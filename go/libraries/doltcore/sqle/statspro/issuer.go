@@ -50,12 +50,21 @@ func (sc *StatsCoord) getCycleWaiter() <-chan struct{} {
 	return sc.cycleCtx.Done()
 }
 
-func (sc *StatsCoord) runSender(ctx context.Context) (err error) {
-	sc.senderDone = make(chan struct{})
+func (sc *StatsCoord) runIssuer(ctx context.Context) (err error) {
+	sc.issuerDone = make(chan struct{})
 	defer func() {
-		close(sc.senderDone)
+		close(sc.issuerDone)
 	}()
+	var gcKv *memStats
 	for {
+		gcStart := sc.gcCnt.Load()
+
+		gcKv = nil
+		if sc.doGc.Swap(false) {
+			gcKv = NewMemStats()
+			gcKv.gcGen = gcStart
+		}
+
 		cycleCtx := sc.newCycle(ctx)
 
 		sqlCtx, err := sc.ctxGen(cycleCtx)
@@ -63,9 +72,14 @@ func (sc *StatsCoord) runSender(ctx context.Context) (err error) {
 			return err
 		}
 
-		newStats, err := sc.newStatsForRoot(sqlCtx)
+		newStats, err := sc.newStatsForRoot(sqlCtx, gcKv)
 		if err != nil {
 			sc.descError("", err)
+		}
+
+		if gcKv.isPoisoned() {
+			sc.descError(fmt.Sprintf("gc %d was interrupted", gcKv.GcGen()), nil)
+			gcKv = nil
 		}
 
 		select {
@@ -74,17 +88,38 @@ func (sc *StatsCoord) runSender(ctx context.Context) (err error) {
 		default:
 		}
 
-		sc.statsMu.Lock()
-		sc.Stats = newStats
-		sc.statsMu.Unlock()
-
-		if _, err = sc.kv.Flush(ctx); err != nil {
-			sc.descError("", err)
+		if ok, err := sc.trySwapStats(ctx, gcStart, newStats, gcKv); err != nil || !ok {
+			sc.descError("failed to swap stats", err)
 		}
 	}
 }
 
-func (sc *StatsCoord) newStatsForRoot(ctx *sql.Context) (*rootStats, error) {
+func (sc *StatsCoord) trySwapStats(ctx context.Context, gcCnt uint64, newStats *rootStats, gcKv *memStats) (bool, error) {
+	sc.statsMu.Lock()
+	defer sc.statsMu.Unlock()
+	var err error
+	if gcKv != nil && sc.gcCnt.CompareAndSwap(gcCnt, gcCnt+1) {
+		sc.kv = gcKv
+		sc.Stats = newStats
+		err = sc.sq.DoAsync(func() {
+			if err := sc.rotateStorage(ctx); err != nil {
+				sc.descError("rotate storage failure", err)
+			}
+		})
+	} else if sc.gcCnt.Load() == gcCnt {
+		sc.Stats = newStats
+		err = sc.sq.DoAsync(func() {
+			if _, err := sc.kv.Flush(ctx); err != nil {
+				sc.descError("flush failure", err)
+			}
+		})
+	} else {
+		return false, nil
+	}
+	return true, err
+}
+
+func (sc *StatsCoord) newStatsForRoot(ctx *sql.Context, gcKv *memStats) (*rootStats, error) {
 	var err error
 	dSess := dsess.DSessFromSess(ctx.Session)
 	dbs := dSess.Provider().AllDatabases(ctx)
@@ -129,7 +164,7 @@ func (sc *StatsCoord) newStatsForRoot(ctx *sql.Context) (*rootStats, error) {
 			}
 
 			for _, tableName := range tableNames {
-				tableKey, newTableStats, err := sc.updateTable(ctx, tableName, sqlDb)
+				tableKey, newTableStats, err := sc.updateTable(ctx, tableName, sqlDb, gcKv)
 				if err != nil {
 					return nil, err
 				}
@@ -246,7 +281,7 @@ func (sc *StatsCoord) collectIndexNodes(ctx *sql.Context, prollyMap prolly.Map, 
 	return buckets, lowerBound, nil
 }
 
-func (sc *StatsCoord) updateTable(ctx *sql.Context, tableName string, sqlDb dsess.SqlDatabase) (tableIndexesKey, []*stats.Statistic, error) {
+func (sc *StatsCoord) updateTable(ctx *sql.Context, tableName string, sqlDb dsess.SqlDatabase, gcKv *memStats) (tableIndexesKey, []*stats.Statistic, error) {
 	var err error
 	var sqlTable *sqle.DoltTable
 	var dTab *doltdb.Table
@@ -327,6 +362,10 @@ func (sc *StatsCoord) updateTable(ctx *sql.Context, tableName string, sqlDb dses
 			}
 		}
 		newTableStats = append(newTableStats, sc.finalizeHistogram(template, buckets, firstBound))
+		if gcKv != nil {
+			keyBuilder := val.NewTupleBuilder(prollyMap.KeyDesc().PrefixDesc(idxLen))
+			gcKv.GcMark(sc.kv, levelNodes, buckets, idxLen, keyBuilder)
+		}
 	}
 	return tableKey, newTableStats, nil
 }

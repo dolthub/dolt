@@ -56,7 +56,7 @@ func NewStatsCoord(ctx context.Context, pro *sqle.DoltDatabaseProvider, ctxGen c
 		fsMu:           &sync.Mutex{},
 		dbFs:           make(map[string]filesys.Filesys),
 		threads:        threads,
-		senderDone:     done,
+		issuerDone:     done,
 		cycleMu:        &sync.Mutex{},
 		kv:             kv,
 		pro:            pro,
@@ -110,14 +110,14 @@ type StatsCoord struct {
 	cycleCancel context.CancelFunc
 	sq          *jobqueue.SerialQueue
 
-	senderDone chan struct{}
+	issuerDone chan struct{}
 
 	JobInterval    time.Duration
 	gcInterval     time.Duration
 	branchInterval time.Duration
 	memOnly        bool
 	enableGc       bool
-	doGc           bool
+	doGc           atomic.Bool
 	Debug          bool
 
 	// kv is a content-addressed cache of histogram objects:
@@ -154,7 +154,7 @@ func (sc *StatsCoord) Stop(ctx context.Context) error {
 		select {
 		case <-ctx.Done():
 			return
-		case <-sc.senderDone:
+		case <-sc.issuerDone:
 			return
 		}
 	})
@@ -172,10 +172,10 @@ func (sc *StatsCoord) Restart(ctx context.Context) error {
 		select {
 		case <-ctx.Done():
 			return
-		case <-sc.senderDone:
+		case <-sc.issuerDone:
 		}
 		go func() {
-			sc.runSender(ctx)
+			sc.runIssuer(ctx)
 		}()
 	})
 }
@@ -221,7 +221,7 @@ func (sc *StatsCoord) Info(ctx context.Context) (dprocedures.StatsInfo, error) {
 	}
 	var active bool
 	select {
-	case <-sc.senderDone:
+	case <-sc.issuerDone:
 	default:
 		active = true
 	}

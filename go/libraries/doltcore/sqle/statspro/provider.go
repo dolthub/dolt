@@ -85,7 +85,7 @@ func (sc *StatsCoord) AnalyzeTable(ctx *sql.Context, table sql.Table, dbName str
 		return err
 	}
 
-	tableKey, newTableStats, err := sc.updateTable(ctx, table.Name(), sqlDb)
+	tableKey, newTableStats, err := sc.updateTable(ctx, table.Name(), sqlDb, nil)
 	if err != nil {
 		return err
 	}
@@ -246,16 +246,22 @@ func (sc *StatsCoord) Init(ctx *sql.Context, dbs []sql.Database, keepStorage boo
 }
 
 func (sc *StatsCoord) Purge(ctx *sql.Context) error {
-	if err := sc.rotateStorage(ctx); err != nil {
+	gcCnt := sc.gcCnt.Load()
+	newKv := NewMemStats()
+	newKv.gcGen = gcCnt
+	newStats := newRootStats()
+	if ok, err := sc.trySwapStats(ctx, gcCnt, newStats, newKv); !ok {
+		return fmt.Errorf("failed to purge stats")
+	} else if err != nil {
 		return err
 	}
-	if err := sc.kv.StartGc(ctx, 0); err != nil {
-		return err
-	}
-	return sc.kv.FinishGc(nil)
+	sc.sq.DoAsync(func() {
+
+	})
+	return nil
 }
 
-func (sc *StatsCoord) rotateStorage(ctx *sql.Context) error {
+func (sc *StatsCoord) rotateStorage(ctx context.Context) error {
 	if sc.statsBackingDb != "" {
 		if err := sc.rm(sc.statsBackingDb); err != nil {
 			return err
@@ -329,7 +335,7 @@ func (sc *StatsCoord) rm(db string) error {
 	return nil
 }
 
-func (sc *StatsCoord) initStorage(ctx *sql.Context, storageTarget string) (*prollyStats, error) {
+func (sc *StatsCoord) initStorage(ctx context.Context, storageTarget string) (*prollyStats, error) {
 	fs, ok := sc.dbFs[strings.ToLower(storageTarget)]
 	if !ok {
 		return nil, fmt.Errorf("failed to remove stats db: %s filesys not found", storageTarget)
@@ -360,8 +366,7 @@ func (sc *StatsCoord) initStorage(ctx *sql.Context, storageTarget string) (*prol
 		}
 
 		dEnv = env.Load(ctx, sc.hdp, statsFs, urlPath, "test")
-		sess := dsess.DSessFromSess(ctx.Session)
-		err = dEnv.InitRepo(ctx, types.Format_Default, sess.Username(), sess.Email(), storageTarget)
+		err = dEnv.InitRepo(ctx, types.Format_Default, "stats", "stats@stats.com", storageTarget)
 		if err != nil {
 			return nil, err
 		}
@@ -407,7 +412,7 @@ func (sc *StatsCoord) WaitForDbSync(ctx *sql.Context) error {
 
 func (sc *StatsCoord) Gc(ctx *sql.Context) error {
 	sc.sq.InterruptAsync(func() {
-		sc.doGc = true
+		sc.doGc.Store(true)
 	})
 	return sc.WaitForDbSync(ctx)
 }
