@@ -57,7 +57,7 @@ type lexicographic struct{}
 
 var _ tree.Ordering[stringSlice] = lexicographic{}
 
-func (l lexicographic) Compare(left, right stringSlice) int {
+func (l lexicographic) Compare(ctx context.Context, left, right stringSlice) int {
 	return bytes.Compare(left, right)
 }
 

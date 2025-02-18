@@ -80,7 +80,7 @@ func (b Builder) Build(ctx *sql.Context, n sql.Node, r sql.Row) (sql.RowIter, er
 					// - usually key tuple, but for keyless tables it's val tuple.
 					// - use primary table projections as reference for comparison
 					//   filter indexes.
-					if lrCmp, llCmp, ok := mergeComparer(filters[0], leftState, rightState, projections); ok {
+					if lrCmp, llCmp, ok := mergeComparer(ctx, filters[0], leftState, rightState, projections); ok {
 						split := len(leftState.tags)
 						var rowJoiner *prollyToSqlJoiner
 						rowJoiner = newRowJoiner([]schema.Schema{leftState.priSch, rightState.priSch}, []int{split}, projections, leftState.idxMap.NodeStore())

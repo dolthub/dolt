@@ -102,8 +102,8 @@ type bboltWriter struct {
 	db    *bbolt.DB
 }
 
-func (wr *bboltWriter) Put(key, value []byte) error {
-	wr.edits.Put(key, value)
+func (wr *bboltWriter) Put(ctx context.Context, key, value []byte) error {
+	wr.edits.Put(ctx, key, value)
 	return nil
 }
 
@@ -130,7 +130,7 @@ type doltWriter struct {
 	cs  *nbs.NomsBlockStore
 }
 
-func (wr *doltWriter) Put(key, value []byte) error {
+func (wr *doltWriter) Put(ctx context.Context, key, value []byte) error {
 	return wr.mut.Put(context.Background(), key, value)
 }
 
@@ -153,7 +153,7 @@ func benchmarkBatchWrite(b *testing.B, wr writer) {
 	dp := newDataProvider(batch)
 	for i := 0; i < b.N; i++ {
 		k, v := dp.next()
-		require.NoError(b, wr.Put(k, v))
+		require.NoError(b, wr.Put(ctx, k, v))
 		if dp.empty() {
 			require.NoError(b, wr.Flush())
 			dp = newDataProvider(batch)
@@ -162,7 +162,7 @@ func benchmarkBatchWrite(b *testing.B, wr writer) {
 }
 
 type writer interface {
-	Put(key, value []byte) error
+	Put(ctx context.Context, key, value []byte) error
 	Flush() error
 }
 

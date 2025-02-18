@@ -1309,7 +1309,7 @@ func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.Node
 		for i, field := range fields {
 			// lookups on non-unique indexes can't be point lookups
 			typ := di.keyBld.Desc.Types[i]
-			cmp := order.CompareValues(i, field.Hi.Value, field.Lo.Value, typ)
+			cmp := order.CompareValues(ctx, i, field.Hi.Value, field.Lo.Value, typ)
 			fields[i].BoundsAreEqual = cmp == 0
 
 			if !di.unique {

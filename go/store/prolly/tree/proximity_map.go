@@ -59,8 +59,8 @@ func (t ProximityMap[K, V, O]) HasPrefix(ctx context.Context, query K, prefixOrd
 
 func (t ProximityMap[K, V, O]) Mutate() MutableMap[K, V, O, ProximityMap[K, V, O]] {
 	return MutableMap[K, V, O, ProximityMap[K, V, O]]{
-		Edits: skip.NewSkipList(func(left, right []byte) int {
-			return t.Order.Compare(left, right)
+		Edits: skip.NewSkipList(func(ctx context.Context, left, right []byte) int {
+			return t.Order.Compare(ctx, left, right)
 		}),
 		Static: t,
 	}

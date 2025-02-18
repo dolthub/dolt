@@ -217,7 +217,7 @@ func TestRowMerge(t *testing.T) {
 			assert.NoError(t, err)
 			assert.Equal(t, test.expectConflict, !ok)
 			vD := test.mergedSch.GetValueDescriptor(ns)
-			assert.Equal(t, vD.Format(test.expectedResult), vD.Format(merged))
+			assert.Equal(t, vD.Format(ctx, test.expectedResult), vD.Format(ctx, merged))
 		})
 	}
 }

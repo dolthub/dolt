@@ -45,7 +45,7 @@ func NewTupleLeafNode(keys, values []val.Tuple) Node {
 	return newLeafNode(ks, vs)
 }
 
-func RandomTuplePairs(count int, keyDesc, valDesc val.TupleDesc, ns NodeStore) (items [][2]val.Tuple) {
+func RandomTuplePairs(ctx context.Context, count int, keyDesc, valDesc val.TupleDesc, ns NodeStore) (items [][2]val.Tuple) {
 	keyBuilder := val.NewTupleBuilder(keyDesc)
 	valBuilder := val.NewTupleBuilder(valDesc)
 
@@ -57,12 +57,12 @@ func RandomTuplePairs(count int, keyDesc, valDesc val.TupleDesc, ns NodeStore) (
 
 	dupes := make([]int, 0, count)
 	for {
-		SortTuplePairs(items, keyDesc)
+		SortTuplePairs(ctx, items, keyDesc)
 		for i := range items {
 			if i == 0 {
 				continue
 			}
-			if keyDesc.Compare(items[i][0], items[i-1][0]) == 0 {
+			if keyDesc.Compare(ctx, items[i][0], items[i-1][0]) == 0 {
 				dupes = append(dupes, i)
 			}
 		}
@@ -79,7 +79,7 @@ func RandomTuplePairs(count int, keyDesc, valDesc val.TupleDesc, ns NodeStore) (
 	return items
 }
 
-func RandomCompositeTuplePairs(count int, keyDesc, valDesc val.TupleDesc, ns NodeStore) (items [][2]val.Tuple) {
+func RandomCompositeTuplePairs(ctx context.Context, count int, keyDesc, valDesc val.TupleDesc, ns NodeStore) (items [][2]val.Tuple) {
 	// preconditions
 	if count%5 != 0 {
 		panic("expected empty divisible by 5")
@@ -88,7 +88,7 @@ func RandomCompositeTuplePairs(count int, keyDesc, valDesc val.TupleDesc, ns Nod
 		panic("expected composite key")
 	}
 
-	tt := RandomTuplePairs(count, keyDesc, valDesc, ns)
+	tt := RandomTuplePairs(ctx, count, keyDesc, valDesc, ns)
 
 	tuples := make([][2]val.Tuple, len(tt)*3)
 	for i := range tuples {
@@ -106,9 +106,9 @@ func RandomCompositeTuplePairs(count int, keyDesc, valDesc val.TupleDesc, ns Nod
 		copy(f2, swap)
 	})
 
-	SortTuplePairs(tuples, keyDesc)
+	SortTuplePairs(ctx, tuples, keyDesc)
 
-	tuples = deduplicateTuples(keyDesc, tuples)
+	tuples = deduplicateTuples(ctx, keyDesc, tuples)
 
 	return tuples[:count]
 }
@@ -142,9 +142,9 @@ func CloneRandomTuples(items [][2]val.Tuple) (clone [][2]val.Tuple) {
 	return
 }
 
-func SortTuplePairs(items [][2]val.Tuple, keyDesc val.TupleDesc) {
+func SortTuplePairs(ctx context.Context, items [][2]val.Tuple, keyDesc val.TupleDesc) {
 	sort.Slice(items, func(i, j int) bool {
-		return keyDesc.Compare(items[i][0], items[j][0]) < 0
+		return keyDesc.Compare(ctx, items[i][0], items[j][0]) < 0
 	})
 }
 
@@ -178,12 +178,12 @@ func newLeafNode(keys, values []Item) Node {
 }
 
 // assumes a sorted list
-func deduplicateTuples(desc val.TupleDesc, tups [][2]val.Tuple) (uniq [][2]val.Tuple) {
+func deduplicateTuples(ctx context.Context, desc val.TupleDesc, tups [][2]val.Tuple) (uniq [][2]val.Tuple) {
 	uniq = make([][2]val.Tuple, 1, len(tups))
 	uniq[0] = tups[0]
 
 	for i := 1; i < len(tups); i++ {
-		cmp := desc.Compare(tups[i-1][0], tups[i][0])
+		cmp := desc.Compare(ctx, tups[i-1][0], tups[i][0])
 		if cmp < 0 {
 			uniq = append(uniq, tups[i])
 		}

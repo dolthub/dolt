@@ -52,22 +52,22 @@ func testIterRange(t *testing.T, om testMap, tuples [][2]val.Tuple) {
 			// two-sided ranges
 			{
 				name:      "OpenRange",
-				testRange: openRange(start, stop, desc),
+				testRange: openRange(ctx, start, stop, desc),
 				expCount:  nonNegative((z - a) - 1),
 			},
 			{
 				name:      "OpenStartRange",
-				testRange: openStartRange(start, stop, desc),
+				testRange: openStartRange(ctx, start, stop, desc),
 				expCount:  z - a,
 			},
 			{
 				name:      "OpenStopRange",
-				testRange: openStopRange(start, stop, desc),
+				testRange: openStopRange(ctx, start, stop, desc),
 				expCount:  z - a,
 			},
 			{
 				name:      "closedRange",
-				testRange: closedRange(start, stop, desc),
+				testRange: closedRange(ctx, start, stop, desc),
 				expCount:  (z - a) + 1,
 			},
 
@@ -109,7 +109,7 @@ func testIterRange(t *testing.T, om testMap, tuples [][2]val.Tuple) {
 				key, _, err = iter.Next(ctx)
 
 				if key != nil {
-					assert.True(t, desc.Compare(prev, key) < 0)
+					assert.True(t, desc.Compare(ctx, prev, key) < 0)
 				}
 			}
 			assert.Equal(t, io.EOF, err)
@@ -151,19 +151,19 @@ func testIterPrefixRange(t *testing.T, om testMap, tuples [][2]val.Tuple) {
 			// two-sided ranges
 			{
 				name:      "OpenRange",
-				testRange: openRange(start, stop, prefixDesc),
+				testRange: openRange(ctx, start, stop, prefixDesc),
 			},
 			{
 				name:      "OpenStartRange",
-				testRange: openStartRange(start, stop, prefixDesc),
+				testRange: openStartRange(ctx, start, stop, prefixDesc),
 			},
 			{
 				name:      "OpenStopRange",
-				testRange: openStopRange(start, stop, prefixDesc),
+				testRange: openStopRange(ctx, start, stop, prefixDesc),
 			},
 			{
 				name:      "closedRange",
-				testRange: closedRange(start, stop, prefixDesc),
+				testRange: closedRange(ctx, start, stop, prefixDesc),
 			},
 
 			// one-sided ranges
@@ -197,7 +197,7 @@ func testIterPrefixRange(t *testing.T, om testMap, tuples [][2]val.Tuple) {
 				key, _, err = iter.Next(ctx)
 
 				if key != nil {
-					assert.True(t, prefixDesc.Compare(prev, key) < 0)
+					assert.True(t, prefixDesc.Compare(ctx, prev, key) < 0)
 				}
 			}
 			assert.Equal(t, io.EOF, err)
@@ -224,7 +224,7 @@ func getKeyPrefix(key val.Tuple, desc val.TupleDesc) (partial val.Tuple) {
 func getExpectedRangeSize(rng Range, tuples [][2]val.Tuple) (sz int) {
 	for i := range tuples {
 		k := tuples[i][0]
-		if rng.aboveStart(k) && rng.belowStop(k) {
+		if rng.aboveStart(ctx, k) && rng.belowStop(ctx, k) {
 			sz++
 		}
 	}
@@ -277,25 +277,25 @@ func TestMapIterRange(t *testing.T) {
 		// partial-key range scan
 		{
 			name:     "range [1:4]",
-			rng:      closedRange(intTuple(1), intTuple(4), partialDesc),
+			rng:      closedRange(ctx, intTuple(1), intTuple(4), partialDesc),
 			physical: [2]int{0, 24},
 			logical:  []int{0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22},
 		},
 		{
 			name:     "range (1:4]",
-			rng:      openStartRange(intTuple(1), intTuple(4), partialDesc),
+			rng:      openStartRange(ctx, intTuple(1), intTuple(4), partialDesc),
 			physical: [2]int{6, 24},
 			logical:  []int{6, 8, 10, 12, 14, 16, 18, 20, 22},
 		},
 		{
 			name:     "range [1:4)",
-			rng:      openStopRange(intTuple(1), intTuple(4), partialDesc),
+			rng:      openStopRange(ctx, intTuple(1), intTuple(4), partialDesc),
 			physical: [2]int{0, 18},
 			logical:  []int{0, 2, 4, 6, 8, 10, 12, 14, 16},
 		},
 		{
 			name:     "range (1:4)",
-			rng:      openRange(intTuple(1), intTuple(4), partialDesc),
+			rng:      openRange(ctx, intTuple(1), intTuple(4), partialDesc),
 			physical: [2]int{6, 18},
 			logical:  []int{6, 8, 10, 12, 14, 16},
 		},
@@ -303,55 +303,55 @@ func TestMapIterRange(t *testing.T) {
 		// full-key range scan
 		{
 			name:     "range (1,1:4,3)",
-			rng:      openRange(intTuple(1, 1), intTuple(4, 3), fullDesc),
+			rng:      openRange(ctx, intTuple(1, 1), intTuple(4, 3), fullDesc),
 			physical: [2]int{0, 24},
 			logical:  []int{2, 8, 14, 20},
 		},
 		{
 			name:     "range (1,1:4,3]",
-			rng:      openStartRange(intTuple(1, 1), intTuple(4, 3), fullDesc),
+			rng:      openStartRange(ctx, intTuple(1, 1), intTuple(4, 3), fullDesc),
 			physical: [2]int{0, 24},
 			logical:  []int{2, 4, 8, 10, 14, 16, 20, 22},
 		},
 		{
 			name:     "range [1,1:4,3)",
-			rng:      openStopRange(intTuple(1, 1), intTuple(4, 3), fullDesc),
+			rng:      openStopRange(ctx, intTuple(1, 1), intTuple(4, 3), fullDesc),
 			physical: [2]int{0, 24},
 			logical:  []int{0, 2, 6, 8, 12, 14, 18, 20},
 		},
 		{
 			name:     "range [1,1:4,3]",
-			rng:      closedRange(intTuple(1, 1), intTuple(4, 3), fullDesc),
+			rng:      closedRange(ctx, intTuple(1, 1), intTuple(4, 3), fullDesc),
 			physical: [2]int{0, 24},
 			logical:  []int{0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22},
 		},
 		{
 			name:     "range [1,2:4,2]",
-			rng:      closedRange(intTuple(1, 2), intTuple(4, 2), fullDesc),
+			rng:      closedRange(ctx, intTuple(1, 2), intTuple(4, 2), fullDesc),
 			physical: [2]int{0, 24},
 			logical:  []int{2, 8, 14, 20},
 		},
 		{
 			name:     "range (1,2:4,2]",
-			rng:      openStartRange(intTuple(1, 2), intTuple(4, 2), fullDesc),
+			rng:      openStartRange(ctx, intTuple(1, 2), intTuple(4, 2), fullDesc),
 			physical: [2]int{0, 24},
 			logical:  []int{},
 		},
 		{
 			name:     "range [2,2:3,2]",
-			rng:      closedRange(intTuple(2, 2), intTuple(3, 2), fullDesc),
+			rng:      closedRange(ctx, intTuple(2, 2), intTuple(3, 2), fullDesc),
 			physical: [2]int{6, 18},
 			logical:  []int{8, 14},
 		},
 		{
 			name:     "range [2,2:2,3]",
-			rng:      closedRange(intTuple(2, 2), intTuple(2, 3), fullDesc),
+			rng:      closedRange(ctx, intTuple(2, 2), intTuple(2, 3), fullDesc),
 			physical: [2]int{8, 12},
 			logical:  []int{8, 10},
 		},
 		{
 			name:     "range [2,2:2,2]",
-			rng:      closedRange(intTuple(2, 2), intTuple(2, 2), fullDesc),
+			rng:      closedRange(ctx, intTuple(2, 2), intTuple(2, 2), fullDesc),
 			physical: [2]int{8, 10},
 			logical:  []int{8},
 		},
@@ -499,7 +499,7 @@ func testIterKeyRange(t *testing.T, m Map, tuples [][2]val.Tuple) {
 	t.Run("RandomKeyRange", func(t *testing.T) {
 		bounds := generateInserts(t, m, m.keyDesc, m.valDesc, 2)
 		start, stop := bounds[0][0], bounds[1][0]
-		if m.keyDesc.Compare(start, stop) > 0 {
+		if m.keyDesc.Compare(ctx, start, stop) > 0 {
 			start, stop = stop, start
 		}
 		kR := keyRange{kd: m.keyDesc, start: start, stop: stop}

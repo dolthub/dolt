@@ -165,7 +165,7 @@ func testDeleteDiffs(t *testing.T, from Map, tups [][2]val.Tuple, numDeletes int
 
 	deletes := tups[:numDeletes]
 	sort.Slice(deletes, func(i, j int) bool {
-		return from.keyDesc.Compare(deletes[i][0], deletes[j][0]) < 0
+		return from.keyDesc.Compare(ctx, deletes[i][0], deletes[j][0]) < 0
 	})
 	to := makeMapWithDeletes(t, from, deletes...)
 
@@ -207,7 +207,7 @@ func testUpdateDiffs(t *testing.T, from Map, tups [][2]val.Tuple, numUpdates int
 
 	sub := tups[:numUpdates]
 	sort.Slice(sub, func(i, j int) bool {
-		return from.keyDesc.Compare(sub[i][0], sub[j][0]) < 0
+		return from.keyDesc.Compare(ctx, sub[i][0], sub[j][0]) < 0
 	})
 
 	kd, vd := from.Descriptors()
@@ -268,7 +268,7 @@ func makeMapWithInserts(t *testing.T, m Map, numInserts int) (Map, [][2]val.Tupl
 func generateInserts(t *testing.T, m testMap, kd, vd val.TupleDesc, numInserts int) [][2]val.Tuple {
 	ctx := context.Background()
 	ns := tree.NewTestNodeStore()
-	tups := tree.RandomTuplePairs(numInserts*2, kd, vd, ns)
+	tups := tree.RandomTuplePairs(ctx, numInserts*2, kd, vd, ns)
 	inserts, extra := tups[:numInserts], tups[numInserts:]
 
 	j := 0
@@ -293,7 +293,7 @@ func generateInserts(t *testing.T, m testMap, kd, vd val.TupleDesc, numInserts i
 			require.True(t, j < len(extra))
 		}
 	}
-	tree.SortTuplePairs(inserts, kd)
+	tree.SortTuplePairs(ctx, inserts, kd)
 
 	return inserts
 }
@@ -323,7 +323,7 @@ func makeUpdatesToTuples(kd, vd val.TupleDesc, tuples ...[2]val.Tuple) (updates 
 	}
 
 	sort.Slice(updates, func(i, j int) bool {
-		return kd.Compare(updates[i][0], updates[j][0]) < 0
+		return kd.Compare(ctx, updates[i][0], updates[j][0]) < 0
 	})
 
 	return

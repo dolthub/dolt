@@ -55,7 +55,7 @@ func (it mutableMapIter[K, V, O]) Next(ctx context.Context) (key K, value V, err
 			return nil, nil, io.EOF
 		}
 
-		cmp := it.compareKeys(pk, mk)
+		cmp := it.compareKeys(ctx, pk, mk)
 		switch {
 		case cmp < 0:
 			key, value = pk, pv
@@ -98,32 +98,32 @@ func (it mutableMapIter[K, V, O]) currentKeys() (memKey, proKey K) {
 	return
 }
 
-func (it mutableMapIter[K, V, O]) compareKeys(memKey, proKey K) int {
+func (it mutableMapIter[K, V, O]) compareKeys(ctx context.Context, memKey, proKey K) int {
 	if memKey == nil {
 		return 1
 	}
 	if proKey == nil {
 		return -1
 	}
-	return it.order.Compare(memKey, proKey)
+	return it.order.Compare(ctx, memKey, proKey)
 }
 
-func memIterFromRange(list *skip.List, rng Range) *memRangeIter {
+func memIterFromRange(ctx context.Context, list *skip.List, rng Range) *memRangeIter {
 	// use the lower bound of |rng| to construct a skip.ListIter
-	iter := list.GetIterFromSeekFn(skipSearchFromRange(rng))
+	iter := list.GetIterFromSeekFn(skipSearchFromRange(ctx, rng))
 
 	// enforce range start
 	var key val.Tuple
 	for {
 		key, _ = iter.Current()
-		if key == nil || rng.aboveStart(key) {
+		if key == nil || rng.aboveStart(ctx, key) {
 			break // |i| inside |rng|
 		}
 		iter.Advance()
 	}
 
 	// enforce range end
-	if key == nil || !rng.belowStop(key) {
+	if key == nil || !rng.belowStop(ctx, key) {
 		iter = nil
 	}
 
@@ -137,12 +137,12 @@ func memIterFromRange(list *skip.List, rng Range) *memRangeIter {
 // a skip.List iterator for a given Range. The skip.SearchFn
 // returns true if the iter being initialized is not yet
 // within the bounds of Range |rng|.
-func skipSearchFromRange(rng Range) skip.SeekFn {
+func skipSearchFromRange(ctx context.Context, rng Range) skip.SeekFn {
 	return func(nodeKey []byte) bool {
 		if nodeKey == nil {
 			return false
 		}
-		return !rng.aboveStart(nodeKey)
+		return !rng.aboveStart(ctx, nodeKey)
 	}
 }
 
@@ -166,12 +166,12 @@ func (it *memRangeIter) Current() (key, value val.Tuple) {
 }
 
 // Iterate progresses the iter inside its range.
-func (it *memRangeIter) Iterate(context.Context) (err error) {
+func (it *memRangeIter) Iterate(ctx context.Context) (err error) {
 	for {
 		it.iter.Advance()
 
 		k, _ := it.Current()
-		if k == nil || !it.rng.belowStop(k) {
+		if k == nil || !it.rng.belowStop(ctx, k) {
 			it.iter = nil // range exhausted
 		}
 
@@ -202,7 +202,7 @@ func (f filteredIter) Next(ctx context.Context) (k, v val.Tuple, err error) {
 		if err != nil {
 			return nil, nil, err
 		}
-		if !f.rng.Matches(k) {
+		if !f.rng.Matches(ctx, k) {
 			continue
 		}
 		return

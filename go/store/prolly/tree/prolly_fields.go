@@ -288,7 +288,7 @@ func PutField(ctx context.Context, ns NodeStore, tb *val.TupleBuilder, i int, v 
 		if err != nil {
 			return err
 		}
-		tb.PutExtendedAddr(i, b)
+		tb.PutExtendedAddr(i, hash.New(b))
 	default:
 		panic(fmt.Sprintf("unknown encoding %v %v", enc, v))
 	}

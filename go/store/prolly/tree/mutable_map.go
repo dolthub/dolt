@@ -26,18 +26,18 @@ type MutableMap[K, V ~[]byte, O Ordering[K], M MapInterface[K, V, O]] struct {
 	Static M
 }
 
-func (m MutableMap[K, V, O, M]) Put(_ context.Context, key K, value V) error {
-	m.Edits.Put(key, value)
+func (m MutableMap[K, V, O, M]) Put(ctx context.Context, key K, value V) error {
+	m.Edits.Put(ctx, key, value)
 	return nil
 }
 
-func (m MutableMap[K, V, O, M]) Delete(_ context.Context, key K) error {
-	m.Edits.Put(key, nil)
+func (m MutableMap[K, V, O, M]) Delete(ctx context.Context, key K) error {
+	m.Edits.Put(ctx, key, nil)
 	return nil
 }
 
 func (m MutableMap[K, V, O, M]) Get(ctx context.Context, key K, cb KeyValueFn[K, V]) (err error) {
-	value, ok := m.Edits.Get(key)
+	value, ok := m.Edits.Get(ctx, key)
 	if ok {
 		if value == nil {
 			key = nil // there is a pending delete of |key| in |m.Edits|.
@@ -51,12 +51,12 @@ func (m MutableMap[K, V, O, M]) Get(ctx context.Context, key K, cb KeyValueFn[K,
 func (m MutableMap[K, V, O, M]) GetPrefix(ctx context.Context, key K, prefixOrder O, cb KeyValueFn[K, V]) (err error) {
 	iter := m.Edits.GetIterFromSeekFn(func(k []byte) (advance bool) {
 		if k != nil { // seek until |k| >= |key|
-			advance = prefixOrder.Compare(k, key) < 0
+			advance = prefixOrder.Compare(ctx, k, key) < 0
 		}
 		return
 	})
 	k, v := iter.Current()
-	if k != nil && prefixOrder.Compare(k, key) == 0 {
+	if k != nil && prefixOrder.Compare(ctx, k, key) == 0 {
 		if v == nil {
 			k = nil // there is a pending delete of |key| in |m.Edits|.
 		}
@@ -66,7 +66,7 @@ func (m MutableMap[K, V, O, M]) GetPrefix(ctx context.Context, key K, prefixOrde
 }
 
 func (m MutableMap[K, V, O, M]) Has(ctx context.Context, key K) (present bool, err error) {
-	value, ok := m.Edits.Get(key)
+	value, ok := m.Edits.Get(ctx, key)
 	if ok {
 		present = value != nil
 		return
@@ -77,12 +77,12 @@ func (m MutableMap[K, V, O, M]) Has(ctx context.Context, key K) (present bool, e
 func (m MutableMap[K, V, O, M]) HasPrefix(ctx context.Context, key K, prefixOrder O) (present bool, err error) {
 	iter := m.Edits.GetIterFromSeekFn(func(k []byte) (advance bool) {
 		if k != nil { // seek until |k| >= |key|
-			advance = prefixOrder.Compare(k, key) < 0
+			advance = prefixOrder.Compare(ctx, k, key) < 0
 		}
 		return
 	})
 	k, v := iter.Current()
-	if k != nil && prefixOrder.Compare(k, key) == 0 {
+	if k != nil && prefixOrder.Compare(ctx, k, key) == 0 {
 		present = v != nil
 		return
 	}

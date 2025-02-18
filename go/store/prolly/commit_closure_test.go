@@ -40,13 +40,13 @@ func TestCommitClosure(t *testing.T) {
 		assert.True(t, k0.Addr().Equal(hash.Hash{}))
 
 		k0_ := NewCommitClosureKey(ns.Pool(), 0, hash.Parse("00000000000000000000000000000000"))
-		assert.False(t, k0.Less(k0_))
+		assert.False(t, k0.Less(ctx, k0_))
 
 		h := hash.Parse("00000000000000000000000000000001")
 		k0_1 := NewCommitClosureKey(ns.Pool(), 0, h)
 		assert.True(t, k0_1.Addr().Equal(h))
-		assert.True(t, k0.Less(k0_1))
-		assert.False(t, k0_1.Less(k0_))
+		assert.True(t, k0.Less(ctx, k0_1))
+		assert.False(t, k0_1.Less(ctx, k0_))
 
 	})
 

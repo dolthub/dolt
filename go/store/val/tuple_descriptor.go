@@ -157,12 +157,12 @@ func (td TupleDesc) GetField(i int, tup Tuple) []byte {
 }
 
 // Compare compares |left| and |right|.
-func (td TupleDesc) Compare(left, right Tuple) (cmp int) {
-	return td.cmp.Compare(left, right, td)
+func (td TupleDesc) Compare(ctx context.Context, left, right Tuple) (cmp int) {
+	return td.cmp.Compare(ctx, left, right, td)
 }
 
 // CompareField compares |value| with the ith field of |tup|.
-func (td TupleDesc) CompareField(value []byte, i int, tup Tuple) (cmp int) {
+func (td TupleDesc) CompareField(ctx context.Context, value []byte, i int, tup Tuple) (cmp int) {
 	var v []byte
 	if i < len(td.fast) {
 		start, stop := td.fast[i][0], td.fast[i][1]
@@ -170,7 +170,7 @@ func (td TupleDesc) CompareField(value []byte, i int, tup Tuple) (cmp int) {
 	} else {
 		v = tup.GetField(i)
 	}
-	return td.cmp.CompareValues(i, value, v, td.Types[i])
+	return td.cmp.CompareValues(ctx, i, value, v, td.Types[i])
 }
 
 // Comparator returns the TupleDescriptor's TupleComparator.
@@ -546,7 +546,7 @@ func (td TupleDesc) GetCell(i int, tup Tuple) (v Cell, ok bool) {
 }
 
 // Format prints a Tuple as a string.
-func (td TupleDesc) Format(tup Tuple) string {
+func (td TupleDesc) Format(ctx context.Context, tup Tuple) string {
 	if tup == nil || tup.Count() == 0 {
 		return "( )"
 	}
@@ -560,20 +560,20 @@ func (td TupleDesc) Format(tup Tuple) string {
 			sb.WriteString(", ")
 		}
 		seenOne = true
-		sb.WriteString(td.FormatValue(i, tup.GetField(i)))
+		sb.WriteString(td.FormatValue(ctx, i, tup.GetField(i)))
 	}
 	sb.WriteString(" )")
 	return sb.String()
 }
 
-func (td TupleDesc) FormatValue(i int, value []byte) string {
+func (td TupleDesc) FormatValue(ctx context.Context, i int, value []byte) string {
 	if value == nil {
 		return "NULL"
 	}
-	return td.formatValue(td.Types[i].Enc, i, value)
+	return td.formatValue(ctx, td.Types[i].Enc, i, value)
 }
 
-func (td TupleDesc) formatValue(enc Encoding, i int, value []byte) string {
+func (td TupleDesc) formatValue(ctx context.Context, enc Encoding, i int, value []byte) string {
 	switch enc {
 	case Int8Enc:
 		v := readInt8(value)
@@ -645,7 +645,7 @@ func (td TupleDesc) formatValue(enc Encoding, i int, value []byte) string {
 		return hex.EncodeToString(value)
 	case ExtendedEnc:
 		handler := td.Handlers[i]
-		v := readExtended(handler, value)
+		v := readExtended(ctx, handler, value)
 		str, err := handler.FormatValue(v)
 		if err != nil {
 			panic(err)
