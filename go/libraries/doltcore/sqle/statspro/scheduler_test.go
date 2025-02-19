@@ -151,7 +151,7 @@ func TestStatsCoord(t *testing.T) {
 			defer close(done)
 			ctx, _ := context.WithTimeout(context.Background(), 10*time.Millisecond)
 			err := sc.WaitForDbSync(ctx)
-			require.ErrorIs(t, err, context.Canceled)
+			require.ErrorIs(t, err, context.DeadlineExceeded)
 		}()
 		wg.Wait()
 	})
@@ -668,19 +668,17 @@ func TestBucketCounting(t *testing.T) {
 		}
 		abIns.WriteString(fmt.Sprintf("(%d, '%s')", i, b))
 	}
-	require.NoError(t, executeQuery(ctx, sqlEng, abIns.String()))
-
-	require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
+	runBlock(t, ctx, sqlEng, abIns.String())
 
 	// 4 old + 2*7 new ab
 	kv := sc.kv.(*memStats)
 	require.Equal(t, 18, len(kv.buckets))
 	require.Equal(t, 2, len(sc.Stats.stats))
 
-	require.NoError(t, executeQuery(ctx, sqlEng, "create table cd (c int primary key, d varchar(200), key (d,c))"))
-	require.NoError(t, executeQuery(ctx, sqlEng, "insert into cd select a,b from ab"))
-
-	require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
+	runBlock(t, ctx, sqlEng,
+		"create table cd (c int primary key, d varchar(200), key (d,c))",
+		"insert into cd select a,b from ab",
+	)
 
 	// no new buckets
 	kv = sc.kv.(*memStats)
@@ -697,27 +695,29 @@ func TestDropOnlyDb(t *testing.T) {
 
 	_, ok := sc.kv.(*prollyStats)
 	require.True(t, ok)
-	require.Equal(t, "mydb", sc.statsBackingDb)
+	statsPath, err := sc.statsBackingDb.Abs("")
+	require.NoError(t, err)
+	require.Equal(t, "/user/dolt/datasets/test/mydb", statsPath)
 
 	// what happens when we drop the only database? swap to memory?
 	// add first database, switch to prolly?
-	require.NoError(t, executeQuery(ctx, sqlEng, "drop database mydb"))
-
-	require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
+	runBlock(t, ctx, sqlEng, "drop database mydb")
 
 	sc.Stop()
 
 	// empty memory KV
 	_, ok = sc.kv.(*memStats)
 	require.True(t, ok)
-	require.Equal(t, "", sc.statsBackingDb)
+	require.Equal(t, nil, sc.statsBackingDb)
 
 	require.NoError(t, executeQuery(ctx, sqlEng, "create database otherdb"))
 
 	// empty prollyKv
 	_, ok = sc.kv.(*prollyStats)
 	require.True(t, ok)
-	require.Equal(t, "otherdb", sc.statsBackingDb)
+	statsPath, err = sc.statsBackingDb.Abs("")
+	require.NoError(t, err)
+	require.Equal(t, "/user/dolt/datasets/test/otherdb", statsPath)
 }
 
 func TestRotateBackingDb(t *testing.T) {
@@ -725,22 +725,22 @@ func TestRotateBackingDb(t *testing.T) {
 	defer threads.Shutdown()
 	ctx, sqlEng, sc := defaultSetup(t, threads, false)
 
-	require.NoError(t, executeQuery(ctx, sqlEng, "create database backupdb"))
-
-	require.NoError(t, executeQuery(ctx, sqlEng, "use backupdb"))
-	require.NoError(t, executeQuery(ctx, sqlEng, "create table xy (x int primary key, y int)"))
-	require.NoError(t, executeQuery(ctx, sqlEng, "insert into xy values (0,0), (1,1), (2,2)"))
-
-	require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
+	runBlock(t, ctx, sqlEng, "create database backupdb",
+		"use backupdb",
+		"create table xy (x int primary key, y int)",
+		"insert into xy values (0,0), (1,1), (2,2)",
+	)
 
 	require.Equal(t, 5, sc.kv.Len())
 	require.Equal(t, 2, len(sc.Stats.stats))
 
-	require.NoError(t, executeQuery(ctx, sqlEng, "drop database mydb"))
+	runBlock(t, ctx, sqlEng, "drop database mydb")
 
 	_, ok := sc.kv.(*prollyStats)
 	require.True(t, ok)
-	require.Equal(t, "backupdb", sc.statsBackingDb)
+	statsPath, err := sc.statsBackingDb.Abs("")
+	require.NoError(t, err)
+	require.Equal(t, "/user/dolt/datasets/test/backupdb", statsPath)
 
 	// lost the backing storage, previous in-memory moves into new kv
 	require.Equal(t, 5, sc.kv.Len())

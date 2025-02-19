@@ -17,6 +17,7 @@ import (
 	"io"
 	"log"
 	"strings"
+	"time"
 )
 
 // thread that does a full root walk, gets databases/branches/tables
@@ -102,10 +103,17 @@ func (sc *StatsCoord) Restart() error {
 
 func (sc *StatsCoord) runIssuer(ctx context.Context) (err error) {
 	var gcKv *memStats
+	gcTicker := time.NewTicker(sc.gcInterval)
 	for {
 		cycleCtx, err := sc.newCycle(ctx)
 		if err != nil {
 			return err
+		}
+
+		select {
+		case <-gcTicker.C:
+			sc.doGc.Store(true)
+		default:
 		}
 
 		genStart := sc.genCnt.Load()

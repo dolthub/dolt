@@ -85,7 +85,7 @@ type ToggableStats interface {
 	Gc(ctx *sql.Context) error
 	//ValidateState(ctx context.Context) error
 	//Init(context.Context, []dsess.SqlDatabase, bool) error
-	SetTimers(int64, int64, int64)
+	SetTimers(int64, int64)
 }
 
 type BranchStatsProvider interface {
@@ -188,8 +188,8 @@ func statsTimers(ctx *sql.Context, args ...string) (interface{}, error) {
 	dSess := dsess.DSessFromSess(ctx.Session)
 	statsPro := dSess.StatsProvider()
 
-	if len(args) != 3 {
-		return nil, fmt.Errorf("expected timer arguments (ns): (job, gc, sync)")
+	if len(args) != 2 {
+		return nil, fmt.Errorf("expected timer arguments (ns): (job, gc)")
 	}
 	job, err := strconv.ParseInt(args[0], 10, 64)
 	if err != nil {
@@ -199,13 +199,9 @@ func statsTimers(ctx *sql.Context, args ...string) (interface{}, error) {
 	if err != nil {
 		return nil, fmt.Errorf("interval timer must be positive intergers")
 	}
-	sync, err := strconv.ParseInt(args[2], 10, 64)
-	if err != nil {
-		return nil, fmt.Errorf("interval arguments must be positive intergers")
-	}
 
 	if afp, ok := statsPro.(ToggableStats); ok {
-		afp.SetTimers(job, gc, sync)
+		afp.SetTimers(job, gc)
 		return OkResult, nil
 	}
 	return nil, fmt.Errorf("provider does not implement ToggableStats")

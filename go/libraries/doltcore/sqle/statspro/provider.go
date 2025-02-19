@@ -156,10 +156,7 @@ func (sc *StatsCoord) SetEnableGc(v bool) {
 func (sc *StatsCoord) SetTimers(job, gc int64) {
 	sc.statsMu.Lock()
 	defer sc.statsMu.Unlock()
-	sc.sq.Pause()
-	sc.sq = sc.sq.WithRateLimit(time.Duration(job))
-	sc.sq.Start()
-
+	sc.sq.NewRateLimit(time.Duration(max(1, job)))
 	sc.gcInterval = time.Duration(gc)
 }
 
