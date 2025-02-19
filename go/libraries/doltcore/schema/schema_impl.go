@@ -595,8 +595,9 @@ func (si *schemaImpl) GetValueDescriptor(vs val.ValueStore) val.TupleDesc {
 		if extendedType, ok := sqlType.(gmstypes.ExtendedType); ok {
 			if encoding == serial.EncodingExtendedAddr {
 				handlers = append(handlers, val.NewExtendedAddressTypeHandler(vs, extendedType))
+			} else {
+				handlers = append(handlers, extendedType)
 			}
-			handlers = append(handlers, extendedType)
 		} else {
 			handlers = append(handlers, nil)
 		}

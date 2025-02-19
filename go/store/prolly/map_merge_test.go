@@ -225,6 +225,7 @@ type mutationSet struct {
 }
 
 func makeTuplesAndMutations(kd, vd val.TupleDesc, sz int, ns tree.NodeStore) (base [][2]val.Tuple, left, right mutationSet) {
+	ctx := context.Background()
 	mutSz := sz / 10
 	totalSz := sz + (mutSz * 2)
 	tuples := tree.RandomTuplePairs(ctx, totalSz, kd, vd, ns)

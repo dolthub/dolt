@@ -132,6 +132,7 @@ var vd = val.NewTupleDescriptor(
 )
 
 func makeProllyMap(t *testing.T, ns tree.NodeStore, count int) (prolly.Map, [][2]val.Tuple) {
+	ctx := context.Background()
 	tuples := tree.RandomTuplePairs(ctx, count, kd, vd, ns)
 	om := mustProllyMapFromTuples(t, kd, vd, ns, tuples)
 

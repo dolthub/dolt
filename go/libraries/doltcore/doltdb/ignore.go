@@ -61,7 +61,7 @@ var ConvertTupleToIgnoreBoolean = convertTupleToIgnoreBoolean
 // GetIgnoreTablePatternKey is a function that converts a Tuple to a string for the pattern field. This is used to handle the Doltgres extended string type.
 var GetIgnoreTablePatternKey = getIgnoreTablePatternKey
 
-func convertTupleToIgnoreBoolean(valueDesc val.TupleDesc, valueTuple val.Tuple) (bool, error) {
+func convertTupleToIgnoreBoolean(ctx context.Context, valueDesc val.TupleDesc, valueTuple val.Tuple) (bool, error) {
 	if !valueDesc.Equals(val.NewTupleDescriptor(val.Type{Enc: val.Int8Enc, Nullable: false})) {
 		return false, fmt.Errorf("dolt_ignore had unexpected value type, this should never happen")
 	}
@@ -72,7 +72,7 @@ func convertTupleToIgnoreBoolean(valueDesc val.TupleDesc, valueTuple val.Tuple) 
 	return ignore, nil
 }
 
-func getIgnoreTablePatternKey(keyDesc val.TupleDesc, keyTuple val.Tuple, _ tree.NodeStore) (string, error) {
+func getIgnoreTablePatternKey(ctx context.Context, keyDesc val.TupleDesc, keyTuple val.Tuple, _ tree.NodeStore) (string, error) {
 	if !keyDesc.Equals(val.NewTupleDescriptor(val.Type{Enc: val.StringEnc, Nullable: false})) {
 		return "", fmt.Errorf("dolt_ignore had unexpected key type, this should never happen")
 	}
@@ -129,12 +129,12 @@ func GetIgnoredTablePatterns(ctx context.Context, roots Roots, schemas []string)
 
 			m := durable.MapFromIndex(index)
 
-			pattern, err := GetIgnoreTablePatternKey(keyDesc, keyTuple, m.NodeStore())
+			pattern, err := GetIgnoreTablePatternKey(ctx, keyDesc, keyTuple, m.NodeStore())
 			if err != nil {
 				return nil, err
 			}
 
-			ignore, err := ConvertTupleToIgnoreBoolean(valueDesc, valueTuple)
+			ignore, err := ConvertTupleToIgnoreBoolean(ctx, valueDesc, valueTuple)
 			if err != nil {
 				return nil, err
 			}

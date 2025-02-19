@@ -43,6 +43,10 @@ var (
 	bucket = []byte("bolt")
 )
 
+func compareBytes(ctx context.Context, a, b []byte) int {
+	return bytes.Compare(a, b)
+}
+
 func BenchmarkImportBBolt(b *testing.B) {
 	makeWriter := func() writer {
 		path, err := os.MkdirTemp("", "*")
@@ -63,7 +67,7 @@ func BenchmarkImportBBolt(b *testing.B) {
 		})
 		require.NoError(b, err)
 		return &bboltWriter{
-			edits: skip.NewSkipList(bytes.Compare),
+			edits: skip.NewSkipList(compareBytes),
 			db:    db,
 		}
 	}
@@ -150,6 +154,7 @@ func (wr *doltWriter) Flush() error {
 }
 
 func benchmarkBatchWrite(b *testing.B, wr writer) {
+	ctx := context.Background()
 	dp := newDataProvider(batch)
 	for i := 0; i < b.N; i++ {
 		k, v := dp.next()

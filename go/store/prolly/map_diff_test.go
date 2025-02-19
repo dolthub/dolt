@@ -311,6 +311,7 @@ func makeMapWithUpdates(t *testing.T, m Map, updates ...[3]val.Tuple) Map {
 }
 
 func makeUpdatesToTuples(kd, vd val.TupleDesc, tuples ...[2]val.Tuple) (updates [][3]val.Tuple) {
+	ctx := context.Background()
 	updates = make([][3]val.Tuple, len(tuples))
 
 	valBuilder := val.NewTupleBuilder(vd)

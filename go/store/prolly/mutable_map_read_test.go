@@ -163,6 +163,7 @@ func makeMutableSecondaryIndex(t *testing.T, count int) (testMap, [][2]val.Tuple
 }
 
 func deleteFromMutableMap(mut *MutableMap, tt [][2]val.Tuple) (*MutableMap, [][2]val.Tuple, [][2]val.Tuple) {
+	ctx := context.Background()
 	count := len(tt)
 	testRand.Shuffle(count, func(i, j int) {
 		tt[i], tt[j] = tt[j], tt[i]
@@ -176,7 +177,6 @@ func deleteFromMutableMap(mut *MutableMap, tt [][2]val.Tuple) (*MutableMap, [][2
 	desc := keyDescFromMap(mut)
 	tree.SortTuplePairs(ctx, remaining, desc)
 
-	ctx := context.Background()
 	for _, kv := range deletes {
 		if err := mut.Delete(ctx, kv[0]); err != nil {
 			panic(err)

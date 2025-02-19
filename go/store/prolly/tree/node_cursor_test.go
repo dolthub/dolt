@@ -164,6 +164,7 @@ var valDesc = val.NewTupleDescriptor(
 )
 
 func randomTupleItemPairs(count int, ns NodeStore) (items [][2]Item) {
+	ctx := context.Background()
 	tups := RandomTuplePairs(ctx, count, keyDesc, valDesc, ns)
 	items = make([][2]Item, count)
 	if len(tups) != len(items) {

@@ -289,6 +289,7 @@ func makeRandomUnboundedUpperKeyRange(kd val.TupleDesc, tuples [][2]val.Tuple) k
 }
 
 func makeBoundedKeyRangeWithMissingKeys(t *testing.T, m Map, kd val.TupleDesc, vd val.TupleDesc, tuples [][2]val.Tuple) keyRangeDiffTest {
+	ctx := context.Background()
 	inserts := generateInserts(t, m, kd, vd, 2)
 	low, hi := inserts[0][0], inserts[1][0]
 	if kd.Compare(ctx, low, hi) > 0 {
@@ -316,6 +317,7 @@ type keyRange struct {
 }
 
 func (kR keyRange) includes(k val.Tuple) bool {
+	ctx := context.Background()
 	if len(kR.start) != 0 && kR.kd.Compare(ctx, k, kR.start) < 0 {
 		return false
 	}

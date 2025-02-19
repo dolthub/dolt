@@ -257,6 +257,7 @@ type rangeDiffTest struct {
 }
 
 func makeRandomOpenStopRangeTest(kd val.TupleDesc, tuples [][2]val.Tuple) rangeDiffTest {
+	ctx := context.Background()
 	i := rand.Intn(len(tuples))
 	j := rand.Intn(len(tuples))
 	if j < i {
@@ -281,6 +282,7 @@ func makeRandomLesserRangeTest(kd val.TupleDesc, tuples [][2]val.Tuple) rangeDif
 }
 
 func getPairsInRange(tuples [][2]val.Tuple, rng Range) (keys [][2]val.Tuple) {
+	ctx := context.Background()
 	for _, pair := range tuples {
 		if rng.Matches(ctx, pair[0]) {
 			keys = append(keys, pair)

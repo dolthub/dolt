@@ -16,6 +16,7 @@ package skip
 
 import (
 	"bytes"
+	"context"
 	"sort"
 	"testing"
 )
@@ -129,7 +130,8 @@ func BenchmarkIterAll(b *testing.B) {
 }
 
 func benchmarkGet(b *testing.B, vals [][]byte) {
-	l := NewSkipList(bytes.Compare)
+	ctx := context.Background()
+	l := NewSkipList(compareBytes)
 	for i := range vals {
 		l.Put(ctx, vals[i], vals[i])
 	}
@@ -144,7 +146,8 @@ func benchmarkGet(b *testing.B, vals [][]byte) {
 }
 
 func benchmarkPut(b *testing.B, vals [][]byte) {
-	l := NewSkipList(bytes.Compare)
+	ctx := context.Background()
+	l := NewSkipList(compareBytes)
 	for i := 0; i < b.N; i++ {
 		j := i % len(vals)
 		if j == 0 {
@@ -156,7 +159,8 @@ func benchmarkPut(b *testing.B, vals [][]byte) {
 }
 
 func benchmarkIterAll(b *testing.B, vals [][]byte) {
-	l := NewSkipList(bytes.Compare)
+	ctx := context.Background()
+	l := NewSkipList(compareBytes)
 	for i := range vals {
 		l.Put(ctx, vals[i], vals[i])
 	}
