@@ -25,39 +25,89 @@ import (
 
 //
 
-func (sc *StatsCoord) newCycle(ctx context.Context) context.Context {
-	sc.cycleMu.Lock()
-	defer sc.cycleMu.Unlock()
-	if sc.cycleCancel != nil {
-		sc.cycleCancel()
+func (sc *StatsCoord) newCycle(ctx context.Context) (context.Context, error) {
+	sc.statsMu.Lock()
+	defer sc.statsMu.Unlock()
+	select {
+	case <-ctx.Done():
+		// thread invalidated and doesn't own stack
+		return ctx, nil
+	default:
+		// otherwise we still own the stack
 	}
-	sc.cycleCtx, sc.cycleCancel = context.WithCancel(ctx)
-	return sc.cycleCtx
+	if len(sc.activeCancels) != 2 || len(sc.activeCtx) != 2 {
+		return nil, fmt.Errorf("thread owning stasts issuing expects two context, found %d", len(sc.activeCtx))
+	}
+
+	sc.activeCancels[1]()
+	sc.activeCtx[1], sc.activeCancels[1] = context.WithCancel(sc.activeCtx[0])
+	return sc.activeCtx[1], nil
 }
 
-func (sc *StatsCoord) cancelSender() {
-	sc.cycleMu.Lock()
-	defer sc.cycleMu.Unlock()
-	if sc.cycleCancel != nil {
-		sc.cycleCancel()
-		sc.cycleCancel = nil
-	}
+func (sc *StatsCoord) newThreadCtx() (context.Context, context.Context) {
+	sc.Stop()
+
+	sc.statsMu.Lock()
+	sc.statsMu.Unlock()
+
+	newCtx, cancel := context.WithCancel(context.Background())
+	cycleCtx, cycleCancel := context.WithCancel(newCtx)
+
+	sc.activeCtx = append(sc.activeCtx, newCtx, cycleCtx)
+	sc.activeCancels = append(sc.activeCancels, cancel, cycleCancel)
+	return newCtx, cycleCtx
 }
 
-func (sc *StatsCoord) getCycleWaiter() <-chan struct{} {
-	sc.cycleMu.Lock()
-	defer sc.cycleMu.Unlock()
-	return sc.cycleCtx.Done()
+var ErrStatsIssuerPaused = fmt.Errorf("stats issuer is paused")
+
+func (sc *StatsCoord) getLatestCtx() (context.Context, error) {
+	sc.statsMu.Lock()
+	defer sc.statsMu.Unlock()
+	if len(sc.activeCtx) != 2 {
+		return nil, ErrStatsIssuerPaused
+	}
+	return sc.activeCtx[1], nil
+}
+
+// Stop stops the sender thread and then pauses the queue
+func (sc *StatsCoord) Stop() {
+	sc.statsMu.Lock()
+	sc.statsMu.Unlock()
+	for _, f := range sc.activeCancels {
+		f()
+	}
+	sc.activeCtx = sc.activeCtx[:0]
+	sc.activeCancels = sc.activeCancels[:0]
+	return
+}
+
+// Restart continues the queue and blocks until sender is running
+func (sc *StatsCoord) Restart() error {
+	select {
+	case <-sc.closed:
+		return fmt.Errorf("StatsCoord is closed")
+	default:
+	}
+	sc.sq.Start()
+	done := make(chan struct{})
+	go func() {
+		ctx, _ := sc.newThreadCtx()
+		close(done)
+		sc.runIssuer(ctx)
+	}()
+	// only return after latestCtx updated
+	<-done
+	return nil
 }
 
 func (sc *StatsCoord) runIssuer(ctx context.Context) (err error) {
-	defer func() {
-		sc.statsMu.Lock()
-		defer sc.statsMu.Unlock()
-		close(sc.issuerDone)
-	}()
 	var gcKv *memStats
 	for {
+		cycleCtx, err := sc.newCycle(ctx)
+		if err != nil {
+			return err
+		}
+
 		genStart := sc.genCnt.Load()
 		genCand := sc.genCand.Add(1)
 		gcKv = nil
@@ -65,8 +115,6 @@ func (sc *StatsCoord) runIssuer(ctx context.Context) (err error) {
 			gcKv = NewMemStats()
 			gcKv.gcGen = genCand
 		}
-
-		cycleCtx := sc.newCycle(ctx)
 
 		sqlCtx, err := sc.ctxGen(cycleCtx)
 		if err != nil {
@@ -79,8 +127,8 @@ func (sc *StatsCoord) runIssuer(ctx context.Context) (err error) {
 		}
 
 		select {
-		case <-cycleCtx.Done():
-			return context.Cause(cycleCtx)
+		case <-ctx.Done():
+			return context.Cause(ctx)
 		default:
 		}
 

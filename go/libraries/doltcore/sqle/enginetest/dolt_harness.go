@@ -301,7 +301,7 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 				return nil, err
 			}
 
-			err = statsPro.Restart(ctx)
+			err = statsPro.Restart()
 			if err != nil {
 				return nil, err
 			}
@@ -324,7 +324,7 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 	}
 	bThreads := sql.NewBackgroundThreads()
 	statsPro := statspro.NewStatsCoord(ctx, d.provider.(*sqle.DoltDatabaseProvider), ctxGen, ctx.Session.GetLogger().Logger, bThreads, d.multiRepoEnv.GetEnv(d.multiRepoEnv.GetFirstDatabase()))
-	require.NoError(t, statsPro.Restart(ctx))
+	require.NoError(t, statsPro.Restart())
 	d.engine.Analyzer.Catalog.StatsProvider = statsPro
 
 	e, err := enginetest.RunSetupScripts(ctx, d.engine, d.resetScripts(), d.SupportsNativeIndexCreation())

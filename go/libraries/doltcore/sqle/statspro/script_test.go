@@ -689,7 +689,7 @@ func TestStatScripts(t *testing.T) {
 			sc.SetEnableGc(true)
 			defer sqlEng.Close()
 
-			require.NoError(t, sc.Restart(ctx))
+			require.NoError(t, sc.Restart())
 
 			//sc.Debug = true
 

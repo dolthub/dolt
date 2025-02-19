@@ -41,6 +41,166 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
 )
 
+func TestStatsCoord(t *testing.T) {
+	bthreads := sql.NewBackgroundThreads()
+	defer bthreads.Shutdown()
+	t.Run("ClosedDoesNotStart", func(t *testing.T) {
+		sc := newStatsCoord(bthreads)
+		sc.Close()
+		require.Error(t, sc.Restart())
+		_, _, ok := sc.latestContexts()
+		require.False(t, ok)
+	})
+	t.Run("IsStoppable", func(t *testing.T) {
+		sc := newStatsCoord(bthreads)
+		require.NoError(t, sc.Restart())
+		ctx1, cycle1, ok := sc.latestContexts()
+		require.True(t, ok)
+		<-cycle1.Done()
+		select {
+		case <-ctx1.Done():
+			t.Fatal("expected latest thread ctx to be active")
+		default:
+		}
+		sc.Stop()
+		<-ctx1.Done()
+	})
+	t.Run("StopsAreIdempotent", func(t *testing.T) {
+		sc := newStatsCoord(bthreads)
+		require.NoError(t, sc.Restart())
+		ctx1, cycle1, ok := sc.latestContexts()
+		require.True(t, ok)
+		<-cycle1.Done()
+		sc.Stop()
+		sc.Stop()
+		sc.Stop()
+		sc.Stop()
+		<-ctx1.Done()
+	})
+	t.Run("IsRestartable", func(t *testing.T) {
+		sc := newStatsCoord(bthreads)
+		require.NoError(t, sc.Restart())
+		ctx1, cycle1, ok := sc.latestContexts()
+		require.True(t, ok)
+
+		require.NoError(t, sc.Restart())
+		ctx2, cycle2, ok := sc.latestContexts()
+		require.True(t, ok)
+
+		<-cycle1.Done()
+		<-ctx1.Done()
+		<-cycle2.Done()
+		sc.Stop()
+		<-ctx2.Done()
+	})
+	t.Run("RestartsAreIdempotent", func(t *testing.T) {
+		sc := newStatsCoord(bthreads)
+		require.NoError(t, sc.Restart())
+		ctx1, cycle1, ok := sc.latestContexts()
+		require.True(t, ok)
+		<-cycle1.Done()
+		select {
+		case <-ctx1.Done():
+			t.Fatal("expected latest thread ctx to be active")
+		default:
+		}
+		require.NoError(t, sc.Restart())
+		require.NoError(t, sc.Restart())
+		require.NoError(t, sc.Restart())
+		require.NoError(t, sc.Restart())
+		<-ctx1.Done()
+	})
+	t.Run("ConcurrentStartStopsSerialize", func(t *testing.T) {
+		sc := newStatsCoord(bthreads)
+		wg := sync.WaitGroup{}
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			for _ = range 20 {
+				require.NoError(t, sc.Restart())
+			}
+		}()
+		go func() {
+			defer wg.Done()
+			for _ = range 20 {
+				sc.Stop()
+			}
+		}()
+		wg.Wait()
+		require.NoError(t, sc.Restart())
+		ctx1, cycle1, ok := sc.latestContexts()
+		require.True(t, ok)
+		<-cycle1.Done()
+		sc.Stop()
+		<-ctx1.Done()
+	})
+	t.Run("WaitBlocksOnStatsCollection", func(t *testing.T) {
+		sqlCtx, sqlEng, sc := emptySetup(t, bthreads, true)
+		require.NoError(t, executeQuery(sqlCtx, sqlEng, "create table xy (x int primary key, y int)"))
+		require.NoError(t, sc.Restart())
+		done := make(chan struct{})
+		wg := sync.WaitGroup{}
+		wg.Add(2)
+		sc.sq.DoAsync(func() error {
+			defer wg.Done()
+			<-done
+			return nil
+		})
+		go func() {
+			defer wg.Done()
+			defer close(done)
+			ctx, _ := context.WithTimeout(context.Background(), 10*time.Millisecond)
+			err := sc.WaitForDbSync(ctx)
+			require.ErrorIs(t, err, context.Canceled)
+		}()
+		wg.Wait()
+	})
+	t.Run("WaitReturnsIfStopped", func(t *testing.T) {
+		sqlCtx, sqlEng, sc := emptySetup(t, bthreads, true)
+		require.NoError(t, executeQuery(sqlCtx, sqlEng, "create table xy (x int primary key, y int)"))
+		require.NoError(t, sc.Restart())
+		done := make(chan struct{})
+		wg := sync.WaitGroup{}
+		wg.Add(2)
+		sc.sq.DoAsync(func() error {
+			defer wg.Done()
+			<-done
+			return nil
+		})
+		go func() {
+			defer wg.Done()
+			defer close(done)
+			ctx, _ := context.WithTimeout(context.Background(), 10*time.Millisecond)
+			err := sc.WaitForDbSync(ctx)
+			require.ErrorIs(t, err, ErrStatsIssuerPaused)
+		}()
+
+		sc.Stop()
+		wg.Wait()
+	})
+	t.Run("WaitHangsUntilCycleCompletes", func(t *testing.T) {
+		sqlCtx, sqlEng, sc := emptySetup(t, bthreads, true)
+		require.NoError(t, executeQuery(sqlCtx, sqlEng, "create table xy (x int primary key, y int)"))
+		require.NoError(t, sc.Restart())
+		done := make(chan struct{})
+		wg := sync.WaitGroup{}
+		wg.Add(2)
+		sc.sq.DoAsync(func() error {
+			defer wg.Done()
+			<-done
+			return nil
+		})
+		go func() {
+			defer wg.Done()
+			ctx, _ := context.WithTimeout(context.Background(), 10*time.Millisecond)
+			err := sc.WaitForDbSync(ctx)
+			require.NoError(t, err)
+		}()
+		close(done)
+		wg.Wait()
+	})
+}
+
 func TestScheduleLoop(t *testing.T) {
 	threads := sql.NewBackgroundThreads()
 	defer threads.Shutdown()
@@ -534,7 +694,7 @@ func TestDropOnlyDb(t *testing.T) {
 	defer threads.Shutdown()
 	ctx, sqlEng, sc := defaultSetup(t, threads, false)
 
-	require.NoError(t, sc.Restart(ctx))
+	require.NoError(t, sc.Restart())
 
 	_, ok := sc.kv.(*prollyStats)
 	require.True(t, ok)
@@ -546,7 +706,7 @@ func TestDropOnlyDb(t *testing.T) {
 
 	require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
 
-	require.NoError(t, sc.Stop(context.Background()))
+	sc.Stop()
 
 	// empty memory KV
 	_, ok = sc.kv.(*memStats)
@@ -595,13 +755,30 @@ func TestPanic(t *testing.T) {
 	ctx, sqlEng, sc := emptySetup(t, threads, false)
 	sc.SetEnableGc(true)
 
-	require.NoError(t, sc.Restart(ctx))
+	require.NoError(t, sc.Restart())
 
 	sc.sq.DoSync(ctx, func() error {
 		panic("test panic")
 	})
 
 	require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
+}
+
+func newStatsCoord(bthreads *sql.BackgroundThreads) *StatsCoord {
+	dEnv := dtestutils.CreateTestEnv()
+	sqlEng, ctx := newTestEngine(context.Background(), dEnv, bthreads)
+	ctx.Session.SetClient(sql.Client{
+		User:    "billy boy",
+		Address: "bigbillie@fake.horse",
+	})
+
+	sql.SystemVariables.AssignValues(map[string]interface{}{
+		dsess.DoltStatsGCInterval:     100,
+		dsess.DoltStatsBranchInterval: 100,
+		dsess.DoltStatsJobInterval:    1,
+	})
+
+	return sqlEng.Analyzer.Catalog.StatsProvider.(*StatsCoord)
 }
 
 func emptySetup(t *testing.T, threads *sql.BackgroundThreads, memOnly bool) (*sql.Context, *gms.Engine, *StatsCoord) {
@@ -623,7 +800,7 @@ func emptySetup(t *testing.T, threads *sql.BackgroundThreads, memOnly bool) (*sq
 	sc.SetMemOnly(memOnly)
 	sc.JobInterval = time.Nanosecond
 
-	require.NoError(t, sc.Restart(ctx))
+	require.NoError(t, sc.Restart())
 
 	ctx, _ = sc.ctxGen(ctx)
 	ctx.Session.SetClient(sql.Client{
@@ -634,7 +811,7 @@ func emptySetup(t *testing.T, threads *sql.BackgroundThreads, memOnly bool) (*sq
 	require.NoError(t, executeQuery(ctx, sqlEng, "use mydb"))
 
 	require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
-	require.NoError(t, sc.Stop(context.Background()))
+	sc.Stop()
 
 	var sqlDbs []sqle.Database
 	for _, db := range sqlEng.Analyzer.Catalog.DbProvider.AllDatabases(ctx) {
@@ -796,7 +973,7 @@ func TestStatsGcConcurrency(t *testing.T) {
 	sc.JobInterval = 1 * time.Nanosecond
 	sc.gcInterval = 100 * time.Nanosecond
 	sc.branchInterval = 50 * time.Nanosecond
-	require.NoError(t, sc.Restart(ctx))
+	require.NoError(t, sc.Restart())
 
 	addDb := func(ctx *sql.Context, dbName string) {
 		require.NoError(t, executeQuery(ctx, sqlEng, "create database "+dbName))
@@ -859,7 +1036,7 @@ func TestStatsGcConcurrency(t *testing.T) {
 		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
 		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_gc()"))
 
-		require.NoError(t, sc.Stop(context.Background()))
+		sc.Stop()
 
 		// 101 dbs, 100 with stats (not main)
 		require.Equal(t, iters/2, len(sc.Stats.stats))
@@ -877,7 +1054,7 @@ func TestStatsBranchConcurrency(t *testing.T) {
 	sc.JobInterval = 10
 	sc.gcInterval = time.Hour
 	sc.branchInterval = time.Hour
-	require.NoError(t, sc.Restart(ctx))
+	require.NoError(t, sc.Restart())
 
 	addBranch := func(ctx *sql.Context, i int) {
 		branchName := "branch" + strconv.Itoa(i)
@@ -943,7 +1120,7 @@ func TestStatsBranchConcurrency(t *testing.T) {
 			log.Println("waiting on final Gc", err)
 			err = executeQuery(ctx, sqlEng, "call dolt_stats_gc()")
 		}
-		require.NoError(t, sc.Stop(context.Background()))
+		sc.Stop()
 
 		// at the end we should still have |iters/2| databases
 		require.Equal(t, iters/2, len(sc.Stats.stats))
@@ -963,7 +1140,7 @@ func TestStatsCacheGrowth(t *testing.T) {
 	sc.JobInterval = 10
 	sc.gcInterval = time.Hour
 	sc.branchInterval = time.Hour
-	require.NoError(t, sc.Restart(ctx))
+	require.NoError(t, sc.Restart())
 
 	addBranch := func(ctx *sql.Context, i int) {
 		branchName := "branch" + strconv.Itoa(i)
@@ -1015,7 +1192,7 @@ func TestStatsCacheGrowth(t *testing.T) {
 		executeQuery(ctx, sqlEng, "call dolt_stats_wait()")
 		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_gc()"))
 
-		require.NoError(t, sc.Stop(context.Background()))
+		sc.Stop()
 
 		// at the end we should still have |iters/2| databases
 		require.Equal(t, iters, len(sc.Stats.stats))

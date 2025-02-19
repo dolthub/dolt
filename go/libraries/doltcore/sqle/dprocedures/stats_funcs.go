@@ -77,11 +77,11 @@ func (si StatsInfo) ToJson() string {
 type ToggableStats interface {
 	sql.StatsProvider
 	//FlushQueue(ctx context.Context) error
-	Restart(context.Context) error
-	Stop(context.Context) error
+	Restart() error
+	Stop()
 	Info(ctx context.Context) (StatsInfo, error)
 	Purge(ctx *sql.Context) error
-	WaitForDbSync(ctx *sql.Context) error
+	WaitForDbSync(ctx context.Context) error
 	Gc(ctx *sql.Context) error
 	//ValidateState(ctx context.Context) error
 	//Init(context.Context, []dsess.SqlDatabase, bool) error
@@ -99,7 +99,7 @@ func statsRestart(ctx *sql.Context, _ ...string) (interface{}, error) {
 	statsPro := dSess.StatsProvider()
 
 	if afp, ok := statsPro.(ToggableStats); ok {
-		if err := afp.Restart(ctx); err != nil {
+		if err := afp.Restart(); err != nil {
 			return nil, err
 		}
 
@@ -158,9 +158,7 @@ func statsStop(ctx *sql.Context, _ ...string) (interface{}, error) {
 	statsPro := dSess.StatsProvider()
 
 	if afp, ok := statsPro.(ToggableStats); ok {
-		if err := afp.Stop(ctx); err != nil {
-			return nil, err
-		}
+		afp.Stop()
 		return OkResult, nil
 	}
 	return nil, fmt.Errorf("provider does not implement ToggableStats")
@@ -176,10 +174,7 @@ func statsPurge(ctx *sql.Context, _ ...string) (interface{}, error) {
 		return nil, fmt.Errorf("stats not persisted, cannot purge")
 	}
 
-	err := pro.Stop(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to flush queue: %w", err)
-	}
+	pro.Stop()
 
 	if err := pro.Purge(ctx); err != nil {
 		return "failed to purge stats", err

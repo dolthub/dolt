@@ -274,7 +274,7 @@ func ConfigureServices(
 				if sc == nil {
 					return fmt.Errorf("unexpected nil stats coord")
 				}
-				if err = sc.Restart(sqlCtx); err != nil {
+				if err = sc.Restart(); err != nil {
 					return err
 				}
 			}
