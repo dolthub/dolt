@@ -44,15 +44,15 @@ package statspro
 // shared state swaps are likewise guarded on the issuer's context
 // integrity.
 //
-// All stats are persisted within a single database. If there are multiple
-// databases, one is selected by random as the storage target. If during
-// initialization multiple databases have stats, one will be chosen by
-// random as the target. If a database changes between server restarts,
-// the storage stats will be useless but not impair regular operations because
-// storage is only ever a best-effort content-addressed persistence layer;
-// buckets will be regenerated if they are missing. If the database acting
-// as a storage target is deleted, we swap the cache and write to a new storage
-// target.
+// All stats are persisted within a single database. If there are
+// multiple databases, one is selected by random as the storage target.
+// If during initialization multiple databases have stats, one will be
+// chosen by random as the target. If a database changes between server
+// restarts, the storage stats will be useless but not impair regular
+// operations because storage is only ever a best-effort
+// content-addressed persistence layer; buckets will be regenerated if
+// they are missing. If the database acting as a storage target is
+// deleted, we swap the cache and write to a new storage target.
 //
 // The main data structures:
 //  - Table statistics map, that returns a list of table index statistics
