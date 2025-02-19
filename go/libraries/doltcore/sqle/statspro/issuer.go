@@ -134,12 +134,6 @@ func (sc *StatsCoord) runIssuer(ctx context.Context) (err error) {
 			sc.descError("", err)
 		}
 
-		select {
-		case <-ctx.Done():
-			return context.Cause(ctx)
-		default:
-		}
-
 		if ok, err := sc.trySwapStats(ctx, genStart, genCand, newStats, gcKv); err != nil || !ok {
 			sc.descError("failed to swap stats", err)
 		}
@@ -149,6 +143,13 @@ func (sc *StatsCoord) runIssuer(ctx context.Context) (err error) {
 func (sc *StatsCoord) trySwapStats(ctx context.Context, prevGen, newGen uint64, newStats *rootStats, gcKv *memStats) (bool, error) {
 	sc.statsMu.Lock()
 	defer sc.statsMu.Unlock()
+
+	select {
+	case <-ctx.Done():
+		return false, context.Cause(ctx)
+	default:
+	}
+
 	var err error
 	if sc.genCnt.CompareAndSwap(prevGen, newGen) {
 		// Replace stats and new Kv if no replacements happened
