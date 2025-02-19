@@ -52,3 +52,56 @@ var BrokenSystemTableQueries = []queries.QueryTest{
 		Expected: []sql.Row{},
 	},
 }
+
+var BackupsSystemTableQueries = queries.ScriptTest{
+	Name: "dolt_backups table",
+	SetUpScript: []string{
+		`call dolt_backup("add", "backup3", "file:///tmp/backup3");`,
+		`call dolt_backup("add", "backup1", "file:///tmp/backup1");`,
+		`call dolt_backup("add", "backup2", "file:///tmp/backup2");`,
+	},
+	Assertions: []queries.ScriptTestAssertion{
+		{
+			Query: "select * from dolt_backups;",
+			Expected: []sql.Row{
+				{"backup1", "file:///tmp/backup1"},
+				{"backup2", "file:///tmp/backup2"},
+				{"backup3", "file:///tmp/backup3"},
+			},
+		},
+		{
+			Query: "select url from dolt_backups where name = 'backup1';",
+			Expected: []sql.Row{
+				{"file:///tmp/backup1"},
+			},
+		},
+		{
+			Query:          "delete from dolt_backups where name = 'backup1';",
+			ExpectedErrStr: "table doesn't support DELETE FROM",
+		},
+		{
+			Query:          "update dolt_backups set name = 'backup1' where name = 'backup2';",
+			ExpectedErrStr: "table doesn't support UPDATE",
+		},
+		{
+			Query:          "insert into dolt_backups values ('backup4', 'file:///tmp/backup4');",
+			ExpectedErrStr: "table doesn't support INSERT INTO",
+		},
+		{
+			Query:    "call dolt_backup('add', 'backup4', 'file:///tmp/backup4');",
+			Expected: []sql.Row{{0}},
+		},
+		{
+			Query:    "call dolt_backup('remove', 'backup1');",
+			Expected: []sql.Row{{0}},
+		},
+		{
+			Query: "select * from dolt_backups;",
+			Expected: []sql.Row{
+				{"backup2", "file:///tmp/backup2"},
+				{"backup3", "file:///tmp/backup3"},
+				{"backup4", "file:///tmp/backup4"},
+			},
+		},
+	},
+}
