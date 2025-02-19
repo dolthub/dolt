@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/dolthub/dolt/go/libraries/utils/circular"
 )
@@ -81,14 +82,9 @@ func NewSerialQueue() *SerialQueue {
 		schedCh:   make(chan schedReq),
 	}
 }
-
-func NewSerialQueueWithErrorCb(errCb func(error)) *SerialQueue {
-	return &SerialQueue{
-		completed: make(chan struct{}),
-		runnerCh:  make(chan work),
-		schedCh:   make(chan schedReq),
-		errCb:     errCb,
-	}
+func (s *SerialQueue) WithErrorCb(errCb func(error)) *SerialQueue {
+	s.errCb = errCb
+	return s
 }
 
 // Run the serial queue's background threads with this |ctx|. If the
@@ -148,6 +144,19 @@ func (s *SerialQueue) Purge() error {
 	return s.makeReq(schedReq{
 		reqType: schedReqType_Purge,
 		resp:    make(chan schedResp, 1),
+	})
+}
+
+func (s *SerialQueue) NewRateLimit(rate time.Duration) error {
+	return s.makeReq(schedReq{
+		reqType: schedReqType_Enqueue,
+		pri:     schedPriority_High,
+		work: work{
+			f:       func() error { return nil },
+			done:    make(chan struct{}),
+			newRate: rate,
+		},
+		resp: make(chan schedResp, 1),
 	})
 }
 
@@ -309,9 +318,18 @@ func (s *SerialQueue) runScheduler(ctx context.Context) {
 
 // Read off the runner channel and run the submitted work.
 func (s *SerialQueue) runRunner(ctx context.Context) {
+	ticker := time.NewTicker(1)
 	for {
 		select {
 		case w := <-s.runnerCh:
+			if w.newRate > 0 {
+				ticker.Reset(w.newRate)
+			}
+			select {
+			case <-ticker.C:
+			case <-ctx.Done():
+			}
+
 			func() {
 				var err error
 				defer func() {
@@ -337,6 +355,8 @@ type work struct {
 	f func() error
 	// The channel to close after the work is run.
 	done chan struct{}
+	// Update worker rate
+	newRate time.Duration
 }
 
 type schedState int

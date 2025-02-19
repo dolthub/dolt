@@ -301,4 +301,35 @@ func TestSerialQueue(t *testing.T) {
 		assert.ErrorIs(t, err, ErrCompletedQueue)
 		assert.False(t, ran, "the interrupt task never ran.")
 	})
+	t.Run("RateLimitWorkThroughput", func(t *testing.T) {
+		ctx, _ := context.WithCancel(context.Background())
+		queue := NewSerialQueue()
+		running := make(chan struct{})
+		go func() {
+			close(running)
+			queue.Run(ctx)
+		}()
+		<-running
+
+		// first will run because timeout > job rate
+		ran := false
+		subCtx, _ := context.WithTimeout(ctx, 5*time.Millisecond)
+		err := queue.DoSync(subCtx, func() error {
+			ran = true
+			return nil
+		})
+		assert.NoError(t, err)
+		assert.True(t, ran, "the interrupt task never ran.")
+
+		// second timeout < jobrate, will fail
+		queue.NewRateLimit(10 * time.Millisecond)
+		ran = false
+		subCtx, _ = context.WithTimeout(ctx, 5*time.Millisecond)
+		err = queue.DoSync(subCtx, func() error {
+			ran = true
+			return nil
+		})
+		assert.ErrorIs(t, err, context.DeadlineExceeded)
+		assert.False(t, ran, "the interrupt task never ran.")
+	})
 }

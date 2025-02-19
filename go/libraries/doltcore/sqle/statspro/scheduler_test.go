@@ -200,7 +200,6 @@ func TestStatsCoord(t *testing.T) {
 		wg.Wait()
 	})
 }
-
 func TestScheduleLoop(t *testing.T) {
 	threads := sql.NewBackgroundThreads()
 	defer threads.Shutdown()

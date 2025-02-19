@@ -114,31 +114,30 @@ func newRootStats() *rootStats {
 }
 
 func NewStatsCoord(ctx context.Context, pro *sqle.DoltDatabaseProvider, ctxGen ctxFactory, logger *logrus.Logger, threads *sql.BackgroundThreads, dEnv *env.DoltEnv) *StatsCoord {
-	sq := jobqueue.NewSerialQueueWithErrorCb(func(err error) {
+	sq := jobqueue.NewSerialQueue().WithErrorCb(func(err error) {
 		logger.Error(err)
 	})
 	go func() {
 		sq.Run(ctx)
 	}()
 	return &StatsCoord{
-		statsMu:        sync.Mutex{},
-		fsMu:           sync.Mutex{},
-		logger:         logger,
-		JobInterval:    500 * time.Millisecond,
-		gcInterval:     24 * time.Hour,
-		branchInterval: 24 * time.Hour,
-		sq:             sq,
-		Stats:          newRootStats(),
-		dbFs:           make(map[string]filesys.Filesys),
-		threads:        threads,
-		closed:         make(chan struct{}),
-		kv:             NewMemStats(),
-		pro:            pro,
-		hdp:            dEnv.GetUserHomeDir,
-		dialPro:        env.NewGRPCDialProviderFromDoltEnv(dEnv),
-		ctxGen:         ctxGen,
-		genCnt:         atomic.Uint64{},
-		genCand:        atomic.Uint64{},
+		statsMu:     sync.Mutex{},
+		fsMu:        sync.Mutex{},
+		logger:      logger,
+		JobInterval: 500 * time.Millisecond,
+		gcInterval:  24 * time.Hour,
+		sq:          sq,
+		Stats:       newRootStats(),
+		dbFs:        make(map[string]filesys.Filesys),
+		threads:     threads,
+		closed:      make(chan struct{}),
+		kv:          NewMemStats(),
+		pro:         pro,
+		hdp:         dEnv.GetUserHomeDir,
+		dialPro:     env.NewGRPCDialProviderFromDoltEnv(dEnv),
+		ctxGen:      ctxGen,
+		genCnt:      atomic.Uint64{},
+		genCand:     atomic.Uint64{},
 	}
 }
 
@@ -154,10 +153,14 @@ func (sc *StatsCoord) SetEnableGc(v bool) {
 	sc.enableGc = v
 }
 
-func (sc *StatsCoord) SetTimers(job, gc, branch int64) {
-	sc.JobInterval = time.Duration(job)
+func (sc *StatsCoord) SetTimers(job, gc int64) {
+	sc.statsMu.Lock()
+	defer sc.statsMu.Unlock()
+	sc.sq.Pause()
+	sc.sq = sc.sq.WithRateLimit(time.Duration(job))
+	sc.sq.Start()
+
 	sc.gcInterval = time.Duration(gc)
-	sc.branchInterval = time.Duration(branch)
 }
 
 func (sc *StatsCoord) latestContexts() (context.Context, context.Context, bool) {
