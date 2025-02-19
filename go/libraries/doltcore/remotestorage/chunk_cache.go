@@ -24,7 +24,7 @@ import (
 // using ChunkCache if it is possible for the remote to GC, since in that
 // case the cache could contain stale data.
 type ChunkCache interface {
-	// Insert some observed / fetched chunks into the cached. These
+	// Insert some observed / fetched chunks into the cache. These
 	// chunks may or may not be returned in the future.
 	InsertChunks(cs []nbs.ToChunker)
 	// Get previously cached chunks, if they are still available.

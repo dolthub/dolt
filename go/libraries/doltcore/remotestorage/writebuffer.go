@@ -27,8 +27,8 @@ type WriteBuffer interface {
 
 	// Returns the current set of written chunks.  After this
 	// returns, concurrent calls to other methods may block until
-	// |WriteCompleted is called.  Calls to |GetAllForWrite| must
-	// be bracketed by a call to |WriteCompleted|
+	// |WriteCompleted| is called.  Calls to |GetAllForWrite| must
+	// be bracketed by a call to |WriteCompleted|.
 	GetAllForWrite() map[hash.Hash]nbs.CompressedChunk
 
 	// Called after a call to |GetAllForWrite|, this records

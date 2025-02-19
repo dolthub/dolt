@@ -15,8 +15,6 @@
 package remotestorage
 
 import (
-	"sync"
-
 	lru "github.com/hashicorp/golang-lru/v2"
 
 	"github.com/dolthub/dolt/go/store/hash"
@@ -26,7 +24,6 @@ import (
 // mapChunkCache is a simple ChunkCache implementation that stores
 // cached chunks and has records in two separate lru caches.
 type mapChunkCache struct {
-	mu     *sync.Mutex
 	chunks *lru.TwoQueueCache[hash.Hash, nbs.ToChunker]
 	has    *lru.TwoQueueCache[hash.Hash, struct{}]
 }
@@ -48,7 +45,6 @@ func NewMapChunkCacheWithCapacity(maxChunkCapacity, maxHasCapacity int) *mapChun
 		panic(err)
 	}
 	return &mapChunkCache{
-		&sync.Mutex{},
 		chunks,
 		has,
 	}
