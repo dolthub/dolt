@@ -22,7 +22,6 @@ import (
 	"strings"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
-	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
 )
@@ -72,7 +71,7 @@ func convertTupleToIgnoreBoolean(ctx context.Context, valueDesc val.TupleDesc, v
 	return ignore, nil
 }
 
-func getIgnoreTablePatternKey(ctx context.Context, keyDesc val.TupleDesc, keyTuple val.Tuple, _ tree.NodeStore) (string, error) {
+func getIgnoreTablePatternKey(ctx context.Context, keyDesc val.TupleDesc, keyTuple val.Tuple) (string, error) {
 	if !keyDesc.Equals(val.NewTupleDescriptor(val.Type{Enc: val.StringEnc, Nullable: false})) {
 		return "", fmt.Errorf("dolt_ignore had unexpected key type, this should never happen")
 	}
@@ -111,10 +110,10 @@ func GetIgnoredTablePatterns(ctx context.Context, roots Roots, schemas []string)
 		if err != nil {
 			return nil, err
 		}
-		// The ignore table doesn't have any addressable columns, so it's okay to not pass in a ValueStore here.
-		keyDesc, valueDesc := ignoreTableSchema.GetMapDescriptors(nil)
+		m := durable.MapFromIndex(index)
+		keyDesc, valueDesc := ignoreTableSchema.GetMapDescriptors(m.NodeStore())
 
-		ignoreTableMap, err := durable.ProllyMapFromIndex(index).IterAll(ctx)
+		ignoreTableMap, err := m.IterAll(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -127,9 +126,7 @@ func GetIgnoredTablePatterns(ctx context.Context, roots Roots, schemas []string)
 				return nil, err
 			}
 
-			m := durable.MapFromIndex(index)
-
-			pattern, err := GetIgnoreTablePatternKey(ctx, keyDesc, keyTuple, m.NodeStore())
+			pattern, err := GetIgnoreTablePatternKey(ctx, keyDesc, keyTuple)
 			if err != nil {
 				return nil, err
 			}
