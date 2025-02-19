@@ -165,8 +165,15 @@ type autoGCCommitHook struct {
 	// we can try to send when we request a GC. If will become our
 	// new |done| channel once we send it successfully.
 	next chan struct{}
-	// |done| and |next| are mutable and |Execute| can be called
-	// concurrently. We protect them with |mu|.
+	// lastSz is set the first time we observe StoreSizes after a
+	// GC or after the server comes up. It is used in some simple
+	// growth heuristics to figure out if we want to run a GC. We
+	// set it back to |nil| when we successfully submit a request
+	// to GC, so that we observe and store the new size after the
+	// GC is finished.
+	lastSz *doltdb.StoreSizes
+	// |done|, |next|, |lastSz| are mutable and |Execute| can be
+	// called concurrently. We protect them with |mu|.
 	mu sync.Mutex
 }
 
@@ -195,24 +202,39 @@ func (h *autoGCCommitHook) Execute(ctx context.Context, ds datas.Dataset, db *do
 	defer h.mu.Unlock()
 	select {
 	case <-h.done:
-		journal := db.ChunkJournal()
-		if journal != nil {
-			const size_128mb = (1 << 27)
-			if journal.Size() > size_128mb {
-				// We want a GC...
-				select {
-				case h.c.workCh <- autoGCWork{db, h.next, h.name}:
-					h.done = h.next
-					h.next = make(chan struct{})
-				case <-ctx.Done():
-					return nil, context.Cause(ctx)
-				}
-			}
+		sz, err := db.StoreSizes(ctx)
+		if err != nil {
+			// Something is probably quite wrong. Regardless, can't determine if we should GC.
+			return nil, err
+		}
+		if h.lastSz == nil {
+			h.lastSz = &sz
+		}
+		const size_128mb = (1 << 27)
+		const size_256mb = (1 << 28)
+		if sz.JournalBytes > size_128mb {
+			// Our first heuristic is simply if journal is greater than a fixed size...
+			return nil, h.requestGC(ctx, db)
+		} else if sz.TotalBytes > h.lastSz.TotalBytes && sz.TotalBytes - h.lastSz.TotalBytes > size_256mb {
+			// Or if the store has grown by a fixed size since our last GC / we started watching it...
+			return nil, h.requestGC(ctx, db)
 		}
 	default:
-		// A GC is running or pending. No need to check.
+		// A GC is already running or pending. No need to check.
 	}
 	return nil, nil
+}
+
+func (h *autoGCCommitHook) requestGC(ctx context.Context, db *doltdb.DoltDB) error {
+	select {
+	case h.c.workCh <- autoGCWork{db, h.next, h.name}:
+		h.done = h.next
+		h.next = make(chan struct{})
+		h.lastSz = nil
+		return nil
+	case <-ctx.Done():
+		return context.Cause(ctx)
+	}
 }
 
 func (h *autoGCCommitHook) HandleError(ctx context.Context, err error) error {
