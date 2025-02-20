@@ -313,6 +313,7 @@ func (ar archiveReader) close() error {
 // readByteSpan reads the byte span from the archive. This allocates a new byte slice and returns it to the caller.
 func (ar archiveReader) readByteSpan(bs byteSpan) ([]byte, error) {
 	buff := make([]byte, bs.length)
+	// NM4 - leverage ReadAtWithStats
 	_, err := ar.reader.ReadAt(buff[:], int64(bs.offset))
 	if err != nil {
 		return nil, err
