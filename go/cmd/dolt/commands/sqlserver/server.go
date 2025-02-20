@@ -267,10 +267,6 @@ func ConfigureServices(
 				config,
 			)
 			if sc, ok := sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.StatsProvider.(*statspro.StatsCoord); ok {
-				sqlCtx, err := sqlEngine.NewDefaultContext(ctx)
-				if err != nil {
-					return err
-				}
 				if sc == nil {
 					return fmt.Errorf("unexpected nil stats coord")
 				}

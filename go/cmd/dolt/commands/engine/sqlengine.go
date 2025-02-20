@@ -218,18 +218,20 @@ func NewSqlEngine(
 
 		typ, jobI, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsJobInterval)
 		_, gcI, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsGCInterval)
-		_, brI, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsBranchInterval)
 
 		jobInterval, _, _ := typ.GetType().Convert(jobI)
 		gcInterval, _, _ := typ.GetType().Convert(gcI)
-		brInterval, _, _ := typ.GetType().Convert(brI)
 
 		sc.SetTimers(
 			jobInterval.(int64)*int64(time.Millisecond),
 			gcInterval.(int64)*int64(time.Millisecond),
-			brInterval.(int64)*int64(time.Millisecond))
+		)
 
-		err := sc.Init(ctx, dbs, false)
+		var sqlDbs []sql.Database
+		for _, db := range dbs {
+			sqlDbs = append(sqlDbs, db)
+		}
+		err := sc.Init(ctx, sqlDbs, false)
 		if err != nil {
 			return nil, err
 		}

@@ -16,6 +16,7 @@ package statspro
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dprocedures"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statspro/jobqueue"
@@ -66,7 +67,6 @@ type StatsCoord struct {
 	dialPro        dbfactory.GRPCDialProvider
 	hdp            env.HomeDirProvider
 
-	fsMu sync.Mutex
 	dbFs map[string]filesys.Filesys
 
 	// ctxGen lets us fetch the most recent working root
@@ -82,9 +82,10 @@ type StatsCoord struct {
 	branchInterval time.Duration
 	memOnly        bool
 	enableGc       bool
-	doGc           atomic.Bool
+	doGc           bool
 	Debug          bool
 	closed         chan struct{}
+	swapCond       sync.Cond
 
 	// kv is a content-addressed cache of histogram objects:
 	// buckets, first bounds, and schema-specific statistic
@@ -120,9 +121,9 @@ func NewStatsCoord(ctx context.Context, pro *sqle.DoltDatabaseProvider, ctxGen c
 	go func() {
 		sq.Run(ctx)
 	}()
-	return &StatsCoord{
+	ret := &StatsCoord{
 		statsMu:     sync.Mutex{},
-		fsMu:        sync.Mutex{},
+		swapCond:    sync.Cond{},
 		logger:      logger,
 		JobInterval: 500 * time.Millisecond,
 		gcInterval:  24 * time.Hour,
@@ -139,6 +140,8 @@ func NewStatsCoord(ctx context.Context, pro *sqle.DoltDatabaseProvider, ctxGen c
 		genCnt:      atomic.Uint64{},
 		genCand:     atomic.Uint64{},
 	}
+	ret.swapCond.L = &ret.statsMu
+	return ret
 }
 
 func (sc *StatsCoord) SetMemOnly(v bool) {
@@ -151,6 +154,18 @@ func (sc *StatsCoord) SetEnableGc(v bool) {
 	sc.statsMu.Lock()
 	defer sc.statsMu.Unlock()
 	sc.enableGc = v
+}
+
+func (sc *StatsCoord) setDoGc() {
+	sc.statsMu.Lock()
+	defer sc.statsMu.Unlock()
+	sc.doGc = true
+}
+
+func (sc *StatsCoord) gcIsSet() bool {
+	sc.statsMu.Lock()
+	defer sc.statsMu.Unlock()
+	return sc.doGc
 }
 
 func (sc *StatsCoord) SetTimers(job, gc int64) {
@@ -224,6 +239,9 @@ func (sc *StatsCoord) Info(ctx context.Context) (dprocedures.StatsInfo, error) {
 }
 
 func (sc *StatsCoord) descError(d string, err error) {
+	if errors.Is(err, context.Canceled) {
+		return
+	}
 	if sc.Debug {
 		log.Println("stats error: ", err.Error())
 	}
@@ -419,7 +437,7 @@ func (sc *StatsCoord) DataLength(ctx *sql.Context, dbName string, table sql.Tabl
 	return 0, nil
 }
 
-func (sc *StatsCoord) Init(ctx *sql.Context, dbs []sql.Database, keepStorage bool) error {
+func (sc *StatsCoord) Init(ctx context.Context, dbs []sql.Database, keepStorage bool) error {
 	sqlCtx, err := sc.ctxGen(ctx)
 	if err != nil {
 		return err
@@ -430,7 +448,7 @@ func (sc *StatsCoord) Init(ctx *sql.Context, dbs []sql.Database, keepStorage boo
 			if err != nil {
 				return err
 			}
-			if err := sc.AddFs(ctx, db, fs); err != nil {
+			if err := sc.AddFs(sqlCtx, db, fs); err != nil {
 				return err
 			}
 			if i == 0 && !keepStorage {
@@ -588,25 +606,42 @@ func (sc *StatsCoord) initStorage(ctx context.Context, fs filesys.Filesys) (*pro
 }
 
 func (sc *StatsCoord) WaitForDbSync(ctx context.Context) error {
+	threadCtx, _, ok := sc.latestContexts()
+	if !ok {
+		return ErrStatsIssuerPaused
+	}
 	// wait for the current partial + one full cycle to complete
+	sc.statsMu.Lock()
+	defer sc.statsMu.Unlock()
 	for _ = range 2 {
-		cycleCtx, err := sc.getLatestCtx()
-		if err != nil {
-			return err
-		}
 		select {
-		case <-cycleCtx.Done():
 		case <-ctx.Done():
 			return context.Cause(ctx)
+		case <-threadCtx.Done():
+			return ErrStatsIssuerPaused
+		default:
 		}
+		sc.swapCond.Wait()
 	}
 	return nil
 }
 
 func (sc *StatsCoord) Gc(ctx *sql.Context) error {
-	sc.sq.InterruptAsync(func() error {
-		sc.doGc.Store(true)
-		return nil
-	})
-	return sc.WaitForDbSync(ctx)
+	threadCtx, _, ok := sc.latestContexts()
+	if !ok {
+		return ErrStatsIssuerPaused
+	}
+	sc.statsMu.Lock()
+	defer sc.statsMu.Unlock()
+	sc.doGc = true
+	for sc.doGc {
+		select {
+		case <-ctx.Done():
+			return context.Cause(ctx)
+		case <-threadCtx.Done():
+			return ErrStatsIssuerPaused
+		}
+		sc.swapCond.Wait()
+	}
+	return nil
 }

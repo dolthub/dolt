@@ -32,7 +32,7 @@ const (
 	mcvCnt       = 3
 )
 
-func firstRowForIndex(ctx *sql.Context, prollyMap prolly.Map, keyBuilder *val.TupleBuilder) (sql.Row, error) {
+func firstRowForIndex(ctx *sql.Context, idxLen int, prollyMap prolly.Map, keyBuilder *val.TupleBuilder) (sql.Row, error) {
 	if cnt, err := prollyMap.Count(); err != nil {
 		return nil, err
 	} else if cnt == 0 {
@@ -55,7 +55,7 @@ func firstRowForIndex(ctx *sql.Context, prollyMap prolly.Map, keyBuilder *val.Tu
 	}
 
 	firstKey := keyBuilder.Build(buffPool)
-	firstRow := make(sql.Row, firstKey.Count())
+	firstRow := make(sql.Row, idxLen)
 	for i := range firstRow {
 		firstRow[i], err = tree.GetField(ctx, prollyMap.KeyDesc(), i, firstKey, prollyMap.NodeStore())
 		if err != nil {

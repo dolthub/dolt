@@ -257,7 +257,7 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 			return d.NewContextWithClient(sql.Client{Address: "localhost", User: "root"}), nil
 		}
 		statsPro := statspro.NewStatsCoord(ctx, doltProvider, ctxGen, sqlCtx.Session.GetLogger().Logger, bThreads, d.multiRepoEnv.GetEnv(d.multiRepoEnv.GetFirstDatabase()))
-		statsPro.SetTimers(int64(1*time.Nanosecond), int64(1*time.Second), int64(1*time.Second))
+		statsPro.SetTimers(int64(1*time.Nanosecond), int64(1*time.Second))
 		d.statsPro = statsPro
 
 		e, err := enginetest.NewEngine(t, d, d.provider, d.setupData, d.statsPro)
@@ -291,13 +291,7 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 		e = e.WithBackgroundThreads(bThreads)
 
 		if d.configureStats {
-			var dsessDbs []dsess.SqlDatabase
-			for _, db := range databases {
-				if sqlDb, ok := db.(dsess.SqlDatabase); ok {
-					dsessDbs = append(dsessDbs, sqlDb)
-				}
-			}
-			if err := statsPro.Init(ctx, dsessDbs, false); err != nil {
+			if err := statsPro.Init(ctx, databases, false); err != nil {
 				return nil, err
 			}
 

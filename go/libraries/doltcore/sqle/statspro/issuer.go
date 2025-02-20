@@ -77,6 +77,7 @@ func (sc *StatsCoord) Stop() {
 	for _, f := range sc.activeCancels {
 		f()
 	}
+	sc.swapCond.Broadcast()
 	sc.activeCtx = sc.activeCtx[:0]
 	sc.activeCancels = sc.activeCancels[:0]
 	return
@@ -112,14 +113,14 @@ func (sc *StatsCoord) runIssuer(ctx context.Context) (err error) {
 
 		select {
 		case <-gcTicker.C:
-			sc.doGc.Store(true)
+			sc.setDoGc()
 		default:
 		}
 
 		genStart := sc.genCnt.Load()
 		genCand := sc.genCand.Add(1)
 		gcKv = nil
-		if sc.doGc.Swap(false) {
+		if sc.gcIsSet() {
 			gcKv = NewMemStats()
 			gcKv.gcGen = genCand
 		}
@@ -154,6 +155,7 @@ func (sc *StatsCoord) trySwapStats(ctx context.Context, prevGen, newGen uint64, 
 	if sc.genCnt.CompareAndSwap(prevGen, newGen) {
 		// Replace stats and new Kv if no replacements happened
 		// in-between.
+		sc.swapCond.Broadcast()
 		sc.Stats = newStats
 		if gcKv != nil {
 			// The new KV has all buckets for the latest root stats,
@@ -162,6 +164,7 @@ func (sc *StatsCoord) trySwapStats(ctx context.Context, prevGen, newGen uint64, 
 			if newGen != gcKv.GcGen() {
 				return false, fmt.Errorf("gc gen didn't match update gen")
 			}
+			sc.doGc = false
 			sc.gcCnt++
 			sc.kv = gcKv
 			if !sc.memOnly {
@@ -262,7 +265,7 @@ func (sc *StatsCoord) collectIndexNodes(ctx *sql.Context, prollyMap prolly.Map, 
 	if !ok {
 		sc.sq.DoSync(ctx, func() error {
 			var err error
-			lowerBound, err = firstRowForIndex(ctx, prollyMap, keyBuilder)
+			lowerBound, err = firstRowForIndex(ctx, idxLen, prollyMap, keyBuilder)
 			if err != nil {
 				sc.descError("get histogram bucket for node", err)
 				return err
@@ -294,6 +297,7 @@ func (sc *StatsCoord) collectIndexNodes(ctx *sql.Context, prollyMap prolly.Map, 
 
 			// we read exclusive range [node first key, next node first key)
 			start, stop := offset, offset+uint64(treeCnt)
+			offset += uint64(treeCnt)
 			iter, err := prollyMap.IterOrdinalRange(ctx, start, stop)
 			if err != nil {
 				return err
@@ -325,7 +329,6 @@ func (sc *StatsCoord) collectIndexNodes(ctx *sql.Context, prollyMap prolly.Map, 
 		if err != nil {
 			return nil, nil, err
 		}
-		offset += uint64(treeCnt)
 	}
 
 	var buckets []*stats.Bucket

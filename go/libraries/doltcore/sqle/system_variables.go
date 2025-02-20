@@ -240,13 +240,7 @@ var DoltSystemVariables = []sql.SystemVariable{
 		Type:    types.NewSystemIntType(dsess.DoltStatsJobInterval, 0, math.MaxInt, false),
 		Default: int64(500 * time.Millisecond / time.Millisecond),
 	},
-	&sql.MysqlSystemVariable{
-		Name:    dsess.DoltStatsBranchInterval,
-		Dynamic: true,
-		Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Global),
-		Type:    types.NewSystemIntType(dsess.DoltStatsBranchInterval, 0, math.MaxInt, false),
-		Default: int64(time.Hour / time.Millisecond),
-	},
+
 	&sql.MysqlSystemVariable{
 		Name:    dsess.DoltStatsGCInterval,
 		Dynamic: true,
@@ -466,13 +460,6 @@ func AddDoltSystemVariables() {
 			Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Global),
 			Type:    types.NewSystemIntType(dsess.DoltStatsJobInterval, 0, math.MaxInt, false),
 			Default: int64(500 * time.Millisecond / time.Millisecond),
-		},
-		&sql.MysqlSystemVariable{
-			Name:    dsess.DoltStatsBranchInterval,
-			Dynamic: true,
-			Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Global),
-			Type:    types.NewSystemIntType(dsess.DoltStatsBranchInterval, 0, math.MaxInt, false),
-			Default: int64(time.Hour / time.Millisecond),
 		},
 		&sql.MysqlSystemVariable{
 			Name:    dsess.DoltStatsMemoryOnly,

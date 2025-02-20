@@ -150,12 +150,15 @@ func TestStatsCoord(t *testing.T) {
 			defer wg.Done()
 			defer close(done)
 			ctx, _ := context.WithTimeout(context.Background(), 10*time.Millisecond)
+			context.AfterFunc(ctx, func() {
+				sc.swapCond.Broadcast() // simulate stop, but without error type race
+			})
 			err := sc.WaitForDbSync(ctx)
 			require.ErrorIs(t, err, context.DeadlineExceeded)
 		}()
 		wg.Wait()
 	})
-	t.Run("WaitReturnsIfStopped", func(t *testing.T) {
+	t.Run("WaitReturnsIfStoppedBefore", func(t *testing.T) {
 		sqlCtx, sqlEng, sc := emptySetup(t, bthreads, true)
 		require.NoError(t, executeQuery(sqlCtx, sqlEng, "create table xy (x int primary key, y int)"))
 		require.NoError(t, sc.Restart())
@@ -170,12 +173,10 @@ func TestStatsCoord(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			defer close(done)
-			ctx, _ := context.WithTimeout(context.Background(), 10*time.Millisecond)
-			err := sc.WaitForDbSync(ctx)
+			sc.Stop()
+			err := sc.WaitForDbSync(context.Background())
 			require.ErrorIs(t, err, ErrStatsIssuerPaused)
 		}()
-
-		sc.Stop()
 		wg.Wait()
 	})
 	t.Run("WaitHangsUntilCycleCompletes", func(t *testing.T) {
@@ -200,6 +201,7 @@ func TestStatsCoord(t *testing.T) {
 		wg.Wait()
 	})
 }
+
 func TestScheduleLoop(t *testing.T) {
 	threads := sql.NewBackgroundThreads()
 	defer threads.Shutdown()
@@ -772,9 +774,8 @@ func newStatsCoord(bthreads *sql.BackgroundThreads) *StatsCoord {
 	})
 
 	sql.SystemVariables.AssignValues(map[string]interface{}{
-		dsess.DoltStatsGCInterval:     100,
-		dsess.DoltStatsBranchInterval: 100,
-		dsess.DoltStatsJobInterval:    1,
+		dsess.DoltStatsGCInterval:  100,
+		dsess.DoltStatsJobInterval: 1,
 	})
 
 	return sqlEng.Analyzer.Catalog.StatsProvider.(*StatsCoord)
@@ -789,9 +790,8 @@ func emptySetup(t *testing.T, threads *sql.BackgroundThreads, memOnly bool) (*sq
 	})
 
 	sql.SystemVariables.AssignValues(map[string]interface{}{
-		dsess.DoltStatsGCInterval:     100,
-		dsess.DoltStatsBranchInterval: 100,
-		dsess.DoltStatsJobInterval:    1,
+		dsess.DoltStatsGCInterval:  100,
+		dsess.DoltStatsJobInterval: 1,
 	})
 
 	sc := sqlEng.Analyzer.Catalog.StatsProvider.(*StatsCoord)

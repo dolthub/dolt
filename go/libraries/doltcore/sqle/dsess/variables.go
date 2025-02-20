@@ -59,12 +59,11 @@ const (
 	DoltClusterRoleEpochVariable    = "dolt_cluster_role_epoch"
 	DoltClusterAckWritesTimeoutSecs = "dolt_cluster_ack_writes_timeout_secs"
 
-	DoltStatsEnabled        = "dolt_stats_enabled"
-	DoltStatsMemoryOnly     = "dolt_stats_memory_only"
-	DoltStatsBranches       = "dolt_stats_branches"
-	DoltStatsJobInterval    = "dolt_stats_job_interval"
-	DoltStatsBranchInterval = "dolt_stats_branch_interval"
-	DoltStatsGCInterval     = "dolt_stats_gc_interval"
+	DoltStatsEnabled     = "dolt_stats_enabled"
+	DoltStatsMemoryOnly  = "dolt_stats_memory_only"
+	DoltStatsBranches    = "dolt_stats_branches"
+	DoltStatsJobInterval = "dolt_stats_job_interval"
+	DoltStatsGCInterval  = "dolt_stats_gc_interval"
 )
 
 const URLTemplateDatabasePlaceholder = "{database}"

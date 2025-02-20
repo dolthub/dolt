@@ -458,7 +458,7 @@ func TestStatScripts(t *testing.T) {
 			},
 		},
 		{
-			name: "test Gc",
+			name: "test gc",
 			setup: []string{
 				"create table xy (x int primary key, y int, key (y,x))",
 				"insert into xy values (0,0), (1,0), (2,0)",
@@ -662,6 +662,8 @@ func TestStatScripts(t *testing.T) {
 			setup: []string{
 				"create table xy (x int primary key, y int, key (y))",
 				"insert into xy values (0,NULL), (1,0), (2,0)",
+				"CREATE table xyz (x bigint primary key, y varchar(500), z bigint, key(x, z));",
+				"insert into xyz values (0,0,NULL), (1,1,0), (2,2,0)",
 			},
 			assertions: []assertion{
 				{
@@ -670,13 +672,17 @@ func TestStatScripts(t *testing.T) {
 						DbCnt:             1,
 						ReadCnt:           0,
 						Active:            true,
-						StorageBucketCnt:  2,
-						CachedBucketCnt:   2,
-						CachedBoundCnt:    2,
-						CachedTemplateCnt: 2,
-						StatCnt:           1,
+						StorageBucketCnt:  4,
+						CachedBucketCnt:   4,
+						CachedBoundCnt:    4,
+						CachedTemplateCnt: 4,
+						StatCnt:           2,
 						GcCnt:             1,
 					}}},
+				},
+				{
+					query: "select index_name, null_count from dolt_statistics",
+					res:   []sql.Row{{"primary", uint64(0)}, {"y", uint64(1)}, {"primary", uint64(0)}, {"x", uint64(1)}},
 				},
 			},
 		},
@@ -697,11 +703,13 @@ func TestStatScripts(t *testing.T) {
 				require.NoError(t, executeQuery(ctx, sqlEng, s))
 			}
 
-			require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_gc()"))
 			require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
+			require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_gc()"))
 
 			for i, a := range tt.assertions {
-				log.Println(a.query)
+				if sc.Debug {
+					log.Println(a.query)
+				}
 				rows, err := executeQueryResults(ctx, sqlEng, a.query)
 				if a.err != "" {
 					require.Equal(t, a.err, err.Error())

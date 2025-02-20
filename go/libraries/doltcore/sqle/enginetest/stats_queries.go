@@ -103,6 +103,9 @@ var DoltHistogramTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
+				Query: "call dolt_stats_wait()",
+			},
+			{
 				Query:    "SELECT json_length(json_extract(histogram, \"$.statistic.buckets\")) from information_schema.column_statistics where column_name = 'z'",
 				Expected: []sql.Row{{2}},
 			},
@@ -172,9 +175,11 @@ var DoltHistogramTests = []queries.ScriptTest{
 			fmt.Sprintf("insert into xy select x, '%s', x+1  from (with recursive inputs(x) as (select 1 union select x+1 from inputs where x < 10000) select * from inputs) dt", fillerVarchar),
 			fmt.Sprintf("insert into xy select x, '%s', x+1  from (with recursive inputs(x) as (select 10001 union select x+1 from inputs where x < 20000) select * from inputs) dt", fillerVarchar),
 			fmt.Sprintf("insert into xy select x, '%s', NULL from (with recursive inputs(x) as (select 20001 union select x+1 from inputs where x < 30000) select * from inputs) dt", fillerVarchar),
-			"analyze table xy",
 		},
 		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "call dolt_stats_wait()",
+			},
 			{
 				Query:    "SELECT json_length(json_extract(histogram, \"$.statistic.buckets\")) from information_schema.column_statistics where column_name = 'x,z'",
 				Expected: []sql.Row{{155}},
@@ -206,7 +211,10 @@ var DoltHistogramTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    " SELECT column_name from information_schema.column_statistics",
+				Query: "call dolt_stats_purge()",
+			},
+			{
+				Query:    "SELECT column_name from information_schema.column_statistics",
 				Expected: []sql.Row{},
 			},
 			{
