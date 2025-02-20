@@ -23,28 +23,36 @@ import (
 )
 
 type WriteBuffer interface {
+	// Add a compressed chunk to the write buffer. It will be
+	// returned from future calls to |GetAllForWrite| until a
+	// write is successful.
 	Put(nbs.CompressedChunk) error
 
 	// Returns the current set of written chunks.  After this
 	// returns, concurrent calls to other methods may block until
 	// |WriteCompleted| is called.  Calls to |GetAllForWrite| must
-	// be bracketed by a call to |WriteCompleted|.
+	// be followed by a call to |WriteCompleted| once the write
+	// attempt is finished.
 	GetAllForWrite() map[hash.Hash]nbs.CompressedChunk
 
 	// Called after a call to |GetAllForWrite|, this records
 	// success or failure of the write operation.  If the write
 	// operation was successful, then the written chunks are now
-	// in the upstream, and so they can be cleared. Otherwise, the
-	// written chunks are retained in the write buffer so that the
-	// write can be retried.
+	// in the upstream and they can be cleared from the write
+	// buffer. Otherwise, the written chunks are retained in the
+	// write buffer so that the write can be retried.
 	WriteCompleted(success bool)
 
-	// ChunkStore clients expect to read their own writes before a commit.
-	// On the get path, remotestorage should add pending chunks to its result
-	// set. On the HasMany path, remotestorage should remove present chunks
+	// ChunkStore clients expect to read their own writes before a
+	// commit.  On the get path, remotestorage should add buffered
+	// chunks matching a given |query| to its |result|. On the
+	// HasMany path, remotestorage should remove present chunks
 	// from its absent set on the HasMany response.
-	AddPendingChunks(h hash.HashSet, res map[hash.Hash]nbs.ToChunker)
-	RemovePresentChunks(h hash.HashSet)
+	AddBufferedChunks(query hash.HashSet, result map[hash.Hash]nbs.ToChunker)
+	// Removes the addresses of any buffered chunks from |hashes|.
+	// Used to filter the |absent| response of a HasMany call so
+	// that buffered chunks are not considered absent.
+	RemovePresentChunks(hashes hash.HashSet)
 }
 
 type noopWriteBuffer struct {
@@ -64,7 +72,7 @@ func (noopWriteBuffer) WriteCompleted(success bool) {
 	panic("call to WriteCompleted on a noopWriteBuffer")
 }
 
-func (noopWriteBuffer) AddPendingChunks(hash.HashSet, map[hash.Hash]nbs.ToChunker) {
+func (noopWriteBuffer) AddBufferedChunks(hash.HashSet, map[hash.Hash]nbs.ToChunker) {
 }
 
 func (noopWriteBuffer) RemovePresentChunks(hash.HashSet) {
@@ -123,7 +131,7 @@ func (b *mapWriteBuffer) WriteCompleted(success bool) {
 	b.cond.Broadcast()
 }
 
-func (b *mapWriteBuffer) AddPendingChunks(hs hash.HashSet, res map[hash.Hash]nbs.ToChunker) {
+func (b *mapWriteBuffer) AddBufferedChunks(hs hash.HashSet, res map[hash.Hash]nbs.ToChunker) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	for h := range hs {
@@ -134,22 +142,22 @@ func (b *mapWriteBuffer) AddPendingChunks(hs hash.HashSet, res map[hash.Hash]nbs
 	}
 }
 
-func (b *mapWriteBuffer) RemovePresentChunks(absent hash.HashSet) {
+func (b *mapWriteBuffer) RemovePresentChunks(hashes hash.HashSet) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	if len(b.chunks) < len(absent) {
+	if len(b.chunks) < len(hashes) {
 		for h := range b.chunks {
-			absent.Remove(h)
+			hashes.Remove(h)
 		}
 	} else {
 		var toRemove []hash.Hash
-		for h := range absent {
+		for h := range hashes {
 			if _, ok := b.chunks[h]; ok {
 				toRemove = append(toRemove, h)
 			}
 		}
 		for _, h := range toRemove {
-			absent.Remove(h)
+			hashes.Remove(h)
 		}
 	}
 }

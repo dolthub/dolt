@@ -224,22 +224,9 @@ func (dcs *DoltChunkStore) WithChunkCache(cache ChunkCache) *DoltChunkStore {
 }
 
 func (dcs *DoltChunkStore) WithNetworkRequestParams(params NetworkRequestParams) *DoltChunkStore {
-	return &DoltChunkStore{
-		repoId:      dcs.repoId,
-		repoPath:    dcs.repoPath,
-		repoToken:   new(atomic.Value),
-		host:        dcs.host,
-		root:        dcs.root,
-		csClient:    dcs.csClient,
-		finalizer:   dcs.finalizer,
-		cache:       dcs.cache,
-		metadata:    dcs.metadata,
-		nbf:         dcs.nbf,
-		httpFetcher: dcs.httpFetcher,
-		params:      params,
-		stats:       dcs.stats,
-		logger:      dcs.logger,
-	}
+	ret := dcs.clone()
+	ret.params = params
+	return ret
 }
 
 func (dcs *DoltChunkStore) SetLogger(logger chunks.DebugLogger) {
@@ -327,7 +314,7 @@ func (dcs *DoltChunkStore) GetManyCompressed(ctx context.Context, hashes hash.Ha
 	defer span.End()
 
 	hashToChunk := dcs.cache.GetCachedChunks(hashes)
-	dcs.wb.AddPendingChunks(hashes, hashToChunk)
+	dcs.wb.AddBufferedChunks(hashes, hashToChunk)
 
 	span.SetAttributes(attribute.Int("num_hashes", len(hashes)), attribute.Int("cache_hits", len(hashToChunk)))
 	atomic.AddUint32(&dcs.stats.Hits, uint32(len(hashToChunk)))
@@ -828,9 +815,22 @@ func (dcs *DoltChunkStore) loadRoot(ctx context.Context) error {
 // If last doesn't match the root in persistent storage, returns false.
 func (dcs *DoltChunkStore) Commit(ctx context.Context, current, last hash.Hash) (bool, error) {
 	toUpload := dcs.wb.GetAllForWrite()
-	var success bool
+	var resp *remotesapi.CommitResponse
 	defer func() {
-		dcs.wb.WriteCompleted(success)
+		// We record success based on the CommitResponse
+		// |Success| field, which is only |true| when the call
+		// successfully updated the root hash of the
+		// remote. With the current API, we cannot distinguish
+		// the case where the commit failed because |last| was
+		// stale but the provided chunks were still
+		// successfully added to the remote. If the write is
+		// retried in such a case, we will currently write the
+		// chunks to the remote again.
+		if resp != nil {
+			dcs.wb.WriteCompleted(resp.Success)
+		} else {
+			dcs.wb.WriteCompleted(false)
+		}
 	}()
 
 	hashToChunkCount, err := dcs.uploadChunks(ctx, toUpload)
@@ -855,7 +855,7 @@ func (dcs *DoltChunkStore) Commit(ctx context.Context, current, last hash.Hash) 
 			NbsVersion: nbs.StorageVersion,
 		},
 	}
-	resp, err := dcs.csClient.Commit(ctx, req)
+	resp, err = dcs.csClient.Commit(ctx, req)
 	if err != nil {
 		return false, NewRpcError(err, "Commit", dcs.host, req)
 	}
@@ -864,9 +864,6 @@ func (dcs *DoltChunkStore) Commit(ctx context.Context, current, last hash.Hash) 
 		return false, NewRpcError(err, "Commit", dcs.host, req)
 	}
 
-	// We only delete the chunks that we wrote to the remote from
-	// our write buffer if our commit was successful.
-	success = resp.Success
 	return resp.Success, dcs.refreshRepoMetadata(ctx)
 }
 

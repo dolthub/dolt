@@ -37,7 +37,7 @@ func TestNoopWriteBuffer(t *testing.T) {
 	assert.Panics(t, func() {
 		cache.WriteCompleted(false)
 	})
-	cache.AddPendingChunks(make(hash.HashSet), make(map[hash.Hash]nbs.ToChunker))
+	cache.AddBufferedChunks(make(hash.HashSet), make(map[hash.Hash]nbs.ToChunker))
 	cache.RemovePresentChunks(make(hash.HashSet))
 }
 
@@ -54,7 +54,7 @@ func TestMapWriteBuffer(t *testing.T) {
 			query.Insert(hash.Of(bs[:]))
 		}
 		res := make(map[hash.Hash]nbs.ToChunker)
-		cache.AddPendingChunks(query, res)
+		cache.AddBufferedChunks(query, res)
 		assert.Len(t, res, 0)
 
 		// Insert some chunks.
@@ -66,12 +66,12 @@ func TestMapWriteBuffer(t *testing.T) {
 			cache.Put(nbs.ChunkToCompressedChunk(chk))
 			inserted.Insert(chk.Hash())
 		}
-		cache.AddPendingChunks(query, res)
+		cache.AddBufferedChunks(query, res)
 		assert.Len(t, res, 0)
 		for h := range inserted {
 			query.Insert(h)
 		}
-		cache.AddPendingChunks(query, res)
+		cache.AddBufferedChunks(query, res)
 		assert.Len(t, res, 8)
 
 		cache.RemovePresentChunks(query)
@@ -84,7 +84,7 @@ func TestMapWriteBuffer(t *testing.T) {
 		toWrite := cache.GetAllForWrite()
 		assert.Len(t, toWrite, 8)
 		res = make(map[hash.Hash]nbs.ToChunker)
-		cache.AddPendingChunks(query, res)
+		cache.AddBufferedChunks(query, res)
 		assert.Len(t, res, 8)
 		cache.RemovePresentChunks(query)
 		assert.Len(t, query, 64)
