@@ -17,6 +17,7 @@ package statspro
 import (
 	"context"
 	"fmt"
+	"golang.org/x/sync/errgroup"
 	"io"
 	"log"
 	"os"
@@ -48,69 +49,71 @@ func TestStatsCoord(t *testing.T) {
 		sc := newStatsCoord(bthreads)
 		sc.Close()
 		require.Error(t, sc.Restart())
-		_, _, ok := sc.latestContexts()
-		require.False(t, ok)
+		require.Nil(t, sc.activeCtxCancel)
 	})
 	t.Run("IsStoppable", func(t *testing.T) {
 		sc := newStatsCoord(bthreads)
-		require.NoError(t, sc.Restart())
-		ctx1, cycle1, ok := sc.latestContexts()
-		require.True(t, ok)
-		<-cycle1.Done()
+		eg := errgroup.Group{}
+		ctx := sc.newThreadCtx(context.Background())
+		eg.Go(func() error {
+			return sc.runIssuer(ctx)
+		})
+
+		require.NotNil(t, sc.activeCtxCancel)
+
+		l, err := sc.addListener()
+		defer close(l)
+		require.NoError(t, err)
+		<-l
 		select {
-		case <-ctx1.Done():
+		case <-ctx.Done():
 			t.Fatal("expected latest thread ctx to be active")
 		default:
 		}
 		sc.Stop()
-		<-ctx1.Done()
+		<-ctx.Done()
+		require.ErrorIs(t, eg.Wait(), context.Canceled)
 	})
 	t.Run("StopsAreIdempotent", func(t *testing.T) {
 		sc := newStatsCoord(bthreads)
-		require.NoError(t, sc.Restart())
-		ctx1, cycle1, ok := sc.latestContexts()
-		require.True(t, ok)
-		<-cycle1.Done()
+		eg := errgroup.Group{}
+		ctx := sc.newThreadCtx(context.Background())
+		eg.Go(func() error {
+			return sc.runIssuer(ctx)
+		})
+
 		sc.Stop()
 		sc.Stop()
 		sc.Stop()
 		sc.Stop()
-		<-ctx1.Done()
+		<-ctx.Done()
+		require.ErrorIs(t, eg.Wait(), context.Canceled)
 	})
 	t.Run("IsRestartable", func(t *testing.T) {
 		sc := newStatsCoord(bthreads)
-		require.NoError(t, sc.Restart())
-		ctx1, cycle1, ok := sc.latestContexts()
-		require.True(t, ok)
+		eg := errgroup.Group{}
+		ctx1 := sc.newThreadCtx(context.Background())
+		eg.Go(func() error {
+			return sc.runIssuer(ctx1)
+		})
 
-		require.NoError(t, sc.Restart())
-		ctx2, cycle2, ok := sc.latestContexts()
-		require.True(t, ok)
+		ctx2 := sc.newThreadCtx(context.Background())
+		eg.Go(func() error {
+			return sc.runIssuer(ctx2)
+		})
 
-		<-cycle1.Done()
+		ctx3 := sc.newThreadCtx(context.Background())
+		eg.Go(func() error {
+			return sc.runIssuer(ctx3)
+		})
+
 		<-ctx1.Done()
-		<-cycle2.Done()
-		sc.Stop()
 		<-ctx2.Done()
+		sc.Stop()
+		<-ctx3.Done()
+		require.ErrorIs(t, eg.Wait(), context.Canceled)
 	})
-	t.Run("RestartsAreIdempotent", func(t *testing.T) {
-		sc := newStatsCoord(bthreads)
-		require.NoError(t, sc.Restart())
-		ctx1, cycle1, ok := sc.latestContexts()
-		require.True(t, ok)
-		<-cycle1.Done()
-		select {
-		case <-ctx1.Done():
-			t.Fatal("expected latest thread ctx to be active")
-		default:
-		}
-		require.NoError(t, sc.Restart())
-		require.NoError(t, sc.Restart())
-		require.NoError(t, sc.Restart())
-		require.NoError(t, sc.Restart())
-		<-ctx1.Done()
-	})
-	t.Run("ConcurrentStartStopsSerialize", func(t *testing.T) {
+	t.Run("ConcurrentStartStopsAreOk", func(t *testing.T) {
 		sc := newStatsCoord(bthreads)
 		wg := sync.WaitGroup{}
 		wg.Add(2)
@@ -118,21 +121,66 @@ func TestStatsCoord(t *testing.T) {
 			defer wg.Done()
 			for _ = range 20 {
 				require.NoError(t, sc.Restart())
+				l, _ := sc.addListener()
+				select {
+				case <-l:
+					close(l)
+				}
 			}
 		}()
 		go func() {
 			defer wg.Done()
 			for _ = range 20 {
 				sc.Stop()
+				l, _ := sc.addListener()
+				select {
+				case <-l:
+					close(l)
+				}
 			}
 		}()
 		wg.Wait()
+	})
+	t.Run("ListenForSwap", func(t *testing.T) {
+		sc := newStatsCoord(bthreads)
+		sc.Close()
+		require.Error(t, sc.Restart())
+		l, err := sc.addListener()
+		defer close(l)
+		require.NoError(t, err)
+		select {
+		case e := <-l:
+			require.Equal(t, e, leSuccess)
+		}
+	})
+	t.Run("ListenForStop", func(t *testing.T) {
+		sc := newStatsCoord(bthreads)
 		require.NoError(t, sc.Restart())
-		ctx1, cycle1, ok := sc.latestContexts()
-		require.True(t, ok)
-		<-cycle1.Done()
+		var l chan listenerEvent
+		err := sc.sq.DoAsync(func() error {
+			// do this in serial queue to make sure we don't race
+			// with swap
+			var err error
+			require.NoError(t, err)
+			l, err = sc.addListener()
+			sc.Stop()
+			return nil
+		})
+		require.NoError(t, err)
+		select {
+		case e := <-l:
+			require.Equal(t, e, leStop)
+		case <-time.Tick(10 * time.Millisecond):
+			t.Fatal("expected listener to recv stop")
+		}
+	})
+	t.Run("ListenerFailsIfStopped", func(t *testing.T) {
+		sc := newStatsCoord(bthreads)
+		sc.Close()
+		require.Error(t, sc.Restart())
 		sc.Stop()
-		<-ctx1.Done()
+		_, err := sc.addListener()
+		require.ErrorIs(t, err, ErrStatsIssuerPaused)
 	})
 	t.Run("WaitBlocksOnStatsCollection", func(t *testing.T) {
 		sqlCtx, sqlEng, sc := emptySetup(t, bthreads, true)
@@ -150,9 +198,6 @@ func TestStatsCoord(t *testing.T) {
 			defer wg.Done()
 			defer close(done)
 			ctx, _ := context.WithTimeout(context.Background(), 10*time.Millisecond)
-			context.AfterFunc(ctx, func() {
-				sc.swapCond.Broadcast() // simulate stop, but without error type race
-			})
 			err := sc.WaitForDbSync(ctx)
 			require.ErrorIs(t, err, context.DeadlineExceeded)
 		}()
@@ -174,7 +219,8 @@ func TestStatsCoord(t *testing.T) {
 			defer wg.Done()
 			defer close(done)
 			sc.Stop()
-			err := sc.WaitForDbSync(context.Background())
+			ctx, _ := context.WithTimeout(context.Background(), 10*time.Millisecond)
+			err := sc.WaitForDbSync(ctx)
 			require.ErrorIs(t, err, ErrStatsIssuerPaused)
 		}()
 		wg.Wait()
@@ -960,6 +1006,12 @@ func newTestEngine(ctx context.Context, dEnv *env.DoltEnv, threads *sql.Backgrou
 	if err := sc.Init(sqlCtx, pro.AllDatabases(sqlCtx), false); err != nil {
 		log.Fatal(err)
 	}
+	done := make(chan struct{})
+	go func() {
+		close(done)
+		sc.sq.Run(ctx)
+	}()
+	<-done
 	sqlEng.Analyzer.Catalog.StatsProvider = sc
 	return sqlEng, sqlCtx
 }

@@ -26,60 +26,40 @@ import (
 
 //
 
-func (sc *StatsCoord) newCycle(ctx context.Context) (context.Context, error) {
-	sc.statsMu.Lock()
-	defer sc.statsMu.Unlock()
-	select {
-	case <-ctx.Done():
-		// thread invalidated and doesn't own stack
-		return ctx, nil
-	default:
-		// otherwise we still own the stack
-	}
-	if len(sc.activeCancels) != 2 || len(sc.activeCtx) != 2 {
-		return nil, fmt.Errorf("thread owning stasts issuing expects two context, found %d", len(sc.activeCtx))
-	}
-
-	sc.activeCancels[1]()
-	sc.activeCtx[1], sc.activeCancels[1] = context.WithCancel(sc.activeCtx[0])
-	return sc.activeCtx[1], nil
-}
-
-func (sc *StatsCoord) newThreadCtx() (context.Context, context.Context) {
-	sc.Stop()
-
+func (sc *StatsCoord) newThreadCtx(ctx context.Context) context.Context {
 	sc.statsMu.Lock()
 	sc.statsMu.Unlock()
-
-	newCtx, cancel := context.WithCancel(context.Background())
-	cycleCtx, cycleCancel := context.WithCancel(newCtx)
-
-	sc.activeCtx = append(sc.activeCtx, newCtx, cycleCtx)
-	sc.activeCancels = append(sc.activeCancels, cancel, cycleCancel)
-	return newCtx, cycleCtx
+	newCtx, cancel := context.WithCancel(ctx)
+	if sc.activeCtxCancel != nil {
+		sc.activeCtxCancel()
+	}
+	sc.signalListenerStop()
+	sc.activeCtxCancel = cancel
+	return newCtx
 }
 
 var ErrStatsIssuerPaused = fmt.Errorf("stats issuer is paused")
 
-func (sc *StatsCoord) getLatestCtx() (context.Context, error) {
+func (sc *StatsCoord) addListener() (chan listenerEvent, error) {
 	sc.statsMu.Lock()
 	defer sc.statsMu.Unlock()
-	if len(sc.activeCtx) != 2 {
+	if sc.activeCtxCancel == nil {
 		return nil, ErrStatsIssuerPaused
 	}
-	return sc.activeCtx[1], nil
+	l := make(chan listenerEvent)
+	sc.listeners = append(sc.listeners, l)
+	return l, nil
 }
 
 // Stop stops the sender thread and then pauses the queue
 func (sc *StatsCoord) Stop() {
 	sc.statsMu.Lock()
 	sc.statsMu.Unlock()
-	for _, f := range sc.activeCancels {
-		f()
+	if sc.activeCtxCancel != nil {
+		sc.activeCtxCancel()
+		sc.activeCtxCancel = nil
 	}
-	sc.swapCond.Broadcast()
-	sc.activeCtx = sc.activeCtx[:0]
-	sc.activeCancels = sc.activeCancels[:0]
+	sc.signalListenerStop()
 	return
 }
 
@@ -93,7 +73,7 @@ func (sc *StatsCoord) Restart() error {
 	sc.sq.Start()
 	done := make(chan struct{})
 	go func() {
-		ctx, _ := sc.newThreadCtx()
+		ctx := sc.newThreadCtx(context.Background())
 		close(done)
 		sc.runIssuer(ctx)
 	}()
@@ -106,10 +86,9 @@ func (sc *StatsCoord) runIssuer(ctx context.Context) (err error) {
 	var gcKv *memStats
 	gcTicker := time.NewTicker(sc.gcInterval)
 	for {
-		cycleCtx, err := sc.newCycle(ctx)
-		if err != nil {
-			return err
-		}
+		gcKv = nil
+		genStart := sc.genCnt.Load()
+		genCand := sc.genCand.Add(1)
 
 		select {
 		case <-gcTicker.C:
@@ -117,22 +96,20 @@ func (sc *StatsCoord) runIssuer(ctx context.Context) (err error) {
 		default:
 		}
 
-		genStart := sc.genCnt.Load()
-		genCand := sc.genCand.Add(1)
-		gcKv = nil
 		if sc.gcIsSet() {
 			gcKv = NewMemStats()
 			gcKv.gcGen = genCand
 		}
 
-		sqlCtx, err := sc.ctxGen(cycleCtx)
-		if err != nil {
-			return err
-		}
-
-		newStats, err := sc.newStatsForRoot(sqlCtx, gcKv)
+		newStats, err := sc.newStatsForRoot(ctx, gcKv)
 		if err != nil {
 			sc.descError("", err)
+		}
+
+		select {
+		case <-ctx.Done():
+			return context.Cause(ctx)
+		default:
 		}
 
 		if ok, err := sc.trySwapStats(ctx, genStart, genCand, newStats, gcKv); err != nil || !ok {
@@ -141,21 +118,37 @@ func (sc *StatsCoord) runIssuer(ctx context.Context) (err error) {
 	}
 }
 
+type listenerEvent uint8
+
+const (
+	unknownEvent = listenerEvent(iota)
+	leSuccess
+	leStop
+)
+
+func (sc *StatsCoord) signalListenerSuccess() {
+	for _, l := range sc.listeners {
+		l <- leSuccess
+	}
+	sc.listeners = sc.listeners[:0]
+}
+
+func (sc *StatsCoord) signalListenerStop() {
+	for _, l := range sc.listeners {
+		l <- leStop
+	}
+	sc.listeners = sc.listeners[:0]
+}
+
 func (sc *StatsCoord) trySwapStats(ctx context.Context, prevGen, newGen uint64, newStats *rootStats, gcKv *memStats) (bool, error) {
 	sc.statsMu.Lock()
 	defer sc.statsMu.Unlock()
-
-	select {
-	case <-ctx.Done():
-		return false, context.Cause(ctx)
-	default:
-	}
 
 	var err error
 	if sc.genCnt.CompareAndSwap(prevGen, newGen) {
 		// Replace stats and new Kv if no replacements happened
 		// in-between.
-		sc.swapCond.Broadcast()
+		defer sc.signalListenerSuccess()
 		sc.Stats = newStats
 		if gcKv != nil {
 			// The new KV has all buckets for the latest root stats,
@@ -183,7 +176,7 @@ func (sc *StatsCoord) trySwapStats(ctx context.Context, prevGen, newGen uint64, 
 	return false, nil
 }
 
-func (sc *StatsCoord) newStatsForRoot(ctx *sql.Context, gcKv *memStats) (newStats *rootStats, err error) {
+func (sc *StatsCoord) newStatsForRoot(baseCtx context.Context, gcKv *memStats) (newStats *rootStats, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = fmt.Errorf("serialQueue panicked running work: %s", r)
@@ -192,6 +185,11 @@ func (sc *StatsCoord) newStatsForRoot(ctx *sql.Context, gcKv *memStats) (newStat
 			sc.descError("", err)
 		}
 	}()
+
+	ctx, err := sc.ctxGen(baseCtx)
+	if err != nil {
+		return nil, err
+	}
 
 	dSess := dsess.DSessFromSess(ctx.Session)
 	dbs := dSess.Provider().AllDatabases(ctx)

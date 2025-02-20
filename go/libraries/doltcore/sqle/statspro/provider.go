@@ -74,8 +74,8 @@ type StatsCoord struct {
 
 	sq *jobqueue.SerialQueue
 
-	activeCtx     []context.Context
-	activeCancels []context.CancelFunc
+	activeCtxCancel context.CancelFunc
+	listeners       []chan listenerEvent
 
 	JobInterval    time.Duration
 	gcInterval     time.Duration
@@ -85,7 +85,6 @@ type StatsCoord struct {
 	doGc           bool
 	Debug          bool
 	closed         chan struct{}
-	swapCond       sync.Cond
 
 	// kv is a content-addressed cache of histogram objects:
 	// buckets, first bounds, and schema-specific statistic
@@ -118,12 +117,8 @@ func NewStatsCoord(ctx context.Context, pro *sqle.DoltDatabaseProvider, ctxGen c
 	sq := jobqueue.NewSerialQueue().WithErrorCb(func(err error) {
 		logger.Error(err)
 	})
-	go func() {
-		sq.Run(ctx)
-	}()
-	ret := &StatsCoord{
+	return &StatsCoord{
 		statsMu:     sync.Mutex{},
-		swapCond:    sync.Cond{},
 		logger:      logger,
 		JobInterval: 500 * time.Millisecond,
 		gcInterval:  24 * time.Hour,
@@ -140,8 +135,6 @@ func NewStatsCoord(ctx context.Context, pro *sqle.DoltDatabaseProvider, ctxGen c
 		genCnt:      atomic.Uint64{},
 		genCand:     atomic.Uint64{},
 	}
-	ret.swapCond.L = &ret.statsMu
-	return ret
 }
 
 func (sc *StatsCoord) SetMemOnly(v bool) {
@@ -176,12 +169,7 @@ func (sc *StatsCoord) SetTimers(job, gc int64) {
 }
 
 func (sc *StatsCoord) latestContexts() (context.Context, context.Context, bool) {
-	sc.statsMu.Lock()
-	sc.statsMu.Unlock()
-	if len(sc.activeCtx) == 0 {
-		return nil, nil, false
-	}
-	return sc.activeCtx[0], sc.activeCtx[1], true
+	return nil, nil, true
 }
 
 func (sc *StatsCoord) Close() {
@@ -227,7 +215,7 @@ func (sc *StatsCoord) Info(ctx context.Context) (dprocedures.StatsInfo, error) {
 
 	return dprocedures.StatsInfo{
 		DbCnt:             sc.Stats.dbCnt,
-		Active:            len(sc.activeCtx) > 0,
+		Active:            sc.activeCtxCancel != nil,
 		CachedBucketCnt:   cachedBucketCnt,
 		StorageBucketCnt:  storageCnt,
 		CachedBoundCnt:    cachedBoundCnt,
@@ -605,43 +593,53 @@ func (sc *StatsCoord) initStorage(ctx context.Context, fs filesys.Filesys) (*pro
 	return NewProllyStats(ctx, statsDb)
 }
 
-func (sc *StatsCoord) WaitForDbSync(ctx context.Context) error {
-	threadCtx, _, ok := sc.latestContexts()
-	if !ok {
-		return ErrStatsIssuerPaused
-	}
-	// wait for the current partial + one full cycle to complete
-	sc.statsMu.Lock()
-	defer sc.statsMu.Unlock()
-	for _ = range 2 {
-		select {
-		case <-ctx.Done():
-			return context.Cause(ctx)
-		case <-threadCtx.Done():
-			return ErrStatsIssuerPaused
-		default:
+func (sc *StatsCoord) WaitForDbSync(ctx context.Context) (err error) {
+	for cnt := 0; cnt < 2; {
+		// the second cycle will include all changes in
+		// the current context
+		if err := func() error {
+			var l chan listenerEvent
+			l, err = sc.addListener()
+			if err != nil {
+				return err
+			}
+
+			select {
+			case <-ctx.Done():
+				return context.Cause(ctx)
+			case e := <-l:
+				switch e {
+				case leSuccess:
+					cnt++
+				case leStop:
+					return ErrStatsIssuerPaused
+				}
+			}
+			return nil
+		}(); err != nil {
+			return err
 		}
-		sc.swapCond.Wait()
 	}
 	return nil
 }
 
 func (sc *StatsCoord) Gc(ctx *sql.Context) error {
-	threadCtx, _, ok := sc.latestContexts()
-	if !ok {
-		return ErrStatsIssuerPaused
-	}
-	sc.statsMu.Lock()
-	defer sc.statsMu.Unlock()
 	sc.doGc = true
-	for sc.doGc {
-		select {
-		case <-ctx.Done():
-			return context.Cause(ctx)
-		case <-threadCtx.Done():
+	l, err := sc.addListener()
+	if err != nil {
+		return err
+	}
+
+	select {
+	case <-ctx.Done():
+		return context.Cause(ctx)
+	case e := <-l:
+		switch e {
+		case leSuccess:
+		case leStop:
 			return ErrStatsIssuerPaused
 		}
-		sc.swapCond.Wait()
+	default:
 	}
 	return nil
 }
