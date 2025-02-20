@@ -150,7 +150,14 @@ func (acs archiveChunkSource) currentSize() uint64 {
 }
 
 func (acs archiveChunkSource) reader(ctx context.Context) (io.ReadCloser, uint64, error) {
-	return nil, 0, errors.New("Archive chunk source does not support reader")
+	rdr := acs.aRdr.reader
+	chks, err := acs.count()
+	if err != nil {
+		return nil, 0, err
+	}
+
+	rc := io.NewSectionReader(rdr, 0, int64(acs.currentSize()))
+	return io.NopCloser(rc), uint64(chks), nil
 }
 func (acs archiveChunkSource) uncompressedLen() (uint64, error) {
 	return 0, errors.New("Archive chunk source does not support uncompressedLen")
