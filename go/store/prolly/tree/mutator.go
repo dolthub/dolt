@@ -91,7 +91,7 @@ func ApplyMutations[K ~[]byte, O Ordering[K], S message.Serializer](
 		if cur.Valid() {
 			// Compare mutations |newKey| and |newValue|
 			// to the existing pair from the cursor
-			if order.Compare(K(newKey), K(cur.CurrentKey())) == 0 {
+			if order.Compare(ctx, K(newKey), K(cur.CurrentKey())) == 0 {
 				oldValue = cur.currentValue()
 			}
 
@@ -132,7 +132,7 @@ func ApplyMutations[K ~[]byte, O Ordering[K], S message.Serializer](
 		prev := newKey
 		newKey, newValue = edits.NextMutation(ctx)
 		if newKey != nil {
-			assertTrue(order.Compare(K(newKey), K(prev)) > 0, "expected sorted edits")
+			assertTrue(order.Compare(ctx, K(newKey), K(prev)) > 0, "expected sorted edits")
 		}
 	}
 

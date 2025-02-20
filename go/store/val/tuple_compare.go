@@ -14,15 +14,18 @@
 
 package val
 
-import "bytes"
+import (
+	"bytes"
+	"context"
+)
 
 // TupleComparator compares Tuples.
 type TupleComparator interface {
 	// Compare compares pairs of Tuples.
-	Compare(left, right Tuple, desc TupleDesc) int
+	Compare(ctx context.Context, left, right Tuple, desc TupleDesc) int
 
 	// CompareValues compares pairs of values. The index should match the index used to retrieve the type.
-	CompareValues(index int, left, right []byte, typ Type) int
+	CompareValues(ctx context.Context, index int, left, right []byte, typ Type) int
 
 	// Prefix returns a TupleComparator for the first n types.
 	Prefix(n int) TupleComparator
@@ -40,7 +43,7 @@ type DefaultTupleComparator struct{}
 var _ TupleComparator = DefaultTupleComparator{}
 
 // Compare implements TupleComparator
-func (d DefaultTupleComparator) Compare(left, right Tuple, desc TupleDesc) (cmp int) {
+func (d DefaultTupleComparator) Compare(ctx context.Context, left, right Tuple, desc TupleDesc) (cmp int) {
 	for i := range desc.fast {
 		start, stop := desc.fast[i][0], desc.fast[i][1]
 		cmp = compare(desc.Types[i], left[start:stop], right[start:stop])
@@ -61,7 +64,7 @@ func (d DefaultTupleComparator) Compare(left, right Tuple, desc TupleDesc) (cmp 
 }
 
 // CompareValues implements TupleComparator
-func (d DefaultTupleComparator) CompareValues(_ int, left, right []byte, typ Type) (cmp int) {
+func (d DefaultTupleComparator) CompareValues(ctx context.Context, index int, left, right []byte, typ Type) (cmp int) {
 	return compare(typ, left, right)
 }
 

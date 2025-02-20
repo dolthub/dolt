@@ -160,7 +160,7 @@ func printIndexContents(ctx context.Context, prollyMap prolly.MapInterface) {
 		if err == io.EOF {
 			break
 		}
-		fmt.Printf("  - k: %v \n", kd.Format(k))
+		fmt.Printf("  - k: %v \n", kd.Format(ctx, k))
 	}
 }
 
@@ -234,7 +234,7 @@ func validateKeylessIndex(ctx context.Context, sch schema.Schema, def schema.Ind
 		}
 		if !ok {
 			printIndexContents(ctx, secondary)
-			return fmt.Errorf("index key %s not found in index %s", builder.Desc.Format(k), def.Name())
+			return fmt.Errorf("index key %s not found in index %s", builder.Desc.Format(ctx, k), def.Name())
 		}
 	}
 }
@@ -329,7 +329,7 @@ func validatePkIndex(ctx context.Context, sch schema.Schema, def schema.Index, p
 		}
 		if !ok {
 			printIndexContents(ctx, secondary)
-			return fmt.Errorf("index key %v not found in index %s", builder.Desc.Format(k), def.Name())
+			return fmt.Errorf("index key %v not found in index %s", builder.Desc.Format(ctx, k), def.Name())
 		}
 	}
 }

@@ -149,7 +149,7 @@ func (mut *GenericMutableMap[M, T]) Checkpoint(context.Context) error {
 }
 
 // Revert discards writes made since the last checkpoint.
-func (mut *GenericMutableMap[M, T]) Revert(context.Context) {
+func (mut *GenericMutableMap[M, T]) Revert(ctx context.Context) {
 	// if we've accumulated a large number of writes
 	// since we check-pointed, our last checkpoint
 	// may be stashed in a separate tree.MutableMap
@@ -157,7 +157,7 @@ func (mut *GenericMutableMap[M, T]) Revert(context.Context) {
 		mut.tuples = *mut.stash
 		return
 	}
-	mut.tuples.Edits.Revert()
+	mut.tuples.Edits.Revert(ctx)
 }
 
 func (mut *GenericMutableMap[M, T]) flushPending(ctx context.Context) error {
@@ -166,7 +166,7 @@ func (mut *GenericMutableMap[M, T]) flushPending(ctx context.Context) error {
 	// must stash a copy of |mut.tuples| we can revert to.
 	if mut.tuples.Edits.HasCheckpoint() {
 		cp := mut.tuples.Copy()
-		cp.Edits.Revert()
+		cp.Edits.Revert(ctx)
 		stash = &cp
 	}
 	serializer := mut.flusher.GetDefaultSerializer(ctx, mut)
@@ -199,7 +199,7 @@ func (mut *GenericMutableMap[M, T]) IterRange(ctx context.Context, rng Range) (M
 	if err != nil {
 		return nil, err
 	}
-	memIter := memIterFromRange(mut.tuples.Edits, rng)
+	memIter := memIterFromRange(ctx, mut.tuples.Edits, rng)
 
 	iter := &mutableMapIter[val.Tuple, val.Tuple, val.TupleDesc]{
 		memory: memIter,
@@ -272,9 +272,9 @@ func debugFormat(ctx context.Context, m *MutableMap) (string, error) {
 			break
 		}
 		sb.WriteString("\t\t")
-		sb.WriteString(kd.Format(k))
+		sb.WriteString(kd.Format(ctx, k))
 		sb.WriteString(": ")
-		sb.WriteString(vd.Format(v))
+		sb.WriteString(vd.Format(ctx, v))
 		sb.WriteString(",\n")
 		editIter.Advance()
 	}
@@ -296,9 +296,9 @@ func debugFormat(ctx context.Context, m *MutableMap) (string, error) {
 			return "", err
 		}
 		sb.WriteString("\t\t")
-		sb.WriteString(kd.Format(k))
+		sb.WriteString(kd.Format(ctx, k))
 		sb.WriteString(": ")
-		sb.WriteString(vd.Format(v))
+		sb.WriteString(vd.Format(ctx, v))
 		sb.WriteString(",\n")
 	}
 	sb.WriteString("\t}\n}\n")

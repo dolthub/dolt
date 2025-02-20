@@ -16,6 +16,7 @@ package schema
 
 import (
 	"bytes"
+	"context"
 	"unicode/utf8"
 
 	"github.com/dolthub/dolt/go/store/val"
@@ -30,11 +31,11 @@ type CollationTupleComparator struct {
 var _ val.TupleComparator = CollationTupleComparator{}
 
 // Compare implements TupleComparator
-func (c CollationTupleComparator) Compare(left, right val.Tuple, desc val.TupleDesc) (cmp int) {
+func (c CollationTupleComparator) Compare(ctx context.Context, left, right val.Tuple, desc val.TupleDesc) (cmp int) {
 	fast := desc.GetFixedAccess()
 	for i := range fast {
 		start, stop := fast[i][0], fast[i][1]
-		cmp = collationCompare(desc.Types[i], c.Collations[i], left[start:stop], right[start:stop])
+		cmp = collationCompare(ctx, desc.Types[i], c.Collations[i], left[start:stop], right[start:stop])
 		if cmp != 0 {
 			return cmp
 		}
@@ -43,7 +44,7 @@ func (c CollationTupleComparator) Compare(left, right val.Tuple, desc val.TupleD
 	off := len(fast)
 	for i, typ := range desc.Types[off:] {
 		j := i + off
-		cmp = collationCompare(typ, c.Collations[j], left.GetField(j), right.GetField(j))
+		cmp = collationCompare(ctx, typ, c.Collations[j], left.GetField(j), right.GetField(j))
 		if cmp != 0 {
 			return cmp
 		}
@@ -52,8 +53,8 @@ func (c CollationTupleComparator) Compare(left, right val.Tuple, desc val.TupleD
 }
 
 // CompareValues implements TupleComparator
-func (c CollationTupleComparator) CompareValues(index int, left, right []byte, typ val.Type) int {
-	return collationCompare(typ, c.Collations[index], left, right)
+func (c CollationTupleComparator) CompareValues(ctx context.Context, index int, left, right []byte, typ val.Type) int {
+	return collationCompare(ctx, typ, c.Collations[index], left, right)
 }
 
 // Prefix implements TupleComparator
@@ -95,7 +96,7 @@ func (c CollationTupleComparator) Validated(types []val.Type) val.TupleComparato
 	return CollationTupleComparator{Collations: newCollations}
 }
 
-func collationCompare(typ val.Type, collation sql.CollationID, left, right []byte) int {
+func collationCompare(ctx context.Context, typ val.Type, collation sql.CollationID, left, right []byte) int {
 	// order NULLs first
 	if left == nil || right == nil {
 		if bytes.Equal(left, right) {
@@ -110,7 +111,7 @@ func collationCompare(typ val.Type, collation sql.CollationID, left, right []byt
 	if typ.Enc == val.StringEnc {
 		return compareCollatedStrings(collation, left[:len(left)-1], right[:len(right)-1])
 	} else {
-		return val.DefaultTupleComparator{}.CompareValues(0, left, right, typ)
+		return val.DefaultTupleComparator{}.CompareValues(ctx, 0, left, right, typ)
 	}
 }
 

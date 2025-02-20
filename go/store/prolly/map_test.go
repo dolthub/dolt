@@ -38,6 +38,7 @@ var testRand = rand.New(rand.NewSource(1))
 var sharedPool = pool.NewBuffPool()
 
 func TestMap(t *testing.T) {
+	ctx := context.Background()
 	scales := []int{
 		10,
 		100,
@@ -73,7 +74,6 @@ func TestMap(t *testing.T) {
 				testHas(t, pm, tuples)
 			})
 
-			ctx := context.Background()
 			t.Run("walk addresses smoke test", func(t *testing.T) {
 				err := pm.WalkAddresses(ctx, func(_ context.Context, addr hash.Hash) error {
 					assert.True(t, addr != hash.Hash{})
@@ -93,6 +93,7 @@ func TestMap(t *testing.T) {
 }
 
 func TestMutateMapWithTupleIter(t *testing.T) {
+	ctx := context.Background()
 	kd := val.NewTupleDescriptor(
 		val.Type{Enc: val.Uint32Enc, Nullable: false},
 	)
@@ -112,7 +113,7 @@ func TestMutateMapWithTupleIter(t *testing.T) {
 
 	for _, s := range scales {
 		t.Run("scale "+strconv.Itoa(s), func(t *testing.T) {
-			all := tree.RandomTuplePairs(s, kd, vd, ns)
+			all := tree.RandomTuplePairs(ctx, s, kd, vd, ns)
 
 			// randomize |all| and partition
 			rand.Shuffle(s, func(i, j int) {
@@ -123,7 +124,7 @@ func TestMutateMapWithTupleIter(t *testing.T) {
 			// unchanged tuples
 			statics := make([][2]val.Tuple, s/4)
 			copy(statics, all[:q1])
-			tree.SortTuplePairs(statics, kd)
+			tree.SortTuplePairs(ctx, statics, kd)
 
 			// tuples to be updated
 			updates := make([][2]val.Tuple, s/4)
@@ -132,7 +133,7 @@ func TestMutateMapWithTupleIter(t *testing.T) {
 				// shuffle values relative to keys
 				updates[i][1], updates[j][1] = updates[j][1], updates[i][1]
 			})
-			tree.SortTuplePairs(updates, kd)
+			tree.SortTuplePairs(ctx, updates, kd)
 
 			// tuples to be deleted
 			deletes := make([][2]val.Tuple, s/4)
@@ -140,25 +141,24 @@ func TestMutateMapWithTupleIter(t *testing.T) {
 			for i := range deletes {
 				deletes[i][1] = nil
 			}
-			tree.SortTuplePairs(deletes, kd)
+			tree.SortTuplePairs(ctx, deletes, kd)
 
 			// tuples to be inserted
 			inserts := make([][2]val.Tuple, s/4)
 			copy(inserts, all[q3:])
-			tree.SortTuplePairs(inserts, kd)
+			tree.SortTuplePairs(ctx, inserts, kd)
 
 			var mutations [][2]val.Tuple
 			mutations = append(mutations, inserts...)
 			mutations = append(mutations, updates...)
 			mutations = append(mutations, deletes...)
-			tree.SortTuplePairs(mutations, kd)
+			tree.SortTuplePairs(ctx, mutations, kd)
 
 			// original tuples, before modification
 			base := all[:q3]
-			tree.SortTuplePairs(base, kd)
+			tree.SortTuplePairs(ctx, base, kd)
 			before := mustProllyMapFromTuples(t, kd, vd, base)
 
-			ctx := context.Background()
 			ds, err := DebugFormat(ctx, before)
 			assert.NoError(t, err)
 			assert.NotNil(t, ds)
@@ -297,6 +297,7 @@ func TestMapGetAllocs(t *testing.T) {
 }
 
 func makeProllyMap(t *testing.T, count int) (testMap, [][2]val.Tuple) {
+	ctx := context.Background()
 	kd := val.NewTupleDescriptor(
 		val.Type{Enc: val.Uint32Enc, Nullable: false},
 	)
@@ -307,20 +308,21 @@ func makeProllyMap(t *testing.T, count int) (testMap, [][2]val.Tuple) {
 	)
 	ns := tree.NewTestNodeStore()
 
-	tuples := tree.RandomTuplePairs(count, kd, vd, ns)
+	tuples := tree.RandomTuplePairs(ctx, count, kd, vd, ns)
 	om := mustProllyMapFromTuples(t, kd, vd, tuples)
 
 	return om, tuples
 }
 
 func makeProllySecondaryIndex(t *testing.T, count int) (testMap, [][2]val.Tuple) {
+	ctx := context.Background()
 	kd := val.NewTupleDescriptor(
 		val.Type{Enc: val.Uint32Enc, Nullable: true},
 		val.Type{Enc: val.Uint32Enc, Nullable: false},
 	)
 	vd := val.NewTupleDescriptor()
 	ns := tree.NewTestNodeStore()
-	tuples := tree.RandomCompositeTuplePairs(count, kd, vd, ns)
+	tuples := tree.RandomCompositeTuplePairs(ctx, count, kd, vd, ns)
 	om := mustProllyMapFromTuples(t, kd, vd, tuples)
 
 	return om, tuples
@@ -352,8 +354,8 @@ func testGet(t *testing.T, om testMap, tuples [][2]val.Tuple) {
 	inserts := generateInserts(t, om, kd, vd, len(tuples)/2)
 	for _, kv := range inserts {
 		err := om.Get(ctx, kv[0], func(key, val val.Tuple) (err error) {
-			assert.Equal(t, 0, len(key), "Got %s", kd.Format(key))
-			assert.Equal(t, 0, len(val), "Got %s", vd.Format(val))
+			assert.Equal(t, 0, len(key), "Got %s", kd.Format(ctx, key))
+			assert.Equal(t, 0, len(val), "Got %s", vd.Format(ctx, val))
 			return nil
 		})
 		require.NoError(t, err)
@@ -362,7 +364,7 @@ func testGet(t *testing.T, om testMap, tuples [][2]val.Tuple) {
 			// find the expected ordinal return value for this non-existent key
 			exp := len(tuples)
 			for i := 0; i < len(tuples); i++ {
-				if kd.Compare(tuples[i][0], kv[0]) >= 0 {
+				if kd.Compare(ctx, tuples[i][0], kv[0]) >= 0 {
 					exp = i
 					break
 				}
@@ -432,19 +434,21 @@ func testIterAll(t *testing.T, om testMap, tuples [][2]val.Tuple) {
 }
 
 func pointRangeFromTuple(tup val.Tuple, desc val.TupleDesc) Range {
-	return closedRange(tup, tup, desc)
+	ctx := context.Background()
+	return closedRange(ctx, tup, tup, desc)
 }
 
 func formatTuples(tuples [][2]val.Tuple, kd, vd val.TupleDesc) string {
+	ctx := context.Background()
 	var sb strings.Builder
 	sb.WriteString("Tuples (")
 	sb.WriteString(strconv.Itoa(len(tuples)))
 	sb.WriteString(") {\n")
 	for _, kv := range tuples {
 		sb.WriteString("\t")
-		sb.WriteString(kd.Format(kv[0]))
+		sb.WriteString(kd.Format(ctx, kv[0]))
 		sb.WriteString(", ")
-		sb.WriteString(vd.Format(kv[1]))
+		sb.WriteString(vd.Format(ctx, kv[1]))
 		sb.WriteString("\n")
 	}
 	sb.WriteString("}\n")

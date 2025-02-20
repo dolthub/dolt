@@ -560,7 +560,7 @@ func materializeMap(t *testing.T, mut *MutableMap) Map {
 		if next == nil {
 			break
 		}
-		cmp := mut.keyDesc.Compare(val.Tuple(prev), val.Tuple(next))
+		cmp := mut.keyDesc.Compare(ctx, val.Tuple(prev), val.Tuple(next))
 		assert.True(t, cmp < 0)
 		prev = next
 	}

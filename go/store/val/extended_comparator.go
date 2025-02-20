@@ -14,6 +14,8 @@
 
 package val
 
+import "context"
+
 // ExtendedTupleComparator is a comparator that properly handles extended types.
 type ExtendedTupleComparator struct {
 	innerCmp TupleComparator
@@ -24,11 +26,11 @@ type ExtendedTupleComparator struct {
 var _ TupleComparator = ExtendedTupleComparator{}
 
 // Compare implements the TupleComparator interface.
-func (c ExtendedTupleComparator) Compare(left, right Tuple, desc TupleDesc) (cmp int) {
+func (c ExtendedTupleComparator) Compare(ctx context.Context, left, right Tuple, desc TupleDesc) (cmp int) {
 	fast := desc.GetFixedAccess()
 	for i := range fast {
 		start, stop := fast[i][0], fast[i][1]
-		cmp = c.CompareValues(i, left[start:stop], right[start:stop], desc.Types[i])
+		cmp = c.CompareValues(ctx, i, left[start:stop], right[start:stop], desc.Types[i])
 		if cmp != 0 {
 			return cmp
 		}
@@ -37,7 +39,7 @@ func (c ExtendedTupleComparator) Compare(left, right Tuple, desc TupleDesc) (cmp
 	off := len(fast)
 	for i, typ := range desc.Types[off:] {
 		j := i + off
-		cmp = c.CompareValues(j, left.GetField(j), right.GetField(j), typ)
+		cmp = c.CompareValues(ctx, j, left.GetField(j), right.GetField(j), typ)
 		if cmp != 0 {
 			return cmp
 		}
@@ -46,10 +48,10 @@ func (c ExtendedTupleComparator) Compare(left, right Tuple, desc TupleDesc) (cmp
 }
 
 // CompareValues implements the TupleComparator interface.
-func (c ExtendedTupleComparator) CompareValues(index int, left, right []byte, typ Type) int {
+func (c ExtendedTupleComparator) CompareValues(ctx context.Context, index int, left, right []byte, typ Type) int {
 	switch typ.Enc {
 	case ExtendedEnc, ExtendedAddrEnc:
-		cmp, err := c.handlers[index].SerializedCompare(left, right)
+		cmp, err := c.handlers[index].SerializedCompare(ctx, left, right)
 		if err != nil {
 			panic(err)
 		}

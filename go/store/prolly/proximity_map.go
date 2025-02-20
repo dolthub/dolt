@@ -487,7 +487,7 @@ func (b *ProximityMapBuilder) getNextPathSegmentCandidates(ctx context.Context, 
 	prefixTupleBuilder.PutByteString(0, currentPath)
 	prefixTuple := prefixTupleBuilder.Build(b.ns.Pool())
 
-	prefixRange := PrefixRange(prefixTuple, prefixTupleBuilder.Desc)
+	prefixRange := PrefixRange(ctx, prefixTuple, prefixTupleBuilder.Desc)
 	return pathMap.IterRange(ctx, prefixRange)
 }
 

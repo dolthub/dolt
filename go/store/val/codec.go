@@ -16,6 +16,7 @@ package val
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"math"
 	"math/big"
@@ -595,8 +596,8 @@ func compareByteString(l, r []byte) int {
 	return bytes.Compare(l, r)
 }
 
-func readExtended(handler TupleTypeHandler, val []byte) any {
-	v, err := handler.DeserializeValue(val)
+func readExtended(ctx context.Context, handler TupleTypeHandler, val []byte) any {
+	v, err := handler.DeserializeValue(ctx, val)
 	if err != nil {
 		panic(err)
 	}

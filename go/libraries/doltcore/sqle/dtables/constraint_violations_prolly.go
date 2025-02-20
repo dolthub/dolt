@@ -174,7 +174,7 @@ func (cvt *prollyConstraintViolationsTable) PartitionRows(ctx *sql.Context, part
 	if err != nil {
 		return nil, err
 	}
-	kd, vd := sch.GetMapDescriptors()
+	kd, vd := sch.GetMapDescriptors(cvt.root.NodeStore())
 
 	// value tuples encoded in ConstraintViolationMeta may
 	// violate the not null constraints assumed by fixed access

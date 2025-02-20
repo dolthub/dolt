@@ -43,13 +43,13 @@ type rowSerializationIter struct {
 
 // newRowSerializationIter creates a new rowSerializationIter for the specified |schema| and row data from the
 // |key| and |value| tuples.
-func newRowSerializationIter(sch schema.Schema, key, value tree.Item) *rowSerializationIter {
+func newRowSerializationIter(sch schema.Schema, key, value tree.Item, ns tree.NodeStore) *rowSerializationIter {
 	return &rowSerializationIter{
 		sch:       sch,
 		key:       val.Tuple(key),
-		keyDesc:   sch.GetKeyDescriptor(),
+		keyDesc:   sch.GetKeyDescriptor(ns),
 		value:     val.Tuple(value),
-		valueDesc: sch.GetValueDescriptor(),
+		valueDesc: sch.GetValueDescriptor(ns),
 		keyIdx:    -1,
 		valueIdx:  -1,
 		colIdx:    0,
@@ -95,7 +95,7 @@ func serializeRowToBinlogBytes(ctx *sql.Context, sch schema.Schema, key, value t
 	columns := sch.GetAllCols().GetColumns()
 	nullBitmap = mysql.NewServerBitmap(len(columns))
 
-	iter := newRowSerializationIter(sch, key, value)
+	iter := newRowSerializationIter(sch, key, value, ns)
 	rowIdx := -1
 	for iter.hasNext() {
 		rowIdx++

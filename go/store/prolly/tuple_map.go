@@ -159,7 +159,7 @@ func makeDiffCallBack(from, to Map, innerCb tree.DiffFn) tree.DiffFn {
 		// Skip diffs produced by non-canonical tuples. A canonical-tuple is a
 		// tuple where any null suffixes have been trimmed.
 		if diff.Type == tree.ModifiedDiff &&
-			from.valDesc.Compare(val.Tuple(diff.From), val.Tuple(diff.To)) == 0 {
+			from.valDesc.Compare(ctx, val.Tuple(diff.From), val.Tuple(diff.To)) == 0 {
 			return nil
 		}
 		return innerCb(ctx, diff)
@@ -313,7 +313,7 @@ func (m Map) HasPrefix(ctx context.Context, preKey val.Tuple, preDesc val.TupleD
 
 // IterRange returns a mutableMapIter that iterates over a Range.
 func (m Map) IterRange(ctx context.Context, rng Range) (iter MapIter, err error) {
-	stop, ok := rng.KeyRangeLookup(m.Pool())
+	stop, ok := rng.KeyRangeLookup(ctx, m.Pool())
 	if ok {
 		iter, err = m.IterKeyRange(ctx, rng.Tup, stop)
 	} else {
@@ -367,8 +367,8 @@ func (m Map) Pool() pool.BuffPool {
 	return m.tuples.NodeStore.Pool()
 }
 
-func (m Map) CompareItems(left, right tree.Item) int {
-	return m.keyDesc.Compare(val.Tuple(left), val.Tuple(right))
+func (m Map) CompareItems(ctx context.Context, left, right tree.Item) int {
+	return m.keyDesc.Compare(ctx, val.Tuple(left), val.Tuple(right))
 }
 
 func treeIterFromRange(
@@ -437,9 +437,9 @@ func DebugFormat(ctx context.Context, m Map) (string, error) {
 		}
 
 		sb.WriteString("\t")
-		sb.WriteString(kd.Format(k))
+		sb.WriteString(kd.Format(ctx, k))
 		sb.WriteString(": ")
-		sb.WriteString(vd.Format(v))
+		sb.WriteString(vd.Format(ctx, v))
 		sb.WriteString(",\n")
 	}
 	sb.WriteString("}")

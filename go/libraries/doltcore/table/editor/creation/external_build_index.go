@@ -47,7 +47,7 @@ func BuildProllyIndexExternal(ctx *sql.Context, vrw types.ValueReadWriter, ns tr
 	}
 	p := primary.Pool()
 
-	keyDesc, _ := idx.Schema().GetMapDescriptors()
+	keyDesc, _ := idx.Schema().GetMapDescriptors(ns)
 	if schema.IsKeyless(sch) {
 		keyDesc = prolly.AddHashToSchema(keyDesc)
 	}
@@ -63,7 +63,7 @@ func BuildProllyIndexExternal(ctx *sql.Context, vrw types.ValueReadWriter, ns tr
 	}
 
 	sorter := sort.NewTupleSorter(batchSize, fileMax, func(t1, t2 val.Tuple) bool {
-		return keyDesc.Compare(t1, t2) < 0
+		return keyDesc.Compare(ctx, t1, t2) < 0
 	}, tempfiles.MovableTempFileProvider)
 	defer sorter.Close()
 
@@ -178,7 +178,7 @@ func (t *tupleIterWithCb) Next(ctx context.Context) (val.Tuple, val.Tuple) {
 			}
 			return nil, nil
 		}
-		if t.lastKey != nil && t.prefixDesc.Compare(t.lastKey, curKey) == 0 && t.uniqCb != nil {
+		if t.lastKey != nil && t.prefixDesc.Compare(ctx, t.lastKey, curKey) == 0 && t.uniqCb != nil {
 			// register a constraint violation if |key| collides with |lastKey|
 			if err := t.uniqCb(ctx, t.lastKey, curKey); err != nil {
 				t.err = err

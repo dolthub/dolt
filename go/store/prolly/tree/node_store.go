@@ -15,7 +15,9 @@
 package tree
 
 import (
+	"bytes"
 	"context"
+	"github.com/dolthub/dolt/go/store/val"
 	"sync"
 
 	"github.com/dolthub/dolt/go/store/prolly/message"
@@ -32,6 +34,8 @@ const (
 
 // NodeStore reads and writes prolly tree Nodes.
 type NodeStore interface {
+	val.ValueStore
+
 	// Read reads a prolly tree Node from the store.
 	Read(ctx context.Context, ref hash.Hash) (Node, error)
 
@@ -204,3 +208,14 @@ func (ns nodeStore) Format() *types.NomsBinFormat {
 func (ns nodeStore) PurgeCaches() {
 	ns.cache.purge()
 }
+
+func (ns nodeStore) ReadBytes(ctx context.Context, h hash.Hash) ([]byte, error) {
+	return NewByteArray(h, ns).ToBytes(ctx)
+}
+
+func (ns nodeStore) WriteBytes(ctx context.Context, b []byte) (hash.Hash, error) {
+	_, h, err := SerializeBytesToAddr(ctx, ns, bytes.NewReader(b), len(b))
+	return h, err
+}
+
+var _ val.ValueStore = nodeStore{}

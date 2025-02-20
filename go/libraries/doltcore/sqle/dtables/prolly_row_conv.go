@@ -85,7 +85,7 @@ func NewProllyRowConverter(inSch, outSch schema.Schema, warnFn rowconv.WarnFunct
 		nonPkTargetTypes = append([]sql.Type{nil}, nonPkTargetTypes...)
 	}
 
-	kd, vd := inSch.GetMapDescriptors()
+	kd, vd := inSch.GetMapDescriptors(ns)
 	return ProllyRowConverter{
 		inSchema:         inSch,
 		outSchema:        outSch,

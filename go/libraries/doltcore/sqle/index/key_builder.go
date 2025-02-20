@@ -144,7 +144,7 @@ func (b SecondaryKeyBuilder) SecondaryKeyFromRow(ctx context.Context, k, v val.T
 			if b.canCopyRawBytes(to) {
 				b.builder.PutRaw(to, v.GetField(from))
 			} else {
-				value, err := tree.GetField(ctx, b.sch.GetValueDescriptor(), from, v, b.nodeStore)
+				value, err := tree.GetField(ctx, b.sch.GetValueDescriptor(b.nodeStore), from, v, b.nodeStore)
 				if err != nil {
 					return nil, err
 				}
@@ -166,7 +166,7 @@ func (b SecondaryKeyBuilder) SecondaryKeyFromRow(ctx context.Context, k, v val.T
 // BuildRow returns a sql.Row for the given key/value tuple pair
 func BuildRow(ctx *sql.Context, key, value val.Tuple, sch schema.Schema, ns tree.NodeStore) (sql.Row, error) {
 	prollyIter := prolly.NewPointLookup(key, value)
-	rowIter := NewProllyRowIterForSchema(sch, prollyIter, sch.GetKeyDescriptor(), sch.GetValueDescriptor(), sch.GetAllCols().Tags, ns)
+	rowIter := NewProllyRowIterForSchema(sch, prollyIter, sch.GetKeyDescriptor(ns), sch.GetValueDescriptor(ns), sch.GetAllCols().Tags, ns)
 	return rowIter.Next(ctx)
 }
 

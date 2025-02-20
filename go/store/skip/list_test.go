@@ -16,6 +16,7 @@ package skip
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"math/rand"
 	"sort"
@@ -27,6 +28,10 @@ import (
 
 var randSrc = rand.New(rand.NewSource(0))
 
+func compareBytes(ctx context.Context, a, b []byte) int {
+	return bytes.Compare(a, b)
+}
+
 func TestSkipList(t *testing.T) {
 	t.Run("test skip list", func(t *testing.T) {
 		vals := [][]byte{
@@ -34,15 +39,15 @@ func TestSkipList(t *testing.T) {
 			b("f"), b("g"), b("h"), b("i"), b("j"),
 			b("k"), b("l"), b("m"), b("n"), b("o"),
 		}
-		testSkipList(t, bytes.Compare, vals...)
+		testSkipList(t, compareBytes, vals...)
 	})
 
 	t.Run("test skip list of random bytes", func(t *testing.T) {
 		vals := randomVals((randSrc.Int63() % 10_000) + 100)
-		testSkipList(t, bytes.Compare, vals...)
+		testSkipList(t, compareBytes, vals...)
 	})
 	t.Run("test with custom compare function", func(t *testing.T) {
-		compare := func(left, right []byte) int {
+		compare := func(ctx context.Context, left, right []byte) int {
 			l := int64(binary.LittleEndian.Uint64(left))
 			r := int64(binary.LittleEndian.Uint64(right))
 			return int(l - r)
@@ -59,15 +64,15 @@ func TestSkipListCheckpoints(t *testing.T) {
 			b("f"), b("g"), b("h"), b("i"), b("j"),
 			b("k"), b("l"), b("m"), b("n"), b("o"),
 		}
-		testSkipListCheckpoints(t, bytes.Compare, vals...)
+		testSkipListCheckpoints(t, compareBytes, vals...)
 	})
 
 	t.Run("test skip list of random bytes", func(t *testing.T) {
 		vals := randomVals((randSrc.Int63() % 10_000) + 100)
-		testSkipListCheckpoints(t, bytes.Compare, vals...)
+		testSkipListCheckpoints(t, compareBytes, vals...)
 	})
 	t.Run("test with custom compare function", func(t *testing.T) {
-		compare := func(left, right []byte) int {
+		compare := func(ctx context.Context, left, right []byte) int {
 			l := int64(binary.LittleEndian.Uint64(left))
 			r := int64(binary.LittleEndian.Uint64(right))
 			return int(l - r)
@@ -86,6 +91,7 @@ func TestMemoryFootprint(t *testing.T) {
 }
 
 func testSkipList(t *testing.T, compare KeyOrder, vals ...[]byte) {
+	ctx := context.Background()
 	randSrc.Shuffle(len(vals), func(i, j int) {
 		vals[i], vals[j] = vals[j], vals[i]
 	})
@@ -96,7 +102,7 @@ func testSkipList(t *testing.T, compare KeyOrder, vals ...[]byte) {
 	t.Run("test puts", func(t *testing.T) {
 		// |list| is populated
 		for _, v := range vals {
-			list.Put(v, v)
+			list.Put(ctx, v, v)
 		}
 		testSkipListPuts(t, list, vals...)
 	})
@@ -124,27 +130,29 @@ func testSkipListPuts(t *testing.T, list *List, vals ...[]byte) {
 }
 
 func testSkipListGets(t *testing.T, list *List, vals ...[]byte) {
+	ctx := context.Background()
 	// get in different keyOrder
 	randSrc.Shuffle(len(vals), func(i, j int) {
 		vals[i], vals[j] = vals[j], vals[i]
 	})
 
 	for _, exp := range vals {
-		act, ok := list.Get(exp)
+		act, ok := list.Get(ctx, exp)
 		assert.True(t, ok)
 		assert.Equal(t, exp, act)
 	}
 
 	// test absent key
-	act, ok := list.Get(b("12345678"))
+	act, ok := list.Get(ctx, b("12345678"))
 	assert.False(t, ok)
 	assert.Nil(t, act)
 }
 
 func testSkipListUpdates(t *testing.T, list *List, vals ...[]byte) {
+	ctx := context.Background()
 	v2 := []byte("789")
 	for _, v := range vals {
-		list.Put(v, v2)
+		list.Put(ctx, v, v2)
 	}
 	assert.Equal(t, len(vals), list.Count())
 
@@ -152,7 +160,7 @@ func testSkipListUpdates(t *testing.T, list *List, vals ...[]byte) {
 		vals[i], vals[j] = vals[j], vals[i]
 	})
 	for _, exp := range vals {
-		act, ok := list.Get(exp)
+		act, ok := list.Get(ctx, exp)
 		assert.True(t, ok)
 		assert.Equal(t, v2, act)
 	}
@@ -162,9 +170,10 @@ func testSkipListUpdates(t *testing.T, list *List, vals ...[]byte) {
 }
 
 func testSkipListIterForward(t *testing.T, list *List, vals ...[]byte) {
+	ctx := context.Background()
 	// put |vals| back in keyOrder
 	sort.Slice(vals, func(i, j int) bool {
-		return list.compareKeys(vals[i], vals[j]) < 0
+		return list.compareKeys(ctx, vals[i], vals[j]) < 0
 	})
 
 	idx := 0
@@ -191,9 +200,10 @@ func testSkipListIterForward(t *testing.T, list *List, vals ...[]byte) {
 }
 
 func testSkipListIterBackward(t *testing.T, list *List, vals ...[]byte) {
+	ctx := context.Background()
 	// put |vals| back in keyOrder
 	sort.Slice(vals, func(i, j int) bool {
-		return list.compareKeys(vals[i], vals[j]) < 0
+		return list.compareKeys(ctx, vals[i], vals[j]) < 0
 	})
 
 	// test iter at
@@ -211,16 +221,17 @@ func testSkipListIterBackward(t *testing.T, list *List, vals ...[]byte) {
 }
 
 func testSkipListTruncate(t *testing.T, list *List, vals ...[]byte) {
+	ctx := context.Background()
 	assert.Equal(t, list.Count(), len(vals))
 
 	list.Truncate()
 	assert.Equal(t, list.Count(), 0)
 
 	for i := range vals {
-		assert.False(t, list.Has(vals[i]))
+		assert.False(t, list.Has(ctx, vals[i]))
 	}
 	for i := range vals {
-		v, ok := list.Get(vals[i])
+		v, ok := list.Get(ctx, vals[i])
 		assert.False(t, ok)
 		assert.Nil(t, v)
 	}
@@ -240,24 +251,26 @@ func testSkipListTruncate(t *testing.T, list *List, vals ...[]byte) {
 
 	validateIter(list.IterAtStart())
 	validateIter(list.IterAtEnd())
-	validateIter(list.GetIterAt(vals[0]))
+	validateIter(list.GetIterAt(ctx, vals[0]))
 }
 
 func validateIterForwardFrom(t *testing.T, l *List, key []byte) (count int) {
-	iter := l.GetIterAt(key)
+	ctx := context.Background()
+	iter := l.GetIterAt(ctx, key)
 	k, _ := iter.Current()
 	for k != nil {
 		count++
 		iter.Advance()
 		prev := k
 		k, _ = iter.Current()
-		assert.True(t, l.compareKeys(prev, k) < 0)
+		assert.True(t, l.compareKeys(ctx, prev, k) < 0)
 	}
 	return
 }
 
 func validateIterBackwardFrom(t *testing.T, l *List, key []byte) (count int) {
-	iter := l.GetIterAt(key)
+	ctx := context.Background()
+	iter := l.GetIterAt(ctx, key)
 	k, _ := iter.Current()
 	for k != nil {
 		count++
@@ -266,7 +279,7 @@ func validateIterBackwardFrom(t *testing.T, l *List, key []byte) (count int) {
 		k, _ = iter.Current()
 
 		if k != nil {
-			assert.True(t, l.compareKeys(prev, k) > 0)
+			assert.True(t, l.compareKeys(ctx, prev, k) > 0)
 		}
 	}
 	return
@@ -317,6 +330,7 @@ func iterAllBackwards(l *List, cb func([]byte, []byte)) {
 }
 
 func testSkipListCheckpoints(t *testing.T, compare KeyOrder, data ...[]byte) {
+	ctx := context.Background()
 	randSrc.Shuffle(len(data), func(i, j int) {
 		data[i], data[j] = data[j], data[i]
 	})
@@ -331,55 +345,55 @@ func testSkipListCheckpoints(t *testing.T, compare KeyOrder, data ...[]byte) {
 	list := NewSkipList(compare)
 
 	// test empty revert
-	list.Revert()
+	list.Revert(ctx)
 
 	for _, v := range init {
-		list.Put(v, v)
+		list.Put(ctx, v, v)
 	}
 	for _, v := range init {
-		act, ok := list.Get(v)
+		act, ok := list.Get(ctx, v)
 		assert.True(t, ok)
 		assert.Equal(t, v, act)
 	}
 	for _, v := range inserts {
-		assert.False(t, list.Has(v))
+		assert.False(t, list.Has(ctx, v))
 	}
 
 	list.Checkpoint()
 
 	up := []byte("update")
 	for _, v := range updates {
-		list.Put(v, up)
+		list.Put(ctx, v, up)
 	}
 
 	for _, v := range inserts {
-		list.Put(v, v)
+		list.Put(ctx, v, v)
 	}
 
 	for _, v := range static {
-		act, ok := list.Get(v)
+		act, ok := list.Get(ctx, v)
 		assert.True(t, ok)
 		assert.Equal(t, v, act)
 	}
 	for _, v := range inserts {
-		act, ok := list.Get(v)
+		act, ok := list.Get(ctx, v)
 		assert.True(t, ok)
 		assert.Equal(t, v, act)
 	}
 	for _, v := range updates {
-		act, ok := list.Get(v)
+		act, ok := list.Get(ctx, v)
 		assert.True(t, ok)
 		assert.Equal(t, up, act)
 	}
 
-	list.Revert()
+	list.Revert(ctx)
 
 	for _, v := range init {
-		act, ok := list.Get(v)
+		act, ok := list.Get(ctx, v)
 		assert.True(t, ok)
 		assert.Equal(t, v, act)
 	}
 	for _, v := range inserts {
-		assert.False(t, list.Has(v))
+		assert.False(t, list.Has(ctx, v))
 	}
 }

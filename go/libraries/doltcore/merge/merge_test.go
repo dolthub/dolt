@@ -63,8 +63,8 @@ type rowV struct {
 	col1, col2 int
 }
 
-var vD = sch.GetValueDescriptor()
-var vB = val.NewTupleBuilder(vD)
+var vD val.TupleDesc
+var vB *val.TupleBuilder
 var syncPool = pool.NewBuffPool()
 
 func (v rowV) value() val.Tuple {
@@ -422,6 +422,13 @@ func setupMergeTest(t *testing.T) (*doltdb.DoltDB, types.ValueReadWriter, tree.N
 	ddb := mustMakeEmptyRepo(t)
 	vrw := ddb.ValueReadWriter()
 	ns := ddb.NodeStore()
+
+	vD = sch.GetValueDescriptor(ns)
+	vB = val.NewTupleBuilder(vD)
+
+	kD = sch.GetKeyDescriptor(ns)
+	kB = val.NewTupleBuilder(kD)
+
 	sortTests(testRows)
 
 	var initialKVs []val.Tuple
@@ -773,8 +780,8 @@ func buildLeftRightAncCommitsAndBranches(t *testing.T, ddb *doltdb.DoltDB, rootT
 	return mergeCommit, ancCm, root, mergeRoot, ancRoot
 }
 
-var kD = sch.GetKeyDescriptor()
-var kB = val.NewTupleBuilder(kD)
+var kD val.TupleDesc
+var kB *val.TupleBuilder
 
 func key(i int) val.Tuple {
 	kB.PutInt64(0, int64(i))

@@ -122,7 +122,7 @@ func buildIndex(
 		if err != nil {
 			return nil, err
 		}
-		kd := postMergeSchema.GetKeyDescriptor()
+		kd := postMergeSchema.GetKeyDescriptor(ns)
 		kb := val.NewTupleBuilder(kd)
 		p := m.Pool()
 

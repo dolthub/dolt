@@ -198,7 +198,7 @@ func TestBucketBuilder(t *testing.T) {
 					err := tree.PutField(ctx, nil, kb, i, v)
 					assert.NoError(t, err)
 				}
-				b.add(kb.Build(pool))
+				b.add(ctx, kb.Build(pool))
 			}
 			// |ns| only needed for out of band tuples
 			bucket, err := b.finalize(ctx, nil)

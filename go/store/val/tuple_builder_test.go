@@ -15,6 +15,7 @@
 package val
 
 import (
+	"context"
 	"math"
 	"math/rand"
 	"testing"
@@ -205,7 +206,7 @@ type testCompare struct{}
 
 var _ TupleComparator = testCompare{}
 
-func (tc testCompare) Compare(left, right Tuple, desc TupleDesc) (cmp int) {
+func (tc testCompare) Compare(ctx context.Context, left, right Tuple, desc TupleDesc) (cmp int) {
 	for i, typ := range desc.Types {
 		cmp = compare(typ, left.GetField(i), right.GetField(i))
 		if cmp != 0 {
@@ -215,7 +216,7 @@ func (tc testCompare) Compare(left, right Tuple, desc TupleDesc) (cmp int) {
 	return
 }
 
-func (tc testCompare) CompareValues(_ int, left, right []byte, typ Type) int {
+func (tc testCompare) CompareValues(ctx context.Context, index int, left, right []byte, typ Type) int {
 	return compare(typ, left, right)
 }
 

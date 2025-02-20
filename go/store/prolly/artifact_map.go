@@ -370,7 +370,7 @@ func (wr *ArtifactsEditor) Add(ctx context.Context, srcKey val.Tuple, srcRootish
 // existing violation exists but has a different |meta.VInfo| value then
 // ErrMergeArtifactCollision is a returned.
 func (wr *ArtifactsEditor) ReplaceConstraintViolation(ctx context.Context, srcKey val.Tuple, srcRootish hash.Hash, artType ArtifactType, meta ConstraintViolationMeta) error {
-	itr, err := wr.mut.IterRange(ctx, PrefixRange(srcKey, wr.srcKeyDesc))
+	itr, err := wr.mut.IterRange(ctx, PrefixRange(ctx, srcKey, wr.srcKeyDesc))
 	if err != nil {
 		return err
 	}
@@ -401,7 +401,7 @@ func (wr *ArtifactsEditor) ReplaceConstraintViolation(ctx context.Context, srcKe
 
 		if bytes.Compare(currMeta.Value, meta.Value) == 0 {
 			if bytes.Compare(currMeta.VInfo, meta.VInfo) != 0 {
-				return artifactCollisionErr(srcKey, wr.srcKeyDesc, currMeta.VInfo, meta.VInfo)
+				return artifactCollisionErr(ctx, srcKey, wr.srcKeyDesc, currMeta.VInfo, meta.VInfo)
 			}
 			// Key and Value is the same, so delete this
 			err = wr.Delete(ctx, art.ArtKey)
@@ -426,9 +426,9 @@ func (wr *ArtifactsEditor) ReplaceConstraintViolation(ctx context.Context, srcKe
 	return nil
 }
 
-func artifactCollisionErr(key val.Tuple, desc val.TupleDesc, old, new []byte) error {
+func artifactCollisionErr(ctx context.Context, key val.Tuple, desc val.TupleDesc, old, new []byte) error {
 	return fmt.Errorf("error storing constraint violation for primary key (%s): another violation already exists\n"+
-		"new violation: %s old violation: (%s)", desc.Format(key), string(old), string(new))
+		"new violation: %s old violation: (%s)", desc.Format(ctx, key), string(old), string(new))
 }
 
 func (wr *ArtifactsEditor) Delete(ctx context.Context, key val.Tuple) error {
@@ -650,9 +650,9 @@ func ArtifactDebugFormat(ctx context.Context, m ArtifactMap) (string, error) {
 		}
 
 		sb.WriteString("\t")
-		sb.WriteString(kd.Format(k))
+		sb.WriteString(kd.Format(ctx, k))
 		sb.WriteString(": ")
-		sb.WriteString(vd.Format(v))
+		sb.WriteString(vd.Format(ctx, v))
 		sb.WriteString(",\n")
 	}
 	sb.WriteString("}")

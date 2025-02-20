@@ -225,8 +225,8 @@ func (t StaticMap[K, V, O]) HashOf() hash.Hash {
 
 func (t StaticMap[K, V, O]) Mutate() MutableMap[K, V, O, StaticMap[K, V, O]] {
 	return MutableMap[K, V, O, StaticMap[K, V, O]]{
-		Edits: skip.NewSkipList(func(left, right []byte) int {
-			return t.Order.Compare(left, right)
+		Edits: skip.NewSkipList(func(ctx context.Context, left, right []byte) int {
+			return t.Order.Compare(ctx, left, right)
 		}),
 		Static: t,
 	}
@@ -251,7 +251,7 @@ func (t StaticMap[K, V, O]) Get(ctx context.Context, query K, cb KeyValueFn[K, V
 
 	if cur.Valid() {
 		key = K(cur.CurrentKey())
-		if t.Order.Compare(query, key) == 0 {
+		if t.Order.Compare(ctx, query, key) == 0 {
 			value = V(cur.currentValue())
 		} else {
 			key = nil
@@ -271,7 +271,7 @@ func (t StaticMap[K, V, O]) GetPrefix(ctx context.Context, query K, prefixOrder 
 
 	if cur.Valid() {
 		key = K(cur.CurrentKey())
-		if prefixOrder.Compare(query, key) == 0 {
+		if prefixOrder.Compare(ctx, query, key) == 0 {
 			value = V(cur.currentValue())
 		} else {
 			key = nil
@@ -285,7 +285,7 @@ func (t StaticMap[K, V, O]) Has(ctx context.Context, query K) (ok bool, err erro
 	if err != nil {
 		return false, err
 	} else if cur.Valid() {
-		ok = t.Order.Compare(query, K(cur.CurrentKey())) == 0
+		ok = t.Order.Compare(ctx, query, K(cur.CurrentKey())) == 0
 	}
 	return
 }
@@ -296,7 +296,7 @@ func (t StaticMap[K, V, O]) HasPrefix(ctx context.Context, query K, prefixOrder 
 		return false, err
 	} else if cur.Valid() {
 		// true if |query| is a prefix of |cur.currentKey()|
-		ok = prefixOrder.Compare(query, K(cur.CurrentKey())) == 0
+		ok = prefixOrder.Compare(ctx, query, K(cur.CurrentKey())) == 0
 	}
 	return
 }

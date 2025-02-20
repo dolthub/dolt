@@ -157,7 +157,7 @@ func sendPatches[K ~[]byte, O Ordering[K]](
 	}
 
 	for lok && rok {
-		cmp := l.order.Compare(K(left.Key), K(right.Key))
+		cmp := l.order.Compare(ctx, K(left.Key), K(right.Key))
 
 		switch {
 		case cmp < 0:

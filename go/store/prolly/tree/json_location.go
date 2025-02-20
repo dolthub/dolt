@@ -16,6 +16,7 @@ package tree
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"slices"
 	"strconv"
@@ -464,7 +465,7 @@ type jsonLocationOrdering struct {
 
 var _ Ordering[[]byte] = &jsonLocationOrdering{}
 
-func (o *jsonLocationOrdering) Compare(left, right []byte) int {
+func (o *jsonLocationOrdering) Compare(ctx context.Context, left, right []byte) int {
 	// A JSON document that fits entirely in a single chunk has no keys,
 	if len(left) == 0 && len(right) == 0 {
 		return 0

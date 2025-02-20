@@ -64,7 +64,7 @@ func NewEmptyArtifactIndex(ctx context.Context, vrw types.ValueReadWriter, ns tr
 		panic("TODO")
 
 	case types.Format_DOLT:
-		kd := tableSch.GetKeyDescriptor()
+		kd := tableSch.GetKeyDescriptor(ns)
 		m, err := prolly.NewArtifactMapFromTuples(ctx, ns, kd)
 		if err != nil {
 			return nil, err
@@ -108,7 +108,7 @@ func artifactIndexFromAddr(ctx context.Context, vrw types.ValueReadWriter, ns tr
 		if fileId != serial.MergeArtifactsFileID {
 			return nil, fmt.Errorf("unexpected file ID for artifact node, expected %s, found %s", serial.MergeArtifactsFileID, fileId)
 		}
-		kd := tableSch.GetKeyDescriptor()
+		kd := tableSch.GetKeyDescriptor(ns)
 		m := prolly.NewArtifactMap(root, ns, kd)
 		return ArtifactIndexFromProllyMap(m), nil
 

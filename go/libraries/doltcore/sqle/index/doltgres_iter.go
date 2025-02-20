@@ -215,7 +215,7 @@ func NewDoltgresPartitionIter(ctx *sql.Context, lookup sql.IndexLookup) (sql.Par
 func doltgresProllyMapIterator(ctx *sql.Context, keyDesc val.TupleDesc, ns tree.NodeStore, root tree.Node, rang DoltgresRange) (prolly.MapIter, error) {
 	searchRow := make(sql.Row, len(keyDesc.Types))
 	var findStartErr error
-	findStart := func(nd tree.Node) int {
+	findStart := func(_ context.Context, nd tree.Node) int {
 		return sort.Search(nd.Count(), func(i int) bool {
 			key := val.Tuple(nd.GetKey(i))
 			if err := doltgresMapSearchKeyToRow(ctx, key, keyDesc, ns, searchRow); err != nil {
@@ -235,7 +235,7 @@ func doltgresProllyMapIterator(ctx *sql.Context, keyDesc val.TupleDesc, ns tree.
 		})
 	}
 	var findStopErr error
-	findStop := func(nd tree.Node) (idx int) {
+	findStop := func(_ context.Context, nd tree.Node) (idx int) {
 		return sort.Search(nd.Count(), func(i int) bool {
 			key := val.Tuple(nd.GetKey(i))
 			if err := doltgresMapSearchKeyToRow(ctx, key, keyDesc, ns, searchRow); err != nil {

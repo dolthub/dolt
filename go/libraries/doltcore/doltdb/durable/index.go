@@ -153,7 +153,7 @@ func newEmptyIndex(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeS
 		return IndexFromNomsMap(m, vrw, ns), nil
 
 	case types.Format_DOLT:
-		kd, vd := sch.GetMapDescriptors()
+		kd, vd := sch.GetMapDescriptors(ns)
 		if isKeylessSecondary {
 			kd = prolly.AddHashToSchema(kd)
 		}

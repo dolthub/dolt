@@ -575,9 +575,11 @@ func extractRowCountAndDiffType(sch schema.Schema, diff tree.Diff) (rowCount uin
 		return 1, diff.Type, nil
 	}
 
+	// This descriptor doesn't need a nodestore because it's never used to access an address field.
+	vd := sch.GetValueDescriptor(nil)
 	switch diff.Type {
 	case tree.AddedDiff:
-		toRowCount, notNull := sch.GetValueDescriptor().GetUint64(0, val.Tuple(diff.To))
+		toRowCount, notNull := vd.GetUint64(0, val.Tuple(diff.To))
 		if !notNull {
 			return 0, 0, fmt.Errorf(
 				"row count for a keyless table row cannot be null")
@@ -585,7 +587,7 @@ func extractRowCountAndDiffType(sch schema.Schema, diff tree.Diff) (rowCount uin
 		return toRowCount, diff.Type, nil
 
 	case tree.RemovedDiff:
-		fromRowCount, notNull := sch.GetValueDescriptor().GetUint64(0, val.Tuple(diff.From))
+		fromRowCount, notNull := vd.GetUint64(0, val.Tuple(diff.From))
 		if !notNull {
 			return 0, 0, fmt.Errorf(
 				"row count for a keyless table row cannot be null")
@@ -593,13 +595,13 @@ func extractRowCountAndDiffType(sch schema.Schema, diff tree.Diff) (rowCount uin
 		return fromRowCount, diff.Type, nil
 
 	case tree.ModifiedDiff:
-		toRowCount, notNull := sch.GetValueDescriptor().GetUint64(0, val.Tuple(diff.To))
+		toRowCount, notNull := vd.GetUint64(0, val.Tuple(diff.To))
 		if !notNull {
 			return 0, 0, fmt.Errorf(
 				"row count for a keyless table row cannot be null")
 		}
 
-		fromRowCount, notNull := sch.GetValueDescriptor().GetUint64(0, val.Tuple(diff.From))
+		fromRowCount, notNull := vd.GetUint64(0, val.Tuple(diff.From))
 		if !notNull {
 			return 0, 0, fmt.Errorf(
 				"row count for a keyless table row cannot be null")

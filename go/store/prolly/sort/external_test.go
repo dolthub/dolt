@@ -29,6 +29,7 @@ import (
 )
 
 func TestFlush(t *testing.T) {
+	ctx := context.Background()
 	tests := []struct {
 		td  val.TupleDesc
 		cnt int
@@ -91,7 +92,7 @@ func TestFlush(t *testing.T) {
 			}
 
 			keyCmp := func(l, r val.Tuple) bool {
-				return tt.td.Compare(l, r) <= 0
+				return tt.td.Compare(ctx, l, r) <= 0
 			}
 
 			t.Run("sorting", func(t *testing.T) {
@@ -118,6 +119,7 @@ func TestFlush(t *testing.T) {
 }
 
 func TestMerge(t *testing.T) {
+	ctx := context.Background()
 	tests := []struct {
 		td     val.TupleDesc
 		counts []int
@@ -175,7 +177,7 @@ func TestMerge(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(name(tt.td, tt.counts), func(t *testing.T) {
 			keyCmp := func(l, r val.Tuple) bool {
-				return tt.td.Compare(l, r) <= 0
+				return tt.td.Compare(ctx, l, r) <= 0
 			}
 
 			var keyMems []keyIterable
@@ -211,7 +213,6 @@ func TestMerge(t *testing.T) {
 			t.Run("file merge", func(t *testing.T) {
 				target := newKeyFile(mustNewFile(t, tmpProv), batchSize)
 
-				ctx := context.Background()
 				m, _ := newFileMerger(ctx, keyCmp, target, keyFiles...)
 				m.run(ctx)
 
@@ -224,6 +225,7 @@ func TestMerge(t *testing.T) {
 }
 
 func TestCompact(t *testing.T) {
+	ctx := context.Background()
 	// run compact until there's only 1 file
 	// check at each iteration that we halved the file count, cnt and size is still the same
 	tests := []struct {
@@ -281,7 +283,7 @@ func TestCompact(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(name(tt.td, tt.fileCnt), func(t *testing.T) {
 			keyCmp := func(l, r val.Tuple) bool {
-				return tt.td.Compare(l, r) <= 0
+				return tt.td.Compare(ctx, l, r) <= 0
 			}
 
 			var keyFiles []keyIterable
@@ -323,6 +325,7 @@ func TestCompact(t *testing.T) {
 }
 
 func TestFileE2E(t *testing.T) {
+	ctx := context.Background()
 	// simulate full lifecycle
 	// vary batch size and file count so multiple compacts/merges
 	// make the batch size and file size small enough that
@@ -416,7 +419,7 @@ func TestFileE2E(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(fmt.Sprintf("%s %d-rows %d-batch %d-files", tt.name, tt.rows, tt.batchSize, tt.fileMax), func(t *testing.T) {
 			keyCmp := func(l, r val.Tuple) bool {
-				return tt.td.Compare(l, r) <= 0
+				return tt.td.Compare(ctx, l, r) <= 0
 			}
 
 			ctx := context.Background()

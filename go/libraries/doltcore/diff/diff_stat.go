@@ -225,7 +225,7 @@ func reportPkChanges(ctx context.Context, vMapping val.OrdinalMapping, fromD, to
 	case tree.RemovedDiff:
 		stat.Removes++
 	case tree.ModifiedDiff:
-		stat.CellChanges = prollyCountCellDiff(vMapping, fromD, toD, val.Tuple(change.From), val.Tuple(change.To))
+		stat.CellChanges = prollyCountCellDiff(ctx, vMapping, fromD, toD, val.Tuple(change.From), val.Tuple(change.To))
 		stat.Changes++
 	default:
 		return errors.New("unknown change type")
@@ -269,7 +269,7 @@ func reportKeylessChanges(ctx context.Context, vMapping val.OrdinalMapping, from
 
 // prollyCountCellDiff counts the number of changes columns between two tuples
 // |from| and |to|. |mapping| should map columns from |from| to |to|.
-func prollyCountCellDiff(mapping val.OrdinalMapping, fromD, toD val.TupleDesc, from val.Tuple, to val.Tuple) uint64 {
+func prollyCountCellDiff(ctx context.Context, mapping val.OrdinalMapping, fromD, toD val.TupleDesc, from, to val.Tuple) uint64 {
 	newCols := uint64(toD.Count())
 	changed := uint64(0)
 	for i, j := range mapping {
@@ -286,7 +286,7 @@ func prollyCountCellDiff(mapping val.OrdinalMapping, fromD, toD val.TupleDesc, f
 			continue
 		}
 
-		if fromD.CompareField(toD.GetField(j, to), i, from) != 0 {
+		if fromD.CompareField(ctx, toD.GetField(j, to), i, from) != 0 {
 			// column was modified
 			changed++
 			continue
