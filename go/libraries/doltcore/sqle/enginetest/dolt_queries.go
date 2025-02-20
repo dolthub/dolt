@@ -7556,6 +7556,7 @@ var DoltSystemVariables = []queries.ScriptTest{
 			{
 				Query: "SHOW TABLES;",
 				Expected: []sql.Row{
+					{"dolt_backups"},
 					{"dolt_branches"},
 					{"dolt_commit_ancestors"},
 					{"dolt_commit_diff_test"},
