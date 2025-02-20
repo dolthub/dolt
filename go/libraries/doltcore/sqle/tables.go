@@ -19,6 +19,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 	"io"
 	"math"
 	"os"
@@ -1725,6 +1726,9 @@ func (t *AlterableDoltTable) RewriteInserter(
 	newColumn *sql.Column,
 	idxCols []sql.IndexColumn,
 ) (sql.RowInserter, error) {
+	if _, isSet := os.LookupEnv(dconfig.EnvAssertNoTableRewrite); isSet {
+		return nil, fmt.Errorf("attempted to rewrite table but %s was set", dconfig.EnvAssertNoTableRewrite)
+	}
 	if err := dsess.CheckAccessForDb(ctx, t.db, branch_control.Permissions_Write); err != nil {
 		return nil, err
 	}
