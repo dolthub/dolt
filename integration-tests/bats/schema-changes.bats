@@ -438,6 +438,7 @@ EOF
   [ $status -ne 0 ]
   [[ $output =~ "attempted to rewrite table but DOLT_TEST_ASSERT_NO_TABLE_REWRITE was set" ]] || false
 
+  # Now, assert that making these schema modifications has no effect on the table data.
   env DOLT_TEST_ASSERT_NO_TABLE_REWRITE=1 dolt sql -q "alter table t modify column e enum('a', 'b', 'c', 'd', 'e');"
   env DOLT_TEST_ASSERT_NO_TABLE_REWRITE=1 dolt sql -q "alter table t modify column s set('a', 'b', 'c', 'd', 'e');"
   env DOLT_TEST_ASSERT_NO_TABLE_REWRITE=1 dolt sql -q "alter table t modify column c char(15);"
