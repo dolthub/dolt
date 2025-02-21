@@ -79,14 +79,11 @@ func (s3p awsTablePersister) Open(ctx context.Context, name hash.Hash, chunkCoun
 	)
 }
 
-func (s3p awsTablePersister) Exists(ctx context.Context, name hash.Hash, chunkCount uint32, stats *Stats) (bool, error) {
+func (s3p awsTablePersister) Exists(ctx context.Context, name hash.Hash, _ uint32, stats *Stats) (bool, error) {
 	return tableExistsInChunkSource(
 		ctx,
 		&s3ObjectReader{s3: s3p.s3, bucket: s3p.bucket, readRl: s3p.rl, ns: s3p.ns},
-		s3p.limits,
 		name,
-		chunkCount,
-		s3p.q,
 		stats,
 	)
 }
@@ -463,7 +460,7 @@ func splitOnMaxSize(dataLen, maxPartSize uint64) []int64 {
 func (s3p awsTablePersister) uploadPartCopy(ctx context.Context, src string, srcStart, srcEnd int64, key, uploadID string, partNum int64) (etag string, err error) {
 	res, err := s3p.s3.UploadPartCopyWithContext(ctx, &s3.UploadPartCopyInput{
 		CopySource:      aws.String(url.PathEscape(s3p.bucket + "/" + s3p.key(src))),
-		CopySourceRange: aws.String(s3RangeHeader(srcStart, srcEnd)),
+		CopySourceRange: aws.String(httpRangeHeader(srcStart, srcEnd)),
 		Bucket:          aws.String(s3p.bucket),
 		Key:             aws.String(s3p.key(key)),
 		PartNumber:      aws.Int64(int64(partNum)),
