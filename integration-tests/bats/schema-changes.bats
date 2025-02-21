@@ -401,52 +401,52 @@ EOF
   dolt sql -q "insert into t values (1, 'a', 'a,b', 'c', 'vc', 'b', 'vb');"
   dolt commit -Am "initial"
 
-  # First check that DOLT_REST_ASSERT_NO_TABLE_REWRITE does prevent schema changes that *do* require a table rewrite.
+  # First check that DOLT_TEST_ASSERT_NO_TABLE_REWRITE does prevent schema changes that *do* require a table rewrite.
   # Although some of these operations don't change any rows, determining this requires an attempted rewrite that scans the table.
-  run env DOLT_REST_ASSERT_NO_TABLE_REWRITE=1 dolt sql -q "alter table t modify column e enum('a', 'b');"
+  run env DOLT_TEST_ASSERT_NO_TABLE_REWRITE=1 dolt sql -q "alter table t modify column e enum('a', 'b');"
   [ $status -ne 0 ]
-  [[ $output =~ "attempted to rewrite table but DOLT_REST_ASSERT_NO_TABLE_REWRITE was set" ]] || false
+  [[ $output =~ "attempted to rewrite table but DOLT_TEST_ASSERT_NO_TABLE_REWRITE was set" ]] || false
 
-  run env DOLT_REST_ASSERT_NO_TABLE_REWRITE=1 dolt sql -q "alter table t modify column s set('a', 'b');"
+  run env DOLT_TEST_ASSERT_NO_TABLE_REWRITE=1 dolt sql -q "alter table t modify column s set('a', 'b');"
   [ $status -ne 0 ]
-  [[ $output =~ "attempted to rewrite table but DOLT_REST_ASSERT_NO_TABLE_REWRITE was set" ]] || false
+  [[ $output =~ "attempted to rewrite table but DOLT_TEST_ASSERT_NO_TABLE_REWRITE was set" ]] || false
 
-  run env DOLT_REST_ASSERT_NO_TABLE_REWRITE=1 dolt sql -q "alter table t modify column c char(5);"
+  run env DOLT_TEST_ASSERT_NO_TABLE_REWRITE=1 dolt sql -q "alter table t modify column c char(5);"
   [ $status -ne 0 ]
-  [[ $output =~ "attempted to rewrite table but DOLT_REST_ASSERT_NO_TABLE_REWRITE was set" ]] || false
+  [[ $output =~ "attempted to rewrite table but DOLT_TEST_ASSERT_NO_TABLE_REWRITE was set" ]] || false
 
-  run env DOLT_REST_ASSERT_NO_TABLE_REWRITE=1 dolt sql -q "alter table t modify column vc varchar(5);"
+  run env DOLT_TEST_ASSERT_NO_TABLE_REWRITE=1 dolt sql -q "alter table t modify column vc varchar(5);"
   [ $status -ne 0 ]
-  [[ $output =~ "attempted to rewrite table but DOLT_REST_ASSERT_NO_TABLE_REWRITE was set" ]] || false
+  [[ $output =~ "attempted to rewrite table but DOLT_TEST_ASSERT_NO_TABLE_REWRITE was set" ]] || false
 
   # Unlike the other string types, binary requires a rewrite even when making the length longer.
-  run env DOLT_REST_ASSERT_NO_TABLE_REWRITE=1 dolt sql -q "alter table t modify column b binary(15);"
+  run env DOLT_TEST_ASSERT_NO_TABLE_REWRITE=1 dolt sql -q "alter table t modify column b binary(15);"
   [ $status -ne 0 ]
-  [[ $output =~ "attempted to rewrite table but DOLT_REST_ASSERT_NO_TABLE_REWRITE was set" ]] || false
+  [[ $output =~ "attempted to rewrite table but DOLT_TEST_ASSERT_NO_TABLE_REWRITE was set" ]] || false
 
-  run env DOLT_REST_ASSERT_NO_TABLE_REWRITE=1 dolt sql -q "alter table t modify column vb varbinary(5);"
+  run env DOLT_TEST_ASSERT_NO_TABLE_REWRITE=1 dolt sql -q "alter table t modify column vb varbinary(5);"
   [ $status -ne 0 ]
-  [[ $output =~ "attempted to rewrite table but DOLT_REST_ASSERT_NO_TABLE_REWRITE was set" ]] || false
-
-  # Changing the character set requires a rewrite.
-  run env DOLT_REST_ASSERT_NO_TABLE_REWRITE=1 dolt sql -q "alter table t modify column vc varbinary(10);"
-  [ $status -ne 0 ]
-  [[ $output =~ "attempted to rewrite table but DOLT_REST_ASSERT_NO_TABLE_REWRITE was set" ]] || false
+  [[ $output =~ "attempted to rewrite table but DOLT_TEST_ASSERT_NO_TABLE_REWRITE was set" ]] || false
 
   # Changing the character set requires a rewrite.
-  run env DOLT_REST_ASSERT_NO_TABLE_REWRITE=1 dolt sql -q "alter table t modify column vc varchar(10) collate latin1_german1_ci;"
+  run env DOLT_TEST_ASSERT_NO_TABLE_REWRITE=1 dolt sql -q "alter table t modify column vc varbinary(10);"
   [ $status -ne 0 ]
-  [[ $output =~ "attempted to rewrite table but DOLT_REST_ASSERT_NO_TABLE_REWRITE was set" ]] || false
+  [[ $output =~ "attempted to rewrite table but DOLT_TEST_ASSERT_NO_TABLE_REWRITE was set" ]] || false
 
-  env DOLT_REST_ASSERT_NO_TABLE_REWRITE=1 dolt sql -q "alter table t modify column e enum('a', 'b', 'c', 'd', 'e');"
-  env DOLT_REST_ASSERT_NO_TABLE_REWRITE=1 dolt sql -q "alter table t modify column s set('a', 'b', 'c', 'd', 'e');"
-  env DOLT_REST_ASSERT_NO_TABLE_REWRITE=1 dolt sql -q "alter table t modify column c char(15);"
-  env DOLT_REST_ASSERT_NO_TABLE_REWRITE=1 dolt sql -q "alter table t modify column vc varchar(15);"
-  env DOLT_REST_ASSERT_NO_TABLE_REWRITE=1 dolt sql -q "alter table t modify column vb varbinary(15);"
+  # Changing the character set requires a rewrite.
+  run env DOLT_TEST_ASSERT_NO_TABLE_REWRITE=1 dolt sql -q "alter table t modify column vc varchar(10) collate latin1_german1_ci;"
+  [ $status -ne 0 ]
+  [[ $output =~ "attempted to rewrite table but DOLT_TEST_ASSERT_NO_TABLE_REWRITE was set" ]] || false
+
+  env DOLT_TEST_ASSERT_NO_TABLE_REWRITE=1 dolt sql -q "alter table t modify column e enum('a', 'b', 'c', 'd', 'e');"
+  env DOLT_TEST_ASSERT_NO_TABLE_REWRITE=1 dolt sql -q "alter table t modify column s set('a', 'b', 'c', 'd', 'e');"
+  env DOLT_TEST_ASSERT_NO_TABLE_REWRITE=1 dolt sql -q "alter table t modify column c char(15);"
+  env DOLT_TEST_ASSERT_NO_TABLE_REWRITE=1 dolt sql -q "alter table t modify column vc varchar(15);"
+  env DOLT_TEST_ASSERT_NO_TABLE_REWRITE=1 dolt sql -q "alter table t modify column vb varbinary(15);"
 
   # Changing the collation doesn't require a table rewrite, but it does invalidate the secondary indexes.
   # The GMS API doesn't currently less us separate the two, so currently this causes a table rewrite, but it doesn't have to.
-  # env DOLT_REST_ASSERT_NO_TABLE_REWRITE=1 dolt sql -q "alter table t modify column vc varchar(15) collate utf8mb4_0900_ai_ci;"
+  # env DOLT_TEST_ASSERT_NO_TABLE_REWRITE=1 dolt sql -q "alter table t modify column vc varchar(15) collate utf8mb4_0900_ai_ci;"
 
   # After all these schema changes, the table hash remains the same.
   run dolt sql -r csv -q "select DOLT_HASHOF_TABLE('t') = (select DOLT_HASHOF_TABLE('t') from t as of HEAD);"
