@@ -46,12 +46,18 @@ import (
 type AutoGCController struct {
 	workCh chan autoGCWork
 	lgr    *logrus.Logger
+
+	mu      sync.Mutex
+	hooks   map[string]*autoGCCommitHook
+	ctxF    func(context.Context) (*sql.Context, error)
+	threads *sql.BackgroundThreads
 }
 
 func NewAutoGCController(lgr *logrus.Logger) *AutoGCController {
 	return &AutoGCController{
 		workCh: make(chan autoGCWork),
 		lgr:    lgr,
+		hooks:  make(map[string]*autoGCCommitHook),
 	}
 }
 
@@ -69,53 +75,62 @@ type autoGCWork struct {
 // background worker threads responsible for performing the GC are
 // running.
 func (c *AutoGCController) RunBackgroundThread(threads *sql.BackgroundThreads, ctxF func(context.Context) (*sql.Context, error)) error {
-	return threads.Add("auto_gc_thread", func(ctx context.Context) {
-		var wg sync.WaitGroup
-		runCh := make(chan autoGCWork)
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			dbs := make([]autoGCWork, 0)
-			// Accumulate GC requests, only one will come in per database at a time.
-			// Send the oldest one out to the worker when it is ready.
-			for {
-				var toSendCh chan autoGCWork
-				var toSend autoGCWork
-				if len(dbs) > 0 {
-					toSend = dbs[0]
-					toSendCh = runCh
-				}
-				select {
-				case <-ctx.Done():
-					// sql.BackgroundThreads is shutting down.
-					// No need to drain or anything; just
-					// return.
-					return
-				case newDB := <-c.workCh:
-					dbs = append(dbs, newDB)
-				case toSendCh <- toSend:
-					// We just sent the front of the slice.
-					// Delete it from our set of pending GCs.
-					copy(dbs[:], dbs[1:])
-					dbs = dbs[:len(dbs)-1]
-				}
+	c.threads = threads
+	c.ctxF = ctxF
+	err := threads.Add("auto_gc_thread", c.gcBgThread)
+	if err != nil {
+		return err
+	}
+	// TODO: Start bg threads for all existing commit hooks.
+	return nil
+}
 
+func (c *AutoGCController) gcBgThread(ctx context.Context) {
+	var wg sync.WaitGroup
+	runCh := make(chan autoGCWork)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		dbs := make([]autoGCWork, 0)
+		// Accumulate GC requests, only one will come in per database at a time.
+		// Send the oldest one out to the worker when it is ready.
+		for {
+			var toSendCh chan autoGCWork
+			var toSend autoGCWork
+			if len(dbs) > 0 {
+				toSend = dbs[0]
+				toSendCh = runCh
 			}
-		}()
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for {
-				select {
-				case <-ctx.Done():
-					return
-				case work := <-runCh:
-					c.doWork(ctx, work, ctxF)
-				}
+			select {
+			case <-ctx.Done():
+				// sql.BackgroundThreads is shutting down.
+				// No need to drain or anything; just
+				// return.
+				return
+			case newDB := <-c.workCh:
+				dbs = append(dbs, newDB)
+			case toSendCh <- toSend:
+				// We just sent the front of the slice.
+				// Delete it from our set of pending GCs.
+				copy(dbs[:], dbs[1:])
+				dbs = dbs[:len(dbs)-1]
 			}
-		}()
-		wg.Wait()
-	})
+
+		}
+	}()
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case work := <-runCh:
+				c.doWork(ctx, work, c.ctxF)
+			}
+		}
+	}()
+	wg.Wait()
 }
 
 func (c *AutoGCController) doWork(ctx context.Context, work autoGCWork, ctxF func(context.Context) (*sql.Context, error)) {
@@ -138,15 +153,27 @@ func (c *AutoGCController) doWork(ctx context.Context, work autoGCWork, ctxF fun
 	c.lgr.Infof("sqle/auto_gc: Successfully completed auto GC of database %s in %v", work.name, time.Since(start))
 }
 
-func (c *AutoGCController) newCommitHook(name string) doltdb.CommitHook {
+func (c *AutoGCController) newCommitHook(name string, db *doltdb.DoltDB) doltdb.CommitHook {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	closed := make(chan struct{})
 	close(closed)
-	return &autoGCCommitHook{
-		c:    c,
-		name: name,
-		done: closed,
-		next: make(chan struct{}),
+	ret := &autoGCCommitHook{
+		c:      c,
+		name:   name,
+		done:   closed,
+		next:   make(chan struct{}),
+		db:     db,
+		tickCh: make(chan struct{}),
+		stopCh: make(chan struct{}),
 	}
+	c.hooks[name] = ret
+	if c.threads != nil {
+		// If this errors, sql.BackgroundThreads is already closed.
+		// Things are hopefully shutting down...
+		_ = ret.run(c.threads)
+	}
+	return ret
 }
 
 // The doltdb.CommitHook which watches for database changes and
@@ -172,9 +199,17 @@ type autoGCCommitHook struct {
 	// to GC, so that we observe and store the new size after the
 	// GC is finished.
 	lastSz *doltdb.StoreSizes
-	// |done|, |next|, |lastSz| are mutable and |Execute| can be
-	// called concurrently. We protect them with |mu|.
-	mu sync.Mutex
+
+	db *doltdb.DoltDB
+
+	// Closed when the thread should shutdown because the database
+	// is being removed.
+	stopCh chan struct{}
+	// An optimistic send on this channel notifies the background
+	// thread that the sizes may have changed and it can check for
+	// the GC condition.
+	tickCh chan struct{}
+	wg     sync.WaitGroup
 }
 
 // During engine initialization, called on the original set of
@@ -185,49 +220,44 @@ func (c *AutoGCController) ApplyCommitHooks(ctx context.Context, mrEnv *env.Mult
 		if denv == nil {
 			continue
 		}
-		denv.DoltDB(ctx).PrependCommitHooks(ctx, c.newCommitHook(db.Name()))
+		ddb := denv.DoltDB(ctx)
+		ddb.PrependCommitHooks(ctx, c.newCommitHook(db.Name(), ddb))
 	}
 	return nil
 }
 
+func (c *AutoGCController) DropDatabaseHook() DropDatabaseHook {
+	return func(ctx *sql.Context, name string) {
+		c.mu.Lock()
+		defer c.mu.Unlock()
+		hook := c.hooks[name]
+		if hook != nil {
+			hook.stop()
+			delete(c.hooks, name)
+		}
+	}
+}
+
 func (c *AutoGCController) InitDatabaseHook() InitDatabaseHook {
 	return func(ctx *sql.Context, pro *DoltDatabaseProvider, name string, env *env.DoltEnv, db dsess.SqlDatabase) error {
-		env.DoltDB(ctx).PrependCommitHooks(ctx, c.newCommitHook(name))
+		ddb := env.DoltDB(ctx)
+		ddb.PrependCommitHooks(ctx, c.newCommitHook(name, ddb))
 		return nil
 	}
 }
 
-func (h *autoGCCommitHook) Execute(ctx context.Context, ds datas.Dataset, db *doltdb.DoltDB) (func(context.Context) error, error) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
+func (h *autoGCCommitHook) Execute(ctx context.Context, _ datas.Dataset, _ *doltdb.DoltDB) (func(context.Context) error, error) {
 	select {
-	case <-h.done:
-		sz, err := db.StoreSizes(ctx)
-		if err != nil {
-			// Something is probably quite wrong. Regardless, can't determine if we should GC.
-			return nil, err
-		}
-		if h.lastSz == nil {
-			h.lastSz = &sz
-		}
-		const size_128mb = (1 << 27)
-		const size_256mb = (1 << 28)
-		if sz.JournalBytes > size_128mb {
-			// Our first heuristic is simply if journal is greater than a fixed size...
-			return nil, h.requestGC(ctx, db)
-		} else if sz.TotalBytes > h.lastSz.TotalBytes && sz.TotalBytes - h.lastSz.TotalBytes > size_256mb {
-			// Or if the store has grown by a fixed size since our last GC / we started watching it...
-			return nil, h.requestGC(ctx, db)
-		}
-	default:
-		// A GC is already running or pending. No need to check.
+	case h.tickCh <- struct{}{}:
+		return nil, nil
+	case <-ctx.Done():
+		return nil, context.Cause(ctx)
 	}
-	return nil, nil
 }
 
-func (h *autoGCCommitHook) requestGC(ctx context.Context, db *doltdb.DoltDB) error {
+func (h *autoGCCommitHook) requestGC(ctx context.Context) error {
 	select {
-	case h.c.workCh <- autoGCWork{db, h.next, h.name}:
+	case h.c.workCh <- autoGCWork{h.db, h.next, h.name}:
 		h.done = h.next
 		h.next = make(chan struct{})
 		h.lastSz = nil
@@ -247,4 +277,63 @@ func (h *autoGCCommitHook) SetLogger(ctx context.Context, wr io.Writer) error {
 
 func (h *autoGCCommitHook) ExecuteForWorkingSets() bool {
 	return true
+}
+
+func (h *autoGCCommitHook) checkForGC(ctx context.Context) error {
+	select {
+	case <-h.done:
+		sz, err := h.db.StoreSizes(ctx)
+		if err != nil {
+			// Something is probably quite wrong. Regardless, can't determine if we should GC.
+			return err
+		}
+		if h.lastSz == nil {
+			h.lastSz = &sz
+		}
+		const size_128mb = (1 << 27)
+		const size_256mb = (1 << 28)
+		if sz.JournalBytes > size_128mb {
+			// Our first heuristic is simply if journal is greater than a fixed size...
+			return h.requestGC(ctx)
+		} else if sz.TotalBytes > h.lastSz.TotalBytes && sz.TotalBytes-h.lastSz.TotalBytes > size_256mb {
+			// Or if the store has grown by a fixed size since our last GC / we started watching it...
+			return h.requestGC(ctx)
+		}
+	default:
+		// A GC is already running or pending. No need to check.
+	}
+	return nil
+}
+
+const checkInterval = 100 * time.Millisecond
+
+func (h *autoGCCommitHook) thread(ctx context.Context) {
+	defer h.wg.Done()
+	timer := time.NewTimer(checkInterval)
+	defer timer.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-h.stopCh:
+			return
+		case <-h.tickCh:
+			// We ignore an error here, which just means we didn't kick
+			// off a GC when we might have wanted to.
+			_ = h.checkForGC(ctx)
+		case <-timer.C:
+			_ = h.checkForGC(ctx)
+			timer.Reset(checkInterval)
+		}
+	}
+}
+
+func (h *autoGCCommitHook) stop() {
+	close(h.stopCh)
+	h.wg.Wait()
+}
+
+func (h *autoGCCommitHook) run(threads *sql.BackgroundThreads) error {
+	h.wg.Add(1)
+	return threads.Add("auto_gc_thread["+h.name+"]", h.thread)
 }

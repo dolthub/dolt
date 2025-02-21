@@ -43,10 +43,6 @@ func TestAutoGC(t *testing.T) {
 			t.Logf("repo size after final gc: %v", final_16)
 		})
 		t.Run("ClusterReplication", func(t *testing.T) {
-			// This test does not work yet, because remotsrv Commits
-			// do not go through the doltdb.hooksDatabase hooks
-			// machinery.
-			t.Skip()
 			var s AutoGCTest
 			s.Enable = true
 			s.Replicate = true

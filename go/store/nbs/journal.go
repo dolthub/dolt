@@ -499,7 +499,11 @@ func (j *ChunkJournal) AccessMode() chunks.ExclusiveAccessMode {
 }
 
 func (j *ChunkJournal) Size() int64 {
-	return j.wr.size()
+	if j.wr != nil {
+		return j.wr.size()
+	} else {
+		return 0
+	}
 }
 
 type journalConjoiner struct {
