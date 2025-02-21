@@ -20,6 +20,7 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
+// NM4 - looks like this will only work for TableFiles.
 type chunkSourceAdapter struct {
 	tableReader
 	h hash.Hash
@@ -33,6 +34,7 @@ func (csa chunkSourceAdapter) name() string {
 	return csa.h.String()
 }
 
+// NM4 - This is always going to be a TableFile - so use name as a hash for the moment.
 func newReaderFromIndexData(ctx context.Context, q MemoryQuotaProvider, idxData []byte, name hash.Hash, tra tableReaderAt, blockSize uint64) (cs chunkSource, err error) {
 	index, err := parseTableIndexByCopy(ctx, idxData, q)
 	if err != nil {
