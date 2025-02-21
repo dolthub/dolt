@@ -68,7 +68,7 @@ type awsLimits struct {
 }
 
 func (s3p awsTablePersister) Open(ctx context.Context, name hash.Hash, chunkCount uint32, stats *Stats) (chunkSource, error) {
-	return newAWSChunkSource(
+	return newAWSTableFileChunkSource(
 		ctx,
 		&s3ObjectReader{s3: s3p.s3, bucket: s3p.bucket, readRl: s3p.rl, ns: s3p.ns},
 		s3p.limits,
