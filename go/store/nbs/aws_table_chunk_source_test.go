@@ -43,7 +43,7 @@ func TestAWSChunkSource(t *testing.T) {
 	s3or := &s3ObjectReader{s3, "bucket", nil, ""}
 
 	makeSrc := func(chunkMax int) chunkSource {
-		cs, err := newAWSChunkSource(
+		cs, err := newAWSTableFileChunkSource(
 			context.Background(),
 			s3or,
 			awsLimits{},
