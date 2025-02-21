@@ -379,7 +379,6 @@ func TestBranches(t *testing.T) {
 	defer threads.Shutdown()
 	ctx, sqlEng, sc := defaultSetup(t, threads, true)
 	sc.enableGc = true
-
 	{
 		runBlock(t, ctx, sqlEng,
 			"call dolt_commit('-Am', 'add xy')",
@@ -424,7 +423,9 @@ func TestBranches(t *testing.T) {
 			"alter table s drop index j",
 			"call dolt_commit('-Am', 'drop index j')",
 		)
-
+		// mydb: main, feat1
+		// otherdb: main, feat2, feat3
+		// thirddb: main, feat1
 		require.Equal(t, sc.Stats.dbCnt, 7)
 
 		stat, ok = sc.Stats.stats[tableIndexesKey{"mydb", "feat1", "xy", ""}]
@@ -451,8 +452,9 @@ func TestBranches(t *testing.T) {
 		runBlock(t, ctx, sqlEng,
 			"drop database otherdb",
 		)
-
-		require.Equal(t, sc.Stats.dbCnt, 4)
+		// mydb: main, feat1
+		// thirddb: main, feat1
+		require.Equal(t, 4, sc.Stats.dbCnt)
 
 		stat, ok = sc.Stats.stats[tableIndexesKey{"otherdb", "feat2", "t", ""}]
 		require.False(t, ok)
@@ -464,7 +466,8 @@ func TestBranches(t *testing.T) {
 			"call dolt_checkout('main')",
 			"call dolt_branch('-D', 'feat1')",
 		)
-
+		// mydb: main
+		// thirddb: main, feat1
 		require.Equal(t, sc.Stats.dbCnt, 3)
 
 		stat, ok = sc.Stats.stats[tableIndexesKey{"mydb", "feat1", "xy", ""}]
@@ -604,7 +607,7 @@ func TestPanic(t *testing.T) {
 	require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
 }
 
-func newStatsCoord(bthreads *sql.BackgroundThreads) *StatsCoord {
+func newStatsCoord(bthreads *sql.BackgroundThreads) *StatsController {
 	dEnv := dtestutils.CreateTestEnv()
 	sqlEng, ctx := newTestEngine(context.Background(), dEnv, bthreads)
 	ctx.Session.SetClient(sql.Client{
@@ -617,10 +620,10 @@ func newStatsCoord(bthreads *sql.BackgroundThreads) *StatsCoord {
 		dsess.DoltStatsJobInterval: 1,
 	})
 
-	return sqlEng.Analyzer.Catalog.StatsProvider.(*StatsCoord)
+	return sqlEng.Analyzer.Catalog.StatsProvider.(*StatsController)
 }
 
-func emptySetup(t *testing.T, threads *sql.BackgroundThreads, memOnly bool) (*sql.Context, *gms.Engine, *StatsCoord) {
+func emptySetup(t *testing.T, threads *sql.BackgroundThreads, memOnly bool) (*sql.Context, *gms.Engine, *StatsController) {
 	dEnv := dtestutils.CreateTestEnv()
 	sqlEng, ctx := newTestEngine(context.Background(), dEnv, threads)
 	ctx.Session.SetClient(sql.Client{
@@ -633,7 +636,7 @@ func emptySetup(t *testing.T, threads *sql.BackgroundThreads, memOnly bool) (*sq
 		dsess.DoltStatsJobInterval: 1,
 	})
 
-	sc := sqlEng.Analyzer.Catalog.StatsProvider.(*StatsCoord)
+	sc := sqlEng.Analyzer.Catalog.StatsProvider.(*StatsController)
 	sc.SetEnableGc(false)
 	sc.SetMemOnly(memOnly)
 	sc.JobInterval = time.Nanosecond
@@ -669,7 +672,7 @@ func emptySetup(t *testing.T, threads *sql.BackgroundThreads, memOnly bool) (*sq
 	return ctx, sqlEng, sc
 }
 
-func defaultSetup(t *testing.T, threads *sql.BackgroundThreads, memOnly bool) (*sql.Context, *gms.Engine, *StatsCoord) {
+func defaultSetup(t *testing.T, threads *sql.BackgroundThreads, memOnly bool) (*sql.Context, *gms.Engine, *StatsController) {
 	ctx, sqlEng, sc := emptySetup(t, threads, memOnly)
 	//sc.Debug = true
 
@@ -950,7 +953,7 @@ func TestStatsBranchConcurrency(t *testing.T) {
 			for br := range branches {
 				if i%2 == 0 {
 					dropBranch(dropCtx, br)
-					time.Sleep(50 * time.Millisecond)
+					time.Sleep(50 * time.Microsecond)
 				}
 				i++
 			}
@@ -959,11 +962,11 @@ func TestStatsBranchConcurrency(t *testing.T) {
 
 		wg.Wait()
 
-		err := executeQuery(ctx, sqlEng, "call dolt_stats_gc()")
-		for err != nil {
-			log.Println("waiting on final Gc", err)
-			err = executeQuery(ctx, sqlEng, "call dolt_stats_gc()")
-		}
+		err := executeQuery(ctx, sqlEng, "call dolt_stats_wait()")
+		require.NoError(t, err)
+
+		err = executeQuery(ctx, sqlEng, "call dolt_stats_gc()")
+		require.NoError(t, err)
 		sc.Stop()
 
 		// at the end we should still have |iters/2| databases

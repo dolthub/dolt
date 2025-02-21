@@ -22,7 +22,24 @@ import (
 
 var ErrStatsIssuerPaused = fmt.Errorf("stats issuer is paused")
 
-func (sc *StatsCoord) newThreadCtx(ctx context.Context) context.Context {
+type listenerEvent uint8
+
+const (
+	unknownEvent = listenerEvent(iota)
+	leSwap
+	leStop
+	leGc = 4
+)
+
+func (sc *StatsController) signalListener(s listenerEvent) {
+	for _, l := range sc.listeners {
+		l <- s
+		close(l)
+	}
+	sc.listeners = sc.listeners[:0]
+}
+
+func (sc *StatsController) newThreadCtx(ctx context.Context) context.Context {
 	sc.statsMu.Lock()
 	sc.statsMu.Unlock()
 	newCtx, cancel := context.WithCancel(ctx)
@@ -34,7 +51,7 @@ func (sc *StatsCoord) newThreadCtx(ctx context.Context) context.Context {
 	return newCtx
 }
 
-func (sc *StatsCoord) addListener() (chan listenerEvent, error) {
+func (sc *StatsController) addListener() (chan listenerEvent, error) {
 	sc.statsMu.Lock()
 	defer sc.statsMu.Unlock()
 	if sc.activeCtxCancel == nil {
@@ -45,10 +62,10 @@ func (sc *StatsCoord) addListener() (chan listenerEvent, error) {
 	return l, nil
 }
 
-func (sc *StatsCoord) Stop() {
+func (sc *StatsController) Stop() {
+	// xxx: do not pause |sq|, analyze jobs still need to run
 	sc.statsMu.Lock()
 	sc.statsMu.Unlock()
-	sc.sq.Pause()
 	if sc.activeCtxCancel != nil {
 		sc.activeCtxCancel()
 		sc.activeCtxCancel = nil
@@ -57,10 +74,10 @@ func (sc *StatsCoord) Stop() {
 	return
 }
 
-func (sc *StatsCoord) Restart() error {
+func (sc *StatsController) Restart() error {
 	select {
 	case <-sc.closed:
-		return fmt.Errorf("StatsCoord is closed")
+		return fmt.Errorf("StatsController is closed")
 	default:
 	}
 	sc.sq.Start()
@@ -75,7 +92,7 @@ func (sc *StatsCoord) Restart() error {
 	return nil
 }
 
-func (sc *StatsCoord) waitForCond(ctx context.Context, ok, stop listenerEvent, cnt int) (err error) {
+func (sc *StatsController) waitForCond(ctx context.Context, ok, stop listenerEvent, cnt int, retry func()) (err error) {
 	for cnt > 0 {
 		var l chan listenerEvent
 		l, err = sc.addListener()
@@ -93,22 +110,28 @@ func (sc *StatsCoord) waitForCond(ctx context.Context, ok, stop listenerEvent, c
 				return ErrStatsIssuerPaused
 			}
 		}
-		return nil
+		if retry != nil {
+			retry()
+		}
 	}
 	return nil
 }
 
-func (sc *StatsCoord) WaitForDbSync(ctx context.Context) (err error) {
+func (sc *StatsController) WaitForDbSync(ctx context.Context) (err error) {
 	// wait for 2 cycles because first completion is usually a stale context
-	return sc.waitForCond(ctx, leSwapGc|leGc, leStop, 2)
+	return sc.waitForCond(ctx, leSwap|leGc, leStop, 2, nil)
 }
 
-func (sc *StatsCoord) Gc(ctx *sql.Context) error {
+func (sc *StatsController) Gc(ctx *sql.Context) error {
 	sc.doGc = true
-	return sc.waitForCond(ctx, leGc, leStop, 1)
+	return sc.waitForCond(ctx, leGc, leStop, 1, func() {
+		sc.statsMu.Lock()
+		defer sc.statsMu.Unlock()
+		sc.doGc = true
+	})
 }
 
-func (sc *StatsCoord) Close() {
+func (sc *StatsController) Close() {
 	sc.sq.Stop()
 	sc.Stop()
 	close(sc.closed)

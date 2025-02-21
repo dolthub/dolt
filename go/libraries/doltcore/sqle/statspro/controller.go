@@ -44,7 +44,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/stats"
 )
 
-var _ sql.StatsProvider = (*StatsCoord)(nil)
+var _ sql.StatsProvider = (*StatsController)(nil)
 
 type ctxFactory func(ctx context.Context) (*sql.Context, error)
 
@@ -59,7 +59,7 @@ func (k tableIndexesKey) String() string {
 	return k.db + "/" + k.branch + "/" + k.table
 }
 
-type StatsCoord struct {
+type StatsController struct {
 	logger         *logrus.Logger
 	threads        *sql.BackgroundThreads
 	pro            *sqle.DoltDatabaseProvider
@@ -113,11 +113,11 @@ func newRootStats() *rootStats {
 	}
 }
 
-func NewStatsCoord(ctx context.Context, pro *sqle.DoltDatabaseProvider, ctxGen ctxFactory, logger *logrus.Logger, threads *sql.BackgroundThreads, dEnv *env.DoltEnv) *StatsCoord {
+func NewStatsCoord(ctx context.Context, pro *sqle.DoltDatabaseProvider, ctxGen ctxFactory, logger *logrus.Logger, threads *sql.BackgroundThreads, dEnv *env.DoltEnv) *StatsController {
 	sq := jobqueue.NewSerialQueue().WithErrorCb(func(err error) {
 		logger.Error(err)
 	})
-	return &StatsCoord{
+	return &StatsController{
 		statsMu:     sync.Mutex{},
 		logger:      logger,
 		JobInterval: 500 * time.Millisecond,
@@ -137,38 +137,38 @@ func NewStatsCoord(ctx context.Context, pro *sqle.DoltDatabaseProvider, ctxGen c
 	}
 }
 
-func (sc *StatsCoord) SetMemOnly(v bool) {
+func (sc *StatsController) SetMemOnly(v bool) {
 	sc.statsMu.Lock()
 	defer sc.statsMu.Unlock()
 	sc.memOnly = v
 }
 
-func (sc *StatsCoord) SetEnableGc(v bool) {
+func (sc *StatsController) SetEnableGc(v bool) {
 	sc.statsMu.Lock()
 	defer sc.statsMu.Unlock()
 	sc.enableGc = v
 }
 
-func (sc *StatsCoord) setDoGc() {
+func (sc *StatsController) setDoGc() {
 	sc.statsMu.Lock()
 	defer sc.statsMu.Unlock()
 	sc.doGc = true
 }
 
-func (sc *StatsCoord) gcIsSet() bool {
+func (sc *StatsController) gcIsSet() bool {
 	sc.statsMu.Lock()
 	defer sc.statsMu.Unlock()
 	return sc.doGc
 }
 
-func (sc *StatsCoord) SetTimers(job, gc int64) {
+func (sc *StatsController) SetTimers(job, gc int64) {
 	sc.statsMu.Lock()
 	defer sc.statsMu.Unlock()
 	sc.sq.NewRateLimit(time.Duration(max(1, job)))
 	sc.gcInterval = time.Duration(gc)
 }
 
-func (sc *StatsCoord) AddFs(ctx *sql.Context, db dsess.SqlDatabase, fs filesys.Filesys) error {
+func (sc *StatsController) AddFs(ctx *sql.Context, db dsess.SqlDatabase, fs filesys.Filesys) error {
 	sc.statsMu.Lock()
 	defer sc.statsMu.Unlock()
 
@@ -180,7 +180,7 @@ func (sc *StatsCoord) AddFs(ctx *sql.Context, db dsess.SqlDatabase, fs filesys.F
 	return nil
 }
 
-func (sc *StatsCoord) Info(ctx context.Context) (dprocedures.StatsInfo, error) {
+func (sc *StatsController) Info(ctx context.Context) (dprocedures.StatsInfo, error) {
 	sc.statsMu.Lock()
 	defer sc.statsMu.Unlock()
 
@@ -215,7 +215,7 @@ func (sc *StatsCoord) Info(ctx context.Context) (dprocedures.StatsInfo, error) {
 	}, nil
 }
 
-func (sc *StatsCoord) descError(d string, err error) {
+func (sc *StatsController) descError(d string, err error) {
 	if errors.Is(err, context.Canceled) {
 		return
 	}
@@ -225,7 +225,7 @@ func (sc *StatsCoord) descError(d string, err error) {
 	sc.logger.Errorf("stats error; job detail: %s; verbose: %s", d, err)
 }
 
-func (sc *StatsCoord) GetTableStats(ctx *sql.Context, db string, table sql.Table) ([]sql.Statistic, error) {
+func (sc *StatsController) GetTableStats(ctx *sql.Context, db string, table sql.Table) ([]sql.Statistic, error) {
 	dSess := dsess.DSessFromSess(ctx.Session)
 	branch, err := dSess.GetBranch()
 	if err != nil {
@@ -246,7 +246,7 @@ func (sc *StatsCoord) GetTableStats(ctx *sql.Context, db string, table sql.Table
 	return ret, nil
 }
 
-func (sc *StatsCoord) AnalyzeTable(ctx *sql.Context, table sql.Table, dbName string) (err error) {
+func (sc *StatsController) AnalyzeTable(ctx *sql.Context, table sql.Table, dbName string) (err error) {
 	dSess := dsess.DSessFromSess(ctx.Session)
 
 	var branch string
@@ -288,7 +288,7 @@ func (sc *StatsCoord) AnalyzeTable(ctx *sql.Context, table sql.Table, dbName str
 	return err
 }
 
-func (sc *StatsCoord) SetStats(ctx *sql.Context, s sql.Statistic) error {
+func (sc *StatsController) SetStats(ctx *sql.Context, s sql.Statistic) error {
 	sc.statsMu.Lock()
 	defer sc.statsMu.Unlock()
 	ss, ok := s.(*stats.Statistic)
@@ -304,7 +304,7 @@ func (sc *StatsCoord) SetStats(ctx *sql.Context, s sql.Statistic) error {
 	return nil
 }
 
-func (sc *StatsCoord) GetStats(ctx *sql.Context, qual sql.StatQualifier, cols []string) (sql.Statistic, bool) {
+func (sc *StatsController) GetStats(ctx *sql.Context, qual sql.StatQualifier, cols []string) (sql.Statistic, bool) {
 	sc.statsMu.Lock()
 	defer sc.statsMu.Unlock()
 	key, err := sc.statsKey(ctx, qual.Database, qual.Table())
@@ -319,7 +319,7 @@ func (sc *StatsCoord) GetStats(ctx *sql.Context, qual sql.StatQualifier, cols []
 	return nil, false
 }
 
-func (sc *StatsCoord) GetTableDoltStats(ctx *sql.Context, branch, db, schema, table string) ([]*stats.Statistic, error) {
+func (sc *StatsController) GetTableDoltStats(ctx *sql.Context, branch, db, schema, table string) ([]*stats.Statistic, error) {
 	sc.statsMu.Lock()
 	defer sc.statsMu.Unlock()
 	key := tableIndexesKey{
@@ -331,7 +331,7 @@ func (sc *StatsCoord) GetTableDoltStats(ctx *sql.Context, branch, db, schema, ta
 	return sc.Stats.stats[key], nil
 }
 
-func (sc *StatsCoord) DropStats(ctx *sql.Context, qual sql.StatQualifier, cols []string) error {
+func (sc *StatsController) DropStats(ctx *sql.Context, qual sql.StatQualifier, cols []string) error {
 	key, err := sc.statsKey(ctx, qual.Database, qual.Table())
 	if err != nil {
 		return err
@@ -342,7 +342,7 @@ func (sc *StatsCoord) DropStats(ctx *sql.Context, qual sql.StatQualifier, cols [
 	return nil
 }
 
-func (sc *StatsCoord) DropDbStats(ctx *sql.Context, dbName string, flush bool) error {
+func (sc *StatsController) DropDbStats(ctx *sql.Context, dbName string, flush bool) error {
 	return sc.sq.InterruptAsync(func() error {
 		// this must be asynchronous otherwise we can deadlock
 		// on the provider lock
@@ -370,7 +370,7 @@ func (sc *StatsCoord) DropDbStats(ctx *sql.Context, dbName string, flush bool) e
 	})
 }
 
-func (sc *StatsCoord) statsKey(ctx *sql.Context, dbName, table string) (tableIndexesKey, error) {
+func (sc *StatsController) statsKey(ctx *sql.Context, dbName, table string) (tableIndexesKey, error) {
 	dSess := dsess.DSessFromSess(ctx.Session)
 	branch, err := dSess.GetBranch()
 	if err != nil {
@@ -384,7 +384,7 @@ func (sc *StatsCoord) statsKey(ctx *sql.Context, dbName, table string) (tableInd
 	return key, nil
 }
 
-func (sc *StatsCoord) RowCount(ctx *sql.Context, dbName string, table sql.Table) (uint64, error) {
+func (sc *StatsController) RowCount(ctx *sql.Context, dbName string, table sql.Table) (uint64, error) {
 	key, err := sc.statsKey(ctx, dbName, table.Name())
 	if err != nil {
 		return 0, err
@@ -399,7 +399,7 @@ func (sc *StatsCoord) RowCount(ctx *sql.Context, dbName string, table sql.Table)
 	return 0, nil
 }
 
-func (sc *StatsCoord) DataLength(ctx *sql.Context, dbName string, table sql.Table) (uint64, error) {
+func (sc *StatsController) DataLength(ctx *sql.Context, dbName string, table sql.Table) (uint64, error) {
 	key, err := sc.statsKey(ctx, dbName, table.Name())
 	if err != nil {
 		return 0, err
@@ -414,7 +414,7 @@ func (sc *StatsCoord) DataLength(ctx *sql.Context, dbName string, table sql.Tabl
 	return 0, nil
 }
 
-func (sc *StatsCoord) Init(ctx context.Context, dbs []sql.Database, keepStorage bool) error {
+func (sc *StatsController) Init(ctx context.Context, dbs []sql.Database, keepStorage bool) error {
 	sqlCtx, err := sc.ctxGen(ctx)
 	if err != nil {
 		return err
@@ -438,7 +438,7 @@ func (sc *StatsCoord) Init(ctx context.Context, dbs []sql.Database, keepStorage 
 	return nil
 }
 
-func (sc *StatsCoord) Purge(ctx *sql.Context) error {
+func (sc *StatsController) Purge(ctx *sql.Context) error {
 	genStart := sc.genCnt.Load()
 	genCand := sc.genCand.Add(1)
 	newKv := NewMemStats()
@@ -452,13 +452,13 @@ func (sc *StatsCoord) Purge(ctx *sql.Context) error {
 	return nil
 }
 
-func (sc *StatsCoord) rotateStorage(ctx context.Context) error {
+func (sc *StatsController) rotateStorage(ctx context.Context) error {
 	sc.statsMu.Lock()
 	defer sc.statsMu.Unlock()
 	return sc.lockedRotateStorage(ctx)
 }
 
-func (sc *StatsCoord) lockedRotateStorage(ctx context.Context) error {
+func (sc *StatsController) lockedRotateStorage(ctx context.Context) error {
 	if sc.statsBackingDb != nil {
 		if err := sc.rm(sc.statsBackingDb); err != nil {
 			return err
@@ -502,7 +502,7 @@ func (sc *StatsCoord) lockedRotateStorage(ctx context.Context) error {
 	return nil
 }
 
-func (sc *StatsCoord) rm(fs filesys.Filesys) error {
+func (sc *StatsController) rm(fs filesys.Filesys) error {
 	statsFs, err := fs.WithWorkingDir(dbfactory.DoltStatsDir)
 	if err != nil {
 		return err
@@ -525,7 +525,7 @@ func (sc *StatsCoord) rm(fs filesys.Filesys) error {
 	return nil
 }
 
-func (sc *StatsCoord) initStorage(ctx context.Context, fs filesys.Filesys) (*prollyStats, error) {
+func (sc *StatsController) initStorage(ctx context.Context, fs filesys.Filesys) (*prollyStats, error) {
 	params := make(map[string]interface{})
 	params[dbfactory.GRPCDialProviderParam] = sc.dialPro
 

@@ -9,6 +9,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
@@ -26,7 +27,7 @@ import (
 
 //
 
-func (sc *StatsCoord) runIssuer(ctx context.Context) (err error) {
+func (sc *StatsController) runIssuer(ctx context.Context) (err error) {
 	var gcKv *memStats
 	var newStats *rootStats
 	gcTicker := time.NewTicker(sc.gcInterval)
@@ -70,28 +71,11 @@ func (sc *StatsCoord) runIssuer(ctx context.Context) (err error) {
 	}
 }
 
-type listenerEvent uint8
-
-const (
-	unknownEvent = listenerEvent(iota)
-	leSwapGc
-	leStop
-	leGc = 4
-)
-
-func (sc *StatsCoord) signalListener(s listenerEvent) {
-	for _, l := range sc.listeners {
-		l <- s
-		close(l)
-	}
-	sc.listeners = sc.listeners[:0]
-}
-
-func (sc *StatsCoord) trySwapStats(ctx context.Context, prevGen, newGen uint64, newStats *rootStats, gcKv *memStats) (ok bool, err error) {
+func (sc *StatsController) trySwapStats(ctx context.Context, prevGen, newGen uint64, newStats *rootStats, gcKv *memStats) (ok bool, err error) {
 	sc.statsMu.Lock()
 	defer sc.statsMu.Unlock()
 
-	signal := leSwapGc
+	signal := leSwap
 	defer func() {
 		if ok {
 			sc.signalListener(signal)
@@ -99,11 +83,11 @@ func (sc *StatsCoord) trySwapStats(ctx context.Context, prevGen, newGen uint64, 
 	}()
 
 	if sc.genCnt.CompareAndSwap(prevGen, newGen) {
-		signal = leGc
 		// Replace stats and new Kv if no replacements happened
 		// in-between.
 		sc.Stats = newStats
 		if gcKv != nil {
+			signal = leGc
 			// The new KV has all buckets for the latest root stats,
 			// background job will to swap the disk location and put
 			// entries into a prolly tree.
@@ -132,7 +116,7 @@ func (sc *StatsCoord) trySwapStats(ctx context.Context, prevGen, newGen uint64, 
 	return false, nil
 }
 
-func (sc *StatsCoord) newStatsForRoot(baseCtx context.Context, gcKv *memStats) (newStats *rootStats, err error) {
+func (sc *StatsController) newStatsForRoot(baseCtx context.Context, gcKv *memStats) (newStats *rootStats, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = fmt.Errorf("serialQueue panicked running work: %s", r)
@@ -198,7 +182,7 @@ func (sc *StatsCoord) newStatsForRoot(baseCtx context.Context, gcKv *memStats) (
 	return newStats, nil
 }
 
-func (sc *StatsCoord) finalizeHistogram(template stats.Statistic, buckets []*stats.Bucket, firstBound sql.Row) *stats.Statistic {
+func (sc *StatsController) finalizeHistogram(template stats.Statistic, buckets []*stats.Bucket, firstBound sql.Row) *stats.Statistic {
 	template.LowerBnd = firstBound
 	for _, b := range buckets {
 		// accumulate counts
@@ -210,7 +194,7 @@ func (sc *StatsCoord) finalizeHistogram(template stats.Statistic, buckets []*sta
 	return &template
 }
 
-func (sc *StatsCoord) collectIndexNodes(ctx *sql.Context, prollyMap prolly.Map, idxLen int, nodes []tree.Node) ([]*stats.Bucket, sql.Row, error) {
+func (sc *StatsController) collectIndexNodes(ctx *sql.Context, prollyMap prolly.Map, idxLen int, nodes []tree.Node) ([]*stats.Bucket, sql.Row, error) {
 	updater := newBucketBuilder(sql.StatQualifier{}, idxLen, prollyMap.KeyDesc())
 	keyBuilder := val.NewTupleBuilder(prollyMap.KeyDesc().PrefixDesc(idxLen))
 
@@ -298,7 +282,7 @@ func (sc *StatsCoord) collectIndexNodes(ctx *sql.Context, prollyMap prolly.Map, 
 	return buckets, lowerBound, nil
 }
 
-func (sc *StatsCoord) updateTable(ctx *sql.Context, tableName string, sqlDb dsess.SqlDatabase, gcKv *memStats) (tableIndexesKey, []*stats.Statistic, error) {
+func (sc *StatsController) updateTable(ctx *sql.Context, tableName string, sqlDb dsess.SqlDatabase, gcKv *memStats) (tableIndexesKey, []*stats.Statistic, error) {
 	var err error
 	var sqlTable *sqle.DoltTable
 	var dTab *doltdb.Table
@@ -391,4 +375,105 @@ func (sc *StatsCoord) updateTable(ctx *sql.Context, tableName string, sqlDb dses
 		}
 	}
 	return tableKey, newTableStats, nil
+}
+
+// GetLatestTable will get the WORKING root table for the current database/branch
+func GetLatestTable(ctx *sql.Context, tableName string, sqlDb sql.Database) (*sqle.DoltTable, *doltdb.Table, error) {
+	var db sqle.Database
+	switch d := sqlDb.(type) {
+	case sqle.Database:
+		db = d
+	case sqle.ReadReplicaDatabase:
+		db = d.Database
+	default:
+		return nil, nil, fmt.Errorf("expected sqle.Database, found %T", sqlDb)
+	}
+	sqlTable, ok, err := db.GetTableInsensitive(ctx, tableName)
+	if err != nil {
+		return nil, nil, err
+	}
+	if !ok {
+		return nil, nil, fmt.Errorf("statistics refresh error: table not found %s", tableName)
+	}
+
+	var dTab *doltdb.Table
+	var sqleTable *sqle.DoltTable
+	switch t := sqlTable.(type) {
+	case *sqle.AlterableDoltTable:
+		sqleTable = t.DoltTable
+		dTab, err = t.DoltTable.DoltTable(ctx)
+	case *sqle.WritableDoltTable:
+		sqleTable = t.DoltTable
+		dTab, err = t.DoltTable.DoltTable(ctx)
+	case *sqle.DoltTable:
+		sqleTable = t
+		dTab, err = t.DoltTable(ctx)
+	default:
+		err = fmt.Errorf("failed to unwrap dolt table from type: %T", sqlTable)
+	}
+	if err != nil {
+		return nil, nil, err
+	}
+	return sqleTable, dTab, nil
+}
+
+type templateCacheKey struct {
+	h       hash.Hash
+	idxName string
+}
+
+func (k templateCacheKey) String() string {
+	return k.idxName + "/" + k.h.String()[:5]
+}
+
+func (sc *StatsController) getTemplate(ctx *sql.Context, sqlTable *sqle.DoltTable, sqlIdx sql.Index) (templateCacheKey, stats.Statistic, error) {
+	schHash, _, err := sqlTable.IndexCacheKey(ctx)
+	if err != nil {
+		return templateCacheKey{}, stats.Statistic{}, err
+	}
+	key := templateCacheKey{h: schHash.Hash, idxName: sqlIdx.ID()}
+	if template, ok := sc.GetTemplate(key); ok {
+		return key, template, nil
+	}
+	fds, colset, err := stats.IndexFds(strings.ToLower(sqlTable.Name()), sqlTable.Schema(), sqlIdx)
+	if err != nil {
+		return templateCacheKey{}, stats.Statistic{}, err
+	}
+
+	var class sql.IndexClass
+	switch {
+	case sqlIdx.IsSpatial():
+		class = sql.IndexClassSpatial
+	case sqlIdx.IsFullText():
+		class = sql.IndexClassFulltext
+	default:
+		class = sql.IndexClassDefault
+	}
+
+	var types []sql.Type
+	for _, cet := range sqlIdx.ColumnExpressionTypes() {
+		types = append(types, cet.Type)
+	}
+
+	tablePrefix := sqlTable.Name() + "."
+	cols := make([]string, len(sqlIdx.Expressions()))
+	for i, c := range sqlIdx.Expressions() {
+		cols[i] = strings.TrimPrefix(strings.ToLower(c), tablePrefix)
+	}
+
+	template := stats.Statistic{
+		Qual:     sql.NewStatQualifier("", "", sqlTable.Name(), sqlIdx.ID()),
+		Cols:     cols,
+		Typs:     types,
+		IdxClass: uint8(class),
+		Fds:      fds,
+		Colset:   colset,
+	}
+
+	// We put template twice, once for schema changes with no data
+	// changes (here), and once when we put chunks to avoid GC dropping
+	// templates before the finalize job.
+	sc.PutTemplate(key, template)
+
+	return key, template, nil
 }

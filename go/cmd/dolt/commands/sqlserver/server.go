@@ -266,7 +266,7 @@ func ConfigureServices(
 				mrEnv,
 				config,
 			)
-			if sc, ok := sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.StatsProvider.(*statspro.StatsCoord); ok {
+			if sc, ok := sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.StatsProvider.(*statspro.StatsController); ok {
 				if sc == nil {
 					return fmt.Errorf("unexpected nil stats coord")
 				}

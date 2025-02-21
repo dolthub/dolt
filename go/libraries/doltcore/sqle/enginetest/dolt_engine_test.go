@@ -1947,7 +1947,7 @@ func TestStatsAutoRefreshConcurrency(t *testing.T) {
 	//thresholdf64 := 0.
 	//bThreads := sql.NewBackgroundThreads()
 	//branches := []string{"main"}
-	statsProv := engine.EngineAnalyzer().Catalog.StatsProvider.(*statspro.StatsCoord)
+	statsProv := engine.EngineAnalyzer().Catalog.StatsProvider.(*statspro.StatsController)
 
 	// it is important to use new sessions for this test, to avoid working root conflicts
 	readCtx := enginetest.NewSession(harness)

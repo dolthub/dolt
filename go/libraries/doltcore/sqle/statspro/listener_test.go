@@ -137,7 +137,7 @@ func TestListening(t *testing.T) {
 		require.NoError(t, err)
 		select {
 		case e := <-l:
-			require.True(t, (leSwapGc|leGc)&e > 0, "expected success or gc signal")
+			require.True(t, (leSwap|leGc)&e > 0, "expected success or gc signal")
 		}
 	})
 	t.Run("ListenForStop", func(t *testing.T) {
@@ -200,7 +200,7 @@ func TestListening(t *testing.T) {
 			defer wg.Done()
 			defer close(done)
 			ctx, _ := context.WithTimeout(context.Background(), 10*time.Millisecond)
-			err := sc.waitForCond(ctx, leSwapGc, leStop, 1)
+			err := sc.waitForCond(ctx, leSwap, leStop, 1, nil)
 			require.ErrorIs(t, err, context.DeadlineExceeded)
 		}()
 		wg.Wait()
@@ -222,7 +222,7 @@ func TestListening(t *testing.T) {
 			defer close(done)
 			sc.Stop()
 			ctx, _ := context.WithTimeout(context.Background(), 10*time.Millisecond)
-			err := sc.waitForCond(ctx, leSwapGc, leStop, 1)
+			err := sc.waitForCond(ctx, leSwap, leStop, 1, nil)
 			require.ErrorIs(t, err, ErrStatsIssuerPaused)
 		}()
 		wg.Wait()
@@ -242,7 +242,7 @@ func TestListening(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			ctx, _ := context.WithTimeout(context.Background(), 10*time.Millisecond)
-			err := sc.waitForCond(ctx, leSwapGc, leStop, 1)
+			err := sc.waitForCond(ctx, leSwap, leStop, 1, nil)
 			require.NoError(t, err)
 		}()
 		close(done)

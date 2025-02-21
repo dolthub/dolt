@@ -211,7 +211,7 @@ func NewSqlEngine(
 
 	// configuring stats depends on sessionBuilder
 	// sessionBuilder needs ref to statsProv
-	if sc, ok := statsPro.(*statspro.StatsCoord); ok {
+	if sc, ok := statsPro.(*statspro.StatsController); ok {
 		//sc.Debug = true
 		_, memOnly, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsMemoryOnly)
 		sc.SetMemOnly(memOnly.(int8) == 1)

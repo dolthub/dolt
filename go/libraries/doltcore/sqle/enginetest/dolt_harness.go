@@ -46,7 +46,7 @@ import (
 type DoltHarness struct {
 	t                     *testing.T
 	provider              dsess.DoltDatabaseProvider
-	statsPro              *statspro.StatsCoord
+	statsPro              *statspro.StatsController
 	multiRepoEnv          *env.MultiRepoEnv
 	session               *dsess.DoltSession
 	branchControl         *branch_control.Controller

@@ -58,7 +58,7 @@ type StatsKv interface {
 
 var _ StatsKv = (*prollyStats)(nil)
 var _ StatsKv = (*memStats)(nil)
-var _ StatsKv = (*StatsCoord)(nil)
+var _ StatsKv = (*StatsController)(nil)
 
 func NewMemStats() *memStats {
 	return &memStats{
@@ -496,55 +496,55 @@ func DecodeRow(ctx context.Context, ns tree.NodeStore, s string, tb *val.TupleBu
 	return r, nil
 }
 
-func (sc *StatsCoord) PutBucket(ctx context.Context, h hash.Hash, b *stats.Bucket, tupB *val.TupleBuilder) error {
+func (sc *StatsController) PutBucket(ctx context.Context, h hash.Hash, b *stats.Bucket, tupB *val.TupleBuilder) error {
 	sc.statsMu.Lock()
 	defer sc.statsMu.Unlock()
 	return sc.kv.PutBucket(ctx, h, b, tupB)
 }
 
-func (sc *StatsCoord) GetBucket(ctx context.Context, h hash.Hash, tupB *val.TupleBuilder) (*stats.Bucket, bool, error) {
+func (sc *StatsController) GetBucket(ctx context.Context, h hash.Hash, tupB *val.TupleBuilder) (*stats.Bucket, bool, error) {
 	sc.statsMu.Lock()
 	defer sc.statsMu.Unlock()
 	return sc.kv.GetBucket(ctx, h, tupB)
 }
 
-func (sc *StatsCoord) GetTemplate(key templateCacheKey) (stats.Statistic, bool) {
+func (sc *StatsController) GetTemplate(key templateCacheKey) (stats.Statistic, bool) {
 	sc.statsMu.Lock()
 	defer sc.statsMu.Unlock()
 	return sc.kv.GetTemplate(key)
 }
 
-func (sc *StatsCoord) PutTemplate(key templateCacheKey, stat stats.Statistic) {
+func (sc *StatsController) PutTemplate(key templateCacheKey, stat stats.Statistic) {
 	sc.statsMu.Lock()
 	defer sc.statsMu.Unlock()
 	sc.kv.PutTemplate(key, stat)
 }
 
-func (sc *StatsCoord) GetBound(h hash.Hash, len int) (sql.Row, bool) {
+func (sc *StatsController) GetBound(h hash.Hash, len int) (sql.Row, bool) {
 	sc.statsMu.Lock()
 	defer sc.statsMu.Unlock()
 	return sc.kv.GetBound(h, len)
 }
 
-func (sc *StatsCoord) PutBound(h hash.Hash, r sql.Row, l int) {
+func (sc *StatsController) PutBound(h hash.Hash, r sql.Row, l int) {
 	sc.statsMu.Lock()
 	defer sc.statsMu.Unlock()
 	sc.kv.PutBound(h, r, l)
 }
 
-func (sc *StatsCoord) Flush(ctx context.Context) (int, error) {
+func (sc *StatsController) Flush(ctx context.Context) (int, error) {
 	sc.statsMu.Lock()
 	defer sc.statsMu.Unlock()
 	return sc.kv.Flush(ctx)
 }
 
-func (sc *StatsCoord) Len() int {
+func (sc *StatsController) Len() int {
 	sc.statsMu.Lock()
 	defer sc.statsMu.Unlock()
 	return sc.kv.Len()
 }
 
-func (sc *StatsCoord) GcGen() uint64 {
+func (sc *StatsController) GcGen() uint64 {
 	sc.statsMu.Lock()
 	defer sc.statsMu.Unlock()
 	return sc.kv.GcGen()

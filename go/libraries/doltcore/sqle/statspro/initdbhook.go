@@ -22,7 +22,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
 
-func NewInitDatabaseHook(sc *StatsCoord) sqle.InitDatabaseHook {
+func NewInitDatabaseHook(sc *StatsController) sqle.InitDatabaseHook {
 	return func(
 		ctx *sql.Context,
 		_ *sqle.DoltDatabaseProvider,
@@ -40,7 +40,7 @@ func NewInitDatabaseHook(sc *StatsCoord) sqle.InitDatabaseHook {
 	}
 }
 
-func NewDropDatabaseHook(sc *StatsCoord) sqle.DropDatabaseHook {
+func NewDropDatabaseHook(sc *StatsController) sqle.DropDatabaseHook {
 	return func(ctx *sql.Context, name string) {
 		if err := sc.DropDbStats(ctx, name, false); err != nil {
 			ctx.GetLogger().Debugf("failed to close stats database: %s", err)
