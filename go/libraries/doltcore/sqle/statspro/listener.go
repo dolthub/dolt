@@ -45,7 +45,6 @@ func (sc *StatsCoord) addListener() (chan listenerEvent, error) {
 	return l, nil
 }
 
-// Stop stops the issuer thread
 func (sc *StatsCoord) Stop() {
 	sc.statsMu.Lock()
 	sc.statsMu.Unlock()
@@ -58,7 +57,6 @@ func (sc *StatsCoord) Stop() {
 	return
 }
 
-// Restart continues the queue and blocks until sender is running
 func (sc *StatsCoord) Restart() error {
 	select {
 	case <-sc.closed:
@@ -79,7 +77,6 @@ func (sc *StatsCoord) Restart() error {
 
 func (sc *StatsCoord) waitForCond(ctx context.Context, ok, stop listenerEvent, cnt int) (err error) {
 	for cnt > 0 {
-		// the first cycle is usually an older context
 		var l chan listenerEvent
 		l, err = sc.addListener()
 		if err != nil {
@@ -102,6 +99,7 @@ func (sc *StatsCoord) waitForCond(ctx context.Context, ok, stop listenerEvent, c
 }
 
 func (sc *StatsCoord) WaitForDbSync(ctx context.Context) (err error) {
+	// wait for 2 cycles because first completion is usually a stale context
 	return sc.waitForCond(ctx, leSwapGc|leGc, leStop, 2)
 }
 
