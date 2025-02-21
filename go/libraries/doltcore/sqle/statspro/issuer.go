@@ -26,66 +26,15 @@ import (
 
 //
 
-func (sc *StatsCoord) newThreadCtx(ctx context.Context) context.Context {
-	sc.statsMu.Lock()
-	sc.statsMu.Unlock()
-	newCtx, cancel := context.WithCancel(ctx)
-	if sc.activeCtxCancel != nil {
-		sc.activeCtxCancel()
-	}
-	sc.signalListenerStop()
-	sc.activeCtxCancel = cancel
-	return newCtx
-}
-
-var ErrStatsIssuerPaused = fmt.Errorf("stats issuer is paused")
-
-func (sc *StatsCoord) addListener() (chan listenerEvent, error) {
-	sc.statsMu.Lock()
-	defer sc.statsMu.Unlock()
-	if sc.activeCtxCancel == nil {
-		return nil, ErrStatsIssuerPaused
-	}
-	l := make(chan listenerEvent)
-	sc.listeners = append(sc.listeners, l)
-	return l, nil
-}
-
-// Stop stops the sender thread and then pauses the queue
-func (sc *StatsCoord) Stop() {
-	sc.statsMu.Lock()
-	sc.statsMu.Unlock()
-	if sc.activeCtxCancel != nil {
-		sc.activeCtxCancel()
-		sc.activeCtxCancel = nil
-	}
-	sc.signalListenerStop()
-	return
-}
-
-// Restart continues the queue and blocks until sender is running
-func (sc *StatsCoord) Restart() error {
-	select {
-	case <-sc.closed:
-		return fmt.Errorf("StatsCoord is closed")
-	default:
-	}
-	sc.sq.Start()
-	done := make(chan struct{})
-	go func() {
-		ctx := sc.newThreadCtx(context.Background())
-		close(done)
-		sc.runIssuer(ctx)
-	}()
-	// only return after latestCtx updated
-	<-done
-	return nil
-}
-
 func (sc *StatsCoord) runIssuer(ctx context.Context) (err error) {
 	var gcKv *memStats
+	var newStats *rootStats
 	gcTicker := time.NewTicker(sc.gcInterval)
 	for {
+		// This loops tries to update stats as long as context
+		// is active. Thread contexts governs who "owns" the update
+		// process. The generation counters ensure atomic swapping.
+
 		gcKv = nil
 		genStart := sc.genCnt.Load()
 		genCand := sc.genCand.Add(1)
@@ -101,13 +50,16 @@ func (sc *StatsCoord) runIssuer(ctx context.Context) (err error) {
 			gcKv.gcGen = genCand
 		}
 
-		newStats, err := sc.newStatsForRoot(ctx, gcKv)
-		if err != nil {
+		newStats, err = sc.newStatsForRoot(ctx, gcKv)
+		if errors.Is(err, context.Canceled) {
+			return nil
+		} else if err != nil {
 			sc.descError("", err)
 		}
 
 		select {
 		case <-ctx.Done():
+			// is double check necessary?
 			return context.Cause(ctx)
 		default:
 		}
@@ -122,33 +74,34 @@ type listenerEvent uint8
 
 const (
 	unknownEvent = listenerEvent(iota)
-	leSuccess
+	leSwapGc
 	leStop
+	leGc = 4
 )
 
-func (sc *StatsCoord) signalListenerSuccess() {
+func (sc *StatsCoord) signalListener(s listenerEvent) {
 	for _, l := range sc.listeners {
-		l <- leSuccess
+		l <- s
+		close(l)
 	}
 	sc.listeners = sc.listeners[:0]
 }
 
-func (sc *StatsCoord) signalListenerStop() {
-	for _, l := range sc.listeners {
-		l <- leStop
-	}
-	sc.listeners = sc.listeners[:0]
-}
-
-func (sc *StatsCoord) trySwapStats(ctx context.Context, prevGen, newGen uint64, newStats *rootStats, gcKv *memStats) (bool, error) {
+func (sc *StatsCoord) trySwapStats(ctx context.Context, prevGen, newGen uint64, newStats *rootStats, gcKv *memStats) (ok bool, err error) {
 	sc.statsMu.Lock()
 	defer sc.statsMu.Unlock()
 
-	var err error
+	signal := leSwapGc
+	defer func() {
+		if ok {
+			sc.signalListener(signal)
+		}
+	}()
+
 	if sc.genCnt.CompareAndSwap(prevGen, newGen) {
+		signal = leGc
 		// Replace stats and new Kv if no replacements happened
 		// in-between.
-		defer sc.signalListenerSuccess()
 		sc.Stats = newStats
 		if gcKv != nil {
 			// The new KV has all buckets for the latest root stats,
@@ -164,6 +117,9 @@ func (sc *StatsCoord) trySwapStats(ctx context.Context, prevGen, newGen uint64, 
 				err = sc.sq.DoAsync(func() error {
 					return sc.rotateStorage(ctx)
 				})
+				if err != nil {
+					return true, err
+				}
 			}
 		}
 		// Flush new changes to disk.

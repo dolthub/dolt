@@ -168,17 +168,6 @@ func (sc *StatsCoord) SetTimers(job, gc int64) {
 	sc.gcInterval = time.Duration(gc)
 }
 
-func (sc *StatsCoord) latestContexts() (context.Context, context.Context, bool) {
-	return nil, nil, true
-}
-
-func (sc *StatsCoord) Close() {
-	sc.sq.Stop()
-	sc.Stop()
-	close(sc.closed)
-	return
-}
-
 func (sc *StatsCoord) AddFs(ctx *sql.Context, db dsess.SqlDatabase, fs filesys.Filesys) error {
 	sc.statsMu.Lock()
 	defer sc.statsMu.Unlock()
@@ -591,55 +580,4 @@ func (sc *StatsCoord) initStorage(ctx context.Context, fs filesys.Filesys) (*pro
 		return nil, err
 	}
 	return NewProllyStats(ctx, statsDb)
-}
-
-func (sc *StatsCoord) WaitForDbSync(ctx context.Context) (err error) {
-	for cnt := 0; cnt < 2; {
-		// the second cycle will include all changes in
-		// the current context
-		if err := func() error {
-			var l chan listenerEvent
-			l, err = sc.addListener()
-			if err != nil {
-				return err
-			}
-
-			select {
-			case <-ctx.Done():
-				return context.Cause(ctx)
-			case e := <-l:
-				switch e {
-				case leSuccess:
-					cnt++
-				case leStop:
-					return ErrStatsIssuerPaused
-				}
-			}
-			return nil
-		}(); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (sc *StatsCoord) Gc(ctx *sql.Context) error {
-	sc.doGc = true
-	l, err := sc.addListener()
-	if err != nil {
-		return err
-	}
-
-	select {
-	case <-ctx.Done():
-		return context.Cause(ctx)
-	case e := <-l:
-		switch e {
-		case leSuccess:
-		case leStop:
-			return ErrStatsIssuerPaused
-		}
-	default:
-	}
-	return nil
 }
