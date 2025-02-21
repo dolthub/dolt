@@ -16,6 +16,7 @@ package sqle
 
 import (
 	"context"
+	"errors"
 	"io"
 	"sync"
 	"time"
@@ -27,6 +28,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dprocedures"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -147,7 +149,9 @@ func (c *AutoGCController) doWork(ctx context.Context, work autoGCWork, ctxF fun
 	defer sql.SessionCommandEnd(sqlCtx.Session)
 	err = dprocedures.RunDoltGC(sqlCtx, work.db, types.GCModeDefault, work.name)
 	if err != nil {
-		c.lgr.Warnf("sqle/auto_gc: Attempt to auto GC database %s failed with error: %v", work.name, err)
+		if !errors.Is(err, chunks.ErrNothingToCollect) {
+			c.lgr.Warnf("sqle/auto_gc: Attempt to auto GC database %s failed with error: %v", work.name, err)
+		}
 		return
 	}
 	c.lgr.Infof("sqle/auto_gc: Successfully completed auto GC of database %s in %v", work.name, time.Since(start))
