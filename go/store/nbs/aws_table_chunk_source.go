@@ -30,7 +30,7 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
-func tableExistsInChunkSource(ctx context.Context, s3 *s3ObjectReader, al awsLimits, name hash.Hash, chunkCount uint32, q MemoryQuotaProvider, stats *Stats) (bool, error) {
+func tableExistsInChunkSource(ctx context.Context, s3 *s3ObjectReader, name hash.Hash, stats *Stats) (bool, error) {
 	magic := make([]byte, magicNumberSize)
 	n, err := readS3TableFileFromEnd(ctx, s3, name.String(), magic, stats)
 	if err != nil {

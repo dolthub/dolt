@@ -47,9 +47,15 @@ type s3ObjectReader struct {
 	ns     string
 }
 
-// s3RangeHeader returns a string for the HTTP range header ("bytes=23-42") for a range starting at |off| and ending at |length|
-// Intended to be used with the |readRange| method.
-func s3RangeHeader(off, length int64) string {
+// httpEndRangeHeader returns a string for the HTTP range header value (eg "bytes=-42") to retrieve the last |length| bytes
+// of the object. Intended to be used with the |readRange| method, to set Range of request.
+func httpEndRangeHeader(length int) string {
+	return fmt.Sprintf("%s=-%d", s3RangePrefix, length)
+}
+
+// httpRangeHeader returns a string for the HTTP range header value (eg "bytes=23-42") for a range starting at |off|
+// with a length of |length|. Intended to be used with the |readRange| method, to set Range of request.
+func httpRangeHeader(off, length int64) string {
 	lastByte := off + length - 1 // insanely, the HTTP range header specifies ranges inclusively.
 	return fmt.Sprintf("%s=%d-%d", s3RangePrefix, off, lastByte)
 }
@@ -71,7 +77,7 @@ func (s3or *s3ObjectReader) ReadAt(ctx context.Context, name string, p []byte, o
 		stats.S3ReadLatency.SampleTimeSince(t1)
 	}()
 
-	n, _, err = s3or.readRange(ctx, name, p, s3RangeHeader(off, int64(len(p))))
+	n, _, err = s3or.readRange(ctx, name, p, httpRangeHeader(off, int64(len(p))))
 	return
 }
 
@@ -89,7 +95,7 @@ func (s3or *s3ObjectReader) reader(ctx context.Context, name string) (io.ReadClo
 }
 
 // readRange implements the raw calls to S3 for the purpose of reading a range of bytes from an |name| object. Contents
-// are read into |p| and the range is specified as a string, which you should get using the |s3RangeHeader| function.
+// are read into |p| and the range is specified as a string, which you should get using the |httpRangeHeader| function.
 // The return value is the number of bytes |n| read and the total size |sz| of the object. The size of the object comes from the Content-Range
 // HTTP header, and can be used if manually breaking of the file into range chunks
 func (s3or *s3ObjectReader) readRange(ctx context.Context, name string, p []byte, rangeHeader string) (n int, sz uint64, err error) {

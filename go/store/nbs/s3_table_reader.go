@@ -23,7 +23,6 @@ package nbs
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"sync/atomic"
 	"time"
@@ -71,7 +70,7 @@ func readS3TableFileFromEnd(ctx context.Context, s3or *s3ObjectReader, name stri
 	if len(p) > maxS3ReadFromEndReqSize {
 		// If we're bigger than 256MB, parallelize the read...
 		// Read the footer first and capture the size of the entire table file.
-		n, sz, err := s3or.readRange(ctx, name, p[len(p)-footerSize:], fmt.Sprintf("%s=-%d", s3RangePrefix, footerSize))
+		n, sz, err := s3or.readRange(ctx, name, p[len(p)-footerSize:], httpEndRangeHeader(footerSize))
 		if err != nil {
 			return n, err
 		}
@@ -87,8 +86,9 @@ func readS3TableFileFromEnd(ctx context.Context, s3or *s3ObjectReader, name stri
 			bs := p[start:end]
 			rangeStart := sz - uint64(len(p)) + uint64(start)
 			rangeEnd := sz - uint64(len(p)) + uint64(end) - 1
+			length := rangeEnd - rangeStart
 			eg.Go(func() error {
-				n, _, err := s3or.readRange(egctx, name, bs, fmt.Sprintf("%s=%d-%d", s3RangePrefix, rangeStart, rangeEnd))
+				n, _, err := s3or.readRange(egctx, name, bs, httpRangeHeader(int64(rangeStart), int64(length)))
 				if err != nil {
 					return err
 				}
@@ -103,6 +103,7 @@ func readS3TableFileFromEnd(ctx context.Context, s3or *s3ObjectReader, name stri
 		}
 		return int(totalN), nil
 	}
-	n, _, err = s3or.readRange(ctx, name, p, fmt.Sprintf("%s=-%d", s3RangePrefix, len(p)))
+
+	n, _, err = s3or.readRange(ctx, name, p, httpEndRangeHeader(len(p)))
 	return n, err
 }
