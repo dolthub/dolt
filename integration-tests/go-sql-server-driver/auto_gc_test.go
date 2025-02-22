@@ -131,7 +131,7 @@ cluster:
 	}
 
 	err = driver.WithFile{
-		Name: "server.yaml",
+		Name:     "server.yaml",
 		Contents: behaviorFragment + clusterFragment,
 	}.WriteAtDir(repo.Dir)
 	require.NoError(t, err)
@@ -183,7 +183,7 @@ cluster:
 	}
 
 	err = driver.WithFile{
-		Name: "server.yaml",
+		Name:     "server.yaml",
 		Contents: behaviorFragment + clusterFragment,
 	}.WriteAtDir(repo.Dir)
 	require.NoError(t, err)

@@ -955,10 +955,10 @@ func (nbs *NomsBlockStore) getManyWithFunc(
 		nbs.stats.ChunksPerGet.Sample(uint64(len(hashes)))
 	}()
 
+	reqs := toGetRecords(hashes)
+
 	const ioParallelism = 16
 	for {
-		reqs := toGetRecords(hashes)
-
 		nbs.mu.Lock()
 		keeper := nbs.keeperFunc
 		if gcDepMode == gcDependencyMode_NoDependency {

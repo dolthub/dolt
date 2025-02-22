@@ -1942,10 +1942,10 @@ type StoreSizes struct {
 	// but everything in it is in the old gen. In practice, given how we build
 	// oldgen references today, this will never be the case--there is always
 	// a little bit of data that only goes in the newgen.
-	NewGenBytes  uint64
+	NewGenBytes uint64
 	// This is the approximate total on-disk storage overhead of the store.
 	// It includes Journal and NewGenBytes, if there are any.
-	TotalBytes   uint64
+	TotalBytes uint64
 }
 
 func (ddb *DoltDB) StoreSizes(ctx context.Context) (StoreSizes, error) {
@@ -1964,13 +1964,13 @@ func (ddb *DoltDB) StoreSizes(ctx context.Context) (StoreSizes, error) {
 		if journal != nil {
 			return StoreSizes{
 				JournalBytes: uint64(journal.Size()),
-				NewGenBytes: newgenSz,
-				TotalBytes: totalSz,
+				NewGenBytes:  newgenSz,
+				TotalBytes:   totalSz,
 			}, nil
 		} else {
 			return StoreSizes{
 				NewGenBytes: newgenSz,
-				TotalBytes: totalSz,
+				TotalBytes:  totalSz,
 			}, nil
 		}
 	} else {
