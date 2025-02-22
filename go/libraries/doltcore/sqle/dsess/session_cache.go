@@ -156,9 +156,7 @@ func (c *SessionCache) ClearTableCache() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	for k := range c.tables {
-		delete(c.tables, k)
-	}
+	clear(c.tables)
 }
 
 type TableCacheKey struct {
