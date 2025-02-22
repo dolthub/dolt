@@ -53,6 +53,7 @@ start_sql_server() {
     fi
     echo db:$DEFAULT_DB logFile:$logFile PORT:$PORT CWD:$PWD
     SERVER_PID=$!
+    export DOLT_FORBID_DB_LOAD_FOR_TEST=1
     wait_for_connection $PORT 8500
 }
 
@@ -74,6 +75,7 @@ start_sql_server_with_args_no_port() {
       dolt sql-server "$@" --socket "dolt.$PORT.sock" &
     fi
     SERVER_PID=$!
+    export DOLT_FORBID_DB_LOAD_FOR_TEST=1
     wait_for_connection $PORT 8500
 }
 
@@ -98,6 +100,7 @@ behavior:
       dolt sql-server --config .cliconfig.yaml --socket "dolt.$PORT.sock" &
     fi
     SERVER_PID=$!
+    export DOLT_FORBID_DB_LOAD_FOR_TEST=1
     wait_for_connection $PORT 8500
 }
 
@@ -124,6 +127,7 @@ behavior:
       dolt sql-server --config .cliconfig.yaml --socket "dolt.$PORT.sock" &
     fi
     SERVER_PID=$!
+    export DOLT_FORBID_DB_LOAD_FOR_TEST=1
     wait_for_connection $PORT 8500
 }
 
@@ -159,6 +163,7 @@ stop_sql_server() {
         fi;
     fi
     SERVER_PID=
+    unset DOLT_FORBID_DB_LOAD_FOR_TEST
 }
 
 definePORT() {
