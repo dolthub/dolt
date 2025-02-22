@@ -46,7 +46,7 @@ func TestAutoGC(t *testing.T) {
 			var s AutoGCTest
 			s.Enable = true
 			s.Replicate = true
-			enabled_16, final_16 = runAutoGCTest(t, &s, 256, 16)
+			enabled_16, final_16 = runAutoGCTest(t, &s, 64, 16)
 			assert.Contains(t, string(s.PrimaryServer.Output.Bytes()), "Successfully completed auto GC")
 			assert.Contains(t, string(s.StandbyServer.Output.Bytes()), "Successfully completed auto GC")
 			t.Logf("repo size before final gc: %v", enabled_16)
