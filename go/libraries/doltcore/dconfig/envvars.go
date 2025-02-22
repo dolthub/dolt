@@ -49,4 +49,7 @@ const (
 	// If set, must be "kill_connections" or "session_aware"
 	// Will go away after session_aware is made default-and-only.
 	EnvGCSafepointControllerChoice = "DOLT_GC_SAFEPOINT_CONTROLLER_CHOICE"
+
+	// Used for tests. If set, Dolt will error if it would rebuild a table's row data.
+	EnvAssertNoTableRewrite = "DOLT_TEST_ASSERT_NO_TABLE_REWRITE"
 )

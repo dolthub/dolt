@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package merge
+package typecompatibility
 
 import (
 	"testing"
@@ -73,7 +73,7 @@ var mediumBlob = mustCreateType(gmstypes.MustCreateBinary(sqltypes.Blob, 16_777_
 // TestLd1IsTypeChangeCompatible tests that the LD1 TypeCompatibilityChecker implementation
 // correctly computes compatibility between types.
 func TestLd1IsTypeChangeCompatible(t *testing.T) {
-	compatChecker := newTypeCompatabilityCheckerForStorageFormat(storetypes.Format_LD_1)
+	compatChecker := NewTypeCompatabilityCheckerForStorageFormat(storetypes.Format_LD_1)
 	runTypeCompatibilityTests(t, compatChecker, []typeChangeCompatibilityTest{
 		{
 			name:       "equivalent types are compatible",
@@ -145,7 +145,7 @@ func TestLd1IsTypeChangeCompatible(t *testing.T) {
 // TestDoltIsTypeChangeCompatible tests that the DOLT TypeCompatibilityChecker implementation
 // correctly computes compatibility between types.
 func TestDoltIsTypeChangeCompatible(t *testing.T) {
-	compatChecker := newTypeCompatabilityCheckerForStorageFormat(storetypes.Format_DOLT)
+	compatChecker := NewTypeCompatabilityCheckerForStorageFormat(storetypes.Format_DOLT)
 	runTypeCompatibilityTests(t, compatChecker, []typeChangeCompatibilityTest{
 		{
 			name:       "equivalent types are compatible",
@@ -320,9 +320,9 @@ func runTypeCompatibilityTests(t *testing.T, compatChecker TypeCompatibilityChec
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			compatibilityResults := compatChecker.IsTypeChangeCompatible(tt.from, tt.to)
-			assert.Equal(t, tt.compatible, compatibilityResults.compatible, "expected compatible to be %t, but was %t", tt.compatible, compatibilityResults.compatible)
-			assert.Equal(t, tt.rewrite, compatibilityResults.rewriteRows, "expected rewrite required to be %t, but was %t", tt.rewrite, compatibilityResults.rewriteRows)
-			assert.Equal(t, tt.invalidateSecondaryIndexes, compatibilityResults.invalidateSecondaryIndexes, "expected secondary index rewrite to be %t, but was %t", tt.invalidateSecondaryIndexes, compatibilityResults.invalidateSecondaryIndexes)
+			assert.Equal(t, tt.compatible, compatibilityResults.Compatible, "expected compatible to be %t, but was %t", tt.compatible, compatibilityResults.Compatible)
+			assert.Equal(t, tt.rewrite, compatibilityResults.RewriteRows, "expected rewrite required to be %t, but was %t", tt.rewrite, compatibilityResults.RewriteRows)
+			assert.Equal(t, tt.invalidateSecondaryIndexes, compatibilityResults.InvalidateSecondaryIndexes, "expected secondary index rewrite to be %t, but was %t", tt.invalidateSecondaryIndexes, compatibilityResults.InvalidateSecondaryIndexes)
 
 		})
 	}

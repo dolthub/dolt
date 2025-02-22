@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package merge
+package typecompatibility
 
 import (
 	"github.com/dolthub/go-mysql-server/sql"
@@ -43,7 +43,7 @@ type TypeCompatibilityChecker interface {
 
 // newTypeCompatabilityCheckerForStorageFormat returns a new TypeCompatibilityChecker
 // instance for the given storage format.
-func newTypeCompatabilityCheckerForStorageFormat(format *storetypes.NomsBinFormat) TypeCompatibilityChecker {
+func NewTypeCompatabilityCheckerForStorageFormat(format *storetypes.NomsBinFormat) TypeCompatibilityChecker {
 	switch format {
 	case storetypes.Format_DOLT:
 		return newDoltTypeCompatibilityChecker()
@@ -68,7 +68,7 @@ func (l ld1TypeCompatibilityChecker) IsTypeChangeCompatible(from, to typeinfo.Ty
 	fromSqlType := from.ToSqlType()
 	toSqlType := to.ToSqlType()
 	if fromSqlType.Equals(toSqlType) {
-		res.compatible = true
+		res.Compatible = true
 		return res
 	}
 
@@ -83,7 +83,7 @@ func (l ld1TypeCompatibilityChecker) IsTypeChangeCompatible(from, to typeinfo.Ty
 		return res
 	}
 
-	res.compatible = true
+	res.Compatible = true
 	return res
 }
 
@@ -115,14 +115,14 @@ func (d doltTypeCompatibilityChecker) IsTypeChangeCompatible(from, to typeinfo.T
 	fromSqlType := from.ToSqlType()
 	toSqlType := to.ToSqlType()
 	if fromSqlType.Equals(toSqlType) {
-		res.compatible = true
+		res.Compatible = true
 		return res
 	}
 
 	for _, checker := range d.checkers {
 		if checker.canHandle(fromSqlType, toSqlType) {
 			subcheckerResult := checker.isCompatible(fromSqlType, toSqlType)
-			if subcheckerResult.compatible {
+			if subcheckerResult.Compatible {
 				return subcheckerResult
 			}
 		}
@@ -132,14 +132,14 @@ func (d doltTypeCompatibilityChecker) IsTypeChangeCompatible(from, to typeinfo.T
 }
 
 // TypeChangeInfo contains details about how a column's type changing during the merge impacts the merge.
-// |compatible| stores whether the merge is still possible.
-// |rewriteRows| stores whether the primary index will need to be rewritten.
-// |invalidateSecondaryIndexes| stores whether all secondary indexes will need to be rewritten.
+// |Compatible| stores whether the merge is still possible.
+// |RewriteRows| stores whether the primary index will need to be rewritten.
+// |InvalidateSecondaryIndexes| stores whether all secondary indexes will need to be rewritten.
 // Typically adding removing, or changing the type of columns will trigger a rewrite of all indexes, because it is
 // nontrivial to determine which secondary indexes have been invalidated. However, some changes do not affect the
 // primary index, such as collation changes to non-pk columns.
 type TypeChangeInfo struct {
-	compatible, rewriteRows, invalidateSecondaryIndexes bool
+	Compatible, RewriteRows, InvalidateSecondaryIndexes bool
 }
 
 // typeChangeHandler has the logic to determine if a specific change from one type to another is a compatible
@@ -185,24 +185,24 @@ func (s stringTypeChangeHandler) isCompatible(fromSqlType, toSqlType sql.Type) (
 	fromStringType := fromSqlType.(types.StringType)
 	toStringType := toSqlType.(types.StringType)
 
-	res.compatible = toStringType.CharacterSet() == fromStringType.CharacterSet() &&
+	res.Compatible = toStringType.CharacterSet() == fromStringType.CharacterSet() &&
 		toStringType.MaxByteLength() >= fromStringType.MaxByteLength()
 
 	collationChanged := toStringType.Collation() != fromStringType.Collation()
 	// If the collation changed, we will need to rebuild any secondary indexes on this column.
 	if collationChanged {
-		res.invalidateSecondaryIndexes = true
+		res.InvalidateSecondaryIndexes = true
 	}
 
-	if res.compatible {
+	if res.Compatible {
 		// Because inline string types (e.g. VARCHAR, CHAR) have the same encoding, the main case
 		// when a table rewrite is required is when moving between an inline string type (e.g. CHAR)
 		// and an out-of-band string type (e.g. TEXT).
 		fromTypeOutOfBand := outOfBandType(fromSqlType)
 		toTypeOutOfBand := outOfBandType(toSqlType)
 		if fromTypeOutOfBand != toTypeOutOfBand {
-			res.rewriteRows = true
-			res.invalidateSecondaryIndexes = true
+			res.RewriteRows = true
+			res.InvalidateSecondaryIndexes = true
 		}
 
 		// The exception to this is when converting to a fixed width BINARY(N) field, which requires rewriting the
@@ -210,8 +210,8 @@ func (s stringTypeChangeHandler) isCompatible(fromSqlType, toSqlType sql.Type) (
 		// or its indexes, need to be right padded up to N bytes. Note that MySQL does NOT do a similar conversion
 		// when converting to VARBINARY(N).
 		if toSqlType.Type() == sqltypes.Binary {
-			res.rewriteRows = true
-			res.invalidateSecondaryIndexes = true
+			res.RewriteRows = true
+			res.InvalidateSecondaryIndexes = true
 		}
 	}
 
@@ -266,7 +266,7 @@ func (e enumTypeChangeHandler) isCompatible(fromSqlType, toSqlType sql.Type) (re
 	// MySQL uses 1 byte to store enum values that have <= 255 values, and 2 bytes for > 255 values
 	// The DOLT storage format *always* uses 2 bytes for all enum values, so table data never needs
 	// to be rewritten in this additive case.
-	res.compatible = true
+	res.Compatible = true
 	return res
 }
 
@@ -307,6 +307,6 @@ func (s setTypeChangeHandler) isCompatible(fromType, toType sql.Type) (res TypeC
 
 	// The DOLT storage format *always* uses 8 bytes for all set values, so the table data never needs
 	// to be rewritten in this additive case.
-	res.compatible = true
+	res.Compatible = true
 	return res
 }
