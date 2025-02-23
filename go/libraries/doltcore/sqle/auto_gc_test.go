@@ -21,11 +21,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/store/datas"
-	"github.com/dolthub/go-mysql-server/sql"
 )
 
 func TestAutoGCController(t *testing.T) {
