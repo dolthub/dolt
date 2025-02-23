@@ -33,6 +33,8 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
+var ErrTableFileNotFound = errors.New("table file not found")
+
 type fileTableReader struct {
 	tableReader
 	h hash.Hash
@@ -81,7 +83,7 @@ func newFileTableReader(ctx context.Context, dir string, h hash.Hash, chunkCount
 	} else if afExists {
 		return newArchiveChunkSource(ctx, dir, h, chunkCount, q)
 	}
-	return nil, errors.New(fmt.Sprintf("table file %s/%s not found", dir, h.String()))
+	return nil, fmt.Errorf("error opening table file: %w: %s/%s", ErrTableFileNotFound, dir, h.String())
 }
 
 func nomsFileTableReader(ctx context.Context, path string, h hash.Hash, chunkCount uint32, q MemoryQuotaProvider) (cs chunkSource, err error) {

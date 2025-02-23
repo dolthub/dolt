@@ -472,6 +472,12 @@ func (wr *journalWriter) commitRootHash(ctx context.Context, root hash.Hash) err
 	return wr.commitRootHashUnlocked(ctx, root)
 }
 
+func (wr *journalWriter) size() int64 {
+	wr.lock.Lock()
+	defer wr.lock.Unlock()
+	return wr.off
+}
+
 func (wr *journalWriter) commitRootHashUnlocked(ctx context.Context, root hash.Hash) error {
 	defer trace.StartRegion(ctx, "commit-root").End()
 

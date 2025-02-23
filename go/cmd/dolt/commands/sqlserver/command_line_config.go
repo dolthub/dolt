@@ -489,6 +489,10 @@ func (cfg *commandLineServerConfig) ValueSet(value string) bool {
 	return ok
 }
 
+func (cfg *commandLineServerConfig) AutoGCBehavior() servercfg.AutoGCBehavior {
+	return stubAutoGCBehavior{}
+}
+
 // DoltServerConfigReader is the default implementation of ServerConfigReader suitable for parsing Dolt config files
 // and command line options.
 type DoltServerConfigReader struct{}
@@ -509,4 +513,11 @@ func (d DoltServerConfigReader) ReadConfigFile(cwdFS filesys.Filesys, file strin
 
 func (d DoltServerConfigReader) ReadConfigArgs(args *argparser.ArgParseResults, dataDirOverride string) (servercfg.ServerConfig, error) {
 	return NewCommandLineConfig(nil, args, dataDirOverride)
+}
+
+type stubAutoGCBehavior struct {
+}
+
+func (stubAutoGCBehavior) Enable() bool {
+	return false
 }

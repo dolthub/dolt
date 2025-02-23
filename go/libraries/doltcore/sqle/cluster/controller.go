@@ -317,7 +317,7 @@ func (c *Controller) applyCommitHooks(ctx context.Context, name string, denv *en
 			}
 		}
 		commitHook := newCommitHook(c.lgr, r.Name(), remote.Url, name, c.role, func(ctx context.Context) (*doltdb.DoltDB, error) {
-			return remote.GetRemoteDB(ctx, types.Format_Default, dialprovider)
+			return remote.GetRemoteDBWithoutCaching(ctx, types.Format_Default, dialprovider)
 		}, denv.DoltDB(ctx), ttfdir)
 		denv.DoltDB(ctx).PrependCommitHooks(ctx, commitHook)
 		hooks = append(hooks, commitHook)

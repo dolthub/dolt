@@ -65,6 +65,8 @@ type BehaviorYAMLConfig struct {
 	DoltTransactionCommit *bool `yaml:"dolt_transaction_commit,omitempty"`
 
 	EventSchedulerStatus *string `yaml:"event_scheduler,omitempty" minver:"1.17.0"`
+
+	AutoGCBehavior *AutoGCBehaviorYAMLConfig `yaml:"auto_gc_behavior,omitempty" minver:"TBD"`
 }
 
 // UserYAMLConfig contains server configuration regarding the user account clients must use to connect
@@ -176,6 +178,7 @@ func YamlConfigFromFile(fs filesys.Filesys, path string) (ServerConfig, error) {
 
 func ServerConfigAsYAMLConfig(cfg ServerConfig) *YAMLConfig {
 	systemVars := cfg.SystemVars()
+	autoGCBehavior := toAutoGCBehaviorYAML(cfg.AutoGCBehavior())
 	return &YAMLConfig{
 		LogLevelStr:       ptr(string(cfg.LogLevel())),
 		MaxQueryLenInLogs: nillableIntPtr(cfg.MaxLoggedQueryLen()),
@@ -186,6 +189,7 @@ func ServerConfigAsYAMLConfig(cfg ServerConfig) *YAMLConfig {
 			DisableClientMultiStatements: ptr(cfg.DisableClientMultiStatements()),
 			DoltTransactionCommit:        ptr(cfg.DoltTransactionCommit()),
 			EventSchedulerStatus:         ptr(cfg.EventSchedulerStatus()),
+			AutoGCBehavior:               autoGCBehavior,
 		},
 		ListenerConfig: ListenerYAMLConfig{
 			HostStr:                 ptr(cfg.Host()),
@@ -817,6 +821,13 @@ func (cfg YAMLConfig) ClusterConfig() ClusterConfig {
 	return cfg.ClusterCfg
 }
 
+func (cfg YAMLConfig) AutoGCBehavior() AutoGCBehavior {
+	if cfg.BehaviorConfig.AutoGCBehavior == nil {
+		return nil
+	}
+	return cfg.BehaviorConfig.AutoGCBehavior
+}
+
 func (cfg YAMLConfig) EventSchedulerStatus() string {
 	if cfg.BehaviorConfig.EventSchedulerStatus == nil {
 		return "ON"
@@ -921,4 +932,21 @@ func (cfg YAMLConfig) ValueSet(value string) bool {
 		return cfg.BehaviorConfig.EventSchedulerStatus != nil
 	}
 	return false
+}
+
+type AutoGCBehaviorYAMLConfig struct {
+	Enable_ *bool `yaml:"enable,omitempty" minver:"TBD"`
+}
+
+func (a *AutoGCBehaviorYAMLConfig) Enable() bool {
+	if a.Enable_ == nil {
+		return false
+	}
+	return *a.Enable_
+}
+
+func toAutoGCBehaviorYAML(a AutoGCBehavior) *AutoGCBehaviorYAMLConfig {
+	return &AutoGCBehaviorYAMLConfig{
+		Enable_: ptr(a.Enable()),
+	}
 }

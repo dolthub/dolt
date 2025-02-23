@@ -955,10 +955,10 @@ func (nbs *NomsBlockStore) getManyWithFunc(
 		nbs.stats.ChunksPerGet.Sample(uint64(len(hashes)))
 	}()
 
+	reqs := toGetRecords(hashes)
+
 	const ioParallelism = 16
 	for {
-		reqs := toGetRecords(hashes)
-
 		nbs.mu.Lock()
 		keeper := nbs.keeperFunc
 		if gcDepMode == gcDependencyMode_NoDependency {
@@ -1735,7 +1735,7 @@ func refCheckAllSources(ctx context.Context, nbs *NomsBlockStore, getAddrs chunk
 			checkErr = err
 		}
 		if len(remaining) > 0 {
-			checkErr = fmt.Errorf("%w, missing: %v", errors.New("cannot add table files; referenced chunk not found in store."), remaining)
+			checkErr = fmt.Errorf("cannot add table files: %w, missing: %v", ErrTableFileNotFound, remaining)
 		}
 	}
 	for _, source := range sources {
