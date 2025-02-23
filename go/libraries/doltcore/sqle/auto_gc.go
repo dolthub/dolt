@@ -83,7 +83,12 @@ func (c *AutoGCController) RunBackgroundThread(threads *sql.BackgroundThreads, c
 	if err != nil {
 		return err
 	}
-	// TODO: Start bg threads for all existing commit hooks.
+	for _, hook := range c.hooks {
+		err = hook.run(threads)
+		if err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -157,7 +162,7 @@ func (c *AutoGCController) doWork(ctx context.Context, work autoGCWork, ctxF fun
 	c.lgr.Infof("sqle/auto_gc: Successfully completed auto GC of database %s in %v", work.name, time.Since(start))
 }
 
-func (c *AutoGCController) newCommitHook(name string, db *doltdb.DoltDB) doltdb.CommitHook {
+func (c *AutoGCController) newCommitHook(name string, db *doltdb.DoltDB) *autoGCCommitHook {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	closed := make(chan struct{})
@@ -231,7 +236,7 @@ func (c *AutoGCController) ApplyCommitHooks(ctx context.Context, mrEnv *env.Mult
 }
 
 func (c *AutoGCController) DropDatabaseHook() DropDatabaseHook {
-	return func(ctx *sql.Context, name string) {
+	return func(_ *sql.Context, name string) {
 		c.mu.Lock()
 		defer c.mu.Unlock()
 		hook := c.hooks[name]
@@ -243,7 +248,7 @@ func (c *AutoGCController) DropDatabaseHook() DropDatabaseHook {
 }
 
 func (c *AutoGCController) InitDatabaseHook() InitDatabaseHook {
-	return func(ctx *sql.Context, pro *DoltDatabaseProvider, name string, env *env.DoltEnv, db dsess.SqlDatabase) error {
+	return func(ctx *sql.Context, _ *DoltDatabaseProvider, name string, env *env.DoltEnv, _ dsess.SqlDatabase) error {
 		ddb := env.DoltDB(ctx)
 		ddb.PrependCommitHooks(ctx, c.newCommitHook(name, ddb))
 		return nil

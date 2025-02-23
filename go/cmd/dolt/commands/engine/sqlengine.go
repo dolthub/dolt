@@ -211,6 +211,7 @@ func NewSqlEngine(
 		}
 		config.AutoGCController.ApplyCommitHooks(ctx, mrEnv, dbs...)
 		pro.InitDatabaseHooks = append(pro.InitDatabaseHooks, config.AutoGCController.InitDatabaseHook())
+		pro.DropDatabaseHooks = append(pro.DropDatabaseHooks, config.AutoGCController.DropDatabaseHook())
 		// XXX: We force session aware safepoint controller if auto_gc is on.
 		dprocedures.UseSessionAwareSafepointController = true
 	}
