@@ -1952,15 +1952,21 @@ func (ddb *DoltDB) StoreSizes(ctx context.Context) (StoreSizes, error) {
 	cs := datas.ChunkStoreFromDatabase(ddb.db)
 	if generationalNBS, ok := cs.(*nbs.GenerationalNBS); ok {
 		newgen := generationalNBS.NewGen()
-		newgenSz, err := newgen.(chunks.TableFileStore).Size(ctx)
+		newGenTFS, newGenTFSOk := newgen.(chunks.TableFileStore)
+		totalTFS, totalTFSOk := cs.(chunks.TableFileStore)
+		newGenNBS, newGenNBSOk := newgen.(*nbs.NomsBlockStore)
+		if !(newGenTFSOk && totalTFSOk && newGenNBSOk) {
+			return StoreSizes{}, fmt.Errorf("unexpected newgen or chunk store type for *nbs.GenerationalNBS instance; cannot take store sizes: cs: %T, newgen: %T", cs, newgen)
+		}
+		newgenSz, err := newGenTFS.Size(ctx)
 		if err != nil {
 			return StoreSizes{}, err
 		}
-		totalSz, err := cs.(chunks.TableFileStore).Size(ctx)
+		totalSz, err := totalTFS.Size(ctx)
 		if err != nil {
 			return StoreSizes{}, err
 		}
-		journal := newgen.(*nbs.NomsBlockStore).ChunkJournal()
+		journal := newGenNBS.ChunkJournal()
 		if journal != nil {
 			return StoreSizes{
 				JournalBytes: uint64(journal.Size()),
@@ -1974,7 +1980,11 @@ func (ddb *DoltDB) StoreSizes(ctx context.Context) (StoreSizes, error) {
 			}, nil
 		}
 	} else {
-		totalSz, err := cs.(chunks.TableFileStore).Size(ctx)
+		totalTFS, totalTFSOk := cs.(chunks.TableFileStore)
+		if !totalTFSOk {
+			return StoreSizes{}, fmt.Errorf("unexpected chunk store type for non-*nbs.GenerationalNBS ddb.db instance; cannot take store sizes: cs: %T", cs)
+		}
+		totalSz, err := totalTFS.Size(ctx)
 		if err != nil {
 			return StoreSizes{}, err
 		}

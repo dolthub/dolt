@@ -288,6 +288,10 @@ func (h *autoGCCommitHook) ExecuteForWorkingSets() bool {
 	return true
 }
 
+const checkInterval = 1 * time.Second
+const size_128mb = (1 << 27)
+const defaultCheckSizeThreshold = size_128mb
+
 func (h *autoGCCommitHook) checkForGC(ctx context.Context) error {
 	select {
 	case <-h.done:
@@ -299,12 +303,10 @@ func (h *autoGCCommitHook) checkForGC(ctx context.Context) error {
 		if h.lastSz == nil {
 			h.lastSz = &sz
 		}
-		const size_128mb = (1 << 27)
-		const size_256mb = (1 << 28)
-		if sz.JournalBytes > size_128mb {
+		if sz.JournalBytes > defaultCheckSizeThreshold {
 			// Our first heuristic is simply if journal is greater than a fixed size...
 			return h.requestGC(ctx)
-		} else if sz.TotalBytes > h.lastSz.TotalBytes && sz.TotalBytes-h.lastSz.TotalBytes > size_256mb {
+		} else if sz.TotalBytes > h.lastSz.TotalBytes && sz.TotalBytes-h.lastSz.TotalBytes > defaultCheckSizeThreshold {
 			// Or if the store has grown by a fixed size since our last GC / we started watching it...
 			return h.requestGC(ctx)
 		}
@@ -313,8 +315,6 @@ func (h *autoGCCommitHook) checkForGC(ctx context.Context) error {
 	}
 	return nil
 }
-
-const checkInterval = 100 * time.Millisecond
 
 func (h *autoGCCommitHook) thread(ctx context.Context) {
 	defer h.wg.Done()
