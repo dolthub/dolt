@@ -671,6 +671,9 @@ func (td TupleDesc) Equals(other TupleDesc) bool {
 	return true
 }
 
+// AddressTypeHandler is an implementation of TupleTypeHandler for columns that contain a content-address to some value
+// stored in a ValueStore. This TypeHandler converts between the address and the underlying value as needed, allowing
+// these columns to be used in contexts that need access to the underlying value, such as in primary indexes.
 type AddressTypeHandler struct {
 	vs           ValueStore
 	childHandler TupleTypeHandler
@@ -684,6 +687,7 @@ func NewExtendedAddressTypeHandler(vs ValueStore, childHandler TupleTypeHandler)
 }
 
 func (handler AddressTypeHandler) SerializedCompare(ctx context.Context, v1 []byte, v2 []byte) (int, error) {
+	// TODO: If the child handler allows, compare the values one chunk at a time instead of always fully deserializing them.
 	v1Bytes, err := handler.vs.ReadBytes(ctx, hash.New(v1))
 	if err != nil {
 		return 0, err

@@ -19,6 +19,9 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
+// ValueStore is an interface for a key-value store that can store byte sequences, keyed by a content hash.
+// The only implementation is tree.NodeStore, but ValueStore can be used without depending on the tree package.
+// This is useful for type handlers.
 type ValueStore interface {
 	ReadBytes(ctx context.Context, h hash.Hash) ([]byte, error)
 	WriteBytes(ctx context.Context, val []byte) (hash.Hash, error)

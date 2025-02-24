@@ -1633,7 +1633,7 @@ func testSchemaMergeHelper(t *testing.T, tests []schemaMergeTest, flipSides bool
 			runTest := func(t *testing.T, test schemaMergeTest, expectDataConflict bool, expConstraintViolations []constraintViolation) {
 				ctx := context.Background()
 				a, l, r, m := setupSchemaMergeTest(ctx, t, test)
-				ns := m.NodeStore()
+				ns := a.NodeStore()
 
 				var mo merge.MergeOpts
 				var eo editor.Options
