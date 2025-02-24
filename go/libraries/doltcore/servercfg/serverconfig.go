@@ -48,6 +48,7 @@ const (
 	DefaultReadOnly                = false
 	DefaultLogLevel                = LogLevel_Info
 	DefaultAutoCommit              = true
+	DefaultAutoGCBehaviorEnable    = false
 	DefaultDoltTransactionCommit   = false
 	DefaultMaxConnections          = 100
 	DefaultDataDir                 = "."
@@ -198,6 +199,8 @@ type ServerConfig interface {
 	EventSchedulerStatus() string
 	// ValueSet returns whether the value string provided was explicitly set in the config
 	ValueSet(value string) bool
+	// AutoGCBehavior defines parameters around how auto-GC works for the running server.
+	AutoGCBehavior() AutoGCBehavior
 }
 
 // DefaultServerConfig creates a `*ServerConfig` that has all of the options set to their default values.
@@ -214,6 +217,9 @@ func defaultServerConfigYAML() *YAMLConfig {
 			ReadOnly:              ptr(DefaultReadOnly),
 			AutoCommit:            ptr(DefaultAutoCommit),
 			DoltTransactionCommit: ptr(DefaultDoltTransactionCommit),
+			AutoGCBehavior: &AutoGCBehaviorYAMLConfig{
+				Enable_: ptr(DefaultAutoGCBehaviorEnable),
+			},
 		},
 		UserConfig: UserYAMLConfig{
 			Name:     ptr(""),
@@ -444,4 +450,8 @@ func CheckForUnixSocket(config ServerConfig) (string, bool, error) {
 	}
 
 	return "", false, nil
+}
+
+type AutoGCBehavior interface {
+	Enable() bool
 }

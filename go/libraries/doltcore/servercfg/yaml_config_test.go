@@ -34,6 +34,8 @@ behavior:
     dolt_transaction_commit: true
     disable_client_multi_statements: false
     event_scheduler: ON
+    auto_gc_behavior:
+        enable: false
 
 listener:
     host: localhost

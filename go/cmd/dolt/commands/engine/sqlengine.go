@@ -41,6 +41,7 @@ import (
 	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	dblr "github.com/dolthub/dolt/go/libraries/doltcore/sqle/binlogreplication"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/cluster"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dprocedures"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/kvexec"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/mysql_file_handler"
@@ -81,6 +82,7 @@ type SqlEngineConfig struct {
 	JwksConfig                 []servercfg.JwksConfig
 	SystemVariables            SystemVariables
 	ClusterController          *cluster.Controller
+	AutoGCController           *dsqle.AutoGCController
 	BinlogReplicaController    binlogreplication.BinlogReplicaController
 	EventSchedulerStatus       eventscheduler.SchedulerStatus
 }
@@ -115,7 +117,15 @@ func NewSqlEngine(
 		return nil, err
 	}
 
-	all := dbs[:]
+	// Make a copy of the databases. |all| is going to be provided
+	// as the set of all initial databases to dsqle
+	// DatabaseProvider. |dbs| is only the databases that came
+	// from MultiRepoEnv, and they are all real databases based on
+	// DoltDB instances. |all| is going to include some extension,
+	// informational databases like |dolt_cluster| sometimes,
+	// depending on config.
+	all := make([]dsess.SqlDatabase, len(dbs))
+	copy(all, dbs)
 
 	// this is overwritten only for server sessions
 	for _, db := range dbs {
@@ -193,6 +203,18 @@ func NewSqlEngine(
 
 	statsPro := statspro.NewProvider(pro, statsnoms.NewNomsStatsFactory(mrEnv.RemoteDialProvider()))
 	engine.Analyzer.Catalog.StatsProvider = statsPro
+
+	if config.AutoGCController != nil {
+		err = config.AutoGCController.RunBackgroundThread(bThreads, sqlEngine.NewDefaultContext)
+		if err != nil {
+			return nil, err
+		}
+		config.AutoGCController.ApplyCommitHooks(ctx, mrEnv, dbs...)
+		pro.InitDatabaseHooks = append(pro.InitDatabaseHooks, config.AutoGCController.InitDatabaseHook())
+		pro.DropDatabaseHooks = append(pro.DropDatabaseHooks, config.AutoGCController.DropDatabaseHook())
+		// XXX: We force session aware safepoint controller if auto_gc is on.
+		dprocedures.UseSessionAwareSafepointController = true
+	}
 
 	engine.Analyzer.ExecBuilder = rowexec.NewOverrideBuilder(kvexec.Builder{})
 	sessFactory := doltSessionFactory(pro, statsPro, mrEnv.Config(), bcController, gcSafepointController, config.Autocommit)

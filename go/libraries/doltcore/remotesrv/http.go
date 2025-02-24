@@ -66,7 +66,7 @@ func newFileHandler(lgr *logrus.Entry, dbCache DBCache, fs filesys.Filesys, read
 
 func (fh filehandler) ServeHTTP(respWr http.ResponseWriter, req *http.Request) {
 	logger := getReqLogger(fh.lgr, req.Method+"_"+req.RequestURI)
-	defer func() { logger.Info("finished") }()
+	defer func() { logger.Trace("finished") }()
 
 	var err error
 	req.URL, err = fh.sealer.Unseal(req.URL)
