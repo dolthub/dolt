@@ -206,6 +206,8 @@ var getWriteableSystemTables = func() []string {
 	}
 }
 
+// getGeneratedSystemTables is a function which returns the names of all generated system tables. This is not
+// simply a list of constants because doltgres swaps out the functions used to generate different names.
 var getGeneratedSystemTables = func() []string {
 	return []string{
 		GetBranchesTableName(),
@@ -218,6 +220,7 @@ var getGeneratedSystemTables = func() []string {
 		GetStatusTableName(),
 		GetRemotesTableName(),
 		GetHelpTableName(),
+		GetBackupsTableName(),
 	}
 }
 
@@ -384,6 +387,10 @@ var GetTagsTableName = func() string {
 // GetHelpTableName returns the help table name
 var GetHelpTableName = func() string {
 	return HelpTableName
+}
+
+var GetBackupsTableName = func() string {
+	return BackupsTableName
 }
 
 const (
@@ -593,5 +600,6 @@ const (
 )
 
 const (
-	HelpTableName = "dolt_help"
+	HelpTableName    = "dolt_help"
+	BackupsTableName = "dolt_backups"
 )

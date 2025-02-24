@@ -38,11 +38,14 @@ platform_as["darwin-arm64"]="clang-15 --target=aarch64-darwin --sysroot=/opt/cro
 platform_as["darwin-amd64"]="clang-15 --target=x86_64-darwin --sysroot=/opt/cross/darwin-sysroot -mmacosx-version-min=12.0"
 platform_as["windows-amd64"]="x86_64-w64-mingw32-as"
 
+# Note: the extldflags below for the MacOS builds specify an SDK version of 14.4
+# This corresponds to our currently installed toolchain, but should change if the
+# toolchain changes.
 declare -A platform_go_ldflags
 platform_go_ldflags["linux-arm64"]="-s -w"
 platform_go_ldflags["linux-amd64"]="-s -w"
-platform_go_ldflags["darwin-arm64"]="-s -w -compressdwarf=false"
-platform_go_ldflags["darwin-amd64"]="-s -w -compressdwarf=false"
+platform_go_ldflags["darwin-arm64"]="-s -w -compressdwarf=false -extldflags -Wl,-platform_version,macos,12.0,14.4"
+platform_go_ldflags["darwin-amd64"]="-s -w -compressdwarf=false -extldflags -Wl,-platform_version,macos,12.0,14.4"
 platform_go_ldflags["windows-amd64"]="-s -w"
 
 declare -A platform_cgo_ldflags
