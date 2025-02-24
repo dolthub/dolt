@@ -28,6 +28,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/dolthub/dolt/go/store/hash"
@@ -55,10 +56,19 @@ func tableFileExists(ctx context.Context, dir string, h hash.Hash) (bool, error)
 	return err == nil, err
 }
 
-func archiveFileExists(ctx context.Context, dir string, h hash.Hash) (bool, error) {
-	darc := fmt.Sprintf("%s%s", h.String(), ArchiveFileSuffix)
+func archiveFileExists(ctx context.Context, dir string, name string) (bool, error) {
+	// NM4 - is name short or long??
+	if !strings.HasSuffix(name, ArchiveFileSuffix) {
+		// It should be a hash, right?
+		_, ok := hash.MaybeParse(name)
+		if !ok {
+			panic("Not sure if this will ever happen")
+		}
 
-	path := filepath.Join(dir, darc)
+		name = fmt.Sprintf("%s%s", name, ArchiveFileSuffix)
+	}
+
+	path := filepath.Join(dir, name)
 	_, err := os.Stat(path)
 
 	if os.IsNotExist(err) {
@@ -77,7 +87,7 @@ func newFileTableReader(ctx context.Context, dir string, h hash.Hash, chunkCount
 		return nomsFileTableReader(ctx, filepath.Join(dir, h.String()), h, chunkCount, q)
 	}
 
-	afExists, err := archiveFileExists(ctx, dir, h)
+	afExists, err := archiveFileExists(ctx, dir, h.String())
 	if err != nil {
 		return nil, err
 	} else if afExists {

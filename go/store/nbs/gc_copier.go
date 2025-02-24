@@ -86,7 +86,7 @@ func (gcc *gcCopier) copyTablesToDir(ctx context.Context) (ts []tableSpec, err e
 		return nil, fmt.Errorf("invalid filename: %s", filename)
 	}
 
-	exists, err := gcc.tfp.Exists(ctx, addr, uint32(gcc.writer.ChunkCount()), nil)
+	exists, err := gcc.tfp.Exists(ctx, filename, uint32(gcc.writer.ChunkCount()), nil)
 	if err != nil {
 		return nil, err
 	}

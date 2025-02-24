@@ -29,7 +29,7 @@ import (
 )
 
 type archiveChunkSource struct {
-	file string
+	file string // Only meaningful for local files.
 	aRdr archiveReader
 }
 
@@ -168,12 +168,18 @@ func (acs archiveChunkSource) index() (tableIndex, error) {
 }
 
 func (acs archiveChunkSource) clone() (chunkSource, error) {
-	newReader, _, err := openReader(acs.file)
-	if err != nil {
-		return nil, err
-	}
+	var rdr archiveReader
+	if _, ok := acs.aRdr.reader.(s3ReaderAt); !ok {
+		newReader, _, err := openReader(acs.file)
+		if err != nil {
+			return nil, err
+		}
 
-	rdr := acs.aRdr.clone(newReader)
+		rdr = acs.aRdr.clone(newReader)
+	} else {
+		// NM4 - S3 reader is stateless, so we can just use the same one.
+		rdr = acs.aRdr.clone(acs.aRdr.reader)
+	}
 
 	return archiveChunkSource{acs.file, rdr}, nil
 }

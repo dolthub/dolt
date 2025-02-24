@@ -72,17 +72,21 @@ func (ftp *fsTablePersister) Open(ctx context.Context, name hash.Hash, chunkCoun
 	return newFileTableReader(ctx, ftp.dir, name, chunkCount, ftp.q)
 }
 
-func (ftp *fsTablePersister) Exists(ctx context.Context, name hash.Hash, chunkCount uint32, stats *Stats) (bool, error) {
+func (ftp *fsTablePersister) Exists(ctx context.Context, name string, chunkCount uint32, stats *Stats) (bool, error) {
 	ftp.removeMu.Lock()
 	defer ftp.removeMu.Unlock()
 	if ftp.toKeep != nil {
-		ftp.toKeep[filepath.Join(ftp.dir, name.String())] = struct{}{}
+		ftp.toKeep[filepath.Join(ftp.dir, name)] = struct{}{}
 	}
 
-	exists, err := tableFileExists(ctx, ftp.dir, name)
-	if exists || err != nil {
-		return exists, err
+	if h, ok := hash.MaybeParse(name); ok {
+		exists, err := tableFileExists(ctx, ftp.dir, h)
+		if exists || err != nil {
+			return exists, err
+		}
+
 	}
+
 	return archiveFileExists(ctx, ftp.dir, name)
 }
 

@@ -68,7 +68,7 @@ type awsLimits struct {
 }
 
 func (s3p awsTablePersister) Open(ctx context.Context, name hash.Hash, chunkCount uint32, stats *Stats) (chunkSource, error) {
-	return newAWSTableFileChunkSource(
+	cs, err := newAWSTableFileChunkSource(
 		ctx,
 		&s3ObjectReader{s3: s3p.s3, bucket: s3p.bucket, readRl: s3p.rl, ns: s3p.ns},
 		s3p.limits,
@@ -77,9 +77,29 @@ func (s3p awsTablePersister) Open(ctx context.Context, name hash.Hash, chunkCoun
 		s3p.q,
 		stats,
 	)
+	if err == nil {
+		return cs, nil
+	}
+
+	// if the error is for an object not found, we may be looking for an archive. We could check the error
+	// before trying to see if there is an archive.... NM4.
+
+	e, err2 := s3p.Exists(ctx, name.String()+ArchiveFileSuffix, chunkCount, stats)
+	if e && err2 == nil {
+		return newAWSArchiveChunkSource(
+			ctx,
+			&s3ObjectReader{s3: s3p.s3, bucket: s3p.bucket, readRl: s3p.rl, ns: s3p.ns},
+			s3p.limits,
+			name.String()+ArchiveFileSuffix,
+			chunkCount,
+			s3p.q,
+			stats)
+	}
+
+	return emptyChunkSource{}, err
 }
 
-func (s3p awsTablePersister) Exists(ctx context.Context, name hash.Hash, _ uint32, stats *Stats) (bool, error) {
+func (s3p awsTablePersister) Exists(ctx context.Context, name string, _ uint32, stats *Stats) (bool, error) {
 	return tableExistsInChunkSource(
 		ctx,
 		&s3ObjectReader{s3: s3p.s3, bucket: s3p.bucket, readRl: s3p.rl, ns: s3p.ns},

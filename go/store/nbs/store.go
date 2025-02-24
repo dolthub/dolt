@@ -421,10 +421,10 @@ func (nbs *NomsBlockStore) checkAllManifestUpdatesExist(ctx context.Context, upd
 	eg, ctx := errgroup.WithContext(ctx)
 	eg.SetLimit(128)
 	for h, c := range updates {
-		h := h
+		name := h
 		c := c
 		eg.Go(func() error {
-			ok, err := nbs.p.Exists(ctx, h, c, nbs.stats)
+			ok, err := nbs.p.Exists(ctx, name.String(), c, nbs.stats)
 			if err != nil {
 				return err
 			}
