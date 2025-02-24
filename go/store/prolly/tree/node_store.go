@@ -17,15 +17,14 @@ package tree
 import (
 	"bytes"
 	"context"
-	"github.com/dolthub/dolt/go/store/val"
 	"sync"
-
-	"github.com/dolthub/dolt/go/store/prolly/message"
 
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/pool"
+	"github.com/dolthub/dolt/go/store/prolly/message"
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 const (

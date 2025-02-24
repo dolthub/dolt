@@ -16,6 +16,7 @@ package val
 
 import (
 	"context"
+
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
