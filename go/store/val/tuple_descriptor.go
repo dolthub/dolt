@@ -15,6 +15,7 @@
 package val
 
 import (
+	"context"
 	"encoding/hex"
 	"fmt"
 	"os"
@@ -53,11 +54,11 @@ type TupleDesc struct {
 type TupleTypeHandler interface {
 	// SerializedCompare compares two byte slices that each represent a serialized value, without first deserializing
 	// the value.
-	SerializedCompare(v1 []byte, v2 []byte) (int, error)
+	SerializedCompare(ctx context.Context, v1 []byte, v2 []byte) (int, error)
 	// SerializeValue converts the given value into a binary representation.
-	SerializeValue(val any) ([]byte, error)
+	SerializeValue(ctx context.Context, val any) ([]byte, error)
 	// DeserializeValue converts a binary representation of a value into its canonical type.
-	DeserializeValue(val []byte) (any, error)
+	DeserializeValue(ctx context.Context, val []byte) (any, error)
 	// FormatValue returns a string version of the value. Primarily intended for display.
 	FormatValue(val any) (string, error)
 }
@@ -156,12 +157,12 @@ func (td TupleDesc) GetField(i int, tup Tuple) []byte {
 }
 
 // Compare compares |left| and |right|.
-func (td TupleDesc) Compare(left, right Tuple) (cmp int) {
-	return td.cmp.Compare(left, right, td)
+func (td TupleDesc) Compare(ctx context.Context, left, right Tuple) (cmp int) {
+	return td.cmp.Compare(ctx, left, right, td)
 }
 
 // CompareField compares |value| with the ith field of |tup|.
-func (td TupleDesc) CompareField(value []byte, i int, tup Tuple) (cmp int) {
+func (td TupleDesc) CompareField(ctx context.Context, value []byte, i int, tup Tuple) (cmp int) {
 	var v []byte
 	if i < len(td.fast) {
 		start, stop := td.fast[i][0], td.fast[i][1]
@@ -169,7 +170,7 @@ func (td TupleDesc) CompareField(value []byte, i int, tup Tuple) (cmp int) {
 	} else {
 		v = tup.GetField(i)
 	}
-	return td.cmp.CompareValues(i, value, v, td.Types[i])
+	return td.cmp.CompareValues(ctx, i, value, v, td.Types[i])
 }
 
 // Comparator returns the TupleDescriptor's TupleComparator.
@@ -545,7 +546,7 @@ func (td TupleDesc) GetCell(i int, tup Tuple) (v Cell, ok bool) {
 }
 
 // Format prints a Tuple as a string.
-func (td TupleDesc) Format(tup Tuple) string {
+func (td TupleDesc) Format(ctx context.Context, tup Tuple) string {
 	if tup == nil || tup.Count() == 0 {
 		return "( )"
 	}
@@ -559,20 +560,20 @@ func (td TupleDesc) Format(tup Tuple) string {
 			sb.WriteString(", ")
 		}
 		seenOne = true
-		sb.WriteString(td.FormatValue(i, tup.GetField(i)))
+		sb.WriteString(td.FormatValue(ctx, i, tup.GetField(i)))
 	}
 	sb.WriteString(" )")
 	return sb.String()
 }
 
-func (td TupleDesc) FormatValue(i int, value []byte) string {
+func (td TupleDesc) FormatValue(ctx context.Context, i int, value []byte) string {
 	if value == nil {
 		return "NULL"
 	}
-	return td.formatValue(td.Types[i].Enc, i, value)
+	return td.formatValue(ctx, td.Types[i].Enc, i, value)
 }
 
-func (td TupleDesc) formatValue(enc Encoding, i int, value []byte) string {
+func (td TupleDesc) formatValue(ctx context.Context, enc Encoding, i int, value []byte) string {
 	switch enc {
 	case Int8Enc:
 		v := readInt8(value)
@@ -644,7 +645,7 @@ func (td TupleDesc) formatValue(enc Encoding, i int, value []byte) string {
 		return hex.EncodeToString(value)
 	case ExtendedEnc:
 		handler := td.Handlers[i]
-		v := readExtended(handler, value)
+		v := readExtended(ctx, handler, value)
 		str, err := handler.FormatValue(v)
 		if err != nil {
 			panic(err)
@@ -669,3 +670,57 @@ func (td TupleDesc) Equals(other TupleDesc) bool {
 	}
 	return true
 }
+
+// AddressTypeHandler is an implementation of TupleTypeHandler for columns that contain a content-address to some value
+// stored in a ValueStore. This TypeHandler converts between the address and the underlying value as needed, allowing
+// these columns to be used in contexts that need access to the underlying value, such as in primary indexes.
+type AddressTypeHandler struct {
+	vs           ValueStore
+	childHandler TupleTypeHandler
+}
+
+func NewExtendedAddressTypeHandler(vs ValueStore, childHandler TupleTypeHandler) AddressTypeHandler {
+	return AddressTypeHandler{
+		vs:           vs,
+		childHandler: childHandler,
+	}
+}
+
+func (handler AddressTypeHandler) SerializedCompare(ctx context.Context, v1 []byte, v2 []byte) (int, error) {
+	// TODO: If the child handler allows, compare the values one chunk at a time instead of always fully deserializing them.
+	v1Bytes, err := handler.vs.ReadBytes(ctx, hash.New(v1))
+	if err != nil {
+		return 0, err
+	}
+	v2Bytes, err := handler.vs.ReadBytes(ctx, hash.New(v2))
+	if err != nil {
+		return 0, err
+	}
+	return handler.childHandler.SerializedCompare(ctx, v1Bytes, v2Bytes)
+}
+
+func (handler AddressTypeHandler) SerializeValue(ctx context.Context, val any) ([]byte, error) {
+	b, err := handler.childHandler.SerializeValue(ctx, val)
+	if err != nil {
+		return nil, err
+	}
+	h, err := handler.vs.WriteBytes(context.Background(), b)
+	if err != nil {
+		return nil, err
+	}
+	return h[:], err
+}
+
+func (handler AddressTypeHandler) DeserializeValue(ctx context.Context, val []byte) (any, error) {
+	b, err := handler.vs.ReadBytes(ctx, hash.New(val))
+	if err != nil {
+		return nil, err
+	}
+	return handler.childHandler.DeserializeValue(ctx, b)
+}
+
+func (handler AddressTypeHandler) FormatValue(val any) (string, error) {
+	return handler.childHandler.FormatValue(val)
+}
+
+var _ TupleTypeHandler = AddressTypeHandler{}

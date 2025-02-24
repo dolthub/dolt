@@ -251,7 +251,7 @@ func (i *fbParentsClosureIterator) Next(ctx context.Context) bool {
 
 func (i *fbParentsClosureIterator) Less(ctx context.Context, nbf *types.NomsBinFormat, otherI parentsClosureIter) bool {
 	other := otherI.(*fbParentsClosureIterator)
-	return i.curr.Less(other.curr)
+	return i.curr.Less(ctx, other.curr)
 }
 
 func writeTypesCommitParentClosure(ctx context.Context, vrw types.ValueReadWriter, parentRefsL types.List) (types.Ref, bool, error) {

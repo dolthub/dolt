@@ -184,12 +184,12 @@ func (c *covLaxSecondaryLookupGen) New(ctx context.Context, k val.Tuple) (prolly
 	if c.prefixDesc.Count() >= c.m.KeyDesc().Count()-1 {
 		// key range optimization only works for full length key
 		start := k
-		stop, ok := prolly.IncrementTuple(start, c.prefixDesc.Count()-1, c.prefixDesc, c.m.Pool())
+		stop, ok := prolly.IncrementTuple(ctx, start, c.prefixDesc.Count()-1, c.prefixDesc, c.m.Pool())
 		if ok {
 			return c.m.IterKeyRange(ctx, start, stop)
 		}
 	}
-	rng := prolly.PrefixRange(k, c.prefixDesc)
+	rng := prolly.PrefixRange(ctx, k, c.prefixDesc)
 
 	iter, err := c.m.IterRange(ctx, rng)
 	if err != nil {
@@ -244,7 +244,7 @@ func (c *nonCovLaxSecondaryLookupGen) New(ctx context.Context, k val.Tuple) (pro
 		// TODO: widen this restriction for multiple PKs. need to count the number
 		// of PK cols in the index colset vs outside
 		start := k
-		stop, ok := prolly.IncrementTuple(start, c.prefixDesc.Count()-1, c.prefixDesc, c.sec.Pool())
+		stop, ok := prolly.IncrementTuple(ctx, start, c.prefixDesc.Count()-1, c.prefixDesc, c.sec.Pool())
 		if ok {
 			secIter, err := c.sec.IterKeyRange(ctx, start, stop)
 			if err != nil {
@@ -253,7 +253,7 @@ func (c *nonCovLaxSecondaryLookupGen) New(ctx context.Context, k val.Tuple) (pro
 			return &nonCoveringMapIter{indexIter: secIter, primary: c.pri, pkMap: c.pkMap, pkBld: c.pkBld}, nil
 		}
 	}
-	rng := prolly.PrefixRange(k, c.prefixDesc)
+	rng := prolly.PrefixRange(ctx, k, c.prefixDesc)
 	secIter, err := c.sec.IterRange(ctx, rng)
 	if err != nil {
 		return nil, err
@@ -297,7 +297,7 @@ func (c *keylessSecondaryLookupGen) New(ctx context.Context, k val.Tuple) (proll
 		// key range optimization only works if full key
 		// keyless indexes should include all rows
 		start := k
-		stop, ok := prolly.IncrementTuple(start, c.prefixDesc.Count()-1, c.prefixDesc, c.sec.Pool())
+		stop, ok := prolly.IncrementTuple(ctx, start, c.prefixDesc.Count()-1, c.prefixDesc, c.sec.Pool())
 		if ok {
 			secIter, err := c.sec.IterKeyRange(ctx, start, stop)
 			if err != nil {
@@ -306,7 +306,7 @@ func (c *keylessSecondaryLookupGen) New(ctx context.Context, k val.Tuple) (proll
 			return &keylessLookupIter{pri: c.pri, secIter: secIter, pkMap: c.pkMap, pkBld: c.pkBld, prefixDesc: c.prefixDesc}, nil
 		}
 	}
-	rng := prolly.PrefixRange(k, c.prefixDesc)
+	rng := prolly.PrefixRange(ctx, k, c.prefixDesc)
 	secIter, err := c.sec.IterRange(ctx, rng)
 	if err != nil {
 		return nil, err

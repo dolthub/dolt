@@ -172,11 +172,11 @@ func TestRangeSearch(t *testing.T) {
 			lo, hi := test.physical[0], test.physical[1]
 
 			startSearch := rangeStartSearchFn(rng)
-			idx := startSearch(testNode)
+			idx := startSearch(ctx, testNode)
 			assert.Equal(t, lo, idx, "range should start at index %d", lo)
 
 			stopSearch := rangeStopSearchFn(rng)
-			idx = stopSearch(testNode)
+			idx = stopSearch(ctx, testNode)
 			assert.Equal(t, hi, idx, "range should stop before index %d", hi)
 
 			// validate physical range (unfiltered iter)

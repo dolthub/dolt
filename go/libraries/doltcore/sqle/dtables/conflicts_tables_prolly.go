@@ -163,10 +163,10 @@ func newProllyConflictRowIter(ctx *sql.Context, ct ProllyConflictsTable) (*proll
 
 	keyless := schema.IsKeyless(ct.ourSch)
 
-	kd := ct.baseSch.GetKeyDescriptor()
-	baseVD := ct.baseSch.GetValueDescriptor()
-	oursVD := ct.ourSch.GetValueDescriptor()
-	theirsVD := ct.theirSch.GetValueDescriptor()
+	kd := ct.baseSch.GetKeyDescriptor(ct.root.NodeStore())
+	baseVD := ct.baseSch.GetValueDescriptor(ct.root.NodeStore())
+	oursVD := ct.ourSch.GetValueDescriptor(ct.root.NodeStore())
+	theirsVD := ct.theirSch.GetValueDescriptor(ct.root.NodeStore())
 
 	b := 1
 	var o, t, n int
@@ -531,7 +531,7 @@ func newProllyConflictDeleter(ct ProllyConflictsTable) *prollyConflictDeleter {
 	ed := ct.artM.Editor()
 	kB := val.NewTupleBuilder(kd)
 
-	vd := ct.ourSch.GetValueDescriptor()
+	vd := ct.ourSch.GetValueDescriptor(ct.root.NodeStore())
 	vB := val.NewTupleBuilder(vd)
 	p := ct.artM.Pool()
 

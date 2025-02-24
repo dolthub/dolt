@@ -171,7 +171,7 @@ func (f ProximityFlusher) visitNode(
 	var nodeSubtrees []uint64
 
 	if node.IsLeaf() {
-		keys, values, nodeSubtrees = f.rebuildLeafNodeWithEdits(node, edits, keyDesc)
+		keys, values, nodeSubtrees = f.rebuildLeafNodeWithEdits(ctx, node, edits, keyDesc)
 	} else {
 		// sort the list of edits based on which child node contains them.
 		childEdits := make(map[int]childEditList)
@@ -274,6 +274,7 @@ func serializeVectorIndexNode(
 
 // rebuildLeafNodeWithEdits creates a new leaf node by applying a list of edits to an existing node.
 func (f ProximityFlusher) rebuildLeafNodeWithEdits(
+	ctx context.Context,
 	originalNode tree.Node,
 	edits []VectorIndexKV,
 	keyDesc val.TupleDesc,
@@ -300,7 +301,7 @@ func (f ProximityFlusher) rebuildLeafNodeWithEdits(
 		}
 		editKey := val.Tuple(edits[editIdx].key)
 		nodeKey := val.Tuple(originalNode.GetKey(nodeIdx))
-		cmp := keyDesc.Compare(editKey, nodeKey)
+		cmp := keyDesc.Compare(ctx, editKey, nodeKey)
 		if cmp < 0 {
 			//edit comes first
 			// Edit doesn't match an existing key: it must be an insert.
@@ -341,17 +342,17 @@ func (f ProximityFlusher) rebuildNode(ctx context.Context, ns tree.NodeStore, no
 	if err != nil {
 		return tree.Node{}, 0, err
 	}
-	editSkipList := skip.NewSkipList(func(left, right []byte) int {
-		return keyDesc.Compare(left, right)
+	editSkipList := skip.NewSkipList(func(ctx context.Context, left, right []byte) int {
+		return keyDesc.Compare(ctx, left, right)
 	})
 	for _, edit := range edits {
-		editSkipList.Put(edit.key, edit.value)
+		editSkipList.Put(ctx, edit.key, edit.value)
 	}
 
 	insertFromNode := func(nd tree.Node, i int) error {
 		key := nd.GetKey(i)
 		value := nd.GetValue(i)
-		_, hasNewVal := editSkipList.Get(key)
+		_, hasNewVal := editSkipList.Get(ctx, key)
 		if !hasNewVal {
 			// TODO: Is it faster if we fetch the level from the current tree?
 			keyLevel := tree.DeterministicHashLevel(f.logChunkSize, key)

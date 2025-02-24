@@ -358,15 +358,15 @@ func assertProllyConflicts(t *testing.T, ctx context.Context, tbl *doltdb.Table,
 
 		if expectedConf.base != nil {
 			_, value := expectedConf.base.HashAndValue()
-			require.Equal(t, valDesc.Format(value), valDesc.Format(base))
+			require.Equal(t, valDesc.Format(ctx, value), valDesc.Format(ctx, base))
 		}
 		if expectedConf.ours != nil {
 			_, value := expectedConf.ours.HashAndValue()
-			require.Equal(t, valDesc.Format(value), valDesc.Format(ours))
+			require.Equal(t, valDesc.Format(ctx, value), valDesc.Format(ctx, ours))
 		}
 		if expectedConf.theirs != nil {
 			_, value := expectedConf.theirs.HashAndValue()
-			require.Equal(t, valDesc.Format(value), valDesc.Format(theirs))
+			require.Equal(t, valDesc.Format(ctx, value), valDesc.Format(ctx, theirs))
 		}
 	}
 
@@ -457,7 +457,7 @@ func assertKeylessProllyRows(t *testing.T, ctx context.Context, tbl *doltdb.Tabl
 		copy(h[:], hashId.GetField(0))
 		expectedVal, ok := expectedSet[h]
 		assert.True(t, ok)
-		assert.Equal(t, valDesc.Format(expectedVal), valDesc.Format(value))
+		assert.Equal(t, valDesc.Format(ctx, expectedVal), valDesc.Format(ctx, value))
 	}
 
 	require.Equal(t, len(expected), c)

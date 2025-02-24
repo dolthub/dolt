@@ -15,6 +15,7 @@
 package val
 
 import (
+	"context"
 	"math"
 	"testing"
 	"time"
@@ -250,11 +251,12 @@ func TestCompare(t *testing.T) {
 	}
 
 	for _, test := range tests {
+		ctx := context.Background()
 		act := compare(test.typ, test.l, test.r)
 		assert.Equal(t, test.cmp, act, "expected %s %s %s ",
-			TupleDesc{}.formatValue(test.typ.Enc, 0, test.l),
+			TupleDesc{}.formatValue(ctx, test.typ.Enc, 0, test.l),
 			fmtComparator(test.cmp),
-			TupleDesc{}.formatValue(test.typ.Enc, 0, test.r))
+			TupleDesc{}.formatValue(ctx, test.typ.Enc, 0, test.r))
 	}
 }
 

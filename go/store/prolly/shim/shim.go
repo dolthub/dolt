@@ -44,11 +44,11 @@ func MapFromValue(v types.Value, sch schema.Schema, ns tree.NodeStore, isKeyless
 	if err != nil {
 		return prolly.Map{}, err
 	}
-	kd := sch.GetKeyDescriptor()
+	kd := sch.GetKeyDescriptor(ns)
 	if isKeylessSecondary {
 		kd = prolly.AddHashToSchema(kd)
 	}
-	vd := sch.GetValueDescriptor()
+	vd := sch.GetValueDescriptor(ns)
 	return prolly.NewMap(root, ns, kd, vd), nil
 }
 
@@ -57,11 +57,11 @@ func MapInterfaceFromValue(ctx context.Context, v types.Value, sch schema.Schema
 	if err != nil {
 		return nil, err
 	}
-	kd := sch.GetKeyDescriptor()
+	kd := sch.GetKeyDescriptor(ns)
 	if isKeylessSecondary {
 		kd = prolly.AddHashToSchema(kd)
 	}
-	vd := sch.GetValueDescriptor()
+	vd := sch.GetValueDescriptor(ns)
 	switch fileId {
 	case serial.VectorIndexNodeFileID:
 		// TODO: We should read the distance function and chunk size from the message.

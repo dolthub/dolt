@@ -465,7 +465,7 @@ func (ib *baseIndexImplBuilder) newPointLookup(ctx *sql.Context, rang prolly.Ran
 		return nil, fmt.Errorf("can't perform point lookup with a proximity index")
 	}
 	err = ib.sec.GetPrefix(ctx, rang.Tup, ib.prefDesc, func(key val.Tuple, value val.Tuple) (err error) {
-		if key != nil && rang.Matches(key) {
+		if key != nil && rang.Matches(ctx, key) {
 			iter = prolly.NewPointLookup(key, value)
 		} else {
 			iter = prolly.EmptyPointLookup
