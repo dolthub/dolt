@@ -39,13 +39,13 @@ type archiveReader struct {
 	spanIndex []uint64
 	chunkRefs []uint32 // Pairs of uint32s. First is the dict id, second is the data id.
 	suffixes  []byte
-	footer    footer
+	footer    archiveFooter
 	dictCache *lru.TwoQueueCache[uint32, *gozstd.DDict]
 }
 
 type suffix [hash.SuffixLen]byte
 
-type footer struct {
+type archiveFooter struct {
 	indexSize     uint32
 	byteSpanCount uint32
 	chunkCount    uint32
@@ -61,31 +61,31 @@ type footer struct {
 
 // dataSpan returns the span of the data section of the archive. This is not generally used directly since we usually
 // read individual spans for each chunk.
-func (f footer) dataSpan() byteSpan {
+func (f archiveFooter) dataSpan() byteSpan {
 	return byteSpan{offset: 0, length: f.fileSize - archiveFooterSize - uint64(f.metadataSize) - uint64(f.indexSize)}
 }
 
 // totalIndexSpan returns the span of the entire index section of the archive. This span is not directly useful as
 // the index is broken into a compressed section and an uncompressed section. Use indexCompressedSpan and indexSuffixSpan
-func (f footer) totalIndexSpan() byteSpan {
+func (f archiveFooter) totalIndexSpan() byteSpan {
 	return byteSpan{offset: f.fileSize - archiveFooterSize - uint64(f.metadataSize) - uint64(f.indexSize), length: uint64(f.indexSize)}
 }
 
 // indexByteOffsetSpan returns the span of the byte offsets section of the index. This is the first part of the index
-func (f footer) indexByteOffsetSpan() byteSpan {
+func (f archiveFooter) indexByteOffsetSpan() byteSpan {
 	totalIdx := f.totalIndexSpan()
 	return byteSpan{offset: totalIdx.offset, length: uint64(f.byteSpanCount * uint64Size)}
 }
 
 // indexPrefixSpan returns the span of the prefix section of the index. This is the second part of the index.
-func (f footer) indexPrefixSpan() byteSpan {
+func (f archiveFooter) indexPrefixSpan() byteSpan {
 	// Prefix starts after the byte spans. Length is uint64 * chunk count.
 	offs := f.indexByteOffsetSpan()
 	return byteSpan{offs.offset + offs.length, uint64(f.chunkCount) * uint64Size}
 }
 
 // indexChunkRefSpan returns the span of the chunk reference section of the index. This is the third part of the index.
-func (f footer) indexChunkRefSpan() byteSpan {
+func (f archiveFooter) indexChunkRefSpan() byteSpan {
 	// chunk refs starts after the prefix. Length is (uint32 + uint32) * chunk count.
 	prefixes := f.indexPrefixSpan()
 	chLen := uint64(f.chunkCount) * (uint32Size + uint32Size)
@@ -93,14 +93,14 @@ func (f footer) indexChunkRefSpan() byteSpan {
 }
 
 // indexSuffixSpan returns the span of the suffix section of the index. This is the fourth part of the index.
-func (f footer) indexSuffixSpan() byteSpan {
+func (f archiveFooter) indexSuffixSpan() byteSpan {
 	suffixLen := uint64(f.chunkCount * hash.SuffixLen)
 	chunkRefs := f.indexChunkRefSpan()
 	return byteSpan{chunkRefs.offset + chunkRefs.length, suffixLen}
 }
 
 // metadataSpan returns the span of the metadata section of the archive.
-func (f footer) metadataSpan() byteSpan {
+func (f archiveFooter) metadataSpan() byteSpan {
 	return byteSpan{offset: f.fileSize - archiveFooterSize - uint64(f.metadataSize), length: uint64(f.metadataSize)}
 }
 
@@ -205,7 +205,7 @@ func (ar archiveReader) clone(newReader io.ReaderAt) archiveReader {
 	}
 }
 
-func loadFooter(reader io.ReaderAt, fileSize uint64) (f footer, err error) {
+func loadFooter(reader io.ReaderAt, fileSize uint64) (f archiveFooter, err error) {
 	section := io.NewSectionReader(reader, int64(fileSize-archiveFooterSize), int64(archiveFooterSize))
 
 	buf := make([]byte, archiveFooterSize)
