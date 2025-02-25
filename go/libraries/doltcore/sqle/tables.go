@@ -1686,13 +1686,11 @@ func (t *AlterableDoltTable) columnChangeRequiresRewrite(oldColumn *sql.Column, 
 			// TODO: we need to do this because some spatial type changes require a full table check, but not all.
 			//  We could narrow this check down.
 			return true
-		} else if types.IsFormat_DOLT(t.Format()) {
+		} else {
 			// This is overly broad, we could narrow this down a bit
 			compatibilityChecker := typecompatibility.NewTypeCompatabilityCheckerForStorageFormat(t.Format())
 			typeChangeInfo := compatibilityChecker.IsTypeChangeCompatible(existingCol.TypeInfo, newCol.TypeInfo)
 			return !typeChangeInfo.Compatible || typeChangeInfo.RewriteRows || typeChangeInfo.InvalidateSecondaryIndexes
-		} else if existingCol.Kind != newCol.Kind {
-			return true
 		}
 	}
 
