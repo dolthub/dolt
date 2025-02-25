@@ -27,19 +27,26 @@ var ErrStatsIssuerPaused = fmt.Errorf("stats issuer is paused")
 type listenerEvent uint16
 
 const (
-	unknownEvent               = listenerEvent(iota)
-	leSwap       listenerEvent = 1 << 0
-	leStop       listenerEvent = 1 << 1
-	leGc         listenerEvent = 1 << 2
-	leFlush      listenerEvent = 1 << 3
+	leUnknown               = listenerEvent(iota)
+	leSwap    listenerEvent = 1 << 0
+	leStop    listenerEvent = 1 << 1
+	leGc      listenerEvent = 1 << 2
+	leFlush   listenerEvent = 1 << 3
 )
 
 func (sc *StatsController) signalListener(s listenerEvent) {
-	for _, l := range sc.listeners {
-		l <- s
-		close(l)
+	j := 0
+	for i := 0; i < len(sc.listeners); i++ {
+		l := sc.listeners[i]
+		if (l.e|leStop)&s > 0 {
+			l.c <- s
+			close(l.c)
+		} else {
+			sc.listeners[j] = sc.listeners[i]
+			j++
+		}
 	}
-	sc.listeners = sc.listeners[:0]
+	sc.listeners = sc.listeners[:j]
 }
 
 func (sc *StatsController) newThreadCtx(ctx context.Context) context.Context {
@@ -54,15 +61,20 @@ func (sc *StatsController) newThreadCtx(ctx context.Context) context.Context {
 	return newCtx
 }
 
-func (sc *StatsController) addListener() (chan listenerEvent, error) {
+type listenMsg struct {
+	e listenerEvent
+	c chan listenerEvent
+}
+
+func (sc *StatsController) addListener(e listenerEvent) (chan listenerEvent, error) {
 	sc.statsMu.Lock()
 	defer sc.statsMu.Unlock()
 	if sc.activeCtxCancel == nil {
 		return nil, ErrStatsIssuerPaused
 	}
-	l := make(chan listenerEvent, 1)
+	l := listenMsg{e: e, c: make(chan listenerEvent, 1)}
 	sc.listeners = append(sc.listeners, l)
-	return l, nil
+	return l.c, nil
 }
 
 func (sc *StatsController) Stop() {
@@ -131,32 +143,19 @@ func (sc *StatsController) Init(ctx context.Context, dbs []sql.Database, keepSto
 	return nil
 }
 
-func (sc *StatsController) waitForCond(ctx context.Context, ok, stop listenerEvent, cnt int, before func(), retry func() bool) (err error) {
+func (sc *StatsController) waitForCond(ctx context.Context, ok listenerEvent, cnt int) (err error) {
 	for cnt > 0 {
 		var l chan listenerEvent
-		l, err = sc.addListener()
+		l, err = sc.addListener(ok)
 		if err != nil {
 			return err
-		}
-
-		if before != nil {
-			before()
 		}
 
 		select {
 		case <-ctx.Done():
 			return context.Cause(ctx)
-		case e := <-l:
-			if (ok & e) > 0 {
-				cnt--
-			} else if (stop & e) > 0 {
-				return ErrStatsIssuerPaused
-			}
-		}
-		if retry != nil {
-			if !retry() {
-				return nil
-			}
+		case <-l:
+			cnt--
 		}
 	}
 	return nil
@@ -164,42 +163,16 @@ func (sc *StatsController) waitForCond(ctx context.Context, ok, stop listenerEve
 
 func (sc *StatsController) WaitForSync(ctx context.Context) (err error) {
 	// wait for 2 cycles because first completion is usually a stale context
-	return sc.waitForCond(ctx, leSwap|leGc, leStop, 2, nil, nil)
+	return sc.waitForCond(ctx, leSwap, 2)
 }
 
 func (sc *StatsController) WaitForFlush(ctx *sql.Context) error {
-	return sc.waitForCond(ctx, leFlush, leStop, 1, nil, nil)
-}
-
-func (sc *StatsController) WaitForDbSync(ctx context.Context) (err error) {
-	// wait for 2 cycles because first completion is usually a stale context
-	return sc.waitForCond(ctx, leSwap|leGc, leStop, 2, nil, nil)
+	return sc.waitForCond(ctx, leFlush, 1)
 }
 
 func (sc *StatsController) Gc(ctx *sql.Context) error {
 	sc.doGc = true
-	var gcCnt int
-	// the combined effect of the before/retry check is that
-	// we'll retry until we see a GC event or notice the counter
-	// bump.
-	// todo: better understand why without the before check we do 1-2 GC's,
-	// or a more efficient concurrency pattern
-	return sc.waitForCond(ctx, leGc, leStop, 1, func() {
-		// acquire counter after we've sent listener to
-		// avoid waiting on multiple GC's
-		sc.statsMu.Lock()
-		defer sc.statsMu.Unlock()
-		gcCnt = sc.gcCnt
-	}, func() bool {
-		// when we finish a swap but miss a GC, make sure we do again
-		sc.statsMu.Lock()
-		defer sc.statsMu.Unlock()
-		if sc.gcCnt > gcCnt {
-			return false
-		}
-		sc.doGc = true
-		return true
-	})
+	return sc.waitForCond(ctx, leGc, 1)
 }
 
 func (sc *StatsController) Close() {

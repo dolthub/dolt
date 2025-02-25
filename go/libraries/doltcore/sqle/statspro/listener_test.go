@@ -43,7 +43,7 @@ func TestListening(t *testing.T) {
 
 		require.NotNil(t, sc.activeCtxCancel)
 
-		l, err := sc.addListener()
+		l, err := sc.addListener(leSwap)
 		require.NoError(t, err)
 		<-l
 		select {
@@ -102,7 +102,7 @@ func TestListening(t *testing.T) {
 			defer wg.Done()
 			for _ = range 20 {
 				require.NoError(t, sc.Restart())
-				l, err := sc.addListener()
+				l, err := sc.addListener(leSwap)
 				if err != nil {
 					require.ErrorIs(t, err, ErrStatsIssuerPaused)
 					continue
@@ -116,7 +116,7 @@ func TestListening(t *testing.T) {
 			defer wg.Done()
 			for _ = range 20 {
 				sc.Stop()
-				l, err := sc.addListener()
+				l, err := sc.addListener(leSwap)
 				if err != nil {
 					require.ErrorIs(t, err, ErrStatsIssuerPaused)
 					continue
@@ -133,31 +133,23 @@ func TestListening(t *testing.T) {
 	t.Run("ListenForSwap", func(t *testing.T) {
 		sc := newStatsCoord(bthreads)
 		require.NoError(t, sc.Restart())
-		l, err := sc.addListener()
+		l, err := sc.addListener(leSwap)
 		require.NoError(t, err)
 		select {
 		case e := <-l:
-			require.True(t, (leSwap|leGc)&e > 0, "expected success or gc signal")
+			require.True(t, (leSwap&e) > 0, "expected success or gc signal")
 		}
 	})
 	t.Run("ListenForStop", func(t *testing.T) {
 		sc := newStatsCoord(bthreads)
 		require.NoError(t, sc.Restart())
 		var l chan listenerEvent
-		//wg := sync.WaitGroup{}
-		//wg.Add(2)
-		//done := make(chan struct{})
-		//err := sc.sq.DoAsync(func() error {
-		//	defer wg.Done()
-		//	<-done
-		//	return nil
-		//})
 		err := sc.sq.DoSync(context.Background(), func() error {
 			// do this in serial queue to make sure we don't race
 			// with swap
 			var err error
 			require.NoError(t, err)
-			l, err = sc.addListener()
+			l, err = sc.addListener(leUnknown)
 			require.NoError(t, err)
 			sc.Stop()
 			return nil
@@ -174,14 +166,14 @@ func TestListening(t *testing.T) {
 		sc := newStatsCoord(bthreads)
 		require.NoError(t, sc.Restart())
 		sc.Stop()
-		_, err := sc.addListener()
+		_, err := sc.addListener(leUnknown)
 		require.ErrorIs(t, err, ErrStatsIssuerPaused)
 	})
 	t.Run("ListenerFailsIfClosed", func(t *testing.T) {
 		sc := newStatsCoord(bthreads)
 		sc.Close()
 		require.Error(t, sc.Restart())
-		_, err := sc.addListener()
+		_, err := sc.addListener(leUnknown)
 		require.ErrorIs(t, err, ErrStatsIssuerPaused)
 	})
 	t.Run("WaitBlocksOnStatsCollection", func(t *testing.T) {
@@ -200,7 +192,7 @@ func TestListening(t *testing.T) {
 			defer wg.Done()
 			defer close(done)
 			ctx, _ := context.WithTimeout(context.Background(), 10*time.Millisecond)
-			err := sc.waitForCond(ctx, leSwap, leStop, 1, nil, nil)
+			err := sc.waitForCond(ctx, leSwap, 1)
 			require.ErrorIs(t, err, context.DeadlineExceeded)
 		}()
 		wg.Wait()
@@ -222,7 +214,7 @@ func TestListening(t *testing.T) {
 			defer close(done)
 			sc.Stop()
 			ctx, _ := context.WithTimeout(context.Background(), 10*time.Millisecond)
-			err := sc.waitForCond(ctx, leSwap, leStop, 1, nil, nil)
+			err := sc.waitForCond(ctx, leSwap, 1)
 			require.ErrorIs(t, err, ErrStatsIssuerPaused)
 		}()
 		wg.Wait()
@@ -242,7 +234,7 @@ func TestListening(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			ctx, _ := context.WithTimeout(context.Background(), 10*time.Millisecond)
-			err := sc.waitForCond(ctx, leSwap, leStop, 1, nil, nil)
+			err := sc.waitForCond(ctx, leSwap, 1)
 			require.NoError(t, err)
 		}()
 		close(done)
