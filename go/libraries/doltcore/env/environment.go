@@ -111,7 +111,9 @@ func NewDoltEnv(version string, config *DoltCliConfig, repoState *RepoState, dol
 
 func (dEnv *DoltEnv) DoltDB(ctx context.Context) *doltdb.DoltDB {
 	if dEnv.doltDB == nil {
-		LoadDoltDB(ctx, dEnv.FS, dEnv.urlStr, dEnv, nil)
+		dEnv.loadDBOnce.Do(func() {
+			LoadDoltDB(ctx, dEnv.FS, dEnv.urlStr, dEnv, nil)
+		})
 	}
 	return dEnv.doltDB
 }
@@ -1287,5 +1289,6 @@ func (dEnv *DoltEnv) IsAccessModeReadOnly(ctx context.Context) bool {
 	if dEnv.DBLoadError == dbfactory.ErrReadOnly {
 		return true
 	}
-	return dEnv.DoltDB(ctx).AccessMode() == chunks.ExclusiveAccessMode_ReadOnly
+	ddb := dEnv.DoltDB(ctx)
+	return ddb != nil && ddb.AccessMode() == chunks.ExclusiveAccessMode_ReadOnly
 }
