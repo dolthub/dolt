@@ -287,6 +287,9 @@ func replaceColumnInSchema(sch schema.Schema, oldCol schema.Column, newCol schem
 		}
 	}
 
+	// Copy over the collation
+	newSch.SetCollation(sch.GetCollation())
+
 	pkOrds, err := modifyPkOrdinals(sch, newSch)
 	if err != nil {
 		return nil, err
