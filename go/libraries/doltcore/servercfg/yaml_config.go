@@ -182,6 +182,7 @@ func ServerConfigAsYAMLConfig(cfg ServerConfig) *YAMLConfig {
 	autoGCBehavior := toAutoGCBehaviorYAML(cfg.AutoGCBehavior())
 	return &YAMLConfig{
 		LogLevelStr:       ptr(string(cfg.LogLevel())),
+		LogFormatStr:      ptr(string(cfg.LogFormat())),
 		MaxQueryLenInLogs: nillableIntPtr(cfg.MaxLoggedQueryLen()),
 		EncodeLoggedQuery: nillableBoolPtr(cfg.ShouldEncodeLoggedQuery()),
 		BehaviorConfig: BehaviorYAMLConfig{
@@ -252,6 +253,7 @@ func ServerConfigSetValuesAsYAMLConfig(cfg ServerConfig) *YAMLConfig {
 
 	return &YAMLConfig{
 		LogLevelStr:       zeroIf(ptr(string(cfg.LogLevel())), !cfg.ValueSet(LogLevelKey)),
+		LogFormatStr: 	   zeroIf(ptr(string(cfg.LogFormat())), !cfg.ValueSet(LogFormatKey)),
 		MaxQueryLenInLogs: zeroIf(ptr(cfg.MaxLoggedQueryLen()), !cfg.ValueSet(MaxLoggedQueryLenKey)),
 		EncodeLoggedQuery: zeroIf(ptr(cfg.ShouldEncodeLoggedQuery()), !cfg.ValueSet(ShouldEncodeLoggedQueryKey)),
 		BehaviorConfig: BehaviorYAMLConfig{
