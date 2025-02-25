@@ -688,13 +688,20 @@ func NewExtendedAddressTypeHandler(vs ValueStore, childHandler TupleTypeHandler)
 
 func (handler AddressTypeHandler) SerializedCompare(ctx context.Context, v1 []byte, v2 []byte) (int, error) {
 	// TODO: If the child handler allows, compare the values one chunk at a time instead of always fully deserializing them.
-	v1Bytes, err := handler.vs.ReadBytes(ctx, hash.New(v1))
-	if err != nil {
-		return 0, err
+	var err error
+	var v1Bytes []byte
+	if len(v1) > 0 {
+		v1Bytes, err = handler.vs.ReadBytes(ctx, hash.New(v1))
+		if err != nil {
+			return 0, err
+		}
 	}
-	v2Bytes, err := handler.vs.ReadBytes(ctx, hash.New(v2))
-	if err != nil {
-		return 0, err
+	var v2Bytes []byte
+	if len(v2) > 0 {
+		v2Bytes, err = handler.vs.ReadBytes(ctx, hash.New(v2))
+		if err != nil {
+			return 0, err
+		}
 	}
 	return handler.childHandler.SerializedCompare(ctx, v1Bytes, v2Bytes)
 }
