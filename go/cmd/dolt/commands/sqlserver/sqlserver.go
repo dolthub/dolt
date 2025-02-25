@@ -43,6 +43,7 @@ const (
 	timeoutFlag                 = "timeout"
 	readonlyFlag                = "readonly"
 	logLevelFlag                = "loglevel"
+	logFormatFlag               = "logformat"
 	noAutoCommitFlag            = "no-auto-commit"
 	configFileFlag              = "config"
 	queryParallelismFlag        = "query-parallelism"

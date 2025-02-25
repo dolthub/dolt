@@ -455,6 +455,9 @@ func (cfg YAMLConfig) withDefaultsFilledIn() YAMLConfig {
 	if withDefaults.LogLevelStr == nil {
 		withDefaults.LogLevelStr = defaults.LogLevelStr
 	}
+	if withDefaults.LogFormatStr == nil {
+		withDefaults.LogFormatStr = defaults.LogFormatStr
+	}
 	if withDefaults.MaxQueryLenInLogs == nil {
 		withDefaults.MaxQueryLenInLogs = defaults.MaxQueryLenInLogs
 	}
@@ -633,6 +636,14 @@ func (cfg YAMLConfig) LogLevel() LogLevel {
 	}
 
 	return LogLevel(*cfg.LogLevelStr)
+}
+// LogFormatStr returns the log format that the server will use.
+func (cfg YAMLConfig) LogFormat() LogFormat {
+	if cfg.LogFormatStr == nil {
+		return DefaultLogFormat
+	}
+
+	return LogFormat(*cfg.LogFormatStr)
 }
 
 // MaxConnections returns the maximum number of simultaneous connections the server will allow.  The default is 1

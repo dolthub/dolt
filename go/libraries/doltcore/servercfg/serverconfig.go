@@ -39,6 +39,13 @@ const (
 	LogLevel_Panic   LogLevel = "panic"
 )
 
+type LogFormat string
+
+const (
+	LogFormat_Text LogFormat = "text"
+	LogFormat_JSON LogFormat = "json"
+)
+
 const (
 	DefaultHost                    = "localhost"
 	DefaultPort                    = 3306
@@ -47,6 +54,7 @@ const (
 	DefaultTimeout                 = 8 * 60 * 60 * 1000 // 8 hours, same as MySQL
 	DefaultReadOnly                = false
 	DefaultLogLevel                = LogLevel_Info
+	DefaultLogFormat               = "text"
 	DefaultAutoCommit              = true
 	DefaultAutoGCBehaviorEnable    = false
 	DefaultDoltTransactionCommit   = false
@@ -138,6 +146,8 @@ type ServerConfig interface {
 	ReadOnly() bool
 	// LogLevel returns the level of logging that the server will use.
 	LogLevel() LogLevel
+	// LogFormat returns the format of logging that the server will use.
+	LogFormat() LogFormat
 	// Autocommit defines the value of the @@autocommit session variable used on every connection
 	AutoCommit() bool
 	// DoltTransactionCommit defines the value of the @@dolt_transaction_commit session variable that enables Dolt
@@ -211,6 +221,7 @@ func DefaultServerConfig() ServerConfig {
 func defaultServerConfigYAML() *YAMLConfig {
 	return &YAMLConfig{
 		LogLevelStr:       ptr(string(DefaultLogLevel)),
+		LogFormatStr:      ptr(string(DefaultLogFormat)),
 		MaxQueryLenInLogs: ptr(DefaultMaxLoggedQueryLen),
 		EncodeLoggedQuery: ptr(DefaultEncodeLoggedQuery),
 		BehaviorConfig: BehaviorYAMLConfig{
@@ -270,6 +281,9 @@ func ValidateConfig(config ServerConfig) error {
 	if config.LogLevel().String() == "unknown" {
 		return fmt.Errorf("loglevel is invalid: %v\n", string(config.LogLevel()))
 	}
+	if config.LogFormat() != "text" && config.LogFormat() != "json" {
+		return fmt.Errorf("logformat is invalid: %v\n", config.LogFormat())
+	}
 	if config.RequireSecureTransport() && config.TLSCert() == "" && config.TLSKey() == "" {
 		return fmt.Errorf("require_secure_transport can only be `true` when a tls_key and tls_cert are provided.")
 	}
@@ -285,6 +299,7 @@ const (
 	WriteTimeoutKey                 = "net_write_timeout"
 	ReadOnlyKey                     = "read_only"
 	LogLevelKey                     = "log_level"
+	LogFormatKey                    = "log_format"
 	AutoCommitKey                   = "autocommit"
 	DoltTransactionCommitKey        = "dolt_transaction_commit"
 	DataDirKey                      = "data_dir"

@@ -36,6 +36,7 @@ type commandLineServerConfig struct {
 	timeout                 uint64
 	readOnly                bool
 	logLevel                servercfg.LogLevel
+	logFormat				servercfg.LogFormat
 	dataDir                 string
 	cfgDir                  string
 	autoCommit              bool
@@ -68,6 +69,7 @@ func DefaultCommandLineServerConfig() *commandLineServerConfig {
 		timeout:                 servercfg.DefaultTimeout,
 		readOnly:                servercfg.DefaultReadOnly,
 		logLevel:                servercfg.DefaultLogLevel,
+		logFormat:               servercfg.DefaultLogFormat
 		autoCommit:              servercfg.DefaultAutoCommit,
 		maxConnections:          servercfg.DefaultMaxConnections,
 		dataDir:                 servercfg.DefaultDataDir,
@@ -230,6 +232,11 @@ func (cfg *commandLineServerConfig) ReadOnly() bool {
 // LogLevel returns the level of logging that the server will use.
 func (cfg *commandLineServerConfig) LogLevel() servercfg.LogLevel {
 	return cfg.logLevel
+}
+
+// LogFornat returns the format of logging that the server will use.
+func (cfg *commandLineServerConfig) LogFormat() servercfg.LogFormat {
+	return cfg.logFormat
 }
 
 // AutoCommit defines the value of the @@autocommit session variable used on every connection
