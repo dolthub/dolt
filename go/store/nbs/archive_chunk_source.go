@@ -38,7 +38,7 @@ var _ chunkSource = &archiveChunkSource{}
 func newArchiveChunkSource(ctx context.Context, dir string, h hash.Hash, chunkCount uint32, q MemoryQuotaProvider) (archiveChunkSource, error) {
 	archiveFile := filepath.Join(dir, h.String()+ArchiveFileSuffix)
 
-	file, size, err := openReader(archiveFile)
+	file, size, err := openFileReader(archiveFile)
 	if err != nil {
 		return archiveChunkSource{}, err
 	}
@@ -65,8 +65,7 @@ func newAWSArchiveChunkSource(ctx context.Context,
 		return emptyChunkSource{}, err
 	}
 
-	rdr := s3ReaderAt{name, s3}
-
+	rdr := newFlexibleReader(s3ReaderAtWithStats{name, s3})
 	aRdr, err := newArchiveReaderFromFooter(rdr, sz, footer)
 	if err != nil {
 		return archiveChunkSource{}, err
@@ -74,18 +73,18 @@ func newAWSArchiveChunkSource(ctx context.Context,
 	return archiveChunkSource{"", aRdr}, nil
 }
 
-func openReader(file string) (io.ReaderAt, uint64, error) {
+func openFileReader(file string) (flexTableReaderAt, uint64, error) {
 	f, err := os.Open(file)
 	if err != nil {
-		return nil, 0, err
+		return flexTableReaderAt{}, 0, err
 	}
 
 	stat, err := f.Stat()
 	if err != nil {
-		return nil, 0, err
+		return flexTableReaderAt{}, 0, err
 	}
 
-	return f, uint64(stat.Size()), nil
+	return newFlexibleReader(f), uint64(stat.Size()), nil
 }
 
 func (acs archiveChunkSource) has(h hash.Hash, keeper keeperF) (bool, gcBehavior, error) {
@@ -114,7 +113,7 @@ func (acs archiveChunkSource) hasMany(addrs []hasRecord, keeper keeperF) (bool, 
 }
 
 func (acs archiveChunkSource) get(ctx context.Context, h hash.Hash, keeper keeperF, stats *Stats) ([]byte, gcBehavior, error) {
-	res, err := acs.aRdr.get(h)
+	res, err := acs.aRdr.get(ctx, h, stats)
 	if err != nil {
 		return nil, gcBehavior_Continue, err
 	}
@@ -129,7 +128,7 @@ func (acs archiveChunkSource) getMany(ctx context.Context, eg *errgroup.Group, r
 	foundAll := true
 	for i, req := range reqs {
 		h := *req.a
-		data, err := acs.aRdr.get(h)
+		data, err := acs.aRdr.get(ctx, h, stats)
 		if err != nil {
 			return true, gcBehavior_Continue, err
 		}
@@ -149,8 +148,8 @@ func (acs archiveChunkSource) getMany(ctx context.Context, eg *errgroup.Group, r
 
 // iterate iterates over the archive chunks. The callback is called for each chunk in the archive. This is not optimized
 // as currently is it only used for un-archiving, which should be uncommon.
-func (acs archiveChunkSource) iterate(ctx context.Context, cb func(chunks.Chunk) error) error {
-	return acs.aRdr.iterate(ctx, cb)
+func (acs archiveChunkSource) iterate(ctx context.Context, cb func(chunks.Chunk) error, stats *Stats) error {
+	return acs.aRdr.iterate(ctx, cb, stats)
 }
 
 func (acs archiveChunkSource) count() (uint32, error) {
@@ -190,19 +189,35 @@ func (acs archiveChunkSource) index() (tableIndex, error) {
 }
 
 func (acs archiveChunkSource) clone() (chunkSource, error) {
-	var rdr archiveReader
-	if _, ok := acs.aRdr.reader.(s3ReaderAt); !ok {
-		newReader, _, err := openReader(acs.file)
-		if err != nil {
-			return nil, err
-		}
+	var newRdr *flexTableReaderAt
 
-		rdr = acs.aRdr.clone(newReader)
-	} else {
-		// S3 reader is stateless, so we can just use the same one.
-		rdr = acs.aRdr.clone(acs.aRdr.reader)
+	// We get into the guts a little bit on flexTableReaderAt here. There isn't a great
+	// way to support cloning of IO mechanisms in a generic way.
+	if acs.aRdr.reader.ioRdr != nil {
+		// io.File is the only type we expect.
+		rdr, _ := (*acs.aRdr.reader.ioRdr).(io.ReaderAt)
+		if _, ok := rdr.(*os.File); ok {
+			newFile, err := os.Open(acs.file)
+			if err != nil {
+				return nil, err
+			}
+			fr := newFlexibleReader(newFile)
+			newRdr = &fr
+		}
+	} else if acs.aRdr.reader.nbsRdrWs != nil {
+		// Currently we only expect the s3ReaderAtWithStats instances here.
+		rdr, _ := (*acs.aRdr.reader.nbsRdrWs).(ReaderAtWithStats)
+		if _, ok := rdr.(s3ReaderAtWithStats); ok {
+			fr := newFlexibleReader(rdr)
+			newRdr = &fr
+		}
 	}
 
+	if newRdr == nil {
+		return nil, errors.New("runtime error: unable to clone reader")
+	}
+
+	rdr := acs.aRdr.clone(*newRdr)
 	return archiveChunkSource{acs.file, rdr}, nil
 }
 
@@ -239,7 +254,7 @@ func (acs archiveChunkSource) getManyCompressed(ctx context.Context, eg *errgrou
 	foundAll := true
 	for i, req := range reqs {
 		h := *req.a
-		toChk, err := acs.aRdr.getAsToChunker(h)
+		toChk, err := acs.aRdr.getAsToChunker(ctx, h, stats)
 		if err != nil {
 			return true, gcBehavior_Continue, err
 		}
@@ -256,7 +271,7 @@ func (acs archiveChunkSource) getManyCompressed(ctx context.Context, eg *errgrou
 	return !foundAll, gcBehavior_Continue, nil
 }
 
-func (acs archiveChunkSource) iterateAllChunks(ctx context.Context, cb func(chunks.Chunk), _ *Stats) error {
+func (acs archiveChunkSource) iterateAllChunks(ctx context.Context, cb func(chunks.Chunk), stats *Stats) error {
 	addrCount := uint32(len(acs.aRdr.prefixes))
 	for i := uint32(0); i < addrCount; i++ {
 		var h hash.Hash
@@ -270,7 +285,7 @@ func (acs archiveChunkSource) iterateAllChunks(ctx context.Context, cb func(chun
 			return ctx.Err()
 		}
 
-		data, err := acs.aRdr.get(h)
+		data, err := acs.aRdr.get(ctx, h, stats)
 		if err != nil {
 			return err
 		}

@@ -177,7 +177,7 @@ func buildArtifact(info TableSpecInfo, genPath string) (StorageArtifact, error) 
 			storageType: TypeNoms,
 		}, nil
 	} else {
-		reader, fileSize, err := openReader(fullPath)
+		reader, fileSize, err := openFileReader(fullPath)
 		if err != nil {
 			return StorageArtifact{}, err
 		}

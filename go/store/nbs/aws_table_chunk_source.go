@@ -24,7 +24,6 @@ package nbs
 import (
 	"context"
 	"errors"
-	"io"
 	"time"
 
 	"github.com/dolthub/dolt/go/store/hash"
@@ -77,16 +76,3 @@ func loadTableIndex(ctx context.Context, stats *Stats, cnt uint32, q MemoryQuota
 	}
 	return idx, err
 }
-
-// NM4 - See if we can get rid of this.
-type s3ReaderAt struct {
-	name string
-	rdr  *s3ObjectReader
-}
-
-func (s s3ReaderAt) ReadAt(p []byte, off int64) (n int, err error) {
-	// NM4 - need a read context. Stats maybe not?
-	return s.rdr.ReadAt(context.Background(), s.name, p, off, &Stats{})
-}
-
-var _ io.ReaderAt = &s3ReaderAt{}

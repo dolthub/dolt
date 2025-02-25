@@ -238,3 +238,14 @@ func isConnReset(err error) bool {
 	scErr, ok := nErr.Err.(*os.SyscallError)
 	return ok && scErr.Err == syscall.ECONNRESET
 }
+
+type s3ReaderAtWithStats struct {
+	name string
+	rdr  *s3ObjectReader
+}
+
+func (s s3ReaderAtWithStats) ReadAtWithStats(ctx context.Context, p []byte, off int64, stats *Stats) (n int, err error) {
+	return s.rdr.ReadAt(ctx, s.name, p, off, stats)
+}
+
+var _ ReaderAtWithStats = s3ReaderAtWithStats{}

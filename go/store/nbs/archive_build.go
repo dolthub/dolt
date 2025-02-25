@@ -75,7 +75,7 @@ func UnArchive(ctx context.Context, cs chunks.ChunkStore, smd StorageMetadata, p
 
 						progress <- fmt.Sprintf("Unarchiving %s (bytes: %d)", chk.Hash().String(), len(chk.Data()))
 						return nil
-					})
+					}, &Stats{})
 					if err != nil {
 						return err
 					}
@@ -150,7 +150,7 @@ func BuildArchive(ctx context.Context, cs chunks.ChunkStore, dagGroups *ChunkRel
 			}
 			archiveSize := fileInfo.Size()
 
-			err = verifyAllChunks(idx, archivePath, progress)
+			err = verifyAllChunks(ctx, idx, archivePath, progress, &stats)
 			if err != nil {
 				return err
 			}
@@ -441,7 +441,7 @@ func gatherAllChunks(ctx context.Context, cs chunkSource, idx tableIndex, stats 
 
 	return chkCache, defaultSamples, nil
 }
-func verifyAllChunks(idx tableIndex, archiveFile string, progress chan interface{}) error {
+func verifyAllChunks(ctx context.Context, idx tableIndex, archiveFile string, progress chan interface{}, stats *Stats) error {
 	file, err := os.Open(archiveFile)
 	if err != nil {
 		return err
@@ -453,7 +453,7 @@ func verifyAllChunks(idx tableIndex, archiveFile string, progress chan interface
 	}
 	fileSize := stat.Size()
 
-	index, err := newArchiveReader(file, uint64(fileSize))
+	index, err := newArchiveReader(newFlexibleReader(file), uint64(fileSize))
 	if err != nil {
 		return err
 	}
@@ -483,7 +483,7 @@ func verifyAllChunks(idx tableIndex, archiveFile string, progress chan interface
 			return errors.New(msg)
 		}
 
-		data, err := index.get(h)
+		data, err := index.get(ctx, h, stats)
 		if err != nil {
 			return fmt.Errorf("error reading chunk: %s (err: %w)", h.String(), err)
 		}

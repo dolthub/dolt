@@ -34,7 +34,7 @@ import (
 // archiveReader is a reader for the archive format. We use primitive type slices where possible. These are read directly
 // from disk into memory for speed. The downside is complexity on the read path, but it's all constant time.
 type archiveReader struct {
-	reader    io.ReaderAt
+	reader    flexTableReaderAt
 	prefixes  []uint64
 	spanIndex []uint64
 	chunkRefs []uint32 // Pairs of uint32s. First is the dict id, second is the data id.
@@ -104,7 +104,7 @@ func (f archiveFooter) metadataSpan() byteSpan {
 	return byteSpan{offset: f.fileSize - archiveFooterSize - uint64(f.metadataSize), length: uint64(f.metadataSize)}
 }
 
-func newArchiveMetadata(reader io.ReaderAt, fileSize uint64) (*ArchiveMetadata, error) {
+func newArchiveMetadata(reader flexTableReaderAt, fileSize uint64) (*ArchiveMetadata, error) {
 	footer, err := loadFooter(reader, fileSize)
 	if err != nil {
 		return nil, err
@@ -136,7 +136,7 @@ func newArchiveMetadata(reader io.ReaderAt, fileSize uint64) (*ArchiveMetadata, 
 	}, nil
 }
 
-func newArchiveReaderFromFooter(reader io.ReaderAt, fileSz uint64, footer []byte) (archiveReader, error) {
+func newArchiveReaderFromFooter(reader flexTableReaderAt, fileSz uint64, footer []byte) (archiveReader, error) {
 	if uint64(len(footer)) != archiveFooterSize {
 		return archiveReader{}, errors.New("runtime error: invalid footer.")
 	}
@@ -149,7 +149,7 @@ func newArchiveReaderFromFooter(reader io.ReaderAt, fileSz uint64, footer []byte
 	return buildArchiveReader(reader, fileSz, ftr)
 }
 
-func newArchiveReader(reader io.ReaderAt, fileSize uint64) (archiveReader, error) {
+func newArchiveReader(reader flexTableReaderAt, fileSize uint64) (archiveReader, error) {
 	footer, err := loadFooter(reader, fileSize)
 	if err != nil {
 		return archiveReader{}, err
@@ -158,7 +158,7 @@ func newArchiveReader(reader io.ReaderAt, fileSize uint64) (archiveReader, error
 	return buildArchiveReader(reader, fileSize, footer)
 }
 
-func buildArchiveReader(reader io.ReaderAt, fileSize uint64, footer archiveFooter) (archiveReader, error) {
+func buildArchiveReader(reader flexTableReaderAt, fileSize uint64, footer archiveFooter) (archiveReader, error) {
 
 	byteOffSpan := footer.indexByteOffsetSpan()
 	secRdr := io.NewSectionReader(reader, int64(byteOffSpan.offset), int64(byteOffSpan.length))
@@ -211,7 +211,7 @@ func buildArchiveReader(reader io.ReaderAt, fileSize uint64, footer archiveFoote
 
 // clone returns a new archiveReader with a new (provided) reader. All other fields are immutable or thread safe,
 // so they are copied.
-func (ar archiveReader) clone(newReader io.ReaderAt) archiveReader {
+func (ar archiveReader) clone(newReader flexTableReaderAt) archiveReader {
 	return archiveReader{
 		reader:    newReader,
 		prefixes:  ar.prefixes,
@@ -288,8 +288,8 @@ func (ar archiveReader) has(hash hash.Hash) bool {
 }
 
 // get returns the decompressed data for the given hash. If the hash is not found, nil is returned (not an error)
-func (ar archiveReader) get(hash hash.Hash) ([]byte, error) {
-	dict, data, err := ar.getRaw(hash)
+func (ar archiveReader) get(ctx context.Context, hash hash.Hash, stats *Stats) ([]byte, error) {
+	dict, data, err := ar.getRaw(ctx, hash, stats)
 	if err != nil || data == nil {
 		return nil, err
 	}
@@ -307,8 +307,8 @@ func (ar archiveReader) get(hash hash.Hash) ([]byte, error) {
 
 // getAsToChunker returns the chunk which is has not been decompressed. Similar to get, but with a different return type.
 // If the hash is not found, a ToChunker instance with IsEmpty() == true is returned (no error)
-func (ar archiveReader) getAsToChunker(h hash.Hash) (ToChunker, error) {
-	dict, data, err := ar.getRaw(h)
+func (ar archiveReader) getAsToChunker(ctx context.Context, h hash.Hash, stats *Stats) (ToChunker, error) {
+	dict, data, err := ar.getRaw(ctx, h, stats)
 	if err != nil {
 		return nil, err
 	}
@@ -325,16 +325,13 @@ func (ar archiveReader) count() uint32 {
 }
 
 func (ar archiveReader) close() error {
-	if closer, ok := ar.reader.(io.Closer); ok {
-		return closer.Close()
-	}
-	return nil
+	return ar.reader.Close()
 }
 
 // readByteSpan reads the byte span from the archive. This allocates a new byte slice and returns it to the caller.
-func (ar archiveReader) readByteSpan(bs byteSpan) ([]byte, error) {
+func (ar archiveReader) readByteSpan(ctx context.Context, bs byteSpan, stats *Stats) ([]byte, error) {
 	buff := make([]byte, bs.length)
-	_, err := ar.reader.ReadAt(buff[:], int64(bs.offset))
+	_, err := ar.reader.ReadAtWithStats(ctx, buff[:], int64(bs.offset), stats)
 	if err != nil {
 		return nil, err
 	}
@@ -345,7 +342,7 @@ func (ar archiveReader) readByteSpan(bs byteSpan) ([]byte, error) {
 // no error is returned in this case. Errors will only be returned if there is an io error.
 //
 // The data returned is still compressed, and the DDict is required to decompress it.
-func (ar archiveReader) getRaw(hash hash.Hash) (dict *gozstd.DDict, data []byte, err error) {
+func (ar archiveReader) getRaw(ctx context.Context, hash hash.Hash, stats *Stats) (dict *gozstd.DDict, data []byte, err error) {
 	idx := ar.search(hash)
 	if idx < 0 {
 		return nil, nil, nil
@@ -357,7 +354,7 @@ func (ar archiveReader) getRaw(hash hash.Hash) (dict *gozstd.DDict, data []byte,
 			dict = cached
 		} else {
 			byteSpan := ar.getByteSpanByID(dictId)
-			dictBytes, err := ar.readByteSpan(byteSpan)
+			dictBytes, err := ar.readByteSpan(ctx, byteSpan, stats)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -377,7 +374,7 @@ func (ar archiveReader) getRaw(hash hash.Hash) (dict *gozstd.DDict, data []byte,
 	}
 
 	byteSpan := ar.getByteSpanByID(dataId)
-	data, err = ar.readByteSpan(byteSpan)
+	data, err = ar.readByteSpan(ctx, byteSpan, stats)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -408,8 +405,8 @@ func (ar archiveReader) getSuffixByID(id uint32) suffix {
 	return suffix(ar.suffixes[start : start+hash.SuffixLen])
 }
 
-func (ar archiveReader) getMetadata() ([]byte, error) {
-	return ar.readByteSpan(ar.footer.metadataSpan())
+func (ar archiveReader) getMetadata(ctx context.Context, stats *Stats) ([]byte, error) {
+	return ar.readByteSpan(ctx, ar.footer.metadataSpan(), stats)
 }
 
 // verifyDataCheckSum verifies the checksum of the data section of the archive. Note - this requires a fully read of
@@ -428,7 +425,7 @@ func (ar archiveReader) verifyMetaCheckSum() error {
 	return verifyCheckSum(ar.reader, ar.footer.metadataSpan(), ar.footer.metaCheckSum)
 }
 
-func (ar archiveReader) iterate(ctx context.Context, cb func(chunks.Chunk) error) error {
+func (ar archiveReader) iterate(ctx context.Context, cb func(chunks.Chunk) error, stats *Stats) error {
 	for i := uint32(0); i < ar.footer.chunkCount; i++ {
 		var hasBytes [hash.ByteLen]byte
 
@@ -437,7 +434,7 @@ func (ar archiveReader) iterate(ctx context.Context, cb func(chunks.Chunk) error
 		copy(hasBytes[hash.ByteLen-hash.SuffixLen:], suf[:])
 		h := hash.New(hasBytes[:])
 
-		data, err := ar.get(h)
+		data, err := ar.get(ctx, h, stats)
 		if err != nil {
 			return err
 		}
@@ -451,7 +448,7 @@ func (ar archiveReader) iterate(ctx context.Context, cb func(chunks.Chunk) error
 	return nil
 }
 
-func verifyCheckSum(reader io.ReaderAt, span byteSpan, checkSum sha512Sum) error {
+func verifyCheckSum(reader flexTableReaderAt, span byteSpan, checkSum sha512Sum) error {
 	hshr := sha512.New()
 	_, err := io.Copy(hshr, io.NewSectionReader(reader, int64(span.offset), int64(span.length)))
 	if err != nil {

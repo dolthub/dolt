@@ -25,6 +25,7 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 	"sort"
 
@@ -151,12 +152,77 @@ func (ir indexResult) Length() uint32 {
 	return ir.length
 }
 
-type tableReaderAt interface {
+type ReaderAtWithStats interface {
 	ReadAtWithStats(ctx context.Context, p []byte, off int64, stats *Stats) (n int, err error)
+}
+
+type tableReaderAt interface {
+	ReaderAtWithStats
 	Reader(ctx context.Context) (io.ReadCloser, error)
 	Close() error
 	clone() (tableReaderAt, error)
 }
+
+// flexTableReaderAt is a type that can be either an io.ReaderAt or a ReaderAtWithStats. It's very close to the
+// tableReaderAt interface, with the exception that it can't be cloned or converted to a Reader.
+type flexTableReaderAt struct {
+	ioRdr    *io.ReaderAt
+	nbsRdrWs *ReaderAtWithStats
+}
+
+func newFlexibleReader(input interface{}) flexTableReaderAt {
+	if r, ok := input.(ReaderAtWithStats); ok {
+		return flexTableReaderAt{nbsRdrWs: &r}
+	}
+	if r, ok := input.(io.ReaderAt); ok {
+		return flexTableReaderAt{ioRdr: &r}
+	}
+	panic(fmt.Sprintf("runtime error: invalid input to newFlexibleReader of type %T", input))
+}
+
+func (fb flexTableReaderAt) ReadAt(p []byte, off int64) (n int, err error) {
+	if fb.nbsRdrWs != nil {
+		return (*fb.nbsRdrWs).ReadAtWithStats(context.Background(), p, off, &Stats{})
+	}
+	if fb.ioRdr != nil {
+		return (*fb.ioRdr).ReadAt(p, off)
+	}
+	panic("runtime error: invalid state in flexTableReaderAt")
+}
+
+func (fb flexTableReaderAt) ReadAtWithStats(ctx context.Context, p []byte, off int64, stats *Stats) (n int, err error) {
+	if fb.nbsRdrWs != nil {
+		return (*fb.nbsRdrWs).ReadAtWithStats(ctx, p, off, stats)
+	}
+	if fb.ioRdr != nil {
+		return (*fb.ioRdr).ReadAt(p, off)
+	}
+	panic("runtime error: invalid state in flexTableReaderAt")
+}
+
+func (fb flexTableReaderAt) close() {
+	if c, ok := (*fb.nbsRdrWs).(io.Closer); ok {
+		_ = c.Close()
+	}
+}
+
+func (fb flexTableReaderAt) Close() error {
+	if fb.nbsRdrWs != nil {
+		if c, ok := (*fb.nbsRdrWs).(io.Closer); ok {
+			return c.Close()
+		}
+	}
+	if fb.ioRdr != nil {
+		if c, ok := (*fb.ioRdr).(io.Closer); ok {
+			return c.Close()
+		}
+	}
+	return nil
+}
+
+var _ ReaderAtWithStats = flexTableReaderAt{}
+var _ io.ReaderAt = flexTableReaderAt{}
+var _ io.Closer = flexTableReaderAt{}
 
 // tableReader implements get & has queries against a single nbs table. goroutine safe.
 // |blockSize| refers to the block-size of the underlying storage. We assume that, each
