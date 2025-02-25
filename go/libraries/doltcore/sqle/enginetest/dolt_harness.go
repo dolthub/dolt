@@ -17,6 +17,7 @@ package enginetest
 import (
 	"context"
 	"fmt"
+	"github.com/sirupsen/logrus"
 	"runtime"
 	"strings"
 	"testing"
@@ -242,23 +243,22 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 		}
 		doltProvider, ok := pro.(*sqle.DoltDatabaseProvider)
 		require.True(t, ok)
+
 		d.provider = doltProvider
 
 		d.gcSafepointController = dsess.NewGCSafepointController()
 
-		var err error
-		d.session, err = dsess.NewDoltSession(enginetest.NewBaseSession(), d.provider, d.multiRepoEnv.Config(), d.branchControl, d.statsPro, writer.NewWriteSession, d.gcSafepointController)
-		require.NoError(t, err)
-
-		sqlCtx := enginetest.NewContext(d)
 		bThreads := sql.NewBackgroundThreads()
 
 		ctxGen := func(ctx context.Context) (*sql.Context, error) {
 			return d.NewContextWithClient(sql.Client{Address: "localhost", User: "root"}), nil
 		}
-		statsPro := statspro.NewStatsCoord(ctx, doltProvider, ctxGen, sqlCtx.Session.GetLogger().Logger, bThreads, d.multiRepoEnv.GetEnv(d.multiRepoEnv.GetFirstDatabase()))
-		statsPro.SetTimers(int64(1*time.Nanosecond), int64(1*time.Second))
+		statsPro := statspro.NewStatsController(doltProvider, ctxGen, logrus.StandardLogger(), d.multiRepoEnv.GetEnv(d.multiRepoEnv.GetFirstDatabase()))
 		d.statsPro = statsPro
+
+		var err error
+		d.session, err = dsess.NewDoltSession(enginetest.NewBaseSession(), d.provider, d.multiRepoEnv.Config(), d.branchControl, d.statsPro, writer.NewWriteSession, d.gcSafepointController)
+		require.NoError(t, err)
 
 		e, err := enginetest.NewEngine(t, d, d.provider, d.setupData, d.statsPro)
 		if err != nil {
@@ -267,6 +267,7 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 		e.Analyzer.ExecBuilder = rowexec.NewOverrideBuilder(kvexec.Builder{})
 		d.engine = e
 
+		sqlCtx := enginetest.NewContext(d)
 		databases := pro.AllDatabases(sqlCtx)
 
 		d.setupDbs = make(map[string]struct{})
@@ -291,9 +292,11 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 		e = e.WithBackgroundThreads(bThreads)
 
 		if d.configureStats {
-			if err := statsPro.Init(ctx, databases, false); err != nil {
+			err = statsPro.Init(ctx, databases, false)
+			if err != nil {
 				return nil, err
 			}
+			statsPro.SetTimers(int64(1*time.Nanosecond), int64(1*time.Second))
 
 			err = statsPro.Restart()
 			if err != nil {
@@ -302,6 +305,13 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 
 			statsOnlyQueries := filterStatsOnlyQueries(d.setupData)
 			e, err = enginetest.RunSetupScripts(sqlCtx, e, statsOnlyQueries, d.SupportsNativeIndexCreation())
+			if err != nil {
+				return nil, err
+			}
+
+			finalizeStatsAfterSetup := []setup.SetupScript{{"call dolt_stats_wait()"}}
+			e, err = enginetest.RunSetupScripts(sqlCtx, d.engine, finalizeStatsAfterSetup, d.SupportsNativeIndexCreation())
+			require.NoError(t, err)
 		}
 
 		return e, nil
@@ -313,15 +323,21 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 	d.engine.Analyzer.Catalog.MySQLDb = mysql_db.CreateEmptyMySQLDb()
 	d.engine.Analyzer.Catalog.MySQLDb.AddRootAccount()
 
-	ctxGen := func(ctx context.Context) (*sql.Context, error) {
-		return d.NewContext(), nil
-	}
-	bThreads := sql.NewBackgroundThreads()
-	statsPro := statspro.NewStatsCoord(ctx, d.provider.(*sqle.DoltDatabaseProvider), ctxGen, ctx.Session.GetLogger().Logger, bThreads, d.multiRepoEnv.GetEnv(d.multiRepoEnv.GetFirstDatabase()))
-	require.NoError(t, statsPro.Restart())
-	d.engine.Analyzer.Catalog.StatsProvider = statsPro
+	//ctxGen := func(ctx context.Context) (*sql.Context, error) {
+	//	return d.NewContext(), nil
+	//}
+	//statsPro := statspro.NewStatsController(d.provider.(*sqle.DoltDatabaseProvider), ctxGen, ctx.Session.GetLogger().Logger, d.multiRepoEnv.GetEnv(d.multiRepoEnv.GetFirstDatabase()))
+	//require.NoError(t, statsPro.Restart())
+	//d.engine.Analyzer.Catalog.StatsProvider = statsPro
 
 	e, err := enginetest.RunSetupScripts(ctx, d.engine, d.resetScripts(), d.SupportsNativeIndexCreation())
+	require.NoError(t, err)
+
+	if d.configureStats {
+		finalizeStatsAfterSetup := []setup.SetupScript{{"call dolt_stats_wait()"}}
+		e, err = enginetest.RunSetupScripts(ctx, d.engine, finalizeStatsAfterSetup, d.SupportsNativeIndexCreation())
+		require.NoError(t, err)
+	}
 
 	// Get a fresh session after running setup scripts, since some setup scripts can change the session state
 	d.session, err = dsess.NewDoltSession(enginetest.NewBaseSession(), d.provider, d.multiRepoEnv.Config(), d.branchControl, d.statsPro, writer.NewWriteSession, nil)

@@ -38,11 +38,11 @@ const OkResult = "Ok"
 
 func statsFunc(fn func(ctx *sql.Context, args ...string) (interface{}, error)) func(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 	return func(ctx *sql.Context, args ...string) (iter sql.RowIter, err error) {
-		defer func() {
-			if r := recover(); r != nil {
-				err = fmt.Errorf("stats function unexpectedly panicked: %s", r)
-			}
-		}()
+		//defer func() {
+		//	if r := recover(); r != nil {
+		//		err = fmt.Errorf("stats function unexpectedly panicked: %s", r)
+		//	}
+		//}()
 		res, err := fn(ctx, args...)
 		if err != nil {
 			return nil, err
@@ -81,8 +81,9 @@ type ToggableStats interface {
 	Stop()
 	Info(ctx context.Context) (StatsInfo, error)
 	Purge(ctx *sql.Context) error
-	WaitForDbSync(ctx context.Context) error
+	WaitForSync(ctx context.Context) error
 	Gc(ctx *sql.Context) error
+	WaitForFlush(ctx *sql.Context) error
 	//ValidateState(ctx context.Context) error
 	//Init(context.Context, []dsess.SqlDatabase, bool) error
 	SetTimers(int64, int64)
@@ -125,11 +126,26 @@ func statsInfo(ctx *sql.Context, _ ...string) (interface{}, error) {
 // statsWait blocks until the job queue executes two full loops
 // of instructions, which will (1) pick up and (2) commit new
 // sets of index-bucket dependencies.
-func statsWait(ctx *sql.Context, _ ...string) (interface{}, error) {
+func statsSync(ctx *sql.Context, _ ...string) (interface{}, error) {
 	dSess := dsess.DSessFromSess(ctx.Session)
 	pro := dSess.StatsProvider()
 	if afp, ok := pro.(ToggableStats); ok {
-		if err := afp.WaitForDbSync(ctx); err != nil {
+		if err := afp.WaitForSync(ctx); err != nil {
+			return nil, err
+		}
+		return OkResult, nil
+	}
+	return nil, fmt.Errorf("provider does not implement ToggableStats")
+}
+
+// statsWait blocks until the job queue executes two full loops
+// of instructions, which will (1) pick up and (2) commit new
+// sets of index-bucket dependencies.
+func statsFlush(ctx *sql.Context, _ ...string) (interface{}, error) {
+	dSess := dsess.DSessFromSess(ctx.Session)
+	pro := dSess.StatsProvider()
+	if afp, ok := pro.(ToggableStats); ok {
+		if err := afp.WaitForFlush(ctx); err != nil {
 			return nil, err
 		}
 		return OkResult, nil

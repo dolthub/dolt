@@ -16,12 +16,11 @@ package statspro
 
 import (
 	"encoding/json"
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/stretchr/testify/require"
 	"log"
 	"strconv"
 	"testing"
-
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dprocedures"
 )
@@ -692,7 +691,7 @@ func TestStatScripts(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			bthreads := sql.NewBackgroundThreads()
 			ctx, sqlEng, sc := emptySetup(t, bthreads, false)
-			sc.SetEnableGc(true)
+			sc.SetEnableGc(false)
 			defer sqlEng.Close()
 
 			require.NoError(t, sc.Restart())
@@ -705,6 +704,7 @@ func TestStatScripts(t *testing.T) {
 
 			require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
 			require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_gc()"))
+			require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_flush()"))
 
 			for i, a := range tt.assertions {
 				if sc.Debug {

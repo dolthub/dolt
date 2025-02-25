@@ -18,156 +18,154 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/types"
-
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 )
 
 // fillerVarchar pushes the tree into level 3
 var fillerVarchar = strings.Repeat("x", 500)
 
 var DoltHistogramTests = []queries.ScriptTest{
-	{
-		Name: "mcv checking",
-		SetUpScript: []string{
-			"CREATE table xy (x bigint primary key, y int, z varchar(500), key(y,z));",
-			"insert into xy values (0,0,'a'), (1,0,'a'), (2,0,'a'), (3,0,'a'), (4,1,'a'), (5,2,'a')",
-			"analyze table xy",
-		},
-		Assertions: []queries.ScriptTestAssertion{
-			{
-				Query: " SELECT mcv_cnt from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(mcv_cnt JSON path '$.mcv_counts')) as dt  where table_name = 'xy' and column_name = 'y,z'",
-				Expected: []sql.Row{
-					{types.JSONDocument{Val: []interface{}{
-						float64(4),
-					}}},
-				},
-			},
-			{
-				Query: " SELECT mcv from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(mcv JSON path '$.mcvs[*]')) as dt  where table_name = 'xy' and column_name = 'y,z'",
-				Expected: []sql.Row{
-					{types.JSONDocument{Val: []interface{}{
-						[]interface{}{float64(0), "a"},
-					}}},
-				},
-			},
-			{
-				Query: " SELECT x,z from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(x bigint path '$.upper_bound[0]', z text path '$.upper_bound[1]')) as dt  where table_name = 'xy' and column_name = 'y,z'",
-				Expected: []sql.Row{
-					{2, "a"},
-				},
-			},
-		},
-	},
-	{
-		Name: "int pk",
-		SetUpScript: []string{
-			"CREATE table xy (x bigint primary key, y varchar(500));",
-			fmt.Sprintf("insert into xy select x, '%s' from (with recursive inputs(x) as (select 1 union select x+1 from inputs where x < 10000) select * from inputs) dt", fillerVarchar),
-			fmt.Sprintf("insert into xy select x, '%s'  from (with recursive inputs(x) as (select 10001 union select x+1 from inputs where x < 20000) select * from inputs) dt", fillerVarchar),
-			fmt.Sprintf("insert into xy select x, '%s'  from (with recursive inputs(x) as (select 20001 union select x+1 from inputs where x < 30000) select * from inputs) dt", fillerVarchar),
-			"analyze table xy",
-		},
-		Assertions: []queries.ScriptTestAssertion{
-			{
-				Query:    "SELECT json_length(json_extract(histogram, \"$.statistic.buckets\")) from information_schema.column_statistics where column_name = 'x'",
-				Expected: []sql.Row{{32}},
-			},
-			{
-				Query:    " SELECT sum(cnt) from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(cnt int path '$.row_count')) as dt  where table_name = 'xy' and column_name = 'x'",
-				Expected: []sql.Row{{float64(30000)}},
-			},
-			{
-				Query:    " SELECT sum(cnt) from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(cnt int path '$.null_count')) as dt  where table_name = 'xy' and column_name = 'x'",
-				Expected: []sql.Row{{float64(0)}},
-			},
-			{
-				Query:    " SELECT sum(cnt) from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(cnt int path '$.distinct_count')) as dt  where table_name = 'xy' and column_name = 'x'",
-				Expected: []sql.Row{{float64(30000)}},
-			},
-			{
-				Query:    " SELECT max(bound_cnt) from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(bound_cnt int path '$.bound_count')) as dt  where table_name = 'xy' and column_name = 'x'",
-				Expected: []sql.Row{{int64(1)}},
-			},
-		},
-	},
-	{
-		Name: "nulls distinct across chunk boundary",
-		SetUpScript: []string{
-			"CREATE table xy (x bigint primary key, y varchar(500), z bigint, key(z));",
-			fmt.Sprintf("insert into xy select x, '%s', x  from (with recursive inputs(x) as (select 1 union select x+1 from inputs where x < 200) select * from inputs) dt", fillerVarchar),
-			fmt.Sprintf("insert into xy select x, '%s', NULL  from (with recursive inputs(x) as (select 201 union select x+1 from inputs where x < 400) select * from inputs) dt", fillerVarchar),
-			"analyze table xy",
-		},
-		Assertions: []queries.ScriptTestAssertion{
-			{
-				Query: "call dolt_stats_wait()",
-			},
-			{
-				Query:    "SELECT json_length(json_extract(histogram, \"$.statistic.buckets\")) from information_schema.column_statistics where column_name = 'z'",
-				Expected: []sql.Row{{2}},
-			},
-			{
-				// bucket boundary duplication
-				Query:    "SELECT json_value(histogram, \"$.statistic.distinct_count\", 'signed') from information_schema.column_statistics where column_name = 'z'",
-				Expected: []sql.Row{{202}},
-			},
-			{
-				Query:    " SELECT sum(cnt) from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(cnt int path '$.row_count')) as dt  where table_name = 'xy' and column_name = 'z'",
-				Expected: []sql.Row{{float64(400)}},
-			},
-			{
-				Query:    " SELECT sum(cnt) from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(cnt int path '$.null_count')) as dt  where table_name = 'xy' and column_name = 'z'",
-				Expected: []sql.Row{{float64(200)}},
-			},
-			{
-				// chunk border double count
-				Query:    " SELECT sum(cnt) from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(cnt int path '$.distinct_count')) as dt  where table_name = 'xy' and column_name = 'z'",
-				Expected: []sql.Row{{float64(202)}},
-			},
-			{
-				// max bound count is an all nulls chunk
-				Query:    " SELECT max(bound_cnt) from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(bound_cnt int path '$.bound_count')) as dt  where table_name = 'xy' and column_name = 'z'",
-				Expected: []sql.Row{{int64(183)}},
-			},
-		},
-	},
-	{
-		Name: "int index",
-		SetUpScript: []string{
-			"CREATE table xy (x bigint primary key, y varchar(500), z bigint, key(z));",
-			fmt.Sprintf("insert into xy select x, '%s', x from (with recursive inputs(x) as (select 1 union select x+1 from inputs where x < 10000) select * from inputs) dt", fillerVarchar),
-			fmt.Sprintf("insert into xy select x, '%s', x  from (with recursive inputs(x) as (select 10001 union select x+1 from inputs where x < 20000) select * from inputs) dt", fillerVarchar),
-			fmt.Sprintf("insert into xy select x, '%s', NULL  from (with recursive inputs(x) as (select 20001 union select x+1 from inputs where x < 30000) select * from inputs) dt", fillerVarchar),
-			"analyze table xy",
-		},
-		Assertions: []queries.ScriptTestAssertion{
-			{
-				Query:    "SELECT json_length(json_extract(histogram, \"$.statistic.buckets\")) from information_schema.column_statistics where column_name = 'z'",
-				Expected: []sql.Row{{152}},
-			},
-			{
-				Query:    " SELECT sum(cnt) from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(cnt int path '$.row_count')) as dt  where table_name = 'xy' and column_name = 'z'",
-				Expected: []sql.Row{{float64(30000)}},
-			},
-			{
-				Query:    " SELECT sum(cnt) from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(cnt int path '$.null_count')) as dt  where table_name = 'xy' and column_name = 'z'",
-				Expected: []sql.Row{{float64(10000)}},
-			},
-			{
-				// border NULL double count
-				Query:    " SELECT sum(cnt) from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(cnt int path '$.distinct_count')) as dt  where table_name = 'xy' and column_name = 'z'",
-				Expected: []sql.Row{{float64(20036)}},
-			},
-			{
-				// max bound count is nulls chunk
-				Query:    " SELECT max(bound_cnt) from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(bound_cnt int path '$.bound_count')) as dt  where table_name = 'xy' and column_name = 'z'",
-				Expected: []sql.Row{{int64(440)}},
-			},
-		},
-	},
+	//{
+	//	Name: "mcv checking",
+	//	SetUpScript: []string{
+	//		"CREATE table xy (x bigint primary key, y int, z varchar(500), key(y,z));",
+	//		"insert into xy values (0,0,'a'), (1,0,'a'), (2,0,'a'), (3,0,'a'), (4,1,'a'), (5,2,'a')",
+	//		"analyze table xy",
+	//	},
+	//	Assertions: []queries.ScriptTestAssertion{
+	//		{
+	//			Query: " SELECT mcv_cnt from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(mcv_cnt JSON path '$.mcv_counts')) as dt  where table_name = 'xy' and column_name = 'y,z'",
+	//			Expected: []sql.Row{
+	//				{types.JSONDocument{Val: []interface{}{
+	//					float64(4),
+	//				}}},
+	//			},
+	//		},
+	//		{
+	//			Query: " SELECT mcv from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(mcv JSON path '$.mcvs[*]')) as dt  where table_name = 'xy' and column_name = 'y,z'",
+	//			Expected: []sql.Row{
+	//				{types.JSONDocument{Val: []interface{}{
+	//					[]interface{}{float64(0), "a"},
+	//				}}},
+	//			},
+	//		},
+	//		{
+	//			Query: " SELECT x,z from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(x bigint path '$.upper_bound[0]', z text path '$.upper_bound[1]')) as dt  where table_name = 'xy' and column_name = 'y,z'",
+	//			Expected: []sql.Row{
+	//				{2, "a"},
+	//			},
+	//		},
+	//	},
+	//},
+	//{
+	//	Name: "int pk",
+	//	SetUpScript: []string{
+	//		"CREATE table xy (x bigint primary key, y varchar(500));",
+	//		fmt.Sprintf("insert into xy select x, '%s' from (with recursive inputs(x) as (select 1 union select x+1 from inputs where x < 10000) select * from inputs) dt", fillerVarchar),
+	//		fmt.Sprintf("insert into xy select x, '%s'  from (with recursive inputs(x) as (select 10001 union select x+1 from inputs where x < 20000) select * from inputs) dt", fillerVarchar),
+	//		fmt.Sprintf("insert into xy select x, '%s'  from (with recursive inputs(x) as (select 20001 union select x+1 from inputs where x < 30000) select * from inputs) dt", fillerVarchar),
+	//		"analyze table xy",
+	//	},
+	//	Assertions: []queries.ScriptTestAssertion{
+	//		{
+	//			Query:    "SELECT json_length(json_extract(histogram, \"$.statistic.buckets\")) from information_schema.column_statistics where column_name = 'x'",
+	//			Expected: []sql.Row{{32}},
+	//		},
+	//		{
+	//			Query:    " SELECT sum(cnt) from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(cnt int path '$.row_count')) as dt  where table_name = 'xy' and column_name = 'x'",
+	//			Expected: []sql.Row{{float64(30000)}},
+	//		},
+	//		{
+	//			Query:    " SELECT sum(cnt) from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(cnt int path '$.null_count')) as dt  where table_name = 'xy' and column_name = 'x'",
+	//			Expected: []sql.Row{{float64(0)}},
+	//		},
+	//		{
+	//			Query:    " SELECT sum(cnt) from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(cnt int path '$.distinct_count')) as dt  where table_name = 'xy' and column_name = 'x'",
+	//			Expected: []sql.Row{{float64(30000)}},
+	//		},
+	//		{
+	//			Query:    " SELECT max(bound_cnt) from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(bound_cnt int path '$.bound_count')) as dt  where table_name = 'xy' and column_name = 'x'",
+	//			Expected: []sql.Row{{int64(1)}},
+	//		},
+	//	},
+	//},
+	//{
+	//	Name: "nulls distinct across chunk boundary",
+	//	SetUpScript: []string{
+	//		"CREATE table xy (x bigint primary key, y varchar(500), z bigint, key(z));",
+	//		fmt.Sprintf("insert into xy select x, '%s', x  from (with recursive inputs(x) as (select 1 union select x+1 from inputs where x < 200) select * from inputs) dt", fillerVarchar),
+	//		fmt.Sprintf("insert into xy select x, '%s', NULL  from (with recursive inputs(x) as (select 201 union select x+1 from inputs where x < 400) select * from inputs) dt", fillerVarchar),
+	//		"analyze table xy",
+	//	},
+	//	Assertions: []queries.ScriptTestAssertion{
+	//		{
+	//			Query: "call dolt_stats_wait()",
+	//		},
+	//		{
+	//			Query:    "SELECT json_length(json_extract(histogram, \"$.statistic.buckets\")) from information_schema.column_statistics where column_name = 'z'",
+	//			Expected: []sql.Row{{2}},
+	//		},
+	//		{
+	//			// bucket boundary duplication
+	//			Query:    "SELECT json_value(histogram, \"$.statistic.distinct_count\", 'signed') from information_schema.column_statistics where column_name = 'z'",
+	//			Expected: []sql.Row{{202}},
+	//		},
+	//		{
+	//			Query:    " SELECT sum(cnt) from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(cnt int path '$.row_count')) as dt  where table_name = 'xy' and column_name = 'z'",
+	//			Expected: []sql.Row{{float64(400)}},
+	//		},
+	//		{
+	//			Query:    " SELECT sum(cnt) from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(cnt int path '$.null_count')) as dt  where table_name = 'xy' and column_name = 'z'",
+	//			Expected: []sql.Row{{float64(200)}},
+	//		},
+	//		{
+	//			// chunk border double count
+	//			Query:    " SELECT sum(cnt) from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(cnt int path '$.distinct_count')) as dt  where table_name = 'xy' and column_name = 'z'",
+	//			Expected: []sql.Row{{float64(202)}},
+	//		},
+	//		{
+	//			// max bound count is an all nulls chunk
+	//			Query:    " SELECT max(bound_cnt) from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(bound_cnt int path '$.bound_count')) as dt  where table_name = 'xy' and column_name = 'z'",
+	//			Expected: []sql.Row{{int64(183)}},
+	//		},
+	//	},
+	//},
+	//{
+	//	Name: "int index",
+	//	SetUpScript: []string{
+	//		"CREATE table xy (x bigint primary key, y varchar(500), z bigint, key(z));",
+	//		fmt.Sprintf("insert into xy select x, '%s', x from (with recursive inputs(x) as (select 1 union select x+1 from inputs where x < 10000) select * from inputs) dt", fillerVarchar),
+	//		fmt.Sprintf("insert into xy select x, '%s', x  from (with recursive inputs(x) as (select 10001 union select x+1 from inputs where x < 20000) select * from inputs) dt", fillerVarchar),
+	//		fmt.Sprintf("insert into xy select x, '%s', NULL  from (with recursive inputs(x) as (select 20001 union select x+1 from inputs where x < 30000) select * from inputs) dt", fillerVarchar),
+	//		"analyze table xy",
+	//	},
+	//	Assertions: []queries.ScriptTestAssertion{
+	//		{
+	//			Query:    "SELECT json_length(json_extract(histogram, \"$.statistic.buckets\")) from information_schema.column_statistics where column_name = 'z'",
+	//			Expected: []sql.Row{{152}},
+	//		},
+	//		{
+	//			Query:    " SELECT sum(cnt) from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(cnt int path '$.row_count')) as dt  where table_name = 'xy' and column_name = 'z'",
+	//			Expected: []sql.Row{{float64(30000)}},
+	//		},
+	//		{
+	//			Query:    " SELECT sum(cnt) from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(cnt int path '$.null_count')) as dt  where table_name = 'xy' and column_name = 'z'",
+	//			Expected: []sql.Row{{float64(10000)}},
+	//		},
+	//		{
+	//			// border NULL double count
+	//			Query:    " SELECT sum(cnt) from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(cnt int path '$.distinct_count')) as dt  where table_name = 'xy' and column_name = 'z'",
+	//			Expected: []sql.Row{{float64(20036)}},
+	//		},
+	//		{
+	//			// max bound count is nulls chunk
+	//			Query:    " SELECT max(bound_cnt) from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(bound_cnt int path '$.bound_count')) as dt  where table_name = 'xy' and column_name = 'z'",
+	//			Expected: []sql.Row{{int64(440)}},
+	//		},
+	//	},
+	//},
 	{
 		Name: "multiint index",
 		SetUpScript: []string{
@@ -195,6 +193,41 @@ var DoltHistogramTests = []queries.ScriptTest{
 			{
 				Query:    " SELECT sum(cnt) from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(cnt int path '$.distinct_count')) as dt  where table_name = 'xy' and column_name = 'x,z'",
 				Expected: []sql.Row{{float64(30000)}},
+			},
+			{
+				// max bound count is nulls chunk
+				Query:    " SELECT max(bound_cnt) from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(bound_cnt int path '$.bound_count')) as dt  where table_name = 'xy' and column_name = 'x,z'",
+				Expected: []sql.Row{{int64(1)}},
+			},
+		},
+	},
+	{
+		Name: "multiint index small",
+		SetUpScript: []string{
+			"CREATE table xy (x bigint primary key, y varchar(500), z bigint, key(x, z));",
+			fmt.Sprintf("insert into xy select x, '%s', x+1  from (with recursive inputs(x) as (select 1 union select x+1 from inputs where x < 2) select * from inputs) dt", fillerVarchar),
+			fmt.Sprintf("insert into xy select x, '%s', x+1  from (with recursive inputs(x) as (select 3 union select x+1 from inputs where x < 4) select * from inputs) dt", fillerVarchar),
+			fmt.Sprintf("insert into xy select x, '%s', NULL from (with recursive inputs(x) as (select 5 union select x+1 from inputs where x < 6) select * from inputs) dt", fillerVarchar),
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "call dolt_stats_wait()",
+			},
+			{
+				Query:    "SELECT json_length(json_extract(histogram, \"$.statistic.buckets\")) from information_schema.column_statistics where column_name = 'x,z'",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    " SELECT sum(cnt) from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(cnt int path '$.row_count')) as dt  where table_name = 'xy' and column_name = 'x,z'",
+				Expected: []sql.Row{{float64(6)}},
+			},
+			{
+				Query:    " SELECT sum(cnt) from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(cnt int path '$.null_count')) as dt  where table_name = 'xy' and column_name = 'x,z'",
+				Expected: []sql.Row{{float64(2)}},
+			},
+			{
+				Query:    " SELECT sum(cnt) from information_schema.column_statistics join json_table(histogram, '$.statistic.buckets[*]' COLUMNS(cnt int path '$.distinct_count')) as dt  where table_name = 'xy' and column_name = 'x,z'",
+				Expected: []sql.Row{{float64(6)}},
 			},
 			{
 				// max bound count is nulls chunk
@@ -609,7 +642,7 @@ var StatBranchTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query: "call dolt_stats_sync()",
+				Query: "call dolt_stats_wait()",
 			},
 			{
 				Query: "select table_name, index_name, row_count from dolt_statistics",

@@ -17,18 +17,21 @@ package statspro
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/go-mysql-server/sql"
+	"sync"
 )
 
 var ErrStatsIssuerPaused = fmt.Errorf("stats issuer is paused")
 
-type listenerEvent uint8
+type listenerEvent uint16
 
 const (
-	unknownEvent = listenerEvent(iota)
-	leSwap
-	leStop
-	leGc = 4
+	unknownEvent               = listenerEvent(iota)
+	leSwap       listenerEvent = 1 << 0
+	leStop       listenerEvent = 1 << 1
+	leGc         listenerEvent = 1 << 2
+	leFlush      listenerEvent = 1 << 3
 )
 
 func (sc *StatsController) signalListener(s listenerEvent) {
@@ -92,12 +95,52 @@ func (sc *StatsController) Restart() error {
 	return nil
 }
 
-func (sc *StatsController) waitForCond(ctx context.Context, ok, stop listenerEvent, cnt int, retry func()) (err error) {
+func (sc *StatsController) RunQueue() {
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		wg.Done()
+		sc.sq.Run(context.Background())
+	}()
+	wg.Wait()
+	return
+}
+
+func (sc *StatsController) Init(ctx context.Context, dbs []sql.Database, keepStorage bool) error {
+	sc.RunQueue()
+	sqlCtx, err := sc.ctxGen(ctx)
+	if err != nil {
+		return err
+	}
+	for i, db := range dbs {
+		if db, ok := db.(sqle.Database); ok { // exclude read replica dbs
+			fs, err := sc.pro.FileSystemForDatabase(db.AliasedName())
+			if err != nil {
+				return err
+			}
+			if err := sc.AddFs(sqlCtx, db, fs); err != nil {
+				return err
+			}
+			if i == 0 && !keepStorage {
+				if err := sc.lockedRotateStorage(sqlCtx); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func (sc *StatsController) waitForCond(ctx context.Context, ok, stop listenerEvent, cnt int, before func(), retry func() bool) (err error) {
 	for cnt > 0 {
 		var l chan listenerEvent
 		l, err = sc.addListener()
 		if err != nil {
 			return err
+		}
+
+		if before != nil {
+			before()
 		}
 
 		select {
@@ -111,29 +154,69 @@ func (sc *StatsController) waitForCond(ctx context.Context, ok, stop listenerEve
 			}
 		}
 		if retry != nil {
-			retry()
+			if !retry() {
+				return nil
+			}
 		}
 	}
 	return nil
 }
 
+func (sc *StatsController) WaitForSync(ctx context.Context) (err error) {
+	// wait for 2 cycles because first completion is usually a stale context
+	return sc.waitForCond(ctx, leSwap|leGc, leStop, 2, nil, nil)
+}
+
+func (sc *StatsController) WaitForFlush(ctx *sql.Context) error {
+	return sc.waitForCond(ctx, leFlush, leStop, 1, nil, nil)
+}
+
 func (sc *StatsController) WaitForDbSync(ctx context.Context) (err error) {
 	// wait for 2 cycles because first completion is usually a stale context
-	return sc.waitForCond(ctx, leSwap|leGc, leStop, 2, nil)
+	return sc.waitForCond(ctx, leSwap|leGc, leStop, 2, nil, nil)
 }
 
 func (sc *StatsController) Gc(ctx *sql.Context) error {
 	sc.doGc = true
+	var gcCnt int
+	// the combined effect of the before/retry check is that
+	// we'll retry until we see a GC event or notice the counter
+	// bump.
+	// todo: better understand why without the before check we do 1-2 GC's,
+	// or a more efficient concurrency pattern
 	return sc.waitForCond(ctx, leGc, leStop, 1, func() {
+		// acquire counter after we've sent listener to
+		// avoid waiting on multiple GC's
 		sc.statsMu.Lock()
 		defer sc.statsMu.Unlock()
+		gcCnt = sc.gcCnt
+	}, func() bool {
+		// when we finish a swap but miss a GC, make sure we do again
+		sc.statsMu.Lock()
+		defer sc.statsMu.Unlock()
+		if sc.gcCnt > gcCnt {
+			return false
+		}
 		sc.doGc = true
+		return true
 	})
 }
 
 func (sc *StatsController) Close() {
-	sc.sq.Stop()
-	sc.Stop()
+	//sc.sq.Purge()
+	sc.statsMu.Lock()
+	defer sc.statsMu.Unlock()
+	if sc.activeCtxCancel != nil {
+		sc.activeCtxCancel()
+		sc.activeCtxCancel = nil
+		sc.sq.InterruptAsync(func() error {
+			sc.sq.Purge()
+			sc.sq.Stop()
+			return nil
+		})
+	}
+	sc.signalListener(leStop)
+
 	close(sc.closed)
 	return
 }

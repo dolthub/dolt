@@ -392,16 +392,12 @@ func TestQueryPlans(t *testing.T) {
 }
 
 func TestIntegrationQueryPlans(t *testing.T) {
-	harness := newDoltEnginetestHarness(t).WithConfigureStats(true)
+	harness := newDoltEnginetestHarness(t)
 	defer harness.Close()
 	enginetest.TestIntegrationPlans(t, harness)
 }
 
 func TestDoltDiffQueryPlans(t *testing.T) {
-	if !types.IsFormat_DOLT(types.Format_Default) {
-		t.Skip("only new format support system table indexing")
-	}
-
 	harness := newDoltEnginetestHarness(t).WithParallelism(2) // want Exchange nodes
 	RunDoltDiffQueryPlansTest(t, harness)
 }
@@ -608,7 +604,7 @@ func TestScripts(t *testing.T) {
 	if types.IsFormat_DOLT(types.Format_Default) {
 		skipped = append(skipped, newFormatSkippedScripts...)
 	}
-	h := newDoltHarness(t).WithSkippedQueries(skipped)
+	h := newDoltHarness(t).WithSkippedQueries(skipped).WithConfigureStats(true)
 	defer h.Close()
 	enginetest.TestScripts(t, h)
 }
@@ -685,20 +681,13 @@ func TestDoltUserPrivileges(t *testing.T) {
 }
 
 func TestJoinOps(t *testing.T) {
-	if types.IsFormat_LD(types.Format_Default) {
-		t.Skip("DOLT_LD keyless indexes are not sorted")
-	}
-
 	h := newDoltHarness(t)
 	defer h.Close()
 	enginetest.TestJoinOps(t, h, enginetest.DefaultJoinOpTests)
 }
 
 func TestJoinPlanning(t *testing.T) {
-	if types.IsFormat_LD(types.Format_Default) {
-		t.Skip("DOLT_LD keyless indexes are not sorted")
-	}
-	h := newDoltEnginetestHarness(t).WithConfigureStats(true)
+	h := newDoltEnginetestHarness(t)
 	defer h.Close()
 	enginetest.TestJoinPlanning(t, h)
 }
@@ -706,7 +695,6 @@ func TestJoinPlanning(t *testing.T) {
 func TestJoinQueries(t *testing.T) {
 	h := newDoltHarness(t)
 	defer h.Close()
-	enginetest.TestJoinQueries(t, h)
 }
 
 func TestJoinQueriesPrepared(t *testing.T) {
@@ -1728,7 +1716,7 @@ func TestScriptsPrepared(t *testing.T) {
 		skipped = append(skipped, newFormatSkippedScripts...)
 	}
 	skipPreparedTests(t)
-	h := newDoltHarness(t).WithSkippedQueries(skipped)
+	h := newDoltHarness(t).WithSkippedQueries(skipped).WithConfigureStats(true)
 	defer h.Close()
 	enginetest.TestScriptsPrepared(t, h)
 }

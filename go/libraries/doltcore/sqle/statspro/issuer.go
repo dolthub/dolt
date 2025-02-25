@@ -58,6 +58,10 @@ func (sc *StatsController) runIssuer(ctx context.Context) (err error) {
 			sc.descError("", err)
 		}
 
+		if ok, err := sc.trySwapStats(ctx, genStart, genCand, newStats, gcKv); err != nil || !ok {
+			sc.descError("failed to swap stats", err)
+		}
+
 		select {
 		case <-ctx.Done():
 			// is double check necessary?
@@ -65,9 +69,6 @@ func (sc *StatsController) runIssuer(ctx context.Context) (err error) {
 		default:
 		}
 
-		if ok, err := sc.trySwapStats(ctx, genStart, genCand, newStats, gcKv); err != nil || !ok {
-			sc.descError("failed to swap stats", err)
-		}
 	}
 }
 
@@ -75,7 +76,7 @@ func (sc *StatsController) trySwapStats(ctx context.Context, prevGen, newGen uin
 	sc.statsMu.Lock()
 	defer sc.statsMu.Unlock()
 
-	signal := leSwap
+	var signal listenerEvent = leSwap
 	defer func() {
 		if ok {
 			sc.signalListener(signal)
@@ -85,6 +86,9 @@ func (sc *StatsController) trySwapStats(ctx context.Context, prevGen, newGen uin
 	if sc.genCnt.CompareAndSwap(prevGen, newGen) {
 		// Replace stats and new Kv if no replacements happened
 		// in-between.
+		if newStats == nil {
+			print()
+		}
 		sc.Stats = newStats
 		if gcKv != nil {
 			signal = leGc
@@ -119,7 +123,7 @@ func (sc *StatsController) trySwapStats(ctx context.Context, prevGen, newGen uin
 func (sc *StatsController) newStatsForRoot(baseCtx context.Context, gcKv *memStats) (newStats *rootStats, err error) {
 	defer func() {
 		if r := recover(); r != nil {
-			err = fmt.Errorf("serialQueue panicked running work: %s", r)
+			err = fmt.Errorf("issuer panicked running work: %s", r)
 		}
 		if err != nil {
 			sc.descError("", err)
@@ -219,23 +223,23 @@ func (sc *StatsController) collectIndexNodes(ctx *sql.Context, prollyMap prolly.
 
 	var offset uint64
 	for _, n := range nodes {
+		treeCnt, err := n.TreeCount()
+		if err != nil {
+			return nil, nil, err
+		}
+		start, stop := offset, offset+uint64(treeCnt)
+		offset = stop
+
 		if _, ok, err := sc.GetBucket(ctx, n.HashOf(), keyBuilder); err != nil {
 			return nil, nil, err
 		} else if ok {
 			continue
 		}
 
-		treeCnt, err := n.TreeCount()
-		if err != nil {
-			return nil, nil, err
-		}
-
 		err = sc.sq.DoSync(ctx, func() error {
 			updater.newBucket()
 
 			// we read exclusive range [node first key, next node first key)
-			start, stop := offset, offset+uint64(treeCnt)
-			offset += uint64(treeCnt)
 			iter, err := prollyMap.IterOrdinalRange(ctx, start, stop)
 			if err != nil {
 				return err
@@ -294,9 +298,9 @@ func (sc *StatsController) updateTable(ctx *sql.Context, tableName string, sqlDb
 	}
 
 	tableKey := tableIndexesKey{
-		db:     sqlDb.AliasedName(),
-		branch: sqlDb.Revision(),
-		table:  tableName,
+		db:     strings.ToLower(sqlDb.AliasedName()),
+		branch: strings.ToLower(sqlDb.Revision()),
+		table:  strings.ToLower(tableName),
 		schema: "",
 	}
 
@@ -341,8 +345,11 @@ func (sc *StatsController) updateTable(ctx *sql.Context, tableName string, sqlDb
 
 		prollyMap := durable.ProllyMapFromIndex(idx)
 		var levelNodes []tree.Node
-		if err := sc.sq.DoSync(ctx, func() error {
+		if err = sc.sq.DoSync(ctx, func() error {
 			levelNodes, err = tree.GetHistogramLevel(ctx, prollyMap.Tuples(), bucketLowCnt)
+			if err != nil {
+				sc.descError("get level", err)
+			}
 			return err
 		}); err != nil {
 			return tableIndexesKey{}, nil, err
@@ -455,7 +462,9 @@ func (sc *StatsController) getTemplate(ctx *sql.Context, sqlTable *sqle.DoltTabl
 		types = append(types, cet.Type)
 	}
 
-	tablePrefix := sqlTable.Name() + "."
+	// xxx: the lower here is load bearing, index comparison
+	// expects the expressions to be stripped of table name.
+	tablePrefix := strings.ToLower(sqlTable.Name()) + "."
 	cols := make([]string, len(sqlIdx.Expressions()))
 	for i, c := range sqlIdx.Expressions() {
 		cols[i] = strings.TrimPrefix(strings.ToLower(c), tablePrefix)

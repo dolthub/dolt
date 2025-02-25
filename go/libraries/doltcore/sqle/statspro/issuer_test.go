@@ -771,7 +771,7 @@ func newTestEngine(ctx context.Context, dEnv *env.DoltEnv, threads *sql.Backgrou
 		panic(err)
 	}
 
-	sc := NewStatsCoord(ctx, pro, nil, logrus.StandardLogger(), threads, dEnv)
+	sc := NewStatsController(pro, nil, logrus.StandardLogger(), dEnv)
 
 	gcSafepointController := dsess.NewGCSafepointController()
 
@@ -802,12 +802,6 @@ func newTestEngine(ctx context.Context, dEnv *env.DoltEnv, threads *sql.Backgrou
 	if err := sc.Init(sqlCtx, pro.AllDatabases(sqlCtx), false); err != nil {
 		log.Fatal(err)
 	}
-	done := make(chan struct{})
-	go func() {
-		close(done)
-		sc.sq.Run(ctx)
-	}()
-	<-done
 	sqlEng.Analyzer.Catalog.StatsProvider = sc
 	return sqlEng, sqlCtx
 }
@@ -819,7 +813,6 @@ func TestStatsGcConcurrency(t *testing.T) {
 	sc.SetEnableGc(true)
 	sc.JobInterval = 1 * time.Nanosecond
 	sc.gcInterval = 100 * time.Nanosecond
-	sc.branchInterval = 50 * time.Nanosecond
 	require.NoError(t, sc.Restart())
 
 	addDb := func(ctx *sql.Context, dbName string) {
@@ -900,7 +893,6 @@ func TestStatsBranchConcurrency(t *testing.T) {
 
 	sc.JobInterval = 10
 	sc.gcInterval = time.Hour
-	sc.branchInterval = time.Hour
 	require.NoError(t, sc.Restart())
 
 	addBranch := func(ctx *sql.Context, i int) {
@@ -986,7 +978,6 @@ func TestStatsCacheGrowth(t *testing.T) {
 
 	sc.JobInterval = 10
 	sc.gcInterval = time.Hour
-	sc.branchInterval = time.Hour
 	require.NoError(t, sc.Restart())
 
 	addBranch := func(ctx *sql.Context, i int) {
@@ -1026,17 +1017,12 @@ func TestStatsCacheGrowth(t *testing.T) {
 			close(branches)
 		}()
 
-		//waitCtx, _ := sc.ctxGen(context.Background())
 		i := 0
 		for _ = range branches {
-			//if i%50 == 0 {
-			//	log.Println("branches: ", strconv.Itoa(i))
-			//	require.NoError(t, executeQuery(waitCtx, sqlEng, "call dolt_stats_wait()"))
-			//}
 			i++
 		}
 
-		executeQuery(ctx, sqlEng, "call dolt_stats_wait()")
+		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
 		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_gc()"))
 
 		sc.Stop()

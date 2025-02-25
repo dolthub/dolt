@@ -51,7 +51,8 @@ var DoltProcedures = []sql.ExternalStoredProcedureDetails{
 	{Name: "dolt_stats_stop", Schema: statsFuncSchema, Function: statsFunc(statsStop)},
 	{Name: "dolt_stats_info", Schema: statsFuncSchema, Function: statsFunc(statsInfo)},
 	{Name: "dolt_stats_purge", Schema: statsFuncSchema, Function: statsFunc(statsPurge)},
-	{Name: "dolt_stats_wait", Schema: statsFuncSchema, Function: statsFunc(statsWait)},
+	{Name: "dolt_stats_wait", Schema: statsFuncSchema, Function: statsFunc(statsSync)},
+	{Name: "dolt_stats_flush", Schema: statsFuncSchema, Function: statsFunc(statsFlush)},
 	{Name: "dolt_stats_gc", Schema: statsFuncSchema, Function: statsFunc(statsGc)},
 	{Name: "dolt_stats_timers", Schema: statsFuncSchema, Function: statsFunc(statsTimers)},
 }

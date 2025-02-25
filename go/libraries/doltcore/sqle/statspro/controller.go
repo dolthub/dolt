@@ -61,7 +61,6 @@ func (k tableIndexesKey) String() string {
 
 type StatsController struct {
 	logger         *logrus.Logger
-	threads        *sql.BackgroundThreads
 	pro            *sqle.DoltDatabaseProvider
 	statsBackingDb filesys.Filesys
 	dialPro        dbfactory.GRPCDialProvider
@@ -77,14 +76,13 @@ type StatsController struct {
 	activeCtxCancel context.CancelFunc
 	listeners       []chan listenerEvent
 
-	JobInterval    time.Duration
-	gcInterval     time.Duration
-	branchInterval time.Duration
-	memOnly        bool
-	enableGc       bool
-	doGc           bool
-	Debug          bool
-	closed         chan struct{}
+	JobInterval time.Duration
+	gcInterval  time.Duration
+	memOnly     bool
+	enableGc    bool
+	doGc        bool
+	Debug       bool
+	closed      chan struct{}
 
 	// kv is a content-addressed cache of histogram objects:
 	// buckets, first bounds, and schema-specific statistic
@@ -113,7 +111,7 @@ func newRootStats() *rootStats {
 	}
 }
 
-func NewStatsCoord(ctx context.Context, pro *sqle.DoltDatabaseProvider, ctxGen ctxFactory, logger *logrus.Logger, threads *sql.BackgroundThreads, dEnv *env.DoltEnv) *StatsController {
+func NewStatsController(pro *sqle.DoltDatabaseProvider, ctxGen ctxFactory, logger *logrus.Logger, dEnv *env.DoltEnv) *StatsController {
 	sq := jobqueue.NewSerialQueue().WithErrorCb(func(err error) {
 		logger.Error(err)
 	})
@@ -125,7 +123,6 @@ func NewStatsCoord(ctx context.Context, pro *sqle.DoltDatabaseProvider, ctxGen c
 		sq:          sq,
 		Stats:       newRootStats(),
 		dbFs:        make(map[string]filesys.Filesys),
-		threads:     threads,
 		closed:      make(chan struct{}),
 		kv:          NewMemStats(),
 		pro:         pro,
@@ -226,18 +223,15 @@ func (sc *StatsController) descError(d string, err error) {
 }
 
 func (sc *StatsController) GetTableStats(ctx *sql.Context, db string, table sql.Table) ([]sql.Statistic, error) {
-	dSess := dsess.DSessFromSess(ctx.Session)
-	branch, err := dSess.GetBranch()
+	key, err := sc.statsKey(ctx, db, table.Name())
 	if err != nil {
 		return nil, err
 	}
-	key := tableIndexesKey{
-		db:     db,
-		branch: branch,
-		table:  table.Name(),
-	}
 	sc.statsMu.Lock()
 	defer sc.statsMu.Unlock()
+	if sc.Stats == nil {
+		return nil, nil
+	}
 	st := sc.Stats.stats[key]
 	var ret []sql.Statistic
 	for _, s := range st {
@@ -299,8 +293,16 @@ func (sc *StatsController) SetStats(ctx *sql.Context, s sql.Statistic) error {
 	if err != nil {
 		return err
 	}
-	sc.Stats.stats[key] = sc.Stats.stats[key][:0]
-	sc.Stats.stats[key] = append(sc.Stats.stats[key], ss)
+
+	// not efficient, but this is only used for testing
+	var newStats []*stats.Statistic
+	for _, ss := range sc.Stats.stats[key] {
+		if !strings.EqualFold(ss.Qualifier().Index(), s.Qualifier().Index()) {
+			newStats = append(newStats, ss)
+		}
+	}
+	newStats = append(newStats, ss)
+	sc.Stats.stats[key] = newStats
 	return nil
 }
 
@@ -320,13 +322,16 @@ func (sc *StatsController) GetStats(ctx *sql.Context, qual sql.StatQualifier, co
 }
 
 func (sc *StatsController) GetTableDoltStats(ctx *sql.Context, branch, db, schema, table string) ([]*stats.Statistic, error) {
+	key := tableIndexesKey{
+		db:     strings.ToLower(db),
+		branch: strings.ToLower(branch),
+		table:  strings.ToLower(table),
+		schema: strings.ToLower(schema),
+	}
 	sc.statsMu.Lock()
 	defer sc.statsMu.Unlock()
-	key := tableIndexesKey{
-		db:     db,
-		branch: branch,
-		table:  table,
-		schema: schema,
+	if sc.Stats == nil {
+		return nil, nil
 	}
 	return sc.Stats.stats[key], nil
 }
@@ -377,9 +382,9 @@ func (sc *StatsController) statsKey(ctx *sql.Context, dbName, table string) (tab
 		return tableIndexesKey{}, err
 	}
 	key := tableIndexesKey{
-		db:     dbName,
-		branch: branch,
-		table:  table,
+		db:     strings.ToLower(dbName),
+		branch: strings.ToLower(branch),
+		table:  strings.ToLower(table),
 	}
 	return key, nil
 }
@@ -412,30 +417,6 @@ func (sc *StatsController) DataLength(ctx *sql.Context, dbName string, table sql
 		}
 	}
 	return 0, nil
-}
-
-func (sc *StatsController) Init(ctx context.Context, dbs []sql.Database, keepStorage bool) error {
-	sqlCtx, err := sc.ctxGen(ctx)
-	if err != nil {
-		return err
-	}
-	for i, db := range dbs {
-		if db, ok := db.(sqle.Database); ok { // exclude read replica dbs
-			fs, err := sc.pro.FileSystemForDatabase(db.AliasedName())
-			if err != nil {
-				return err
-			}
-			if err := sc.AddFs(sqlCtx, db, fs); err != nil {
-				return err
-			}
-			if i == 0 && !keepStorage {
-				if err := sc.lockedRotateStorage(sqlCtx); err != nil {
-					return err
-				}
-			}
-		}
-	}
-	return nil
 }
 
 func (sc *StatsController) Purge(ctx *sql.Context) error {
