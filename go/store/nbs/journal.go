@@ -541,7 +541,7 @@ func AcquireManifestLock(dir string) (lock *fslock.Lock, err error) {
 	return lock, nil
 }
 
-// newJournalManifest makes a new file manifest.
+// newJournalManifest makes a new journal manifest.
 func newJournalManifest(ctx context.Context, lock *fslock.Lock, dir string) (m *journalManifest, err error) {
 	m = &journalManifest{dir: dir, lock: lock}
 
