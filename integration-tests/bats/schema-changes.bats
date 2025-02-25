@@ -445,8 +445,8 @@ EOF
   env DOLT_TEST_ASSERT_NO_TABLE_REWRITE=1 dolt sql -q "alter table t modify column vc varchar(15);"
   env DOLT_TEST_ASSERT_NO_TABLE_REWRITE=1 dolt sql -q "alter table t modify column vb varbinary(15);"
 
-  # Changing the collation doesn't require a table rewrite, but it does invalidate the secondary indexes.
-  # The GMS API doesn't currently less us separate the two, so currently this causes a table rewrite, but it doesn't have to.
+  # Changing the collation for a non-PK column doesn't require a table rewrite, but it does invalidate the secondary indexes.
+  # The GMS API doesn't currently let us separate the two, so currently this causes a table rewrite, but it doesn't have to.
   # env DOLT_TEST_ASSERT_NO_TABLE_REWRITE=1 dolt sql -q "alter table t modify column vc varchar(15) collate utf8mb4_0900_ai_ci;"
 
   # After all these schema changes, the table hash remains the same.

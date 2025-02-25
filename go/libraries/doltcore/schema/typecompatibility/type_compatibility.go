@@ -41,7 +41,7 @@ type TypeCompatibilityChecker interface {
 	IsTypeChangeCompatible(from, to typeinfo.TypeInfo) TypeChangeInfo
 }
 
-// newTypeCompatabilityCheckerForStorageFormat returns a new TypeCompatibilityChecker
+// NewTypeCompatabilityCheckerForStorageFormat returns a new TypeCompatibilityChecker
 // instance for the given storage format.
 func NewTypeCompatabilityCheckerForStorageFormat(format *storetypes.NomsBinFormat) TypeCompatibilityChecker {
 	switch format {
