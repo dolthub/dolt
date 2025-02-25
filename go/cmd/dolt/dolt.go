@@ -678,7 +678,7 @@ If you're interested in running this command against a remote host, hit us up on
 	}
 
 	var lookForServer bool
-	if targetEnv.DoltDB(ctx) != nil && targetEnv.IsAccessModeReadOnly(ctx) {
+	if targetEnv.IsAccessModeReadOnly(ctx) {
 		// If the loaded target environment has a doltDB and we do not
 		// have access to it, we look for a server.
 		lookForServer = true

@@ -526,9 +526,10 @@ func (c journalConjoiner) chooseConjoinees(upstream []tableSpec) (conjoinees, ke
 	return
 }
 
-// newJournalManifest makes a new file manifest.
-func newJournalManifest(ctx context.Context, dir string) (m *journalManifest, err error) {
-	lock := fslock.New(filepath.Join(dir, lockFileName))
+// AcquireManifestLock attempts to acquire the lock for a manifest.
+// If the lock cannot be acquired but no other error occurs, this returns nil.
+func AcquireManifestLock(dir string) (lock *fslock.Lock, err error) {
+	lock = fslock.New(filepath.Join(dir, lockFileName))
 	// try to take the file lock. if we fail, make the manifest read-only.
 	// if we succeed, hold the file lock until we close the journalManifest
 	err = lock.LockWithTimeout(lockFileTimeout)
@@ -537,6 +538,11 @@ func newJournalManifest(ctx context.Context, dir string) (m *journalManifest, er
 	} else if err != nil {
 		return nil, err
 	}
+	return lock, nil
+}
+
+// newJournalManifest makes a new file manifest.
+func newJournalManifest(ctx context.Context, lock *fslock.Lock, dir string) (m *journalManifest, err error) {
 	m = &journalManifest{dir: dir, lock: lock}
 
 	var f *os.File

@@ -111,7 +111,7 @@ func NewDoltEnv(version string, config *DoltCliConfig, repoState *RepoState, dol
 
 func (dEnv *DoltEnv) DoltDB(ctx context.Context) *doltdb.DoltDB {
 	if dEnv.doltDB == nil {
-		LoadDoltDB(ctx, dEnv.FS, dEnv.urlStr, dEnv)
+		LoadDoltDB(ctx, dEnv.FS, dEnv.urlStr, dEnv, nil)
 	}
 	return dEnv.doltDB
 }
@@ -203,13 +203,25 @@ func LoadWithoutDB(_ context.Context, hdp HomeDirProvider, fs filesys.Filesys, u
 // Load loads the DoltEnv for the .dolt directory determined by resolving the specified urlStr with the specified Filesys.
 func Load(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, urlStr string, version string) *DoltEnv {
 	dEnv := LoadWithoutDB(ctx, hdp, fs, urlStr, version)
-	LoadDoltDB(ctx, dEnv.FS, dEnv.urlStr, dEnv)
+	LoadDoltDB(ctx, dEnv.FS, dEnv.urlStr, dEnv, nil)
 	return dEnv
 }
 
-func LoadDoltDB(ctx context.Context, fs filesys.Filesys, urlStr string, dEnv *DoltEnv) {
-	dEnv.loadDBOnce.Do(func() {
-		ddb, dbLoadErr := doltdb.LoadDoltDB(ctx, types.Format_Default, urlStr, fs)
+// LoadWithWriteAccess loads the DoltEnv for the .dolt directory determined by resolving the specified urlStr with the specified Filesys.
+// If it can't get write access, it sets dEnv.DBLoadError to dbfactory.ErrReadOnly and returns a nil doltDb.
+func LoadWithWriteAccess(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, urlStr string, version string) *DoltEnv {
+	dEnv := LoadWithoutDB(ctx, hdp, fs, urlStr, version)
+	LoadDoltDB(ctx, dEnv.FS, dEnv.urlStr, dEnv, map[string]interface{}{dbfactory.RequestWriteAccessParam: true})
+	return dEnv
+}
+
+func LoadDoltDB(ctx context.Context, fs filesys.Filesys, urlStr string, dEnv *DoltEnv, params map[string]interface{}) {
+	if dEnv.doltDB == nil {
+		var ddb *doltdb.DoltDB
+		var dbLoadErr error
+
+		ddb, dbLoadErr = doltdb.LoadDoltDBWithParams(ctx, types.Format_Default, urlStr, fs, params)
+
 		dEnv.doltDB = ddb
 		dEnv.DBLoadError = dbLoadErr
 		dEnv.urlStr = urlStr
@@ -255,7 +267,7 @@ func LoadDoltDB(ctx context.Context, fs filesys.Filesys, urlStr string, dEnv *Do
 				dEnv.RSLoadErr = err
 			}
 		}
-	})
+	}
 }
 
 func GetDefaultInitBranch(cfg config.ReadableConfig) string {
@@ -1271,5 +1283,9 @@ func (dEnv *DoltEnv) BulkDbEaFactory(ctx context.Context) editor.DbEaFactory {
 }
 
 func (dEnv *DoltEnv) IsAccessModeReadOnly(ctx context.Context) bool {
+	// Check if we previously tried to load a writeable database and got an error.
+	if dEnv.DBLoadError == dbfactory.ErrReadOnly {
+		return true
+	}
 	return dEnv.DoltDB(ctx).AccessMode() == chunks.ExclusiveAccessMode_ReadOnly
 }

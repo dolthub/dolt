@@ -51,6 +51,8 @@ const (
 	StatsDir = "stats"
 
 	ChunkJournalParam = "journal"
+	// RequestWriteAccessParam is the parameter used to indicate that creating a DB either needs write access or should fail.
+	RequestWriteAccessParam = "requestWriteAccess"
 )
 
 // DoltDataDir is the directory where noms files will be stored
@@ -114,6 +116,8 @@ func (fact FileFactory) PrepareDB(ctx context.Context, nbf *types.NomsBinFormat,
 	return nil
 }
 
+var ErrReadOnly = fmt.Errorf("db is read only")
+
 // CreateDB creates a local filesys backed database
 func (fact FileFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) (datas.Database, types.ValueReadWriter, tree.NodeStore, error) {
 	singletonLock.Lock()
@@ -137,14 +141,26 @@ func (fact FileFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, 
 	}
 
 	var useJournal bool
+	var requestWriteAccess bool
 	if params != nil {
 		_, useJournal = params[ChunkJournalParam]
+		_, requestWriteAccess = params[RequestWriteAccessParam]
 	}
 
 	var newGenSt *nbs.NomsBlockStore
 	q := nbs.NewUnlimitedMemQuotaProvider()
 	if useJournal && chunkJournalFeatureFlag {
-		newGenSt, err = nbs.NewLocalJournalingStore(ctx, nbf.VersionString(), path, q)
+		// Attempt to acquire the lock and return a special error if we fail.
+		lock, err := nbs.AcquireManifestLock(path)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+
+		if requestWriteAccess && lock == nil {
+			return nil, nil, nil, ErrReadOnly
+		}
+
+		newGenSt, err = nbs.NewLocalJournalingStoreWithLock(ctx, lock, nbf.VersionString(), path, q)
 	} else {
 		newGenSt, err = nbs.NewLocalStore(ctx, nbf.VersionString(), path, defaultMemTableSize, q)
 	}
