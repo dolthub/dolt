@@ -33,6 +33,7 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3iface"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
@@ -67,6 +68,8 @@ type awsLimits struct {
 	partTarget, partMin, partMax uint64
 }
 
+// Open takes the named object, and returns a chunkSource for it. This function works for both table files and archive
+// files. If the table file doesn't exist, but |name| + ".darc" does, then an archive chunk source is returned instead.
 func (s3p awsTablePersister) Open(ctx context.Context, name hash.Hash, chunkCount uint32, stats *Stats) (chunkSource, error) {
 	cs, err := newAWSTableFileChunkSource(
 		ctx,
@@ -81,8 +84,15 @@ func (s3p awsTablePersister) Open(ctx context.Context, name hash.Hash, chunkCoun
 		return cs, nil
 	}
 
-	// if the error is for an object not found, we may be looking for an archive. We could check the error
-	// before trying to see if there is an archive.... NM4.
+	// errors.Is doesn't work with aws errors
+	reqErr, ok := err.(awserr.RequestFailure)
+	if !ok {
+		// Probably won't ever happen.
+		return emptyChunkSource{}, err
+	}
+	if reqErr.Code() != "NoSuchKey" || reqErr.StatusCode() != 404 {
+		return emptyChunkSource{}, err
+	}
 
 	e, err2 := s3p.Exists(ctx, name.String()+ArchiveFileSuffix, chunkCount, stats)
 	if e && err2 == nil {
@@ -100,12 +110,9 @@ func (s3p awsTablePersister) Open(ctx context.Context, name hash.Hash, chunkCoun
 }
 
 func (s3p awsTablePersister) Exists(ctx context.Context, name string, _ uint32, stats *Stats) (bool, error) {
-	return tableExistsInChunkSource(
-		ctx,
-		&s3ObjectReader{s3: s3p.s3, bucket: s3p.bucket, readRl: s3p.rl, ns: s3p.ns},
-		name,
-		stats,
-	)
+	s3or := &s3ObjectReader{s3: s3p.s3, bucket: s3p.bucket, readRl: s3p.rl, ns: s3p.ns}
+
+	return s3or.objectExistsInChunkSource(ctx, name, stats)
 }
 
 func (s3p awsTablePersister) CopyTableFile(ctx context.Context, r io.Reader, fileId string, fileSz uint64, chunkCount uint32) error {

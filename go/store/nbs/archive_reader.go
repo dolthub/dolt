@@ -136,17 +136,35 @@ func newArchiveMetadata(reader io.ReaderAt, fileSize uint64) (*ArchiveMetadata, 
 	}, nil
 }
 
+func newArchiveReaderFromFooter(reader io.ReaderAt, fileSz uint64, footer []byte) (archiveReader, error) {
+	if uint64(len(footer)) != archiveFooterSize {
+		return archiveReader{}, errors.New("runtime error: invalid footer.")
+	}
+
+	ftr, err := buildFooter(fileSz, footer)
+	if err != nil {
+		return archiveReader{}, err
+	}
+
+	return buildArchiveReader(reader, fileSz, ftr)
+}
+
 func newArchiveReader(reader io.ReaderAt, fileSize uint64) (archiveReader, error) {
 	footer, err := loadFooter(reader, fileSize)
 	if err != nil {
 		return archiveReader{}, err
 	}
 
+	return buildArchiveReader(reader, fileSize, footer)
+}
+
+func buildArchiveReader(reader io.ReaderAt, fileSize uint64, footer archiveFooter) (archiveReader, error) {
+
 	byteOffSpan := footer.indexByteOffsetSpan()
 	secRdr := io.NewSectionReader(reader, int64(byteOffSpan.offset), int64(byteOffSpan.length))
 	byteSpans := make([]uint64, footer.byteSpanCount+1)
 	byteSpans[0] = 0 // Null byteSpan to simplify logic.
-	err = binary.Read(secRdr, binary.BigEndian, byteSpans[1:])
+	err := binary.Read(secRdr, binary.BigEndian, byteSpans[1:])
 	if err != nil {
 		return archiveReader{}, err
 	}
@@ -213,7 +231,10 @@ func loadFooter(reader io.ReaderAt, fileSize uint64) (f archiveFooter, err error
 	if err != nil {
 		return
 	}
+	return buildFooter(fileSize, buf)
+}
 
+func buildFooter(fileSize uint64, buf []byte) (f archiveFooter, err error) {
 	f.formatVersion = buf[afrVersionOffset]
 	f.fileSignature = string(buf[afrSigOffset:])
 	// Verify File Signature

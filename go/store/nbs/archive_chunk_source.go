@@ -50,6 +50,30 @@ func newArchiveChunkSource(ctx context.Context, dir string, h hash.Hash, chunkCo
 	return archiveChunkSource{archiveFile, aRdr}, nil
 }
 
+func newAWSArchiveChunkSource(ctx context.Context,
+	s3 *s3ObjectReader,
+	al awsLimits,
+	name string,
+	chunkCount uint32,
+	q MemoryQuotaProvider,
+	stats *Stats) (cs chunkSource, err error) {
+
+	footer := make([]byte, archiveFooterSize)
+	// sz is what we are really after here, but we'll use the bytes to construct the footer to avoid another call.
+	_, sz, err := s3.readRange(ctx, name, footer, httpEndRangeHeader(int(archiveFooterSize)))
+	if err != nil {
+		return emptyChunkSource{}, err
+	}
+
+	rdr := s3ReaderAt{name, s3}
+
+	aRdr, err := newArchiveReaderFromFooter(rdr, sz, footer)
+	if err != nil {
+		return archiveChunkSource{}, err
+	}
+	return archiveChunkSource{"", aRdr}, nil
+}
+
 func openReader(file string) (io.ReaderAt, uint64, error) {
 	f, err := os.Open(file)
 	if err != nil {
@@ -149,15 +173,13 @@ func (acs archiveChunkSource) currentSize() uint64 {
 	return acs.aRdr.footer.fileSize
 }
 
+// reader returns a reader for the entire archive file.
 func (acs archiveChunkSource) reader(ctx context.Context) (io.ReadCloser, uint64, error) {
 	rdr := acs.aRdr.reader
-	chks, err := acs.count()
-	if err != nil {
-		return nil, 0, err
-	}
+	fz := acs.currentSize()
 
-	rc := io.NewSectionReader(rdr, 0, int64(acs.currentSize()))
-	return io.NopCloser(rc), uint64(chks), nil
+	rc := io.NewSectionReader(rdr, 0, int64(fz))
+	return io.NopCloser(rc), fz, nil
 }
 func (acs archiveChunkSource) uncompressedLen() (uint64, error) {
 	return 0, errors.New("Archive chunk source does not support uncompressedLen")
@@ -177,7 +199,7 @@ func (acs archiveChunkSource) clone() (chunkSource, error) {
 
 		rdr = acs.aRdr.clone(newReader)
 	} else {
-		// NM4 - S3 reader is stateless, so we can just use the same one.
+		// S3 reader is stateless, so we can just use the same one.
 		rdr = acs.aRdr.clone(acs.aRdr.reader)
 	}
 

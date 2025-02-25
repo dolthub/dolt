@@ -46,10 +46,13 @@ skip_if_no_aws_tests() {
   ## is currently the only way we can get archive files from AWS backed databases
   ## when cloning.
   dolt clone "$url" cloneddb
+  cd cloneddb
   # Verify we can read data
   run dolt sql -q 'select sum(i) from tbl;'
   [[ "$status" -eq 0 ]] || false
   [[ "$output" =~ "138075" ]] || false # i = 1 - 525, sum is 138075
+
+  dolt fsck
 }
 
 # bats test_tags=no_lambda
@@ -79,10 +82,12 @@ skip_if_no_aws_tests() {
   run dolt sql -q 'select sum(i) from tbl;'
   [[ "$status" -eq 0 ]] || false
   [[ "$output" =~ "138033" ]] || false # i = 1 - 525, sum is 138075, then substract 42
+
+  dolt fsck
 }
 
 # bats test_tags=no_lambda
-@test "archive-aws: can push and and clone archive" {
+@test "archive-aws: can push and clone archive" {
   skip_if_no_aws_tests
   rm -rf .dolt
 
@@ -105,4 +110,11 @@ skip_if_no_aws_tests() {
   run dolt sql -q 'select sum(i) from tbl;'
   [[ "$status" -eq 0 ]] || false
   [[ "$output" =~ "138075" ]] || false # i = 1 - 525, sum is 138075
+
+  dolt fsck
 }
+
+## NM4 - Need additional tests when we support streaming to archive files.
+##  - Push archive content to AWS, verify it is in archive format when we clone.
+##  - Incremental push/fetch produces archive files (remote and local).
+##  - GC then Archive, then push to AWS.

@@ -22,13 +22,16 @@
 package nbs
 
 import (
+	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
 	"os"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -36,10 +39,11 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3iface"
 	"github.com/jpillora/backoff"
+	"golang.org/x/sync/errgroup"
 )
 
 // s3ObjectReader is a wrapper for S3 that gives us some nice to haves for reading objects from S3.
-// TODO: Bring all the multipart upload and remote-conjoin stuff over here and make this a better analogue to ddbTableStore
+// TODO: Bring all the multipart upload and remote-conjoin stuff in.
 type s3ObjectReader struct {
 	s3     s3iface.S3API
 	bucket string
@@ -156,57 +160,74 @@ func (s3or *s3ObjectReader) readRange(ctx context.Context, name string, p []byte
 	return n, sz, err
 }
 
-// NM4 - still table specific. Clean up. Doesn't need to be, IMO.
-func (s3or *s3ObjectReader) readS3TableFileFromEnd(ctx context.Context, name string, p []byte, stats *Stats) (n int, err error) {
+// readS3ObjectFromEnd reads the last |len(p)| bytes of the named object into |p|. The number of bytes read is returned,
+func (s3or *s3ObjectReader) readS3ObjectFromEnd(ctx context.Context, name string, p []byte, stats *Stats) (n int, err error) {
 	defer func(t1 time.Time) {
 		stats.S3BytesPerRead.Sample(uint64(len(p)))
 		stats.S3ReadLatency.SampleTimeSince(t1)
 	}(time.Now())
 
 	if len(p) > maxS3ReadFromEndReqSize {
-		panic("ReadAtFromEnd: re-instate!")
-		/*
-			totalN := uint64(0)
-			// If we're bigger than 256MB, parallelize the read...
-			// Read the footer first and capture the size of the entire table file.
-			n, sz, err := s3or.readRange(ctx, name, p[len(p)-footerSize:], httpEndRangeHeader(footerSize))
-			if err != nil {
-				return n, err
+		totalN := uint64(0)
+		// If we're bigger than 256MB, parallelize the read...
+		// Read the last |footerSize| bytes to get the size of the file. We know that all table files are at least this big.
+		n, sz, err := s3or.readRange(ctx, name, p[len(p)-footerSize:], httpEndRangeHeader(footerSize))
+		if err != nil {
+			return n, err
+		}
+		totalN += uint64(n)
+		eg, egctx := errgroup.WithContext(ctx)
+		start := 0
+		for start < len(p)-footerSize {
+			// Make parallel read requests of up to 128MB.
+			end := start + preferredS3ReadFromEndReqSize
+			if end > len(p)-footerSize {
+				end = len(p) - footerSize
 			}
-			totalN += uint64(n)
-			eg, egctx := errgroup.WithContext(ctx)
-			start := 0
-			for start < len(p)-footerSize {
-				// Make parallel read requests of up to 128MB.
-				end := start + preferredS3ReadFromEndReqSize
-				if end > len(p)-footerSize {
-					end = len(p) - footerSize
+			bs := p[start:end]
+			rangeStart := sz - uint64(len(p)) + uint64(start)
+			rangeEnd := sz - uint64(len(p)) + uint64(end) - 1
+			length := rangeEnd - rangeStart
+			eg.Go(func() error {
+				n, _, err := s3or.readRange(egctx, name, bs, httpRangeHeader(int64(rangeStart), int64(length)))
+				if err != nil {
+					return err
 				}
-				bs := p[start:end]
-				rangeStart := sz - uint64(len(p)) + uint64(start)
-				rangeEnd := sz - uint64(len(p)) + uint64(end) - 1
-				length := rangeEnd - rangeStart
-				eg.Go(func() error {
-					n, _, err := s3or.readRange(egctx, name, bs, httpRangeHeader(int64(rangeStart), int64(length)))
-					if err != nil {
-						return err
-					}
-					atomic.AddUint64(&totalN, uint64(n))
-					return nil
-				})
-				start = end
-			}
-			err = eg.Wait()
-			if err != nil {
-				return 0, err
-			}
-			return int(totalN), nil
+				atomic.AddUint64(&totalN, uint64(n))
+				return nil
+			})
+			start = end
+		}
+		err = eg.Wait()
+		if err != nil {
+			return 0, err
+		}
+		return int(totalN), nil
+	} else {
+		n, _, err = s3or.readRange(ctx, name, p, httpEndRangeHeader(len(p)))
+		return n, err
+	}
+}
 
-		*/
+// objectExistsInChunkSource returns true if the object exists in the chunk source, and it verifies that
+// the object signatures matches the |name|. A |name| which ends in .darc indicates an archive file, otherwise
+// we verify the Noms magic number. True is returned if the object is legitimate, and false with an error if not.
+func (s3or *s3ObjectReader) objectExistsInChunkSource(ctx context.Context, name string, stats *Stats) (bool, error) {
+	magic := make([]byte, magicNumberSize)
+	n, err := s3or.readS3ObjectFromEnd(ctx, name, magic, stats)
+	if err != nil {
+		return false, err
+	}
+	if n != len(magic) {
+		return false, errors.New("failed to read all data")
 	}
 
-	n, _, err = s3or.readRange(ctx, name, p, httpEndRangeHeader(len(p)))
-	return n, err
+	if strings.HasSuffix(name, ArchiveFileSuffix) {
+		// dolt magic number is a version byte + DOLTARC. We ignore the version byte here.
+		return bytes.Equal(magic[magicNumberSize-doltMagicSize:], []byte(doltMagicNumber)), nil
+	} else {
+		return bytes.Equal(magic, []byte(magicNumber)), nil
+	}
 }
 
 func isConnReset(err error) bool {
