@@ -25,7 +25,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/dolthub/fslock"
 	"io"
 	"os"
 	"path/filepath"
@@ -36,6 +35,7 @@ import (
 
 	"cloud.google.com/go/storage"
 	"github.com/aws/aws-sdk-go/service/s3/s3iface"
+	"github.com/dolthub/fslock"
 	"github.com/dustin/go-humanize"
 	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/oracle/oci-go-sdk/v65/common"
