@@ -156,7 +156,8 @@ var CopiedNomsFiles []CopiedNomsFile = []CopiedNomsFile{
 	{Path: "store/metrics/histogram.go", NomsPath: "go/metrics/histogram.go", HadCopyrightNotice: true},
 	{Path: "store/metrics/histogram_test.go", NomsPath: "go/metrics/histogram_test.go", HadCopyrightNotice: true},
 	{Path: "store/nbs/aws_table_chunk_source.go", NomsPath: "go/nbs/aws_chunk_source.go", HadCopyrightNotice: true},
-	{Path: "store/nbs/aws_chunk_source_test.go", NomsPath: "go/nbs/aws_chunk_source_test.go", HadCopyrightNotice: true},
+	{Path: "store/nbs/aws_table_chunk_source_test.go", NomsPath: "go/nbs/aws_chunk_source_test.go", HadCopyrightNotice: true},
+
 	{Path: "store/nbs/aws_table_persister.go", NomsPath: "go/nbs/aws_table_persister.go", HadCopyrightNotice: true},
 	{Path: "store/nbs/aws_table_persister_test.go", NomsPath: "go/nbs/aws_table_persister_test.go", HadCopyrightNotice: true},
 	{Path: "store/nbs/benchmarks/block_store_benchmarks.go", NomsPath: "go/nbs/benchmarks/block_store_benchmarks.go", HadCopyrightNotice: true},
