@@ -157,7 +157,7 @@ func (h *commithook) replicate(ctx context.Context) {
 				// When the replicate thread comes up, it attempts to replicate the current head.
 				datasDB := doltdb.HackDatasDatabaseFromDoltDB(h.srcDB)
 				cs := datas.ChunkStoreFromDatabase(datasDB)
-				h.nextHead, err = cs.Root(ctx)
+				h.nextHead, err = cs.Root(sqlCtx)
 				if err != nil {
 					// TODO: if err != nil, something is really wrong; should shutdown or backoff.
 					lgr.Warningf("standby replication thread failed to load database root: %v", err)
@@ -316,7 +316,7 @@ func (h *commithook) attemptReplicate(ctx context.Context) {
 	if destDB == nil {
 		lgr.Tracef("cluster/commithook: attempting to fetch destDB.")
 		var err error
-		destDB, err = h.destDBF(ctx)
+		destDB, err = h.destDBF(sqlCtx)
 		if err != nil {
 			h.mu.Lock()
 			h.currentError = new(string)
@@ -335,16 +335,16 @@ func (h *commithook) attemptReplicate(ctx context.Context) {
 	}
 
 	lgr.Tracef("cluster/commithook: pushing chunks for root hash %v to destDB", toPush.String())
-	err = destDB.PullChunks(ctx, h.tempDir, h.srcDB, []hash.Hash{toPush}, nil, nil)
+	err = destDB.PullChunks(sqlCtx, h.tempDir, h.srcDB, []hash.Hash{toPush}, nil, nil)
 	if err == nil {
 		lgr.Tracef("cluster/commithook: successfully pushed chunks, setting root")
 		datasDB := doltdb.HackDatasDatabaseFromDoltDB(destDB)
 		cs := datas.ChunkStoreFromDatabase(datasDB)
 		var curRootHash hash.Hash
-		if err = cs.Rebase(ctx); err == nil {
-			if curRootHash, err = cs.Root(ctx); err == nil {
+		if err = cs.Rebase(sqlCtx); err == nil {
+			if curRootHash, err = cs.Root(sqlCtx); err == nil {
 				var ok bool
-				ok, err = cs.Commit(ctx, toPush, curRootHash)
+				ok, err = cs.Commit(sqlCtx, toPush, curRootHash)
 				if err == nil && !ok {
 					err = errDestDBRootHashMoved
 				}
