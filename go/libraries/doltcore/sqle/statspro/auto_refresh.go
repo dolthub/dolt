@@ -16,6 +16,7 @@ package statspro
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -70,40 +71,46 @@ func (p *Provider) InitAutoRefreshWithParams(ctxFactory func(ctx context.Context
 				default:
 				}
 
-				sqlCtx, err := ctxFactory(ctx)
+				err := func() error {
+					sqlCtx, err := ctxFactory(ctx)
+					if err != nil {
+						return err
+					}
+					defer sql.SessionEnd(sqlCtx.Session)
+					sql.SessionCommandBegin(sqlCtx.Session)
+					defer sql.SessionCommandEnd(sqlCtx.Session)
+
+					dSess := dsess.DSessFromSess(sqlCtx.Session)
+
+					ddb, ok := dSess.GetDoltDB(sqlCtx, dbName)
+					if !ok {
+						sqlCtx.GetLogger().Debugf("statistics refresh error: database not found %s", dbName)
+						return errors.New("database not found")
+					}
+					for _, branch := range branches {
+						if br, ok, err := ddb.HasBranch(sqlCtx, branch); ok {
+							sqlCtx.GetLogger().Debugf("starting statistics refresh check for '%s': %s", dbName, time.Now().String())
+							// update WORKING session references
+							sqlDb, err := dSess.Provider().Database(sqlCtx, BranchQualifiedDatabase(dbName, branch))
+							if err != nil {
+								sqlCtx.GetLogger().Debugf("statistics refresh error: %s", err.Error())
+								return err
+							}
+
+							if err := p.checkRefresh(sqlCtx, sqlDb, dbName, br, updateThresh); err != nil {
+								sqlCtx.GetLogger().Debugf("statistics refresh error: %s", err.Error())
+								return err
+							}
+						} else if err != nil {
+							sqlCtx.GetLogger().Debugf("statistics refresh error: branch check error %s", err.Error())
+						} else {
+							sqlCtx.GetLogger().Debugf("statistics refresh error: branch not found %s", br)
+						}
+					}
+					return nil
+				}()
 				if err != nil {
 					return
-				}
-
-				dSess := dsess.DSessFromSess(sqlCtx.Session)
-				defer sql.SessionEnd(dSess)
-				sql.SessionCommandBegin(dSess)
-				defer sql.SessionCommandEnd(dSess)
-
-				ddb, ok := dSess.GetDoltDB(sqlCtx, dbName)
-				if !ok {
-					sqlCtx.GetLogger().Debugf("statistics refresh error: database not found %s", dbName)
-					return
-				}
-				for _, branch := range branches {
-					if br, ok, err := ddb.HasBranch(ctx, branch); ok {
-						sqlCtx.GetLogger().Debugf("starting statistics refresh check for '%s': %s", dbName, time.Now().String())
-						// update WORKING session references
-						sqlDb, err := dSess.Provider().Database(sqlCtx, BranchQualifiedDatabase(dbName, branch))
-						if err != nil {
-							sqlCtx.GetLogger().Debugf("statistics refresh error: %s", err.Error())
-							return
-						}
-
-						if err := p.checkRefresh(sqlCtx, sqlDb, dbName, br, updateThresh); err != nil {
-							sqlCtx.GetLogger().Debugf("statistics refresh error: %s", err.Error())
-							return
-						}
-					} else if err != nil {
-						sqlCtx.GetLogger().Debugf("statistics refresh error: branch check error %s", err.Error())
-					} else {
-						sqlCtx.GetLogger().Debugf("statistics refresh error: branch not found %s", br)
-					}
 				}
 			}
 		}
