@@ -27,7 +27,7 @@ var trueValue = true
 func TestUnmarshall(t *testing.T) {
 	testStr := `
 log_level: info
-
+log_format: text
 behavior:
     read_only: false
     autocommit: true
