@@ -69,7 +69,7 @@ func DefaultCommandLineServerConfig() *commandLineServerConfig {
 		timeout:                 servercfg.DefaultTimeout,
 		readOnly:                servercfg.DefaultReadOnly,
 		logLevel:                servercfg.DefaultLogLevel,
-		logFormat:               servercfg.DefaultLogFormat
+		logFormat:               servercfg.DefaultLogFormat,
 		autoCommit:              servercfg.DefaultAutoCommit,
 		maxConnections:          servercfg.DefaultMaxConnections,
 		dataDir:                 servercfg.DefaultDataDir,
