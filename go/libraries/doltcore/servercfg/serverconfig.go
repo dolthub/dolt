@@ -54,7 +54,7 @@ const (
 	DefaultTimeout                 = 8 * 60 * 60 * 1000 // 8 hours, same as MySQL
 	DefaultReadOnly                = false
 	DefaultLogLevel                = LogLevel_Info
-	DefaultLogFormat               = "text"
+	DefaultLogFormat               = LogFormat_Text
 	DefaultAutoCommit              = true
 	DefaultAutoGCBehaviorEnable    = false
 	DefaultDoltTransactionCommit   = false

@@ -329,6 +329,7 @@ func TestYAMLConfigDefaults(t *testing.T) {
 	assert.Equal(t, uint64(DefaultTimeout), cfg.ReadTimeout())
 	assert.Equal(t, DefaultReadOnly, cfg.ReadOnly())
 	assert.Equal(t, DefaultLogLevel, cfg.LogLevel())
+	assert.Equal(t, DefaultLogFormat, cfg.LogFormat())
 	assert.Equal(t, DefaultAutoCommit, cfg.AutoCommit())
 	assert.Equal(t, DefaultDoltTransactionCommit, cfg.DoltTransactionCommit())
 	assert.Equal(t, uint64(DefaultMaxConnections), cfg.MaxConnections())

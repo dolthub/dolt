@@ -123,6 +123,12 @@ func ConfigureServices(
 				return err
 			}
 			logrus.SetLevel(level)
+			switch serverConfig.LogFormat() {
+			case "json":
+				logrus.SetFormatter(&logrus.JSONFormatter{})
+			default:
+				logrus.SetFormatter(&logrus.TextFormatter{})
+			}
 
 			sql.SystemVariables.AddSystemVariables([]sql.SystemVariable{
 				&sql.MysqlSystemVariable{
