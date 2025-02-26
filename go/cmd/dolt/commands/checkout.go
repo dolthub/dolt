@@ -234,7 +234,7 @@ func handleErrors(branchName string, err error) errhand.VerboseError {
 			"1) commit or reset your changes on this branch, using `dolt commit` or `dolt reset`, before checking out the other branch, " +
 			"2) use the `-f` flag with `dolt checkout` to force an overwrite, or " +
 			"3) connect to branch '%s' with the SQL server and revert or commit changes there before proceeding."
-		return errhand.BuildDError(str).AddCause(err).Build()
+		return errhand.BuildDError("%s", str).AddCause(err).Build()
 	} else {
 		bdr := errhand.BuildDError("fatal: Unexpected error checking out branch '%s'", branchName)
 		bdr.AddCause(err)

@@ -257,7 +257,7 @@ func handleResetError(err error, usage cli.UsagePrinter) int {
 		}
 
 		for _, tbl := range tbls {
-			bdr.AddDetails("\t" + tbl.Name)
+			bdr.AddDetails("\t%s", tbl.Name)
 		}
 
 		return HandleVErrAndExitCode(bdr.Build(), usage)

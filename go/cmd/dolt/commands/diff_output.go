@@ -157,7 +157,7 @@ func (t tabularDiffWriter) WriteTableDiffStats(diffStats []diffStatistics, oldCo
 
 		if i != 0 && i%10000 == 0 {
 			msg := fmt.Sprintf("prev size: %d, new size: %d, adds: %d, deletes: %d, modifications: %d\n", acc.OldRowSize, acc.NewRowSize, acc.Adds, acc.Removes, acc.Changes)
-			eP.Printf(msg)
+			eP.Printf("%s", msg)
 			eP.Display()
 			pos += len(msg)
 		}

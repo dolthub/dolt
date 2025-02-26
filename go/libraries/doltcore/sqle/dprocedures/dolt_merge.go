@@ -218,7 +218,7 @@ func performMerge(
 	if err != nil {
 		switch err {
 		case doltdb.ErrIsAhead, doltdb.ErrUpToDate:
-			ctx.Warn(DoltMergeWarningCode, err.Error())
+			ctx.Warn(DoltMergeWarningCode, "%s", err.Error())
 			return ws, "", noConflictsOrViolations, threeWayMerge, err.Error(), nil
 		default:
 			return ws, "", noConflictsOrViolations, threeWayMerge, "", err
@@ -236,7 +236,7 @@ func performMerge(
 				if wsErr != nil {
 					return ws, "", hasConflictsOrViolations, threeWayMerge, "", wsErr
 				}
-				ctx.Warn(DoltMergeWarningCode, err.Error())
+				ctx.Warn(DoltMergeWarningCode, "%s", err.Error())
 				return ws, "", hasConflictsOrViolations, threeWayMerge, "", err
 			} else if err != nil {
 				return ws, "", noConflictsOrViolations, threeWayMerge, "", err
@@ -280,7 +280,7 @@ func performMerge(
 			return ws, "", hasConflictsOrViolations, threeWayMerge, "", wsErr
 		}
 
-		ctx.Warn(DoltMergeWarningCode, err.Error())
+		ctx.Warn(DoltMergeWarningCode, "%s", err.Error())
 		return ws, "", hasConflictsOrViolations, threeWayMerge, err.Error(), nil
 	} else if err != nil {
 		return ws, "", noConflictsOrViolations, threeWayMerge, "", err

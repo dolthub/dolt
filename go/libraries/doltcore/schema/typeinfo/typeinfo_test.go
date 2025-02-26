@@ -163,7 +163,7 @@ func testTypeInfoEquals(t *testing.T, tiArrays [][]TypeInfo) {
 				t.Run(ti1.String(), func(t *testing.T) {
 					for j := range tiArray {
 						ti2 := tiArray[j]
-						t.Run(fmt.Sprintf(ti2.String()), func(t *testing.T) {
+						t.Run(ti2.String(), func(t *testing.T) {
 							equality := ti1.Equals(ti2)
 							if i == j {
 								assert.True(t, equality)
@@ -184,7 +184,7 @@ func testTypeInfoEquals(t *testing.T, tiArrays [][]TypeInfo) {
 						continue
 					}
 					for _, otherTi := range tiArray2 {
-						t.Run(fmt.Sprintf(otherTi.String()), func(t *testing.T) {
+						t.Run(otherTi.String(), func(t *testing.T) {
 							equality := firstTi.Equals(otherTi)
 							assert.False(t, equality)
 						})

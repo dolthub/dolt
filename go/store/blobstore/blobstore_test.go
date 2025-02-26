@@ -202,7 +202,7 @@ func testCheckAndPutError(t *testing.T, bs Blobstore) {
 	if !ok {
 		t.Errorf("Error is not of the expected type")
 	} else if cpe.Key != key || cpe.ExpectedVersion != badVersion {
-		t.Errorf("CheckAndPutError does not have expected values - " + cpe.Error())
+		t.Errorf("CheckAndPutError does not have expected values - %s", cpe.Error())
 	}
 }
 

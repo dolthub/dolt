@@ -139,7 +139,7 @@ func resolveOverriddenSchemaRoot(ctx *sql.Context, db Database) (doltdb.RootValu
 
 	optionalCommit, err := db.GetDoltDB().Resolve(ctx, commitSpec, headRef)
 	if err != nil {
-		return nil, fmt.Errorf("unable to resolve schema override value: " + err.Error())
+		return nil, fmt.Errorf("unable to resolve schema override value: %s", err.Error())
 	}
 
 	commit, ok := optionalCommit.ToCommit()
@@ -150,7 +150,7 @@ func resolveOverriddenSchemaRoot(ctx *sql.Context, db Database) (doltdb.RootValu
 
 	rootValue, err := commit.GetRootValue(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("unable to load root value for schema override commit: " + err.Error())
+		return nil, fmt.Errorf("unable to load root value for schema override commit: %s", err.Error())
 	}
 
 	return rootValue, nil

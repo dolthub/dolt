@@ -360,7 +360,7 @@ func checkoutRemoteBranch(ctx *sql.Context, dSess *dsess.DoltSession, dbName str
 
 		refSpec, err := ref.ParseRefSpecForRemote(remoteRef.GetRemote(), remoteRef.GetBranch())
 		if err != nil {
-			return "", errhand.BuildDError(fmt.Errorf("%w: '%s'", err, remoteRef.GetRemote()).Error()).Build()
+			return "", errhand.BuildDError("%s: '%s'", err.Error(), remoteRef.GetRemote()).Build()
 		}
 
 		headRef, err := dbData.Rsr.CWBHeadRef()

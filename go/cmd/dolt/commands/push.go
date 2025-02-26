@@ -209,7 +209,7 @@ func handlePushError(err error, usage cli.UsagePrinter) int {
 			cli.Println("hint: check that user.email in 'dolt config --list' has write perms to DoltHub repo")
 		}
 		if rpcErr, ok := err.(*remotestorage.RpcError); ok {
-			verr = errhand.BuildDError("error: push failed").AddCause(err).AddDetails(rpcErr.FullDetails()).Build()
+			verr = errhand.BuildDError("error: push failed").AddCause(err).AddDetails("%s", rpcErr.FullDetails()).Build()
 		} else {
 			verr = errhand.BuildDError("error: push failed").AddCause(err).Build()
 		}

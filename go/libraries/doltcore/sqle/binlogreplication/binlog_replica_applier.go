@@ -528,7 +528,7 @@ func (a *binlogReplicaApplier) processBinlogEvent(ctx *sql.Context, engine *gms.
 			}
 			if flags != 0 {
 				msg := fmt.Sprintf("unsupported binlog protocol message: TableMap event with unsupported flags '%x'", flags)
-				ctx.GetLogger().Errorf(msg)
+				ctx.GetLogger().Error(msg)
 				DoltBinlogReplicaController.setSqlError(mysql.ERUnknownError, msg)
 			}
 			a.tableMapsById[tableId] = tableMap
@@ -664,7 +664,7 @@ func (a *binlogReplicaApplier) processRowEvent(ctx *sql.Context, event mysql.Bin
 	}
 	if flags != 0 {
 		msg := fmt.Sprintf("unsupported binlog protocol message: row event with unsupported flags '%x'", flags)
-		ctx.GetLogger().Errorf(msg)
+		ctx.GetLogger().Error(msg)
 		DoltBinlogReplicaController.setSqlError(mysql.ERUnknownError, msg)
 	}
 	schema, tableName, err := getTableSchema(ctx, engine, tableMap.Name, tableMap.Database)

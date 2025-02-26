@@ -459,9 +459,9 @@ func formatQueryError(message string, err error) errhand.VerboseError {
 	)
 
 	if se, ok := vterrors.AsSyntaxError(err); ok {
-		verrBuilder := errhand.BuildDError(message)
+		verrBuilder := errhand.BuildDError("%s", message)
 		verrBuilder.AddDetails("Error parsing SQL: ")
-		verrBuilder.AddDetails(se.Message)
+		verrBuilder.AddDetails("%s", se.Message)
 
 		statement := se.Statement
 		position := se.Position
@@ -493,7 +493,7 @@ func formatQueryError(message string, err error) errhand.VerboseError {
 			}
 		}
 
-		verrBuilder.AddDetails(prevLines + statement)
+		verrBuilder.AddDetails("%s%s", prevLines, statement)
 
 		marker := make([]rune, position+1)
 		for i := 0; i < position; i++ {
@@ -501,7 +501,7 @@ func formatQueryError(message string, err error) errhand.VerboseError {
 		}
 
 		marker[position] = '^'
-		verrBuilder.AddDetails(string(marker))
+		verrBuilder.AddDetails("%s", string(marker))
 
 		return verrBuilder.Build()
 	} else {

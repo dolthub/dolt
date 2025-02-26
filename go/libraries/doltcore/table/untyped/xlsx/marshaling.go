@@ -47,7 +47,7 @@ func openFile(path string) (*xlsx.File, error) {
 
 	if err != nil {
 		msg := strings.ReplaceAll(err.Error(), "zip", "xlsx")
-		return nil, fmt.Errorf(msg)
+		return nil, fmt.Errorf("%s", msg)
 	}
 
 	return data, nil
@@ -58,7 +58,7 @@ func openBinary(content []byte) (*xlsx.File, error) {
 
 	if err != nil {
 		msg := strings.ReplaceAll(err.Error(), "zip", "xlsx")
-		return nil, fmt.Errorf(msg)
+		return nil, fmt.Errorf("%s", msg)
 	}
 
 	return data, nil

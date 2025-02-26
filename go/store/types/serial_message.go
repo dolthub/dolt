@@ -62,7 +62,7 @@ func (sm SerialMessage) HumanReadableString() string {
 }
 
 func printWithIndendationLevel(level int, builder *strings.Builder, format string, a ...any) {
-	fmt.Fprintf(builder, strings.Repeat("\t", level))
+	fmt.Fprint(builder, strings.Repeat("\t", level))
 	fmt.Fprintf(builder, format, a...)
 }
 

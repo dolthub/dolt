@@ -222,7 +222,7 @@ func (dt *CommitDiffTable) LookupPartitions(ctx *sql.Context, i sql.IndexLookup)
 	}
 
 	if !isDiffable {
-		ctx.Warn(PrimaryKeyChangeWarningCode, fmt.Sprintf(PrimaryKeyChangeWarning, dp.fromName, dp.toName))
+		ctx.Warn(PrimaryKeyChangeWarningCode, PrimaryKeyChangeWarning, dp.fromName, dp.toName)
 		return NewSliceOfPartitionsItr([]sql.Partition{}), nil
 	}
 

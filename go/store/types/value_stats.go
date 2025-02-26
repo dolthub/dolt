@@ -72,7 +72,7 @@ func writePtreeStats(ctx context.Context, w io.Writer, v Value, vr ValueReader) 
 		return err
 	}
 
-	_, err = fmt.Fprintf(w, treeLevelHeader)
+	_, err = fmt.Fprint(w, treeLevelHeader)
 
 	if err != nil {
 		return err

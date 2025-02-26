@@ -874,12 +874,12 @@ func (dps *DiffPartitions) Next(ctx *sql.Context) (sql.Partition, error) {
 			}
 
 			if !simpleDiff && !fuzzyDiff {
-				ctx.Warn(PrimaryKeyChangeWarningCode, fmt.Sprintf(PrimaryKeyChangeWarning, next.fromName, next.toName))
+				ctx.Warn(PrimaryKeyChangeWarningCode, PrimaryKeyChangeWarning, next.fromName, next.toName)
 				return nil, io.EOF
 			}
 
 			if !simpleDiff && fuzzyDiff {
-				ctx.Warn(PrimaryKeyChangeWarningCode, fmt.Sprintf(PrimaryKeyChangeWarning, next.fromName, next.toName))
+				ctx.Warn(PrimaryKeyChangeWarningCode, PrimaryKeyChangeWarning, next.fromName, next.toName)
 				dps.stopNext = true
 			}
 

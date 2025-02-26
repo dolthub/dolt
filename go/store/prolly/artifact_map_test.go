@@ -130,8 +130,8 @@ func TestMergeArtifactMaps(t *testing.T) {
 	ms, err := ArtifactDebugFormat(ctx, merged)
 	require.NoError(t, err)
 
-	t.Logf(es)
-	t.Logf(ms)
+	t.Log(es)
+	t.Log(ms)
 
 	assert.Equal(t, es, ms)
 }

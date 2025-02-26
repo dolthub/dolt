@@ -562,15 +562,15 @@ func (test *ImportTest) IterImportTables(tables []Table, cb func(t Table, f *os.
 				batchSize := defaultBatchSize
 				var i int
 				for i+batchSize < len(rows) {
-					fmt.Fprintf(f, newBatch(t.TargetTable, rows[i:i+batchSize]))
+					fmt.Fprint(f, newBatch(t.TargetTable, rows[i:i+batchSize]))
 					i += batchSize
 				}
 				if i < len(rows) {
-					fmt.Fprintf(f, newBatch(t.TargetTable, rows[i:]))
+					fmt.Fprint(f, newBatch(t.TargetTable, rows[i:]))
 				}
 			} else {
 				for _, r := range rows {
-					fmt.Fprintf(f, fmt.Sprintf("INSERT INTO %s VALUES %s;\n", t.TargetTable, r))
+					fmt.Fprintf(f, "INSERT INTO %s VALUES %s;\n", t.TargetTable, r)
 				}
 			}
 		default:
