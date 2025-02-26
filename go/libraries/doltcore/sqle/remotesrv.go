@@ -131,7 +131,7 @@ func (si SqlContextServerInterceptor) Stream() grpc.StreamServerInterceptor {
 		defer sql.SessionEnd(sqlCtx.Session)
 		sql.SessionCommandBegin(sqlCtx.Session)
 		defer sql.SessionCommandEnd(sqlCtx.Session)
-		newCtx := context.WithValue(ss.Context(), sqlContextInterceptorKey{}, sqlCtx)
+		newCtx := context.WithValue(sqlCtx.Context, sqlContextInterceptorKey{}, sqlCtx)
 		newSs := serverStreamWrapper{
 			ServerStream: ss,
 			ctx:          newCtx,
@@ -149,7 +149,7 @@ func (si SqlContextServerInterceptor) Unary() grpc.UnaryServerInterceptor {
 		defer sql.SessionEnd(sqlCtx.Session)
 		sql.SessionCommandBegin(sqlCtx.Session)
 		defer sql.SessionCommandEnd(sqlCtx.Session)
-		newCtx := context.WithValue(ctx, sqlContextInterceptorKey{}, sqlCtx)
+		newCtx := context.WithValue(sqlCtx.Context, sqlContextInterceptorKey{}, sqlCtx)
 		return handler(newCtx, req)
 	}
 }
@@ -166,7 +166,7 @@ func (si SqlContextServerInterceptor) HTTP(existing func(http.Handler) http.Hand
 			defer sql.SessionEnd(sqlCtx.Session)
 			sql.SessionCommandBegin(sqlCtx.Session)
 			defer sql.SessionCommandEnd(sqlCtx.Session)
-			newCtx := context.WithValue(ctx, sqlContextInterceptorKey{}, sqlCtx)
+			newCtx := context.WithValue(sqlCtx.Context, sqlContextInterceptorKey{}, sqlCtx)
 			newReq := r.WithContext(newCtx)
 			h.ServeHTTP(w, newReq)
 		})
