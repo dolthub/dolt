@@ -722,7 +722,7 @@ func ConfigureServices(
 				mySQLServer, err = server.NewServerWithHandler(
 					serverConf,
 					sqlEngine.GetUnderlyingEngine(),
-					sql.NewContext,
+					sqlEngine.ContextFactory,
 					newSessionBuilder(sqlEngine, cfg.ServerConfig),
 					metListener,
 					func(h mysql.Handler) (mysql.Handler, error) {
@@ -733,7 +733,7 @@ func ConfigureServices(
 				mySQLServer, err = server.NewServer(
 					serverConf,
 					sqlEngine.GetUnderlyingEngine(),
-					sql.NewContext,
+					sqlEngine.ContextFactory,
 					newSessionBuilder(sqlEngine, cfg.ServerConfig),
 					metListener,
 				)

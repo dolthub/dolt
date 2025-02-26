@@ -1736,6 +1736,16 @@ func (d *DoltSession) CommandEnd() {
 	}
 }
 
+func (d *DoltSession) Validate() {
+	// If this gets called, valctx context validation is enabled and the
+	// purpose is to validate that this session is registered with an open
+	// command on our current gcSafepointController.
+	if d.gcSafepointController == nil {
+		panic("DoltSession.Validate called. Expected to have a gcSafepointController but did not.")
+	}
+	d.gcSafepointController.Validate(d)
+}
+
 func (d *DoltSession) SessionEnd() {
 	if d.gcSafepointController != nil {
 		d.gcSafepointController.SessionEnd(d)
