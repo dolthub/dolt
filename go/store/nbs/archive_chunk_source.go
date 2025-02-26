@@ -148,8 +148,8 @@ func (acs archiveChunkSource) hash() hash.Hash {
 	return acs.aRdr.footer.hash
 }
 
-func (acs archiveChunkSource) name() string {
-	return acs.hash().String() + ArchiveFileSuffix
+func (acs archiveChunkSource) suffix() string {
+	return ArchiveFileSuffix
 }
 
 func (acs archiveChunkSource) currentSize() uint64 {

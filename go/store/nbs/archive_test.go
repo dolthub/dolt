@@ -726,7 +726,7 @@ func (tcs *testChunkSource) hash() hash.Hash {
 	panic("never used")
 }
 
-func (tcs *testChunkSource) name() string {
+func (tcs *testChunkSource) suffix() string {
 	panic("never used")
 }
 

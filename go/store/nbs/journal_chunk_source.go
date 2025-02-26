@@ -185,8 +185,8 @@ func (s journalChunkSource) hash() hash.Hash {
 	return journalAddr
 }
 
-func (s journalChunkSource) name() string {
-	return s.hash().String()
+func (s journalChunkSource) suffix() string {
+	return ""
 }
 
 // reader implements chunkSource.

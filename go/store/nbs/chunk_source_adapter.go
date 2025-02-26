@@ -29,8 +29,8 @@ func (csa chunkSourceAdapter) hash() hash.Hash {
 	return csa.h
 }
 
-func (csa chunkSourceAdapter) name() string {
-	return csa.h.String()
+func (csa chunkSourceAdapter) suffix() string {
+	return ""
 }
 
 func newReaderFromIndexData(ctx context.Context, q MemoryQuotaProvider, idxData []byte, name hash.Hash, tra tableReaderAt, blockSize uint64) (cs chunkSource, err error) {

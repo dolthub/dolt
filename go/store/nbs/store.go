@@ -165,12 +165,7 @@ func (nbs *NomsBlockStore) GetChunkLocationsWithPaths(ctx context.Context, hashe
 	res := make(map[string]map[hash.Hash]Range, len(sourcesToRanges))
 	for csP, ranges := range sourcesToRanges {
 		cs := *csP
-		suffix := ""
-		if _, ok := cs.(archiveChunkSource); ok {
-			suffix = ArchiveFileSuffix
-		}
-
-		res[cs.hash().String()+suffix] = ranges
+		res[cs.hash().String()+cs.suffix()] = ranges
 	}
 	return res, nil
 }

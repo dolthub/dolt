@@ -167,8 +167,8 @@ func (ftr *fileTableReader) hash() hash.Hash {
 	return ftr.h
 }
 
-func (ftr *fileTableReader) name() string {
-	return ftr.h.String()
+func (ftr *fileTableReader) suffix() string {
+	return ""
 }
 
 func (ftr *fileTableReader) Close() error {
