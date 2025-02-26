@@ -158,7 +158,7 @@ func (s3p awsTablePersister) Persist(ctx context.Context, mt *memTable, haver ch
 		return emptyChunkSource{}, gcBehavior_Continue, err
 	}
 
-	tra := &s3TableReaderAt{&s3ObjectReader{s3: s3p.s3, bucket: s3p.bucket, readRl: s3p.rl, ns: s3p.ns}, name}
+	tra := &s3TableReaderAt{&s3ObjectReader{s3: s3p.s3, bucket: s3p.bucket, readRl: s3p.rl, ns: s3p.ns}, name.String()}
 	src, err := newReaderFromIndexData(ctx, s3p.q, data, name, tra, s3BlockSize)
 	if err != nil {
 		return emptyChunkSource{}, gcBehavior_Continue, err
@@ -253,7 +253,7 @@ func (s3p awsTablePersister) ConjoinAll(ctx context.Context, sources chunkSource
 
 	verbose.Logger(ctx).Sugar().Debugf("Compacted table of %d Kb in %s", plan.totalCompressedData/1024, time.Since(t1))
 
-	tra := &s3TableReaderAt{&s3ObjectReader{s3: s3p.s3, bucket: s3p.bucket, readRl: s3p.rl, ns: s3p.ns}, name}
+	tra := &s3TableReaderAt{&s3ObjectReader{s3: s3p.s3, bucket: s3p.bucket, readRl: s3p.rl, ns: s3p.ns}, name.String()}
 	cs, err := newReaderFromIndexData(ctx, s3p.q, plan.mergedIndex, name, tra, s3BlockSize)
 	return cs, func() {}, err
 }

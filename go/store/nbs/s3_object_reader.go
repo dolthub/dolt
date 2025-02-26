@@ -154,7 +154,7 @@ func (s3or *s3ObjectReader) readRange(ctx context.Context, name string, p []byte
 }
 
 // readS3ObjectFromEnd reads the last |len(p)| bytes of the named object into |p|. The number of bytes read is returned,
-func (s3or *s3ObjectReader) readS3ObjectFromEnd(ctx context.Context, name string, p []byte, stats *Stats) (n int, err error) {
+func (s3or *s3ObjectReader) readS3ObjectFromEnd(ctx context.Context, name string, p []byte, stats *Stats) (n int, sz uint64, err error) {
 	defer func(t1 time.Time) {
 		stats.S3BytesPerRead.Sample(uint64(len(p)))
 		stats.S3ReadLatency.SampleTimeSince(t1)
@@ -166,7 +166,7 @@ func (s3or *s3ObjectReader) readS3ObjectFromEnd(ctx context.Context, name string
 		// Read the last |footerSize| bytes to get the size of the file. We know that all table files are at least this big.
 		n, sz, err := s3or.readRange(ctx, name, p[len(p)-footerSize:], httpEndRangeHeader(footerSize))
 		if err != nil {
-			return n, err
+			return 0, sz, err
 		}
 		totalN += uint64(n)
 		eg, egctx := errgroup.WithContext(ctx)
@@ -193,12 +193,11 @@ func (s3or *s3ObjectReader) readS3ObjectFromEnd(ctx context.Context, name string
 		}
 		err = eg.Wait()
 		if err != nil {
-			return 0, err
+			return 0, 0, err
 		}
-		return int(totalN), nil
+		return int(totalN), sz, nil
 	} else {
-		n, _, err = s3or.readRange(ctx, name, p, httpEndRangeHeader(len(p)))
-		return n, err
+		return s3or.readRange(ctx, name, p, httpEndRangeHeader(len(p)))
 	}
 }
 
@@ -207,7 +206,7 @@ func (s3or *s3ObjectReader) readS3ObjectFromEnd(ctx context.Context, name string
 // we verify the Noms magic number. True is returned if the object is legitimate, and false with an error if not.
 func (s3or *s3ObjectReader) objectExistsInChunkSource(ctx context.Context, name string, stats *Stats) (bool, error) {
 	magic := make([]byte, magicNumberSize)
-	n, err := s3or.readS3ObjectFromEnd(ctx, name, magic, stats)
+	n, _, err := s3or.readS3ObjectFromEnd(ctx, name, magic, stats)
 	if err != nil {
 		return false, err
 	}

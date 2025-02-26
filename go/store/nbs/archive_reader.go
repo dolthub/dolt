@@ -34,7 +34,7 @@ import (
 // archiveReader is a reader for the archive format. We use primitive type slices where possible. These are read directly
 // from disk into memory for speed. The downside is complexity on the read path, but it's all constant time.
 type archiveReader struct {
-	reader    flexTableReaderAt
+	reader    tableReaderAt
 	prefixes  []uint64
 	spanIndex []uint64
 	chunkRefs []uint32 // Pairs of uint32s. First is the dict id, second is the data id.
@@ -104,8 +104,8 @@ func (f archiveFooter) metadataSpan() byteSpan {
 	return byteSpan{offset: f.fileSize - archiveFooterSize - uint64(f.metadataSize), length: uint64(f.metadataSize)}
 }
 
-func newArchiveMetadata(reader flexTableReaderAt, fileSize uint64) (*ArchiveMetadata, error) {
-	footer, err := loadFooter(reader, fileSize)
+func newArchiveMetadata(ctx context.Context, reader tableReaderAt, fileSize uint64, stats *Stats) (*ArchiveMetadata, error) {
+	footer, err := loadFooter(ctx, reader, fileSize, stats)
 	if err != nil {
 		return nil, err
 	}
@@ -115,7 +115,7 @@ func newArchiveMetadata(reader flexTableReaderAt, fileSize uint64) (*ArchiveMeta
 	}
 
 	metaSpan := footer.metadataSpan()
-	metaRdr := io.NewSectionReader(reader, int64(metaSpan.offset), int64(metaSpan.length))
+	metaRdr := newSectionReader(ctx, reader, int64(metaSpan.offset), int64(metaSpan.length), stats)
 
 	// Read the data into a byte slice
 	metaData := make([]byte, metaSpan.length)
@@ -136,7 +136,7 @@ func newArchiveMetadata(reader flexTableReaderAt, fileSize uint64) (*ArchiveMeta
 	}, nil
 }
 
-func newArchiveReaderFromFooter(reader flexTableReaderAt, fileSz uint64, footer []byte) (archiveReader, error) {
+func newArchiveReaderFromFooter(ctx context.Context, reader tableReaderAt, fileSz uint64, footer []byte, stats *Stats) (archiveReader, error) {
 	if uint64(len(footer)) != archiveFooterSize {
 		return archiveReader{}, errors.New("runtime error: invalid footer.")
 	}
@@ -146,22 +146,21 @@ func newArchiveReaderFromFooter(reader flexTableReaderAt, fileSz uint64, footer 
 		return archiveReader{}, err
 	}
 
-	return buildArchiveReader(reader, fileSz, ftr)
+	return buildArchiveReader(ctx, reader, ftr, stats)
 }
 
-func newArchiveReader(reader flexTableReaderAt, fileSize uint64) (archiveReader, error) {
-	footer, err := loadFooter(reader, fileSize)
+func newArchiveReader(ctx context.Context, reader tableReaderAt, fileSize uint64, stats *Stats) (archiveReader, error) {
+	footer, err := loadFooter(ctx, reader, fileSize, stats)
 	if err != nil {
 		return archiveReader{}, err
 	}
 
-	return buildArchiveReader(reader, fileSize, footer)
+	return buildArchiveReader(ctx, reader, footer, stats)
 }
 
-func buildArchiveReader(reader flexTableReaderAt, fileSize uint64, footer archiveFooter) (archiveReader, error) {
-
+func buildArchiveReader(ctx context.Context, reader tableReaderAt, footer archiveFooter, stats *Stats) (archiveReader, error) {
 	byteOffSpan := footer.indexByteOffsetSpan()
-	secRdr := io.NewSectionReader(reader, int64(byteOffSpan.offset), int64(byteOffSpan.length))
+	secRdr := newSectionReader(ctx, reader, int64(byteOffSpan.offset), int64(byteOffSpan.length), stats)
 	byteSpans := make([]uint64, footer.byteSpanCount+1)
 	byteSpans[0] = 0 // Null byteSpan to simplify logic.
 	err := binary.Read(secRdr, binary.BigEndian, byteSpans[1:])
@@ -170,7 +169,7 @@ func buildArchiveReader(reader flexTableReaderAt, fileSize uint64, footer archiv
 	}
 
 	prefixSpan := footer.indexPrefixSpan()
-	prefixRdr := io.NewSectionReader(reader, int64(prefixSpan.offset), int64(prefixSpan.length))
+	prefixRdr := newSectionReader(ctx, reader, int64(prefixSpan.offset), int64(prefixSpan.length), stats)
 	prefixes := make([]uint64, footer.chunkCount)
 	err = binary.Read(prefixRdr, binary.BigEndian, prefixes[:])
 	if err != nil {
@@ -178,7 +177,7 @@ func buildArchiveReader(reader flexTableReaderAt, fileSize uint64, footer archiv
 	}
 
 	chunkRefSpan := footer.indexChunkRefSpan()
-	chunkRdr := io.NewSectionReader(reader, int64(chunkRefSpan.offset), int64(chunkRefSpan.length))
+	chunkRdr := newSectionReader(ctx, reader, int64(chunkRefSpan.offset), int64(chunkRefSpan.length), stats)
 	chunks := make([]uint32, footer.chunkCount*2)
 	err = binary.Read(chunkRdr, binary.BigEndian, chunks[:])
 	if err != nil {
@@ -186,7 +185,7 @@ func buildArchiveReader(reader flexTableReaderAt, fileSize uint64, footer archiv
 	}
 
 	suffixSpan := footer.indexSuffixSpan()
-	sufRdr := io.NewSectionReader(reader, int64(suffixSpan.offset), int64(suffixSpan.length))
+	sufRdr := newSectionReader(ctx, reader, int64(suffixSpan.offset), int64(suffixSpan.length), stats)
 	suffixes := make([]byte, footer.chunkCount*hash.SuffixLen)
 	_, err = io.ReadFull(sufRdr, suffixes)
 	if err != nil {
@@ -211,21 +210,38 @@ func buildArchiveReader(reader flexTableReaderAt, fileSize uint64, footer archiv
 
 // clone returns a new archiveReader with a new (provided) reader. All other fields are immutable or thread safe,
 // so they are copied.
-func (ar archiveReader) clone(newReader flexTableReaderAt) archiveReader {
+func (ar archiveReader) clone() (archiveReader, error) {
+	reader, err := ar.reader.clone()
+	if err != nil {
+		return archiveReader{}, nil
+	}
 	return archiveReader{
-		reader:    newReader,
+		reader:    reader,
 		prefixes:  ar.prefixes,
 		spanIndex: ar.spanIndex,
 		chunkRefs: ar.chunkRefs,
 		suffixes:  ar.suffixes,
 		footer:    ar.footer,
 		dictCache: ar.dictCache, // cache is thread safe.
-	}
+	}, nil
 }
 
-func loadFooter(reader io.ReaderAt, fileSize uint64) (f archiveFooter, err error) {
-	section := io.NewSectionReader(reader, int64(fileSize-archiveFooterSize), int64(archiveFooterSize))
+type readerAtWithStatsBridge struct {
+	reader ReaderAtWithStats
+	ctx    context.Context
+	stats  *Stats
+}
 
+func (r readerAtWithStatsBridge) ReadAt(p []byte, off int64) (int, error) {
+	return r.reader.ReadAtWithStats(r.ctx, p, off, r.stats)
+}
+
+func newSectionReader(ctx context.Context, rd ReaderAtWithStats, off, len int64, stats *Stats) *io.SectionReader {
+	return io.NewSectionReader(readerAtWithStatsBridge{rd, ctx, stats}, off, len)
+}
+
+func loadFooter(ctx context.Context, reader ReaderAtWithStats, fileSize uint64, stats *Stats) (f archiveFooter, err error) {
+	section := newSectionReader(ctx, reader, int64(fileSize-archiveFooterSize), int64(archiveFooterSize), stats)
 	buf := make([]byte, archiveFooterSize)
 	_, err = io.ReadFull(section, buf)
 	if err != nil {
@@ -411,18 +427,18 @@ func (ar archiveReader) getMetadata(ctx context.Context, stats *Stats) ([]byte, 
 
 // verifyDataCheckSum verifies the checksum of the data section of the archive. Note - this requires a fully read of
 // the data section, which could be sizable.
-func (ar archiveReader) verifyDataCheckSum() error {
-	return verifyCheckSum(ar.reader, ar.footer.dataSpan(), ar.footer.dataCheckSum)
+func (ar archiveReader) verifyDataCheckSum(ctx context.Context, stats *Stats) error {
+	return verifyCheckSum(ctx, ar.reader, ar.footer.dataSpan(), ar.footer.dataCheckSum, stats)
 }
 
 // verifyIndexCheckSum verifies the checksum of the index section of the archive.
-func (ar archiveReader) verifyIndexCheckSum() error {
-	return verifyCheckSum(ar.reader, ar.footer.totalIndexSpan(), ar.footer.indexCheckSum)
+func (ar archiveReader) verifyIndexCheckSum(ctx context.Context, stats *Stats) error {
+	return verifyCheckSum(ctx, ar.reader, ar.footer.totalIndexSpan(), ar.footer.indexCheckSum, stats)
 }
 
 // verifyMetaCheckSum verifies the checksum of the metadata section of the archive.
-func (ar archiveReader) verifyMetaCheckSum() error {
-	return verifyCheckSum(ar.reader, ar.footer.metadataSpan(), ar.footer.metaCheckSum)
+func (ar archiveReader) verifyMetaCheckSum(ctx context.Context, stats *Stats) error {
+	return verifyCheckSum(ctx, ar.reader, ar.footer.metadataSpan(), ar.footer.metaCheckSum, stats)
 }
 
 func (ar archiveReader) iterate(ctx context.Context, cb func(chunks.Chunk) error, stats *Stats) error {
@@ -448,9 +464,9 @@ func (ar archiveReader) iterate(ctx context.Context, cb func(chunks.Chunk) error
 	return nil
 }
 
-func verifyCheckSum(reader flexTableReaderAt, span byteSpan, checkSum sha512Sum) error {
+func verifyCheckSum(ctx context.Context, reader tableReaderAt, span byteSpan, checkSum sha512Sum, stats *Stats) error {
 	hshr := sha512.New()
-	_, err := io.Copy(hshr, io.NewSectionReader(reader, int64(span.offset), int64(span.length)))
+	_, err := io.Copy(hshr, newSectionReader(ctx, reader, int64(span.offset), int64(span.length), stats))
 	if err != nil {
 		return err
 	}

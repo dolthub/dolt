@@ -92,7 +92,7 @@ func (cmd ArchiveCmd) Exec(ctx context.Context, commandStr string, args []string
 		return 1
 	}
 
-	storageMetadata, err := env.GetMultiEnvStorageMetadata(dEnv.FS)
+	storageMetadata, err := env.GetMultiEnvStorageMetadata(ctx, dEnv.FS)
 	if err != nil {
 		cli.PrintErrln(err)
 		return 1

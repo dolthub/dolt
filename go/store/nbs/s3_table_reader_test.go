@@ -54,7 +54,7 @@ func TestS3TableReaderAt(t *testing.T) {
 		assert := assert.New(t)
 
 		baseline := s3.getCount
-		tra := &s3TableReaderAt{&s3ObjectReader{makeFlakyS3(s3), "bucket", nil, ""}, h}
+		tra := &s3TableReaderAt{&s3ObjectReader{makeFlakyS3(s3), "bucket", nil, ""}, h.String()}
 		scratch := make([]byte, len(tableData))
 		_, err := tra.ReadAtWithStats(context.Background(), scratch, 0, &Stats{})
 		require.NoError(t, err)
@@ -81,7 +81,7 @@ func TestS3TableReaderAtNamespace(t *testing.T) {
 	require.NoError(t, err)
 	s3.data["a-prefix-here/"+h.String()] = tableData
 
-	tra := &s3TableReaderAt{&s3ObjectReader{s3, "bucket", nil, ns}, h}
+	tra := &s3TableReaderAt{&s3ObjectReader{s3, "bucket", nil, ns}, h.String()}
 	scratch := make([]byte, len(tableData))
 	_, err = tra.ReadAtWithStats(context.Background(), scratch, 0, &Stats{})
 	require.NoError(t, err)

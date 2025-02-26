@@ -24,8 +24,6 @@ package nbs
 import (
 	"context"
 	"io"
-
-	"github.com/dolthub/dolt/go/store/hash"
 )
 
 const (
@@ -34,8 +32,8 @@ const (
 )
 
 type s3TableReaderAt struct {
-	s3 *s3ObjectReader
-	h  hash.Hash
+	s3  *s3ObjectReader
+	key string
 }
 
 func (s3tra *s3TableReaderAt) Close() error {
@@ -47,11 +45,11 @@ func (s3tra *s3TableReaderAt) clone() (tableReaderAt, error) {
 }
 
 func (s3tra *s3TableReaderAt) Reader(ctx context.Context) (io.ReadCloser, error) {
-	return s3tra.s3.reader(ctx, s3tra.h.String())
+	return s3tra.s3.reader(ctx, s3tra.key)
 }
 
 func (s3tra *s3TableReaderAt) ReadAtWithStats(ctx context.Context, p []byte, off int64, stats *Stats) (n int, err error) {
-	return s3tra.s3.ReadAt(ctx, s3tra.h.String(), p, off, stats)
+	return s3tra.s3.ReadAt(ctx, s3tra.key, p, off, stats)
 }
 
 const maxS3ReadFromEndReqSize = 256 * 1024 * 1024       // 256MB

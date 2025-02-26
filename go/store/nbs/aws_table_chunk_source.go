@@ -32,14 +32,14 @@ import (
 func newAWSTableFileChunkSource(ctx context.Context, s3 *s3ObjectReader, al awsLimits, name hash.Hash, chunkCount uint32, q MemoryQuotaProvider, stats *Stats) (cs chunkSource, err error) {
 	var tra tableReaderAt
 	index, err := loadTableIndex(ctx, stats, chunkCount, q, func(p []byte) error {
-		n, err := s3.readS3ObjectFromEnd(ctx, name.String(), p, stats)
+		n, _, err := s3.readS3ObjectFromEnd(ctx, name.String(), p, stats)
 		if err != nil {
 			return err
 		}
 		if len(p) != n {
 			return errors.New("failed to read all data")
 		}
-		tra = &s3TableReaderAt{h: name, s3: s3}
+		tra = &s3TableReaderAt{key: name.String(), s3: s3}
 		return nil
 	})
 	if err != nil {

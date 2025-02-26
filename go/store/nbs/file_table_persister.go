@@ -69,7 +69,7 @@ var _ tablePersister = &fsTablePersister{}
 var _ tableFilePersister = &fsTablePersister{}
 
 func (ftp *fsTablePersister) Open(ctx context.Context, name hash.Hash, chunkCount uint32, stats *Stats) (chunkSource, error) {
-	return newFileTableReader(ctx, ftp.dir, name, chunkCount, ftp.q)
+	return newFileTableReader(ctx, ftp.dir, name, chunkCount, ftp.q, stats)
 }
 
 func (ftp *fsTablePersister) Exists(ctx context.Context, name string, chunkCount uint32, stats *Stats) (bool, error) {

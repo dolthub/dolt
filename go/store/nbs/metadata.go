@@ -15,6 +15,7 @@
 package nbs
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -89,7 +90,7 @@ func (sm *StorageMetadata) oldGenTableExists(id hash.Hash) (bool, error) {
 
 // GetStorageMetadata returns metadata about the local filesystem storage for a single database. The path given must be
 // the path to DB directory - ie, containing the .dolt directory.
-func GetStorageMetadata(path string) (StorageMetadata, error) {
+func GetStorageMetadata(ctx context.Context, path string, stats *Stats) (StorageMetadata, error) {
 	err := validateDir(path)
 	if err != nil {
 		return StorageMetadata{}, err
@@ -112,7 +113,7 @@ func GetStorageMetadata(path string) (StorageMetadata, error) {
 	// for each table in the manifest, get the table spec
 	for i := 0; i < manifest.NumTableSpecs(); i++ {
 		tableSpecInfo := manifest.GetTableSpecInfo(i)
-		artifact, err := buildArtifact(tableSpecInfo, newGen)
+		artifact, err := buildArtifact(ctx, tableSpecInfo, newGen, stats)
 		if err != nil {
 			return StorageMetadata{}, err
 		}
@@ -139,7 +140,7 @@ func GetStorageMetadata(path string) (StorageMetadata, error) {
 	for i := 0; i < manifest.NumTableSpecs(); i++ {
 		tableSpecInfo := manifest.GetTableSpecInfo(i)
 
-		artifact, err := buildArtifact(tableSpecInfo, oldgen)
+		artifact, err := buildArtifact(ctx, tableSpecInfo, oldgen, stats)
 		if err != nil {
 			return StorageMetadata{}, err
 		}
@@ -149,7 +150,7 @@ func GetStorageMetadata(path string) (StorageMetadata, error) {
 	return StorageMetadata{path, artifacts}, nil
 }
 
-func buildArtifact(info TableSpecInfo, genPath string) (StorageArtifact, error) {
+func buildArtifact(ctx context.Context, info TableSpecInfo, genPath string, stats *Stats) (StorageArtifact, error) {
 	tfName := info.GetName()
 
 	// This code is going to be removed as soon as backup supports archives.
@@ -177,12 +178,12 @@ func buildArtifact(info TableSpecInfo, genPath string) (StorageArtifact, error) 
 			storageType: TypeNoms,
 		}, nil
 	} else {
-		reader, fileSize, err := openFileReader(fullPath)
+		fra, err := newFileReaderAt(fullPath)
 		if err != nil {
 			return StorageArtifact{}, err
 		}
 
-		arcMetadata, err := newArchiveMetadata(reader, fileSize)
+		arcMetadata, err := newArchiveMetadata(ctx, fra, uint64(fra.sz), stats)
 		if err != nil {
 			return StorageArtifact{}, err
 		}

@@ -441,19 +441,14 @@ func gatherAllChunks(ctx context.Context, cs chunkSource, idx tableIndex, stats 
 
 	return chkCache, defaultSamples, nil
 }
+
 func verifyAllChunks(ctx context.Context, idx tableIndex, archiveFile string, progress chan interface{}, stats *Stats) error {
-	file, err := os.Open(archiveFile)
+	fra, err := newFileReaderAt(archiveFile)
 	if err != nil {
 		return err
 	}
 
-	stat, err := file.Stat()
-	if err != nil {
-		return err
-	}
-	fileSize := stat.Size()
-
-	index, err := newArchiveReader(newFlexibleReader(file), uint64(fileSize))
+	index, err := newArchiveReader(ctx, fra, uint64(fra.sz), stats)
 	if err != nil {
 		return err
 	}

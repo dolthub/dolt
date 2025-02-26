@@ -18,7 +18,6 @@ import (
 	"context"
 	"encoding/binary"
 	"io"
-	"os"
 	"path/filepath"
 
 	"github.com/pkg/errors"
@@ -35,15 +34,15 @@ type archiveChunkSource struct {
 
 var _ chunkSource = &archiveChunkSource{}
 
-func newArchiveChunkSource(ctx context.Context, dir string, h hash.Hash, chunkCount uint32, q MemoryQuotaProvider) (archiveChunkSource, error) {
+func newArchiveChunkSource(ctx context.Context, dir string, h hash.Hash, chunkCount uint32, q MemoryQuotaProvider, stats *Stats) (archiveChunkSource, error) {
 	archiveFile := filepath.Join(dir, h.String()+ArchiveFileSuffix)
 
-	file, size, err := openFileReader(archiveFile)
+	fra, err := newFileReaderAt(archiveFile)
 	if err != nil {
 		return archiveChunkSource{}, err
 	}
 
-	aRdr, err := newArchiveReader(file, size)
+	aRdr, err := newArchiveReader(ctx, fra, uint64(fra.sz), stats)
 	if err != nil {
 		return archiveChunkSource{}, err
 	}
@@ -60,31 +59,16 @@ func newAWSArchiveChunkSource(ctx context.Context,
 
 	footer := make([]byte, archiveFooterSize)
 	// sz is what we are really after here, but we'll use the bytes to construct the footer to avoid another call.
-	_, sz, err := s3.readRange(ctx, name, footer, httpEndRangeHeader(int(archiveFooterSize)))
+	_, sz, err := s3.readS3ObjectFromEnd(ctx, name, footer, stats)
 	if err != nil {
 		return emptyChunkSource{}, err
 	}
 
-	rdr := newFlexibleReader(s3ReaderAtWithStats{name, s3})
-	aRdr, err := newArchiveReaderFromFooter(rdr, sz, footer)
+	aRdr, err := newArchiveReaderFromFooter(ctx, &s3TableReaderAt{s3, name}, sz, footer, stats)
 	if err != nil {
 		return archiveChunkSource{}, err
 	}
 	return archiveChunkSource{"", aRdr}, nil
-}
-
-func openFileReader(file string) (flexTableReaderAt, uint64, error) {
-	f, err := os.Open(file)
-	if err != nil {
-		return flexTableReaderAt{}, 0, err
-	}
-
-	stat, err := f.Stat()
-	if err != nil {
-		return flexTableReaderAt{}, 0, err
-	}
-
-	return newFlexibleReader(f), uint64(stat.Size()), nil
 }
 
 func (acs archiveChunkSource) has(h hash.Hash, keeper keeperF) (bool, gcBehavior, error) {
@@ -174,11 +158,11 @@ func (acs archiveChunkSource) currentSize() uint64 {
 
 // reader returns a reader for the entire archive file.
 func (acs archiveChunkSource) reader(ctx context.Context) (io.ReadCloser, uint64, error) {
-	rdr := acs.aRdr.reader
-	fz := acs.currentSize()
-
-	rc := io.NewSectionReader(rdr, 0, int64(fz))
-	return io.NopCloser(rc), fz, nil
+	rd, err := acs.aRdr.reader.Reader(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+	return rd, acs.currentSize(), nil
 }
 func (acs archiveChunkSource) uncompressedLen() (uint64, error) {
 	return 0, errors.New("Archive chunk source does not support uncompressedLen")
@@ -189,36 +173,11 @@ func (acs archiveChunkSource) index() (tableIndex, error) {
 }
 
 func (acs archiveChunkSource) clone() (chunkSource, error) {
-	var newRdr *flexTableReaderAt
-
-	// We get into the guts a little bit on flexTableReaderAt here. There isn't a great
-	// way to support cloning of IO mechanisms in a generic way.
-	if acs.aRdr.reader.ioRdr != nil {
-		// io.File is the only type we expect.
-		rdr, _ := (*acs.aRdr.reader.ioRdr).(io.ReaderAt)
-		if _, ok := rdr.(*os.File); ok {
-			newFile, err := os.Open(acs.file)
-			if err != nil {
-				return nil, err
-			}
-			fr := newFlexibleReader(newFile)
-			newRdr = &fr
-		}
-	} else if acs.aRdr.reader.nbsRdrWs != nil {
-		// Currently we only expect the s3ReaderAtWithStats instances here.
-		rdr, _ := (*acs.aRdr.reader.nbsRdrWs).(ReaderAtWithStats)
-		if _, ok := rdr.(s3ReaderAtWithStats); ok {
-			fr := newFlexibleReader(rdr)
-			newRdr = &fr
-		}
+	reader, err := acs.aRdr.clone()
+	if err != nil {
+		return nil, err
 	}
-
-	if newRdr == nil {
-		return nil, errors.New("runtime error: unable to clone reader")
-	}
-
-	rdr := acs.aRdr.clone(*newRdr)
-	return archiveChunkSource{acs.file, rdr}, nil
+	return archiveChunkSource{acs.file, reader}, nil
 }
 
 func (acs archiveChunkSource) getRecordRanges(_ context.Context, requests []getRecord, keeper keeperF) (map[hash.Hash]Range, gcBehavior, error) {
