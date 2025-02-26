@@ -57,12 +57,10 @@ func tableFileExists(ctx context.Context, dir string, h hash.Hash) (bool, error)
 }
 
 func archiveFileExists(ctx context.Context, dir string, name string) (bool, error) {
-	// NM4 - is name short or long??
 	if !strings.HasSuffix(name, ArchiveFileSuffix) {
-		// It should be a hash, right?
 		_, ok := hash.MaybeParse(name)
 		if !ok {
-			panic("Not sure if this will ever happen")
+			return false, errors.New(fmt.Sprintf("invalid archive file name: %s", name))
 		}
 
 		name = fmt.Sprintf("%s%s", name, ArchiveFileSuffix)
