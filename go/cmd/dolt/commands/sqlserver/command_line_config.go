@@ -234,7 +234,7 @@ func (cfg *commandLineServerConfig) LogLevel() servercfg.LogLevel {
 	return cfg.logLevel
 }
 
-// LogFornat returns the format of logging that the server will use.
+// LogFormat returns the format of logging that the server will use.
 func (cfg *commandLineServerConfig) LogFormat() servercfg.LogFormat {
 	return cfg.logFormat
 }
