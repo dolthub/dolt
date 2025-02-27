@@ -356,7 +356,7 @@ func listSavedQueries(ctx *sql.Context, qryist cli.Queryist, dEnv *env.DoltEnv, 
 	}
 
 	query := "SELECT * FROM " + doltdb.DoltQueryCatalogTableName
-	return sqlHandleVErrAndExitCode(qryist, execQuery(ctx, qryist, query, format), usage)
+	return sqlHandleVErrAndExitCode(qryist, execSingleQuery(ctx, qryist, query, format), usage)
 }
 
 func executeSavedQuery(ctx *sql.Context, qryist cli.Queryist, dEnv *env.DoltEnv, savedQueryName string, format engine.PrintResultFormat, usage cli.UsagePrinter) int {
@@ -376,7 +376,7 @@ func executeSavedQuery(ctx *sql.Context, qryist cli.Queryist, dEnv *env.DoltEnv,
 	}
 
 	cli.PrintErrf("Executing saved query '%s':\n%s\n", savedQueryName, sq.Query)
-	return sqlHandleVErrAndExitCode(qryist, execQuery(ctx, qryist, sq.Query, format), usage)
+	return sqlHandleVErrAndExitCode(qryist, execSingleQuery(ctx, qryist, sq.Query, format), usage)
 }
 
 func queryMode(
@@ -406,7 +406,7 @@ func execSaveQuery(ctx *sql.Context, dEnv *env.DoltEnv, qryist cli.Queryist, apr
 
 	saveName := apr.GetValueOrDefault(saveFlag, "")
 
-	verr := execQuery(ctx, qryist, query, format)
+	verr := execSingleQuery(ctx, qryist, query, format)
 	if verr != nil {
 		return sqlHandleVErrAndExitCode(qryist, verr, usage)
 	}
@@ -430,7 +430,9 @@ func execSaveQuery(ctx *sql.Context, dEnv *env.DoltEnv, qryist cli.Queryist, apr
 	return 0
 }
 
-func execQuery(
+// execSingleQuery runs a single query and prints the results. This is not intended for use in interactive modes, especially
+// the shell.
+func execSingleQuery(
 	sqlCtx *sql.Context,
 	qryist cli.Queryist,
 	query string,
@@ -443,7 +445,7 @@ func execQuery(
 	}
 
 	if rowIter != nil {
-		err = engine.PrettyPrintResults(sqlCtx, format, sqlSch, rowIter)
+		err = engine.PrettyPrintResults(sqlCtx, format, sqlSch, rowIter, false)
 		if err != nil {
 			return errhand.VerboseErrorFromError(err)
 		}
@@ -659,7 +661,7 @@ func execBatchMode(ctx *sql.Context, qryist cli.Queryist, input io.Reader, conti
 					fileReadProg.printNewLineIfNeeded()
 				}
 			}
-			err = engine.PrettyPrintResults(ctx, format, sqlSch, rowIter)
+			err = engine.PrettyPrintResults(ctx, format, sqlSch, rowIter, false)
 			if err != nil {
 				err = buildBatchSqlErr(scanner.state.statementStartLine, query, err)
 				if !continueOnErr {
@@ -749,6 +751,7 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 
 	initialCtx := sqlCtx.Context
 
+	pagerEnabled := false
 	// Used for the \edit command.
 	lastSqlCmd := ""
 
@@ -787,9 +790,18 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 			}
 
 			if cmdType == DoltCliCommand {
-				err := handleSlashCommand(sqlCtx, subCmd, query, cliCtx)
-				if err != nil {
-					shell.Println(color.RedString(err.Error()))
+				if _, ok := subCmd.(SlashPager); ok {
+					p, err := handlePagerCommand(query)
+					if err != nil {
+						shell.Println(color.RedString(err.Error()))
+					} else {
+						pagerEnabled = p
+					}
+				} else {
+					err := handleSlashCommand(sqlCtx, subCmd, query, cliCtx)
+					if err != nil {
+						shell.Println(color.RedString(err.Error()))
+					}
 				}
 			} else {
 				if cmdType == TransformCommand {
@@ -805,9 +817,9 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 				} else if rowIter != nil {
 					switch closureFormat {
 					case engine.FormatTabular, engine.FormatVertical:
-						err = engine.PrettyPrintResultsExtended(sqlCtx, closureFormat, sqlSch, rowIter)
+						err = engine.PrettyPrintResultsExtended(sqlCtx, closureFormat, sqlSch, rowIter, pagerEnabled)
 					default:
-						err = engine.PrettyPrintResults(sqlCtx, closureFormat, sqlSch, rowIter)
+						err = engine.PrettyPrintResults(sqlCtx, closureFormat, sqlSch, rowIter, pagerEnabled)
 					}
 
 					if err != nil {

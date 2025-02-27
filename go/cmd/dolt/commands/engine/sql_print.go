@@ -21,6 +21,7 @@ import (
 	"io"
 	"time"
 
+	"github.com/dolthub/dolt/go/store/util/outputpager"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
 
@@ -54,16 +55,16 @@ const (
 )
 
 // PrettyPrintResults prints the result of a query in the format provided
-func PrettyPrintResults(ctx *sql.Context, resultFormat PrintResultFormat, sqlSch sql.Schema, rowIter sql.RowIter) (rerr error) {
-	return prettyPrintResultsWithSummary(ctx, resultFormat, sqlSch, rowIter, PrintNoSummary)
+func PrettyPrintResults(ctx *sql.Context, resultFormat PrintResultFormat, sqlSch sql.Schema, rowIter sql.RowIter, pageResults bool) (rerr error) {
+	return prettyPrintResultsWithSummary(ctx, resultFormat, sqlSch, rowIter, PrintNoSummary, pageResults)
 }
 
 // PrettyPrintResultsExtended prints the result of a query in the format provided, including row count and timing info
-func PrettyPrintResultsExtended(ctx *sql.Context, resultFormat PrintResultFormat, sqlSch sql.Schema, rowIter sql.RowIter) (rerr error) {
-	return prettyPrintResultsWithSummary(ctx, resultFormat, sqlSch, rowIter, PrintRowCountAndTiming)
+func PrettyPrintResultsExtended(ctx *sql.Context, resultFormat PrintResultFormat, sqlSch sql.Schema, rowIter sql.RowIter, pageResults bool) (rerr error) {
+	return prettyPrintResultsWithSummary(ctx, resultFormat, sqlSch, rowIter, PrintRowCountAndTiming, pageResults)
 }
 
-func prettyPrintResultsWithSummary(ctx *sql.Context, resultFormat PrintResultFormat, sqlSch sql.Schema, rowIter sql.RowIter, summary PrintSummaryBehavior) (rerr error) {
+func prettyPrintResultsWithSummary(ctx *sql.Context, resultFormat PrintResultFormat, sqlSch sql.Schema, rowIter sql.RowIter, summary PrintSummaryBehavior, pageResults bool) (rerr error) {
 	defer func() {
 		closeErr := rowIter.Close(ctx)
 		if rerr == nil && closeErr != nil {
@@ -79,37 +80,51 @@ func prettyPrintResultsWithSummary(ctx *sql.Context, resultFormat PrintResultFor
 	}
 
 	var wr table.SqlRowWriter
+	var err error
+	var numRows int
 
-	switch resultFormat {
-	case FormatCsv:
-		var err error
-		wr, err = csv.NewCSVSqlWriter(iohelp.NopWrCloser(cli.CliOut), sqlSch, csv.NewCSVInfo())
-		if err != nil {
-			return err
+	printEm := func() {
+		writerStream := cli.CliOut
+		if pageResults {
+			pager := outputpager.Start()
+			defer pager.Stop()
+			writerStream = pager.Writer
 		}
-	case FormatJson:
-		var err error
-		wr, err = json.NewJSONSqlWriter(iohelp.NopWrCloser(cli.CliOut), sqlSch)
-		if err != nil {
-			return err
+
+		switch resultFormat {
+		case FormatCsv:
+			var err error
+			wr, err = csv.NewCSVSqlWriter(iohelp.NopWrCloser(writerStream), sqlSch, csv.NewCSVInfo())
+			if err != nil {
+				return
+			}
+		case FormatJson:
+			var err error
+			wr, err = json.NewJSONSqlWriter(iohelp.NopWrCloser(writerStream), sqlSch)
+			if err != nil {
+				return
+			}
+		case FormatTabular:
+			wr = tabular.NewFixedWidthTableWriter(sqlSch, iohelp.NopWrCloser(writerStream), 100)
+		case FormatNull:
+			wr = nullWriter{}
+		case FormatVertical:
+			wr = newVerticalRowWriter(iohelp.NopWrCloser(writerStream), sqlSch)
+		case FormatParquet:
+			var err error
+			wr, err = parquet.NewParquetRowWriter(sqlSch, iohelp.NopWrCloser(writerStream))
+			if err != nil {
+				return
+			}
 		}
-	case FormatTabular:
-		wr = tabular.NewFixedWidthTableWriter(sqlSch, iohelp.NopWrCloser(cli.CliOut), 100)
-	case FormatNull:
-		wr = nullWriter{}
-	case FormatVertical:
-		wr = newVerticalRowWriter(iohelp.NopWrCloser(cli.CliOut), sqlSch)
-	case FormatParquet:
-		var err error
-		wr, err = parquet.NewParquetRowWriter(sqlSch, iohelp.NopWrCloser(cli.CliOut))
-		if err != nil {
-			return err
-		}
+
+		numRows, err = writeResultSet(ctx, rowIter, wr)
 	}
 
-	numRows, err := writeResultSet(ctx, rowIter, wr)
-	if err != nil {
-		return err
+	if pageResults {
+		cli.ExecuteWithStdioRestored(printEm)
+	} else {
+		printEm()
 	}
 
 	// if there is no row data and result format is JSON, then create empty JSON.
