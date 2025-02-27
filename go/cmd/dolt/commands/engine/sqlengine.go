@@ -219,7 +219,7 @@ func NewSqlEngine(
 	engine.Analyzer.ExecBuilder = rowexec.NewOverrideBuilder(kvexec.Builder{})
 	sessFactory := doltSessionFactory(pro, statsPro, mrEnv.Config(), bcController, gcSafepointController, config.Autocommit)
 	sqlEngine.provider = pro
-	sqlEngine.contextFactory = sqlContextFactory()
+	sqlEngine.contextFactory = sqlContextFactory
 	sqlEngine.dsessFactory = sessFactory
 	sqlEngine.engine = engine
 	sqlEngine.fs = pro.FileSystem()
@@ -258,7 +258,7 @@ func NewSqlEngine(
 	}
 
 	if engine.EventScheduler == nil {
-		err = configureEventScheduler(config, engine, sessFactory, pro)
+		err = configureEventScheduler(config, engine, sqlEngine.contextFactory, sessFactory, pro)
 		if err != nil {
 			return nil, err
 		}
@@ -270,7 +270,7 @@ func NewSqlEngine(
 			return nil, err
 		}
 
-		err = configureBinlogReplicaController(config, engine, binLogSession)
+		err = configureBinlogReplicaController(config, engine, sqlEngine.contextFactory, binLogSession)
 		if err != nil {
 			return nil, err
 		}
@@ -368,8 +368,7 @@ func (se *SqlEngine) Close() error {
 }
 
 // configureBinlogReplicaController configures the binlog replication controller with the |engine|.
-func configureBinlogReplicaController(config *SqlEngineConfig, engine *gms.Engine, session *dsess.DoltSession) error {
-	ctxFactory := sqlContextFactory()
+func configureBinlogReplicaController(config *SqlEngineConfig, engine *gms.Engine, ctxFactory contextFactory, session *dsess.DoltSession) error {
 	executionCtx, err := ctxFactory(context.Background(), session)
 	if err != nil {
 		return err
@@ -395,38 +394,14 @@ func configureBinlogPrimaryController(engine *gms.Engine) error {
 
 // configureEventScheduler configures the event scheduler with the |engine| for executing events, a |sessFactory|
 // for creating sessions, and a DoltDatabaseProvider, |pro|.
-func configureEventScheduler(config *SqlEngineConfig, engine *gms.Engine, sessFactory sessionFactory, pro *dsqle.DoltDatabaseProvider) error {
-	// need to give correct user, use the definer as user to run the event definition queries
-	ctxFactory := sqlContextFactory()
-
-	// getCtxFunc is used to create new session context for event scheduler.
-	// It starts a transaction that needs to be committed using the function returned.
-	getCtxFunc := func() (*sql.Context, func() error, error) {
+func configureEventScheduler(config *SqlEngineConfig, engine *gms.Engine, ctxFactory contextFactory, sessFactory sessionFactory, pro *dsqle.DoltDatabaseProvider) error {
+	// getCtxFunc is used to create new session with a new context for event scheduler.
+	getCtxFunc := func() (*sql.Context, error) {
 		sess, err := sessFactory(sql.NewBaseSession(), pro)
 		if err != nil {
-			return nil, func() error { return nil }, err
+			return nil, err
 		}
-
-		newCtx, err := ctxFactory(context.Background(), sess)
-		if err != nil {
-			return nil, func() error { return nil }, err
-		}
-
-		ts, ok := newCtx.Session.(sql.TransactionSession)
-		if !ok {
-			return nil, func() error { return nil }, nil
-		}
-
-		tr, err := sess.StartTransaction(newCtx, sql.ReadWrite)
-		if err != nil {
-			return nil, func() error { return nil }, err
-		}
-
-		ts.SetTransaction(tr)
-
-		return newCtx, func() error {
-			return ts.CommitTransaction(newCtx, tr)
-		}, nil
+		return ctxFactory(context.Background(), sess)
 	}
 
 	// A hidden env var allows overriding the event scheduler period for testing. This option is not
@@ -447,12 +422,10 @@ func configureEventScheduler(config *SqlEngineConfig, engine *gms.Engine, sessFa
 	return engine.InitializeEventScheduler(getCtxFunc, config.EventSchedulerStatus, eventSchedulerPeriod)
 }
 
-// sqlContextFactory returns a contextFactory that creates a new sql.Context with the initial database provided
-func sqlContextFactory() contextFactory {
-	return func(ctx context.Context, session sql.Session) (*sql.Context, error) {
-		sqlCtx := sql.NewContext(ctx, sql.WithSession(session))
-		return sqlCtx, nil
-	}
+// sqlContextFactory returns a contextFactory that creates a new sql.Context with the given session
+func sqlContextFactory(ctx context.Context, session sql.Session) (*sql.Context, error) {
+	sqlCtx := sql.NewContext(ctx, sql.WithSession(session))
+	return sqlCtx, nil
 }
 
 // doltSessionFactory returns a sessionFactory that creates a new DoltSession
