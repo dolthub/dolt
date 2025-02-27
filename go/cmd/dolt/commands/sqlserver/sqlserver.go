@@ -168,6 +168,7 @@ func (cmd SqlServerCmd) ArgParserWithName(name string) *argparser.ArgParser {
 	ap.SupportsInt(timeoutFlag, "t", "connection timeout", fmt.Sprintf("Defines the timeout, in seconds, used for connections\nA value of `0` represents an infinite timeout. Defaults to `%v`.", serverConfig.ReadTimeout()))
 	ap.SupportsFlag(readonlyFlag, "r", "Disable modification of the database.")
 	ap.SupportsString(logLevelFlag, "l", "log level", fmt.Sprintf("Defines the level of logging provided\nOptions are: `trace`, `debug`, `info`, `warning`, `error`, `fatal`. Defaults to `%v`.", serverConfig.LogLevel()))
+	ap.SupportsString(logFormatFlag, "f", "log format", fmt.Sprintf("Defines the level of format provided\nOptions are: `text`, `json`. Defaults to `%v`.", serverConfig.LogFormat()))
 	ap.SupportsString(commands.DataDirFlag, "", "directory", "Defines a directory to find databases to serve. Defaults to the current directory.")
 	ap.SupportsString(commands.MultiDBDirFlag, "", "directory", "Deprecated, use `--data-dir` instead.")
 	ap.SupportsString(commands.CfgDirFlag, "", "directory", "Defines a directory that contains non-database storage for dolt. Defaults to `$data-dir/.doltcfg`. Will be created automatically as needed.")

@@ -145,6 +145,9 @@ func NewCommandLineConfig(creds *cli.UserPassword, apr *argparser.ArgParseResult
 	if logLevel, ok := apr.GetValue(logLevelFlag); ok {
 		config.withLogLevel(servercfg.LogLevel(strings.ToLower(logLevel)))
 	}
+	if logFormat, ok := apr.GetValue(logFormatFlag); ok {
+		config.withLogFormat(servercfg.LogFormat(strings.ToLower(logFormat)))
+	}	
 
 	if dataDir, ok := apr.GetValue(commands.MultiDBDirFlag); ok {
 		config.withDataDir(dataDir)
@@ -404,6 +407,12 @@ func (cfg *commandLineServerConfig) withReadOnly(readonly bool) *commandLineServ
 func (cfg *commandLineServerConfig) withLogLevel(loglevel servercfg.LogLevel) *commandLineServerConfig {
 	cfg.logLevel = loglevel
 	cfg.valuesSet[servercfg.LogLevelKey] = struct{}{}
+	return cfg
+}
+// withLogFormat updates the log format and returns the called `*commandLineServerConfig`, which is useful for chaining calls.
+func (cfg *commandLineServerConfig) withLogFormat(logformat servercfg.LogFormat) *commandLineServerConfig {
+	cfg.logFormat = logformat
+	cfg.valuesSet[servercfg.LogFormatKey] = struct{}{}
 	return cfg
 }
 
