@@ -119,6 +119,17 @@ teardown() {
 
     wc=`grep SQL_SERVER_HEARTBEAT heartbeats.out | wc -l`
     [ $wc -gt 0 ]
+
+    # make sure we don't emit until the timer goes off
+    DOLT_EVENTS_EMITTER=logger DOLT_SQL_SERVER_HEARTBEAT_INTERVAL=10s dolt sql-server -l debug > heartbeats.out 2>&1 &
+    server_pid=$!
+    sleep 5
+    kill $server_pid
+
+    cat heartbeats.out
+
+    wc=`grep SQL_SERVER_HEARTBEAT heartbeats.out | wc -l`
+    [ $wc -eq 0 ]
 }
 
 # TODO: we need a local metrics server here that we can spin up to verify the send actually works
