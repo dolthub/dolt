@@ -11,6 +11,8 @@ BehaviorConfig servercfg.BehaviorYAMLConfig 0.0.0 behavior,omitempty
 -DisableClientMultiStatements *bool 0.0.0 disable_client_multi_statements,omitempty
 -DoltTransactionCommit *bool 0.0.0 dolt_transaction_commit,omitempty
 -EventSchedulerStatus *string 1.17.0 event_scheduler,omitempty
+-AutoGCBehavior *servercfg.AutoGCBehaviorYAMLConfig 1.50.0 auto_gc_behavior,omitempty
+--Enable_ *bool 1.50.0 enable,omitempty
 UserConfig servercfg.UserYAMLConfig 0.0.0 user,omitempty
 -Name *string 0.0.0 name,omitempty
 -Password *string 0.0.0 password,omitempty

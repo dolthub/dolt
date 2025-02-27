@@ -66,7 +66,7 @@ type BehaviorYAMLConfig struct {
 
 	EventSchedulerStatus *string `yaml:"event_scheduler,omitempty" minver:"1.17.0"`
 
-	AutoGCBehavior *AutoGCBehaviorYAMLConfig `yaml:"auto_gc_behavior,omitempty" minver:"TBD"`
+	AutoGCBehavior *AutoGCBehaviorYAMLConfig `yaml:"auto_gc_behavior,omitempty" minver:"1.50.0"`
 }
 
 // UserYAMLConfig contains server configuration regarding the user account clients must use to connect
@@ -935,7 +935,7 @@ func (cfg YAMLConfig) ValueSet(value string) bool {
 }
 
 type AutoGCBehaviorYAMLConfig struct {
-	Enable_ *bool `yaml:"enable,omitempty" minver:"TBD"`
+	Enable_ *bool `yaml:"enable,omitempty" minver:"1.50.0"`
 }
 
 func (a *AutoGCBehaviorYAMLConfig) Enable() bool {
