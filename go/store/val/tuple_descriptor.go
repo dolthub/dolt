@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"os"
 	"strconv"
 	"strings"
@@ -711,6 +712,9 @@ func (handler AddressTypeHandler) SerializeValue(ctx context.Context, val any) (
 	if err != nil {
 		return nil, err
 	}
+	if len(b) == 0 {
+		return nil, nil
+	}
 	h, err := handler.vs.WriteBytes(context.Background(), b)
 	if err != nil {
 		return nil, err
@@ -719,6 +723,9 @@ func (handler AddressTypeHandler) SerializeValue(ctx context.Context, val any) (
 }
 
 func (handler AddressTypeHandler) DeserializeValue(ctx context.Context, val []byte) (any, error) {
+	if len(val) == 0 {
+		return nil, nil
+	}
 	b, err := handler.vs.ReadBytes(ctx, hash.New(val))
 	if err != nil {
 		return nil, err
@@ -730,4 +737,96 @@ func (handler AddressTypeHandler) FormatValue(val any) (string, error) {
 	return handler.childHandler.FormatValue(val)
 }
 
+type LengthAndTreeValue struct {
+	length int
+	tree.ImmutableTree
+}
+
 var _ TupleTypeHandler = AddressTypeHandler{}
+
+// OversizedTypeHandler is an implementation of TupleTypeHandler for columns that embed short values, but
+// for long values contain a content-address to some value stored in a ValueStore.
+// This TypeHandler converts between the address and the underlying value as needed, allowing
+// these columns to be used in contexts that need access to the underlying value, such as in primary indexes.
+// Every value stored in this column has a header that describes how to interpret the rest of the value.
+// We embed the size because this helps us determine whether we need to deserialize when writing a row.
+// bit 0 - is the value stored in band or out of band
+// bit 1 - is the value compressed. Currently not supported, always set to 0.
+// reserve additional bits?
+// size - variable length encoding?
+type OversizedTypeHandler struct {
+	vs           ValueStore
+	childHandler TupleTypeHandler
+}
+
+func NewOversizedTypeHandler(vs ValueStore, childHandler TupleTypeHandler) OversizedTypeHandler {
+	return OversizedTypeHandler{
+		vs:           vs,
+		childHandler: childHandler,
+	}
+}
+
+func getOversizedHeaderLength(firstByte byte) int {
+	// for now always use 4 bytes for length
+	return 5
+}
+
+func getOversizedBytes(input []byte) []byte {
+	if len(input) == 0 {
+		return nil
+	}
+	if input[0]&128 == 1 {
+		headerLength := getOversizedHeaderLength(input[0])
+		return input[headerLength:]
+	}
+	return input[1:]
+}
+
+func (handler OversizedTypeHandler) SerializedCompare(ctx context.Context, v1 []byte, v2 []byte) (int, error) {
+	// TODO: If the child handler allows, compare the values one chunk at a time instead of always fully deserializing them.
+	var err error
+	v1InlineBytes := getOversizedBytes(v1)
+	var v1Bytes []byte
+	if len(v1) > 0 {
+		v1Bytes, err = handler.vs.ReadBytes(ctx, hash.New(v1InlineBytes))
+		if err != nil {
+			return 0, err
+		}
+	}
+	v2InlineBytes := getOversizedBytes(v2)
+	var v2Bytes []byte
+	if len(v2) > 0 {
+		v2Bytes, err = handler.vs.ReadBytes(ctx, hash.New(v2InlineBytes))
+		if err != nil {
+			return 0, err
+		}
+	}
+	return handler.childHandler.SerializedCompare(ctx, v1Bytes, v2Bytes)
+}
+
+// we need to know the total length of the row, or handle this at some higher level.
+func (handler OversizedTypeHandler) SerializeValue(ctx context.Context, val any) ([]byte, error) {
+	b, err := handler.childHandler.SerializeValue(ctx, val)
+	if err != nil {
+		return nil, err
+	}
+	h, err := handler.vs.WriteBytes(context.Background(), b)
+	if err != nil {
+		return nil, err
+	}
+	return h[:], err
+}
+
+func (handler OversizedTypeHandler) DeserializeValue(ctx context.Context, val []byte) (any, error) {
+	b, err := handler.vs.ReadBytes(ctx, hash.New(val))
+	if err != nil {
+		return nil, err
+	}
+	return handler.childHandler.DeserializeValue(ctx, b)
+}
+
+func (handler OversizedTypeHandler) FormatValue(val any) (string, error) {
+	return handler.childHandler.FormatValue(val)
+}
+
+var _ TupleTypeHandler = OversizedTypeHandler{}

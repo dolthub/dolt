@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"github.com/dolthub/dolt/go/store/val"
 	"io"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -254,11 +255,15 @@ func NewByteArray(addr hash.Hash, ns NodeStore) *ByteArray {
 }
 
 func (b *ByteArray) ToBytes(ctx context.Context) ([]byte, error) {
-	return b.bytes(ctx)
+	return getBytes(ctx, &b.ImmutableTree, ns)
+}
+
+func (b *ByteArray) ToInterface(ctx context.Context) (interface{}, error) {
+	return b.ToBytes(ctx)
 }
 
 func (b *ByteArray) ToString(ctx context.Context) (string, error) {
-	buf, err := b.bytes(ctx)
+	buf, err := getBytes(ctx, &b.ImmutableTree, ns)
 	if err != nil {
 		return "", err
 	}
@@ -269,6 +274,8 @@ func (b *ByteArray) ToString(ctx context.Context) (string, error) {
 	return string(buf[:toShow]), nil
 }
 
+var _ sql.ValueWrapper = &ByteArray{}
+
 type JSONDoc struct {
 	ImmutableTree
 }
@@ -278,7 +285,7 @@ func NewJSONDoc(addr hash.Hash, ns NodeStore) *JSONDoc {
 }
 
 func (b *JSONDoc) ToJSONDocument(ctx context.Context) (sqltypes.JSONDocument, error) {
-	buf, err := b.bytes(ctx)
+	buf, err := b.getBytes(ctx, &b.ImmutableTree, ns)
 	if err != nil {
 		return sqltypes.JSONDocument{}, err
 	}
@@ -291,7 +298,7 @@ func (b *JSONDoc) ToJSONDocument(ctx context.Context) (sqltypes.JSONDocument, er
 }
 
 func (b *JSONDoc) ToLazyJSONDocument(ctx context.Context) (sql.JSONWrapper, error) {
-	buf, err := b.bytes(ctx)
+	buf, err := getBytes(ctx, &b.ImmutableTree, b.ns)
 	if err != nil {
 		return sqltypes.JSONDocument{}, err
 	}
@@ -312,7 +319,7 @@ func (b *JSONDoc) ToIndexedJSONDocument(ctx context.Context) (sql.JSONWrapper, e
 }
 
 func (b *JSONDoc) ToString(ctx context.Context) (string, error) {
-	buf, err := b.bytes(ctx)
+	buf, err := b.getBytes(ctx, ns)
 	if err != nil {
 		return "", err
 	}
@@ -332,16 +339,22 @@ func NewTextStorage(addr hash.Hash, ns NodeStore) *TextStorage {
 }
 
 func (b *TextStorage) ToBytes(ctx context.Context) ([]byte, error) {
-	return b.bytes(ctx)
+	return b.getBytes(ctx, ns)
 }
 
 func (b *TextStorage) ToString(ctx context.Context) (string, error) {
-	buf, err := b.bytes(ctx)
+	buf, err := b.getBytes(ctx, ns)
 	if err != nil {
 		return "", err
 	}
 	return string(buf), nil
 }
+
+func (b *TextStorage) ToInterface(ctx context.Context) (interface{}, error) {
+	return b.ToString(ctx)
+}
+
+var _ sql.ValueWrapper = &TextStorage{}
 
 type ImmutableTree struct {
 	Addr hash.Hash
@@ -349,32 +362,22 @@ type ImmutableTree struct {
 	ns   NodeStore
 }
 
-func (t *ImmutableTree) load(ctx context.Context) error {
+func (ns *nodeStore) LoadBytesIntoValue(ctx context.Context, t *val.ImmutableValue) error {
 	if t.Addr.IsEmpty() {
-		t.buf = []byte{}
+		t.Buf = []byte{}
 		return nil
 	}
-	n, err := t.ns.Read(ctx, t.Addr)
+	n, err := ns.Read(ctx, t.Addr)
 	if err != nil {
 		return err
 	}
 
-	return WalkNodes(ctx, n, t.ns, func(ctx context.Context, n Node) error {
+	return WalkNodes(ctx, n, ns, func(ctx context.Context, n Node) error {
 		if n.IsLeaf() {
-			t.buf = append(t.buf, n.GetValue(0)...)
+			t.Buf = append(t.Buf, n.GetValue(0)...)
 		}
 		return nil
 	})
-}
-
-func (t *ImmutableTree) bytes(ctx context.Context) ([]byte, error) {
-	if t.buf == nil {
-		err := t.load(ctx)
-		if err != nil {
-			return nil, err
-		}
-	}
-	return t.buf[:], nil
 }
 
 func (t *ImmutableTree) next() (Node, error) {

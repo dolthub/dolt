@@ -122,7 +122,7 @@ func GetField(ctx context.Context, td val.TupleDesc, i int, tup val.Tuple, ns No
 		var h hash.Hash
 		h, ok = td.GetBytesAddr(i, tup)
 		if ok {
-			v, err = NewByteArray(h, ns).ToBytes(ctx)
+			v = NewByteArray(h, ns)
 		}
 	case val.JSONAddrEnc:
 		var h hash.Hash
@@ -134,7 +134,7 @@ func GetField(ctx context.Context, td val.TupleDesc, i int, tup val.Tuple, ns No
 		var h hash.Hash
 		h, ok = td.GetStringAddr(i, tup)
 		if ok {
-			v, err = NewTextStorage(h, ns).ToString(ctx)
+			v = NewTextStorage(h, ns)
 		}
 	case val.CommitAddrEnc:
 		v, ok = td.GetCommitAddr(i, tup)
@@ -251,14 +251,14 @@ func PutField(ctx context.Context, ns NodeStore, tb *val.TupleBuilder, i int, v 
 		}
 		tb.PutJSONAddr(i, h)
 	case val.BytesAddrEnc:
-		_, h, err := SerializeBytesToAddr(ctx, ns, bytes.NewReader(v.([]byte)), len(v.([]byte)))
+		h, err := getBlobAddrHash(ctx, ns, v)
 		if err != nil {
 			return err
 		}
 		tb.PutBytesAddr(i, h)
 	case val.StringAddrEnc:
 		//todo: v will be []byte after daylon's changes
-		_, h, err := SerializeBytesToAddr(ctx, ns, bytes.NewReader([]byte(v.(string))), len(v.(string)))
+		h, err := getStringAddrHash(ctx, ns, v)
 		if err != nil {
 			return err
 		}
@@ -293,6 +293,47 @@ func PutField(ctx context.Context, ns NodeStore, tb *val.TupleBuilder, i int, v 
 		panic(fmt.Sprintf("unknown encoding %v %v", enc, v))
 	}
 	return nil
+}
+
+// TODO: Should this and getStringAddrHash be one function? Should BytesWrapper and StringWrapper be one type?
+func getBlobAddrHash(ctx context.Context, ns NodeStore, v interface{}) (h hash.Hash, err error) {
+	if byteSlice, isByteSlice := v.([]byte); isByteSlice {
+		_, h, err = SerializeBytesToAddr(ctx, ns, bytes.NewReader(byteSlice), len(byteSlice))
+		return h, err
+	}
+	bytesWrapper, isBytesWrapper := v.(sql.BytesWrapper)
+	if !isBytesWrapper {
+		return hash.Hash{}, fmt.Errorf("expected implementation of sql.BytesWrapper, got %v", v)
+	}
+	if byteArray, isByteArray := v.(ByteArray); isByteArray {
+		return byteArray.Addr, nil
+	}
+	b, err := bytesWrapper.ToBytes(ctx)
+	if err != nil {
+		return hash.Hash{}, err
+	}
+	_, h, err = SerializeBytesToAddr(ctx, ns, bytes.NewReader(b), len(b))
+	return h, err
+}
+
+func getStringAddrHash(ctx context.Context, ns NodeStore, v interface{}) (h hash.Hash, err error) {
+	if str, isStr := v.(string); isStr {
+		_, h, err := SerializeBytesToAddr(ctx, ns, bytes.NewReader([]byte(str)), len(str))
+		return h, err
+	}
+	stringWrapper, isStringWrapper := v.(sql.StringWrapper)
+	if !isStringWrapper {
+		return hash.Hash{}, fmt.Errorf("expected implementation of sql.StringWrapper, got %v", v)
+	}
+	if textStorage, isTextStorage := v.(TextStorage); isTextStorage {
+		return textStorage.Addr, nil
+	}
+	s, err := stringWrapper.ToString(ctx)
+	if err != nil {
+		return hash.Hash{}, err
+	}
+	_, h, err = SerializeBytesToAddr(ctx, ns, bytes.NewReader([]byte(s)), len([]byte(s)))
+	return h, err
 }
 
 func getJSONAddrHash(ctx context.Context, ns NodeStore, v interface{}) (hash.Hash, error) {

@@ -476,9 +476,19 @@ func getSchemaFragmentsOfType(ctx *sql.Context, tbl *WritableDoltTable, fragType
 			return nil, err
 		}
 
+		name, err := sql.String(ctx, sqlRow[nameIdx])
+		if err != nil {
+			return nil, err
+		}
+
+		fragment, err := sql.String(ctx, sqlRow[fragmentIdx])
+		if err != nil {
+			return nil, err
+		}
+
 		frags = append(frags, schemaFragment{
-			name:     sqlRow[nameIdx].(string),
-			fragment: sqlRow[fragmentIdx].(string),
+			name:     name,
+			fragment: fragment,
 			created:  time.Unix(createdTime, 0).UTC(),
 			sqlMode:  sqlModeString,
 		})

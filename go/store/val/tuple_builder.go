@@ -86,6 +86,25 @@ func (tb *TupleBuilder) Build(pool pool.BuffPool) (tup Tuple) {
 // BuildPermissive materializes a Tuple from the fields
 // written to the TupleBuilder without validating nullability.
 func (tb *TupleBuilder) BuildPermissive(pool pool.BuffPool) (tup Tuple) {
+	/*
+		// We need to determine which TOAST fields get written out, and pass the addresses in instead. This is the only
+		// place where we break encapsulation.
+		// Track the total packed and unpacked size?
+		totalSize := unpackedSize
+		if totalSize > allocated_size {
+			// start allocating to toast fields until we get below the size.
+			// do this in a way that doesn't require the full field.
+			for _, handler := range tb.Desc.Handlers {
+				if handler.IsToast() {
+					// if outlining saves size, then outline it and update the size.
+				}
+
+				if totalSize <= allocated_size {
+					break
+				}
+			}
+
+			}*/
 	values := tb.fields[:tb.Desc.Count()]
 	tup = NewTuple(pool, values...)
 	tb.Recycle()

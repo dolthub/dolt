@@ -20,10 +20,27 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
+type ImmutableValue struct {
+	Addr hash.Hash
+	Buf  []byte
+	vs   ValueStore
+}
+
+func (t *ImmutableValue) GetBytes(ctx context.Context) ([]byte, error) {
+	if t.Buf == nil {
+		err := t.vs.LoadBytesIntoValue(ctx, t)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return t.Buf[:], nil
+}
+
 // ValueStore is an interface for a key-value store that can store byte sequences, keyed by a content hash.
 // The only implementation is tree.NodeStore, but ValueStore can be used without depending on the tree package.
 // This is useful for type handlers.
 type ValueStore interface {
 	ReadBytes(ctx context.Context, h hash.Hash) ([]byte, error)
 	WriteBytes(ctx context.Context, val []byte) (hash.Hash, error)
+	LoadBytesIntoValue(ctx context.Context, v *ImmutableValue) error
 }
