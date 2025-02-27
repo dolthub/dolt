@@ -35,6 +35,7 @@ import (
 
 	"cloud.google.com/go/storage"
 	"github.com/aws/aws-sdk-go/service/s3/s3iface"
+	"github.com/dolthub/fslock"
 	"github.com/dustin/go-humanize"
 	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/oracle/oci-go-sdk/v65/common"
@@ -615,12 +616,17 @@ func newLocalStore(ctx context.Context, nbfVerStr string, dir string, memTableSi
 }
 
 func NewLocalJournalingStore(ctx context.Context, nbfVers, dir string, q MemoryQuotaProvider) (*NomsBlockStore, error) {
+	lock := fslock.New(filepath.Join(dir, lockFileName))
+	return NewLocalJournalingStoreWithLock(ctx, lock, nbfVers, dir, q)
+}
+
+func NewLocalJournalingStoreWithLock(ctx context.Context, lock *fslock.Lock, nbfVers, dir string, q MemoryQuotaProvider) (*NomsBlockStore, error) {
 	cacheOnce.Do(makeGlobalCaches)
 	if err := checkDir(dir); err != nil {
 		return nil, err
 	}
 
-	m, err := newJournalManifest(ctx, dir)
+	m, err := newJournalManifest(ctx, lock, dir)
 	if err != nil {
 		return nil, err
 	}

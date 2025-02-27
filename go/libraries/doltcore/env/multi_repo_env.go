@@ -153,7 +153,7 @@ func MultiEnvForDirectory(
 		envName := getRepoRootDir(path, string(os.PathSeparator))
 		dbName = dbfactory.DirToDBName(envName)
 
-		newDEnv = Load(ctx, GetCurrentUserHomeDir, dataDirFS, doltdb.LocalDirDoltDB, version)
+		newDEnv = LoadWithWriteAccess(ctx, GetCurrentUserHomeDir, dataDirFS, doltdb.LocalDirDoltDB, version)
 	}
 
 	mrEnv := &MultiRepoEnv{
@@ -231,7 +231,7 @@ func (mrEnv *MultiRepoEnv) ReloadDBs(
 		dEnv := namedEnv.env
 
 		if dEnv.doltDB == nil {
-			LoadDoltDB(ctx, dEnv.FS, dEnv.urlStr, dEnv)
+			LoadDoltDB(ctx, dEnv.FS, dEnv.urlStr, dEnv, nil)
 		}
 		if !dEnv.Valid() {
 			dbErr := dEnv.DBLoadError
