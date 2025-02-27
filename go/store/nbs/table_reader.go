@@ -151,8 +151,12 @@ func (ir indexResult) Length() uint32 {
 	return ir.length
 }
 
-type tableReaderAt interface {
+type ReaderAtWithStats interface {
 	ReadAtWithStats(ctx context.Context, p []byte, off int64, stats *Stats) (n int, err error)
+}
+
+type tableReaderAt interface {
+	ReaderAtWithStats
 	Reader(ctx context.Context) (io.ReadCloser, error)
 	Close() error
 	clone() (tableReaderAt, error)

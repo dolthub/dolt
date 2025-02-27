@@ -18,7 +18,6 @@ import (
 	"context"
 	"encoding/binary"
 	"io"
-	"os"
 	"path/filepath"
 
 	"github.com/pkg/errors"
@@ -29,39 +28,47 @@ import (
 )
 
 type archiveChunkSource struct {
-	file string
+	file string // Only meaningful for local files.
 	aRdr archiveReader
 }
 
 var _ chunkSource = &archiveChunkSource{}
 
-func newArchiveChunkSource(ctx context.Context, dir string, h hash.Hash, chunkCount uint32, q MemoryQuotaProvider) (archiveChunkSource, error) {
+func newArchiveChunkSource(ctx context.Context, dir string, h hash.Hash, chunkCount uint32, q MemoryQuotaProvider, stats *Stats) (archiveChunkSource, error) {
 	archiveFile := filepath.Join(dir, h.String()+ArchiveFileSuffix)
 
-	file, size, err := openReader(archiveFile)
+	fra, err := newFileReaderAt(archiveFile)
 	if err != nil {
 		return archiveChunkSource{}, err
 	}
 
-	aRdr, err := newArchiveReader(file, size)
+	aRdr, err := newArchiveReader(ctx, fra, uint64(fra.sz), stats)
 	if err != nil {
 		return archiveChunkSource{}, err
 	}
 	return archiveChunkSource{archiveFile, aRdr}, nil
 }
 
-func openReader(file string) (io.ReaderAt, uint64, error) {
-	f, err := os.Open(file)
+func newAWSArchiveChunkSource(ctx context.Context,
+	s3 *s3ObjectReader,
+	al awsLimits,
+	name string,
+	chunkCount uint32,
+	q MemoryQuotaProvider,
+	stats *Stats) (cs chunkSource, err error) {
+
+	footer := make([]byte, archiveFooterSize)
+	// sz is what we are really after here, but we'll use the bytes to construct the footer to avoid another call.
+	_, sz, err := s3.readS3ObjectFromEnd(ctx, name, footer, stats)
 	if err != nil {
-		return nil, 0, err
+		return emptyChunkSource{}, err
 	}
 
-	stat, err := f.Stat()
+	aRdr, err := newArchiveReaderFromFooter(ctx, &s3TableReaderAt{s3, name}, sz, footer, stats)
 	if err != nil {
-		return nil, 0, err
+		return archiveChunkSource{}, err
 	}
-
-	return f, uint64(stat.Size()), nil
+	return archiveChunkSource{"", aRdr}, nil
 }
 
 func (acs archiveChunkSource) has(h hash.Hash, keeper keeperF) (bool, gcBehavior, error) {
@@ -90,7 +97,7 @@ func (acs archiveChunkSource) hasMany(addrs []hasRecord, keeper keeperF) (bool, 
 }
 
 func (acs archiveChunkSource) get(ctx context.Context, h hash.Hash, keeper keeperF, stats *Stats) ([]byte, gcBehavior, error) {
-	res, err := acs.aRdr.get(h)
+	res, err := acs.aRdr.get(ctx, h, stats)
 	if err != nil {
 		return nil, gcBehavior_Continue, err
 	}
@@ -105,7 +112,7 @@ func (acs archiveChunkSource) getMany(ctx context.Context, eg *errgroup.Group, r
 	foundAll := true
 	for i, req := range reqs {
 		h := *req.a
-		data, err := acs.aRdr.get(h)
+		data, err := acs.aRdr.get(ctx, h, stats)
 		if err != nil {
 			return true, gcBehavior_Continue, err
 		}
@@ -125,8 +132,8 @@ func (acs archiveChunkSource) getMany(ctx context.Context, eg *errgroup.Group, r
 
 // iterate iterates over the archive chunks. The callback is called for each chunk in the archive. This is not optimized
 // as currently is it only used for un-archiving, which should be uncommon.
-func (acs archiveChunkSource) iterate(ctx context.Context, cb func(chunks.Chunk) error) error {
-	return acs.aRdr.iterate(ctx, cb)
+func (acs archiveChunkSource) iterate(ctx context.Context, cb func(chunks.Chunk) error, stats *Stats) error {
+	return acs.aRdr.iterate(ctx, cb, stats)
 }
 
 func (acs archiveChunkSource) count() (uint32, error) {
@@ -141,16 +148,21 @@ func (acs archiveChunkSource) hash() hash.Hash {
 	return acs.aRdr.footer.hash
 }
 
-func (acs archiveChunkSource) name() string {
-	return acs.hash().String() + ArchiveFileSuffix
+func (acs archiveChunkSource) suffix() string {
+	return ArchiveFileSuffix
 }
 
 func (acs archiveChunkSource) currentSize() uint64 {
 	return acs.aRdr.footer.fileSize
 }
 
+// reader returns a reader for the entire archive file.
 func (acs archiveChunkSource) reader(ctx context.Context) (io.ReadCloser, uint64, error) {
-	return nil, 0, errors.New("Archive chunk source does not support reader")
+	rd, err := acs.aRdr.reader.Reader(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+	return rd, acs.currentSize(), nil
 }
 func (acs archiveChunkSource) uncompressedLen() (uint64, error) {
 	return 0, errors.New("Archive chunk source does not support uncompressedLen")
@@ -161,14 +173,11 @@ func (acs archiveChunkSource) index() (tableIndex, error) {
 }
 
 func (acs archiveChunkSource) clone() (chunkSource, error) {
-	newReader, _, err := openReader(acs.file)
+	reader, err := acs.aRdr.clone()
 	if err != nil {
 		return nil, err
 	}
-
-	rdr := acs.aRdr.clone(newReader)
-
-	return archiveChunkSource{acs.file, rdr}, nil
+	return archiveChunkSource{acs.file, reader}, nil
 }
 
 func (acs archiveChunkSource) getRecordRanges(_ context.Context, requests []getRecord, keeper keeperF) (map[hash.Hash]Range, gcBehavior, error) {
@@ -204,7 +213,7 @@ func (acs archiveChunkSource) getManyCompressed(ctx context.Context, eg *errgrou
 	foundAll := true
 	for i, req := range reqs {
 		h := *req.a
-		toChk, err := acs.aRdr.getAsToChunker(h)
+		toChk, err := acs.aRdr.getAsToChunker(ctx, h, stats)
 		if err != nil {
 			return true, gcBehavior_Continue, err
 		}
@@ -221,7 +230,7 @@ func (acs archiveChunkSource) getManyCompressed(ctx context.Context, eg *errgrou
 	return !foundAll, gcBehavior_Continue, nil
 }
 
-func (acs archiveChunkSource) iterateAllChunks(ctx context.Context, cb func(chunks.Chunk), _ *Stats) error {
+func (acs archiveChunkSource) iterateAllChunks(ctx context.Context, cb func(chunks.Chunk), stats *Stats) error {
 	addrCount := uint32(len(acs.aRdr.prefixes))
 	for i := uint32(0); i < addrCount; i++ {
 		var h hash.Hash
@@ -235,7 +244,7 @@ func (acs archiveChunkSource) iterateAllChunks(ctx context.Context, cb func(chun
 			return ctx.Err()
 		}
 
-		data, err := acs.aRdr.get(h)
+		data, err := acs.aRdr.get(ctx, h, stats)
 		if err != nil {
 			return err
 		}

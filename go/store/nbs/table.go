@@ -243,9 +243,8 @@ type chunkSource interface {
 	// hash returns the hash address of this chunkSource.
 	hash() hash.Hash
 
-	// name is the on disk short name for this chunkSource. Classically, this was a hash. Having files
-	// with suffixes (eg darc) was useful.
-	name() string
+	// suffix returns the file suffix of this chunkSource. File name can be produces with `cs.hash().String() + cs.suffix()`
+	suffix() string
 
 	// opens a Reader to the first byte of the chunkData segment of this table.
 	reader(context.Context) (io.ReadCloser, uint64, error)

@@ -165,12 +165,7 @@ func (nbs *NomsBlockStore) GetChunkLocationsWithPaths(ctx context.Context, hashe
 	res := make(map[string]map[hash.Hash]Range, len(sourcesToRanges))
 	for csP, ranges := range sourcesToRanges {
 		cs := *csP
-		suffix := ""
-		if _, ok := cs.(archiveChunkSource); ok {
-			suffix = ArchiveFileSuffix
-		}
-
-		res[cs.hash().String()+suffix] = ranges
+		res[cs.hash().String()+cs.suffix()] = ranges
 	}
 	return res, nil
 }
@@ -421,10 +416,10 @@ func (nbs *NomsBlockStore) checkAllManifestUpdatesExist(ctx context.Context, upd
 	eg, ctx := errgroup.WithContext(ctx)
 	eg.SetLimit(128)
 	for h, c := range updates {
-		h := h
+		name := h
 		c := c
 		eg.Go(func() error {
-			ok, err := nbs.p.Exists(ctx, h, c, nbs.stats)
+			ok, err := nbs.p.Exists(ctx, name.String(), c, nbs.stats)
 			if err != nil {
 				return err
 			}

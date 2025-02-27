@@ -183,16 +183,6 @@ mutations_and_gc_statement() {
     run dolt sql -q 'select sum(i) from tbl;'
     [[ "$status" -eq 0 ]] || false
     [[ "$output" =~ "138075" ]] || false # i = 1 - 525, sum is 138075
-
-
-    ## Temporary check. We want to ensure that backup will give an error, even when
-    ## there are archives in newgen.
-    mkdir ../backup
-    dolt backup add bac1 file://../backup
-
-    run dolt backup sync bac1
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "error: archive files present" ]] || false
 }
 
 @test "archive: can clone respiratory with mixed types" {
@@ -269,3 +259,21 @@ mutations_and_gc_statement() {
     dolt fsck
 }
 
+@test "archive: backup and restore" {
+  # cp the repository from the test dir.
+  mkdir -p original/.dolt
+  cp -R $BATS_TEST_DIRNAME/archive-test-repo/* original/.dolt
+
+  cd original
+  dolt backup add bac1 file://../bac1
+  dolt backup sync bac1
+
+  cd ..
+
+  dolt backup restore file://./bac1 restored
+  cd restored
+  # Verify we can read data
+  run dolt sql -q 'select sum(i) from tbl;'
+  [[ "$status" -eq 0 ]] || false
+  [[ "$output" =~ "138075" ]] || false # i = 1 - 525, sum is 138075
+}
