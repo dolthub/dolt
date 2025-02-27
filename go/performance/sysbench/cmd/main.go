@@ -79,7 +79,7 @@ func main() {
 		if err != nil {
 			log.Fatalln(err)
 		}
-		fmt.Fprintf(of, results.SqlDump())
+		fmt.Fprint(of, results.SqlDump())
 	} else {
 		fmt.Println(results.SqlDump())
 	}

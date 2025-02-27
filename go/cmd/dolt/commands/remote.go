@@ -200,7 +200,7 @@ func addRemoteLocaly(remoteName, remoteUrl string, params map[string]string, dEn
 	case env.ErrInvalidRemoteURL:
 		return errhand.BuildDError("error: '%s' is not valid.", rmot.Url).AddCause(err).Build()
 	case env.ErrInvalidRemoteName:
-		return errhand.BuildDError("error: invalid remote name: " + rmot.Name).Build()
+		return errhand.BuildDError("error: invalid remote name: %s", rmot.Name).Build()
 	default:
 		return errhand.BuildDError("error: Unable to save changes.").AddCause(err).Build()
 	}

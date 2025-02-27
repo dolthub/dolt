@@ -493,7 +493,7 @@ func callStoredProcedure(sqlCtx *sql.Context, queryEngine cli.Queryist, args []s
 	if err != nil {
 		if strings.Contains(err.Error(), "is not fully merged") {
 			newErrorMessage := fmt.Sprintf("%s. If you are sure you want to delete it, run 'dolt branch -D%s'", err.Error(), generateForceDeleteMessage(args))
-			return HandleVErrAndExitCode(errhand.BuildDError(newErrorMessage).Build(), nil)
+			return HandleVErrAndExitCode(errhand.BuildDError("%s", newErrorMessage).Build(), nil)
 		}
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(fmt.Errorf("error: %s", err.Error())), nil)
 	}
@@ -507,5 +507,5 @@ func callStoredProcedure(sqlCtx *sql.Context, queryEngine cli.Queryist, args []s
 
 // BuildVerrAndExit is a shortcut for building a verbose error and calling HandleVerrAndExitCode with it
 func BuildVerrAndExit(errMsg string, cause error) int {
-	return HandleVErrAndExitCode(errhand.BuildDError(errMsg).AddCause(cause).Build(), nil)
+	return HandleVErrAndExitCode(errhand.BuildDError("%s", errMsg).AddCause(cause).Build(), nil)
 }

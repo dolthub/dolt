@@ -78,7 +78,7 @@ func (d *DoltBinlogPrimaryController) validateReplicationConfiguration() *mysql.
 	}
 	logBin, _, err := gmstypes.Boolean.Convert(logBinValue)
 	if err != nil {
-		return mysql.NewSQLError(mysql.ERUnknownError, "HY000", err.Error())
+		return mysql.NewSQLError(mysql.ERUnknownError, "HY000", "%s", err.Error())
 	}
 	if logBin.(int8) != 1 {
 		return mysql.NewSQLError(mysql.ERMasterFatalReadingBinlog, "HY000",

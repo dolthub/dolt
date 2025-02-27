@@ -189,7 +189,7 @@ func parseArgs(apr *argparser.ArgParseResults) (string, string, errhand.VerboseE
 	_, err := earl.Parse(urlStr)
 
 	if err != nil {
-		return "", "", errhand.BuildDError("error: invalid remote url: " + urlStr).Build()
+		return "", "", errhand.BuildDError("error: invalid remote url: %s", urlStr).Build()
 	}
 
 	var dir string

@@ -133,7 +133,7 @@ func (p *Provider) RefreshTableStatsWithBranch(ctx *sql.Context, table sql.Table
 		}
 		statDb, err = p.sf.Init(ctx, sourceDb, p.pro, fs, env.GetCurrentUserHomeDir)
 		if err != nil {
-			ctx.Warn(0, err.Error())
+			ctx.Warn(0, "%s", err.Error())
 			return nil
 		}
 		p.setStatDb(dbName, statDb)

@@ -156,7 +156,7 @@ func (cmd *DumpDocsCmd) dumpDocs(wr io.Writer, cmdStr string, subCommands []cli.
 					docs.CommandStr = fmt.Sprintf("%s %s", cmdStr, curr.Name())
 					err := CreateMarkdown(wr, docs)
 					if err != nil {
-						return errhand.BuildDError(fmt.Sprintf("error: Failed to create markdown for command: %s %s.", cmdStr, curr.Name())).AddCause(err).Build()
+						return errhand.BuildDError("error: Failed to create markdown for command: %s %s.", cmdStr, curr.Name()).AddCause(err).Build()
 					}
 				}
 			}

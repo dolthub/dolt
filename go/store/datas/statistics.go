@@ -109,7 +109,7 @@ func Statistics_flatbuffer(addr hash.Hash) serial.Message {
 // embedding the stats table and address.
 func parse_Statistics(ctx context.Context, bs []byte, ns tree.NodeStore, vr types.ValueReader) (*Statistics, error) {
 	if serial.GetFileID(bs) != serial.StatisticFileID {
-		return nil, fmt.Errorf("expected statistics file id, got: " + serial.GetFileID(bs))
+		return nil, fmt.Errorf("expected statistics file id, got: %s", serial.GetFileID(bs))
 	}
 	stat, err := serial.TryGetRootAsStatistic(bs, serial.MessagePrefixSz)
 	if err != nil {

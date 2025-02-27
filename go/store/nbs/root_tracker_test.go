@@ -597,7 +597,7 @@ func compactSourcesToBuffer(sources chunkSources) (name hash.Hash, data []byte, 
 	}
 
 	if errString != "" {
-		return hash.Hash{}, nil, 0, fmt.Errorf(errString)
+		return hash.Hash{}, nil, 0, fmt.Errorf("%s", errString)
 	}
 
 	tableSize, name, err := tw.finish()

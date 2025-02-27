@@ -198,7 +198,7 @@ func addBackup(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.Verbos
 	case env.ErrInvalidBackupURL:
 		return errhand.BuildDError("error: '%s' is not valid.", r.Url).AddCause(err).Build()
 	case env.ErrInvalidBackupName:
-		return errhand.BuildDError("error: invalid backup name: " + r.Name).Build()
+		return errhand.BuildDError("error: invalid backup name: %s", r.Name).Build()
 	default:
 		return errhand.BuildDError("error: Unable to save changes.").AddCause(err).Build()
 	}
@@ -289,7 +289,7 @@ func backup(ctx context.Context, dEnv *env.DoltEnv, b env.Remote) errhand.Verbos
 	case env.ErrInvalidBackupURL:
 		return errhand.BuildDError("error: '%s' is not valid.", b.Url).AddCause(err).Build()
 	case env.ErrInvalidBackupName:
-		return errhand.BuildDError("error: invalid backup name: " + b.Name).Build()
+		return errhand.BuildDError("error: invalid backup name: %s", b.Name).Build()
 	default:
 		return errhand.BuildDError("error: Unable to save changes.").AddCause(err).Build()
 	}
@@ -345,7 +345,7 @@ func restoreBackup(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPar
 
 	if existingDEnv != nil {
 		if !force {
-			return errhand.BuildDError("error: cannot restore backup into " + restoredDB + ". A database with that name already exists. Did you mean to supply --force?").Build()
+			return errhand.BuildDError("error: cannot restore backup into %s. A database with that name already exists. Did you mean to supply --force?", restoredDB).Build()
 		}
 
 		tmpDir, err := existingDEnv.TempTableFilesDir()

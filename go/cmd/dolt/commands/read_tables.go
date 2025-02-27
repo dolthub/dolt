@@ -223,7 +223,7 @@ func getRemoteDBAtCommit(ctx context.Context, remoteUrl string, remoteUrlParams 
 	}
 	cm, ok := optCmt.ToCommit()
 	if !ok {
-		return nil, nil, errhand.BuildDError(doltdb.ErrGhostCommitEncountered.Error()).Build()
+		return nil, nil, errhand.BuildDError("%s", doltdb.ErrGhostCommitEncountered.Error()).Build()
 	}
 
 	srcRoot, err := cm.GetRootValue(ctx)

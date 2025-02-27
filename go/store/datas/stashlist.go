@@ -277,7 +277,7 @@ func stashlist_flatbuffer(am prolly.AddressMap) serial.Message {
 
 func parse_stashlist(bs []byte, ns tree.NodeStore) (prolly.AddressMap, error) {
 	if serial.GetFileID(bs) != serial.StashListFileID {
-		return prolly.AddressMap{}, fmt.Errorf("expected stash list file id, got: " + serial.GetFileID(bs))
+		return prolly.AddressMap{}, fmt.Errorf("expected stash list file id, got: %s", serial.GetFileID(bs))
 	}
 	sr, err := serial.TryGetRootAsStashList(bs, serial.MessagePrefixSz)
 	if err != nil {

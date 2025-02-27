@@ -95,7 +95,7 @@ func Tuple_flatbuffer(val []byte) serial.Message {
 // embedding the stats table and address.
 func parse_Tuple(ctx context.Context, bs []byte, ns tree.NodeStore, vr types.ValueReader) (*Tuple, error) {
 	if serial.GetFileID(bs) != serial.TupleFileID {
-		return nil, fmt.Errorf("expected Tuple file id, got: " + serial.GetFileID(bs))
+		return nil, fmt.Errorf("expected Tuple file id, got: %s", serial.GetFileID(bs))
 	}
 	tup, err := serial.TryGetRootAsTuple(bs, serial.MessagePrefixSz)
 	if err != nil {

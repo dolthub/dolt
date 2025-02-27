@@ -467,7 +467,7 @@ func (d *DoltSession) CommitTransaction(ctx *sql.Context, tx sql.Transaction) (e
 
 	peformDoltCommitInt, ok := performDoltCommitVar.(int8)
 	if !ok {
-		return fmt.Errorf(fmt.Sprintf("Unexpected type for var %s: %T", DoltCommitOnTransactionCommit, performDoltCommitVar))
+		return fmt.Errorf("Unexpected type for var %s: %T", DoltCommitOnTransactionCommit, performDoltCommitVar)
 	}
 
 	dirtyBranchState := dirties[0]
@@ -486,7 +486,7 @@ func (d *DoltSession) CommitTransaction(ctx *sql.Context, tx sql.Transaction) (e
 
 		doltCommitMessageString, ok := doltCommitMessageVar.(string)
 		if !ok && doltCommitMessageVar != nil {
-			return fmt.Errorf(fmt.Sprintf("Unexpected type for var %s: %T", DoltCommitOnTransactionCommitMessage, doltCommitMessageVar))
+			return fmt.Errorf("Unexpected type for var %s: %T", DoltCommitOnTransactionCommitMessage, doltCommitMessageVar)
 		}
 
 		trimmedString := strings.TrimSpace(doltCommitMessageString)
