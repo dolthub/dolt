@@ -39,7 +39,7 @@ var ExpectedHeader = regexp.MustCompile(`// Copyright (2019|2020|2021|2022|2023|
 
 `)
 
-var ExpectedHeaderForFileFromNoms = regexp.MustCompile(`// Copyright (2019|2020|2021|2022|2023|2019-2020|2019-2021|2019-2022|2019-2023|2020-2021|2020-2022|2020-2023|2021-2022|2021-2023|2022-2023) Dolthub, Inc.
+var ExpectedHeaderForFileFromNoms = regexp.MustCompile(`// Copyright (2019|2020|2021|2022|2023|2019-2020|2019-2021|2019-2022|2019-2023|2019-2025|2020-2021|2020-2022|2020-2023|2021-2022|2021-2023|2022-2023) Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 \(the "License"\);
 // you may not use this file except in compliance with the License.
@@ -76,6 +76,7 @@ var CopiedNomsFiles []CopiedNomsFile = []CopiedNomsFile{
 	{Path: "store/prolly/tree/chunker.go", NomsPath: "go/types/sequence_chunker.go", HadCopyrightNotice: true},
 	{Path: "store/prolly/tree/node_cursor.go", NomsPath: "go/types/sequence_cursor.go", HadCopyrightNotice: true},
 	{Path: "store/prolly/tree/node_splitter.go", NomsPath: "go/types/rolling_value_hasher.go", HadCopyrightNotice: true},
+	{Path: "store/nbs/s3_object_reader.go", NomsPath: "go/nbs/s3_table_reader.go", HadCopyrightNotice: true},
 
 	// These included source files from noms did not have copyright notices.
 	{Path: "store/types/common_supertype.go", NomsPath: "go/types/common_supertype.go", HadCopyrightNotice: false},
