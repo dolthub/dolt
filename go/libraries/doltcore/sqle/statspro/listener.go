@@ -17,9 +17,13 @@ package statspro
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/go-mysql-server/sql"
+	"log"
 	"sync"
+	"time"
 )
 
 var ErrStatsIssuerPaused = fmt.Errorf("stats issuer is paused")
@@ -52,8 +56,11 @@ func (sc *StatsController) signalListener(s listenerEvent) {
 func (sc *StatsController) newThreadCtx(ctx context.Context) context.Context {
 	sc.statsMu.Lock()
 	sc.statsMu.Unlock()
+	log.Println("new thread from newThreadCtx")
+
 	newCtx, cancel := context.WithCancel(ctx)
 	if sc.activeCtxCancel != nil {
+		log.Println("cancel thread from newThreadCtx")
 		sc.activeCtxCancel()
 	}
 	sc.signalListener(leStop)
@@ -83,10 +90,30 @@ func (sc *StatsController) Stop() {
 	sc.statsMu.Unlock()
 	if sc.activeCtxCancel != nil {
 		sc.activeCtxCancel()
+		log.Println("cancel thread from Stop()")
 		sc.activeCtxCancel = nil
 	}
 	sc.signalListener(leStop)
 	return
+}
+
+func (sc *StatsController) variableUpdate() {
+	_, memOnly, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsMemoryOnly)
+	sc.SetMemOnly(memOnly.(int8) == 1)
+
+	_, gcEnabled, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsGCEnabled)
+	sc.SetEnableGc(gcEnabled.(int8) == 1)
+
+	typ, jobI, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsJobInterval)
+	_, gcI, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsGCInterval)
+
+	jobInterval, _, _ := typ.GetType().Convert(jobI)
+	gcInterval, _, _ := typ.GetType().Convert(gcI)
+
+	sc.SetTimers(
+		jobInterval.(int64)*int64(time.Millisecond),
+		gcInterval.(int64)*int64(time.Millisecond),
+	)
 }
 
 func (sc *StatsController) Restart() error {
@@ -95,12 +122,18 @@ func (sc *StatsController) Restart() error {
 		return fmt.Errorf("StatsController is closed")
 	default:
 	}
+
+	sc.variableUpdate()
+
 	sc.sq.Start()
 	done := make(chan struct{})
 	go func() {
 		ctx := sc.newThreadCtx(context.Background())
 		close(done)
-		sc.runIssuer(ctx)
+		err := sc.runIssuer(ctx)
+		if err != nil {
+			sc.logger.Errorf("stats stopped: %s", err.Error())
+		}
 	}()
 	// only return after latestCtx updated
 	<-done
@@ -118,7 +151,8 @@ func (sc *StatsController) RunQueue() {
 	return
 }
 
-func (sc *StatsController) Init(ctx context.Context, dbs []sql.Database, keepStorage bool) error {
+// Init should only be called once
+func (sc *StatsController) Init(ctx context.Context, dbs []sql.Database) error {
 	sc.RunQueue()
 	sqlCtx, err := sc.ctxGen(ctx)
 	if err != nil {
@@ -130,10 +164,30 @@ func (sc *StatsController) Init(ctx context.Context, dbs []sql.Database, keepSto
 			if err != nil {
 				return err
 			}
-			if err := sc.AddFs(sqlCtx, db, fs); err != nil {
+			if err := sc.AddFs(sqlCtx, db, fs, false); err != nil {
 				return err
 			}
-			if i == 0 && !keepStorage {
+			if i == 0 && !sc.memOnly {
+				// attempt to access previously written stats
+				statsFs, err := fs.WithWorkingDir(dbfactory.DoltStatsDir)
+				if err != nil {
+					return err
+				}
+
+				exists, isDir := statsFs.Exists("")
+				if exists && isDir {
+					newKv, err := sc.initStorage(ctx, fs)
+					if err == nil {
+						sc.kv = newKv
+						sc.statsBackingDb = fs
+						continue
+					} else {
+						path, _ := statsFs.Abs("")
+						sc.descError("failed to reboot stats from: "+path, err)
+					}
+				}
+
+				// otherwise wipe and create new stats dir
 				if err := sc.lockedRotateStorage(sqlCtx); err != nil {
 					return err
 				}
@@ -176,10 +230,10 @@ func (sc *StatsController) Gc(ctx *sql.Context) error {
 }
 
 func (sc *StatsController) Close() {
-	//sc.sq.Purge()
 	sc.statsMu.Lock()
 	defer sc.statsMu.Unlock()
 	if sc.activeCtxCancel != nil {
+		log.Println("cancel thread from Close")
 		sc.activeCtxCancel()
 		sc.activeCtxCancel = nil
 		sc.sq.InterruptAsync(func() error {

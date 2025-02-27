@@ -55,7 +55,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/cluster"
 	_ "github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statspro"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqlserver"
 	"github.com/dolthub/dolt/go/libraries/events"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
@@ -261,19 +260,15 @@ func ConfigureServices(
 	var sqlEngine *engine.SqlEngine
 	InitSqlEngine := &svcs.AnonService{
 		InitF: func(ctx context.Context) (err error) {
+			if _, err := mrEnv.Config().GetString(env.SqlServerGlobalsPrefix + "." + dsess.DoltStatsPaused); err != nil {
+				// unless otherwise specified, run stats writer alongside server
+				sql.SystemVariables.SetGlobal(dsess.DoltStatsPaused, 0)
+			}
 			sqlEngine, err = engine.NewSqlEngine(
 				ctx,
 				mrEnv,
 				config,
 			)
-			if sc, ok := sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.StatsProvider.(*statspro.StatsController); ok {
-				if sc == nil {
-					return fmt.Errorf("unexpected nil stats coord")
-				}
-				if err = sc.Restart(); err != nil {
-					return err
-				}
-			}
 			return err
 		},
 		StopF: func() error {

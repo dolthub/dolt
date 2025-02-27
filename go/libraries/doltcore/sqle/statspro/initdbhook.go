@@ -36,7 +36,7 @@ func NewInitDatabaseHook(sc *StatsController) sqle.InitDatabaseHook {
 		}
 
 		// call should only fail if backpressure in secondary queue
-		return sc.AddFs(ctx, sqlDb, denv.FS)
+		return sc.AddFs(ctx, sqlDb, denv.FS, true)
 	}
 }
 

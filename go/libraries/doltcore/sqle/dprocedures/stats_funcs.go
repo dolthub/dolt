@@ -52,19 +52,23 @@ func statsFunc(fn func(ctx *sql.Context, args ...string) (interface{}, error)) f
 }
 
 type StatsInfo struct {
-	DbCnt             int  `json:"dbCnt"`
-	ReadCnt           int  `json:"readCnt"`
-	Active            bool `json:"active"`
-	StorageBucketCnt  int  `json:"storageBucketCnt"`
-	CachedBucketCnt   int  `json:"cachedBucketCnt"`
-	CachedBoundCnt    int  `json:"cachedBoundCnt"`
-	CachedTemplateCnt int  `json:"cachedTemplateCnt"`
-	StatCnt           int  `json:"statCnt"`
-	GcCnt             int  `json:"gcCnt"`
-	GenCnt            int  `json:"genCnt"`
+	DbCnt             int    `json:"dbCnt"`
+	Active            bool   `json:"active"`
+	StorageBucketCnt  int    `json:"storageBucketCnt"`
+	CachedBucketCnt   int    `json:"cachedBucketCnt"`
+	CachedBoundCnt    int    `json:"cachedBoundCnt"`
+	CachedTemplateCnt int    `json:"cachedTemplateCnt"`
+	StatCnt           int    `json:"statCnt"`
+	GcCnt             int    `json:"gcCnt,omitempty"`
+	GenCnt            int    `json:"genCnt,omitempty"`
+	Backing           string `json:"backing"`
 }
 
-func (si StatsInfo) ToJson() string {
+func (si StatsInfo) ToJson(short bool) string {
+	if short {
+		si.GcCnt = 0
+		si.GenCnt = 0
+	}
 	jsonData, err := json.Marshal(si)
 	if err != nil {
 		return ""
@@ -84,8 +88,7 @@ type ToggableStats interface {
 	WaitForSync(ctx context.Context) error
 	Gc(ctx *sql.Context) error
 	WaitForFlush(ctx *sql.Context) error
-	//ValidateState(ctx context.Context) error
-	//Init(context.Context, []dsess.SqlDatabase, bool) error
+	CollectOnce(ctx context.Context) (string, error)
 	SetTimers(int64, int64)
 }
 
@@ -110,15 +113,19 @@ func statsRestart(ctx *sql.Context, _ ...string) (interface{}, error) {
 }
 
 // statsInfo returns the last update for a stats thread
-func statsInfo(ctx *sql.Context, _ ...string) (interface{}, error) {
+func statsInfo(ctx *sql.Context, args ...string) (interface{}, error) {
 	dSess := dsess.DSessFromSess(ctx.Session)
 	pro := dSess.StatsProvider()
 	if afp, ok := pro.(ToggableStats); ok {
+		var short bool
+		if len(args) > 0 && (args[0] == "-s" || args[0] == "--short") {
+			short = true
+		}
 		info, err := afp.Info(ctx)
 		if err != nil {
 			return nil, err
 		}
-		return info.ToJson(), nil
+		return info.ToJson(short), nil
 	}
 	return nil, fmt.Errorf("provider does not implement ToggableStats")
 }
@@ -134,6 +141,19 @@ func statsSync(ctx *sql.Context, _ ...string) (interface{}, error) {
 			return nil, err
 		}
 		return OkResult, nil
+	}
+	return nil, fmt.Errorf("provider does not implement ToggableStats")
+}
+
+func statsOnce(ctx *sql.Context, _ ...string) (interface{}, error) {
+	dSess := dsess.DSessFromSess(ctx.Session)
+	pro := dSess.StatsProvider()
+	if afp, ok := pro.(ToggableStats); ok {
+		str, err := afp.CollectOnce(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return str, nil
 	}
 	return nil, fmt.Errorf("provider does not implement ToggableStats")
 }

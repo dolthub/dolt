@@ -75,8 +75,12 @@ func (s StatsNoop) Purge(ctx *sql.Context) error {
 	return nil
 }
 
-func (s StatsNoop) WaitForDbSync(ctx *sql.Context) error {
+func (s StatsNoop) WaitForSync(ctx *sql.Context) error {
 	return nil
+}
+
+func (s StatsNoop) CollectOnce(ctx *sql.Context) (string, error) {
+	return "", nil
 }
 
 var _ sql.StatsProvider = StatsNoop{}

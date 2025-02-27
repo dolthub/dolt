@@ -292,7 +292,7 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 		e = e.WithBackgroundThreads(bThreads)
 
 		if d.configureStats {
-			err = statsPro.Init(ctx, databases, false)
+			err = statsPro.Init(ctx, databases)
 			if err != nil {
 				return nil, err
 			}

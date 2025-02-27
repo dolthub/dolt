@@ -234,6 +234,48 @@ func TestStatScripts(t *testing.T) {
 			},
 		},
 		{
+			name: "vector index",
+			setup: []string{
+				"create table t (c int)",
+				"insert into t values (0), (1), (2), (NULL), (NULL)",
+			},
+			assertions: []assertion{
+				{
+					query: "select database_name, table_name, index_name  from dolt_statistics order by index_name",
+					res:   []sql.Row{{"mydb", "xy", "primary"}, {"mydb", "xy", "y2"}, {"mydb", "xy", "yx"}},
+				},
+			},
+		},
+		{
+			name: "generated index",
+			setup: []string{
+				"create table t (c int)",
+				"insert into t values (0), (1), (2), (NULL), (NULL)",
+			},
+			assertions: []assertion{
+				{
+					query: "select database_name, table_name, index_name  from dolt_statistics order by index_name",
+					res:   []sql.Row{{"mydb", "xy", "primary"}, {"mydb", "xy", "y2"}, {"mydb", "xy", "yx"}},
+				},
+			},
+		},
+		{
+			name: "keyless index",
+			setup: []string{
+				"create table t (c int)",
+				"insert into t values (0), (1), (2), (NULL), (NULL)",
+			},
+			assertions: []assertion{
+				{
+					query: "analyze table t",
+				},
+				{
+					query: "select database_name, table_name, index_name  from dolt_statistics order by index_name",
+					res:   []sql.Row{{"mydb", "xy", "primary"}, {"mydb", "xy", "y2"}, {"mydb", "xy", "yx"}},
+				},
+			},
+		},
+		{
 			name: "caps testing",
 			setup: []string{
 				"create table XY (x int primary key, Y int, key Yx (Y,x))",
@@ -377,18 +419,17 @@ func TestStatScripts(t *testing.T) {
 			},
 			assertions: []assertion{
 				{
-					query: "call dolt_stats_info()",
+					query: "call dolt_stats_info('--short')",
 					res: []sql.Row{
 						{dprocedures.StatsInfo{
 							DbCnt:             2,
-							ReadCnt:           0,
+							Backing:           "mydb",
 							Active:            true,
 							StorageBucketCnt:  2,
 							CachedBucketCnt:   2,
 							CachedBoundCnt:    2,
 							CachedTemplateCnt: 2,
 							StatCnt:           2,
-							GcCnt:             1,
 						},
 						}},
 				},
@@ -411,18 +452,17 @@ func TestStatScripts(t *testing.T) {
 					query: "call dolt_stats_wait()",
 				},
 				{
-					query: "call dolt_stats_info()",
+					query: "call dolt_stats_info('--short')",
 					res: []sql.Row{
 						{dprocedures.StatsInfo{
 							DbCnt:             2,
-							ReadCnt:           0,
+							Backing:           "mydb",
 							Active:            true,
 							StorageBucketCnt:  2,
 							CachedBucketCnt:   2,
 							CachedBoundCnt:    2,
 							CachedTemplateCnt: 2,
 							StatCnt:           1,
-							GcCnt:             3,
 						},
 						}},
 				},
@@ -439,18 +479,17 @@ func TestStatScripts(t *testing.T) {
 					query: "call dolt_stats_wait()",
 				},
 				{
-					query: "call dolt_stats_info()",
+					query: "call dolt_stats_info('--short')",
 					res: []sql.Row{
 						{dprocedures.StatsInfo{
 							DbCnt:             1,
-							ReadCnt:           0,
+							Backing:           "mydb",
 							Active:            true,
 							StorageBucketCnt:  2,
 							CachedBucketCnt:   2,
 							CachedBoundCnt:    2,
 							CachedTemplateCnt: 2,
 							StatCnt:           1,
-							GcCnt:             4,
 						},
 						}},
 				},
@@ -472,7 +511,7 @@ func TestStatScripts(t *testing.T) {
 					res: []sql.Row{
 						{dprocedures.StatsInfo{
 							DbCnt:             2,
-							ReadCnt:           0,
+							Backing:           "mydb",
 							Active:            true,
 							StorageBucketCnt:  2,
 							CachedBucketCnt:   2,
@@ -494,7 +533,7 @@ func TestStatScripts(t *testing.T) {
 					res: []sql.Row{
 						{dprocedures.StatsInfo{
 							DbCnt:             2,
-							ReadCnt:           0,
+							Backing:           "mydb",
 							Active:            true,
 							StorageBucketCnt:  2,
 							CachedBucketCnt:   2,
@@ -523,7 +562,7 @@ func TestStatScripts(t *testing.T) {
 					res: []sql.Row{
 						{dprocedures.StatsInfo{
 							DbCnt:             2,
-							ReadCnt:           0,
+							Backing:           "mydb",
 							Active:            true,
 							StorageBucketCnt:  2,
 							CachedBucketCnt:   2,
@@ -542,7 +581,7 @@ func TestStatScripts(t *testing.T) {
 					res: []sql.Row{
 						{dprocedures.StatsInfo{
 							DbCnt:             2,
-							ReadCnt:           0,
+							Backing:           "mydb",
 							Active:            false,
 							StorageBucketCnt:  2,
 							CachedBucketCnt:   2,
@@ -561,7 +600,7 @@ func TestStatScripts(t *testing.T) {
 					res: []sql.Row{
 						{dprocedures.StatsInfo{
 							DbCnt:             2,
-							ReadCnt:           0,
+							Backing:           "mydb",
 							Active:            true,
 							StorageBucketCnt:  2,
 							CachedBucketCnt:   2,
@@ -602,7 +641,7 @@ func TestStatScripts(t *testing.T) {
 					res: []sql.Row{
 						{dprocedures.StatsInfo{
 							DbCnt:             2,
-							ReadCnt:           0,
+							Backing:           "mydb",
 							Active:            true,
 							StorageBucketCnt:  4,
 							CachedBucketCnt:   4,
@@ -621,7 +660,7 @@ func TestStatScripts(t *testing.T) {
 					res: []sql.Row{
 						{dprocedures.StatsInfo{
 							DbCnt:             0,
-							ReadCnt:           0,
+							Backing:           "mydb",
 							Active:            false,
 							StorageBucketCnt:  0,
 							CachedBucketCnt:   0,
@@ -643,7 +682,7 @@ func TestStatScripts(t *testing.T) {
 					res: []sql.Row{
 						{dprocedures.StatsInfo{
 							DbCnt:             2,
-							ReadCnt:           0,
+							Backing:           "mydb",
 							Active:            true,
 							StorageBucketCnt:  2,
 							CachedBucketCnt:   2,
@@ -669,7 +708,6 @@ func TestStatScripts(t *testing.T) {
 					query: "call dolt_stats_info()",
 					res: []sql.Row{{dprocedures.StatsInfo{
 						DbCnt:             1,
-						ReadCnt:           0,
 						Active:            true,
 						StorageBucketCnt:  4,
 						CachedBucketCnt:   4,
@@ -677,6 +715,7 @@ func TestStatScripts(t *testing.T) {
 						CachedTemplateCnt: 4,
 						StatCnt:           2,
 						GcCnt:             1,
+						Backing:           "mydb",
 					}}},
 				},
 				{

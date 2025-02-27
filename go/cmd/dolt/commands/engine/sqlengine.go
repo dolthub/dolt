@@ -16,11 +16,6 @@ package engine
 
 import (
 	"context"
-	"os"
-	"strconv"
-	"strings"
-	"time"
-
 	gms "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/eventscheduler"
 	"github.com/dolthub/go-mysql-server/sql"
@@ -31,6 +26,9 @@ import (
 	_ "github.com/dolthub/go-mysql-server/sql/variables"
 	"github.com/dolthub/vitess/go/vt/sqlparser"
 	"github.com/sirupsen/logrus"
+	"os"
+	"strconv"
+	"strings"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
@@ -212,28 +210,24 @@ func NewSqlEngine(
 	// configuring stats depends on sessionBuilder
 	// sessionBuilder needs ref to statsProv
 	if sc, ok := statsPro.(*statspro.StatsController); ok {
-		//sc.Debug = true
-		_, memOnly, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsMemoryOnly)
-		sc.SetMemOnly(memOnly.(int8) == 1)
-
-		typ, jobI, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsJobInterval)
-		_, gcI, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsGCInterval)
-
-		jobInterval, _, _ := typ.GetType().Convert(jobI)
-		gcInterval, _, _ := typ.GetType().Convert(gcI)
-
-		sc.SetTimers(
-			jobInterval.(int64)*int64(time.Millisecond),
-			gcInterval.(int64)*int64(time.Millisecond),
-		)
+		pro.InitDatabaseHooks = append(pro.InitDatabaseHooks, statspro.NewInitDatabaseHook(sc))
+		pro.DropDatabaseHooks = append(pro.DropDatabaseHooks, statspro.NewDropDatabaseHook(sc))
 
 		var sqlDbs []sql.Database
 		for _, db := range dbs {
 			sqlDbs = append(sqlDbs, db)
 		}
-		err := sc.Init(ctx, sqlDbs, false)
+		err := sc.Init(ctx, sqlDbs)
 		if err != nil {
 			return nil, err
+		}
+
+		if _, paused, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsPaused); paused.(int8) == 0 {
+			if err = sc.Restart(); err != nil {
+				return nil, err
+			}
+		} else {
+			//sc.CollectOnce(ctx)
 		}
 	}
 

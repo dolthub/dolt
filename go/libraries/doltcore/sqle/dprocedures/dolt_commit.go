@@ -87,7 +87,7 @@ func doDoltCommit(ctx *sql.Context, args []string) (string, bool, error) {
 	if apr.Contains(cli.UpperCaseAllFlag) {
 		roots, err = actions.StageAllTables(ctx, roots, true)
 		if err != nil {
-			return "", false, fmt.Errorf(err.Error())
+			return "", false, fmt.Errorf("%w", err)
 		}
 		roots, err = actions.StageDatabase(ctx, roots)
 		if err != nil {

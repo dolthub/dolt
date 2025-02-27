@@ -355,7 +355,7 @@ func TestGC(t *testing.T) {
 		)
 
 		kv := sc.kv.(*memStats)
-		require.Equal(t, 3, sc.Stats.dbCnt)
+		require.Equal(t, 3, sc.Stats.DbCnt)
 
 		runBlock(t, ctx, sqlEng,
 			"drop database otherdb",
@@ -364,7 +364,7 @@ func TestGC(t *testing.T) {
 		)
 
 		// test for cleanup
-		require.Equal(t, sc.Stats.dbCnt, 2)
+		require.Equal(t, sc.Stats.DbCnt, 2)
 
 		kv = sc.kv.(*memStats)
 		require.Equal(t, 5, len(kv.buckets))
@@ -395,7 +395,7 @@ func TestBranches(t *testing.T) {
 			"call dolt_commit('-Am', 'add s')",
 		)
 
-		require.Equal(t, sc.Stats.dbCnt, 3)
+		require.Equal(t, sc.Stats.DbCnt, 3)
 
 		stat, ok := sc.Stats.stats[tableIndexesKey{"otherdb", "feat2", "t", ""}]
 		require.False(t, ok)
@@ -426,7 +426,7 @@ func TestBranches(t *testing.T) {
 		// mydb: main, feat1
 		// otherdb: main, feat2, feat3
 		// thirddb: main, feat1
-		require.Equal(t, sc.Stats.dbCnt, 7)
+		require.Equal(t, sc.Stats.DbCnt, 7)
 
 		stat, ok = sc.Stats.stats[tableIndexesKey{"mydb", "feat1", "xy", ""}]
 		require.True(t, ok)
@@ -454,7 +454,7 @@ func TestBranches(t *testing.T) {
 		)
 		// mydb: main, feat1
 		// thirddb: main, feat1
-		require.Equal(t, 4, sc.Stats.dbCnt)
+		require.Equal(t, 4, sc.Stats.DbCnt)
 
 		stat, ok = sc.Stats.stats[tableIndexesKey{"otherdb", "feat2", "t", ""}]
 		require.False(t, ok)
@@ -468,7 +468,7 @@ func TestBranches(t *testing.T) {
 		)
 		// mydb: main
 		// thirddb: main, feat1
-		require.Equal(t, sc.Stats.dbCnt, 3)
+		require.Equal(t, sc.Stats.DbCnt, 3)
 
 		stat, ok = sc.Stats.stats[tableIndexesKey{"mydb", "feat1", "xy", ""}]
 		require.False(t, ok)
@@ -534,7 +534,6 @@ func TestDropOnlyDb(t *testing.T) {
 	threads := sql.NewBackgroundThreads()
 	defer threads.Shutdown()
 	ctx, sqlEng, sc := defaultSetup(t, threads, false)
-
 	require.NoError(t, sc.Restart())
 
 	_, ok := sc.kv.(*prollyStats)
@@ -635,10 +634,18 @@ func emptySetup(t *testing.T, threads *sql.BackgroundThreads, memOnly bool) (*sq
 		dsess.DoltStatsGCInterval:  100,
 		dsess.DoltStatsJobInterval: 1,
 	})
+	if memOnly {
+		sql.SystemVariables.AssignValues(map[string]interface{}{
+			dsess.DoltStatsMemoryOnly: int8(1),
+		})
+	} else {
+		sql.SystemVariables.AssignValues(map[string]interface{}{
+			dsess.DoltStatsMemoryOnly: int8(0),
+		})
+	}
 
 	sc := sqlEng.Analyzer.Catalog.StatsProvider.(*StatsController)
 	sc.SetEnableGc(false)
-	sc.SetMemOnly(memOnly)
 	sc.JobInterval = time.Nanosecond
 
 	require.NoError(t, sc.Restart())
@@ -799,7 +806,7 @@ func newTestEngine(ctx context.Context, dEnv *env.DoltEnv, threads *sql.Backgrou
 		IsServerLocked: false,
 	})
 
-	if err := sc.Init(sqlCtx, pro.AllDatabases(sqlCtx), false); err != nil {
+	if err := sc.Init(sqlCtx, pro.AllDatabases(sqlCtx)); err != nil {
 		log.Fatal(err)
 	}
 	sqlEng.Analyzer.Catalog.StatsProvider = sc

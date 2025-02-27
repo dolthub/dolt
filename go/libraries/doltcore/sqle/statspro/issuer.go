@@ -21,11 +21,20 @@ import (
 	"time"
 )
 
-// thread that does a full root walk, gets databases/branches/tables
-
-// control work throughput on sender or receiver side?
-
-//
+func (sc *StatsController) CollectOnce(ctx context.Context) (string, error) {
+	genStart := sc.genCnt.Load()
+	genCand := sc.genCand.Add(1)
+	newStats, err := sc.newStatsForRoot(ctx, nil)
+	if errors.Is(err, context.Canceled) {
+		return "", nil
+	} else if err != nil {
+		return "", err
+	}
+	if ok, err := sc.trySwapStats(ctx, genStart, genCand, newStats, nil); err != nil || !ok {
+		return "", err
+	}
+	return newStats.String(), nil
+}
 
 func (sc *StatsController) runIssuer(ctx context.Context) (err error) {
 	var gcKv *memStats
@@ -53,18 +62,24 @@ func (sc *StatsController) runIssuer(ctx context.Context) (err error) {
 
 		newStats, err = sc.newStatsForRoot(ctx, gcKv)
 		if errors.Is(err, context.Canceled) {
+			log.Printf("stats context cancelled")
 			return nil
 		} else if err != nil {
 			sc.descError("", err)
 		}
 
-		if ok, err := sc.trySwapStats(ctx, genStart, genCand, newStats, gcKv); err != nil || !ok {
-			sc.descError("failed to swap stats", err)
+		if ok, err := sc.trySwapStats(ctx, genStart, genCand, newStats, gcKv); err != nil {
+			if !ok {
+				sc.descError("failed to swap stats", err)
+			} else {
+				sc.descError("swapped stats with flush failure", err)
+			}
 		}
 
 		select {
 		case <-ctx.Done():
 			// is double check necessary?
+			log.Printf("stats context cancelled")
 			return context.Cause(ctx)
 		default:
 		}
@@ -76,7 +91,7 @@ func (sc *StatsController) trySwapStats(ctx context.Context, prevGen, newGen uin
 	sc.statsMu.Lock()
 	defer sc.statsMu.Unlock()
 
-	var signal listenerEvent = leSwap
+	signal := leSwap
 	defer func() {
 		if ok {
 			sc.signalListener(signal)
@@ -86,9 +101,6 @@ func (sc *StatsController) trySwapStats(ctx context.Context, prevGen, newGen uin
 	if sc.genCnt.CompareAndSwap(prevGen, newGen) {
 		// Replace stats and new Kv if no replacements happened
 		// in-between.
-		if newStats == nil {
-			print()
-		}
 		sc.Stats = newStats
 		if gcKv != nil {
 			signal = leGc
@@ -96,26 +108,33 @@ func (sc *StatsController) trySwapStats(ctx context.Context, prevGen, newGen uin
 			// background job will to swap the disk location and put
 			// entries into a prolly tree.
 			if newGen != gcKv.GcGen() {
-				return false, fmt.Errorf("gc gen didn't match update gen")
+				err = fmt.Errorf("gc gen didn't match update gen")
+				return
 			}
 			sc.doGc = false
 			sc.gcCnt++
 			sc.kv = gcKv
+			ok = true
 			if !sc.memOnly {
-				err = sc.sq.DoAsync(func() error {
-					return sc.rotateStorage(ctx)
-				})
-				if err != nil {
-					return true, err
+				if err = sc.sq.DoSync(ctx, func() error {
+					return sc.lockedRotateStorage(ctx)
+				}); err != nil {
+					return
 				}
 			}
 		}
-		// Flush new changes to disk.
-		err = sc.sq.DoAsync(func() error {
-			_, err := sc.Flush(ctx)
-			return err
-		})
-		return true, err
+		// Flush new changes to disk, unlocked
+		if !sc.memOnly {
+			err = sc.sq.DoSync(ctx, func() error {
+				_, err := sc.kv.Flush(ctx)
+				return err
+			})
+			if err != nil {
+				return true, err
+			}
+		}
+		signal = signal | leFlush
+		return true, nil
 	}
 	return false, nil
 }
@@ -126,7 +145,7 @@ func (sc *StatsController) newStatsForRoot(baseCtx context.Context, gcKv *memSta
 			err = fmt.Errorf("issuer panicked running work: %s", r)
 		}
 		if err != nil {
-			sc.descError("", err)
+			sc.descError("stats update interrupted", err)
 		}
 	}()
 
@@ -148,7 +167,7 @@ func (sc *StatsController) newStatsForRoot(baseCtx context.Context, gcKv *memSta
 		if err := sc.sq.DoSync(ctx, func() error {
 			ddb, ok := dSess.GetDoltDB(ctx, db.Name())
 			if !ok {
-				return fmt.Errorf("dolt database not found %s", db.Name())
+				return fmt.Errorf("get dolt db dolt database not found %s", db.Name())
 			}
 			branches, err = ddb.GetBranches(ctx)
 			return err
@@ -163,7 +182,7 @@ func (sc *StatsController) newStatsForRoot(baseCtx context.Context, gcKv *memSta
 				continue
 			}
 
-			newStats.dbCnt++
+			newStats.DbCnt++
 
 			var tableNames []string
 			if err := sc.sq.DoSync(ctx, func() error {
@@ -174,16 +193,24 @@ func (sc *StatsController) newStatsForRoot(baseCtx context.Context, gcKv *memSta
 			}
 
 			for _, tableName := range tableNames {
-				tableKey, newTableStats, err := sc.updateTable(ctx, tableName, sqlDb, gcKv)
+				err := sc.updateTable(ctx, newStats, tableName, sqlDb, gcKv)
 				if err != nil {
 					return nil, err
 				}
-				newStats.stats[tableKey] = newTableStats
 			}
 		}
 	}
 
 	return newStats, nil
+}
+
+func (sc *StatsController) preexistingStats(k tableIndexesKey, h hash.Hash) ([]*stats.Statistic, bool) {
+	sc.statsMu.Lock()
+	defer sc.statsMu.Unlock()
+	if sc.Stats.hashes[k].Equal(h) {
+		return sc.Stats.stats[k], true
+	}
+	return nil, false
 }
 
 func (sc *StatsController) finalizeHistogram(template stats.Statistic, buckets []*stats.Bucket, firstBound sql.Row) *stats.Statistic {
@@ -198,7 +225,7 @@ func (sc *StatsController) finalizeHistogram(template stats.Statistic, buckets [
 	return &template
 }
 
-func (sc *StatsController) collectIndexNodes(ctx *sql.Context, prollyMap prolly.Map, idxLen int, nodes []tree.Node) ([]*stats.Bucket, sql.Row, error) {
+func (sc *StatsController) collectIndexNodes(ctx *sql.Context, prollyMap prolly.Map, idxLen int, nodes []tree.Node) ([]*stats.Bucket, sql.Row, int, error) {
 	updater := newBucketBuilder(sql.StatQualifier{}, idxLen, prollyMap.KeyDesc())
 	keyBuilder := val.NewTupleBuilder(prollyMap.KeyDesc().PrefixDesc(idxLen))
 
@@ -221,21 +248,23 @@ func (sc *StatsController) collectIndexNodes(ctx *sql.Context, prollyMap prolly.
 		})
 	}
 
+	var writes int
 	var offset uint64
 	for _, n := range nodes {
 		treeCnt, err := n.TreeCount()
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, 0, err
 		}
 		start, stop := offset, offset+uint64(treeCnt)
 		offset = stop
 
 		if _, ok, err := sc.GetBucket(ctx, n.HashOf(), keyBuilder); err != nil {
-			return nil, nil, err
+			return nil, nil, 0, err
 		} else if ok {
 			continue
 		}
 
+		writes++
 		err = sc.sq.DoSync(ctx, func() error {
 			updater.newBucket()
 
@@ -269,7 +298,7 @@ func (sc *StatsController) collectIndexNodes(ctx *sql.Context, prollyMap prolly.
 			return sc.PutBucket(ctx, n.HashOf(), newBucket, keyBuilder)
 		})
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, 0, err
 		}
 	}
 
@@ -278,15 +307,15 @@ func (sc *StatsController) collectIndexNodes(ctx *sql.Context, prollyMap prolly.
 		newBucket, ok, err := sc.GetBucket(ctx, n.HashOf(), keyBuilder)
 		if err != nil || !ok {
 			sc.descError(fmt.Sprintf("missing histogram bucket for node %s", n.HashOf().String()[:5]), err)
-			return nil, nil, err
+			return nil, nil, 0, err
 		}
 		buckets = append(buckets, newBucket)
 	}
 
-	return buckets, lowerBound, nil
+	return buckets, lowerBound, writes, nil
 }
 
-func (sc *StatsController) updateTable(ctx *sql.Context, tableName string, sqlDb dsess.SqlDatabase, gcKv *memStats) (tableIndexesKey, []*stats.Statistic, error) {
+func (sc *StatsController) updateTable(ctx *sql.Context, newStats *rootStats, tableName string, sqlDb dsess.SqlDatabase, gcKv *memStats) error {
 	var err error
 	var sqlTable *sqle.DoltTable
 	var dTab *doltdb.Table
@@ -294,7 +323,7 @@ func (sc *StatsController) updateTable(ctx *sql.Context, tableName string, sqlDb
 		sqlTable, dTab, err = GetLatestTable(ctx, tableName, sqlDb)
 		return err
 	}); err != nil {
-		return tableIndexesKey{}, nil, err
+		return err
 	}
 
 	tableKey := tableIndexesKey{
@@ -304,12 +333,25 @@ func (sc *StatsController) updateTable(ctx *sql.Context, tableName string, sqlDb
 		schema: "",
 	}
 
+	tableHash, err := dTab.HashOf()
+	if err != nil {
+		return err
+	}
+	if gcKv == nil {
+		if stats, ok := sc.preexistingStats(tableKey, tableHash); ok {
+			newStats.stats[tableKey] = stats
+			newStats.hashes[tableKey] = tableHash
+			newStats.TablesSkipped++
+			return nil
+		}
+	}
+
 	var indexes []sql.Index
 	if err := sc.sq.DoSync(ctx, func() error {
 		indexes, err = sqlTable.GetIndexes(ctx)
 		return err
 	}); err != nil {
-		return tableIndexesKey{}, nil, err
+		return err
 	}
 
 	var newTableStats []*stats.Statistic
@@ -334,9 +376,9 @@ func (sc *StatsController) updateTable(ctx *sql.Context, tableName string, sqlDb
 			}
 			return nil
 		}); err != nil {
-			return tableIndexesKey{}, nil, err
+			return err
 		} else if template.Fds.Empty() {
-			return tableIndexesKey{}, nil, fmt.Errorf("failed to creat template for %s/%s/%s/%s", sqlDb.Revision(), sqlDb.AliasedName(), tableName, sqlIdx.ID())
+			return fmt.Errorf("failed to creat template for %s/%s/%s/%s", sqlDb.Revision(), sqlDb.AliasedName(), tableName, sqlIdx.ID())
 		}
 
 		template.Qual.Database = sqlDb.AliasedName()
@@ -352,16 +394,18 @@ func (sc *StatsController) updateTable(ctx *sql.Context, tableName string, sqlDb
 			}
 			return err
 		}); err != nil {
-			return tableIndexesKey{}, nil, err
+			return err
 		}
 		var buckets []*stats.Bucket
 		var firstBound sql.Row
 		if len(levelNodes) > 0 {
-			buckets, firstBound, err = sc.collectIndexNodes(ctx, prollyMap, idxLen, levelNodes)
+			var writes int
+			buckets, firstBound, writes, err = sc.collectIndexNodes(ctx, prollyMap, idxLen, levelNodes)
 			if err != nil {
 				sc.descError("", err)
 				continue
 			}
+			newStats.BucketWrites += writes
 		}
 
 		newTableStats = append(newTableStats, sc.finalizeHistogram(template, buckets, firstBound))
@@ -369,11 +413,11 @@ func (sc *StatsController) updateTable(ctx *sql.Context, tableName string, sqlDb
 		if gcKv != nil {
 			keyBuilder := val.NewTupleBuilder(prollyMap.KeyDesc().PrefixDesc(idxLen))
 			if !gcKv.GcMark(sc.kv, levelNodes, buckets, idxLen, keyBuilder) {
-				return tableIndexesKey{}, nil, fmt.Errorf("GC interrupted updated")
+				return fmt.Errorf("GC interrupted updated")
 			}
 			schHash, _, err := sqlTable.IndexCacheKey(ctx)
 			if err != nil {
-				return tableIndexesKey{}, nil, err
+				return err
 			}
 			key := templateCacheKey{h: schHash.Hash, idxName: sqlIdx.ID()}
 			if t, ok := sc.GetTemplate(key); ok {
@@ -381,7 +425,10 @@ func (sc *StatsController) updateTable(ctx *sql.Context, tableName string, sqlDb
 			}
 		}
 	}
-	return tableKey, newTableStats, nil
+	newStats.stats[tableKey] = newTableStats
+	newStats.hashes[tableKey] = tableHash
+	newStats.TablesProcessed++
+	return nil
 }
 
 // GetLatestTable will get the WORKING root table for the current database/branch

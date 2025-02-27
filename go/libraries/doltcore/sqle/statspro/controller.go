@@ -16,12 +16,14 @@ package statspro
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dprocedures"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statspro/jobqueue"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/val"
 	"github.com/sirupsen/logrus"
 	"log"
 	"path"
@@ -98,17 +100,24 @@ type StatsController struct {
 }
 
 type rootStats struct {
-	h     hash.Hash
-	dbCnt int
-	stats map[tableIndexesKey][]*stats.Statistic
+	hashes          map[tableIndexesKey]hash.Hash
+	stats           map[tableIndexesKey][]*stats.Statistic
+	DbCnt           int `json:"dbCnt"`
+	BucketWrites    int `json:"bucketWrites""`
+	TablesProcessed int `json:"tablesProcessed""`
+	TablesSkipped   int `json:"tablesSkipped""`
 }
 
 func newRootStats() *rootStats {
 	return &rootStats{
-		h:     hash.Hash{},
-		dbCnt: 0,
-		stats: make(map[tableIndexesKey][]*stats.Statistic),
+		hashes: make(map[tableIndexesKey]hash.Hash),
+		stats:  make(map[tableIndexesKey][]*stats.Statistic),
 	}
+}
+
+func (rs *rootStats) String() string {
+	str, _ := json.Marshal(rs)
+	return string(str)
 }
 
 func NewStatsController(pro *sqle.DoltDatabaseProvider, ctxGen ctxFactory, logger *logrus.Logger, dEnv *env.DoltEnv) *StatsController {
@@ -158,6 +167,7 @@ func (sc *StatsController) gcIsSet() bool {
 	return sc.doGc
 }
 
+// SetTimers can only be called after Init
 func (sc *StatsController) SetTimers(job, gc int64) {
 	sc.statsMu.Lock()
 	defer sc.statsMu.Unlock()
@@ -165,13 +175,13 @@ func (sc *StatsController) SetTimers(job, gc int64) {
 	sc.gcInterval = time.Duration(gc)
 }
 
-func (sc *StatsController) AddFs(ctx *sql.Context, db dsess.SqlDatabase, fs filesys.Filesys) error {
+func (sc *StatsController) AddFs(ctx *sql.Context, db dsess.SqlDatabase, fs filesys.Filesys, rotateOk bool) error {
 	sc.statsMu.Lock()
 	defer sc.statsMu.Unlock()
 
 	firstDb := len(sc.dbFs) == 0
 	sc.dbFs[db.AliasedName()] = fs
-	if firstDb && !sc.memOnly {
+	if rotateOk && firstDb {
 		return sc.lockedRotateStorage(ctx)
 	}
 	return nil
@@ -190,17 +200,20 @@ func (sc *StatsController) Info(ctx context.Context) (dprocedures.StatsInfo, err
 
 	var cachedBoundCnt int
 	var cachedTemplateCnt int
+	var backing string
 	switch kv := sc.kv.(type) {
 	case *memStats:
 		cachedBoundCnt = len(kv.bounds)
 		cachedTemplateCnt = len(kv.templates)
+		backing = "mem"
 	case *prollyStats:
 		cachedBoundCnt = len(kv.mem.bounds)
 		cachedTemplateCnt = len(kv.mem.templates)
+		backing, _ = sc.statsBackingDb.Abs("")
 	}
-
+	backingParts := strings.Split(backing, "/")
 	return dprocedures.StatsInfo{
-		DbCnt:             sc.Stats.dbCnt,
+		DbCnt:             sc.Stats.DbCnt,
 		Active:            sc.activeCtxCancel != nil,
 		CachedBucketCnt:   cachedBucketCnt,
 		StorageBucketCnt:  storageCnt,
@@ -209,6 +222,7 @@ func (sc *StatsController) Info(ctx context.Context) (dprocedures.StatsInfo, err
 		StatCnt:           len(sc.Stats.stats),
 		GenCnt:            int(sc.genCnt.Load()),
 		GcCnt:             sc.gcCnt,
+		Backing:           backingParts[len(backingParts)-1],
 	}, nil
 }
 
@@ -269,16 +283,19 @@ func (sc *StatsController) AnalyzeTable(ctx *sql.Context, table sql.Table, dbNam
 		return err
 	}
 
-	tableKey, newTableStats, err := sc.updateTable(ctx, table.Name(), sqlDb, nil)
+	newStats := newRootStats()
+	err = sc.updateTable(ctx, newStats, table.Name(), sqlDb, nil)
 	if err != nil {
 		return err
 	}
 
 	sc.statsMu.Lock()
-	sc.Stats.stats[tableKey] = newTableStats
+	for k, v := range newStats.stats {
+		sc.Stats.stats[k] = v
+		sc.Stats.hashes[k] = newStats.hashes[k]
+	}
 	sc.statsMu.Unlock()
 
-	_, err = sc.Flush(ctx)
 	return err
 }
 
@@ -348,31 +365,34 @@ func (sc *StatsController) DropStats(ctx *sql.Context, qual sql.StatQualifier, c
 }
 
 func (sc *StatsController) DropDbStats(ctx *sql.Context, dbName string, flush bool) error {
-	return sc.sq.InterruptAsync(func() error {
-		// this must be asynchronous otherwise we can deadlock
-		// on the provider lock
-		sc.statsMu.Lock()
-		defer sc.statsMu.Unlock()
+	sc.statsMu.Lock()
+	defer sc.statsMu.Unlock()
+	log.Println("drop statsdb", dbName)
 
-		dbFs := sc.dbFs[dbName]
-		delete(sc.dbFs, dbName)
-		if sc.statsBackingDb == dbFs {
-			if err := sc.lockedRotateStorage(ctx); err != nil {
-				return err
-			}
+	dbFs := sc.dbFs[dbName]
+	delete(sc.dbFs, dbName)
+	if sc.statsBackingDb == dbFs {
+		// don't wait to see if the thread context is invalidated
+		func() {
+			sc.statsMu.Unlock()
+			sc.Restart()
+			defer sc.statsMu.Lock()
+		}()
+		if err := sc.lockedRotateStorage(ctx); err != nil {
+			return err
 		}
+	}
 
-		var deleteKeys []tableIndexesKey
-		for k, _ := range sc.Stats.stats {
-			if strings.EqualFold(dbName, k.db) {
-				deleteKeys = append(deleteKeys, k)
-			}
+	var deleteKeys []tableIndexesKey
+	for k, _ := range sc.Stats.stats {
+		if strings.EqualFold(dbName, k.db) {
+			deleteKeys = append(deleteKeys, k)
 		}
-		for _, k := range deleteKeys {
-			delete(sc.Stats.stats, k)
-		}
-		return nil
-	})
+	}
+	for _, k := range deleteKeys {
+		delete(sc.Stats.stats, k)
+	}
+	return nil
 }
 
 func (sc *StatsController) statsKey(ctx *sql.Context, dbName, table string) (tableIndexesKey, error) {
@@ -440,6 +460,10 @@ func (sc *StatsController) rotateStorage(ctx context.Context) error {
 }
 
 func (sc *StatsController) lockedRotateStorage(ctx context.Context) error {
+	if sc.memOnly {
+		return nil
+	}
+	//log.Println("rotate storage")
 	if sc.statsBackingDb != nil {
 		if err := sc.rm(sc.statsBackingDb); err != nil {
 			return err
@@ -465,7 +489,10 @@ func (sc *StatsController) lockedRotateStorage(ctx context.Context) error {
 	var newStorageTarget filesys.Filesys
 	for _, dbFs := range sc.dbFs {
 		newStorageTarget = dbFs
-		break
+		if newStorageTarget == sc.statsBackingDb {
+			// prefer continuity when possible
+			break
+		}
 	}
 
 	if err := sc.rm(newStorageTarget); err != nil {
@@ -499,6 +526,8 @@ func (sc *StatsController) rm(fs filesys.Filesys) error {
 	if err != nil {
 		return err
 	}
+
+	//log.Println("rm", dropDbLoc)
 
 	if err = dbfactory.DeleteFromSingletonCache(filepath.ToSlash(dropDbLoc + "/.dolt/noms")); err != nil {
 		return err
@@ -556,9 +585,23 @@ func (sc *StatsController) initStorage(ctx context.Context, fs filesys.Filesys) 
 		Deaf:    deaf,
 		Tempdir: tmpDir,
 	}
+
 	statsDb, err := sqle.NewDatabase(ctx, "stats", dEnv.DbData(ctx), opts)
 	if err != nil {
 		return nil, err
+	}
+	m, err := dEnv.DbData(ctx).Ddb.GetStatistics(ctx)
+	if err == nil {
+		// use preexisting map
+		kd, vd := m.Descriptors()
+		return &prollyStats{
+			mu:     sync.Mutex{},
+			destDb: statsDb,
+			kb:     val.NewTupleBuilder(kd),
+			vb:     val.NewTupleBuilder(vd),
+			m:      m.Mutate(),
+			mem:    NewMemStats(),
+		}, nil
 	}
 	return NewProllyStats(ctx, statsDb)
 }
