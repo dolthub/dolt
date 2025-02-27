@@ -123,7 +123,8 @@ func ConfigureServices(
 				return err
 			}
 			logrus.SetLevel(level)
-			switch serverConfig.LogFormat() {
+			format := strings.ToLower(fmt.Sprintf("%v", serverConfig.LogFormat())) 
+			switch format {
 			case "json":
 				logrus.SetFormatter(&logrus.JSONFormatter{})
 			default:
