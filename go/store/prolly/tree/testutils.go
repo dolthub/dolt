@@ -272,8 +272,19 @@ type nodeStoreValidator struct {
 	bbp *sync.Pool
 }
 
-func (v nodeStoreValidator) ReadBytes(ctx context.Context, h hash.Hash) ([]byte, error) {
-	panic("not implemented")
+func (v nodeStoreValidator) ReadBytes(ctx context.Context, h hash.Hash) (result []byte, err error) {
+	n, err := v.ns.Read(ctx, h)
+	if err != nil {
+		return nil, err
+	}
+
+	err = WalkNodes(ctx, n, &v, func(ctx context.Context, n Node) error {
+		if n.IsLeaf() {
+			result = append(result, n.GetValue(0)...)
+		}
+		return nil
+	})
+	return result, err
 }
 
 func (v nodeStoreValidator) WriteBytes(ctx context.Context, val []byte) (hash.Hash, error) {

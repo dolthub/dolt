@@ -109,7 +109,7 @@ func GetField(ctx context.Context, td val.TupleDesc, i int, tup val.Tuple, ns No
 			var h hash.Hash
 			h, ok = td.GetGeometryAddr(i, tup)
 			if ok {
-				buf, err = NewByteArray(h, ns).ToBytes(ctx)
+				buf, err = ns.ReadBytes(ctx, h)
 				if err != nil {
 					return nil, err
 				}

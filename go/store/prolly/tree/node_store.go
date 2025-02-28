@@ -208,8 +208,19 @@ func (ns nodeStore) PurgeCaches() {
 	ns.cache.purge()
 }
 
-func (ns nodeStore) ReadBytes(ctx context.Context, h hash.Hash) ([]byte, error) {
-	return NewByteArray(h, ns).ToBytes(ctx)
+func (ns nodeStore) ReadBytes(ctx context.Context, h hash.Hash) (result []byte, err error) {
+	n, err := ns.Read(ctx, h)
+	if err != nil {
+		return nil, err
+	}
+
+	err = WalkNodes(ctx, n, &ns, func(ctx context.Context, n Node) error {
+		if n.IsLeaf() {
+			result = append(result, n.GetValue(0)...)
+		}
+		return nil
+	})
+	return result, err
 }
 
 func (ns nodeStore) WriteBytes(ctx context.Context, b []byte) (hash.Hash, error) {
@@ -217,4 +228,4 @@ func (ns nodeStore) WriteBytes(ctx context.Context, b []byte) (hash.Hash, error)
 	return h, err
 }
 
-var _ val.ValueStore = nodeStore{}
+var _ val.ValueStore = &nodeStore{}
