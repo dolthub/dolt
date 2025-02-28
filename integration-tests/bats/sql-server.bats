@@ -156,10 +156,7 @@ EOF
     stop_sql_server
 
      # Assert that log is in JSON format (checking if logs contain `{...}`)
-    if ! grep -q '^{.*}$' log.txt; then
-    exit 1
-    fi
-    
+    grep -q '^{.*}$' log.txt
     # assert that logformat in yaml config is not case sensitive
     cat >config.yml <<EOF
 log_format: teXt
