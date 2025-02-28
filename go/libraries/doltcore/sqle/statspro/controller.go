@@ -76,7 +76,7 @@ type StatsController struct {
 	sq *jobqueue.SerialQueue
 
 	activeCtxCancel context.CancelFunc
-	listeners       []listenMsg
+	listeners       *listenMsg
 
 	JobInterval time.Duration
 	gcInterval  time.Duration
@@ -95,7 +95,6 @@ type StatsController struct {
 	statsMu sync.Mutex
 	Stats   *rootStats
 	genCnt  atomic.Uint64
-	genCand atomic.Uint64
 	gcCnt   int
 }
 
@@ -139,7 +138,6 @@ func NewStatsController(pro *sqle.DoltDatabaseProvider, ctxGen ctxFactory, logge
 		dialPro:     env.NewGRPCDialProviderFromDoltEnv(dEnv),
 		ctxGen:      ctxGen,
 		genCnt:      atomic.Uint64{},
-		genCand:     atomic.Uint64{},
 	}
 }
 
@@ -441,11 +439,10 @@ func (sc *StatsController) DataLength(ctx *sql.Context, dbName string, table sql
 
 func (sc *StatsController) Purge(ctx *sql.Context) error {
 	genStart := sc.genCnt.Load()
-	genCand := sc.genCand.Add(1)
 	newKv := NewMemStats()
-	newKv.gcGen = genCand
+	newKv.gcGen = genStart
 	newStats := newRootStats()
-	if ok, err := sc.trySwapStats(ctx, genStart, genCand, newStats, newKv); !ok {
+	if ok, err := sc.trySwapStats(ctx, genStart, newStats, newKv); !ok {
 		return fmt.Errorf("failed to purge stats")
 	} else if err != nil {
 		return err

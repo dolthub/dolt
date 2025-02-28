@@ -39,28 +39,33 @@ const (
 )
 
 func (sc *StatsController) signalListener(s listenerEvent) {
-	j := 0
-	for i := 0; i < len(sc.listeners); i++ {
-		l := sc.listeners[i]
-		if (l.e|leStop)&s > 0 {
-			l.c <- s
-			close(l.c)
+	var root, keep *listenMsg
+	n := sc.listeners
+	for n != nil {
+		if (n.e|leStop)&s > 0 {
+			n.c <- s
+			close(n.c)
+		} else if root == nil {
+			root = n
+			keep = n
 		} else {
-			sc.listeners[j] = sc.listeners[i]
-			j++
+			keep.n = n
+			keep = n
 		}
+		n = n.n
 	}
-	sc.listeners = sc.listeners[:j]
+	if keep != nil {
+		keep.n = nil
+	}
+	sc.listeners = root
 }
 
 func (sc *StatsController) newThreadCtx(ctx context.Context) context.Context {
 	sc.statsMu.Lock()
 	sc.statsMu.Unlock()
-	log.Println("new thread from newThreadCtx")
 
 	newCtx, cancel := context.WithCancel(ctx)
 	if sc.activeCtxCancel != nil {
-		log.Println("cancel thread from newThreadCtx")
 		sc.activeCtxCancel()
 	}
 	sc.signalListener(leStop)
@@ -71,6 +76,7 @@ func (sc *StatsController) newThreadCtx(ctx context.Context) context.Context {
 type listenMsg struct {
 	e listenerEvent
 	c chan listenerEvent
+	n *listenMsg
 }
 
 func (sc *StatsController) addListener(e listenerEvent) (chan listenerEvent, error) {
@@ -79,8 +85,11 @@ func (sc *StatsController) addListener(e listenerEvent) (chan listenerEvent, err
 	if sc.activeCtxCancel == nil {
 		return nil, ErrStatsIssuerPaused
 	}
-	l := listenMsg{e: e, c: make(chan listenerEvent, 1)}
-	sc.listeners = append(sc.listeners, l)
+	l := &listenMsg{e: e, c: make(chan listenerEvent, 1)}
+	if sc.listeners != nil {
+		l.n = sc.listeners
+	}
+	sc.listeners = l
 	return l.c, nil
 }
 

@@ -23,14 +23,13 @@ import (
 
 func (sc *StatsController) CollectOnce(ctx context.Context) (string, error) {
 	genStart := sc.genCnt.Load()
-	genCand := sc.genCand.Add(1)
 	newStats, err := sc.newStatsForRoot(ctx, nil)
 	if errors.Is(err, context.Canceled) {
 		return "", nil
 	} else if err != nil {
 		return "", err
 	}
-	if ok, err := sc.trySwapStats(ctx, genStart, genCand, newStats, nil); err != nil || !ok {
+	if ok, err := sc.trySwapStats(ctx, genStart, newStats, nil); err != nil || !ok {
 		return "", err
 	}
 	return newStats.String(), nil
@@ -47,7 +46,6 @@ func (sc *StatsController) runIssuer(ctx context.Context) (err error) {
 
 		gcKv = nil
 		genStart := sc.genCnt.Load()
-		genCand := sc.genCand.Add(1)
 
 		select {
 		case <-gcTicker.C:
@@ -57,7 +55,7 @@ func (sc *StatsController) runIssuer(ctx context.Context) (err error) {
 
 		if sc.gcIsSet() {
 			gcKv = NewMemStats()
-			gcKv.gcGen = genCand
+			gcKv.gcGen = genStart
 		}
 
 		newStats, err = sc.newStatsForRoot(ctx, gcKv)
@@ -68,7 +66,7 @@ func (sc *StatsController) runIssuer(ctx context.Context) (err error) {
 			sc.descError("", err)
 		}
 
-		if ok, err := sc.trySwapStats(ctx, genStart, genCand, newStats, gcKv); err != nil {
+		if ok, err := sc.trySwapStats(ctx, genStart, newStats, gcKv); err != nil {
 			if !ok {
 				sc.descError("failed to swap stats", err)
 			} else {
@@ -87,7 +85,7 @@ func (sc *StatsController) runIssuer(ctx context.Context) (err error) {
 	}
 }
 
-func (sc *StatsController) trySwapStats(ctx context.Context, prevGen, newGen uint64, newStats *rootStats, gcKv *memStats) (ok bool, err error) {
+func (sc *StatsController) trySwapStats(ctx context.Context, prevGen uint64, newStats *rootStats, gcKv *memStats) (ok bool, err error) {
 	sc.statsMu.Lock()
 	defer sc.statsMu.Unlock()
 
@@ -98,7 +96,7 @@ func (sc *StatsController) trySwapStats(ctx context.Context, prevGen, newGen uin
 		}
 	}()
 
-	if sc.genCnt.CompareAndSwap(prevGen, newGen) {
+	if sc.genCnt.CompareAndSwap(prevGen, prevGen+1) {
 		// Replace stats and new Kv if no replacements happened
 		// in-between.
 		sc.Stats = newStats
@@ -107,7 +105,7 @@ func (sc *StatsController) trySwapStats(ctx context.Context, prevGen, newGen uin
 			// The new KV has all buckets for the latest root stats,
 			// background job will to swap the disk location and put
 			// entries into a prolly tree.
-			if newGen != gcKv.GcGen() {
+			if prevGen != gcKv.GcGen() {
 				err = fmt.Errorf("gc gen didn't match update gen")
 				return
 			}
@@ -116,19 +114,23 @@ func (sc *StatsController) trySwapStats(ctx context.Context, prevGen, newGen uin
 			sc.kv = gcKv
 			ok = true
 			if !sc.memOnly {
+				sc.statsMu.Unlock()
 				if err = sc.sq.DoSync(ctx, func() error {
-					return sc.lockedRotateStorage(ctx)
+					return sc.rotateStorage(ctx)
 				}); err != nil {
 					return
 				}
+				sc.statsMu.Lock()
 			}
 		}
 		// Flush new changes to disk, unlocked
 		if !sc.memOnly {
+			sc.statsMu.Unlock()
 			err = sc.sq.DoSync(ctx, func() error {
-				_, err := sc.kv.Flush(ctx)
+				_, err := sc.Flush(ctx)
 				return err
 			})
+			sc.statsMu.Lock()
 			if err != nil {
 				return true, err
 			}
