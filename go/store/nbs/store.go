@@ -288,12 +288,15 @@ func (nbs *NomsBlockStore) conjoinIfRequired(ctx context.Context) (bool, error) 
 	}
 }
 
-func (nbs *NomsBlockStore) UpdateManifest(ctx context.Context, updates map[hash.Hash]uint32) (mi ManifestInfo, err error) {
-	err = nbs.checkAllManifestUpdatesExist(ctx, updates)
+func (nbs *NomsBlockStore) UpdateManifest(ctx context.Context, updates map[hash.Hash]uint32) (ManifestInfo, error) {
+	chunkSources, _, err := nbs.openChunkSourcesForAddTableFiles(ctx, updates)
 	if err != nil {
-		return manifestContents{}, err
+		return manifestContents{}, nil
 	}
-	mi, _, err = nbs.updateManifestAddFiles(ctx, updates, nil, nil, nil)
+	// If these sources get added to the store, they will get cloned.
+	// Either way, we want to close these instances when we are done.
+	defer chunkSources.close()
+	mi, _, err := nbs.updateManifestAddFiles(ctx, updates, nil, nil, chunkSources)
 	return mi, err
 }
 
@@ -403,12 +406,15 @@ func (nbs *NomsBlockStore) updateManifestAddFiles(ctx context.Context, updates m
 	return updatedContents, false, nil
 }
 
-func (nbs *NomsBlockStore) UpdateManifestWithAppendix(ctx context.Context, updates map[hash.Hash]uint32, option ManifestAppendixOption) (mi ManifestInfo, err error) {
-	err = nbs.checkAllManifestUpdatesExist(ctx, updates)
+func (nbs *NomsBlockStore) UpdateManifestWithAppendix(ctx context.Context, updates map[hash.Hash]uint32, option ManifestAppendixOption) (ManifestInfo, error) {
+	chunkSources, _, err := nbs.openChunkSourcesForAddTableFiles(ctx, updates)
 	if err != nil {
-		return
+		return manifestContents{}, nil
 	}
-	mi, _, err = nbs.updateManifestAddFiles(ctx, updates, &option, nil, nil)
+	// If these sources get added to the store, they will get cloned.
+	// Either way, we want to close these instances when we are done.
+	defer chunkSources.close()
+	mi, _, err := nbs.updateManifestAddFiles(ctx, updates, &option, nil, chunkSources)
 	return mi, err
 }
 
