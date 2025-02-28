@@ -431,11 +431,6 @@ func (gcs *GenerationalNBS) PruneTableFiles(ctx context.Context) error {
 	return gcs.newGen.pruneTableFiles(ctx)
 }
 
-// SetRootChunk changes the root chunk hash from the previous value to the new root for the newgen cs
-func (gcs *GenerationalNBS) SetRootChunk(ctx context.Context, root, previous hash.Hash) error {
-	return gcs.newGen.setRootChunk(ctx, root, previous, gcs.refCheck)
-}
-
 // SupportedOperations returns a description of the support TableFile operations. Some stores only support reading table files, not writing.
 func (gcs *GenerationalNBS) SupportedOperations() chunks.TableFileStoreOps {
 	return gcs.newGen.SupportedOperations()
