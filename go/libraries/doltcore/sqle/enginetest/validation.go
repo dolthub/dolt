@@ -377,6 +377,14 @@ func dereferenceContent(ctx context.Context, tableValueDescriptor val.TupleDesc,
 	}
 
 	switch x := v.(type) {
+	case sql.TypedWrapper[string]:
+		str, err := x.Unwrap(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return []byte(str), nil
+	case sql.TypedWrapper[[]byte]:
+		return x.Unwrap(ctx)
 	case string:
 		return []byte(x), nil
 	case []byte:

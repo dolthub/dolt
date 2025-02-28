@@ -196,6 +196,10 @@ func testRoundTripProllyFields(t *testing.T, test prollyFieldTest) {
 
 	v, err := GetField(context.Background(), desc, 0, tup, ns)
 	assert.NoError(t, err)
+
+	v, err = sql.UnwrapAny(context.Background(), v)
+	assert.NoError(t, err)
+
 	jsonType := val.Type{Enc: val.JSONAddrEnc}
 	if test.typ == jsonType {
 		getJson := func(field interface{}) interface{} {
