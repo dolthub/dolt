@@ -554,6 +554,8 @@ func TestGenerateYamlConfig(t *testing.T) {
 
 # log_level: info
 
+# log_format: text
+
 # max_logged_query_len: 0
 
 # encode_logged_query: false
