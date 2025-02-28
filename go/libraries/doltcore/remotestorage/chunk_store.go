@@ -1151,11 +1151,6 @@ func (dcs *DoltChunkStore) Size(ctx context.Context) (uint64, error) {
 	return dcs.metadata.StorageSize, nil
 }
 
-// SetRootChunk changes the root chunk hash from the previous value to the new root.
-func (dcs *DoltChunkStore) SetRootChunk(ctx context.Context, root, previous hash.Hash) error {
-	panic("Not Implemented")
-}
-
 // DoltRemoteTableFile is an implementation of a TableFile that lives in a DoltChunkStore
 type DoltRemoteTableFile struct {
 	dcs  *DoltChunkStore
