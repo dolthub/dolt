@@ -83,6 +83,9 @@ func prettyPrintResultsWithSummary(ctx *sql.Context, resultFormat PrintResultFor
 	var err error
 	var numRows int
 
+	// Function to print results. A function is required because we need to wrap the whole process in a swap of
+	// IO streams. This is done with cli.ExecuteWithStdioRestored, which requires a resultless function. As
+	// a result, we need to depend on side effects to numRows and err to determine if it was successful.
 	printEm := func() {
 		writerStream := cli.CliOut
 		if pageResults {
@@ -125,6 +128,9 @@ func prettyPrintResultsWithSummary(ctx *sql.Context, resultFormat PrintResultFor
 		cli.ExecuteWithStdioRestored(printEm)
 	} else {
 		printEm()
+	}
+	if err != nil {
+		return err
 	}
 
 	// if there is no row data and result format is JSON, then create empty JSON.
