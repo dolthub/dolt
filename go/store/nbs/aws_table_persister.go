@@ -33,7 +33,6 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3iface"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
@@ -84,29 +83,14 @@ func (s3p awsTablePersister) Open(ctx context.Context, name hash.Hash, chunkCoun
 		return cs, nil
 	}
 
-	// errors.Is doesn't work with aws errors
-	reqErr, ok := err.(awserr.RequestFailure)
-	if !ok {
-		// Probably won't ever happen.
-		return emptyChunkSource{}, err
-	}
-	if reqErr.Code() != "NoSuchKey" || reqErr.StatusCode() != 404 {
-		return emptyChunkSource{}, err
-	}
-
-	e, err2 := s3p.Exists(ctx, name.String()+ArchiveFileSuffix, chunkCount, stats)
-	if e && err2 == nil {
-		return newAWSArchiveChunkSource(
-			ctx,
-			&s3ObjectReader{s3: s3p.s3, bucket: s3p.bucket, readRl: s3p.rl, ns: s3p.ns},
-			s3p.limits,
-			name.String()+ArchiveFileSuffix,
-			chunkCount,
-			s3p.q,
-			stats)
-	}
-
-	return emptyChunkSource{}, err
+	return newAWSArchiveChunkSource(
+		ctx,
+		&s3ObjectReader{s3: s3p.s3, bucket: s3p.bucket, readRl: s3p.rl, ns: s3p.ns},
+		s3p.limits,
+		name.String()+ArchiveFileSuffix,
+		chunkCount,
+		s3p.q,
+		stats)
 }
 
 func (s3p awsTablePersister) Exists(ctx context.Context, name string, _ uint32, stats *Stats) (bool, error) {

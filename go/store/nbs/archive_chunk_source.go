@@ -66,7 +66,7 @@ func newAWSArchiveChunkSource(ctx context.Context,
 
 	aRdr, err := newArchiveReaderFromFooter(ctx, &s3TableReaderAt{s3, name}, sz, footer, stats)
 	if err != nil {
-		return archiveChunkSource{}, err
+		return emptyChunkSource{}, err
 	}
 	return archiveChunkSource{"", aRdr}, nil
 }

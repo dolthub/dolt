@@ -291,7 +291,7 @@ func (nbs *NomsBlockStore) conjoinIfRequired(ctx context.Context) (bool, error) 
 func (nbs *NomsBlockStore) UpdateManifest(ctx context.Context, updates map[hash.Hash]uint32) (ManifestInfo, error) {
 	chunkSources, _, err := nbs.openChunkSourcesForAddTableFiles(ctx, updates)
 	if err != nil {
-		return manifestContents{}, nil
+		return manifestContents{}, err
 	}
 	// If these sources get added to the store, they will get cloned.
 	// Either way, we want to close these instances when we are done.
