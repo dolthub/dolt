@@ -418,26 +418,6 @@ func (nbs *NomsBlockStore) UpdateManifestWithAppendix(ctx context.Context, updat
 	return mi, err
 }
 
-func (nbs *NomsBlockStore) checkAllManifestUpdatesExist(ctx context.Context, updates map[hash.Hash]uint32) error {
-	eg, ctx := errgroup.WithContext(ctx)
-	eg.SetLimit(128)
-	for h, c := range updates {
-		name := h
-		c := c
-		eg.Go(func() error {
-			ok, err := nbs.p.Exists(ctx, name.String(), c, nbs.stats)
-			if err != nil {
-				return err
-			}
-			if !ok {
-				return fmt.Errorf("missing table file referenced in UpdateManifest call: %v", h)
-			}
-			return nil
-		})
-	}
-	return eg.Wait()
-}
-
 func fromManifestAppendixOptionNewContents(upstream manifestContents, appendixSpecs []tableSpec, option ManifestAppendixOption) (manifestContents, error) {
 	contents, upstreamAppendixSpecs := upstream.removeAppendixSpecs()
 	switch option {
