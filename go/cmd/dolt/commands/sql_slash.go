@@ -40,6 +40,7 @@ var slashCmds = []cli.Command{
 	MergeCmd{},
 	SlashHelp{},
 	SlashEdit{},
+	SlashPager{},
 }
 
 // parseSlashCmd parses a command line string into a slice of strings, splitting on spaces, but allowing spaces within
@@ -214,4 +215,54 @@ func (s SlashEdit) Docs() *cli.CommandDocumentation {
 func (s SlashEdit) ArgParser() *argparser.ArgParser {
 	// No arguments.
 	return &argparser.ArgParser{}
+}
+
+type SlashPager struct{}
+
+func (s SlashPager) Docs() *cli.CommandDocumentation {
+	//TODO
+	return &cli.CommandDocumentation{}
+}
+
+func (s SlashPager) ArgParser() *argparser.ArgParser {
+	return &argparser.ArgParser{}
+}
+
+var _ cli.Command = SlashPager{}
+
+func (s SlashPager) Name() string {
+	return "pager"
+}
+func (s SlashPager) Description() string {
+	return "Enable or Disable the result pager"
+}
+
+// Exec is a little special because the shell is interested in the response. So rather than call Exec, it calls
+// handlePagerCommand function.
+func (s SlashPager) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
+	panic("runtime error. SlashPager.Exec should never be called.")
+}
+
+// handlePagerCommand executes the pager command and returns true if pager should be on, or false otherwise. An error
+// could come up if they provided weird input.
+func handlePagerCommand(fullCmd string) (bool, error) {
+	tokens := strings.Split(fullCmd, " ")
+
+	if len(tokens) == 0 || tokens[0] != "\\pager" {
+		return false, fmt.Errorf("runtime error: Expected \\pager command.")
+	}
+
+	if len(tokens) == 1 {
+		return false, fmt.Errorf("Usage: \\pager [on|off]")
+	}
+
+	// Kind of sloppy here,`\pager foo bar on` will work, but not the end of the world.
+	if tokens[len(tokens)-1] == "on" {
+		return true, nil
+	}
+	if tokens[len(tokens)-1] == "off" {
+		return false, nil
+	}
+
+	return false, fmt.Errorf("Usage: \\pager [on|off]")
 }

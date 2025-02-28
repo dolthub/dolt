@@ -33,6 +33,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/csv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/tabular"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
+	"github.com/dolthub/dolt/go/store/util/outputpager"
 )
 
 type PrintResultFormat byte
@@ -54,16 +55,16 @@ const (
 )
 
 // PrettyPrintResults prints the result of a query in the format provided
-func PrettyPrintResults(ctx *sql.Context, resultFormat PrintResultFormat, sqlSch sql.Schema, rowIter sql.RowIter) (rerr error) {
-	return prettyPrintResultsWithSummary(ctx, resultFormat, sqlSch, rowIter, PrintNoSummary)
+func PrettyPrintResults(ctx *sql.Context, resultFormat PrintResultFormat, sqlSch sql.Schema, rowIter sql.RowIter, pageResults bool) (rerr error) {
+	return prettyPrintResultsWithSummary(ctx, resultFormat, sqlSch, rowIter, PrintNoSummary, pageResults)
 }
 
 // PrettyPrintResultsExtended prints the result of a query in the format provided, including row count and timing info
-func PrettyPrintResultsExtended(ctx *sql.Context, resultFormat PrintResultFormat, sqlSch sql.Schema, rowIter sql.RowIter) (rerr error) {
-	return prettyPrintResultsWithSummary(ctx, resultFormat, sqlSch, rowIter, PrintRowCountAndTiming)
+func PrettyPrintResultsExtended(ctx *sql.Context, resultFormat PrintResultFormat, sqlSch sql.Schema, rowIter sql.RowIter, pageResults bool) (rerr error) {
+	return prettyPrintResultsWithSummary(ctx, resultFormat, sqlSch, rowIter, PrintRowCountAndTiming, pageResults)
 }
 
-func prettyPrintResultsWithSummary(ctx *sql.Context, resultFormat PrintResultFormat, sqlSch sql.Schema, rowIter sql.RowIter, summary PrintSummaryBehavior) (rerr error) {
+func prettyPrintResultsWithSummary(ctx *sql.Context, resultFormat PrintResultFormat, sqlSch sql.Schema, rowIter sql.RowIter, summary PrintSummaryBehavior, pageResults bool) (rerr error) {
 	defer func() {
 		closeErr := rowIter.Close(ctx)
 		if rerr == nil && closeErr != nil {
@@ -79,35 +80,55 @@ func prettyPrintResultsWithSummary(ctx *sql.Context, resultFormat PrintResultFor
 	}
 
 	var wr table.SqlRowWriter
+	var err error
+	var numRows int
 
-	switch resultFormat {
-	case FormatCsv:
-		var err error
-		wr, err = csv.NewCSVSqlWriter(iohelp.NopWrCloser(cli.CliOut), sqlSch, csv.NewCSVInfo())
-		if err != nil {
-			return err
+	// Function to print results. A function is required because we need to wrap the whole process in a swap of
+	// IO streams. This is done with cli.ExecuteWithStdioRestored, which requires a resultless function. As
+	// a result, we need to depend on side effects to numRows and err to determine if it was successful.
+	printEm := func() {
+		writerStream := cli.CliOut
+		if pageResults {
+			pager := outputpager.Start()
+			defer pager.Stop()
+			writerStream = pager.Writer
 		}
-	case FormatJson:
-		var err error
-		wr, err = json.NewJSONSqlWriter(iohelp.NopWrCloser(cli.CliOut), sqlSch)
-		if err != nil {
-			return err
+
+		switch resultFormat {
+		case FormatCsv:
+			var err error
+			wr, err = csv.NewCSVSqlWriter(iohelp.NopWrCloser(writerStream), sqlSch, csv.NewCSVInfo())
+			if err != nil {
+				return
+			}
+		case FormatJson:
+			var err error
+			wr, err = json.NewJSONSqlWriter(iohelp.NopWrCloser(writerStream), sqlSch)
+			if err != nil {
+				return
+			}
+		case FormatTabular:
+			wr = tabular.NewFixedWidthTableWriter(sqlSch, iohelp.NopWrCloser(writerStream), 100)
+		case FormatNull:
+			wr = nullWriter{}
+		case FormatVertical:
+			wr = newVerticalRowWriter(iohelp.NopWrCloser(writerStream), sqlSch)
+		case FormatParquet:
+			var err error
+			wr, err = parquet.NewParquetRowWriter(sqlSch, iohelp.NopWrCloser(writerStream))
+			if err != nil {
+				return
+			}
 		}
-	case FormatTabular:
-		wr = tabular.NewFixedWidthTableWriter(sqlSch, iohelp.NopWrCloser(cli.CliOut), 100)
-	case FormatNull:
-		wr = nullWriter{}
-	case FormatVertical:
-		wr = newVerticalRowWriter(iohelp.NopWrCloser(cli.CliOut), sqlSch)
-	case FormatParquet:
-		var err error
-		wr, err = parquet.NewParquetRowWriter(sqlSch, iohelp.NopWrCloser(cli.CliOut))
-		if err != nil {
-			return err
-		}
+
+		numRows, err = writeResultSet(ctx, rowIter, wr)
 	}
 
-	numRows, err := writeResultSet(ctx, rowIter, wr)
+	if pageResults {
+		cli.ExecuteWithStdioRestored(printEm)
+	} else {
+		printEm()
+	}
 	if err != nil {
 		return err
 	}
