@@ -475,16 +475,16 @@ SQL
     cd one/two
     dolt init
     rm -rf .dolt/stats
-    ls -laR > ../../before_gc
+    ls -laR | grep -v '^d' > ../../before_gc
     dolt gc
     manifest_first_gc=$(cat .dolt/noms/manifest)
     rm -rf .dolt/stats
-    ls -laR > ../../after_first_gc
+    ls -laR | grep -v '^d' > ../../after_first_gc
     cp ./.dolt/noms/manifest ../../manifest_after_first_gc
     dolt gc
     manifest_second_gc=$(cat .dolt/noms/manifest)
     rm -rf .dolt/stats
-    ls -laR > ../../after_second_gc
+    ls -laR | grep -v '^d' > ../../after_second_gc
     # This should exit 0 because the gc should have changed things.
     if cmp ../../before_gc ../../after_first_gc; then
         echo "expected dolt gc to change things, but it didn't."
@@ -504,14 +504,14 @@ SQL
     cd one/two
     dolt init
     rm -rf .dolt/stats
-    ls -laR > ../../before_gc
+    ls -laR | grep -v '^d' > ../../before_gc
     dolt gc --full
     rm -rf .dolt/stats
-    ls -laR > ../../after_first_gc
+    ls -laR | grep -v '^d' > ../../after_first_gc
     cp ./.dolt/noms/manifest ../../manifest_after_first_gc
     dolt gc --full
     rm -rf .dolt/stats
-    ls -laR > ../../after_second_gc
+    ls -laR | grep -v '^d' > ../../after_second_gc
     # This should exit 0 because the gc should have changed things.
     if cmp ../../before_gc ../../after_first_gc; then
         echo "expected dolt gc to change things, but it didn't."
@@ -531,14 +531,14 @@ SQL
     cd one/two
     dolt init
     rm -rf .dolt/stats
-    ls -laR > ../../before_gc
+    ls -laR | grep -v '^d' > ../../before_gc
     dolt gc --full
     rm -rf .dolt/stats
-    ls -laR > ../../after_first_gc
+    ls -laR | grep -v '^d' > ../../after_first_gc
     cp ./.dolt/noms/manifest ../../manifest_after_first_gc
     dolt gc
     rm -rf .dolt/stats
-    ls -laR > ../../after_second_gc
+    ls -laR | grep -v '^d' > ../../after_second_gc
     # This should exit 0 because the gc should have changed things.
     if cmp ../../before_gc ../../after_first_gc; then
         echo "expected dolt gc to change things, but it didn't."
@@ -558,10 +558,10 @@ SQL
     cd one/two
     dolt init
     rm -rf .dolt/stats
-    ls -laR > ../../files_before_gc
+    ls -laR | grep -v '^d' > ../../files_before_gc
     dolt gc
     rm -rf .dolt/stats
-    ls -laR > ../../files_after_first_gc
+    ls -laR | grep -v '^d' > ../../files_after_first_gc
     cp ./.dolt/noms/manifest ../../manifest_after_first_gc
     dolt gc --full
     rm -rf .dolt/stats
