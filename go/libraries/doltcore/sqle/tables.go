@@ -442,8 +442,8 @@ func (t *DoltTable) HasIndex(ctx *sql.Context, idx sql.Index) (bool, error) {
 	return index.TableHasIndex(ctx, t.db.Name(), t.tableName, tbl, idx)
 }
 
-// GetAutoIncrementValue gets the last AUTO_INCREMENT value
-func (t *DoltTable) GetAutoIncrementValue(ctx *sql.Context) (uint64, error) {
+// PeekNextAutoIncrementValue gets the next AUTO_INCREMENT value
+func (t *DoltTable) PeekNextAutoIncrementValue(ctx *sql.Context) (uint64, error) {
 	table, err := t.DoltTable(ctx)
 	if err != nil {
 		return 0, err
@@ -1154,7 +1154,7 @@ func (t *WritableDoltTable) PeekNextAutoIncrementValue(ctx *sql.Context) (uint64
 		return 0, sql.ErrNoAutoIncrementCol
 	}
 
-	return t.DoltTable.GetAutoIncrementValue(ctx)
+	return t.DoltTable.PeekNextAutoIncrementValue(ctx)
 }
 
 // GetNextAutoIncrementValue implements sql.AutoIncrementTable

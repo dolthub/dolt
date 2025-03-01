@@ -391,6 +391,20 @@ func (td TableDelta) HasSchemaChanged(ctx context.Context) (bool, error) {
 		return true, nil
 	}
 
+	fromAutoInc, err := td.FromTable.GetAutoIncrementValue(ctx)
+	if err != nil {
+		return false, err
+	}
+
+	toAutoInc, err := td.ToTable.GetAutoIncrementValue(ctx)
+	if err != nil {
+		return false, err
+	}
+
+	if fromAutoInc != toAutoInc {
+		return true, nil
+	}
+
 	fromSchemaHash, err := td.FromTable.GetSchemaHash(ctx)
 	if err != nil {
 		return false, err
