@@ -6,8 +6,6 @@ on:
       version:
         description: 'SemVer format release tag, i.e. 0.24.5'
         required: true
-  repository_dispatch:
-    types: [ push-docker-image ]
 
 jobs:
   docker-image-push:
@@ -34,9 +32,9 @@ jobs:
           context: .
           file: ./docker/Dockerfile
           push: true
-          tags: dolthub/dolt:${{ github.event.inputs.version || github.event.client_payload.version }} , dolthub/dolt:latest
+          tags: dolthub/dolt:${{ github.event.inputs.version }} , dolthub/dolt:latest
           build-args: |
-            DOLT_VERSION=${{ github.event.inputs.version || github.event.client_payload.version }}
+            DOLT_VERSION=${{ github.event.inputs.version }}
       - name: Build and push dolt-sql-server image
         uses: docker/build-push-action@v5
         with:
@@ -44,9 +42,9 @@ jobs:
           context: .
           file: ./docker/serverDockerfile
           push: true
-          tags: dolthub/dolt-sql-server:${{ github.event.inputs.version || github.event.client_payload.version }} , dolthub/dolt-sql-server:latest
+          tags: dolthub/dolt-sql-server:${{ github.event.inputs.version }} , dolthub/dolt-sql-server:latest
           build-args: |
-            DOLT_VERSION=${{ github.event.inputs.version || github.event.client_payload.version }}
+            DOLT_VERSION=${{ github.event.inputs.version }}
       - name: Update Docker Hub Readme for dolt image
         uses: peter-evans/dockerhub-description@v4
         with:

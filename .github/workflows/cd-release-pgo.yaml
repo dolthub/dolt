@@ -32,8 +32,63 @@ jobs:
           fi
           echo "version=$version" >> $GITHUB_OUTPUT
 
-  create-pgo-release:
+  docker-image-push:
+    name: Push Docker Image
     needs: format-version
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          platforms: linux/amd64,linux/arm64
+      - name: Build and push dolt image
+        uses: docker/build-push-action@v5
+        with:
+          platforms: linux/amd64,linux/arm64
+          context: .
+          file: ./docker/Dockerfile
+          push: true
+          tags: dolthub/dolt:${{ needs.format-version.outputs.version }} , dolthub/dolt:latest
+          build-args: |
+            DOLT_VERSION=${{ needs.format-version.outputs.version }}
+      - name: Build and push dolt-sql-server image
+        uses: docker/build-push-action@v5
+        with:
+          platforms: linux/amd64,linux/arm64
+          context: .
+          file: ./docker/serverDockerfile
+          push: true
+          tags: dolthub/dolt-sql-server:${{ needs.format-version.outputs.version }} , dolthub/dolt-sql-server:latest
+          build-args: |
+            DOLT_VERSION=${{ needs.format-version.outputs.version }}
+      - name: Update Docker Hub Readme for dolt image
+        uses: peter-evans/dockerhub-description@v4
+        with:
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
+          repository: dolthub/dolt
+          readme-filepath: ./docker/README.md
+      - name: Update Docker Hub Readme for dolt-sql-server image
+        uses: peter-evans/dockerhub-description@v4
+        with:
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
+          repository: dolthub/dolt-sql-server
+          readme-filepath: ./docker/serverREADME.md
+
+  create-pgo-release:
+    needs: [format-version, docker-image-push]
     runs-on: ubuntu-22.04
     name: Release PGO Dolt
     outputs:
@@ -171,7 +226,7 @@ jobs:
           asset_content_type: text/plain
 
   create-windows-msi:
-    needs: [format-version, create-pgo-release]
+    needs: [format-version, create-pgo-release, docker-image-push]
     runs-on: ubuntu-22.04
     steps:
       - name: Trigger Upload MSI
@@ -183,7 +238,7 @@ jobs:
           client-payload: '{"tag": "${{ needs.format-version.outputs.version }}", "release_id": "${{ needs.create-pgo-release.outputs.release_id }}", "actor": "${{ github.actor }}", "bucket": "${{ github.event.inputs.profile_bucket || github.event.client_payload.bucket }}", "profile_key": "${{ github.event.inputs.profile_key || github.event.client_payload.profile_key }}"}'
 
   create-release-notes:
-    needs: [format-version, create-pgo-release]
+    needs: [format-version, create-pgo-release, docker-image-push]
     runs-on: ubuntu-22.04
     steps:
       - name: Trigger Release Notes
@@ -194,7 +249,7 @@ jobs:
           client-payload: '{"version": "${{ needs.format-version.outputs.version }}", "release_id": "${{ needs.create-pgo-release.outputs.release_id }}"}'
 
   trigger-performance-benchmark-email:
-    needs: [format-version, create-pgo-release]
+    needs: [format-version, create-pgo-release, docker-image-push]
     runs-on: ubuntu-22.04
     steps:
       - name: Trigger Performance Benchmarks
@@ -203,14 +258,3 @@ jobs:
           token: ${{ secrets.REPO_ACCESS_TOKEN }}
           event-type: release-dolt
           client-payload: '{"version": "${{ needs.format-version.outputs.version }}", "actor": "${{ github.actor }}", "profile_key": "${{ github.event.inputs.profile_key || github.event.client_payload.profile_key }}"}'
-
-  docker-image-push:
-    needs: [format-version, create-pgo-release]
-    runs-on: ubuntu-22.04
-    steps:
-      - name: Trigger Push Docker Image
-        uses: peter-evans/repository-dispatch@v3
-        with:
-          token: ${{ secrets.REPO_ACCESS_TOKEN }}
-          event-type: push-docker-image
-          client-payload: '{"version": "${{ needs.format-version.outputs.version }}"}'
