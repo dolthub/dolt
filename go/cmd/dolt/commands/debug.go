@@ -170,7 +170,7 @@ func (cmd DebugCmd) Exec(ctx context.Context, commandStr string, args []string, 
 				cli.Println("failed to create output tar " + err.Error())
 			}
 
-			cli.Println("zipped results in " + outFile)
+			cli.Println("zipped results in: " + outFile)
 		}()
 	}
 
