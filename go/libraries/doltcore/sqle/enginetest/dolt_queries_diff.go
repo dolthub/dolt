@@ -3042,6 +3042,25 @@ var DiffSummaryTableFunctionScriptTests = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "raising the autoincrement value should be seen as a schema change",
+		SetUpScript: []string{
+			"CREATE table t (pk int primary key auto_increment);",
+			"INSERT INTO t values (1);",
+			"CALL DOLT_COMMIT('-Am', 'first commit');",
+			"INSERT INTO t values (2);",
+			"DELETE FROM t where pk = 2",
+			"CALL DOLT_COMMIT('-am', 'second commit');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT * from dolt_diff_summary('HEAD~', 'HEAD')",
+				Expected: []sql.Row{
+					{"t", "t", "modified", false, true},
+				},
+			},
+		},
+	},
 }
 
 var PatchTableFunctionScriptTests = []queries.ScriptTest{

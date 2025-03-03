@@ -2124,3 +2124,61 @@ EOF
     # Count the line numbers to make sure there are no schema changes output
     [ "${#lines[@]}" -eq 11 ]
 }
+
+@test "diff: autoincrement registers as schema diff" {
+    dolt sql <<SQL
+drop table test;
+create table test (pk int primary key auto_increment);
+insert into test values (1);
+SQL
+    dolt add .
+    dolt commit -am "First commit"
+
+    dolt sql <<SQL
+insert into test values (2);
+delete from test where pk = 2;
+SQL
+
+    run dolt diff
+
+    # Somehow, bats rejects this Heredoc if it contains unmatched parentheses.
+    # So we add a parenthesis to the first line and remove it with tail.
+    EXPECTED=$(tail -n 8 <<'EOF'
+(
+diff --dolt a/test b/test
+--- a/test
++++ b/test
+ CREATE TABLE `test` (
+   `pk` int NOT NULL AUTO_INCREMENT,
+   PRIMARY KEY (`pk`)
+-) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;
++) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;
+EOF
+)
+
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "$EXPECTED" ]] || false
+
+    run dolt diff --data --schema
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "$EXPECTED" ]] || false
+
+    dolt diff --schema
+    run dolt diff --schema
+
+    [[ "$output" =~ "$EXPECTED" ]] || false
+    # Count the line numbers to make sure there are no data changes output
+    [ "${#lines[@]}" -eq 8 ]
+
+    run dolt diff --data
+    EXPECTED=$(cat <<'EOF'
+diff --dolt a/test b/test
+--- a/test
++++ b/test
+EOF
+)
+
+    [[ "$output" =~ "$EXPECTED" ]] || false
+    # Count the line numbers to make sure there are no schema changes output
+    [ "${#lines[@]}" -eq 3 ]
+}

@@ -850,3 +850,31 @@ SQL
     [ $status -eq 0 ]
     [[ "$output" =~ "4" ]] || false
 }
+
+
+@test "auto_increment: auto inc shows up in SHOW CREATE (AS OF)" {
+    dolt checkout -b other
+    dolt sql -q "create table t(pk int primary key auto_increment);"
+    dolt sql -q "insert into t values (1);"
+    dolt commit -Am "create table"
+
+    dolt sql -q "insert into t values (2);"
+    dolt commit -Am "insert into table"
+
+    run dolt sql -q 'show create table t'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ AUTO_INCREMENT ]] || false
+
+    run dolt sql -q 'show create table t as of other'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ AUTO_INCREMENT ]] || false
+
+    run dolt sql -q 'show create table t as of HEAD'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ AUTO_INCREMENT ]] || false
+
+    dolt sql -q 'show create table t as of `HEAD^`'
+    run dolt sql -q 'show create table t as of `HEAD^`'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ AUTO_INCREMENT ]] || false
+}
