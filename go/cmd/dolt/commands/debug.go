@@ -1,8 +1,10 @@
 package commands
 
 import (
+	"archive/tar"
 	"bufio"
 	"bytes"
+	"compress/gzip"
 	"context"
 	"errors"
 	"fmt"
@@ -13,17 +15,25 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/analyzer"
 	"github.com/pkg/profile"
+	"github.com/sirupsen/logrus"
 	textunicode "golang.org/x/text/encoding/unicode"
 	"golang.org/x/text/transform"
 	"io"
+	"io/fs"
+	"log"
 	"os"
+	"path/filepath"
+	"strings"
 	"time"
 )
 
 type DebugCmd struct {
 	VersionStr string
 }
+
+const defaultDebugTime = 10
 
 // The SQL shell installs its own signal handlers so that you can cancel a running query without ending the entire
 // process
@@ -52,13 +62,10 @@ func (cmd DebugCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithMaxArgs(cmd.Name(), 0)
 	ap.SupportsString(QueryFlag, "q", "SQL query to run", "Runs a single query and exits.")
 	ap.SupportsString(FormatFlag, "r", "result output format", "How to format result output. Valid values are tabular, csv, json, vertical, and parquet. Defaults to tabular.")
-	ap.SupportsString(saveFlag, "s", "saved query name", "Used with --query, save the query to the query catalog with the name provided. Saved queries can be examined in the dolt_query_catalog system table.")
-	ap.SupportsString(executeFlag, "x", "saved query name", "Executes a saved query with the given name.")
-	ap.SupportsFlag(listSavedFlag, "l", "List all saved queries.")
-	ap.SupportsString(messageFlag, "m", "saved query description", "Used with --query and --save, saves the query with the descriptive message given. See also `--name`.")
-	ap.SupportsFlag(BatchFlag, "b", "Use to enable more efficient batch processing for large SQL import scripts. This mode is no longer supported and this flag is a no-op. To speed up your SQL imports, use either LOAD DATA, or structure your SQL import script to insert many rows per statement.")
 	ap.SupportsFlag(continueFlag, "c", "Continue running queries on an error. Used for batch mode only.")
 	ap.SupportsString(fileInputFlag, "f", "input file", "Execute statements from the file given.")
+	ap.SupportsInt(timeFlag, "t", "benchmark time", "Execute for at least time seconds.")
+	ap.SupportsString(outputFlag, "o", "output dir", "Result directory (Defaults to temporary director)")
 	return ap
 }
 
@@ -127,7 +134,47 @@ func (cmd DebugCmd) Exec(ctx context.Context, commandStr string, args []string, 
 		return sqlHandleVErrAndExitCode(queryist, errhand.BuildDError("cannot run debug mode on a pre-existing server").Build(), usage)
 	}
 
+	// create a temp directory
+	tempDir, err := os.MkdirTemp("", "dolt-debug-*")
+	if err != nil {
+		return sqlHandleVErrAndExitCode(queryist, errhand.BuildDError("couldn't create tempdir %w", err).Build(), usage)
+	}
+
 	_, continueOnError := apr.GetValue(continueFlag)
+	outFile, ok := apr.GetValue(outputFlag)
+
+	if outFile != "" {
+		defer func() {
+			if !strings.HasPrefix(outFile, ".tar.gz") && !strings.HasPrefix(outFile, ".tgz") {
+				outFile += ".tar.gz"
+			}
+			file, err := os.Create(outFile)
+			if err != nil {
+				cli.Println("failed to create output file " + err.Error())
+				return
+			}
+			defer file.Close()
+
+			gzipWriter := gzip.NewWriter(file)
+			defer gzipWriter.Close()
+
+			tarWriter := tar.NewWriter(gzipWriter)
+			defer tarWriter.Close()
+
+			if err := filepath.WalkDir(tempDir, func(path string, d fs.DirEntry, err error) error {
+				if d.IsDir() {
+					return nil
+				}
+				return addFileToTar(tarWriter, path)
+			}); err != nil {
+				cli.Println("failed to create output tar " + err.Error())
+			}
+
+			cli.Println("zipped results in " + outFile)
+		}()
+	}
+
+	runTime := apr.GetIntOrDefault(timeFlag, defaultDebugTime)
 
 	var input io.Reader = os.Stdin
 	if query, queryOK := apr.GetValue(QueryFlag); queryOK {
@@ -149,11 +196,6 @@ func (cmd DebugCmd) Exec(ctx context.Context, commandStr string, args []string, 
 		defer fileReadProg.close()
 	}
 
-	// create a temp directory
-	tempDir, err := os.MkdirTemp("", "dolt-debug-*")
-	if err != nil {
-		return sqlHandleVErrAndExitCode(queryist, errhand.BuildDError("couldn't create tempdir %w", err).Build(), usage)
-	}
 	queryFile, err := os.CreateTemp(tempDir, "input.sql")
 	if err != nil {
 		return sqlHandleVErrAndExitCode(queryist, errhand.BuildDError("couldn't create tempfile %w", err).Build(), usage)
@@ -175,12 +217,33 @@ func (cmd DebugCmd) Exec(ctx context.Context, commandStr string, args []string, 
 		return sqlHandleVErrAndExitCode(queryist, errhand.VerboseErrorFromError(err), usage)
 	}
 
+	debugFile, err := os.CreateTemp(tempDir, "exec.txt")
+	if err != nil {
+		if err != nil {
+			return sqlHandleVErrAndExitCode(queryist, errhand.VerboseErrorFromError(err), usage)
+		}
+	}
+	defer debugFile.Close()
+
 	func() {
 		defer profile.Start(profile.ProfilePath(tempDir), profile.CPUProfile).Stop()
 		cli.Println("starting cpu profile...")
-		for {
+
+		origStdout := cli.CliOut
+		origStderr := cli.CliErr
+		cli.CliOut = debugFile
+		cli.CliErr = debugFile
+		defer func() {
+			cli.CliOut = origStdout
+			cli.CliErr = origStderr
+		}()
+
+		var done bool
+		wait := time.Tick(time.Duration(runTime) * time.Second)
+		for !done {
 			select {
-			case <-time.Tick(5 * time.Second):
+			case <-wait:
+				done = true
 			default:
 				execDebugMode(sqlCtx, sqlEng, queryFile, continueOnError, format)
 			}
@@ -190,30 +253,83 @@ func (cmd DebugCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	func() {
 		defer profile.Start(profile.ProfilePath(tempDir), profile.MemProfile).Stop()
 		cli.Println("starting mem profile...")
-		for {
+
+		origStdout := cli.CliOut
+		origStderr := cli.CliErr
+		cli.CliOut = debugFile
+		cli.CliErr = debugFile
+		defer func() {
+			cli.CliOut = origStdout
+			cli.CliErr = origStderr
+		}()
+
+		var done bool
+		wait := time.Tick(time.Duration(runTime) * time.Second)
+		for !done {
 			select {
-			case <-time.Tick(5 * time.Second):
+			case <-wait:
+				done = true
 			default:
 				execDebugMode(sqlCtx, sqlEng, queryFile, continueOnError, format)
 			}
 		}
 	}()
 
-	input = bufio.NewReader(transform.NewReader(queryFile, textunicode.BOMOverride(transform.Nop)))
 	func() {
 		defer profile.Start(profile.ProfilePath(tempDir), profile.TraceProfile).Stop()
 		cli.Println("starting trace profile...")
-		for {
+
+		origStdout := cli.CliOut
+		origStderr := cli.CliErr
+		cli.CliOut = debugFile
+		cli.CliErr = debugFile
+		defer func() {
+			cli.CliOut = origStdout
+			cli.CliErr = origStderr
+		}()
+
+		var done bool
+		wait := time.Tick(time.Duration(runTime) * time.Second)
+		for !done {
 			select {
-			case <-time.Tick(5 * time.Second):
+			case <-wait:
+				done = true
 			default:
 				execDebugMode(sqlCtx, sqlEng, queryFile, continueOnError, format)
 			}
 		}
 	}()
 
-	cli.Printf("debug results in: %s", tempDir)
+	defer cli.Printf("debug results in: %s\n", tempDir)
+
 	return 0
+}
+
+func addFileToTar(tarWriter *tar.Writer, filePath string) error {
+	file, err := os.Open(filePath)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	stat, err := file.Stat()
+	if err != nil {
+		return err
+	}
+
+	header, err := tar.FileInfoHeader(stat, stat.Name())
+	if err != nil {
+		return err
+	}
+
+	header.Name = filePath
+	err = tarWriter.WriteHeader(header)
+	if err != nil {
+		return err
+	}
+
+	_, err = io.Copy(tarWriter, file)
+	return err
 }
 
 func debugAnalyze(ctx *sql.Context, tempDir string, sqlEng *engine.SqlEngine, sqlFile *os.File) error {
@@ -243,10 +359,25 @@ func debugAnalyze(ctx *sql.Context, tempDir string, sqlEng *engine.SqlEngine, sq
 	defer planFile.Close()
 	planBuf := bufio.NewWriter(planFile)
 
+	analyzer.SetOutput(analysisFile)
+	logrus.SetOutput(analysisFile)
+	log.SetOutput(analysisFile)
 	origStdout := os.Stdout
+	origStderr := os.Stderr
+	origCliErr := cli.CliErr
+	origCliOut := cli.CliOut
 	os.Stdout = analysisFile
+	os.Stderr = analysisFile
+	cli.CliErr = analysisFile
+	cli.CliOut = analysisFile
 	defer func() {
+		logrus.SetOutput(os.Stderr)
+		analyzer.SetOutput(os.Stderr)
+		log.SetOutput(os.Stderr)
 		os.Stdout = origStdout
+		os.Stderr = origStderr
+		cli.CliOut = origCliOut
+		cli.CliErr = origCliErr
 	}()
 
 	scanner := NewStreamScanner(sqlFile)

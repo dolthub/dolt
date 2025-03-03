@@ -56,7 +56,7 @@ require (
 	github.com/cespare/xxhash/v2 v2.2.0
 	github.com/creasty/defaults v1.6.0
 	github.com/dolthub/flatbuffers/v23 v23.3.3-dh.2
-	github.com/dolthub/go-mysql-server v0.19.1-0.20250228013728-e1e27339cbd6
+	github.com/dolthub/go-mysql-server v0.19.1-0.20250303204632-ac81c13f6d6c
 	github.com/dolthub/gozstd v0.0.0-20240423170813-23a2903bca63
 	github.com/dolthub/swiss v0.1.0
 	github.com/esote/minmaxheap v1.0.0
@@ -109,7 +109,7 @@ require (
 	github.com/apache/thrift v0.13.1-0.20201008052519-daf620915714 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
-	github.com/dolthub/go-icu-regex v0.0.0-20241215010122-db690dd53c90 // indirect
+	github.com/dolthub/go-icu-regex v0.0.0-20250303123116-549b8d7cad00 // indirect
 	github.com/dolthub/jsonpath v0.0.2-0.20240227200619-19675ab05c71 // indirect
 	github.com/dolthub/maphash v0.0.0-20221220182448-74e1e1ea1577 // indirect
 	github.com/go-fonts/liberation v0.2.0 // indirect
@@ -172,3 +172,5 @@ require (
 replace github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi => ./gen/proto/dolt/services/eventsapi
 
 go 1.24.0
+
+replace github.com/dolthub/go-mysql-server => ../../go-mysql-server/
