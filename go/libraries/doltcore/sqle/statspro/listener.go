@@ -61,8 +61,8 @@ func (sc *StatsController) signalListener(s listenerEvent) {
 }
 
 func (sc *StatsController) newThreadCtx(ctx context.Context) context.Context {
-	sc.statsMu.Lock()
-	sc.statsMu.Unlock()
+	sc.mu.Lock()
+	sc.mu.Unlock()
 
 	newCtx, cancel := context.WithCancel(ctx)
 	if sc.activeCtxCancel != nil {
@@ -80,8 +80,8 @@ type listenMsg struct {
 }
 
 func (sc *StatsController) addListener(e listenerEvent) (chan listenerEvent, error) {
-	sc.statsMu.Lock()
-	defer sc.statsMu.Unlock()
+	sc.mu.Lock()
+	defer sc.mu.Unlock()
 	if sc.activeCtxCancel == nil {
 		return nil, ErrStatsIssuerPaused
 	}
@@ -95,8 +95,8 @@ func (sc *StatsController) addListener(e listenerEvent) (chan listenerEvent, err
 
 func (sc *StatsController) Stop() {
 	// xxx: do not pause |sq|, analyze jobs still need to run
-	sc.statsMu.Lock()
-	sc.statsMu.Unlock()
+	sc.mu.Lock()
+	sc.mu.Unlock()
 	if sc.activeCtxCancel != nil {
 		sc.activeCtxCancel()
 		log.Println("cancel thread from Stop()")
@@ -106,7 +106,9 @@ func (sc *StatsController) Stop() {
 	return
 }
 
-func (sc *StatsController) variableUpdate() {
+// UpdateParams reads the environment variables and updates controller
+// parameters. If the queue is not started this will hang.
+func (sc *StatsController) UpdateParams() {
 	_, memOnly, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsMemoryOnly)
 	sc.SetMemOnly(memOnly.(int8) == 1)
 
@@ -132,9 +134,10 @@ func (sc *StatsController) Restart() error {
 	default:
 	}
 
-	sc.variableUpdate()
-
 	sc.sq.Start()
+
+	sc.UpdateParams()
+
 	done := make(chan struct{})
 	go func() {
 		ctx := sc.newThreadCtx(context.Background())
@@ -176,30 +179,31 @@ func (sc *StatsController) Init(ctx context.Context, dbs []sql.Database) error {
 			if err := sc.AddFs(sqlCtx, db, fs, false); err != nil {
 				return err
 			}
-			if i == 0 && !sc.memOnly {
-				// attempt to access previously written stats
-				statsFs, err := fs.WithWorkingDir(dbfactory.DoltStatsDir)
-				if err != nil {
-					return err
-				}
+			if i > 0 || sc.memOnly {
+				continue
+			}
+			// attempt to access previously written stats
+			statsFs, err := fs.WithWorkingDir(dbfactory.DoltStatsDir)
+			if err != nil {
+				return err
+			}
 
-				exists, isDir := statsFs.Exists("")
-				if exists && isDir {
-					newKv, err := sc.initStorage(ctx, fs)
-					if err == nil {
-						sc.kv = newKv
-						sc.statsBackingDb = fs
-						continue
-					} else {
-						path, _ := statsFs.Abs("")
-						sc.descError("failed to reboot stats from: "+path, err)
-					}
+			exists, isDir := statsFs.Exists("")
+			if exists && isDir {
+				newKv, err := sc.initStorage(ctx, fs)
+				if err == nil {
+					sc.kv = newKv
+					sc.statsBackingDb = fs
+					continue
+				} else {
+					path, _ := statsFs.Abs("")
+					sc.descError("failed to reboot stats from: "+path, err)
 				}
+			}
 
-				// otherwise wipe and create new stats dir
-				if err := sc.lockedRotateStorage(sqlCtx); err != nil {
-					return err
-				}
+			// otherwise wipe and create new stats dir
+			if err := sc.lockedRotateStorage(sqlCtx); err != nil {
+				return err
 			}
 		}
 	}
@@ -239,8 +243,8 @@ func (sc *StatsController) Gc(ctx *sql.Context) error {
 }
 
 func (sc *StatsController) Close() {
-	sc.statsMu.Lock()
-	defer sc.statsMu.Unlock()
+	sc.mu.Lock()
+	defer sc.mu.Unlock()
 	if sc.activeCtxCancel != nil {
 		log.Println("cancel thread from Close")
 		sc.activeCtxCancel()

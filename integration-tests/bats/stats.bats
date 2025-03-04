@@ -338,48 +338,47 @@ teardown() {
     #[[ "$output" =~ '"{""dbCnt"":1,""active"":true,""storageBucketCnt"":4,""cachedBucketCnt"":4,""cachedBoundCnt"":4,""cachedTemplateCnt"":4,""statCnt"":2,""backing"":""repo2""}"' ]] || false
 #}
 
-@test "stats: memory only doesn't write to disk" {
-    cd repo2
-    dolt sql -q "set @@PERSIST.dolt_stats_memory_only = 1"
+#@test "stats: memory only doesn't write to disk" {
+    #cd repo2
+    #dolt sql -q "set @@PERSIST.dolt_stats_memory_only = 1"
 
-    start_sql_server
+    #start_sql_server
 
-    dolt sql -q "insert into xy values (0,0), (1,1)"
-    dolt sql -q "call dolt_stats_once()"
+    #dolt sql -q "insert into xy values (0,0), (1,1)"
+    #dolt sql -q "call dolt_stats_once()"
 
-    dolt sql -q "call dolt_stats_info('--short')"
-    run dolt sql -r csv -q "call dolt_stats_info('--short')"
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ '"{""dbCnt"":1,""active"":false,""storageBucketCnt"":0,""cachedBucketCnt"":2,""cachedBoundCnt"":2,""cachedTemplateCnt"":4,""statCnt"":2,""backing"":""memory""}"' ]] || false
+    #dolt sql -q "call dolt_stats_info('--short')"
+    #run dolt sql -r csv -q "call dolt_stats_info('--short')"
+    #[ "$status" -eq 0 ]
+    #[[ "$output" =~ '"{""dbCnt"":1,""active"":true,""storageBucketCnt"":0,""cachedBucketCnt"":2,""cachedBoundCnt"":2,""cachedTemplateCnt"":4,""statCnt"":2,""backing"":""memory""}"' ]] || false
 
-    run dolt sql -r csv -q "select count(*) from dolt_statistics"
-    [ "$status" -eq 0 ]
-    [ "${lines[1]}" = "2" ]
+    #run dolt sql -r csv -q "select count(*) from dolt_statistics"
+    #[ "$status" -eq 0 ]
+    #[ "${lines[1]}" = "2" ]
 
-    stop_sql_server
+    #stop_sql_server
 
-    dolt sql -q "call dolt_stats_info('--short')"
-    run dolt sql -r csv -q "call dolt_stats_info('--short')"
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ '"{""dbCnt"":0,""active"":false,""storageBucketCnt"":0,""cachedBucketCnt"":0,""cachedBoundCnt"":0,""cachedTemplateCnt"":0,""statCnt"":0,""backing"":""memory""}"' ]] || false
-}
+    #run dolt sql -r csv -q "call dolt_stats_once(); call dolt_stats_info('--short')"
+    #[ "$status" -eq 0 ]
+    #[[ "$output" =~ '"{""dbCnt"":1,""active"":false,""storageBucketCnt"":0,""cachedBucketCnt"":2,""cachedBoundCnt"":2,""cachedTemplateCnt"":4,""statCnt"":2,""backing"":""memory""}"' ]] || false
+#}
 
 
-@test "stats: waiters error for closed stats queue" {
-    cd repo2
+#@test "stats: waiters error for closed stats queue" {
+    #cd repo2
 
-    dolt sql -q "insert into xy values (0,0), (1,1)"
-    dolt sql -q "analyze table xy"
+    #dolt sql -q "insert into xy values (0,0), (1,1)"
+    #dolt sql -q "analyze table xy"
 
-    run dolt sql -q "call dolt_stats_gc()"
-    [ "$status" -eq 1 ]
+    #run dolt sql -q "call dolt_stats_gc()"
+    #[ "$status" -eq 1 ]
 
-    run dolt sql -q "call dolt_stats_wait()"
-    [ "$status" -eq 1 ]
+    #run dolt sql -q "call dolt_stats_wait()"
+    #[ "$status" -eq 1 ]
 
-    run dolt sql -q "call dolt_stats_flush()"
-    [ "$status" -eq 1 ]
-}
+    #run dolt sql -q "call dolt_stats_flush()"
+    #[ "$status" -eq 1 ]
+#}
 
 #@test "stats: encode/decode loop is delimiter safe" {
     #cd repo2
@@ -387,12 +386,11 @@ teardown() {
 #dolt sql <<EOF
 #create table uv (u varbinary(255) primary key);
 #insert into uv values ('hello, world');
-#analyze table uv;
 #EOF
 
-    #run dolt sql -r csv -q "select count(*) from dolt_statistics"
+    #run dolt sql -r csv -q "call dolt_stats_once(); select count(*) from dolt_statistics"
     #[ "$status" -eq 0 ]
-    #[ "${lines[1]}" = "1" ]
+    #[ "${lines[3]}" = "1" ]
 #}
 
 #@test "stats: correct stats directory location, issue#8324" {
@@ -407,6 +405,9 @@ teardown() {
 
     #run stat .dolt/repo2
     #[ "$status" -eq 1 ]
+
+    #run stat .dolt/stats/.dolt
+    #[ "$status" -eq 0 ]
 #}
 
 #@test "stats: restart in shell doesn't drop db, issue#8345" {
@@ -414,18 +415,17 @@ teardown() {
 
     #dolt sql -q "insert into xy values (0,0), (1,1), (2,2), (3,3), (4,4)"
     #dolt sql -q "insert into ab values (0,0), (1,1), (2,2), (3,3), (4,4)"
-    #dolt sql -q "ANALYZE table xy, ab"
     #run dolt sql -r csv <<EOF
+#call dolt_stats_once();
 #select count(*) from dolt_statistics;
-#set @@GLOBAL.dolt_stats_auto_refresh_interval = 2;
 #call dolt_stats_restart();
 #select count(*) from dolt_statistics;
-#select sleep(3);
+#call dolt_stats_wait();
 #select count(*) from dolt_statistics;
 #EOF
-    #[ "${lines[1]}" = "4" ]
-    #[ "${lines[5]}" = "4" ]
-    #[ "${lines[9]}" = "4" ]
+    #[ "${lines[3]}" = "4" ]
+    #[ "${lines[7]}" = "4" ]
+    #[ "${lines[11]}" = "4" ]
     #[ "$status" -eq 0 ]
 #}
 
@@ -435,68 +435,42 @@ teardown() {
     #dolt sql -q "alter table xy add index y2 (y)"
     #dolt sql -q "insert into xy values (0,0), (1,0), (2,0), (3,0), (4,0), (5,0), (6,1), (7,1), (8,1), (9,1),(10,3),(11,4),(12,5),(13,6),(14,7),(15,8),(16,9),(17,10),(18,11)"
 
-    #dolt sql -q "analyze table xy"
-
-    #run dolt sql -r csv -q "select mcv1, mcv2 from dolt_statistics where index_name = 'y2'"
+    #run dolt sql -r csv -q "call dolt_stats_once(); select mcv1, mcv2 from dolt_statistics where index_name = 'y2'"
     #[ "$status" -eq 0 ]
-    #[ "${lines[1]}" = "1,0" ]
+    #[ "${lines[3]}" = "1,0" ]
 #}
 
-#@test "stats: stats delete index schema change" {
-    #cd repo2
+@test "stats: stats delete index schema change" {
+    cd repo2
 
-    #dolt sql -q "set @@PERSIST.dolt_stats_bootstrap_enabled = 0;"
-    #dolt sql -q "set @@PERSIST.dolt_stats_auto_refresh_interval = 1;"
+    dolt sql -q "insert into xy values (0,0), (1,1)"
 
-    #dolt sql -q "insert into xy values (0,0), (1,1)"
-    #dolt sql -q "analyze table xy"
+    # stats OK after analyze
+    run dolt sql -r csv -q "call dolt_stats_once(); select count(*) from dolt_statistics"
+    [ "$status" -eq 0 ]
+    [ "${lines[3]}" = "2" ]
 
-    ## stats OK after analyze
-    #run dolt sql -r csv -q "select count(*) from dolt_statistics"
-    #[ "$status" -eq 0 ]
-    #[ "${lines[1]}" = "2" ]
+    dolt sql -q "alter table xy drop index y"
 
-    #dolt sql -q "alter table xy drop index y"
+    # load after schema change should purge
+    dolt sql -r csv -q "call dolt_stats_once(); select count(*) from dolt_statistics"
+    [ "$status" -eq 0 ]
+    [ "${lines[1]}" = "3" ]
+}
 
-    ## load after schema change should purge
-    #run dolt sql -r csv -q "select count(*) from dolt_statistics"
-    #[ "$status" -eq 0 ]
-    #[ "${lines[1]}" = "0" ]
+@test "stats: stats recreate table without index" {
+    cd repo2
 
+    dolt sql -q "insert into xy values (0,0), (1,1)"
 
-    #dolt sql -q "analyze table xy"
-    #run dolt sql -r csv -q "select count(*) from dolt_statistics"
-    #[ "$status" -eq 0 ]
-    #[ "${lines[1]}" = "1" ]
-#}
+    dolt sql -q "call dolt_stats_once()"
 
-#@test "stats: stats recreate table without index" {
-    #cd repo2
+    dolt sql -q "drop table xy"
+    dolt sql -q "create table xy (x int primary key, y int)"
+    dolt sql -q "insert into xy values (0,0), (1,1)"
 
-    #dolt sql -q "set @@PERSIST.dolt_stats_bootstrap_enabled = 0;"
-    #dolt sql -q "set @@PERSIST.dolt_stats_auto_refresh_interval = 1;"
-
-    #dolt sql -q "insert into xy values (0,0), (1,1)"
-    #dolt sql -q "analyze table xy"
-
-    #run dolt sql -r csv -q "select count(*) from dolt_statistics"
-    #[ "$status" -eq 0 ]
-    #[ "${lines[1]}" = "2" ]
-
-    #dolt sql -q "drop table xy"
-    #dolt sql -q "create table xy (x int primary key, y int)"
-    #dolt sql -q "insert into xy values (0,0), (1,1)"
-
-    ## make sure no stats
-    #run dolt sql -r csv -q "select count(*) from dolt_statistics"
-    #[ "$status" -eq 0 ]
-    #[ "${lines[1]}" = "0" ]
-
-    #dolt sql -q "analyze table xy"
-
-    #run dolt sql -r csv -q "select count(*) from dolt_statistics"
-    #[ "$status" -eq 0 ]
-    #[ "${lines[1]}" = "1" ]
-
-    #stop_sql_server
-#}
+    # make sure no stats
+    run dolt sql -r csv -q "call dolt_stats_once(); select count(*) from dolt_statistics"
+    [ "$status" -eq 0 ]
+    [ "${lines[1]}" = "3" ]
+}

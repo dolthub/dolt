@@ -497,56 +497,56 @@ func DecodeRow(ctx context.Context, ns tree.NodeStore, s string, tb *val.TupleBu
 }
 
 func (sc *StatsController) PutBucket(ctx context.Context, h hash.Hash, b *stats.Bucket, tupB *val.TupleBuilder) error {
-	sc.statsMu.Lock()
-	defer sc.statsMu.Unlock()
+	sc.mu.Lock()
+	defer sc.mu.Unlock()
 	return sc.kv.PutBucket(ctx, h, b, tupB)
 }
 
 func (sc *StatsController) GetBucket(ctx context.Context, h hash.Hash, tupB *val.TupleBuilder) (*stats.Bucket, bool, error) {
-	sc.statsMu.Lock()
-	defer sc.statsMu.Unlock()
+	sc.mu.Lock()
+	defer sc.mu.Unlock()
 	return sc.kv.GetBucket(ctx, h, tupB)
 }
 
 func (sc *StatsController) GetTemplate(key templateCacheKey) (stats.Statistic, bool) {
-	sc.statsMu.Lock()
-	defer sc.statsMu.Unlock()
+	sc.mu.Lock()
+	defer sc.mu.Unlock()
 	return sc.kv.GetTemplate(key)
 }
 
 func (sc *StatsController) PutTemplate(key templateCacheKey, stat stats.Statistic) {
-	sc.statsMu.Lock()
-	defer sc.statsMu.Unlock()
+	sc.mu.Lock()
+	defer sc.mu.Unlock()
 	sc.kv.PutTemplate(key, stat)
 }
 
 func (sc *StatsController) GetBound(h hash.Hash, len int) (sql.Row, bool) {
-	sc.statsMu.Lock()
-	defer sc.statsMu.Unlock()
+	sc.mu.Lock()
+	defer sc.mu.Unlock()
 	return sc.kv.GetBound(h, len)
 }
 
 func (sc *StatsController) PutBound(h hash.Hash, r sql.Row, l int) {
-	sc.statsMu.Lock()
-	defer sc.statsMu.Unlock()
+	sc.mu.Lock()
+	defer sc.mu.Unlock()
 	sc.kv.PutBound(h, r, l)
 }
 
 func (sc *StatsController) Flush(ctx context.Context) (int, error) {
-	sc.statsMu.Lock()
-	defer sc.statsMu.Unlock()
+	sc.mu.Lock()
+	defer sc.mu.Unlock()
 	defer sc.signalListener(leFlush)
 	return sc.kv.Flush(ctx)
 }
 
 func (sc *StatsController) Len() int {
-	sc.statsMu.Lock()
-	defer sc.statsMu.Unlock()
+	sc.mu.Lock()
+	defer sc.mu.Unlock()
 	return sc.kv.Len()
 }
 
 func (sc *StatsController) GcGen() uint64 {
-	sc.statsMu.Lock()
-	defer sc.statsMu.Unlock()
+	sc.mu.Lock()
+	defer sc.mu.Unlock()
 	return sc.kv.GcGen()
 }

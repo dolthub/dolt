@@ -90,12 +90,14 @@ type StatsController struct {
 	// buckets, first bounds, and schema-specific statistic
 	// templates.
 	kv StatsKv
-
 	// Stats tracks table statistics accessible to sessions.
-	statsMu sync.Mutex
-	Stats   *rootStats
-	genCnt  atomic.Uint64
-	gcCnt   int
+	Stats *rootStats
+	// mu protects all shared object access
+	mu sync.Mutex
+	// genCnt is used to atomically swap Stats, same behavior
+	// as last-writer wins
+	genCnt atomic.Uint64
+	gcCnt  int
 }
 
 type rootStats struct {
@@ -124,7 +126,7 @@ func NewStatsController(pro *sqle.DoltDatabaseProvider, ctxGen ctxFactory, logge
 		logger.Error(err)
 	})
 	return &StatsController{
-		statsMu:     sync.Mutex{},
+		mu:          sync.Mutex{},
 		logger:      logger,
 		JobInterval: 500 * time.Millisecond,
 		gcInterval:  24 * time.Hour,
@@ -142,40 +144,40 @@ func NewStatsController(pro *sqle.DoltDatabaseProvider, ctxGen ctxFactory, logge
 }
 
 func (sc *StatsController) SetMemOnly(v bool) {
-	sc.statsMu.Lock()
-	defer sc.statsMu.Unlock()
+	sc.mu.Lock()
+	defer sc.mu.Unlock()
 	sc.memOnly = v
 }
 
 func (sc *StatsController) SetEnableGc(v bool) {
-	sc.statsMu.Lock()
-	defer sc.statsMu.Unlock()
+	sc.mu.Lock()
+	defer sc.mu.Unlock()
 	sc.enableGc = v
 }
 
 func (sc *StatsController) setDoGc() {
-	sc.statsMu.Lock()
-	defer sc.statsMu.Unlock()
+	sc.mu.Lock()
+	defer sc.mu.Unlock()
 	sc.doGc = true
 }
 
 func (sc *StatsController) gcIsSet() bool {
-	sc.statsMu.Lock()
-	defer sc.statsMu.Unlock()
+	sc.mu.Lock()
+	defer sc.mu.Unlock()
 	return sc.doGc
 }
 
 // SetTimers can only be called after Init
 func (sc *StatsController) SetTimers(job, gc int64) {
-	sc.statsMu.Lock()
-	defer sc.statsMu.Unlock()
+	sc.mu.Lock()
+	defer sc.mu.Unlock()
 	sc.sq.NewRateLimit(time.Duration(max(1, job)))
 	sc.gcInterval = time.Duration(gc)
 }
 
 func (sc *StatsController) AddFs(ctx *sql.Context, db dsess.SqlDatabase, fs filesys.Filesys, rotateOk bool) error {
-	sc.statsMu.Lock()
-	defer sc.statsMu.Unlock()
+	sc.mu.Lock()
+	defer sc.mu.Unlock()
 
 	firstDb := len(sc.dbFs) == 0
 	sc.dbFs[db.AliasedName()] = fs
@@ -186,8 +188,8 @@ func (sc *StatsController) AddFs(ctx *sql.Context, db dsess.SqlDatabase, fs file
 }
 
 func (sc *StatsController) Info(ctx context.Context) (dprocedures.StatsInfo, error) {
-	sc.statsMu.Lock()
-	defer sc.statsMu.Unlock()
+	sc.mu.Lock()
+	defer sc.mu.Unlock()
 
 	// don't use protected access / deadlock
 	cachedBucketCnt := sc.kv.Len()
@@ -203,7 +205,7 @@ func (sc *StatsController) Info(ctx context.Context) (dprocedures.StatsInfo, err
 	case *memStats:
 		cachedBoundCnt = len(kv.bounds)
 		cachedTemplateCnt = len(kv.templates)
-		backing = "mem"
+		backing = "memory"
 	case *prollyStats:
 		cachedBoundCnt = len(kv.mem.bounds)
 		cachedTemplateCnt = len(kv.mem.templates)
@@ -239,8 +241,8 @@ func (sc *StatsController) GetTableStats(ctx *sql.Context, db string, table sql.
 	if err != nil {
 		return nil, err
 	}
-	sc.statsMu.Lock()
-	defer sc.statsMu.Unlock()
+	sc.mu.Lock()
+	defer sc.mu.Unlock()
 	if sc.Stats == nil {
 		return nil, nil
 	}
@@ -287,19 +289,19 @@ func (sc *StatsController) AnalyzeTable(ctx *sql.Context, table sql.Table, dbNam
 		return err
 	}
 
-	sc.statsMu.Lock()
+	sc.mu.Lock()
 	for k, v := range newStats.stats {
 		sc.Stats.stats[k] = v
 		sc.Stats.hashes[k] = newStats.hashes[k]
 	}
-	sc.statsMu.Unlock()
+	sc.mu.Unlock()
 
 	return err
 }
 
 func (sc *StatsController) SetStats(ctx *sql.Context, s sql.Statistic) error {
-	sc.statsMu.Lock()
-	defer sc.statsMu.Unlock()
+	sc.mu.Lock()
+	defer sc.mu.Unlock()
 	ss, ok := s.(*stats.Statistic)
 	if !ok {
 		return fmt.Errorf("expected *stats.Statistics, found %T", s)
@@ -322,8 +324,8 @@ func (sc *StatsController) SetStats(ctx *sql.Context, s sql.Statistic) error {
 }
 
 func (sc *StatsController) GetStats(ctx *sql.Context, qual sql.StatQualifier, cols []string) (sql.Statistic, bool) {
-	sc.statsMu.Lock()
-	defer sc.statsMu.Unlock()
+	sc.mu.Lock()
+	defer sc.mu.Unlock()
 	key, err := sc.statsKey(ctx, qual.Database, qual.Table())
 	if err != nil {
 		return nil, false
@@ -343,8 +345,8 @@ func (sc *StatsController) GetTableDoltStats(ctx *sql.Context, branch, db, schem
 		table:  strings.ToLower(table),
 		schema: strings.ToLower(schema),
 	}
-	sc.statsMu.Lock()
-	defer sc.statsMu.Unlock()
+	sc.mu.Lock()
+	defer sc.mu.Unlock()
 	if sc.Stats == nil {
 		return nil, nil
 	}
@@ -356,15 +358,15 @@ func (sc *StatsController) DropStats(ctx *sql.Context, qual sql.StatQualifier, c
 	if err != nil {
 		return err
 	}
-	sc.statsMu.Lock()
-	defer sc.statsMu.Unlock()
+	sc.mu.Lock()
+	defer sc.mu.Unlock()
 	delete(sc.Stats.stats, key)
 	return nil
 }
 
 func (sc *StatsController) DropDbStats(ctx *sql.Context, dbName string, flush bool) error {
-	sc.statsMu.Lock()
-	defer sc.statsMu.Unlock()
+	sc.mu.Lock()
+	defer sc.mu.Unlock()
 	log.Println("drop statsdb", dbName)
 
 	dbFs := sc.dbFs[dbName]
@@ -372,9 +374,9 @@ func (sc *StatsController) DropDbStats(ctx *sql.Context, dbName string, flush bo
 	if sc.statsBackingDb == dbFs {
 		// don't wait to see if the thread context is invalidated
 		func() {
-			sc.statsMu.Unlock()
+			sc.mu.Unlock()
 			sc.Restart()
-			defer sc.statsMu.Lock()
+			defer sc.mu.Lock()
 		}()
 		if err := sc.lockedRotateStorage(ctx); err != nil {
 			return err
@@ -412,8 +414,8 @@ func (sc *StatsController) RowCount(ctx *sql.Context, dbName string, table sql.T
 	if err != nil {
 		return 0, err
 	}
-	sc.statsMu.Lock()
-	defer sc.statsMu.Unlock()
+	sc.mu.Lock()
+	defer sc.mu.Unlock()
 	for _, s := range sc.Stats.stats[key] {
 		if strings.EqualFold(s.Qualifier().Index(), "PRIMARY") {
 			return s.RowCnt, nil
@@ -427,8 +429,8 @@ func (sc *StatsController) DataLength(ctx *sql.Context, dbName string, table sql
 	if err != nil {
 		return 0, err
 	}
-	sc.statsMu.Lock()
-	defer sc.statsMu.Unlock()
+	sc.mu.Lock()
+	defer sc.mu.Unlock()
 	for _, s := range sc.Stats.stats[key] {
 		if strings.EqualFold(s.Qualifier().Index(), "PRIMARY") {
 			return s.RowCnt, nil
@@ -451,8 +453,8 @@ func (sc *StatsController) Purge(ctx *sql.Context) error {
 }
 
 func (sc *StatsController) rotateStorage(ctx context.Context) error {
-	sc.statsMu.Lock()
-	defer sc.statsMu.Unlock()
+	sc.mu.Lock()
+	defer sc.mu.Unlock()
 	return sc.lockedRotateStorage(ctx)
 }
 

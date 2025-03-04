@@ -606,6 +606,25 @@ func TestPanic(t *testing.T) {
 	require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
 }
 
+func TestMemoryOnly(t *testing.T) {
+	threads := sql.NewBackgroundThreads()
+	defer threads.Shutdown()
+	ctx, sqlEng, sc := emptySetup(t, threads, true)
+	sc.SetEnableGc(false)
+
+	require.NoError(t, sc.Restart())
+
+	runBlock(t, ctx, sqlEng, "create database otherdb",
+		"create table xy (x int primary key, y int)",
+		"insert into xy values (0,0), (1,1), (2,2)",
+		"call dolt_stats_wait()",
+		"call dolt_stats_flush()",
+	)
+
+	_, ok := sc.kv.(*memStats)
+	require.True(t, ok, "expected *memStats")
+}
+
 func newStatsCoord(bthreads *sql.BackgroundThreads) *StatsController {
 	dEnv := dtestutils.CreateTestEnv()
 	sqlEng, ctx := newTestEngine(context.Background(), dEnv, bthreads)

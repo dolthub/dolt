@@ -210,6 +210,9 @@ func NewSqlEngine(
 	// configuring stats depends on sessionBuilder
 	// sessionBuilder needs ref to statsProv
 	if sc, ok := statsPro.(*statspro.StatsController); ok {
+		_, memOnly, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsMemoryOnly)
+		sc.SetMemOnly(memOnly.(int8) == 1)
+
 		pro.InitDatabaseHooks = append(pro.InitDatabaseHooks, statspro.NewInitDatabaseHook(sc))
 		pro.DropDatabaseHooks = append(pro.DropDatabaseHooks, statspro.NewDropDatabaseHook(sc))
 

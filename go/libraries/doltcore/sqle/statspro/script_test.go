@@ -156,6 +156,43 @@ func TestStatScripts(t *testing.T) {
 			},
 		},
 		{
+			name: "panic bug",
+			setup: []string{
+				"create table xy (x int primary key, y varchar(16), key (y,x))",
+				"insert into xy values (0,'0'), (1,'0'), (2,'0')",
+			},
+			assertions: []assertion{
+				{
+					query: "call dolt_stats_stop()",
+				},
+				{
+					query: "alter table xy drop index y",
+				},
+				{
+					query: "select count(*) from dolt_statistics",
+					res:   []sql.Row{{2}},
+				},
+				{
+					query: "call dolt_stats_once()",
+				},
+				{
+					query: "call dolt_stats_info('--short')",
+					res: []sql.Row{
+						{dprocedures.StatsInfo{
+							DbCnt:             1,
+							Backing:           "mydb",
+							Active:            false,
+							StorageBucketCnt:  2,
+							CachedBucketCnt:   2,
+							CachedBoundCnt:    2,
+							CachedTemplateCnt: 2,
+							StatCnt:           2,
+						},
+						}},
+				},
+			},
+		},
+		{
 			name: "ddl index",
 			setup: []string{
 				"create table xy (x int primary key, y varchar(16), key (y,x))",

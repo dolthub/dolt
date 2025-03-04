@@ -86,8 +86,8 @@ func (sc *StatsController) runIssuer(ctx context.Context) (err error) {
 }
 
 func (sc *StatsController) trySwapStats(ctx context.Context, prevGen uint64, newStats *rootStats, gcKv *memStats) (ok bool, err error) {
-	sc.statsMu.Lock()
-	defer sc.statsMu.Unlock()
+	sc.mu.Lock()
+	defer sc.mu.Unlock()
 
 	signal := leSwap
 	defer func() {
@@ -101,7 +101,7 @@ func (sc *StatsController) trySwapStats(ctx context.Context, prevGen uint64, new
 		// in-between.
 		sc.Stats = newStats
 		if gcKv != nil {
-			signal = leGc
+			signal |= leGc
 			// The new KV has all buckets for the latest root stats,
 			// background job will to swap the disk location and put
 			// entries into a prolly tree.
@@ -114,23 +114,23 @@ func (sc *StatsController) trySwapStats(ctx context.Context, prevGen uint64, new
 			sc.kv = gcKv
 			ok = true
 			if !sc.memOnly {
-				sc.statsMu.Unlock()
+				sc.mu.Unlock()
 				if err = sc.sq.DoSync(ctx, func() error {
 					return sc.rotateStorage(ctx)
 				}); err != nil {
 					return
 				}
-				sc.statsMu.Lock()
+				sc.mu.Lock()
 			}
 		}
 		// Flush new changes to disk, unlocked
 		if !sc.memOnly {
-			sc.statsMu.Unlock()
+			sc.mu.Unlock()
 			err = sc.sq.DoSync(ctx, func() error {
 				_, err := sc.Flush(ctx)
 				return err
 			})
-			sc.statsMu.Lock()
+			sc.mu.Lock()
 			if err != nil {
 				return true, err
 			}
@@ -207,8 +207,8 @@ func (sc *StatsController) newStatsForRoot(baseCtx context.Context, gcKv *memSta
 }
 
 func (sc *StatsController) preexistingStats(k tableIndexesKey, h hash.Hash) ([]*stats.Statistic, bool) {
-	sc.statsMu.Lock()
-	defer sc.statsMu.Unlock()
+	sc.mu.Lock()
+	defer sc.mu.Unlock()
 	if sc.Stats.hashes[k].Equal(h) {
 		return sc.Stats.stats[k], true
 	}
