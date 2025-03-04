@@ -39,7 +39,7 @@ teardown() {
 }
 
 
-@test "debug produces expected files" {
+@test "debug: debug produces expected files" {
     run dolt debug -t 1 -o out -q "select count(*) from ab where b = 'text_val'"
     [ "$status" -eq 0 ]
     [[ "${lines[0]}" =~ "cpu" ]] || false
