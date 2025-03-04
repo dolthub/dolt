@@ -25,7 +25,6 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 )
 
@@ -134,21 +133,23 @@ func (cmd DebugCmd) Exec(ctx context.Context, commandStr string, args []string, 
 		return sqlHandleVErrAndExitCode(queryist, errhand.BuildDError("cannot run debug mode on a pre-existing server").Build(), usage)
 	}
 
-	// create a temp directory
-	tempDir, err := os.MkdirTemp("", "dolt-debug-*")
-	if err != nil {
-		return sqlHandleVErrAndExitCode(queryist, errhand.BuildDError("couldn't create tempdir %w", err).Build(), usage)
+	_, continueOnError := apr.GetValue(continueFlag)
+	outDir, outputDirSpecified := apr.GetValue(outputFlag)
+	if !outputDirSpecified {
+		outDir, err = os.MkdirTemp("", "dolt-debug-*")
+		if err != nil {
+			return sqlHandleVErrAndExitCode(queryist, errhand.BuildDError("couldn't create tempdir %w", err).Build(), usage)
+		}
+	} else {
+		err := os.Mkdir(outDir, os.ModePerm)
+		if err != nil {
+			return sqlHandleVErrAndExitCode(queryist, errhand.BuildDError("failed to create output directory %w", err).Build(), usage)
+		}
 	}
 
-	_, continueOnError := apr.GetValue(continueFlag)
-	outFile, ok := apr.GetValue(outputFlag)
-
-	if outFile != "" {
+	if outputDirSpecified {
 		defer func() {
-			if !strings.HasPrefix(outFile, ".tar.gz") && !strings.HasPrefix(outFile, ".tgz") {
-				outFile += ".tar.gz"
-			}
-			file, err := os.Create(outFile)
+			file, err := os.Create(outDir + ".tar.gz")
 			if err != nil {
 				cli.Println("failed to create output file " + err.Error())
 				return
@@ -161,7 +162,7 @@ func (cmd DebugCmd) Exec(ctx context.Context, commandStr string, args []string, 
 			tarWriter := tar.NewWriter(gzipWriter)
 			defer tarWriter.Close()
 
-			if err := filepath.WalkDir(tempDir, func(path string, d fs.DirEntry, err error) error {
+			if err := filepath.WalkDir(outDir, func(path string, d fs.DirEntry, err error) error {
 				if d.IsDir() {
 					return nil
 				}
@@ -170,7 +171,7 @@ func (cmd DebugCmd) Exec(ctx context.Context, commandStr string, args []string, 
 				cli.Println("failed to create output tar " + err.Error())
 			}
 
-			cli.Println("zipped results in: " + outFile)
+			cli.Println("zipped results in: " + outDir + ".tar.gz")
 		}()
 	}
 
@@ -196,9 +197,9 @@ func (cmd DebugCmd) Exec(ctx context.Context, commandStr string, args []string, 
 		defer fileReadProg.close()
 	}
 
-	queryFile, err := os.CreateTemp(tempDir, "input.sql")
+	queryFile, err := os.Create(filepath.Join(outDir, "input.sql"))
 	if err != nil {
-		return sqlHandleVErrAndExitCode(queryist, errhand.BuildDError("couldn't create tempfile %w", err).Build(), usage)
+		return sqlHandleVErrAndExitCode(queryist, errhand.BuildDError("couldn't create file %s", err.Error()).Build(), usage)
 	}
 	defer queryFile.Close()
 
@@ -212,12 +213,12 @@ func (cmd DebugCmd) Exec(ctx context.Context, commandStr string, args []string, 
 		return sqlHandleVErrAndExitCode(queryist, errhand.BuildDError("seek input sql %w", err).Build(), usage)
 	}
 
-	err = debugAnalyze(sqlCtx, tempDir, sqlEng, queryFile)
+	err = debugAnalyze(sqlCtx, outDir, sqlEng, queryFile)
 	if err != nil {
 		return sqlHandleVErrAndExitCode(queryist, errhand.VerboseErrorFromError(err), usage)
 	}
 
-	debugFile, err := os.CreateTemp(tempDir, "exec.txt")
+	debugFile, err := os.Create(filepath.Join(outDir, "exec.txt"))
 	if err != nil {
 		if err != nil {
 			return sqlHandleVErrAndExitCode(queryist, errhand.VerboseErrorFromError(err), usage)
@@ -226,7 +227,7 @@ func (cmd DebugCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	defer debugFile.Close()
 
 	func() {
-		defer profile.Start(profile.ProfilePath(tempDir), profile.CPUProfile).Stop()
+		defer profile.Start(profile.ProfilePath(outDir), profile.CPUProfile).Stop()
 		cli.Println("starting cpu profile...")
 
 		origStdout := cli.CliOut
@@ -251,7 +252,7 @@ func (cmd DebugCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	}()
 
 	func() {
-		defer profile.Start(profile.ProfilePath(tempDir), profile.MemProfile).Stop()
+		defer profile.Start(profile.ProfilePath(outDir), profile.MemProfile).Stop()
 		cli.Println("starting mem profile...")
 
 		origStdout := cli.CliOut
@@ -276,7 +277,7 @@ func (cmd DebugCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	}()
 
 	func() {
-		defer profile.Start(profile.ProfilePath(tempDir), profile.TraceProfile).Stop()
+		defer profile.Start(profile.ProfilePath(outDir), profile.TraceProfile).Stop()
 		cli.Println("starting trace profile...")
 
 		origStdout := cli.CliOut
@@ -300,7 +301,7 @@ func (cmd DebugCmd) Exec(ctx context.Context, commandStr string, args []string, 
 		}
 	}()
 
-	defer cli.Printf("debug results in: %s\n", tempDir)
+	defer cli.Printf("debug results in: %s\n", outDir)
 
 	return 0
 }
@@ -346,13 +347,13 @@ func debugAnalyze(ctx *sql.Context, tempDir string, sqlEng *engine.SqlEngine, sq
 	defer func() {
 		eng.Analyzer.Debug = false
 	}()
-	analysisFile, err := os.CreateTemp(tempDir, "analysis.txt")
+	analysisFile, err := os.Create(filepath.Join(tempDir, "analysis.txt"))
 	if err != nil {
 		return err
 	}
 	defer analysisFile.Close()
 
-	planFile, err := os.CreateTemp(tempDir, "plan.txt")
+	planFile, err := os.Create(filepath.Join(tempDir, "plan.txt"))
 	if err != nil {
 		return err
 	}
