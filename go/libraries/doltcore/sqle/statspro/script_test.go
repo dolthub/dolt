@@ -16,11 +16,12 @@ package statspro
 
 import (
 	"encoding/json"
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/stretchr/testify/require"
 	"log"
 	"strconv"
 	"testing"
+
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dprocedures"
 )

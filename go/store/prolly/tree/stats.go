@@ -17,6 +17,7 @@ package tree
 import (
 	"context"
 	"fmt"
+
 	"github.com/dolthub/dolt/go/store/hash"
 )
 

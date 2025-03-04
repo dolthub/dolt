@@ -16,12 +16,13 @@ package statspro
 
 import (
 	"context"
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/stretchr/testify/require"
-	"golang.org/x/sync/errgroup"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/stretchr/testify/require"
+	"golang.org/x/sync/errgroup"
 )
 
 func TestListening(t *testing.T) {
