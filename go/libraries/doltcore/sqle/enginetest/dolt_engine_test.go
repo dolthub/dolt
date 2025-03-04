@@ -1951,7 +1951,7 @@ func TestStatsAutoRefreshConcurrency(t *testing.T) {
 	fs, err := engine.EngineAnalyzer().Catalog.DbProvider.(*sqle.DoltDatabaseProvider).FileSystemForDatabase(sqlDb.AliasedName())
 	require.NoError(t, err)
 
-	err = statsProv.AddFs(readCtx, sqlDb, fs)
+	err = statsProv.AddFs(readCtx, sqlDb, fs, true)
 	require.NoError(t, err)
 
 	execQ := func(ctx *sql.Context, q string, id int, tag string) {
