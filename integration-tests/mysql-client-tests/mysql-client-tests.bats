@@ -164,7 +164,7 @@ EOF" -m "postgres"
 
 @test "rust mysql client" {
     cd $BATS_TEST_DIRNAME/rust
-    cargo run --bin mysql_connector_test $USER $PORT $REPO_NAME
+    ./target/debug/mysql_connector_test $USER $PORT $REPO_NAME
 }
 
 @test "php mysqli mysql client" {
