@@ -10,8 +10,27 @@ on:
     types: [ push-docker-image ]
 
 jobs:
+  get-release-id:
+    name: Get Dolt Release Id
+    runs-on: ubuntu-22.04
+    outputs:
+      release_id: ${{ steps.get_release.outputs.release_id }}
+    steps:
+      - name: Get Release
+        id: get_release
+        run: |
+          release_id="$RELEASE_ID"
+          if [ "$EVENT_TYPE" == "workflow_dispatch" ]; then
+            release_id=$(curl -H "Accept: application/vnd.github.v3+json" https://api.github.com/repos/dolthub/dolt/releases/tags/v${{ github.event.inputs.version }} | jq '.id')
+          fi
+          echo "release_id=$release_id" >> $GITHUB_OUTPUT
+        env:
+          EVENT_TYPE: ${{ github.event_name }}
+          RELEASE_ID: ${{ github.event.client_payload.release_id }}
+
   docker-image-push:
     name: Push Docker Image
+    needs: get-release-id
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout
@@ -61,3 +80,9 @@ jobs:
           password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
           repository: dolthub/dolt-sql-server
           readme-filepath: ./docker/serverREADME.md
+      - name: Edit Release
+        uses: irongut/EditRelease@v1.2.0
+        with:
+          token: ${{ secrets.REPO_ACCESS_TOKEN || secrets.GITHUB_TOKEN }}
+          id: ${{ needs.get-release-id.outputs.release_id }}
+          prerelease: false
