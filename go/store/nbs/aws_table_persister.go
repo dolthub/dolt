@@ -94,7 +94,11 @@ func (s3p awsTablePersister) Open(ctx context.Context, name hash.Hash, chunkCoun
 		return emptyChunkSource{}, err
 	}
 
-	e, err2 := s3p.Exists(ctx, name.String()+ArchiveFileSuffix, chunkCount, stats)
+	archiveKey := name.String() + ArchiveFileSuffix
+	if s3p.ns != "" {
+		archiveKey = s3p.ns + "/" + archiveKey
+	}
+	e, err2 := s3p.Exists(ctx, archiveKey, chunkCount, stats)
 	if e && err2 == nil {
 		return newAWSArchiveChunkSource(
 			ctx,
