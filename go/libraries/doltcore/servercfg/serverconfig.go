@@ -281,10 +281,10 @@ func ValidateConfig(config ServerConfig) error {
 	if config.LogLevel().String() == "unknown" {
 		return fmt.Errorf("loglevel is invalid: %v\n", string(config.LogLevel()))
 	}
-	if strings.ToLower(fmt.Sprintf("%v", config.LogFormat())) != "text" && 
-		strings.ToLower(fmt.Sprintf("%v", config.LogFormat())) != "json" {
-	 return fmt.Errorf("logformat is invalid: %v\n", config.LogFormat())
- 	}
+	if strings.ToLower(fmt.Sprintf("%v", config.LogFormat())) != string(LogFormat_Text) &&
+		strings.ToLower(fmt.Sprintf("%v", config.LogFormat())) != string(LogFormat_JSON) {
+		return fmt.Errorf("logformat is invalid: %v\n", config.LogFormat())
+	}
 	if config.RequireSecureTransport() && config.TLSCert() == "" && config.TLSKey() == "" {
 		return fmt.Errorf("require_secure_transport can only be `true` when a tls_key and tls_cert are provided.")
 	}

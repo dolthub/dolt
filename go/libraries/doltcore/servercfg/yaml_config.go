@@ -127,7 +127,7 @@ type UserSessionVars struct {
 // YAMLConfig is a ServerConfig implementation which is read from a yaml file
 type YAMLConfig struct {
 	LogLevelStr       *string                `yaml:"log_level,omitempty"`
-	LogFormatStr      *string                `yaml:"log_format,omitempty"`
+	LogFormatStr      *string                `yaml:"log_format,omitempty" minver:"TBD"`
 	MaxQueryLenInLogs *int                   `yaml:"max_logged_query_len,omitempty"`
 	EncodeLoggedQuery *bool                  `yaml:"encode_logged_query,omitempty"`
 	BehaviorConfig    BehaviorYAMLConfig     `yaml:"behavior,omitempty"`
@@ -253,7 +253,7 @@ func ServerConfigSetValuesAsYAMLConfig(cfg ServerConfig) *YAMLConfig {
 
 	return &YAMLConfig{
 		LogLevelStr:       zeroIf(ptr(string(cfg.LogLevel())), !cfg.ValueSet(LogLevelKey)),
-		LogFormatStr: 	   zeroIf(ptr(string(cfg.LogFormat())), !cfg.ValueSet(LogFormatKey)),
+		LogFormatStr:      zeroIf(ptr(string(cfg.LogFormat())), !cfg.ValueSet(LogFormatKey)),
 		MaxQueryLenInLogs: zeroIf(ptr(cfg.MaxLoggedQueryLen()), !cfg.ValueSet(MaxLoggedQueryLenKey)),
 		EncodeLoggedQuery: zeroIf(ptr(cfg.ShouldEncodeLoggedQuery()), !cfg.ValueSet(ShouldEncodeLoggedQueryKey)),
 		BehaviorConfig: BehaviorYAMLConfig{
@@ -637,6 +637,7 @@ func (cfg YAMLConfig) LogLevel() LogLevel {
 
 	return LogLevel(*cfg.LogLevelStr)
 }
+
 // LogFormatStr returns the log format that the server will use.
 func (cfg YAMLConfig) LogFormat() LogFormat {
 	if cfg.LogFormatStr == nil {

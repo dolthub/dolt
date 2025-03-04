@@ -36,7 +36,7 @@ type commandLineServerConfig struct {
 	timeout                 uint64
 	readOnly                bool
 	logLevel                servercfg.LogLevel
-	logFormat				servercfg.LogFormat
+	logFormat               servercfg.LogFormat
 	dataDir                 string
 	cfgDir                  string
 	autoCommit              bool
@@ -147,7 +147,7 @@ func NewCommandLineConfig(creds *cli.UserPassword, apr *argparser.ArgParseResult
 	}
 	if logFormat, ok := apr.GetValue(logFormatFlag); ok {
 		config.withLogFormat(servercfg.LogFormat(strings.ToLower(logFormat)))
-	}	
+	}
 
 	if dataDir, ok := apr.GetValue(commands.MultiDBDirFlag); ok {
 		config.withDataDir(dataDir)
@@ -409,6 +409,7 @@ func (cfg *commandLineServerConfig) withLogLevel(loglevel servercfg.LogLevel) *c
 	cfg.valuesSet[servercfg.LogLevelKey] = struct{}{}
 	return cfg
 }
+
 // withLogFormat updates the log format and returns the called `*commandLineServerConfig`, which is useful for chaining calls.
 func (cfg *commandLineServerConfig) withLogFormat(logformat servercfg.LogFormat) *commandLineServerConfig {
 	cfg.logFormat = logformat

@@ -123,12 +123,13 @@ func ConfigureServices(
 				return err
 			}
 			logrus.SetLevel(level)
-			format := strings.ToLower(fmt.Sprintf("%v", serverConfig.LogFormat())) 
-			switch format {
-			case "json":
+			switch strings.ToLower(string(serverConfig.LogFormat())) {
+			case string(servercfg.LogFormat_JSON):
 				logrus.SetFormatter(&logrus.JSONFormatter{})
-			default:
+			case string(servercfg.LogFormat_Text):
 				logrus.SetFormatter(&logrus.TextFormatter{})
+			default:
+				return fmt.Errorf("unknown log format: %s", serverConfig.LogFormat())
 			}
 
 			sql.SystemVariables.AddSystemVariables([]sql.SystemVariable{
