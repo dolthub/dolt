@@ -15,15 +15,16 @@
 package tree
 
 import (
+	"bytes"
 	"context"
 	"sync"
-
-	"github.com/dolthub/dolt/go/store/prolly/message"
 
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/pool"
+	"github.com/dolthub/dolt/go/store/prolly/message"
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 const (
@@ -32,6 +33,8 @@ const (
 
 // NodeStore reads and writes prolly tree Nodes.
 type NodeStore interface {
+	val.ValueStore
+
 	// Read reads a prolly tree Node from the store.
 	Read(ctx context.Context, ref hash.Hash) (Node, error)
 
@@ -49,6 +52,12 @@ type NodeStore interface {
 
 	BlobBuilder() *BlobBuilder
 	PutBlobBuilder(*BlobBuilder)
+
+	// Delete any cached chunks associated with this NodeStore.
+	// Used by GC during safepoint establishment to ensure deleted
+	// chunks do not float around in the application layer after GC
+	// completes.
+	PurgeCaches()
 }
 
 type nodeStore struct {
@@ -194,3 +203,18 @@ func (ns nodeStore) Format() *types.NomsBinFormat {
 	}
 	return nbf
 }
+
+func (ns nodeStore) PurgeCaches() {
+	ns.cache.purge()
+}
+
+func (ns nodeStore) ReadBytes(ctx context.Context, h hash.Hash) ([]byte, error) {
+	return NewByteArray(h, ns).ToBytes(ctx)
+}
+
+func (ns nodeStore) WriteBytes(ctx context.Context, b []byte) (hash.Hash, error) {
+	_, h, err := SerializeBytesToAddr(ctx, ns, bytes.NewReader(b), len(b))
+	return h, err
+}
+
+var _ val.ValueStore = nodeStore{}

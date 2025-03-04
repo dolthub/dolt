@@ -15,6 +15,8 @@
 package nbs
 
 import (
+	"context"
+	"errors"
 	"os"
 	"path/filepath"
 
@@ -22,34 +24,38 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
-type StorageType int
-
-const (
-	Journal StorageType = iota
-	TableFileNewGen
-	TableFileOldGen
-	Archive
-)
-
 type ArchiveMetadata struct {
 	originalTableFileId string
 }
 
+type TableFileFormat int
+
+const (
+	TypeNoms TableFileFormat = iota
+	TypeArchive
+)
+
 type StorageArtifact struct {
-	id          hash.Hash
-	path        string
-	storageType StorageType
+	// ID of the storage artifact. This is uses in the manifest to identify the artifact, but it is not the file name.
+	// as archives has a suffix.
+	id hash.Hash
+	// path to the storage artifact.
+	path string
+	// storageType is the type of the storage artifact.
+	storageType TableFileFormat
+	// arcMetadata is additional metadata for archive files. it is only set for storageType == TypeArchive.
 	arcMetadata *ArchiveMetadata
 }
 
 type StorageMetadata struct {
+	// root is the path to storage. Specifically, it contains a .dolt directory.
 	root      string
 	artifacts []StorageArtifact
 }
 
 func (sm *StorageMetadata) ArchiveFilesPresent() bool {
 	for _, artifact := range sm.artifacts {
-		if artifact.storageType == Archive {
+		if artifact.storageType == TypeArchive {
 			return true
 		}
 	}
@@ -60,7 +66,7 @@ func (sm *StorageMetadata) ArchiveFilesPresent() bool {
 func (sm *StorageMetadata) RevertMap() map[hash.Hash]hash.Hash {
 	revertMap := make(map[hash.Hash]hash.Hash)
 	for _, artifact := range sm.artifacts {
-		if artifact.storageType == Archive {
+		if artifact.storageType == TypeArchive {
 			md := artifact.arcMetadata
 			revertMap[artifact.id] = hash.Parse(md.originalTableFileId)
 		}
@@ -68,6 +74,8 @@ func (sm *StorageMetadata) RevertMap() map[hash.Hash]hash.Hash {
 	return revertMap
 }
 
+// oldGenTableExists returns true if the table file exists in the oldgen directory. This is a file system check for
+// a table file we have no record of, but may be useful in the process of reverting an archive operation.
 func (sm *StorageMetadata) oldGenTableExists(id hash.Hash) (bool, error) {
 	path := filepath.Join(sm.root, ".dolt", "noms", "oldgen", id.String())
 	_, err := os.Stat(path)
@@ -82,26 +90,15 @@ func (sm *StorageMetadata) oldGenTableExists(id hash.Hash) (bool, error) {
 
 // GetStorageMetadata returns metadata about the local filesystem storage for a single database. The path given must be
 // the path to DB directory - ie, containing the .dolt directory.
-func GetStorageMetadata(path string) (StorageMetadata, error) {
+func GetStorageMetadata(ctx context.Context, path string, stats *Stats) (StorageMetadata, error) {
 	err := validateDir(path)
 	if err != nil {
 		return StorageMetadata{}, err
 	}
 
-	// TODO: new gen and journal information in storage metadata will be useful in the future.
-	//	newGen := filepath.Join(path, ".dolt", "noms")
-	//	newgenManifest := filepath.Join(newGen, "manifest")
-
-	oldgen := filepath.Join(path, ".dolt", "noms", "oldgen")
-	oldgenManifest := filepath.Join(oldgen, "manifest")
-
-	// If there is not oldgen manifest, then GC has never been run. Which is fine. We just don't have any oldgen.
-	if _, err := os.Stat(oldgenManifest); err != nil {
-		return StorageMetadata{}, nil
-	}
-
-	// create a io.Reader for the manifest file
-	manifestReader, err := os.Open(oldgenManifest)
+	newGen := filepath.Join(path, ".dolt", "noms")
+	newgenManifest := filepath.Join(newGen, "manifest")
+	manifestReader, err := os.Open(newgenManifest)
 	if err != nil {
 		return StorageMetadata{}, err
 	}
@@ -116,51 +113,88 @@ func GetStorageMetadata(path string) (StorageMetadata, error) {
 	// for each table in the manifest, get the table spec
 	for i := 0; i < manifest.NumTableSpecs(); i++ {
 		tableSpecInfo := manifest.GetTableSpecInfo(i)
-
-		// If the oldgen/name exists, it's not an archive. If it exists with a .darc suffix, then it's an archive.
-		tfName := tableSpecInfo.GetName()
-		fullPath := filepath.Join(oldgen, tfName)
-		_, err := os.Stat(fullPath)
-		if err == nil {
-			// exists.  Not an archive.
-			artifacts = append(artifacts, StorageArtifact{
-				id:          hash.Parse(tfName),
-				path:        fullPath,
-				storageType: TableFileOldGen,
-			})
-		} else if os.IsNotExist(err) {
-			arcName := tfName + ".darc"
-			arcPath := filepath.Join(oldgen, arcName)
-			_, err := os.Stat(arcPath)
-			if err == nil {
-				// reader for the path. State. call
-				reader, fileSize, err := openReader(arcPath)
-				if err != nil {
-					return StorageMetadata{}, err
-				}
-
-				arcMetadata, err := newArchiveMetadata(reader, fileSize)
-				if err != nil {
-					return StorageMetadata{}, err
-				}
-
-				artifacts = append(artifacts, StorageArtifact{
-					id:          hash.Parse(tfName),
-					path:        arcPath,
-					storageType: Archive,
-					arcMetadata: arcMetadata,
-				})
-			} else {
-				// any error is bad here. If the files don't exist, then the manifest is no good.
-				return StorageMetadata{}, err
-			}
-		} else {
-			// some other error.
+		artifact, err := buildArtifact(ctx, tableSpecInfo, newGen, stats)
+		if err != nil {
 			return StorageMetadata{}, err
 		}
+		artifacts = append(artifacts, artifact)
+	}
+
+	oldgen := filepath.Join(newGen, "oldgen")
+	oldgenManifest := filepath.Join(oldgen, "manifest")
+
+	// If there is no oldgen manifest, then GC has never been run. Which is fine. We just don't have any oldgen.
+	if _, err := os.Stat(oldgenManifest); err != nil {
+		return StorageMetadata{path, artifacts}, nil
+	}
+
+	manifestReader, err = os.Open(oldgenManifest)
+	if err != nil {
+		return StorageMetadata{}, err
+	}
+	manifest, err = ParseManifest(manifestReader)
+	if err != nil {
+		return StorageMetadata{}, err
+	}
+
+	for i := 0; i < manifest.NumTableSpecs(); i++ {
+		tableSpecInfo := manifest.GetTableSpecInfo(i)
+
+		artifact, err := buildArtifact(ctx, tableSpecInfo, oldgen, stats)
+		if err != nil {
+			return StorageMetadata{}, err
+		}
+		artifacts = append(artifacts, artifact)
 	}
 
 	return StorageMetadata{path, artifacts}, nil
+}
+
+func buildArtifact(ctx context.Context, info TableSpecInfo, genPath string, stats *Stats) (StorageArtifact, error) {
+	tfName := info.GetName()
+
+	// This code is going to be removed as soon as backup supports archives.
+	archive := false
+	fullPath := filepath.Join(genPath, tfName)
+
+	_, err := os.Stat(fullPath)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			fullPath = filepath.Join(genPath, tfName+ArchiveFileSuffix)
+		} else {
+			return StorageArtifact{}, err
+		}
+		_, err = os.Stat(fullPath)
+		if err != nil {
+			return StorageArtifact{}, err
+		}
+		archive = true
+	}
+
+	if !archive {
+		return StorageArtifact{
+			id:          hash.Parse(tfName),
+			path:        fullPath,
+			storageType: TypeNoms,
+		}, nil
+	} else {
+		fra, err := newFileReaderAt(fullPath)
+		if err != nil {
+			return StorageArtifact{}, err
+		}
+
+		arcMetadata, err := newArchiveMetadata(ctx, fra, uint64(fra.sz), stats)
+		if err != nil {
+			return StorageArtifact{}, err
+		}
+
+		return StorageArtifact{
+			id:          hash.Parse(tfName),
+			path:        fullPath,
+			storageType: TypeArchive,
+			arcMetadata: arcMetadata,
+		}, nil
+	}
 }
 
 func validateDir(path string) error {

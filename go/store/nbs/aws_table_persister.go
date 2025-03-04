@@ -33,6 +33,7 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3iface"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
@@ -67,8 +68,10 @@ type awsLimits struct {
 	partTarget, partMin, partMax uint64
 }
 
+// Open takes the named object, and returns a chunkSource for it. This function works for both table files and archive
+// files. If the table file doesn't exist, but |name| + ".darc" does, then an archive chunk source is returned instead.
 func (s3p awsTablePersister) Open(ctx context.Context, name hash.Hash, chunkCount uint32, stats *Stats) (chunkSource, error) {
-	return newAWSChunkSource(
+	cs, err := newAWSTableFileChunkSource(
 		ctx,
 		&s3ObjectReader{s3: s3p.s3, bucket: s3p.bucket, readRl: s3p.rl, ns: s3p.ns},
 		s3p.limits,
@@ -77,18 +80,39 @@ func (s3p awsTablePersister) Open(ctx context.Context, name hash.Hash, chunkCoun
 		s3p.q,
 		stats,
 	)
+	if err == nil {
+		return cs, nil
+	}
+
+	// errors.Is doesn't work with aws errors
+	reqErr, ok := err.(awserr.RequestFailure)
+	if !ok {
+		// Probably won't ever happen.
+		return emptyChunkSource{}, err
+	}
+	if reqErr.Code() != "NoSuchKey" || reqErr.StatusCode() != 404 {
+		return emptyChunkSource{}, err
+	}
+
+	e, err2 := s3p.Exists(ctx, name.String()+ArchiveFileSuffix, chunkCount, stats)
+	if e && err2 == nil {
+		return newAWSArchiveChunkSource(
+			ctx,
+			&s3ObjectReader{s3: s3p.s3, bucket: s3p.bucket, readRl: s3p.rl, ns: s3p.ns},
+			s3p.limits,
+			name.String()+ArchiveFileSuffix,
+			chunkCount,
+			s3p.q,
+			stats)
+	}
+
+	return emptyChunkSource{}, err
 }
 
-func (s3p awsTablePersister) Exists(ctx context.Context, name hash.Hash, chunkCount uint32, stats *Stats) (bool, error) {
-	return tableExistsInChunkSource(
-		ctx,
-		&s3ObjectReader{s3: s3p.s3, bucket: s3p.bucket, readRl: s3p.rl, ns: s3p.ns},
-		s3p.limits,
-		name,
-		chunkCount,
-		s3p.q,
-		stats,
-	)
+func (s3p awsTablePersister) Exists(ctx context.Context, name string, _ uint32, stats *Stats) (bool, error) {
+	s3or := &s3ObjectReader{s3: s3p.s3, bucket: s3p.bucket, readRl: s3p.rl, ns: s3p.ns}
+
+	return s3or.objectExistsInChunkSource(ctx, name, stats)
 }
 
 func (s3p awsTablePersister) CopyTableFile(ctx context.Context, r io.Reader, fileId string, fileSz uint64, chunkCount uint32) error {
@@ -134,7 +158,7 @@ func (s3p awsTablePersister) Persist(ctx context.Context, mt *memTable, haver ch
 		return emptyChunkSource{}, gcBehavior_Continue, err
 	}
 
-	tra := &s3TableReaderAt{&s3ObjectReader{s3: s3p.s3, bucket: s3p.bucket, readRl: s3p.rl, ns: s3p.ns}, name}
+	tra := &s3TableReaderAt{&s3ObjectReader{s3: s3p.s3, bucket: s3p.bucket, readRl: s3p.rl, ns: s3p.ns}, name.String()}
 	src, err := newReaderFromIndexData(ctx, s3p.q, data, name, tra, s3BlockSize)
 	if err != nil {
 		return emptyChunkSource{}, gcBehavior_Continue, err
@@ -229,7 +253,7 @@ func (s3p awsTablePersister) ConjoinAll(ctx context.Context, sources chunkSource
 
 	verbose.Logger(ctx).Sugar().Debugf("Compacted table of %d Kb in %s", plan.totalCompressedData/1024, time.Since(t1))
 
-	tra := &s3TableReaderAt{&s3ObjectReader{s3: s3p.s3, bucket: s3p.bucket, readRl: s3p.rl, ns: s3p.ns}, name}
+	tra := &s3TableReaderAt{&s3ObjectReader{s3: s3p.s3, bucket: s3p.bucket, readRl: s3p.rl, ns: s3p.ns}, name.String()}
 	cs, err := newReaderFromIndexData(ctx, s3p.q, plan.mergedIndex, name, tra, s3BlockSize)
 	return cs, func() {}, err
 }
@@ -463,7 +487,7 @@ func splitOnMaxSize(dataLen, maxPartSize uint64) []int64 {
 func (s3p awsTablePersister) uploadPartCopy(ctx context.Context, src string, srcStart, srcEnd int64, key, uploadID string, partNum int64) (etag string, err error) {
 	res, err := s3p.s3.UploadPartCopyWithContext(ctx, &s3.UploadPartCopyInput{
 		CopySource:      aws.String(url.PathEscape(s3p.bucket + "/" + s3p.key(src))),
-		CopySourceRange: aws.String(s3RangeHeader(srcStart, srcEnd)),
+		CopySourceRange: aws.String(httpRangeHeader(srcStart, srcEnd)),
 		Bucket:          aws.String(s3p.bucket),
 		Key:             aws.String(s3p.key(key)),
 		PartNumber:      aws.Int64(int64(partNum)),

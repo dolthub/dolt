@@ -257,6 +257,17 @@ func ConfigureServices(
 	}
 	controller.Register(InitEventSchedulerStatus)
 
+	InitAutoGCController := &svcs.AnonService{
+		InitF: func(context.Context) error {
+			if serverConfig.AutoGCBehavior() != nil &&
+				serverConfig.AutoGCBehavior().Enable() {
+				config.AutoGCController = sqle.NewAutoGCController(lgr)
+			}
+			return nil
+		},
+	}
+	controller.Register(InitAutoGCController)
+
 	var sqlEngine *engine.SqlEngine
 	InitSqlEngine := &svcs.AnonService{
 		InitF: func(ctx context.Context) (err error) {
@@ -652,6 +663,7 @@ func ConfigureServices(
 				mySQLServer, err = server.NewServerWithHandler(
 					serverConf,
 					sqlEngine.GetUnderlyingEngine(),
+					sql.NewContext,
 					newSessionBuilder(sqlEngine, serverConfig),
 					metListener,
 					func(h mysql.Handler) (mysql.Handler, error) {
@@ -662,6 +674,7 @@ func ConfigureServices(
 				mySQLServer, err = server.NewServer(
 					serverConf,
 					sqlEngine.GetUnderlyingEngine(),
+					sql.NewContext,
 					newSessionBuilder(sqlEngine, serverConfig),
 					metListener,
 				)

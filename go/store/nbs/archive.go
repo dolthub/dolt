@@ -27,7 +27,7 @@ Chunks from the Archive.
 ByteSpans are arbitrary offset/lengths into the file which store (1) zstd dictionary data, and (2) compressed chunk
 data. Each Chunk is stored as a pair of ByteSpans (dict,data). Dictionary ByteSpans can (should) be used by multiple
 Chunks, so there are more ByteSpans than Chunks. The Index is used to map Chunks to ByteSpan pairs. These pairs are
-called  ChunkRefs, and were store them as [uint32,uint32] on disk. This allows us to quickly find the ByteSpans for a
+called  ChunkRefs, and we store them as [uint32,uint32] on disk. This allows us to quickly find the ByteSpans for a
 given Chunk with minimal processing at load time.
 
 A Dolt Archive file follows the following format:
@@ -162,7 +162,7 @@ const (
 		archiveCheckSumSize +
 		1 + // version byte
 		archiveFileSigSize
-	archiveFileSuffix = ".darc"
+	ArchiveFileSuffix = ".darc"
 )
 
 /*

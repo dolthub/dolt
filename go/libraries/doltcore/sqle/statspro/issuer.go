@@ -155,6 +155,10 @@ func (sc *StatsController) newStatsForRoot(baseCtx context.Context, gcKv *memSta
 	if err != nil {
 		return nil, err
 	}
+	
+	sql.SessionCommandBegin(ctx.Session)
+	defer sql.SessionCommandEnd(ctx.Session)
+	defer sql.SessionEnd(ctx.Session)
 
 	dSess := dsess.DSessFromSess(ctx.Session)
 	dbs := dSess.Provider().AllDatabases(ctx)

@@ -111,7 +111,7 @@ func (cmd LoginCmd) Exec(ctx context.Context, commandStr string, args []string, 
 		var err error
 		authHost, authPort, err = net.SplitHostPort(authEndpoint)
 		if err != nil {
-			HandleVErrAndExitCode(errhand.BuildDError(fmt.Sprintf("unable to parse auth-endpoint: '%s'", authEndpoint)).AddCause(err).Build(), usage)
+			HandleVErrAndExitCode(errhand.BuildDError("unable to parse auth-endpoint: '%s'", authEndpoint).AddCause(err).Build(), usage)
 		}
 		authEndpoint = fmt.Sprintf("%s:%s", authHost, authPort)
 	} else {
@@ -132,7 +132,7 @@ func (cmd LoginCmd) Exec(ctx context.Context, commandStr string, args []string, 
 		insecureStr := dEnv.Config.GetStringOrDefault(config.DoltLabInsecureKey, "false")
 		insecure, err = strconv.ParseBool(insecureStr)
 		if err != nil {
-			HandleVErrAndExitCode(errhand.BuildDError(fmt.Sprintf("The config value of '%s' is '%s' which is not a valid true/false value", config.DoltLabInsecureKey, insecureStr)).Build(), usage)
+			HandleVErrAndExitCode(errhand.BuildDError("The config value of '%s' is '%s' which is not a valid true/false value", config.DoltLabInsecureKey, insecureStr).Build(), usage)
 		}
 	}
 
@@ -216,7 +216,7 @@ func loginWithCreds(ctx context.Context, dEnv *env.DoltEnv, dc creds.DoltCreds, 
 	p := cli.NewEphemeralPrinter()
 	linePrinter := func() func(line string) {
 		return func(line string) {
-			p.Printf(line + "\n")
+			p.Printf("%s\n", line)
 			p.Display()
 		}
 	}()

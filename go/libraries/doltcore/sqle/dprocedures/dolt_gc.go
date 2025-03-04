@@ -27,6 +27,7 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
@@ -37,15 +38,13 @@ const (
 	cmdSuccess = 0
 )
 
-var useSessionAwareSafepointController bool
-
 func init() {
 	if os.Getenv(dconfig.EnvDisableGcProcedure) != "" {
 		DoltGCFeatureFlag = false
 	}
 	if choice := os.Getenv(dconfig.EnvGCSafepointControllerChoice); choice != "" {
 		if choice == "session_aware" {
-			useSessionAwareSafepointController = true
+			UseSessionAwareSafepointController = true
 		} else if choice != "kill_connections" {
 			panic("Invalid value for " + dconfig.EnvGCSafepointControllerChoice + ". must be session_aware or kill_connections")
 		}
@@ -53,6 +52,7 @@ func init() {
 }
 
 var DoltGCFeatureFlag = true
+var UseSessionAwareSafepointController = false
 
 // doltGC is the stored procedure to run online garbage collection on a database.
 func doltGC(ctx *sql.Context, args ...string) (sql.RowIter, error) {
@@ -73,10 +73,12 @@ var ErrServerPerformedGC = errors.New("this connection was established when this
 // invalidated in such a way that all future queries on it return an error.
 type killConnectionsSafepointController struct {
 	callCtx   *sql.Context
+	doltDB    *doltdb.DoltDB
 	origEpoch int
 }
 
 func (sc killConnectionsSafepointController) BeginGC(ctx context.Context, keeper func(hash.Hash) bool) error {
+	sc.doltDB.PurgeCaches()
 	return nil
 }
 
@@ -127,23 +129,24 @@ func (sc killConnectionsSafepointController) EstablishPostFinalizeSafepoint(ctx 
 	params := backoff.NewExponentialBackOff()
 	params.InitialInterval = 1 * time.Millisecond
 	params.MaxInterval = 25 * time.Millisecond
-	params.MaxElapsedTime = 3 * time.Second
+	params.MaxElapsedTime = 10 * time.Second
+	var unkilled map[uint32]struct{}
 	err = backoff.Retry(func() error {
+		unkilled = make(map[uint32]struct{})
 		processes := sc.callCtx.ProcessList.Processes()
-		allgood := true
 		for _, p := range processes {
 			if _, ok := killed[p.Connection]; ok {
-				allgood = false
+				unkilled[p.Connection] = struct{}{}
 				sc.callCtx.ProcessList.Kill(p.Connection)
 			}
 		}
-		if !allgood {
-			return errors.New("unable to establish safepoint.")
+		if len(unkilled) > 0 {
+			return errors.New("could not establish safepont")
 		}
 		return nil
 	}, params)
 	if err != nil {
-		return err
+		return fmt.Errorf("%w: still saw these connections in the process list: %v", err, unkilled)
 	}
 	sc.callCtx.Session.SetTransaction(nil)
 	dsess.DSessFromSess(sc.callCtx.Session).SetValidateErr(ErrServerPerformedGC)
@@ -154,26 +157,28 @@ func (sc killConnectionsSafepointController) CancelSafepoint() {
 }
 
 type sessionAwareSafepointController struct {
-	controller *dsess.GCSafepointController
-	callCtx    *sql.Context
-	origEpoch  int
+	controller  *dsess.GCSafepointController
+	dbname      string
+	callSession *dsess.DoltSession
+	origEpoch   int
+	doltDB      *doltdb.DoltDB
 
 	waiter *dsess.GCSafepointWaiter
 	keeper func(hash.Hash) bool
 }
 
 func (sc *sessionAwareSafepointController) visit(ctx context.Context, sess *dsess.DoltSession) error {
-	return sess.VisitGCRoots(ctx, sc.callCtx.GetCurrentDatabase(), sc.keeper)
+	return sess.VisitGCRoots(ctx, sc.dbname, sc.keeper)
 }
 
 func (sc *sessionAwareSafepointController) BeginGC(ctx context.Context, keeper func(hash.Hash) bool) error {
+	sc.doltDB.PurgeCaches()
 	sc.keeper = keeper
-	thisSess := dsess.DSessFromSess(sc.callCtx.Session)
-	err := sc.visit(ctx, thisSess)
+	err := sc.visit(ctx, sc.callSession)
 	if err != nil {
 		return err
 	}
-	sc.waiter = sc.controller.Waiter(ctx, thisSess, sc.visit)
+	sc.waiter = sc.controller.Waiter(ctx, sc.callSession, sc.visit)
 	return nil
 }
 
@@ -182,7 +187,7 @@ func (sc *sessionAwareSafepointController) EstablishPreFinalizeSafepoint(ctx con
 }
 
 func (sc *sessionAwareSafepointController) EstablishPostFinalizeSafepoint(ctx context.Context) error {
-	return checkEpochSame(sc.origEpoch)
+	return nil
 }
 
 func (sc *sessionAwareSafepointController) CancelSafepoint() {
@@ -226,48 +231,53 @@ func doDoltGC(ctx *sql.Context, args []string) (int, error) {
 			return cmdFailure, err
 		}
 	} else {
-		// Currently, if this server is involved in cluster
-		// replication, a full GC is only safe to run on the primary.
-		// We assert that we are the primary here before we begin, and
-		// we assert again that we are the primary at the same epoch as
-		// we establish the safepoint.
-		origepoch := -1
-		if _, role, ok := sql.SystemVariables.GetGlobal(dsess.DoltClusterRoleVariable); ok {
-			// TODO: magic constant...
-			if role.(string) != "primary" {
-				return cmdFailure, fmt.Errorf("cannot run a full dolt_gc() while cluster replication is enabled and role is %s; must be the primary", role.(string))
-			}
-			_, epoch, ok := sql.SystemVariables.GetGlobal(dsess.DoltClusterRoleEpochVariable)
-			if !ok {
-				return cmdFailure, fmt.Errorf("internal error: cannot run a full dolt_gc(); cluster replication is enabled but could not read %s", dsess.DoltClusterRoleEpochVariable)
-			}
-			origepoch = epoch.(int)
-		}
-
 		var mode types.GCMode = types.GCModeDefault
 		if apr.Contains(cli.FullFlag) {
 			mode = types.GCModeFull
 		}
 
-		var sc types.GCSafepointController
-		if useSessionAwareSafepointController {
-			gcSafepointController := dSess.GCSafepointController()
-			sc = &sessionAwareSafepointController{
-				origEpoch:  origepoch,
-				callCtx:    ctx,
-				controller: gcSafepointController,
-			}
-		} else {
-			sc = killConnectionsSafepointController{
-				origEpoch: origepoch,
-				callCtx:   ctx,
-			}
-		}
-		err = ddb.GC(ctx, mode, sc)
+		err := RunDoltGC(ctx, ddb, mode, ctx.GetCurrentDatabase())
 		if err != nil {
 			return cmdFailure, err
 		}
 	}
 
 	return cmdSuccess, nil
+}
+
+func RunDoltGC(ctx *sql.Context, ddb *doltdb.DoltDB, mode types.GCMode, dbname string) error {
+	var sc types.GCSafepointController
+	if UseSessionAwareSafepointController {
+		dSess := dsess.DSessFromSess(ctx.Session)
+		gcSafepointController := dSess.GCSafepointController()
+		sc = &sessionAwareSafepointController{
+			callSession: dSess,
+			dbname:      dbname,
+			controller:  gcSafepointController,
+			doltDB:      ddb,
+		}
+	} else {
+		// Legacy safepoint controller behavior was to not
+		// allow GC on a standby server. GC on a standby server
+		// with killConnections safepoints should be safe now,
+		// but we retain this legacy behavior for now.
+		origepoch := -1
+		if _, role, ok := sql.SystemVariables.GetGlobal(dsess.DoltClusterRoleVariable); ok {
+			// TODO: magic constant...
+			if role.(string) != "primary" {
+				return fmt.Errorf("cannot run a full dolt_gc() while cluster replication is enabled and role is %s; must be the primary", role.(string))
+			}
+			_, epoch, ok := sql.SystemVariables.GetGlobal(dsess.DoltClusterRoleEpochVariable)
+			if !ok {
+				return fmt.Errorf("internal error: cannot run a full dolt_gc(); cluster replication is enabled but could not read %s", dsess.DoltClusterRoleEpochVariable)
+			}
+			origepoch = epoch.(int)
+		}
+		sc = killConnectionsSafepointController{
+			origEpoch: origepoch,
+			callCtx:   ctx,
+			doltDB:    ddb,
+		}
+	}
+	return ddb.GC(ctx, mode, sc)
 }

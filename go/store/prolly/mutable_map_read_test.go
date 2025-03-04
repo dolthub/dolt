@@ -125,7 +125,7 @@ func makeMutableMap(t *testing.T, count int) (testMap, [][2]val.Tuple) {
 		val.Type{Enc: val.Uint32Enc, Nullable: true},
 	)
 
-	tuples := tree.RandomTuplePairs(count, kd, vd, ns)
+	tuples := tree.RandomTuplePairs(ctx, count, kd, vd, ns)
 	// 2/3 of tuples in Map
 	// 1/3 of tuples in memoryMap
 	clone := tree.CloneRandomTuples(tuples)
@@ -134,8 +134,8 @@ func makeMutableMap(t *testing.T, count int) (testMap, [][2]val.Tuple) {
 
 	mapTuples := clone[:split]
 	memTuples := clone[split:]
-	tree.SortTuplePairs(mapTuples, kd)
-	tree.SortTuplePairs(memTuples, kd)
+	tree.SortTuplePairs(ctx, mapTuples, kd)
+	tree.SortTuplePairs(ctx, memTuples, kd)
 
 	serializer := message.NewProllyMapSerializer(vd, ns.Pool())
 	chunker, err := tree.NewEmptyChunker(ctx, ns, serializer)
@@ -163,6 +163,7 @@ func makeMutableSecondaryIndex(t *testing.T, count int) (testMap, [][2]val.Tuple
 }
 
 func deleteFromMutableMap(mut *MutableMap, tt [][2]val.Tuple) (*MutableMap, [][2]val.Tuple, [][2]val.Tuple) {
+	ctx := context.Background()
 	count := len(tt)
 	testRand.Shuffle(count, func(i, j int) {
 		tt[i], tt[j] = tt[j], tt[i]
@@ -174,9 +175,8 @@ func deleteFromMutableMap(mut *MutableMap, tt [][2]val.Tuple) (*MutableMap, [][2
 	// re-sort the remaining tuples
 	remaining := tt[count/4:]
 	desc := keyDescFromMap(mut)
-	tree.SortTuplePairs(remaining, desc)
+	tree.SortTuplePairs(ctx, remaining, desc)
 
-	ctx := context.Background()
 	for _, kv := range deletes {
 		if err := mut.Delete(ctx, kv[0]); err != nil {
 			panic(err)

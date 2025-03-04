@@ -578,7 +578,7 @@ func PrintCommitInfo(pager *outputpager.Pager, minParents int, showParents, show
 	if len(comm.parentHashes) > 1 {
 		pager.Writer.Write([]byte(fmt.Sprintf("\nMerge:")))
 		for _, h := range comm.parentHashes {
-			pager.Writer.Write([]byte(fmt.Sprintf(" " + h)))
+			pager.Writer.Write([]byte(" " + h))
 		}
 	}
 

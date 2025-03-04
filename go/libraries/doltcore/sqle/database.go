@@ -725,6 +725,14 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 		if !resolve.UseSearchPath || isDoltgresSystemTable {
 			dt, found = dtables.NewHelpTable(ctx, db.Name(), lwrName), true
 		}
+	case doltdb.GetBackupsTableName(), doltdb.BackupsTableName:
+		isDoltgresSystemTable, err := resolve.IsDoltgresSystemTable(ctx, tname, root)
+		if err != nil {
+			return nil, false, err
+		}
+		if !resolve.UseSearchPath || isDoltgresSystemTable {
+			dt, found = dtables.NewBackupsTable(db, lwrName), true
+		}
 	}
 
 	if found {
@@ -1556,7 +1564,7 @@ func (db Database) createDoltTable(ctx *sql.Context, tableName string, schemaNam
 	})
 
 	if len(conflictingTbls) > 0 {
-		return fmt.Errorf(strings.Join(conflictingTbls, "\n"))
+		return fmt.Errorf("%s", strings.Join(conflictingTbls, "\n"))
 	}
 
 	newRoot, err := doltdb.CreateEmptyTable(ctx, root, doltdb.TableName{Name: tableName, Schema: schemaName}, doltSch)

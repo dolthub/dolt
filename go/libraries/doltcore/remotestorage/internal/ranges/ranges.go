@@ -21,18 +21,27 @@ import (
 	"github.com/google/btree"
 )
 
-// GetRange represents a way to get the contents for a Chunk from a given Url
-// with an HTTP Range request. The chunk with hash |Hash| can be fetched using
+// GetRange represents a range of remote data that has semantic meaning to the
+// ChunkFetcher. These ranges are currently either Chunks, or Dictionaries.
+// They can be fetched from the remote URL with an HTTP Range request.
+// For a chunk range, the chunk with hash |Hash| can be fetched using
 // the |Url| with a Range request starting at |Offset| and reading |Length|
-// bytes.
+// bytes. A Dictionary does not have a meaningful Hash, but its identity is
+// unique for a Url and Offset.
 //
 // A |GetRange| struct is a member of a |Region| in the |RegionHeap|.
+//
+// Chunk |GetRange|s which depend on Dictionaries can be constructed with
+// some state which allows them to fetch those dictionaries from a shared
+// chache when they need them. That is their GetDict callback.
 type GetRange struct {
-	Url    string
-	Hash   []byte
-	Offset uint64
-	Length uint32
-	Region *Region
+	Url        string
+	Hash       []byte
+	Offset     uint64
+	Length     uint32
+	DictOffset uint64
+	DictLength uint32
+	Region     *Region
 }
 
 // A |Region| represents a continuous range of bytes within in a Url.
@@ -145,12 +154,14 @@ func (t *Tree) Len() int {
 	return t.t.Len()
 }
 
-func (t *Tree) Insert(url string, hash []byte, offset uint64, length uint32) {
+func (t *Tree) Insert(url string, hash []byte, offset uint64, length uint32, dictOffset uint64, dictLength uint32) {
 	ins := &GetRange{
-		Url:    t.intern(url),
-		Hash:   hash,
-		Offset: offset,
-		Length: length,
+		Url:        t.intern(url),
+		Hash:       hash,
+		Offset:     offset,
+		Length:     length,
+		DictOffset: dictOffset,
+		DictLength: dictLength,
 	}
 	t.t.ReplaceOrInsert(ins)
 

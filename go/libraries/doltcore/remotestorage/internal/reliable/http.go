@@ -130,11 +130,13 @@ func StreamingRangeDownload(ctx context.Context, req StreamingRangeRequest) Stre
 
 			url, err := req.UrlFact(lastError)
 			if err != nil {
+				cCause(err)
 				return err
 			}
 
 			httpReq, err := http.NewRequest(http.MethodGet, url, nil)
 			if err != nil {
+				cCause(err)
 				return err
 			}
 
@@ -157,9 +159,7 @@ func StreamingRangeDownload(ctx context.Context, req StreamingRangeRequest) Stre
 			defer tc.Close()
 			go func() {
 				err := tc.Run()
-				if err != nil {
-					cCause(err)
-				}
+				cCause(err)
 			}()
 
 			httpReq = httpReq.WithContext(ctx)

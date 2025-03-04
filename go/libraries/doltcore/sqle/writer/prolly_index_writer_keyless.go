@@ -276,7 +276,7 @@ func (writer prollyKeylessSecondaryWriter) checkForUniqueKeyError(ctx context.Co
 		}
 	}
 
-	rng := prolly.PrefixRange(prefixKey, writer.prefixBld.Desc)
+	rng := prolly.PrefixRange(ctx, prefixKey, writer.prefixBld.Desc)
 	itr, err := writer.mut.IterRange(ctx, rng)
 	if err != nil {
 		return err
@@ -291,7 +291,7 @@ func (writer prollyKeylessSecondaryWriter) checkForUniqueKeyError(ctx context.Co
 			from := writer.keyMap.MapOrdinal(to)
 			remappedSqlRow[to] = writer.trimKeyPart(to, sqlRow[from])
 		}
-		keyStr := FormatKeyForUniqKeyErr(prefixKey, writer.prefixBld.Desc, remappedSqlRow)
+		keyStr := FormatKeyForUniqKeyErr(ctx, prefixKey, writer.prefixBld.Desc, remappedSqlRow)
 		writer.hashBld.PutRaw(0, k.GetField(k.Count()-1))
 		existingKey := writer.hashBld.Build(sharePool)
 		return secondaryUniqueKeyError{keyStr: keyStr, existingKey: existingKey}

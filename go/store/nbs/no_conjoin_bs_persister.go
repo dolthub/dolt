@@ -77,8 +77,8 @@ func (bsp *noConjoinBlobstorePersister) Open(ctx context.Context, name hash.Hash
 	return newBSChunkSource(ctx, bsp.bs, name, chunkCount, bsp.q, stats)
 }
 
-func (bsp *noConjoinBlobstorePersister) Exists(ctx context.Context, name hash.Hash, chunkCount uint32, stats *Stats) (bool, error) {
-	return bsp.bs.Exists(ctx, name.String())
+func (bsp *noConjoinBlobstorePersister) Exists(ctx context.Context, name string, chunkCount uint32, stats *Stats) (bool, error) {
+	return bsp.bs.Exists(ctx, name)
 }
 
 func (bsp *noConjoinBlobstorePersister) PruneTableFiles(ctx context.Context, keeper func() []hash.Hash, t time.Time) error {

@@ -807,8 +807,7 @@ func newDataMoverErrToVerr(mvOpts *importOptions, err *mvdata.DataMoverCreationE
 
 	case mvdata.CreateMapperErr:
 		bdr := errhand.BuildDError("Error creating input to output mapper.")
-		details := fmt.Sprintf("When attempting to move data from %s to %s, could not create a mapper.", mvOpts.src.String(), mvOpts.destTableName)
-		bdr.AddDetails(details)
+		bdr.AddDetails("When attempting to move data from %s to %s, could not create a mapper.", mvOpts.src.String(), mvOpts.destTableName)
 		bdr.AddCause(err.Cause)
 
 		return bdr.AddCause(err.Cause).Build()

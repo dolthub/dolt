@@ -51,7 +51,7 @@ func TestMmapTableReader(t *testing.T) {
 	err = os.WriteFile(filepath.Join(dir, h.String()), tableData, 0666)
 	require.NoError(t, err)
 
-	trc, err := newFileTableReader(ctx, dir, h, uint32(len(chunks)), &UnlimitedQuotaProvider{})
+	trc, err := newFileTableReader(ctx, dir, h, uint32(len(chunks)), &UnlimitedQuotaProvider{}, &Stats{})
 	require.NoError(t, err)
 	defer trc.close()
 	assertChunksInReader(chunks, trc, assert)

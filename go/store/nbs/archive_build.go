@@ -57,7 +57,7 @@ func UnArchive(ctx context.Context, cs chunks.ChunkStore, smd StorageMetadata, p
 					return err
 				}
 				if exists {
-					// We have a fast path to follow because oritinal table file is still on disk.
+					// We have a fast path to follow because original table file is still on disk.
 					swapMap[arc.hash()] = orginTfId
 				} else {
 					// We don't have the original table file id, so we have to create a new one.
@@ -75,7 +75,7 @@ func UnArchive(ctx context.Context, cs chunks.ChunkStore, smd StorageMetadata, p
 
 						progress <- fmt.Sprintf("Unarchiving %s (bytes: %d)", chk.Hash().String(), len(chk.Data()))
 						return nil
-					})
+					}, &Stats{})
 					if err != nil {
 						return err
 					}
@@ -150,7 +150,7 @@ func BuildArchive(ctx context.Context, cs chunks.ChunkStore, dagGroups *ChunkRel
 			}
 			archiveSize := fileInfo.Size()
 
-			err = verifyAllChunks(idx, archivePath, progress)
+			err = verifyAllChunks(ctx, idx, archivePath, progress, &stats)
 			if err != nil {
 				return err
 			}
@@ -441,19 +441,14 @@ func gatherAllChunks(ctx context.Context, cs chunkSource, idx tableIndex, stats 
 
 	return chkCache, defaultSamples, nil
 }
-func verifyAllChunks(idx tableIndex, archiveFile string, progress chan interface{}) error {
-	file, err := os.Open(archiveFile)
+
+func verifyAllChunks(ctx context.Context, idx tableIndex, archiveFile string, progress chan interface{}, stats *Stats) error {
+	fra, err := newFileReaderAt(archiveFile)
 	if err != nil {
 		return err
 	}
 
-	stat, err := file.Stat()
-	if err != nil {
-		return err
-	}
-	fileSize := stat.Size()
-
-	index, err := newArchiveReader(file, uint64(fileSize))
+	index, err := newArchiveReader(ctx, fra, uint64(fra.sz), stats)
 	if err != nil {
 		return err
 	}
@@ -483,7 +478,7 @@ func verifyAllChunks(idx tableIndex, archiveFile string, progress chan interface
 			return errors.New(msg)
 		}
 
-		data, err := index.get(h)
+		data, err := index.get(ctx, h, stats)
 		if err != nil {
 			return fmt.Errorf("error reading chunk: %s (err: %w)", h.String(), err)
 		}

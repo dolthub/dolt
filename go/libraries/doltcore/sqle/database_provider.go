@@ -92,21 +92,21 @@ func (p *DoltDatabaseProvider) WithTableFunctions(fns ...sql.TableFunction) (sql
 
 // NewDoltDatabaseProvider returns a new provider, initialized without any databases, along with any
 // errors that occurred while trying to create the database provider.
-func NewDoltDatabaseProvider(defaultBranch string, fs filesys.Filesys, bThreads *sql.BackgroundThreads) (*DoltDatabaseProvider, error) {
-	return NewDoltDatabaseProviderWithDatabases(defaultBranch, fs, nil, nil, bThreads)
+func NewDoltDatabaseProvider(defaultBranch string, fs filesys.Filesys) (*DoltDatabaseProvider, error) {
+	return NewDoltDatabaseProviderWithDatabases(defaultBranch, fs, nil, nil)
 }
 
 // NewDoltDatabaseProviderWithDatabase returns a new provider, initialized with one database at the
 // specified location, and any error that occurred along the way.
-func NewDoltDatabaseProviderWithDatabase(defaultBranch string, fs filesys.Filesys, database dsess.SqlDatabase, dbLocation filesys.Filesys, bThreads *sql.BackgroundThreads) (*DoltDatabaseProvider, error) {
-	return NewDoltDatabaseProviderWithDatabases(defaultBranch, fs, []dsess.SqlDatabase{database}, []filesys.Filesys{dbLocation}, bThreads)
+func NewDoltDatabaseProviderWithDatabase(defaultBranch string, fs filesys.Filesys, database dsess.SqlDatabase, dbLocation filesys.Filesys) (*DoltDatabaseProvider, error) {
+	return NewDoltDatabaseProviderWithDatabases(defaultBranch, fs, []dsess.SqlDatabase{database}, []filesys.Filesys{dbLocation})
 }
 
 // NewDoltDatabaseProviderWithDatabases returns a new provider, initialized with the specified databases,
 // at the specified locations. For every database specified, there must be a corresponding filesystem
 // specified that represents where the database is located. If the number of specified databases is not the
 // same as the number of specified locations, an error is returned.
-func NewDoltDatabaseProviderWithDatabases(defaultBranch string, fs filesys.Filesys, databases []dsess.SqlDatabase, locations []filesys.Filesys, bThreads *sql.BackgroundThreads) (*DoltDatabaseProvider, error) {
+func NewDoltDatabaseProviderWithDatabases(defaultBranch string, fs filesys.Filesys, databases []dsess.SqlDatabase, locations []filesys.Filesys) (*DoltDatabaseProvider, error) {
 	if len(databases) != len(locations) {
 		return nil, fmt.Errorf("unable to create DoltDatabaseProvider: "+
 			"incorrect number of databases (%d) and database locations (%d) specified", len(databases), len(locations))
@@ -154,7 +154,6 @@ func NewDoltDatabaseProviderWithDatabases(defaultBranch string, fs filesys.Files
 		fs:                     fs,
 		defaultBranch:          defaultBranch,
 		dbFactoryUrl:           dbFactoryUrl,
-		InitDatabaseHooks:      []InitDatabaseHook{NewConfigureReplicationDatabaseHook(bThreads)},
 		isStandby:              new(bool),
 		droppedDatabaseManager: newDroppedDatabaseManager(fs),
 	}, nil
@@ -205,6 +204,19 @@ func (p *DoltDatabaseProvider) AddDropDatabaseHook(hook DropDatabaseHook) {
 
 func (p *DoltDatabaseProvider) FileSystem() filesys.Filesys {
 	return p.fs
+}
+
+// Installs an InitDatabaseHook which configures new databases--those
+// created with `CREATE DATABASE` and `call dolt_clone` for
+// example--for push replication. Pull-on-read replication is already
+// managed separately by wrapping the database instance in
+// `registerNewDatabase`.
+//
+// If the databases that are being managed by |DoltDatabaseProvider| have
+// been through |ApplyReplicationConfig|, then this hook should probably
+// also be installed.
+func (p *DoltDatabaseProvider) InstallReplicationInitDatabaseHook(bThreads *sql.BackgroundThreads, ctxF func(context.Context) (*sql.Context, error)) {
+	p.AddInitDatabaseHook(NewConfigureReplicationDatabaseHook(bThreads, ctxF))
 }
 
 // SetIsStandby sets whether this provider is set to standby |true|. Standbys return every dolt database as a read only
@@ -618,7 +630,7 @@ type DropDatabaseHook func(ctx *sql.Context, name string)
 // 1) creates a new remote based on dsess.ReplicationRemoteURLTemplate
 // 2) Installed push-on-write replication hooks based on existing sql.SystemVariables on the *DoltDB
 // 3) Triggers the push-on-write hook for the default branch.
-func NewConfigureReplicationDatabaseHook(bThreads *sql.BackgroundThreads) func(ctx *sql.Context, p *DoltDatabaseProvider, name string, newEnv *env.DoltEnv, _ dsess.SqlDatabase) error {
+func NewConfigureReplicationDatabaseHook(bThreads *sql.BackgroundThreads, ctxF func(context.Context) (*sql.Context, error)) InitDatabaseHook {
 	return func(ctx *sql.Context, p *DoltDatabaseProvider, name string, newEnv *env.DoltEnv, _ dsess.SqlDatabase) error {
 		_, replicationRemoteName, _ := sql.SystemVariables.GetGlobal(dsess.ReplicateToRemote)
 		if replicationRemoteName == "" {
@@ -655,9 +667,12 @@ func NewConfigureReplicationDatabaseHook(bThreads *sql.BackgroundThreads) func(c
 			return err
 		}
 
-		commitHooks, err := GetCommitHooks(ctx, bThreads, newEnv, cli.CliErr)
+		commitHooks, startAsyncThreads, err := GetCommitHooks(ctx, newEnv, cli.CliErr)
 		if err != nil {
 			return err
+		}
+		if startAsyncThreads != nil {
+			startAsyncThreads(bThreads, ctxF)
 		}
 
 		newEnv.DoltDB(ctx).PrependCommitHooks(ctx, commitHooks...)

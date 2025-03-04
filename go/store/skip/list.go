@@ -15,6 +15,7 @@
 package skip
 
 import (
+	"context"
 	"hash/maphash"
 	"math"
 )
@@ -27,7 +28,7 @@ const (
 )
 
 // A KeyOrder determines the ordering of two keys |l| and |r|.
-type KeyOrder func(l, r []byte) (cmp int)
+type KeyOrder func(ctx context.Context, l, r []byte) (cmp int)
 
 // A SeekFn facilitates seeking into a List. It returns true
 // if the seek operation should advance past |key|.
@@ -99,12 +100,12 @@ func (l *List) HasCheckpoint() bool {
 }
 
 // Revert reverts to the last recorded checkpoint.
-func (l *List) Revert() {
+func (l *List) Revert(ctx context.Context) {
 	cp := l.checkpoint
 	keepers := l.nodes[1:cp]
 	l.Truncate()
 	for _, nd := range keepers {
-		l.Put(nd.key, nd.val)
+		l.Put(ctx, nd.key, nd.val)
 	}
 	l.checkpoint = cp
 }
@@ -126,21 +127,21 @@ func (l *List) Count() int {
 }
 
 // Has returns true if |key| is a member of the list.
-func (l *List) Has(key []byte) (ok bool) {
-	_, ok = l.Get(key)
+func (l *List) Has(ctx context.Context, key []byte) (ok bool) {
+	_, ok = l.Get(ctx, key)
 	return
 }
 
 // Get returns the value associated with |key| and true
 // if |key| is a member of the list, otherwise it returns
 // nil and false.
-func (l *List) Get(key []byte) (val []byte, ok bool) {
+func (l *List) Get(ctx context.Context, key []byte) (val []byte, ok bool) {
 	var id nodeId
 	next, prev := l.headTower(), sentinelId
 	for lvl := maxHeight; lvl >= 0; {
 		nd := l.nodePtr(next[lvl])
 		// descend if we can't advance at |lvl|
-		if l.compareKeys(key, nd.key) < 0 {
+		if l.compareKeys(ctx, key, nd.key) < 0 {
 			id = prev
 			lvl--
 			continue
@@ -150,14 +151,14 @@ func (l *List) Get(key []byte) (val []byte, ok bool) {
 		prev = nd.id
 	}
 	node := l.nodePtr(id)
-	if l.compareKeys(key, node.key) == 0 {
+	if l.compareKeys(ctx, key, node.key) == 0 {
 		val, ok = node.val, true
 	}
 	return
 }
 
 // Put adds |key| and |values| to the list.
-func (l *List) Put(key, val []byte) {
+func (l *List) Put(ctx context.Context, key, val []byte) {
 	if key == nil {
 		panic("key must be non-nil")
 	} else if len(l.nodes) >= maxCount {
@@ -171,7 +172,7 @@ func (l *List) Put(key, val []byte) {
 	for h := maxHeight; h >= 0; {
 		curr := l.nodePtr(next[h])
 		// descend if we can't advance at |lvl|
-		if l.compareKeys(key, curr.key) <= 0 {
+		if l.compareKeys(ctx, key, curr.key) <= 0 {
 			path[h] = prev
 			h--
 			continue
@@ -185,7 +186,7 @@ func (l *List) Put(key, val []byte) {
 	node := l.nodePtr(path[0])
 	node = l.nodePtr(node.next[0])
 
-	if l.compareKeys(key, node.key) == 0 {
+	if l.compareKeys(ctx, key, node.key) == 0 {
 		l.overwrite(key, val, &path, node)
 	} else {
 		l.insert(key, val, &path)
@@ -270,9 +271,9 @@ func (it *ListIter) Retreat() {
 
 // GetIterAt creates an iterator starting at the first item
 // of the list whose key is greater than or equal to |key|.
-func (l *List) GetIterAt(key []byte) (it *ListIter) {
+func (l *List) GetIterAt(ctx context.Context, key []byte) (it *ListIter) {
 	return l.GetIterFromSeekFn(func(nodeKey []byte) bool {
-		return l.compareKeys(key, nodeKey) > 0
+		return l.compareKeys(ctx, key, nodeKey) > 0
 	})
 }
 
@@ -307,9 +308,9 @@ func (l *List) IterAtEnd() *ListIter {
 }
 
 // seek returns the skipNode with the smallest key >= |key|.
-func (l *List) seek(key []byte) *skipNode {
+func (l *List) seek(ctx context.Context, key []byte) *skipNode {
 	return l.seekWithFn(func(curr []byte) (advance bool) {
-		return l.compareKeys(key, curr) > 0
+		return l.compareKeys(ctx, key, curr) > 0
 	})
 }
 
@@ -346,11 +347,11 @@ func (l *List) nextNodeId() nodeId {
 	return nodeId(len(l.nodes))
 }
 
-func (l *List) compareKeys(left, right []byte) int {
+func (l *List) compareKeys(ctx context.Context, left, right []byte) int {
 	if right == nil {
 		return -1 // |right| is sentinel key
 	}
-	return l.keyOrder(left, right)
+	return l.keyOrder(ctx, left, right)
 }
 
 var (

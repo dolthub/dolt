@@ -22,7 +22,6 @@
 package nbs
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"time"
@@ -30,29 +29,17 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
-func tableExistsInChunkSource(ctx context.Context, s3 *s3ObjectReader, al awsLimits, name hash.Hash, chunkCount uint32, q MemoryQuotaProvider, stats *Stats) (bool, error) {
-	magic := make([]byte, magicNumberSize)
-	n, _, err := s3.ReadFromEnd(ctx, name, magic, stats)
-	if err != nil {
-		return false, err
-	}
-	if n != len(magic) {
-		return false, errors.New("failed to read all data")
-	}
-	return bytes.Equal(magic, []byte(magicNumber)), nil
-}
-
-func newAWSChunkSource(ctx context.Context, s3 *s3ObjectReader, al awsLimits, name hash.Hash, chunkCount uint32, q MemoryQuotaProvider, stats *Stats) (cs chunkSource, err error) {
+func newAWSTableFileChunkSource(ctx context.Context, s3 *s3ObjectReader, al awsLimits, name hash.Hash, chunkCount uint32, q MemoryQuotaProvider, stats *Stats) (cs chunkSource, err error) {
 	var tra tableReaderAt
 	index, err := loadTableIndex(ctx, stats, chunkCount, q, func(p []byte) error {
-		n, _, err := s3.ReadFromEnd(ctx, name, p, stats)
+		n, _, err := s3.readS3ObjectFromEnd(ctx, name.String(), p, stats)
 		if err != nil {
 			return err
 		}
 		if len(p) != n {
 			return errors.New("failed to read all data")
 		}
-		tra = &s3TableReaderAt{h: name, s3: s3}
+		tra = &s3TableReaderAt{key: name.String(), s3: s3}
 		return nil
 	})
 	if err != nil {

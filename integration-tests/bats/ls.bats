@@ -60,7 +60,7 @@ teardown() {
 @test "ls: --system shows system tables" {
     run dolt ls --system
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 23 ]
+    [ "${#lines[@]}" -eq 24 ]
     [[ "$output" =~ "System tables:" ]] || false
     [[ "$output" =~ "dolt_status" ]] || false
     [[ "$output" =~ "dolt_commits" ]] || false
@@ -70,6 +70,7 @@ teardown() {
     [[ "$output" =~ "dolt_conflicts" ]] || false
     [[ "$output" =~ "dolt_remotes" ]] || false
     [[ "$output" =~ "dolt_branches" ]] || false
+    [[ "$output" =~ "dolt_backups" ]] || false
     [[ "$output" =~ "dolt_remote_branches" ]] || false
     [[ "$output" =~ "dolt_help" ]] || false
     [[ "$output" =~ "dolt_constraint_violations_table_one" ]] || false

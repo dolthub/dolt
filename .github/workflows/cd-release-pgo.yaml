@@ -84,9 +84,9 @@ jobs:
         run: |
           latest=$(git rev-parse HEAD)
           echo "commitish=$latest" >> $GITHUB_OUTPUT
-          GO_BUILD_VERSION=1.23.3 go/utils/publishrelease/buildpgobinaries.sh
+          GO_BUILD_VERSION=1.24.0 go/utils/publishrelease/buildpgobinaries.sh
         env:
-          GO_BUILD_VERSION: "1.23.3"
+          GO_BUILD_VERSION: "1.24.0"
           PROFILE: ${{ format('{0}/dolt-cpu-profile.pprof', github.workspace) }}
       - name: Create Release
         id: create_release
@@ -97,7 +97,7 @@ jobs:
           tag_name: v${{ needs.format-version.outputs.version }}
           release_name: ${{ needs.format-version.outputs.version }}
           draft: false
-          prerelease: false
+          prerelease: true
           commitish: ${{ steps.build_binaries.outputs.commitish }}
       - name: Upload Linux AMD64 Distro
         id: upload-linux-amd64-distro
@@ -213,4 +213,4 @@ jobs:
         with:
           token: ${{ secrets.REPO_ACCESS_TOKEN }}
           event-type: push-docker-image
-          client-payload: '{"version": "${{ needs.format-version.outputs.version }}"}'
+          client-payload: '{"version": "${{ needs.format-version.outputs.version }}", "release_id": "${{ needs.create-pgo-release.outputs.release_id }}" }'

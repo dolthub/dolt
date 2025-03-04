@@ -150,7 +150,7 @@ func testRngMapDiffAgainstEmpty(t *testing.T, scale int, rngTest rangeDiffTest) 
 		assert.Equal(t, inRange[cnt][0], val.Tuple(diff.Key))
 		assert.Equal(t, inRange[cnt][1], val.Tuple(diff.From))
 		assert.Nil(t, val.Tuple(diff.To))
-		assert.True(t, rngTest.rng.Matches(val.Tuple(diff.Key)))
+		assert.True(t, rngTest.rng.Matches(ctx, val.Tuple(diff.Key)))
 		cnt++
 		return nil
 	})
@@ -162,7 +162,7 @@ func testRngMapDiffAgainstEmpty(t *testing.T, scale int, rngTest rangeDiffTest) 
 		assert.Equal(t, inRange[cnt][0], val.Tuple(diff.Key))
 		assert.Equal(t, inRange[cnt][1], val.Tuple(diff.To))
 		assert.Nil(t, val.Tuple(diff.From))
-		assert.True(t, rngTest.rng.Matches(val.Tuple(diff.Key)))
+		assert.True(t, rngTest.rng.Matches(ctx, val.Tuple(diff.Key)))
 		cnt++
 		return nil
 	})
@@ -178,7 +178,7 @@ func testRngDeleteDiffs(t *testing.T, from Map, tups [][2]val.Tuple, numDeletes 
 
 	deletes := tups[:numDeletes]
 	sort.Slice(deletes, func(i, j int) bool {
-		return from.keyDesc.Compare(deletes[i][0], deletes[j][0]) < 0
+		return from.keyDesc.Compare(ctx, deletes[i][0], deletes[j][0]) < 0
 	})
 	inRange := getPairsInRange(deletes, rngTest.rng)
 	to := makeMapWithDeletes(t, from, deletes...)
@@ -187,7 +187,7 @@ func testRngDeleteDiffs(t *testing.T, from Map, tups [][2]val.Tuple, numDeletes 
 	err := RangeDiffMaps(ctx, from, to, rngTest.rng, func(ctx context.Context, diff tree.Diff) error {
 		assert.Equal(t, tree.RemovedDiff, diff.Type)
 		assert.Equal(t, inRange[cnt][0], val.Tuple(diff.Key))
-		assert.True(t, rngTest.rng.Matches(val.Tuple(diff.Key)))
+		assert.True(t, rngTest.rng.Matches(ctx, val.Tuple(diff.Key)))
 		cnt++
 		return nil
 	})
@@ -207,7 +207,7 @@ func testRngInsertDiffs(t *testing.T, from Map, tups [][2]val.Tuple, numInserts 
 		}
 		assert.Equal(t, inRange[cnt][0], val.Tuple(diff.Key))
 		assert.Equal(t, inRange[cnt][1], val.Tuple(diff.To))
-		assert.True(t, rngTest.rng.Matches(val.Tuple(diff.Key)))
+		assert.True(t, rngTest.rng.Matches(ctx, val.Tuple(diff.Key)))
 		cnt++
 		return nil
 	})
@@ -224,7 +224,7 @@ func testRngUpdateDiffs(t *testing.T, from Map, tups [][2]val.Tuple, numUpdates 
 
 	sub := tups[:numUpdates]
 	sort.Slice(sub, func(i, j int) bool {
-		return from.keyDesc.Compare(sub[i][0], sub[j][0]) < 0
+		return from.keyDesc.Compare(ctx, sub[i][0], sub[j][0]) < 0
 	})
 
 	kd, vd := from.Descriptors()
@@ -232,7 +232,7 @@ func testRngUpdateDiffs(t *testing.T, from Map, tups [][2]val.Tuple, numUpdates 
 	to := makeMapWithUpdates(t, from, updates...)
 	var inRange [][3]val.Tuple
 	for _, pair := range updates {
-		if rngTest.rng.Matches(pair[0]) {
+		if rngTest.rng.Matches(ctx, pair[0]) {
 			inRange = append(inRange, pair)
 		}
 	}
@@ -243,7 +243,7 @@ func testRngUpdateDiffs(t *testing.T, from Map, tups [][2]val.Tuple, numUpdates 
 		assert.Equal(t, inRange[cnt][0], val.Tuple(diff.Key))
 		assert.Equal(t, inRange[cnt][1], val.Tuple(diff.From))
 		assert.Equal(t, inRange[cnt][2], val.Tuple(diff.To))
-		assert.True(t, rngTest.rng.Matches(val.Tuple(diff.Key)))
+		assert.True(t, rngTest.rng.Matches(ctx, val.Tuple(diff.Key)))
 		cnt++
 		return nil
 	})
@@ -257,6 +257,7 @@ type rangeDiffTest struct {
 }
 
 func makeRandomOpenStopRangeTest(kd val.TupleDesc, tuples [][2]val.Tuple) rangeDiffTest {
+	ctx := context.Background()
 	i := rand.Intn(len(tuples))
 	j := rand.Intn(len(tuples))
 	if j < i {
@@ -265,7 +266,7 @@ func makeRandomOpenStopRangeTest(kd val.TupleDesc, tuples [][2]val.Tuple) rangeD
 	start := tuples[i][0]
 	stop := tuples[j][0]
 
-	return rangeDiffTest{tuples: tuples, rng: OpenStopRange(start, stop, kd)}
+	return rangeDiffTest{tuples: tuples, rng: OpenStopRange(ctx, start, stop, kd)}
 }
 
 func makeRandomGreaterOrEqualRangeTest(kd val.TupleDesc, tuples [][2]val.Tuple) rangeDiffTest {
@@ -281,8 +282,9 @@ func makeRandomLesserRangeTest(kd val.TupleDesc, tuples [][2]val.Tuple) rangeDif
 }
 
 func getPairsInRange(tuples [][2]val.Tuple, rng Range) (keys [][2]val.Tuple) {
+	ctx := context.Background()
 	for _, pair := range tuples {
-		if rng.Matches(pair[0]) {
+		if rng.Matches(ctx, pair[0]) {
 			keys = append(keys, pair)
 		}
 	}

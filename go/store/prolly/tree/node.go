@@ -211,8 +211,8 @@ func getLastKey(nd Node) Item {
 // to the type specified by the provided schema. All nodes have keys displayed in this manner. Interior nodes have
 // their child hash references spelled out, leaf nodes have value tuples delineated like the keys
 func OutputProllyNode(ctx context.Context, w io.Writer, node Node, ns NodeStore, schema schema.Schema) error {
-	kd := schema.GetKeyDescriptor()
-	vd := schema.GetValueDescriptor()
+	kd := schema.GetKeyDescriptor(ns)
+	vd := schema.GetValueDescriptor(ns)
 	for i := 0; i < int(node.count); i++ {
 		k := node.GetKey(i)
 		kt := val.Tuple(k)

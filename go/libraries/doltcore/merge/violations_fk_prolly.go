@@ -117,7 +117,7 @@ func prollyParentPriDiffFkConstraintViolations(
 				return nil
 			}
 
-			partialKeyRange := prolly.PrefixRange(partialKey, partialDesc)
+			partialKeyRange := prolly.PrefixRange(ctx, partialKey, partialDesc)
 			itr, err := postParentIndexData.IterRange(ctx, partialKeyRange)
 			if err != nil {
 				return err

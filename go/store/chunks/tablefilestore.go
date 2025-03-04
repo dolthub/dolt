@@ -31,6 +31,10 @@ type TableFile interface {
 	// LocationPrefix
 	LocationPrefix() string
 
+	// Used in conjuction with the FileID to create file paths to table files. Currently archive files are the only
+	// that take advantage of this, using .darc as the file suffix.
+	LocationSuffix() string
+
 	// NumChunks returns the number of chunks in a table file
 	NumChunks() int
 

@@ -16,6 +16,7 @@ package val
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 
 	"github.com/zeebo/xxh3"
@@ -79,12 +80,12 @@ type keylessCompare struct{}
 var _ TupleComparator = keylessCompare{}
 
 // Compare implements TupleComparator
-func (k keylessCompare) Compare(left, right Tuple, _ TupleDesc) int {
+func (k keylessCompare) Compare(ctx context.Context, left, right Tuple, desc TupleDesc) int {
 	return bytes.Compare(left, right)
 }
 
 // CompareValues implements TupleComparator
-func (k keylessCompare) CompareValues(_ int, left, right []byte, typ Type) int {
+func (k keylessCompare) CompareValues(ctx context.Context, index int, left, right []byte, typ Type) int {
 	return compare(typ, left, right)
 }
 

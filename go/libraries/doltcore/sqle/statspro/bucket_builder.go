@@ -146,10 +146,10 @@ func (u *bucketBuilder) finalize(ctx context.Context, ns tree.NodeStore) (*stats
 
 // add inputs a new row for a histogram bucket aggregation. We assume
 // the key has already been truncated to the appropriate prefix length.
-func (u *bucketBuilder) add(key val.Tuple) {
-	newKey := u.currentKey == nil || u.tupleDesc.Compare(u.currentKey, key) != 0
+func (u *bucketBuilder) add(ctx context.Context, key val.Tuple) {
+	newKey := u.currentKey == nil || u.tupleDesc.Compare(ctx, u.currentKey, key) != 0
 	if newKey {
-		u.newKey(key)
+		u.newKey(ctx, key)
 	} else {
 		u.currentCnt++
 	}
@@ -165,10 +165,10 @@ func (u *bucketBuilder) add(key val.Tuple) {
 }
 
 // newKey updates state for a new key in the rolling stream.
-func (u *bucketBuilder) newKey(key val.Tuple) {
+func (u *bucketBuilder) newKey(ctx context.Context, key val.Tuple) {
 	u.updateMcv()
 	if u.prevBound != nil {
-		if u.tupleDesc.Compare(u.prevBound, key) != 0 {
+		if u.tupleDesc.Compare(ctx, u.prevBound, key) != 0 {
 			u.globalDistinct++
 			u.prevBound = nil
 		} else {

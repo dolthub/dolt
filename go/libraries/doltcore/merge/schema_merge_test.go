@@ -1633,6 +1633,7 @@ func testSchemaMergeHelper(t *testing.T, tests []schemaMergeTest, flipSides bool
 			runTest := func(t *testing.T, test schemaMergeTest, expectDataConflict bool, expConstraintViolations []constraintViolation) {
 				ctx := context.Background()
 				a, l, r, m := setupSchemaMergeTest(ctx, t, test)
+				ns := a.NodeStore()
 
 				var mo merge.MergeOpts
 				var eo editor.Options
@@ -1669,7 +1670,7 @@ func testSchemaMergeHelper(t *testing.T, tests []schemaMergeTest, flipSides bool
 								table, _, err := result.Root.GetTable(ctx, name)
 								require.NoError(t, err)
 								t.Logf("table %s:", name)
-								t.Log(table.DebugString(ctx, m.NodeStore()))
+								t.Log(table.DebugString(ctx, ns))
 							}
 
 						}
@@ -1690,7 +1691,8 @@ func testSchemaMergeHelper(t *testing.T, tests []schemaMergeTest, flipSides bool
 
 							sch, err := actTbl.GetSchema(ctx)
 							require.NoError(t, err)
-							kd, vd := sch.GetMapDescriptors()
+
+							kd, vd := sch.GetMapDescriptors(m.NodeStore())
 
 							if len(expConstraintViolations) > 0 {
 								artifacts, err := actTbl.GetArtifacts(ctx)
@@ -1720,10 +1722,10 @@ func testSchemaMergeHelper(t *testing.T, tests []schemaMergeTest, flipSides bool
 									require.NoError(t, err)
 									actRowDataHash, err := actTbl.GetRowDataHash(ctx)
 									require.NoError(t, err)
-									if !expSchema.GetKeyDescriptor().Equals(kd) {
+									if !expSchema.GetKeyDescriptor(ns).Equals(kd) {
 										t.Fatal("Primary key descriptors unequal")
 									}
-									if !expSchema.GetValueDescriptor().Equals(vd) {
+									if !expSchema.GetValueDescriptor(ns).Equals(vd) {
 										t.Fatal("Value descriptors unequal")
 									}
 									if expRowDataHash != actRowDataHash {

@@ -26,6 +26,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typecompatibility"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	storetypes "github.com/dolthub/dolt/go/store/types"
 )
@@ -410,7 +411,7 @@ func mergeColumns(tblName string, format *storetypes.NomsBinFormat, ourCC, their
 		return nil, nil, mergeInfo, diffInfo, err
 	}
 
-	compatChecker := newTypeCompatabilityCheckerForStorageFormat(format)
+	compatChecker := typecompatibility.NewTypeCompatabilityCheckerForStorageFormat(format)
 
 	// After we've checked for schema conflicts, merge the columns together
 	// TODO: We don't currently preserve all column position changes; the returned merged columns are always based on
@@ -470,14 +471,14 @@ func mergeColumns(tblName string, format *storetypes.NomsBinFormat, ourCC, their
 					// In this case, only theirsChanged, so we need to check if moving from ours->theirs
 					// is valid, otherwise it's a conflict
 					compatibilityInfo := compatChecker.IsTypeChangeCompatible(ours.TypeInfo, theirs.TypeInfo)
-					if compatibilityInfo.invalidateSecondaryIndexes {
+					if compatibilityInfo.InvalidateSecondaryIndexes {
 						mergeInfo.InvalidateSecondaryIndexes = true
 					}
-					if compatibilityInfo.rewriteRows {
+					if compatibilityInfo.RewriteRows {
 						mergeInfo.LeftNeedsRewrite = true
 						diffInfo.RightSchemaChange = true
 					}
-					if compatibilityInfo.compatible {
+					if compatibilityInfo.Compatible {
 						mergedColumns = append(mergedColumns, *theirs)
 					} else {
 						conflicts = append(conflicts, ColConflict{
@@ -492,14 +493,14 @@ func mergeColumns(tblName string, format *storetypes.NomsBinFormat, ourCC, their
 					// is valid, otherwise it's a conflict
 					mergeInfo.RightNeedsRewrite = true
 					compatibilityInfo := compatChecker.IsTypeChangeCompatible(theirs.TypeInfo, ours.TypeInfo)
-					if compatibilityInfo.invalidateSecondaryIndexes {
+					if compatibilityInfo.InvalidateSecondaryIndexes {
 						mergeInfo.InvalidateSecondaryIndexes = true
 					}
-					if compatibilityInfo.rewriteRows {
+					if compatibilityInfo.RewriteRows {
 						mergeInfo.RightNeedsRewrite = true
 						diffInfo.LeftSchemaChange = true
 					}
-					if compatibilityInfo.compatible {
+					if compatibilityInfo.Compatible {
 						mergedColumns = append(mergedColumns, *ours)
 					} else {
 						conflicts = append(conflicts, ColConflict{

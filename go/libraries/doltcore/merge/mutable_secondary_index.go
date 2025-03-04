@@ -23,6 +23,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/store/prolly"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
@@ -46,7 +47,7 @@ func GetMutableSecondaryIdxs(ctx *sql.Context, ourSch, sch schema.Schema, tableN
 // GetMutableSecondaryIdxsWithPending returns a MutableSecondaryIdx for each secondary index in |indexes|. If an index
 // is listed in the given |sch|, but does not exist in the given |indexes|, then it is skipped. This is useful when
 // merging a schema that has a new index, but the index does not exist on the index set being modified.
-func GetMutableSecondaryIdxsWithPending(ctx *sql.Context, ourSch, sch schema.Schema, tableName string, indexes durable.IndexSet, pendingSize int) ([]MutableSecondaryIdx, error) {
+func GetMutableSecondaryIdxsWithPending(ctx *sql.Context, ns tree.NodeStore, ourSch, sch schema.Schema, tableName string, indexes durable.IndexSet, pendingSize int) ([]MutableSecondaryIdx, error) {
 	mods := make([]MutableSecondaryIdx, 0, sch.Indexes().Count())
 	for _, index := range sch.Indexes().AllIndexes() {
 
@@ -78,11 +79,11 @@ func GetMutableSecondaryIdxsWithPending(ctx *sql.Context, ourSch, sch schema.Sch
 			idxKeyDesc = idxKeyDesc.PrefixDesc(idxKeyDesc.Count() - 1)
 		}
 
-		if !idxKeyDesc.Equals(index.Schema().GetKeyDescriptorWithNoConversion()) {
+		if !idxKeyDesc.Equals(index.Schema().GetKeyDescriptorWithNoConversion(ns)) {
 			continue
 		}
 
-		if !m.ValDesc().Equals(index.Schema().GetValueDescriptor()) {
+		if !m.ValDesc().Equals(index.Schema().GetValueDescriptor(ns)) {
 			continue
 		}
 

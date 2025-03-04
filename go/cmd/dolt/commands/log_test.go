@@ -85,7 +85,7 @@ func TestLogSigterm(t *testing.T) {
 		pager.Writer.Write([]byte(fmt.Sprintf("\nDate:  %s", timeStr)))
 
 		formattedDesc := "\n\n\t" + strings.Replace(cMeta.Description, "\n", "\n\t", -1) + "\n\n"
-		pager.Writer.Write([]byte(fmt.Sprintf(formattedDesc)))
+		pager.Writer.Write([]byte(formattedDesc))
 	}
 
 	process, err := os.FindProcess(syscall.Getpid())

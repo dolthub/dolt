@@ -161,6 +161,9 @@ func (f *FileValueStore) CacheHas(h hash.Hash) bool {
 	return ok
 }
 
+func (f *FileValueStore) PurgeCaches() {
+}
+
 // HasMany returns the set of hashes that are absent from the store
 func (f *FileValueStore) HasMany(ctx context.Context, hashes hash.HashSet) (absent hash.HashSet, err error) {
 	f.chunkLock.Lock()

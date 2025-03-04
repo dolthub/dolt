@@ -1917,23 +1917,81 @@ func (ddb *DoltDB) IsTableFileStore() bool {
 
 // ChunkJournal returns the ChunkJournal for this DoltDB, if one is in use.
 func (ddb *DoltDB) ChunkJournal() *nbs.ChunkJournal {
-	tableFileStore, ok := datas.ChunkStoreFromDatabase(ddb.db).(chunks.TableFileStore)
-	if !ok {
-		return nil
+	cs := datas.ChunkStoreFromDatabase(ddb.db)
+
+	if generationalNBS, ok := cs.(*nbs.GenerationalNBS); ok {
+		cs = generationalNBS.NewGen()
 	}
 
-	generationalNbs, ok := tableFileStore.(*nbs.GenerationalNBS)
-	if !ok {
+	if nbsStore, ok := cs.(*nbs.NomsBlockStore); ok {
+		return nbsStore.ChunkJournal()
+	} else {
 		return nil
 	}
+}
 
-	newGen := generationalNbs.NewGen()
-	nbs, ok := newGen.(*nbs.NomsBlockStore)
-	if !ok {
-		return nil
+// An approximate representation of how large the on-disk storage is for a DoltDB.
+type StoreSizes struct {
+	// For ChunkJournal stores, this will be size of the journal file. A size
+	// of zero does not mean the store is not journaled. The store could be
+	// journaled, and the journal could be empty.
+	JournalBytes uint64
+	// For Generational storages this will be the size of the new gen. It will
+	// include any JournalBytes. A size of zero does not mean the store is not
+	// generational, since it could be the case that the store is generational
+	// but everything in it is in the old gen. In practice, given how we build
+	// oldgen references today, this will never be the case--there is always
+	// a little bit of data that only goes in the newgen.
+	NewGenBytes uint64
+	// This is the approximate total on-disk storage overhead of the store.
+	// It includes Journal and NewGenBytes, if there are any.
+	TotalBytes uint64
+}
+
+func (ddb *DoltDB) StoreSizes(ctx context.Context) (StoreSizes, error) {
+	cs := datas.ChunkStoreFromDatabase(ddb.db)
+	if generationalNBS, ok := cs.(*nbs.GenerationalNBS); ok {
+		newgen := generationalNBS.NewGen()
+		newGenTFS, newGenTFSOk := newgen.(chunks.TableFileStore)
+		totalTFS, totalTFSOk := cs.(chunks.TableFileStore)
+		newGenNBS, newGenNBSOk := newgen.(*nbs.NomsBlockStore)
+		if !(newGenTFSOk && totalTFSOk && newGenNBSOk) {
+			return StoreSizes{}, fmt.Errorf("unexpected newgen or chunk store type for *nbs.GenerationalNBS instance; cannot take store sizes: cs: %T, newgen: %T", cs, newgen)
+		}
+		newgenSz, err := newGenTFS.Size(ctx)
+		if err != nil {
+			return StoreSizes{}, err
+		}
+		totalSz, err := totalTFS.Size(ctx)
+		if err != nil {
+			return StoreSizes{}, err
+		}
+		journal := newGenNBS.ChunkJournal()
+		if journal != nil {
+			return StoreSizes{
+				JournalBytes: uint64(journal.Size()),
+				NewGenBytes:  newgenSz,
+				TotalBytes:   totalSz,
+			}, nil
+		} else {
+			return StoreSizes{
+				NewGenBytes: newgenSz,
+				TotalBytes:  totalSz,
+			}, nil
+		}
+	} else {
+		totalTFS, totalTFSOk := cs.(chunks.TableFileStore)
+		if !totalTFSOk {
+			return StoreSizes{}, fmt.Errorf("unexpected chunk store type for non-*nbs.GenerationalNBS ddb.db instance; cannot take store sizes: cs: %T", cs)
+		}
+		totalSz, err := totalTFS.Size(ctx)
+		if err != nil {
+			return StoreSizes{}, err
+		}
+		return StoreSizes{
+			TotalBytes: totalSz,
+		}, nil
 	}
-
-	return nbs.ChunkJournal()
 }
 
 func (ddb *DoltDB) TableFileStoreHasJournal(ctx context.Context) (bool, error) {
@@ -2189,6 +2247,15 @@ func (ddb *DoltDB) GetStashRootAndHeadCommitAtIdx(ctx context.Context, idx int) 
 // a shallow clone, but should not be called after the clone is complete.
 func (ddb *DoltDB) PersistGhostCommits(ctx context.Context, ghostCommits hash.HashSet) error {
 	return ddb.db.Database.PersistGhostCommitIDs(ctx, ghostCommits)
+}
+
+// Purge in-memory read caches associated with this DoltDB. This needs
+// to be done at a specific point during a GC operation to ensure that
+// everything the application layer sees still exists in the database
+// after the GC operation is completed.
+func (ddb *DoltDB) PurgeCaches() {
+	ddb.vrw.PurgeCaches()
+	ddb.ns.PurgeCaches()
 }
 
 type FSCKReport struct {

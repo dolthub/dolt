@@ -664,7 +664,7 @@ func printTableSummary(tables []string, counts map[string]*tablePatchInfo) {
 	header += "=====                              =====   ========   =======\n"
 	header = color.YellowString(header)
 
-	cli.Printf(header)
+	cli.Print(header)
 
 	totalChgCount := 0
 

@@ -46,7 +46,7 @@ type ChunkFetcher interface {
 
 	CloseSend() error
 
-	Recv(context.Context) (CompressedChunk, error)
+	Recv(context.Context) (ToChunker, error)
 
 	Close() error
 }

@@ -87,20 +87,20 @@ func doDoltCommit(ctx *sql.Context, args []string) (string, bool, error) {
 	if apr.Contains(cli.UpperCaseAllFlag) {
 		roots, err = actions.StageAllTables(ctx, roots, true)
 		if err != nil {
-			return "", false, fmt.Errorf("%w", err)
+			return "", false, err
 		}
 		roots, err = actions.StageDatabase(ctx, roots)
 		if err != nil {
-			return "", false, fmt.Errorf(err.Error())
+			return "", false, err
 		}
 	} else if apr.Contains(cli.AllFlag) {
 		roots, err = actions.StageModifiedAndDeletedTables(ctx, roots)
 		if err != nil {
-			return "", false, fmt.Errorf(err.Error())
+			return "", false, err
 		}
 		roots, err = actions.StageDatabase(ctx, roots)
 		if err != nil {
-			return "", false, fmt.Errorf(err.Error())
+			return "", false, err
 		}
 	}
 
@@ -142,7 +142,7 @@ func doDoltCommit(ctx *sql.Context, args []string) (string, bool, error) {
 		t, err = dconfig.ParseDate(commitTimeStr)
 
 		if err != nil {
-			return "", false, fmt.Errorf(err.Error())
+			return "", false, err
 		}
 	} else if datas.CustomAuthorDate {
 		t = datas.AuthorDate()
@@ -151,7 +151,7 @@ func doDoltCommit(ctx *sql.Context, args []string) (string, bool, error) {
 	if apr.Contains(cli.ForceFlag) {
 		err = ctx.SetSessionVariable(ctx, "dolt_force_transaction_commit", 1)
 		if err != nil {
-			return "", false, fmt.Errorf(err.Error())
+			return "", false, err
 		}
 	}
 

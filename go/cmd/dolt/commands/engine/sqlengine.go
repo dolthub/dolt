@@ -35,9 +35,11 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/servercfg"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	dblr "github.com/dolthub/dolt/go/libraries/doltcore/sqle/binlogreplication"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/cluster"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dprocedures"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/kvexec"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/mysql_file_handler"
@@ -77,6 +79,7 @@ type SqlEngineConfig struct {
 	JwksConfig                 []servercfg.JwksConfig
 	SystemVariables            SystemVariables
 	ClusterController          *cluster.Controller
+	AutoGCController           *dsqle.AutoGCController
 	BinlogReplicaController    binlogreplication.BinlogReplicaController
 	EventSchedulerStatus       eventscheduler.SchedulerStatus
 }
@@ -93,7 +96,8 @@ func NewSqlEngine(
 	}
 
 	bThreads := sql.NewBackgroundThreads()
-	dbs, err = dsqle.ApplyReplicationConfig(ctx, bThreads, mrEnv, cli.CliOut, dbs...)
+	var runAsyncThreads sqle.RunAsyncThreads
+	dbs, runAsyncThreads, err = dsqle.ApplyReplicationConfig(ctx, mrEnv, cli.CliOut, dbs...)
 	if err != nil {
 		return nil, err
 	}
@@ -110,7 +114,15 @@ func NewSqlEngine(
 		return nil, err
 	}
 
-	all := dbs[:]
+	// Make a copy of the databases. |all| is going to be provided
+	// as the set of all initial databases to dsqle
+	// DatabaseProvider. |dbs| is only the databases that came
+	// from MultiRepoEnv, and they are all real databases based on
+	// DoltDB instances. |all| is going to include some extension,
+	// informational databases like |dolt_cluster| sometimes,
+	// depending on config.
+	all := make([]dsess.SqlDatabase, len(dbs))
+	copy(all, dbs)
 
 	// this is overwritten only for server sessions
 	for _, db := range dbs {
@@ -126,7 +138,7 @@ func NewSqlEngine(
 	gcSafepointController := dsess.NewGCSafepointController()
 
 	b := env.GetDefaultInitBranch(mrEnv.Config())
-	pro, err := dsqle.NewDoltDatabaseProviderWithDatabases(b, mrEnv.FileSystem(), all, locations, bThreads)
+	pro, err := dsqle.NewDoltDatabaseProviderWithDatabases(b, mrEnv.FileSystem(), all, locations)
 	if err != nil {
 		return nil, err
 	}
@@ -195,16 +207,34 @@ func NewSqlEngine(
 	}
 	engine.Analyzer.Catalog.StatsProvider = statsPro
 
+	if config.AutoGCController != nil {
+		err = config.AutoGCController.RunBackgroundThread(bThreads, sqlEngine.NewDefaultContext)
+		if err != nil {
+			return nil, err
+		}
+		config.AutoGCController.ApplyCommitHooks(ctx, mrEnv, dbs...)
+		pro.InitDatabaseHooks = append(pro.InitDatabaseHooks, config.AutoGCController.InitDatabaseHook())
+		pro.DropDatabaseHooks = append(pro.DropDatabaseHooks, config.AutoGCController.DropDatabaseHook())
+		// XXX: We force session aware safepoint controller if auto_gc is on.
+		dprocedures.UseSessionAwareSafepointController = true
+	}
+
 	engine.Analyzer.ExecBuilder = rowexec.NewOverrideBuilder(kvexec.Builder{})
 	sessFactory := doltSessionFactory(pro, statsPro, mrEnv.Config(), bcController, gcSafepointController, config.Autocommit)
 	sqlEngine.provider = pro
-	sqlEngine.contextFactory = sqlContextFactory()
+	sqlEngine.contextFactory = sqlContextFactory
 	sqlEngine.dsessFactory = sessFactory
 	sqlEngine.engine = engine
 	sqlEngine.fs = pro.FileSystem()
 
+	pro.InstallReplicationInitDatabaseHook(bThreads, sqlEngine.NewDefaultContext)
 	if err = config.ClusterController.RunCommitHooks(bThreads, sqlEngine.NewDefaultContext); err != nil {
 		return nil, err
+	}
+	if runAsyncThreads != nil {
+		if err = runAsyncThreads(bThreads, sqlEngine.NewDefaultContext); err != nil {
+			return nil, err
+		}
 	}
 
 	// configuring stats depends on sessionBuilder
@@ -252,7 +282,7 @@ func NewSqlEngine(
 	}
 
 	if engine.EventScheduler == nil {
-		err = configureEventScheduler(config, engine, sessFactory, pro)
+		err = configureEventScheduler(config, engine, sqlEngine.contextFactory, sessFactory, pro)
 		if err != nil {
 			return nil, err
 		}
@@ -264,7 +294,7 @@ func NewSqlEngine(
 			return nil, err
 		}
 
-		err = configureBinlogReplicaController(config, engine, binLogSession)
+		err = configureBinlogReplicaController(config, engine, sqlEngine.contextFactory, binLogSession)
 		if err != nil {
 			return nil, err
 		}
@@ -362,8 +392,7 @@ func (se *SqlEngine) Close() error {
 }
 
 // configureBinlogReplicaController configures the binlog replication controller with the |engine|.
-func configureBinlogReplicaController(config *SqlEngineConfig, engine *gms.Engine, session *dsess.DoltSession) error {
-	ctxFactory := sqlContextFactory()
+func configureBinlogReplicaController(config *SqlEngineConfig, engine *gms.Engine, ctxFactory contextFactory, session *dsess.DoltSession) error {
 	executionCtx, err := ctxFactory(context.Background(), session)
 	if err != nil {
 		return err
@@ -389,38 +418,14 @@ func configureBinlogPrimaryController(engine *gms.Engine) error {
 
 // configureEventScheduler configures the event scheduler with the |engine| for executing events, a |sessFactory|
 // for creating sessions, and a DoltDatabaseProvider, |pro|.
-func configureEventScheduler(config *SqlEngineConfig, engine *gms.Engine, sessFactory sessionFactory, pro *dsqle.DoltDatabaseProvider) error {
-	// need to give correct user, use the definer as user to run the event definition queries
-	ctxFactory := sqlContextFactory()
-
-	// getCtxFunc is used to create new session context for event scheduler.
-	// It starts a transaction that needs to be committed using the function returned.
-	getCtxFunc := func() (*sql.Context, func() error, error) {
+func configureEventScheduler(config *SqlEngineConfig, engine *gms.Engine, ctxFactory contextFactory, sessFactory sessionFactory, pro *dsqle.DoltDatabaseProvider) error {
+	// getCtxFunc is used to create new session with a new context for event scheduler.
+	getCtxFunc := func() (*sql.Context, error) {
 		sess, err := sessFactory(sql.NewBaseSession(), pro)
 		if err != nil {
-			return nil, func() error { return nil }, err
+			return nil, err
 		}
-
-		newCtx, err := ctxFactory(context.Background(), sess)
-		if err != nil {
-			return nil, func() error { return nil }, err
-		}
-
-		ts, ok := newCtx.Session.(sql.TransactionSession)
-		if !ok {
-			return nil, func() error { return nil }, nil
-		}
-
-		tr, err := sess.StartTransaction(newCtx, sql.ReadWrite)
-		if err != nil {
-			return nil, func() error { return nil }, err
-		}
-
-		ts.SetTransaction(tr)
-
-		return newCtx, func() error {
-			return ts.CommitTransaction(newCtx, tr)
-		}, nil
+		return ctxFactory(context.Background(), sess)
 	}
 
 	// A hidden env var allows overriding the event scheduler period for testing. This option is not
@@ -441,12 +446,10 @@ func configureEventScheduler(config *SqlEngineConfig, engine *gms.Engine, sessFa
 	return engine.InitializeEventScheduler(getCtxFunc, config.EventSchedulerStatus, eventSchedulerPeriod)
 }
 
-// sqlContextFactory returns a contextFactory that creates a new sql.Context with the initial database provided
-func sqlContextFactory() contextFactory {
-	return func(ctx context.Context, session sql.Session) (*sql.Context, error) {
-		sqlCtx := sql.NewContext(ctx, sql.WithSession(session))
-		return sqlCtx, nil
-	}
+// sqlContextFactory returns a contextFactory that creates a new sql.Context with the given session
+func sqlContextFactory(ctx context.Context, session sql.Session) (*sql.Context, error) {
+	sqlCtx := sql.NewContext(ctx, sql.WithSession(session))
+	return sqlCtx, nil
 }
 
 // doltSessionFactory returns a sessionFactory that creates a new DoltSession

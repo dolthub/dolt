@@ -35,10 +35,12 @@ import (
 	sqltypes "github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typecompatibility"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
@@ -440,8 +442,8 @@ func (t *DoltTable) HasIndex(ctx *sql.Context, idx sql.Index) (bool, error) {
 	return index.TableHasIndex(ctx, t.db.Name(), t.tableName, tbl, idx)
 }
 
-// GetAutoIncrementValue gets the last AUTO_INCREMENT value
-func (t *DoltTable) GetAutoIncrementValue(ctx *sql.Context) (uint64, error) {
+// PeekNextAutoIncrementValue gets the next AUTO_INCREMENT value
+func (t *DoltTable) PeekNextAutoIncrementValue(ctx *sql.Context) (uint64, error) {
 	table, err := t.DoltTable(ctx)
 	if err != nil {
 		return 0, err
@@ -1152,7 +1154,7 @@ func (t *WritableDoltTable) PeekNextAutoIncrementValue(ctx *sql.Context) (uint64
 		return 0, sql.ErrNoAutoIncrementCol
 	}
 
-	return t.DoltTable.GetAutoIncrementValue(ctx)
+	return t.DoltTable.PeekNextAutoIncrementValue(ctx)
 }
 
 // GetNextAutoIncrementValue implements sql.AutoIncrementTable
@@ -1654,7 +1656,7 @@ func (t *AlterableDoltTable) ShouldRewriteTable(
 	oldColumn *sql.Column,
 	newColumn *sql.Column,
 ) bool {
-	return t.isIncompatibleTypeChange(oldColumn, newColumn) ||
+	return t.columnChangeRequiresRewrite(oldColumn, newColumn) ||
 		orderChanged(oldSchema, newSchema, oldColumn, newColumn) ||
 		isColumnDrop(oldSchema, newSchema) ||
 		isPrimaryKeyChange(oldSchema, newSchema)
@@ -1668,7 +1670,7 @@ func orderChanged(oldSchema, newSchema sql.PrimaryKeySchema, oldColumn, newColum
 	return oldSchema.Schema.IndexOfColName(oldColumn.Name) != newSchema.Schema.IndexOfColName(newColumn.Name)
 }
 
-func (t *AlterableDoltTable) isIncompatibleTypeChange(oldColumn *sql.Column, newColumn *sql.Column) bool {
+func (t *AlterableDoltTable) columnChangeRequiresRewrite(oldColumn *sql.Column, newColumn *sql.Column) bool {
 	if oldColumn == nil || newColumn == nil {
 		return false
 	}
@@ -1680,16 +1682,15 @@ func (t *AlterableDoltTable) isIncompatibleTypeChange(oldColumn *sql.Column, new
 	}
 
 	if !existingCol.TypeInfo.Equals(newCol.TypeInfo) {
-		if types.IsFormat_DOLT(t.Format()) {
-			// This is overly broad, we could narrow this down a bit
-			return true
-		}
-		if existingCol.Kind != newCol.Kind {
-			return true
-		} else if schema.IsColSpatialType(newCol) {
+		if schema.IsColSpatialType(newCol) {
 			// TODO: we need to do this because some spatial type changes require a full table check, but not all.
 			//  We could narrow this check down.
 			return true
+		} else {
+			// This is overly broad, we could narrow this down a bit
+			compatibilityChecker := typecompatibility.NewTypeCompatabilityCheckerForStorageFormat(t.Format())
+			typeChangeInfo := compatibilityChecker.IsTypeChangeCompatible(existingCol.TypeInfo, newCol.TypeInfo)
+			return !typeChangeInfo.Compatible || typeChangeInfo.RewriteRows || typeChangeInfo.InvalidateSecondaryIndexes
 		}
 	}
 
@@ -1722,6 +1723,9 @@ func (t *AlterableDoltTable) RewriteInserter(
 	newColumn *sql.Column,
 	idxCols []sql.IndexColumn,
 ) (sql.RowInserter, error) {
+	if _, isSet := os.LookupEnv(dconfig.EnvAssertNoTableRewrite); isSet {
+		return nil, fmt.Errorf("attempted to rewrite table but %s was set", dconfig.EnvAssertNoTableRewrite)
+	}
 	if err := dsess.CheckAccessForDb(ctx, t.db, branch_control.Permissions_Write); err != nil {
 		return nil, err
 	}

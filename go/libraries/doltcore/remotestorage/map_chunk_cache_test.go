@@ -15,10 +15,8 @@
 package remotestorage
 
 import (
-	"math/rand"
-	"reflect"
+	"math/rand/v2"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 
@@ -27,68 +25,111 @@ import (
 	"github.com/dolthub/dolt/go/store/nbs"
 )
 
-func genRandomChunks(rng *rand.Rand, n int) (hash.HashSet, []nbs.CompressedChunk) {
-	chks := make([]nbs.CompressedChunk, n)
-	hashes := make(hash.HashSet)
-	for i := 0; i < n; i++ {
-		size := int(rng.Int31n(99) + 1)
-		bytes := make([]byte, size)
-		for j := 0; j < size; j++ {
-			bytes[j] = byte(rng.Int31n(255))
+func TestMapChunkCache(t *testing.T) {
+	t.Run("New", func(t *testing.T) {
+		assert.NotNil(t, newMapChunkCache())
+		assert.NotNil(t, NewMapChunkCacheWithCapacity(32, 32))
+		assert.Panics(t, func() {
+			assert.NotNil(t, NewMapChunkCacheWithCapacity(-1, 32))
+		})
+		assert.Panics(t, func() {
+			assert.NotNil(t, NewMapChunkCacheWithCapacity(32, -1))
+		})
+	})
+	t.Run("CachesChunks", func(t *testing.T) {
+		var seed [32]byte
+		rand := rand.NewChaCha8(seed)
+		cache := NewMapChunkCacheWithCapacity(8, 8)
+		inserted := make(hash.HashSet)
+		// Insert some chunks.
+		for i := 0; i < 8; i++ {
+			bs := make([]byte, 512)
+			rand.Read(bs)
+			chk := chunks.NewChunk(bs)
+			inserted.Insert(chk.Hash())
+			cc := nbs.ChunkToCompressedChunk(chk)
+			cache.InsertChunks([]nbs.ToChunker{cc})
 		}
 
-		chk := nbs.ChunkToCompressedChunk(chunks.NewChunk(bytes))
-		chks[i] = chk
+		// Query for those chunks, plus some that were not inserted.
+		query := make(hash.HashSet)
+		for h := range inserted {
+			query.Insert(h)
+		}
+		for i := 0; i < 8; i++ {
+			var bs [512]byte
+			rand.Read(bs[:])
+			query.Insert(hash.Of(bs[:]))
+		}
 
-		hashes[chk.Hash()] = struct{}{}
-	}
+		// Only got back the inserted chunks...
+		cached := cache.GetCachedChunks(query)
+		assert.Len(t, cached, 8)
 
-	return hashes, chks
-}
+		// If we insert more than our max size, and query
+		// for everything inserted, we get back a result
+		// set matching our max size.
+		for i := 0; i < 64; i++ {
+			bs := make([]byte, 512)
+			rand.Read(bs)
+			chk := chunks.NewChunk(bs)
+			inserted.Insert(chk.Hash())
+			cc := nbs.ChunkToCompressedChunk(chk)
+			cache.InsertChunks([]nbs.ToChunker{cc})
+		}
+		cached = cache.GetCachedChunks(inserted)
+		assert.Len(t, cached, 8)
+	})
+	t.Run("CachesHasRecords", func(t *testing.T) {
+		var seed [32]byte
+		rand := rand.NewChaCha8(seed)
+		cache := NewMapChunkCacheWithCapacity(8, 8)
+		query := make(hash.HashSet)
+		for i := 0; i < 64; i++ {
+			var bs [512]byte
+			rand.Read(bs[:])
+			query.Insert(hash.Of(bs[:]))
+		}
 
-func TestMapChunkCache(t *testing.T) {
-	const chunkBatchSize = 10
+		// Querying an empty cache returns all the hashes.
+		res := cache.GetCachedHas(query)
+		assert.NotSame(t, res, query)
+		assert.Len(t, res, 64)
+		for h := range query {
+			_, ok := res[h]
+			assert.True(t, ok, "everything in query is in res")
+		}
 
-	seed := time.Now().UnixNano()
-	rng := rand.New(rand.NewSource(seed))
-	hashes, chks := genRandomChunks(rng, chunkBatchSize)
+		// Insert 8 of our query hashes into the cache.
+		insert := make(hash.HashSet)
+		insertTwo := make(hash.HashSet)
+		i := 0
+		for h := range query {
+			if i < 8 {
+				insert.Insert(h)
+			} else {
+				insertTwo.Insert(h)
+			}
+			i += 1
+			if i == 16 {
+				break
+			}
+		}
+		cache.InsertHas(insert)
 
-	mapChunkCache := newMapChunkCache()
-	mapChunkCache.Put(chks)
-	hashToChunk := mapChunkCache.Get(hashes)
+		// Querying our original query set returns expected results.
+		res = cache.GetCachedHas(query)
+		assert.Len(t, res, 64-8)
+		for h := range query {
+			if _, ok := insert[h]; !ok {
+				_, ok = res[h]
+				assert.True(t, ok, "everything in query that is not in insert is in res")
+			}
+		}
 
-	assert.Equal(t, len(hashToChunk), chunkBatchSize, "Did not read back all chunks (seed %d)", seed)
-
-	absent := mapChunkCache.Has(hashes)
-
-	assert.Equal(t, len(absent), 0, "Missing chunks that were added (seed %d)", seed)
-
-	toFlush := mapChunkCache.GetAndClearChunksToFlush()
-
-	assert.True(t, reflect.DeepEqual(toFlush, hashToChunk), "unexpected or missing chunks to flush (seed %d)", seed)
-
-	moreHashes, moreChks := genRandomChunks(rng, chunkBatchSize)
-
-	joinedHashes := make(hash.HashSet)
-
-	for h := range hashes {
-		joinedHashes[h] = struct{}{}
-	}
-
-	for h := range moreHashes {
-		joinedHashes[h] = struct{}{}
-	}
-
-	absent = mapChunkCache.Has(joinedHashes)
-
-	assert.True(t, reflect.DeepEqual(absent, moreHashes), "unexpected absent hashset (seed %d)", seed)
-
-	mapChunkCache.PutChunk(chks[0])
-	mapChunkCache.PutChunk(moreChks[0])
-
-	toFlush = mapChunkCache.GetAndClearChunksToFlush()
-
-	expected := map[hash.Hash]nbs.CompressedChunk{moreChks[0].Hash(): moreChks[0]}
-	eq := reflect.DeepEqual(toFlush, expected)
-	assert.True(t, eq, "Missing or unexpected chunks to flush (seed %d)", seed)
+		// Inserting another 8 hashes hits max limit. Only 8 records cached.
+		cache.InsertHas(insertTwo)
+		res = cache.GetCachedHas(query)
+		assert.Len(t, res, 64-8)
+	})
 }

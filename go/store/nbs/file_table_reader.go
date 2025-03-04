@@ -28,10 +28,13 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/dolthub/dolt/go/store/hash"
 )
+
+var ErrTableFileNotFound = errors.New("table file not found")
 
 type fileTableReader struct {
 	tableReader
@@ -53,10 +56,17 @@ func tableFileExists(ctx context.Context, dir string, h hash.Hash) (bool, error)
 	return err == nil, err
 }
 
-func archiveFileExists(ctx context.Context, dir string, h hash.Hash) (bool, error) {
-	darc := fmt.Sprintf("%s%s", h.String(), archiveFileSuffix)
+func archiveFileExists(ctx context.Context, dir string, name string) (bool, error) {
+	if !strings.HasSuffix(name, ArchiveFileSuffix) {
+		_, ok := hash.MaybeParse(name)
+		if !ok {
+			return false, errors.New(fmt.Sprintf("invalid archive file name: %s", name))
+		}
 
-	path := filepath.Join(dir, darc)
+		name = fmt.Sprintf("%s%s", name, ArchiveFileSuffix)
+	}
+
+	path := filepath.Join(dir, name)
 	_, err := os.Stat(path)
 
 	if os.IsNotExist(err) {
@@ -66,7 +76,7 @@ func archiveFileExists(ctx context.Context, dir string, h hash.Hash) (bool, erro
 	return err == nil, err
 }
 
-func newFileTableReader(ctx context.Context, dir string, h hash.Hash, chunkCount uint32, q MemoryQuotaProvider) (cs chunkSource, err error) {
+func newFileTableReader(ctx context.Context, dir string, h hash.Hash, chunkCount uint32, q MemoryQuotaProvider, stats *Stats) (cs chunkSource, err error) {
 	// we either have a table file or an archive file
 	tfExists, err := tableFileExists(ctx, dir, h)
 	if err != nil {
@@ -75,88 +85,76 @@ func newFileTableReader(ctx context.Context, dir string, h hash.Hash, chunkCount
 		return nomsFileTableReader(ctx, filepath.Join(dir, h.String()), h, chunkCount, q)
 	}
 
-	afExists, err := archiveFileExists(ctx, dir, h)
+	afExists, err := archiveFileExists(ctx, dir, h.String())
 	if err != nil {
 		return nil, err
 	} else if afExists {
-		return newArchiveChunkSource(ctx, dir, h, chunkCount, q)
+		return newArchiveChunkSource(ctx, dir, h, chunkCount, q, stats)
 	}
-	return nil, errors.New(fmt.Sprintf("table file %s/%s not found", dir, h.String()))
+	return nil, fmt.Errorf("error opening table file: %w: %s/%s", ErrTableFileNotFound, dir, h.String())
+}
+
+func newFileReaderAt(path string) (*fileReaderAt, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	fi, err := f.Stat()
+	if err != nil {
+		return nil, err
+	}
+	if fi.Size() < 0 {
+		// Size returns the number of bytes for regular files and is system dependent for others (Some of which can be negative).
+		return nil, fmt.Errorf("%s has invalid size: %d", path, fi.Size())
+	}
+	return &fileReaderAt{f, path, fi.Size()}, nil
 }
 
 func nomsFileTableReader(ctx context.Context, path string, h hash.Hash, chunkCount uint32, q MemoryQuotaProvider) (cs chunkSource, err error) {
-	var f *os.File
-	index, sz, err := func() (ti onHeapTableIndex, sz int64, err error) {
-		// Be careful with how |f| is used below. |RefFile| returns a cached
-		// os.File pointer so the code needs to use f in a concurrency-safe
-		// manner. Moving the file offset is BAD.
-		f, err = os.Open(path)
-		if err != nil {
-			return
-		}
-
-		// Since we can't move the file offset, get the size of the file and use
-		// ReadAt to load the index instead.
-		var fi os.FileInfo
-		fi, err = f.Stat()
-
-		if err != nil {
-			return
-		}
-
-		if fi.Size() < 0 {
-			// Size returns the number of bytes for regular files and is system dependent for others (Some of which can be negative).
-			err = fmt.Errorf("%s has invalid size: %d", path, fi.Size())
-			return
-		}
-
-		idxSz := int64(indexSize(chunkCount) + footerSize)
-		sz = fi.Size()
-		indexOffset := sz - idxSz
-		r := io.NewSectionReader(f, indexOffset, idxSz)
-
-		if int64(int(idxSz)) != idxSz {
-			err = fmt.Errorf("table file %s is too large to read on this platform. index size %d > max int.", path, idxSz)
-			return
-		}
-
-		var b []byte
-		b, err = q.AcquireQuotaBytes(ctx, int(idxSz))
-		if err != nil {
-			return
-		}
-
-		_, err = io.ReadFull(r, b)
-		if err != nil {
-			q.ReleaseQuotaBytes(len(b))
-			return
-		}
-
-		ti, err = parseTableIndex(ctx, b, q)
-		if err != nil {
-			q.ReleaseQuotaBytes(len(b))
-			return
-		}
-
-		return
-	}()
+	fra, err := newFileReaderAt(path)
 	if err != nil {
-		if f != nil {
-			f.Close()
-		}
 		return nil, err
+	}
+
+	idxSz := int64(indexSize(chunkCount) + footerSize)
+	indexOffset := fra.sz - idxSz
+	r := io.NewSectionReader(fra.f, indexOffset, idxSz)
+	if int64(int(idxSz)) != idxSz {
+		err = fmt.Errorf("table file %s is too large to read on this platform. index size %d > max int.", path, idxSz)
+		return
+	}
+
+	var b []byte
+	b, err = q.AcquireQuotaBytes(ctx, int(idxSz))
+	if err != nil {
+		fra.Close()
+		return
+	}
+
+	_, err = io.ReadFull(r, b)
+	if err != nil {
+		q.ReleaseQuotaBytes(len(b))
+		fra.Close()
+		return
+	}
+
+	index, err := parseTableIndex(ctx, b, q)
+	if err != nil {
+		q.ReleaseQuotaBytes(len(b))
+		fra.Close()
+		return
 	}
 
 	if chunkCount != index.chunkCount() {
 		index.Close()
-		f.Close()
+		fra.Close()
 		return nil, errors.New("unexpected chunk count")
 	}
 
-	tr, err := newTableReader(index, &fileReaderAt{f, path, sz}, fileBlockSize)
+	tr, err := newTableReader(index, fra, fileBlockSize)
 	if err != nil {
 		index.Close()
-		f.Close()
+		fra.Close()
 		return nil, err
 	}
 	return &fileTableReader{
@@ -167,6 +165,10 @@ func nomsFileTableReader(ctx context.Context, path string, h hash.Hash, chunkCou
 
 func (ftr *fileTableReader) hash() hash.Hash {
 	return ftr.h
+}
+
+func (ftr *fileTableReader) suffix() string {
+	return ""
 }
 
 func (ftr *fileTableReader) Close() error {

@@ -59,7 +59,7 @@ type tablePersister interface {
 	Open(ctx context.Context, name hash.Hash, chunkCount uint32, stats *Stats) (chunkSource, error)
 
 	// Exists checks if a table named |name| exists.
-	Exists(ctx context.Context, name hash.Hash, chunkCount uint32, stats *Stats) (bool, error)
+	Exists(ctx context.Context, name string, chunkCount uint32, stats *Stats) (bool, error)
 
 	// PruneTableFiles deletes table files which the persister would normally be responsible for and
 	// which are not in the included |keeper| set and have not be written or modified more recently

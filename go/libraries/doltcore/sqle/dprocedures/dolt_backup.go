@@ -338,15 +338,27 @@ func syncRootsFromBackup(ctx *sql.Context, dbData env.DbData, sess *dsess.DoltSe
 	return nil
 }
 
+// UserHasSuperAccess returns whether the current user has SUPER access. This is used by
+// Doltgres to check the user role by its own authentication methods.
+var UserHasSuperAccess = userHasSuperAccess
+
+func userHasSuperAccess(ctx *sql.Context) (bool, error) {
+	privs, counter := ctx.GetPrivilegeSet()
+	if counter == 0 {
+		return false, fmt.Errorf("unable to check user privileges")
+	}
+	return privs.Has(sql.PrivilegeType_Super) == true, nil
+}
+
 // checkBackupRestorePrivs returns an error if the user requesting to restore a database
 // does not have SUPER access. Since this is a potentially destructive operation, we restrict it to admins,
 // even though the SUPER privilege has been deprecated, since there isn't another appropriate global privilege.
 func checkBackupRestorePrivs(ctx *sql.Context) error {
-	privs, counter := ctx.GetPrivilegeSet()
-	if counter == 0 {
-		return fmt.Errorf("unable to check user privileges for dolt_backup() restore subcommand")
+	isSuper, err := UserHasSuperAccess(ctx)
+	if err != nil {
+		return fmt.Errorf("error in dolt_backup() restore subcommand: %w", err)
 	}
-	if privs.Has(sql.PrivilegeType_Super) == false {
+	if !isSuper {
 		return sql.ErrPrivilegeCheckFailed.New(ctx.Session.Client().User)
 	}
 

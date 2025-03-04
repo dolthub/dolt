@@ -106,7 +106,7 @@ func (cmd VersionCmd) ExecWithArgParser(ctx context.Context, apr *argparser.ArgP
 		verr := checkAndPrintVersionOutOfDateWarning(cmd.VersionStr, dEnv)
 		if verr != nil {
 			// print error but don't fail
-			cli.PrintErrf(color.YellowString(verr.Verbose()))
+			cli.PrintErr(color.YellowString(verr.Verbose()))
 		}
 	}
 
@@ -189,7 +189,7 @@ func checkAndPrintVersionOutOfDateWarning(curVersion string, dEnv *env.DoltEnv) 
 	// check and print a warning message. This can happen for example, if we get a 403 from GitHub when
 	// querying for the latest release tag.
 	if latestRelease == "" {
-		cli.Printf(color.YellowString("Warning: unable to query latest released Dolt version"))
+		cli.Print(color.YellowString("Warning: unable to query latest released Dolt version"))
 		return nil
 	}
 
@@ -199,7 +199,7 @@ func checkAndPrintVersionOutOfDateWarning(curVersion string, dEnv *env.DoltEnv) 
 		return verr
 	}
 	if isOutOfDate {
-		cli.Printf(color.YellowString("Warning: you are on an old version of Dolt. The newest version is %s.\n", latestRelease))
+		cli.Print(color.YellowString("Warning: you are on an old version of Dolt. The newest version is %s.\n", latestRelease))
 		printDisableVersionCheckWarning(dEnv, homeDir, curVersion)
 	}
 

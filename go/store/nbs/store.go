@@ -67,7 +67,6 @@ const (
 	defaultMaxTables           = 256
 
 	defaultManifestCacheSize = 1 << 23 // 8MB
-	preflushChunkCount       = 8
 )
 
 var (
@@ -85,7 +84,7 @@ func makeGlobalCaches() {
 
 type NBSCompressedChunkStore interface {
 	chunks.ChunkStore
-	GetManyCompressed(context.Context, hash.HashSet, func(context.Context, CompressedChunk)) error
+	GetManyCompressed(context.Context, hash.HashSet, func(context.Context, ToChunker)) error
 }
 
 type gcDependencyMode int
@@ -96,7 +95,7 @@ const (
 )
 
 type CompressedChunkStoreForGC interface {
-	getManyCompressed(context.Context, hash.HashSet, func(context.Context, CompressedChunk), gcDependencyMode) error
+	getManyCompressed(context.Context, hash.HashSet, func(context.Context, ToChunker), gcDependencyMode) error
 }
 
 type NomsBlockStore struct {
@@ -143,8 +142,10 @@ var _ chunks.ChunkStoreGarbageCollector = &NomsBlockStore{}
 const hasCacheSize = 100000
 
 type Range struct {
-	Offset uint64
-	Length uint32
+	Offset     uint64
+	Length     uint32
+	DictOffset uint64
+	DictLength uint32
 }
 
 // ChunkJournal returns the ChunkJournal in use by this NomsBlockStore, or nil if no ChunkJournal is being used.
@@ -156,19 +157,21 @@ func (nbs *NomsBlockStore) ChunkJournal() *ChunkJournal {
 }
 
 func (nbs *NomsBlockStore) GetChunkLocationsWithPaths(ctx context.Context, hashes hash.HashSet) (map[string]map[hash.Hash]Range, error) {
-	locs, err := nbs.GetChunkLocations(ctx, hashes)
+	sourcesToRanges, err := nbs.getChunkLocations(ctx, hashes)
 	if err != nil {
 		return nil, err
 	}
-	toret := make(map[string]map[hash.Hash]Range, len(locs))
-	for k, v := range locs {
-		toret[k.String()] = v
+
+	res := make(map[string]map[hash.Hash]Range, len(sourcesToRanges))
+	for csP, ranges := range sourcesToRanges {
+		cs := *csP
+		res[cs.hash().String()+cs.suffix()] = ranges
 	}
-	return toret, nil
+	return res, nil
 }
 
-func (nbs *NomsBlockStore) GetChunkLocations(ctx context.Context, hashes hash.HashSet) (map[hash.Hash]map[hash.Hash]Range, error) {
-	fn := func(css chunkSourceSet, gr []getRecord, ranges map[hash.Hash]map[hash.Hash]Range, keeper keeperF) (gcBehavior, error) {
+func (nbs *NomsBlockStore) getChunkLocations(ctx context.Context, hashes hash.HashSet) (map[*chunkSource]map[hash.Hash]Range, error) {
+	fn := func(css chunkSourceSet, gr []getRecord, ranges map[*chunkSource]map[hash.Hash]Range, keeper keeperF) (gcBehavior, error) {
 		for _, cs := range css {
 			rng, gcb, err := cs.getRecordRanges(ctx, gr, keeper)
 			if err != nil {
@@ -177,14 +180,16 @@ func (nbs *NomsBlockStore) GetChunkLocations(ctx context.Context, hashes hash.Ha
 			if gcb != gcBehavior_Continue {
 				return gcb, nil
 			}
+			if len(rng) == 0 {
+				continue
+			}
 
-			h := hash.Hash(cs.hash())
-			if m, ok := ranges[h]; ok {
+			if m, ok := ranges[&cs]; ok {
 				for k, v := range rng {
 					m[k] = v
 				}
 			} else {
-				ranges[h] = rng
+				ranges[&cs] = rng
 			}
 		}
 		return gcBehavior_Continue, nil
@@ -196,7 +201,7 @@ func (nbs *NomsBlockStore) GetChunkLocations(ctx context.Context, hashes hash.Ha
 		nbs.mu.Unlock()
 
 		gr := toGetRecords(hashes)
-		ranges := make(map[hash.Hash]map[hash.Hash]Range)
+		ranges := make(map[*chunkSource]map[hash.Hash]Range)
 
 		gcb, err := fn(tables.upstream, gr, ranges, keeper)
 		if needsContinue, err := nbs.handleUnlockedRead(ctx, gcb, endRead, err); err != nil {
@@ -214,6 +219,20 @@ func (nbs *NomsBlockStore) GetChunkLocations(ctx context.Context, hashes hash.Ha
 
 		return ranges, nil
 	}
+
+}
+
+func (nbs *NomsBlockStore) GetChunkLocations(ctx context.Context, hashes hash.HashSet) (map[hash.Hash]map[hash.Hash]Range, error) {
+	sourcesToRanges, err := nbs.getChunkLocations(ctx, hashes)
+	if err != nil {
+		return nil, err
+	}
+	res := make(map[hash.Hash]map[hash.Hash]Range, len(hashes))
+	for csP, ranges := range sourcesToRanges {
+		cs := *csP
+		res[cs.hash()] = ranges
+	}
+	return res, nil
 }
 
 func (nbs *NomsBlockStore) handleUnlockedRead(ctx context.Context, gcb gcBehavior, endRead func(), err error) (bool, error) {
@@ -269,12 +288,15 @@ func (nbs *NomsBlockStore) conjoinIfRequired(ctx context.Context) (bool, error) 
 	}
 }
 
-func (nbs *NomsBlockStore) UpdateManifest(ctx context.Context, updates map[hash.Hash]uint32) (mi ManifestInfo, err error) {
-	err = nbs.checkAllManifestUpdatesExist(ctx, updates)
+func (nbs *NomsBlockStore) UpdateManifest(ctx context.Context, updates map[hash.Hash]uint32) (ManifestInfo, error) {
+	chunkSources, _, err := nbs.openChunkSourcesForAddTableFiles(ctx, updates)
 	if err != nil {
-		return manifestContents{}, err
+		return manifestContents{}, nil
 	}
-	mi, _, err = nbs.updateManifestAddFiles(ctx, updates, nil, nil, nil)
+	// If these sources get added to the store, they will get cloned.
+	// Either way, we want to close these instances when we are done.
+	defer chunkSources.close()
+	mi, _, err := nbs.updateManifestAddFiles(ctx, updates, nil, nil, chunkSources)
 	return mi, err
 }
 
@@ -384,33 +406,16 @@ func (nbs *NomsBlockStore) updateManifestAddFiles(ctx context.Context, updates m
 	return updatedContents, false, nil
 }
 
-func (nbs *NomsBlockStore) UpdateManifestWithAppendix(ctx context.Context, updates map[hash.Hash]uint32, option ManifestAppendixOption) (mi ManifestInfo, err error) {
-	err = nbs.checkAllManifestUpdatesExist(ctx, updates)
+func (nbs *NomsBlockStore) UpdateManifestWithAppendix(ctx context.Context, updates map[hash.Hash]uint32, option ManifestAppendixOption) (ManifestInfo, error) {
+	chunkSources, _, err := nbs.openChunkSourcesForAddTableFiles(ctx, updates)
 	if err != nil {
-		return
+		return manifestContents{}, nil
 	}
-	mi, _, err = nbs.updateManifestAddFiles(ctx, updates, &option, nil, nil)
+	// If these sources get added to the store, they will get cloned.
+	// Either way, we want to close these instances when we are done.
+	defer chunkSources.close()
+	mi, _, err := nbs.updateManifestAddFiles(ctx, updates, &option, nil, chunkSources)
 	return mi, err
-}
-
-func (nbs *NomsBlockStore) checkAllManifestUpdatesExist(ctx context.Context, updates map[hash.Hash]uint32) error {
-	eg, ctx := errgroup.WithContext(ctx)
-	eg.SetLimit(128)
-	for h, c := range updates {
-		h := h
-		c := c
-		eg.Go(func() error {
-			ok, err := nbs.p.Exists(ctx, h, c, nbs.stats)
-			if err != nil {
-				return err
-			}
-			if !ok {
-				return fmt.Errorf("missing table file referenced in UpdateManifest call: %v", h)
-			}
-			return nil
-		})
-	}
-	return eg.Wait()
 }
 
 func fromManifestAppendixOptionNewContents(upstream manifestContents, appendixSpecs []tableSpec, option ManifestAppendixOption) (manifestContents, error) {
@@ -901,11 +906,11 @@ func (nbs *NomsBlockStore) GetMany(ctx context.Context, hashes hash.HashSet, fou
 	)
 }
 
-func (nbs *NomsBlockStore) GetManyCompressed(ctx context.Context, hashes hash.HashSet, found func(context.Context, CompressedChunk)) error {
+func (nbs *NomsBlockStore) GetManyCompressed(ctx context.Context, hashes hash.HashSet, found func(context.Context, ToChunker)) error {
 	return nbs.getManyCompressed(ctx, hashes, found, gcDependencyMode_TakeDependency)
 }
 
-func (nbs *NomsBlockStore) getManyCompressed(ctx context.Context, hashes hash.HashSet, found func(context.Context, CompressedChunk), gcDepMode gcDependencyMode) error {
+func (nbs *NomsBlockStore) getManyCompressed(ctx context.Context, hashes hash.HashSet, found func(context.Context, ToChunker), gcDepMode gcDependencyMode) error {
 	ctx, span := tracer.Start(ctx, "nbs.GetManyCompressed", trace.WithAttributes(attribute.Int("num_hashes", len(hashes))))
 	defer span.End()
 	return nbs.getManyWithFunc(ctx, hashes, gcDepMode,
@@ -931,10 +936,10 @@ func (nbs *NomsBlockStore) getManyWithFunc(
 		nbs.stats.ChunksPerGet.Sample(uint64(len(hashes)))
 	}()
 
+	reqs := toGetRecords(hashes)
+
 	const ioParallelism = 16
 	for {
-		reqs := toGetRecords(hashes)
-
 		nbs.mu.Lock()
 		keeper := nbs.keeperFunc
 		if gcDepMode == gcDependencyMode_NoDependency {
@@ -1482,13 +1487,18 @@ func (nbs *NomsBlockStore) StatsSummary() string {
 
 // tableFile is our implementation of TableFile.
 type tableFile struct {
-	info TableSpecInfo
-	open func(ctx context.Context) (io.ReadCloser, uint64, error)
+	info   TableSpecInfo
+	open   func(ctx context.Context) (io.ReadCloser, uint64, error)
+	suffix string
 }
 
 // LocationPrefix
 func (tf tableFile) LocationPrefix() string {
 	return ""
+}
+
+func (tf tableFile) LocationSuffix() string {
+	return tf.suffix
 }
 
 // FileID gets the id of the file
@@ -1555,12 +1565,18 @@ func getTableFiles(css map[hash.Hash]chunkSource, contents manifestContents, num
 		if !ok {
 			return nil, ErrSpecWithoutChunkSource
 		}
+
 		tableFiles = append(tableFiles, newTableFile(cs, info))
 	}
 	return tableFiles, nil
 }
 
 func newTableFile(cs chunkSource, info tableSpec) tableFile {
+	s := ""
+	if _, ok := cs.(archiveChunkSource); ok {
+		s = ArchiveFileSuffix
+	}
+
 	return tableFile{
 		info: info,
 		open: func(ctx context.Context) (io.ReadCloser, uint64, error) {
@@ -1570,6 +1586,7 @@ func newTableFile(cs chunkSource, info tableSpec) tableFile {
 			}
 			return r, s, nil
 		},
+		suffix: s,
 	}
 }
 
@@ -1625,7 +1642,7 @@ func (nbs *NomsBlockStore) Path() (string, bool) {
 }
 
 // WriteTableFile will read a table file from the provided reader and write it to the TableFileStore
-func (nbs *NomsBlockStore) WriteTableFile(ctx context.Context, fileId string, numChunks int, contentHash []byte, getRd func() (io.ReadCloser, uint64, error)) error {
+func (nbs *NomsBlockStore) WriteTableFile(ctx context.Context, fileName string, numChunks int, contentHash []byte, getRd func() (io.ReadCloser, uint64, error)) error {
 	tfp, ok := nbs.p.(tableFilePersister)
 	if !ok {
 		return errors.New("Not implemented")
@@ -1636,7 +1653,7 @@ func (nbs *NomsBlockStore) WriteTableFile(ctx context.Context, fileId string, nu
 		return err
 	}
 	defer r.Close()
-	return tfp.CopyTableFile(ctx, r, fileId, sz, uint32(numChunks))
+	return tfp.CopyTableFile(ctx, r, fileName, sz, uint32(numChunks))
 }
 
 // AddTableFilesToManifest adds table files to the manifest
@@ -1699,7 +1716,7 @@ func refCheckAllSources(ctx context.Context, nbs *NomsBlockStore, getAddrs chunk
 			checkErr = err
 		}
 		if len(remaining) > 0 {
-			checkErr = fmt.Errorf("%w, missing: %v", errors.New("cannot add table files; referenced chunk not found in store."), remaining)
+			checkErr = fmt.Errorf("cannot add table files: %w, missing: %v", ErrTableFileNotFound, remaining)
 		}
 	}
 	for _, source := range sources {
@@ -1982,25 +1999,25 @@ func (i *markAndSweeper) SaveHashes(ctx context.Context, hashes []hash.Hash) err
 
 		found := 0
 		var addErr error
-		err = i.src.getManyCompressed(ctx, toVisit, func(ctx context.Context, cc CompressedChunk) {
+		err = i.src.getManyCompressed(ctx, toVisit, func(ctx context.Context, tc ToChunker) {
 			mu.Lock()
 			defer mu.Unlock()
 			if addErr != nil {
 				return
 			}
 			found += 1
-			if cc.IsGhost() {
+			if tc.IsGhost() {
 				// Ghost chunks encountered on the walk can be left alone --- they
 				// do not bring their dependencies, and because of how generational
 				// store works, they will still be ghost chunks
 				// in the store after the GC is finished.
 				return
 			}
-			addErr = i.gcc.addChunk(ctx, cc)
+			addErr = i.gcc.addChunk(ctx, tc)
 			if addErr != nil {
 				return
 			}
-			c, err := cc.ToChunk()
+			c, err := tc.ToChunk()
 			if err != nil {
 				addErr = err
 				return

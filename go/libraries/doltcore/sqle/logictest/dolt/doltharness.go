@@ -143,8 +143,11 @@ func innerInit(h *DoltHarness, dEnv *env.DoltEnv) error {
 		return err
 	}
 
+	statsPro := statspro.NewProvider(pro.(*dsql.DoltDatabaseProvider), statsnoms.NewNomsStatsFactory(env.NewGRPCDialProviderFromDoltEnv(dEnv)))
+	gcSafepointController := dsess.NewGCSafepointController()
+
 	config, _ := dEnv.Config.GetConfig(env.GlobalConfig)
-	sqlCtx := dsql.NewTestSQLCtxWithProvider(ctx, pro, config, statspro.StatsNoop{}, dsess.NewGCSafepointController())
+	sqlCtx := dsql.NewTestSQLCtxWithProvider(ctx, pro, config, statsPro, gcSafepointController)
 	h.sess = sqlCtx.Session.(*dsess.DoltSession)
 
 	dbs := h.engine.Analyzer.Catalog.AllDatabases(sqlCtx)
@@ -300,7 +303,7 @@ func sqlNewEngine(ctx context.Context, dEnv *env.DoltEnv) (*sqle.Engine, dsess.D
 	}
 
 	b := env.GetDefaultInitBranch(dEnv.Config)
-	pro, err := dsql.NewDoltDatabaseProviderWithDatabase(b, mrEnv.FileSystem(), db, dEnv.FS, sql.NewBackgroundThreads())
+	pro, err := dsql.NewDoltDatabaseProviderWithDatabase(b, mrEnv.FileSystem(), db, dEnv.FS)
 	if err != nil {
 		return nil, nil, err
 	}

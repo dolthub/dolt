@@ -15,129 +15,70 @@
 package remotestorage
 
 import (
-	"sync"
+	lru "github.com/hashicorp/golang-lru/v2"
 
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/nbs"
 )
 
-// mapChunkCache is a ChunkCache implementation that stores everything in an in memory map.
+// mapChunkCache is a simple ChunkCache implementation that stores
+// cached chunks and has records in two separate lru caches.
 type mapChunkCache struct {
-	mu          *sync.Mutex
-	hashToChunk map[hash.Hash]nbs.CompressedChunk
-	toFlush     map[hash.Hash]nbs.CompressedChunk
-	cm          CapacityMonitor
+	chunks *lru.TwoQueueCache[hash.Hash, nbs.ToChunker]
+	has    *lru.TwoQueueCache[hash.Hash, struct{}]
 }
+
+const defaultCacheChunkCapacity = 32 * 1024
+const defaultCacheHasCapacity = 1024 * 1024
 
 func newMapChunkCache() *mapChunkCache {
+	return NewMapChunkCacheWithCapacity(defaultCacheChunkCapacity, defaultCacheHasCapacity)
+}
+
+func NewMapChunkCacheWithCapacity(maxChunkCapacity, maxHasCapacity int) *mapChunkCache {
+	chunks, err := lru.New2Q[hash.Hash, nbs.ToChunker](maxChunkCapacity)
+	if err != nil {
+		panic(err)
+	}
+	has, err := lru.New2Q[hash.Hash, struct{}](maxHasCapacity)
+	if err != nil {
+		panic(err)
+	}
 	return &mapChunkCache{
-		&sync.Mutex{},
-		make(map[hash.Hash]nbs.CompressedChunk),
-		make(map[hash.Hash]nbs.CompressedChunk),
-		NewUncappedCapacityMonitor(),
+		chunks,
+		has,
 	}
 }
 
-// used by DoltHub API
-func NewMapChunkCacheWithMaxCapacity(maxCapacity int64) *mapChunkCache {
-	return &mapChunkCache{
-		&sync.Mutex{},
-		make(map[hash.Hash]nbs.CompressedChunk),
-		make(map[hash.Hash]nbs.CompressedChunk),
-		NewFixedCapacityMonitor(maxCapacity),
+func (cache *mapChunkCache) InsertChunks(cs []nbs.ToChunker) {
+	for _, c := range cs {
+		cache.chunks.Add(c.Hash(), c)
 	}
 }
 
-// Put puts a slice of chunks into the cache.
-func (mcc *mapChunkCache) Put(chnks []nbs.CompressedChunk) bool {
-	mcc.mu.Lock()
-	defer mcc.mu.Unlock()
-
-	for i := 0; i < len(chnks); i++ {
-		c := chnks[i]
-		h := c.Hash()
-
-		if curr, ok := mcc.hashToChunk[h]; ok {
-			if !curr.IsEmpty() {
-				continue
-			}
-		}
-
-		if mcc.cm.CapacityExceeded(len(c.FullCompressedChunk)) {
-			return true
-		}
-
-		mcc.hashToChunk[h] = c
-
-		if !c.IsEmpty() {
-			mcc.toFlush[h] = c
+func (cache *mapChunkCache) GetCachedChunks(hs hash.HashSet) map[hash.Hash]nbs.ToChunker {
+	ret := make(map[hash.Hash]nbs.ToChunker)
+	for h := range hs {
+		c, ok := cache.chunks.Get(h)
+		if ok {
+			ret[h] = c
 		}
 	}
-
-	return false
+	return ret
 }
 
-// Get gets a map of hash to chunk for a set of hashes.  In the event that a chunk is not in the cache, chunks.Empty.
-// is put in it's place
-func (mcc *mapChunkCache) Get(hashes hash.HashSet) map[hash.Hash]nbs.CompressedChunk {
-	hashToChunk := make(map[hash.Hash]nbs.CompressedChunk)
+func (cache *mapChunkCache) InsertHas(hs hash.HashSet) {
+	for h := range hs {
+		cache.has.Add(h, struct{}{})
+	}
+}
 
-	mcc.mu.Lock()
-	defer mcc.mu.Unlock()
-
-	for h := range hashes {
-		if c, ok := mcc.hashToChunk[h]; ok {
-			hashToChunk[h] = c
-		} else {
-			hashToChunk[h] = nbs.EmptyCompressedChunk
+func (cache *mapChunkCache) GetCachedHas(hs hash.HashSet) (absent hash.HashSet) {
+	ret := make(hash.HashSet)
+	for h := range hs {
+		if !cache.has.Contains(h) {
+			ret.Insert(h)
 		}
 	}
-
-	return hashToChunk
-}
-
-// Has takes a set of hashes and returns the set of hashes that the cache currently does not have in it.
-func (mcc *mapChunkCache) Has(hashes hash.HashSet) (absent hash.HashSet) {
-	absent = make(hash.HashSet)
-
-	mcc.mu.Lock()
-	defer mcc.mu.Unlock()
-
-	for h := range hashes {
-		if _, ok := mcc.hashToChunk[h]; !ok {
-			absent[h] = struct{}{}
-		}
-	}
-
-	return absent
-}
-
-func (mcc *mapChunkCache) PutChunk(ch nbs.CompressedChunk) bool {
-	mcc.mu.Lock()
-	defer mcc.mu.Unlock()
-
-	h := ch.Hash()
-	if existing, ok := mcc.hashToChunk[h]; !ok || existing.IsEmpty() {
-		if mcc.cm.CapacityExceeded(len(ch.FullCompressedChunk)) {
-			return true
-		}
-		mcc.hashToChunk[h] = ch
-		mcc.toFlush[h] = ch
-	}
-
-	return false
-}
-
-// GetAndClearChunksToFlush gets a map of hash to chunk which includes all the chunks that were put in the cache
-// between the last time GetAndClearChunksToFlush was called and now.
-func (mcc *mapChunkCache) GetAndClearChunksToFlush() map[hash.Hash]nbs.CompressedChunk {
-	newToFlush := make(map[hash.Hash]nbs.CompressedChunk)
-
-	mcc.mu.Lock()
-	defer mcc.mu.Unlock()
-
-	toFlush := mcc.toFlush
-	mcc.toFlush = newToFlush
-
-	return toFlush
+	return ret
 }

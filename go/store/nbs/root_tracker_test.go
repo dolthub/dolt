@@ -597,7 +597,7 @@ func compactSourcesToBuffer(sources chunkSources) (name hash.Hash, data []byte, 
 	}
 
 	if errString != "" {
-		return hash.Hash{}, nil, 0, fmt.Errorf(errString)
+		return hash.Hash{}, nil, 0, fmt.Errorf("%s", errString)
 	}
 
 	tableSize, name, err := tw.finish()
@@ -631,8 +631,13 @@ func (ftp fakeTablePersister) Open(ctx context.Context, name hash.Hash, chunkCou
 	return chunkSourceAdapter{cs, name}, nil
 }
 
-func (ftp fakeTablePersister) Exists(ctx context.Context, name hash.Hash, chunkCount uint32, stats *Stats) (bool, error) {
-	if _, ok := ftp.sourcesToFail[name]; ok {
+func (ftp fakeTablePersister) Exists(ctx context.Context, name string, chunkCount uint32, stats *Stats) (bool, error) {
+	h, ok := hash.MaybeParse(name)
+	if !ok {
+		panic("object store name expected to be a hash in test")
+	}
+
+	if _, ok := ftp.sourcesToFail[h]; ok {
 		return false, errors.New("intentional failure")
 	}
 	return true, nil

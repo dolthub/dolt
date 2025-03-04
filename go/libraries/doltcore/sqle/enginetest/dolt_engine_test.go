@@ -1392,6 +1392,12 @@ func TestBrokenSystemTableQueries(t *testing.T) {
 	enginetest.RunQueryTests(t, h, BrokenSystemTableQueries)
 }
 
+func TestBackupsSystemTable(t *testing.T) {
+	h := newDoltHarness(t)
+	defer h.Close()
+	enginetest.TestScript(t, h, BackupsSystemTableQueries)
+}
+
 func TestHistorySystemTable(t *testing.T) {
 	harness := newDoltEnginetestHarness(t).WithParallelism(2)
 	RunHistorySystemTableTests(t, harness)
