@@ -32,11 +32,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/client/metadata"
-	"github.com/aws/aws-sdk-go/aws/request"
-	"github.com/aws/aws-sdk-go/service/s3"
-	"github.com/aws/aws-sdk-go/service/s3/s3iface"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	s3types "github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/dolthub/dolt/go/store/d"
@@ -60,8 +58,6 @@ func makeFakeS3(t *testing.T) *fakeS3 {
 }
 
 type fakeS3 struct {
-	s3iface.S3API
-
 	assert *assert.Assertions
 
 	mu                sync.Mutex
@@ -118,7 +114,7 @@ func (m *fakeS3) readerForTableWithNamespace(ctx context.Context, ns string, nam
 	return nil, nil
 }
 
-func (m *fakeS3) AbortMultipartUploadWithContext(ctx aws.Context, input *s3.AbortMultipartUploadInput, opts ...request.Option) (*s3.AbortMultipartUploadOutput, error) {
+func (m *fakeS3) AbortMultipartUpload(ctx context.Context, input *s3.AbortMultipartUploadInput, opts ...func(*s3.Options)) (*s3.AbortMultipartUploadOutput, error) {
 	m.assert.NotNil(input.Bucket, "Bucket is a required field")
 	m.assert.NotNil(input.Key, "Key is a required field")
 	m.assert.NotNil(input.UploadId, "UploadId is a required field")
@@ -133,7 +129,7 @@ func (m *fakeS3) AbortMultipartUploadWithContext(ctx aws.Context, input *s3.Abor
 	return &s3.AbortMultipartUploadOutput{}, nil
 }
 
-func (m *fakeS3) CreateMultipartUploadWithContext(ctx aws.Context, input *s3.CreateMultipartUploadInput, opts ...request.Option) (*s3.CreateMultipartUploadOutput, error) {
+func (m *fakeS3) CreateMultipartUpload(ctx context.Context, input *s3.CreateMultipartUploadInput, opts ...func(*s3.Options)) (*s3.CreateMultipartUploadOutput, error) {
 	m.assert.NotNil(input.Bucket, "Bucket is a required field")
 	m.assert.NotNil(input.Key, "Key is a required field")
 
@@ -151,7 +147,7 @@ func (m *fakeS3) CreateMultipartUploadWithContext(ctx aws.Context, input *s3.Cre
 	return out, nil
 }
 
-func (m *fakeS3) UploadPartWithContext(ctx aws.Context, input *s3.UploadPartInput, opts ...request.Option) (*s3.UploadPartOutput, error) {
+func (m *fakeS3) UploadPart(ctx context.Context, input *s3.UploadPartInput, opts ...func(*s3.Options)) (*s3.UploadPartOutput, error) {
 	m.assert.NotNil(input.Bucket, "Bucket is a required field")
 	m.assert.NotNil(input.Key, "Key is a required field")
 	m.assert.NotNil(input.PartNumber, "PartNumber is a required field")
@@ -174,7 +170,7 @@ func (m *fakeS3) UploadPartWithContext(ctx aws.Context, input *s3.UploadPartInpu
 	return &s3.UploadPartOutput{ETag: aws.String(etag)}, nil
 }
 
-func (m *fakeS3) UploadPartCopyWithContext(ctx aws.Context, input *s3.UploadPartCopyInput, opts ...request.Option) (*s3.UploadPartCopyOutput, error) {
+func (m *fakeS3) UploadPartCopy(ctx context.Context, input *s3.UploadPartCopyInput, opts ...func(*s3.Options)) (*s3.UploadPartCopyOutput, error) {
 	m.assert.NotNil(input.Bucket, "Bucket is a required field")
 	m.assert.NotNil(input.Key, "Key is a required field")
 	m.assert.NotNil(input.PartNumber, "PartNumber is a required field")
@@ -205,10 +201,10 @@ func (m *fakeS3) UploadPartCopyWithContext(ctx aws.Context, input *s3.UploadPart
 	m.assert.Equal(inProgress.uploadID, *input.UploadId)
 	inProgress.etags = append(inProgress.etags, etag)
 	m.inProgress[*input.Key] = inProgress
-	return &s3.UploadPartCopyOutput{CopyPartResult: &s3.CopyPartResult{ETag: aws.String(etag)}}, nil
+	return &s3.UploadPartCopyOutput{CopyPartResult: &s3types.CopyPartResult{ETag: aws.String(etag)}}, nil
 }
 
-func (m *fakeS3) CompleteMultipartUploadWithContext(ctx aws.Context, input *s3.CompleteMultipartUploadInput, opts ...request.Option) (*s3.CompleteMultipartUploadOutput, error) {
+func (m *fakeS3) CompleteMultipartUpload(ctx context.Context, input *s3.CompleteMultipartUploadInput, opts ...func(*s3.Options)) (*s3.CompleteMultipartUploadOutput, error) {
 	m.assert.NotNil(input.Bucket, "Bucket is a required field")
 	m.assert.NotNil(input.Key, "Key is a required field")
 	m.assert.NotNil(input.UploadId, "UploadId is a required field")
@@ -228,7 +224,7 @@ func (m *fakeS3) CompleteMultipartUploadWithContext(ctx aws.Context, input *s3.C
 	return &s3.CompleteMultipartUploadOutput{Bucket: input.Bucket, Key: input.Key}, nil
 }
 
-func (m *fakeS3) GetObjectWithContext(ctx aws.Context, input *s3.GetObjectInput, opts ...request.Option) (*s3.GetObjectOutput, error) {
+func (m *fakeS3) GetObject(ctx context.Context, input *s3.GetObjectInput, opts ...func(*s3.Options)) (*s3.GetObjectOutput, error) {
 	m.assert.NotNil(input.Bucket, "Bucket is a required field")
 	m.assert.NotNil(input.Key, "Key is a required field")
 
@@ -270,7 +266,7 @@ func parseRange(hdr string, total int) (start, end int) {
 	return start, end + 1 // insanely, the HTTP range header specifies ranges inclusively.
 }
 
-func (m *fakeS3) PutObjectWithContext(ctx aws.Context, input *s3.PutObjectInput, opts ...request.Option) (*s3.PutObjectOutput, error) {
+func (m *fakeS3) PutObject(ctx context.Context, input *s3.PutObjectInput, opts ...func(*s3.Options)) (*s3.PutObjectOutput, error) {
 	m.assert.NotNil(input.Bucket, "Bucket is a required field")
 	m.assert.NotNil(input.Key, "Key is a required field")
 
@@ -282,38 +278,4 @@ func (m *fakeS3) PutObjectWithContext(ctx aws.Context, input *s3.PutObjectInput,
 	m.data[*input.Key] = buff.Bytes()
 
 	return &s3.PutObjectOutput{}, nil
-}
-
-func (m *fakeS3) GetObjectRequest(input *s3.GetObjectInput) (*request.Request, *s3.GetObjectOutput) {
-	out := &s3.GetObjectOutput{}
-	var handlers request.Handlers
-	handlers.Send.PushBack(func(r *request.Request) {
-		res, err := m.GetObjectWithContext(r.Context(), input)
-		r.Error = err
-		if res != nil {
-			*(r.Data.(*s3.GetObjectOutput)) = *res
-		}
-	})
-	return request.New(aws.Config{}, metadata.ClientInfo{}, handlers, nil, &request.Operation{
-		Name:       "GetObject",
-		HTTPMethod: "GET",
-		HTTPPath:   "/{Bucket}/{Key+}",
-	}, input, out), out
-}
-
-func (m *fakeS3) PutObjectRequest(input *s3.PutObjectInput) (*request.Request, *s3.PutObjectOutput) {
-	out := &s3.PutObjectOutput{}
-	var handlers request.Handlers
-	handlers.Send.PushBack(func(r *request.Request) {
-		res, err := m.PutObjectWithContext(r.Context(), input)
-		r.Error = err
-		if res != nil {
-			*(r.Data.(*s3.PutObjectOutput)) = *res
-		}
-	})
-	return request.New(aws.Config{}, metadata.ClientInfo{}, handlers, nil, &request.Operation{
-		Name:       "PutObject",
-		HTTPMethod: "PUT",
-		HTTPPath:   "/{Bucket}/{Key+}",
-	}, input, out), out
 }

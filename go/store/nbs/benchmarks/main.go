@@ -29,10 +29,11 @@ import (
 	"sort"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/dynamodb"
-	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	ddbtypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/dustin/go-humanize"
 	flag "github.com/juju/gnuflag"
 	"github.com/stretchr/testify/assert"
@@ -136,16 +137,19 @@ func main() {
 			}
 
 		} else if *toAWS != "" {
-			sess := session.Must(session.NewSession(aws.NewConfig().WithRegion("us-west-2")))
+			cfg, err := config.LoadDefaultConfig(context.Background(), config.WithRegion("us-west-2"))
+			d.PanicIfError(err)
 			open = func() (chunks.ChunkStore, error) {
-				return nbs.NewAWSStore(context.Background(), types.Format_Default.VersionString(), dynamoTable, *toAWS, s3Bucket, s3.New(sess), dynamodb.New(sess), bufSize, nbs.NewUnlimitedMemQuotaProvider())
+				return nbs.NewAWSStore(context.Background(), types.Format_Default.VersionString(), dynamoTable, *toAWS, s3Bucket, s3.NewFromConfig(cfg), dynamodb.NewFromConfig(cfg), bufSize, nbs.NewUnlimitedMemQuotaProvider())
 			}
 			reset = func() {
-				ddb := dynamodb.New(sess)
-				_, err := ddb.DeleteItem(&dynamodb.DeleteItemInput{
+				ddb := dynamodb.NewFromConfig(cfg)
+				_, err := ddb.DeleteItem(context.Background(), &dynamodb.DeleteItemInput{
 					TableName: aws.String(dynamoTable),
-					Key: map[string]*dynamodb.AttributeValue{
-						"db": {S: toAWS},
+					Key: map[string]ddbtypes.AttributeValue{
+						"db": &ddbtypes.AttributeValueMemberS{
+							Value: *toAWS,
+						},
 					},
 				})
 				d.PanicIfError(err)
@@ -163,9 +167,10 @@ func main() {
 				return nbs.NewLocalStore(context.Background(), types.Format_Default.VersionString(), *useNBS, bufSize, nbs.NewUnlimitedMemQuotaProvider())
 			}
 		} else if *useAWS != "" {
-			sess := session.Must(session.NewSession(aws.NewConfig().WithRegion("us-west-2")))
+			cfg, err := config.LoadDefaultConfig(context.Background(), config.WithRegion("us-west-2"))
+			d.PanicIfError(err)
 			open = func() (chunks.ChunkStore, error) {
-				return nbs.NewAWSStore(context.Background(), types.Format_Default.VersionString(), dynamoTable, *useAWS, s3Bucket, s3.New(sess), dynamodb.New(sess), bufSize, nbs.NewUnlimitedMemQuotaProvider())
+				return nbs.NewAWSStore(context.Background(), types.Format_Default.VersionString(), dynamoTable, *useAWS, s3Bucket, s3.NewFromConfig(cfg), dynamodb.NewFromConfig(cfg), bufSize, nbs.NewUnlimitedMemQuotaProvider())
 			}
 		}
 		writeDB = func() {}

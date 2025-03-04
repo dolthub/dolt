@@ -28,10 +28,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/aws/request"
-	"github.com/aws/aws-sdk-go/service/dynamodb"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	ddbtypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -57,18 +56,18 @@ var (
 	valueNotExistsOrEqualsExpression = fmt.Sprintf("attribute_not_exists("+lockAttr+") or %s", valueEqualsExpression)
 )
 
-type ddbsvc interface {
-	GetItemWithContext(ctx aws.Context, input *dynamodb.GetItemInput, opts ...request.Option) (*dynamodb.GetItemOutput, error)
-	PutItemWithContext(ctx aws.Context, input *dynamodb.PutItemInput, opts ...request.Option) (*dynamodb.PutItemOutput, error)
+type DynamoDBAPIV2 interface {
+	GetItem(context.Context, *dynamodb.GetItemInput, ...func(*dynamodb.Options)) (*dynamodb.GetItemOutput, error)
+	PutItem(context.Context, *dynamodb.PutItemInput, ...func(*dynamodb.Options)) (*dynamodb.PutItemOutput, error)
 }
 
 // dynamoManifest assumes the existence of a DynamoDB table whose primary partition key is in String format and named `db`.
 type dynamoManifest struct {
 	table, db string
-	ddbsvc    ddbsvc
+	ddbsvc    DynamoDBAPIV2
 }
 
-func newDynamoManifest(table, namespace string, ddb ddbsvc) manifest {
+func newDynamoManifest(table, namespace string, ddb DynamoDBAPIV2) manifest {
 	d.PanicIfTrue(table == "")
 	d.PanicIfTrue(namespace == "")
 	return dynamoManifest{table, namespace, ddb}
@@ -85,11 +84,13 @@ func (dm dynamoManifest) ParseIfExists(ctx context.Context, stats *Stats, readHo
 	var exists bool
 	var contents manifestContents
 
-	result, err := dm.ddbsvc.GetItemWithContext(ctx, &dynamodb.GetItemInput{
-		ConsistentRead: aws.Bool(true), // This doubles the cost :-(
+	result, err := dm.ddbsvc.GetItem(ctx, &dynamodb.GetItemInput{
+		ConsistentRead: aws.Bool(true),
 		TableName:      aws.String(dm.table),
-		Key: map[string]*dynamodb.AttributeValue{
-			dbAttr: {S: aws.String(dm.db)},
+		Key: map[string]ddbtypes.AttributeValue{
+			dbAttr: &ddbtypes.AttributeValueMemberS{
+				Value: dm.db,
+			},
 		},
 	})
 
@@ -105,18 +106,18 @@ func (dm dynamoManifest) ParseIfExists(ctx context.Context, stats *Stats, readHo
 		}
 
 		exists = true
-		contents.nbfVers = *result.Item[versAttr].S
-		contents.root = hash.New(result.Item[rootAttr].B)
-		copy(contents.lock[:], result.Item[lockAttr].B)
+		contents.nbfVers = result.Item[versAttr].(*ddbtypes.AttributeValueMemberS).Value
+		contents.root = hash.New(result.Item[rootAttr].(*ddbtypes.AttributeValueMemberB).Value)
+		copy(contents.lock[:], result.Item[lockAttr].(*ddbtypes.AttributeValueMemberB).Value)
 		if hasSpecs {
-			contents.specs, err = parseSpecs(strings.Split(*result.Item[tableSpecsAttr].S, ":"))
+			contents.specs, err = parseSpecs(strings.Split(result.Item[tableSpecsAttr].(*ddbtypes.AttributeValueMemberS).Value, ":"))
 			if err != nil {
 				return false, manifestContents{}, ErrCorruptManifest
 			}
 		}
 
 		if hasAppendix {
-			contents.appendix, err = parseSpecs(strings.Split(*result.Item[appendixAttr].S, ":"))
+			contents.appendix, err = parseSpecs(strings.Split(result.Item[appendixAttr].(*ddbtypes.AttributeValueMemberS).Value, ":"))
 			if err != nil {
 				return false, manifestContents{}, ErrCorruptManifest
 			}
@@ -126,24 +127,41 @@ func (dm dynamoManifest) ParseIfExists(ctx context.Context, stats *Stats, readHo
 	return exists, contents, nil
 }
 
-func validateManifest(item map[string]*dynamodb.AttributeValue) (valid, hasSpecs, hasAppendix bool) {
-	if item[nbsVersAttr] != nil && item[nbsVersAttr].S != nil &&
-		AWSStorageVersion == *item[nbsVersAttr].S &&
-		item[versAttr] != nil && item[versAttr].S != nil &&
-		item[lockAttr] != nil && item[lockAttr].B != nil &&
-		item[rootAttr] != nil && item[rootAttr].B != nil {
-		if len(item) == 6 || len(item) == 7 {
-			if item[tableSpecsAttr] != nil && item[tableSpecsAttr].S != nil {
-				hasSpecs = true
-			}
-			if item[appendixAttr] != nil && item[appendixAttr].S != nil {
-				hasAppendix = true
-			}
-			return true, hasSpecs, hasAppendix
-		}
-		return len(item) == 5, false, false
+func validateManifest(item map[string]ddbtypes.AttributeValue) (valid, hasSpecs, hasAppendix bool) {
+	if nbsVersA := item[nbsVersAttr]; nbsVersA == nil {
+		return false, false, false
+	} else if nbsVers, ok := nbsVersA.(*ddbtypes.AttributeValueMemberS); !ok {
+		return false, false, false
+	} else if nbsVers.Value != AWSStorageVersion {
+		return false, false, false
 	}
-	return false, false, false
+	if versA := item[versAttr]; versA == nil {
+		return false, false, false
+	} else if _, ok := versA.(*ddbtypes.AttributeValueMemberS); !ok {
+		return false, false, false
+	}
+	if lockA := item[lockAttr]; lockA == nil {
+		return false, false, false
+	} else if _, ok := lockA.(*ddbtypes.AttributeValueMemberB); !ok {
+		return false, false, false
+	}
+	if rootA := item[rootAttr]; rootA == nil {
+		return false, false, false
+	} else if _, ok := rootA.(*ddbtypes.AttributeValueMemberB); !ok {
+		return false, false, false
+	}
+	if len(item) == 6 || len(item) == 7 {
+		if tableSpecsA := item[tableSpecsAttr]; tableSpecsA == nil {
+		} else if _, ok := tableSpecsA.(*ddbtypes.AttributeValueMemberS); ok {
+			hasSpecs = true
+		}
+		if appendixA := item[appendixAttr]; appendixA == nil {
+		} else if _, ok := appendixA.(*ddbtypes.AttributeValueMemberS); ok {
+			hasAppendix = true
+		}
+		return true, hasSpecs, hasAppendix
+	}
+	return len(item) == 5, false, false
 }
 
 func (dm dynamoManifest) Update(ctx context.Context, lastLock hash.Hash, newContents manifestContents, stats *Stats, writeHook func() error) (manifestContents, error) {
@@ -152,25 +170,25 @@ func (dm dynamoManifest) Update(ctx context.Context, lastLock hash.Hash, newCont
 
 	putArgs := dynamodb.PutItemInput{
 		TableName: aws.String(dm.table),
-		Item: map[string]*dynamodb.AttributeValue{
-			dbAttr:      {S: aws.String(dm.db)},
-			nbsVersAttr: {S: aws.String(AWSStorageVersion)},
-			versAttr:    {S: aws.String(newContents.nbfVers)},
-			rootAttr:    {B: newContents.root[:]},
-			lockAttr:    {B: newContents.lock[:]},
+		Item: map[string]ddbtypes.AttributeValue{
+			dbAttr:      &ddbtypes.AttributeValueMemberS{Value: dm.db},
+			nbsVersAttr: &ddbtypes.AttributeValueMemberS{Value: AWSStorageVersion},
+			versAttr:    &ddbtypes.AttributeValueMemberS{Value: newContents.nbfVers},
+			rootAttr:    &ddbtypes.AttributeValueMemberB{Value: newContents.root[:]},
+			lockAttr:    &ddbtypes.AttributeValueMemberB{Value: newContents.lock[:]},
 		},
 	}
 
 	if len(newContents.specs) > 0 {
 		tableInfo := make([]string, 2*len(newContents.specs))
 		formatSpecs(newContents.specs, tableInfo)
-		putArgs.Item[tableSpecsAttr] = &dynamodb.AttributeValue{S: aws.String(strings.Join(tableInfo, ":"))}
+		putArgs.Item[tableSpecsAttr] = &ddbtypes.AttributeValueMemberS{Value: strings.Join(tableInfo, ":")}
 	}
 
 	if len(newContents.appendix) > 0 {
 		tableInfo := make([]string, 2*len(newContents.appendix))
 		formatSpecs(newContents.appendix, tableInfo)
-		putArgs.Item[appendixAttr] = &dynamodb.AttributeValue{S: aws.String(strings.Join(tableInfo, ":"))}
+		putArgs.Item[appendixAttr] = &ddbtypes.AttributeValueMemberS{Value: strings.Join(tableInfo, ":")}
 	}
 
 	expr := valueEqualsExpression
@@ -179,12 +197,12 @@ func (dm dynamoManifest) Update(ctx context.Context, lastLock hash.Hash, newCont
 	}
 
 	putArgs.ConditionExpression = aws.String(expr)
-	putArgs.ExpressionAttributeValues = map[string]*dynamodb.AttributeValue{
-		prevLockExpressionValuesKey: {B: lastLock[:]},
-		versExpressionValuesKey:     {S: aws.String(newContents.nbfVers)},
+	putArgs.ExpressionAttributeValues = map[string]ddbtypes.AttributeValue{
+		prevLockExpressionValuesKey: &ddbtypes.AttributeValueMemberB{Value: lastLock[:]},
+		versExpressionValuesKey:     &ddbtypes.AttributeValueMemberS{Value: newContents.nbfVers},
 	}
 
-	_, ddberr := dm.ddbsvc.PutItemWithContext(ctx, &putArgs)
+	_, ddberr := dm.ddbsvc.PutItem(ctx, &putArgs)
 	if ddberr != nil {
 		if errIsConditionalCheckFailed(ddberr) {
 			exists, upstream, err := dm.ParseIfExists(ctx, stats, nil)
@@ -213,6 +231,6 @@ func (dm dynamoManifest) Update(ctx context.Context, lastLock hash.Hash, newCont
 }
 
 func errIsConditionalCheckFailed(err error) bool {
-	awsErr, ok := err.(awserr.Error)
-	return ok && awsErr.Code() == "ConditionalCheckFailedException"
+	var ccfe *ddbtypes.ConditionalCheckFailedException
+	return errors.As(err, &ccfe)
 }

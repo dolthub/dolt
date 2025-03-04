@@ -15,12 +15,13 @@
 package dbfactory
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -121,12 +122,11 @@ func TestAWSConfigFromParams(t *testing.T) {
 			os.Setenv(k, v)
 		}
 	}
-	getSession := func(t *testing.T, params map[string]interface{}) *session.Session {
-		opts, err := awsConfigFromParams(params)
+	getConfig := func(t *testing.T, params map[string]interface{}) aws.Config {
+		cfg, err := awsConfigFromParams(context.Background(), params)
+		t.Helper()
 		require.NoError(t, err)
-		sess, err := session.NewSessionWithOptions(opts)
-		require.NoError(t, err)
-		return sess
+		return cfg
 	}
 
 	// Do not pick up config from any files in the running user's
@@ -166,15 +166,13 @@ func TestAWSConfigFromParams(t *testing.T) {
 					"AWS_SECRET_ACCESS_KEY": expectedSecretAccessKey,
 					"AWS_REGION":            expectedRegion,
 				})
-				sess := getSession(t, getRttParams(rtt))
-				creds, err := sess.Config.Credentials.Get()
+				cfg := getConfig(t, getRttParams(rtt))
+				creds, err := cfg.Credentials.Retrieve(context.Background())
 				if assert.NoError(t, err) {
 					assert.Equal(t, expectedAccessKeyID, creds.AccessKeyID)
 					assert.Equal(t, expectedSecretAccessKey, creds.SecretAccessKey)
 				}
-				if assert.NotNil(t, sess.Config.Region) {
-					assert.Equal(t, expectedRegion, *sess.Config.Region)
-				}
+				assert.Equal(t, expectedRegion, cfg.Region)
 			})
 			t.Run("CredsInLegacyEnv", func(t *testing.T) {
 				expectedAccessKeyID := uuid.New().String()
@@ -185,15 +183,13 @@ func TestAWSConfigFromParams(t *testing.T) {
 					"AWS_SECRET_KEY":     expectedSecretAccessKey,
 					"AWS_DEFAULT_REGION": expectedRegion,
 				})
-				sess := getSession(t, getRttParams(rtt))
-				creds, err := sess.Config.Credentials.Get()
+				cfg := getConfig(t, getRttParams(rtt))
+				creds, err := cfg.Credentials.Retrieve(context.Background())
 				if assert.NoError(t, err) {
 					assert.Equal(t, expectedAccessKeyID, creds.AccessKeyID)
 					assert.Equal(t, expectedSecretAccessKey, creds.SecretAccessKey)
 				}
-				if assert.NotNil(t, sess.Config.Region) {
-					assert.Equal(t, expectedRegion, *sess.Config.Region)
-				}
+				assert.Equal(t, expectedRegion, cfg.Region)
 			})
 			t.Run("FilesInEnv", func(t *testing.T) {
 				t.Run("ProfileInEnv", func(t *testing.T) {
@@ -205,15 +201,13 @@ func TestAWSConfigFromParams(t *testing.T) {
 						"AWS_CONFIG_FILE":             configFile,
 						"AWS_SHARED_CREDENTIALS_FILE": credsFile,
 					})
-					sess := getSession(t, getRttParams(rtt))
-					creds, err := sess.Config.Credentials.Get()
+					cfg := getConfig(t, getRttParams(rtt))
+					creds, err := cfg.Credentials.Retrieve(context.Background())
 					if assert.NoError(t, err) {
 						assert.Equal(t, loadFromFileProfileAccessKeyID, creds.AccessKeyID)
 						assert.Equal(t, loadFromFileProfileSecretAccessKey, creds.SecretAccessKey)
 					}
-					if assert.NotNil(t, sess.Config.Region) {
-						assert.Equal(t, loadFromFileProfileRegion, *sess.Config.Region)
-					}
+					assert.Equal(t, loadFromFileProfileRegion, cfg.Region)
 				})
 				t.Run("ProfileInLegacyEnv", func(t *testing.T) {
 					loadedProfile := "load_from_file"
@@ -224,15 +218,13 @@ func TestAWSConfigFromParams(t *testing.T) {
 						"AWS_CONFIG_FILE":             configFile,
 						"AWS_SHARED_CREDENTIALS_FILE": credsFile,
 					})
-					sess := getSession(t, getRttParams(rtt))
-					creds, err := sess.Config.Credentials.Get()
+					cfg := getConfig(t, getRttParams(rtt))
+					creds, err := cfg.Credentials.Retrieve(context.Background())
 					if assert.NoError(t, err) {
 						assert.Equal(t, loadFromFileProfileAccessKeyID, creds.AccessKeyID)
 						assert.Equal(t, loadFromFileProfileSecretAccessKey, creds.SecretAccessKey)
 					}
-					if assert.NotNil(t, sess.Config.Region) {
-						assert.Equal(t, loadFromFileProfileRegion, *sess.Config.Region)
-					}
+					assert.Equal(t, loadFromFileProfileRegion, cfg.Region)
 				})
 				t.Run("ProfileInParam", func(t *testing.T) {
 					loadedProfile := "load_from_file"
@@ -244,15 +236,13 @@ func TestAWSConfigFromParams(t *testing.T) {
 					})
 					params := getRttParams(rtt)
 					params[AWSCredsProfile] = loadedProfile
-					sess := getSession(t, params)
-					creds, err := sess.Config.Credentials.Get()
+					cfg := getConfig(t, params)
+					creds, err := cfg.Credentials.Retrieve(context.Background())
 					if assert.NoError(t, err) {
 						assert.Equal(t, loadFromFileProfileAccessKeyID, creds.AccessKeyID)
 						assert.Equal(t, loadFromFileProfileSecretAccessKey, creds.SecretAccessKey)
 					}
-					if assert.NotNil(t, sess.Config.Region) {
-						assert.Equal(t, loadFromFileProfileRegion, *sess.Config.Region)
-					}
+					assert.Equal(t, loadFromFileProfileRegion, cfg.Region)
 				})
 				t.Run("FileParamOverridesCredsTypeRole", func(t *testing.T) {
 					// If an aws-creds-file parameter is passed,
@@ -274,15 +264,13 @@ func TestAWSConfigFromParams(t *testing.T) {
 					params := getRttParams(rtt)
 					params[AWSCredsProfile] = loadedProfile
 					params[AWSCredsFileParam] = credsFile
-					sess := getSession(t, params)
-					creds, err := sess.Config.Credentials.Get()
+					cfg := getConfig(t, params)
+					creds, err := cfg.Credentials.Retrieve(context.Background())
 					if assert.NoError(t, err) {
 						assert.Equal(t, loadFromFileProfileAccessKeyID, creds.AccessKeyID)
 						assert.Equal(t, loadFromFileProfileSecretAccessKey, creds.SecretAccessKey)
 					}
-					if assert.NotNil(t, sess.Config.Region) {
-						assert.Equal(t, loadFromFileProfileRegion, *sess.Config.Region)
-					}
+					assert.Equal(t, loadFromFileProfileRegion, cfg.Region)
 				})
 				// XXX: Currently there are no tests
 				// here of web identity token
@@ -319,17 +307,15 @@ func TestAWSConfigFromParams(t *testing.T) {
 			"AWS_SECRET_ACCESS_KEY": expectedSecretAccessKey,
 			"AWS_REGION":            envRegion,
 		})
-		sess := getSession(t, map[string]interface{}{
+		cfg := getConfig(t, map[string]interface{}{
 			AWSRegionParam: expectedRegion,
 		})
-		creds, err := sess.Config.Credentials.Get()
+		creds, err := cfg.Credentials.Retrieve(context.Background())
 		if assert.NoError(t, err) {
 			assert.Equal(t, expectedAccessKeyID, creds.AccessKeyID)
 			assert.Equal(t, expectedSecretAccessKey, creds.SecretAccessKey)
 		}
-		if assert.NotNil(t, sess.Config.Region) {
-			assert.Equal(t, expectedRegion, *sess.Config.Region)
-		}
+		assert.Equal(t, expectedRegion, cfg.Region)
 	})
 	t.Run("CredsTypeEnv", func(t *testing.T) {
 		t.Run("PopulatedCreds", func(t *testing.T) {
@@ -341,17 +327,15 @@ func TestAWSConfigFromParams(t *testing.T) {
 				"AWS_SECRET_ACCESS_KEY": expectedSecretAccessKey,
 				"AWS_REGION":            expectedRegion,
 			})
-			sess := getSession(t, map[string]interface{}{
+			cfg := getConfig(t, map[string]interface{}{
 				AWSCredsTypeParam: "env",
 			})
-			creds, err := sess.Config.Credentials.Get()
+			creds, err := cfg.Credentials.Retrieve(context.Background())
 			if assert.NoError(t, err) {
 				assert.Equal(t, expectedAccessKeyID, creds.AccessKeyID)
 				assert.Equal(t, expectedSecretAccessKey, creds.SecretAccessKey)
 			}
-			if assert.NotNil(t, sess.Config.Region) {
-				assert.Equal(t, expectedRegion, *sess.Config.Region)
-			}
+			assert.Equal(t, expectedRegion, cfg.Region)
 		})
 		t.Run("MissingAccessKeyID", func(t *testing.T) {
 			expectedSecretAccessKey := uuid.New().String()
@@ -360,10 +344,10 @@ func TestAWSConfigFromParams(t *testing.T) {
 				"AWS_SECRET_ACCESS_KEY": expectedSecretAccessKey,
 				"AWS_REGION":            expectedRegion,
 			})
-			sess := getSession(t, map[string]interface{}{
+			cfg := getConfig(t, map[string]interface{}{
 				AWSCredsTypeParam: "env",
 			})
-			_, err := sess.Config.Credentials.Get()
+			_, err := cfg.Credentials.Retrieve(context.Background())
 			require.Error(t, err)
 		})
 		t.Run("MissingSecretAccessKey", func(t *testing.T) {
@@ -373,16 +357,16 @@ func TestAWSConfigFromParams(t *testing.T) {
 				"AWS_ACCESS_KEY_ID": expectedAccessKeyID,
 				"AWS_REGION":        expectedRegion,
 			})
-			sess := getSession(t, map[string]interface{}{
+			cfg := getConfig(t, map[string]interface{}{
 				AWSCredsTypeParam: "env",
 			})
-			_, err := sess.Config.Credentials.Get()
+			_, err := cfg.Credentials.Retrieve(context.Background())
 			require.Error(t, err)
 		})
 	})
 	t.Run("CredsTypeFile", func(t *testing.T) {
 		t.Run("FileParamDoesNotExist", func(t *testing.T) {
-			_, err := awsConfigFromParams(map[string]interface{}{
+			_, err := awsConfigFromParams(context.Background(), map[string]interface{}{
 				AWSCredsTypeParam: "file",
 				AWSCredsProfile:   "some_profile",
 			})
@@ -395,12 +379,12 @@ func TestAWSConfigFromParams(t *testing.T) {
 			setEnv(t, map[string]string{
 				"AWS_CONFIG_FILE": configFile,
 			})
-			sess := getSession(t, map[string]interface{}{
+			cfg := getConfig(t, map[string]interface{}{
 				AWSCredsTypeParam: "file",
 				AWSCredsProfile:   loadedProfile,
 				AWSCredsFileParam: credsFile,
 			})
-			_, err = sess.Config.Credentials.Get()
+			_, err = cfg.Credentials.Retrieve(context.Background())
 			require.Error(t, err)
 		})
 		t.Run("ProfileFromParamDoesNotExist", func(t *testing.T) {
@@ -410,12 +394,12 @@ func TestAWSConfigFromParams(t *testing.T) {
 			setEnv(t, map[string]string{
 				"AWS_CONFIG_FILE": configFile,
 			})
-			sess := getSession(t, map[string]interface{}{
+			cfg := getConfig(t, map[string]interface{}{
 				AWSCredsTypeParam: "file",
 				AWSCredsProfile:   loadedProfile,
 				AWSCredsFileParam: credsFile,
 			})
-			_, err = sess.Config.Credentials.Get()
+			_, err = cfg.Credentials.Retrieve(context.Background())
 			require.Error(t, err)
 		})
 		t.Run("ProfileFromEnvDoesNotExist", func(t *testing.T) {
@@ -426,11 +410,11 @@ func TestAWSConfigFromParams(t *testing.T) {
 				"AWS_CONFIG_FILE": configFile,
 				"AWS_PROFILE":     loadedProfile,
 			})
-			sess := getSession(t, map[string]interface{}{
+			cfg := getConfig(t, map[string]interface{}{
 				AWSCredsTypeParam: "file",
 				AWSCredsFileParam: credsFile,
 			})
-			_, err = sess.Config.Credentials.Get()
+			_, err = cfg.Credentials.Retrieve(context.Background())
 			require.Error(t, err)
 		})
 		type profileOnlyHasCredsTest struct {
@@ -459,11 +443,11 @@ func TestAWSConfigFromParams(t *testing.T) {
 							"AWS_CONFIG_FILE": tt.fileEnv,
 						})
 					}
-					sess := getSession(t, map[string]interface{}{
+					cfg := getConfig(t, map[string]interface{}{
 						AWSCredsTypeParam: "file",
 						AWSCredsFileParam: credsFile,
 					})
-					creds, err := sess.Config.Credentials.Get()
+					creds, err := cfg.Credentials.Retrieve(context.Background())
 					if assert.NoError(t, err) {
 						assert.Equal(t, onlyCredsProfileAccessKeyID, creds.AccessKeyID)
 						assert.Equal(t, onlyCredsProfileSecretAccessKey, creds.SecretAccessKey)
@@ -481,12 +465,12 @@ func TestAWSConfigFromParams(t *testing.T) {
 							"AWS_CONFIG_FILE": tt.fileEnv,
 						})
 					}
-					sess := getSession(t, map[string]interface{}{
+					cfg := getConfig(t, map[string]interface{}{
 						AWSCredsTypeParam: "file",
 						AWSCredsFileParam: credsFile,
 						AWSCredsProfile:   loadedProfile,
 					})
-					creds, err := sess.Config.Credentials.Get()
+					creds, err := cfg.Credentials.Retrieve(context.Background())
 					if assert.NoError(t, err) {
 						assert.Equal(t, onlyCredsProfileAccessKeyID, creds.AccessKeyID)
 						assert.Equal(t, onlyCredsProfileSecretAccessKey, creds.SecretAccessKey)
@@ -507,19 +491,17 @@ func TestAWSConfigFromParams(t *testing.T) {
 				"AWS_SHARED_CREDENTIALS_FILE": altCredsFile,
 			})
 			credsFile := filepath.Join(cwd, "testdata", "basic_creds_file")
-			sess := getSession(t, map[string]interface{}{
+			cfg := getConfig(t, map[string]interface{}{
 				AWSCredsTypeParam: "file",
 				AWSCredsProfile:   loadedProfile,
 				AWSCredsFileParam: credsFile,
 			})
-			creds, err := sess.Config.Credentials.Get()
+			creds, err := cfg.Credentials.Retrieve(context.Background())
 			if assert.NoError(t, err) {
 				assert.Equal(t, loadFromFileProfileAccessKeyID, creds.AccessKeyID)
 				assert.Equal(t, loadFromFileProfileSecretAccessKey, creds.SecretAccessKey)
 			}
-			if assert.NotNil(t, sess.Config.Region) {
-				assert.Equal(t, loadFromFileProfileRegion, *sess.Config.Region)
-			}
+			assert.Equal(t, loadFromFileProfileRegion, cfg.Region)
 		})
 		t.Run("NoProfileUsesDefault", func(t *testing.T) {
 			// If no aws-profile parameter is supplied,
@@ -536,18 +518,16 @@ func TestAWSConfigFromParams(t *testing.T) {
 				"AWS_SHARED_CREDENTIALS_FILE": altCredsFile,
 			})
 			credsFile := filepath.Join(cwd, "testdata", "basic_creds_file")
-			sess := getSession(t, map[string]interface{}{
+			cfg := getConfig(t, map[string]interface{}{
 				AWSCredsTypeParam: "file",
 				AWSCredsFileParam: credsFile,
 			})
-			creds, err := sess.Config.Credentials.Get()
+			creds, err := cfg.Credentials.Retrieve(context.Background())
 			if assert.NoError(t, err) {
 				assert.Equal(t, defaultProfileAccessKeyID, creds.AccessKeyID)
 				assert.Equal(t, defaultProfileSecretAccessKey, creds.SecretAccessKey)
 			}
-			if assert.NotNil(t, sess.Config.Region) {
-				assert.Equal(t, defaultProfileRegion, *sess.Config.Region)
-			}
+			assert.Equal(t, defaultProfileRegion, cfg.Region)
 		})
 		t.Run("ProfileInEnv", func(t *testing.T) {
 			// If no aws-profile parameter is supplied,
@@ -566,18 +546,16 @@ func TestAWSConfigFromParams(t *testing.T) {
 				"AWS_SHARED_CREDENTIALS_FILE": altCredsFile,
 			})
 			credsFile := filepath.Join(cwd, "testdata", "basic_creds_file")
-			sess := getSession(t, map[string]interface{}{
+			cfg := getConfig(t, map[string]interface{}{
 				AWSCredsTypeParam: "file",
 				AWSCredsFileParam: credsFile,
 			})
-			creds, err := sess.Config.Credentials.Get()
+			creds, err := cfg.Credentials.Retrieve(context.Background())
 			if assert.NoError(t, err) {
 				assert.Equal(t, loadFromFileProfileAccessKeyID, creds.AccessKeyID)
 				assert.Equal(t, loadFromFileProfileSecretAccessKey, creds.SecretAccessKey)
 			}
-			if assert.NotNil(t, sess.Config.Region) {
-				assert.Equal(t, loadFromFileProfileRegion, *sess.Config.Region)
-			}
+			assert.Equal(t, loadFromFileProfileRegion, cfg.Region)
 		})
 		t.Run("SplitBrainProfileInLegacyEnv", func(t *testing.T) {
 			// If no aws-profile parameter is supplied,
@@ -603,18 +581,16 @@ func TestAWSConfigFromParams(t *testing.T) {
 				"AWS_SHARED_CREDENTIALS_FILE": altCredsFile,
 			})
 			credsFile := filepath.Join(cwd, "testdata", "basic_creds_file")
-			sess := getSession(t, map[string]interface{}{
+			cfg := getConfig(t, map[string]interface{}{
 				AWSCredsTypeParam: "file",
 				AWSCredsFileParam: credsFile,
 			})
-			creds, err := sess.Config.Credentials.Get()
+			creds, err := cfg.Credentials.Retrieve(context.Background())
 			if assert.NoError(t, err) {
 				assert.Equal(t, defaultProfileAccessKeyID, creds.AccessKeyID)
 				assert.Equal(t, defaultProfileSecretAccessKey, creds.SecretAccessKey)
 			}
-			if assert.NotNil(t, sess.Config.Region) {
-				assert.Equal(t, loadFromFileProfileRegion, *sess.Config.Region)
-			}
+			assert.Equal(t, loadFromFileProfileRegion, cfg.Region)
 		})
 	})
 	t.Run("CredentialsFileRefresh", func(t *testing.T) {
@@ -642,16 +618,14 @@ aws_access_key_id = new_access_key_id
 aws_secret_access_key = new_secret_access_key
 `)
 		require.NoError(t, os.WriteFile(credsFilePath, credsFileContents, 0660))
-		sess := getSession(t, map[string]interface{}{
+		cfg := getConfig(t, map[string]interface{}{
 			AWSCredsTypeParam: "file",
 			AWSCredsFileParam: credsFilePath,
 			AWSRegionParam:    "us-west-2",
 			AWSCredsProfile:   "some_profile",
 		})
-		if assert.NotNil(t, sess.Config.Region) {
-			assert.Equal(t, "us-west-2", *sess.Config.Region)
-		}
-		creds, err := sess.Config.Credentials.Get()
+		assert.Equal(t, "us-west-2", cfg.Region)
+		creds, err := cfg.Credentials.Retrieve(context.Background())
 		if assert.NoError(t, err) {
 			assert.Equal(t, "original_access_key_id", creds.AccessKeyID)
 			assert.Equal(t, "original_secret_access_key", creds.SecretAccessKey)
@@ -659,7 +633,7 @@ aws_secret_access_key = new_secret_access_key
 		require.NoError(t, os.WriteFile(filepath.Join(dir, "new_creds_file"), newCredsFileContents, 0660))
 		require.NoError(t, os.Rename(filepath.Join(dir, "new_creds_file"), credsFilePath))
 		time.Sleep(10 * time.Millisecond)
-		creds, err = sess.Config.Credentials.Get()
+		creds, err = cfg.Credentials.Retrieve(context.Background())
 		if assert.NoError(t, err) {
 			assert.Equal(t, "new_access_key_id", creds.AccessKeyID)
 			assert.Equal(t, "new_secret_access_key", creds.SecretAccessKey)

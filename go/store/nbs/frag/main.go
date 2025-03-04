@@ -28,10 +28,9 @@ import (
 	"os"
 	"sync"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/dynamodb"
-	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/dustin/go-humanize"
 	flag "github.com/juju/gnuflag"
 
@@ -75,10 +74,9 @@ func main() {
 
 		*dbName = *dir
 	} else if *table != "" && *bucket != "" && *dbName != "" {
-		sess := session.Must(session.NewSession(aws.NewConfig().WithRegion("us-west-2")))
-
-		var err error
-		store, err = nbs.NewAWSStore(context.Background(), types.Format_Default.VersionString(), *table, *dbName, *bucket, s3.New(sess), dynamodb.New(sess), memTableSize, nbs.NewUnlimitedMemQuotaProvider())
+		cfg, err := config.LoadDefaultConfig(context.Background(), config.WithRegion("us-west-2"))
+		d.PanicIfError(err)
+		store, err = nbs.NewAWSStore(context.Background(), types.Format_Default.VersionString(), *table, *dbName, *bucket, s3.NewFromConfig(cfg), dynamodb.NewFromConfig(cfg), memTableSize, nbs.NewUnlimitedMemQuotaProvider())
 		d.PanicIfError(err)
 	} else {
 		log.Fatalf("Must set either --dir or ALL of --table, --bucket and --db\n")

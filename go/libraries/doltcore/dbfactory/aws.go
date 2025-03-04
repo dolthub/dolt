@@ -17,16 +17,16 @@ package dbfactory
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/url"
 	"os"
 	"strings"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/dynamodb"
-	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 
 	"github.com/dolthub/dolt/go/libraries/utils/awsrefreshcreds"
 	"github.com/dolthub/dolt/go/store/chunks"
@@ -138,7 +138,7 @@ func (fact AWSFactory) newChunkStore(ctx context.Context, nbf *types.NomsBinForm
 		return nil, errors.New("aws url has an invalid format")
 	}
 
-	opts, err := awsConfigFromParams(params)
+	cfg, err := awsConfigFromParams(ctx, params)
 
 	if err != nil {
 		return nil, err
@@ -150,14 +150,14 @@ func (fact AWSFactory) newChunkStore(ctx context.Context, nbf *types.NomsBinForm
 		return nil, err
 	}
 
-	sess := session.Must(session.NewSessionWithOptions(opts))
-	_, err = sess.Config.Credentials.Get()
+	// Sanity check that we have credentials...
+	_, err = cfg.Credentials.Retrieve(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	q := nbs.NewUnlimitedMemQuotaProvider()
-	return nbs.NewAWSStore(ctx, nbf.VersionString(), parts[0], dbName, parts[1], s3.New(sess), dynamodb.New(sess), defaultMemTableSize, q)
+	return nbs.NewAWSStore(ctx, nbf.VersionString(), parts[0], dbName, parts[1], s3.NewFromConfig(cfg), dynamodb.NewFromConfig(cfg), defaultMemTableSize, q)
 }
 
 func validatePath(path string) (string, error) {
@@ -178,28 +178,26 @@ func validatePath(path string) (string, error) {
 	return path, nil
 }
 
-func awsConfigFromParams(params map[string]interface{}) (session.Options, error) {
-	awsConfig := aws.NewConfig()
+func awsConfigFromParams(ctx context.Context, params map[string]interface{}) (aws.Config, error) {
+	var opts []func(*config.LoadOptions) error
+
+	// aws-region always sets the region. Otherwise it comes from AWS_REGION or AWS_DEFAULT_REGION.
 	if val, ok := params[AWSRegionParam]; ok {
-		awsConfig = awsConfig.WithRegion(val.(string))
+		opts = append(opts, config.WithRegion(val.(string)))
 	}
 
 	awsCredsSource := RoleCS
 	if val, ok := params[AWSCredsTypeParam]; ok {
 		awsCredsSource = AWSCredentialSourceFromStr(val.(string))
 		if awsCredsSource == InvalidCS {
-			return session.Options{}, errors.New("invalid value for aws-creds-source")
+			return aws.Config{}, errors.New("invalid value for aws-creds-source")
 		}
-	}
-
-	opts := session.Options{
-		SharedConfigState: session.SharedConfigEnable,
 	}
 
 	profile := ""
 	if val, ok := params[AWSCredsProfile]; ok {
 		profile = val.(string)
-		opts.Profile = val.(string)
+		opts = append(opts, config.WithSharedConfigProfile(val.(string)))
 	}
 
 	filePath, ok := params[AWSCredsFileParam]
@@ -209,39 +207,80 @@ func awsConfigFromParams(params map[string]interface{}) (session.Options, error)
 
 	switch awsCredsSource {
 	case EnvCS:
-		awsConfig = awsConfig.WithCredentials(credentials.NewEnvCredentials())
+		// Credentials can only come directly from AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY...
+		creds := awsrefreshcreds.LoadEnvCredentials()
+		opts = append(opts, config.WithCredentialsProvider(aws.CredentialsProviderFunc(func(context.Context) (aws.Credentials, error) {
+			if !creds.HasKeys() {
+				return aws.Credentials{}, errors.New("error loading env creds; did not find AWS_ACCESS_KEY_ID or AWS_SECRET_ACCESS_KEY environment variable.")
+			} else {
+				return creds, nil
+			}
+		})))
 	case FileCS:
 		if filePath, ok := params[AWSCredsFileParam]; !ok {
-			return opts, os.ErrNotExist
+			return aws.Config{}, os.ErrNotExist
 		} else {
-			provider := &credentials.SharedCredentialsProvider{
-				Filename: filePath.(string),
-				Profile:  profile,
-			}
-			creds := credentials.NewCredentials(awsrefreshcreds.NewRefreshingCredentialsProvider(provider, AWSFileCredsRefreshDuration))
-			awsConfig = awsConfig.WithCredentials(creds)
+			provider := awsrefreshcreds.LoadINICredentialsProvider(filePath.(string), profile)
+			provider = awsrefreshcreds.NewRefreshingCredentialsProvider(provider, AWSFileCredsRefreshDuration)
+			opts = append(opts, config.WithCredentialsProvider(provider))
 		}
 	case AutoCS:
-		// start by trying to get the credentials from the environment
-		envCreds := credentials.NewEnvCredentials()
-		if _, err := envCreds.Get(); err == nil {
-			awsConfig = awsConfig.WithCredentials(envCreds)
+		if envCreds := awsrefreshcreds.LoadEnvCredentials(); envCreds.HasKeys() {
+			opts = append(opts, config.WithCredentialsProvider(aws.CredentialsProviderFunc(func(context.Context) (aws.Credentials, error) {
+				return envCreds, nil
+			})))
 		} else {
 			// if env credentials don't exist try looking for a credentials file
 			if filePath, ok := params[AWSCredsFileParam]; ok {
 				if _, err := os.Stat(filePath.(string)); err == nil {
-					creds := credentials.NewSharedCredentials(filePath.(string), profile)
-					awsConfig = awsConfig.WithCredentials(creds)
+					provider := awsrefreshcreds.LoadINICredentialsProvider(filePath.(string), profile)
+					opts = append(opts, config.WithCredentialsProvider(provider))
 				}
 			}
-
-			// if file and env do not return valid credentials use the default credentials of the box (same as role)
 		}
+	// if file and env do not return valid credentials use the default credentials of the box (same as role)
 	case RoleCS:
 	default:
 	}
 
-	opts.Config.MergeIn(awsConfig)
+	cfg, err := config.LoadDefaultConfig(ctx, opts...)
+	var profileErr config.SharedConfigProfileNotExistError
+	if errors.As(err, &profileErr) {
+		// XXX: Dolt was originaly using aws-sdk-go, which was
+		// happy to load the specified shared profile from
+		// places like AWS_CONFIG_FILE or $HOME/.aws/config,
+		// but did not complain if it could not find it.
+		//
+		// We preserve that behavior here with this gross
+		// hack. We write a shared config file with an empty
+		// profile, and we point to that config file when
+		// loading the config.
+		if profile == "" {
+			profile = os.Getenv("AWS_PROFILE")
+		}
+		if profile == "" {
+			profile = os.Getenv("AWS_DEFAULT_PROFILE")
+		}
+		path, ferr := makeTempEmptyProfileConfig(profile)
+		if path != "" {
+			defer os.Remove(path)
+		}
+		if ferr == nil {
+			opts = append(opts, config.WithSharedConfigFiles([]string{path}))
+			cfg, err = config.LoadDefaultConfig(ctx, opts...)
+		}
+	}
+	return cfg, err
+}
 
-	return opts, nil
+func makeTempEmptyProfileConfig(profile string) (string, error) {
+	f, err := os.CreateTemp("", "dolt_aws_empty_profile-*")
+	if err != nil {
+		return "", err
+	}
+	_, err = fmt.Fprintf(f, "[profile %s]\n", profile)
+	if err != nil {
+		return f.Name(), errors.Join(err, f.Close())
+	}
+	return f.Name(), f.Close()
 }

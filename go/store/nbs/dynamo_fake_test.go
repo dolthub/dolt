@@ -23,12 +23,12 @@ package nbs
 
 import (
 	"bytes"
+	"context"
 	"sync/atomic"
 	"testing"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/request"
-	"github.com/aws/aws-sdk-go/service/dynamodb"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	ddbtypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/dolthub/dolt/go/store/constants"
@@ -52,24 +52,24 @@ func makeFakeDDB(t *testing.T) *fakeDDB {
 	}
 }
 
-func (m *fakeDDB) GetItemWithContext(ctx aws.Context, input *dynamodb.GetItemInput, opts ...request.Option) (*dynamodb.GetItemOutput, error) {
-	key := input.Key[dbAttr].S
-	assert.NotNil(m.t, key, "key should have been a String: %+v", input.Key[dbAttr])
+func (m *fakeDDB) GetItem(ctx context.Context, input *dynamodb.GetItemInput, opts ...func(*dynamodb.Options)) (*dynamodb.GetItemOutput, error) {
+	keyM := input.Key[dbAttr].(*ddbtypes.AttributeValueMemberS)
+	assert.NotNil(m.t, keyM, "key should have been a String: %+v", input.Key[dbAttr])
 
-	item := map[string]*dynamodb.AttributeValue{}
-	if e, present := m.data[*key]; present {
-		item[dbAttr] = &dynamodb.AttributeValue{S: key}
+	item := map[string]ddbtypes.AttributeValue{}
+	if e, present := m.data[keyM.Value]; present {
+		item[dbAttr] = &ddbtypes.AttributeValueMemberS{Value: keyM.Value}
 		switch e := e.(type) {
 		case record:
-			item[nbsVersAttr] = &dynamodb.AttributeValue{S: aws.String(AWSStorageVersion)}
-			item[versAttr] = &dynamodb.AttributeValue{S: aws.String(e.vers)}
-			item[rootAttr] = &dynamodb.AttributeValue{B: e.root}
-			item[lockAttr] = &dynamodb.AttributeValue{B: e.lock}
+			item[nbsVersAttr] = &ddbtypes.AttributeValueMemberS{Value: AWSStorageVersion}
+			item[versAttr] = &ddbtypes.AttributeValueMemberS{Value: e.vers}
+			item[rootAttr] = &ddbtypes.AttributeValueMemberB{Value: e.root}
+			item[lockAttr] = &ddbtypes.AttributeValueMemberB{Value: e.lock}
 			if e.specs != "" {
-				item[tableSpecsAttr] = &dynamodb.AttributeValue{S: aws.String(e.specs)}
+				item[tableSpecsAttr] = &ddbtypes.AttributeValueMemberS{Value: e.specs}
 			}
 			if e.appendix != "" {
-				item[appendixAttr] = &dynamodb.AttributeValue{S: aws.String(e.appendix)}
+				item[appendixAttr] = &ddbtypes.AttributeValueMemberS{Value: e.appendix}
 			}
 		}
 	}
@@ -85,46 +85,46 @@ func (m *fakeDDB) putData(k string, d []byte) {
 	m.data[k] = d
 }
 
-func (m *fakeDDB) PutItemWithContext(ctx aws.Context, input *dynamodb.PutItemInput, opts ...request.Option) (*dynamodb.PutItemOutput, error) {
+func (m *fakeDDB) PutItem(ctx context.Context, input *dynamodb.PutItemInput, opts ...func(*dynamodb.Options)) (*dynamodb.PutItemOutput, error) {
 	assert.NotNil(m.t, input.Item[dbAttr], "%s should have been present", dbAttr)
-	assert.NotNil(m.t, input.Item[dbAttr].S, "key should have been a String: %+v", input.Item[dbAttr])
-	key := *input.Item[dbAttr].S
+	assert.NotNil(m.t, input.Item[dbAttr].(*ddbtypes.AttributeValueMemberS), "key should have been a String: %+v", input.Item[dbAttr])
+	key := input.Item[dbAttr].(*ddbtypes.AttributeValueMemberS).Value
 
 	assert.NotNil(m.t, input.Item[nbsVersAttr], "%s should have been present", nbsVersAttr)
-	assert.NotNil(m.t, input.Item[nbsVersAttr].S, "nbsVers should have been a String: %+v", input.Item[nbsVersAttr])
-	assert.Equal(m.t, AWSStorageVersion, *input.Item[nbsVersAttr].S)
+	assert.NotNil(m.t, input.Item[nbsVersAttr].(*ddbtypes.AttributeValueMemberS), "nbsVers should have been a String: %+v", input.Item[nbsVersAttr])
+	assert.Equal(m.t, AWSStorageVersion, input.Item[nbsVersAttr].(*ddbtypes.AttributeValueMemberS).Value)
 
 	assert.NotNil(m.t, input.Item[versAttr], "%s should have been present", versAttr)
-	assert.NotNil(m.t, input.Item[versAttr].S, "nbsVers should have been a String: %+v", input.Item[versAttr])
-	assert.Equal(m.t, constants.FormatLD1String, *input.Item[versAttr].S)
+	assert.NotNil(m.t, input.Item[versAttr].(*ddbtypes.AttributeValueMemberS), "nbsVers should have been a String: %+v", input.Item[versAttr])
+	assert.Equal(m.t, constants.FormatLD1String, input.Item[versAttr].(*ddbtypes.AttributeValueMemberS).Value)
 
 	assert.NotNil(m.t, input.Item[lockAttr], "%s should have been present", lockAttr)
-	assert.NotNil(m.t, input.Item[lockAttr].B, "lock should have been a blob: %+v", input.Item[lockAttr])
-	lock := input.Item[lockAttr].B
+	assert.NotNil(m.t, input.Item[lockAttr].(*ddbtypes.AttributeValueMemberB), "lock should have been a blob: %+v", input.Item[lockAttr])
+	lock := input.Item[lockAttr].(*ddbtypes.AttributeValueMemberB).Value
 
 	assert.NotNil(m.t, input.Item[rootAttr], "%s should have been present", rootAttr)
-	assert.NotNil(m.t, input.Item[rootAttr].B, "root should have been a blob: %+v", input.Item[rootAttr])
-	root := input.Item[rootAttr].B
+	assert.NotNil(m.t, input.Item[rootAttr].(*ddbtypes.AttributeValueMemberB), "root should have been a blob: %+v", input.Item[rootAttr])
+	root := input.Item[rootAttr].(*ddbtypes.AttributeValueMemberB).Value
 
 	specs := ""
 	if attr, present := input.Item[tableSpecsAttr]; present {
-		assert.NotNil(m.t, attr.S, "specs should have been a String: %+v", input.Item[tableSpecsAttr])
-		specs = *attr.S
+		assert.NotNil(m.t, attr.(*ddbtypes.AttributeValueMemberS), "specs should have been a String: %+v", input.Item[tableSpecsAttr])
+		specs = attr.(*ddbtypes.AttributeValueMemberS).Value
 	}
 
 	apps := ""
 	if attr, present := input.Item[appendixAttr]; present {
-		assert.NotNil(m.t, attr.S, "appendix specs should have been a String: %+v", input.Item[appendixAttr])
-		apps = *attr.S
+		assert.NotNil(m.t, attr.(*ddbtypes.AttributeValueMemberS), "appendix specs should have been a String: %+v", input.Item[appendixAttr])
+		apps = attr.(*ddbtypes.AttributeValueMemberS).Value
 	}
 
 	mustNotExist := *(input.ConditionExpression) == valueNotExistsOrEqualsExpression
 	current, present := m.data[key]
 
 	if mustNotExist && present {
-		return nil, mockAWSError("ConditionalCheckFailedException")
+		return nil, &ddbtypes.ConditionalCheckFailedException{}
 	} else if !mustNotExist && !checkCondition(current.(record), input.ExpressionAttributeValues) {
-		return nil, mockAWSError("ConditionalCheckFailedException")
+		return nil, &ddbtypes.ConditionalCheckFailedException{}
 	}
 
 	m.putRecord(key, lock, root, constants.FormatLD1String, specs, apps)
@@ -133,8 +133,8 @@ func (m *fakeDDB) PutItemWithContext(ctx aws.Context, input *dynamodb.PutItemInp
 	return &dynamodb.PutItemOutput{}, nil
 }
 
-func checkCondition(current record, expressionAttrVals map[string]*dynamodb.AttributeValue) bool {
-	return current.vers == *expressionAttrVals[versExpressionValuesKey].S && bytes.Equal(current.lock, expressionAttrVals[prevLockExpressionValuesKey].B)
+func checkCondition(current record, expressionAttrVals map[string]ddbtypes.AttributeValue) bool {
+	return current.vers == expressionAttrVals[versExpressionValuesKey].(*ddbtypes.AttributeValueMemberS).Value && bytes.Equal(current.lock, expressionAttrVals[prevLockExpressionValuesKey].(*ddbtypes.AttributeValueMemberB).Value)
 
 }
 

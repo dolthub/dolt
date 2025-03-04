@@ -20,38 +20,94 @@
 package awsrefreshcreds
 
 import (
+	"context"
+	"fmt"
+	"os"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws/credentials"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	ini "github.com/dolthub/aws-sdk-go-ini-parser"
 )
 
 var now func() time.Time = time.Now
 
+var _ aws.CredentialsProvider = (*RefreshingCredentialsProvider)(nil)
+
 type RefreshingCredentialsProvider struct {
-	provider credentials.Provider
-
-	refreshedAt     time.Time
-	refreshInterval time.Duration
+	provider aws.CredentialsProvider
+	interval time.Duration
 }
 
-func NewRefreshingCredentialsProvider(provider credentials.Provider, interval time.Duration) *RefreshingCredentialsProvider {
+func NewRefreshingCredentialsProvider(provider aws.CredentialsProvider, interval time.Duration) *RefreshingCredentialsProvider {
 	return &RefreshingCredentialsProvider{
-		provider:        provider,
-		refreshInterval: interval,
+		provider: provider,
+		interval: interval,
 	}
 }
 
-func (p *RefreshingCredentialsProvider) Retrieve() (credentials.Value, error) {
-	v, err := p.provider.Retrieve()
-	if err == nil {
-		p.refreshedAt = now()
+func (p *RefreshingCredentialsProvider) Retrieve(ctx context.Context) (aws.Credentials, error) {
+	res, err := p.provider.Retrieve(ctx)
+	if err == nil && res.CanExpire == false {
+		res.CanExpire = true
+		res.Expires = now().Add(p.interval)
 	}
-	return v, err
+	return res, err
 }
 
-func (p *RefreshingCredentialsProvider) IsExpired() bool {
-	if now().Sub(p.refreshedAt) > p.refreshInterval {
-		return true
+// Based on the behavior of EnvConfig in aws-sdk-go-v2.
+func LoadEnvCredentials() aws.Credentials {
+	var ret aws.Credentials
+	ret.AccessKeyID = os.Getenv("AWS_ACCESS_KEY_ID")
+	if ret.AccessKeyID == "" {
+		ret.AccessKeyID = os.Getenv("AWS_ACCESS_KEY")
 	}
-	return p.provider.IsExpired()
+	ret.SecretAccessKey = os.Getenv("AWS_SECRET_ACCESS_KEY")
+	if ret.SecretAccessKey == "" {
+		ret.SecretAccessKey = os.Getenv("AWS_SECRET_KEY")
+	}
+	if ret.HasKeys() {
+		ret.SessionToken = os.Getenv("AWS_SESSION_TOKEN")
+		ret.Source = "EnvironmentVariables"
+		return ret
+	}
+	return aws.Credentials{}
+}
+
+func LoadINICredentialsProvider(filename, profile string) aws.CredentialsProvider {
+	if profile == "" {
+		profile = os.Getenv("AWS_PROFILE")
+	}
+	if profile == "" {
+		profile = "default"
+	}
+	return aws.CredentialsProviderFunc(func(context.Context) (aws.Credentials, error) {
+		sections, err := ini.OpenFile(filename)
+		if err != nil {
+			return aws.Credentials{}, err
+		}
+		section, ok := sections.GetSection(profile)
+		if !ok {
+			return aws.Credentials{}, fmt.Errorf("error loading credentials for profile %s from file %s; profile not found", profile, filename)
+		}
+
+		id := section.String("aws_access_key_id")
+		if len(id) == 0 {
+			return aws.Credentials{}, fmt.Errorf("error loading credentials for profile %s from file %s; no aws_access_key_id", profile, filename)
+		}
+
+		secret := section.String("aws_secret_access_key")
+		if len(secret) == 0 {
+			return aws.Credentials{}, fmt.Errorf("error loading credentials for profile %s from file %s; no aws_secret_access_key", profile, filename)
+		}
+
+		// Default to empty string if not found
+		token := section.String("aws_session_token")
+
+		return aws.Credentials{
+			AccessKeyID:     id,
+			SecretAccessKey: secret,
+			SessionToken:    token,
+			Source:          "SharedCredentialsFile",
+		}, nil
+	})
 }
