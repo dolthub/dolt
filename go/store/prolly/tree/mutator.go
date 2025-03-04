@@ -133,7 +133,7 @@ func ApplyMutations[K ~[]byte, O Ordering[K], S message.Serializer](
 		prev := newKey
 		newKey, newValue = edits.NextMutation(ctx)
 		if newKey != nil {
-			assertTrue(order.Compare(K(newKey), K(prev)) > 0, "expected sorted edits"+fmt.Sprintf("%v, %v", prev, newKey))
+			assertTrue(order.Compare(ctx, K(newKey), K(prev)) > 0, "expected sorted edits"+fmt.Sprintf("%v, %v", prev, newKey))
 		}
 	}
 

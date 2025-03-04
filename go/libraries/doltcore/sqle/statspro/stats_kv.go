@@ -190,7 +190,7 @@ func (m *memStats) Flush(_ context.Context) (int, error) {
 
 func NewProllyStats(ctx context.Context, destDb dsess.SqlDatabase) (*prollyStats, error) {
 	sch := schema.StatsTableDoltSchema
-	kd, vd := sch.GetMapDescriptors()
+	kd, vd := sch.GetMapDescriptors(nil)
 
 	keyBuilder := val.NewTupleBuilder(kd)
 	valueBuilder := val.NewTupleBuilder(vd)
@@ -461,7 +461,7 @@ func (p *prollyStats) encodeBucket(ctx context.Context, b *stats.Bucket, tupB *v
 }
 
 func (p *prollyStats) NewEmpty(ctx context.Context) (StatsKv, error) {
-	kd, vd := schema.StatsTableDoltSchema.GetMapDescriptors()
+	kd, vd := schema.StatsTableDoltSchema.GetMapDescriptors(nil)
 	newMap, err := prolly.NewMapFromTuples(ctx, p.destDb.DbData().Ddb.NodeStore(), kd, vd)
 	if err != nil {
 		return nil, err

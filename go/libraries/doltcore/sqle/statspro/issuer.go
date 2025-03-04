@@ -155,10 +155,10 @@ func (sc *StatsController) newStatsForRoot(baseCtx context.Context, gcKv *memSta
 	if err != nil {
 		return nil, err
 	}
-	
+
 	sql.SessionCommandBegin(ctx.Session)
-	defer sql.SessionCommandEnd(ctx.Session)
 	defer sql.SessionEnd(ctx.Session)
+	defer sql.SessionCommandEnd(ctx.Session)
 
 	dSess := dsess.DSessFromSess(ctx.Session)
 	dbs := dSess.Provider().AllDatabases(ctx)
@@ -292,7 +292,7 @@ func (sc *StatsController) collectIndexNodes(ctx *sql.Context, prollyMap prolly.
 					keyBuilder.PutRaw(i, keyBytes.GetField(i))
 				}
 
-				updater.add(keyBuilder.BuildPrefixNoRecycle(prollyMap.Pool(), updater.prefixLen))
+				updater.add(ctx, keyBuilder.BuildPrefixNoRecycle(prollyMap.Pool(), updater.prefixLen))
 				keyBuilder.Recycle()
 			}
 
