@@ -141,6 +141,10 @@ func (db *UserSpaceDatabase) RequestedName() string {
 	return db.Name()
 }
 
+func (db *UserSpaceDatabase) AliasedName() string {
+	return db.Name()
+}
+
 func (db *UserSpaceDatabase) GetSchema(ctx *sql.Context, schemaName string) (sql.DatabaseSchema, bool, error) {
 	panic(fmt.Sprintf("GetSchema is not implemented for database %T", db))
 }

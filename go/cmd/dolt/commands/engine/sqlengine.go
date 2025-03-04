@@ -16,11 +16,6 @@ package engine
 
 import (
 	"context"
-	"fmt"
-	"os"
-	"strconv"
-	"strings"
-
 	gms "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/eventscheduler"
 	"github.com/dolthub/go-mysql-server/sql"
@@ -31,6 +26,9 @@ import (
 	_ "github.com/dolthub/go-mysql-server/sql/variables"
 	"github.com/dolthub/vitess/go/vt/sqlparser"
 	"github.com/sirupsen/logrus"
+	"os"
+	"strconv"
+	"strings"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
@@ -45,7 +43,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/kvexec"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/mysql_file_handler"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statsnoms"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statspro"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
@@ -201,7 +198,13 @@ func NewSqlEngine(
 		"authentication_dolt_jwt": NewAuthenticateDoltJWTPlugin(config.JwksConfig),
 	})
 
-	statsPro := statspro.NewProvider(pro, statsnoms.NewNomsStatsFactory(mrEnv.RemoteDialProvider()))
+	var statsPro sql.StatsProvider
+	_, enabled, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsEnabled)
+	if enabled.(int8) == 1 {
+		statsPro = statspro.NewStatsController(pro, sqlEngine.NewDefaultContext, logrus.StandardLogger(), mrEnv.GetEnv(mrEnv.GetFirstDatabase()))
+	} else {
+		statsPro = statspro.StatsNoop{}
+	}
 	engine.Analyzer.Catalog.StatsProvider = statsPro
 
 	if config.AutoGCController != nil {
@@ -236,8 +239,29 @@ func NewSqlEngine(
 
 	// configuring stats depends on sessionBuilder
 	// sessionBuilder needs ref to statsProv
-	if err = statsPro.Configure(ctx, sqlEngine.NewDefaultContext, bThreads, dbs); err != nil {
-		fmt.Fprintln(cli.CliErr, err)
+	if sc, ok := statsPro.(*statspro.StatsController); ok {
+		_, memOnly, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsMemoryOnly)
+		sc.SetMemOnly(memOnly.(int8) == 1)
+
+		pro.InitDatabaseHooks = append(pro.InitDatabaseHooks, statspro.NewInitDatabaseHook(sc))
+		pro.DropDatabaseHooks = append(pro.DropDatabaseHooks, statspro.NewDropDatabaseHook(sc))
+
+		var sqlDbs []sql.Database
+		for _, db := range dbs {
+			sqlDbs = append(sqlDbs, db)
+		}
+		err := sc.Init(ctx, sqlDbs)
+		if err != nil {
+			return nil, err
+		}
+
+		if _, paused, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsPaused); paused.(int8) == 0 {
+			if err = sc.Restart(); err != nil {
+				return nil, err
+			}
+		} else {
+			//sc.CollectOnce(ctx)
+		}
 	}
 
 	// Load MySQL Db information
