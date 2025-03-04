@@ -7,7 +7,7 @@ require (
 	github.com/abiosoft/readline v0.0.0-20180607040430-155bce2042db
 	github.com/andreyvit/diff v0.0.0-20170406064948-c7f18ee00883
 	github.com/attic-labs/kingpin v2.2.7-0.20180312050558-442efcfac769+incompatible
-	github.com/aws/aws-sdk-go v1.34.0
+	github.com/aws/aws-sdk-go v1.55.6
 	github.com/bcicen/jstream v1.0.0
 	github.com/boltdb/bolt v1.3.1
 	github.com/denisbrodbeck/machineid v1.0.1
