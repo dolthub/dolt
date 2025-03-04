@@ -65,7 +65,7 @@ type archiveWriter struct {
 There is a workflow to writing an archive:
  1. writeByteSpan: Write a group of bytes to the archive. This will immediately write the bytes to the output, and
     return an ID for the byte span. Caller must keep track of this ID.
- 2. stageChunk: Given a hash, dictionary (as byteSpan ID), and data (as byteSpan ID), stage a chunk for writing. This
+ 2. stageZStdChunk: Given a hash, dictionary (as byteSpan ID), and data (as byteSpan ID), stage a chunk for writing. This
     does not write anything to disk yet.
  3. Repeat steps 1 and 2 as necessary. You can interleave them, but all chunks must be staged before the next step.
  4. finalizeByteSpans: At this point, all byte spans have been written out, and the checksum for the data block
@@ -128,9 +128,9 @@ func (aw *archiveWriter) chunkSeen(h hash.Hash) bool {
 	return aw.seenChunks.Has(h)
 }
 
-func (aw *archiveWriter) stageChunk(hash hash.Hash, dictionary, data uint32) error {
+func (aw *archiveWriter) stageZStdChunk(hash hash.Hash, dictionary, data uint32) error {
 	if aw.workflowStage != stageByteSpan {
-		return fmt.Errorf("Runtime error: stageChunk called out of order")
+		return fmt.Errorf("Runtime error: stageZStdChunk called out of order")
 	}
 
 	if data == 0 || data > uint32(len(aw.stagedBytes)) {
@@ -139,12 +139,29 @@ func (aw *archiveWriter) stageChunk(hash hash.Hash, dictionary, data uint32) err
 	if aw.seenChunks.Has(hash) {
 		return ErrDuplicateChunkWritten
 	}
-	if dictionary > uint32(len(aw.stagedBytes)) {
+	if dictionary == 0 || dictionary > uint32(len(aw.stagedBytes)) {
 		return ErrInvalidDictionaryRange
 	}
 
 	aw.seenChunks.Insert(hash)
 	aw.stagedChunks = append(aw.stagedChunks, stagedChunkRef{hash, dictionary, data})
+	return nil
+}
+
+func (aw *archiveWriter) stageSnappyChunk(hash hash.Hash, data uint32) error {
+	if aw.workflowStage != stageByteSpan {
+		return fmt.Errorf("Runtime error: stageSnappyChunk called out of order")
+	}
+
+	if data == 0 || data > uint32(len(aw.stagedBytes)) {
+		return ErrInvalidChunkRange
+	}
+	if aw.seenChunks.Has(hash) {
+		return ErrDuplicateChunkWritten
+	}
+
+	aw.seenChunks.Insert(hash)
+	aw.stagedChunks = append(aw.stagedChunks, stagedChunkRef{hash, 0, data})
 	return nil
 }
 
@@ -310,7 +327,7 @@ func (aw *archiveWriter) writeFooter() error {
 	}
 
 	// Write out the format version
-	_, err = aw.output.Write([]byte{archiveFormatVersion})
+	_, err = aw.output.Write([]byte{archiveFormatVersionMax})
 	if err != nil {
 		return err
 	}

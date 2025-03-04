@@ -359,7 +359,7 @@ func writeDataToArchive(
 						if err != nil {
 							return 0, 0, 0, err
 						}
-						err = arcW.stageChunk(cs.chunkId, dictId, dataId)
+						err = arcW.stageZStdChunk(cs.chunkId, dictId, dataId)
 						if err != nil {
 							return 0, 0, 0, err
 						}
@@ -376,7 +376,7 @@ func writeDataToArchive(
 	ungroupedChunkCount := int32(len(allChunks))
 	ungroupedChunkProgress := int32(0)
 
-	// Any chunks remaining will be written out individually.
+	// Any chunks remaining will be written out individually, using the default dictionary.
 	for h := range allChunks {
 		select {
 		case <-ctx.Done():
@@ -396,7 +396,7 @@ func writeDataToArchive(
 			if err != nil {
 				return 0, 0, 0, err
 			}
-			err = arcW.stageChunk(h, dictId, id)
+			err = arcW.stageZStdChunk(h, dictId, id)
 			if err != nil {
 				return 0, 0, 0, err
 			}
