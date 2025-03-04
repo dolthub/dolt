@@ -138,12 +138,12 @@ func (cmd DebugCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	if !outputDirSpecified {
 		outDir, err = os.MkdirTemp("", "dolt-debug-*")
 		if err != nil {
-			return sqlHandleVErrAndExitCode(queryist, errhand.BuildDError("couldn't create tempdir %w", err).Build(), usage)
+			return sqlHandleVErrAndExitCode(queryist, errhand.BuildDError("couldn't create tempdir %s", err.Error()).Build(), usage)
 		}
 	} else {
 		err := os.Mkdir(outDir, os.ModePerm)
 		if err != nil {
-			return sqlHandleVErrAndExitCode(queryist, errhand.BuildDError("failed to create output directory %w", err).Build(), usage)
+			return sqlHandleVErrAndExitCode(queryist, errhand.BuildDError("failed to create output directory %s", err.Error()).Build(), usage)
 		}
 	}
 
@@ -206,11 +206,11 @@ func (cmd DebugCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	input = bufio.NewReader(transform.NewReader(input, textunicode.BOMOverride(transform.Nop)))
 	_, err = io.Copy(queryFile, input)
 	if err != nil {
-		return sqlHandleVErrAndExitCode(queryist, errhand.BuildDError("couldn't copy input sql %w", err).Build(), usage)
+		return sqlHandleVErrAndExitCode(queryist, errhand.BuildDError("couldn't copy input sql %s", err.Error()).Build(), usage)
 	}
 	_, err = queryFile.Seek(0, 0)
 	if err != nil {
-		return sqlHandleVErrAndExitCode(queryist, errhand.BuildDError("seek input sql %w", err).Build(), usage)
+		return sqlHandleVErrAndExitCode(queryist, errhand.BuildDError("seek input sql %s", err.Error()).Build(), usage)
 	}
 
 	err = debugAnalyze(sqlCtx, outDir, sqlEng, queryFile)
