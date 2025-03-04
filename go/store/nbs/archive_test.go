@@ -41,7 +41,7 @@ func init() {
 	defaultDict, defaultCDict = generateTerribleDefaultDictionary()
 }
 
-func TestArchiveSingleChunk(t *testing.T) {
+func TestArchiveSingleZStdChunk(t *testing.T) {
 	writer := NewFixedBufferByteSink(make([]byte, 4096))
 	aw := newArchiveWriterWithSink(writer)
 
@@ -97,37 +97,56 @@ func TestArchiveSingleChunk(t *testing.T) {
 	assert.Equal(t, testBlob, data)
 }
 
-func TestArchiveSingleChunkWithDictionary(t *testing.T) {
+func TestArchiveSingleSnappyChunk(t *testing.T) {
 	writer := NewFixedBufferByteSink(make([]byte, 4096))
 	aw := newArchiveWriterWithSink(writer)
-	testData := []byte{9, 8, 7, 6, 5, 4, 3, 2, 1, 0}
-	_, _ = aw.writeByteSpan(defaultDict)
-	_, _ = aw.writeByteSpan(testData)
 
-	h := hashWithPrefix(t, 42)
-	err := aw.stageZStdChunk(h, 1, 2)
+	testBlob := []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
+	bsId, err := aw.writeByteSpan(testBlob)
+	assert.NoError(t, err)
+	assert.Equal(t, uint32(1), bsId)
+
+	dataSz := uint64(len(testBlob))
+	assert.Equal(t, dataSz, aw.bytesWritten)
+
+	oneHash := hashWithPrefix(t, 23)
+
+	err = aw.stageSnappyChunk(oneHash, bsId)
 	assert.NoError(t, err)
 
-	_ = aw.finalizeByteSpans()
-	_ = aw.writeIndex()
-	_ = aw.writeMetadata([]byte(""))
+	err = aw.finalizeByteSpans()
+	assert.NoError(t, err)
+
+	err = aw.writeIndex()
+	assert.NoError(t, err)
+	// Index size is not deterministic from the number of chunks, but when no dictionary and one chunk are in play, 36 bytes is correct:
+	// [SpanIndex - one ByteSpans]   [Prefix Map]   [chunk ref ]    [hash.Suffix --]
+	//        8 (2 uint64s)        + 8 (1 uint64) + 8 (2 uint32s) + 12                = ___36___
+	assert.Equal(t, uint32(36), aw.indexLen)
+
+	err = aw.writeMetadata([]byte(""))
+	assert.NoError(t, err)
+
 	err = aw.writeFooter()
 	assert.NoError(t, err)
+
+	assert.Equal(t, dataSz+36+archiveFooterSize, aw.bytesWritten)
 
 	theBytes := writer.buff[:writer.pos]
 	fileSize := uint64(len(theBytes))
 	readerAt := bytes.NewReader(theBytes)
 	tra := tableReaderAtAdapter{readerAt}
+
 	aIdx, err := newArchiveReader(context.Background(), tra, fileSize, &Stats{})
 	assert.NoError(t, err)
-	assert.Equal(t, []uint64{42}, aIdx.prefixes)
 
-	assert.True(t, aIdx.has(h))
+	assert.Equal(t, []uint64{23}, aIdx.prefixes)
+	assert.True(t, aIdx.has(oneHash))
 
-	dict, data, err := aIdx.getRaw(context.Background(), h, &Stats{})
+	dict, data, err := aIdx.getRaw(context.Background(), oneHash, &Stats{})
 	assert.NoError(t, err)
-	assert.NotNil(t, dict)
-	assert.Equal(t, testData, data)
+	assert.Nil(t, dict)
+	assert.Equal(t, testBlob, data)
 }
 
 func TestArchiverMultipleChunksMultipleDictionaries(t *testing.T) {
@@ -285,6 +304,128 @@ func TestArchiveDictDecompression(t *testing.T) {
 		roundTripData, err := aIdx.get(c, chk.Hash(), s)
 		assert.NoError(t, err)
 		assert.Equal(t, chk.Data(), roundTripData)
+		assert.Equal(t, chk.Hash(), hash.Of(roundTripData))
+	}
+}
+
+func TestArchiveSnappyDecompression(t *testing.T) {
+	// 32K worth of data. Unlike dictionary test above, these won't compress well together.
+	writer := NewFixedBufferByteSink(make([]byte, 1<<16))
+	chks, _, _ := generateSimilarChunks(42, 32)
+	aw := newArchiveWriterWithSink(writer)
+
+	for _, chk := range chks {
+		cmp := ChunkToCompressedChunk(*chk)
+		chId, err := aw.writeByteSpan(cmp.FullCompressedChunk)
+		assert.NoError(t, err)
+
+		err = aw.stageSnappyChunk(chk.Hash(), chId)
+		assert.NoError(t, err)
+	}
+	err := aw.finalizeByteSpans()
+	assert.NoError(t, err)
+
+	err = aw.writeIndex()
+	assert.NoError(t, err)
+
+	err = aw.writeMetadata([]byte("hello world"))
+	err = aw.writeFooter()
+	assert.NoError(t, err)
+
+	theBytes := writer.buff[:writer.pos]
+	fileSize := uint64(len(theBytes))
+	readerAt := bytes.NewReader(theBytes)
+	tra := tableReaderAtAdapter{readerAt}
+	aIdx, err := newArchiveReader(context.Background(), tra, fileSize, &Stats{})
+	assert.NoError(t, err)
+
+	c := context.Background()
+	s := &Stats{}
+
+	// Now verify that we can look up the chunks by their original addresses, and the data is the same.
+	for _, chk := range chks {
+		roundTripData, err := aIdx.get(c, chk.Hash(), s)
+		assert.NoError(t, err)
+		rtChk := chunks.NewChunk(roundTripData)
+		assert.Equal(t, chk.Data(), rtChk.Data())
+		// go all the way and test hash is right.
+		assert.Equal(t, chk.Hash(), hash.Of(rtChk.Data()))
+	}
+}
+
+func TestArchiveMixedTypesToChunkers(t *testing.T) {
+	// 32K of data, but half of the chunks will be very highly compressible with a dictionary. Note that if
+	// you ran the equivalent test with snappy only, this buffer would be too small (need 1<<16)
+	writer := NewFixedBufferByteSink(make([]byte, 1<<14))
+	chks, _, _ := generateSimilarChunks(42, 32)
+	samples := make([][]byte, len(chks))
+	for i, c := range chks {
+		samples[i] = c.Data()
+	}
+
+	// Build zStd dictionary. This will be a decent dictionary for all chunks, but we will only
+	// use it for even chunks.
+	dict := gozstd.BuildDict(samples, 2048)
+	cDict, err := gozstd.NewCDict(dict)
+	assert.NoError(t, err)
+
+	aw := newArchiveWriterWithSink(writer)
+
+	cmpDict := gozstd.Compress(nil, dict)
+	dictId, err := aw.writeByteSpan(cmpDict)
+	assert.NoError(t, err)
+
+	for _, chk := range chks {
+		if isEven(chk.Hash()) {
+			// Use zStd compression for even  chunks
+			cmp := gozstd.CompressDict(nil, chk.Data(), cDict)
+
+			chId, err := aw.writeByteSpan(cmp)
+			assert.NoError(t, err)
+
+			err = aw.stageZStdChunk(chk.Hash(), dictId, chId)
+			assert.NoError(t, err)
+		} else {
+			// Use Snappy compression for odd-prefix chunks
+			cmp := ChunkToCompressedChunk(*chk)
+
+			chId, err := aw.writeByteSpan(cmp.FullCompressedChunk)
+			assert.NoError(t, err)
+
+			err = aw.stageSnappyChunk(chk.Hash(), chId)
+			assert.NoError(t, err)
+		}
+	}
+
+	err = aw.finalizeByteSpans()
+	assert.NoError(t, err)
+
+	err = aw.writeIndex()
+	assert.NoError(t, err)
+
+	err = aw.writeMetadata([]byte("hello world"))
+	err = aw.writeFooter()
+	assert.NoError(t, err)
+
+	theBytes := writer.buff[:writer.pos]
+	fileSize := uint64(len(theBytes))
+	readerAt := bytes.NewReader(theBytes)
+	tra := tableReaderAtAdapter{readerAt}
+	aIdx, err := newArchiveReader(context.Background(), tra, fileSize, &Stats{})
+	assert.NoError(t, err)
+
+	c := context.Background()
+	s := &Stats{}
+
+	for _, chk := range chks {
+		tc, err := aIdx.getAsToChunker(c, chk.Hash(), s)
+		assert.NoError(t, err)
+
+		// round trip chunk should be the same as the original.
+		rtChk, err := tc.ToChunk()
+		assert.NoError(t, err)
+		assert.Equal(t, chk.Data(), rtChk.Data())
+		assert.Equal(t, chk.Hash(), hash.Of(rtChk.Data()))
 	}
 }
 
@@ -698,6 +839,10 @@ func generateRandomBytes(seed int64, len int) []byte {
 	}
 
 	return data
+}
+
+func isEven(h hash.Hash) bool {
+	return h[hash.ByteLen-1]%2 == 0
 }
 
 func buildTestChunkSource(chks []*chunks.Chunk) (*simpleChunkSourceCache, hash.HashSet) {

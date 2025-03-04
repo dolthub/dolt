@@ -342,6 +342,10 @@ func (ar archiveReader) getAsToChunker(ctx context.Context, h hash.Hash, stats *
 		return nil, err
 	}
 
+	if data == nil {
+		return ArchiveToChunker{h, nil, []byte{}}, nil
+	}
+
 	if dict == nil {
 		if ar.footer.formatVersion >= archiveVersionSnappySupport {
 			// Snappy compression format. The data is compressed with a checksum at the end.
@@ -352,10 +356,6 @@ func (ar archiveReader) getAsToChunker(ctx context.Context, h hash.Hash, stats *
 			return cc, nil
 		}
 		return nil, errors.New("runtime error: unable to get archived chunk. dictionary is nil")
-	}
-
-	if data == nil {
-		return ArchiveToChunker{h, nil, []byte{}}, nil
 	}
 
 	return ArchiveToChunker{h, dict, data}, nil
