@@ -80,9 +80,15 @@ jobs:
           password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
           repository: dolthub/dolt-sql-server
           readme-filepath: ./docker/serverREADME.md
-      - name: Edit Release
-        uses: irongut/EditRelease@v1.2.0
-        with:
-          token: ${{ secrets.REPO_ACCESS_TOKEN || secrets.GITHUB_TOKEN }}
-          id: ${{ needs.get-release-id.outputs.release_id }}
-          prerelease: false
+      - run: |
+          gh api \
+          --method PATCH \
+          -H "Accept: application/vnd.github+json" \
+          -H "X-GitHub-Api-Version: 2022-11-28" \
+          /repos/$REPO_OWNER/$REPO_NAME/releases/$RELEASE_ID \
+          -F "draft=false" -F "prerelease=false" -F "make_latest=true"
+        env:
+          GH_TOKEN: ${{ secrets.REPO_ACCESS_TOKEN || secrets.GITHUB_TOKEN }}
+          REPO_OWNER: dolthub
+          REPO_NAME: dolt
+          RELEASE_ID: ${{ needs.get-release-id.outputs.release_id }}
