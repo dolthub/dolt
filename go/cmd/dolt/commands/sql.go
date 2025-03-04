@@ -93,6 +93,8 @@ const (
 	DefaultHost           = "localhost"
 	UseDbFlag             = "use-db"
 	ProfileFlag           = "profile"
+	timeFlag              = "time"
+	outputFlag            = "output"
 
 	welcomeMsg = `# Welcome to the DoltSQL shell.
 # Statements must be terminated with ';'.

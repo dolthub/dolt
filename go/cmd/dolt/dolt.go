@@ -109,6 +109,7 @@ var commandsWithoutGlobalArgSupport = []cli.Command{
 	commands.VersionCmd{VersionStr: doltversion.Version},
 	commands.ConfigCmd{},
 	ci.Commands,
+	commands.DebugCmd{},
 }
 
 // commands that do not need write access for the current directory
