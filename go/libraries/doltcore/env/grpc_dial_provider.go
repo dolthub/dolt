@@ -164,6 +164,18 @@ func (p GRPCDialProvider) getRPCCredsFromOSEnv(username string) (credentials.Per
 	return c.RPCCreds(), nil
 }
 
+// Used for local development and testing, setting this makes Dolt
+// sign outgoing authentication JWTs to remotesapi with its value,
+// instead of a value derived from the hostname in the authority:
+// which the call is going to.
+//
+// Note that this is a process-wide override, and applies to all
+// remotesapi remotes accessed as backups or remotes. It does not
+// apply to remotesapi endpoints accessed for cluster
+// replication. This feature is undocumented, unsupported, and should
+// only used for development and testing.
+var OverrideGRPCJWTAudience = os.Getenv("DOLT_OVERRIDE_GRPC_JWT_AUDIENCE")
+
 // getRPCCreds returns any RPC credentials available to this dial provider. If a DoltEnv has been configured
 // in this dial provider, it will be used to load custom user credentials, otherwise nil will be returned.
 func (p GRPCDialProvider) getRPCCreds(endpoint string) (credentials.PerRPCCredentials, error) {
@@ -183,7 +195,11 @@ func (p GRPCDialProvider) getRPCCreds(endpoint string) (credentials.PerRPCCreden
 		return nil, nil
 	}
 
-	return dCreds.RPCCreds(getHostFromEndpoint(endpoint)), nil
+	if OverrideGRPCJWTAudience != "" {
+		return dCreds.RPCCreds(OverrideGRPCJWTAudience), nil
+	} else {
+		return dCreds.RPCCreds(getHostFromEndpoint(endpoint)), nil
+	}
 }
 
 func getHostFromEndpoint(endpoint string) string {
