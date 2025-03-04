@@ -120,7 +120,8 @@ RUN Rscript -e 'install.packages(c("DBI", "RMySQL", "RMariaDB"), \
                   repos = c(RSPM="https://packagemanager.rstudio.com/cran/__linux__/focal/latest"))'
 
 # install rust
-RUN curl https://sh.rustup.rs -sSf | sh -s -- --default-toolchain stable -y
+# RUN curl https://sh.rustup.rs -sSf | sh -s -- --default-toolchain stable -y
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 ENV PATH="/root/.cargo/bin:${PATH}"
 
 # install postgres and psql
