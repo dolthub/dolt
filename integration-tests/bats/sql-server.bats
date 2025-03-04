@@ -155,8 +155,6 @@ EOF
     dolt sql -q "show databases;"
     stop_sql_server
 
-     # Assert that log is in JSON format (checking if logs contain `{...}`)
-    grep -q '^{.*}$' log.txt
     # assert that logformat in yaml config is not case sensitive
     cat >config.yml <<EOF
 log_format: teXt
@@ -173,6 +171,18 @@ EOF
     stop_sql_server
 }
 
+@test "sql-server: logformat json functionality is working" {
+    cd repo1
+    PORT=$( definePORT )
+    dolt sql-server --logformat json --port=$PORT --socket "dolt.$PORT.sock" > log.txt 2>&1 &
+    SERVER_PID=$!
+    wait_for_connection $PORT 8500 
+    dolt sql -q "show databases;"
+    stop_sql_server
+
+    # Assert that log is in JSON format (checking if logs contain `{...}`)
+    grep -q '^{.*}$' log.txt
+}
 
 @test "sql-server: server assumes existing user" {
     cd repo1
