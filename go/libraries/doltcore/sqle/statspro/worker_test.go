@@ -618,7 +618,6 @@ func TestMemoryOnly(t *testing.T) {
 		"create table xy (x int primary key, y int)",
 		"insert into xy values (0,0), (1,1), (2,2)",
 		"call dolt_stats_wait()",
-		"call dolt_stats_flush()",
 	)
 
 	_, ok := sc.kv.(*memStats)
