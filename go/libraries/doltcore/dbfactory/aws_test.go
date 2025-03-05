@@ -572,7 +572,7 @@ aws_secret_access_key = original_secret_access_key
 aws_access_key_id = new_access_key_id
 aws_secret_access_key = new_secret_access_key
 `)
-		require.NoError(t, os.WriteFile(credsFilePath, credsFileContents, 0440))
+		require.NoError(t, os.WriteFile(credsFilePath, credsFileContents, 0660))
 		sess := getSession(t, map[string]interface{}{
 			AWSCredsTypeParam: "file",
 			AWSCredsFileParam: credsFilePath,
@@ -587,7 +587,7 @@ aws_secret_access_key = new_secret_access_key
 			assert.Equal(t, "original_access_key_id", creds.AccessKeyID)
 			assert.Equal(t, "original_secret_access_key", creds.SecretAccessKey)
 		}
-		require.NoError(t, os.WriteFile(filepath.Join(dir, "new_creds_file"), newCredsFileContents, 0440))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "new_creds_file"), newCredsFileContents, 0660))
 		require.NoError(t, os.Rename(filepath.Join(dir, "new_creds_file"), credsFilePath))
 		time.Sleep(10 * time.Millisecond)
 		creds, err = sess.Config.Credentials.Get()
