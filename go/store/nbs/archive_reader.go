@@ -40,7 +40,7 @@ type archiveReader struct {
 	chunkRefs []uint32 // Pairs of uint32s. First is the dict id, second is the data id.
 	suffixes  []byte
 	footer    archiveFooter
-	dictCache *lru.TwoQueueCache[uint32, *gozstd.DDict]
+	dictCache *lru.TwoQueueCache[uint32, *DecompBundle]
 }
 
 type suffix [hash.SuffixLen]byte
@@ -192,7 +192,7 @@ func buildArchiveReader(ctx context.Context, reader tableReaderAt, footer archiv
 		return archiveReader{}, err
 	}
 
-	dictCache, err := lru.New2Q[uint32, *gozstd.DDict](256)
+	dictCache, err := lru.New2Q[uint32, *DecompBundle](256)
 	if err != nil {
 		return archiveReader{}, err
 	}
@@ -327,7 +327,7 @@ func (ar archiveReader) get(ctx context.Context, hash hash.Hash, stats *Stats) (
 	}
 
 	var result []byte
-	result, err = gozstd.DecompressDict(nil, data, dict)
+	result, err = gozstd.DecompressDict(nil, data, dict.dictionary)
 	if err != nil {
 		return nil, err
 	}
@@ -343,12 +343,11 @@ func (ar archiveReader) getAsToChunker(ctx context.Context, h hash.Hash, stats *
 	}
 
 	if data == nil {
-		return ArchiveToChunker{h, nil, []byte{}}, nil
+		return CompressedChunk{}, nil
 	}
 
 	if dict == nil {
 		if ar.footer.formatVersion >= archiveVersionSnappySupport {
-			// Snappy compression format. The data is compressed with a checksum at the end.
 			cc, err := NewCompressedChunk(h, data)
 			if err != nil {
 				return nil, err
@@ -387,7 +386,7 @@ func (ar archiveReader) readByteSpan(ctx context.Context, bs byteSpan, stats *St
 //   - zStd when a dictionary is returned. The data is decompressed with the dictionary.
 //   - Snappy compression when no dictionary is returned. The data has a checksum 32 bit checksum at the end. This
 //     format matches the noms format.
-func (ar archiveReader) getRaw(ctx context.Context, hash hash.Hash, stats *Stats) (dict *gozstd.DDict, data []byte, err error) {
+func (ar archiveReader) getRaw(ctx context.Context, hash hash.Hash, stats *Stats) (dict *DecompBundle, data []byte, err error) {
 	idx := ar.search(hash)
 	if idx < 0 {
 		return nil, nil, nil
@@ -403,15 +402,9 @@ func (ar archiveReader) getRaw(ctx context.Context, hash hash.Hash, stats *Stats
 			if err != nil {
 				return nil, nil, err
 			}
-			// Dictionaries are compressed with no dictionary.
-			dcmpDict, e2 := gozstd.Decompress(nil, dictBytes)
-			if e2 != nil {
-				return nil, nil, e2
-			}
-
-			dict, e2 = gozstd.NewDDict(dcmpDict)
-			if e2 != nil {
-				return nil, nil, e2
+			dict, err = NewDecompBundle(dictBytes)
+			if err != nil {
+				return nil, nil, err
 			}
 
 			ar.dictCache.Add(dictId, dict)

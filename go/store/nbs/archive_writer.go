@@ -447,3 +447,38 @@ func (aw *archiveWriter) genFileName(path string) (string, error) {
 	fullPath := filepath.Join(path, fileName)
 	return fullPath, nil
 }
+
+type archiveStreamWriter struct {
+	writer  *archiveWriter
+	dictMap map[*DecompBundle]uint32
+}
+
+func (asw *archiveStreamWriter) writeArchiveToChunker(chunker ArchiveToChunker) error {
+	dict := chunker.dict
+
+	var err error
+	dictId, ok := asw.dictMap[dict]
+	if !ok {
+		// Never seen this dictionary. write it out, and stick it's ID in the map.
+		dictId, err = asw.writer.writeByteSpan(*dict.rawDictionary)
+		if err != nil {
+			return err
+		}
+		asw.dictMap[dict] = dictId
+	}
+
+	dataId, err := asw.writer.writeByteSpan(chunker.chunkData)
+	if err != nil {
+		return err
+	}
+
+	return asw.writer.stageZStdChunk(chunker.Hash(), dictId, dataId)
+}
+
+func (asw *archiveStreamWriter) writeCompressedChunkToChunker(chunker CompressedChunk) error {
+	dataId, err := asw.writer.writeByteSpan(chunker.FullCompressedChunk)
+	if err != nil {
+		return err
+	}
+	return asw.writer.stageSnappyChunk(chunker.Hash(), dataId)
+}
