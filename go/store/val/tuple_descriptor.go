@@ -636,11 +636,11 @@ func (td TupleDesc) formatValue(ctx context.Context, enc Encoding, i int, value 
 	case Hash128Enc:
 		return hex.EncodeToString(value)
 	case BytesAddrEnc:
-		return hex.EncodeToString(value)
+		return hash.New(value).String()
 	case StringAddrEnc:
-		return hex.EncodeToString(value)
+		return hash.New(value).String()
 	case CommitAddrEnc:
-		return hash.New(value).String()[:5]
+		return hash.New(value).String()
 	case CellEnc:
 		return hex.EncodeToString(value)
 	case ExtendedEnc:

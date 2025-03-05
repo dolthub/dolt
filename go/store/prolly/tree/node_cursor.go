@@ -629,8 +629,8 @@ func fetchChild(ctx context.Context, ns NodeStore, ref hash.Hash) (Node, error) 
 	return ns.Read(ctx, ref)
 }
 
-func assertTrue(b bool, msg string) {
+func assertTrue(b bool, msg string, args ...any) {
 	if !b {
-		panic("assertion failed: " + msg)
+		panic(fmt.Sprintf("assertion failed: "+msg, args...))
 	}
 }

@@ -17,8 +17,6 @@ package tree
 import (
 	"bytes"
 	"context"
-	"fmt"
-
 	"github.com/dolthub/dolt/go/store/prolly/message"
 )
 
@@ -133,7 +131,7 @@ func ApplyMutations[K ~[]byte, O Ordering[K], S message.Serializer](
 		prev := newKey
 		newKey, newValue = edits.NextMutation(ctx)
 		if newKey != nil {
-			assertTrue(order.Compare(ctx, K(newKey), K(prev)) > 0, "expected sorted edits"+fmt.Sprintf("%v, %v", prev, newKey))
+			assertTrue(order.Compare(ctx, K(newKey), K(prev)) > 0, "expected sorted edits: %v, %v", prev, newKey)
 		}
 	}
 

@@ -251,7 +251,7 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 		bThreads := sql.NewBackgroundThreads()
 
 		ctxGen := func(ctx context.Context) (*sql.Context, error) {
-			return d.NewContextWithClient(sql.Client{Address: "localhost", User: "root"}), nil
+			return d.NewContextWithClient(ctx, sql.Client{Address: "localhost", User: "root"}), nil
 		}
 		statsPro := statspro.NewStatsController(doltProvider, ctxGen, logrus.StandardLogger(), d.multiRepoEnv.GetEnv(d.multiRepoEnv.GetFirstDatabase()))
 		d.statsPro = statsPro
@@ -322,13 +322,6 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 
 	d.engine.Analyzer.Catalog.MySQLDb = mysql_db.CreateEmptyMySQLDb()
 	d.engine.Analyzer.Catalog.MySQLDb.AddRootAccount()
-
-	//ctxGen := func(ctx context.Context) (*sql.Context, error) {
-	//	return d.NewContext(), nil
-	//}
-	//statsPro := statspro.NewStatsController(d.provider.(*sqle.DoltDatabaseProvider), ctxGen, ctx.Session.GetLogger().Logger, d.multiRepoEnv.GetEnv(d.multiRepoEnv.GetFirstDatabase()))
-	//require.NoError(t, statsPro.Restart())
-	//d.engine.Analyzer.Catalog.StatsProvider = statsPro
 
 	e, err := enginetest.RunSetupScripts(ctx, d.engine, d.resetScripts(), d.SupportsNativeIndexCreation())
 	require.NoError(t, err)
@@ -409,7 +402,7 @@ func (d *DoltHarness) NewContext() *sql.Context {
 	return sql.NewContext(context.Background(), sql.WithSession(d.session))
 }
 
-func (d *DoltHarness) NewContextWithClient(client sql.Client) *sql.Context {
+func (d *DoltHarness) NewContextWithClient(ctx context.Context, client sql.Client) *sql.Context {
 	return sql.NewContext(context.Background(), sql.WithSession(d.newSessionWithClient(client)))
 }
 
