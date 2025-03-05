@@ -273,8 +273,13 @@ type prollyIndex struct {
 }
 
 // ProllyMapFromIndex unwraps the Index and returns the underlying prolly.Map.
-func ProllyMapFromIndex(i Index) prolly.Map {
-	return i.(prollyIndex).index
+func ProllyMapFromIndex(i Index) (prolly.Map, error) {
+	switch i := i.(type) {
+	case prollyIndex:
+		return i.index, nil
+	default:
+		return prolly.Map{}, fmt.Errorf("expected prollyIndex, found: %T", i)
+	}
 }
 
 // MapFromIndex unwraps the Index and returns the underlying map as an interface.
@@ -358,7 +363,10 @@ func (i prollyIndex) AddColumnToRows(ctx context.Context, newCol string, newSche
 	}
 
 	// If not, then we have to iterate over this table's rows and update all the offsets for the new column
-	rowMap := ProllyMapFromIndex(i)
+	rowMap, err := ProllyMapFromIndex(i)
+	if err != nil {
+		return nil, err
+	}
 	mutator := rowMap.Mutate()
 
 	iter, err := mutator.IterAll(ctx)

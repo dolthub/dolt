@@ -260,8 +260,6 @@ func NewSqlEngine(
 			if err = sc.Restart(); err != nil {
 				return nil, err
 			}
-		} else {
-			//sc.CollectOnce(ctx)
 		}
 	}
 

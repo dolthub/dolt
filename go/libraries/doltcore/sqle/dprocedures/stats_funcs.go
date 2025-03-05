@@ -38,11 +38,11 @@ const OkResult = "Ok"
 
 func statsFunc(fn func(ctx *sql.Context, args ...string) (interface{}, error)) func(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 	return func(ctx *sql.Context, args ...string) (iter sql.RowIter, err error) {
-		//defer func() {
-		//	if r := recover(); r != nil {
-		//		err = fmt.Errorf("stats function unexpectedly panicked: %s", r)
-		//	}
-		//}()
+		defer func() {
+			if r := recover(); r != nil {
+				err = fmt.Errorf("stats function unexpectedly panicked: %s", r)
+			}
+		}()
 		res, err := fn(ctx, args...)
 		if err != nil {
 			return nil, err
@@ -51,6 +51,7 @@ func statsFunc(fn func(ctx *sql.Context, args ...string) (interface{}, error)) f
 	}
 }
 
+// StatsInfo gives a summary of the current coordinator stats.
 type StatsInfo struct {
 	DbCnt             int    `json:"dbCnt"`
 	Active            bool   `json:"active"`
@@ -64,6 +65,8 @@ type StatsInfo struct {
 	Backing           string `json:"backing"`
 }
 
+// ToJson returns stats info as a json string. Use the |short|
+// flag to exclude cycle counters.
 func (si StatsInfo) ToJson(short bool) string {
 	if short {
 		si.GcCnt = 0
@@ -80,7 +83,6 @@ func (si StatsInfo) ToJson(short bool) string {
 // observing and manipulating background database auto refresh threads.
 type ToggableStats interface {
 	sql.StatsProvider
-	//FlushQueue(ctx context.Context) error
 	Restart() error
 	Stop()
 	Info(ctx context.Context) (StatsInfo, error)
@@ -96,8 +98,7 @@ type BranchStatsProvider interface {
 	DropBranchDbStats(ctx *sql.Context, branch, db string, flush bool) error
 }
 
-// statsRestart flushes the current job queue and re-inits all
-// statistic databases.
+// statsRestart cancels any ongoing update thread and starts a new worker
 func statsRestart(ctx *sql.Context, _ ...string) (interface{}, error) {
 	dSess := dsess.DSessFromSess(ctx.Session)
 	statsPro := dSess.StatsProvider()
@@ -112,7 +113,7 @@ func statsRestart(ctx *sql.Context, _ ...string) (interface{}, error) {
 	return nil, fmt.Errorf("provider does not implement ToggableStats")
 }
 
-// statsInfo returns the last update for a stats thread
+// statsInfo returns a coordinator state summary
 func statsInfo(ctx *sql.Context, args ...string) (interface{}, error) {
 	dSess := dsess.DSessFromSess(ctx.Session)
 	pro := dSess.StatsProvider()
@@ -130,10 +131,10 @@ func statsInfo(ctx *sql.Context, args ...string) (interface{}, error) {
 	return nil, fmt.Errorf("provider does not implement ToggableStats")
 }
 
-// statsWait blocks until the job queue executes two full loops
-// of instructions, which will (1) pick up and (2) commit new
-// sets of index-bucket dependencies.
-func statsSync(ctx *sql.Context, _ ...string) (interface{}, error) {
+// statsWait blocks until the stats worker executes two full loops
+// of instructions. The second loop will include the most recent
+// committed session as of this function's execution.
+func statsWait(ctx *sql.Context, _ ...string) (interface{}, error) {
 	dSess := dsess.DSessFromSess(ctx.Session)
 	pro := dSess.StatsProvider()
 	if afp, ok := pro.(ToggableStats); ok {
@@ -145,6 +146,10 @@ func statsSync(ctx *sql.Context, _ ...string) (interface{}, error) {
 	return nil, fmt.Errorf("provider does not implement ToggableStats")
 }
 
+// statsOnce runs a one-off worker update. This is mostly used for
+// testing and grabbing statistics while in the shell. Servers
+// should use `dolt_stats_wait` to avoid contending with the
+// background thread.
 func statsOnce(ctx *sql.Context, _ ...string) (interface{}, error) {
 	dSess := dsess.DSessFromSess(ctx.Session)
 	pro := dSess.StatsProvider()
@@ -158,9 +163,7 @@ func statsOnce(ctx *sql.Context, _ ...string) (interface{}, error) {
 	return nil, fmt.Errorf("provider does not implement ToggableStats")
 }
 
-// statsWait blocks until the job queue executes two full loops
-// of instructions, which will (1) pick up and (2) commit new
-// sets of index-bucket dependencies.
+// statsFlush waits for the next stats flush to storage.
 func statsFlush(ctx *sql.Context, _ ...string) (interface{}, error) {
 	dSess := dsess.DSessFromSess(ctx.Session)
 	pro := dSess.StatsProvider()
@@ -173,8 +176,8 @@ func statsFlush(ctx *sql.Context, _ ...string) (interface{}, error) {
 	return nil, fmt.Errorf("provider does not implement ToggableStats")
 }
 
-// statsGc rewrites the cache to only include objects reachable
-// by the current root value.
+// statsGc sets the |doGc| flag and waits until a worker
+// performs an update/GC.
 func statsGc(ctx *sql.Context, _ ...string) (interface{}, error) {
 	dSess := dsess.DSessFromSess(ctx.Session)
 	pro := dSess.StatsProvider()
@@ -219,7 +222,7 @@ func statsPurge(ctx *sql.Context, _ ...string) (interface{}, error) {
 	return OkResult, nil
 }
 
-// statsTimers updates the stats timers, which go into effect after the next restart.
+// statsTimers updates the stats timers, which go into effect immediately.
 func statsTimers(ctx *sql.Context, args ...string) (interface{}, error) {
 	dSess := dsess.DSessFromSess(ctx.Session)
 	statsPro := dSess.StatsProvider()

@@ -157,43 +157,6 @@ func TestStatScripts(t *testing.T) {
 			},
 		},
 		{
-			name: "panic bug",
-			setup: []string{
-				"create table xy (x int primary key, y varchar(16), key (y,x))",
-				"insert into xy values (0,'0'), (1,'0'), (2,'0')",
-			},
-			assertions: []assertion{
-				{
-					query: "call dolt_stats_stop()",
-				},
-				{
-					query: "alter table xy drop index y",
-				},
-				{
-					query: "select count(*) from dolt_statistics",
-					res:   []sql.Row{{2}},
-				},
-				{
-					query: "call dolt_stats_once()",
-				},
-				{
-					query: "call dolt_stats_info('--short')",
-					res: []sql.Row{
-						{dprocedures.StatsInfo{
-							DbCnt:             1,
-							Backing:           "mydb",
-							Active:            false,
-							StorageBucketCnt:  2,
-							CachedBucketCnt:   2,
-							CachedBoundCnt:    2,
-							CachedTemplateCnt: 2,
-							StatCnt:           2,
-						},
-						}},
-				},
-			},
-		},
-		{
 			name: "ddl index",
 			setup: []string{
 				"create table xy (x int primary key, y varchar(16), key (y,x))",
@@ -274,42 +237,86 @@ func TestStatScripts(t *testing.T) {
 		{
 			name: "vector index",
 			setup: []string{
-				"create table t (c int)",
-				"insert into t values (0), (1), (2), (NULL), (NULL)",
+				"create table xy (x int primary key, y json, vector key(y))",
+				"insert into xy values (0, '0'), (1, '1'), (2, '2'), (3, NULL), (4, NULL)",
 			},
 			assertions: []assertion{
 				{
 					query: "select database_name, table_name, index_name  from dolt_statistics order by index_name",
-					res:   []sql.Row{{"mydb", "xy", "primary"}, {"mydb", "xy", "y2"}, {"mydb", "xy", "yx"}},
+					res:   []sql.Row{{"mydb", "xy", "primary"}},
+				},
+				{
+					query: "call dolt_stats_info('--short')",
+					res: []sql.Row{
+						{dprocedures.StatsInfo{
+							DbCnt:             1,
+							Backing:           "mydb",
+							Active:            true,
+							StorageBucketCnt:  1,
+							CachedBucketCnt:   1,
+							CachedBoundCnt:    1,
+							CachedTemplateCnt: 1,
+							StatCnt:           1,
+						}},
+					},
 				},
 			},
 		},
 		{
 			name: "generated index",
 			setup: []string{
-				"create table t (c int)",
-				"insert into t values (0), (1), (2), (NULL), (NULL)",
+				"create table t (pk int primary key, c0 int)",
+				"insert into t values (0,0), (1,1), (2,2), (3,NULL), (4,NULL)",
+				"alter table t add column c1 int generated always as (c0);",
+				"alter table t add index idx(c1);",
 			},
 			assertions: []assertion{
 				{
 					query: "select database_name, table_name, index_name  from dolt_statistics order by index_name",
-					res:   []sql.Row{{"mydb", "xy", "primary"}, {"mydb", "xy", "y2"}, {"mydb", "xy", "yx"}},
+					res:   []sql.Row{{"mydb", "t", "idx"}, {"mydb", "t", "primary"}},
+				},
+				{
+					query: "call dolt_stats_info('--short')",
+					res: []sql.Row{
+						{dprocedures.StatsInfo{
+							DbCnt:             1,
+							Backing:           "mydb",
+							Active:            true,
+							StorageBucketCnt:  2,
+							CachedBucketCnt:   2,
+							CachedBoundCnt:    2,
+							CachedTemplateCnt: 2,
+							StatCnt:           1,
+						}},
+					},
 				},
 			},
 		},
 		{
 			name: "keyless index",
 			setup: []string{
-				"create table t (c int)",
-				"insert into t values (0), (1), (2), (NULL), (NULL)",
+				"create table t (c1 int, c2 int, index (c2))",
+				"insert into t values (0,0), (1,1), (2,2), (3,NULL), (4,NULL)",
 			},
 			assertions: []assertion{
 				{
-					query: "analyze table t",
+					query: "select database_name, table_name, index_name  from dolt_statistics order by index_name",
+					res:   []sql.Row{{"mydb", "t", "c2"}},
 				},
 				{
-					query: "select database_name, table_name, index_name  from dolt_statistics order by index_name",
-					res:   []sql.Row{{"mydb", "xy", "primary"}, {"mydb", "xy", "y2"}, {"mydb", "xy", "yx"}},
+					query: "call dolt_stats_info('--short')",
+					res: []sql.Row{
+						{dprocedures.StatsInfo{
+							DbCnt:             1,
+							Backing:           "mydb",
+							Active:            true,
+							StorageBucketCnt:  1,
+							CachedBucketCnt:   1,
+							CachedBoundCnt:    1,
+							CachedTemplateCnt: 1,
+							StatCnt:           1,
+						}},
+					},
 				},
 			},
 		},
@@ -468,8 +475,8 @@ func TestStatScripts(t *testing.T) {
 							CachedBoundCnt:    2,
 							CachedTemplateCnt: 2,
 							StatCnt:           2,
-						},
 						}},
+					},
 				},
 				{
 					query: "call dolt_checkout('feat')",

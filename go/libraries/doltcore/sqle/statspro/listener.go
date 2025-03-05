@@ -17,7 +17,6 @@ package statspro
 import (
 	"context"
 	"fmt"
-	"log"
 	"sync"
 	"time"
 
@@ -136,14 +135,13 @@ func (sc *StatsController) Restart() error {
 	}
 
 	sc.sq.Start()
-
 	sc.UpdateParams()
 
 	done := make(chan struct{})
 	go func() {
 		ctx := sc.newThreadCtx(context.Background())
 		close(done)
-		err := sc.runIssuer(ctx)
+		err := sc.runWorker(ctx)
 		if err != nil {
 			sc.logger.Errorf("stats stopped: %s", err.Error())
 		}
@@ -235,11 +233,19 @@ func (sc *StatsController) WaitForSync(ctx context.Context) (err error) {
 }
 
 func (sc *StatsController) WaitForFlush(ctx *sql.Context) error {
+	sc.mu.Lock()
+	memOnly := sc.memOnly
+	sc.mu.Unlock()
+	if memOnly {
+		return fmt.Errorf("memory only statistics will not flush")
+	}
 	return sc.waitForCond(ctx, leFlush, 1)
 }
 
 func (sc *StatsController) Gc(ctx *sql.Context) error {
+	sc.mu.Lock()
 	sc.doGc = true
+	sc.mu.Unlock()
 	return sc.waitForCond(ctx, leGc, 1)
 }
 
@@ -247,7 +253,6 @@ func (sc *StatsController) Close() {
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
 	if sc.activeCtxCancel != nil {
-		log.Println("cancel thread from Close")
 		sc.activeCtxCancel()
 		sc.activeCtxCancel = nil
 		sc.sq.InterruptAsync(func() error {

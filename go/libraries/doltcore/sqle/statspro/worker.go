@@ -37,7 +37,7 @@ func (sc *StatsController) CollectOnce(ctx context.Context) (string, error) {
 	return newStats.String(), nil
 }
 
-func (sc *StatsController) runIssuer(ctx context.Context) (err error) {
+func (sc *StatsController) runWorker(ctx context.Context) (err error) {
 	var gcKv *memStats
 	var newStats *rootStats
 	gcTicker := time.NewTicker(sc.gcInterval)
@@ -393,7 +393,11 @@ func (sc *StatsController) updateTable(ctx *sql.Context, newStats *rootStats, ta
 
 		idxLen := len(sqlIdx.Expressions())
 
-		prollyMap := durable.ProllyMapFromIndex(idx)
+		prollyMap, err := durable.ProllyMapFromIndex(idx)
+		if err != nil {
+			sc.descError("cannot generate stats for non-prollyIndex", err)
+			continue
+		}
 		var levelNodes []tree.Node
 		if err = sc.sq.DoSync(ctx, func() error {
 			levelNodes, err = tree.GetHistogramLevel(ctx, prollyMap.Tuples(), bucketLowCnt)

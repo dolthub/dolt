@@ -50,7 +50,10 @@ func mergeProllySecondaryIndexes(
 		return nil, err
 	}
 
-	mergedM := durable.ProllyMapFromIndex(finalRows)
+	mergedM, err := durable.ProllyMapFromIndex(finalRows)
+	if err != nil {
+		return nil, err
+	}
 
 	tryGetIdx := func(sch schema.Schema, iS durable.IndexSet, indexName string) (prolly.Map, bool, error) {
 		ok := sch.Indexes().Contains(indexName)
@@ -59,7 +62,10 @@ func mergeProllySecondaryIndexes(
 			if err != nil {
 				return prolly.Map{}, false, err
 			}
-			m := durable.ProllyMapFromIndex(idx)
+			m, err := durable.ProllyMapFromIndex(idx)
+			if err != nil {
+				return prolly.Map{}, false, err
+			}
 			return m, true, nil
 		}
 		return prolly.Map{}, false, nil

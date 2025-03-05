@@ -39,7 +39,7 @@ func TestListening(t *testing.T) {
 		eg := errgroup.Group{}
 		ctx := sc.newThreadCtx(context.Background())
 		eg.Go(func() error {
-			return sc.runIssuer(ctx)
+			return sc.runWorker(ctx)
 		})
 
 		require.NotNil(t, sc.activeCtxCancel)
@@ -61,7 +61,7 @@ func TestListening(t *testing.T) {
 		eg := errgroup.Group{}
 		ctx := sc.newThreadCtx(context.Background())
 		eg.Go(func() error {
-			return sc.runIssuer(ctx)
+			return sc.runWorker(ctx)
 		})
 
 		sc.Stop()
@@ -76,17 +76,17 @@ func TestListening(t *testing.T) {
 		eg := errgroup.Group{}
 		ctx1 := sc.newThreadCtx(context.Background())
 		eg.Go(func() error {
-			return sc.runIssuer(ctx1)
+			return sc.runWorker(ctx1)
 		})
 
 		ctx2 := sc.newThreadCtx(context.Background())
 		eg.Go(func() error {
-			return sc.runIssuer(ctx2)
+			return sc.runWorker(ctx2)
 		})
 
 		ctx3 := sc.newThreadCtx(context.Background())
 		eg.Go(func() error {
-			return sc.runIssuer(ctx3)
+			return sc.runWorker(ctx3)
 		})
 
 		<-ctx1.Done()

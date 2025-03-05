@@ -234,7 +234,15 @@ func (sc *StatsController) descError(d string, err error) {
 	if sc.Debug {
 		log.Println("stats error: ", err.Error())
 	}
-	sc.logger.Errorf("stats error; job detail: %s; verbose: %s", d, err)
+	b := strings.Builder{}
+	b.WriteString("stats error;")
+	if d != "" {
+		b.WriteString(" " + d)
+	}
+	if err != nil {
+		b.WriteString(" " + err.Error())
+	}
+	sc.logger.Error(b.String())
 }
 
 func (sc *StatsController) GetTableStats(ctx *sql.Context, db string, table sql.Table) ([]sql.Statistic, error) {

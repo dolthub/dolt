@@ -105,11 +105,16 @@ func diffProllyTrees(ctx context.Context, ch chan DiffStatProgress, keyless bool
 
 	var f, t prolly.Map
 	if from != nil {
-		f = durable.ProllyMapFromIndex(from)
+		f, err = durable.ProllyMapFromIndex(from)
+		if err != nil {
+			return err
+		}
 	}
 	if to != nil {
-		t = durable.ProllyMapFromIndex(to)
-
+		t, err = durable.ProllyMapFromIndex(to)
+		if err != nil {
+			return err
+		}
 	}
 
 	_, fVD := f.Descriptors()

@@ -635,7 +635,7 @@ func rebuildAllProllyIndexes(ctx *sql.Context, tbl *doltdb.Table) (*doltdb.Table
 	if err != nil {
 		return nil, err
 	}
-	primary := durable.ProllyMapFromIndex(tableRowData)
+	primary, _ := durable.ProllyMapFromIndex(tableRowData)
 
 	for _, index := range sch.Indexes().AllIndexes() {
 		rebuiltIndexRowData, err := creation.BuildSecondaryProllyIndex(ctx, tbl.ValueReadWriter(), tbl.NodeStore(), sch, tableName, index, primary)
