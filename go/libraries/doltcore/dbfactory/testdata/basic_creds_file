@@ -1,0 +1,7 @@
+[load_from_file]
+aws_access_key_id = 2A16B802-306B-43CB-B3A7-8A2DAB712F44
+aws_secret_access_key = 28893871-7BEB-4AE3-B643-1DB21FCB9EC8
+
+[default]
+aws_access_key_id = BEFB28DF-A5AA-423C-A09B-35583580D740
+aws_secret_access_key = 8E44AE62-AC85-4C9D-BE48-802AA081EBF3
