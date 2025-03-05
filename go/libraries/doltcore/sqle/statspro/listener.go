@@ -101,7 +101,6 @@ func (sc *StatsController) Stop() {
 	sc.mu.Unlock()
 	if sc.activeCtxCancel != nil {
 		sc.activeCtxCancel()
-		log.Println("cancel thread from Stop()")
 		sc.activeCtxCancel = nil
 	}
 	sc.signalListener(leStop)

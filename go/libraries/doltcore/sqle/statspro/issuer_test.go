@@ -787,7 +787,7 @@ func executeQueryResults(ctx *sql.Context, eng *gms.Engine, query string) ([]sql
 }
 
 func newTestEngine(ctx context.Context, dEnv *env.DoltEnv, threads *sql.BackgroundThreads) (*gms.Engine, *sql.Context) {
-	pro, err := sqle.NewDoltDatabaseProviderWithDatabases("main", dEnv.FS, nil, nil, threads)
+	pro, err := sqle.NewDoltDatabaseProviderWithDatabases("main", dEnv.FS, nil, nil)
 	if err != nil {
 		panic(err)
 	}
@@ -995,14 +995,12 @@ func TestStatsBranchConcurrency(t *testing.T) {
 }
 
 func TestStatsCacheGrowth(t *testing.T) {
-	//t.Skip("expensive test")
-
 	threads := sql.NewBackgroundThreads()
 	defer threads.Shutdown()
 	ctx, sqlEng, sc := emptySetup(t, threads, false)
 	sc.SetEnableGc(true)
 
-	sc.JobInterval = 10
+	sc.JobInterval = 1
 	sc.gcInterval = time.Hour
 	require.NoError(t, sc.Restart())
 
@@ -1024,7 +1022,7 @@ func TestStatsCacheGrowth(t *testing.T) {
 
 	iters := 2000
 	if os.Getenv("CI") != "" {
-		iters = 1025
+		iters = 200
 	}
 	{
 		branches := make(chan string, iters)

@@ -159,7 +159,7 @@ func TestListening(t *testing.T) {
 		select {
 		case e := <-l:
 			require.Equal(t, e, leStop)
-		case <-time.Tick(10 * time.Millisecond):
+		default:
 			t.Fatal("expected listener to recv stop")
 		}
 	})
