@@ -230,8 +230,10 @@ func (d *DoltSession) LookupDbState(ctx *sql.Context, dbName string) (SessionSta
 	if err != nil {
 		return nil, false, err
 	}
-
-	return s, ok, nil
+	if !ok {
+		return nil, false, nil
+	}
+	return s, true, nil
 }
 
 // RemoveDbState invalidates any cached db state in this session, for example, if a database is dropped.
@@ -1690,13 +1692,13 @@ func (d *DoltSession) GetBranch() (string, error) {
 		return "", nil
 	}
 
-	branchState, _, err := d.LookupDbState(ctx, currentDb)
+	bs, _, err := d.LookupDbState(ctx, currentDb)
 	if err != nil {
 		return "", err
 	}
 
-	if branchState.WorkingSet() != nil {
-		branchRef, err := branchState.WorkingSet().Ref().ToHeadRef()
+	if bs != nil && bs.WorkingSet() != nil {
+		branchRef, err := bs.WorkingSet().Ref().ToHeadRef()
 		if err != nil {
 			return "", err
 		}

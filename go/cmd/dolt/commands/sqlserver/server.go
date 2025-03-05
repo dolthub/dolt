@@ -123,6 +123,14 @@ func ConfigureServices(
 				return err
 			}
 			logrus.SetLevel(level)
+			switch strings.ToLower(string(serverConfig.LogFormat())) {
+			case string(servercfg.LogFormat_JSON):
+				logrus.SetFormatter(&logrus.JSONFormatter{})
+			case string(servercfg.LogFormat_Text):
+				logrus.SetFormatter(&logrus.TextFormatter{})
+			default:
+				return fmt.Errorf("unknown log format: %s", serverConfig.LogFormat())
+			}
 
 			sql.SystemVariables.AddSystemVariables([]sql.SystemVariable{
 				&sql.MysqlSystemVariable{
