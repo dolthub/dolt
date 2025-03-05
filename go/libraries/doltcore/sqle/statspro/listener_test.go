@@ -101,7 +101,7 @@ func TestListening(t *testing.T) {
 		wg.Add(2)
 		go func() {
 			defer wg.Done()
-			for _ = range 20 {
+			for range 20 {
 				require.NoError(t, sc.Restart())
 				l, err := sc.addListener(leSwap)
 				if err != nil {
@@ -115,7 +115,7 @@ func TestListening(t *testing.T) {
 		}()
 		go func() {
 			defer wg.Done()
-			for _ = range 20 {
+			for range 20 {
 				sc.Stop()
 				l, err := sc.addListener(leSwap)
 				if err != nil {
@@ -184,15 +184,17 @@ func TestListening(t *testing.T) {
 		done := make(chan struct{})
 		wg := sync.WaitGroup{}
 		wg.Add(2)
-		sc.sq.DoAsync(func() error {
+		err := sc.sq.DoAsync(func() error {
 			defer wg.Done()
 			<-done
 			return nil
 		})
+		require.NoError(t, err)
 		go func() {
 			defer wg.Done()
 			defer close(done)
-			ctx, _ := context.WithTimeout(context.Background(), 10*time.Millisecond)
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+			defer cancel()
 			err := sc.waitForCond(ctx, leSwap, 1)
 			require.ErrorIs(t, err, context.DeadlineExceeded)
 		}()
@@ -205,11 +207,12 @@ func TestListening(t *testing.T) {
 		done := make(chan struct{})
 		wg := sync.WaitGroup{}
 		wg.Add(2)
-		sc.sq.DoAsync(func() error {
+		err := sc.sq.DoAsync(func() error {
 			defer wg.Done()
 			<-done
 			return nil
 		})
+		require.NoError(t, err)
 		go func() {
 			defer wg.Done()
 			defer close(done)
@@ -228,11 +231,12 @@ func TestListening(t *testing.T) {
 		done := make(chan struct{})
 		wg := sync.WaitGroup{}
 		wg.Add(2)
-		sc.sq.DoAsync(func() error {
+		err := sc.sq.DoAsync(func() error {
 			defer wg.Done()
 			<-done
 			return nil
 		})
+		require.NoError(t, err)
 		go func() {
 			defer wg.Done()
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
