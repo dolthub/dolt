@@ -203,6 +203,8 @@ func TestServerGoodParams(t *testing.T) {
 		DefaultCommandLineServerConfig().withLogLevel(servercfg.LogLevel_Info).WithPort(15408),
 		DefaultCommandLineServerConfig().withReadOnly(true).WithPort(15409),
 		DefaultCommandLineServerConfig().withUser("testusernamE").withPassword("hunter2").withTimeout(4).WithPort(15410),
+		DefaultCommandLineServerConfig().withLogFormat(servercfg.LogFormat_Text).WithPort(15411),
+		DefaultCommandLineServerConfig().withLogFormat(servercfg.LogFormat_JSON).WithPort(15412),
 		DefaultCommandLineServerConfig().withAllowCleartextPasswords(true),
 	}
 
@@ -551,6 +553,8 @@ func TestGenerateYamlConfig(t *testing.T) {
 #
 
 # log_level: info
+
+# log_format: text
 
 # max_logged_query_len: 0
 
