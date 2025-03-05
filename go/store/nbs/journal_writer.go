@@ -735,8 +735,8 @@ func (idx rangeIndex) novelLookups() (lookups []lookup) {
 
 func (idx rangeIndex) flatten(ctx context.Context) rangeIndex {
 	defer trace.StartRegion(ctx, "flatten journal index").End()
-	trace.Logf(ctx, "swiss map current count", "%d", len(idx.cached))
-	trace.Logf(ctx, "swiss map add count", "%d", len(idx.novel))
+	trace.Logf(ctx, "map index cached count", "%d", len(idx.cached))
+	trace.Logf(ctx, "map index novel count", "%d", len(idx.novel))
 	for a, r := range idx.novel {
 		idx.cached[toAddr16(a)] = r
 	}
