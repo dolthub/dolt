@@ -36,6 +36,7 @@ type commandLineServerConfig struct {
 	timeout                 uint64
 	readOnly                bool
 	logLevel                servercfg.LogLevel
+	logFormat               servercfg.LogFormat
 	dataDir                 string
 	cfgDir                  string
 	autoCommit              bool
@@ -68,6 +69,7 @@ func DefaultCommandLineServerConfig() *commandLineServerConfig {
 		timeout:                 servercfg.DefaultTimeout,
 		readOnly:                servercfg.DefaultReadOnly,
 		logLevel:                servercfg.DefaultLogLevel,
+		logFormat:               servercfg.DefaultLogFormat,
 		autoCommit:              servercfg.DefaultAutoCommit,
 		maxConnections:          servercfg.DefaultMaxConnections,
 		dataDir:                 servercfg.DefaultDataDir,
@@ -142,6 +144,9 @@ func NewCommandLineConfig(creds *cli.UserPassword, apr *argparser.ArgParseResult
 
 	if logLevel, ok := apr.GetValue(logLevelFlag); ok {
 		config.withLogLevel(servercfg.LogLevel(strings.ToLower(logLevel)))
+	}
+	if logFormat, ok := apr.GetValue(logFormatFlag); ok {
+		config.withLogFormat(servercfg.LogFormat(strings.ToLower(logFormat)))
 	}
 
 	if dataDir, ok := apr.GetValue(commands.MultiDBDirFlag); ok {
@@ -230,6 +235,11 @@ func (cfg *commandLineServerConfig) ReadOnly() bool {
 // LogLevel returns the level of logging that the server will use.
 func (cfg *commandLineServerConfig) LogLevel() servercfg.LogLevel {
 	return cfg.logLevel
+}
+
+// LogFormat returns the format of logging that the server will use.
+func (cfg *commandLineServerConfig) LogFormat() servercfg.LogFormat {
+	return cfg.logFormat
 }
 
 // AutoCommit defines the value of the @@autocommit session variable used on every connection
@@ -397,6 +407,13 @@ func (cfg *commandLineServerConfig) withReadOnly(readonly bool) *commandLineServ
 func (cfg *commandLineServerConfig) withLogLevel(loglevel servercfg.LogLevel) *commandLineServerConfig {
 	cfg.logLevel = loglevel
 	cfg.valuesSet[servercfg.LogLevelKey] = struct{}{}
+	return cfg
+}
+
+// withLogFormat updates the log format and returns the called `*commandLineServerConfig`, which is useful for chaining calls.
+func (cfg *commandLineServerConfig) withLogFormat(logformat servercfg.LogFormat) *commandLineServerConfig {
+	cfg.logFormat = logformat
+	cfg.valuesSet[servercfg.LogFormatKey] = struct{}{}
 	return cfg
 }
 
