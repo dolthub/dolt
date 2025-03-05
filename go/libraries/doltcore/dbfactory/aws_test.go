@@ -104,6 +104,8 @@ func TestAWSConfigFromParams(t *testing.T) {
 	const defaultProfileAccessKeyID = "BEFB28DF-A5AA-423C-A09B-35583580D740"
 	const defaultProfileSecretAccessKey = "8E44AE62-AC85-4C9D-BE48-802AA081EBF3"
 	const defaultProfileRegion = "eu-central-1"
+	const onlyCredsProfileAccessKeyID = "4A5A28FB-35CF-44FD-8344-A581EDC970BA"
+	const onlyCredsProfileSecretAccessKey = "86D705DE-A73C-4B13-9690-CAE285C40793"
 
 	setEnv := func(t *testing.T, env map[string]string) {
 		orig := make(map[string]string, len(env))
@@ -126,6 +128,15 @@ func TestAWSConfigFromParams(t *testing.T) {
 		require.NoError(t, err)
 		return sess
 	}
+
+	// Do not pick up config from any files in the running user's
+	// home directory (potentially a developer).
+	setEnv(t, map[string]string{
+		"HOME": "/does_not_exist",
+	})
+
+	cwd, err := os.Getwd()
+	require.NoError(t, err)
 
 	type roleTypeTest struct {
 		name     string
@@ -186,8 +197,6 @@ func TestAWSConfigFromParams(t *testing.T) {
 			})
 			t.Run("FilesInEnv", func(t *testing.T) {
 				t.Run("ProfileInEnv", func(t *testing.T) {
-					cwd, err := os.Getwd()
-					require.NoError(t, err)
 					loadedProfile := "load_from_file"
 					configFile := filepath.Join(cwd, "testdata", "basic_config_file")
 					credsFile := filepath.Join(cwd, "testdata", "basic_creds_file")
@@ -207,8 +216,6 @@ func TestAWSConfigFromParams(t *testing.T) {
 					}
 				})
 				t.Run("ProfileInLegacyEnv", func(t *testing.T) {
-					cwd, err := os.Getwd()
-					require.NoError(t, err)
 					loadedProfile := "load_from_file"
 					configFile := filepath.Join(cwd, "testdata", "basic_config_file")
 					credsFile := filepath.Join(cwd, "testdata", "basic_creds_file")
@@ -228,8 +235,6 @@ func TestAWSConfigFromParams(t *testing.T) {
 					}
 				})
 				t.Run("ProfileInParam", func(t *testing.T) {
-					cwd, err := os.Getwd()
-					require.NoError(t, err)
 					loadedProfile := "load_from_file"
 					configFile := filepath.Join(cwd, "testdata", "basic_config_file")
 					credsFile := filepath.Join(cwd, "testdata", "basic_creds_file")
@@ -254,8 +259,6 @@ func TestAWSConfigFromParams(t *testing.T) {
 					// the credentials are forcefully loaded from
 					// there, ignoring the default credentials
 					// chain. AWS_CONFIG_FILE still works for region.
-					cwd, err := os.Getwd()
-					require.NoError(t, err)
 					envAccessKeyID := uuid.New().String()
 					envSecretAccessKeyID := uuid.New().String()
 					loadedProfile := "load_from_file"
@@ -294,8 +297,10 @@ func TestAWSConfigFromParams(t *testing.T) {
 				// Potentially a major shortcoming of
 				// the current implementation is that
 				// there is no way to configure a
-				// per-remote credentials file without
-				// overriding the creds-type to be
+				// per-remote profile config file, and
+				// attempting to configure a
+				// per-remote credentials file
+				// overrides the creds-type to be
 				// file, which is restricted to just
 				// static credentials in the form of
 				// aws_access_key_id and
@@ -384,8 +389,6 @@ func TestAWSConfigFromParams(t *testing.T) {
 			require.Error(t, err)
 		})
 		t.Run("FileDoesNotExist", func(t *testing.T) {
-			cwd, err := os.Getwd()
-			require.NoError(t, err)
 			loadedProfile := "default"
 			configFile := filepath.Join(cwd, "testdata", "basic_config_file")
 			credsFile := uuid.New().String()
@@ -400,9 +403,7 @@ func TestAWSConfigFromParams(t *testing.T) {
 			_, err = sess.Config.Credentials.Get()
 			require.Error(t, err)
 		})
-		t.Run("ProfileDoesNotExist", func(t *testing.T) {
-			cwd, err := os.Getwd()
-			require.NoError(t, err)
+		t.Run("ProfileFromParamDoesNotExist", func(t *testing.T) {
 			loadedProfile := "does_not_exist"
 			configFile := filepath.Join(cwd, "testdata", "basic_config_file")
 			credsFile := filepath.Join(cwd, "testdata", "basic_creds_file")
@@ -417,9 +418,83 @@ func TestAWSConfigFromParams(t *testing.T) {
 			_, err = sess.Config.Credentials.Get()
 			require.Error(t, err)
 		})
+		t.Run("ProfileFromEnvDoesNotExist", func(t *testing.T) {
+			loadedProfile := "does_not_exist"
+			configFile := filepath.Join(cwd, "testdata", "basic_config_file")
+			credsFile := filepath.Join(cwd, "testdata", "basic_creds_file")
+			setEnv(t, map[string]string{
+				"AWS_CONFIG_FILE": configFile,
+				"AWS_PROFILE":     loadedProfile,
+			})
+			sess := getSession(t, map[string]interface{}{
+				AWSCredsTypeParam: "file",
+				AWSCredsFileParam: credsFile,
+			})
+			_, err = sess.Config.Credentials.Get()
+			require.Error(t, err)
+		})
+		type profileOnlyHasCredsTest struct {
+			name    string
+			fileEnv string
+		}
+		allProfileOnlyHasCredsTests := []profileOnlyHasCredsTest{{
+			name:    "SpecifyExistingConfigFile",
+			fileEnv: filepath.Join(cwd, "testdata", "basic_config_file"),
+		}, {
+			name:    "SpecifyNonExistantConfigFile",
+			fileEnv: "/dev/null/does_not_exist",
+		}, {
+			name: "DoNotSpecifyConfigFile",
+		}}
+		t.Run("ProfileFromEnvOnlyExistsInCreds", func(t *testing.T) {
+			for _, tt := range allProfileOnlyHasCredsTests {
+				t.Run(tt.name, func(t *testing.T) {
+					loadedProfile := "only_creds_profile"
+					credsFile := filepath.Join(cwd, "testdata", "basic_creds_file")
+					setEnv(t, map[string]string{
+						"AWS_PROFILE": loadedProfile,
+					})
+					if tt.fileEnv != "" {
+						setEnv(t, map[string]string{
+							"AWS_CONFIG_FILE": tt.fileEnv,
+						})
+					}
+					sess := getSession(t, map[string]interface{}{
+						AWSCredsTypeParam: "file",
+						AWSCredsFileParam: credsFile,
+					})
+					creds, err := sess.Config.Credentials.Get()
+					if assert.NoError(t, err) {
+						assert.Equal(t, onlyCredsProfileAccessKeyID, creds.AccessKeyID)
+						assert.Equal(t, onlyCredsProfileSecretAccessKey, creds.SecretAccessKey)
+					}
+				})
+			}
+		})
+		t.Run("ProfileFromParamOnlyExistsInCreds", func(t *testing.T) {
+			for _, tt := range allProfileOnlyHasCredsTests {
+				t.Run(tt.name, func(t *testing.T) {
+					loadedProfile := "only_creds_profile"
+					credsFile := filepath.Join(cwd, "testdata", "basic_creds_file")
+					if tt.fileEnv != "" {
+						setEnv(t, map[string]string{
+							"AWS_CONFIG_FILE": tt.fileEnv,
+						})
+					}
+					sess := getSession(t, map[string]interface{}{
+						AWSCredsTypeParam: "file",
+						AWSCredsFileParam: credsFile,
+						AWSCredsProfile:   loadedProfile,
+					})
+					creds, err := sess.Config.Credentials.Get()
+					if assert.NoError(t, err) {
+						assert.Equal(t, onlyCredsProfileAccessKeyID, creds.AccessKeyID)
+						assert.Equal(t, onlyCredsProfileSecretAccessKey, creds.SecretAccessKey)
+					}
+				})
+			}
+		})
 		t.Run("IgnoresEnv", func(t *testing.T) {
-			cwd, err := os.Getwd()
-			require.NoError(t, err)
 			envAccessKeyID := uuid.New().String()
 			envSecretAccessKeyID := uuid.New().String()
 			loadedProfile := "load_from_file"
@@ -450,8 +525,6 @@ func TestAWSConfigFromParams(t *testing.T) {
 			// If no aws-profile parameter is supplied,
 			// and no AWS_PROFILE is set, then "default"
 			// is used for both config and credentials.
-			cwd, err := os.Getwd()
-			require.NoError(t, err)
 			envAccessKeyID := uuid.New().String()
 			envSecretAccessKeyID := uuid.New().String()
 			configFile := filepath.Join(cwd, "testdata", "basic_config_file")
@@ -480,8 +553,6 @@ func TestAWSConfigFromParams(t *testing.T) {
 			// If no aws-profile parameter is supplied,
 			// then AWS_PROFILE is used for both config
 			// and credentials.
-			cwd, err := os.Getwd()
-			require.NoError(t, err)
 			envAccessKeyID := uuid.New().String()
 			envSecretAccessKeyID := uuid.New().String()
 			loadedProfile := "load_from_file"
@@ -519,8 +590,6 @@ func TestAWSConfigFromParams(t *testing.T) {
 			// This is a weird, probably unintentional
 			// edge case which we probably don't want to
 			// support.
-			cwd, err := os.Getwd()
-			require.NoError(t, err)
 			envAccessKeyID := uuid.New().String()
 			envSecretAccessKeyID := uuid.New().String()
 			loadedProfile := "load_from_file"
