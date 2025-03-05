@@ -97,7 +97,7 @@ jobs:
           tag_name: v${{ needs.format-version.outputs.version }}
           release_name: ${{ needs.format-version.outputs.version }}
           draft: false
-          prerelease: false
+          prerelease: true
           commitish: ${{ steps.build_binaries.outputs.commitish }}
       - name: Upload Linux AMD64 Distro
         id: upload-linux-amd64-distro
@@ -213,4 +213,4 @@ jobs:
         with:
           token: ${{ secrets.REPO_ACCESS_TOKEN }}
           event-type: push-docker-image
-          client-payload: '{"version": "${{ needs.format-version.outputs.version }}"}'
+          client-payload: '{"version": "${{ needs.format-version.outputs.version }}", "release_id": "${{ needs.create-pgo-release.outputs.release_id }}" }'
