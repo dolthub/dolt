@@ -15,6 +15,7 @@
 package sqlserver
 
 import (
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -184,11 +185,6 @@ func TestServerBadArgs(t *testing.T) {
 
 func TestServerGoodParams(t *testing.T) {
 	ctx := context.Background()
-	env, err := sqle.CreateEnvWithSeedData()
-	require.NoError(t, err)
-	defer func() {
-		assert.NoError(t, env.DoltDB(ctx).Close())
-	}()
 
 	tests := []servercfg.ServerConfig{
 		DefaultCommandLineServerConfig(),
@@ -210,11 +206,17 @@ func TestServerGoodParams(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(servercfg.ConfigInfo(test), func(t *testing.T) {
+			env, err := sqle.CreateEnvWithSeedData()
+			require.NoError(t, err)
+			defer func() {
+				assert.NoError(t, env.DoltDB(ctx).Close())
+			}()
 			sc := svcs.NewController()
 			go func(config servercfg.ServerConfig, sc *svcs.Controller) {
+				fmt.Println("start server")
 				_, _ = Serve(context.Background(), "0.0.0", config, sc, env, false)
 			}(test, sc)
-			err := sc.WaitForStart()
+			err = sc.WaitForStart()
 			require.NoError(t, err)
 			conn, err := dbr.Open("mysql", servercfg.ConnectionString(test, "dbname"), nil)
 			require.NoError(t, err)
@@ -223,6 +225,7 @@ func TestServerGoodParams(t *testing.T) {
 			sc.Stop()
 			err = sc.WaitForStop()
 			assert.NoError(t, err)
+			fmt.Println("stop server")
 		})
 	}
 }

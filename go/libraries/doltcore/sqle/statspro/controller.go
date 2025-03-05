@@ -66,8 +66,7 @@ type StatsController struct {
 	logger         *logrus.Logger
 	pro            *sqle.DoltDatabaseProvider
 	statsBackingDb filesys.Filesys
-	dialPro        dbfactory.GRPCDialProvider
-	hdp            env.HomeDirProvider
+	hdpEnv         *env.DoltEnv
 
 	dbFs map[string]filesys.Filesys
 
@@ -126,6 +125,7 @@ func NewStatsController(pro *sqle.DoltDatabaseProvider, ctxGen ctxFactory, logge
 	sq := jobqueue.NewSerialQueue().WithErrorCb(func(err error) {
 		logger.Error(err)
 	})
+
 	return &StatsController{
 		mu:          sync.Mutex{},
 		logger:      logger,
@@ -137,8 +137,7 @@ func NewStatsController(pro *sqle.DoltDatabaseProvider, ctxGen ctxFactory, logge
 		closed:      make(chan struct{}),
 		kv:          NewMemStats(),
 		pro:         pro,
-		hdp:         dEnv.GetUserHomeDir,
-		dialPro:     env.NewGRPCDialProviderFromDoltEnv(dEnv),
+		hdpEnv:      dEnv,
 		ctxGen:      ctxGen,
 		genCnt:      atomic.Uint64{},
 	}
@@ -544,8 +543,11 @@ func (sc *StatsController) rm(fs filesys.Filesys) error {
 }
 
 func (sc *StatsController) initStorage(ctx context.Context, fs filesys.Filesys) (*prollyStats, error) {
+	if sc.hdpEnv == nil {
+		return nil, fmt.Errorf("cannot initialize *prollKv, missing homeDirProvider")
+	}
 	params := make(map[string]interface{})
-	params[dbfactory.GRPCDialProviderParam] = sc.dialPro
+	params[dbfactory.GRPCDialProviderParam] = env.NewGRPCDialProviderFromDoltEnv(sc.hdpEnv)
 
 	var urlPath string
 	u, err := earl.Parse(sc.pro.DbFactoryUrl())
@@ -568,7 +570,7 @@ func (sc *StatsController) initStorage(ctx context.Context, fs filesys.Filesys) 
 			return nil, fmt.Errorf("unable to make directory '%s', cause: %s", dbfactory.DoltStatsDir, err.Error())
 		}
 
-		dEnv = env.Load(ctx, sc.hdp, statsFs, urlPath, "test")
+		dEnv = env.Load(ctx, sc.hdpEnv.GetUserHomeDir, statsFs, urlPath, "test")
 		err = dEnv.InitRepo(ctx, types.Format_Default, "stats", "stats@stats.com", env.DefaultInitBranch)
 		if err != nil {
 			return nil, err
@@ -576,7 +578,7 @@ func (sc *StatsController) initStorage(ctx context.Context, fs filesys.Filesys) 
 	} else if !isDir {
 		return nil, fmt.Errorf("file exists where the dolt stats directory should be")
 	} else {
-		dEnv = env.LoadWithoutDB(ctx, sc.hdp, statsFs, "", doltversion.Version)
+		dEnv = env.LoadWithoutDB(ctx, sc.hdpEnv.GetUserHomeDir, statsFs, "", doltversion.Version)
 	}
 
 	if err := dEnv.LoadDoltDBWithParams(ctx, types.Format_Default, urlPath, statsFs, params); err != nil {

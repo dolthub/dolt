@@ -171,6 +171,7 @@ func (sc *StatsController) newStatsForRoot(baseCtx context.Context, gcKv *memSta
 			continue
 		}
 
+		println("read stats db")
 		var branches []ref.DoltRef
 		if err := sc.sq.DoSync(ctx, func() error {
 			ddb, ok := dSess.GetDoltDB(ctx, db.Name())

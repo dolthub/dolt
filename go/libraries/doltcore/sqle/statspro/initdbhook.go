@@ -15,11 +15,10 @@
 package statspro
 
 import (
-	"github.com/dolthub/go-mysql-server/sql"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/go-mysql-server/sql"
 )
 
 func NewInitDatabaseHook(sc *StatsController) sqle.InitDatabaseHook {
@@ -30,6 +29,11 @@ func NewInitDatabaseHook(sc *StatsController) sqle.InitDatabaseHook {
 		denv *env.DoltEnv,
 		db dsess.SqlDatabase,
 	) error {
+		if sc.hdpEnv == nil {
+			sc.mu.Lock()
+			sc.hdpEnv = denv
+			sc.mu.Unlock()
+		}
 		sqlDb, ok := db.(sqle.Database)
 		if !ok {
 			return nil

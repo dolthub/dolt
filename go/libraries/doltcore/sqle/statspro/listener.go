@@ -256,9 +256,7 @@ func (sc *StatsController) Close() {
 		sc.activeCtxCancel()
 		sc.activeCtxCancel = nil
 		sc.sq.InterruptAsync(func() error {
-			sc.sq.Purge()
-			sc.sq.Stop()
-			return nil
+			return sc.sq.Stop()
 		})
 	}
 	sc.signalListener(leStop)
