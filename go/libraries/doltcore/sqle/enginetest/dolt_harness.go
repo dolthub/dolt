@@ -251,7 +251,8 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 		bThreads := sql.NewBackgroundThreads()
 
 		ctxGen := func(ctx context.Context) (*sql.Context, error) {
-			return d.NewContextWithClient(ctx, sql.Client{Address: "localhost", User: "root"}), nil
+			client := sql.Client{Address: "localhost", User: "root"}
+			return sql.NewContext(context.Background(), sql.WithSession(d.newSessionWithClient(client))), nil
 		}
 		statsPro := statspro.NewStatsController(doltProvider, ctxGen, logrus.StandardLogger(), d.multiRepoEnv.GetEnv(d.multiRepoEnv.GetFirstDatabase()))
 		d.statsPro = statsPro
@@ -402,7 +403,7 @@ func (d *DoltHarness) NewContext() *sql.Context {
 	return sql.NewContext(context.Background(), sql.WithSession(d.session))
 }
 
-func (d *DoltHarness) NewContextWithClient(ctx context.Context, client sql.Client) *sql.Context {
+func (d *DoltHarness) NewContextWithClient(client sql.Client) *sql.Context {
 	return sql.NewContext(context.Background(), sql.WithSession(d.newSessionWithClient(client)))
 }
 
