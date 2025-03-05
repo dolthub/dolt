@@ -97,6 +97,8 @@ SUPPORTED CONFIG FILE FIELDS:
 
 {{.EmphasisLeft}}behavior.dolt_transaction_commit{{.EmphasisRight}}: If true all SQL transaction commits will automatically create a Dolt commit, with a generated commit message. This is useful when a system working with Dolt wants to create versioned data, but doesn't want to directly use Dolt features such as dolt_commit(). 
 
+{{.EmphasisLeft}}behavior.auto_gc_behavior.enabled{{.EmphasisRight}}: If true, garbage collection will run automatically in the background. 
+
 {{.EmphasisLeft}}listener.host{{.EmphasisRight}}: The host address that the server will run on.  This may be {{.EmphasisLeft}}localhost{{.EmphasisRight}} or an IPv4 or IPv6 address
 
 {{.EmphasisLeft}}listener.port{{.EmphasisRight}}: The port that the server should listen on
