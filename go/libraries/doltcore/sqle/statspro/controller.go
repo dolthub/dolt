@@ -104,9 +104,9 @@ type rootStats struct {
 	hashes          map[tableIndexesKey]hash.Hash
 	stats           map[tableIndexesKey][]*stats.Statistic
 	DbCnt           int `json:"dbCnt"`
-	BucketWrites    int `json:"bucketWrites""`
-	TablesProcessed int `json:"tablesProcessed""`
-	TablesSkipped   int `json:"tablesSkipped""`
+	BucketWrites    int `json:"bucketWrites"`
+	TablesProcessed int `json:"tablesProcessed"`
+	TablesSkipped   int `json:"tablesSkipped"`
 }
 
 func newRootStats() *rootStats {
@@ -375,7 +375,6 @@ func (sc *StatsController) DropStats(ctx *sql.Context, qual sql.StatQualifier, c
 func (sc *StatsController) DropDbStats(ctx *sql.Context, dbName string, flush bool) error {
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
-	log.Println("drop statsdb", dbName)
 
 	dbFs := sc.dbFs[dbName]
 	delete(sc.dbFs, dbName)
@@ -470,7 +469,6 @@ func (sc *StatsController) lockedRotateStorage(ctx context.Context) error {
 	if sc.memOnly {
 		return nil
 	}
-	//log.Println("rotate storage")
 	if sc.statsBackingDb != nil {
 		if err := sc.rm(sc.statsBackingDb); err != nil {
 			return err

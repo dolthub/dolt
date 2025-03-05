@@ -302,7 +302,8 @@ func TestSerialQueue(t *testing.T) {
 		assert.False(t, ran, "the interrupt task never ran.")
 	})
 	t.Run("RateLimitWorkThroughput", func(t *testing.T) {
-		ctx, _ := context.WithCancel(context.Background())
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
 		queue := NewSerialQueue()
 		running := make(chan struct{})
 		go func() {
@@ -313,7 +314,8 @@ func TestSerialQueue(t *testing.T) {
 
 		// first will run because timeout > job rate
 		ran := false
-		subCtx, _ := context.WithTimeout(ctx, 5*time.Millisecond)
+		subCtx, cancel2 := context.WithTimeout(ctx, 5*time.Millisecond)
+		defer cancel2()
 		err := queue.DoSync(subCtx, func() error {
 			ran = true
 			return nil
@@ -324,7 +326,8 @@ func TestSerialQueue(t *testing.T) {
 		// second timeout < jobrate, will fail
 		queue.NewRateLimit(10 * time.Millisecond)
 		ran = false
-		subCtx, _ = context.WithTimeout(ctx, 5*time.Millisecond)
+		subCtx, cancel3 := context.WithTimeout(ctx, 5*time.Millisecond)
+		defer cancel3()
 		err = queue.DoSync(subCtx, func() error {
 			ran = true
 			return nil
