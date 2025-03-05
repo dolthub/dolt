@@ -376,6 +376,47 @@ func TestAWSConfigFromParams(t *testing.T) {
 		})
 	})
 	t.Run("CredsTypeFile", func(t *testing.T) {
+		t.Run("FileParamDoesNotExist", func(t *testing.T) {
+			_, err := awsConfigFromParams(map[string]interface{}{
+				AWSCredsTypeParam: "file",
+				AWSCredsProfile:   "some_profile",
+			})
+			require.Error(t, err)
+		})
+		t.Run("FileDoesNotExist", func(t *testing.T) {
+			cwd, err := os.Getwd()
+			require.NoError(t, err)
+			loadedProfile := "default"
+			configFile := filepath.Join(cwd, "testdata", "basic_config_file")
+			credsFile := uuid.New().String()
+			setEnv(t, map[string]string{
+				"AWS_CONFIG_FILE": configFile,
+			})
+			sess := getSession(t, map[string]interface{}{
+				AWSCredsTypeParam: "file",
+				AWSCredsProfile:   loadedProfile,
+				AWSCredsFileParam: credsFile,
+			})
+			_, err = sess.Config.Credentials.Get()
+			require.Error(t, err)
+		})
+		t.Run("ProfileDoesNotExist", func(t *testing.T) {
+			cwd, err := os.Getwd()
+			require.NoError(t, err)
+			loadedProfile := "does_not_exist"
+			configFile := filepath.Join(cwd, "testdata", "basic_config_file")
+			credsFile := filepath.Join(cwd, "testdata", "basic_creds_file")
+			setEnv(t, map[string]string{
+				"AWS_CONFIG_FILE": configFile,
+			})
+			sess := getSession(t, map[string]interface{}{
+				AWSCredsTypeParam: "file",
+				AWSCredsProfile:   loadedProfile,
+				AWSCredsFileParam: credsFile,
+			})
+			_, err = sess.Config.Credentials.Get()
+			require.Error(t, err)
+		})
 		t.Run("IgnoresEnv", func(t *testing.T) {
 			cwd, err := os.Getwd()
 			require.NoError(t, err)
