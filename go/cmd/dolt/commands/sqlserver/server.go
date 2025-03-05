@@ -276,6 +276,28 @@ func ConfigureServices(
 	}
 	controller.Register(InitAutoGCController)
 
+	// mySQLServer is going to be populated down below once further services
+	// are initialized. However, we want to block Controller shutdown on all
+	// connections being fully drained from the Server. Stopping the
+	// SQL server itself only stops the connection listener, and inflight
+	// work is shutdown by other services, which can stop things like
+	// replication threads, listeners for other services, etc.
+	//
+	// On the shutdown path, we block for connection draining
+	// right after we have stopped the sql engine itself, which
+	// was responsible for canceling the contexts associated with
+	// all inflight queries.
+	var mySQLServer *server.Server
+	DrainClientConnectionsOnShutdown := &svcs.AnonService{
+		StopF: func() error {
+			if mySQLServer != nil {
+				mySQLServer.SessionManager().WaitForClosedConnections()
+			}
+			return nil
+		},
+	}
+	controller.Register(DrainClientConnectionsOnShutdown)
+
 	var sqlEngine *engine.SqlEngine
 	InitSqlEngine := &svcs.AnonService{
 		InitF: func(ctx context.Context) (err error) {
@@ -304,6 +326,26 @@ func ConfigureServices(
 		},
 	}
 	controller.Register(InitSqlEngine)
+
+	// Closing the connections on shutdown attempts to prevent
+	// them from creating new work after we cancel their running
+	// queries up above. GMS should ideally avoid creating new
+	// process list queries or operations for these connections
+	// after they are killed, but it is not currently set up that
+	// way.
+	CloseClientConnectionsOnShutdown := &svcs.AnonService{
+		StopF: func() error {
+			if mySQLServer != nil {
+				sm := mySQLServer.SessionManager()
+				return sm.Iter(func(s sql.Session) (bool, error) {
+					sm.KillConnection(s.ID())
+					return false, nil
+				})
+			}
+			return nil
+		},
+	}
+	controller.Register(CloseClientConnectionsOnShutdown)
 
 	// Persist any system variables that have a non-deterministic default value (i.e. @@server_uuid)
 	// We only do this on sql-server startup initially since we want to keep the persisted server_uuid
@@ -671,7 +713,6 @@ func ConfigureServices(
 	// already been Closed.
 
 	var sqlServerClosed bool
-	var mySQLServer *server.Server
 	InitSQLServer := &svcs.AnonService{
 		InitF: func(context.Context) (err error) {
 			v, ok := serverConfig.(servercfg.ValidatingServerConfig)
