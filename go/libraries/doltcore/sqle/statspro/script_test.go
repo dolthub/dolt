@@ -265,10 +265,8 @@ func TestStatScripts(t *testing.T) {
 		{
 			name: "generated index",
 			setup: []string{
-				"create table t (pk int primary key, c0 int)",
-				"insert into t values (0,0), (1,1), (2,2), (3,NULL), (4,NULL)",
-				"alter table t add column c1 int generated always as (c0);",
-				"alter table t add index idx(c1);",
+				"create table t (pk int primary key, c0 int, c1 int as (c0) virtual, index idx(c1))",
+				"insert into t (pk, c0) values (0,0), (1,1), (2,2), (3,NULL), (4,NULL)",
 			},
 			assertions: []assertion{
 				{
@@ -285,7 +283,7 @@ func TestStatScripts(t *testing.T) {
 							StorageBucketCnt:  2,
 							CachedBucketCnt:   2,
 							CachedBoundCnt:    2,
-							CachedTemplateCnt: 3,
+							CachedTemplateCnt: 2,
 							StatCnt:           1,
 						}},
 					},
@@ -601,20 +599,11 @@ func TestStatScripts(t *testing.T) {
 				"call dolt_commit('-m', 'create xy')",
 				"call dolt_checkout('-b', 'feat')",
 				"call dolt_checkout('main')",
+				"insert into xy values (3,0)",
+				"call dolt_checkout('feat')",
+				"insert into xy values (3,0)",
 			},
 			assertions: []assertion{
-				{
-					query: "insert into xy values (3,0)",
-				},
-				{
-					query: "call dolt_checkout('feat')",
-				},
-				{
-					query: "insert into xy values (3,0)",
-				},
-				{
-					query: "call dolt_stats_wait()",
-				},
 				{
 					query: "call dolt_stats_info('--short')",
 					res: []sql.Row{
