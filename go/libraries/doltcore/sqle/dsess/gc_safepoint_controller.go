@@ -17,14 +17,13 @@ package dsess
 import (
 	"context"
 	"errors"
+	"fmt"
+	"runtime/debug"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"fmt"
-
 	"github.com/fatih/color"
-	"runtime/debug"
 )
 
 type GCSafepointController struct {

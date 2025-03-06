@@ -27,6 +27,7 @@ func EnableContextValidation() {
 }
 
 type ctxKey int
+
 var validationKey ctxKey
 
 func WithContextValidation(ctx context.Context) context.Context {
