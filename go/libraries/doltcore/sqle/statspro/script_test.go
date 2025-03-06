@@ -573,7 +573,7 @@ func TestStatScripts(t *testing.T) {
 					query: "call dolt_stats_wait()",
 				},
 				{
-					query: "call dolt_stats_info('--short'))",
+					query: "call dolt_stats_info('--short')",
 					res: []sql.Row{
 						{dprocedures.StatsInfo{
 							DbCnt:             2,
