@@ -26,7 +26,6 @@ import (
 	"runtime/trace"
 	"sync"
 
-	"github.com/dolthub/swiss"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 
@@ -225,7 +224,7 @@ func (wr *journalWriter) bootstrapJournal(ctx context.Context, reflogRingBuffer 
 		// initialize range index with enough capacity to
 		// avoid rehashing during bootstrapping
 		cnt := estimateRangeCount(info)
-		wr.ranges.cached = swiss.NewMap[addr16, Range](cnt)
+		wr.ranges.cached = make(map[addr16]Range, cnt)
 
 		eg, ectx := errgroup.WithContext(ctx)
 		ch := make(chan []lookup, 4)
@@ -676,12 +675,12 @@ type rangeIndex struct {
 	// novel Ranges represent most recent chunks written to
 	// the journal. These Ranges have not yet been written to
 	// a journal index record.
-	novel *swiss.Map[hash.Hash, Range]
+	novel map[hash.Hash]Range
 
 	// cached Ranges are bootstrapped from an out-of-band journal
 	// index file. To save memory, these Ranges are keyed by a 16-byte
 	// prefix of their addr which is assumed to be globally unique
-	cached *swiss.Map[addr16, Range]
+	cached map[addr16]Range
 }
 
 type addr16 [16]byte
@@ -693,8 +692,8 @@ func toAddr16(full hash.Hash) (prefix addr16) {
 
 func newRangeIndex() rangeIndex {
 	return rangeIndex{
-		novel:  swiss.NewMap[hash.Hash, Range](journalIndexDefaultMaxNovel),
-		cached: swiss.NewMap[addr16, Range](0),
+		novel:  make(map[hash.Hash]Range, journalIndexDefaultMaxNovel),
+		cached: make(map[addr16]Range),
 	}
 }
 
@@ -703,46 +702,44 @@ func estimateRangeCount(info os.FileInfo) uint32 {
 }
 
 func (idx rangeIndex) get(h hash.Hash) (rng Range, ok bool) {
-	rng, ok = idx.novel.Get(h)
+	rng, ok = idx.novel[h]
 	if !ok {
-		rng, ok = idx.cached.Get(toAddr16(h))
+		rng, ok = idx.cached[toAddr16(h)]
 	}
 	return
 }
 
 func (idx rangeIndex) put(h hash.Hash, rng Range) {
-	idx.novel.Put(h, rng)
+	idx.novel[h] = rng
 }
 
 func (idx rangeIndex) putCached(a addr16, rng Range) {
-	idx.cached.Put(a, rng)
+	idx.cached[a] = rng
 }
 
 func (idx rangeIndex) count() uint32 {
-	return uint32(idx.novel.Count() + idx.cached.Count())
+	return uint32(len(idx.novel) + len(idx.cached))
 }
 
 func (idx rangeIndex) novelCount() int {
-	return idx.novel.Count()
+	return len(idx.novel)
 }
 
 func (idx rangeIndex) novelLookups() (lookups []lookup) {
-	lookups = make([]lookup, 0, idx.novel.Count())
-	idx.novel.Iter(func(a hash.Hash, r Range) (stop bool) {
+	lookups = make([]lookup, 0, len(idx.novel))
+	for a, r := range idx.novel {
 		lookups = append(lookups, lookup{a: toAddr16(a), r: r})
-		return
-	})
+	}
 	return
 }
 
 func (idx rangeIndex) flatten(ctx context.Context) rangeIndex {
 	defer trace.StartRegion(ctx, "flatten journal index").End()
-	trace.Logf(ctx, "swiss map current count", "%d", idx.cached.Count())
-	trace.Logf(ctx, "swiss map add count", "%d", idx.novel.Count())
-	idx.novel.Iter(func(a hash.Hash, r Range) (stop bool) {
-		idx.cached.Put(toAddr16(a), r)
-		return
-	})
-	idx.novel = swiss.NewMap[hash.Hash, Range](journalIndexDefaultMaxNovel)
+	trace.Logf(ctx, "map index cached count", "%d", len(idx.cached))
+	trace.Logf(ctx, "map index novel count", "%d", len(idx.novel))
+	for a, r := range idx.novel {
+		idx.cached[toAddr16(a)] = r
+	}
+	idx.novel = make(map[hash.Hash]Range, journalIndexDefaultMaxNovel)
 	return idx
 }

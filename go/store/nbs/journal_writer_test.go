@@ -251,10 +251,12 @@ func validateAllLookups(t *testing.T, j *journalWriter, data map[hash.Hash]Compr
 }
 
 func iterRangeIndex(idx rangeIndex, cb func(addr16, Range) (stop bool)) {
-	idx.novel.Iter(func(a hash.Hash, r Range) (stop bool) {
-		return cb(toAddr16(a), r)
-	})
-	idx.cached.Iter(cb)
+	for h, r := range idx.novel {
+		cb(toAddr16(h), r)
+	}
+	for a16, r := range idx.cached {
+		cb(a16, r)
+	}
 }
 
 func validateLookup(t *testing.T, j *journalWriter, r Range, cc CompressedChunk) {

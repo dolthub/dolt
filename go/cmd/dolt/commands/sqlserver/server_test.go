@@ -213,8 +213,12 @@ func TestServerGoodParams(t *testing.T) {
 			}()
 			sc := svcs.NewController()
 			go func(config servercfg.ServerConfig, sc *svcs.Controller) {
-				fmt.Println("start server")
-				_, _ = Serve(context.Background(), "0.0.0", config, sc, env, false)
+				_, _ = Serve(context.Background(), &Config{
+					Version:      "0.0.0",
+					ServerConfig: config,
+					Controller:   sc,
+					DoltEnv:      env,
+				})
 			}(test, sc)
 			err = sc.WaitForStart()
 			require.NoError(t, err)
@@ -243,7 +247,12 @@ func TestServerSelect(t *testing.T) {
 	sc := svcs.NewController()
 	defer sc.Stop()
 	go func() {
-		_, _ = Serve(context.Background(), "0.0.0", serverConfig, sc, env, false)
+		_, _ = Serve(context.Background(), &Config{
+			Version:      "0.0.0",
+			ServerConfig: serverConfig,
+			Controller:   sc,
+			DoltEnv:      env,
+		})
 	}()
 	err = sc.WaitForStart()
 	require.NoError(t, err)
@@ -342,7 +351,12 @@ func TestServerSetDefaultBranch(t *testing.T) {
 	sc := svcs.NewController()
 	defer sc.Stop()
 	go func() {
-		_, _ = Serve(context.Background(), "0.0.0", serverConfig, sc, dEnv, false)
+		_, _ = Serve(context.Background(), &Config{
+			Version:      "0.0.0",
+			ServerConfig: serverConfig,
+			Controller:   sc,
+			DoltEnv:      dEnv,
+		})
 	}()
 	err = sc.WaitForStart()
 	require.NoError(t, err)
@@ -506,7 +520,12 @@ func TestReadReplica(t *testing.T) {
 
 	os.Chdir(multiSetup.DbPaths[readReplicaDbName])
 	go func() {
-		err, _ = Serve(context.Background(), "0.0.0", serverConfig, sc, multiSetup.GetEnv(readReplicaDbName), false)
+		err, _ = Serve(context.Background(), &Config{
+			Version:      "0.0.0",
+			ServerConfig: serverConfig,
+			Controller:   sc,
+			DoltEnv:      multiSetup.GetEnv(readReplicaDbName),
+		})
 		require.NoError(t, err)
 	}()
 	require.NoError(t, sc.WaitForStart())

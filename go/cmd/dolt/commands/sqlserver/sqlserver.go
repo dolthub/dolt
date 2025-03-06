@@ -267,7 +267,13 @@ func StartServer(ctx context.Context, versionStr, commandStr string, args []stri
 	cli.Printf("Starting server with Config %v\n", servercfg.ConfigInfo(serverConfig))
 
 	skipRootUserInitialization := apr.Contains(skipRootUserInitialization)
-	startError, closeError := Serve(ctx, versionStr, serverConfig, controller, dEnv, skipRootUserInitialization)
+	startError, closeError := Serve(ctx, &Config{
+		Version:          versionStr,
+		ServerConfig:     serverConfig,
+		Controller:       controller,
+		DoltEnv:          dEnv,
+		SkipRootUserInit: skipRootUserInitialization,
+	})
 	if startError != nil {
 		return startError
 	}
