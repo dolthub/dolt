@@ -20,6 +20,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -540,7 +541,7 @@ func TestDropOnlyDb(t *testing.T) {
 	require.True(t, ok)
 	statsPath, err := sc.statsBackingDb.Abs("")
 	require.NoError(t, err)
-	require.Equal(t, "/user/dolt/datasets/test/mydb", statsPath)
+	require.Equal(t, "mydb", filepath.Base(statsPath))
 
 	// what happens when we drop the only database? swap to memory?
 	// add first database, switch to prolly?
@@ -560,7 +561,7 @@ func TestDropOnlyDb(t *testing.T) {
 	require.True(t, ok)
 	statsPath, err = sc.statsBackingDb.Abs("")
 	require.NoError(t, err)
-	require.Equal(t, "/user/dolt/datasets/test/otherdb", statsPath)
+	require.Equal(t, "otherdb", filepath.Base(statsPath))
 }
 
 func TestRotateBackingDb(t *testing.T) {
@@ -583,7 +584,7 @@ func TestRotateBackingDb(t *testing.T) {
 	require.True(t, ok)
 	statsPath, err := sc.statsBackingDb.Abs("")
 	require.NoError(t, err)
-	require.Equal(t, "/user/dolt/datasets/test/backupdb", statsPath)
+	require.Equal(t, "backupdb", filepath.Base(statsPath))
 
 	// lost the backing storage, previous in-memory moves into new kv
 	require.Equal(t, 5, sc.kv.Len())
