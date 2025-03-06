@@ -16,6 +16,7 @@ package json
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -133,6 +134,7 @@ func (j *RowWriter) WriteSqlRow(ctx context.Context, row sql.Row) error {
 func (j *RowWriter) jsonDataForSchema(row sql.Row) ([]byte, error) {
 	allCols := j.sch.GetAllCols()
 	colValMap := make(map[string]interface{}, allCols.Size())
+	var buf bytes.Buffer
 	if err := allCols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		val := row[allCols.TagToIdx[tag]]
 		if val == nil {
@@ -149,17 +151,21 @@ func (j *RowWriter) jsonDataForSchema(row sql.Row) ([]byte, error) {
 			typeinfo.TupleTypeIdentifier,
 			typeinfo.UuidTypeIdentifier,
 			typeinfo.VarBinaryTypeIdentifier:
-			sqlVal, err := col.TypeInfo.ToSqlType().SQL(sqlContext, nil, val)
+			bufVal, err := col.TypeInfo.ToSqlType().SQL(sqlContext, &buf, val)
 			if err != nil {
 				return true, err
 			}
+			sqlVal := bufVal.ToValue(buf.Bytes())
 			val = sqlVal.ToString()
+			buf.Reset()
 		case typeinfo.JSONTypeIdentifier:
-			sqlVal, err := col.TypeInfo.ToSqlType().SQL(sqlContext, nil, val)
+			bufVal, err := col.TypeInfo.ToSqlType().SQL(sqlContext, &buf, val)
 			if err != nil {
 				return true, err
 			}
+			sqlVal := bufVal.ToValue(buf.Bytes())
 			str := sqlVal.ToString()
+			buf.Reset()
 
 			// This is kind of silly: we are unmarshalling JSON just to marshall it back again
 			// But it makes marshalling much simpler
@@ -193,6 +199,7 @@ func (j *RowWriter) jsonDataForSchema(row sql.Row) ([]byte, error) {
 // jsonDataForSqlSchema returns a JSON representation of the given row, using the sql schema for serialization hints
 func (j *RowWriter) jsonDataForSqlSchema(row sql.Row) ([]byte, error) {
 	colValMap := make(map[string]interface{}, len(j.sqlSch))
+	var buf bytes.Buffer
 	for i, col := range j.sqlSch {
 		val := row[i]
 		if val == nil {
@@ -206,17 +213,21 @@ func (j *RowWriter) jsonDataForSqlSchema(row sql.Row) ([]byte, error) {
 			sql.StringType,
 			sql.SetType,
 			types.TupleType:
-			sqlVal, err := col.Type.SQL(sqlContext, nil, val)
+			bufVal, err := col.Type.SQL(sqlContext, &buf, val)
 			if err != nil {
 				return nil, err
 			}
+			sqlVal := bufVal.ToValue(buf.Bytes())
 			val = sqlVal.ToString()
+			buf.Reset()
 		case types.JsonType:
-			sqlVal, err := col.Type.SQL(sqlContext, nil, val)
+			bufVal, err := col.Type.SQL(sqlContext, &buf, val)
 			if err != nil {
 				return nil, err
 			}
+			sqlVal := bufVal.ToValue(buf.Bytes())
 			str := sqlVal.ToString()
+			buf.Reset()
 
 			// This is kind of silly: we are unmarshalling JSON just to marshall it back again
 			// But it makes marshalling much simpler
