@@ -586,6 +586,8 @@ func TestGenerateYamlConfig(t *testing.T) {
   # disable_client_multi_statements: false
   # dolt_transaction_commit: false
   # event_scheduler: "OFF"
+  # auto_gc_behavior:
+    # enable: false
 
 listener:
   # host: localhost
