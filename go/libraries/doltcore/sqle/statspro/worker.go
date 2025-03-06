@@ -65,7 +65,7 @@ func (sc *StatsController) runWorker(ctx context.Context) (err error) {
 
 		select {
 		case <-gcTicker.C:
-			sc.setDoGc()
+			sc.setDoGc(false)
 		default:
 		}
 

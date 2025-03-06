@@ -243,7 +243,7 @@ func (sc *StatsController) WaitForFlush(ctx *sql.Context) error {
 }
 
 func (sc *StatsController) Gc(ctx *sql.Context) error {
-	sc.setDoGc()
+	sc.setDoGc(true)
 	return sc.waitForCond(ctx, leGc, 1)
 }
 

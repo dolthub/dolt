@@ -155,10 +155,10 @@ func (sc *StatsController) SetEnableGc(v bool) {
 	sc.enableGc = v
 }
 
-func (sc *StatsController) setDoGc() {
+func (sc *StatsController) setDoGc(force bool) {
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
-	if sc.enableGc {
+	if sc.enableGc || force {
 		sc.doGc = true
 	}
 }

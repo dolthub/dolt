@@ -178,7 +178,7 @@ func TestListening(t *testing.T) {
 		require.ErrorIs(t, err, ErrStatsIssuerPaused)
 	})
 	t.Run("WaitBlocksOnStatsCollection", func(t *testing.T) {
-		sqlCtx, sqlEng, sc := emptySetup(t, bthreads, true)
+		sqlCtx, sqlEng, sc := emptySetup(t, bthreads, true, true)
 		require.NoError(t, executeQuery(sqlCtx, sqlEng, "create table xy (x int primary key, y int)"))
 		require.NoError(t, sc.Restart())
 		done := make(chan struct{})
@@ -201,7 +201,7 @@ func TestListening(t *testing.T) {
 		wg.Wait()
 	})
 	t.Run("WaitReturnsIfStoppedBefore", func(t *testing.T) {
-		sqlCtx, sqlEng, sc := emptySetup(t, bthreads, true)
+		sqlCtx, sqlEng, sc := emptySetup(t, bthreads, true, true)
 		require.NoError(t, executeQuery(sqlCtx, sqlEng, "create table xy (x int primary key, y int)"))
 		require.NoError(t, sc.Restart())
 		done := make(chan struct{})
@@ -225,7 +225,7 @@ func TestListening(t *testing.T) {
 		wg.Wait()
 	})
 	t.Run("WaitHangsUntilCycleCompletes", func(t *testing.T) {
-		sqlCtx, sqlEng, sc := emptySetup(t, bthreads, true)
+		sqlCtx, sqlEng, sc := emptySetup(t, bthreads, true, true)
 		require.NoError(t, executeQuery(sqlCtx, sqlEng, "create table xy (x int primary key, y int)"))
 		require.NoError(t, sc.Restart())
 		done := make(chan struct{})

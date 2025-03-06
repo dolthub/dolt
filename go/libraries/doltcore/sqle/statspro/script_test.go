@@ -693,8 +693,8 @@ func TestStatScripts(t *testing.T) {
 	for _, tt := range scripts {
 		t.Run(tt.name, func(t *testing.T) {
 			bthreads := sql.NewBackgroundThreads()
-			ctx, sqlEng, sc := emptySetup(t, bthreads, false)
-			sc.SetEnableGc(false)
+			ctx, sqlEng, sc := emptySetup(t, bthreads, false, false)
+
 			defer sqlEng.Close()
 
 			require.NoError(t, sc.Restart())

@@ -596,7 +596,7 @@ func TestRotateBackingDb(t *testing.T) {
 func TestPanic(t *testing.T) {
 	threads := sql.NewBackgroundThreads()
 	defer threads.Shutdown()
-	ctx, sqlEng, sc := emptySetup(t, threads, false)
+	ctx, sqlEng, sc := emptySetup(t, threads, false, true)
 	sc.SetEnableGc(true)
 
 	require.NoError(t, sc.Restart())
@@ -611,7 +611,7 @@ func TestPanic(t *testing.T) {
 func TestMemoryOnly(t *testing.T) {
 	threads := sql.NewBackgroundThreads()
 	defer threads.Shutdown()
-	ctx, sqlEng, sc := emptySetup(t, threads, true)
+	ctx, sqlEng, sc := emptySetup(t, threads, true, true)
 	sc.SetEnableGc(false)
 
 	require.NoError(t, sc.Restart())
@@ -642,7 +642,7 @@ func newStatsCoord(bthreads *sql.BackgroundThreads) *StatsController {
 	return sqlEng.Analyzer.Catalog.StatsProvider.(*StatsController)
 }
 
-func emptySetup(t *testing.T, threads *sql.BackgroundThreads, memOnly bool) (*sql.Context, *gms.Engine, *StatsController) {
+func emptySetup(t *testing.T, threads *sql.BackgroundThreads, memOnly bool, gcEnabled bool) (*sql.Context, *gms.Engine, *StatsController) {
 	dEnv := dtestutils.CreateTestEnv()
 	sqlEng, ctx := newTestEngine(context.Background(), dEnv, threads)
 	ctx.Session.SetClient(sql.Client{
@@ -661,6 +661,15 @@ func emptySetup(t *testing.T, threads *sql.BackgroundThreads, memOnly bool) (*sq
 	} else {
 		sql.SystemVariables.AssignValues(map[string]interface{}{
 			dsess.DoltStatsMemoryOnly: int8(0),
+		})
+	}
+	if gcEnabled {
+		sql.SystemVariables.AssignValues(map[string]interface{}{
+			dsess.DoltStatsGCEnabled: int8(1),
+		})
+	} else {
+		sql.SystemVariables.AssignValues(map[string]interface{}{
+			dsess.DoltStatsGCEnabled: int8(0),
 		})
 	}
 
@@ -700,7 +709,7 @@ func emptySetup(t *testing.T, threads *sql.BackgroundThreads, memOnly bool) (*sq
 }
 
 func defaultSetup(t *testing.T, threads *sql.BackgroundThreads, memOnly bool) (*sql.Context, *gms.Engine, *StatsController) {
-	ctx, sqlEng, sc := emptySetup(t, threads, memOnly)
+	ctx, sqlEng, sc := emptySetup(t, threads, memOnly, true)
 	//sc.Debug = true
 
 	require.NoError(t, executeQuery(ctx, sqlEng, "create table xy (x int primary key, y int, key (y,x))"))
@@ -836,7 +845,7 @@ func newTestEngine(ctx context.Context, dEnv *env.DoltEnv, threads *sql.Backgrou
 func TestStatsGcConcurrency(t *testing.T) {
 	threads := sql.NewBackgroundThreads()
 	defer threads.Shutdown()
-	ctx, sqlEng, sc := emptySetup(t, threads, false)
+	ctx, sqlEng, sc := emptySetup(t, threads, false, true)
 	sc.SetEnableGc(true)
 	sc.JobInterval = 1 * time.Nanosecond
 	sc.gcInterval = 100 * time.Nanosecond
@@ -915,7 +924,7 @@ func TestStatsGcConcurrency(t *testing.T) {
 func TestStatsBranchConcurrency(t *testing.T) {
 	threads := sql.NewBackgroundThreads()
 	defer threads.Shutdown()
-	ctx, sqlEng, sc := emptySetup(t, threads, false)
+	ctx, sqlEng, sc := emptySetup(t, threads, false, true)
 	sc.SetEnableGc(true)
 
 	sc.JobInterval = 10
@@ -998,7 +1007,7 @@ func TestStatsBranchConcurrency(t *testing.T) {
 func TestStatsCacheGrowth(t *testing.T) {
 	threads := sql.NewBackgroundThreads()
 	defer threads.Shutdown()
-	ctx, sqlEng, sc := emptySetup(t, threads, false)
+	ctx, sqlEng, sc := emptySetup(t, threads, false, true)
 	sc.SetEnableGc(true)
 
 	sc.JobInterval = 1
