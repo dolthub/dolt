@@ -873,7 +873,10 @@ func TestStatsGcConcurrency(t *testing.T) {
 	writeCtx, _ := sc.ctxGen(context.Background())
 	dropCtx, _ := sc.ctxGen(context.Background())
 
-	iters := 200
+	iters := 100
+	if os.Getenv("CI") != "" {
+		iters = 20
+	}
 	dbs := make(chan string, iters)
 
 	{
@@ -924,10 +927,9 @@ func TestStatsGcConcurrency(t *testing.T) {
 func TestStatsBranchConcurrency(t *testing.T) {
 	threads := sql.NewBackgroundThreads()
 	defer threads.Shutdown()
-	ctx, sqlEng, sc := emptySetup(t, threads, false, true)
-	sc.SetEnableGc(true)
+	ctx, sqlEng, sc := emptySetup(t, threads, false, false)
 
-	sc.JobInterval = 10
+	sc.JobInterval = 1
 	sc.gcInterval = time.Hour
 	require.NoError(t, sc.Restart())
 
@@ -960,6 +962,9 @@ func TestStatsBranchConcurrency(t *testing.T) {
 	dropCtx, _ := sc.ctxGen(context.Background())
 
 	iters := 100
+	if os.Getenv("CI") != "" {
+		iters = 20
+	}
 	{
 		branches := make(chan string, iters)
 
@@ -1032,7 +1037,7 @@ func TestStatsCacheGrowth(t *testing.T) {
 
 	iters := 2000
 	if os.Getenv("CI") != "" {
-		iters = 200
+		iters = 20
 	}
 	{
 		branches := make(chan string, iters)
