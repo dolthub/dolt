@@ -63,7 +63,7 @@ func (sc *StatsController) signalListener(s listenerEvent) {
 
 func (sc *StatsController) newThreadCtx(ctx context.Context) context.Context {
 	sc.mu.Lock()
-	sc.mu.Unlock()
+	defer sc.mu.Unlock()
 
 	newCtx, cancel := context.WithCancel(ctx)
 	if sc.activeCtxCancel != nil {
@@ -97,7 +97,7 @@ func (sc *StatsController) addListener(e listenerEvent) (chan listenerEvent, err
 func (sc *StatsController) Stop() {
 	// xxx: do not pause |sq|, analyze jobs still need to run
 	sc.mu.Lock()
-	sc.mu.Unlock()
+	defer sc.mu.Unlock()
 	if sc.activeCtxCancel != nil {
 		sc.activeCtxCancel()
 		sc.activeCtxCancel = nil

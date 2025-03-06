@@ -191,6 +191,7 @@ func (sc *StatsController) newStatsForRoot(baseCtx context.Context, gcKv *memSta
 			if !ok {
 				return fmt.Errorf("get dolt db dolt database not found %s", db.Name())
 			}
+			var err error // races with outer err
 			branches, err = ddb.GetBranches(ctx)
 			return err
 		}); err != nil {

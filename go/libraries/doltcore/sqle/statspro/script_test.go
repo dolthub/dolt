@@ -552,7 +552,7 @@ func TestStatScripts(t *testing.T) {
 			},
 			assertions: []assertion{
 				{
-					query: "call dolt_stats_info()",
+					query: "call dolt_stats_info('--short')",
 					res: []sql.Row{
 						{dprocedures.StatsInfo{
 							DbCnt:             2,
@@ -563,7 +563,6 @@ func TestStatScripts(t *testing.T) {
 							CachedBoundCnt:    2,
 							CachedTemplateCnt: 2,
 							StatCnt:           2,
-							GcCnt:             1,
 						},
 						}},
 				},
@@ -574,7 +573,7 @@ func TestStatScripts(t *testing.T) {
 					query: "call dolt_stats_wait()",
 				},
 				{
-					query: "call dolt_stats_info()",
+					query: "call dolt_stats_info('--short'))",
 					res: []sql.Row{
 						{dprocedures.StatsInfo{
 							DbCnt:             2,
@@ -585,7 +584,6 @@ func TestStatScripts(t *testing.T) {
 							CachedBoundCnt:    2,
 							CachedTemplateCnt: 2,
 							StatCnt:           2,
-							GcCnt:             2,
 						},
 						}},
 				},
@@ -603,7 +601,7 @@ func TestStatScripts(t *testing.T) {
 			},
 			assertions: []assertion{
 				{
-					query: "call dolt_stats_info()",
+					query: "call dolt_stats_info('--short')",
 					res: []sql.Row{
 						{dprocedures.StatsInfo{
 							DbCnt:             2,
@@ -614,7 +612,6 @@ func TestStatScripts(t *testing.T) {
 							CachedBoundCnt:    2,
 							CachedTemplateCnt: 2,
 							StatCnt:           2,
-							GcCnt:             1,
 						},
 						}},
 				},
@@ -622,7 +619,7 @@ func TestStatScripts(t *testing.T) {
 					query: "call dolt_stats_stop()",
 				},
 				{
-					query: "call dolt_stats_info()",
+					query: "call dolt_stats_info('--short')",
 					res: []sql.Row{
 						{dprocedures.StatsInfo{
 							DbCnt:             2,
@@ -633,7 +630,6 @@ func TestStatScripts(t *testing.T) {
 							CachedBoundCnt:    2,
 							CachedTemplateCnt: 2,
 							StatCnt:           2,
-							GcCnt:             1,
 						},
 						}},
 				},
@@ -641,7 +637,7 @@ func TestStatScripts(t *testing.T) {
 					query: "call dolt_stats_restart()",
 				},
 				{
-					query: "call dolt_stats_info()",
+					query: "call dolt_stats_info('--short')",
 					res: []sql.Row{
 						{dprocedures.StatsInfo{
 							DbCnt:             2,
@@ -652,7 +648,6 @@ func TestStatScripts(t *testing.T) {
 							CachedBoundCnt:    2,
 							CachedTemplateCnt: 2,
 							StatCnt:           2,
-							GcCnt:             1,
 						},
 						}},
 				},
@@ -682,7 +677,7 @@ func TestStatScripts(t *testing.T) {
 					query: "call dolt_stats_wait()",
 				},
 				{
-					query: "call dolt_stats_info()",
+					query: "call dolt_stats_info('--short')",
 					res: []sql.Row{
 						{dprocedures.StatsInfo{
 							DbCnt:             2,
@@ -693,7 +688,6 @@ func TestStatScripts(t *testing.T) {
 							CachedBoundCnt:    4,
 							CachedTemplateCnt: 2,
 							StatCnt:           2,
-							GcCnt:             1,
 						},
 						}},
 				},
@@ -701,7 +695,7 @@ func TestStatScripts(t *testing.T) {
 					query: "call dolt_stats_purge()",
 				},
 				{
-					query: "call dolt_stats_info()",
+					query: "call dolt_stats_info('--short')",
 					res: []sql.Row{
 						{dprocedures.StatsInfo{
 							DbCnt:             0,
@@ -712,7 +706,6 @@ func TestStatScripts(t *testing.T) {
 							CachedBoundCnt:    0,
 							CachedTemplateCnt: 0,
 							StatCnt:           0,
-							GcCnt:             2,
 						},
 						}},
 				},
@@ -723,7 +716,7 @@ func TestStatScripts(t *testing.T) {
 					query: "call dolt_stats_wait()",
 				},
 				{
-					query: "call dolt_stats_info()",
+					query: "call dolt_stats_info('--short')",
 					res: []sql.Row{
 						{dprocedures.StatsInfo{
 							DbCnt:             2,
@@ -734,7 +727,6 @@ func TestStatScripts(t *testing.T) {
 							CachedBoundCnt:    2,
 							CachedTemplateCnt: 2,
 							StatCnt:           2,
-							GcCnt:             2,
 						},
 						}},
 				},
@@ -750,7 +742,7 @@ func TestStatScripts(t *testing.T) {
 			},
 			assertions: []assertion{
 				{
-					query: "call dolt_stats_info()",
+					query: "call dolt_stats_info('--short')",
 					res: []sql.Row{{dprocedures.StatsInfo{
 						DbCnt:             1,
 						Active:            true,
@@ -759,7 +751,6 @@ func TestStatScripts(t *testing.T) {
 						CachedBoundCnt:    4,
 						CachedTemplateCnt: 4,
 						StatCnt:           2,
-						GcCnt:             1,
 						Backing:           "mydb",
 					}}},
 				},
