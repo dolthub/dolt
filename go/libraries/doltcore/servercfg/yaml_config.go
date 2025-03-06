@@ -474,6 +474,9 @@ func (cfg YAMLConfig) withDefaultsFilledIn() YAMLConfig {
 	if withDefaults.BehaviorConfig.DoltTransactionCommit == nil {
 		withDefaults.BehaviorConfig.DoltTransactionCommit = defaults.BehaviorConfig.DoltTransactionCommit
 	}
+	if withDefaults.BehaviorConfig.AutoGCBehavior == nil {
+		withDefaults.BehaviorConfig.AutoGCBehavior = defaults.BehaviorConfig.AutoGCBehavior
+	}
 
 	if withDefaults.ListenerConfig.HostStr == nil {
 		withDefaults.ListenerConfig.HostStr = defaults.ListenerConfig.HostStr
