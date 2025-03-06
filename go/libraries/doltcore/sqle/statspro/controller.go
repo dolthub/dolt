@@ -240,7 +240,7 @@ func (sc *StatsController) descError(d string, err error) {
 	if err != nil {
 		b.WriteString(" " + err.Error())
 	}
-	sc.logger.Error(b.String())
+	sc.logger.Debug(b.String())
 }
 
 func (sc *StatsController) GetTableStats(ctx *sql.Context, db string, table sql.Table) ([]sql.Statistic, error) {

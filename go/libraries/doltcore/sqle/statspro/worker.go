@@ -259,8 +259,7 @@ func (sc *StatsController) collectIndexNodes(ctx *sql.Context, prollyMap prolly.
 			var err error
 			lowerBound, err = firstRowForIndex(ctx, idxLen, prollyMap, keyBuilder)
 			if err != nil {
-				sc.descError("get histogram bucket for node", err)
-				return err
+				return fmt.Errorf("get histogram bucket for node; %w", err)
 			}
 			if sc.Debug {
 				log.Printf("put bound:  %s: %v\n", firstNodeHash.String()[:5], lowerBound)

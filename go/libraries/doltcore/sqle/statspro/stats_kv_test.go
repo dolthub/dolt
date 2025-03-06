@@ -75,7 +75,6 @@ func TestProllyKv(t *testing.T) {
 		_, ok = prollyKv.GetTemplate(key2)
 		require.False(t, ok)
 	})
-
 	t.Run("TestBucketsRoundTrip", func(t *testing.T) {
 		exp := stats.NewHistogramBucket(15, 7, 3, 4, sql.Row{int64(1), "one"}, []uint64{5, 4, 3, 1}, []sql.Row{{int64(5), "six"}, {int64(4), "three"}, {int64(3), "seven"}, {int64(1), "one"}}).(*stats.Bucket)
 		err := prollyKv.PutBucket(context.Background(), h, exp, tupB)
@@ -85,17 +84,8 @@ func TestProllyKv(t *testing.T) {
 		require.True(t, ok)
 		require.Equal(t, exp, cmp)
 
-		_, ok, err = prollyKv.GetBucket(context.Background(), h2, tupB)
-		require.NoError(t, err)
-		require.False(t, ok)
-
 		// delete from memory, should pull from disk when |tupB| supplied
 		delete(prollyKv.mem.buckets, k)
-
-		cmp, ok, err = prollyKv.GetBucket(context.Background(), h, tupB)
-		require.NoError(t, err)
-		require.True(t, ok)
-		require.Equal(t, exp, cmp)
 
 		cmp, ok, err = prollyKv.GetBucket(context.Background(), h, tupB)
 		require.NoError(t, err)
@@ -108,6 +98,25 @@ func TestProllyKv(t *testing.T) {
 		require.Equal(t, exp.McvVals[1], cmp.McvVals[1])
 		require.Equal(t, exp.McvVals[2], cmp.McvVals[2])
 		require.Equal(t, exp.McvVals[3], cmp.McvVals[3])
+		require.Equal(t, exp.BoundVal, cmp.BoundVal)
+		require.Equal(t, exp.BoundCnt, cmp.BoundCnt)
+	})
+	t.Run("TestNilMcvsRoundTrip", func(t *testing.T) {
+		exp := stats.NewHistogramBucket(15, 7, 3, 4, sql.Row{int64(1), "one"}, []uint64{5, 4}, []sql.Row{{int64(5), "six"}, {int64(4), "three"}}).(*stats.Bucket)
+		err := prollyKv.PutBucket(context.Background(), h, exp, tupB)
+
+		delete(prollyKv.mem.buckets, k)
+
+		cmp, ok, err := prollyKv.GetBucket(context.Background(), h, tupB)
+		require.NoError(t, err)
+		require.True(t, ok)
+		require.Equal(t, exp.RowCnt, cmp.RowCnt)
+		require.Equal(t, exp.DistinctCnt, cmp.DistinctCnt)
+		require.Equal(t, exp.NullCnt, cmp.NullCnt)
+		require.Equal(t, exp.McvsCnt, cmp.McvsCnt)
+		require.Equal(t, len(exp.McvVals), len(cmp.McvVals))
+		require.Equal(t, exp.McvVals[0], cmp.McvVals[0])
+		require.Equal(t, exp.McvVals[1], cmp.McvVals[1])
 		require.Equal(t, exp.BoundVal, cmp.BoundVal)
 		require.Equal(t, exp.BoundCnt, cmp.BoundCnt)
 	})

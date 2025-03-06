@@ -406,8 +406,8 @@ func (p *prollyStats) decodeBucketTuple(ctx context.Context, v val.Tuple, tupB *
 		}
 	}
 
-	mcvs := make([]sql.Row, 4)
-	for i, v := range row[6:10] {
+	mcvs := make([]sql.Row, len(mcvCnts))
+	for i, v := range row[6 : 6+len(mcvCnts)] {
 		if v != nil && v != "" {
 			row, err := DecodeRow(ctx, p.m.NodeStore(), v.(string), tupB)
 			if err != nil {
