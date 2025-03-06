@@ -211,7 +211,6 @@ func (sc *StatsController) Info(ctx context.Context) (dprocedures.StatsInfo, err
 		cachedTemplateCnt = len(kv.mem.templates)
 		backing, _ = sc.statsBackingDb.Abs("")
 	}
-	backingParts := strings.Split(backing, "/")
 	return dprocedures.StatsInfo{
 		DbCnt:             sc.Stats.DbCnt,
 		Active:            sc.activeCtxCancel != nil,
@@ -222,7 +221,7 @@ func (sc *StatsController) Info(ctx context.Context) (dprocedures.StatsInfo, err
 		StatCnt:           len(sc.Stats.stats),
 		GenCnt:            int(sc.genCnt.Load()),
 		GcCnt:             sc.gcCnt,
-		Backing:           backingParts[len(backingParts)-1],
+		Backing:           filepath.Base(backing),
 	}, nil
 }
 
