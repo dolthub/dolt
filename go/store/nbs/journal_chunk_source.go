@@ -238,43 +238,32 @@ func (s journalChunkSource) close() error {
 }
 
 func (s journalChunkSource) iterateAllChunks(ctx context.Context, cb func(chunks.Chunk), _ *Stats) error {
-	var finalErr error
-
 	// TODO - a less time consuming lock is possible here. Using s.journal.snapshot and processJournalRecords()
 	// would allow for no locking. Need to filter out the journal records which are actually chunks, then convert
 	// those to chunks and pass them to cb. When we support online FSCK this will allow the server to keep running uninterrupted.
 	s.journal.lock.RLock()
 	defer s.journal.lock.RUnlock()
 
-	s.journal.ranges.novel.Iter(func(h hash.Hash, r Range) (stop bool) {
+	for h, r := range s.journal.ranges.novel {
 		if ctx.Err() != nil {
-			finalErr = ctx.Err()
-			return true
+			return context.Cause(ctx)
 		}
 
 		cchk, err := s.journal.getCompressedChunkAtRange(r, h)
 		if err != nil {
-			finalErr = err
-			return true
+			return err
 		}
 
 		chunk, err := cchk.ToChunk()
 		if err != nil {
-			finalErr = err
-			return true
+			return err
 		}
 		cb(chunk)
-		return false
-	})
-
-	if finalErr != nil {
-		return finalErr
 	}
 
-	s.journal.ranges.cached.Iter(func(a16 addr16, r Range) (stop bool) {
+	for a16, r := range s.journal.ranges.cached {
 		if ctx.Err() != nil {
-			finalErr = ctx.Err()
-			return true
+			return context.Cause(ctx)
 		}
 
 		// We only have 16 bytes of the hash. The value returned here will have 4 0x00 bytes at the end.
@@ -283,20 +272,17 @@ func (s journalChunkSource) iterateAllChunks(ctx context.Context, cb func(chunks
 
 		cchk, err := s.journal.getCompressedChunkAtRange(r, h)
 		if err != nil {
-			finalErr = err
-			return true
+			return err
 		}
 
 		chunk, err := cchk.ToChunk()
 		if err != nil {
-			finalErr = err
-			return true
+			return err
 		}
 		cb(chunk)
-		return false
-	})
+	}
 
-	return finalErr
+	return nil
 }
 
 func equalSpecs(left, right []tableSpec) bool {
