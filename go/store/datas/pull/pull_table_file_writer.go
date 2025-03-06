@@ -55,7 +55,7 @@ type PullTableFileWriter struct {
 	cfg PullTableFileWriterConfig
 
 	addChunkCh  chan nbs.CompressedChunk
-	newWriterCh chan *nbs.CmpChunkTableWriter
+	newWriterCh chan nbs.GenericTableWriter
 	egCtx       context.Context
 	eg          *errgroup.Group
 
@@ -100,7 +100,7 @@ func NewPullTableFileWriter(ctx context.Context, cfg PullTableFileWriterConfig) 
 	ret := &PullTableFileWriter{
 		cfg:         cfg,
 		addChunkCh:  make(chan nbs.CompressedChunk),
-		newWriterCh: make(chan *nbs.CmpChunkTableWriter, cfg.MaximumBufferedFiles),
+		newWriterCh: make(chan nbs.GenericTableWriter, cfg.MaximumBufferedFiles),
 		getAddrs:    cfg.GetAddrs,
 	}
 	ret.eg, ret.egCtx = errgroup.WithContext(ctx)
@@ -194,12 +194,12 @@ func (w *PullTableFileWriter) uploadAndFinalizeThread() (err error) {
 // Once addChunkCh closes, it sends along the last table file, if any, and then
 // closes newWriterCh and exits itself.
 func (w *PullTableFileWriter) addChunkThread() (err error) {
-	var curWr *nbs.CmpChunkTableWriter
+	var curWr nbs.GenericTableWriter
 
 	defer func() {
 		if curWr != nil {
 			// Cleanup dangling writer, whose contents will never be used.
-			curWr.Finish()
+			_, _ = curWr.Finish()
 			rd, _ := curWr.Reader()
 			if rd != nil {
 				rd.Close()
@@ -235,14 +235,15 @@ LOOP:
 			}
 
 			if curWr == nil {
-				curWr, err = nbs.NewCmpChunkTableWriter(w.cfg.TempDir)
+				// curWr, err = nbs.NewCmpChunkTableWriter(w.cfg.TempDir)
+				curWr, err = nbs.NewArchiveStreamWriter()
 				if err != nil {
 					return err
 				}
 			}
 
 			// Add the chunk to writer.
-			err = curWr.AddCmpChunk(newChnk)
+			err = curWr.AddChunk(newChnk)
 			if err != nil {
 				return err
 			}
@@ -272,7 +273,7 @@ func (w *PullTableFileWriter) Close() error {
 	return w.eg.Wait()
 }
 
-func (w *PullTableFileWriter) uploadThread(ctx context.Context, reqCh chan *nbs.CmpChunkTableWriter, respCh chan tempTblFile) error {
+func (w *PullTableFileWriter) uploadThread(ctx context.Context, reqCh chan nbs.GenericTableWriter, respCh chan tempTblFile) error {
 	for {
 		select {
 		case wr, ok := <-reqCh:

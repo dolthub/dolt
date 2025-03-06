@@ -20,10 +20,12 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -48,6 +50,10 @@ const (
 )
 
 type archiveWriter struct {
+	// MD5 is calculated on the entire output, so this hash sink wraps actual ByteSink.
+	md5Summer *HashingByteSink
+	// SHA512 is calculated on chunks of the output stream, so will be reset at appropriate times. This
+	// sinker is what archive code writes to, and it wraps the MD5 sink.
 	output           *HashingByteSink
 	bytesWritten     uint64
 	stagedBytes      stagedByteSpanSlice
@@ -59,6 +65,7 @@ type archiveWriter struct {
 	indexCheckSum    sha512Sum
 	metadataCheckSum sha512Sum
 	footerCheckSum   sha512Sum
+	fullMD5          md5Sum
 	workflowStage    stage
 	finalPath        string
 	// Currently using a blunt lock for the writer. The writeByteSpan and stage* methods may benefit from
@@ -89,15 +96,24 @@ func newArchiveWriter() (*archiveWriter, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	hbs := NewSHA512HashingByteSink(bs)
-	return &archiveWriter{output: hbs, seenChunks: hash.HashSet{}, lock: sync.Mutex{}}, nil
+	hbMd5 := NewMD5HashingByteSink(bs)
+	hbSha := NewSHA512HashingByteSink(hbMd5)
+	return &archiveWriter{
+		md5Summer:  hbMd5,
+		seenChunks: hash.HashSet{},
+		output:     hbSha,
+	}, nil
 }
 
 // newArchiveWriter - Create an *archiveWriter with the given output ByteSync. This is used for testing.
 func newArchiveWriterWithSink(bs ByteSink) *archiveWriter {
-	hbs := NewSHA512HashingByteSink(bs)
-	return &archiveWriter{output: hbs, seenChunks: hash.HashSet{}, lock: sync.Mutex{}}
+	hbMd5 := NewMD5HashingByteSink(bs)
+	hbSha := NewSHA512HashingByteSink(hbMd5)
+	return &archiveWriter{
+		md5Summer:  hbMd5,
+		seenChunks: hash.HashSet{},
+		output:     hbSha,
+	}
 }
 
 // writeByteSpan writes a byte span to the archive, returning the ByteSpan ID if the write was successful. Note
@@ -398,6 +414,8 @@ func (aw *archiveWriter) writeFooter() error {
 	aw.footerCheckSum = sha512Sum(aw.output.GetSum())
 	aw.output.ResetHasher()
 
+	aw.fullMD5 = md5Sum(aw.md5Summer.GetSum())
+
 	return nil
 }
 
@@ -510,23 +528,99 @@ func (aw *archiveWriter) genFileName(path string) (string, error) {
 	return fullPath, nil
 }
 
-type archiveStreamWriter struct {
-	writer  *archiveWriter
-	dictMap map[*DecompBundle]uint32
+type ArchiveStreamWriter struct {
+	writer *archiveWriter
+	// We don't use a sync map here because what we actually want to avoid is writing the same dictionary to
+	// the writer multiple times. Writing dictionaries is rare, so there will be little contention here.
+	dictMap     map[*DecompBundle]uint32
+	dictMapLock sync.Mutex
+	chunkCount  *int32
 }
 
-func (asw *archiveStreamWriter) writeArchiveToChunker(chunker ArchiveToChunker) error {
+func NewArchiveStreamWriter() (*ArchiveStreamWriter, error) {
+	writer, err := newArchiveWriter()
+	if err != nil {
+		return nil, err
+	}
+	return &ArchiveStreamWriter{
+		writer,
+		map[*DecompBundle]uint32{},
+		sync.Mutex{},
+		new(int32),
+	}, nil
+}
+
+var _ GenericTableWriter = (*ArchiveStreamWriter)(nil)
+
+func (asw *ArchiveStreamWriter) Reader() (io.ReadCloser, error) {
+	return asw.writer.output.Reader()
+}
+
+func (asw *ArchiveStreamWriter) Finish() (string, error) {
+	// This will perform all the steps to construct an archive file - starting with the finalization of byte spans.
+	// All writeByteSpan calls and stage* calls must be completed before this.
+	err := indexFinalize(asw.writer, hash.Hash{})
+	if err != nil {
+		return "", err
+	}
+
+	h, err := asw.writer.getName()
+	if err != nil {
+		return "", err
+	}
+	return h.String() + ArchiveFileSuffix, nil
+}
+
+func (asw *ArchiveStreamWriter) ChunkCount() int {
+	return int(atomic.LoadInt32(asw.chunkCount))
+}
+
+func (asw *ArchiveStreamWriter) AddChunk(chunker ToChunker) error {
+	if cc, ok := chunker.(CompressedChunk); ok {
+		return asw.writeCompressedChunk(cc)
+	}
+	if ac, ok := chunker.(ArchiveToChunker); ok {
+		return asw.writeArchiveToChunker(ac)
+	}
+	return fmt.Errorf("Unknown chunk type: %T", chunker)
+}
+
+func (asw *ArchiveStreamWriter) ContentLength() uint64 {
+	return asw.writer.bytesWritten
+}
+
+func (asw *ArchiveStreamWriter) GetMD5() []byte {
+	return asw.writer.fullMD5[:]
+}
+
+func (asw *ArchiveStreamWriter) Remove() error {
+	return os.Remove(asw.writer.finalPath)
+}
+
+func (asw *ArchiveStreamWriter) writeArchiveToChunker(chunker ArchiveToChunker) error {
 	dict := chunker.dict
 
 	var err error
 	dictId, ok := asw.dictMap[dict]
 	if !ok {
-		// Never seen this dictionary. write it out, and stick it's ID in the map.
-		dictId, err = asw.writer.writeByteSpan(*dict.rawDictionary)
-		if err != nil {
-			return err
-		}
-		asw.dictMap[dict] = dictId
+		err = func() error {
+			asw.dictMapLock.Lock()
+			defer asw.dictMapLock.Unlock()
+
+			// we have a lock, so check again as it may have been added by the last lock holder.
+			dictId, ok := asw.dictMap[dict]
+			if ok {
+				return nil
+			}
+
+			// New dictionary. Write it out, and add id to the map.
+			dictId, err = asw.writer.writeByteSpan(*dict.rawDictionary)
+			if err != nil {
+				return err
+			}
+			asw.dictMap[dict] = dictId
+			return nil
+		}()
 	}
 
 	dataId, err := asw.writer.writeByteSpan(chunker.chunkData)
@@ -534,13 +628,15 @@ func (asw *archiveStreamWriter) writeArchiveToChunker(chunker ArchiveToChunker) 
 		return err
 	}
 
+	atomic.AddInt32(asw.chunkCount, 1)
 	return asw.writer.stageZStdChunk(chunker.Hash(), dictId, dataId)
 }
 
-func (asw *archiveStreamWriter) writeCompressedChunkToChunker(chunker CompressedChunk) error {
+func (asw *ArchiveStreamWriter) writeCompressedChunk(chunker CompressedChunk) error {
 	dataId, err := asw.writer.writeByteSpan(chunker.FullCompressedChunk)
 	if err != nil {
 		return err
 	}
+	atomic.AddInt32(asw.chunkCount, 1)
 	return asw.writer.stageSnappyChunk(chunker.Hash(), dataId)
 }

@@ -68,7 +68,7 @@ func UnArchive(ctx context.Context, cs chunks.ChunkStore, smd StorageMetadata, p
 
 					err = arc.iterate(ctx, func(chk chunks.Chunk) error {
 						cmpChk := ChunkToCompressedChunk(chk)
-						err := classicTable.AddCmpChunk(cmpChk)
+						err := classicTable.AddChunk(cmpChk)
 						if err != nil {
 							return err
 						}
@@ -248,7 +248,7 @@ func convertTableFileToArchive(
 		return "", hash.Hash{}, err
 	}
 
-	err = indexAndFinalizeArchive(arcW, archivePath, cs.hash())
+	err = indexFinalizeFlushArchive(arcW, archivePath, cs.hash())
 	if err != nil {
 		return "", hash.Hash{}, err
 	}
@@ -267,9 +267,7 @@ func convertTableFileToArchive(
 	return arcW.finalPath, name, err
 }
 
-// indexAndFinalizeArchive writes the index, metadata, and footer to the archive file. It also flushes the archive writer
-// to the directory provided. The name is calculated from the footer, and can be obtained by calling getName on the archive.
-func indexAndFinalizeArchive(arcW *archiveWriter, archivePath string, originTableFile hash.Hash) error {
+func indexFinalize(arcW *archiveWriter, originTableFile hash.Hash) error {
 	err := arcW.finalizeByteSpans()
 	if err != nil {
 		return err
@@ -281,10 +279,13 @@ func indexAndFinalizeArchive(arcW *archiveWriter, archivePath string, originTabl
 	}
 
 	meta := map[string]string{
-		amdkDoltVersion:     doltversion.Version,
-		amdkOriginTableFile: originTableFile.String(),
-		amdkConversionTime:  time.Now().UTC().Format(time.RFC3339),
+		amdkDoltVersion:    doltversion.Version,
+		amdkConversionTime: time.Now().UTC().Format(time.RFC3339),
 	}
+	if !originTableFile.IsEmpty() {
+		meta[amdkOriginTableFile] = originTableFile.String()
+	}
+
 	jsonData, err := json.Marshal(meta)
 	if err != nil {
 		return err
@@ -295,7 +296,13 @@ func indexAndFinalizeArchive(arcW *archiveWriter, archivePath string, originTabl
 		return err
 	}
 
-	err = arcW.writeFooter()
+	return arcW.writeFooter()
+}
+
+// indexAndFinalizeArchive writes the index, metadata, and footer to the archive file. It also flushes the archive writer
+// to the directory provided. The name is calculated from the footer, and can be obtained by calling getName on the archive.
+func indexFinalizeFlushArchive(arcW *archiveWriter, archivePath string, originTableFile hash.Hash) error {
+	err := indexFinalize(arcW, originTableFile)
 	if err != nil {
 		return err
 	}

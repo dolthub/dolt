@@ -15,6 +15,7 @@
 package nbs
 
 import (
+	"crypto/md5"
 	"crypto/sha512"
 	"errors"
 )
@@ -219,6 +220,7 @@ var ErrInvalidFileSignature = errors.New("invalid file signature")
 var ErrInvalidFormatVersion = errors.New("invalid format version")
 
 type sha512Sum [sha512.Size]byte
+type md5Sum [md5.Size]byte
 
 type byteSpan struct {
 	offset uint64
