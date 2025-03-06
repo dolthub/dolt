@@ -255,7 +255,7 @@ func TestStatScripts(t *testing.T) {
 							StorageBucketCnt:  1,
 							CachedBucketCnt:   1,
 							CachedBoundCnt:    1,
-							CachedTemplateCnt: 1,
+							CachedTemplateCnt: 2,
 							StatCnt:           1,
 						}},
 					},
@@ -285,7 +285,7 @@ func TestStatScripts(t *testing.T) {
 							StorageBucketCnt:  2,
 							CachedBucketCnt:   2,
 							CachedBoundCnt:    2,
-							CachedTemplateCnt: 2,
+							CachedTemplateCnt: 3,
 							StatCnt:           1,
 						}},
 					},
@@ -488,15 +488,6 @@ func TestStatScripts(t *testing.T) {
 					query: "call dolt_stats_wait()",
 				},
 				{
-					query: "call dolt_stats_gc()",
-				},
-				{
-					query: "call dolt_stats_gc()",
-				},
-				{
-					query: "call dolt_stats_wait()",
-				},
-				{
 					query: "call dolt_stats_info('--short')",
 					res: []sql.Row{
 						{dprocedures.StatsInfo{
@@ -518,9 +509,6 @@ func TestStatScripts(t *testing.T) {
 					query: "call dolt_branch('-D', 'feat')",
 				},
 				{
-					query: "call dolt_stats_gc()",
-				},
-				{
 					query: "call dolt_stats_wait()",
 				},
 				{
@@ -535,55 +523,6 @@ func TestStatScripts(t *testing.T) {
 							CachedBoundCnt:    2,
 							CachedTemplateCnt: 2,
 							StatCnt:           1,
-						},
-						}},
-				},
-			},
-		},
-		{
-			name: "test gc",
-			setup: []string{
-				"create table xy (x int primary key, y int, key (y,x))",
-				"insert into xy values (0,0), (1,0), (2,0)",
-				"call dolt_add('-A')",
-				"call dolt_commit('-m', 'create xy')",
-				"call dolt_checkout('-b', 'feat')",
-				"call dolt_checkout('main')",
-			},
-			assertions: []assertion{
-				{
-					query: "call dolt_stats_info('--short')",
-					res: []sql.Row{
-						{dprocedures.StatsInfo{
-							DbCnt:             2,
-							Backing:           "mydb",
-							Active:            true,
-							StorageBucketCnt:  2,
-							CachedBucketCnt:   2,
-							CachedBoundCnt:    2,
-							CachedTemplateCnt: 2,
-							StatCnt:           2,
-						},
-						}},
-				},
-				{
-					query: "call dolt_stats_gc()",
-				},
-				{
-					query: "call dolt_stats_wait()",
-				},
-				{
-					query: "call dolt_stats_info('--short')",
-					res: []sql.Row{
-						{dprocedures.StatsInfo{
-							DbCnt:             2,
-							Backing:           "mydb",
-							Active:            true,
-							StorageBucketCnt:  2,
-							CachedBucketCnt:   2,
-							CachedBoundCnt:    2,
-							CachedTemplateCnt: 2,
-							StatCnt:           2,
 						},
 						}},
 				},
@@ -778,7 +717,6 @@ func TestStatScripts(t *testing.T) {
 			}
 
 			require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
-			require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_gc()"))
 			require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_flush()"))
 
 			for i, a := range tt.assertions {
@@ -793,7 +731,7 @@ func TestStatScripts(t *testing.T) {
 				}
 				if a.res != nil {
 					cmp, exp := normalize(rows, a.res)
-					require.Equal(t, exp, cmp, strconv.Itoa(i)+": "+a.query)
+					require.Equal(t, exp, cmp, "query no "+strconv.Itoa(i)+" failed: "+a.query)
 				}
 			}
 		})

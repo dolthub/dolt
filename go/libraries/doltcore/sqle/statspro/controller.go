@@ -158,7 +158,9 @@ func (sc *StatsController) SetEnableGc(v bool) {
 func (sc *StatsController) setDoGc() {
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
-	sc.doGc = true
+	if sc.enableGc {
+		sc.doGc = true
+	}
 }
 
 func (sc *StatsController) gcIsSet() bool {
@@ -235,10 +237,10 @@ func (sc *StatsController) descError(d string, err error) {
 	b := strings.Builder{}
 	b.WriteString("stats error;")
 	if d != "" {
-		b.WriteString(" " + d)
+		b.WriteString("; " + d)
 	}
 	if err != nil {
-		b.WriteString(" " + err.Error())
+		b.WriteString("; " + err.Error())
 	}
 	sc.logger.Debug(b.String())
 }

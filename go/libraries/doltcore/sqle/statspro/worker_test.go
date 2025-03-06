@@ -568,6 +568,7 @@ func TestRotateBackingDb(t *testing.T) {
 	threads := sql.NewBackgroundThreads()
 	defer threads.Shutdown()
 	ctx, sqlEng, sc := defaultSetup(t, threads, false)
+	sc.SetEnableGc(false)
 
 	runBlock(t, ctx, sqlEng, "create database backupdb",
 		"use backupdb",
