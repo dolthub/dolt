@@ -30,6 +30,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	ddbtypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/store/constants"
 )
@@ -86,35 +87,35 @@ func (m *fakeDDB) putData(k string, d []byte) {
 }
 
 func (m *fakeDDB) PutItem(ctx context.Context, input *dynamodb.PutItemInput, opts ...func(*dynamodb.Options)) (*dynamodb.PutItemOutput, error) {
-	assert.NotNil(m.t, input.Item[dbAttr], "%s should have been present", dbAttr)
-	assert.NotNil(m.t, input.Item[dbAttr].(*ddbtypes.AttributeValueMemberS), "key should have been a String: %+v", input.Item[dbAttr])
+	require.NotNil(m.t, input.Item[dbAttr], "%s should have been present", dbAttr)
+	require.IsType(m.t, (*ddbtypes.AttributeValueMemberS)(nil), input.Item[dbAttr], "key should have been a String: %+v", input.Item[dbAttr])
 	key := input.Item[dbAttr].(*ddbtypes.AttributeValueMemberS).Value
 
-	assert.NotNil(m.t, input.Item[nbsVersAttr], "%s should have been present", nbsVersAttr)
-	assert.NotNil(m.t, input.Item[nbsVersAttr].(*ddbtypes.AttributeValueMemberS), "nbsVers should have been a String: %+v", input.Item[nbsVersAttr])
+	require.NotNil(m.t, input.Item[nbsVersAttr], "%s should have been present", nbsVersAttr)
+	require.IsType(m.t, (*ddbtypes.AttributeValueMemberS)(nil), input.Item[nbsVersAttr], "nbsVers should have been a String: %+v", input.Item[nbsVersAttr])
 	assert.Equal(m.t, AWSStorageVersion, input.Item[nbsVersAttr].(*ddbtypes.AttributeValueMemberS).Value)
 
-	assert.NotNil(m.t, input.Item[versAttr], "%s should have been present", versAttr)
-	assert.NotNil(m.t, input.Item[versAttr].(*ddbtypes.AttributeValueMemberS), "nbsVers should have been a String: %+v", input.Item[versAttr])
+	require.NotNil(m.t, input.Item[versAttr], "%s should have been present", versAttr)
+	require.IsType(m.t, (*ddbtypes.AttributeValueMemberS)(nil), input.Item[versAttr], "nbsVers should have been a String: %+v", input.Item[versAttr])
 	assert.Equal(m.t, constants.FormatLD1String, input.Item[versAttr].(*ddbtypes.AttributeValueMemberS).Value)
 
-	assert.NotNil(m.t, input.Item[lockAttr], "%s should have been present", lockAttr)
-	assert.NotNil(m.t, input.Item[lockAttr].(*ddbtypes.AttributeValueMemberB), "lock should have been a blob: %+v", input.Item[lockAttr])
+	require.NotNil(m.t, input.Item[lockAttr], "%s should have been present", lockAttr)
+	require.IsType(m.t, (*ddbtypes.AttributeValueMemberB)(nil), input.Item[lockAttr], "lock should have been a blob: %+v", input.Item[lockAttr])
 	lock := input.Item[lockAttr].(*ddbtypes.AttributeValueMemberB).Value
 
-	assert.NotNil(m.t, input.Item[rootAttr], "%s should have been present", rootAttr)
-	assert.NotNil(m.t, input.Item[rootAttr].(*ddbtypes.AttributeValueMemberB), "root should have been a blob: %+v", input.Item[rootAttr])
+	require.NotNil(m.t, input.Item[rootAttr], "%s should have been present", rootAttr)
+	require.IsType(m.t, (*ddbtypes.AttributeValueMemberB)(nil), input.Item[rootAttr], "root should have been a blob: %+v", input.Item[rootAttr])
 	root := input.Item[rootAttr].(*ddbtypes.AttributeValueMemberB).Value
 
 	specs := ""
 	if attr, present := input.Item[tableSpecsAttr]; present {
-		assert.NotNil(m.t, attr.(*ddbtypes.AttributeValueMemberS), "specs should have been a String: %+v", input.Item[tableSpecsAttr])
+		require.IsType(m.t, (*ddbtypes.AttributeValueMemberS)(nil), attr, "specs should have been a String: %+v", input.Item[tableSpecsAttr])
 		specs = attr.(*ddbtypes.AttributeValueMemberS).Value
 	}
 
 	apps := ""
 	if attr, present := input.Item[appendixAttr]; present {
-		assert.NotNil(m.t, attr.(*ddbtypes.AttributeValueMemberS), "appendix specs should have been a String: %+v", input.Item[appendixAttr])
+		require.IsType(m.t, (*ddbtypes.AttributeValueMemberS)(nil), attr, "appendix specs should have been a String: %+v", input.Item[appendixAttr])
 		apps = attr.(*ddbtypes.AttributeValueMemberS).Value
 	}
 
