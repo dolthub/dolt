@@ -168,8 +168,12 @@ func restoreBackup(ctx *sql.Context, _ env.DbData, apr *argparser.ArgParseResult
 
 	sess := dsess.DSessFromSess(ctx.Session)
 
-	remoteParams := map[string]string{}
-	r := env.NewRemote("", backupUrl, remoteParams)
+	params, err := loadAwsParams(ctx, sess, apr, backupUrl, "restore")
+	if err != nil {
+		return err
+	}
+
+	r := env.NewRemote("", backupUrl, params)
 	srcDb, err := r.GetRemoteDB(ctx, types.Format_Default, nil)
 	if err != nil {
 		return err
@@ -236,24 +240,19 @@ func removeBackup(ctx *sql.Context, dbData env.DbData, apr *argparser.ArgParseRe
 	}
 }
 
-func syncBackupViaUrl(ctx *sql.Context, dbData env.DbData, sess *dsess.DoltSession, apr *argparser.ArgParseResults) error {
-	if apr.NArg() != 2 {
-		return fmt.Errorf("usage: dolt_backup('sync-url', BACKUP_URL)")
-	}
-
-	backupUrl := strings.TrimSpace(apr.Arg(1))
+func loadAwsParams(ctx *sql.Context, sess *dsess.DoltSession, apr *argparser.ArgParseResults, backupUrl, backupCmd string) (map[string]string, error) {
 	cfg := loadConfig(ctx)
 	scheme, absBackupUrl, err := env.GetAbsRemoteUrl(filesys.LocalFS, cfg, backupUrl)
 	if err != nil {
-		return fmt.Errorf("error: '%s' is not valid.", backupUrl)
+		return nil, fmt.Errorf("error: '%s' is not valid.", backupUrl)
 	} else if scheme == dbfactory.HTTPScheme || scheme == dbfactory.HTTPSScheme {
 		// not sure how to get the dialer so punting on this
-		return fmt.Errorf("sync-url does not support http or https backup locations currently")
+		return nil, fmt.Errorf("%s does not support http or https backup locations currently", backupCmd)
 	}
 
 	params, err := cli.ProcessBackupArgs(apr, scheme, absBackupUrl)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	credsFile, _ := sess.GetSessionVariable(ctx, dsess.AwsCredsFile)
@@ -272,6 +271,20 @@ func syncBackupViaUrl(ctx *sql.Context, dbData env.DbData, sess *dsess.DoltSessi
 	regionStr, isStr := credsRegion.(string)
 	if isStr && len(regionStr) > 0 {
 		params[dbfactory.AWSRegionParam] = regionStr
+	}
+
+	return params, nil
+}
+
+func syncBackupViaUrl(ctx *sql.Context, dbData env.DbData, sess *dsess.DoltSession, apr *argparser.ArgParseResults) error {
+	if apr.NArg() != 2 {
+		return fmt.Errorf("usage: dolt_backup('sync-url', BACKUP_URL)")
+	}
+
+	backupUrl := strings.TrimSpace(apr.Arg(1))
+	params, err := loadAwsParams(ctx, sess, apr, backupUrl, "sync-url")
+	if err != nil {
+		return err
 	}
 
 	b := env.NewRemote("__temp__", backupUrl, params)
