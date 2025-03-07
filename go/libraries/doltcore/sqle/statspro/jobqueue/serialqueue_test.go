@@ -223,6 +223,7 @@ func TestSerialQueue(t *testing.T) {
 		start := make(chan struct{})
 		go func() error {
 			defer wg.Done()
+			close(start)
 			queue.Run(ctx)
 			return nil
 		}()
