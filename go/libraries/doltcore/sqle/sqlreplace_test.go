@@ -139,7 +139,7 @@ var BasicReplaceTests = []ReplaceTest{
 	{
 		Name:         "replace missing non-nullable column",
 		ReplaceQuery: "replace into people (id, first_name) values (2, 'Bart')",
-		ExpectedErr:  "Field 'last_name' doesn't have a default value",
+		ExpectedErr:  "column name 'last_name' is non-nullable but attempted to set a value of null",
 	},
 	{
 		Name:         "replace partial columns mismatch too many values",
