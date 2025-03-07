@@ -17,10 +17,11 @@ package dprocedures
 import (
 	"errors"
 	"fmt"
-
+	"os"
+	"strings"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
-
+	"github.com/fatih/color"
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -34,6 +35,7 @@ import (
 )
 
 var ErrEmptyBranchName = errors.New("error: cannot checkout empty string")
+var os_args=os.Args[1:]
 
 var doltCheckoutSchema = []*sql.Column{
 	{
@@ -176,6 +178,10 @@ func doDoltCheckout(ctx *sql.Context, args []string) (statusCode int, successMes
 		if err != nil {
 			return 1, "", err
 		}
+		terminal_command:=strings.Join(os_args, " ")
+		if strings.Contains(terminal_command, "sql") {
+			cli.PrintErrln(color.YellowString("WARNING: The checked out branch is only changed for this current session."))
+		} 
 		return 0, generateSuccessMessage(branchName, ""), nil
 	}
 
