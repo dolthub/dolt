@@ -533,10 +533,18 @@ func (sc *StatsController) PutBound(h hash.Hash, r sql.Row, l int) {
 }
 
 func (sc *StatsController) Flush(ctx context.Context) (int, error) {
+	sqlCtx, err := sc.ctxGen(ctx)
+	if err != nil {
+		return 0, err
+	}
+	defer sql.SessionEnd(sqlCtx.Session)
+	sql.SessionCommandBegin(sqlCtx.Session)
+	defer sql.SessionCommandEnd(sqlCtx.Session)
+
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
 	defer sc.signalListener(leFlush)
-	return sc.kv.Flush(ctx)
+	return sc.kv.Flush(sqlCtx)
 }
 
 func (sc *StatsController) Len() int {

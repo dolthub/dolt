@@ -505,7 +505,15 @@ func (sc *StatsController) lockedRotateStorage(ctx context.Context) error {
 		return err
 	}
 
-	newKv, err := sc.initStorage(ctx, newStorageTarget)
+	sqlCtx, err := sc.ctxGen(ctx)
+	if err != nil {
+		return err
+	}
+	defer sql.SessionEnd(sqlCtx.Session)
+	sql.SessionCommandBegin(sqlCtx.Session)
+	defer sql.SessionCommandEnd(sqlCtx.Session)
+
+	newKv, err := sc.initStorage(sqlCtx, newStorageTarget)
 	if err != nil {
 		return err
 	}

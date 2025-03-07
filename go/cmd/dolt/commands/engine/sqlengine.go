@@ -255,7 +255,8 @@ func NewSqlEngine(
 		for _, db := range dbs {
 			sqlDbs = append(sqlDbs, db)
 		}
-		err := sc.Init(ctx, sqlDbs)
+
+		err = sc.Init(ctx, sqlDbs)
 		if err != nil {
 			return nil, err
 		}

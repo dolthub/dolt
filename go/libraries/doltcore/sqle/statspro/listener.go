@@ -139,9 +139,15 @@ func (sc *StatsController) Restart() error {
 
 	done := make(chan struct{})
 	go func() {
-		ctx := sc.newThreadCtx(context.Background())
+		sqlCtx, err := sc.ctxGen(context.Background())
+		if err != nil {
+			sc.logger.Errorf("error starting stats: %s", err.Error())
+			return
+		}
+
+		ctx := sc.newThreadCtx(sqlCtx)
 		close(done)
-		err := sc.runWorker(ctx)
+		err = sc.runWorker(ctx)
 		if err != nil {
 			sc.logger.Errorf("stats stopped: %s", err.Error())
 		}
@@ -169,6 +175,10 @@ func (sc *StatsController) Init(ctx context.Context, dbs []sql.Database) error {
 	if err != nil {
 		return err
 	}
+	defer sql.SessionEnd(sqlCtx.Session)
+	sql.SessionCommandBegin(sqlCtx.Session)
+	defer sql.SessionCommandEnd(sqlCtx.Session)
+
 	for i, db := range dbs {
 		if db, ok := db.(sqle.Database); ok { // exclude read replica dbs
 			fs, err := sc.pro.FileSystemForDatabase(db.AliasedName())
@@ -201,7 +211,7 @@ func (sc *StatsController) Init(ctx context.Context, dbs []sql.Database) error {
 			}
 
 			// otherwise wipe and create new stats dir
-			if err := sc.lockedRotateStorage(sqlCtx); err != nil {
+			if err := sc.lockedRotateStorage(ctx); err != nil {
 				return err
 			}
 		}

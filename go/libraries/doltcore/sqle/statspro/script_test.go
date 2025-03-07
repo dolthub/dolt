@@ -255,7 +255,7 @@ func TestStatScripts(t *testing.T) {
 							StorageBucketCnt:  1,
 							CachedBucketCnt:   1,
 							CachedBoundCnt:    1,
-							CachedTemplateCnt: 2,
+							CachedTemplateCnt: 1,
 							StatCnt:           1,
 						}},
 					},

@@ -76,7 +76,6 @@ func (sc *StatsController) runWorker(ctx context.Context) (err error) {
 
 		newStats, err = sc.newStatsForRoot(ctx, gcKv)
 		if errors.Is(err, context.Canceled) {
-			log.Printf("stats context cancelled")
 			return nil
 		} else if err != nil {
 			sc.descError("", err)
@@ -93,7 +92,6 @@ func (sc *StatsController) runWorker(ctx context.Context) (err error) {
 		select {
 		case <-ctx.Done():
 			// is double check necessary?
-			log.Printf("stats context cancelled")
 			return context.Cause(ctx)
 		default:
 		}
@@ -130,26 +128,29 @@ func (sc *StatsController) trySwapStats(ctx context.Context, prevGen uint64, new
 			sc.kv = gcKv
 			ok = true
 			if !sc.memOnly {
-				sc.mu.Unlock()
-				if err = sc.sq.DoSync(ctx, func() error {
-					return sc.rotateStorage(ctx)
-				}); err != nil {
-					return
-				}
-				sc.mu.Lock()
+				func() {
+					sc.mu.Unlock()
+					defer sc.mu.Lock()
+					if err := sc.sq.DoSync(ctx, func() error {
+						return sc.rotateStorage(ctx)
+					}); err != nil {
+						sc.descError("", err)
+					}
+				}()
 			}
 		}
 		// Flush new changes to disk, unlocked
 		if !sc.memOnly {
-			sc.mu.Unlock()
-			err = sc.sq.DoSync(ctx, func() error {
-				_, err := sc.Flush(ctx)
-				return err
-			})
-			sc.mu.Lock()
-			if err != nil {
-				return true, err
-			}
+			func() {
+				sc.mu.Unlock()
+				defer sc.mu.Lock()
+				if err := sc.sq.DoSync(ctx, func() error {
+					_, err := sc.Flush(ctx)
+					return err
+				}); err != nil {
+					sc.descError("", err)
+				}
+			}()
 		}
 		signal = signal | leFlush
 		return true, nil
@@ -172,12 +173,15 @@ func (sc *StatsController) newStatsForRoot(baseCtx context.Context, gcKv *memSta
 		return nil, err
 	}
 
-	sql.SessionCommandBegin(ctx.Session)
 	defer sql.SessionEnd(ctx.Session)
-	defer sql.SessionCommandEnd(ctx.Session)
 
 	dSess := dsess.DSessFromSess(ctx.Session)
-	dbs := dSess.Provider().AllDatabases(ctx)
+	var dbs []sql.Database
+	func() {
+		sql.SessionCommandBegin(ctx.Session)
+		defer sql.SessionCommandEnd(ctx.Session)
+		dbs = dSess.Provider().AllDatabases(ctx)
+	}()
 	newStats = newRootStats()
 	for _, db := range dbs {
 		sqlDb, ok := db.(sqle.Database)
@@ -187,6 +191,8 @@ func (sc *StatsController) newStatsForRoot(baseCtx context.Context, gcKv *memSta
 
 		var branches []ref.DoltRef
 		if err := sc.sq.DoSync(ctx, func() error {
+			sql.SessionCommandBegin(ctx.Session)
+			defer sql.SessionCommandEnd(ctx.Session)
 			ddb, ok := dSess.GetDoltDB(ctx, db.Name())
 			if !ok {
 				return fmt.Errorf("get dolt db dolt database not found %s", db.Name())
@@ -199,6 +205,7 @@ func (sc *StatsController) newStatsForRoot(baseCtx context.Context, gcKv *memSta
 		}
 
 		for _, br := range branches {
+			// this call avoids the chunkstore
 			sqlDb, err := sqle.RevisionDbForBranch(ctx, db.(dsess.SqlDatabase), br.GetPath(), br.GetPath()+"/"+sqlDb.AliasedName())
 			if err != nil {
 				sc.descError("revisionForBranch", err)
@@ -209,10 +216,13 @@ func (sc *StatsController) newStatsForRoot(baseCtx context.Context, gcKv *memSta
 
 			var tableNames []string
 			if err := sc.sq.DoSync(ctx, func() error {
+				sql.SessionCommandBegin(ctx.Session)
+				defer sql.SessionCommandEnd(ctx.Session)
 				tableNames, err = sqlDb.GetTableNames(ctx)
 				return err
 			}); err != nil {
-				return nil, err
+				sc.descError("getTableNames", err)
+				continue
 			}
 
 			for _, tableName := range tableNames {
@@ -256,6 +266,8 @@ func (sc *StatsController) collectIndexNodes(ctx *sql.Context, prollyMap prolly.
 	lowerBound, ok := sc.kv.GetBound(firstNodeHash, idxLen)
 	if !ok {
 		sc.sq.DoSync(ctx, func() error {
+			sql.SessionCommandBegin(ctx.Session)
+			defer sql.SessionCommandEnd(ctx.Session)
 			var err error
 			lowerBound, err = firstRowForIndex(ctx, idxLen, prollyMap, keyBuilder)
 			if err != nil {
@@ -288,6 +300,8 @@ func (sc *StatsController) collectIndexNodes(ctx *sql.Context, prollyMap prolly.
 
 		writes++
 		err = sc.sq.DoSync(ctx, func() error {
+			sql.SessionCommandBegin(ctx.Session)
+			defer sql.SessionCommandEnd(ctx.Session)
 			updater.newBucket()
 
 			// we read exclusive range [node first key, next node first key)
@@ -342,6 +356,8 @@ func (sc *StatsController) updateTable(ctx *sql.Context, newStats *rootStats, ta
 	var sqlTable *sqle.DoltTable
 	var dTab *doltdb.Table
 	if err := sc.sq.DoSync(ctx, func() error {
+		sql.SessionCommandBegin(ctx.Session)
+		defer sql.SessionCommandEnd(ctx.Session)
 		sqlTable, dTab, err = GetLatestTable(ctx, tableName, sqlDb)
 		return err
 	}); err != nil {
@@ -370,6 +386,8 @@ func (sc *StatsController) updateTable(ctx *sql.Context, newStats *rootStats, ta
 
 	var indexes []sql.Index
 	if err := sc.sq.DoSync(ctx, func() error {
+		sql.SessionCommandBegin(ctx.Session)
+		defer sql.SessionCommandEnd(ctx.Session)
 		indexes, err = sqlTable.GetIndexes(ctx)
 		return err
 	}); err != nil {
@@ -380,11 +398,19 @@ func (sc *StatsController) updateTable(ctx *sql.Context, newStats *rootStats, ta
 	for _, sqlIdx := range indexes {
 		var idx durable.Index
 		var err error
-		if strings.EqualFold(sqlIdx.ID(), "PRIMARY") {
-			idx, err = dTab.GetRowData(ctx)
-		} else {
-			idx, err = dTab.GetIndexRowData(ctx, sqlIdx.ID())
-		}
+		var prollyMap prolly.Map
+		func() {
+			sql.SessionCommandBegin(ctx.Session)
+			defer sql.SessionCommandEnd(ctx.Session)
+			if strings.EqualFold(sqlIdx.ID(), "PRIMARY") {
+				idx, err = dTab.GetRowData(ctx)
+			} else {
+				idx, err = dTab.GetIndexRowData(ctx, sqlIdx.ID())
+			}
+			if err == nil {
+				prollyMap, err = durable.ProllyMapFromIndex(idx)
+			}
+		}()
 		if err != nil {
 			sc.descError("GetRowData", err)
 			continue
@@ -392,6 +418,8 @@ func (sc *StatsController) updateTable(ctx *sql.Context, newStats *rootStats, ta
 
 		var template stats.Statistic
 		if err := sc.sq.DoSync(ctx, func() error {
+			sql.SessionCommandBegin(ctx.Session)
+			defer sql.SessionCommandEnd(ctx.Session)
 			_, template, err = sc.getTemplate(ctx, sqlTable, sqlIdx)
 			if err != nil {
 				return fmt.Errorf("stats collection failed to generate a statistic template: %s.%s.%s:%T; %s", sqlDb.RevisionQualifiedName(), tableName, sqlIdx, sqlIdx, err.Error())
@@ -407,13 +435,10 @@ func (sc *StatsController) updateTable(ctx *sql.Context, newStats *rootStats, ta
 
 		idxLen := len(sqlIdx.Expressions())
 
-		prollyMap, err := durable.ProllyMapFromIndex(idx)
-		if err != nil {
-			sc.descError("cannot generate stats for non-prollyIndex", err)
-			continue
-		}
 		var levelNodes []tree.Node
 		if err = sc.sq.DoSync(ctx, func() error {
+			sql.SessionCommandBegin(ctx.Session)
+			defer sql.SessionCommandEnd(ctx.Session)
 			levelNodes, err = tree.GetHistogramLevel(ctx, prollyMap.Tuples(), bucketLowCnt)
 			if err != nil {
 				sc.descError("get level", err)
@@ -441,13 +466,20 @@ func (sc *StatsController) updateTable(ctx *sql.Context, newStats *rootStats, ta
 			if !gcKv.GcMark(sc.kv, levelNodes, buckets, idxLen, keyBuilder) {
 				return fmt.Errorf("GC interrupted updated")
 			}
-			schHash, _, err := sqlTable.IndexCacheKey(ctx)
-			if err != nil {
+			if err := func() error {
+				sql.SessionCommandBegin(ctx.Session)
+				defer sql.SessionCommandEnd(ctx.Session)
+				schHash, _, err := sqlTable.IndexCacheKey(ctx)
+				if err != nil {
+					return err
+				}
+				key := templateCacheKey{h: schHash.Hash, idxName: sqlIdx.ID()}
+				if t, ok := sc.GetTemplate(key); ok {
+					gcKv.PutTemplate(key, t)
+				}
+				return nil
+			}(); err != nil {
 				return err
-			}
-			key := templateCacheKey{h: schHash.Hash, idxName: sqlIdx.ID()}
-			if t, ok := sc.GetTemplate(key); ok {
-				gcKv.PutTemplate(key, t)
 			}
 		}
 	}
