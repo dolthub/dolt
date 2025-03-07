@@ -70,8 +70,8 @@ func (q QueryDiff) ArgParser() *argparser.ArgParser {
 func (q QueryDiff) compareRows(pkOrds []int, row1, row2 sql.Row) (int, bool) {
 	var cmp int
 	for _, pkOrd := range pkOrds {
-		pk1, _ := gmstypes.ConvertToString(row1[pkOrd], gmstypes.Text, nil)
-		pk2, _ := gmstypes.ConvertToString(row2[pkOrd], gmstypes.Text, nil)
+		pk1, _ := gmstypes.ConvertToString(row1[pkOrd], gmstypes.Text)
+		pk2, _ := gmstypes.ConvertToString(row2[pkOrd], gmstypes.Text)
 		if pk1 < pk2 {
 			cmp = -1
 		} else if pk1 > pk2 {
@@ -82,8 +82,8 @@ func (q QueryDiff) compareRows(pkOrds []int, row1, row2 sql.Row) (int, bool) {
 	}
 	var diff bool
 	for i := 0; i < len(row1); i++ {
-		a, _ := gmstypes.ConvertToString(row1[i], gmstypes.Text, nil)
-		b, _ := gmstypes.ConvertToString(row2[i], gmstypes.Text, nil)
+		a, _ := gmstypes.ConvertToString(row1[i], gmstypes.Text)
+		b, _ := gmstypes.ConvertToString(row2[i], gmstypes.Text)
 		if a != b {
 			diff = true
 			break

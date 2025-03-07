@@ -15,6 +15,7 @@
 package microsysbench
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -26,6 +27,7 @@ import (
 
 	"github.com/dolthub/go-mysql-server/server"
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/vitess/go/sqltypes"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
@@ -125,14 +127,18 @@ func benchmarkSysbenchQuery(b *testing.B, getQuery func(int) string) {
 		schema, iter, _, err := eng.Query(ctx, getQuery(i))
 		require.NoError(b, err)
 		i := 0
-		buf := sql.NewByteBuffer(16000)
+		var buf bytes.Buffer
 		for {
 			i++
 			row, err := iter.Next(ctx)
 			if err != nil {
 				break
 			}
-			outputRow, err := server.RowToSQL(ctx, schema, row, nil, buf)
+			bufRow, err := server.RowToSQL(ctx, schema, row, nil, &buf)
+			outputRow := make([]sqltypes.Value, len(bufRow))
+			for i := range bufRow {
+				outputRow[i] = bufRow[i].ToValue(buf.Bytes())
+			}
 			_ = outputRow
 			if i%128 == 0 {
 				buf.Reset()

@@ -15,6 +15,7 @@
 package sqlutil
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -228,6 +229,7 @@ var sqlColToStrContext = sql.NewEmptyContext()
 // SqlColToStr is a utility function for converting a sql column of type interface{} to a string.
 // NULL values are treated as empty strings. Handle nil separately if you require other behavior.
 func SqlColToStr(sqlType sql.Type, col interface{}) (string, error) {
+	var buf bytes.Buffer
 	if col != nil {
 		switch typedCol := col.(type) {
 		case bool:
@@ -237,17 +239,21 @@ func SqlColToStr(sqlType sql.Type, col interface{}) (string, error) {
 				return "false", nil
 			}
 		case sql.SpatialColumnType:
-			res, err := sqlType.SQL(sqlColToStrContext, nil, col)
-			hexRes := fmt.Sprintf("0x%X", res.Raw())
+			bufres, err := sqlType.SQL(sqlColToStrContext, &buf, col)
 			if err != nil {
 				return "", err
+			}
+			res := bufres.ToValue(buf.Bytes())
+			hexRes := fmt.Sprintf("0x%X", res.Raw())
+			if err != nil {
 			}
 			return hexRes, nil
 		default:
-			res, err := sqlType.SQL(sqlColToStrContext, nil, col)
+			bufres, err := sqlType.SQL(sqlColToStrContext, &buf, col)
 			if err != nil {
 				return "", err
 			}
+			res := bufres.ToValue(buf.Bytes())
 			return res.ToString(), nil
 		}
 	}
