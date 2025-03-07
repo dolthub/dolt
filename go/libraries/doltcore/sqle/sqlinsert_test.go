@@ -137,7 +137,7 @@ var BasicInsertTests = []InsertTest{
 	{
 		Name:        "insert missing non-nullable column",
 		InsertQuery: "insert into people (id, first_name) values (2, 'Bart')",
-		ExpectedErr: "Field 'last_name' doesn't have a default value",
+		ExpectedErr: "column name 'last_name' is non-nullable but attempted to set a value of null",
 	},
 	{
 		Name:        "insert partial columns mismatch too many values",
