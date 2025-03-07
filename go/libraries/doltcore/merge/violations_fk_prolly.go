@@ -38,19 +38,29 @@ func prollyParentSecDiffFkConstraintViolations(
 	postParent, postChild *constraintViolationsLoadedTable,
 	preParentSecIdx prolly.Map,
 	receiver FKViolationReceiver) error {
-
-	postParentRowData := durable.ProllyMapFromIndex(postParent.RowData)
-	postParentSecIdx := durable.ProllyMapFromIndex(postParent.IndexData)
-	childSecIdx := durable.ProllyMapFromIndex(postChild.IndexData)
+	postParentRowData, err := durable.ProllyMapFromIndex(postParent.RowData)
+	if err != nil {
+		return err
+	}
+	postParentSecIdx, err := durable.ProllyMapFromIndex(postParent.IndexData)
+	if err != nil {
+		return err
+	}
+	childSecIdx, err := durable.ProllyMapFromIndex(postChild.IndexData)
+	if err != nil {
+		return err
+	}
 
 	parentSecKD, _ := postParentSecIdx.Descriptors()
 	parentPrefixKD := parentSecKD.PrefixDesc(len(foreignKey.TableColumns))
 	partialKB := val.NewTupleBuilder(parentPrefixKD)
 
-	childPriIdx := durable.ProllyMapFromIndex(postChild.RowData)
+	childPriIdx, err := durable.ProllyMapFromIndex(postChild.RowData)
+	if err != nil {
+		return err
+	}
 	childPriKD, _ := childPriIdx.Descriptors()
 
-	var err error
 	// TODO: Determine whether we should surface every row as a diff when the map's value descriptor has changed.
 	considerAllRowsModified := false
 	err = prolly.DiffMaps(ctx, preParentSecIdx, postParentSecIdx, considerAllRowsModified, func(ctx context.Context, diff tree.Diff) error {
@@ -95,20 +105,32 @@ func prollyParentPriDiffFkConstraintViolations(
 	postParent, postChild *constraintViolationsLoadedTable,
 	preParentRowData prolly.Map,
 	receiver FKViolationReceiver) error {
-	postParentRowData := durable.ProllyMapFromIndex(postParent.RowData)
-	postParentIndexData := durable.ProllyMapFromIndex(postParent.IndexData)
+	postParentRowData, err := durable.ProllyMapFromIndex(postParent.RowData)
+	if err != nil {
+		return err
+	}
+	postParentIndexData, err := durable.ProllyMapFromIndex(postParent.IndexData)
+	if err != nil {
+		return err
+	}
 
 	idxDesc, _ := postParentIndexData.Descriptors()
 	partialDesc := idxDesc.PrefixDesc(len(foreignKey.TableColumns))
 	partialKB := val.NewTupleBuilder(partialDesc)
 
-	childPriIdx := durable.ProllyMapFromIndex(postChild.RowData)
-	childScndryIdx := durable.ProllyMapFromIndex(postChild.IndexData)
+	childPriIdx, err := durable.ProllyMapFromIndex(postChild.RowData)
+	if err != nil {
+		return err
+	}
+	childScndryIdx, err := durable.ProllyMapFromIndex(postChild.IndexData)
+	if err != nil {
+		return err
+	}
 	primaryKD, _ := childPriIdx.Descriptors()
 
 	// TODO: Determine whether we should surface every row as a diff when the map's value descriptor has changed.
 	considerAllRowsModified := false
-	err := prolly.DiffMaps(ctx, preParentRowData, postParentRowData, considerAllRowsModified, func(ctx context.Context, diff tree.Diff) error {
+	err = prolly.DiffMaps(ctx, preParentRowData, postParentRowData, considerAllRowsModified, func(ctx context.Context, diff tree.Diff) error {
 		switch diff.Type {
 		case tree.RemovedDiff, tree.ModifiedDiff:
 			partialKey, hadNulls := makePartialKey(partialKB, foreignKey.ReferencedTableColumns, postParent.Index, postParent.Schema, val.Tuple(diff.Key), val.Tuple(diff.From), preParentRowData.Pool())
@@ -159,8 +181,14 @@ func prollyChildPriDiffFkConstraintViolations(
 	postParent, postChild *constraintViolationsLoadedTable,
 	preChildRowData prolly.Map,
 	receiver FKViolationReceiver) error {
-	postChildRowData := durable.ProllyMapFromIndex(postChild.RowData)
-	parentScndryIdx := durable.ProllyMapFromIndex(postParent.IndexData)
+	postChildRowData, err := durable.ProllyMapFromIndex(postChild.RowData)
+	if err != nil {
+		return err
+	}
+	parentScndryIdx, err := durable.ProllyMapFromIndex(postParent.IndexData)
+	if err != nil {
+		return err
+	}
 
 	idxDesc, _ := parentScndryIdx.Descriptors()
 	partialDesc := idxDesc.PrefixDesc(len(foreignKey.TableColumns))
@@ -168,7 +196,7 @@ func prollyChildPriDiffFkConstraintViolations(
 
 	// TODO: Determine whether we should surface every row as a diff when the map's value descriptor has changed.
 	considerAllRowsModified := false
-	err := prolly.DiffMaps(ctx, preChildRowData, postChildRowData, considerAllRowsModified, func(ctx context.Context, diff tree.Diff) error {
+	err = prolly.DiffMaps(ctx, preChildRowData, postChildRowData, considerAllRowsModified, func(ctx context.Context, diff tree.Diff) error {
 		switch diff.Type {
 		case tree.AddedDiff, tree.ModifiedDiff:
 			k, v := val.Tuple(diff.Key), val.Tuple(diff.To)
@@ -207,9 +235,18 @@ func prollyChildSecDiffFkConstraintViolations(
 	postParent, postChild *constraintViolationsLoadedTable,
 	preChildSecIdx prolly.Map,
 	receiver FKViolationReceiver) error {
-	postChildRowData := durable.ProllyMapFromIndex(postChild.RowData)
-	postChildSecIdx := durable.ProllyMapFromIndex(postChild.IndexData)
-	parentSecIdx := durable.ProllyMapFromIndex(postParent.IndexData)
+	postChildRowData, err := durable.ProllyMapFromIndex(postChild.RowData)
+	if err != nil {
+		return err
+	}
+	postChildSecIdx, err := durable.ProllyMapFromIndex(postChild.IndexData)
+	if err != nil {
+		return err
+	}
+	parentSecIdx, err := durable.ProllyMapFromIndex(postParent.IndexData)
+	if err != nil {
+		return err
+	}
 
 	parentSecIdxDesc, _ := parentSecIdx.Descriptors()
 	prefixDesc := parentSecIdxDesc.PrefixDesc(len(foreignKey.TableColumns))
@@ -218,7 +255,7 @@ func prollyChildSecDiffFkConstraintViolations(
 
 	// TODO: Determine whether we should surface every row as a diff when the map's value descriptor has changed.
 	considerAllRowsModified := false
-	err := prolly.DiffMaps(ctx, preChildSecIdx, postChildSecIdx, considerAllRowsModified, func(ctx context.Context, diff tree.Diff) error {
+	err = prolly.DiffMaps(ctx, preChildSecIdx, postChildSecIdx, considerAllRowsModified, func(ctx context.Context, diff tree.Diff) error {
 		switch diff.Type {
 		case tree.AddedDiff, tree.ModifiedDiff:
 			k := val.Tuple(diff.Key)

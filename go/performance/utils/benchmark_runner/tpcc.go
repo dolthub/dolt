@@ -20,9 +20,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
-
-	"github.com/jmoiron/sqlx"
 )
 
 type tpccTesterImpl struct {
@@ -52,17 +49,6 @@ func NewTpccTester(config TpccConfig, serverConfig ServerConfig, test Test, serv
 
 func (t *tpccTesterImpl) outputToResult(output []byte) (*Result, error) {
 	return OutputToResult(output, t.serverConfig.GetServerType(), t.serverConfig.GetVersion(), t.test.GetName(), t.test.GetId(), t.suiteId, t.config.GetRuntimeOs(), t.config.GetRuntimeGoArch(), t.serverParams, t.test.GetParamsToSlice(), nil, false)
-}
-
-func (t *tpccTesterImpl) collectStats(ctx context.Context) error {
-	if strings.Contains(t.serverConfig.GetServerExec(), "dolt") && !strings.Contains(t.serverConfig.GetServerExec(), "doltgres") {
-		db, err := sqlx.Open("mysql", fmt.Sprintf("root:@tcp(%s:%d)/sbt", t.serverConfig.GetHost(), t.serverConfig.GetPort()))
-		if err != nil {
-			return err
-		}
-		return collectStats(ctx, db)
-	}
-	return nil
 }
 
 func (t *tpccTesterImpl) prepare(ctx context.Context) error {
@@ -116,10 +102,6 @@ func (t *tpccTesterImpl) cleanup(ctx context.Context) error {
 func (t *tpccTesterImpl) Test(ctx context.Context) (*Result, error) {
 	err := t.prepare(ctx)
 	if err != nil {
-		return nil, err
-	}
-
-	if err := t.collectStats(ctx); err != nil {
 		return nil, err
 	}
 

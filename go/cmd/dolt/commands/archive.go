@@ -310,8 +310,14 @@ func relateCommitToParentChunks(ctx context.Context, commit hash.Hash, groupings
 
 			from, to, err := delta.GetRowData(ctx)
 
-			f := durable.ProllyMapFromIndex(from)
-			t := durable.ProllyMapFromIndex(to)
+			f, err := durable.ProllyMapFromIndex(from)
+			if err != nil {
+				return err
+			}
+			t, err := durable.ProllyMapFromIndex(to)
+			if err != nil {
+				return err
+			}
 
 			if f.Node().Level() != t.Node().Level() {
 				continue

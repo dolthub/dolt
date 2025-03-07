@@ -61,9 +61,8 @@ require (
 	github.com/creasty/defaults v1.6.0
 	github.com/dolthub/aws-sdk-go-ini-parser v0.0.0-20250305001723-2821c37f6c12
 	github.com/dolthub/flatbuffers/v23 v23.3.3-dh.2
-	github.com/dolthub/go-mysql-server v0.19.1-0.20250305230031-14a57e076a0a
+	github.com/dolthub/go-mysql-server v0.19.1-0.20250307225029-44627388e856
 	github.com/dolthub/gozstd v0.0.0-20240423170813-23a2903bca63
-	github.com/dolthub/swiss v0.1.0
 	github.com/esote/minmaxheap v1.0.0
 	github.com/goccy/go-json v0.10.2
 	github.com/google/btree v1.1.2
@@ -96,7 +95,6 @@ require (
 	golang.org/x/exp v0.0.0-20230522175609-2e198f4a06a1
 	golang.org/x/text v0.21.0
 	gonum.org/v1/plot v0.11.0
-	gopkg.in/errgo.v2 v2.1.0
 	gopkg.in/go-jose/go-jose.v2 v2.6.3
 	gopkg.in/yaml.v3 v3.0.1
 )
@@ -132,7 +130,6 @@ require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/dolthub/go-icu-regex v0.0.0-20250303123116-549b8d7cad00 // indirect
 	github.com/dolthub/jsonpath v0.0.2-0.20240227200619-19675ab05c71 // indirect
-	github.com/dolthub/maphash v0.0.0-20221220182448-74e1e1ea1577 // indirect
 	github.com/go-fonts/liberation v0.2.0 // indirect
 	github.com/go-kit/kit v0.10.0 // indirect
 	github.com/go-latex/latex v0.0.0-20210823091927-c0d11ff05a81 // indirect

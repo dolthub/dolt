@@ -34,12 +34,20 @@ func (b *Buff[T]) Len() int {
 	return b.len
 }
 
+func (b *Buff[T]) Cap() int {
+	return cap(b.arr)
+}
+
 func (b *Buff[T]) At(i int) T {
+	return *b.at(i)
+}
+
+func (b *Buff[T]) at(i int) *T {
 	if i >= b.Len() {
 		panic("At on Buff too small")
 	}
 	j := (b.front + i) % len(b.arr)
-	return b.arr[j]
+	return &b.arr[j]
 }
 
 func (b *Buff[T]) Front() T {
@@ -50,6 +58,9 @@ func (b *Buff[T]) Pop() {
 	if b.Len() == 0 {
 		panic("Pop empty Buff")
 	}
+	// Don't leak entries...
+	var empty T
+	*b.at(0) = empty
 	b.front = (b.front + 1) % len(b.arr)
 	b.len -= 1
 }

@@ -36,7 +36,10 @@ func getPrimaryProllyWriter(ctx context.Context, t *doltdb.Table, schState *dses
 		return prollyIndexWriter{}, err
 	}
 
-	m := durable.ProllyMapFromIndex(idx)
+	m, err := durable.ProllyMapFromIndex(idx)
+	if err != nil {
+		return prollyIndexWriter{}, err
+	}
 
 	keyDesc, valDesc := m.Descriptors()
 
@@ -55,7 +58,10 @@ func getPrimaryKeylessProllyWriter(ctx context.Context, t *doltdb.Table, schStat
 		return prollyKeylessWriter{}, err
 	}
 
-	m := durable.ProllyMapFromIndex(idx)
+	m, err := durable.ProllyMapFromIndex(idx)
+	if err != nil {
+		return prollyKeylessWriter{}, err
+	}
 
 	keyDesc, valDesc := m.Descriptors()
 

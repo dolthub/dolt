@@ -16,6 +16,7 @@ package sqle
 
 import (
 	"math"
+	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
@@ -219,18 +220,18 @@ var DoltSystemVariables = []sql.SystemVariable{
 		Default: int8(1),
 	},
 	&sql.MysqlSystemVariable{
-		Name:    dsess.DoltStatsAutoRefreshEnabled,
+		Name:    dsess.DoltStatsEnabled,
 		Dynamic: true,
 		Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Global),
-		Type:    types.NewSystemBoolType(dsess.DoltStatsAutoRefreshEnabled),
-		Default: int8(0),
+		Type:    types.NewSystemBoolType(dsess.DoltStatsEnabled),
+		Default: int8(1),
 	},
 	&sql.MysqlSystemVariable{
-		Name:    dsess.DoltStatsBootstrapEnabled,
+		Name:    dsess.DoltStatsPaused,
 		Dynamic: true,
 		Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Global),
-		Type:    types.NewSystemBoolType(dsess.DoltStatsBootstrapEnabled),
-		Default: int8(0),
+		Type:    types.NewSystemBoolType(dsess.DoltStatsPaused),
+		Default: int8(1),
 	},
 	&sql.MysqlSystemVariable{
 		Name:    dsess.DoltStatsMemoryOnly,
@@ -240,18 +241,25 @@ var DoltSystemVariables = []sql.SystemVariable{
 		Default: int8(0),
 	},
 	&sql.MysqlSystemVariable{
-		Name:    dsess.DoltStatsAutoRefreshThreshold,
+		Name:    dsess.DoltStatsJobInterval,
 		Dynamic: true,
 		Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Global),
-		Type:    types.NewSystemDoubleType(dsess.DoltStatsAutoRefreshThreshold, 0, 10),
-		Default: float64(.5),
+		Type:    types.NewSystemIntType(dsess.DoltStatsJobInterval, 0, math.MaxInt, false),
+		Default: int64(30 * time.Millisecond / time.Millisecond),
 	},
 	&sql.MysqlSystemVariable{
-		Name:    dsess.DoltStatsAutoRefreshInterval,
+		Name:    dsess.DoltStatsGCInterval,
 		Dynamic: true,
 		Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Global),
-		Type:    types.NewSystemIntType(dsess.DoltStatsAutoRefreshInterval, 0, math.MaxInt, false),
-		Default: 600,
+		Type:    types.NewSystemIntType(dsess.DoltStatsGCInterval, 0, math.MaxInt, false),
+		Default: int64(time.Hour / time.Millisecond),
+	},
+	&sql.MysqlSystemVariable{
+		Name:    dsess.DoltStatsGCEnabled,
+		Dynamic: true,
+		Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Global),
+		Type:    types.NewSystemBoolType(dsess.DoltStatsGCEnabled),
+		Default: int8(1),
 	},
 	&sql.MysqlSystemVariable{
 		Name:    dsess.DoltStatsBranches,
@@ -446,18 +454,39 @@ func AddDoltSystemVariables() {
 			Default: int8(0),
 		},
 		&sql.MysqlSystemVariable{
-			Name:    dsess.DoltStatsAutoRefreshEnabled,
+			Name:    dsess.DoltStatsEnabled,
 			Dynamic: true,
 			Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Global),
-			Type:    types.NewSystemBoolType(dsess.DoltStatsAutoRefreshEnabled),
-			Default: int8(0),
+			Type:    types.NewSystemBoolType(dsess.DoltStatsEnabled),
+			Default: int8(1),
 		},
 		&sql.MysqlSystemVariable{
-			Name:    dsess.DoltStatsBootstrapEnabled,
+			Name:    dsess.DoltStatsPaused,
 			Dynamic: true,
 			Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Global),
-			Type:    types.NewSystemBoolType(dsess.DoltStatsBootstrapEnabled),
-			Default: int8(0),
+			Type:    types.NewSystemBoolType(dsess.DoltStatsPaused),
+			Default: int8(1),
+		},
+		&sql.MysqlSystemVariable{
+			Name:    dsess.DoltStatsGCInterval,
+			Dynamic: true,
+			Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Global),
+			Type:    types.NewSystemIntType(dsess.DoltStatsGCInterval, 0, math.MaxInt, false),
+			Default: int64(time.Hour / time.Millisecond),
+		},
+		&sql.MysqlSystemVariable{
+			Name:    dsess.DoltStatsGCEnabled,
+			Dynamic: true,
+			Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Global),
+			Type:    types.NewSystemBoolType(dsess.DoltStatsGCEnabled),
+			Default: int8(1),
+		},
+		&sql.MysqlSystemVariable{
+			Name:    dsess.DoltStatsJobInterval,
+			Dynamic: true,
+			Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Global),
+			Type:    types.NewSystemIntType(dsess.DoltStatsJobInterval, 0, math.MaxInt, false),
+			Default: int64(30 * time.Millisecond / time.Millisecond),
 		},
 		&sql.MysqlSystemVariable{
 			Name:    dsess.DoltStatsMemoryOnly,
@@ -465,20 +494,6 @@ func AddDoltSystemVariables() {
 			Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Global),
 			Type:    types.NewSystemBoolType(dsess.DoltStatsMemoryOnly),
 			Default: int8(0),
-		},
-		&sql.MysqlSystemVariable{
-			Name:    dsess.DoltStatsAutoRefreshThreshold,
-			Dynamic: true,
-			Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Global),
-			Type:    types.NewSystemDoubleType(dsess.DoltStatsAutoRefreshThreshold, 0, 10),
-			Default: float64(.5),
-		},
-		&sql.MysqlSystemVariable{
-			Name:    dsess.DoltStatsAutoRefreshInterval,
-			Dynamic: true,
-			Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Global),
-			Type:    types.NewSystemIntType(dsess.DoltStatsAutoRefreshInterval, 0, math.MaxInt, false),
-			Default: 120,
 		},
 		&sql.MysqlSystemVariable{
 			Name:    dsess.DoltStatsBranches,

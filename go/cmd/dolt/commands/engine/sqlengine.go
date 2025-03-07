@@ -16,7 +16,6 @@ package engine
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"strconv"
 	"strings"
@@ -45,17 +44,17 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/kvexec"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/mysql_file_handler"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statsnoms"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statspro"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/libraries/utils/valctx"
 )
 
 // SqlEngine packages up the context necessary to run sql queries against dsqle.
 type SqlEngine struct {
 	provider       sql.DatabaseProvider
-	contextFactory contextFactory
+	ContextFactory sql.ContextFactory
 	dsessFactory   sessionFactory
 	engine         *gms.Engine
 	fs             filesys.Filesys
@@ -201,10 +200,19 @@ func NewSqlEngine(
 		"authentication_dolt_jwt": NewAuthenticateDoltJWTPlugin(config.JwksConfig),
 	})
 
-	statsPro := statspro.NewProvider(pro, statsnoms.NewNomsStatsFactory(mrEnv.RemoteDialProvider()))
+	var statsPro sql.StatsProvider
+	_, enabled, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsEnabled)
+	if enabled.(int8) == 1 {
+		statsPro = statspro.NewStatsController(pro, sqlEngine.NewDefaultContext, logrus.StandardLogger(), mrEnv.GetEnv(mrEnv.GetFirstDatabase()))
+	} else {
+		statsPro = statspro.StatsNoop{}
+	}
 	engine.Analyzer.Catalog.StatsProvider = statsPro
 
 	if config.AutoGCController != nil {
+		// XXX: We enable context validation globally for the entire process when we contstruct
+		// an engine that uses auto gc controller.
+		valctx.EnableContextValidation()
 		err = config.AutoGCController.RunBackgroundThread(bThreads, sqlEngine.NewDefaultContext)
 		if err != nil {
 			return nil, err
@@ -219,7 +227,7 @@ func NewSqlEngine(
 	engine.Analyzer.ExecBuilder = rowexec.NewOverrideBuilder(kvexec.Builder{})
 	sessFactory := doltSessionFactory(pro, statsPro, mrEnv.Config(), bcController, gcSafepointController, config.Autocommit)
 	sqlEngine.provider = pro
-	sqlEngine.contextFactory = sqlContextFactory
+	sqlEngine.ContextFactory = sqlContextFactory
 	sqlEngine.dsessFactory = sessFactory
 	sqlEngine.engine = engine
 	sqlEngine.fs = pro.FileSystem()
@@ -236,8 +244,28 @@ func NewSqlEngine(
 
 	// configuring stats depends on sessionBuilder
 	// sessionBuilder needs ref to statsProv
-	if err = statsPro.Configure(ctx, sqlEngine.NewDefaultContext, bThreads, dbs); err != nil {
-		fmt.Fprintln(cli.CliErr, err)
+	if sc, ok := statsPro.(*statspro.StatsController); ok {
+		_, memOnly, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsMemoryOnly)
+		sc.SetMemOnly(memOnly.(int8) == 1)
+
+		pro.InitDatabaseHooks = append(pro.InitDatabaseHooks, statspro.NewInitDatabaseHook(sc))
+		pro.DropDatabaseHooks = append(pro.DropDatabaseHooks, statspro.NewDropDatabaseHook(sc))
+
+		var sqlDbs []sql.Database
+		for _, db := range dbs {
+			sqlDbs = append(sqlDbs, db)
+		}
+
+		err = sc.Init(ctx, sqlDbs)
+		if err != nil {
+			return nil, err
+		}
+
+		if _, paused, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsPaused); paused.(int8) == 0 {
+			if err = sc.Restart(); err != nil {
+				return nil, err
+			}
+		}
 	}
 
 	// Load MySQL Db information
@@ -258,7 +286,7 @@ func NewSqlEngine(
 	}
 
 	if engine.EventScheduler == nil {
-		err = configureEventScheduler(config, engine, sqlEngine.contextFactory, sessFactory, pro)
+		err = configureEventScheduler(config, engine, sqlEngine.ContextFactory, sessFactory, pro)
 		if err != nil {
 			return nil, err
 		}
@@ -270,7 +298,7 @@ func NewSqlEngine(
 			return nil, err
 		}
 
-		err = configureBinlogReplicaController(config, engine, sqlEngine.contextFactory, binLogSession)
+		err = configureBinlogReplicaController(config, engine, sqlEngine.ContextFactory, binLogSession)
 		if err != nil {
 			return nil, err
 		}
@@ -307,7 +335,7 @@ func (se *SqlEngine) Databases(ctx *sql.Context) []dsess.SqlDatabase {
 
 // NewContext returns a new sql.Context with the given session.
 func (se *SqlEngine) NewContext(ctx context.Context, session sql.Session) (*sql.Context, error) {
-	return se.contextFactory(ctx, session)
+	return se.ContextFactory(ctx, sql.WithSession(session)), nil
 }
 
 // NewDefaultContext returns a new sql.Context with a new default dolt session.
@@ -316,7 +344,7 @@ func (se *SqlEngine) NewDefaultContext(ctx context.Context) (*sql.Context, error
 	if err != nil {
 		return nil, err
 	}
-	return se.contextFactory(ctx, session)
+	return se.ContextFactory(ctx, sql.WithSession(session)), nil
 }
 
 // NewLocalContext returns a new |sql.Context| with its client set to |root|
@@ -368,15 +396,11 @@ func (se *SqlEngine) Close() error {
 }
 
 // configureBinlogReplicaController configures the binlog replication controller with the |engine|.
-func configureBinlogReplicaController(config *SqlEngineConfig, engine *gms.Engine, ctxFactory contextFactory, session *dsess.DoltSession) error {
-	executionCtx, err := ctxFactory(context.Background(), session)
-	if err != nil {
-		return err
-	}
+func configureBinlogReplicaController(config *SqlEngineConfig, engine *gms.Engine, ctxFactory sql.ContextFactory, session *dsess.DoltSession) error {
+	executionCtx := ctxFactory(context.Background(), sql.WithSession(session))
 	dblr.DoltBinlogReplicaController.SetExecutionContext(executionCtx)
 	dblr.DoltBinlogReplicaController.SetEngine(engine)
 	engine.Analyzer.Catalog.BinlogReplicaController = config.BinlogReplicaController
-
 	return nil
 }
 
@@ -394,14 +418,15 @@ func configureBinlogPrimaryController(engine *gms.Engine) error {
 
 // configureEventScheduler configures the event scheduler with the |engine| for executing events, a |sessFactory|
 // for creating sessions, and a DoltDatabaseProvider, |pro|.
-func configureEventScheduler(config *SqlEngineConfig, engine *gms.Engine, ctxFactory contextFactory, sessFactory sessionFactory, pro *dsqle.DoltDatabaseProvider) error {
-	// getCtxFunc is used to create new session with a new context for event scheduler.
+func configureEventScheduler(config *SqlEngineConfig, engine *gms.Engine, ctxFactory sql.ContextFactory, sessFactory sessionFactory, pro *dsqle.DoltDatabaseProvider) error {
+	// getCtxFunc is used to create new session context for event
+	// scheduler anytime it needs to access the database.
 	getCtxFunc := func() (*sql.Context, error) {
 		sess, err := sessFactory(sql.NewBaseSession(), pro)
 		if err != nil {
 			return nil, err
 		}
-		return ctxFactory(context.Background(), sess)
+		return ctxFactory(context.Background(), sql.WithSession(sess)), nil
 	}
 
 	// A hidden env var allows overriding the event scheduler period for testing. This option is not
@@ -422,10 +447,14 @@ func configureEventScheduler(config *SqlEngineConfig, engine *gms.Engine, ctxFac
 	return engine.InitializeEventScheduler(getCtxFunc, config.EventSchedulerStatus, eventSchedulerPeriod)
 }
 
-// sqlContextFactory returns a contextFactory that creates a new sql.Context with the given session
-func sqlContextFactory(ctx context.Context, session sql.Session) (*sql.Context, error) {
-	sqlCtx := sql.NewContext(ctx, sql.WithSession(session))
-	return sqlCtx, nil
+// sqlContextFactory returns a contextFactory that creates a new sql.Context with the initial database provided
+func sqlContextFactory(ctx context.Context, opts ...sql.ContextOption) *sql.Context {
+	ctx = valctx.WithContextValidation(ctx)
+	sqlCtx := sql.NewContext(ctx, opts...)
+	if sqlCtx.Session != nil {
+		valctx.SetContextValidation(ctx, sqlCtx.Session.(*dsess.DoltSession).Validate)
+	}
+	return sqlCtx
 }
 
 // doltSessionFactory returns a sessionFactory that creates a new DoltSession

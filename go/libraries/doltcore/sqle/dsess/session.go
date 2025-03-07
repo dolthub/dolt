@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"strconv"
 	"strings"
 	"sync"
@@ -963,6 +964,7 @@ func (d *DoltSession) ReleaseSavepoint(ctx *sql.Context, tx sql.Transaction, sav
 func (d *DoltSession) GetDoltDB(ctx *sql.Context, dbName string) (*doltdb.DoltDB, bool) {
 	branchState, ok, err := d.lookupDbState(ctx, dbName)
 	if err != nil {
+		log.Println("GetDoltDb error", err.Error())
 		return nil, false
 	}
 	if !ok {
@@ -1734,6 +1736,16 @@ func (d *DoltSession) CommandEnd() {
 	if d.gcSafepointController != nil {
 		d.gcSafepointController.SessionCommandEnd(d)
 	}
+}
+
+func (d *DoltSession) Validate() {
+	// If this gets called, valctx context validation is enabled and the
+	// purpose is to validate that this session is registered with an open
+	// command on our current gcSafepointController.
+	if d.gcSafepointController == nil {
+		panic("DoltSession.Validate called. Expected to have a gcSafepointController but did not.")
+	}
+	d.gcSafepointController.Validate(d)
 }
 
 func (d *DoltSession) SessionEnd() {

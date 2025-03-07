@@ -825,7 +825,10 @@ func newWorkspaceDiffIter(ctx *sql.Context, wp WorkspacePartition) (workspaceDif
 		if err != nil {
 			return workspaceDiffIter{}, err
 		}
-		base = durable.ProllyMapFromIndex(idx)
+		base, err = durable.ProllyMapFromIndex(idx)
+		if err != nil {
+			return workspaceDiffIter{}, err
+		}
 	}
 
 	if wp.staging != nil {
@@ -833,7 +836,10 @@ func newWorkspaceDiffIter(ctx *sql.Context, wp WorkspacePartition) (workspaceDif
 		if err != nil {
 			return workspaceDiffIter{}, err
 		}
-		staging = durable.ProllyMapFromIndex(idx)
+		staging, err = durable.ProllyMapFromIndex(idx)
+		if err != nil {
+			return workspaceDiffIter{}, err
+		}
 	}
 
 	if wp.working != nil {
@@ -841,7 +847,10 @@ func newWorkspaceDiffIter(ctx *sql.Context, wp WorkspacePartition) (workspaceDif
 		if err != nil {
 			return workspaceDiffIter{}, err
 		}
-		working = durable.ProllyMapFromIndex(idx)
+		working, err = durable.ProllyMapFromIndex(idx)
+		if err != nil {
+			return workspaceDiffIter{}, err
+		}
 	}
 
 	var nodeStore tree.NodeStore

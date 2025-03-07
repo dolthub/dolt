@@ -517,7 +517,10 @@ func SqlRowsFromDurableIndex(idx durable.Index, sch schema.Schema) ([]sql.Row, e
 	ctx := context.Background()
 	var sqlRows []sql.Row
 	if types.Format_Default == types.Format_DOLT {
-		rowData := durable.ProllyMapFromIndex(idx)
+		rowData, err := durable.ProllyMapFromIndex(idx)
+		if err != nil {
+			return nil, err
+		}
 		kd, vd := rowData.Descriptors()
 		iter, err := rowData.IterAll(ctx)
 		if err != nil {

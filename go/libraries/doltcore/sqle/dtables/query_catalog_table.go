@@ -236,7 +236,10 @@ func newQueryCatalogEntryProlly(ctx context.Context, tbl *doltdb.Table, id, name
 	if err != nil {
 		return SavedQuery{}, nil, err
 	}
-	m := durable.ProllyMapFromIndex(idx)
+	m, err := durable.ProllyMapFromIndex(idx)
+	if err != nil {
+		return SavedQuery{}, nil, err
+	}
 
 	existingSQ, err := retrieveFromQueryCatalogProlly(ctx, tbl, id)
 	if err != nil && !ErrQueryNotFound.Is(err) {
@@ -312,7 +315,11 @@ func retrieveFromQueryCatalogProlly(ctx context.Context, tbl *doltdb.Table, id s
 		return SavedQuery{}, err
 	}
 
-	m := durable.ProllyMapFromIndex(idx)
+	m, err := durable.ProllyMapFromIndex(idx)
+	if err != nil {
+		return SavedQuery{}, err
+	}
+
 	kb := val.NewTupleBuilder(catalogKd)
 	kb.PutString(0, id)
 	k := kb.Build(m.Pool())
