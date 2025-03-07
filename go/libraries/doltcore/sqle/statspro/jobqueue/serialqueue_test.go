@@ -166,15 +166,18 @@ func TestSerialQueue(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		queue := NewSerialQueue()
 		var wg sync.WaitGroup
+		start := make(chan struct{})
 		wg.Add(1)
 		go func() error {
 			defer wg.Done()
+			close(start)
 			queue.Run(ctx)
 			return nil
 		}()
+		<-start
 		var cnt int
 		for i := 0; i < 16; i++ {
-			// Some of these calls my error, since the queue
+			// Some of these calls may error, since the queue
 			// will be stopped asynchronously.
 			queue.DoAsync(func() error {
 				cnt += 1
@@ -189,13 +192,16 @@ func TestSerialQueue(t *testing.T) {
 	t.Run("PauseFromQueue", func(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		queue := NewSerialQueue()
+		start := make(chan struct{})
 		var wg sync.WaitGroup
 		wg.Add(1)
 		go func() error {
 			defer wg.Done()
+			close(start)
 			queue.Run(ctx)
 			return nil
 		}()
+		<-start
 		var cnt int
 		for i := 0; i < 16; i++ {
 			err := queue.DoAsync(func() error {
@@ -214,11 +220,13 @@ func TestSerialQueue(t *testing.T) {
 		queue := NewSerialQueue()
 		var wg sync.WaitGroup
 		wg.Add(1)
+		start := make(chan struct{})
 		go func() error {
 			defer wg.Done()
 			queue.Run(ctx)
 			return nil
 		}()
+		<-start
 		assert.NoError(t, queue.Pause())
 		var cnt int
 		didRun := make(chan struct{})
@@ -241,13 +249,17 @@ func TestSerialQueue(t *testing.T) {
 	t.Run("DoSyncInQueueDeadlockWithContext", func(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		queue := NewSerialQueue()
+		start := make(chan struct{})
+
 		var wg sync.WaitGroup
 		wg.Add(1)
 		go func() error {
 			defer wg.Done()
+			close(start)
 			queue.Run(ctx)
 			return nil
 		}()
+		<-start
 		var cnt int
 		err := queue.DoSync(context.Background(), func() error {
 			cnt += 1
@@ -270,13 +282,16 @@ func TestSerialQueue(t *testing.T) {
 	t.Run("SyncReturnsErrCompletedQueueAfterWorkAccepted", func(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		queue := NewSerialQueue()
+		start := make(chan struct{})
 		var wg sync.WaitGroup
 		wg.Add(1)
 		go func() error {
 			defer wg.Done()
+			close(start)
 			queue.Run(ctx)
 			return nil
 		}()
+		<-start
 		queue.Pause()
 		var err error
 		var ran bool
