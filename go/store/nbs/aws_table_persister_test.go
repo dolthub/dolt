@@ -29,10 +29,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/request"
-	"github.com/aws/aws-sdk-go/service/s3"
-	"github.com/aws/aws-sdk-go/service/s3/s3iface"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -191,12 +188,12 @@ type failingFakeS3 struct {
 	numSuccesses int
 }
 
-func (m *failingFakeS3) UploadPartWithContext(ctx aws.Context, input *s3.UploadPartInput, opts ...request.Option) (*s3.UploadPartOutput, error) {
+func (m *failingFakeS3) UploadPart(ctx context.Context, input *s3.UploadPartInput, opts ...func(*s3.Options)) (*s3.UploadPartOutput, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.numSuccesses > 0 {
 		m.numSuccesses--
-		return m.fakeS3.UploadPartWithContext(ctx, input)
+		return m.fakeS3.UploadPart(ctx, input)
 	}
 	return nil, mockAWSError("MalformedXML")
 }
@@ -277,7 +274,7 @@ func TestAWSTablePersisterConjoinAll(t *testing.T) {
 	rl := make(chan struct{}, 8)
 	defer close(rl)
 
-	newPersister := func(s3svc s3iface.S3API) awsTablePersister {
+	newPersister := func(s3svc S3APIV2) awsTablePersister {
 		return awsTablePersister{
 			s3svc,
 			"bucket",
