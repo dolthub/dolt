@@ -91,8 +91,8 @@ There is a workflow to writing an archive:
 
 // newArchiveWriter creates a new archiveWriter. Output is written to a temp file, as the file name won't be known
 // until we've finished writing the footer.
-func newArchiveWriter() (*archiveWriter, error) {
-	bs, err := NewBufferedFileByteSink("", defaultTableSinkBlockSize, defaultChBufferSize)
+func newArchiveWriter(tmpDir string) (*archiveWriter, error) {
+	bs, err := NewBufferedFileByteSink(tmpDir, defaultTableSinkBlockSize, defaultChBufferSize)
 	if err != nil {
 		return nil, err
 	}
@@ -537,8 +537,8 @@ type ArchiveStreamWriter struct {
 	chunkCount  *int32
 }
 
-func NewArchiveStreamWriter() (*ArchiveStreamWriter, error) {
-	writer, err := newArchiveWriter()
+func NewArchiveStreamWriter(tmpDir string) (*ArchiveStreamWriter, error) {
+	writer, err := newArchiveWriter(tmpDir)
 	if err != nil {
 		return nil, err
 	}
@@ -575,18 +575,18 @@ func (asw *ArchiveStreamWriter) ChunkCount() int {
 	return int(atomic.LoadInt32(asw.chunkCount))
 }
 
-func (asw *ArchiveStreamWriter) AddChunk(chunker ToChunker) error {
+func (asw *ArchiveStreamWriter) AddChunk(chunker ToChunker) (uint32, error) {
 	if cc, ok := chunker.(CompressedChunk); ok {
 		return asw.writeCompressedChunk(cc)
 	}
 	if ac, ok := chunker.(ArchiveToChunker); ok {
 		return asw.writeArchiveToChunker(ac)
 	}
-	return fmt.Errorf("Unknown chunk type: %T", chunker)
+	return 0, fmt.Errorf("Unknown chunk type: %T", chunker)
 }
 
 func (asw *ArchiveStreamWriter) ContentLength() uint64 {
-	return asw.writer.bytesWritten
+	return asw.writer.md5Summer.Size()
 }
 
 func (asw *ArchiveStreamWriter) GetMD5() []byte {
@@ -597,8 +597,10 @@ func (asw *ArchiveStreamWriter) Remove() error {
 	return os.Remove(asw.writer.finalPath)
 }
 
-func (asw *ArchiveStreamWriter) writeArchiveToChunker(chunker ArchiveToChunker) error {
+func (asw *ArchiveStreamWriter) writeArchiveToChunker(chunker ArchiveToChunker) (uint32, error) {
 	dict := chunker.dict
+
+	bytesWritten := uint32(0)
 
 	var err error
 	dictId, ok := asw.dictMap[dict]
@@ -618,6 +620,7 @@ func (asw *ArchiveStreamWriter) writeArchiveToChunker(chunker ArchiveToChunker) 
 			if err != nil {
 				return err
 			}
+			bytesWritten += uint32(len(*dict.rawDictionary))
 			asw.dictMap[dict] = dictId
 			return nil
 		}()
@@ -625,18 +628,20 @@ func (asw *ArchiveStreamWriter) writeArchiveToChunker(chunker ArchiveToChunker) 
 
 	dataId, err := asw.writer.writeByteSpan(chunker.chunkData)
 	if err != nil {
-		return err
+		return bytesWritten, err
 	}
+	bytesWritten += uint32(len(chunker.chunkData))
 
 	atomic.AddInt32(asw.chunkCount, 1)
-	return asw.writer.stageZStdChunk(chunker.Hash(), dictId, dataId)
+	return bytesWritten, asw.writer.stageZStdChunk(chunker.Hash(), dictId, dataId)
 }
 
-func (asw *ArchiveStreamWriter) writeCompressedChunk(chunker CompressedChunk) error {
+func (asw *ArchiveStreamWriter) writeCompressedChunk(chunker CompressedChunk) (uint32, error) {
+	writeCount := uint32(len(chunker.FullCompressedChunk))
 	dataId, err := asw.writer.writeByteSpan(chunker.FullCompressedChunk)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	atomic.AddInt32(asw.chunkCount, 1)
-	return asw.writer.stageSnappyChunk(chunker.Hash(), dataId)
+	return writeCount, asw.writer.stageSnappyChunk(chunker.Hash(), dataId)
 }

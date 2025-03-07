@@ -68,7 +68,7 @@ func UnArchive(ctx context.Context, cs chunks.ChunkStore, smd StorageMetadata, p
 
 					err = arc.iterate(ctx, func(chk chunks.Chunk) error {
 						cmpChk := ChunkToCompressedChunk(chk)
-						err := classicTable.AddChunk(cmpChk)
+						_, err := classicTable.AddChunk(cmpChk)
 						if err != nil {
 							return err
 						}
@@ -233,7 +233,7 @@ func convertTableFileToArchive(
 	cmpBuff = gozstd.Compress(cmpBuff[:0], defaultDict)
 	// p("Default Dict Raw vs Compressed: %d , %d\n", len(defaultDict), len(cmpDefDict))
 
-	arcW, err := newArchiveWriter()
+	arcW, err := newArchiveWriter("")
 	if err != nil {
 		return "", hash.Hash{}, err
 	}

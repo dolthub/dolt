@@ -18,6 +18,7 @@ import (
 	"crypto/sha512"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	gohash "hash"
 	"io"
 	"os"
@@ -38,9 +39,11 @@ type GenericTableWriter interface {
 	// ChunkCount returns the number of chunks written to the table file. This can be called before Finish to determine
 	// if the maximum number of chunks has been reached.
 	ChunkCount() int
-	// AddChunk adds a chunk to the table file. The underlying implementation of ToChunker will probably be exploided
+	// AddChunk adds a chunk to the table file. The underlying implementation of ToChunker will probably be exploited
 	// by implementors of GenericTableWriter so that their bytes can be efficiently written to the table file.
-	AddChunk(ToChunker) error
+	//
+	// If no error occurs, the number of bytes written to the store is returned.
+	AddChunk(ToChunker) (uint32, error)
 	// ContentLength returns the number of bytes written to the table file. This can be called before Finish to determine
 	// if the file is too large.
 	ContentLength() uint64
@@ -65,7 +68,6 @@ var ErrDuplicateChunkWritten = errors.New("duplicate chunks written")
 // CmpChunkTableWriter writes CompressedChunks to a table file
 type CmpChunkTableWriter struct {
 	sink                  *HashingByteSink
-	totalCompressedData   uint64
 	totalUncompressedData uint64
 	prefixes              prefixIndexSlice
 	blockAddr             *hash.Hash
@@ -81,7 +83,7 @@ func NewCmpChunkTableWriter(tempDir string) (*CmpChunkTableWriter, error) {
 		return nil, err
 	}
 
-	return &CmpChunkTableWriter{NewMD5HashingByteSink(s), 0, 0, nil, nil, s.path}, nil
+	return &CmpChunkTableWriter{NewMD5HashingByteSink(s), 0, nil, nil, s.path}, nil
 }
 
 func (tw *CmpChunkTableWriter) ChunkCount() int {
@@ -99,12 +101,12 @@ func (tw *CmpChunkTableWriter) GetMD5() []byte {
 }
 
 // AddCmpChunk adds a compressed chunk
-func (tw *CmpChunkTableWriter) AddChunk(tc ToChunker) error {
+func (tw *CmpChunkTableWriter) AddChunk(tc ToChunker) (uint32, error) {
 	if tc.IsGhost() {
 		// Ghost chunks cannot be written to a table file. They should
 		// always be filtered by the write processes before landing
 		// here.
-		return ErrGhostChunkRequested
+		return 0, ErrGhostChunkRequested
 	}
 	if tc.IsEmpty() {
 		panic("NBS blocks cannot be zero length")
@@ -112,33 +114,41 @@ func (tw *CmpChunkTableWriter) AddChunk(tc ToChunker) error {
 
 	c, ok := tc.(CompressedChunk)
 	if !ok {
-		panic("runtime error: Require a CompressedChunk instance")
+		if arc, ok := tc.(ArchiveToChunker); ok {
+			// Decompress, and recompress since we can only write snappy compressed objects to this store.
+			chk, err := arc.ToChunk()
+			if err != nil {
+				return 0, err
+			}
+			c = ChunkToCompressedChunk(chk)
+		} else {
+			panic(fmt.Sprintf("Unknown chunk type: %T", tc))
+		}
 	}
 
 	uncmpLen, err := snappy.DecodedLen(c.CompressedData)
 
 	if err != nil {
-		return err
+		return 0, err
 	}
 
-	fullLen := len(c.FullCompressedChunk)
+	fullLen := uint32(len(c.FullCompressedChunk))
 	_, err = tw.sink.Write(c.FullCompressedChunk)
 
 	if err != nil {
-		return err
+		return 0, err
 	}
 
-	tw.totalCompressedData += uint64(len(c.CompressedData))
 	tw.totalUncompressedData += uint64(uncmpLen)
 
 	// Stored in insertion order
 	tw.prefixes = append(tw.prefixes, prefixIndexRec{
 		c.H,
 		uint32(len(tw.prefixes)),
-		uint32(fullLen),
+		fullLen,
 	})
 
-	return nil
+	return fullLen, nil
 }
 
 // Finish will write the index and footer of the table file and return the id of the file.

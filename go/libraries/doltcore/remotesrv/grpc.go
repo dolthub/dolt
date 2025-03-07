@@ -418,7 +418,7 @@ func (rs *RemoteChunkStore) GetUploadLocations(ctx context.Context, req *remotes
 }
 
 func (rs *RemoteChunkStore) getUploadUrl(md metadata.MD, repoPath string, tfd *remotesapi.TableFileDetails) *url.URL {
-	fileID := hash.New(tfd.Id).String()
+	fileID := hash.New(tfd.Id).String() + tfd.Suffix
 	params := url.Values{}
 	params.Add("num_chunks", strconv.Itoa(int(tfd.NumChunks)))
 	params.Add("content_length", strconv.Itoa(int(tfd.ContentLength)))

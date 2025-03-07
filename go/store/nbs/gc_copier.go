@@ -57,7 +57,8 @@ func newGarbageCollectionCopier(tfp tableFilePersister) (*gcCopier, error) {
 }
 
 func (gcc *gcCopier) addChunk(ctx context.Context, c ToChunker) error {
-	return gcc.writer.AddChunk(c)
+	_, err := gcc.writer.AddChunk(c)
+	return err
 }
 
 // If the writer should be closed and deleted, instead of being used with

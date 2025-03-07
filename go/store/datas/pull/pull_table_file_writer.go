@@ -17,6 +17,8 @@ package pull
 import (
 	"context"
 	"io"
+	"os"
+	"strings"
 	"sync"
 	"sync/atomic"
 
@@ -54,7 +56,7 @@ import (
 type PullTableFileWriter struct {
 	cfg PullTableFileWriterConfig
 
-	addChunkCh  chan nbs.CompressedChunk
+	addChunkCh  chan nbs.ToChunker
 	newWriterCh chan nbs.GenericTableWriter
 	egCtx       context.Context
 	eg          *errgroup.Group
@@ -99,7 +101,7 @@ type PullTableFileWriterStats struct {
 func NewPullTableFileWriter(ctx context.Context, cfg PullTableFileWriterConfig) *PullTableFileWriter {
 	ret := &PullTableFileWriter{
 		cfg:         cfg,
-		addChunkCh:  make(chan nbs.CompressedChunk),
+		addChunkCh:  make(chan nbs.ToChunker),
 		newWriterCh: make(chan nbs.GenericTableWriter, cfg.MaximumBufferedFiles),
 		getAddrs:    cfg.GetAddrs,
 	}
@@ -124,7 +126,7 @@ func (w *PullTableFileWriter) GetStats() PullTableFileWriterStats {
 // This method may block for arbitrary amounts of time if there is already a
 // lot of buffered table files and we are waiting for uploads to succeed before
 // creating more table files.
-func (w *PullTableFileWriter) AddCompressedChunk(ctx context.Context, chk nbs.CompressedChunk) error {
+func (w *PullTableFileWriter) AddToChunker(ctx context.Context, chk nbs.ToChunker) error {
 	select {
 	case w.addChunkCh <- chk:
 		return nil
@@ -169,7 +171,12 @@ func (w *PullTableFileWriter) uploadAndFinalizeThread() (err error) {
 	go func() {
 		defer manifestWg.Done()
 		for ttf := range respCh {
-			manifestUpdates[ttf.id] = ttf.numChunks
+			id := ttf.id
+			if strings.HasSuffix(id, nbs.ArchiveFileSuffix) {
+				id = id[:len(id)-len(nbs.ArchiveFileSuffix)]
+			}
+
+			manifestUpdates[id] = ttf.numChunks
 		}
 	}()
 
@@ -235,19 +242,23 @@ LOOP:
 			}
 
 			if curWr == nil {
-				// curWr, err = nbs.NewCmpChunkTableWriter(w.cfg.TempDir)
-				curWr, err = nbs.NewArchiveStreamWriter()
+				if os.Getenv("DOLT_ARCHIVE_PULL_STREAMER") != "" {
+					curWr, err = nbs.NewArchiveStreamWriter(w.cfg.TempDir)
+				} else {
+					curWr, err = nbs.NewCmpChunkTableWriter(w.cfg.TempDir)
+				}
 				if err != nil {
 					return err
 				}
 			}
 
 			// Add the chunk to writer.
-			err = curWr.AddChunk(newChnk)
+			bytes, err := curWr.AddChunk(newChnk)
 			if err != nil {
 				return err
 			}
-			atomic.AddUint64(&w.bufferedSendBytes, uint64(len(newChnk.FullCompressedChunk)))
+
+			atomic.AddUint64(&w.bufferedSendBytes, uint64(bytes))
 		}
 	}
 
