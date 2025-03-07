@@ -24,12 +24,13 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/dolthub/dolt/go/store/chunks"
-	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/gozstd"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
+
+	"github.com/dolthub/dolt/go/store/chunks"
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 // There are many tests which don't actually use the dictionary to compress. But some dictionary is required, so
