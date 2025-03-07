@@ -127,6 +127,7 @@ type UserSessionVars struct {
 // YAMLConfig is a ServerConfig implementation which is read from a yaml file
 type YAMLConfig struct {
 	LogLevelStr       *string                `yaml:"log_level,omitempty"`
+	LogFormatStr      *string                `yaml:"log_format,omitempty" minver:"TBD"`
 	MaxQueryLenInLogs *int                   `yaml:"max_logged_query_len,omitempty"`
 	EncodeLoggedQuery *bool                  `yaml:"encode_logged_query,omitempty"`
 	BehaviorConfig    BehaviorYAMLConfig     `yaml:"behavior,omitempty"`
@@ -181,6 +182,7 @@ func ServerConfigAsYAMLConfig(cfg ServerConfig) *YAMLConfig {
 	autoGCBehavior := toAutoGCBehaviorYAML(cfg.AutoGCBehavior())
 	return &YAMLConfig{
 		LogLevelStr:       ptr(string(cfg.LogLevel())),
+		LogFormatStr:      ptr(string(cfg.LogFormat())),
 		MaxQueryLenInLogs: nillableIntPtr(cfg.MaxLoggedQueryLen()),
 		EncodeLoggedQuery: nillableBoolPtr(cfg.ShouldEncodeLoggedQuery()),
 		BehaviorConfig: BehaviorYAMLConfig{
@@ -251,6 +253,7 @@ func ServerConfigSetValuesAsYAMLConfig(cfg ServerConfig) *YAMLConfig {
 
 	return &YAMLConfig{
 		LogLevelStr:       zeroIf(ptr(string(cfg.LogLevel())), !cfg.ValueSet(LogLevelKey)),
+		LogFormatStr:      zeroIf(ptr(string(cfg.LogFormat())), !cfg.ValueSet(LogFormatKey)),
 		MaxQueryLenInLogs: zeroIf(ptr(cfg.MaxLoggedQueryLen()), !cfg.ValueSet(MaxLoggedQueryLenKey)),
 		EncodeLoggedQuery: zeroIf(ptr(cfg.ShouldEncodeLoggedQuery()), !cfg.ValueSet(ShouldEncodeLoggedQueryKey)),
 		BehaviorConfig: BehaviorYAMLConfig{
@@ -452,6 +455,9 @@ func (cfg YAMLConfig) withDefaultsFilledIn() YAMLConfig {
 	if withDefaults.LogLevelStr == nil {
 		withDefaults.LogLevelStr = defaults.LogLevelStr
 	}
+	if withDefaults.LogFormatStr == nil {
+		withDefaults.LogFormatStr = defaults.LogFormatStr
+	}
 	if withDefaults.MaxQueryLenInLogs == nil {
 		withDefaults.MaxQueryLenInLogs = defaults.MaxQueryLenInLogs
 	}
@@ -467,6 +473,9 @@ func (cfg YAMLConfig) withDefaultsFilledIn() YAMLConfig {
 	}
 	if withDefaults.BehaviorConfig.DoltTransactionCommit == nil {
 		withDefaults.BehaviorConfig.DoltTransactionCommit = defaults.BehaviorConfig.DoltTransactionCommit
+	}
+	if withDefaults.BehaviorConfig.AutoGCBehavior == nil {
+		withDefaults.BehaviorConfig.AutoGCBehavior = defaults.BehaviorConfig.AutoGCBehavior
 	}
 
 	if withDefaults.ListenerConfig.HostStr == nil {
@@ -630,6 +639,15 @@ func (cfg YAMLConfig) LogLevel() LogLevel {
 	}
 
 	return LogLevel(*cfg.LogLevelStr)
+}
+
+// LogFormatStr returns the log format that the server will use.
+func (cfg YAMLConfig) LogFormat() LogFormat {
+	if cfg.LogFormatStr == nil {
+		return DefaultLogFormat
+	}
+
+	return LogFormat(*cfg.LogFormatStr)
 }
 
 // MaxConnections returns the maximum number of simultaneous connections the server will allow.  The default is 1

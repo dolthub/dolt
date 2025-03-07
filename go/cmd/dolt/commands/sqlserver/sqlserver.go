@@ -43,6 +43,7 @@ const (
 	timeoutFlag                 = "timeout"
 	readonlyFlag                = "readonly"
 	logLevelFlag                = "loglevel"
+	logFormatFlag               = "logformat"
 	noAutoCommitFlag            = "no-auto-commit"
 	configFileFlag              = "config"
 	queryParallelismFlag        = "query-parallelism"
@@ -84,6 +85,8 @@ SUPPORTED CONFIG FILE FIELDS:
 
 {{.EmphasisLeft}}log_level{{.EmphasisRight}}: Level of logging provided. Options are: {{.EmphasisLeft}}trace{{.EmphasisRight}}, {{.EmphasisLeft}}debug{{.EmphasisRight}}, {{.EmphasisLeft}}info{{.EmphasisRight}}, {{.EmphasisLeft}}warning{{.EmphasisRight}}, {{.EmphasisLeft}}error{{.EmphasisRight}}, and {{.EmphasisLeft}}fatal{{.EmphasisRight}}.
 
+{{.EmphasisLeft}}log_format{{.EmphasisRight}}: Format of logging provided. Options are: {{.EmphasisLeft}}text{{.EmphasisRight}}, {{.EmphasisLeft}}json{{.EmphasisRight}}.
+
 {{.EmphasisLeft}}privilege_file{{.EmphasisRight}}: "Path to a file to load and store users and grants. Defaults to {{.EmphasisLeft}}$doltcfg-dir/privileges.db{{.EmphasisRight}}. Will be created automatically if it doesn't exist.
 
 {{.EmphasisLeft}}branch_control_file{{.EmphasisRight}}: Path to a file to load and store branch control permissions. Defaults to {{.EmphasisLeft}}$doltcfg-dir/branch_control.db{{.EmphasisRight}}. Will be created as needed.
@@ -95,6 +98,8 @@ SUPPORTED CONFIG FILE FIELDS:
 {{.EmphasisLeft}}behavior.autocommit{{.EmphasisRight}}: If true every statement is committed automatically. Defaults to true. @@autocommit can also be specified in each session.
 
 {{.EmphasisLeft}}behavior.dolt_transaction_commit{{.EmphasisRight}}: If true all SQL transaction commits will automatically create a Dolt commit, with a generated commit message. This is useful when a system working with Dolt wants to create versioned data, but doesn't want to directly use Dolt features such as dolt_commit(). 
+
+{{.EmphasisLeft}}behavior.auto_gc_behavior.enabled{{.EmphasisRight}}: If true, garbage collection will run automatically in the background. 
 
 {{.EmphasisLeft}}listener.host{{.EmphasisRight}}: The host address that the server will run on.  This may be {{.EmphasisLeft}}localhost{{.EmphasisRight}} or an IPv4 or IPv6 address
 
@@ -167,6 +172,7 @@ func (cmd SqlServerCmd) ArgParserWithName(name string) *argparser.ArgParser {
 	ap.SupportsInt(timeoutFlag, "t", "connection timeout", fmt.Sprintf("Defines the timeout, in seconds, used for connections\nA value of `0` represents an infinite timeout. Defaults to `%v`.", serverConfig.ReadTimeout()))
 	ap.SupportsFlag(readonlyFlag, "r", "Disable modification of the database.")
 	ap.SupportsString(logLevelFlag, "l", "log level", fmt.Sprintf("Defines the level of logging provided\nOptions are: `trace`, `debug`, `info`, `warning`, `error`, `fatal`. Defaults to `%v`.", serverConfig.LogLevel()))
+	ap.SupportsString(logFormatFlag, "f", "log format", fmt.Sprintf("Defines the output format of the server log\nOptions are: `text`, `json`. Defaults to `%v`.", serverConfig.LogFormat()))
 	ap.SupportsString(commands.DataDirFlag, "", "directory", "Defines a directory to find databases to serve. Defaults to the current directory.")
 	ap.SupportsString(commands.MultiDBDirFlag, "", "directory", "Deprecated, use `--data-dir` instead.")
 	ap.SupportsString(commands.CfgDirFlag, "", "directory", "Defines a directory that contains non-database storage for dolt. Defaults to `$data-dir/.doltcfg`. Will be created automatically as needed.")
@@ -265,7 +271,13 @@ func StartServer(ctx context.Context, versionStr, commandStr string, args []stri
 	cli.Printf("Starting server with Config %v\n", servercfg.ConfigInfo(serverConfig))
 
 	skipRootUserInitialization := apr.Contains(skipRootUserInitialization)
-	startError, closeError := Serve(ctx, versionStr, serverConfig, controller, dEnv, skipRootUserInitialization)
+	startError, closeError := Serve(ctx, &Config{
+		Version:          versionStr,
+		ServerConfig:     serverConfig,
+		Controller:       controller,
+		DoltEnv:          dEnv,
+		SkipRootUserInit: skipRootUserInitialization,
+	})
 	if startError != nil {
 		return startError
 	}

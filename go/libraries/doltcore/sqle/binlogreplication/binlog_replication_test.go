@@ -932,6 +932,15 @@ func (h *harness) startMySqlServer() (int, *os.Process, error) {
 
 	h.mySqlPort = findFreePort()
 
+	// Log the mysqld version
+	versionCmd := exec.CommandContext(commandCtx, "mysqld", "--version")
+	versionCmd.Dir = dir
+	output, err := versionCmd.CombinedOutput()
+	if err != nil {
+		return -1, nil, fmt.Errorf("unable to execute command %v: %v – %v", versionCmd.String(), err.Error(), string(output))
+	}
+	h.t.Logf("mysqld version: %s", output)
+
 	// MySQL will NOT start up as the root user, so if we're running as root
 	// (e.g. in a CI env), use the "mysql" user instead.
 	user, err := user.Current()
