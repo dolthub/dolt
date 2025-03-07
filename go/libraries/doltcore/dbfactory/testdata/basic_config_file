@@ -1,0 +1,5 @@
+[profile load_from_file]
+region = il-central-1
+
+[profile default]
+region = eu-central-1
