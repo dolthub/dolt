@@ -40,7 +40,7 @@ type archiveReader struct {
 	chunkRefs []uint32 // Pairs of uint32s. First is the dict id, second is the data id.
 	suffixes  []byte
 	footer    archiveFooter
-	dictCache *lru.TwoQueueCache[uint32, *gozstd.DDict]
+	dictCache *lru.TwoQueueCache[uint32, *DecompBundle]
 }
 
 type suffix [hash.SuffixLen]byte
@@ -110,7 +110,7 @@ func newArchiveMetadata(ctx context.Context, reader tableReaderAt, fileSize uint
 		return nil, err
 	}
 
-	if footer.formatVersion != archiveFormatVersion {
+	if footer.formatVersion > archiveFormatVersionMax {
 		return nil, ErrInvalidFormatVersion
 	}
 
@@ -192,7 +192,7 @@ func buildArchiveReader(ctx context.Context, reader tableReaderAt, footer archiv
 		return archiveReader{}, err
 	}
 
-	dictCache, err := lru.New2Q[uint32, *gozstd.DDict](256)
+	dictCache, err := lru.New2Q[uint32, *DecompBundle](256)
 	if err != nil {
 		return archiveReader{}, err
 	}
@@ -258,8 +258,8 @@ func buildFooter(fileSize uint64, buf []byte) (f archiveFooter, err error) {
 		err = ErrInvalidFileSignature
 		return
 	}
-	// Verify Format Version. Currently only one version is supported, but we'll need to be more flexible in the future.
-	if f.formatVersion != archiveFormatVersion {
+	// Verify Format Version. 1 and 2 supported.
+	if f.formatVersion > archiveFormatVersionMax {
 		err = ErrInvalidFormatVersion
 		return
 	}
@@ -309,12 +309,25 @@ func (ar archiveReader) get(ctx context.Context, hash hash.Hash, stats *Stats) (
 	if err != nil || data == nil {
 		return nil, err
 	}
+
 	if dict == nil {
+		if ar.footer.formatVersion >= archiveVersionSnappySupport {
+			// Snappy compression format. The data is compressed with a checksum at the end.
+			cc, err := NewCompressedChunk(hash, data)
+			if err != nil {
+				return nil, err
+			}
+			chk, err := cc.ToChunk()
+			if err != nil {
+				return nil, err
+			}
+			return chk.Data(), nil
+		}
 		return nil, errors.New("runtime error: unable to get archived chunk. dictionary is nil")
 	}
 
 	var result []byte
-	result, err = gozstd.DecompressDict(nil, data, dict)
+	result, err = gozstd.DecompressDict(nil, data, dict.dictionary)
 	if err != nil {
 		return nil, err
 	}
@@ -330,7 +343,18 @@ func (ar archiveReader) getAsToChunker(ctx context.Context, h hash.Hash, stats *
 	}
 
 	if data == nil {
-		return ArchiveToChunker{h, nil, []byte{}}, nil
+		return CompressedChunk{}, nil
+	}
+
+	if dict == nil {
+		if ar.footer.formatVersion >= archiveVersionSnappySupport {
+			cc, err := NewCompressedChunk(h, data)
+			if err != nil {
+				return nil, err
+			}
+			return cc, nil
+		}
+		return nil, errors.New("runtime error: unable to get archived chunk. dictionary is nil")
 	}
 
 	return ArchiveToChunker{h, dict, data}, nil
@@ -354,11 +378,15 @@ func (ar archiveReader) readByteSpan(ctx context.Context, bs byteSpan, stats *St
 	return buff, nil
 }
 
-// getRaw returns the raw data for the given hash. If the hash is not found, nil is returned for both slices. Also,
-// no error is returned in this case. Errors will only be returned if there is an io error.
+// getRaw returns the raw data for the given hash. If the hash is not found, nil is returned for both output, and no error.
 //
-// The data returned is still compressed, and the DDict is required to decompress it.
-func (ar archiveReader) getRaw(ctx context.Context, hash hash.Hash, stats *Stats) (dict *gozstd.DDict, data []byte, err error) {
+// The data is returned still compressed:
+// Format Version 1: Only zStd compression is supported. The data returned requires the dictionary to be decompressed.
+// Format Version 2: The compression format of the data is:
+//   - zStd when a dictionary is returned. The data is decompressed with the dictionary.
+//   - Snappy compression when no dictionary is returned. The data has a checksum 32 bit checksum at the end. This
+//     format matches the noms format.
+func (ar archiveReader) getRaw(ctx context.Context, hash hash.Hash, stats *Stats) (dict *DecompBundle, data []byte, err error) {
 	idx := ar.search(hash)
 	if idx < 0 {
 		return nil, nil, nil
@@ -374,15 +402,9 @@ func (ar archiveReader) getRaw(ctx context.Context, hash hash.Hash, stats *Stats
 			if err != nil {
 				return nil, nil, err
 			}
-			// Dictionaries are compressed with no dictionary.
-			dcmpDict, e2 := gozstd.Decompress(nil, dictBytes)
-			if e2 != nil {
-				return nil, nil, e2
-			}
-
-			dict, e2 = gozstd.NewDDict(dcmpDict)
-			if e2 != nil {
-				return nil, nil, e2
+			dict, err = NewDecompBundle(dictBytes)
+			if err != nil {
+				return nil, nil, err
 			}
 
 			ar.dictCache.Add(dictId, dict)

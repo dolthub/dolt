@@ -15,6 +15,7 @@
 package nbs
 
 import (
+	"crypto/md5"
 	"crypto/sha512"
 	"errors"
 )
@@ -25,10 +26,20 @@ ByteSpans concatenated together, with an index at the end of the file. Chunk Add
 Chunks from the Archive.
 
 ByteSpans are arbitrary offset/lengths into the file which store (1) zstd dictionary data, and (2) compressed chunk
-data. Each Chunk is stored as a pair of ByteSpans (dict,data). Dictionary ByteSpans can (should) be used by multiple
+data.
+
+Each Chunk is stored as one or two ByteSpans. Dictionary ByteSpans can (should) be used by multiple
 Chunks, so there are more ByteSpans than Chunks. The Index is used to map Chunks to ByteSpan pairs. These pairs are
 called  ChunkRefs, and we store them as [uint32,uint32] on disk. This allows us to quickly find the ByteSpans for a
 given Chunk with minimal processing at load time.
+
+Format Version Differences:
+  - Version 1: All chunks are compressed with zStd. Dictionaries are stored as a chunk ref with dictionary ID 0.
+               The dictionaries themselves are zStd compressed. Chunks are stored with a pair of ByteSpans, the first
+               being the dictionary, and the second being the chunk data.
+  - Version 2: In addition to zStd compressed chunks, we also support Snappy compressed chunks, in the same format
+               as Noms table files. Any Snappy compressed chunk will have a dictionary ID of 0, and the chunk data
+               will be stored in the second Bytespan. It is stored with 32 bit CRC, just like Noms table files.
 
 A Dolt Archive file follows the following format:
    +------------+------------+-----+------------+-------+----------+--------+
@@ -48,7 +59,7 @@ Footer:
         based on the Chunk Count. This is not the case with a Dolt Archive.
    - Metadata Length: The length of the Metadata in bytes.
    - CheckSums: See Below.
-   - Format Version: Sequence starting at 1.
+   - Format Version: Sequence starting at 1. Currently, 1 and 2 are supported.
    - File Signature: Some would call this a magic number. Not on my watch. Dolt Archives have a 7 byte signature: "DOLTARC"
 
    CheckSums:
@@ -104,6 +115,8 @@ Index:
            +--------------------------------+---------------------------+
         - Dictionary: ID for a ByteSpan to be used as zstd dictionary. 0 refers to the empty ByteSpan, which indicates no dictionary.
         - Chunk: ID for the ByteSpan containing the Chunk data. Never 0.
+        - ChunkRefs with a Dictionary ID of 0 are zStd compressed Chunks. The Chunk data is stored in the second ByteSpan. (version 1)
+        - ChunkRefs with a Dictionary ID of 0 are Snappy compressed Chunks. The Chunk data is stored in the second ByteSpan. (version 2)
 
    Suffixes:
        +--------------------+--------------------+-----+----------------------+
@@ -144,14 +157,14 @@ Chunk Retrieval (phase 1 is similar to NBS):
   - Take the Chunk Id discovered in Phase one, and use it to grab that index from the ChunkRefs Map.
   - Retrieve the ByteSpan Id for the Chunk data. Verify integrity with CRC.
   - If Dictionary is 0:
-    - Decompress the Chunk data using zstd (no dictionary)
+    - Decompress the Chunk data using zstd (no dictionary, version 1).
+    - Decompress the Chunk data using snappy (no dictionary, version 2).
   - Otherwise:
     - Retrieve the ByteSpan ID for the Dictionary data.
     - Decompress the Chunk data using zstd with the Dictionary data.
 */
 
 const (
-	archiveFormatVersion = uint8(1)
 	archiveFileSignature = "DOLTARC"
 	archiveFileSigSize   = uint64(len(archiveFileSignature))
 	archiveCheckSumSize  = sha512.Size * 3 // sha512 3 times.
@@ -182,6 +195,13 @@ const ( // afr = Archive FooteR
 	afrSigOffset         = afrVersionOffset + 1
 )
 
+// Archive Format Versions.
+const (
+	archiveVersionInitial       = uint8(1)
+	archiveVersionSnappySupport = uint8(2)
+	archiveFormatVersionMax     = archiveVersionSnappySupport
+)
+
 // Archive Metadata Data Keys are the fields in the archive metadata that are stored in the footer. These are used
 // to store information about the archive that is semi-structured. The data is stored in JSON format, all values are strings.
 const ( //amdk = Archive Metadata Data Key
@@ -200,6 +220,7 @@ var ErrInvalidFileSignature = errors.New("invalid file signature")
 var ErrInvalidFormatVersion = errors.New("invalid format version")
 
 type sha512Sum [sha512.Size]byte
+type md5Sum [md5.Size]byte
 
 type byteSpan struct {
 	offset uint64

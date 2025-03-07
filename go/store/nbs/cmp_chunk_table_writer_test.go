@@ -59,7 +59,7 @@ func TestCmpChunkTableWriter(t *testing.T) {
 	tw, err := NewCmpChunkTableWriter("")
 	require.NoError(t, err)
 	for _, cmpChnk := range found {
-		err = tw.AddCmpChunk(cmpChnk)
+		_, err = tw.AddChunk(cmpChnk)
 		require.NoError(t, err)
 	}
 
@@ -70,9 +70,9 @@ func TestCmpChunkTableWriter(t *testing.T) {
 		tw, err := NewCmpChunkTableWriter("")
 		require.NoError(t, err)
 		for _, cmpChnk := range found {
-			err = tw.AddCmpChunk(cmpChnk)
+			_, err = tw.AddChunk(cmpChnk)
 			require.NoError(t, err)
-			err = tw.AddCmpChunk(cmpChnk)
+			_, err = tw.AddChunk(cmpChnk)
 			require.NoError(t, err)
 		}
 		_, err = tw.Finish()
@@ -98,7 +98,8 @@ func TestCmpChunkTableWriter(t *testing.T) {
 func TestCmpChunkTableWriterGhostChunk(t *testing.T) {
 	tw, err := NewCmpChunkTableWriter("")
 	require.NoError(t, err)
-	require.Error(t, tw.AddCmpChunk(NewGhostCompressedChunk(hash.Parse("6af71afc2ea0hmp4olev0vp9q1q5gvb1"))))
+	_, err = tw.AddChunk(NewGhostCompressedChunk(hash.Parse("6af71afc2ea0hmp4olev0vp9q1q5gvb1")))
+	require.Error(t, err)
 }
 
 func TestContainsDuplicates(t *testing.T) {

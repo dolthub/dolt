@@ -933,7 +933,9 @@ func (dcs *DoltChunkStore) uploadChunks(ctx context.Context, hashToChunk map[has
 	}
 
 	for h, contentHash := range hashToContentHash {
-		err := dcs.uploadTableFileWithRetries(ctx, h, uint64(hashToCount[h]), contentHash, func() (io.ReadCloser, uint64, error) {
+		// Tables created on this path are always starting from memory tables and ending up as noms table files.
+		// As a result, the suffix is always empty.
+		err := dcs.uploadTableFileWithRetries(ctx, h, "", uint64(hashToCount[h]), contentHash, func() (io.ReadCloser, uint64, error) {
 			data := hashToData[h]
 			return io.NopCloser(bytes.NewReader(data)), uint64(len(data)), nil
 		})
@@ -945,7 +947,7 @@ func (dcs *DoltChunkStore) uploadChunks(ctx context.Context, hashToChunk map[has
 	return hashToCount, nil
 }
 
-func (dcs *DoltChunkStore) uploadTableFileWithRetries(ctx context.Context, tableFileId hash.Hash, numChunks uint64, tableFileContentHash []byte, getContent func() (io.ReadCloser, uint64, error)) error {
+func (dcs *DoltChunkStore) uploadTableFileWithRetries(ctx context.Context, tableFileId hash.Hash, suffix string, numChunks uint64, tableFileContentHash []byte, getContent func() (io.ReadCloser, uint64, error)) error {
 	op := func() error {
 		body, contentLength, err := getContent()
 		if err != nil {
@@ -957,6 +959,7 @@ func (dcs *DoltChunkStore) uploadTableFileWithRetries(ctx context.Context, table
 			ContentLength: contentLength,
 			ContentHash:   tableFileContentHash,
 			NumChunks:     numChunks,
+			Suffix:        suffix,
 		}
 
 		dcs.logf("getting upload location for file %s", tableFileId.String())
@@ -1061,17 +1064,14 @@ func (dcs *DoltChunkStore) SupportedOperations() chunks.TableFileStoreOps {
 
 // WriteTableFile reads a table file from the provided reader and writes it to the chunk store.
 func (dcs *DoltChunkStore) WriteTableFile(ctx context.Context, fileId string, numChunks int, contentHash []byte, getRd func() (io.ReadCloser, uint64, error)) error {
-	// Err if the suffix is an archive file
+	suffix := ""
 	if strings.HasSuffix(fileId, nbs.ArchiveFileSuffix) {
-		return errors.New("cannot write archive file ids currently.")
+		suffix = nbs.ArchiveFileSuffix
+		fileId = strings.TrimSuffix(fileId, nbs.ArchiveFileSuffix)
 	}
 
 	fileIdBytes := hash.Parse(fileId)
-	err := dcs.uploadTableFileWithRetries(ctx, fileIdBytes, uint64(numChunks), contentHash, getRd)
-	if err != nil {
-		return err
-	}
-	return nil
+	return dcs.uploadTableFileWithRetries(ctx, fileIdBytes, suffix, uint64(numChunks), contentHash, getRd)
 }
 
 // AddTableFilesToManifest adds table files to the manifest
@@ -1149,11 +1149,6 @@ func getTableFiles(dcs *DoltChunkStore, infoList []*remotesapi.TableFileInfo) []
 
 func (dcs *DoltChunkStore) Size(ctx context.Context) (uint64, error) {
 	return dcs.metadata.StorageSize, nil
-}
-
-// SetRootChunk changes the root chunk hash from the previous value to the new root.
-func (dcs *DoltChunkStore) SetRootChunk(ctx context.Context, root, previous hash.Hash) error {
-	panic("Not Implemented")
 }
 
 // DoltRemoteTableFile is an implementation of a TableFile that lives in a DoltChunkStore

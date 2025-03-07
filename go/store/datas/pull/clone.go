@@ -234,7 +234,11 @@ func clone(ctx context.Context, srcTS, sinkTS chunks.TableFileStore, sinkCS chun
 		return nil
 	}
 
-	return sinkTS.SetRootChunk(ctx, root, hash.Hash{})
+	success, err := sinkTS.Commit(ctx, root, hash.Hash{})
+	if success && err != nil {
+		panic("runtime error: successful update with error")
+	}
+	return err
 }
 
 func filterAppendicesFromSourceFiles(appendixFiles []chunks.TableFile, sourceFiles []chunks.TableFile) []chunks.TableFile {
