@@ -34,14 +34,14 @@ import (
 	"strings"
 
 	"cloud.google.com/go/storage"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/dynamodb"
-	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/oracle/oci-go-sdk/v65/common"
 	"github.com/oracle/oci-go-sdk/v65/objectstorage"
 
+	"github.com/dolthub/dolt/go/libraries/utils/awsrefreshcreds"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/d"
@@ -341,34 +341,47 @@ func parseAWSSpec(ctx context.Context, awsURL string, options SpecOptions) chunk
 	parts := strings.SplitN(u.Hostname(), ":", 2) // [table] [, bucket]?
 	d.PanicIfFalse(len(parts) == 2)
 
-	awsConfig := aws.NewConfig().WithRegion(options.AwsRegionOrDefault())
+	var opts []func(*config.LoadOptions) error
+	opts = append(opts, config.WithRegion(options.AwsRegionOrDefault()))
 
 	switch options.AWSCredSource {
 	case RoleCS:
+	// All the default behavior of the SDK.
 	case EnvCS:
-		awsConfig = awsConfig.WithCredentials(credentials.NewEnvCredentials())
+		// Credentials can only come directly from AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY...
+		creds := awsrefreshcreds.LoadEnvCredentials()
+		opts = append(opts, config.WithCredentialsProvider(aws.CredentialsProviderFunc(func(context.Context) (aws.Credentials, error) {
+			return creds, nil
+		})))
 	case FileCS:
-		filePath := options.AwsCredFileOrDefault()
-		creds := credentials.NewSharedCredentials(filePath, DefaultAWSCredsProfile)
-		awsConfig = awsConfig.WithCredentials(creds)
+		provider := awsrefreshcreds.LoadINICredentialsProvider(options.AwsCredFileOrDefault(), DefaultAWSCredsProfile)
+		opts = append(opts, config.WithCredentialsProvider(provider))
 	case AutoCS:
-		envCreds := credentials.NewEnvCredentials()
-		if _, err := envCreds.Get(); err == nil {
-			awsConfig = awsConfig.WithCredentials(envCreds)
+		var opt config.LoadOptionsFunc
+
+		if envCreds := awsrefreshcreds.LoadEnvCredentials(); envCreds.HasKeys() {
+			opt = config.WithCredentialsProvider(aws.CredentialsProviderFunc(func(context.Context) (aws.Credentials, error) {
+				return envCreds, nil
+			}))
 		}
 
 		filePath := options.AwsCredFileOrDefault()
 		if _, err := os.Stat(filePath); err == nil {
-			creds := credentials.NewSharedCredentials(filePath, DefaultAWSCredsProfile)
-			awsConfig = awsConfig.WithCredentials(creds)
+			provider := awsrefreshcreds.LoadINICredentialsProvider(options.AwsCredFileOrDefault(), DefaultAWSCredsProfile)
+			opt = config.WithCredentialsProvider(provider)
+		}
+
+		if opt != nil {
+			opts = append(opts, opt)
 		}
 	default:
 		panic("unsupported credential type")
 	}
 
-	sess := session.Must(session.NewSession(awsConfig))
-	cs, err := nbs.NewAWSStore(ctx, types.Format_Default.VersionString(), parts[0], u.Path, parts[1], s3.New(sess), dynamodb.New(sess), 1<<28, nbs.NewUnlimitedMemQuotaProvider())
+	cfg, err := config.LoadDefaultConfig(ctx, opts...)
+	d.PanicIfError(err)
 
+	cs, err := nbs.NewAWSStore(ctx, types.Format_Default.VersionString(), parts[0], u.Path, parts[1], s3.NewFromConfig(cfg), dynamodb.NewFromConfig(cfg), 1<<28, nbs.NewUnlimitedMemQuotaProvider())
 	d.PanicIfError(err)
 
 	return cs

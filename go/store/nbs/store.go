@@ -34,7 +34,6 @@ import (
 	"time"
 
 	"cloud.google.com/go/storage"
-	"github.com/aws/aws-sdk-go/service/s3/s3iface"
 	"github.com/dustin/go-humanize"
 	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/oracle/oci-go-sdk/v65/common"
@@ -509,22 +508,7 @@ func OverwriteStoreManifest(ctx context.Context, store *NomsBlockStore, root has
 	return nil
 }
 
-func NewAWSStoreWithMMapIndex(ctx context.Context, nbfVerStr string, table, ns, bucket string, s3 s3iface.S3API, ddb ddbsvc, memTableSize uint64, q MemoryQuotaProvider) (*NomsBlockStore, error) {
-	cacheOnce.Do(makeGlobalCaches)
-	readRateLimiter := make(chan struct{}, 32)
-	p := &awsTablePersister{
-		s3,
-		bucket,
-		readRateLimiter,
-		awsLimits{defaultS3PartSize, minS3PartSize, maxS3PartSize},
-		ns,
-		q,
-	}
-	mm := makeManifestManager(newDynamoManifest(table, ns, ddb))
-	return newNomsBlockStore(ctx, nbfVerStr, mm, p, q, inlineConjoiner{defaultMaxTables}, memTableSize)
-}
-
-func NewAWSStore(ctx context.Context, nbfVerStr string, table, ns, bucket string, s3 s3iface.S3API, ddb ddbsvc, memTableSize uint64, q MemoryQuotaProvider) (*NomsBlockStore, error) {
+func NewAWSStore(ctx context.Context, nbfVerStr string, table, ns, bucket string, s3 S3APIV2, ddb DynamoDBAPIV2, memTableSize uint64, q MemoryQuotaProvider) (*NomsBlockStore, error) {
 	cacheOnce.Do(makeGlobalCaches)
 	readRateLimiter := make(chan struct{}, 32)
 	p := &awsTablePersister{
