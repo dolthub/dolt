@@ -139,15 +139,9 @@ func (sc *StatsController) Restart() error {
 
 	done := make(chan struct{})
 	go func() {
-		sqlCtx, err := sc.ctxGen(context.Background())
-		if err != nil {
-			sc.logger.Errorf("error starting stats: %s", err.Error())
-			return
-		}
-
-		ctx := sc.newThreadCtx(sqlCtx)
+		ctx := sc.newThreadCtx(context.Background())
 		close(done)
-		err = sc.runWorker(ctx)
+		err := sc.runWorker(ctx)
 		if err != nil {
 			sc.logger.Errorf("stats stopped: %s", err.Error())
 		}
