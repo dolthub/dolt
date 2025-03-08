@@ -35,7 +35,7 @@ func TestS3ObjectReader(t *testing.T) {
 			nil,
 			"5c2d1e52-e9bc-4779-881a-9087ad9a9f7b",
 		}
-		sz := maxS3ReadFromEndReqSize * 2 + maxS3ReadFromEndReqSize / 2
+		sz := maxS3ReadFromEndReqSize*2 + maxS3ReadFromEndReqSize/2
 		data := make([]byte, sz)
 		for i := range data {
 			data[i] = byte((i % 256))
