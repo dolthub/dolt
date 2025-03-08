@@ -235,14 +235,17 @@ func (m *fakeS3) GetObject(ctx context.Context, input *s3.GetObjectInput, opts .
 	if !present {
 		return nil, mockAWSError("NoSuchKey")
 	}
+	var outputRange *string
 	if input.Range != nil {
 		start, end := parseRange(*input.Range, len(obj))
+		outputRange = aws.String(*input.Range + "/" + strconv.Itoa(len(obj)))
 		obj = obj[start:end]
 	}
 
 	return &s3.GetObjectOutput{
 		Body:          io.NopCloser(bytes.NewReader(obj)),
 		ContentLength: aws.Int64(int64(len(obj))),
+		ContentRange:  outputRange,
 	}, nil
 }
 

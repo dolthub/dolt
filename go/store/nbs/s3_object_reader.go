@@ -185,10 +185,8 @@ func (s3or *s3ObjectReader) readS3ObjectFromEnd(ctx context.Context, name string
 			}
 			bs := p[start:end]
 			rangeStart := sz - uint64(len(p)) + uint64(start)
-			rangeEnd := sz - uint64(len(p)) + uint64(end) - 1
-			length := rangeEnd - rangeStart
 			eg.Go(func() error {
-				n, _, err := s3or.readRange(egctx, name, bs, httpRangeHeader(int64(rangeStart), int64(length)))
+				n, _, err := s3or.readRange(egctx, name, bs, httpRangeHeader(int64(rangeStart), int64(len(bs))))
 				if err != nil {
 					return err
 				}
