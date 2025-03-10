@@ -23,9 +23,6 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strings"
-	"sync"
-	"sync/atomic"
 
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -68,9 +65,6 @@ type archiveWriter struct {
 	fullMD5          md5Sum
 	workflowStage    stage
 	finalPath        string
-	// Currently using a blunt lock for the writer. The writeByteSpan and stage* methods may benefit from
-	// a more nuanced approach.
-	lock sync.Mutex
 }
 
 /*
@@ -87,6 +81,11 @@ There is a workflow to writing an archive:
  6. writeMetadata: Write the metadataSpan to the archive. Calculate the metadataSpan checksum at the end of this step.
  7. writeFooter: Write the footer to the archive. This will write out the index length, byte span count, chunk count.
  8. flushToFile: Write the archive to disk and move into its new home.
+
+When all of these steps have been completed without error, the ByteSink used to create the writer can be flushed and closed
+to complete the archive writing process.
+
+The archiveWriter is not thread safe, and should only be used by a single routine for its entire build workflow.
 */
 
 // newArchiveWriter creates a new archiveWriter. Output is written to a temp file, as the file name won't be known
@@ -119,12 +118,7 @@ func newArchiveWriterWithSink(bs ByteSink) *archiveWriter {
 // writeByteSpan writes a byte span to the archive, returning the ByteSpan ID if the write was successful. Note
 // that writing an empty byte span is a no-op and will return 0. Also, the slice passed in is copied, so the caller
 // can reuse the slice after this call.
-//
-// This method acquires the lock on the writer.
 func (aw *archiveWriter) writeByteSpan(b []byte) (uint32, error) {
-	aw.lock.Lock()
-	defer aw.lock.Unlock()
-
 	if aw.workflowStage != stageByteSpan {
 		return 0, fmt.Errorf("Runtime error: writeByteSpan called out of order")
 	}
@@ -150,20 +144,12 @@ func (aw *archiveWriter) writeByteSpan(b []byte) (uint32, error) {
 }
 
 func (aw *archiveWriter) chunkSeen(h hash.Hash) bool {
-	aw.lock.Lock()
-	defer aw.lock.Unlock()
-
 	return aw.seenChunks.Has(h)
 }
 
 // stageZStdChunk stages a zStd compressed chunk for writing. The |dictionary| and |data| arguments must refer to IDs
 // returned by |writeByteSpan|.
-//
-// This method acquires the lock on the writer. There will be races for sure.
 func (aw *archiveWriter) stageZStdChunk(hash hash.Hash, dictionary, data uint32) error {
-	aw.lock.Lock()
-	defer aw.lock.Unlock()
-
 	if aw.workflowStage != stageByteSpan {
 		return fmt.Errorf("Runtime error: stageZStdChunk called out of order")
 	}
@@ -185,12 +171,7 @@ func (aw *archiveWriter) stageZStdChunk(hash hash.Hash, dictionary, data uint32)
 
 // stageSnappyChunk stages a snappy compressed chunk for writing. This is similar to stageZStdChunk, but does not require
 // the dictionary. the |dataId| must refer to an ID returned by |writeByteSpan|.
-//
-// This method acquires the lock on the writer. There will be races to call this method for sure.
 func (aw *archiveWriter) stageSnappyChunk(hash hash.Hash, dataId uint32) error {
-	aw.lock.Lock()
-	defer aw.lock.Unlock()
-
 	if aw.workflowStage != stageByteSpan {
 		return fmt.Errorf("Runtime error: stageSnappyChunk called out of order")
 	}
@@ -219,13 +200,7 @@ func (scrs stagedChunkRefSlice) Swap(i, j int) {
 
 // finalizeByteSpans should be called after all byte spans have been written. It calculates the checksum for the data
 // to be written later in the footer.
-//
-// This method acquires the lock on the writer. There should never be a race to call this method, but the lock
-// guards against the |workflowStage| being changed by another thread.
 func (aw *archiveWriter) finalizeByteSpans() error {
-	aw.lock.Lock()
-	defer aw.lock.Unlock()
-
 	if aw.workflowStage != stageByteSpan {
 		return fmt.Errorf("Runtime error: finalizeByteSpans called out of order")
 	}
@@ -254,13 +229,7 @@ var _ io.Writer = &streamCounter{}
 
 // writeIndex writes the index to the archive. Expects the hasher to be reset before being called, and will reset it. It
 // sets the indexLen and indexCheckSum fields on the archiveWriter, and updates the bytesWritten field.
-//
-// This method acquires the lock on the writer. There should never be a race to call this method, but the lock
-// guards against the |workflowStage| being changed by another thread.
 func (aw *archiveWriter) writeIndex() error {
-	aw.lock.Lock()
-	defer aw.lock.Unlock()
-
 	if aw.workflowStage != stageIndex {
 		return fmt.Errorf("Runtime error: writeIndex called out of order")
 	}
@@ -326,13 +295,7 @@ func (aw *archiveWriter) writeIndex() error {
 // It sets the metadataLen and metadataCheckSum fields on the archiveWriter, and updates the bytesWritten field.
 //
 // Empty input is allowed.
-//
-// This method acquires the lock on the writer. There should never be a race to call this method, but the lock
-// guards against the |workflowStage| being changed by another thread.
 func (aw *archiveWriter) writeMetadata(data []byte) error {
-	aw.lock.Lock()
-	defer aw.lock.Unlock()
-
 	if aw.workflowStage != stageMetadata {
 		return fmt.Errorf("Runtime error: writeMetadata called out of order")
 	}
@@ -356,13 +319,7 @@ func (aw *archiveWriter) writeMetadata(data []byte) error {
 
 // writeFooter writes the footer to the archive. This method is intended to be called after writeMetadata,
 // and will complete the writing of bytes into the temp file.
-//
-// This method acquires the lock on the writer. There should never be a race to call this method, but the lock
-// guards against the |workflowStage| being changed by another thread.
 func (aw *archiveWriter) writeFooter() error {
-	aw.lock.Lock()
-	defer aw.lock.Unlock()
-
 	if aw.workflowStage != stageFooter {
 		return fmt.Errorf("Runtime error: writeFooter called out of order")
 	}
@@ -419,8 +376,6 @@ func (aw *archiveWriter) writeFooter() error {
 	return nil
 }
 
-// writeCheckSums writes the data, index and metadata checksums into the footer.
-// Internal helper method. Really only should be used by |writeFooter| Assumes the lock is held.
 func (aw *archiveWriter) writeCheckSums() error {
 	err := aw.writeSha512(aw.dataCheckSum)
 	if err != nil {
@@ -435,8 +390,6 @@ func (aw *archiveWriter) writeCheckSums() error {
 	return aw.writeSha512(aw.metadataCheckSum)
 }
 
-// writeSha512 writes a sha512Sum to the archive. Increments the bytesWritten field.
-// Internal helper method. Assumes the lock is held.
 func (aw *archiveWriter) writeSha512(sha sha512Sum) error {
 	_, err := aw.output.Write(sha[:])
 	if err != nil {
@@ -448,7 +401,6 @@ func (aw *archiveWriter) writeSha512(sha sha512Sum) error {
 }
 
 // Write a uint64 to the archive. Increments the bytesWritten field.
-// Internal helper method. Assumes the lock is held.
 func (aw *archiveWriter) writeUint64(val uint64) error {
 	err := binary.Write(aw.output, binary.BigEndian, val)
 	if err != nil {
@@ -460,7 +412,6 @@ func (aw *archiveWriter) writeUint64(val uint64) error {
 }
 
 // Write a uint32 to the archive. Increments the bytesWritten field.
-// Internal helper method. Assumes the lock is held.
 func (aw *archiveWriter) writeUint32(val uint32) error {
 	err := binary.Write(aw.output, binary.BigEndian, val)
 	if err != nil {
@@ -471,17 +422,11 @@ func (aw *archiveWriter) writeUint32(val uint32) error {
 	return nil
 }
 
-// flushToFile writes the archive to disk. Path must end in ".darc"
+// flushToFile writes the archive to disk. The input is the directory where the file should be written, the file name
+// will be the footer hash + ".darc" as a suffix.
 func (aw *archiveWriter) flushToFile(fullPath string) error {
-	aw.lock.Lock()
-	defer aw.lock.Unlock()
-
 	if aw.workflowStage != stageFlush {
 		return fmt.Errorf("Runtime error: flushToFile called out of order")
-	}
-
-	if !strings.HasSuffix(fullPath, ArchiveFileSuffix) {
-		return fmt.Errorf("Invalid archive file path: %s", fullPath)
 	}
 
 	if bs, ok := aw.output.backingSink.(*BufferedFileByteSink); ok {
@@ -500,10 +445,9 @@ func (aw *archiveWriter) flushToFile(fullPath string) error {
 	return nil
 }
 
+// getName returns the hash of the footer, which is used as the fileID for the archive. This differs from the name
+// on disk which has the .darc suffix.
 func (aw *archiveWriter) getName() (hash.Hash, error) {
-	aw.lock.Lock()
-	defer aw.lock.Unlock()
-
 	if aw.workflowStage != stageFlush && aw.workflowStage != stageDone {
 		return hash.Hash{}, fmt.Errorf("Runtime error: getName called out of order")
 	}
@@ -511,9 +455,8 @@ func (aw *archiveWriter) getName() (hash.Hash, error) {
 	return hash.New(aw.footerCheckSum[:hash.ByteLen]), nil
 }
 
+// genFileName generates the file name for the archive. The path argument is the directory where the file should be written.
 func (aw *archiveWriter) genFileName(path string) (string, error) {
-	// No need to lock here, as aw.getName() acquires the lock.
-
 	if aw.workflowStage != stageFlush {
 		return "", fmt.Errorf("Runtime error: genFileName called out of order")
 	}
@@ -523,18 +466,15 @@ func (aw *archiveWriter) genFileName(path string) (string, error) {
 		return "", err
 	}
 
-	fileName := fmt.Sprintf("%s%s", h.String(), ArchiveFileSuffix)
+	fileName := h.String() + ArchiveFileSuffix
 	fullPath := filepath.Join(path, fileName)
 	return fullPath, nil
 }
 
 type ArchiveStreamWriter struct {
-	writer *archiveWriter
-	// We don't use a sync map here because what we actually want to avoid is writing the same dictionary to
-	// the writer multiple times. Writing dictionaries is rare, so there will be little contention here.
-	dictMap     map[*DecompBundle]uint32
-	dictMapLock sync.Mutex
-	chunkCount  *int32
+	writer     *archiveWriter
+	dictMap    map[*DecompBundle]uint32
+	chunkCount int32
 }
 
 func NewArchiveStreamWriter(tmpDir string) (*ArchiveStreamWriter, error) {
@@ -545,8 +485,7 @@ func NewArchiveStreamWriter(tmpDir string) (*ArchiveStreamWriter, error) {
 	return &ArchiveStreamWriter{
 		writer,
 		map[*DecompBundle]uint32{},
-		sync.Mutex{},
-		new(int32),
+		0,
 	}, nil
 }
 
@@ -572,7 +511,7 @@ func (asw *ArchiveStreamWriter) Finish() (string, error) {
 }
 
 func (asw *ArchiveStreamWriter) ChunkCount() int {
-	return int(atomic.LoadInt32(asw.chunkCount))
+	return int(asw.chunkCount)
 }
 
 func (asw *ArchiveStreamWriter) AddChunk(chunker ToChunker) (uint32, error) {
@@ -605,25 +544,13 @@ func (asw *ArchiveStreamWriter) writeArchiveToChunker(chunker ArchiveToChunker) 
 	var err error
 	dictId, ok := asw.dictMap[dict]
 	if !ok {
-		err = func() error {
-			asw.dictMapLock.Lock()
-			defer asw.dictMapLock.Unlock()
-
-			// we have a lock, so check again as it may have been added by the last lock holder.
-			dictId, ok := asw.dictMap[dict]
-			if ok {
-				return nil
-			}
-
-			// New dictionary. Write it out, and add id to the map.
-			dictId, err = asw.writer.writeByteSpan(*dict.rawDictionary)
-			if err != nil {
-				return err
-			}
-			bytesWritten += uint32(len(*dict.rawDictionary))
-			asw.dictMap[dict] = dictId
-			return nil
-		}()
+		// New dictionary. Write it out, and add id to the map.
+		dictId, err = asw.writer.writeByteSpan(*dict.rawDictionary)
+		if err != nil {
+			return 0, err
+		}
+		bytesWritten += uint32(len(*dict.rawDictionary))
+		asw.dictMap[dict] = dictId
 	}
 
 	dataId, err := asw.writer.writeByteSpan(chunker.chunkData)
@@ -631,8 +558,7 @@ func (asw *ArchiveStreamWriter) writeArchiveToChunker(chunker ArchiveToChunker) 
 		return bytesWritten, err
 	}
 	bytesWritten += uint32(len(chunker.chunkData))
-
-	atomic.AddInt32(asw.chunkCount, 1)
+	asw.chunkCount += 1
 	return bytesWritten, asw.writer.stageZStdChunk(chunker.Hash(), dictId, dataId)
 }
 
@@ -642,6 +568,6 @@ func (asw *ArchiveStreamWriter) writeCompressedChunk(chunker CompressedChunk) (u
 	if err != nil {
 		return 0, err
 	}
-	atomic.AddInt32(asw.chunkCount, 1)
+	asw.chunkCount += 1
 	return writeCount, asw.writer.stageSnappyChunk(chunker.Hash(), dataId)
 }
