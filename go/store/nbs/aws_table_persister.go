@@ -95,25 +95,14 @@ func (s3p awsTablePersister) Open(ctx context.Context, name hash.Hash, chunkCoun
 		return cs, nil
 	}
 
-	var nskErr *s3types.NoSuchKey
-	if !errors.As(err, &nskErr) {
-		return emptyChunkSource{}, err
-	}
-
-	archiveKey := name.String() + ArchiveFileSuffix
-	e, err2 := s3p.Exists(ctx, archiveKey, chunkCount, stats)
-	if e && err2 == nil {
-		return newAWSArchiveChunkSource(
-			ctx,
-			&s3ObjectReader{s3: s3p.s3, bucket: s3p.bucket, readRl: s3p.rl, ns: s3p.ns},
-			s3p.limits,
-			archiveKey,
-			chunkCount,
-			s3p.q,
-			stats)
-	}
-
-	return emptyChunkSource{}, err
+	return newAWSArchiveChunkSource(
+		ctx,
+		&s3ObjectReader{s3: s3p.s3, bucket: s3p.bucket, readRl: s3p.rl, ns: s3p.ns},
+		s3p.limits,
+		name.String()+ArchiveFileSuffix,
+		chunkCount,
+		s3p.q,
+		stats)
 }
 
 func (s3p awsTablePersister) Exists(ctx context.Context, name string, _ uint32, stats *Stats) (bool, error) {

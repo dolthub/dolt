@@ -362,23 +362,12 @@ func (rs *RemoteChunkStore) getDownloadUrl(md metadata.MD, path string) *url.URL
 	}
 }
 
-func parseTableFileDetails(req *remotesapi.GetUploadLocsRequest) []*remotesapi.TableFileDetails {
+func getTableFileDetails(req *remotesapi.GetUploadLocsRequest) ([]*remotesapi.TableFileDetails, error) {
 	tfd := req.GetTableFileDetails()
-
 	if len(tfd) == 0 {
-		_, hashToIdx := remotestorage.ParseByteSlices(req.TableFileHashes)
-
-		tfd = make([]*remotesapi.TableFileDetails, len(hashToIdx))
-		for h, i := range hashToIdx {
-			tfd[i] = &remotesapi.TableFileDetails{
-				Id:            h[:],
-				ContentLength: 0,
-				ContentHash:   nil,
-			}
-		}
+		return nil, errors.New("no table file details provided. Your dolt version is pre 1.0. please upgrade.")
 	}
-
-	return tfd
+	return tfd, nil
 }
 
 func (rs *RemoteChunkStore) GetUploadLocations(ctx context.Context, req *remotesapi.GetUploadLocsRequest) (*remotesapi.GetUploadLocsResponse, error) {
@@ -395,7 +384,10 @@ func (rs *RemoteChunkStore) GetUploadLocations(ctx context.Context, req *remotes
 		return nil, err
 	}
 
-	tfds := parseTableFileDetails(req)
+	tfds, err := getTableFileDetails(req)
+	if err != nil {
+		return nil, err
+	}
 
 	md, _ := metadata.FromIncomingContext(ctx)
 
@@ -426,7 +418,7 @@ func (rs *RemoteChunkStore) GetUploadLocations(ctx context.Context, req *remotes
 }
 
 func (rs *RemoteChunkStore) getUploadUrl(md metadata.MD, repoPath string, tfd *remotesapi.TableFileDetails) *url.URL {
-	fileID := hash.New(tfd.Id).String()
+	fileID := hash.New(tfd.Id).String() + tfd.Suffix
 	params := url.Values{}
 	params.Add("num_chunks", strconv.Itoa(int(tfd.NumChunks)))
 	params.Add("content_length", strconv.Itoa(int(tfd.ContentLength)))

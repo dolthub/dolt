@@ -61,7 +61,7 @@ func TestPullTableFileWriter(t *testing.T) {
 				assert.NoError(t, err)
 				chk := chunks.NewChunk(bs)
 				cChk := nbs.ChunkToCompressedChunk(chk)
-				err = wr.AddCompressedChunk(context.Background(), cChk)
+				err = wr.AddToChunker(context.Background(), cChk)
 				assert.NoError(t, err)
 			}
 
@@ -87,7 +87,7 @@ func TestPullTableFileWriter(t *testing.T) {
 				assert.NoError(t, err)
 				chk := chunks.NewChunk(bs)
 				cChk := nbs.ChunkToCompressedChunk(chk)
-				err = wr.AddCompressedChunk(context.Background(), cChk)
+				err = wr.AddToChunker(context.Background(), cChk)
 				assert.NoError(t, err)
 			}
 
@@ -117,7 +117,7 @@ func TestPullTableFileWriter(t *testing.T) {
 			assert.NoError(t, err)
 			chk := chunks.NewChunk(bs)
 			cChk := nbs.ChunkToCompressedChunk(chk)
-			err = wr.AddCompressedChunk(context.Background(), cChk)
+			err = wr.AddToChunker(context.Background(), cChk)
 			assert.NoError(t, err)
 		}
 
@@ -145,7 +145,7 @@ func TestPullTableFileWriter(t *testing.T) {
 				assert.NoError(t, err)
 				chk := chunks.NewChunk(bs)
 				cChk := nbs.ChunkToCompressedChunk(chk)
-				err = wr.AddCompressedChunk(context.Background(), cChk)
+				err = wr.AddToChunker(context.Background(), cChk)
 				assert.NoError(t, err)
 			}
 
@@ -169,7 +169,7 @@ func TestPullTableFileWriter(t *testing.T) {
 				assert.NoError(t, err)
 				chk := chunks.NewChunk(bs)
 				cChk := nbs.ChunkToCompressedChunk(chk)
-				err = wr.AddCompressedChunk(context.Background(), cChk)
+				err = wr.AddToChunker(context.Background(), cChk)
 				assert.NoError(t, err)
 			}
 
@@ -180,7 +180,7 @@ func TestPullTableFileWriter(t *testing.T) {
 				assert.NoError(t, err)
 				chk := chunks.NewChunk(bs)
 				cChk := nbs.ChunkToCompressedChunk(chk)
-				err = wr.AddCompressedChunk(context.Background(), cChk)
+				err = wr.AddToChunker(context.Background(), cChk)
 				if err != nil {
 					assert.EqualError(t, err, "this dest store throws an error")
 					assert.EqualError(t, wr.Close(), "this dest store throws an error")
@@ -210,7 +210,7 @@ func TestPullTableFileWriter(t *testing.T) {
 			assert.NoError(t, err)
 			chk := chunks.NewChunk(bs)
 			cChk := nbs.ChunkToCompressedChunk(chk)
-			err = wr.AddCompressedChunk(context.Background(), cChk)
+			err = wr.AddToChunker(context.Background(), cChk)
 			assert.NoError(t, err)
 		}
 
@@ -238,7 +238,7 @@ func TestPullTableFileWriter(t *testing.T) {
 			assert.NoError(t, err)
 			chk := chunks.NewChunk(bs)
 			cChk := nbs.ChunkToCompressedChunk(chk)
-			err = wr.AddCompressedChunk(context.Background(), cChk)
+			err = wr.AddToChunker(context.Background(), cChk)
 			assert.NoError(t, err)
 		}
 
@@ -278,7 +278,7 @@ func TestPullTableFileWriter(t *testing.T) {
 			assert.NoError(t, err)
 			chk := chunks.NewChunk(bs)
 			cChk := nbs.ChunkToCompressedChunk(chk)
-			err = wr.AddCompressedChunk(context.Background(), cChk)
+			err = wr.AddToChunker(context.Background(), cChk)
 			assert.NoError(t, err)
 		}
 
