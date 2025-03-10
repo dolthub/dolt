@@ -61,11 +61,6 @@ func (nbsMW *NBSMetricWrapper) AddTableFilesToManifest(ctx context.Context, file
 	return nbsMW.nbs.AddTableFilesToManifest(ctx, fileIdToNumChunks, getAddrs)
 }
 
-// SetRootChunk changes the root chunk hash from the previous value to the new root.
-func (nbsMW *NBSMetricWrapper) SetRootChunk(ctx context.Context, root, previous hash.Hash) error {
-	return nbsMW.nbs.SetRootChunk(ctx, root, previous)
-}
-
 // Forwards SupportedOperations to wrapped block store.
 func (nbsMW *NBSMetricWrapper) SupportedOperations() chunks.TableFileStoreOps {
 	return nbsMW.nbs.SupportedOperations()

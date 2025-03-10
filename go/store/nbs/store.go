@@ -2172,34 +2172,6 @@ func (nbs *NomsBlockStore) swapTables(ctx context.Context, specs []tableSpec, mo
 	return nil
 }
 
-// SetRootChunk changes the root chunk hash from the previous value to the new root.
-func (nbs *NomsBlockStore) SetRootChunk(ctx context.Context, root, previous hash.Hash) error {
-	return nbs.setRootChunk(ctx, root, previous, nbs.refCheck)
-}
-
-func (nbs *NomsBlockStore) setRootChunk(ctx context.Context, root, previous hash.Hash, checker refCheck) error {
-	nbs.mu.Lock()
-	defer nbs.mu.Unlock()
-	err := nbs.waitForGC(ctx)
-	if err != nil {
-		return err
-	}
-	for {
-		err := nbs.updateManifest(ctx, root, previous, checker)
-
-		if err == nil {
-			return nil
-		} else if err == errOptimisticLockFailedTables {
-			continue
-		} else {
-			return err
-		}
-
-		// Same behavior as Commit
-		// I guess this thing infinitely retries without backoff in the case off errOptimisticLockFailedTables
-	}
-}
-
 // CalcReads computes the number of IO operations necessary to fetch |hashes|.
 func CalcReads(nbs *NomsBlockStore, hashes hash.HashSet, blockSize uint64, keeper keeperF) (int, bool, gcBehavior, error) {
 	reqs := toGetRecords(hashes)
