@@ -35,9 +35,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/s3"
-	"github.com/aws/aws-sdk-go/service/s3/s3iface"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/jpillora/backoff"
 	"golang.org/x/sync/errgroup"
 )
@@ -45,7 +44,7 @@ import (
 // s3ObjectReader is a wrapper for S3 that gives us some nice to haves for reading objects from S3.
 // TODO: Bring all the multipart upload and remote-conjoin stuff in.
 type s3ObjectReader struct {
-	s3     s3iface.S3API
+	s3     S3APIV2
 	bucket string
 	readRl chan struct{}
 	ns     string
@@ -91,7 +90,7 @@ func (s3or *s3ObjectReader) reader(ctx context.Context, name string) (io.ReadClo
 		Bucket: aws.String(s3or.bucket),
 		Key:    aws.String(s3or.key(name)),
 	}
-	result, err := s3or.s3.GetObjectWithContext(ctx, input)
+	result, err := s3or.s3.GetObject(ctx, input)
 	if err != nil {
 		return nil, err
 	}
@@ -117,7 +116,7 @@ func (s3or *s3ObjectReader) readRange(ctx context.Context, name string, p []byte
 			Range:  aws.String(rangeHeader),
 		}
 
-		result, err := s3or.s3.GetObjectWithContext(ctx, input)
+		result, err := s3or.s3.GetObject(ctx, input)
 		if err != nil {
 			return 0, 0, err
 		}
@@ -186,10 +185,8 @@ func (s3or *s3ObjectReader) readS3ObjectFromEnd(ctx context.Context, name string
 			}
 			bs := p[start:end]
 			rangeStart := sz - uint64(len(p)) + uint64(start)
-			rangeEnd := sz - uint64(len(p)) + uint64(end) - 1
-			length := rangeEnd - rangeStart
 			eg.Go(func() error {
-				n, _, err := s3or.readRange(egctx, name, bs, httpRangeHeader(int64(rangeStart), int64(length)))
+				n, _, err := s3or.readRange(egctx, name, bs, httpRangeHeader(int64(rangeStart), int64(len(bs))))
 				if err != nil {
 					return err
 				}

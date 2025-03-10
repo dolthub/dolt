@@ -32,10 +32,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/s3"
-	"github.com/aws/aws-sdk-go/service/s3/s3iface"
-	"github.com/aws/aws-sdk-go/service/s3/s3manager"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	s3manager "github.com/aws/aws-sdk-go-v2/feature/s3/manager"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	s3types "github.com/aws/aws-sdk-go-v2/service/s3/types"
 
 	"github.com/dolthub/dolt/go/store/atomicerr"
 	"github.com/dolthub/dolt/go/store/chunks"
@@ -51,8 +51,20 @@ const (
 	defaultS3PartSize = minS3PartSize // smallest allowed by S3 allows for most throughput
 )
 
+type S3APIV2 interface {
+	CreateMultipartUpload(context.Context, *s3.CreateMultipartUploadInput, ...func(*s3.Options)) (*s3.CreateMultipartUploadOutput, error)
+	AbortMultipartUpload(context.Context, *s3.AbortMultipartUploadInput, ...func(*s3.Options)) (*s3.AbortMultipartUploadOutput, error)
+	CompleteMultipartUpload(context.Context, *s3.CompleteMultipartUploadInput, ...func(*s3.Options)) (*s3.CompleteMultipartUploadOutput, error)
+	UploadPart(context.Context, *s3.UploadPartInput, ...func(*s3.Options)) (*s3.UploadPartOutput, error)
+	UploadPartCopy(context.Context, *s3.UploadPartCopyInput, ...func(*s3.Options)) (*s3.UploadPartCopyOutput, error)
+	PutObject(context.Context, *s3.PutObjectInput, ...func(*s3.Options)) (*s3.PutObjectOutput, error)
+	GetObject(context.Context, *s3.GetObjectInput, ...func(*s3.Options)) (*s3.GetObjectOutput, error)
+}
+
+var _ S3APIV2 = (*s3.Client)(nil)
+
 type awsTablePersister struct {
-	s3     s3iface.S3API
+	s3     S3APIV2
 	bucket string
 	rl     chan struct{}
 	limits awsLimits
@@ -112,7 +124,7 @@ func (s3p awsTablePersister) AccessMode() chunks.ExclusiveAccessMode {
 }
 
 type s3UploadedPart struct {
-	idx  int64
+	idx  int32
 	etag string
 }
 
@@ -151,10 +163,10 @@ func (s3p awsTablePersister) Persist(ctx context.Context, mt *memTable, haver ch
 }
 
 func (s3p awsTablePersister) multipartUpload(ctx context.Context, r io.Reader, sz uint64, key string) error {
-	uploader := s3manager.NewUploaderWithClient(s3p.s3, func(u *s3manager.Uploader) {
+	uploader := s3manager.NewUploader(s3p.s3, func(u *s3manager.Uploader) {
 		u.PartSize = int64(s3p.limits.partTarget)
 	})
-	_, err := uploader.Upload(&s3manager.UploadInput{
+	_, err := uploader.Upload(ctx, &s3.PutObjectInput{
 		Bucket: aws.String(s3p.bucket),
 		Key:    aws.String(s3p.key(key)),
 		Body:   r,
@@ -163,7 +175,7 @@ func (s3p awsTablePersister) multipartUpload(ctx context.Context, r io.Reader, s
 }
 
 func (s3p awsTablePersister) startMultipartUpload(ctx context.Context, key string) (string, error) {
-	result, err := s3p.s3.CreateMultipartUploadWithContext(ctx, &s3.CreateMultipartUploadInput{
+	result, err := s3p.s3.CreateMultipartUpload(ctx, &s3.CreateMultipartUploadInput{
 		Bucket: aws.String(s3p.bucket),
 		Key:    aws.String(s3p.key(key)),
 	})
@@ -176,7 +188,7 @@ func (s3p awsTablePersister) startMultipartUpload(ctx context.Context, key strin
 }
 
 func (s3p awsTablePersister) abortMultipartUpload(ctx context.Context, key, uploadID string) error {
-	_, abrtErr := s3p.s3.AbortMultipartUploadWithContext(ctx, &s3.AbortMultipartUploadInput{
+	_, abrtErr := s3p.s3.AbortMultipartUpload(ctx, &s3.AbortMultipartUploadInput{
 		Bucket:   aws.String(s3p.bucket),
 		Key:      aws.String(s3p.key(key)),
 		UploadId: aws.String(uploadID),
@@ -185,8 +197,8 @@ func (s3p awsTablePersister) abortMultipartUpload(ctx context.Context, key, uplo
 	return abrtErr
 }
 
-func (s3p awsTablePersister) completeMultipartUpload(ctx context.Context, key, uploadID string, mpu *s3.CompletedMultipartUpload) error {
-	_, err := s3p.s3.CompleteMultipartUploadWithContext(ctx, &s3.CompleteMultipartUploadInput{
+func (s3p awsTablePersister) completeMultipartUpload(ctx context.Context, key, uploadID string, mpu *s3types.CompletedMultipartUpload) error {
+	_, err := s3p.s3.CompleteMultipartUpload(ctx, &s3.CompleteMultipartUploadInput{
 		Bucket:          aws.String(s3p.bucket),
 		Key:             aws.String(s3p.key(key)),
 		MultipartUpload: mpu,
@@ -196,15 +208,15 @@ func (s3p awsTablePersister) completeMultipartUpload(ctx context.Context, key, u
 	return err
 }
 
-func getNumParts(dataLen, minPartSize uint64) uint64 {
+func getNumParts(dataLen, minPartSize uint64) uint32 {
 	numParts := dataLen / minPartSize
 	if numParts == 0 {
 		numParts = 1
 	}
-	return numParts
+	return uint32(numParts)
 }
 
-type partsByPartNum []*s3.CompletedPart
+type partsByPartNum []s3types.CompletedPart
 
 func (s partsByPartNum) Len() int {
 	return len(s)
@@ -258,7 +270,7 @@ func (s3p awsTablePersister) executeCompactionPlan(ctx context.Context, plan com
 	return s3p.completeMultipartUpload(ctx, key, uploadID, multipartUpload)
 }
 
-func (s3p awsTablePersister) assembleTable(ctx context.Context, plan compactionPlan, key, uploadID string) (*s3.CompletedMultipartUpload, error) {
+func (s3p awsTablePersister) assembleTable(ctx context.Context, plan compactionPlan, key, uploadID string) (*s3types.CompletedMultipartUpload, error) {
 	if len(plan.sources.sws) > maxS3Parts {
 		return nil, errors.New("exceeded maximum parts")
 	}
@@ -293,7 +305,7 @@ func (s3p awsTablePersister) assembleTable(ctx context.Context, plan compactionP
 	sent, failed, done := make(chan s3UploadedPart), make(chan error), make(chan struct{})
 	var uploadWg sync.WaitGroup
 	type uploadFn func() (etag string, err error)
-	sendPart := func(partNum int64, doUpload uploadFn) {
+	sendPart := func(partNum int32, doUpload uploadFn) {
 		if s3p.rl != nil {
 			s3p.rl <- struct{}{}
 			defer func() { <-s3p.rl }()
@@ -314,7 +326,7 @@ func (s3p awsTablePersister) assembleTable(ctx context.Context, plan compactionP
 		}
 		// Try to send along part info. In the case that the upload was aborted, reading from done allows this worker to exit correctly.
 		select {
-		case sent <- s3UploadedPart{int64(partNum), etag}:
+		case sent <- s3UploadedPart{partNum, etag}:
 		case <-done:
 			return
 		}
@@ -322,10 +334,10 @@ func (s3p awsTablePersister) assembleTable(ctx context.Context, plan compactionP
 
 	// Concurrently begin sending all parts using sendPart().
 	// First, kick off sending all the copyable parts.
-	partNum := int64(1) // Part numbers are 1-indexed
+	partNum := int32(1) // Part numbers are 1-indexed
 	for _, cp := range copies {
 		uploadWg.Add(1)
-		go func(cp copyPart, partNum int64) {
+		go func(cp copyPart, partNum int32) {
 			sendPart(partNum, func() (etag string, err error) {
 				return s3p.uploadPartCopy(ctx, cp.name, cp.srcOffset, cp.srcLen, key, uploadID, partNum)
 			})
@@ -335,13 +347,13 @@ func (s3p awsTablePersister) assembleTable(ctx context.Context, plan compactionP
 
 	// Then, split buff (data from |manuals| and index) into parts and upload those concurrently.
 	numManualParts := getNumParts(uint64(len(buff)), s3p.limits.partTarget) // TODO: What if this is too big?
-	for i := uint64(0); i < numManualParts; i++ {
-		start, end := i*s3p.limits.partTarget, (i+1)*s3p.limits.partTarget
+	for i := uint32(0); i < numManualParts; i++ {
+		start, end := uint64(i)*s3p.limits.partTarget, uint64(i+1)*s3p.limits.partTarget
 		if i+1 == numManualParts { // If this is the last part, make sure it includes any overflow
 			end = uint64(len(buff))
 		}
 		uploadWg.Add(1)
-		go func(data []byte, partNum int64) {
+		go func(data []byte, partNum int32) {
 			sendPart(partNum, func() (etag string, err error) {
 				return s3p.uploadPart(ctx, data, key, uploadID, partNum)
 			})
@@ -357,15 +369,15 @@ func (s3p awsTablePersister) assembleTable(ctx context.Context, plan compactionP
 	}()
 
 	// Watch |sent| and |failed| for the results of part uploads. If ever one fails, close |done| to stop all the in-progress or pending sendPart() calls and then bail.
-	multipartUpload := &s3.CompletedMultipartUpload{}
+	multipartUpload := &s3types.CompletedMultipartUpload{}
 	var firstFailure error
 	for cont := true; cont; {
 		select {
 		case sentPart, open := <-sent:
 			if open {
-				multipartUpload.Parts = append(multipartUpload.Parts, &s3.CompletedPart{
+				multipartUpload.Parts = append(multipartUpload.Parts, s3types.CompletedPart{
 					ETag:       aws.String(sentPart.etag),
-					PartNumber: aws.Int64(sentPart.idx),
+					PartNumber: aws.Int32(sentPart.idx),
 				})
 			}
 			cont = open
@@ -468,13 +480,13 @@ func splitOnMaxSize(dataLen, maxPartSize uint64) []int64 {
 	return sizes
 }
 
-func (s3p awsTablePersister) uploadPartCopy(ctx context.Context, src string, srcStart, srcEnd int64, key, uploadID string, partNum int64) (etag string, err error) {
-	res, err := s3p.s3.UploadPartCopyWithContext(ctx, &s3.UploadPartCopyInput{
+func (s3p awsTablePersister) uploadPartCopy(ctx context.Context, src string, srcStart, srcEnd int64, key, uploadID string, partNum int32) (etag string, err error) {
+	res, err := s3p.s3.UploadPartCopy(ctx, &s3.UploadPartCopyInput{
 		CopySource:      aws.String(url.PathEscape(s3p.bucket + "/" + s3p.key(src))),
 		CopySourceRange: aws.String(httpRangeHeader(srcStart, srcEnd)),
 		Bucket:          aws.String(s3p.bucket),
 		Key:             aws.String(s3p.key(key)),
-		PartNumber:      aws.Int64(int64(partNum)),
+		PartNumber:      aws.Int32(partNum),
 		UploadId:        aws.String(uploadID),
 	})
 	if err == nil {
@@ -483,11 +495,11 @@ func (s3p awsTablePersister) uploadPartCopy(ctx context.Context, src string, src
 	return
 }
 
-func (s3p awsTablePersister) uploadPart(ctx context.Context, data []byte, key, uploadID string, partNum int64) (etag string, err error) {
-	res, err := s3p.s3.UploadPartWithContext(ctx, &s3.UploadPartInput{
+func (s3p awsTablePersister) uploadPart(ctx context.Context, data []byte, key, uploadID string, partNum int32) (etag string, err error) {
+	res, err := s3p.s3.UploadPart(ctx, &s3.UploadPartInput{
 		Bucket:     aws.String(s3p.bucket),
 		Key:        aws.String(s3p.key(key)),
-		PartNumber: aws.Int64(int64(partNum)),
+		PartNumber: aws.Int32(partNum),
 		UploadId:   aws.String(uploadID),
 		Body:       bytes.NewReader(data),
 	})
