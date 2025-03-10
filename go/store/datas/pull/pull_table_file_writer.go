@@ -173,7 +173,7 @@ func (w *PullTableFileWriter) uploadAndFinalizeThread() (err error) {
 		for ttf := range respCh {
 			id := ttf.id
 			if strings.HasSuffix(id, nbs.ArchiveFileSuffix) {
-				id = id[:len(id)-len(nbs.ArchiveFileSuffix)]
+				id = strings.TrimSuffix(id, nbs.ArchiveFileSuffix)
 			}
 
 			manifestUpdates[id] = ttf.numChunks
@@ -248,6 +248,7 @@ LOOP:
 					curWr, err = nbs.NewCmpChunkTableWriter(w.cfg.TempDir)
 				}
 				if err != nil {
+					curWr = nil
 					return err
 				}
 			}
