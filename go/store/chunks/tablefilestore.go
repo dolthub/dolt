@@ -73,8 +73,8 @@ type TableFileStore interface {
 	// PruneTableFiles deletes old table files that are no longer referenced in the manifest.
 	PruneTableFiles(ctx context.Context) error
 
-	// SetRootChunk changes the root chunk hash from the previous value to the new root.
-	SetRootChunk(ctx context.Context, root, previous hash.Hash) error
+	// Commit performs an optimistic lock/update of the root hash.
+	Commit(ctx context.Context, current, last hash.Hash) (bool, error)
 
 	// SupportedOperations returns a description of the support TableFile operations. Some stores only support reading table files, not writing.
 	SupportedOperations() TableFileStoreOps

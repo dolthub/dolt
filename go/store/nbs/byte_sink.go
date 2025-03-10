@@ -316,7 +316,7 @@ func (sink *BufferedFileByteSink) Reader() (io.ReadCloser, error) {
 	return os.Open(sink.path)
 }
 
-// HashingByteSink is a ByteSink that keeps an md5 hash of all the data written to it.
+// HashingByteSink is a ByteSink that keeps an hash of all the data written to it.
 type HashingByteSink struct {
 	backingSink ByteSink
 	hasher      hash.Hash

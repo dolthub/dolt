@@ -22,7 +22,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/dolthub/gozstd"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
 
@@ -580,11 +579,12 @@ func deliverChunkCallback(chunkCh chan nbs.ToChunker, path string, dictCache *di
 		var cc nbs.ToChunker
 		if rang.DictLength != 0 {
 			payload, _ := dictCache.getOrCreate(path, rang.DictOffset, rang.DictLength)
-			dictRes, err := payload.Get()
+			bundle, err := payload.Get()
 			if err != nil {
 				return err
 			}
-			cc = nbs.NewArchiveToChunker(h, dictRes.(*gozstd.DDict), bs)
+
+			cc = nbs.NewArchiveToChunker(h, bundle, bs)
 		} else {
 			var err error
 			cc, err = nbs.NewCompressedChunk(h, bs)
@@ -603,13 +603,13 @@ func deliverChunkCallback(chunkCh chan nbs.ToChunker, path string, dictCache *di
 
 func setDictionaryCallback(dictCache *dictionaryCache, path string) func(context.Context, []byte, *Range) error {
 	return func(ctx context.Context, bs []byte, rang *Range) error {
-		var ddict *gozstd.DDict
-		decompressed, err := gozstd.Decompress(nil, bs)
-		if err == nil {
-			ddict, err = gozstd.NewDDict(decompressed)
+		bundle, err := nbs.NewDecompBundle(bs)
+		if err != nil {
+			return err
 		}
+
 		payload, _ := dictCache.getOrCreate(path, rang.Offset, rang.Length)
-		payload.Set(ddict, err)
+		payload.Set(bundle, err)
 		// XXX: For now, we fail here on any error, instead of when we try to use the dictionary...
 		// For now, the record in the cache will be terminally failed and is never removed.
 		return err
@@ -650,7 +650,7 @@ func fetcherDownloadURLThread(ctx context.Context, fetchReqCh chan fetchReq, don
 // A dictionaryCache provides a rendezvous point for chunk fetches
 // which have data dependencies on dictionary fetches. It stores a
 // single record per |path|,|offset| tuple we see, and that record
-// will be populated with the |*gozstd.DDict| that results from
+// will be populated with the |*nbs.DecompBundle| that results from
 // fetching those contents. Every |GetRange| that has a dictionary
 // dependency gets the record out of the dictionary cache. The first
 // time the cache entry is created, the download thread also schedules
@@ -670,16 +670,16 @@ type DictionaryKey struct {
 
 type DictionaryPayload struct {
 	done chan struct{}
-	res  any
+	res  *nbs.DecompBundle
 	err  error
 }
 
-func (p *DictionaryPayload) Get() (any, error) {
+func (p *DictionaryPayload) Get() (*nbs.DecompBundle, error) {
 	<-p.done
 	return p.res, p.err
 }
 
-func (p *DictionaryPayload) Set(res any, err error) {
+func (p *DictionaryPayload) Set(res *nbs.DecompBundle, err error) {
 	p.res = res
 	p.err = err
 	close(p.done)

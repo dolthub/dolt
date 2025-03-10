@@ -123,8 +123,7 @@ func (fh filehandler) ServeHTTP(respWr http.ResponseWriter, req *http.Request) {
 		}
 
 		i := strings.LastIndex(path, "/")
-		// a table file name is currently 32 characters, plus the '/' is 33.
-		if i < 0 || len(path[i:]) != 33 {
+		if i < 0 || !validateFileName(path[i+1:]) {
 			logger = logger.WithField("status", http.StatusNotFound)
 			respWr.WriteHeader(http.StatusNotFound)
 			return
@@ -231,7 +230,7 @@ func readTableFile(logger *logrus.Entry, path string, respWr http.ResponseWriter
 		}
 	}()
 
-	if rangeStr == "" {
+	if rangeStr != "" {
 		respWr.WriteHeader(http.StatusPartialContent)
 	} else {
 		respWr.WriteHeader(http.StatusOK)
@@ -288,8 +287,7 @@ func (u *uploadreader) Close() error {
 }
 
 func writeTableFile(ctx context.Context, logger *logrus.Entry, dbCache DBCache, path, fileId string, numChunks int, contentHash []byte, contentLength uint64, body io.ReadCloser) (*logrus.Entry, int) {
-	_, ok := hash.MaybeParse(fileId)
-	if !ok {
+	if !validateFileName(fileId) {
 		logger = logger.WithField("status", http.StatusBadRequest)
 		logger.Warnf("%s is not a valid hash", fileId)
 		return logger, http.StatusBadRequest
@@ -442,4 +440,16 @@ func ExtractBasicAuthCreds(ctx context.Context) (*RequestCredentials, error) {
 
 		return &RequestCredentials{Username: username, Password: password, Address: addr.Addr.String()}, nil
 	}
+}
+
+func validateFileName(fileName string) bool {
+	if len(fileName) == 32 {
+		_, ok := hash.MaybeParse(fileName)
+		return ok
+	}
+	if len(fileName) == 32+len(nbs.ArchiveFileSuffix) && strings.HasSuffix(fileName, nbs.ArchiveFileSuffix) {
+		_, ok := hash.MaybeParse(fileName[:32])
+		return ok
+	}
+	return false
 }
