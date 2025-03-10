@@ -84,9 +84,16 @@ func MoveTablesBetweenRoots(ctx context.Context, tbls []doltdb.TableName, src, d
 				}
 			}
 
-			dest, err = dest.PutTable(ctx, td.ToName, td.ToTable)
-			if err != nil {
-				return nil, err
+			if td.ToCustomTable != nil {
+				dest, err = dest.PutCustomTable(ctx, td.ToName, td.ToCustomTable)
+				if err != nil {
+					return nil, err
+				}
+			} else {
+				dest, err = dest.PutTable(ctx, td.ToName, td.ToTable)
+				if err != nil {
+					return nil, err
+				}
 			}
 
 			stagedFKs.RemoveKeys(td.FromFks...)

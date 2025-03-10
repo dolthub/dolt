@@ -64,8 +64,12 @@ type RootValue interface {
 	// all tables is also included. This method is very expensive for large root values, so |transitive| should only be used
 	// when debugging tests.
 	DebugString(ctx context.Context, transitive bool) string
+	// TODO: doc
+	FindCustomTableNames(ctx context.Context, names []TableName) (customTblNamesMap map[TableName]struct{}, customTblNames []TableName, err error)
 	// GetCollation returns the database collation.
 	GetCollation(ctx context.Context) (schema.Collation, error)
+	// GetCustomTable will retrieve a custom table by its case-sensitive name.
+	GetCustomTable(ctx context.Context, tName TableName) (CustomTable, bool, error)
 	// GetDatabaseSchemas returns all schemas. These differ from a table's schema.
 	GetDatabaseSchemas(ctx context.Context) ([]schema.DatabaseSchema, error)
 	// GetFeatureVersion returns the feature version of this root, if one is written
@@ -87,12 +91,17 @@ type RootValue interface {
 	HandlePostMerge(ctx context.Context, ourRoot, theirRoot, ancRoot RootValue) (RootValue, error)
 	// HasTable returns whether the root has a table with the given case-sensitive name.
 	HasTable(ctx context.Context, tName TableName) (bool, error)
+	// IterCustomTables calls the callback function cb on each CustomTable in this RootValue.
+	IterCustomTables(ctx context.Context, cb func(name TableName, table CustomTable) (stop bool, err error)) error
 	// IterTables calls the callback function cb on each table in this RootValue.
 	IterTables(ctx context.Context, cb func(name TableName, table *Table, sch schema.Schema) (stop bool, err error)) error
 	// NodeStore returns this root's NodeStore.
 	NodeStore() tree.NodeStore
 	// NomsValue returns this root's storage as a noms value.
 	NomsValue() types.Value
+	// PutCustomTable inserts a custom table by name into the root. If a custom table already exists with that name,
+	// then it will be replaced.
+	PutCustomTable(ctx context.Context, tName TableName, table CustomTable) (RootValue, error)
 	// PutForeignKeyCollection returns a new root with the given foreign key collection.
 	PutForeignKeyCollection(ctx context.Context, fkc *ForeignKeyCollection) (RootValue, error)
 	// PutTable inserts a table by name into the map of tables. If a table already exists with that name it will be replaced
@@ -279,6 +288,11 @@ func (root *rootValue) SetFeatureVersion(v FeatureVersion) (RootValue, error) {
 	return root.withStorage(newStorage), nil
 }
 
+// FindCustomTableNames is only used by Doltgres.
+func (root *rootValue) FindCustomTableNames(ctx context.Context, names []TableName) (map[TableName]struct{}, []TableName, error) {
+	return nil, nil, nil
+}
+
 func (root *rootValue) GetCollation(ctx context.Context) (schema.Collation, error) {
 	return root.st.GetCollation(ctx)
 }
@@ -289,6 +303,11 @@ func (root *rootValue) SetCollation(ctx context.Context, collation schema.Collat
 		return nil, err
 	}
 	return root.withStorage(newStorage), nil
+}
+
+// GetCustomTable is only used by Doltgres.
+func (root *rootValue) GetCustomTable(ctx context.Context, tName TableName) (CustomTable, bool, error) {
+	return nil, false, nil
 }
 
 func (root *rootValue) HandlePostMerge(ctx context.Context, ourRoot, theirRoot, ancRoot RootValue) (RootValue, error) {
@@ -634,14 +653,27 @@ func TablesWithDataConflicts(ctx context.Context, root RootValue) ([]TableName, 
 		return nil, err
 	}
 
+	var customTblNamesMap map[TableName]struct{}
 	conflicted := make([]TableName, 0, len(names))
 	for _, name := range names {
-		tbl, _, err := root.GetTable(ctx, name)
+		tbl, ok, err := root.GetTable(ctx, name)
 		if err != nil {
 			return nil, err
 		}
+		if !ok {
+			if customTblNamesMap == nil {
+				customTblNamesMap, _, err = root.FindCustomTableNames(ctx, names)
+				if err != nil {
+					return nil, err
+				}
+			}
+			if _, ok = customTblNamesMap[name]; ok {
+				continue
+			}
+			return nil, fmt.Errorf("root returned table `%s` but it could not be found", name.String())
+		}
 
-		ok, err := tbl.HasConflicts(ctx)
+		ok, err = tbl.HasConflicts(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -660,11 +692,24 @@ func TablesWithConstraintViolations(ctx context.Context, root RootValue) ([]Tabl
 		return nil, err
 	}
 
+	var customTblNamesMap map[TableName]struct{}
 	violating := make([]TableName, 0, len(names))
 	for _, name := range names {
-		tbl, _, err := root.GetTable(ctx, name)
+		tbl, ok, err := root.GetTable(ctx, name)
 		if err != nil {
 			return nil, err
+		}
+		if !ok {
+			if customTblNamesMap == nil {
+				customTblNamesMap, _, err = root.FindCustomTableNames(ctx, names)
+				if err != nil {
+					return nil, err
+				}
+			}
+			if _, ok = customTblNamesMap[name]; ok {
+				continue
+			}
+			return nil, fmt.Errorf("root returned table `%s` but it could not be found", name.String())
 		}
 
 		n, err := tbl.NumConstraintViolations(ctx)
@@ -697,6 +742,11 @@ func HasConstraintViolations(ctx context.Context, root RootValue) (bool, error) 
 		return false, err
 	}
 	return len(tbls) > 0, nil
+}
+
+// IterCustomTables is only used by Doltgres.
+func (root *rootValue) IterCustomTables(ctx context.Context, cb func(name TableName, table CustomTable) (stop bool, err error)) error {
+	return nil
 }
 
 // IterTables calls the callback function cb on each table in this RootValue.
@@ -872,6 +922,11 @@ func (root *rootValue) PutTable(ctx context.Context, tName TableName, table *Tab
 	}
 
 	return root.putTable(ctx, tName, tableRef, schHash)
+}
+
+// PutCustomTable is only used by Doltgres.
+func (root *rootValue) PutCustomTable(ctx context.Context, tName TableName, table CustomTable) (RootValue, error) {
+	return nil, errors.New("dolt does not implement custom tables")
 }
 
 func RefFromNomsTable(ctx context.Context, table *Table) (types.Ref, error) {
@@ -1112,12 +1167,22 @@ func ValidateForeignKeysOnSchemas(ctx context.Context, root RootValue) (RootValu
 		return nil, err
 	}
 	allTablesSet := make(map[TableName]schema.Schema)
+	var customTblNamesMap map[TableName]struct{}
 	for _, tableName := range allTablesSlice {
 		tbl, ok, err := root.GetTable(ctx, tableName)
 		if err != nil {
 			return nil, err
 		}
 		if !ok {
+			if customTblNamesMap == nil {
+				customTblNamesMap, _, err = root.FindCustomTableNames(ctx, allTablesSlice)
+				if err != nil {
+					return nil, err
+				}
+			}
+			if _, ok = customTblNamesMap[tableName]; ok {
+				continue
+			}
 			return nil, fmt.Errorf("found table `%s` in staging but could not load for foreign key check", tableName)
 		}
 		tblSch, err := tbl.GetSchema(ctx)
