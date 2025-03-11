@@ -255,7 +255,7 @@ end
 			{
 				Query: "insert into t values (1, 1);",
 				Expected: []sql.Row{
-					{gmstypes.OkResult{RowsAffected: 1, InsertID: 4}},
+					{gmstypes.OkResult{RowsAffected: 1, InsertID: 1}},
 				},
 			},
 			{
