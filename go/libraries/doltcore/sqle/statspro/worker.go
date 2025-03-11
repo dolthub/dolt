@@ -37,6 +37,8 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
+const collectBatchSize = 20
+
 func (sc *StatsController) CollectOnce(ctx context.Context) (string, error) {
 	genStart := sc.genCnt.Load()
 	newStats, err := sc.newStatsForRoot(ctx, nil)
@@ -293,54 +295,66 @@ func (sc *StatsController) collectIndexNodes(ctx *sql.Context, prollyMap prolly.
 
 	var writes int
 	var offset uint64
-	for _, n := range nodes {
-		treeCnt, err := n.TreeCount()
-		if err != nil {
-			return nil, nil, 0, err
-		}
-		start, stop := offset, offset+uint64(treeCnt)
-		offset = stop
-
-		if _, ok, err := sc.GetBucket(ctx, n.HashOf(), keyBuilder); err != nil {
-			return nil, nil, 0, err
-		} else if ok {
-			continue
-		}
-
-		writes++
-		err = sc.sq.DoSync(ctx, func() error {
+	for i := 0; i < len(nodes); {
+		err := sc.sq.DoSync(ctx, func() error {
 			sql.SessionCommandBegin(ctx.Session)
 			defer sql.SessionCommandEnd(ctx.Session)
-			updater.newBucket()
 
-			// we read exclusive range [node first key, next node first key)
-			iter, err := prollyMap.IterOrdinalRange(ctx, start, stop)
-			if err != nil {
-				return err
-			}
-			for {
-				// stats key will be a prefix of the index key
-				keyBytes, _, err := iter.Next(ctx)
-				if errors.Is(err, io.EOF) {
-					break
-				} else if err != nil {
+			newWrites := 0
+			for i < len(nodes) && newWrites < collectBatchSize {
+				n := nodes[i]
+				i++
+
+				treeCnt, err := n.TreeCount()
+				if err != nil {
 					return err
 				}
-				// build full key
-				for i := range keyBuilder.Desc.Types {
-					keyBuilder.PutRaw(i, keyBytes.GetField(i))
+				start, stop := offset, offset+uint64(treeCnt)
+				offset = stop
+
+				if _, ok, err := sc.GetBucket(ctx, n.HashOf(), keyBuilder); err != nil {
+					return err
+				} else if ok {
+					continue
 				}
 
-				updater.add(ctx, keyBuilder.BuildPrefixNoRecycle(prollyMap.Pool(), updater.prefixLen))
-				keyBuilder.Recycle()
-			}
+				writes++
+				newWrites++
 
-			// finalize the aggregation
-			newBucket, err := updater.finalize(ctx, prollyMap.NodeStore())
-			if err != nil {
-				return err
+				updater.newBucket()
+
+				// we read exclusive range [node first key, next node first key)
+				iter, err := prollyMap.IterOrdinalRange(ctx, start, stop)
+				if err != nil {
+					return err
+				}
+				for {
+					// stats key will be a prefix of the index key
+					keyBytes, _, err := iter.Next(ctx)
+					if errors.Is(err, io.EOF) {
+						break
+					} else if err != nil {
+						return err
+					}
+					// build full key
+					for i := range keyBuilder.Desc.Types {
+						keyBuilder.PutRaw(i, keyBytes.GetField(i))
+					}
+
+					updater.add(ctx, keyBuilder.BuildPrefixNoRecycle(prollyMap.Pool(), updater.prefixLen))
+					keyBuilder.Recycle()
+				}
+
+				// finalize the aggregation
+				newBucket, err := updater.finalize(ctx, prollyMap.NodeStore())
+				if err != nil {
+					return err
+				}
+				if err := sc.PutBucket(ctx, n.HashOf(), newBucket, keyBuilder); err != nil {
+					return err
+				}
 			}
-			return sc.PutBucket(ctx, n.HashOf(), newBucket, keyBuilder)
+			return nil
 		})
 		if err != nil {
 			return nil, nil, 0, err
@@ -405,6 +419,9 @@ func (sc *StatsController) updateTable(ctx *sql.Context, newStats *rootStats, ta
 
 	var newTableStats []*stats.Statistic
 	for _, sqlIdx := range indexes {
+		if sqlIdx.IsSpatial() || sqlIdx.IsFullText() || sqlIdx.IsGenerated() || sqlIdx.IsVector() {
+			continue
+		}
 		var idx durable.Index
 		var err error
 		var prollyMap prolly.Map

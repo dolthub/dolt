@@ -369,6 +369,31 @@ var DoltStatsStorageTests = []queries.ScriptTest{
 		},
 	},
 	{
+		Name: "issue 8964: alternative indexes panic",
+		SetUpScript: []string{
+			"create table geom_tbl(g geometry not null srid 0)",
+			"insert into geom_tbl values (point(0,0)), (linestring(point(1,1), point(2,2)))",
+			"alter table geom_tbl add spatial index (g)",
+			"CREATE TABLE fullt_tbl (pk BIGINT UNSIGNED PRIMARY KEY, v1 VARCHAR(200), v2 VARCHAR(200), FULLTEXT idx (v1, v2));",
+			"INSERT INTO fullt_tbl VALUES (1, 'abc', 'def pqr'), (2, 'ghi', 'jkl'), (3, 'mno', 'mno'), (4, 'stu vwx', 'xyz zyx yzx'), (5, 'ghs', 'mno shg');",
+			"create table vector_tbl (id int primary key, v json);",
+			`insert into vector_tbl values (1, '[4.0,3.0]'), (2, '[0.0,0.0]'), (3, '[-1.0,1.0]'), (4, '[0.0,-2.0]');`,
+			`create vector index v_idx on vector_tbl(v);`,
+			"create table gen_tbl (a  int primary key, b int as (a + 1) stored)",
+			"insert into gen_tbl (a) values (0), (1), (2)",
+			"create index i1 on gen_tbl(b)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "analyze table geom_tbl, fullt_tbl, vector_tbl, gen_tbl",
+			},
+			{
+				Query:    "select table_name, index_name from dolt_statistics",
+				Expected: []sql.Row{{"fullt_tbl", "primary"}, {"gen_tbl", "primary"}, {"gen_tbl", "i1"}, {"vector_tbl", "primary"}},
+			},
+		},
+	},
+	{
 		Name: "comma encoding bug",
 		SetUpScript: []string{
 			`create table a (a varbinary (32) primary key)`,

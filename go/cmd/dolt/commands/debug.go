@@ -360,10 +360,8 @@ func debugAnalyze(ctx *sql.Context, tempDir string, sqlEng *engine.SqlEngine, sq
 
 	eng := sqlEng.GetUnderlyingEngine()
 	eng.Analyzer.Debug = true
-	eng.Analyzer.Verbose = true
 	defer func() {
 		eng.Analyzer.Debug = false
-		eng.Analyzer.Verbose = false
 	}()
 	analysisFile, err := os.Create(filepath.Join(tempDir, "analysis.txt"))
 	if err != nil {
@@ -377,8 +375,6 @@ func debugAnalyze(ctx *sql.Context, tempDir string, sqlEng *engine.SqlEngine, sq
 	}
 	defer planFile.Close()
 	planBuf := bufio.NewWriter(planFile)
-
-	defer planBuf.Flush()
 
 	analyzer.SetOutput(analysisFile)
 	logrus.SetOutput(analysisFile)
@@ -417,7 +413,6 @@ func debugAnalyze(ctx *sql.Context, tempDir string, sqlEng *engine.SqlEngine, sq
 
 		planned, err := eng.AnalyzeQuery(ctx, query)
 		if err != nil {
-			fmt.Fprintf(planBuf, "error: %s\n", err.Error())
 			return err
 		}
 
@@ -426,7 +421,7 @@ func debugAnalyze(ctx *sql.Context, tempDir string, sqlEng *engine.SqlEngine, sq
 		fmt.Fprintf(planBuf, "debug plan: \n%s", sql.DebugString(planned))
 	}
 
-	return nil
+	return planBuf.Flush()
 }
 
 func execDebugMode(ctx *sql.Context, qryist cli.Queryist, queryFile *os.File, continueOnErr bool, format engine.PrintResultFormat) error {

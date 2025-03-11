@@ -127,7 +127,7 @@ type UserSessionVars struct {
 // YAMLConfig is a ServerConfig implementation which is read from a yaml file
 type YAMLConfig struct {
 	LogLevelStr       *string                `yaml:"log_level,omitempty"`
-	LogFormatStr      *string                `yaml:"log_format,omitempty" minver:"TBD"`
+	LogFormatStr      *string                `yaml:"log_format,omitempty" minver:"1.50.3"`
 	MaxQueryLenInLogs *int                   `yaml:"max_logged_query_len,omitempty"`
 	EncodeLoggedQuery *bool                  `yaml:"encode_logged_query,omitempty"`
 	BehaviorConfig    BehaviorYAMLConfig     `yaml:"behavior,omitempty"`

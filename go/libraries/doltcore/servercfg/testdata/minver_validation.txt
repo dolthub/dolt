@@ -2,6 +2,7 @@
 # if you are getting an error with this file it's likely you
 # have added a new minver tag with a value other than TBD
 LogLevelStr *string 0.0.0 log_level,omitempty
+LogFormatStr *string 1.50.3 log_format,omitempty
 MaxQueryLenInLogs *int 0.0.0 max_logged_query_len,omitempty
 EncodeLoggedQuery *bool 0.0.0 encode_logged_query,omitempty
 BehaviorConfig servercfg.BehaviorYAMLConfig 0.0.0 behavior,omitempty
