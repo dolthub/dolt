@@ -53,6 +53,10 @@ func createNewStatsBuckets(ctx *sql.Context, sqlTable sql.Table, dTab *doltdb.Ta
 	ret := make(map[sql.StatQualifier]*DoltStats)
 
 	for _, meta := range idxMetas {
+		sqlIdx := nameToIdx[strings.ToLower(meta.qual.Index())]
+		if sqlIdx.IsSpatial() || sqlIdx.IsFullText() || sqlIdx.IsGenerated() || sqlIdx.IsVector() {
+			continue
+		}
 		var idx durable.Index
 		var err error
 		if strings.EqualFold(meta.qual.Index(), "PRIMARY") {
@@ -67,7 +71,6 @@ func createNewStatsBuckets(ctx *sql.Context, sqlTable sql.Table, dTab *doltdb.Ta
 		prollyMap := durable.ProllyMapFromIndex(idx)
 		keyBuilder := val.NewTupleBuilder(prollyMap.KeyDesc())
 
-		sqlIdx := nameToIdx[strings.ToLower(meta.qual.Index())]
 		fds, colSet, err := stats.IndexFds(meta.qual.Table(), sqlTable.Schema(), sqlIdx)
 		if err != nil {
 			return nil, err
