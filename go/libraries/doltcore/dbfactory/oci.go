@@ -22,9 +22,7 @@ import (
 	"github.com/oracle/oci-go-sdk/v65/objectstorage"
 
 	"github.com/dolthub/dolt/go/store/blobstore"
-	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/nbs"
-	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -38,30 +36,25 @@ func (fact OCIFactory) PrepareDB(ctx context.Context, nbf *types.NomsBinFormat, 
 }
 
 // CreateDB creates an OCI backed database
-func (fact OCIFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) (datas.Database, types.ValueReadWriter, tree.NodeStore, error) {
-	var db datas.Database
+func (fact OCIFactory) GetDBLoader(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) (DBLoader, error) {
 	provider := common.DefaultConfigProvider()
 
 	client, err := objectstorage.NewObjectStorageClientWithConfigurationProvider(provider)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, err
 	}
 
 	bs, err := blobstore.NewOCIBlobstore(ctx, provider, client, urlObj.Host, urlObj.Path)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, err
 	}
 
 	q := nbs.NewUnlimitedMemQuotaProvider()
 
 	ociStore, err := nbs.NewNoConjoinBSStore(ctx, nbf.VersionString(), bs, defaultMemTableSize, q)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, err
 	}
 
-	vrw := types.NewValueStore(ociStore)
-	ns := tree.NewNodeStore(ociStore)
-	db = datas.NewTypesDatabase(vrw, ns)
-
-	return db, vrw, ns, nil
+	return ChunkStoreLoader{cs: ociStore}, nil
 }

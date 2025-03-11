@@ -95,8 +95,7 @@ func MaybeMigrateFileManifest(ctx context.Context, dir string) (bool, error) {
 }
 
 // getFileManifest makes a new file manifest.
-func getFileManifest(ctx context.Context, dir string, mode updateMode) (m manifest, err error) {
-	lock := fslock.New(filepath.Join(dir, lockFileName))
+func getFileManifest(ctx context.Context, lock *fslock.Lock, dir string, mode updateMode) (m manifest, err error) {
 	m = fileManifest{dir: dir, mode: mode, lock: lock}
 
 	var f *os.File
