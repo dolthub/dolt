@@ -21,16 +21,44 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
+// DecompBundle is a bundle of a dictionary and its raw bytes. This is necesary because we sometimes need to copy
+// the raw dictionary from one archive to another. The C interface around zStd objects doesn't give us a way to
+// get the raw dictionary bytes, so we'll use this struct as the primary interface to pass around dictionaries.
+type DecompBundle struct {
+	dictionary    *gozstd.DDict
+	rawDictionary *[]byte
+}
+
+// NewDecompBundle creates a new DecompBundle from a zStd compressed dictionary. The input should be the same
+// bytes we store on disk and transport over the wire. The uncompressed form is preserved in the result.
+func NewDecompBundle(compressedDict []byte) (*DecompBundle, error) {
+	// Standard zStd decompression. No dictionary for dictionaries.
+	rawDict, err := gozstd.Decompress(nil, compressedDict)
+	if err != nil {
+		return nil, err
+	}
+
+	dict, err := gozstd.NewDDict(rawDict)
+	if err != nil {
+		return nil, err
+	}
+
+	return &DecompBundle{dictionary: dict, rawDictionary: &rawDict}, nil
+}
+
 type ArchiveToChunker struct {
-	h          hash.Hash
-	dictionary *gozstd.DDict
-	chunkData  []byte
+	h         hash.Hash
+	dict      *DecompBundle
+	chunkData []byte
 }
 
 var _ ToChunker = (*ArchiveToChunker)(nil)
 
-func NewArchiveToChunker(h hash.Hash, dict *gozstd.DDict, chunkData []byte) ToChunker {
-	return ArchiveToChunker{h: h, dictionary: dict, chunkData: chunkData}
+func NewArchiveToChunker(h hash.Hash, dict *DecompBundle, chunkData []byte) ToChunker {
+	return ArchiveToChunker{
+		h:         h,
+		dict:      dict,
+		chunkData: chunkData}
 }
 
 func (a ArchiveToChunker) Hash() hash.Hash {
@@ -38,7 +66,7 @@ func (a ArchiveToChunker) Hash() hash.Hash {
 }
 
 func (a ArchiveToChunker) ToChunk() (chunks.Chunk, error) {
-	dict := a.dictionary
+	dict := a.dict.dictionary
 	data := a.chunkData
 	rawChunk, err := gozstd.DecompressDict(nil, data, dict)
 	if err != nil {

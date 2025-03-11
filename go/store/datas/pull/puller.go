@@ -381,19 +381,9 @@ func (p *Puller) Pull(ctx context.Context) error {
 			}
 			tracker.TickProcessed()
 
-			if compressedChunk, ok := cChk.(nbs.CompressedChunk); ok {
-				err = p.wr.AddCompressedChunk(ctx, compressedChunk)
-				if err != nil {
-					return err
-				}
-			} else if _, ok := cChk.(nbs.ArchiveToChunker); ok {
-				// NM4 - Until we can write quickly to archives.....
-				cc := nbs.ChunkToCompressedChunk(chnk)
-
-				err = p.wr.AddCompressedChunk(ctx, cc)
-				if err != nil {
-					return err
-				}
+			err = p.wr.AddToChunker(ctx, cChk)
+			if err != nil {
+				return err
 			}
 		}
 	})

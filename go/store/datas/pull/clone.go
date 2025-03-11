@@ -234,7 +234,14 @@ func clone(ctx context.Context, srcTS, sinkTS chunks.TableFileStore, sinkCS chun
 		return nil
 	}
 
-	return sinkTS.SetRootChunk(ctx, root, hash.Hash{})
+	success, err := sinkTS.Commit(ctx, root, hash.Hash{})
+	if !success && err == nil {
+		return errors.New("root update failure. optimistic lock failed")
+	}
+	if success && err != nil {
+		panic(fmt.Sprintf("runtime error: successful root update with error: %v", err))
+	}
+	return err
 }
 
 func filterAppendicesFromSourceFiles(appendixFiles []chunks.TableFile, sourceFiles []chunks.TableFile) []chunks.TableFile {
