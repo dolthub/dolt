@@ -228,9 +228,12 @@ func (p *Provider) checkRefresh(ctx *sql.Context, sqlDb sql.Database, dbName, br
 			}
 			ctx.GetLogger().Debugf("statistics refresh index: %s", qual.String())
 
-			updateMeta, err := newIdxMeta(ctx, curStat, dTab, index, curStat.Columns())
+			updateMeta, ok, err := newIdxMeta(ctx, curStat, dTab, index, curStat.Columns())
 			if err != nil {
 				ctx.GetLogger().Debugf("statistics refresh error: %s", err.Error())
+				continue
+			}
+			if !ok {
 				continue
 			}
 			curCnt := float64(len(curStat.Active))

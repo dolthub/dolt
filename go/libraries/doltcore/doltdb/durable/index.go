@@ -277,6 +277,17 @@ func ProllyMapFromIndex(i Index) prolly.Map {
 	return i.(prollyIndex).index
 }
 
+// xxx: don't use this, temporary fix waiting for bigger
+// fix in stats 2.0
+func MaybeProllyMapFromIndex(i Index) (prolly.Map, bool) {
+	ret, ok := i.(prollyIndex)
+	if ok {
+		return ret.index, true
+	} else {
+		return prolly.Map{}, false
+	}
+}
+
 // MapFromIndex unwraps the Index and returns the underlying map as an interface.
 func MapFromIndex(i Index) prolly.MapInterfaceWithMutable {
 	switch indexType := i.(type) {
