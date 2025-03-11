@@ -179,11 +179,13 @@ func (p *Provider) RefreshTableStatsWithBranch(ctx *sql.Context, table sql.Table
 			curStat = NewDoltStats()
 			curStat.Statistic.Qual = qual
 		}
-		idxMeta, err := newIdxMeta(ctx, curStat, dTab, idx, cols)
+		idxMeta, ok, err := newIdxMeta(ctx, curStat, dTab, idx, cols)
 		if err != nil {
 			return err
 		}
-		idxMetas = append(idxMetas, idxMeta)
+		if ok {
+			idxMetas = append(idxMetas, idxMeta)
+		}
 	}
 
 	newTableStats, err := createNewStatsBuckets(ctx, sqlTable, dTab, indexes, idxMetas)
@@ -193,7 +195,10 @@ func (p *Provider) RefreshTableStatsWithBranch(ctx *sql.Context, table sql.Table
 
 	// merge new chunks with preexisting chunks
 	for _, idxMeta := range idxMetas {
-		stat := newTableStats[idxMeta.qual]
+		stat, ok := newTableStats[idxMeta.qual]
+		if !ok {
+			continue
+		}
 		targetChunks, err := MergeNewChunks(idxMeta.allAddrs, idxMeta.keepChunks, stat.Hist)
 		if err != nil {
 			return err
@@ -260,7 +265,7 @@ func GetLatestTable(ctx *sql.Context, tableName string, sqlDb sql.Database) (sql
 	return sqlTable, dTab, nil
 }
 
-func newIdxMeta(ctx *sql.Context, curStats *DoltStats, doltTable *doltdb.Table, sqlIndex sql.Index, cols []string) (indexMeta, error) {
+func newIdxMeta(ctx *sql.Context, curStats *DoltStats, doltTable *doltdb.Table, sqlIndex sql.Index, cols []string) (indexMeta, bool, error) {
 	var idx durable.Index
 	var err error
 	if strings.EqualFold(sqlIndex.ID(), "PRIMARY") {
@@ -269,24 +274,27 @@ func newIdxMeta(ctx *sql.Context, curStats *DoltStats, doltTable *doltdb.Table, 
 		idx, err = doltTable.GetIndexRowData(ctx, sqlIndex.ID())
 	}
 	if err != nil {
-		return indexMeta{}, err
+		return indexMeta{}, false, err
 	}
 
-	prollyMap := durable.ProllyMapFromIndex(idx)
+	prollyMap, ok := durable.MaybeProllyMapFromIndex(idx)
+	if !ok {
+		return indexMeta{}, false, nil
+	}
 
 	if cnt, err := prollyMap.Count(); err != nil {
-		return indexMeta{}, err
+		return indexMeta{}, false, err
 	} else if cnt == 0 {
 		return indexMeta{
 			qual: curStats.Statistic.Qual,
 			cols: cols,
-		}, nil
+		}, true, nil
 	}
 
 	// get newest histogram target level hashes
 	levelNodes, err := tree.GetHistogramLevel(ctx, prollyMap.Tuples(), bucketLowCnt)
 	if err != nil {
-		return indexMeta{}, err
+		return indexMeta{}, false, err
 	}
 
 	var addrs []hash.Hash
@@ -303,7 +311,7 @@ func newIdxMeta(ctx *sql.Context, curStats *DoltStats, doltTable *doltdb.Table, 
 		// track the (start, end) ordinal offsets to simplify the read iter.
 		treeCnt, err := n.TreeCount()
 		if err != nil {
-			return indexMeta{}, err
+			return indexMeta{}, false, err
 		}
 
 		addrs = append(addrs, n.HashOf())
@@ -339,5 +347,5 @@ func newIdxMeta(ctx *sql.Context, curStats *DoltStats, doltTable *doltdb.Table, 
 		keepChunks:     keepChunks,
 		dropChunks:     dropChunks,
 		allAddrs:       addrs,
-	}, nil
+	}, true, nil
 }
