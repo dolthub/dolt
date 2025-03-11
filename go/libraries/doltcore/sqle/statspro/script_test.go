@@ -605,6 +605,9 @@ func TestStatScripts(t *testing.T) {
 			},
 			assertions: []assertion{
 				{
+					query: "call dolt_stats_wait()",
+				},
+				{
 					query: "call dolt_stats_info('--short')",
 					res: []sql.Row{
 						{dprocedures.StatsInfo{

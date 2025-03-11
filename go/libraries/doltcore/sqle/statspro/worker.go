@@ -100,6 +100,9 @@ func (sc *StatsController) runWorker(ctx context.Context) (err error) {
 }
 
 func (sc *StatsController) trySwapStats(ctx context.Context, prevGen uint64, newStats *rootStats, gcKv *memStats) (ok bool, err error) {
+	if newStats == nil {
+		return false, fmt.Errorf("attempted to place a nil stats object")
+	}
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
 
