@@ -314,7 +314,8 @@ SQL
     [[ "$output" =~ '"{""dbCnt"":1,""active"":true,""storageBucketCnt"":2,""cachedBucketCnt"":2,""cachedBoundCnt"":2,""cachedTemplateCnt"":4,""statCnt"":2,""backing"":""repo2""}"' ]] || false
 
     # stop turns stats off
-    dolt sql -r csv -q "call dolt_stats_stop('--short')"
+    dolt sql -q "call dolt_stats_stop()"
+    dolt sql -r csv -q "call dolt_stats_info('--short')"
     run dolt sql -r csv -q "call dolt_stats_info('--short')"
     [ "$status" -eq 0 ]
     [[ "$output" =~ '"{""dbCnt"":1,""active"":false,""storageBucketCnt"":2,""cachedBucketCnt"":2,""cachedBoundCnt"":2,""cachedTemplateCnt"":4,""statCnt"":2,""backing"":""repo2""}"' ]] || false

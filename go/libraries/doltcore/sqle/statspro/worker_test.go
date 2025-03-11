@@ -45,7 +45,7 @@ import (
 func TestScheduleLoop(t *testing.T) {
 	threads := sql.NewBackgroundThreads()
 	defer threads.Shutdown()
-	ctx, sqlEng, sc := defaultSetup(t, threads, true, true)
+	ctx, sqlEng, sc := defaultSetup(t, threads, true, false)
 
 	{
 		// add more data
@@ -98,7 +98,7 @@ func TestScheduleLoop(t *testing.T) {
 func TestAnalyze(t *testing.T) {
 	threads := sql.NewBackgroundThreads()
 	defer threads.Shutdown()
-	ctx, sqlEng, sc := defaultSetup(t, threads, true, true)
+	ctx, sqlEng, sc := defaultSetup(t, threads, true, false)
 
 	require.NoError(t, executeQuery(ctx, sqlEng, "insert into xy values (-1,-1)"))
 
@@ -125,7 +125,7 @@ func TestAnalyze(t *testing.T) {
 func TestModifyColumn(t *testing.T) {
 	threads := sql.NewBackgroundThreads()
 	defer threads.Shutdown()
-	ctx, sqlEng, sc := defaultSetup(t, threads, true, true)
+	ctx, sqlEng, sc := defaultSetup(t, threads, true, false)
 	sc.enableGc = false
 	{
 		runBlock(t, ctx, sqlEng, "alter table xy modify column y bigint")
@@ -147,7 +147,7 @@ func TestModifyColumn(t *testing.T) {
 func TestAddColumn(t *testing.T) {
 	threads := sql.NewBackgroundThreads()
 	defer threads.Shutdown()
-	ctx, sqlEng, sc := defaultSetup(t, threads, true, true)
+	ctx, sqlEng, sc := defaultSetup(t, threads, true, false)
 	sc.enableGc = false
 
 	runBlock(t, ctx, sqlEng,
@@ -167,7 +167,7 @@ func TestAddColumn(t *testing.T) {
 func TestDropIndex(t *testing.T) {
 	threads := sql.NewBackgroundThreads()
 	defer threads.Shutdown()
-	ctx, sqlEng, sc := defaultSetup(t, threads, true, true)
+	ctx, sqlEng, sc := defaultSetup(t, threads, true, false)
 	sc.enableGc = false
 
 	runBlock(t, ctx, sqlEng,
@@ -198,7 +198,7 @@ func TestDropIndex(t *testing.T) {
 func TestDropTable(t *testing.T) {
 	threads := sql.NewBackgroundThreads()
 	defer threads.Shutdown()
-	ctx, sqlEng, sc := defaultSetup(t, threads, true, true)
+	ctx, sqlEng, sc := defaultSetup(t, threads, true, false)
 	sc.enableGc = false
 
 	runBlock(t, ctx, sqlEng,
@@ -231,7 +231,7 @@ func TestDropTable(t *testing.T) {
 func TestDeleteAboveBoundary(t *testing.T) {
 	threads := sql.NewBackgroundThreads()
 	defer threads.Shutdown()
-	ctx, sqlEng, sc := defaultSetup(t, threads, true, true)
+	ctx, sqlEng, sc := defaultSetup(t, threads, true, false)
 	sc.enableGc = false
 
 	runBlock(t, ctx, sqlEng,
@@ -256,7 +256,7 @@ func TestDeleteAboveBoundary(t *testing.T) {
 func TestDeleteBelowBoundary(t *testing.T) {
 	threads := sql.NewBackgroundThreads()
 	defer threads.Shutdown()
-	ctx, sqlEng, sc := defaultSetup(t, threads, true, true)
+	ctx, sqlEng, sc := defaultSetup(t, threads, true, false)
 	sc.enableGc = false
 
 	runBlock(t, ctx, sqlEng,
@@ -283,7 +283,7 @@ func TestDeleteBelowBoundary(t *testing.T) {
 func TestDeleteOnBoundary(t *testing.T) {
 	threads := sql.NewBackgroundThreads()
 	defer threads.Shutdown()
-	ctx, sqlEng, sc := defaultSetup(t, threads, true, true)
+	ctx, sqlEng, sc := defaultSetup(t, threads, true, false)
 	sc.enableGc = false
 
 	runBlock(t, ctx, sqlEng,
@@ -308,7 +308,7 @@ func TestDeleteOnBoundary(t *testing.T) {
 func TestAddDropDatabases(t *testing.T) {
 	threads := sql.NewBackgroundThreads()
 	defer threads.Shutdown()
-	ctx, sqlEng, sc := defaultSetup(t, threads, true, true)
+	ctx, sqlEng, sc := defaultSetup(t, threads, true, false)
 	sc.enableGc = false
 
 	{
@@ -340,7 +340,7 @@ func TestAddDropDatabases(t *testing.T) {
 func TestGC(t *testing.T) {
 	threads := sql.NewBackgroundThreads()
 	defer threads.Shutdown()
-	ctx, sqlEng, sc := defaultSetup(t, threads, true, true)
+	ctx, sqlEng, sc := defaultSetup(t, threads, true, false)
 
 	{
 		runBlock(t, ctx, sqlEng,
@@ -378,7 +378,7 @@ func TestGC(t *testing.T) {
 func TestBranches(t *testing.T) {
 	threads := sql.NewBackgroundThreads()
 	defer threads.Shutdown()
-	ctx, sqlEng, sc := defaultSetup(t, threads, true, true)
+	ctx, sqlEng, sc := defaultSetup(t, threads, true, false)
 	sc.enableGc = true
 	{
 		runBlock(t, ctx, sqlEng,
@@ -499,7 +499,7 @@ func runBlock(t *testing.T, ctx *sql.Context, sqlEng *gms.Engine, qs ...string) 
 func TestBucketCounting(t *testing.T) {
 	threads := sql.NewBackgroundThreads()
 	defer threads.Shutdown()
-	ctx, sqlEng, sc := defaultSetup(t, threads, true, true)
+	ctx, sqlEng, sc := defaultSetup(t, threads, true, false)
 	sc.enableGc = false
 
 	// add more data
@@ -534,7 +534,7 @@ func TestBucketCounting(t *testing.T) {
 func TestDropOnlyDb(t *testing.T) {
 	threads := sql.NewBackgroundThreads()
 	defer threads.Shutdown()
-	ctx, sqlEng, sc := defaultSetup(t, threads, false, true)
+	ctx, sqlEng, sc := defaultSetup(t, threads, false, false)
 	require.NoError(t, sc.Restart())
 
 	_, ok := sc.kv.(*prollyStats)

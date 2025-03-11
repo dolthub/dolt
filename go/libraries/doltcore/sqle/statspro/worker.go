@@ -106,6 +106,12 @@ func (sc *StatsController) trySwapStats(ctx context.Context, prevGen uint64, new
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
 
+	if ctx.Err() != nil {
+		// final ctx check in critical section, avoid races on
+		// stats after calling stop
+		return false, context.Cause(ctx)
+	}
+
 	signal := leSwap
 	defer func() {
 		if ok {
