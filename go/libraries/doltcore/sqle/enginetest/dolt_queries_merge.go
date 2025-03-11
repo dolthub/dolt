@@ -1734,7 +1734,7 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "INSERT INTO t VALUES (3,3),(NULL,6);",
-				Expected: []sql.Row{{types.OkResult{RowsAffected: 2, InsertID: 6}}},
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 2, InsertID: 3}}},
 			},
 			{
 				Query: "SELECT * FROM t ORDER BY pk;",
@@ -1770,7 +1770,7 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "INSERT INTO t VALUES (3,3),(NULL,7);",
-				Expected: []sql.Row{{types.OkResult{RowsAffected: 2, InsertID: 7}}},
+				Expected: []sql.Row{{types.OkResult{RowsAffected: 2, InsertID: 3}}},
 			},
 			{
 				Query: "SELECT * FROM t ORDER BY pk;",
