@@ -166,15 +166,16 @@ func TestSerialQueue(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		queue := NewSerialQueue()
 		var wg sync.WaitGroup
-		start := make(chan struct{})
 		wg.Add(1)
 		go func() error {
 			defer wg.Done()
-			close(start)
 			queue.Run(ctx)
 			return nil
 		}()
-		<-start
+		// block until queue is running
+		assert.NoError(t, queue.DoSync(ctx, func() error {
+			return nil
+		}))
 		var cnt int
 		for i := 0; i < 16; i++ {
 			// Some of these calls may error, since the queue
@@ -192,16 +193,17 @@ func TestSerialQueue(t *testing.T) {
 	t.Run("PauseFromQueue", func(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		queue := NewSerialQueue()
-		start := make(chan struct{})
 		var wg sync.WaitGroup
 		wg.Add(1)
 		go func() error {
 			defer wg.Done()
-			close(start)
 			queue.Run(ctx)
 			return nil
 		}()
-		<-start
+		// block until queue is running
+		assert.NoError(t, queue.DoSync(ctx, func() error {
+			return nil
+		}))
 		var cnt int
 		for i := 0; i < 16; i++ {
 			err := queue.DoAsync(func() error {
@@ -220,14 +222,13 @@ func TestSerialQueue(t *testing.T) {
 		queue := NewSerialQueue()
 		var wg sync.WaitGroup
 		wg.Add(1)
-		start := make(chan struct{})
+
 		go func() error {
 			defer wg.Done()
-			close(start)
 			queue.Run(ctx)
 			return nil
 		}()
-		<-start
+
 		assert.NoError(t, queue.Pause())
 		var cnt int
 		didRun := make(chan struct{})
