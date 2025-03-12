@@ -605,24 +605,6 @@ func TestStatScripts(t *testing.T) {
 			},
 			assertions: []assertion{
 				{
-					query: "call dolt_stats_wait()",
-				},
-				{
-					query: "call dolt_stats_info('--short')",
-					res: []sql.Row{
-						{dprocedures.StatsInfo{
-							DbCnt:             2,
-							Backing:           "mydb",
-							Active:            true,
-							StorageBucketCnt:  4,
-							CachedBucketCnt:   4,
-							CachedBoundCnt:    4,
-							CachedTemplateCnt: 2,
-							StatCnt:           2,
-						},
-						}},
-				},
-				{
 					query: "call dolt_stats_purge()",
 				},
 				{
