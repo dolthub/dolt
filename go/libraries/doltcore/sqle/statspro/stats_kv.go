@@ -37,8 +37,6 @@ import (
 
 var ErrIncompatibleVersion = errors.New("client stats version mismatch")
 
-const defaultBucketSize = 1024 // must be > 0 to avoid panic
-
 type StatsKv interface {
 	PutBucket(ctx context.Context, h hash.Hash, b *stats.Bucket, tupB *val.TupleBuilder) error
 	GetBucket(ctx context.Context, h hash.Hash, tupB *val.TupleBuilder) (*stats.Bucket, bool, error)
@@ -47,13 +45,8 @@ type StatsKv interface {
 	GetBound(h hash.Hash, len int) (sql.Row, bool)
 	PutBound(h hash.Hash, r sql.Row, l int)
 	Flush(ctx context.Context) (int, error)
-	//StartGc(ctx context.Context, sz int) error
-	//MarkBucket(ctx context.Context, h hash.Hash, tupB *val.TupleBuilder) error
-	//GcMark(from StatsKv, hashes []hash.Hash, buckets []*stats.Bucket, idxLen int, tb *val.TupleBuilder) bool
-	//FinishGc(context.Context) error
 	Len() int
 	GcGen() uint64
-	// Tag(from StatsKv, []*stats.Bucket)
 }
 
 var _ StatsKv = (*prollyStats)(nil)
@@ -78,6 +71,8 @@ type memStats struct {
 	templates map[templateCacheKey]stats.Statistic
 	bounds    map[bucketKey]sql.Row
 
+	// gcFlusher tracks state require to lazily swap from
+	// a *memStats to *prollyStats
 	gcFlusher map[*val.TupleBuilder][]bucketKey
 }
 
@@ -285,11 +280,6 @@ func (p *prollyStats) GetBucket(ctx context.Context, h hash.Hash, tupB *val.Tupl
 	})
 	if !ok || err != nil {
 		return nil, false, err
-	}
-
-	if tupB == nil {
-		// still function if treating like memStats
-		return nil, true, nil
 	}
 
 	b, err = p.decodeBucketTuple(ctx, v, tupB)
