@@ -17,13 +17,8 @@ package dsess
 import (
 	"context"
 	"errors"
-	"fmt"
-	"runtime/debug"
 	"sync"
 	"sync/atomic"
-	"time"
-
-	"github.com/fatih/color"
 )
 
 type GCSafepointController struct {
@@ -49,8 +44,6 @@ type GCSafepointSessionState struct {
 	// session. The CommandBegin callback will block until
 	// that call has completed.
 	QuiesceCallbackDone atomic.Value // chan struct{}
-
-	BeginStackTrace string
 }
 
 // Make is so that HasOutstandingVisitCall will return true and
@@ -123,7 +116,6 @@ func (c *GCSafepointController) Waiter(ctx context.Context, thisSession *DoltSes
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	ret := &GCSafepointWaiter{controller: c}
-	numEndCallbacks := 0
 	for sess, state := range c.sessions {
 		// If an existing session already has a |CommandEndCallback| registered,
 		// then more than one |Waiter| would be outstanding on this
@@ -157,14 +149,12 @@ func (c *GCSafepointController) Waiter(ctx context.Context, thisSession *DoltSes
 			// If a command is currently running on the session, register
 			// our work to run as soon as the command is done.
 			state.CommandEndCallback = work
-			numEndCallbacks += 1
 		} else {
 			// When no command is running on the session, we can immediately
 			// visit it.
 			work()
 		}
 	}
-	fmt.Fprintf(color.Error, "gc_safepoint_controller: creating waiter: %d sessions, %d end callbacks\n", len(c.sessions), numEndCallbacks)
 	return ret
 }
 
@@ -199,46 +189,26 @@ func (w *GCSafepointWaiter) Wait(ctx context.Context) error {
 		w.wg.Wait()
 		close(done)
 	}()
-	for {
-		ticker := time.NewTicker(1 * time.Second)
-		defer ticker.Stop()
-		select {
-		case <-done:
-			return w.err
-		case <-ctx.Done():
-			w.controller.mu.Lock()
-			for _, state := range w.controller.sessions {
-				if state.CommandEndCallback != nil {
-					// Do not visit the session, but do
-					// count down the WaitGroup so that
-					// the goroutine above still completes.
-					w.wg.Done()
-					state.CommandEndCallback = nil
-				}
-			}
-			w.controller.mu.Unlock()
-			// Once a session visit callback has started, we
-			// cannot cancel it. So we wait for all the inflight
-			// callbacks to be completed here, before returning.
-			<-done
-			return errors.Join(context.Cause(ctx), w.err)
-		case <-ticker.C:
-			numCallbacks, numSessions := 0, 0
-			var beginStack string
-			w.controller.mu.Lock()
-			for _, state := range w.controller.sessions {
-				if state.CommandEndCallback != nil {
-					numCallbacks += 1
-					beginStack = state.BeginStackTrace
-				}
-			}
-			numSessions = len(w.controller.sessions)
-			w.controller.mu.Unlock()
-			fmt.Fprintf(color.Error, "gc_safepoint_controller: still waiting. num sessions: %d, num with callbacks: %d\n", numSessions, numCallbacks)
-			if beginStack != "" {
-				fmt.Fprintf(color.Error, "gc_safepoint_controller: begin controller: %s\n", beginStack)
+	select {
+	case <-done:
+		return w.err
+	case <-ctx.Done():
+		w.controller.mu.Lock()
+		for _, state := range w.controller.sessions {
+			if state.CommandEndCallback != nil {
+				// Do not visit the session, but do
+				// count down the WaitGroup so that
+				// the goroutine above still completes.
+				w.wg.Done()
+				state.CommandEndCallback = nil
 			}
 		}
+		w.controller.mu.Unlock()
+		// Once a session visit callback has started, we
+		// cannot cancel it. So we wait for all the inflight
+		// callbacks to be completed here, before returning.
+		<-done
+		return errors.Join(context.Cause(ctx), w.err)
 	}
 }
 
@@ -286,20 +256,7 @@ func (c *GCSafepointController) SessionCommandBegin(s *DoltSession) error {
 	// will populate CommandEndCallback instead of running the
 	// visit logic immediately.
 	state.OutstandingCommand = true
-	state.BeginStackTrace = string(debug.Stack())
 	return nil
-}
-
-// Called as part of valctx context validation, this asserts that the
-// session is registered with an open command.
-func (c *GCSafepointController) Validate(s *DoltSession) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if state := c.sessions[s]; state == nil {
-		panic("GCSafepointController.Validate; expected session with an open command, but no session registered with controller.")
-	} else if !state.OutstandingCommand {
-		panic("GCSafepointController.Validate; expected session with an open command, but the registered session has OutstandingCommand == false.")
-	}
 }
 
 // SessionCommandEnd marks the end of a session command. It has for
