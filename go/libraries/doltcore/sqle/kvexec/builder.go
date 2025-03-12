@@ -366,9 +366,7 @@ func getSourceKv(ctx *sql.Context, n sql.Node, isSrc bool) (prolly.Map, prolly.M
 		}
 		priMap, err = durable.ProllyMapFromIndex(rowData)
 		if err != nil {
-			if err != nil {
-				return prolly.Map{}, prolly.Map{}, nil, nil, nil, nil, nil, nil, err
-			}
+			return prolly.Map{}, prolly.Map{}, nil, nil, nil, nil, nil, nil, err
 		}
 
 		priSch = lb.OutputSchema()
@@ -421,9 +419,7 @@ func getSourceKv(ctx *sql.Context, n sql.Node, isSrc bool) (prolly.Map, prolly.M
 		}
 		priMap, err = durable.ProllyMapFromIndex(priIndex)
 		if err != nil {
-			if err != nil {
-				return prolly.Map{}, prolly.Map{}, nil, nil, nil, nil, nil, nil, err
-			}
+			return prolly.Map{}, prolly.Map{}, nil, nil, nil, nil, nil, nil, err
 		}
 		secMap = priMap
 

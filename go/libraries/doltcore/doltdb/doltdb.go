@@ -2119,7 +2119,7 @@ func (ddb *DoltDB) SetStatistics(ctx context.Context, branch string, addr hash.H
 	return err
 }
 
-func (ddb *DoltDB) DropStatisics(ctx context.Context, branch string) error {
+func (ddb *DoltDB) DropStatisics(ctx context.Context) error {
 	statsDs, err := ddb.db.GetDataset(ctx, ref.NewStatsRef().String())
 
 	_, err = ddb.db.Delete(ctx, statsDs, "")

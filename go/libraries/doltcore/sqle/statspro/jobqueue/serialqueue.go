@@ -70,6 +70,64 @@ type SerialQueue struct {
 	errCb    func(error)
 }
 
+// |work| represents work to be run on the runner goroutine.
+type work struct {
+	// The function to call.
+	f func() error
+	// The channel to close after the work is run.
+	done chan struct{}
+	// Update worker rate
+	newRate time.Duration
+}
+
+type schedState int
+
+const (
+	// When scheduler is running, it is willing to accept new work
+	// and to give work to the work thread.
+	schedState_Running schedState = iota
+	// When scheduler is paused, it is willing to accept new work
+	// but it does not give work to the work thread.
+	schedState_Paused
+	// When scheduler is stopped, it does not accept new work
+	// and it does not give work to the work thread.
+	schedState_Stopped
+)
+
+type schedReqType int
+
+const (
+	schedReqType_Enqueue schedReqType = iota
+	schedReqType_Purge
+	schedReqType_Start
+	schedReqType_Pause
+	schedReqType_Stop
+)
+
+type schedPriority int
+
+const (
+	schedPriority_Normal schedPriority = iota
+	schedPriority_High
+)
+
+// Incoming message for the scheduler thread.
+type schedReq struct {
+	reqType schedReqType
+	// Always set, the scheduler's response is
+	// sent through this channel. The send
+	// must never block.
+	resp chan schedResp
+	// Set when |reqType| is Enqueue
+	pri schedPriority
+	// Set when |reqType| is Enqueue
+	work work
+}
+
+type schedResp struct {
+	err error
+}
+
 var ErrStoppedQueue = errors.New("stopped queue: cannot submit work to a stopped queue.")
 var ErrCompletedQueue = errors.New("completed queue: the queue is no longer running.")
 
@@ -325,6 +383,8 @@ func (s *SerialQueue) runRunner(ctx context.Context) {
 			if w.newRate > 0 {
 				ticker.Reset(w.newRate)
 			}
+
+			// do not run jobs more frequently than the ticker rate
 			select {
 			case <-ticker.C:
 			case <-ctx.Done():
@@ -347,62 +407,4 @@ func (s *SerialQueue) runRunner(ctx context.Context) {
 			return
 		}
 	}
-}
-
-// |work| represents work to be run on the runner goroutine.
-type work struct {
-	// The function to call.
-	f func() error
-	// The channel to close after the work is run.
-	done chan struct{}
-	// Update worker rate
-	newRate time.Duration
-}
-
-type schedState int
-
-const (
-	// When scheduler is running, it is willing to accept new work
-	// and to give work to the work thread.
-	schedState_Running schedState = iota
-	// When scheduler is paused, it is willing to accept new work
-	// but it does not give work to the work thread.
-	schedState_Paused
-	// When scheduler is stopped, it does not accept new work
-	// and it does not give work to the work thread.
-	schedState_Stopped
-)
-
-type schedReqType int
-
-const (
-	schedReqType_Enqueue schedReqType = iota
-	schedReqType_Purge
-	schedReqType_Start
-	schedReqType_Pause
-	schedReqType_Stop
-)
-
-type schedPriority int
-
-const (
-	schedPriority_Normal schedPriority = iota
-	schedPriority_High
-)
-
-// Incoming message for the scheduler thread.
-type schedReq struct {
-	reqType schedReqType
-	// Always set, the scheduler's response is
-	// sent through this channel. The send
-	// must never block.
-	resp chan schedResp
-	// Set when |reqType| is Enqueue
-	pri schedPriority
-	// Set when |reqType| is Enqueue
-	work work
-}
-
-type schedResp struct {
-	err error
 }

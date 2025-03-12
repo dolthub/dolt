@@ -17,7 +17,6 @@ package statspro
 import (
 	"context"
 	"fmt"
-	"sync"
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -106,9 +105,9 @@ func (sc *StatsController) Stop() {
 	return
 }
 
-// UpdateParams reads the environment variables and updates controller
+// RefreshFromSysVars reads the environment variables and updates controller
 // parameters. If the queue is not started this will hang.
-func (sc *StatsController) UpdateParams() {
+func (sc *StatsController) RefreshFromSysVars() {
 	_, memOnly, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsMemoryOnly)
 	sc.SetMemOnly(memOnly.(int8) == 1)
 
@@ -135,7 +134,7 @@ func (sc *StatsController) Restart() error {
 	}
 
 	sc.sq.Start()
-	sc.UpdateParams()
+	sc.RefreshFromSysVars()
 
 	done := make(chan struct{})
 	go func() {
@@ -152,13 +151,11 @@ func (sc *StatsController) Restart() error {
 }
 
 func (sc *StatsController) RunQueue() {
-	wg := sync.WaitGroup{}
-	wg.Add(1)
 	go func() {
-		wg.Done()
 		sc.sq.Run(context.Background())
 	}()
-	wg.Wait()
+	// block on queue starting
+	sc.sq.DoSync(context.Background(), func() error { return nil })
 	return
 }
 
@@ -213,10 +210,10 @@ func (sc *StatsController) Init(ctx context.Context, dbs []sql.Database) error {
 	return nil
 }
 
-func (sc *StatsController) waitForCond(ctx context.Context, ok listenerEvent, cnt int) (err error) {
+func (sc *StatsController) waitForCond(ctx context.Context, signal listenerEvent, cnt int) (err error) {
 	for cnt > 0 {
 		var l chan listenerEvent
-		l, err = sc.addListener(ok)
+		l, err = sc.addListener(signal)
 		if err != nil {
 			return err
 		}

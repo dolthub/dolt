@@ -79,18 +79,32 @@ func (si StatsInfo) ToJson(short bool) string {
 	return string(jsonData)
 }
 
-// ToggableStats is a sql.StatsProvider that exposes hooks for
+// ExtendedStatsProvider is a sql.StatsProvider that exposes hooks for
 // observing and manipulating background database auto refresh threads.
-type ToggableStats interface {
+type ExtendedStatsProvider interface {
 	sql.StatsProvider
+	// Restart starts a new stats thread, finalizes any active thread
 	Restart() error
+	// Stop finalizes stats thread if active
 	Stop()
+	// Info returns summary statistics about the current coordinator state
 	Info(ctx context.Context) (StatsInfo, error)
+	// Purge wipes the memory and storage state, and pauses stats collection
 	Purge(ctx *sql.Context) error
+	// WaitForSync blocks until the stats state includes changes
+	// from the current session
 	WaitForSync(ctx context.Context) error
+	// Gc forces the next stats cycle to perform a GC. Block until
+	// the GC lands.
 	Gc(ctx *sql.Context) error
+	// WaitForFlush blocks until the next cycle finishes and flushes
+	// buckets to disk.
 	WaitForFlush(ctx *sql.Context) error
+	// CollectOnce performs a stats update in-thread. This will contend
+	// with background collection and most useful in a non-server context.
 	CollectOnce(ctx context.Context) (string, error)
+	// SetTimers is an access point for editing the statistics
+	// delay timer. This will block if the scheduler is not running.
 	SetTimers(int64, int64)
 }
 
@@ -103,21 +117,21 @@ func statsRestart(ctx *sql.Context, _ ...string) (interface{}, error) {
 	dSess := dsess.DSessFromSess(ctx.Session)
 	statsPro := dSess.StatsProvider()
 
-	if afp, ok := statsPro.(ToggableStats); ok {
+	if afp, ok := statsPro.(ExtendedStatsProvider); ok {
 		if err := afp.Restart(); err != nil {
 			return nil, err
 		}
 
 		return OkResult, nil
 	}
-	return nil, fmt.Errorf("provider does not implement ToggableStats")
+	return nil, fmt.Errorf("provider does not implement ExtendedStatsProvider")
 }
 
 // statsInfo returns a coordinator state summary
 func statsInfo(ctx *sql.Context, args ...string) (interface{}, error) {
 	dSess := dsess.DSessFromSess(ctx.Session)
 	pro := dSess.StatsProvider()
-	if afp, ok := pro.(ToggableStats); ok {
+	if afp, ok := pro.(ExtendedStatsProvider); ok {
 		var short bool
 		if len(args) > 0 && (args[0] == "-s" || args[0] == "--short") {
 			short = true
@@ -128,7 +142,7 @@ func statsInfo(ctx *sql.Context, args ...string) (interface{}, error) {
 		}
 		return info.ToJson(short), nil
 	}
-	return nil, fmt.Errorf("provider does not implement ToggableStats")
+	return nil, fmt.Errorf("provider does not implement ExtendedStatsProvider")
 }
 
 // statsWait blocks until the stats worker executes two full loops
@@ -137,13 +151,13 @@ func statsInfo(ctx *sql.Context, args ...string) (interface{}, error) {
 func statsWait(ctx *sql.Context, _ ...string) (interface{}, error) {
 	dSess := dsess.DSessFromSess(ctx.Session)
 	pro := dSess.StatsProvider()
-	if afp, ok := pro.(ToggableStats); ok {
+	if afp, ok := pro.(ExtendedStatsProvider); ok {
 		if err := afp.WaitForSync(ctx); err != nil {
 			return nil, err
 		}
 		return OkResult, nil
 	}
-	return nil, fmt.Errorf("provider does not implement ToggableStats")
+	return nil, fmt.Errorf("provider does not implement ExtendedStatsProvider")
 }
 
 // statsOnce runs a one-off worker update. This is mostly used for
@@ -153,27 +167,27 @@ func statsWait(ctx *sql.Context, _ ...string) (interface{}, error) {
 func statsOnce(ctx *sql.Context, _ ...string) (interface{}, error) {
 	dSess := dsess.DSessFromSess(ctx.Session)
 	pro := dSess.StatsProvider()
-	if afp, ok := pro.(ToggableStats); ok {
+	if afp, ok := pro.(ExtendedStatsProvider); ok {
 		str, err := afp.CollectOnce(ctx)
 		if err != nil {
 			return nil, err
 		}
 		return str, nil
 	}
-	return nil, fmt.Errorf("provider does not implement ToggableStats")
+	return nil, fmt.Errorf("provider does not implement ExtendedStatsProvider")
 }
 
 // statsFlush waits for the next stats flush to storage.
 func statsFlush(ctx *sql.Context, _ ...string) (interface{}, error) {
 	dSess := dsess.DSessFromSess(ctx.Session)
 	pro := dSess.StatsProvider()
-	if afp, ok := pro.(ToggableStats); ok {
+	if afp, ok := pro.(ExtendedStatsProvider); ok {
 		if err := afp.WaitForFlush(ctx); err != nil {
 			return nil, err
 		}
 		return OkResult, nil
 	}
-	return nil, fmt.Errorf("provider does not implement ToggableStats")
+	return nil, fmt.Errorf("provider does not implement ExtendedStatsProvider")
 }
 
 // statsGc sets the |doGc| flag and waits until a worker
@@ -181,13 +195,13 @@ func statsFlush(ctx *sql.Context, _ ...string) (interface{}, error) {
 func statsGc(ctx *sql.Context, _ ...string) (interface{}, error) {
 	dSess := dsess.DSessFromSess(ctx.Session)
 	pro := dSess.StatsProvider()
-	if afp, ok := pro.(ToggableStats); ok {
+	if afp, ok := pro.(ExtendedStatsProvider); ok {
 		if err := afp.Gc(ctx); err != nil {
 			return nil, err
 		}
 		return OkResult, nil
 	}
-	return nil, fmt.Errorf("provider does not implement ToggableStats")
+	return nil, fmt.Errorf("provider does not implement ExtendedStatsProvider")
 }
 
 // statsStop flushes the job queue and leaves the stats provider
@@ -196,11 +210,11 @@ func statsStop(ctx *sql.Context, _ ...string) (interface{}, error) {
 	dSess := dsess.DSessFromSess(ctx.Session)
 	statsPro := dSess.StatsProvider()
 
-	if afp, ok := statsPro.(ToggableStats); ok {
+	if afp, ok := statsPro.(ExtendedStatsProvider); ok {
 		afp.Stop()
 		return OkResult, nil
 	}
-	return nil, fmt.Errorf("provider does not implement ToggableStats")
+	return nil, fmt.Errorf("provider does not implement ExtendedStatsProvider")
 }
 
 // statsPurge flushes the job queue, deletes the current caches
@@ -208,7 +222,7 @@ func statsStop(ctx *sql.Context, _ ...string) (interface{}, error) {
 // states, and returns with stats collection paused.
 func statsPurge(ctx *sql.Context, _ ...string) (interface{}, error) {
 	dSess := dsess.DSessFromSess(ctx.Session)
-	pro, ok := dSess.StatsProvider().(ToggableStats)
+	pro, ok := dSess.StatsProvider().(ExtendedStatsProvider)
 	if !ok {
 		return nil, fmt.Errorf("stats not persisted, cannot purge")
 	}
@@ -239,9 +253,9 @@ func statsTimers(ctx *sql.Context, args ...string) (interface{}, error) {
 		return nil, fmt.Errorf("interval timer must be positive intergers")
 	}
 
-	if afp, ok := statsPro.(ToggableStats); ok {
+	if afp, ok := statsPro.(ExtendedStatsProvider); ok {
 		afp.SetTimers(job, gc)
 		return OkResult, nil
 	}
-	return nil, fmt.Errorf("provider does not implement ToggableStats")
+	return nil, fmt.Errorf("provider does not implement ExtendedStatsProvider")
 }

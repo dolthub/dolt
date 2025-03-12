@@ -20,9 +20,9 @@ package statspro
 // At any given time there is one work generating thread, one scheduling
 // thread, and one execution thread.
 //
-// The worker loops fetching the most recent session root,
-// reading all of its databases/tables/ indexes, collecting statistics
-// for those objects, and updating the shared statistics state. Every
+// The worker loop fetches the most recent session root,
+// reads all of its databases/tables/ indexes, collects statistics
+// for those objects, and updates the shared statistics state. Every
 // cycle replaces the shared state.
 //
 // Work is delegated to the scheduler thread, which serializes
@@ -44,10 +44,11 @@ package statspro
 // shared state swaps are likewise guarded on the issuer's context
 // integrity.
 //
-// All stats are persisted within a single database. If there are
-// multiple databases, one is selected by random as the storage target.
-// If during initialization multiple databases have stats, one will be
-// chosen by random as the target. If a database changes between server
+// All stats are persisted within a single database in the `.dolt/stats`
+// folder separate from user data. If there are multiple databases,
+// one is selected by random as the storage target. If during
+// initialization multiple databases have stats, one will be chosen
+// by random as the target. If a database changes between server
 // restarts, the storage stats will be useless but not impair regular
 // operations because storage is only ever a best-effort
 // content-addressed persistence layer; buckets will be regenerated if

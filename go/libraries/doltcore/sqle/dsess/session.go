@@ -18,7 +18,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"strconv"
 	"strings"
 	"sync"
@@ -964,7 +963,6 @@ func (d *DoltSession) ReleaseSavepoint(ctx *sql.Context, tx sql.Transaction, sav
 func (d *DoltSession) GetDoltDB(ctx *sql.Context, dbName string) (*doltdb.DoltDB, bool) {
 	branchState, ok, err := d.lookupDbState(ctx, dbName)
 	if err != nil {
-		log.Println("GetDoltDb error", err.Error())
 		return nil, false
 	}
 	if !ok {
