@@ -277,3 +277,37 @@ mutations_and_gc_statement() {
   [[ "$status" -eq 0 ]] || false
   [[ "$output" =~ "138075" ]] || false # i = 1 - 525, sum is 138075
 }
+
+@test "archive: mixed compression types" {
+  port=$( definePORT )
+  # run a bare server.
+  mkdir remotesrv
+  cd remotesrv
+  remotesrv --http-port $port --grpc-port $port &
+  remotesrv_pid=$!
+  [[ "$remotesrv_pid" -gt 0 ]] || false
+  cd ..
+
+  # Copy the archive test repo to remote directory
+  mkdir -p repo/.dolt
+  cp -R $BATS_TEST_DIRNAME/archive-test-repo/* repo/.dolt
+  cd repo
+
+  # Make some new commits.
+  update_statement
+
+  # Get everything into a non-journal form. Repository has mixed storage types now.
+  dolt gc
+
+  # Push, and enable the archive streamer. In the future this will be the default.
+  dolt remote add origin http://localhost:$port/test-org/test-repo
+  DOLT_ARCHIVE_PULL_STREAMER=1 dolt push origin main
+
+  cd ..
+
+  dolt clone http://localhost:$port/test-org/test-repo repo2
+  cd repo2
+
+  dolt fsck
+
+}
