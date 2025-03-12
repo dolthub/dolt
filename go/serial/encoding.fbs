@@ -50,4 +50,7 @@ enum Encoding : uint8 {
   JSON     = 131,
   Geometry = 133,
   Extended = 134,
+  StringToast = 135,
+  BytesToast = 136,
+  ExtendedToast = 137
 }

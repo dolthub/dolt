@@ -119,12 +119,15 @@ func IsAddrEncoding(enc Encoding) bool {
 
 // Variable Width Encodings
 const (
-	StringEnc     = Encoding(serial.EncodingString)
-	ByteStringEnc = Encoding(serial.EncodingBytes)
-	DecimalEnc    = Encoding(serial.EncodingDecimal)
-	JSONEnc       = Encoding(serial.EncodingJSON)
-	GeometryEnc   = Encoding(serial.EncodingGeometry)
-	ExtendedEnc   = Encoding(serial.EncodingExtended)
+	StringEnc        = Encoding(serial.EncodingString)
+	ByteStringEnc    = Encoding(serial.EncodingBytes)
+	DecimalEnc       = Encoding(serial.EncodingDecimal)
+	JSONEnc          = Encoding(serial.EncodingJSON)
+	GeometryEnc      = Encoding(serial.EncodingGeometry)
+	ExtendedEnc      = Encoding(serial.EncodingExtended)
+	StringToastEnc   = Encoding(serial.EncodingStringToast)
+	BytesToastEnc    = Encoding(serial.EncodingBytesToast)
+	ExtendedToastEnc = Encoding(serial.EncodingExtendedToast)
 )
 
 func sizeFromType(t Type) (ByteSize, bool) {
