@@ -17,18 +17,18 @@ package statspro
 // Package statspro provides a queue that manages table statistics
 // management and access.
 //
-// At any given time there is one issuer thread, one scheduler thread,
-// and one worker thread.
+// At any given time there is one work generating thread, one scheduling
+// thread, and one execution thread.
 //
-// The issuer executes cycles of fetching the most recent session root,
+// The worker loops fetching the most recent session root,
 // reading all of its databases/tables/ indexes, collecting statistics
 // for those objects, and updating the shared statistics state. Every
 // cycle replaces the shared state.
 //
-// Cycle work is delegated to the scheduler thread, which serializes
-// stats work with concurrent async requests, and rate limits sending
-// work to the worker thread. The worker thread simply executes a function
-// callback.
+// Work is delegated to the scheduler thread, which serializes
+// issuer jobs with concurrent async requests, and rate limits sending
+// jobs to the execution thread. The execution thread completes
+// function callbacks.
 //
 // GC occurs within an update cycle. Through a cycle GC populates an
 // in-memory cache with the complete and exclusive set of values of
@@ -70,9 +70,8 @@ package statspro
 //  - dolt_stats_restart: clear queue, refresh queue, start thread
 //  - dolt_stats_purge: clear queue, refresh queue, clear cache,
 //    disable thread
-//  - dolt_stats_validate: return report of cache misses for current
-//    root value.
-//
-// `dolt_stats_wait` is additionally useful for blocking on a full
-// queue cycle and then validating whether the session head is caught up.
+//  - dolt_stats_once: collect statistics once, ex: in sql-shell
+//  - dolt_stats_wait: block on a full queue cycle
+//  - dolt_stats_gc: block waiting for a GC signal
+//  - dolt_stats_flush: block waiting for a flush signal
 //

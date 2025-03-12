@@ -1937,16 +1937,11 @@ func TestStatsAutoRefreshConcurrency(t *testing.T) {
 
 	// Setting an interval of 0 and a threshold of 0 will result
 	// in the stats being updated after every operation
-	//intervalSec := time.Duration(0)
-	//thresholdf64 := 0.
-	//bThreads := sql.NewBackgroundThreads()
-	//branches := []string{"main"}
 	statsProv := engine.EngineAnalyzer().Catalog.StatsProvider.(*statspro.StatsController)
 
 	// it is important to use new sessions for this test, to avoid working root conflicts
 	readCtx := enginetest.NewSession(harness)
 	writeCtx := enginetest.NewSession(harness)
-	//refreshCtx := enginetest.NewSession(harness)
 
 	fs, err := engine.EngineAnalyzer().Catalog.DbProvider.(*sqle.DoltDatabaseProvider).FileSystemForDatabase(sqlDb.AliasedName())
 	require.NoError(t, err)

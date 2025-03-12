@@ -520,7 +520,6 @@ func (d *DoltHarness) Close() {
 	if d.statsPro != nil {
 		d.statsPro.Close()
 	}
-	sql.SystemVariables.SetGlobal(dsess.DoltStatsEnabled, int8(0))
 }
 
 func (d *DoltHarness) closeProvider() {
