@@ -50,7 +50,8 @@ var ErrSessionNotPersistable = errors.New("session is not persistable")
 // DoltSession is the sql.Session implementation used by dolt. It is accessible through a *sql.Context instance
 type DoltSession struct {
 	sql.Session
-	DoltgresSessObj       any // This is used by Doltgres to persist objects in the session. This is not used by Dolt.
+	DoltgresSessObj       any   // This is used by Doltgres to persist objects in the session. This is not used by Dolt.
+	notices               []any // This is used by Doltgres to store notices. This is not used by Dolt.
 	username              string
 	email                 string
 	dbStates              map[string]*DatabaseSessionState
@@ -324,6 +325,24 @@ func (d *DoltSession) SetValidateErr(err error) {
 // so no error is returned.
 func (d *DoltSession) ValidateSession(ctx *sql.Context) error {
 	return d.validateErr
+}
+
+// Notices returns the set of notices currently queued in this session. Notices are specific to Doltgres sessions
+// and are not used by Dolt sessions.
+func (d *DoltSession) Notices() []any {
+	return d.notices
+}
+
+// Notice adds a notice to the queue of the current notices in this session that have not been sent to the client yet.
+// Notices are specific to Doltgres sessions and are not used by Dolt sessions.
+func (d *DoltSession) Notice(notice any) {
+	d.notices = append(d.notices, notice)
+}
+
+// ClearNotices clears the queued notices in this session. Notices are specific to Doltgres sessions and are not
+// used by Dolt sessions.
+func (d *DoltSession) ClearNotices() {
+	d.notices = nil
 }
 
 // StartTransaction refreshes the state of this session and starts a new transaction.
