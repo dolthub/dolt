@@ -25,6 +25,7 @@ import (
 	"sort"
 
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/gozstd"
 )
 
 type stagedByteSpanSlice []byteSpan
@@ -544,8 +545,11 @@ func (asw *ArchiveStreamWriter) writeArchiveToChunker(chunker ArchiveToChunker) 
 	var err error
 	dictId, ok := asw.dictMap[dict]
 	if !ok {
+		// compress the raw bytes of the dictionary before persisting it.
+		compressedDict := gozstd.Compress(nil, *dict.rawDictionary)
+
 		// New dictionary. Write it out, and add id to the map.
-		dictId, err = asw.writer.writeByteSpan(*dict.rawDictionary)
+		dictId, err = asw.writer.writeByteSpan(compressedDict)
 		if err != nil {
 			return 0, err
 		}
