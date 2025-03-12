@@ -1426,6 +1426,76 @@ tests:
     queries:
     - exec: 'use repo1'
     - exec: 'call dolt_checkout("new_branch_name")'
+# At one point the dolt_cluster database interacted poorly with creating savepoints.
+- name: savepoints work on cluster replicated databases
+  multi_repos:
+  - name: server1
+    with_files:
+    - name: server.yaml
+      contents: |
+        log_level: trace
+        listener:
+          host: 0.0.0.0
+          port: 3309
+        cluster:
+          standby_remotes:
+          - name: standby
+            remote_url_template: http://localhost:3852/{database}
+          bootstrap_role: primary
+          bootstrap_epoch: 1
+          remotesapi:
+            port: 3851
+    server:
+      args: ["--config", "server.yaml"]
+      port: 3309
+  - name: server2
+    with_files:
+    - name: server.yaml
+      contents: |
+        log_level: trace
+        listener:
+          host: 0.0.0.0
+          port: 3310
+        cluster:
+          standby_remotes:
+          - name: standby
+            remote_url_template: http://localhost:3851/{database}
+          bootstrap_role: standby
+          bootstrap_epoch: 1
+          remotesapi:
+            port: 3852
+    server:
+      args: ["--config", "server.yaml"]
+      port: 3310
+  connections:
+  - on: server1
+    queries:
+    - exec: 'create database repo1'
+    - exec: 'use repo1'
+    - exec: 'create table vals (id int primary key, val int)'
+    - exec: 'begin'
+    - exec: 'savepoint before_values_inserted'
+    - exec: 'insert into vals values (1,1)'
+    - exec: 'insert into vals values (2,2)'
+    - exec: 'insert into vals values (3,3)'
+    - exec: 'insert into vals values (4,4)'
+    - exec: 'rollback to savepoint before_values_inserted'
+    - exec: 'commit'
+  - on: server1
+    queries:
+    - query: "select `database`, standby_remote, role, epoch, replication_lag_millis, current_error from dolt_cluster.dolt_cluster_status order by `database` asc"
+      result:
+        columns: ["database","standby_remote","role","epoch","replication_lag_millis","current_error"]
+        rows:
+        - ["repo1","standby","primary","1","0","NULL"]
+      retry_attempts: 100
+  - on: server2
+    queries:
+    - exec: 'use repo1'
+    - query: "select * from vals order by id asc"
+      result:
+        columns: ["id","val"]
+        rows: []
 - name: call dolt gc
   multi_repos:
   - name: server1
