@@ -476,9 +476,25 @@ func getSchemaFragmentsOfType(ctx *sql.Context, tbl *WritableDoltTable, fragType
 			return nil, err
 		}
 
+		name, ok, err := sql.Unwrap[string](ctx, sqlRow[nameIdx])
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			return nil, fmt.Errorf("unexpected type for name, expected string, got %v. This should never happen", sqlRow[nameIdx])
+		}
+
+		fragment, ok, err := sql.Unwrap[string](ctx, sqlRow[fragmentIdx])
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			return nil, fmt.Errorf("unexpected type for fragment, expected string, got %v. This should never happen", sqlRow[nameIdx])
+		}
+
 		frags = append(frags, schemaFragment{
-			name:     sqlRow[nameIdx].(string),
-			fragment: sqlRow[fragmentIdx].(string),
+			name:     name,
+			fragment: fragment,
 			created:  time.Unix(createdTime, 0).UTC(),
 			sqlMode:  sqlModeString,
 		})
