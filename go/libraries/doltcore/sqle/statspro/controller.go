@@ -76,7 +76,7 @@ type StatsController struct {
 	sq *jobqueue.SerialQueue
 
 	activeCtxCancel context.CancelFunc
-	listeners       *listenMsg
+	listeners       []listener
 
 	JobInterval time.Duration
 	gcInterval  time.Duration

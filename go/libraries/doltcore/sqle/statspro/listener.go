@@ -39,25 +39,17 @@ const (
 )
 
 func (sc *StatsController) signalListener(s listenerEvent) {
-	var root, keep *listenMsg
-	n := sc.listeners
-	for n != nil {
-		if (n.e|leStop)&s > 0 {
-			n.c <- s
-			close(n.c)
-		} else if root == nil {
-			root = n
-			keep = n
+	keep := 0
+	for i, l := range sc.listeners {
+		if (l.target|leStop)&s > 0 {
+			l.c <- s
+			close(l.c)
 		} else {
-			keep.n = n
-			keep = n
+			sc.listeners[keep] = sc.listeners[i]
+			keep++
 		}
-		n = n.n
 	}
-	if keep != nil {
-		keep.n = nil
-	}
-	sc.listeners = root
+	sc.listeners = sc.listeners[:keep]
 }
 
 func (sc *StatsController) newThreadCtx(ctx context.Context) context.Context {
@@ -73,10 +65,9 @@ func (sc *StatsController) newThreadCtx(ctx context.Context) context.Context {
 	return newCtx
 }
 
-type listenMsg struct {
-	e listenerEvent
-	c chan listenerEvent
-	n *listenMsg
+type listener struct {
+	target listenerEvent
+	c      chan listenerEvent
 }
 
 func (sc *StatsController) addListener(e listenerEvent) (chan listenerEvent, error) {
@@ -85,11 +76,8 @@ func (sc *StatsController) addListener(e listenerEvent) (chan listenerEvent, err
 	if sc.activeCtxCancel == nil {
 		return nil, ErrStatsIssuerPaused
 	}
-	l := &listenMsg{e: e, c: make(chan listenerEvent, 1)}
-	if sc.listeners != nil {
-		l.n = sc.listeners
-	}
-	sc.listeners = l
+	l := listener{target: e, c: make(chan listenerEvent, 1)}
+	sc.listeners = append(sc.listeners, l)
 	return l.c, nil
 }
 
@@ -210,7 +198,7 @@ func (sc *StatsController) Init(ctx context.Context, dbs []sql.Database) error {
 	return nil
 }
 
-func (sc *StatsController) waitForCond(ctx context.Context, signal listenerEvent, cnt int) (err error) {
+func (sc *StatsController) waitForSignal(ctx context.Context, signal listenerEvent, cnt int) (err error) {
 	for cnt > 0 {
 		var l chan listenerEvent
 		l, err = sc.addListener(signal)
@@ -230,7 +218,7 @@ func (sc *StatsController) waitForCond(ctx context.Context, signal listenerEvent
 
 func (sc *StatsController) WaitForSync(ctx context.Context) (err error) {
 	// wait for 2 cycles because first completion is usually a stale context
-	return sc.waitForCond(ctx, leSwap, 2)
+	return sc.waitForSignal(ctx, leSwap, 2)
 }
 
 func (sc *StatsController) WaitForFlush(ctx *sql.Context) error {
@@ -240,12 +228,12 @@ func (sc *StatsController) WaitForFlush(ctx *sql.Context) error {
 	if memOnly {
 		return fmt.Errorf("memory only statistics will not flush")
 	}
-	return sc.waitForCond(ctx, leFlush, 1)
+	return sc.waitForSignal(ctx, leFlush, 1)
 }
 
 func (sc *StatsController) Gc(ctx *sql.Context) error {
 	sc.setDoGc(true)
-	return sc.waitForCond(ctx, leGc, 1)
+	return sc.waitForSignal(ctx, leGc, 1)
 }
 
 func (sc *StatsController) Close() {
