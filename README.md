@@ -41,7 +41,7 @@ it so far](https://dolthub.com/blog/2024-10-15-dolt-use-cases/).
 Dolt can be [set up as a replica of your existing MySQL](https://www.dolthub.com/blog/2023-02-17-binlog-replication-preview/)
 database using standard MySQL binlog replication. Every write becomes
 a Dolt commit. This is a great way to get the version control benefits 
-of Dolt and keep an existing MySQL or MariaDB database. 
+of Dolt and keep an existing MySQL database. 
 
 # Dolt CLI
 
