@@ -176,6 +176,11 @@ func SchemaMerge(
 		TableName: tblName,
 	}
 
+	if schema.SchemasAreEqual(ancSch, ourSch) && schema.SchemasAreEqual(ancSch, theirSch) {
+		// All schemas are identical, so no merge is needed.
+		return ourSch, sc, mergeInfo, diffInfo, nil
+	}
+
 	// TODO: We'll remove this once it's possible to get diff and merge on different primary key sets
 	// TODO: decide how to merge different orders of PKS
 	if !schema.ArePrimaryKeySetsDiffable(format, ourSch, theirSch) {

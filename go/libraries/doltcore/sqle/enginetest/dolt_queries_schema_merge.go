@@ -620,6 +620,30 @@ var SchemaChangeTestsBasicCases = []MergeScriptTest{
 			},
 		},
 	},
+	{
+		// Ensure duplicate indexes on same columns merge. https://github.com/dolthub/dolt/issues/8975
+		Name: "",
+		AncSetUpScript: []string{
+			`CREATE TABLE t (
+          id CHAR(36) PRIMARY KEY,
+          time DATETIME,
+          INDEX i1 (time DESC),
+          INDEX i2 (time))`,
+			"INSERT INTO t VALUES (UUID(), NOW())",
+		},
+		RightSetUpScript: []string{
+			"INSERT INTO t VALUES (UUID(), NOW())",
+		},
+		LeftSetUpScript: []string{
+			"INSERT INTO t VALUES (UUID(), NOW())",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+		},
+	},
 }
 
 var SchemaChangeTestsCollations = []MergeScriptTest{
