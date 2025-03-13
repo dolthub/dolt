@@ -294,6 +294,25 @@ func (ixc *indexCollectionImpl) Equals(other IndexCollection) bool {
 		// if the lengths don't match then we can quickly return
 		return false
 	}
+
+	// if named indexes are all equal, then we can skip the checks which compare indexes by their tags.
+	nameCmp := true
+	for name, i1 := range ixc.indexes {
+		i2, ok := otherIxc.indexes[name]
+		if !ok {
+			nameCmp = false
+			break
+		}
+
+		if !i1.Equals(i2) {
+			nameCmp = false
+			break
+		}
+	}
+	if nameCmp {
+		return true
+	}
+
 	for _, index := range ixc.indexes {
 		otherIndex := otherIxc.containsColumnTagCollection(index.tags...)
 		if otherIndex == nil || !index.Equals(otherIndex) {

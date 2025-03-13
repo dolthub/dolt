@@ -180,8 +180,8 @@ func SchemasAreEqual(sch1, sch2 Schema) bool {
 	} else if sch1 == nil || sch2 == nil {
 		return false
 	}
-	colCollIsEqual := ColCollsAreEqual(sch1.GetAllCols(), sch2.GetAllCols())
-	if !colCollIsEqual {
+
+	if !ColCollsAreEqual(sch1.GetAllCols(), sch2.GetAllCols()) {
 		return false
 	}
 
