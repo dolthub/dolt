@@ -117,6 +117,17 @@ func IsAddrEncoding(enc Encoding) bool {
 	}
 }
 
+func IsToastEncoding(enc Encoding) bool {
+	switch enc {
+	case BytesToastEnc,
+		StringToastEnc,
+		ExtendedToastEnc:
+		return true
+	default:
+		return false
+	}
+}
+
 // Variable Width Encodings
 const (
 	StringEnc        = Encoding(serial.EncodingString)
