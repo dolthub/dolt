@@ -101,7 +101,7 @@ func doDoltAdd(ctx *sql.Context, args []string) (int, error) {
 			var missingTables []string
 			tableNames = make([]doltdb.TableName, len(unqualifiedTableNames))
 			for i, name := range unqualifiedTableNames {
-				tblName, _, ok, err := resolve.TableWithSearchPath(ctx, roots.Working, name)
+				tblName, ok, err := resolve.TableNameWithSearchPath(ctx, roots.Working, name)
 				if err != nil {
 					return 1, err
 				}
