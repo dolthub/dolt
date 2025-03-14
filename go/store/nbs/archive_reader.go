@@ -105,16 +105,16 @@ func (f archiveFooter) metadataSpan() byteSpan {
 }
 
 func newArchiveMetadata(ctx context.Context, reader tableReaderAt, fileSize uint64, stats *Stats) (*ArchiveMetadata, error) {
-	footer, err := loadFooter(ctx, reader, fileSize, stats)
+	aRdr, err := newArchiveReader(ctx, reader, fileSize, stats)
 	if err != nil {
 		return nil, err
 	}
 
-	if footer.formatVersion > archiveFormatVersionMax {
+	if aRdr.footer.formatVersion > archiveFormatVersionMax {
 		return nil, ErrInvalidFormatVersion
 	}
 
-	metaSpan := footer.metadataSpan()
+	metaSpan := aRdr.footer.metadataSpan()
 	metaRdr := newSectionReader(ctx, reader, int64(metaSpan.offset), int64(metaSpan.length), stats)
 
 	// Read the data into a byte slice
@@ -131,7 +131,42 @@ func newArchiveMetadata(ctx context.Context, reader tableReaderAt, fileSize uint
 		return nil, err
 	}
 
+	snappyChunks := 0
+	snappyBytes := uint64(0)
+	zStdChunks := 0
+	zStdBytes := uint64(0)
+	seenDictIds := map[uint32]bool{}
+	dictionaryBytes := uint64(0)
+	idx := 0
+	for idx < int(aRdr.footer.chunkCount) {
+		dictId, dataId := aRdr.getChunkRef(idx)
+
+		bs := aRdr.getByteSpanByID(dataId)
+		if dictId != 0 {
+			zStdBytes += bs.length
+			zStdChunks += 1
+
+			if !seenDictIds[dictId] {
+				seenDictIds[dictId] = true
+
+				bs := aRdr.getByteSpanByID(dictId)
+				dictionaryBytes += bs.length
+			}
+		} else {
+			snappyBytes += bs.length
+			snappyChunks += 1
+		}
+		idx += 1
+	}
+
 	return &ArchiveMetadata{
+		formatVersion:       int(aRdr.footer.formatVersion),
+		snappyChunkCount:    snappyChunks,
+		snappyBytes:         snappyBytes,
+		zStdChunkCount:      zStdChunks,
+		zStdBytes:           zStdBytes,
+		dictionaryCount:     len(seenDictIds),
+		dictionaryBytes:     dictionaryBytes,
 		originalTableFileId: result[amdkOriginTableFile],
 	}, nil
 }
