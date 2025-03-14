@@ -362,7 +362,7 @@ func (ar archiveReader) get(ctx context.Context, hash hash.Hash, stats *Stats) (
 	}
 
 	var result []byte
-	result, err = gozstd.DecompressDict(nil, data, dict.dictionary)
+	result, err = gozstd.DecompressDict(nil, data, dict.dDict)
 	if err != nil {
 		return nil, err
 	}

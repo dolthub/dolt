@@ -24,9 +24,8 @@ import (
 	"os"
 	"sort"
 
-	"github.com/golang/snappy"
-
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/golang/snappy"
 )
 
 // GenericTableWriter is an interface for writing table files regardless of the output format
@@ -35,18 +34,25 @@ type GenericTableWriter interface {
 	Reader() (io.ReadCloser, error)
 	// Finish completed the writing of the table file and returns the calculated name of the table. Note that Finish
 	// doesn't move the file, but it returns the name that the file should be moved to.
-	Finish() (string, error)
+	// It also returns the additional bytes written to the table file. Those bytes are included in the ContentLength.
+	Finish() (uint32, string, error)
 	// ChunkCount returns the number of chunks written to the table file. This can be called before Finish to determine
 	// if the maximum number of chunks has been reached.
 	ChunkCount() int
 	// AddChunk adds a chunk to the table file. The underlying implementation of ToChunker will probably be exploited
 	// by implementors of GenericTableWriter so that their bytes can be efficiently written to the table file.
 	//
+	// The number of bytes written to storage is returned. This could be 0 even on success if the writer decides
+	// to defer writing the chunks. In the event that AddChunk triggers a flush, the number of bytes written to storage
+	// will be returned.
+	//
 	// If no error occurs, the number of bytes written to the store is returned.
 	AddChunk(ToChunker) (uint32, error)
-	// ContentLength returns the number of bytes written to the table file. This can be called before Finish to determine
-	// if the file is too large.
-	ContentLength() uint64
+	// ChunkDataLentgh returns the number of bytes written which are specifically tracked data. It will not include
+	// data written for the indexes of the storage files. The returned value is only valid after Finish is called.
+	ChunkDataLength() (uint64, error)
+	// FullLength returns the number of bytes written to the table file.
+	FullLength() uint64
 	// GetMD5 returns the MD5 hash of the table file. This can can only be called after Finish.
 	GetMD5() []byte
 	// Remove cleans up and artifacts created by the table writer. Called after everything else is done.
@@ -68,6 +74,7 @@ var ErrDuplicateChunkWritten = errors.New("duplicate chunks written")
 // CmpChunkTableWriter writes CompressedChunks to a table file
 type CmpChunkTableWriter struct {
 	sink                  *HashingByteSink
+	chunkDataLength       uint64
 	totalUncompressedData uint64
 	prefixes              prefixIndexSlice
 	blockAddr             *hash.Hash
@@ -83,7 +90,14 @@ func NewCmpChunkTableWriter(tempDir string) (*CmpChunkTableWriter, error) {
 		return nil, err
 	}
 
-	return &CmpChunkTableWriter{NewMD5HashingByteSink(s), 0, nil, nil, s.path}, nil
+	return &CmpChunkTableWriter{
+		sink:                  NewMD5HashingByteSink(s),
+		chunkDataLength:       0,
+		totalUncompressedData: 0,
+		prefixes:              nil,
+		blockAddr:             nil,
+		path:                  s.path,
+	}, nil
 }
 
 func (tw *CmpChunkTableWriter) ChunkCount() int {
@@ -91,7 +105,7 @@ func (tw *CmpChunkTableWriter) ChunkCount() int {
 }
 
 // Gets the size of the entire table file in bytes
-func (tw *CmpChunkTableWriter) ContentLength() uint64 {
+func (tw *CmpChunkTableWriter) FullLength() uint64 {
 	return tw.sink.Size()
 }
 
@@ -152,21 +166,25 @@ func (tw *CmpChunkTableWriter) AddChunk(tc ToChunker) (uint32, error) {
 }
 
 // Finish will write the index and footer of the table file and return the id of the file.
-func (tw *CmpChunkTableWriter) Finish() (string, error) {
+func (tw *CmpChunkTableWriter) Finish() (uint32, string, error) {
 	if tw.blockAddr != nil {
-		return "", ErrAlreadyFinished
+		return 0, "", ErrAlreadyFinished
 	}
+
+	startSize := tw.sink.Size()
+	// This happens to be the chunk data size.
+	tw.chunkDataLength = startSize
 
 	blockHash, err := tw.writeIndex()
 
 	if err != nil {
-		return "", err
+		return 0, "", err
 	}
 
 	err = tw.writeFooter()
 
 	if err != nil {
-		return "", err
+		return 0, "", err
 	}
 
 	var h []byte
@@ -174,7 +192,17 @@ func (tw *CmpChunkTableWriter) Finish() (string, error) {
 	blockAddr := hash.New(h[:hash.ByteLen])
 
 	tw.blockAddr = &blockAddr
-	return tw.blockAddr.String(), nil
+
+	endSize := tw.sink.Size()
+	return uint32(endSize - startSize), tw.blockAddr.String(), nil
+}
+
+func (tw *CmpChunkTableWriter) ChunkDataLength() (uint64, error) {
+	if tw.chunkDataLength == 0 {
+		return 0, errors.New("runtime error: ChunkDataLength invalid before Finish")
+	}
+
+	return tw.chunkDataLength, nil
 }
 
 // FlushToFile can be called after Finish in order to write the data out to the path provided.
