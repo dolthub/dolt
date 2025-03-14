@@ -295,7 +295,10 @@ func createRowIterForTable(ctx *sql.Context, t *doltdb.Table, sch schema.Schema)
 	if err != nil {
 		return nil, err
 	}
-	rows := durable.ProllyMapFromIndex(rowData)
+	rows, err := durable.ProllyMapFromIndex(rowData)
+	if err != nil {
+		return nil, err
+	}
 	rowCount, err := rows.Count()
 	if err != nil {
 		return nil, err

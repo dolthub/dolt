@@ -405,7 +405,10 @@ func migrateTable(ctx context.Context, newSch schema.Schema, oldParentTbl, oldTb
 	if err != nil {
 		return nil, err
 	}
-	newParentRows := durable.ProllyMapFromIndex(idx)
+	newParentRows, err := durable.ProllyMapFromIndex(idx)
+	if err != nil {
+		return nil, err
+	}
 
 	oldParentSet, err := oldParentTbl.GetIndexSet(ctx)
 	if err != nil {
@@ -582,7 +585,10 @@ func migrateIndexSet(
 		if err != nil {
 			return nil, err
 		}
-		newParent := durable.ProllyMapFromIndex(idx)
+		newParent, err := durable.ProllyMapFromIndex(idx)
+		if err != nil {
+			return nil, err
+		}
 
 		newIdx, err := migrateIndex(ctx, def.Schema(), oldParent, old, newParent, ns)
 		if err != nil {

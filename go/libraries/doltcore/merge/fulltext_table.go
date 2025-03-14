@@ -145,7 +145,10 @@ func (table *fulltextTable) ApplyToTable(ctx *sql.Context) (*doltdb.Table, error
 	if err != nil {
 		return nil, err
 	}
-	m := durable.ProllyMapFromIndex(idx)
+	m, err := durable.ProllyMapFromIndex(idx)
+	if err != nil {
+		return nil, err
+	}
 	keyDesc, valDesc := m.Descriptors()
 	keyMap, valMap := ordinalMappingsFromSchema(table.SqlSch, table.Sch)
 	mut := m.Mutate()

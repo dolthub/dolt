@@ -2110,8 +2110,8 @@ func (ddb *DoltDB) AddStash(ctx context.Context, head *Commit, stash RootValue, 
 	return err
 }
 
-func (ddb *DoltDB) SetStatisics(ctx context.Context, branch string, addr hash.Hash) error {
-	statsDs, err := ddb.db.GetDataset(ctx, ref.NewStatsRef(branch).String())
+func (ddb *DoltDB) SetStatistics(ctx context.Context, branch string, addr hash.Hash) error {
+	statsDs, err := ddb.db.GetDataset(ctx, ref.NewStatsRef().String())
 	if err != nil {
 		return err
 	}
@@ -2119,8 +2119,8 @@ func (ddb *DoltDB) SetStatisics(ctx context.Context, branch string, addr hash.Ha
 	return err
 }
 
-func (ddb *DoltDB) DropStatisics(ctx context.Context, branch string) error {
-	statsDs, err := ddb.db.GetDataset(ctx, ref.NewStatsRef(branch).String())
+func (ddb *DoltDB) DropStatisics(ctx context.Context) error {
+	statsDs, err := ddb.db.GetDataset(ctx, ref.NewStatsRef().String())
 
 	_, err = ddb.db.Delete(ctx, statsDs, "")
 	if err != nil {
@@ -2132,8 +2132,8 @@ func (ddb *DoltDB) DropStatisics(ctx context.Context, branch string) error {
 var ErrNoStatistics = errors.New("no statistics found")
 
 // GetStatistics returns the value of the singleton ref.StatsRef for this database
-func (ddb *DoltDB) GetStatistics(ctx context.Context, branch string) (prolly.Map, error) {
-	ds, err := ddb.db.GetDataset(ctx, ref.NewStatsRef(branch).String())
+func (ddb *DoltDB) GetStatistics(ctx context.Context) (prolly.Map, error) {
+	ds, err := ddb.db.GetDataset(ctx, ref.NewStatsRef().String())
 	if err != nil {
 		return prolly.Map{}, err
 	}

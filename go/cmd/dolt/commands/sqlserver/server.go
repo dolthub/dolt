@@ -303,17 +303,9 @@ func ConfigureServices(
 	var sqlEngine *engine.SqlEngine
 	InitSqlEngine := &svcs.AnonService{
 		InitF: func(ctx context.Context) (err error) {
-			if statsOn, err := mrEnv.Config().GetString(env.SqlServerGlobalsPrefix + "." + dsess.DoltStatsAutoRefreshEnabled); err != nil {
-				// Auto-stats is off by default for every command except
-				// sql-server. Unless the config specifies a specific
-				// behavior, enable server stats collection.
-				sql.SystemVariables.SetGlobal(dsess.DoltStatsAutoRefreshEnabled, 1)
-			} else if statsOn != "0" {
-				// do not bootstrap if auto-stats enabled
-			} else if _, err := mrEnv.Config().GetString(env.SqlServerGlobalsPrefix + "." + dsess.DoltStatsBootstrapEnabled); err != nil {
-				// If we've disabled stats collection and config does not
-				// specify bootstrap behavior, enable bootstrapping.
-				sql.SystemVariables.SetGlobal(dsess.DoltStatsBootstrapEnabled, 1)
+			if _, err := mrEnv.Config().GetString(env.SqlServerGlobalsPrefix + "." + dsess.DoltStatsPaused); err != nil {
+				// unless otherwise specified, run stats writer alongside server
+				sql.SystemVariables.SetGlobal(dsess.DoltStatsPaused, 0)
 			}
 			sqlEngine, err = engine.NewSqlEngine(
 				ctx,

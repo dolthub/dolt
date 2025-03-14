@@ -116,7 +116,10 @@ func getSecondaryKeylessProllyWriters(ctx context.Context, t *doltdb.Table, schS
 		if err != nil {
 			return nil, err
 		}
-		m := durable.ProllyMapFromIndex(idxRows)
+		m, err := durable.ProllyMapFromIndex(idxRows)
+		if err != nil {
+			return nil, err
+		}
 
 		keyDesc, _ := m.Descriptors()
 

@@ -154,7 +154,10 @@ func newProllyConflictRowIter(ctx *sql.Context, ct ProllyConflictsTable) (*proll
 	if err != nil {
 		return nil, err
 	}
-	ourRows := durable.ProllyMapFromIndex(idx)
+	ourRows, err := durable.ProllyMapFromIndex(idx)
+	if err != nil {
+		return nil, err
+	}
 
 	itr, err := ct.artM.IterAllConflicts(ctx)
 	if err != nil {
@@ -424,7 +427,11 @@ func (itr *prollyConflictRowIter) loadTableMaps(ctx *sql.Context, baseHash, thei
 			return err
 		}
 
-		itr.baseRows = durable.ProllyMapFromIndex(idx)
+		itr.baseRows, err = durable.ProllyMapFromIndex(idx)
+		if err != nil {
+			return err
+		}
+
 		itr.baseHash = baseHash
 	}
 
@@ -446,7 +453,10 @@ func (itr *prollyConflictRowIter) loadTableMaps(ctx *sql.Context, baseHash, thei
 		if err != nil {
 			return err
 		}
-		itr.theirRows = durable.ProllyMapFromIndex(idx)
+		itr.theirRows, err = durable.ProllyMapFromIndex(idx)
+		if err != nil {
+			return err
+		}
 		itr.theirHash = theirHash
 	}
 

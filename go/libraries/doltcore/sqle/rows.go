@@ -183,7 +183,11 @@ func ProllyRowIterFromPartition(
 	projections []uint64,
 	partition doltTablePartition,
 ) (sql.RowIter, error) {
-	rows := durable.ProllyMapFromIndex(partition.rowData)
+	rows, err := durable.ProllyMapFromIndex(partition.rowData)
+	if err != nil {
+		return nil, err
+	}
+
 	c, err := rows.Count()
 	if err != nil {
 		return nil, err
@@ -243,7 +247,10 @@ func DoltTablePartitionToRowIter(ctx *sql.Context, name string, table *doltdb.Ta
 	}
 
 	if types.IsFormat_DOLT(data.Format()) {
-		idx := durable.ProllyMapFromIndex(data)
+		idx, err := durable.ProllyMapFromIndex(data)
+		if err != nil {
+			return nil, nil, err
+		}
 		c, err := idx.Count()
 		if err != nil {
 			return nil, nil, err

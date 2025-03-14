@@ -403,7 +403,7 @@ func assertNomsConflicts(t *testing.T, ctx context.Context, tbl *doltdb.Table, e
 func mustGetRowValueFromTable(t *testing.T, ctx context.Context, tbl *doltdb.Table, key val.Tuple) val.Tuple {
 	idx, err := tbl.GetRowData(ctx)
 	require.NoError(t, err)
-	m := durable.ProllyMapFromIndex(idx)
+	m, _ := durable.ProllyMapFromIndex(idx)
 
 	var value val.Tuple
 	err = m.Get(ctx, key, func(_, v val.Tuple) error {
@@ -438,7 +438,7 @@ func assertKeylessRows(t *testing.T, ctx context.Context, tbl *doltdb.Table, exp
 func assertKeylessProllyRows(t *testing.T, ctx context.Context, tbl *doltdb.Table, expected []keylessEntry) {
 	idx, err := tbl.GetRowData(ctx)
 	require.NoError(t, err)
-	m := durable.ProllyMapFromIndex(idx)
+	m, _ := durable.ProllyMapFromIndex(idx)
 
 	expectedSet := mustHash128Set(expected...)
 

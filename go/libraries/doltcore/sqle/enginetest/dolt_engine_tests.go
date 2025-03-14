@@ -234,41 +234,8 @@ func RunVersionedQueriesTest(t *testing.T, h DoltEnginetestHarness) {
 }
 
 func RunQueryTestPlans(t *testing.T, harness DoltEnginetestHarness) {
-	// Dolt supports partial keys, so the index matched is different for some plans
-	// TODO: Fix these differences by implementing partial key matching in the memory tables, or the engine itself
-	skipped := []string{
-		"SELECT pk,pk1,pk2 FROM one_pk LEFT JOIN two_pk ON pk=pk1",
-		"SELECT pk,pk1,pk2 FROM one_pk JOIN two_pk ON pk=pk1",
-		"SELECT one_pk.c5,pk1,pk2 FROM one_pk JOIN two_pk ON pk=pk1 ORDER BY 1,2,3",
-		"SELECT opk.c5,pk1,pk2 FROM one_pk opk JOIN two_pk tpk ON opk.pk=tpk.pk1 ORDER BY 1,2,3",
-		"SELECT opk.c5,pk1,pk2 FROM one_pk opk JOIN two_pk tpk ON pk=pk1 ORDER BY 1,2,3",
-		"SELECT pk,pk1,pk2 FROM one_pk LEFT JOIN two_pk ON pk=pk1 ORDER BY 1,2,3",
-		"SELECT pk,pk1,pk2 FROM one_pk t1, two_pk t2 WHERE pk=1 AND pk2=1 AND pk1=1 ORDER BY 1,2",
-	}
-	// Parallelism introduces Exchange nodes into the query plans, so disable.
-	// TODO: exchange nodes should really only be part of the explain plan under certain debug settings
-	harness = harness.NewHarness(t).WithSkippedQueries(skipped).WithConfigureStats(true)
-	if !types.IsFormat_DOLT(types.Format_Default) {
-		// only new format supports reverse IndexTableAccess
-		reverseIndexSkip := []string{
-			"SELECT * FROM one_pk ORDER BY pk",
-			"SELECT * FROM two_pk ORDER BY pk1, pk2",
-			"SELECT * FROM two_pk ORDER BY pk1",
-			"SELECT pk1 AS one, pk2 AS two FROM two_pk ORDER BY pk1, pk2",
-			"SELECT pk1 AS one, pk2 AS two FROM two_pk ORDER BY one, two",
-			"SELECT i FROM (SELECT i FROM mytable ORDER BY i DESC LIMIT 1) sq WHERE i = 3",
-			"SELECT i FROM (SELECT i FROM (SELECT i FROM mytable ORDER BY DES LIMIT 1) sql1)sql2 WHERE i = 3",
-			"SELECT s,i FROM mytable order by i DESC",
-			"SELECT s,i FROM mytable as a order by i DESC",
-			"SELECT pk1, pk2 FROM two_pk order by pk1 asc, pk2 asc",
-			"SELECT pk1, pk2 FROM two_pk order by pk1 desc, pk2 desc",
-			"SELECT i FROM (SELECT i FROM (SELECT i FROM mytable ORDER BY i DESC  LIMIT 1) sq1) sq2 WHERE i = 3",
-		}
-		harness = harness.WithSkippedQueries(reverseIndexSkip)
-	}
-
+	harness = harness.NewHarness(t)
 	defer harness.Close()
-	sql.SystemVariables.SetGlobal(dsess.DoltStatsBootstrapEnabled, 0)
 	enginetest.TestQueryPlans(t, harness, queries.PlanTests)
 }
 
@@ -1165,21 +1132,6 @@ func mustNewEngine(t *testing.T, h enginetest.Harness) enginetest.QueryEngine {
 	return e
 }
 
-func RunStatsFunctionsTest(t *testing.T, harness DoltEnginetestHarness) {
-	defer harness.Close()
-	for _, test := range StatProcTests {
-		t.Run(test.Name, func(t *testing.T) {
-			// reset engine so provider statistics are clean
-			harness = harness.NewHarness(t).WithConfigureStats(true)
-			harness.Setup(setup.MydbData)
-			harness.SkipSetupCommit()
-			e := mustNewEngine(t, harness)
-			defer e.Close()
-			enginetest.TestScriptWithEngine(t, e, harness, test)
-		})
-	}
-}
-
 func RunDiffTableFunctionTests(t *testing.T, harness DoltEnginetestHarness) {
 	for _, test := range DiffTableFunctionScriptTests {
 		t.Run(test.Name, func(t *testing.T) {
@@ -1559,30 +1511,15 @@ func RunStatsHistogramTests(t *testing.T, h DoltEnginetestHarness) {
 }
 
 func RunStatsStorageTests(t *testing.T, h DoltEnginetestHarness) {
-	for _, script := range append(DoltStatsStorageTests, DoltHistogramTests...) {
+	for _, script := range DoltHistogramTests {
 		func() {
 			h = h.NewHarness(t).WithConfigureStats(true)
-			defer h.Close()
 			e := mustNewEngine(t, h)
 			if enginetest.IsServerEngine(e) {
 				return
 			}
 			defer e.Close()
-			TestProviderReloadScriptWithEngine(t, e, h, script)
-		}()
-	}
-}
-
-func RunStatsIOTestsWithoutReload(t *testing.T, h DoltEnginetestHarness) {
-	for _, script := range append(DoltStatsStorageTests, DoltHistogramTests...) {
-		func() {
-			h = h.NewHarness(t).WithConfigureStats(true)
 			defer h.Close()
-			e := mustNewEngine(t, h)
-			if enginetest.IsServerEngine(e) {
-				return
-			}
-			defer e.Close()
 			enginetest.TestScriptWithEngine(t, e, h, script)
 		}()
 	}

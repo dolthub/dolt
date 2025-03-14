@@ -332,14 +332,18 @@ func TestMergeCommits(t *testing.T) {
 	artifacts := durable.ProllyMapFromArtifactIndex(artIdx)
 	MustEqualArtifactMap(t, expectedArtifacts, artifacts)
 
-	MustEqualProlly(t, tableName, durable.ProllyMapFromIndex(expectedRows), durable.ProllyMapFromIndex(mergedRows))
+	idx1, _ := durable.ProllyMapFromIndex(expectedRows)
+	idx2, _ := durable.ProllyMapFromIndex(mergedRows)
+	MustEqualProlly(t, tableName, idx1, idx2)
 
 	for _, index := range sch.Indexes().AllIndexes() {
 		mergedIndexRows, err := merged.table.GetIndexRowData(ctx, index.Name())
 		require.NoError(t, err)
 		expectedIndexRows, err := expected.GetIndexRowData(ctx, index.Name())
 		require.NoError(t, err)
-		MustEqualProlly(t, index.Name(), durable.ProllyMapFromIndex(expectedIndexRows), durable.ProllyMapFromIndex(mergedIndexRows))
+		idx1, _ := durable.ProllyMapFromIndex(expectedIndexRows)
+		idx2, _ := durable.ProllyMapFromIndex(mergedIndexRows)
+		MustEqualProlly(t, index.Name(), idx1, idx2)
 	}
 
 	h, err := merged.table.HashOf()
@@ -635,7 +639,7 @@ func rebuildAllProllyIndexes(ctx *sql.Context, tbl *doltdb.Table) (*doltdb.Table
 	if err != nil {
 		return nil, err
 	}
-	primary := durable.ProllyMapFromIndex(tableRowData)
+	primary, _ := durable.ProllyMapFromIndex(tableRowData)
 
 	for _, index := range sch.Indexes().AllIndexes() {
 		rebuiltIndexRowData, err := creation.BuildSecondaryProllyIndex(ctx, tbl.ValueReadWriter(), tbl.NodeStore(), sch, tableName, index, primary)
