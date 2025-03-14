@@ -165,7 +165,7 @@ func GetField(ctx context.Context, td val.TupleDesc, i int, tup val.Tuple, ns No
 // and a boolean indicating success.
 func Serialize(ctx context.Context, ns NodeStore, t val.Type, v interface{}) (result []byte, err error) {
 	newTupleDesc := val.NewTupleDescriptor(t)
-	tb := val.NewTupleBuilder(newTupleDesc)
+	tb := val.NewTupleBuilder(newTupleDesc, ns)
 	err = PutField(ctx, ns, tb, 0, v)
 	if err != nil {
 		return nil, err

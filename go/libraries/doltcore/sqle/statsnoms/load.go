@@ -243,7 +243,7 @@ func loadRefdProps(ctx *sql.Context, db dsess.SqlDatabase, sqlTable sql.Table, q
 	}
 
 	prollyMap := durable.ProllyMapFromIndex(idx)
-	keyBuilder := val.NewTupleBuilder(prollyMap.KeyDesc().PrefixDesc(cols))
+	keyBuilder := val.NewTupleBuilder(prollyMap.KeyDesc().PrefixDesc(cols), prollyMap.NodeStore())
 	buffPool := prollyMap.NodeStore().Pool()
 
 	if cnt, err := prollyMap.Count(); err != nil {

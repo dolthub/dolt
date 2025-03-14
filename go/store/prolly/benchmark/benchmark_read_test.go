@@ -251,7 +251,7 @@ func makeGoMap(scale uint64) map[uint64]val.Tuple {
 		val.Type{Enc: val.Int64Enc, Nullable: true},
 		val.Type{Enc: val.Int64Enc, Nullable: true},
 		val.Type{Enc: val.Int64Enc, Nullable: true},
-	))
+	), nil)
 
 	kv := make(map[uint64]val.Tuple, scale)
 	for i := uint64(0); i < scale; i++ {
@@ -273,7 +273,7 @@ func makeSyncMap(scale uint64) *sync.Map {
 		val.Type{Enc: val.Int64Enc, Nullable: true},
 		val.Type{Enc: val.Int64Enc, Nullable: true},
 		val.Type{Enc: val.Int64Enc, Nullable: true},
-	))
+	), nil)
 	kv := &sync.Map{}
 
 	for i := uint64(0); i < scale; i++ {

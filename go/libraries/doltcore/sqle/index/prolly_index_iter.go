@@ -67,7 +67,7 @@ func newProllyIndexIter(
 
 	primary := durable.ProllyMapFromIndex(dprimary)
 	kd, _ := primary.Descriptors()
-	pkBld := val.NewTupleBuilder(kd)
+	pkBld := val.NewTupleBuilder(kd, primary.NodeStore())
 	pkMap := OrdinalMappingFromIndex(idx)
 	keyProj, valProj, ordProj := projectionMappings(idx.Schema(), projections)
 
@@ -315,7 +315,7 @@ func newProllyKeylessIndexIter(ctx *sql.Context, idx DoltIndex, rng prolly.Range
 	clustered := durable.ProllyMapFromIndex(rows)
 	keyDesc, valDesc := clustered.Descriptors()
 	indexMap := OrdinalMappingFromIndex(idx)
-	keyBld := val.NewTupleBuilder(keyDesc)
+	keyBld := val.NewTupleBuilder(keyDesc, clustered.NodeStore())
 	sch := idx.Schema()
 	_, vm, om := projectionMappings(sch, projections)
 

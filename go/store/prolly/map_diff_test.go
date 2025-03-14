@@ -312,10 +312,10 @@ func makeMapWithUpdates(t *testing.T, m Map, updates ...[3]val.Tuple) Map {
 
 func makeUpdatesToTuples(kd, vd val.TupleDesc, tuples ...[2]val.Tuple) (updates [][3]val.Tuple) {
 	ctx := context.Background()
+	ns := tree.NewTestNodeStore()
 	updates = make([][3]val.Tuple, len(tuples))
 
-	valBuilder := val.NewTupleBuilder(vd)
-	ns := tree.NewTestNodeStore()
+	valBuilder := val.NewTupleBuilder(vd, ns)
 
 	for i := range updates {
 		updates[i][0] = tuples[i][0]

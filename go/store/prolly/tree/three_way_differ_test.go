@@ -194,7 +194,7 @@ func TestThreeWayDiffer(t *testing.T) {
 			right := newTestMap(t, ctx, tt.right, ns, valDesc)
 
 			var diffInfo ThreeWayDiffInfo
-			iter, err := NewThreeWayDiffer(ctx, ns, left, right, base, testResolver(t, ns, valDesc, val.NewTupleBuilder(valDesc)), false, diffInfo, keyDesc)
+			iter, err := NewThreeWayDiffer(ctx, ns, left, right, base, testResolver(t, ns, valDesc, val.NewTupleBuilder(valDesc, ns)), false, diffInfo, keyDesc)
 			require.NoError(t, err)
 
 			var cmp []testDiff
@@ -294,8 +294,8 @@ func newTestMap(t *testing.T, ctx context.Context, rows [][]int, ns NodeStore, v
 	chkr, err := newEmptyChunker(ctx, ns, serializer)
 	require.NoError(t, err)
 
-	keyBuilder := val.NewTupleBuilder(keyDesc)
-	valBuilder := val.NewTupleBuilder(valDesc)
+	keyBuilder := val.NewTupleBuilder(keyDesc, ns)
+	valBuilder := val.NewTupleBuilder(valDesc, ns)
 
 	for _, row := range rows {
 		keyBuilder.PutInt64(0, int64(row[0]))

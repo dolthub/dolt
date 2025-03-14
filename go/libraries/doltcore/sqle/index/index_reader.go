@@ -397,7 +397,7 @@ func newNonCoveringLookupBuilder(s *durableIndexState, b *baseIndexImplBuilder) 
 
 	primary := durable.ProllyMapFromIndex(s.Primary)
 	priKd, _ := primary.Descriptors()
-	tbBld := val.NewTupleBuilder(priKd)
+	tbBld := val.NewTupleBuilder(priKd, primary.NodeStore())
 	pkMap := OrdinalMappingFromIndex(b.idx)
 	keyProj, valProj, ordProj := projectionMappings(b.idx.Schema(), b.projections)
 	return &nonCoveringIndexImplBuilder{
@@ -775,7 +775,7 @@ func (ib *keylessIndexImplBuilder) NewRangeMapIter(ctx context.Context, r prolly
 	keyDesc := clustered.KeyDesc()
 	indexMap := OrdinalMappingFromIndex(ib.idx)
 
-	keyBld := val.NewTupleBuilder(keyDesc)
+	keyBld := val.NewTupleBuilder(keyDesc, clustered.NodeStore())
 
 	return &keylessLookupIter{pri: clustered, secIter: indexIter, pkMap: indexMap, pkBld: keyBld, prefixDesc: keyDesc}, nil
 }
@@ -835,7 +835,7 @@ func (ib *keylessIndexImplBuilder) NewPartitionRowIter(ctx *sql.Context, part sq
 func (ib *keylessIndexImplBuilder) NewSecondaryIter(strict bool, cnt int, nullSafe []bool) SecondaryLookupIterGen {
 	pri := durable.ProllyMapFromIndex(ib.s.Primary)
 	pkDesc, _ := pri.Descriptors()
-	pkBld := val.NewTupleBuilder(pkDesc)
+	pkBld := val.NewTupleBuilder(pkDesc, pri.NodeStore())
 
 	secondary := durable.ProllyMapFromIndex(ib.s.Secondary)
 

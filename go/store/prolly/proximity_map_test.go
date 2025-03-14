@@ -60,7 +60,7 @@ var testValDesc = val.NewTupleDescriptor(
 )
 
 func buildTuple(t *testing.T, ctx context.Context, ns tree.NodeStore, pool pool.BuffPool, desc val.TupleDesc, row []interface{}) val.Tuple {
-	builder := val.NewTupleBuilder(desc)
+	builder := val.NewTupleBuilder(desc, ns)
 	for i, column := range row {
 		err := tree.PutField(ctx, ns, builder, i, column)
 		require.NoError(t, err)
@@ -523,8 +523,8 @@ func TestIncrementalUpdates(t *testing.T) {
 
 	bp := pool.NewBuffPool()
 
-	keyBuilder := val.NewTupleBuilder(testKeyDesc)
-	valueBuilder := val.NewTupleBuilder(testValDesc)
+	keyBuilder := val.NewTupleBuilder(testKeyDesc, ns)
+	valueBuilder := val.NewTupleBuilder(testValDesc, ns)
 
 	// update leaf node
 	{
@@ -613,7 +613,7 @@ func TestIncrementalDeletes(t *testing.T) {
 
 	bp := pool.NewBuffPool()
 
-	keyBuilder := val.NewTupleBuilder(testKeyDesc)
+	keyBuilder := val.NewTupleBuilder(testKeyDesc, ns)
 
 	// delete leaf node
 	{

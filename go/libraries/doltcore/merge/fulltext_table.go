@@ -149,8 +149,8 @@ func (table *fulltextTable) ApplyToTable(ctx *sql.Context) (*doltdb.Table, error
 	keyDesc, valDesc := m.Descriptors()
 	keyMap, valMap := ordinalMappingsFromSchema(table.SqlSch, table.Sch)
 	mut := m.Mutate()
-	keyBld := val.NewTupleBuilder(keyDesc)
-	valBld := val.NewTupleBuilder(valDesc)
+	keyBld := val.NewTupleBuilder(keyDesc, m.NodeStore())
+	valBld := val.NewTupleBuilder(valDesc, m.NodeStore())
 
 	sqlRow, err := rowIter.Next(ctx)
 	for ; err == nil; sqlRow, err = rowIter.Next(ctx) {

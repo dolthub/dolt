@@ -353,8 +353,8 @@ func newTree(t *testing.T, ns NodeStore, keyCnt, blobLen, chunkSize int) Node {
 	valDesc := val.NewTupleDescriptor(val.Type{Enc: val.BytesAddrEnc})
 
 	tuples := make([][2]val.Tuple, keyCnt)
-	keyBld := val.NewTupleBuilder(keyDesc)
-	valBld := val.NewTupleBuilder(valDesc)
+	keyBld := val.NewTupleBuilder(keyDesc, ns)
+	valBld := val.NewTupleBuilder(valDesc, ns)
 	for i := range tuples {
 		keyBld.PutUint32(0, uint32(i))
 		tuples[i][0] = keyBld.Build(sharedPool)

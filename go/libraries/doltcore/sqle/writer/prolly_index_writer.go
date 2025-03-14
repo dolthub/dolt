@@ -42,9 +42,9 @@ func getPrimaryProllyWriter(ctx context.Context, t *doltdb.Table, schState *dses
 
 	return prollyIndexWriter{
 		mut:    m.Mutate(),
-		keyBld: val.NewTupleBuilder(keyDesc),
+		keyBld: val.NewTupleBuilder(keyDesc, m.NodeStore()),
 		keyMap: schState.PriIndex.KeyMapping,
-		valBld: val.NewTupleBuilder(valDesc),
+		valBld: val.NewTupleBuilder(valDesc, m.NodeStore()),
 		valMap: schState.PriIndex.ValMapping,
 	}, nil
 }
@@ -61,8 +61,8 @@ func getPrimaryKeylessProllyWriter(ctx context.Context, t *doltdb.Table, schStat
 
 	return prollyKeylessWriter{
 		mut:    m.Mutate(),
-		keyBld: val.NewTupleBuilder(keyDesc),
-		valBld: val.NewTupleBuilder(valDesc),
+		keyBld: val.NewTupleBuilder(keyDesc, m.NodeStore()),
+		valBld: val.NewTupleBuilder(valDesc, m.NodeStore()),
 		valMap: schState.PriIndex.ValMapping,
 	}, nil
 }
@@ -113,7 +113,7 @@ func (m prollyIndexWriter) keyFromRow(ctx context.Context, sqlRow sql.Row) (val.
 			return nil, err
 		}
 	}
-	return m.keyBld.BuildPermissive(sharePool), nil
+	return m.keyBld.BuildPermissive(sharePool, m.mut.NodeStore()), nil
 }
 
 func (m prollyIndexWriter) ValidateKeyViolations(ctx context.Context, sqlRow sql.Row) error {

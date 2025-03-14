@@ -41,10 +41,11 @@ var varchar255 = gmstypes.MustCreateString(sqltypes.VarChar, 255, sql.Collation_
 var buffPool = pool.NewBuffPool()
 
 func TestStringSerializer(t *testing.T) {
+	ns := tree.NewTestNodeStore()
 	s := stringSerializer{}
 
 	tupleDesc := val.NewTupleDescriptor(val.Type{Enc: val.StringEnc})
-	tupleBuilder := val.NewTupleBuilder(tupleDesc)
+	tupleBuilder := val.NewTupleBuilder(tupleDesc, ns)
 
 	t.Run("VARCHAR 1 byte length encoding", func(t *testing.T) {
 		tupleBuilder.PutString(0, "abc")
@@ -90,7 +91,7 @@ func TestStringSerializer(t *testing.T) {
 	})
 	t.Run("VARBINARY 1 byte length encoding", func(t *testing.T) {
 		tupleDesc := val.NewTupleDescriptor(val.Type{Enc: val.ByteStringEnc})
-		tupleBuilder := val.NewTupleBuilder(tupleDesc)
+		tupleBuilder := val.NewTupleBuilder(tupleDesc, ns)
 		typ := gmstypes.MustCreateString(sqltypes.VarBinary, 50, sql.Collation_binary)
 		tupleBuilder.PutByteString(0, []byte{'a', 'b', 'c'})
 		tuple := tupleBuilder.Build(buffPool)
@@ -103,7 +104,7 @@ func TestStringSerializer(t *testing.T) {
 	})
 	t.Run("VARBINARY 2 byte length encoding", func(t *testing.T) {
 		tupleDesc := val.NewTupleDescriptor(val.Type{Enc: val.ByteStringEnc})
-		tupleBuilder := val.NewTupleBuilder(tupleDesc)
+		tupleBuilder := val.NewTupleBuilder(tupleDesc, ns)
 		typ := gmstypes.MustCreateString(sqltypes.VarBinary, 420, sql.Collation_binary)
 		tupleBuilder.PutByteString(0, []byte{'a', 'b', 'c'})
 		tuple := tupleBuilder.Build(buffPool)
@@ -116,7 +117,7 @@ func TestStringSerializer(t *testing.T) {
 	})
 	t.Run("BINARY 1 byte length encoding", func(t *testing.T) {
 		tupleDesc := val.NewTupleDescriptor(val.Type{Enc: val.ByteStringEnc})
-		tupleBuilder := val.NewTupleBuilder(tupleDesc)
+		tupleBuilder := val.NewTupleBuilder(tupleDesc, ns)
 		typ := gmstypes.MustCreateString(sqltypes.Binary, 25, sql.Collation_binary)
 		tupleBuilder.PutByteString(0, []byte{'a', 'b', 'c'})
 		tuple := tupleBuilder.Build(buffPool)
@@ -132,11 +133,12 @@ func TestStringSerializer(t *testing.T) {
 }
 
 func TestFloatSerializer_Float32(t *testing.T) {
+	ns := tree.NewTestNodeStore()
 	s := floatSerializer{}
 
 	// 3.1415927E+00 = 0x40490fdb
 	tupleDesc := val.NewTupleDescriptor(val.Type{Enc: val.Float32Enc})
-	tupleBuilder := val.NewTupleBuilder(tupleDesc)
+	tupleBuilder := val.NewTupleBuilder(tupleDesc, ns)
 	tupleBuilder.PutFloat32(0, 3.1415927)
 	tuple := tupleBuilder.Build(buffPool)
 	bytes, err := s.serialize(nil, gmstypes.Float32, tupleDesc, tuple, 0, nil)
@@ -148,11 +150,12 @@ func TestFloatSerializer_Float32(t *testing.T) {
 }
 
 func TestFloatSerializer_Float64(t *testing.T) {
+	ns := tree.NewTestNodeStore()
 	s := floatSerializer{}
 
 	// 3.1415926535E+00 = 0x400921fb54411744
 	tupleDesc := val.NewTupleDescriptor(val.Type{Enc: val.Float64Enc})
-	tupleBuilder := val.NewTupleBuilder(tupleDesc)
+	tupleBuilder := val.NewTupleBuilder(tupleDesc, ns)
 	tupleBuilder.PutFloat64(0, 3.1415926535)
 	tuple := tupleBuilder.Build(buffPool)
 	bytes, err := s.serialize(nil, gmstypes.Float64, tupleDesc, tuple, 0, nil)
@@ -164,10 +167,11 @@ func TestFloatSerializer_Float64(t *testing.T) {
 }
 
 func TestYearSerializer(t *testing.T) {
+	ns := tree.NewTestNodeStore()
 	s := yearSerializer{}
 
 	tupleDesc := val.NewTupleDescriptor(val.Type{Enc: val.YearEnc})
-	tupleBuilder := val.NewTupleBuilder(tupleDesc)
+	tupleBuilder := val.NewTupleBuilder(tupleDesc, ns)
 	tupleBuilder.PutYear(0, 2030)
 	tuple := tupleBuilder.Build(buffPool)
 	bytes, err := s.serialize(nil, gmstypes.Year, tupleDesc, tuple, 0, nil)
@@ -179,13 +183,14 @@ func TestYearSerializer(t *testing.T) {
 }
 
 func TestDatetimeSerializer(t *testing.T) {
+	ns := tree.NewTestNodeStore()
 	s := datetimeSerializer{}
 
 	t.Run("No Precision", func(t *testing.T) {
 		// 2012-06-21 15:45:17 (precision 0)
 		datetimeType := gmstypes.Datetime
 		tupleDesc := val.NewTupleDescriptor(val.Type{Enc: val.DatetimeEnc})
-		tupleBuilder := val.NewTupleBuilder(tupleDesc)
+		tupleBuilder := val.NewTupleBuilder(tupleDesc, ns)
 		tupleBuilder.PutDatetime(0,
 			time.Date(2012, 6, 21, 15, 45, 17, 0, time.UTC))
 		tuple := tupleBuilder.Build(buffPool)
@@ -200,7 +205,7 @@ func TestDatetimeSerializer(t *testing.T) {
 		// 2012-06-21 15:45:17.7 (precision 1)
 		datetimeType := gmstypes.MustCreateDatetimeType(sqltypes.Datetime, 1)
 		tupleDesc := val.NewTupleDescriptor(val.Type{Enc: val.DatetimeEnc})
-		tupleBuilder := val.NewTupleBuilder(tupleDesc)
+		tupleBuilder := val.NewTupleBuilder(tupleDesc, ns)
 		tupleBuilder.PutDatetime(0,
 			time.Date(2012, 6, 21, 15, 45, 17, .7*1_000_000_000, time.UTC))
 		tuple := tupleBuilder.Build(buffPool)
@@ -215,7 +220,7 @@ func TestDatetimeSerializer(t *testing.T) {
 		// 2012-06-21 15:45:17.76 (precision 2)
 		datetimeType := gmstypes.MustCreateDatetimeType(sqltypes.Datetime, 2)
 		tupleDesc := val.NewTupleDescriptor(val.Type{Enc: val.DatetimeEnc})
-		tupleBuilder := val.NewTupleBuilder(tupleDesc)
+		tupleBuilder := val.NewTupleBuilder(tupleDesc, ns)
 		tupleBuilder.PutDatetime(0,
 			time.Date(2012, 6, 21, 15, 45, 17, .76*1_000_000_000, time.UTC))
 		tuple := tupleBuilder.Build(buffPool)
@@ -230,7 +235,7 @@ func TestDatetimeSerializer(t *testing.T) {
 		// 2012-06-21 15:45:17.765 (precision 3)
 		datetimeType := gmstypes.MustCreateDatetimeType(sqltypes.Datetime, 3)
 		tupleDesc := val.NewTupleDescriptor(val.Type{Enc: val.DatetimeEnc})
-		tupleBuilder := val.NewTupleBuilder(tupleDesc)
+		tupleBuilder := val.NewTupleBuilder(tupleDesc, ns)
 		tupleBuilder.PutDatetime(0,
 			time.Date(2012, 6, 21, 15, 45, 17, .765*1_000_000_000, time.UTC))
 		tuple := tupleBuilder.Build(buffPool)
@@ -245,7 +250,7 @@ func TestDatetimeSerializer(t *testing.T) {
 		// 2012-06-21 15:45:17.7654 (precision 4)
 		datetimeType := gmstypes.MustCreateDatetimeType(sqltypes.Datetime, 4)
 		tupleDesc := val.NewTupleDescriptor(val.Type{Enc: val.DatetimeEnc})
-		tupleBuilder := val.NewTupleBuilder(tupleDesc)
+		tupleBuilder := val.NewTupleBuilder(tupleDesc, ns)
 		tupleBuilder.PutDatetime(0,
 			time.Date(2012, 6, 21, 15, 45, 17, .7654*1_000_000_000, time.UTC))
 		tuple := tupleBuilder.Build(buffPool)
@@ -260,7 +265,7 @@ func TestDatetimeSerializer(t *testing.T) {
 		// 2012-06-21 15:45:17.76543 (precision 5)
 		datetimeType := gmstypes.MustCreateDatetimeType(sqltypes.Datetime, 5)
 		tupleDesc := val.NewTupleDescriptor(val.Type{Enc: val.DatetimeEnc})
-		tupleBuilder := val.NewTupleBuilder(tupleDesc)
+		tupleBuilder := val.NewTupleBuilder(tupleDesc, ns)
 		tupleBuilder.PutDatetime(0,
 			time.Date(2012, 6, 21, 15, 45, 17, .76543*1_000_000_000, time.UTC))
 		tuple := tupleBuilder.Build(buffPool)
@@ -275,7 +280,7 @@ func TestDatetimeSerializer(t *testing.T) {
 		// 2012-06-21 15:45:17.765432 (precision 6)
 		datetimeType := gmstypes.MustCreateDatetimeType(sqltypes.Datetime, 6)
 		tupleDesc := val.NewTupleDescriptor(val.Type{Enc: val.DatetimeEnc})
-		tupleBuilder := val.NewTupleBuilder(tupleDesc)
+		tupleBuilder := val.NewTupleBuilder(tupleDesc, ns)
 		tupleBuilder.PutDatetime(0,
 			time.Date(2012, 6, 21, 15, 45, 17, .765432*1_000_000_000, time.UTC))
 		tuple := tupleBuilder.Build(buffPool)
@@ -289,13 +294,14 @@ func TestDatetimeSerializer(t *testing.T) {
 }
 
 func TestTimestampSerializer(t *testing.T) {
+	ns := tree.NewTestNodeStore()
 	s := timestampSerializer{}
 
 	t.Run("No Precision", func(t *testing.T) {
 		// 2017-03-21 14:25:09
 		timestampType := gmstypes.MustCreateDatetimeType(sqltypes.Timestamp, 0)
 		tupleDesc := val.NewTupleDescriptor(val.Type{Enc: val.DatetimeEnc})
-		tupleBuilder := val.NewTupleBuilder(tupleDesc)
+		tupleBuilder := val.NewTupleBuilder(tupleDesc, ns)
 		tupleBuilder.PutDatetime(0,
 			time.Date(2017, 03, 21, 14, 25, 9, 0.0*1_000_000_000, time.UTC))
 		tuple := tupleBuilder.Build(buffPool)
@@ -310,7 +316,7 @@ func TestTimestampSerializer(t *testing.T) {
 		// 2017-03-21 14:25:09.7
 		timestampType := gmstypes.MustCreateDatetimeType(sqltypes.Timestamp, 1)
 		tupleDesc := val.NewTupleDescriptor(val.Type{Enc: val.DatetimeEnc})
-		tupleBuilder := val.NewTupleBuilder(tupleDesc)
+		tupleBuilder := val.NewTupleBuilder(tupleDesc, ns)
 		tupleBuilder.PutDatetime(0,
 			time.Date(2017, 03, 21, 14, 25, 9, 0.7*1_000_000_000, time.UTC))
 		tuple := tupleBuilder.Build(buffPool)
@@ -325,7 +331,7 @@ func TestTimestampSerializer(t *testing.T) {
 		// 2017-03-21 14:25:09.76
 		timestampType := gmstypes.MustCreateDatetimeType(sqltypes.Timestamp, 2)
 		tupleDesc := val.NewTupleDescriptor(val.Type{Enc: val.DatetimeEnc})
-		tupleBuilder := val.NewTupleBuilder(tupleDesc)
+		tupleBuilder := val.NewTupleBuilder(tupleDesc, ns)
 		tupleBuilder.PutDatetime(0,
 			time.Date(2017, 03, 21, 14, 25, 9, 0.76*1_000_000_000, time.UTC))
 		tuple := tupleBuilder.Build(buffPool)
@@ -340,7 +346,7 @@ func TestTimestampSerializer(t *testing.T) {
 		// 2017-03-21 14:25:09.765
 		timestampType := gmstypes.MustCreateDatetimeType(sqltypes.Timestamp, 3)
 		tupleDesc := val.NewTupleDescriptor(val.Type{Enc: val.DatetimeEnc})
-		tupleBuilder := val.NewTupleBuilder(tupleDesc)
+		tupleBuilder := val.NewTupleBuilder(tupleDesc, ns)
 		tupleBuilder.PutDatetime(0,
 			time.Date(2017, 03, 21, 14, 25, 9, 0.765*1_000_000_000, time.UTC))
 		tuple := tupleBuilder.Build(buffPool)
@@ -355,7 +361,7 @@ func TestTimestampSerializer(t *testing.T) {
 		// 2017-03-21 14:25:09.7654
 		timestampType := gmstypes.MustCreateDatetimeType(sqltypes.Timestamp, 4)
 		tupleDesc := val.NewTupleDescriptor(val.Type{Enc: val.DatetimeEnc})
-		tupleBuilder := val.NewTupleBuilder(tupleDesc)
+		tupleBuilder := val.NewTupleBuilder(tupleDesc, ns)
 		tupleBuilder.PutDatetime(0,
 			time.Date(2017, 03, 21, 14, 25, 9, 0.7654*1_000_000_000, time.UTC))
 		tuple := tupleBuilder.Build(buffPool)
@@ -370,7 +376,7 @@ func TestTimestampSerializer(t *testing.T) {
 		// 2017-03-21 14:25:09.76543
 		timestampType := gmstypes.MustCreateDatetimeType(sqltypes.Timestamp, 5)
 		tupleDesc := val.NewTupleDescriptor(val.Type{Enc: val.DatetimeEnc})
-		tupleBuilder := val.NewTupleBuilder(tupleDesc)
+		tupleBuilder := val.NewTupleBuilder(tupleDesc, ns)
 		tupleBuilder.PutDatetime(0,
 			time.Date(2017, 03, 21, 14, 25, 9, 0.76543*1_000_000_000, time.UTC))
 		tuple := tupleBuilder.Build(buffPool)
@@ -385,7 +391,7 @@ func TestTimestampSerializer(t *testing.T) {
 		// 2017-03-21 14:25:09.765432
 		timestampType := gmstypes.MustCreateDatetimeType(sqltypes.Timestamp, 6)
 		tupleDesc := val.NewTupleDescriptor(val.Type{Enc: val.DatetimeEnc})
-		tupleBuilder := val.NewTupleBuilder(tupleDesc)
+		tupleBuilder := val.NewTupleBuilder(tupleDesc, ns)
 		tupleBuilder.PutDatetime(0,
 			time.Date(2017, 03, 21, 14, 25, 9, 0.765432*1_000_000_000, time.UTC))
 		tuple := tupleBuilder.Build(buffPool)
@@ -399,11 +405,12 @@ func TestTimestampSerializer(t *testing.T) {
 }
 
 func TestDateSerializer(t *testing.T) {
+	ns := tree.NewTestNodeStore()
 	s := dateSerializer{}
 
 	// 2010-10-03
 	tupleDesc := val.NewTupleDescriptor(val.Type{Enc: val.DateEnc})
-	tupleBuilder := val.NewTupleBuilder(tupleDesc)
+	tupleBuilder := val.NewTupleBuilder(tupleDesc, ns)
 	tupleBuilder.PutDate(0,
 		time.Date(2010, 10, 03, 0, 0, 0, 0.0*1_000_000_000, time.UTC))
 	tuple := tupleBuilder.Build(buffPool)
@@ -416,12 +423,13 @@ func TestDateSerializer(t *testing.T) {
 }
 
 func TestTimeSerializer(t *testing.T) {
+	ns := tree.NewTestNodeStore()
 	s := timeSerializer{}
 
 	t.Run("6 Digit Precision: 00:00:00", func(t *testing.T) {
 		typ := gmstypes.Time
 		tupleDesc := val.NewTupleDescriptor(val.Type{Enc: val.TimeEnc})
-		tupleBuilder := val.NewTupleBuilder(tupleDesc)
+		tupleBuilder := val.NewTupleBuilder(tupleDesc, ns)
 		tupleBuilder.PutSqlTime(0, (0 * time.Second).Microseconds())
 		tuple := tupleBuilder.Build(buffPool)
 		bytes, err := s.serialize(nil, typ, tupleDesc, tuple, 0, nil)
@@ -434,7 +442,7 @@ func TestTimeSerializer(t *testing.T) {
 	t.Run("6 Digit Precision: -00:00:00.000001", func(t *testing.T) {
 		typ := gmstypes.Time
 		tupleDesc := val.NewTupleDescriptor(val.Type{Enc: val.TimeEnc})
-		tupleBuilder := val.NewTupleBuilder(tupleDesc)
+		tupleBuilder := val.NewTupleBuilder(tupleDesc, ns)
 		tupleBuilder.PutSqlTime(0, (-1 * time.Microsecond).Microseconds())
 		tuple := tupleBuilder.Build(buffPool)
 		bytes, err := s.serialize(nil, typ, tupleDesc, tuple, 0, nil)
@@ -447,7 +455,7 @@ func TestTimeSerializer(t *testing.T) {
 	t.Run("6 Digit Precision: -00:00:00.000099", func(t *testing.T) {
 		typ := gmstypes.Time
 		tupleDesc := val.NewTupleDescriptor(val.Type{Enc: val.TimeEnc})
-		tupleBuilder := val.NewTupleBuilder(tupleDesc)
+		tupleBuilder := val.NewTupleBuilder(tupleDesc, ns)
 		tupleBuilder.PutSqlTime(0, (-99 * time.Microsecond).Microseconds())
 		tuple := tupleBuilder.Build(buffPool)
 		bytes, err := s.serialize(nil, typ, tupleDesc, tuple, 0, nil)
@@ -460,7 +468,7 @@ func TestTimeSerializer(t *testing.T) {
 	t.Run("6 Digit Precision: -00:00:01.000000", func(t *testing.T) {
 		typ := gmstypes.Time
 		tupleDesc := val.NewTupleDescriptor(val.Type{Enc: val.TimeEnc})
-		tupleBuilder := val.NewTupleBuilder(tupleDesc)
+		tupleBuilder := val.NewTupleBuilder(tupleDesc, ns)
 		tupleBuilder.PutSqlTime(0, -1*(time.Second).Microseconds())
 		tuple := tupleBuilder.Build(buffPool)
 		bytes, err := s.serialize(nil, typ, tupleDesc, tuple, 0, nil)
@@ -473,7 +481,7 @@ func TestTimeSerializer(t *testing.T) {
 	t.Run("6 Digit Precision: -00:00:01.000001", func(t *testing.T) {
 		typ := gmstypes.Time
 		tupleDesc := val.NewTupleDescriptor(val.Type{Enc: val.TimeEnc})
-		tupleBuilder := val.NewTupleBuilder(tupleDesc)
+		tupleBuilder := val.NewTupleBuilder(tupleDesc, ns)
 		tupleBuilder.PutSqlTime(0, -1*(time.Second+time.Microsecond).Microseconds())
 		tuple := tupleBuilder.Build(buffPool)
 		bytes, err := s.serialize(nil, typ, tupleDesc, tuple, 0, nil)
@@ -486,7 +494,7 @@ func TestTimeSerializer(t *testing.T) {
 	t.Run("6 Digit Precision: -00:00:01.000010", func(t *testing.T) {
 		typ := gmstypes.Time
 		tupleDesc := val.NewTupleDescriptor(val.Type{Enc: val.TimeEnc})
-		tupleBuilder := val.NewTupleBuilder(tupleDesc)
+		tupleBuilder := val.NewTupleBuilder(tupleDesc, ns)
 		tupleBuilder.PutSqlTime(0, -1*(time.Second+10*time.Microsecond).Microseconds())
 		tuple := tupleBuilder.Build(buffPool)
 		bytes, err := s.serialize(nil, typ, tupleDesc, tuple, 0, nil)
@@ -499,7 +507,7 @@ func TestTimeSerializer(t *testing.T) {
 	t.Run("6 Digit Precision: 15:34:54.000000", func(t *testing.T) {
 		typ := gmstypes.Time
 		tupleDesc := val.NewTupleDescriptor(val.Type{Enc: val.TimeEnc})
-		tupleBuilder := val.NewTupleBuilder(tupleDesc)
+		tupleBuilder := val.NewTupleBuilder(tupleDesc, ns)
 		tupleBuilder.PutSqlTime(0, (15*time.Hour + 34*time.Minute + 54*time.Second).Microseconds())
 		tuple := tupleBuilder.Build(buffPool)
 		bytes, err := s.serialize(nil, typ, tupleDesc, tuple, 0, nil)
@@ -512,7 +520,7 @@ func TestTimeSerializer(t *testing.T) {
 	t.Run("6 Digit Precision: 00:00:01.100000", func(t *testing.T) {
 		typ := gmstypes.Time
 		tupleDesc := val.NewTupleDescriptor(val.Type{Enc: val.TimeEnc})
-		tupleBuilder := val.NewTupleBuilder(tupleDesc)
+		tupleBuilder := val.NewTupleBuilder(tupleDesc, ns)
 		tupleBuilder.PutSqlTime(0, (time.Second + 100*time.Millisecond).Microseconds())
 		tuple := tupleBuilder.Build(buffPool)
 		bytes, err := s.serialize(nil, typ, tupleDesc, tuple, 0, nil)
@@ -966,8 +974,9 @@ func TestGeometrySerializer(t *testing.T) {
 }
 
 func newTupleBuilderForEncoding(encoding val.Encoding) (val.TupleDesc, *val.TupleBuilder) {
+	ns := tree.NewTestNodeStore()
 	tupleDesc := val.NewTupleDescriptor(val.Type{Enc: encoding})
-	tupleBuilder := val.NewTupleBuilder(tupleDesc)
+	tupleBuilder := val.NewTupleBuilder(tupleDesc, ns)
 	return tupleDesc, tupleBuilder
 }
 

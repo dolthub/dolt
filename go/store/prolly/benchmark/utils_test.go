@@ -64,7 +64,7 @@ func generateProllyBench(b *testing.B, size uint64) prollyBench {
 		val.Type{Enc: val.Int64Enc, Nullable: true},
 	)
 
-	tups := generateProllyTuples(kd, vd, size)
+	tups := generateProllyTuples(kd, vd, size, ns)
 
 	tt := make([]val.Tuple, 0, len(tups)*2)
 	for i := range tups {
@@ -86,12 +86,12 @@ func newTestNodeStore() tree.NodeStore {
 	return tree.NewNodeStore(ts.NewView())
 }
 
-func generateProllyTuples(kd, vd val.TupleDesc, size uint64) [][2]val.Tuple {
+func generateProllyTuples(kd, vd val.TupleDesc, size uint64, ns tree.NodeStore) [][2]val.Tuple {
 	src := rand.NewSource(0)
 
 	tups := make([][2]val.Tuple, size)
-	kb := val.NewTupleBuilder(kd)
-	vb := val.NewTupleBuilder(vd)
+	kb := val.NewTupleBuilder(kd, ns)
+	vb := val.NewTupleBuilder(vd, ns)
 
 	for i := range tups {
 		// key
@@ -194,7 +194,7 @@ func generateBBoltBench(b *testing.B, size uint64) bboltBench {
 	})
 	require.NoError(b, err)
 
-	tups := generateProllyTuples(kd, vd, size)
+	tups := generateProllyTuples(kd, vd, size, nil)
 
 	const batch = 4096
 	for i := 0; i < len(tups); i += batch {

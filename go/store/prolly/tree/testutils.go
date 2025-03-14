@@ -46,8 +46,8 @@ func NewTupleLeafNode(keys, values []val.Tuple) Node {
 }
 
 func RandomTuplePairs(ctx context.Context, count int, keyDesc, valDesc val.TupleDesc, ns NodeStore) (items [][2]val.Tuple) {
-	keyBuilder := val.NewTupleBuilder(keyDesc)
-	valBuilder := val.NewTupleBuilder(valDesc)
+	keyBuilder := val.NewTupleBuilder(keyDesc, ns)
+	valBuilder := val.NewTupleBuilder(valDesc, ns)
 
 	items = make([][2]val.Tuple, count)
 	for i := range items {
@@ -116,7 +116,7 @@ func RandomCompositeTuplePairs(ctx context.Context, count int, keyDesc, valDesc 
 // Map<Tuple<Uint32>,Tuple<Uint32>>
 func AscendingUintTuples(count int) (tuples [][2]val.Tuple, desc val.TupleDesc) {
 	desc = val.NewTupleDescriptor(val.Type{Enc: val.Uint32Enc})
-	bld := val.NewTupleBuilder(desc)
+	bld := val.NewTupleBuilder(desc, nil)
 	tuples = make([][2]val.Tuple, count)
 	for i := range tuples {
 		bld.PutUint32(0, uint32(i))

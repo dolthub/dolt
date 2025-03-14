@@ -1107,8 +1107,9 @@ var sharePool = pool.NewBuffPool()
 
 func maybeGetKeyBuilder(idx durable.Index) *val.TupleBuilder {
 	if types.IsFormat_DOLT(idx.Format()) {
-		kd, _ := durable.MapFromIndex(idx).Descriptors()
-		return val.NewTupleBuilder(kd)
+		m := durable.MapFromIndex(idx)
+		kd, _ := m.Descriptors()
+		return val.NewTupleBuilder(kd, m.NodeStore())
 	}
 	return nil
 }

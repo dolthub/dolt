@@ -17,6 +17,7 @@ package prolly
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"math/rand"
 	"testing"
 
@@ -469,7 +470,7 @@ func testInternalNodeSplits(t *testing.T) {
 		val.Type{Enc: val.Int32Enc},
 	)
 	vd := val.NewTupleDescriptor()
-	bld := val.NewTupleBuilder(kd)
+	bld := val.NewTupleBuilder(kd, ns)
 
 	tuples := make([][2]val.Tuple, n)
 	for i := range tuples {
@@ -478,7 +479,7 @@ func testInternalNodeSplits(t *testing.T) {
 		tuples[i][0] = bld.Build(sharedPool)
 		tuples[i][1] = val.EmptyTuple
 	}
-	pm := mustProllyMapFromTuples(t, kd, vd, tuples)
+	pm := mustProllyMapFromTuples(t, kd, vd, tuples, ns)
 
 	// reproduces chunker panic (k = 10_600)
 	repro := 20_000
@@ -508,7 +509,7 @@ func ascendingIntMap(t *testing.T, count int) Map {
 
 func ascendingIntMapWithStep(t *testing.T, count, step int) Map {
 	tuples := ascendingTuplesWithStepAndStart(count, step, 0)
-	pm := mustProllyMapFromTuples(t, mutKeyDesc, mutValDesc, tuples)
+	pm := mustProllyMapFromTuples(t, mutKeyDesc, mutValDesc, tuples, ns)
 	return pm
 }
 
@@ -528,8 +529,9 @@ var mutValDesc = val.NewTupleDescriptor(
 	val.Type{Enc: val.Int64Enc, Nullable: true},
 )
 
-var mutKeyBuilder = val.NewTupleBuilder(mutKeyDesc)
-var mutValBuilder = val.NewTupleBuilder(mutValDesc)
+var ns = tree.NewTestNodeStore()
+var mutKeyBuilder = val.NewTupleBuilder(mutKeyDesc, ns)
+var mutValBuilder = val.NewTupleBuilder(mutValDesc, ns)
 
 func makePut(k, v int64) (key, value val.Tuple) {
 	mutKeyBuilder.PutInt64(0, k)

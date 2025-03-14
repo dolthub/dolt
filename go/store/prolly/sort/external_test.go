@@ -461,7 +461,7 @@ func TestFileE2E(t *testing.T) {
 }
 
 func testTuples(ns tree.NodeStore, kd val.TupleDesc, cnt int) []val.Tuple {
-	keyBuilder := val.NewTupleBuilder(kd)
+	keyBuilder := val.NewTupleBuilder(kd, ns)
 
 	var keys []val.Tuple
 	for i := 0; i < cnt; i++ {
