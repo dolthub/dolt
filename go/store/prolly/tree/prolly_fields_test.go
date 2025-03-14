@@ -186,8 +186,8 @@ var testPool = pool.NewBuffPool()
 
 func testRoundTripProllyFields(t *testing.T, test prollyFieldTest) {
 	desc := val.NewTupleDescriptor(test.typ)
-	builder := val.NewTupleBuilder(desc)
 	ns := NewTestNodeStore()
+	builder := val.NewTupleBuilder(desc, ns)
 
 	err := PutField(context.Background(), ns, builder, 0, test.value)
 	assert.NoError(t, err)
@@ -283,7 +283,7 @@ func TestGeometryEncoding(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			ns := NewTestNodeStore()
 			oldDesc := val.NewTupleDescriptor(val.Type{Enc: val.GeometryEnc})
-			builder := val.NewTupleBuilder(oldDesc)
+			builder := val.NewTupleBuilder(oldDesc, ns)
 			b := serializeGeometry(test.value)
 			builder.PutGeometry(0, b)
 			tup := builder.Build(testPool)

@@ -113,7 +113,7 @@ func testGetOrdinalOfCursor(t *testing.T, count int) {
 		assert.Equal(t, uint64(i), ord)
 	}
 
-	b := val.NewTupleBuilder(desc)
+	b := val.NewTupleBuilder(desc, ns)
 	b.PutUint32(0, uint32(len(tuples)))
 	aboveItem := b.Build(sharedPool)
 

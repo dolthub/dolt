@@ -368,7 +368,7 @@ func (i prollyIndex) AddColumnToRows(ctx context.Context, newCol string, newSche
 
 	// Re-write all the rows, inserting a zero-byte field in every value tuple
 	_, valDesc := rowMap.Descriptors()
-	b := val.NewTupleBuilder(valDesc)
+	b := val.NewTupleBuilder(valDesc, i.index.NodeStore())
 	for {
 		k, v, err := iter.Next(ctx)
 		if err == io.EOF {

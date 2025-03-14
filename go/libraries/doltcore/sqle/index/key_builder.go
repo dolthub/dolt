@@ -32,7 +32,7 @@ import (
 // (index value tuples are not used).
 func NewSecondaryKeyBuilder(ctx *sql.Context, tableName string, sch schema.Schema, def schema.Index, idxDesc val.TupleDesc, p pool.BuffPool, nodeStore tree.NodeStore) (SecondaryKeyBuilder, error) {
 	b := SecondaryKeyBuilder{
-		builder:   val.NewTupleBuilder(idxDesc),
+		builder:   val.NewTupleBuilder(idxDesc, nodeStore),
 		pool:      p,
 		nodeStore: nodeStore,
 		sch:       sch,
@@ -186,12 +186,12 @@ func (b SecondaryKeyBuilder) canCopyRawBytes(idxField int) bool {
 	return true
 }
 
-func NewClusteredKeyBuilder(def schema.Index, sch schema.Schema, keyDesc val.TupleDesc, p pool.BuffPool) (b ClusteredKeyBuilder) {
+func NewClusteredKeyBuilder(def schema.Index, sch schema.Schema, keyDesc val.TupleDesc, p pool.BuffPool, ns tree.NodeStore) (b ClusteredKeyBuilder) {
 	b.pool = p
 	if schema.IsKeyless(sch) {
 		// [16]byte hash key is always final key field
 		b.mapping = val.OrdinalMapping{def.Count()}
-		b.builder = val.NewTupleBuilder(val.KeylessTupleDesc)
+		b.builder = val.NewTupleBuilder(val.KeylessTupleDesc, ns)
 		return
 	}
 
@@ -201,7 +201,7 @@ func NewClusteredKeyBuilder(def schema.Index, sch schema.Schema, keyDesc val.Tup
 		tagToOrdinal[tag] = ord
 	}
 
-	b.builder = val.NewTupleBuilder(keyDesc)
+	b.builder = val.NewTupleBuilder(keyDesc, ns)
 	b.mapping = make(val.OrdinalMapping, keyDesc.Count())
 	for i, col := range sch.GetPKCols().GetColumns() {
 		b.mapping[i] = tagToOrdinal[col.Tag]

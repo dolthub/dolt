@@ -28,11 +28,11 @@ import (
 )
 
 func TestArtifactMapEditing(t *testing.T) {
-	var srcKd = val.NewTupleDescriptor(val.Type{Enc: val.Int16Enc})
-	var srcKb = val.NewTupleBuilder(srcKd)
-
 	ctx := context.Background()
 	ns := tree.NewTestNodeStore()
+
+	var srcKd = val.NewTupleDescriptor(val.Type{Enc: val.Int16Enc})
+	var srcKb = val.NewTupleBuilder(srcKd, ns)
 
 	am, err := NewArtifactMapFromTuples(ctx, ns, srcKd)
 	require.NoError(t, err)
@@ -77,11 +77,11 @@ func TestArtifactMapEditing(t *testing.T) {
 
 // Smoke test for merging artifact maps
 func TestMergeArtifactMaps(t *testing.T) {
-	var srcKd = val.NewTupleDescriptor(val.Type{Enc: val.Int16Enc})
-	var srcKb = val.NewTupleBuilder(srcKd)
-
 	ctx := context.Background()
 	ns := tree.NewTestNodeStore()
+
+	var srcKd = val.NewTupleDescriptor(val.Type{Enc: val.Int16Enc})
+	var srcKb = val.NewTupleBuilder(srcKd, ns)
 
 	base, err := NewArtifactMapFromTuples(ctx, ns, srcKd)
 	require.NoError(t, err)

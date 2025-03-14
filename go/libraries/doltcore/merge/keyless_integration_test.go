@@ -498,7 +498,7 @@ var c2Tag = types.Uint(2)
 var cardTag = types.Uint(schema.KeylessRowCardinalityTag)
 
 var valDesc = val.NewTupleDescriptor(val.Type{Enc: val.Uint64Enc}, val.Type{Enc: val.Int64Enc, Nullable: true}, val.Type{Enc: val.Int64Enc, Nullable: true})
-var valBld = val.NewTupleBuilder(valDesc)
+var valBld = val.NewTupleBuilder(valDesc, nil)
 var sharePool = pool.NewBuffPool()
 
 type keylessEntries []keylessEntry

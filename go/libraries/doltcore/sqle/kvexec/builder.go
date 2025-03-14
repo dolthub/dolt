@@ -587,7 +587,7 @@ func getMergeKv(ctx *sql.Context, n sql.Node) (mergeState, error) {
 		priMap := durable.ProllyMapFromIndex(priIndex)
 		pkMap := index.OrdinalMappingFromIndex(idx)
 		priKd, _ := priMap.Descriptors()
-		pkBld := val.NewTupleBuilder(priKd)
+		pkBld := val.NewTupleBuilder(priKd, priMap.NodeStore())
 
 		ms.norm = func(key val.Tuple) (val.Tuple, val.Tuple, error) {
 			for to := range pkMap {

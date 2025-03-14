@@ -424,10 +424,10 @@ func setupMergeTest(t *testing.T) (*doltdb.DoltDB, types.ValueReadWriter, tree.N
 	ns := ddb.NodeStore()
 
 	vD = sch.GetValueDescriptor(ns)
-	vB = val.NewTupleBuilder(vD)
+	vB = val.NewTupleBuilder(vD, ns)
 
 	kD = sch.GetKeyDescriptor(ns)
-	kB = val.NewTupleBuilder(kD)
+	kB = val.NewTupleBuilder(kD, ns)
 
 	sortTests(testRows)
 

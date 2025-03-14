@@ -240,7 +240,7 @@ func newLookupKeyMapping(ctx context.Context, sourceSch schema.Schema, tgtKeyDes
 		}
 	}
 	litDesc := val.NewTupleDescriptor(litTypes...)
-	litTb := val.NewTupleBuilder(litDesc)
+	litTb := val.NewTupleBuilder(litDesc, ns)
 	for i, j := range litMappings {
 		val := keyExprs[j].(*expression.Literal).Value()
 		val, _, err := typs[j].Type.Convert(val)
@@ -264,7 +264,7 @@ func newLookupKeyMapping(ctx context.Context, sourceSch schema.Schema, tgtKeyDes
 		litKd:      litDesc,
 		srcKd:      sourceSch.GetKeyDescriptor(ns),
 		srcVd:      sourceSch.GetValueDescriptor(ns),
-		targetKb:   val.NewTupleBuilder(tgtKeyDesc),
+		targetKb:   val.NewTupleBuilder(tgtKeyDesc, ns),
 		ns:         ns,
 		pool:       ns.Pool(),
 	}, nil
@@ -329,6 +329,6 @@ func (m *lookupMapping) dstKeyTuple(srcKey, srcVal val.Tuple) (val.Tuple, error)
 		}
 	}
 
-	idxKey := m.targetKb.BuildPermissive(m.pool)
+	idxKey := m.targetKb.BuildPermissive(m.pool, m.ns)
 	return idxKey, nil
 }
