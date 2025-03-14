@@ -74,6 +74,10 @@ setup_no_dolt_init() {
     # during the cli -> sql migration.
     export DOLT_CLI_PASSWORD=""
     export DOLT_SILENCE_USER_REQ_FOR_TESTING="Y"
+
+    if [ $((RANDOM % 2)) -eq 0 ]; then
+      unset DOLT_ARCHIVE_PULL_STREAMER
+    fi
 }
 
 assert_feature_version() {
