@@ -35,12 +35,17 @@ type GenericTableWriter interface {
 	Reader() (io.ReadCloser, error)
 	// Finish completed the writing of the table file and returns the calculated name of the table. Note that Finish
 	// doesn't move the file, but it returns the name that the file should be moved to.
-	Finish() (string, error)
+	// It also returns the additional bytes written to the table file. Those bytes are included in the ContentLength.
+	Finish() (uint32, string, error)
 	// ChunkCount returns the number of chunks written to the table file. This can be called before Finish to determine
 	// if the maximum number of chunks has been reached.
 	ChunkCount() int
 	// AddChunk adds a chunk to the table file. The underlying implementation of ToChunker will probably be exploited
 	// by implementors of GenericTableWriter so that their bytes can be efficiently written to the table file.
+	//
+	// The number of bytes written to storage is returned. This could be 0 even on success if the writer decides
+	// to defer writing the chunks. In the event that AddChunk triggers a flush, the number of bytes written to storage
+	// will be returned.
 	//
 	// If no error occurs, the number of bytes written to the store is returned.
 	AddChunk(ToChunker) (uint32, error)
@@ -152,21 +157,21 @@ func (tw *CmpChunkTableWriter) AddChunk(tc ToChunker) (uint32, error) {
 }
 
 // Finish will write the index and footer of the table file and return the id of the file.
-func (tw *CmpChunkTableWriter) Finish() (string, error) {
+func (tw *CmpChunkTableWriter) Finish() (uint32, string, error) {
 	if tw.blockAddr != nil {
-		return "", ErrAlreadyFinished
+		return 0, "", ErrAlreadyFinished
 	}
 
 	blockHash, err := tw.writeIndex()
 
 	if err != nil {
-		return "", err
+		return 0, "", err
 	}
 
 	err = tw.writeFooter()
 
 	if err != nil {
-		return "", err
+		return 0, "", err
 	}
 
 	var h []byte
@@ -174,7 +179,9 @@ func (tw *CmpChunkTableWriter) Finish() (string, error) {
 	blockAddr := hash.New(h[:hash.ByteLen])
 
 	tw.blockAddr = &blockAddr
-	return tw.blockAddr.String(), nil
+
+	// NM4 - need to get a real size val.
+	return 0, tw.blockAddr.String(), nil
 }
 
 // FlushToFile can be called after Finish in order to write the data out to the path provided.

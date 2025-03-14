@@ -18,12 +18,14 @@ import (
 	"bytes"
 	"crypto/sha512"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"sort"
 
+	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/gozstd"
 
 	"github.com/dolthub/dolt/go/store/hash"
@@ -477,6 +479,12 @@ type ArchiveStreamWriter struct {
 	writer     *archiveWriter
 	dictMap    map[*DecompBundle]uint32
 	chunkCount int32
+
+	// snappyQueue is a queue of CompressedChunk that have been written, but not flushed to the archive.
+	// These are kept in memory until we have enough to create a compression dictionary for them (and subsequent
+	// snappy chunks). When this value is nil, the snappyDict must be set (they are exclusive)
+	snappyQueue *[]CompressedChunk
+	snappyDict  *DecompBundle
 }
 
 func NewArchiveStreamWriter(tmpDir string) (*ArchiveStreamWriter, error) {
@@ -484,10 +492,15 @@ func NewArchiveStreamWriter(tmpDir string) (*ArchiveStreamWriter, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	sq := make([]CompressedChunk, 0, 1000)
+
 	return &ArchiveStreamWriter{
-		writer,
-		map[*DecompBundle]uint32{},
-		0,
+		writer:      writer,
+		dictMap:     map[*DecompBundle]uint32{},
+		chunkCount:  0,
+		snappyQueue: &sq,
+		snappyDict:  nil,
 	}, nil
 }
 
@@ -497,19 +510,36 @@ func (asw *ArchiveStreamWriter) Reader() (io.ReadCloser, error) {
 	return asw.writer.output.Reader()
 }
 
-func (asw *ArchiveStreamWriter) Finish() (string, error) {
+func (asw *ArchiveStreamWriter) Finish() (uint32, string, error) {
+	bytesWritten := uint32(0)
+
+	// There may be snappy chunks queued up because we didn't get enough to build a dictionary.
+	for _, cc := range *asw.snappyQueue {
+		dataId, err := asw.writer.writeByteSpan(cc.FullCompressedChunk)
+		if err != nil {
+			return bytesWritten, "", err
+		}
+
+		bytesWritten += uint32(len(cc.FullCompressedChunk))
+		asw.chunkCount += 1
+		err = asw.writer.stageSnappyChunk(cc.Hash(), dataId)
+		if err != nil {
+			return bytesWritten, "", err
+		}
+	}
+
 	// This will perform all the steps to construct an archive file - starting with the finalization of byte spans.
 	// All writeByteSpan calls and stage* calls must be completed before this.
 	err := indexFinalize(asw.writer, hash.Hash{})
 	if err != nil {
-		return "", err
+		return 0, "", err
 	}
 
 	h, err := asw.writer.getName()
 	if err != nil {
-		return "", err
+		return 0, "", err
 	}
-	return h.String() + ArchiveFileSuffix, nil
+	return 0, h.String() + ArchiveFileSuffix, nil
 }
 
 func (asw *ArchiveStreamWriter) ChunkCount() int {
@@ -554,7 +584,7 @@ func (asw *ArchiveStreamWriter) writeArchiveToChunker(chunker ArchiveToChunker) 
 		if err != nil {
 			return 0, err
 		}
-		bytesWritten += uint32(len(*dict.rawDictionary))
+		bytesWritten += uint32(len(compressedDict))
 		asw.dictMap[dict] = dictId
 	}
 
@@ -567,12 +597,86 @@ func (asw *ArchiveStreamWriter) writeArchiveToChunker(chunker ArchiveToChunker) 
 	return bytesWritten, asw.writer.stageZStdChunk(chunker.Hash(), dictId, dataId)
 }
 
-func (asw *ArchiveStreamWriter) writeCompressedChunk(chunker CompressedChunk) (uint32, error) {
-	writeCount := uint32(len(chunker.FullCompressedChunk))
-	dataId, err := asw.writer.writeByteSpan(chunker.FullCompressedChunk)
+func (asw *ArchiveStreamWriter) writeCompressedChunk(chunker CompressedChunk) (bytesWritten uint32, err error) {
+	if asw.snappyQueue != nil {
+		// We have a queue of compressed chunks that we are waiting to flush.
+		// Add this chunk to the queue.
+		*asw.snappyQueue = append(*asw.snappyQueue, chunker)
+		if len(*asw.snappyQueue) < maxSamples {
+			return 0, nil
+		}
+
+		// We have enough to build a dictionary. Build it, and flush the queue.
+		samples := make([]*chunks.Chunk, len(*asw.snappyQueue))
+		for i, cc := range *asw.snappyQueue {
+			chk, err := cc.ToChunk()
+			if err != nil {
+				return 0, err
+			}
+			samples[i] = &chk
+		}
+		rawDictionary := buildDictionary(samples)
+		compressedDict := gozstd.Compress(nil, rawDictionary)
+		asw.snappyDict, err = NewDecompBundle(compressedDict)
+		if err != nil {
+			return 0, err
+		}
+
+		// New dictionary. Write it out, and add id to the map.
+		dictId, err := asw.writer.writeByteSpan(compressedDict)
+		if err != nil {
+			return 0, err
+		}
+		bytesWritten += uint32(len(compressedDict))
+		asw.dictMap[asw.snappyDict] = dictId
+
+		// Now stage all the
+		for _, cc := range *asw.snappyQueue {
+			bw := uint32(0)
+			bw, err = asw.convertSnappyAndStage(cc)
+			if err != nil {
+				return bytesWritten, err
+			}
+			bytesWritten += bw
+			asw.chunkCount += 1
+		}
+		return bytesWritten, err
+	} else {
+		// Convert this chunk from snappy to zstd, and write it out.
+		bw, err := asw.convertSnappyAndStage(chunker)
+		if err != nil {
+			return 0, err
+		}
+		asw.chunkCount += 1
+		return bw, nil
+	}
+}
+
+func (asw *ArchiveStreamWriter) convertSnappyAndStage(cc CompressedChunk) (uint32, error) {
+	dictId, ok := asw.dictMap[asw.snappyDict]
+	if !ok {
+		return 0, errors.New("runtime error: snappyDict not found in dictMap")
+	}
+
+	h := cc.Hash()
+	chk, err := cc.ToChunk()
 	if err != nil {
 		return 0, err
 	}
-	asw.chunkCount += 1
-	return writeCount, asw.writer.stageSnappyChunk(chunker.Hash(), dataId)
+
+	// We should cache this somewhere... NM4.
+	cDict, err := gozstd.NewCDict(*asw.snappyDict.rawDictionary)
+	if err != nil {
+		return 0, err
+	}
+
+	compressedData := gozstd.CompressDict(nil, chk.Data(), cDict)
+
+	dataId, err := asw.writer.writeByteSpan(compressedData)
+	if err != nil {
+		return 0, err
+	}
+	bytesWritten := uint32(len(compressedData))
+
+	return bytesWritten, asw.writer.stageZStdChunk(h, dictId, dataId)
 }
