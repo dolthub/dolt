@@ -1306,6 +1306,22 @@ var DoltScripts = []queries.ScriptTest{
 		},
 	},
 	{
+		Name: "dolt_docs panic",
+		SetUpScript: []string{
+			"INSERT INTO dolt_docs VALUES ('name','content1');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "INSERT INTO dolt_docs VALUES ('name','content2') ON DUPLICATE KEY UPDATE doc_text = '789';",
+				Expected: []sql.Row{{types.NewOkResult(2)}},
+			},
+			{
+				Query:    "SELECT * FROM dolt_docs;",
+				Expected: []sql.Row{{"name", "789"}},
+			},
+		},
+	},
+	{
 		Name: "Nautobot FOREIGN KEY panic repro",
 		SetUpScript: []string{
 			"CREATE TABLE `auth_user` (" +
