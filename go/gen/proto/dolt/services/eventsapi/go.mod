@@ -1,6 +1,8 @@
 module github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi
 
-go 1.19
+go 1.23.0
+
+toolchain go1.24.0
 
 require (
 	google.golang.org/grpc v1.56.3
