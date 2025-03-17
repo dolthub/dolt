@@ -204,16 +204,17 @@ func TestSerialQueue(t *testing.T) {
 		assert.NoError(t, queue.DoSync(ctx, func() error {
 			return nil
 		}))
-		var cnt int
+
+		done := make(chan struct{})
 		for i := 0; i < 16; i++ {
 			err := queue.DoAsync(func() error {
-				cnt += 1
+				close(done)
 				assert.NoError(t, queue.Pause())
 				return nil
 			})
 			assert.NoError(t, err)
 		}
-		assert.Equal(t, cnt, 1)
+		<-done
 		cancel()
 		wg.Wait()
 	})

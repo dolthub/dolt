@@ -117,6 +117,7 @@ func (sc *StatsController) trySwapStats(ctx context.Context, prevGen uint64, new
 	signal := leSwap
 	defer func() {
 		if ok {
+			sc.logger.Debugf("stats successful swap: %s\n", newStats.String())
 			sc.signalListener(signal)
 		}
 	}()
