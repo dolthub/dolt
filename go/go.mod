@@ -61,7 +61,7 @@ require (
 	github.com/creasty/defaults v1.6.0
 	github.com/dolthub/aws-sdk-go-ini-parser v0.0.0-20250305001723-2821c37f6c12
 	github.com/dolthub/flatbuffers/v23 v23.3.3-dh.2
-	github.com/dolthub/go-mysql-server v0.19.1-0.20250311230957-b42963c4ae72
+	github.com/dolthub/go-mysql-server v0.19.1-0.20250317200812-2e51a70e5306
 	github.com/dolthub/gozstd v0.0.0-20240423170813-23a2903bca63
 	github.com/esote/minmaxheap v1.0.0
 	github.com/goccy/go-json v0.10.2
@@ -95,7 +95,6 @@ require (
 	golang.org/x/exp v0.0.0-20230522175609-2e198f4a06a1
 	golang.org/x/text v0.21.0
 	gonum.org/v1/plot v0.11.0
-	gopkg.in/errgo.v2 v2.1.0
 	gopkg.in/go-jose/go-jose.v2 v2.6.3
 	gopkg.in/yaml.v3 v3.0.1
 )
