@@ -119,6 +119,14 @@ func (d doltTypeCompatibilityChecker) IsTypeChangeCompatible(from, to typeinfo.T
 		return res
 	}
 
+	// The TypeCompatibility checkers don't support ExtendedTypes added by integrators, so if we see
+	// one, return early and report the types are not compatible.
+	_, fromExtendedType := fromSqlType.(types.ExtendedType)
+	_, toExtendedType := toSqlType.(types.ExtendedType)
+	if fromExtendedType || toExtendedType {
+		return res
+	}
+
 	for _, checker := range d.checkers {
 		if checker.canHandle(fromSqlType, toSqlType) {
 			subcheckerResult := checker.isCompatible(fromSqlType, toSqlType)
