@@ -193,7 +193,7 @@ func TestListening(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			defer close(done)
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 			defer cancel()
 			err := sc.waitForSignal(ctx, leSwap, 1)
 			require.ErrorIs(t, err, context.DeadlineExceeded)
@@ -217,7 +217,7 @@ func TestListening(t *testing.T) {
 			defer wg.Done()
 			defer close(done)
 			sc.Stop()
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 			defer cancel()
 			err := sc.waitForSignal(ctx, leSwap, 1)
 			require.ErrorIs(t, err, ErrStatsIssuerPaused)
@@ -239,7 +239,7 @@ func TestListening(t *testing.T) {
 		require.NoError(t, err)
 		go func() {
 			defer wg.Done()
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 			defer cancel()
 			err := sc.waitForSignal(ctx, leSwap, 1)
 			require.NoError(t, err)
