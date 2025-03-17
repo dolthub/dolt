@@ -15,11 +15,14 @@
 package typecompatibility
 
 import (
+	"context"
+	"reflect"
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/sqltypes"
+	"github.com/dolthub/vitess/go/vt/proto/query"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
@@ -69,6 +72,9 @@ var mediumText = typeinfo.CreateVarStringTypeFromSqlType(gmstypes.MustCreateStri
 var varbinary10 = mustCreateType(gmstypes.MustCreateString(sqltypes.VarBinary, 10, sql.Collation_binary))
 var blob = mustCreateType(gmstypes.MustCreateString(sqltypes.Blob, 65_535, sql.Collation_binary))
 var mediumBlob = mustCreateType(gmstypes.MustCreateBinary(sqltypes.Blob, 16_777_215))
+
+// ExtendedType test data
+var extendedTypeInfo = typeinfo.CreateExtendedTypeFromSqlType(extendedType{})
 
 // TestLd1IsTypeChangeCompatible tests that the LD1 TypeCompatibilityChecker implementation
 // correctly computes compatibility between types.
@@ -313,6 +319,26 @@ func TestDoltIsTypeChangeCompatible(t *testing.T) {
 			to:         text,
 			compatible: false,
 		},
+
+		// Extended types
+		{
+			name:       "incompatible: VARBINARY(10) to ExtendedType",
+			from:       varbinary10,
+			to:         extendedTypeInfo,
+			compatible: false,
+		},
+		{
+			name:       "incompatible: ExtendedType to TEXT",
+			from:       extendedTypeInfo,
+			to:         text,
+			compatible: false,
+		},
+		{
+			name:       "incompatible: ExtendedType to ExtendedType",
+			from:       extendedTypeInfo,
+			to:         extendedTypeInfo,
+			compatible: false,
+		},
 	})
 }
 
@@ -336,4 +362,77 @@ func mustCreateType(sqlType sql.Type) typeinfo.TypeInfo {
 		panic(err)
 	}
 	return mediumBlob
+}
+
+// extendedType is a no-op implementation of gmstypes.ExtendedType, used for testing type compatibility with extended types.
+type extendedType struct{}
+
+var _ gmstypes.ExtendedType = extendedType{}
+
+func (e extendedType) CollationCoercibility(ctx *sql.Context) (collation sql.CollationID, coercibility byte) {
+	panic("unimplemented")
+}
+
+func (e extendedType) Compare(i interface{}, i2 interface{}) (int, error) {
+	panic("unimplemented")
+}
+
+func (e extendedType) Convert(i interface{}) (interface{}, sql.ConvertInRange, error) {
+	panic("unimplemented")
+}
+
+func (e extendedType) ConvertToType(ctx *sql.Context, typ gmstypes.ExtendedType, val any) (any, error) {
+	panic("unimplemented")
+}
+
+func (e extendedType) Equals(otherType sql.Type) bool {
+	return false
+}
+
+func (e extendedType) MaxTextResponseByteLength(ctx *sql.Context) uint32 {
+	panic("unimplemented")
+}
+
+func (e extendedType) Promote() sql.Type {
+	panic("unimplemented")
+}
+
+func (e extendedType) SQL(ctx *sql.Context, dest []byte, v interface{}) (sqltypes.Value, error) {
+	panic("unimplemented")
+}
+
+func (e extendedType) Type() query.Type {
+	panic("unimplemented")
+}
+
+func (e extendedType) ValueType() reflect.Type {
+	panic("unimplemented")
+}
+
+func (e extendedType) Zero() interface{} {
+	panic("unimplemented")
+}
+
+func (e extendedType) String() string {
+	panic("unimplemented")
+}
+
+func (e extendedType) SerializedCompare(ctx context.Context, v1 []byte, v2 []byte) (int, error) {
+	panic("unimplemented")
+}
+
+func (e extendedType) SerializeValue(ctx context.Context, val any) ([]byte, error) {
+	panic("unimplemented")
+}
+
+func (e extendedType) DeserializeValue(ctx context.Context, val []byte) (any, error) {
+	panic("unimplemented")
+}
+
+func (e extendedType) FormatValue(val any) (string, error) {
+	panic("unimplemented")
+}
+
+func (e extendedType) MaxSerializedWidth() gmstypes.ExtendedTypeSerializedWidth {
+	panic("unimplemented")
 }
