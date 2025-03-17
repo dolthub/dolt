@@ -17,7 +17,8 @@ package val
 import (
 	"context"
 	"github.com/dolthub/dolt/go/store/hash"
-	"github.com/dolthub/go-mysql-server/sql/values"
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/types"
 )
 
 const BytePeekLength = 128
@@ -59,6 +60,15 @@ func (t *ImmutableValue) GetBytes(ctx context.Context) ([]byte, error) {
 
 type TextStorage struct {
 	ImmutableValue
+	maxByteLength int64
+}
+
+func (t TextStorage) IsExactLength() bool {
+	return false
+}
+
+func (t TextStorage) MaxByteLength() int64 {
+	return t.maxByteLength
 }
 
 func (t TextStorage) Unwrap(ctx context.Context) (string, error) {
@@ -73,25 +83,69 @@ func (t TextStorage) UnwrapAny(ctx context.Context) (interface{}, error) {
 	return t.Unwrap(ctx)
 }
 
-func NewTextStorage(addr hash.Hash, vs ValueStore) *TextStorage {
-	return &TextStorage{NewImmutableValue(addr, vs)}
+func (t TextStorage) WithMaxByteLength(maxByteLength int64) *TextStorage {
+	return &TextStorage{
+		ImmutableValue: NewImmutableValue(t.Addr, t.vs),
+		maxByteLength:  maxByteLength,
+	}
 }
 
-var _ values.Wrapper[string] = &TextStorage{}
+func (t TextStorage) Compare(ctx context.Context, other interface{}) (cmp int, comparable bool, err error) {
+	otherTextStorage, ok := other.(TextStorage)
+	if !ok {
+		return 0, false, nil
+	}
+	if otherTextStorage.Addr == t.Addr {
+		return 0, true, nil
+	}
+	return 0, false, nil
+}
+
+func NewTextStorage(addr hash.Hash, vs ValueStore) *TextStorage {
+	return &TextStorage{
+		ImmutableValue: NewImmutableValue(addr, vs),
+		maxByteLength:  types.LongText.MaxByteLength(),
+	}
+}
+
+var _ sql.StringWrapper = &TextStorage{}
 
 type ByteArray struct {
 	ImmutableValue
+	maxByteLength int64
+}
+
+func (b *ByteArray) IsExactLength() bool {
+	return false
+}
+
+func (b *ByteArray) MaxByteLength() int64 {
+	return b.maxByteLength
+}
+
+func (b *ByteArray) Compare(ctx context.Context, other interface{}) (cmp int, comparable bool, err error) {
+	otherByteArray, ok := other.(ByteArray)
+	if !ok {
+		return 0, false, nil
+	}
+	if otherByteArray.Addr == b.Addr {
+		return 0, true, nil
+	}
+	return 0, false, nil
 }
 
 func NewByteArray(addr hash.Hash, vs ValueStore) *ByteArray {
-	return &ByteArray{NewImmutableValue(addr, vs)}
+	return &ByteArray{
+		ImmutableValue: NewImmutableValue(addr, vs),
+		maxByteLength:  types.LongBlob.MaxByteLength(),
+	}
 }
 
 func (b *ByteArray) ToBytes(ctx context.Context) ([]byte, error) {
 	return b.GetBytes(ctx)
 }
 
-func (b *ByteArray) ToAny(ctx context.Context) (interface{}, error) {
+func (b *ByteArray) UnwrapAny(ctx context.Context) (interface{}, error) {
 	return b.ToBytes(ctx)
 }
 
@@ -111,4 +165,11 @@ func (b *ByteArray) ToString(ctx context.Context) (string, error) {
 	return string(buf[:toShow]), nil
 }
 
-var _ values.Wrapper[[]byte] = &ByteArray{}
+var _ sql.BytesWrapper = &ByteArray{}
+
+func (t ByteArray) WithMaxByteLength(maxByteLength int64) *ByteArray {
+	return &ByteArray{
+		ImmutableValue: t.ImmutableValue,
+		maxByteLength:  maxByteLength,
+	}
+}
