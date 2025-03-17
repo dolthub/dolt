@@ -17,6 +17,7 @@ package nbs
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/dolthub/dolt/go/store/hash"
@@ -44,12 +45,18 @@ func (ea gcErrAccum) Error() string {
 }
 
 type gcCopier struct {
-	writer *CmpChunkTableWriter
+	writer GenericTableWriter
 	tfp    tableFilePersister
 }
 
 func newGarbageCollectionCopier(tfp tableFilePersister) (*gcCopier, error) {
-	writer, err := NewCmpChunkTableWriter("")
+	var writer GenericTableWriter
+	var err error
+	if os.Getenv("DOLT_ARCHIVE_PULL_STREAMER") != "" {
+		writer, err = NewArchiveStreamWriter("")
+	} else {
+		writer, err = NewCmpChunkTableWriter("")
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -82,7 +89,7 @@ func (gcc *gcCopier) copyTablesToDir(ctx context.Context) (ts []tableSpec, err e
 		return []tableSpec{}, nil
 	}
 
-	addr, ok := hash.MaybeParse(filename)
+	addr, ok := fileNameToAddr(filename)
 	if !ok {
 		return nil, fmt.Errorf("invalid filename: %s", filename)
 	}
@@ -133,4 +140,20 @@ func (gcc *gcCopier) copyTablesToDir(ctx context.Context) (ts []tableSpec, err e
 			chunkCount: uint32(gcc.writer.ChunkCount()),
 		},
 	}, nil
+}
+
+func fileNameToAddr(fileName string) (hash.Hash, bool) {
+	if len(fileName) == 32 {
+		addr, ok := hash.MaybeParse(fileName)
+		if ok {
+			return addr, true
+		}
+	}
+	if len(fileName) == 32+len(ArchiveFileSuffix) && strings.HasSuffix(fileName, ArchiveFileSuffix) {
+		addr, ok := hash.MaybeParse(fileName[:32])
+		if ok {
+			return addr, true
+		}
+	}
+	return hash.Hash{}, false
 }

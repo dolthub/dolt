@@ -84,7 +84,7 @@ type tableFilePersister interface {
 }
 
 type movingTableFilePersister interface {
-	TryMoveCmpChunkTableWriter(ctx context.Context, filename string, w *CmpChunkTableWriter) error
+	TryMoveCmpChunkTableWriter(ctx context.Context, filename string, w GenericTableWriter) error
 }
 
 type chunkSourcesByDescendingDataSize struct {

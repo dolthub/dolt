@@ -579,6 +579,18 @@ func (asw *ArchiveStreamWriter) GetMD5() []byte {
 	return asw.writer.fullMD5[:]
 }
 
+func (asw *ArchiveStreamWriter) Cancel() error {
+	rdr, err := asw.writer.output.Reader()
+	if err != nil {
+		return err
+	}
+	err = rdr.Close()
+	if err != nil {
+		return err
+	}
+	return asw.Remove()
+}
+
 func (asw *ArchiveStreamWriter) Remove() error {
 	return os.Remove(asw.writer.finalPath)
 }
