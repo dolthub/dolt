@@ -360,8 +360,10 @@ func debugAnalyze(ctx *sql.Context, tempDir string, sqlEng *engine.SqlEngine, sq
 
 	eng := sqlEng.GetUnderlyingEngine()
 	eng.Analyzer.Debug = true
+	eng.Analyzer.Verbose = true
 	defer func() {
 		eng.Analyzer.Debug = false
+		eng.Analyzer.Verbose = false
 	}()
 	analysisFile, err := os.Create(filepath.Join(tempDir, "analysis.txt"))
 	if err != nil {

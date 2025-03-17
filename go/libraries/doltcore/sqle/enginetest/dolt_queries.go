@@ -23,7 +23,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/vt/sqlparser"
-	"github.com/hashicorp/go-uuid"
+	"github.com/google/uuid"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtablefunctions"
 )
@@ -1302,6 +1302,22 @@ var DoltScripts = []queries.ScriptTest{
 					{1, "adding table t-1"},
 					{2, "adding another row to t-1"},
 				},
+			},
+		},
+	},
+	{
+		Name: "dolt_docs panic",
+		SetUpScript: []string{
+			"INSERT INTO dolt_docs VALUES ('name','content1');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "INSERT INTO dolt_docs VALUES ('name','content2') ON DUPLICATE KEY UPDATE doc_text = '789';",
+				Expected: []sql.Row{{types.NewOkResult(2)}},
+			},
+			{
+				Query:    "SELECT * FROM dolt_docs;",
+				Expected: []sql.Row{{"name", "789"}},
 			},
 		},
 	},
@@ -4798,10 +4814,7 @@ var LargeJsonObjectScriptTests = []queries.ScriptTest{
 func generateStringData(length int) string {
 	var b strings.Builder
 	for length > 0 {
-		uuid, err := uuid.GenerateUUID()
-		if err != nil {
-			panic(err)
-		}
+		uuid := uuid.NewString()
 		uuid = strings.ReplaceAll(uuid, "-", "")
 		b.WriteString(uuid)
 		length -= len(uuid)

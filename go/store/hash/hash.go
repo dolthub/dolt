@@ -217,9 +217,7 @@ func (hs HashSet) Equals(other HashSet) bool {
 }
 
 func (hs HashSet) Empty() {
-	for h := range hs {
-		delete(hs, h)
-	}
+	clear(hs)
 }
 
 func (hs HashSet) ToSlice() HashSlice {
