@@ -288,7 +288,8 @@ func (v nodeStoreValidator) ReadBytes(ctx context.Context, h hash.Hash) (result 
 }
 
 func (v nodeStoreValidator) WriteBytes(ctx context.Context, val []byte) (hash.Hash, error) {
-	panic("not implemented")
+	_, h, err := SerializeBytesToAddr(ctx, v, bytes.NewReader(val), len(val))
+	return h, err
 }
 
 func (v nodeStoreValidator) Read(ctx context.Context, ref hash.Hash) (Node, error) {

@@ -15,7 +15,11 @@
 package val
 
 import (
+	"bytes"
 	"context"
+	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/stretchr/testify/require"
 	"math"
 	"math/rand"
 	"testing"
@@ -36,6 +40,7 @@ func TestTupleBuilder(t *testing.T) {
 }
 
 func smokeTestTupleBuilder(t *testing.T) {
+	ns := &TestValueStore{}
 	desc := NewTupleDescriptor(
 		Type{Enc: Int8Enc},
 		Type{Enc: Int16Enc},
@@ -51,7 +56,7 @@ func smokeTestTupleBuilder(t *testing.T) {
 		Type{Enc: ByteStringEnc},
 	)
 
-	tb := NewTupleBuilder(desc)
+	tb := NewTupleBuilder(desc, ns)
 	tb.PutInt8(0, math.MaxInt8)
 	tb.PutInt16(1, math.MaxInt16)
 	tb.PutInt32(2, math.MaxInt32)
@@ -105,6 +110,7 @@ func smokeTestTupleBuilder(t *testing.T) {
 }
 
 func testRoundTripInts(t *testing.T) {
+	ns := &TestValueStore{}
 	typ := Type{Enc: Int64Enc, Nullable: true}
 
 	tests := []struct {
@@ -143,7 +149,7 @@ func testRoundTripInts(t *testing.T) {
 
 	for _, test := range tests {
 		// build
-		bld := NewTupleBuilder(test.desc)
+		bld := NewTupleBuilder(test.desc, ns)
 		for idx, value := range test.data {
 			bld.PutInt64(idx, value)
 		}
@@ -187,7 +193,7 @@ func testBuildLargeTuple(t *testing.T) {
 	rand.Read(s1)
 	rand.Read(s2)
 
-	tb := NewTupleBuilder(desc)
+	tb := NewTupleBuilder(desc, nil)
 	tb.PutInt8(0, math.MaxInt8)
 	tb.PutInt16(1, math.MaxInt16)
 	tb.PutInt32(2, math.MaxInt32)
@@ -230,4 +236,112 @@ func (tc testCompare) Suffix(n int) TupleComparator {
 
 func (tc testCompare) Validated(types []Type) TupleComparator {
 	return tc
+}
+
+type TestValueStore struct {
+	values [][]byte
+}
+
+func (t TestValueStore) ReadBytes(_ context.Context, h hash.Hash) ([]byte, error) {
+	idx := int(h[0]) - 1
+	return t.values[idx], nil
+}
+
+func (t TestValueStore) contains(val []byte) (int, bool) {
+	for i, v := range t.values {
+		if bytes.Equal(v, val) {
+			return i, true
+		}
+	}
+	return -1, false
+}
+
+func (t *TestValueStore) WriteBytes(_ context.Context, val []byte) (h hash.Hash, err error) {
+	idx, ok := t.contains(val)
+	if ok {
+		h[0] = byte(idx) + 1
+		return h, nil
+	}
+	t.values = append(t.values, val)
+	h[0] = byte(len(t.values))
+	return h, nil
+}
+
+var _ ValueStore = &TestValueStore{}
+
+func TestTupleBuilderToastTypes(t *testing.T) {
+	ctx := sql.NewEmptyContext()
+	types := []Type{
+		{Enc: BytesToastEnc},
+	}
+	vs := &TestValueStore{}
+	td := NewTupleDescriptor(types...)
+	tb := NewTupleBuilder(td, vs)
+	// Test round trip when we expect values to be inlined
+	{
+		shortByteArray := make([]byte, defaultTupleLengthTarget/2)
+		err := tb.PutToastBytesFromInline(0, shortByteArray)
+		require.NoError(t, err)
+		tup := tb.Build(testPool)
+
+		toastBytes, _, err := td.GetBytesToastValue(0, vs, tup)
+		require.NoError(t, err)
+		require.Equal(t, shortByteArray, toastBytes)
+	}
+
+	// Test round trip when we expect values to be outlined
+	{
+		longByteArray := make([]byte, defaultTupleLengthTarget*2)
+		h, err := vs.WriteBytes(ctx, longByteArray)
+		require.NoError(t, err)
+		byteArray := NewByteArray(h, vs).WithMaxByteLength(int64(len(longByteArray)))
+		tb.PutToastBytesFromOutline(0, byteArray)
+
+		tup := tb.Build(testPool)
+
+		toastBytes, _, err := td.GetBytesToastValue(0, vs, tup)
+		require.NoError(t, err)
+		toastByteArray := toastBytes.(ByteArray)
+		outBytes, err := toastByteArray.ToBytes(ctx)
+		require.NoError(t, err)
+		require.Equal(t, longByteArray, outBytes)
+	}
+}
+
+func TestTupleBuilderMultipleToastTypes(t *testing.T) {
+	ctx := sql.NewEmptyContext()
+	types := []Type{
+		{Enc: BytesToastEnc},
+		{Enc: BytesToastEnc},
+	}
+	vs := &TestValueStore{}
+	td := NewTupleDescriptor(types...)
+	tb := NewTupleBuilder(td, vs)
+	// Test multi column tuples. Exactly one column can fit inline.
+	{
+		columnSize := defaultTupleLengthTarget / 2
+		mediumByteArray := make([]byte, columnSize)
+		err := tb.PutToastBytesFromInline(0, mediumByteArray)
+		require.NoError(t, err)
+		err = tb.PutToastBytesFromInline(1, mediumByteArray)
+		require.NoError(t, err)
+
+		tup := tb.Build(testPool)
+
+		{
+			toastBytes, _, err := td.GetBytesToastValue(0, vs, tup)
+			require.NoError(t, err)
+			toastByteArray := toastBytes.(ByteArray)
+			outBytes, err := toastByteArray.ToBytes(ctx)
+			require.NoError(t, err)
+			require.Equal(t, mediumByteArray, outBytes)
+		}
+
+		{
+			toastBytes, _, err := td.GetBytesToastValue(1, vs, tup)
+			require.NoError(t, err)
+			toastByteArray := toastBytes.([]byte)
+			require.Equal(t, mediumByteArray, toastByteArray)
+		}
+	}
 }
