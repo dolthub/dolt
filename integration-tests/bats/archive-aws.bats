@@ -23,7 +23,7 @@ skip_if_no_aws_tests() {
   random_repo=`openssl rand -hex 16`
 
   mkdir -p original/.dolt
-  cp -R $BATS_TEST_DIRNAME/archive-test-repo/* original/.dolt
+  cp -R $BATS_TEST_DIRNAME/archive-test-repos/base/* original/.dolt
   cd original
 
   url='aws://['"$DOLT_BATS_AWS_TABLE"':'"$DOLT_BATS_AWS_BUCKET"']/'"$random_repo"
@@ -63,7 +63,7 @@ skip_if_no_aws_tests() {
   random_repo=`openssl rand -hex 16`
 
   mkdir -p original/.dolt
-  cp -R $BATS_TEST_DIRNAME/archive-test-repo/* original/.dolt
+  cp -R $BATS_TEST_DIRNAME/archive-test-repos/base/* original/.dolt
   cd original
 
   # dirty the database. Should be visible after we restore.
@@ -94,7 +94,7 @@ skip_if_no_aws_tests() {
   random_repo=`openssl rand -hex 16`
 
   mkdir -p original/.dolt
-  cp -R $BATS_TEST_DIRNAME/archive-test-repo/* original/.dolt
+  cp -R $BATS_TEST_DIRNAME/archive-test-repos/base/* original/.dolt
   cd original
 
   url='aws://['"$DOLT_BATS_AWS_TABLE"':'"$DOLT_BATS_AWS_BUCKET"']/'"$random_repo"
