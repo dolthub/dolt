@@ -141,7 +141,7 @@ mutations_and_gc_statement() {
     mkdir cloned
 
     # Copy the archive test repo to remote directory
-    cp -R $BATS_TEST_DIRNAME/archive-test-repo/* remote/.dolt
+    cp -R $BATS_TEST_DIRNAME/archive-test-repos/base/* remote/.dolt
     cd remote
 
     port=$( definePORT )
@@ -190,7 +190,7 @@ mutations_and_gc_statement() {
     mkdir cloned
 
     # Copy the archive test repo to remote directory
-    cp -R $BATS_TEST_DIRNAME/archive-test-repo/* remote/.dolt
+    cp -R $BATS_TEST_DIRNAME/archive-test-repos/base/* remote/.dolt
     cd remote
 
     # Insert data (commits automatically), but don't gc/archive yet. Want to make sure we can still clone it.
@@ -219,7 +219,7 @@ mutations_and_gc_statement() {
     mkdir cloned
 
     # Copy the archive test repo to remote directory
-    cp -R $BATS_TEST_DIRNAME/archive-test-repo/* remote/.dolt
+    cp -R $BATS_TEST_DIRNAME/archive-test-repos/base/* remote/.dolt
     cd remote
 
     port=$( definePORT )
@@ -262,7 +262,7 @@ mutations_and_gc_statement() {
 @test "archive: backup and restore" {
   # cp the repository from the test dir.
   mkdir -p original/.dolt
-  cp -R $BATS_TEST_DIRNAME/archive-test-repo/* original/.dolt
+  cp -R $BATS_TEST_DIRNAME/archive-test-repos/base/* original/.dolt
 
   cd original
   dolt backup add bac1 file://../bac1
@@ -290,7 +290,7 @@ mutations_and_gc_statement() {
 
   # Copy the archive test repo to remote directory
   mkdir -p repo/.dolt
-  cp -R $BATS_TEST_DIRNAME/archive-test-repo/* repo/.dolt
+  cp -R $BATS_TEST_DIRNAME/archive-test-repos/base/* repo/.dolt
   cd repo
 
   # Make some new commits.
