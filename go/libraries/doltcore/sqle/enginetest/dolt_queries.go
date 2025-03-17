@@ -23,7 +23,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/vt/sqlparser"
-	"github.com/hashicorp/go-uuid"
+	"github.com/google/uuid"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtablefunctions"
 )
@@ -4814,10 +4814,7 @@ var LargeJsonObjectScriptTests = []queries.ScriptTest{
 func generateStringData(length int) string {
 	var b strings.Builder
 	for length > 0 {
-		uuid, err := uuid.GenerateUUID()
-		if err != nil {
-			panic(err)
-		}
+		uuid := uuid.NewString()
 		uuid = strings.ReplaceAll(uuid, "-", "")
 		b.WriteString(uuid)
 		length -= len(uuid)
