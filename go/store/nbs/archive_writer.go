@@ -25,9 +25,9 @@ import (
 	"path/filepath"
 	"sort"
 
-	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/gozstd"
 
+	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
