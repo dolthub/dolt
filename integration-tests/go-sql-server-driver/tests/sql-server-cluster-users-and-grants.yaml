@@ -255,6 +255,7 @@ tests:
     restart_server: {}
   - on: server1
     queries:
+    - exec: 'SET @@PERSIST.dolt_cluster_ack_writes_timeout_secs = 10'
     - exec: 'use repo1'
     - exec: 'delete from dolt_branch_control'
     - query: 'show warnings'
@@ -329,6 +330,8 @@ tests:
     restart_server: {}
   - on: server1
     queries:
+    # Because we run in parallel, do not be too agressive about the timeout...
+    - exec: 'SET @@PERSIST.dolt_cluster_ack_writes_timeout_secs = 10'
     - exec: 'create user "brian"@"%" IDENTIFIED BY "brianspassword"'
     - query: 'show warnings'
       result:
