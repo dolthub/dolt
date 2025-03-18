@@ -1,15 +1,19 @@
+parallel: true
 tests:
 - name: read-only flag prevents modification
   repos:
   - name: repo1
     server:
       args: ["--config", "readonly.yaml"]
+      dynamic_port: server1
     with_files:
     - name: readonly.yaml
       contents: |
         log_level: trace
         behavior:
           read_only: true
+        listener:
+          port: {{get_port "server1"}}
   connections:
   - on: repo1
     queries:
@@ -26,12 +30,16 @@ tests:
 - name: read-only flag still allows select
   repos:
   - name: repo1
-    server: {}
+    server:
+      args: ["--port", "{{get_port \"server1\"}}"]
+      dynamic_port: server1
     with_files:
     - name: readonly.yaml
       contents: |
         behavior:
           read_only: true
+        listener:
+          port: {{get_port "server1"}}
   connections:
   - on: repo1
     queries:
@@ -51,12 +59,15 @@ tests:
   - name: repo1
     server:
       args: ["--config", "readonly.yaml"]
+      dynamic_port: server1
     with_files:
     - name: readonly.yaml
       contents: |
         log_level: trace
         behavior:
           read_only: true
+        listener:
+          port: {{get_port "server1"}}
   connections:
   - on: repo1
     queries:
@@ -66,13 +77,17 @@ tests:
   skip: read-only flag does not prevent dolt_reset
   repos:
   - name: repo1
-    server: {}
+    server:
+      args: ["--port", "{{get_port \"server1\"}}"]
+      dynamic_port: server1
     with_files:
     - name: readonly.yaml
       contents: |
         log_level: trace
         behavior:
           read_only: true
+        listener:
+          port: {{get_port "server1"}}
   connections:
   - on: repo1
     queries:
@@ -86,15 +101,21 @@ tests:
 - name: port in use
   repos:
   - name: repo1
-    server: {}
+    server:
+      args: ["--port", "{{get_port \"server1\"}}"]
+      dynamic_port: server1
   - name: repo2
     server:
+      args: ["--port", "{{get_port \"server1\"}}"]
+      dynamic_port: server1
       error_matches:
       - "already in use"
 - name: test autocommit
   repos:
   - name: repo1
-    server: {}
+    server:
+      args: ["--port", "{{get_port \"server1\"}}"]
+      dynamic_port: server1
   connections:
   - on: repo1
     queries:
@@ -109,7 +130,9 @@ tests:
 - name: test basic querying via dolt sql-server
   repos:
   - name: repo1
-    server: {}
+    server:
+      args: ["--port", "{{get_port \"server1\"}}"]
+      dynamic_port: server1
   connections:
   - on: repo1
     queries:
@@ -163,7 +186,9 @@ tests:
 - name: test multiple queries on same connection
   repos:
   - name: repo1
-    server: {}
+    server:
+      args: ["--port", "{{get_port \"server1\"}}"]
+      dynamic_port: server1
   connections:
   - on: repo1
     queries:
@@ -198,7 +223,9 @@ tests:
 - name: test CREATE and DROP database via sql-server
   repos:
   - name: repo1
-    server: {}
+    server:
+      args: ["--port", "{{get_port \"server1\"}}"]
+      dynamic_port: server1
   connections:
   - on: repo1
     queries:
@@ -223,7 +250,9 @@ tests:
 - name: LOAD DATA LOCAL INFILE works
   repos:
   - name: repo1
-    server: {}
+    server:
+      args: ["--port", "{{get_port \"server1\"}}"]
+      dynamic_port: server1
   connections:
   - on: repo1
     queries:
@@ -239,7 +268,9 @@ tests:
 - name: LOAD DATA LOCAL INFILE automatically ignores row with existing primary key
   repos:
   - name: repo1
-    server: {}
+    server:
+      args: ["--port", "{{get_port \"server1\"}}"]
+      dynamic_port: server1
   connections:
   - on: repo1
     queries:
@@ -256,7 +287,9 @@ tests:
 - name: LOAD DATA LOCAL INFILE can replace row with existing primary key
   repos:
   - name: repo1
-    server: {}
+    server:
+      args: ["--port", "{{get_port \"server1\"}}"]
+      dynamic_port: server1
   connections:
   - on: repo1
     queries:
@@ -273,7 +306,9 @@ tests:
 - name: JSON queries
   repos:
   - name: repo1
-    server: {}
+    server:
+      args: ["--port", "{{get_port \"server1\"}}"]
+      dynamic_port: server1
   connections:
   - on: repo1
     queries:
@@ -296,7 +331,9 @@ tests:
 - name: select a branch with the USE syntax
   repos:
   - name: repo1
-    server: {}
+    server:
+      args: ["--port", "{{get_port \"server1\"}}"]
+      dynamic_port: server1
   connections:
   - on: repo1
     queries:
@@ -321,7 +358,9 @@ tests:
 - name: auto increment for a table should reset between drops
   repos:
   - name: repo1
-    server: {}
+    server:
+      args: ["--port", "{{get_port \"server1\"}}"]
+      dynamic_port: server1
   connections:
   - on: repo1
     queries:
@@ -341,7 +380,9 @@ tests:
 - name: Create a temporary table and validate that it doesn't persist after a session closes
   repos:
   - name: repo1
-    server: {}
+    server:
+      args: ["--port", "{{get_port \"server1\"}}"]
+      dynamic_port: server1
   connections:
   - on: repo1
     queries:
@@ -360,6 +401,8 @@ tests:
   - name: server1
     server:
       envs: ["DOLT_DISABLE_CHUNK_JOURNAL=true"]
+      args: ["--port", "{{get_port \"server1\"}}"]
+      dynamic_port: server1
   connections:
   - on: server1
     queries:

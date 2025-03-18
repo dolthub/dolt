@@ -1,3 +1,4 @@
+parallel: true
 tests:
 - name: persist global variable before server startup
   repos:
@@ -7,7 +8,8 @@ tests:
         contents: |
           {"sqlserver.global.max_connections":"1000"}
     server:
-      args: ["-l", "trace"]
+      args: ["-l", "trace", "-P", '{{get_port "repo1"}}']
+      dynamic_port: repo1
   connections:
   - on: repo1
     queries:
@@ -23,7 +25,8 @@ tests:
         contents: |
           {"sqlserver.global.unknown":"1000"}
     server:
-      args: ["-l", "trace"]
+      args: ["-l", "trace", "-P", '{{get_port "repo1"}}']
+      dynamic_port: repo1
       log_matches:
       - "warning: persisted system variable unknown was not loaded since its definition does not exist."
   connections:
@@ -36,6 +39,8 @@ tests:
         contents: |
           {"sqlserver.global.max_connections":"string"}
     server:
+      args: ["-P", '{{get_port "repo1"}}']
+      dynamic_port: repo1
       log_matches:
       - "error: failed to load persisted global variables: key: 'max_connections'; strconv.ParseInt: parsing \"string\": invalid syntax"
   connections:
@@ -44,7 +49,8 @@ tests:
   repos:
   - name: repo1
     server:
-      args: ["-l", "trace"]
+      args: ["-l", "trace", "-P", '{{get_port "repo1"}}']
+      dynamic_port: repo1
   connections:
   - on: repo1
     queries:
@@ -64,7 +70,8 @@ tests:
   repos:
   - name: repo1
     server:
-      args: ["-l", "trace"]
+      args: ["-l", "trace", "-P", '{{get_port "repo1"}}']
+      dynamic_port: repo1
   connections:
   - on: repo1
     queries:
@@ -92,7 +99,8 @@ tests:
   repos:
   - name: repo1
     server:
-      args: ["-l", "trace"]
+      args: ["-l", "trace", "-P", '{{get_port "repo1"}}']
+      dynamic_port: repo1
   connections:
   - on: repo1
     queries:
@@ -120,7 +128,8 @@ tests:
   repos:
   - name: repo1
     server:
-      args: ["-l", "trace"]
+      args: ["-l", "trace", "-P", '{{get_port "repo1"}}']
+      dynamic_port: repo1
   connections:
   - on: repo1
     queries:
@@ -157,7 +166,8 @@ tests:
   repos:
   - name: repo1
     server:
-      args: ["-l", "trace"]
+      args: ["-l", "trace", "-P", '{{get_port "repo1"}}']
+      dynamic_port: repo1
   connections:
   - on: repo1
     queries:
@@ -178,7 +188,8 @@ tests:
   repos:
   - name: repo1
     server:
-      args: ["-l", "trace"]
+      args: ["-l", "trace", "-P", '{{get_port "repo1"}}']
+      dynamic_port: repo1
   connections:
   - on: repo1
     queries:
@@ -187,7 +198,9 @@ tests:
 - name: persist invalid global variable value during server session
   repos:
   - name: repo1
-    server: {}
+    server:
+      args: ["-P", '{{get_port "repo1"}}']
+      dynamic_port: repo1
   connections:
   - on: repo1
     queries:
@@ -202,8 +215,10 @@ tests:
           log_level: trace
           listener:
             max_connections: 999
+            port: {{get_port "repo1"}}
     server:
       args: ["--config", "server.yaml"]
+      dynamic_port: repo1
   connections:
   - on: repo1
     queries:
@@ -215,7 +230,8 @@ tests:
   repos:
   - name: repo1
     server:
-      args: []
+      args: ["-P", '{{get_port "repo1"}}']
+      dynamic_port: repo1
   connections:
   - on: repo1
     queries:
@@ -227,7 +243,8 @@ tests:
   repos:
   - name: repo1
     server:
-      args: ["--max-connections", "555"]
+      args: ["--max-connections", "555", "-P", '{{get_port "repo1"}}']
+      dynamic_port: repo1
   connections:
   - on: repo1
     queries:
@@ -239,7 +256,8 @@ tests:
   repos:
   - name: repo1
     server:
-      args: ["-l", "warning"]
+      args: ["-l", "warning", "-P", '{{get_port "repo1"}}']
+      dynamic_port: repo1
       log_matches:
       - "Starting query"
   connections:
@@ -259,7 +277,7 @@ tests:
         columns: ["@@GLOBAL.dolt_log_level"]
         rows: [["trace"]]
     restart_server:
-      args: ["-l", "info"]
+      args: ["-l", "info", "-P", '{{get_port "repo1"}}']
   - on: repo1
     queries:
     - query: "select @@GLOBAL.dolt_log_level"
@@ -275,8 +293,11 @@ tests:
           system_variables:
             secure_file_priv: "/dev/null"
             max_connections: 1000
+          listener:
+            port: {{get_port "repo1"}}
     server:
       args: ["-l", "trace", "--config", "config.yaml"]
+      dynamic_port: repo1
   connections:
   - on: repo1
     queries:
@@ -292,8 +313,11 @@ tests:
         contents: |
           system_variables:
             secure_file_priv: "/dev/null"
+          listener:
+            port: {{get_port "repo1"}}
     server:
       args: ["-l", "trace", "--config", "config.yaml"]
+      dynamic_port: repo1
   connections:
   - on: repo1
     queries:
@@ -318,21 +342,28 @@ tests:
         contents: |
           system_variables:
             secure_file_priv: ""
+          listener:
+            port: {{get_port "repo1"}}
+      - name: "known_contents"
+        contents: |
+          system_variables:
+            secure_file_priv: ""
     server:
       args: ["-l", "trace", "--config", "config.yaml"]
+      dynamic_port: repo1
   connections:
   - on: repo1
     queries:
-    - query: "select LOAD_FILE('config.yaml')"
+    - query: "select LOAD_FILE('known_contents')"
       result:
-        columns: ["LOAD_FILE('config.yaml')"]
+        columns: ["LOAD_FILE('known_contents')"]
         rows: [["system_variables:\n  secure_file_priv: \"\"\n"]]
-    - query: "select LOAD_FILE('./.dolt/../config.yaml')"
+    - query: "select LOAD_FILE('./.dolt/../known_contents')"
       result:
-        columns: ["LOAD_FILE('./.dolt/../config.yaml')"]
+        columns: ["LOAD_FILE('./.dolt/../known_contents')"]
         rows: [["system_variables:\n  secure_file_priv: \"\"\n"]]
     - exec: "create table loaded (contents text)"
-    - exec: "load data infile \"config.yaml\" into table loaded lines terminated by \"\\0\""
+    - exec: "load data infile \"known_contents\" into table loaded lines terminated by \"\\0\""
     - query: "select contents from loaded"
       result:
         columns: ["contents"]
