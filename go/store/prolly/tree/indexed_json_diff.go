@@ -17,9 +17,9 @@ package tree
 import (
 	"context"
 	"io"
+	"slices"
 
 	"github.com/dolthub/go-mysql-server/sql/types"
-	"golang.org/x/exp/slices"
 )
 
 type IndexedJsonDiffer struct {

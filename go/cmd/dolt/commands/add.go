@@ -20,14 +20,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/ishell"
 	"github.com/fatih/color"
-	"golang.org/x/exp/slices"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -191,7 +190,7 @@ func patchWorkflow(sqlCtx *sql.Context, queryist cli.Queryist, tables []string) 
 		return 0
 	}
 
-	sort.Strings(tables)
+	slices.Sort(tables)
 	runAddPatchShell(sqlCtx, queryist, tables)
 
 	return 0
