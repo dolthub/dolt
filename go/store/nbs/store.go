@@ -110,7 +110,7 @@ type NomsBlockStore struct {
 	cond *sync.Cond
 	// |true| after BeginGC is called, and false once the corresponding EndGC call returns.
 	gcInProgress bool
-	// When unlocked read operations are occuring against the
+	// When unlocked read operations are occurring against the
 	// block store, and they started when |gcInProgress == true|,
 	// this variable is incremented. EndGC will not return until
 	// no outstanding reads are in progress.

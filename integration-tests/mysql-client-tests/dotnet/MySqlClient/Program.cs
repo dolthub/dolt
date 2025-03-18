@@ -69,7 +69,7 @@ public class DoltSQL
                 int r = Convert.ToInt32(result);
                 if (r != 1)
                 {
-                        TestException ex = new TestException($"Expected 1, Recieved {r}");
+                        TestException ex = new TestException($"Expected 1, Received {r}");
                         throw ex;
                 }
             }
@@ -156,7 +156,7 @@ public class DoltSQL
                 int r = Convert.ToInt32(result);
                 if (r != 3)
                 {
-                    TestException ex = new TestException($"Expected 3, Recieved {r}");
+                    TestException ex = new TestException($"Expected 3, Received {r}");
                     throw ex;
                 }
             }

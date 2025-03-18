@@ -1,10 +1,10 @@
 #!/usr/bin/env bats
 load $BATS_TEST_DIRNAME/helper/common.bash
 
-# This suite of tests is for testing the sql server's presentation of privledges, priviledge persisteance between
+# This suite of tests is for testing the sql server's presentation of privileges, privilege persistence between
 # CLI and server instances.
 #
-# Caring about privledges on the CLI isn't really the point, but working in both modes ensures that persistance
+# Caring about privileges on the CLI isn't really the point, but working in both modes ensures that persistence
 # is working correctly. You won't see mention of working with servers in these tests because it's handled by
 # running tests in this file using helper/local-remote.bash
 
