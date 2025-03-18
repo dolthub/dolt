@@ -59,6 +59,9 @@ type tableIndexesKey struct {
 }
 
 func (k tableIndexesKey) String() string {
+	if k.table != "" {
+		return k.schema + "/" + k.db + "/" + k.branch + "/" + k.table
+	}
 	return k.db + "/" + k.branch + "/" + k.table
 }
 

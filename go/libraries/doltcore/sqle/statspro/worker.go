@@ -224,23 +224,40 @@ func (sc *StatsController) newStatsForRoot(baseCtx context.Context, gcKv *memSta
 				continue
 			}
 
-			newStats.DbCnt++
-
-			var tableNames []string
+			var schDbs []sql.DatabaseSchema
 			if err := sc.sq.DoSync(ctx, func() error {
 				sql.SessionCommandBegin(ctx.Session)
 				defer sql.SessionCommandEnd(ctx.Session)
-				tableNames, err = sqlDb.GetTableNames(ctx)
+				schDbs, err = sqlDb.AllSchemas(ctx)
 				return err
 			}); err != nil {
-				sc.descError("getTableNames", err)
+				sc.descError("getDatabaseSchemas", err)
 				continue
 			}
 
-			for _, tableName := range tableNames {
-				err := sc.updateTable(ctx, newStats, tableName, sqlDb, gcKv)
-				if err != nil {
-					return nil, err
+			for _, sqlDb := range schDbs {
+				switch sqlDb.SchemaName() {
+				case "dolt", "information_schema", "pg_catalog":
+					continue
+				}
+				var tableNames []string
+				if err := sc.sq.DoSync(ctx, func() error {
+					sql.SessionCommandBegin(ctx.Session)
+					defer sql.SessionCommandEnd(ctx.Session)
+					tableNames, err = sqlDb.GetTableNames(ctx)
+					return err
+				}); err != nil {
+					sc.descError("getTableNames", err)
+					continue
+				}
+
+				newStats.DbCnt++
+
+				for _, tableName := range tableNames {
+					err := sc.updateTable(ctx, newStats, tableName, sqlDb.(dsess.SqlDatabase), gcKv)
+					if err != nil {
+						return nil, err
+					}
 				}
 			}
 		}
@@ -388,11 +405,13 @@ func (sc *StatsController) updateTable(ctx *sql.Context, newStats *rootStats, ta
 		return err
 	}
 
+	schemaName := sqlTable.DatabaseSchema().SchemaName()
+
 	tableKey := tableIndexesKey{
 		db:     strings.ToLower(sqlDb.AliasedName()),
 		branch: strings.ToLower(sqlDb.Revision()),
 		table:  strings.ToLower(tableName),
-		schema: "",
+		schema: strings.ToLower(schemaName),
 	}
 
 	tableHash, err := dTab.HashOf()
