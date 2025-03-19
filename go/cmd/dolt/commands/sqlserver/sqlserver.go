@@ -48,6 +48,7 @@ const (
 	configFileFlag              = "config"
 	queryParallelismFlag        = "query-parallelism"
 	maxConnectionsFlag          = "max-connections"
+	maxWaitConnectionsFlag      = "back-log"
 	allowCleartextPasswordsFlag = "allow-cleartext-passwords"
 	socketFlag                  = "socket"
 	remotesapiPortFlag          = "remotesapi-port"
@@ -106,6 +107,8 @@ SUPPORTED CONFIG FILE FIELDS:
 {{.EmphasisLeft}}listener.port{{.EmphasisRight}}: The port that the server should listen on
 
 {{.EmphasisLeft}}listener.max_connections{{.EmphasisRight}}: The number of simultaneous connections that the server will accept
+
+{{.EmphasisLeft}}listener.back_log{{.EmphasisRight}}: The number of simultaneous connections that the server will allow to block waiting for a connection before new connections result in immediate rejection. Default 50.
 
 {{.EmphasisLeft}}listener.read_timeout_millis{{.EmphasisRight}}: The number of milliseconds that the server will wait for a read operation
 
@@ -179,6 +182,7 @@ func (cmd SqlServerCmd) ArgParserWithName(name string) *argparser.ArgParser {
 	ap.SupportsFlag(noAutoCommitFlag, "", "Set @@autocommit = off for the server.")
 	ap.SupportsInt(queryParallelismFlag, "", "num-go-routines", "Deprecated, no effect in current versions of Dolt")
 	ap.SupportsInt(maxConnectionsFlag, "", "max-connections", fmt.Sprintf("Set the number of connections handled by the server. Defaults to `%d`.", serverConfig.MaxConnections()))
+	ap.SupportsInt(maxWaitConnectionsFlag, "", "back-log", fmt.Sprintf("Set the number of connections that can block waiting for a connection before new connections are rejected. Defaults to `%d`.", serverConfig.MaxWaitConnections()))
 	ap.SupportsString(commands.PrivsFilePathFlag, "", "privilege file", "Path to a file to load and store users and grants. Defaults to `$doltcfg-dir/privileges.db`. Will be created as needed.")
 	ap.SupportsString(commands.BranchCtrlPathFlag, "", "branch control file", "Path to a file to load and store branch control permissions. Defaults to `$doltcfg-dir/branch_control.db`. Will be created as needed.")
 	ap.SupportsString(allowCleartextPasswordsFlag, "", "allow-cleartext-passwords", "Allows use of cleartext passwords. Defaults to false.")

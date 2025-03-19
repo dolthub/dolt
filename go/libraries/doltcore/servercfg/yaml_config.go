@@ -80,6 +80,7 @@ type ListenerYAMLConfig struct {
 	HostStr            *string `yaml:"host,omitempty"`
 	PortNumber         *int    `yaml:"port,omitempty"`
 	MaxConnections     *uint64 `yaml:"max_connections,omitempty"`
+	BackLog            *uint32 `yaml:"back_log,omitempty"`
 	ReadTimeoutMillis  *uint64 `yaml:"read_timeout_millis,omitempty"`
 	WriteTimeoutMillis *uint64 `yaml:"write_timeout_millis,omitempty"`
 	// TLSKey is a file system path to an unencrypted private TLS key in PEM format.
@@ -487,6 +488,9 @@ func (cfg YAMLConfig) withDefaultsFilledIn() YAMLConfig {
 	if withDefaults.ListenerConfig.MaxConnections == nil {
 		withDefaults.ListenerConfig.MaxConnections = defaults.ListenerConfig.MaxConnections
 	}
+	if withDefaults.ListenerConfig.BackLog == nil {
+		withDefaults.ListenerConfig.BackLog = defaults.ListenerConfig.BackLog
+	}
 	if withDefaults.ListenerConfig.ReadTimeoutMillis == nil {
 		withDefaults.ListenerConfig.ReadTimeoutMillis = defaults.ListenerConfig.ReadTimeoutMillis
 	}
@@ -657,6 +661,14 @@ func (cfg YAMLConfig) MaxConnections() uint64 {
 	}
 
 	return *cfg.ListenerConfig.MaxConnections
+}
+
+func (cfg YAMLConfig) MaxWaitConnections() uint32 {
+	if cfg.ListenerConfig.BackLog == nil {
+		return DefaultMaxWaitConnections
+	}
+
+	return *cfg.ListenerConfig.BackLog
 }
 
 // DisableClientMultiStatements returns true if the server should run in a mode

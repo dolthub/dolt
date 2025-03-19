@@ -42,6 +42,7 @@ type commandLineServerConfig struct {
 	autoCommit              bool
 	doltTransactionCommit   bool
 	maxConnections          uint64
+	maxWaitConnections      uint32
 	tlsKey                  string
 	tlsCert                 string
 	requireSecureTransport  bool
@@ -72,6 +73,7 @@ func DefaultCommandLineServerConfig() *commandLineServerConfig {
 		logFormat:               servercfg.DefaultLogFormat,
 		autoCommit:              servercfg.DefaultAutoCommit,
 		maxConnections:          servercfg.DefaultMaxConnections,
+		maxWaitConnections:      servercfg.DefaultMaxWaitConnections,
 		dataDir:                 servercfg.DefaultDataDir,
 		cfgDir:                  filepath.Join(servercfg.DefaultDataDir, servercfg.DefaultCfgDir),
 		privilegeFilePath:       filepath.Join(servercfg.DefaultDataDir, servercfg.DefaultCfgDir, servercfg.DefaultPrivilegeFilePath),
@@ -169,6 +171,10 @@ func NewCommandLineConfig(creds *cli.UserPassword, apr *argparser.ArgParseResult
 		config.withMaxConnections(uint64(maxConnections))
 	}
 
+	if maxWaitConnections, ok := apr.GetInt(maxWaitConnectionsFlag); ok {
+		config.maxWaitConnections = uint32(maxWaitConnections)
+	}
+
 	config.autoCommit = !apr.Contains(noAutoCommitFlag)
 	if apr.Contains(noAutoCommitFlag) {
 		config.valuesSet[servercfg.AutoCommitKey] = struct{}{}
@@ -256,6 +262,12 @@ func (cfg *commandLineServerConfig) DoltTransactionCommit() bool {
 // MaxConnections returns the maximum number of simultaneous connections the server will allow.  The default is 1
 func (cfg *commandLineServerConfig) MaxConnections() uint64 {
 	return cfg.maxConnections
+}
+
+// MaxWaitConnections returns the maximum number of simultaneous connections that the server will allow to block waiting
+// for a connection before new connections result in immediate rejection.
+func (cfg *commandLineServerConfig) MaxWaitConnections() uint32 {
+	return cfg.maxWaitConnections
 }
 
 // TLSKey returns a path to the servers PEM-encoded private TLS key. "" if there is none.
