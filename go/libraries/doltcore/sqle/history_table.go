@@ -113,7 +113,7 @@ func (ht *HistoryTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 	return index.DoltHistoryIndexesFromTable(ctx, ht.doltTable.db.Name(), ht.Name(), tbl, ht.doltTable.db.DbData().Ddb)
 }
 
-func (ht *HistoryTable) IndexedAccess(lookup sql.IndexLookup) sql.IndexedTable {
+func (ht *HistoryTable) IndexedAccess(ctx *sql.Context, lookup sql.IndexLookup) sql.IndexedTable {
 	ret := *ht
 	return &ret
 }
@@ -519,7 +519,7 @@ func (ht *HistoryTable) newRowItrForTableAtCommit(ctx *sql.Context, table *DoltT
 		}
 		for _, idx := range indexes {
 			if idx.ID() == lookup.Index.ID() {
-				histTable = lockedTable.IndexedAccess(lookup)
+				histTable = lockedTable.IndexedAccess(ctx, lookup)
 				if histTable != nil {
 					newLookup := sql.IndexLookup{Index: idx, Ranges: lookup.Ranges}
 					partIter, err = histTable.(sql.IndexedTable).LookupPartitions(ctx, newLookup)
