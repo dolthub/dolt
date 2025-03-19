@@ -19,6 +19,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statspro"
 	"net"
 	"net/http"
 	"os"
@@ -266,6 +267,19 @@ func ConfigureServices(
 		},
 	}
 	controller.Register(InitEventSchedulerStatus)
+
+	InitStatsController := &svcs.AnonService{
+		InitF: func(context.Context) error {
+			_, enabled, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsEnabled)
+			if enabled.(int8) == 1 {
+				config.StatsController = statspro.NewStatsController(lgr, mrEnv.GetEnv(mrEnv.GetFirstDatabase()))
+			} else {
+				config.StatsController = statspro.StatsNoop{}
+			}
+			return nil
+		},
+	}
+	controller.Register(InitStatsController)
 
 	InitAutoGCController := &svcs.AnonService{
 		InitF: func(context.Context) error {

@@ -68,6 +68,7 @@ func (k tableIndexesKey) String() string {
 type StatsController struct {
 	logger         *logrus.Logger
 	pro            *sqle.DoltDatabaseProvider
+	bthreads       *sql.BackgroundThreads
 	statsBackingDb filesys.Filesys
 	hdpEnv         *env.DoltEnv
 
@@ -124,7 +125,7 @@ func (rs *rootStats) String() string {
 	return string(str)
 }
 
-func NewStatsController(pro *sqle.DoltDatabaseProvider, ctxGen ctxFactory, logger *logrus.Logger, dEnv *env.DoltEnv) *StatsController {
+func NewStatsController(logger *logrus.Logger, dEnv *env.DoltEnv) *StatsController {
 	sq := jobqueue.NewSerialQueue().WithErrorCb(func(err error) {
 		logger.Error(err)
 	})
@@ -139,9 +140,7 @@ func NewStatsController(pro *sqle.DoltDatabaseProvider, ctxGen ctxFactory, logge
 		dbFs:        make(map[string]filesys.Filesys),
 		closed:      make(chan struct{}),
 		kv:          NewMemStats(),
-		pro:         pro,
 		hdpEnv:      dEnv,
-		ctxGen:      ctxGen,
 		genCnt:      atomic.Uint64{},
 	}
 }

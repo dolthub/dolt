@@ -125,30 +125,32 @@ func (sc *StatsController) Restart() error {
 	sc.RefreshFromSysVars()
 
 	done := make(chan struct{})
-	go func() {
-		ctx := sc.newThreadCtx(context.Background())
+	sc.bthreads.Add("stats_worker", func(ctx context.Context) {
+		ctx = sc.newThreadCtx(ctx)
 		close(done)
 		err := sc.runWorker(ctx)
 		if err != nil {
 			sc.logger.Errorf("stats stopped: %s", err.Error())
 		}
-	}()
+	})
 	// only return after latestCtx updated
 	<-done
 	return nil
 }
 
 func (sc *StatsController) RunQueue() {
-	go func() {
-		sc.sq.Run(context.Background())
-	}()
+	sc.bthreads.Add("stats_scheduler", sc.sq.Run)
 	// block on queue starting
 	sc.sq.DoSync(context.Background(), func() error { return nil })
 	return
 }
 
 // Init should only be called once
-func (sc *StatsController) Init(ctx context.Context, dbs []sql.Database) error {
+func (sc *StatsController) Init(ctx context.Context, pro *sqle.DoltDatabaseProvider, ctxGen ctxFactory, bthreads *sql.BackgroundThreads, dbs []sql.Database) error {
+	sc.pro = pro
+	sc.ctxGen = ctxGen
+	sc.bthreads = bthreads
+
 	sc.RunQueue()
 	sqlCtx, err := sc.ctxGen(ctx)
 	if err != nil {

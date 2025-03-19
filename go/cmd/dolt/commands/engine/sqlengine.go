@@ -83,6 +83,7 @@ type SqlEngineConfig struct {
 	AutoGCController           *dsqle.AutoGCController
 	BinlogReplicaController    binlogreplication.BinlogReplicaController
 	EventSchedulerStatus       eventscheduler.SchedulerStatus
+	StatsController            sql.StatsProvider
 }
 
 // NewSqlEngine returns a SqlEngine
@@ -199,15 +200,6 @@ func NewSqlEngine(
 		"authentication_dolt_jwt": NewAuthenticateDoltJWTPlugin(config.JwksConfig),
 	})
 
-	var statsPro sql.StatsProvider
-	_, enabled, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsEnabled)
-	if enabled.(int8) == 1 {
-		statsPro = statspro.NewStatsController(pro, sqlEngine.NewDefaultContext, logrus.StandardLogger(), mrEnv.GetEnv(mrEnv.GetFirstDatabase()))
-	} else {
-		statsPro = statspro.StatsNoop{}
-	}
-	engine.Analyzer.Catalog.StatsProvider = statsPro
-
 	if config.AutoGCController != nil {
 		err = config.AutoGCController.RunBackgroundThread(bThreads, sqlEngine.NewDefaultContext)
 		if err != nil {
@@ -221,7 +213,7 @@ func NewSqlEngine(
 	}
 
 	engine.Analyzer.ExecBuilder = rowexec.NewOverrideBuilder(kvexec.Builder{})
-	sessFactory := doltSessionFactory(pro, statsPro, mrEnv.Config(), bcController, gcSafepointController, config.Autocommit)
+	sessFactory := doltSessionFactory(pro, config.StatsController, mrEnv.Config(), bcController, gcSafepointController, config.Autocommit)
 	sqlEngine.provider = pro
 	sqlEngine.contextFactory = sqlContextFactory
 	sqlEngine.dsessFactory = sessFactory
@@ -240,7 +232,8 @@ func NewSqlEngine(
 
 	// configuring stats depends on sessionBuilder
 	// sessionBuilder needs ref to statsProv
-	if sc, ok := statsPro.(*statspro.StatsController); ok {
+	engine.Analyzer.Catalog.StatsProvider = config.StatsController
+	if sc, ok := config.StatsController.(*statspro.StatsController); ok {
 		_, memOnly, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsMemoryOnly)
 		sc.SetMemOnly(memOnly.(int8) == 1)
 
@@ -252,7 +245,7 @@ func NewSqlEngine(
 			sqlDbs = append(sqlDbs, db)
 		}
 
-		err = sc.Init(ctx, sqlDbs)
+		err = sc.Init(ctx, pro, sqlEngine.NewDefaultContext, bThreads, sqlDbs)
 		if err != nil {
 			return nil, err
 		}
