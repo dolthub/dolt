@@ -219,10 +219,10 @@ github.com/dolthub/flatbuffers/v23 v23.3.3-dh.2 h1:u3PMzfF8RkKd3lB9pZ2bfn0qEG+1G
 github.com/dolthub/flatbuffers/v23 v23.3.3-dh.2/go.mod h1:mIEZOHnFx4ZMQeawhw9rhsj+0zwQj7adVsnBX7t+eKY=
 github.com/dolthub/fslock v0.0.3 h1:iLMpUIvJKMKm92+N1fmHVdxJP5NdyDK5bK7z7Ba2s2U=
 github.com/dolthub/fslock v0.0.3/go.mod h1:QWql+P17oAAMLnL4HGB5tiovtDuAjdDTPbuqx7bYfa0=
-github.com/dolthub/go-icu-regex v0.0.0-20250303123116-549b8d7cad00 h1:rh2ij2yTYKJWlX+c8XRg4H5OzqPewbU1lPK8pcfVmx8=
-github.com/dolthub/go-icu-regex v0.0.0-20250303123116-549b8d7cad00/go.mod h1:ylU4XjUpsMcvl/BKeRRMXSH7e7WBrPXdSLvnRJYrxEA=
-github.com/dolthub/go-mysql-server v0.19.1-0.20250319194307-552313d92958 h1:A+PsDzrfkHkxn2w+PBAGNbeNYSEe6R4FA4IdJXZOMPE=
-github.com/dolthub/go-mysql-server v0.19.1-0.20250319194307-552313d92958/go.mod h1:yr+Vv47/YLOKMgiEY+QxHTlbIVpTuiVtkEZ5l+xruY4=
+github.com/dolthub/go-icu-regex v0.0.0-20250319212010-451ea8d003fa h1:NFbzJ4wjWRz32nz2EimbrHpRx1Xt6k+IaR8N+j4x62k=
+github.com/dolthub/go-icu-regex v0.0.0-20250319212010-451ea8d003fa/go.mod h1:ylU4XjUpsMcvl/BKeRRMXSH7e7WBrPXdSLvnRJYrxEA=
+github.com/dolthub/go-mysql-server v0.19.1-0.20250319232254-8c915e51131f h1:n5L5Yo7+RZKGCv89hMP1xjlOnaWBU4BfneYaTpFoM1o=
+github.com/dolthub/go-mysql-server v0.19.1-0.20250319232254-8c915e51131f/go.mod h1:9itIc5jYYDRxmchFmegPaLaqdf4XWYX6nua5HhrajgA=
 github.com/dolthub/gozstd v0.0.0-20240423170813-23a2903bca63 h1:OAsXLAPL4du6tfbBgK0xXHZkOlos63RdKYS3Sgw/dfI=
 github.com/dolthub/gozstd v0.0.0-20240423170813-23a2903bca63/go.mod h1:lV7lUeuDhH5thVGDCKXbatwKy2KW80L4rMT46n+Y2/Q=
 github.com/dolthub/ishell v0.0.0-20240701202509-2b217167d718 h1:lT7hE5k+0nkBdj/1UOSFwjWpNxf+LCApbRHgnCA17XE=
