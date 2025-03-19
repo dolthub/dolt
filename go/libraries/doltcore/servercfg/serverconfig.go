@@ -59,6 +59,7 @@ const (
 	DefaultAutoGCBehaviorEnable    = false
 	DefaultDoltTransactionCommit   = false
 	DefaultMaxConnections          = 1000
+	DefaultMaxWaitConnections      = 50
 	DefaultDataDir                 = "."
 	DefaultCfgDir                  = ".doltcfg"
 	DefaultPrivilegeFilePath       = "privileges.db"
@@ -159,6 +160,9 @@ type ServerConfig interface {
 	CfgDir() string
 	// MaxConnections returns the maximum number of simultaneous connections the server will allow.  The default is 1
 	MaxConnections() uint64
+	// MaxWaitConnections returns the maximum number of simultaneous connections that the server will allow to block waiting
+	// for a connection before new connections result in immediate rejection
+	MaxWaitConnections() uint32
 	// TLSKey returns a path to the servers PEM-encoded private TLS key. "" if there is none.
 	TLSKey() string
 	// TLSCert returns a path to the servers PEM-encoded TLS certificate chain. "" if there is none.
@@ -240,6 +244,7 @@ func defaultServerConfigYAML() *YAMLConfig {
 			HostStr:                 ptr(DefaultHost),
 			PortNumber:              ptr(DefaultPort),
 			MaxConnections:          ptr(uint64(DefaultMaxConnections)),
+			BackLog:                 ptr(uint32(DefaultMaxWaitConnections)),
 			ReadTimeoutMillis:       ptr(uint64(DefaultTimeout)),
 			WriteTimeoutMillis:      ptr(uint64(DefaultTimeout)),
 			AllowCleartextPasswords: ptr(DefaultAllowCleartextPasswords),
