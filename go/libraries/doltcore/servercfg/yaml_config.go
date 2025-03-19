@@ -198,6 +198,7 @@ func ServerConfigAsYAMLConfig(cfg ServerConfig) *YAMLConfig {
 			HostStr:                 ptr(cfg.Host()),
 			PortNumber:              ptr(cfg.Port()),
 			MaxConnections:          ptr(cfg.MaxConnections()),
+			BackLog:                 ptr(cfg.MaxWaitConnections()),
 			ReadTimeoutMillis:       ptr(cfg.ReadTimeout()),
 			WriteTimeoutMillis:      ptr(cfg.WriteTimeout()),
 			TLSKey:                  nillableStrPtr(cfg.TLSKey()),
@@ -268,6 +269,7 @@ func ServerConfigSetValuesAsYAMLConfig(cfg ServerConfig) *YAMLConfig {
 			HostStr:                 zeroIf(ptr(cfg.Host()), !cfg.ValueSet(HostKey)),
 			PortNumber:              zeroIf(ptr(cfg.Port()), !cfg.ValueSet(PortKey)),
 			MaxConnections:          zeroIf(ptr(cfg.MaxConnections()), !cfg.ValueSet(MaxConnectionsKey)),
+			BackLog:                 zeroIf(ptr(cfg.MaxWaitConnections()), !cfg.ValueSet(MaxWaitConnectionsKey)),
 			ReadTimeoutMillis:       zeroIf(ptr(cfg.ReadTimeout()), !cfg.ValueSet(ReadTimeoutKey)),
 			WriteTimeoutMillis:      zeroIf(ptr(cfg.WriteTimeout()), !cfg.ValueSet(WriteTimeoutKey)),
 			TLSKey:                  zeroIf(ptr(cfg.TLSKey()), !cfg.ValueSet(TLSKeyKey)),
@@ -958,6 +960,8 @@ func (cfg YAMLConfig) ValueSet(value string) bool {
 		return cfg.ListenerConfig.WriteTimeoutMillis != nil
 	case MaxConnectionsKey:
 		return cfg.ListenerConfig.MaxConnections != nil
+	case MaxWaitConnectionsKey:
+		return cfg.ListenerConfig.BackLog != nil
 	case EventSchedulerKey:
 		return cfg.BehaviorConfig.EventSchedulerStatus != nil
 	}

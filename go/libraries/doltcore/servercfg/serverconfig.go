@@ -311,6 +311,7 @@ const (
 	DataDirKey                      = "data_dir"
 	CfgDirKey                       = "cfg_dir"
 	MaxConnectionsKey               = "max_connections"
+	MaxWaitConnectionsKey           = "back_log"
 	TLSKeyKey                       = "tls_key"
 	TLSCertKey                      = "tls_cert"
 	RequireSecureTransportKey       = "require_secure_transport"

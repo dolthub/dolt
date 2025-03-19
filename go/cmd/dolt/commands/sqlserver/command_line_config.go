@@ -172,7 +172,7 @@ func NewCommandLineConfig(creds *cli.UserPassword, apr *argparser.ArgParseResult
 	}
 
 	if maxWaitConnections, ok := apr.GetInt(maxWaitConnectionsFlag); ok {
-		config.maxWaitConnections = uint32(maxWaitConnections)
+		config.withMaxWaitConnections(uint32(maxWaitConnections))
 	}
 
 	config.autoCommit = !apr.Contains(noAutoCommitFlag)
@@ -434,6 +434,12 @@ func (cfg *commandLineServerConfig) withLogFormat(logformat servercfg.LogFormat)
 func (cfg *commandLineServerConfig) withMaxConnections(maxConnections uint64) *commandLineServerConfig {
 	cfg.maxConnections = maxConnections
 	cfg.valuesSet[servercfg.MaxConnectionsKey] = struct{}{}
+	return cfg
+}
+
+func (cfg *commandLineServerConfig) withMaxWaitConnections(maxWaitConnections uint32) *commandLineServerConfig {
+	cfg.maxWaitConnections = maxWaitConnections
+	cfg.valuesSet[servercfg.MaxWaitConnectionsKey] = struct{}{}
 	return cfg
 }
 
