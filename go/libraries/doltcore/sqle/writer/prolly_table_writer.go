@@ -281,7 +281,7 @@ func (w *prollyTableWriter) PreciseMatch() bool {
 }
 
 // IndexedAccess implements sql.IndexAddressableTable.
-func (w *prollyTableWriter) IndexedAccess(i sql.IndexLookup) sql.IndexedTable {
+func (w *prollyTableWriter) IndexedAccess(ctx *sql.Context, i sql.IndexLookup) sql.IndexedTable {
 	idx := index.DoltIndexFromSqlIndex(i.Index)
 	return &prollyFkIndexer{
 		writer: w,
