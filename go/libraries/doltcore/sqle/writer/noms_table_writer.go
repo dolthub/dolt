@@ -148,7 +148,7 @@ func (te *nomsTableWriter) AcquireAutoIncrementLock(ctx *sql.Context) (func(), e
 	return te.autoInc.AcquireTableLock(ctx, te.tableName)
 }
 
-func (te *nomsTableWriter) IndexedAccess(i sql.IndexLookup) sql.IndexedTable {
+func (te *nomsTableWriter) IndexedAccess(ctx *sql.Context, i sql.IndexLookup) sql.IndexedTable {
 	idx := index.DoltIndexFromSqlIndex(i.Index)
 	return &nomsFkIndexer{
 		writer:  te,
