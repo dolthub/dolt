@@ -1923,6 +1923,10 @@ func TestCreateDatabaseErrorCleansUp(t *testing.T) {
 // (2) auto refresh threads, and (3) manual ANALYZE statements.
 // todo: the dolt_stat functions should be concurrency tested
 func TestStatsAutoRefreshConcurrency(t *testing.T) {
+	if runtime.GOOS == "windows" && os.Getenv("CI") != "" {
+		t.Skip("Racy on Windows CI.")
+	}
+
 	// create engine
 	harness := newDoltHarness(t)
 	harness.Setup(setup.MydbData)

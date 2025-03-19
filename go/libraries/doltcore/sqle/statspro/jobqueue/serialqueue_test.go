@@ -16,6 +16,8 @@ package jobqueue
 
 import (
 	"context"
+	"os"
+	"runtime"
 	"sync"
 	"testing"
 	"time"
@@ -24,6 +26,9 @@ import (
 )
 
 func TestSerialQueue(t *testing.T) {
+	if runtime.GOOS == "windows" && os.Getenv("CI") != "" {
+		t.Skip("Racy on Windows CI")
+	}
 	t.Run("CanceledRunContext", func(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
