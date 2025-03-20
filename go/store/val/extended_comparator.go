@@ -14,7 +14,9 @@
 
 package val
 
-import "context"
+import (
+	"context"
+)
 
 // ExtendedTupleComparator is a comparator that properly handles extended types.
 type ExtendedTupleComparator struct {

@@ -98,8 +98,8 @@ func putIndexRows(ctx context.Context, statsMap *prolly.MutableMap, dStats *stat
 	sch := schema.StatsTableDoltSchema
 	kd, vd := sch.GetMapDescriptors(statsMap.NodeStore())
 
-	keyBuilder := val.NewTupleBuilder(kd, ns)
-	valueBuilder := val.NewTupleBuilder(vd, ns)
+	keyBuilder := val.NewTupleBuilder(kd, statsMap.NodeStore())
+	valueBuilder := val.NewTupleBuilder(vd, statsMap.NodeStore())
 
 	qual := dStats.Qualifier()
 	pool := statsMap.NodeStore().Pool()

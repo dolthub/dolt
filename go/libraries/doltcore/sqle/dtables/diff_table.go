@@ -582,7 +582,7 @@ func (dt *DiffTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 }
 
 // IndexedAccess implements sql.IndexAddressable
-func (dt *DiffTable) IndexedAccess(lookup sql.IndexLookup) sql.IndexedTable {
+func (dt *DiffTable) IndexedAccess(ctx *sql.Context, lookup sql.IndexLookup) sql.IndexedTable {
 	nt := *dt
 	return &nt
 }

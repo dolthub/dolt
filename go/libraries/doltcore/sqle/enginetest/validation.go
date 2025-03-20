@@ -252,7 +252,7 @@ func validatePkIndex(ctx context.Context, sch schema.Schema, def schema.Index, p
 
 	// secondary indexes have empty values
 	idxDesc, _ := secondary.Descriptors()
-	builder := val.NewTupleBuilder(idxDesc, ns)
+	builder := val.NewTupleBuilder(idxDesc, primary.NodeStore())
 	mapping := ordinalMappingsForSecondaryIndex(sch, def)
 	kd, vd := primary.Descriptors()
 

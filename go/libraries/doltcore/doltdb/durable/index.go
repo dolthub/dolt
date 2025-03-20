@@ -397,7 +397,7 @@ func (i prollyIndex) AddColumnToRows(ctx context.Context, newCol string, newSche
 			b.PutRaw(i+1, v.GetField(i))
 		}
 
-		err = mutator.Put(ctx, k, b.BuildPermissive(sharePool))
+		err = mutator.Put(ctx, k, b.BuildPermissive(sharePool, i.index.NodeStore()))
 		if err != nil {
 			return nil, err
 		}

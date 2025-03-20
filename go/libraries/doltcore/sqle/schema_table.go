@@ -99,7 +99,7 @@ func (st *SchemaTable) LockedToRoot(ctx *sql.Context, root doltdb.RootValue) (sq
 	return st.backingTable.LockedToRoot(ctx, root)
 }
 
-func (st *SchemaTable) IndexedAccess(lookup sql.IndexLookup) sql.IndexedTable {
+func (st *SchemaTable) IndexedAccess(ctx *sql.Context, lookup sql.IndexLookup) sql.IndexedTable {
 	// Never reached. Interface required for LockedToRoot to be implemented.
 	panic("Unreachable")
 }

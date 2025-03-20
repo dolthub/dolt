@@ -15,7 +15,6 @@
 package table
 
 import (
-	"context"
 	"io"
 	"math/rand"
 	"testing"
@@ -40,14 +39,14 @@ func TestTableIteratorProlly(t *testing.T) {
 
 	m, tups := mustMakeProllyMap(t, n)
 	idx := durable.IndexFromProllyMap(m)
-	itr, err := NewTableIterator(context.Background(), sch, idx)
+	itr, err := NewTableIterator(sql.NewEmptyContext(), sch, idx)
 	require.NoError(t, err)
 	expectedRows := tuplesToRows(t, tups)
 	testIterator(t, itr, expectedRows)
 }
 
 func testIterator(t *testing.T, iter RowIter, expected []sql.Row) {
-	ctx := context.Background()
+	ctx := sql.NewEmptyContext()
 	for _, eR := range expected {
 		r, err := iter.Next(ctx)
 		require.NoError(t, err)
@@ -68,7 +67,7 @@ var vd = val.NewTupleDescriptor(
 )
 
 func mustMakeProllyMap(t *testing.T, count int) (prolly.Map, [][2]val.Tuple) {
-	ctx := context.Background()
+	ctx := sql.NewEmptyContext()
 
 	ns := tree.NewTestNodeStore()
 
@@ -79,7 +78,7 @@ func mustMakeProllyMap(t *testing.T, count int) (prolly.Map, [][2]val.Tuple) {
 }
 
 func mustProllyMapFromTuples(t *testing.T, kd, vd val.TupleDesc, tuples [][2]val.Tuple) prolly.Map {
-	ctx := context.Background()
+	ctx := sql.NewEmptyContext()
 	ns := tree.NewTestNodeStore()
 
 	serializer := message.NewProllyMapSerializer(vd, ns.Pool())
@@ -100,9 +99,9 @@ func tuplesToRows(t *testing.T, kvs [][2]val.Tuple) (rows []sql.Row) {
 
 	rows = make([]sql.Row, len(kvs))
 	for i, kv := range kvs {
-		v1, err := tree.GetField(context.Background(), kd, 0, kv[0], nil)
+		v1, err := tree.GetField(sql.NewEmptyContext(), kd, 0, kv[0], nil)
 		require.NoError(t, err)
-		v2, err := tree.GetField(context.Background(), kd, 0, kv[1], nil)
+		v2, err := tree.GetField(sql.NewEmptyContext(), kd, 0, kv[1], nil)
 		require.NoError(t, err)
 		rows[i] = sql.Row{v1, v2}
 	}

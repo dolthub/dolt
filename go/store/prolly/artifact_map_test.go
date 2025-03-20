@@ -17,6 +17,7 @@ package prolly
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/go-mysql-server/sql"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -28,7 +29,7 @@ import (
 )
 
 func TestArtifactMapEditing(t *testing.T) {
-	ctx := context.Background()
+	ctx := sql.NewEmptyContext()
 	ns := tree.NewTestNodeStore()
 
 	var srcKd = val.NewTupleDescriptor(val.Type{Enc: val.Int16Enc})
@@ -77,7 +78,7 @@ func TestArtifactMapEditing(t *testing.T) {
 
 // Smoke test for merging artifact maps
 func TestMergeArtifactMaps(t *testing.T) {
-	ctx := context.Background()
+	ctx := sql.NewEmptyContext()
 	ns := tree.NewTestNodeStore()
 
 	var srcKd = val.NewTupleDescriptor(val.Type{Enc: val.Int16Enc})
