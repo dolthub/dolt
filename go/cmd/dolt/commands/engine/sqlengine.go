@@ -232,7 +232,11 @@ func NewSqlEngine(
 
 	// configuring stats depends on sessionBuilder
 	// sessionBuilder needs ref to statsProv
-	engine.Analyzer.Catalog.StatsProvider = config.StatsController
+	if config.StatsController == nil {
+		engine.Analyzer.Catalog.StatsProvider = statspro.StatsNoop{}
+	} else {
+		engine.Analyzer.Catalog.StatsProvider = config.StatsController
+	}
 	if sc, ok := config.StatsController.(*statspro.StatsController); ok {
 		_, memOnly, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsMemoryOnly)
 		sc.SetMemOnly(memOnly.(int8) == 1)
