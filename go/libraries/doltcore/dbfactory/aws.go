@@ -246,7 +246,7 @@ func awsConfigFromParams(ctx context.Context, params map[string]interface{}) (aw
 	cfg, err := config.LoadDefaultConfig(ctx, opts...)
 	var profileErr config.SharedConfigProfileNotExistError
 	if errors.As(err, &profileErr) {
-		// XXX: Dolt was originaly using aws-sdk-go, which was
+		// XXX: Dolt was originally using aws-sdk-go, which was
 		// happy to load the specified shared profile from
 		// places like AWS_CONFIG_FILE or $HOME/.aws/config,
 		// but did not complain if it could not find it.

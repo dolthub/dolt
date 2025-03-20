@@ -594,7 +594,7 @@ func TestGenerateYamlConfig(t *testing.T) {
 listener:
   # host: localhost
   # port: 3306
-  # max_connections: 100
+  # max_connections: 1000
   read_timeout_millis: 11000
   write_timeout_millis: 11000
   # tls_key: key.pem

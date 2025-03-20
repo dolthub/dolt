@@ -58,7 +58,7 @@ const (
 	DefaultAutoCommit              = true
 	DefaultAutoGCBehaviorEnable    = false
 	DefaultDoltTransactionCommit   = false
-	DefaultMaxConnections          = 100
+	DefaultMaxConnections          = 1000
 	DefaultDataDir                 = "."
 	DefaultCfgDir                  = ".doltcfg"
 	DefaultPrivilegeFilePath       = "privileges.db"

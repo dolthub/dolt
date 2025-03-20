@@ -110,7 +110,7 @@ type NomsBlockStore struct {
 	cond *sync.Cond
 	// |true| after BeginGC is called, and false once the corresponding EndGC call returns.
 	gcInProgress bool
-	// When unlocked read operations are occuring against the
+	// When unlocked read operations are occurring against the
 	// block store, and they started when |gcInProgress == true|,
 	// this variable is incremented. EndGC will not return until
 	// no outstanding reads are in progress.
@@ -288,14 +288,14 @@ func (nbs *NomsBlockStore) conjoinIfRequired(ctx context.Context) (bool, error) 
 }
 
 func (nbs *NomsBlockStore) UpdateManifest(ctx context.Context, updates map[hash.Hash]uint32) (ManifestInfo, error) {
-	chunkSources, _, err := nbs.openChunkSourcesForAddTableFiles(ctx, updates)
+	sources, err := nbs.openChunkSourcesForAddTableFiles(ctx, updates)
 	if err != nil {
 		return manifestContents{}, err
 	}
 	// If these sources get added to the store, they will get cloned.
 	// Either way, we want to close these instances when we are done.
-	defer chunkSources.close()
-	mi, _, err := nbs.updateManifestAddFiles(ctx, updates, nil, nil, chunkSources)
+	defer sources.sources.close()
+	mi, _, err := nbs.updateManifestAddFiles(ctx, updates, nil, nil, sources.sources)
 	return mi, err
 }
 
@@ -406,14 +406,14 @@ func (nbs *NomsBlockStore) updateManifestAddFiles(ctx context.Context, updates m
 }
 
 func (nbs *NomsBlockStore) UpdateManifestWithAppendix(ctx context.Context, updates map[hash.Hash]uint32, option ManifestAppendixOption) (ManifestInfo, error) {
-	chunkSources, _, err := nbs.openChunkSourcesForAddTableFiles(ctx, updates)
+	sources, err := nbs.openChunkSourcesForAddTableFiles(ctx, updates)
 	if err != nil {
 		return manifestContents{}, err
 	}
 	// If these sources get added to the store, they will get cloned.
 	// Either way, we want to close these instances when we are done.
-	defer chunkSources.close()
-	mi, _, err := nbs.updateManifestAddFiles(ctx, updates, &option, nil, chunkSources)
+	defer sources.sources.close()
+	mi, _, err := nbs.updateManifestAddFiles(ctx, updates, &option, nil, sources.sources)
 	return mi, err
 }
 
@@ -1683,7 +1683,7 @@ func getRefCheck(nbs *NomsBlockStore, base func([]hasRecord) (hash.HashSet, erro
 }
 
 // For each chunk in sources, walk all its addresses with |getAddrs| and ensure that none are missing from a call to |refCheck|.
-func refCheckAllSources(ctx context.Context, nbs *NomsBlockStore, getAddrs chunks.GetAddrsCurry, refCheck func([]hasRecord) (hash.HashSet, error), sources chunkSourceSet) error {
+func refCheckAllSources(ctx context.Context, getAddrs chunks.GetAddrsCurry, refCheck func([]hasRecord) (hash.HashSet, error), sources chunkSourceSet, stats *Stats) error {
 	if refCheck == nil {
 		return nil
 	}
@@ -1709,7 +1709,7 @@ func refCheckAllSources(ctx context.Context, nbs *NomsBlockStore, getAddrs chunk
 				return
 			}
 			checkDeps(c)
-		}, nbs.stats)
+		}, stats)
 		if err != nil {
 			checkErr = errors.Join(err, checkErr)
 		}
@@ -1742,24 +1742,37 @@ func (nbs *NomsBlockStore) addTableFilesToManifest(ctx context.Context, fileIdTo
 		// time so that we can ensure our view of the store is still
 		// accurate when we add these files to the store if all the sanity
 		// checks pass.
-		chunkSources, gcGen, err := nbs.openChunkSourcesForAddTableFiles(ctx, fileIdHashToNumChunks)
+		sources, err := nbs.openChunkSourcesForAddTableFiles(ctx, fileIdHashToNumChunks)
 		if err != nil {
 			return err
 		}
 		// If these sources get added to the store, they will get cloned.
 		// Either way, we want to close these instances when we are done.
-		defer chunkSources.close()
+		defer sources.sources.close()
 
-		refCheck := getRefCheck(nbs, genRefCheck, chunkSources)
-		err = refCheckAllSources(ctx, nbs, getAddrs, refCheck, chunkSources)
-		if err != nil {
-			// There was an error checking all references.
-			return err
+		// If we are an uninitialized store, we do not perform
+		// this ref check.  This is a hascky solve for the
+		// case where there is a push or clone into a remote
+		// newly initialized store with no existing contents.
+		//
+		// For example, call dolt_backup(sync-url, aws://.../new_backup_path_here
+		// needs to be efficient.
+		//
+		// We should make these ref checks more efficient and
+		// more performant as well, so that incremental
+		// backups are more credible for example.
+		if !sources.root.IsEmpty() {
+			refCheck := getRefCheck(nbs, genRefCheck, sources.sources)
+			err = refCheckAllSources(ctx, getAddrs, refCheck, sources.sources, nbs.stats)
+			if err != nil {
+				// There was an error checking all references.
+				return err
+			}
 		}
 
 		// At this point, the added files are consistent with our view of the store.
 		// We add them to the set of table files in the store.
-		_, gcGenMismatch, err := nbs.updateManifestAddFiles(ctx, fileIdHashToNumChunks, nil, &gcGen, chunkSources)
+		_, gcGenMismatch, err := nbs.updateManifestAddFiles(ctx, fileIdHashToNumChunks, nil, &sources.gcGen, sources.sources)
 		if err != nil {
 			return err
 		} else if gcGenMismatch {
@@ -1781,14 +1794,24 @@ func (nbs *NomsBlockStore) addTableFilesToManifest(ctx context.Context, fileIdTo
 	}
 }
 
-func (nbs *NomsBlockStore) openChunkSourcesForAddTableFiles(ctx context.Context, files map[hash.Hash]uint32) (chunkSourceSet, hash.Hash, error) {
+type openChunkSourcesForAddTableFilesResult struct {
+	sources chunkSourceSet
+	gcGen   hash.Hash
+	root    hash.Hash
+}
+
+func (nbs *NomsBlockStore) openChunkSourcesForAddTableFiles(ctx context.Context, files map[hash.Hash]uint32) (openChunkSourcesForAddTableFilesResult, error) {
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
 	sources, err := nbs.tables.openForAdd(ctx, files, nbs.stats)
 	if err != nil {
-		return nil, hash.Hash{}, err
+		return openChunkSourcesForAddTableFilesResult{}, err
 	}
-	return sources, nbs.upstream.gcGen, nil
+	return openChunkSourcesForAddTableFilesResult{
+		sources: sources,
+		gcGen:   nbs.upstream.gcGen,
+		root:    nbs.upstream.root,
+	}, nil
 }
 
 // PruneTableFiles deletes old table files that are no longer referenced in the manifest.
