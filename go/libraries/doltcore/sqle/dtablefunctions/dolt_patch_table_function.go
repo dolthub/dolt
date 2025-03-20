@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"slices"
 	"sort"
 	"strings"
 
@@ -26,7 +27,6 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/rowexec"
 	sqltypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/mysql"
-	"golang.org/x/exp/slices"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"

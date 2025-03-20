@@ -74,7 +74,7 @@ func (s *nomsWriteSession) GetWorkingSet() *doltdb.WorkingSet {
 func (s *nomsWriteSession) GetTableWriter(ctx *sql.Context, table doltdb.TableName, db string, setter dsess.SessionRootSetter, targetStaging bool) (dsess.TableWriter, error) {
 	if targetStaging {
 		// This would be fairly easy to implement, but we gotta stop luggin around the legacy storage format.
-		return nil, fmt.Errorf("Feature not suppported in legacy storage format")
+		return nil, fmt.Errorf("Feature not supported in legacy storage format")
 	}
 
 	s.mut.Lock()
