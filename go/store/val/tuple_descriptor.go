@@ -15,6 +15,7 @@
 package val
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
 	"fmt"
@@ -730,6 +731,10 @@ func NewExtendedAddressTypeHandler(vs ValueStore, childHandler TupleTypeHandler)
 }
 
 func (handler AddressTypeHandler) SerializedCompare(ctx context.Context, v1 []byte, v2 []byte) (int, error) {
+	// If hashes are equal, the values must be equal
+	if bytes.Compare(v1, v2) == 0 {
+		return 0, nil
+	}
 	// TODO: If the child handler allows, compare the values one chunk at a time instead of always fully deserializing them.
 	var err error
 	var v1Bytes []byte
@@ -921,4 +926,78 @@ func (v ToastValue) convertToTextStorage(ctx context.Context, vs ValueStore, buf
 	address := hash.New(outlineValue[9:29])
 	length := readInt64(outlineValue[1:9])
 	return NewTextStorage(address, vs).WithMaxByteLength(length), nil
+}
+
+// ToastTypeHandler is an implementation of ToastTypeHandler for TOAST types, that is, values that can be either a content-address
+// or an inline value. This TypeHandler converts between the address and the underlying value as needed, allowing
+// these columns to be used in contexts that need access to the underlying value, such as in primary indexes.
+// The |childHandler| field allows this behavior to be composed with other type handlers.
+type ToastTypeHandler struct {
+	vs           ValueStore
+	childHandler TupleTypeHandler
+}
+
+func NewToastTypeHandler(vs ValueStore, childHandler TupleTypeHandler) ToastTypeHandler {
+	return ToastTypeHandler{
+		vs:           vs,
+		childHandler: childHandler,
+	}
+}
+
+func (handler ToastTypeHandler) SerializedCompare(ctx context.Context, v1 []byte, v2 []byte) (int, error) {
+	toastValue1 := ToastValue(v1)
+	toastValue2 := ToastValue(v2)
+	// Fast-path: two outlined values with equal hashes are equal.
+	if toastValue1.IsOutlined() && toastValue2.IsOutlined() && bytes.Equal(toastValue1, toastValue2) {
+		return 0, nil
+	}
+	var err error
+	if toastValue1.IsOutlined() {
+		toastValue1, err = toastValue1.convertToInline(ctx, handler.vs, nil)
+		if err != nil {
+			return 0, err
+		}
+	}
+	if toastValue2.IsOutlined() {
+		toastValue1, err = toastValue2.convertToInline(ctx, handler.vs, nil)
+		if err != nil {
+			return 0, err
+		}
+	}
+	return handler.childHandler.SerializedCompare(ctx, toastValue1[1:], toastValue2[1:])
+}
+
+func (handler ToastTypeHandler) SerializeValue(ctx context.Context, val any) ([]byte, error) {
+	b, err := handler.childHandler.SerializeValue(ctx, val)
+	if err != nil {
+		return nil, err
+	}
+	if len(b) == 0 {
+		return nil, nil
+	}
+	dest := make([]byte, len(b)+1)
+	copy(dest[1:], b)
+	return dest, nil
+}
+
+func (handler ToastTypeHandler) DeserializeValue(ctx context.Context, val []byte) (any, error) {
+	toastVal := ToastValue(val)
+	if toastVal.IsNull() {
+		return nil, nil
+	}
+	if toastVal.isInlined() {
+		return handler.childHandler.DeserializeValue(ctx, toastVal[1:])
+	}
+	// else toastVal is outlined
+	_, lengthBytes := uvarint.Uvarint(toastVal)
+	addr := hash.New(toastVal[lengthBytes:])
+	b, err := handler.vs.ReadBytes(ctx, addr)
+	if err != nil {
+		return nil, err
+	}
+	return handler.childHandler.DeserializeValue(ctx, b)
+}
+
+func (handler ToastTypeHandler) FormatValue(val any) (string, error) {
+	return handler.childHandler.FormatValue(val)
 }

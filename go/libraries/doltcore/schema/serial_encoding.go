@@ -24,6 +24,11 @@ import (
 	"github.com/dolthub/dolt/go/gen/fb/serial"
 )
 
+// UseToastTypes indicates whether to use TOAST encoding for large/unbounded fields instead of address encoding.
+// Tests can set this variable to true in order to force Dolt to use TOAST encoding for TEXT and BLOB columns.
+// Doltgres also sets this to true in order to use TOAST encoding for extended types.
+var UseToastTypes = false
+
 // EncodingFromSqlType returns a serial.Encoding for a sql.Type.
 func EncodingFromSqlType(typ sql.Type) serial.Encoding {
 	if extendedType, ok := typ.(types.ExtendedType); ok {
@@ -31,6 +36,9 @@ func EncodingFromSqlType(typ sql.Type) serial.Encoding {
 		case types.ExtendedTypeSerializedWidth_64K:
 			return serial.EncodingExtended
 		case types.ExtendedTypeSerializedWidth_Unbounded:
+			if UseToastTypes {
+				return serial.EncodingExtendedToast
+			}
 			return serial.EncodingExtendedAddr
 		default:
 			panic(fmt.Errorf("unknown serialization width"))
@@ -38,9 +46,6 @@ func EncodingFromSqlType(typ sql.Type) serial.Encoding {
 	}
 	return EncodingFromQueryType(typ.Type())
 }
-
-// Tests can set this variable to true in order to force Dolt to use TOAST encoding for TEXT and BLOB columns.
-var UseToastTypes = false
 
 // EncodingFromQueryType returns a serial.Encoding for a query.Type.
 func EncodingFromQueryType(typ query.Type) serial.Encoding {
