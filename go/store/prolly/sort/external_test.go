@@ -15,8 +15,8 @@
 package sort
 
 import (
-	"context"
 	"fmt"
+	"github.com/dolthub/go-mysql-server/sql"
 	"os"
 	"strings"
 	"testing"
@@ -29,7 +29,7 @@ import (
 )
 
 func TestFlush(t *testing.T) {
-	ctx := context.Background()
+	ctx := sql.NewEmptyContext()
 	tests := []struct {
 		td  val.TupleDesc
 		cnt int
@@ -119,7 +119,7 @@ func TestFlush(t *testing.T) {
 }
 
 func TestMerge(t *testing.T) {
-	ctx := context.Background()
+	ctx := sql.NewEmptyContext()
 	tests := []struct {
 		td     val.TupleDesc
 		counts []int
@@ -201,7 +201,7 @@ func TestMerge(t *testing.T) {
 			t.Run("mem merge", func(t *testing.T) {
 				target := newKeyFile(mustNewFile(t, tmpProv), batchSize)
 
-				ctx := context.Background()
+				ctx := sql.NewEmptyContext()
 				m, _ := newFileMerger(ctx, keyCmp, target, keyMems...)
 				m.run(ctx)
 
@@ -225,7 +225,7 @@ func TestMerge(t *testing.T) {
 }
 
 func TestCompact(t *testing.T) {
-	ctx := context.Background()
+	ctx := sql.NewEmptyContext()
 	// run compact until there's only 1 file
 	// check at each iteration that we halved the file count, cnt and size is still the same
 	tests := []struct {
@@ -302,7 +302,7 @@ func TestCompact(t *testing.T) {
 				keyFiles = append(keyFiles, kf)
 			}
 
-			ctx := context.Background()
+			ctx := sql.NewEmptyContext()
 
 			t.Run("file compact", func(t *testing.T) {
 				s := NewTupleSorter(batchSize, tt.fileCnt, keyCmp, tmpProv)
@@ -325,7 +325,7 @@ func TestCompact(t *testing.T) {
 }
 
 func TestFileE2E(t *testing.T) {
-	ctx := context.Background()
+	ctx := sql.NewEmptyContext()
 	// simulate full lifecycle
 	// vary batch size and file count so multiple compacts/merges
 	// make the batch size and file size small enough that
@@ -422,7 +422,7 @@ func TestFileE2E(t *testing.T) {
 				return tt.td.Compare(ctx, l, r) <= 0
 			}
 
-			ctx := context.Background()
+			ctx := sql.NewEmptyContext()
 			keys := testTuples(ns, tt.td, tt.rows)
 			s := NewTupleSorter(tt.batchSize, tt.fileMax, keyCmp, tmpProv)
 			defer s.Close()
@@ -491,7 +491,7 @@ func mustNewFile(t *testing.T, prov tempfiles.TempFileProvider) *os.File {
 }
 
 func drainIterCntSize(t *testing.T, ki keyIterable) (cnt int, size int) {
-	ctx := context.Background()
+	ctx := sql.NewEmptyContext()
 	iter, err := ki.IterAll(ctx)
 	require.NoError(t, err)
 	defer iter.Close()

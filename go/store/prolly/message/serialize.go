@@ -84,6 +84,14 @@ func countAddresses(items [][]byte, td val.TupleDesc) (cnt int) {
 			}
 			return
 		})
+		val.IterToastFields(td, func(j int, t val.Type) {
+			// get offset of toast value within |tup|
+			toastValue := val.ToastValue(val.Tuple(items[i]).GetField(j))
+			if toastValue.IsOutlined() {
+				cnt++
+			}
+			return
+		})
 	}
 	return
 }
@@ -96,7 +104,7 @@ func writeAddressOffsets(b *fb.Builder, items [][]byte, sumSz int, td val.TupleD
 		tup := val.Tuple(items[i])
 		off -= len(tup) // start of tuple
 		val.IterAddressFields(td, func(j int, t val.Type) {
-			addr := val.Tuple(items[i]).GetField(j)
+			addr := tup.GetField(j)
 			if len(addr) == 0 || hash.New(addr).IsEmpty() {
 				return
 			}
@@ -105,6 +113,17 @@ func writeAddressOffsets(b *fb.Builder, items [][]byte, sumSz int, td val.TupleD
 			o += off // offset is tuple start plus field start
 			b.PrependUint16(uint16(o))
 			cnt++
+		})
+		val.IterToastFields(td, func(j int, t val.Type) {
+			// get offset of toast value within |tup|
+			toastValue := val.ToastValue(val.Tuple(items[i]).GetField(j))
+			if toastValue.IsOutlined() {
+				o, _ := tup.GetOffset(j)
+				o += off + 9 // address appears 9 bytes in.
+				b.PrependUint16(uint16(o))
+				cnt++
+			}
+			return
 		})
 	}
 	return b.EndVector(cnt)

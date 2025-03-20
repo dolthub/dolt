@@ -200,19 +200,11 @@ func testRoundTripProllyFields(t *testing.T, test prollyFieldTest) {
 	v, err = sql.UnwrapAny(context.Background(), v)
 	assert.NoError(t, err)
 
-	jsonType := val.Type{Enc: val.JSONAddrEnc}
-	if test.typ == jsonType {
-		getJson := func(field interface{}) interface{} {
-			jsonWrapper, ok := field.(sql.JSONWrapper)
-			require.Equal(t, ok, true)
-			val, err := jsonWrapper.ToInterface()
-			require.NoError(t, err)
-			return val
-		}
-		assert.Equal(t, getJson(test.value), getJson(v))
-	} else {
-		assert.Equal(t, test.value, v)
-	}
+	expectedValue, err := sql.UnwrapAny(context.Background(), test.value)
+	assert.NoError(t, err)
+
+	assert.Equal(t, expectedValue, v)
+
 }
 
 func mustParseGeometryType(t *testing.T, s string) (v interface{}) {

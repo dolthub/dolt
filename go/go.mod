@@ -15,7 +15,7 @@ require (
 	github.com/dolthub/fslock v0.0.3
 	github.com/dolthub/ishell v0.0.0-20240701202509-2b217167d718
 	github.com/dolthub/sqllogictest/go v0.0.0-20201107003712-816f3ae12d81
-	github.com/dolthub/vitess v0.0.0-20250214225328-a0ed4612b41c
+	github.com/dolthub/vitess v0.0.0-20250304211657-920ca9ec2b9a
 	github.com/dustin/go-humanize v1.0.1
 	github.com/fatih/color v1.13.0
 	github.com/flynn-archive/go-shlex v0.0.0-20150515145356-3f9db97f8568
@@ -109,7 +109,7 @@ require (
 	github.com/apache/thrift v0.13.1-0.20201008052519-daf620915714 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
-	github.com/dolthub/go-icu-regex v0.0.0-20241215010122-db690dd53c90 // indirect
+	github.com/dolthub/go-icu-regex v0.0.0-20250303123116-549b8d7cad00 // indirect
 	github.com/dolthub/jsonpath v0.0.2-0.20240227200619-19675ab05c71 // indirect
 	github.com/dolthub/maphash v0.0.0-20221220182448-74e1e1ea1577 // indirect
 	github.com/go-fonts/liberation v0.2.0 // indirect
@@ -170,5 +170,7 @@ require (
 )
 
 replace github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi => ./gen/proto/dolt/services/eventsapi
+
+replace github.com/dolthub/go-mysql-server => ../../go-mysql-server
 
 go 1.23.3

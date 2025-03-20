@@ -468,7 +468,7 @@ func (b *ProximityMapBuilder) createInitialPathMaps(ctx context.Context, maxLeve
 	emptyPathMap, err := NewMapFromTuples(ctx, b.ns, pathMapKeyDesc, b.valDesc)
 
 	keyTupleBuilder = val.NewTupleBuilder(pathMapKeyDesc, b.ns)
-	prefixTupleBuilder = val.NewTupleBuilder(val.NewTupleDescriptor(pathMapKeyDescTypes[0]), ns)
+	prefixTupleBuilder = val.NewTupleBuilder(val.NewTupleDescriptor(pathMapKeyDescTypes[0]), b.ns)
 
 	for i := uint8(0); i <= maxLevel; i++ {
 

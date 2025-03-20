@@ -15,7 +15,7 @@
 package val
 
 import (
-	"context"
+	"github.com/dolthub/go-mysql-server/sql"
 	"math"
 	"testing"
 	"time"
@@ -251,7 +251,7 @@ func TestCompare(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		ctx := context.Background()
+		ctx := sql.NewEmptyContext()
 		act := compare(test.typ, test.l, test.r)
 		assert.Equal(t, test.cmp, act, "expected %s %s %s ",
 			TupleDesc{}.formatValue(ctx, test.typ.Enc, 0, test.l),

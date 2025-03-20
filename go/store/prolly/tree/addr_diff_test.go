@@ -15,7 +15,7 @@
 package tree
 
 import (
-	"context"
+	"github.com/dolthub/go-mysql-server/sql"
 	"io"
 	"testing"
 
@@ -27,7 +27,7 @@ import (
 // Single layer trees are entirely root nodes - which are embedded in the table flatbuffer, so we don't
 // currently use them for purposes of grouping chunks.
 func TestAddressDifferFromRootsOneLayer(t *testing.T) {
-	ctx := context.Background()
+	ctx := sql.NewEmptyContext()
 	ns := NewTestNodeStore()
 	fromTups, desc := AscendingUintTuples(42)
 	fromRoot := makeTree(t, fromTups)
@@ -51,7 +51,7 @@ func TestAddressDifferFromRootsOneLayer(t *testing.T) {
 }
 
 func TestAddressDifferFromRootsTwoLayer(t *testing.T) {
-	ctx := context.Background()
+	ctx := sql.NewEmptyContext()
 	ns := NewTestNodeStore()
 
 	fromTups, desc := AscendingUintTuples(416)
@@ -88,7 +88,7 @@ func TestAddressDifferFromRootsTwoLayer(t *testing.T) {
 }
 
 func TestAddressDifferFromRootsThreeLayer(t *testing.T) {
-	ctx := context.Background()
+	ctx := sql.NewEmptyContext()
 	ns := NewTestNodeStore()
 	// 23800 - results in a 3 level tree, where the root has two children. The second child will have one child.
 	// of its own, which is the content. If we alter the content in the last ~250 elements of the tuple, it should
@@ -145,7 +145,7 @@ func TestAddressDifferFromRootsLayerMismatch(t *testing.T) {
 	assert.Equal(t, 415, toRoot.Count())
 	assert.Equal(t, 0, toRoot.Level())
 
-	ctx := context.Background()
+	ctx := sql.NewEmptyContext()
 	ns := NewTestNodeStore()
 	_, err := layerDifferFromRoots(ctx, ns, ns, fromRoot, toRoot, desc)
 	assert.Equal(t, ErrRootDepthMismatch, err)

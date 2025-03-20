@@ -641,6 +641,10 @@ func compareAddr(l, r hash.Hash) int {
 	return l.Compare(r)
 }
 
+func compareToastValue(l, r ToastValue) int {
+	return bytes.Compare(l, r)
+}
+
 func writeRaw(buf, val []byte) {
 	expectSize(buf, ByteSize(len(val)))
 	copy(buf, val)

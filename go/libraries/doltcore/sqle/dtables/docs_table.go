@@ -131,7 +131,7 @@ func (dt *DocsTable) LockedToRoot(ctx *sql.Context, root doltdb.RootValue) (sql.
 
 // IndexedAccess implements IndexAddressableTable, but DocsTables has no indexes.
 // Thus, this should never be called.
-func (dt *DocsTable) IndexedAccess(lookup sql.IndexLookup) sql.IndexedTable {
+func (dt *DocsTable) IndexedAccess(ctx *sql.Context, lookup sql.IndexLookup) sql.IndexedTable {
 	panic("Unreachable")
 }
 

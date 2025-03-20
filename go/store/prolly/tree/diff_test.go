@@ -15,7 +15,7 @@
 package tree
 
 import (
-	"context"
+	"github.com/dolthub/go-mysql-server/sql"
 	"io"
 	"testing"
 
@@ -28,7 +28,7 @@ import (
 // method, and when developing the layerDifferFromRoots method I wanted to verify some assumptions.
 // TODO - test DifferFromRoots more thoroughly.
 func TestDifferFromRoots(t *testing.T) {
-	ctx := context.Background()
+	ctx := sql.NewEmptyContext()
 	ns := NewTestNodeStore()
 
 	fromTups, desc := AscendingUintTuples(1234)
