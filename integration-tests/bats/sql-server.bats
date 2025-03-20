@@ -2115,3 +2115,29 @@ EOF
     [[ "$output" =~ "br3  | true" ]] || false
     [[ "$output" =~ "main | false" ]] || false
 }
+
+@test "sql-server: test --max-connections and --back-log flags" {
+    cd repo1
+    # 3 connections allowed, everything else immediate failure.
+    start_sql_server_with_args --max-connections 3 --back-log 0
+
+    # Start 3 long running connections.
+    set +e # errors expected.
+    pids=()
+    for i in {1..3}; do
+      dolt sql &
+      pids+=($!)
+    done
+
+    # Give the first 3 connections time to start/connect
+    sleep 5
+
+    run dolt sql -q "select(1);"
+    [ $status -ne 0 ]
+    [[ "$output" =~ "bad connection" ]] || false
+
+    # Kill all the running shells
+    for pid in "${pids[@]}"; do
+      kill -9 "$pid"
+    done
+}
