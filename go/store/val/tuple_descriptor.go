@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"github.com/mohae/uvarint"
 	"os"
 	"strconv"
 	"strings"
@@ -778,195 +779,113 @@ func (handler AddressTypeHandler) FormatValue(val any) (string, error) {
 	return handler.childHandler.FormatValue(val)
 }
 
-type LengthAndTreeValue struct {
-	length int
-	ImmutableValue
-}
-
-var _ TupleTypeHandler = AddressTypeHandler{}
-
-func getOversizedHeaderLength(firstByte byte) int {
-	// for now always use 4 bytes for length
-	return 9
-}
-
+// A ToastValue is a byte sequence that can represent:
+// - An inlined string or bytes value
+// - An outlined (addressable) string or bytes value
+// - NULL (identified by the empty sequence)
+// Outlined ToastValues begin with a SQLite () variable-length encoding of the string length.
+// Note that this value is always greater than 21, because we only outline values when doing so reduces the length of
+// the tuple, and the outlined ToastValue consists of a 20 byte address + the string length (min 1 byte).
+// This means that we can use a shorter length value to indicate an inlined ToastValue. We choose 0 for simplicity.
 type ToastValue []byte
 
-func (v ToastValue) getOversizedOutlinedLength() int64 {
-	return readInt64(v[1:9])
-}
-
-func headerLengthForBlobSize(blobSize int) int64 {
-	return 8
-}
-
-func (v ToastValue) getOversizedBytes() []byte {
-	if len(v) == 0 {
-		return nil
+// getMessageLength returns the length of the underlying value.
+func (v ToastValue) getMessageLength() int64 {
+	if v.IsNull() {
+		return 0
 	}
-	if v[0]&128 == 1 {
-		headerLength := getOversizedHeaderLength(v[0])
-		return v[headerLength:]
+	if v.isInlined() {
+		return int64(len(v)) - 1
 	}
-	return v[1:]
+	length, _ := uvarint.Uvarint(v)
+	return int64(length)
 }
 
-/*
-
-// OversizedTypeHandler is an implementation of TupleTypeHandler for columns that embed short values, but
-// for long values contain a content-address to some value stored in a ValueStore.
-// This TypeHandler converts between the address and the underlying value as needed, allowing
-// these columns to be used in contexts that need access to the underlying value, such as in primary indexes.
-// Every value stored in this column has a header that describes how to interpret the rest of the value.
-// We embed the size because this helps us determine whether we need to deserialize when writing a row.
-// bit 0 - is the value stored in band or out of band
-// bit 1 - is the value compressed. Currently not supported, always set to 0.
-// reserve additional bits?
-// size - variable length encoding?
-type OversizedTypeHandler struct {
-	vs           ValueStore
-	childHandler TupleTypeHandler
-}
-
-func NewOversizedTypeHandler(vs ValueStore, childHandler TupleTypeHandler) OversizedTypeHandler {
-	return OversizedTypeHandler{
-		vs:           vs,
-		childHandler: childHandler,
-	}
-}
-
-func (handler OversizedTypeHandler) SerializedCompare(ctx context.Context, v1 []byte, v2 []byte) (int, error) {
-	// TODO: If the child handler allows, compare the values one chunk at a time instead of always fully deserializing them.
-	var err error
-	v1InlineBytes := getOversizedBytes(v1)
-	var v1Bytes []byte
-	if len(v1) > 0 {
-		v1Bytes, err = handler.vs.ReadBytes(ctx, hash.New(v1InlineBytes))
-		if err != nil {
-			return 0, err
-		}
-	}
-	v2InlineBytes := getOversizedBytes(v2)
-	var v2Bytes []byte
-	if len(v2) > 0 {
-		v2Bytes, err = handler.vs.ReadBytes(ctx, hash.New(v2InlineBytes))
-		if err != nil {
-			return 0, err
-		}
-	}
-	return handler.childHandler.SerializedCompare(ctx, v1Bytes, v2Bytes)
-}
-
-// we need to know the total length of the row, or handle this at some higher level.
-func (handler OversizedTypeHandler) SerializeValue(ctx context.Context, val any) ([]byte, error) {
-	b, err := handler.childHandler.SerializeValue(ctx, val)
-	if err != nil {
-		return nil, err
-	}
-	h, err := handler.vs.WriteBytes(context.Background(), b)
-	if err != nil {
-		return nil, err
-	}
-	return h[:], err
-}
-
-func (handler OversizedTypeHandler) DeserializeValue(ctx context.Context, val []byte) (any, error) {
-	firstByte := val[0]
-	if firstByte&128 == 0 {
-		return val[1:], nil
-	}
-	// value is stored out of band
-	h := getOversizedBytes(val)
-	// properly convert this to an int
-	size := readInt64(val[1:9])
-	// TODO: Allow for returning BytesArray, or combine them.
-	return NewTextStorage(hash.New(h), handler.vs).WithMaxByteLength(size), nil
-}
-
-func (handler OversizedTypeHandler) FormatValue(val any) (string, error) {
-	return handler.childHandler.FormatValue(val)
-}
-
-var _ TupleTypeHandler = OversizedTypeHandler{}
-
-*/
-
+// outlineSize computes the size of the value in the tuple if it were outlined.
 func (v ToastValue) outlineSize() int64 {
 	if v.IsOutlined() {
 		return int64(len(v))
 	}
-	blobLength := len(v) - 1                            // Get length without header byte
-	return 1 + headerLengthForBlobSize(blobLength) + 20 // Header byte + variable length + address
+	_, lengthSize := uvarint.Uvarint(v)
+	return int64(lengthSize) + 20 // variable length + address
 }
 
+// inlineSize computes the size of the value in the tuple if it were inlined.
 func (v ToastValue) inlineSize() int64 {
 	if v.isInlined() {
 		return int64(len(v))
 	}
-	// read length of the outlined message and use it to compute the length if this were inlined.
-	blobLength := v.getOversizedOutlinedLength()
-	return 1 + blobLength
+	blobLength := v.getMessageLength()
+	return 1 + blobLength // header + message
 }
 
+// IsNull returns whether this ToastValue represents a NULL value.
 func (v ToastValue) IsNull() bool {
 	return len(v) == 0
 }
 
+// IsOutlined returns whether this ToastValue represents a outlined addressable value.
 func (v ToastValue) IsOutlined() bool {
 	if v.IsNull() {
 		return false
 	}
-	return v[0]&128 != 0
+	return v[0] != 0
 }
 
-// If a conversion is necessary, the converted value will be written into `dest`. This is a performance
+func makeVarInt(x uint64, dest []byte) (bytesWritten int, output []byte) {
+	if dest == nil {
+		dest = make([]byte, 9)
+	}
+	length := uvarint.Encode(dest, x)
+	return length, dest[:length]
+}
+
+// If a conversion is necessary, the converted value will be copied into `dest`. This is a performance
 // optimization when there is a pre-allocated buffer.
-func (v ToastValue) convertToOutline(ctx context.Context, vs ValueStore, buf []byte) (ToastValue, error) {
+func (v ToastValue) convertToOutline(ctx context.Context, vs ValueStore, dest []byte) (ToastValue, error) {
 	if v.IsOutlined() {
 		return v, nil
 	}
-	blob := v[1 : len(v)-1]
-	blobLength := len(blob)
+	if cap(dest) < 29 {
+		dest = make([]byte, 29)
+	}
+	blob := v[1:]
+	blobLength := uint64(len(blob))
+	lengthSize, dest := makeVarInt(blobLength, dest)
 	blobHash, err := vs.WriteBytes(ctx, blob)
 	if err != nil {
 		return nil, err
 	}
-	dest := buf[len(buf):]
 
-	outputSize := 1 + 8 + 20
-	if cap(dest) < outputSize {
-		dest = make([]byte, outputSize)
-	}
-	dest[0] = 128
-	writeInt64(dest[1:9], int64(blobLength))
-	copy(dest[9:29], blobHash[:])
+	dest = append(dest[:lengthSize], blobHash[:]...)
 	return dest, nil
 }
 
+// isInlined returns whether this ToastValue represents an inlined value.
 func (v ToastValue) isInlined() bool {
 	if v.IsNull() {
 		return false
 	}
-	return v[0]&128 == 0
+	return v[0] == 0
 }
 
 // If a conversion is necessary, the converted value will be written into `dest`. This is a performance
 // optimization when there is a pre-allocated buffer.
-func (v ToastValue) convertToInline(ctx context.Context, vs ValueStore, buf []byte) (ToastValue, error) {
+func (v ToastValue) convertToInline(ctx context.Context, vs ValueStore, dest []byte) (ToastValue, error) {
 	if v.isInlined() {
 		return v, nil
 	}
-	// blobLength := readInt64(bytes[1:9])
-	addr := v[9:29]
+	_, lengthBytes := uvarint.Uvarint(v)
+	addr := v[lengthBytes:]
 	blob, err := vs.ReadBytes(ctx, hash.New(addr))
 	if err != nil {
 		return nil, err
 	}
-	dest := buf[len(buf):]
 	outputSize := 1 + len(blob)
 	if cap(dest) < outputSize {
 		dest = make([]byte, outputSize)
 	}
+	dest = dest[:1]
 	dest[0] = 0
 	dest = append(dest, blob...)
 	return dest, nil
@@ -978,8 +897,8 @@ func (v ToastValue) convertToBytes(ctx context.Context, vs ValueStore, buf []byt
 	if err != nil {
 		return nil, err
 	}
-	// Remove header byte and null terminator.
-	return inlineValue[1 : len(inlineValue)-1], nil
+	// Remove header byte
+	return inlineValue[1:], nil
 }
 
 func (v ToastValue) convertToByteArray(ctx context.Context, vs ValueStore, buf []byte) (*ByteArray, error) {
@@ -988,13 +907,13 @@ func (v ToastValue) convertToByteArray(ctx context.Context, vs ValueStore, buf [
 	if err != nil {
 		return &ByteArray{}, err
 	}
-	address := hash.New(outlineValue[9:29])
-	length := readInt64(outlineValue[1:9])
+	length := outlineValue.getMessageLength()
+	address := hash.New(outlineValue[length:])
 	return NewByteArray(address, vs).WithMaxByteLength(length), nil
 }
 
 func (v ToastValue) convertToTextStorage(ctx context.Context, vs ValueStore, buf []byte) (*TextStorage, error) {
-	// Only outlined values can be converted to a ByteArray
+	// Only outlined values can be converted to a TextStorage
 	outlineValue, err := v.convertToOutline(ctx, vs, buf)
 	if err != nil {
 		return &TextStorage{}, err
