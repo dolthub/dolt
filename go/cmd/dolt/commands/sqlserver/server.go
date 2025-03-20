@@ -55,7 +55,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/cluster"
 	_ "github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statspro"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqlserver"
 	"github.com/dolthub/dolt/go/libraries/events"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
@@ -267,19 +266,6 @@ func ConfigureServices(
 		},
 	}
 	controller.Register(InitEventSchedulerStatus)
-
-	InitStatsController := &svcs.AnonService{
-		InitF: func(context.Context) error {
-			_, enabled, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsEnabled)
-			if enabled.(int8) == 1 {
-				config.StatsController = statspro.NewStatsController(lgr, mrEnv.GetEnv(mrEnv.GetFirstDatabase()))
-			} else {
-				config.StatsController = statspro.StatsNoop{}
-			}
-			return nil
-		},
-	}
-	controller.Register(InitStatsController)
 
 	InitAutoGCController := &svcs.AnonService{
 		InitF: func(context.Context) error {

@@ -212,6 +212,13 @@ func NewSqlEngine(
 		dprocedures.UseSessionAwareSafepointController = true
 	}
 
+	_, enabled, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsEnabled)
+	if enabled.(int8) == 1 {
+		config.StatsController = statspro.NewStatsController(logrus.StandardLogger(), mrEnv.GetEnv(mrEnv.GetFirstDatabase()))
+	} else {
+		config.StatsController = statspro.StatsNoop{}
+	}
+	
 	engine.Analyzer.ExecBuilder = rowexec.NewOverrideBuilder(kvexec.Builder{})
 	sessFactory := doltSessionFactory(pro, config.StatsController, mrEnv.Config(), bcController, gcSafepointController, config.Autocommit)
 	sqlEngine.provider = pro
@@ -232,11 +239,6 @@ func NewSqlEngine(
 
 	// configuring stats depends on sessionBuilder
 	// sessionBuilder needs ref to statsProv
-	if config.StatsController == nil {
-		engine.Analyzer.Catalog.StatsProvider = statspro.StatsNoop{}
-	} else {
-		engine.Analyzer.Catalog.StatsProvider = config.StatsController
-	}
 	if sc, ok := config.StatsController.(*statspro.StatsController); ok {
 		_, memOnly, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsMemoryOnly)
 		sc.SetMemOnly(memOnly.(int8) == 1)
