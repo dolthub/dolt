@@ -173,6 +173,26 @@ func TestRoundTripProllyFields(t *testing.T) {
 			typ:   val.Type{Enc: val.BytesAddrEnc},
 			value: []byte("lorem ipsum"),
 		},
+		{
+			name:  "binary toast short",
+			typ:   val.Type{Enc: val.BytesToastEnc},
+			value: []byte("lorem ipsum"),
+		},
+		{
+			name:  "binary toast long",
+			typ:   val.Type{Enc: val.BytesToastEnc},
+			value: make([]byte, (1 << 12)),
+		},
+		{
+			name:  "string toast short",
+			typ:   val.Type{Enc: val.StringToastEnc},
+			value: "lorem ipsum",
+		},
+		{
+			name:  "binary toast long",
+			typ:   val.Type{Enc: val.StringToastEnc},
+			value: string(make([]byte, (1 << 12))),
+		},
 	}
 
 	for _, test := range tests {
@@ -200,8 +220,18 @@ func testRoundTripProllyFields(t *testing.T, test prollyFieldTest) {
 	v, err = sql.UnwrapAny(context.Background(), v)
 	assert.NoError(t, err)
 
+	if js, ok := v.(sql.JSONWrapper); ok {
+		v, err = js.ToInterface()
+		require.NoError(t, err)
+	}
+
 	expectedValue, err := sql.UnwrapAny(context.Background(), test.value)
 	assert.NoError(t, err)
+
+	if js, ok := expectedValue.(sql.JSONWrapper); ok {
+		expectedValue, err = js.ToInterface()
+		require.NoError(t, err)
+	}
 
 	assert.Equal(t, expectedValue, v)
 
