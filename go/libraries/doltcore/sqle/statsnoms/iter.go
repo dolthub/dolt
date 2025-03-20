@@ -38,9 +38,9 @@ func NewStatsIter(ctx *sql.Context, schemaName string, m prolly.Map) (*statsIter
 		return nil, err
 	}
 	kd, vd := m.Descriptors()
-	keyBuilder := val.NewTupleBuilder(kd)
-	valueBuilder := val.NewTupleBuilder(vd)
 	ns := m.NodeStore()
+	keyBuilder := val.NewTupleBuilder(kd, ns)
+	valueBuilder := val.NewTupleBuilder(vd, ns)
 
 	return &statsIter{
 		iter:       iter,

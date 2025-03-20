@@ -45,7 +45,7 @@ func prollyParentSecDiffFkConstraintViolations(
 
 	parentSecKD, _ := postParentSecIdx.Descriptors()
 	parentPrefixKD := parentSecKD.PrefixDesc(len(foreignKey.TableColumns))
-	partialKB := val.NewTupleBuilder(parentPrefixKD)
+	partialKB := val.NewTupleBuilder(parentPrefixKD, postParentRowData.NodeStore())
 
 	childPriIdx := durable.ProllyMapFromIndex(postChild.RowData)
 	childPriKD, _ := childPriIdx.Descriptors()
@@ -100,7 +100,7 @@ func prollyParentPriDiffFkConstraintViolations(
 
 	idxDesc, _ := postParentIndexData.Descriptors()
 	partialDesc := idxDesc.PrefixDesc(len(foreignKey.TableColumns))
-	partialKB := val.NewTupleBuilder(partialDesc)
+	partialKB := val.NewTupleBuilder(partialDesc, postParentRowData.NodeStore())
 
 	childPriIdx := durable.ProllyMapFromIndex(postChild.RowData)
 	childScndryIdx := durable.ProllyMapFromIndex(postChild.IndexData)
@@ -164,7 +164,7 @@ func prollyChildPriDiffFkConstraintViolations(
 
 	idxDesc, _ := parentScndryIdx.Descriptors()
 	partialDesc := idxDesc.PrefixDesc(len(foreignKey.TableColumns))
-	partialKB := val.NewTupleBuilder(partialDesc)
+	partialKB := val.NewTupleBuilder(partialDesc, postChildRowData.NodeStore())
 
 	// TODO: Determine whether we should surface every row as a diff when the map's value descriptor has changed.
 	considerAllRowsModified := false
@@ -214,7 +214,7 @@ func prollyChildSecDiffFkConstraintViolations(
 	parentSecIdxDesc, _ := parentSecIdx.Descriptors()
 	prefixDesc := parentSecIdxDesc.PrefixDesc(len(foreignKey.TableColumns))
 	childPriKD, _ := postChildRowData.Descriptors()
-	childPriKB := val.NewTupleBuilder(childPriKD)
+	childPriKB := val.NewTupleBuilder(childPriKD, preChildSecIdx.NodeStore())
 
 	// TODO: Determine whether we should surface every row as a diff when the map's value descriptor has changed.
 	considerAllRowsModified := false
@@ -316,7 +316,7 @@ func createCVsForPartialKeyMatches(
 		return err
 	}
 
-	kb := val.NewTupleBuilder(primaryKD)
+	kb := val.NewTupleBuilder(primaryKD, primaryIdx.NodeStore())
 
 	for k, _, err := itr.Next(ctx); err == nil; k, _, err = itr.Next(ctx) {
 

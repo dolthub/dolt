@@ -251,7 +251,7 @@ func (b *ProximityMapBuilder) Insert(ctx context.Context, key, value []byte) err
 	// 255 - the actual level.
 
 	// In the future, if MutableMap supports a ReverseIter function, we can use that instead.
-	levelMapKeyBuilder := val.NewTupleBuilder(proximitylevelMapKeyDesc)
+	levelMapKeyBuilder := val.NewTupleBuilder(proximitylevelMapKeyDesc, b.ns)
 	levelMapKeyBuilder.PutUint8(0, 255-keyLevel)
 	levelMapKeyBuilder.PutByteString(1, key)
 	return b.levelMap.Put(ctx, levelMapKeyBuilder.Build(b.ns.Pool()), value)
@@ -273,7 +273,7 @@ func (b *ProximityMapBuilder) InsertAtLevel(ctx context.Context, key, value []by
 	if keyLevel > b.maxLevel {
 		b.maxLevel = keyLevel
 	}
-	levelMapKeyBuilder := val.NewTupleBuilder(proximitylevelMapKeyDesc)
+	levelMapKeyBuilder := val.NewTupleBuilder(proximitylevelMapKeyDesc, b.ns)
 	levelMapKeyBuilder.PutUint8(0, 255-keyLevel)
 	levelMapKeyBuilder.PutByteString(1, key)
 	return b.levelMap.Put(ctx, levelMapKeyBuilder.Build(b.ns.Pool()), value)
@@ -467,8 +467,8 @@ func (b *ProximityMapBuilder) createInitialPathMaps(ctx context.Context, maxLeve
 
 	emptyPathMap, err := NewMapFromTuples(ctx, b.ns, pathMapKeyDesc, b.valDesc)
 
-	keyTupleBuilder = val.NewTupleBuilder(pathMapKeyDesc)
-	prefixTupleBuilder = val.NewTupleBuilder(val.NewTupleDescriptor(pathMapKeyDescTypes[0]))
+	keyTupleBuilder = val.NewTupleBuilder(pathMapKeyDesc, b.ns)
+	prefixTupleBuilder = val.NewTupleBuilder(val.NewTupleDescriptor(pathMapKeyDescTypes[0]), b.ns)
 
 	for i := uint8(0); i <= maxLevel; i++ {
 

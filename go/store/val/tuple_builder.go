@@ -15,6 +15,8 @@
 package val
 
 import (
+	"context"
+	"fmt"
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql/analyzer/analyzererrors"
@@ -58,18 +60,26 @@ func (om OrdinalMapping) IsIdentityMapping() bool {
 	return true
 }
 
+var defaultTupleLengthTarget int64 = (1 << 11)
+
 type TupleBuilder struct {
-	Desc   TupleDesc
-	fields [][]byte
-	buf    []byte
-	pos    ByteSize
+	Desc              TupleDesc
+	fields            [][]byte
+	buf               []byte
+	pos               int64
+	tupleLengthTarget int64 // The max tuple length before the tuple builder attempts to outline values.
+	outlineSize       int64 // The size of the tuple if every oversized type is outlined
+	inlineSize        int64 // The size of the tuple if every oversized type is inlined
+	vs                ValueStore
 }
 
-func NewTupleBuilder(desc TupleDesc) *TupleBuilder {
+func NewTupleBuilder(desc TupleDesc, vs ValueStore) *TupleBuilder {
 	return &TupleBuilder{
-		Desc:   desc,
-		fields: make([][]byte, len(desc.Types)),
-		buf:    make([]byte, builderBufferSize),
+		Desc:              desc,
+		fields:            make([][]byte, len(desc.Types)),
+		buf:               make([]byte, builderBufferSize),
+		vs:                vs,
+		tupleLengthTarget: defaultTupleLengthTarget,
 	}
 }
 
@@ -80,12 +90,68 @@ func (tb *TupleBuilder) Build(pool pool.BuffPool) (tup Tuple) {
 			panic("cannot write NULL to non-NULL field")
 		}
 	}
-	return tb.BuildPermissive(pool)
+	return tb.BuildPermissive(pool, tb.vs)
 }
 
 // BuildPermissive materializes a Tuple from the fields
 // written to the TupleBuilder without validating nullability.
-func (tb *TupleBuilder) BuildPermissive(pool pool.BuffPool) (tup Tuple) {
+func (tb *TupleBuilder) BuildPermissive(pool pool.BuffPool, vs ValueStore) (tup Tuple) {
+	// DO NOT SUBMIT: add context parameter
+	ctx := context.Background()
+	// Values may get passed into the tuple builder in either in-band or out-of-band form.
+	// In the best case, we don't need to convert either of them. But we need to track the sizes.
+
+	// We need to determine which TOAST fields get written out, and pass the addresses in instead. This is the only
+	// place where we break encapsulation.
+	// Track the total packed and unpacked size?
+	totalSize := tb.inlineSize
+	if totalSize > tb.tupleLengthTarget {
+		// start allocating to toast fields until we get below the size.
+		// do this in a way that doesn't require the full field.
+		for i, descType := range tb.Desc.Types {
+			if IsToastEncoding(descType.Enc) {
+				toastValue := ToastValue(tb.fields[i])
+				outlineSize := toastValue.outlineSize()
+				inlineSize := toastValue.inlineSize()
+
+				if outlineSize < inlineSize {
+					// outline this field.
+					if !toastValue.IsOutlined() {
+						// This isn't correct. Can we avoid the extra copy cleanly? If not, don't prematurely optimize.
+						outline, err := toastValue.convertToOutline(ctx, tb.vs, nil)
+						if err != nil {
+							// TODO: return error
+							return nil
+						}
+						tb.PutRaw(i, outline)
+					}
+
+					totalSize += outlineSize - inlineSize
+				}
+			}
+
+			if totalSize <= int64(MaxTupleDataSize) {
+				// We have enough space, mark all the remaining columns as inline
+				for j, descType := range tb.Desc.Types[i+1:] {
+					if IsToastEncoding(descType.Enc) {
+						toastValue := ToastValue(tb.fields[j+i+1])
+						if !toastValue.isInlined() {
+							inline, err := toastValue.convertToInline(ctx, tb.vs, nil)
+							if err != nil {
+								return nil
+							}
+							tb.PutRaw(j+i+1, inline)
+						}
+					}
+				}
+				break
+			}
+		}
+
+	}
+	if totalSize > int64(MaxTupleDataSize) {
+		// Outlining failed to reduce the tuple size enough. Is this possible?
+	}
 	values := tb.fields[:tb.Desc.Count()]
 	tup = NewTuple(pool, values...)
 	tb.Recycle()
@@ -126,170 +192,196 @@ func (tb *TupleBuilder) Recycle() {
 	tb.pos = 0
 }
 
+func (tb *TupleBuilder) addSize(sz ByteSize) {
+	tb.inlineSize += int64(sz)
+	tb.outlineSize += int64(sz)
+}
+
 // PutBool writes a bool to the ith field of the Tuple being built.
 func (tb *TupleBuilder) PutBool(i int, v bool) {
 	tb.Desc.expectEncoding(i, Int8Enc)
 	tb.ensureCapacity(int8Size)
-	tb.fields[i] = tb.buf[tb.pos : tb.pos+int8Size]
+	tb.fields[i] = tb.buf[tb.pos : tb.pos+int64(int8Size)]
 	writeBool(tb.fields[i], v)
-	tb.pos += int8Size
+	tb.pos += int64(int8Size)
+	tb.addSize(int8Size)
 }
 
 // PutInt8 writes an int8 to the ith field of the Tuple being built.
 func (tb *TupleBuilder) PutInt8(i int, v int8) {
 	tb.Desc.expectEncoding(i, Int8Enc)
 	tb.ensureCapacity(int8Size)
-	tb.fields[i] = tb.buf[tb.pos : tb.pos+int8Size]
+	tb.fields[i] = tb.buf[tb.pos : tb.pos+int64(int8Size)]
 	writeInt8(tb.fields[i], v)
-	tb.pos += int8Size
+	tb.pos += int64(int8Size)
+	tb.addSize(int8Size)
 }
 
 // PutUint8 writes a uint8 to the ith field of the Tuple being built.
 func (tb *TupleBuilder) PutUint8(i int, v uint8) {
 	tb.Desc.expectEncoding(i, Uint8Enc)
 	tb.ensureCapacity(uint8Size)
-	tb.fields[i] = tb.buf[tb.pos : tb.pos+uint8Size]
+	tb.fields[i] = tb.buf[tb.pos : tb.pos+int64(1)]
 	writeUint8(tb.fields[i], v)
-	tb.pos += uint8Size
+	tb.pos += int64(uint8Size)
+	tb.addSize(int8Size)
 }
 
 // PutInt16 writes an int16 to the ith field of the Tuple being built.
 func (tb *TupleBuilder) PutInt16(i int, v int16) {
 	tb.Desc.expectEncoding(i, Int16Enc)
 	tb.ensureCapacity(int16Size)
-	tb.fields[i] = tb.buf[tb.pos : tb.pos+int16Size]
+	tb.fields[i] = tb.buf[tb.pos : tb.pos+int64(int16Size)]
 	writeInt16(tb.fields[i], v)
-	tb.pos += int16Size
+	tb.pos += int64(int16Size)
+	tb.addSize(int16Size)
 }
 
 // PutUint16 writes a uint16 to the ith field of the Tuple being built.
 func (tb *TupleBuilder) PutUint16(i int, v uint16) {
 	tb.Desc.expectEncoding(i, Uint16Enc)
 	tb.ensureCapacity(uint16Size)
-	tb.fields[i] = tb.buf[tb.pos : tb.pos+uint16Size]
+	tb.fields[i] = tb.buf[tb.pos : tb.pos+int64(uint16Size)]
 	WriteUint16(tb.fields[i], v)
-	tb.pos += uint16Size
+	tb.pos += int64(uint16Size)
+	tb.addSize(int16Size)
 }
 
 // PutInt32 writes an int32 to the ith field of the Tuple being built.
 func (tb *TupleBuilder) PutInt32(i int, v int32) {
 	tb.Desc.expectEncoding(i, Int32Enc)
 	tb.ensureCapacity(int32Size)
-	tb.fields[i] = tb.buf[tb.pos : tb.pos+int32Size]
+	tb.fields[i] = tb.buf[tb.pos : tb.pos+int64(int32Size)]
 	writeInt32(tb.fields[i], v)
-	tb.pos += int32Size
+	tb.pos += int64(int32Size)
+	tb.addSize(int32Size)
 }
 
 // PutUint32 writes a uint32 to the ith field of the Tuple being built.
 func (tb *TupleBuilder) PutUint32(i int, v uint32) {
 	tb.Desc.expectEncoding(i, Uint32Enc)
 	tb.ensureCapacity(uint32Size)
-	tb.fields[i] = tb.buf[tb.pos : tb.pos+uint32Size]
+	tb.fields[i] = tb.buf[tb.pos : tb.pos+int64(uint32Size)]
 	writeUint32(tb.fields[i], v)
-	tb.pos += uint32Size
+	tb.pos += int64(uint32Size)
+	tb.addSize(int32Size)
 }
 
 // PutInt64 writes an int64 to the ith field of the Tuple being built.
 func (tb *TupleBuilder) PutInt64(i int, v int64) {
 	tb.Desc.expectEncoding(i, Int64Enc)
 	tb.ensureCapacity(int64Size)
-	tb.fields[i] = tb.buf[tb.pos : tb.pos+int64Size]
+	tb.fields[i] = tb.buf[tb.pos : tb.pos+int64(int64Size)]
 	writeInt64(tb.fields[i], v)
-	tb.pos += int64Size
+	tb.pos += int64(int64Size)
+	tb.addSize(int64Size)
 }
 
 // PutUint64 writes a uint64 to the ith field of the Tuple being built.
 func (tb *TupleBuilder) PutUint64(i int, v uint64) {
 	tb.Desc.expectEncoding(i, Uint64Enc)
 	tb.ensureCapacity(uint64Size)
-	tb.fields[i] = tb.buf[tb.pos : tb.pos+uint64Size]
+	tb.fields[i] = tb.buf[tb.pos : tb.pos+int64(uint64Size)]
 	writeUint64(tb.fields[i], v)
-	tb.pos += uint64Size
+	tb.pos += int64(uint64Size)
+	tb.addSize(int64Size)
 }
 
 // PutFloat32 writes a float32 to the ith field of the Tuple being built.
 func (tb *TupleBuilder) PutFloat32(i int, v float32) {
 	tb.Desc.expectEncoding(i, Float32Enc)
 	tb.ensureCapacity(float32Size)
-	tb.fields[i] = tb.buf[tb.pos : tb.pos+float32Size]
+	tb.fields[i] = tb.buf[tb.pos : tb.pos+int64(float32Size)]
 	writeFloat32(tb.fields[i], v)
-	tb.pos += float32Size
+	tb.pos += int64(float32Size)
+	tb.addSize(float32Size)
 }
 
 // PutFloat64 writes a float64 to the ith field of the Tuple being built.
 func (tb *TupleBuilder) PutFloat64(i int, v float64) {
 	tb.Desc.expectEncoding(i, Float64Enc)
 	tb.ensureCapacity(float64Size)
-	tb.fields[i] = tb.buf[tb.pos : tb.pos+float64Size]
+	tb.fields[i] = tb.buf[tb.pos : tb.pos+int64(float64Size)]
 	writeFloat64(tb.fields[i], v)
-	tb.pos += float64Size
+	tb.pos += int64(float64Size)
+	tb.addSize(float64Size)
 }
 
 func (tb *TupleBuilder) PutBit(i int, v uint64) {
 	tb.Desc.expectEncoding(i, Bit64Enc)
 	tb.ensureCapacity(bit64Size)
-	tb.fields[i] = tb.buf[tb.pos : tb.pos+bit64Size]
+	tb.fields[i] = tb.buf[tb.pos : tb.pos+int64(bit64Size)]
 	writeBit64(tb.fields[i], v)
-	tb.pos += bit64Size
+	tb.pos += int64(bit64Size)
+	tb.addSize(bit64Size)
 }
 
 func (tb *TupleBuilder) PutDecimal(i int, v decimal.Decimal) {
 	tb.Desc.expectEncoding(i, DecimalEnc)
 	sz := sizeOfDecimal(v)
 	tb.ensureCapacity(sz)
-	tb.fields[i] = tb.buf[tb.pos : tb.pos+sz]
+	tb.fields[i] = tb.buf[tb.pos : tb.pos+int64(sz)]
 	writeDecimal(tb.fields[i], v)
-	tb.pos += sz
+	tb.pos += int64(sz)
+	tb.addSize(sz)
 }
 
 // PutYear writes an int16-encoded year to the ith field of the Tuple being built.
 func (tb *TupleBuilder) PutYear(i int, v int16) {
 	tb.Desc.expectEncoding(i, YearEnc)
 	tb.ensureCapacity(yearSize)
-	tb.fields[i] = tb.buf[tb.pos : tb.pos+yearSize]
+	tb.fields[i] = tb.buf[tb.pos : tb.pos+int64(yearSize)]
 	writeYear(tb.fields[i], v)
-	tb.pos += int16Size
+	tb.pos += int64(int16Size)
+	tb.addSize(int16Size)
 }
 
 func (tb *TupleBuilder) PutDate(i int, v time.Time) {
 	tb.Desc.expectEncoding(i, DateEnc)
 	tb.ensureCapacity(dateSize)
-	tb.fields[i] = tb.buf[tb.pos : tb.pos+dateSize]
+	tb.fields[i] = tb.buf[tb.pos : tb.pos+int64(dateSize)]
 	writeDate(tb.fields[i], v)
-	tb.pos += dateSize
+	tb.pos += int64(dateSize)
+	tb.addSize(dateSize)
 }
 
 // PutSqlTime writes a string to the ith field of the Tuple being built.
 func (tb *TupleBuilder) PutSqlTime(i int, v int64) {
 	tb.Desc.expectEncoding(i, TimeEnc)
 	tb.ensureCapacity(timeSize)
-	tb.fields[i] = tb.buf[tb.pos : tb.pos+timeSize]
+	tb.fields[i] = tb.buf[tb.pos : tb.pos+int64(timeSize)]
 	writeTime(tb.fields[i], v)
-	tb.pos += timeSize
+	tb.pos += int64(timeSize)
+	tb.addSize(timeSize)
 }
 
 func (tb *TupleBuilder) PutDatetime(i int, v time.Time) {
 	tb.Desc.expectEncoding(i, DatetimeEnc)
 	tb.ensureCapacity(datetimeSize)
-	tb.fields[i] = tb.buf[tb.pos : tb.pos+datetimeSize]
+	tb.fields[i] = tb.buf[tb.pos : tb.pos+int64(datetimeSize)]
 	writeDatetime(tb.fields[i], v)
-	tb.pos += datetimeSize
+	tb.pos += int64(datetimeSize)
+	tb.addSize(datetimeSize)
 }
 
 func (tb *TupleBuilder) PutEnum(i int, v uint16) {
 	tb.Desc.expectEncoding(i, EnumEnc)
 	tb.ensureCapacity(enumSize)
-	tb.fields[i] = tb.buf[tb.pos : tb.pos+enumSize]
+	tb.fields[i] = tb.buf[tb.pos : tb.pos+int64(enumSize)]
 	writeEnum(tb.fields[i], v)
-	tb.pos += enumSize
+	tb.pos += int64(enumSize)
+	tb.addSize(enumSize)
+
 }
 
 func (tb *TupleBuilder) PutSet(i int, v uint64) {
 	tb.Desc.expectEncoding(i, SetEnc)
 	tb.ensureCapacity(setSize)
-	tb.fields[i] = tb.buf[tb.pos : tb.pos+setSize]
+	tb.fields[i] = tb.buf[tb.pos : tb.pos+int64(setSize)]
 	writeSet(tb.fields[i], v)
-	tb.pos += setSize
+	tb.pos += int64(setSize)
+	tb.addSize(setSize)
+
 }
 
 // PutString writes a string to the ith field of the Tuple being built.
@@ -304,9 +396,10 @@ func (tb *TupleBuilder) PutString(i int, v string) error {
 		return analyzererrors.ErrInvalidRowLength.New(MaxTupleDataSize, int(tb.pos)+len(v)+int(offsetsSize(i)))
 	}
 	tb.ensureCapacity(sz)
-	tb.fields[i] = tb.buf[tb.pos : tb.pos+sz]
+	tb.fields[i] = tb.buf[tb.pos : tb.pos+int64(sz)]
 	writeString(tb.fields[i], v)
-	tb.pos += sz
+	tb.pos += int64(sz)
+	tb.addSize(sz)
 	return nil
 }
 
@@ -315,9 +408,10 @@ func (tb *TupleBuilder) PutByteString(i int, v []byte) {
 	tb.Desc.expectEncoding(i, ByteStringEnc)
 	sz := ByteSize(len(v)) + 1
 	tb.ensureCapacity(sz)
-	tb.fields[i] = tb.buf[tb.pos : tb.pos+sz]
+	tb.fields[i] = tb.buf[tb.pos : tb.pos+int64(sz)]
 	writeByteString(tb.fields[i], v)
-	tb.pos += sz
+	tb.pos += int64(sz)
+	tb.addSize(sz)
 }
 
 // PutJSON writes a []byte to the ith field of the Tuple being built.
@@ -325,9 +419,10 @@ func (tb *TupleBuilder) PutJSON(i int, v []byte) {
 	tb.Desc.expectEncoding(i, JSONEnc)
 	sz := ByteSize(len(v)) + 1
 	tb.ensureCapacity(sz)
-	tb.fields[i] = tb.buf[tb.pos : tb.pos+sz]
+	tb.fields[i] = tb.buf[tb.pos : tb.pos+int64(sz)]
 	writeByteString(tb.fields[i], v)
-	tb.pos += sz
+	tb.pos += int64(sz)
+	tb.addSize(sz)
 }
 
 // PutGeometry writes a []byte to the ith field of the Tuple being built.
@@ -335,9 +430,10 @@ func (tb *TupleBuilder) PutGeometry(i int, v []byte) {
 	tb.Desc.expectEncoding(i, GeometryEnc)
 	sz := ByteSize(len(v)) + 1
 	tb.ensureCapacity(sz)
-	tb.fields[i] = tb.buf[tb.pos : tb.pos+sz]
+	tb.fields[i] = tb.buf[tb.pos : tb.pos+int64(sz)]
 	writeByteString(tb.fields[i], v)
-	tb.pos += sz
+	tb.pos += int64(sz)
+	tb.addSize(sz)
 }
 
 // PutGeometryAddr writes a Geometry's address ref to the ith field
@@ -351,9 +447,10 @@ func (tb *TupleBuilder) PutGeometryAddr(i int, v hash.Hash) {
 func (tb *TupleBuilder) PutHash128(i int, v []byte) {
 	tb.Desc.expectEncoding(i, Hash128Enc)
 	tb.ensureCapacity(hash128Size)
-	tb.fields[i] = tb.buf[tb.pos : tb.pos+hash128Size]
+	tb.fields[i] = tb.buf[tb.pos : tb.pos+int64(hash128Size)]
 	writeHash128(tb.fields[i], v)
-	tb.pos += hash128Size
+	tb.pos += int64(hash128Size)
+	tb.addSize(hash128Size)
 }
 
 // PutExtended writes a []byte to the ith field of the Tuple being built.
@@ -361,9 +458,10 @@ func (tb *TupleBuilder) PutExtended(i int, v []byte) {
 	tb.Desc.expectEncoding(i, ExtendedEnc)
 	sz := ByteSize(len(v))
 	tb.ensureCapacity(sz)
-	tb.fields[i] = tb.buf[tb.pos : tb.pos+sz]
+	tb.fields[i] = tb.buf[tb.pos : tb.pos+int64(sz)]
 	writeExtended(tb.Desc.Handlers[i], tb.fields[i], v)
-	tb.pos += sz
+	tb.pos += int64(sz)
+	tb.addSize(sz)
 }
 
 // PutExtendedAddr writes a []byte to the ith field of the Tuple being built.
@@ -382,9 +480,10 @@ func (tb *TupleBuilder) PutRaw(i int, buf []byte) {
 	}
 	sz := ByteSize(len(buf))
 	tb.ensureCapacity(sz)
-	tb.fields[i] = tb.buf[tb.pos : tb.pos+sz]
+	tb.fields[i] = tb.buf[tb.pos : tb.pos+int64(sz)]
 	writeRaw(tb.fields[i], buf)
-	tb.pos += sz
+	tb.pos += int64(sz)
+	tb.addSize(sz)
 }
 
 // PutCommitAddr writes a commit's address ref to the ith field
@@ -420,13 +519,14 @@ func (tb *TupleBuilder) PutJSONAddr(i int, v hash.Hash) {
 }
 
 func (tb *TupleBuilder) putAddr(i int, v hash.Hash) {
-	tb.fields[i] = tb.buf[tb.pos : tb.pos+hash.ByteLen]
+	tb.fields[i] = tb.buf[tb.pos : tb.pos+int64(hash.ByteLen)]
 	writeAddr(tb.fields[i], v[:])
-	tb.pos += hash.ByteLen
+	tb.pos += int64(hash.ByteLen)
+	tb.addSize(hash.ByteLen)
 }
 
 func (tb *TupleBuilder) ensureCapacity(sz ByteSize) {
-	need := int(tb.pos+sz) - len(tb.buf)
+	need := int(tb.pos+int64(sz)) - len(tb.buf)
 	if need > 0 {
 		for i := 0; i < need; i++ {
 			tb.buf = append(tb.buf, byte(0))
@@ -438,7 +538,80 @@ func (tb *TupleBuilder) ensureCapacity(sz ByteSize) {
 func (tb *TupleBuilder) PutCell(i int, v Cell) {
 	tb.Desc.expectEncoding(i, CellEnc)
 	tb.ensureCapacity(cellSize)
-	tb.fields[i] = tb.buf[tb.pos : tb.pos+cellSize]
+	tb.fields[i] = tb.buf[tb.pos : tb.pos+int64(cellSize)]
 	writeCell(tb.fields[i], v)
-	tb.pos += cellSize
+	tb.pos += int64(cellSize)
+	tb.addSize(cellSize)
+}
+
+// TODO: If a addr field gets copied to a toast field we won't know the size initially
+
+func (tb *TupleBuilder) PutToastBytesFromInline(i int, v []byte) error {
+	// TODO: Add context
+	tb.Desc.expectEncoding(i, BytesToastEnc)
+	if len(v) > int(MaxTupleDataSize) {
+		return fmt.Errorf("byte array too large to fit inline (%d > %d). This shouldn't happen", len(v), MaxTupleDataSize)
+	}
+	sz := ByteSize(len(v)) + 2 // header byte, plus null terminator?
+	tb.ensureCapacity(sz)
+	field := ToastValue(tb.buf[tb.pos : tb.pos+int64(sz)])
+	tb.fields[i] = field
+	field[0] = 0 // Mark this as inline
+	writeByteString(field[1:], v)
+	tb.pos += int64(sz)
+	tb.inlineSize += int64(sz)
+	tb.outlineSize += field.outlineSize()
+	return nil
+}
+
+func (tb *TupleBuilder) PutToastStringFromInline(i int, v string) error {
+	// TODO: Add context
+	tb.Desc.expectEncoding(i, StringToastEnc)
+	if len(v) > int(MaxTupleDataSize) {
+		return fmt.Errorf("byte array too large to fit inline (%d > %d). This shouldn't happen", len(v), MaxTupleDataSize)
+	}
+	sz := ByteSize(len(v)) + 2 // header byte, plus null terminator?
+	tb.ensureCapacity(sz)
+	field := ToastValue(tb.buf[tb.pos : tb.pos+int64(sz)])
+	tb.fields[i] = field
+	field[0] = 0 // Mark this as inline
+	writeByteString(field[1:], []byte(v))
+	tb.pos += int64(sz)
+	tb.inlineSize += int64(sz)
+	tb.outlineSize += field.outlineSize()
+	return nil
+}
+
+func (tb *TupleBuilder) PutToastBytesFromOutline(i int, v *ByteArray) {
+	tb.Desc.expectEncoding(i, BytesToastEnc)
+	// TODO: What's the correct size?
+	sz := ByteSize(29)
+	tb.ensureCapacity(sz)
+	field := tb.buf[tb.pos : tb.pos+int64(sz)]
+	tb.fields[i] = field
+	field[0] = 128
+	// TODO: If this came from a address type we don't know the size.
+	bytesLength := v.MaxByteLength()
+	writeInt64(field[1:9], bytesLength)
+	writeAddr(field[9:29], v.Addr[:])
+	tb.pos += int64(sz)
+	tb.inlineSize += 2 + bytesLength // header byte + null terminator
+	tb.outlineSize += int64(sz)
+}
+
+func (tb *TupleBuilder) PutToastStringFromOutline(i int, v *TextStorage) {
+	tb.Desc.expectEncoding(i, StringToastEnc)
+	// TODO: What's the correct size?
+	sz := ByteSize(29)
+	tb.ensureCapacity(sz)
+	field := tb.buf[tb.pos : tb.pos+int64(sz)]
+	tb.fields[i] = field
+	field[0] = 128
+	// TODO: If this came from a address type we don't know the size.
+	bytesLength := v.MaxByteLength()
+	writeInt64(field[1:9], bytesLength)
+	writeAddr(field[9:29], v.Addr[:])
+	tb.pos += int64(sz)
+	tb.inlineSize += 2 + bytesLength // header byte + null terminator
+	tb.outlineSize += int64(sz)
 }

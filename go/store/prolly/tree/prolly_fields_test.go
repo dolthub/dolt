@@ -173,6 +173,26 @@ func TestRoundTripProllyFields(t *testing.T) {
 			typ:   val.Type{Enc: val.BytesAddrEnc},
 			value: []byte("lorem ipsum"),
 		},
+		{
+			name:  "binary toast short",
+			typ:   val.Type{Enc: val.BytesToastEnc},
+			value: []byte("lorem ipsum"),
+		},
+		{
+			name:  "binary toast long",
+			typ:   val.Type{Enc: val.BytesToastEnc},
+			value: make([]byte, (1 << 12)),
+		},
+		{
+			name:  "string toast short",
+			typ:   val.Type{Enc: val.StringToastEnc},
+			value: "lorem ipsum",
+		},
+		{
+			name:  "binary toast long",
+			typ:   val.Type{Enc: val.StringToastEnc},
+			value: string(make([]byte, (1 << 12))),
+		},
 	}
 
 	for _, test := range tests {
@@ -186,8 +206,8 @@ var testPool = pool.NewBuffPool()
 
 func testRoundTripProllyFields(t *testing.T, test prollyFieldTest) {
 	desc := val.NewTupleDescriptor(test.typ)
-	builder := val.NewTupleBuilder(desc)
 	ns := NewTestNodeStore()
+	builder := val.NewTupleBuilder(desc, ns)
 
 	err := PutField(context.Background(), ns, builder, 0, test.value)
 	assert.NoError(t, err)
@@ -196,19 +216,25 @@ func testRoundTripProllyFields(t *testing.T, test prollyFieldTest) {
 
 	v, err := GetField(context.Background(), desc, 0, tup, ns)
 	assert.NoError(t, err)
-	jsonType := val.Type{Enc: val.JSONAddrEnc}
-	if test.typ == jsonType {
-		getJson := func(field interface{}) interface{} {
-			jsonWrapper, ok := field.(sql.JSONWrapper)
-			require.Equal(t, ok, true)
-			val, err := jsonWrapper.ToInterface()
-			require.NoError(t, err)
-			return val
-		}
-		assert.Equal(t, getJson(test.value), getJson(v))
-	} else {
-		assert.Equal(t, test.value, v)
+
+	v, err = sql.UnwrapAny(context.Background(), v)
+	assert.NoError(t, err)
+
+	if js, ok := v.(sql.JSONWrapper); ok {
+		v, err = js.ToInterface()
+		require.NoError(t, err)
 	}
+
+	expectedValue, err := sql.UnwrapAny(context.Background(), test.value)
+	assert.NoError(t, err)
+
+	if js, ok := expectedValue.(sql.JSONWrapper); ok {
+		expectedValue, err = js.ToInterface()
+		require.NoError(t, err)
+	}
+
+	assert.Equal(t, expectedValue, v)
+
 }
 
 func mustParseGeometryType(t *testing.T, s string) (v interface{}) {
@@ -283,7 +309,7 @@ func TestGeometryEncoding(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			ns := NewTestNodeStore()
 			oldDesc := val.NewTupleDescriptor(val.Type{Enc: val.GeometryEnc})
-			builder := val.NewTupleBuilder(oldDesc)
+			builder := val.NewTupleBuilder(oldDesc, ns)
 			b := serializeGeometry(test.value)
 			builder.PutGeometry(0, b)
 			tup := builder.Build(testPool)

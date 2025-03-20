@@ -529,10 +529,10 @@ type prollyConflictDeleter struct {
 func newProllyConflictDeleter(ct ProllyConflictsTable) *prollyConflictDeleter {
 	kd, _ := ct.artM.Descriptors()
 	ed := ct.artM.Editor()
-	kB := val.NewTupleBuilder(kd)
+	kB := val.NewTupleBuilder(kd, ct.artM.NodeStore())
 
 	vd := ct.ourSch.GetValueDescriptor(ct.root.NodeStore())
-	vB := val.NewTupleBuilder(vd)
+	vB := val.NewTupleBuilder(vd, ct.artM.NodeStore())
 	p := ct.artM.Pool()
 
 	baseColSize := ct.baseSch.GetAllCols().Size()

@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"github.com/mohae/uvarint"
 	"os"
 	"strconv"
 	"strings"
@@ -103,6 +104,15 @@ func IterAddressFields(td TupleDesc, cb func(int, Type)) {
 		switch typ.Enc {
 		case BytesAddrEnc, StringAddrEnc,
 			JSONAddrEnc, CommitAddrEnc, GeomAddrEnc:
+			cb(i, typ)
+		}
+	}
+}
+
+func IterToastFields(td TupleDesc, cb func(int, Type)) {
+	for i, typ := range td.Types {
+		switch typ.Enc {
+		case BytesToastEnc, StringToastEnc:
 			cb(i, typ)
 		}
 	}
@@ -513,6 +523,39 @@ func (td TupleDesc) GetBytesAddr(i int, tup Tuple) (hash.Hash, bool) {
 	return td.getAddr(i, tup)
 }
 
+// GetBytesToastValue returns either a []byte or a BytesWrapper, but Go doesn't allow us to use a single type for that.
+func (td TupleDesc) GetBytesToastValue(i int, vs ValueStore, tup Tuple) (interface{}, bool, error) {
+	td.expectEncoding(i, BytesToastEnc)
+	toastValue := ToastValue(td.GetField(i, tup))
+	if len(toastValue) == 0 {
+		return nil, false, nil
+	}
+	if toastValue.isInlined() {
+		// TODO: This needs context.
+		val, err := toastValue.convertToBytes(nil, vs, nil)
+		return val, true, err
+	} else {
+		val, err := toastValue.convertToByteArray(nil, vs, nil)
+		return val, true, err
+	}
+}
+
+func (td TupleDesc) GetStringToastValue(i int, vs ValueStore, tup Tuple) (interface{}, bool, error) {
+	td.expectEncoding(i, StringToastEnc)
+	toastValue := ToastValue(td.GetField(i, tup))
+	if len(toastValue) == 0 {
+		return nil, false, nil
+	}
+	if toastValue.isInlined() {
+		// TODO: This needs context.
+		val, err := toastValue.convertToBytes(nil, vs, nil)
+		return string(val), true, err
+	} else {
+		val, err := toastValue.convertToTextStorage(nil, vs, nil)
+		return val, true, err
+	}
+}
+
 func (td TupleDesc) GetCommitAddr(i int, tup Tuple) (v hash.Hash, ok bool) {
 	td.expectEncoding(i, CommitAddrEnc)
 	return td.getAddr(i, tup)
@@ -711,6 +754,9 @@ func (handler AddressTypeHandler) SerializeValue(ctx context.Context, val any) (
 	if err != nil {
 		return nil, err
 	}
+	if len(b) == 0 {
+		return nil, nil
+	}
 	h, err := handler.vs.WriteBytes(context.Background(), b)
 	if err != nil {
 		return nil, err
@@ -719,6 +765,9 @@ func (handler AddressTypeHandler) SerializeValue(ctx context.Context, val any) (
 }
 
 func (handler AddressTypeHandler) DeserializeValue(ctx context.Context, val []byte) (any, error) {
+	if len(val) == 0 {
+		return nil, nil
+	}
 	b, err := handler.vs.ReadBytes(ctx, hash.New(val))
 	if err != nil {
 		return nil, err
@@ -730,4 +779,146 @@ func (handler AddressTypeHandler) FormatValue(val any) (string, error) {
 	return handler.childHandler.FormatValue(val)
 }
 
-var _ TupleTypeHandler = AddressTypeHandler{}
+// A ToastValue is a byte sequence that can represent:
+// - An inlined string or bytes value
+// - An outlined (addressable) string or bytes value
+// - NULL (identified by the empty sequence)
+// Outlined ToastValues begin with a SQLite () variable-length encoding of the string length.
+// Note that this value is always greater than 21, because we only outline values when doing so reduces the length of
+// the tuple, and the outlined ToastValue consists of a 20 byte address + the string length (min 1 byte).
+// This means that we can use a shorter length value to indicate an inlined ToastValue. We choose 0 for simplicity.
+type ToastValue []byte
+
+// getMessageLength returns the length of the underlying value.
+func (v ToastValue) getMessageLength() int64 {
+	if v.IsNull() {
+		return 0
+	}
+	if v.isInlined() {
+		return int64(len(v)) - 1
+	}
+	length, _ := uvarint.Uvarint(v)
+	return int64(length)
+}
+
+// outlineSize computes the size of the value in the tuple if it were outlined.
+func (v ToastValue) outlineSize() int64 {
+	if v.IsOutlined() {
+		return int64(len(v))
+	}
+	_, lengthSize := uvarint.Uvarint(v)
+	return int64(lengthSize) + 20 // variable length + address
+}
+
+// inlineSize computes the size of the value in the tuple if it were inlined.
+func (v ToastValue) inlineSize() int64 {
+	if v.isInlined() {
+		return int64(len(v))
+	}
+	blobLength := v.getMessageLength()
+	return 1 + blobLength // header + message
+}
+
+// IsNull returns whether this ToastValue represents a NULL value.
+func (v ToastValue) IsNull() bool {
+	return len(v) == 0
+}
+
+// IsOutlined returns whether this ToastValue represents a outlined addressable value.
+func (v ToastValue) IsOutlined() bool {
+	if v.IsNull() {
+		return false
+	}
+	return v[0] != 0
+}
+
+func makeVarInt(x uint64, dest []byte) (bytesWritten int, output []byte) {
+	if dest == nil {
+		dest = make([]byte, 9)
+	}
+	length := uvarint.Encode(dest, x)
+	return length, dest[:length]
+}
+
+// If a conversion is necessary, the converted value will be copied into `dest`. This is a performance
+// optimization when there is a pre-allocated buffer.
+func (v ToastValue) convertToOutline(ctx context.Context, vs ValueStore, dest []byte) (ToastValue, error) {
+	if v.IsOutlined() {
+		return v, nil
+	}
+	if cap(dest) < 29 {
+		dest = make([]byte, 29)
+	}
+	blob := v[1:]
+	blobLength := uint64(len(blob))
+	lengthSize, dest := makeVarInt(blobLength, dest)
+	blobHash, err := vs.WriteBytes(ctx, blob)
+	if err != nil {
+		return nil, err
+	}
+
+	dest = append(dest[:lengthSize], blobHash[:]...)
+	return dest, nil
+}
+
+// isInlined returns whether this ToastValue represents an inlined value.
+func (v ToastValue) isInlined() bool {
+	if v.IsNull() {
+		return false
+	}
+	return v[0] == 0
+}
+
+// If a conversion is necessary, the converted value will be written into `dest`. This is a performance
+// optimization when there is a pre-allocated buffer.
+func (v ToastValue) convertToInline(ctx context.Context, vs ValueStore, dest []byte) (ToastValue, error) {
+	if v.isInlined() {
+		return v, nil
+	}
+	_, lengthBytes := uvarint.Uvarint(v)
+	addr := v[lengthBytes:]
+	blob, err := vs.ReadBytes(ctx, hash.New(addr))
+	if err != nil {
+		return nil, err
+	}
+	outputSize := 1 + len(blob)
+	if cap(dest) < outputSize {
+		dest = make([]byte, outputSize)
+	}
+	dest = dest[:1]
+	dest[0] = 0
+	dest = append(dest, blob...)
+	return dest, nil
+}
+
+func (v ToastValue) convertToBytes(ctx context.Context, vs ValueStore, buf []byte) ([]byte, error) {
+	// Only inlined values can be converted to bytes
+	inlineValue, err := v.convertToInline(ctx, vs, buf)
+	if err != nil {
+		return nil, err
+	}
+	// Remove header byte
+	return inlineValue[1:], nil
+}
+
+func (v ToastValue) convertToByteArray(ctx context.Context, vs ValueStore, buf []byte) (*ByteArray, error) {
+	// Only outlined values can be converted to a ByteArray
+	outlineValue, err := v.convertToOutline(ctx, vs, buf)
+	if err != nil {
+		return &ByteArray{}, err
+	}
+	length := outlineValue.getMessageLength()
+	address := hash.New(outlineValue[length:])
+	return NewByteArray(address, vs).WithMaxByteLength(length), nil
+}
+
+func (v ToastValue) convertToTextStorage(ctx context.Context, vs ValueStore, buf []byte) (*TextStorage, error) {
+	// Only outlined values can be converted to a TextStorage
+	outlineValue, err := v.convertToOutline(ctx, vs, buf)
+	if err != nil {
+		return &TextStorage{}, err
+	}
+	address := hash.New(outlineValue[9:29])
+	length := readInt64(outlineValue[1:9])
+	return NewTextStorage(address, vs).WithMaxByteLength(length), nil
+}

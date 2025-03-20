@@ -725,7 +725,7 @@ func newUniqIndex(ctx *sql.Context, sch schema.Schema, tableName string, def sch
 		return uniqIndex{}, err
 	}
 
-	clusteredBld := index.NewClusteredKeyBuilder(def, sch, clustered.KeyDesc(), p)
+	clusteredBld := index.NewClusteredKeyBuilder(def, sch, clustered.KeyDesc(), p, clustered.NodeStore())
 
 	return uniqIndex{
 		def:              def,
@@ -1455,7 +1455,7 @@ func remapTupleWithColumnDefaults(
 	pool pool.BuffPool,
 	rightSide bool,
 ) (val.Tuple, error) {
-	tb := val.NewTupleBuilder(mergedSch.GetValueDescriptor(tm.ns))
+	tb := val.NewTupleBuilder(mergedSch.GetValueDescriptor(tm.ns), tm.ns)
 
 	var secondPass []int
 	for to, from := range mapping {

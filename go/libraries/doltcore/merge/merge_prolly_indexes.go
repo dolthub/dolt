@@ -123,7 +123,7 @@ func buildIndex(
 			return nil, err
 		}
 		kd := postMergeSchema.GetKeyDescriptor(ns)
-		kb := val.NewTupleBuilder(kd)
+		kb := val.NewTupleBuilder(kd, ns)
 		p := m.Pool()
 
 		pkMapping := ordinalMappingFromIndex(index)

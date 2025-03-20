@@ -39,6 +39,9 @@ func EncodingFromSqlType(typ sql.Type) serial.Encoding {
 	return EncodingFromQueryType(typ.Type())
 }
 
+// Tests can set this variable to true in order to force Dolt to use TOAST encoding for TEXT and BLOB columns.
+var UseToastTypes = false
+
 // EncodingFromQueryType returns a serial.Encoding for a query.Type.
 func EncodingFromQueryType(typ query.Type) serial.Encoding {
 	switch typ {
@@ -97,8 +100,14 @@ func EncodingFromQueryType(typ query.Type) serial.Encoding {
 	case query.Type_JSON:
 		return serial.EncodingJSONAddr
 	case query.Type_BLOB:
+		if UseToastTypes {
+			return serial.EncodingBytesToast
+		}
 		return serial.EncodingBytesAddr
 	case query.Type_TEXT:
+		if UseToastTypes {
+			return serial.EncodingStringToast
+		}
 		return serial.EncodingStringAddr
 	default:
 		panic(fmt.Sprintf("unknown encoding %v", typ))

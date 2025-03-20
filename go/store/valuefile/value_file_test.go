@@ -15,7 +15,7 @@
 package valuefile
 
 import (
-	"context"
+	"github.com/dolthub/go-mysql-server/sql"
 	"os"
 	"path/filepath"
 	"testing"
@@ -37,7 +37,7 @@ func TestReadWriteValueFile(t *testing.T) {
 	const numMaps = 1
 	const numMapValues = 1
 
-	ctx := context.Background()
+	ctx := sql.NewEmptyContext()
 	store, err := NewFileValueStore(types.Format_Default)
 	require.NoError(t, err)
 
@@ -71,7 +71,7 @@ func TestRoundtripProllyMapIntoValueFile(t *testing.T) {
 	const numMaps = 5
 	const numMapEntries = 1000
 
-	ctx := context.Background()
+	ctx := sql.NewEmptyContext()
 	store, err := NewFileValueStore(types.Format_DOLT)
 	require.NoError(t, err)
 	oldNs := tree.NewNodeStore(store)
@@ -115,9 +115,9 @@ func TestRoundtripProllyMapIntoValueFile(t *testing.T) {
 func assertProllyMapsEqual(t *testing.T, expected, received prolly.Map) {
 	assert.Equal(t, expected.HashOf(), received.HashOf())
 
-	s, err := prolly.DebugFormat(context.Background(), expected)
+	s, err := prolly.DebugFormat(sql.NewEmptyContext(), expected)
 	require.NoError(t, err)
-	s2, err := prolly.DebugFormat(context.Background(), received)
+	s2, err := prolly.DebugFormat(sql.NewEmptyContext(), received)
 	require.NoError(t, err)
 	require.Equal(t, s, s2)
 }
@@ -132,13 +132,13 @@ var vd = val.NewTupleDescriptor(
 )
 
 func makeProllyMap(t *testing.T, ns tree.NodeStore, count int) (prolly.Map, [][2]val.Tuple) {
-	ctx := context.Background()
+	ctx := sql.NewEmptyContext()
 	tuples := tree.RandomTuplePairs(ctx, count, kd, vd, ns)
 	om := mustProllyMapFromTuples(t, kd, vd, ns, tuples)
 
 	for i := 0; i < len(tuples); i++ {
 		var found bool
-		err := om.Get(context.Background(), tuples[i][0], func(k, v val.Tuple) error {
+		err := om.Get(sql.NewEmptyContext(), tuples[i][0], func(k, v val.Tuple) error {
 			assert.Equal(t, tuples[i][0], k)
 			assert.Equal(t, tuples[i][1], v)
 			found = true
@@ -152,7 +152,7 @@ func makeProllyMap(t *testing.T, ns tree.NodeStore, count int) (prolly.Map, [][2
 }
 
 func mustProllyMapFromTuples(t *testing.T, kd, vd val.TupleDesc, ns tree.NodeStore, tuples [][2]val.Tuple) prolly.Map {
-	ctx := context.Background()
+	ctx := sql.NewEmptyContext()
 
 	serializer := message.NewProllyMapSerializer(vd, ns.Pool())
 	chunker, err := tree.NewEmptyChunker(ctx, ns, serializer)

@@ -117,14 +117,28 @@ func IsAddrEncoding(enc Encoding) bool {
 	}
 }
 
+func IsToastEncoding(enc Encoding) bool {
+	switch enc {
+	case BytesToastEnc,
+		StringToastEnc,
+		ExtendedToastEnc:
+		return true
+	default:
+		return false
+	}
+}
+
 // Variable Width Encodings
 const (
-	StringEnc     = Encoding(serial.EncodingString)
-	ByteStringEnc = Encoding(serial.EncodingBytes)
-	DecimalEnc    = Encoding(serial.EncodingDecimal)
-	JSONEnc       = Encoding(serial.EncodingJSON)
-	GeometryEnc   = Encoding(serial.EncodingGeometry)
-	ExtendedEnc   = Encoding(serial.EncodingExtended)
+	StringEnc        = Encoding(serial.EncodingString)
+	ByteStringEnc    = Encoding(serial.EncodingBytes)
+	DecimalEnc       = Encoding(serial.EncodingDecimal)
+	JSONEnc          = Encoding(serial.EncodingJSON)
+	GeometryEnc      = Encoding(serial.EncodingGeometry)
+	ExtendedEnc      = Encoding(serial.EncodingExtended)
+	StringToastEnc   = Encoding(serial.EncodingStringToast)
+	BytesToastEnc    = Encoding(serial.EncodingBytesToast)
+	ExtendedToastEnc = Encoding(serial.EncodingExtendedToast)
 )
 
 func sizeFromType(t Type) (ByteSize, bool) {
@@ -625,6 +639,10 @@ func compareHash128(l, r []byte) int {
 
 func compareAddr(l, r hash.Hash) int {
 	return l.Compare(r)
+}
+
+func compareToastValue(l, r ToastValue) int {
+	return bytes.Compare(l, r)
 }
 
 func writeRaw(buf, val []byte) {
