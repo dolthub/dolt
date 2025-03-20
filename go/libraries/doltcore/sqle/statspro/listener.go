@@ -129,14 +129,6 @@ func (sc *StatsController) Restart() error {
 		ctx = sc.newThreadCtx(ctx)
 		close(done)
 		err := sc.runWorker(ctx)
-		defer sc.signalListener(leStop)
-
-		sc.mu.Lock()
-		if sc.activeCtxCancel != nil {
-			sc.activeCtxCancel()
-			sc.activeCtxCancel = nil
-		}
-		sc.mu.Unlock()
 		if err != nil {
 			sc.logger.Errorf("stats stopped: %s", err.Error())
 		}
