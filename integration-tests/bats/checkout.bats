@@ -87,7 +87,7 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "new table" ]] || false
 
-    # Now check the table into main and make additonal changes
+    # Now check the table into main and make additional changes
     dolt add . && dolt commit -m "new table"
     dolt sql -q "insert into t2 values (2);"
 
@@ -444,7 +444,7 @@ SQL
   dolt checkout -b test-branch
   dolt sql -q 'insert into test (id, id2) values (0, 2);'
   dolt add .
-  dolt commit -m "conclicting commit message"
+  dolt commit -m "conflicting commit message"
 
   shaparent1=$(dolt log --oneline --decorate=no | head -n 1 | cut -d ' ' -f 1)
   # remove special characters (color)
@@ -478,7 +478,7 @@ SQL
   dolt checkout -b test-branch
   dolt sql -q 'insert into test (id, id2) values (0, 2);'
   dolt add .
-  dolt commit -m "conclicting commit message"
+  dolt commit -m "conflicting commit message"
 
   shaparent1=$(dolt log --oneline --decorate=no | head -n 1 | cut -d ' ' -f 1)
   # remove special characters (color)
