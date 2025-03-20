@@ -73,7 +73,11 @@ func getProllyRowMaps(ctx *sql.Context, vrw types.ValueReadWriter, ns tree.NodeS
 		return prolly.Map{}, err
 	}
 
-	return durable.ProllyMapFromIndex(idx), nil
+	pm, err := durable.ProllyMapFromIndex(idx)
+	if err != nil {
+		return prolly.Map{}, err
+	}
+	return pm, nil
 }
 
 func resolveProllyConflicts(ctx *sql.Context, tbl *doltdb.Table, tblName string, ourSch, sch schema.Schema) (*doltdb.Table, error) {
@@ -94,7 +98,10 @@ func resolveProllyConflicts(ctx *sql.Context, tbl *doltdb.Table, tblName string,
 	if err != nil {
 		return nil, err
 	}
-	ourMap := durable.ProllyMapFromIndex(ourIdx)
+	ourMap, err := durable.ProllyMapFromIndex(ourIdx)
+	if err != nil {
+		return nil, err
+	}
 	mutMap := ourMap.Mutate()
 
 	// get mutable secondary indexes

@@ -251,7 +251,10 @@ func newProllyDiffIter(ctx *sql.Context, dp DiffPartition, targetFromSchema, tar
 		if err != nil {
 			return prollyDiffIter{}, err
 		}
-		from = durable.ProllyMapFromIndex(idx)
+		from, err = durable.ProllyMapFromIndex(idx)
+		if err != nil {
+			return prollyDiffIter{}, err
+		}
 		if fsch, err = dp.from.GetSchema(ctx); err != nil {
 			return prollyDiffIter{}, err
 		}
@@ -263,7 +266,10 @@ func newProllyDiffIter(ctx *sql.Context, dp DiffPartition, targetFromSchema, tar
 		if err != nil {
 			return prollyDiffIter{}, err
 		}
-		to = durable.ProllyMapFromIndex(idx)
+		to, err = durable.ProllyMapFromIndex(idx)
+		if err != nil {
+			return prollyDiffIter{}, err
+		}
 		if tsch, err = dp.to.GetSchema(ctx); err != nil {
 			return prollyDiffIter{}, err
 		}

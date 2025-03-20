@@ -150,7 +150,11 @@ func BuildSecondaryIndex(ctx *sql.Context, tbl *doltdb.Table, idx schema.Index, 
 		if err != nil {
 			return nil, err
 		}
-		primary := durable.ProllyMapFromIndex(m)
+		primary, err := durable.ProllyMapFromIndex(m)
+		if err != nil {
+			return nil, err
+		}
+
 		return BuildSecondaryProllyIndex(ctx, tbl.ValueReadWriter(), tbl.NodeStore(), sch, tableName, idx, primary)
 
 	default:
@@ -218,7 +222,10 @@ func BuildUniqueProllyIndex(
 	if err != nil {
 		return nil, err
 	}
-	secondary := durable.ProllyMapFromIndex(empty)
+	secondary, err := durable.ProllyMapFromIndex(empty)
+	if err != nil {
+		return nil, err
+	}
 
 	iter, err := primary.IterAll(ctx)
 	if err != nil {

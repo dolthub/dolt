@@ -694,6 +694,9 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 		if err != nil {
 			return nil, false, err
 		}
+		if branch == "" {
+			branch = db.Revision()
+		}
 		dt, found = dtables.NewStatisticsTable(ctx, db.Name(), db.schemaName, branch, tables), true
 	case doltdb.ProceduresTableName:
 		found = true

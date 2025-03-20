@@ -1,4 +1,4 @@
-// Copyright 2023 Dolthub, Inc.
+// Copyright 2023-2025 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,19 +17,11 @@ package statspro
 import (
 	"container/heap"
 	"context"
-	"errors"
-	"fmt"
-	"io"
 	"sort"
-	"strings"
-	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/stats"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
-	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
@@ -40,156 +32,7 @@ const (
 	mcvCnt       = 3
 )
 
-// createNewStatsBuckets builds histograms for a list of index statistic metadata.
-// We only read chunk ranges indicated by |indexMeta.updateOrdinals|. If
-// the returned buckets are a subset of the index the caller is responsible
-// for reconciling the difference.
-func createNewStatsBuckets(ctx *sql.Context, sqlTable sql.Table, dTab *doltdb.Table, indexes []sql.Index, idxMetas []indexMeta) (map[sql.StatQualifier]*DoltStats, error) {
-	nameToIdx := make(map[string]sql.Index)
-	for _, idx := range indexes {
-		nameToIdx[strings.ToLower(idx.ID())] = idx
-	}
-
-	ret := make(map[sql.StatQualifier]*DoltStats)
-
-	for _, meta := range idxMetas {
-		sqlIdx := nameToIdx[strings.ToLower(meta.qual.Index())]
-		if sqlIdx.IsSpatial() || sqlIdx.IsFullText() || sqlIdx.IsGenerated() || sqlIdx.IsVector() {
-			continue
-		}
-		var idx durable.Index
-		var err error
-		if strings.EqualFold(meta.qual.Index(), "PRIMARY") {
-			idx, err = dTab.GetRowData(ctx)
-		} else {
-			idx, err = dTab.GetIndexRowData(ctx, meta.qual.Index())
-		}
-		if err != nil {
-			return nil, err
-		}
-
-		prollyMap := durable.ProllyMapFromIndex(idx)
-		keyBuilder := val.NewTupleBuilder(prollyMap.KeyDesc())
-
-		fds, colSet, err := stats.IndexFds(meta.qual.Table(), sqlTable.Schema(), sqlIdx)
-		if err != nil {
-			return nil, err
-		}
-
-		var types []sql.Type
-		for _, cet := range nameToIdx[strings.ToLower(meta.qual.Index())].ColumnExpressionTypes() {
-			types = append(types, cet.Type)
-		}
-
-		if cnt, err := prollyMap.Count(); err != nil {
-			return nil, err
-		} else if cnt == 0 {
-			// table is empty
-			ret[meta.qual] = NewDoltStats()
-			ret[meta.qual].Statistic.Created = time.Now()
-			ret[meta.qual].Statistic.Cols = meta.cols
-			ret[meta.qual].Statistic.Typs = types
-			ret[meta.qual].Statistic.Qual = meta.qual
-
-			ret[meta.qual].Statistic.Fds = fds
-			ret[meta.qual].Statistic.Colset = colSet
-			ret[meta.qual].Tb = val.NewTupleBuilder(prollyMap.KeyDesc().PrefixDesc(len(meta.cols)))
-
-			continue
-		}
-
-		firstRow, err := firstRowForIndex(ctx, prollyMap, keyBuilder, len(meta.cols))
-		if err != nil {
-			return nil, err
-		}
-
-		updater := newBucketBuilder(meta.qual, len(meta.cols), prollyMap.KeyDesc())
-		ret[meta.qual] = NewDoltStats()
-		ret[meta.qual].Chunks = meta.allAddrs
-		ret[meta.qual].Statistic.Created = time.Now()
-		ret[meta.qual].Statistic.Cols = meta.cols
-		ret[meta.qual].Statistic.Typs = types
-		ret[meta.qual].Statistic.Qual = meta.qual
-		ret[meta.qual].Tb = val.NewTupleBuilder(prollyMap.KeyDesc().PrefixDesc(len(meta.cols)))
-
-		var start, stop uint64
-		// read leaf rows for each bucket
-		for i, chunk := range meta.newNodes {
-			// each node is a bucket
-			updater.newBucket()
-
-			// we read exclusive range [node first key, next node first key)
-			start, stop = meta.updateOrdinals[i].start, meta.updateOrdinals[i].stop
-			iter, err := prollyMap.IterOrdinalRange(ctx, start, stop)
-			if err != nil {
-				return nil, err
-			}
-			for {
-				// stats key will be a prefix of the index key
-				keyBytes, _, err := iter.Next(ctx)
-				if errors.Is(err, io.EOF) {
-					break
-				} else if err != nil {
-					return nil, err
-				}
-				// build full key
-				for i := range keyBuilder.Desc.Types {
-					keyBuilder.PutRaw(i, keyBytes.GetField(i))
-				}
-
-				updater.add(ctx, keyBuilder.BuildPrefixNoRecycle(prollyMap.Pool(), updater.prefixLen))
-				keyBuilder.Recycle()
-			}
-
-			// finalize the aggregation
-			bucket, err := updater.finalize(ctx, prollyMap.NodeStore())
-			if err != nil {
-				return nil, err
-			}
-			bucket.Chunk = chunk.HashOf()
-			ret[updater.qual].Hist = append(ret[updater.qual].Hist, bucket)
-		}
-
-		ret[updater.qual].Statistic.DistinctCnt = uint64(updater.globalDistinct)
-		ret[updater.qual].Statistic.RowCnt = uint64(updater.globalCount)
-		ret[updater.qual].Statistic.LowerBnd = firstRow
-		ret[updater.qual].Statistic.Fds = fds
-		ret[updater.qual].Statistic.Colset = colSet
-		ret[updater.qual].UpdateActive()
-	}
-	return ret, nil
-}
-
-// MergeNewChunks combines a set of old and new chunks to create
-// the desired target histogram. Undefined behavior if a |targetHash|
-// does not exist in either |oldChunks| or |newChunks|.
-func MergeNewChunks(inputHashes []hash.Hash, oldChunks, newChunks []sql.HistogramBucket) ([]sql.HistogramBucket, error) {
-	hashToPos := make(map[hash.Hash]int, len(inputHashes))
-	for i, h := range inputHashes {
-		hashToPos[h] = i
-	}
-
-	var cnt int
-	targetBuckets := make([]sql.HistogramBucket, len(inputHashes))
-	for _, c := range oldChunks {
-		if idx, ok := hashToPos[DoltBucketChunk(c)]; ok {
-			cnt++
-			targetBuckets[idx] = c
-		}
-	}
-	for _, c := range newChunks {
-		if idx, ok := hashToPos[DoltBucketChunk(c)]; ok && targetBuckets[idx] == nil {
-			cnt++
-			targetBuckets[idx] = c
-		}
-	}
-	if cnt != len(inputHashes) {
-		return nil, fmt.Errorf("encountered invalid statistic chunks")
-	}
-	return targetBuckets, nil
-}
-
-func firstRowForIndex(ctx *sql.Context, prollyMap prolly.Map, keyBuilder *val.TupleBuilder, prefixLen int) (sql.Row, error) {
+func firstRowForIndex(ctx *sql.Context, idxLen int, prollyMap prolly.Map, keyBuilder *val.TupleBuilder) (sql.Row, error) {
 	if cnt, err := prollyMap.Count(); err != nil {
 		return nil, err
 	} else if cnt == 0 {
@@ -211,9 +54,9 @@ func firstRowForIndex(ctx *sql.Context, prollyMap prolly.Map, keyBuilder *val.Tu
 		keyBuilder.PutRaw(i, keyBytes.GetField(i))
 	}
 
-	firstKey := keyBuilder.BuildPrefixNoRecycle(buffPool, prefixLen)
-	firstRow := make(sql.Row, prefixLen)
-	for i := 0; i < prefixLen; i++ {
+	firstKey := keyBuilder.Build(buffPool)
+	firstRow := make(sql.Row, idxLen)
+	for i := range firstRow {
 		firstRow[i], err = tree.GetField(ctx, prollyMap.KeyDesc(), i, firstKey, prollyMap.NodeStore())
 		if err != nil {
 			return nil, err
@@ -269,7 +112,7 @@ func (u *bucketBuilder) newBucket() {
 
 // finalize converts the current aggregation stats into a histogram bucket,
 // which includes deserializing most common value tuples into sql.Rows.
-func (u *bucketBuilder) finalize(ctx context.Context, ns tree.NodeStore) (DoltBucket, error) {
+func (u *bucketBuilder) finalize(ctx context.Context, ns tree.NodeStore) (*stats.Bucket, error) {
 	// update MCV in case we've ended on a run of many identical keys
 	u.updateMcv()
 
@@ -279,27 +122,25 @@ func (u *bucketBuilder) finalize(ctx context.Context, ns tree.NodeStore) (DoltBu
 	// convert the MCV tuples into SQL rows (most efficient to only do this once)
 	mcvRows, err := u.mcvs.Values(ctx, u.tupleDesc, ns, u.prefixLen)
 	if err != nil {
-		return DoltBucket{}, err
+		return nil, err
 	}
 	upperBound := make(sql.Row, u.prefixLen)
 	if u.currentKey != nil {
 		for i := 0; i < u.prefixLen; i++ {
 			upperBound[i], err = tree.GetField(ctx, u.tupleDesc, i, u.currentKey, ns)
 			if err != nil {
-				return DoltBucket{}, err
+				return nil, err
 			}
 		}
 	}
-	return DoltBucket{
-		Bucket: &stats.Bucket{
-			RowCnt:      uint64(u.count),
-			DistinctCnt: uint64(u.distinct),
-			BoundCnt:    uint64(u.currentCnt),
-			McvVals:     mcvRows,
-			McvsCnt:     u.mcvs.Counts(),
-			BoundVal:    upperBound,
-			NullCnt:     uint64(u.nulls),
-		},
+	return &stats.Bucket{
+		RowCnt:      uint64(u.count),
+		DistinctCnt: uint64(u.distinct),
+		BoundCnt:    uint64(u.currentCnt),
+		McvVals:     mcvRows,
+		McvsCnt:     u.mcvs.Counts(),
+		BoundVal:    upperBound,
+		NullCnt:     uint64(u.nulls),
 	}, nil
 }
 

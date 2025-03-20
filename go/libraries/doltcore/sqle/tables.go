@@ -129,12 +129,12 @@ func (t *DoltTable) LookupForExpressions(ctx *sql.Context, exprs ...sql.Expressi
 		return sql.IndexLookup{}, nil, nil, false, nil
 	}
 
-	dbState, ok, err := sess.LookupDbState(ctx, t.db.Name())
+	dbState, ok, err := sess.LookupDbState(ctx, t.db.AliasedName())
 	if err != nil {
 		return sql.IndexLookup{}, nil, nil, false, nil
 	}
 	if !ok {
-		return sql.IndexLookup{}, nil, nil, false, fmt.Errorf("no state for database %s", t.db.Name())
+		return sql.IndexLookup{}, nil, nil, false, fmt.Errorf("no state for database %s", t.db.AliasedName())
 	}
 
 	var lookupCols []expression.LookupColumn

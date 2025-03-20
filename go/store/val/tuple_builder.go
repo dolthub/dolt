@@ -15,6 +15,7 @@
 package val
 
 import (
+	"strconv"
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql/analyzer/analyzererrors"
@@ -77,7 +78,7 @@ func NewTupleBuilder(desc TupleDesc) *TupleBuilder {
 func (tb *TupleBuilder) Build(pool pool.BuffPool) (tup Tuple) {
 	for i, typ := range tb.Desc.Types {
 		if !typ.Nullable && tb.fields[i] == nil {
-			panic("cannot write NULL to non-NULL field")
+			panic("cannot write NULL to non-NULL field: " + strconv.Itoa(i))
 		}
 	}
 	return tb.BuildPermissive(pool)

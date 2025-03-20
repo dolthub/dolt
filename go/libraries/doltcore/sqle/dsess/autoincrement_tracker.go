@@ -327,7 +327,10 @@ func (a *AutoIncrementTracker) deepSet(ctx *sql.Context, tableName string, table
 
 func getMaxIndexValue(ctx context.Context, indexData durable.Index) (uint64, error) {
 	if types.IsFormat_DOLT(indexData.Format()) {
-		idx := durable.ProllyMapFromIndex(indexData)
+		idx, err := durable.ProllyMapFromIndex(indexData)
+		if err != nil {
+			return 0, err
+		}
 
 		iter, err := idx.IterAllReverse(ctx)
 		if err != nil {

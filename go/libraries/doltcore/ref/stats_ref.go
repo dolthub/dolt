@@ -20,9 +20,11 @@ type StatsRef struct {
 
 var _ DoltRef = StatsRef{}
 
+const statsBranch = "main"
+
 // NewStatsRef creates a reference to a statistic dataset head.
-func NewStatsRef(branch string) StatsRef {
-	return StatsRef{branch}
+func NewStatsRef() StatsRef {
+	return StatsRef{statsBranch}
 }
 
 // GetType will return StatsRefType

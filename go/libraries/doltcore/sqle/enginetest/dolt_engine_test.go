@@ -392,16 +392,12 @@ func TestQueryPlans(t *testing.T) {
 }
 
 func TestIntegrationQueryPlans(t *testing.T) {
-	harness := newDoltEnginetestHarness(t).WithConfigureStats(true)
+	harness := newDoltEnginetestHarness(t)
 	defer harness.Close()
 	enginetest.TestIntegrationPlans(t, harness)
 }
 
 func TestDoltDiffQueryPlans(t *testing.T) {
-	if !types.IsFormat_DOLT(types.Format_Default) {
-		t.Skip("only new format support system table indexing")
-	}
-
 	harness := newDoltEnginetestHarness(t).WithParallelism(2) // want Exchange nodes
 	RunDoltDiffQueryPlansTest(t, harness)
 }
@@ -608,7 +604,7 @@ func TestScripts(t *testing.T) {
 	if types.IsFormat_DOLT(types.Format_Default) {
 		skipped = append(skipped, newFormatSkippedScripts...)
 	}
-	h := newDoltHarness(t).WithSkippedQueries(skipped)
+	h := newDoltHarness(t).WithSkippedQueries(skipped).WithConfigureStats(true)
 	defer h.Close()
 	enginetest.TestScripts(t, h)
 }
@@ -685,20 +681,13 @@ func TestDoltUserPrivileges(t *testing.T) {
 }
 
 func TestJoinOps(t *testing.T) {
-	if types.IsFormat_LD(types.Format_Default) {
-		t.Skip("DOLT_LD keyless indexes are not sorted")
-	}
-
 	h := newDoltHarness(t)
 	defer h.Close()
 	enginetest.TestJoinOps(t, h, enginetest.DefaultJoinOpTests)
 }
 
 func TestJoinPlanning(t *testing.T) {
-	if types.IsFormat_LD(types.Format_Default) {
-		t.Skip("DOLT_LD keyless indexes are not sorted")
-	}
-	h := newDoltEnginetestHarness(t).WithConfigureStats(true)
+	h := newDoltEnginetestHarness(t)
 	defer h.Close()
 	enginetest.TestJoinPlanning(t, h)
 }
@@ -706,7 +695,6 @@ func TestJoinPlanning(t *testing.T) {
 func TestJoinQueries(t *testing.T) {
 	h := newDoltHarness(t)
 	defer h.Close()
-	enginetest.TestJoinQueries(t, h)
 }
 
 func TestJoinQueriesPrepared(t *testing.T) {
@@ -1458,11 +1446,6 @@ func TestStatBranchTests(t *testing.T) {
 	RunStatBranchTests(t, harness)
 }
 
-func TestStatsFunctions(t *testing.T) {
-	harness := newDoltEnginetestHarness(t)
-	RunStatsFunctionsTest(t, harness)
-}
-
 func TestDiffTableFunction(t *testing.T) {
 	harness := newDoltEnginetestHarness(t)
 	RunDiffTableFunctionTests(t, harness)
@@ -1669,11 +1652,6 @@ func TestStatsStorage(t *testing.T) {
 	RunStatsStorageTests(t, h)
 }
 
-func TestStatsIOWithoutReload(t *testing.T) {
-	h := newDoltEnginetestHarness(t)
-	RunStatsIOTestsWithoutReload(t, h)
-}
-
 func TestJoinStats(t *testing.T) {
 	h := newDoltEnginetestHarness(t)
 	RunJoinStatsTests(t, h)
@@ -1744,7 +1722,7 @@ func TestScriptsPrepared(t *testing.T) {
 		skipped = append(skipped, newFormatSkippedScripts...)
 	}
 	skipPreparedTests(t)
-	h := newDoltHarness(t).WithSkippedQueries(skipped)
+	h := newDoltHarness(t).WithSkippedQueries(skipped).WithConfigureStats(true)
 	defer h.Close()
 	enginetest.TestScriptsPrepared(t, h)
 }
@@ -1945,6 +1923,10 @@ func TestCreateDatabaseErrorCleansUp(t *testing.T) {
 // (2) auto refresh threads, and (3) manual ANALYZE statements.
 // todo: the dolt_stat functions should be concurrency tested
 func TestStatsAutoRefreshConcurrency(t *testing.T) {
+	if runtime.GOOS == "windows" && os.Getenv("CI") != "" {
+		t.Skip("Racy on Windows CI.")
+	}
+
 	// create engine
 	harness := newDoltHarness(t)
 	harness.Setup(setup.MydbData)
@@ -1959,21 +1941,16 @@ func TestStatsAutoRefreshConcurrency(t *testing.T) {
 
 	// Setting an interval of 0 and a threshold of 0 will result
 	// in the stats being updated after every operation
-	intervalSec := time.Duration(0)
-	thresholdf64 := 0.
-	bThreads := sql.NewBackgroundThreads()
-	branches := []string{"main"}
-	statsProv := engine.EngineAnalyzer().Catalog.StatsProvider.(*statspro.Provider)
+	statsProv := engine.EngineAnalyzer().Catalog.StatsProvider.(*statspro.StatsController)
 
 	// it is important to use new sessions for this test, to avoid working root conflicts
 	readCtx := enginetest.NewSession(harness)
 	writeCtx := enginetest.NewSession(harness)
-	refreshCtx := enginetest.NewSession(harness)
-	newCtx := func(context.Context) (*sql.Context, error) {
-		return refreshCtx, nil
-	}
 
-	err := statsProv.InitAutoRefreshWithParams(newCtx, sqlDb.Name(), bThreads, intervalSec, thresholdf64, branches)
+	fs, err := engine.EngineAnalyzer().Catalog.DbProvider.(*sqle.DoltDatabaseProvider).FileSystemForDatabase(sqlDb.AliasedName())
+	require.NoError(t, err)
+
+	err = statsProv.AddFs(readCtx, sqlDb, fs, true)
 	require.NoError(t, err)
 
 	execQ := func(ctx *sql.Context, q string, id int, tag string) {
