@@ -218,7 +218,7 @@ func NewSqlEngine(
 	} else {
 		config.StatsController = statspro.StatsNoop{}
 	}
-	
+
 	engine.Analyzer.ExecBuilder = rowexec.NewOverrideBuilder(kvexec.Builder{})
 	sessFactory := doltSessionFactory(pro, config.StatsController, mrEnv.Config(), bcController, gcSafepointController, config.Autocommit)
 	sqlEngine.provider = pro
