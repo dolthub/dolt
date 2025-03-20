@@ -60,6 +60,7 @@ type DoltHarness struct {
 	setupDbs              map[string]struct{}
 	skipSetupCommit       bool
 	configureStats        bool
+	statsThreads          *sql.BackgroundThreads
 	useLocalFilesystem    bool
 	setupTestProcedures   bool
 }
@@ -292,8 +293,11 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 
 		e = e.WithBackgroundThreads(bThreads)
 
+		// xxx: stats threads can't be tied to single test cycle,
+		// this is only OK for enginetests
+		statsThreads := sql.NewBackgroundThreads()
 		if d.configureStats {
-			err = statsPro.Init(ctx, doltProvider, ctxGen, bThreads, databases)
+			err = statsPro.Init(ctx, doltProvider, ctxGen, statsThreads, databases)
 			if err != nil {
 				return nil, err
 			}
@@ -326,12 +330,6 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 
 	e, err := enginetest.RunSetupScripts(ctx, d.engine, d.resetScripts(), d.SupportsNativeIndexCreation())
 	require.NoError(t, err)
-
-	if d.configureStats {
-		finalizeStatsAfterSetup := []setup.SetupScript{{"call dolt_stats_wait()"}}
-		e, err = enginetest.RunSetupScripts(ctx, d.engine, finalizeStatsAfterSetup, d.SupportsNativeIndexCreation())
-		require.NoError(t, err)
-	}
 
 	// Get a fresh session after running setup scripts, since some setup scripts can change the session state
 	d.session, err = dsess.NewDoltSession(enginetest.NewBaseSession(), d.provider, d.multiRepoEnv.Config(), d.branchControl, d.statsPro, writer.NewWriteSession, nil)
@@ -517,9 +515,6 @@ func (d *DoltHarness) NewDatabaseProvider() sql.MutableDatabaseProvider {
 
 func (d *DoltHarness) Close() {
 	d.closeProvider()
-	if d.statsPro != nil {
-		d.statsPro.Close()
-	}
 }
 
 func (d *DoltHarness) closeProvider() {

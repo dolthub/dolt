@@ -68,7 +68,7 @@ func (k tableIndexesKey) String() string {
 type StatsController struct {
 	logger         *logrus.Logger
 	pro            *sqle.DoltDatabaseProvider
-	bthreads       *sql.BackgroundThreads
+	bgThreads      *sql.BackgroundThreads
 	statsBackingDb filesys.Filesys
 	hdpEnv         *env.DoltEnv
 
@@ -143,6 +143,10 @@ func NewStatsController(logger *logrus.Logger, dEnv *env.DoltEnv) *StatsControll
 		hdpEnv:      dEnv,
 		genCnt:      atomic.Uint64{},
 	}
+}
+
+func (sc *StatsController) SetBackgroundThreads(bgThreads *sql.BackgroundThreads) {
+	sc.bgThreads = bgThreads
 }
 
 func (sc *StatsController) SetMemOnly(v bool) {

@@ -125,21 +125,33 @@ func (sc *StatsController) Restart() error {
 	sc.RefreshFromSysVars()
 
 	done := make(chan struct{})
-	sc.bthreads.Add("stats_worker", func(ctx context.Context) {
+	if err := sc.bgThreads.Add("stats_worker", func(ctx context.Context) {
 		ctx = sc.newThreadCtx(ctx)
 		close(done)
 		err := sc.runWorker(ctx)
+		defer sc.signalListener(leStop)
+
+		sc.mu.Lock()
+		if sc.activeCtxCancel != nil {
+			sc.activeCtxCancel()
+			sc.activeCtxCancel = nil
+		}
+		sc.mu.Unlock()
 		if err != nil {
 			sc.logger.Errorf("stats stopped: %s", err.Error())
 		}
-	})
+	}); err != nil {
+		return err
+	}
 	// only return after latestCtx updated
 	<-done
 	return nil
 }
 
 func (sc *StatsController) RunQueue() {
-	sc.bthreads.Add("stats_scheduler", sc.sq.Run)
+	if err := sc.bgThreads.Add("stats_scheduler", sc.sq.Run); err != nil {
+		sc.descError("start scheduler", err)
+	}
 	// block on queue starting
 	sc.sq.DoSync(context.Background(), func() error { return nil })
 	return
@@ -149,7 +161,7 @@ func (sc *StatsController) RunQueue() {
 func (sc *StatsController) Init(ctx context.Context, pro *sqle.DoltDatabaseProvider, ctxGen ctxFactory, bthreads *sql.BackgroundThreads, dbs []sql.Database) error {
 	sc.pro = pro
 	sc.ctxGen = ctxGen
-	sc.bthreads = bthreads
+	sc.bgThreads = bthreads
 
 	sc.RunQueue()
 	sqlCtx, err := sc.ctxGen(ctx)
