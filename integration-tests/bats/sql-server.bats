@@ -2141,3 +2141,96 @@ EOF
       kill -9 "$pid"
     done
 }
+
+@test "sql-server: test --max-connections 3 flag" {
+    cd repo1
+
+    dolt sql -q "CREATE TABLE test_table (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        str VARCHAR(20)
+    );"
+    dolt commit -A -m "create test_table"
+
+    # 3 connections allowed, default back-log (50).
+    start_sql_server_with_args --max-connections 3
+
+    set +e # errors expected.
+
+    # Start 3 long running connections.
+    pids=()
+    for i in {1..3}; do
+      dolt sql &
+      pids+=($!)
+    done
+
+    sleep 1 # give all connections a chance to start
+
+    # These jobs will wait until there is a connection available. verify
+    # by ensuring the inserts complete.
+    dolt sql -q "insert into test_table (str) values ('test4223');" &
+    second_to_last_pid=$!
+    dolt sql -q "insert into test_table (str) values ('test9119');" &
+    last_pid=$!
+
+    sleep 1
+
+    # Now have two jobs waiting for a connection.
+
+    # Kill all the running shells
+    for pid in "${pids[@]}"; do
+      kill -9 "$pid"
+    done
+
+    wait "$second_to_last_pid"
+    wait "$last_pid"
+
+    run dolt sql -q "select * from test_table;"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "test4223" ]] || false
+    [[ "$output" =~ "test9119" ]] || false
+}
+
+@test "sql-server: test --max-connections 3 and --back-log 1 flags" {
+    cd repo1
+
+    dolt sql -q "CREATE TABLE test_table (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        str VARCHAR(20)
+    );"
+    dolt commit -A -m "create test_table"
+
+    # 3 connections allowed, 1 connection in back-log.
+    start_sql_server_with_args --max-connections 3 --back-log 1
+
+    set +e # errors expected.
+    # Start 3 long running connections.
+    pids=()
+    for i in {1..3}; do
+      dolt sql &
+      pids+=($!)
+    done
+
+    # This job will wait until there is a connection available. verify
+    # by ensuring the insert completes.
+    dolt sql -q "insert into test_table (str) values ('test4223');" &
+    last_pid=$!
+
+    sleep 1 # give all connections a chance to start
+
+    # This operation should fail immediately.
+    run dolt sql -q "insert into test_table (str) values ('testxxxx');"
+    [ "$status" -ne 0 ]
+    [[ "$stderr" =~ "bad connection" ]] || false
+
+    # Kill all the running shells
+    for pid in "${pids[@]}"; do
+      kill -9 "$pid"
+    done
+
+    wait "$last_pid"
+
+    run dolt sql -q "select * from test_table;"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "test4223" ]] || false
+    [[ ! "$output" =~ "testxxxx" ]] || false
+}
