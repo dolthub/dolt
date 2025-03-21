@@ -19,7 +19,6 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statspro"
 	"net"
 	"net/http"
 	"os"
@@ -360,39 +359,7 @@ func ConfigureServices(
 
 	InitStatsController := &svcs.AnonService{
 		InitF: func(ctx context.Context) error {
-			// configuring stats depends on sessionBuilder
-			// sessionBuilder needs ref to statsProv
-			pro := sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.DbProvider.(*sqle.DoltDatabaseProvider)
-			sqlCtx, err := sqlEngine.NewLocalContext(ctx)
-			if err != nil {
-				return err
-			}
-			dbs := pro.AllDatabases(sqlCtx)
-			statsPro := sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.StatsProvider
-			if sc, ok := statsPro.(*statspro.StatsController); ok {
-				_, memOnly, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsMemoryOnly)
-				sc.SetMemOnly(memOnly.(int8) == 1)
-
-				pro.InitDatabaseHooks = append(pro.InitDatabaseHooks, statspro.NewInitDatabaseHook(sc))
-				pro.DropDatabaseHooks = append(pro.DropDatabaseHooks, statspro.NewDropDatabaseHook(sc))
-
-				var sqlDbs []sql.Database
-				for _, db := range dbs {
-					sqlDbs = append(sqlDbs, db)
-				}
-
-				err = sc.Init(ctx, pro, sqlEngine.NewDefaultContext, sqlDbs)
-				if err != nil {
-					return err
-				}
-
-				if _, paused, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsPaused); paused.(int8) == 0 {
-					if err = sc.Restart(); err != nil {
-						return err
-					}
-				}
-			}
-			return nil
+			return sqlEngine.InitStats(ctx)
 		},
 	}
 	controller.Register(InitStatsController)
