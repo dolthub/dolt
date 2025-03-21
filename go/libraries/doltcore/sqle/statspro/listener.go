@@ -159,8 +159,9 @@ func (sc *StatsController) Init(ctx context.Context, pro *sqle.DoltDatabaseProvi
 	if err != nil {
 		return err
 	}
-	defer sql.SessionEnd(sqlCtx.Session)
+	
 	sql.SessionCommandBegin(sqlCtx.Session)
+	defer sql.SessionEnd(sqlCtx.Session)
 	defer sql.SessionCommandEnd(sqlCtx.Session)
 
 	for i, db := range dbs {
