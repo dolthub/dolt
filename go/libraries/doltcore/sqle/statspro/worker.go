@@ -292,7 +292,7 @@ func (sc *StatsController) collectIndexNodes(ctx *sql.Context, prollyMap prolly.
 	keyBuilder := val.NewTupleBuilder(prollyMap.KeyDesc().PrefixDesc(idxLen))
 
 	firstNodeHash := nodes[0].HashOf()
-	lowerBound, ok := sc.kv.GetBound(firstNodeHash, idxLen)
+	lowerBound, ok := sc.GetBound(firstNodeHash, idxLen)
 	if !ok {
 		sc.sq.DoSync(ctx, func() error {
 			sql.SessionCommandBegin(ctx.Session)
@@ -306,7 +306,7 @@ func (sc *StatsController) collectIndexNodes(ctx *sql.Context, prollyMap prolly.
 				log.Printf("put bound:  %s: %v\n", firstNodeHash.String()[:5], lowerBound)
 			}
 
-			sc.kv.PutBound(firstNodeHash, lowerBound, idxLen)
+			sc.PutBound(firstNodeHash, lowerBound, idxLen)
 			return nil
 		})
 	}
