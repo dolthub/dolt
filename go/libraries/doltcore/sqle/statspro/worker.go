@@ -399,6 +399,7 @@ func (sc *StatsController) updateTable(ctx *sql.Context, newStats *rootStats, ta
 	if err := sc.sq.DoSync(ctx, func() error {
 		sql.SessionCommandBegin(ctx.Session)
 		defer sql.SessionCommandEnd(ctx.Session)
+		var err error
 		sqlTable, dTab, err = GetLatestTable(ctx, tableName, sqlDb)
 		return err
 	}); err != nil {
@@ -431,6 +432,7 @@ func (sc *StatsController) updateTable(ctx *sql.Context, newStats *rootStats, ta
 	if err := sc.sq.DoSync(ctx, func() error {
 		sql.SessionCommandBegin(ctx.Session)
 		defer sql.SessionCommandEnd(ctx.Session)
+		var err error
 		indexes, err = sqlTable.GetIndexes(ctx)
 		return err
 	}); err != nil {
@@ -466,6 +468,7 @@ func (sc *StatsController) updateTable(ctx *sql.Context, newStats *rootStats, ta
 		if err := sc.sq.DoSync(ctx, func() error {
 			sql.SessionCommandBegin(ctx.Session)
 			defer sql.SessionCommandEnd(ctx.Session)
+			var err error
 			_, template, err = sc.getTemplate(ctx, sqlTable, sqlIdx)
 			if err != nil {
 				return fmt.Errorf("stats collection failed to generate a statistic template: %s.%s.%s:%T; %s", sqlDb.RevisionQualifiedName(), tableName, sqlIdx, sqlIdx, err.Error())
@@ -482,9 +485,10 @@ func (sc *StatsController) updateTable(ctx *sql.Context, newStats *rootStats, ta
 		idxLen := len(sqlIdx.Expressions())
 
 		var levelNodes []tree.Node
-		if err = sc.sq.DoSync(ctx, func() error {
+		if err := sc.sq.DoSync(ctx, func() error {
 			sql.SessionCommandBegin(ctx.Session)
 			defer sql.SessionCommandEnd(ctx.Session)
+			var err error
 			levelNodes, err = tree.GetHistogramLevel(ctx, prollyMap.Tuples(), bucketLowCnt)
 			if err != nil {
 				sc.descError("get level", err)
