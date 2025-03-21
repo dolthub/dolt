@@ -22,7 +22,6 @@ require (
 	github.com/gocraft/dbr/v2 v2.7.2
 	github.com/golang/snappy v0.0.4
 	github.com/google/uuid v1.6.0
-	github.com/jpillora/backoff v1.0.0
 	github.com/juju/gnuflag v0.0.0-20171113085948-2ce1bb71843d
 	github.com/mattn/go-isatty v0.0.17
 	github.com/mattn/go-runewidth v0.0.13
