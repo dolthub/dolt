@@ -330,7 +330,7 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 	if d.configureStats {
 		err := d.statsPro.Purge(ctx)
 		require.NoError(t, err)
-		
+
 		err = d.statsPro.Restart()
 		require.NoError(t, err)
 	}
