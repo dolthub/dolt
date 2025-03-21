@@ -1093,6 +1093,7 @@ func getConfigFromServerConfig(serverConfig servercfg.ServerConfig, plf server.P
 	serverConf.ConnWriteTimeout = writeTimeout
 	serverConf.MaxConnections = serverConfig.MaxConnections()
 	serverConf.MaxWaitConnections = serverConfig.MaxWaitConnections()
+	serverConf.MaxWaitConnectionsTimeout = serverConfig.MaxWaitConnectionsTimeout()
 	serverConf.TLSConfig = tlsConfig
 	serverConf.RequireSecureTransport = serverConfig.RequireSecureTransport()
 	serverConf.MaxLoggedQueryLen = serverConfig.MaxLoggedQueryLen()

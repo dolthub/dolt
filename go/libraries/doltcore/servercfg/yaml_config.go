@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+	"time"
 	"unicode"
 	"unicode/utf8"
 
@@ -77,12 +78,13 @@ type UserYAMLConfig struct {
 
 // ListenerYAMLConfig contains information on the network connection that the server will open
 type ListenerYAMLConfig struct {
-	HostStr            *string `yaml:"host,omitempty"`
-	PortNumber         *int    `yaml:"port,omitempty"`
-	MaxConnections     *uint64 `yaml:"max_connections,omitempty"`
-	BackLog            *uint32 `yaml:"back_log,omitempty"`
-	ReadTimeoutMillis  *uint64 `yaml:"read_timeout_millis,omitempty"`
-	WriteTimeoutMillis *uint64 `yaml:"write_timeout_millis,omitempty"`
+	HostStr                 *string `yaml:"host,omitempty"`
+	PortNumber              *int    `yaml:"port,omitempty"`
+	MaxConnections          *uint64 `yaml:"max_connections,omitempty"`
+	BackLog                 *uint32 `yaml:"back_log,omitempty"`
+	MaxConnectionsTimeoutMs *uint64 `yaml:"max_connections_timeout_millis,omitempty"`
+	ReadTimeoutMillis       *uint64 `yaml:"read_timeout_millis,omitempty"`
+	WriteTimeoutMillis      *uint64 `yaml:"write_timeout_millis,omitempty"`
 	// TLSKey is a file system path to an unencrypted private TLS key in PEM format.
 	TLSKey *string `yaml:"tls_key,omitempty"`
 	// TLSCert is a file system path to a TLS certificate chain in PEM format.
@@ -199,6 +201,7 @@ func ServerConfigAsYAMLConfig(cfg ServerConfig) *YAMLConfig {
 			PortNumber:              ptr(cfg.Port()),
 			MaxConnections:          ptr(cfg.MaxConnections()),
 			BackLog:                 ptr(cfg.MaxWaitConnections()),
+			MaxConnectionsTimeoutMs: ptr(uint64(cfg.MaxWaitConnectionsTimeout().Milliseconds())),
 			ReadTimeoutMillis:       ptr(cfg.ReadTimeout()),
 			WriteTimeoutMillis:      ptr(cfg.WriteTimeout()),
 			TLSKey:                  nillableStrPtr(cfg.TLSKey()),
@@ -270,6 +273,7 @@ func ServerConfigSetValuesAsYAMLConfig(cfg ServerConfig) *YAMLConfig {
 			PortNumber:              zeroIf(ptr(cfg.Port()), !cfg.ValueSet(PortKey)),
 			MaxConnections:          zeroIf(ptr(cfg.MaxConnections()), !cfg.ValueSet(MaxConnectionsKey)),
 			BackLog:                 zeroIf(ptr(cfg.MaxWaitConnections()), !cfg.ValueSet(MaxWaitConnectionsKey)),
+			MaxConnectionsTimeoutMs: zeroIf(ptr(uint64(cfg.MaxWaitConnectionsTimeout().Milliseconds())), !cfg.ValueSet(MaxWaitConnectionsTimeoutKey)),
 			ReadTimeoutMillis:       zeroIf(ptr(cfg.ReadTimeout()), !cfg.ValueSet(ReadTimeoutKey)),
 			WriteTimeoutMillis:      zeroIf(ptr(cfg.WriteTimeout()), !cfg.ValueSet(WriteTimeoutKey)),
 			TLSKey:                  zeroIf(ptr(cfg.TLSKey()), !cfg.ValueSet(TLSKeyKey)),
@@ -493,6 +497,9 @@ func (cfg YAMLConfig) withDefaultsFilledIn() YAMLConfig {
 	if withDefaults.ListenerConfig.BackLog == nil {
 		withDefaults.ListenerConfig.BackLog = defaults.ListenerConfig.BackLog
 	}
+	if withDefaults.ListenerConfig.MaxConnectionsTimeoutMs == nil {
+		withDefaults.ListenerConfig.MaxConnectionsTimeoutMs = defaults.ListenerConfig.MaxConnectionsTimeoutMs
+	}
 	if withDefaults.ListenerConfig.ReadTimeoutMillis == nil {
 		withDefaults.ListenerConfig.ReadTimeoutMillis = defaults.ListenerConfig.ReadTimeoutMillis
 	}
@@ -671,6 +678,14 @@ func (cfg YAMLConfig) MaxWaitConnections() uint32 {
 	}
 
 	return *cfg.ListenerConfig.BackLog
+}
+
+func (cfg YAMLConfig) MaxWaitConnectionsTimeout() time.Duration {
+	if cfg.ListenerConfig.MaxConnectionsTimeoutMs == nil {
+		return DefaultMaxWaitConnectionsTimeout
+	}
+
+	return time.Duration(*cfg.ListenerConfig.MaxConnectionsTimeoutMs) * time.Millisecond
 }
 
 // DisableClientMultiStatements returns true if the server should run in a mode
@@ -962,6 +977,8 @@ func (cfg YAMLConfig) ValueSet(value string) bool {
 		return cfg.ListenerConfig.MaxConnections != nil
 	case MaxWaitConnectionsKey:
 		return cfg.ListenerConfig.BackLog != nil
+	case MaxWaitConnectionsTimeoutKey:
+		return cfg.ListenerConfig.MaxConnectionsTimeoutMs != nil
 	case EventSchedulerKey:
 		return cfg.BehaviorConfig.EventSchedulerStatus != nil
 	}

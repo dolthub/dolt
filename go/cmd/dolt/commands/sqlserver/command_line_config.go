@@ -19,6 +19,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/servercfg"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
@@ -43,6 +44,7 @@ type commandLineServerConfig struct {
 	doltTransactionCommit   bool
 	maxConnections          uint64
 	maxWaitConnections      uint32
+	maxWaitConnsTimeout     time.Duration
 	tlsKey                  string
 	tlsCert                 string
 	requireSecureTransport  bool
@@ -74,6 +76,7 @@ func DefaultCommandLineServerConfig() *commandLineServerConfig {
 		autoCommit:              servercfg.DefaultAutoCommit,
 		maxConnections:          servercfg.DefaultMaxConnections,
 		maxWaitConnections:      servercfg.DefaultMaxWaitConnections,
+		maxWaitConnsTimeout:     servercfg.DefaultMaxWaitConnectionsTimeout,
 		dataDir:                 servercfg.DefaultDataDir,
 		cfgDir:                  filepath.Join(servercfg.DefaultDataDir, servercfg.DefaultCfgDir),
 		privilegeFilePath:       filepath.Join(servercfg.DefaultDataDir, servercfg.DefaultCfgDir, servercfg.DefaultPrivilegeFilePath),
@@ -175,6 +178,14 @@ func NewCommandLineConfig(creds *cli.UserPassword, apr *argparser.ArgParseResult
 		config.withMaxWaitConnections(uint32(maxWaitConnections))
 	}
 
+	if maxWaitConnsTimeoutStr, ok := apr.GetValue(maxWaitConsTimeoutFlag); ok {
+		maxWaitConnsTimeout, err := time.ParseDuration(maxWaitConnsTimeoutStr)
+		if err != nil {
+			return nil, fmt.Errorf("invalid value for --max-wait-connections-timeout '%s'", maxWaitConnsTimeoutStr)
+		}
+		config.maxWaitConnsTimeout = maxWaitConnsTimeout
+	}
+
 	config.autoCommit = !apr.Contains(noAutoCommitFlag)
 	if apr.Contains(noAutoCommitFlag) {
 		config.valuesSet[servercfg.AutoCommitKey] = struct{}{}
@@ -268,6 +279,10 @@ func (cfg *commandLineServerConfig) MaxConnections() uint64 {
 // for a connection before new connections result in immediate rejection.
 func (cfg *commandLineServerConfig) MaxWaitConnections() uint32 {
 	return cfg.maxWaitConnections
+}
+
+func (cfg *commandLineServerConfig) MaxWaitConnectionsTimeout() time.Duration {
+	return cfg.maxWaitConnsTimeout
 }
 
 // TLSKey returns a path to the servers PEM-encoded private TLS key. "" if there is none.
@@ -437,9 +452,16 @@ func (cfg *commandLineServerConfig) withMaxConnections(maxConnections uint64) *c
 	return cfg
 }
 
+// NM4 - I think we can drop this. Or take a str?
 func (cfg *commandLineServerConfig) withMaxWaitConnections(maxWaitConnections uint32) *commandLineServerConfig {
 	cfg.maxWaitConnections = maxWaitConnections
 	cfg.valuesSet[servercfg.MaxWaitConnectionsKey] = struct{}{}
+	return cfg
+}
+
+func (cfg *commandLineServerConfig) withMaxWaitConnectionsTimeout(maxWaitConnsTimeout time.Duration) *commandLineServerConfig {
+	cfg.maxWaitConnsTimeout = maxWaitConnsTimeout
+	cfg.valuesSet[servercfg.MaxWaitConnectionsTimeoutKey] = struct{}{}
 	return cfg
 }
 
