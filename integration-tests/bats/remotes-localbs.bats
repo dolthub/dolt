@@ -9,8 +9,6 @@ setup() {
     cd $BATS_TMPDIR
     cd dolt-repo-$$
     mkdir "dolt-repo-clones"
-
-    unset DOLT_ARCHIVE_PULL_STREAMER
 }
 
 teardown() {
