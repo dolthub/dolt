@@ -212,15 +212,21 @@ func NewSqlEngine(
 		dprocedures.UseSessionAwareSafepointController = true
 	}
 
+	var statsPro sql.StatsProvider
 	_, enabled, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsEnabled)
 	if enabled.(int8) == 1 {
-		config.StatsController = statspro.NewStatsController(logrus.StandardLogger(), mrEnv.GetEnv(mrEnv.GetFirstDatabase()))
+		statsPro = statspro.NewStatsController(logrus.StandardLogger(), mrEnv.GetEnv(mrEnv.GetFirstDatabase()))
 	} else {
-		config.StatsController = statspro.StatsNoop{}
+		statsPro = statspro.StatsNoop{}
 	}
 
+<<<<<<< Updated upstream
+=======
+	engine.Analyzer.Catalog.StatsProvider = statsPro
+
+>>>>>>> Stashed changes
 	engine.Analyzer.ExecBuilder = rowexec.NewOverrideBuilder(kvexec.Builder{})
-	sessFactory := doltSessionFactory(pro, config.StatsController, mrEnv.Config(), bcController, gcSafepointController, config.Autocommit)
+	sessFactory := doltSessionFactory(pro, statsPro, mrEnv.Config(), bcController, gcSafepointController, config.Autocommit)
 	sqlEngine.provider = pro
 	sqlEngine.contextFactory = sqlContextFactory
 	sqlEngine.dsessFactory = sessFactory
@@ -239,7 +245,7 @@ func NewSqlEngine(
 
 	// configuring stats depends on sessionBuilder
 	// sessionBuilder needs ref to statsProv
-	if sc, ok := config.StatsController.(*statspro.StatsController); ok {
+	if sc, ok := statsPro.(*statspro.StatsController); ok {
 		_, memOnly, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsMemoryOnly)
 		sc.SetMemOnly(memOnly.(int8) == 1)
 
