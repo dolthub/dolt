@@ -17,15 +17,50 @@ package nbs
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
+type TableFileMetadata struct {
+	snappyChunkCount int
+	snappyBytes      uint64
+}
+
+func (tfm *TableFileMetadata) SummaryString() string {
+	sb := strings.Builder{}
+
+	sb.WriteString("  Table File Metadata:\n")
+	sb.WriteString(fmt.Sprintf("    Snappy Chunk Count: %d (bytes: %d)\n", tfm.snappyChunkCount, tfm.snappyBytes))
+
+	return sb.String()
+}
+
 type ArchiveMetadata struct {
 	originalTableFileId string
+	formatVersion       int
+	snappyChunkCount    int
+	snappyBytes         uint64
+	zStdChunkCount      int
+	zStdBytes           uint64
+	dictionaryCount     int
+	dictionaryBytes     uint64
+}
+
+func (am *ArchiveMetadata) SummaryString() string {
+	sb := strings.Builder{}
+
+	sb.WriteString("  Archive Metadata:\n")
+	sb.WriteString(fmt.Sprintf("    Format Version: %d\n", am.formatVersion))
+	sb.WriteString(fmt.Sprintf("    Snappy Chunk Count: %d (bytes: %d)\n", am.snappyChunkCount, am.snappyBytes))
+	sb.WriteString(fmt.Sprintf("    ZStd Chunk Count: %d (bytes: %d)\n", am.zStdChunkCount, am.zStdBytes))
+	sb.WriteString(fmt.Sprintf("    Dictionary Count: %d (bytes: %d)\n", am.dictionaryCount, am.dictionaryBytes))
+
+	return sb.String()
 }
 
 type TableFileFormat int
@@ -45,6 +80,24 @@ type StorageArtifact struct {
 	storageType TableFileFormat
 	// arcMetadata is additional metadata for archive files. it is only set for storageType == TypeArchive.
 	arcMetadata *ArchiveMetadata
+	// tblMetadata is additional metadata for table files. it is only set for storageType == TypeNoms.
+	tblMetadata *TableFileMetadata
+}
+
+func (sa StorageArtifact) SummaryString() string {
+	sb := strings.Builder{}
+
+	sb.WriteString("Storage Artifact:\n")
+	sb.WriteString("  ID: " + sa.id.String() + "\n")
+	sb.WriteString("  Path: " + sa.path + "\n")
+
+	if sa.storageType == TypeArchive {
+		sb.WriteString(sa.arcMetadata.SummaryString())
+	} else {
+		sb.WriteString(sa.tblMetadata.SummaryString())
+	}
+
+	return sb.String()
 }
 
 type StorageMetadata struct {
@@ -60,6 +113,10 @@ func (sm *StorageMetadata) ArchiveFilesPresent() bool {
 		}
 	}
 	return false
+}
+
+func (sm *StorageMetadata) GetArtifacts() []StorageArtifact {
+	return sm.artifacts
 }
 
 // RevertMap returns a map of Archive file ids to their origin TableFile ids.
@@ -153,7 +210,6 @@ func GetStorageMetadata(ctx context.Context, path string, stats *Stats) (Storage
 func buildArtifact(ctx context.Context, info TableSpecInfo, genPath string, stats *Stats) (StorageArtifact, error) {
 	tfName := info.GetName()
 
-	// This code is going to be removed as soon as backup supports archives.
 	archive := false
 	fullPath := filepath.Join(genPath, tfName)
 
@@ -172,10 +228,16 @@ func buildArtifact(ctx context.Context, info TableSpecInfo, genPath string, stat
 	}
 
 	if !archive {
+		tblMeta, err := newTableFileMetadata(fullPath, info.GetChunkCount())
+		if err != nil {
+			return StorageArtifact{}, err
+		}
+
 		return StorageArtifact{
 			id:          hash.Parse(tfName),
 			path:        fullPath,
 			storageType: TypeNoms,
+			tblMetadata: tblMeta,
 		}, nil
 	} else {
 		fra, err := newFileReaderAt(fullPath)

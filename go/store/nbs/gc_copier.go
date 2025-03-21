@@ -69,7 +69,7 @@ func (gcc *gcCopier) cancel(_ context.Context) error {
 
 func (gcc *gcCopier) copyTablesToDir(ctx context.Context) (ts []tableSpec, err error) {
 	var filename string
-	filename, err = gcc.writer.Finish()
+	_, filename, err = gcc.writer.Finish()
 	if err != nil {
 		return nil, err
 	}
@@ -120,7 +120,7 @@ func (gcc *gcCopier) copyTablesToDir(ctx context.Context) (ts []tableSpec, err e
 		return nil, err
 	}
 	defer r.Close()
-	sz := gcc.writer.ContentLength()
+	sz := gcc.writer.FullLength()
 
 	err = gcc.tfp.CopyTableFile(ctx, r, filename, sz, uint32(gcc.writer.ChunkCount()))
 	if err != nil {

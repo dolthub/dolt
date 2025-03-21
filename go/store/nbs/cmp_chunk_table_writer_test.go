@@ -63,7 +63,7 @@ func TestCmpChunkTableWriter(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	id, err := tw.Finish()
+	_, id, err := tw.Finish()
 	require.NoError(t, err)
 
 	t.Run("ErrDuplicateChunkWritten", func(t *testing.T) {
@@ -75,7 +75,7 @@ func TestCmpChunkTableWriter(t *testing.T) {
 			_, err = tw.AddChunk(cmpChnk)
 			require.NoError(t, err)
 		}
-		_, err = tw.Finish()
+		_, _, err = tw.Finish()
 		require.Error(t, err, ErrDuplicateChunkWritten)
 	})
 
