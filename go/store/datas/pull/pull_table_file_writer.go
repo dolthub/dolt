@@ -206,7 +206,7 @@ func (w *PullTableFileWriter) addChunkThread() (err error) {
 	defer func() {
 		if curWr != nil {
 			// Cleanup dangling writer, whose contents will never be used.
-			_, _ = curWr.Finish()
+			_, _, _ = curWr.Finish()
 			rd, _ := curWr.Reader()
 			if rd != nil {
 				rd.Close()
@@ -292,11 +292,13 @@ func (w *PullTableFileWriter) uploadThread(ctx context.Context, reqCh chan nbs.G
 			if !ok {
 				return nil
 			}
-			// content length before we finish the write, which will
-			// add the index and table file footer.
-			chunksLen := wr.ContentLength()
 
-			id, err := wr.Finish()
+			_, id, err := wr.Finish()
+			if err != nil {
+				return err
+			}
+
+			chunkData, err := wr.ChunkDataLength()
 			if err != nil {
 				return err
 			}
@@ -305,8 +307,8 @@ func (w *PullTableFileWriter) uploadThread(ctx context.Context, reqCh chan nbs.G
 				id:          id,
 				read:        wr,
 				numChunks:   wr.ChunkCount(),
-				chunksLen:   chunksLen,
-				contentLen:  wr.ContentLength(),
+				chunksLen:   chunkData,
+				contentLen:  wr.FullLength(),
 				contentHash: wr.GetMD5(),
 			}
 			err = w.uploadTempTableFile(ctx, ttf)

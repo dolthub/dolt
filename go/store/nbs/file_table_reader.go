@@ -217,3 +217,18 @@ func (fra *fileReaderAt) ReadAtWithStats(ctx context.Context, p []byte, off int6
 	}()
 	return fra.f.ReadAt(p, off)
 }
+
+func newTableFileMetadata(path string, chunkCount uint32) (*TableFileMetadata, error) {
+	fra, err := newFileReaderAt(path)
+	if err != nil {
+		return nil, err
+	}
+
+	idxSz := int64(indexSize(chunkCount) + footerSize)
+	indexOffset := fra.sz - idxSz
+
+	return &TableFileMetadata{
+		snappyChunkCount: int(chunkCount),
+		snappyBytes:      uint64(indexOffset),
+	}, nil
+}

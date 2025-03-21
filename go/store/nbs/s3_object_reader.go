@@ -37,7 +37,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"github.com/jpillora/backoff"
+	"github.com/cenkalti/backoff/v4"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -144,14 +144,14 @@ func (s3or *s3ObjectReader) readRange(ctx context.Context, name string, p []byte
 	// We hit the point of diminishing returns investigating #3255, so add retries. In conversations with AWS people, it's not surprising to get transient failures when talking to S3, though SDKs are intended to have their own retrying. The issue may be that, in Go, making the S3 request and reading the data are separate operations, and the SDK kind of can't do its own retrying to handle failures in the latter.
 	if isConnReset(err) {
 		// We are backing off here because its possible and likely that the rate of requests to S3 is the underlying issue.
-		b := &backoff.Backoff{
-			Min:    128 * time.Microsecond,
-			Max:    1024 * time.Millisecond,
-			Factor: 2,
-			Jitter: true,
-		}
+		b := backoff.NewExponentialBackOff()
+		b.InitialInterval = 128 * time.Millisecond
+		b.MaxInterval = 1024 * time.Millisecond
+		b.Multiplier = 2
+		b.Reset()
+
 		for ; isConnReset(err); n, sz, err = read() {
-			dur := b.Duration()
+			dur := b.NextBackOff()
 			time.Sleep(dur)
 		}
 	}

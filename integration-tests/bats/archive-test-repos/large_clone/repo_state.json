@@ -1,0 +1,20 @@
+{
+  "head": "refs/heads/main",
+  "remotes": {
+    "origin": {
+      "name": "origin",
+      "url": "http://localhost:4635/test-org/test-repo",
+      "fetch_specs": [
+        "refs/heads/*:refs/remotes/origin/*"
+      ],
+      "params": {}
+    }
+  },
+  "backups": {},
+  "branches": {
+    "main": {
+      "head": "refs/heads/main",
+      "remote": "origin"
+    }
+  }
+}

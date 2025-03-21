@@ -80,7 +80,7 @@ func UnArchive(ctx context.Context, cs chunks.ChunkStore, smd StorageMetadata, p
 						return err
 					}
 
-					id, err := classicTable.Finish()
+					_, id, err := classicTable.Finish()
 					if err != nil {
 						return err
 					}
