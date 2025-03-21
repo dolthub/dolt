@@ -20,6 +20,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	gms "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/enginetest"
@@ -28,6 +29,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
 	"github.com/dolthub/go-mysql-server/sql/rowexec"
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
@@ -36,7 +38,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/kvexec"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statsnoms"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statspro"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
@@ -46,7 +47,7 @@ import (
 type DoltHarness struct {
 	t                     *testing.T
 	provider              dsess.DoltDatabaseProvider
-	statsPro              sql.StatsProvider
+	statsPro              *statspro.StatsController
 	multiRepoEnv          *env.MultiRepoEnv
 	session               *dsess.DoltSession
 	branchControl         *branch_control.Controller
@@ -59,6 +60,7 @@ type DoltHarness struct {
 	setupDbs              map[string]struct{}
 	skipSetupCommit       bool
 	configureStats        bool
+	statsThreads          *sql.BackgroundThreads
 	useLocalFilesystem    bool
 	setupTestProcedures   bool
 }
@@ -242,12 +244,19 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 		}
 		doltProvider, ok := pro.(*sqle.DoltDatabaseProvider)
 		require.True(t, ok)
+
 		d.provider = doltProvider
 
 		d.gcSafepointController = dsess.NewGCSafepointController()
 
-		statsProv := statspro.NewProvider(d.provider.(*sqle.DoltDatabaseProvider), statsnoms.NewNomsStatsFactory(d.multiRepoEnv.RemoteDialProvider()))
-		d.statsPro = statsProv
+		bThreads := sql.NewBackgroundThreads()
+
+		ctxGen := func(ctx context.Context) (*sql.Context, error) {
+			client := sql.Client{Address: "localhost", User: "root"}
+			return sql.NewContext(context.Background(), sql.WithSession(d.newSessionWithClient(client))), nil
+		}
+		statsPro := statspro.NewStatsController(logrus.StandardLogger(), d.multiRepoEnv.GetEnv(d.multiRepoEnv.GetFirstDatabase()))
+		d.statsPro = statsPro
 
 		var err error
 		d.session, err = dsess.NewDoltSession(enginetest.NewBaseSession(), d.provider, d.multiRepoEnv.Config(), d.branchControl, d.statsPro, writer.NewWriteSession, d.gcSafepointController)
@@ -262,6 +271,7 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 
 		sqlCtx := enginetest.NewContext(d)
 		databases := pro.AllDatabases(sqlCtx)
+
 		d.setupDbs = make(map[string]struct{})
 		var dbs []string
 		for _, db := range databases {
@@ -281,41 +291,45 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 			require.NoError(t, err)
 		}
 
+		e = e.WithBackgroundThreads(bThreads)
+
+		// xxx: stats threads can't be tied to single test cycle,
+		// this is only OK for enginetests
+		statsThreads := sql.NewBackgroundThreads()
 		if d.configureStats {
-			bThreads := sql.NewBackgroundThreads()
-			e = e.WithBackgroundThreads(bThreads)
-
-			dSess := dsess.DSessFromSess(sqlCtx.Session)
-			dbCache := dSess.DatabaseCache(sqlCtx)
-
-			dsessDbs := make([]dsess.SqlDatabase, len(dbs))
-			for i, dbName := range dbs {
-				dsessDbs[i], _ = dbCache.GetCachedRevisionDb(fmt.Sprintf("%s/main", dbName), dbName)
+			err = statsPro.Init(ctx, doltProvider, ctxGen, statsThreads, databases)
+			if err != nil {
+				return nil, err
 			}
+			statsPro.SetTimers(int64(1*time.Nanosecond), int64(1*time.Second))
 
-			ctxFact := func(context.Context) (*sql.Context, error) {
-				sess := d.newSessionWithClient(sql.Client{Address: "localhost", User: "root"})
-				return sql.NewContext(context.Background(), sql.WithSession(sess)), nil
-			}
-			if err = statsProv.Configure(sqlCtx, ctxFact, bThreads, dsessDbs); err != nil {
+			err = statsPro.Restart()
+			if err != nil {
 				return nil, err
 			}
 
 			statsOnlyQueries := filterStatsOnlyQueries(d.setupData)
 			e, err = enginetest.RunSetupScripts(sqlCtx, e, statsOnlyQueries, d.SupportsNativeIndexCreation())
+			if err != nil {
+				return nil, err
+			}
+
+			finalizeStatsAfterSetup := []setup.SetupScript{{"call dolt_stats_wait()"}}
+			e, err = enginetest.RunSetupScripts(sqlCtx, d.engine, finalizeStatsAfterSetup, d.SupportsNativeIndexCreation())
+			require.NoError(t, err)
 		}
 
 		return e, nil
 	}
 
 	// Reset the mysql DB table to a clean state for this new engine
+	ctx := enginetest.NewContext(d)
+
 	d.engine.Analyzer.Catalog.MySQLDb = mysql_db.CreateEmptyMySQLDb()
 	d.engine.Analyzer.Catalog.MySQLDb.AddRootAccount()
-	d.engine.Analyzer.Catalog.StatsProvider = statspro.NewProvider(d.provider.(*sqle.DoltDatabaseProvider), statsnoms.NewNomsStatsFactory(d.multiRepoEnv.RemoteDialProvider()))
 
-	var err error
-	sqlCtx := enginetest.NewContext(d)
-	e, err := enginetest.RunSetupScripts(sqlCtx, d.engine, d.resetScripts(), d.SupportsNativeIndexCreation())
+	e, err := enginetest.RunSetupScripts(ctx, d.engine, d.resetScripts(), d.SupportsNativeIndexCreation())
+	require.NoError(t, err)
 
 	// Get a fresh session after running setup scripts, since some setup scripts can change the session state
 	d.session, err = dsess.NewDoltSession(enginetest.NewBaseSession(), d.provider, d.multiRepoEnv.Config(), d.branchControl, d.statsPro, writer.NewWriteSession, nil)
@@ -430,7 +444,6 @@ func (d *DoltHarness) NewDatabases(names ...string) []sql.Database {
 	doltProvider, ok := pro.(*sqle.DoltDatabaseProvider)
 	require.True(d.t, ok)
 	d.provider = doltProvider
-	d.statsPro = statspro.NewProvider(doltProvider, statsnoms.NewNomsStatsFactory(d.multiRepoEnv.RemoteDialProvider()))
 
 	var err error
 	d.session, err = dsess.NewDoltSession(enginetest.NewBaseSession(), doltProvider, d.multiRepoEnv.Config(), d.branchControl, d.statsPro, writer.NewWriteSession, nil)
@@ -502,7 +515,6 @@ func (d *DoltHarness) NewDatabaseProvider() sql.MutableDatabaseProvider {
 
 func (d *DoltHarness) Close() {
 	d.closeProvider()
-	sql.SystemVariables.SetGlobal(dsess.DoltStatsAutoRefreshEnabled, int8(0))
 }
 
 func (d *DoltHarness) closeProvider() {

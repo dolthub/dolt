@@ -35,7 +35,10 @@ func GetMutableSecondaryIdxs(ctx *sql.Context, ourSch, sch schema.Schema, tableN
 		if err != nil {
 			return nil, err
 		}
-		m := durable.ProllyMapFromIndex(idx)
+		m, err := durable.ProllyMapFromIndex(idx)
+		if err != nil {
+			return nil, err
+		}
 		mods[i], err = NewMutableSecondaryIdx(ctx, m, ourSch, sch, tableName, index)
 		if err != nil {
 			return nil, err
@@ -68,7 +71,10 @@ func GetMutableSecondaryIdxsWithPending(ctx *sql.Context, ns tree.NodeStore, our
 		if err != nil {
 			return nil, err
 		}
-		m := durable.ProllyMapFromIndex(idx)
+		m, err := durable.ProllyMapFromIndex(idx)
+		if err != nil {
+			return nil, err
+		}
 
 		// If the schema has changed, don't reuse the index.
 		// TODO: This isn't technically required, but correctly handling updating secondary indexes when only some

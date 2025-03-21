@@ -205,7 +205,7 @@ func Parse(str string) (DoltRef, error) {
 	}
 
 	if prefix := PrefixForType(StatsRefType); strings.HasPrefix(str, prefix) {
-		return NewStatsRef(str[len(prefix):]), nil
+		return NewStatsRef(), nil
 	}
 
 	if prefix := PrefixForType(TupleRefType); strings.HasPrefix(str, prefix) {

@@ -59,13 +59,20 @@ func newProllyIndexIter(
 	projections []uint64,
 	dprimary, dsecondary durable.Index,
 ) (prollyIndexIter, error) {
-	secondary := durable.ProllyMapFromIndex(dsecondary)
+	secondary, err := durable.ProllyMapFromIndex(dsecondary)
+	if err != nil {
+		return prollyIndexIter{}, err
+	}
+
 	indexIter, err := secondary.IterRange(ctx, rng)
 	if err != nil {
 		return prollyIndexIter{}, err
 	}
 
-	primary := durable.ProllyMapFromIndex(dprimary)
+	primary, err := durable.ProllyMapFromIndex(dprimary)
+	if err != nil {
+		return prollyIndexIter{}, err
+	}
 	kd, _ := primary.Descriptors()
 	pkBld := val.NewTupleBuilder(kd, primary.NodeStore())
 	pkMap := OrdinalMappingFromIndex(idx)
@@ -183,7 +190,10 @@ func newProllyCoveringIndexIter(
 	projections []uint64,
 	indexdata durable.Index,
 ) (prollyCoveringIndexIter, error) {
-	secondary := durable.ProllyMapFromIndex(indexdata)
+	secondary, err := durable.ProllyMapFromIndex(indexdata)
+	if err != nil {
+		return prollyCoveringIndexIter{}, err
+	}
 	indexIter, err := secondary.IterRange(ctx, rng)
 	if err != nil {
 		return prollyCoveringIndexIter{}, err
@@ -293,9 +303,11 @@ type prollyKeylessIndexIter struct {
 var _ sql.RowIter = prollyKeylessIndexIter{}
 
 func newProllyKeylessIndexIter(ctx *sql.Context, idx DoltIndex, rng prolly.Range, doltgresRange *DoltgresRange, pkSch sql.PrimaryKeySchema, projections []uint64, rows, dsecondary durable.Index, reverse bool) (prollyKeylessIndexIter, error) {
-	secondary := durable.ProllyMapFromIndex(dsecondary)
+	secondary, err := durable.ProllyMapFromIndex(dsecondary)
+	if err != nil {
+		return prollyKeylessIndexIter{}, err
+	}
 	var indexIter prolly.MapIter
-	var err error
 	if doltgresRange == nil {
 		if reverse {
 			indexIter, err = secondary.IterRangeReverse(ctx, rng)
@@ -312,7 +324,10 @@ func newProllyKeylessIndexIter(ctx *sql.Context, idx DoltIndex, rng prolly.Range
 		}
 	}
 
-	clustered := durable.ProllyMapFromIndex(rows)
+	clustered, err := durable.ProllyMapFromIndex(rows)
+	if err != nil {
+		return prollyKeylessIndexIter{}, err
+	}
 	keyDesc, valDesc := clustered.Descriptors()
 	indexMap := OrdinalMappingFromIndex(idx)
 	keyBld := val.NewTupleBuilder(keyDesc, clustered.NodeStore())

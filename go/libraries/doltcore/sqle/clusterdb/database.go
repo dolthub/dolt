@@ -162,6 +162,10 @@ func (db database) RequestedName() string {
 	return db.Name()
 }
 
+func (db database) AliasedName() string {
+	return db.Name()
+}
+
 type noopRepoStateWriter struct{}
 
 var _ env.RepoStateWriter = noopRepoStateWriter{}

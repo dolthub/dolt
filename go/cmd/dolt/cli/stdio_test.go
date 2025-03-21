@@ -20,7 +20,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/vbauerster/mpb/cwriter"
 )
 
 func TestEphemeralPrinter(t *testing.T) {
@@ -64,6 +63,15 @@ func TestEphemeralPrinter(t *testing.T) {
 	})
 }
 
+// clearLinesTxt moves cursor up n lines and clears the screen from the cursor position to the end.
+// Inspired by https://github.com/vbauerster/mpb/blob/v8.0.2/cwriter/writer.go#L11-L15.
 func clearLinesTxt(n int) string {
-	return fmt.Sprintf("%c[%dA", cwriter.ESC, n) + fmt.Sprintf("%c[J", cwriter.ESC)
+	// These are ANSI escape codes, see
+	//  - https://en.wikipedia.org/wiki/ANSI_escape_code#C0_control_codes1
+	//  - https://en.wikipedia.org/wiki/ANSI_escape_code#Control_Sequence_Introducer_commands
+	//
+	// \x1b: ESC (Escape)
+	// [%dA: CUU (Cursor Up). [5A means moves the cursor up 5 lines
+	// [J  : ED (Erase in Display)
+	return fmt.Sprintf("\x1b[%dA\x1b[J", n)
 }

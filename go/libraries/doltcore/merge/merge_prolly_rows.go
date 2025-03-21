@@ -73,7 +73,10 @@ func mergeProllyTable(
 	if err != nil {
 		return nil, nil, err
 	}
-	leftRows := durable.ProllyMapFromIndex(lr)
+	leftRows, err := durable.ProllyMapFromIndex(lr)
+	if err != nil {
+		return nil, nil, err
+	}
 	valueMerger := newValueMerger(mergedSch, tm.leftSch, tm.rightSch, tm.ancSch, leftRows.Pool(), tm.ns)
 
 	if !valueMerger.leftMapping.IsIdentityMapping() {
@@ -130,7 +133,11 @@ func mergeProllyTableData(ctx *sql.Context, tm *TableMerger, finalSch schema.Sch
 	if err != nil {
 		return nil, nil, err
 	}
-	leftEditor := durable.ProllyMapFromIndex(lr).Rewriter(finalSch.GetKeyDescriptor(ns), finalSch.GetValueDescriptor(ns))
+	lIdx, err := durable.ProllyMapFromIndex(lr)
+	if err != nil {
+		return nil, nil, err
+	}
+	leftEditor := lIdx.Rewriter(finalSch.GetKeyDescriptor(ns), finalSch.GetValueDescriptor(ns))
 
 	ai, err := mergeTbl.GetArtifacts(ctx)
 	if err != nil {
@@ -331,19 +338,27 @@ func threeWayDiffer(ctx context.Context, tm *TableMerger, valueMerger *valueMerg
 	if err != nil {
 		return nil, err
 	}
-	leftRows := durable.ProllyMapFromIndex(lr)
+	leftRows, err := durable.ProllyMapFromIndex(lr)
+	if err != nil {
+		return nil, err
+	}
 
 	rr, err := tm.rightTbl.GetRowData(ctx)
 	if err != nil {
 		return nil, err
 	}
-	rightRows := durable.ProllyMapFromIndex(rr)
-
+	rightRows, err := durable.ProllyMapFromIndex(rr)
+	if err != nil {
+		return nil, err
+	}
 	ar, err := tm.ancTbl.GetRowData(ctx)
 	if err != nil {
 		return nil, err
 	}
-	ancRows := durable.ProllyMapFromIndex(ar)
+	ancRows, err := durable.ProllyMapFromIndex(ar)
+	if err != nil {
+		return nil, err
+	}
 
 	return tree.NewThreeWayDiffer(
 		ctx,
@@ -534,7 +549,10 @@ func newUniqValidator(ctx *sql.Context, sch schema.Schema, tm *TableMerger, vm *
 	if err != nil {
 		return uniqValidator{}, err
 	}
-	clustered := durable.ProllyMapFromIndex(rows)
+	clustered, err := durable.ProllyMapFromIndex(rows)
+	if err != nil {
+		return uniqValidator{}, err
+	}
 
 	indexes, err := tm.leftTbl.GetIndexSet(ctx)
 	if err != nil {
@@ -552,7 +570,10 @@ func newUniqValidator(ctx *sql.Context, sch schema.Schema, tm *TableMerger, vm *
 		if err != nil {
 			return uniqValidator{}, err
 		}
-		secondary := durable.ProllyMapFromIndex(idx)
+		secondary, err := durable.ProllyMapFromIndex(idx)
+		if err != nil {
+			return uniqValidator{}, err
+		}
 
 		u, err := newUniqIndex(ctx, sch, tm.name.Name, def, clustered, secondary)
 		if err != nil {

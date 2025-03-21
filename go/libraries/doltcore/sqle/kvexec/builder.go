@@ -364,7 +364,10 @@ func getSourceKv(ctx *sql.Context, n sql.Node, isSrc bool) (prolly.Map, prolly.M
 		if rowData.Format() != types.Format_DOLT {
 			return prolly.Map{}, prolly.Map{}, nil, nil, nil, nil, nil, nil, nil
 		}
-		priMap = durable.ProllyMapFromIndex(rowData)
+		priMap, err = durable.ProllyMapFromIndex(rowData)
+		if err != nil {
+			return prolly.Map{}, prolly.Map{}, nil, nil, nil, nil, nil, nil, err
+		}
 
 		priSch = lb.OutputSchema()
 
@@ -384,7 +387,7 @@ func getSourceKv(ctx *sql.Context, n sql.Node, isSrc bool) (prolly.Map, prolly.M
 				return prolly.Map{}, prolly.Map{}, nil, nil, nil, nil, nil, nil, err
 			}
 		} else {
-			dstIter = lb.NewSecondaryIter(n.IsStrictLookup(), len(n.Expressions()), n.NullMask())
+			dstIter, _ = lb.NewSecondaryIter(n.IsStrictLookup(), len(n.Expressions()), n.NullMask())
 		}
 
 	case *plan.ResolvedTable:
@@ -414,7 +417,10 @@ func getSourceKv(ctx *sql.Context, n sql.Node, isSrc bool) (prolly.Map, prolly.M
 		if err != nil {
 			return prolly.Map{}, prolly.Map{}, nil, nil, nil, nil, nil, nil, err
 		}
-		priMap = durable.ProllyMapFromIndex(priIndex)
+		priMap, err = durable.ProllyMapFromIndex(priIndex)
+		if err != nil {
+			return prolly.Map{}, prolly.Map{}, nil, nil, nil, nil, nil, nil, err
+		}
 		secMap = priMap
 
 		srcIter, err = priMap.IterAll(ctx)
@@ -535,7 +541,10 @@ func getMergeKv(ctx *sql.Context, n sql.Node) (mergeState, error) {
 		if err != nil {
 			return ms, err
 		}
-		ms.idxMap = durable.ProllyMapFromIndex(secIdx)
+		ms.idxMap, err = durable.ProllyMapFromIndex(secIdx)
+		if err != nil {
+			return mergeState{}, err
+		}
 		table, err = doltTable.DoltTable(ctx)
 		if err != nil {
 			return ms, err
@@ -560,7 +569,10 @@ func getMergeKv(ctx *sql.Context, n sql.Node) (mergeState, error) {
 			if err != nil {
 				return ms, err
 			}
-			ms.idxMap = durable.ProllyMapFromIndex(priIndex)
+			ms.idxMap, err = durable.ProllyMapFromIndex(priIndex)
+			if err != nil {
+				return mergeState{}, err
+			}
 			secIterGen = index.NewKeylessIndexImplBuilder(priIndex, secIdx, idx)
 		} else {
 			secIterGen = index.NewSecondaryIterGen(ms.idxMap)
@@ -584,7 +596,10 @@ func getMergeKv(ctx *sql.Context, n sql.Node) (mergeState, error) {
 			return ms, err
 		}
 
-		priMap := durable.ProllyMapFromIndex(priIndex)
+		priMap, err := durable.ProllyMapFromIndex(priIndex)
+		if err != nil {
+			return ms, err
+		}
 		pkMap := index.OrdinalMappingFromIndex(idx)
 		priKd, _ := priMap.Descriptors()
 		pkBld := val.NewTupleBuilder(priKd, priMap.NodeStore())

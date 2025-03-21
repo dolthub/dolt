@@ -16,7 +16,6 @@ package engine
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"strconv"
 	"strings"
@@ -45,7 +44,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/kvexec"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/mysql_file_handler"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statsnoms"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statspro"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
@@ -85,6 +83,7 @@ type SqlEngineConfig struct {
 	AutoGCController           *dsqle.AutoGCController
 	BinlogReplicaController    binlogreplication.BinlogReplicaController
 	EventSchedulerStatus       eventscheduler.SchedulerStatus
+	StatsController            sql.StatsProvider
 }
 
 // NewSqlEngine returns a SqlEngine
@@ -201,9 +200,6 @@ func NewSqlEngine(
 		"authentication_dolt_jwt": NewAuthenticateDoltJWTPlugin(config.JwksConfig),
 	})
 
-	statsPro := statspro.NewProvider(pro, statsnoms.NewNomsStatsFactory(mrEnv.RemoteDialProvider()))
-	engine.Analyzer.Catalog.StatsProvider = statsPro
-
 	if config.AutoGCController != nil {
 		err = config.AutoGCController.RunBackgroundThread(bThreads, sqlEngine.NewDefaultContext)
 		if err != nil {
@@ -216,8 +212,15 @@ func NewSqlEngine(
 		dprocedures.UseSessionAwareSafepointController = true
 	}
 
+	_, enabled, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsEnabled)
+	if enabled.(int8) == 1 {
+		config.StatsController = statspro.NewStatsController(logrus.StandardLogger(), mrEnv.GetEnv(mrEnv.GetFirstDatabase()))
+	} else {
+		config.StatsController = statspro.StatsNoop{}
+	}
+
 	engine.Analyzer.ExecBuilder = rowexec.NewOverrideBuilder(kvexec.Builder{})
-	sessFactory := doltSessionFactory(pro, statsPro, mrEnv.Config(), bcController, gcSafepointController, config.Autocommit)
+	sessFactory := doltSessionFactory(pro, config.StatsController, mrEnv.Config(), bcController, gcSafepointController, config.Autocommit)
 	sqlEngine.provider = pro
 	sqlEngine.contextFactory = sqlContextFactory
 	sqlEngine.dsessFactory = sessFactory
@@ -236,8 +239,28 @@ func NewSqlEngine(
 
 	// configuring stats depends on sessionBuilder
 	// sessionBuilder needs ref to statsProv
-	if err = statsPro.Configure(ctx, sqlEngine.NewDefaultContext, bThreads, dbs); err != nil {
-		fmt.Fprintln(cli.CliErr, err)
+	if sc, ok := config.StatsController.(*statspro.StatsController); ok {
+		_, memOnly, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsMemoryOnly)
+		sc.SetMemOnly(memOnly.(int8) == 1)
+
+		pro.InitDatabaseHooks = append(pro.InitDatabaseHooks, statspro.NewInitDatabaseHook(sc))
+		pro.DropDatabaseHooks = append(pro.DropDatabaseHooks, statspro.NewDropDatabaseHook(sc))
+
+		var sqlDbs []sql.Database
+		for _, db := range dbs {
+			sqlDbs = append(sqlDbs, db)
+		}
+
+		err = sc.Init(ctx, pro, sqlEngine.NewDefaultContext, bThreads, sqlDbs)
+		if err != nil {
+			return nil, err
+		}
+
+		if _, paused, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsPaused); paused.(int8) == 0 {
+			if err = sc.Restart(); err != nil {
+				return nil, err
+			}
+		}
 	}
 
 	// Load MySQL Db information

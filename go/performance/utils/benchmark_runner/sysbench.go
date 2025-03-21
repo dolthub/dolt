@@ -21,9 +21,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"time"
-
-	"github.com/jmoiron/sqlx"
 
 	"github.com/google/uuid"
 )
@@ -149,10 +146,6 @@ func (t *sysbenchTesterImpl) Test(ctx context.Context) (*Result, error) {
 		return nil, err
 	}
 
-	if err := t.collectStats(ctx); err != nil {
-		return nil, err
-	}
-
 	fmt.Println("Running test", t.test.GetName())
 
 	rs, err := t.run(ctx)
@@ -161,77 +154,4 @@ func (t *sysbenchTesterImpl) Test(ctx context.Context) (*Result, error) {
 	}
 
 	return rs, nil
-}
-
-func (t *sysbenchTesterImpl) collectStats(ctx context.Context) error {
-	if strings.Contains(t.serverConfig.GetServerExec(), "dolt") && !strings.Contains(t.serverConfig.GetServerExec(), "doltgres") {
-		db, err := sqlx.Open("mysql", fmt.Sprintf("root:@tcp(%s:%d)/test", t.serverConfig.GetHost(), t.serverConfig.GetPort()))
-		if err != nil {
-			return err
-		}
-		return collectStats(ctx, db)
-	}
-	return nil
-}
-
-func collectStats(ctx context.Context, db *sqlx.DB) error {
-	c, err := db.Connx(ctx)
-	if err != nil {
-		return err
-	}
-
-	{
-		// configuration, restart, and check needs to be in the same session
-		tx, err := c.BeginTxx(ctx, nil)
-		if err != nil {
-			return err
-		}
-
-		if _, err := tx.Exec("set @@GLOBAL.dolt_stats_auto_refresh_enabled = 1;"); err != nil {
-			return err
-		}
-		if _, err := tx.Exec("set @@GLOBAL.dolt_stats_auto_refresh_interval = 0;"); err != nil {
-			return err
-		}
-		if _, err := tx.Exec("set @@PERSIST.dolt_stats_auto_refresh_interval = 0;"); err != nil {
-			return err
-		}
-		if _, err := tx.Exec("set @@PERSIST.dolt_stats_auto_refresh_enabled = 1;"); err != nil {
-			return err
-		}
-		if _, err := tx.Exec("call dolt_stats_restart();"); err != nil {
-			return err
-		}
-
-		rows := map[string]interface{}{"cnt": 0}
-		tick := time.NewTicker(5 * time.Second)
-		for {
-			if rows["cnt"] != 0 {
-				fmt.Printf("collected %d histogram buckets\n", rows["cnt"])
-				break
-			}
-			select {
-			case <-tick.C:
-				res, err := tx.Queryx("select count(*) as cnt from dolt_statistics;")
-				if err != nil {
-					return err
-				}
-				if !res.Next() {
-					return fmt.Errorf("failed to set statistics")
-				}
-				if err := res.MapScan(rows); err != nil {
-					return err
-				}
-				if err := res.Close(); err != nil {
-					return err
-				}
-			}
-		}
-	}
-
-	if _, err := c.QueryContext(ctx, "call dolt_stats_stop();"); err != nil {
-		return err
-	}
-
-	return nil
 }
