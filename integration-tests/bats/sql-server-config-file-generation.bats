@@ -99,6 +99,7 @@ EOF
         --timeout 7777777 \
         --allow-cleartext-passwords true \
         --back-log 767 \
+        --max-connections-timeout 13s \
         --host 0.0.0.0
 
     run cat "$CONFIG_FILE_NAME"
@@ -110,6 +111,12 @@ EOF
     [[ "$output" =~ "write_timeout_millis: 7777777" ]] || false
     [[ "$output" =~ "allow_cleartext_passwords: true" ]] || false
     [[ "$output" =~ "back_log: 767" ]] || false
+
+    echo "--------------------------"
+    echo "$output"
+    echo "--------------------------"
+
+    [[ "$output" =~ "max_connections_timeout: 676" ]] || false
 }
 
 @test "sql-server-config-file-generation: generated config file uses default values as placeholders for unset fields" {
