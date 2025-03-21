@@ -84,9 +84,9 @@ func countAddresses(items [][]byte, td val.TupleDesc) (cnt int) {
 			}
 			return
 		})
-		val.IterToastFields(td, func(j int, t val.Type) {
+		val.IterAdaptiveFields(td, func(j int, t val.Type) {
 			// get offset of toast value within |tup|
-			toastValue := val.ToastValue(val.Tuple(items[i]).GetField(j))
+			toastValue := val.AdaptiveValue(val.Tuple(items[i]).GetField(j))
 			if toastValue.IsOutlined() {
 				cnt++
 			}
@@ -114,12 +114,13 @@ func writeAddressOffsets(b *fb.Builder, items [][]byte, sumSz int, td val.TupleD
 			b.PrependUint16(uint16(o))
 			cnt++
 		})
-		val.IterToastFields(td, func(j int, t val.Type) {
+		val.IterAdaptiveFields(td, func(j int, t val.Type) {
 			// get offset of toast value within |tup|
-			toastValue := val.ToastValue(val.Tuple(items[i]).GetField(j))
-			if toastValue.IsOutlined() {
+			adaptiveValue := val.AdaptiveValue(val.Tuple(items[i]).GetField(j))
+			if adaptiveValue.IsOutlined() {
+				// Out-of-line adaptive values end in an address, so get the offset |hash.ByteLen| bytes before the end.
 				o, _ := tup.GetOffset(j)
-				o += off + 9 // address appears 9 bytes in.
+				o += off + len(adaptiveValue) - hash.ByteLen
 				b.PrependUint16(uint16(o))
 				cnt++
 			}

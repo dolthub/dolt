@@ -110,10 +110,10 @@ func IterAddressFields(td TupleDesc, cb func(int, Type)) {
 	}
 }
 
-func IterToastFields(td TupleDesc, cb func(int, Type)) {
+func IterAdaptiveFields(td TupleDesc, cb func(int, Type)) {
 	for i, typ := range td.Types {
 		switch typ.Enc {
-		case BytesToastEnc, StringToastEnc:
+		case BytesAdaptiveEnc, StringAdaptiveEnc, ExtendedAdaptiveEnc:
 			cb(i, typ)
 		}
 	}
@@ -526,8 +526,8 @@ func (td TupleDesc) GetBytesAddr(i int, tup Tuple) (hash.Hash, bool) {
 
 // GetBytesToastValue returns either a []byte or a BytesWrapper, but Go doesn't allow us to use a single type for that.
 func (td TupleDesc) GetBytesToastValue(i int, vs ValueStore, tup Tuple) (interface{}, bool, error) {
-	td.expectEncoding(i, BytesToastEnc)
-	toastValue := ToastValue(td.GetField(i, tup))
+	td.expectEncoding(i, BytesAdaptiveEnc)
+	toastValue := AdaptiveValue(td.GetField(i, tup))
 	if len(toastValue) == 0 {
 		return nil, false, nil
 	}
@@ -542,8 +542,8 @@ func (td TupleDesc) GetBytesToastValue(i int, vs ValueStore, tup Tuple) (interfa
 }
 
 func (td TupleDesc) GetStringToastValue(i int, vs ValueStore, tup Tuple) (interface{}, bool, error) {
-	td.expectEncoding(i, StringToastEnc)
-	toastValue := ToastValue(td.GetField(i, tup))
+	td.expectEncoding(i, StringAdaptiveEnc)
+	toastValue := AdaptiveValue(td.GetField(i, tup))
 	if len(toastValue) == 0 {
 		return nil, false, nil
 	}
@@ -784,18 +784,18 @@ func (handler AddressTypeHandler) FormatValue(val any) (string, error) {
 	return handler.childHandler.FormatValue(val)
 }
 
-// A ToastValue is a byte sequence that can represent:
+// A AdaptiveValue is a byte sequence that can represent:
 // - An inlined string or bytes value
 // - An outlined (addressable) string or bytes value
 // - NULL (identified by the empty sequence)
 // Outlined ToastValues begin with a SQLite () variable-length encoding of the string length.
 // Note that this value is always greater than 21, because we only outline values when doing so reduces the length of
-// the tuple, and the outlined ToastValue consists of a 20 byte address + the string length (min 1 byte).
-// This means that we can use a shorter length value to indicate an inlined ToastValue. We choose 0 for simplicity.
-type ToastValue []byte
+// the tuple, and the outlined AdaptiveValue consists of a 20 byte address + the string length (min 1 byte).
+// This means that we can use a shorter length value to indicate an inlined AdaptiveValue. We choose 0 for simplicity.
+type AdaptiveValue []byte
 
 // getMessageLength returns the length of the underlying value.
-func (v ToastValue) getMessageLength() int64 {
+func (v AdaptiveValue) getMessageLength() int64 {
 	if v.IsNull() {
 		return 0
 	}
@@ -807,7 +807,7 @@ func (v ToastValue) getMessageLength() int64 {
 }
 
 // outlineSize computes the size of the value in the tuple if it were outlined.
-func (v ToastValue) outlineSize() int64 {
+func (v AdaptiveValue) outlineSize() int64 {
 	if v.IsOutlined() {
 		return int64(len(v))
 	}
@@ -816,7 +816,7 @@ func (v ToastValue) outlineSize() int64 {
 }
 
 // inlineSize computes the size of the value in the tuple if it were inlined.
-func (v ToastValue) inlineSize() int64 {
+func (v AdaptiveValue) inlineSize() int64 {
 	if v.isInlined() {
 		return int64(len(v))
 	}
@@ -824,13 +824,13 @@ func (v ToastValue) inlineSize() int64 {
 	return 1 + blobLength // header + message
 }
 
-// IsNull returns whether this ToastValue represents a NULL value.
-func (v ToastValue) IsNull() bool {
+// IsNull returns whether this AdaptiveValue represents a NULL value.
+func (v AdaptiveValue) IsNull() bool {
 	return len(v) == 0
 }
 
-// IsOutlined returns whether this ToastValue represents a outlined addressable value.
-func (v ToastValue) IsOutlined() bool {
+// IsOutlined returns whether this AdaptiveValue represents a outlined addressable value.
+func (v AdaptiveValue) IsOutlined() bool {
 	if v.IsNull() {
 		return false
 	}
@@ -847,7 +847,7 @@ func makeVarInt(x uint64, dest []byte) (bytesWritten int, output []byte) {
 
 // If a conversion is necessary, the converted value will be copied into `dest`. This is a performance
 // optimization when there is a pre-allocated buffer.
-func (v ToastValue) convertToOutline(ctx context.Context, vs ValueStore, dest []byte) (ToastValue, error) {
+func (v AdaptiveValue) convertToOutline(ctx context.Context, vs ValueStore, dest []byte) (AdaptiveValue, error) {
 	if v.IsOutlined() {
 		return v, nil
 	}
@@ -866,8 +866,8 @@ func (v ToastValue) convertToOutline(ctx context.Context, vs ValueStore, dest []
 	return dest, nil
 }
 
-// isInlined returns whether this ToastValue represents an inlined value.
-func (v ToastValue) isInlined() bool {
+// isInlined returns whether this AdaptiveValue represents an inlined value.
+func (v AdaptiveValue) isInlined() bool {
 	if v.IsNull() {
 		return false
 	}
@@ -876,7 +876,7 @@ func (v ToastValue) isInlined() bool {
 
 // If a conversion is necessary, the converted value will be written into `dest`. This is a performance
 // optimization when there is a pre-allocated buffer.
-func (v ToastValue) convertToInline(ctx context.Context, vs ValueStore, dest []byte) (ToastValue, error) {
+func (v AdaptiveValue) convertToInline(ctx context.Context, vs ValueStore, dest []byte) (AdaptiveValue, error) {
 	if v.isInlined() {
 		return v, nil
 	}
@@ -896,7 +896,7 @@ func (v ToastValue) convertToInline(ctx context.Context, vs ValueStore, dest []b
 	return dest, nil
 }
 
-func (v ToastValue) convertToBytes(ctx context.Context, vs ValueStore, buf []byte) ([]byte, error) {
+func (v AdaptiveValue) convertToBytes(ctx context.Context, vs ValueStore, buf []byte) ([]byte, error) {
 	// Only inlined values can be converted to bytes
 	inlineValue, err := v.convertToInline(ctx, vs, buf)
 	if err != nil {
@@ -906,7 +906,7 @@ func (v ToastValue) convertToBytes(ctx context.Context, vs ValueStore, buf []byt
 	return inlineValue[1:], nil
 }
 
-func (v ToastValue) convertToByteArray(ctx context.Context, vs ValueStore, buf []byte) (*ByteArray, error) {
+func (v AdaptiveValue) convertToByteArray(ctx context.Context, vs ValueStore, buf []byte) (*ByteArray, error) {
 	// Only outlined values can be converted to a ByteArray
 	outlineValue, err := v.convertToOutline(ctx, vs, buf)
 	if err != nil {
@@ -917,7 +917,7 @@ func (v ToastValue) convertToByteArray(ctx context.Context, vs ValueStore, buf [
 	return NewByteArray(address, vs).WithMaxByteLength(length), nil
 }
 
-func (v ToastValue) convertToTextStorage(ctx context.Context, vs ValueStore, buf []byte) (*TextStorage, error) {
+func (v AdaptiveValue) convertToTextStorage(ctx context.Context, vs ValueStore, buf []byte) (*TextStorage, error) {
 	// Only outlined values can be converted to a TextStorage
 	outlineValue, err := v.convertToOutline(ctx, vs, buf)
 	if err != nil {
@@ -945,8 +945,8 @@ func NewToastTypeHandler(vs ValueStore, childHandler TupleTypeHandler) ToastType
 }
 
 func (handler ToastTypeHandler) SerializedCompare(ctx context.Context, v1 []byte, v2 []byte) (int, error) {
-	toastValue1 := ToastValue(v1)
-	toastValue2 := ToastValue(v2)
+	toastValue1 := AdaptiveValue(v1)
+	toastValue2 := AdaptiveValue(v2)
 	// Fast-path: two outlined values with equal hashes are equal.
 	if toastValue1.IsOutlined() && toastValue2.IsOutlined() && bytes.Equal(toastValue1, toastValue2) {
 		return 0, nil
@@ -981,7 +981,7 @@ func (handler ToastTypeHandler) SerializeValue(ctx context.Context, val any) ([]
 }
 
 func (handler ToastTypeHandler) DeserializeValue(ctx context.Context, val []byte) (any, error) {
-	toastVal := ToastValue(val)
+	toastVal := AdaptiveValue(val)
 	if toastVal.IsNull() {
 		return nil, nil
 	}

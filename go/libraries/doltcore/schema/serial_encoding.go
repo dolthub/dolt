@@ -31,8 +31,8 @@ func EncodingFromSqlType(typ sql.Type) serial.Encoding {
 		case types.ExtendedTypeSerializedWidth_64K:
 			return serial.EncodingExtended
 		case types.ExtendedTypeSerializedWidth_Unbounded:
-			// Always uses Toast encoding for extended types, regardless of the setting of UseToastTypes below.
-			return serial.EncodingExtendedToast
+			// Always uses adaptive encoding for extended types, regardless of the setting of UseAdaptiveEncoding below.
+			return serial.EncodingExtendedAdaptive
 		default:
 			panic(fmt.Errorf("unknown serialization width"))
 		}
@@ -40,10 +40,10 @@ func EncodingFromSqlType(typ sql.Type) serial.Encoding {
 	return EncodingFromQueryType(typ.Type())
 }
 
-// UseToastTypes indicates whether to use TOAST encoding for large/unbounded fields instead of address encoding.
-// Tests can set this variable to true in order to force Dolt to use TOAST encoding for TEXT and BLOB columns.
-// Doltgres also sets this to true in order to use TOAST encoding for extended types.
-var UseToastTypes = false
+// UseAdaptiveEncoding indicates whether to use adaptive encoding for large/unbounded fields instead of address encoding.
+// Tests can set this variable to true in order to force Dolt to use adaptive encoding for TEXT and BLOB columns.
+// Extended types will always use adaptive encoding for TEXT and BLOB types regardless of this value.
+var UseAdaptiveEncoding = false
 
 // EncodingFromQueryType returns a serial.Encoding for a query.Type.
 func EncodingFromQueryType(typ query.Type) serial.Encoding {
@@ -103,13 +103,13 @@ func EncodingFromQueryType(typ query.Type) serial.Encoding {
 	case query.Type_JSON:
 		return serial.EncodingJSONAddr
 	case query.Type_BLOB:
-		if UseToastTypes {
-			return serial.EncodingBytesToast
+		if UseAdaptiveEncoding {
+			return serial.EncodingBytesAdaptive
 		}
 		return serial.EncodingBytesAddr
 	case query.Type_TEXT:
-		if UseToastTypes {
-			return serial.EncodingStringToast
+		if UseAdaptiveEncoding {
+			return serial.EncodingStringAdaptive
 		}
 		return serial.EncodingStringAddr
 	default:

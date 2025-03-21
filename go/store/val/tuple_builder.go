@@ -110,7 +110,7 @@ func (tb *TupleBuilder) BuildPermissive(pool pool.BuffPool, vs ValueStore) (tup 
 		// do this in a way that doesn't require the full field.
 		for i, descType := range tb.Desc.Types {
 			if IsToastEncoding(descType.Enc) {
-				toastValue := ToastValue(tb.fields[i])
+				toastValue := AdaptiveValue(tb.fields[i])
 				outlineSize := toastValue.outlineSize()
 				inlineSize := toastValue.inlineSize()
 
@@ -134,7 +134,7 @@ func (tb *TupleBuilder) BuildPermissive(pool pool.BuffPool, vs ValueStore) (tup 
 				// We have enough space, mark all the remaining columns as inline
 				for j, descType := range tb.Desc.Types[i+1:] {
 					if IsToastEncoding(descType.Enc) {
-						toastValue := ToastValue(tb.fields[j+i+1])
+						toastValue := AdaptiveValue(tb.fields[j+i+1])
 						if !toastValue.isInlined() {
 							inline, err := toastValue.convertToInline(ctx, tb.vs, nil)
 							if err != nil {
@@ -548,13 +548,13 @@ func (tb *TupleBuilder) PutCell(i int, v Cell) {
 
 func (tb *TupleBuilder) PutToastBytesFromInline(i int, v []byte) error {
 	// TODO: Add context
-	tb.Desc.expectEncoding(i, BytesToastEnc)
+	tb.Desc.expectEncoding(i, BytesAdaptiveEnc)
 	if len(v) > int(MaxTupleDataSize) {
 		return fmt.Errorf("byte array too large to fit inline (%d > %d). This shouldn't happen", len(v), MaxTupleDataSize)
 	}
 	sz := ByteSize(len(v)) + 2 // header byte, plus null terminator?
 	tb.ensureCapacity(sz)
-	field := ToastValue(tb.buf[tb.pos : tb.pos+int64(sz)])
+	field := AdaptiveValue(tb.buf[tb.pos : tb.pos+int64(sz)])
 	tb.fields[i] = field
 	field[0] = 0 // Mark this as inline
 	writeByteString(field[1:], v)
@@ -566,13 +566,13 @@ func (tb *TupleBuilder) PutToastBytesFromInline(i int, v []byte) error {
 
 func (tb *TupleBuilder) PutToastStringFromInline(i int, v string) error {
 	// TODO: Add context
-	tb.Desc.expectEncoding(i, StringToastEnc)
+	tb.Desc.expectEncoding(i, StringAdaptiveEnc)
 	if len(v) > int(MaxTupleDataSize) {
 		return fmt.Errorf("byte array too large to fit inline (%d > %d). This shouldn't happen", len(v), MaxTupleDataSize)
 	}
 	sz := ByteSize(len(v)) + 2 // header byte, plus null terminator?
 	tb.ensureCapacity(sz)
-	field := ToastValue(tb.buf[tb.pos : tb.pos+int64(sz)])
+	field := AdaptiveValue(tb.buf[tb.pos : tb.pos+int64(sz)])
 	tb.fields[i] = field
 	field[0] = 0 // Mark this as inline
 	writeByteString(field[1:], []byte(v))
@@ -583,7 +583,7 @@ func (tb *TupleBuilder) PutToastStringFromInline(i int, v string) error {
 }
 
 func (tb *TupleBuilder) PutToastBytesFromOutline(i int, v *ByteArray) {
-	tb.Desc.expectEncoding(i, BytesToastEnc)
+	tb.Desc.expectEncoding(i, BytesAdaptiveEnc)
 	// TODO: What's the correct size?
 	sz := ByteSize(29)
 	tb.ensureCapacity(sz)
@@ -600,7 +600,7 @@ func (tb *TupleBuilder) PutToastBytesFromOutline(i int, v *ByteArray) {
 }
 
 func (tb *TupleBuilder) PutToastStringFromOutline(i int, v *TextStorage) {
-	tb.Desc.expectEncoding(i, StringToastEnc)
+	tb.Desc.expectEncoding(i, StringAdaptiveEnc)
 	// TODO: What's the correct size?
 	sz := ByteSize(29)
 	tb.ensureCapacity(sz)

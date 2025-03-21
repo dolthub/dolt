@@ -175,22 +175,22 @@ func TestRoundTripProllyFields(t *testing.T) {
 		},
 		{
 			name:  "binary toast short",
-			typ:   val.Type{Enc: val.BytesToastEnc},
+			typ:   val.Type{Enc: val.BytesAdaptiveEnc},
 			value: []byte("lorem ipsum"),
 		},
 		{
 			name:  "binary toast long",
-			typ:   val.Type{Enc: val.BytesToastEnc},
+			typ:   val.Type{Enc: val.BytesAdaptiveEnc},
 			value: make([]byte, (1 << 12)),
 		},
 		{
 			name:  "string toast short",
-			typ:   val.Type{Enc: val.StringToastEnc},
+			typ:   val.Type{Enc: val.StringAdaptiveEnc},
 			value: "lorem ipsum",
 		},
 		{
 			name:  "binary toast long",
-			typ:   val.Type{Enc: val.StringToastEnc},
+			typ:   val.Type{Enc: val.StringAdaptiveEnc},
 			value: string(make([]byte, (1 << 12))),
 		},
 	}

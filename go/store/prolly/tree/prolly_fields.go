@@ -136,9 +136,9 @@ func GetField(ctx context.Context, td val.TupleDesc, i int, tup val.Tuple, ns No
 		if ok {
 			v = val.NewTextStorage(h, ns)
 		}
-	case val.BytesToastEnc:
+	case val.BytesAdaptiveEnc:
 		v, ok, err = td.GetBytesToastValue(i, ns, tup)
-	case val.StringToastEnc:
+	case val.StringAdaptiveEnc:
 		v, ok, err = td.GetStringToastValue(i, ns, tup)
 	case val.CommitAddrEnc:
 		v, ok = td.GetCommitAddr(i, tup)
@@ -300,7 +300,7 @@ func PutField(ctx context.Context, ns NodeStore, tb *val.TupleBuilder, i int, v 
 			return err
 		}
 		tb.PutExtendedAddr(i, hash.New(b))
-	case val.BytesToastEnc:
+	case val.BytesAdaptiveEnc:
 		switch value := v.(type) {
 		case []byte:
 			err := tb.PutToastBytesFromInline(i, value)
@@ -310,7 +310,7 @@ func PutField(ctx context.Context, ns NodeStore, tb *val.TupleBuilder, i int, v 
 		case *val.ByteArray:
 			tb.PutToastBytesFromOutline(i, value)
 		}
-	case val.StringToastEnc:
+	case val.StringAdaptiveEnc:
 		switch value := v.(type) {
 		case string:
 			err := tb.PutToastStringFromInline(i, value)
@@ -334,7 +334,7 @@ func getBlobAddrHash(ctx context.Context, ns NodeStore, v interface{}) (h hash.H
 	}
 	bytesWrapper, isBytesWrapper := v.(sql.BytesWrapper)
 	if !isBytesWrapper {
-		return hash.Hash{}, fmt.Errorf("expected implementation of sql.BytesWrapper, got %v", v)
+		return hash.Hash{}, fmt.Errorf("expected implementation of sql.BytesWrapper, got %T", v)
 	}
 	if byteArray, isByteArray := v.(val.ByteArray); isByteArray {
 		return byteArray.Addr, nil
@@ -354,7 +354,7 @@ func getStringAddrHash(ctx context.Context, ns NodeStore, v interface{}) (h hash
 	}
 	stringWrapper, isStringWrapper := v.(sql.StringWrapper)
 	if !isStringWrapper {
-		return hash.Hash{}, fmt.Errorf("expected implementation of sql.StringWrapper, got %v", v)
+		return hash.Hash{}, fmt.Errorf("expected implementation of sql.StringWrapper, got %T", v)
 	}
 	if textStorage, isTextStorage := v.(val.TextStorage); isTextStorage {
 		return textStorage.Addr, nil

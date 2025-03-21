@@ -272,7 +272,7 @@ var _ ValueStore = &TestValueStore{}
 func TestTupleBuilderToastTypes(t *testing.T) {
 	ctx := sql.NewEmptyContext()
 	types := []Type{
-		{Enc: BytesToastEnc},
+		{Enc: BytesAdaptiveEnc},
 	}
 	vs := &TestValueStore{}
 	td := NewTupleDescriptor(types...)
@@ -311,8 +311,8 @@ func TestTupleBuilderToastTypes(t *testing.T) {
 func TestTupleBuilderMultipleToastTypes(t *testing.T) {
 	ctx := sql.NewEmptyContext()
 	types := []Type{
-		{Enc: BytesToastEnc},
-		{Enc: BytesToastEnc},
+		{Enc: BytesAdaptiveEnc},
+		{Enc: BytesAdaptiveEnc},
 	}
 	vs := &TestValueStore{}
 	td := NewTupleDescriptor(types...)

@@ -37,6 +37,7 @@ func unwrapRow(t *testing.T, row sql.Row) (unwrappedRow sql.Row) {
 	}
 	return unwrappedRow
 }
+
 func unwrapRows(t *testing.T, rows []sql.Row) (unwrappedRows []sql.Row) {
 	for _, row := range rows {
 		unwrappedRows = append(unwrappedRows, unwrapRow(t, row))

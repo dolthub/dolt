@@ -106,7 +106,8 @@ func TestSchemaOverrides(t *testing.T) {
 // Provide additional test coverage for toast types by running Schema Override tests
 // using toast types instead of address types.
 func TestSchemaOverridesWithToastTypes(t *testing.T) {
-	schema.UseToastTypes = true
+	defer func() { schema.UseAdaptiveEncoding = false }()
+	schema.UseAdaptiveEncoding = true
 	harness := newDoltEnginetestHarness(t)
 	RunSchemaOverridesTest(t, harness)
 }
