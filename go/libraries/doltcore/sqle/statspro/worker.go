@@ -237,7 +237,7 @@ func (sc *StatsController) newStatsForRoot(baseCtx context.Context, gcKv *memSta
 
 			for _, sqlDb := range schDbs {
 				switch sqlDb.SchemaName() {
-				case "dolt", "information_schema", "pg_catalog":
+				case "dolt", sql.InformationSchemaDatabaseName, "pg_catalog":
 					continue
 				}
 				var tableNames []string
