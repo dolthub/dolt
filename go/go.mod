@@ -60,7 +60,7 @@ require (
 	github.com/creasty/defaults v1.6.0
 	github.com/dolthub/aws-sdk-go-ini-parser v0.0.0-20250305001723-2821c37f6c12
 	github.com/dolthub/flatbuffers/v23 v23.3.3-dh.2
-	github.com/dolthub/go-mysql-server v0.19.1-0.20250320045724-2ce4c019d3d9
+	github.com/dolthub/go-mysql-server v0.19.1-0.20250321210205-e9e48ab740ab
 	github.com/dolthub/gozstd v0.0.0-20240423170813-23a2903bca63
 	github.com/esote/minmaxheap v1.0.0
 	github.com/goccy/go-json v0.10.2
@@ -124,7 +124,7 @@ require (
 	github.com/aws/smithy-go v1.22.2 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
-	github.com/dolthub/go-icu-regex v0.0.0-20250303123116-549b8d7cad00 // indirect
+	github.com/dolthub/go-icu-regex v0.0.0-20250319212010-451ea8d003fa // indirect
 	github.com/dolthub/jsonpath v0.0.2-0.20240227200619-19675ab05c71 // indirect
 	github.com/go-fonts/liberation v0.2.0 // indirect
 	github.com/go-kit/kit v0.10.0 // indirect
@@ -187,4 +187,4 @@ replace github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi => ./gen/pr
 
 replace github.com/dolthub/go-mysql-server => ../../go-mysql-server
 
-go 1.23.3
+go 1.24.0
