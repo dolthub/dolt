@@ -22,6 +22,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/dolthub/go-mysql-server/sql"
+
 	"github.com/dolthub/dolt/go/libraries/utils/circular"
 )
 
@@ -247,6 +249,37 @@ func (s *SerialQueue) DoSync(ctx context.Context, f func() error) error {
 	case <-w.done:
 		return nil
 	case <-ctx.Done():
+		return context.Cause(ctx)
+	case <-s.completed:
+		return ErrCompletedQueue
+	}
+}
+
+// DoSyncSessionAware initializes a session command before running
+// a worker callback. If the context is cancelled midway we either
+// finish calling the function, or return without calling the function.
+// No return leaves the session in an incomplete state.
+func (s *SerialQueue) DoSyncSessionAware(ctx *sql.Context, f func() error) error {
+	started := atomic.Bool{}
+	nf := func() error {
+		if started.Swap(true) {
+			return nil
+		}
+		sql.SessionCommandBegin(ctx.Session)
+		defer sql.SessionCommandEnd(ctx.Session)
+		return f()
+	}
+	w, err := s.submitWork(schedPriority_Normal, nf)
+	if err != nil {
+		return err
+	}
+	select {
+	case <-w.done:
+		return nil
+	case <-ctx.Done():
+		if started.Swap(true) {
+			<-w.done
+		}
 		return context.Cause(ctx)
 	case <-s.completed:
 		return ErrCompletedQueue

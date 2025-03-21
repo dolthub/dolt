@@ -50,6 +50,7 @@ type DoltHarness struct {
 	statsPro              *statspro.StatsController
 	multiRepoEnv          *env.MultiRepoEnv
 	session               *dsess.DoltSession
+	statsSession          *dsess.DoltSession
 	branchControl         *branch_control.Controller
 	gcSafepointController *dsess.GCSafepointController
 	parallelism           int
@@ -251,14 +252,18 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 
 		bThreads := sql.NewBackgroundThreads()
 
+		var err error
+		d.statsSession, err = dsess.NewDoltSession(enginetest.NewBaseSession(), d.provider, d.multiRepoEnv.Config(), d.branchControl, d.statsPro, writer.NewWriteSession, nil)
+		require.NoError(t, err)
 		ctxGen := func(ctx context.Context) (*sql.Context, error) {
 			client := sql.Client{Address: "localhost", User: "root"}
-			return sql.NewContext(context.Background(), sql.WithSession(d.newSessionWithClient(client))), nil
+			return sql.NewContext(context.Background(), sql.WithSession(d.newStatsSessionWithClient(client))), nil
 		}
-		statsPro := statspro.NewStatsController(logrus.StandardLogger(), d.multiRepoEnv.GetEnv(d.multiRepoEnv.GetFirstDatabase()))
+		// xxx: stats threads can't be tied to single test cycle,
+		// this is only OK for enginetests
+		statsPro := statspro.NewStatsController(logrus.StandardLogger(), sql.NewBackgroundThreads(), d.multiRepoEnv.GetEnv(d.multiRepoEnv.GetFirstDatabase()))
 		d.statsPro = statsPro
 
-		var err error
 		d.session, err = dsess.NewDoltSession(enginetest.NewBaseSession(), d.provider, d.multiRepoEnv.Config(), d.branchControl, d.statsPro, writer.NewWriteSession, d.gcSafepointController)
 		require.NoError(t, err)
 
@@ -293,11 +298,8 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 
 		e = e.WithBackgroundThreads(bThreads)
 
-		// xxx: stats threads can't be tied to single test cycle,
-		// this is only OK for enginetests
-		statsThreads := sql.NewBackgroundThreads()
 		if d.configureStats {
-			err = statsPro.Init(ctx, doltProvider, ctxGen, statsThreads, databases)
+			err = statsPro.Init(ctx, doltProvider, ctxGen, databases)
 			if err != nil {
 				return nil, err
 			}
@@ -324,6 +326,14 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 
 	// Reset the mysql DB table to a clean state for this new engine
 	ctx := enginetest.NewContext(d)
+
+	if d.configureStats {
+		err := d.statsPro.Purge(ctx)
+		require.NoError(t, err)
+
+		err = d.statsPro.Restart()
+		require.NoError(t, err)
+	}
 
 	d.engine.Analyzer.Catalog.MySQLDb = mysql_db.CreateEmptyMySQLDb()
 	d.engine.Analyzer.Catalog.MySQLDb.AddRootAccount()
@@ -413,6 +423,16 @@ func (d *DoltHarness) NewSession() *sql.Context {
 func (d *DoltHarness) newSessionWithClient(client sql.Client) *dsess.DoltSession {
 	localConfig := d.multiRepoEnv.Config()
 	pro := d.session.Provider()
+
+	dSession, err := dsess.NewDoltSession(sql.NewBaseSessionWithClientServer("address", client, 1), pro.(dsess.DoltDatabaseProvider), localConfig, d.branchControl, d.statsPro, writer.NewWriteSession, nil)
+	dSession.SetCurrentDatabase("mydb")
+	require.NoError(d.t, err)
+	return dSession
+}
+
+func (d *DoltHarness) newStatsSessionWithClient(client sql.Client) *dsess.DoltSession {
+	localConfig := d.multiRepoEnv.Config()
+	pro := d.statsSession.Provider()
 
 	dSession, err := dsess.NewDoltSession(sql.NewBaseSessionWithClientServer("address", client, 1), pro.(dsess.DoltDatabaseProvider), localConfig, d.branchControl, d.statsPro, writer.NewWriteSession, nil)
 	dSession.SetCurrentDatabase("mydb")

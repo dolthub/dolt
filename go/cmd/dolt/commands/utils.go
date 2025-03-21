@@ -261,6 +261,10 @@ func newLateBindingEngine(
 			return nil, nil, nil, err
 		}
 
+		if err := se.InitStats(ctx2); err != nil {
+			return nil, nil, nil, err
+		}
+
 		sqlCtx, err := se.NewDefaultContext(ctx2)
 		if err != nil {
 			return nil, nil, nil, err
