@@ -150,10 +150,9 @@ func (sc *StatsController) RunQueue() {
 }
 
 // Init should only be called once
-func (sc *StatsController) Init(ctx context.Context, pro *sqle.DoltDatabaseProvider, ctxGen ctxFactory, bthreads *sql.BackgroundThreads, dbs []sql.Database) error {
+func (sc *StatsController) Init(ctx context.Context, pro *sqle.DoltDatabaseProvider, ctxGen ctxFactory, dbs []sql.Database) error {
 	sc.pro = pro
 	sc.ctxGen = ctxGen
-	sc.bgThreads = bthreads
 
 	sc.RunQueue()
 	sqlCtx, err := sc.ctxGen(ctx)

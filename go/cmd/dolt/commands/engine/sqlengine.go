@@ -215,11 +215,11 @@ func NewSqlEngine(
 	var statsPro sql.StatsProvider
 	_, enabled, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsEnabled)
 	if enabled.(int8) == 1 {
-		statsPro = statspro.NewStatsController(logrus.StandardLogger(), mrEnv.GetEnv(mrEnv.GetFirstDatabase()))
+		statsPro = statspro.NewStatsController(logrus.StandardLogger(), bThreads, mrEnv.GetEnv(mrEnv.GetFirstDatabase()))
 	} else {
 		statsPro = statspro.StatsNoop{}
 	}
-	
+
 	engine.Analyzer.Catalog.StatsProvider = statsPro
 
 	engine.Analyzer.ExecBuilder = rowexec.NewOverrideBuilder(kvexec.Builder{})
@@ -237,32 +237,6 @@ func NewSqlEngine(
 	if runAsyncThreads != nil {
 		if err = runAsyncThreads(bThreads, sqlEngine.NewDefaultContext); err != nil {
 			return nil, err
-		}
-	}
-
-	// configuring stats depends on sessionBuilder
-	// sessionBuilder needs ref to statsProv
-	if sc, ok := statsPro.(*statspro.StatsController); ok {
-		_, memOnly, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsMemoryOnly)
-		sc.SetMemOnly(memOnly.(int8) == 1)
-
-		pro.InitDatabaseHooks = append(pro.InitDatabaseHooks, statspro.NewInitDatabaseHook(sc))
-		pro.DropDatabaseHooks = append(pro.DropDatabaseHooks, statspro.NewDropDatabaseHook(sc))
-
-		var sqlDbs []sql.Database
-		for _, db := range dbs {
-			sqlDbs = append(sqlDbs, db)
-		}
-
-		err = sc.Init(ctx, pro, sqlEngine.NewDefaultContext, bThreads, sqlDbs)
-		if err != nil {
-			return nil, err
-		}
-
-		if _, paused, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsPaused); paused.(int8) == 0 {
-			if err = sc.Restart(); err != nil {
-				return nil, err
-			}
 		}
 	}
 
