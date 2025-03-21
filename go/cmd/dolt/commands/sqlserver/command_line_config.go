@@ -181,9 +181,9 @@ func NewCommandLineConfig(creds *cli.UserPassword, apr *argparser.ArgParseResult
 	if maxWaitConnsTimeoutStr, ok := apr.GetValue(maxWaitConsTimeoutFlag); ok {
 		maxWaitConnsTimeout, err := time.ParseDuration(maxWaitConnsTimeoutStr)
 		if err != nil {
-			return nil, fmt.Errorf("invalid value for --max-wait-connections-timeout '%s'", maxWaitConnsTimeoutStr)
+			return nil, fmt.Errorf("invalid duration value for --max-wait-connections-timeout '%s'", maxWaitConnsTimeoutStr)
 		}
-		config.maxWaitConnsTimeout = maxWaitConnsTimeout
+		config.withMaxWaitConnectionsTimeout(maxWaitConnsTimeout)
 	}
 
 	config.autoCommit = !apr.Contains(noAutoCommitFlag)
