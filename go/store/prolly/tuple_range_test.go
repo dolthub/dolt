@@ -232,7 +232,7 @@ func intNullTuple(ints ...*int32) val.Tuple {
 	}
 
 	desc := val.NewTupleDescriptor(types...)
-	tb := val.NewTupleBuilder(desc)
+	tb := val.NewTupleBuilder(desc, ns)
 	for i, val := range ints {
 		if val != nil {
 			tb.PutInt32(i, *val)

@@ -83,8 +83,8 @@ func newProgress(ctx context.Context, cs chunks.ChunkStore) (*progress, error) {
 	}
 
 	mut := mapping.Mutate()
-	kb := val.NewTupleBuilder(kd)
-	vb := val.NewTupleBuilder(vd)
+	kb := val.NewTupleBuilder(kd, ns)
+	vb := val.NewTupleBuilder(vd, ns)
 
 	return &progress{
 		stack:    make([]*doltdb.Commit, 0, 128),
@@ -194,7 +194,7 @@ func persistMigratedCommitMapping(ctx context.Context, ddb *doltdb.DoltDB, mappi
 	}
 
 	rows := m.Mutate()
-	bld := val.NewTupleBuilder(desc)
+	bld := val.NewTupleBuilder(desc, ns)
 
 	// convert |mapping| values from hash.Hash to string
 	iter, err := mapping.IterAll(ctx)

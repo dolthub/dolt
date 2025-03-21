@@ -194,7 +194,7 @@ func (cvt *prollyConstraintViolationsTable) Deleter(context *sql.Context) sql.Ro
 	ed := cvt.artM.Editor()
 	p := cvt.artM.Pool()
 	kd, _ := cvt.artM.Descriptors()
-	kb := val.NewTupleBuilder(kd)
+	kb := val.NewTupleBuilder(kd, ed.NodeStore())
 
 	return &prollyCVDeleter{
 		kd:   kd,

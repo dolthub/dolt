@@ -184,7 +184,7 @@ func (c *covLaxSecondaryLookupGen) New(ctx context.Context, k val.Tuple) (prolly
 	if c.prefixDesc.Count() >= c.m.KeyDesc().Count()-1 {
 		// key range optimization only works for full length key
 		start := k
-		stop, ok := prolly.IncrementTuple(ctx, start, c.prefixDesc.Count()-1, c.prefixDesc, c.m.Pool())
+		stop, ok := prolly.IncrementTuple(ctx, start, c.prefixDesc.Count()-1, c.prefixDesc, c.m.Pool(), c.NodeStore())
 		if ok {
 			return c.m.IterKeyRange(ctx, start, stop)
 		}
@@ -244,7 +244,7 @@ func (c *nonCovLaxSecondaryLookupGen) New(ctx context.Context, k val.Tuple) (pro
 		// TODO: widen this restriction for multiple PKs. need to count the number
 		// of PK cols in the index colset vs outside
 		start := k
-		stop, ok := prolly.IncrementTuple(ctx, start, c.prefixDesc.Count()-1, c.prefixDesc, c.sec.Pool())
+		stop, ok := prolly.IncrementTuple(ctx, start, c.prefixDesc.Count()-1, c.prefixDesc, c.sec.Pool(), c.NodeStore())
 		if ok {
 			secIter, err := c.sec.IterKeyRange(ctx, start, stop)
 			if err != nil {
@@ -297,7 +297,7 @@ func (c *keylessSecondaryLookupGen) New(ctx context.Context, k val.Tuple) (proll
 		// key range optimization only works if full key
 		// keyless indexes should include all rows
 		start := k
-		stop, ok := prolly.IncrementTuple(ctx, start, c.prefixDesc.Count()-1, c.prefixDesc, c.sec.Pool())
+		stop, ok := prolly.IncrementTuple(ctx, start, c.prefixDesc.Count()-1, c.prefixDesc, c.sec.Pool(), c.NodeStore())
 		if ok {
 			secIter, err := c.sec.IterKeyRange(ctx, start, stop)
 			if err != nil {

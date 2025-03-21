@@ -203,7 +203,7 @@ func (r Range) IsStrictKeyLookup(desc val.TupleDesc) bool {
 // numeric or string. The stop key adds +1 to a numeric final field, and appends
 // '0' to a string final field.
 // TODO: support non-exact final field, and use range upper bound?
-func (r Range) KeyRangeLookup(ctx context.Context, pool pool.BuffPool) (val.Tuple, bool) {
+func (r Range) KeyRangeLookup(ctx context.Context, pool pool.BuffPool, ns tree.NodeStore) (val.Tuple, bool) {
 	if r.Tup == nil {
 		return nil, false
 	}
@@ -247,11 +247,11 @@ func (r Range) KeyRangeLookup(ctx context.Context, pool pool.BuffPool) (val.Tupl
 
 	}
 
-	return IncrementTuple(ctx, r.Tup, n, r.Desc, pool)
+	return IncrementTuple(ctx, r.Tup, n, r.Desc, pool, ns)
 }
 
-func IncrementTuple(ctx context.Context, start val.Tuple, n int, desc val.TupleDesc, pool pool.BuffPool) (val.Tuple, bool) {
-	tb := val.NewTupleBuilder(desc)
+func IncrementTuple(ctx context.Context, start val.Tuple, n int, desc val.TupleDesc, pool pool.BuffPool, ns tree.NodeStore) (val.Tuple, bool) {
+	tb := val.NewTupleBuilder(desc, ns)
 	for i := 0; i < n; i++ {
 		if i != n {
 			// direct copy all but the last field

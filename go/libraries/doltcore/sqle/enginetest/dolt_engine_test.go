@@ -17,6 +17,7 @@ package enginetest
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"os"
 	"runtime"
 	"sync"
@@ -98,6 +99,15 @@ func TestSingleQuery(t *testing.T) {
 }
 
 func TestSchemaOverrides(t *testing.T) {
+	harness := newDoltEnginetestHarness(t)
+	RunSchemaOverridesTest(t, harness)
+}
+
+// Provide additional test coverage for toast types by running Schema Override tests
+// using toast types instead of address types.
+func TestSchemaOverridesWithToastTypes(t *testing.T) {
+	defer func() { schema.UseAdaptiveEncoding = false }()
+	schema.UseAdaptiveEncoding = true
 	harness := newDoltEnginetestHarness(t)
 	RunSchemaOverridesTest(t, harness)
 }
@@ -1590,7 +1600,7 @@ func TestNullRanges(t *testing.T) {
 }
 
 func TestPersist(t *testing.T) {
-	ctx := context.Background()
+	ctx := sql.NewEmptyContext()
 	harness := newDoltHarness(t)
 	defer harness.Close()
 	dEnv := dtestutils.CreateTestEnv()

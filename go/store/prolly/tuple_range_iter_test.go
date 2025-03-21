@@ -213,7 +213,7 @@ func getDescPrefix(desc val.TupleDesc, sz int) val.TupleDesc {
 }
 
 func getKeyPrefix(key val.Tuple, desc val.TupleDesc) (partial val.Tuple) {
-	tb := val.NewTupleBuilder(desc)
+	tb := val.NewTupleBuilder(desc, ns)
 	for i := range desc.Types {
 		tb.PutRaw(i, key.GetField(i))
 	}
@@ -425,7 +425,7 @@ func intTuple(ints ...int32) val.Tuple {
 	}
 
 	desc := val.NewTupleDescriptor(types...)
-	tb := val.NewTupleBuilder(desc)
+	tb := val.NewTupleBuilder(desc, ns)
 	for i := range ints {
 		tb.PutInt32(i, ints[i])
 	}

@@ -108,7 +108,7 @@ func (ct *CommitsTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 }
 
 // IndexedAccess implements sql.IndexAddressable
-func (ct *CommitsTable) IndexedAccess(lookup sql.IndexLookup) sql.IndexedTable {
+func (ct *CommitsTable) IndexedAccess(ctx *sql.Context, lookup sql.IndexLookup) sql.IndexedTable {
 	nt := *ct
 	return &nt
 }

@@ -213,7 +213,7 @@ func (p *PatchTableFunction) LookupPartitions(context *sql.Context, lookup sql.I
 	}), nil
 }
 
-func (p *PatchTableFunction) IndexedAccess(lookup sql.IndexLookup) sql.IndexedTable {
+func (p *PatchTableFunction) IndexedAccess(ctx *sql.Context, lookup sql.IndexLookup) sql.IndexedTable {
 	return p
 }
 

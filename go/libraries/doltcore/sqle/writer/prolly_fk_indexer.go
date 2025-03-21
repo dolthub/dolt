@@ -140,7 +140,7 @@ func (iter prollyFkPkRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 		for pkPos, idxPos := range iter.pkToIdxMap {
 			pkBld.PutRaw(pkPos, k.GetField(idxPos))
 		}
-		pkTup := pkBld.BuildPermissive(sharePool)
+		pkTup := pkBld.BuildPermissive(sharePool, iter.primary.mut.NodeStore())
 
 		var tblKey, tblVal val.Tuple
 		err = iter.primary.mut.Get(ctx, pkTup, func(k, v val.Tuple) error {

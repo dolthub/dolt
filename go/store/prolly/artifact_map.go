@@ -178,8 +178,8 @@ func (m ArtifactMap) Editor() *ArtifactsEditor {
 			maxPending: artifactMapPendingBufferSize,
 			flusher:    ProllyFlusher{},
 		},
-		artKB: val.NewTupleBuilder(artKD),
-		artVB: val.NewTupleBuilder(artVD),
+		artKB: val.NewTupleBuilder(artKD, m.NodeStore()),
+		artVB: val.NewTupleBuilder(artVD, m.NodeStore()),
 		pool:  m.Pool(),
 	}
 }
@@ -192,7 +192,7 @@ func (m ArtifactMap) IterAll(ctx context.Context) (MapIter, error) {
 // IterAllArtifacts returns an iterator for all artifacts.
 func (m ArtifactMap) IterAllArtifacts(ctx context.Context) (ArtifactIter, error) {
 	numPks := m.srcKeyDesc.Count()
-	tb := val.NewTupleBuilder(m.srcKeyDesc)
+	tb := val.NewTupleBuilder(m.srcKeyDesc, m.NodeStore())
 	itr, err := m.tuples.IterAll(ctx)
 	if err != nil {
 		return nil, err
@@ -379,7 +379,7 @@ func (wr *ArtifactsEditor) ReplaceConstraintViolation(ctx context.Context, srcKe
 		artKD:  wr.mut.keyDesc,
 		artVD:  wr.mut.valDesc,
 		pool:   wr.pool,
-		tb:     val.NewTupleBuilder(wr.srcKeyDesc),
+		tb:     val.NewTupleBuilder(wr.srcKeyDesc, wr.NodeStore()),
 		numPks: wr.srcKeyDesc.Count(),
 	}
 

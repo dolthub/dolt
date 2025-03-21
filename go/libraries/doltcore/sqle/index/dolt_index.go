@@ -1107,8 +1107,9 @@ var sharePool = pool.NewBuffPool()
 
 func maybeGetKeyBuilder(idx durable.Index) *val.TupleBuilder {
 	if types.IsFormat_DOLT(idx.Format()) {
-		kd, _ := durable.MapFromIndex(idx).Descriptors()
-		return val.NewTupleBuilder(kd)
+		m := durable.MapFromIndex(idx)
+		kd, _ := m.Descriptors()
+		return val.NewTupleBuilder(kd, m.NodeStore())
 	}
 	return nil
 }
@@ -1265,7 +1266,7 @@ func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.Node
 			}
 		}
 		// BuildPermissive() allows nulls in non-null fields
-		tup := tb.BuildPermissive(sharePool)
+		tup := tb.BuildPermissive(sharePool, ns)
 		for i := range fields {
 			fields[i].Lo.Value = tup.GetField(i)
 		}
@@ -1298,7 +1299,7 @@ func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.Node
 			}
 		}
 
-		tup = tb.BuildPermissive(sharePool)
+		tup = tb.BuildPermissive(sharePool, ns)
 		for i := range fields {
 			fields[i].Hi.Value = tup.GetField(i)
 		}

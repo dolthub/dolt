@@ -257,8 +257,8 @@ func newQueryCatalogEntryProlly(ctx context.Context, tbl *doltdb.Table, id, name
 		order = existingSQ.Order
 	}
 
-	kb := val.NewTupleBuilder(catalogKd)
-	vb := val.NewTupleBuilder(catalogVd)
+	kb := val.NewTupleBuilder(catalogKd, m.NodeStore())
+	vb := val.NewTupleBuilder(catalogVd, m.NodeStore())
 	kb.PutString(0, id)
 	k := kb.Build(m.Pool())
 
@@ -320,7 +320,7 @@ func retrieveFromQueryCatalogProlly(ctx context.Context, tbl *doltdb.Table, id s
 		return SavedQuery{}, err
 	}
 
-	kb := val.NewTupleBuilder(catalogKd)
+	kb := val.NewTupleBuilder(catalogKd, m.NodeStore())
 	kb.PutString(0, id)
 	k := kb.Build(m.Pool())
 	var value val.Tuple

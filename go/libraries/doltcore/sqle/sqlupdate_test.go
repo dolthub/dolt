@@ -410,16 +410,19 @@ func testUpdateQuery(t *testing.T, test UpdateTest) {
 	actualRows, sch, err := executeSelect(t, ctx, dEnv, root, test.SelectQuery)
 	require.NoError(t, err)
 
-	assert.Equal(t, len(test.ExpectedRows), len(actualRows))
-	for i := 0; i < len(test.ExpectedRows); i++ {
-		assert.Equal(t, len(test.ExpectedRows[i]), len(actualRows[i]))
-		for j := 0; j < len(test.ExpectedRows[i]); j++ {
+	actualRows = unwrapRows(t, actualRows)
+	expectedRows := unwrapRows(t, test.ExpectedRows)
+
+	assert.Equal(t, len(expectedRows), len(actualRows))
+	for i := 0; i < len(expectedRows); i++ {
+		assert.Equal(t, len(expectedRows[i]), len(actualRows[i]))
+		for j := 0; j < len(expectedRows[i]); j++ {
 			if _, ok := actualRows[i][j].(json.NomsJSON); ok {
-				cmp, err := gmstypes.CompareJSON(actualRows[i][j].(json.NomsJSON), test.ExpectedRows[i][j].(json.NomsJSON))
+				cmp, err := gmstypes.CompareJSON(actualRows[i][j].(json.NomsJSON), expectedRows[i][j].(json.NomsJSON))
 				assert.NoError(t, err)
 				assert.Equal(t, 0, cmp)
 			} else {
-				assert.Equal(t, test.ExpectedRows[i][j], actualRows[i][j])
+				assert.Equal(t, expectedRows[i][j], actualRows[i][j])
 			}
 		}
 	}

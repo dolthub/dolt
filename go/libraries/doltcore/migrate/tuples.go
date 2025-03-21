@@ -81,7 +81,7 @@ func tupleTranslatorsFromSchema(sch schema.Schema, ns tree.NodeStore) (kt, vt tr
 
 func newTupleTranslator(ns tree.NodeStore, mapping map[uint64]int, desc val.TupleDesc) translator {
 	return translator{
-		builder: val.NewTupleBuilder(desc),
+		builder: val.NewTupleBuilder(desc, ns),
 		mapping: mapping,
 		ns:      ns,
 		pool:    pool.NewBuffPool(),

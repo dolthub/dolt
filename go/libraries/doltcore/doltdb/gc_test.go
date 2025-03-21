@@ -241,7 +241,7 @@ func newIntMap(t *testing.T, ctx context.Context, ns tree.NodeStore, k, v int8) 
 		Nullable: false,
 	})
 
-	tb := val.NewTupleBuilder(desc)
+	tb := val.NewTupleBuilder(desc, ns)
 	tb.PutInt8(0, k)
 	keyTuple := tb.Build(ns.Pool())
 
