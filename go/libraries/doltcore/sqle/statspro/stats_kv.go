@@ -187,9 +187,10 @@ func NewProllyStats(ctx context.Context, destDb dsess.SqlDatabase) (*prollyStats
 	sch := schema.StatsTableDoltSchema
 	kd, vd := sch.GetMapDescriptors(nil)
 
-	keyBuilder := val.NewTupleBuilder(kd)
-	valueBuilder := val.NewTupleBuilder(vd)
-	newMap, err := prolly.NewMapFromTuples(ctx, destDb.DbData().Ddb.NodeStore(), kd, vd)
+	nodeStore := destDb.DbData().Ddb.NodeStore()
+	keyBuilder := val.NewTupleBuilder(kd, nodeStore)
+	valueBuilder := val.NewTupleBuilder(vd, nodeStore)
+	newMap, err := prolly.NewMapFromTuples(ctx, nodeStore, kd, vd)
 	if err != nil {
 		return nil, err
 	}

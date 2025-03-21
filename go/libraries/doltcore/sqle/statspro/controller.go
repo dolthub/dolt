@@ -620,8 +620,8 @@ func (sc *StatsController) initStorage(ctx context.Context, fs filesys.Filesys) 
 		return &prollyStats{
 			mu:     sync.Mutex{},
 			destDb: statsDb,
-			kb:     val.NewTupleBuilder(kd),
-			vb:     val.NewTupleBuilder(vd),
+			kb:     val.NewTupleBuilder(kd, m.NodeStore()),
+			vb:     val.NewTupleBuilder(vd, m.NodeStore()),
 			m:      m.Mutate(),
 			mem:    NewMemStats(),
 		}, nil
