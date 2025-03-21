@@ -18,29 +18,36 @@ import (
 	"bytes"
 	"context"
 	"os"
+	"sync"
 	"testing"
+	"text/template"
 	"time"
 
 	"database/sql"
-	
+
 	driver "github.com/dolthub/dolt/go/libraries/doltcore/dtestutils/sql_server_driver"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	yaml "gopkg.in/yaml.v3"
 )
 
+var GlobalPorts GlobalDynamicPorts
+
 type TestDef struct {
 	Tests []Test `yaml:"tests"`
+
+	// If true, RunTestfile will run each subtest in parallel.
+	Parallel bool `yaml:"parallel"`
 }
 
 // Test is a single test to run. The Repos and MultiRepos will be created, and
 // any Servers defined within them will be started. The interactions and
 // assertions defined in Conns will be run.
 type Test struct {
-	Name        string              `yaml:"name"`
-	Repos       []driver.TestRepo   `yaml:"repos"`
-	MultiRepos  []driver.MultiRepo  `yaml:"multi_repos"`
-	Conns       []driver.Connection `yaml:"connections"`
+	Name       string              `yaml:"name"`
+	Repos      []driver.TestRepo   `yaml:"repos"`
+	MultiRepos []driver.MultiRepo  `yaml:"multi_repos"`
+	Conns      []driver.Connection `yaml:"connections"`
 
 	// Skip the entire test with this reason.
 	Skip string `yaml:"skip"`
@@ -48,6 +55,7 @@ type Test struct {
 
 // Set this environment variable to effectively disable timeouts for debugging.
 const debugEnvKey = "DOLT_SQL_SERVER_TEST_DEBUG"
+
 var timeout = 20 * time.Second
 
 func init() {
@@ -69,35 +77,160 @@ func ParseTestsFile(path string) (TestDef, error) {
 	return res, err
 }
 
-func MakeRepo(t *testing.T, rs driver.RepoStore, r driver.TestRepo) driver.Repo {
+func MakeRepo(t *testing.T, rs driver.RepoStore, r driver.TestRepo, ports *DynamicPorts) driver.Repo {
 	repo, err := rs.MakeRepo(r.Name)
 	require.NoError(t, err)
 	for _, f := range r.WithFiles {
+		f.Template = func(s string) string {
+			return ports.ApplyTemplate(s)
+		}
 		require.NoError(t, f.WriteAtDir(repo.Dir))
 	}
 	for _, remote := range r.WithRemotes {
-		require.NoError(t, repo.CreateRemote(remote.Name, remote.URL))
+		url := remote.URL
+		url = ports.ApplyTemplate(url)
+		require.NoError(t, repo.CreateRemote(remote.Name, url))
 	}
 	return repo
 }
 
-func MakeServer(t *testing.T, dc driver.DoltCmdable, s *driver.Server) *driver.SqlServer {
+// Simple interface for wrapping *testing.T. Used for retryingT.
+type TestingT interface {
+	Fatal(...any)
+
+	FailNow()
+
+	Errorf(string, ...any)
+
+	Cleanup(func())
+}
+
+// Globally available dynamic ports, backs every instance of
+// DynamicPorts and hands them out in a thread-safe manner.
+//
+// XXX: This structure and its initialization does not currently look
+// for "available" ports on the running host. It simply avoids handing
+// out the same port to two separate tests that are running at the
+// same time. It recycles ports as tests complete.
+type GlobalDynamicPorts struct {
+	mu        sync.Mutex
+	available []int
+}
+
+func (g *GlobalDynamicPorts) Get(t TestingT) int {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if len(g.available) == 0 {
+		t.Fatal("cannot get a port; we are all out.")
+	}
+	next := g.available[len(g.available)-1]
+	g.available = g.available[:len(g.available)-1]
+	return next
+}
+
+func (g *GlobalDynamicPorts) Return(n int) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.available = append(g.available, n)
+}
+
+// Tracks dynamic ports available for expansion in `{{get_port ...}}`
+// templates for server args and config files.
+type DynamicPorts struct {
+	// Where we go when we need a new one.
+	global *GlobalDynamicPorts
+
+	t TestingT
+
+	// Where we put allocated ports. For a given test, the first
+	// use will get a new unused port from
+	// GlobalDynamicPorts. Then that same port will be returned
+	// from here for all uses. When the test finishes, its Cleanup
+	// returns the port to GlobalDynamicPorts.
+	allocated map[string]int
+}
+
+func (d *DynamicPorts) Get(name string) (int, bool) {
+	if d.allocated != nil {
+		v, ok := d.allocated[name]
+		return v, ok
+	} else {
+		return 0, false
+	}
+}
+
+func (d *DynamicPorts) GetOrAllocate(name string) int {
+	v, ok := d.Get(name)
+	if ok {
+		return v
+	}
+	v = d.global.Get(d.t)
+	if d.allocated == nil {
+		d.allocated = make(map[string]int)
+		// We register one cleanup function for the entire
+		// DynamicPorts and we return them all at once.
+		//
+		// In cases where there are two dependent servers, we
+		// want to return all ports after both servers have
+		// been shut down. If we return them as we allocated
+		// them, it's possible that we allocated them to
+		// render the entire config for the first server, some
+		// referring to the second server, for example. If
+		// testing.T runs cleanups in FIFO order, and the
+		// Cleanup for running the second server is
+		// responsible for shutting it down, it is possible we
+		// would return the second server's ports before it is
+		// shut down if we didn't return them all at once.
+		d.t.Cleanup(func() {
+			for _, p := range d.allocated {
+				d.global.Return(p)
+			}
+		})
+	}
+	d.allocated[name] = v
+	return v
+}
+
+func (d *DynamicPorts) ApplyTemplate(s string) string {
+	tmpl, err := template.New("sql").Funcs(map[string]any{
+		"get_port": d.GetOrAllocate,
+	}).Parse(s)
+	require.NoError(d.t, err)
+	var buf bytes.Buffer
+	err = tmpl.Execute(&buf, nil)
+	require.NoError(d.t, err)
+	return buf.String()
+}
+
+func MakeServer(t *testing.T, dc driver.DoltCmdable, s *driver.Server, dynPorts *DynamicPorts) *driver.SqlServer {
 	if s == nil {
 		return nil
 	}
-	opts := []driver.SqlServerOpt{driver.WithArgs(s.Args...), driver.WithEnvs(s.Envs...), driver.WithName(s.Name)}
-	if s.Port != 0 {
-		opts = append(opts, driver.WithPort(s.Port))
+	args := make([]string, len(s.Args))
+	for i := range args {
+		args[i] = dynPorts.ApplyTemplate(s.Args[i])
 	}
+	opts := []driver.SqlServerOpt{driver.WithArgs(args...), driver.WithEnvs(s.Envs...), driver.WithName(s.Name)}
+	if s.Port != 0 {
+		t.Fatal("cannot specify s.Port on these tests; please use {{get_port ...}} and dynamic_port: to specify a dynamic port.")
+	}
+	if s.DynamicPort == "" {
+		t.Fatal("you must specify s.DynamicPort on these tests; please use {{get_port ...}} and dynamic_port: to specify a dynamic port.")
+	}
+	port, ok := dynPorts.Get(s.DynamicPort)
+	if !ok {
+		t.Fatalf("cannot find dynamic port %s after expanding server config, requested as dynamic server port", s.DynamicPort)
+	}
+	opts = append(opts, driver.WithPort(port))
 
 	var server *driver.SqlServer
 	var err error
 	if s.DebugPort != 0 {
-		server, err = driver.DebugSqlServer(dc, s.DebugPort, opts...)	
+		server, err = driver.DebugSqlServer(dc, s.DebugPort, opts...)
 	} else {
 		server, err = driver.StartSqlServer(dc, opts...)
 	}
-	
+
 	require.NoError(t, err)
 	if len(s.ErrorMatches) > 0 {
 		err := server.ErrorStop()
@@ -124,10 +257,24 @@ func MakeServer(t *testing.T, dc driver.DoltCmdable, s *driver.Server) *driver.S
 	}
 }
 
+// Runs the defined test, applying its asserts.
+//
+// Supports {{get_port ...}} dynamic port assignment in the following
+// places:
+// * Repo with_files contents
+// * MultiRepo with_files contents
+// * Server args
+// * RestartServer args
+// * Query exec string literals. Currently not args.
+// * Query result row assert string literals.
 func (test Test) Run(t *testing.T) {
 	if test.Skip != "" {
 		t.Skip(test.Skip)
 	}
+
+	var ports DynamicPorts
+	ports.global = &GlobalPorts
+	ports.t = t
 
 	u, err := driver.NewDoltUser()
 	require.NoError(t, err)
@@ -140,17 +287,18 @@ func (test Test) Run(t *testing.T) {
 	servers := make(map[string]*driver.SqlServer)
 
 	for _, r := range test.Repos {
-		repo := MakeRepo(t, rs, r)
+		repo := MakeRepo(t, rs, r, &ports)
 
 		if r.Server.Name == "" {
 			r.Server.Name = r.Name
 		}
-		server := MakeServer(t, repo, r.Server)
+		server := MakeServer(t, repo, r.Server, &ports)
 		if server != nil {
 			server.DBName = r.Name
 			servers[r.Name] = server
 		}
 	}
+
 	for _, mr := range test.MultiRepos {
 		// Each MultiRepo gets its own dolt config --global.
 		u, err := driver.NewDoltUser()
@@ -161,16 +309,18 @@ func (test Test) Run(t *testing.T) {
 		rs, err = u.MakeRepoStore()
 		require.NoError(t, err)
 		for _, r := range mr.Repos {
-			MakeRepo(t, rs, r)
+			MakeRepo(t, rs, r, &ports)
 		}
 		for _, f := range mr.WithFiles {
+			f.Template = func(s string) string {
+				return ports.ApplyTemplate(s)
+			}
 			require.NoError(t, f.WriteAtDir(rs.Dir))
 		}
-
 		if mr.Server.Name == "" {
 			mr.Server.Name = mr.Name
 		}
-		server := MakeServer(t, rs, mr.Server)
+		server := MakeServer(t, rs, mr.Server, &ports)
 		if server != nil {
 			servers[mr.Name] = server
 		}
@@ -180,7 +330,7 @@ func (test Test) Run(t *testing.T) {
 		server := servers[c.On]
 		require.NotNilf(t, server, "error in test spec: could not find server %s for connection %d", c.On, i)
 		if c.RetryAttempts > 1 {
-			RetryTestRun(t, c.RetryAttempts, func(t require.TestingT) {
+			RetryTestRun(t, c.RetryAttempts, func(t TestingT) {
 				db, err := server.DB(c)
 				require.NoError(t, err)
 				defer db.Close()
@@ -190,7 +340,7 @@ func (test Test) Run(t *testing.T) {
 				defer conn.Close()
 
 				for _, q := range c.Queries {
-					RunQueryAttempt(t, conn, q)
+					RunQueryAttempt(t, conn, q, &ports)
 				}
 			})
 		} else {
@@ -204,12 +354,20 @@ func (test Test) Run(t *testing.T) {
 				defer conn.Close()
 
 				for _, q := range c.Queries {
-					RunQuery(t, conn, q)
+					RunQuery(t, conn, q, &ports)
 				}
 			}()
 		}
 		if c.RestartServer != nil {
-			err := server.Restart(c.RestartServer.Args, c.RestartServer.Envs)
+			args := c.RestartServer.Args
+			if args != nil {
+				tmplArgs := make([]string, len(*args))
+				for i := range tmplArgs {
+					tmplArgs[i] = ports.ApplyTemplate((*args)[i])
+				}
+				args = &tmplArgs
+			}
+			err := server.Restart(args, c.RestartServer.Envs)
 			require.NoError(t, err)
 		}
 	}
@@ -218,8 +376,14 @@ func (test Test) Run(t *testing.T) {
 func RunTestsFile(t *testing.T, path string) {
 	def, err := ParseTestsFile(path)
 	require.NoError(t, err)
+	parallel := def.Parallel
 	for _, test := range def.Tests {
-		t.Run(test.Name, test.Run)
+		t.Run(test.Name, func(t *testing.T) {
+			if parallel {
+				t.Parallel()
+			}
+			test.Run(t)
+		})
 	}
 }
 
@@ -252,7 +416,7 @@ func (r *retryTestingT) FailNow() {
 	panic(r)
 }
 
-func (r *retryTestingT) try(attempts int, test func(require.TestingT)) {
+func (r *retryTestingT) try(attempts int, test func(TestingT)) {
 	for i := 0; i < attempts; i++ {
 		r.errorfStrings = nil
 		r.errorfArgs = nil
@@ -283,7 +447,7 @@ func (r *retryTestingT) try(attempts int, test func(require.TestingT)) {
 	}
 }
 
-func RetryTestRun(t *testing.T, attempts int, test func(require.TestingT)) {
+func RetryTestRun(t *testing.T, attempts int, test func(TestingT)) {
 	if attempts == 0 {
 		attempts = 1
 	}
@@ -291,13 +455,13 @@ func RetryTestRun(t *testing.T, attempts int, test func(require.TestingT)) {
 	rtt.try(attempts, test)
 }
 
-func RunQuery(t *testing.T, conn *sql.Conn, q driver.Query) {
-	RetryTestRun(t, q.RetryAttempts, func(t require.TestingT) {
-		RunQueryAttempt(t, conn, q)
+func RunQuery(t *testing.T, conn *sql.Conn, q driver.Query, ports *DynamicPorts) {
+	RetryTestRun(t, q.RetryAttempts, func(t TestingT) {
+		RunQueryAttempt(t, conn, q, ports)
 	})
 }
 
-func RunQueryAttempt(t require.TestingT, conn *sql.Conn, q driver.Query) {
+func RunQueryAttempt(t TestingT, conn *sql.Conn, q driver.Query, ports *DynamicPorts) {
 	args := make([]any, len(q.Args))
 	for i := range q.Args {
 		args[i] = q.Args[i]
@@ -323,12 +487,22 @@ func RunQueryAttempt(t require.TestingT, conn *sql.Conn, q driver.Query) {
 		rowstrings, err := RowsToStrings(len(cols), rows)
 		require.NoError(t, err)
 		if q.Result.Rows.Or != nil {
-			require.Contains(t, *q.Result.Rows.Or, rowstrings)
+			match := *q.Result.Rows.Or
+			for i := range match {
+				for j := range match[i] {
+					for k := range match[i][j] {
+						match[i][j][k] = ports.ApplyTemplate(match[i][j][k])
+					}
+				}
+			}
+			require.Contains(t, match, rowstrings)
 		}
 	} else if q.Exec != "" {
 		ctx, c := context.WithTimeout(context.Background(), timeout)
 		defer c()
-		_, err := conn.ExecContext(ctx, q.Exec, args...)
+		exec := q.Exec
+		exec = ports.ApplyTemplate(exec)
+		_, err := conn.ExecContext(ctx, exec, args...)
 		if q.ErrorMatch == "" {
 			require.NoError(t, err, "error running query %s: %v", q.Exec, err)
 		} else {

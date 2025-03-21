@@ -129,6 +129,10 @@ type WithFile struct {
 	// A source file path to copy to |Name|. Mutually exclusive with
 	// Contents.
 	SourcePath string `yaml:"source_path"`
+
+	// If this is non-nil, the template will be applied to the
+	// contents of the file as they are written through |WriteAtDir|.
+	Template func(string) string
 }
 
 func (f WithFile) WriteAtDir(dir string) error {
@@ -152,10 +156,22 @@ func (f WithFile) WriteAtDir(dir string) error {
 		if err != nil {
 			return err
 		}
-		_, err = io.Copy(dest, source)
+		contents, err := io.ReadAll(source)
+		if err != nil {
+			return err
+		}
+		if f.Template != nil {
+			str := f.Template(string(contents))
+			contents = []byte(str)
+		}
+		_, err = dest.Write(contents)
 		return err
 	} else {
-		return os.WriteFile(path, []byte(f.Contents), 0550)
+		contents := f.Contents
+		if f.Template != nil {
+			contents = f.Template(contents)
+		}
+		return os.WriteFile(path, []byte(contents), 0550)
 	}
 }
 
@@ -167,8 +183,16 @@ type Server struct {
 	Envs []string `yaml:"envs"`
 
 	// The |Port| which the server will be running on. For now, it is up to
-	// the |Args| to make sure this is true. Defaults to 3308.
+	// the |Args| to make sure this is true. Defaults to 3306.
 	Port int `yaml:"port"`
+
+	// This can be used with templating of dynamic ports to
+	// specify the SQL listener port which will have been filled
+	// in by a call to `{{get_port "server_name"}}` within the
+	// config or args of the server.
+	//
+	// A |Port| != 0 with a |DynamicPort| != "" is an error.
+	DynamicPort string `yaml:"dynamic_port"`
 
 	// DebugPort if set to a non-zero value will cause this server to be started with |dlv| listening for a debugger
 	// connection on the port given.
@@ -192,7 +216,7 @@ type ExternalServer struct {
 	User     string `yaml:"user"`
 	Password string `yaml:"password"`
 	// The |Port| which the server will be running on. For now, it is up to
-	// the |Args| to make sure this is true. Defaults to 3308.
+	// the |Args| to make sure this is true. Defaults to 3306.
 	Port int `yaml:"port"`
 }
 

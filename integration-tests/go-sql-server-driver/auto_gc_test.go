@@ -32,9 +32,12 @@ import (
 )
 
 func TestAutoGC(t *testing.T) {
+	t.Parallel()
 	var enabled_16, final_16, disabled, final_disabled RepoSize
 	t.Run("Enable", func(t *testing.T) {
+		t.Parallel()
 		t.Run("CommitEvery16", func(t *testing.T) {
+			t.Parallel()
 			var s AutoGCTest
 			s.Enable = true
 			enabled_16, final_16 = runAutoGCTest(t, &s, 64, 16)
@@ -43,6 +46,7 @@ func TestAutoGC(t *testing.T) {
 			t.Logf("repo size after final gc: %v", final_16)
 		})
 		t.Run("ClusterReplication", func(t *testing.T) {
+			t.Parallel()
 			var s AutoGCTest
 			s.Enable = true
 			s.Replicate = true
@@ -57,6 +61,7 @@ func TestAutoGC(t *testing.T) {
 		})
 	})
 	t.Run("Disabled", func(t *testing.T) {
+		t.Parallel()
 		var s AutoGCTest
 		disabled, final_disabled = runAutoGCTest(t, &s, 64, 128)
 		assert.NotContains(t, string(s.PrimaryServer.Output.Bytes()), "Successfully completed auto GC")
@@ -80,9 +85,15 @@ type AutoGCTest struct {
 	StandbyDir    string
 	StandbyServer *driver.SqlServer
 	StandbyDB     *sql.DB
+
+	Ports *DynamicPorts
 }
 
 func (s *AutoGCTest) Setup(ctx context.Context, t *testing.T) {
+	s.Ports = &DynamicPorts{
+		global: &GlobalPorts,
+		t:      t,
+	}
 	u, err := driver.NewDoltUser()
 	require.NoError(t, err)
 	t.Cleanup(func() {
@@ -114,6 +125,8 @@ func (s *AutoGCTest) CreatePrimaryServer(ctx context.Context, t *testing.T, u dr
 behavior:
   auto_gc_behavior:
     enable: %v
+listener:
+  port: {{get_port "primary_server_port"}}
 `, s.Enable)
 
 	var clusterFragment string
@@ -122,23 +135,25 @@ behavior:
 cluster:
   standby_remotes:
   - name: standby
-    remote_url_template: http://localhost:3852/{database}
+    remote_url_template: http://localhost:{{get_port "standby_server_cluster_port"}}/{database}
   bootstrap_role: primary
   bootstrap_epoch: 1
   remotesapi:
-    port: 3851
+    port: {{get_port "primary_server_cluster_port"}}
 `
 	}
 
 	err = driver.WithFile{
 		Name:     "server.yaml",
 		Contents: behaviorFragment + clusterFragment,
+		Template: s.Ports.ApplyTemplate,
 	}.WriteAtDir(repo.Dir)
 	require.NoError(t, err)
 
 	server := MakeServer(t, repo, &driver.Server{
-		Args: []string{"--config", "server.yaml"},
-	})
+		Args:        []string{"--config", "server.yaml"},
+		DynamicPort: "primary_server_port",
+	}, s.Ports)
 	server.DBName = "auto_gc_test"
 
 	db, err := server.DB(driver.Connection{User: "root"})
@@ -162,7 +177,7 @@ func (s *AutoGCTest) CreateStandbyServer(ctx context.Context, t *testing.T, u dr
 	behaviorFragment := fmt.Sprintf(`
 listener:
   host: 0.0.0.0
-  port: 3308
+  port: {{get_port "standby_server_port"}}
 behavior:
   auto_gc_behavior:
     enable: %v
@@ -174,24 +189,25 @@ behavior:
 cluster:
   standby_remotes:
   - name: primary
-    remote_url_template: http://localhost:3851/{database}
+    remote_url_template: http://localhost:{{get_port "primary_server_cluster_port"}}/{database}
   bootstrap_role: standby
   bootstrap_epoch: 1
   remotesapi:
-    port: 3852
+    port: {{get_port "standby_server_cluster_port"}}
 `
 	}
 
 	err = driver.WithFile{
 		Name:     "server.yaml",
 		Contents: behaviorFragment + clusterFragment,
+		Template: s.Ports.ApplyTemplate,
 	}.WriteAtDir(repo.Dir)
 	require.NoError(t, err)
 
 	server := MakeServer(t, repo, &driver.Server{
-		Args: []string{"--config", "server.yaml"},
-		Port: 3308,
-	})
+		Args:        []string{"--config", "server.yaml"},
+		DynamicPort: "standby_server_port",
+	}, s.Ports)
 	server.DBName = "auto_gc_test"
 
 	db, err := server.DB(driver.Connection{User: "root"})

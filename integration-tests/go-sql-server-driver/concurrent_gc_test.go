@@ -31,6 +31,7 @@ import (
 )
 
 func TestConcurrentGC(t *testing.T) {
+	t.Parallel()
 	type dimension struct {
 		names   []string
 		factors func(gcTest) []gcTest
@@ -72,14 +73,15 @@ func TestConcurrentGC(t *testing.T) {
 		dimf := dim.factors(base)
 		for i := range dim.names {
 			t.Run(dim.names[i], func(t *testing.T) {
+				t.Parallel()
 				doDimensions(t, dimf[i], dims)
 			})
 		}
 	}
 	dimensions := []dimension{commits, full, safepoint}
 	doDimensions(t, gcTest{
-		numThreads: 8,
-		duration:   10 * time.Second,
+		numThreads:  8,
+		duration:    10 * time.Second,
 	}, dimensions)
 }
 
@@ -225,6 +227,9 @@ func (gct gcTest) finalize(t *testing.T, ctx context.Context, db *sql.DB) {
 }
 
 func (gct gcTest) run(t *testing.T) {
+	var ports DynamicPorts
+	ports.global = &GlobalPorts
+	ports.t = t
 	u, err := driver.NewDoltUser()
 	require.NoError(t, err)
 	t.Cleanup(func() {
@@ -237,14 +242,17 @@ func (gct gcTest) run(t *testing.T) {
 	repo, err := rs.MakeRepo("concurrent_gc_test")
 	require.NoError(t, err)
 
-	srvSettings := &driver.Server{}
+	srvSettings := &driver.Server{
+		Args: []string{"-P", `{{get_port "server_port"}}`},
+		DynamicPort: "server_port",
+	}
 	if gct.sessionAware {
 		srvSettings.Envs = append(srvSettings.Envs, "DOLT_GC_SAFEPOINT_CONTROLLER_CHOICE=session_aware")
 	} else {
 		srvSettings.Envs = append(srvSettings.Envs, "DOLT_GC_SAFEPOINT_CONTROLLER_CHOICE=kill_connections")
 	}
 
-	server := MakeServer(t, repo, srvSettings)
+	server := MakeServer(t, repo, srvSettings, &ports)
 	server.DBName = "concurrent_gc_test"
 
 	db, err := server.DB(driver.Connection{User: "root"})

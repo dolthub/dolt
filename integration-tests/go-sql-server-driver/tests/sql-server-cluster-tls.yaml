@@ -1,3 +1,4 @@
+parallel: true
 tests:
 - name: tls, bad root, failover to standby fails
   multi_repos:
@@ -8,15 +9,15 @@ tests:
         log_level: trace
         listener:
           host: 0.0.0.0
-          port: 3309
+          port: {{get_port "server1"}}
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: https://localhost:3852/{database}
+            remote_url_template: https://localhost:{{get_port "server2_cluster"}}/{database}
           bootstrap_role: primary
           bootstrap_epoch: 1
           remotesapi:
-            port: 3851
+            port: {{get_port "server1_cluster"}}
             tls_key: key.pem
             tls_cert: cert.pem
             tls_ca: root.pem
@@ -28,7 +29,7 @@ tests:
       source_path: $TESTGENDIR/ed25519_root.pem
     server:
       args: ["--config", "server.yaml"]
-      port: 3309
+      dynamic_port: server1
   - name: server2
     with_files:
     - name: server.yaml
@@ -36,15 +37,15 @@ tests:
         log_level: trace
         listener:
           host: 0.0.0.0
-          port: 3310
+          port: {{get_port "server2"}}
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: https://localhost:3851/{database}
+            remote_url_template: https://localhost:{{get_port "server1_cluster"}}/{database}
           bootstrap_role: standby
           bootstrap_epoch: 1
           remotesapi:
-            port: 3852
+            port: {{get_port "server2_cluster"}}
             tls_key: key.pem
             tls_cert: cert.pem
             tls_ca: root.pem
@@ -56,7 +57,7 @@ tests:
       source_path: $TESTGENDIR/rsa_root.pem
     server:
       args: ["--config", "server.yaml"]
-      port: 3310
+      dynamic_port: server2
   connections:
   - on: server1
     queries:
@@ -75,15 +76,15 @@ tests:
         log_level: trace
         listener:
           host: 0.0.0.0
-          port: 3309
+          port: {{get_port "server1"}}
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: https://localhost:3852/{database}
+            remote_url_template: https://localhost:{{get_port "server2_cluster"}}/{database}
           bootstrap_role: primary
           bootstrap_epoch: 1
           remotesapi:
-            port: 3851
+            port: {{get_port "server1_cluster"}}
             tls_key: key.pem
             tls_cert: cert.pem
             tls_ca: root.pem
@@ -95,7 +96,7 @@ tests:
       source_path: $TESTGENDIR/rsa_root.pem
     server:
       args: ["--config", "server.yaml"]
-      port: 3309
+      dynamic_port: server1
   - name: server2
     with_files:
     - name: server.yaml
@@ -103,15 +104,15 @@ tests:
         log_level: trace
         listener:
           host: 0.0.0.0
-          port: 3310
+          port: {{get_port "server2"}}
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: https://localhost:3851/{database}
+            remote_url_template: https://localhost:{{get_port "server1_cluster"}}/{database}
           bootstrap_role: standby
           bootstrap_epoch: 1
           remotesapi:
-            port: 3852
+            port: {{get_port "server2_cluster"}}
             tls_key: key.pem
             tls_cert: cert.pem
             tls_ca: root.pem
@@ -123,7 +124,7 @@ tests:
       source_path: $TESTGENDIR/rsa_root.pem
     server:
       args: ["--config", "server.yaml"]
-      port: 3310
+      dynamic_port: server2
   connections:
   - on: server1
     queries:
@@ -142,15 +143,15 @@ tests:
         log_level: trace
         listener:
           host: 0.0.0.0
-          port: 3309
+          port: {{get_port "server1"}}
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: https://localhost:3852/{database}
+            remote_url_template: https://localhost:{{get_port "server2_cluster"}}/{database}
           bootstrap_role: primary
           bootstrap_epoch: 1
           remotesapi:
-            port: 3851
+            port: {{get_port "server1_cluster"}}
             tls_key: key.pem
             tls_cert: cert.pem
             tls_ca: root.pem
@@ -163,7 +164,7 @@ tests:
       source_path: $TESTGENDIR/rsa_root.pem
     server:
       args: ["--config", "server.yaml"]
-      port: 3309
+      dynamic_port: server1
   - name: server2
     with_files:
     - name: server.yaml
@@ -171,15 +172,15 @@ tests:
         log_level: trace
         listener:
           host: 0.0.0.0
-          port: 3310
+          port: {{get_port "server2"}}
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: https://localhost:3851/{database}
+            remote_url_template: https://localhost:{{get_port "server1_cluster"}}/{database}
           bootstrap_role: standby
           bootstrap_epoch: 1
           remotesapi:
-            port: 3852
+            port: {{get_port "server2_cluster"}}
             tls_key: key.pem
             tls_cert: cert.pem
             tls_ca: root.pem
@@ -191,7 +192,7 @@ tests:
       source_path: $TESTGENDIR/rsa_root.pem
     server:
       args: ["--config", "server.yaml"]
-      port: 3310
+      dynamic_port: server2
   connections:
   - on: server1
     queries:
@@ -210,15 +211,15 @@ tests:
         log_level: trace
         listener:
           host: 0.0.0.0
-          port: 3309
+          port: {{get_port "server1"}}
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: https://localhost:3852/{database}
+            remote_url_template: https://localhost:{{get_port "server2_cluster"}}/{database}
           bootstrap_role: primary
           bootstrap_epoch: 1
           remotesapi:
-            port: 3851
+            port: {{get_port "server1_cluster"}}
             tls_key: key.pem
             tls_cert: cert.pem
             tls_ca: root.pem
@@ -231,7 +232,7 @@ tests:
       source_path: $TESTGENDIR/rsa_root.pem
     server:
       args: ["--config", "server.yaml"]
-      port: 3309
+      dynamic_port: server1
   - name: server2
     with_files:
     - name: server.yaml
@@ -239,15 +240,15 @@ tests:
         log_level: trace
         listener:
           host: 0.0.0.0
-          port: 3310
+          port: {{get_port "server2"}}
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: https://localhost:3851/{database}
+            remote_url_template: https://localhost:{{get_port "server1_cluster"}}/{database}
           bootstrap_role: standby
           bootstrap_epoch: 1
           remotesapi:
-            port: 3852
+            port: {{get_port "server2_cluster"}}
             tls_key: key.pem
             tls_cert: cert.pem
             tls_ca: root.pem
@@ -259,7 +260,7 @@ tests:
       source_path: $TESTGENDIR/rsa_root.pem
     server:
       args: ["--config", "server.yaml"]
-      port: 3310
+      dynamic_port: server2
   connections:
   - on: server1
     queries:
@@ -278,15 +279,15 @@ tests:
         log_level: trace
         listener:
           host: 0.0.0.0
-          port: 3309
+          port: {{get_port "server1"}}
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: https://localhost:3852/{database}
+            remote_url_template: https://localhost:{{get_port "server2_cluster"}}/{database}
           bootstrap_role: primary
           bootstrap_epoch: 1
           remotesapi:
-            port: 3851
+            port: {{get_port "server1_cluster"}}
             tls_key: key.pem
             tls_cert: cert.pem
             tls_ca: root.pem
@@ -298,7 +299,7 @@ tests:
       source_path: $TESTGENDIR/rsa_root.pem
     server:
       args: ["--config", "server.yaml"]
-      port: 3309
+      dynamic_port: server1
   - name: server2
     with_files:
     - name: server.yaml
@@ -306,15 +307,15 @@ tests:
         log_level: trace
         listener:
           host: 0.0.0.0
-          port: 3310
+          port: {{get_port "server2"}}
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: https://localhost:3851/{database}
+            remote_url_template: https://localhost:{{get_port "server1_cluster"}}/{database}
           bootstrap_role: standby
           bootstrap_epoch: 1
           remotesapi:
-            port: 3852
+            port: {{get_port "server2_cluster"}}
             tls_key: key.pem
             tls_cert: cert.pem
             tls_ca: root.pem
@@ -326,7 +327,7 @@ tests:
       source_path: $TESTGENDIR/rsa_root.pem
     server:
       args: ["--config", "server.yaml"]
-      port: 3310
+      dynamic_port: server2
   connections:
   - on: server1
     queries:
@@ -385,15 +386,15 @@ tests:
         log_level: trace
         listener:
           host: 0.0.0.0
-          port: 3309
+          port: {{get_port "server1"}}
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: https://localhost:3852/{database}
+            remote_url_template: https://localhost:{{get_port "server2_cluster"}}/{database}
           bootstrap_role: primary
           bootstrap_epoch: 1
           remotesapi:
-            port: 3851
+            port: {{get_port "server1_cluster"}}
             tls_key: key.pem
             tls_cert: cert.pem
             tls_ca: root.pem
@@ -407,7 +408,7 @@ tests:
       source_path: $TESTGENDIR/ed25519_root.pem
     server:
       args: ["--config", "server.yaml"]
-      port: 3309
+      dynamic_port: server1
   - name: server2
     with_files:
     - name: server.yaml
@@ -415,15 +416,15 @@ tests:
         log_level: trace
         listener:
           host: 0.0.0.0
-          port: 3310
+          port: {{get_port "server2"}}
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: https://localhost:3851/{database}
+            remote_url_template: https://localhost:{{get_port "server1_cluster"}}/{database}
           bootstrap_role: standby
           bootstrap_epoch: 1
           remotesapi:
-            port: 3852
+            port: {{get_port "server2_cluster"}}
             tls_key: key.pem
             tls_cert: cert.pem
             tls_ca: root.pem
@@ -437,7 +438,7 @@ tests:
       source_path: $TESTGENDIR/ed25519_root.pem
     server:
       args: ["--config", "server.yaml"]
-      port: 3310
+      dynamic_port: server2
   connections:
   - on: server1
     queries:
