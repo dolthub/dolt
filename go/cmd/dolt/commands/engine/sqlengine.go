@@ -219,12 +219,9 @@ func NewSqlEngine(
 	} else {
 		statsPro = statspro.StatsNoop{}
 	}
-
-<<<<<<< Updated upstream
-=======
+	
 	engine.Analyzer.Catalog.StatsProvider = statsPro
 
->>>>>>> Stashed changes
 	engine.Analyzer.ExecBuilder = rowexec.NewOverrideBuilder(kvexec.Builder{})
 	sessFactory := doltSessionFactory(pro, statsPro, mrEnv.Config(), bcController, gcSafepointController, config.Autocommit)
 	sqlEngine.provider = pro
