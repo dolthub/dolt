@@ -249,7 +249,7 @@ func defaultServerConfigYAML() *YAMLConfig {
 			PortNumber:              ptr(DefaultPort),
 			MaxConnections:          ptr(uint64(DefaultMaxConnections)),
 			BackLog:                 ptr(uint32(DefaultMaxWaitConnections)),
-			MaxConnectionsTimeoutMs: ptr(uint32(DefaultMaxWaitConnectionsTimeout.Seconds())),
+			MaxConnectionsTimeoutMs: ptr(uint64(DefaultMaxWaitConnectionsTimeout.Milliseconds())),
 			ReadTimeoutMillis:       ptr(uint64(DefaultTimeout)),
 			WriteTimeoutMillis:      ptr(uint64(DefaultTimeout)),
 			AllowCleartextPasswords: ptr(DefaultAllowCleartextPasswords),
