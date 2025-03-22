@@ -68,11 +68,17 @@ func NewAutoIncrementTracker(ctx context.Context, dbName string, roots ...doltdb
 		mm:        mutexmap.NewMutexMap(),
 		init:      make(chan struct{}),
 	}
-	ctx = gcctx.WithGCSafepointController(context.Background(), getGCSafepointController(ctx))
+	ctx = context.Background()
+	gcSafepointController := getGCSafepointController(ctx)
+	if gcSafepointController != nil {
+		ctx = gcctx.WithGCSafepointController(ctx, gcSafepointController)
+	}
 	go func() {
-		defer gcctx.SessionEnd(ctx)
-		gcctx.SessionCommandBegin(ctx)
-		defer gcctx.SessionCommandEnd(ctx)
+		if gcSafepointController != nil {
+			defer gcctx.SessionEnd(ctx)
+			gcctx.SessionCommandBegin(ctx)
+			defer gcctx.SessionCommandEnd(ctx)
+		}
 		ait.runInitWithRootsAsync(ctx, roots...)
 	}()
 	return &ait, nil
