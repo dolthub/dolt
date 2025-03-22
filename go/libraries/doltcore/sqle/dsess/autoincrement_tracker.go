@@ -29,6 +29,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/gcctx"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess/mutexmap"
@@ -67,8 +68,21 @@ func NewAutoIncrementTracker(ctx context.Context, dbName string, roots ...doltdb
 		mm:        mutexmap.NewMutexMap(),
 		init:      make(chan struct{}),
 	}
-	ait.runInitWithRootsAsync(ctx, roots...)
+	ctx = gcctx.WithGCSafepointController(context.Background(), getGCSafepointController(ctx))
+	go func() {
+		defer gcctx.SessionEnd(ctx)
+		gcctx.SessionCommandBegin(ctx)
+		defer gcctx.SessionCommandEnd(ctx)
+		ait.runInitWithRootsAsync(ctx, roots...)
+	}()
 	return &ait, nil
+}
+
+func getGCSafepointController(ctx context.Context) *gcctx.GCSafepointController {
+	if sqlCtx, ok := ctx.(*sql.Context); ok {
+		return DSessFromSess(sqlCtx.Session).GCSafepointController()
+	}
+	return gcctx.GetGCSafepointController(ctx)
 }
 
 func loadAutoIncValue(sequences *sync.Map, tableName string) uint64 {
@@ -450,10 +464,8 @@ func (a *AutoIncrementTracker) waitForInit() error {
 }
 
 func (a *AutoIncrementTracker) runInitWithRootsAsync(ctx context.Context, roots ...doltdb.Rootish) {
-	go func() {
-		defer close(a.init)
-		a.initErr = a.initWithRoots(ctx, roots...)
-	}()
+	defer close(a.init)
+	a.initErr = a.initWithRoots(ctx, roots...)
 }
 
 func (a *AutoIncrementTracker) initWithRoots(ctx context.Context, roots ...doltdb.Rootish) error {
@@ -500,6 +512,6 @@ func (a *AutoIncrementTracker) InitWithRoots(ctx context.Context, roots ...doltd
 		return err
 	}
 	a.init = make(chan struct{})
-	a.runInitWithRootsAsync(ctx, roots...)
+	go a.runInitWithRootsAsync(ctx, roots...)
 	return a.waitForInit()
 }

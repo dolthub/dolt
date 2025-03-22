@@ -94,6 +94,11 @@ func NewSqlEngine(
 	config *SqlEngineConfig,
 ) (*SqlEngine, error) {
 	gcSafepointController := gcctx.NewGCSafepointController()
+	ctx = gcctx.WithGCSafepointController(ctx, gcSafepointController)
+
+	defer gcctx.SessionEnd(ctx)
+	gcctx.SessionCommandBegin(ctx)
+	defer gcctx.SessionCommandEnd(ctx)
 
 	dbs, locations, err := CollectDBs(ctx, mrEnv, config.Bulk)
 	if err != nil {
