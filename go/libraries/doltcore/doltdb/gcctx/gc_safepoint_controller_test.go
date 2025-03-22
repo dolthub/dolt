@@ -19,8 +19,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/stretchr/testify/require"
+
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 func TestGCSafepointController(t *testing.T) {
