@@ -28,6 +28,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/gcctx"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
@@ -157,17 +158,17 @@ func (sc killConnectionsSafepointController) CancelSafepoint() {
 }
 
 type sessionAwareSafepointController struct {
-	controller  *dsess.GCSafepointController
+	controller  *gcctx.GCSafepointController
 	dbname      string
 	callSession *dsess.DoltSession
 	origEpoch   int
 	doltDB      *doltdb.DoltDB
 
-	waiter *dsess.GCSafepointWaiter
+	waiter *gcctx.GCSafepointWaiter
 	keeper func(hash.Hash) bool
 }
 
-func (sc *sessionAwareSafepointController) visit(ctx context.Context, sess *dsess.DoltSession) error {
+func (sc *sessionAwareSafepointController) visit(ctx context.Context, sess gcctx.GCRootsProvider) error {
 	return sess.VisitGCRoots(ctx, sc.dbname, sc.keeper)
 }
 
