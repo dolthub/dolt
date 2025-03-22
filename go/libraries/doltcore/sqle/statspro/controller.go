@@ -282,7 +282,7 @@ func (sc *StatsController) AnalyzeTable(ctx *sql.Context, table sql.Table, dbNam
 	}
 	if branch == "" {
 		var err error
-		branch, err = dSess.GetBranch()
+		branch, err = dSess.GetBranch(ctx)
 		if err != nil {
 			return err
 		}
@@ -411,7 +411,7 @@ func (sc *StatsController) DropDbStats(ctx *sql.Context, dbName string, flush bo
 
 func (sc *StatsController) statsKey(ctx *sql.Context, dbName, table string) (tableIndexesKey, error) {
 	dSess := dsess.DSessFromSess(ctx.Session)
-	branch, err := dSess.GetBranch()
+	branch, err := dSess.GetBranch(ctx)
 	if err != nil {
 		return tableIndexesKey{}, err
 	}
