@@ -509,7 +509,7 @@ func checkoutTablesFromCommit(
 		return fmt.Errorf("Could not load database %s", ctx.GetCurrentDatabase())
 	}
 
-	currentBranch, err := dSess.GetBranch()
+	currentBranch, err := dSess.GetBranch(ctx)
 	if err != nil {
 		return err
 	}

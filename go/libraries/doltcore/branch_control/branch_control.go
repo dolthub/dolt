@@ -348,13 +348,65 @@ func AddAdminForContext(ctx context.Context, branchName string) error {
 // then nil is returned.
 func GetBranchAwareSession(ctx context.Context) Context {
 	if sqlCtx, ok := ctx.(*sql.Context); ok {
-		if bas, ok := sqlCtx.Session.(Context); ok {
+		if bas, ok := sqlCtx.Session.(ContextConvertible); ok {
+			return &convertedContext{
+				convertible: bas,
+				ctx:         sqlCtx,
+			}
+		} else if bas, ok := sqlCtx.Session.(Context); ok {
 			return bas
 		}
 	} else if bas, ok := ctx.(Context); ok {
 		return bas
 	}
 	return nil
+}
+
+// GetBranchAwareSession will return a context converted from this if
+// the Session supports this GetBranch call instead.
+type ContextConvertible interface {
+	GetBranch(*sql.Context) (string, error)
+	GetCurrentDatabase() string
+	GetUser() string
+	GetHost() string
+	GetPrivilegeSet() (sql.PrivilegeSet, uint64)
+	GetController() *Controller
+	GetFileSystem() filesys.Filesys
+}
+
+type convertedContext struct {
+	convertible ContextConvertible
+	ctx         *sql.Context
+}
+
+var _ Context = (*convertedContext)(nil)
+
+func (cc *convertedContext) GetBranch() (string, error) {
+	return cc.convertible.GetBranch(cc.ctx)
+}
+
+func (cc *convertedContext) GetCurrentDatabase() string {
+	return cc.convertible.GetCurrentDatabase()
+}
+
+func (cc *convertedContext) GetUser() string {
+	return cc.convertible.GetUser()
+}
+
+func (cc *convertedContext) GetHost() string {
+	return cc.convertible.GetHost()
+}
+
+func (cc *convertedContext) GetPrivilegeSet() (sql.PrivilegeSet, uint64) {
+	return cc.convertible.GetPrivilegeSet()
+}
+
+func (cc *convertedContext) GetController() *Controller {
+	return cc.convertible.GetController()
+}
+
+func (cc *convertedContext) GetFileSystem() filesys.Filesys {
+	return cc.convertible.GetFileSystem()
 }
 
 // HasDatabasePrivileges returns whether the given context's user has the correct privileges to modify any table entries

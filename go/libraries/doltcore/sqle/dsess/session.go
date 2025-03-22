@@ -74,7 +74,7 @@ type DoltSession struct {
 var _ sql.Session = (*DoltSession)(nil)
 var _ sql.PersistableSession = (*DoltSession)(nil)
 var _ sql.TransactionSession = (*DoltSession)(nil)
-var _ branch_control.Context = (*DoltSession)(nil)
+var _ branch_control.ContextConvertible = (*DoltSession)(nil)
 
 // DefaultSession creates a DoltSession with default values
 func DefaultSession(pro DoltDatabaseProvider, sessFunc WriteSessFunc) *DoltSession {
@@ -1703,9 +1703,7 @@ func (d *DoltSession) SystemVariablesInConfig() ([]sql.SystemVariable, error) {
 }
 
 // GetBranch implements the interface branch_control.Context.
-func (d *DoltSession) GetBranch() (string, error) {
-	// TODO: creating a new SQL context here is expensive
-	ctx := sql.NewContext(context.Background(), sql.WithSession(d))
+func (d *DoltSession) GetBranch(ctx *sql.Context) (string, error) {
 	currentDb := d.Session.GetCurrentDatabase()
 
 	// no branch if there's no current db
