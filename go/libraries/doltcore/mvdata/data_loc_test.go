@@ -25,6 +25,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
@@ -201,6 +202,17 @@ func TestCreateRdWr(t *testing.T) {
 	require.NoError(t, err)
 	dEnv.FS.WriteFile(testSchemaFileName, []byte(testSchema), os.ModePerm)
 
+	eng, dbName, err := engine.NewSqlEngineForEnv(ctx, dEnv)
+	if err != nil {
+		t.Fatalf("Unexpected error creating sql engine: %v", err)
+	}
+	defer eng.Close()
+	sqlCtx, err := eng.NewLocalContext(ctx)
+	if err != nil {
+		t.Fatalf("Unexpected error creating sql context: %v", err)
+	}
+	sqlCtx.SetCurrentDatabase(dbName)
+
 	mvOpts := &testDataMoverOptions{}
 
 	for idx, test := range tests {
@@ -242,7 +254,12 @@ func TestCreateRdWr(t *testing.T) {
 			t.Fatal("Failed to write data. bad:", numBad, err)
 		}
 
-		rd, _, err := loc.NewReader(context.Background(), dEnv, JSONOptions{TableName: testTableName, SchFile: testSchemaFileName})
+		rd, _, err := loc.NewReader(context.Background(), dEnv, JSONOptions{
+			TableName: testTableName,
+			SchFile:   testSchemaFileName,
+			SqlCtx:    sqlCtx,
+			Engine:    eng.GetUnderlyingEngine(),
+		})
 
 		if err != nil {
 			t.Fatal("Unexpected error creating reader", err)

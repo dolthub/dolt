@@ -25,6 +25,7 @@ import (
 	"strings"
 	"sync/atomic"
 
+	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/sqltypes"
@@ -35,6 +36,7 @@ import (
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
+	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/schcmds"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
@@ -180,7 +182,7 @@ func (m importOptions) srcIsStream() bool {
 	return isStream
 }
 
-func getImportMoveOptions(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEnv) (*importOptions, errhand.VerboseError) {
+func getImportMoveOptions(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEnv, sqlCtx *sql.Context, engine *sqle.Engine) (*importOptions, errhand.VerboseError) {
 	tableName := apr.Arg(0)
 
 	path := ""
@@ -225,9 +227,19 @@ func getImportMoveOptions(ctx context.Context, apr *argparser.ArgParseResults, d
 			// table name must match sheet name currently
 			srcOpts = mvdata.XlsxOptions{SheetName: tableName}
 		} else if val.Format == mvdata.JsonFile {
-			srcOpts = mvdata.JSONOptions{TableName: tableName, SchFile: schemaFile}
+			opts := mvdata.JSONOptions{TableName: tableName, SchFile: schemaFile}
+			if schemaFile != "" {
+				opts.SqlCtx = sqlCtx
+				opts.Engine = engine
+			}
+			srcOpts = opts
 		} else if val.Format == mvdata.ParquetFile {
-			srcOpts = mvdata.ParquetOptions{TableName: tableName, SchFile: schemaFile}
+			opts := mvdata.ParquetOptions{TableName: tableName, SchFile: schemaFile}
+			if schemaFile != "" {
+				opts.SqlCtx = sqlCtx
+				opts.Engine = engine
+			}
+			srcOpts = opts
 		}
 
 	case mvdata.StreamDataLocation:
@@ -417,7 +429,19 @@ func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return commands.HandleVErrAndExitCode(verr, usage)
 	}
 
-	mvOpts, verr := getImportMoveOptions(ctx, apr, dEnv)
+	eng, dbName, err := engine.NewSqlEngineForEnv(ctx, dEnv)
+	if err != nil {
+		verr = errhand.BuildDError("could not build sql engine for import").AddCause(err).Build()
+		return commands.HandleVErrAndExitCode(verr, usage)
+	}
+	sqlCtx, err := eng.NewLocalContext(ctx)
+	if err != nil {
+		verr = errhand.BuildDError("could not build sql context for import").AddCause(err).Build()
+		return commands.HandleVErrAndExitCode(verr, usage)
+	}
+	sqlCtx.SetCurrentDatabase(dbName)
+
+	mvOpts, verr := getImportMoveOptions(ctx, apr, dEnv, sqlCtx, eng.GetUnderlyingEngine())
 	if verr != nil {
 		return commands.HandleVErrAndExitCode(verr, usage)
 	}
@@ -689,7 +713,23 @@ func moveRows(
 
 func getImportSchema(ctx context.Context, dEnv *env.DoltEnv, impOpts *importOptions) (schema.Schema, *mvdata.DataMoverCreationError) {
 	if impOpts.schFile != "" {
-		tn, out, err := mvdata.SchAndTableNameFromFile(ctx, impOpts.schFile, dEnv)
+		root, err := dEnv.WorkingRoot(ctx)
+		if err != nil {
+			return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.SchemaErr, Cause: err}
+		}
+
+		eng, dbName, err := engine.NewSqlEngineForEnv(ctx, dEnv)
+		if err != nil {
+			return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.SchemaErr, Cause: err}
+		}
+		defer eng.Close()
+		sqlCtx, err := eng.NewLocalContext(ctx)
+		if err != nil {
+			return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.SchemaErr, Cause: err}
+		}
+		sqlCtx.SetCurrentDatabase(dbName)
+
+		tn, out, err := mvdata.SchAndTableNameFromFile(sqlCtx, impOpts.schFile, dEnv.FS, root, eng.GetUnderlyingEngine())
 		if err != nil {
 			return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.SchemaErr, Cause: err}
 		}
