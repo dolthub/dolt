@@ -470,21 +470,28 @@ func doltSessionFactory(pro *dsqle.DoltDatabaseProvider, statsPro sql.StatsProvi
 	}
 }
 
+type ConfigOption func(*SqlEngineConfig)
+
 // NewSqlEngineForEnv returns a SqlEngine configured for the environment provided, with a single root user.
 // Returns the new engine, the first database name, and any error that occurred.
-func NewSqlEngineForEnv(ctx context.Context, dEnv *env.DoltEnv) (*SqlEngine, string, error) {
+func NewSqlEngineForEnv(ctx context.Context, dEnv *env.DoltEnv, options ...ConfigOption) (*SqlEngine, string, error) {
 	mrEnv, err := env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), dEnv.FS, dEnv.Version, dEnv)
 	if err != nil {
 		return nil, "", err
 	}
 
+	config := &SqlEngineConfig{
+		ServerUser: "root",
+		ServerHost: "localhost",
+	}
+	for _, opt := range options {
+		opt(config)
+	}
+
 	engine, err := NewSqlEngine(
 		ctx,
 		mrEnv,
-		&SqlEngineConfig{
-			ServerUser: "root",
-			ServerHost: "localhost",
-		},
+		config,
 	)
 
 	return engine, mrEnv.GetFirstDatabase(), err

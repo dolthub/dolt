@@ -182,7 +182,7 @@ func (m importOptions) srcIsStream() bool {
 	return isStream
 }
 
-func getImportMoveOptions(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEnv, sqlCtx *sql.Context, engine *sqle.Engine) (*importOptions, errhand.VerboseError) {
+func getImportMoveOptions(ctx *sql.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEnv, engine *sqle.Engine) (*importOptions, errhand.VerboseError) {
 	tableName := apr.Arg(0)
 
 	path := ""
@@ -229,14 +229,14 @@ func getImportMoveOptions(ctx context.Context, apr *argparser.ArgParseResults, d
 		} else if val.Format == mvdata.JsonFile {
 			opts := mvdata.JSONOptions{TableName: tableName, SchFile: schemaFile}
 			if schemaFile != "" {
-				opts.SqlCtx = sqlCtx
+				opts.SqlCtx = ctx
 				opts.Engine = engine
 			}
 			srcOpts = opts
 		} else if val.Format == mvdata.ParquetFile {
 			opts := mvdata.ParquetOptions{TableName: tableName, SchFile: schemaFile}
 			if schemaFile != "" {
-				opts.SqlCtx = sqlCtx
+				opts.SqlCtx = ctx
 				opts.Engine = engine
 			}
 			srcOpts = opts
@@ -429,7 +429,16 @@ func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return commands.HandleVErrAndExitCode(verr, usage)
 	}
 
-	eng, dbName, err := engine.NewSqlEngineForEnv(ctx, dEnv)
+	root, err := dEnv.WorkingRoot(ctx)
+	if err != nil {
+		verr = errhand.BuildDError("Unable to get the working root value for this data repository.").AddCause(err).Build()
+		return commands.HandleVErrAndExitCode(verr, usage)
+	}
+
+	eng, dbName, err := engine.NewSqlEngineForEnv(ctx, dEnv, func(cfg *engine.SqlEngineConfig) {
+		cfg.Autocommit = false
+		cfg.Bulk = true
+	})
 	if err != nil {
 		verr = errhand.BuildDError("could not build sql engine for import").AddCause(err).Build()
 		return commands.HandleVErrAndExitCode(verr, usage)
@@ -441,30 +450,24 @@ func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string,
 	}
 	sqlCtx.SetCurrentDatabase(dbName)
 
-	mvOpts, verr := getImportMoveOptions(ctx, apr, dEnv, sqlCtx, eng.GetUnderlyingEngine())
+	mvOpts, verr := getImportMoveOptions(sqlCtx, apr, dEnv, eng.GetUnderlyingEngine())
 	if verr != nil {
 		return commands.HandleVErrAndExitCode(verr, usage)
 	}
 
-	root, err := dEnv.WorkingRoot(ctx)
-	if err != nil {
-		verr = errhand.BuildDError("Unable to get the working root value for this data repository.").AddCause(err).Build()
-		return commands.HandleVErrAndExitCode(verr, usage)
-	}
-
-	rd, nDMErr := newImportDataReader(ctx, root, dEnv, mvOpts)
+	rd, nDMErr := newImportDataReader(sqlCtx, root, dEnv, mvOpts)
 	if nDMErr != nil {
 		verr = newDataMoverErrToVerr(mvOpts, nDMErr)
 		return commands.HandleVErrAndExitCode(verr, usage)
 	}
 
-	wr, nDMErr := newImportSqlEngineMover(ctx, root, dEnv, rd.GetSchema(), mvOpts)
+	wr, nDMErr := newImportSqlEngineMover(sqlCtx, root, dEnv, rd.GetSchema(), eng.GetUnderlyingEngine(), mvOpts)
 	if nDMErr != nil {
 		verr = newDataMoverErrToVerr(mvOpts, nDMErr)
 		return commands.HandleVErrAndExitCode(verr, usage)
 	}
 
-	skipped, err := move(ctx, rd, wr, mvOpts)
+	skipped, err := move(sqlCtx, rd, wr, mvOpts)
 	if err != nil {
 		bdr := errhand.BuildDError("\nAn error occurred while moving data")
 		bdr.AddCause(err)
@@ -512,11 +515,11 @@ func newImportDataReader(ctx context.Context, root doltdb.RootValue, dEnv *env.D
 	return rd, nil
 }
 
-func newImportSqlEngineMover(ctx context.Context, root doltdb.RootValue, dEnv *env.DoltEnv, rdSchema schema.Schema, imOpts *importOptions) (*mvdata.SqlEngineTableWriter, *mvdata.DataMoverCreationError) {
+func newImportSqlEngineMover(ctx *sql.Context, root doltdb.RootValue, dEnv *env.DoltEnv, rdSchema schema.Schema, engine *sqle.Engine, imOpts *importOptions) (*mvdata.SqlEngineTableWriter, *mvdata.DataMoverCreationError) {
 	moveOps := &mvdata.MoverOptions{Force: imOpts.force, TableToWriteTo: imOpts.destTableName, ContinueOnErr: imOpts.contOnErr, Operation: imOpts.operation, DisableFks: imOpts.disableFkChecks}
 
 	// Returns the schema of the table to be created or the existing schema
-	tableSchema, dmce := getImportSchema(ctx, root, dEnv, imOpts)
+	tableSchema, dmce := getImportSchema(ctx, root, dEnv, engine, imOpts)
 	if dmce != nil {
 		return nil, dmce
 	}
@@ -561,7 +564,7 @@ func newImportSqlEngineMover(ctx context.Context, root doltdb.RootValue, dEnv *e
 		}
 	}
 
-	mv, err := mvdata.NewSqlEngineTableWriter(ctx, dEnv, tableSchema, rowOperationSchema, moveOps, importStatsCB)
+	mv, err := mvdata.NewSqlEngineTableWriter(ctx, engine, tableSchema, rowOperationSchema, moveOps, importStatsCB)
 	if err != nil {
 		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.CreateWriterErr, Cause: err}
 	}
@@ -711,20 +714,9 @@ func moveRows(
 	}
 }
 
-func getImportSchema(ctx context.Context, root doltdb.RootValue, dEnv *env.DoltEnv, impOpts *importOptions) (schema.Schema, *mvdata.DataMoverCreationError) {
-	eng, dbName, err := engine.NewSqlEngineForEnv(ctx, dEnv)
-	if err != nil {
-		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.SchemaErr, Cause: err}
-	}
-	defer eng.Close()
-	sqlCtx, err := eng.NewLocalContext(ctx)
-	if err != nil {
-		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.SchemaErr, Cause: err}
-	}
-	sqlCtx.SetCurrentDatabase(dbName)
-
+func getImportSchema(ctx *sql.Context, root doltdb.RootValue, dEnv *env.DoltEnv, engine *sqle.Engine, impOpts *importOptions) (schema.Schema, *mvdata.DataMoverCreationError) {
 	if impOpts.schFile != "" {
-		tn, out, err := mvdata.SchAndTableNameFromFile(sqlCtx, impOpts.schFile, dEnv.FS, root, eng.GetUnderlyingEngine())
+		tn, out, err := mvdata.SchAndTableNameFromFile(ctx, impOpts.schFile, dEnv.FS, root, engine)
 		if err != nil {
 			return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.SchemaErr, Cause: err}
 		}
@@ -772,7 +764,7 @@ func getImportSchema(ctx context.Context, root doltdb.RootValue, dEnv *env.DoltE
 	}
 
 	// UpdateOp || ReplaceOp
-	tblRd, err := mvdata.NewSqlEngineReader(sqlCtx, eng.GetUnderlyingEngine(), root, impOpts.destTableName)
+	tblRd, err := mvdata.NewSqlEngineReader(ctx, engine, root, impOpts.destTableName)
 	if err != nil {
 		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.CreateReaderErr, Cause: err}
 	}
