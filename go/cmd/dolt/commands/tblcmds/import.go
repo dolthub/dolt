@@ -458,7 +458,7 @@ func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return commands.HandleVErrAndExitCode(verr, usage)
 	}
 
-	wr, nDMErr := newImportSqlEngineMover(ctx, dEnv, rd.GetSchema(), mvOpts)
+	wr, nDMErr := newImportSqlEngineMover(ctx, root, dEnv, rd.GetSchema(), mvOpts)
 	if nDMErr != nil {
 		verr = newDataMoverErrToVerr(mvOpts, nDMErr)
 		return commands.HandleVErrAndExitCode(verr, usage)
@@ -512,11 +512,11 @@ func newImportDataReader(ctx context.Context, root doltdb.RootValue, dEnv *env.D
 	return rd, nil
 }
 
-func newImportSqlEngineMover(ctx context.Context, dEnv *env.DoltEnv, rdSchema schema.Schema, imOpts *importOptions) (*mvdata.SqlEngineTableWriter, *mvdata.DataMoverCreationError) {
+func newImportSqlEngineMover(ctx context.Context, root doltdb.RootValue, dEnv *env.DoltEnv, rdSchema schema.Schema, imOpts *importOptions) (*mvdata.SqlEngineTableWriter, *mvdata.DataMoverCreationError) {
 	moveOps := &mvdata.MoverOptions{Force: imOpts.force, TableToWriteTo: imOpts.destTableName, ContinueOnErr: imOpts.contOnErr, Operation: imOpts.operation, DisableFks: imOpts.disableFkChecks}
 
 	// Returns the schema of the table to be created or the existing schema
-	tableSchema, dmce := getImportSchema(ctx, dEnv, imOpts)
+	tableSchema, dmce := getImportSchema(ctx, root, dEnv, imOpts)
 	if dmce != nil {
 		return nil, dmce
 	}
@@ -711,24 +711,19 @@ func moveRows(
 	}
 }
 
-func getImportSchema(ctx context.Context, dEnv *env.DoltEnv, impOpts *importOptions) (schema.Schema, *mvdata.DataMoverCreationError) {
+func getImportSchema(ctx context.Context, root doltdb.RootValue, dEnv *env.DoltEnv, impOpts *importOptions) (schema.Schema, *mvdata.DataMoverCreationError) {
+	eng, dbName, err := engine.NewSqlEngineForEnv(ctx, dEnv)
+	if err != nil {
+		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.SchemaErr, Cause: err}
+	}
+	defer eng.Close()
+	sqlCtx, err := eng.NewLocalContext(ctx)
+	if err != nil {
+		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.SchemaErr, Cause: err}
+	}
+	sqlCtx.SetCurrentDatabase(dbName)
+
 	if impOpts.schFile != "" {
-		root, err := dEnv.WorkingRoot(ctx)
-		if err != nil {
-			return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.SchemaErr, Cause: err}
-		}
-
-		eng, dbName, err := engine.NewSqlEngineForEnv(ctx, dEnv)
-		if err != nil {
-			return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.SchemaErr, Cause: err}
-		}
-		defer eng.Close()
-		sqlCtx, err := eng.NewLocalContext(ctx)
-		if err != nil {
-			return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.SchemaErr, Cause: err}
-		}
-		sqlCtx.SetCurrentDatabase(dbName)
-
 		tn, out, err := mvdata.SchAndTableNameFromFile(sqlCtx, impOpts.schFile, dEnv.FS, root, eng.GetUnderlyingEngine())
 		if err != nil {
 			return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.SchemaErr, Cause: err}
@@ -768,11 +763,6 @@ func getImportSchema(ctx context.Context, dEnv *env.DoltEnv, impOpts *importOpti
 			return rd.GetSchema(), nil
 		}
 
-		root, err := dEnv.WorkingRoot(ctx)
-		if err != nil {
-			return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.SchemaErr, Cause: err}
-		}
-
 		outSch, err := mvdata.InferSchema(ctx, root, rd, impOpts.destTableName, impOpts.primaryKeys, impOpts)
 		if err != nil {
 			return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.SchemaErr, Cause: err}
@@ -782,7 +772,7 @@ func getImportSchema(ctx context.Context, dEnv *env.DoltEnv, impOpts *importOpti
 	}
 
 	// UpdateOp || ReplaceOp
-	tblRd, err := mvdata.NewSqlEngineReader(ctx, dEnv, impOpts.destTableName)
+	tblRd, err := mvdata.NewSqlEngineReader(sqlCtx, eng.GetUnderlyingEngine(), root, impOpts.destTableName)
 	if err != nil {
 		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.CreateReaderErr, Cause: err}
 	}

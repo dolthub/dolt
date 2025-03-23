@@ -22,6 +22,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/dolthub/go-mysql-server/sql/planbuilder"
@@ -142,6 +143,17 @@ func (cmd DumpCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		return HandleVErrAndExitCode(vErr, usage)
 	}
 
+	engine, dbName, berr := engine.NewSqlEngineForEnv(ctx, dEnv)
+	if berr != nil {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(berr), usage)
+	}
+	defer engine.Close()
+	sqlCtx, berr := engine.NewLocalContext(ctx)
+	if berr != nil {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(berr), usage)
+	}
+	sqlCtx.SetCurrentDatabase(dbName)
+
 	switch resFormat {
 	case emptyFileExt, sqlFileExt:
 		var defaultName string
@@ -183,7 +195,7 @@ func (cmd DumpCmd) Exec(ctx context.Context, commandStr string, args []string, d
 
 		for _, tbl := range tblNames {
 			tblOpts := newTableArgs(tbl, dumpOpts.dest, !apr.Contains(noBatchFlag), apr.Contains(noAutocommitFlag), schemaOnly)
-			err = dumpTable(ctx, dEnv, tblOpts, fPath)
+			err = dumpTable(sqlCtx, dEnv, engine.GetUnderlyingEngine(), root, tblOpts, fPath)
 			if err != nil {
 				return HandleVErrAndExitCode(err, usage)
 			}
@@ -194,7 +206,7 @@ func (cmd DumpCmd) Exec(ctx context.Context, commandStr string, args []string, d
 			return HandleVErrAndExitCode(err, usage)
 		}
 	case csvFileExt, jsonFileExt, parquetFileExt:
-		err = dumpNonSqlTables(ctx, root, dEnv, force, tblNames, resFormat, outputFileOrDirName, false)
+		err = dumpNonSqlTables(sqlCtx, engine.GetUnderlyingEngine(), root, dEnv, force, tblNames, resFormat, outputFileOrDirName, false)
 		if err != nil {
 			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 		}
@@ -560,8 +572,8 @@ func (m dumpOptions) DumpDestName() string {
 }
 
 // dumpTable dumps table in file given specific table and file location info
-func dumpTable(ctx context.Context, dEnv *env.DoltEnv, tblOpts *tableOptions, filePath string) errhand.VerboseError {
-	rd, err := mvdata.NewSqlEngineReader(ctx, dEnv, tblOpts.tableName)
+func dumpTable(ctx *sql.Context, dEnv *env.DoltEnv, engine *sqle.Engine, root doltdb.RootValue, tblOpts *tableOptions, filePath string) errhand.VerboseError {
+	rd, err := mvdata.NewSqlEngineReader(ctx, engine, root, tblOpts.tableName)
 	if err != nil {
 		return errhand.BuildDError("Error creating reader for %s.", tblOpts.SrcName()).AddCause(err).Build()
 	}
@@ -738,7 +750,7 @@ func newTableArgs(tblName string, destination mvdata.DataLocation, batched, auto
 
 // dumpNonSqlTables returns nil if all tables is dumped successfully, and it returns err if there is one.
 // It handles only csv and json file types(rf).
-func dumpNonSqlTables(ctx context.Context, root doltdb.RootValue, dEnv *env.DoltEnv, force bool, tblNames []string, rf string, dirName string, batched bool) errhand.VerboseError {
+func dumpNonSqlTables(ctx *sql.Context, engine *sqle.Engine, root doltdb.RootValue, dEnv *env.DoltEnv, force bool, tblNames []string, rf string, dirName string, batched bool) errhand.VerboseError {
 	var fName string
 	if dirName == emptyStr {
 		dirName = "doltdump/"
@@ -759,7 +771,7 @@ func dumpNonSqlTables(ctx context.Context, root doltdb.RootValue, dEnv *env.Dolt
 
 		tblOpts := newTableArgs(tbl, dumpOpts.dest, batched, false, false)
 
-		err = dumpTable(ctx, dEnv, tblOpts, fPath)
+		err = dumpTable(ctx, dEnv, engine, root, tblOpts, fPath)
 		if err != nil {
 			return err
 		}
