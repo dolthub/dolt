@@ -17,14 +17,15 @@ package val
 import (
 	"bytes"
 	"context"
-	"github.com/dolthub/dolt/go/store/hash"
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/stretchr/testify/require"
 	"math"
 	"math/rand"
 	"testing"
 
+	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 func TestTupleBuilder(t *testing.T) {

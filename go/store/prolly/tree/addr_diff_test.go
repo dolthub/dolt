@@ -15,10 +15,10 @@
 package tree
 
 import (
-	"github.com/dolthub/go-mysql-server/sql"
 	"io"
 	"testing"
 
+	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/dolthub/dolt/go/store/val"

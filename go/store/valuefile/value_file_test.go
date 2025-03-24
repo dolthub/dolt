@@ -15,11 +15,11 @@
 package valuefile
 
 import (
-	"github.com/dolthub/go-mysql-server/sql"
 	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

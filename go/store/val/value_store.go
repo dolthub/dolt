@@ -16,9 +16,11 @@ package val
 
 import (
 	"context"
-	"github.com/dolthub/dolt/go/store/hash"
+
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
+
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 const BytePeekLength = 128

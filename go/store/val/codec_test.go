@@ -15,13 +15,12 @@
 package val
 
 import (
-	"github.com/dolthub/go-mysql-server/sql"
 	"math"
 	"testing"
 	"time"
 
+	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/shopspring/decimal"
-
 	"github.com/stretchr/testify/assert"
 )
 

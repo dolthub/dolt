@@ -17,7 +17,6 @@ package tree
 import (
 	"context"
 	"errors"
-	"github.com/dolthub/dolt/go/store/val"
 	"io"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -27,6 +26,7 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly/message"
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 const DefaultFixedChunkLength = 4000

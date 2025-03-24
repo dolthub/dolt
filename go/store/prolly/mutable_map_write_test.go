@@ -17,13 +17,13 @@ package prolly
 import (
 	"context"
 	"fmt"
-	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"math/rand"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
