@@ -30,6 +30,7 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/gcctx"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
@@ -64,7 +65,7 @@ type DoltSession struct {
 	mu                    *sync.Mutex
 	fs                    filesys.Filesys
 	writeSessProv         WriteSessFunc
-	gcSafepointController *GCSafepointController
+	gcSafepointController *gcctx.GCSafepointController
 
 	// If non-nil, this will be returned from ValidateSession.
 	// Used by sqle/cluster to put a session into a terminal err state.
@@ -102,7 +103,7 @@ func NewDoltSession(
 	branchController *branch_control.Controller,
 	statsProvider sql.StatsProvider,
 	writeSessProv WriteSessFunc,
-	gcSafepointController *GCSafepointController,
+	gcSafepointController *gcctx.GCSafepointController,
 ) (*DoltSession, error) {
 	username := conf.GetStringOrDefault(config.UserNameKey, "")
 	email := conf.GetStringOrDefault(config.UserEmailKey, "")
@@ -1765,7 +1766,7 @@ func (d *DoltSession) SessionEnd() {
 
 // dolt_gc accesses the safepoint controller for the current
 // sql engine through here.
-func (d *DoltSession) GCSafepointController() *GCSafepointController {
+func (d *DoltSession) GCSafepointController() *gcctx.GCSafepointController {
 	return d.gcSafepointController
 }
 

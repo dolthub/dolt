@@ -33,6 +33,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/gcctx"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
@@ -52,7 +53,7 @@ type DoltHarness struct {
 	session               *dsess.DoltSession
 	statsSession          *dsess.DoltSession
 	branchControl         *branch_control.Controller
-	gcSafepointController *dsess.GCSafepointController
+	gcSafepointController *gcctx.GCSafepointController
 	parallelism           int
 	skippedQueries        []string
 	setupData             []setup.SetupScript
@@ -248,7 +249,7 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 
 		d.provider = doltProvider
 
-		d.gcSafepointController = dsess.NewGCSafepointController()
+		d.gcSafepointController = gcctx.NewGCSafepointController()
 
 		bThreads := sql.NewBackgroundThreads()
 

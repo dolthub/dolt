@@ -29,6 +29,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/gcctx"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess/mutexmap"
@@ -67,8 +68,27 @@ func NewAutoIncrementTracker(ctx context.Context, dbName string, roots ...doltdb
 		mm:        mutexmap.NewMutexMap(),
 		init:      make(chan struct{}),
 	}
-	ait.runInitWithRootsAsync(ctx, roots...)
+	ctx = context.Background()
+	gcSafepointController := getGCSafepointController(ctx)
+	if gcSafepointController != nil {
+		ctx = gcctx.WithGCSafepointController(ctx, gcSafepointController)
+	}
+	go func() {
+		if gcSafepointController != nil {
+			defer gcctx.SessionEnd(ctx)
+			gcctx.SessionCommandBegin(ctx)
+			defer gcctx.SessionCommandEnd(ctx)
+		}
+		ait.initWithRoots(ctx, roots...)
+	}()
 	return &ait, nil
+}
+
+func getGCSafepointController(ctx context.Context) *gcctx.GCSafepointController {
+	if sqlCtx, ok := ctx.(*sql.Context); ok {
+		return DSessFromSess(sqlCtx.Session).GCSafepointController()
+	}
+	return gcctx.GetGCSafepointController(ctx)
 }
 
 func loadAutoIncValue(sequences *sync.Map, tableName string) uint64 {
@@ -449,14 +469,18 @@ func (a *AutoIncrementTracker) waitForInit() error {
 	}
 }
 
-func (a *AutoIncrementTracker) runInitWithRootsAsync(ctx context.Context, roots ...doltdb.Rootish) {
-	go func() {
-		defer close(a.init)
-		a.initErr = a.initWithRoots(ctx, roots...)
-	}()
-}
-
+// This method will initialize the AutoIncrementTracker state with all
+// data from the tables found in |roots|.  This method closes the
+// |a.init| channel when it completes. It is meant to be run in a
+// goroutine, as in `go a.initWithRoots(...)`. When running this method,
+// a newly allocated |a.init| channel should exist.
+//
+// It is the caller's responsibility to ensure that whatever |ctx|
+// |initWithRoots| is called with appropriately outlives the end of
+// the method and that it participates in GC lifecycle callbacks
+// appropriately, if that is necessary.
 func (a *AutoIncrementTracker) initWithRoots(ctx context.Context, roots ...doltdb.Rootish) error {
+	defer close(a.init)
 	eg, egCtx := errgroup.WithContext(ctx)
 	eg.SetLimit(128)
 
@@ -500,6 +524,6 @@ func (a *AutoIncrementTracker) InitWithRoots(ctx context.Context, roots ...doltd
 		return err
 	}
 	a.init = make(chan struct{})
-	a.runInitWithRootsAsync(ctx, roots...)
+	go a.initWithRoots(ctx, roots...)
 	return a.waitForInit()
 }
