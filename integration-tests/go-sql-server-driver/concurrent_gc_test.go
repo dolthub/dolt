@@ -38,7 +38,7 @@ func TestConcurrentGC(t *testing.T) {
 	}
 	commits := dimension{
 		names: []string{"NoCommits", "WithCommits"},
-		factors: func(base gcTest) []gcTest{
+		factors: func(base gcTest) []gcTest {
 			no, yes := base, base
 			no.commit = false
 			yes.commit = true
@@ -47,16 +47,16 @@ func TestConcurrentGC(t *testing.T) {
 	}
 	full := dimension{
 		names: []string{"NotFull", "Full"},
-		factors: func(base gcTest) []gcTest{
+		factors: func(base gcTest) []gcTest {
 			no, yes := base, base
 			no.full = false
 			yes.full = true
 			return []gcTest{no, yes}
 		},
 	}
-	safepoint := dimension {
+	safepoint := dimension{
 		names: []string{"KillConnections", "SessionAware"},
-		factors: func(base gcTest) []gcTest{
+		factors: func(base gcTest) []gcTest {
 			no, yes := base, base
 			no.sessionAware = false
 			yes.sessionAware = true
@@ -64,7 +64,7 @@ func TestConcurrentGC(t *testing.T) {
 		},
 	}
 	var doDimensions func(t *testing.T, base gcTest, dims []dimension)
-	doDimensions = func (t *testing.T, base gcTest, dims []dimension) {
+	doDimensions = func(t *testing.T, base gcTest, dims []dimension) {
 		if len(dims) == 0 {
 			base.run(t)
 			return
@@ -80,8 +80,8 @@ func TestConcurrentGC(t *testing.T) {
 	}
 	dimensions := []dimension{commits, full, safepoint}
 	doDimensions(t, gcTest{
-		numThreads:  8,
-		duration:    10 * time.Second,
+		numThreads: 8,
+		duration:   10 * time.Second,
 	}, dimensions)
 }
 
@@ -123,7 +123,16 @@ func (gct gcTest) doUpdate(t *testing.T, ctx context.Context, db *sql.DB, i int)
 		return nil
 	}
 	defer conn.Close()
-	_, err = conn.ExecContext(ctx, "update vals set val = val+1 where id = ?", i)
+	tx, err := conn.BeginTx(ctx, nil)
+	if gct.sessionAware {
+		assert.NoError(t, err)
+	}
+	if err != nil {
+		// Ignore and try with a different connection...
+		return nil
+	}
+	defer tx.Rollback()
+	_, err = tx.ExecContext(ctx, "update vals set val = val+1 where id = ?", i)
 	if gct.sessionAware {
 		assert.NoError(t, err)
 	} else if err != nil {
@@ -138,21 +147,39 @@ func (gct gcTest) doUpdate(t *testing.T, ctx context.Context, db *sql.DB, i int)
 		}
 		t.Logf("err in Exec update: %v", err)
 	}
-	if gct.commit {
-		_, err = conn.ExecContext(ctx, fmt.Sprintf("call dolt_commit('-am', 'increment vals id = %d')", i))
-		if gct.sessionAware {
-			assert.NoError(t, err)
-		} else if err != nil {
-			if !assert.NotContains(t, err.Error(), "dangling ref") {
-				return err
+	if err == nil {
+		if gct.commit {
+			_, err = tx.ExecContext(ctx, fmt.Sprintf("call dolt_commit('-am', 'increment vals id = %d')", i))
+			if gct.sessionAware {
+				assert.NoError(t, err)
+			} else if err != nil {
+				if !assert.NotContains(t, err.Error(), "dangling ref") {
+					return err
+				}
+				if !assert.NotContains(t, err.Error(), "is unexpected noms value") {
+					return err
+				}
+				if !assert.NotContains(t, err.Error(), "interface conversion: types.Value is nil") {
+					return err
+				}
+				t.Logf("err in Exec call dolt_commit: %v", err)
 			}
-			if !assert.NotContains(t, err.Error(), "is unexpected noms value") {
-				return err
+		} else {
+			err = tx.Commit()
+			if gct.sessionAware {
+				assert.NoError(t, err)
+			} else if err != nil {
+				if !assert.NotContains(t, err.Error(), "dangling ref") {
+					return err
+				}
+				if !assert.NotContains(t, err.Error(), "is unexpected noms value") {
+					return err
+				}
+				if !assert.NotContains(t, err.Error(), "interface conversion: types.Value is nil") {
+					return err
+				}
+				t.Logf("err in tx commit: %v", err)
 			}
-			if !assert.NotContains(t, err.Error(), "interface conversion: types.Value is nil") {
-				return err
-			}
-			t.Logf("err in Exec call dolt_commit: %v", err)
 		}
 	}
 	return nil
@@ -243,7 +270,7 @@ func (gct gcTest) run(t *testing.T) {
 	require.NoError(t, err)
 
 	srvSettings := &driver.Server{
-		Args: []string{"-P", `{{get_port "server_port"}}`},
+		Args:        []string{"-P", `{{get_port "server_port"}}`},
 		DynamicPort: "server_port",
 	}
 	if gct.sessionAware {
