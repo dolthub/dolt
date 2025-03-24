@@ -46,7 +46,7 @@ func TestArtifactMapEditing(t *testing.T) {
 			edt := am.Editor()
 			for i := 0; i < n; i++ {
 				srcKb.PutInt16(0, int16(i))
-				key1 := srcKb.Build(sharedPool)
+				key1, _ := srcKb.Build(sharedPool)
 				err = edt.Add(ctx, key1, addr, ArtifactTypeConflict, []byte("{}"))
 				require.NoError(t, err)
 			}
@@ -100,14 +100,14 @@ func TestMergeArtifactMaps(t *testing.T) {
 	rightEdt := right.Editor()
 
 	srcKb.PutInt16(0, 1)
-	key1 := srcKb.Build(sharedPool)
+	key1, _ := srcKb.Build(sharedPool)
 	err = leftEdt.Add(ctx, key1, addr, ArtifactTypeConflict, []byte("{}"))
 	require.NoError(t, err)
 	left, err = leftEdt.Flush(ctx)
 	require.NoError(t, err)
 
 	srcKb.PutInt16(0, 2)
-	key2 := srcKb.Build(sharedPool)
+	key2, _ := srcKb.Build(sharedPool)
 	err = rightEdt.Add(ctx, key2, addr, ArtifactTypeConflict, []byte("{}"))
 	require.NoError(t, err)
 	right, err = rightEdt.Flush(ctx)

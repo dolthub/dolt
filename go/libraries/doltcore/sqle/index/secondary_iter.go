@@ -134,7 +134,7 @@ func (c *nonCovStrictSecondaryLookupGen) New(ctx context.Context, k val.Tuple) (
 		from := c.pkMap.MapOrdinal(to)
 		c.pkBld.PutRaw(to, idxKey.GetField(from))
 	}
-	pk := c.pkBld.Build(sharePool)
+	pk, _ := c.pkBld.Build(sharePool)
 
 	iter := &strictLookupIter{k: pk}
 	if err := c.pri.Get(ctx, pk, func(key val.Tuple, value val.Tuple) error {
@@ -350,7 +350,7 @@ func (i *keylessLookupIter) Next(ctx context.Context) (k, v val.Tuple, err error
 		from := i.pkMap.MapOrdinal(to)
 		i.pkBld.PutRaw(to, idxKey.GetField(from))
 	}
-	i.k = i.pkBld.Build(sharePool)
+	i.k, _ = i.pkBld.Build(sharePool)
 
 	err = i.pri.Get(ctx, i.k, func(key val.Tuple, value val.Tuple) error {
 		i.v = value

@@ -673,7 +673,7 @@ func (i *nonCoveringMapIter) Next(ctx context.Context) (val.Tuple, val.Tuple, er
 		from := i.pkMap.MapOrdinal(to)
 		i.pkBld.PutRaw(to, idxKey.GetField(from))
 	}
-	pk := i.pkBld.Build(sharePool)
+	pk, _ := i.pkBld.Build(sharePool)
 
 	var value val.Tuple
 	err = i.primary.Get(ctx, pk, func(_, v val.Tuple) error {
@@ -811,7 +811,7 @@ func (i *keylessMapIter) Next(ctx context.Context) (val.Tuple, val.Tuple, error)
 		from := i.clusteredMap.MapOrdinal(to)
 		i.clusteredBld.PutRaw(to, idxKey.GetField(from))
 	}
-	pk := i.clusteredBld.Build(sharePool)
+	pk, _ := i.clusteredBld.Build(sharePool)
 
 	var value val.Tuple
 	err = i.clustered.Get(ctx, pk, func(k, v val.Tuple) error {

@@ -260,7 +260,7 @@ func makeGoMap(scale uint64) map[uint64]val.Tuple {
 		vb.PutInt64(2, src.Int63())
 		vb.PutInt64(3, src.Int63())
 		vb.PutInt64(4, src.Int63())
-		kv[i] = vb.Build(shared)
+		kv[i], _ = vb.Build(shared)
 	}
 	return kv
 }

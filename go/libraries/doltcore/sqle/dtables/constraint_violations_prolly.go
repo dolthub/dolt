@@ -339,7 +339,7 @@ func (d *prollyCVDeleter) Delete(ctx *sql.Context, r sql.Row) error {
 	artType := merge.UnmapCVType(r[1])
 	d.kb.PutUint8(d.kd.Count()-1, uint8(artType))
 
-	key := d.kb.Build(d.pool)
+	key, _ := d.kb.Build(d.pool)
 	err := d.ed.Delete(ctx, key)
 	if err != nil {
 		return err

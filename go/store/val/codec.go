@@ -117,7 +117,7 @@ func IsAddrEncoding(enc Encoding) bool {
 	}
 }
 
-func IsToastEncoding(enc Encoding) bool {
+func IsAdaptiveEncoding(enc Encoding) bool {
 	switch enc {
 	case BytesAdaptiveEnc,
 		StringAdaptiveEnc,
@@ -652,7 +652,7 @@ func compareAddr(l, r hash.Hash) int {
 	return l.Compare(r)
 }
 
-func compareToastValue(l, r AdaptiveValue) int {
+func compareAdaptiveValue(l, r AdaptiveValue) int {
 	return bytes.Compare(l, r)
 }
 

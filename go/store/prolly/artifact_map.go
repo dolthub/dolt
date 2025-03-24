@@ -359,7 +359,7 @@ func (wr *ArtifactsEditor) Add(ctx context.Context, srcKey val.Tuple, srcRootish
 	key := wr.BuildArtifactKey(ctx, srcKey, srcRootish, artType)
 
 	wr.artVB.PutJSON(0, meta)
-	value := wr.artVB.Build(wr.pool)
+	value, _ := wr.artVB.Build(wr.pool)
 
 	return wr.mut.Put(ctx, key, value)
 }

@@ -16,6 +16,7 @@ package val
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 	"time"
 
@@ -84,7 +85,7 @@ func NewTupleBuilder(desc TupleDesc, vs ValueStore) *TupleBuilder {
 }
 
 // Build materializes a Tuple from the fields written to the TupleBuilder.
-func (tb *TupleBuilder) Build(pool pool.BuffPool) (tup Tuple) {
+func (tb *TupleBuilder) Build(pool pool.BuffPool) (tup Tuple, err error) {
 	for i, typ := range tb.Desc.Types {
 		if !typ.Nullable && tb.fields[i] == nil {
 			panic("cannot write NULL to non-NULL field: " + strconv.Itoa(i))
@@ -95,33 +96,28 @@ func (tb *TupleBuilder) Build(pool pool.BuffPool) (tup Tuple) {
 
 // BuildPermissive materializes a Tuple from the fields
 // written to the TupleBuilder without validating nullability.
-func (tb *TupleBuilder) BuildPermissive(pool pool.BuffPool, vs ValueStore) (tup Tuple) {
-	// DO NOT SUBMIT: add context parameter
+func (tb *TupleBuilder) BuildPermissive(pool pool.BuffPool, vs ValueStore) (tup Tuple, err error) {
+	// TODO: add context parameter
 	ctx := context.Background()
 	// Values may get passed into the tuple builder in either in-band or out-of-band form.
-	// In the best case, we don't need to convert either of them. But we need to track the sizes.
-
-	// We need to determine which TOAST fields get written out, and pass the addresses in instead. This is the only
-	// place where we break encapsulation.
-	// Track the total packed and unpacked size?
+	// In the best case, we don't need to convert any of them, so the TupleBuilder initially stores them in the form they're given.
+	// But we track the tuple size if they're all inlined vs the tuple size if they're all out-of-band,
+	// Then use this to determine which values need to be stored out of band.
 	totalSize := tb.inlineSize
 	if totalSize > tb.tupleLengthTarget {
-		// start allocating to toast fields until we get below the size.
-		// do this in a way that doesn't require the full field.
+		// We're above the size limit, begin converting to out-of-band storage.
 		for i, descType := range tb.Desc.Types {
-			if IsToastEncoding(descType.Enc) {
-				toastValue := AdaptiveValue(tb.fields[i])
-				outlineSize := toastValue.outlineSize()
-				inlineSize := toastValue.inlineSize()
+			if IsAdaptiveEncoding(descType.Enc) {
+				adaptiveValue := AdaptiveValue(tb.fields[i])
+				outlineSize := adaptiveValue.outlineSize()
+				inlineSize := adaptiveValue.inlineSize()
 
+				// We only outline a field if the outlined size is shorter than the inlined size.
 				if outlineSize < inlineSize {
-					// outline this field.
-					if !toastValue.IsOutlined() {
-						// This isn't correct. Can we avoid the extra copy cleanly? If not, don't prematurely optimize.
-						outline, err := toastValue.convertToOutline(ctx, tb.vs, nil)
+					if !adaptiveValue.IsOutlined() {
+						outline, err := adaptiveValue.convertToOutline(ctx, tb.vs, nil)
 						if err != nil {
-							// TODO: return error
-							return nil
+							return nil, err
 						}
 						tb.PutRaw(i, outline)
 					}
@@ -130,15 +126,15 @@ func (tb *TupleBuilder) BuildPermissive(pool pool.BuffPool, vs ValueStore) (tup 
 				}
 			}
 
-			if totalSize <= int64(MaxTupleDataSize) {
+			if totalSize <= tb.tupleLengthTarget {
 				// We have enough space, mark all the remaining columns as inline
 				for j, descType := range tb.Desc.Types[i+1:] {
-					if IsToastEncoding(descType.Enc) {
-						toastValue := AdaptiveValue(tb.fields[j+i+1])
-						if !toastValue.isInlined() {
-							inline, err := toastValue.convertToInline(ctx, tb.vs, nil)
+					if IsAdaptiveEncoding(descType.Enc) {
+						adaptiveValue := AdaptiveValue(tb.fields[j+i+1])
+						if !adaptiveValue.isInlined() {
+							inline, err := adaptiveValue.convertToInline(ctx, tb.vs, nil)
 							if err != nil {
-								return nil
+								return nil, err
 							}
 							tb.PutRaw(j+i+1, inline)
 						}
@@ -147,15 +143,14 @@ func (tb *TupleBuilder) BuildPermissive(pool pool.BuffPool, vs ValueStore) (tup 
 				break
 			}
 		}
-
 	}
 	if totalSize > tb.tupleLengthTarget {
-		// Outlining failed to reduce the tuple size enough. Is this possible?
+		return Tuple{}, fmt.Errorf("nable to create tuple under the target legnth. This should not be possible")
 	}
 	values := tb.fields[:tb.Desc.Count()]
 	tup = NewTuple(pool, values...)
 	tb.Recycle()
-	return
+	return tup, nil
 }
 
 // BuildPrefix materializes a prefix Tuple from the first |k| fields written to the TupleBuilder.
@@ -544,9 +539,7 @@ func (tb *TupleBuilder) PutCell(i int, v Cell) {
 	tb.addSize(cellSize)
 }
 
-// TODO: If a addr field gets copied to a toast field we won't know the size initially
-
-func (tb *TupleBuilder) PutToastBytesFromInline(ctx context.Context, i int, v []byte) error {
+func (tb *TupleBuilder) PutAdaptiveBytesFromInline(ctx context.Context, i int, v []byte) error {
 	tb.Desc.expectEncoding(i, BytesAdaptiveEnc)
 	if int64(len(v)) > tb.tupleLengthTarget {
 		// Inline value is too large. We must outline it.
@@ -576,7 +569,7 @@ func (tb *TupleBuilder) PutToastBytesFromInline(ctx context.Context, i int, v []
 	return nil
 }
 
-func (tb *TupleBuilder) PutToastStringFromInline(ctx context.Context, i int, v string) error {
+func (tb *TupleBuilder) PutAdaptiveStringFromInline(ctx context.Context, i int, v string) error {
 	tb.Desc.expectEncoding(i, StringAdaptiveEnc)
 	if int64(len(v)) > tb.tupleLengthTarget {
 		// Inline value is too large. We must outline it.
@@ -607,7 +600,7 @@ func (tb *TupleBuilder) PutToastStringFromInline(ctx context.Context, i int, v s
 	return nil
 }
 
-func (tb *TupleBuilder) PutToastBytesFromOutline(i int, v *ByteArray) {
+func (tb *TupleBuilder) PutAdaptiveBytesFromOutline(i int, v *ByteArray) {
 	tb.Desc.expectEncoding(i, BytesAdaptiveEnc)
 
 	maxLengthBytes := 9
@@ -621,7 +614,7 @@ func (tb *TupleBuilder) PutToastBytesFromOutline(i int, v *ByteArray) {
 	tb.pos += int64(lengthSize) + hash.ByteLen
 }
 
-func (tb *TupleBuilder) PutToastStringFromOutline(i int, v *TextStorage) {
+func (tb *TupleBuilder) PutAdaptiveStringFromOutline(i int, v *TextStorage) {
 	tb.Desc.expectEncoding(i, StringAdaptiveEnc)
 
 	maxLengthBytes := 9

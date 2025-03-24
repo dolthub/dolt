@@ -524,35 +524,37 @@ func (td TupleDesc) GetBytesAddr(i int, tup Tuple) (hash.Hash, bool) {
 	return td.getAddr(i, tup)
 }
 
-// GetBytesToastValue returns either a []byte or a BytesWrapper, but Go doesn't allow us to use a single type for that.
-func (td TupleDesc) GetBytesToastValue(i int, vs ValueStore, tup Tuple) (interface{}, bool, error) {
+// GetBytesAdaptiveValue returns either a []byte or a BytesWrapper, but Go doesn't allow us to use a single type for that.
+func (td TupleDesc) GetBytesAdaptiveValue(i int, vs ValueStore, tup Tuple) (interface{}, bool, error) {
+	// TODO: Add context parameter
+	ctx := context.Background()
 	td.expectEncoding(i, BytesAdaptiveEnc)
-	toastValue := AdaptiveValue(td.GetField(i, tup))
-	if len(toastValue) == 0 {
+	adaptiveValue := AdaptiveValue(td.GetField(i, tup))
+	if len(adaptiveValue) == 0 {
 		return nil, false, nil
 	}
-	if toastValue.isInlined() {
-		// TODO: This needs context.
-		val, err := toastValue.convertToBytes(nil, vs, nil)
+	if adaptiveValue.isInlined() {
+		val, err := adaptiveValue.convertToBytes(ctx, vs, nil)
 		return val, true, err
 	} else {
-		val, err := toastValue.convertToByteArray(nil, vs, nil)
+		val, err := adaptiveValue.convertToByteArray(ctx, vs, nil)
 		return val, true, err
 	}
 }
 
-func (td TupleDesc) GetStringToastValue(i int, vs ValueStore, tup Tuple) (interface{}, bool, error) {
+func (td TupleDesc) GetStringAdaptiveValue(i int, vs ValueStore, tup Tuple) (interface{}, bool, error) {
+	// TODO: Add context parameter
+	ctx := context.Background()
 	td.expectEncoding(i, StringAdaptiveEnc)
-	toastValue := AdaptiveValue(td.GetField(i, tup))
-	if len(toastValue) == 0 {
+	adaptiveValue := AdaptiveValue(td.GetField(i, tup))
+	if len(adaptiveValue) == 0 {
 		return nil, false, nil
 	}
-	if toastValue.isInlined() {
-		// TODO: This needs context.
-		val, err := toastValue.convertToBytes(nil, vs, nil)
+	if adaptiveValue.isInlined() {
+		val, err := adaptiveValue.convertToBytes(ctx, vs, nil)
 		return string(val), true, err
 	} else {
-		val, err := toastValue.convertToTextStorage(nil, vs, nil)
+		val, err := adaptiveValue.convertToTextStorage(ctx, vs, nil)
 		return val, true, err
 	}
 }
@@ -788,7 +790,8 @@ func (handler AddressTypeHandler) FormatValue(val any) (string, error) {
 // - An inlined string or bytes value
 // - An outlined (addressable) string or bytes value
 // - NULL (identified by the empty sequence)
-// Outlined ToastValues begin with a SQLite () variable-length encoding of the string length.
+// Outlined AdaptiveValues begin with a SQLite4 variable-length encoding of the string length.
+// See: https://sqlite.org/src4/doc/trunk/www/varint.wiki
 // Note that this value is always greater than 21, because we only outline values when doing so reduces the length of
 // the tuple, and the outlined AdaptiveValue consists of a 20 byte address + the string length (min 1 byte).
 // This means that we can use a shorter length value to indicate an inlined AdaptiveValue. We choose 0 for simplicity.
@@ -928,46 +931,47 @@ func (v AdaptiveValue) convertToTextStorage(ctx context.Context, vs ValueStore, 
 	return NewTextStorage(address, vs).WithMaxByteLength(int64(length)), nil
 }
 
-// ToastTypeHandler is an implementation of ToastTypeHandler for TOAST types, that is, values that can be either a content-address
-// or an inline value. This TypeHandler converts between the address and the underlying value as needed, allowing
-// these columns to be used in contexts that need access to the underlying value, such as in primary indexes.
+// AdaptiveEncodingTypeHandler is an implementation of TypeHandler for adaptive encoding types,
+// that is, values that can be either a content-address or an inline value.
+// This TypeHandler converts between the address and the underlying value as needed, allowing these columns
+// to be used in contexts that need access to the underlying value, such as in primary indexes.
 // The |childHandler| field allows this behavior to be composed with other type handlers.
-type ToastTypeHandler struct {
+type AdaptiveEncodingTypeHandler struct {
 	vs           ValueStore
 	childHandler TupleTypeHandler
 }
 
-func NewToastTypeHandler(vs ValueStore, childHandler TupleTypeHandler) ToastTypeHandler {
-	return ToastTypeHandler{
+func NewAdaptiveTypeHandler(vs ValueStore, childHandler TupleTypeHandler) AdaptiveEncodingTypeHandler {
+	return AdaptiveEncodingTypeHandler{
 		vs:           vs,
 		childHandler: childHandler,
 	}
 }
 
-func (handler ToastTypeHandler) SerializedCompare(ctx context.Context, v1 []byte, v2 []byte) (int, error) {
-	toastValue1 := AdaptiveValue(v1)
-	toastValue2 := AdaptiveValue(v2)
+func (handler AdaptiveEncodingTypeHandler) SerializedCompare(ctx context.Context, v1 []byte, v2 []byte) (int, error) {
+	adaptiveValue1 := AdaptiveValue(v1)
+	adaptiveValue2 := AdaptiveValue(v2)
 	// Fast-path: two outlined values with equal hashes are equal.
-	if toastValue1.IsOutlined() && toastValue2.IsOutlined() && bytes.Equal(toastValue1, toastValue2) {
+	if adaptiveValue1.IsOutlined() && adaptiveValue2.IsOutlined() && bytes.Equal(adaptiveValue1, adaptiveValue2) {
 		return 0, nil
 	}
 	var err error
-	if toastValue1.IsOutlined() {
-		toastValue1, err = toastValue1.convertToInline(ctx, handler.vs, nil)
+	if adaptiveValue1.IsOutlined() {
+		adaptiveValue1, err = adaptiveValue1.convertToInline(ctx, handler.vs, nil)
 		if err != nil {
 			return 0, err
 		}
 	}
-	if toastValue2.IsOutlined() {
-		toastValue1, err = toastValue2.convertToInline(ctx, handler.vs, nil)
+	if adaptiveValue2.IsOutlined() {
+		adaptiveValue1, err = adaptiveValue2.convertToInline(ctx, handler.vs, nil)
 		if err != nil {
 			return 0, err
 		}
 	}
-	return handler.childHandler.SerializedCompare(ctx, toastValue1[1:], toastValue2[1:])
+	return handler.childHandler.SerializedCompare(ctx, adaptiveValue1[1:], adaptiveValue2[1:])
 }
 
-func (handler ToastTypeHandler) SerializeValue(ctx context.Context, val any) ([]byte, error) {
+func (handler AdaptiveEncodingTypeHandler) SerializeValue(ctx context.Context, val any) ([]byte, error) {
 	b, err := handler.childHandler.SerializeValue(ctx, val)
 	if err != nil {
 		return nil, err
@@ -980,17 +984,17 @@ func (handler ToastTypeHandler) SerializeValue(ctx context.Context, val any) ([]
 	return dest, nil
 }
 
-func (handler ToastTypeHandler) DeserializeValue(ctx context.Context, val []byte) (any, error) {
-	toastVal := AdaptiveValue(val)
-	if toastVal.IsNull() {
+func (handler AdaptiveEncodingTypeHandler) DeserializeValue(ctx context.Context, val []byte) (any, error) {
+	adaptiveValue := AdaptiveValue(val)
+	if adaptiveValue.IsNull() {
 		return nil, nil
 	}
-	if toastVal.isInlined() {
-		return handler.childHandler.DeserializeValue(ctx, toastVal[1:])
+	if adaptiveValue.isInlined() {
+		return handler.childHandler.DeserializeValue(ctx, adaptiveValue[1:])
 	}
-	// else toastVal is outlined
-	_, lengthBytes := uvarint.Uvarint(toastVal)
-	addr := hash.New(toastVal[lengthBytes:])
+	// else adaptiveValue is outlined
+	_, lengthBytes := uvarint.Uvarint(adaptiveValue)
+	addr := hash.New(adaptiveValue[lengthBytes:])
 	b, err := handler.vs.ReadBytes(ctx, addr)
 	if err != nil {
 		return nil, err
@@ -998,6 +1002,6 @@ func (handler ToastTypeHandler) DeserializeValue(ctx context.Context, val []byte
 	return handler.childHandler.DeserializeValue(ctx, b)
 }
 
-func (handler ToastTypeHandler) FormatValue(val any) (string, error) {
+func (handler AdaptiveEncodingTypeHandler) FormatValue(val any) (string, error) {
 	return handler.childHandler.FormatValue(val)
 }

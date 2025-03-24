@@ -140,7 +140,7 @@ func (iter prollyFkPkRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 		for pkPos, idxPos := range iter.pkToIdxMap {
 			pkBld.PutRaw(pkPos, k.GetField(idxPos))
 		}
-		pkTup := pkBld.BuildPermissive(sharePool, iter.primary.mut.NodeStore())
+		pkTup, _ := pkBld.BuildPermissive(sharePool, iter.primary.mut.NodeStore())
 
 		var tblKey, tblVal val.Tuple
 		err = iter.primary.mut.Get(ctx, pkTup, func(k, v val.Tuple) error {
@@ -201,7 +201,7 @@ func (iter prollyFkKeylessRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 	}
 	hashId := k.GetField(k.Count() - 1)
 	iter.primary.keyBld.PutHash128(0, hashId)
-	primaryKey := iter.primary.keyBld.Build(sharePool)
+	primaryKey, _ := iter.primary.keyBld.Build(sharePool)
 
 	nextRow := make(sql.Row, len(iter.primary.valMap))
 	err = iter.primary.mut.Get(ctx, primaryKey, func(tblKey, tblVal val.Tuple) error {

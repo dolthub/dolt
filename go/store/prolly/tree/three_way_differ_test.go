@@ -299,12 +299,12 @@ func newTestMap(t *testing.T, ctx context.Context, rows [][]int, ns NodeStore, v
 
 	for _, row := range rows {
 		keyBuilder.PutInt64(0, int64(row[0]))
-		key := keyBuilder.Build(ns.Pool())
+		key, _ := keyBuilder.Build(ns.Pool())
 		for j := 1; j < len(row); j++ {
 			valBuilder.PutInt64(j-1, int64(row[j]))
 			require.NoError(t, err)
 		}
-		val := valBuilder.Build(ns.Pool())
+		val, _ := valBuilder.Build(ns.Pool())
 		err := chkr.AddPair(ctx, Item(key), Item(val))
 		require.NoError(t, err)
 	}

@@ -71,7 +71,8 @@ func smokeTestTupleBuilder(t *testing.T) {
 	tb.PutString(10, "123")
 	tb.PutByteString(11, []byte("abc"))
 
-	tup := tb.Build(testPool)
+	tup, err := tb.Build(testPool)
+	assert.NoError(t, err)
 	i8, ok := desc.GetInt8(0, tup)
 	assert.True(t, ok)
 	assert.Equal(t, int8(math.MaxInt8), i8)
@@ -154,7 +155,7 @@ func testRoundTripInts(t *testing.T) {
 		for idx, value := range test.data {
 			bld.PutInt64(idx, value)
 		}
-		tup := bld.Build(testPool)
+		tup, _ := bld.Build(testPool)
 
 		// verify
 		n := test.desc.Count()
@@ -270,7 +271,7 @@ func (t *TestValueStore) WriteBytes(_ context.Context, val []byte) (h hash.Hash,
 
 var _ ValueStore = &TestValueStore{}
 
-func TestTupleBuilderToastTypes(t *testing.T) {
+func TestTupleBuilderAdaptiveEncodings(t *testing.T) {
 	ctx := sql.NewEmptyContext()
 	types := []Type{
 		{Enc: BytesAdaptiveEnc},
@@ -281,13 +282,13 @@ func TestTupleBuilderToastTypes(t *testing.T) {
 	// Test round trip when we expect values to be inlined
 	{
 		shortByteArray := make([]byte, defaultTupleLengthTarget/2)
-		err := tb.PutToastBytesFromInline(ctx, 0, shortByteArray)
+		err := tb.PutAdaptiveBytesFromInline(ctx, 0, shortByteArray)
 		require.NoError(t, err)
-		tup := tb.Build(testPool)
+		tup, _ := tb.Build(testPool)
 
-		toastBytes, _, err := td.GetBytesToastValue(0, vs, tup)
+		adaptiveEncodingBytes, _, err := td.GetBytesAdaptiveValue(0, vs, tup)
 		require.NoError(t, err)
-		require.Equal(t, shortByteArray, toastBytes)
+		require.Equal(t, shortByteArray, adaptiveEncodingBytes)
 	}
 
 	// Test round trip when we expect values to be outlined
@@ -296,20 +297,20 @@ func TestTupleBuilderToastTypes(t *testing.T) {
 		h, err := vs.WriteBytes(ctx, longByteArray)
 		require.NoError(t, err)
 		byteArray := NewByteArray(h, vs).WithMaxByteLength(int64(len(longByteArray)))
-		tb.PutToastBytesFromOutline(0, byteArray)
+		tb.PutAdaptiveBytesFromOutline(0, byteArray)
 
-		tup := tb.Build(testPool)
+		tup, _ := tb.Build(testPool)
 
-		toastBytes, _, err := td.GetBytesToastValue(0, vs, tup)
+		adaptiveEncodingBytes, _, err := td.GetBytesAdaptiveValue(0, vs, tup)
 		require.NoError(t, err)
-		toastByteArray := toastBytes.(*ByteArray)
-		outBytes, err := toastByteArray.ToBytes(ctx)
+		adaptiveEncodingByteArray := adaptiveEncodingBytes.(*ByteArray)
+		outBytes, err := adaptiveEncodingByteArray.ToBytes(ctx)
 		require.NoError(t, err)
 		require.Equal(t, longByteArray, outBytes)
 	}
 }
 
-func TestTupleBuilderMultipleToastTypes(t *testing.T) {
+func TestTupleBuilderMultipleAdaptiveTypes(t *testing.T) {
 	ctx := sql.NewEmptyContext()
 	types := []Type{
 		{Enc: BytesAdaptiveEnc},
@@ -322,27 +323,27 @@ func TestTupleBuilderMultipleToastTypes(t *testing.T) {
 	{
 		columnSize := defaultTupleLengthTarget / 2
 		mediumByteArray := make([]byte, columnSize)
-		err := tb.PutToastBytesFromInline(ctx, 0, mediumByteArray)
+		err := tb.PutAdaptiveBytesFromInline(ctx, 0, mediumByteArray)
 		require.NoError(t, err)
-		err = tb.PutToastBytesFromInline(ctx, 1, mediumByteArray)
+		err = tb.PutAdaptiveBytesFromInline(ctx, 1, mediumByteArray)
 		require.NoError(t, err)
 
-		tup := tb.Build(testPool)
+		tup, _ := tb.Build(testPool)
 
 		{
-			toastBytes, _, err := td.GetBytesToastValue(0, vs, tup)
+			adaptiveEncodingBytes, _, err := td.GetBytesAdaptiveValue(0, vs, tup)
 			require.NoError(t, err)
-			toastByteArray := toastBytes.(*ByteArray)
-			outBytes, err := toastByteArray.ToBytes(ctx)
+			adaptiveEncodingByteArray := adaptiveEncodingBytes.(*ByteArray)
+			outBytes, err := adaptiveEncodingByteArray.ToBytes(ctx)
 			require.NoError(t, err)
 			require.Equal(t, mediumByteArray, outBytes)
 		}
 
 		{
-			toastBytes, _, err := td.GetBytesToastValue(1, vs, tup)
+			adaptiveEncodingBytes, _, err := td.GetBytesAdaptiveValue(1, vs, tup)
 			require.NoError(t, err)
-			toastByteArray := toastBytes.([]byte)
-			require.Equal(t, mediumByteArray, toastByteArray)
+			adaptiveEncodingByteArray := adaptiveEncodingBytes.([]byte)
+			require.Equal(t, mediumByteArray, adaptiveEncodingByteArray)
 		}
 	}
 }

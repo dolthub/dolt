@@ -525,7 +525,7 @@ func (e keylessEntry) HashAndValue() ([]byte, val.Tuple) {
 	valBld.PutInt64(1, int64(e.c1))
 	valBld.PutInt64(2, int64(e.c2))
 
-	value := valBld.Build(sharePool)
+	value, _ := valBld.Build(sharePool)
 	hashTup := val.HashTupleFromValue(sharePool, value)
 	return hashTup.GetField(0), value
 }

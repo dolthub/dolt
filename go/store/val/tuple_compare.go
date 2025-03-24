@@ -151,7 +151,7 @@ func compare(typ Type, left, right []byte) int {
 	case CellEnc:
 		return compareCell(readCell(left), readCell(right))
 	case BytesAdaptiveEnc, StringAdaptiveEnc:
-		return compareToastValue(left, right)
+		return compareAdaptiveValue(left, right)
 	default:
 		panic("unknown encoding")
 	}

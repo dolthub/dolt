@@ -85,9 +85,9 @@ func countAddresses(items [][]byte, td val.TupleDesc) (cnt int) {
 			return
 		})
 		val.IterAdaptiveFields(td, func(j int, t val.Type) {
-			// get offset of toast value within |tup|
-			toastValue := val.AdaptiveValue(val.Tuple(items[i]).GetField(j))
-			if toastValue.IsOutlined() {
+			// get offset of adaptive encoded value within |tup|
+			adaptiveValue := val.AdaptiveValue(val.Tuple(items[i]).GetField(j))
+			if adaptiveValue.IsOutlined() {
 				cnt++
 			}
 			return
@@ -115,7 +115,7 @@ func writeAddressOffsets(b *fb.Builder, items [][]byte, sumSz int, td val.TupleD
 			cnt++
 		})
 		val.IterAdaptiveFields(td, func(j int, t val.Type) {
-			// get offset of toast value within |tup|
+			// get offset of adaptive encoded value within |tup|
 			adaptiveValue := val.AdaptiveValue(val.Tuple(items[i]).GetField(j))
 			if adaptiveValue.IsOutlined() {
 				// Out-of-line adaptive values end in an address, so get the offset |hash.ByteLen| bytes before the end.

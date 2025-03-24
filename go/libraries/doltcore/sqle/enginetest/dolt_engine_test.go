@@ -102,8 +102,8 @@ func TestSchemaOverrides(t *testing.T) {
 	RunSchemaOverridesTest(t, harness)
 }
 
-// Provide additional test coverage for toast types by running Schema Override tests
-// using toast types instead of address types.
+// Provide additional test coverage for adaptive types by running Schema Override tests
+// using adaptive types instead of address types.
 func TestSchemaOverridesWithAdaptiveEncoding(t *testing.T) {
 	defer func() { schema.UseAdaptiveEncoding = false }()
 	schema.UseAdaptiveEncoding = true

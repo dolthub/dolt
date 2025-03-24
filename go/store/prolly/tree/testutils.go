@@ -120,9 +120,9 @@ func AscendingUintTuples(count int) (tuples [][2]val.Tuple, desc val.TupleDesc) 
 	tuples = make([][2]val.Tuple, count)
 	for i := range tuples {
 		bld.PutUint32(0, uint32(i))
-		tuples[i][0] = bld.Build(sharedPool)
+		tuples[i][0], _ = bld.Build(sharedPool)
 		bld.PutUint32(0, uint32(i+count))
-		tuples[i][1] = bld.Build(sharedPool)
+		tuples[i][1], _ = bld.Build(sharedPool)
 	}
 	return
 }

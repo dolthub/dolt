@@ -99,13 +99,13 @@ func newProgress(ctx context.Context, cs chunks.ChunkStore) (*progress, error) {
 
 func (p *progress) Has(ctx context.Context, addr hash.Hash) (ok bool, err error) {
 	p.kb.PutByteString(0, addr[:])
-	k := p.kb.Build(p.buffPool)
+	k, _ := p.kb.Build(p.buffPool)
 	return p.mapping.Has(ctx, k)
 }
 
 func (p *progress) Get(ctx context.Context, old hash.Hash) (new hash.Hash, err error) {
 	p.kb.PutByteString(0, old[:])
-	k := p.kb.Build(p.buffPool)
+	k, _ := p.kb.Build(p.buffPool)
 	err = p.mapping.Get(ctx, k, func(_, v val.Tuple) error {
 		if len(v) > 0 {
 			n, ok := p.vb.Desc.GetBytes(0, v)
@@ -121,9 +121,9 @@ func (p *progress) Get(ctx context.Context, old hash.Hash) (new hash.Hash, err e
 
 func (p *progress) Put(ctx context.Context, old, new hash.Hash) (err error) {
 	p.kb.PutByteString(0, old[:])
-	k := p.kb.Build(p.buffPool)
+	k, _ := p.kb.Build(p.buffPool)
 	p.vb.PutByteString(0, new[:])
-	v := p.vb.Build(p.buffPool)
+	v, _ := p.vb.Build(p.buffPool)
 	err = p.mapping.Put(ctx, k, v)
 	return
 }
@@ -214,11 +214,11 @@ func persistMigratedCommitMapping(ctx context.Context, ddb *doltdb.DoltDB, mappi
 
 		o, _ := kd.GetBytes(0, k)
 		bld.PutString(0, hash.New(o).String())
-		key := bld.Build(ddb.NodeStore().Pool())
+		key, _ := bld.Build(ddb.NodeStore().Pool())
 
 		n, _ := vd.GetBytes(0, v)
 		bld.PutString(0, hash.New(n).String())
-		value := bld.Build(ddb.NodeStore().Pool())
+		value, _ := bld.Build(ddb.NodeStore().Pool())
 
 		if err = rows.Put(ctx, key, value); err != nil {
 			return err

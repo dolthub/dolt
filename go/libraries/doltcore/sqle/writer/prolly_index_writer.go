@@ -155,7 +155,7 @@ func (m prollyIndexWriter) Insert(ctx context.Context, sqlRow sql.Row) error {
 			return err
 		}
 	}
-	v := m.valBld.Build(sharePool)
+	v, _ := m.valBld.Build(sharePool)
 
 	return m.mut.Put(ctx, k, v)
 }
@@ -209,7 +209,7 @@ func (m prollyIndexWriter) Update(ctx context.Context, oldRow sql.Row, newRow sq
 			return err
 		}
 	}
-	v := m.valBld.Build(sharePool)
+	v, _ := m.valBld.Build(sharePool)
 
 	return m.mut.Put(ctx, newKey, v)
 }
@@ -369,7 +369,7 @@ func (m prollySecondaryIndexWriter) checkForUniqueKeyErr(ctx context.Context, sq
 		from := m.pkMap.MapOrdinal(to)
 		m.pkBld.PutRaw(to, idxDesc.GetField(from, idxKey))
 	}
-	existingPK := m.pkBld.Build(sharePool)
+	existingPK, _ := m.pkBld.Build(sharePool)
 
 	remappedSqlRow := make(sql.Row, m.idxCols)
 	for to := range m.keyMap[:m.idxCols] {
@@ -383,7 +383,7 @@ func (m prollySecondaryIndexWriter) checkForUniqueKeyErr(ctx context.Context, sq
 }
 
 func (m prollySecondaryIndexWriter) Delete(ctx context.Context, sqlRow sql.Row) error {
-	k := m.keyBld.Build(sharePool)
+	k, _ := m.keyBld.Build(sharePool)
 	k, err := m.keyFromRow(ctx, sqlRow)
 	if err != nil {
 		return err

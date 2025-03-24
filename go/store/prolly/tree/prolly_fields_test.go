@@ -174,22 +174,22 @@ func TestRoundTripProllyFields(t *testing.T) {
 			value: []byte("lorem ipsum"),
 		},
 		{
-			name:  "binary toast short",
+			name:  "adaptive line binary short",
 			typ:   val.Type{Enc: val.BytesAdaptiveEnc},
 			value: []byte("lorem ipsum"),
 		},
 		{
-			name:  "binary toast long",
+			name:  "adaptive line binary long",
 			typ:   val.Type{Enc: val.BytesAdaptiveEnc},
 			value: make([]byte, (1 << 12)),
 		},
 		{
-			name:  "string toast short",
+			name:  "adaptive line string short",
 			typ:   val.Type{Enc: val.StringAdaptiveEnc},
 			value: "lorem ipsum",
 		},
 		{
-			name:  "string toast long",
+			name:  "adaptive line string long",
 			typ:   val.Type{Enc: val.StringAdaptiveEnc},
 			value: string(make([]byte, (1 << 12))),
 		},
@@ -213,7 +213,7 @@ func testRoundTripProllyFields(t *testing.T, test prollyFieldTest) {
 	err := PutField(ctx, ns, builder, 0, test.value)
 	require.NoError(t, err)
 
-	tup := builder.Build(testPool)
+	tup, _ := builder.Build(testPool)
 
 	v, err := GetField(ctx, desc, 0, tup, ns)
 	require.NoError(t, err)
@@ -313,7 +313,7 @@ func TestGeometryEncoding(t *testing.T) {
 			builder := val.NewTupleBuilder(oldDesc, ns)
 			b := serializeGeometry(test.value)
 			builder.PutGeometry(0, b)
-			tup := builder.Build(testPool)
+			tup, _ := builder.Build(testPool)
 
 			var v interface{}
 			var err error

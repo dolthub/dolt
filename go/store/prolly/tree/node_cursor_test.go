@@ -115,7 +115,7 @@ func testGetOrdinalOfCursor(t *testing.T, count int) {
 
 	b := val.NewTupleBuilder(desc, ns)
 	b.PutUint32(0, uint32(len(tuples)))
-	aboveItem := b.Build(sharedPool)
+	aboveItem, _ := b.Build(sharedPool)
 
 	curr, err := newCursorAtKey(ctx, ns, nd, aboveItem, desc)
 	require.NoError(t, err)

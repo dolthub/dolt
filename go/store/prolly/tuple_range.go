@@ -339,7 +339,7 @@ func IncrementTuple(ctx context.Context, start val.Tuple, n int, desc val.TupleD
 	default:
 		return nil, false
 	}
-	stop := tb.Build(pool)
+	stop, _ := tb.Build(pool)
 	if desc.Compare(ctx, start, stop) >= 0 {
 		// If cmp == 0, we lost precision serializing.
 		// If cmp > 0, we overflowed and |stop| < |start|.

@@ -40,7 +40,7 @@ func TestAddressDifferFromRootsOneLayer(t *testing.T) {
 	bld := val.NewTupleBuilder(desc, ns)
 	// modify value in the first half of the tree
 	bld.PutUint32(0, uint32(42))
-	toTups[23][1] = bld.Build(sharedPool)
+	toTups[23][1], _ = bld.Build(sharedPool)
 	toRoot := makeTree(t, toTups)
 
 	dfr, err := layerDifferFromRoots(ctx, ns, ns, fromRoot, toRoot, desc)
@@ -68,7 +68,7 @@ func TestAddressDifferFromRootsTwoLayer(t *testing.T) {
 	bld := val.NewTupleBuilder(desc, ns)
 	// modify value early in the tree, to ensure the modification happens on the first child of the root.
 	bld.PutUint32(0, uint32(42))
-	toTups[23][1] = bld.Build(sharedPool)
+	toTups[23][1], _ = bld.Build(sharedPool)
 	toRoot := makeTree(t, toTups)
 
 	after := toRoot.getAddress(0)
@@ -104,7 +104,7 @@ func TestAddressDifferFromRootsThreeLayer(t *testing.T) {
 	bld := val.NewTupleBuilder(desc, ns)
 	// modify value in the second half of the tree
 	bld.PutUint32(0, uint32(42))
-	toTups[23700][1] = bld.Build(sharedPool)
+	toTups[23700][1], _ = bld.Build(sharedPool)
 	toRoot := makeTree(t, toTups)
 
 	dfr, err := layerDifferFromRoots(ctx, ns, ns, fromRoot, toRoot, desc)

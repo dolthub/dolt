@@ -609,7 +609,7 @@ func getMergeKv(ctx *sql.Context, n sql.Node) (mergeState, error) {
 				from := pkMap.MapOrdinal(to)
 				pkBld.PutRaw(to, ms.idxMap.KeyDesc().GetField(from, key))
 			}
-			pk := pkBld.Build(ms.idxMap.Pool())
+			pk, _ := pkBld.Build(ms.idxMap.Pool())
 			var v val.Tuple
 			err = priMap.Get(ctx, pk, func(key val.Tuple, value val.Tuple) error {
 				v = value

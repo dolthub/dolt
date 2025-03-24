@@ -163,7 +163,7 @@ func (table *fulltextTable) ApplyToTable(ctx *sql.Context) (*doltdb.Table, error
 				return nil, err
 			}
 		}
-		k := keyBld.Build(sharePool)
+		k, _ := keyBld.Build(sharePool)
 
 		for to := range valMap {
 			from := valMap.MapOrdinal(to)
@@ -171,7 +171,7 @@ func (table *fulltextTable) ApplyToTable(ctx *sql.Context) (*doltdb.Table, error
 				return nil, err
 			}
 		}
-		v := valBld.Build(sharePool)
+		v, _ := valBld.Build(sharePool)
 
 		if err = mut.Put(ctx, k, v); err != nil {
 			return nil, err
