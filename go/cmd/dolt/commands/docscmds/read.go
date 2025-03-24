@@ -141,7 +141,7 @@ const (
 
 func writeDocToTable(ctx *sql.Context, eng *engine.SqlEngine, docName, content string) error {
 	var (
-		err  error
+		err error
 	)
 
 	err = ctx.Session.SetSessionVariable(ctx, sql.AutoCommitSessionVar, 1)
