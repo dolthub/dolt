@@ -150,7 +150,10 @@ func (b SecondaryKeyBuilder) SecondaryKeyFromRow(ctx context.Context, k, v val.T
 				}
 
 				if len(b.indexDef.PrefixLengths()) > to {
-					value = val.TrimValueToPrefixLength(value, b.indexDef.PrefixLengths()[to])
+					value, err = val.TrimValueToPrefixLength(ctx, value, b.indexDef.PrefixLengths()[to])
+					if err != nil {
+						return nil, err
+					}
 				}
 
 				err = tree.PutField(ctx, b.nodeStore, b.builder, to, value)

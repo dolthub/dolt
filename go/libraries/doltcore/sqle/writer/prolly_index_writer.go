@@ -304,18 +304,18 @@ func (m prollySecondaryIndexWriter) ValidateKeyViolations(ctx context.Context, s
 }
 
 // trimKeyPart will trim entry into the sql.Row depending on the prefixLengths
-func (m prollySecondaryIndexWriter) trimKeyPart(to int, keyPart interface{}) interface{} {
+func (m prollySecondaryIndexWriter) trimKeyPart(ctx context.Context, to int, keyPart interface{}) (interface{}, error) {
 	var prefixLength uint16
 	if len(m.prefixLengths) > to {
 		prefixLength = m.prefixLengths[to]
 	}
-	return val.TrimValueToPrefixLength(keyPart, prefixLength)
+	return val.TrimValueToPrefixLength(ctx, keyPart, prefixLength)
 }
 
 func (m prollySecondaryIndexWriter) keyFromRow(ctx context.Context, sqlRow sql.Row) (val.Tuple, error) {
 	for to := range m.keyMap {
 		from := m.keyMap.MapOrdinal(to)
-		keyPart := m.trimKeyPart(to, sqlRow[from])
+		keyPart, _ := m.trimKeyPart(ctx, to, sqlRow[from])
 		if err := tree.PutField(ctx, m.mut.NodeStore(), m.keyBld, to, keyPart); err != nil {
 			return nil, err
 		}
@@ -341,7 +341,7 @@ func (m prollySecondaryIndexWriter) checkForUniqueKeyErr(ctx context.Context, sq
 			m.keyBld.Recycle()
 			return nil
 		}
-		keyPart := m.trimKeyPart(to, sqlRow[from])
+		keyPart, _ := m.trimKeyPart(ctx, to, sqlRow[from])
 		if err := tree.PutField(ctx, ns, m.keyBld, to, keyPart); err != nil {
 			return err
 		}
@@ -374,7 +374,7 @@ func (m prollySecondaryIndexWriter) checkForUniqueKeyErr(ctx context.Context, sq
 	remappedSqlRow := make(sql.Row, m.idxCols)
 	for to := range m.keyMap[:m.idxCols] {
 		from := m.keyMap.MapOrdinal(to)
-		remappedSqlRow[to] = m.trimKeyPart(to, sqlRow[from])
+		remappedSqlRow[to], _ = m.trimKeyPart(ctx, to, sqlRow[from])
 	}
 	return secondaryUniqueKeyError{
 		keyStr:      FormatKeyForUniqKeyErr(ctx, key, desc, remappedSqlRow),

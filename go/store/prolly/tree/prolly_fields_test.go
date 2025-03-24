@@ -189,7 +189,7 @@ func TestRoundTripProllyFields(t *testing.T) {
 			value: "lorem ipsum",
 		},
 		{
-			name:  "binary toast long",
+			name:  "string toast long",
 			typ:   val.Type{Enc: val.StringAdaptiveEnc},
 			value: string(make([]byte, (1 << 12))),
 		},
@@ -205,27 +205,28 @@ func TestRoundTripProllyFields(t *testing.T) {
 var testPool = pool.NewBuffPool()
 
 func testRoundTripProllyFields(t *testing.T, test prollyFieldTest) {
+	ctx := context.Background()
 	desc := val.NewTupleDescriptor(test.typ)
 	ns := NewTestNodeStore()
 	builder := val.NewTupleBuilder(desc, ns)
 
-	err := PutField(context.Background(), ns, builder, 0, test.value)
-	assert.NoError(t, err)
+	err := PutField(ctx, ns, builder, 0, test.value)
+	require.NoError(t, err)
 
 	tup := builder.Build(testPool)
 
-	v, err := GetField(context.Background(), desc, 0, tup, ns)
-	assert.NoError(t, err)
+	v, err := GetField(ctx, desc, 0, tup, ns)
+	require.NoError(t, err)
 
-	v, err = sql.UnwrapAny(context.Background(), v)
-	assert.NoError(t, err)
+	v, err = sql.UnwrapAny(ctx, v)
+	require.NoError(t, err)
 
 	if js, ok := v.(sql.JSONWrapper); ok {
 		v, err = js.ToInterface()
 		require.NoError(t, err)
 	}
 
-	expectedValue, err := sql.UnwrapAny(context.Background(), test.value)
+	expectedValue, err := sql.UnwrapAny(ctx, test.value)
 	assert.NoError(t, err)
 
 	if js, ok := expectedValue.(sql.JSONWrapper); ok {

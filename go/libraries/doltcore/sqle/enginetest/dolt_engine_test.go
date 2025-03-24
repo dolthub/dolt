@@ -15,7 +15,6 @@
 package enginetest
 
 import (
-	"context"
 	"fmt"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"os"
@@ -105,7 +104,7 @@ func TestSchemaOverrides(t *testing.T) {
 
 // Provide additional test coverage for toast types by running Schema Override tests
 // using toast types instead of address types.
-func TestSchemaOverridesWithToastTypes(t *testing.T) {
+func TestSchemaOverridesWithAdaptiveEncoding(t *testing.T) {
 	defer func() { schema.UseAdaptiveEncoding = false }()
 	schema.UseAdaptiveEncoding = true
 	harness := newDoltEnginetestHarness(t)

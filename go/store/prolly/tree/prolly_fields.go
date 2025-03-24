@@ -231,6 +231,11 @@ func PutField(ctx context.Context, ns NodeStore, tb *val.TupleBuilder, i int, v 
 		}
 		return tb.PutString(i, unwrappedString)
 	case val.ByteStringEnc:
+		var err error
+		v, err = sql.UnwrapAny(ctx, v)
+		if err != nil {
+			return err
+		}
 		if s, ok := v.(string); ok {
 			if len(s) > math.MaxUint16 {
 				return ErrValueExceededMaxFieldSize
@@ -303,22 +308,46 @@ func PutField(ctx context.Context, ns NodeStore, tb *val.TupleBuilder, i int, v 
 	case val.BytesAdaptiveEnc:
 		switch value := v.(type) {
 		case []byte:
-			err := tb.PutToastBytesFromInline(i, value)
+			err := tb.PutToastBytesFromInline(ctx, i, value)
 			if err != nil {
 				return err
 			}
 		case *val.ByteArray:
-			tb.PutToastBytesFromOutline(i, value)
+			if value.IsExactLength() {
+				tb.PutToastBytesFromOutline(i, value)
+			} else {
+				// This ByteArray came from an address column. Its length is unknown.
+				valueBytes, err := value.ToBytes(ctx)
+				if err != nil {
+					return err
+				}
+				err = tb.PutToastBytesFromInline(ctx, i, valueBytes)
+				if err != nil {
+					return err
+				}
+			}
 		}
 	case val.StringAdaptiveEnc:
 		switch value := v.(type) {
 		case string:
-			err := tb.PutToastStringFromInline(i, value)
+			err := tb.PutToastStringFromInline(ctx, i, value)
 			if err != nil {
 				return err
 			}
 		case *val.TextStorage:
-			tb.PutToastStringFromOutline(i, value)
+			if value.IsExactLength() {
+				tb.PutToastStringFromOutline(i, value)
+			} else {
+				// This ByteArray came from an address column. Its length is unknown.
+				valueBytes, err := value.GetBytes(ctx)
+				if err != nil {
+					return err
+				}
+				err = tb.PutToastBytesFromInline(ctx, i, valueBytes)
+				if err != nil {
+					return err
+				}
+			}
 		}
 	default:
 		panic(fmt.Sprintf("unknown encoding %v %v", enc, v))
