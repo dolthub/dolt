@@ -21,6 +21,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
@@ -78,6 +79,9 @@ func parseSchemaString(t *testing.T, s string) schema.Schema {
 	require.NoError(t, err)
 	sqlCtx, err := eng.NewDefaultContext(ctx)
 	require.NoError(t, err)
+	defer sql.SessionEnd(sqlCtx.Session)
+	sql.SessionCommandBegin(sqlCtx.Session)
+	defer sql.SessionCommandEnd(sqlCtx.Session)
 	sqlCtx.SetCurrentDatabase(db)
 	_, sch, err := sqlutil.ParseCreateTableStatement(sqlCtx, root, eng.GetUnderlyingEngine(), s)
 	require.NoError(t, err)
