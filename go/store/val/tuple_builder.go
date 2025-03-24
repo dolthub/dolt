@@ -68,9 +68,9 @@ type TupleBuilder struct {
 	fields            [][]byte
 	buf               []byte
 	pos               int64
-	tupleLengthTarget int64 // The max tuple length before the tuple builder attempts to outline values.
-	outlineSize       int64 // The size of the tuple if every oversized type is outlined
-	inlineSize        int64 // The size of the tuple if every oversized type is inlined
+	tupleLengthTarget int64 // The max tuple length before the tuple builder attempts to store values out-of-band.
+	outOfBandSize     int64 // The size of the tuple if every adaptive value is stored out-of-band
+	inlineSize        int64 // The size of the tuple if every adaptive value is inlined
 	vs                ValueStore
 }
 
@@ -109,20 +109,20 @@ func (tb *TupleBuilder) BuildPermissive(pool pool.BuffPool, vs ValueStore) (tup 
 		for i, descType := range tb.Desc.Types {
 			if IsAdaptiveEncoding(descType.Enc) {
 				adaptiveValue := AdaptiveValue(tb.fields[i])
-				outlineSize := adaptiveValue.outOfBandSize()
+				outOfBandSize := adaptiveValue.outOfBandSize()
 				inlineSize := adaptiveValue.inlineSize()
 
-				// We only outline a field if the outlined size is shorter than the inlined size.
-				if outlineSize < inlineSize {
+				// We only store a field out-of-band if it makes the tuple shorter.
+				if outOfBandSize < inlineSize {
 					if !adaptiveValue.IsOutOfBand() {
-						outline, err := adaptiveValue.convertToOutOfBand(ctx, tb.vs, nil)
+						outOfBandValue, err := adaptiveValue.convertToOutOfBand(ctx, tb.vs, nil)
 						if err != nil {
 							return nil, err
 						}
-						tb.PutRaw(i, outline)
+						tb.PutRaw(i, outOfBandValue)
 					}
 
-					totalSize += outlineSize - inlineSize
+					totalSize += outOfBandSize - inlineSize
 				}
 			}
 
@@ -189,7 +189,7 @@ func (tb *TupleBuilder) Recycle() {
 
 func (tb *TupleBuilder) addSize(sz ByteSize) {
 	tb.inlineSize += int64(sz)
-	tb.outlineSize += int64(sz)
+	tb.outOfBandSize += int64(sz)
 }
 
 // PutBool writes a bool to the ith field of the Tuple being built.
@@ -542,8 +542,8 @@ func (tb *TupleBuilder) PutCell(i int, v Cell) {
 func (tb *TupleBuilder) PutAdaptiveBytesFromInline(ctx context.Context, i int, v []byte) error {
 	tb.Desc.expectEncoding(i, BytesAdaptiveEnc)
 	if int64(len(v)) > tb.tupleLengthTarget {
-		// Inline value is too large. We must outline it.
-		tb.ensureCapacity(29)
+		// Inline value is too large. We must store it out-of-band.
+		tb.ensureCapacity(maxOutOfBandAdaptiveValueLength)
 		blobLength := uint64(len(v))
 		lengthSize, _ := makeVarInt(blobLength, tb.buf[tb.pos:])
 
@@ -565,14 +565,14 @@ func (tb *TupleBuilder) PutAdaptiveBytesFromInline(ctx context.Context, i int, v
 	copy(field[1:], v)
 	tb.pos += int64(sz)
 	tb.inlineSize += int64(sz)
-	tb.outlineSize += field.outOfBandSize()
+	tb.outOfBandSize += field.outOfBandSize()
 	return nil
 }
 
 func (tb *TupleBuilder) PutAdaptiveStringFromInline(ctx context.Context, i int, v string) error {
 	tb.Desc.expectEncoding(i, StringAdaptiveEnc)
 	if int64(len(v)) > tb.tupleLengthTarget {
-		// Inline value is too large. We must outline it.
+		// Inline value is too large. We must store it out of line.
 		maxLengthBytes := 9
 		tb.ensureCapacity(ByteSize(hash.ByteLen + maxLengthBytes))
 		blobLength := uint64(len(v))
@@ -596,7 +596,7 @@ func (tb *TupleBuilder) PutAdaptiveStringFromInline(ctx context.Context, i int, 
 	copy(field[1:], v)
 	tb.pos += int64(sz)
 	tb.inlineSize += int64(sz)
-	tb.outlineSize += field.outOfBandSize()
+	tb.outOfBandSize += field.outOfBandSize()
 	return nil
 }
 

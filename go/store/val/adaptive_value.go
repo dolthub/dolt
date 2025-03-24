@@ -16,6 +16,7 @@ package val
 
 import (
 	"bytes"
+	"context"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/mohae/uvarint"
 )
@@ -87,11 +88,12 @@ func (v AdaptiveValue) IsOutOfBand() bool {
 	return v[0] != 0
 }
 
-var makeVarIntLength = 9
+var maxVarIntLength ByteSize = 9
+var maxOutOfBandAdaptiveValueLength = maxVarIntLength + hash.ByteLen
 
 func makeVarInt(x uint64, dest []byte) (bytesWritten int, output []byte) {
 	if dest == nil {
-		dest = make([]byte, makeVarIntLength)
+		dest = make([]byte, maxVarIntLength)
 	}
 	length := uvarint.Encode(dest, x)
 	return length, dest[:length]
@@ -103,8 +105,8 @@ func (v AdaptiveValue) convertToOutOfBand(ctx context.Context, vs ValueStore, de
 	if v.IsOutOfBand() {
 		return v, nil
 	}
-	maxSize := hash.ByteLen + makeVarIntLength
-	if cap(dest) < 29 {
+	maxSize := hash.ByteLen + maxVarIntLength
+	if cap(dest) < int(maxOutOfBandAdaptiveValueLength) {
 		dest = make([]byte, maxSize)
 	}
 	blob := v[1:]
