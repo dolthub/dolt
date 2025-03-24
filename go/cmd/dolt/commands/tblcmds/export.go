@@ -19,6 +19,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/fatih/color"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -207,6 +208,9 @@ func (cmd ExportCmd) Exec(ctx context.Context, commandStr string, args []string,
 	if berr != nil {
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(berr), usage)
 	}
+	defer sql.SessionEnd(sqlCtx.Session)
+	sql.SessionCommandBegin(sqlCtx.Session)
+	defer sql.SessionCommandEnd(sqlCtx.Session)
 	sqlCtx.SetCurrentDatabase(dbName)
 
 	rd, err := mvdata.NewSqlEngineReader(sqlCtx, engine.GetUnderlyingEngine(), root, exOpts.tableName)

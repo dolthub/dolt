@@ -152,6 +152,9 @@ func (cmd DumpCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	if berr != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(berr), usage)
 	}
+	defer sql.SessionEnd(sqlCtx.Session)
+	sql.SessionCommandBegin(sqlCtx.Session)
+	defer sql.SessionCommandEnd(sqlCtx.Session)
 	sqlCtx.SetCurrentDatabase(dbName)
 
 	switch resFormat {
@@ -201,7 +204,7 @@ func (cmd DumpCmd) Exec(ctx context.Context, commandStr string, args []string, d
 			}
 		}
 
-		err = dumpSchemaElements(ctx, dEnv, fPath)
+		err = dumpSchemaElements(sqlCtx, engine, root, dEnv.FS, fPath)
 		if err != nil {
 			return HandleVErrAndExitCode(err, usage)
 		}
@@ -220,39 +223,23 @@ func (cmd DumpCmd) Exec(ctx context.Context, commandStr string, args []string, d
 }
 
 // dumpSchemaElements writes the non-table schema elements (views, triggers, procedures) to the file path given
-func dumpSchemaElements(ctx context.Context, dEnv *env.DoltEnv, path string) errhand.VerboseError {
-	writer, err := dEnv.FS.OpenForWriteAppend(path, os.ModePerm)
+func dumpSchemaElements(ctx *sql.Context, eng *engine.SqlEngine, root doltdb.RootValue, fs filesys.Filesys, path string) errhand.VerboseError {
+	writer, err := fs.OpenForWriteAppend(path, os.ModePerm)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
 
-	engine, dbName, err := engine.NewSqlEngineForEnv(ctx, dEnv)
+	err = dumpViews(ctx, eng, root, writer)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
 
-	sqlCtx, err := engine.NewLocalContext(ctx)
-	if err != nil {
-		return errhand.VerboseErrorFromError(err)
-	}
-	sqlCtx.SetCurrentDatabase(dbName)
-
-	root, err := dEnv.WorkingRoot(ctx)
+	err = dumpTriggers(ctx, eng, root, writer)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
 
-	err = dumpViews(sqlCtx, engine, root, writer)
-	if err != nil {
-		return errhand.VerboseErrorFromError(err)
-	}
-
-	err = dumpTriggers(sqlCtx, engine, root, writer)
-	if err != nil {
-		return errhand.VerboseErrorFromError(err)
-	}
-
-	err = dumpProcedures(sqlCtx, engine, root, writer)
+	err = dumpProcedures(ctx, eng, root, writer)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}

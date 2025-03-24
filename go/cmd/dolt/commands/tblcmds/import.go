@@ -448,6 +448,9 @@ func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string,
 		verr = errhand.BuildDError("could not build sql context for import").AddCause(err).Build()
 		return commands.HandleVErrAndExitCode(verr, usage)
 	}
+	defer sql.SessionEnd(sqlCtx.Session)
+	sql.SessionCommandBegin(sqlCtx.Session)
+	defer sql.SessionCommandEnd(sqlCtx.Session)
 	sqlCtx.SetCurrentDatabase(dbName)
 
 	mvOpts, verr := getImportMoveOptions(sqlCtx, apr, dEnv, eng.GetUnderlyingEngine())
