@@ -278,7 +278,7 @@ func (rs *RemoteChunkStore) StreamDownloadLocations(stream remotesapi.ChunkStore
 			return err
 		}
 		numHashes += len(hashes)
-		locations, err := cs.GetChunkLocationsWithPaths(context.Background(), hashes)
+		locations, err := cs.GetChunkLocationsWithPaths(stream.Context(), hashes)
 		if err != nil {
 			logger.WithError(err).Error("error getting chunk locations for hashes")
 			return err
