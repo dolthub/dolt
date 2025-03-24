@@ -30,6 +30,26 @@ type GCSafepointController struct {
 	sessions map[GCRootsProvider]*GCSafepointSessionState
 }
 
+// A GCRootsProvider is the thing that a GCSafepointController
+// tracks. It also calls it a |session|, as it represents a client
+// interacting with the database.  The GCRootsProvider is registered
+// with the Controller through the first SessionCommandBegin() call,
+// and it goes through lifecycle callbacks which effect safepoint
+// establishment when it gets passed to SessionEnd and
+// SessionCommandEnd as well.
+//
+// A GCRootsProvider implements a single method |VisitGCRoots|, which
+// will be called if a GC needs to establish a safepoint while the
+// session is alive. The method is responsible for passing every live
+// in-memory chunk address related to the given |db| to the provided
+// |roots| callback. If it cannot do this for some reason, it should
+// return an error, but in that case the GC will fail. A
+// |VisitGCRoots| function will never be called after a
+// |GCRootsProvider| is given to |gcctx.SessionCommandBegin| until it
+// is given to |gcctx.SessionCommandEnd| again. If there is an
+// outstanding call to |VisitGCRoots| when |sql.SessionCommandBegin|
+// is called with a given roots provider, that call will block until
+// the call to |VisitGCRoots| completes.
 type GCRootsProvider interface {
 	VisitGCRoots(ctx context.Context, db string, roots func(hash.Hash) bool) error
 }
