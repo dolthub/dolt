@@ -542,6 +542,7 @@ func (td TupleDesc) GetBytesAdaptiveValue(i int, vs ValueStore, tup Tuple) (inte
 	}
 }
 
+// GetStringAdaptiveValue returns either a string or a StringWrapper, but Go doesn't allow us to use a single type for that.
 func (td TupleDesc) GetStringAdaptiveValue(i int, vs ValueStore, tup Tuple) (interface{}, bool, error) {
 	// TODO: Add context parameter
 	ctx := context.Background()

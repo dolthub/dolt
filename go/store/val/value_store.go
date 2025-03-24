@@ -65,14 +65,17 @@ type TextStorage struct {
 	maxByteLength int64
 }
 
+// IsExactLength implements sql.BytesWrapper
 func (t TextStorage) IsExactLength() bool {
 	return false
 }
 
+// MaxByteLength implements sql.BytesWrapper
 func (t TextStorage) MaxByteLength() int64 {
 	return t.maxByteLength
 }
 
+// Unwrap implements sql.BytesWrapper
 func (t TextStorage) Unwrap(ctx context.Context) (string, error) {
 	buf, err := t.GetBytes(ctx)
 	if err != nil {
@@ -117,10 +120,12 @@ type ByteArray struct {
 	maxByteLength int64
 }
 
+// IsExactLength implements sql.BytesWrapper
 func (b *ByteArray) IsExactLength() bool {
 	return false
 }
 
+// MaxByteLength implements sql.BytesWrapper
 func (b *ByteArray) MaxByteLength() int64 {
 	return b.maxByteLength
 }
@@ -147,10 +152,12 @@ func (b *ByteArray) ToBytes(ctx context.Context) ([]byte, error) {
 	return b.GetBytes(ctx)
 }
 
+// UnwrapAny implements sql.Wrapper
 func (b *ByteArray) UnwrapAny(ctx context.Context) (interface{}, error) {
 	return b.ToBytes(ctx)
 }
 
+// Unwrap implements sql.BytesWrapper
 func (b ByteArray) Unwrap(ctx context.Context) ([]byte, error) {
 	return b.GetBytes(ctx)
 }
