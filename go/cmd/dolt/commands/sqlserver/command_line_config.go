@@ -452,7 +452,6 @@ func (cfg *commandLineServerConfig) withMaxConnections(maxConnections uint64) *c
 	return cfg
 }
 
-// NM4 - I think we can drop this. Or take a str?
 func (cfg *commandLineServerConfig) withMaxWaitConnections(maxWaitConnections uint32) *commandLineServerConfig {
 	cfg.maxWaitConnections = maxWaitConnections
 	cfg.valuesSet[servercfg.MaxWaitConnectionsKey] = struct{}{}
