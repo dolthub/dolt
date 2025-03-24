@@ -534,7 +534,7 @@ func (td TupleDesc) GetBytesAdaptiveValue(i int, vs ValueStore, tup Tuple) (inte
 		return nil, false, nil
 	}
 	if adaptiveValue.isInlined() {
-		val, err := adaptiveValue.convertToBytes(ctx, vs, nil)
+		val, err := adaptiveValue.getUnderlyingBytes(ctx, vs)
 		return val, true, err
 	} else {
 		val, err := adaptiveValue.convertToByteArray(ctx, vs, nil)
@@ -551,7 +551,7 @@ func (td TupleDesc) GetStringAdaptiveValue(i int, vs ValueStore, tup Tuple) (int
 		return nil, false, nil
 	}
 	if adaptiveValue.isInlined() {
-		val, err := adaptiveValue.convertToBytes(ctx, vs, nil)
+		val, err := adaptiveValue.getUnderlyingBytes(ctx, vs)
 		return string(val), true, err
 	} else {
 		val, err := adaptiveValue.convertToTextStorage(ctx, vs, nil)
@@ -915,14 +915,18 @@ func (v AdaptiveValue) convertToInline(ctx context.Context, vs ValueStore, dest 
 	return dest, nil
 }
 
-func (v AdaptiveValue) convertToBytes(ctx context.Context, vs ValueStore, buf []byte) ([]byte, error) {
-	// Only inlined values can be converted to bytes
-	inlineValue, err := v.convertToInline(ctx, vs, buf)
-	if err != nil {
-		return nil, err
+// getUnderlyingBytes extracts the underlying value that this AdaptiveValue represents.
+func (v AdaptiveValue) getUnderlyingBytes(ctx context.Context, vs ValueStore) ([]byte, error) {
+	if v.IsNull() {
+		return nil, nil
 	}
-	// Remove header byte
-	return inlineValue[1:], nil
+	if v.isInlined() {
+		return v[1:], nil
+	}
+	// else value is stored out-of-band
+	_, lengthBytes := uvarint.Uvarint(v)
+	addr := v[lengthBytes:]
+	return vs.ReadBytes(ctx, hash.New(addr))
 }
 
 func (v AdaptiveValue) convertToByteArray(ctx context.Context, vs ValueStore, buf []byte) (*ByteArray, error) {
