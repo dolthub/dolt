@@ -2234,3 +2234,33 @@ EOF
     [[ "$output" =~ "test4223" ]] || false
     [[ ! "$output" =~ "testxxxx" ]] || false
 }
+
+# bats test_tags=no_lambda
+@test "sql-server: test --max-connections-timeout 15s and --max-connections 3 flags" {
+    cd repo1
+
+    # Default is 60s, but I don't want to extend the test time for this.
+    start_sql_server_with_args --max-connections-timeout=15s --max-connections=3
+
+    pids=()
+    for i in {1..3}; do
+      dolt sql &
+      pids+=($!)
+    done
+
+    # Attempt to connect with a fourth connection using mysql client because dolt sql has
+    # 9 retries which we don't have the patience to wait for.
+    start_time=$(date +%s)
+    run mysql -h 127.0.0.1 -P 3306 -u root -e "SELECT 1;"
+    end_time=$(date +%s)
+
+    elapsed_time=$((end_time - start_time))
+    [[ $elapsed_time -lt 17 ]] || false
+    [[ $elapsed_time -gt 13 ]] || false
+    [ $status -ne 0 ]
+    [[ "$output" =~ "Lost connection to MySQL server at 'reading initial communication packet'" ]] || false
+
+    for pid in "${pids[@]}"; do
+      kill -9 "$pid"
+    done
+}
