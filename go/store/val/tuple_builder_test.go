@@ -280,7 +280,7 @@ func TestTupleBuilderToastTypes(t *testing.T) {
 	// Test round trip when we expect values to be inlined
 	{
 		shortByteArray := make([]byte, defaultTupleLengthTarget/2)
-		err := tb.PutToastBytesFromInline(0, shortByteArray)
+		err := tb.PutToastBytesFromInline(ctx, 0, shortByteArray)
 		require.NoError(t, err)
 		tup := tb.Build(testPool)
 
@@ -301,7 +301,7 @@ func TestTupleBuilderToastTypes(t *testing.T) {
 
 		toastBytes, _, err := td.GetBytesToastValue(0, vs, tup)
 		require.NoError(t, err)
-		toastByteArray := toastBytes.(ByteArray)
+		toastByteArray := toastBytes.(*ByteArray)
 		outBytes, err := toastByteArray.ToBytes(ctx)
 		require.NoError(t, err)
 		require.Equal(t, longByteArray, outBytes)
@@ -321,9 +321,9 @@ func TestTupleBuilderMultipleToastTypes(t *testing.T) {
 	{
 		columnSize := defaultTupleLengthTarget / 2
 		mediumByteArray := make([]byte, columnSize)
-		err := tb.PutToastBytesFromInline(0, mediumByteArray)
+		err := tb.PutToastBytesFromInline(ctx, 0, mediumByteArray)
 		require.NoError(t, err)
-		err = tb.PutToastBytesFromInline(1, mediumByteArray)
+		err = tb.PutToastBytesFromInline(ctx, 1, mediumByteArray)
 		require.NoError(t, err)
 
 		tup := tb.Build(testPool)
@@ -331,7 +331,7 @@ func TestTupleBuilderMultipleToastTypes(t *testing.T) {
 		{
 			toastBytes, _, err := td.GetBytesToastValue(0, vs, tup)
 			require.NoError(t, err)
-			toastByteArray := toastBytes.(ByteArray)
+			toastByteArray := toastBytes.(*ByteArray)
 			outBytes, err := toastByteArray.ToBytes(ctx)
 			require.NoError(t, err)
 			require.Equal(t, mediumByteArray, outBytes)

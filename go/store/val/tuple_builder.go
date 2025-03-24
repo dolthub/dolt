@@ -16,7 +16,6 @@ package val
 
 import (
 	"context"
-	"fmt"
 	"strconv"
 	"time"
 
@@ -150,7 +149,7 @@ func (tb *TupleBuilder) BuildPermissive(pool pool.BuffPool, vs ValueStore) (tup 
 		}
 
 	}
-	if totalSize > int64(MaxTupleDataSize) {
+	if totalSize > tb.tupleLengthTarget {
 		// Outlining failed to reduce the tuple size enough. Is this possible?
 	}
 	values := tb.fields[:tb.Desc.Count()]
@@ -547,36 +546,61 @@ func (tb *TupleBuilder) PutCell(i int, v Cell) {
 
 // TODO: If a addr field gets copied to a toast field we won't know the size initially
 
-func (tb *TupleBuilder) PutToastBytesFromInline(i int, v []byte) error {
-	// TODO: Add context
+func (tb *TupleBuilder) PutToastBytesFromInline(ctx context.Context, i int, v []byte) error {
 	tb.Desc.expectEncoding(i, BytesAdaptiveEnc)
-	if len(v) > int(MaxTupleDataSize) {
-		return fmt.Errorf("byte array too large to fit inline (%d > %d). This shouldn't happen", len(v), MaxTupleDataSize)
+	if int64(len(v)) > tb.tupleLengthTarget {
+		// Inline value is too large. We must outline it.
+		tb.ensureCapacity(29)
+		blobLength := uint64(len(v))
+		lengthSize, _ := makeVarInt(blobLength, tb.buf[tb.pos:])
+
+		blobHash, err := tb.vs.WriteBytes(ctx, []byte(v))
+		if err != nil {
+			return err
+		}
+		copy(tb.buf[tb.pos+int64(lengthSize):], blobHash[:])
+		field := tb.buf[tb.pos : tb.pos+int64(lengthSize)+hash.ByteLen]
+		tb.fields[i] = field
+		tb.pos += int64(lengthSize) + hash.ByteLen
+		return nil
 	}
-	sz := ByteSize(len(v)) + 2 // header byte, plus null terminator?
+	sz := ByteSize(len(v)) + 1 // include extra header byte
 	tb.ensureCapacity(sz)
 	field := AdaptiveValue(tb.buf[tb.pos : tb.pos+int64(sz)])
 	tb.fields[i] = field
 	field[0] = 0 // Mark this as inline
-	writeByteString(field[1:], v)
+	copy(field[1:], v)
 	tb.pos += int64(sz)
 	tb.inlineSize += int64(sz)
 	tb.outlineSize += field.outlineSize()
 	return nil
 }
 
-func (tb *TupleBuilder) PutToastStringFromInline(i int, v string) error {
-	// TODO: Add context
+func (tb *TupleBuilder) PutToastStringFromInline(ctx context.Context, i int, v string) error {
 	tb.Desc.expectEncoding(i, StringAdaptiveEnc)
-	if len(v) > int(MaxTupleDataSize) {
-		return fmt.Errorf("byte array too large to fit inline (%d > %d). This shouldn't happen", len(v), MaxTupleDataSize)
+	if int64(len(v)) > tb.tupleLengthTarget {
+		// Inline value is too large. We must outline it.
+		maxLengthBytes := 9
+		tb.ensureCapacity(ByteSize(hash.ByteLen + maxLengthBytes))
+		blobLength := uint64(len(v))
+		lengthSize, _ := makeVarInt(blobLength, tb.buf[tb.pos:])
+
+		blobHash, err := tb.vs.WriteBytes(ctx, []byte(v))
+		if err != nil {
+			return err
+		}
+		copy(tb.buf[tb.pos+int64(lengthSize):], blobHash[:])
+		field := tb.buf[tb.pos : tb.pos+int64(lengthSize)+hash.ByteLen]
+		tb.fields[i] = field
+		tb.pos += int64(lengthSize) + hash.ByteLen
+		return nil
 	}
-	sz := ByteSize(len(v)) + 2 // header byte, plus null terminator?
+	sz := ByteSize(len(v)) + 1 // include extra header byte
 	tb.ensureCapacity(sz)
 	field := AdaptiveValue(tb.buf[tb.pos : tb.pos+int64(sz)])
 	tb.fields[i] = field
 	field[0] = 0 // Mark this as inline
-	writeByteString(field[1:], []byte(v))
+	copy(field[1:], v)
 	tb.pos += int64(sz)
 	tb.inlineSize += int64(sz)
 	tb.outlineSize += field.outlineSize()
@@ -585,34 +609,28 @@ func (tb *TupleBuilder) PutToastStringFromInline(i int, v string) error {
 
 func (tb *TupleBuilder) PutToastBytesFromOutline(i int, v *ByteArray) {
 	tb.Desc.expectEncoding(i, BytesAdaptiveEnc)
-	// TODO: What's the correct size?
-	sz := ByteSize(29)
-	tb.ensureCapacity(sz)
-	field := tb.buf[tb.pos : tb.pos+int64(sz)]
+
+	maxLengthBytes := 9
+	tb.ensureCapacity(ByteSize(hash.ByteLen + maxLengthBytes))
+	blobLength := uint64(v.MaxByteLength())
+	lengthSize, _ := makeVarInt(blobLength, tb.buf[tb.pos:])
+
+	copy(tb.buf[tb.pos+int64(lengthSize):], v.Addr[:])
+	field := tb.buf[tb.pos : tb.pos+int64(lengthSize)+hash.ByteLen]
 	tb.fields[i] = field
-	field[0] = 128
-	// TODO: If this came from a address type we don't know the size.
-	bytesLength := v.MaxByteLength()
-	writeInt64(field[1:9], bytesLength)
-	writeAddr(field[9:29], v.Addr[:])
-	tb.pos += int64(sz)
-	tb.inlineSize += 2 + bytesLength // header byte + null terminator
-	tb.outlineSize += int64(sz)
+	tb.pos += int64(lengthSize) + hash.ByteLen
 }
 
 func (tb *TupleBuilder) PutToastStringFromOutline(i int, v *TextStorage) {
 	tb.Desc.expectEncoding(i, StringAdaptiveEnc)
-	// TODO: What's the correct size?
-	sz := ByteSize(29)
-	tb.ensureCapacity(sz)
-	field := tb.buf[tb.pos : tb.pos+int64(sz)]
+
+	maxLengthBytes := 9
+	tb.ensureCapacity(ByteSize(hash.ByteLen + maxLengthBytes))
+	blobLength := uint64(v.MaxByteLength())
+	lengthSize, _ := makeVarInt(blobLength, tb.buf[tb.pos:])
+
+	copy(tb.buf[tb.pos+int64(lengthSize):], v.Addr[:])
+	field := tb.buf[tb.pos : tb.pos+int64(lengthSize)+hash.ByteLen]
 	tb.fields[i] = field
-	field[0] = 128
-	// TODO: If this came from a address type we don't know the size.
-	bytesLength := v.MaxByteLength()
-	writeInt64(field[1:9], bytesLength)
-	writeAddr(field[9:29], v.Addr[:])
-	tb.pos += int64(sz)
-	tb.inlineSize += 2 + bytesLength // header byte + null terminator
-	tb.outlineSize += int64(sz)
+	tb.pos += int64(lengthSize) + hash.ByteLen
 }

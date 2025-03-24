@@ -912,9 +912,9 @@ func (v AdaptiveValue) convertToByteArray(ctx context.Context, vs ValueStore, bu
 	if err != nil {
 		return &ByteArray{}, err
 	}
-	length := outlineValue.getMessageLength()
-	address := hash.New(outlineValue[length:])
-	return NewByteArray(address, vs).WithMaxByteLength(length), nil
+	length, lengthBytes := uvarint.Uvarint(outlineValue)
+	address := hash.New(outlineValue[lengthBytes:])
+	return NewByteArray(address, vs).WithMaxByteLength(int64(length)), nil
 }
 
 func (v AdaptiveValue) convertToTextStorage(ctx context.Context, vs ValueStore, buf []byte) (*TextStorage, error) {
@@ -923,9 +923,9 @@ func (v AdaptiveValue) convertToTextStorage(ctx context.Context, vs ValueStore, 
 	if err != nil {
 		return &TextStorage{}, err
 	}
-	address := hash.New(outlineValue[9:29])
-	length := readInt64(outlineValue[1:9])
-	return NewTextStorage(address, vs).WithMaxByteLength(length), nil
+	length, lengthBytes := uvarint.Uvarint(outlineValue)
+	address := hash.New(outlineValue[lengthBytes:])
+	return NewTextStorage(address, vs).WithMaxByteLength(int64(length)), nil
 }
 
 // ToastTypeHandler is an implementation of ToastTypeHandler for TOAST types, that is, values that can be either a content-address
