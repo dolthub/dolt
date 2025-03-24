@@ -815,7 +815,7 @@ func (v AdaptiveValue) outlineSize() int64 {
 		return int64(len(v))
 	}
 	_, lengthSize := uvarint.Uvarint(v)
-	return int64(lengthSize) + 20 // variable length + address
+	return int64(lengthSize) + hash.ByteLen // variable length + address
 }
 
 // inlineSize computes the size of the value in the tuple if it were inlined.
@@ -840,9 +840,11 @@ func (v AdaptiveValue) IsOutlined() bool {
 	return v[0] != 0
 }
 
+var makeVarIntLength = 9
+
 func makeVarInt(x uint64, dest []byte) (bytesWritten int, output []byte) {
 	if dest == nil {
-		dest = make([]byte, 9)
+		dest = make([]byte, makeVarIntLength)
 	}
 	length := uvarint.Encode(dest, x)
 	return length, dest[:length]
@@ -854,8 +856,9 @@ func (v AdaptiveValue) convertToOutline(ctx context.Context, vs ValueStore, dest
 	if v.IsOutlined() {
 		return v, nil
 	}
+	maxSize := hash.ByteLen + makeVarIntLength
 	if cap(dest) < 29 {
-		dest = make([]byte, 29)
+		dest = make([]byte, maxSize)
 	}
 	blob := v[1:]
 	blobLength := uint64(len(blob))
