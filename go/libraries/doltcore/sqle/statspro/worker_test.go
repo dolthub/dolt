@@ -806,7 +806,7 @@ func newTestEngine(ctx context.Context, dEnv *env.DoltEnv, threads *sql.Backgrou
 		panic(err)
 	}
 
-	sc := NewStatsController(logrus.StandardLogger(), dEnv)
+	sc := NewStatsController(logrus.StandardLogger(), threads, dEnv)
 
 	gcSafepointController := dsess.NewGCSafepointController()
 
@@ -834,7 +834,7 @@ func newTestEngine(ctx context.Context, dEnv *env.DoltEnv, threads *sql.Backgrou
 		IsServerLocked: false,
 	})
 
-	if err := sc.Init(sqlCtx, pro, ctxGen, threads, pro.AllDatabases(sqlCtx)); err != nil {
+	if err := sc.Init(sqlCtx, pro, ctxGen, pro.AllDatabases(sqlCtx)); err != nil {
 		log.Fatal(err)
 	}
 	sqlEng.Analyzer.Catalog.StatsProvider = sc

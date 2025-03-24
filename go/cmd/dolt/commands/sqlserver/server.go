@@ -357,6 +357,13 @@ func ConfigureServices(
 	}
 	controller.Register(PersistNondeterministicSystemVarDefaults)
 
+	InitStatsController := &svcs.AnonService{
+		InitF: func(ctx context.Context) error {
+			return sqlEngine.InitStats(ctx)
+		},
+	}
+	controller.Register(InitStatsController)
+
 	InitBinlogging := &svcs.AnonService{
 		InitF: func(context.Context) error {
 			primaryController := sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.BinlogPrimaryController

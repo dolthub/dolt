@@ -125,7 +125,7 @@ func (rs *rootStats) String() string {
 	return string(str)
 }
 
-func NewStatsController(logger *logrus.Logger, dEnv *env.DoltEnv) *StatsController {
+func NewStatsController(logger *logrus.Logger, bgThreads *sql.BackgroundThreads, dEnv *env.DoltEnv) *StatsController {
 	sq := jobqueue.NewSerialQueue().WithErrorCb(func(err error) {
 		logger.Error(err)
 	})
@@ -141,6 +141,7 @@ func NewStatsController(logger *logrus.Logger, dEnv *env.DoltEnv) *StatsControll
 		closed:      make(chan struct{}),
 		kv:          NewMemStats(),
 		hdpEnv:      dEnv,
+		bgThreads:   bgThreads,
 		genCnt:      atomic.Uint64{},
 	}
 }
@@ -515,8 +516,9 @@ func (sc *StatsController) lockedRotateStorage(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	defer sql.SessionEnd(sqlCtx.Session)
+
 	sql.SessionCommandBegin(sqlCtx.Session)
+	defer sql.SessionEnd(sqlCtx.Session)
 	defer sql.SessionCommandEnd(sqlCtx.Session)
 
 	newKv, err := sc.initStorage(sqlCtx, newStorageTarget)
