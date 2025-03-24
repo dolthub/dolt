@@ -181,10 +181,6 @@ func (cmd DumpCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		}
 
 		if !apr.Contains(noCreateDbFlag) {
-			dbName, err := getActiveDatabaseName(ctx, dEnv)
-			if err != nil {
-				return HandleVErrAndExitCode(err, usage)
-			}
 			err = addCreateDatabaseHeader(dEnv, fPath, dbName)
 			if err != nil {
 				return HandleVErrAndExitCode(err, usage)
@@ -807,25 +803,4 @@ func addCreateDatabaseHeader(dEnv *env.DoltEnv, fPath, dbName string) errhand.Ve
 	_ = writer.Close()
 
 	return nil
-}
-
-// TODO: find a more elegant way to get database name, possibly implement a method in DoltEnv
-// getActiveDatabaseName returns the name of the current active database
-func getActiveDatabaseName(ctx context.Context, dEnv *env.DoltEnv) (string, errhand.VerboseError) {
-	mrEnv, err := env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), dEnv.FS, dEnv.Version, dEnv)
-	if err != nil {
-		return "", errhand.VerboseErrorFromError(err)
-	}
-
-	// Choose the first DB as the current one. This will be the DB in the working dir if there was one there
-	var dbName string
-	err = mrEnv.Iter(func(name string, _ *env.DoltEnv) (stop bool, err error) {
-		dbName = name
-		return true, nil
-	})
-	if err != nil {
-		return "", errhand.VerboseErrorFromError(err)
-	}
-
-	return dbName, nil
 }
