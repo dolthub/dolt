@@ -109,13 +109,13 @@ func (tb *TupleBuilder) BuildPermissive(pool pool.BuffPool, vs ValueStore) (tup 
 		for i, descType := range tb.Desc.Types {
 			if IsAdaptiveEncoding(descType.Enc) {
 				adaptiveValue := AdaptiveValue(tb.fields[i])
-				outlineSize := adaptiveValue.outlineSize()
+				outlineSize := adaptiveValue.outOfBandSize()
 				inlineSize := adaptiveValue.inlineSize()
 
 				// We only outline a field if the outlined size is shorter than the inlined size.
 				if outlineSize < inlineSize {
-					if !adaptiveValue.IsOutlined() {
-						outline, err := adaptiveValue.convertToOutline(ctx, tb.vs, nil)
+					if !adaptiveValue.IsOutOfBand() {
+						outline, err := adaptiveValue.convertToOutOfBand(ctx, tb.vs, nil)
 						if err != nil {
 							return nil, err
 						}
@@ -565,7 +565,7 @@ func (tb *TupleBuilder) PutAdaptiveBytesFromInline(ctx context.Context, i int, v
 	copy(field[1:], v)
 	tb.pos += int64(sz)
 	tb.inlineSize += int64(sz)
-	tb.outlineSize += field.outlineSize()
+	tb.outlineSize += field.outOfBandSize()
 	return nil
 }
 
@@ -596,7 +596,7 @@ func (tb *TupleBuilder) PutAdaptiveStringFromInline(ctx context.Context, i int, 
 	copy(field[1:], v)
 	tb.pos += int64(sz)
 	tb.inlineSize += int64(sz)
-	tb.outlineSize += field.outlineSize()
+	tb.outlineSize += field.outOfBandSize()
 	return nil
 }
 

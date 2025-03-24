@@ -788,13 +788,26 @@ func (handler AddressTypeHandler) FormatValue(val any) (string, error) {
 
 // A AdaptiveValue is a byte sequence that can represent:
 // - An inlined string or bytes value
-// - An outlined (addressable) string or bytes value
-// - NULL (identified by the empty sequence)
-// Outlined AdaptiveValues begin with a SQLite4 variable-length encoding of the string length.
+// - An address to a string or bytes value
+// - NULL
+//
+// NULL is represented by an empty byte sequence. Otherwise, the encoding is as follows:
+//
+//   - Inlined:
+//     +------------+-------------------------+
+//     | 0 (1 byte) | inlined string or bytes |
+//     +------------+-------------------------+
+//
+//   - Addressed:
+//     +-----------------------------------------------------------------+--------------------+
+//     | size of addressed string or bytes (SQLite4 variable-length int) | address (20 bytes) |
+//     +-----------------------------------------------------------------+--------------------+
+//
 // See: https://sqlite.org/src4/doc/trunk/www/varint.wiki
-// Note that this value is always greater than 21, because we only outline values when doing so reduces the length of
-// the tuple, and the outlined AdaptiveValue consists of a 20 byte address + the string length (min 1 byte).
-// This means that we can use a shorter length value to indicate an inlined AdaptiveValue. We choose 0 for simplicity.
+//
+// We only store an address when if the address is shorter than the string.
+// Since addresses are always 20 bytes, the size is always greater than 20 when storing an address.
+// Thus we can always distinguish representations by the first byte.
 type AdaptiveValue []byte
 
 // getMessageLength returns the length of the underlying value.
@@ -809,16 +822,16 @@ func (v AdaptiveValue) getMessageLength() int64 {
 	return int64(length)
 }
 
-// outlineSize computes the size of the value in the tuple if it were outlined.
-func (v AdaptiveValue) outlineSize() int64 {
-	if v.IsOutlined() {
+// outOfBandSize computes the size of the value if it were stored out of band.
+func (v AdaptiveValue) outOfBandSize() int64 {
+	if v.IsOutOfBand() {
 		return int64(len(v))
 	}
 	_, lengthSize := uvarint.Uvarint(v)
 	return int64(lengthSize) + hash.ByteLen // variable length + address
 }
 
-// inlineSize computes the size of the value in the tuple if it were inlined.
+// inlineSize computes the size of the value if it were inlined.
 func (v AdaptiveValue) inlineSize() int64 {
 	if v.isInlined() {
 		return int64(len(v))
@@ -832,8 +845,8 @@ func (v AdaptiveValue) IsNull() bool {
 	return len(v) == 0
 }
 
-// IsOutlined returns whether this AdaptiveValue represents a outlined addressable value.
-func (v AdaptiveValue) IsOutlined() bool {
+// IsOutOfBand returns whether this AdaptiveValue represents a addressable value stored out-of-band.
+func (v AdaptiveValue) IsOutOfBand() bool {
 	if v.IsNull() {
 		return false
 	}
@@ -852,8 +865,8 @@ func makeVarInt(x uint64, dest []byte) (bytesWritten int, output []byte) {
 
 // If a conversion is necessary, the converted value will be copied into `dest`. This is a performance
 // optimization when there is a pre-allocated buffer.
-func (v AdaptiveValue) convertToOutline(ctx context.Context, vs ValueStore, dest []byte) (AdaptiveValue, error) {
-	if v.IsOutlined() {
+func (v AdaptiveValue) convertToOutOfBand(ctx context.Context, vs ValueStore, dest []byte) (AdaptiveValue, error) {
+	if v.IsOutOfBand() {
 		return v, nil
 	}
 	maxSize := hash.ByteLen + makeVarIntLength
@@ -913,24 +926,24 @@ func (v AdaptiveValue) convertToBytes(ctx context.Context, vs ValueStore, buf []
 }
 
 func (v AdaptiveValue) convertToByteArray(ctx context.Context, vs ValueStore, buf []byte) (*ByteArray, error) {
-	// Only outlined values can be converted to a ByteArray
-	outlineValue, err := v.convertToOutline(ctx, vs, buf)
+	// Only out-of-band values can be converted to a ByteArray
+	outOfBandValue, err := v.convertToOutOfBand(ctx, vs, buf)
 	if err != nil {
 		return &ByteArray{}, err
 	}
-	length, lengthBytes := uvarint.Uvarint(outlineValue)
-	address := hash.New(outlineValue[lengthBytes:])
+	length, lengthBytes := uvarint.Uvarint(outOfBandValue)
+	address := hash.New(outOfBandValue[lengthBytes:])
 	return NewByteArray(address, vs).WithMaxByteLength(int64(length)), nil
 }
 
 func (v AdaptiveValue) convertToTextStorage(ctx context.Context, vs ValueStore, buf []byte) (*TextStorage, error) {
-	// Only outlined values can be converted to a TextStorage
-	outlineValue, err := v.convertToOutline(ctx, vs, buf)
+	// Only out-of-band values can be converted to a TextStorage
+	outOfBandValue, err := v.convertToOutOfBand(ctx, vs, buf)
 	if err != nil {
 		return &TextStorage{}, err
 	}
-	length, lengthBytes := uvarint.Uvarint(outlineValue)
-	address := hash.New(outlineValue[lengthBytes:])
+	length, lengthBytes := uvarint.Uvarint(outOfBandValue)
+	address := hash.New(outOfBandValue[lengthBytes:])
 	return NewTextStorage(address, vs).WithMaxByteLength(int64(length)), nil
 }
 
@@ -954,18 +967,18 @@ func NewAdaptiveTypeHandler(vs ValueStore, childHandler TupleTypeHandler) Adapti
 func (handler AdaptiveEncodingTypeHandler) SerializedCompare(ctx context.Context, v1 []byte, v2 []byte) (int, error) {
 	adaptiveValue1 := AdaptiveValue(v1)
 	adaptiveValue2 := AdaptiveValue(v2)
-	// Fast-path: two outlined values with equal hashes are equal.
-	if adaptiveValue1.IsOutlined() && adaptiveValue2.IsOutlined() && bytes.Equal(adaptiveValue1, adaptiveValue2) {
+	// Fast-path: two out-of-band values with equal hashes are equal.
+	if adaptiveValue1.IsOutOfBand() && adaptiveValue2.IsOutOfBand() && bytes.Equal(adaptiveValue1, adaptiveValue2) {
 		return 0, nil
 	}
 	var err error
-	if adaptiveValue1.IsOutlined() {
+	if adaptiveValue1.IsOutOfBand() {
 		adaptiveValue1, err = adaptiveValue1.convertToInline(ctx, handler.vs, nil)
 		if err != nil {
 			return 0, err
 		}
 	}
-	if adaptiveValue2.IsOutlined() {
+	if adaptiveValue2.IsOutOfBand() {
 		adaptiveValue1, err = adaptiveValue2.convertToInline(ctx, handler.vs, nil)
 		if err != nil {
 			return 0, err
@@ -995,7 +1008,7 @@ func (handler AdaptiveEncodingTypeHandler) DeserializeValue(ctx context.Context,
 	if adaptiveValue.isInlined() {
 		return handler.childHandler.DeserializeValue(ctx, adaptiveValue[1:])
 	}
-	// else adaptiveValue is outlined
+	// else adaptiveValue is stored out-of-band
 	_, lengthBytes := uvarint.Uvarint(adaptiveValue)
 	addr := hash.New(adaptiveValue[lengthBytes:])
 	b, err := handler.vs.ReadBytes(ctx, addr)

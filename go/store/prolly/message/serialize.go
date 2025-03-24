@@ -87,7 +87,7 @@ func countAddresses(items [][]byte, td val.TupleDesc) (cnt int) {
 		val.IterAdaptiveFields(td, func(j int, t val.Type) {
 			// get offset of adaptive encoded value within |tup|
 			adaptiveValue := val.AdaptiveValue(val.Tuple(items[i]).GetField(j))
-			if adaptiveValue.IsOutlined() {
+			if adaptiveValue.IsOutOfBand() {
 				cnt++
 			}
 			return
@@ -117,7 +117,7 @@ func writeAddressOffsets(b *fb.Builder, items [][]byte, sumSz int, td val.TupleD
 		val.IterAdaptiveFields(td, func(j int, t val.Type) {
 			// get offset of adaptive encoded value within |tup|
 			adaptiveValue := val.AdaptiveValue(val.Tuple(items[i]).GetField(j))
-			if adaptiveValue.IsOutlined() {
+			if adaptiveValue.IsOutOfBand() {
 				// Out-of-line adaptive values end in an address, so get the offset |hash.ByteLen| bytes before the end.
 				o, _ := tup.GetOffset(j)
 				o += off + len(adaptiveValue) - hash.ByteLen
