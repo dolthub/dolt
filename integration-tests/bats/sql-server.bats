@@ -2237,30 +2237,45 @@ EOF
 
 # bats test_tags=no_lambda
 @test "sql-server: test --max-connections-timeout 15s and --max-connections 3 flags" {
+    skiponwindows "mysql client required"
+
     cd repo1
 
-    # Default is 60s, but I don't want to extend the test time for this.
-    start_sql_server_with_args --max-connections-timeout=15s --max-connections=3
+    export PORT=$( definePORT )
 
+    # Default is 60s, but I don't want to extend the test time for this.
+    start_sql_server_with_args_no_port --max-connections-timeout=10s --max-connections=3 --back-log=10 --port=$PORT
+
+    # For this test we use the mysql client, which doesn't retry connections, but also seems to exit early
+    # if we don't give it a query. So we use a sleep to hang the three connections. These will be killed, so
+    # they won't run the full 30s.
     pids=()
     for i in {1..3}; do
-      dolt sql &
+      mysql -h 127.0.0.1 -P $PORT -u root -D repo1 -e "select sleep(30)" &
       pids+=($!)
     done
 
-    # Attempt to connect with a fourth connection using mysql client because dolt sql has
-    # 9 retries which we don't have the patience to wait for.
-    start_time=$(date +%s)
-    run mysql -h 127.0.0.1 -P 3306 -u root -e "SELECT 1;"
-    end_time=$(date +%s)
+    sleep 3
 
-    elapsed_time=$((end_time - start_time))
-    [[ $elapsed_time -lt 17 ]] || false
-    [[ $elapsed_time -gt 13 ]] || false
+    # Attempt to connect with a fourth connection - should fail after 10s. `run` caused a lot of variance in the test
+    # time, so we avoid using it here.
+    start_time=$(date +%s)
+    set +e
+    mysql -h 127.0.0.1 -P $PORT -u root > $BATS_TMPDIR/mysql.out
+    status=$?
+    end_time=$(date +%s)
     [ $status -ne 0 ]
+
+    # There is a high amount of variance in the time it takes to fail, so we just check that it is within a range
+    # with a pretty high upper bound.
+    elapsed_time=$((end_time - start_time))
+    [[ $elapsed_time -lt 15 ]] || false
+    [[ $elapsed_time -gt 9 ]] || false
+
+    run cat $BATS_TMPDIR/mysql.out
     [[ "$output" =~ "Lost connection to MySQL server at 'reading initial communication packet'" ]] || false
 
     for pid in "${pids[@]}"; do
-      kill -9 "$pid"
+      kill "$pid" 2>/dev/null
     done
 }
