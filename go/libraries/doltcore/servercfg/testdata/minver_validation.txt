@@ -21,8 +21,8 @@ ListenerConfig servercfg.ListenerYAMLConfig 0.0.0 listener,omitempty
 -HostStr *string 0.0.0 host,omitempty
 -PortNumber *int 0.0.0 port,omitempty
 -MaxConnections *uint64 0.0.0 max_connections,omitempty
--BackLog *uint32 0.0.0 back_log,omitempty
--MaxConnectionsTimeoutMs *uint64 0.0.0 max_connections_timeout_millis,omitempty
+-BackLog *uint32 1.50.10 back_log,omitempty
+-MaxConnectionsTimeoutMs *uint64 1.50.10 max_connections_timeout_millis,omitempty
 -ReadTimeoutMillis *uint64 0.0.0 read_timeout_millis,omitempty
 -WriteTimeoutMillis *uint64 0.0.0 write_timeout_millis,omitempty
 -TLSKey *string 0.0.0 tls_key,omitempty
