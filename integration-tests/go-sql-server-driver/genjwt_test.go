@@ -20,7 +20,7 @@ import (
 	"crypto/rsa"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 	"time"
 
@@ -61,7 +61,7 @@ func GenerateTestJWTs(dir string) error {
 		return fmt.Errorf("could not generate jwt: %w", err)
 	}
 
-	err = ioutil.WriteFile(filepath.Join(dir, "token.jwt"), []byte(jwt), 0644)
+	err = os.WriteFile(filepath.Join(dir, "token.jwt"), []byte(jwt), 0644)
 	if err != nil {
 		return fmt.Errorf("could not write jwt to file: %w", err)
 	}
@@ -82,7 +82,7 @@ func writeJWKSToFile(dir string, pubKey crypto.PublicKey, kid string) error {
 		return err
 	}
 
-	err = ioutil.WriteFile(filepath.Join(dir, "test_jwks.json"), jwksjson, 0644)
+	err = os.WriteFile(filepath.Join(dir, "test_jwks.json"), jwksjson, 0644)
 	if err != nil {
 		return err
 	}

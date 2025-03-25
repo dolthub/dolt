@@ -49,26 +49,41 @@ func TestMain(m *testing.M) {
 	}
 	os.Setenv("TESTGENDIR", gendir)
 	flag.Parse()
+	InitGlobalDynamicPorts()
 	os.Exit(m.Run())
 }
 
+func InitGlobalDynamicPorts() {
+	// XXX: Max and min here could be supplied by flags. Currently
+	// tests use at most 6 ports, so this may run out of ports if
+	// we have more than ~40 concurrent processes.
+	for i := 0; i < 256; i++ {
+		GlobalPorts.available = append(GlobalPorts.available, 3306 + i)
+	}
+}
+
 func TestConfig(t *testing.T) {
+	t.Parallel()
 	RunTestsFile(t, "tests/sql-server-config.yaml")
 }
 
 func TestJWTAuth(t *testing.T) {
+	t.Parallel()
 	RunTestsFile(t, "tests/sql-server-jwt-auth.yaml")
 }
 
 func TestCluster(t *testing.T) {
+	t.Parallel()
 	RunTestsFile(t, "tests/sql-server-cluster.yaml")
 }
 
 func TestClusterUsersAndGrants(t *testing.T) {
+	t.Parallel()
 	RunTestsFile(t, "tests/sql-server-cluster-users-and-grants.yaml")
 }
 
 func TestRemotesAPI(t *testing.T) {
+	t.Parallel()
 	RunTestsFile(t, "tests/sql-server-remotesapi.yaml")
 }
 
@@ -80,17 +95,21 @@ func TestSingle(t *testing.T) {
 }
 
 func TestClusterTLS(t *testing.T) {
+	t.Parallel()
 	RunTestsFile(t, "tests/sql-server-cluster-tls.yaml")
 }
 
 func TestOriginal(t *testing.T) {
+	t.Parallel()
 	RunTestsFile(t, "tests/sql-server-orig.yaml")
 }
 
 func TestTLS(t *testing.T) {
+	t.Parallel()
 	RunTestsFile(t, "tests/sql-server-tls.yaml")
 }
 
 func TestClusterReadOnly(t *testing.T) {
+	t.Parallel()
 	RunTestsFile(t, "tests/sql-server-cluster-read-only.yaml")
 }

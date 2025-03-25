@@ -29,6 +29,7 @@ import (
 )
 
 func TestSQLServerInfoFile(t *testing.T) {
+	t.Parallel()
 	t.Run("With Two Repos", func(t *testing.T) {
 		u, err := driver.NewDoltUser()
 		require.NoError(t, err)
@@ -44,7 +45,13 @@ func TestSQLServerInfoFile(t *testing.T) {
 		require.NoError(t, err)
 
 		t.Run("With server running in root", func(t *testing.T) {
-			RunServerUntilEndOfTest(t, rs, &driver.Server{})
+			var ports DynamicPorts
+			ports.global = &GlobalPorts
+			ports.t = t
+			RunServerUntilEndOfTest(t, rs, &driver.Server{
+				Args: []string{"--port", `{{get_port "server_one"}}`},
+				DynamicPort: "server_one",
+			}, &ports)
 
 			t.Run("sql-server.info file exists", func(t *testing.T) {
 				location := filepath.Join(rs.Dir, ".dolt/sql-server.info")
@@ -54,17 +61,21 @@ func TestSQLServerInfoFile(t *testing.T) {
 			})
 			t.Run("Running again in root fails", func(t *testing.T) {
 				_ = MakeServer(t, rs, &driver.Server{
+					Args: []string{"--port", `{{get_port "server_two"}}`},
+					DynamicPort: "server_two",
 					ErrorMatches: []string{
 						"locked by another dolt process",
 					},
-				})
+				}, &ports)
 			})
 			t.Run("Running in db_one fails", func(t *testing.T) {
 				_ = MakeServer(t, dbOne, &driver.Server{
+					Args: []string{"--port", `{{get_port "server_two"}}`},
+					DynamicPort: "server_two",
 					ErrorMatches: []string{
 						"locked by another dolt process",
 					},
-				})
+				}, &ports)
 			})
 			t.Run("Running dolt sql -q in /server connects to server", func(t *testing.T) {
 				cmd := rs.DoltCmd("sql", "-q", "show databases")
@@ -107,20 +118,28 @@ func TestSQLServerInfoFile(t *testing.T) {
 			require.ErrorIs(t, err, fs.ErrNotExist)
 		})
 		t.Run("With server running in db_one", func(t *testing.T) {
-			RunServerUntilEndOfTest(t, dbOne, &driver.Server{})
+			var ports DynamicPorts
+			ports.global = &GlobalPorts
+			ports.t = t
+			RunServerUntilEndOfTest(t, dbOne, &driver.Server{
+				Args: []string{"--port", `{{get_port "server_one"}}`},
+				DynamicPort: "server_one",
+			}, &ports)
 
 			t.Run("Running server in root fails", func(t *testing.T) {
 				_ = MakeServer(t, rs, &driver.Server{
+					Args: []string{"--port", `{{get_port "server_two"}}`},
+					DynamicPort: "server_two",
 					ErrorMatches: []string{
 						"locked by another dolt process",
 					},
-				})
+				}, &ports)
 			})
 			t.Run("Running server in db_two succeeds", func(t *testing.T) {
 				RunServerUntilEndOfTest(t, dbTwo, &driver.Server{
-					Args: []string{"--port", "3310"},
-					Port: 3310,
-				})
+					Args: []string{"--port", `{{get_port "server_two"}}`},
+					DynamicPort: "server_two",
+				}, &ports)
 			})
 			t.Run("dolt sql -q in root succeeds", func(t *testing.T) {
 				cmd := rs.DoltCmd("sql", "-q", "show databases")
@@ -142,21 +161,28 @@ func TestSQLServerInfoFile(t *testing.T) {
 			})
 		})
 		t.Run("Given a running dolt sql process in root", func(t *testing.T) {
+			var ports DynamicPorts
+			ports.global = &GlobalPorts
+			ports.t = t
 			RunDoltSQLUntilEndOfTest(t, rs)
 
 			t.Run("Running server in root fails", func(t *testing.T) {
 				_ = MakeServer(t, rs, &driver.Server{
+					Args: []string{"--port", `{{get_port "server_two"}}`},
+					DynamicPort: "server_two",
 					ErrorMatches: []string{
 						"locked by another dolt process",
 					},
-				})
+				}, &ports)
 			})
 			t.Run("Running server in db_one fails", func(t *testing.T) {
 				_ = MakeServer(t, dbOne, &driver.Server{
+					Args: []string{"--port", `{{get_port "server_two"}}`},
+					DynamicPort: "server_two",
 					ErrorMatches: []string{
 						"locked by another dolt process",
 					},
-				})
+				}, &ports)
 			})
 			t.Run("dolt sql -q in root succeeds", func(t *testing.T) {
 				cmd := rs.DoltCmd("sql", "-q", "show databases")
@@ -173,24 +199,34 @@ func TestSQLServerInfoFile(t *testing.T) {
 			})
 		})
 		t.Run("Given a running dolt sql process in db_one", func(t *testing.T) {
+			var ports DynamicPorts
+			ports.global = &GlobalPorts
+			ports.t = t
 			RunDoltSQLUntilEndOfTest(t, dbOne)
 
 			t.Run("Running server in root fails", func(t *testing.T) {
 				_ = MakeServer(t, rs, &driver.Server{
+					Args: []string{"--port", `{{get_port "server_two"}}`},
+					DynamicPort: "server_two",
 					ErrorMatches: []string{
 						"locked by another dolt process",
 					},
-				})
+				}, &ports)
 			})
 			t.Run("Running server in db_one fails", func(t *testing.T) {
 				_ = MakeServer(t, dbOne, &driver.Server{
+					Args: []string{"--port", `{{get_port "server_two"}}`},
+					DynamicPort: "server_two",
 					ErrorMatches: []string{
 						"locked by another dolt process",
 					},
-				})
+				}, &ports)
 			})
 			t.Run("Running server in db_two succeeds", func(t *testing.T) {
-				RunServerUntilEndOfTest(t, dbTwo, &driver.Server{})
+				RunServerUntilEndOfTest(t, dbTwo, &driver.Server{
+					Args: []string{"--port", `{{get_port "server_two"}}`},
+					DynamicPort: "server_two",
+				}, &ports)
 			})
 			t.Run("dolt sql -q in root succeeds", func(t *testing.T) {
 				cmd := rs.DoltCmd("sql", "-q", "show databases")
@@ -212,6 +248,9 @@ func TestSQLServerInfoFile(t *testing.T) {
 			})
 		})
 		t.Run("With stale sql-server.info file in root", func(t *testing.T) {
+			var ports DynamicPorts
+			ports.global = &GlobalPorts
+			ports.t = t
 			Setup := func(t *testing.T) {
 				path := filepath.Join(rs.Dir, ".dolt/sql-server.info")
 				err := os.WriteFile(path, []byte("1:3306:this_is_not_a_real_secret"), 0600)
@@ -220,11 +259,17 @@ func TestSQLServerInfoFile(t *testing.T) {
 			}
 			t.Run("sql-server can run in root", func(t *testing.T) {
 				Setup(t)
-				RunServerUntilEndOfTest(t, rs, &driver.Server{})
+				RunServerUntilEndOfTest(t, rs, &driver.Server{
+					Args: []string{"--port", `{{get_port "server_one"}}`},
+					DynamicPort: "server_one",
+				}, &ports)
 			})
 			t.Run("sql-server can run in db_one", func(t *testing.T) {
 				Setup(t)
-				RunServerUntilEndOfTest(t, dbOne, &driver.Server{})
+				RunServerUntilEndOfTest(t, dbOne, &driver.Server{
+					Args: []string{"--port", `{{get_port "server_one"}}`},
+					DynamicPort: "server_one",
+				}, &ports)
 			})
 			t.Run("sql can run in root", func(t *testing.T) {
 				Setup(t)
@@ -245,6 +290,9 @@ func TestSQLServerInfoFile(t *testing.T) {
 			})
 		})
 		t.Run("With malformed sql-server.info file in root", func(t *testing.T) {
+			var ports DynamicPorts
+			ports.global = &GlobalPorts
+			ports.t = t
 			Setup := func(t *testing.T) {
 				path := filepath.Join(rs.Dir, ".dolt/sql-server.info")
 				err := os.WriteFile(path, []byte("1:3306:this_is_not_a_real_secret:extra:fields:make:it:fail"), 0600)
@@ -253,11 +301,17 @@ func TestSQLServerInfoFile(t *testing.T) {
 			}
 			t.Run("sql-server can run in root", func(t *testing.T) {
 				Setup(t)
-				RunServerUntilEndOfTest(t, rs, &driver.Server{})
+				RunServerUntilEndOfTest(t, rs, &driver.Server{
+					Args: []string{"--port", `{{get_port "server_one"}}`},
+					DynamicPort: "server_one",
+				}, &ports)
 			})
 			t.Run("sql-server can run in db_one", func(t *testing.T) {
 				Setup(t)
-				RunServerUntilEndOfTest(t, rs, &driver.Server{})
+				RunServerUntilEndOfTest(t, rs, &driver.Server{
+					Args: []string{"--port", `{{get_port "server_one"}}`},
+					DynamicPort: "server_one",
+				}, &ports)
 			})
 			t.Run("sql can run in root", func(t *testing.T) {
 				Setup(t)
@@ -312,11 +366,17 @@ func TestSQLServerInfoFile(t *testing.T) {
 		// started, they can both run against it. Only one of their
 		// credential files will win the write.
 		t.Run("Can Run Two Servers At Once", func(t *testing.T) {
-			RunServerUntilEndOfTest(t, rs, &driver.Server{})
+			var ports DynamicPorts
+			ports.global = &GlobalPorts
+			ports.t = t
 			RunServerUntilEndOfTest(t, rs, &driver.Server{
-				Args: []string{"--port", "3309"},
-				Port: 3309,
-			})
+				Args: []string{"--port", `{{get_port "server_one"}}`},
+				DynamicPort: "server_one",
+			}, &ports)
+			RunServerUntilEndOfTest(t, rs, &driver.Server{
+				Args: []string{"--port", `{{get_port "server_two"}}`},
+				DynamicPort: "server_two",
+			}, &ports)
 		})
 	})
 }
@@ -359,8 +419,8 @@ func RunDoltSQLUntilEndOfTest(t *testing.T, dc driver.DoltCmdable) {
 // for doing things like making connections to it, this is only useful for
 // for asserting the behavior of other dolt commands which interact with the
 // server.
-func RunServerUntilEndOfTest(t *testing.T, dc driver.DoltCmdable, s *driver.Server) {
-	server := MakeServer(t, dc, s)
+func RunServerUntilEndOfTest(t *testing.T, dc driver.DoltCmdable, s *driver.Server, ports *DynamicPorts) {
+	server := MakeServer(t, dc, s, ports)
 	require.NotNil(t, server)
 	db, err := server.DB(driver.Connection{User: "root"})
 	require.NoError(t, err)

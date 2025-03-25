@@ -29,6 +29,10 @@ import (
 )
 
 func TestGCConjoinsOldgen(t *testing.T) {
+	t.Parallel()
+	var ports DynamicPorts
+	ports.global = &GlobalPorts
+	ports.t = t
 	u, err := driver.NewDoltUser()
 	require.NoError(t, err)
 	t.Cleanup(func() {
@@ -41,7 +45,10 @@ func TestGCConjoinsOldgen(t *testing.T) {
 	repo, err := rs.MakeRepo("concurrent_gc_test")
 	require.NoError(t, err)
 
-	server := MakeServer(t, repo, &driver.Server{})
+	server := MakeServer(t, repo, &driver.Server{
+		Args: []string{"--port", `{{get_port "server"}}`},
+		DynamicPort: "server",
+	}, &ports)
 	server.DBName = "concurrent_gc_test"
 
 	db, err := server.DB(driver.Connection{User: "root"})

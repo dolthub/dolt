@@ -31,13 +31,14 @@ import (
 )
 
 func TestConcurrentGC(t *testing.T) {
+	t.Parallel()
 	type dimension struct {
 		names   []string
 		factors func(gcTest) []gcTest
 	}
 	commits := dimension{
 		names: []string{"NoCommits", "WithCommits"},
-		factors: func(base gcTest) []gcTest{
+		factors: func(base gcTest) []gcTest {
 			no, yes := base, base
 			no.commit = false
 			yes.commit = true
@@ -46,16 +47,16 @@ func TestConcurrentGC(t *testing.T) {
 	}
 	full := dimension{
 		names: []string{"NotFull", "Full"},
-		factors: func(base gcTest) []gcTest{
+		factors: func(base gcTest) []gcTest {
 			no, yes := base, base
 			no.full = false
 			yes.full = true
 			return []gcTest{no, yes}
 		},
 	}
-	safepoint := dimension {
+	safepoint := dimension{
 		names: []string{"KillConnections", "SessionAware"},
-		factors: func(base gcTest) []gcTest{
+		factors: func(base gcTest) []gcTest {
 			no, yes := base, base
 			no.sessionAware = false
 			yes.sessionAware = true
@@ -63,7 +64,7 @@ func TestConcurrentGC(t *testing.T) {
 		},
 	}
 	var doDimensions func(t *testing.T, base gcTest, dims []dimension)
-	doDimensions = func (t *testing.T, base gcTest, dims []dimension) {
+	doDimensions = func(t *testing.T, base gcTest, dims []dimension) {
 		if len(dims) == 0 {
 			base.run(t)
 			return
@@ -72,6 +73,7 @@ func TestConcurrentGC(t *testing.T) {
 		dimf := dim.factors(base)
 		for i := range dim.names {
 			t.Run(dim.names[i], func(t *testing.T) {
+				t.Parallel()
 				doDimensions(t, dimf[i], dims)
 			})
 		}
@@ -109,6 +111,21 @@ func (gct gcTest) createDB(t *testing.T, ctx context.Context, db *sql.DB) {
 	require.NoError(t, err)
 }
 
+// When running with kill_connections GC safepoints, asserts that the
+// error we got is not an error that was not allowed.
+func assertExpectedGCError(t *testing.T, err error) bool {
+	if !assert.NotContains(t, err.Error(), "dangling ref") {
+		return false
+	}
+	if !assert.NotContains(t, err.Error(), "is unexpected noms value") {
+		return false
+	}
+	if !assert.NotContains(t, err.Error(), "interface conversion: types.Value is nil") {
+		return false
+	}
+	return true
+}
+
 func (gct gcTest) doUpdate(t *testing.T, ctx context.Context, db *sql.DB, i int) error {
 	conn, err := db.Conn(ctx)
 	if gct.sessionAware {
@@ -121,36 +138,50 @@ func (gct gcTest) doUpdate(t *testing.T, ctx context.Context, db *sql.DB, i int)
 		return nil
 	}
 	defer conn.Close()
-	_, err = conn.ExecContext(ctx, "update vals set val = val+1 where id = ?", i)
+
+	tx, err := conn.BeginTx(ctx, nil)
+	if gct.sessionAware {
+		assert.NoError(t, err)
+	}
+	if err != nil {
+		// Ignore and try with a different connection...
+		return nil
+	}
+	defer tx.Rollback()
+	_, err = tx.ExecContext(ctx, "update vals set val = val+1 where id = ?", i)
 	if gct.sessionAware {
 		assert.NoError(t, err)
 	} else if err != nil {
-		if !assert.NotContains(t, err.Error(), "dangling ref") {
-			return err
-		}
-		if !assert.NotContains(t, err.Error(), "is unexpected noms value") {
-			return err
-		}
-		if !assert.NotContains(t, err.Error(), "interface conversion: types.Value is nil") {
+		if !assertExpectedGCError(t, err) {
 			return err
 		}
 		t.Logf("err in Exec update: %v", err)
 	}
+	if err != nil {
+		// Early return so we do not try to continue using the
+		// broken connection or attempt to commit something
+		// with no changes.
+		return nil
+	}
 	if gct.commit {
-		_, err = conn.ExecContext(ctx, fmt.Sprintf("call dolt_commit('-am', 'increment vals id = %d')", i))
+		_, err = tx.ExecContext(ctx, fmt.Sprintf("call dolt_commit('-am', 'increment vals id = %d')", i))
 		if gct.sessionAware {
 			assert.NoError(t, err)
 		} else if err != nil {
-			if !assert.NotContains(t, err.Error(), "dangling ref") {
-				return err
-			}
-			if !assert.NotContains(t, err.Error(), "is unexpected noms value") {
-				return err
-			}
-			if !assert.NotContains(t, err.Error(), "interface conversion: types.Value is nil") {
+			if !assertExpectedGCError(t, err) {
 				return err
 			}
 			t.Logf("err in Exec call dolt_commit: %v", err)
+		}
+	} else {
+		err = tx.Commit()
+		if gct.sessionAware {
+			assert.NoError(t, err)
+		} else if err != nil {
+			if !assertExpectedGCError(t, err) {
+				return err
+			}
+			t.Logf("err in tx commit: %v", err)
 		}
 	}
 	return nil
@@ -225,6 +256,9 @@ func (gct gcTest) finalize(t *testing.T, ctx context.Context, db *sql.DB) {
 }
 
 func (gct gcTest) run(t *testing.T) {
+	var ports DynamicPorts
+	ports.global = &GlobalPorts
+	ports.t = t
 	u, err := driver.NewDoltUser()
 	require.NoError(t, err)
 	t.Cleanup(func() {
@@ -237,14 +271,17 @@ func (gct gcTest) run(t *testing.T) {
 	repo, err := rs.MakeRepo("concurrent_gc_test")
 	require.NoError(t, err)
 
-	srvSettings := &driver.Server{}
+	srvSettings := &driver.Server{
+		Args:        []string{"-P", `{{get_port "server_port"}}`},
+		DynamicPort: "server_port",
+	}
 	if gct.sessionAware {
 		srvSettings.Envs = append(srvSettings.Envs, "DOLT_GC_SAFEPOINT_CONTROLLER_CHOICE=session_aware")
 	} else {
 		srvSettings.Envs = append(srvSettings.Envs, "DOLT_GC_SAFEPOINT_CONTROLLER_CHOICE=kill_connections")
 	}
 
-	server := MakeServer(t, repo, srvSettings)
+	server := MakeServer(t, repo, srvSettings, &ports)
 	server.DBName = "concurrent_gc_test"
 
 	db, err := server.DB(driver.Connection{User: "root"})

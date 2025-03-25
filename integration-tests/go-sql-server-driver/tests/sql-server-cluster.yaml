@@ -1,3 +1,4 @@
+parallel: true
 tests:
 - name: persisted role and epoch take precedence over bootstrap values
   multi_repos:
@@ -6,43 +7,43 @@ tests:
     - name: repo1
       with_remotes:
       - name: standby
-        url: http://localhost:3852/repo1
+        url: http://localhost:{{get_port "server2_cluster"}}/repo1
     - name: repo2
       with_remotes:
       - name: standby
-        url: http://localhost:3852/repo2
+        url: http://localhost:{{get_port "server2_cluster"}}/repo2
     with_files:
     - name: standby_server.yaml
       contents: |
         log_level: trace
         listener:
           host: 0.0.0.0
-          port: 3309
+          port: {{get_port "server1"}}
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:3852/{database}
+            remote_url_template: http://localhost:{{get_port "server2_cluster"}}/{database}
           bootstrap_role: standby
           bootstrap_epoch: 10
           remotesapi:
-            port: 3851
+            port: {{get_port "server1_cluster"}}
     - name: primary_server.yaml
       contents: |
         log_level: trace
         listener:
           host: 0.0.0.0
-          port: 3309
+          port: {{get_port "server1"}}
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:3852/{database}
+            remote_url_template: http://localhost:{{get_port "server2_cluster"}}/{database}
           bootstrap_role: primary
           bootstrap_epoch: 15
           remotesapi:
-            port: 3851
+            port: {{get_port "server1_cluster"}}
     server:
       args: ["--config", "standby_server.yaml"]
-      port: 3309
+      dynamic_port: server1
   connections:
   - on: server1
     queries:
@@ -74,29 +75,29 @@ tests:
     - name: repo1
       with_remotes:
       - name: standby
-        url: http://localhost:3852/repo1
+        url: http://localhost:{{get_port "server2_cluster"}}/repo1
     - name: repo2
       with_remotes:
       - name: standby
-        url: http://localhost:3852/repo2
+        url: http://localhost:{{get_port "server2_cluster"}}/repo2
     with_files:
     - name: server.yaml
       contents: |
         log_level: trace
         listener:
           host: 0.0.0.0
-          port: 3309
+          port: {{get_port "server1"}}
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:3852/{database}
+            remote_url_template: http://localhost:{{get_port "server2_cluster"}}/{database}
           bootstrap_role: standby
           bootstrap_epoch: 10
           remotesapi:
-            port: 3851
+            port: {{get_port "server1_cluster"}}
     server:
       args: ["--config", "server.yaml"]
-      port: 3309
+      dynamic_port: server1
   connections:
   - on: server1
     queries:
@@ -151,29 +152,29 @@ tests:
     - name: repo1
       with_remotes:
       - name: standby
-        url: http://localhost:3852/repo1
+        url: http://localhost:{{get_port "server2_cluster"}}/repo1
     - name: repo2
       with_remotes:
       - name: standby
-        url: http://localhost:3852/repo2
+        url: http://localhost:{{get_port "server2_cluster"}}/repo2
     with_files:
     - name: server.yaml
       contents: |
         log_level: trace
         listener:
           host: 0.0.0.0
-          port: 3309
+          port: {{get_port "server1"}}
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:3852/{database}
+            remote_url_template: http://localhost:{{get_port "server2_cluster"}}/{database}
           bootstrap_role: primary
           bootstrap_epoch: 10
           remotesapi:
-            port: 3851
+            port: {{get_port "server1_cluster"}}
     server:
       args: ["--config", "server.yaml"]
-      port: 3309
+      dynamic_port: server1
   connections:
   - on: server1
     queries:
@@ -182,7 +183,7 @@ tests:
     - query: "select name, url from dolt_remotes"
       result:
         columns: ["name","url"]
-        rows: [["standby","http://localhost:3852/a_new_database"]]
+        rows: [["standby","http://localhost:{{get_port \"server2_cluster\"}}/a_new_database"]]
 - name: primary comes up and replicates to standby
   multi_repos:
   - name: server1
@@ -190,57 +191,57 @@ tests:
     - name: repo1
       with_remotes:
       - name: standby
-        url: http://localhost:3852/repo1
+        url: http://localhost:{{get_port "server2_cluster"}}/repo1
     - name: repo2
       with_remotes:
       - name: standby
-        url: http://localhost:3852/repo2
+        url: http://localhost:{{get_port "server2_cluster"}}/repo2
     with_files:
     - name: server.yaml
       contents: |
         log_level: trace
         listener:
           host: 0.0.0.0
-          port: 3309
+          port: {{get_port "server1"}}
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:3852/{database}
+            remote_url_template: http://localhost:{{get_port "server2_cluster"}}/{database}
           bootstrap_role: primary
           bootstrap_epoch: 10
           remotesapi:
-            port: 3851
+            port: {{get_port "server1_cluster"}}
     server:
-      args: ["--port", "3309"]
-      port: 3309
+      args: ["--port", "{{get_port \"server1\"}}"]
+      dynamic_port: server1
   - name: server2
     repos:
     - name: repo1
       with_remotes:
       - name: standby
-        url: http://localhost:3851/repo1
+        url: http://localhost:{{get_port "server1_cluster"}}/repo1
     - name: repo2
       with_remotes:
       - name: standby
-        url: http://localhost:3851/repo2
+        url: http://localhost:{{get_port "server1_cluster"}}/repo2
     with_files:
     - name: server.yaml
       contents: |
         log_level: trace
         listener:
           host: 0.0.0.0
-          port: 3310
+          port: {{get_port "server2"}}
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:3851/{database}
+            remote_url_template: http://localhost:{{get_port "server1_cluster"}}/{database}
           bootstrap_role: standby
           bootstrap_epoch: 10
           remotesapi:
-            port: 3852
+            port: {{get_port "server2_cluster"}}
     server:
       args: ["--config", "server.yaml"]
-      port: 3310
+      dynamic_port: server2
   connections:
   - on: server1
     queries:
@@ -273,29 +274,29 @@ tests:
     - name: repo1
       with_remotes:
       - name: standby
-        url: http://localhost:3852/repo1
+        url: http://localhost:{{get_port "server2_cluster"}}/repo1
     - name: repo2
       with_remotes:
       - name: standby
-        url: http://localhost:3852/repo2
+        url: http://localhost:{{get_port "server2_cluster"}}/repo2
     with_files:
     - name: standby_server.yaml
       contents: |
         log_level: trace
         listener:
           host: 0.0.0.0
-          port: 3309
+          port: {{get_port "server1"}}
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:3852/{database}
+            remote_url_template: http://localhost:{{get_port "server2_cluster"}}/{database}
           bootstrap_role: standby
           bootstrap_epoch: 10
           remotesapi:
-            port: 3851
+            port: {{get_port "server1_cluster"}}
     server:
       args: ["--config", "standby_server.yaml"]
-      port: 3309
+      dynamic_port: server1
   connections:
   - on: server1
     queries:
@@ -309,29 +310,29 @@ tests:
     - name: repo1
       with_remotes:
       - name: standby
-        url: http://localhost:3852/repo1
+        url: http://localhost:{{get_port "server2_cluster"}}/repo1
     - name: repo2
       with_remotes:
       - name: standby
-        url: http://localhost:3852/repo2
+        url: http://localhost:{{get_port "server2_cluster"}}/repo2
     with_files:
     - name: server.yaml
       contents: |
         log_level: trace
         listener:
           host: 0.0.0.0
-          port: 3309
+          port: {{get_port "server1"}}
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:3852/{database}
+            remote_url_template: http://localhost:{{get_port "server2_cluster"}}/{database}
           bootstrap_role: primary
           bootstrap_epoch: 10
           remotesapi:
-            port: 3851
+            port: {{get_port "server1_cluster"}}
     server:
       args: ["--config", "server.yaml"]
-      port: 3309
+      dynamic_port: server1
   connections:
   - on: server1
     queries:
@@ -344,57 +345,57 @@ tests:
     - name: repo1
       with_remotes:
       - name: standby
-        url: http://localhost:3852/repo1
+        url: http://localhost:{{get_port "server2_cluster"}}/repo1
     - name: repo2
       with_remotes:
       - name: standby
-        url: http://localhost:3852/repo2
+        url: http://localhost:{{get_port "server2_cluster"}}/repo2
     with_files:
     - name: server.yaml
       contents: |
         log_level: trace
         listener:
           host: 0.0.0.0
-          port: 3309
+          port: {{get_port "server1"}}
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:3852/{database}
+            remote_url_template: http://localhost:{{get_port "server2_cluster"}}/{database}
           bootstrap_role: primary
           bootstrap_epoch: 10
           remotesapi:
-            port: 3851
+            port: {{get_port "server1_cluster"}}
     server:
-      args: ["--port", "3309"]
-      port: 3309
+      args: ["--port", "{{get_port \"server1\"}}"]
+      dynamic_port: server1
   - name: server2
     repos:
     - name: repo1
       with_remotes:
       - name: standby
-        url: http://localhost:3851/repo1
+        url: http://localhost:{{get_port "server1_cluster"}}/repo1
     - name: repo2
       with_remotes:
       - name: standby
-        url: http://localhost:3851/repo2
+        url: http://localhost:{{get_port "server1_cluster"}}/repo2
     with_files:
     - name: server.yaml
       contents: |
         log_level: trace
         listener:
           host: 0.0.0.0
-          port: 3310
+          port: {{get_port "server2"}}
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:3851/{database}
+            remote_url_template: http://localhost:{{get_port "server1_cluster"}}/{database}
           bootstrap_role: standby
           bootstrap_epoch: 1
           remotesapi:
-            port: 3852
+            port: {{get_port "server2_cluster"}}
     server:
       args: ["--config", "server.yaml"]
-      port: 3310
+      dynamic_port: server2
   connections:
   - on: server1
     queries:
@@ -455,29 +456,29 @@ tests:
     - name: repo1
       with_remotes:
       - name: standby
-        url: http://localhost:3852/repo1
+        url: http://localhost:{{get_port "server2_cluster"}}/repo1
     - name: repo2
       with_remotes:
       - name: standby
-        url: http://localhost:3852/repo2
+        url: http://localhost:{{get_port "server2_cluster"}}/repo2
     with_files:
     - name: standby_server.yaml
       contents: |
         log_level: trace
         listener:
           host: 0.0.0.0
-          port: 3309
+          port: {{get_port "server1"}}
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:3852/{database}
+            remote_url_template: http://localhost:{{get_port "server2_cluster"}}/{database}
           bootstrap_role: standby
           bootstrap_epoch: 10
           remotesapi:
-            port: 3851
+            port: {{get_port "server1_cluster"}}
     server:
       args: ["--config", "standby_server.yaml"]
-      port: 3309
+      dynamic_port: server1
   connections:
   - on: server1
     queries:
@@ -503,57 +504,57 @@ tests:
     - name: repo1
       with_remotes:
       - name: standby
-        url: http://localhost:3852/repo1
+        url: http://localhost:{{get_port "server2_cluster"}}/repo1
     - name: repo2
       with_remotes:
       - name: standby
-        url: http://localhost:3852/repo2
+        url: http://localhost:{{get_port "server2_cluster"}}/repo2
     with_files:
     - name: server.yaml
       contents: |
         log_level: trace
         listener:
           host: 0.0.0.0
-          port: 3309
+          port: {{get_port "server1"}}
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:3852/{database}
+            remote_url_template: http://localhost:{{get_port "server2_cluster"}}/{database}
           bootstrap_role: primary
           bootstrap_epoch: 10
           remotesapi:
-            port: 3851
+            port: {{get_port "server1_cluster"}}
     server:
       args: ["--config", "server.yaml"]
-      port: 3309
+      dynamic_port: server1
   - name: server2
     repos:
     - name: repo1
       with_remotes:
       - name: standby
-        url: http://localhost:3851/repo1
+        url: http://localhost:{{get_port "server1_cluster"}}/repo1
     - name: repo2
       with_remotes:
       - name: standby
-        url: http://localhost:3851/repo2
+        url: http://localhost:{{get_port "server1_cluster"}}/repo2
     with_files:
     - name: server.yaml
       contents: |
         log_level: trace
         listener:
           host: 0.0.0.0
-          port: 3310
+          port: {{get_port "server2"}}
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:3851/{database}
+            remote_url_template: http://localhost:{{get_port "server1_cluster"}}/{database}
           bootstrap_role: standby
           bootstrap_epoch: 10
           remotesapi:
-            port: 3852
+            port: {{get_port "server2_cluster"}}
     server:
       args: ["--config", "server.yaml"]
-      port: 3310
+      dynamic_port: server2
   connections:
   - on: server1
     queries:
@@ -580,57 +581,57 @@ tests:
     - name: repo1
       with_remotes:
       - name: standby
-        url: http://localhost:3852/repo1
+        url: http://localhost:{{get_port "server2_cluster"}}/repo1
     - name: repo2
       with_remotes:
       - name: standby
-        url: http://localhost:3852/repo2
+        url: http://localhost:{{get_port "server2_cluster"}}/repo2
     with_files:
     - name: server.yaml
       contents: |
         log_level: trace
         listener:
           host: 0.0.0.0
-          port: 3309
+          port: {{get_port "server1"}}
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:3852/{database}
+            remote_url_template: http://localhost:{{get_port "server2_cluster"}}/{database}
           bootstrap_role: primary
           bootstrap_epoch: 10
           remotesapi:
-            port: 3851
+            port: {{get_port "server1_cluster"}}
     server:
       args: ["--config", "server.yaml"]
-      port: 3309
+      dynamic_port: server1
   - name: server2
     repos:
     - name: repo1
       with_remotes:
       - name: standby
-        url: http://localhost:3851/repo1
+        url: http://localhost:{{get_port "server1_cluster"}}/repo1
     - name: repo2
       with_remotes:
       - name: standby
-        url: http://localhost:3851/repo2
+        url: http://localhost:{{get_port "server1_cluster"}}/repo2
     with_files:
     - name: server.yaml
       contents: |
         log_level: trace
         listener:
           host: 0.0.0.0
-          port: 3310
+          port: {{get_port "server2"}}
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:3851/{database}
+            remote_url_template: http://localhost:{{get_port "server1_cluster"}}/{database}
           bootstrap_role: primary
           bootstrap_epoch: 10
           remotesapi:
-            port: 3852
+            port: {{get_port "server2_cluster"}}
     server:
       args: ["--config", "server.yaml"]
-      port: 3310
+      dynamic_port: server2
   connections:
   - on: server1
     retry_attempts: 100
@@ -659,69 +660,69 @@ tests:
     - name: repo1
       with_remotes:
       - name: standby
-        url: http://localhost:3852/repo1
+        url: http://localhost:{{get_port "server2_cluster"}}/repo1
     - name: repo2
       with_remotes:
       - name: standby
-        url: http://localhost:3852/repo2
+        url: http://localhost:{{get_port "server2_cluster"}}/repo2
     with_files:
     - name: preserver.yaml
       contents: |
         log_level: trace
         listener:
           host: 0.0.0.0
-          port: 3309
+          port: {{get_port "server1"}}
     - name: server.yaml
       contents: |
         log_level: trace
         listener:
           host: 0.0.0.0
-          port: 3309
+          port: {{get_port "server1"}}
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:3852/{database}
+            remote_url_template: http://localhost:{{get_port "server2_cluster"}}/{database}
           bootstrap_role: primary
           bootstrap_epoch: 15
           remotesapi:
-            port: 3851
+            port: {{get_port "server1_cluster"}}
     server:
       args: ["--config", "preserver.yaml"]
-      port: 3309
+      dynamic_port: server1
   - name: server2
     repos:
     - name: repo1
       with_remotes:
       - name: standby
-        url: http://localhost:3851/repo1
+        url: http://localhost:{{get_port "server1_cluster"}}/repo1
     - name: repo2
       with_remotes:
       - name: standby
-        url: http://localhost:3851/repo2
+        url: http://localhost:{{get_port "server1_cluster"}}/repo2
     with_files:
     - name: preserver.yaml
       contents: |
         log_level: trace
         listener:
           host: 0.0.0.0
-          port: 3310
+          port: {{get_port "server2"}}
     - name: server.yaml
       contents: |
         log_level: trace
         listener:
           host: 0.0.0.0
-          port: 3310
+          port: {{get_port "server2"}}
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:3851/{database}
+            remote_url_template: http://localhost:{{get_port "server1_cluster"}}/{database}
           bootstrap_role: primary
           bootstrap_epoch: 10
           remotesapi:
-            port: 3852
+            port: {{get_port "server2_cluster"}}
     server:
       args: ["--config", "preserver.yaml"]
-      port: 3310
+      dynamic_port: server2
   connections:
   - on: server1
     queries:
@@ -770,69 +771,69 @@ tests:
     - name: repo1
       with_remotes:
       - name: standby
-        url: http://localhost:3852/repo1
+        url: http://localhost:{{get_port "server2_cluster"}}/repo1
     - name: repo2
       with_remotes:
       - name: standby
-        url: http://localhost:3852/repo2
+        url: http://localhost:{{get_port "server2_cluster"}}/repo2
     with_files:
     - name: preserver.yaml
       contents: |
         log_level: trace
         listener:
           host: 0.0.0.0
-          port: 3309
+          port: {{get_port "server1"}}
     - name: server.yaml
       contents: |
         log_level: trace
         listener:
           host: 0.0.0.0
-          port: 3309
+          port: {{get_port "server1"}}
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:3852/{database}
+            remote_url_template: http://localhost:{{get_port "server2_cluster"}}/{database}
           bootstrap_role: primary
           bootstrap_epoch: 10
           remotesapi:
-            port: 3851
+            port: {{get_port "server1_cluster"}}
     server:
       args: ["--config", "preserver.yaml"]
-      port: 3309
+      dynamic_port: server1
   - name: server2
     repos:
     - name: repo1
       with_remotes:
       - name: standby
-        url: http://localhost:3851/repo1
+        url: http://localhost:{{get_port "server1_cluster"}}/repo1
     - name: repo2
       with_remotes:
       - name: standby
-        url: http://localhost:3851/repo2
+        url: http://localhost:{{get_port "server1_cluster"}}/repo2
     with_files:
     - name: preserver.yaml
       contents: |
         log_level: trace
         listener:
           host: 0.0.0.0
-          port: 3310
+          port: {{get_port "server2"}}
     - name: server.yaml
       contents: |
         log_level: trace
         listener:
           host: 0.0.0.0
-          port: 3310
+          port: {{get_port "server2"}}
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:3851/{database}
+            remote_url_template: http://localhost:{{get_port "server1_cluster"}}/{database}
           bootstrap_role: primary
           bootstrap_epoch: 15
           remotesapi:
-            port: 3852
+            port: {{get_port "server2_cluster"}}
     server:
       args: ["--config", "preserver.yaml"]
-      port: 3310
+      dynamic_port: server2
   connections:
   - on: server1
     queries:
@@ -886,29 +887,29 @@ tests:
     - name: repo1
       with_remotes:
       - name: standby
-        url: http://localhost:3852/repo1
+        url: http://localhost:{{get_port "server2_cluster"}}/repo1
     - name: repo2
       with_remotes:
       - name: standby
-        url: http://localhost:3852/repo2
+        url: http://localhost:{{get_port "server2_cluster"}}/repo2
     with_files:
     - name: server.yaml
       contents: |
         log_level: trace
         listener:
           host: 0.0.0.0
-          port: 3309
+          port: {{get_port "server1"}}
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:3852/{database}
+            remote_url_template: http://localhost:{{get_port "server2_cluster"}}/{database}
           bootstrap_role: primary
           bootstrap_epoch: 10
           remotesapi:
-            port: 3851
+            port: {{get_port "server1_cluster"}}
     server:
       args: ["--config", "server.yaml"]
-      port: 3309
+      dynamic_port: server1
   connections:
   - on: server1
     queries:
@@ -926,18 +927,18 @@ tests:
         log_level: trace
         listener:
           host: 0.0.0.0
-          port: 3309
+          port: {{get_port "server1"}}
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:3852/{database}
+            remote_url_template: http://localhost:{{get_port "server2_cluster"}}/{database}
           bootstrap_role: primary
           bootstrap_epoch: 1
           remotesapi:
-            port: 3851
+            port: {{get_port "server1_cluster"}}
     server:
       args: ["--config", "server.yaml"]
-      port: 3309
+      dynamic_port: server1
   - name: server2
     with_files:
     - name: server.yaml
@@ -945,18 +946,18 @@ tests:
         log_level: trace
         listener:
           host: 0.0.0.0
-          port: 3310
+          port: {{get_port "server2"}}
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:3851/{database}
+            remote_url_template: http://localhost:{{get_port "server1_cluster"}}/{database}
           bootstrap_role: standby
           bootstrap_epoch: 1
           remotesapi:
-            port: 3852
+            port: {{get_port "server2_cluster"}}
     server:
       args: ["--config", "server.yaml"]
-      port: 3310
+      dynamic_port: server2
   connections:
   - on: server1
     queries:
@@ -968,9 +969,9 @@ tests:
       result:
         columns: ["caught_up", "database", "remote", "remote_url"]
         rows:
-        - ["1", "repo1", "standby", "http://localhost:3852/repo1"]
-        - ["1", "mysql", "standby", "http://localhost:3852"]
-        - ["1", "dolt_branch_control", "standby", "http://localhost:3852"]
+        - ["1", "repo1", "standby", "http://localhost:{{get_port \"server2_cluster\"}}/repo1"]
+        - ["1", "mysql", "standby", "http://localhost:{{get_port \"server2_cluster\"}}"]
+        - ["1", "dolt_branch_control", "standby", "http://localhost:{{get_port \"server2_cluster\"}}"]
 - name: dolt_cluster_transition_to_standby too many standbys provided
   multi_repos:
   - name: server1
@@ -980,18 +981,18 @@ tests:
         log_level: trace
         listener:
           host: 0.0.0.0
-          port: 3309
+          port: {{get_port "server1"}}
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:3852/{database}
+            remote_url_template: http://localhost:{{get_port "server2_cluster"}}/{database}
           bootstrap_role: primary
           bootstrap_epoch: 1
           remotesapi:
-            port: 3851
+            port: {{get_port "server1_cluster"}}
     server:
       args: ["--config", "server.yaml"]
-      port: 3309
+      dynamic_port: server1
   - name: server2
     with_files:
     - name: server.yaml
@@ -999,18 +1000,18 @@ tests:
         log_level: trace
         listener:
           host: 0.0.0.0
-          port: 3310
+          port: {{get_port "server2"}}
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:3851/{database}
+            remote_url_template: http://localhost:{{get_port "server1_cluster"}}/{database}
           bootstrap_role: standby
           bootstrap_epoch: 1
           remotesapi:
-            port: 3852
+            port: {{get_port "server2_cluster"}}
     server:
       args: ["--config", "server.yaml"]
-      port: 3310
+      dynamic_port: server2
   connections:
   - on: server1
     queries:
@@ -1029,18 +1030,18 @@ tests:
         log_level: trace
         listener:
           host: 0.0.0.0
-          port: 3309
+          port: {{get_port "server1"}}
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:3852/{database}
+            remote_url_template: http://localhost:{{get_port "server2_cluster"}}/{database}
           bootstrap_role: primary
           bootstrap_epoch: 1
           remotesapi:
-            port: 3851
+            port: {{get_port "server1_cluster"}}
     server:
       args: ["--config", "server.yaml"]
-      port: 3309
+      dynamic_port: server1
   - name: server2
     with_files:
     - name: server.yaml
@@ -1048,18 +1049,18 @@ tests:
         log_level: trace
         listener:
           host: 0.0.0.0
-          port: 3310
+          port: {{get_port "server2"}}
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:3851/{database}
+            remote_url_template: http://localhost:{{get_port "server1_cluster"}}/{database}
           bootstrap_role: standby
           bootstrap_epoch: 1
           remotesapi:
-            port: 3852
+            port: {{get_port "server2_cluster"}}
     server:
       args: ["--config", "server.yaml"]
-      port: 3310
+      dynamic_port: server2
   connections:
   - on: server1
     queries:
@@ -1118,18 +1119,18 @@ tests:
         log_level: trace
         listener:
           host: 0.0.0.0
-          port: 3309
+          port: {{get_port "server1"}}
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:3852/{database}
+            remote_url_template: http://localhost:{{get_port "server2_cluster"}}/{database}
           bootstrap_role: primary
           bootstrap_epoch: 1
           remotesapi:
-            port: 3851
+            port: {{get_port "server1_cluster"}}
     server:
       args: ["--config", "server.yaml"]
-      port: 3309
+      dynamic_port: server1
   - name: server2
     with_files:
     - name: server.yaml
@@ -1137,18 +1138,18 @@ tests:
         log_level: trace
         listener:
           host: 0.0.0.0
-          port: 3310
+          port: {{get_port "server2"}}
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:3851/{database}
+            remote_url_template: http://localhost:{{get_port "server1_cluster"}}/{database}
           bootstrap_role: standby
           bootstrap_epoch: 1
           remotesapi:
-            port: 3852
+            port: {{get_port "server2_cluster"}}
     server:
       args: ["--config", "server.yaml"]
-      port: 3310
+      dynamic_port: server2
   connections:
   - on: server1
     queries:
@@ -1186,18 +1187,18 @@ tests:
         log_level: trace
         listener:
           host: 0.0.0.0
-          port: 3309
+          port: {{get_port "server1"}}
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:3852/{database}
+            remote_url_template: http://localhost:{{get_port "server2_cluster"}}/{database}
           bootstrap_role: primary
           bootstrap_epoch: 1
           remotesapi:
-            port: 3851
+            port: {{get_port "server1_cluster"}}
     server:
       args: ["--config", "server.yaml"]
-      port: 3309
+      dynamic_port: server1
   - name: server2
     with_files:
     - name: server.yaml
@@ -1205,18 +1206,18 @@ tests:
         log_level: trace
         listener:
           host: 0.0.0.0
-          port: 3310
+          port: {{get_port "server2"}}
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:3851/{database}
+            remote_url_template: http://localhost:{{get_port "server1_cluster"}}/{database}
           bootstrap_role: standby
           bootstrap_epoch: 1
           remotesapi:
-            port: 3852
+            port: {{get_port "server2_cluster"}}
     server:
       args: ["--config", "server.yaml"]
-      port: 3310
+      dynamic_port: server2
   connections:
   - on: server1
     queries:
@@ -1253,18 +1254,18 @@ tests:
         log_level: trace
         listener:
           host: 0.0.0.0
-          port: 3309
+          port: {{get_port "server1"}}
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:3852/{database}
+            remote_url_template: http://localhost:{{get_port "server2_cluster"}}/{database}
           bootstrap_role: primary
           bootstrap_epoch: 1
           remotesapi:
-            port: 3851
+            port: {{get_port "server1_cluster"}}
     server:
       args: ["--config", "server.yaml"]
-      port: 3309
+      dynamic_port: server1
   - name: server2
     with_files:
     - name: server.yaml
@@ -1272,18 +1273,18 @@ tests:
         log_level: trace
         listener:
           host: 0.0.0.0
-          port: 3310
+          port: {{get_port "server2"}}
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:3851/{database}
+            remote_url_template: http://localhost:{{get_port "server1_cluster"}}/{database}
           bootstrap_role: standby
           bootstrap_epoch: 1
           remotesapi:
-            port: 3852
+            port: {{get_port "server2_cluster"}}
     server:
       args: ["--config", "server.yaml"]
-      port: 3310
+      dynamic_port: server2
   # This test writes new commits on the primary and quickly checks for them on
   # the secondary. If dolt_cluster_ack_writes_timeout_secs is working as
   # intended, the new writes will always be present.
@@ -1404,18 +1405,18 @@ tests:
         log_level: trace
         listener:
           host: 0.0.0.0
-          port: 3309
+          port: {{get_port "server1"}}
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:3852/{database}
+            remote_url_template: http://localhost:{{get_port "server2_cluster"}}/{database}
           bootstrap_role: primary
           bootstrap_epoch: 1
           remotesapi:
-            port: 3851
+            port: {{get_port "server1_cluster"}}
     server:
       args: ["--config", "server.yaml"]
-      port: 3309
+      dynamic_port: server1
   connections:
   - on: server1
     queries:
@@ -1436,18 +1437,18 @@ tests:
         log_level: trace
         listener:
           host: 0.0.0.0
-          port: 3309
+          port: {{get_port "server1"}}
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:3852/{database}
+            remote_url_template: http://localhost:{{get_port "server2_cluster"}}/{database}
           bootstrap_role: primary
           bootstrap_epoch: 1
           remotesapi:
-            port: 3851
+            port: {{get_port "server1_cluster"}}
     server:
       args: ["--config", "server.yaml"]
-      port: 3309
+      dynamic_port: server1
   - name: server2
     with_files:
     - name: server.yaml
@@ -1455,18 +1456,18 @@ tests:
         log_level: trace
         listener:
           host: 0.0.0.0
-          port: 3310
+          port: {{get_port "server2"}}
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:3851/{database}
+            remote_url_template: http://localhost:{{get_port "server1_cluster"}}/{database}
           bootstrap_role: standby
           bootstrap_epoch: 1
           remotesapi:
-            port: 3852
+            port: {{get_port "server2_cluster"}}
     server:
       args: ["--config", "server.yaml"]
-      port: 3310
+      dynamic_port: server2
   connections:
   - on: server1
     queries:
@@ -1505,18 +1506,18 @@ tests:
         log_level: trace
         listener:
           host: 0.0.0.0
-          port: 3309
+          port: {{get_port "server1"}}
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:3852/{database}
+            remote_url_template: http://localhost:{{get_port "server2_cluster"}}/{database}
           bootstrap_role: primary
           bootstrap_epoch: 1
           remotesapi:
-            port: 3851
+            port: {{get_port "server1_cluster"}}
     server:
       args: ["--config", "server.yaml"]
-      port: 3309
+      dynamic_port: server1
   - name: server2
     with_files:
     - name: server.yaml
@@ -1524,18 +1525,18 @@ tests:
         log_level: trace
         listener:
           host: 0.0.0.0
-          port: 3310
+          port: {{get_port "server2"}}
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:3851/{database}
+            remote_url_template: http://localhost:{{get_port "server1_cluster"}}/{database}
           bootstrap_role: standby
           bootstrap_epoch: 1
           remotesapi:
-            port: 3852
+            port: {{get_port "server2_cluster"}}
     server:
       args: ["--config", "server.yaml"]
-      port: 3310
+      dynamic_port: server2
   connections:
   - on: server1
     queries:
@@ -1580,18 +1581,18 @@ tests:
         log_level: trace
         listener:
           host: 0.0.0.0
-          port: 3309
+          port: {{get_port "server1"}}
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:3852/{database}
+            remote_url_template: http://localhost:{{get_port "server2_cluster"}}/{database}
           bootstrap_role: primary
           bootstrap_epoch: 1
           remotesapi:
-            port: 3851
+            port: {{get_port "server1_cluster"}}
     server:
       args: ["--config", "server.yaml"]
-      port: 3309
+      dynamic_port: server1
   - name: server2
     with_files:
     - name: server.yaml
@@ -1599,18 +1600,18 @@ tests:
         log_level: trace
         listener:
           host: 0.0.0.0
-          port: 3310
+          port: {{get_port "server2"}}
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:3851/{database}
+            remote_url_template: http://localhost:{{get_port "server1_cluster"}}/{database}
           bootstrap_role: standby
           bootstrap_epoch: 1
           remotesapi:
-            port: 3852
+            port: {{get_port "server2_cluster"}}
     server:
       args: ["--config", "server.yaml"]
-      port: 3310
+      dynamic_port: server2
   connections:
   - on: server1
     queries:
@@ -1668,18 +1669,18 @@ tests:
         log_level: trace
         listener:
           host: 0.0.0.0
-          port: 3309
+          port: {{get_port "server1"}}
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:3852/{database}
+            remote_url_template: http://localhost:{{get_port "server2_cluster"}}/{database}
           bootstrap_role: primary
           bootstrap_epoch: 1
           remotesapi:
-            port: 3851
+            port: {{get_port "server1_cluster"}}
     server:
       args: ["--config", "server.yaml"]
-      port: 3309
+      dynamic_port: server1
   - name: server2
     with_files:
     - name: server.yaml
@@ -1687,18 +1688,18 @@ tests:
         log_level: trace
         listener:
           host: 0.0.0.0
-          port: 3310
+          port: {{get_port "server2"}}
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:3851/{database}
+            remote_url_template: http://localhost:{{get_port "server1_cluster"}}/{database}
           bootstrap_role: standby
           bootstrap_epoch: 1
           remotesapi:
-            port: 3852
+            port: {{get_port "server2_cluster"}}
     server:
       args: ["--config", "server.yaml"]
-      port: 3310
+      dynamic_port: server2
   connections:
   - on: server1
     queries:
@@ -1737,18 +1738,18 @@ tests:
         log_level: trace
         listener:
           host: 0.0.0.0
-          port: 3309
+          port: {{get_port "server1"}}
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:3852/{database}
+            remote_url_template: http://localhost:{{get_port "server2_cluster"}}/{database}
           bootstrap_role: primary
           bootstrap_epoch: 1
           remotesapi:
-            port: 3851
+            port: {{get_port "server1_cluster"}}
     server:
       args: ["--config", "server.yaml"]
-      port: 3309
+      dynamic_port: server1
   - name: server2
     with_files:
     - name: server.yaml
@@ -1756,18 +1757,18 @@ tests:
         log_level: trace
         listener:
           host: 0.0.0.0
-          port: 3310
+          port: {{get_port "server2"}}
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:3851/{database}
+            remote_url_template: http://localhost:{{get_port "server1_cluster"}}/{database}
           bootstrap_role: standby
           bootstrap_epoch: 1
           remotesapi:
-            port: 3852
+            port: {{get_port "server2_cluster"}}
     server:
       args: ["--config", "server.yaml"]
-      port: 3310
+      dynamic_port: server2
   connections:
   - on: server1
     queries:
@@ -1836,18 +1837,18 @@ tests:
         log_level: trace
         listener:
           host: 0.0.0.0
-          port: 3309
+          port: {{get_port "server1"}}
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:3852/{database}
+            remote_url_template: http://localhost:{{get_port "server2_cluster"}}/{database}
           bootstrap_role: primary
           bootstrap_epoch: 1
           remotesapi:
-            port: 3851
+            port: {{get_port "server1_cluster"}}
     server:
       args: ["--config", "server.yaml"]
-      port: 3309
+      dynamic_port: server1
   - name: server2
     with_files:
     - name: server.yaml
@@ -1855,18 +1856,18 @@ tests:
         log_level: trace
         listener:
           host: 0.0.0.0
-          port: 3310
+          port: {{get_port "server2"}}
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:3851/{database}
+            remote_url_template: http://localhost:{{get_port "server1_cluster"}}/{database}
           bootstrap_role: standby
           bootstrap_epoch: 1
           remotesapi:
-            port: 3852
+            port: {{get_port "server2_cluster"}}
     server:
       args: ["--config", "server.yaml"]
-      port: 3310
+      dynamic_port: server2
   connections:
   - on: server1
     queries:
@@ -1897,34 +1898,34 @@ tests:
         log_level: trace
         listener:
           host: 0.0.0.0
-          port: 3309
+          port: {{get_port "server1"}}
         cluster:
           standby_remotes:
           - name: standby_one
-            remote_url_template: http://localhost:3852/{database}
+            remote_url_template: http://localhost:{{get_port "server2_cluster"}}/{database}
           bootstrap_role: primary
           bootstrap_epoch: 1
           remotesapi:
-            port: 3851
+            port: {{get_port "server1_cluster"}}
     - name: twostandbys.yaml
       contents: |
         log_level: trace
         listener:
           host: 0.0.0.0
-          port: 3309
+          port: {{get_port "server1"}}
         cluster:
           standby_remotes:
           - name: standby_one
-            remote_url_template: http://localhost:3852/{database}
+            remote_url_template: http://localhost:{{get_port "server2_cluster"}}/{database}
           - name: standby_two
-            remote_url_template: http://localhost:3853/{database}
+            remote_url_template: http://localhost:{{get_port "server3_cluster"}}/{database}
           bootstrap_role: primary
           bootstrap_epoch: 1
           remotesapi:
-            port: 3851
+            port: {{get_port "server1_cluster"}}
     server:
       args: ["--config", "onestandby.yaml"]
-      port: 3309
+      dynamic_port: server1
   - name: standby_one
     with_files:
     - name: config.yaml
@@ -1932,18 +1933,18 @@ tests:
         log_level: trace
         listener:
           host: 0.0.0.0
-          port: 3310
+          port: {{get_port "server2"}}
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:3851/{database}
+            remote_url_template: http://localhost:{{get_port "server1_cluster"}}/{database}
           bootstrap_role: standby
           bootstrap_epoch: 1
           remotesapi:
-            port: 3852
+            port: {{get_port "server2_cluster"}}
     server:
       args: ["--config", "config.yaml"]
-      port: 3310
+      dynamic_port: server2
   - name: standby_two
     with_files:
     - name: config.yaml
@@ -1951,18 +1952,18 @@ tests:
         log_level: trace
         listener:
           host: 0.0.0.0
-          port: 3311
+          port: {{get_port "server3"}}
         cluster:
           standby_remotes:
           - name: standby
-            remote_url_template: http://localhost:3851/{database}
+            remote_url_template: http://localhost:{{get_port "server1_cluster"}}/{database}
           bootstrap_role: standby
           bootstrap_epoch: 1
           remotesapi:
-            port: 3853
+            port: {{get_port "server3_cluster"}}
     server:
       args: ["--config", "config.yaml"]
-      port: 3311
+      dynamic_port: server3
   connections:
   - on: server1
     queries:
@@ -2001,28 +2002,28 @@ tests:
         - name: repo1
           with_remotes:
             - name: standby
-              url: http://localhost:3852/repo1
+              url: http://localhost:{{get_port "server2_cluster"}}/repo1
         - name: repo2
           with_remotes:
             - name: standby
-              url: http://localhost:3852/repo2
+              url: http://localhost:{{get_port "server2_cluster"}}/repo2
       with_files:
         - name: server.yaml
           contents: |
             log_level: trace
             listener:
               host: 0.0.0.0
-              port: 3309
+              port: {{get_port "server1"}}
             cluster:
               standby_remotes:
               - name: standby
-                remote_url_template: http://localhost:3852/{database}
+                remote_url_template: http://localhost:{{get_port "server2_cluster"}}/{database}
               bootstrap_role: primary
               remotesapi:
-                port: 3851
+                port: {{get_port "server1_cluster"}}
       server:
         args: ["--config", "server.yaml"]
-        port: 3309
+        dynamic_port: server1
   connections:
     - on: server1
       queries:
