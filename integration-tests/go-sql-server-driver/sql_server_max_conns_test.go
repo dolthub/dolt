@@ -30,6 +30,7 @@ import (
 )
 
 func TestSqlServerMaxConns(t *testing.T) {
+	t.Parallel()
 	t.Run("MaxConns 3", testMaxConns3)
 	t.Run("MaxConns 3 BackLog 0", testMaxConns3BackLog0)
 	t.Run("MaxConns 3 BackLog 1", testMaxConns3BackLog1)
@@ -37,8 +38,7 @@ func TestSqlServerMaxConns(t *testing.T) {
 }
 
 func setupMaxConnsTest(t *testing.T, ctx context.Context, args ...string) (*sql.DB, []*sql.Conn) {
-	// TODO: These tests should run parallel once |main| is merged.
-	// Add "--port", `{{get_port "server"}}` to the args and add t.Parallel() to this function.
+	t.Parallel()
 	u, err := driver.NewDoltUser()
 	require.NoError(t, err)
 	t.Cleanup(func() {
@@ -49,10 +49,15 @@ func setupMaxConnsTest(t *testing.T, ctx context.Context, args ...string) (*sql.
 	repo, err := rs.MakeRepo("max_conns_test")
 	require.NoError(t, err)
 	args = append(args, "--max-connections", "3")
+	args = append(args, "--port", `{{get_port "server"}}`)
 	srvSettings := &driver.Server{
-		Args: args,
+		Args:        args,
+		DynamicPort: "server",
 	}
-	server := MakeServer(t, repo, srvSettings)
+	var ports DynamicPorts
+	ports.global = &GlobalPorts
+	ports.t = t
+	server := MakeServer(t, repo, srvSettings, &ports)
 	server.DBName = "max_conns_test"
 	db, err := server.DB(driver.Connection{User: "root"})
 	require.NoError(t, err)
