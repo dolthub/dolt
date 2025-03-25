@@ -1560,8 +1560,10 @@ func initialStateForBranchDb(ctx *sql.Context, srcDb dsess.SqlDatabase) (dsess.I
 		return dsess.InitialDbState{}, err
 	}
 
+	// Working set may not exist. Upstream code which calls here must
+	// handle the WorkingSet field being nil.q
 	ws, err := srcDb.DbData().Ddb.ResolveWorkingSetAtRoot(ctx, wsRef, rootHash)
-	if err != nil {
+	if err != nil && err != doltdb.ErrWorkingSetNotFound {
 		return dsess.InitialDbState{}, err
 	}
 
