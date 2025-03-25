@@ -115,7 +115,8 @@ func testGetOrdinalOfCursor(t *testing.T, count int) {
 
 	b := val.NewTupleBuilder(desc, ns)
 	b.PutUint32(0, uint32(len(tuples)))
-	aboveItem, _ := b.Build(sharedPool)
+	aboveItem, err := b.Build(sharedPool)
+	require.NoError(t, err)
 
 	curr, err := newCursorAtKey(ctx, ns, nd, aboveItem, desc)
 	require.NoError(t, err)
@@ -165,7 +166,10 @@ var valDesc = val.NewTupleDescriptor(
 
 func randomTupleItemPairs(count int, ns NodeStore) (items [][2]Item) {
 	ctx := sql.NewEmptyContext()
-	tups := RandomTuplePairs(ctx, count, keyDesc, valDesc, ns)
+	tups, err := RandomTuplePairs(ctx, count, keyDesc, valDesc, ns)
+	if err != nil {
+		panic(err)
+	}
 	items = make([][2]Item, count)
 	if len(tups) != len(items) {
 		panic("mismatch")

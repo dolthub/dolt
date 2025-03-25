@@ -226,7 +226,10 @@ func validateKeylessIndex(ctx context.Context, sch schema.Schema, def schema.Ind
 			builder.PutRaw(i, field)
 		}
 		builder.PutRaw(idxDesc.Count()-1, hashId.GetField(0))
-		k, _ := builder.Build(primary.Pool())
+		k, err := builder.Build(primary.Pool())
+		if err != nil {
+			return err
+		}
 
 		ok, err := secondary.Has(ctx, k)
 		if err != nil {
@@ -321,7 +324,10 @@ func validatePkIndex(ctx context.Context, sch schema.Schema, def schema.Index, p
 				builder.PutRaw(i, field)
 			}
 		}
-		k, _ := builder.Build(primary.Pool())
+		k, err := builder.Build(primary.Pool())
+		if err != nil {
+			return err
+		}
 
 		ok, err := secondary.Has(ctx, k)
 		if err != nil {

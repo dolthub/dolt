@@ -16,7 +16,6 @@ package val
 
 import (
 	"context"
-	"fmt"
 	"strconv"
 	"time"
 
@@ -91,12 +90,12 @@ func (tb *TupleBuilder) Build(pool pool.BuffPool) (tup Tuple, err error) {
 			panic("cannot write NULL to non-NULL field: " + strconv.Itoa(i))
 		}
 	}
-	return tb.BuildPermissive(pool, tb.vs)
+	return tb.BuildPermissive(pool)
 }
 
 // BuildPermissive materializes a Tuple from the fields
 // written to the TupleBuilder without validating nullability.
-func (tb *TupleBuilder) BuildPermissive(pool pool.BuffPool, vs ValueStore) (tup Tuple, err error) {
+func (tb *TupleBuilder) BuildPermissive(pool pool.BuffPool) (tup Tuple, err error) {
 	// TODO: add context parameter
 	ctx := context.Background()
 	// Values may get passed into the tuple builder in either in-band or out-of-band form.
@@ -143,9 +142,6 @@ func (tb *TupleBuilder) BuildPermissive(pool pool.BuffPool, vs ValueStore) (tup 
 				break
 			}
 		}
-	}
-	if totalSize > tb.tupleLengthTarget {
-		return Tuple{}, fmt.Errorf("nable to create tuple under the target legnth. This should not be possible")
 	}
 	values := tb.fields[:tb.Desc.Count()]
 	tup = NewTuple(pool, values...)

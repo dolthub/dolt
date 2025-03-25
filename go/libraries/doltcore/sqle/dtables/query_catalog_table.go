@@ -260,13 +260,19 @@ func newQueryCatalogEntryProlly(ctx context.Context, tbl *doltdb.Table, id, name
 	kb := val.NewTupleBuilder(catalogKd, m.NodeStore())
 	vb := val.NewTupleBuilder(catalogVd, m.NodeStore())
 	kb.PutString(0, id)
-	k, _ := kb.Build(m.Pool())
+	k, err := kb.Build(m.Pool())
+	if err != nil {
+		return SavedQuery{}, nil, err
+	}
 
 	vb.PutUint64(0, order)
 	vb.PutString(1, name)
 	vb.PutString(2, query)
 	vb.PutString(3, description)
-	v, _ := vb.Build(m.Pool())
+	v, err := vb.Build(m.Pool())
+	if err != nil {
+		return SavedQuery{}, nil, err
+	}
 
 	mut := m.Mutate()
 	err = mut.Put(ctx, k, v)
@@ -322,7 +328,10 @@ func retrieveFromQueryCatalogProlly(ctx context.Context, tbl *doltdb.Table, id s
 
 	kb := val.NewTupleBuilder(catalogKd, m.NodeStore())
 	kb.PutString(0, id)
-	k, _ := kb.Build(m.Pool())
+	k, err := kb.Build(m.Pool())
+	if err != nil {
+		return SavedQuery{}, err
+	}
 	var value val.Tuple
 	_ = m.Get(ctx, k, func(_, v val.Tuple) error {
 		value = v

@@ -638,7 +638,10 @@ func (cd *prollyConflictDeleter) putKeylessHash(ctx *sql.Context, r sql.Row) err
 		}
 	}
 
-	v, _ := cd.vB.Build(cd.pool)
+	v, err := cd.vB.Build(cd.pool)
+	if err != nil {
+		return err
+	}
 	k := val.HashTupleFromValue(cd.pool, v)
 	cd.kB.PutHash128(0, k.GetField(0))
 	return nil

@@ -155,7 +155,8 @@ func testRoundTripInts(t *testing.T) {
 		for idx, value := range test.data {
 			bld.PutInt64(idx, value)
 		}
-		tup, _ := bld.Build(testPool)
+		tup, err := bld.Build(testPool)
+		assert.NoError(t, err)
 
 		// verify
 		n := test.desc.Count()
@@ -284,7 +285,8 @@ func TestTupleBuilderAdaptiveEncodings(t *testing.T) {
 		shortByteArray := make([]byte, defaultTupleLengthTarget/2)
 		err := tb.PutAdaptiveBytesFromInline(ctx, 0, shortByteArray)
 		require.NoError(t, err)
-		tup, _ := tb.Build(testPool)
+		tup, err := tb.Build(testPool)
+		require.NoError(t, err)
 
 		adaptiveEncodingBytes, _, err := td.GetBytesAdaptiveValue(0, vs, tup)
 		require.NoError(t, err)
@@ -299,7 +301,8 @@ func TestTupleBuilderAdaptiveEncodings(t *testing.T) {
 		byteArray := NewByteArray(h, vs).WithMaxByteLength(int64(len(longByteArray)))
 		tb.PutAdaptiveBytesFromOutline(0, byteArray)
 
-		tup, _ := tb.Build(testPool)
+		tup, err := tb.Build(testPool)
+		require.NoError(t, err)
 
 		adaptiveEncodingBytes, _, err := td.GetBytesAdaptiveValue(0, vs, tup)
 		require.NoError(t, err)
@@ -328,7 +331,8 @@ func TestTupleBuilderMultipleAdaptiveTypes(t *testing.T) {
 		err = tb.PutAdaptiveBytesFromInline(ctx, 1, mediumByteArray)
 		require.NoError(t, err)
 
-		tup, _ := tb.Build(testPool)
+		tup, err := tb.Build(testPool)
+		require.NoError(t, err)
 
 		{
 			adaptiveEncodingBytes, _, err := td.GetBytesAdaptiveValue(0, vs, tup)

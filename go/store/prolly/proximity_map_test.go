@@ -65,7 +65,9 @@ func buildTuple(t *testing.T, ctx context.Context, ns tree.NodeStore, pool pool.
 		err := tree.PutField(ctx, ns, builder, i, column)
 		require.NoError(t, err)
 	}
-	return builder.Build(pool)
+	tup, err := builder.Build(pool)
+	require.NoError(t, err)
+	return tup
 }
 
 func buildTuples(t *testing.T, ctx context.Context, ns tree.NodeStore, pool pool.BuffPool, desc val.TupleDesc, rows [][]interface{}) [][]byte {
@@ -529,12 +531,14 @@ func TestIncrementalUpdates(t *testing.T) {
 	// update leaf node
 	{
 		keyBuilder.PutJSONAddr(0, newJsonDocument(t, ctx, ns, "[0.0, 1.0]"))
-		nextKey, _ := keyBuilder.Build(bp)
+		nextKey, err := keyBuilder.Build(bp)
+		require.NoError(t, err)
 
 		valueBuilder.PutInt64(0, 5)
-		nextValue, _ := valueBuilder.Build(bp)
+		nextValue, err := valueBuilder.Build(bp)
+		require.NoError(t, err)
 
-		err := mutableMap.Put(ctx, nextKey, nextValue)
+		err = mutableMap.Put(ctx, nextKey, nextValue)
 		require.NoError(t, err)
 
 		newMap, err := flusher.Map(ctx, mutableMap)
@@ -563,12 +567,14 @@ func TestIncrementalUpdates(t *testing.T) {
 	// update root node
 	{
 		keyBuilder.PutJSONAddr(0, newJsonDocument(t, ctx, ns, "[5.0, 6.0]"))
-		nextKey, _ := keyBuilder.Build(bp)
+		nextKey, err := keyBuilder.Build(bp)
+		require.NoError(t, err)
 
 		valueBuilder.PutInt64(0, 6)
-		nextValue, _ := valueBuilder.Build(bp)
+		nextValue, err := valueBuilder.Build(bp)
+		require.NoError(t, err)
 
-		err := mutableMap.Put(ctx, nextKey, nextValue)
+		err = mutableMap.Put(ctx, nextKey, nextValue)
 		require.NoError(t, err)
 
 		newMap, err := flusher.Map(ctx, mutableMap)
@@ -618,9 +624,10 @@ func TestIncrementalDeletes(t *testing.T) {
 	// delete leaf node
 	{
 		keyBuilder.PutJSONAddr(0, newJsonDocument(t, ctx, ns, "[0.0, 1.0]"))
-		nextKey, _ := keyBuilder.Build(bp)
+		nextKey, err := keyBuilder.Build(bp)
+		require.NoError(t, err)
 
-		err := mutableMap.Put(ctx, nextKey, nil)
+		err = mutableMap.Put(ctx, nextKey, nil)
 		require.NoError(t, err)
 
 		newMap, err := flusher.Map(ctx, mutableMap)
@@ -642,9 +649,10 @@ func TestIncrementalDeletes(t *testing.T) {
 	// delete root node
 	{
 		keyBuilder.PutJSONAddr(0, newJsonDocument(t, ctx, ns, "[5.0, 6.0]"))
-		nextKey, _ := keyBuilder.Build(bp)
+		nextKey, err := keyBuilder.Build(bp)
+		require.NoError(t, err)
 
-		err := mutableMap.Put(ctx, nextKey, nil)
+		err = mutableMap.Put(ctx, nextKey, nil)
 		require.NoError(t, err)
 
 		newMap, err := flusher.Map(ctx, mutableMap)

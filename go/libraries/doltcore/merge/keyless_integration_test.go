@@ -520,14 +520,17 @@ func (e keylessEntry) ToNomsTuple() types.Tuple {
 	return dtu.MustTuple(cardTag, types.Uint(e.card), c1Tag, types.Int(e.c1), c2Tag, types.Int(e.c2))
 }
 
-func (e keylessEntry) HashAndValue() ([]byte, val.Tuple) {
+func (e keylessEntry) HashAndValue() ([]byte, val.Tuple, error) {
 	valBld.PutUint64(0, uint64(e.card))
 	valBld.PutInt64(1, int64(e.c1))
 	valBld.PutInt64(2, int64(e.c2))
 
-	value, _ := valBld.Build(sharePool)
+	value, err := valBld.Build(sharePool)
+	if err != nil {
+		return nil, nil, err
+	}
 	hashTup := val.HashTupleFromValue(sharePool, value)
-	return hashTup.GetField(0), value
+	return hashTup.GetField(0), value, nil
 }
 
 type conflictSet map[[16]byte]conflictEntry

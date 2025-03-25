@@ -332,10 +332,13 @@ func createCVForSecIdx(
 		j := o + i
 		primaryKb.PutRaw(i, k.GetField(j))
 	}
-	primaryIdxKey, _ := primaryKb.Build(pool)
+	primaryIdxKey, err := primaryKb.Build(pool)
+	if err != nil {
+		return err
+	}
 
 	var value val.Tuple
-	err := pri.Get(ctx, primaryIdxKey, func(k, v val.Tuple) error {
+	err = pri.Get(ctx, primaryIdxKey, func(k, v val.Tuple) error {
 		value = v
 		return nil
 	})
@@ -373,10 +376,13 @@ func createCVsForPartialKeyMatches(
 			j := o + i
 			kb.PutRaw(i, k.GetField(j))
 		}
-		primaryIdxKey, _ := kb.Build(pool)
+		primaryIdxKey, err := kb.Build(pool)
+		if err != nil {
+			return err
+		}
 
 		var value val.Tuple
-		err := primaryIdx.Get(ctx, primaryIdxKey, func(k, v val.Tuple) error {
+		err = primaryIdx.Get(ctx, primaryIdxKey, func(k, v val.Tuple) error {
 			value = v
 			return nil
 		})

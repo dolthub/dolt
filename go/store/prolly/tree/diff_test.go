@@ -39,7 +39,9 @@ func TestDifferFromRoots(t *testing.T) {
 	copy(toTups, fromTups)
 	bld := val.NewTupleBuilder(desc, ns)
 	bld.PutUint32(0, uint32(42))
-	toTups[23][1], _ = bld.Build(sharedPool) // modify value at index 23.
+	var err error
+	toTups[23][1], err = bld.Build(sharedPool) // modify value at index 23.
+	assert.NoError(t, err)
 	toRoot := makeTree(t, toTups)
 
 	dfr, err := DifferFromRoots(ctx, ns, ns, fromRoot, toRoot, desc, false)

@@ -70,7 +70,11 @@ var syncPool = pool.NewBuffPool()
 func (v rowV) value() val.Tuple {
 	vB.PutInt64(0, int64(v.col1))
 	vB.PutInt64(1, int64(v.col2))
-	return vB.Build(syncPool)
+	tup, err := vB.Build(syncPool)
+	if err != nil {
+		panic(err)
+	}
+	return tup
 }
 
 func (v rowV) nomsValue() types.Value {
@@ -789,7 +793,11 @@ var kB *val.TupleBuilder
 
 func key(i int) val.Tuple {
 	kB.PutInt64(0, int64(i))
-	return kB.Build(syncPool)
+	tup, err := kB.Build(syncPool)
+	if err != nil {
+		panic(err)
+	}
+	return tup
 }
 
 func nomsKey(i int) types.Value {

@@ -128,11 +128,18 @@ func AscendingUintTuples(count int) (tuples [][2]val.Tuple, desc val.TupleDesc) 
 	desc = val.NewTupleDescriptor(val.Type{Enc: val.Uint32Enc})
 	bld := val.NewTupleBuilder(desc, nil)
 	tuples = make([][2]val.Tuple, count)
+	var err error
 	for i := range tuples {
 		bld.PutUint32(0, uint32(i))
-		tuples[i][0], _ = bld.Build(sharedPool)
+		tuples[i][0], err = bld.Build(sharedPool)
+		if err != nil {
+			panic(err)
+		}
 		bld.PutUint32(0, uint32(i+count))
-		tuples[i][1], _ = bld.Build(sharedPool)
+		tuples[i][1], err = bld.Build(sharedPool)
+		if err != nil {
+			panic(err)
+		}
 	}
 	return
 }

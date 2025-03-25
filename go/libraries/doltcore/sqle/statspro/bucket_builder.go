@@ -54,7 +54,10 @@ func firstRowForIndex(ctx *sql.Context, idxLen int, prollyMap prolly.Map, keyBui
 		keyBuilder.PutRaw(i, keyBytes.GetField(i))
 	}
 
-	firstKey, _ := keyBuilder.Build(buffPool)
+	firstKey, err := keyBuilder.Build(buffPool)
+	if err != nil {
+		return nil, err
+	}
 	firstRow := make(sql.Row, idxLen)
 	for i := range firstRow {
 		firstRow[i], err = tree.GetField(ctx, prollyMap.KeyDesc(), i, firstKey, prollyMap.NodeStore())

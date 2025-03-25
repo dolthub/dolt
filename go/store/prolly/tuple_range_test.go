@@ -238,5 +238,9 @@ func intNullTuple(ints ...*int32) val.Tuple {
 			tb.PutInt32(i, *val)
 		}
 	}
-	return tb.Build(sharedPool)
+	tup, err := tb.Build(sharedPool)
+	if err != nil {
+		panic(err)
+	}
+	return tup
 }

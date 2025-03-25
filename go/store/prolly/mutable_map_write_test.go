@@ -476,7 +476,8 @@ func testInternalNodeSplits(t *testing.T) {
 	for i := range tuples {
 		bld.PutInt32(0, int32(i))
 		bld.PutInt32(1, int32(0))
-		tuples[i][0], _ = bld.Build(sharedPool)
+		tuples[i][0], err = bld.Build(sharedPool)
+		require.NoError(t, err)
 		tuples[i][1] = val.EmptyTuple
 	}
 	pm := mustProllyMapFromTuples(t, kd, vd, tuples, ns)
@@ -489,7 +490,8 @@ func testInternalNodeSplits(t *testing.T) {
 		for j := 1; j <= k; j++ {
 			bld.PutInt32(0, int32(j))
 			bld.PutInt32(1, int32(j))
-			key, _ := bld.Build(sharedPool)
+			key, err := bld.Build(sharedPool)
+			require.NoError(t, err)
 			err = mut.Put(ctx, key, val.EmptyTuple)
 			require.NoError(t, err)
 		}
@@ -536,14 +538,25 @@ var mutValBuilder = val.NewTupleBuilder(mutValDesc, ns)
 func makePut(k, v int64) (key, value val.Tuple) {
 	mutKeyBuilder.PutInt64(0, k)
 	mutValBuilder.PutInt64(0, v)
-	key, _ = mutKeyBuilder.Build(sharedPool)
-	value, _ = mutValBuilder.Build(sharedPool)
+	var err error
+	key, err = mutKeyBuilder.Build(sharedPool)
+	if err != nil {
+		panic(err)
+	}
+	value, err = mutValBuilder.Build(sharedPool)
+	if err != nil {
+		panic(err)
+	}
 	return
 }
 
 func makeDelete(k int64) (key val.Tuple) {
 	mutKeyBuilder.PutInt64(0, k)
-	key, _ = mutKeyBuilder.Build(sharedPool)
+	var err error
+	key, err = mutKeyBuilder.Build(sharedPool)
+	if err != nil {
+		panic(err)
+	}
 	return
 }
 

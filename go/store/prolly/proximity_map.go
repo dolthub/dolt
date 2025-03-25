@@ -427,7 +427,10 @@ func (b *ProximityMapBuilder) makePathMaps(ctx context.Context, mutableLevelMap 
 		keyTupleBuilder.PutByteString(0, hashPath)
 		keyTupleBuilder.PutByteString(1, keyToInsert)
 
-		keyTuple, _ := keyTupleBuilder.Build(b.ns.Pool())
+		keyTuple, err := keyTupleBuilder.Build(b.ns.Pool())
+		if err != nil {
+			return nil, err
+		}
 		err = pathMaps[level].Put(ctx, keyTuple, levelMapValue)
 		if err != nil {
 			return nil, err
@@ -442,7 +445,10 @@ func (b *ProximityMapBuilder) makePathMaps(ctx context.Context, mutableLevelMap 
 				keyTupleBuilder.PutByteString(0, hashPath)
 				keyTupleBuilder.PutByteString(1, keyToInsert)
 
-				childKeyTuple, _ := keyTupleBuilder.Build(b.ns.Pool())
+				childKeyTuple, err := keyTupleBuilder.Build(b.ns.Pool())
+				if err != nil {
+					return nil, err
+				}
 				err = pathMaps[childLevel].Put(ctx, childKeyTuple, levelMapValue)
 				if err != nil {
 					return nil, err
@@ -493,7 +499,10 @@ func (b *ProximityMapBuilder) createInitialPathMaps(ctx context.Context, maxLeve
 // It returns an iter over all possible keys that could be the next path segment.
 func (b *ProximityMapBuilder) getNextPathSegmentCandidates(ctx context.Context, pathMap *MutableMap, prefixTupleBuilder *val.TupleBuilder, currentPath []byte) (MapIter, error) {
 	prefixTupleBuilder.PutByteString(0, currentPath)
-	prefixTuple, _ := prefixTupleBuilder.Build(b.ns.Pool())
+	prefixTuple, err := prefixTupleBuilder.Build(b.ns.Pool())
+	if err != nil {
+		return nil, err
+	}
 
 	prefixRange := PrefixRange(ctx, prefixTuple, prefixTupleBuilder.Desc)
 	return pathMap.IterRange(ctx, prefixRange)

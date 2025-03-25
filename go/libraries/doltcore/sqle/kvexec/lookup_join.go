@@ -253,8 +253,12 @@ func newLookupKeyMapping(ctx context.Context, sourceSch schema.Schema, tgtKeyDes
 	}
 
 	var litTuple val.Tuple
+	var err error
 	if litDesc.Count() > 0 {
-		litTuple, _ = litTb.Build(ns.Pool())
+		litTuple, err = litTb.Build(ns.Pool())
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return &lookupMapping{
@@ -329,6 +333,5 @@ func (m *lookupMapping) dstKeyTuple(srcKey, srcVal val.Tuple) (val.Tuple, error)
 		}
 	}
 
-	idxKey, _ := m.targetKb.BuildPermissive(m.pool, m.ns)
-	return idxKey, nil
+	return m.targetKb.BuildPermissive(m.pool)
 }
