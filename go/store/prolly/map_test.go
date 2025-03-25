@@ -113,7 +113,8 @@ func TestMutateMapWithTupleIter(t *testing.T) {
 
 	for _, s := range scales {
 		t.Run("scale "+strconv.Itoa(s), func(t *testing.T) {
-			all := tree.RandomTuplePairs(ctx, s, kd, vd, ns)
+			all, err := tree.RandomTuplePairs(ctx, s, kd, vd, ns)
+			require.NoError(t, err)
 
 			// randomize |all| and partition
 			rand.Shuffle(s, func(i, j int) {
@@ -308,7 +309,8 @@ func makeProllyMap(t *testing.T, count int) (testMap, [][2]val.Tuple) {
 	)
 	ns := tree.NewTestNodeStore()
 
-	tuples := tree.RandomTuplePairs(ctx, count, kd, vd, ns)
+	tuples, err := tree.RandomTuplePairs(ctx, count, kd, vd, ns)
+	require.NoError(t, err)
 	om := mustProllyMapFromTuples(t, kd, vd, tuples, ns)
 
 	return om, tuples

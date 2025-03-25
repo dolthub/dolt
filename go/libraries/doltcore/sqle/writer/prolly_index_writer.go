@@ -119,7 +119,7 @@ func (m prollyIndexWriter) keyFromRow(ctx context.Context, sqlRow sql.Row) (val.
 			return nil, err
 		}
 	}
-	return m.keyBld.BuildPermissive(sharePool, m.mut.NodeStore()), nil
+	return m.keyBld.BuildPermissive(sharePool, m.mut.NodeStore())
 }
 
 func (m prollyIndexWriter) ValidateKeyViolations(ctx context.Context, sqlRow sql.Row) error {
@@ -320,7 +320,7 @@ func (m prollySecondaryIndexWriter) keyFromRow(ctx context.Context, sqlRow sql.R
 			return nil, err
 		}
 	}
-	return m.keyBld.Build(sharePool), nil
+	return m.keyBld.Build(sharePool)
 }
 
 func (m prollySecondaryIndexWriter) Insert(ctx context.Context, sqlRow sql.Row) error {

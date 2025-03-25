@@ -119,7 +119,7 @@ func (t translator) TranslateTuple(ctx context.Context, tup types.Tuple) (val.Tu
 		}
 	}()
 
-	return t.builder.Build(t.pool), nil
+	return t.builder.Build(t.pool)
 }
 
 func translateNomsField(ctx context.Context, ns tree.NodeStore, value types.Value, idx int, b *val.TupleBuilder) error {

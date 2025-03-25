@@ -151,7 +151,8 @@ func testThreeWayMapMerge(t *testing.T, kd, vd val.TupleDesc, sz int, ns tree.No
 
 func testTupleMergeFn(t *testing.T, kd, vd val.TupleDesc, sz int, ns tree.NodeStore) {
 	ctx := context.Background()
-	tuples := tree.RandomTuplePairs(ctx, sz, kd, vd, ns)
+	tuples, err := tree.RandomTuplePairs(ctx, sz, kd, vd, ns)
+	require.NoError(t, err)
 	base := mustProllyMapFromTuples(t, kd, vd, tuples, ns)
 
 	mutSz := sz / 10
@@ -228,7 +229,10 @@ func makeTuplesAndMutations(kd, vd val.TupleDesc, sz int, ns tree.NodeStore) (ba
 	ctx := context.Background()
 	mutSz := sz / 10
 	totalSz := sz + (mutSz * 2)
-	tuples := tree.RandomTuplePairs(ctx, totalSz, kd, vd, ns)
+	tuples, err := tree.RandomTuplePairs(ctx, totalSz, kd, vd, ns)
+	if err != nil {
+		panic(err)
+	}
 
 	base = tuples[:sz]
 

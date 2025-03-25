@@ -465,7 +465,11 @@ func testTuples(ns tree.NodeStore, kd val.TupleDesc, cnt int) []val.Tuple {
 
 	var keys []val.Tuple
 	for i := 0; i < cnt; i++ {
-		keys = append(keys, tree.RandomTuple(keyBuilder, ns))
+		key, err := tree.RandomTuple(keyBuilder, ns)
+		if err != nil {
+			panic(err)
+		}
+		keys = append(keys, key)
 	}
 
 	return keys

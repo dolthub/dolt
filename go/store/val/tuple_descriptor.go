@@ -24,7 +24,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mohae/uvarint"
 	"github.com/shopspring/decimal"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"

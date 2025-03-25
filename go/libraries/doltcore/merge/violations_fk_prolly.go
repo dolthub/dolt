@@ -66,7 +66,10 @@ func prollyParentSecDiffFkConstraintViolations(
 	err = prolly.DiffMaps(ctx, preParentSecIdx, postParentSecIdx, considerAllRowsModified, func(ctx context.Context, diff tree.Diff) error {
 		switch diff.Type {
 		case tree.RemovedDiff, tree.ModifiedDiff:
-			toSecKey, hadNulls := makePartialKey(partialKB, foreignKey.ReferencedTableColumns, postParent.Index, postParent.IndexSchema, val.Tuple(diff.Key), val.Tuple(diff.From), preParentSecIdx.Pool())
+			toSecKey, err, hadNulls := makePartialKey(partialKB, foreignKey.ReferencedTableColumns, postParent.Index, postParent.IndexSchema, val.Tuple(diff.Key), val.Tuple(diff.From), preParentSecIdx.Pool())
+			if err != nil {
+				return err
+			}
 			if hadNulls {
 				// row had some nulls previously, so it couldn't have been a parent
 				return nil
@@ -133,7 +136,10 @@ func prollyParentPriDiffFkConstraintViolations(
 	err = prolly.DiffMaps(ctx, preParentRowData, postParentRowData, considerAllRowsModified, func(ctx context.Context, diff tree.Diff) error {
 		switch diff.Type {
 		case tree.RemovedDiff, tree.ModifiedDiff:
-			partialKey, hadNulls := makePartialKey(partialKB, foreignKey.ReferencedTableColumns, postParent.Index, postParent.Schema, val.Tuple(diff.Key), val.Tuple(diff.From), preParentRowData.Pool())
+			partialKey, err, hadNulls := makePartialKey(partialKB, foreignKey.ReferencedTableColumns, postParent.Index, postParent.Schema, val.Tuple(diff.Key), val.Tuple(diff.From), preParentRowData.Pool())
+			if err != nil {
+				return err
+			}
 			if hadNulls {
 				// row had some nulls previously, so it couldn't have been a parent
 				return nil
@@ -200,7 +206,7 @@ func prollyChildPriDiffFkConstraintViolations(
 		switch diff.Type {
 		case tree.AddedDiff, tree.ModifiedDiff:
 			k, v := val.Tuple(diff.Key), val.Tuple(diff.To)
-			partialKey, hasNulls := makePartialKey(
+			partialKey, err, hasNulls := makePartialKey(
 				partialKB,
 				foreignKey.TableColumns,
 				postChild.Index,
@@ -208,11 +214,14 @@ func prollyChildPriDiffFkConstraintViolations(
 				k,
 				v,
 				preChildRowData.Pool())
+			if err != nil {
+				return err
+			}
 			if hasNulls {
 				return nil
 			}
 
-			err := createCVIfNoPartialKeyMatchesPri(ctx, k, v, partialKey, partialDesc, parentScndryIdx, receiver)
+			err = createCVIfNoPartialKeyMatchesPri(ctx, k, v, partialKey, partialDesc, parentScndryIdx, receiver)
 			if err != nil {
 				return err
 			}
@@ -387,7 +396,7 @@ func createCVsForPartialKeyMatches(
 	return nil
 }
 
-func makePartialKey(kb *val.TupleBuilder, tags []uint64, idxSch schema.Index, tblSch schema.Schema, k, v val.Tuple, pool pool.BuffPool) (val.Tuple, bool) {
+func makePartialKey(kb *val.TupleBuilder, tags []uint64, idxSch schema.Index, tblSch schema.Schema, k, v val.Tuple, pool pool.BuffPool) (val.Tuple, error, bool) {
 	// Possible that the parent index (idxSch) is longer than the partial key (tags).
 	if idxSch.Name() != "" && len(idxSch.IndexedColumnTags()) <= len(tags) {
 		tags = idxSch.IndexedColumnTags()
@@ -395,7 +404,7 @@ func makePartialKey(kb *val.TupleBuilder, tags []uint64, idxSch schema.Index, tb
 	for i, tag := range tags {
 		if j, ok := tblSch.GetPKCols().TagToIdx[tag]; ok {
 			if k.FieldIsNull(j) {
-				return nil, true
+				return nil, nil, true
 			}
 			kb.PutRaw(i, k.GetField(j))
 			continue
@@ -403,7 +412,7 @@ func makePartialKey(kb *val.TupleBuilder, tags []uint64, idxSch schema.Index, tb
 
 		j, _ := tblSch.GetNonPKCols().TagToIdx[tag]
 		if v.FieldIsNull(j) {
-			return nil, true
+			return nil, nil, true
 		}
 		if schema.IsKeyless(tblSch) {
 			kb.PutRaw(i, v.GetField(j+1))
@@ -412,7 +421,8 @@ func makePartialKey(kb *val.TupleBuilder, tags []uint64, idxSch schema.Index, tb
 		}
 	}
 
-	return kb.Build(pool), false
+	tup, err := kb.Build(pool)
+	return tup, err, false
 }
 
 // TODO: Change json.NomsJson string marshalling to match json.Marshall

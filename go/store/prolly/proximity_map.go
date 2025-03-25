@@ -254,7 +254,11 @@ func (b *ProximityMapBuilder) Insert(ctx context.Context, key, value []byte) err
 	levelMapKeyBuilder := val.NewTupleBuilder(proximitylevelMapKeyDesc, b.ns)
 	levelMapKeyBuilder.PutUint8(0, 255-keyLevel)
 	levelMapKeyBuilder.PutByteString(1, key)
-	return b.levelMap.Put(ctx, levelMapKeyBuilder.Build(b.ns.Pool()), value)
+	tup, err := levelMapKeyBuilder.Build(b.ns.Pool())
+	if err != nil {
+		return err
+	}
+	return b.levelMap.Put(ctx, tup, value)
 }
 
 // When set to true, enables an additional check in ProximityMapBuilder.InsertAtLevel.
@@ -276,7 +280,11 @@ func (b *ProximityMapBuilder) InsertAtLevel(ctx context.Context, key, value []by
 	levelMapKeyBuilder := val.NewTupleBuilder(proximitylevelMapKeyDesc, b.ns)
 	levelMapKeyBuilder.PutUint8(0, 255-keyLevel)
 	levelMapKeyBuilder.PutByteString(1, key)
-	return b.levelMap.Put(ctx, levelMapKeyBuilder.Build(b.ns.Pool()), value)
+	tup, err := levelMapKeyBuilder.Build(b.ns.Pool())
+	if err != nil {
+		return err
+	}
+	return b.levelMap.Put(ctx, tup, value)
 }
 
 // makeRootNode creates a ProximityMap with a root node constructed from the provided parameters.

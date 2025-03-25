@@ -45,14 +45,21 @@ func NewTupleLeafNode(keys, values []val.Tuple) Node {
 	return newLeafNode(ks, vs)
 }
 
-func RandomTuplePairs(ctx context.Context, count int, keyDesc, valDesc val.TupleDesc, ns NodeStore) (items [][2]val.Tuple) {
+func RandomTuplePairs(ctx context.Context, count int, keyDesc, valDesc val.TupleDesc, ns NodeStore) (items [][2]val.Tuple, err error) {
 	keyBuilder := val.NewTupleBuilder(keyDesc, ns)
 	valBuilder := val.NewTupleBuilder(valDesc, ns)
 
 	items = make([][2]val.Tuple, count)
 	for i := range items {
-		items[i][0] = RandomTuple(keyBuilder, ns)
-		items[i][1] = RandomTuple(valBuilder, ns)
+		var err error
+		items[i][0], err = RandomTuple(keyBuilder, ns)
+		if err != nil {
+			return nil, err
+		}
+		items[i][1], err = RandomTuple(valBuilder, ns)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	dupes := make([]int, 0, count)
@@ -72,14 +79,14 @@ func RandomTuplePairs(ctx context.Context, count int, keyDesc, valDesc val.Tuple
 
 		// replace duplicates and validate again
 		for _, d := range dupes {
-			items[d][0] = RandomTuple(keyBuilder, ns)
+			items[d][0], _ = RandomTuple(keyBuilder, ns)
 		}
 		dupes = dupes[:0]
 	}
-	return items
+	return items, nil
 }
 
-func RandomCompositeTuplePairs(ctx context.Context, count int, keyDesc, valDesc val.TupleDesc, ns NodeStore) (items [][2]val.Tuple) {
+func RandomCompositeTuplePairs(ctx context.Context, count int, keyDesc, valDesc val.TupleDesc, ns NodeStore) (items [][2]val.Tuple, err error) {
 	// preconditions
 	if count%5 != 0 {
 		panic("expected empty divisible by 5")
@@ -88,7 +95,10 @@ func RandomCompositeTuplePairs(ctx context.Context, count int, keyDesc, valDesc 
 		panic("expected composite key")
 	}
 
-	tt := RandomTuplePairs(ctx, count, keyDesc, valDesc, ns)
+	tt, err := RandomTuplePairs(ctx, count, keyDesc, valDesc, ns)
+	if err != nil {
+		return nil, err
+	}
 
 	tuples := make([][2]val.Tuple, len(tt)*3)
 	for i := range tuples {
@@ -110,7 +120,7 @@ func RandomCompositeTuplePairs(ctx context.Context, count int, keyDesc, valDesc 
 
 	tuples = deduplicateTuples(ctx, keyDesc, tuples)
 
-	return tuples[:count]
+	return tuples[:count], nil
 }
 
 // Map<Tuple<Uint32>,Tuple<Uint32>>
@@ -127,7 +137,7 @@ func AscendingUintTuples(count int) (tuples [][2]val.Tuple, desc val.TupleDesc) 
 	return
 }
 
-func RandomTuple(tb *val.TupleBuilder, ns NodeStore) (tup val.Tuple) {
+func RandomTuple(tb *val.TupleBuilder, ns NodeStore) (tup val.Tuple, err error) {
 	for i, typ := range tb.Desc.Types {
 		randomField(tb, i, typ, ns)
 	}

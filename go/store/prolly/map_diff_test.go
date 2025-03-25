@@ -268,7 +268,8 @@ func makeMapWithInserts(t *testing.T, m Map, numInserts int) (Map, [][2]val.Tupl
 func generateInserts(t *testing.T, m testMap, kd, vd val.TupleDesc, numInserts int) [][2]val.Tuple {
 	ctx := context.Background()
 	ns := tree.NewTestNodeStore()
-	tups := tree.RandomTuplePairs(ctx, numInserts*2, kd, vd, ns)
+	tups, err := tree.RandomTuplePairs(ctx, numInserts*2, kd, vd, ns)
+	require.NoError(t, err)
 	inserts, extra := tups[:numInserts], tups[numInserts:]
 
 	j := 0
@@ -318,9 +319,13 @@ func makeUpdatesToTuples(kd, vd val.TupleDesc, tuples ...[2]val.Tuple) (updates 
 	valBuilder := val.NewTupleBuilder(vd, ns)
 
 	for i := range updates {
+		var err error
 		updates[i][0] = tuples[i][0]
 		updates[i][1] = tuples[i][1]
-		updates[i][2] = tree.RandomTuple(valBuilder, ns)
+		updates[i][2], err = tree.RandomTuple(valBuilder, ns)
+		if err != nil {
+			panic(err)
+		}
 	}
 
 	sort.Slice(updates, func(i, j int) bool {

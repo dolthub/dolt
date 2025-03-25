@@ -174,7 +174,11 @@ func Serialize(ctx context.Context, ns NodeStore, t val.Type, v interface{}) (re
 	if err != nil {
 		return nil, err
 	}
-	return newTupleDesc.GetField(0, tb.Build(pool.NewBuffPool())), nil
+	tup, err := tb.Build(pool.NewBuffPool())
+	if err != nil {
+		return nil, err
+	}
+	return newTupleDesc.GetField(0, tup), nil
 }
 
 // PutField writes an interface{} to the ith field of the Tuple being built.

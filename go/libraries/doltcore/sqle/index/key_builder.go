@@ -163,7 +163,7 @@ func (b SecondaryKeyBuilder) SecondaryKeyFromRow(ctx context.Context, k, v val.T
 			}
 		}
 	}
-	return b.builder.Build(b.pool), nil
+	return b.builder.Build(b.pool)
 }
 
 // BuildRow returns a sql.Row for the given key/value tuple pair
@@ -219,7 +219,7 @@ type ClusteredKeyBuilder struct {
 }
 
 // ClusteredKeyFromIndexKey builds a clustered index key from a secondary index key.
-func (b ClusteredKeyBuilder) ClusteredKeyFromIndexKey(k val.Tuple) val.Tuple {
+func (b ClusteredKeyBuilder) ClusteredKeyFromIndexKey(k val.Tuple) (val.Tuple, error) {
 	for to, from := range b.mapping {
 		b.builder.PutRaw(to, k.GetField(from))
 	}

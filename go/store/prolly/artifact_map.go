@@ -344,7 +344,7 @@ type ArtifactsEditor struct {
 // BuildArtifactKey builds a val.Tuple to be used to look up a value in this ArtifactsEditor. The key is composed
 // of |srcKey|, the primary key fields from the original table, followed by the hash of the source root, |srcRootish|,
 // and then the artifact type, |artType|.
-func (wr *ArtifactsEditor) BuildArtifactKey(_ context.Context, srcKey val.Tuple, srcRootish hash.Hash, artType ArtifactType) val.Tuple {
+func (wr *ArtifactsEditor) BuildArtifactKey(_ context.Context, srcKey val.Tuple, srcRootish hash.Hash, artType ArtifactType) (val.Tuple, error) {
 	for i := 0; i < srcKey.Count(); i++ {
 		wr.artKB.PutRaw(i, srcKey.GetField(i))
 	}
@@ -356,10 +356,16 @@ func (wr *ArtifactsEditor) BuildArtifactKey(_ context.Context, srcKey val.Tuple,
 // Add adds an artifact entry to this editor. The key for the entry includes all the primary key fields from the
 // underlying table (|srcKey|), the hash of the source root (|srcRootish|), and the artifact type (|artType|).
 func (wr *ArtifactsEditor) Add(ctx context.Context, srcKey val.Tuple, srcRootish hash.Hash, artType ArtifactType, meta []byte) error {
-	key := wr.BuildArtifactKey(ctx, srcKey, srcRootish, artType)
+	key, err := wr.BuildArtifactKey(ctx, srcKey, srcRootish, artType)
+	if err != nil {
+		return err
+	}
 
 	wr.artVB.PutJSON(0, meta)
-	value, _ := wr.artVB.Build(wr.pool)
+	value, err := wr.artVB.Build(wr.pool)
+	if err != nil {
+		return err
+	}
 
 	return wr.mut.Put(ctx, key, value)
 }
@@ -571,7 +577,10 @@ func (itr artifactIterImpl) Next(ctx context.Context) (Artifact, error) {
 		return Artifact{}, err
 	}
 
-	srcKey := itr.getSrcKeyFromArtKey(artKey)
+	srcKey, err := itr.getSrcKeyFromArtKey(artKey)
+	if err != nil {
+		return Artifact{}, err
+	}
 	cmHash, _ := itr.artKD.GetCommitAddr(itr.numPks, artKey)
 	artType, _ := itr.artKD.GetUint8(itr.numPks+1, artKey)
 	metadata, _ := itr.artVD.GetJSON(0, v)
@@ -585,7 +594,7 @@ func (itr artifactIterImpl) Next(ctx context.Context) (Artifact, error) {
 	}, nil
 }
 
-func (itr artifactIterImpl) getSrcKeyFromArtKey(k val.Tuple) val.Tuple {
+func (itr artifactIterImpl) getSrcKeyFromArtKey(k val.Tuple) (val.Tuple, error) {
 	for i := 0; i < itr.numPks; i++ {
 		itr.tb.PutRaw(i, k.GetField(i))
 	}
