@@ -1562,7 +1562,9 @@ func initialStateForBranchDb(ctx *sql.Context, srcDb dsess.SqlDatabase) (dsess.I
 
 	ws, err := srcDb.DbData().Ddb.ResolveWorkingSetAtRoot(ctx, wsRef, rootHash)
 	if err != nil {
-		return dsess.InitialDbState{}, err
+		if err != doltdb.ErrWorkingSetNotFound {
+			return dsess.InitialDbState{}, err
+		}
 	}
 
 	static := staticRepoState{
