@@ -131,6 +131,8 @@ func (ti *decimalType) Equals(other TypeInfo) bool {
 
 // FormatValue implements TypeInfo interface.
 func (ti *decimalType) FormatValue(v types.Value) (*string, error) {
+	// TODO: Add context parameter to FormatValue
+	ctx := context.Background()
 	if _, ok := v.(types.Null); ok || v == nil {
 		return nil, nil
 	}
@@ -138,7 +140,10 @@ func (ti *decimalType) FormatValue(v types.Value) (*string, error) {
 	if err != nil {
 		return nil, err
 	}
-	val, ok := strVal.(string)
+	val, ok, err := sql.Unwrap[string](ctx, strVal)
+	if err != nil {
+		return nil, err
+	}
 	if !ok {
 		return nil, fmt.Errorf(`"%v" has unexpectedly encountered a value of type "%T" from embedded type`, ti.String(), v)
 	}

@@ -170,12 +170,18 @@ func (ti *varStringType) Equals(other TypeInfo) bool {
 
 // FormatValue implements TypeInfo interface.
 func (ti *varStringType) FormatValue(v types.Value) (*string, error) {
+	// TODO: Add context parameter to FormatValue
+	ctx := context.Background()
 	if val, ok := v.(types.String); ok {
 		res, err := ti.ConvertNomsValueToValue(val)
 		if err != nil {
 			return nil, err
 		}
-		if resStr, ok := res.(string); ok {
+		resStr, ok, err := sql.Unwrap[string](ctx, res)
+		if err != nil {
+			return nil, err
+		}
+		if ok {
 			return &resStr, nil
 		}
 		return nil, fmt.Errorf(`"%v" has unexpectedly encountered a value of type "%T" from embedded type`, ti.String(), v)
