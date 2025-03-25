@@ -336,7 +336,7 @@ func assertProllyConflicts(t *testing.T, ctx context.Context, tbl *doltdb.Table,
 	itr, err := artM.IterAllConflicts(ctx)
 	require.NoError(t, err)
 
-	expectedSet := expected.toConflictSet()
+	expectedSet := expected.toConflictSet(t)
 
 	var c int
 	var h [16]byte
@@ -357,16 +357,19 @@ func assertProllyConflicts(t *testing.T, ctx context.Context, tbl *doltdb.Table,
 		require.True(t, ok)
 
 		if expectedConf.base != nil {
-			_, value := expectedConf.base.HashAndValue()
+			_, value, err := expectedConf.base.HashAndValue()
+			require.NoError(t, err)
 			require.Equal(t, valDesc.Format(ctx, value), valDesc.Format(ctx, base))
 		}
 		if expectedConf.ours != nil {
-			_, value := expectedConf.ours.HashAndValue()
+			_, value, err := expectedConf.ours.HashAndValue()
 			require.Equal(t, valDesc.Format(ctx, value), valDesc.Format(ctx, ours))
+			require.NoError(t, err)
 		}
 		if expectedConf.theirs != nil {
-			_, value := expectedConf.theirs.HashAndValue()
+			_, value, err := expectedConf.theirs.HashAndValue()
 			require.Equal(t, valDesc.Format(ctx, value), valDesc.Format(ctx, theirs))
+			require.NoError(t, err)
 		}
 	}
 
@@ -539,10 +542,10 @@ type conflictEntry struct {
 	base, ours, theirs *keylessEntry
 }
 
-func (e conflictEntries) toConflictSet() conflictSet {
+func (e conflictEntries) toConflictSet(t *testing.T) conflictSet {
 	s := make(conflictSet, len(e))
-	for _, t := range e {
-		s[t.Key()] = t
+	for _, entry := range e {
+		s[entry.Key(t)] = entry
 	}
 	return s
 }
@@ -555,19 +558,22 @@ func (e conflictEntries) toTupleSet() tupleSet {
 	return mustTupleSet(tups...)
 }
 
-func (e conflictEntry) Key() (h [16]byte) {
+func (e conflictEntry) Key(t *testing.T) (h [16]byte) {
 	if e.base != nil {
-		h2, _ := e.base.HashAndValue()
+		h2, _, err := e.base.HashAndValue()
+		require.NoError(t, err)
 		copy(h[:], h2[:])
 		return
 	}
 	if e.ours != nil {
-		h2, _ := e.ours.HashAndValue()
+		h2, _, err := e.ours.HashAndValue()
+		require.NoError(t, err)
 		copy(h[:], h2[:])
 		return
 	}
 	if e.theirs != nil {
-		h2, _ := e.theirs.HashAndValue()
+		h2, _, err := e.theirs.HashAndValue()
+		require.NoError(t, err)
 		copy(h[:], h2[:])
 		return
 	}
@@ -610,7 +616,10 @@ func mustHash128Set(entries ...keylessEntry) (s hash128Set) {
 	s = make(hash128Set, len(entries))
 
 	for _, e := range entries {
-		h2, value := e.HashAndValue()
+		h2, value, err := e.HashAndValue()
+		if err != nil {
+			panic(err)
+		}
 		copy(h[:], h2)
 		s[h] = value
 	}

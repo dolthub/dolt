@@ -180,7 +180,14 @@ func patchWorkflow(sqlCtx *sql.Context, queryist cli.Queryist, tables []string) 
 		}
 
 		for _, r := range rows {
-			tbl := r[0].(string)
+			tbl, ok, err := sql.Unwrap[string](sqlCtx, r[0])
+			if err != nil {
+				cli.PrintErrln(errhand.VerboseErrorFromError(err))
+				return 1
+			}
+			if !ok {
+				cli.PrintErrln("unexpected type for table_name, expected string, found %T", r[0])
+			}
 			tables = append(tables, tbl)
 		}
 	}
@@ -300,7 +307,13 @@ func queryForUnstagedChanges(sqlCtx *sql.Context, queryist cli.Queryist, tables 
 
 		changeCounts[tableName] = &tablePatchInfo{}
 		for _, row := range rows {
-			diffType := row[0].(string)
+			diffType, ok, err := sql.Unwrap[string](sqlCtx, row[0])
+			if err != nil {
+				return nil, err
+			}
+			if !ok {
+				return nil, fmt.Errorf("unexpected type for diff_type, expected string, found %T", row[0])
+			}
 			count, err := coerceToInt(row[1])
 			if err != nil {
 				return nil, err
@@ -614,7 +627,13 @@ func printSingleChange(sqlCtx *sql.Context, workspaceRow sql.Row, schema sql.Sch
 	toRow := workspaceRow[3 : 3+len(schema)]
 	fromRow := workspaceRow[3+len(schema):]
 
-	diffType := workspaceRow[2].(string)
+	diffType, ok, err := sql.Unwrap[string](sqlCtx, workspaceRow[2])
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return fmt.Errorf("unexpected type for diff_type, expected string, found %T", workspaceRow[2])
+	}
 	switch diffType {
 	case "added":
 		err = writer.WriteRow(sqlCtx.Context, toRow, diff.Added, colDiffType(diff.Added, len(toRow)))

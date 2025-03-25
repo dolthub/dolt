@@ -289,7 +289,11 @@ func dumpProcedures(sqlCtx *sql.Context, engine *engine.SqlEngine, root doltdb.R
 
 		sqlMode := ""
 		if sqlModeIdx >= 0 {
-			if s, ok := row[sqlModeIdx].(string); ok {
+			s, ok, err := sql.Unwrap[string](sqlCtx, row[sqlModeIdx])
+			if err != nil {
+				return err
+			}
+			if ok {
 				sqlMode = s
 			}
 		}
@@ -365,7 +369,11 @@ func dumpTriggers(sqlCtx *sql.Context, engine *engine.SqlEngine, root doltdb.Roo
 
 		sqlMode := ""
 		if sqlModeIdx >= 0 {
-			if s, ok := row[sqlModeIdx].(string); ok {
+			s, ok, err := sql.Unwrap[string](sqlCtx, row[sqlModeIdx])
+			if err != nil {
+				return err
+			}
+			if ok {
 				sqlMode = s
 			}
 		}
@@ -375,7 +383,14 @@ func dumpTriggers(sqlCtx *sql.Context, engine *engine.SqlEngine, root doltdb.Roo
 			return err
 		}
 
-		err = iohelp.WriteLine(writer, fmt.Sprintf("%s;", row[fragColIdx]))
+		fragCol, ok, err := sql.Unwrap[string](sqlCtx, row[fragColIdx])
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return fmt.Errorf("unexpected type for doltdb.SchemasTablesFragmentCol, expected string, got %T", row[fragColIdx])
+		}
+		err = iohelp.WriteLine(writer, fmt.Sprintf("%s;", fragCol))
 		if err != nil {
 			return err
 		}
@@ -425,14 +440,24 @@ func dumpViews(ctx *sql.Context, engine *engine.SqlEngine, root doltdb.RootValue
 		} else if err != nil {
 			return err
 		}
-
-		if row[typeColIdx] != "view" {
+		typeCol, ok, err := sql.Unwrap[string](ctx, row[typeColIdx])
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return fmt.Errorf("unexpected type for %s: expected string, found %T", doltdb.SchemasTablesTypeCol, row[typeColIdx])
+		}
+		if typeCol != "view" {
 			continue
 		}
 
 		sqlMode := ""
 		if sqlModeIdx >= 0 {
-			if s, ok := row[sqlModeIdx].(string); ok {
+			s, ok, err := sql.Unwrap[string](ctx, row[sqlModeIdx])
+			if err != nil {
+				return err
+			}
+			if ok {
 				sqlMode = s
 			}
 		}
@@ -440,7 +465,14 @@ func dumpViews(ctx *sql.Context, engine *engine.SqlEngine, root doltdb.RootValue
 		sqlEngine := engine.GetUnderlyingEngine()
 		binder := planbuilder.New(ctx, sqlEngine.Analyzer.Catalog, sqlEngine.EventScheduler, sqlEngine.Parser)
 		binder.SetParserOptions(sql.NewSqlModeFromString(sqlMode).ParserOptions())
-		cv, _, _, _, err := binder.Parse(row[fragColIdx].(string), nil, false)
+		fragCol, ok, err := sql.Unwrap[string](ctx, row[fragColIdx])
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return fmt.Errorf("unexpected type for %s: expected string, found %T", doltdb.SchemasTablesFragmentCol, row[fragColIdx])
+		}
+		cv, _, _, _, err := binder.Parse(fragCol, nil, false)
 		if err != nil {
 			return err
 		}
@@ -449,14 +481,19 @@ func dumpViews(ctx *sql.Context, engine *engine.SqlEngine, root doltdb.RootValue
 			return err
 		}
 
-		_, ok := cv.(*plan.CreateView)
+		_, ok = cv.(*plan.CreateView)
 		if ok {
-			err := iohelp.WriteLine(writer, fmt.Sprintf("%s;", row[fragColIdx]))
+			err := iohelp.WriteLine(writer, fmt.Sprintf("%s;", fragCol))
 			if err != nil {
 				return err
 			}
 		} else {
-			err := iohelp.WriteLine(writer, fmt.Sprintf("CREATE VIEW %s AS %s;", row[nameColIdx], row[fragColIdx]))
+			name, err := sql.UnwrapAny(ctx, row[nameColIdx])
+			if err != nil {
+				return err
+			}
+
+			err = iohelp.WriteLine(writer, fmt.Sprintf("CREATE VIEW %s AS %s;", name, fragCol))
 			if err != nil {
 				return err
 			}
