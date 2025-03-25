@@ -186,7 +186,7 @@ func patchWorkflow(sqlCtx *sql.Context, queryist cli.Queryist, tables []string) 
 				return 1
 			}
 			if !ok {
-				cli.PrintErrln("unexpected type for table_name, expected string, found %T", r[0])
+				cli.PrintErrf("unexpected type for table_name, expected string, found %T\n", r[0])
 			}
 			tables = append(tables, tbl)
 		}
