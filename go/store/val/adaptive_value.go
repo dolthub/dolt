@@ -17,8 +17,10 @@ package val
 import (
 	"bytes"
 	"context"
-	"github.com/dolthub/dolt/go/store/hash"
+
 	"github.com/mohae/uvarint"
+
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 // A AdaptiveValue is a byte sequence that can represent:

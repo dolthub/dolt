@@ -18,9 +18,9 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/dolthub/go-mysql-server/sql"
 	"strings"
 
+	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/gocraft/dbr/v2"
 	"github.com/gocraft/dbr/v2/dialect"
 
