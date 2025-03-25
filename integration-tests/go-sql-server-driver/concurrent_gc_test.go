@@ -111,6 +111,21 @@ func (gct gcTest) createDB(t *testing.T, ctx context.Context, db *sql.DB) {
 	require.NoError(t, err)
 }
 
+// When running with kill_connections GC safepoints, asserts that the
+// error we got is not an error that was not allowed.
+func assertExpectedGCError(t *testing.T, err error) bool {
+	if !assert.NotContains(t, err.Error(), "dangling ref") {
+		return false
+	}
+	if !assert.NotContains(t, err.Error(), "is unexpected noms value") {
+		return false
+	}
+	if !assert.NotContains(t, err.Error(), "interface conversion: types.Value is nil") {
+		return false
+	}
+	return true
+}
+
 func (gct gcTest) doUpdate(t *testing.T, ctx context.Context, db *sql.DB, i int) error {
 	conn, err := db.Conn(ctx)
 	if gct.sessionAware {
@@ -123,6 +138,7 @@ func (gct gcTest) doUpdate(t *testing.T, ctx context.Context, db *sql.DB, i int)
 		return nil
 	}
 	defer conn.Close()
+
 	tx, err := conn.BeginTx(ctx, nil)
 	if gct.sessionAware {
 		assert.NoError(t, err)
@@ -136,50 +152,36 @@ func (gct gcTest) doUpdate(t *testing.T, ctx context.Context, db *sql.DB, i int)
 	if gct.sessionAware {
 		assert.NoError(t, err)
 	} else if err != nil {
-		if !assert.NotContains(t, err.Error(), "dangling ref") {
-			return err
-		}
-		if !assert.NotContains(t, err.Error(), "is unexpected noms value") {
-			return err
-		}
-		if !assert.NotContains(t, err.Error(), "interface conversion: types.Value is nil") {
+		if !assertExpectedGCError(t, err) {
 			return err
 		}
 		t.Logf("err in Exec update: %v", err)
 	}
-	if err == nil {
-		if gct.commit {
-			_, err = tx.ExecContext(ctx, fmt.Sprintf("call dolt_commit('-am', 'increment vals id = %d')", i))
-			if gct.sessionAware {
-				assert.NoError(t, err)
-			} else if err != nil {
-				if !assert.NotContains(t, err.Error(), "dangling ref") {
-					return err
-				}
-				if !assert.NotContains(t, err.Error(), "is unexpected noms value") {
-					return err
-				}
-				if !assert.NotContains(t, err.Error(), "interface conversion: types.Value is nil") {
-					return err
-				}
-				t.Logf("err in Exec call dolt_commit: %v", err)
+	if err != nil {
+		// Early return so we do not try to continue using the
+		// broken connection or attempt to commit something
+		// with no changes.
+		return nil
+	}
+	if gct.commit {
+		_, err = tx.ExecContext(ctx, fmt.Sprintf("call dolt_commit('-am', 'increment vals id = %d')", i))
+		if gct.sessionAware {
+			assert.NoError(t, err)
+		} else if err != nil {
+			if !assertExpectedGCError(t, err) {
+				return err
 			}
-		} else {
-			err = tx.Commit()
-			if gct.sessionAware {
-				assert.NoError(t, err)
-			} else if err != nil {
-				if !assert.NotContains(t, err.Error(), "dangling ref") {
-					return err
-				}
-				if !assert.NotContains(t, err.Error(), "is unexpected noms value") {
-					return err
-				}
-				if !assert.NotContains(t, err.Error(), "interface conversion: types.Value is nil") {
-					return err
-				}
-				t.Logf("err in tx commit: %v", err)
+			t.Logf("err in Exec call dolt_commit: %v", err)
+		}
+	} else {
+		err = tx.Commit()
+		if gct.sessionAware {
+			assert.NoError(t, err)
+		} else if err != nil {
+			if !assertExpectedGCError(t, err) {
+				return err
 			}
+			t.Logf("err in tx commit: %v", err)
 		}
 	}
 	return nil

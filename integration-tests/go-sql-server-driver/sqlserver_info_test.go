@@ -49,7 +49,7 @@ func TestSQLServerInfoFile(t *testing.T) {
 			ports.global = &GlobalPorts
 			ports.t = t
 			RunServerUntilEndOfTest(t, rs, &driver.Server{
-				Args: []string{"--port", "{{get_port \"server_one\"}}"},
+				Args: []string{"--port", `{{get_port "server_one"}}`},
 				DynamicPort: "server_one",
 			}, &ports)
 
@@ -61,7 +61,7 @@ func TestSQLServerInfoFile(t *testing.T) {
 			})
 			t.Run("Running again in root fails", func(t *testing.T) {
 				_ = MakeServer(t, rs, &driver.Server{
-					Args: []string{"--port", "{{get_port \"server_two\"}}"},
+					Args: []string{"--port", `{{get_port "server_two"}}`},
 					DynamicPort: "server_two",
 					ErrorMatches: []string{
 						"locked by another dolt process",
@@ -70,7 +70,7 @@ func TestSQLServerInfoFile(t *testing.T) {
 			})
 			t.Run("Running in db_one fails", func(t *testing.T) {
 				_ = MakeServer(t, dbOne, &driver.Server{
-					Args: []string{"--port", "{{get_port \"server_two\"}}"},
+					Args: []string{"--port", `{{get_port "server_two"}}`},
 					DynamicPort: "server_two",
 					ErrorMatches: []string{
 						"locked by another dolt process",
@@ -122,13 +122,13 @@ func TestSQLServerInfoFile(t *testing.T) {
 			ports.global = &GlobalPorts
 			ports.t = t
 			RunServerUntilEndOfTest(t, dbOne, &driver.Server{
-				Args: []string{"--port", "{{get_port \"server_one\"}}"},
+				Args: []string{"--port", `{{get_port "server_one"}}`},
 				DynamicPort: "server_one",
 			}, &ports)
 
 			t.Run("Running server in root fails", func(t *testing.T) {
 				_ = MakeServer(t, rs, &driver.Server{
-					Args: []string{"--port", "{{get_port \"server_two\"}}"},
+					Args: []string{"--port", `{{get_port "server_two"}}`},
 					DynamicPort: "server_two",
 					ErrorMatches: []string{
 						"locked by another dolt process",
@@ -137,7 +137,7 @@ func TestSQLServerInfoFile(t *testing.T) {
 			})
 			t.Run("Running server in db_two succeeds", func(t *testing.T) {
 				RunServerUntilEndOfTest(t, dbTwo, &driver.Server{
-					Args: []string{"--port", "{{get_port \"server_two\"}}"},
+					Args: []string{"--port", `{{get_port "server_two"}}`},
 					DynamicPort: "server_two",
 				}, &ports)
 			})
@@ -168,7 +168,7 @@ func TestSQLServerInfoFile(t *testing.T) {
 
 			t.Run("Running server in root fails", func(t *testing.T) {
 				_ = MakeServer(t, rs, &driver.Server{
-					Args: []string{"--port", "{{get_port \"server_two\"}}"},
+					Args: []string{"--port", `{{get_port "server_two"}}`},
 					DynamicPort: "server_two",
 					ErrorMatches: []string{
 						"locked by another dolt process",
@@ -177,7 +177,7 @@ func TestSQLServerInfoFile(t *testing.T) {
 			})
 			t.Run("Running server in db_one fails", func(t *testing.T) {
 				_ = MakeServer(t, dbOne, &driver.Server{
-					Args: []string{"--port", "{{get_port \"server_two\"}}"},
+					Args: []string{"--port", `{{get_port "server_two"}}`},
 					DynamicPort: "server_two",
 					ErrorMatches: []string{
 						"locked by another dolt process",
@@ -206,7 +206,7 @@ func TestSQLServerInfoFile(t *testing.T) {
 
 			t.Run("Running server in root fails", func(t *testing.T) {
 				_ = MakeServer(t, rs, &driver.Server{
-					Args: []string{"--port", "{{get_port \"server_two\"}}"},
+					Args: []string{"--port", `{{get_port "server_two"}}`},
 					DynamicPort: "server_two",
 					ErrorMatches: []string{
 						"locked by another dolt process",
@@ -215,7 +215,7 @@ func TestSQLServerInfoFile(t *testing.T) {
 			})
 			t.Run("Running server in db_one fails", func(t *testing.T) {
 				_ = MakeServer(t, dbOne, &driver.Server{
-					Args: []string{"--port", "{{get_port \"server_two\"}}"},
+					Args: []string{"--port", `{{get_port "server_two"}}`},
 					DynamicPort: "server_two",
 					ErrorMatches: []string{
 						"locked by another dolt process",
@@ -224,7 +224,7 @@ func TestSQLServerInfoFile(t *testing.T) {
 			})
 			t.Run("Running server in db_two succeeds", func(t *testing.T) {
 				RunServerUntilEndOfTest(t, dbTwo, &driver.Server{
-					Args: []string{"--port", "{{get_port \"server_two\"}}"},
+					Args: []string{"--port", `{{get_port "server_two"}}`},
 					DynamicPort: "server_two",
 				}, &ports)
 			})
@@ -260,14 +260,14 @@ func TestSQLServerInfoFile(t *testing.T) {
 			t.Run("sql-server can run in root", func(t *testing.T) {
 				Setup(t)
 				RunServerUntilEndOfTest(t, rs, &driver.Server{
-					Args: []string{"--port", "{{get_port \"server_one\"}}"},
+					Args: []string{"--port", `{{get_port "server_one"}}`},
 					DynamicPort: "server_one",
 				}, &ports)
 			})
 			t.Run("sql-server can run in db_one", func(t *testing.T) {
 				Setup(t)
 				RunServerUntilEndOfTest(t, dbOne, &driver.Server{
-					Args: []string{"--port", "{{get_port \"server_one\"}}"},
+					Args: []string{"--port", `{{get_port "server_one"}}`},
 					DynamicPort: "server_one",
 				}, &ports)
 			})
@@ -302,14 +302,14 @@ func TestSQLServerInfoFile(t *testing.T) {
 			t.Run("sql-server can run in root", func(t *testing.T) {
 				Setup(t)
 				RunServerUntilEndOfTest(t, rs, &driver.Server{
-					Args: []string{"--port", "{{get_port \"server_one\"}}"},
+					Args: []string{"--port", `{{get_port "server_one"}}`},
 					DynamicPort: "server_one",
 				}, &ports)
 			})
 			t.Run("sql-server can run in db_one", func(t *testing.T) {
 				Setup(t)
 				RunServerUntilEndOfTest(t, rs, &driver.Server{
-					Args: []string{"--port", "{{get_port \"server_one\"}}"},
+					Args: []string{"--port", `{{get_port "server_one"}}`},
 					DynamicPort: "server_one",
 				}, &ports)
 			})
@@ -370,11 +370,11 @@ func TestSQLServerInfoFile(t *testing.T) {
 			ports.global = &GlobalPorts
 			ports.t = t
 			RunServerUntilEndOfTest(t, rs, &driver.Server{
-				Args: []string{"--port", "{{get_port \"server_one\"}}"},
+				Args: []string{"--port", `{{get_port "server_one"}}`},
 				DynamicPort: "server_one",
 			}, &ports)
 			RunServerUntilEndOfTest(t, rs, &driver.Server{
-				Args: []string{"--port", "{{get_port \"server_two\"}}"},
+				Args: []string{"--port", `{{get_port "server_two"}}`},
 				DynamicPort: "server_two",
 			}, &ports)
 		})

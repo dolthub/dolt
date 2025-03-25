@@ -46,7 +46,7 @@ func TestGCConjoinsOldgen(t *testing.T) {
 	require.NoError(t, err)
 
 	server := MakeServer(t, repo, &driver.Server{
-		Args: []string{"--port", "{{get_port \"server\"}}"},
+		Args: []string{"--port", `{{get_port "server"}}`},
 		DynamicPort: "server",
 	}, &ports)
 	server.DBName = "concurrent_gc_test"
