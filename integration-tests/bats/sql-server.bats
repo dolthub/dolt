@@ -2236,7 +2236,7 @@ EOF
 }
 
 # bats test_tags=no_lambda
-@test "sql-server: test --max-connections-timeout 15s and --max-connections 3 flags" {
+@test "sql-server: test --max-connections-timeout 10s and --max-connections 3 flags" {
     skiponwindows "mysql client required"
 
     cd repo1
@@ -2244,7 +2244,7 @@ EOF
     export PORT=$( definePORT )
 
     # Default is 60s, but I don't want to extend the test time for this.
-    start_sql_server_with_args_no_port --max-connections-timeout=10s --max-connections=3 --back-log=10 --port=$PORT
+    start_sql_server_with_args_no_port --max-connections-timeout=10s --max-connections=3 --port=$PORT
 
     # For this test we use the mysql client, which doesn't retry connections, but also seems to exit early
     # if we don't give it a query. So we use a sleep to hang the three connections. These will be killed, so

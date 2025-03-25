@@ -81,8 +81,8 @@ type ListenerYAMLConfig struct {
 	HostStr                 *string `yaml:"host,omitempty"`
 	PortNumber              *int    `yaml:"port,omitempty"`
 	MaxConnections          *uint64 `yaml:"max_connections,omitempty"`
-	BackLog                 *uint32 `yaml:"back_log,omitempty"`
-	MaxConnectionsTimeoutMs *uint64 `yaml:"max_connections_timeout_millis,omitempty"`
+	BackLog                 *uint32 `yaml:"back_log,omitempty" minver:"1.50.10"`
+	MaxConnectionsTimeoutMs *uint64 `yaml:"max_connections_timeout_millis,omitempty" minver:"1.50.10"`
 	ReadTimeoutMillis       *uint64 `yaml:"read_timeout_millis,omitempty"`
 	WriteTimeoutMillis      *uint64 `yaml:"write_timeout_millis,omitempty"`
 	// TLSKey is a file system path to an unencrypted private TLS key in PEM format.
