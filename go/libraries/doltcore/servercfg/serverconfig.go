@@ -22,6 +22,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 )
 
 var DefaultUnixSocketFilePath = DefaultMySQLUnixSocketFilePath
@@ -47,28 +48,30 @@ const (
 )
 
 const (
-	DefaultHost                    = "localhost"
-	DefaultPort                    = 3306
-	DefaultUser                    = "root"
-	DefaultPass                    = ""
-	DefaultTimeout                 = 8 * 60 * 60 * 1000 // 8 hours, same as MySQL
-	DefaultReadOnly                = false
-	DefaultLogLevel                = LogLevel_Info
-	DefaultLogFormat               = LogFormat_Text
-	DefaultAutoCommit              = true
-	DefaultAutoGCBehaviorEnable    = false
-	DefaultDoltTransactionCommit   = false
-	DefaultMaxConnections          = 1000
-	DefaultDataDir                 = "."
-	DefaultCfgDir                  = ".doltcfg"
-	DefaultPrivilegeFilePath       = "privileges.db"
-	DefaultBranchControlFilePath   = "branch_control.db"
-	DefaultMetricsHost             = ""
-	DefaultMetricsPort             = -1
-	DefaultAllowCleartextPasswords = false
-	DefaultMySQLUnixSocketFilePath = "/tmp/mysql.sock"
-	DefaultMaxLoggedQueryLen       = 0
-	DefaultEncodeLoggedQuery       = false
+	DefaultHost                      = "localhost"
+	DefaultPort                      = 3306
+	DefaultUser                      = "root"
+	DefaultPass                      = ""
+	DefaultTimeout                   = 8 * 60 * 60 * 1000 // 8 hours, same as MySQL
+	DefaultReadOnly                  = false
+	DefaultLogLevel                  = LogLevel_Info
+	DefaultLogFormat                 = LogFormat_Text
+	DefaultAutoCommit                = true
+	DefaultAutoGCBehaviorEnable      = false
+	DefaultDoltTransactionCommit     = false
+	DefaultMaxConnections            = 1000
+	DefaultMaxWaitConnections        = 50
+	DefaultMaxWaitConnectionsTimeout = 60 * time.Second
+	DefaultDataDir                   = "."
+	DefaultCfgDir                    = ".doltcfg"
+	DefaultPrivilegeFilePath         = "privileges.db"
+	DefaultBranchControlFilePath     = "branch_control.db"
+	DefaultMetricsHost               = ""
+	DefaultMetricsPort               = -1
+	DefaultAllowCleartextPasswords   = false
+	DefaultMySQLUnixSocketFilePath   = "/tmp/mysql.sock"
+	DefaultMaxLoggedQueryLen         = 0
+	DefaultEncodeLoggedQuery         = false
 )
 
 func ptr[T any](t T) *T {
@@ -159,6 +162,11 @@ type ServerConfig interface {
 	CfgDir() string
 	// MaxConnections returns the maximum number of simultaneous connections the server will allow.  The default is 1
 	MaxConnections() uint64
+	// MaxWaitConnections returns the maximum number of simultaneous connections that the server will allow to block waiting
+	// for a connection before new connections result in immediate rejection
+	MaxWaitConnections() uint32
+	// MaxWaitConnectionsTimeout returns the maximum amount of time that a connection will block waiting for a connection
+	MaxWaitConnectionsTimeout() time.Duration
 	// TLSKey returns a path to the servers PEM-encoded private TLS key. "" if there is none.
 	TLSKey() string
 	// TLSCert returns a path to the servers PEM-encoded TLS certificate chain. "" if there is none.
@@ -240,6 +248,8 @@ func defaultServerConfigYAML() *YAMLConfig {
 			HostStr:                 ptr(DefaultHost),
 			PortNumber:              ptr(DefaultPort),
 			MaxConnections:          ptr(uint64(DefaultMaxConnections)),
+			BackLog:                 ptr(uint32(DefaultMaxWaitConnections)),
+			MaxConnectionsTimeoutMs: ptr(uint64(DefaultMaxWaitConnectionsTimeout.Milliseconds())),
 			ReadTimeoutMillis:       ptr(uint64(DefaultTimeout)),
 			WriteTimeoutMillis:      ptr(uint64(DefaultTimeout)),
 			AllowCleartextPasswords: ptr(DefaultAllowCleartextPasswords),
@@ -306,6 +316,8 @@ const (
 	DataDirKey                      = "data_dir"
 	CfgDirKey                       = "cfg_dir"
 	MaxConnectionsKey               = "max_connections"
+	MaxWaitConnectionsKey           = "back_log"
+	MaxWaitConnectionsTimeoutKey    = "max_connections_timeout"
 	TLSKeyKey                       = "tls_key"
 	TLSCertKey                      = "tls_cert"
 	RequireSecureTransportKey       = "require_secure_transport"
