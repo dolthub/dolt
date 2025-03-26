@@ -30,6 +30,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/gcctx"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	dsql "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
@@ -143,7 +144,7 @@ func innerInit(h *DoltHarness, dEnv *env.DoltEnv) error {
 		return err
 	}
 
-	gcSafepointController := dsess.NewGCSafepointController()
+	gcSafepointController := gcctx.NewGCSafepointController()
 
 	config, _ := dEnv.Config.GetConfig(env.GlobalConfig)
 	sqlCtx := dsql.NewTestSQLCtxWithProvider(ctx, pro, config, statspro.StatsNoop{}, gcSafepointController)

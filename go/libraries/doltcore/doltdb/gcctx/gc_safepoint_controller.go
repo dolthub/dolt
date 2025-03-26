@@ -12,20 +12,46 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package dsess
+package gcctx
 
 import (
 	"context"
 	"errors"
 	"sync"
 	"sync/atomic"
+
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 type GCSafepointController struct {
 	mu sync.Mutex
 	// All known sessions. The first command registers the session
 	// here and SessionEnd causes it to be removed.
-	sessions map[*DoltSession]*GCSafepointSessionState
+	sessions map[GCRootsProvider]*GCSafepointSessionState
+}
+
+// A GCRootsProvider is the thing that a GCSafepointController
+// tracks. It also calls it a |session|, as it represents a client
+// interacting with the database.  The GCRootsProvider is registered
+// with the Controller through the first SessionCommandBegin() call,
+// and it goes through lifecycle callbacks which effect safepoint
+// establishment when it gets passed to SessionEnd and
+// SessionCommandEnd as well.
+//
+// A GCRootsProvider implements a single method |VisitGCRoots|, which
+// will be called if a GC needs to establish a safepoint while the
+// session is alive. The method is responsible for passing every live
+// in-memory chunk address related to the given |db| to the provided
+// |roots| callback. If it cannot do this for some reason, it should
+// return an error, but in that case the GC will fail. A
+// |VisitGCRoots| function will never be called after a
+// |GCRootsProvider| is given to |gcctx.SessionCommandBegin| until it
+// is given to |gcctx.SessionCommandEnd| again. If there is an
+// outstanding call to |VisitGCRoots| when |sql.SessionCommandBegin|
+// is called with a given roots provider, that call will block until
+// the call to |VisitGCRoots| completes.
+type GCRootsProvider interface {
+	VisitGCRoots(ctx context.Context, db string, roots func(hash.Hash) bool) error
 }
 
 type GCSafepointSessionState struct {
@@ -97,7 +123,7 @@ type GCSafepointWaiter struct {
 
 func NewGCSafepointController() *GCSafepointController {
 	return &GCSafepointController{
-		sessions: make(map[*DoltSession]*GCSafepointSessionState),
+		sessions: make(map[GCRootsProvider]*GCSafepointSessionState),
 	}
 }
 
@@ -112,7 +138,7 @@ func NewGCSafepointController() *GCSafepointController {
 //
 // After creating a Waiter, it is an error to create a new Waiter before the |Wait| method of the
 // original watier has returned. This error is not guaranteed to always be detected.
-func (c *GCSafepointController) Waiter(ctx context.Context, thisSession *DoltSession, visitQuiescedSession func(context.Context, *DoltSession) error) *GCSafepointWaiter {
+func (c *GCSafepointController) Waiter(ctx context.Context, thisSession GCRootsProvider, visitQuiescedSession func(context.Context, GCRootsProvider) error) *GCSafepointWaiter {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	ret := &GCSafepointWaiter{controller: c}
@@ -227,7 +253,7 @@ func (w *GCSafepointWaiter) Wait(ctx context.Context) error {
 //     one command can be outstanding at a time, and whether a command
 //     is outstanding controls how |Waiter| treats the Session when it
 //     is setting up all Sessions to visit their GC roots.
-func (c *GCSafepointController) SessionCommandBegin(s *DoltSession) error {
+func (c *GCSafepointController) SessionCommandBegin(s GCRootsProvider) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	var state *GCSafepointSessionState
@@ -237,7 +263,7 @@ func (c *GCSafepointController) SessionCommandBegin(s *DoltSession) error {
 		c.sessions[s] = state
 	}
 	if state.OutstandingCommand {
-		panic("SessionBeginCommand called on a session that already had an outstanding command.")
+		panic("SessionCommandBegin called on a session that already had an outstanding command.")
 	}
 	// Step #2: Receiving from QuiesceCallbackDone blocks, then
 	// the callback for this Session is still outstanding. We
@@ -249,7 +275,7 @@ func (c *GCSafepointController) SessionCommandBegin(s *DoltSession) error {
 		c.mu.Lock()
 		if state.OutstandingCommand {
 			// Concurrent calls to SessionCommandBegin. Bad times...
-			panic("SessionBeginCommand called on a session that already had an outstanding command.")
+			panic("SessionCommandBegin called on a session that already had an outstanding command.")
 		}
 	}
 	// Step #3. Record that a command is running so that Waiter
@@ -259,11 +285,23 @@ func (c *GCSafepointController) SessionCommandBegin(s *DoltSession) error {
 	return nil
 }
 
+// Called as part of valctx context validation, this asserts that the
+// session is registered with an open command.
+func (c *GCSafepointController) Validate(s GCRootsProvider) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if state := c.sessions[s]; state == nil {
+		panic("GCSafepointController.Validate; expected session with an open command, but no session registered with controller.")
+	} else if !state.OutstandingCommand {
+		panic("GCSafepointController.Validate; expected session with an open command, but the registered session has OutstandingCommand == false.")
+	}
+}
+
 // SessionCommandEnd marks the end of a session command. It has for
 // effects that the session no longer has an OutstandingCommand and,
 // if CommandEndCallback was non-nil, the callback itself has been
 // called and the CommandEndCallback field has been reset to |nil|.
-func (c *GCSafepointController) SessionCommandEnd(s *DoltSession) {
+func (c *GCSafepointController) SessionCommandEnd(s GCRootsProvider) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	state := c.sessions[s]
@@ -284,16 +322,16 @@ func (c *GCSafepointController) SessionCommandEnd(s *DoltSession) {
 // if we already knew about it. It is an error to call this on a
 // session which currently has an outstanding command.
 //
-// Because we only register sessions when the BeginCommand, it is
+// Because we only register sessions when the CommandBegin, it is
 // possible to get a SessionEnd callback for a session that was
 // never registered.
 //
 // This callback does not block for any outstanding |visitQuiescedSession|
 // callback to be completed before allowing the session to unregister
-// itself. It is an error for the application to call |SessionBeginCommand|
+// itself. It is an error for the application to call |SessionCommandBegin|
 // on a session after it is has called |SessionEnd| on it, but that error
 // is not necessarily detected.
-func (c *GCSafepointController) SessionEnd(s *DoltSession) {
+func (c *GCSafepointController) SessionEnd(s GCRootsProvider) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	state := c.sessions[s]

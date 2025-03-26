@@ -173,7 +173,7 @@ func (sc *StatsController) trySwapStats(ctx context.Context, prevGen uint64, new
 func (sc *StatsController) newStatsForRoot(baseCtx context.Context, gcKv *memStats) (newStats *rootStats, err error) {
 	defer func() {
 		if r := recover(); r != nil {
-			err = fmt.Errorf("issuer panicked running work: %s", r)
+			err = fmt.Errorf("worker panicked running work: %s", r)
 		}
 		if err != nil {
 			sc.descError("stats update interrupted", err)
@@ -202,14 +202,11 @@ func (sc *StatsController) newStatsForRoot(baseCtx context.Context, gcKv *memSta
 		}
 
 		var branches []ref.DoltRef
-		if err := sc.sq.DoSync(ctx, func() error {
-			sql.SessionCommandBegin(ctx.Session)
-			defer sql.SessionCommandEnd(ctx.Session)
+		if err := sc.sq.DoSyncSessionAware(ctx, func() (err error) {
 			ddb, ok := dSess.GetDoltDB(ctx, db.Name())
 			if !ok {
 				return fmt.Errorf("get dolt db dolt database not found %s", db.Name())
 			}
-			var err error // races with outer err
 			branches, err = ddb.GetBranches(ctx)
 			return err
 		}); err != nil {
@@ -225,9 +222,7 @@ func (sc *StatsController) newStatsForRoot(baseCtx context.Context, gcKv *memSta
 			}
 
 			var schDbs []sql.DatabaseSchema
-			if err := sc.sq.DoSync(ctx, func() error {
-				sql.SessionCommandBegin(ctx.Session)
-				defer sql.SessionCommandEnd(ctx.Session)
+			if err := sc.sq.DoSyncSessionAware(ctx, func() (err error) {
 				schDbs, err = sqlDb.AllSchemas(ctx)
 				return err
 			}); err != nil {
@@ -237,13 +232,11 @@ func (sc *StatsController) newStatsForRoot(baseCtx context.Context, gcKv *memSta
 
 			for _, sqlDb := range schDbs {
 				switch sqlDb.SchemaName() {
-				case "dolt", "information_schema", "pg_catalog":
+				case "dolt", sql.InformationSchemaDatabaseName, "pg_catalog":
 					continue
 				}
 				var tableNames []string
-				if err := sc.sq.DoSync(ctx, func() error {
-					sql.SessionCommandBegin(ctx.Session)
-					defer sql.SessionCommandEnd(ctx.Session)
+				if err := sc.sq.DoSyncSessionAware(ctx, func() (err error) {
 					tableNames, err = sqlDb.GetTableNames(ctx)
 					return err
 				}); err != nil {
@@ -292,12 +285,9 @@ func (sc *StatsController) collectIndexNodes(ctx *sql.Context, prollyMap prolly.
 	keyBuilder := val.NewTupleBuilder(prollyMap.KeyDesc().PrefixDesc(idxLen), prollyMap.NodeStore())
 
 	firstNodeHash := nodes[0].HashOf()
-	lowerBound, ok := sc.kv.GetBound(firstNodeHash, idxLen)
+	lowerBound, ok := sc.GetBound(firstNodeHash, idxLen)
 	if !ok {
-		sc.sq.DoSync(ctx, func() error {
-			sql.SessionCommandBegin(ctx.Session)
-			defer sql.SessionCommandEnd(ctx.Session)
-			var err error
+		sc.sq.DoSyncSessionAware(ctx, func() (err error) {
 			lowerBound, err = firstRowForIndex(ctx, idxLen, prollyMap, keyBuilder)
 			if err != nil {
 				return fmt.Errorf("get histogram bucket for node; %w", err)
@@ -306,7 +296,7 @@ func (sc *StatsController) collectIndexNodes(ctx *sql.Context, prollyMap prolly.
 				log.Printf("put bound:  %s: %v\n", firstNodeHash.String()[:5], lowerBound)
 			}
 
-			sc.kv.PutBound(firstNodeHash, lowerBound, idxLen)
+			sc.PutBound(firstNodeHash, lowerBound, idxLen)
 			return nil
 		})
 	}
@@ -314,10 +304,7 @@ func (sc *StatsController) collectIndexNodes(ctx *sql.Context, prollyMap prolly.
 	var writes int
 	var offset uint64
 	for i := 0; i < len(nodes); {
-		err := sc.sq.DoSync(ctx, func() error {
-			sql.SessionCommandBegin(ctx.Session)
-			defer sql.SessionCommandEnd(ctx.Session)
-
+		err := sc.sq.DoSyncSessionAware(ctx, func() (err error) {
 			newWrites := 0
 			for i < len(nodes) && newWrites < collectBatchSize {
 				n := nodes[i]
@@ -396,9 +383,7 @@ func (sc *StatsController) updateTable(ctx *sql.Context, newStats *rootStats, ta
 	var err error
 	var sqlTable *sqle.DoltTable
 	var dTab *doltdb.Table
-	if err := sc.sq.DoSync(ctx, func() error {
-		sql.SessionCommandBegin(ctx.Session)
-		defer sql.SessionCommandEnd(ctx.Session)
+	if err := sc.sq.DoSyncSessionAware(ctx, func() (err error) {
 		sqlTable, dTab, err = GetLatestTable(ctx, tableName, sqlDb)
 		return err
 	}); err != nil {
@@ -428,9 +413,7 @@ func (sc *StatsController) updateTable(ctx *sql.Context, newStats *rootStats, ta
 	}
 
 	var indexes []sql.Index
-	if err := sc.sq.DoSync(ctx, func() error {
-		sql.SessionCommandBegin(ctx.Session)
-		defer sql.SessionCommandEnd(ctx.Session)
+	if err := sc.sq.DoSyncSessionAware(ctx, func() (err error) {
 		indexes, err = sqlTable.GetIndexes(ctx)
 		return err
 	}); err != nil {
@@ -445,9 +428,8 @@ func (sc *StatsController) updateTable(ctx *sql.Context, newStats *rootStats, ta
 		var idx durable.Index
 		var err error
 		var prollyMap prolly.Map
-		func() {
-			sql.SessionCommandBegin(ctx.Session)
-			defer sql.SessionCommandEnd(ctx.Session)
+		var template stats.Statistic
+		if sc.sq.DoSyncSessionAware(ctx, func() (err error) {
 			if strings.EqualFold(sqlIdx.ID(), "PRIMARY") {
 				idx, err = dTab.GetRowData(ctx)
 			} else {
@@ -455,17 +437,11 @@ func (sc *StatsController) updateTable(ctx *sql.Context, newStats *rootStats, ta
 			}
 			if err == nil {
 				prollyMap, err = durable.ProllyMapFromIndex(idx)
+				if err != nil {
+					return err
+				}
 			}
-		}()
-		if err != nil {
-			sc.descError("GetRowData", err)
-			continue
-		}
 
-		var template stats.Statistic
-		if err := sc.sq.DoSync(ctx, func() error {
-			sql.SessionCommandBegin(ctx.Session)
-			defer sql.SessionCommandEnd(ctx.Session)
 			_, template, err = sc.getTemplate(ctx, sqlTable, sqlIdx)
 			if err != nil {
 				return fmt.Errorf("stats collection failed to generate a statistic template: %s.%s.%s:%T; %s", sqlDb.RevisionQualifiedName(), tableName, sqlIdx, sqlIdx, err.Error())
@@ -482,9 +458,7 @@ func (sc *StatsController) updateTable(ctx *sql.Context, newStats *rootStats, ta
 		idxLen := len(sqlIdx.Expressions())
 
 		var levelNodes []tree.Node
-		if err = sc.sq.DoSync(ctx, func() error {
-			sql.SessionCommandBegin(ctx.Session)
-			defer sql.SessionCommandEnd(ctx.Session)
+		if err := sc.sq.DoSyncSessionAware(ctx, func() (err error) {
 			levelNodes, err = tree.GetHistogramLevel(ctx, prollyMap.Tuples(), bucketLowCnt)
 			if err != nil {
 				sc.descError("get level", err)

@@ -1,3 +1,4 @@
+parallel: true
 tests:
 - name: jwt auth from config
   repos:
@@ -15,6 +16,7 @@ tests:
           tls_key: chain_key.pem
           tls_cert: chain_cert.pem
           require_secure_transport: true
+          port: {{get_port "server1"}}
         jwks:
         - name: jwksname
           location_url: file:///test_jwks.json
@@ -26,6 +28,7 @@ tests:
           fields_to_log: [on_behalf_of,id]
     server:
       args: ["--config", "server.yaml"]
+      dynamic_port: server1
   connections:
   - on: repo1
     queries:

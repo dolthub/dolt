@@ -357,6 +357,13 @@ func ConfigureServices(
 	}
 	controller.Register(PersistNondeterministicSystemVarDefaults)
 
+	InitStatsController := &svcs.AnonService{
+		InitF: func(ctx context.Context) error {
+			return sqlEngine.InitStats(ctx)
+		},
+	}
+	controller.Register(InitStatsController)
+
 	InitBinlogging := &svcs.AnonService{
 		InitF: func(context.Context) error {
 			primaryController := sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.BinlogPrimaryController
@@ -1085,6 +1092,8 @@ func getConfigFromServerConfig(serverConfig servercfg.ServerConfig, plf server.P
 	serverConf.ConnReadTimeout = readTimeout
 	serverConf.ConnWriteTimeout = writeTimeout
 	serverConf.MaxConnections = serverConfig.MaxConnections()
+	serverConf.MaxWaitConnections = serverConfig.MaxWaitConnections()
+	serverConf.MaxWaitConnectionsTimeout = serverConfig.MaxWaitConnectionsTimeout()
 	serverConf.TLSConfig = tlsConfig
 	serverConf.RequireSecureTransport = serverConfig.RequireSecureTransport()
 	serverConf.MaxLoggedQueryLen = serverConfig.MaxLoggedQueryLen()

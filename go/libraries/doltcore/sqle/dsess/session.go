@@ -30,6 +30,7 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/gcctx"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
@@ -64,7 +65,7 @@ type DoltSession struct {
 	mu                    *sync.Mutex
 	fs                    filesys.Filesys
 	writeSessProv         WriteSessFunc
-	gcSafepointController *GCSafepointController
+	gcSafepointController *gcctx.GCSafepointController
 
 	// If non-nil, this will be returned from ValidateSession.
 	// Used by sqle/cluster to put a session into a terminal err state.
@@ -74,7 +75,7 @@ type DoltSession struct {
 var _ sql.Session = (*DoltSession)(nil)
 var _ sql.PersistableSession = (*DoltSession)(nil)
 var _ sql.TransactionSession = (*DoltSession)(nil)
-var _ branch_control.Context = (*DoltSession)(nil)
+var _ branch_control.ContextConvertible = (*DoltSession)(nil)
 
 // DefaultSession creates a DoltSession with default values
 func DefaultSession(pro DoltDatabaseProvider, sessFunc WriteSessFunc) *DoltSession {
@@ -102,7 +103,7 @@ func NewDoltSession(
 	branchController *branch_control.Controller,
 	statsProvider sql.StatsProvider,
 	writeSessProv WriteSessFunc,
-	gcSafepointController *GCSafepointController,
+	gcSafepointController *gcctx.GCSafepointController,
 ) (*DoltSession, error) {
 	username := conf.GetStringOrDefault(config.UserNameKey, "")
 	email := conf.GetStringOrDefault(config.UserEmailKey, "")
@@ -1703,9 +1704,7 @@ func (d *DoltSession) SystemVariablesInConfig() ([]sql.SystemVariable, error) {
 }
 
 // GetBranch implements the interface branch_control.Context.
-func (d *DoltSession) GetBranch() (string, error) {
-	// TODO: creating a new SQL context here is expensive
-	ctx := sql.NewContext(context.Background(), sql.WithSession(d))
+func (d *DoltSession) GetBranch(ctx *sql.Context) (string, error) {
 	currentDb := d.Session.GetCurrentDatabase()
 
 	// no branch if there's no current db
@@ -1767,7 +1766,7 @@ func (d *DoltSession) SessionEnd() {
 
 // dolt_gc accesses the safepoint controller for the current
 // sql engine through here.
-func (d *DoltSession) GCSafepointController() *GCSafepointController {
+func (d *DoltSession) GCSafepointController() *gcctx.GCSafepointController {
 	return d.gcSafepointController
 }
 

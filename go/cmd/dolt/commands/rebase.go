@@ -358,7 +358,7 @@ func insertRebasePlanIntoDoltRebaseTable(plan *rebase.RebasePlan, sqlCtx *sql.Co
 // to be back on the branch being rebased (e.g. t1).
 func syncCliBranchToSqlSessionBranch(ctx *sql.Context, dEnv *env.DoltEnv) error {
 	doltSession := dsess.DSessFromSess(ctx.Session)
-	currentBranch, err := doltSession.GetBranch()
+	currentBranch, err := doltSession.GetBranch(ctx)
 	if err != nil {
 		return err
 	}

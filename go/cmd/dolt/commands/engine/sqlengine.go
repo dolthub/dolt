@@ -34,6 +34,7 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/gcctx"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/servercfg"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
@@ -83,7 +84,6 @@ type SqlEngineConfig struct {
 	AutoGCController           *dsqle.AutoGCController
 	BinlogReplicaController    binlogreplication.BinlogReplicaController
 	EventSchedulerStatus       eventscheduler.SchedulerStatus
-	StatsController            sql.StatsProvider
 }
 
 // NewSqlEngine returns a SqlEngine
@@ -92,6 +92,13 @@ func NewSqlEngine(
 	mrEnv *env.MultiRepoEnv,
 	config *SqlEngineConfig,
 ) (*SqlEngine, error) {
+	gcSafepointController := gcctx.NewGCSafepointController()
+	ctx = gcctx.WithGCSafepointController(ctx, gcSafepointController)
+
+	defer gcctx.SessionEnd(ctx)
+	gcctx.SessionCommandBegin(ctx)
+	defer gcctx.SessionCommandEnd(ctx)
+
 	dbs, locations, err := CollectDBs(ctx, mrEnv, config.Bulk)
 	if err != nil {
 		return nil, err
@@ -136,8 +143,6 @@ func NewSqlEngine(
 		all = append(all, clusterDB.(dsess.SqlDatabase))
 		locations = append(locations, nil)
 	}
-
-	gcSafepointController := dsess.NewGCSafepointController()
 
 	b := env.GetDefaultInitBranch(mrEnv.Config())
 	pro, err := dsqle.NewDoltDatabaseProviderWithDatabases(b, mrEnv.FileSystem(), all, locations)
@@ -212,15 +217,18 @@ func NewSqlEngine(
 		dprocedures.UseSessionAwareSafepointController = true
 	}
 
+	var statsPro sql.StatsProvider
 	_, enabled, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsEnabled)
 	if enabled.(int8) == 1 {
-		config.StatsController = statspro.NewStatsController(logrus.StandardLogger(), mrEnv.GetEnv(mrEnv.GetFirstDatabase()))
+		statsPro = statspro.NewStatsController(logrus.StandardLogger(), bThreads, mrEnv.GetEnv(mrEnv.GetFirstDatabase()))
 	} else {
-		config.StatsController = statspro.StatsNoop{}
+		statsPro = statspro.StatsNoop{}
 	}
 
+	engine.Analyzer.Catalog.StatsProvider = statsPro
+
 	engine.Analyzer.ExecBuilder = rowexec.NewOverrideBuilder(kvexec.Builder{})
-	sessFactory := doltSessionFactory(pro, config.StatsController, mrEnv.Config(), bcController, gcSafepointController, config.Autocommit)
+	sessFactory := doltSessionFactory(pro, statsPro, mrEnv.Config(), bcController, gcSafepointController, config.Autocommit)
 	sqlEngine.provider = pro
 	sqlEngine.contextFactory = sqlContextFactory
 	sqlEngine.dsessFactory = sessFactory
@@ -234,32 +242,6 @@ func NewSqlEngine(
 	if runAsyncThreads != nil {
 		if err = runAsyncThreads(bThreads, sqlEngine.NewDefaultContext); err != nil {
 			return nil, err
-		}
-	}
-
-	// configuring stats depends on sessionBuilder
-	// sessionBuilder needs ref to statsProv
-	if sc, ok := config.StatsController.(*statspro.StatsController); ok {
-		_, memOnly, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsMemoryOnly)
-		sc.SetMemOnly(memOnly.(int8) == 1)
-
-		pro.InitDatabaseHooks = append(pro.InitDatabaseHooks, statspro.NewInitDatabaseHook(sc))
-		pro.DropDatabaseHooks = append(pro.DropDatabaseHooks, statspro.NewDropDatabaseHook(sc))
-
-		var sqlDbs []sql.Database
-		for _, db := range dbs {
-			sqlDbs = append(sqlDbs, db)
-		}
-
-		err = sc.Init(ctx, pro, sqlEngine.NewDefaultContext, bThreads, sqlDbs)
-		if err != nil {
-			return nil, err
-		}
-
-		if _, paused, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsPaused); paused.(int8) == 0 {
-			if err = sc.Restart(); err != nil {
-				return nil, err
-			}
 		}
 	}
 
@@ -313,6 +295,49 @@ func NewRebasedSqlEngine(engine *gms.Engine, dbs map[string]dsess.SqlDatabase) *
 func applySystemVariables(vars sql.SystemVariableRegistry, cfg SystemVariables) error {
 	if cfg != nil {
 		return vars.AssignValues(cfg)
+	}
+	return nil
+}
+
+// InitStats initalizes stats threads. We separate construction
+// from initialization because the session provider needs the
+// *StatsCoordinator handle (stats and provider are cyclically
+// dependent), but several other initialization steps race on
+// session variables if stats threads are started too early.
+// xxx: separating provider/stats dependency is tough because
+// the session is the runtime source of truth for both.
+func (se *SqlEngine) InitStats(ctx context.Context) error {
+	// configuring stats depends on sessionBuilder
+	// sessionBuilder needs ref to statsProv
+	pro := se.GetUnderlyingEngine().Analyzer.Catalog.DbProvider.(*sqle.DoltDatabaseProvider)
+	sqlCtx, err := se.NewLocalContext(ctx)
+	if err != nil {
+		return err
+	}
+	dbs := pro.AllDatabases(sqlCtx)
+	statsPro := se.GetUnderlyingEngine().Analyzer.Catalog.StatsProvider
+	if sc, ok := statsPro.(*statspro.StatsController); ok {
+		_, memOnly, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsMemoryOnly)
+		sc.SetMemOnly(memOnly.(int8) == 1)
+
+		pro.InitDatabaseHooks = append(pro.InitDatabaseHooks, statspro.NewInitDatabaseHook(sc))
+		pro.DropDatabaseHooks = append(pro.DropDatabaseHooks, statspro.NewDropDatabaseHook(sc))
+
+		var sqlDbs []sql.Database
+		for _, db := range dbs {
+			sqlDbs = append(sqlDbs, db)
+		}
+
+		err = sc.Init(ctx, pro, se.NewDefaultContext, sqlDbs)
+		if err != nil {
+			return err
+		}
+
+		if _, paused, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsPaused); paused.(int8) == 0 {
+			if err = sc.Restart(); err != nil {
+				return err
+			}
+		}
 	}
 	return nil
 }
@@ -452,7 +477,7 @@ func sqlContextFactory(ctx context.Context, session sql.Session) (*sql.Context, 
 }
 
 // doltSessionFactory returns a sessionFactory that creates a new DoltSession
-func doltSessionFactory(pro *dsqle.DoltDatabaseProvider, statsPro sql.StatsProvider, config config.ReadWriteConfig, bc *branch_control.Controller, gcSafepointController *dsess.GCSafepointController, autocommit bool) sessionFactory {
+func doltSessionFactory(pro *dsqle.DoltDatabaseProvider, statsPro sql.StatsProvider, config config.ReadWriteConfig, bc *branch_control.Controller, gcSafepointController *gcctx.GCSafepointController, autocommit bool) sessionFactory {
 	return func(mysqlSess *sql.BaseSession, provider sql.DatabaseProvider) (*dsess.DoltSession, error) {
 		doltSession, err := dsess.NewDoltSession(mysqlSess, pro, config, bc, statsPro, writer.NewWriteSession, gcSafepointController)
 		if err != nil {
@@ -486,6 +511,12 @@ func NewSqlEngineForEnv(ctx context.Context, dEnv *env.DoltEnv) (*SqlEngine, str
 			ServerHost: "localhost",
 		},
 	)
+	if err != nil {
+		return nil, "", err
+	}
+	if err := engine.InitStats(ctx); err != nil {
+		return nil, "", err
+	}
 
 	return engine, mrEnv.GetFirstDatabase(), err
 }

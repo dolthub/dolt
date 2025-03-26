@@ -528,8 +528,8 @@ func (sc *StatsController) Flush(ctx context.Context) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	defer sql.SessionEnd(sqlCtx.Session)
 	sql.SessionCommandBegin(sqlCtx.Session)
+	defer sql.SessionEnd(sqlCtx.Session)
 	defer sql.SessionCommandEnd(sqlCtx.Session)
 
 	sc.mu.Lock()

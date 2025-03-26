@@ -19,6 +19,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/servercfg"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
@@ -42,6 +43,8 @@ type commandLineServerConfig struct {
 	autoCommit              bool
 	doltTransactionCommit   bool
 	maxConnections          uint64
+	maxWaitConnections      uint32
+	maxWaitConnsTimeout     time.Duration
 	tlsKey                  string
 	tlsCert                 string
 	requireSecureTransport  bool
@@ -72,6 +75,8 @@ func DefaultCommandLineServerConfig() *commandLineServerConfig {
 		logFormat:               servercfg.DefaultLogFormat,
 		autoCommit:              servercfg.DefaultAutoCommit,
 		maxConnections:          servercfg.DefaultMaxConnections,
+		maxWaitConnections:      servercfg.DefaultMaxWaitConnections,
+		maxWaitConnsTimeout:     servercfg.DefaultMaxWaitConnectionsTimeout,
 		dataDir:                 servercfg.DefaultDataDir,
 		cfgDir:                  filepath.Join(servercfg.DefaultDataDir, servercfg.DefaultCfgDir),
 		privilegeFilePath:       filepath.Join(servercfg.DefaultDataDir, servercfg.DefaultCfgDir, servercfg.DefaultPrivilegeFilePath),
@@ -169,6 +174,18 @@ func NewCommandLineConfig(creds *cli.UserPassword, apr *argparser.ArgParseResult
 		config.withMaxConnections(uint64(maxConnections))
 	}
 
+	if maxWaitConnections, ok := apr.GetInt(maxWaitConnectionsFlag); ok {
+		config.withMaxWaitConnections(uint32(maxWaitConnections))
+	}
+
+	if maxWaitConnsTimeoutStr, ok := apr.GetValue(maxWaitConsTimeoutFlag); ok {
+		maxWaitConnsTimeout, err := time.ParseDuration(maxWaitConnsTimeoutStr)
+		if err != nil {
+			return nil, fmt.Errorf("invalid duration value for --max-wait-connections-timeout '%s'", maxWaitConnsTimeoutStr)
+		}
+		config.withMaxWaitConnectionsTimeout(maxWaitConnsTimeout)
+	}
+
 	config.autoCommit = !apr.Contains(noAutoCommitFlag)
 	if apr.Contains(noAutoCommitFlag) {
 		config.valuesSet[servercfg.AutoCommitKey] = struct{}{}
@@ -256,6 +273,16 @@ func (cfg *commandLineServerConfig) DoltTransactionCommit() bool {
 // MaxConnections returns the maximum number of simultaneous connections the server will allow.  The default is 1
 func (cfg *commandLineServerConfig) MaxConnections() uint64 {
 	return cfg.maxConnections
+}
+
+// MaxWaitConnections returns the maximum number of simultaneous connections that the server will allow to block waiting
+// for a connection before new connections result in immediate rejection.
+func (cfg *commandLineServerConfig) MaxWaitConnections() uint32 {
+	return cfg.maxWaitConnections
+}
+
+func (cfg *commandLineServerConfig) MaxWaitConnectionsTimeout() time.Duration {
+	return cfg.maxWaitConnsTimeout
 }
 
 // TLSKey returns a path to the servers PEM-encoded private TLS key. "" if there is none.
@@ -422,6 +449,18 @@ func (cfg *commandLineServerConfig) withLogFormat(logformat servercfg.LogFormat)
 func (cfg *commandLineServerConfig) withMaxConnections(maxConnections uint64) *commandLineServerConfig {
 	cfg.maxConnections = maxConnections
 	cfg.valuesSet[servercfg.MaxConnectionsKey] = struct{}{}
+	return cfg
+}
+
+func (cfg *commandLineServerConfig) withMaxWaitConnections(maxWaitConnections uint32) *commandLineServerConfig {
+	cfg.maxWaitConnections = maxWaitConnections
+	cfg.valuesSet[servercfg.MaxWaitConnectionsKey] = struct{}{}
+	return cfg
+}
+
+func (cfg *commandLineServerConfig) withMaxWaitConnectionsTimeout(maxWaitConnsTimeout time.Duration) *commandLineServerConfig {
+	cfg.maxWaitConnsTimeout = maxWaitConnsTimeout
+	cfg.valuesSet[servercfg.MaxWaitConnectionsTimeoutKey] = struct{}{}
 	return cfg
 }
 

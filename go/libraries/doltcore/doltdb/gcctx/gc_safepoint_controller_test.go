@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package dsess
+package gcctx
 
 import (
 	"context"
@@ -20,6 +20,8 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 func TestGCSafepointController(t *testing.T) {
@@ -29,12 +31,12 @@ func TestGCSafepointController(t *testing.T) {
 		t.Run("UnknownSession", func(t *testing.T) {
 			t.Parallel()
 			controller := NewGCSafepointController()
-			controller.SessionEnd(&DoltSession{})
+			controller.SessionEnd(&visitable{})
 		})
 		t.Run("KnownSession", func(t *testing.T) {
 			t.Parallel()
 			controller := NewGCSafepointController()
-			sess := &DoltSession{}
+			sess := &visitable{}
 			controller.SessionCommandBegin(sess)
 			controller.SessionCommandEnd(sess)
 			controller.SessionEnd(sess)
@@ -42,7 +44,7 @@ func TestGCSafepointController(t *testing.T) {
 		t.Run("RunningSession", func(t *testing.T) {
 			t.Parallel()
 			controller := NewGCSafepointController()
-			sess := &DoltSession{}
+			sess := &visitable{}
 			controller.SessionCommandBegin(sess)
 			require.Panics(t, func() {
 				controller.SessionEnd(sess)
@@ -54,7 +56,7 @@ func TestGCSafepointController(t *testing.T) {
 		t.Run("RunningSession", func(t *testing.T) {
 			t.Parallel()
 			controller := NewGCSafepointController()
-			sess := &DoltSession{}
+			sess := &visitable{}
 			controller.SessionCommandBegin(sess)
 			require.Panics(t, func() {
 				controller.SessionCommandBegin(sess)
@@ -63,7 +65,7 @@ func TestGCSafepointController(t *testing.T) {
 		t.Run("AfterCommandEnd", func(t *testing.T) {
 			t.Parallel()
 			controller := NewGCSafepointController()
-			sess := &DoltSession{}
+			sess := &visitable{}
 			controller.SessionCommandBegin(sess)
 			controller.SessionCommandEnd(sess)
 			controller.SessionCommandBegin(sess)
@@ -74,7 +76,7 @@ func TestGCSafepointController(t *testing.T) {
 		t.Run("NotKnown", func(t *testing.T) {
 			t.Parallel()
 			controller := NewGCSafepointController()
-			sess := &DoltSession{}
+			sess := &visitable{}
 			require.Panics(t, func() {
 				controller.SessionCommandEnd(sess)
 			})
@@ -82,7 +84,7 @@ func TestGCSafepointController(t *testing.T) {
 		t.Run("NotRunning", func(t *testing.T) {
 			t.Parallel()
 			controller := NewGCSafepointController()
-			sess := &DoltSession{}
+			sess := &visitable{}
 			controller.SessionCommandBegin(sess)
 			controller.SessionCommandEnd(sess)
 			require.Panics(t, func() {
@@ -95,7 +97,7 @@ func TestGCSafepointController(t *testing.T) {
 		t.Run("Empty", func(t *testing.T) {
 			t.Parallel()
 			var nilCh chan struct{}
-			block := func(context.Context, *DoltSession) error {
+			block := func(context.Context, GCRootsProvider) error {
 				<-nilCh
 				return nil
 			}
@@ -106,11 +108,11 @@ func TestGCSafepointController(t *testing.T) {
 		t.Run("OnlyThisSession", func(t *testing.T) {
 			t.Parallel()
 			var nilCh chan struct{}
-			block := func(context.Context, *DoltSession) error {
+			block := func(context.Context, GCRootsProvider) error {
 				<-nilCh
 				return nil
 			}
-			sess := &DoltSession{}
+			sess := &visitable{}
 			controller := NewGCSafepointController()
 			controller.SessionCommandBegin(sess)
 			waiter := controller.Waiter(context.Background(), sess, block)
@@ -124,14 +126,14 @@ func TestGCSafepointController(t *testing.T) {
 			// but not within a command and another one
 			// is within a command at the time the
 			// waiter is created.
-			quiesced := &DoltSession{}
-			running := &DoltSession{}
+			quiesced := &visitable{}
+			running := &visitable{}
 			controller := NewGCSafepointController()
 			controller.SessionCommandBegin(quiesced)
 			controller.SessionCommandBegin(running)
 			controller.SessionCommandEnd(quiesced)
 			sawQuiesced, sawRunning, waitDone := make(chan struct{}), make(chan struct{}), make(chan struct{})
-			wait := func(_ context.Context, s *DoltSession) error {
+			wait := func(_ context.Context, s GCRootsProvider) error {
 				if s == quiesced {
 					close(sawQuiesced)
 				} else if s == running {
@@ -165,14 +167,14 @@ func TestGCSafepointController(t *testing.T) {
 			t.Parallel()
 			// When the Wait context is canceled, we do not block on
 			// the running sessions and they never get visited.
-			quiesced := &DoltSession{}
-			running := &DoltSession{}
+			quiesced := &visitable{}
+			running := &visitable{}
 			controller := NewGCSafepointController()
 			controller.SessionCommandBegin(quiesced)
 			controller.SessionCommandBegin(running)
 			controller.SessionCommandEnd(quiesced)
 			sawQuiesced, sawRunning, waitDone := make(chan struct{}), make(chan struct{}), make(chan struct{})
-			wait := func(_ context.Context, s *DoltSession) error {
+			wait := func(_ context.Context, s GCRootsProvider) error {
 				if s == quiesced {
 					close(sawQuiesced)
 				} else if s == running {
@@ -212,15 +214,15 @@ func TestGCSafepointController(t *testing.T) {
 		})
 		t.Run("BeginBlocksUntilVisitFinished", func(t *testing.T) {
 			t.Parallel()
-			quiesced := &DoltSession{}
-			running := &DoltSession{}
+			quiesced := &visitable{}
+			running := &visitable{}
 			controller := NewGCSafepointController()
 			controller.SessionCommandBegin(quiesced)
 			controller.SessionCommandEnd(quiesced)
 			controller.SessionCommandBegin(running)
 			finishQuiesced, finishRunning := make(chan struct{}), make(chan struct{})
 			sawQuiesced, sawRunning := make(chan struct{}), make(chan struct{})
-			wait := func(_ context.Context, s *DoltSession) error {
+			wait := func(_ context.Context, s GCRootsProvider) error {
 				if s == quiesced {
 					close(sawQuiesced)
 					<-finishQuiesced
@@ -250,7 +252,7 @@ func TestGCSafepointController(t *testing.T) {
 			case <-time.After(50 * time.Millisecond):
 			}
 
-			newSession := &DoltSession{}
+			newSession := &visitable{}
 			controller.SessionCommandBegin(newSession)
 			controller.SessionCommandEnd(newSession)
 			controller.SessionEnd(newSession)
@@ -283,10 +285,19 @@ func TestGCSafepointController(t *testing.T) {
 
 			controller.SessionEnd(quiesced)
 			controller.SessionEnd(running)
-			err := controller.Waiter(context.Background(), nil, func(context.Context, *DoltSession) error {
+			err := controller.Waiter(context.Background(), nil, func(context.Context, GCRootsProvider) error {
 				panic("unexpected registered session")
 			}).Wait(context.Background())
 			require.NoError(t, err)
 		})
 	})
+}
+
+type visitable struct {
+	// Give it an unused memory so it gets a unique address.
+	state bool
+}
+
+func (*visitable) VisitGCRoots(ctx context.Context, db string, keep func(hash.Hash) bool) error {
+	return nil
 }
