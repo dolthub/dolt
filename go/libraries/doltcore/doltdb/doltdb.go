@@ -60,7 +60,7 @@ const (
 	CreationBranch = "create"
 
 	// 1GB.
-	defaultTargetFileSize = 1<<30
+	defaultTargetFileSize = 1 << 30
 )
 
 var ErrMissingDoltDataDir = errors.New("missing dolt data directory")

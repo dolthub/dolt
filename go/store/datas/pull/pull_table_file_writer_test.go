@@ -35,7 +35,7 @@ func TestPullTableFileWriter(t *testing.T) {
 		var s noopTableFileDestStore
 		wr := NewPullTableFileWriter(PullTableFileWriterConfig{
 			ConcurrentUploads:    1,
-			TargetFileSize:       1<<20,
+			TargetFileSize:       1 << 20,
 			MaximumBufferedFiles: 1,
 			TempDir:              t.TempDir(),
 			DestStore:            &s,
@@ -55,7 +55,7 @@ func TestPullTableFileWriter(t *testing.T) {
 			var s noopTableFileDestStore
 			wr := NewPullTableFileWriter(PullTableFileWriterConfig{
 				ConcurrentUploads:    1,
-				TargetFileSize:       1<<20,
+				TargetFileSize:       1 << 20,
 				MaximumBufferedFiles: 1,
 				TempDir:              t.TempDir(),
 				DestStore:            &s,
@@ -66,7 +66,7 @@ func TestPullTableFileWriter(t *testing.T) {
 			})
 
 			for i := 0; i < 32; i++ {
-				bs := make([]byte, 1<<20 / 32 * 4)
+				bs := make([]byte, 1<<20/32*4)
 				_, err := rand.Read(bs)
 				assert.NoError(t, err)
 				chk := chunks.NewChunk(bs)
@@ -86,7 +86,7 @@ func TestPullTableFileWriter(t *testing.T) {
 			var s noopTableFileDestStore
 			wr := NewPullTableFileWriter(PullTableFileWriterConfig{
 				ConcurrentUploads:    1,
-				TargetFileSize:       1<<20,
+				TargetFileSize:       1 << 20,
 				MaximumBufferedFiles: 1,
 				TempDir:              t.TempDir(),
 				DestStore:            &s,
@@ -119,7 +119,7 @@ func TestPullTableFileWriter(t *testing.T) {
 		s.writeDelay = 50 * time.Millisecond
 		wr := NewPullTableFileWriter(PullTableFileWriterConfig{
 			ConcurrentUploads:    32,
-			TargetFileSize:       1<<20,
+			TargetFileSize:       1 << 20,
 			MaximumBufferedFiles: 1,
 			TempDir:              t.TempDir(),
 			DestStore:            &s,
@@ -154,7 +154,7 @@ func TestPullTableFileWriter(t *testing.T) {
 			var s errTableFileDestStore
 			wr := NewPullTableFileWriter(PullTableFileWriterConfig{
 				ConcurrentUploads:    1,
-				TargetFileSize:       1<<20,
+				TargetFileSize:       1 << 20,
 				MaximumBufferedFiles: 0,
 				TempDir:              t.TempDir(),
 				DestStore:            &s,
@@ -183,7 +183,7 @@ func TestPullTableFileWriter(t *testing.T) {
 			var s errTableFileDestStore
 			wr := NewPullTableFileWriter(PullTableFileWriterConfig{
 				ConcurrentUploads:    1,
-				TargetFileSize:       1<<20,
+				TargetFileSize:       1 << 20,
 				MaximumBufferedFiles: 0,
 				TempDir:              t.TempDir(),
 				DestStore:            &s,
@@ -194,7 +194,7 @@ func TestPullTableFileWriter(t *testing.T) {
 			})
 
 			for i := 0; i < 8; i++ {
-				bs := make([]byte, 1<<20 / 8)
+				bs := make([]byte, 1<<20/8)
 				_, err := rand.Read(bs)
 				assert.NoError(t, err)
 				chk := chunks.NewChunk(bs)
@@ -229,7 +229,7 @@ func TestPullTableFileWriter(t *testing.T) {
 		s.onAdd = true
 		wr := NewPullTableFileWriter(PullTableFileWriterConfig{
 			ConcurrentUploads:    1,
-			TargetFileSize:       1<<20,
+			TargetFileSize:       1 << 20,
 			MaximumBufferedFiles: 0,
 			TempDir:              t.TempDir(),
 			DestStore:            &s,
@@ -262,7 +262,7 @@ func TestPullTableFileWriter(t *testing.T) {
 		}
 		wr := NewPullTableFileWriter(PullTableFileWriterConfig{
 			ConcurrentUploads:    1,
-			TargetFileSize:       1<<20,
+			TargetFileSize:       1 << 20,
 			MaximumBufferedFiles: 0,
 			TempDir:              t.TempDir(),
 			DestStore:            &s,
@@ -273,7 +273,7 @@ func TestPullTableFileWriter(t *testing.T) {
 		})
 
 		for i := 0; i < 8; i++ {
-			bs := make([]byte, 1<<20 / 8)
+			bs := make([]byte, 1<<20/8)
 			_, err := rand.Read(bs)
 			assert.NoError(t, err)
 			chk := chunks.NewChunk(bs)
@@ -307,7 +307,7 @@ func TestPullTableFileWriter(t *testing.T) {
 		}
 		wr := NewPullTableFileWriter(PullTableFileWriterConfig{
 			ConcurrentUploads:    4,
-			TargetFileSize:       1<<20,
+			TargetFileSize:       1 << 20,
 			MaximumBufferedFiles: 0,
 			TempDir:              t.TempDir(),
 			DestStore:            &s,
@@ -318,7 +318,7 @@ func TestPullTableFileWriter(t *testing.T) {
 		})
 
 		for i := 0; i < 32; i++ {
-			bs := make([]byte, 1 << 20 / 32 * 4)
+			bs := make([]byte, 1<<20/32*4)
 			_, err := rand.Read(bs)
 			assert.NoError(t, err)
 			chk := chunks.NewChunk(bs)
