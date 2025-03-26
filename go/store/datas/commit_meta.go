@@ -205,8 +205,10 @@ func (cm *CommitMeta) Time() time.Time {
 
 // FormatTS takes the internal timestamp and turns it into a human readable string in the time.RubyDate format
 // which looks like: "Mon Jan 02 15:04:05 -0700 2006"
+//
+// We round this to the nearest second, which is what MySQL timestamp does by default.
 func (cm *CommitMeta) FormatTS() string {
-	return cm.Time().In(CommitLoc).Format(time.RubyDate)
+	return cm.Time().In(CommitLoc).Round(time.Second).Format(time.RubyDate)
 }
 
 // String returns the human readable string representation of the commit data

@@ -1,3 +1,4 @@
+parallel: true
 tests:
 - name: require_secure_transport no key or cert
   repos:
@@ -7,8 +8,10 @@ tests:
       contents: |
         listener:
           require_secure_transport: true
+          port: {{get_port "server"}}
     server:
       args: ["--config", "server.yaml"]
+      dynamic_port: server
       error_matches:
       - "require_secure_transport can only be `true` when a tls_key and tls_cert are provided."
 - name: tls_key non-existent
@@ -24,8 +27,10 @@ tests:
         listener:
           tls_key: doesnotexist_key.pem
           tls_cert: chain_cert.pem
+          port: {{get_port "server"}}
     server:
       args: ["--config", "server.yaml"]
+      dynamic_port: server
       error_matches:
       - "no such file or directory"
 - name: tls_cert non-existent
@@ -41,8 +46,10 @@ tests:
         listener:
           tls_key: chain_key.pem
           tls_cert: doesnotexist_key.pem
+          port: {{get_port "server"}}
     server:
       args: ["--config", "server.yaml"]
+      dynamic_port: server
       error_matches:
       - "no such file or directory"
 
@@ -62,8 +69,10 @@ tests:
           tls_key: chain_key.pem
           tls_cert: chain_cert.pem
           require_secure_transport: true
+          port: {{get_port "server"}}
     server:
       args: ["--config", "server.yaml"]
+      dynamic_port: server
   connections:
   - on: repo1
     queries:

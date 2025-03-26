@@ -1,3 +1,4 @@
+parallel: true
 tests:
 - name: can clone from server1 remotesapi endpoint
   multi_repos:
@@ -6,8 +7,8 @@ tests:
     - name: repo1
     - name: repo2
     server:
-      args: ["--remotesapi-port", "50051", "--port", "3309"]
-      port: 3309
+      args: ["--remotesapi-port", "{{get_port \"remotesapi_port\"}}", "--port", "{{get_port \"server_port\"}}"]
+      dynamic_port: server_port
   - name: server2
     repos:
     - name: repo1
@@ -17,10 +18,10 @@ tests:
         log_level: trace
         listener:
           host: 0.0.0.0
-          port: 3308
+          port: {{get_port "server2_port"}}
     server:
       args: ["--config", "server.yaml"]
-      port: 3308
+      dynamic_port: server2_port
   connections:
   - on: server1
     queries:
@@ -31,7 +32,7 @@ tests:
   - on: server2
     queries:
     - exec: "use repo1"
-    - exec: "call dolt_clone('http://localhost:50051/repo2')"
+    - exec: "call dolt_clone('http://localhost:{{get_port \"remotesapi_port\"}}/repo2')"
     - exec: "use repo2"
     - query: "select count(*) from vals"
       result:
@@ -44,8 +45,8 @@ tests:
     - name: repo1
     - name: repo2
     server:
-      args: ["--remotesapi-port", "50051", "--port", "3309"]
-      port: 3309
+      args: ["--remotesapi-port", "{{get_port \"remotesapi_port\"}}", "--port", "{{get_port \"server_port\"}}"]
+      dynamic_port: server_port
   - name: server2
     repos:
     - name: repo1
@@ -55,10 +56,10 @@ tests:
         log_level: trace
         listener:
           host: 0.0.0.0
-          port: 3308
+          port: {{get_port "server2_port"}}
     server:
       args: ["--config", "server.yaml"]
-      port: 3308
+      dynamic_port: server2_port
   connections:
   - on: server1
     queries:
@@ -75,7 +76,7 @@ tests:
   - on: server2
     queries:
     - exec: "use repo1"
-    - exec: "call dolt_clone('http://localhost:50051/repo2')"
+    - exec: "call dolt_clone('http://localhost:{{get_port \"remotesapi_port\"}}/repo2')"
     - exec: "use repo2"
     - query: "select count(*) from vals"
       result:
