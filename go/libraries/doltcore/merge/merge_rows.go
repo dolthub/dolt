@@ -146,7 +146,7 @@ func NewMerger(
 
 // MergedResult returns either the merged table or merged root object. Both fields will never be set simultaneously.
 type MergedResult struct {
-	table    *doltdb.Table // If non-nil, represents a merged table (and not a merged root object).
+	table    *doltdb.Table     // If non-nil, represents a merged table (and not a merged root object).
 	rootObj  doltdb.RootObject // If non-nil, represents a merged root object (and not a merged table).
 	conflict SchemaConflict
 }
@@ -329,7 +329,7 @@ func (rm *RootMerger) makeTableMerger(ctx context.Context, tblName doltdb.TableN
 
 	// TODO: need to determine what to do if we have a mix of both tables and root objects (we'll error for now)
 	if tm.HasTable() && tm.HasRootObject() {
-		return nil, errors.New("Attempting to merge fundamentally different objects, which has not yet been implemented\n"+
+		return nil, errors.New("Attempting to merge fundamentally different objects, which has not yet been implemented\n" +
 			"Please contact us and share how you ran into this error to better help our development efforts.")
 	}
 	return &tm, nil
@@ -437,9 +437,9 @@ func (tm TableMerger) HasTable() bool {
 }
 
 // HasRootObject returns whether any of the root object fields have been set.
- func (tm TableMerger) HasRootObject() bool {
-	 return tm.leftRootObj != nil || tm.rightRootObj != nil || tm.ancRootObj != nil
- }
+func (tm TableMerger) HasRootObject() bool {
+	return tm.leftRootObj != nil || tm.rightRootObj != nil || tm.ancRootObj != nil
+}
 
 // MergeRootObject contains all the information needed for MergeRootObjects to perform a merge.
 type MergeRootObject struct {
