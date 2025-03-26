@@ -69,7 +69,10 @@ type PullTableFileWriter struct {
 type PullTableFileWriterConfig struct {
 	ConcurrentUploads int
 
-	ChunksPerFile int
+	// The approximate file size at which we will cut a file so
+	// that we start uploading it and we start writing later
+	// chunks to a new file. In bytes.
+	TargetFileSize uint64
 
 	MaximumBufferedFiles int
 
@@ -210,6 +213,7 @@ func (w *PullTableFileWriter) uploadAndFinalizeThread(ctx context.Context) error
 // closes newWriterCh and exits itself.
 func (w *PullTableFileWriter) addChunkThread(ctx context.Context) (err error) {
 	var curWr nbs.GenericTableWriter
+	var curBytes uint64
 
 	defer func() {
 		if curWr != nil {
@@ -222,19 +226,29 @@ func (w *PullTableFileWriter) addChunkThread(ctx context.Context) (err error) {
 		}
 	}()
 
+	estimatedFooterSize := func(chunkCnt int) uint64 {
+		// Does not need to be perfect. Based on storing all hashes (20 bytes each) and 8 byte offsets into the file.
+		// This is not actually how we store the index in table files or archives, but it's reasonably close.
+		return uint64(chunkCnt) * 28
+	}
+	estimatedFileSize := func() uint64 {
+		return curBytes + estimatedFooterSize(curWr.ChunkCount())
+	}
+
 	sendTableFile := func() error {
 		select {
 		case <-ctx.Done():
 			return context.Cause(ctx)
 		case w.newWriterCh <- curWr:
 			curWr = nil
+			curBytes = 0
 			return nil
 		}
 	}
 
 LOOP:
 	for {
-		if curWr != nil && curWr.ChunkCount() >= w.cfg.ChunksPerFile {
+		if curWr != nil && estimatedFileSize() >= w.cfg.TargetFileSize {
 			if err := sendTableFile(); err != nil {
 				return err
 			}
@@ -266,6 +280,8 @@ LOOP:
 			if err != nil {
 				return err
 			}
+
+			curBytes += uint64(bytes)
 
 			atomic.AddUint64(&w.bufferedSendBytes, uint64(bytes))
 		}

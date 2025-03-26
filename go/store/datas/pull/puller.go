@@ -66,7 +66,7 @@ type Puller struct {
 func NewPuller(
 	ctx context.Context,
 	tempDir string,
-	chunksPerTF int,
+	targetFileSz uint64,
 	srcCS, sinkCS chunks.ChunkStore,
 	walkAddrs WalkAddrs,
 	hashes []hash.Hash,
@@ -114,7 +114,7 @@ func NewPuller(
 
 	wr := NewPullTableFileWriter(PullTableFileWriterConfig{
 		ConcurrentUploads:    2,
-		ChunksPerFile:        chunksPerTF,
+		TargetFileSize:       targetFileSz,
 		MaximumBufferedFiles: 8,
 		TempDir:              tempDir,
 		DestStore:            sinkCS.(chunks.TableFileStore),
