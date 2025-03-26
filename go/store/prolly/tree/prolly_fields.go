@@ -156,6 +156,12 @@ func GetField(ctx context.Context, td val.TupleDesc, i int, tup val.Tuple, ns No
 		if ok {
 			v, err = td.Handlers[i].DeserializeValue(ctx, h[:])
 		}
+	case val.ExtendedAdaptiveEnc:
+		var b []byte
+		b, ok = td.GetExtendedAdaptiveValue(i, tup)
+		if ok {
+			v, err = td.Handlers[i].DeserializeValue(ctx, b)
+		}
 	default:
 		panic("unknown val.encoding")
 	}
@@ -353,6 +359,12 @@ func PutField(ctx context.Context, ns NodeStore, tb *val.TupleBuilder, i int, v 
 				}
 			}
 		}
+	case val.ExtendedAdaptiveEnc:
+		b, err := tb.Desc.Handlers[i].SerializeValue(ctx, v)
+		if err != nil {
+			return err
+		}
+		tb.PutRaw(i, b)
 	default:
 		panic(fmt.Sprintf("unknown encoding %v %v", enc, v))
 	}

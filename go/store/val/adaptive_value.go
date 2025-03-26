@@ -207,6 +207,16 @@ func NewAdaptiveTypeHandler(vs ValueStore, childHandler TupleTypeHandler) Adapti
 }
 
 func (handler AdaptiveEncodingTypeHandler) SerializedCompare(ctx context.Context, v1 []byte, v2 []byte) (int, error) {
+	// order NULLs first
+	if v1 == nil || v2 == nil {
+		if bytes.Equal(v1, v2) {
+			return 0, nil
+		} else if v1 == nil {
+			return -1, nil
+		} else {
+			return 1, nil
+		}
+	}
 	adaptiveValue1 := AdaptiveValue(v1)
 	adaptiveValue2 := AdaptiveValue(v2)
 	// Fast-path: two out-of-band values with equal hashes are equal.

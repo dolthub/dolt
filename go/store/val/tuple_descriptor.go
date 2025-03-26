@@ -508,6 +508,13 @@ func (td TupleDesc) GetExtendedAddr(i int, tup Tuple) (hash.Hash, bool) {
 	return td.getAddr(i, tup)
 }
 
+// GetExtended reads a byte slice from the ith field of the Tuple.
+func (td TupleDesc) GetExtendedAdaptiveValue(i int, tup Tuple) ([]byte, bool) {
+	td.expectEncoding(i, ExtendedAdaptiveEnc)
+	v := td.GetField(i, tup)
+	return v, v != nil
+}
+
 func (td TupleDesc) GetJSONAddr(i int, tup Tuple) (hash.Hash, bool) {
 	td.expectEncoding(i, JSONAddrEnc)
 	return td.getAddr(i, tup)
