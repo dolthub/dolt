@@ -40,7 +40,8 @@ echo '
           "alert_recipients": "'$ACTOR_EMAIL'"
         },
         "labels": {
-          "k8s-liquidata-inc-monitored-job": "created-by-static-config"
+          "k8s-liquidata-inc-monitored-job": "created-by-static-config",
+          "app": "performance-benchmarking"
         }
       },
       "spec": {
