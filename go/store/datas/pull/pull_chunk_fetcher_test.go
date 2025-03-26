@@ -16,6 +16,7 @@ package pull
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"sync"
@@ -29,30 +30,27 @@ import (
 
 func TestPullChunkFetcher(t *testing.T) {
 	t.Run("ImmediateCloseSend", func(t *testing.T) {
-		f := NewPullChunkFetcher(context.Background(), emptyGetManyer{})
+		f := NewPullChunkFetcher(emptyGetManyer{})
 		assert.NoError(t, f.CloseSend())
 		_, err := f.Recv(context.Background())
 		assert.ErrorIs(t, err, io.EOF)
 		assert.NoError(t, f.Close())
 	})
 	t.Run("CanceledGetCtx", func(t *testing.T) {
-		ctx, c := context.WithCancel(context.Background())
 		gm := blockingGetManyer{make(chan struct{})}
-		f := NewPullChunkFetcher(context.Background(), gm)
+		f := NewPullChunkFetcher(gm)
+		ctx, c := context.WithCancel(context.Background())
 		hs := make(hash.HashSet)
 		var h hash.Hash
 		hs.Insert(h)
-		err := f.Get(ctx, hs)
-		assert.NoError(t, err)
 		c()
-		err = f.Get(ctx, hs)
+		err := f.Get(ctx, hs)
 		assert.Error(t, err)
-		close(gm.block)
 		assert.NoError(t, f.Close())
 	})
 	t.Run("CanceledRecvCtx", func(t *testing.T) {
 		ctx, c := context.WithCancel(context.Background())
-		f := NewPullChunkFetcher(context.Background(), emptyGetManyer{})
+		f := NewPullChunkFetcher(emptyGetManyer{})
 		c()
 		_, err := f.Recv(ctx)
 		assert.Error(t, err)
@@ -61,7 +59,7 @@ func TestPullChunkFetcher(t *testing.T) {
 	t.Run("ReturnsDelieveredChunk", func(t *testing.T) {
 		var gm deliveringGetManyer
 		gm.C.FullCompressedChunk = make([]byte, 1024)
-		f := NewPullChunkFetcher(context.Background(), gm)
+		f := NewPullChunkFetcher(gm)
 		hs := make(hash.HashSet)
 		hs.Insert(gm.C.H)
 		var wg sync.WaitGroup
@@ -86,7 +84,7 @@ func TestPullChunkFetcher(t *testing.T) {
 		wg.Wait()
 	})
 	t.Run("ReturnsEmptyCompressedChunk", func(t *testing.T) {
-		f := NewPullChunkFetcher(context.Background(), emptyGetManyer{})
+		f := NewPullChunkFetcher(emptyGetManyer{})
 		hs := make(hash.HashSet)
 		var h hash.Hash
 		hs.Insert(h)
@@ -111,27 +109,33 @@ func TestPullChunkFetcher(t *testing.T) {
 		wg.Wait()
 	})
 	t.Run("ErrorGetManyer", func(t *testing.T) {
-		f := NewPullChunkFetcher(context.Background(), errorGetManyer{})
+		f := NewPullChunkFetcher(errorGetManyer{})
 		hs := make(hash.HashSet)
 		var h hash.Hash
 		hs.Insert(h)
 		var wg sync.WaitGroup
-		wg.Add(1)
+		wg.Add(2)
+		var werr, rerr error
 		go func() {
 			defer wg.Done()
-			_, err := f.Recv(context.Background())
-			assert.Error(t, err)
-			err = f.Close()
-			assert.Error(t, err)
+			_, rerr = f.Recv(context.Background())
+			if rerr == io.EOF {
+				rerr = nil
+			}
 		}()
-		err := f.Get(context.Background(), hs)
-		assert.NoError(t, err)
-		err = f.Get(context.Background(), hs)
-		assert.Error(t, err)
+		go func() {
+			defer wg.Done()
+			defer f.CloseSend()
+			werr = f.Get(context.Background(), hs)
+		}()
 		wg.Wait()
+		// Either the Recv or the Get should have seen
+		// the error from GetManyComprsseed.
+		assert.Error(t, errors.Join(rerr, werr))
+		assert.NoError(t, f.Close())
 	})
 	t.Run("ClosedFetcherErrorsGet", func(t *testing.T) {
-		f := NewPullChunkFetcher(context.Background(), emptyGetManyer{})
+		f := NewPullChunkFetcher(emptyGetManyer{})
 		assert.NoError(t, f.Close())
 		hs := make(hash.HashSet)
 		var h hash.Hash
@@ -163,8 +167,12 @@ type blockingGetManyer struct {
 }
 
 func (b blockingGetManyer) GetManyCompressed(ctx context.Context, hashes hash.HashSet, found func(context.Context, nbs.ToChunker)) error {
-	<-b.block
-	return nil
+	select {
+	case <-b.block:
+		return nil
+	case <-ctx.Done():
+		return context.Cause(ctx)
+	}
 }
 
 type errorGetManyer struct {

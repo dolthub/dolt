@@ -18,8 +18,9 @@ import (
 	"context"
 	"errors"
 
-	"github.com/dolthub/dolt/go/store/hash"
 	"golang.org/x/sync/errgroup"
+
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 type HasManyer interface {

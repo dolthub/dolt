@@ -19,10 +19,10 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/stretchr/testify/assert"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 func TestPullChunkTracker(t *testing.T) {
@@ -216,7 +216,7 @@ func TestPullChunkTracker(t *testing.T) {
 			BatchSize: 64 * 1024,
 			HasManyer: haser,
 		})
-		
+
 		eg, ctx := errgroup.WithContext(context.Background())
 		eg.Go(func() error {
 			return tracker.Run(ctx, hs)
