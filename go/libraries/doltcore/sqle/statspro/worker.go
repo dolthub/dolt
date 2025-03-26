@@ -214,9 +214,6 @@ func (sc *StatsController) newStatsForRoot(baseCtx context.Context, gcKv *memSta
 		}
 
 		for _, br := range branches {
-			if !doltdb.IsValidBranchRef(br) {
-				continue
-			}
 			// this call avoids the chunkstore
 			sqlDb, err := sqle.RevisionDbForBranch(ctx, db.(dsess.SqlDatabase), br.GetPath(), br.GetPath()+"/"+sqlDb.AliasedName())
 			if err != nil {
