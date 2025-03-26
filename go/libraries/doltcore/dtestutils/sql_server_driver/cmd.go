@@ -405,7 +405,7 @@ func (s *SqlServer) Connector(c Connection) (driver.Connector, error) {
 	cfg.Apply(mysql.BeforeConnect(func(ctx context.Context, cfg *mysql.Config) error {
 		// TODO: This could be more robust if we sniffed it on first connect.
 		const numAttemptsGoLibraryMakes = 3
-		if attempt, ok := incrementConnectRetryAttempts(ctx); ok && attempt < numAttemptsGoLibraryMakes  {
+		if attempt, ok := incrementConnectRetryAttempts(ctx); ok && attempt < numAttemptsGoLibraryMakes {
 			return driver.ErrBadConn
 		}
 		return nil
@@ -460,6 +460,7 @@ func ConnectDB(user, password, name, host string, port int, params map[string]st
 }
 
 type connectRetryAttemptKeyType int
+
 var connectRetryAttemptKey connectRetryAttemptKeyType
 
 // The database/sql package in Go takes connections out of a
