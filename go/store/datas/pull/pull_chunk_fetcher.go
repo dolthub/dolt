@@ -66,19 +66,17 @@ func NewPullChunkFetcher(ctx context.Context, getter GetManyer) *PullChunkFetche
 		resCh:   make(chan nbs.ToChunker),
 	}
 	ret.eg.Go(func() error {
-		return ret.fetcherThread(func() {
-			close(ret.resCh)
-		})
+		return ret.fetcherThread(ctx)
 	})
 	return ret
 }
 
-func (f *PullChunkFetcher) fetcherThread(finalize func()) error {
+func (f *PullChunkFetcher) fetcherThread(ctx context.Context) error {
 	for {
 		select {
 		case batch, ok := <-f.batchCh:
 			if !ok {
-				finalize()
+				close(f.resCh)
 				return nil
 			}
 
@@ -86,13 +84,12 @@ func (f *PullChunkFetcher) fetcherThread(finalize func()) error {
 			missing := batch.Copy()
 
 			// Blocking get, no concurrency, only one fetcher.
-			err := f.getter.GetManyCompressed(f.ctx, batch, func(ctx context.Context, chk nbs.ToChunker) {
+			err := f.getter.GetManyCompressed(ctx, batch, func(ctx context.Context, chk nbs.ToChunker) {
 				mu.Lock()
 				missing.Remove(chk.Hash())
 				mu.Unlock()
 				select {
 				case <-ctx.Done():
-				case <-f.ctx.Done():
 				case f.resCh <- chk:
 				case <-f.doneCh:
 				}
@@ -103,15 +100,15 @@ func (f *PullChunkFetcher) fetcherThread(finalize func()) error {
 
 			for h := range missing {
 				select {
-				case <-f.ctx.Done():
-					return context.Cause(f.ctx)
+				case <-ctx.Done():
+					return context.Cause(ctx)
 				case f.resCh <- nbs.CompressedChunk{H: h}:
 				case <-f.doneCh:
 					return nil
 				}
 			}
-		case <-f.ctx.Done():
-			return context.Cause(f.ctx)
+		case <-ctx.Done():
+			return context.Cause(ctx)
 		case <-f.doneCh:
 			return nil
 		}
