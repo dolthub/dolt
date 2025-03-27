@@ -127,9 +127,17 @@ func (cmd VerifyConstraintsCmd) Exec(ctx context.Context, commandStr string, arg
 		if err != nil {
 			return commands.HandleVErrAndExitCode(errhand.BuildDError("Failed to build sql engine.").AddCause(err).Build(), nil)
 		}
+		sqlCtx, err := eng.NewLocalContext(ctx)
+		if err != nil {
+			return commands.HandleVErrAndExitCode(errhand.BuildDError("Failed to build sql context.").AddCause(err).Build(), nil)
+		}
+		defer sql.SessionEnd(sqlCtx.Session)
+		sql.SessionCommandBegin(sqlCtx.Session)
+		defer sql.SessionCommandEnd(sqlCtx.Session)
+		sqlCtx.SetCurrentDatabase(dbName)
 
 		for _, tableName := range tablesWithViolations.AsSortedSlice() {
-			tbl, ok, err := endRoot.GetTable(ctx, tableName)
+			tbl, ok, err := endRoot.GetTable(sqlCtx, tableName)
 			if err != nil {
 				return commands.HandleVErrAndExitCode(errhand.BuildDError("Error loading table.").AddCause(err).Build(), nil)
 			}
@@ -138,14 +146,14 @@ func (cmd VerifyConstraintsCmd) Exec(ctx context.Context, commandStr string, arg
 			}
 			cli.Println("")
 			cli.Println(doltdb.DoltConstViolTablePrefix + tableName.Name)
-			dErr := printViolationsForTable(ctx, dbName, tableName.Name, tbl, eng)
+			dErr := printViolationsForTable(sqlCtx, dbName, tableName.Name, tbl, eng)
 			if dErr != nil {
 				return commands.HandleVErrAndExitCode(dErr, nil)
 			}
 		}
 
 		if outputOnly {
-			err = dEnv.UpdateWorkingRoot(ctx, working)
+			err = dEnv.UpdateWorkingRoot(sqlCtx, working)
 			if err != nil {
 				return commands.HandleVErrAndExitCode(errhand.BuildDError("Unable to undo written constraint violations").AddCause(err).Build(), nil)
 			}
@@ -157,7 +165,7 @@ func (cmd VerifyConstraintsCmd) Exec(ctx context.Context, commandStr string, arg
 	return 0
 }
 
-func printViolationsForTable(ctx context.Context, dbName, tblName string, tbl *doltdb.Table, eng *engine.SqlEngine) errhand.VerboseError {
+func printViolationsForTable(ctx *sql.Context, dbName, tblName string, tbl *doltdb.Table, eng *engine.SqlEngine) errhand.VerboseError {
 	sch, err := tbl.GetSchema(ctx)
 	if err != nil {
 		return errhand.BuildDError("Error loading table schema").AddCause(err).Build()
@@ -166,20 +174,14 @@ func printViolationsForTable(ctx context.Context, dbName, tblName string, tbl *d
 	colNames := strings.Join(sch.GetAllCols().GetColumnNames(), ", ")
 	query := fmt.Sprintf("SELECT violation_type, %s, violation_info from dolt_constraint_violations_%s", colNames, tblName)
 
-	sCtx, err := eng.NewLocalContext(ctx)
-	if err != nil {
-		return errhand.BuildDError("Error making sql context").AddCause(err).Build()
-	}
-	sCtx.SetCurrentDatabase(dbName)
-
-	sqlSch, sqlItr, _, err := eng.Query(sCtx, query)
+	sqlSch, sqlItr, _, err := eng.Query(ctx, query)
 	if err != nil {
 		return errhand.BuildDError("Error querying constraint violations").AddCause(err).Build()
 	}
 
 	limitItr := &sqlLimitIter{itr: sqlItr, limit: 50}
 
-	err = engine.PrettyPrintResults(sCtx, engine.FormatTabular, sqlSch, limitItr, false)
+	err = engine.PrettyPrintResults(ctx, engine.FormatTabular, sqlSch, limitItr, false)
 	if err != nil {
 		return errhand.BuildDError("Error outputting rows").AddCause(err).Build()
 	}

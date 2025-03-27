@@ -93,6 +93,9 @@ func (a *Assist) Exec(ctx context.Context, commandStr string, args []string, dEn
 	if err != nil {
 		return 1
 	}
+	defer sql.SessionEnd(sqlCtx.Session)
+	sql.SessionCommandBegin(sqlCtx.Session)
+	defer sql.SessionCommandEnd(sqlCtx.Session)
 	sqlCtx.SetCurrentDatabase(dbName)
 
 	a.messages, err = getInitialPrompt(sqlCtx, sqlEng, dEnv)

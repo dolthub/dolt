@@ -1836,6 +1836,9 @@ func sch(definition string) namedSchema {
 	root, _ := doltdb.EmptyRootValue(ctx, vrw, ns)
 	eng, dbName, _ := engine.NewSqlEngineForEnv(ctx, denv)
 	sqlCtx, _ := eng.NewDefaultContext(ctx)
+	defer sql.SessionEnd(sqlCtx.Session)
+	sql.SessionCommandBegin(sqlCtx.Session)
+	defer sql.SessionCommandEnd(sqlCtx.Session)
 	sqlCtx.SetCurrentDatabase(dbName)
 	// TODO: ParseCreateTableStatement silently drops any indexes or check constraints in the definition
 	name, s, err := sqlutil.ParseCreateTableStatement(sqlCtx, root, eng.GetUnderlyingEngine(), definition)

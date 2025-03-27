@@ -118,8 +118,16 @@ func readDoltDoc(ctx context.Context, dEnv *env.DoltEnv, docName, fileName strin
 	if err != nil {
 		return err
 	}
+	sqlCtx, err := eng.NewLocalContext(ctx)
+	if err != nil {
+		return err
+	}
+	defer sql.SessionEnd(sqlCtx.Session)
+	sql.SessionCommandBegin(sqlCtx.Session)
+	defer sql.SessionCommandEnd(sqlCtx.Session)
+	sqlCtx.SetCurrentDatabase(dbName)
 
-	err = writeDocToTable(ctx, eng, dbName, docName, string(update))
+	err = writeDocToTable(sqlCtx, eng, docName, string(update))
 	if err != nil {
 		return err
 	}
@@ -131,30 +139,21 @@ const (
 	writeDocTemplate = `REPLACE INTO dolt_docs VALUES ("%s", "%s")`
 )
 
-func writeDocToTable(ctx context.Context, eng *engine.SqlEngine, dbName, docName, content string) error {
+func writeDocToTable(ctx *sql.Context, eng *engine.SqlEngine, docName, content string) error {
 	var (
-		sctx *sql.Context
-		err  error
+		err error
 	)
 
-	sctx, err = eng.NewDefaultContext(ctx)
+	err = ctx.Session.SetSessionVariable(ctx, sql.AutoCommitSessionVar, 1)
 	if err != nil {
 		return err
 	}
-
-	sctx.SetCurrentDatabase(dbName)
-
-	err = sctx.Session.SetSessionVariable(sctx, sql.AutoCommitSessionVar, 1)
-	if err != nil {
-		return err
-	}
-
-	sctx.Session.SetClient(sql.Client{User: "root", Address: "%", Capabilities: 0})
+	ctx.Session.SetClient(sql.Client{User: "root", Address: "%", Capabilities: 0})
 
 	content = strings.ReplaceAll(content, `"`, `\"`)
 	update := fmt.Sprintf(writeDocTemplate, docName, content)
 
-	return execQuery(sctx, eng, update)
+	return execQuery(ctx, eng, update)
 }
 
 func execQuery(sctx *sql.Context, eng *engine.SqlEngine, q string) (err error) {
