@@ -106,6 +106,11 @@ func (t TextStorage) Compare(ctx context.Context, other interface{}) (cmp int, c
 	return 0, false, nil
 }
 
+// Hash implements sql.AnyWrapper by returning the Dolt hash.
+func (t *TextStorage) Hash() interface{} {
+	return t.Addr
+}
+
 func NewTextStorage(addr hash.Hash, vs ValueStore) *TextStorage {
 	return &TextStorage{
 		ImmutableValue: NewImmutableValue(addr, vs),
@@ -172,6 +177,11 @@ func (b *ByteArray) ToString(ctx context.Context) (string, error) {
 		toShow = len(buf)
 	}
 	return string(buf[:toShow]), nil
+}
+
+// Hash implements sql.AnyWrapper by returning the Dolt hash.
+func (b *ByteArray) Hash() interface{} {
+	return b.Addr
 }
 
 var _ sql.BytesWrapper = &ByteArray{}
