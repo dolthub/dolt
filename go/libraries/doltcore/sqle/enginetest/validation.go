@@ -200,12 +200,7 @@ func validateKeylessIndex(ctx context.Context, sch schema.Schema, def schema.Ind
 			// first field in |value| is cardinality
 			field := value.GetField(j + 1)
 
-			if shouldDereferenceContent(j+1, vd, i, idxDesc) {
-				field, err = dereferenceContent(ctx, vd, j+1, value, secondary.NodeStore())
-				if err != nil {
-					return err
-				}
-			} else if def.IsSpatial() {
+			if def.IsSpatial() {
 				geom, err := dereferenceGeometry(ctx, vd, j+1, value, secondary.NodeStore())
 				if err != nil {
 					return err
@@ -216,6 +211,11 @@ func validateKeylessIndex(ctx context.Context, sch schema.Schema, def schema.Ind
 				}
 				cell := tree.ZCell(geom.(sqltypes.GeometryValue))
 				field = cell[:]
+			} else if shouldDereferenceContent(j+1, vd, i, idxDesc) {
+				field, err = dereferenceContent(ctx, vd, j+1, value, secondary.NodeStore())
+				if err != nil {
+					return err
+				}
 			}
 
 			// Apply prefix lengths if they are configured
@@ -298,12 +298,7 @@ func validatePkIndex(ctx context.Context, sch schema.Schema, def schema.Index, p
 			} else {
 				field := value.GetField(j - pkSize)
 
-				if shouldDereferenceContent(j-pkSize, vd, i, idxDesc) {
-					field, err = dereferenceContent(ctx, vd, j-pkSize, value, secondary.NodeStore())
-					if err != nil {
-						return err
-					}
-				} else if def.IsSpatial() {
+				if def.IsSpatial() {
 					geom, err := dereferenceGeometry(ctx, vd, j-pkSize, value, secondary.NodeStore())
 					if err != nil {
 						return err
@@ -314,6 +309,11 @@ func validatePkIndex(ctx context.Context, sch schema.Schema, def schema.Index, p
 					}
 					cell := tree.ZCell(geom.(sqltypes.GeometryValue))
 					field = cell[:]
+				} else if shouldDereferenceContent(j-pkSize, vd, i, idxDesc) {
+					field, err = dereferenceContent(ctx, vd, j-pkSize, value, secondary.NodeStore())
+					if err != nil {
+						return err
+					}
 				}
 
 				// Apply prefix lengths if they are configured
@@ -415,7 +415,7 @@ func dereferenceGeometry(ctx context.Context, tableValueDescriptor val.TupleDesc
 	case sqltypes.Point, sqltypes.LineString, sqltypes.Polygon, sqltypes.MultiPoint, sqltypes.MultiLineString, sqltypes.MultiPolygon, sqltypes.GeometryType, sqltypes.GeomColl:
 		return x, nil
 	default:
-		return nil, fmt.Errorf("unexpected type for address encoded content: %T", v)
+		return nil, fmt.Errorf("unexpected type for geometry content: %T", v)
 	}
 }
 
