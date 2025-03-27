@@ -79,7 +79,7 @@ func (st *StatisticsTable) RowCount(ctx *sql.Context) (uint64, bool, error) {
 		// only Dolt-specific provider has branch support
 		dbStats, err := dSess.StatsProvider().(BranchStatsProvider).GetTableDoltStats(ctx, st.branch, st.dbName, st.schemaName, table)
 		if err != nil {
-
+			return 0, false, err
 		}
 		for _, dbStat := range dbStats {
 			cnt += len(dbStat.Histogram())
