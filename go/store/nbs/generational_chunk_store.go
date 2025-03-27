@@ -270,10 +270,7 @@ func (gcs *GenerationalNBS) Version() string {
 func (gcs *GenerationalNBS) AccessMode() chunks.ExclusiveAccessMode {
 	newGenMode := gcs.newGen.AccessMode()
 	oldGenMode := gcs.oldGen.AccessMode()
-	if oldGenMode > newGenMode {
-		return oldGenMode
-	}
-	return newGenMode
+	return max(oldGenMode, newGenMode)
 }
 
 // Rebase brings this ChunkStore into sync with the persistent storage's
