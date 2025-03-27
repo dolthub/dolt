@@ -85,7 +85,7 @@ func (c *JoinCost) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 	scope := plan.Scope{}
 	_, err = eng.Analyzer.Analyze(ctx, parsed, &scope, qFlags)
 	if err != nil {
-		return "", err
+		ctx.GetLogger().Debug("join cost error", err)
 	}
 
 	ret := strings.Builder{}
