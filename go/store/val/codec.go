@@ -128,6 +128,10 @@ func IsAdaptiveEncoding(enc Encoding) bool {
 	}
 }
 
+func IsReferenceEncoding(enc Encoding) bool {
+	return IsAdaptiveEncoding(enc) || IsAddrEncoding(enc)
+}
+
 func IsExtendedEncoding(enc Encoding) bool {
 	switch enc {
 	case ExtendedEnc,

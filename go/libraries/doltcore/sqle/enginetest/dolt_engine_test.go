@@ -874,6 +874,15 @@ func TestBigBlobs(t *testing.T) {
 	RunBigBlobsTest(t, h)
 }
 
+func TestAdaptiveBigBlobs(t *testing.T) {
+	defer func() { schema.UseAdaptiveEncoding = false }()
+	schema.UseAdaptiveEncoding = true
+	skipOldFormat(t)
+
+	h := newDoltHarness(t)
+	RunAdaptiveBigBlobsTest(t, h)
+}
+
 func TestDropDatabase(t *testing.T) {
 	h := newDoltEnginetestHarness(t)
 	RunDropEngineTest(t, h)

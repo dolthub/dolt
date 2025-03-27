@@ -358,15 +358,9 @@ func isVirtualIndex(def schema.Index, sch schema.Schema) bool {
 // in the main table (|tablePos| and |tableValueDescriptor|) and the encoding of the field in the index
 // (|indexPos| and |indexKeyDescriptor|) and seeing if one is an address encoding and the other is not.
 func shouldDereferenceContent(tablePos int, tableValueDescriptor val.TupleDesc, indexPos int, indexKeyDescriptor val.TupleDesc) bool {
-	if tableValueDescriptor.Types[tablePos].Enc == val.StringAddrEnc && indexKeyDescriptor.Types[indexPos].Enc != val.StringAddrEnc {
-		return true
-	}
-
-	if tableValueDescriptor.Types[tablePos].Enc == val.BytesAddrEnc && indexKeyDescriptor.Types[indexPos].Enc != val.BytesAddrEnc {
-		return true
-	}
-
-	return false
+	tableEncoding := tableValueDescriptor.Types[tablePos].Enc
+	indexEncoding := indexKeyDescriptor.Types[indexPos].Enc
+	return val.IsReferenceEncoding(tableEncoding) && !val.IsReferenceEncoding(indexEncoding)
 }
 
 // dereferenceContent dereferences an address encoded field (e.g. TEXT, BLOB) to load the content
@@ -438,7 +432,7 @@ func trimValueToPrefixLength(value []byte, prefixLength uint16, encoding val.Enc
 	}
 
 	addTerminatingNullByte := false
-	if encoding == val.BytesAddrEnc || encoding == val.StringAddrEnc {
+	if val.IsReferenceEncoding(encoding) {
 		// If the original encoding was for a BLOB or TEXT field, then we need to add
 		// a null byte at the end of the prefix to get it into StringEnc format.
 		addTerminatingNullByte = true
