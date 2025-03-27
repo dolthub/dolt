@@ -15,11 +15,12 @@
 package enginetest
 
 import (
-	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/enginetest/scriptgen/setup"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
+
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 func makeTestBytes(size int, firstbyte byte) []byte {
