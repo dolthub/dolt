@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/nbs"
@@ -32,14 +33,19 @@ import (
 func TestPullTableFileWriter(t *testing.T) {
 	t.Run("Empty", func(t *testing.T) {
 		var s noopTableFileDestStore
-		wr := NewPullTableFileWriter(context.Background(), PullTableFileWriterConfig{
+		wr := NewPullTableFileWriter(PullTableFileWriterConfig{
 			ConcurrentUploads:    1,
-			ChunksPerFile:        8,
+			TargetFileSize:       1 << 20,
 			MaximumBufferedFiles: 1,
 			TempDir:              t.TempDir(),
 			DestStore:            &s,
 		})
-		assert.NoError(t, wr.Close())
+		eg, ctx := errgroup.WithContext(context.Background())
+		eg.Go(func() error {
+			return wr.Run(ctx)
+		})
+		wr.Close()
+		assert.NoError(t, eg.Wait())
 		assert.Equal(t, s.writeCalled.Load(), uint32(0))
 		assert.Equal(t, s.addCalled, 0)
 	})
@@ -47,25 +53,30 @@ func TestPullTableFileWriter(t *testing.T) {
 	t.Run("AddSomeChunks", func(t *testing.T) {
 		t.Run("FinishOnFullWriter", func(t *testing.T) {
 			var s noopTableFileDestStore
-			wr := NewPullTableFileWriter(context.Background(), PullTableFileWriterConfig{
+			wr := NewPullTableFileWriter(PullTableFileWriterConfig{
 				ConcurrentUploads:    1,
-				ChunksPerFile:        8,
+				TargetFileSize:       1 << 20,
 				MaximumBufferedFiles: 1,
 				TempDir:              t.TempDir(),
 				DestStore:            &s,
 			})
+			eg, ctx := errgroup.WithContext(context.Background())
+			eg.Go(func() error {
+				return wr.Run(ctx)
+			})
 
 			for i := 0; i < 32; i++ {
-				bs := make([]byte, 1024)
+				bs := make([]byte, 1<<20/32*4)
 				_, err := rand.Read(bs)
 				assert.NoError(t, err)
 				chk := chunks.NewChunk(bs)
 				cChk := nbs.ChunkToCompressedChunk(chk)
-				err = wr.AddToChunker(context.Background(), cChk)
+				err = wr.AddToChunker(ctx, cChk)
 				assert.NoError(t, err)
 			}
 
-			assert.NoError(t, wr.Close())
+			wr.Close()
+			assert.NoError(t, eg.Wait())
 			assert.Equal(t, s.writeCalled.Load(), uint32(4))
 			assert.Equal(t, s.addCalled, 1)
 			assert.Len(t, s.manifest, 4)
@@ -73,12 +84,16 @@ func TestPullTableFileWriter(t *testing.T) {
 
 		t.Run("FinishOnPartialFile", func(t *testing.T) {
 			var s noopTableFileDestStore
-			wr := NewPullTableFileWriter(context.Background(), PullTableFileWriterConfig{
+			wr := NewPullTableFileWriter(PullTableFileWriterConfig{
 				ConcurrentUploads:    1,
-				ChunksPerFile:        1024,
+				TargetFileSize:       1 << 20,
 				MaximumBufferedFiles: 1,
 				TempDir:              t.TempDir(),
 				DestStore:            &s,
+			})
+			eg, ctx := errgroup.WithContext(context.Background())
+			eg.Go(func() error {
+				return wr.Run(ctx)
 			})
 
 			for i := 0; i < 32; i++ {
@@ -87,11 +102,12 @@ func TestPullTableFileWriter(t *testing.T) {
 				assert.NoError(t, err)
 				chk := chunks.NewChunk(bs)
 				cChk := nbs.ChunkToCompressedChunk(chk)
-				err = wr.AddToChunker(context.Background(), cChk)
+				err = wr.AddToChunker(ctx, cChk)
 				assert.NoError(t, err)
 			}
 
-			assert.NoError(t, wr.Close())
+			wr.Close()
+			assert.NoError(t, eg.Wait())
 			assert.Equal(t, s.writeCalled.Load(), uint32(1))
 			assert.Equal(t, s.addCalled, 1)
 			assert.Len(t, s.manifest, 1)
@@ -101,27 +117,32 @@ func TestPullTableFileWriter(t *testing.T) {
 	t.Run("ConcurrentUpload", func(t *testing.T) {
 		var s noopTableFileDestStore
 		s.writeDelay = 50 * time.Millisecond
-		wr := NewPullTableFileWriter(context.Background(), PullTableFileWriterConfig{
+		wr := NewPullTableFileWriter(PullTableFileWriterConfig{
 			ConcurrentUploads:    32,
-			ChunksPerFile:        8,
+			TargetFileSize:       1 << 20,
 			MaximumBufferedFiles: 1,
 			TempDir:              t.TempDir(),
 			DestStore:            &s,
 		})
+		eg, ctx := errgroup.WithContext(context.Background())
+		eg.Go(func() error {
+			return wr.Run(ctx)
+		})
 
 		start := time.Now()
 
-		for i := 0; i < 8*32; i++ {
-			bs := make([]byte, 1024)
+		for i := 0; i < 32; i++ {
+			bs := make([]byte, 1<<20)
 			_, err := rand.Read(bs)
 			assert.NoError(t, err)
 			chk := chunks.NewChunk(bs)
 			cChk := nbs.ChunkToCompressedChunk(chk)
-			err = wr.AddToChunker(context.Background(), cChk)
+			err = wr.AddToChunker(ctx, cChk)
 			assert.NoError(t, err)
 		}
 
-		assert.NoError(t, wr.Close())
+		wr.Close()
+		assert.NoError(t, eg.Wait())
 		assert.Equal(t, s.writeCalled.Load(), uint32(32))
 		assert.Equal(t, s.addCalled, 1)
 		assert.Len(t, s.manifest, 32)
@@ -131,12 +152,16 @@ func TestPullTableFileWriter(t *testing.T) {
 	t.Run("ErrorOnUpload", func(t *testing.T) {
 		t.Run("ErrAtClose", func(t *testing.T) {
 			var s errTableFileDestStore
-			wr := NewPullTableFileWriter(context.Background(), PullTableFileWriterConfig{
+			wr := NewPullTableFileWriter(PullTableFileWriterConfig{
 				ConcurrentUploads:    1,
-				ChunksPerFile:        8,
+				TargetFileSize:       1 << 20,
 				MaximumBufferedFiles: 0,
 				TempDir:              t.TempDir(),
 				DestStore:            &s,
+			})
+			eg, ctx := errgroup.WithContext(context.Background())
+			eg.Go(func() error {
+				return wr.Run(ctx)
 			})
 
 			for i := 0; i < 8; i++ {
@@ -145,31 +170,36 @@ func TestPullTableFileWriter(t *testing.T) {
 				assert.NoError(t, err)
 				chk := chunks.NewChunk(bs)
 				cChk := nbs.ChunkToCompressedChunk(chk)
-				err = wr.AddToChunker(context.Background(), cChk)
+				err = wr.AddToChunker(ctx, cChk)
 				assert.NoError(t, err)
 			}
 
-			assert.EqualError(t, wr.Close(), "this dest store throws an error")
+			wr.Close()
+			assert.EqualError(t, eg.Wait(), "this dest store throws an error")
 			assert.Equal(t, s.addCalled, 0)
 		})
 
 		t.Run("ErrAtAdd", func(t *testing.T) {
 			var s errTableFileDestStore
-			wr := NewPullTableFileWriter(context.Background(), PullTableFileWriterConfig{
+			wr := NewPullTableFileWriter(PullTableFileWriterConfig{
 				ConcurrentUploads:    1,
-				ChunksPerFile:        8,
+				TargetFileSize:       1 << 20,
 				MaximumBufferedFiles: 0,
 				TempDir:              t.TempDir(),
 				DestStore:            &s,
 			})
+			eg, ctx := errgroup.WithContext(context.Background())
+			eg.Go(func() error {
+				return wr.Run(ctx)
+			})
 
 			for i := 0; i < 8; i++ {
-				bs := make([]byte, 1024)
+				bs := make([]byte, 1<<20/8)
 				_, err := rand.Read(bs)
 				assert.NoError(t, err)
 				chk := chunks.NewChunk(bs)
 				cChk := nbs.ChunkToCompressedChunk(chk)
-				err = wr.AddToChunker(context.Background(), cChk)
+				err = wr.AddToChunker(ctx, cChk)
 				assert.NoError(t, err)
 			}
 
@@ -180,10 +210,11 @@ func TestPullTableFileWriter(t *testing.T) {
 				assert.NoError(t, err)
 				chk := chunks.NewChunk(bs)
 				cChk := nbs.ChunkToCompressedChunk(chk)
-				err = wr.AddToChunker(context.Background(), cChk)
+				err = wr.AddToChunker(ctx, cChk)
 				if err != nil {
 					assert.EqualError(t, err, "this dest store throws an error")
-					assert.EqualError(t, wr.Close(), "this dest store throws an error")
+					wr.Close()
+					assert.EqualError(t, eg.Wait(), "this dest store throws an error")
 					assert.Equal(t, s.addCalled, 0)
 					return
 				}
@@ -196,12 +227,16 @@ func TestPullTableFileWriter(t *testing.T) {
 	t.Run("ErrorOnAdd", func(t *testing.T) {
 		var s errTableFileDestStore
 		s.onAdd = true
-		wr := NewPullTableFileWriter(context.Background(), PullTableFileWriterConfig{
+		wr := NewPullTableFileWriter(PullTableFileWriterConfig{
 			ConcurrentUploads:    1,
-			ChunksPerFile:        8,
+			TargetFileSize:       1 << 20,
 			MaximumBufferedFiles: 0,
 			TempDir:              t.TempDir(),
 			DestStore:            &s,
+		})
+		eg, ctx := errgroup.WithContext(context.Background())
+		eg.Go(func() error {
+			return wr.Run(ctx)
 		})
 
 		for i := 0; i < 8; i++ {
@@ -210,11 +245,12 @@ func TestPullTableFileWriter(t *testing.T) {
 			assert.NoError(t, err)
 			chk := chunks.NewChunk(bs)
 			cChk := nbs.ChunkToCompressedChunk(chk)
-			err = wr.AddToChunker(context.Background(), cChk)
+			err = wr.AddToChunker(ctx, cChk)
 			assert.NoError(t, err)
 		}
 
-		assert.EqualError(t, wr.Close(), "this dest store throws an error")
+		wr.Close()
+		assert.EqualError(t, eg.Wait(), "this dest store throws an error")
 		assert.Equal(t, s.addCalled, 1)
 	})
 
@@ -224,21 +260,25 @@ func TestPullTableFileWriter(t *testing.T) {
 			doWriteTableFile:   make(chan struct{}),
 			doneWriteTableFile: make(chan struct{}),
 		}
-		wr := NewPullTableFileWriter(context.Background(), PullTableFileWriterConfig{
+		wr := NewPullTableFileWriter(PullTableFileWriterConfig{
 			ConcurrentUploads:    1,
-			ChunksPerFile:        8,
+			TargetFileSize:       1 << 20,
 			MaximumBufferedFiles: 0,
 			TempDir:              t.TempDir(),
 			DestStore:            &s,
 		})
+		eg, ctx := errgroup.WithContext(context.Background())
+		eg.Go(func() error {
+			return wr.Run(ctx)
+		})
 
 		for i := 0; i < 8; i++ {
-			bs := make([]byte, 1024)
+			bs := make([]byte, 1<<20/8)
 			_, err := rand.Read(bs)
 			assert.NoError(t, err)
 			chk := chunks.NewChunk(bs)
 			cChk := nbs.ChunkToCompressedChunk(chk)
-			err = wr.AddToChunker(context.Background(), cChk)
+			err = wr.AddToChunker(ctx, cChk)
 			assert.NoError(t, err)
 		}
 
@@ -255,7 +295,8 @@ func TestPullTableFileWriter(t *testing.T) {
 		assert.Greater(t, wrStats.FinishedSendBytes, uint64(8*1024))
 		assert.Equal(t, wrStats.FinishedSendBytes, wrStats.BufferedSendBytes)
 
-		assert.NoError(t, wr.Close())
+		wr.Close()
+		assert.NoError(t, eg.Wait())
 	})
 
 	t.Run("UploadsAreParallel", func(t *testing.T) {
@@ -264,21 +305,25 @@ func TestPullTableFileWriter(t *testing.T) {
 			doWriteTableFile:   make(chan struct{}),
 			doneWriteTableFile: make(chan struct{}),
 		}
-		wr := NewPullTableFileWriter(context.Background(), PullTableFileWriterConfig{
+		wr := NewPullTableFileWriter(PullTableFileWriterConfig{
 			ConcurrentUploads:    4,
-			ChunksPerFile:        8,
+			TargetFileSize:       1 << 20,
 			MaximumBufferedFiles: 0,
 			TempDir:              t.TempDir(),
 			DestStore:            &s,
 		})
+		eg, ctx := errgroup.WithContext(context.Background())
+		eg.Go(func() error {
+			return wr.Run(ctx)
+		})
 
 		for i := 0; i < 32; i++ {
-			bs := make([]byte, 1024)
+			bs := make([]byte, 1<<20/32*4)
 			_, err := rand.Read(bs)
 			assert.NoError(t, err)
 			chk := chunks.NewChunk(bs)
 			cChk := nbs.ChunkToCompressedChunk(chk)
-			err = wr.AddToChunker(context.Background(), cChk)
+			err = wr.AddToChunker(ctx, cChk)
 			assert.NoError(t, err)
 		}
 
@@ -292,7 +337,8 @@ func TestPullTableFileWriter(t *testing.T) {
 			<-s.doneWriteTableFile
 		}
 
-		assert.NoError(t, wr.Close())
+		wr.Close()
+		assert.NoError(t, eg.Wait())
 	})
 }
 

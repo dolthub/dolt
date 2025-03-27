@@ -59,7 +59,8 @@ const (
 const (
 	CreationBranch = "create"
 
-	defaultChunksPerTF = 256 * 1024
+	// 1GB.
+	defaultTargetFileSize = 1 << 30
 )
 
 var ErrMissingDoltDataDir = errors.New("missing dolt data directory")
@@ -1883,7 +1884,7 @@ func pullHash(
 	waf := types.WalkAddrsForNBF(srcDB.Format(), skipHashes)
 
 	if datas.CanUsePuller(srcDB) && datas.CanUsePuller(destDB) {
-		puller, err := pull.NewPuller(ctx, tempDir, defaultChunksPerTF, srcCS, destCS, waf, targetHashes, statsCh)
+		puller, err := pull.NewPuller(ctx, tempDir, defaultTargetFileSize, srcCS, destCS, waf, targetHashes, statsCh)
 		if err == pull.ErrDBUpToDate {
 			return nil
 		} else if err != nil {
