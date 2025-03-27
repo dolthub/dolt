@@ -274,80 +274,83 @@ var _ ValueStore = &TestValueStore{}
 
 func TestTupleBuilderAdaptiveEncodings(t *testing.T) {
 	ctx := sql.NewEmptyContext()
-	types := []Type{
-		{Enc: BytesAdaptiveEnc},
-	}
-	vs := &TestValueStore{}
-	td := NewTupleDescriptor(types...)
-	tb := NewTupleBuilder(td, vs)
-	// Test round trip when we expect values to be inlined
 	{
-		shortByteArray := make([]byte, defaultTupleLengthTarget/2)
-		err := tb.PutAdaptiveBytesFromInline(ctx, 0, shortByteArray)
-		require.NoError(t, err)
-		tup, err := tb.Build(testPool)
-		require.NoError(t, err)
+		types := []Type{
+			{Enc: BytesAdaptiveEnc},
+		}
+		vs := &TestValueStore{}
+		td := NewTupleDescriptor(types...)
+		tb := NewTupleBuilder(td, vs)
+		t.Run("round trip inlined value", func(t *testing.T) {
+			shortByteArray := make([]byte, defaultTupleLengthTarget/2)
+			err := tb.PutAdaptiveBytesFromInline(ctx, 0, shortByteArray)
+			require.NoError(t, err)
+			tup, err := tb.Build(testPool)
+			require.NoError(t, err)
 
-		adaptiveEncodingBytes, _, err := td.GetBytesAdaptiveValue(0, vs, tup)
-		require.NoError(t, err)
-		require.Equal(t, shortByteArray, adaptiveEncodingBytes)
-	}
+			adaptiveEncodingBytes, _, err := td.GetBytesAdaptiveValue(0, vs, tup)
+			require.NoError(t, err)
+			require.Equal(t, shortByteArray, adaptiveEncodingBytes)
+		})
 
-	// Test round trip when we expect values to be outlined
-	{
-		longByteArray := make([]byte, defaultTupleLengthTarget*2)
-		h, err := vs.WriteBytes(ctx, longByteArray)
-		require.NoError(t, err)
-		byteArray := NewByteArray(h, vs).WithMaxByteLength(int64(len(longByteArray)))
-		tb.PutAdaptiveBytesFromOutline(0, byteArray)
+		t.Run("round trip out-of-band value", func(t *testing.T) {
+			longByteArray := make([]byte, defaultTupleLengthTarget*2)
+			h, err := vs.WriteBytes(ctx, longByteArray)
+			require.NoError(t, err)
+			byteArray := NewByteArray(h, vs).WithMaxByteLength(int64(len(longByteArray)))
+			tb.PutAdaptiveBytesFromOutline(0, byteArray)
 
-		tup, err := tb.Build(testPool)
-		require.NoError(t, err)
+			tup, err := tb.Build(testPool)
+			require.NoError(t, err)
 
-		adaptiveEncodingBytes, _, err := td.GetBytesAdaptiveValue(0, vs, tup)
-		require.NoError(t, err)
-		adaptiveEncodingByteArray := adaptiveEncodingBytes.(*ByteArray)
-		outBytes, err := adaptiveEncodingByteArray.ToBytes(ctx)
-		require.NoError(t, err)
-		require.Equal(t, longByteArray, outBytes)
-	}
-}
-
-func TestTupleBuilderMultipleAdaptiveTypes(t *testing.T) {
-	ctx := sql.NewEmptyContext()
-	types := []Type{
-		{Enc: BytesAdaptiveEnc},
-		{Enc: BytesAdaptiveEnc},
-	}
-	vs := &TestValueStore{}
-	td := NewTupleDescriptor(types...)
-	tb := NewTupleBuilder(td, vs)
-	// Test multi column tuples. Exactly one column can fit inline.
-	{
-		columnSize := defaultTupleLengthTarget / 2
-		mediumByteArray := make([]byte, columnSize)
-		err := tb.PutAdaptiveBytesFromInline(ctx, 0, mediumByteArray)
-		require.NoError(t, err)
-		err = tb.PutAdaptiveBytesFromInline(ctx, 1, mediumByteArray)
-		require.NoError(t, err)
-
-		tup, err := tb.Build(testPool)
-		require.NoError(t, err)
-
-		{
 			adaptiveEncodingBytes, _, err := td.GetBytesAdaptiveValue(0, vs, tup)
 			require.NoError(t, err)
 			adaptiveEncodingByteArray := adaptiveEncodingBytes.(*ByteArray)
 			outBytes, err := adaptiveEncodingByteArray.ToBytes(ctx)
 			require.NoError(t, err)
-			require.Equal(t, mediumByteArray, outBytes)
-		}
+			require.Equal(t, longByteArray, outBytes)
+		})
+	}
 
-		{
-			adaptiveEncodingBytes, _, err := td.GetBytesAdaptiveValue(1, vs, tup)
-			require.NoError(t, err)
-			adaptiveEncodingByteArray := adaptiveEncodingBytes.([]byte)
-			require.Equal(t, mediumByteArray, adaptiveEncodingByteArray)
+	{
+		types := []Type{
+			{Enc: BytesAdaptiveEnc},
+			{Enc: BytesAdaptiveEnc},
 		}
+		vs := &TestValueStore{}
+		td := NewTupleDescriptor(types...)
+		tb := NewTupleBuilder(td, vs)
+
+		t.Run("inline one of two columns", func(t *testing.T) {
+			// In this test, the strings are sized such that the first is stored out-of-band but the second can be stored inline.
+
+			columnSize := defaultTupleLengthTarget / 2
+			mediumByteArray := make([]byte, columnSize)
+			err := tb.PutAdaptiveBytesFromInline(ctx, 0, mediumByteArray)
+			require.NoError(t, err)
+			err = tb.PutAdaptiveBytesFromInline(ctx, 1, mediumByteArray)
+			require.NoError(t, err)
+
+			tup, err := tb.Build(testPool)
+			require.NoError(t, err)
+
+			{
+				// Check that first column is stored out-of-band
+				adaptiveEncodingBytes, _, err := td.GetBytesAdaptiveValue(0, vs, tup)
+				require.NoError(t, err)
+				adaptiveEncodingByteArray := adaptiveEncodingBytes.(*ByteArray)
+				outBytes, err := adaptiveEncodingByteArray.ToBytes(ctx)
+				require.NoError(t, err)
+				require.Equal(t, mediumByteArray, outBytes)
+			}
+
+			{
+				// Check that second column is stored inline
+				adaptiveEncodingBytes, _, err := td.GetBytesAdaptiveValue(1, vs, tup)
+				require.NoError(t, err)
+				adaptiveEncodingByteArray := adaptiveEncodingBytes.([]byte)
+				require.Equal(t, mediumByteArray, adaptiveEncodingByteArray)
+			}
+		})
 	}
 }
