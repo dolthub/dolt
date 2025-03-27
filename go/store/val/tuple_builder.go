@@ -181,6 +181,8 @@ func (tb *TupleBuilder) Recycle() {
 		tb.fields[i] = nil
 	}
 	tb.pos = 0
+	tb.inlineSize = 0
+	tb.outOfBandSize = 0
 }
 
 func (tb *TupleBuilder) addSize(sz ByteSize) {
@@ -537,30 +539,34 @@ func (tb *TupleBuilder) PutCell(i int, v Cell) {
 
 func (tb *TupleBuilder) PutAdaptiveBytesFromInline(ctx context.Context, i int, v []byte) error {
 	tb.Desc.expectEncoding(i, BytesAdaptiveEnc)
-	if int64(len(v)) > tb.tupleLengthTarget {
+	inlineSize := ByteSize(len(v)) + 1 // include extra header byte
+	if int64(inlineSize) > tb.tupleLengthTarget {
 		// Inline value is too large. We must store it out-of-band.
 		tb.ensureCapacity(maxOutOfBandAdaptiveValueLength)
 		blobLength := uint64(len(v))
 		lengthSize, _ := makeVarInt(blobLength, tb.buf[tb.pos:])
+		outOfBandSize := lengthSize + hash.ByteLen
 
 		blobHash, err := tb.vs.WriteBytes(ctx, []byte(v))
 		if err != nil {
 			return err
 		}
 		copy(tb.buf[tb.pos+int64(lengthSize):], blobHash[:])
-		field := tb.buf[tb.pos : tb.pos+int64(lengthSize)+hash.ByteLen]
+		field := tb.buf[tb.pos : tb.pos+int64(outOfBandSize)]
 		tb.fields[i] = field
-		tb.pos += int64(lengthSize) + hash.ByteLen
+		tb.pos += int64(outOfBandSize)
+		tb.inlineSize += int64(inlineSize)
+		tb.outOfBandSize += int64(outOfBandSize)
 		return nil
 	}
-	sz := ByteSize(len(v)) + 1 // include extra header byte
-	tb.ensureCapacity(sz)
-	field := AdaptiveValue(tb.buf[tb.pos : tb.pos+int64(sz)])
+
+	tb.ensureCapacity(inlineSize)
+	field := AdaptiveValue(tb.buf[tb.pos : tb.pos+int64(inlineSize)])
 	tb.fields[i] = field
 	field[0] = 0 // Mark this as inline
 	copy(field[1:], v)
-	tb.pos += int64(sz)
-	tb.inlineSize += int64(sz)
+	tb.pos += int64(inlineSize)
+	tb.inlineSize += int64(inlineSize)
 	tb.outOfBandSize += field.outOfBandSize()
 	return nil
 }
