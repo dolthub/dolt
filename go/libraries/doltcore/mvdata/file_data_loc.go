@@ -121,7 +121,7 @@ func (dl FileDataLocation) NewReader(ctx context.Context, dEnv *env.DoltEnv, opt
 		var sch schema.Schema
 		jsonOpts, _ := opts.(JSONOptions)
 		if jsonOpts.SchFile != "" {
-			tn, s, err := SchAndTableNameFromFile(ctx, jsonOpts.SchFile, dEnv)
+			tn, s, err := SchAndTableNameFromFile(jsonOpts.SqlCtx, jsonOpts.SchFile, dEnv.FS, root, jsonOpts.Engine)
 			if err != nil {
 				return nil, false, err
 			}
@@ -153,7 +153,7 @@ func (dl FileDataLocation) NewReader(ctx context.Context, dEnv *env.DoltEnv, opt
 		var tableSch schema.Schema
 		parquetOpts, _ := opts.(ParquetOptions)
 		if parquetOpts.SchFile != "" {
-			tn, s, tnErr := SchAndTableNameFromFile(ctx, parquetOpts.SchFile, dEnv)
+			tn, s, tnErr := SchAndTableNameFromFile(parquetOpts.SqlCtx, parquetOpts.SchFile, dEnv.FS, root, parquetOpts.Engine)
 			if tnErr != nil {
 				return nil, false, tnErr
 			}

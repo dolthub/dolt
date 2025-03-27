@@ -19,10 +19,12 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/fatih/color"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
+	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -197,7 +199,21 @@ func (cmd ExportCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return commands.HandleVErrAndExitCode(verr, usage)
 	}
 
-	rd, err := mvdata.NewSqlEngineReader(ctx, dEnv, exOpts.tableName)
+	engine, dbName, berr := engine.NewSqlEngineForEnv(ctx, dEnv)
+	if berr != nil {
+		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(berr), usage)
+	}
+	defer engine.Close()
+	sqlCtx, berr := engine.NewLocalContext(ctx)
+	if berr != nil {
+		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(berr), usage)
+	}
+	defer sql.SessionEnd(sqlCtx.Session)
+	sql.SessionCommandBegin(sqlCtx.Session)
+	defer sql.SessionCommandEnd(sqlCtx.Session)
+	sqlCtx.SetCurrentDatabase(dbName)
+
+	rd, err := mvdata.NewSqlEngineReader(sqlCtx, engine.GetUnderlyingEngine(), root, exOpts.tableName)
 	if err != nil {
 		return commands.HandleVErrAndExitCode(errhand.BuildDError("Error creating reader for %s.", exOpts.SrcName()).AddCause(err).Build(), usage)
 	}
