@@ -98,7 +98,7 @@ func TestPuller(t *testing.T) {
 		st, err := nbs.NewLocalJournalingStore(ctx, nbf, dir, q)
 		require.NoError(t, err)
 
-		plr, err := NewPuller(ctx, t.TempDir(), 128, gs, st, waf, []hash.Hash{ghost}, statsCh)
+		plr, err := NewPuller(ctx, t.TempDir(), 1<<20, gs, st, waf, []hash.Hash{ghost}, statsCh)
 		require.NoError(t, err)
 		err = plr.Pull(ctx)
 		require.ErrorIs(t, err, nbs.ErrGhostChunkRequested)
@@ -367,7 +367,7 @@ func testPuller(t *testing.T, makeDB datasFactory) {
 			require.NoError(t, err)
 			waf, err := types.WalkAddrsForChunkStore(datas.ChunkStoreFromDatabase(db))
 			require.NoError(t, err)
-			plr, err := NewPuller(ctx, tmpDir, 128, datas.ChunkStoreFromDatabase(db), datas.ChunkStoreFromDatabase(sinkdb), waf, []hash.Hash{rootAddr}, statsCh)
+			plr, err := NewPuller(ctx, tmpDir, 1<<20, datas.ChunkStoreFromDatabase(db), datas.ChunkStoreFromDatabase(sinkdb), waf, []hash.Hash{rootAddr}, statsCh)
 			require.NoError(t, err)
 
 			err = plr.Pull(ctx)

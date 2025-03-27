@@ -58,8 +58,7 @@ type PullTableFileWriter struct {
 
 	addChunkCh  chan nbs.ToChunker
 	newWriterCh chan nbs.GenericTableWriter
-	egCtx       context.Context
-	eg          *errgroup.Group
+	doneCh      chan struct{}
 
 	getAddrs chunks.GetAddrsCurry
 
@@ -70,7 +69,10 @@ type PullTableFileWriter struct {
 type PullTableFileWriterConfig struct {
 	ConcurrentUploads int
 
-	ChunksPerFile int
+	// The approximate file size at which we will cut a file so
+	// that we start uploading it and we start writing later
+	// chunks to a new file. In bytes.
+	TargetFileSize uint64
 
 	MaximumBufferedFiles int
 
@@ -98,17 +100,27 @@ type PullTableFileWriterStats struct {
 	FinishedSendBytes uint64
 }
 
-func NewPullTableFileWriter(ctx context.Context, cfg PullTableFileWriterConfig) *PullTableFileWriter {
+func NewPullTableFileWriter(cfg PullTableFileWriterConfig) *PullTableFileWriter {
 	ret := &PullTableFileWriter{
 		cfg:         cfg,
 		addChunkCh:  make(chan nbs.ToChunker),
 		newWriterCh: make(chan nbs.GenericTableWriter, cfg.MaximumBufferedFiles),
+		doneCh:      make(chan struct{}),
 		getAddrs:    cfg.GetAddrs,
 	}
-	ret.eg, ret.egCtx = errgroup.WithContext(ctx)
-	ret.eg.Go(ret.uploadAndFinalizeThread)
-	ret.eg.Go(ret.addChunkThread)
 	return ret
+}
+
+func (w *PullTableFileWriter) Run(ctx context.Context) error {
+	defer close(w.doneCh)
+	eg, egCtx := errgroup.WithContext(ctx)
+	eg.Go(func() error {
+		return w.uploadAndFinalizeThread(egCtx)
+	})
+	eg.Go(func() error {
+		return w.addChunkThread(egCtx)
+	})
+	return eg.Wait()
 }
 
 func (w *PullTableFileWriter) GetStats() PullTableFileWriterStats {
@@ -132,44 +144,35 @@ func (w *PullTableFileWriter) AddToChunker(ctx context.Context, chk nbs.ToChunke
 		return nil
 	case <-ctx.Done():
 		return context.Cause(ctx)
-	case <-w.egCtx.Done():
-		return w.eg.Wait()
 	}
 }
 
-// This thread coordinates the threads which do the actual uploading. It spawns
-// the appropriate number of upload threads and waits for them all to exit,
-// which they typically do after newWriterCh is closed, but may also do if
-// their context is canceled. This thread reads the response channel from the
-// upload threads and accumulate the manifest updates.
-//
-// When all uploads threads have exited, it finishes reading the response
-// channel, and then, if all upload threads exited successfully, it applies any
-// necessary manifest updates to the DestStore.
-func (w *PullTableFileWriter) uploadAndFinalizeThread() (err error) {
+func (w *PullTableFileWriter) uploadFilesAndAccumulateUpdates(ctx context.Context) (map[string]int, error) {
+	// respCh is where upload threads send responses. These
+	// get built into a manifest update which gets sent to
+	// DestStore.AddTableFilesToManifest.
 	respCh := make(chan tempTblFile)
 
-	uploadEg, uploadCtx := errgroup.WithContext(w.egCtx)
+	eg, ctx := errgroup.WithContext(ctx)
+	var uploadWg sync.WaitGroup
 	for i := 0; i < w.cfg.ConcurrentUploads; i++ {
-		uploadEg.Go(func() error {
-			return w.uploadThread(uploadCtx, w.newWriterCh, respCh)
+		uploadWg.Add(1)
+		eg.Go(func() error {
+			defer uploadWg.Done()
+			return w.uploadThread(ctx, w.newWriterCh, respCh)
 		})
 	}
-
-	// After all upload threads are done, the response channel is closed.
-	go func() {
-		uploadEg.Wait()
+	eg.Go(func() error {
+		uploadWg.Wait()
 		close(respCh)
-	}()
+		return nil
+	})
 
 	// We don't need too much coordination here, since respCh is guaranteed
-	// to always be closed after uploadEg is done and we are going to check
+	// to always be closed after uploadWg is done and we are going to check
 	// for errors later.
 	manifestUpdates := make(map[string]int)
-	var manifestWg sync.WaitGroup
-	manifestWg.Add(1)
-	go func() {
-		defer manifestWg.Done()
+	eg.Go(func() error {
 		for ttf := range respCh {
 			id := ttf.id
 			if strings.HasSuffix(id, nbs.ArchiveFileSuffix) {
@@ -178,19 +181,27 @@ func (w *PullTableFileWriter) uploadAndFinalizeThread() (err error) {
 
 			manifestUpdates[id] = ttf.numChunks
 		}
-	}()
+		return nil
+	})
 
-	manifestWg.Wait()
-	err = uploadEg.Wait()
+	return manifestUpdates, eg.Wait()
+}
+
+// Write all completed table files which arrive from |w.newWriterCh|
+// using |w.cfg.DestStore.WriteTableFile|. Runs as many as
+// |w.cfg.ConcurrentUploads| at once.  If |w.newWriterCh| is closed
+// and all uploads complete successfully, calls
+// w.cfg.DestStore.AddTableFilesToManifest to add the uploaded files
+// to the dest store.
+func (w *PullTableFileWriter) uploadAndFinalizeThread(ctx context.Context) error {
+	updates, err := w.uploadFilesAndAccumulateUpdates(ctx)
 	if err != nil {
 		return err
 	}
-
-	if len(manifestUpdates) > 0 {
-		return w.cfg.DestStore.AddTableFilesToManifest(w.egCtx, manifestUpdates, w.getAddrs)
-	} else {
+	if len(updates) == 0 {
 		return nil
 	}
+	return w.cfg.DestStore.AddTableFilesToManifest(ctx, updates, w.getAddrs)
 }
 
 // This thread reads from addChunkCh and writes the chunks to table files.
@@ -200,8 +211,9 @@ func (w *PullTableFileWriter) uploadAndFinalizeThread() (err error) {
 //
 // Once addChunkCh closes, it sends along the last table file, if any, and then
 // closes newWriterCh and exits itself.
-func (w *PullTableFileWriter) addChunkThread() (err error) {
+func (w *PullTableFileWriter) addChunkThread(ctx context.Context) (err error) {
 	var curWr nbs.GenericTableWriter
+	var curBytes uint64
 
 	defer func() {
 		if curWr != nil {
@@ -214,19 +226,29 @@ func (w *PullTableFileWriter) addChunkThread() (err error) {
 		}
 	}()
 
+	estimatedFooterSize := func(chunkCnt int) uint64 {
+		// Does not need to be perfect. Based on storing all hashes (20 bytes each) and 8 byte offsets into the file.
+		// This is not actually how we store the index in table files or archives, but it's reasonably close.
+		return uint64(chunkCnt) * 28
+	}
+	estimatedFileSize := func() uint64 {
+		return curBytes + estimatedFooterSize(curWr.ChunkCount())
+	}
+
 	sendTableFile := func() error {
 		select {
-		case <-w.egCtx.Done():
-			return context.Cause(w.egCtx)
+		case <-ctx.Done():
+			return context.Cause(ctx)
 		case w.newWriterCh <- curWr:
 			curWr = nil
+			curBytes = 0
 			return nil
 		}
 	}
 
 LOOP:
 	for {
-		if curWr != nil && curWr.ChunkCount() >= w.cfg.ChunksPerFile {
+		if curWr != nil && estimatedFileSize() >= w.cfg.TargetFileSize {
 			if err := sendTableFile(); err != nil {
 				return err
 			}
@@ -234,8 +256,8 @@ LOOP:
 		}
 
 		select {
-		case <-w.egCtx.Done():
-			return context.Cause(w.egCtx)
+		case <-ctx.Done():
+			return context.Cause(ctx)
 		case newChnk, ok := <-w.addChunkCh:
 			if !ok {
 				break LOOP
@@ -259,6 +281,8 @@ LOOP:
 				return err
 			}
 
+			curBytes += uint64(bytes)
+
 			atomic.AddUint64(&w.bufferedSendBytes, uint64(bytes))
 		}
 	}
@@ -278,11 +302,10 @@ LOOP:
 // Finalize any in-flight table file writes and add all the uploaded table
 // files to the destination database.
 //
-// Returns any errors encountered on uploading or adding the table files to the
-// destination database.
-func (w *PullTableFileWriter) Close() error {
+// Causes Run() to return.
+func (w *PullTableFileWriter) Close() {
 	close(w.addChunkCh)
-	return w.eg.Wait()
+	<-w.doneCh
 }
 
 func (w *PullTableFileWriter) uploadThread(ctx context.Context, reqCh chan nbs.GenericTableWriter, respCh chan tempTblFile) error {

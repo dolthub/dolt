@@ -23,51 +23,21 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/dolthub/go-mysql-server/sql/planbuilder"
 
-	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 )
 
 type sqlEngineTableReader struct {
-	se     *engine.SqlEngine
 	sqlCtx *sql.Context
-
-	sch  schema.Schema
-	iter sql.RowIter
+	sch    schema.Schema
+	iter   sql.RowIter
 }
 
-func NewSqlEngineReader(ctx context.Context, dEnv *env.DoltEnv, tableName string) (*sqlEngineTableReader, error) {
-	mrEnv, err := env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), dEnv.FS, dEnv.Version, dEnv)
-	if err != nil {
-		return nil, err
-	}
-
-	config := &engine.SqlEngineConfig{
-		ServerUser: "root",
-		Autocommit: true,
-	}
-	se, err := engine.NewSqlEngine(
-		ctx,
-		mrEnv,
-		config,
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	sqlCtx, err := se.NewLocalContext(ctx)
-	if err != nil {
-		return nil, err
-	}
-	sqlCtx.SetCurrentDatabase(mrEnv.GetFirstDatabase())
-
-	sqlEngine := se.GetUnderlyingEngine()
-	binder := planbuilder.New(sqlCtx, sqlEngine.Analyzer.Catalog, sqlEngine.EventScheduler, sqlEngine.Parser)
+func NewSqlEngineReader(ctx *sql.Context, engine *sqle.Engine, root doltdb.RootValue, tableName string) (*sqlEngineTableReader, error) {
+	binder := planbuilder.New(ctx, engine.Analyzer.Catalog, engine.EventScheduler, engine.Parser)
 	ret, _, _, _, err := binder.Parse(fmt.Sprintf("show create table `%s`", tableName), nil, false)
 	if err != nil {
 		return nil, err
@@ -78,12 +48,7 @@ func NewSqlEngineReader(ctx context.Context, dEnv *env.DoltEnv, tableName string
 		return nil, fmt.Errorf("expected *plan.ShowCreate table, found %T", ret)
 	}
 
-	_, iter, _, err := se.Query(sqlCtx, fmt.Sprintf("SELECT * FROM `%s`", tableName))
-	if err != nil {
-		return nil, err
-	}
-
-	root, err := dEnv.WorkingRoot(ctx)
+	_, iter, _, err := engine.Query(ctx, fmt.Sprintf("SELECT * FROM `%s`", tableName))
 	if err != nil {
 		return nil, err
 	}
@@ -96,17 +61,15 @@ func NewSqlEngineReader(ctx context.Context, dEnv *env.DoltEnv, tableName string
 	}
 
 	return &sqlEngineTableReader{
-		se:     se,
-		sqlCtx: sqlCtx,
-
-		sch:  doltSchema,
-		iter: iter,
+		sqlCtx: ctx,
+		sch:    doltSchema,
+		iter:   iter,
 	}, nil
 }
 
 // Used by Dolthub API
-func NewSqlEngineTableReaderWithEngine(sqlCtx *sql.Context, se *sqle.Engine, db dsqle.Database, root doltdb.RootValue, tableName string) (*sqlEngineTableReader, error) {
-	sch, iter, _, err := se.Query(sqlCtx, fmt.Sprintf("SELECT * FROM `%s`", tableName))
+func NewSqlEngineTableReaderWithEngine(sqlCtx *sql.Context, engine *sqle.Engine, db dsqle.Database, root doltdb.RootValue, tableName string) (*sqlEngineTableReader, error) {
+	sch, iter, _, err := engine.Query(sqlCtx, fmt.Sprintf("SELECT * FROM `%s`", tableName))
 	if err != nil {
 		return nil, err
 	}
@@ -119,7 +82,6 @@ func NewSqlEngineTableReaderWithEngine(sqlCtx *sql.Context, se *sqle.Engine, db 
 	}
 
 	return &sqlEngineTableReader{
-		se:     engine.NewRebasedSqlEngine(se, map[string]dsess.SqlDatabase{db.Name(): db}),
 		sqlCtx: sqlCtx,
 		sch:    doltSchema,
 		iter:   iter,
