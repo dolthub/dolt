@@ -37,6 +37,11 @@ func TestSqlServerMaxConns(t *testing.T) {
 	t.Run("MaxConns 3 MaxConnectionsTimeout 10s", testMaxConns3Timeout10s)
 }
 
+// setupMaxConnsTest sets up a test "sql-server" with the provided arguments being cli arguments you would pass to
+// an actual server. Then it connects to the DB with 3 connections, simulating connections from 3 different clients.
+// Finally, it creates a two column table, "test_table", for tests to work with.
+//
+// DB and the 3 connections are returned, and the caller can close connections as needed in their test.
 func setupMaxConnsTest(t *testing.T, ctx context.Context, args ...string) (*sql.DB, []*sql.Conn) {
 	t.Parallel()
 	u, err := driver.NewDoltUser()
