@@ -171,6 +171,10 @@ func SchemaMerge(
 	ourSch, theirSch, ancSch schema.Schema,
 	tblName doltdb.TableName,
 ) (sch schema.Schema, sc SchemaConflict, mergeInfo MergeInfo, diffInfo tree.ThreeWayDiffInfo, err error) {
+	// If the schemas are nil, then we have nothing to do here
+	if ourSch == nil && theirSch == nil && ancSch == nil {
+		return nil, sc, mergeInfo, diffInfo, nil
+	}
 	// (sch - ancSch) ∪ (mergeSch - ancSch) ∪ (sch ∩ mergeSch)
 	sc = SchemaConflict{
 		TableName: tblName,

@@ -165,6 +165,7 @@ func clearEmptyConflicts(ctx context.Context, tbls []doltdb.TableName, working d
 			return nil, err
 		}
 		if !ok {
+			// TODO: check custom tables
 			continue
 		}
 
