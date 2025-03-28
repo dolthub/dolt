@@ -139,7 +139,7 @@ var BigAdaptiveBlobWriteQueries = []queries.WriteQueryTest{
 		WriteQuery:          "UPDATE blobt2 SET b2 = LOAD_FILE('testdata/tinyFile') WHERE i = 'HH'",
 		ExpectedWriteResult: []sql.Row{{queries.NewUpdateResult(1, 1)}},
 		SelectQuery:         "select i, b1, b2 from blobt2 where i = 'HH'",
-		DontUnwrap:          true,
+		WrapBehavior:        queries.WrapBehavior_Hash,
 		ExpectedSelect:      []sql.Row{{"HH", halfSizeBytes, tinyBytes}},
 	},
 	{
@@ -147,7 +147,7 @@ var BigAdaptiveBlobWriteQueries = []queries.WriteQueryTest{
 		WriteQuery:          "ALTER TABLE blobt2 DROP COLUMN b2",
 		ExpectedWriteResult: []sql.Row{{types.NewOkResult(0)}},
 		SelectQuery:         "select i, b1 from blobt2",
-		DontUnwrap:          true,
+		WrapBehavior:        queries.WrapBehavior_Hash,
 		ExpectedSelect: []sql.Row{
 			{"FF", fullSizeHash},
 			{"HF", halfSizeBytes},
@@ -164,7 +164,7 @@ var BigAdaptiveBlobWriteQueries = []queries.WriteQueryTest{
 		WriteQuery:          "ALTER TABLE blobt2 ADD INDEX (b1(10))",
 		ExpectedWriteResult: []sql.Row{{types.NewOkResult(0)}},
 		SelectQuery:         "select i, b1 FROM blobt2 WHERE BINARY b1 LIKE '\\0%'",
-		DontUnwrap:          true,
+		WrapBehavior:        queries.WrapBehavior_Hash,
 		ExpectedSelect: []sql.Row{
 			{"FF", fullSizeHash},
 			{"FH", fullSizeHash},
@@ -176,7 +176,7 @@ var BigAdaptiveBlobWriteQueries = []queries.WriteQueryTest{
 		WriteQuery:          "ALTER TABLE blobt2 ADD INDEX (b2(5))",
 		ExpectedWriteResult: []sql.Row{{types.NewOkResult(0)}},
 		SelectQuery:         "select i, b2 FROM blobt2 WHERE BINARY b2 LIKE '\x01%'",
-		DontUnwrap:          true,
+		WrapBehavior:        queries.WrapBehavior_Hash,
 		ExpectedSelect: []sql.Row{
 			{"FH", halfSizeBytes},
 			{"HH", halfSizeBytes},
