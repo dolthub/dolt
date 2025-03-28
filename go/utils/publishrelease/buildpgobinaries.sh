@@ -15,7 +15,7 @@ set -o pipefail
 apt-get update && apt-get install -y p7zip-full pigz curl xz-utils mingw-w64 clang-15
 
 cd /
-curl -o optcross.tar.xz https://dolthub-tools.s3.us-west-2.amazonaws.com/optcross/"$(uname -m)"-linux_20240515_0.0.2.tar.xz
+curl -o optcross.tar.xz https://dolthub-tools.s3.us-west-2.amazonaws.com/optcross/"$(uname -m)"-linux_20250327_0.0.3.tar.xz
 tar Jxf optcross.tar.xz
 export PATH=/opt/cross/bin:"$PATH"
 
