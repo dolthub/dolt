@@ -77,21 +77,21 @@ var BigBlobWriteQueries = []queries.WriteQueryTest{
 var BigAdaptiveBlobQueries = []queries.QueryTest{
 	{
 		// Large files are always stored out-of-band
-		Query:      "select b from blobt where i = 'F'",
-		Expected:   []sql.Row{{fullSizeHash}},
-		DontUnwrap: true,
+		Query:        "select b from blobt where i = 'F'",
+		Expected:     []sql.Row{{fullSizeHash}},
+		WrapBehavior: queries.WrapBehavior_Hash,
 	},
 	{
 		// Files that can fit within a tuple are stored inline.
-		Query:      "select b from blobt where i = 'H'",
-		Expected:   []sql.Row{{halfSizeBytes}},
-		DontUnwrap: true,
+		Query:        "select b from blobt where i = 'H'",
+		Expected:     []sql.Row{{halfSizeBytes}},
+		WrapBehavior: queries.WrapBehavior_Hash,
 	},
 	{
 		// When a tuple with multiple adaptive columns is too large, columns are moved out-of-band from left to right.
 		// However, strings smaller than the address size (20 bytes) are never stored out-of-band.
-		Query:      "select i, b1, b2 from blobt2",
-		DontUnwrap: true,
+		Query:        "select i, b1, b2 from blobt2",
+		WrapBehavior: queries.WrapBehavior_Hash,
 		Expected: []sql.Row{
 			{"FF", fullSizeHash, fullSizeHash},
 			{"HF", halfSizeHash, fullSizeHash},
@@ -106,27 +106,27 @@ var BigAdaptiveBlobQueries = []queries.QueryTest{
 	},
 	{
 		// An inlined adaptive column can be used in a filter.
-		Query:      "select i from blobt where b = LOAD_FILE('testdata/fullSize')",
-		DontUnwrap: true,
-		Expected:   []sql.Row{{"F"}},
+		Query:        "select i from blobt where b = LOAD_FILE('testdata/fullSize')",
+		WrapBehavior: queries.WrapBehavior_Hash,
+		Expected:     []sql.Row{{"F"}},
 	},
 	{
 		// An out-of-line adaptive column can be used in a filter.
-		Query:      "select i from blobt where b = LOAD_FILE('testdata/halfSize')",
-		DontUnwrap: true,
-		Expected:   []sql.Row{{"H"}},
+		Query:        "select i from blobt where b = LOAD_FILE('testdata/halfSize')",
+		WrapBehavior: queries.WrapBehavior_Hash,
+		Expected:     []sql.Row{{"H"}},
 	},
 	{
 		// An adaptive column can be used in a filter when it doesn't have the same encoding in all rows.
-		Query:      "select i from blobt2 where b1 = LOAD_FILE('testdata/halfSize')",
-		DontUnwrap: true,
-		Expected:   []sql.Row{{"HF"}, {"HH"}, {"HT"}},
+		Query:        "select i from blobt2 where b1 = LOAD_FILE('testdata/halfSize')",
+		WrapBehavior: queries.WrapBehavior_Hash,
+		Expected:     []sql.Row{{"HF"}, {"HH"}, {"HT"}},
 	},
 	{
 		// An adaptive column can be used in a filter when it doesn't have the same encoding in all rows.
-		Query:      "select i from blobt2 where b2 = LOAD_FILE('testdata/halfSize')",
-		DontUnwrap: true,
-		Expected:   []sql.Row{{"FH"}, {"HH"}, {"TH"}},
+		Query:        "select i from blobt2 where b2 = LOAD_FILE('testdata/halfSize')",
+		WrapBehavior: queries.WrapBehavior_Hash,
+		Expected:     []sql.Row{{"FH"}, {"HH"}, {"TH"}},
 	},
 }
 
