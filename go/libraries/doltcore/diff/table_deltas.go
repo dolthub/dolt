@@ -25,6 +25,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -54,6 +55,8 @@ type TableDelta struct {
 	ToName           doltdb.TableName
 	FromTable        *doltdb.Table
 	ToTable          *doltdb.Table
+	FromRootObject   doltdb.RootObject
+	ToRootObject     doltdb.RootObject
 	FromNodeStore    tree.NodeStore
 	ToNodeStore      tree.NodeStore
 	FromVRW          types.ValueReadWriter
@@ -145,9 +148,23 @@ func GetTableDeltas(ctx context.Context, fromRoot, toRoot doltdb.RootValue) (del
 	if err != nil {
 		return nil, err
 	}
+	err = fromRoot.IterRootObjects(ctx, func(name doltdb.TableName, tbl doltdb.RootObject) (stop bool, err error) {
+		fromDeltas = append(fromDeltas, TableDelta{
+			FromName:       name,
+			FromRootObject: tbl,
+			FromSch:        schema.EmptySchema,
+			FromVRW:        fromVRW,
+			FromNodeStore:  fromNS,
+			ToVRW:          toVRW,
+			ToNodeStore:    toNS,
+		})
+		return
+	})
+	if err != nil {
+		return nil, err
+	}
 
 	toDeltas := make([]TableDelta, 0)
-
 	err = toRoot.IterTables(ctx, func(name doltdb.TableName, tbl *doltdb.Table, sch schema.Schema) (stop bool, err error) {
 		c, err := toRoot.GetForeignKeyCollection(ctx)
 		if err != nil {
@@ -170,6 +187,21 @@ func GetTableDeltas(ctx context.Context, fromRoot, toRoot doltdb.RootValue) (del
 			FromNodeStore:  fromNS,
 			ToVRW:          toVRW,
 			ToNodeStore:    toNS,
+		})
+		return
+	})
+	if err != nil {
+		return nil, err
+	}
+	err = toRoot.IterRootObjects(ctx, func(name doltdb.TableName, tbl doltdb.RootObject) (stop bool, err error) {
+		toDeltas = append(toDeltas, TableDelta{
+			ToName:        name,
+			ToRootObject:  tbl,
+			ToSch:         schema.EmptySchema,
+			FromVRW:       fromVRW,
+			FromNodeStore: fromNS,
+			ToVRW:         toVRW,
+			ToNodeStore:   toNS,
 		})
 		return
 	})
@@ -235,7 +267,7 @@ func getFkParentSchs(ctx context.Context, root doltdb.RootValue, fks ...doltdb.F
 func filterUnmodifiedTableDeltas(deltas []TableDelta) ([]TableDelta, error) {
 	var filtered []TableDelta
 	for _, d := range deltas {
-		if d.ToTable == nil || d.FromTable == nil {
+		if d.IsAdd() || d.IsDrop() {
 			// Table was added or dropped
 			filtered = append(filtered, d)
 			continue
@@ -276,6 +308,8 @@ func matchTableDeltas(fromDeltas, toDeltas []TableDelta) (deltas []TableDelta) {
 			ToName:           t.ToName,
 			FromTable:        f.FromTable,
 			ToTable:          t.ToTable,
+			FromRootObject:   f.FromRootObject,
+			ToRootObject:     t.ToRootObject,
 			FromSch:          f.FromSch,
 			ToSch:            t.ToSch,
 			FromFks:          f.FromFks,
@@ -339,12 +373,12 @@ func schemasOverlap(from, to schema.Schema) bool {
 
 // IsAdd returns true if the table was added between the fromRoot and toRoot.
 func (td TableDelta) IsAdd() bool {
-	return td.FromTable == nil && td.ToTable != nil
+	return (td.FromTable == nil && td.ToTable != nil) || (td.FromRootObject == nil && td.ToRootObject != nil)
 }
 
 // IsDrop returns true if the table was dropped between the fromRoot and toRoot.
 func (td TableDelta) IsDrop() bool {
-	return td.FromTable != nil && td.ToTable == nil
+	return (td.FromTable != nil && td.ToTable == nil) || (td.FromRootObject != nil && td.ToRootObject == nil)
 }
 
 // IsRename return true if the table was renamed between the fromRoot and toRoot.
@@ -362,22 +396,39 @@ func (td TableDelta) HasHashChanged() (bool, error) {
 		return true, nil
 	}
 
-	toHash, err := td.ToTable.HashOf()
-	if err != nil {
-		return false, err
-	}
+	var toHash hash.Hash
+	var fromHash hash.Hash
+	var err error
 
-	fromHash, err := td.FromTable.HashOf()
-	if err != nil {
-		return false, err
+	if td.FromTable != nil || td.ToTable != nil {
+		toHash, err = td.ToTable.HashOf()
+		if err != nil {
+			return false, err
+		}
+		fromHash, err = td.FromTable.HashOf()
+		if err != nil {
+			return false, err
+		}
+	} else {
+		ctx := context.Background()
+		toHash, err = td.ToRootObject.HashOf(ctx)
+		if err != nil {
+			return false, err
+		}
+		fromHash, err = td.FromRootObject.HashOf(ctx)
+		if err != nil {
+			return false, err
+		}
 	}
-
 	return !toHash.Equal(fromHash), nil
 }
 
 // HasSchemaChanged returns true if the table schema has changed between the
 // fromRoot and toRoot.
 func (td TableDelta) HasSchemaChanged(ctx context.Context) (bool, error) {
+	if td.FromRootObject != nil || td.ToRootObject != nil {
+		return false, nil
+	}
 	// Database collation change is a schema change
 	if td.FromTable == nil && td.ToTable == nil {
 		return true, nil
@@ -419,71 +470,56 @@ func (td TableDelta) HasSchemaChanged(ctx context.Context) (bool, error) {
 }
 
 func (td TableDelta) HasChangesIgnoringColumnTags(ctx context.Context) (bool, error) {
-
-	if td.FromTable == nil && td.ToTable == nil {
+	if td.FromTable == nil && td.ToTable == nil && td.FromRootObject == nil && td.ToRootObject == nil {
 		return true, nil
 	}
-
 	if td.IsAdd() || td.IsDrop() {
 		return true, nil
 	}
-
 	if td.IsRename() {
 		return true, nil
 	}
-
 	if td.HasFKChanges() {
 		return true, nil
 	}
 
-	fromRowDataHash, err := td.FromTable.GetRowDataHash(ctx)
-	if err != nil {
-		return false, err
-	}
+	// There are specific checks that we make for regular tables
+	if td.FromTable != nil || td.ToTable != nil {
+		// Any change to the table data counts as a change
+		fromRowDataHash, err := td.FromTable.GetRowDataHash(ctx)
+		if err != nil {
+			return false, err
+		}
+		toRowDataHash, err := td.ToTable.GetRowDataHash(ctx)
+		if err != nil {
+			return false, err
+		}
+		if !fromRowDataHash.Equal(toRowDataHash) {
+			return true, nil
+		}
 
-	toRowDataHash, err := td.ToTable.GetRowDataHash(ctx)
-	if err != nil {
-		return false, err
-	}
-
-	// Any change to the table data counts as a change
-	if !fromRowDataHash.Equal(toRowDataHash) {
-		return true, nil
-	}
-
-	fromTableHash, err := td.FromTable.HashOf()
-	if err != nil {
-		return false, err
-	}
-
-	toTableHash, err := td.FromTable.HashOf()
-	if err != nil {
-		return false, err
-	}
-
-	// If the data hashes have changed, the table has obviously changed.
-	if !fromTableHash.Equal(toTableHash) {
-		return true, nil
-	}
-
-	fromSchemaHash, err := td.FromTable.GetSchemaHash(ctx)
-	if err != nil {
-		return false, err
-	}
-
-	toSchemaHash, err := td.ToTable.GetSchemaHash(ctx)
-	if err != nil {
-		return false, err
-	}
-
-	// If neither data nor schema hashes have changed, the table is obviously the same.
-	if fromSchemaHash.Equal(toSchemaHash) {
-		return false, nil
+		// If neither data nor schema hashes have changed, the table is the same
+		fromSchemaHash, err := td.FromTable.GetSchemaHash(ctx)
+		if err != nil {
+			return false, err
+		}
+		toSchemaHash, err := td.ToTable.GetSchemaHash(ctx)
+		if err != nil {
+			return false, err
+		}
+		if fromSchemaHash.Equal(toSchemaHash) {
+			return false, nil
+		}
+	} else {
+		// If we're not dealing with regular tables, then we must be dealing with root objects.
+		// In that case, it's a straight-forward check to see if the hashes changed.
+		if ok, err := td.HasHashChanged(); err != nil || ok {
+			return ok, err
+		}
 	}
 
 	// The schema hash has changed but the data has remained the same. We must inspect the schema to determine
 	// whether the change is observable or if only column tags have changed.
-
 	fromSchema, toSchema, err := td.GetSchemas(ctx)
 	if err != nil {
 		return false, err
@@ -495,8 +531,12 @@ func (td TableDelta) HasChangesIgnoringColumnTags(ctx context.Context) (bool, er
 
 func (td TableDelta) HasDataChanged(ctx context.Context) (bool, error) {
 	// Database collation change is not a data change
-	if td.FromTable == nil && td.ToTable == nil {
+	if td.FromTable == nil && td.ToTable == nil && td.FromRootObject == nil && td.ToRootObject == nil {
 		return false, nil
+	}
+
+	if td.FromRootObject != nil || td.ToRootObject != nil {
+		return td.HasHashChanged()
 	}
 
 	if td.IsAdd() {
@@ -504,10 +544,8 @@ func (td TableDelta) HasDataChanged(ctx context.Context) (bool, error) {
 		if err != nil {
 			return false, err
 		}
-
 		return !isEmpty, nil
 	}
-
 	if td.IsDrop() {
 		isEmpty, err := isTableDataEmpty(ctx, td.FromTable)
 		if err != nil {
@@ -520,12 +558,10 @@ func (td TableDelta) HasDataChanged(ctx context.Context) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-
 	toRowDataHash, err := td.ToTable.GetRowDataHash(ctx)
 	if err != nil {
 		return false, err
 	}
-
 	return !fromRowDataHash.Equal(toRowDataHash), nil
 }
 
@@ -596,6 +632,9 @@ func (td TableDelta) GetSchemas(ctx context.Context) (from, to schema.Schema, er
 
 // Format returns the format of the tables in this delta.
 func (td TableDelta) Format() *types.NomsBinFormat {
+	if td.FromRootObject != nil || td.ToRootObject != nil {
+		return types.Format_DOLT
+	}
 	if td.FromTable != nil {
 		return td.FromTable.Format()
 	}
@@ -693,6 +732,11 @@ func (td TableDelta) GetSummary(ctx context.Context) (*TableDeltaSummary, error)
 
 // GetRowData returns the table's row data at the fromRoot and toRoot, or an empty map if the table did not exist.
 func (td TableDelta) GetRowData(ctx context.Context) (from, to durable.Index, err error) {
+	if td.FromRootObject != nil || td.ToRootObject != nil {
+		// TODO: determine if this should error
+		return nil, nil, nil
+	}
+
 	if td.FromTable == nil && td.ToTable == nil {
 		return nil, nil, fmt.Errorf("both from and to tables are missing from table delta")
 	}

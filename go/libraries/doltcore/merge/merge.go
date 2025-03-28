@@ -311,6 +311,15 @@ func MergeRoots(
 				return nil, err
 			}
 			continue
+		} else if mergedTable.rootObj != nil {
+			tblToStats[tblName] = stats
+			if stats.Operation != TableUnmodified {
+				mergedRoot, err = mergedRoot.PutRootObject(ctx, tblName, mergedTable.rootObj)
+				if err != nil {
+					return nil, err
+				}
+			}
+			continue
 		}
 
 		mergedRootHasTable, err := mergedRoot.HasTable(ctx, tblName)
@@ -350,11 +359,6 @@ func MergeRoots(
 	}
 
 	mergedRoot, err = mergedRoot.PutForeignKeyCollection(ctx, mergedFKColl)
-	if err != nil {
-		return nil, err
-	}
-
-	mergedRoot, err = mergedRoot.HandlePostMerge(ctx, ourRoot, theirRoot, ancRoot)
 	if err != nil {
 		return nil, err
 	}

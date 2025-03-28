@@ -103,6 +103,8 @@ func doDoltCheckout(ctx *sql.Context, args []string) (statusCode int, successMes
 	updateHead := apr.Contains(cli.MoveFlag)
 
 	var rsc doltdb.ReplicationStatusController
+	// If we're switching branches, then we need to clear any Doltgres session objects since they're temporary
+	dSess.DoltgresSessObj = nil
 
 	// Checking out new branch.
 	if branchOrTrack {
