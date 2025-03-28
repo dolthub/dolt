@@ -347,8 +347,6 @@ func RunBigBlobsTest(t *testing.T, h DoltEnginetestHarness) {
 }
 
 func RunAdaptiveBigBlobsTest(t *testing.T, h DoltEnginetestHarness) {
-	defer func() { schema.UseAdaptiveEncoding = false }()
-	schema.UseAdaptiveEncoding = true
 	defer h.Close()
 	h.Setup(setup.MydbData, BigAdaptiveBlobQueriesSetup)
 	enginetest.RunQueryTests(t, h, BigAdaptiveBlobQueries)
