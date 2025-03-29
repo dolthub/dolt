@@ -17,8 +17,8 @@ package val
 import (
 	"bytes"
 	"context"
-	"github.com/dolthub/go-mysql-server/sql"
 
+	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/mohae/uvarint"
 
 	"github.com/dolthub/dolt/go/store/hash"
