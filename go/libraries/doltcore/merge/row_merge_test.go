@@ -336,13 +336,17 @@ func buildTup(sch schema.Schema, r []*int) val.Tuple {
 	}
 
 	vD := sch.GetValueDescriptor(nil)
-	vB := val.NewTupleBuilder(vD)
+	vB := val.NewTupleBuilder(vD, nil)
 	for i, v := range r {
 		if v != nil {
 			vB.PutInt64(i, int64(*v))
 		}
 	}
-	return vB.Build(syncPool)
+	tup, err := vB.Build(syncPool)
+	if err != nil {
+		panic(err)
+	}
+	return tup
 }
 
 func toVals(ints []*int) []types.Value {

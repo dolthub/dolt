@@ -341,7 +341,25 @@ func RunIndexPrefixTest(t *testing.T, harness DoltEnginetestHarness) {
 func RunBigBlobsTest(t *testing.T, h DoltEnginetestHarness) {
 	defer h.Close()
 	h.Setup(setup.MydbData, setup.BlobData)
-	for _, tt := range BigBlobQueries {
+	for _, tt := range BigBlobWriteQueries {
+		enginetest.RunWriteQueryTest(t, h, tt)
+	}
+}
+
+func RunAdaptiveBigBlobsTest(t *testing.T, h DoltEnginetestHarness) {
+	defer h.Close()
+	h.Setup(setup.MydbData, BigAdaptiveBlobQueriesSetup)
+	enginetest.RunQueryTests(t, h, BigAdaptiveBlobQueries)
+	for _, tt := range BigAdaptiveBlobWriteQueries {
+		enginetest.RunWriteQueryTest(t, h, tt)
+	}
+}
+
+func RunAdaptiveBigTextTest(t *testing.T, h DoltEnginetestHarness) {
+	defer h.Close()
+	h.Setup(setup.MydbData, BigAdaptiveTextQueriesSetup)
+	enginetest.RunQueryTests(t, h, BigAdaptiveTextQueries)
+	for _, tt := range BigAdaptiveTextWriteQueries {
 		enginetest.RunWriteQueryTest(t, h, tt)
 	}
 }

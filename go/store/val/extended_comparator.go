@@ -14,7 +14,9 @@
 
 package val
 
-import "context"
+import (
+	"context"
+)
 
 // ExtendedTupleComparator is a comparator that properly handles extended types.
 type ExtendedTupleComparator struct {
@@ -50,7 +52,7 @@ func (c ExtendedTupleComparator) Compare(ctx context.Context, left, right Tuple,
 // CompareValues implements the TupleComparator interface.
 func (c ExtendedTupleComparator) CompareValues(ctx context.Context, index int, left, right []byte, typ Type) int {
 	switch typ.Enc {
-	case ExtendedEnc, ExtendedAddrEnc:
+	case ExtendedEnc, ExtendedAddrEnc, ExtendedAdaptiveEnc:
 		cmp, err := c.handlers[index].SerializedCompare(ctx, left, right)
 		if err != nil {
 			panic(err)
@@ -88,7 +90,7 @@ func (c ExtendedTupleComparator) Validated(types []Type) TupleComparator {
 	hasHandler := false
 	for i, handler := range c.handlers {
 		switch types[i].Enc {
-		case ExtendedEnc, ExtendedAddrEnc:
+		case ExtendedEnc, ExtendedAddrEnc, ExtendedAdaptiveEnc:
 			if handler == nil {
 				panic("extended encoding requires a handler")
 			} else {

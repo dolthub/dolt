@@ -125,7 +125,8 @@ func makeMutableMap(t *testing.T, count int) (testMap, [][2]val.Tuple) {
 		val.Type{Enc: val.Uint32Enc, Nullable: true},
 	)
 
-	tuples := tree.RandomTuplePairs(ctx, count, kd, vd, ns)
+	tuples, err := tree.RandomTuplePairs(ctx, count, kd, vd, ns)
+	require.NoError(t, err)
 	// 2/3 of tuples in Map
 	// 1/3 of tuples in memoryMap
 	clone := tree.CloneRandomTuples(tuples)

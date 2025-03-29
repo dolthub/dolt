@@ -175,7 +175,14 @@ hint: commit your changes (dolt commit -am \"<message>\") or reset them (dolt re
 	succeeded := false
 	commitHash := ""
 	for _, row := range rows {
-		commitHash = row[0].(string)
+		var ok bool
+		commitHash, ok, err = sql.Unwrap[string](sqlCtx, row[0])
+		if err != nil {
+			return fmt.Errorf("Unable to parse commitHash column: %w", err)
+		}
+		if !ok {
+			return fmt.Errorf("Unexpected type for commitHash column, expected string, found %T", row[0])
+		}
 		dataConflicts, err := getInt64ColAsInt64(row[1])
 		if err != nil {
 			return fmt.Errorf("Unable to parse data_conflicts column: %w", err)

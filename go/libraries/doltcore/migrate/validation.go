@@ -147,7 +147,7 @@ func validateTableDataPartition(ctx context.Context, name string, old, new *dolt
 			return err
 		}
 
-		ok, err := equalRows(o, n, newSch)
+		ok, err := equalRows(ctx, o, n, newSch)
 		if err != nil {
 			return err
 		} else if !ok {
@@ -164,20 +164,27 @@ func validateTableDataPartition(ctx context.Context, name string, old, new *dolt
 	return nil
 }
 
-func equalRows(old, new sql.Row, sch sql.Schema) (bool, error) {
+func equalRows(ctx context.Context, old, new sql.Row, sch sql.Schema) (bool, error) {
 	if len(new) != len(old) || len(new) != len(sch) {
 		return false, nil
 	}
 
-	var err error
 	var cmp int
 	for i := range new {
 
 		// special case string comparisons
-		if s, ok := old[i].(string); ok {
+		s, ok, err := sql.Unwrap[string](ctx, old[i])
+		if err != nil {
+			return false, err
+		}
+		if ok {
 			old[i] = strings.TrimRightFunc(s, unicode.IsSpace)
 		}
-		if s, ok := new[i].(string); ok {
+		s, ok, err = sql.Unwrap[string](ctx, new[i])
+		if err != nil {
+			return false, err
+		}
+		if ok {
 			new[i] = strings.TrimRightFunc(s, unicode.IsSpace)
 		}
 

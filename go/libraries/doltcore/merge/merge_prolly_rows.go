@@ -665,7 +665,10 @@ func (uv uniqValidator) validateDiff(ctx *sql.Context, diff tree.ThreeWayDiff) (
 // boolean that indicates if an artifact was deleted, as well as an error that indicates if there were any
 // unexpected errors encountered.
 func (uv uniqValidator) deleteArtifact(ctx context.Context, key val.Tuple) (bool, error) {
-	artifactKey := uv.edits.BuildArtifactKey(ctx, key, uv.srcHash, prolly.ArtifactTypeUniqueKeyViol)
+	artifactKey, err := uv.edits.BuildArtifactKey(ctx, key, uv.srcHash, prolly.ArtifactTypeUniqueKeyViol)
+	if err != nil {
+		return false, err
+	}
 
 	has, err := uv.edits.Has(ctx, artifactKey)
 	if err != nil || !has {
@@ -746,7 +749,7 @@ func newUniqIndex(ctx *sql.Context, sch schema.Schema, tableName string, def sch
 		return uniqIndex{}, err
 	}
 
-	clusteredBld := index.NewClusteredKeyBuilder(def, sch, clustered.KeyDesc(), p)
+	clusteredBld := index.NewClusteredKeyBuilder(def, sch, clustered.KeyDesc(), p, clustered.NodeStore())
 
 	return uniqIndex{
 		def:              def,
@@ -783,7 +786,10 @@ func (idx uniqIndex) removeRow(ctx context.Context, key, value val.Tuple) error 
 		return err
 	}
 
-	clusteredIndexKey := idx.clusteredBld.ClusteredKeyFromIndexKey(secondaryIndexKey)
+	clusteredIndexKey, err := idx.clusteredBld.ClusteredKeyFromIndexKey(secondaryIndexKey)
+	if err != nil {
+		return err
+	}
 	return idx.clustered.Delete(ctx, clusteredIndexKey)
 }
 
@@ -816,7 +822,10 @@ func (idx uniqIndex) findCollisions(ctx context.Context, key, value val.Tuple, c
 	collisionDetected := false
 	for _, collision := range collisions {
 		// Next find the key in the primary (aka clustered) index
-		clusteredKey := idx.clusteredBld.ClusteredKeyFromIndexKey(collision)
+		clusteredKey, err := idx.clusteredBld.ClusteredKeyFromIndexKey(collision)
+		if err != nil {
+			return err
+		}
 		if bytes.Equal(key, clusteredKey) {
 			continue // collided with ourselves
 		}
@@ -1476,7 +1485,7 @@ func remapTupleWithColumnDefaults(
 	pool pool.BuffPool,
 	rightSide bool,
 ) (val.Tuple, error) {
-	tb := val.NewTupleBuilder(mergedSch.GetValueDescriptor(tm.ns))
+	tb := val.NewTupleBuilder(mergedSch.GetValueDescriptor(tm.ns), tm.ns)
 
 	var secondPass []int
 	for to, from := range mapping {
@@ -1522,7 +1531,7 @@ func remapTupleWithColumnDefaults(
 		}
 	}
 
-	return tb.Build(pool), nil
+	return tb.Build(pool)
 }
 
 // writeTupleExpression attempts to evaluate the expression string |exprString| against the row provided and write it

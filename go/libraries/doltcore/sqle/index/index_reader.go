@@ -400,7 +400,7 @@ func newNonCoveringLookupBuilder(s *durableIndexState, b *baseIndexImplBuilder) 
 		return nil, err
 	}
 	priKd, _ := primary.Descriptors()
-	tbBld := val.NewTupleBuilder(priKd)
+	tbBld := val.NewTupleBuilder(priKd, primary.NodeStore())
 	pkMap := OrdinalMappingFromIndex(b.idx)
 	keyProj, valProj, ordProj := projectionMappings(b.idx.Schema(), b.projections)
 	return &nonCoveringIndexImplBuilder{
@@ -673,13 +673,19 @@ func (i *nonCoveringMapIter) Next(ctx context.Context) (val.Tuple, val.Tuple, er
 		from := i.pkMap.MapOrdinal(to)
 		i.pkBld.PutRaw(to, idxKey.GetField(from))
 	}
-	pk := i.pkBld.Build(sharePool)
+	pk, err := i.pkBld.Build(sharePool)
+	if err != nil {
+		return nil, nil, err
+	}
 
 	var value val.Tuple
 	err = i.primary.Get(ctx, pk, func(_, v val.Tuple) error {
 		value = v
 		return nil
 	})
+	if err != nil {
+		return nil, nil, err
+	}
 	return pk, value, nil
 }
 
@@ -784,7 +790,7 @@ func (ib *keylessIndexImplBuilder) NewRangeMapIter(ctx context.Context, r prolly
 	keyDesc := clustered.KeyDesc()
 	indexMap := OrdinalMappingFromIndex(ib.idx)
 
-	keyBld := val.NewTupleBuilder(keyDesc)
+	keyBld := val.NewTupleBuilder(keyDesc, clustered.NodeStore())
 
 	return &keylessLookupIter{pri: clustered, secIter: indexIter, pkMap: indexMap, pkBld: keyBld, prefixDesc: keyDesc}, nil
 }
@@ -811,7 +817,10 @@ func (i *keylessMapIter) Next(ctx context.Context) (val.Tuple, val.Tuple, error)
 		from := i.clusteredMap.MapOrdinal(to)
 		i.clusteredBld.PutRaw(to, idxKey.GetField(from))
 	}
-	pk := i.clusteredBld.Build(sharePool)
+	pk, err := i.clusteredBld.Build(sharePool)
+	if err != nil {
+		return nil, nil, err
+	}
 
 	var value val.Tuple
 	err = i.clustered.Get(ctx, pk, func(k, v val.Tuple) error {
@@ -847,7 +856,7 @@ func (ib *keylessIndexImplBuilder) NewSecondaryIter(strict bool, cnt int, nullSa
 		return nil, err
 	}
 	pkDesc, _ := pri.Descriptors()
-	pkBld := val.NewTupleBuilder(pkDesc)
+	pkBld := val.NewTupleBuilder(pkDesc, pri.NodeStore())
 
 	secondary, err := durable.ProllyMapFromIndex(ib.s.Secondary)
 	if err != nil {

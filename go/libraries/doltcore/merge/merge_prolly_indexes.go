@@ -129,14 +129,20 @@ func buildIndex(
 			return nil, err
 		}
 		kd := postMergeSchema.GetKeyDescriptor(ns)
-		kb := val.NewTupleBuilder(kd)
+		kb := val.NewTupleBuilder(kd, ns)
 		p := m.Pool()
 
 		pkMapping := ordinalMappingFromIndex(index)
 
 		mergedMap, err := creation.BuildUniqueProllyIndex(ctx, vrw, ns, postMergeSchema, tblName, index, m, func(ctx context.Context, existingKey, newKey val.Tuple) (err error) {
-			eK := getPKFromSecondaryKey(kb, p, pkMapping, existingKey)
-			nK := getPKFromSecondaryKey(kb, p, pkMapping, newKey)
+			eK, err := getPKFromSecondaryKey(kb, p, pkMapping, existingKey)
+			if err != nil {
+				return err
+			}
+			nK, err := getPKFromSecondaryKey(kb, p, pkMapping, newKey)
+			if err != nil {
+				return err
+			}
 			err = replaceUniqueKeyViolation(ctx, artEditor, m, eK, theirRootIsh, vInfo)
 			if err != nil {
 				return err
