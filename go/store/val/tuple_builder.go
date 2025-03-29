@@ -573,31 +573,34 @@ func (tb *TupleBuilder) PutAdaptiveBytesFromInline(ctx context.Context, i int, v
 
 func (tb *TupleBuilder) PutAdaptiveStringFromInline(ctx context.Context, i int, v string) error {
 	tb.Desc.expectEncoding(i, StringAdaptiveEnc)
-	if int64(len(v)) > tb.tupleLengthTarget {
+	inlineSize := ByteSize(len(v)) + 1 // include extra header byte
+	if int64(inlineSize) > tb.tupleLengthTarget {
 		// Inline value is too large. We must store it out of line.
 		maxLengthBytes := 9
 		tb.ensureCapacity(ByteSize(hash.ByteLen + maxLengthBytes))
 		blobLength := uint64(len(v))
 		lengthSize, _ := makeVarInt(blobLength, tb.buf[tb.pos:])
+		outOfBandSize := int64(lengthSize) + hash.ByteLen
 
 		blobHash, err := tb.vs.WriteBytes(ctx, []byte(v))
 		if err != nil {
 			return err
 		}
 		copy(tb.buf[tb.pos+int64(lengthSize):], blobHash[:])
-		field := tb.buf[tb.pos : tb.pos+int64(lengthSize)+hash.ByteLen]
+		field := tb.buf[tb.pos : tb.pos+outOfBandSize]
 		tb.fields[i] = field
-		tb.pos += int64(lengthSize) + hash.ByteLen
+		tb.pos += outOfBandSize
+		tb.inlineSize += int64(inlineSize)
+		tb.outOfBandSize += outOfBandSize
 		return nil
 	}
-	sz := ByteSize(len(v)) + 1 // include extra header byte
-	tb.ensureCapacity(sz)
-	field := AdaptiveValue(tb.buf[tb.pos : tb.pos+int64(sz)])
+	tb.ensureCapacity(inlineSize)
+	field := AdaptiveValue(tb.buf[tb.pos : tb.pos+int64(inlineSize)])
 	tb.fields[i] = field
 	field[0] = 0 // Mark this as inline
 	copy(field[1:], v)
-	tb.pos += int64(sz)
-	tb.inlineSize += int64(sz)
+	tb.pos += int64(inlineSize)
+	tb.inlineSize += int64(inlineSize)
 	tb.outOfBandSize += field.outOfBandSize()
 	return nil
 }
@@ -609,11 +612,14 @@ func (tb *TupleBuilder) PutAdaptiveBytesFromOutline(i int, v *ByteArray) {
 	tb.ensureCapacity(ByteSize(hash.ByteLen + maxLengthBytes))
 	blobLength := uint64(v.MaxByteLength())
 	lengthSize, _ := makeVarInt(blobLength, tb.buf[tb.pos:])
+	outOfBandSize := int64(lengthSize) + hash.ByteLen
 
 	copy(tb.buf[tb.pos+int64(lengthSize):], v.Addr[:])
-	field := tb.buf[tb.pos : tb.pos+int64(lengthSize)+hash.ByteLen]
+	field := tb.buf[tb.pos : tb.pos+outOfBandSize]
 	tb.fields[i] = field
-	tb.pos += int64(lengthSize) + hash.ByteLen
+	tb.pos += outOfBandSize
+	tb.inlineSize += int64(blobLength) + 1
+	tb.outOfBandSize += outOfBandSize
 }
 
 func (tb *TupleBuilder) PutAdaptiveStringFromOutline(i int, v *TextStorage) {
@@ -623,9 +629,12 @@ func (tb *TupleBuilder) PutAdaptiveStringFromOutline(i int, v *TextStorage) {
 	tb.ensureCapacity(ByteSize(hash.ByteLen + maxLengthBytes))
 	blobLength := uint64(v.MaxByteLength())
 	lengthSize, _ := makeVarInt(blobLength, tb.buf[tb.pos:])
+	outOfBandSize := int64(lengthSize) + hash.ByteLen
 
 	copy(tb.buf[tb.pos+int64(lengthSize):], v.Addr[:])
-	field := tb.buf[tb.pos : tb.pos+int64(lengthSize)+hash.ByteLen]
+	field := tb.buf[tb.pos : tb.pos+outOfBandSize]
 	tb.fields[i] = field
-	tb.pos += int64(lengthSize) + hash.ByteLen
+	tb.pos += outOfBandSize
+	tb.inlineSize += int64(blobLength) + 1
+	tb.outOfBandSize += outOfBandSize
 }

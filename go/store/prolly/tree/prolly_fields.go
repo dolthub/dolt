@@ -353,7 +353,7 @@ func PutField(ctx context.Context, ns NodeStore, tb *val.TupleBuilder, i int, v 
 				if err != nil {
 					return err
 				}
-				err = tb.PutAdaptiveBytesFromInline(ctx, i, valueBytes)
+				err = tb.PutAdaptiveStringFromInline(ctx, i, string(valueBytes))
 				if err != nil {
 					return err
 				}

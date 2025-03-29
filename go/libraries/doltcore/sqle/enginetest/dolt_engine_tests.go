@@ -355,6 +355,15 @@ func RunAdaptiveBigBlobsTest(t *testing.T, h DoltEnginetestHarness) {
 	}
 }
 
+func RunAdaptiveBigTextTest(t *testing.T, h DoltEnginetestHarness) {
+	defer h.Close()
+	h.Setup(setup.MydbData, BigAdaptiveTextQueriesSetup)
+	enginetest.RunQueryTests(t, h, BigAdaptiveTextQueries)
+	for _, tt := range BigAdaptiveTextWriteQueries {
+		enginetest.RunWriteQueryTest(t, h, tt)
+	}
+}
+
 func RunDropEngineTest(t *testing.T, h DoltEnginetestHarness) {
 	func() {
 		h := h.NewHarness(t)
