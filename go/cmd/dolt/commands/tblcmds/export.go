@@ -218,7 +218,7 @@ func (cmd ExportCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return commands.HandleVErrAndExitCode(errhand.BuildDError("Error creating reader for %s.", exOpts.SrcName()).AddCause(err).Build(), usage)
 	}
 
-	wr, verr := getTableWriter(ctx, root, dEnv, rd.GetSchema(), exOpts)
+	wr, verr := getTableWriter(sqlCtx, root, dEnv, rd.GetSchema(), exOpts)
 	if verr != nil {
 		return commands.HandleVErrAndExitCode(verr, usage)
 	}

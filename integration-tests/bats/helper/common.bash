@@ -6,6 +6,8 @@ if [ -z "$BATS_TMPDIR" ]; then
     mkdir $BATS_TMPDIR
 fi
 
+export DOLT_CONTEXT_VALIDATION_ENABLED=true
+
 nativebatsdir() { echo `nativepath $BATS_TEST_DIRNAME/$1`; }
 batshelper() { echo `nativebatsdir helper/$1`; }
 

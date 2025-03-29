@@ -261,21 +261,24 @@ func (s *SerialQueue) DoSync(ctx context.Context, f func() error) error {
 // No return leaves the session in an incomplete state.
 func (s *SerialQueue) DoSyncSessionAware(ctx *sql.Context, f func() error) error {
 	started := atomic.Bool{}
+	var err error
 	nf := func() error {
 		if started.Swap(true) {
 			return nil
 		}
 		sql.SessionCommandBegin(ctx.Session)
 		defer sql.SessionCommandEnd(ctx.Session)
-		return f()
+		err = f()
+		return err
 	}
-	w, err := s.submitWork(schedPriority_Normal, nf)
+	var w work
+	w, err = s.submitWork(schedPriority_Normal, nf)
 	if err != nil {
 		return err
 	}
 	select {
 	case <-w.done:
-		return nil
+		return err
 	case <-ctx.Done():
 		if started.Swap(true) {
 			<-w.done

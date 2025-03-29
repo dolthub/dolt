@@ -171,7 +171,7 @@ func (cmd ShowCmd) Exec(ctx context.Context, commandStr string, args []string, d
 			return 1
 		}
 
-		if !opts.pretty && !dEnv.DoltDB(ctx).Format().UsesFlatbuffers() {
+		if !opts.pretty && !dEnv.DoltDB(sqlCtx).Format().UsesFlatbuffers() {
 			cli.PrintErrln("`dolt show --no-pretty` or `dolt show (BRANCHNAME)` is not supported when using old LD_1 storage format.")
 			return 1
 		}
@@ -180,7 +180,7 @@ func (cmd ShowCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	for _, specRef := range resolvedRefs {
 		// If --no-pretty was supplied, always display the raw contents of the referenced object.
 		if !opts.pretty {
-			err := printRawValue(ctx, dEnv, specRef)
+			err := printRawValue(sqlCtx, dEnv, specRef)
 			if err != nil {
 				return handleErrAndExit(err)
 			}
@@ -202,12 +202,12 @@ func (cmd ShowCmd) Exec(ctx context.Context, commandStr string, args []string, d
 				cli.PrintErrln("`dolt show (NON_COMMIT_HASH)` requires a local environment. Not intended for common use.")
 				return 1
 			}
-			if !dEnv.DoltDB(ctx).Format().UsesFlatbuffers() {
+			if !dEnv.DoltDB(sqlCtx).Format().UsesFlatbuffers() {
 				cli.PrintErrln("`dolt show (NON_COMMIT_HASH)` is not supported when using old LD_1 storage format.")
 				return 1
 			}
 
-			value, err := getValueFromRefSpec(ctx, dEnv, specRef)
+			value, err := getValueFromRefSpec(sqlCtx, dEnv, specRef)
 			if err != nil {
 				err = fmt.Errorf("error resolving spec ref '%s': %w", specRef, err)
 				if err != nil {

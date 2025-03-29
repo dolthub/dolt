@@ -68,8 +68,8 @@ func NewAutoIncrementTracker(ctx context.Context, dbName string, roots ...doltdb
 		mm:        mutexmap.NewMutexMap(),
 		init:      make(chan struct{}),
 	}
-	ctx = context.Background()
 	gcSafepointController := getGCSafepointController(ctx)
+	ctx = context.Background()
 	if gcSafepointController != nil {
 		ctx = gcctx.WithGCSafepointController(ctx, gcSafepointController)
 	}
