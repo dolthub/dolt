@@ -17,6 +17,7 @@ package val
 import (
 	"bytes"
 	"context"
+	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/mohae/uvarint"
 
@@ -247,6 +248,8 @@ func (handler AdaptiveEncodingTypeHandler) SerializeValue(ctx context.Context, v
 	if len(b) == 0 {
 		return nil, nil
 	}
+	// Initially create an inline version of the value. If subsequently written to a tuple, this may get replaced
+	// with an out-of-band version.
 	dest := make([]byte, len(b)+1)
 	copy(dest[1:], b)
 	return dest, nil
@@ -261,15 +264,51 @@ func (handler AdaptiveEncodingTypeHandler) DeserializeValue(ctx context.Context,
 		return handler.childHandler.DeserializeValue(ctx, adaptiveValue[1:])
 	}
 	// else adaptiveValue is stored out-of-band
-	_, lengthBytes := uvarint.Uvarint(adaptiveValue)
+	length, lengthBytes := uvarint.Uvarint(adaptiveValue)
 	addr := hash.New(adaptiveValue[lengthBytes:])
-	b, err := handler.vs.ReadBytes(ctx, addr)
-	if err != nil {
-		return nil, err
-	}
-	return handler.childHandler.DeserializeValue(ctx, b)
+	return &ExtendedValueWrapper{
+		ImmutableValue:  NewImmutableValue(addr, handler.vs),
+		outOfBandLength: int64(length),
+		typeHandler:     handler.childHandler,
+	}, nil
 }
 
 func (handler AdaptiveEncodingTypeHandler) FormatValue(val any) (string, error) {
 	return handler.childHandler.FormatValue(val)
 }
+
+type ExtendedValueWrapper struct {
+	ImmutableValue
+	outOfBandLength int64
+	typeHandler     TupleTypeHandler
+}
+
+func (e *ExtendedValueWrapper) UnwrapAny(ctx context.Context) (interface{}, error) {
+	if e.ImmutableValue.Buf == nil {
+		buf, err := e.vs.ReadBytes(ctx, e.ImmutableValue.Addr)
+		if err != nil {
+			return nil, err
+		}
+		e.ImmutableValue.Buf = buf
+	}
+	return e.typeHandler.DeserializeValue(ctx, e.ImmutableValue.Buf)
+}
+
+func (e ExtendedValueWrapper) IsExactLength() bool {
+	return true
+}
+
+func (e ExtendedValueWrapper) MaxByteLength() int64 {
+	return e.outOfBandLength
+}
+
+func (e ExtendedValueWrapper) Compare(ctx context.Context, other interface{}) (cmp int, comparable bool, err error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (e ExtendedValueWrapper) Hash() interface{} {
+	return e.ImmutableValue.Addr
+}
+
+var _ sql.AnyWrapper = &ExtendedValueWrapper{}
