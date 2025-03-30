@@ -53,8 +53,8 @@ func doltTestValctx(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 
 func NewTestValctxProcedure() sql.ExternalStoredProcedureDetails {
 	return sql.ExternalStoredProcedureDetails{
-		Name: "dolt_test_valctx",
-		Schema: int64Schema("status"),
+		Name:     "dolt_test_valctx",
+		Schema:   int64Schema("status"),
 		Function: doltTestValctx,
 	}
 }
