@@ -34,6 +34,14 @@ teardown() {
     dolt gc -s
 }
 
+@test "garbage_collection: valctx is enabled" {
+    run dolt sql -q "call dolt_test_valctx();"
+    # Calling dolt_test_valctx should exit non-zero.
+    [ "$status" -ne "0" ]
+    # It should have surfaced a panic.
+    [[ "$output" =~ "panic: " ]] || false
+}
+
 @test "garbage_collection: smoke test" {
     dolt sql <<SQL
 CREATE TABLE test (pk int PRIMARY KEY);

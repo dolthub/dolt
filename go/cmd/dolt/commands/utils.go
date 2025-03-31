@@ -246,14 +246,14 @@ func newLateBindingEngine(
 		Autocommit:         true,
 	}
 
-	var lateBinder cli.LateBindQueryist = func(ctx2 context.Context) (cli.Queryist, *sql.Context, func(), error) {
+	var lateBinder cli.LateBindQueryist = func(ctx context.Context) (cli.Queryist, *sql.Context, func(), error) {
 		// We've deferred loading the database as long as we can.
 		// If we're binding the Queryist, that means that engine is actually
 		// going to be used.
-		mrEnv.ReloadDBs(ctx2)
+		mrEnv.ReloadDBs(ctx)
 
 		se, err := engine.NewSqlEngine(
-			ctx2,
+			ctx,
 			mrEnv,
 			config,
 		)
@@ -261,22 +261,15 @@ func newLateBindingEngine(
 			return nil, nil, nil, err
 		}
 
-		if err := se.InitStats(ctx2); err != nil {
+		if err := se.InitStats(ctx); err != nil {
+			se.Close()
 			return nil, nil, nil, err
 		}
-
-		sqlCtx, err := se.NewDefaultContext(ctx2)
-		if err != nil {
-			return nil, nil, nil, err
-		}
-
-		// Whether we're running in shell mode or some other mode, sql commands from the command line always have a current
-		// database set when you begin using them.
-		sqlCtx.SetCurrentDatabase(database)
 
 		rawDb := se.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb
 		salt, err := mysql.NewSalt()
 		if err != nil {
+			se.Close()
 			return nil, nil, nil, err
 		}
 
@@ -292,6 +285,7 @@ func newLateBindingEngine(
 
 			err := passwordValidate(rawDb, salt, dbUser, authResponse)
 			if err != nil {
+				se.Close()
 				return nil, nil, nil, err
 			}
 
@@ -303,9 +297,28 @@ func newLateBindingEngine(
 			rawDb.AddEphemeralSuperUser(ed, dbUser, config.ServerHost, "")
 		}
 
+		sqlCtx, err := se.NewDefaultContext(ctx)
+		if err != nil {
+			se.Close()
+			return nil, nil, nil, err
+		}
+		// Whether we're running in shell mode or some other mode, sql commands from the command line always have a current
+		// database set when you begin using them.
+		sqlCtx.SetCurrentDatabase(database)
+
+		// For now, we treat the entire lifecycle of this
+		// sqlCtx as one big session-in-use window.
+		sql.SessionCommandBegin(sqlCtx.Session)
+
+		close := func() {
+			sql.SessionCommandEnd(sqlCtx.Session)
+			sql.SessionEnd(sqlCtx.Session)
+			se.Close()
+		}
+
 		// Set client to specified user
 		sqlCtx.Session.SetClient(sql.Client{User: dbUser, Address: config.ServerHost, Capabilities: 0})
-		return se, sqlCtx, func() { se.Close() }, nil
+		return se, sqlCtx, close, nil
 	}
 
 	return lateBinder, nil
