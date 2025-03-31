@@ -10,6 +10,7 @@ CREATE TABLE test (
   c0 int
 );
 SQL
+    dolt commit -Am "initial commit"
 
 }
 
@@ -877,4 +878,47 @@ SQL
     run dolt sql -q 'show create table t as of `HEAD^`'
     [ "$status" -eq 0 ]
     [[ "$output" =~ AUTO_INCREMENT ]] || false
+}
+
+@test "auto_increment: setting auto_increment to 1 vs 0 produces identical hashes and no diffs" {
+    dolt branch auto_increment_0
+    dolt branch auto_increment_1
+
+    dolt checkout auto_increment_0
+    dolt sql -q "ALTER TABLE test AUTO_INCREMENT=0;"
+    run dolt commit -Am "explicitly set AUTO_INCREMENT to 0"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "no changes added to commit" ]] || false
+    # Make a new commit by touching an unrelated table
+    dolt sql -q "CREATE TABLE other (pk int primary key)"
+    run dolt commit -Am "create other table"
+
+    dolt checkout auto_increment_1
+    dolt sql -q "ALTER TABLE test AUTO_INCREMENT=1;"
+    run dolt commit -Am "explicitly set AUTO_INCREMENT to 1"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "no changes added to commit" ]] || false
+    # Make a new commit by touching an unrelated table
+    dolt sql -q "CREATE TABLE other (pk char(1) primary key)"
+    run dolt commit -Am "create other table"
+
+    # Verify that tables produce no diff
+    run dolt diff main auto_increment_0 test
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 0 ]
+
+    run dolt diff main auto_increment_1 test
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 0 ]
+
+    # Verify that tables have the same hash
+    dolt checkout main
+    main_hash=$(dolt sql -r csv -q "SELECT DOLT_HASHOF_TABLE('test')")
+    dolt checkout auto_increment_0
+    ai0_hash=$(dolt sql -r csv -q "SELECT DOLT_HASHOF_TABLE('test')")
+    dolt checkout auto_increment_1
+    ai1_hash=$(dolt sql -r csv -q "SELECT DOLT_HASHOF_TABLE('test')")
+
+    [[ "$main_hash" = "$ai0_hash" ]] || false
+    [[ "$main_hash" = "$ai1_hash" ]] || false
 }
