@@ -105,6 +105,7 @@ type StatsController struct {
 }
 
 type rootStats struct {
+	hash            uint64
 	hashes          map[tableIndexesKey]hash.Hash
 	stats           map[tableIndexesKey][]*stats.Statistic
 	DbCnt           int `json:"dbCnt"`

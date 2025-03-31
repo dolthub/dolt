@@ -23,6 +23,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cespare/xxhash/v2"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/stats"
 
@@ -56,6 +57,7 @@ func (sc *StatsController) CollectOnce(ctx context.Context) (string, error) {
 func (sc *StatsController) runWorker(ctx context.Context) (err error) {
 	var gcKv *memStats
 	var newStats *rootStats
+	var lastSuccessfulStats *rootStats
 	gcTicker := time.NewTicker(sc.gcInterval)
 	for {
 		// This loops tries to update stats as long as context
@@ -89,6 +91,9 @@ func (sc *StatsController) runWorker(ctx context.Context) (err error) {
 			} else {
 				sc.descError("swapped stats with flush failure", err)
 			}
+		} else if ok && lastSuccessfulStats != nil && lastSuccessfulStats.hash != newStats.hash {
+			lastSuccessfulStats = newStats
+			sc.logger.Tracef("stats successful swap: %s\n", newStats.String())
 		}
 
 		select {
@@ -117,7 +122,6 @@ func (sc *StatsController) trySwapStats(ctx context.Context, prevGen uint64, new
 	signal := leSwap
 	defer func() {
 		if ok {
-			sc.logger.Debugf("stats successful swap: %s\n", newStats.String())
 			sc.signalListener(signal)
 		}
 	}()
@@ -195,6 +199,7 @@ func (sc *StatsController) newStatsForRoot(baseCtx context.Context, gcKv *memSta
 		dbs = dSess.Provider().AllDatabases(ctx)
 	}()
 	newStats = newRootStats()
+	digest := xxhash.New()
 	for _, db := range dbs {
 		sqlDb, ok := db.(sqle.Database)
 		if !ok {
@@ -203,6 +208,15 @@ func (sc *StatsController) newStatsForRoot(baseCtx context.Context, gcKv *memSta
 
 		var branches []ref.DoltRef
 		if err := sc.sq.DoSyncSessionAware(ctx, func() (err error) {
+			root, err := sqlDb.GetRoot(ctx)
+			if err != nil {
+				return err
+			}
+			rootHash, err := root.HashOf()
+			if err != nil {
+				return err
+			}
+			digest.Write(rootHash[:])
 			ddb, ok := dSess.GetDoltDB(ctx, db.Name())
 			if !ok {
 				return fmt.Errorf("get dolt db dolt database not found %s", db.Name())
@@ -256,6 +270,7 @@ func (sc *StatsController) newStatsForRoot(baseCtx context.Context, gcKv *memSta
 		}
 	}
 
+	newStats.hash = digest.Sum64()
 	return newStats, nil
 }
 
