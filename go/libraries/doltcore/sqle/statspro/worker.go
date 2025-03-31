@@ -18,12 +18,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/cespare/xxhash/v2"
 	"io"
 	"log"
 	"strings"
 	"time"
 
+	"github.com/cespare/xxhash/v2"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/stats"
 
