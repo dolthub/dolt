@@ -245,12 +245,12 @@ func doltgresProllyMapIterator(ctx *sql.Context, keyDesc val.TupleDesc, ns tree.
 					res, err := expr.Eval(ctx, searchRow)
 					if err != nil {
 						findStopErr = err
-					} else if res.(bool) {
-						return true
+					} else if !res.(bool) {
+						return false
 					}
 				}
 			}
-			return false
+			return true
 		})
 	}
 
