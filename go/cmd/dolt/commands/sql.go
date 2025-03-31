@@ -787,6 +787,7 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 			sqlCtx, cancel = sqlCtx.NewSubContext()
 			stopAfter := context.AfterFunc(subCtx, cancel)
 			defer stopAfter()
+			sqlCtx.SetQueryTime(time.Now())
 
 			cmdType, subCmd, newQuery, err := preprocessQuery(query, lastSqlCmd, cliCtx)
 			if err != nil {
