@@ -92,6 +92,7 @@ func (sc *StatsController) runWorker(ctx context.Context) (err error) {
 				sc.descError("swapped stats with flush failure", err)
 			}
 		} else if ok && lastSuccessfulStats != nil && lastSuccessfulStats.hash != newStats.hash {
+			lastSuccessfulStats = newStats
 			sc.logger.Tracef("stats successful swap: %s\n", newStats.String())
 		}
 
