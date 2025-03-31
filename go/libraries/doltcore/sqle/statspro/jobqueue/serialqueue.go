@@ -271,10 +271,9 @@ func (s *SerialQueue) DoSyncSessionAware(ctx *sql.Context, f func() error) error
 		err = f()
 		return err
 	}
-	var w work
-	w, err = s.submitWork(schedPriority_Normal, nf)
-	if err != nil {
-		return err
+	w, serr := s.submitWork(schedPriority_Normal, nf)
+	if serr != nil {
+		return serr
 	}
 	select {
 	case <-w.done:

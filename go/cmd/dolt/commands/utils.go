@@ -299,6 +299,7 @@ func newLateBindingEngine(
 
 		sqlCtx, err := se.NewDefaultContext(ctx)
 		if err != nil {
+			se.Close()
 			return nil, nil, nil, err
 		}
 		// Whether we're running in shell mode or some other mode, sql commands from the command line always have a current
