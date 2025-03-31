@@ -979,3 +979,25 @@ SQL
     [[ "$output" =~ "active_branch()" ]] || false
     [[ "$output" =~ "tmp_br" ]] || false
 }
+
+# bats test_tags=no_lambda
+@test "sql-shell: printed query time is accurate" {
+    expect -c '
+set timeout 2
+spawn dolt sql
+for {set i 0} {$i < 3} {incr i} {
+  expect "> "
+  send -- "select sleep(1);\r"
+  expect {
+    timeout {
+      puts "test failure: expected to see a query result that took ~1 second, but did not"
+      exit 1;
+    }
+    "1 row in set (1"
+  }
+}
+expect "> "
+send -- "quit;\r"
+expect eof
+'
+}
