@@ -107,7 +107,7 @@ func (j *RowWriter) WriteSqlRow(ctx *sql.Context, row sql.Row) error {
 		}
 	} else {
 		var err error
-		jsonRowData, err = j.jsonDataForSqlSchema(row)
+		jsonRowData, err = j.jsonDataForSqlSchema(ctx, row)
 		if err != nil {
 			return err
 		}
@@ -191,7 +191,7 @@ func (j *RowWriter) jsonDataForSchema(ctx *sql.Context, row sql.Row) ([]byte, er
 }
 
 // jsonDataForSqlSchema returns a JSON representation of the given row, using the sql schema for serialization hints
-func (j *RowWriter) jsonDataForSqlSchema(row sql.Row) ([]byte, error) {
+func (j *RowWriter) jsonDataForSqlSchema(ctx *sql.Context, row sql.Row) ([]byte, error) {
 	colValMap := make(map[string]interface{}, len(j.sqlSch))
 	for i, col := range j.sqlSch {
 		val := row[i]
@@ -206,13 +206,13 @@ func (j *RowWriter) jsonDataForSqlSchema(row sql.Row) ([]byte, error) {
 			sql.StringType,
 			sql.SetType,
 			types.TupleType:
-			sqlVal, err := col.Type.SQL(sqlContext, nil, val)
+			sqlVal, err := col.Type.SQL(ctx, nil, val)
 			if err != nil {
 				return nil, err
 			}
 			val = sqlVal.ToString()
 		case types.JsonType:
-			sqlVal, err := col.Type.SQL(sqlContext, nil, val)
+			sqlVal, err := col.Type.SQL(ctx, nil, val)
 			if err != nil {
 				return nil, err
 			}
