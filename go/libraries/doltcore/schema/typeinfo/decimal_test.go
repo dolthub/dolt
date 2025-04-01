@@ -357,7 +357,7 @@ func TestDecimalMarshal(t *testing.T) {
 				umar, err := typ.ConvertNomsValueToValue(val)
 				require.NoError(t, err)
 				testVal := sql.MustConvert(typ.sqlDecimalType.Convert(test.val))
-				cmp, err := typ.sqlDecimalType.Compare(testVal, umar)
+				cmp, err := typ.sqlDecimalType.Compare(sql.NewEmptyContext(), testVal, umar)
 				require.NoError(t, err)
 				assert.Equal(t, 0, cmp)
 			}

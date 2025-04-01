@@ -592,7 +592,7 @@ func getDataSqlPatchResults(ctx *sql.Context, diffQuerySch, targetSch sql.Schema
 			return nil, err
 		}
 
-		oldRow, newRow, err := ds.SplitDiffResultRow(r)
+		oldRow, newRow, err := ds.SplitDiffResultRow(ctx, r)
 		if err != nil {
 			return nil, err
 		}

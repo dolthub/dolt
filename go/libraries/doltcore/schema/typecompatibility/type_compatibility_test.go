@@ -373,7 +373,7 @@ func (e extendedType) CollationCoercibility(ctx *sql.Context) (collation sql.Col
 	panic("unimplemented")
 }
 
-func (e extendedType) Compare(i interface{}, i2 interface{}) (int, error) {
+func (e extendedType) Compare(s context.Context, i interface{}, i2 interface{}) (int, error) {
 	panic("unimplemented")
 }
 

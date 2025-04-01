@@ -684,7 +684,6 @@ func (i IndexedJsonDocument) Compare(other interface{}) (int, error) {
 	case jsonTypeArray, jsonTypeObject:
 		// To compare two values that are both arrays or both objects, we must locate the first location
 		// where they differ.
-
 		jsonDiffer, err := NewIndexedJsonDiffer(i.ctx, i, otherIndexedDocument)
 		if err != nil {
 			return 0, err
@@ -706,7 +705,7 @@ func (i IndexedJsonDocument) Compare(other interface{}) (int, error) {
 		case ModifiedDiff:
 			// Since both modified values have already been loaded into memory,
 			// We can just compare them.
-			return types.JSON.Compare(firstDiff.From, firstDiff.To)
+			return types.JSON.Compare(i.ctx, firstDiff.From, firstDiff.To)
 		default:
 			panic("Impossible diff type")
 		}

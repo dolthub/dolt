@@ -2422,7 +2422,7 @@ func (t *AlterableDoltTable) getFirstAutoIncrementValue(
 			return 0, err
 		}
 
-		cmp, err := columnType.Compare(initialValue, r[colIdx])
+		cmp, err := columnType.Compare(ctx, initialValue, r[colIdx])
 		if err != nil {
 			return 0, err
 		}

@@ -16,6 +16,7 @@ package expreval
 
 import (
 	"context"
+	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/go-mysql-server/sql/expression"
 
@@ -23,7 +24,9 @@ import (
 )
 
 func compareLiterals(l1, l2 *expression.Literal) (int, error) {
-	return l1.Type().Compare(l1.Value(), l2.Value())
+	// TODO: Add Context parameter
+	ctx := sql.NewEmptyContext()
+	return l1.Type().Compare(ctx, l1.Value(), l2.Value())
 }
 
 // CompareOp is an interface for comparing values

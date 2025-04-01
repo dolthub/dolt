@@ -1706,7 +1706,7 @@ func writeDiffResults(
 			return err
 		}
 
-		oldRow, newRow, err := ds.SplitDiffResultRow(r)
+		oldRow, newRow, err := ds.SplitDiffResultRow(ctx, r)
 		if err != nil {
 			return err
 		}
@@ -1775,7 +1775,7 @@ func getModifiedCols(
 			return modifiedColNames, err
 		}
 
-		oldRow, newRow, err := ds.SplitDiffResultRow(r)
+		oldRow, newRow, err := ds.SplitDiffResultRow(ctx, r)
 		if err != nil {
 			return modifiedColNames, err
 		}
