@@ -90,7 +90,7 @@ func NewJSONWriterWithHeader(wr io.WriteCloser, outSch schema.Schema, header, fo
 // TODO: we could get this from a sql context in many cases
 var sqlContext = sql.NewEmptyContext()
 
-func (j *RowWriter) WriteSqlRow(ctx context.Context, row sql.Row) error {
+func (j *RowWriter) WriteSqlRow(ctx *sql.Context, row sql.Row) error {
 	if j.rowsWritten == 0 {
 		err := iohelp.WriteAll(j.bWr, []byte(j.header))
 		if err != nil {
@@ -101,7 +101,7 @@ func (j *RowWriter) WriteSqlRow(ctx context.Context, row sql.Row) error {
 	var jsonRowData []byte
 	if j.sch != nil {
 		var err error
-		jsonRowData, err = j.jsonDataForSchema(row)
+		jsonRowData, err = j.jsonDataForSchema(ctx, row)
 		if err != nil {
 			return err
 		}
@@ -130,7 +130,7 @@ func (j *RowWriter) WriteSqlRow(ctx context.Context, row sql.Row) error {
 }
 
 // jsonDataForSchema returns a JSON representation of the given row, using the schema for serialization hints
-func (j *RowWriter) jsonDataForSchema(row sql.Row) ([]byte, error) {
+func (j *RowWriter) jsonDataForSchema(ctx *sql.Context, row sql.Row) ([]byte, error) {
 	allCols := j.sch.GetAllCols()
 	colValMap := make(map[string]interface{}, allCols.Size())
 	if err := allCols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
@@ -169,7 +169,7 @@ func (j *RowWriter) jsonDataForSchema(row sql.Row) ([]byte, error) {
 			}
 		default:
 			sqlType := col.TypeInfo.ToSqlType()
-			converted, _, err := sqlType.Convert(val)
+			converted, _, err := sqlType.Convert(ctx, val)
 			if err != nil {
 				return true, err
 			}

@@ -106,7 +106,7 @@ func (ti *inlineBlobType) ConvertValueToNomsValue(ctx context.Context, vrw types
 	if v == nil {
 		return types.NullValue, nil
 	}
-	strVal, _, err := ti.sqlBinaryType.Convert(v)
+	strVal, _, err := ti.sqlBinaryType.Convert(ctx, v)
 	if err != nil {
 		return nil, err
 	}

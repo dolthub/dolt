@@ -165,8 +165,10 @@ func (ti *decimalType) GetTypeParams() map[string]string {
 
 // IsValid implements TypeInfo interface.
 func (ti *decimalType) IsValid(v types.Value) bool {
+	// TODO: Add context parameter
+	ctx := sql.NewEmptyContext()
 	if val, ok := v.(types.Decimal); ok {
-		_, _, err := ti.sqlDecimalType.Convert(decimal.Decimal(val))
+		_, _, err := ti.sqlDecimalType.Convert(ctx, decimal.Decimal(val))
 		if err != nil {
 			return false
 		}
@@ -238,7 +240,7 @@ func decimalTypeConverter(ctx context.Context, src *decimalType, destTi TypeInfo
 			if !ok {
 				return nil, fmt.Errorf("unexpected type converting decimal to enum: %T", v)
 			}
-			uintVal, _, err := gmstypes.Uint64.Convert(decimal.Decimal(val))
+			uintVal, _, err := gmstypes.Uint64.Convert(ctx, decimal.Decimal(val))
 			if err != nil {
 				return nil, err
 			}
@@ -334,7 +336,7 @@ func decimalTypeConverter(ctx context.Context, src *decimalType, destTi TypeInfo
 			if !ok {
 				return nil, fmt.Errorf("unexpected type converting decimal to year: %T", v)
 			}
-			intVal, _, err := gmstypes.Int64.Convert(decimal.Decimal(val))
+			intVal, _, err := gmstypes.Int64.Convert(ctx, decimal.Decimal(val))
 			if err != nil {
 				return nil, err
 			}

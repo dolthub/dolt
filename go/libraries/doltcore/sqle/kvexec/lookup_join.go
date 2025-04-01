@@ -243,7 +243,7 @@ func newLookupKeyMapping(ctx context.Context, sourceSch schema.Schema, tgtKeyDes
 	litTb := val.NewTupleBuilder(litDesc, ns)
 	for i, j := range litMappings {
 		val := keyExprs[j].(*expression.Literal).Value()
-		val, _, err := typs[j].Type.Convert(val)
+		val, _, err := typs[j].Type.Convert(ctx, val)
 		if err != nil {
 			return nil, err
 		}

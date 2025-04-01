@@ -167,7 +167,7 @@ func (w *prollyTableWriter) Insert(ctx *sql.Context, sqlRow sql.Row) (err error)
 	w.setAutoIncrement = true
 
 	// TODO: need schema name in ai tracker
-	w.aiTracker.Next(w.tableName.Name, sqlRow)
+	w.aiTracker.Next(ctx, w.tableName.Name, sqlRow)
 	return nil
 }
 
@@ -204,12 +204,12 @@ func (w *prollyTableWriter) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.
 
 // GetNextAutoIncrementValue implements TableWriter.
 func (w *prollyTableWriter) GetNextAutoIncrementValue(ctx *sql.Context, insertVal interface{}) (uint64, error) {
-	return w.aiTracker.Next(w.tableName.Name, insertVal)
+	return w.aiTracker.Next(ctx, w.tableName.Name, insertVal)
 }
 
 // SetAutoIncrementValue implements AutoIncrementSetter.
 func (w *prollyTableWriter) SetAutoIncrementValue(ctx *sql.Context, val uint64) error {
-	seq, err := w.aiTracker.CoerceAutoIncrementValue(val)
+	seq, err := w.aiTracker.CoerceAutoIncrementValue(ctx, val)
 	if err != nil {
 		return err
 	}

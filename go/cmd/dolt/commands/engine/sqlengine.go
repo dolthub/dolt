@@ -351,7 +351,7 @@ func (se *SqlEngine) InitStats(ctx context.Context) error {
 		}
 
 		if _, paused, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsPaused); paused.(int8) == 0 {
-			if err = sc.Restart(); err != nil {
+			if err = sc.Restart(sqlCtx); err != nil {
 				return err
 			}
 		}

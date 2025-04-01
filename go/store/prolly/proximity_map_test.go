@@ -37,15 +37,15 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-func newJsonValue(t *testing.T, v interface{}) sql.JSONWrapper {
-	doc, _, err := types.JSON.Convert(v)
+func newJsonValue(t *testing.T, ctx context.Context, v interface{}) sql.JSONWrapper {
+	doc, _, err := types.JSON.Convert(ctx, v)
 	require.NoError(t, err)
 	return doc.(sql.JSONWrapper)
 }
 
 // newJsonDocument creates a JSON value from a provided value.
 func newJsonDocument(t *testing.T, ctx context.Context, ns tree.NodeStore, v interface{}) hash.Hash {
-	doc := newJsonValue(t, v)
+	doc := newJsonValue(t, ctx, v)
 	root, err := tree.SerializeJsonToAddr(ctx, ns, doc)
 	require.NoError(t, err)
 	return root.HashOf()
@@ -251,7 +251,7 @@ func TestDoubleEntryProximityMapGetClosest(t *testing.T) {
 
 	matches := 0
 
-	mapIter, err := m.GetClosest(ctx, newJsonValue(t, "[0.0, 0.0]"), 1)
+	mapIter, err := m.GetClosest(ctx, newJsonValue(t, ctx, "[0.0, 0.0]"), 1)
 	require.NoError(t, err)
 	for {
 		k, v, err := mapIter.Next(ctx)
@@ -293,7 +293,7 @@ func TestProximityMapGetManyClosest(t *testing.T) {
 		t.Run(fmt.Sprintf("limit %d", limit), func(t *testing.T) {
 			matches := 0
 
-			mapIter, err := m.GetClosest(ctx, newJsonValue(t, queryVector), limit)
+			mapIter, err := m.GetClosest(ctx, newJsonValue(t, ctx, queryVector), limit)
 			require.NoError(t, err)
 			for {
 				k, v, err := mapIter.Next(ctx)

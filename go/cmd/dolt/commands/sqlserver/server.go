@@ -365,7 +365,8 @@ func ConfigureServices(
 	controller.Register(InitStatsController)
 
 	InitBinlogging := &svcs.AnonService{
-		InitF: func(context.Context) error {
+		InitF: func(ctx context.Context) error {
+			sqlCtx := sql.NewContext(ctx)
 			primaryController := sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.BinlogPrimaryController
 			doltBinlogPrimaryController, ok := primaryController.(*binlogreplication.DoltBinlogPrimaryController)
 			if !ok {
@@ -405,12 +406,12 @@ func ConfigureServices(
 
 			if logBin == 1 {
 				logrus.Infof("Enabling binary logging for branch %s", logBinBranch)
-				binlogProducer, err := binlogreplication.NewBinlogProducer(cfg.DoltEnv.FS)
+				binlogProducer, err := binlogreplication.NewBinlogProducer(sqlCtx, cfg.DoltEnv.FS)
 				if err != nil {
 					return err
 				}
 
-				logManager, err := binlogreplication.NewLogManager(fs)
+				logManager, err := binlogreplication.NewLogManager(sqlCtx, fs)
 				if err != nil {
 					return err
 				}

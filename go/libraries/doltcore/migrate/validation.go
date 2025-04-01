@@ -192,10 +192,10 @@ func equalRows(ctx context.Context, old, new sql.Row, sch sql.Schema) (bool, err
 		// for precision changes between formats
 		if _, ok := old[i].(time.Time); ok {
 			var o, n interface{}
-			if o, _, err = gmstypes.Int64.Convert(old[i]); err != nil {
+			if o, _, err = gmstypes.Int64.Convert(ctx, old[i]); err != nil {
 				return false, err
 			}
-			if n, _, err = gmstypes.Int64.Convert(new[i]); err != nil {
+			if n, _, err = gmstypes.Int64.Convert(ctx, new[i]); err != nil {
 				return false, err
 			}
 			if cmp, err = gmstypes.Int64.Compare(ctx, o, n); err != nil {

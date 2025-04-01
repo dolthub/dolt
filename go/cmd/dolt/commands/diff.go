@@ -596,7 +596,7 @@ var diffSummarySchema = sql.Schema{
 	&sql.Column{Name: "Schema change", Type: types.Boolean, Nullable: false},
 }
 
-func printDiffSummary(ctx context.Context, diffSummaries []diff.TableDeltaSummary, dArgs *diffArgs) errhand.VerboseError {
+func printDiffSummary(ctx *sql.Context, diffSummaries []diff.TableDeltaSummary, dArgs *diffArgs) errhand.VerboseError {
 	cliWR := iohelp.NopWrCloser(cli.OutStream)
 	wr := tabular.NewFixedWidthTableWriter(diffSummarySchema, cliWR, 100)
 	defer wr.Close(ctx)

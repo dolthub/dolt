@@ -1511,7 +1511,7 @@ func remapTupleWithColumnDefaults(
 			}
 
 			// If the type has changed, then call convert to convert the value to the new type
-			value, err = convertValueToNewType(value, col.TypeInfo, tm, from, rightSide)
+			value, err = convertValueToNewType(ctx, value, col.TypeInfo, tm, from, rightSide)
 			if err != nil {
 				return nil, err
 			}
@@ -1561,7 +1561,7 @@ func writeTupleExpression(
 		return err
 	}
 
-	value, _, err = col.TypeInfo.ToSqlType().Convert(value)
+	value, _, err = col.TypeInfo.ToSqlType().Convert(ctx, value)
 	if err != nil {
 		return err
 	}
@@ -1576,7 +1576,7 @@ func writeTupleExpression(
 // or the left side. If the previous type info is the same as the current type info for the merged schema, then this
 // function is a no-op and simply returns |value|. The converted value along with any unexpected error encountered is
 // returned.
-func convertValueToNewType(value interface{}, newTypeInfo typeinfo.TypeInfo, tm *TableMerger, from int, rightSide bool) (interface{}, error) {
+func convertValueToNewType(ctx *sql.Context, value interface{}, newTypeInfo typeinfo.TypeInfo, tm *TableMerger, from int, rightSide bool) (interface{}, error) {
 	var previousTypeInfo typeinfo.TypeInfo
 	if rightSide {
 		previousTypeInfo = tm.rightSch.GetNonPKCols().GetByIndex(from).TypeInfo
@@ -1589,7 +1589,7 @@ func convertValueToNewType(value interface{}, newTypeInfo typeinfo.TypeInfo, tm 
 	}
 
 	// If the type has changed, then call convert to convert the value to the new type
-	newValue, inRange, err := newTypeInfo.ToSqlType().Convert(value)
+	newValue, inRange, err := newTypeInfo.ToSqlType().Convert(ctx, value)
 	if err != nil {
 		return nil, err
 	}
@@ -2188,7 +2188,7 @@ func convert(ctx context.Context, fromDesc, toDesc val.TupleDesc, toSchema schem
 		return nil, err
 	}
 	sqlType := toSchema.GetNonPKCols().GetByIndex(toIndex).TypeInfo.ToSqlType()
-	convertedCell, _, err := sqlType.Convert(parsedCell)
+	convertedCell, _, err := sqlType.Convert(ctx, parsedCell)
 	if err != nil {
 		return nil, err
 	}

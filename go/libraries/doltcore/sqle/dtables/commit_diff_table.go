@@ -168,7 +168,7 @@ func (dt *CommitDiffTable) LookupPartitions(ctx *sql.Context, i sql.IndexLookup)
 	default:
 		return nil, ErrInvalidCommitDiffTableArgs
 	}
-	toCommit, _, err := to.Typ.Convert(sql.GetMySQLRangeCutKey(to.UpperBound))
+	toCommit, _, err := to.Typ.Convert(ctx, sql.GetMySQLRangeCutKey(to.UpperBound))
 	if err != nil {
 		return nil, err
 	}
@@ -176,7 +176,7 @@ func (dt *CommitDiffTable) LookupPartitions(ctx *sql.Context, i sql.IndexLookup)
 	if !ok {
 		return nil, fmt.Errorf("to_commit must be string, found %T", toCommit)
 	}
-	fromCommit, _, err := from.Typ.Convert(sql.GetMySQLRangeCutKey(from.UpperBound))
+	fromCommit, _, err := from.Typ.Convert(ctx, sql.GetMySQLRangeCutKey(from.UpperBound))
 	if err != nil {
 		return nil, err
 	}

@@ -111,7 +111,7 @@ func (q QueryDiff) Exec(ctx context.Context, commandStr string, args []string, d
 		if rerr != nil {
 			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(rerr), usage)
 		}
-		if werr := wr.WriteSqlRow(ctx, row); werr != nil {
+		if werr := wr.WriteSqlRow(sqlCtx, row); werr != nil {
 			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(werr), usage)
 		}
 	}

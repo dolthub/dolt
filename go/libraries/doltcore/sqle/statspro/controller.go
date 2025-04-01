@@ -400,7 +400,7 @@ func (sc *StatsController) DropDbStats(ctx *sql.Context, dbName string, flush bo
 		// don't wait to see if the thread context is invalidated
 		func() {
 			sc.mu.Unlock()
-			sc.Restart()
+			sc.Restart(ctx)
 			defer sc.mu.Lock()
 		}()
 		if err := sc.lockedRotateStorage(ctx); err != nil {

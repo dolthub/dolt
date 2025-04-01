@@ -16,6 +16,7 @@ package dsess
 
 import (
 	"fmt"
+	"github.com/dolthub/go-mysql-server/sql"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -57,10 +58,11 @@ func TestCoerceAutoIncrementValue(t *testing.T) {
 		},
 	}
 
+	ctx := sql.NewEmptyContext()
 	for _, test := range tests {
 		name := fmt.Sprintf("Coerce %v to %v", test.val, test.exp)
 		t.Run(name, func(t *testing.T) {
-			act, err := CoerceAutoIncrementValue(test.val)
+			act, err := CoerceAutoIncrementValue(ctx, test.val)
 			if test.err {
 				assert.Error(t, err)
 			} else {

@@ -205,7 +205,7 @@ func validateKeylessIndex(ctx context.Context, sch schema.Schema, def schema.Ind
 				if err != nil {
 					return err
 				}
-				geom, _, err = sqltypes.GeometryType{}.Convert(geom)
+				geom, _, err = sqltypes.GeometryType{}.Convert(ctx, geom)
 				if err != nil {
 					return err
 				}
@@ -303,7 +303,7 @@ func validatePkIndex(ctx context.Context, sch schema.Schema, def schema.Index, p
 					if err != nil {
 						return err
 					}
-					geom, _, err = sqltypes.GeometryType{}.Convert(geom)
+					geom, _, err = sqltypes.GeometryType{}.Convert(ctx, geom)
 					if err != nil {
 						return err
 					}

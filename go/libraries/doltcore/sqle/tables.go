@@ -2431,7 +2431,7 @@ func (t *AlterableDoltTable) getFirstAutoIncrementValue(
 		}
 	}
 
-	seq, err := dsess.CoerceAutoIncrementValue(initialValue)
+	seq, err := dsess.CoerceAutoIncrementValue(ctx, initialValue)
 	if err != nil {
 		return 0, err
 	}

@@ -70,6 +70,7 @@ func TestFixedWidthWriter(t *testing.T) {
 	}
 
 	t.Run("Column names bigger than row data", func(t *testing.T) {
+		ctx := sql.NewEmptyContext()
 		var stringWr StringBuilderCloser
 		biggerSch := sch.Copy()
 		for _, col := range biggerSch {
@@ -91,7 +92,7 @@ func TestFixedWidthWriter(t *testing.T) {
 		expectedTableString = strings.Replace(expectedTableString, "\n", "", 1)
 
 		for _, r := range rows {
-			err := tableWr.WriteSqlRow(context.Background(), r)
+			err := tableWr.WriteSqlRow(ctx, r)
 			assert.NoError(t, err)
 		}
 
@@ -102,6 +103,7 @@ func TestFixedWidthWriter(t *testing.T) {
 	})
 
 	t.Run("Sample size bigger than num rows", func(t *testing.T) {
+		ctx := sql.NewEmptyContext()
 		var stringWr StringBuilderCloser
 		tableWr := NewFixedWidthTableWriter(sch, &stringWr, 100)
 
@@ -119,7 +121,7 @@ func TestFixedWidthWriter(t *testing.T) {
 		expectedTableString = strings.Replace(expectedTableString, "\n", "", 1)
 
 		for _, r := range rows {
-			err := tableWr.WriteSqlRow(context.Background(), r)
+			err := tableWr.WriteSqlRow(ctx, r)
 			assert.NoError(t, err)
 		}
 
@@ -130,6 +132,7 @@ func TestFixedWidthWriter(t *testing.T) {
 	})
 
 	t.Run("Sample size smaller than initial buffer, resets buffer", func(t *testing.T) {
+		ctx := sql.NewEmptyContext()
 		var stringWr StringBuilderCloser
 		tableWr := NewFixedWidthTableWriter(sch, &stringWr, 2)
 
@@ -147,7 +150,7 @@ func TestFixedWidthWriter(t *testing.T) {
 		expectedTableString = strings.Replace(expectedTableString, "\n", "", 1)
 
 		for _, r := range rows {
-			err := tableWr.WriteSqlRow(context.Background(), r)
+			err := tableWr.WriteSqlRow(ctx, r)
 			assert.NoError(t, err)
 		}
 
@@ -158,6 +161,7 @@ func TestFixedWidthWriter(t *testing.T) {
 	})
 
 	t.Run("Multiline string", func(t *testing.T) {
+		ctx := sql.NewEmptyContext()
 		var stringWr StringBuilderCloser
 		tableWr := NewFixedWidthTableWriter(sch, &stringWr, 100)
 
@@ -187,7 +191,7 @@ func TestFixedWidthWriter(t *testing.T) {
 			if title != nil {
 				title = strings.Replace(title.(string), " ", "\n", -1)
 			}
-			err := tableWr.WriteSqlRow(context.Background(), sql.Row{name, ages[i], title})
+			err := tableWr.WriteSqlRow(ctx, sql.Row{name, ages[i], title})
 			assert.NoError(t, err)
 		}
 
