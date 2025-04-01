@@ -702,8 +702,6 @@ SQL
 
 @test "auto_increment: globally distinct auto increment values" {
     dolt sql  <<SQL
-call dolt_add('.');
-call dolt_commit('-am', 'empty table');
 call dolt_branch('branch1');
 call dolt_branch('branch2');
 
@@ -780,8 +778,6 @@ SQL
 
 @test "auto_increment: newly cloned database" {
     dolt sql  <<SQL
-call dolt_add('.');
-call dolt_commit('-am', 'empty table');
 call dolt_branch('branch1');
 call dolt_branch('branch2');
 
