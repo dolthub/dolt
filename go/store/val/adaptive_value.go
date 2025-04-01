@@ -283,6 +283,14 @@ type ExtendedValueWrapper struct {
 	typeHandler     TupleTypeHandler
 }
 
+func (e *ExtendedValueWrapper) Unwrap(ctx context.Context) (result string, err error) {
+	b, err := e.UnwrapAny(ctx)
+	if err != nil {
+		return "", err
+	}
+	return b.(string), nil
+}
+
 func (e *ExtendedValueWrapper) UnwrapAny(ctx context.Context) (interface{}, error) {
 	if e.ImmutableValue.Buf == nil {
 		buf, err := e.vs.ReadBytes(ctx, e.ImmutableValue.Addr)
@@ -311,4 +319,4 @@ func (e ExtendedValueWrapper) Hash() interface{} {
 	return e.ImmutableValue.Addr
 }
 
-var _ sql.AnyWrapper = &ExtendedValueWrapper{}
+var _ sql.Wrapper[string] = &ExtendedValueWrapper{}
