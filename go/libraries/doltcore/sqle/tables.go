@@ -1148,7 +1148,7 @@ func (t *WritableDoltTable) AutoIncrementSetter(ctx *sql.Context) sql.AutoIncrem
 	return te
 }
 
-// PeekNextAutoIncrementValue implements sql.AutoIncrementTable
+// PeekNextAutoIncrementValue implements sql.AutoIncrementGetter
 func (t *WritableDoltTable) PeekNextAutoIncrementValue(ctx *sql.Context) (uint64, error) {
 	if !t.autoIncCol.AutoIncrement {
 		return 0, sql.ErrNoAutoIncrementCol
