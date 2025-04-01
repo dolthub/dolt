@@ -23,6 +23,8 @@ import (
 	"path/filepath"
 	"sync"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/datas"
@@ -51,6 +53,8 @@ const (
 	StatsDir = "stats"
 
 	ChunkJournalParam = "journal"
+
+	DatabaseNameParam = "database_name"
 )
 
 // DoltDataDir is the directory where noms files will be stored
@@ -178,6 +182,14 @@ func (fact FileFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, 
 
 	st := nbs.NewGenerationalCS(oldGenSt, newGenSt, ghostGen)
 	// metrics?
+
+	if params != nil {
+		if nameV, ok := params[DatabaseNameParam]; ok && nameV != nil {
+			if name, ok := nameV.(string); ok && name != "" {
+				st.AppendLoggerFields(logrus.Fields{"database": name})
+			}
+		}
+	}
 
 	vrw := types.NewValueStore(st)
 	ns := tree.NewNodeStore(st)
