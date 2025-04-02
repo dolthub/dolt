@@ -38,6 +38,7 @@ import (
 	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/oracle/oci-go-sdk/v65/common"
 	"github.com/oracle/oci-go-sdk/v65/objectstorage"
+	"github.com/sirupsen/logrus"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
@@ -125,6 +126,8 @@ type NomsBlockStore struct {
 	memtableSz uint64
 	putCount   uint64
 
+	logger *logrus.Entry
+
 	hasCache *lru.TwoQueueCache[hash.Hash, struct{}]
 
 	stats *Stats
@@ -134,8 +137,8 @@ func (nbs *NomsBlockStore) PersistGhostHashes(ctx context.Context, refs hash.Has
 	return fmt.Errorf("runtime error: PersistGhostHashes should never be called on the NomsBlockStore")
 }
 
-var _ chunks.TableFileStore = &NomsBlockStore{}
-var _ chunks.ChunkStoreGarbageCollector = &NomsBlockStore{}
+var _ chunks.TableFileStore = (*NomsBlockStore)(nil)
+var _ chunks.ChunkStoreGarbageCollector = (*NomsBlockStore)(nil)
 
 // 20-byte keys, ~2MB of key data.
 //
@@ -268,19 +271,23 @@ func (nbs *NomsBlockStore) handleUnlockedRead(ctx context.Context, gcb gcBehavio
 
 func (nbs *NomsBlockStore) conjoinIfRequired(ctx context.Context) (bool, error) {
 	if nbs.conjoiner.conjoinRequired(nbs.tables) {
+		nbs.logger.WithField("upstream_len", len(nbs.tables.upstream)).Info("beginning conjoin of database")
 		newUpstream, cleanup, err := conjoin(ctx, nbs.conjoiner, nbs.upstream, nbs.manifestMgr, nbs.persister, nbs.stats)
 		if err != nil {
+			nbs.logger.WithError(err).Info("conjoin of database failed")
 			return false, err
 		}
 
 		newTables, err := nbs.tables.rebase(ctx, newUpstream.specs, nil, nbs.stats)
 		if err != nil {
+			nbs.logger.WithError(err).Info("during conjoin, updating database with new table files failed")
 			return false, err
 		}
 
 		nbs.upstream = newUpstream
 		oldTables := nbs.tables
 		nbs.tables = newTables
+		nbs.logger.WithField("new_upstream_len", len(nbs.tables.upstream)).Info("conjoin completed successfully")
 		err = oldTables.close()
 		if err != nil {
 			return true, err
@@ -645,6 +652,7 @@ func newNomsBlockStore(ctx context.Context, nbfVerStr string, mm manifestManager
 		memtableSz:  memTableSize,
 		hasCache:    hasCache,
 		stats:       NewStats(),
+		logger:      logrus.StandardLogger().WithField("pkg", "store.noms"),
 	}
 	nbs.gcCond = sync.NewCond(&nbs.mu)
 
@@ -674,6 +682,11 @@ func newNomsBlockStore(ctx context.Context, nbfVerStr string, mm manifestManager
 	}
 
 	return nbs, nil
+}
+
+// Sets logging fields for the logger used by this store.
+func (nbs *NomsBlockStore) AppendLoggerFields(fields logrus.Fields) {
+	nbs.logger = nbs.logger.WithFields(fields)
 }
 
 // Wait for GC to complete to continue with ongoing operations.
