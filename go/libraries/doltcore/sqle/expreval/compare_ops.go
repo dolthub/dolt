@@ -16,8 +16,8 @@ package expreval
 
 import (
 	"context"
-	"github.com/dolthub/go-mysql-server/sql"
 
+	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
 
 	"github.com/dolthub/dolt/go/store/types"
