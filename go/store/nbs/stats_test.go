@@ -132,7 +132,7 @@ func TestStats(t *testing.T) {
 	assert.Equal(uint64(54), stats(store).FileBytesPerRead.Sum())
 
 	// Force a conjoin
-	store.c = inlineConjoiner{2}
+	store.conjoiner = inlineConjoiner{2}
 	err = store.Put(context.Background(), c4, noopGetAddrs)
 	require.NoError(t, err)
 	h, err = store.Root(context.Background())
