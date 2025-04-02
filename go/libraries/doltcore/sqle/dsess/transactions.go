@@ -405,8 +405,12 @@ func (tx *DoltTransaction) doCommit(
 
 			existingWs, err := startPoint.db.ResolveWorkingSet(ctx, workingSet.Ref())
 			if err == doltdb.ErrWorkingSetNotFound {
-				// This is to handle the case where an existing DB pre working sets is committing to this HEAD for the
-				// first time. Can be removed and called an error post 1.0
+				// This is to handle the case where this is the first commit to a branch which
+				// does not have a working set. Typically Dolt creates a working set when it
+				// creates the branch. However, things like pushing a branch to a remote do not
+				// typically eagerly create a working set which does not exist. Since sql-server
+				// can run as a doltremoteapi remote endpoint and accept writes, this logic
+				// should anti-entropy the lack of a working set here.
 				existingWs = doltdb.EmptyWorkingSet(workingSet.Ref())
 				newWorkingSet = true
 			} else if err != nil {
