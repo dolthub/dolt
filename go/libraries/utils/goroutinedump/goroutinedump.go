@@ -1,4 +1,4 @@
-// Copyright 2024 Dolthub, Inc.
+// Copyright 2025 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,9 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// dolt is the command line tool for working with Dolt databases.
-package doltversion
+package goroutinedump
 
-const (
-	Version = "1.51.1"
+import (
+	"bytes"
+	"runtime/pprof"
 )
+
+// Returns a potentially-large string containing stack traces of all
+// the goroutines in the running program. Relies on `runtime/pprof` to
+// get the stack traces.
+func DumpGoRoutines() (string, error) {
+	var buf bytes.Buffer
+	err := pprof.Lookup("goroutine").WriteTo(&buf, 2)
+	if err != nil {
+		return "", err
+	}
+	return buf.String(), nil
+}
