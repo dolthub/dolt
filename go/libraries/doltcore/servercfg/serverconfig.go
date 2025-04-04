@@ -18,12 +18,13 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
-	"github.com/dolthub/go-mysql-server/sql"
 	"net"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
+
+	"github.com/dolthub/go-mysql-server/sql"
 )
 
 var DefaultUnixSocketFilePath = DefaultMySQLUnixSocketFilePath

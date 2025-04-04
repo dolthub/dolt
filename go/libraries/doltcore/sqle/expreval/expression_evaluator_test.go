@@ -17,10 +17,10 @@ package expreval
 import (
 	"context"
 	"errors"
-	"github.com/dolthub/go-mysql-server/sql"
 	"testing"
 	"time"
 
+	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/stretchr/testify/assert"
