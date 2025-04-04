@@ -605,7 +605,7 @@ func (d *doltWorkflowManager) sqlReadQuery(ctx *sql.Context, query string, cb fu
 		for i := range size {
 			col := sch[i]
 			val := row[i]
-			cv, err := newColumnValue(col, val)
+			cv, err := newColumnValue(ctx, col, val)
 			if err != nil {
 				return err
 			}

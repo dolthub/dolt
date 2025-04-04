@@ -15,10 +15,10 @@
 package tree
 
 import (
-	"context"
 	"io"
 	"testing"
 
+	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/dolthub/dolt/go/store/val"
@@ -28,7 +28,8 @@ import (
 // method, and when developing the layerDifferFromRoots method I wanted to verify some assumptions.
 // TODO - test DifferFromRoots more thoroughly.
 func TestDifferFromRoots(t *testing.T) {
-	ctx := context.Background()
+	ctx := sql.NewEmptyContext()
+	ns := NewTestNodeStore()
 
 	fromTups, desc := AscendingUintTuples(1234)
 	fromRoot := makeTree(t, fromTups)
@@ -36,12 +37,12 @@ func TestDifferFromRoots(t *testing.T) {
 	toTups := make([][2]val.Tuple, len(fromTups))
 	// Copy elements from the original slice to the new slice
 	copy(toTups, fromTups)
-	bld := val.NewTupleBuilder(desc)
+	bld := val.NewTupleBuilder(desc, ns)
 	bld.PutUint32(0, uint32(42))
-	toTups[23][1] = bld.Build(sharedPool) // modify value at index 23.
+	var err error
+	toTups[23][1], err = bld.Build(sharedPool) // modify value at index 23.
+	assert.NoError(t, err)
 	toRoot := makeTree(t, toTups)
-
-	ns := NewTestNodeStore()
 
 	dfr, err := DifferFromRoots(ctx, ns, ns, fromRoot, toRoot, desc, false)
 	assert.NoError(t, err)

@@ -176,7 +176,7 @@ func validateKeylessIndex(ctx context.Context, sch schema.Schema, def schema.Ind
 	}
 
 	idxDesc, _ := secondary.Descriptors()
-	builder := val.NewTupleBuilder(idxDesc)
+	builder := val.NewTupleBuilder(idxDesc, primary.NodeStore())
 	mapping := ordinalMappingsForSecondaryIndex(sch, def)
 	_, vd := primary.Descriptors()
 
@@ -200,22 +200,22 @@ func validateKeylessIndex(ctx context.Context, sch schema.Schema, def schema.Ind
 			// first field in |value| is cardinality
 			field := value.GetField(j + 1)
 
-			if shouldDereferenceContent(j+1, vd, i, idxDesc) {
-				field, err = dereferenceContent(ctx, vd, j+1, value, secondary.NodeStore())
-				if err != nil {
-					return err
-				}
-			} else if def.IsSpatial() {
+			if def.IsSpatial() {
 				geom, err := dereferenceGeometry(ctx, vd, j+1, value, secondary.NodeStore())
 				if err != nil {
 					return err
 				}
-				geom, _, err = sqltypes.GeometryType{}.Convert(geom)
+				geom, _, err = sqltypes.GeometryType{}.Convert(ctx, geom)
 				if err != nil {
 					return err
 				}
 				cell := tree.ZCell(geom.(sqltypes.GeometryValue))
 				field = cell[:]
+			} else if shouldDereferenceContent(j+1, vd, i, idxDesc) {
+				field, err = dereferenceContent(ctx, vd, j+1, value, secondary.NodeStore())
+				if err != nil {
+					return err
+				}
 			}
 
 			// Apply prefix lengths if they are configured
@@ -226,7 +226,10 @@ func validateKeylessIndex(ctx context.Context, sch schema.Schema, def schema.Ind
 			builder.PutRaw(i, field)
 		}
 		builder.PutRaw(idxDesc.Count()-1, hashId.GetField(0))
-		k := builder.Build(primary.Pool())
+		k, err := builder.Build(primary.Pool())
+		if err != nil {
+			return err
+		}
 
 		ok, err := secondary.Has(ctx, k)
 		if err != nil {
@@ -252,7 +255,7 @@ func validatePkIndex(ctx context.Context, sch schema.Schema, def schema.Index, p
 
 	// secondary indexes have empty values
 	idxDesc, _ := secondary.Descriptors()
-	builder := val.NewTupleBuilder(idxDesc)
+	builder := val.NewTupleBuilder(idxDesc, primary.NodeStore())
 	mapping := ordinalMappingsForSecondaryIndex(sch, def)
 	kd, vd := primary.Descriptors()
 
@@ -295,22 +298,22 @@ func validatePkIndex(ctx context.Context, sch schema.Schema, def schema.Index, p
 			} else {
 				field := value.GetField(j - pkSize)
 
-				if shouldDereferenceContent(j-pkSize, vd, i, idxDesc) {
-					field, err = dereferenceContent(ctx, vd, j-pkSize, value, secondary.NodeStore())
-					if err != nil {
-						return err
-					}
-				} else if def.IsSpatial() {
+				if def.IsSpatial() {
 					geom, err := dereferenceGeometry(ctx, vd, j-pkSize, value, secondary.NodeStore())
 					if err != nil {
 						return err
 					}
-					geom, _, err = sqltypes.GeometryType{}.Convert(geom)
+					geom, _, err = sqltypes.GeometryType{}.Convert(ctx, geom)
 					if err != nil {
 						return err
 					}
 					cell := tree.ZCell(geom.(sqltypes.GeometryValue))
 					field = cell[:]
+				} else if shouldDereferenceContent(j-pkSize, vd, i, idxDesc) {
+					field, err = dereferenceContent(ctx, vd, j-pkSize, value, secondary.NodeStore())
+					if err != nil {
+						return err
+					}
 				}
 
 				// Apply prefix lengths if they are configured
@@ -321,7 +324,10 @@ func validatePkIndex(ctx context.Context, sch schema.Schema, def schema.Index, p
 				builder.PutRaw(i, field)
 			}
 		}
-		k := builder.Build(primary.Pool())
+		k, err := builder.Build(primary.Pool())
+		if err != nil {
+			return err
+		}
 
 		ok, err := secondary.Has(ctx, k)
 		if err != nil {
@@ -352,15 +358,9 @@ func isVirtualIndex(def schema.Index, sch schema.Schema) bool {
 // in the main table (|tablePos| and |tableValueDescriptor|) and the encoding of the field in the index
 // (|indexPos| and |indexKeyDescriptor|) and seeing if one is an address encoding and the other is not.
 func shouldDereferenceContent(tablePos int, tableValueDescriptor val.TupleDesc, indexPos int, indexKeyDescriptor val.TupleDesc) bool {
-	if tableValueDescriptor.Types[tablePos].Enc == val.StringAddrEnc && indexKeyDescriptor.Types[indexPos].Enc != val.StringAddrEnc {
-		return true
-	}
-
-	if tableValueDescriptor.Types[tablePos].Enc == val.BytesAddrEnc && indexKeyDescriptor.Types[indexPos].Enc != val.BytesAddrEnc {
-		return true
-	}
-
-	return false
+	tableEncoding := tableValueDescriptor.Types[tablePos].Enc
+	indexEncoding := indexKeyDescriptor.Types[indexPos].Enc
+	return val.IsReferenceEncoding(tableEncoding) && !val.IsReferenceEncoding(indexEncoding)
 }
 
 // dereferenceContent dereferences an address encoded field (e.g. TEXT, BLOB) to load the content
@@ -377,6 +377,14 @@ func dereferenceContent(ctx context.Context, tableValueDescriptor val.TupleDesc,
 	}
 
 	switch x := v.(type) {
+	case sql.StringWrapper:
+		str, err := x.Unwrap(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return []byte(str), nil
+	case sql.BytesWrapper:
+		return x.Unwrap(ctx)
 	case string:
 		return []byte(x), nil
 	case []byte:
@@ -407,7 +415,7 @@ func dereferenceGeometry(ctx context.Context, tableValueDescriptor val.TupleDesc
 	case sqltypes.Point, sqltypes.LineString, sqltypes.Polygon, sqltypes.MultiPoint, sqltypes.MultiLineString, sqltypes.MultiPolygon, sqltypes.GeometryType, sqltypes.GeomColl:
 		return x, nil
 	default:
-		return nil, fmt.Errorf("unexpected type for address encoded content: %T", v)
+		return nil, fmt.Errorf("unexpected type for geometry content: %T", v)
 	}
 }
 
@@ -424,7 +432,7 @@ func trimValueToPrefixLength(value []byte, prefixLength uint16, encoding val.Enc
 	}
 
 	addTerminatingNullByte := false
-	if encoding == val.BytesAddrEnc || encoding == val.StringAddrEnc {
+	if val.IsReferenceEncoding(encoding) {
 		// If the original encoding was for a BLOB or TEXT field, then we need to add
 		// a null byte at the end of the prefix to get it into StringEnc format.
 		addTerminatingNullByte = true

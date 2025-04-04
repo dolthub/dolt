@@ -33,7 +33,7 @@ import (
 
 // newIndexedJsonDocumentFromValue creates an IndexedJsonDocument from a provided value.
 func newIndexedJsonDocumentFromValue(t *testing.T, ctx context.Context, ns NodeStore, v interface{}) IndexedJsonDocument {
-	doc, _, err := types.JSON.Convert(v)
+	doc, _, err := types.JSON.Convert(ctx, v)
 	require.NoError(t, err)
 	root, err := SerializeJsonToAddr(ctx, ns, doc.(sql.JSONWrapper))
 	require.NoError(t, err)
@@ -161,7 +161,7 @@ func TestIndexedJsonDocument_Insert(t *testing.T) {
 				newJsonDocument := types.JSONDocument{Val: v}
 
 				// test that the JSONDocument compares equal to the IndexedJSONDocument
-				cmp, err := types.JSON.Compare(newDoc, newJsonDocument)
+				cmp, err := types.JSON.Compare(ctx, newDoc, newJsonDocument)
 				require.NoError(t, err)
 				require.Equal(t, cmp, 0)
 
@@ -170,7 +170,7 @@ func TestIndexedJsonDocument_Insert(t *testing.T) {
 				require.NoError(t, err)
 				require.NotNil(t, result)
 
-				cmp, err = types.JSON.Compare(valueToInsert, result)
+				cmp, err = types.JSON.Compare(ctx, valueToInsert, result)
 				require.NoError(t, err)
 				require.Equal(t, cmp, 0)
 			})
@@ -320,7 +320,7 @@ func TestJsonCompare(t *testing.T) {
 			left = newIndexedJsonDocumentFromValue(t, ctx, ns, left)
 		}
 		if right != nil {
-			rightJSON, inRange, err := types.JSON.Convert(right)
+			rightJSON, inRange, err := types.JSON.Convert(ctx, right)
 			require.NoError(t, err)
 			require.True(t, bool(inRange))
 			rightInterface, err := rightJSON.(sql.JSONWrapper).ToInterface()
@@ -463,14 +463,14 @@ func TestIndexedJsonDocument_CreateLargeStringValues(t *testing.T) {
 	docMap := make(map[string]interface{})
 	value := strings.Repeat("x", 2097152)
 	docMap["key"] = value
-	doc, _, err := types.JSON.Convert(docMap)
+	doc, _, err := types.JSON.Convert(ctx, docMap)
 	require.NoError(t, err)
 	root, err := SerializeJsonToAddr(ctx, ns, doc.(sql.JSONWrapper))
 	require.NoError(t, err)
 	indexedDoc, err := NewJSONDoc(root.HashOf(), ns).ToIndexedJSONDocument(ctx)
 	lookup, err := types.LookupJSONValue(indexedDoc, "$.key")
 	require.NoError(t, err)
-	extractedValue, _, err := types.LongText.Convert(lookup)
+	extractedValue, _, err := types.LongText.Convert(ctx, lookup)
 	require.NoError(t, err)
 	require.Equal(t, value, extractedValue)
 }

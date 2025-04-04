@@ -129,11 +129,11 @@ func (te *nomsTableWriter) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.R
 }
 
 func (te *nomsTableWriter) GetNextAutoIncrementValue(ctx *sql.Context, insertVal interface{}) (uint64, error) {
-	return te.autoInc.Next(te.tableName, insertVal)
+	return te.autoInc.Next(ctx, te.tableName, insertVal)
 }
 
 func (te *nomsTableWriter) SetAutoIncrementValue(ctx *sql.Context, val uint64) error {
-	seq, err := te.autoInc.CoerceAutoIncrementValue(val)
+	seq, err := te.autoInc.CoerceAutoIncrementValue(ctx, val)
 	if err != nil {
 		return err
 	}
@@ -148,7 +148,7 @@ func (te *nomsTableWriter) AcquireAutoIncrementLock(ctx *sql.Context) (func(), e
 	return te.autoInc.AcquireTableLock(ctx, te.tableName)
 }
 
-func (te *nomsTableWriter) IndexedAccess(i sql.IndexLookup) sql.IndexedTable {
+func (te *nomsTableWriter) IndexedAccess(_ *sql.Context, i sql.IndexLookup) sql.IndexedTable {
 	idx := index.DoltIndexFromSqlIndex(i.Index)
 	return &nomsFkIndexer{
 		writer:  te,

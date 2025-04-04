@@ -213,8 +213,8 @@ func secondsSince(start time.Time, end time.Time) float64 {
 // nullWriter is a no-op SqlRowWriter implementation
 type nullWriter struct{}
 
-func (n nullWriter) WriteSqlRow(ctx context.Context, r sql.Row) error { return nil }
-func (n nullWriter) Close(ctx context.Context) error                  { return nil }
+func (n nullWriter) WriteSqlRow(ctx *sql.Context, r sql.Row) error { return nil }
+func (n nullWriter) Close(ctx context.Context) error               { return nil }
 
 func printEmptySetResult(start time.Time) {
 	seconds := secondsSince(start, time.Now())
@@ -290,7 +290,7 @@ func (v *verticalRowWriter) Close(ctx context.Context) error {
 
 var space = []byte{' '}
 
-func (v *verticalRowWriter) WriteSqlRow(ctx context.Context, r sql.Row) error {
+func (v *verticalRowWriter) WriteSqlRow(ctx *sql.Context, r sql.Row) error {
 	v.idx++
 	sep := fmt.Sprintf("*************************** %d. row ***************************\n", v.idx)
 	_, err := v.wr.Write([]byte(sep))
@@ -311,7 +311,7 @@ func (v *verticalRowWriter) WriteSqlRow(ctx context.Context, r sql.Row) error {
 		if r[i] == nil {
 			str = "NULL"
 		} else {
-			str, err = sqlutil.SqlColToStr(v.sch[i].Type, r[i])
+			str, err = sqlutil.SqlColToStr(ctx, v.sch[i].Type, r[i])
 			if err != nil {
 				return err
 			}

@@ -19,8 +19,6 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/dolthub/go-mysql-server/sql"
-	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/gocraft/dbr/v2"
 	"github.com/gocraft/dbr/v2/dialect"
 
@@ -65,31 +63,6 @@ func (q QueryDiff) Docs() *cli.CommandDocumentation {
 
 func (q QueryDiff) ArgParser() *argparser.ArgParser {
 	return argparser.NewArgParserWithVariableArgs(q.Name())
-}
-
-func (q QueryDiff) compareRows(pkOrds []int, row1, row2 sql.Row) (int, bool) {
-	var cmp int
-	for _, pkOrd := range pkOrds {
-		pk1, _ := gmstypes.ConvertToString(row1[pkOrd], gmstypes.Text, nil)
-		pk2, _ := gmstypes.ConvertToString(row2[pkOrd], gmstypes.Text, nil)
-		if pk1 < pk2 {
-			cmp = -1
-		} else if pk1 > pk2 {
-			cmp = 1
-		} else {
-			cmp = 0
-		}
-	}
-	var diff bool
-	for i := 0; i < len(row1); i++ {
-		a, _ := gmstypes.ConvertToString(row1[i], gmstypes.Text, nil)
-		b, _ := gmstypes.ConvertToString(row2[i], gmstypes.Text, nil)
-		if a != b {
-			diff = true
-			break
-		}
-	}
-	return cmp, diff
 }
 
 func (q QueryDiff) validateArgs(apr *argparser.ArgParseResults) error {
@@ -138,7 +111,7 @@ func (q QueryDiff) Exec(ctx context.Context, commandStr string, args []string, d
 		if rerr != nil {
 			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(rerr), usage)
 		}
-		if werr := wr.WriteSqlRow(ctx, row); werr != nil {
+		if werr := wr.WriteSqlRow(sqlCtx, row); werr != nil {
 			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(werr), usage)
 		}
 	}

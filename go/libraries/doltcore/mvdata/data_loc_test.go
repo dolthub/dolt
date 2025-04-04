@@ -247,7 +247,7 @@ func TestCreateRdWr(t *testing.T) {
 		}
 
 		inMemRd := table.NewInMemTableReader(imt)
-		_, numBad, pipeErr := table.PipeRows(context.Background(), inMemRd, wr, false)
+		_, numBad, pipeErr := table.PipeRows(sqlCtx, inMemRd, wr, false)
 		wr.Close(context.Background())
 
 		if numBad != 0 || pipeErr != nil {

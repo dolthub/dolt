@@ -1384,7 +1384,7 @@ var jsonMergeTests = []schemaMergeTest{
 
 // newIndexedJsonDocumentFromValue creates an IndexedJsonDocument from a provided value.
 func newIndexedJsonDocumentFromValue(t *testing.T, ctx context.Context, ns tree.NodeStore, v interface{}) tree.IndexedJsonDocument {
-	doc, _, err := sqltypes.JSON.Convert(v)
+	doc, _, err := sqltypes.JSON.Convert(ctx, v)
 	require.NoError(t, err)
 	root, err := tree.SerializeJsonToAddr(ctx, ns, doc.(sql.JSONWrapper))
 	require.NoError(t, err)
@@ -1426,7 +1426,7 @@ func jsonMergeLargeDocumentTests(t *testing.T) []schemaMergeTest {
 	largeObject := createLargeDocumentForTesting(t, ctx, ns)
 
 	insert := func(document sqltypes.MutableJSON, path string, val interface{}) sqltypes.MutableJSON {
-		jsonVal, inRange, err := sqltypes.JSON.Convert(val)
+		jsonVal, inRange, err := sqltypes.JSON.Convert(ctx, val)
 		require.NoError(t, err)
 		require.True(t, (bool)(inRange))
 		newDoc, changed, err := document.Insert(ctx, path, jsonVal.(sql.JSONWrapper))
@@ -1436,7 +1436,7 @@ func jsonMergeLargeDocumentTests(t *testing.T) []schemaMergeTest {
 	}
 
 	set := func(document sqltypes.MutableJSON, path string, val interface{}) sqltypes.MutableJSON {
-		jsonVal, inRange, err := sqltypes.JSON.Convert(val)
+		jsonVal, inRange, err := sqltypes.JSON.Convert(ctx, val)
 		require.NoError(t, err)
 		require.True(t, (bool)(inRange))
 		newDoc, changed, err := document.Replace(ctx, path, jsonVal.(sql.JSONWrapper))

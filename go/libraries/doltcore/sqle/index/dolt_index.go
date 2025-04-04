@@ -81,7 +81,7 @@ func (p *CommitIndex) CanSupportOrderBy(_ sql.Expression) bool {
 	return false
 }
 
-func (p *CommitIndex) CanSupport(ranges ...sql.Range) bool {
+func (p *CommitIndex) CanSupport(c *sql.Context, ranges ...sql.Range) bool {
 	var selects []string
 	for _, r := range ranges {
 		mysqlRange, ok := r.(sql.MySQLRange)
@@ -621,7 +621,7 @@ var _ DoltIndex = (*doltIndex)(nil)
 var _ sql.ExtendedIndex = (*doltIndex)(nil)
 
 // CanSupport implements sql.Index
-func (di *doltIndex) CanSupport(...sql.Range) bool {
+func (di *doltIndex) CanSupport(*sql.Context, ...sql.Range) bool {
 	return true
 }
 
@@ -1107,8 +1107,9 @@ var sharePool = pool.NewBuffPool()
 
 func maybeGetKeyBuilder(idx durable.Index) *val.TupleBuilder {
 	if types.IsFormat_DOLT(idx.Format()) {
-		kd, _ := durable.MapFromIndex(idx).Descriptors()
-		return val.NewTupleBuilder(kd)
+		m := durable.MapFromIndex(idx)
+		kd, _ := m.Descriptors()
+		return val.NewTupleBuilder(kd, m.NodeStore())
 	}
 	return nil
 }
@@ -1247,7 +1248,7 @@ func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.Node
 			}
 			if rangeCutIsBinding(expr.LowerBound) {
 				// accumulate bound values in |tb|
-				v, err := getRangeCutValue(expr.LowerBound, rng[j].Typ)
+				v, err := getRangeCutValue(ctx, expr.LowerBound, rng[j].Typ)
 				if err != nil {
 					return nil, err
 				}
@@ -1265,7 +1266,10 @@ func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.Node
 			}
 		}
 		// BuildPermissive() allows nulls in non-null fields
-		tup := tb.BuildPermissive(sharePool)
+		tup, err := tb.BuildPermissive(sharePool)
+		if err != nil {
+			return nil, err
+		}
 		for i := range fields {
 			fields[i].Lo.Value = tup.GetField(i)
 		}
@@ -1274,7 +1278,7 @@ func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.Node
 			if rangeCutIsBinding(expr.UpperBound) {
 				bound := expr.UpperBound.TypeAsUpperBound()
 				// accumulate bound values in |tb|
-				v, err := getRangeCutValue(expr.UpperBound, rng[i].Typ)
+				v, err := getRangeCutValue(ctx, expr.UpperBound, rng[i].Typ)
 				if err != nil {
 					return nil, err
 				}
@@ -1298,7 +1302,10 @@ func (di *doltIndex) prollyRangesFromSqlRanges(ctx context.Context, ns tree.Node
 			}
 		}
 
-		tup = tb.BuildPermissive(sharePool)
+		tup, err = tb.BuildPermissive(sharePool)
+		if err != nil {
+			return nil, err
+		}
 		for i := range fields {
 			fields[i].Hi.Value = tup.GetField(i)
 		}
@@ -1351,11 +1358,11 @@ func rangeCutIsBinding(c sql.MySQLRangeCut) bool {
 	}
 }
 
-func getRangeCutValue(cut sql.MySQLRangeCut, typ sql.Type) (interface{}, error) {
+func getRangeCutValue(ctx context.Context, cut sql.MySQLRangeCut, typ sql.Type) (interface{}, error) {
 	if _, ok := cut.(sql.AboveNull); ok {
 		return nil, nil
 	}
-	ret, oob, err := typ.Convert(sql.GetMySQLRangeCutKey(cut))
+	ret, oob, err := typ.Convert(ctx, sql.GetMySQLRangeCutKey(cut))
 	if oob == sql.OutOfRange {
 		return ret, nil
 	}

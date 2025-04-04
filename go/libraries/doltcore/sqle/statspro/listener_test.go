@@ -27,11 +27,12 @@ import (
 
 func TestListening(t *testing.T) {
 	bthreads := sql.NewBackgroundThreads()
+	ctx := sql.NewEmptyContext()
 	defer bthreads.Shutdown()
 	t.Run("ClosedDoesNotStart", func(t *testing.T) {
 		sc := newStatsCoord(bthreads)
 		sc.Close()
-		require.Error(t, sc.Restart())
+		require.Error(t, sc.Restart(ctx))
 		require.Nil(t, sc.activeCtxCancel)
 	})
 	t.Run("IsStoppable", func(t *testing.T) {
@@ -102,7 +103,7 @@ func TestListening(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			for range 20 {
-				require.NoError(t, sc.Restart())
+				require.NoError(t, sc.Restart(ctx))
 				l, err := sc.addListener(leSwap)
 				if err != nil {
 					require.ErrorIs(t, err, ErrStatsIssuerPaused)
@@ -133,7 +134,7 @@ func TestListening(t *testing.T) {
 	})
 	t.Run("ListenForSwap", func(t *testing.T) {
 		sc := newStatsCoord(bthreads)
-		require.NoError(t, sc.Restart())
+		require.NoError(t, sc.Restart(ctx))
 		l, err := sc.addListener(leSwap)
 		require.NoError(t, err)
 		select {
@@ -143,7 +144,7 @@ func TestListening(t *testing.T) {
 	})
 	t.Run("ListenForStop", func(t *testing.T) {
 		sc := newStatsCoord(bthreads)
-		require.NoError(t, sc.Restart())
+		require.NoError(t, sc.Restart(ctx))
 		var l chan listenerEvent
 		err := sc.sq.DoSync(context.Background(), func() error {
 			// do this in serial queue to make sure we don't race
@@ -165,7 +166,7 @@ func TestListening(t *testing.T) {
 	})
 	t.Run("ListenerFailsIfStopped", func(t *testing.T) {
 		sc := newStatsCoord(bthreads)
-		require.NoError(t, sc.Restart())
+		require.NoError(t, sc.Restart(ctx))
 		sc.Stop()
 		_, err := sc.addListener(leUnknown)
 		require.ErrorIs(t, err, ErrStatsIssuerPaused)
@@ -173,14 +174,14 @@ func TestListening(t *testing.T) {
 	t.Run("ListenerFailsIfClosed", func(t *testing.T) {
 		sc := newStatsCoord(bthreads)
 		sc.Close()
-		require.Error(t, sc.Restart())
+		require.Error(t, sc.Restart(ctx))
 		_, err := sc.addListener(leUnknown)
 		require.ErrorIs(t, err, ErrStatsIssuerPaused)
 	})
 	t.Run("WaitBlocksOnStatsCollection", func(t *testing.T) {
 		sqlCtx, sqlEng, sc := emptySetup(t, bthreads, true, true)
 		require.NoError(t, executeQuery(sqlCtx, sqlEng, "create table xy (x int primary key, y int)"))
-		require.NoError(t, sc.Restart())
+		require.NoError(t, sc.Restart(ctx))
 		done := make(chan struct{})
 		wg := sync.WaitGroup{}
 		wg.Add(2)
@@ -203,7 +204,7 @@ func TestListening(t *testing.T) {
 	t.Run("WaitReturnsIfStoppedBefore", func(t *testing.T) {
 		sqlCtx, sqlEng, sc := emptySetup(t, bthreads, true, true)
 		require.NoError(t, executeQuery(sqlCtx, sqlEng, "create table xy (x int primary key, y int)"))
-		require.NoError(t, sc.Restart())
+		require.NoError(t, sc.Restart(ctx))
 		done := make(chan struct{})
 		wg := sync.WaitGroup{}
 		wg.Add(2)
@@ -227,7 +228,7 @@ func TestListening(t *testing.T) {
 	t.Run("WaitHangsUntilCycleCompletes", func(t *testing.T) {
 		sqlCtx, sqlEng, sc := emptySetup(t, bthreads, true, true)
 		require.NoError(t, executeQuery(sqlCtx, sqlEng, "create table xy (x int primary key, y int)"))
-		require.NoError(t, sc.Restart())
+		require.NoError(t, sc.Restart(ctx))
 		done := make(chan struct{})
 		wg := sync.WaitGroup{}
 		wg.Add(2)

@@ -278,7 +278,7 @@ func TestDiffSplitter(t *testing.T) {
 
 			var splitRows []splitRow
 			for _, row := range tc.diffQueryRows {
-				old, new, err := ds.SplitDiffResultRow(row)
+				old, new, err := ds.SplitDiffResultRow(sql.NewEmptyContext(), row)
 				require.NoError(t, err)
 				splitRows = append(splitRows, splitRow{old, new})
 			}

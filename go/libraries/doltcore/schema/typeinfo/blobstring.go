@@ -119,11 +119,14 @@ func (ti *blobStringType) ConvertValueToNomsValue(ctx context.Context, vrw types
 	if v == nil {
 		return types.NullValue, nil
 	}
-	strVal, _, err := ti.sqlStringType.Convert(v)
+	strVal, _, err := ti.sqlStringType.Convert(ctx, v)
 	if err != nil {
 		return nil, err
 	}
-	val, ok := strVal.(string)
+	val, ok, err := sql.Unwrap[string](ctx, strVal)
+	if err != nil {
+		return nil, err
+	}
 	if ok && utf8.ValidString(val) { // We need to move utf8 (collation) validation into the server
 		return types.NewBlob(ctx, vrw, strings.NewReader(val))
 	}

@@ -130,7 +130,7 @@ func (dt *CommitDiffTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 }
 
 // IndexedAccess implements sql.IndexAddressable
-func (dt *CommitDiffTable) IndexedAccess(lookup sql.IndexLookup) sql.IndexedTable {
+func (dt *CommitDiffTable) IndexedAccess(ctx *sql.Context, lookup sql.IndexLookup) sql.IndexedTable {
 	nt := *dt
 	return &nt
 }
@@ -168,7 +168,7 @@ func (dt *CommitDiffTable) LookupPartitions(ctx *sql.Context, i sql.IndexLookup)
 	default:
 		return nil, ErrInvalidCommitDiffTableArgs
 	}
-	toCommit, _, err := to.Typ.Convert(sql.GetMySQLRangeCutKey(to.UpperBound))
+	toCommit, _, err := to.Typ.Convert(ctx, sql.GetMySQLRangeCutKey(to.UpperBound))
 	if err != nil {
 		return nil, err
 	}
@@ -176,7 +176,7 @@ func (dt *CommitDiffTable) LookupPartitions(ctx *sql.Context, i sql.IndexLookup)
 	if !ok {
 		return nil, fmt.Errorf("to_commit must be string, found %T", toCommit)
 	}
-	fromCommit, _, err := from.Typ.Convert(sql.GetMySQLRangeCutKey(from.UpperBound))
+	fromCommit, _, err := from.Typ.Convert(ctx, sql.GetMySQLRangeCutKey(from.UpperBound))
 	if err != nil {
 		return nil, err
 	}

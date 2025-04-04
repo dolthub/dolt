@@ -106,7 +106,7 @@ func (ct *CommitAncestorsTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error
 }
 
 // IndexedAccess implements sql.IndexAddressable
-func (ct *CommitAncestorsTable) IndexedAccess(lookup sql.IndexLookup) sql.IndexedTable {
+func (ct *CommitAncestorsTable) IndexedAccess(ctx *sql.Context, lookup sql.IndexLookup) sql.IndexedTable {
 	nt := *ct
 	return &nt
 }

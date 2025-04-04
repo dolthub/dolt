@@ -90,7 +90,7 @@ func (ti *bitType) ConvertValueToNomsValue(ctx context.Context, vrw types.ValueR
 	if v == nil {
 		return types.NullValue, nil
 	}
-	uintVal, _, err := ti.sqlBitType.Convert(v)
+	uintVal, _, err := ti.sqlBitType.Convert(ctx, v)
 	if err != nil {
 		return nil, err
 	}
@@ -144,7 +144,7 @@ func (ti *bitType) GetTypeParams() map[string]string {
 // IsValid implements TypeInfo interface.
 func (ti *bitType) IsValid(v types.Value) bool {
 	if val, ok := v.(types.Uint); ok {
-		_, _, err := ti.sqlBitType.Convert(uint64(val))
+		_, _, err := ti.sqlBitType.Convert(context.Background(), uint64(val))
 		if err != nil {
 			return false
 		}

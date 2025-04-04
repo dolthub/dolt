@@ -1320,7 +1320,7 @@ func (d *DoltSession) setForeignKeyChecksSessionVar(ctx *sql.Context, key string
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	convertedVal, _, err := sqltypes.Int64.Convert(value)
+	convertedVal, _, err := sqltypes.Int64.Convert(ctx, value)
 	if err != nil {
 		return err
 	}
@@ -1632,7 +1632,7 @@ func (d *DoltSession) WithGlobals(conf config.ReadWriteConfig) *DoltSession {
 }
 
 // PersistGlobal implements sql.PersistableSession
-func (d *DoltSession) PersistGlobal(sysVarName string, value interface{}) error {
+func (d *DoltSession) PersistGlobal(ctx *sql.Context, sysVarName string, value interface{}) error {
 	if d.globalsConf == nil {
 		return ErrSessionNotPersistable
 	}

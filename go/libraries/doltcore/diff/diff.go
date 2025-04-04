@@ -71,10 +71,10 @@ type RowDiffer interface {
 type SqlRowDiffWriter interface {
 	// WriteRow writes the diff row given, of the diff type provided. colDiffTypes is guaranteed to be the same length as
 	// the input row.
-	WriteRow(ctx context.Context, row sql.Row, diffType ChangeType, colDiffTypes []ChangeType) error
+	WriteRow(ctx *sql.Context, row sql.Row, diffType ChangeType, colDiffTypes []ChangeType) error
 
 	// WriteCombinedRow writes the diff of the rows given as a single, combined row.
-	WriteCombinedRow(ctx context.Context, oldRow, newRow sql.Row, mode Mode) error
+	WriteCombinedRow(ctx *sql.Context, oldRow, newRow sql.Row, mode Mode) error
 
 	// Close finalizes the work of this writer.
 	Close(ctx context.Context) error

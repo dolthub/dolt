@@ -76,7 +76,7 @@ func (w *SqlExportWriter) GetSchema() schema.Schema {
 	return w.sch
 }
 
-func (w *SqlExportWriter) WriteSqlRow(ctx context.Context, r sql.Row) error {
+func (w *SqlExportWriter) WriteSqlRow(ctx *sql.Context, r sql.Row) error {
 	if r == nil {
 		return nil
 	}
@@ -107,7 +107,7 @@ func (w *SqlExportWriter) WriteSqlRow(ctx context.Context, r sql.Row) error {
 		return err
 	}
 
-	stmt, err := sqlfmt.SqlRowAsInsertStmt(r, w.tableName, w.sch)
+	stmt, err := sqlfmt.SqlRowAsInsertStmt(ctx, r, w.tableName, w.sch)
 	if err != nil {
 		return err
 	}

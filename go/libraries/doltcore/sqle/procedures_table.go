@@ -92,7 +92,7 @@ func (pt *ProceduresTable) LockedToRoot(ctx *sql.Context, root doltdb.RootValue)
 	return pt.backingTable.LockedToRoot(ctx, root)
 }
 
-func (pt *ProceduresTable) IndexedAccess(lookup sql.IndexLookup) sql.IndexedTable {
+func (pt *ProceduresTable) IndexedAccess(ctx *sql.Context, lookup sql.IndexLookup) sql.IndexedTable {
 	// Never reached. Interface required for LockedToRoot to be implemented.
 	panic("Unreachable")
 }

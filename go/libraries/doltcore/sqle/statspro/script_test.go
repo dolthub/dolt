@@ -682,7 +682,7 @@ func TestStatScripts(t *testing.T) {
 
 			defer sqlEng.Close()
 
-			require.NoError(t, sc.Restart())
+			require.NoError(t, sc.Restart(ctx))
 
 			//sc.Debug = true
 

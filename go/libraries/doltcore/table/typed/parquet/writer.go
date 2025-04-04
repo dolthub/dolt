@@ -83,7 +83,7 @@ func NewParquetRowWriterForFile(outSch schema.Schema, destName string) (*Parquet
 	return NewParquetRowWriter(primaryKeySchema.Schema, fw)
 }
 
-func (pwr *ParquetRowWriter) WriteSqlRow(_ context.Context, r sql.Row) error {
+func (pwr *ParquetRowWriter) WriteSqlRow(ctx *sql.Context, r sql.Row) error {
 	colValStrs := make([]*string, len(pwr.sch))
 
 	for i, val := range r {
@@ -103,7 +103,7 @@ func (pwr *ParquetRowWriter) WriteSqlRow(_ context.Context, r sql.Row) error {
 			case query.Type_BIT:
 				sqlType = types.Uint64
 			}
-			v, err := sqlutil.SqlColToStr(sqlType, val)
+			v, err := sqlutil.SqlColToStr(ctx, sqlType, val)
 			if err != nil {
 				return err
 			}

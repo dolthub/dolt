@@ -194,7 +194,7 @@ func (cvt *prollyConstraintViolationsTable) Deleter(context *sql.Context) sql.Ro
 	ed := cvt.artM.Editor()
 	p := cvt.artM.Pool()
 	kd, _ := cvt.artM.Descriptors()
-	kb := val.NewTupleBuilder(kd)
+	kb := val.NewTupleBuilder(kd, ed.NodeStore())
 
 	return &prollyCVDeleter{
 		kd:   kd,
@@ -339,8 +339,11 @@ func (d *prollyCVDeleter) Delete(ctx *sql.Context, r sql.Row) error {
 	artType := merge.UnmapCVType(r[1])
 	d.kb.PutUint8(d.kd.Count()-1, uint8(artType))
 
-	key := d.kb.Build(d.pool)
-	err := d.ed.Delete(ctx, key)
+	key, err := d.kb.Build(d.pool)
+	if err != nil {
+		return err
+	}
+	err = d.ed.Delete(ctx, key)
 	if err != nil {
 		return err
 	}

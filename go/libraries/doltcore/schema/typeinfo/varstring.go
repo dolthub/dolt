@@ -144,7 +144,7 @@ func (ti *varStringType) ConvertValueToNomsValue(ctx context.Context, vrw types.
 	if v == nil {
 		return types.NullValue, nil
 	}
-	strVal, _, err := ti.sqlStringType.Convert(v)
+	strVal, _, err := ti.sqlStringType.Convert(ctx, v)
 	if err != nil {
 		return nil, err
 	}
@@ -170,12 +170,18 @@ func (ti *varStringType) Equals(other TypeInfo) bool {
 
 // FormatValue implements TypeInfo interface.
 func (ti *varStringType) FormatValue(v types.Value) (*string, error) {
+	// TODO: Add context parameter to FormatValue
+	ctx := context.Background()
 	if val, ok := v.(types.String); ok {
 		res, err := ti.ConvertNomsValueToValue(val)
 		if err != nil {
 			return nil, err
 		}
-		if resStr, ok := res.(string); ok {
+		resStr, ok, err := sql.Unwrap[string](ctx, res)
+		if err != nil {
+			return nil, err
+		}
+		if ok {
 			return &resStr, nil
 		}
 		return nil, fmt.Errorf(`"%v" has unexpectedly encountered a value of type "%T" from embedded type`, ti.String(), v)
@@ -212,8 +218,10 @@ func (ti *varStringType) GetTypeParams() map[string]string {
 
 // IsValid implements TypeInfo interface.
 func (ti *varStringType) IsValid(v types.Value) bool {
+	// TODO: Add context parameter or delete typeinfo package
+	ctx := context.Background()
 	if val, ok := v.(types.String); ok {
-		_, _, err := ti.sqlStringType.Convert(string(val))
+		_, _, err := ti.sqlStringType.Convert(ctx, string(val))
 		if err != nil {
 			return false
 		}

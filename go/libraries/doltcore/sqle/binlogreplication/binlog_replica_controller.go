@@ -110,7 +110,7 @@ func (d *doltBinlogReplicaController) StartReplica(ctx *sql.Context) error {
 	// error message. Currently, this case would trigger an error from the GMS layer, so we can't give
 	// a specific error message about needing to run Dolt in sql-server mode yet.
 
-	_, err := loadReplicaServerId()
+	_, err := loadReplicaServerId(ctx)
 	if err != nil {
 		return fmt.Errorf("unable to start replication: %s", err.Error())
 	}

@@ -161,7 +161,10 @@ func (ds *DiffSummaryTableFunction) CheckAuth(ctx *sql.Context, opChecker sql.Pr
 		if err != nil {
 			return false
 		}
-		tableName, ok := tableNameVal.(string)
+		tableName, ok, err := sql.Unwrap[string](ctx, tableNameVal)
+		if err != nil {
+			return false
+		}
 		if !ok {
 			return false
 		}

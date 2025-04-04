@@ -17,19 +17,20 @@ package expreval
 import (
 	"context"
 
+	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
 
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-func compareLiterals(l1, l2 *expression.Literal) (int, error) {
-	return l1.Type().Compare(l1.Value(), l2.Value())
+func compareLiterals(ctx *sql.Context, l1, l2 *expression.Literal) (int, error) {
+	return l1.Type().Compare(ctx, l1.Value(), l2.Value())
 }
 
 // CompareOp is an interface for comparing values
 type CompareOp interface {
 	// CompareLiterals compares two go-mysql-server literals
-	CompareLiterals(l1, l2 *expression.Literal) (bool, error)
+	CompareLiterals(ctx *sql.Context, l1, l2 *expression.Literal) (bool, error)
 	// CompareNomsValues compares two noms values
 	CompareNomsValues(ctx context.Context, v1, v2 types.Value) (bool, error)
 	// CompareToNil compares a noms value to nil using sql logic rules
@@ -40,8 +41,8 @@ type CompareOp interface {
 type EqualsOp struct{}
 
 // CompareLiterals compares two go-mysql-server literals for equality
-func (op EqualsOp) CompareLiterals(l1, l2 *expression.Literal) (bool, error) {
-	n, err := compareLiterals(l1, l2)
+func (op EqualsOp) CompareLiterals(ctx *sql.Context, l1, l2 *expression.Literal) (bool, error) {
+	n, err := compareLiterals(ctx, l1, l2)
 
 	if err != nil {
 		return false, err
@@ -71,8 +72,8 @@ type GreaterOp struct {
 
 // CompareLiterals compares two go-mysql-server literals returning true if the value of the first
 // is greater than the second.
-func (op GreaterOp) CompareLiterals(l1, l2 *expression.Literal) (bool, error) {
-	n, err := compareLiterals(l1, l2)
+func (op GreaterOp) CompareLiterals(ctx *sql.Context, l1, l2 *expression.Literal) (bool, error) {
+	n, err := compareLiterals(ctx, l1, l2)
 
 	if err != nil {
 		return false, err
@@ -111,8 +112,8 @@ type GreaterEqualOp struct {
 
 // CompareLiterals compares two go-mysql-server literals returning true if the value of the first
 // is greater than or equal to the second.
-func (op GreaterEqualOp) CompareLiterals(l1, l2 *expression.Literal) (bool, error) {
-	n, err := compareLiterals(l1, l2)
+func (op GreaterEqualOp) CompareLiterals(ctx *sql.Context, l1, l2 *expression.Literal) (bool, error) {
+	n, err := compareLiterals(ctx, l1, l2)
 
 	if err != nil {
 		return false, err
@@ -145,8 +146,8 @@ type LessOp struct {
 
 // CompareLiterals compares two go-mysql-server literals returning true if the value of the first
 // is less than the second.
-func (op LessOp) CompareLiterals(l1, l2 *expression.Literal) (bool, error) {
-	n, err := compareLiterals(l1, l2)
+func (op LessOp) CompareLiterals(ctx *sql.Context, l1, l2 *expression.Literal) (bool, error) {
+	n, err := compareLiterals(ctx, l1, l2)
 
 	if err != nil {
 		return false, err
@@ -173,8 +174,8 @@ type LessEqualOp struct {
 
 // CompareLiterals compares two go-mysql-server literals returning true if the value of the first
 // is less than or equal to the second.
-func (op LessEqualOp) CompareLiterals(l1, l2 *expression.Literal) (bool, error) {
-	n, err := compareLiterals(l1, l2)
+func (op LessEqualOp) CompareLiterals(ctx *sql.Context, l1, l2 *expression.Literal) (bool, error) {
+	n, err := compareLiterals(ctx, l1, l2)
 
 	if err != nil {
 		return false, err

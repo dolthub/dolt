@@ -27,19 +27,21 @@ import (
 // DataMoverPipeline is an errgroup based pipeline that reads rows from a reader and writes them to a destination with
 // a writer.
 type DataMoverPipeline struct {
-	g   *errgroup.Group
-	ctx context.Context
-	rd  table.SqlRowReader
-	wr  table.SqlRowWriter
+	g      *errgroup.Group
+	ctx    context.Context
+	sqlCtx *sql.Context
+	rd     table.SqlRowReader
+	wr     table.SqlRowWriter
 }
 
-func NewDataMoverPipeline(ctx context.Context, rd table.SqlRowReader, wr table.SqlRowWriter) *DataMoverPipeline {
-	g, ctx := errgroup.WithContext(ctx)
+func NewDataMoverPipeline(sqlCtx *sql.Context, rd table.SqlRowReader, wr table.SqlRowWriter) *DataMoverPipeline {
+	g, ctx := errgroup.WithContext(sqlCtx)
 	return &DataMoverPipeline{
-		g:   g,
-		ctx: ctx,
-		rd:  rd,
-		wr:  wr,
+		g:      g,
+		ctx:    ctx,
+		sqlCtx: sqlCtx,
+		rd:     rd,
+		wr:     wr,
 	}
 }
 
@@ -84,7 +86,7 @@ func (e *DataMoverPipeline) Execute() error {
 			case <-e.ctx.Done():
 				return e.ctx.Err()
 			default:
-				err := e.wr.WriteSqlRow(e.ctx, r)
+				err := e.wr.WriteSqlRow(e.sqlCtx, r)
 				if err != nil {
 					return err
 				}

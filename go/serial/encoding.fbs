@@ -50,4 +50,7 @@ enum Encoding : uint8 {
   JSON     = 131,
   Geometry = 133,
   Extended = 134,
+  StringAdaptive = 135,
+  BytesAdaptive = 136,
+  ExtendedAdaptive = 137
 }

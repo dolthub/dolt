@@ -123,10 +123,10 @@ func (r *JSONReader) ReadSqlRow(ctx context.Context) (sql.Row, error) {
 		return nil, fmt.Errorf("unexpected JSON format received, expected format: { \"rows\": [ json_row_objects... ] } ")
 	}
 
-	return r.convToSqlRow(mapVal)
+	return r.convToSqlRow(ctx, mapVal)
 }
 
-func (r *JSONReader) convToSqlRow(rowMap map[string]interface{}) (sql.Row, error) {
+func (r *JSONReader) convToSqlRow(ctx context.Context, rowMap map[string]interface{}) (sql.Row, error) {
 	allCols := r.sch.GetAllCols()
 
 	ret := make(sql.Row, allCols.Size())
@@ -136,7 +136,7 @@ func (r *JSONReader) convToSqlRow(rowMap map[string]interface{}) (sql.Row, error
 			return nil, fmt.Errorf("column %s not found in schema", k)
 		}
 
-		v, _, err := col.TypeInfo.ToSqlType().Convert(v)
+		v, _, err := col.TypeInfo.ToSqlType().Convert(ctx, v)
 		if err != nil {
 			return nil, err
 		}

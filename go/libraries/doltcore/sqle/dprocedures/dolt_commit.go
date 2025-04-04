@@ -230,7 +230,7 @@ func getDoltArgs(ctx *sql.Context, row sql.Row, children []sql.Expression) ([]st
 			return nil, err
 		}
 
-		text, _, err := types.Text.Convert(childVal)
+		text, _, err := types.Text.Convert(ctx, childVal)
 
 		if err != nil {
 			return nil, err

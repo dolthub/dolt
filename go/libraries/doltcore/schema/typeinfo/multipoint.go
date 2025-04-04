@@ -74,7 +74,7 @@ func (ti *multipointType) ConvertValueToNomsValue(ctx context.Context, vrw types
 	}
 
 	// Convert to sql.MultiPointType
-	multipoint, _, err := ti.sqlMultiPointType.Convert(v)
+	multipoint, _, err := ti.sqlMultiPointType.Convert(ctx, v)
 	if err != nil {
 		return nil, err
 	}

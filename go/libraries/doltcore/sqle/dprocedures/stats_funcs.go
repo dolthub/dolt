@@ -84,7 +84,7 @@ func (si StatsInfo) ToJson(short bool) string {
 type ExtendedStatsProvider interface {
 	sql.StatsProvider
 	// Restart starts a new stats thread, finalizes any active thread
-	Restart() error
+	Restart(ctx *sql.Context) error
 	// Stop finalizes stats thread if active
 	Stop()
 	// Info returns summary statistics about the current coordinator state
@@ -118,7 +118,7 @@ func statsRestart(ctx *sql.Context, _ ...string) (interface{}, error) {
 	statsPro := dSess.StatsProvider()
 
 	if afp, ok := statsPro.(ExtendedStatsProvider); ok {
-		if err := afp.Restart(); err != nil {
+		if err := afp.Restart(ctx); err != nil {
 			return nil, err
 		}
 

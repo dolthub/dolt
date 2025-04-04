@@ -341,7 +341,16 @@ func RunIndexPrefixTest(t *testing.T, harness DoltEnginetestHarness) {
 func RunBigBlobsTest(t *testing.T, h DoltEnginetestHarness) {
 	defer h.Close()
 	h.Setup(setup.MydbData, setup.BlobData)
-	for _, tt := range BigBlobQueries {
+	for _, tt := range BigBlobWriteQueries {
+		enginetest.RunWriteQueryTest(t, h, tt)
+	}
+}
+
+func RunTestAdaptiveEncoding(t *testing.T, h DoltEnginetestHarness, columnType AdaptiveEncodingTestColumnType, testPurpose AdaptiveEncodingTestPurpose) {
+	defer h.Close()
+	h.Setup(setup.MydbData, MakeBigAdaptiveEncodingQueriesSetup(columnType))
+	enginetest.RunQueryTests(t, h, MakeBigAdaptiveEncodingQueries(columnType, testPurpose))
+	for _, tt := range MakeBigAdaptiveEncodingWriteQueries(columnType, testPurpose) {
 		enginetest.RunWriteQueryTest(t, h, tt)
 	}
 }
