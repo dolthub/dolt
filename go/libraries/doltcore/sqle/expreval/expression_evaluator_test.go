@@ -490,7 +490,7 @@ func TestNewComparisonFunc(t *testing.T) {
 			for opId := range ops {
 				t.Run(opId, func(t *testing.T) {
 					op := ops[opId]
-					f, err := newComparisonFunc(op, test.be, test.sch)
+					f, err := newComparisonFunc(ctx, op, test.be, test.sch)
 
 					if test.expectNewErr {
 						assert.Error(t, err)
