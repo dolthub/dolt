@@ -150,7 +150,7 @@ func ConfigureServices(
 						logrus.TraceLevel.String(),
 					),
 					Default: logrus.GetLevel().String(),
-					NotifyChanged: func(_ sql.SystemVariableScope, v sql.SystemVarValue) error {
+					NotifyChanged: func(ctx *sql.Context, _ sql.SystemVariableScope, v sql.SystemVarValue) error {
 						level, err := logrus.ParseLevel(v.Val.(string))
 						if err != nil {
 							return fmt.Errorf("could not parse requested log level %s as a log level. dolt_log_level variable value and logging behavior will diverge.", v.Val.(string))
@@ -305,7 +305,8 @@ func ConfigureServices(
 		InitF: func(ctx context.Context) (err error) {
 			if _, err := mrEnv.Config().GetString(env.SqlServerGlobalsPrefix + "." + dsess.DoltStatsPaused); err != nil {
 				// unless otherwise specified, run stats writer alongside server
-				sql.SystemVariables.SetGlobal(dsess.DoltStatsPaused, 0)
+				sqlCtx := sql.NewEmptyContext()
+				sql.SystemVariables.SetGlobal(sqlCtx, dsess.DoltStatsPaused, 0)
 			}
 			sqlEngine, err = engine.NewSqlEngine(
 				ctx,

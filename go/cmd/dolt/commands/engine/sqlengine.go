@@ -259,8 +259,13 @@ func NewSqlEngine(
 		}
 	}
 
+	sqlCtx, err := sqlEngine.NewDefaultContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	// Load MySQL Db information
-	if err = engine.Analyzer.Catalog.MySQLDb.LoadData(sql.NewEmptyContext(), data); err != nil {
+	if err = engine.Analyzer.Catalog.MySQLDb.LoadData(sqlCtx, data); err != nil {
 		return nil, err
 	}
 
@@ -271,7 +276,7 @@ func NewSqlEngine(
 		}
 	}
 
-	err = sql.SystemVariables.SetGlobal(dsess.DoltCommitOnTransactionCommit, config.DoltTransactionCommit)
+	err = sql.SystemVariables.SetGlobal(sqlCtx, dsess.DoltCommitOnTransactionCommit, config.DoltTransactionCommit)
 	if err != nil {
 		return nil, err
 	}

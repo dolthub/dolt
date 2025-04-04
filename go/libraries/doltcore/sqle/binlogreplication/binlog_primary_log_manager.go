@@ -96,7 +96,7 @@ func NewLogManager(ctx *sql.Context, fs filesys.Filesys) (*logManager, error) {
 	// NOTE that we assume that all GTIDs are available after the first GTID we find in the logs. This won't
 	// be true if someone goes directly to the file system and deletes binary log files, but that isn't
 	// how we expect people to manage the binary log files.
-	if err := lm.initializePurgedGtids(); err != nil {
+	if err := lm.initializePurgedGtids(ctx); err != nil {
 		return nil, err
 	}
 
@@ -192,7 +192,7 @@ func (lm *logManager) purgeExpiredLogFiles(ctx *sql.Context) error {
 // preceding the found GTID, unless the found GTID is sequence number 1. If no GTIDs are found in the available
 // binary logs, then it is assumed that all GTIDs have been purged, so @@gtid_purged is set to the same value
 // held in @@gtid_executed.
-func (lm *logManager) initializePurgedGtids() error {
+func (lm *logManager) initializePurgedGtids(ctx *sql.Context) error {
 	filenames, err := lm.logFilesOnDiskForBranch(BinlogBranch)
 	if err != nil {
 		return err
@@ -213,7 +213,7 @@ func (lm *logManager) initializePurgedGtids() error {
 		if sequenceNumber > 1 {
 			gtidPurged := fmt.Sprintf("%s:%d", gtid.SourceServer(), sequenceNumber-1)
 			logrus.Debugf("setting gtid_purged to: %s", gtidPurged)
-			return sql.SystemVariables.SetGlobal("gtid_purged", gtidPurged)
+			return sql.SystemVariables.SetGlobal(ctx, "gtid_purged", gtidPurged)
 		} else {
 			return nil
 		}
@@ -226,7 +226,7 @@ func (lm *logManager) initializePurgedGtids() error {
 		return fmt.Errorf("unable to find system variable @@gtid_executed")
 	}
 	logrus.Debugf("no available GTIDs found in logs, setting gtid_purged to: %s", gtidExecutedValue)
-	return sql.SystemVariables.SetGlobal("gtid_purged", gtidExecutedValue)
+	return sql.SystemVariables.SetGlobal(ctx, "gtid_purged", gtidExecutedValue)
 }
 
 // findLogFileForPosition searches through the available binlog files on disk for the first log file that
