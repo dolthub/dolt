@@ -17,6 +17,7 @@ package expreval
 import (
 	"context"
 	"errors"
+	"github.com/dolthub/go-mysql-server/sql"
 	"testing"
 	"time"
 
@@ -203,6 +204,7 @@ func TestNewAndAndOrFuncs(t *testing.T) {
 }
 
 func TestNewComparisonFunc(t *testing.T) {
+	ctx := sql.NewEmptyContext()
 	colColl := schema.NewColCollection(
 		schema.NewColumn("col0", 0, types.IntKind, true),
 		schema.NewColumn("col1", 1, types.IntKind, false),
