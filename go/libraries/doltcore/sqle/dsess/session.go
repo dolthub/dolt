@@ -728,7 +728,6 @@ func (d *DoltSession) NewPendingCommit(
 // See NewPendingCommit
 func (d *DoltSession) newPendingCommit(ctx *sql.Context, branchState *branchState, roots doltdb.Roots, props actions.CommitStagedProps) (*doltdb.PendingCommit, error) {
 	headCommit := branchState.headCommit
-	headHash, _ := headCommit.HashOf()
 
 	if branchState.WorkingSet() == nil {
 		return nil, doltdb.ErrOperationNotSupportedInDetachedHead
@@ -755,52 +754,18 @@ func (d *DoltSession) newPendingCommit(ctx *sql.Context, branchState *branchStat
 		// If the commit message isn't set and we're amending the previous commit,
 		// go ahead and set the commit message from the current HEAD
 		if props.Message == "" && props.Amend {
-			cs, err := doltdb.NewCommitSpec("HEAD")
-			if err != nil {
-				return nil, err
-			}
-
-			headRef, err := branchState.dbData.Rsr.CWBHeadRef()
-			if err != nil {
-				return nil, err
-			}
-			optCmt, err := branchState.dbData.Ddb.Resolve(ctx, cs, headRef)
-			commit, ok := optCmt.ToCommit()
-			if !ok {
-				return nil, doltdb.ErrGhostCommitEncountered
-			}
-
-			meta, err := commit.GetCommitMeta(ctx)
+			meta, err := headCommit.GetCommitMeta(ctx)
 			if err != nil {
 				return nil, err
 			}
 			props.Message = meta.Description
 		}
-
-		// TODO: This is not the correct way to write this commit as an amend. While this commit is running
-		//  the branch head moves backwards and concurrency control here is not principled.
-		newRoots, err := actions.ResetSoftToRef(ctx, branchState.dbData, "HEAD~1")
-		if err != nil {
-			return nil, err
-		}
-
-		err = d.SetWorkingSet(ctx, ctx.GetCurrentDatabase(), branchState.WorkingSet().WithStagedRoot(newRoots.Staged))
-		if err != nil {
-			return nil, err
-		}
-
-		roots.Head = newRoots.Head
 	}
 
 	pendingCommit, err := actions.GetCommitStaged(ctx, roots, branchState.WorkingSet(), mergeParentCommits, branchState.dbData.Ddb, props)
 	if err != nil {
-		if props.Amend {
-			_, err = actions.ResetSoftToRef(ctx, branchState.dbData, headHash.String())
-			if err != nil {
-				return nil, err
-			}
-		}
-		if _, ok := err.(actions.NothingStaged); err != nil && !ok {
+		// Special case for nothing staged, which is not an error
+		if _, ok := err.(actions.NothingStaged); !ok {
 			return nil, err
 		}
 	}

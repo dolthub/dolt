@@ -110,5 +110,5 @@ func GetCommitStaged(
 		return nil, err
 	}
 
-	return db.NewPendingCommit(ctx, roots, mergeParents, meta)
+	return db.NewPendingCommit(ctx, roots, mergeParents, props.Amend, meta)
 }
