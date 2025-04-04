@@ -67,7 +67,7 @@ type nodeStore struct {
 	bbp   *sync.Pool
 }
 
-var _ NodeStore = nodeStore{}
+var _ NodeStore = &nodeStore{}
 
 var sharedCache = newChunkCache(cacheSize)
 
@@ -81,7 +81,7 @@ var blobBuilderPool = sync.Pool{
 
 // NewNodeStore makes a new NodeStore.
 func NewNodeStore(cs chunks.ChunkStore) NodeStore {
-	return nodeStore{
+	return &nodeStore{
 		store: cs,
 		cache: sharedCache,
 		bp:    sharedPool,
@@ -90,7 +90,7 @@ func NewNodeStore(cs chunks.ChunkStore) NodeStore {
 }
 
 // Read implements NodeStore.
-func (ns nodeStore) Read(ctx context.Context, ref hash.Hash) (Node, error) {
+func (ns *nodeStore) Read(ctx context.Context, ref hash.Hash) (Node, error) {
 	n, ok := ns.cache.get(ref)
 	if ok {
 		return n, nil
@@ -112,7 +112,7 @@ func (ns nodeStore) Read(ctx context.Context, ref hash.Hash) (Node, error) {
 }
 
 // ReadMany implements NodeStore.
-func (ns nodeStore) ReadMany(ctx context.Context, addrs hash.HashSlice) ([]Node, error) {
+func (ns *nodeStore) ReadMany(ctx context.Context, addrs hash.HashSlice) ([]Node, error) {
 	found := make(map[hash.Hash]Node)
 	gets := hash.HashSet{}
 
@@ -155,7 +155,7 @@ func (ns nodeStore) ReadMany(ctx context.Context, addrs hash.HashSlice) ([]Node,
 }
 
 // Write implements NodeStore.
-func (ns nodeStore) Write(ctx context.Context, nd Node) (hash.Hash, error) {
+func (ns *nodeStore) Write(ctx context.Context, nd Node) (hash.Hash, error) {
 	c := chunks.NewChunk(nd.bytes())
 	assertTrue(c.Size() > 0, "cannot write empty chunk to ChunkStore")
 
@@ -179,24 +179,24 @@ func (ns nodeStore) Write(ctx context.Context, nd Node) (hash.Hash, error) {
 }
 
 // Pool implements NodeStore.
-func (ns nodeStore) Pool() pool.BuffPool {
+func (ns *nodeStore) Pool() pool.BuffPool {
 	return ns.bp
 }
 
 // BlobBuilder implements NodeStore.
-func (ns nodeStore) BlobBuilder() *BlobBuilder {
+func (ns *nodeStore) BlobBuilder() *BlobBuilder {
 	bb := ns.bbp.Get().(*BlobBuilder)
 	bb.SetNodeStore(ns)
 	return bb
 }
 
 // PutBlobBuilder implements NodeStore.
-func (ns nodeStore) PutBlobBuilder(bb *BlobBuilder) {
+func (ns *nodeStore) PutBlobBuilder(bb *BlobBuilder) {
 	bb.Reset()
 	ns.bbp.Put(bb)
 }
 
-func (ns nodeStore) Format() *types.NomsBinFormat {
+func (ns *nodeStore) Format() *types.NomsBinFormat {
 	nbf, err := types.GetFormatForVersionString(ns.store.Version())
 	if err != nil {
 		panic(err)
@@ -204,17 +204,17 @@ func (ns nodeStore) Format() *types.NomsBinFormat {
 	return nbf
 }
 
-func (ns nodeStore) PurgeCaches() {
+func (ns *nodeStore) PurgeCaches() {
 	ns.cache.purge()
 }
 
-func (ns nodeStore) ReadBytes(ctx context.Context, h hash.Hash) (result []byte, err error) {
+func (ns *nodeStore) ReadBytes(ctx context.Context, h hash.Hash) (result []byte, err error) {
 	n, err := ns.Read(ctx, h)
 	if err != nil {
 		return nil, err
 	}
 
-	err = WalkNodes(ctx, n, &ns, func(ctx context.Context, n Node) error {
+	err = WalkNodes(ctx, n, ns, func(ctx context.Context, n Node) error {
 		if n.IsLeaf() {
 			result = append(result, n.GetValue(0)...)
 		}
@@ -223,7 +223,7 @@ func (ns nodeStore) ReadBytes(ctx context.Context, h hash.Hash) (result []byte, 
 	return result, err
 }
 
-func (ns nodeStore) WriteBytes(ctx context.Context, b []byte) (hash.Hash, error) {
+func (ns *nodeStore) WriteBytes(ctx context.Context, b []byte) (hash.Hash, error) {
 	_, h, err := SerializeBytesToAddr(ctx, ns, bytes.NewReader(b), len(b))
 	return h, err
 }
