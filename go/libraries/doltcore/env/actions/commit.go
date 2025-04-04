@@ -98,9 +98,7 @@ func GetCommitStaged(
 				return nil, NewTblSchemaConflictError(schConflicts)
 			}
 		}
-	}
 
-	if !props.Force {
 		roots.Staged, err = doltdb.ValidateForeignKeysOnSchemas(ctx, roots.Staged)
 		if err != nil {
 			return nil, err
@@ -112,5 +110,5 @@ func GetCommitStaged(
 		return nil, err
 	}
 
-	return db.NewPendingCommit(ctx, roots, mergeParents, meta)
+	return db.NewPendingCommit(ctx, roots, mergeParents, props.Amend, meta)
 }

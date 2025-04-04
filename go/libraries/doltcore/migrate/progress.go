@@ -273,7 +273,7 @@ func commitRoot(
 		return err
 	}
 
-	pcm, err := ddb.NewPendingCommit(ctx, roots, parents, meta)
+	pcm, err := ddb.NewPendingCommit(ctx, roots, parents, false, meta)
 	if err != nil {
 		return err
 	}
