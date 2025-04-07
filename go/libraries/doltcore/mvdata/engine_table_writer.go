@@ -126,7 +126,7 @@ func (s *SqlEngineTableWriter) WriteRows(ctx context.Context, inputChannel chan 
 			oldRow := row[:len(row)/2]
 			newRow := row[len(row)/2:]
 
-			if ok, err := oldRow.Equals(newRow, s.tableSchema.Schema); err == nil {
+			if ok, err := oldRow.Equals(s.sqlCtx, newRow, s.tableSchema.Schema); err == nil {
 				if ok {
 					s.stats.SameVal++
 				} else {

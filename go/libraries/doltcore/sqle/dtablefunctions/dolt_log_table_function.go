@@ -226,7 +226,7 @@ func getDoltArgs(ctx *sql.Context, expressions []sql.Expression, name string) ([
 			return args, sql.ErrInvalidArgumentDetails.New(name, expr.String())
 		}
 
-		text, _, err := types.Text.Convert(childVal)
+		text, _, err := types.Text.Convert(ctx, childVal)
 		if err != nil {
 			return nil, err
 		}

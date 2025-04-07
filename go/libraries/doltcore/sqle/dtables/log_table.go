@@ -120,7 +120,7 @@ func (dt *LogTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 }
 
 // IndexedAccess implements sql.IndexAddressable
-func (dt *LogTable) IndexedAccess(lookup sql.IndexLookup) sql.IndexedTable {
+func (dt *LogTable) IndexedAccess(ctx *sql.Context, lookup sql.IndexLookup) sql.IndexedTable {
 	nt := *dt
 	return &nt
 }

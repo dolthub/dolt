@@ -187,9 +187,10 @@ func NewProllyStats(ctx context.Context, destDb dsess.SqlDatabase) (*prollyStats
 	sch := schema.StatsTableDoltSchema
 	kd, vd := sch.GetMapDescriptors(nil)
 
-	keyBuilder := val.NewTupleBuilder(kd)
-	valueBuilder := val.NewTupleBuilder(vd)
-	newMap, err := prolly.NewMapFromTuples(ctx, destDb.DbData().Ddb.NodeStore(), kd, vd)
+	nodeStore := destDb.DbData().Ddb.NodeStore()
+	keyBuilder := val.NewTupleBuilder(kd, nodeStore)
+	valueBuilder := val.NewTupleBuilder(vd, nodeStore)
+	newMap, err := prolly.NewMapFromTuples(ctx, nodeStore, kd, vd)
 	if err != nil {
 		return nil, err
 	}
@@ -347,7 +348,7 @@ func (p *prollyStats) encodeHash(h hash.Hash, len int) (val.Tuple, error) {
 	if err := p.kb.PutString(1, h.String()); err != nil {
 		return nil, err
 	}
-	return p.kb.Build(p.m.NodeStore().Pool()), nil
+	return p.kb.Build(p.m.NodeStore().Pool())
 }
 
 func (p *prollyStats) decodeHashTuple(v val.Tuple) (int, hash.Hash, error) {
@@ -447,7 +448,7 @@ func (p *prollyStats) encodeBucket(ctx context.Context, b *stats.Bucket, tupB *v
 	}
 	p.vb.PutString(10, stats.StringifyKey(mcvCntsRow, mcvTypes[:len(mcvCntsRow)]))
 
-	return p.vb.Build(p.m.NodeStore().Pool()), nil
+	return p.vb.Build(p.m.NodeStore().Pool())
 }
 
 func (p *prollyStats) NewEmpty(ctx context.Context) (StatsKv, error) {
@@ -470,7 +471,7 @@ func EncodeRow(ctx context.Context, ns tree.NodeStore, r sql.Row, tb *val.TupleB
 			return nil, err
 		}
 	}
-	return tb.Build(ns.Pool()), nil
+	return tb.Build(ns.Pool())
 }
 
 func DecodeRow(ctx context.Context, ns tree.NodeStore, s string, tb *val.TupleBuilder) (sql.Row, error) {

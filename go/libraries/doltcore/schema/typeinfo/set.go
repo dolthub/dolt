@@ -99,7 +99,7 @@ func (ti *setType) ConvertValueToNomsValue(ctx context.Context, vrw types.ValueR
 	if v == nil {
 		return types.NullValue, nil
 	}
-	val, _, err := ti.sqlSetType.Convert(v)
+	val, _, err := ti.sqlSetType.Convert(ctx, v)
 	if err != nil {
 		return nil, err
 	}

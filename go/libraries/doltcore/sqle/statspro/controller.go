@@ -400,7 +400,7 @@ func (sc *StatsController) DropDbStats(ctx *sql.Context, dbName string, flush bo
 		// don't wait to see if the thread context is invalidated
 		func() {
 			sc.mu.Unlock()
-			sc.Restart()
+			sc.Restart(ctx)
 			defer sc.mu.Lock()
 		}()
 		if err := sc.lockedRotateStorage(ctx); err != nil {
@@ -632,8 +632,8 @@ func (sc *StatsController) initStorage(ctx context.Context, fs filesys.Filesys) 
 		return &prollyStats{
 			mu:     sync.Mutex{},
 			destDb: statsDb,
-			kb:     val.NewTupleBuilder(kd),
-			vb:     val.NewTupleBuilder(vd),
+			kb:     val.NewTupleBuilder(kd, m.NodeStore()),
+			vb:     val.NewTupleBuilder(vd, m.NodeStore()),
 			m:      m.Mutate(),
 			mem:    NewMemStats(),
 		}, nil

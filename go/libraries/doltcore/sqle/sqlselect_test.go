@@ -1379,15 +1379,17 @@ func testSelectQuery(t *testing.T, test SelectTest) {
 		require.NoError(t, err)
 	}
 
+	expectedRows := unwrapRows(t, test.ExpectedRows)
+	actualRows = unwrapRows(t, actualRows)
 	// JSON columns must be compared using like so
-	assert.Equal(t, len(test.ExpectedRows), len(actualRows))
-	for i := 0; i < len(test.ExpectedRows); i++ {
-		assert.Equal(t, len(test.ExpectedRows[i]), len(actualRows[i]))
-		for j := 0; j < len(test.ExpectedRows[i]); j++ {
-			if test.ExpectedRows[i][j] == ignoreVal {
+	assert.Equal(t, len(expectedRows), len(actualRows))
+	for i := 0; i < len(expectedRows); i++ {
+		assert.Equal(t, len(expectedRows[i]), len(actualRows[i]))
+		for j := 0; j < len(expectedRows[i]); j++ {
+			if expectedRows[i][j] == ignoreVal {
 				continue
 			}
-			assert.Equal(t, test.ExpectedRows[i][j], actualRows[i][j])
+			assert.Equal(t, expectedRows[i][j], actualRows[i][j])
 		}
 	}
 

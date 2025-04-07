@@ -91,7 +91,7 @@ func testGoodJSON(t *testing.T, getReader func(types.ValueReadWriter, schema.Sch
 		{1, "brian", "hendriks"},
 	}
 
-	assert.Equal(t, enginetest.WidenRows(sqlSch.Schema, expectedRows), rows)
+	assert.Equal(t, enginetest.WidenRows(t, sqlSch.Schema, expectedRows), rows)
 }
 
 func TestReader(t *testing.T) {

@@ -53,9 +53,9 @@ type logManager struct {
 // NewLogManager creates a new logManager instance where binlog files are stored in the .dolt/binlog directory
 // underneath the specified |fs| filesystem. This method also initializes the binlog logging system, including
 // rotating to a new log file and purging expired log files.
-func NewLogManager(fs filesys.Filesys) (*logManager, error) {
+func NewLogManager(ctx *sql.Context, fs filesys.Filesys) (*logManager, error) {
 	binlogFormat := createBinlogFormat()
-	binlogEventMeta, err := createBinlogEventMetadata()
+	binlogEventMeta, err := createBinlogEventMetadata(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -78,12 +78,12 @@ func NewLogManager(fs filesys.Filesys) (*logManager, error) {
 	lm.binlogDirectory = abs
 
 	// Initialize a new binlog file
-	if err := lm.createNewBinlogFile(); err != nil {
+	if err := lm.createNewBinlogFile(ctx); err != nil {
 		return nil, err
 	}
 
 	// Purge any expired log files
-	if err := lm.purgeExpiredLogFiles(); err != nil {
+	if err := lm.purgeExpiredLogFiles(ctx); err != nil {
 		return nil, err
 	}
 
@@ -96,7 +96,7 @@ func NewLogManager(fs filesys.Filesys) (*logManager, error) {
 	// NOTE that we assume that all GTIDs are available after the first GTID we find in the logs. This won't
 	// be true if someone goes directly to the file system and deletes binary log files, but that isn't
 	// how we expect people to manage the binary log files.
-	if err := lm.initializePurgedGtids(); err != nil {
+	if err := lm.initializePurgedGtids(ctx); err != nil {
 		return nil, err
 	}
 
@@ -149,8 +149,8 @@ func (lm *logManager) initializeAvailableGtids() (err error) {
 // When this method is called, it is expected that the new, current binlog file has already been initialized and that
 // adding a Rotate event to the previous log has NOT occurred yet (otherwise adding the Rotate event would update the
 // log file's last modified time and would not be purged).
-func (lm *logManager) purgeExpiredLogFiles() error {
-	expireLogsSeconds, err := lookupBinlogExpireLogsSeconds()
+func (lm *logManager) purgeExpiredLogFiles(ctx *sql.Context) error {
+	expireLogsSeconds, err := lookupBinlogExpireLogsSeconds(ctx)
 	if expireLogsSeconds == 0 {
 		// If @@binlog_expire_logs_seconds is set to 0, then binlog files are never automatically expired
 		return nil
@@ -192,7 +192,7 @@ func (lm *logManager) purgeExpiredLogFiles() error {
 // preceding the found GTID, unless the found GTID is sequence number 1. If no GTIDs are found in the available
 // binary logs, then it is assumed that all GTIDs have been purged, so @@gtid_purged is set to the same value
 // held in @@gtid_executed.
-func (lm *logManager) initializePurgedGtids() error {
+func (lm *logManager) initializePurgedGtids(ctx *sql.Context) error {
 	filenames, err := lm.logFilesOnDiskForBranch(BinlogBranch)
 	if err != nil {
 		return err
@@ -213,7 +213,7 @@ func (lm *logManager) initializePurgedGtids() error {
 		if sequenceNumber > 1 {
 			gtidPurged := fmt.Sprintf("%s:%d", gtid.SourceServer(), sequenceNumber-1)
 			logrus.Debugf("setting gtid_purged to: %s", gtidPurged)
-			return sql.SystemVariables.SetGlobal("gtid_purged", gtidPurged)
+			return sql.SystemVariables.SetGlobal(ctx, "gtid_purged", gtidPurged)
 		} else {
 			return nil
 		}
@@ -226,7 +226,7 @@ func (lm *logManager) initializePurgedGtids() error {
 		return fmt.Errorf("unable to find system variable @@gtid_executed")
 	}
 	logrus.Debugf("no available GTIDs found in logs, setting gtid_purged to: %s", gtidExecutedValue)
-	return sql.SystemVariables.SetGlobal("gtid_purged", gtidExecutedValue)
+	return sql.SystemVariables.SetGlobal(ctx, "gtid_purged", gtidExecutedValue)
 }
 
 // findLogFileForPosition searches through the available binlog files on disk for the first log file that
@@ -334,14 +334,14 @@ func (lm *logManager) addRotateEventToPreviousLogFile() error {
 
 // createNewBinlogFile creates a new binlog file and initializes it with the binlog magic number, a Format Description
 // event, and a Previous GTIDs event. The new binlog file is opened for append only writing.
-func (lm *logManager) createNewBinlogFile() error {
+func (lm *logManager) createNewBinlogFile(ctx *sql.Context) error {
 	nextLogFilename, err := lm.nextLogFile()
 	if err != nil {
 		return err
 	}
 	lm.currentBinlogFileName = nextLogFilename
 
-	return lm.initializeCurrentLogFile(lm.binlogFormat, lm.binlogEventMeta)
+	return lm.initializeCurrentLogFile(ctx, lm.binlogFormat, lm.binlogEventMeta)
 }
 
 // nextLogFile returns the filename of the next bin log file in the current sequence. For example, if the
@@ -439,7 +439,7 @@ func (lm *logManager) mostRecentLogFileForBranch(branch string) (logFile string,
 // Rotation should occur when an administrator explicitly requests it with the `FLUSH LOGS` statement, during server
 // shutdown or restart, or when the current binary log file size exceeds the maximum size defined by the
 // @@max_binlog_size system variable.
-func (lm *logManager) RotateLogFile() error {
+func (lm *logManager) RotateLogFile(ctx *sql.Context) error {
 	nextLogFile, err := lm.nextLogFile()
 	if err != nil {
 		return err
@@ -447,7 +447,7 @@ func (lm *logManager) RotateLogFile() error {
 	logrus.Tracef("Rotating bin log file to: %s", nextLogFile)
 
 	binlogEvent := mysql.NewRotateEvent(lm.binlogFormat, lm.binlogEventMeta, 0, nextLogFile)
-	if err = lm.writeEventsHelper(binlogEvent); err != nil {
+	if err = lm.writeEventsHelper(ctx, binlogEvent); err != nil {
 		return err
 	}
 
@@ -458,12 +458,12 @@ func (lm *logManager) RotateLogFile() error {
 
 	// Open and initialize a new binlog file
 	lm.currentBinlogFileName = nextLogFile
-	return lm.initializeCurrentLogFile(lm.binlogFormat, lm.binlogEventMeta)
+	return lm.initializeCurrentLogFile(ctx, lm.binlogFormat, lm.binlogEventMeta)
 }
 
 // initializeCurrentLogFile creates and opens the current binlog file for append only writing, writes the first four
 // bytes with the binlog magic numbers, then writes a Format Description event and a Previous GTIDs event.
-func (lm *logManager) initializeCurrentLogFile(binlogFormat mysql.BinlogFormat, binlogEventMeta mysql.BinlogEventMetadata) error {
+func (lm *logManager) initializeCurrentLogFile(ctx *sql.Context, binlogFormat mysql.BinlogFormat, binlogEventMeta mysql.BinlogEventMetadata) error {
 	logrus.Tracef("Initializing binlog file: %s", lm.currentBinlogFilepath())
 
 	// Open the file in append mode
@@ -483,7 +483,7 @@ func (lm *logManager) initializeCurrentLogFile(binlogFormat mysql.BinlogFormat, 
 
 	// Write Format Description Event, the first event in each binlog file
 	binlogEvent := mysql.NewFormatDescriptionEvent(binlogFormat, binlogEventMeta)
-	if err = lm.writeEventsHelper(binlogEvent); err != nil {
+	if err = lm.writeEventsHelper(ctx, binlogEvent); err != nil {
 		return err
 	}
 
@@ -504,23 +504,23 @@ func (lm *logManager) initializeCurrentLogFile(binlogFormat mysql.BinlogFormat, 
 	if err != nil {
 		return err
 	}
-	return lm.writeEventsHelper(mysql.NewPreviousGtidsEvent(binlogFormat, binlogEventMeta, gtidSet.(mysql.Mysql56GTIDSet)))
+	return lm.writeEventsHelper(ctx, mysql.NewPreviousGtidsEvent(binlogFormat, binlogEventMeta, gtidSet.(mysql.Mysql56GTIDSet)))
 }
 
 // WriteEvents writes |binlogEvents| to the current binlog file. Access to write to the binary log is synchronized,
 // so that only one thread can write to the log file at a time.
-func (lm *logManager) WriteEvents(binlogEvents ...mysql.BinlogEvent) error {
+func (lm *logManager) WriteEvents(ctx *sql.Context, binlogEvents ...mysql.BinlogEvent) error {
 	// synchronize on WriteEvents so that only one thread is writing to the log file at a time
 	lm.mu.Lock()
 	defer lm.mu.Unlock()
 
-	return lm.writeEventsHelper(binlogEvents...)
+	return lm.writeEventsHelper(ctx, binlogEvents...)
 }
 
 // writeEventsHelper writes |binlogEvents| to the current binlog file. This function is NOT synchronized, and is only
 // intended to be used from code inside logManager that needs to be called transitively from the WriteEvents method.
-func (lm *logManager) writeEventsHelper(binlogEvents ...mysql.BinlogEvent) error {
-	maxBinlogSize, err := lookupMaxBinlogSize()
+func (lm *logManager) writeEventsHelper(ctx *sql.Context, binlogEvents ...mysql.BinlogEvent) error {
+	maxBinlogSize, err := lookupMaxBinlogSize(ctx)
 	if err != nil {
 		return err
 	}
@@ -559,7 +559,7 @@ func (lm *logManager) writeEventsHelper(binlogEvents ...mysql.BinlogEvent) error
 	if rotateLogFile {
 		// NOTE: Rotate event should be the very last entry in the (completed) binlog file.
 		//       Streamers will read the rotate event and know what file to open next.
-		return lm.RotateLogFile()
+		return lm.RotateLogFile(ctx)
 	}
 
 	return nil
@@ -599,13 +599,13 @@ func (lm *logManager) currentBinlogFilepath() string {
 
 // lookupMaxBinlogSize looks up the value of the @@max_binlog_size system variable and returns it, along with any
 // errors encountered while looking it up.
-func lookupMaxBinlogSize() (int, error) {
+func lookupMaxBinlogSize(ctx *sql.Context) (int, error) {
 	_, value, ok := sql.SystemVariables.GetGlobal("max_binlog_size")
 	if !ok {
 		return 0, fmt.Errorf("system variable @@max_binlog_size not found")
 	}
 
-	intValue, _, err := gmstypes.Int32.Convert(value)
+	intValue, _, err := gmstypes.Int32.Convert(ctx, value)
 	if err != nil {
 		return 0, err
 	}
@@ -614,13 +614,13 @@ func lookupMaxBinlogSize() (int, error) {
 
 // lookupBinlogExpireLogsSeconds looks up the value of the @@binlog_expire_logs_seconds system variable and returns
 // it, along with any errors encountered while looking it up.
-func lookupBinlogExpireLogsSeconds() (int, error) {
+func lookupBinlogExpireLogsSeconds(ctx *sql.Context) (int, error) {
 	_, value, ok := sql.SystemVariables.GetGlobal("binlog_expire_logs_seconds")
 	if !ok {
 		return -1, fmt.Errorf("unable to find system variable @@binlog_expire_logs_seconds")
 	}
 
-	int32Value, _, err := gmstypes.Int32.Convert(value)
+	int32Value, _, err := gmstypes.Int32.Convert(ctx, value)
 	if err != nil {
 		return -1, fmt.Errorf("unable to convert @@binlog_expire_logs_seconds value to integer: %s", err.Error())
 	}

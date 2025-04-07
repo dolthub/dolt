@@ -48,12 +48,7 @@ func NewJSONRowDiffWriter(wr io.WriteCloser, outSch schema.Schema) (*jsonRowDiff
 	}, nil
 }
 
-func (j *jsonRowDiffWriter) WriteRow(
-	ctx context.Context,
-	row sql.Row,
-	rowDiffType diff.ChangeType,
-	colDiffTypes []diff.ChangeType,
-) error {
+func (j *jsonRowDiffWriter) WriteRow(ctx *sql.Context, row sql.Row, rowDiffType diff.ChangeType, colDiffTypes []diff.ChangeType) error {
 	if len(row) != len(colDiffTypes) {
 		return fmt.Errorf("expected the same size for columns and diff types, got %d and %d", len(row), len(colDiffTypes))
 	}
@@ -127,7 +122,7 @@ func (j *jsonRowDiffWriter) WriteRow(
 	return nil
 }
 
-func (j *jsonRowDiffWriter) WriteCombinedRow(ctx context.Context, oldRow, newRow sql.Row, mode diff.Mode) error {
+func (j *jsonRowDiffWriter) WriteCombinedRow(ctx *sql.Context, oldRow, newRow sql.Row, mode diff.Mode) error {
 	return fmt.Errorf("json format is unable to output diffs for combined rows")
 }
 

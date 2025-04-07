@@ -306,7 +306,7 @@ var _ sql.ProjectedTable = (*DoltTable)(nil)
 var _ sql.IndexSearchable = (*DoltTable)(nil)
 
 // IndexedAccess implements sql.IndexAddressableTable
-func (t *DoltTable) IndexedAccess(lookup sql.IndexLookup) sql.IndexedTable {
+func (t *DoltTable) IndexedAccess(ctx *sql.Context, lookup sql.IndexLookup) sql.IndexedTable {
 	return NewIndexedDoltTable(t, lookup.Index.(index.DoltIndex))
 }
 
@@ -686,7 +686,7 @@ func (t *WritableDoltTable) setRoot(ctx *sql.Context, newRoot doltdb.RootValue) 
 	return t.db.SetRoot(ctx, newRoot)
 }
 
-func (t *WritableDoltTable) IndexedAccess(lookup sql.IndexLookup) sql.IndexedTable {
+func (t *WritableDoltTable) IndexedAccess(ctx *sql.Context, lookup sql.IndexLookup) sql.IndexedTable {
 	return NewWritableIndexedDoltTable(t, lookup.Index.(index.DoltIndex))
 }
 
@@ -2422,7 +2422,7 @@ func (t *AlterableDoltTable) getFirstAutoIncrementValue(
 			return 0, err
 		}
 
-		cmp, err := columnType.Compare(initialValue, r[colIdx])
+		cmp, err := columnType.Compare(ctx, initialValue, r[colIdx])
 		if err != nil {
 			return 0, err
 		}
@@ -2431,7 +2431,7 @@ func (t *AlterableDoltTable) getFirstAutoIncrementValue(
 		}
 	}
 
-	seq, err := dsess.CoerceAutoIncrementValue(initialValue)
+	seq, err := dsess.CoerceAutoIncrementValue(ctx, initialValue)
 	if err != nil {
 		return 0, err
 	}
