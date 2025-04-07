@@ -687,7 +687,7 @@ func (uv uniqValidator) deleteArtifact(ctx context.Context, key val.Tuple) (bool
 // and then checks to see if only one unique constraint violation artifact remains, and if so, deletes it as well,
 // since only a single row remaining for a unique constraint violation means that the violation has been fully
 // resolved and no other rows conflict with that unique value.
-func (uv uniqValidator) clearArtifact(ctx context.Context, key val.Tuple, prevValue val.Tuple) (int, error) {
+func (uv uniqValidator) clearArtifact(ctx *sql.Context, key val.Tuple, prevValue val.Tuple) (int, error) {
 	deleted, err := uv.deleteArtifact(ctx, key)
 	if err != nil || !deleted {
 		return 0, err
@@ -765,7 +765,7 @@ func newUniqIndex(ctx *sql.Context, sch schema.Schema, tableName string, def sch
 
 type collisionFn func(key, value val.Tuple) error
 
-func (idx uniqIndex) insertRow(ctx context.Context, key, value val.Tuple) error {
+func (idx uniqIndex) insertRow(ctx *sql.Context, key, value val.Tuple) error {
 	secondaryIndexKey, err := idx.secondaryBld.SecondaryKeyFromRow(ctx, key, value)
 	if err != nil {
 		return err
@@ -775,7 +775,7 @@ func (idx uniqIndex) insertRow(ctx context.Context, key, value val.Tuple) error 
 	return idx.secondary.Put(ctx, secondaryIndexKey, val.EmptyTuple)
 }
 
-func (idx uniqIndex) removeRow(ctx context.Context, key, value val.Tuple) error {
+func (idx uniqIndex) removeRow(ctx *sql.Context, key, value val.Tuple) error {
 	secondaryIndexKey, err := idx.secondaryBld.SecondaryKeyFromRow(ctx, key, value)
 	if err != nil {
 		return err
@@ -796,7 +796,7 @@ func (idx uniqIndex) removeRow(ctx context.Context, key, value val.Tuple) error 
 // findCollisions searches this unique index to find any rows that have the same values as |value| for the columns
 // included in the unique constraint. For any matching row, the specified callback, |cb|, is invoked with the key
 // and value for the primary index, representing the conflicting row identified from the unique index.
-func (idx uniqIndex) findCollisions(ctx context.Context, key, value val.Tuple, cb collisionFn) error {
+func (idx uniqIndex) findCollisions(ctx *sql.Context, key, value val.Tuple, cb collisionFn) error {
 	indexKey, err := idx.secondaryBld.SecondaryKeyFromRow(ctx, key, value)
 	if err != nil {
 		return err
@@ -900,7 +900,7 @@ func newNullValidator(
 	}, nil
 }
 
-func (nv nullValidator) validateDiff(ctx context.Context, diff tree.ThreeWayDiff) (count int, err error) {
+func (nv nullValidator) validateDiff(ctx *sql.Context, diff tree.ThreeWayDiff) (count int, err error) {
 	switch diff.Op {
 	case tree.DiffOpRightAdd, tree.DiffOpRightModify:
 		var violations []string

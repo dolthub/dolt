@@ -15,8 +15,6 @@
 package index
 
 import (
-	"context"
-
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -102,23 +100,19 @@ type SecondaryKeyBuilder struct {
 }
 
 // SecondaryKeyFromRow builds a secondary index key from a clustered index row.
-func (b SecondaryKeyBuilder) SecondaryKeyFromRow(ctx context.Context, k, v val.Tuple) (val.Tuple, error) {
+func (b SecondaryKeyBuilder) SecondaryKeyFromRow(ctx *sql.Context, k, v val.Tuple) (val.Tuple, error) {
 	for to := range b.mapping {
 		from := b.mapping.MapOrdinal(to)
 		if from == -1 {
 			// the "from" field is a virtual column
 			expr := b.virtualExpressions[to]
-			sqlCtx, ok := ctx.(*sql.Context)
-			if !ok {
-				sqlCtx = sql.NewContext(ctx)
-			}
 
-			sqlRow, err := BuildRow(sqlCtx, k, v, b.sch, b.nodeStore)
+			sqlRow, err := BuildRow(ctx, k, v, b.sch, b.nodeStore)
 			if err != nil {
 				return nil, err
 			}
 
-			value, err := expr.Eval(sqlCtx, sqlRow)
+			value, err := expr.Eval(ctx, sqlRow)
 			if err != nil {
 				return nil, err
 			}

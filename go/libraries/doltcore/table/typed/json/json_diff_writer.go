@@ -88,7 +88,7 @@ func (j *jsonRowDiffWriter) WriteRow(ctx *sql.Context, row sql.Row, rowDiffType 
 		return err
 	}
 
-	err = j.rowWriter.WriteSqlRow(sqlContext, row)
+	err = j.rowWriter.WriteSqlRow(ctx, row)
 	if err != nil {
 		return err
 	}

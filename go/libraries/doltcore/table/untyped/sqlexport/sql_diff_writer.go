@@ -50,8 +50,7 @@ func NewSqlDiffWriter(tableName string, schema schema.Schema, wr io.WriteCloser)
 }
 
 func (w SqlDiffWriter) WriteRow(ctx *sql.Context, row sql.Row, rowDiffType diff.ChangeType, colDiffTypes []diff.ChangeType) error {
-	sqlCtx := sql.NewContext(ctx)
-	stmt, err := sqlfmt.GenerateDataDiffStatement(sqlCtx, w.tableName, w.sch, row, rowDiffType, colDiffTypes)
+	stmt, err := sqlfmt.GenerateDataDiffStatement(ctx, w.tableName, w.sch, row, rowDiffType, colDiffTypes)
 	if err != nil {
 		return err
 	}

@@ -169,7 +169,7 @@ func buildIndex(
 // applyEdit applies |edit| to |idx|. If |len(edit.To)| == 0, then action is
 // a delete, if |len(edit.From)| == 0 then it is an insert, otherwise it is an
 // update.
-func applyEdit(ctx context.Context, idx MutableSecondaryIdx, key, from, to val.Tuple) (err error) {
+func applyEdit(ctx *sql.Context, idx MutableSecondaryIdx, key, from, to val.Tuple) (err error) {
 	if len(from) == 0 {
 		err := idx.InsertEntry(ctx, key, to)
 		if err != nil {
