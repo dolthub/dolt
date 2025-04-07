@@ -3,8 +3,13 @@ set -e
 set -o pipefail
 
 WORKING_DIR=`mktemp -d`
+mkdir $WORKING_DIR/sbtest
+WORKING_DIR=$WORKING_DIR/sbtest
 PPROF=0
 PORT=3366
+
+USER="root"
+PASS=""
 
 # parse options
 # superuser.com/questions/186272/
@@ -51,20 +56,12 @@ behavior:
   read_only: false
   autocommit: true
 
-user:
-  name: "user"
-  password: "pass"
-
 listener:
   host: "0.0.0.0"
   port: $PORT
   max_connections: 128
   read_timeout_millis: 28800000
   write_timeout_millis: 28800000
-
-databases:
-  - name: "sbtest"
-    path: "."
 YAML
 
 # start a server
@@ -83,7 +80,7 @@ echo "benchmark TPC-C bootstrapping at $WORKING_DIR"
 
 sleep 1
 
-./tpcc.lua --db-driver="mysql" --mysql-db="sbtest" --mysql-host="0.0.0.0" --mysql-port="$PORT" --mysql-user="user" --mysql-password="pass" --time=10 --report_interval=1 --threads=2 --tables=1 --scale=1 --trx_level="RR" prepare
+./tpcc.lua --db-driver="mysql" --mysql-db="sbtest" --mysql-host="0.0.0.0" --mysql-port="$PORT" --mysql-user="$USER" --mysql-password="$PASS" --time=10 --report_interval=1 --threads=2 --tables=1 --scale=1 --trx_level="RR" prepare
 
 # restart server to isolate bench run
 kill -15 "$SERVER_PID"
@@ -100,7 +97,7 @@ sleep 1
 # run benchmark
 echo "benchmark $SYSBENCH_TEST starting at $WORKING_DIR"
 
-./tpcc.lua --db-driver="mysql" --mysql-db="sbtest" --mysql-host="0.0.0.0" --mysql-port="$PORT" --mysql-user="user" --mysql-password="pass" --time=10 --report_interval=1 --threads=2 --tables=1 --scale=1 --trx_level="RR" run
+./tpcc.lua --db-driver="mysql" --mysql-db="sbtest" --mysql-host="0.0.0.0" --mysql-port="$PORT" --mysql-user="$USER" --mysql-password="$PASS" --time=10 --report_interval=1 --threads=2 --tables=1 --scale=1 --trx_level="RR" run
 
 echo "benchmark TPC-C complete at $WORKING_DIR"
 echo "DOLT_DEFAULT_BIN_FORMAT='$DOLT_DEFAULT_BIN_FORMAT'"
