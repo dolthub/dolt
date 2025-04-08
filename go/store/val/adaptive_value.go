@@ -182,7 +182,7 @@ func (v AdaptiveValue) convertToByteArray(ctx context.Context, vs ValueStore, bu
 	}
 	length, lengthBytes := uvarint.Uvarint(outOfBandValue)
 	address := hash.New(outOfBandValue[lengthBytes:])
-	return NewByteArray(address, vs).WithMaxByteLength(int64(length)), nil
+	return NewByteArray(ctx, address, vs).WithMaxByteLength(int64(length)), nil
 }
 
 func (v AdaptiveValue) convertToTextStorage(ctx context.Context, vs ValueStore, buf []byte) (*TextStorage, error) {
@@ -193,7 +193,7 @@ func (v AdaptiveValue) convertToTextStorage(ctx context.Context, vs ValueStore, 
 	}
 	length, lengthBytes := uvarint.Uvarint(outOfBandValue)
 	address := hash.New(outOfBandValue[lengthBytes:])
-	return NewTextStorage(address, vs).WithMaxByteLength(int64(length)), nil
+	return NewTextStorage(ctx, address, vs).WithMaxByteLength(int64(length)), nil
 }
 
 // AdaptiveEncodingTypeHandler is an implementation of TypeHandler for adaptive encoding types,
