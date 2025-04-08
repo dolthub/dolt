@@ -36,6 +36,7 @@ SKIP_SERVER_TESTS=$(cat <<-EOM
 ~remotes-localbs.bats~
 ~conflict-detection.bats~
 ~json.bats~
+~copy-tags.bats~
 ~cp-and-mv.bats~
 ~sql-create-tables.bats~
 ~sql-multi-db.bats~
