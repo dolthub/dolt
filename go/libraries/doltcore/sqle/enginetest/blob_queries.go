@@ -79,17 +79,25 @@ func MakeBigAdaptiveEncodingQueriesSetup(columnType AdaptiveEncodingTestColumnTy
 		`insert into blobt values
     ('F', LOAD_FILE('testdata/fullSize')),
     ('H', LOAD_FILE('testdata/halfSize')),
-    ('T', LOAD_FILE('testdata/tinyFile'))`,
+    ('T', LOAD_FILE('testdata/tinyFile')),
+	('N', NULL)`,
 		`insert into blobt2 values
     ('FF', LOAD_FILE('testdata/fullSize'), LOAD_FILE('testdata/fullSize')),
     ('HF', LOAD_FILE('testdata/halfSize'), LOAD_FILE('testdata/fullSize')),
     ('TF', LOAD_FILE('testdata/tinyFile'), LOAD_FILE('testdata/fullSize')),
+    ('NF', NULL, LOAD_FILE('testdata/fullSize')),
 	('FH', LOAD_FILE('testdata/fullSize'), LOAD_FILE('testdata/halfSize')),
 	('HH', LOAD_FILE('testdata/halfSize'), LOAD_FILE('testdata/halfSize')),
 	('TH', LOAD_FILE('testdata/tinyFile'), LOAD_FILE('testdata/halfSize')),
+	('NH', NULL, LOAD_FILE('testdata/halfSize')),
     ('FT', LOAD_FILE('testdata/fullSize'), LOAD_FILE('testdata/tinyFile')),
     ('HT', LOAD_FILE('testdata/halfSize'), LOAD_FILE('testdata/tinyFile')),
-    ('TT', LOAD_FILE('testdata/tinyFile'), LOAD_FILE('testdata/tinyFile'))`,
+    ('TT', LOAD_FILE('testdata/tinyFile'), LOAD_FILE('testdata/tinyFile')),
+    ('NT', NULL, LOAD_FILE('testdata/tinyFile')),
+    ('FN', LOAD_FILE('testdata/fullSize'), NULL),
+    ('HN', LOAD_FILE('testdata/halfSize'), NULL),
+    ('TN', LOAD_FILE('testdata/tinyFile'), NULL),
+    ('NN', NULL, NULL)`,
 	}}
 }
 
@@ -154,12 +162,19 @@ func MakeBigAdaptiveEncodingQueries(columnType AdaptiveEncodingTestColumnType, t
 				{"FF", fullSizeOutOfLineRepr, fullSizeOutOfLineRepr},
 				{"HF", halfSizeOutOfLineRepr, fullSizeOutOfLineRepr},
 				{"TF", tiny, fullSizeOutOfLineRepr},
+				{"NF", nil, fullSizeOutOfLineRepr},
 				{"FH", fullSizeOutOfLineRepr, halfSize},
 				{"HH", halfSizeOutOfLineRepr, halfSize},
 				{"TH", tiny, halfSize},
+				{"NH", nil, halfSize},
 				{"FT", fullSizeOutOfLineRepr, tiny},
 				{"HT", halfSize, tiny},
 				{"TT", tiny, tiny},
+				{"NT", nil, tiny},
+				{"FN", fullSizeOutOfLineRepr, nil},
+				{"HN", halfSize, nil},
+				{"TN", tiny, nil},
+				{"NN", nil, nil},
 			},
 		},
 		{
@@ -178,13 +193,13 @@ func MakeBigAdaptiveEncodingQueries(columnType AdaptiveEncodingTestColumnType, t
 			// An adaptive column can be used in a filter when it doesn't have the same encoding in all rows.
 			Query:        "select i from blobt2 where b1 = LOAD_FILE('testdata/halfSize')",
 			WrapBehavior: wrapBehavior,
-			Expected:     []sql.Row{{"HF"}, {"HH"}, {"HT"}},
+			Expected:     []sql.Row{{"HF"}, {"HH"}, {"HT"}, {"HN"}},
 		},
 		{
 			// An adaptive column can be used in a filter when it doesn't have the same encoding in all rows.
 			Query:        "select i from blobt2 where b2 = LOAD_FILE('testdata/halfSize')",
 			WrapBehavior: wrapBehavior,
-			Expected:     []sql.Row{{"FH"}, {"HH"}, {"TH"}},
+			Expected:     []sql.Row{{"FH"}, {"HH"}, {"TH"}, {"NH"}},
 		},
 	}
 }
@@ -238,12 +253,19 @@ func MakeBigAdaptiveEncodingWriteQueries(columnType AdaptiveEncodingTestColumnTy
 				{"FF", fullSizeOutOfLineRepr},
 				{"HF", halfSize},
 				{"TF", tiny},
+				{"NF", nil},
 				{"FH", fullSizeOutOfLineRepr},
 				{"HH", halfSize},
 				{"TH", tiny},
+				{"NH", nil},
 				{"FT", fullSizeOutOfLineRepr},
 				{"HT", halfSize},
-				{"TT", tiny}},
+				{"TT", tiny},
+				{"NT", nil},
+				{"FN", fullSizeOutOfLineRepr},
+				{"HN", halfSize},
+				{"TN", tiny},
+				{"NN", nil}},
 		},
 		{
 			// Test creating an index on an adaptive encoding column, matching against out-of-band values
@@ -255,6 +277,7 @@ func MakeBigAdaptiveEncodingWriteQueries(columnType AdaptiveEncodingTestColumnTy
 				{"FF", fullSizeOutOfLineRepr},
 				{"FH", fullSizeOutOfLineRepr},
 				{"FT", fullSizeOutOfLineRepr},
+				{"FN", fullSizeOutOfLineRepr},
 			},
 		},
 		{
@@ -267,6 +290,7 @@ func MakeBigAdaptiveEncodingWriteQueries(columnType AdaptiveEncodingTestColumnTy
 				{"FH", halfSize},
 				{"HH", halfSize},
 				{"TH", halfSize},
+				{"NH", halfSize},
 			},
 		},
 	}

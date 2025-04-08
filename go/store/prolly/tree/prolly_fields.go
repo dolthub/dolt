@@ -122,7 +122,7 @@ func GetField(ctx context.Context, td val.TupleDesc, i int, tup val.Tuple, ns No
 		var h hash.Hash
 		h, ok = td.GetBytesAddr(i, tup)
 		if ok {
-			v = val.NewByteArray(h, ns)
+			v = val.NewByteArray(ctx, h, ns)
 		}
 	case val.JSONAddrEnc:
 		var h hash.Hash
@@ -134,7 +134,7 @@ func GetField(ctx context.Context, td val.TupleDesc, i int, tup val.Tuple, ns No
 		var h hash.Hash
 		h, ok = td.GetStringAddr(i, tup)
 		if ok {
-			v = val.NewTextStorage(h, ns)
+			v = val.NewTextStorage(ctx, h, ns)
 		}
 	case val.BytesAdaptiveEnc:
 		v, ok, err = td.GetBytesAdaptiveValue(i, ns, tup)

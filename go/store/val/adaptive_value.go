@@ -62,6 +62,9 @@ func (v AdaptiveValue) getMessageLength() int64 {
 
 // outOfBandSize computes the size of the value if it were stored out of band.
 func (v AdaptiveValue) outOfBandSize() int64 {
+	if v.IsNull() {
+		return 0
+	}
 	if v.IsOutOfBand() {
 		return int64(len(v))
 	}
@@ -71,6 +74,9 @@ func (v AdaptiveValue) outOfBandSize() int64 {
 
 // inlineSize computes the size of the value if it were inlined.
 func (v AdaptiveValue) inlineSize() int64 {
+	if v.IsNull() {
+		return 0
+	}
 	if v.isInlined() {
 		return int64(len(v))
 	}
@@ -176,7 +182,7 @@ func (v AdaptiveValue) convertToByteArray(ctx context.Context, vs ValueStore, bu
 	}
 	length, lengthBytes := uvarint.Uvarint(outOfBandValue)
 	address := hash.New(outOfBandValue[lengthBytes:])
-	return NewByteArray(address, vs).WithMaxByteLength(int64(length)), nil
+	return NewByteArray(ctx, address, vs).WithMaxByteLength(int64(length)), nil
 }
 
 func (v AdaptiveValue) convertToTextStorage(ctx context.Context, vs ValueStore, buf []byte) (*TextStorage, error) {
@@ -187,7 +193,7 @@ func (v AdaptiveValue) convertToTextStorage(ctx context.Context, vs ValueStore, 
 	}
 	length, lengthBytes := uvarint.Uvarint(outOfBandValue)
 	address := hash.New(outOfBandValue[lengthBytes:])
-	return NewTextStorage(address, vs).WithMaxByteLength(int64(length)), nil
+	return NewTextStorage(ctx, address, vs).WithMaxByteLength(int64(length)), nil
 }
 
 // AdaptiveEncodingTypeHandler is an implementation of TypeHandler for adaptive encoding types,

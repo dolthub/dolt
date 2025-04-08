@@ -108,6 +108,9 @@ func (tb *TupleBuilder) BuildPermissive(pool pool.BuffPool) (tup Tuple, err erro
 		for i, descType := range tb.Desc.Types {
 			if IsAdaptiveEncoding(descType.Enc) {
 				adaptiveValue := AdaptiveValue(tb.fields[i])
+				if adaptiveValue.IsNull() {
+					continue
+				}
 				outOfBandSize := adaptiveValue.outOfBandSize()
 				inlineSize := adaptiveValue.inlineSize()
 
@@ -130,7 +133,7 @@ func (tb *TupleBuilder) BuildPermissive(pool pool.BuffPool) (tup Tuple, err erro
 				for j, descType := range tb.Desc.Types[i+1:] {
 					if IsAdaptiveEncoding(descType.Enc) {
 						adaptiveValue := AdaptiveValue(tb.fields[j+i+1])
-						if !adaptiveValue.isInlined() {
+						if adaptiveValue.IsOutOfBand() {
 							inline, err := adaptiveValue.convertToInline(ctx, tb.vs, nil)
 							if err != nil {
 								return nil, err
