@@ -2407,7 +2407,7 @@ func (db Database) SetCollation(ctx *sql.Context, collation sql.CollationID) err
 // from a sql.Row considering the correct types.
 var ConvertRowToRebasePlanStep = convertRowToRebasePlanStep
 
-func convertRowToRebasePlanStep(row sql.Row) (rebase.RebasePlanStep, error) {
+func convertRowToRebasePlanStep(ctx context.Context, row sql.Row) (rebase.RebasePlanStep, error) {
 	i, ok := row[1].(uint16)
 	if !ok {
 		return rebase.RebasePlanStep{}, fmt.Errorf("invalid enum value in rebase plan: %v (%T)", row[1], row[1])
@@ -2418,11 +2418,27 @@ func convertRowToRebasePlanStep(row sql.Row) (rebase.RebasePlanStep, error) {
 		return rebase.RebasePlanStep{}, fmt.Errorf("invalid enum value in rebase plan: %v (%T)", row[1], row[1])
 	}
 
+	commitHash, ok, err := sql.Unwrap[string](ctx, row[2])
+	if err != nil {
+		return rebase.RebasePlanStep{}, err
+	}
+	if !ok {
+		return rebase.RebasePlanStep{}, fmt.Errorf("invalid commit hash value in rebase plan: %v (%T)", row[2], row[2])
+	}
+
+	commitMsg, ok, err := sql.Unwrap[string](ctx, row[3])
+	if err != nil {
+		return rebase.RebasePlanStep{}, err
+	}
+	if !ok {
+		return rebase.RebasePlanStep{}, fmt.Errorf("invalid commit message value in rebase plan: %v (%T)", row[3], row[3])
+	}
+
 	return rebase.RebasePlanStep{
 		RebaseOrder: row[0].(decimal.Decimal),
 		Action:      rebaseAction,
-		CommitHash:  row[2].(string),
-		CommitMsg:   row[3].(string),
+		CommitHash:  commitHash,
+		CommitMsg:   commitMsg,
 	}, nil
 }
 
@@ -2458,7 +2474,7 @@ func (db Database) LoadRebasePlan(ctx *sql.Context) (*rebase.RebasePlan, error) 
 			return nil, err
 		}
 
-		newRebasePlan, err := ConvertRowToRebasePlanStep(row)
+		newRebasePlan, err := ConvertRowToRebasePlanStep(ctx, row)
 		if err != nil {
 			return nil, err
 		}

@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -28,11 +29,11 @@ import (
 )
 
 func TestArtifactMapEditing(t *testing.T) {
-	var srcKd = val.NewTupleDescriptor(val.Type{Enc: val.Int16Enc})
-	var srcKb = val.NewTupleBuilder(srcKd)
-
-	ctx := context.Background()
+	ctx := sql.NewEmptyContext()
 	ns := tree.NewTestNodeStore()
+
+	var srcKd = val.NewTupleDescriptor(val.Type{Enc: val.Int16Enc})
+	var srcKb = val.NewTupleBuilder(srcKd, ns)
 
 	am, err := NewArtifactMapFromTuples(ctx, ns, srcKd)
 	require.NoError(t, err)
@@ -45,7 +46,8 @@ func TestArtifactMapEditing(t *testing.T) {
 			edt := am.Editor()
 			for i := 0; i < n; i++ {
 				srcKb.PutInt16(0, int16(i))
-				key1 := srcKb.Build(sharedPool)
+				key1, err := srcKb.Build(sharedPool)
+				require.NoError(t, err)
 				err = edt.Add(ctx, key1, addr, ArtifactTypeConflict, []byte("{}"))
 				require.NoError(t, err)
 			}
@@ -77,11 +79,11 @@ func TestArtifactMapEditing(t *testing.T) {
 
 // Smoke test for merging artifact maps
 func TestMergeArtifactMaps(t *testing.T) {
-	var srcKd = val.NewTupleDescriptor(val.Type{Enc: val.Int16Enc})
-	var srcKb = val.NewTupleBuilder(srcKd)
-
-	ctx := context.Background()
+	ctx := sql.NewEmptyContext()
 	ns := tree.NewTestNodeStore()
+
+	var srcKd = val.NewTupleDescriptor(val.Type{Enc: val.Int16Enc})
+	var srcKb = val.NewTupleBuilder(srcKd, ns)
 
 	base, err := NewArtifactMapFromTuples(ctx, ns, srcKd)
 	require.NoError(t, err)
@@ -99,14 +101,16 @@ func TestMergeArtifactMaps(t *testing.T) {
 	rightEdt := right.Editor()
 
 	srcKb.PutInt16(0, 1)
-	key1 := srcKb.Build(sharedPool)
+	key1, err := srcKb.Build(sharedPool)
+	require.NoError(t, err)
 	err = leftEdt.Add(ctx, key1, addr, ArtifactTypeConflict, []byte("{}"))
 	require.NoError(t, err)
 	left, err = leftEdt.Flush(ctx)
 	require.NoError(t, err)
 
 	srcKb.PutInt16(0, 2)
-	key2 := srcKb.Build(sharedPool)
+	key2, err := srcKb.Build(sharedPool)
+	require.NoError(t, err)
 	err = rightEdt.Add(ctx, key2, addr, ArtifactTypeConflict, []byte("{}"))
 	require.NoError(t, err)
 	right, err = rightEdt.Flush(ctx)

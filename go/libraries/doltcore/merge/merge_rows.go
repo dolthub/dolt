@@ -16,6 +16,7 @@ package merge
 
 import (
 	"context"
+	"errors"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -61,6 +62,10 @@ type TableMerger struct {
 	rightTbl *doltdb.Table
 	ancTbl   *doltdb.Table
 
+	leftRootObj  doltdb.RootObject
+	rightRootObj doltdb.RootObject
+	ancRootObj   doltdb.RootObject
+
 	leftSch  schema.Schema
 	rightSch schema.Schema
 	ancSch   schema.Schema
@@ -78,9 +83,13 @@ type TableMerger struct {
 	recordViolations bool
 }
 
-func (tm TableMerger) tableHashes() (left, right, anc hash.Hash, err error) {
+func (tm TableMerger) tableHashes(ctx context.Context) (left, right, anc hash.Hash, err error) {
 	if tm.leftTbl != nil {
 		if left, err = tm.leftTbl.HashOf(); err != nil {
+			return
+		}
+	} else if tm.leftRootObj != nil {
+		if left, err = tm.leftRootObj.HashOf(ctx); err != nil {
 			return
 		}
 	}
@@ -88,9 +97,17 @@ func (tm TableMerger) tableHashes() (left, right, anc hash.Hash, err error) {
 		if right, err = tm.rightTbl.HashOf(); err != nil {
 			return
 		}
+	} else if tm.rightRootObj != nil {
+		if right, err = tm.rightRootObj.HashOf(ctx); err != nil {
+			return
+		}
 	}
 	if tm.ancTbl != nil {
 		if anc, err = tm.ancTbl.HashOf(); err != nil {
+			return
+		}
+	} else if tm.ancRootObj != nil {
+		if anc, err = tm.ancRootObj.HashOf(ctx); err != nil {
 			return
 		}
 	}
@@ -127,8 +144,10 @@ func NewMerger(
 	}, nil
 }
 
-type MergedTable struct {
-	table    *doltdb.Table
+// MergedResult returns either the merged table or merged root object. Both fields will never be set simultaneously.
+type MergedResult struct {
+	table    *doltdb.Table     // If non-nil, represents a merged table (and not a merged root object).
+	rootObj  doltdb.RootObject // If non-nil, represents a merged root object (and not a merged table).
 	conflict SchemaConflict
 }
 
@@ -151,16 +170,16 @@ func (rm *RootMerger) MergeTable(
 	tblName doltdb.TableName,
 	opts editor.Options,
 	mergeOpts MergeOpts,
-) (*MergedTable, *MergeStats, error) {
+) (*MergedResult, *MergeStats, error) {
 	tm, err := rm.makeTableMerger(ctx, tblName, mergeOpts)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	// short-circuit here if we can
-	finished, stats, err := rm.maybeShortCircuit(ctx, tm, mergeOpts)
+	finished, finishedRootObj, stats, err := rm.maybeShortCircuit(ctx, tm, mergeOpts)
 	if finished != nil || stats != nil || err != nil {
-		return &MergedTable{table: finished}, stats, err
+		return &MergedResult{table: finished, rootObj: finishedRootObj}, stats, err
 	}
 
 	// Calculate a merge of the schemas, but don't apply it yet
@@ -173,7 +192,7 @@ func (rm *RootMerger) MergeTable(
 			return nil, nil, schConflicts
 		}
 		// handle schema conflicts above
-		mt := &MergedTable{
+		mt := &MergedResult{
 			table:    tm.leftTbl,
 			conflict: schConflicts,
 		}
@@ -185,15 +204,33 @@ func (rm *RootMerger) MergeTable(
 	}
 
 	var tbl *doltdb.Table
-	if types.IsFormat_DOLT(tm.vrw.Format()) {
-		tbl, stats, err = mergeProllyTable(ctx, tm, mergeSch, mergeInfo, diffInfo)
+	var rootObj doltdb.RootObject
+	involvesRootObjects := tm.leftRootObj != nil || tm.rightRootObj != nil || tm.ancRootObj != nil
+	if !involvesRootObjects {
+		if types.IsFormat_DOLT(tm.vrw.Format()) {
+			tbl, stats, err = mergeProllyTable(ctx, tm, mergeSch, mergeInfo, diffInfo)
+		} else {
+			tbl, stats, err = mergeNomsTable(ctx, tm, mergeSch, rm.vrw, opts)
+		}
+		if err != nil {
+			return nil, nil, err
+		}
 	} else {
-		tbl, stats, err = mergeNomsTable(ctx, tm, mergeSch, rm.vrw, opts)
+		rootObj, stats, err = MergeRootObjects(ctx, MergeRootObject{
+			Name:            tm.name,
+			OurRootObj:      tm.leftRootObj,
+			TheirRootObj:    tm.rightRootObj,
+			AncestorRootObj: tm.ancRootObj,
+			RightSrc:        tm.rightSrc,
+			AncestorSrc:     tm.ancestorSrc,
+			VRW:             tm.vrw,
+			NS:              tm.ns,
+		})
+		if err != nil {
+			return nil, nil, err
+		}
 	}
-	if err != nil {
-		return nil, nil, err
-	}
-	return &MergedTable{table: tbl}, stats, nil
+	return &MergedResult{table: tbl, rootObj: rootObj}, stats, nil
 }
 
 func (rm *RootMerger) makeTableMerger(ctx context.Context, tblName doltdb.TableName, mergeOpts MergeOpts) (*TableMerger, error) {
@@ -224,6 +261,11 @@ func (rm *RootMerger) makeTableMerger(ctx context.Context, tblName doltdb.TableN
 		if tm.leftSch, err = tm.leftTbl.GetSchema(ctx); err != nil {
 			return nil, err
 		}
+	} else {
+		tm.leftRootObj, _, err = rm.left.GetRootObject(ctx, tblName)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	tm.rightTbl, rightSideTableExists, err = rm.right.GetTable(ctx, tblName)
@@ -234,13 +276,18 @@ func (rm *RootMerger) makeTableMerger(ctx context.Context, tblName doltdb.TableN
 		if tm.rightSch, err = tm.rightTbl.GetSchema(ctx); err != nil {
 			return nil, err
 		}
+	} else {
+		tm.rightRootObj, _, err = rm.right.GetRootObject(ctx, tblName)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// If we need to re-verify all constraints, then we need to stub out tables
 	// that don't exist, so that the diff logic can compare an empty table to
 	// the table containing the real data. This is required by dolt_verify_constraints()
 	// so that we can run the merge logic on all rows in all tables.
-	if mergeOpts.ReverifyAllConstraints {
+	if mergeOpts.ReverifyAllConstraints && !tm.HasRootObject() {
 		if !leftSideTableExists && rightSideTableExists {
 			// if left side doesn't have the table... stub it out with an empty table from the right side...
 			tm.leftSch = tm.rightSch
@@ -273,56 +320,67 @@ func (rm *RootMerger) makeTableMerger(ctx context.Context, tblName doltdb.TableN
 		if err != nil {
 			return nil, err
 		}
+	} else {
+		tm.ancRootObj, _, err = rm.anc.GetRootObject(ctx, tblName)
+		if err != nil {
+			return nil, err
+		}
 	}
 
+	// TODO: need to determine what to do if we have a mix of both tables and root objects (we'll error for now)
+	if tm.HasTable() && tm.HasRootObject() {
+		return nil, errors.New("Attempting to merge fundamentally different objects, which has not yet been implemented\n" +
+			"Please contact us and share how you ran into this error to better help our development efforts.")
+	}
 	return &tm, nil
 }
 
-func (rm *RootMerger) maybeShortCircuit(ctx context.Context, tm *TableMerger, opts MergeOpts) (*doltdb.Table, *MergeStats, error) {
+func (rm *RootMerger) maybeShortCircuit(ctx context.Context, tm *TableMerger, opts MergeOpts) (*doltdb.Table, doltdb.RootObject, *MergeStats, error) {
 	// If we need to re-verify all constraints as part of this merge, then we can't short
 	// circuit considering any tables, so return immediately
 	if opts.ReverifyAllConstraints {
-		return nil, nil, nil
+		return nil, nil, nil, nil
 	}
 
-	rootHash, mergeHash, ancHash, err := tm.tableHashes()
+	rootHash, mergeHash, ancHash, err := tm.tableHashes(ctx)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
-	leftExists := tm.leftTbl != nil
-	rightExists := tm.rightTbl != nil
-	ancExists := tm.ancTbl != nil
+	leftExists := tm.leftTbl != nil || tm.leftRootObj != nil
+	rightExists := tm.rightTbl != nil || tm.rightRootObj != nil
+	ancExists := tm.ancTbl != nil || tm.ancRootObj != nil
+	areRootObjs := tm.leftRootObj != nil || tm.rightRootObj != nil || tm.ancRootObj != nil
 
 	// Nothing changed
 	if leftExists && rightExists && ancExists && rootHash == mergeHash && rootHash == ancHash {
-		return tm.leftTbl, &MergeStats{Operation: TableUnmodified}, nil
+		return tm.leftTbl, tm.leftRootObj, &MergeStats{Operation: TableUnmodified}, nil
 	}
 
 	// Both made identical changes
 	// For keyless tables, this counts as a conflict
 	if leftExists && rightExists && rootHash == mergeHash && !schema.IsKeyless(tm.leftSch) {
-		return tm.leftTbl, &MergeStats{Operation: TableUnmodified}, nil
+		return tm.leftTbl, tm.leftRootObj, &MergeStats{Operation: TableUnmodified}, nil
 	}
 
 	// One or both added this table
 	if !ancExists {
 		if rightExists && leftExists {
 			if !schema.SchemasAreEqual(tm.leftSch, tm.rightSch) {
-				return nil, nil, ErrSameTblAddedTwice.New(tm.name)
+				return nil, nil, nil, ErrSameTblAddedTwice.New(tm.name)
 			}
 		} else if leftExists {
 			// fast-forward
-			return tm.leftTbl, &MergeStats{Operation: TableUnmodified}, nil
+			return tm.leftTbl, tm.leftRootObj, &MergeStats{Operation: TableUnmodified}, nil
 		} else {
 			// fast-forward
-			return tm.rightTbl, &MergeStats{Operation: TableAdded}, nil
+			return tm.rightTbl, tm.rightRootObj, &MergeStats{Operation: TableAdded}, nil
 		}
 	}
 
 	// Deleted in both, fast-forward
 	if ancExists && !leftExists && !rightExists {
-		return nil, &MergeStats{Operation: TableRemoved}, nil
+		return nil, nil, &MergeStats{Operation: TableRemoved}, nil
 	}
 
 	// Deleted in root or in merge, either a conflict (if any changes in other root) or else a fast-forward
@@ -339,38 +397,68 @@ func (rm *RootMerger) maybeShortCircuit(ctx context.Context, tm *TableMerger, op
 		if childHash != ancHash {
 			schemasEqual, err := doltdb.SchemaHashesEqual(ctx, childTable, tm.ancTbl)
 			if err != nil {
-				return nil, nil, err
+				return nil, nil, nil, err
 			}
-			if schemasEqual {
-				return nil, nil, ErrTableDeletedAndModified
+			if schemasEqual || areRootObjs {
+				return nil, nil, nil, ErrTableDeletedAndModified
 			} else {
-				return nil, nil, ErrTableDeletedAndSchemaModified
+				return nil, nil, nil, ErrTableDeletedAndSchemaModified
 			}
 		}
 		// fast-forward
-		return nil, &MergeStats{Operation: TableRemoved}, nil
+		return nil, nil, &MergeStats{Operation: TableRemoved}, nil
 	}
 
 	// Changes only in root, table unmodified
 	if mergeHash == ancHash {
-		return tm.leftTbl, &MergeStats{Operation: TableUnmodified}, nil
+		return tm.leftTbl, tm.leftRootObj, &MergeStats{Operation: TableUnmodified}, nil
 	}
 
 	// Changes only in merge root, fast-forward
 	// TODO : no fast-forward when cherry-picking for now
 	if !opts.IsCherryPick && rootHash == ancHash {
 		ms := MergeStats{Operation: TableModified}
-		if rootHash != mergeHash {
+		if rootHash != mergeHash && !areRootObjs {
 			ms, err = calcTableMergeStats(ctx, tm.leftTbl, tm.rightTbl)
 			if err != nil {
-				return nil, nil, err
+				return nil, nil, nil, err
 			}
 		}
-		return tm.rightTbl, &ms, nil
+		return tm.rightTbl, tm.rightRootObj, &ms, nil
 	}
 
 	// no short-circuit
-	return nil, nil, nil
+	return nil, nil, nil, nil
+}
+
+// HasTable returns whether any of the table fields have been set.
+func (tm TableMerger) HasTable() bool {
+	return tm.leftTbl != nil || tm.rightTbl != nil || tm.ancTbl != nil
+}
+
+// HasRootObject returns whether any of the root object fields have been set.
+func (tm TableMerger) HasRootObject() bool {
+	return tm.leftRootObj != nil || tm.rightRootObj != nil || tm.ancRootObj != nil
+}
+
+// MergeRootObject contains all the information needed for MergeRootObjects to perform a merge.
+type MergeRootObject struct {
+	Name            doltdb.TableName
+	OurRootObj      doltdb.RootObject
+	TheirRootObj    doltdb.RootObject
+	AncestorRootObj doltdb.RootObject
+	RightSrc        doltdb.Rootish
+	AncestorSrc     doltdb.Rootish
+	VRW             types.ValueReadWriter
+	NS              tree.NodeStore
+}
+
+// MergeRootObjects handles merging root objects, which is primarily used by Doltgres. This is implemented as a function
+// pointer due to import cycles, as the `doltdb` package is referenced from within this `merge` package. To change this
+// to a proper interface would mean that several items would need to be moved into `doltdb`, creating a sort of
+// dual-location for the implementation to reside. Keeping this as a pointer makes it much simpler.
+var MergeRootObjects = func(ctx context.Context, mro MergeRootObject) (doltdb.RootObject, *MergeStats, error) {
+	return nil, nil, errors.New("Dolt does not operate on root objects")
 }
 
 func setConflicts(ctx context.Context, cons durable.ConflictIndex, tbl, mergeTbl, ancTbl, tableToUpdate *doltdb.Table) (*doltdb.Table, error) {

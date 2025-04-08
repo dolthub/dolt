@@ -16,10 +16,9 @@ package pull
 
 import (
 	"context"
+	"errors"
 	"io"
 	"sync"
-
-	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/nbs"
@@ -37,7 +36,7 @@ func GetChunkFetcher(ctx context.Context, cs GetManyer) nbs.ChunkFetcher {
 	if fable, ok := cs.(ChunkFetcherable); ok {
 		return fable.ChunkFetcher(ctx)
 	}
-	return NewPullChunkFetcher(ctx, cs)
+	return NewPullChunkFetcher(cs)
 }
 
 // A PullChunkFetcher is a simple implementation of |ChunkFetcher| based on
@@ -45,98 +44,58 @@ func GetChunkFetcher(ctx context.Context, cs GetManyer) nbs.ChunkFetcher {
 //
 // It only has one outstanding GetManyCompressed call at a time.
 type PullChunkFetcher struct {
-	ctx context.Context
-	eg  *errgroup.Group
-
-	getter GetManyer
-
-	batchCh chan hash.HashSet
-	doneCh  chan struct{}
-	resCh   chan nbs.ToChunker
+	getter   GetManyer
+	resCh    chan nbs.ToChunker
+	closedCh chan struct{}
 }
 
-func NewPullChunkFetcher(ctx context.Context, getter GetManyer) *PullChunkFetcher {
-	eg, ctx := errgroup.WithContext(ctx)
+func NewPullChunkFetcher(getter GetManyer) *PullChunkFetcher {
 	ret := &PullChunkFetcher{
-		ctx:     ctx,
-		eg:      eg,
-		getter:  getter,
-		batchCh: make(chan hash.HashSet),
-		doneCh:  make(chan struct{}),
-		resCh:   make(chan nbs.ToChunker),
+		getter:   getter,
+		resCh:    make(chan nbs.ToChunker),
+		closedCh: make(chan struct{}),
 	}
-	ret.eg.Go(func() error {
-		return ret.fetcherThread(func() {
-			close(ret.resCh)
-		})
-	})
 	return ret
 }
 
-func (f *PullChunkFetcher) fetcherThread(finalize func()) error {
-	for {
+func (f *PullChunkFetcher) Get(ctx context.Context, hashes hash.HashSet) error {
+	var mu sync.Mutex
+	missing := hashes.Copy()
+	// Blocking get, no concurrency, only one fetcher.
+	err := f.getter.GetManyCompressed(ctx, hashes, func(ctx context.Context, chk nbs.ToChunker) {
+		mu.Lock()
+		missing.Remove(chk.Hash())
+		mu.Unlock()
 		select {
-		case batch, ok := <-f.batchCh:
-			if !ok {
-				finalize()
-				return nil
-			}
+		case <-ctx.Done():
+		case f.resCh <- chk:
+		}
+	})
+	if err != nil {
+		return err
+	}
 
-			var mu sync.Mutex
-			missing := batch.Copy()
-
-			// Blocking get, no concurrency, only one fetcher.
-			err := f.getter.GetManyCompressed(f.ctx, batch, func(ctx context.Context, chk nbs.ToChunker) {
-				mu.Lock()
-				missing.Remove(chk.Hash())
-				mu.Unlock()
-				select {
-				case <-ctx.Done():
-				case <-f.ctx.Done():
-				case f.resCh <- chk:
-				case <-f.doneCh:
-				}
-			})
-			if err != nil {
-				return err
-			}
-
-			for h := range missing {
-				select {
-				case <-f.ctx.Done():
-					return context.Cause(f.ctx)
-				case f.resCh <- nbs.CompressedChunk{H: h}:
-				case <-f.doneCh:
-					return nil
-				}
-			}
-		case <-f.ctx.Done():
-			return context.Cause(f.ctx)
-		case <-f.doneCh:
-			return nil
+	for h := range missing {
+		select {
+		case <-ctx.Done():
+			return context.Cause(ctx)
+		case f.resCh <- nbs.CompressedChunk{H: h}:
+		case <-f.closedCh:
+			return errors.New("PullChunkFetcher: Get on closed Fetcher.")
 		}
 	}
-}
 
-func (f *PullChunkFetcher) Get(ctx context.Context, hashes hash.HashSet) error {
-	select {
-	case f.batchCh <- hashes:
-		return nil
-	case <-ctx.Done():
-		return context.Cause(ctx)
-	case <-f.ctx.Done():
-		return context.Cause(f.ctx)
-	}
+	return nil
 }
 
 func (f *PullChunkFetcher) CloseSend() error {
-	close(f.batchCh)
+	close(f.resCh)
 	return nil
 }
 
 func (f *PullChunkFetcher) Close() error {
-	close(f.doneCh)
-	return f.eg.Wait()
+	close(f.closedCh)
+	return nil
 }
 
 func (f *PullChunkFetcher) Recv(ctx context.Context) (nbs.ToChunker, error) {
@@ -148,7 +107,7 @@ func (f *PullChunkFetcher) Recv(ctx context.Context) (nbs.ToChunker, error) {
 		return res, nil
 	case <-ctx.Done():
 		return nbs.CompressedChunk{}, context.Cause(ctx)
-	case <-f.ctx.Done():
-		return nbs.CompressedChunk{}, context.Cause(f.ctx)
+	case <-f.closedCh:
+		return nbs.CompressedChunk{}, errors.New("PullChunkFetcher: Recv on closed Fetcher.")
 	}
 }

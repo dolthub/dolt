@@ -44,7 +44,7 @@ func TestProllyKv(t *testing.T) {
 	tupB := val.NewTupleBuilder(val.NewTupleDescriptor(
 		val.Type{Enc: val.Int64Enc, Nullable: true},
 		val.Type{Enc: val.StringEnc, Nullable: true},
-	))
+	), nil)
 
 	t.Run("TestBoundsRoundTrip", func(t *testing.T) {
 		exp := sql.Row{1, 1}

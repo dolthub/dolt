@@ -36,10 +36,10 @@ var errNotImplemented = errors.NewKind("Not Implemented: %s")
 type ExpressionFunc func(ctx context.Context, vals map[uint64]types.Value) (bool, error)
 
 // ExpressionFuncFromSQLExpressions returns an ExpressionFunc which represents the slice of sql.Expressions passed in
-func ExpressionFuncFromSQLExpressions(vr types.ValueReader, sch schema.Schema, expressions []sql.Expression) (ExpressionFunc, error) {
+func ExpressionFuncFromSQLExpressions(ctx *sql.Context, vr types.ValueReader, sch schema.Schema, expressions []sql.Expression) (ExpressionFunc, error) {
 	var root ExpressionFunc
 	for _, exp := range expressions {
-		expFunc, err := getExpFunc(vr, sch, exp)
+		expFunc, err := getExpFunc(ctx, vr, sch, exp)
 
 		if err != nil {
 			return nil, err
@@ -61,26 +61,26 @@ func ExpressionFuncFromSQLExpressions(vr types.ValueReader, sch schema.Schema, e
 	return root, nil
 }
 
-func getExpFunc(vr types.ValueReader, sch schema.Schema, exp sql.Expression) (ExpressionFunc, error) {
+func getExpFunc(ctx *sql.Context, vr types.ValueReader, sch schema.Schema, exp sql.Expression) (ExpressionFunc, error) {
 	switch typedExpr := exp.(type) {
 	case *expression.Equals:
-		return newComparisonFunc(EqualsOp{}, typedExpr, sch)
+		return newComparisonFunc(ctx, EqualsOp{}, typedExpr, sch)
 	case *expression.GreaterThan:
-		return newComparisonFunc(GreaterOp{vr}, typedExpr, sch)
+		return newComparisonFunc(ctx, GreaterOp{vr}, typedExpr, sch)
 	case *expression.GreaterThanOrEqual:
-		return newComparisonFunc(GreaterEqualOp{vr}, typedExpr, sch)
+		return newComparisonFunc(ctx, GreaterEqualOp{vr}, typedExpr, sch)
 	case *expression.LessThan:
-		return newComparisonFunc(LessOp{vr}, typedExpr, sch)
+		return newComparisonFunc(ctx, LessOp{vr}, typedExpr, sch)
 	case *expression.LessThanOrEqual:
-		return newComparisonFunc(LessEqualOp{vr}, typedExpr, sch)
+		return newComparisonFunc(ctx, LessEqualOp{vr}, typedExpr, sch)
 	case *expression.Or:
-		leftFunc, err := getExpFunc(vr, sch, typedExpr.Left())
+		leftFunc, err := getExpFunc(ctx, vr, sch, typedExpr.Left())
 
 		if err != nil {
 			return nil, err
 		}
 
-		rightFunc, err := getExpFunc(vr, sch, typedExpr.Right())
+		rightFunc, err := getExpFunc(ctx, vr, sch, typedExpr.Right())
 
 		if err != nil {
 			return nil, err
@@ -88,13 +88,13 @@ func getExpFunc(vr types.ValueReader, sch schema.Schema, exp sql.Expression) (Ex
 
 		return newOrFunc(leftFunc, rightFunc), nil
 	case *expression.And:
-		leftFunc, err := getExpFunc(vr, sch, typedExpr.Left())
+		leftFunc, err := getExpFunc(ctx, vr, sch, typedExpr.Left())
 
 		if err != nil {
 			return nil, err
 		}
 
-		rightFunc, err := getExpFunc(vr, sch, typedExpr.Right())
+		rightFunc, err := getExpFunc(ctx, vr, sch, typedExpr.Right())
 
 		if err != nil {
 			return nil, err
@@ -102,15 +102,15 @@ func getExpFunc(vr types.ValueReader, sch schema.Schema, exp sql.Expression) (Ex
 
 		return newAndFunc(leftFunc, rightFunc), nil
 	case *expression.InTuple:
-		return newComparisonFunc(EqualsOp{}, typedExpr, sch)
+		return newComparisonFunc(ctx, EqualsOp{}, typedExpr, sch)
 	case *expression.Not:
-		expFunc, err := getExpFunc(vr, sch, typedExpr.Child)
+		expFunc, err := getExpFunc(ctx, vr, sch, typedExpr.Child)
 		if err != nil {
 			return nil, err
 		}
 		return newNotFunc(expFunc), nil
 	case *expression.IsNull:
-		return newComparisonFunc(EqualsOp{}, expression.NewNullSafeEquals(typedExpr.Child, expression.NewLiteral(nil, gmstypes.Null)), sch)
+		return newComparisonFunc(ctx, EqualsOp{}, expression.NewNullSafeEquals(typedExpr.Child, expression.NewLiteral(nil, gmstypes.Null)), sch)
 	}
 
 	return nil, errNotImplemented.New(exp.Type().String())
@@ -219,7 +219,7 @@ func GetComparisonType(be expression.BinaryExpression) ([]*expression.GetField, 
 var trueFunc = func(ctx context.Context, vals map[uint64]types.Value) (b bool, err error) { return true, nil }
 var falseFunc = func(ctx context.Context, vals map[uint64]types.Value) (b bool, err error) { return false, nil }
 
-func newComparisonFunc(op CompareOp, exp expression.BinaryExpression, sch schema.Schema) (ExpressionFunc, error) {
+func newComparisonFunc(ctx *sql.Context, op CompareOp, exp expression.BinaryExpression, sch schema.Schema) (ExpressionFunc, error) {
 	vars, consts, compType, err := GetComparisonType(exp)
 
 	if err != nil {
@@ -227,7 +227,7 @@ func newComparisonFunc(op CompareOp, exp expression.BinaryExpression, sch schema
 	}
 
 	if compType == ConstConstCompare {
-		res, err := op.CompareLiterals(consts[0], consts[1])
+		res, err := op.CompareLiterals(ctx, consts[0], consts[1])
 
 		if err != nil {
 			return nil, err

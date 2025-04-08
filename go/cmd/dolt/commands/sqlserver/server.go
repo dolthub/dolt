@@ -150,7 +150,7 @@ func ConfigureServices(
 						logrus.TraceLevel.String(),
 					),
 					Default: logrus.GetLevel().String(),
-					NotifyChanged: func(_ sql.SystemVariableScope, v sql.SystemVarValue) error {
+					NotifyChanged: func(ctx *sql.Context, _ sql.SystemVariableScope, v sql.SystemVarValue) error {
 						level, err := logrus.ParseLevel(v.Val.(string))
 						if err != nil {
 							return fmt.Errorf("could not parse requested log level %s as a log level. dolt_log_level variable value and logging behavior will diverge.", v.Val.(string))
@@ -305,7 +305,8 @@ func ConfigureServices(
 		InitF: func(ctx context.Context) (err error) {
 			if _, err := mrEnv.Config().GetString(env.SqlServerGlobalsPrefix + "." + dsess.DoltStatsPaused); err != nil {
 				// unless otherwise specified, run stats writer alongside server
-				sql.SystemVariables.SetGlobal(dsess.DoltStatsPaused, 0)
+				sqlCtx := sql.NewEmptyContext()
+				sql.SystemVariables.SetGlobal(sqlCtx, dsess.DoltStatsPaused, 0)
 			}
 			sqlEngine, err = engine.NewSqlEngine(
 				ctx,
@@ -365,7 +366,8 @@ func ConfigureServices(
 	controller.Register(InitStatsController)
 
 	InitBinlogging := &svcs.AnonService{
-		InitF: func(context.Context) error {
+		InitF: func(ctx context.Context) error {
+			sqlCtx := sql.NewContext(ctx)
 			primaryController := sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.BinlogPrimaryController
 			doltBinlogPrimaryController, ok := primaryController.(*binlogreplication.DoltBinlogPrimaryController)
 			if !ok {
@@ -405,12 +407,12 @@ func ConfigureServices(
 
 			if logBin == 1 {
 				logrus.Infof("Enabling binary logging for branch %s", logBinBranch)
-				binlogProducer, err := binlogreplication.NewBinlogProducer(cfg.DoltEnv.FS)
+				binlogProducer, err := binlogreplication.NewBinlogProducer(sqlCtx, cfg.DoltEnv.FS)
 				if err != nil {
 					return err
 				}
 
-				logManager, err := binlogreplication.NewLogManager(fs)
+				logManager, err := binlogreplication.NewLogManager(sqlCtx, fs)
 				if err != nil {
 					return err
 				}
@@ -721,7 +723,7 @@ func ConfigureServices(
 				mySQLServer, err = server.NewServerWithHandler(
 					serverConf,
 					sqlEngine.GetUnderlyingEngine(),
-					sql.NewContext,
+					sqlEngine.ContextFactory,
 					newSessionBuilder(sqlEngine, cfg.ServerConfig),
 					metListener,
 					func(h mysql.Handler) (mysql.Handler, error) {
@@ -732,7 +734,7 @@ func ConfigureServices(
 				mySQLServer, err = server.NewServer(
 					serverConf,
 					sqlEngine.GetUnderlyingEngine(),
-					sql.NewContext,
+					sqlEngine.ContextFactory,
 					newSessionBuilder(sqlEngine, cfg.ServerConfig),
 					metListener,
 				)

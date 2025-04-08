@@ -59,7 +59,8 @@ const (
 const (
 	CreationBranch = "create"
 
-	defaultChunksPerTF = 256 * 1024
+	// 1GB.
+	defaultTargetFileSize = 1 << 30
 )
 
 var ErrMissingDoltDataDir = errors.New("missing dolt data directory")
@@ -119,6 +120,10 @@ func LoadDoltDB(ctx context.Context, nbf *types.NomsBinFormat, urlStr string, fs
 }
 
 func LoadDoltDBWithParams(ctx context.Context, nbf *types.NomsBinFormat, urlStr string, fs filesys.Filesys, params map[string]interface{}) (*DoltDB, error) {
+	if params == nil {
+		params = make(map[string]any)
+	}
+
 	if urlStr == LocalDirDoltDB {
 		exists, isDir := fs.Exists(dbfactory.DoltDataDir)
 		if !exists {
@@ -134,9 +139,6 @@ func LoadDoltDBWithParams(ctx context.Context, nbf *types.NomsBinFormat, urlStr 
 
 		urlStr = earl.FileUrlFromPath(filepath.ToSlash(absPath), os.PathSeparator)
 
-		if params == nil {
-			params = make(map[string]any)
-		}
 		params[dbfactory.ChunkJournalParam] = struct{}{}
 	}
 
@@ -144,6 +146,8 @@ func LoadDoltDBWithParams(ctx context.Context, nbf *types.NomsBinFormat, urlStr 
 	// filesystem implementations), we can determine the database name by looking at the filesystem path. This
 	// won't work for other storage schemes though.
 	name := findParentDirectory(urlStr, ".dolt")
+
+	params[dbfactory.DatabaseNameParam] = name
 
 	db, vrw, ns, err := dbfactory.CreateDB(ctx, nbf, urlStr, params)
 	if err != nil {
@@ -1883,7 +1887,7 @@ func pullHash(
 	waf := types.WalkAddrsForNBF(srcDB.Format(), skipHashes)
 
 	if datas.CanUsePuller(srcDB) && datas.CanUsePuller(destDB) {
-		puller, err := pull.NewPuller(ctx, tempDir, defaultChunksPerTF, srcCS, destCS, waf, targetHashes, statsCh)
+		puller, err := pull.NewPuller(ctx, tempDir, defaultTargetFileSize, srcCS, destCS, waf, targetHashes, statsCh)
 		if err == pull.ErrDBUpToDate {
 			return nil
 		} else if err != nil {

@@ -161,7 +161,10 @@ func (ds *DiffSummaryTableFunction) CheckAuth(ctx *sql.Context, opChecker sql.Pr
 		if err != nil {
 			return false
 		}
-		tableName, ok := tableNameVal.(string)
+		tableName, ok, err := sql.Unwrap[string](ctx, tableNameVal)
+		if err != nil {
+			return false
+		}
 		if !ok {
 			return false
 		}
@@ -316,7 +319,7 @@ func (ds *DiffSummaryTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.
 }
 
 func getSummaryForDelta(ctx *sql.Context, delta diff.TableDelta, sqledb dsess.SqlDatabase, fromDetails, toDetails *refDetails, shouldErrorOnPKChange bool) (*diff.TableDeltaSummary, error) {
-	if delta.FromTable == nil && delta.ToTable == nil {
+	if delta.FromTable == nil && delta.ToTable == nil && delta.FromRootObject == nil && delta.ToRootObject == nil {
 		if !strings.HasPrefix(delta.FromName.Name, diff.DBPrefix) && !strings.HasPrefix(delta.ToName.Name, diff.DBPrefix) {
 			return nil, nil
 		}

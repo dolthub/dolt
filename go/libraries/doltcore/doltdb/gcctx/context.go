@@ -17,6 +17,7 @@ package gcctx
 import (
 	"context"
 
+	"github.com/dolthub/dolt/go/libraries/utils/valctx"
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
@@ -48,6 +49,8 @@ func WithGCSafepointController(ctx context.Context, controller *GCSafepointContr
 		controller: controller,
 	}
 	ret := context.WithValue(ctx, safepointControllerkey, state)
+	ret = valctx.WithContextValidation(ret)
+	valctx.SetContextValidation(ret, state.Validate)
 	return ret
 }
 

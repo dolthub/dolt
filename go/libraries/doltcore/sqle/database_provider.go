@@ -43,6 +43,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/concurrentmap"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/lockutil"
+	"github.com/dolthub/dolt/go/libraries/utils/valctx"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -135,6 +136,9 @@ func NewDoltDatabaseProviderWithDatabases(defaultBranch string, fs filesys.Files
 	externalProcedures := sql.NewExternalStoredProcedureRegistry()
 	for _, esp := range dprocedures.DoltProcedures {
 		externalProcedures.Register(esp)
+	}
+	if valctx.IsEnabled() {
+		externalProcedures.Register(dprocedures.NewTestValctxProcedure())
 	}
 
 	// If the specified |fs| is an in mem file system, default to using the InMemDoltDB dbFactoryUrl so that all

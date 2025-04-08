@@ -213,7 +213,7 @@ func (p *PatchTableFunction) LookupPartitions(context *sql.Context, lookup sql.I
 	}), nil
 }
 
-func (p *PatchTableFunction) IndexedAccess(lookup sql.IndexLookup) sql.IndexedTable {
+func (p *PatchTableFunction) IndexedAccess(ctx *sql.Context, lookup sql.IndexLookup) sql.IndexedTable {
 	return p
 }
 
@@ -592,21 +592,21 @@ func getDataSqlPatchResults(ctx *sql.Context, diffQuerySch, targetSch sql.Schema
 			return nil, err
 		}
 
-		oldRow, newRow, err := ds.SplitDiffResultRow(r)
+		oldRow, newRow, err := ds.SplitDiffResultRow(ctx, r)
 		if err != nil {
 			return nil, err
 		}
 
 		var stmt string
 		if oldRow.Row != nil {
-			stmt, err = sqlfmt.GenerateDataDiffStatement(tn, tsch, oldRow.Row, oldRow.RowDiff, oldRow.ColDiffs)
+			stmt, err = sqlfmt.GenerateDataDiffStatement(ctx, tn, tsch, oldRow.Row, oldRow.RowDiff, oldRow.ColDiffs)
 			if err != nil {
 				return nil, err
 			}
 		}
 
 		if newRow.Row != nil {
-			stmt, err = sqlfmt.GenerateDataDiffStatement(tn, tsch, newRow.Row, newRow.RowDiff, newRow.ColDiffs)
+			stmt, err = sqlfmt.GenerateDataDiffStatement(ctx, tn, tsch, newRow.Row, newRow.RowDiff, newRow.ColDiffs)
 			if err != nil {
 				return nil, err
 			}

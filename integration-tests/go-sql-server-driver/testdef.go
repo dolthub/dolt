@@ -210,7 +210,11 @@ func MakeServer(t *testing.T, dc driver.DoltCmdable, s *driver.Server, dynPorts 
 	for i := range args {
 		args[i] = dynPorts.ApplyTemplate(s.Args[i])
 	}
-	opts := []driver.SqlServerOpt{driver.WithArgs(args...), driver.WithEnvs(s.Envs...), driver.WithName(s.Name)}
+	opts := []driver.SqlServerOpt{
+		driver.WithArgs(args...),
+		driver.WithEnvs(append([]string{"DOLT_CONTEXT_VALIDATION_ENABLED=true"}, s.Envs...)...),
+		driver.WithName(s.Name),
+	}
 	if s.Port != 0 {
 		t.Fatal("cannot specify s.Port on these tests; please use {{get_port ...}} and dynamic_port: to specify a dynamic port.")
 	}

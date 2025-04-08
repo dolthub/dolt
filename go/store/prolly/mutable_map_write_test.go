@@ -23,6 +23,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
@@ -469,16 +470,17 @@ func testInternalNodeSplits(t *testing.T) {
 		val.Type{Enc: val.Int32Enc},
 	)
 	vd := val.NewTupleDescriptor()
-	bld := val.NewTupleBuilder(kd)
+	bld := val.NewTupleBuilder(kd, ns)
 
 	tuples := make([][2]val.Tuple, n)
 	for i := range tuples {
 		bld.PutInt32(0, int32(i))
 		bld.PutInt32(1, int32(0))
-		tuples[i][0] = bld.Build(sharedPool)
+		tuples[i][0], err = bld.Build(sharedPool)
+		require.NoError(t, err)
 		tuples[i][1] = val.EmptyTuple
 	}
-	pm := mustProllyMapFromTuples(t, kd, vd, tuples)
+	pm := mustProllyMapFromTuples(t, kd, vd, tuples, ns)
 
 	// reproduces chunker panic (k = 10_600)
 	repro := 20_000
@@ -488,7 +490,8 @@ func testInternalNodeSplits(t *testing.T) {
 		for j := 1; j <= k; j++ {
 			bld.PutInt32(0, int32(j))
 			bld.PutInt32(1, int32(j))
-			key := bld.Build(sharedPool)
+			key, err := bld.Build(sharedPool)
+			require.NoError(t, err)
 			err = mut.Put(ctx, key, val.EmptyTuple)
 			require.NoError(t, err)
 		}
@@ -508,7 +511,7 @@ func ascendingIntMap(t *testing.T, count int) Map {
 
 func ascendingIntMapWithStep(t *testing.T, count, step int) Map {
 	tuples := ascendingTuplesWithStepAndStart(count, step, 0)
-	pm := mustProllyMapFromTuples(t, mutKeyDesc, mutValDesc, tuples)
+	pm := mustProllyMapFromTuples(t, mutKeyDesc, mutValDesc, tuples, ns)
 	return pm
 }
 
@@ -528,20 +531,32 @@ var mutValDesc = val.NewTupleDescriptor(
 	val.Type{Enc: val.Int64Enc, Nullable: true},
 )
 
-var mutKeyBuilder = val.NewTupleBuilder(mutKeyDesc)
-var mutValBuilder = val.NewTupleBuilder(mutValDesc)
+var ns = tree.NewTestNodeStore()
+var mutKeyBuilder = val.NewTupleBuilder(mutKeyDesc, ns)
+var mutValBuilder = val.NewTupleBuilder(mutValDesc, ns)
 
 func makePut(k, v int64) (key, value val.Tuple) {
 	mutKeyBuilder.PutInt64(0, k)
 	mutValBuilder.PutInt64(0, v)
-	key = mutKeyBuilder.Build(sharedPool)
-	value = mutValBuilder.Build(sharedPool)
+	var err error
+	key, err = mutKeyBuilder.Build(sharedPool)
+	if err != nil {
+		panic(err)
+	}
+	value, err = mutValBuilder.Build(sharedPool)
+	if err != nil {
+		panic(err)
+	}
 	return
 }
 
 func makeDelete(k int64) (key val.Tuple) {
 	mutKeyBuilder.PutInt64(0, k)
-	key = mutKeyBuilder.Build(sharedPool)
+	var err error
+	key, err = mutKeyBuilder.Build(sharedPool)
+	if err != nil {
+		panic(err)
+	}
 	return
 }
 

@@ -26,6 +26,10 @@ func EnableContextValidation() {
 	enabled = true
 }
 
+func IsEnabled() bool {
+	return enabled
+}
+
 type ctxKey int
 
 var validationKey ctxKey

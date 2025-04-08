@@ -1100,6 +1100,7 @@ func (t doltDevTable) SetConstraintViolations(ctx context.Context, violations ty
 	return doltDevTable{t.vrw, t.ns, msg}, nil
 }
 
+// GetAutoIncrement returns the next value to be used for the AUTO_INCREMENT column.
 func (t doltDevTable) GetAutoIncrement(ctx context.Context) (uint64, error) {
 	res := t.msg.AutoIncrementValue()
 	if res == 0 {
@@ -1108,7 +1109,14 @@ func (t doltDevTable) GetAutoIncrement(ctx context.Context) (uint64, error) {
 	return res, nil
 }
 
+// SetAutoIncrement sets the next value to be used for the AUTO_INCREMENT column.
+// Since AUTO_INCREMENT starts at 1, setting this to either 0 or 1 will result in the field being unset.
 func (t doltDevTable) SetAutoIncrement(ctx context.Context, val uint64) (Table, error) {
+	// AUTO_INCREMENT starts at 1, so a value of 1 is the same as being unset.
+	// Normalizing both values to 0 ensures that they both result in the same hash as the field being unset.
+	if val == 1 {
+		val = 0
+	}
 	// TODO: This clones before checking if the mutate will work.
 	msg := t.clone()
 	if !msg.MutateAutoIncrementValue(val) {

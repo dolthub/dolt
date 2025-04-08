@@ -19,135 +19,176 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/dolthub/dolt/go/store/hash"
-
 	"github.com/stretchr/testify/assert"
+	"golang.org/x/sync/errgroup"
+
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 func TestPullChunkTracker(t *testing.T) {
 	t.Run("Empty", func(t *testing.T) {
-		tracker := NewPullChunkTracker(context.Background(), make(hash.HashSet), TrackerConfig{
+		eg, ctx := errgroup.WithContext(context.Background())
+		tracker := NewPullChunkTracker(TrackerConfig{
 			BatchSize: 64 * 1024,
 			HasManyer: nil,
 		})
-		hs, ok, err := tracker.GetChunksToFetch()
-		assert.Len(t, hs, 0)
-		assert.False(t, ok)
-		assert.NoError(t, err)
-		tracker.Close()
+		eg.Go(func() error {
+			return tracker.Run(ctx, make(hash.HashSet))
+		})
+		eg.Go(func() error {
+			hs, ok, err := tracker.GetChunksToFetch(ctx)
+			assert.Len(t, hs, 0)
+			assert.False(t, ok)
+			assert.NoError(t, err)
+			tracker.Close()
+			return nil
+		})
+		assert.NoError(t, eg.Wait())
 	})
 
 	t.Run("HasAllInitial", func(t *testing.T) {
+		eg, ctx := errgroup.WithContext(context.Background())
 		hs := make(hash.HashSet)
 		for i := byte(0); i < byte(10); i++ {
 			var h hash.Hash
 			h[0] = i
 			hs.Insert(h)
 		}
-		tracker := NewPullChunkTracker(context.Background(), hs, TrackerConfig{
+		tracker := NewPullChunkTracker(TrackerConfig{
 			BatchSize: 64 * 1024,
 			HasManyer: hasAllHaser{},
 		})
-		hs, ok, err := tracker.GetChunksToFetch()
-		assert.Len(t, hs, 0)
-		assert.False(t, ok)
-		assert.NoError(t, err)
-		tracker.Close()
+		eg.Go(func() error {
+			return tracker.Run(ctx, hs)
+		})
+		eg.Go(func() error {
+			hs, ok, err := tracker.GetChunksToFetch(ctx)
+			assert.Len(t, hs, 0)
+			assert.False(t, ok)
+			assert.NoError(t, err)
+			tracker.Close()
+			return nil
+		})
+		assert.NoError(t, eg.Wait())
 	})
 
 	t.Run("HasNoneInitial", func(t *testing.T) {
+		eg, ctx := errgroup.WithContext(context.Background())
 		hs := make(hash.HashSet)
 		for i := byte(1); i <= byte(10); i++ {
 			var h hash.Hash
 			h[0] = i
 			hs.Insert(h)
 		}
-		tracker := NewPullChunkTracker(context.Background(), hs, TrackerConfig{
+		tracker := NewPullChunkTracker(TrackerConfig{
 			BatchSize: 64 * 1024,
 			HasManyer: hasNoneHaser{},
 		})
-		hs, ok, err := tracker.GetChunksToFetch()
-		assert.Len(t, hs, 10)
-		assert.True(t, ok)
-		assert.NoError(t, err)
-		for _ = range hs {
-			tracker.TickProcessed()
-		}
-		hs, ok, err = tracker.GetChunksToFetch()
-		assert.Len(t, hs, 0)
-		assert.False(t, ok)
-		assert.NoError(t, err)
-
-		for i := byte(1); i <= byte(10); i++ {
-			var h hash.Hash
-			h[1] = i
-			tracker.Seen(h)
-		}
-
-		cnt := 0
-		for {
-			hs, ok, err := tracker.GetChunksToFetch()
+		eg.Go(func() error {
+			return tracker.Run(ctx, hs)
+		})
+		eg.Go(func() error {
+			hs, ok, err := tracker.GetChunksToFetch(ctx)
+			assert.Len(t, hs, 10)
+			assert.True(t, ok)
 			assert.NoError(t, err)
-			if !ok {
-				assert.Equal(t, 10, cnt)
-				break
-			}
-			cnt += len(hs)
 			for _ = range hs {
-				tracker.TickProcessed()
+				tracker.TickProcessed(ctx)
 			}
-		}
+			hs, ok, err = tracker.GetChunksToFetch(ctx)
+			assert.Len(t, hs, 0)
+			assert.False(t, ok)
+			assert.NoError(t, err)
 
-		tracker.Close()
+			for i := byte(1); i <= byte(10); i++ {
+				var h hash.Hash
+				h[1] = i
+				tracker.Seen(ctx, h)
+			}
+
+			cnt := 0
+			for {
+				hs, ok, err := tracker.GetChunksToFetch(ctx)
+				assert.NoError(t, err)
+				if !ok {
+					assert.Equal(t, 10, cnt)
+					break
+				}
+				cnt += len(hs)
+				for _ = range hs {
+					tracker.TickProcessed(ctx)
+				}
+			}
+
+			tracker.Close()
+			return nil
+		})
+		assert.NoError(t, eg.Wait())
 	})
 
 	t.Run("HasManyError", func(t *testing.T) {
+		eg, ctx := errgroup.WithContext(context.Background())
 		hs := make(hash.HashSet)
 		for i := byte(0); i < byte(10); i++ {
 			var h hash.Hash
 			h[0] = i
 			hs.Insert(h)
 		}
-		tracker := NewPullChunkTracker(context.Background(), hs, TrackerConfig{
+		tracker := NewPullChunkTracker(TrackerConfig{
 			BatchSize: 64 * 1024,
 			HasManyer: errHaser{},
 		})
-		_, _, err := tracker.GetChunksToFetch()
-		assert.Error(t, err)
-		tracker.Close()
+		eg.Go(func() error {
+			return tracker.Run(ctx, hs)
+		})
+		eg.Go(func() error {
+			_, _, err := tracker.GetChunksToFetch(ctx)
+			assert.Error(t, err)
+			tracker.Close()
+			return nil
+		})
+		assert.NoError(t, eg.Wait())
 	})
 
 	t.Run("InitialAreSeen", func(t *testing.T) {
+		eg, ctx := errgroup.WithContext(context.Background())
 		hs := make(hash.HashSet)
 		for i := byte(0); i < byte(10); i++ {
 			var h hash.Hash
 			h[0] = i
 			hs.Insert(h)
 		}
-		tracker := NewPullChunkTracker(context.Background(), hs, TrackerConfig{
+		tracker := NewPullChunkTracker(TrackerConfig{
 			BatchSize: 64 * 1024,
 			HasManyer: hasNoneHaser{},
 		})
-		hs, ok, err := tracker.GetChunksToFetch()
-		assert.Len(t, hs, 10)
-		assert.True(t, ok)
-		assert.NoError(t, err)
+		eg.Go(func() error {
+			return tracker.Run(ctx, hs)
+		})
+		eg.Go(func() error {
+			hs, ok, err := tracker.GetChunksToFetch(ctx)
+			assert.Len(t, hs, 10)
+			assert.True(t, ok)
+			assert.NoError(t, err)
 
-		for i := byte(0); i < byte(10); i++ {
-			var h hash.Hash
-			h[0] = i
-			tracker.Seen(h)
-		}
-		for _ = range hs {
-			tracker.TickProcessed()
-		}
+			for i := byte(0); i < byte(10); i++ {
+				var h hash.Hash
+				h[0] = i
+				tracker.Seen(ctx, h)
+			}
+			for _ = range hs {
+				tracker.TickProcessed(ctx)
+			}
 
-		hs, ok, err = tracker.GetChunksToFetch()
-		assert.Len(t, hs, 0)
-		assert.False(t, ok)
-		assert.NoError(t, err)
+			hs, ok, err = tracker.GetChunksToFetch(ctx)
+			assert.Len(t, hs, 0)
+			assert.False(t, ok)
+			assert.NoError(t, err)
 
-		tracker.Close()
+			tracker.Close()
+			return nil
+		})
+		assert.NoError(t, eg.Wait())
 	})
 
 	t.Run("StaticHaser", func(t *testing.T) {
@@ -171,43 +212,51 @@ func TestPullChunkTracker(t *testing.T) {
 			h[0] = i
 			hs.Insert(h)
 		}
-		tracker := NewPullChunkTracker(context.Background(), hs, TrackerConfig{
+		tracker := NewPullChunkTracker(TrackerConfig{
 			BatchSize: 64 * 1024,
 			HasManyer: haser,
 		})
 
-		// Should get back 03, 04, 05
-		hs, ok, err := tracker.GetChunksToFetch()
-		assert.Len(t, hs, 3)
-		assert.True(t, ok)
-		assert.NoError(t, err)
-		for _ = range hs {
-			tracker.TickProcessed()
-		}
-
-		for i := byte(1); i <= byte(10); i++ {
-			var h hash.Hash
-			h[0] = 1
-			h[1] = i
-			tracker.Seen(h)
-		}
-
-		// Should get back 13, 14, 15, 16, 17, 18, 19, 1(10).
-		cnt := 0
-		for {
-			hs, ok, err := tracker.GetChunksToFetch()
+		eg, ctx := errgroup.WithContext(context.Background())
+		eg.Go(func() error {
+			return tracker.Run(ctx, hs)
+		})
+		eg.Go(func() error {
+			// Should get back 03, 04, 05
+			hs, ok, err := tracker.GetChunksToFetch(ctx)
+			assert.Len(t, hs, 3)
+			assert.True(t, ok)
 			assert.NoError(t, err)
-			if !ok {
-				break
-			}
-			cnt += len(hs)
 			for _ = range hs {
-				tracker.TickProcessed()
+				tracker.TickProcessed(ctx)
 			}
-		}
-		assert.Equal(t, 8, cnt)
 
-		tracker.Close()
+			for i := byte(1); i <= byte(10); i++ {
+				var h hash.Hash
+				h[0] = 1
+				h[1] = i
+				tracker.Seen(ctx, h)
+			}
+
+			// Should get back 13, 14, 15, 16, 17, 18, 19, 1(10).
+			cnt := 0
+			for {
+				hs, ok, err := tracker.GetChunksToFetch(ctx)
+				assert.NoError(t, err)
+				if !ok {
+					break
+				}
+				cnt += len(hs)
+				for _ = range hs {
+					tracker.TickProcessed(ctx)
+				}
+			}
+			assert.Equal(t, 8, cnt)
+
+			tracker.Close()
+			return nil
+		})
+		assert.NoError(t, eg.Wait())
 	})
 
 	t.Run("SmallBatches", func(t *testing.T) {
@@ -231,44 +280,52 @@ func TestPullChunkTracker(t *testing.T) {
 			h[0] = i
 			hs.Insert(h)
 		}
-		tracker := NewPullChunkTracker(context.Background(), hs, TrackerConfig{
+		tracker := NewPullChunkTracker(TrackerConfig{
 			BatchSize: 1,
 			HasManyer: haser,
 		})
 
-		// First call doesn't actually respect batch size.
-		hs, ok, err := tracker.GetChunksToFetch()
-		assert.Len(t, hs, 3)
-		assert.True(t, ok)
-		assert.NoError(t, err)
-		for _ = range hs {
-			tracker.TickProcessed()
-		}
-
-		for i := byte(1); i <= byte(10); i++ {
-			var h hash.Hash
-			h[0] = 1
-			h[1] = i
-			tracker.Seen(h)
-		}
-
-		// Should get back 13, 14, 15, 16, 17, 18, 19, 1(10); one at a time.
-		cnt := 0
-		for {
-			hs, ok, err := tracker.GetChunksToFetch()
+		eg, ctx := errgroup.WithContext(context.Background())
+		eg.Go(func() error {
+			return tracker.Run(ctx, hs)
+		})
+		eg.Go(func() error {
+			// First call doesn't actually respect batch size.
+			hs, ok, err := tracker.GetChunksToFetch(ctx)
+			assert.Len(t, hs, 3)
+			assert.True(t, ok)
 			assert.NoError(t, err)
-			if !ok {
-				break
-			}
-			assert.Len(t, hs, 1)
-			cnt += len(hs)
 			for _ = range hs {
-				tracker.TickProcessed()
+				tracker.TickProcessed(ctx)
 			}
-		}
-		assert.Equal(t, 8, cnt)
 
-		tracker.Close()
+			for i := byte(1); i <= byte(10); i++ {
+				var h hash.Hash
+				h[0] = 1
+				h[1] = i
+				tracker.Seen(ctx, h)
+			}
+
+			// Should get back 13, 14, 15, 16, 17, 18, 19, 1(10); one at a time.
+			cnt := 0
+			for {
+				hs, ok, err := tracker.GetChunksToFetch(ctx)
+				assert.NoError(t, err)
+				if !ok {
+					break
+				}
+				assert.Len(t, hs, 1)
+				cnt += len(hs)
+				for _ = range hs {
+					tracker.TickProcessed(ctx)
+				}
+			}
+			assert.Equal(t, 8, cnt)
+
+			tracker.Close()
+			return nil
+		})
+		assert.NoError(t, eg.Wait())
 	})
 }
 

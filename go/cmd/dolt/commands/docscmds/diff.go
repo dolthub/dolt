@@ -18,6 +18,7 @@ import (
 	"context"
 
 	textdiff "github.com/andreyvit/diff"
+	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
@@ -89,13 +90,21 @@ func diffDoltDoc(ctx context.Context, dEnv *env.DoltEnv, docName string) error {
 	if err != nil {
 		return err
 	}
+	sqlCtx, err := eng.NewLocalContext(ctx)
+	if err != nil {
+		return err
+	}
+	defer sql.SessionEnd(sqlCtx.Session)
+	sql.SessionCommandBegin(sqlCtx.Session)
+	defer sql.SessionCommandEnd(sqlCtx.Session)
+	sqlCtx.SetCurrentDatabase(dbName)
 
-	working, err := readDocFromTable(ctx, eng, dbName, docName)
+	working, err := readDocFromTable(sqlCtx, eng, docName)
 	if err != nil {
 		return err
 	}
 
-	head, err := readDocFromTableAsOf(ctx, eng, dbName, docName, "HEAD")
+	head, err := readDocFromTableAsOf(sqlCtx, eng, docName, "HEAD")
 	if err != nil {
 		return err
 	}

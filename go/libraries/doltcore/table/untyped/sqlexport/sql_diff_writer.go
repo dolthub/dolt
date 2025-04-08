@@ -49,15 +49,15 @@ func NewSqlDiffWriter(tableName string, schema schema.Schema, wr io.WriteCloser)
 	}
 }
 
-func (w SqlDiffWriter) WriteRow(ctx context.Context, row sql.Row, rowDiffType diff.ChangeType, colDiffTypes []diff.ChangeType) error {
-	stmt, err := sqlfmt.GenerateDataDiffStatement(w.tableName, w.sch, row, rowDiffType, colDiffTypes)
+func (w SqlDiffWriter) WriteRow(ctx *sql.Context, row sql.Row, rowDiffType diff.ChangeType, colDiffTypes []diff.ChangeType) error {
+	stmt, err := sqlfmt.GenerateDataDiffStatement(ctx, w.tableName, w.sch, row, rowDiffType, colDiffTypes)
 	if err != nil {
 		return err
 	}
 	return iohelp.WriteLine(w.writeCloser, stmt)
 }
 
-func (w SqlDiffWriter) WriteCombinedRow(ctx context.Context, oldRow, newRow sql.Row, mode diff.Mode) error {
+func (w SqlDiffWriter) WriteCombinedRow(ctx *sql.Context, oldRow, newRow sql.Row, mode diff.Mode) error {
 	return fmt.Errorf("sql format is unable to output diffs for combined rows")
 }
 

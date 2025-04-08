@@ -661,7 +661,7 @@ func TestGuessPrefixOrdinal(t *testing.T) {
 func TestWaitForGC(t *testing.T) {
 	// Wait for GC should always return when the context is canceled...
 	nbs := &NomsBlockStore{}
-	nbs.cond = sync.NewCond(&nbs.mu)
+	nbs.gcCond = sync.NewCond(&nbs.mu)
 	nbs.gcInProgress = true
 	const numThreads = 32
 	cancels := make([]func(), 0, numThreads)
