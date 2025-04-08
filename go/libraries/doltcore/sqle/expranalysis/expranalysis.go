@@ -93,7 +93,7 @@ func parseCreateTable(ctx *sql.Context, tableName string, sch schema.Schema) (*p
 	mockProvider := memory.NewDBProvider(mockDatabase)
 	catalog := analyzer.NewCatalog(mockProvider)
 	catalog.AuthHandler = sql.NoopAuthorizationHandler{}
-	
+
 	// We need a new context for this operation
 	parseCtx := sql.NewEmptyContext()
 	parseCtx.SetCurrentDatabase("mydb")

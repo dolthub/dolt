@@ -445,7 +445,7 @@ func GenerateCreateTableStatement(tblName string, sch schema.Schema, fks []doltd
 	colStmts := make([]string, sch.GetAllCols().Size())
 
 	schemaFormatter := sql.GlobalSchemaFormatter
-	
+
 	// Statement creation parts for each column
 	for i, col := range sch.GetAllCols().GetColumns() {
 		colStmts[i] = GenerateCreateTableIndentedColumnDefinition(col, sql.CollationID(sch.GetCollation()))
