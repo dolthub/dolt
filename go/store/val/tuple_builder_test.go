@@ -297,7 +297,7 @@ func TestTupleBuilderAdaptiveEncodings(t *testing.T) {
 			longByteArray := make([]byte, defaultTupleLengthTarget*2)
 			h, err := vs.WriteBytes(ctx, longByteArray)
 			require.NoError(t, err)
-			byteArray := NewByteArray(h, vs).WithMaxByteLength(int64(len(longByteArray)))
+			byteArray := NewByteArray(ctx, h, vs).WithMaxByteLength(int64(len(longByteArray)))
 			tb.PutAdaptiveBytesFromOutline(0, byteArray)
 
 			tup, err := tb.Build(testPool)
