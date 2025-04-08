@@ -128,13 +128,24 @@ mutations_and_gc_statement() {
 @test "archive: archive --revert (rebuild)" {
   dolt sql -q "$(mutations_and_gc_statement)"
   dolt archive
-  dolt gc                         # This will delete the unused table files.
   dolt archive --revert
 
   # dolt log --stat will load every single chunk. 66 manually verified.
   commits=$(dolt log --stat --oneline | wc -l | sed 's/[ \t]//g')
   [ "$commits" -eq "66" ]
 }
+
+@test "archive: archive --purge" {
+  dolt sql -q "$(mutations_and_gc_statement)"
+
+  tablefile=$(find ./.dolt/noms/oldgen -type f -regex '.*/[a-v0-9]\{32\}')
+
+  [ -e "$tablefile" ] # extreme paranoia. make sure it exists before.
+  dolt archive --purge
+  # Ensure the table file is gone.
+  [ ! -e "$tablefile" ]
+}
+
 
 @test "archive: can clone archived repository" {
     mkdir -p remote/.dolt
