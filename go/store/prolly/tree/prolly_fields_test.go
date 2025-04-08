@@ -173,6 +173,26 @@ func TestRoundTripProllyFields(t *testing.T) {
 			typ:   val.Type{Enc: val.BytesAddrEnc},
 			value: []byte("lorem ipsum"),
 		},
+		{
+			name:  "adaptive line binary short",
+			typ:   val.Type{Enc: val.BytesAdaptiveEnc},
+			value: []byte("lorem ipsum"),
+		},
+		{
+			name:  "adaptive line binary long",
+			typ:   val.Type{Enc: val.BytesAdaptiveEnc},
+			value: make([]byte, (1 << 12)),
+		},
+		{
+			name:  "adaptive line string short",
+			typ:   val.Type{Enc: val.StringAdaptiveEnc},
+			value: "lorem ipsum",
+		},
+		{
+			name:  "adaptive line string long",
+			typ:   val.Type{Enc: val.StringAdaptiveEnc},
+			value: string(make([]byte, (1 << 12))),
+		},
 	}
 
 	for _, test := range tests {
@@ -185,30 +205,38 @@ func TestRoundTripProllyFields(t *testing.T) {
 var testPool = pool.NewBuffPool()
 
 func testRoundTripProllyFields(t *testing.T, test prollyFieldTest) {
+	ctx := context.Background()
 	desc := val.NewTupleDescriptor(test.typ)
-	builder := val.NewTupleBuilder(desc)
 	ns := NewTestNodeStore()
+	builder := val.NewTupleBuilder(desc, ns)
 
-	err := PutField(context.Background(), ns, builder, 0, test.value)
-	assert.NoError(t, err)
+	err := PutField(ctx, ns, builder, 0, test.value)
+	require.NoError(t, err)
 
-	tup := builder.Build(testPool)
+	tup, err := builder.Build(testPool)
+	require.NoError(t, err)
 
-	v, err := GetField(context.Background(), desc, 0, tup, ns)
-	assert.NoError(t, err)
-	jsonType := val.Type{Enc: val.JSONAddrEnc}
-	if test.typ == jsonType {
-		getJson := func(field interface{}) interface{} {
-			jsonWrapper, ok := field.(sql.JSONWrapper)
-			require.Equal(t, ok, true)
-			val, err := jsonWrapper.ToInterface()
-			require.NoError(t, err)
-			return val
-		}
-		assert.Equal(t, getJson(test.value), getJson(v))
-	} else {
-		assert.Equal(t, test.value, v)
+	v, err := GetField(ctx, desc, 0, tup, ns)
+	require.NoError(t, err)
+
+	v, err = sql.UnwrapAny(ctx, v)
+	require.NoError(t, err)
+
+	if js, ok := v.(sql.JSONWrapper); ok {
+		v, err = js.ToInterface()
+		require.NoError(t, err)
 	}
+
+	expectedValue, err := sql.UnwrapAny(ctx, test.value)
+	assert.NoError(t, err)
+
+	if js, ok := expectedValue.(sql.JSONWrapper); ok {
+		expectedValue, err = js.ToInterface()
+		require.NoError(t, err)
+	}
+
+	assert.Equal(t, expectedValue, v)
+
 }
 
 func mustParseGeometryType(t *testing.T, s string) (v interface{}) {
@@ -283,13 +311,13 @@ func TestGeometryEncoding(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			ns := NewTestNodeStore()
 			oldDesc := val.NewTupleDescriptor(val.Type{Enc: val.GeometryEnc})
-			builder := val.NewTupleBuilder(oldDesc)
+			builder := val.NewTupleBuilder(oldDesc, ns)
 			b := serializeGeometry(test.value)
 			builder.PutGeometry(0, b)
-			tup := builder.Build(testPool)
+			tup, err := builder.Build(testPool)
+			require.NoError(t, err)
 
 			var v interface{}
-			var err error
 
 			v, err = GetField(context.Background(), oldDesc, 0, tup, ns)
 			assert.NoError(t, err)

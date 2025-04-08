@@ -15,13 +15,12 @@
 package val
 
 import (
-	"context"
 	"math"
 	"testing"
 	"time"
 
+	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/shopspring/decimal"
-
 	"github.com/stretchr/testify/assert"
 )
 
@@ -251,7 +250,7 @@ func TestCompare(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		ctx := context.Background()
+		ctx := sql.NewEmptyContext()
 		act := compare(test.typ, test.l, test.r)
 		assert.Equal(t, test.cmp, act, "expected %s %s %s ",
 			TupleDesc{}.formatValue(ctx, test.typ.Enc, 0, test.l),

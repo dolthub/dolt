@@ -28,16 +28,16 @@ import (
 )
 
 // GenerateDataDiffStatement returns any data diff in SQL statements for given table including INSERT, UPDATE and DELETE row statements.
-func GenerateDataDiffStatement(tableName string, sch schema.Schema, row sql.Row, rowDiffType diff.ChangeType, colDiffTypes []diff.ChangeType) (string, error) {
+func GenerateDataDiffStatement(ctx *sql.Context, tableName string, sch schema.Schema, row sql.Row, rowDiffType diff.ChangeType, colDiffTypes []diff.ChangeType) (string, error) {
 	if len(row) != len(colDiffTypes) {
 		return "", fmt.Errorf("expected the same size for columns and diff types, got %d and %d", len(row), len(colDiffTypes))
 	}
 
 	switch rowDiffType {
 	case diff.Added:
-		return SqlRowAsInsertStmt(row, tableName, sch)
+		return SqlRowAsInsertStmt(ctx, row, tableName, sch)
 	case diff.Removed:
-		return SqlRowAsDeleteStmt(row, tableName, sch, 0)
+		return SqlRowAsDeleteStmt(ctx, row, tableName, sch, 0)
 	case diff.ModifiedNew:
 		updatedCols := set.NewEmptyStrSet()
 		for i, diffType := range colDiffTypes {
@@ -48,7 +48,7 @@ func GenerateDataDiffStatement(tableName string, sch schema.Schema, row sql.Row,
 		if updatedCols.Size() == 0 {
 			return "", nil
 		}
-		return SqlRowAsUpdateStmt(row, tableName, sch, updatedCols)
+		return SqlRowAsUpdateStmt(ctx, row, tableName, sch, updatedCols)
 	case diff.ModifiedOld:
 		// do nothing, we only issue UPDATE for ModifiedNew
 		return "", nil

@@ -18,6 +18,8 @@ import (
 	"context"
 	"testing"
 
+	"github.com/dolthub/go-mysql-server/sql"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -67,7 +69,7 @@ func roundTripTreeItems(t *testing.T) {
 }
 
 func countTree(t *testing.T, ns NodeStore, nd Node) (count int) {
-	ctx := context.Background()
+	ctx := sql.NewEmptyContext()
 	err := iterTree(ctx, ns, nd, func(_ Item) (err error) {
 		count++
 		return
@@ -78,7 +80,7 @@ func countTree(t *testing.T, ns NodeStore, nd Node) (count int) {
 
 func validateTreeItems(t *testing.T, ns NodeStore, nd Node, expected [][2]Item) {
 	i := 0
-	ctx := context.Background()
+	ctx := sql.NewEmptyContext()
 	err := iterTree(ctx, ns, nd, func(actual Item) (err error) {
 		assert.Equal(t, expected[i/2][i%2], actual)
 		i++

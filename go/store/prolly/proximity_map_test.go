@@ -37,15 +37,15 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-func newJsonValue(t *testing.T, v interface{}) sql.JSONWrapper {
-	doc, _, err := types.JSON.Convert(v)
+func newJsonValue(t *testing.T, ctx context.Context, v interface{}) sql.JSONWrapper {
+	doc, _, err := types.JSON.Convert(ctx, v)
 	require.NoError(t, err)
 	return doc.(sql.JSONWrapper)
 }
 
 // newJsonDocument creates a JSON value from a provided value.
 func newJsonDocument(t *testing.T, ctx context.Context, ns tree.NodeStore, v interface{}) hash.Hash {
-	doc := newJsonValue(t, v)
+	doc := newJsonValue(t, ctx, v)
 	root, err := tree.SerializeJsonToAddr(ctx, ns, doc)
 	require.NoError(t, err)
 	return root.HashOf()
@@ -60,12 +60,14 @@ var testValDesc = val.NewTupleDescriptor(
 )
 
 func buildTuple(t *testing.T, ctx context.Context, ns tree.NodeStore, pool pool.BuffPool, desc val.TupleDesc, row []interface{}) val.Tuple {
-	builder := val.NewTupleBuilder(desc)
+	builder := val.NewTupleBuilder(desc, ns)
 	for i, column := range row {
 		err := tree.PutField(ctx, ns, builder, i, column)
 		require.NoError(t, err)
 	}
-	return builder.Build(pool)
+	tup, err := builder.Build(pool)
+	require.NoError(t, err)
+	return tup
 }
 
 func buildTuples(t *testing.T, ctx context.Context, ns tree.NodeStore, pool pool.BuffPool, desc val.TupleDesc, rows [][]interface{}) [][]byte {
@@ -249,7 +251,7 @@ func TestDoubleEntryProximityMapGetClosest(t *testing.T) {
 
 	matches := 0
 
-	mapIter, err := m.GetClosest(ctx, newJsonValue(t, "[0.0, 0.0]"), 1)
+	mapIter, err := m.GetClosest(ctx, newJsonValue(t, ctx, "[0.0, 0.0]"), 1)
 	require.NoError(t, err)
 	for {
 		k, v, err := mapIter.Next(ctx)
@@ -291,7 +293,7 @@ func TestProximityMapGetManyClosest(t *testing.T) {
 		t.Run(fmt.Sprintf("limit %d", limit), func(t *testing.T) {
 			matches := 0
 
-			mapIter, err := m.GetClosest(ctx, newJsonValue(t, queryVector), limit)
+			mapIter, err := m.GetClosest(ctx, newJsonValue(t, ctx, queryVector), limit)
 			require.NoError(t, err)
 			for {
 				k, v, err := mapIter.Next(ctx)
@@ -523,18 +525,20 @@ func TestIncrementalUpdates(t *testing.T) {
 
 	bp := pool.NewBuffPool()
 
-	keyBuilder := val.NewTupleBuilder(testKeyDesc)
-	valueBuilder := val.NewTupleBuilder(testValDesc)
+	keyBuilder := val.NewTupleBuilder(testKeyDesc, ns)
+	valueBuilder := val.NewTupleBuilder(testValDesc, ns)
 
 	// update leaf node
 	{
 		keyBuilder.PutJSONAddr(0, newJsonDocument(t, ctx, ns, "[0.0, 1.0]"))
-		nextKey := keyBuilder.Build(bp)
+		nextKey, err := keyBuilder.Build(bp)
+		require.NoError(t, err)
 
 		valueBuilder.PutInt64(0, 5)
-		nextValue := valueBuilder.Build(bp)
+		nextValue, err := valueBuilder.Build(bp)
+		require.NoError(t, err)
 
-		err := mutableMap.Put(ctx, nextKey, nextValue)
+		err = mutableMap.Put(ctx, nextKey, nextValue)
 		require.NoError(t, err)
 
 		newMap, err := flusher.Map(ctx, mutableMap)
@@ -563,12 +567,14 @@ func TestIncrementalUpdates(t *testing.T) {
 	// update root node
 	{
 		keyBuilder.PutJSONAddr(0, newJsonDocument(t, ctx, ns, "[5.0, 6.0]"))
-		nextKey := keyBuilder.Build(bp)
+		nextKey, err := keyBuilder.Build(bp)
+		require.NoError(t, err)
 
 		valueBuilder.PutInt64(0, 6)
-		nextValue := valueBuilder.Build(bp)
+		nextValue, err := valueBuilder.Build(bp)
+		require.NoError(t, err)
 
-		err := mutableMap.Put(ctx, nextKey, nextValue)
+		err = mutableMap.Put(ctx, nextKey, nextValue)
 		require.NoError(t, err)
 
 		newMap, err := flusher.Map(ctx, mutableMap)
@@ -613,14 +619,15 @@ func TestIncrementalDeletes(t *testing.T) {
 
 	bp := pool.NewBuffPool()
 
-	keyBuilder := val.NewTupleBuilder(testKeyDesc)
+	keyBuilder := val.NewTupleBuilder(testKeyDesc, ns)
 
 	// delete leaf node
 	{
 		keyBuilder.PutJSONAddr(0, newJsonDocument(t, ctx, ns, "[0.0, 1.0]"))
-		nextKey := keyBuilder.Build(bp)
+		nextKey, err := keyBuilder.Build(bp)
+		require.NoError(t, err)
 
-		err := mutableMap.Put(ctx, nextKey, nil)
+		err = mutableMap.Put(ctx, nextKey, nil)
 		require.NoError(t, err)
 
 		newMap, err := flusher.Map(ctx, mutableMap)
@@ -642,9 +649,10 @@ func TestIncrementalDeletes(t *testing.T) {
 	// delete root node
 	{
 		keyBuilder.PutJSONAddr(0, newJsonDocument(t, ctx, ns, "[5.0, 6.0]"))
-		nextKey := keyBuilder.Build(bp)
+		nextKey, err := keyBuilder.Build(bp)
+		require.NoError(t, err)
 
-		err := mutableMap.Put(ctx, nextKey, nil)
+		err = mutableMap.Put(ctx, nextKey, nil)
 		require.NoError(t, err)
 
 		newMap, err := flusher.Map(ctx, mutableMap)

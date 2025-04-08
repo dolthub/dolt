@@ -70,7 +70,7 @@ type SqlTableReader interface {
 //
 // Returns a tuple: (number of rows written, number of errors ignored, error). In the case that err is non-nil, the
 // row counter fields in the tuple will be set to -1.
-func PipeRows(ctx context.Context, rd SqlRowReader, wr SqlRowWriter, contOnBadRow bool) (int, int, error) {
+func PipeRows(ctx *sql.Context, rd SqlRowReader, wr SqlRowWriter, contOnBadRow bool) (int, int, error) {
 	var numBad, numGood int
 	for {
 		r, err := rd.ReadSqlRow(ctx)

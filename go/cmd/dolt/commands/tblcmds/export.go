@@ -223,7 +223,7 @@ func (cmd ExportCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return commands.HandleVErrAndExitCode(verr, usage)
 	}
 
-	pipeline := mvdata.NewDataMoverPipeline(ctx, rd, wr)
+	pipeline := mvdata.NewDataMoverPipeline(sqlCtx, rd, wr)
 
 	err = pipeline.Execute()
 	if err != nil {

@@ -74,7 +74,7 @@ func (ti *multipolygonType) ConvertValueToNomsValue(ctx context.Context, vrw typ
 	}
 
 	// Convert to sql.MultiPolygon
-	mpoly, _, err := ti.sqlMultiPolygonType.Convert(v)
+	mpoly, _, err := ti.sqlMultiPolygonType.Convert(ctx, v)
 	if err != nil {
 		return nil, err
 	}

@@ -142,7 +142,10 @@ func (k prollyKeylessWriter) tuplesFromRow(ctx context.Context, sqlRow sql.Row) 
 		}
 	}
 
-	value = k.valBld.Build(sharePool)
+	value, err = k.valBld.Build(sharePool)
+	if err != nil {
+		return nil, nil, err
+	}
 	hashId = val.HashTupleFromValue(sharePool, value)
 	return
 }
@@ -254,11 +257,17 @@ func (writer prollyKeylessSecondaryWriter) Insert(ctx context.Context, sqlRow sq
 		return err
 	}
 	writer.keyBld.PutHash128(len(writer.keyBld.Desc.Types)-1, hashId.GetField(0))
-	indexKey := writer.keyBld.Build(sharePool)
+	indexKey, err := writer.keyBld.Build(sharePool)
+	if err != nil {
+		return err
+	}
 
 	if writer.unique {
-		prefixKey := writer.prefixBld.Build(sharePool)
-		err := writer.checkForUniqueKeyError(ctx, prefixKey, sqlRow)
+		prefixKey, err := writer.prefixBld.Build(sharePool)
+		if err != nil {
+			return err
+		}
+		err = writer.checkForUniqueKeyError(ctx, prefixKey, sqlRow)
 		if err != nil {
 			return err
 		}
@@ -293,7 +302,10 @@ func (writer prollyKeylessSecondaryWriter) checkForUniqueKeyError(ctx context.Co
 		}
 		keyStr := FormatKeyForUniqKeyErr(ctx, prefixKey, writer.prefixBld.Desc, remappedSqlRow)
 		writer.hashBld.PutRaw(0, k.GetField(k.Count()-1))
-		existingKey := writer.hashBld.Build(sharePool)
+		existingKey, err := writer.hashBld.Build(sharePool)
+		if err != nil {
+			return err
+		}
 		return secondaryUniqueKeyError{keyStr: keyStr, existingKey: existingKey}
 	}
 	return nil
@@ -323,7 +335,10 @@ func (writer prollyKeylessSecondaryWriter) Delete(ctx context.Context, sqlRow sq
 		}
 	}
 	writer.keyBld.PutHash128(len(writer.keyBld.Desc.Types)-1, hashId.GetField(0))
-	indexKey := writer.keyBld.Build(sharePool)
+	indexKey, err := writer.keyBld.Build(sharePool)
+	if err != nil {
+		return err
+	}
 
 	// Indexes are always updated before the primary table, so we check if the deletion will cause the row to be removed
 	// from the primary. If not, then we just return.
