@@ -16,6 +16,7 @@ package val
 
 import (
 	"context"
+	"database/sql/driver"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
@@ -63,7 +64,13 @@ func (t *ImmutableValue) GetBytes(ctx context.Context) ([]byte, error) {
 type TextStorage struct {
 	ImmutableValue
 	maxByteLength int64
+	// ctx is a context that can be used in driver.Value
+	// Storing a context in a struct is bad practice, so this field should not be used for any other purpose.
+	ctx context.Context
 }
+
+var _ sql.StringWrapper = &TextStorage{}
+var _ driver.Valuer = &TextStorage{}
 
 // IsExactLength implements sql.BytesWrapper
 func (t TextStorage) IsExactLength() bool {
@@ -111,19 +118,33 @@ func (t *TextStorage) Hash() interface{} {
 	return t.Addr
 }
 
-func NewTextStorage(addr hash.Hash, vs ValueStore) *TextStorage {
+func NewTextStorage(ctx context.Context, addr hash.Hash, vs ValueStore) *TextStorage {
 	return &TextStorage{
 		ImmutableValue: NewImmutableValue(addr, vs),
 		maxByteLength:  types.LongText.MaxByteLength(),
+		ctx:            ctx,
 	}
 }
 
-var _ sql.StringWrapper = &TextStorage{}
+// Value implements driver.Valuer for interoperability with other go libraries
+func (t *TextStorage) Value() (driver.Value, error) {
+	buf, err := t.GetBytes(t.ctx)
+	if err != nil {
+		return "", err
+	}
+	return string(buf), nil
+}
 
 type ByteArray struct {
 	ImmutableValue
 	maxByteLength int64
+	// ctx is a context that can be used in driver.Value
+	// Storing a context in a struct is bad practice, so this field should not be used for any other purpose.
+	ctx context.Context
 }
+
+var _ sql.BytesWrapper = &ByteArray{}
+var _ driver.Valuer = &ByteArray{}
 
 // IsExactLength implements sql.BytesWrapper
 func (b *ByteArray) IsExactLength() bool {
@@ -146,10 +167,11 @@ func (b *ByteArray) Compare(ctx context.Context, other interface{}) (cmp int, co
 	return 0, false, nil
 }
 
-func NewByteArray(addr hash.Hash, vs ValueStore) *ByteArray {
+func NewByteArray(ctx context.Context, addr hash.Hash, vs ValueStore) *ByteArray {
 	return &ByteArray{
 		ImmutableValue: NewImmutableValue(addr, vs),
 		maxByteLength:  types.LongBlob.MaxByteLength(),
+		ctx:            ctx,
 	}
 }
 
@@ -184,11 +206,14 @@ func (b *ByteArray) Hash() interface{} {
 	return b.Addr
 }
 
-var _ sql.BytesWrapper = &ByteArray{}
-
-func (t ByteArray) WithMaxByteLength(maxByteLength int64) *ByteArray {
+func (b *ByteArray) WithMaxByteLength(maxByteLength int64) *ByteArray {
 	return &ByteArray{
-		ImmutableValue: t.ImmutableValue,
+		ImmutableValue: b.ImmutableValue,
 		maxByteLength:  maxByteLength,
 	}
+}
+
+// Value implements driver.Valuer for interoperability with other go libraries
+func (b *ByteArray) Value() (driver.Value, error) {
+	return b.GetBytes(b.ctx)
 }
