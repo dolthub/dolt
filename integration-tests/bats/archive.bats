@@ -138,7 +138,8 @@ mutations_and_gc_statement() {
 @test "archive: archive --purge" {
   dolt sql -q "$(mutations_and_gc_statement)"
 
-  tablefile=$(find ./.dolt/noms/oldgen -type f -regex '.*/[a-v0-9]\{32\}')
+  # find impl differences by platform makes this a pain.
+  tablefile=$(find .dolt/noms/oldgen -type f -print | awk -F/ 'length($NF) == 32 && $NF ~ /^[a-v0-9]{32}$/')
 
   [ -e "$tablefile" ] # extreme paranoia. make sure it exists before.
   dolt archive --purge
