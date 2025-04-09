@@ -37,8 +37,7 @@ const singleQuote = `'`
 
 // QuoteIdentifier quotes the identifier given with backticks.
 func QuoteIdentifier(s string) string {
-	// TODO: quote character is different for different SQL modes / dialects
-	return "`" + s + "`"
+	return sql.GlobalSchemaFormatter.QuoteIdentifier(s)
 }
 
 // QuoteTableName quotes the table name given with backticks.
