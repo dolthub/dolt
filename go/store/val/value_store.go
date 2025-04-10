@@ -73,17 +73,17 @@ var _ sql.StringWrapper = &TextStorage{}
 var _ driver.Valuer = &TextStorage{}
 
 // IsExactLength implements sql.BytesWrapper
-func (t TextStorage) IsExactLength() bool {
+func (t *TextStorage) IsExactLength() bool {
 	return false
 }
 
 // MaxByteLength implements sql.BytesWrapper
-func (t TextStorage) MaxByteLength() int64 {
+func (t *TextStorage) MaxByteLength() int64 {
 	return t.maxByteLength
 }
 
 // Unwrap implements sql.BytesWrapper
-func (t TextStorage) Unwrap(ctx context.Context) (string, error) {
+func (t *TextStorage) Unwrap(ctx context.Context) (string, error) {
 	buf, err := t.GetBytes(ctx)
 	if err != nil {
 		return "", err
@@ -91,18 +91,18 @@ func (t TextStorage) Unwrap(ctx context.Context) (string, error) {
 	return string(buf), nil
 }
 
-func (t TextStorage) UnwrapAny(ctx context.Context) (interface{}, error) {
+func (t *TextStorage) UnwrapAny(ctx context.Context) (interface{}, error) {
 	return t.Unwrap(ctx)
 }
 
-func (t TextStorage) WithMaxByteLength(maxByteLength int64) *TextStorage {
+func (t *TextStorage) WithMaxByteLength(maxByteLength int64) *TextStorage {
 	return &TextStorage{
 		ImmutableValue: NewImmutableValue(t.Addr, t.vs),
 		maxByteLength:  maxByteLength,
 	}
 }
 
-func (t TextStorage) Compare(ctx context.Context, other interface{}) (cmp int, comparable bool, err error) {
+func (t *TextStorage) Compare(ctx context.Context, other interface{}) (cmp int, comparable bool, err error) {
 	otherTextStorage, ok := other.(TextStorage)
 	if !ok {
 		return 0, false, nil
