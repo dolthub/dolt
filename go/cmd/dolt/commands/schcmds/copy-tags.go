@@ -37,17 +37,18 @@ var copyTagsDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Copy the column tags from one branch to the current branch",
 	LongDesc: `{{.EmphasisLeft}}dolt schema copy-tags {{.LessThan}}from-branch{{.GreaterThan}} {{.EmphasisRight}}
 
-Copies all column tags from a branch to the currently checked out branch. Useful to fix a merge that is throwing
-column tag conflict errors after schema changes. Only tables and columns that match by name will be synced with 
-the column tags from the specified branch. This is an advanced command and should be used with caution.`,
+Copies all column tags from the HEAD commit on the specified branch to the currently checked out branch. Useful 
+to fix a merge that is returning many column tag conflict errors after schema changes. Only tables and columns that 
+match by name will be synced with the column tags from the specified branch. To update a single column tag, customers
+can use the {{.LessThan}}dolt schema update-tag{{.GreaterThan}} command instead. 
+
+This is an advanced command that most customers shouldn't ever need to use. Customers should generally only use this 
+command after asking the Dolt team for help with column tag conflict errors. If in doubt, reach out to the Dolt team 
+on Discord or GitHub.`,
 	Synopsis: []string{
 		"{{.LessThan}}from-branch{{.GreaterThan}}",
 	},
 }
-
-// verbose controls whether this command outputs more verbose information, showing exactly which columns
-// are being changed.
-var verbose = false
 
 // CopyTagsCmd implements the cli.Command interface for the schema copy-tags command.
 type CopyTagsCmd struct{}
@@ -92,17 +93,17 @@ func (cmd CopyTagsCmd) Exec(ctx context.Context, commandStr string, args []strin
 	}
 
 	// Load all the tags from fromBranch and toBranch
-	fromBranchTags, err := getAllTagsForRoots(ctx, fromRoots.Working)
+	fromBranchTags, err := getAllTagsForRoots(ctx, fromRoots.Head)
 	if err != nil {
 		return commands.HandleVErrAndExitCode(errhand.BuildDError("failed to get tags").AddCause(err).Build(), usage)
 	}
-	toBranchTags, err := getAllTagsForRoots(ctx, toRoots.Working)
+	toBranchTags, err := getAllTagsForRoots(ctx, toRoots.Head)
 	if err != nil {
 		return commands.HandleVErrAndExitCode(errhand.BuildDError("failed to get tags").AddCause(err).Build(), usage)
 	}
 
 	// Iterate over the fromBranch tags
-	tagsChanged := false
+	tagsSynced := 0
 	workingRoot := toRoots.Working
 	for tag, fromTableAndColumn := range fromBranchTags {
 		// Does the main branch have this tag?
@@ -115,16 +116,21 @@ func (cmd CopyTagsCmd) Exec(ctx context.Context, commandStr string, args []strin
 				continue
 			}
 
-			// At this point, we have a tag conflict... we need to move it out of the way so we can reuse this tag
+			// At this point, we have a tag conflict... that means there is already another column on the target
+			// branch that is using this tag that we need to sync. We can't sync this tag yet, because then there
+			// would be two columns with the same tag on the target branch. The API for updating a table in a root
+			// works with a single table at a time, so we have to ensure tags are valid (i.e. not duplicated) at
+			// every table update we store to the root, otherwise writing the table to the root throws an error.
+			// So, we need to move the existing tag occurrence to an unused tag and then sync the current tag on
+			// the target branch.
 			newTag := generateUnusedTag(toBranchTags, tag)
-			if verbose {
-				cli.Printf("changing %s.%s to %d\n"+
-					"changing %s.%s to %d\n",
-					toTableAndColumn.table, toTableAndColumn.column, newTag,
-					fromTableAndColumn.table, fromTableAndColumn.column, tag)
-			}
+			cli.Printf("changing %s.%s to %d\n"+
+				"syncing %s.%s to %d\n",
+				toTableAndColumn.table, toTableAndColumn.column, newTag,
+				fromTableAndColumn.table, fromTableAndColumn.column, tag)
 
-			tagsChanged = true
+			// Only count the tag we are syncing from the source branch, not the tag we are moving out of the way
+			tagsSynced += 1
 			workingRoot, err = updateRootWithNewColumnTag(ctx, workingRoot, toTableAndColumn.table, toTableAndColumn.column, newTag)
 			if err != nil {
 				return commands.HandleVErrAndExitCode(errhand.BuildDError("failed to update column tag").AddCause(err).Build(), usage)
@@ -139,12 +145,10 @@ func (cmd CopyTagsCmd) Exec(ctx context.Context, commandStr string, args []strin
 			toBranchTags[tag] = fromTableAndColumn
 		} else {
 			// The main branch doesn't have this tag at all, so fix the column
-			if verbose {
-				cli.Printf(" - tag not found; syncing %s.%s to %d\n",
-					fromTableAndColumn.table, fromTableAndColumn.column, tag)
-			}
+			cli.Printf("syncing %s.%s to %d\n",
+				fromTableAndColumn.table, fromTableAndColumn.column, tag)
 
-			tagsChanged = true
+			tagsSynced += 1
 			workingRoot, err = updateRootWithNewColumnTag(ctx, workingRoot, fromTableAndColumn.table, fromTableAndColumn.column, tag)
 			if err != nil {
 				return commands.HandleVErrAndExitCode(errhand.BuildDError("failed to update column tag").AddCause(err).Build(), usage)
@@ -153,13 +157,14 @@ func (cmd CopyTagsCmd) Exec(ctx context.Context, commandStr string, args []strin
 		}
 	}
 
-	if tagsChanged {
-		if err = commitUpdatedTags(ctx, dEnv, workingRoot, fromBranchName); err != nil {
+	if tagsSynced > 0 {
+		if err = doltCommitUpdatedTags(ctx, dEnv, workingRoot, fromBranchName); err != nil {
 			vErr := errhand.BuildDError("failed to commit column tag updates").AddCause(err).Build()
 			return commands.HandleVErrAndExitCode(vErr, usage)
 		}
+		cli.Printf("\n%d column tags synced from branch %s\n", tagsSynced, fromBranchName)
 	} else {
-		cli.Printf("No tag changes needed\n")
+		cli.Printf("\nNo tag changes needed\n")
 	}
 
 	return 0
@@ -176,7 +181,7 @@ func (cmd CopyTagsCmd) validateArgs(ctx context.Context, commandStr string, args
 
 	doltDB := dEnv.DoltDB(ctx)
 	if !types.IsFormat_DOLT(doltDB.Format()) {
-		return "", nil, nil, nil, fmt.Errorf("copy-tags is only available in storage format __DOLT__")
+		return "", nil, nil, nil, fmt.Errorf("copy-tags is only available for modern database storage formats")
 	}
 
 	if len(apr.Args) != 1 {
@@ -233,9 +238,9 @@ func validateDestinationBranch(ctx context.Context, toRoots *doltdb.Roots) error
 	return nil
 }
 
-// commitUpdatedTags commits tag changes in |workingRoot| for the specified DoltEnv, |dEnv|. The commit message uses
+// doltCommitUpdatedTags commits tag changes in |workingRoot| for the specified DoltEnv, |dEnv|. The commit message uses
 // |fromBranchName| to document the source of the tag changes.
-func commitUpdatedTags(ctx context.Context, dEnv *env.DoltEnv, workingRoot doltdb.RootValue, fromBranchName string) (err error) {
+func doltCommitUpdatedTags(ctx context.Context, dEnv *env.DoltEnv, workingRoot doltdb.RootValue, fromBranchName string) (err error) {
 	if err = dEnv.UpdateWorkingRoot(ctx, workingRoot); err != nil {
 		return err
 	}

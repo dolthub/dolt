@@ -30,8 +30,7 @@ teardown() {
     dolt schema tags > main.tags
     dolt checkout branch1
     dolt schema tags > branch1.tags
-    run diff main.tags branch1.tags
-    [ "$status" -eq 0 ]
+   diff main.tags branch1.tags
 
     # Change the tags on the branch1 branch
     dolt checkout branch1
@@ -48,8 +47,7 @@ teardown() {
     dolt checkout branch1
     dolt schema copy-tags main
     dolt schema tags > branch1.tags
-    run diff main.tags branch1.tags
-    [ "$status" -eq 0 ]
+    diff main.tags branch1.tags
 
     # Assert the expected log message
     run dolt log -n1
@@ -73,8 +71,7 @@ teardown() {
     dolt schema tags > main.tags
     dolt checkout branch1
     dolt schema tags > branch1.tags
-    run diff main.tags branch1.tags
-    [ "$status" -eq 0 ]
+    diff main.tags branch1.tags
 
     # Assert that the CLI reports no tag changes are needed
     run dolt schema copy-tags main
