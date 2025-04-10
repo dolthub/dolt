@@ -736,6 +736,33 @@ var DoltScripts = []queries.ScriptTest{
 		},
 	},
 	{
+		Name: "dolt_join_cost tests",
+		SetUpScript: []string{
+			"create table xy (x int primary key, y varchar(10))",
+			"create table ab (a int primary key, b varchar(10))",
+			"create table cd (c int primary key, d varchar(10))",
+			"insert into xy values (0,'0'), (1,'1'), (2,'2')",
+			"insert into ab values (0,'0'), (1,'1'), (2,'2')",
+			"insert into cd values (0,'0'), (1,'1'), (2,'2')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "select dolt_join_cost('select * from ab, cd, xy where a = c and b = d and y = d')",
+				Expected: []sql.Row{
+					{`memo:
+├── G1: (tablescan: ab 0.0)*
+├── G2: (tablescan: cd 0.0)*
+├── G3: (hashjoin 1 2 12.1) (hashjoin 2 1 12.1) (mergejoin 1 2 6.1)* (mergejoin 2 1 6.1)* (lookupjoin 1 2 9.9) (lookupjoin 2 1 9.9) (innerjoin 2 1 10.1) (innerjoin 1 2 10.1)
+├── G4: (tablescan: xy 0.0)*
+├── G5: (hashjoin 3 4 12.1) (hashjoin 1 7 12.1) (hashjoin 7 1 12.1) (hashjoin 2 6 12.1) (hashjoin 6 2 12.1) (hashjoin 4 3 12.1) (lookupjoin 7 1 9.9) (lookupjoin 6 2 9.9) (innerjoin 4 3 10.1)* (innerjoin 6 2 10.1) (innerjoin 2 6 10.1) (innerjoin 7 1 10.1) (innerjoin 1 7 10.1) (innerjoin 3 4 10.1)*
+├── G6: (hashjoin 1 4 12.1) (hashjoin 4 1 12.1) (innerjoin 4 1 10.1)* (innerjoin 1 4 10.1)*
+└── G7: (hashjoin 2 4 12.1) (hashjoin 4 2 12.1) (innerjoin 4 2 10.1)* (innerjoin 2 4 10.1)*
+`},
+				},
+			},
+		},
+	},
+	{
 		Name: "dolt_diff.from_commit test",
 		SetUpScript: []string{
 			"CREATE TABLE test (pk INT, c1 INT, PRIMARY KEY(pk))",
