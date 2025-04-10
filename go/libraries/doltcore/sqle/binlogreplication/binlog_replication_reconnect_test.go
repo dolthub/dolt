@@ -116,7 +116,7 @@ func (h *harness) testInitialReplicaStatus() {
 
 	// Unsupported fields
 	require.Equal(h.t, "INVALID", status["Source_Log_File"])
-	require.Equal(h.t, "Ignored", status["Source_SSL_Allowed"])
+	require.Equal(h.t, "No", status["Source_SSL_Allowed"])
 	require.Equal(h.t, "None", status["Until_Condition"])
 	require.Equal(h.t, "0", status["SQL_Delay"])
 	require.Equal(h.t, "0", status["SQL_Remaining_Delay"])

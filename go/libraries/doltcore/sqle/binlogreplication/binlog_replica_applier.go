@@ -33,6 +33,7 @@ import (
 	"github.com/dolthub/vitess/go/mysql"
 	"github.com/dolthub/vitess/go/sqltypes"
 	vquery "github.com/dolthub/vitess/go/vt/proto/query"
+	"github.com/dolthub/vitess/go/vt/vttls"
 	"github.com/sirupsen/logrus"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -165,9 +166,15 @@ func (a *binlogReplicaApplier) connectAndStartReplicationEventStream(ctx *sql.Co
 			return nil, ErrEmptyUsername
 		}
 
+		sslMode := vttls.Disabled
+		if replicaSourceInfo.Ssl {
+			sslMode = vttls.Required
+		}
+
 		connParams := mysql.ConnParams{
 			Host:             replicaSourceInfo.Host,
 			Port:             int(replicaSourceInfo.Port),
+			SslMode:          sslMode,
 			Uname:            replicaSourceInfo.User,
 			Pass:             replicaSourceInfo.Password,
 			ConnectTimeoutMs: 4_000,

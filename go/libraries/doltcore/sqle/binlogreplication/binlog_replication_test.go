@@ -247,6 +247,32 @@ func TestBinlogReplicationWithHundredsOfDatabases(t *testing.T) {
 	logrus.Infof("Time to replicate inserts to 1 database (out of %d): %v", endTime.Sub(startTime), dbCount)
 }
 
+// Tests that the SOURCE_SSL option can be enabled to establish a TLS connection to the source MySQL server.
+func TestSslReplication(t *testing.T) {
+	h := newHarness(t)
+	h.startSqlServersWithDoltSystemVars(doltReplicaSystemVars)
+	h.startReplicationAndCreateTestDb(h.mySqlPort)
+
+	// Stop the replica, then reconfigure with SOURCE_SSL=1 and restart replication
+	h.replicaDatabase.MustExec("STOP REPLICA;")
+	h.replicaDatabase.MustExec("CHANGE REPLICATION SOURCE TO SOURCE_SSL=1;")
+	h.replicaDatabase.MustExec("START REPLICA;")
+	time.Sleep(200 * time.Millisecond)
+
+	// Assert SSL config in replica status
+	status := h.showReplicaStatus()
+	require.Equal(t, "Yes", status["Source_SSL_Allowed"])
+	require.Equal(t, "Yes", status["Replica_IO_Running"])
+	require.Equal(t, "Yes", status["Replica_SQL_Running"])
+
+	// Assert data is replicated correctly
+	h.primaryDatabase.MustExec("create table tableT (pk int primary key)")
+	h.waitForReplicaToCatchUp()
+	assertCreateTableStatement(h.t, h.replicaDatabase, "tableT",
+		"CREATE TABLE tableT ( pk int NOT NULL, PRIMARY KEY (pk)) "+
+			"ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin")
+}
+
 // TestAutoRestartReplica tests that a Dolt replica automatically starts up replication if
 // replication was running when the replica was shut down.
 func TestAutoRestartReplica(t *testing.T) {
