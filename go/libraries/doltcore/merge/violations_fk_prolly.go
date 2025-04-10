@@ -53,7 +53,7 @@ func prollyParentSecDiffFkConstraintViolations(
 
 	parentSecKD, _ := postParentSecIdx.Descriptors()
 	parentPrefixKD := parentSecKD.PrefixDesc(len(foreignKey.TableColumns))
-	partialKB := val.NewTupleBuilder(parentPrefixKD)
+	partialKB := val.NewTupleBuilder(parentPrefixKD, postParentRowData.NodeStore())
 
 	childPriIdx, err := durable.ProllyMapFromIndex(postChild.RowData)
 	if err != nil {
@@ -66,7 +66,10 @@ func prollyParentSecDiffFkConstraintViolations(
 	err = prolly.DiffMaps(ctx, preParentSecIdx, postParentSecIdx, considerAllRowsModified, func(ctx context.Context, diff tree.Diff) error {
 		switch diff.Type {
 		case tree.RemovedDiff, tree.ModifiedDiff:
-			toSecKey, hadNulls := makePartialKey(partialKB, foreignKey.ReferencedTableColumns, postParent.Index, postParent.IndexSchema, val.Tuple(diff.Key), val.Tuple(diff.From), preParentSecIdx.Pool())
+			toSecKey, hadNulls, err := makePartialKey(partialKB, foreignKey.ReferencedTableColumns, postParent.Index, postParent.IndexSchema, val.Tuple(diff.Key), val.Tuple(diff.From), preParentSecIdx.Pool())
+			if err != nil {
+				return err
+			}
 			if hadNulls {
 				// row had some nulls previously, so it couldn't have been a parent
 				return nil
@@ -116,7 +119,7 @@ func prollyParentPriDiffFkConstraintViolations(
 
 	idxDesc, _ := postParentIndexData.Descriptors()
 	partialDesc := idxDesc.PrefixDesc(len(foreignKey.TableColumns))
-	partialKB := val.NewTupleBuilder(partialDesc)
+	partialKB := val.NewTupleBuilder(partialDesc, postParentRowData.NodeStore())
 
 	childPriIdx, err := durable.ProllyMapFromIndex(postChild.RowData)
 	if err != nil {
@@ -133,7 +136,10 @@ func prollyParentPriDiffFkConstraintViolations(
 	err = prolly.DiffMaps(ctx, preParentRowData, postParentRowData, considerAllRowsModified, func(ctx context.Context, diff tree.Diff) error {
 		switch diff.Type {
 		case tree.RemovedDiff, tree.ModifiedDiff:
-			partialKey, hadNulls := makePartialKey(partialKB, foreignKey.ReferencedTableColumns, postParent.Index, postParent.Schema, val.Tuple(diff.Key), val.Tuple(diff.From), preParentRowData.Pool())
+			partialKey, hadNulls, err := makePartialKey(partialKB, foreignKey.ReferencedTableColumns, postParent.Index, postParent.Schema, val.Tuple(diff.Key), val.Tuple(diff.From), preParentRowData.Pool())
+			if err != nil {
+				return err
+			}
 			if hadNulls {
 				// row had some nulls previously, so it couldn't have been a parent
 				return nil
@@ -192,7 +198,7 @@ func prollyChildPriDiffFkConstraintViolations(
 
 	idxDesc, _ := parentScndryIdx.Descriptors()
 	partialDesc := idxDesc.PrefixDesc(len(foreignKey.TableColumns))
-	partialKB := val.NewTupleBuilder(partialDesc)
+	partialKB := val.NewTupleBuilder(partialDesc, postChildRowData.NodeStore())
 
 	// TODO: Determine whether we should surface every row as a diff when the map's value descriptor has changed.
 	considerAllRowsModified := false
@@ -200,7 +206,7 @@ func prollyChildPriDiffFkConstraintViolations(
 		switch diff.Type {
 		case tree.AddedDiff, tree.ModifiedDiff:
 			k, v := val.Tuple(diff.Key), val.Tuple(diff.To)
-			partialKey, hasNulls := makePartialKey(
+			partialKey, hasNulls, err := makePartialKey(
 				partialKB,
 				foreignKey.TableColumns,
 				postChild.Index,
@@ -208,11 +214,14 @@ func prollyChildPriDiffFkConstraintViolations(
 				k,
 				v,
 				preChildRowData.Pool())
+			if err != nil {
+				return err
+			}
 			if hasNulls {
 				return nil
 			}
 
-			err := createCVIfNoPartialKeyMatchesPri(ctx, k, v, partialKey, partialDesc, parentScndryIdx, receiver)
+			err = createCVIfNoPartialKeyMatchesPri(ctx, k, v, partialKey, partialDesc, parentScndryIdx, receiver)
 			if err != nil {
 				return err
 			}
@@ -251,7 +260,7 @@ func prollyChildSecDiffFkConstraintViolations(
 	parentSecIdxDesc, _ := parentSecIdx.Descriptors()
 	prefixDesc := parentSecIdxDesc.PrefixDesc(len(foreignKey.TableColumns))
 	childPriKD, _ := postChildRowData.Descriptors()
-	childPriKB := val.NewTupleBuilder(childPriKD)
+	childPriKB := val.NewTupleBuilder(childPriKD, preChildSecIdx.NodeStore())
 
 	// TODO: Determine whether we should surface every row as a diff when the map's value descriptor has changed.
 	considerAllRowsModified := false
@@ -323,10 +332,13 @@ func createCVForSecIdx(
 		j := o + i
 		primaryKb.PutRaw(i, k.GetField(j))
 	}
-	primaryIdxKey := primaryKb.Build(pool)
+	primaryIdxKey, err := primaryKb.Build(pool)
+	if err != nil {
+		return err
+	}
 
 	var value val.Tuple
-	err := pri.Get(ctx, primaryIdxKey, func(k, v val.Tuple) error {
+	err = pri.Get(ctx, primaryIdxKey, func(k, v val.Tuple) error {
 		value = v
 		return nil
 	})
@@ -353,7 +365,7 @@ func createCVsForPartialKeyMatches(
 		return err
 	}
 
-	kb := val.NewTupleBuilder(primaryKD)
+	kb := val.NewTupleBuilder(primaryKD, primaryIdx.NodeStore())
 
 	for k, _, err := itr.Next(ctx); err == nil; k, _, err = itr.Next(ctx) {
 
@@ -364,10 +376,13 @@ func createCVsForPartialKeyMatches(
 			j := o + i
 			kb.PutRaw(i, k.GetField(j))
 		}
-		primaryIdxKey := kb.Build(pool)
+		primaryIdxKey, err := kb.Build(pool)
+		if err != nil {
+			return err
+		}
 
 		var value val.Tuple
-		err := primaryIdx.Get(ctx, primaryIdxKey, func(k, v val.Tuple) error {
+		err = primaryIdx.Get(ctx, primaryIdxKey, func(k, v val.Tuple) error {
 			value = v
 			return nil
 		})
@@ -387,7 +402,7 @@ func createCVsForPartialKeyMatches(
 	return nil
 }
 
-func makePartialKey(kb *val.TupleBuilder, tags []uint64, idxSch schema.Index, tblSch schema.Schema, k, v val.Tuple, pool pool.BuffPool) (val.Tuple, bool) {
+func makePartialKey(kb *val.TupleBuilder, tags []uint64, idxSch schema.Index, tblSch schema.Schema, k, v val.Tuple, pool pool.BuffPool) (val.Tuple, bool, error) {
 	// Possible that the parent index (idxSch) is longer than the partial key (tags).
 	if idxSch.Name() != "" && len(idxSch.IndexedColumnTags()) <= len(tags) {
 		tags = idxSch.IndexedColumnTags()
@@ -395,7 +410,7 @@ func makePartialKey(kb *val.TupleBuilder, tags []uint64, idxSch schema.Index, tb
 	for i, tag := range tags {
 		if j, ok := tblSch.GetPKCols().TagToIdx[tag]; ok {
 			if k.FieldIsNull(j) {
-				return nil, true
+				return nil, true, nil
 			}
 			kb.PutRaw(i, k.GetField(j))
 			continue
@@ -403,7 +418,7 @@ func makePartialKey(kb *val.TupleBuilder, tags []uint64, idxSch schema.Index, tb
 
 		j, _ := tblSch.GetNonPKCols().TagToIdx[tag]
 		if v.FieldIsNull(j) {
-			return nil, true
+			return nil, true, nil
 		}
 		if schema.IsKeyless(tblSch) {
 			kb.PutRaw(i, v.GetField(j+1))
@@ -412,7 +427,8 @@ func makePartialKey(kb *val.TupleBuilder, tags []uint64, idxSch schema.Index, tb
 		}
 	}
 
-	return kb.Build(pool), false
+	tup, err := kb.Build(pool)
+	return tup, false, err
 }
 
 // TODO: Change json.NomsJson string marshalling to match json.Marshall

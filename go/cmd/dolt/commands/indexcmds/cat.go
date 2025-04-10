@@ -165,7 +165,7 @@ func (cmd CatCmd) prettyPrintResults(ctx context.Context, doltSch schema.Schema,
 		if err != nil {
 			return err
 		}
-		err = wr.WriteSqlRow(ctx, r)
+		err = wr.WriteSqlRow(sqlCtx, r)
 		if err != nil {
 			return err
 		}

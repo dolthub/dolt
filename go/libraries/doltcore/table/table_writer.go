@@ -15,12 +15,10 @@
 package table
 
 import (
-	"context"
-
 	"github.com/dolthub/go-mysql-server/sql"
 )
 
 type SqlRowWriter interface {
 	Closer
-	WriteSqlRow(ctx context.Context, r sql.Row) error
+	WriteSqlRow(ctx *sql.Context, r sql.Row) error
 }

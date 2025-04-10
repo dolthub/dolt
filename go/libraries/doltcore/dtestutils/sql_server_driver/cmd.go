@@ -17,7 +17,9 @@ package sql_server_driver
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"database/sql"
+	"database/sql/driver"
 	"fmt"
 	"io"
 	"log"
@@ -28,6 +30,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/go-sql-driver/mysql"
 	_ "github.com/go-sql-driver/mysql"
 )
 
@@ -379,15 +382,38 @@ func (s *SqlServer) Restart(newargs *[]string, newenvs *[]string) error {
 }
 
 func (s *SqlServer) DB(c Connection) (*sql.DB, error) {
-	var pass string
+	connector, err := s.Connector(c)
+	if err != nil {
+		return nil, err
+	}
+	return OpenDB(connector)
+}
+
+// If a test needs to circumvent the database/sql connection pool
+// it can use the raw MySQL connector.
+func (s *SqlServer) Connector(c Connection) (driver.Connector, error) {
 	pass, err := c.Password()
 	if err != nil {
 		return nil, err
 	}
-	return ConnectDB(c.User, pass, s.DBName, "127.0.0.1", s.Port, c.DriverParams)
+	dsn := GetDSN(c.User, pass, s.DBName, "127.0.0.1", s.Port, c.DriverParams)
+	cfg, err := mysql.ParseDSN(dsn)
+	if err != nil {
+		return nil, err
+	}
+	// See the comment on WithConnectRetriesDisabled for why we do this.
+	cfg.Apply(mysql.BeforeConnect(func(ctx context.Context, cfg *mysql.Config) error {
+		// TODO: This could be more robust if we sniffed it on first connect.
+		const numAttemptsGoLibraryMakes = 3
+		if attempt, ok := incrementConnectRetryAttempts(ctx); ok && attempt < numAttemptsGoLibraryMakes {
+			return driver.ErrBadConn
+		}
+		return nil
+	}))
+	return mysql.NewConnector(cfg)
 }
 
-func ConnectDB(user, password, name, host string, port int, driverParams map[string]string) (*sql.DB, error) {
+func GetDSN(user, password, name, host string, port int, driverParams map[string]string) string {
 	params := make(url.Values)
 	params.Set("allowAllFiles", "true")
 	params.Set("tls", "preferred")
@@ -395,7 +421,27 @@ func ConnectDB(user, password, name, host string, port int, driverParams map[str
 		params.Set(k, v)
 	}
 	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?%s", user, password, host, port, name, params.Encode())
+	return dsn
+}
 
+func OpenDB(connector driver.Connector) (*sql.DB, error) {
+	db := sql.OpenDB(connector)
+	var err error
+	for i := 0; i < ConnectAttempts; i++ {
+		err = db.Ping()
+		if err == nil {
+			return db, nil
+		}
+		time.Sleep(RetrySleepDuration)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return db, nil
+}
+
+func ConnectDB(user, password, name, host string, port int, params map[string]string) (*sql.DB, error) {
+	dsn := GetDSN(user, password, name, host, port, params)
 	db, err := sql.Open("mysql", dsn)
 	if err != nil {
 		return nil, err
@@ -411,4 +457,42 @@ func ConnectDB(user, password, name, host string, port int, driverParams map[str
 		return nil, err
 	}
 	return db, nil
+}
+
+type connectRetryAttemptKeyType int
+
+var connectRetryAttemptKey connectRetryAttemptKeyType
+
+// The database/sql package in Go takes connections out of a
+// connection pool or opens a new connection to the database. It has
+// logic in it that looks for driver.ErrBadConn responses when it is
+// opening a connection and automatically retries those connections a
+// fixed number of times before actually surfacing the error to the
+// caller. This behavior interferes with some testing we want to do
+// against the behavior of the server.
+//
+// WithConnectionRetriesDisabled is a hack which circumvents these
+// retries. It works by embedding a counter into the returned context,
+// which should then be passed to *sql.DB.Conn(). An interceptor has
+// been installed on the |mysql.Connector| which looks for this
+// counter and fast-fails the first few calls into the driver. That
+// way the first call which goes through to the driver is the last and
+// final retry from *sql.DB.
+func WithConnectRetriesDisabled(ctx context.Context) context.Context {
+	return context.WithValue(ctx, connectRetryAttemptKey, &retryAttempt{})
+}
+
+type retryAttempt struct {
+	attempt int
+}
+
+func incrementConnectRetryAttempts(ctx context.Context) (int, bool) {
+	v := ctx.Value(connectRetryAttemptKey)
+	if v != nil {
+		if v, ok := v.(*retryAttempt); ok {
+			v.attempt += 1
+			return v.attempt, true
+		}
+	}
+	return 0, false
 }

@@ -20,6 +20,7 @@ import (
 	"io"
 	"sync/atomic"
 
+	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/analyzer/analyzererrors"
 	"github.com/dolthub/go-mysql-server/sql/plan"
@@ -27,8 +28,6 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/rowexec"
 	"github.com/dolthub/go-mysql-server/sql/transform"
 
-	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
@@ -42,7 +41,7 @@ const (
 
 // SqlEngineTableWriter is a utility for importing a set of rows through the sql engine.
 type SqlEngineTableWriter struct {
-	se     *engine.SqlEngine
+	se     *sqle.Engine
 	sqlCtx *sql.Context
 
 	tableName  string
@@ -60,42 +59,11 @@ type SqlEngineTableWriter struct {
 	rowOperationSchema sql.PrimaryKeySchema
 }
 
-func NewSqlEngineTableWriter(ctx context.Context, dEnv *env.DoltEnv, createTableSchema, rowOperationSchema schema.Schema, options *MoverOptions, statsCB noms.StatsCB) (*SqlEngineTableWriter, error) {
-	// TODO: Assert that dEnv.DoltDB(ctx).AccessMode() != ReadOnly?
-
-	mrEnv, err := env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), dEnv.FS, dEnv.Version, dEnv)
-	if err != nil {
-		return nil, err
-	}
-
-	// Simplest path would have our import path be a layer over load data
-	config := &engine.SqlEngineConfig{
-		ServerUser: "root",
-		Autocommit: false, // We set autocommit == false to ensure to improve performance. Bulk import should not commit on each row.
-		Bulk:       true,
-	}
-	se, err := engine.NewSqlEngine(
-		ctx,
-		mrEnv,
-		config,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer se.Close()
-
-	dbName := mrEnv.GetFirstDatabase()
-
-	if se.GetUnderlyingEngine().IsReadOnly() {
+func NewSqlEngineTableWriter(ctx *sql.Context, engine *sqle.Engine, createTableSchema, rowOperationSchema schema.Schema, options *MoverOptions, statsCB noms.StatsCB) (*SqlEngineTableWriter, error) {
+	if engine.IsReadOnly() {
 		// SqlEngineTableWriter does not respect read only mode
-		return nil, analyzererrors.ErrReadOnlyDatabase.New(dbName)
+		return nil, analyzererrors.ErrReadOnlyDatabase.New(ctx.GetCurrentDatabase())
 	}
-
-	sqlCtx, err := se.NewLocalContext(ctx)
-	if err != nil {
-		return nil, err
-	}
-	sqlCtx.SetCurrentDatabase(dbName)
 
 	doltCreateTableSchema, err := sqlutil.FromDoltSchema("", options.TableToWriteTo, createTableSchema)
 	if err != nil {
@@ -108,13 +76,13 @@ func NewSqlEngineTableWriter(ctx context.Context, dEnv *env.DoltEnv, createTable
 	}
 
 	return &SqlEngineTableWriter{
-		se:         se,
-		sqlCtx:     sqlCtx,
+		se:         engine,
+		sqlCtx:     ctx,
 		contOnErr:  options.ContinueOnErr,
 		force:      options.Force,
 		disableFks: options.DisableFks,
 
-		database:  dbName,
+		database:  ctx.GetCurrentDatabase(),
 		tableName: options.TableToWriteTo,
 
 		statsCB: statsCB,
@@ -158,7 +126,7 @@ func (s *SqlEngineTableWriter) WriteRows(ctx context.Context, inputChannel chan 
 			oldRow := row[:len(row)/2]
 			newRow := row[len(row)/2:]
 
-			if ok, err := oldRow.Equals(newRow, s.tableSchema.Schema); err == nil {
+			if ok, err := oldRow.Equals(s.sqlCtx, newRow, s.tableSchema.Schema); err == nil {
 				if ok {
 					s.stats.SameVal++
 				} else {
@@ -374,7 +342,7 @@ func (s *SqlEngineTableWriter) getInsertNode(inputChannel chan sql.Row, replace 
 		sep = ", "
 	}
 
-	sqlEngine := s.se.GetUnderlyingEngine()
+	sqlEngine := s.se
 	binder := planbuilder.New(s.sqlCtx, sqlEngine.Analyzer.Catalog, sqlEngine.EventScheduler, sqlEngine.Parser)
 	insert := fmt.Sprintf("insert into `%s` (%s) VALUES (%s)%s", s.tableName, colNames, values, duplicate)
 	parsed, _, _, qFlags, err := binder.Parse(insert, nil, false)
@@ -401,7 +369,7 @@ func (s *SqlEngineTableWriter) getInsertNode(inputChannel chan sql.Row, replace 
 
 	parsedIns.Ignore = s.contOnErr
 	parsedIns.IsReplace = replace
-	analyzed, err := s.se.Analyze(s.sqlCtx, parsedIns, qFlags)
+	analyzed, err := s.se.Analyzer.Analyze(s.sqlCtx, parsedIns, nil, qFlags)
 	if err != nil {
 		return nil, err
 	}

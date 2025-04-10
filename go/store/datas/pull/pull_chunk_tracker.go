@@ -17,7 +17,8 @@ package pull
 import (
 	"context"
 	"errors"
-	"sync"
+
+	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -46,38 +47,37 @@ const hasManyThreadCount = 3
 // parallel with other work the Puller does and abstracts out the logic for
 // keeping track of seen, unchecked and to pull hcunk addresses.
 type PullChunkTracker struct {
-	ctx  context.Context
 	seen hash.HashSet
 	cfg  TrackerConfig
-	wg   sync.WaitGroup
 
 	uncheckedCh chan hash.Hash
 	processedCh chan struct{}
+	doneCh      chan struct{}
 	reqCh       chan *trackerGetAbsentReq
 }
 
-func NewPullChunkTracker(ctx context.Context, initial hash.HashSet, cfg TrackerConfig) *PullChunkTracker {
+func NewPullChunkTracker(cfg TrackerConfig) *PullChunkTracker {
 	ret := &PullChunkTracker{
-		ctx:         ctx,
 		seen:        make(hash.HashSet),
 		cfg:         cfg,
 		uncheckedCh: make(chan hash.Hash),
 		processedCh: make(chan struct{}),
+		doneCh:      make(chan struct{}),
 		reqCh:       make(chan *trackerGetAbsentReq),
 	}
-	ret.seen.InsertAll(initial)
-	ret.wg.Add(1)
-	go func() {
-		defer ret.wg.Done()
-		ret.reqRespThread(initial)
-	}()
 	return ret
 }
 
-func (t *PullChunkTracker) Seen(h hash.Hash) {
+func (t *PullChunkTracker) Run(ctx context.Context, initial hash.HashSet) error {
+	defer close(t.doneCh)
+	t.seen.InsertAll(initial)
+	return t.reqRespThread(ctx, initial)
+}
+
+func (t *PullChunkTracker) Seen(ctx context.Context, h hash.Hash) {
 	if !t.seen.Has(h) {
 		t.seen.Insert(h)
-		t.addUnchecked(h)
+		t.addUnchecked(ctx, h)
 	}
 }
 
@@ -85,39 +85,39 @@ func (t *PullChunkTracker) Seen(h hash.Hash) {
 //
 // GetChunksToFetch() requires a matching |TickProcessed| call for each
 // returned Hash before it will return |hasMany == false|.
-func (t *PullChunkTracker) TickProcessed() {
+func (t *PullChunkTracker) TickProcessed(ctx context.Context) {
 	select {
 	case t.processedCh <- struct{}{}:
-	case <-t.ctx.Done():
+	case <-ctx.Done():
 	}
 }
 
 func (t *PullChunkTracker) Close() {
 	close(t.uncheckedCh)
-	t.wg.Wait()
+	<-t.doneCh
 }
 
-func (t *PullChunkTracker) addUnchecked(h hash.Hash) {
+func (t *PullChunkTracker) addUnchecked(ctx context.Context, h hash.Hash) {
 	select {
 	case t.uncheckedCh <- h:
-	case <-t.ctx.Done():
+	case <-ctx.Done():
 	}
 }
 
-func (t *PullChunkTracker) GetChunksToFetch() (hash.HashSet, bool, error) {
+func (t *PullChunkTracker) GetChunksToFetch(ctx context.Context) (hash.HashSet, bool, error) {
 	var req trackerGetAbsentReq
 	req.ready = make(chan struct{})
 
 	select {
 	case t.reqCh <- &req:
-	case <-t.ctx.Done():
-		return nil, false, context.Cause(t.ctx)
+	case <-ctx.Done():
+		return nil, false, context.Cause(ctx)
 	}
 
 	select {
 	case <-req.ready:
-	case <-t.ctx.Done():
-		return nil, false, context.Cause(t.ctx)
+	case <-ctx.Done():
+		return nil, false, context.Cause(ctx)
 	}
 
 	return req.hs, req.ok, req.err
@@ -125,121 +125,120 @@ func (t *PullChunkTracker) GetChunksToFetch() (hash.HashSet, bool, error) {
 
 // The main logic of the PullChunkTracker, receives requests from other threads
 // and responds to them.
-func (t *PullChunkTracker) reqRespThread(initial hash.HashSet) {
+func (t *PullChunkTracker) reqRespThread(ctx context.Context, initial hash.HashSet) error {
 	doneCh := make(chan struct{})
 	hasManyReqCh := make(chan trackerHasManyReq)
 	hasManyRespCh := make(chan trackerHasManyResp)
 
-	var wg sync.WaitGroup
-	wg.Add(hasManyThreadCount)
+	eg, ctx := errgroup.WithContext(ctx)
 
 	for i := 0; i < hasManyThreadCount; i++ {
-		go func() {
-			defer wg.Done()
-			hasManyThread(t.ctx, t.cfg.HasManyer, hasManyReqCh, hasManyRespCh, doneCh)
-		}()
+		eg.Go(func() error {
+			return hasManyThread(ctx, t.cfg.HasManyer, hasManyReqCh, hasManyRespCh, doneCh)
+		})
 	}
 
-	defer func() {
-		close(doneCh)
-		wg.Wait()
-	}()
+	eg.Go(func() error {
+		defer close(doneCh)
 
-	unchecked := make([]hash.HashSet, 0)
-	absent := make([]hash.HashSet, 0)
+		unchecked := make([]hash.HashSet, 0)
+		absent := make([]hash.HashSet, 0)
 
-	var err error
-	outstanding := 0
-	unprocessed := 0
+		var err error
+		outstanding := 0
+		unprocessed := 0
 
-	if len(initial) > 0 {
-		unchecked = append(unchecked, initial)
-		outstanding += 1
-	}
-
-	for {
-		var thisReqCh = t.reqCh
-		if len(absent) == 0 && (outstanding != 0 || unprocessed != 0) {
-			// If we are waiting for a HasMany response and we don't currently have any
-			// absent addresses to return, block any absent requests.
-			thisReqCh = nil
+		if len(initial) > 0 {
+			unchecked = append(unchecked, initial)
+			outstanding += 1
 		}
 
-		var thisHasManyReqCh chan trackerHasManyReq
-		var hasManyReq trackerHasManyReq
-		if len(unchecked) > 0 {
-			hasManyReq.hs = unchecked[0]
-			thisHasManyReqCh = hasManyReqCh
-		}
+		for {
+			var thisReqCh = t.reqCh
+			if len(absent) == 0 && (outstanding != 0 || unprocessed != 0) {
+				// If we are waiting for a HasMany response and we don't currently have any
+				// absent addresses to return, block any absent requests.
+				thisReqCh = nil
+			}
 
-		select {
-		case h, ok := <-t.uncheckedCh:
-			if !ok {
-				return
+			var thisHasManyReqCh chan trackerHasManyReq
+			var hasManyReq trackerHasManyReq
+			if len(unchecked) > 0 {
+				hasManyReq.hs = unchecked[0]
+				thisHasManyReqCh = hasManyReqCh
 			}
-			if len(unchecked) == 0 || len(unchecked[len(unchecked)-1]) >= t.cfg.BatchSize {
-				outstanding += 1
-				unchecked = append(unchecked, make(hash.HashSet))
-			}
-			unchecked[len(unchecked)-1].Insert(h)
-		case resp := <-hasManyRespCh:
-			outstanding -= 1
-			if resp.err != nil {
-				err = errors.Join(err, resp.err)
-			} else if len(resp.hs) > 0 {
-				absent = append(absent, resp.hs)
-			}
-		case thisHasManyReqCh <- hasManyReq:
-			copy(unchecked[:], unchecked[1:])
-			if len(unchecked) > 1 {
-				unchecked[len(unchecked)-1] = nil
-			}
-			unchecked = unchecked[:len(unchecked)-1]
-		case <-t.processedCh:
-			unprocessed -= 1
-		case req := <-thisReqCh:
-			if err != nil {
-				req.err = err
-				close(req.ready)
-				err = nil
-			} else if len(absent) == 0 {
-				req.ok = false
-				close(req.ready)
-			} else {
-				req.ok = true
-				req.hs = absent[0]
-				var i int
-				for i = 1; i < len(absent); i++ {
-					l := len(absent[i])
-					if len(req.hs)+l < t.cfg.BatchSize {
-						req.hs.InsertAll(absent[i])
-					} else {
-						for h := range absent[i] {
-							if len(req.hs) >= t.cfg.BatchSize {
-								break
+
+			select {
+			case h, ok := <-t.uncheckedCh:
+				if !ok {
+					return nil
+				}
+				if len(unchecked) == 0 || len(unchecked[len(unchecked)-1]) >= t.cfg.BatchSize {
+					outstanding += 1
+					unchecked = append(unchecked, make(hash.HashSet))
+				}
+				unchecked[len(unchecked)-1].Insert(h)
+			case resp := <-hasManyRespCh:
+				outstanding -= 1
+				if resp.err != nil {
+					err = errors.Join(err, resp.err)
+				} else if len(resp.hs) > 0 {
+					absent = append(absent, resp.hs)
+				}
+			case thisHasManyReqCh <- hasManyReq:
+				copy(unchecked[:], unchecked[1:])
+				if len(unchecked) > 1 {
+					unchecked[len(unchecked)-1] = nil
+				}
+				unchecked = unchecked[:len(unchecked)-1]
+			case <-t.processedCh:
+				unprocessed -= 1
+			case req := <-thisReqCh:
+				if err != nil {
+					req.err = err
+					close(req.ready)
+					err = nil
+				} else if len(absent) == 0 {
+					req.ok = false
+					close(req.ready)
+				} else {
+					req.ok = true
+					req.hs = absent[0]
+					var i int
+					for i = 1; i < len(absent); i++ {
+						l := len(absent[i])
+						if len(req.hs)+l < t.cfg.BatchSize {
+							req.hs.InsertAll(absent[i])
+						} else {
+							for h := range absent[i] {
+								if len(req.hs) >= t.cfg.BatchSize {
+									break
+								}
+								req.hs.Insert(h)
+								absent[i].Remove(h)
 							}
-							req.hs.Insert(h)
-							absent[i].Remove(h)
+							break
 						}
-						break
 					}
+					copy(absent[:], absent[i:])
+					for j := len(absent) - i; j < len(absent); j++ {
+						absent[j] = nil
+					}
+					absent = absent[:len(absent)-i]
+					unprocessed += len(req.hs)
+					close(req.ready)
 				}
-				copy(absent[:], absent[i:])
-				for j := len(absent) - i; j < len(absent); j++ {
-					absent[j] = nil
-				}
-				absent = absent[:len(absent)-i]
-				unprocessed += len(req.hs)
-				close(req.ready)
+			case <-ctx.Done():
+				return context.Cause(ctx)
 			}
-		case <-t.ctx.Done():
-			return
 		}
-	}
+	})
+
+	return eg.Wait()
 }
 
 // Run by a PullChunkTracker, calls HasMany on a batch of addresses and delivers the results.
-func hasManyThread(ctx context.Context, hasManyer HasManyer, reqCh <-chan trackerHasManyReq, respCh chan<- trackerHasManyResp, doneCh <-chan struct{}) {
+func hasManyThread(ctx context.Context, hasManyer HasManyer, reqCh <-chan trackerHasManyReq, respCh chan<- trackerHasManyResp, doneCh <-chan struct{}) error {
 	for {
 		select {
 		case req := <-reqCh:
@@ -248,23 +247,23 @@ func hasManyThread(ctx context.Context, hasManyer HasManyer, reqCh <-chan tracke
 				select {
 				case respCh <- trackerHasManyResp{err: err}:
 				case <-ctx.Done():
-					return
+					return context.Cause(ctx)
 				case <-doneCh:
-					return
+					return nil
 				}
 			} else {
 				select {
 				case respCh <- trackerHasManyResp{hs: hs}:
 				case <-ctx.Done():
-					return
+					return context.Cause(ctx)
 				case <-doneCh:
-					return
+					return nil
 				}
 			}
 		case <-doneCh:
-			return
+			return nil
 		case <-ctx.Done():
-			return
+			return context.Cause(ctx)
 		}
 	}
 }

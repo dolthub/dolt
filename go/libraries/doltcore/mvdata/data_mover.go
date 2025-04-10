@@ -19,14 +19,16 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
+	sqle "github.com/dolthub/go-mysql-server"
+	"github.com/dolthub/go-mysql-server/sql"
+
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 )
 
@@ -41,11 +43,15 @@ type XlsxOptions struct {
 type JSONOptions struct {
 	TableName string
 	SchFile   string
+	SqlCtx    *sql.Context
+	Engine    *sqle.Engine
 }
 
 type ParquetOptions struct {
 	TableName string
 	SchFile   string
+	SqlCtx    *sql.Context
+	Engine    *sqle.Engine
 }
 
 type MoverOptions struct {
@@ -89,30 +95,14 @@ func (dmce *DataMoverCreationError) String() string {
 }
 
 // SchAndTableNameFromFile reads a SQL schema file and creates a Dolt schema from it.
-func SchAndTableNameFromFile(ctx context.Context, path string, dEnv *env.DoltEnv) (string, schema.Schema, error) {
-	root, err := dEnv.WorkingRoot(ctx)
-	if err != nil {
-		return "", nil, err
-	}
-	fs := dEnv.FS
-
+func SchAndTableNameFromFile(ctx *sql.Context, path string, fs filesys.Filesys, root doltdb.RootValue, engine *sqle.Engine) (string, schema.Schema, error) {
 	if path != "" {
 		data, err := fs.ReadFile(path)
 		if err != nil {
 			return "", nil, err
 		}
 
-		eng, dbName, err := engine.NewSqlEngineForEnv(ctx, dEnv)
-		if err != nil {
-			return "", nil, err
-		}
-
-		sqlCtx, err := eng.NewDefaultContext(ctx)
-		if err != nil {
-			return "", nil, err
-		}
-		sqlCtx.SetCurrentDatabase(dbName)
-		tn, sch, err := sqlutil.ParseCreateTableStatement(sqlCtx, root, eng.GetUnderlyingEngine(), string(data))
+		tn, sch, err := sqlutil.ParseCreateTableStatement(ctx, root, engine, string(data))
 
 		if err != nil {
 			return "", nil, fmt.Errorf("%s in schema file %s", err.Error(), path)

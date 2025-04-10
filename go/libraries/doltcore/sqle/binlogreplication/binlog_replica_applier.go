@@ -33,6 +33,7 @@ import (
 	"github.com/dolthub/vitess/go/mysql"
 	"github.com/dolthub/vitess/go/sqltypes"
 	vquery "github.com/dolthub/vitess/go/vt/proto/query"
+	"github.com/dolthub/vitess/go/vt/vttls"
 	"github.com/sirupsen/logrus"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -165,9 +166,15 @@ func (a *binlogReplicaApplier) connectAndStartReplicationEventStream(ctx *sql.Co
 			return nil, ErrEmptyUsername
 		}
 
+		sslMode := vttls.Disabled
+		if replicaSourceInfo.Ssl {
+			sslMode = vttls.Required
+		}
+
 		connParams := mysql.ConnParams{
 			Host:             replicaSourceInfo.Host,
 			Port:             int(replicaSourceInfo.Port),
+			SslMode:          sslMode,
 			Uname:            replicaSourceInfo.User,
 			Pass:             replicaSourceInfo.Password,
 			ConnectTimeoutMs: 4_000,
@@ -215,7 +222,7 @@ func (a *binlogReplicaApplier) connectAndStartReplicationEventStream(ctx *sql.Co
 // startReplicationEventStream sends a request over |conn|, the connection to the MySQL source server, to begin
 // sending binlog events.
 func (a *binlogReplicaApplier) startReplicationEventStream(ctx *sql.Context, conn *mysql.Conn) error {
-	serverId, err := loadReplicaServerId()
+	serverId, err := loadReplicaServerId(ctx)
 	if err != nil {
 		return err
 	}
@@ -887,16 +894,16 @@ func convertSqlTypesValue(ctx *sql.Context, value sqltypes.Value, column *sql.Co
 		if err != nil {
 			return nil, err
 		}
-		convertedValue, _, err = column.Type.Convert(atoi)
+		convertedValue, _, err = column.Type.Convert(ctx, atoi)
 	case types.IsDecimal(column.Type):
 		// Decimal values need to have any leading/trailing whitespace trimmed off
 		// TODO: Consider moving this into DecimalType_.Convert; if DecimalType_.Convert handled trimming
 		//       leading/trailing whitespace, this special case for Decimal types wouldn't be needed.
-		convertedValue, _, err = column.Type.Convert(strings.TrimSpace(value.ToString()))
+		convertedValue, _, err = column.Type.Convert(ctx, strings.TrimSpace(value.ToString()))
 	case types.IsJSON(column.Type):
 		convertedValue, err = convertVitessJsonExpressionString(ctx, value)
 	default:
-		convertedValue, _, err = column.Type.Convert(value.ToString())
+		convertedValue, _, err = column.Type.Convert(ctx, value.ToString())
 	}
 	if err != nil {
 		return nil, fmt.Errorf("unable to convert value %q, for column of type %T: %v", value.ToString(), column.Type, err.Error())
@@ -964,7 +971,7 @@ func getAllUserDatabaseNames(ctx *sql.Context, engine *gms.Engine) []string {
 
 // loadReplicaServerId loads the @@GLOBAL.server_id system variable needed to register the replica with the source,
 // and returns an error specific to replication configuration if the variable is not set to a valid value.
-func loadReplicaServerId() (uint32, error) {
+func loadReplicaServerId(ctx *sql.Context) (uint32, error) {
 	serverIdVar, value, ok := sql.SystemVariables.GetGlobal("server_id")
 	if !ok {
 		return 0, fmt.Errorf("no server_id global system variable set")
@@ -975,7 +982,7 @@ func loadReplicaServerId() (uint32, error) {
 	serverId, ok := value.(uint32)
 	if !ok {
 		var err error
-		value, _, err = serverIdVar.GetType().Convert(value)
+		value, _, err = serverIdVar.GetType().Convert(ctx, value)
 		if err != nil {
 			return 0, err
 		}

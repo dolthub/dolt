@@ -93,8 +93,16 @@ func writeDoltDoc(ctx context.Context, dEnv *env.DoltEnv, docName string) error 
 	if err != nil {
 		return err
 	}
+	sqlCtx, err := eng.NewLocalContext(ctx)
+	if err != nil {
+		return err
+	}
+	defer sql.SessionEnd(sqlCtx.Session)
+	sql.SessionCommandBegin(sqlCtx.Session)
+	defer sql.SessionCommandEnd(sqlCtx.Session)
+	sqlCtx.SetCurrentDatabase(dbName)
 
-	doc, err := readDocFromTable(ctx, eng, dbName, docName)
+	doc, err := readDocFromTable(sqlCtx, eng, docName)
 	if err != nil {
 		return err
 	}
@@ -108,13 +116,12 @@ const (
 		"FROM dolt_docs %s WHERE " + doltdb.DocPkColumnName + " = '%s'"
 )
 
-func readDocFromTable(ctx context.Context, eng *engine.SqlEngine, dbName, docName string) (string, error) {
-	return readDocFromTableAsOf(ctx, eng, dbName, docName, "")
+func readDocFromTable(ctx *sql.Context, eng *engine.SqlEngine, docName string) (string, error) {
+	return readDocFromTableAsOf(ctx, eng, docName, "")
 }
 
-func readDocFromTableAsOf(ctx context.Context, eng *engine.SqlEngine, dbName, docName, asOf string) (doc string, err error) {
+func readDocFromTableAsOf(ctx *sql.Context, eng *engine.SqlEngine, docName, asOf string) (doc string, err error) {
 	var (
-		sctx *sql.Context
 		iter sql.RowIter
 		row  sql.Row
 	)
@@ -124,13 +131,7 @@ func readDocFromTableAsOf(ctx context.Context, eng *engine.SqlEngine, dbName, do
 	}
 	query := fmt.Sprintf(readDocTemplate, asOf, docName)
 
-	sctx, err = eng.NewLocalContext(ctx)
-	if err != nil {
-		return "", err
-	}
-	sctx.SetCurrentDatabase(dbName)
-
-	_, iter, _, err = eng.Query(sctx, query)
+	_, iter, _, err = eng.Query(ctx, query)
 	if sql.ErrTableNotFound.Is(err) {
 		return "", errors.New("no dolt docs in this database")
 	}
@@ -139,12 +140,12 @@ func readDocFromTableAsOf(ctx context.Context, eng *engine.SqlEngine, dbName, do
 	}
 
 	defer func() {
-		if cerr := iter.Close(sctx); err == nil {
+		if cerr := iter.Close(ctx); err == nil {
 			err = cerr
 		}
 	}()
 
-	row, err = iter.Next(sctx)
+	row, err = iter.Next(ctx)
 	if err == io.EOF {
 		// doc does not exist
 		return "", nil
@@ -153,9 +154,16 @@ func readDocFromTableAsOf(ctx context.Context, eng *engine.SqlEngine, dbName, do
 		return "", err
 	}
 
-	doc = row[0].(string)
+	var ok bool
+	doc, ok, err = sql.Unwrap[string](ctx, row[0])
+	if err != nil {
+		return "", err
+	}
+	if !ok {
+		return "", fmt.Errorf("unexpected type for %s: expected string, found %T", doltdb.DocTextColumnName, row[0])
+	}
 
-	_, eof := iter.Next(sctx)
+	_, eof := iter.Next(ctx)
 	if eof != io.EOF && eof != nil {
 		return "", eof
 	}

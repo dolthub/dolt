@@ -54,7 +54,6 @@ type Puller struct {
 	hashes        hash.HashSet
 
 	wr *PullTableFileWriter
-	rd nbs.ChunkFetcher
 
 	pushLog *log.Logger
 
@@ -67,7 +66,7 @@ type Puller struct {
 func NewPuller(
 	ctx context.Context,
 	tempDir string,
-	chunksPerTF int,
+	targetFileSz uint64,
 	srcCS, sinkCS chunks.ChunkStore,
 	walkAddrs WalkAddrs,
 	hashes []hash.Hash,
@@ -113,16 +112,14 @@ func NewPuller(
 		}
 	}
 
-	wr := NewPullTableFileWriter(ctx, PullTableFileWriterConfig{
+	wr := NewPullTableFileWriter(PullTableFileWriterConfig{
 		ConcurrentUploads:    2,
-		ChunksPerFile:        chunksPerTF,
+		TargetFileSize:       targetFileSz,
 		MaximumBufferedFiles: 8,
 		TempDir:              tempDir,
 		DestStore:            sinkCS.(chunks.TableFileStore),
 		GetAddrs:             getAddrs,
 	})
-
-	rd := GetChunkFetcher(ctx, srcChunkStore)
 
 	var pushLogger *log.Logger
 	if dbg, ok := os.LookupEnv(dconfig.EnvPushLog); ok && strings.EqualFold(dbg, "true") {
@@ -140,7 +137,6 @@ func NewPuller(
 		sinkDBCS:      sinkCS,
 		hashes:        hash.NewHashSet(hashes...),
 		wr:            wr,
-		rd:            rd,
 		pushLog:       pushLogger,
 		statsCh:       statsCh,
 		stats: &stats{
@@ -313,25 +309,36 @@ func (p *Puller) Pull(ctx context.Context) error {
 
 	eg, ctx := errgroup.WithContext(ctx)
 
+	rd := GetChunkFetcher(ctx, p.srcChunkStore)
+
 	const batchSize = 64 * 1024
-	tracker := NewPullChunkTracker(ctx, p.hashes, TrackerConfig{
+	tracker := NewPullChunkTracker(TrackerConfig{
 		BatchSize: batchSize,
 		HasManyer: p.sinkDBCS,
 	})
 
+	eg.Go(func() error {
+		return tracker.Run(ctx, p.hashes)
+	})
+
+	eg.Go(func() error {
+		return p.wr.Run(ctx)
+	})
+
 	// One thread calls ChunkFetcher.Get on each batch.
 	eg.Go(func() error {
+		defer tracker.Close()
 		for {
-			toFetch, hasMore, err := tracker.GetChunksToFetch()
+			toFetch, hasMore, err := tracker.GetChunksToFetch(ctx)
 			if err != nil {
 				return err
 			}
 			if !hasMore {
-				return p.rd.CloseSend()
+				return rd.CloseSend()
 			}
 
 			atomic.AddUint64(&p.stats.totalSourceChunks, uint64(len(toFetch)))
-			err = p.rd.Get(ctx, toFetch)
+			err = rd.Get(ctx, toFetch)
 			if err != nil {
 				return err
 			}
@@ -339,9 +346,13 @@ func (p *Puller) Pull(ctx context.Context) error {
 	})
 
 	// One thread reads the received chunks, walks their addresses and writes them to the table file.
-	eg.Go(func() error {
+	eg.Go(func() (err error) {
+		defer func() {
+			cerr := rd.Close()
+			err = errors.Join(err, cerr)
+		}()
 		for {
-			cChk, err := p.rd.Recv(ctx)
+			cChk, err := rd.Recv(ctx)
 			if err == io.EOF {
 				// This means the requesting thread
 				// successfully saw all chunk addresses and
@@ -351,7 +362,8 @@ func (p *Puller) Pull(ctx context.Context) error {
 				// on uploading any table files and will write
 				// the new table files to the destination's
 				// manifest.
-				return p.wr.Close()
+				p.wr.Close()
+				return nil
 			}
 			if err != nil {
 				return err
@@ -373,13 +385,13 @@ func (p *Puller) Pull(ctx context.Context) error {
 			atomic.AddUint64(&p.stats.fetchedSourceBytes, uint64(len(chnk.Data())))
 
 			err = p.waf(chnk, func(h hash.Hash, _ bool) error {
-				tracker.Seen(h)
+				tracker.Seen(ctx, h)
 				return nil
 			})
 			if err != nil {
 				return err
 			}
-			tracker.TickProcessed()
+			tracker.TickProcessed(ctx)
 
 			err = p.wr.AddToChunker(ctx, cChk)
 			if err != nil {
@@ -388,12 +400,5 @@ func (p *Puller) Pull(ctx context.Context) error {
 		}
 	})
 
-	// Always close the reader outside of the errgroup threads above.
-	// Closing the reader will cause Get() to start returning errors, and
-	// we don't need to deliver that error to the Get thread. Both threads
-	// should exit and return any errors they encounter, after which the
-	// errgroup will report the error.
-	wErr := eg.Wait()
-	rErr := p.rd.Close()
-	return errors.Join(wErr, rErr)
+	return eg.Wait()
 }

@@ -665,7 +665,10 @@ func (uv uniqValidator) validateDiff(ctx *sql.Context, diff tree.ThreeWayDiff) (
 // boolean that indicates if an artifact was deleted, as well as an error that indicates if there were any
 // unexpected errors encountered.
 func (uv uniqValidator) deleteArtifact(ctx context.Context, key val.Tuple) (bool, error) {
-	artifactKey := uv.edits.BuildArtifactKey(ctx, key, uv.srcHash, prolly.ArtifactTypeUniqueKeyViol)
+	artifactKey, err := uv.edits.BuildArtifactKey(ctx, key, uv.srcHash, prolly.ArtifactTypeUniqueKeyViol)
+	if err != nil {
+		return false, err
+	}
 
 	has, err := uv.edits.Has(ctx, artifactKey)
 	if err != nil || !has {
@@ -684,7 +687,7 @@ func (uv uniqValidator) deleteArtifact(ctx context.Context, key val.Tuple) (bool
 // and then checks to see if only one unique constraint violation artifact remains, and if so, deletes it as well,
 // since only a single row remaining for a unique constraint violation means that the violation has been fully
 // resolved and no other rows conflict with that unique value.
-func (uv uniqValidator) clearArtifact(ctx context.Context, key val.Tuple, prevValue val.Tuple) (int, error) {
+func (uv uniqValidator) clearArtifact(ctx *sql.Context, key val.Tuple, prevValue val.Tuple) (int, error) {
 	deleted, err := uv.deleteArtifact(ctx, key)
 	if err != nil || !deleted {
 		return 0, err
@@ -746,7 +749,7 @@ func newUniqIndex(ctx *sql.Context, sch schema.Schema, tableName string, def sch
 		return uniqIndex{}, err
 	}
 
-	clusteredBld := index.NewClusteredKeyBuilder(def, sch, clustered.KeyDesc(), p)
+	clusteredBld := index.NewClusteredKeyBuilder(def, sch, clustered.KeyDesc(), p, clustered.NodeStore())
 
 	return uniqIndex{
 		def:              def,
@@ -762,7 +765,7 @@ func newUniqIndex(ctx *sql.Context, sch schema.Schema, tableName string, def sch
 
 type collisionFn func(key, value val.Tuple) error
 
-func (idx uniqIndex) insertRow(ctx context.Context, key, value val.Tuple) error {
+func (idx uniqIndex) insertRow(ctx *sql.Context, key, value val.Tuple) error {
 	secondaryIndexKey, err := idx.secondaryBld.SecondaryKeyFromRow(ctx, key, value)
 	if err != nil {
 		return err
@@ -772,7 +775,7 @@ func (idx uniqIndex) insertRow(ctx context.Context, key, value val.Tuple) error 
 	return idx.secondary.Put(ctx, secondaryIndexKey, val.EmptyTuple)
 }
 
-func (idx uniqIndex) removeRow(ctx context.Context, key, value val.Tuple) error {
+func (idx uniqIndex) removeRow(ctx *sql.Context, key, value val.Tuple) error {
 	secondaryIndexKey, err := idx.secondaryBld.SecondaryKeyFromRow(ctx, key, value)
 	if err != nil {
 		return err
@@ -783,14 +786,17 @@ func (idx uniqIndex) removeRow(ctx context.Context, key, value val.Tuple) error 
 		return err
 	}
 
-	clusteredIndexKey := idx.clusteredBld.ClusteredKeyFromIndexKey(secondaryIndexKey)
+	clusteredIndexKey, err := idx.clusteredBld.ClusteredKeyFromIndexKey(secondaryIndexKey)
+	if err != nil {
+		return err
+	}
 	return idx.clustered.Delete(ctx, clusteredIndexKey)
 }
 
 // findCollisions searches this unique index to find any rows that have the same values as |value| for the columns
 // included in the unique constraint. For any matching row, the specified callback, |cb|, is invoked with the key
 // and value for the primary index, representing the conflicting row identified from the unique index.
-func (idx uniqIndex) findCollisions(ctx context.Context, key, value val.Tuple, cb collisionFn) error {
+func (idx uniqIndex) findCollisions(ctx *sql.Context, key, value val.Tuple, cb collisionFn) error {
 	indexKey, err := idx.secondaryBld.SecondaryKeyFromRow(ctx, key, value)
 	if err != nil {
 		return err
@@ -816,7 +822,10 @@ func (idx uniqIndex) findCollisions(ctx context.Context, key, value val.Tuple, c
 	collisionDetected := false
 	for _, collision := range collisions {
 		// Next find the key in the primary (aka clustered) index
-		clusteredKey := idx.clusteredBld.ClusteredKeyFromIndexKey(collision)
+		clusteredKey, err := idx.clusteredBld.ClusteredKeyFromIndexKey(collision)
+		if err != nil {
+			return err
+		}
 		if bytes.Equal(key, clusteredKey) {
 			continue // collided with ourselves
 		}
@@ -891,7 +900,7 @@ func newNullValidator(
 	}, nil
 }
 
-func (nv nullValidator) validateDiff(ctx context.Context, diff tree.ThreeWayDiff) (count int, err error) {
+func (nv nullValidator) validateDiff(ctx *sql.Context, diff tree.ThreeWayDiff) (count int, err error) {
 	switch diff.Op {
 	case tree.DiffOpRightAdd, tree.DiffOpRightModify:
 		var violations []string
@@ -1476,7 +1485,7 @@ func remapTupleWithColumnDefaults(
 	pool pool.BuffPool,
 	rightSide bool,
 ) (val.Tuple, error) {
-	tb := val.NewTupleBuilder(mergedSch.GetValueDescriptor(tm.ns))
+	tb := val.NewTupleBuilder(mergedSch.GetValueDescriptor(tm.ns), tm.ns)
 
 	var secondPass []int
 	for to, from := range mapping {
@@ -1502,7 +1511,7 @@ func remapTupleWithColumnDefaults(
 			}
 
 			// If the type has changed, then call convert to convert the value to the new type
-			value, err = convertValueToNewType(value, col.TypeInfo, tm, from, rightSide)
+			value, err = convertValueToNewType(ctx, value, col.TypeInfo, tm, from, rightSide)
 			if err != nil {
 				return nil, err
 			}
@@ -1522,7 +1531,7 @@ func remapTupleWithColumnDefaults(
 		}
 	}
 
-	return tb.Build(pool), nil
+	return tb.Build(pool)
 }
 
 // writeTupleExpression attempts to evaluate the expression string |exprString| against the row provided and write it
@@ -1552,7 +1561,7 @@ func writeTupleExpression(
 		return err
 	}
 
-	value, _, err = col.TypeInfo.ToSqlType().Convert(value)
+	value, _, err = col.TypeInfo.ToSqlType().Convert(ctx, value)
 	if err != nil {
 		return err
 	}
@@ -1567,7 +1576,7 @@ func writeTupleExpression(
 // or the left side. If the previous type info is the same as the current type info for the merged schema, then this
 // function is a no-op and simply returns |value|. The converted value along with any unexpected error encountered is
 // returned.
-func convertValueToNewType(value interface{}, newTypeInfo typeinfo.TypeInfo, tm *TableMerger, from int, rightSide bool) (interface{}, error) {
+func convertValueToNewType(ctx *sql.Context, value interface{}, newTypeInfo typeinfo.TypeInfo, tm *TableMerger, from int, rightSide bool) (interface{}, error) {
 	var previousTypeInfo typeinfo.TypeInfo
 	if rightSide {
 		previousTypeInfo = tm.rightSch.GetNonPKCols().GetByIndex(from).TypeInfo
@@ -1580,7 +1589,7 @@ func convertValueToNewType(value interface{}, newTypeInfo typeinfo.TypeInfo, tm 
 	}
 
 	// If the type has changed, then call convert to convert the value to the new type
-	newValue, inRange, err := newTypeInfo.ToSqlType().Convert(value)
+	newValue, inRange, err := newTypeInfo.ToSqlType().Convert(ctx, value)
 	if err != nil {
 		return nil, err
 	}
@@ -2179,7 +2188,7 @@ func convert(ctx context.Context, fromDesc, toDesc val.TupleDesc, toSchema schem
 		return nil, err
 	}
 	sqlType := toSchema.GetNonPKCols().GetByIndex(toIndex).TypeInfo.ToSqlType()
-	convertedCell, _, err := sqlType.Convert(parsedCell)
+	convertedCell, _, err := sqlType.Convert(ctx, parsedCell)
 	if err != nil {
 		return nil, err
 	}

@@ -74,7 +74,7 @@ func newProllyIndexIter(
 		return prollyIndexIter{}, err
 	}
 	kd, _ := primary.Descriptors()
-	pkBld := val.NewTupleBuilder(kd)
+	pkBld := val.NewTupleBuilder(kd, primary.NodeStore())
 	pkMap := OrdinalMappingFromIndex(idx)
 	keyProj, valProj, ordProj := projectionMappings(idx.Schema(), projections)
 
@@ -104,7 +104,10 @@ func (p prollyIndexIter) Next(ctx *sql.Context) (sql.Row, error) {
 		from := p.pkMap.MapOrdinal(to)
 		p.pkBld.PutRaw(to, idxKey.GetField(from))
 	}
-	pk := p.pkBld.Build(sharePool)
+	pk, err := p.pkBld.Build(sharePool)
+	if err != nil {
+		return nil, err
+	}
 
 	r := make(sql.Row, len(p.projections))
 	err = p.primary.Get(ctx, pk, func(key, value val.Tuple) error {
@@ -330,7 +333,7 @@ func newProllyKeylessIndexIter(ctx *sql.Context, idx DoltIndex, rng prolly.Range
 	}
 	keyDesc, valDesc := clustered.Descriptors()
 	indexMap := OrdinalMappingFromIndex(idx)
-	keyBld := val.NewTupleBuilder(keyDesc)
+	keyBld := val.NewTupleBuilder(keyDesc, clustered.NodeStore())
 	sch := idx.Schema()
 	_, vm, om := projectionMappings(sch, projections)
 
@@ -384,7 +387,10 @@ func (p prollyKeylessIndexIter) queueRows(ctx context.Context) error {
 			from := p.clusteredMap.MapOrdinal(to)
 			p.clusteredBld.PutRaw(to, idxKey.GetField(from))
 		}
-		pk := p.clusteredBld.Build(sharePool)
+		pk, err := p.clusteredBld.Build(sharePool)
+		if err != nil {
+			return err
+		}
 
 		var value val.Tuple
 		err = p.clustered.Get(ctx, pk, func(k, v val.Tuple) error {

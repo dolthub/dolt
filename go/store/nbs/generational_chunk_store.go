@@ -23,6 +23,8 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -58,11 +60,19 @@ func NewGenerationalCS(oldGen, newGen *NomsBlockStore, ghostGen *GhostBlockStore
 		panic("oldgen and newgen chunkstore versions vary")
 	}
 
+	oldGen.AppendLoggerFields(logrus.Fields{"generation": "old"})
+	newGen.AppendLoggerFields(logrus.Fields{"generation": "new"})
+
 	return &GenerationalNBS{
 		oldGen:   oldGen,
 		newGen:   newGen,
 		ghostGen: ghostGen,
 	}
+}
+
+func (gcs *GenerationalNBS) AppendLoggerFields(fields logrus.Fields) {
+	gcs.oldGen.AppendLoggerFields(fields)
+	gcs.newGen.AppendLoggerFields(fields)
 }
 
 func (gcs *GenerationalNBS) NewGen() chunks.ChunkStoreGarbageCollector {
@@ -270,10 +280,7 @@ func (gcs *GenerationalNBS) Version() string {
 func (gcs *GenerationalNBS) AccessMode() chunks.ExclusiveAccessMode {
 	newGenMode := gcs.newGen.AccessMode()
 	oldGenMode := gcs.oldGen.AccessMode()
-	if oldGenMode > newGenMode {
-		return oldGenMode
-	}
-	return newGenMode
+	return max(oldGenMode, newGenMode)
 }
 
 // Rebase brings this ChunkStore into sync with the persistent storage's

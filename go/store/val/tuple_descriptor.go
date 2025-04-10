@@ -15,6 +15,7 @@
 package val
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
 	"fmt"
@@ -103,6 +104,15 @@ func IterAddressFields(td TupleDesc, cb func(int, Type)) {
 		switch typ.Enc {
 		case BytesAddrEnc, StringAddrEnc,
 			JSONAddrEnc, CommitAddrEnc, GeomAddrEnc:
+			cb(i, typ)
+		}
+	}
+}
+
+func IterAdaptiveFields(td TupleDesc, cb func(int, Type)) {
+	for i, typ := range td.Types {
+		switch typ.Enc {
+		case BytesAdaptiveEnc, StringAdaptiveEnc, ExtendedAdaptiveEnc:
 			cb(i, typ)
 		}
 	}
@@ -498,6 +508,13 @@ func (td TupleDesc) GetExtendedAddr(i int, tup Tuple) (hash.Hash, bool) {
 	return td.getAddr(i, tup)
 }
 
+// GetExtended reads a byte slice from the ith field of the Tuple.
+func (td TupleDesc) GetExtendedAdaptiveValue(i int, tup Tuple) ([]byte, bool) {
+	td.expectEncoding(i, ExtendedAdaptiveEnc)
+	v := td.GetField(i, tup)
+	return v, v != nil
+}
+
 func (td TupleDesc) GetJSONAddr(i int, tup Tuple) (hash.Hash, bool) {
 	td.expectEncoding(i, JSONAddrEnc)
 	return td.getAddr(i, tup)
@@ -511,6 +528,42 @@ func (td TupleDesc) GetStringAddr(i int, tup Tuple) (hash.Hash, bool) {
 func (td TupleDesc) GetBytesAddr(i int, tup Tuple) (hash.Hash, bool) {
 	td.expectEncoding(i, BytesAddrEnc)
 	return td.getAddr(i, tup)
+}
+
+// GetBytesAdaptiveValue returns either a []byte or a BytesWrapper, but Go doesn't allow us to use a single type for that.
+func (td TupleDesc) GetBytesAdaptiveValue(i int, vs ValueStore, tup Tuple) (interface{}, bool, error) {
+	// TODO: Add context parameter
+	ctx := context.Background()
+	td.expectEncoding(i, BytesAdaptiveEnc)
+	adaptiveValue := AdaptiveValue(td.GetField(i, tup))
+	if len(adaptiveValue) == 0 {
+		return nil, false, nil
+	}
+	if adaptiveValue.isInlined() {
+		val, err := adaptiveValue.getUnderlyingBytes(ctx, vs)
+		return val, true, err
+	} else {
+		val, err := adaptiveValue.convertToByteArray(ctx, vs, nil)
+		return val, true, err
+	}
+}
+
+// GetStringAdaptiveValue returns either a string or a StringWrapper, but Go doesn't allow us to use a single type for that.
+func (td TupleDesc) GetStringAdaptiveValue(i int, vs ValueStore, tup Tuple) (interface{}, bool, error) {
+	// TODO: Add context parameter
+	ctx := context.Background()
+	td.expectEncoding(i, StringAdaptiveEnc)
+	adaptiveValue := AdaptiveValue(td.GetField(i, tup))
+	if len(adaptiveValue) == 0 {
+		return nil, false, nil
+	}
+	if adaptiveValue.isInlined() {
+		val, err := adaptiveValue.getUnderlyingBytes(ctx, vs)
+		return string(val), true, err
+	} else {
+		val, err := adaptiveValue.convertToTextStorage(ctx, vs, nil)
+		return val, true, err
+	}
 }
 
 func (td TupleDesc) GetCommitAddr(i int, tup Tuple) (v hash.Hash, ok bool) {
@@ -687,6 +740,10 @@ func NewExtendedAddressTypeHandler(vs ValueStore, childHandler TupleTypeHandler)
 }
 
 func (handler AddressTypeHandler) SerializedCompare(ctx context.Context, v1 []byte, v2 []byte) (int, error) {
+	// If hashes are equal, the values must be equal
+	if bytes.Compare(v1, v2) == 0 {
+		return 0, nil
+	}
 	// TODO: If the child handler allows, compare the values one chunk at a time instead of always fully deserializing them.
 	var err error
 	var v1Bytes []byte
@@ -711,6 +768,9 @@ func (handler AddressTypeHandler) SerializeValue(ctx context.Context, val any) (
 	if err != nil {
 		return nil, err
 	}
+	if len(b) == 0 {
+		return nil, nil
+	}
 	h, err := handler.vs.WriteBytes(context.Background(), b)
 	if err != nil {
 		return nil, err
@@ -719,6 +779,9 @@ func (handler AddressTypeHandler) SerializeValue(ctx context.Context, val any) (
 }
 
 func (handler AddressTypeHandler) DeserializeValue(ctx context.Context, val []byte) (any, error) {
+	if len(val) == 0 {
+		return nil, nil
+	}
 	b, err := handler.vs.ReadBytes(ctx, hash.New(val))
 	if err != nil {
 		return nil, err
@@ -729,5 +792,3 @@ func (handler AddressTypeHandler) DeserializeValue(ctx context.Context, val []by
 func (handler AddressTypeHandler) FormatValue(val any) (string, error) {
 	return handler.childHandler.FormatValue(val)
 }
-
-var _ TupleTypeHandler = AddressTypeHandler{}

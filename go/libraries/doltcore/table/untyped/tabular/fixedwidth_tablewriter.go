@@ -118,15 +118,15 @@ var colDiffColors = map[diff.ChangeType]*color.Color{
 	diff.Removed:     colorRemoved,
 }
 
-func (w *FixedWidthTableWriter) WriteSqlRow(ctx context.Context, r sql.Row) error {
+func (w *FixedWidthTableWriter) WriteSqlRow(ctx *sql.Context, r sql.Row) error {
 	return w.WriteColoredSqlRow(ctx, r, nil)
 }
 
 // WriteColoredSqlRow writes the given SQL row to the buffer. If colors are nil, then uses the default color.
-func (w *FixedWidthTableWriter) WriteColoredSqlRow(ctx context.Context, r sql.Row, colors []*color.Color) error {
+func (w *FixedWidthTableWriter) WriteColoredSqlRow(ctx *sql.Context, r sql.Row, colors []*color.Color) error {
 	strRow := make([]string, len(r))
 	for i := range r {
-		str, err := w.stringValue(i, r[i])
+		str, err := w.stringValue(ctx, i, r[i])
 		if err != nil {
 			return err
 		}
@@ -214,11 +214,12 @@ func (w *FixedWidthTableWriter) flushSampleBuffer() error {
 	return nil
 }
 
-func (w *FixedWidthTableWriter) stringValue(idx int, i interface{}) (string, error) {
+func (w *FixedWidthTableWriter) stringValue(ctx *sql.Context, idx int, i interface{}) (string, error) {
 	if i == nil {
 		return "NULL", nil
 	}
-	return sqlutil.SqlColToStr(w.schema[idx].Type, i)
+
+	return sqlutil.SqlColToStr(ctx, w.schema[idx].Type, i)
 }
 
 func (w *FixedWidthTableWriter) writeRow(row tableRow) error {
@@ -259,31 +260,6 @@ func (w *FixedWidthTableWriter) writeRow(row tableRow) error {
 
 	w.numRowsWritten++
 	return iohelp.WriteLine(w.wr, rowStr.String())
-}
-
-func (w *FixedWidthTableWriter) rowToTableRow(row sql.Row, colors []*color.Color) (tableRow, error) {
-	tRow := tableRow{
-		columns: make([]string, len(row)),
-		colors:  colors,
-		widths:  make([]FixedWidthString, len(row)),
-		height:  1,
-	}
-
-	var err error
-	for i := range row {
-		tRow.columns[i], err = w.stringValue(i, row[i])
-		if err != nil {
-			return tableRow{}, err
-		}
-
-		stringWidth := NewFixedWidthString(tRow.columns[i])
-		tRow.widths[i] = stringWidth
-		if len(stringWidth.Lines) > tRow.height {
-			tRow.height = len(stringWidth.Lines)
-		}
-	}
-
-	return tRow, nil
 }
 
 func (w *FixedWidthTableWriter) writeHeader() error {

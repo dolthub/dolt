@@ -83,8 +83,8 @@ func newProgress(ctx context.Context, cs chunks.ChunkStore) (*progress, error) {
 	}
 
 	mut := mapping.Mutate()
-	kb := val.NewTupleBuilder(kd)
-	vb := val.NewTupleBuilder(vd)
+	kb := val.NewTupleBuilder(kd, ns)
+	vb := val.NewTupleBuilder(vd, ns)
 
 	return &progress{
 		stack:    make([]*doltdb.Commit, 0, 128),
@@ -99,13 +99,19 @@ func newProgress(ctx context.Context, cs chunks.ChunkStore) (*progress, error) {
 
 func (p *progress) Has(ctx context.Context, addr hash.Hash) (ok bool, err error) {
 	p.kb.PutByteString(0, addr[:])
-	k := p.kb.Build(p.buffPool)
+	k, err := p.kb.Build(p.buffPool)
+	if err != nil {
+		return false, err
+	}
 	return p.mapping.Has(ctx, k)
 }
 
 func (p *progress) Get(ctx context.Context, old hash.Hash) (new hash.Hash, err error) {
 	p.kb.PutByteString(0, old[:])
-	k := p.kb.Build(p.buffPool)
+	k, err := p.kb.Build(p.buffPool)
+	if err != nil {
+		return new, err
+	}
 	err = p.mapping.Get(ctx, k, func(_, v val.Tuple) error {
 		if len(v) > 0 {
 			n, ok := p.vb.Desc.GetBytes(0, v)
@@ -116,14 +122,20 @@ func (p *progress) Get(ctx context.Context, old hash.Hash) (new hash.Hash, err e
 		}
 		return nil
 	})
-	return
+	return new, err
 }
 
 func (p *progress) Put(ctx context.Context, old, new hash.Hash) (err error) {
 	p.kb.PutByteString(0, old[:])
-	k := p.kb.Build(p.buffPool)
+	k, err := p.kb.Build(p.buffPool)
+	if err != nil {
+		return err
+	}
 	p.vb.PutByteString(0, new[:])
-	v := p.vb.Build(p.buffPool)
+	v, err := p.vb.Build(p.buffPool)
+	if err != nil {
+		return err
+	}
 	err = p.mapping.Put(ctx, k, v)
 	return
 }
@@ -194,7 +206,7 @@ func persistMigratedCommitMapping(ctx context.Context, ddb *doltdb.DoltDB, mappi
 	}
 
 	rows := m.Mutate()
-	bld := val.NewTupleBuilder(desc)
+	bld := val.NewTupleBuilder(desc, ns)
 
 	// convert |mapping| values from hash.Hash to string
 	iter, err := mapping.IterAll(ctx)
@@ -214,11 +226,17 @@ func persistMigratedCommitMapping(ctx context.Context, ddb *doltdb.DoltDB, mappi
 
 		o, _ := kd.GetBytes(0, k)
 		bld.PutString(0, hash.New(o).String())
-		key := bld.Build(ddb.NodeStore().Pool())
+		key, err := bld.Build(ddb.NodeStore().Pool())
+		if err != nil {
+			return err
+		}
 
 		n, _ := vd.GetBytes(0, v)
 		bld.PutString(0, hash.New(n).String())
-		value := bld.Build(ddb.NodeStore().Pool())
+		value, err := bld.Build(ddb.NodeStore().Pool())
+		if err != nil {
+			return err
+		}
 
 		if err = rows.Put(ctx, key, value); err != nil {
 			return err
@@ -273,7 +291,7 @@ func commitRoot(
 		return err
 	}
 
-	pcm, err := ddb.NewPendingCommit(ctx, roots, parents, meta)
+	pcm, err := ddb.NewPendingCommit(ctx, roots, parents, false, meta)
 	if err != nil {
 		return err
 	}

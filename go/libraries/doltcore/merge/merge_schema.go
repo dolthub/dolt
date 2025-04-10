@@ -166,11 +166,15 @@ var ErrMergeWithDifferentPksFromAncestor = errorkinds.NewKind("error: cannot mer
 // any schema conflicts identified, whether moving to the new schema requires a full table rewrite, and any
 // unexpected error encountered while merging the schemas.
 func SchemaMerge(
-	ctx context.Context,
+	ctx *sql.Context,
 	format *storetypes.NomsBinFormat,
 	ourSch, theirSch, ancSch schema.Schema,
 	tblName doltdb.TableName,
 ) (sch schema.Schema, sc SchemaConflict, mergeInfo MergeInfo, diffInfo tree.ThreeWayDiffInfo, err error) {
+	// If the schemas are nil, then we have nothing to do here
+	if ourSch == nil && theirSch == nil && ancSch == nil {
+		return nil, sc, mergeInfo, diffInfo, nil
+	}
 	// (sch - ancSch) ∪ (mergeSch - ancSch) ∪ (sch ∩ mergeSch)
 	sc = SchemaConflict{
 		TableName: tblName,
@@ -239,7 +243,7 @@ func SchemaMerge(
 	// Look for invalid CHECKs
 	for _, chk := range mergedChks {
 		// CONFLICT: a CHECK now references a column that no longer exists in schema
-		if ok, err := isCheckReferenced(sch, chk); err != nil {
+		if ok, err := isCheckReferenced(ctx, sch, chk); err != nil {
 			return nil, sc, mergeInfo, diffInfo, err
 		} else if !ok {
 			// Append to conflicts
@@ -1351,13 +1355,13 @@ func mergeChecks(ctx context.Context, ourChks, theirChks, ancChks schema.CheckCo
 }
 
 // isCheckReferenced determine if columns referenced in check are in schema
-func isCheckReferenced(sch schema.Schema, chk schema.Check) (bool, error) {
+func isCheckReferenced(ctx *sql.Context, sch schema.Schema, chk schema.Check) (bool, error) {
 	chkDef := sql.CheckDefinition{
 		Name:            chk.Name(),
 		CheckExpression: chk.Expression(),
 		Enforced:        chk.Enforced(),
 	}
-	colNames, err := ColumnsFromCheckDefinition(sql.NewEmptyContext(), &chkDef)
+	colNames, err := ColumnsFromCheckDefinition(ctx, &chkDef)
 	if err != nil {
 		return false, err
 	}

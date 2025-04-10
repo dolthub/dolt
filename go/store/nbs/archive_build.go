@@ -114,7 +114,7 @@ func UnArchive(ctx context.Context, cs chunks.ChunkStore, smd StorageMetadata, p
 	return nil
 }
 
-func BuildArchive(ctx context.Context, cs chunks.ChunkStore, dagGroups *ChunkRelations, progress chan interface{}) (err error) {
+func BuildArchive(ctx context.Context, cs chunks.ChunkStore, dagGroups *ChunkRelations, purge bool, progress chan interface{}) (err error) {
 	// Currently, we don't have any stats to report. Required for calls to the lower layers tho.
 	var stats Stats
 
@@ -165,12 +165,15 @@ func BuildArchive(ctx context.Context, cs chunks.ChunkStore, dagGroups *ChunkRel
 			return fmt.Errorf("No tables found to archive. Run 'dolt gc' first")
 		}
 
+		cleanup := make([]hash.Hash, 0, len(swapMap))
+
 		//NM4 TODO: This code path must only be run on an offline database. We should add a check for that.
 		specs, err := gs.oldGen.tables.toSpecs()
 		newSpecs := make([]tableSpec, 0, len(specs))
 		for _, spec := range specs {
 			if newSpec, exists := swapMap[spec.name]; exists {
 				newSpecs = append(newSpecs, tableSpec{newSpec, spec.chunkCount})
+				cleanup = append(cleanup, spec.name)
 			} else {
 				newSpecs = append(newSpecs, spec)
 			}
@@ -179,6 +182,17 @@ func BuildArchive(ctx context.Context, cs chunks.ChunkStore, dagGroups *ChunkRel
 		if err != nil {
 			return err
 		}
+
+		if purge && len(cleanup) > 0 {
+			for _, h := range cleanup {
+				tf := filepath.Join(outPath, h.String())
+				err = os.Remove(tf)
+				if err != nil {
+					return err
+				}
+			}
+		}
+
 	} else {
 		return errors.New("Modern DB Expected")
 	}

@@ -29,6 +29,22 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 )
 
+func unwrapRow(t *testing.T, row sql.Row) (unwrappedRow sql.Row) {
+	for _, col := range row {
+		newCol, err := sql.UnwrapAny(context.Background(), col)
+		require.NoError(t, err)
+		unwrappedRow = append(unwrappedRow, newCol)
+	}
+	return unwrappedRow
+}
+
+func unwrapRows(t *testing.T, rows []sql.Row) (unwrappedRows []sql.Row) {
+	for _, row := range rows {
+		unwrappedRows = append(unwrappedRows, unwrapRow(t, row))
+	}
+	return unwrappedRows
+}
+
 func TestAncientSchemaTableMigration(t *testing.T) {
 	ctx := context.Background()
 	dEnv := dtestutils.CreateTestEnv()
@@ -88,7 +104,8 @@ func TestAncientSchemaTableMigration(t *testing.T) {
 		{"view", "view1", "SELECT v1 FROM test;", nil, nil},
 		{"view", "view2", "SELECT v2 FROM test;", nil, nil},
 	}
-	assert.Equal(t, expectedRows, rows)
+
+	assert.Equal(t, unwrapRows(t, expectedRows), unwrapRows(t, rows))
 }
 
 func TestV1SchemasTable(t *testing.T) {

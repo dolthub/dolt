@@ -15,12 +15,17 @@
 package val
 
 import (
+	"bytes"
 	"context"
 	"math"
 	"math/rand"
 	"testing"
 
+	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 func TestTupleBuilder(t *testing.T) {
@@ -36,6 +41,7 @@ func TestTupleBuilder(t *testing.T) {
 }
 
 func smokeTestTupleBuilder(t *testing.T) {
+	ns := &TestValueStore{}
 	desc := NewTupleDescriptor(
 		Type{Enc: Int8Enc},
 		Type{Enc: Int16Enc},
@@ -51,7 +57,7 @@ func smokeTestTupleBuilder(t *testing.T) {
 		Type{Enc: ByteStringEnc},
 	)
 
-	tb := NewTupleBuilder(desc)
+	tb := NewTupleBuilder(desc, ns)
 	tb.PutInt8(0, math.MaxInt8)
 	tb.PutInt16(1, math.MaxInt16)
 	tb.PutInt32(2, math.MaxInt32)
@@ -65,7 +71,8 @@ func smokeTestTupleBuilder(t *testing.T) {
 	tb.PutString(10, "123")
 	tb.PutByteString(11, []byte("abc"))
 
-	tup := tb.Build(testPool)
+	tup, err := tb.Build(testPool)
+	assert.NoError(t, err)
 	i8, ok := desc.GetInt8(0, tup)
 	assert.True(t, ok)
 	assert.Equal(t, int8(math.MaxInt8), i8)
@@ -105,6 +112,7 @@ func smokeTestTupleBuilder(t *testing.T) {
 }
 
 func testRoundTripInts(t *testing.T) {
+	ns := &TestValueStore{}
 	typ := Type{Enc: Int64Enc, Nullable: true}
 
 	tests := []struct {
@@ -143,11 +151,12 @@ func testRoundTripInts(t *testing.T) {
 
 	for _, test := range tests {
 		// build
-		bld := NewTupleBuilder(test.desc)
+		bld := NewTupleBuilder(test.desc, ns)
 		for idx, value := range test.data {
 			bld.PutInt64(idx, value)
 		}
-		tup := bld.Build(testPool)
+		tup, err := bld.Build(testPool)
+		assert.NoError(t, err)
 
 		// verify
 		n := test.desc.Count()
@@ -187,7 +196,7 @@ func testBuildLargeTuple(t *testing.T) {
 	rand.Read(s1)
 	rand.Read(s2)
 
-	tb := NewTupleBuilder(desc)
+	tb := NewTupleBuilder(desc, nil)
 	tb.PutInt8(0, math.MaxInt8)
 	tb.PutInt16(1, math.MaxInt16)
 	tb.PutInt32(2, math.MaxInt32)
@@ -230,4 +239,118 @@ func (tc testCompare) Suffix(n int) TupleComparator {
 
 func (tc testCompare) Validated(types []Type) TupleComparator {
 	return tc
+}
+
+type TestValueStore struct {
+	values [][]byte
+}
+
+func (t TestValueStore) ReadBytes(_ context.Context, h hash.Hash) ([]byte, error) {
+	idx := int(h[0]) - 1
+	return t.values[idx], nil
+}
+
+func (t TestValueStore) contains(val []byte) (int, bool) {
+	for i, v := range t.values {
+		if bytes.Equal(v, val) {
+			return i, true
+		}
+	}
+	return -1, false
+}
+
+func (t *TestValueStore) WriteBytes(_ context.Context, val []byte) (h hash.Hash, err error) {
+	idx, ok := t.contains(val)
+	if ok {
+		h[0] = byte(idx) + 1
+		return h, nil
+	}
+	t.values = append(t.values, val)
+	h[0] = byte(len(t.values))
+	return h, nil
+}
+
+var _ ValueStore = &TestValueStore{}
+
+func TestTupleBuilderAdaptiveEncodings(t *testing.T) {
+	ctx := sql.NewEmptyContext()
+	{
+		types := []Type{
+			{Enc: BytesAdaptiveEnc},
+		}
+		vs := &TestValueStore{}
+		td := NewTupleDescriptor(types...)
+		tb := NewTupleBuilder(td, vs)
+		t.Run("round trip inlined value", func(t *testing.T) {
+			shortByteArray := make([]byte, defaultTupleLengthTarget/2)
+			err := tb.PutAdaptiveBytesFromInline(ctx, 0, shortByteArray)
+			require.NoError(t, err)
+			tup, err := tb.Build(testPool)
+			require.NoError(t, err)
+
+			adaptiveEncodingBytes, _, err := td.GetBytesAdaptiveValue(0, vs, tup)
+			require.NoError(t, err)
+			require.Equal(t, shortByteArray, adaptiveEncodingBytes)
+		})
+
+		t.Run("round trip out-of-band value", func(t *testing.T) {
+			longByteArray := make([]byte, defaultTupleLengthTarget*2)
+			h, err := vs.WriteBytes(ctx, longByteArray)
+			require.NoError(t, err)
+			byteArray := NewByteArray(ctx, h, vs).WithMaxByteLength(int64(len(longByteArray)))
+			tb.PutAdaptiveBytesFromOutline(0, byteArray)
+
+			tup, err := tb.Build(testPool)
+			require.NoError(t, err)
+
+			adaptiveEncodingBytes, _, err := td.GetBytesAdaptiveValue(0, vs, tup)
+			require.NoError(t, err)
+			adaptiveEncodingByteArray := adaptiveEncodingBytes.(*ByteArray)
+			outBytes, err := adaptiveEncodingByteArray.ToBytes(ctx)
+			require.NoError(t, err)
+			require.Equal(t, longByteArray, outBytes)
+		})
+	}
+
+	{
+		types := []Type{
+			{Enc: BytesAdaptiveEnc},
+			{Enc: BytesAdaptiveEnc},
+		}
+		vs := &TestValueStore{}
+		td := NewTupleDescriptor(types...)
+		tb := NewTupleBuilder(td, vs)
+
+		t.Run("inline one of two columns", func(t *testing.T) {
+			// In this test, the strings are sized such that the first is stored out-of-band but the second can be stored inline.
+
+			columnSize := defaultTupleLengthTarget / 2
+			mediumByteArray := make([]byte, columnSize)
+			err := tb.PutAdaptiveBytesFromInline(ctx, 0, mediumByteArray)
+			require.NoError(t, err)
+			err = tb.PutAdaptiveBytesFromInline(ctx, 1, mediumByteArray)
+			require.NoError(t, err)
+
+			tup, err := tb.Build(testPool)
+			require.NoError(t, err)
+
+			{
+				// Check that first column is stored out-of-band
+				adaptiveEncodingBytes, _, err := td.GetBytesAdaptiveValue(0, vs, tup)
+				require.NoError(t, err)
+				adaptiveEncodingByteArray := adaptiveEncodingBytes.(*ByteArray)
+				outBytes, err := adaptiveEncodingByteArray.ToBytes(ctx)
+				require.NoError(t, err)
+				require.Equal(t, mediumByteArray, outBytes)
+			}
+
+			{
+				// Check that second column is stored inline
+				adaptiveEncodingBytes, _, err := td.GetBytesAdaptiveValue(1, vs, tup)
+				require.NoError(t, err)
+				adaptiveEncodingByteArray := adaptiveEncodingBytes.([]byte)
+				require.Equal(t, mediumByteArray, adaptiveEncodingByteArray)
+			}
+		})
+	}
 }

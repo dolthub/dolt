@@ -285,7 +285,7 @@ func CleanUntracked(ctx *sql.Context, roots doltdb.Roots, tables []string, dryru
 
 	for i := range tables {
 		name := tables[i]
-		resolvedName, _, tblExists, err := resolve.Table(ctx, roots.Working, name)
+		resolvedName, tblExists, err := resolve.TableName(ctx, roots.Working, name)
 		if err != nil {
 			return doltdb.Roots{}, err
 		}

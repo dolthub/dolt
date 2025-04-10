@@ -123,7 +123,7 @@ func (ti *geometryType) ConvertValueToNomsValue(ctx context.Context, vrw types.V
 	}
 
 	// Convert accordingly
-	geom, _, err := ti.sqlGeometryType.Convert(v)
+	geom, _, err := ti.sqlGeometryType.Convert(ctx, v)
 	if err != nil {
 		return nil, err
 	}

@@ -1688,6 +1688,7 @@ SQL
     dolt add .
     dolt commit -m "commit 2"
 
+    dolt diff HEAD~1 HEAD
     run dolt diff HEAD~1 HEAD
     [ $status -eq 0 ]
     [[ "$output" =~ "CREATE TRIGGER avg_age AFTER INSERT ON people"                         ]] || false
