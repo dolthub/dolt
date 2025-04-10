@@ -54,6 +54,7 @@ table files into archives. Currently, for safety, table files are left in place.
 
 const groupChunksFlag = "group-chunks"
 const revertFlag = "revert"
+const purgeFlag = "purge"
 
 // Description returns a description of the command
 func (cmd ArchiveCmd) Description() string {
@@ -71,9 +72,7 @@ func (cmd ArchiveCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithMaxArgs(cmd.Name(), 0)
 	ap.SupportsFlag(groupChunksFlag, "", "Attempt to group chunks. This will produce smaller archives, but can take much longer to build.")
 	ap.SupportsFlag(revertFlag, "", "Return to unpurged table files, or rebuilt table files from archives")
-	/* TODO: Implement these flags
-	ap.SupportsFlag("purge", "", "remove table files after archiving")
-	*/
+	ap.SupportsFlag(purgeFlag, "", "remove table files after archiving")
 	return ap
 }
 func (cmd ArchiveCmd) Hidden() bool {
@@ -137,7 +136,9 @@ func (cmd ArchiveCmd) Exec(ctx context.Context, commandStr string, args []string
 			}
 		}
 
-		err = nbs.BuildArchive(ctx, cs, &groupings, progress)
+		purge := apr.Contains(purgeFlag)
+
+		err = nbs.BuildArchive(ctx, cs, &groupings, purge, progress)
 		if err != nil {
 			cli.PrintErrln(err)
 			return 1
