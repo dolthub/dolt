@@ -295,7 +295,7 @@ func getJsonAsString(sqlCtx *sql.Context, params interface{}) (string, error) {
 	case string:
 		return p, nil
 	case sql.JSONWrapper:
-		json, err := types.StringifyJSON(p)
+		json, err := types.JsonToMySqlString(p)
 		if err != nil {
 			return "", err
 		}

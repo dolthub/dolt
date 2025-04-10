@@ -567,12 +567,12 @@ func (i IndexedJsonDocument) ArrayAppend(path string, val sql.JSONWrapper) (type
 
 // Value implements driver.Valuer for interoperability with other go libraries
 func (i IndexedJsonDocument) Value() (driver.Value, error) {
-	return types.StringifyJSON(i)
+	return types.JsonToMySqlString(i)
 }
 
 // String implements the fmt.Stringer interface.
 func (i IndexedJsonDocument) String() string {
-	s, err := types.StringifyJSON(i)
+	s, err := types.JsonToMySqlString(i)
 	if err != nil {
 		return fmt.Sprintf("error while stringifying JSON: %s", err.Error())
 	}
