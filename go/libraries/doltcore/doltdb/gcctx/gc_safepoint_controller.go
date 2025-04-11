@@ -154,6 +154,10 @@ func (c *GCSafepointController) Waiter(ctx context.Context, thisSession GCRootsP
 		if sess == thisSession {
 			continue
 		}
+		if state.cancel != nil {
+			state.cancel()
+			continue
+		}
 		// When this session's |visit| call is done, it will count down this
 		// waitgroup. The |Wait| method, in turn, will block on this waitgroup
 		// completing to know that all callback are done.
