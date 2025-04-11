@@ -237,17 +237,31 @@ func (s *SerialQueue) InterruptSync(ctx context.Context, f func() error) error {
 	}
 }
 
-// Run a normal priority job on the SerialQueue, blocking for its completion.
-// When done against a paused queue, this can block indefinitely.
+// DoSync runs a normal priority job on the SerialQueue, blocking for
+// its completion. When done against a paused queue, this can block
+// indefinitely. Canceling this job's parent context will exit early
+// and invalidate the job in the queue.
 func (s *SerialQueue) DoSync(ctx context.Context, f func() error) error {
-	w, err := s.submitWork(schedPriority_Normal, f)
-	if err != nil {
+	started := atomic.Bool{}
+	var err error
+	nf := func() error {
+		if started.Swap(true) {
+			return nil
+		}
+		err = f()
 		return err
+	}
+	w, serr := s.submitWork(schedPriority_Normal, nf)
+	if serr != nil {
+		return serr
 	}
 	select {
 	case <-w.done:
-		return nil
+		return err
 	case <-ctx.Done():
+		if started.Swap(true) {
+			<-w.done
+		}
 		return context.Cause(ctx)
 	case <-s.completed:
 		return ErrCompletedQueue
