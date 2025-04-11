@@ -37,7 +37,7 @@ func TestGCSafepointController(t *testing.T) {
 			t.Parallel()
 			controller := NewGCSafepointController()
 			sess := &visitable{}
-			controller.SessionCommandBegin(sess)
+			controller.SessionCommandBegin(sess, nil)
 			controller.SessionCommandEnd(sess)
 			controller.SessionEnd(sess)
 		})
@@ -45,7 +45,7 @@ func TestGCSafepointController(t *testing.T) {
 			t.Parallel()
 			controller := NewGCSafepointController()
 			sess := &visitable{}
-			controller.SessionCommandBegin(sess)
+			controller.SessionCommandBegin(sess, nil)
 			require.Panics(t, func() {
 				controller.SessionEnd(sess)
 			})
@@ -57,18 +57,18 @@ func TestGCSafepointController(t *testing.T) {
 			t.Parallel()
 			controller := NewGCSafepointController()
 			sess := &visitable{}
-			controller.SessionCommandBegin(sess)
+			controller.SessionCommandBegin(sess, nil)
 			require.Panics(t, func() {
-				controller.SessionCommandBegin(sess)
+				controller.SessionCommandBegin(sess, nil)
 			})
 		})
 		t.Run("AfterCommandEnd", func(t *testing.T) {
 			t.Parallel()
 			controller := NewGCSafepointController()
 			sess := &visitable{}
-			controller.SessionCommandBegin(sess)
+			controller.SessionCommandBegin(sess, nil)
 			controller.SessionCommandEnd(sess)
-			controller.SessionCommandBegin(sess)
+			controller.SessionCommandBegin(sess, nil)
 		})
 	})
 	t.Run("CommandEnd", func(t *testing.T) {
@@ -85,7 +85,7 @@ func TestGCSafepointController(t *testing.T) {
 			t.Parallel()
 			controller := NewGCSafepointController()
 			sess := &visitable{}
-			controller.SessionCommandBegin(sess)
+			controller.SessionCommandBegin(sess, nil)
 			controller.SessionCommandEnd(sess)
 			require.Panics(t, func() {
 				controller.SessionCommandEnd(sess)
@@ -114,7 +114,7 @@ func TestGCSafepointController(t *testing.T) {
 			}
 			sess := &visitable{}
 			controller := NewGCSafepointController()
-			controller.SessionCommandBegin(sess)
+			controller.SessionCommandBegin(sess, nil)
 			waiter := controller.Waiter(context.Background(), sess, block)
 			waiter.Wait(context.Background())
 			controller.SessionCommandEnd(sess)
@@ -129,8 +129,8 @@ func TestGCSafepointController(t *testing.T) {
 			quiesced := &visitable{}
 			running := &visitable{}
 			controller := NewGCSafepointController()
-			controller.SessionCommandBegin(quiesced)
-			controller.SessionCommandBegin(running)
+			controller.SessionCommandBegin(quiesced, nil)
+			controller.SessionCommandBegin(running, nil)
 			controller.SessionCommandEnd(quiesced)
 			sawQuiesced, sawRunning, waitDone := make(chan struct{}), make(chan struct{}), make(chan struct{})
 			wait := func(_ context.Context, s GCRootsProvider) error {
@@ -158,8 +158,8 @@ func TestGCSafepointController(t *testing.T) {
 			<-sawRunning
 			<-waitDone
 
-			controller.SessionCommandBegin(quiesced)
-			controller.SessionCommandBegin(running)
+			controller.SessionCommandBegin(quiesced, nil)
+			controller.SessionCommandBegin(running, nil)
 			controller.SessionCommandEnd(quiesced)
 			controller.SessionCommandEnd(running)
 		})
@@ -170,8 +170,8 @@ func TestGCSafepointController(t *testing.T) {
 			quiesced := &visitable{}
 			running := &visitable{}
 			controller := NewGCSafepointController()
-			controller.SessionCommandBegin(quiesced)
-			controller.SessionCommandBegin(running)
+			controller.SessionCommandBegin(quiesced, nil)
+			controller.SessionCommandBegin(running, nil)
 			controller.SessionCommandEnd(quiesced)
 			sawQuiesced, sawRunning, waitDone := make(chan struct{}), make(chan struct{}), make(chan struct{})
 			wait := func(_ context.Context, s GCRootsProvider) error {
@@ -207,8 +207,8 @@ func TestGCSafepointController(t *testing.T) {
 			case <-time.After(50 * time.Millisecond):
 			}
 
-			controller.SessionCommandBegin(quiesced)
-			controller.SessionCommandBegin(running)
+			controller.SessionCommandBegin(quiesced, nil)
+			controller.SessionCommandBegin(running, nil)
 			controller.SessionCommandEnd(quiesced)
 			controller.SessionCommandEnd(running)
 		})
@@ -217,9 +217,9 @@ func TestGCSafepointController(t *testing.T) {
 			quiesced := &visitable{}
 			running := &visitable{}
 			controller := NewGCSafepointController()
-			controller.SessionCommandBegin(quiesced)
+			controller.SessionCommandBegin(quiesced, nil)
 			controller.SessionCommandEnd(quiesced)
-			controller.SessionCommandBegin(running)
+			controller.SessionCommandBegin(running, nil)
 			finishQuiesced, finishRunning := make(chan struct{}), make(chan struct{})
 			sawQuiesced, sawRunning := make(chan struct{}), make(chan struct{})
 			wait := func(_ context.Context, s GCRootsProvider) error {
@@ -242,7 +242,7 @@ func TestGCSafepointController(t *testing.T) {
 			}()
 			beginDone := make(chan struct{})
 			go func() {
-				controller.SessionCommandBegin(quiesced)
+				controller.SessionCommandBegin(quiesced, nil)
 				close(beginDone)
 			}()
 			<-sawQuiesced
@@ -253,7 +253,7 @@ func TestGCSafepointController(t *testing.T) {
 			}
 
 			newSession := &visitable{}
-			controller.SessionCommandBegin(newSession)
+			controller.SessionCommandBegin(newSession, nil)
 			controller.SessionCommandEnd(newSession)
 			controller.SessionEnd(newSession)
 
@@ -263,7 +263,7 @@ func TestGCSafepointController(t *testing.T) {
 			go func() {
 				controller.SessionCommandEnd(running)
 				<-sawRunning
-				controller.SessionCommandBegin(running)
+				controller.SessionCommandBegin(running, nil)
 				close(beginDone)
 			}()
 			select {
@@ -278,8 +278,8 @@ func TestGCSafepointController(t *testing.T) {
 
 			controller.SessionCommandEnd(quiesced)
 			controller.SessionCommandEnd(running)
-			controller.SessionCommandBegin(quiesced)
-			controller.SessionCommandBegin(running)
+			controller.SessionCommandBegin(quiesced, nil)
+			controller.SessionCommandBegin(running, nil)
 			controller.SessionCommandEnd(quiesced)
 			controller.SessionCommandEnd(running)
 

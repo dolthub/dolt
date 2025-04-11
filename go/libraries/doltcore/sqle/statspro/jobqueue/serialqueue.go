@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"runtime/debug"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -429,7 +430,7 @@ func (s *SerialQueue) runRunner(ctx context.Context) {
 				var err error
 				defer func() {
 					if r := recover(); r != nil {
-						err = fmt.Errorf("serialQueue panicked running work: %s", r)
+						err = fmt.Errorf("serialQueue panicked running work: %s\n%s", r, string(debug.Stack()))
 					}
 					if err != nil {
 						s.errCb(err)

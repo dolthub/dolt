@@ -524,11 +524,12 @@ func (sc *StatsController) PutBound(h hash.Hash, r sql.Row, l int) {
 }
 
 func (sc *StatsController) Flush(ctx context.Context) (int, error) {
-	sqlCtx, err := sc.ctxGen(ctx)
+	newCtx, cancel := context.WithCancel(ctx)
+	sqlCtx, err := sc.ctxGen(newCtx)
 	if err != nil {
 		return 0, err
 	}
-	sql.SessionCommandBegin(sqlCtx.Session)
+	sql.SessionCommandBeginWithCancel(sqlCtx.Session, cancel)
 	defer sql.SessionEnd(sqlCtx.Session)
 	defer sql.SessionCommandEnd(sqlCtx.Session)
 
