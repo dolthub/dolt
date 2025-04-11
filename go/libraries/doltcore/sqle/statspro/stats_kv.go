@@ -37,6 +37,8 @@ import (
 
 var ErrIncompatibleVersion = errors.New("client stats version mismatch")
 
+const defaultMaxStatsPending = 128
+
 type StatsKv interface {
 	PutBucket(ctx context.Context, h hash.Hash, b *stats.Bucket, tupB *val.TupleBuilder) error
 	GetBucket(ctx context.Context, h hash.Hash, tupB *val.TupleBuilder) (*stats.Bucket, bool, error)
@@ -200,7 +202,7 @@ func NewProllyStats(ctx context.Context, destDb dsess.SqlDatabase) (*prollyStats
 		destDb: destDb,
 		kb:     keyBuilder,
 		vb:     valueBuilder,
-		m:      newMap.Mutate(),
+		m:      newMap.Mutate().WithMaxPending(defaultMaxStatsPending),
 		mem:    NewMemStats(),
 	}, nil
 }
@@ -335,7 +337,7 @@ func (p *prollyStats) Flush(ctx context.Context) (int, error) {
 		return 0, err
 	}
 
-	p.m = flushedMap.Mutate()
+	p.m = flushedMap.Mutate().WithMaxPending(defaultMaxStatsPending)
 
 	cnt, err := flushedMap.Count()
 	return cnt, err
@@ -457,7 +459,7 @@ func (p *prollyStats) NewEmpty(ctx context.Context) (StatsKv, error) {
 	if err != nil {
 		return nil, err
 	}
-	m := newMap.Mutate()
+	m := newMap.Mutate().WithMaxPending(defaultMaxStatsPending)
 	return &prollyStats{m: m, destDb: p.destDb, kb: p.kb, vb: p.vb}, nil
 }
 
@@ -524,11 +526,13 @@ func (sc *StatsController) PutBound(h hash.Hash, r sql.Row, l int) {
 }
 
 func (sc *StatsController) Flush(ctx context.Context) (int, error) {
-	sqlCtx, err := sc.ctxGen(ctx)
+	newCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	sqlCtx, err := sc.ctxGen(newCtx)
 	if err != nil {
 		return 0, err
 	}
-	sql.SessionCommandBegin(sqlCtx.Session)
+	sql.SessionCommandBeginWithCancel(sqlCtx.Session, cancel)
 	defer sql.SessionEnd(sqlCtx.Session)
 	defer sql.SessionCommandEnd(sqlCtx.Session)
 

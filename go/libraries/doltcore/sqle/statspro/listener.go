@@ -130,7 +130,7 @@ func (sc *StatsController) Restart(ctx *sql.Context) error {
 		close(done)
 		err := sc.runWorker(ctx)
 		if err != nil {
-			sc.logger.Errorf("stats stopped: %s", err.Error())
+			sc.logger.Infof("stats stopped: %s", err.Error())
 		}
 	}); err != nil {
 		return err
@@ -184,7 +184,7 @@ func (sc *StatsController) Init(ctx context.Context, pro *sqle.DoltDatabaseProvi
 
 			exists, isDir := statsFs.Exists("")
 			if exists && isDir {
-				newKv, err := sc.initStorage(ctx, fs)
+				newKv, err := sc.initStorage(sqlCtx, fs)
 				if err == nil {
 					sc.kv = newKv
 					sc.statsBackingDb = fs
@@ -196,7 +196,7 @@ func (sc *StatsController) Init(ctx context.Context, pro *sqle.DoltDatabaseProvi
 			}
 
 			// otherwise wipe and create new stats dir
-			if err := sc.lockedRotateStorage(ctx); err != nil {
+			if err := sc.lockedRotateStorage(sqlCtx); err != nil {
 				return err
 			}
 		}

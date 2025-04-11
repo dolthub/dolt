@@ -76,7 +76,7 @@ func NewAutoIncrementTracker(ctx context.Context, dbName string, roots ...doltdb
 	go func() {
 		if gcSafepointController != nil {
 			defer gcctx.SessionEnd(ctx)
-			gcctx.SessionCommandBegin(ctx)
+			gcctx.SessionCommandBegin(ctx, nil)
 			defer gcctx.SessionCommandEnd(ctx)
 		}
 		ait.initWithRoots(ctx, roots...)
