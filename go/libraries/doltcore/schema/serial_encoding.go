@@ -31,19 +31,13 @@ func EncodingFromSqlType(typ sql.Type) serial.Encoding {
 		case types.ExtendedTypeSerializedWidth_64K:
 			return serial.EncodingExtended
 		case types.ExtendedTypeSerializedWidth_Unbounded:
-			// Always uses adaptive encoding for extended types, regardless of the setting of UseAdaptiveEncoding below.
-			return serial.EncodingExtendedAdaptive
+			return serial.EncodingExtendedAddr
 		default:
 			panic(fmt.Errorf("unknown serialization width"))
 		}
 	}
 	return EncodingFromQueryType(typ.Type())
 }
-
-// UseAdaptiveEncoding indicates whether to use adaptive encoding for large/unbounded fields instead of address encoding.
-// Tests can set this variable to true in order to force Dolt to use adaptive encoding for TEXT and BLOB columns.
-// Extended types will always use adaptive encoding for TEXT and BLOB types regardless of this value.
-var UseAdaptiveEncoding = false
 
 // EncodingFromQueryType returns a serial.Encoding for a query.Type.
 func EncodingFromQueryType(typ query.Type) serial.Encoding {
@@ -103,14 +97,8 @@ func EncodingFromQueryType(typ query.Type) serial.Encoding {
 	case query.Type_JSON:
 		return serial.EncodingJSONAddr
 	case query.Type_BLOB:
-		if UseAdaptiveEncoding {
-			return serial.EncodingBytesAdaptive
-		}
 		return serial.EncodingBytesAddr
 	case query.Type_TEXT:
-		if UseAdaptiveEncoding {
-			return serial.EncodingStringAdaptive
-		}
 		return serial.EncodingStringAddr
 	default:
 		panic(fmt.Sprintf("unknown encoding %v", typ))

@@ -203,27 +203,27 @@ func (r Range) IsStrictKeyLookup(desc val.TupleDesc) bool {
 // numeric or string. The stop key adds +1 to a numeric final field, and appends
 // '0' to a string final field.
 // TODO: support non-exact final field, and use range upper bound?
-func (r Range) KeyRangeLookup(ctx context.Context, pool pool.BuffPool, ns tree.NodeStore) (val.Tuple, bool, error) {
+func (r Range) KeyRangeLookup(ctx context.Context, pool pool.BuffPool) (val.Tuple, bool) {
 	if r.Tup == nil {
-		return nil, false, nil
+		return nil, false
 	}
 	n := len(r.Fields) - 1
 	for i := range r.Fields {
 		if r.Fields[i].Lo.Value == nil {
 			if r.Fields[i].Hi.Value != nil {
-				return nil, false, nil
+				return nil, false
 			}
 			n = i - 1
 			break
 		}
 		if !r.Fields[i].BoundsAreEqual {
-			return nil, false, nil
+			return nil, false
 		}
 	}
 
 	if n < 0 {
 		// ex: range scan
-		return nil, false, nil
+		return nil, false
 	}
 
 	for _, typ := range r.Desc.Types[n+1:] {
@@ -231,7 +231,7 @@ func (r Range) KeyRangeLookup(ctx context.Context, pool pool.BuffPool, ns tree.N
 			// this is checked separately because fulltext descriptors
 			// do not match field lengths sometimes
 			// todo: why?
-			return nil, false, nil
+			return nil, false
 		}
 	}
 
@@ -242,16 +242,16 @@ func (r Range) KeyRangeLookup(ctx context.Context, pool pool.BuffPool, ns tree.N
 			// but we manually inline indexes sometimes on the Dolt side,
 			// and it's possible we'd change analyzer indexing semantics
 			// in the future
-			return nil, false, nil
+			return nil, false
 		}
 
 	}
 
-	return IncrementTuple(ctx, r.Tup, n, r.Desc, pool, ns)
+	return IncrementTuple(ctx, r.Tup, n, r.Desc, pool)
 }
 
-func IncrementTuple(ctx context.Context, start val.Tuple, n int, desc val.TupleDesc, pool pool.BuffPool, ns tree.NodeStore) (val.Tuple, bool, error) {
-	tb := val.NewTupleBuilder(desc, ns)
+func IncrementTuple(ctx context.Context, start val.Tuple, n int, desc val.TupleDesc, pool pool.BuffPool) (val.Tuple, bool) {
+	tb := val.NewTupleBuilder(desc)
 	for i := 0; i < n; i++ {
 		if i != n {
 			// direct copy all but the last field
@@ -265,92 +265,89 @@ func IncrementTuple(ctx context.Context, start val.Tuple, n int, desc val.TupleD
 	case val.StringEnc:
 		v, ok := desc.GetString(n, start)
 		if !ok {
-			return nil, false, nil
+			return nil, false
 		}
 		tb.PutString(n, string(v)+"0")
 	case val.Int8Enc:
 		v, ok := desc.GetInt8(n, start)
 		if !ok {
-			return nil, false, nil
+			return nil, false
 		}
 		tb.PutInt8(n, v+1)
 	case val.Uint8Enc:
 		v, ok := desc.GetUint8(n, start)
 		if !ok {
-			return nil, false, nil
+			return nil, false
 		}
 		tb.PutUint8(n, v+1)
 	case val.Int16Enc:
 		v, ok := desc.GetInt16(n, start)
 		if !ok {
-			return nil, false, nil
+			return nil, false
 		}
 		tb.PutInt16(n, v+1)
 	case val.Uint16Enc:
 		v, ok := desc.GetUint16(n, start)
 		if !ok {
-			return nil, false, nil
+			return nil, false
 		}
 		tb.PutUint16(n, v+1)
 	case val.Int32Enc:
 		v, ok := desc.GetInt32(n, start)
 		if !ok {
-			return nil, false, nil
+			return nil, false
 		}
 		tb.PutInt32(n, v+1)
 	case val.Uint32Enc:
 		v, ok := desc.GetUint32(n, start)
 		if !ok {
-			return nil, false, nil
+			return nil, false
 		}
 		tb.PutUint32(n, v+1)
 	case val.Int64Enc:
 		v, ok := desc.GetInt64(n, start)
 		if !ok {
-			return nil, false, nil
+			return nil, false
 		}
 		tb.PutInt64(n, v+1)
 	case val.Uint64Enc:
 		v, ok := desc.GetUint64(n, start)
 		if !ok {
-			return nil, false, nil
+			return nil, false
 		}
 		tb.PutUint64(n, v+1)
 	case val.Float32Enc:
 		v, ok := desc.GetFloat32(n, start)
 		if !ok {
-			return nil, false, nil
+			return nil, false
 		}
 		// increment the finest precision we can represent on disk (little endian)
 		tb.PutFloat32(n, math.Float32frombits(math.Float32bits(v)+1))
 	case val.Float64Enc:
 		v, ok := desc.GetFloat64(n, start)
 		if !ok {
-			return nil, false, nil
+			return nil, false
 		}
 		// increment the finest precision we can represent on disk (little endian)
 		tb.PutFloat64(n, math.Float64frombits(math.Float64bits(v)+1))
 	case val.DecimalEnc:
 		v, ok := desc.GetDecimal(n, start)
 		if !ok {
-			return nil, false, nil
+			return nil, false
 		}
 		tb.PutDecimal(n, v.Add(decimal.New(1, 0)))
 	default:
-		return nil, false, nil
+		return nil, false
 	}
-	stop, err := tb.Build(pool)
-	if err != nil {
-		return nil, false, err
-	}
+	stop := tb.Build(pool)
 	if desc.Compare(ctx, start, stop) >= 0 {
 		// If cmp == 0, we lost precision serializing.
 		// If cmp > 0, we overflowed and |stop| < |start|.
 		// |stop| has to be strictly greater than |start|
 		// for this optimization to be valid.
-		return nil, false, nil
+		return nil, false
 	}
-	return stop, true, nil
+	return stop, true
 }
 
 func rangeStartSearchFn(rng Range) tree.SearchFn {

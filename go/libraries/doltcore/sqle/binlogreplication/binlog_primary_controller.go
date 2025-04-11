@@ -66,7 +66,7 @@ func (d *DoltBinlogPrimaryController) RegisterReplica(ctx *sql.Context, c *mysql
 // validateReplicationConfiguration checks that this server is properly configured to replicate databases, meaning
 // that @@log_bin is enabled, @@gtid_mode is enabled, @@enforce_gtid_consistency is enabled, and the binlog producer
 // has been instantiated. If any of this configuration is not valid, then an error is returned.
-func (d *DoltBinlogPrimaryController) validateReplicationConfiguration(ctx *sql.Context) *mysql.SQLError {
+func (d *DoltBinlogPrimaryController) validateReplicationConfiguration() *mysql.SQLError {
 	if d.binlogProducer == nil {
 		return mysql.NewSQLError(mysql.ERMasterFatalReadingBinlog, "HY000",
 			"no binlog currently being recorded; make sure the server is started with @@log_bin enabled")
@@ -76,7 +76,7 @@ func (d *DoltBinlogPrimaryController) validateReplicationConfiguration(ctx *sql.
 	if !ok {
 		return mysql.NewSQLError(mysql.ERUnknownError, "HY000", "unable to find system variable @@log_bin")
 	}
-	logBin, _, err := gmstypes.Boolean.Convert(ctx, logBinValue)
+	logBin, _, err := gmstypes.Boolean.Convert(logBinValue)
 	if err != nil {
 		return mysql.NewSQLError(mysql.ERUnknownError, "HY000", "%s", err.Error())
 	}
@@ -117,7 +117,7 @@ func (d *DoltBinlogPrimaryController) validateReplicationConfiguration(ctx *sql.
 
 // BinlogDumpGtid implements the BinlogPrimaryController interface.
 func (d *DoltBinlogPrimaryController) BinlogDumpGtid(ctx *sql.Context, conn *mysql.Conn, replicaExecutedGtids mysql.GTIDSet) error {
-	if err := d.validateReplicationConfiguration(ctx); err != nil {
+	if err := d.validateReplicationConfiguration(); err != nil {
 		return err
 	}
 

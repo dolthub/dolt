@@ -117,43 +117,14 @@ func IsAddrEncoding(enc Encoding) bool {
 	}
 }
 
-func IsAdaptiveEncoding(enc Encoding) bool {
-	switch enc {
-	case BytesAdaptiveEnc,
-		StringAdaptiveEnc,
-		ExtendedAdaptiveEnc:
-		return true
-	default:
-		return false
-	}
-}
-
-func IsReferenceEncoding(enc Encoding) bool {
-	return IsAdaptiveEncoding(enc) || IsAddrEncoding(enc)
-}
-
-func IsExtendedEncoding(enc Encoding) bool {
-	switch enc {
-	case ExtendedEnc,
-		ExtendedAddrEnc,
-		ExtendedAdaptiveEnc:
-		return true
-	default:
-		return false
-	}
-}
-
 // Variable Width Encodings
 const (
-	StringEnc           = Encoding(serial.EncodingString)
-	ByteStringEnc       = Encoding(serial.EncodingBytes)
-	DecimalEnc          = Encoding(serial.EncodingDecimal)
-	JSONEnc             = Encoding(serial.EncodingJSON)
-	GeometryEnc         = Encoding(serial.EncodingGeometry)
-	ExtendedEnc         = Encoding(serial.EncodingExtended)
-	StringAdaptiveEnc   = Encoding(serial.EncodingStringAdaptive)
-	BytesAdaptiveEnc    = Encoding(serial.EncodingBytesAdaptive)
-	ExtendedAdaptiveEnc = Encoding(serial.EncodingExtendedAdaptive)
+	StringEnc     = Encoding(serial.EncodingString)
+	ByteStringEnc = Encoding(serial.EncodingBytes)
+	DecimalEnc    = Encoding(serial.EncodingDecimal)
+	JSONEnc       = Encoding(serial.EncodingJSON)
+	GeometryEnc   = Encoding(serial.EncodingGeometry)
+	ExtendedEnc   = Encoding(serial.EncodingExtended)
 )
 
 func sizeFromType(t Type) (ByteSize, bool) {
@@ -654,10 +625,6 @@ func compareHash128(l, r []byte) int {
 
 func compareAddr(l, r hash.Hash) int {
 	return l.Compare(r)
-}
-
-func compareAdaptiveValue(l, r AdaptiveValue) int {
-	return bytes.Compare(l, r)
 }
 
 func writeRaw(buf, val []byte) {

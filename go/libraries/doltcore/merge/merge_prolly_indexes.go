@@ -129,20 +129,14 @@ func buildIndex(
 			return nil, err
 		}
 		kd := postMergeSchema.GetKeyDescriptor(ns)
-		kb := val.NewTupleBuilder(kd, ns)
+		kb := val.NewTupleBuilder(kd)
 		p := m.Pool()
 
 		pkMapping := ordinalMappingFromIndex(index)
 
 		mergedMap, err := creation.BuildUniqueProllyIndex(ctx, vrw, ns, postMergeSchema, tblName, index, m, func(ctx context.Context, existingKey, newKey val.Tuple) (err error) {
-			eK, err := getPKFromSecondaryKey(kb, p, pkMapping, existingKey)
-			if err != nil {
-				return err
-			}
-			nK, err := getPKFromSecondaryKey(kb, p, pkMapping, newKey)
-			if err != nil {
-				return err
-			}
+			eK := getPKFromSecondaryKey(kb, p, pkMapping, existingKey)
+			nK := getPKFromSecondaryKey(kb, p, pkMapping, newKey)
 			err = replaceUniqueKeyViolation(ctx, artEditor, m, eK, theirRootIsh, vInfo)
 			if err != nil {
 				return err
@@ -169,7 +163,7 @@ func buildIndex(
 // applyEdit applies |edit| to |idx|. If |len(edit.To)| == 0, then action is
 // a delete, if |len(edit.From)| == 0 then it is an insert, otherwise it is an
 // update.
-func applyEdit(ctx *sql.Context, idx MutableSecondaryIdx, key, from, to val.Tuple) (err error) {
+func applyEdit(ctx context.Context, idx MutableSecondaryIdx, key, from, to val.Tuple) (err error) {
 	if len(from) == 0 {
 		err := idx.InsertEntry(ctx, key, to)
 		if err != nil {

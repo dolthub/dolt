@@ -29,13 +29,13 @@ import (
 )
 
 func TestCommitHooksNoErrors(t *testing.T) {
-	ctx := sql.NewEmptyContext()
+	ctx := context.Background()
 	dEnv, err := CreateEnvWithSeedData()
 	require.NoError(t, err)
 	defer dEnv.DoltDB(ctx).Close()
 
-	sql.SystemVariables.SetGlobal(ctx, dsess.SkipReplicationErrors, true)
-	sql.SystemVariables.SetGlobal(ctx, dsess.ReplicateToRemote, "unknown")
+	sql.SystemVariables.SetGlobal(dsess.SkipReplicationErrors, true)
+	sql.SystemVariables.SetGlobal(dsess.ReplicateToRemote, "unknown")
 	hooks, _, err := GetCommitHooks(context.Background(), dEnv, &buffer.Buffer{})
 	assert.NoError(t, err)
 	if len(hooks) < 1 {

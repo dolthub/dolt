@@ -255,20 +255,8 @@ func buildInitialRebaseMsg(sqlCtx *sql.Context, queryist cli.Queryist, rebaseBra
 		if !found {
 			return "", errors.New("invalid rebase action")
 		}
-		commitHash, ok, err := sql.Unwrap[string](sqlCtx, row[1])
-		if err != nil {
-			return "", err
-		}
-		if !ok {
-			return "", fmt.Errorf("unexpected type for commit_hash; expected string, found %T", commitHash)
-		}
-		commitMessage, ok, err := sql.Unwrap[string](sqlCtx, row[2])
-		if err != nil {
-			return "", err
-		}
-		if !ok {
-			return "", fmt.Errorf("unexpected type for commit_message; expected string, found %T", commitMessage)
-		}
+		commitHash := row[1].(string)
+		commitMessage := row[2].(string)
 		buffer.WriteString(fmt.Sprintf("%s %s %s\n", action, commitHash, commitMessage))
 	}
 	buffer.WriteString("\n")

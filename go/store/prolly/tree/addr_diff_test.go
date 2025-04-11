@@ -15,10 +15,10 @@
 package tree
 
 import (
+	"context"
 	"io"
 	"testing"
 
-	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/dolthub/dolt/go/store/val"
@@ -27,8 +27,6 @@ import (
 // Single layer trees are entirely root nodes - which are embedded in the table flatbuffer, so we don't
 // currently use them for purposes of grouping chunks.
 func TestAddressDifferFromRootsOneLayer(t *testing.T) {
-	ctx := sql.NewEmptyContext()
-	ns := NewTestNodeStore()
 	fromTups, desc := AscendingUintTuples(42)
 	fromRoot := makeTree(t, fromTups)
 	assert.Equal(t, 42, fromRoot.Count())
@@ -37,13 +35,14 @@ func TestAddressDifferFromRootsOneLayer(t *testing.T) {
 	toTups := make([][2]val.Tuple, len(fromTups))
 	// Copy elements from the original slice to the new slice
 	copy(toTups, fromTups)
-	bld := val.NewTupleBuilder(desc, ns)
+	bld := val.NewTupleBuilder(desc)
 	// modify value in the first half of the tree
-	var err error
 	bld.PutUint32(0, uint32(42))
-	toTups[23][1], err = bld.Build(sharedPool)
-	assert.NoError(t, err)
+	toTups[23][1] = bld.Build(sharedPool)
 	toRoot := makeTree(t, toTups)
+
+	ctx := context.Background()
+	ns := NewTestNodeStore()
 
 	dfr, err := layerDifferFromRoots(ctx, ns, ns, fromRoot, toRoot, desc)
 	assert.NoError(t, err)
@@ -53,9 +52,6 @@ func TestAddressDifferFromRootsOneLayer(t *testing.T) {
 }
 
 func TestAddressDifferFromRootsTwoLayer(t *testing.T) {
-	ctx := sql.NewEmptyContext()
-	ns := NewTestNodeStore()
-
 	fromTups, desc := AscendingUintTuples(416)
 	fromRoot := makeTree(t, fromTups)
 	assert.Equal(t, 2, fromRoot.Count())
@@ -67,17 +63,18 @@ func TestAddressDifferFromRootsTwoLayer(t *testing.T) {
 	toTups := make([][2]val.Tuple, len(fromTups))
 	// Copy elements from the original slice to the new slice
 	copy(toTups, fromTups)
-	bld := val.NewTupleBuilder(desc, ns)
+	bld := val.NewTupleBuilder(desc)
 	// modify value early in the tree, to ensure the modification happens on the first child of the root.
 	bld.PutUint32(0, uint32(42))
-	var err error
-	toTups[23][1], err = bld.Build(sharedPool)
-	assert.NoError(t, err)
+	toTups[23][1] = bld.Build(sharedPool)
 	toRoot := makeTree(t, toTups)
 
 	after := toRoot.getAddress(0)
 	assert.NotEqual(t, before, after)
 	assert.Equal(t, unchanged, toRoot.getAddress(1))
+
+	ctx := context.Background()
+	ns := NewTestNodeStore()
 
 	dfr, err := layerDifferFromRoots(ctx, ns, ns, fromRoot, toRoot, desc)
 	assert.NoError(t, err)
@@ -92,8 +89,6 @@ func TestAddressDifferFromRootsTwoLayer(t *testing.T) {
 }
 
 func TestAddressDifferFromRootsThreeLayer(t *testing.T) {
-	ctx := sql.NewEmptyContext()
-	ns := NewTestNodeStore()
 	// 23800 - results in a 3 level tree, where the root has two children. The second child will have one child.
 	// of its own, which is the content. If we alter the content in the last ~250 elements of the tuple, it should
 	// result in a modification of the second child of the root.
@@ -105,14 +100,14 @@ func TestAddressDifferFromRootsThreeLayer(t *testing.T) {
 	toTups := make([][2]val.Tuple, len(fromTups))
 	// Copy elements from the original slice to the new slice
 	copy(toTups, fromTups)
-	bld := val.NewTupleBuilder(desc, ns)
+	bld := val.NewTupleBuilder(desc)
 	// modify value in the second half of the tree
 	bld.PutUint32(0, uint32(42))
-	var err error
-	toTups[23700][1], err = bld.Build(sharedPool)
-	assert.NoError(t, err)
+	toTups[23700][1] = bld.Build(sharedPool)
 	toRoot := makeTree(t, toTups)
 
+	ctx := context.Background()
+	ns := NewTestNodeStore()
 	dfr, err := layerDifferFromRoots(ctx, ns, ns, fromRoot, toRoot, desc)
 	assert.NoError(t, err)
 
@@ -151,7 +146,7 @@ func TestAddressDifferFromRootsLayerMismatch(t *testing.T) {
 	assert.Equal(t, 415, toRoot.Count())
 	assert.Equal(t, 0, toRoot.Level())
 
-	ctx := sql.NewEmptyContext()
+	ctx := context.Background()
 	ns := NewTestNodeStore()
 	_, err := layerDifferFromRoots(ctx, ns, ns, fromRoot, toRoot, desc)
 	assert.Equal(t, ErrRootDepthMismatch, err)

@@ -143,7 +143,7 @@ func mapToAndFromColumns(query sql.Schema) (mapping []int, err error) {
 	return
 }
 
-func (ds DiffSplitter) SplitDiffResultRow(ctx *sql.Context, row sql.Row) (from, to RowDiff, err error) {
+func (ds DiffSplitter) SplitDiffResultRow(row sql.Row) (from, to RowDiff, err error) {
 	from = RowDiff{ColDiffs: make([]ChangeType, len(ds.targetSch))}
 	to = RowDiff{ColDiffs: make([]ChangeType, len(ds.targetSch))}
 
@@ -197,7 +197,7 @@ func (ds DiffSplitter) SplitDiffResultRow(ctx *sql.Context, row sql.Row) (from, 
 		// now do field-wise comparison
 		var cmp int
 		for i, col := range ds.targetSch {
-			cmp, err = col.Type.Compare(ctx, from.Row[i], to.Row[i])
+			cmp, err = col.Type.Compare(from.Row[i], to.Row[i])
 			if err != nil {
 				return RowDiff{}, RowDiff{}, err
 			} else if cmp != 0 {

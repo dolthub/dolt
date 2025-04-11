@@ -74,7 +74,7 @@ func (ti *linestringType) ConvertValueToNomsValue(ctx context.Context, vrw types
 	}
 
 	// Convert to sql.LineStringType
-	line, _, err := ti.sqlLineStringType.Convert(ctx, v)
+	line, _, err := ti.sqlLineStringType.Convert(v)
 	if err != nil {
 		return nil, err
 	}

@@ -23,8 +23,6 @@ import (
 	"runtime"
 	"strings"
 	"time"
-
-	"github.com/dolthub/go-mysql-server/sql"
 )
 
 var DefaultUnixSocketFilePath = DefaultMySQLUnixSocketFilePath
@@ -343,34 +341,34 @@ const (
 )
 
 type SystemVariableTarget interface {
-	SetGlobal(ctx *sql.Context, name string, value interface{}) error
+	SetGlobal(name string, value interface{}) error
 }
 
 // ApplySystemVariables sets the global system variables based on the given `ServerConfig`.
-func ApplySystemVariables(ctx *sql.Context, cfg ServerConfig, sysVarTarget SystemVariableTarget) error {
+func ApplySystemVariables(cfg ServerConfig, sysVarTarget SystemVariableTarget) error {
 	if cfg.ValueSet(MaxConnectionsKey) {
-		err := sysVarTarget.SetGlobal(ctx, "max_connections", cfg.MaxConnections())
+		err := sysVarTarget.SetGlobal("max_connections", cfg.MaxConnections())
 		if err != nil {
 			return err
 		}
 	}
 
 	if cfg.ValueSet(ReadTimeoutKey) {
-		err := sysVarTarget.SetGlobal(ctx, "net_read_timeout", cfg.ReadTimeout())
+		err := sysVarTarget.SetGlobal("net_read_timeout", cfg.ReadTimeout())
 		if err != nil {
 			return err
 		}
 	}
 
 	if cfg.ValueSet(WriteTimeoutKey) {
-		err := sysVarTarget.SetGlobal(ctx, "net_write_timeout", cfg.WriteTimeout())
+		err := sysVarTarget.SetGlobal("net_write_timeout", cfg.WriteTimeout())
 		if err != nil {
 			return err
 		}
 	}
 
 	if cfg.ValueSet(EventSchedulerKey) {
-		err := sysVarTarget.SetGlobal(ctx, "event_scheduler", cfg.EventSchedulerStatus())
+		err := sysVarTarget.SetGlobal("event_scheduler", cfg.EventSchedulerStatus())
 		if err != nil {
 			return err
 		}

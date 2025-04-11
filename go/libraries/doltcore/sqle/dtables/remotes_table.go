@@ -132,7 +132,7 @@ func NewRemoteItr(ctx *sql.Context, ddb *doltdb.DoltDB) (*RemoteItr, error) {
 
 // Next retrieves the next row. It will return io.EOF if it's the last row.
 // After retrieving the last row, Close will be automatically closed.
-func (itr *RemoteItr) Next(ctx *sql.Context) (sql.Row, error) {
+func (itr *RemoteItr) Next(*sql.Context) (sql.Row, error) {
 	if itr.idx >= len(itr.remotes) {
 		return nil, io.EOF
 	}
@@ -143,11 +143,11 @@ func (itr *RemoteItr) Next(ctx *sql.Context) (sql.Row, error) {
 
 	remote := itr.remotes[itr.idx]
 
-	fs, _, err := types.JSON.Convert(ctx, remote.FetchSpecs)
+	fs, _, err := types.JSON.Convert(remote.FetchSpecs)
 	if err != nil {
 		return nil, err
 	}
-	params, _, err := types.JSON.Convert(ctx, remote.Params)
+	params, _, err := types.JSON.Convert(remote.Params)
 	if err != nil {
 		return nil, err
 	}

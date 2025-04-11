@@ -37,7 +37,6 @@ var DoltProcedures = []sql.ExternalStoredProcedureDetails{
 	{Name: "dolt_rebase", Schema: doltRebaseProcedureSchema, Function: doltRebase},
 
 	{Name: "dolt_gc", Schema: int64Schema("status"), Function: doltGC, ReadOnly: true, AdminOnly: true},
-	{Name: "dolt_thread_dump", Schema: stringSchema("thread_dump"), Function: doltThreadDump, ReadOnly: true, AdminOnly: true},
 
 	{Name: "dolt_merge", Schema: doltMergeSchema, Function: doltMerge},
 	{Name: "dolt_pull", Schema: doltPullSchema, Function: doltPull, AdminOnly: true},

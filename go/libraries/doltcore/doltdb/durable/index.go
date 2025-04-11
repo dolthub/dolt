@@ -376,7 +376,7 @@ func (i prollyIndex) AddColumnToRows(ctx context.Context, newCol string, newSche
 
 	// Re-write all the rows, inserting a zero-byte field in every value tuple
 	_, valDesc := rowMap.Descriptors()
-	b := val.NewTupleBuilder(valDesc, i.index.NodeStore())
+	b := val.NewTupleBuilder(valDesc)
 	for {
 		k, v, err := iter.Next(ctx)
 		if err == io.EOF {
@@ -394,11 +394,7 @@ func (i prollyIndex) AddColumnToRows(ctx context.Context, newCol string, newSche
 			b.PutRaw(i+1, v.GetField(i))
 		}
 
-		tup, err := b.BuildPermissive(sharePool)
-		if err != nil {
-			return nil, err
-		}
-		err = mutator.Put(ctx, k, tup)
+		err = mutator.Put(ctx, k, b.BuildPermissive(sharePool))
 		if err != nil {
 			return nil, err
 		}

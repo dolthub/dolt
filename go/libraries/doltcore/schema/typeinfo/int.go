@@ -120,7 +120,7 @@ func (ti *intType) ConvertValueToNomsValue(ctx context.Context, vrw types.ValueR
 	if v == nil {
 		return types.NullValue, nil
 	}
-	intVal, _, err := ti.sqlIntType.Convert(ctx, v)
+	intVal, _, err := ti.sqlIntType.Convert(v)
 	if err != nil {
 		return nil, err
 	}
@@ -204,10 +204,8 @@ func (ti *intType) GetTypeParams() map[string]string {
 
 // IsValid implements TypeInfo interface.
 func (ti *intType) IsValid(v types.Value) bool {
-	// TODO: Add context parameter or delete typeinfo package
-	ctx := context.Background()
 	if val, ok := v.(types.Int); ok {
-		_, _, err := ti.sqlIntType.Convert(ctx, int64(val))
+		_, _, err := ti.sqlIntType.Convert(int64(val))
 		if err != nil {
 			return false
 		}

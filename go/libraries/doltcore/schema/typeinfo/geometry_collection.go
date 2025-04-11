@@ -74,7 +74,7 @@ func (ti *geomcollType) ConvertValueToNomsValue(ctx context.Context, vrw types.V
 	}
 
 	// Convert to sql.GeomColl
-	geomColl, _, err := ti.sqlGeomCollType.Convert(ctx, v)
+	geomColl, _, err := ti.sqlGeomCollType.Convert(v)
 	if err != nil {
 		return nil, err
 	}

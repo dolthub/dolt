@@ -134,10 +134,7 @@ func (c *nonCovStrictSecondaryLookupGen) New(ctx context.Context, k val.Tuple) (
 		from := c.pkMap.MapOrdinal(to)
 		c.pkBld.PutRaw(to, idxKey.GetField(from))
 	}
-	pk, err := c.pkBld.Build(sharePool)
-	if err != nil {
-		return nil, err
-	}
+	pk := c.pkBld.Build(sharePool)
 
 	iter := &strictLookupIter{k: pk}
 	if err := c.pri.Get(ctx, pk, func(key val.Tuple, value val.Tuple) error {
@@ -187,10 +184,7 @@ func (c *covLaxSecondaryLookupGen) New(ctx context.Context, k val.Tuple) (prolly
 	if c.prefixDesc.Count() >= c.m.KeyDesc().Count()-1 {
 		// key range optimization only works for full length key
 		start := k
-		stop, ok, err := prolly.IncrementTuple(ctx, start, c.prefixDesc.Count()-1, c.prefixDesc, c.m.Pool(), c.NodeStore())
-		if err != nil {
-			return nil, err
-		}
+		stop, ok := prolly.IncrementTuple(ctx, start, c.prefixDesc.Count()-1, c.prefixDesc, c.m.Pool())
 		if ok {
 			return c.m.IterKeyRange(ctx, start, stop)
 		}
@@ -250,10 +244,7 @@ func (c *nonCovLaxSecondaryLookupGen) New(ctx context.Context, k val.Tuple) (pro
 		// TODO: widen this restriction for multiple PKs. need to count the number
 		// of PK cols in the index colset vs outside
 		start := k
-		stop, ok, err := prolly.IncrementTuple(ctx, start, c.prefixDesc.Count()-1, c.prefixDesc, c.sec.Pool(), c.NodeStore())
-		if err != nil {
-			return nil, err
-		}
+		stop, ok := prolly.IncrementTuple(ctx, start, c.prefixDesc.Count()-1, c.prefixDesc, c.sec.Pool())
 		if ok {
 			secIter, err := c.sec.IterKeyRange(ctx, start, stop)
 			if err != nil {
@@ -306,10 +297,7 @@ func (c *keylessSecondaryLookupGen) New(ctx context.Context, k val.Tuple) (proll
 		// key range optimization only works if full key
 		// keyless indexes should include all rows
 		start := k
-		stop, ok, err := prolly.IncrementTuple(ctx, start, c.prefixDesc.Count()-1, c.prefixDesc, c.sec.Pool(), c.NodeStore())
-		if err != nil {
-			return nil, err
-		}
+		stop, ok := prolly.IncrementTuple(ctx, start, c.prefixDesc.Count()-1, c.prefixDesc, c.sec.Pool())
 		if ok {
 			secIter, err := c.sec.IterKeyRange(ctx, start, stop)
 			if err != nil {
@@ -362,10 +350,7 @@ func (i *keylessLookupIter) Next(ctx context.Context) (k, v val.Tuple, err error
 		from := i.pkMap.MapOrdinal(to)
 		i.pkBld.PutRaw(to, idxKey.GetField(from))
 	}
-	i.k, err = i.pkBld.Build(sharePool)
-	if err != nil {
-		return nil, nil, err
-	}
+	i.k = i.pkBld.Build(sharePool)
 
 	err = i.pri.Get(ctx, i.k, func(key val.Tuple, value val.Tuple) error {
 		i.v = value

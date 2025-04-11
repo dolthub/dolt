@@ -129,7 +129,7 @@ func (it *IgnoreTable) LockedToRoot(ctx *sql.Context, root doltdb.RootValue) (sq
 
 // IndexedAccess implements IndexAddressableTable, but IgnoreTables has no indexes.
 // Thus, this should never be called.
-func (it *IgnoreTable) IndexedAccess(ctx *sql.Context, lookup sql.IndexLookup) sql.IndexedTable {
+func (it *IgnoreTable) IndexedAccess(lookup sql.IndexLookup) sql.IndexedTable {
 	panic("Unreachable")
 }
 

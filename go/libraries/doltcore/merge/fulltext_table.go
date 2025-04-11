@@ -118,8 +118,8 @@ func (table *fulltextTable) Deleter(ctx *sql.Context) sql.RowDeleter {
 }
 
 // IndexedAccess implements the interface fulltext.EditableTable.
-func (table *fulltextTable) IndexedAccess(ctx *sql.Context, lookup sql.IndexLookup) sql.IndexedTable {
-	return table.GMSTable.IndexedAccess(ctx, lookup)
+func (table *fulltextTable) IndexedAccess(lookup sql.IndexLookup) sql.IndexedTable {
+	return table.GMSTable.IndexedAccess(lookup)
 }
 
 // GetIndexes implements the interface fulltext.EditableTable.
@@ -152,8 +152,8 @@ func (table *fulltextTable) ApplyToTable(ctx *sql.Context) (*doltdb.Table, error
 	keyDesc, valDesc := m.Descriptors()
 	keyMap, valMap := ordinalMappingsFromSchema(table.SqlSch, table.Sch)
 	mut := m.Mutate()
-	keyBld := val.NewTupleBuilder(keyDesc, m.NodeStore())
-	valBld := val.NewTupleBuilder(valDesc, m.NodeStore())
+	keyBld := val.NewTupleBuilder(keyDesc)
+	valBld := val.NewTupleBuilder(valDesc)
 
 	sqlRow, err := rowIter.Next(ctx)
 	for ; err == nil; sqlRow, err = rowIter.Next(ctx) {
@@ -163,10 +163,7 @@ func (table *fulltextTable) ApplyToTable(ctx *sql.Context) (*doltdb.Table, error
 				return nil, err
 			}
 		}
-		k, err := keyBld.Build(sharePool)
-		if err != nil {
-			return nil, err
-		}
+		k := keyBld.Build(sharePool)
 
 		for to := range valMap {
 			from := valMap.MapOrdinal(to)
@@ -174,10 +171,7 @@ func (table *fulltextTable) ApplyToTable(ctx *sql.Context) (*doltdb.Table, error
 				return nil, err
 			}
 		}
-		v, err := valBld.Build(sharePool)
-		if err != nil {
-			return nil, err
-		}
+		v := valBld.Build(sharePool)
 
 		if err = mut.Put(ctx, k, v); err != nil {
 			return nil, err

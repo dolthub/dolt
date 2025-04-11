@@ -1001,7 +1001,7 @@ func lookupBoolSysVar(ctx *sql.Context, systemVarName string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	boolValue, _, err := types.Boolean.Convert(ctx, value)
+	boolValue, _, err := types.Boolean.Convert(value)
 	if err != nil {
 		return false, err
 	}

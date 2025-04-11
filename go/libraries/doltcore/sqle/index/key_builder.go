@@ -15,6 +15,8 @@
 package index
 
 import (
+	"context"
+
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -30,7 +32,7 @@ import (
 // (index value tuples are not used).
 func NewSecondaryKeyBuilder(ctx *sql.Context, tableName string, sch schema.Schema, def schema.Index, idxDesc val.TupleDesc, p pool.BuffPool, nodeStore tree.NodeStore) (SecondaryKeyBuilder, error) {
 	b := SecondaryKeyBuilder{
-		builder:   val.NewTupleBuilder(idxDesc, nodeStore),
+		builder:   val.NewTupleBuilder(idxDesc),
 		pool:      p,
 		nodeStore: nodeStore,
 		sch:       sch,
@@ -100,19 +102,23 @@ type SecondaryKeyBuilder struct {
 }
 
 // SecondaryKeyFromRow builds a secondary index key from a clustered index row.
-func (b SecondaryKeyBuilder) SecondaryKeyFromRow(ctx *sql.Context, k, v val.Tuple) (val.Tuple, error) {
+func (b SecondaryKeyBuilder) SecondaryKeyFromRow(ctx context.Context, k, v val.Tuple) (val.Tuple, error) {
 	for to := range b.mapping {
 		from := b.mapping.MapOrdinal(to)
 		if from == -1 {
 			// the "from" field is a virtual column
 			expr := b.virtualExpressions[to]
+			sqlCtx, ok := ctx.(*sql.Context)
+			if !ok {
+				sqlCtx = sql.NewContext(ctx)
+			}
 
-			sqlRow, err := BuildRow(ctx, k, v, b.sch, b.nodeStore)
+			sqlRow, err := BuildRow(sqlCtx, k, v, b.sch, b.nodeStore)
 			if err != nil {
 				return nil, err
 			}
 
-			value, err := expr.Eval(ctx, sqlRow)
+			value, err := expr.Eval(sqlCtx, sqlRow)
 			if err != nil {
 				return nil, err
 			}
@@ -144,10 +150,7 @@ func (b SecondaryKeyBuilder) SecondaryKeyFromRow(ctx *sql.Context, k, v val.Tupl
 				}
 
 				if len(b.indexDef.PrefixLengths()) > to {
-					value, err = val.TrimValueToPrefixLength(ctx, value, b.indexDef.PrefixLengths()[to])
-					if err != nil {
-						return nil, err
-					}
+					value = val.TrimValueToPrefixLength(value, b.indexDef.PrefixLengths()[to])
 				}
 
 				err = tree.PutField(ctx, b.nodeStore, b.builder, to, value)
@@ -157,7 +160,7 @@ func (b SecondaryKeyBuilder) SecondaryKeyFromRow(ctx *sql.Context, k, v val.Tupl
 			}
 		}
 	}
-	return b.builder.Build(b.pool)
+	return b.builder.Build(b.pool), nil
 }
 
 // BuildRow returns a sql.Row for the given key/value tuple pair
@@ -183,12 +186,12 @@ func (b SecondaryKeyBuilder) canCopyRawBytes(idxField int) bool {
 	return true
 }
 
-func NewClusteredKeyBuilder(def schema.Index, sch schema.Schema, keyDesc val.TupleDesc, p pool.BuffPool, ns tree.NodeStore) (b ClusteredKeyBuilder) {
+func NewClusteredKeyBuilder(def schema.Index, sch schema.Schema, keyDesc val.TupleDesc, p pool.BuffPool) (b ClusteredKeyBuilder) {
 	b.pool = p
 	if schema.IsKeyless(sch) {
 		// [16]byte hash key is always final key field
 		b.mapping = val.OrdinalMapping{def.Count()}
-		b.builder = val.NewTupleBuilder(val.KeylessTupleDesc, ns)
+		b.builder = val.NewTupleBuilder(val.KeylessTupleDesc)
 		return
 	}
 
@@ -198,7 +201,7 @@ func NewClusteredKeyBuilder(def schema.Index, sch schema.Schema, keyDesc val.Tup
 		tagToOrdinal[tag] = ord
 	}
 
-	b.builder = val.NewTupleBuilder(keyDesc, ns)
+	b.builder = val.NewTupleBuilder(keyDesc)
 	b.mapping = make(val.OrdinalMapping, keyDesc.Count())
 	for i, col := range sch.GetPKCols().GetColumns() {
 		b.mapping[i] = tagToOrdinal[col.Tag]
@@ -213,7 +216,7 @@ type ClusteredKeyBuilder struct {
 }
 
 // ClusteredKeyFromIndexKey builds a clustered index key from a secondary index key.
-func (b ClusteredKeyBuilder) ClusteredKeyFromIndexKey(k val.Tuple) (val.Tuple, error) {
+func (b ClusteredKeyBuilder) ClusteredKeyFromIndexKey(k val.Tuple) val.Tuple {
 	for to, from := range b.mapping {
 		b.builder.PutRaw(to, k.GetField(from))
 	}

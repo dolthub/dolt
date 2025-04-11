@@ -342,7 +342,6 @@ func TestDecimalMarshal(t *testing.T) {
 		{20, 10, time.Date(2019, 12, 12, 12, 12, 12, 0, time.UTC), "", true},
 	}
 
-	ctx := sql.NewEmptyContext()
 	for _, test := range tests {
 		t.Run(fmt.Sprintf("%v %v %v", test.precision, test.scale, test.val), func(t *testing.T) {
 			typ := &decimalType{gmstypes.MustCreateDecimalType(test.precision, test.scale)}
@@ -357,8 +356,8 @@ func TestDecimalMarshal(t *testing.T) {
 				assert.True(t, expectedDecimal.Equal(decimal.Decimal(val.(types.Decimal))))
 				umar, err := typ.ConvertNomsValueToValue(val)
 				require.NoError(t, err)
-				testVal := sql.MustConvert(typ.sqlDecimalType.Convert(ctx, test.val))
-				cmp, err := typ.sqlDecimalType.Compare(ctx, testVal, umar)
+				testVal := sql.MustConvert(typ.sqlDecimalType.Convert(test.val))
+				cmp, err := typ.sqlDecimalType.Compare(testVal, umar)
 				require.NoError(t, err)
 				assert.Equal(t, 0, cmp)
 			}

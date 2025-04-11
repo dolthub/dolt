@@ -169,7 +169,7 @@ func (dt *DiffTable) Collation() sql.CollationID {
 func (dt *DiffTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
 	cmItr := doltdb.CommitItrForRoots(dt.ddb, dt.head)
 
-	sf, err := SelectFuncForFilters(ctx, dt.ddb.ValueReadWriter(), dt.partitionFilters)
+	sf, err := SelectFuncForFilters(dt.ddb.ValueReadWriter(), dt.partitionFilters)
 	if err != nil {
 		return nil, err
 	}
@@ -356,7 +356,7 @@ func (dt *DiffTable) fromCommitLookupPartitions(ctx *sql.Context, hashes []hash.
 		return sql.PartitionsToPartitionIter(), nil
 	}
 
-	sf, err := SelectFuncForFilters(ctx, dt.ddb.ValueReadWriter(), dt.partitionFilters)
+	sf, err := SelectFuncForFilters(dt.ddb.ValueReadWriter(), dt.partitionFilters)
 	if err != nil {
 		return nil, err
 	}
@@ -559,7 +559,7 @@ func (dt *DiffTable) toCommitLookupPartitions(ctx *sql.Context, hashes []hash.Ha
 		return sql.PartitionsToPartitionIter(), nil
 	}
 
-	sf, err := SelectFuncForFilters(ctx, dt.ddb.ValueReadWriter(), dt.partitionFilters)
+	sf, err := SelectFuncForFilters(dt.ddb.ValueReadWriter(), dt.partitionFilters)
 	if err != nil {
 		return nil, err
 	}
@@ -582,7 +582,7 @@ func (dt *DiffTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 }
 
 // IndexedAccess implements sql.IndexAddressable
-func (dt *DiffTable) IndexedAccess(ctx *sql.Context, lookup sql.IndexLookup) sql.IndexedTable {
+func (dt *DiffTable) IndexedAccess(lookup sql.IndexLookup) sql.IndexedTable {
 	nt := *dt
 	return &nt
 }
@@ -724,7 +724,7 @@ func (dp *DiffPartition) isDiffablePartition(ctx *sql.Context) (simpleDiff bool,
 
 type partitionSelectFunc func(*sql.Context, DiffPartition) (bool, error)
 
-func SelectFuncForFilters(ctx *sql.Context, vr types.ValueReader, filters []sql.Expression) (partitionSelectFunc, error) {
+func SelectFuncForFilters(vr types.ValueReader, filters []sql.Expression) (partitionSelectFunc, error) {
 	const (
 		toCommitTag uint64 = iota
 		fromCommitTag
@@ -739,7 +739,7 @@ func SelectFuncForFilters(ctx *sql.Context, vr types.ValueReader, filters []sql.
 		schema.NewColumn(fromCommitDate, fromCommitDateTag, types.TimestampKind, false),
 	)
 
-	expFunc, err := expreval.ExpressionFuncFromSQLExpressions(ctx, vr, schema.UnkeyedSchemaFromCols(colColl), filters)
+	expFunc, err := expreval.ExpressionFuncFromSQLExpressions(vr, schema.UnkeyedSchemaFromCols(colColl), filters)
 
 	if err != nil {
 		return nil, err

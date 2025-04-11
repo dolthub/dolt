@@ -45,9 +45,9 @@ func getPrimaryProllyWriter(ctx context.Context, t *doltdb.Table, schState *dses
 
 	return prollyIndexWriter{
 		mut:    m.Mutate(),
-		keyBld: val.NewTupleBuilder(keyDesc, m.NodeStore()),
+		keyBld: val.NewTupleBuilder(keyDesc),
 		keyMap: schState.PriIndex.KeyMapping,
-		valBld: val.NewTupleBuilder(valDesc, m.NodeStore()),
+		valBld: val.NewTupleBuilder(valDesc),
 		valMap: schState.PriIndex.ValMapping,
 	}, nil
 }
@@ -67,8 +67,8 @@ func getPrimaryKeylessProllyWriter(ctx context.Context, t *doltdb.Table, schStat
 
 	return prollyKeylessWriter{
 		mut:    m.Mutate(),
-		keyBld: val.NewTupleBuilder(keyDesc, m.NodeStore()),
-		valBld: val.NewTupleBuilder(valDesc, m.NodeStore()),
+		keyBld: val.NewTupleBuilder(keyDesc),
+		valBld: val.NewTupleBuilder(valDesc),
 		valMap: schState.PriIndex.ValMapping,
 	}, nil
 }
@@ -119,7 +119,7 @@ func (m prollyIndexWriter) keyFromRow(ctx context.Context, sqlRow sql.Row) (val.
 			return nil, err
 		}
 	}
-	return m.keyBld.BuildPermissive(sharePool)
+	return m.keyBld.BuildPermissive(sharePool), nil
 }
 
 func (m prollyIndexWriter) ValidateKeyViolations(ctx context.Context, sqlRow sql.Row) error {
@@ -155,10 +155,7 @@ func (m prollyIndexWriter) Insert(ctx context.Context, sqlRow sql.Row) error {
 			return err
 		}
 	}
-	v, err := m.valBld.Build(sharePool)
-	if err != nil {
-		return err
-	}
+	v := m.valBld.Build(sharePool)
 
 	return m.mut.Put(ctx, k, v)
 }
@@ -212,10 +209,7 @@ func (m prollyIndexWriter) Update(ctx context.Context, oldRow sql.Row, newRow sq
 			return err
 		}
 	}
-	v, err := m.valBld.Build(sharePool)
-	if err != nil {
-		return err
-	}
+	v := m.valBld.Build(sharePool)
 
 	return m.mut.Put(ctx, newKey, v)
 }
@@ -310,23 +304,23 @@ func (m prollySecondaryIndexWriter) ValidateKeyViolations(ctx context.Context, s
 }
 
 // trimKeyPart will trim entry into the sql.Row depending on the prefixLengths
-func (m prollySecondaryIndexWriter) trimKeyPart(ctx context.Context, to int, keyPart interface{}) (interface{}, error) {
+func (m prollySecondaryIndexWriter) trimKeyPart(to int, keyPart interface{}) interface{} {
 	var prefixLength uint16
 	if len(m.prefixLengths) > to {
 		prefixLength = m.prefixLengths[to]
 	}
-	return val.TrimValueToPrefixLength(ctx, keyPart, prefixLength)
+	return val.TrimValueToPrefixLength(keyPart, prefixLength)
 }
 
 func (m prollySecondaryIndexWriter) keyFromRow(ctx context.Context, sqlRow sql.Row) (val.Tuple, error) {
 	for to := range m.keyMap {
 		from := m.keyMap.MapOrdinal(to)
-		keyPart, _ := m.trimKeyPart(ctx, to, sqlRow[from])
+		keyPart := m.trimKeyPart(to, sqlRow[from])
 		if err := tree.PutField(ctx, m.mut.NodeStore(), m.keyBld, to, keyPart); err != nil {
 			return nil, err
 		}
 	}
-	return m.keyBld.Build(sharePool)
+	return m.keyBld.Build(sharePool), nil
 }
 
 func (m prollySecondaryIndexWriter) Insert(ctx context.Context, sqlRow sql.Row) error {
@@ -347,7 +341,7 @@ func (m prollySecondaryIndexWriter) checkForUniqueKeyErr(ctx context.Context, sq
 			m.keyBld.Recycle()
 			return nil
 		}
-		keyPart, _ := m.trimKeyPart(ctx, to, sqlRow[from])
+		keyPart := m.trimKeyPart(to, sqlRow[from])
 		if err := tree.PutField(ctx, ns, m.keyBld, to, keyPart); err != nil {
 			return err
 		}
@@ -375,15 +369,12 @@ func (m prollySecondaryIndexWriter) checkForUniqueKeyErr(ctx context.Context, sq
 		from := m.pkMap.MapOrdinal(to)
 		m.pkBld.PutRaw(to, idxDesc.GetField(from, idxKey))
 	}
-	existingPK, err := m.pkBld.Build(sharePool)
-	if err != nil {
-		return err
-	}
+	existingPK := m.pkBld.Build(sharePool)
 
 	remappedSqlRow := make(sql.Row, m.idxCols)
 	for to := range m.keyMap[:m.idxCols] {
 		from := m.keyMap.MapOrdinal(to)
-		remappedSqlRow[to], _ = m.trimKeyPart(ctx, to, sqlRow[from])
+		remappedSqlRow[to] = m.trimKeyPart(to, sqlRow[from])
 	}
 	return secondaryUniqueKeyError{
 		keyStr:      FormatKeyForUniqKeyErr(ctx, key, desc, remappedSqlRow),
@@ -392,6 +383,7 @@ func (m prollySecondaryIndexWriter) checkForUniqueKeyErr(ctx context.Context, sq
 }
 
 func (m prollySecondaryIndexWriter) Delete(ctx context.Context, sqlRow sql.Row) error {
+	k := m.keyBld.Build(sharePool)
 	k, err := m.keyFromRow(ctx, sqlRow)
 	if err != nil {
 		return err

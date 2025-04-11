@@ -81,7 +81,7 @@ func stripTableNamesFromExpression(expr sql.Expression) sql.Expression {
 	return e
 }
 
-func parseCreateTable(ctx *sql.Context, tableName string, sch schema.Schema) (*plan.CreateTable, error) {
+func parseCreateTable(_ *sql.Context, tableName string, sch schema.Schema) (*plan.CreateTable, error) {
 	createTable, err := sqlfmt.GenerateCreateTableStatement(tableName, sch, nil, nil)
 	if err != nil {
 		return nil, err
@@ -92,9 +92,6 @@ func parseCreateTable(ctx *sql.Context, tableName string, sch schema.Schema) (*p
 	mockDatabase := memory.NewDatabase("mydb")
 	mockProvider := memory.NewDBProvider(mockDatabase)
 	catalog := analyzer.NewCatalog(mockProvider)
-	catalog.AuthHandler = sql.NoopAuthorizationHandler{}
-
-	// We need a new context for this operation
 	parseCtx := sql.NewEmptyContext()
 	parseCtx.SetCurrentDatabase("mydb")
 

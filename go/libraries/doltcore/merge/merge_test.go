@@ -70,11 +70,7 @@ var syncPool = pool.NewBuffPool()
 func (v rowV) value() val.Tuple {
 	vB.PutInt64(0, int64(v.col1))
 	vB.PutInt64(1, int64(v.col2))
-	tup, err := vB.Build(syncPool)
-	if err != nil {
-		panic(err)
-	}
-	return tup
+	return vB.Build(syncPool)
 }
 
 func (v rowV) nomsValue() types.Value {
@@ -432,10 +428,10 @@ func setupMergeTest(t *testing.T) (*doltdb.DoltDB, types.ValueReadWriter, tree.N
 	ns := ddb.NodeStore()
 
 	vD = sch.GetValueDescriptor(ns)
-	vB = val.NewTupleBuilder(vD, ns)
+	vB = val.NewTupleBuilder(vD)
 
 	kD = sch.GetKeyDescriptor(ns)
-	kB = val.NewTupleBuilder(kD, ns)
+	kB = val.NewTupleBuilder(kD)
 
 	sortTests(testRows)
 
@@ -793,11 +789,7 @@ var kB *val.TupleBuilder
 
 func key(i int) val.Tuple {
 	kB.PutInt64(0, int64(i))
-	tup, err := kB.Build(syncPool)
-	if err != nil {
-		panic(err)
-	}
-	return tup
+	return kB.Build(syncPool)
 }
 
 func nomsKey(i int) types.Value {

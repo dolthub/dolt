@@ -586,7 +586,7 @@ func (db *database) BuildNewCommit(ctx context.Context, ds Dataset, v types.Valu
 		if ok {
 			opts.Parents = []hash.Hash{headAddr}
 		}
-	} else if !opts.Amend {
+	} else {
 		curr, ok := ds.MaybeHeadAddr()
 		if ok {
 			if !hasParentHash(opts, curr) {
@@ -901,7 +901,7 @@ func (db *database) CommitWithWorkingSet(
 
 	// Prepend the current head hash to the list of parents if one was provided. This is only necessary if parents were
 	// provided because we fill it in automatically in buildNewCommit otherwise.
-	if len(opts.Parents) > 0 && !opts.Amend {
+	if len(opts.Parents) > 0 {
 		headHash, ok := commitDS.MaybeHeadAddr()
 		if ok {
 			if !hasParentHash(opts, headHash) {

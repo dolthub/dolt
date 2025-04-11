@@ -64,8 +64,9 @@ func keyDescFromMap(om testMap) val.TupleDesc {
 	}
 }
 
-func mustProllyMapFromTuples(t *testing.T, kd, vd val.TupleDesc, tuples [][2]val.Tuple, ns tree.NodeStore) Map {
+func mustProllyMapFromTuples(t *testing.T, kd, vd val.TupleDesc, tuples [][2]val.Tuple) Map {
 	ctx := context.Background()
+	ns := tree.NewTestNodeStore()
 
 	serializer := message.NewProllyMapSerializer(vd, ns.Pool())
 	chunker, err := tree.NewEmptyChunker(ctx, ns, serializer)

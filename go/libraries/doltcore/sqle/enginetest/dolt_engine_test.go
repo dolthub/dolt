@@ -15,6 +15,7 @@
 package enginetest
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"runtime"
@@ -33,7 +34,6 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statspro"
@@ -98,15 +98,6 @@ func TestSingleQuery(t *testing.T) {
 }
 
 func TestSchemaOverrides(t *testing.T) {
-	harness := newDoltEnginetestHarness(t)
-	RunSchemaOverridesTest(t, harness)
-}
-
-// Provide additional test coverage for adaptive types by running Schema Override tests
-// using adaptive types instead of address types.
-func TestSchemaOverridesWithAdaptiveEncoding(t *testing.T) {
-	defer func() { schema.UseAdaptiveEncoding = false }()
-	schema.UseAdaptiveEncoding = true
 	harness := newDoltEnginetestHarness(t)
 	RunSchemaOverridesTest(t, harness)
 }
@@ -874,17 +865,6 @@ func TestBigBlobs(t *testing.T) {
 	RunBigBlobsTest(t, h)
 }
 
-func TestAdaptiveEncoding(t *testing.T) {
-	defer func() { schema.UseAdaptiveEncoding = false }()
-	schema.UseAdaptiveEncoding = true
-	skipOldFormat(t)
-
-	RunTestAdaptiveEncoding(t, newDoltHarness(t), AdaptiveEncodingTestType_Blob, AdaptiveEncodingTestPurpose_Representation)
-	RunTestAdaptiveEncoding(t, newDoltHarness(t), AdaptiveEncodingTestType_Blob, AdaptiveEncodingTestPurpose_Correctness)
-	RunTestAdaptiveEncoding(t, newDoltHarness(t), AdaptiveEncodingTestType_Text, AdaptiveEncodingTestPurpose_Representation)
-	RunTestAdaptiveEncoding(t, newDoltHarness(t), AdaptiveEncodingTestType_Text, AdaptiveEncodingTestPurpose_Correctness)
-}
-
 func TestDropDatabase(t *testing.T) {
 	h := newDoltEnginetestHarness(t)
 	RunDropEngineTest(t, h)
@@ -1610,7 +1590,7 @@ func TestNullRanges(t *testing.T) {
 }
 
 func TestPersist(t *testing.T) {
-	ctx := sql.NewEmptyContext()
+	ctx := context.Background()
 	harness := newDoltHarness(t)
 	defer harness.Close()
 	dEnv := dtestutils.CreateTestEnv()

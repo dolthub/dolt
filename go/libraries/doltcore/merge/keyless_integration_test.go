@@ -336,7 +336,7 @@ func assertProllyConflicts(t *testing.T, ctx context.Context, tbl *doltdb.Table,
 	itr, err := artM.IterAllConflicts(ctx)
 	require.NoError(t, err)
 
-	expectedSet := expected.toConflictSet(t)
+	expectedSet := expected.toConflictSet()
 
 	var c int
 	var h [16]byte
@@ -357,19 +357,16 @@ func assertProllyConflicts(t *testing.T, ctx context.Context, tbl *doltdb.Table,
 		require.True(t, ok)
 
 		if expectedConf.base != nil {
-			_, value, err := expectedConf.base.HashAndValue()
-			require.NoError(t, err)
+			_, value := expectedConf.base.HashAndValue()
 			require.Equal(t, valDesc.Format(ctx, value), valDesc.Format(ctx, base))
 		}
 		if expectedConf.ours != nil {
-			_, value, err := expectedConf.ours.HashAndValue()
+			_, value := expectedConf.ours.HashAndValue()
 			require.Equal(t, valDesc.Format(ctx, value), valDesc.Format(ctx, ours))
-			require.NoError(t, err)
 		}
 		if expectedConf.theirs != nil {
-			_, value, err := expectedConf.theirs.HashAndValue()
+			_, value := expectedConf.theirs.HashAndValue()
 			require.Equal(t, valDesc.Format(ctx, value), valDesc.Format(ctx, theirs))
-			require.NoError(t, err)
 		}
 	}
 
@@ -501,7 +498,7 @@ var c2Tag = types.Uint(2)
 var cardTag = types.Uint(schema.KeylessRowCardinalityTag)
 
 var valDesc = val.NewTupleDescriptor(val.Type{Enc: val.Uint64Enc}, val.Type{Enc: val.Int64Enc, Nullable: true}, val.Type{Enc: val.Int64Enc, Nullable: true})
-var valBld = val.NewTupleBuilder(valDesc, nil)
+var valBld = val.NewTupleBuilder(valDesc)
 var sharePool = pool.NewBuffPool()
 
 type keylessEntries []keylessEntry
@@ -523,17 +520,14 @@ func (e keylessEntry) ToNomsTuple() types.Tuple {
 	return dtu.MustTuple(cardTag, types.Uint(e.card), c1Tag, types.Int(e.c1), c2Tag, types.Int(e.c2))
 }
 
-func (e keylessEntry) HashAndValue() ([]byte, val.Tuple, error) {
+func (e keylessEntry) HashAndValue() ([]byte, val.Tuple) {
 	valBld.PutUint64(0, uint64(e.card))
 	valBld.PutInt64(1, int64(e.c1))
 	valBld.PutInt64(2, int64(e.c2))
 
-	value, err := valBld.Build(sharePool)
-	if err != nil {
-		return nil, nil, err
-	}
+	value := valBld.Build(sharePool)
 	hashTup := val.HashTupleFromValue(sharePool, value)
-	return hashTup.GetField(0), value, nil
+	return hashTup.GetField(0), value
 }
 
 type conflictSet map[[16]byte]conflictEntry
@@ -542,10 +536,10 @@ type conflictEntry struct {
 	base, ours, theirs *keylessEntry
 }
 
-func (e conflictEntries) toConflictSet(t *testing.T) conflictSet {
+func (e conflictEntries) toConflictSet() conflictSet {
 	s := make(conflictSet, len(e))
-	for _, entry := range e {
-		s[entry.Key(t)] = entry
+	for _, t := range e {
+		s[t.Key()] = t
 	}
 	return s
 }
@@ -558,22 +552,19 @@ func (e conflictEntries) toTupleSet() tupleSet {
 	return mustTupleSet(tups...)
 }
 
-func (e conflictEntry) Key(t *testing.T) (h [16]byte) {
+func (e conflictEntry) Key() (h [16]byte) {
 	if e.base != nil {
-		h2, _, err := e.base.HashAndValue()
-		require.NoError(t, err)
+		h2, _ := e.base.HashAndValue()
 		copy(h[:], h2[:])
 		return
 	}
 	if e.ours != nil {
-		h2, _, err := e.ours.HashAndValue()
-		require.NoError(t, err)
+		h2, _ := e.ours.HashAndValue()
 		copy(h[:], h2[:])
 		return
 	}
 	if e.theirs != nil {
-		h2, _, err := e.theirs.HashAndValue()
-		require.NoError(t, err)
+		h2, _ := e.theirs.HashAndValue()
 		copy(h[:], h2[:])
 		return
 	}
@@ -616,10 +607,7 @@ func mustHash128Set(entries ...keylessEntry) (s hash128Set) {
 	s = make(hash128Set, len(entries))
 
 	for _, e := range entries {
-		h2, value, err := e.HashAndValue()
-		if err != nil {
-			panic(err)
-		}
+		h2, value := e.HashAndValue()
 		copy(h[:], h2)
 		s[h] = value
 	}

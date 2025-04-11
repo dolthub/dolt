@@ -28,16 +28,16 @@ import (
 )
 
 // GenerateDataDiffStatement returns any data diff in SQL statements for given table including INSERT, UPDATE and DELETE row statements.
-func GenerateDataDiffStatement(ctx *sql.Context, tableName string, sch schema.Schema, row sql.Row, rowDiffType diff.ChangeType, colDiffTypes []diff.ChangeType) (string, error) {
+func GenerateDataDiffStatement(tableName string, sch schema.Schema, row sql.Row, rowDiffType diff.ChangeType, colDiffTypes []diff.ChangeType) (string, error) {
 	if len(row) != len(colDiffTypes) {
 		return "", fmt.Errorf("expected the same size for columns and diff types, got %d and %d", len(row), len(colDiffTypes))
 	}
 
 	switch rowDiffType {
 	case diff.Added:
-		return SqlRowAsInsertStmt(ctx, row, tableName, sch)
+		return SqlRowAsInsertStmt(row, tableName, sch)
 	case diff.Removed:
-		return SqlRowAsDeleteStmt(ctx, row, tableName, sch, 0)
+		return SqlRowAsDeleteStmt(row, tableName, sch, 0)
 	case diff.ModifiedNew:
 		updatedCols := set.NewEmptyStrSet()
 		for i, diffType := range colDiffTypes {
@@ -48,7 +48,7 @@ func GenerateDataDiffStatement(ctx *sql.Context, tableName string, sch schema.Sc
 		if updatedCols.Size() == 0 {
 			return "", nil
 		}
-		return SqlRowAsUpdateStmt(ctx, row, tableName, sch, updatedCols)
+		return SqlRowAsUpdateStmt(row, tableName, sch, updatedCols)
 	case diff.ModifiedOld:
 		// do nothing, we only issue UPDATE for ModifiedNew
 		return "", nil
@@ -220,7 +220,7 @@ func GenerateCreateTableIndentedColumnDefinition(col schema.Column, tableCollati
 }
 
 // GenerateCreateTableIndexDefinition returns index definition for CREATE TABLE statement with indentation of 2 spaces
-func GenerateCreateTableIndexDefinition(index schema.Index) (string, bool) {
+func GenerateCreateTableIndexDefinition(index schema.Index) string {
 	return sql.GenerateCreateTableIndexDefinition(index.IsUnique(), index.IsSpatial(), index.IsFullText(), index.IsVector(), index.Name(),
 		sql.QuoteIdentifiers(index.ColumnNames()), index.Comment())
 }
@@ -444,8 +444,6 @@ func AlterTableDropForeignKeyStmt(tableName doltdb.TableName, fkName string) str
 func GenerateCreateTableStatement(tblName string, sch schema.Schema, fks []doltdb.ForeignKey, fksParentSch map[doltdb.TableName]schema.Schema) (string, error) {
 	colStmts := make([]string, sch.GetAllCols().Size())
 
-	schemaFormatter := sql.GlobalSchemaFormatter
-
 	// Statement creation parts for each column
 	for i, col := range sch.GetAllCols().GetColumns() {
 		colStmts[i] = GenerateCreateTableIndentedColumnDefinition(col, sql.CollationID(sch.GetCollation()))
@@ -453,7 +451,7 @@ func GenerateCreateTableStatement(tblName string, sch schema.Schema, fks []doltd
 
 	primaryKeyCols := sch.GetPKCols().GetColumnNames()
 	if len(primaryKeyCols) > 0 {
-		primaryKey := schemaFormatter.GenerateCreateTablePrimaryKeyDefinition(primaryKeyCols)
+		primaryKey := sql.GenerateCreateTablePrimaryKeyDefinition(primaryKeyCols)
 		colStmts = append(colStmts, primaryKey)
 	}
 
@@ -463,11 +461,7 @@ func GenerateCreateTableStatement(tblName string, sch schema.Schema, fks []doltd
 		if isPrimaryKeyIndex(index, sch) {
 			continue
 		}
-
-		definition, shouldInclude := GenerateCreateTableIndexDefinition(index)
-		if shouldInclude {
-			colStmts = append(colStmts, definition)
-		}
+		colStmts = append(colStmts, GenerateCreateTableIndexDefinition(index))
 	}
 
 	for _, fk := range fks {

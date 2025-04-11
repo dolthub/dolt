@@ -33,12 +33,11 @@ import (
 )
 
 func setGlobalSqlVariable(t *testing.T, name string, val interface{}) {
-	ctx := sql.NewEmptyContext()
 	_, cur, _ := sql.SystemVariables.GetGlobal(name)
 	t.Cleanup(func() {
-		sql.SystemVariables.SetGlobal(ctx, name, cur)
+		sql.SystemVariables.SetGlobal(name, cur)
 	})
-	sql.SystemVariables.SetGlobal(ctx, name, val)
+	sql.SystemVariables.SetGlobal(name, val)
 }
 
 func TestDatabaseProvider(t *testing.T) {

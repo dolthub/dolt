@@ -111,7 +111,7 @@ func (a *AutoIncrementTracker) Current(tableName string) (uint64, error) {
 
 // Next returns the next auto increment value for the table named using the provided value from an insert (which may
 // be null or 0, in which case it will be generated from the sequence).
-func (a *AutoIncrementTracker) Next(ctx *sql.Context, tbl string, insertVal interface{}) (uint64, error) {
+func (a *AutoIncrementTracker) Next(tbl string, insertVal interface{}) (uint64, error) {
 	err := a.waitForInit()
 	if err != nil {
 		return 0, err
@@ -119,7 +119,7 @@ func (a *AutoIncrementTracker) Next(ctx *sql.Context, tbl string, insertVal inte
 
 	tbl = strings.ToLower(tbl)
 
-	given, err := CoerceAutoIncrementValue(ctx, insertVal)
+	given, err := CoerceAutoIncrementValue(insertVal)
 	if err != nil {
 		return 0, err
 	}
@@ -146,16 +146,16 @@ func (a *AutoIncrementTracker) Next(ctx *sql.Context, tbl string, insertVal inte
 	return given, nil
 }
 
-func (a *AutoIncrementTracker) CoerceAutoIncrementValue(ctx *sql.Context, val interface{}) (uint64, error) {
+func (a *AutoIncrementTracker) CoerceAutoIncrementValue(val interface{}) (uint64, error) {
 	err := a.waitForInit()
 	if err != nil {
 		return 0, err
 	}
-	return CoerceAutoIncrementValue(ctx, val)
+	return CoerceAutoIncrementValue(val)
 }
 
 // CoerceAutoIncrementValue converts |val| into an AUTO_INCREMENT sequence value
-func CoerceAutoIncrementValue(ctx *sql.Context, val interface{}) (uint64, error) {
+func CoerceAutoIncrementValue(val interface{}) (uint64, error) {
 	switch typ := val.(type) {
 	case float32:
 		val = math.Round(float64(typ))
@@ -164,7 +164,7 @@ func CoerceAutoIncrementValue(ctx *sql.Context, val interface{}) (uint64, error)
 	}
 
 	var err error
-	val, _, err = gmstypes.Uint64.Convert(ctx, val)
+	val, _, err = gmstypes.Uint64.Convert(val)
 	if err != nil {
 		return 0, err
 	}
@@ -345,7 +345,7 @@ func (a *AutoIncrementTracker) deepSet(ctx *sql.Context, tableName string, table
 	return table, nil
 }
 
-func getMaxIndexValue(ctx *sql.Context, indexData durable.Index) (uint64, error) {
+func getMaxIndexValue(ctx context.Context, indexData durable.Index) (uint64, error) {
 	if types.IsFormat_DOLT(indexData.Format()) {
 		idx, err := durable.ProllyMapFromIndex(indexData)
 		if err != nil {
@@ -371,7 +371,7 @@ func getMaxIndexValue(ctx *sql.Context, indexData durable.Index) (uint64, error)
 			return 0, err
 		}
 
-		maxVal, err := CoerceAutoIncrementValue(ctx, field)
+		maxVal, err := CoerceAutoIncrementValue(field)
 		if err != nil {
 			return 0, err
 		}

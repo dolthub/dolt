@@ -507,14 +507,10 @@ func (si *schemaImpl) getKeyColumnsDescriptor(vs val.ValueStore, convertAddressC
 				Enc:      val.Encoding(encoding),
 				Nullable: columnMissingNotNullConstraint(col),
 			}
-			switch encoding {
-			case serial.EncodingExtendedAddr:
-				handler = val.NewExtendedAddressTypeHandler(vs, extendedType)
-			case serial.EncodingExtendedAdaptive:
-				handler = val.NewAdaptiveTypeHandler(vs, extendedType)
-			default:
-				// encoding == serial.EncodingExtended
+			if encoding == serial.EncodingExtended {
 				handler = extendedType
+			} else {
+				handler = val.NewExtendedAddressTypeHandler(vs, extendedType)
 			}
 		} else {
 			if convertAddressColumns && !contentHashedField && queryType == query.Type_BLOB {
@@ -597,13 +593,9 @@ func (si *schemaImpl) GetValueDescriptor(vs val.ValueStore) val.TupleDesc {
 		}
 
 		if extendedType, ok := sqlType.(gmstypes.ExtendedType); ok {
-			switch encoding {
-			case serial.EncodingExtendedAddr:
+			if encoding == serial.EncodingExtendedAddr {
 				handlers = append(handlers, val.NewExtendedAddressTypeHandler(vs, extendedType))
-			case serial.EncodingExtendedAdaptive:
-				handlers = append(handlers, val.NewAdaptiveTypeHandler(vs, extendedType))
-			default:
-				// encoding == serial.EncodingExtended
+			} else {
 				handlers = append(handlers, extendedType)
 			}
 		} else {

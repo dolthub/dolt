@@ -35,7 +35,7 @@ const utf8RuneError = string(utf8.RuneError)
 
 type columnValues []*columnValue
 
-func toUtf8StringValue(ctx *sql.Context, col *sql.Column, val interface{}) (string, error) {
+func toUtf8StringValue(col *sql.Column, val interface{}) (string, error) {
 	if val == nil {
 		return "", nil
 	}
@@ -48,7 +48,7 @@ func toUtf8StringValue(ctx *sql.Context, col *sql.Column, val interface{}) (stri
 	if ti.ToSqlType().Type() == sqltypes.Blob {
 		return "", fmt.Errorf("binary types not supported in dolt ci configuration")
 	} else {
-		formattedVal, err := sqlutil.SqlColToStr(ctx, ti.ToSqlType(), val)
+		formattedVal, err := sqlutil.SqlColToStr(ti.ToSqlType(), val)
 		if err != nil {
 			return "", err
 		}
@@ -61,8 +61,8 @@ func toUtf8StringValue(ctx *sql.Context, col *sql.Column, val interface{}) (stri
 	}
 }
 
-func newColumnValue(ctx *sql.Context, col *sql.Column, val interface{}) (*columnValue, error) {
-	utf8Value, err := toUtf8StringValue(ctx, col, val)
+func newColumnValue(col *sql.Column, val interface{}) (*columnValue, error) {
+	utf8Value, err := toUtf8StringValue(col, val)
 	if err != nil {
 		return nil, err
 	}

@@ -99,7 +99,7 @@ func (st *SchemaTable) LockedToRoot(ctx *sql.Context, root doltdb.RootValue) (sq
 	return st.backingTable.LockedToRoot(ctx, root)
 }
 
-func (st *SchemaTable) IndexedAccess(ctx *sql.Context, lookup sql.IndexLookup) sql.IndexedTable {
+func (st *SchemaTable) IndexedAccess(lookup sql.IndexLookup) sql.IndexedTable {
 	// Never reached. Interface required for LockedToRoot to be implemented.
 	panic("Unreachable")
 }
@@ -476,25 +476,9 @@ func getSchemaFragmentsOfType(ctx *sql.Context, tbl *WritableDoltTable, fragType
 			return nil, err
 		}
 
-		name, ok, err := sql.Unwrap[string](ctx, sqlRow[nameIdx])
-		if err != nil {
-			return nil, err
-		}
-		if !ok {
-			return nil, fmt.Errorf("unexpected type for name, expected string, got %v. This should never happen", sqlRow[nameIdx])
-		}
-
-		fragment, ok, err := sql.Unwrap[string](ctx, sqlRow[fragmentIdx])
-		if err != nil {
-			return nil, err
-		}
-		if !ok {
-			return nil, fmt.Errorf("unexpected type for fragment, expected string, got %v. This should never happen", sqlRow[fragmentIdx])
-		}
-
 		frags = append(frags, schemaFragment{
-			name:     name,
-			fragment: fragment,
+			name:     sqlRow[nameIdx].(string),
+			fragment: sqlRow[fragmentIdx].(string),
 			created:  time.Unix(createdTime, 0).UTC(),
 			sqlMode:  sqlModeString,
 		})

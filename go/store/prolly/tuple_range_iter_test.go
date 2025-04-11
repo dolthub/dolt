@@ -144,10 +144,8 @@ func testIterPrefixRange(t *testing.T, om testMap, tuples [][2]val.Tuple) {
 		if a > z {
 			a, z = z, a
 		}
-		start, err := getKeyPrefix(tuples[a][0], prefixDesc)
-		require.NoError(t, err)
-		stop, err := getKeyPrefix(tuples[z][0], prefixDesc)
-		require.NoError(t, err)
+		start := getKeyPrefix(tuples[a][0], prefixDesc)
+		stop := getKeyPrefix(tuples[z][0], prefixDesc)
 
 		tests := []prefixRangeTest{
 			// two-sided ranges
@@ -214,8 +212,8 @@ func getDescPrefix(desc val.TupleDesc, sz int) val.TupleDesc {
 	return val.NewTupleDescriptor(desc.Types[:sz]...)
 }
 
-func getKeyPrefix(key val.Tuple, desc val.TupleDesc) (partial val.Tuple, err error) {
-	tb := val.NewTupleBuilder(desc, ns)
+func getKeyPrefix(key val.Tuple, desc val.TupleDesc) (partial val.Tuple) {
+	tb := val.NewTupleBuilder(desc)
 	for i := range desc.Types {
 		tb.PutRaw(i, key.GetField(i))
 	}
@@ -427,15 +425,11 @@ func intTuple(ints ...int32) val.Tuple {
 	}
 
 	desc := val.NewTupleDescriptor(types...)
-	tb := val.NewTupleBuilder(desc, ns)
+	tb := val.NewTupleBuilder(desc)
 	for i := range ints {
 		tb.PutInt32(i, ints[i])
 	}
-	tup, err := tb.Build(sharedPool)
-	if err != nil {
-		panic(err)
-	}
-	return tup
+	return tb.Build(sharedPool)
 }
 
 func testIterOrdinalRange(t *testing.T, om Map, tuples [][2]val.Tuple) {

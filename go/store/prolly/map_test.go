@@ -113,8 +113,7 @@ func TestMutateMapWithTupleIter(t *testing.T) {
 
 	for _, s := range scales {
 		t.Run("scale "+strconv.Itoa(s), func(t *testing.T) {
-			all, err := tree.RandomTuplePairs(ctx, s, kd, vd, ns)
-			require.NoError(t, err)
+			all := tree.RandomTuplePairs(ctx, s, kd, vd, ns)
 
 			// randomize |all| and partition
 			rand.Shuffle(s, func(i, j int) {
@@ -158,7 +157,7 @@ func TestMutateMapWithTupleIter(t *testing.T) {
 			// original tuples, before modification
 			base := all[:q3]
 			tree.SortTuplePairs(ctx, base, kd)
-			before := mustProllyMapFromTuples(t, kd, vd, base, ns)
+			before := mustProllyMapFromTuples(t, kd, vd, base)
 
 			ds, err := DebugFormat(ctx, before)
 			assert.NoError(t, err)
@@ -309,9 +308,8 @@ func makeProllyMap(t *testing.T, count int) (testMap, [][2]val.Tuple) {
 	)
 	ns := tree.NewTestNodeStore()
 
-	tuples, err := tree.RandomTuplePairs(ctx, count, kd, vd, ns)
-	require.NoError(t, err)
-	om := mustProllyMapFromTuples(t, kd, vd, tuples, ns)
+	tuples := tree.RandomTuplePairs(ctx, count, kd, vd, ns)
+	om := mustProllyMapFromTuples(t, kd, vd, tuples)
 
 	return om, tuples
 }
@@ -324,9 +322,8 @@ func makeProllySecondaryIndex(t *testing.T, count int) (testMap, [][2]val.Tuple)
 	)
 	vd := val.NewTupleDescriptor()
 	ns := tree.NewTestNodeStore()
-	tuples, err := tree.RandomCompositeTuplePairs(ctx, count, kd, vd, ns)
-	require.NoError(t, err)
-	om := mustProllyMapFromTuples(t, kd, vd, tuples, ns)
+	tuples := tree.RandomCompositeTuplePairs(ctx, count, kd, vd, ns)
+	om := mustProllyMapFromTuples(t, kd, vd, tuples)
 
 	return om, tuples
 }

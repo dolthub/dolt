@@ -154,14 +154,7 @@ func readDocFromTableAsOf(ctx *sql.Context, eng *engine.SqlEngine, docName, asOf
 		return "", err
 	}
 
-	var ok bool
-	doc, ok, err = sql.Unwrap[string](ctx, row[0])
-	if err != nil {
-		return "", err
-	}
-	if !ok {
-		return "", fmt.Errorf("unexpected type for %s: expected string, found %T", doltdb.DocTextColumnName, row[0])
-	}
+	doc = row[0].(string)
 
 	_, eof := iter.Next(ctx)
 	if eof != io.EOF && eof != nil {

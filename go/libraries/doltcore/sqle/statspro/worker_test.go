@@ -536,7 +536,7 @@ func TestDropOnlyDb(t *testing.T) {
 	threads := sql.NewBackgroundThreads()
 	defer threads.Shutdown()
 	ctx, sqlEng, sc := defaultSetup(t, threads, false, false)
-	require.NoError(t, sc.Restart(ctx))
+	require.NoError(t, sc.Restart())
 
 	_, ok := sc.kv.(*prollyStats)
 	require.True(t, ok)
@@ -599,7 +599,7 @@ func TestPanic(t *testing.T) {
 	ctx, sqlEng, sc := emptySetup(t, threads, false, true)
 	sc.SetEnableGc(true)
 
-	require.NoError(t, sc.Restart(ctx))
+	require.NoError(t, sc.Restart())
 
 	sc.sq.DoSync(ctx, func() error {
 		panic("test panic")
@@ -614,7 +614,7 @@ func TestMemoryOnly(t *testing.T) {
 	ctx, sqlEng, sc := emptySetup(t, threads, true, true)
 	sc.SetEnableGc(false)
 
-	require.NoError(t, sc.Restart(ctx))
+	require.NoError(t, sc.Restart())
 
 	runBlock(t, ctx, sqlEng, "create database otherdb",
 		"create table xy (x int primary key, y int)",
@@ -677,7 +677,7 @@ func emptySetup(t *testing.T, threads *sql.BackgroundThreads, memOnly bool, gcEn
 	sc.SetEnableGc(false)
 	sc.JobInterval = time.Nanosecond
 
-	require.NoError(t, sc.Restart(ctx))
+	require.NoError(t, sc.Restart())
 
 	ctx, _ = sc.ctxGen(ctx)
 	ctx.Session.SetClient(sql.Client{
@@ -849,7 +849,7 @@ func TestStatsGcConcurrency(t *testing.T) {
 	sc.SetEnableGc(true)
 	sc.JobInterval = 1 * time.Nanosecond
 	sc.gcInterval = 100 * time.Nanosecond
-	require.NoError(t, sc.Restart(ctx))
+	require.NoError(t, sc.Restart())
 
 	addDb := func(ctx *sql.Context, dbName string) {
 		require.NoError(t, executeQuery(ctx, sqlEng, "create database "+dbName))
@@ -931,7 +931,7 @@ func TestStatsBranchConcurrency(t *testing.T) {
 
 	sc.JobInterval = 1
 	sc.gcInterval = time.Hour
-	require.NoError(t, sc.Restart(ctx))
+	require.NoError(t, sc.Restart())
 
 	addBranch := func(ctx *sql.Context, i int) {
 		branchName := "branch" + strconv.Itoa(i)
@@ -1017,7 +1017,7 @@ func TestStatsCacheGrowth(t *testing.T) {
 
 	sc.JobInterval = 1
 	sc.gcInterval = time.Hour
-	require.NoError(t, sc.Restart(ctx))
+	require.NoError(t, sc.Restart())
 
 	addBranch := func(ctx *sql.Context, i int) {
 		branchName := "branch" + strconv.Itoa(i)

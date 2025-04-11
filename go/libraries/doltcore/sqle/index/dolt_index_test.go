@@ -1192,7 +1192,7 @@ func (r *rowSlice) equals(other *rowSlice, sch sql.Schema) bool {
 		return false
 	}
 	for i := range r.rows {
-		ok, err := r.rows[i].Equals(sql.NewEmptyContext(), other.rows[i], sch)
+		ok, err := r.rows[i].Equals(other.rows[i], sch)
 		if err != nil || !ok {
 			return false
 		}

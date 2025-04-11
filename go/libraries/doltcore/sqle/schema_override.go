@@ -234,7 +234,7 @@ func convertWithTruncation(ctx *sql.Context, value any, typ typeinfo.TypeInfo) (
 		}
 	}
 
-	convertedValue, _, err := typ.ToSqlType().Convert(ctx, value)
+	convertedValue, _, err := typ.ToSqlType().Convert(value)
 	if err != nil {
 		return nil, fmt.Errorf("unable to convert value to overridden schema: %s", err.Error())
 	}

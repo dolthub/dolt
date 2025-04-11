@@ -237,7 +237,7 @@ func commitScripts(dbs []string) []setup.SetupScript {
 func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 	initializeEngine := d.engine == nil
 	if initializeEngine {
-		ctx := sql.NewEmptyContext()
+		ctx := context.Background()
 		d.branchControl = branch_control.CreateDefaultController(ctx)
 
 		pro := d.newProvider(ctx)
@@ -306,7 +306,7 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 			}
 			statsPro.SetTimers(int64(1*time.Nanosecond), int64(1*time.Second))
 
-			err = statsPro.Restart(ctx)
+			err = statsPro.Restart()
 			if err != nil {
 				return nil, err
 			}
@@ -332,7 +332,7 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 		err := d.statsPro.Purge(ctx)
 		require.NoError(t, err)
 
-		err = d.statsPro.Restart(ctx)
+		err = d.statsPro.Restart()
 		require.NoError(t, err)
 	}
 

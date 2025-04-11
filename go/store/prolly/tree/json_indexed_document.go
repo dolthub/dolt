@@ -567,12 +567,12 @@ func (i IndexedJsonDocument) ArrayAppend(path string, val sql.JSONWrapper) (type
 
 // Value implements driver.Valuer for interoperability with other go libraries
 func (i IndexedJsonDocument) Value() (driver.Value, error) {
-	return types.JsonToMySqlString(i)
+	return types.StringifyJSON(i)
 }
 
 // String implements the fmt.Stringer interface.
 func (i IndexedJsonDocument) String() string {
-	s, err := types.JsonToMySqlString(i)
+	s, err := types.StringifyJSON(i)
 	if err != nil {
 		return fmt.Sprintf("error while stringifying JSON: %s", err.Error())
 	}
@@ -684,6 +684,7 @@ func (i IndexedJsonDocument) Compare(other interface{}) (int, error) {
 	case jsonTypeArray, jsonTypeObject:
 		// To compare two values that are both arrays or both objects, we must locate the first location
 		// where they differ.
+
 		jsonDiffer, err := NewIndexedJsonDiffer(i.ctx, i, otherIndexedDocument)
 		if err != nil {
 			return 0, err
@@ -705,7 +706,7 @@ func (i IndexedJsonDocument) Compare(other interface{}) (int, error) {
 		case ModifiedDiff:
 			// Since both modified values have already been loaded into memory,
 			// We can just compare them.
-			return types.JSON.Compare(i.ctx, firstDiff.From, firstDiff.To)
+			return types.JSON.Compare(firstDiff.From, firstDiff.To)
 		default:
 			panic("Impossible diff type")
 		}
