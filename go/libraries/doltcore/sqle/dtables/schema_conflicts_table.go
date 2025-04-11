@@ -15,6 +15,7 @@
 package dtables
 
 import (
+	"context"
 	"errors"
 	"io"
 
@@ -153,7 +154,7 @@ type schemaConflict struct {
 	description string
 }
 
-func newSchemaConflict(ctx *sql.Context, table doltdb.TableName, baseRoot doltdb.RootValue, c doltdb.SchemaConflict) (schemaConflict, error) {
+func newSchemaConflict(ctx context.Context, table doltdb.TableName, baseRoot doltdb.RootValue, c doltdb.SchemaConflict) (schemaConflict, error) {
 	bs, err := doltdb.GetAllSchemas(ctx, baseRoot)
 	if err != nil {
 		return schemaConflict{}, err
@@ -228,7 +229,7 @@ func getCreateTableStatement(table string, sch schema.Schema, fks []doltdb.Forei
 	return sqlfmt.GenerateCreateTableStatement(table, sch, fks, parents)
 }
 
-func getSchemaConflictDescription(ctx *sql.Context, table doltdb.TableName, base, ours, theirs schema.Schema) (string, error) {
+func getSchemaConflictDescription(ctx context.Context, table doltdb.TableName, base, ours, theirs schema.Schema) (string, error) {
 	_, conflict, _, _, err := merge.SchemaMerge(ctx, noms.Format_Default, ours, theirs, base, table)
 	if err != nil {
 		return "", err

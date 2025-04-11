@@ -84,14 +84,6 @@ func countAddresses(items [][]byte, td val.TupleDesc) (cnt int) {
 			}
 			return
 		})
-		val.IterAdaptiveFields(td, func(j int, t val.Type) {
-			// get offset of adaptive encoded value within |tup|
-			adaptiveValue := val.AdaptiveValue(val.Tuple(items[i]).GetField(j))
-			if adaptiveValue.IsOutOfBand() {
-				cnt++
-			}
-			return
-		})
 	}
 	return
 }
@@ -104,7 +96,7 @@ func writeAddressOffsets(b *fb.Builder, items [][]byte, sumSz int, td val.TupleD
 		tup := val.Tuple(items[i])
 		off -= len(tup) // start of tuple
 		val.IterAddressFields(td, func(j int, t val.Type) {
-			addr := tup.GetField(j)
+			addr := val.Tuple(items[i]).GetField(j)
 			if len(addr) == 0 || hash.New(addr).IsEmpty() {
 				return
 			}
@@ -113,18 +105,6 @@ func writeAddressOffsets(b *fb.Builder, items [][]byte, sumSz int, td val.TupleD
 			o += off // offset is tuple start plus field start
 			b.PrependUint16(uint16(o))
 			cnt++
-		})
-		val.IterAdaptiveFields(td, func(j int, t val.Type) {
-			// get offset of adaptive encoded value within |tup|
-			adaptiveValue := val.AdaptiveValue(val.Tuple(items[i]).GetField(j))
-			if adaptiveValue.IsOutOfBand() {
-				// Out-of-line adaptive values end in an address, so get the offset |hash.ByteLen| bytes before the end.
-				o, _ := tup.GetOffset(j)
-				o += off + len(adaptiveValue) - hash.ByteLen
-				b.PrependUint16(uint16(o))
-				cnt++
-			}
-			return
 		})
 	}
 	return b.EndVector(cnt)

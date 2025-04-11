@@ -64,9 +64,9 @@ var _ doltdb.DatabaseUpdateListener = (*binlogProducer)(nil)
 // NewBinlogProducer creates and returns a new instance of BinlogProducer. Note that callers must register the
 // returned binlogProducer as a DatabaseUpdateListener before it will start receiving database updates and start
 // producing binlog events.
-func NewBinlogProducer(ctx *sql.Context, fs filesys.Filesys) (*binlogProducer, error) {
+func NewBinlogProducer(fs filesys.Filesys) (*binlogProducer, error) {
 	binlogFormat := createBinlogFormat()
-	binlogEventMeta, err := createBinlogEventMetadata(ctx)
+	binlogEventMeta, err := createBinlogEventMetadata()
 	if err != nil {
 		return nil, err
 	}
@@ -143,7 +143,7 @@ func (b *binlogProducer) WorkingRootUpdated(ctx *sql.Context, databaseName strin
 		binlogEvents = append(binlogEvents, b.newXIDEvent())
 	}
 
-	return b.logManager.WriteEvents(ctx, binlogEvents...)
+	return b.logManager.WriteEvents(binlogEvents...)
 }
 
 // DatabaseCreated implements the doltdb.DatabaseUpdateListener interface.
@@ -162,7 +162,7 @@ func (b *binlogProducer) DatabaseCreated(ctx *sql.Context, databaseName string) 
 	createDatabaseStatement := fmt.Sprintf("create database `%s`;", databaseName)
 	binlogEvents = append(binlogEvents, b.newQueryEvent(databaseName, createDatabaseStatement))
 
-	return b.logManager.WriteEvents(ctx, binlogEvents...)
+	return b.logManager.WriteEvents(binlogEvents...)
 }
 
 // DatabaseDropped implements the doltdb.DatabaseUpdateListener interface.
@@ -177,7 +177,7 @@ func (b *binlogProducer) DatabaseDropped(ctx *sql.Context, databaseName string) 
 	dropDatabaseStatement := fmt.Sprintf("drop database `%s`;", databaseName)
 	binlogEvents = append(binlogEvents, b.newQueryEvent(databaseName, dropDatabaseStatement))
 
-	return b.logManager.WriteEvents(ctx, binlogEvents...)
+	return b.logManager.WriteEvents(binlogEvents...)
 }
 
 // initializeGtidPosition loads the persisted GTID position from disk and initializes it
@@ -693,8 +693,8 @@ func createBinlogFormat() *mysql.BinlogFormat {
 // createBinlogEventMetadata returns a new BinlogStream instance, configured with this server's @@server_id, a zero value for
 // the log position, and the current time for the timestamp. If any errors are encountered while loading @@server_id,
 // this function will return an error.
-func createBinlogEventMetadata(ctx *sql.Context) (*mysql.BinlogEventMetadata, error) {
-	serverId, err := getServerId(ctx)
+func createBinlogEventMetadata() (*mysql.BinlogEventMetadata, error) {
+	serverId, err := getServerId()
 	if err != nil {
 		return nil, err
 	}

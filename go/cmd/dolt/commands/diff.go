@@ -376,20 +376,8 @@ func getTableNamesAtRef(queryist cli.Queryist, sqlCtx *sql.Context, ref string) 
 
 	tableNames := make(map[string]bool)
 	for _, row := range rows {
-		tableName, ok, err := sql.Unwrap[string](sqlCtx, row[0])
-		if err != nil {
-			return nil, err
-		}
-		if !ok {
-			return nil, fmt.Errorf("unexpected type for table name, expected string, found %T", row[0])
-		}
-		tableType, ok, err := sql.Unwrap[string](sqlCtx, row[1])
-		if err != nil {
-			return nil, err
-		}
-		if !ok {
-			return nil, fmt.Errorf("unexpected type for table type, expected string, found %T", row[1])
-		}
+		tableName := row[0].(string)
+		tableType := row[1].(string)
 		isTable := tableType == "BASE TABLE"
 		if isTable {
 			tableNames[tableName] = true
@@ -596,7 +584,7 @@ var diffSummarySchema = sql.Schema{
 	&sql.Column{Name: "Schema change", Type: types.Boolean, Nullable: false},
 }
 
-func printDiffSummary(ctx *sql.Context, diffSummaries []diff.TableDeltaSummary, dArgs *diffArgs) errhand.VerboseError {
+func printDiffSummary(ctx context.Context, diffSummaries []diff.TableDeltaSummary, dArgs *diffArgs) errhand.VerboseError {
 	cliWR := iohelp.NopWrCloser(cli.OutStream)
 	wr := tabular.NewFixedWidthTableWriter(diffSummarySchema, cliWR, 100)
 	defer wr.Close(ctx)
@@ -1235,60 +1223,31 @@ func diffDoltSchemasTable(
 			return errhand.VerboseErrorFromError(err)
 		}
 
-		var vErr errhand.VerboseError
-		unwrapString := func(val interface{}) (string, errhand.VerboseError) {
-			s, ok, err := sql.Unwrap[string](sqlCtx, val)
-			if err != nil {
-				return "", errhand.VerboseErrorFromError(err)
-			}
-			if !ok {
-				return "", errhand.BuildDError("expected string, got %T", val).Build()
-			}
-			return s, nil
-		}
 		var fragmentName string
 		if row[0] != nil {
-			fragmentName, vErr = unwrapString(row[0])
-			if vErr != nil {
-				return vErr
-			}
+			fragmentName = row[0].(string)
 		} else {
-			fragmentName, vErr = unwrapString(row[1])
-			if vErr != nil {
-				return vErr
-			}
+			fragmentName = row[1].(string)
 		}
 
 		var fragmentType string
 		if row[2] != nil {
-			fragmentType, vErr = unwrapString(row[2])
-			if vErr != nil {
-				return vErr
-			}
+			fragmentType = row[2].(string)
 		} else {
-			fragmentType, vErr = unwrapString(row[3])
-			if vErr != nil {
-				return vErr
-			}
+			fragmentType = row[3].(string)
 		}
 
 		var oldFragment string
 		var newFragment string
 		if row[4] != nil {
-			oldFragment, vErr = unwrapString(row[4])
-			if vErr != nil {
-				return vErr
-			}
+			oldFragment = row[4].(string)
 			// Typically schema fragments have the semicolons stripped, so put it back on
 			if len(oldFragment) > 0 && oldFragment[len(oldFragment)-1] != ';' {
 				oldFragment += ";"
 			}
 		}
 		if row[5] != nil {
-			newFragment, vErr = unwrapString(row[5])
-			if vErr != nil {
-				return vErr
-			}
+			newFragment = row[5].(string)
 			// Typically schema fragments have the semicolons stripped, so put it back on
 			if len(newFragment) > 0 && newFragment[len(newFragment)-1] != ';' {
 				newFragment += ";"
@@ -1706,7 +1665,7 @@ func writeDiffResults(
 			return err
 		}
 
-		oldRow, newRow, err := ds.SplitDiffResultRow(ctx, r)
+		oldRow, newRow, err := ds.SplitDiffResultRow(r)
 		if err != nil {
 			return err
 		}
@@ -1775,7 +1734,7 @@ func getModifiedCols(
 			return modifiedColNames, err
 		}
 
-		oldRow, newRow, err := ds.SplitDiffResultRow(ctx, r)
+		oldRow, newRow, err := ds.SplitDiffResultRow(r)
 		if err != nil {
 			return modifiedColNames, err
 		}

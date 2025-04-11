@@ -869,7 +869,7 @@ func encodeBytesFromAddress(ctx *sql.Context, addr hash.Hash, ns tree.NodeStore,
 	if ns == nil {
 		return nil, fmt.Errorf("nil NodeStore used to encode bytes from address")
 	}
-	bytes, err := ns.ReadBytes(ctx, addr)
+	bytes, err := tree.NewByteArray(addr, ns).ToBytes(ctx)
 	if err != nil {
 		return nil, err
 	}

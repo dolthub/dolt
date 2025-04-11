@@ -32,10 +32,5 @@ type CommitOptions struct {
 	// parent.
 	Parents []hash.Hash
 
-	// Amend flag indicates that the commit being build it to amend an existing commit. Generally we add the branch HEAD
-	// as a parent, in addition to the parent set provided here. When we amend, we want to strictly use the commits
-	// provided in |Parents|, and no others.
-	Amend bool
-
 	Meta *CommitMeta
 }

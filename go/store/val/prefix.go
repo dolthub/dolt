@@ -14,25 +14,14 @@
 
 package val
 
-import (
-	"context"
-
-	"github.com/dolthub/go-mysql-server/sql"
-)
-
 // TrimValueToPrefixLength trims |value| to |prefixLength| if it is longer
 // and if it is either a []byte or string type. If |prefixLength| is zero,
 // then |value| will be returned without being trimmed.
-func TrimValueToPrefixLength(ctx context.Context, value interface{}, prefixLength uint16) (interface{}, error) {
+func TrimValueToPrefixLength(value interface{}, prefixLength uint16) interface{} {
 	if prefixLength == 0 {
-		return value, nil
+		return value
 	}
 
-	var err error
-	value, err = sql.UnwrapAny(ctx, value)
-	if err != nil {
-		return value, err
-	}
 	switch v := value.(type) {
 	case string:
 		if prefixLength > uint16(len(v)) {
@@ -46,5 +35,5 @@ func TrimValueToPrefixLength(ctx context.Context, value interface{}, prefixLengt
 		value = v[:prefixLength]
 	}
 
-	return value, nil
+	return value
 }

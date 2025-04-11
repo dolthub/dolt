@@ -16,6 +16,7 @@ package statspro
 
 import (
 	"container/heap"
+	"context"
 	"fmt"
 	"testing"
 
@@ -185,22 +186,19 @@ func TestBucketBuilder(t *testing.T) {
 		},
 	}
 
-	ctx := sql.NewEmptyContext()
+	ctx := context.Background()
 	pool := pool.NewBuffPool()
-	ns := tree.NewTestNodeStore()
 	for _, tt := range tests {
 		t.Run(fmt.Sprintf("build bucket: %s", tt.name), func(t *testing.T) {
 			b := newBucketBuilder(sql.StatQualifier{}, tt.keyDesc.Count(), tt.keyDesc)
-			kb := val.NewTupleBuilder(tt.keyDesc, ns)
+			kb := val.NewTupleBuilder(tt.keyDesc)
 			for _, k := range tt.keys {
 				for i, v := range k {
 					// |ns| only needed for out of band tuples
 					err := tree.PutField(ctx, nil, kb, i, v)
 					assert.NoError(t, err)
 				}
-				tup, err := kb.Build(pool)
-				assert.NoError(t, err)
-				b.add(ctx, tup)
+				b.add(ctx, kb.Build(pool))
 			}
 			// |ns| only needed for out of band tuples
 			bucket, err := b.finalize(ctx, nil)

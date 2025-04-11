@@ -353,22 +353,15 @@ func newTree(t *testing.T, ns NodeStore, keyCnt, blobLen, chunkSize int) Node {
 	valDesc := val.NewTupleDescriptor(val.Type{Enc: val.BytesAddrEnc})
 
 	tuples := make([][2]val.Tuple, keyCnt)
-	keyBld := val.NewTupleBuilder(keyDesc, ns)
-	valBld := val.NewTupleBuilder(valDesc, ns)
-	var err error
+	keyBld := val.NewTupleBuilder(keyDesc)
+	valBld := val.NewTupleBuilder(valDesc)
 	for i := range tuples {
 		keyBld.PutUint32(0, uint32(i))
-		tuples[i][0], err = keyBld.Build(sharedPool)
-		if err != nil {
-			panic(err)
-		}
+		tuples[i][0] = keyBld.Build(sharedPool)
 
 		addr := mustNewBlob(ctx, ns, blobLen, chunkSize)
 		valBld.PutBytesAddr(0, addr)
-		tuples[i][1], err = valBld.Build(sharedPool)
-		if err != nil {
-			panic(err)
-		}
+		tuples[i][1] = valBld.Build(sharedPool)
 	}
 
 	s := message.NewProllyMapSerializer(valDesc, ns.Pool())

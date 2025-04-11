@@ -241,14 +241,12 @@ func newIntMap(t *testing.T, ctx context.Context, ns tree.NodeStore, k, v int8) 
 		Nullable: false,
 	})
 
-	tb := val.NewTupleBuilder(desc, ns)
+	tb := val.NewTupleBuilder(desc)
 	tb.PutInt8(0, k)
-	keyTuple, err := tb.Build(ns.Pool())
-	require.NoError(t, err)
+	keyTuple := tb.Build(ns.Pool())
 
 	tb.PutInt8(0, v)
-	valueTuple, err := tb.Build(ns.Pool())
-	require.NoError(t, err)
+	valueTuple := tb.Build(ns.Pool())
 
 	m, err := prolly.NewMapFromTuples(ctx, ns, desc, desc, keyTuple, valueTuple)
 	require.NoError(t, err)

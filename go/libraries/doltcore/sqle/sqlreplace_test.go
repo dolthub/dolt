@@ -320,6 +320,6 @@ func testReplaceQuery(t *testing.T, test ReplaceTest) {
 	actualRows, sch, err := executeSelect(t, context.Background(), dEnv, root, test.SelectQuery)
 	require.NoError(t, err)
 
-	assert.Equal(t, unwrapRows(t, test.ExpectedRows), unwrapRows(t, actualRows))
+	assert.Equal(t, test.ExpectedRows, actualRows)
 	assertSchemasEqual(t, mustSqlSchema(test.ExpectedSchema), sch)
 }

@@ -20,7 +20,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/stretchr/testify/assert"
@@ -204,7 +203,6 @@ func TestNewAndAndOrFuncs(t *testing.T) {
 }
 
 func TestNewComparisonFunc(t *testing.T) {
-	ctx := sql.NewEmptyContext()
 	colColl := schema.NewColCollection(
 		schema.NewColumn("col0", 0, types.IntKind, true),
 		schema.NewColumn("col1", 1, types.IntKind, false),
@@ -492,7 +490,7 @@ func TestNewComparisonFunc(t *testing.T) {
 			for opId := range ops {
 				t.Run(opId, func(t *testing.T) {
 					op := ops[opId]
-					f, err := newComparisonFunc(ctx, op, test.be, test.sch)
+					f, err := newComparisonFunc(op, test.be, test.sch)
 
 					if test.expectNewErr {
 						assert.Error(t, err)

@@ -100,7 +100,7 @@ func (ti *enumType) ConvertValueToNomsValue(ctx context.Context, vrw types.Value
 	if v == nil {
 		return types.NullValue, nil
 	}
-	val, _, err := ti.sqlEnumType.Convert(ctx, v)
+	val, _, err := ti.sqlEnumType.Convert(v)
 	if err != nil {
 		return nil, err
 	}
@@ -222,7 +222,7 @@ func enumTypeConverter(ctx context.Context, src *enumType, destTi TypeInfo) (tc 
 			if !ok {
 				return nil, fmt.Errorf("%s does not contain an equivalent value of %d", src.sqlEnumType.String(), val)
 			}
-			newVal, _, err := dest.sqlEnumType.Convert(ctx, valStr)
+			newVal, _, err := dest.sqlEnumType.Convert(valStr)
 			if err != nil {
 				return nil, err
 			}

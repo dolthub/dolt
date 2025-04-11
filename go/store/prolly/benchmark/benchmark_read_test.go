@@ -251,7 +251,7 @@ func makeGoMap(scale uint64) map[uint64]val.Tuple {
 		val.Type{Enc: val.Int64Enc, Nullable: true},
 		val.Type{Enc: val.Int64Enc, Nullable: true},
 		val.Type{Enc: val.Int64Enc, Nullable: true},
-	), nil)
+	))
 
 	kv := make(map[uint64]val.Tuple, scale)
 	for i := uint64(0); i < scale; i++ {
@@ -260,12 +260,7 @@ func makeGoMap(scale uint64) map[uint64]val.Tuple {
 		vb.PutInt64(2, src.Int63())
 		vb.PutInt64(3, src.Int63())
 		vb.PutInt64(4, src.Int63())
-		var err error
-		kv[i], err = vb.Build(shared)
-		if err != nil {
-			panic(err)
-		}
-
+		kv[i] = vb.Build(shared)
 	}
 	return kv
 }
@@ -278,7 +273,7 @@ func makeSyncMap(scale uint64) *sync.Map {
 		val.Type{Enc: val.Int64Enc, Nullable: true},
 		val.Type{Enc: val.Int64Enc, Nullable: true},
 		val.Type{Enc: val.Int64Enc, Nullable: true},
-	), nil)
+	))
 	kv := &sync.Map{}
 
 	for i := uint64(0); i < scale; i++ {
@@ -287,11 +282,7 @@ func makeSyncMap(scale uint64) *sync.Map {
 		vb.PutInt64(2, src.Int63())
 		vb.PutInt64(3, src.Int63())
 		vb.PutInt64(4, src.Int63())
-		tup, err := vb.Build(shared)
-		if err != nil {
-			panic(err)
-		}
-		kv.Store(i, tup)
+		kv.Store(i, vb.Build(shared))
 	}
 	return kv
 }

@@ -90,9 +90,9 @@ func getSecondaryProllyIndexWriters(ctx context.Context, t *doltdb.Table, schSta
 			prefixLengths: def.PrefixLengths,
 			idxCols:       def.Count,
 			keyMap:        def.KeyMapping,
-			keyBld:        val.NewTupleBuilder(keyDesc, idxMap.NodeStore()),
+			keyBld:        val.NewTupleBuilder(keyDesc),
 			pkMap:         def.PkMapping,
-			pkBld:         val.NewTupleBuilder(schState.PkKeyDesc, idxMap.NodeStore()),
+			pkBld:         val.NewTupleBuilder(schState.PkKeyDesc),
 		}
 	}
 
@@ -130,9 +130,9 @@ func getSecondaryKeylessProllyWriters(ctx context.Context, t *doltdb.Table, schS
 			unique:        def.IsUnique,
 			spatial:       def.IsSpatial,
 			prefixLengths: def.PrefixLengths,
-			keyBld:        val.NewTupleBuilder(keyDesc, m.NodeStore()),
-			prefixBld:     val.NewTupleBuilder(keyDesc.PrefixDesc(def.Count), m.NodeStore()),
-			hashBld:       val.NewTupleBuilder(val.NewTupleDescriptor(val.Type{Enc: val.Hash128Enc}), m.NodeStore()),
+			keyBld:        val.NewTupleBuilder(keyDesc),
+			prefixBld:     val.NewTupleBuilder(keyDesc.PrefixDesc(def.Count)),
+			hashBld:       val.NewTupleBuilder(val.NewTupleDescriptor(val.Type{Enc: val.Hash128Enc})),
 			keyMap:        def.KeyMapping,
 		}
 	}
@@ -167,7 +167,7 @@ func (w *prollyTableWriter) Insert(ctx *sql.Context, sqlRow sql.Row) (err error)
 	w.setAutoIncrement = true
 
 	// TODO: need schema name in ai tracker
-	w.aiTracker.Next(ctx, w.tableName.Name, sqlRow)
+	w.aiTracker.Next(w.tableName.Name, sqlRow)
 	return nil
 }
 
@@ -204,12 +204,12 @@ func (w *prollyTableWriter) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.
 
 // GetNextAutoIncrementValue implements TableWriter.
 func (w *prollyTableWriter) GetNextAutoIncrementValue(ctx *sql.Context, insertVal interface{}) (uint64, error) {
-	return w.aiTracker.Next(ctx, w.tableName.Name, insertVal)
+	return w.aiTracker.Next(w.tableName.Name, insertVal)
 }
 
 // SetAutoIncrementValue implements AutoIncrementSetter.
 func (w *prollyTableWriter) SetAutoIncrementValue(ctx *sql.Context, val uint64) error {
-	seq, err := w.aiTracker.CoerceAutoIncrementValue(ctx, val)
+	seq, err := w.aiTracker.CoerceAutoIncrementValue(val)
 	if err != nil {
 		return err
 	}
@@ -284,7 +284,7 @@ func (w *prollyTableWriter) PreciseMatch() bool {
 }
 
 // IndexedAccess implements sql.IndexAddressableTable.
-func (w *prollyTableWriter) IndexedAccess(_ *sql.Context, i sql.IndexLookup) sql.IndexedTable {
+func (w *prollyTableWriter) IndexedAccess(i sql.IndexLookup) sql.IndexedTable {
 	idx := index.DoltIndexFromSqlIndex(i.Index)
 	return &prollyFkIndexer{
 		writer: w,

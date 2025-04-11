@@ -74,7 +74,7 @@ func (ti *multilinestringType) ConvertValueToNomsValue(ctx context.Context, vrw 
 	}
 
 	// Convert to sql.MultiLineString
-	mline, _, err := ti.sqlMultiLineStringType.Convert(ctx, v)
+	mline, _, err := ti.sqlMultiLineStringType.Convert(v)
 	if err != nil {
 		return nil, err
 	}

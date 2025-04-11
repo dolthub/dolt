@@ -297,7 +297,7 @@ func (sc *StatsController) finalizeHistogram(template stats.Statistic, buckets [
 
 func (sc *StatsController) collectIndexNodes(ctx *sql.Context, prollyMap prolly.Map, idxLen int, nodes []tree.Node) ([]*stats.Bucket, sql.Row, int, error) {
 	updater := newBucketBuilder(sql.StatQualifier{}, idxLen, prollyMap.KeyDesc())
-	keyBuilder := val.NewTupleBuilder(prollyMap.KeyDesc().PrefixDesc(idxLen), prollyMap.NodeStore())
+	keyBuilder := val.NewTupleBuilder(prollyMap.KeyDesc().PrefixDesc(idxLen))
 
 	firstNodeHash := nodes[0].HashOf()
 	lowerBound, ok := sc.GetBound(firstNodeHash, idxLen)
@@ -497,7 +497,7 @@ func (sc *StatsController) updateTable(ctx *sql.Context, newStats *rootStats, ta
 		newTableStats = append(newTableStats, sc.finalizeHistogram(template, buckets, firstBound))
 
 		if gcKv != nil {
-			keyBuilder := val.NewTupleBuilder(prollyMap.KeyDesc().PrefixDesc(idxLen), prollyMap.NodeStore())
+			keyBuilder := val.NewTupleBuilder(prollyMap.KeyDesc().PrefixDesc(idxLen))
 			if !gcKv.GcMark(sc.kv, levelNodes, buckets, idxLen, keyBuilder) {
 				return fmt.Errorf("GC interrupted updated")
 			}

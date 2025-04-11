@@ -131,7 +131,7 @@ func NewMutableSecondaryIdx(ctx *sql.Context, idx prolly.Map, ourSch, mergedSch 
 
 // InsertEntry inserts a secondary index entry given the key and new value
 // of the primary row.
-func (m MutableSecondaryIdx) InsertEntry(ctx *sql.Context, key, newValue val.Tuple) error {
+func (m MutableSecondaryIdx) InsertEntry(ctx context.Context, key, newValue val.Tuple) error {
 	newKey, err := m.mergedBuilder.SecondaryKeyFromRow(ctx, key, newValue)
 	if err != nil {
 		return err
@@ -147,7 +147,7 @@ func (m MutableSecondaryIdx) InsertEntry(ctx *sql.Context, key, newValue val.Tup
 
 // UpdateEntry modifies the corresponding secondary index entry given the key
 // and curr/new values of the primary row.
-func (m MutableSecondaryIdx) UpdateEntry(ctx *sql.Context, key, currValue, newValue val.Tuple) error {
+func (m MutableSecondaryIdx) UpdateEntry(ctx context.Context, key, currValue, newValue val.Tuple) error {
 	currKey, err := m.leftBuilder.SecondaryKeyFromRow(ctx, key, currValue)
 	if err != nil {
 		return err
@@ -166,7 +166,7 @@ func (m MutableSecondaryIdx) UpdateEntry(ctx *sql.Context, key, currValue, newVa
 }
 
 // DeleteEntry deletes a secondary index entry given they key and value of the primary row.
-func (m MutableSecondaryIdx) DeleteEntry(ctx *sql.Context, key val.Tuple, value val.Tuple) error {
+func (m MutableSecondaryIdx) DeleteEntry(ctx context.Context, key val.Tuple, value val.Tuple) error {
 	currKey, err := m.leftBuilder.SecondaryKeyFromRow(ctx, key, value)
 	if err != nil {
 		return err

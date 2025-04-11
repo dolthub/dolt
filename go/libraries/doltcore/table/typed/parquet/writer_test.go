@@ -15,6 +15,7 @@
 package parquet
 
 import (
+	"context"
 	"fmt"
 	"path"
 	"testing"
@@ -64,14 +65,13 @@ func getSampleRows() []sql.Row {
 
 func writeToParquet(pWr *ParquetRowWriter, rows []sql.Row, t *testing.T) {
 	func() {
-		ctx := sql.NewEmptyContext()
 		defer func() {
-			err := pWr.Close(ctx)
+			err := pWr.Close(context.Background())
 			require.NoError(t, err)
 		}()
 
 		for _, row := range rows {
-			err := pWr.WriteSqlRow(ctx, row)
+			err := pWr.WriteSqlRow(context.Background(), row)
 			if err != nil {
 				t.Fatal("Failed to write row")
 			}

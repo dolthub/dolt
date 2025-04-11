@@ -271,7 +271,7 @@ func StartServer(ctx context.Context, versionStr, commandStr string, args []stri
 		return err
 	}
 
-	err = servercfg.ApplySystemVariables(nil, serverConfig, sql.SystemVariables)
+	err = servercfg.ApplySystemVariables(serverConfig, sql.SystemVariables)
 	if err != nil {
 		return err
 	}

@@ -67,7 +67,7 @@ func (ti *jsonType) ConvertValueToNomsValue(ctx context.Context, vrw types.Value
 		return types.NullValue, nil
 	}
 
-	jsDoc, _, err := ti.jsonType.Convert(ctx, v)
+	jsDoc, _, err := ti.jsonType.Convert(v)
 	if err != nil {
 		return nil, err
 	}

@@ -107,16 +107,16 @@ func NewCSVSqlWriter(wr io.WriteCloser, sch sql.Schema, info *CSVFileInfo) (*CSV
 	return csvw, nil
 }
 
-func (csvw *CSVWriter) WriteSqlRow(ctx *sql.Context, r sql.Row) error {
+func (csvw *CSVWriter) WriteSqlRow(ctx context.Context, r sql.Row) error {
 	var colValStrs []*string
 	var err error
 	if csvw.sch != nil {
-		colValStrs, err = csvw.processRowWithSchema(r, ctx)
+		colValStrs, err = csvw.processRowWithSchema(r)
 		if err != nil {
 			return err
 		}
 	} else {
-		colValStrs, err = csvw.processRowWithSqlSchema(ctx, r)
+		colValStrs, err = csvw.processRowWithSqlSchema(r)
 		if err != nil {
 			return err
 		}
@@ -125,14 +125,14 @@ func (csvw *CSVWriter) WriteSqlRow(ctx *sql.Context, r sql.Row) error {
 	return csvw.write(colValStrs)
 }
 
-func toCsvString(ctx *sql.Context, colType sql.Type, val interface{}) (string, error) {
+func toCsvString(colType sql.Type, val interface{}) (string, error) {
 	var v string
 	// Due to BIT's unique output, we special-case writing the integer specifically for CSV
 	if _, ok := colType.(types.BitType); ok {
 		v = strconv.FormatUint(val.(uint64), 10)
 	} else {
 		var err error
-		v, err = sqlutil.SqlColToStr(ctx, colType, val)
+		v, err = sqlutil.SqlColToStr(colType, val)
 		if err != nil {
 			return "", err
 		}
@@ -141,14 +141,14 @@ func toCsvString(ctx *sql.Context, colType sql.Type, val interface{}) (string, e
 	return v, nil
 }
 
-func (csvw *CSVWriter) processRowWithSchema(r sql.Row, ctx *sql.Context) ([]*string, error) {
+func (csvw *CSVWriter) processRowWithSchema(r sql.Row) ([]*string, error) {
 	colValStrs := make([]*string, csvw.sch.GetAllCols().Size())
 	for i, val := range r {
 		if val == nil {
 			colValStrs[i] = nil
 		} else {
 			colType := csvw.sch.GetAllCols().GetByIndex(i).TypeInfo.ToSqlType()
-			v, err := toCsvString(ctx, colType, val)
+			v, err := toCsvString(colType, val)
 			if err != nil {
 				return nil, err
 			}
@@ -158,14 +158,14 @@ func (csvw *CSVWriter) processRowWithSchema(r sql.Row, ctx *sql.Context) ([]*str
 	return colValStrs, nil
 }
 
-func (csvw *CSVWriter) processRowWithSqlSchema(ctx *sql.Context, r sql.Row) ([]*string, error) {
+func (csvw *CSVWriter) processRowWithSqlSchema(r sql.Row) ([]*string, error) {
 	colValStrs := make([]*string, len(csvw.sqlSch))
 	for i, val := range r {
 		if val == nil {
 			colValStrs[i] = nil
 		} else {
 			colType := csvw.sqlSch[i].Type
-			v, err := toCsvString(ctx, colType, val)
+			v, err := toCsvString(colType, val)
 			if err != nil {
 				return nil, err
 			}

@@ -178,8 +178,8 @@ func (m ArtifactMap) Editor() *ArtifactsEditor {
 			maxPending: artifactMapPendingBufferSize,
 			flusher:    ProllyFlusher{},
 		},
-		artKB: val.NewTupleBuilder(artKD, m.NodeStore()),
-		artVB: val.NewTupleBuilder(artVD, m.NodeStore()),
+		artKB: val.NewTupleBuilder(artKD),
+		artVB: val.NewTupleBuilder(artVD),
 		pool:  m.Pool(),
 	}
 }
@@ -192,7 +192,7 @@ func (m ArtifactMap) IterAll(ctx context.Context) (MapIter, error) {
 // IterAllArtifacts returns an iterator for all artifacts.
 func (m ArtifactMap) IterAllArtifacts(ctx context.Context) (ArtifactIter, error) {
 	numPks := m.srcKeyDesc.Count()
-	tb := val.NewTupleBuilder(m.srcKeyDesc, m.NodeStore())
+	tb := val.NewTupleBuilder(m.srcKeyDesc)
 	itr, err := m.tuples.IterAll(ctx)
 	if err != nil {
 		return nil, err
@@ -344,7 +344,7 @@ type ArtifactsEditor struct {
 // BuildArtifactKey builds a val.Tuple to be used to look up a value in this ArtifactsEditor. The key is composed
 // of |srcKey|, the primary key fields from the original table, followed by the hash of the source root, |srcRootish|,
 // and then the artifact type, |artType|.
-func (wr *ArtifactsEditor) BuildArtifactKey(_ context.Context, srcKey val.Tuple, srcRootish hash.Hash, artType ArtifactType) (val.Tuple, error) {
+func (wr *ArtifactsEditor) BuildArtifactKey(_ context.Context, srcKey val.Tuple, srcRootish hash.Hash, artType ArtifactType) val.Tuple {
 	for i := 0; i < srcKey.Count(); i++ {
 		wr.artKB.PutRaw(i, srcKey.GetField(i))
 	}
@@ -356,16 +356,10 @@ func (wr *ArtifactsEditor) BuildArtifactKey(_ context.Context, srcKey val.Tuple,
 // Add adds an artifact entry to this editor. The key for the entry includes all the primary key fields from the
 // underlying table (|srcKey|), the hash of the source root (|srcRootish|), and the artifact type (|artType|).
 func (wr *ArtifactsEditor) Add(ctx context.Context, srcKey val.Tuple, srcRootish hash.Hash, artType ArtifactType, meta []byte) error {
-	key, err := wr.BuildArtifactKey(ctx, srcKey, srcRootish, artType)
-	if err != nil {
-		return err
-	}
+	key := wr.BuildArtifactKey(ctx, srcKey, srcRootish, artType)
 
 	wr.artVB.PutJSON(0, meta)
-	value, err := wr.artVB.Build(wr.pool)
-	if err != nil {
-		return err
-	}
+	value := wr.artVB.Build(wr.pool)
 
 	return wr.mut.Put(ctx, key, value)
 }
@@ -385,7 +379,7 @@ func (wr *ArtifactsEditor) ReplaceConstraintViolation(ctx context.Context, srcKe
 		artKD:  wr.mut.keyDesc,
 		artVD:  wr.mut.valDesc,
 		pool:   wr.pool,
-		tb:     val.NewTupleBuilder(wr.srcKeyDesc, wr.NodeStore()),
+		tb:     val.NewTupleBuilder(wr.srcKeyDesc),
 		numPks: wr.srcKeyDesc.Count(),
 	}
 
@@ -577,10 +571,7 @@ func (itr artifactIterImpl) Next(ctx context.Context) (Artifact, error) {
 		return Artifact{}, err
 	}
 
-	srcKey, err := itr.getSrcKeyFromArtKey(artKey)
-	if err != nil {
-		return Artifact{}, err
-	}
+	srcKey := itr.getSrcKeyFromArtKey(artKey)
 	cmHash, _ := itr.artKD.GetCommitAddr(itr.numPks, artKey)
 	artType, _ := itr.artKD.GetUint8(itr.numPks+1, artKey)
 	metadata, _ := itr.artVD.GetJSON(0, v)
@@ -594,7 +585,7 @@ func (itr artifactIterImpl) Next(ctx context.Context) (Artifact, error) {
 	}, nil
 }
 
-func (itr artifactIterImpl) getSrcKeyFromArtKey(k val.Tuple) (val.Tuple, error) {
+func (itr artifactIterImpl) getSrcKeyFromArtKey(k val.Tuple) val.Tuple {
 	for i := 0; i < itr.numPks; i++ {
 		itr.tb.PutRaw(i, k.GetField(i))
 	}

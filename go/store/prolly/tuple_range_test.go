@@ -232,15 +232,11 @@ func intNullTuple(ints ...*int32) val.Tuple {
 	}
 
 	desc := val.NewTupleDescriptor(types...)
-	tb := val.NewTupleBuilder(desc, ns)
+	tb := val.NewTupleBuilder(desc)
 	for i, val := range ints {
 		if val != nil {
 			tb.PutInt32(i, *val)
 		}
 	}
-	tup, err := tb.Build(sharedPool)
-	if err != nil {
-		panic(err)
-	}
-	return tup
+	return tb.Build(sharedPool)
 }

@@ -24,7 +24,7 @@ import (
 
 // getServerId returns the @@server_id global system variable value. If the value of @@server_id is 0 or is not a
 // uint32 value, then an error is returned.
-func getServerId(ctx *sql.Context) (uint32, error) {
+func getServerId() (uint32, error) {
 	_, value, ok := sql.SystemVariables.GetGlobal("server_id")
 	if !ok {
 		return 0, fmt.Errorf("global variable 'server_id' not found")
@@ -32,7 +32,7 @@ func getServerId(ctx *sql.Context) (uint32, error) {
 
 	// Attempt to convert the server_id value into a UINT32, in case it has been loaded as a string
 	// through global JSON configuration.
-	convertedValue, _, err := types.Uint32.Convert(ctx, value)
+	convertedValue, _, err := types.Uint32.Convert(value)
 	if err != nil {
 		return 0, err
 	}

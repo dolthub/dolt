@@ -64,7 +64,7 @@ func generateProllyBench(b *testing.B, size uint64) prollyBench {
 		val.Type{Enc: val.Int64Enc, Nullable: true},
 	)
 
-	tups := generateProllyTuples(kd, vd, size, ns)
+	tups := generateProllyTuples(kd, vd, size)
 
 	tt := make([]val.Tuple, 0, len(tups)*2)
 	for i := range tups {
@@ -86,21 +86,17 @@ func newTestNodeStore() tree.NodeStore {
 	return tree.NewNodeStore(ts.NewView())
 }
 
-func generateProllyTuples(kd, vd val.TupleDesc, size uint64, ns tree.NodeStore) [][2]val.Tuple {
+func generateProllyTuples(kd, vd val.TupleDesc, size uint64) [][2]val.Tuple {
 	src := rand.NewSource(0)
 
 	tups := make([][2]val.Tuple, size)
-	kb := val.NewTupleBuilder(kd, ns)
-	vb := val.NewTupleBuilder(vd, ns)
+	kb := val.NewTupleBuilder(kd)
+	vb := val.NewTupleBuilder(vd)
 
-	var err error
 	for i := range tups {
 		// key
 		kb.PutUint64(0, uint64(i))
-		tups[i][0], err = kb.Build(shared)
-		if err != nil {
-			panic(err)
-		}
+		tups[i][0] = kb.Build(shared)
 
 		// val
 		vb.PutInt64(0, src.Int63())
@@ -108,10 +104,7 @@ func generateProllyTuples(kd, vd val.TupleDesc, size uint64, ns tree.NodeStore) 
 		vb.PutInt64(2, src.Int63())
 		vb.PutInt64(3, src.Int63())
 		vb.PutInt64(4, src.Int63())
-		tups[i][1], err = vb.Build(shared)
-		if err != nil {
-			panic(err)
-		}
+		tups[i][1] = vb.Build(shared)
 	}
 
 	return tups
@@ -201,7 +194,7 @@ func generateBBoltBench(b *testing.B, size uint64) bboltBench {
 	})
 	require.NoError(b, err)
 
-	tups := generateProllyTuples(kd, vd, size, nil)
+	tups := generateProllyTuples(kd, vd, size)
 
 	const batch = 4096
 	for i := 0; i < len(tups); i += batch {

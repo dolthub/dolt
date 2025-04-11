@@ -15,6 +15,7 @@
 package csv
 
 import (
+	"context"
 	"os"
 	"testing"
 
@@ -54,11 +55,10 @@ func getSampleRows() []sql.Row {
 
 func writeToCSV(csvWr *CSVWriter, rows []sql.Row, t *testing.T) {
 	func() {
-		ctx := sql.NewEmptyContext()
-		defer csvWr.Close(ctx)
+		defer csvWr.Close(context.Background())
 
 		for _, r := range rows {
-			err := csvWr.WriteSqlRow(ctx, r)
+			err := csvWr.WriteSqlRow(context.Background(), r)
 
 			if err != nil {
 				t.Fatal("Failed to write row")

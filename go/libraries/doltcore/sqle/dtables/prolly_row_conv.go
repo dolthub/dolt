@@ -132,7 +132,7 @@ func (c ProllyRowConverter) putFields(ctx context.Context, tup val.Tuple, proj v
 		}
 		if t := targetTypes[i]; t != nil {
 			var inRange sql.ConvertInRange
-			dstRow[j], inRange, err = t.Convert(ctx, f)
+			dstRow[j], inRange, err = t.Convert(f)
 			if sql.ErrInvalidValue.Is(err) && c.warnFn != nil {
 				col := c.inSchema.GetAllCols().GetByIndex(i)
 				c.warnFn(rowconv.DatatypeCoercionFailureWarningCode, rowconv.DatatypeCoercionFailureWarning, col.Name)

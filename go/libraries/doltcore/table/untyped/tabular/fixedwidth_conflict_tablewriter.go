@@ -55,7 +55,7 @@ func NewFixedWidthConflictTableWriter(schema sql.Schema, wr io.WriteCloser, numS
 }
 
 func (w FixedWidthConflictTableWriter) WriteRow(
-	ctx *sql.Context,
+	ctx context.Context,
 	version string,
 	row sql.Row,
 	rowDiffType diff.ChangeType,

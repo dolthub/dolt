@@ -95,7 +95,7 @@ func (sc *StatsController) Stop() {
 
 // RefreshFromSysVars reads the environment variables and updates controller
 // parameters. If the queue is not started this will hang.
-func (sc *StatsController) RefreshFromSysVars(ctx *sql.Context) {
+func (sc *StatsController) RefreshFromSysVars() {
 	_, memOnly, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsMemoryOnly)
 	sc.SetMemOnly(memOnly.(int8) == 1)
 
@@ -105,8 +105,8 @@ func (sc *StatsController) RefreshFromSysVars(ctx *sql.Context) {
 	typ, jobI, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsJobInterval)
 	_, gcI, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsGCInterval)
 
-	jobInterval, _, _ := typ.GetType().Convert(ctx, jobI)
-	gcInterval, _, _ := typ.GetType().Convert(ctx, gcI)
+	jobInterval, _, _ := typ.GetType().Convert(jobI)
+	gcInterval, _, _ := typ.GetType().Convert(gcI)
 
 	sc.SetTimers(
 		jobInterval.(int64)*int64(time.Millisecond),
@@ -114,7 +114,7 @@ func (sc *StatsController) RefreshFromSysVars(ctx *sql.Context) {
 	)
 }
 
-func (sc *StatsController) Restart(ctx *sql.Context) error {
+func (sc *StatsController) Restart() error {
 	select {
 	case <-sc.closed:
 		return fmt.Errorf("StatsController is closed")
@@ -122,7 +122,7 @@ func (sc *StatsController) Restart(ctx *sql.Context) error {
 	}
 
 	sc.sq.Start()
-	sc.RefreshFromSysVars(ctx)
+	sc.RefreshFromSysVars()
 
 	done := make(chan struct{})
 	if err := sc.bgThreads.Add("stats_worker", func(ctx context.Context) {

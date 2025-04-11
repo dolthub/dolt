@@ -539,10 +539,10 @@ type prollyConflictDeleter struct {
 func newProllyConflictDeleter(ct ProllyConflictsTable) *prollyConflictDeleter {
 	kd, _ := ct.artM.Descriptors()
 	ed := ct.artM.Editor()
-	kB := val.NewTupleBuilder(kd, ct.artM.NodeStore())
+	kB := val.NewTupleBuilder(kd)
 
 	vd := ct.ourSch.GetValueDescriptor(ct.root.NodeStore())
-	vB := val.NewTupleBuilder(vd, ct.artM.NodeStore())
+	vB := val.NewTupleBuilder(vd)
 	p := ct.artM.Pool()
 
 	baseColSize := ct.baseSch.GetAllCols().Size()
@@ -582,10 +582,7 @@ func (cd *prollyConflictDeleter) Delete(ctx *sql.Context, r sql.Row) (err error)
 	// Finally the artifact type which is always a conflict
 	cd.kB.PutUint8(cd.kd.Count()-1, uint8(prolly.ArtifactTypeConflict))
 
-	key, err := cd.kB.Build(cd.pool)
-	if err != nil {
-		return err
-	}
+	key := cd.kB.Build(cd.pool)
 	err = cd.ed.Delete(ctx, key)
 	if err != nil {
 		return err
@@ -638,10 +635,7 @@ func (cd *prollyConflictDeleter) putKeylessHash(ctx *sql.Context, r sql.Row) err
 		}
 	}
 
-	v, err := cd.vB.Build(cd.pool)
-	if err != nil {
-		return err
-	}
+	v := cd.vB.Build(cd.pool)
 	k := val.HashTupleFromValue(cd.pool, v)
 	cd.kB.PutHash128(0, k.GetField(0))
 	return nil

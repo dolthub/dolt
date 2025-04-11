@@ -181,7 +181,7 @@ func TestGet(t *testing.T) {
 	require.NoError(t, err)
 	requireGet(ctx, t, tea, key1, false)
 
-	// test committed
+	// test commmitted
 	teaInsert(t, tea, key1)
 	err = tea.Commit(ctx, nbf)
 	require.NoError(t, err)

@@ -89,7 +89,7 @@ func (w *BatchSqlExportWriter) GetSchema() schema.Schema {
 	return w.sch
 }
 
-func (w *BatchSqlExportWriter) WriteSqlRow(ctx *sql.Context, r sql.Row) error {
+func (w *BatchSqlExportWriter) WriteSqlRow(ctx context.Context, r sql.Row) error {
 	if err := w.maybeWriteDropCreate(ctx); err != nil {
 		return err
 	}
@@ -128,7 +128,7 @@ func (w *BatchSqlExportWriter) WriteSqlRow(ctx *sql.Context, r sql.Row) error {
 	}
 
 	// Get insert tuple string
-	tuple, err := sqlfmt.SqlRowAsTupleString(ctx, r, w.sch)
+	tuple, err := sqlfmt.SqlRowAsTupleString(r, w.sch)
 	if err != nil {
 		return err
 	}

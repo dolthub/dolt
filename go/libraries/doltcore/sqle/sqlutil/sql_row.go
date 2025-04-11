@@ -219,9 +219,15 @@ func keylessDoltRowFromSqlRow(ctx context.Context, vrw types.ValueReadWriter, sq
 	return row.KeylessRow(vrw.Format(), vals[:j]...)
 }
 
+// The Type.SQL() call takes in a SQL context to determine the output character set for types that use a collation.
+// As the SqlColToStr utility function is primarily used in places where no SQL context is available (such as commands
+// on the CLI), we force the `utf8mb4` character set to be used, as it is the most likely to be supported by the
+// destination. `utf8mb4` is the default character set for empty contexts, so we don't need to explicitly set it.
+var sqlColToStrContext = sql.NewEmptyContext()
+
 // SqlColToStr is a utility function for converting a sql column of type interface{} to a string.
 // NULL values are treated as empty strings. Handle nil separately if you require other behavior.
-func SqlColToStr(ctx *sql.Context, sqlType sql.Type, col interface{}) (string, error) {
+func SqlColToStr(sqlType sql.Type, col interface{}) (string, error) {
 	if col != nil {
 		switch typedCol := col.(type) {
 		case bool:
@@ -231,14 +237,14 @@ func SqlColToStr(ctx *sql.Context, sqlType sql.Type, col interface{}) (string, e
 				return "false", nil
 			}
 		case sql.SpatialColumnType:
-			res, err := sqlType.SQL(ctx, nil, col)
+			res, err := sqlType.SQL(sqlColToStrContext, nil, col)
 			hexRes := fmt.Sprintf("0x%X", res.Raw())
 			if err != nil {
 				return "", err
 			}
 			return hexRes, nil
 		default:
-			res, err := sqlType.SQL(ctx, nil, col)
+			res, err := sqlType.SQL(sqlColToStrContext, nil, col)
 			if err != nil {
 				return "", err
 			}

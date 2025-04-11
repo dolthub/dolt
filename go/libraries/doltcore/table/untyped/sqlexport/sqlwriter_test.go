@@ -15,6 +15,7 @@
 package sqlexport
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -85,7 +86,7 @@ func TestEndToEnd(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx := sql.NewEmptyContext()
+			ctx := context.Background()
 			dEnv := dtestutils.CreateTestEnv()
 			defer dEnv.DoltDB(ctx).Close()
 			root, err := dEnv.WorkingRoot(ctx)

@@ -214,64 +214,53 @@ func rowsToResultStrings(ctx *sql.Context, iter sql.RowIter) ([]string, error) {
 			return nil, err
 		} else {
 			for _, col := range row {
-				str, err := toSqlString(ctx, col)
-				if err != nil {
-					drainIteratorIgnoreErrors(ctx, iter)
-					return nil, err
-				}
-				results = append(results, str)
+				results = append(results, toSqlString(col))
 			}
 		}
 	}
 }
 
-func toSqlString(ctx *sql.Context, val interface{}) (string, error) {
+func toSqlString(val interface{}) string {
 	if val == nil {
-		return "NULL", nil
+		return "NULL"
 	}
 
 	switch v := val.(type) {
-	case sql.AnyWrapper:
-		unwrapped, err := sql.UnwrapAny(ctx, v)
-		if err != nil {
-			return "", err
-		}
-		return toSqlString(ctx, unwrapped)
 	case float32, float64:
 		// exactly 3 decimal points for floats
-		return fmt.Sprintf("%.3f", v), nil
+		return fmt.Sprintf("%.3f", v)
 	case decimal.Decimal:
 		// exactly 3 decimal points for floats
 		res, _ := v.Float64()
-		return fmt.Sprintf("%.3f", res), nil
+		return fmt.Sprintf("%.3f", res)
 	case int:
-		return strconv.Itoa(v), nil
+		return strconv.Itoa(v)
 	case uint:
-		return strconv.Itoa(int(v)), nil
+		return strconv.Itoa(int(v))
 	case int8:
-		return strconv.Itoa(int(v)), nil
+		return strconv.Itoa(int(v))
 	case uint8:
-		return strconv.Itoa(int(v)), nil
+		return strconv.Itoa(int(v))
 	case int16:
-		return strconv.Itoa(int(v)), nil
+		return strconv.Itoa(int(v))
 	case uint16:
-		return strconv.Itoa(int(v)), nil
+		return strconv.Itoa(int(v))
 	case int32:
-		return strconv.Itoa(int(v)), nil
+		return strconv.Itoa(int(v))
 	case uint32:
-		return strconv.Itoa(int(v)), nil
+		return strconv.Itoa(int(v))
 	case int64:
-		return strconv.Itoa(int(v)), nil
+		return strconv.Itoa(int(v))
 	case uint64:
-		return strconv.Itoa(int(v)), nil
+		return strconv.Itoa(int(v))
 	case string:
-		return v, nil
+		return v
 	// Mysql returns 1 and 0 for boolean values, mimic that
 	case bool:
 		if v {
-			return "1", nil
+			return "1"
 		} else {
-			return "0", nil
+			return "0"
 		}
 	default:
 		panic(fmt.Sprintf("No conversion for value %v of type %T", val, val))

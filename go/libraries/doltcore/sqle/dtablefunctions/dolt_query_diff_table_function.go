@@ -176,11 +176,11 @@ func (tf *QueryDiffTableFunction) Children() []sql.Node {
 	return nil
 }
 
-func (tf *QueryDiffTableFunction) compareRows(ctx *sql.Context, pkOrds []int, row1, row2 sql.Row) (int, bool, error) {
+func (tf *QueryDiffTableFunction) compareRows(pkOrds []int, row1, row2 sql.Row) (int, bool, error) {
 	var cmp int
 	var err error
 	for i, pkOrd := range pkOrds {
-		cmp, err = tf.schema1[i].Type.Compare(ctx, row1[pkOrd], row2[pkOrd])
+		cmp, err = tf.schema1[i].Type.Compare(row1[pkOrd], row2[pkOrd])
 		if err != nil {
 			return 0, false, err
 		}
@@ -205,7 +205,7 @@ func (tf *QueryDiffTableFunction) RowIter(ctx *sql.Context, _ sql.Row) (sql.RowI
 		// todo: schema is currently an unreliable source of primary key columns
 		return tf.keylessRowIter()
 	}
-	return tf.pkRowIter(ctx)
+	return tf.pkRowIter()
 }
 
 // keylessRowIter uses the entire row for difference comparison
@@ -239,7 +239,7 @@ func (tf *QueryDiffTableFunction) keylessRowIter() (sql.RowIter, error) {
 }
 
 // pkRowIter uses primary keys to do an efficient row comparison
-func (tf *QueryDiffTableFunction) pkRowIter(ctx *sql.Context) (sql.RowIter, error) {
+func (tf *QueryDiffTableFunction) pkRowIter() (sql.RowIter, error) {
 	var results []sql.Row
 	var newRow sql.Row
 	row1, err1 := tf.rowIter1.Next(tf.ctx)
@@ -252,7 +252,7 @@ func (tf *QueryDiffTableFunction) pkRowIter(ctx *sql.Context) (sql.RowIter, erro
 	}
 	nilRow := make(sql.Row, len(tf.schema1))
 	for err1 == nil && err2 == nil {
-		cmp, d, err := tf.compareRows(ctx, pkOrds, row1, row2)
+		cmp, d, err := tf.compareRows(pkOrds, row1, row2)
 		if err != nil {
 			return nil, err
 		}

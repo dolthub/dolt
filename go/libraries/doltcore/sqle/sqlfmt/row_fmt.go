@@ -37,7 +37,8 @@ const singleQuote = `'`
 
 // QuoteIdentifier quotes the identifier given with backticks.
 func QuoteIdentifier(s string) string {
-	return sql.GlobalSchemaFormatter.QuoteIdentifier(s)
+	// TODO: quote character is different for different SQL modes / dialects
+	return "`" + s + "`"
 }
 
 // QuoteTableName quotes the table name given with backticks.
@@ -313,7 +314,7 @@ func SqlRowAsCreateFragStmt(r sql.Row) (string, error) {
 	return b.String(), nil
 }
 
-func SqlRowAsInsertStmt(ctx *sql.Context, r sql.Row, tableName string, tableSch schema.Schema) (string, error) {
+func SqlRowAsInsertStmt(r sql.Row, tableName string, tableSch schema.Schema) (string, error) {
 	var b strings.Builder
 
 	// Write insert prefix
@@ -324,7 +325,7 @@ func SqlRowAsInsertStmt(ctx *sql.Context, r sql.Row, tableName string, tableSch 
 	b.WriteString(prefix)
 
 	// Write single insert
-	str, err := SqlRowAsTupleString(ctx, r, tableSch)
+	str, err := SqlRowAsTupleString(r, tableSch)
 	if err != nil {
 		return "", err
 	}
@@ -335,7 +336,7 @@ func SqlRowAsInsertStmt(ctx *sql.Context, r sql.Row, tableName string, tableSch 
 }
 
 // SqlRowAsTupleString converts a sql row into it's tuple string representation for SQL insert statements.
-func SqlRowAsTupleString(ctx *sql.Context, r sql.Row, tableSch schema.Schema) (string, error) {
+func SqlRowAsTupleString(r sql.Row, tableSch schema.Schema) (string, error) {
 	var b strings.Builder
 	var err error
 
@@ -348,7 +349,7 @@ func SqlRowAsTupleString(ctx *sql.Context, r sql.Row, tableSch schema.Schema) (s
 		col := tableSch.GetAllCols().GetByIndex(i)
 		str := "NULL"
 		if val != nil {
-			str, err = interfaceValueAsSqlString(ctx, col.TypeInfo, val)
+			str, err = interfaceValueAsSqlString(col.TypeInfo, val)
 			if err != nil {
 				return "", err
 			}
@@ -364,12 +365,12 @@ func SqlRowAsTupleString(ctx *sql.Context, r sql.Row, tableSch schema.Schema) (s
 
 // SqlRowAsStrings returns the string representation for each column of |r|
 // which should have schema |sch|.
-func SqlRowAsStrings(ctx *sql.Context, r sql.Row, sch sql.Schema) ([]string, error) {
+func SqlRowAsStrings(r sql.Row, sch sql.Schema) ([]string, error) {
 	out := make([]string, len(r))
 	for i := range out {
 		v := r[i]
 		sqlType := sch[i].Type
-		s, err := sqlutil.SqlColToStr(ctx, sqlType, v)
+		s, err := sqlutil.SqlColToStr(sqlType, v)
 		if err != nil {
 			return nil, err
 		}
@@ -379,7 +380,7 @@ func SqlRowAsStrings(ctx *sql.Context, r sql.Row, sch sql.Schema) ([]string, err
 }
 
 // SqlRowAsDeleteStmt generates a sql statement. Non-zero |limit| adds a limit clause.
-func SqlRowAsDeleteStmt(ctx *sql.Context, r sql.Row, tableName string, tableSch schema.Schema, limit uint64) (string, error) {
+func SqlRowAsDeleteStmt(r sql.Row, tableName string, tableSch schema.Schema, limit uint64) (string, error) {
 	var b strings.Builder
 	b.WriteString("DELETE FROM ")
 	b.WriteString(QuoteIdentifier(tableName))
@@ -394,7 +395,7 @@ func SqlRowAsDeleteStmt(ctx *sql.Context, r sql.Row, tableName string, tableSch 
 			if seenOne {
 				b.WriteString(" AND ")
 			}
-			sqlString, err := interfaceValueAsSqlString(ctx, col.TypeInfo, r[i])
+			sqlString, err := interfaceValueAsSqlString(col.TypeInfo, r[i])
 			if err != nil {
 				return true, err
 			}
@@ -413,7 +414,7 @@ func SqlRowAsDeleteStmt(ctx *sql.Context, r sql.Row, tableName string, tableSch 
 
 	if limit != 0 {
 		b.WriteString(" LIMIT ")
-		s, err := interfaceValueAsSqlString(ctx, typeinfo.FromKind(types.UintKind), limit)
+		s, err := interfaceValueAsSqlString(typeinfo.FromKind(types.UintKind), limit)
 		if err != nil {
 			return "", err
 		}
@@ -424,7 +425,7 @@ func SqlRowAsDeleteStmt(ctx *sql.Context, r sql.Row, tableName string, tableSch 
 	return b.String(), nil
 }
 
-func SqlRowAsUpdateStmt(ctx *sql.Context, r sql.Row, tableName string, tableSch schema.Schema, colsToUpdate *set.StrSet) (string, error) {
+func SqlRowAsUpdateStmt(r sql.Row, tableName string, tableSch schema.Schema, colsToUpdate *set.StrSet) (string, error) {
 	var b strings.Builder
 	b.WriteString("UPDATE ")
 	b.WriteString(QuoteIdentifier(tableName))
@@ -441,7 +442,7 @@ func SqlRowAsUpdateStmt(ctx *sql.Context, r sql.Row, tableName string, tableSch 
 			}
 			seenOne = true
 
-			sqlString, err := interfaceValueAsSqlString(ctx, col.TypeInfo, r[i])
+			sqlString, err := interfaceValueAsSqlString(col.TypeInfo, r[i])
 			if err != nil {
 				return true, err
 			}
@@ -468,7 +469,7 @@ func SqlRowAsUpdateStmt(ctx *sql.Context, r sql.Row, tableName string, tableSch 
 			}
 			seenOne = true
 
-			sqlString, err := interfaceValueAsSqlString(ctx, col.TypeInfo, r[i])
+			sqlString, err := interfaceValueAsSqlString(col.TypeInfo, r[i])
 			if err != nil {
 				return true, err
 			}
@@ -521,12 +522,12 @@ func ValueAsSqlString(ti typeinfo.TypeInfo, value types.Value) (string, error) {
 	}
 }
 
-func interfaceValueAsSqlString(ctx *sql.Context, ti typeinfo.TypeInfo, value interface{}) (string, error) {
+func interfaceValueAsSqlString(ti typeinfo.TypeInfo, value interface{}) (string, error) {
 	if value == nil {
 		return "NULL", nil
 	}
 
-	str, err := sqlutil.SqlColToStr(ctx, ti.ToSqlType(), value)
+	str, err := sqlutil.SqlColToStr(ti.ToSqlType(), value)
 	if err != nil {
 		return "", err
 	}

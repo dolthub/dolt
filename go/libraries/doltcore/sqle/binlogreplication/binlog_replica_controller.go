@@ -110,7 +110,7 @@ func (d *doltBinlogReplicaController) StartReplica(ctx *sql.Context) error {
 	// error message. Currently, this case would trigger an error from the GMS layer, so we can't give
 	// a specific error message about needing to run Dolt in sql-server mode yet.
 
-	_, err := loadReplicaServerId(ctx)
+	_, err := loadReplicaServerId()
 	if err != nil {
 		return fmt.Errorf("unable to start replication: %s", err.Error())
 	}
@@ -222,18 +222,6 @@ func (d *doltBinlogReplicaController) SetReplicationSourceOptions(ctx *sql.Conte
 				return err
 			}
 			replicaSourceInfo.Host = value
-		case "SOURCE_SSL":
-			intValue, err := getOptionValueAsInt(option)
-			if err != nil {
-				return err
-			}
-			if intValue == 1 {
-				replicaSourceInfo.Ssl = true
-			} else if intValue == 0 {
-				replicaSourceInfo.Ssl = false
-			} else {
-				return fmt.Errorf("SOURCE_SSL may only be set to 0 or 1")
-			}
 		case "SOURCE_USER":
 			value, err := getOptionValueAsString(option)
 			if err != nil {
@@ -335,7 +323,6 @@ func (d *doltBinlogReplicaController) GetReplicaStatus(ctx *sql.Context) (*binlo
 
 	copy.SourceUser = replicaSourceInfo.User
 	copy.SourceHost = replicaSourceInfo.Host
-	copy.SourceSsl = replicaSourceInfo.Ssl
 	copy.SourcePort = uint(replicaSourceInfo.Port)
 	copy.SourceServerUuid = replicaSourceInfo.Uuid
 	copy.ConnectRetry = replicaSourceInfo.ConnectRetryInterval

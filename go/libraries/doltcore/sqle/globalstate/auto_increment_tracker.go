@@ -29,13 +29,13 @@ type AutoIncrementTracker interface {
 	// Current returns the current auto increment value for the given table.
 	Current(tableName string) (uint64, error)
 	// Next returns the next auto increment value for the given table, and increments the current value.
-	Next(ctx *sql.Context, tbl string, insertVal interface{}) (uint64, error)
+	Next(tbl string, insertVal interface{}) (uint64, error)
 	// AddNewTable adds a new table to the tracker, initializing the auto increment value to 1.
 	AddNewTable(tableName string) error
 	// DropTable removes a table from the tracker.
 	DropTable(ctx *sql.Context, tableName string, wses ...*doltdb.WorkingSet) error
 	// CoerceAutoIncrementValue coerces the given value to a uint64, returning an error if it can't be done.
-	CoerceAutoIncrementValue(ctx *sql.Context, val interface{}) (uint64, error)
+	CoerceAutoIncrementValue(val interface{}) (uint64, error)
 	// Set sets the auto increment value for the given table. This operation may silently do nothing if this value is
 	// below the current value for this table. The table in the provided working set is assumed to already have the value
 	// given, so the new global maximum is computed without regard for its value in that working set.

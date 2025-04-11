@@ -65,7 +65,7 @@ func (a *HasAncestor) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 		if err != nil {
 			return nil, err
 		}
-		headStr, _, err := types.Text.Convert(ctx, headIf)
+		headStr, _, err := types.Text.Convert(headIf)
 		if err != nil {
 			return nil, err
 		}
@@ -90,7 +90,7 @@ func (a *HasAncestor) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 		if err != nil {
 			return nil, err
 		}
-		ancStr, _, err := types.Text.Convert(ctx, ancIf)
+		ancStr, _, err := types.Text.Convert(ancIf)
 		if err != nil {
 			return nil, err
 		}

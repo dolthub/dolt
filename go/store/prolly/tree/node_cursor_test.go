@@ -15,10 +15,10 @@
 package tree
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
-	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -44,7 +44,7 @@ func TestNodeCursor(t *testing.T) {
 	})
 
 	t.Run("retreat past beginning", func(t *testing.T) {
-		ctx := sql.NewEmptyContext()
+		ctx := context.Background()
 		root, _, ns := randomTree(t, 10_000)
 		assert.NotNil(t, root)
 		before, err := newCursorAtStart(ctx, ns, root)
@@ -75,7 +75,7 @@ func testNewCursorAtItem(t *testing.T, count int) {
 	root, items, ns := randomTree(t, count)
 	assert.NotNil(t, root)
 
-	ctx := sql.NewEmptyContext()
+	ctx := context.Background()
 	for i := range items {
 		key, value := items[i][0], items[i][1]
 		cur, err := newCursorAtKey(ctx, ns, root, val.Tuple(key), keyDesc)
@@ -90,7 +90,7 @@ func testNewCursorAtItem(t *testing.T, count int) {
 func testGetOrdinalOfCursor(t *testing.T, count int) {
 	tuples, desc := AscendingUintTuples(count)
 
-	ctx := sql.NewEmptyContext()
+	ctx := context.Background()
 	ns := NewTestNodeStore()
 	serializer := message.NewProllyMapSerializer(desc, ns.Pool())
 	chkr, err := newEmptyChunker(ctx, ns, serializer)
@@ -113,10 +113,9 @@ func testGetOrdinalOfCursor(t *testing.T, count int) {
 		assert.Equal(t, uint64(i), ord)
 	}
 
-	b := val.NewTupleBuilder(desc, ns)
+	b := val.NewTupleBuilder(desc)
 	b.PutUint32(0, uint32(len(tuples)))
-	aboveItem, err := b.Build(sharedPool)
-	require.NoError(t, err)
+	aboveItem := b.Build(sharedPool)
 
 	curr, err := newCursorAtKey(ctx, ns, nd, aboveItem, desc)
 	require.NoError(t, err)
@@ -138,7 +137,7 @@ func testGetOrdinalOfCursor(t *testing.T, count int) {
 }
 
 func randomTree(t *testing.T, count int) (Node, [][2]Item, NodeStore) {
-	ctx := sql.NewEmptyContext()
+	ctx := context.Background()
 	ns := NewTestNodeStore()
 	serializer := message.NewProllyMapSerializer(valDesc, ns.Pool())
 	chkr, err := newEmptyChunker(ctx, ns, serializer)
@@ -165,11 +164,8 @@ var valDesc = val.NewTupleDescriptor(
 )
 
 func randomTupleItemPairs(count int, ns NodeStore) (items [][2]Item) {
-	ctx := sql.NewEmptyContext()
-	tups, err := RandomTuplePairs(ctx, count, keyDesc, valDesc, ns)
-	if err != nil {
-		panic(err)
-	}
+	ctx := context.Background()
+	tups := RandomTuplePairs(ctx, count, keyDesc, valDesc, ns)
 	items = make([][2]Item, count)
 	if len(tups) != len(items) {
 		panic("mismatch")

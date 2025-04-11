@@ -100,7 +100,7 @@ func (ti *floatType) ConvertValueToNomsValue(ctx context.Context, vrw types.Valu
 	if v == nil {
 		return types.NullValue, nil
 	}
-	fltVal, _, err := ti.sqlFloatType.Convert(ctx, v)
+	fltVal, _, err := ti.sqlFloatType.Convert(v)
 	if err != nil {
 		return nil, err
 	}
@@ -167,10 +167,8 @@ func (ti *floatType) GetTypeParams() map[string]string {
 
 // IsValid implements TypeInfo interface.
 func (ti *floatType) IsValid(v types.Value) bool {
-	// TODO: Add context parameter
-	ctx := sql.NewEmptyContext()
 	if val, ok := v.(types.Float); ok {
-		_, _, err := ti.sqlFloatType.Convert(ctx, float64(val))
+		_, _, err := ti.sqlFloatType.Convert(float64(val))
 		if err != nil {
 			return false
 		}
@@ -222,7 +220,7 @@ func floatTypeConverter(ctx context.Context, src *floatType, destTi TypeInfo) (t
 				return nil, fmt.Errorf("unexpected type converting float to enum: %T", v)
 			}
 			fltVal := floatTypeRoundToZero(float64(val))
-			intVal, _, err := gmstypes.Int64.Convert(ctx, fltVal)
+			intVal, _, err := gmstypes.Int64.Convert(fltVal)
 			if err != nil {
 				return nil, err
 			}

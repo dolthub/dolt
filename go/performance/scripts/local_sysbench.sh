@@ -7,9 +7,6 @@ WORKING_DIR=`mktemp -d`
 PPROF=0
 PORT=3366
 
-USER="root"
-PASS=""
-
 # parse options
 # superuser.com/questions/186272/
 while test $# -gt 0
@@ -61,6 +58,10 @@ behavior:
   read_only: false
   autocommit: true
 
+user:
+  name: "user"
+  password: "pass"
+
 listener:
   host: "0.0.0.0"
   port: $PORT
@@ -93,8 +94,8 @@ sysbench \
   --db-driver="mysql" \
   --mysql-host="0.0.0.0" \
   --mysql-port="$PORT" \
-  --mysql-user="$USER" \
-  --mysql-password="$PASS" \
+  --mysql-user="user" \
+  --mysql-password="pass" \
   "$SYSBENCH_TEST" prepare
 
 # restart server to isolate bench run
@@ -117,8 +118,8 @@ sysbench \
   --db-driver="mysql" \
   --mysql-host="0.0.0.0" \
   --mysql-port="$PORT" \
-  --mysql-user="$USER" \
-  --mysql-password="$PASS" \
+  --mysql-user="user" \
+  --mysql-password="pass" \
   --db-ps-mode=disable \
   --time=30 \
   --db-ps-mode=disable \

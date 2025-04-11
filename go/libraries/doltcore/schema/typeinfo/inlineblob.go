@@ -106,7 +106,7 @@ func (ti *inlineBlobType) ConvertValueToNomsValue(ctx context.Context, vrw types
 	if v == nil {
 		return types.NullValue, nil
 	}
-	strVal, _, err := ti.sqlBinaryType.Convert(ctx, v)
+	strVal, _, err := ti.sqlBinaryType.Convert(v)
 	if err != nil {
 		return nil, err
 	}
@@ -131,17 +131,12 @@ func (ti *inlineBlobType) Equals(other TypeInfo) bool {
 
 // FormatValue implements TypeInfo interface.
 func (ti *inlineBlobType) FormatValue(v types.Value) (*string, error) {
-	// TODO: Add context parameter to FormatValue
-	ctx := context.Background()
 	if val, ok := v.(types.InlineBlob); ok {
 		convVal, err := ti.ConvertNomsValueToValue(val)
 		if err != nil {
 			return nil, err
 		}
-		res, ok, err := sql.Unwrap[string](ctx, convVal)
-		if err != nil {
-			return nil, err
-		}
+		res, ok := convVal.(string)
 		if !ok {
 			return nil, fmt.Errorf(`"%v" has unexpectedly encountered a value of type "%T" from embedded type`, ti.String(), v)
 		}
