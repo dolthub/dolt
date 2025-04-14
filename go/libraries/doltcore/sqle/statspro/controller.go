@@ -483,9 +483,16 @@ func (sc *StatsController) Purge(ctx *sql.Context) error {
 }
 
 func (sc *StatsController) rotateStorage(ctx context.Context) error {
+	sqlCtx, err := sc.ctxGen(ctx)
+	if err != nil {
+		return err
+	}
+	sql.SessionCommandBegin(sqlCtx.Session)
+	defer sql.SessionCommandEnd(sqlCtx.Session)
+	defer sql.SessionEnd(sqlCtx.Session)
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
-	return sc.lockedRotateStorage(ctx)
+	return sc.lockedRotateStorage(sqlCtx)
 }
 
 func (sc *StatsController) lockedRotateStorage(ctx context.Context) error {
