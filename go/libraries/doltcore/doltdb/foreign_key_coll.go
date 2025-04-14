@@ -83,6 +83,7 @@ const (
 	ForeignKeyReferentialAction_NoAction
 	ForeignKeyReferentialAction_Restrict
 	ForeignKeyReferentialAction_SetNull
+	ForeignKeyReferentialAction_SetDefault
 )
 
 // ForeignKey is the complete, internal representation of a Foreign Key.
@@ -771,6 +772,8 @@ func (refOp ForeignKeyReferentialAction) String() string {
 		return "RESTRICT"
 	case ForeignKeyReferentialAction_SetNull:
 		return "SET NULL"
+	case ForeignKeyReferentialAction_SetDefault:
+		return "SET DEFAULT"
 	default:
 		return "INVALID"
 	}
@@ -786,6 +789,8 @@ func (refOp ForeignKeyReferentialAction) ReducedString() string {
 		return "CASCADE"
 	case ForeignKeyReferentialAction_SetNull:
 		return "SET NULL"
+	case ForeignKeyReferentialAction_SetDefault:
+		return "SET DEFAULT"
 	default:
 		return "INVALID"
 	}
