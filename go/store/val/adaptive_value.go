@@ -238,7 +238,7 @@ func (handler AdaptiveEncodingTypeHandler) SerializedCompare(ctx context.Context
 		}
 	}
 	if adaptiveValue2.IsOutOfBand() {
-		adaptiveValue1, err = adaptiveValue2.convertToInline(ctx, handler.vs, nil)
+		adaptiveValue2, err = adaptiveValue2.convertToInline(ctx, handler.vs, nil)
 		if err != nil {
 			return 0, err
 		}
