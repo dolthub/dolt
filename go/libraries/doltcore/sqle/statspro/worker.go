@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"runtime/debug"
 	"strings"
 	"time"
 
@@ -80,7 +81,12 @@ func (sc *StatsController) runWorker(ctx context.Context) (err error) {
 
 		newStats, err = sc.newStatsForRoot(ctx, gcKv)
 		if errors.Is(err, context.Canceled) {
-			return nil
+			select {
+			case <-ctx.Done():
+				return nil
+			default:
+				continue
+			}
 		} else if err != nil {
 			sc.descError("", err)
 		}
@@ -177,7 +183,7 @@ func (sc *StatsController) trySwapStats(ctx context.Context, prevGen uint64, new
 func (sc *StatsController) newStatsForRoot(baseCtx context.Context, gcKv *memStats) (newStats *rootStats, err error) {
 	defer func() {
 		if r := recover(); r != nil {
-			err = fmt.Errorf("worker panicked running work: %s", r)
+			err = fmt.Errorf("worker panicked running work: %s\n%s", r, string(debug.Stack()))
 		}
 		if err != nil {
 			sc.descError("stats update interrupted", err)
@@ -199,8 +205,6 @@ func (sc *StatsController) newStatsForRoot(baseCtx context.Context, gcKv *memSta
 	dSess := dsess.DSessFromSess(ctx.Session)
 	var dbs []sql.Database
 	func() {
-		//sql.SessionCommandBegin(ctx.Session)
-		//defer sql.SessionCommandEnd(ctx.Session)
 		dbs = dSess.Provider().AllDatabases(ctx)
 	}()
 	newStats = newRootStats()
@@ -266,7 +270,7 @@ func (sc *StatsController) newStatsForRoot(baseCtx context.Context, gcKv *memSta
 				newStats.DbCnt++
 
 				for _, tableName := range tableNames {
-					err := sc.updateTable(ctx, newStats, tableName, sqlDb.(dsess.SqlDatabase), gcKv)
+					err = sc.updateTable(ctx, newStats, tableName, sqlDb.(dsess.SqlDatabase), gcKv)
 					if err != nil {
 						return nil, err
 					}
@@ -307,7 +311,7 @@ func (sc *StatsController) collectIndexNodes(ctx *sql.Context, prollyMap prolly.
 	firstNodeHash := nodes[0].HashOf()
 	lowerBound, ok := sc.GetBound(firstNodeHash, idxLen)
 	if !ok {
-		sc.sq.DoSync(ctx, func() (err error) {
+		if err := sc.sq.DoSync(ctx, func() (err error) {
 			lowerBound, err = firstRowForIndex(ctx, idxLen, prollyMap, keyBuilder)
 			if err != nil {
 				return fmt.Errorf("get histogram bucket for node; %w", err)
@@ -318,7 +322,9 @@ func (sc *StatsController) collectIndexNodes(ctx *sql.Context, prollyMap prolly.
 
 			sc.PutBound(firstNodeHash, lowerBound, idxLen)
 			return nil
-		})
+		}); err != nil {
+			return nil, nil, 0, err
+		}
 	}
 
 	var writes int
@@ -469,7 +475,7 @@ func (sc *StatsController) updateTable(ctx *sql.Context, newStats *rootStats, ta
 			return nil
 		}); err != nil {
 			return err
-		} else if template.Fds.Empty() {
+		} else if template.Fds == nil || template.Fds.Empty() {
 			return fmt.Errorf("failed to creat template for %s/%s/%s/%s", sqlDb.Revision(), sqlDb.AliasedName(), tableName, sqlIdx.ID())
 		}
 

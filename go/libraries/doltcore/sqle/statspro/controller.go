@@ -488,8 +488,8 @@ func (sc *StatsController) rotateStorage(ctx context.Context) error {
 		return err
 	}
 	sql.SessionCommandBegin(sqlCtx.Session)
-	defer sql.SessionCommandEnd(sqlCtx.Session)
 	defer sql.SessionEnd(sqlCtx.Session)
+	defer sql.SessionCommandEnd(sqlCtx.Session)
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
 	return sc.lockedRotateStorage(sqlCtx)
