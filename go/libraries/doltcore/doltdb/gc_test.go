@@ -20,6 +20,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -140,7 +141,7 @@ func testGarbageCollection(t *testing.T, test gcTest) {
 	}
 
 	ddb := dEnv.DoltDB(ctx)
-	err := ddb.GC(ctx, types.GCModeDefault, purgingSafepointController{ddb})
+	err := ddb.GC(ctx, types.GCModeDefault, chunks.OldSkhool, purgingSafepointController{ddb})
 	require.NoError(t, err)
 	test.postGCFunc(ctx, t, dEnv.DoltDB(ctx), res)
 
@@ -209,7 +210,7 @@ func testGarbageCollectionHasCacheDataCorruptionBugFix(t *testing.T) {
 	_, err = ns.Write(ctx, c1.Node())
 	require.NoError(t, err)
 
-	err = ddb.GC(ctx, types.GCModeDefault, purgingSafepointController{ddb})
+	err = ddb.GC(ctx, types.GCModeDefault, chunks.OldSkhool, purgingSafepointController{ddb})
 	require.NoError(t, err)
 
 	c2 := newIntMap(t, ctx, ns, 2, 2)
