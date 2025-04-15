@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
+	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -166,6 +167,9 @@ type sessionAwareSafepointController struct {
 
 	waiter *gcctx.GCSafepointWaiter
 	keeper func(hash.Hash) bool
+
+	// NM4 - Maybe here???
+	cmpLvl int
 }
 
 func (sc *sessionAwareSafepointController) visit(ctx context.Context, sess gcctx.GCRootsProvider) error {
@@ -237,7 +241,19 @@ func doDoltGC(ctx *sql.Context, args []string) (int, error) {
 			mode = types.GCModeFull
 		}
 
-		err := RunDoltGC(ctx, ddb, mode, ctx.GetCurrentDatabase())
+		cmpLvl := chunks.OldSkhool
+		if apr.Contains(cli.ArchiveLevelParam) {
+			lvl, ok := apr.GetInt(cli.ArchiveLevelParam)
+			if !ok {
+				return cmdFailure, fmt.Errorf("parse error for value for %s: %s", cli.ArchiveLevelParam, apr.GetValues()[cli.ArchiveLevelParam])
+			}
+			if lvl < int(chunks.OldSkhool) || lvl > int(chunks.FutureSkhool) {
+				return cmdFailure, fmt.Errorf("invalid value for %s: %d", cli.ArchiveLevelParam, lvl)
+			}
+			cmpLvl = chunks.GCCompression(lvl)
+		}
+
+		err := RunDoltGC(ctx, ddb, mode, ctx.GetCurrentDatabase(), cmpLvl)
 		if err != nil {
 			return cmdFailure, err
 		}
@@ -246,7 +262,7 @@ func doDoltGC(ctx *sql.Context, args []string) (int, error) {
 	return cmdSuccess, nil
 }
 
-func RunDoltGC(ctx *sql.Context, ddb *doltdb.DoltDB, mode types.GCMode, dbname string) error {
+func RunDoltGC(ctx *sql.Context, ddb *doltdb.DoltDB, mode types.GCMode, dbname string, cmp chunks.GCCompression) error {
 	var sc types.GCSafepointController
 	if UseSessionAwareSafepointController {
 		dSess := dsess.DSessFromSess(ctx.Session)
@@ -280,5 +296,5 @@ func RunDoltGC(ctx *sql.Context, ddb *doltdb.DoltDB, mode types.GCMode, dbname s
 			doltDB:    ddb,
 		}
 	}
-	return ddb.GC(ctx, mode, sc)
+	return ddb.GC(ctx, mode, sc, cmp)
 }

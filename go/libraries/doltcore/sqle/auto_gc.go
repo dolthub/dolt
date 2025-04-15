@@ -21,9 +21,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/sirupsen/logrus"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dprocedures"
@@ -31,6 +28,8 @@ import (
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/sirupsen/logrus"
 )
 
 // Auto GC is the ability of a running SQL server engine to perform
@@ -53,13 +52,17 @@ type AutoGCController struct {
 	hooks   map[string]*autoGCCommitHook
 	ctxF    func(context.Context) (*sql.Context, error)
 	threads *sql.BackgroundThreads
+
+	// NM4 - does config get stuffed in here???
+	cmpLevel chunks.GCCompression
 }
 
-func NewAutoGCController(lgr *logrus.Logger) *AutoGCController {
+func NewAutoGCController(cmpLevel chunks.GCCompression, lgr *logrus.Logger) *AutoGCController {
 	return &AutoGCController{
-		workCh: make(chan autoGCWork),
-		lgr:    lgr,
-		hooks:  make(map[string]*autoGCCommitHook),
+		workCh:   make(chan autoGCWork),
+		lgr:      lgr,
+		hooks:    make(map[string]*autoGCCommitHook),
+		cmpLevel: cmpLevel,
 	}
 }
 
@@ -152,7 +155,7 @@ func (c *AutoGCController) doWork(ctx context.Context, work autoGCWork, ctxF fun
 	defer sql.SessionEnd(sqlCtx.Session)
 	sql.SessionCommandBegin(sqlCtx.Session)
 	defer sql.SessionCommandEnd(sqlCtx.Session)
-	err = dprocedures.RunDoltGC(sqlCtx, work.db, types.GCModeDefault, work.name)
+	err = dprocedures.RunDoltGC(sqlCtx, work.db, types.GCModeDefault, work.name, c.cmpLevel)
 	if err != nil {
 		if !errors.Is(err, chunks.ErrNothingToCollect) {
 			c.lgr.Warnf("sqle/auto_gc: Attempt to auto GC database %s failed with error: %v", work.name, err)

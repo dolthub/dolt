@@ -208,6 +208,15 @@ const (
 	GCMode_Full
 )
 
+type GCCompression int
+
+// NM4 - not sure why the types package is where we define stuff like this...
+const (
+	OldSkhool GCCompression = iota
+	NewSkhool
+	FutureSkhool
+)
+
 // ChunkStoreGarbageCollector is a ChunkStore that supports garbage collection.
 type ChunkStoreGarbageCollector interface {
 	ChunkStore
@@ -236,7 +245,7 @@ type ChunkStoreGarbageCollector interface {
 	// filtered through the |filter| and their references are walked with
 	// |getAddrs|, each of those addresses being filtered and copied as
 	// well.
-	MarkAndSweepChunks(ctx context.Context, getAddrs GetAddrsCurry, filter HasManyFunc, dest ChunkStore, mode GCMode) (MarkAndSweeper, error)
+	MarkAndSweepChunks(ctx context.Context, getAddrs GetAddrsCurry, filter HasManyFunc, dest ChunkStore, mode GCMode, cmp GCCompression) (MarkAndSweeper, error)
 
 	// Count returns the number of chunks in the store.
 	Count() (uint32, error)
