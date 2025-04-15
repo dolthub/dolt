@@ -236,7 +236,7 @@ func doDoltGC(ctx *sql.Context, args []string) (int, error) {
 			return cmdFailure, err
 		}
 	} else {
-		var mode types.GCMode = types.GCModeDefault
+		mode := types.GCModeDefault
 		if apr.Contains(cli.FullFlag) {
 			mode = types.GCModeFull
 		}
@@ -253,7 +253,7 @@ func doDoltGC(ctx *sql.Context, args []string) (int, error) {
 			cmpLvl = chunks.GCCompression(lvl)
 		}
 
-		err := RunDoltGC(ctx, ddb, mode, ctx.GetCurrentDatabase(), cmpLvl)
+		err := RunDoltGC(ctx, ddb, mode, cmpLvl, ctx.GetCurrentDatabase())
 		if err != nil {
 			return cmdFailure, err
 		}
@@ -262,7 +262,7 @@ func doDoltGC(ctx *sql.Context, args []string) (int, error) {
 	return cmdSuccess, nil
 }
 
-func RunDoltGC(ctx *sql.Context, ddb *doltdb.DoltDB, mode types.GCMode, dbname string, cmp chunks.GCCompression) error {
+func RunDoltGC(ctx *sql.Context, ddb *doltdb.DoltDB, mode types.GCMode, cmp chunks.GCCompression, dbname string) error {
 	var sc types.GCSafepointController
 	if UseSessionAwareSafepointController {
 		dSess := dsess.DSessFromSess(ctx.Session)
