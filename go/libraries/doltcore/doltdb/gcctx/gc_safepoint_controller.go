@@ -70,8 +70,6 @@ type GCSafepointSessionState struct {
 	// session. The CommandBegin callback will block until
 	// that call has completed.
 	QuiesceCallbackDone atomic.Value // chan struct{}
-
-	cancel context.CancelFunc
 }
 
 // Make is so that HasOutstandingVisitCall will return true and
@@ -153,9 +151,6 @@ func (c *GCSafepointController) Waiter(ctx context.Context, thisSession GCRootsP
 		}
 		if sess == thisSession {
 			continue
-		}
-		if state.cancel != nil {
-			state.cancel()
 		}
 		// When this session's |visit| call is done, it will count down this
 		// waitgroup. The |Wait| method, in turn, will block on this waitgroup
@@ -258,14 +253,13 @@ func (w *GCSafepointWaiter) Wait(ctx context.Context) error {
 //     one command can be outstanding at a time, and whether a command
 //     is outstanding controls how |Waiter| treats the Session when it
 //     is setting up all Sessions to visit their GC roots.
-func (c *GCSafepointController) SessionCommandBegin(s GCRootsProvider, cancel context.CancelFunc) error {
+func (c *GCSafepointController) SessionCommandBegin(s GCRootsProvider) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	var state *GCSafepointSessionState
 	if state = c.sessions[s]; state == nil {
 		// Step #1: keep track of all seen sessions.
 		state = NewGCSafepointSessionState()
-		state.cancel = cancel
 		c.sessions[s] = state
 	}
 	if state.OutstandingCommand {

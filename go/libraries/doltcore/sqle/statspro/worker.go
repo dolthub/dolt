@@ -166,10 +166,7 @@ func (sc *StatsController) trySwapStats(ctx context.Context, prevGen uint64, new
 			func() {
 				sc.mu.Unlock()
 				defer sc.mu.Lock()
-				if err := sc.sq.DoSync(ctx, func() error {
-					_, err := sc.Flush(ctx)
-					return err
-				}); err != nil {
+				if _, err := sc.Flush(ctx, sc.sq); err != nil {
 					sc.descError("", err)
 				}
 			}()
@@ -190,15 +187,12 @@ func (sc *StatsController) newStatsForRoot(baseCtx context.Context, gcKv *memSta
 		}
 	}()
 
-	cycleCtx, cancel := context.WithCancel(baseCtx)
-	defer cancel()
-
-	ctx, err := sc.ctxGen(cycleCtx)
+	ctx, err := sc.ctxGen(baseCtx)
 	if err != nil {
 		return nil, err
 	}
 
-	sql.SessionCommandBeginWithCancel(ctx.Session, cancel)
+	sql.SessionCommandBegin(ctx.Session)
 	defer sql.SessionEnd(ctx.Session)
 	defer sql.SessionCommandEnd(ctx.Session)
 

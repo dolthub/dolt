@@ -16,6 +16,7 @@ package statspro
 
 import (
 	"context"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statspro/jobqueue"
 	"strings"
 	"testing"
 
@@ -154,9 +155,13 @@ func TestProllyKv(t *testing.T) {
 		require.Equal(t, 20, len(to.gcFlusher[tupB]))
 		require.Equal(t, 20, to.Len())
 
+		sq := jobqueue.NewSerialQueue()
+		sq.Run(ctx)
+		defer sq.Stop()
+
 		kv := newTestProllyKv(t, bthreads)
 		kv.mem = to
-		cnt, err := kv.Flush(ctx)
+		cnt, err := kv.Flush(ctx, sq)
 		require.NoError(t, err)
 		require.Equal(t, 20, cnt)
 	})

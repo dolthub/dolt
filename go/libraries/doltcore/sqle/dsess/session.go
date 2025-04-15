@@ -1712,13 +1712,13 @@ func (d *DoltSession) GetController() *branch_control.Controller {
 // outstanding SQL operations.
 func (d *DoltSession) CommandBegin() error {
 	if d.gcSafepointController != nil {
-		return d.gcSafepointController.SessionCommandBegin(d, nil)
+		return d.gcSafepointController.SessionCommandBegin(d)
 	}
 	return nil
 }
 func (d *DoltSession) CommandBeginWithCancel(cancel context.CancelFunc) error {
 	if d.gcSafepointController != nil {
-		return d.gcSafepointController.SessionCommandBegin(d, cancel)
+		return d.gcSafepointController.SessionCommandBegin(d)
 	}
 	return nil
 }
