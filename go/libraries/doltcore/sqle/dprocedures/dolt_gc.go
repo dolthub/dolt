@@ -241,8 +241,17 @@ func doDoltGC(ctx *sql.Context, args []string) (int, error) {
 			mode = types.GCModeFull
 		}
 
-		// NM4 - Add cmpLvl argument to the parser....
-		cmpLvl := chunks.NewSkhool
+		cmpLvl := chunks.OldSkhool
+		if apr.Contains(cli.ArchiveLevelParam) {
+			lvl, ok := apr.GetInt(cli.ArchiveLevelParam)
+			if !ok {
+				return cmdFailure, fmt.Errorf("parse error for value for %s: %s", cli.ArchiveLevelParam, apr.GetValues()[cli.ArchiveLevelParam])
+			}
+			if lvl < int(chunks.OldSkhool) || lvl > int(chunks.FutureSkhool) {
+				return cmdFailure, fmt.Errorf("invalid value for %s: %d", cli.ArchiveLevelParam, lvl)
+			}
+			cmpLvl = chunks.GCCompression(lvl)
+		}
 
 		err := RunDoltGC(ctx, ddb, mode, ctx.GetCurrentDatabase(), cmpLvl)
 		if err != nil {
