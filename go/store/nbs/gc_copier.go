@@ -20,6 +20,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
@@ -49,7 +50,7 @@ type gcCopier struct {
 	tfp    tableFilePersister
 }
 
-func newGarbageCollectionCopier(tfp tableFilePersister) (*gcCopier, error) {
+func newGarbageCollectionCopier(cmp chunks.GCCompression, tfp tableFilePersister) (*gcCopier, error) {
 	var writer GenericTableWriter
 	var err error
 	if os.Getenv("DOLT_ARCHIVE_PULL_STREAMER") != "" {

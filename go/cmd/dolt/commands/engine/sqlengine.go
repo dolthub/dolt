@@ -220,6 +220,8 @@ func NewSqlEngine(
 	})
 
 	if config.AutoGCController != nil {
+		// NM4 - only set when auto_gc is on.
+
 		err = config.AutoGCController.RunBackgroundThread(bThreads, sqlEngine.NewDefaultContext)
 		if err != nil {
 			return nil, err
