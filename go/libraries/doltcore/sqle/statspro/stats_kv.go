@@ -19,7 +19,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statspro/jobqueue"
 	"strconv"
 	"strings"
 	"sync"
@@ -30,6 +29,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statspro/jobqueue"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
