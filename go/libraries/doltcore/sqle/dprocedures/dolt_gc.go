@@ -296,5 +296,5 @@ func RunDoltGC(ctx *sql.Context, ddb *doltdb.DoltDB, mode types.GCMode, cmp chun
 			doltDB:    ddb,
 		}
 	}
-	return ddb.GC(ctx, mode, sc, cmp)
+	return ddb.GC(ctx, mode, cmp, sc)
 }
