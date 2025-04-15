@@ -17,7 +17,6 @@ package nbs
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/dolthub/dolt/go/store/chunks"
@@ -53,7 +52,7 @@ type gcCopier struct {
 func newGarbageCollectionCopier(cmp chunks.GCCompression, tfp tableFilePersister) (*gcCopier, error) {
 	var writer GenericTableWriter
 	var err error
-	if os.Getenv("DOLT_ARCHIVE_PULL_STREAMER") != "" {
+	if cmp == chunks.NewSkhool { // NM4 - FutureSkhool too??? May need to group after?? Not sure how this is gonna work.
 		writer, err = NewArchiveStreamWriter("")
 	} else {
 		writer, err = NewCmpChunkTableWriter("")
