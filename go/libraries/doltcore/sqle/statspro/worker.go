@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"runtime/debug"
 	"strings"
 	"time"
 
@@ -80,7 +81,12 @@ func (sc *StatsController) runWorker(ctx context.Context) (err error) {
 
 		newStats, err = sc.newStatsForRoot(ctx, gcKv)
 		if errors.Is(err, context.Canceled) {
-			return nil
+			select {
+			case <-ctx.Done():
+				return nil
+			default:
+				continue
+			}
 		} else if err != nil {
 			sc.descError("", err)
 		}
@@ -160,10 +166,7 @@ func (sc *StatsController) trySwapStats(ctx context.Context, prevGen uint64, new
 			func() {
 				sc.mu.Unlock()
 				defer sc.mu.Lock()
-				if err := sc.sq.DoSync(ctx, func() error {
-					_, err := sc.Flush(ctx)
-					return err
-				}); err != nil {
+				if _, err := sc.Flush(ctx, sc.sq); err != nil {
 					sc.descError("", err)
 				}
 			}()
@@ -177,7 +180,7 @@ func (sc *StatsController) trySwapStats(ctx context.Context, prevGen uint64, new
 func (sc *StatsController) newStatsForRoot(baseCtx context.Context, gcKv *memStats) (newStats *rootStats, err error) {
 	defer func() {
 		if r := recover(); r != nil {
-			err = fmt.Errorf("worker panicked running work: %s", r)
+			err = fmt.Errorf("worker panicked running work: %s\n%s", r, string(debug.Stack()))
 		}
 		if err != nil {
 			sc.descError("stats update interrupted", err)
@@ -189,13 +192,13 @@ func (sc *StatsController) newStatsForRoot(baseCtx context.Context, gcKv *memSta
 		return nil, err
 	}
 
+	sql.SessionCommandBegin(ctx.Session)
 	defer sql.SessionEnd(ctx.Session)
+	defer sql.SessionCommandEnd(ctx.Session)
 
 	dSess := dsess.DSessFromSess(ctx.Session)
 	var dbs []sql.Database
 	func() {
-		sql.SessionCommandBegin(ctx.Session)
-		defer sql.SessionCommandEnd(ctx.Session)
 		dbs = dSess.Provider().AllDatabases(ctx)
 	}()
 	newStats = newRootStats()
@@ -207,7 +210,7 @@ func (sc *StatsController) newStatsForRoot(baseCtx context.Context, gcKv *memSta
 		}
 
 		var branches []ref.DoltRef
-		if err := sc.sq.DoSyncSessionAware(ctx, func() (err error) {
+		if err := sc.sq.DoSync(ctx, func() (err error) {
 			root, err := sqlDb.GetRoot(ctx)
 			if err != nil {
 				return err
@@ -236,7 +239,7 @@ func (sc *StatsController) newStatsForRoot(baseCtx context.Context, gcKv *memSta
 			}
 
 			var schDbs []sql.DatabaseSchema
-			if err := sc.sq.DoSyncSessionAware(ctx, func() (err error) {
+			if err := sc.sq.DoSync(ctx, func() (err error) {
 				schDbs, err = sqlDb.AllSchemas(ctx)
 				return err
 			}); err != nil {
@@ -250,7 +253,7 @@ func (sc *StatsController) newStatsForRoot(baseCtx context.Context, gcKv *memSta
 					continue
 				}
 				var tableNames []string
-				if err := sc.sq.DoSyncSessionAware(ctx, func() (err error) {
+				if err := sc.sq.DoSync(ctx, func() (err error) {
 					tableNames, err = sqlDb.GetTableNames(ctx)
 					return err
 				}); err != nil {
@@ -261,7 +264,7 @@ func (sc *StatsController) newStatsForRoot(baseCtx context.Context, gcKv *memSta
 				newStats.DbCnt++
 
 				for _, tableName := range tableNames {
-					err := sc.updateTable(ctx, newStats, tableName, sqlDb.(dsess.SqlDatabase), gcKv)
+					err = sc.updateTable(ctx, newStats, tableName, sqlDb.(dsess.SqlDatabase), gcKv)
 					if err != nil {
 						return nil, err
 					}
@@ -302,7 +305,7 @@ func (sc *StatsController) collectIndexNodes(ctx *sql.Context, prollyMap prolly.
 	firstNodeHash := nodes[0].HashOf()
 	lowerBound, ok := sc.GetBound(firstNodeHash, idxLen)
 	if !ok {
-		sc.sq.DoSyncSessionAware(ctx, func() (err error) {
+		if err := sc.sq.DoSync(ctx, func() (err error) {
 			lowerBound, err = firstRowForIndex(ctx, idxLen, prollyMap, keyBuilder)
 			if err != nil {
 				return fmt.Errorf("get histogram bucket for node; %w", err)
@@ -313,13 +316,15 @@ func (sc *StatsController) collectIndexNodes(ctx *sql.Context, prollyMap prolly.
 
 			sc.PutBound(firstNodeHash, lowerBound, idxLen)
 			return nil
-		})
+		}); err != nil {
+			return nil, nil, 0, err
+		}
 	}
 
 	var writes int
 	var offset uint64
 	for i := 0; i < len(nodes); {
-		err := sc.sq.DoSyncSessionAware(ctx, func() (err error) {
+		err := sc.sq.DoSync(ctx, func() (err error) {
 			newWrites := 0
 			for i < len(nodes) && newWrites < collectBatchSize {
 				n := nodes[i]
@@ -398,7 +403,7 @@ func (sc *StatsController) updateTable(ctx *sql.Context, newStats *rootStats, ta
 	var err error
 	var sqlTable *sqle.DoltTable
 	var dTab *doltdb.Table
-	if err := sc.sq.DoSyncSessionAware(ctx, func() (err error) {
+	if err := sc.sq.DoSync(ctx, func() (err error) {
 		sqlTable, dTab, err = GetLatestTable(ctx, tableName, sqlDb)
 		return err
 	}); err != nil {
@@ -428,7 +433,7 @@ func (sc *StatsController) updateTable(ctx *sql.Context, newStats *rootStats, ta
 	}
 
 	var indexes []sql.Index
-	if err := sc.sq.DoSyncSessionAware(ctx, func() (err error) {
+	if err := sc.sq.DoSync(ctx, func() (err error) {
 		indexes, err = sqlTable.GetIndexes(ctx)
 		return err
 	}); err != nil {
@@ -444,7 +449,7 @@ func (sc *StatsController) updateTable(ctx *sql.Context, newStats *rootStats, ta
 		var err error
 		var prollyMap prolly.Map
 		var template stats.Statistic
-		if sc.sq.DoSyncSessionAware(ctx, func() (err error) {
+		if sc.sq.DoSync(ctx, func() (err error) {
 			if strings.EqualFold(sqlIdx.ID(), "PRIMARY") {
 				idx, err = dTab.GetRowData(ctx)
 			} else {
@@ -464,7 +469,7 @@ func (sc *StatsController) updateTable(ctx *sql.Context, newStats *rootStats, ta
 			return nil
 		}); err != nil {
 			return err
-		} else if template.Fds.Empty() {
+		} else if template.Fds == nil || template.Fds.Empty() {
 			return fmt.Errorf("failed to creat template for %s/%s/%s/%s", sqlDb.Revision(), sqlDb.AliasedName(), tableName, sqlIdx.ID())
 		}
 
@@ -473,7 +478,7 @@ func (sc *StatsController) updateTable(ctx *sql.Context, newStats *rootStats, ta
 		idxLen := len(sqlIdx.Expressions())
 
 		var levelNodes []tree.Node
-		if err := sc.sq.DoSyncSessionAware(ctx, func() (err error) {
+		if err := sc.sq.DoSync(ctx, func() (err error) {
 			levelNodes, err = tree.GetHistogramLevel(ctx, prollyMap.Tuples(), bucketLowCnt)
 			if err != nil {
 				sc.descError("get level", err)
@@ -502,8 +507,6 @@ func (sc *StatsController) updateTable(ctx *sql.Context, newStats *rootStats, ta
 				return fmt.Errorf("GC interrupted updated")
 			}
 			if err := func() error {
-				sql.SessionCommandBegin(ctx.Session)
-				defer sql.SessionCommandEnd(ctx.Session)
 				schHash, _, err := sqlTable.IndexCacheKey(ctx)
 				if err != nil {
 					return err

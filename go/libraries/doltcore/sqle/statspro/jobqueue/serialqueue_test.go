@@ -282,8 +282,8 @@ func TestSerialQueue(t *testing.T) {
 		})
 		assert.NoError(t, err)
 		assert.NoError(t, queue.DoSync(context.Background(), func() error { return nil }))
-		// Both tasks eventually ran...
-		assert.Equal(t, cnt, 2)
+		// Only first task will run, second task canceled
+		assert.Equal(t, cnt, 1)
 		cancel()
 		wg.Wait()
 	})

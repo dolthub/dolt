@@ -29,6 +29,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statspro/jobqueue"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
@@ -37,6 +38,8 @@ import (
 
 var ErrIncompatibleVersion = errors.New("client stats version mismatch")
 
+const defaultMaxStatsPending = 64
+
 type StatsKv interface {
 	PutBucket(ctx context.Context, h hash.Hash, b *stats.Bucket, tupB *val.TupleBuilder) error
 	GetBucket(ctx context.Context, h hash.Hash, tupB *val.TupleBuilder) (*stats.Bucket, bool, error)
@@ -44,7 +47,7 @@ type StatsKv interface {
 	PutTemplate(key templateCacheKey, stat stats.Statistic)
 	GetBound(h hash.Hash, len int) (sql.Row, bool)
 	PutBound(h hash.Hash, r sql.Row, l int)
-	Flush(ctx context.Context) (int, error)
+	Flush(ctx context.Context, sq *jobqueue.SerialQueue) (int, error)
 	Len() int
 	GcGen() uint64
 }
@@ -174,7 +177,7 @@ func (m *memStats) GetBucket(_ context.Context, h hash.Hash, tupB *val.TupleBuil
 	return b, ok, nil
 }
 
-func (m *memStats) Flush(_ context.Context) (int, error) {
+func (m *memStats) Flush(context.Context, *jobqueue.SerialQueue) (int, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.gcFlusher != nil {
@@ -200,7 +203,7 @@ func NewProllyStats(ctx context.Context, destDb dsess.SqlDatabase) (*prollyStats
 		destDb: destDb,
 		kb:     keyBuilder,
 		vb:     valueBuilder,
-		m:      newMap.Mutate(),
+		m:      newMap.Mutate().WithMaxPending(defaultMaxStatsPending),
 		mem:    NewMemStats(),
 	}, nil
 }
@@ -296,21 +299,32 @@ func (p *prollyStats) GcGen() uint64 {
 	return p.mem.gcGen
 }
 
-func (p *prollyStats) LoadFromMem(ctx context.Context) error {
+func (p *prollyStats) LoadFromMem(ctx context.Context, sq *jobqueue.SerialQueue) error {
 	p.mem.mu.Lock()
 	defer p.mem.mu.Unlock()
 	for tb, keys := range p.mem.gcFlusher {
-		for _, key := range keys {
-			b, ok := p.mem.buckets[key]
-			if !ok {
-				return fmt.Errorf("memory KV inconsistent, missing bucket for: %s", key)
-			}
-			tupK, err := p.encodeHash(hash.New(key[:hash.ByteLen]), tb.Desc.Count())
-			tupV, err := p.encodeBucket(ctx, b, tb)
-			if err != nil {
-				return err
-			}
-			if err := p.m.Put(ctx, tupK, tupV); err != nil {
+		var i int
+		for i < len(keys) {
+			if err := sq.DoSync(ctx, func() error {
+				for j := 0; i < len(keys) && j < defaultMaxStatsPending; {
+					key := keys[i]
+					b, ok := p.mem.buckets[key]
+					if !ok {
+						return fmt.Errorf("memory KV inconsistent, missing bucket for: %s", key)
+					}
+					tupK, err := p.encodeHash(hash.New(key[:hash.ByteLen]), tb.Desc.Count())
+					tupV, err := p.encodeBucket(ctx, b, tb)
+					if err != nil {
+						return err
+					}
+					if err := p.m.Put(ctx, tupK, tupV); err != nil {
+						return err
+					}
+					i++
+					j++
+				}
+				return nil
+			}); err != nil {
 				return err
 			}
 		}
@@ -319,8 +333,8 @@ func (p *prollyStats) LoadFromMem(ctx context.Context) error {
 	return nil
 }
 
-func (p *prollyStats) Flush(ctx context.Context) (int, error) {
-	if err := p.LoadFromMem(ctx); err != nil {
+func (p *prollyStats) Flush(ctx context.Context, sq *jobqueue.SerialQueue) (int, error) {
+	if err := p.LoadFromMem(ctx, sq); err != nil {
 		return 0, err
 	}
 
@@ -335,7 +349,7 @@ func (p *prollyStats) Flush(ctx context.Context) (int, error) {
 		return 0, err
 	}
 
-	p.m = flushedMap.Mutate()
+	p.m = flushedMap.Mutate().WithMaxPending(defaultMaxStatsPending)
 
 	cnt, err := flushedMap.Count()
 	return cnt, err
@@ -457,7 +471,7 @@ func (p *prollyStats) NewEmpty(ctx context.Context) (StatsKv, error) {
 	if err != nil {
 		return nil, err
 	}
-	m := newMap.Mutate()
+	m := newMap.Mutate().WithMaxPending(defaultMaxStatsPending)
 	return &prollyStats{m: m, destDb: p.destDb, kb: p.kb, vb: p.vb}, nil
 }
 
@@ -523,7 +537,7 @@ func (sc *StatsController) PutBound(h hash.Hash, r sql.Row, l int) {
 	sc.kv.PutBound(h, r, l)
 }
 
-func (sc *StatsController) Flush(ctx context.Context) (int, error) {
+func (sc *StatsController) Flush(ctx context.Context, sq *jobqueue.SerialQueue) (int, error) {
 	sqlCtx, err := sc.ctxGen(ctx)
 	if err != nil {
 		return 0, err
@@ -535,7 +549,7 @@ func (sc *StatsController) Flush(ctx context.Context) (int, error) {
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
 	defer sc.signalListener(leFlush)
-	return sc.kv.Flush(sqlCtx)
+	return sc.kv.Flush(sqlCtx, sq)
 }
 
 func (sc *StatsController) Len() int {

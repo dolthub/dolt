@@ -25,6 +25,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statspro/jobqueue"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly/message"
@@ -154,9 +155,15 @@ func TestProllyKv(t *testing.T) {
 		require.Equal(t, 20, len(to.gcFlusher[tupB]))
 		require.Equal(t, 20, to.Len())
 
+		sq := jobqueue.NewSerialQueue()
+		defer sq.Stop()
+		go func() {
+			sq.Run(ctx)
+		}()
+
 		kv := newTestProllyKv(t, bthreads)
 		kv.mem = to
-		cnt, err := kv.Flush(ctx)
+		cnt, err := kv.Flush(ctx, sq)
 		require.NoError(t, err)
 		require.Equal(t, 20, cnt)
 	})
