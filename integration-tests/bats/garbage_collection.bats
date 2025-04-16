@@ -599,7 +599,7 @@ SQL
 
     run dolt gc --archive-level -1
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "invalid value for archive-level: -1" ]] || false ]]
+    [[ "$output" =~ "invalid value for archive-level: -1" ]] || false
 }
 
 @test "garbage_collection: dolt gc --archive-level 0" {
