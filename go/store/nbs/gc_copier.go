@@ -58,7 +58,7 @@ func newGarbageCollectionCopier(cmp chunks.GCArchiveLevel, tfp tableFilePersiste
 	case chunks.NoArchive:
 		writer, err = NewCmpChunkTableWriter("")
 	default:
-		return nil, fmt.Errorf("invalid archive level: %s", cmp)
+		return nil, fmt.Errorf("invalid archive level: %d", cmp)
 	}
 	if err != nil {
 		return nil, err
