@@ -17,7 +17,6 @@ package dfunctions
 import (
 	"errors"
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
@@ -25,6 +24,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
 
