@@ -271,18 +271,9 @@ func ConfigureServices(
 	InitAutoGCController := &svcs.AnonService{
 		InitF: func(context.Context) error {
 			if cfg.ServerConfig.AutoGCBehavior() != nil && cfg.ServerConfig.AutoGCBehavior().Enable() {
-
-				// NM4 - there has got to be a better way.
-				var cmp chunks.GCCompression
-				switch cfg.ServerConfig.AutoGCBehavior().ArchiveLevel() {
-				case 0:
-					cmp = chunks.OldSkhool
-				case 1:
-					cmp = chunks.NewSkhool
-				case 2:
-					cmp = chunks.FutureSkhool
-				default:
-					panic("invalid archive level")
+				cmp := chunks.GCArchiveLevel(cfg.ServerConfig.AutoGCBehavior().ArchiveLevel())
+				if cmp < chunks.NoArchive || cmp > chunks.MaxArchiveLevel {
+					return fmt.Errorf("invalid value for %s: %d", cli.ArchiveLevelParam, cmp)
 				}
 
 				config.AutoGCController = sqle.NewAutoGCController(cmp, lgr)

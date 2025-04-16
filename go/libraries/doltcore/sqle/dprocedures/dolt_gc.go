@@ -241,16 +241,16 @@ func doDoltGC(ctx *sql.Context, args []string) (int, error) {
 			mode = types.GCModeFull
 		}
 
-		cmpLvl := chunks.OldSkhool
+		cmpLvl := chunks.NoArchive
 		if apr.Contains(cli.ArchiveLevelParam) {
 			lvl, ok := apr.GetInt(cli.ArchiveLevelParam)
 			if !ok {
 				return cmdFailure, fmt.Errorf("parse error for value for %s: %s", cli.ArchiveLevelParam, apr.GetValues()[cli.ArchiveLevelParam])
 			}
-			if lvl < int(chunks.OldSkhool) || lvl > int(chunks.FutureSkhool) {
+			if lvl < int(chunks.NoArchive) || lvl > int(chunks.MaxArchiveLevel) {
 				return cmdFailure, fmt.Errorf("invalid value for %s: %d", cli.ArchiveLevelParam, lvl)
 			}
-			cmpLvl = chunks.GCCompression(lvl)
+			cmpLvl = chunks.GCArchiveLevel(lvl)
 		}
 
 		err := RunDoltGC(ctx, ddb, mode, cmpLvl, ctx.GetCurrentDatabase())
@@ -262,7 +262,7 @@ func doDoltGC(ctx *sql.Context, args []string) (int, error) {
 	return cmdSuccess, nil
 }
 
-func RunDoltGC(ctx *sql.Context, ddb *doltdb.DoltDB, mode types.GCMode, cmp chunks.GCCompression, dbname string) error {
+func RunDoltGC(ctx *sql.Context, ddb *doltdb.DoltDB, mode types.GCMode, cmp chunks.GCArchiveLevel, dbname string) error {
 	var sc types.GCSafepointController
 	if UseSessionAwareSafepointController {
 		dSess := dsess.DSessFromSess(ctx.Session)

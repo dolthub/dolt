@@ -198,7 +198,7 @@ type GarbageCollector interface {
 
 	// GC traverses the database starting at the Root and removes
 	// all unreferenced data from persistent storage.
-	GC(ctx context.Context, mode types.GCMode, cmp chunks.GCCompression, oldGenRefs, newGenRefs hash.HashSet, safepointController types.GCSafepointController) error
+	GC(ctx context.Context, mode types.GCMode, cmp chunks.GCArchiveLevel, oldGenRefs, newGenRefs hash.HashSet, safepointController types.GCSafepointController) error
 }
 
 // CanUsePuller returns true if a datas.Puller can be used to pull data from one Database into another.  Not all

@@ -49,13 +49,16 @@ type gcCopier struct {
 	tfp    tableFilePersister
 }
 
-func newGarbageCollectionCopier(cmp chunks.GCCompression, tfp tableFilePersister) (*gcCopier, error) {
+func newGarbageCollectionCopier(cmp chunks.GCArchiveLevel, tfp tableFilePersister) (*gcCopier, error) {
 	var writer GenericTableWriter
 	var err error
-	if cmp == chunks.NewSkhool { // NM4 - FutureSkhool too??? May need to group after?? Not sure how this is gonna work.
+	switch cmp {
+	case chunks.SimpleArchive:
 		writer, err = NewArchiveStreamWriter("")
-	} else {
+	case chunks.NoArchive:
 		writer, err = NewCmpChunkTableWriter("")
+	default:
+		return nil, fmt.Errorf("invalid archive level: %s", cmp)
 	}
 	if err != nil {
 		return nil, err

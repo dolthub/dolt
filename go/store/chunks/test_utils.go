@@ -91,7 +91,7 @@ func (s *TestStoreView) EndGC(mode GCMode) {
 	collector.EndGC(mode)
 }
 
-func (s *TestStoreView) MarkAndSweepChunks(ctx context.Context, getAddrs GetAddrsCurry, filter HasManyFunc, dest ChunkStore, mode GCMode, cmp GCCompression) (MarkAndSweeper, error) {
+func (s *TestStoreView) MarkAndSweepChunks(ctx context.Context, getAddrs GetAddrsCurry, filter HasManyFunc, dest ChunkStore, mode GCMode, cmp GCArchiveLevel) (MarkAndSweeper, error) {
 	collector, ok := s.ChunkStore.(ChunkStoreGarbageCollector)
 	if !ok || dest != s {
 		return nil, ErrUnsupportedOperation

@@ -547,7 +547,7 @@ type GCSafepointController interface {
 }
 
 // GC traverses the ValueStore from the root and removes unreferenced chunks from the ChunkStore
-func (lvs *ValueStore) GC(ctx context.Context, mode GCMode, cmp chunks.GCCompression, oldGenRefs, newGenRefs hash.HashSet, safepoint GCSafepointController) error {
+func (lvs *ValueStore) GC(ctx context.Context, mode GCMode, cmp chunks.GCArchiveLevel, oldGenRefs, newGenRefs hash.HashSet, safepoint GCSafepointController) error {
 	lvs.versOnce.Do(lvs.expectVersion)
 
 	lvs.transitionToOldGenGC()
@@ -718,7 +718,7 @@ func (lvs *ValueStore) gc(ctx context.Context,
 	toVisit hash.HashSet,
 	hashFilter chunks.HasManyFunc,
 	chksMode chunks.GCMode,
-	cmp chunks.GCCompression,
+	cmp chunks.GCArchiveLevel,
 	src, dest chunks.ChunkStoreGarbageCollector,
 	safepointController GCSafepointController,
 	finalize func() hash.HashSet) (chunks.GCFinalizer, error) {

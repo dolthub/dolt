@@ -208,13 +208,16 @@ const (
 	GCMode_Full
 )
 
-type GCCompression int
+type GCArchiveLevel int
 
-// NM4 - not sure why the types package is where we define stuff like this...
 const (
-	OldSkhool GCCompression = iota
-	NewSkhool
-	FutureSkhool
+	// NoArchive means that the GC process will write chunks into the classic table format with Snappy compression.
+	NoArchive GCArchiveLevel = iota
+	// SimpleArchive means that the GC process will write chunks into archives, using a single dictionary for all chunks.
+	SimpleArchive
+	// GroupedArchive means that the GC process will write chunks into archives, using chunk group dictionaries.
+	GroupedArchive
+	MaxArchiveLevel = SimpleArchive // Currently GroupedArchives are not supported in GC.
 )
 
 // ChunkStoreGarbageCollector is a ChunkStore that supports garbage collection.
@@ -245,7 +248,7 @@ type ChunkStoreGarbageCollector interface {
 	// filtered through the |filter| and their references are walked with
 	// |getAddrs|, each of those addresses being filtered and copied as
 	// well.
-	MarkAndSweepChunks(ctx context.Context, getAddrs GetAddrsCurry, filter HasManyFunc, dest ChunkStore, mode GCMode, cmp GCCompression) (MarkAndSweeper, error)
+	MarkAndSweepChunks(ctx context.Context, getAddrs GetAddrsCurry, filter HasManyFunc, dest ChunkStore, mode GCMode, cmp GCArchiveLevel) (MarkAndSweeper, error)
 
 	// Count returns the number of chunks in the store.
 	Count() (uint32, error)

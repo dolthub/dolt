@@ -53,16 +53,15 @@ type AutoGCController struct {
 	ctxF    func(context.Context) (*sql.Context, error)
 	threads *sql.BackgroundThreads
 
-	// NM4 - does config get stuffed in here???
-	cmpLevel chunks.GCCompression
+	arcLevel chunks.GCArchiveLevel
 }
 
-func NewAutoGCController(cmpLevel chunks.GCCompression, lgr *logrus.Logger) *AutoGCController {
+func NewAutoGCController(arcLevel chunks.GCArchiveLevel, lgr *logrus.Logger) *AutoGCController {
 	return &AutoGCController{
 		workCh:   make(chan autoGCWork),
 		lgr:      lgr,
 		hooks:    make(map[string]*autoGCCommitHook),
-		cmpLevel: cmpLevel,
+		arcLevel: arcLevel,
 	}
 }
 
@@ -155,7 +154,7 @@ func (c *AutoGCController) doWork(ctx context.Context, work autoGCWork, ctxF fun
 	defer sql.SessionEnd(sqlCtx.Session)
 	sql.SessionCommandBegin(sqlCtx.Session)
 	defer sql.SessionCommandEnd(sqlCtx.Session)
-	err = dprocedures.RunDoltGC(sqlCtx, work.db, types.GCModeDefault, c.cmpLevel, work.name)
+	err = dprocedures.RunDoltGC(sqlCtx, work.db, types.GCModeDefault, c.arcLevel, work.name)
 	if err != nil {
 		if !errors.Is(err, chunks.ErrNothingToCollect) {
 			c.lgr.Warnf("sqle/auto_gc: Attempt to auto GC database %s failed with error: %v", work.name, err)
