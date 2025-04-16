@@ -27,7 +27,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/go-mysql-server/eventscheduler"
 	"github.com/dolthub/go-mysql-server/server"
 	"github.com/dolthub/go-mysql-server/server/golden"
@@ -61,6 +60,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/svcs"
+	"github.com/dolthub/dolt/go/store/chunks"
 )
 
 const (

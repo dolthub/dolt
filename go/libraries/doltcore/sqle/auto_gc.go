@@ -21,6 +21,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/sirupsen/logrus"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dprocedures"
@@ -28,8 +31,6 @@ import (
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/types"
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/sirupsen/logrus"
 )
 
 // Auto GC is the ability of a running SQL server engine to perform

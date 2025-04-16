@@ -21,11 +21,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/datas"
 )
 
