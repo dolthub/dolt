@@ -19,10 +19,7 @@ import (
 	"strings"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions/commitwalk"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/dolt/go/store/hash"
-
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
 )
@@ -151,18 +148,41 @@ func (d *DivergeTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIt
 		if oErr != nil {
 			return nil, oErr
 		}
-		commit, isCommit := optCmt.ToCommit()
-		if !isCommit {
+		commit, optCommitOk := optCmt.ToCommit()
+		if !optCommitOk {
 			return nil, doltdb.ErrGhostCommitEncountered
 		}
 		commits[i] = commit
 	}
-	baseHash, err := commits[0].HashOf()
+
+	baseCommit := commits[0]
+	branchCommits := commits[1:]
+	baseHeight, err := baseCommit.Height()
 	if err != nil {
 		return nil, err
 	}
 
-	commitwalk.GetTopologicalOrderIterator(ctx, ddb, []hash.Hash{baseHash}, func(commit *doltdb.OptionalCommit) (bool, error) { return true, nil })
+	var rows []sql.Row
+	for i, branchCommit := range branchCommits {
+		branchHeight, bErr := branchCommit.Height()
+		if bErr != nil {
+			return nil, bErr
+		}
 
-	return nil, nil
+		ancOptCommit, ancErr := doltdb.GetCommitAncestor(ctx, baseCommit, branchCommit)
+		if ancErr != nil {
+			return nil, err
+		}
+		ancCommit, ancCommitOk := ancOptCommit.ToCommit()
+		if !ancCommitOk {
+			return nil, doltdb.ErrGhostCommitEncountered
+		}
+		ancHeight, _ := ancCommit.Height()
+
+		ahead := branchHeight - ancHeight
+		behind := baseHeight - ancHeight
+		rows = append(rows, sql.Row{specs[i+1], ahead, behind})
+	}
+
+	return sql.RowsToRowIter(rows...), nil
 }

@@ -4761,6 +4761,49 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 	},
 }
 
+var DivergeTableFunctionScriptTests = []queries.ScriptTest{
+	{
+		Name: "test dolt_diverge(...)",
+		SetUpScript: []string{
+			"call dolt_branch('b1');",
+			"call dolt_branch('b2');",
+			"call dolt_commit('-m', 'main', '--allow-empty');",
+
+			"call dolt_checkout('b2');",
+			"call dolt_commit('-m', 'b2', '--allow-empty');",
+
+			"call dolt_checkout('main');",
+			"call dolt_branch('b3');",
+			"call dolt_branch('b4');",
+			"call dolt_checkout('b4');",
+			"call dolt_commit('-m', 'b4', '--allow-empty');",
+
+			"call dolt_branch('b5');",
+			"call dolt_checkout('b5');",
+			"call dolt_commit('-m', 'b5', '--allow-empty');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "select * from dolt_diverge('main', 'main', 'b1', 'b2', 'b3', 'b4', 'b5');",
+				Expected: []sql.Row{
+					{"main", uint64(0), uint64(0)},
+					{"b1", uint64(0), uint64(1)},
+					{"b2", uint64(1), uint64(1)},
+					{"b3", uint64(0), uint64(0)},
+					{"b4", uint64(1), uint64(0)},
+					{"b5", uint64(2), uint64(0)},
+				},
+			},
+			{
+				Query: "select * from dolt_diverge('b2', 'b5');",
+				Expected: []sql.Row{
+					{"b5", uint64(3), uint64(1)},
+				},
+			},
+		},
+	},
+}
+
 var LargeJsonObjectScriptTests = []queries.ScriptTest{
 	{
 		Name: "JSON under max length limit",
