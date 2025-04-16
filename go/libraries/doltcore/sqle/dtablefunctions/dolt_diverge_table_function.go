@@ -33,8 +33,7 @@ type DivergeTableFunction struct {
 
 // NewInstance creates a new instance of TableFunction interface
 func (d *DivergeTableFunction) NewInstance(ctx *sql.Context, db sql.Database, args []sql.Expression) (sql.Node, error) {
-	if len(args) < 2 {
-		// TODO: should this just return empty set when there's one argument?
+	if len(args) < 1 {
 		return nil, sql.ErrInvalidArgumentNumber.New(d.Name(), "at least 2", len(args))
 	}
 	return &DivergeTableFunction{

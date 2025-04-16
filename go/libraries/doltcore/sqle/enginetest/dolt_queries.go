@@ -4784,6 +4784,18 @@ var DivergeTableFunctionScriptTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
+				Query:          "select * from dolt_diverge('main', 'non-existent-branch');",
+				ExpectedErrStr: "branch not found: non-existent-branch",
+			},
+			{
+				Query:       "select * from dolt_diverge();",
+				ExpectedErr: sql.ErrInvalidArgumentNumber,
+			},
+			{
+				Query:    "select * from dolt_diverge('main');",
+				Expected: []sql.Row{},
+			},
+			{
 				Query: "select * from dolt_diverge('main', 'main', 'b1', 'b2', 'b3', 'b4', 'b5');",
 				Expected: []sql.Row{
 					{"main", uint64(0), uint64(0)},
