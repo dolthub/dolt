@@ -110,7 +110,7 @@ func NewSqlEngine(
 	ctx = gcctx.WithGCSafepointController(ctx, gcSafepointController)
 
 	defer gcctx.SessionEnd(ctx)
-	gcctx.SessionCommandBegin(ctx, nil)
+	gcctx.SessionCommandBegin(ctx)
 	defer gcctx.SessionCommandEnd(ctx)
 
 	dbs, locations, err := CollectDBs(ctx, mrEnv, config.Bulk)

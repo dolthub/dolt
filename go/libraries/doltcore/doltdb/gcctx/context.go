@@ -59,7 +59,7 @@ func SessionEnd(ctx context.Context) {
 	state.controller.SessionEnd(state)
 }
 
-func SessionCommandBegin(ctx context.Context, cancel context.CancelFunc) {
+func SessionCommandBegin(ctx context.Context) {
 	state := ctx.Value(safepointControllerkey).(*ctxState)
 	state.controller.SessionCommandBegin(state)
 }

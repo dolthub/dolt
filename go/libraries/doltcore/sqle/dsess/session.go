@@ -1716,12 +1716,7 @@ func (d *DoltSession) CommandBegin() error {
 	}
 	return nil
 }
-func (d *DoltSession) CommandBeginWithCancel(cancel context.CancelFunc) error {
-	if d.gcSafepointController != nil {
-		return d.gcSafepointController.SessionCommandBegin(d)
-	}
-	return nil
-}
+
 func (d *DoltSession) CommandEnd() {
 	if d.gcSafepointController != nil {
 		d.gcSafepointController.SessionCommandEnd(d)
