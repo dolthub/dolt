@@ -113,9 +113,26 @@ func TestSchemaOverridesWithAdaptiveEncoding(t *testing.T) {
 
 // Convenience test for debugging a single query. Unskip and set to the desired query.
 func TestSingleScript(t *testing.T) {
-	t.Skip()
+	//t.Skip()
 
-	var scripts = []queries.ScriptTest{}
+	var scripts = []queries.ScriptTest{
+		{
+			Name: "test dolt_log",
+			SetUpScript: []string{
+				"call dolt_checkout('-b', 'b2');",
+				"call dolt_commit('--allow-empty', '-m', 'c1');",
+				"call dolt_branch('b1');",
+				"call dolt_commit('--allow-empty', '-m', 'c2');",
+				"call dolt_commit('--allow-empty', '-m', 'c3');",
+			},
+			Assertions: []queries.ScriptTestAssertion{
+				{
+					Query:    "select * from dolt_log('b1..b2');",
+					Expected: []sql.Row{},
+				},
+			},
+		},
+	}
 
 	for _, script := range scripts {
 		harness := newDoltHarness(t)
