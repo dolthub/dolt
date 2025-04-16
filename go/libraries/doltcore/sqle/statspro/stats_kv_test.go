@@ -156,8 +156,10 @@ func TestProllyKv(t *testing.T) {
 		require.Equal(t, 20, to.Len())
 
 		sq := jobqueue.NewSerialQueue()
-		sq.Run(ctx)
 		defer sq.Stop()
+		go func() {
+			sq.Run(ctx)
+		}()
 
 		kv := newTestProllyKv(t, bthreads)
 		kv.mem = to

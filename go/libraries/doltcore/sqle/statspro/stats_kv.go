@@ -328,9 +328,8 @@ func (p *prollyStats) LoadFromMem(ctx context.Context, sq *jobqueue.SerialQueue)
 				return err
 			}
 		}
-		p.mem.gcFlusher = nil
-		return nil
 	}
+	p.mem.gcFlusher = nil
 	return nil
 }
 
