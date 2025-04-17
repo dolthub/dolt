@@ -18,14 +18,14 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/dolthub/go-mysql-server/sql/expression"
+	"github.com/dolthub/go-mysql-server/sql"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-func literalAsInt64(literal *expression.Literal) (int64, error) {
-	v := literal.Value()
+func literalAsInt64(literal sql.LiteralExpression) (int64, error) {
+	v := literal.LiteralValue()
 	switch typedVal := v.(type) {
 	case bool:
 		if typedVal {
@@ -78,8 +78,8 @@ func literalAsInt64(literal *expression.Literal) (int64, error) {
 	return 0, errInvalidConversion.New(literal.String(), literal.Type().String(), "int64")
 }
 
-func literalAsUint64(literal *expression.Literal) (uint64, error) {
-	v := literal.Value()
+func literalAsUint64(literal sql.LiteralExpression) (uint64, error) {
+	v := literal.LiteralValue()
 	switch typedVal := v.(type) {
 	case bool:
 		if typedVal {
@@ -152,8 +152,8 @@ func literalAsUint64(literal *expression.Literal) (uint64, error) {
 	return 0, errInvalidConversion.New(literal.String(), literal.Type().String(), "int64")
 }
 
-func literalAsFloat64(literal *expression.Literal) (float64, error) {
-	v := literal.Value()
+func literalAsFloat64(literal sql.LiteralExpression) (float64, error) {
+	v := literal.LiteralValue()
 	switch typedVal := v.(type) {
 	case int:
 		return float64(typedVal), nil
@@ -186,8 +186,8 @@ func literalAsFloat64(literal *expression.Literal) (float64, error) {
 	return 0, errInvalidConversion.New(literal.String(), literal.Type().String(), "float64")
 }
 
-func literalAsBool(literal *expression.Literal) (bool, error) {
-	v := literal.Value()
+func literalAsBool(literal sql.LiteralExpression) (bool, error) {
+	v := literal.LiteralValue()
 	switch typedVal := v.(type) {
 	case bool:
 		return typedVal, nil
@@ -224,8 +224,8 @@ func literalAsBool(literal *expression.Literal) (bool, error) {
 	return false, errInvalidConversion.New(literal.String(), literal.Type().String(), "bool")
 }
 
-func literalAsString(literal *expression.Literal) (string, error) {
-	v := literal.Value()
+func literalAsString(literal sql.LiteralExpression) (string, error) {
+	v := literal.LiteralValue()
 	switch typedVal := v.(type) {
 	case string:
 		return typedVal, nil
@@ -257,8 +257,8 @@ func parseDate(s string) (time.Time, error) {
 	return time.Time{}, gmstypes.ErrConvertingToTime.New(s)
 }
 
-func literalAsTimestamp(literal *expression.Literal) (time.Time, error) {
-	v := literal.Value()
+func literalAsTimestamp(literal sql.LiteralExpression) (time.Time, error) {
+	v := literal.LiteralValue()
 	switch typedVal := v.(type) {
 	case time.Time:
 		return typedVal, nil
@@ -276,8 +276,8 @@ func literalAsTimestamp(literal *expression.Literal) (time.Time, error) {
 }
 
 // LiteralToNomsValue converts a go-mysql-servel Literal into a noms value.
-func LiteralToNomsValue(kind types.NomsKind, literal *expression.Literal) (types.Value, error) {
-	if literal.Value() == nil {
+func LiteralToNomsValue(kind types.NomsKind, literal sql.LiteralExpression) (types.Value, error) {
+	if literal.LiteralValue() == nil {
 		return types.NullValue, nil
 	}
 

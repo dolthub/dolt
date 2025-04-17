@@ -171,9 +171,9 @@ const (
 
 // GetComparisonType looks at a go-mysql-server BinaryExpression classifies the left and right arguments
 // as variables or constants.
-func GetComparisonType(be expression.BinaryExpression) ([]*expression.GetField, []*expression.Literal, ComparisonType, error) {
+func GetComparisonType(be expression.BinaryExpression) ([]*expression.GetField, []sql.LiteralExpression, ComparisonType, error) {
 	var variables []*expression.GetField
-	var consts []*expression.Literal
+	var consts []sql.LiteralExpression
 
 	for _, curr := range []sql.Expression{be.Left(), be.Right()} {
 		// need to remove this and handle properly
@@ -184,12 +184,12 @@ func GetComparisonType(be expression.BinaryExpression) ([]*expression.GetField, 
 		switch v := curr.(type) {
 		case *expression.GetField:
 			variables = append(variables, v)
-		case *expression.Literal:
+		case sql.LiteralExpression:
 			consts = append(consts, v)
 		case expression.Tuple:
 			children := v.Children()
 			for _, currChild := range children {
-				lit, ok := currChild.(*expression.Literal)
+				lit, ok := currChild.(sql.LiteralExpression)
 				if !ok {
 					return nil, nil, InvalidCompare, errUnsupportedComparisonType.New()
 				}

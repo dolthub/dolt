@@ -74,7 +74,7 @@ func newLookupKvIter(
 	excludeNulls bool,
 ) (*lookupJoinKvIter, error) {
 	if lit, ok := joinFilter.(*expression.Literal); ok {
-		if lit.Value() == true {
+		if lit.LiteralValue() == true {
 			joinFilter = nil
 		}
 	}
@@ -233,7 +233,7 @@ func newLookupKeyMapping(ctx context.Context, sourceSch schema.Schema, tgtKeyDes
 			} else {
 				srcMapping[i] = split + sourceSch.GetNonPKCols().TagToIdx[col.Tag]
 			}
-		case *expression.Literal:
+		case sql.LiteralExpression:
 			srcMapping[i] = -1
 			litMappings = append(litMappings, i)
 			litTypes = append(litTypes, tgtKeyDesc.Types[i])
@@ -242,7 +242,7 @@ func newLookupKeyMapping(ctx context.Context, sourceSch schema.Schema, tgtKeyDes
 	litDesc := val.NewTupleDescriptor(litTypes...)
 	litTb := val.NewTupleBuilder(litDesc, ns)
 	for i, j := range litMappings {
-		val := keyExprs[j].(*expression.Literal).Value()
+		val := keyExprs[j].(sql.LiteralExpression).LiteralValue()
 		val, _, err := typs[j].Type.Convert(ctx, val)
 		if err != nil {
 			return nil, err

@@ -242,8 +242,8 @@ func substituteWorkingHash(h hash.Hash, f []sql.Expression) []sql.Expression {
 	for i, e := range f {
 		ret[i], _, _ = transform.Expr(e, func(e sql.Expression) (sql.Expression, transform.TreeIdentity, error) {
 			switch e := e.(type) {
-			case *expression.Literal:
-				if str, isStr := e.Value().(string); isStr {
+			case sql.LiteralExpression:
+				if str, isStr := e.LiteralValue().(string); isStr {
 					if strings.EqualFold(str, doltdb.Working) || strings.EqualFold(str, doltdb.Staged) {
 						return expression.NewLiteral(h.String(), e.Type()), transform.NewTree, nil
 					}

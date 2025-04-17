@@ -128,7 +128,7 @@ func getIta(n sql.Node) (*plan.IndexedTableAccess, bool) {
 func simpleLookupExpressions(keyExprs []sql.Expression) bool {
 	for _, e := range keyExprs {
 		switch e.(type) {
-		case *expression.Literal, *expression.GetField:
+		case sql.LiteralExpression, *expression.GetField:
 		default:
 			return false
 		}
