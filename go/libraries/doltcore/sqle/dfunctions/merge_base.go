@@ -94,7 +94,6 @@ func (d MergeBase) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 	return mergeBase.String(), nil
 }
 
-// TODO: move this to resolve package
 func resolveRefSpec(ctx *sql.Context, headRef ref.DoltRef, doltDB *doltdb.DoltDB, spec string) (*doltdb.Commit, error) {
 	cs, err := doltdb.NewCommitSpec(spec)
 	if err != nil {
