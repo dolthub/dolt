@@ -17,8 +17,9 @@ package expreval
 import (
 	"context"
 
-	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/go-mysql-server/sql"
+
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 func compareLiterals(ctx *sql.Context, l1, l2 sql.LiteralExpression) (int, error) {
