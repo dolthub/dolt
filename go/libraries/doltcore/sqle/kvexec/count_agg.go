@@ -31,7 +31,7 @@ func newCountAggregationKvIter(srcIter prolly.MapIter, sch schema.Schema, e sql.
 	var isKeyRef bool
 
 	switch e := e.(type) {
-	case *expression.Literal:
+	case sql.LiteralExpression:
 		nullable = false
 	case *expression.GetField:
 		// name -> tag -> position in source key/val

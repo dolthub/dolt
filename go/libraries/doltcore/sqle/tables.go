@@ -191,7 +191,7 @@ func (t *DoltTable) LookupForExpressions(ctx *sql.Context, exprs ...sql.Expressi
 					}
 				}
 				if matched {
-					if err := rb.AddEquality(ctx, matchIdx, c2.Lit.Value()); err != nil {
+					if err := rb.AddEquality(ctx, matchIdx, c2.Lit.LiteralValue()); err != nil {
 						return sql.IndexLookup{}, nil, nil, false, nil
 					}
 				}
