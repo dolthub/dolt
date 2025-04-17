@@ -21,7 +21,7 @@ Dolt databases. We host public data for free. If you want to host
 your own version of DoltHub, we have [DoltLab](https://www.doltlab.com). 
 If you want us to run a Dolt server for you, we have [Hosted Dolt](https://hosted.doltdb.com). 
 
-Prefer Postgres instead of MySQL? Try [Doltgre](https://github.com/dolthub/doltgresql), now
+Prefer Postgres instead of MySQL? Try [Doltgres](https://github.com/dolthub/doltgresql), now
 in its Beta release.
 
 [Join us on Discord](https://discord.com/invite/RFwfYpu) to say hi and
