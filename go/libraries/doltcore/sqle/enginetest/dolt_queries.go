@@ -4781,6 +4781,12 @@ var BranchStatusTableFunctionScriptTests = []queries.ScriptTest{
 			"call dolt_branch('b5');",
 			"call dolt_checkout('b5');",
 			"call dolt_commit('-m', 'b5', '--allow-empty');",
+
+			"call dolt_tag('t1', 'b1');",
+			"call dolt_tag('t2', 'b2');",
+			"call dolt_tag('t3', 'b3');",
+			"call dolt_tag('t4', 'b4');",
+			"call dolt_tag('t5', 'b5');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -4807,9 +4813,28 @@ var BranchStatusTableFunctionScriptTests = []queries.ScriptTest{
 				},
 			},
 			{
+				Query: "select * from dolt_branch_status('main', 't1', 't2', 't3', 't4', 't5');",
+				Expected: []sql.Row{
+					{"t1", uint64(0), uint64(1)},
+					{"t2", uint64(1), uint64(1)},
+					{"t3", uint64(0), uint64(0)},
+					{"t4", uint64(1), uint64(0)},
+					{"t5", uint64(2), uint64(0)},
+				},
+			},
+			{
 				Query: "select * from dolt_branch_status('b2', 'b5');",
 				Expected: []sql.Row{
 					{"b5", uint64(3), uint64(1)},
+				},
+			},
+			{
+				Query: "select * from dolt_branch_status('main', 'b5', 'HEAD', 'HEAD~1', 'HEAD~2');",
+				Expected: []sql.Row{
+					{"b5", uint64(2), uint64(0)},
+					{"HEAD", uint64(2), uint64(0)},
+					{"HEAD~1", uint64(1), uint64(0)},
+					{"HEAD~2", uint64(0), uint64(0)},
 				},
 			},
 		},
