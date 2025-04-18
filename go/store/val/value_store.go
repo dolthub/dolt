@@ -185,7 +185,7 @@ func (b *ByteArray) UnwrapAny(ctx context.Context) (interface{}, error) {
 }
 
 // Unwrap implements sql.BytesWrapper
-func (b ByteArray) Unwrap(ctx context.Context) ([]byte, error) {
+func (b *ByteArray) Unwrap(ctx context.Context) ([]byte, error) {
 	return b.GetBytes(ctx)
 }
 
