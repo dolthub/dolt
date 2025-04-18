@@ -4761,9 +4761,9 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 	},
 }
 
-var DivergeTableFunctionScriptTests = []queries.ScriptTest{
+var BranchStatusTableFunctionScriptTests = []queries.ScriptTest{
 	{
-		Name: "test dolt_diverge(...)",
+		Name: "test dolt_branch_status(...)",
 		SetUpScript: []string{
 			"call dolt_branch('b1');",
 			"call dolt_branch('b2');",
@@ -4784,19 +4784,19 @@ var DivergeTableFunctionScriptTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:          "select * from dolt_diverge('main', 'non-existent-branch');",
+				Query:          "select * from dolt_branch_status('main', 'non-existent-branch');",
 				ExpectedErrStr: "branch not found: non-existent-branch",
 			},
 			{
-				Query:       "select * from dolt_diverge();",
+				Query:       "select * from dolt_branch_status();",
 				ExpectedErr: sql.ErrInvalidArgumentNumber,
 			},
 			{
-				Query:    "select * from dolt_diverge('main');",
+				Query:    "select * from dolt_branch_status('main');",
 				Expected: []sql.Row{},
 			},
 			{
-				Query: "select * from dolt_diverge('main', 'main', 'b1', 'b2', 'b3', 'b4', 'b5');",
+				Query: "select * from dolt_branch_status('main', 'main', 'b1', 'b2', 'b3', 'b4', 'b5');",
 				Expected: []sql.Row{
 					{"main", uint64(0), uint64(0)},
 					{"b1", uint64(0), uint64(1)},
@@ -4807,7 +4807,7 @@ var DivergeTableFunctionScriptTests = []queries.ScriptTest{
 				},
 			},
 			{
-				Query: "select * from dolt_diverge('b2', 'b5');",
+				Query: "select * from dolt_branch_status('b2', 'b5');",
 				Expected: []sql.Row{
 					{"b5", uint64(3), uint64(1)},
 				},

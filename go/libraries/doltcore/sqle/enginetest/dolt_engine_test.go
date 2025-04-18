@@ -1516,14 +1516,14 @@ func TestLogTableFunctionPrepared(t *testing.T) {
 	RunLogTableFunctionTestsPrepared(t, harness)
 }
 
-func TestDivergeTableFunction(t *testing.T) {
+func TestBranchStatusTableFunction(t *testing.T) {
 	harness := newDoltEnginetestHarness(t)
-	RunDivergeTableFunctionTests(t, harness)
+	RunBranchStatusTableFunctionTests(t, harness)
 }
 
-func TestDivergeTableFunctionPrepared(t *testing.T) {
+func TestBranchStatusTableFunctionPrepared(t *testing.T) {
 	harness := newDoltEnginetestHarness(t)
-	RunDivergeTableFunctionTestsPrepared(t, harness)
+	RunBranchStatusTableFunctionTestsPrepared(t, harness)
 }
 
 func TestDoltReflog(t *testing.T) {

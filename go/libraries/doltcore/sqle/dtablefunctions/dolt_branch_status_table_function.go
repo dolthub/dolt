@@ -16,50 +16,53 @@ package dtablefunctions
 
 import (
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions/commitwalk"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
-var _ sql.TableFunction = (*DivergeTableFunction)(nil)
+var _ sql.TableFunction = (*BranchStatusTableFunction)(nil)
 
-type DivergeTableFunction struct {
+type BranchStatusTableFunction struct {
 	db    sql.Database
 	exprs []sql.Expression
 }
 
 // NewInstance creates a new instance of TableFunction interface
-func (d *DivergeTableFunction) NewInstance(ctx *sql.Context, db sql.Database, args []sql.Expression) (sql.Node, error) {
+func (b *BranchStatusTableFunction) NewInstance(ctx *sql.Context, db sql.Database, args []sql.Expression) (sql.Node, error) {
 	if len(args) < 1 {
-		return nil, sql.ErrInvalidArgumentNumber.New(d.Name(), "at least 2", len(args))
+		return nil, sql.ErrInvalidArgumentNumber.New(b.Name(), "at least 2", len(args))
 	}
-	return &DivergeTableFunction{
+	return &BranchStatusTableFunction{
 		db:    db,
 		exprs: args,
 	}, nil
 }
 
 // Name implements the sql.Node interface
-func (d *DivergeTableFunction) Name() string {
-	return "DOLT_DIVERGE"
+func (b *BranchStatusTableFunction) Name() string {
+	return "DOLT_BRANCH_STATUS"
 }
 
 // String implements the Stringer interface
-func (d *DivergeTableFunction) String() string {
-	exprStrs := make([]string, len(d.exprs))
-	for i, expr := range d.exprs {
+func (b *BranchStatusTableFunction) String() string {
+	exprStrs := make([]string, len(b.exprs))
+	for i, expr := range b.exprs {
 		exprStrs[i] = expr.String()
 	}
-	return fmt.Sprintf("%s(%s)", d.Name(), strings.Join(exprStrs, ", "))
+	return fmt.Sprintf("%s(%s)", b.Name(), strings.Join(exprStrs, ", "))
 }
 
 // Resolved implements the sql.Resolvable interface
-func (d *DivergeTableFunction) Resolved() bool {
-	for _, expr := range d.exprs {
+func (b *BranchStatusTableFunction) Resolved() bool {
+	for _, expr := range b.exprs {
 		if !expr.Resolved() {
 			return false
 		}
@@ -68,36 +71,36 @@ func (d *DivergeTableFunction) Resolved() bool {
 }
 
 // Expressions implements the sql.Expressioner interface
-func (d *DivergeTableFunction) Expressions() []sql.Expression {
-	return d.exprs
+func (b *BranchStatusTableFunction) Expressions() []sql.Expression {
+	return b.exprs
 }
 
 // WithExpressions implements the sql.Expressioner interface
-func (d *DivergeTableFunction) WithExpressions(exprs ...sql.Expression) (sql.Node, error) {
-	nd := *d
+func (b *BranchStatusTableFunction) WithExpressions(exprs ...sql.Expression) (sql.Node, error) {
+	nd := *b
 	nd.exprs = exprs
 	return &nd, nil
 }
 
 // Database implements the sql.Databaser interface
-func (d *DivergeTableFunction) Database() sql.Database {
-	return d.db
+func (b *BranchStatusTableFunction) Database() sql.Database {
+	return b.db
 }
 
 // WithDatabase implements the sql.Databaser interface
-func (d *DivergeTableFunction) WithDatabase(db sql.Database) (sql.Node, error) {
-	nd := *d
+func (b *BranchStatusTableFunction) WithDatabase(db sql.Database) (sql.Node, error) {
+	nd := *b
 	nd.db = db
 	return &nd, nil
 }
 
 // IsReadOnly implements the sql.Node interface
-func (d *DivergeTableFunction) IsReadOnly() bool {
+func (b *BranchStatusTableFunction) IsReadOnly() bool {
 	return true
 }
 
 // Schema implements the sql.Node interface
-func (d *DivergeTableFunction) Schema() sql.Schema {
+func (b *BranchStatusTableFunction) Schema() sql.Schema {
 	return sql.Schema{
 		&sql.Column{Name: "branch", Type: types.Text, Nullable: false},
 		&sql.Column{Name: "commits_ahead", Type: types.Uint64, Nullable: false},
@@ -106,18 +109,18 @@ func (d *DivergeTableFunction) Schema() sql.Schema {
 }
 
 // Children implements the sql.Node interface
-func (d *DivergeTableFunction) Children() []sql.Node {
+func (b *BranchStatusTableFunction) Children() []sql.Node {
 	return nil
 }
 
 // WithChildren implements the sql.Node interface
-func (d *DivergeTableFunction) WithChildren(children ...sql.Node) (sql.Node, error) {
-	return d, nil
+func (b *BranchStatusTableFunction) WithChildren(children ...sql.Node) (sql.Node, error) {
+	return b, nil
 }
 
 // RowIter implements the sql.Node interface
-func (d *DivergeTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter, error) {
-	sqlDb, ok := d.db.(dsess.SqlDatabase)
+func (b *BranchStatusTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter, error) {
+	sqlDb, ok := b.db.(dsess.SqlDatabase)
 	if !ok {
 		return nil, fmt.Errorf("unable to get dolt database")
 	}
@@ -130,7 +133,7 @@ func (d *DivergeTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIt
 		return nil, err
 	}
 
-	specs, err := mustExpressionsToString(ctx, d.exprs)
+	specs, err := mustExpressionsToString(ctx, b.exprs)
 	if err != nil {
 		return nil, err
 	}
@@ -157,16 +160,22 @@ func (d *DivergeTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIt
 
 	baseCommit := commits[0]
 	branchCommits := commits[1:]
-	baseHeight, err := baseCommit.Height()
+
+	baseHash, err := baseCommit.HashOf()
 	if err != nil {
 		return nil, err
 	}
 
+	isNotGhostCommit := func(commit *doltdb.OptionalCommit) (bool, error) {
+		_, commitOk := commit.ToCommit()
+		return commitOk, nil
+	}
+
 	var rows []sql.Row
 	for i, branchCommit := range branchCommits {
-		branchHeight, bErr := branchCommit.Height()
-		if bErr != nil {
-			return nil, bErr
+		branchHash, hErr := branchCommit.HashOf()
+		if hErr != nil {
+			return nil, hErr
 		}
 
 		ancOptCommit, ancErr := doltdb.GetCommitAncestor(ctx, baseCommit, branchCommit)
@@ -177,10 +186,47 @@ func (d *DivergeTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIt
 		if !ancCommitOk {
 			return nil, doltdb.ErrGhostCommitEncountered
 		}
-		ancHeight, _ := ancCommit.Height()
+		ancHash, hErr := ancCommit.HashOf()
+		if hErr != nil {
+			return nil, hErr
+		}
 
-		ahead := branchHeight - ancHeight
-		behind := baseHeight - ancHeight
+		var ahead, behind uint64
+		if commitIter, iErr := commitwalk.GetTopologicalOrderIterator(ctx, ddb, []hash.Hash{branchHash}, isNotGhostCommit); iErr != nil {
+			return nil, iErr
+		} else {
+			for {
+				hash, _, cErr := commitIter.Next(ctx)
+				if cErr != nil {
+					if cErr == io.EOF {
+						break
+					}
+					return nil, err
+				}
+				if ancHash.Equal(hash) {
+					break
+				}
+				ahead++
+			}
+		}
+
+		if commitIter, iErr := commitwalk.GetTopologicalOrderIterator(ctx, ddb, []hash.Hash{baseHash}, isNotGhostCommit); iErr != nil {
+			return nil, iErr
+		} else {
+			for {
+				hash, _, cErr := commitIter.Next(ctx)
+				if cErr != nil {
+					if cErr == io.EOF {
+						break
+					}
+					return nil, err
+				}
+				if ancHash.Equal(hash) {
+					break
+				}
+				behind++
+			}
+		}
 		rows = append(rows, sql.Row{specs[i+1], ahead, behind})
 	}
 

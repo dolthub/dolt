@@ -1249,8 +1249,8 @@ func RunLogTableFunctionTestsPrepared(t *testing.T, harness DoltEnginetestHarnes
 	}
 }
 
-func RunDivergeTableFunctionTests(t *testing.T, harness DoltEnginetestHarness) {
-	for _, test := range DivergeTableFunctionScriptTests {
+func RunBranchStatusTableFunctionTests(t *testing.T, harness DoltEnginetestHarness) {
+	for _, test := range BranchStatusTableFunctionScriptTests {
 		t.Run(test.Name, func(t *testing.T) {
 			harness = harness.NewHarness(t)
 			defer harness.Close()
@@ -1261,8 +1261,8 @@ func RunDivergeTableFunctionTests(t *testing.T, harness DoltEnginetestHarness) {
 	}
 }
 
-func RunDivergeTableFunctionTestsPrepared(t *testing.T, harness DoltEnginetestHarness) {
-	for _, test := range DivergeTableFunctionScriptTests {
+func RunBranchStatusTableFunctionTestsPrepared(t *testing.T, harness DoltEnginetestHarness) {
+	for _, test := range BranchStatusTableFunctionScriptTests {
 		t.Run(test.Name, func(t *testing.T) {
 			harness = harness.NewHarness(t)
 			defer harness.Close()

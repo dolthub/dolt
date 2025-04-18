@@ -20,7 +20,7 @@ var DoltTableFunctions = []sql.TableFunction{
 	&DiffTableFunction{},
 	&DiffStatTableFunction{},
 	&DiffSummaryTableFunction{},
-	&DivergeTableFunction{},
+	&BranchStatusTableFunction{},
 	&LogTableFunction{},
 	&PatchTableFunction{},
 	&SchemaDiffTableFunction{},
