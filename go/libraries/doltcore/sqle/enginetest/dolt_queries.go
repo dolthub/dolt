@@ -16,14 +16,13 @@ package enginetest
 
 import (
 	"fmt"
-	"strings"
-
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/vt/sqlparser"
 	"github.com/google/uuid"
+	"strings"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtablefunctions"
 )
@@ -4763,6 +4762,19 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 
 var BranchStatusTableFunctionScriptTests = []queries.ScriptTest{
 	{
+		// * anc
+		// |\
+		// | * b1
+		// | |
+		// | * b2
+		// |
+		// * main
+		// \
+		//  * b3
+		//  |
+		//  * b4
+		//  \
+		//  * b5
 		Name: "test dolt_branch_status(...)",
 		SetUpScript: []string{
 			"call dolt_branch('b1');",
@@ -4835,6 +4847,92 @@ var BranchStatusTableFunctionScriptTests = []queries.ScriptTest{
 					{"HEAD", uint64(2), uint64(0)},
 					{"HEAD~1", uint64(1), uint64(0)},
 					{"HEAD~2", uint64(0), uint64(0)},
+				},
+			},
+		},
+	},
+	{
+		// * -----------
+		// |\            \
+		// | * b1c1       * b2c1
+		// | |            |
+		// | * b2c2 (b1)  * b2c2
+		// |              |
+		// * m1           * b2c3 (b2)
+		// |
+		// * m2 (main)
+		Name: "test dolt_branch_status with merge",
+		SetUpScript: []string{
+			"call dolt_branch('b1');",
+			"call dolt_branch('b2');",
+			"call dolt_commit('-m', 'm1', '--allow-empty');",
+			"call dolt_commit('-m', 'm2', '--allow-empty');",
+
+			"call dolt_checkout('b1');",
+			"call dolt_commit('-m', 'b1c1', '--allow-empty');",
+			"call dolt_commit('-m', 'b1c2', '--allow-empty');",
+
+			"call dolt_checkout('b2');",
+			"call dolt_commit('-m', 'b2c1', '--allow-empty');",
+			"call dolt_commit('-m', 'b2c2', '--allow-empty');",
+			"call dolt_commit('-m', 'b2c3', '--allow-empty');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "select * from dolt_branch_status('main', 'b1', 'b2');",
+				Expected: []sql.Row{
+					{"b1", uint64(2), uint64(2)},
+					{"b2", uint64(3), uint64(2)},
+				},
+			},
+			{
+				Query: "select * from dolt_branch_status('b1', 'b2');",
+				Expected: []sql.Row{
+					{"b2", uint64(3), uint64(2)},
+				},
+			},
+			{
+				SkipResultsCheck: true,
+				Query:            "call dolt_merge('b1')", // merge b1 into b2
+			},
+			{
+				// * ------------
+				// |\            \
+				// | \            \
+				// |  * b1c1       * b2c1
+				// |  |            |
+				// |  * b2c2 (b1)  * b1c1
+				// |               |
+				// * m1            * b2c2 (b1)
+				// |               |
+				// |               * b1c2
+				// |               |
+				// |               * b2c3
+				// |               |
+				// |               * merge b1 (b2)
+				// * m2 (main)
+				Query: "select message from dolt_log;",
+				Expected: []sql.Row{
+					{"Merge branch 'b1' into b2"},
+					{"b2c3"},
+					{"b1c2"},
+					{"b2c2"},
+					{"b1c1"},
+					{"b2c1"},
+					{"Initialize data repository"},
+				},
+			},
+			{
+				Query: "select * from dolt_branch_status('main', 'b1', 'b2');",
+				Expected: []sql.Row{
+					{"b1", uint64(2), uint64(2)},
+					{"b2", uint64(6), uint64(2)},
+				},
+			},
+			{
+				Query: "select * from dolt_branch_status('b1', 'b2');",
+				Expected: []sql.Row{
+					{"b2", uint64(2), uint64(0)},
 				},
 			},
 		},
