@@ -17,6 +17,9 @@ package commands
 import (
 	"context"
 
+	"github.com/gocraft/dbr/v2"
+	"github.com/gocraft/dbr/v2/dialect"
+
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
@@ -103,7 +106,7 @@ func (cmd GarbageCollectionCmd) Exec(ctx context.Context, commandStr string, arg
 		defer closeFunc()
 	}
 
-	query, err := constructDoltGCQuery(apr)
+	query, err := cmd.constructDoltGCQuery(apr)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
@@ -117,16 +120,37 @@ func (cmd GarbageCollectionCmd) Exec(ctx context.Context, commandStr string, arg
 }
 
 // constructDoltGCQuery generates the sql query necessary to call DOLT_GC()
-func constructDoltGCQuery(apr *argparser.ArgParseResults) (string, error) {
-	query := "call DOLT_GC("
+func (cmd GarbageCollectionCmd) constructDoltGCQuery(apr *argparser.ArgParseResults) (string, error) {
+	var params []interface{}
+
+	extraFlag := ""
 	if apr.Contains(cli.ShallowFlag) {
-		query += "'--shallow'"
+		extraFlag = "--shallow"
+	} else if apr.Contains(cli.FullFlag) {
+		extraFlag = "--full"
 	}
-	if apr.Contains(cli.FullFlag) {
-		query += "'--full'"
+
+	archiveLevel := chunks.NoArchive
+	if apr.Contains(cli.ArchiveLevelParam) {
+		lvl, ok := apr.GetInt(cli.ArchiveLevelParam)
+		if !ok {
+			return "", errhand.BuildDError("Invalid Argument: --archive-level must be an integer").SetPrintUsage().Build()
+		}
+		// validation is done in the procedure.
+		archiveLevel = chunks.GCArchiveLevel(lvl)
 	}
-	query += ")"
-	return query, nil
+
+	params = append(params, archiveLevel)
+
+	query := "CALL DOLT_GC('--archive-level', ?"
+	if extraFlag != "" {
+		query += ", ?)"
+		params = append(params, extraFlag)
+	} else {
+		query += ")"
+	}
+
+	return dbr.InterpolateForDialect(query, params, dialect.MySQL)
 }
 
 func MaybeMigrateEnv(ctx context.Context, dEnv *env.DoltEnv) (*env.DoltEnv, error) {

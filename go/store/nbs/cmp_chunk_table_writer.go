@@ -58,6 +58,8 @@ type GenericTableWriter interface {
 	GetMD5() []byte
 	// Remove cleans up and artifacts created by the table writer. Called after everything else is done.
 	Remove() error
+	// Terminate the inprogress write and attempt to cleanup any resources.
+	Cancel() error
 }
 
 const defaultTableSinkBlockSize = 2 * 1024 * 1024

@@ -1896,12 +1896,12 @@ func (nbs *NomsBlockStore) beginRead() (endRead func()) {
 	return nil
 }
 
-func (nbs *NomsBlockStore) MarkAndSweepChunks(ctx context.Context, getAddrs chunks.GetAddrsCurry, filter chunks.HasManyFunc, dest chunks.ChunkStore, mode chunks.GCMode) (chunks.MarkAndSweeper, error) {
+func (nbs *NomsBlockStore) MarkAndSweepChunks(ctx context.Context, getAddrs chunks.GetAddrsCurry, filter chunks.HasManyFunc, dest chunks.ChunkStore, mode chunks.GCMode, cmp chunks.GCArchiveLevel) (chunks.MarkAndSweeper, error) {
 	valctx.ValidateContext(ctx)
-	return markAndSweepChunks(ctx, nbs, nbs, dest, getAddrs, filter, mode)
+	return markAndSweepChunks(ctx, nbs, nbs, dest, getAddrs, filter, mode, cmp)
 }
 
-func markAndSweepChunks(ctx context.Context, nbs *NomsBlockStore, src CompressedChunkStoreForGC, dest chunks.ChunkStore, getAddrs chunks.GetAddrsCurry, filter chunks.HasManyFunc, mode chunks.GCMode) (chunks.MarkAndSweeper, error) {
+func markAndSweepChunks(_ context.Context, nbs *NomsBlockStore, src CompressedChunkStoreForGC, dest chunks.ChunkStore, getAddrs chunks.GetAddrsCurry, filter chunks.HasManyFunc, mode chunks.GCMode, cmp chunks.GCArchiveLevel) (chunks.MarkAndSweeper, error) {
 	ops := nbs.SupportedOperations()
 	if !ops.CanGC || !ops.CanPrune {
 		return nil, chunks.ErrUnsupportedOperation
@@ -1949,7 +1949,7 @@ func markAndSweepChunks(ctx context.Context, nbs *NomsBlockStore, src Compressed
 		return nil, fmt.Errorf("NBS does not support copying garbage collection")
 	}
 
-	gcc, err := newGarbageCollectionCopier(tfp)
+	gcc, err := newGarbageCollectionCopier(cmp, tfp)
 	if err != nil {
 		return nil, err
 	}

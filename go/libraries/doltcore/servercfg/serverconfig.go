@@ -74,6 +74,7 @@ const (
 	DefaultMySQLUnixSocketFilePath   = "/tmp/mysql.sock"
 	DefaultMaxLoggedQueryLen         = 0
 	DefaultEncodeLoggedQuery         = false
+	DefaultCompressionLevel          = 0
 )
 
 func ptr[T any](t T) *T {
@@ -239,7 +240,8 @@ func defaultServerConfigYAML() *YAMLConfig {
 			AutoCommit:            ptr(DefaultAutoCommit),
 			DoltTransactionCommit: ptr(DefaultDoltTransactionCommit),
 			AutoGCBehavior: &AutoGCBehaviorYAMLConfig{
-				Enable_: ptr(DefaultAutoGCBehaviorEnable),
+				Enable_:       ptr(DefaultAutoGCBehaviorEnable),
+				ArchiveLevel_: ptr(DefaultCompressionLevel),
 			},
 		},
 		UserConfig: UserYAMLConfig{
@@ -484,4 +486,5 @@ func CheckForUnixSocket(config ServerConfig) (string, bool, error) {
 
 type AutoGCBehavior interface {
 	Enable() bool
+	ArchiveLevel() int
 }

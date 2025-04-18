@@ -53,13 +53,16 @@ type AutoGCController struct {
 	hooks   map[string]*autoGCCommitHook
 	ctxF    func(context.Context) (*sql.Context, error)
 	threads *sql.BackgroundThreads
+
+	arcLevel chunks.GCArchiveLevel
 }
 
-func NewAutoGCController(lgr *logrus.Logger) *AutoGCController {
+func NewAutoGCController(arcLevel chunks.GCArchiveLevel, lgr *logrus.Logger) *AutoGCController {
 	return &AutoGCController{
-		workCh: make(chan autoGCWork),
-		lgr:    lgr,
-		hooks:  make(map[string]*autoGCCommitHook),
+		workCh:   make(chan autoGCWork),
+		lgr:      lgr,
+		hooks:    make(map[string]*autoGCCommitHook),
+		arcLevel: arcLevel,
 	}
 }
 
@@ -152,7 +155,7 @@ func (c *AutoGCController) doWork(ctx context.Context, work autoGCWork, ctxF fun
 	defer sql.SessionEnd(sqlCtx.Session)
 	sql.SessionCommandBegin(sqlCtx.Session)
 	defer sql.SessionCommandEnd(sqlCtx.Session)
-	err = dprocedures.RunDoltGC(sqlCtx, work.db, types.GCModeDefault, work.name)
+	err = dprocedures.RunDoltGC(sqlCtx, work.db, types.GCModeDefault, c.arcLevel, work.name)
 	if err != nil {
 		if !errors.Is(err, chunks.ErrNothingToCollect) {
 			c.lgr.Warnf("sqle/auto_gc: Attempt to auto GC database %s failed with error: %v", work.name, err)

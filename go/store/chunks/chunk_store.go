@@ -208,6 +208,18 @@ const (
 	GCMode_Full
 )
 
+type GCArchiveLevel int
+
+const (
+	// NoArchive means that the GC process will write chunks into the classic table format with Snappy compression.
+	NoArchive GCArchiveLevel = iota
+	// SimpleArchive means that the GC process will write chunks into archives, using a single dictionary for all chunks.
+	SimpleArchive
+	// GroupedArchive means that the GC process will write chunks into archives, using chunk group dictionaries.
+	GroupedArchive
+	MaxArchiveLevel = SimpleArchive // Currently GroupedArchives are not supported in GC.
+)
+
 // ChunkStoreGarbageCollector is a ChunkStore that supports garbage collection.
 type ChunkStoreGarbageCollector interface {
 	ChunkStore
@@ -236,7 +248,7 @@ type ChunkStoreGarbageCollector interface {
 	// filtered through the |filter| and their references are walked with
 	// |getAddrs|, each of those addresses being filtered and copied as
 	// well.
-	MarkAndSweepChunks(ctx context.Context, getAddrs GetAddrsCurry, filter HasManyFunc, dest ChunkStore, mode GCMode) (MarkAndSweeper, error)
+	MarkAndSweepChunks(ctx context.Context, getAddrs GetAddrsCurry, filter HasManyFunc, dest ChunkStore, mode GCMode, cmp GCArchiveLevel) (MarkAndSweeper, error)
 
 	// Count returns the number of chunks in the store.
 	Count() (uint32, error)

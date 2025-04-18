@@ -201,7 +201,7 @@ func TestGC(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotNil(v2)
 
-	err = vs.GC(ctx, GCModeDefault, hash.HashSet{}, hash.HashSet{}, purgingSafepointController{vs})
+	err = vs.GC(ctx, GCModeDefault, chunks.NoArchive, hash.HashSet{}, hash.HashSet{}, purgingSafepointController{vs})
 	require.NoError(t, err)
 
 	v1, err = vs.ReadValue(ctx, h1) // non-nil

@@ -30,6 +30,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/gcctx"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -166,6 +167,9 @@ type sessionAwareSafepointController struct {
 
 	waiter *gcctx.GCSafepointWaiter
 	keeper func(hash.Hash) bool
+
+	// NM4 - Maybe here???
+	cmpLvl int
 }
 
 func (sc *sessionAwareSafepointController) visit(ctx context.Context, sess gcctx.GCRootsProvider) error {
@@ -232,12 +236,24 @@ func doDoltGC(ctx *sql.Context, args []string) (int, error) {
 			return cmdFailure, err
 		}
 	} else {
-		var mode types.GCMode = types.GCModeDefault
+		mode := types.GCModeDefault
 		if apr.Contains(cli.FullFlag) {
 			mode = types.GCModeFull
 		}
 
-		err := RunDoltGC(ctx, ddb, mode, ctx.GetCurrentDatabase())
+		cmpLvl := chunks.NoArchive
+		if apr.Contains(cli.ArchiveLevelParam) {
+			lvl, ok := apr.GetInt(cli.ArchiveLevelParam)
+			if !ok {
+				return cmdFailure, fmt.Errorf("parse error for value for %s: %s", cli.ArchiveLevelParam, apr.GetValues()[cli.ArchiveLevelParam])
+			}
+			if lvl < int(chunks.NoArchive) || lvl > int(chunks.MaxArchiveLevel) {
+				return cmdFailure, fmt.Errorf("invalid value for %s: %d", cli.ArchiveLevelParam, lvl)
+			}
+			cmpLvl = chunks.GCArchiveLevel(lvl)
+		}
+
+		err := RunDoltGC(ctx, ddb, mode, cmpLvl, ctx.GetCurrentDatabase())
 		if err != nil {
 			return cmdFailure, err
 		}
@@ -246,7 +262,7 @@ func doDoltGC(ctx *sql.Context, args []string) (int, error) {
 	return cmdSuccess, nil
 }
 
-func RunDoltGC(ctx *sql.Context, ddb *doltdb.DoltDB, mode types.GCMode, dbname string) error {
+func RunDoltGC(ctx *sql.Context, ddb *doltdb.DoltDB, mode types.GCMode, cmp chunks.GCArchiveLevel, dbname string) error {
 	var sc types.GCSafepointController
 	if UseSessionAwareSafepointController {
 		dSess := dsess.DSessFromSess(ctx.Session)
@@ -280,5 +296,5 @@ func RunDoltGC(ctx *sql.Context, ddb *doltdb.DoltDB, mode types.GCMode, dbname s
 			doltDB:    ddb,
 		}
 	}
-	return ddb.GC(ctx, mode, sc)
+	return ddb.GC(ctx, mode, cmp, sc)
 }

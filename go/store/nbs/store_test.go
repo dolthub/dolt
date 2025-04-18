@@ -339,7 +339,7 @@ func TestNBSCopyGC(t *testing.T) {
 	noopFilter := func(ctx context.Context, hashes hash.HashSet) (hash.HashSet, error) {
 		return hashes, nil
 	}
-	sweeper, err := st.MarkAndSweepChunks(ctx, noopGetAddrs, noopFilter, nil, chunks.GCMode_Full)
+	sweeper, err := st.MarkAndSweepChunks(ctx, noopGetAddrs, noopFilter, nil, chunks.GCMode_Full, chunks.NoArchive)
 	require.NoError(t, err)
 	keepersSlice := make([]hash.Hash, 0, len(keepers))
 	for h := range keepers {

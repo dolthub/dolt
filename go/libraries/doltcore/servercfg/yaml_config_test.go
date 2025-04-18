@@ -36,6 +36,7 @@ behavior:
     event_scheduler: ON
     auto_gc_behavior:
         enable: false
+        archive_level: 0
 
 listener:
     host: localhost

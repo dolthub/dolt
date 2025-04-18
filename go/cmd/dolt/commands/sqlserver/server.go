@@ -60,6 +60,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/svcs"
+	"github.com/dolthub/dolt/go/store/chunks"
 )
 
 const (
@@ -269,9 +270,13 @@ func ConfigureServices(
 
 	InitAutoGCController := &svcs.AnonService{
 		InitF: func(context.Context) error {
-			if cfg.ServerConfig.AutoGCBehavior() != nil &&
-				cfg.ServerConfig.AutoGCBehavior().Enable() {
-				config.AutoGCController = sqle.NewAutoGCController(lgr)
+			if cfg.ServerConfig.AutoGCBehavior() != nil && cfg.ServerConfig.AutoGCBehavior().Enable() {
+				cmp := chunks.GCArchiveLevel(cfg.ServerConfig.AutoGCBehavior().ArchiveLevel())
+				if cmp < chunks.NoArchive || cmp > chunks.MaxArchiveLevel {
+					return fmt.Errorf("invalid value for %s: %d", cli.ArchiveLevelParam, cmp)
+				}
+
+				config.AutoGCController = sqle.NewAutoGCController(cmp, lgr)
 			}
 			return nil
 		},

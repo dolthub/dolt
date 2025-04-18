@@ -296,6 +296,7 @@ func CreateGCArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithMaxArgs("gc", 0)
 	ap.SupportsFlag(ShallowFlag, "s", "perform a fast, but incomplete garbage collection pass")
 	ap.SupportsFlag(FullFlag, "f", "perform a full garbage collection, including the old generation")
+	ap.SupportsInt(ArchiveLevelParam, "", "archive compression level", "Specify the archive compression level garbage collection results. Default is 0. Max is 2")
 	return ap
 }
 
