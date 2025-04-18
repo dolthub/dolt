@@ -16,13 +16,14 @@ package enginetest
 
 import (
 	"fmt"
+	"strings"
+
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/vt/sqlparser"
 	"github.com/google/uuid"
-	"strings"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtablefunctions"
 )
