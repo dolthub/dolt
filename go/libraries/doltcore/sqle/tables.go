@@ -2998,6 +2998,8 @@ func toReferentialAction(opt doltdb.ForeignKeyReferentialAction) sql.ForeignKeyR
 		return sql.ForeignKeyReferentialAction_Restrict
 	case doltdb.ForeignKeyReferentialAction_SetNull:
 		return sql.ForeignKeyReferentialAction_SetNull
+	case doltdb.ForeignKeyReferentialAction_SetDefault:
+		return sql.ForeignKeyReferentialAction_SetDefault
 	default:
 		panic(fmt.Sprintf("Unhandled foreign key referential action %v", opt))
 	}
@@ -3016,7 +3018,7 @@ func ParseFkReferentialAction(refOp sql.ForeignKeyReferentialAction) (doltdb.For
 	case sql.ForeignKeyReferentialAction_SetNull:
 		return doltdb.ForeignKeyReferentialAction_SetNull, nil
 	case sql.ForeignKeyReferentialAction_SetDefault:
-		return doltdb.ForeignKeyReferentialAction_DefaultAction, sql.ErrForeignKeySetDefault.New()
+		return doltdb.ForeignKeyReferentialAction_SetDefault, nil
 	default:
 		return doltdb.ForeignKeyReferentialAction_DefaultAction, fmt.Errorf("unknown foreign key referential action: %v", refOp)
 	}
