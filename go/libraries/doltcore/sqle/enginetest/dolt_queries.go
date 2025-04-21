@@ -4938,6 +4938,86 @@ var BranchStatusTableFunctionScriptTests = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		//      * anc
+		//      |\
+		// "C1" * \---- * "C7"
+		//      |       |
+		// "C2" *       |
+		//      |       |
+		// "C3" * t1    |
+		//      |\      |
+		//      | \---- * t2 "M1"
+		//      |       |
+		// "C4" *       * b1 "C8"
+		//      |\     /
+		// "C5" * \   /
+		//      |   * b2 "M2"
+		//      |
+		// "C6" * main
+
+		Name: "test dolt_branch_status(...)",
+		SetUpScript: []string{
+			"call dolt_tag('anc', 'HEAD');",
+			"call dolt_branch('b1');",
+			"call dolt_commit('-m', 'C1', '--allow-empty');",
+			"call dolt_commit('-m', 'C2', '--allow-empty');",
+			"call dolt_commit('-m', 'C3', '--allow-empty');",
+			"call dolt_tag('t1', 'HEAD');",
+			"call dolt_commit('-m', 'C4', '--allow-empty');",
+			"call dolt_branch('b2');",
+			"call dolt_commit('-m', 'C5', '--allow-empty');",
+			"call dolt_commit('-m', 'C6', '--allow-empty');",
+
+			"call dolt_checkout('b1');",
+			"call dolt_commit('-m', 'C7', '--allow-empty');",
+			"call dolt_merge('t1', '-m', 'M1');",
+			"call dolt_tag('t2', 'HEAD');",
+			"call dolt_commit('-m', 'C8', '--allow-empty');",
+
+			"call dolt_checkout('b2');",
+			"call dolt_merge('b1', '-m', 'M2');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "select * from dolt_branch_status('main', 'b2');",
+				Expected: []sql.Row{
+					{"b2", uint64(1), uint64(2)}, // Currently Failing here.
+				},
+			},
+			{
+				Query: "select * from dolt_branch_status('main', 'b1');",
+				Expected: []sql.Row{
+					{"b1", uint64(2), uint64(3)},
+				},
+			},
+			{
+				Query: "select * from dolt_branch_status('anc', 'b2');",
+				Expected: []sql.Row{
+					{"b2", uint64(8), uint64(0)},
+				},
+			},
+			{
+				Query: "select * from dolt_branch_status('b2', 'anc');",
+				Expected: []sql.Row{
+					{"anc", uint64(0), uint64(8)},
+				},
+			},
+			{
+				Query: "select * from dolt_branch_status('t1', 'anc', 't2','t2~1', 'main', 'b1', 'b2', 'b2^1', 'b2^2' );",
+				Expected: []sql.Row{
+					{"anc", uint64(0), uint64(3)},
+					{"t2", uint64(1), uint64(0)},
+					{"t2~1", uint64(1), uint64(3)},
+					{"main", uint64(3), uint64(0)},
+					{"b1", uint64(2), uint64(0)},
+					{"b2", uint64(4), uint64(0)},
+					{"b2^1", uint64(1), uint64(0)},
+					{"b2^2", uint64(2), uint64(0)},
+				},
+			},
+		},
+	},
 }
 
 var LargeJsonObjectScriptTests = []queries.ScriptTest{
