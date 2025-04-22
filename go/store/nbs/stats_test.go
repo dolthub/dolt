@@ -147,6 +147,16 @@ func TestStats(t *testing.T) {
 	_, err = store.Commit(context.Background(), h, h)
 	require.NoError(t, err)
 
+	waitForConjoin(store)
+
 	assert.Equal(uint64(1), stats(store).ConjoinLatency.Samples())
 	// TODO: Once random conjoin hack is out, test other conjoin stats
+}
+
+func waitForConjoin(nbs *NomsBlockStore) {
+	nbs.mu.Lock()
+	defer nbs.mu.Unlock()
+	for nbs.conjoinOp != nil {
+		nbs.conjoinOpCond.Wait()
+	}
 }

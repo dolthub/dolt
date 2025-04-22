@@ -213,9 +213,12 @@ func TestNBSPruneTableFiles(t *testing.T) {
 	}, st.refCheck)
 	require.NoError(t, err)
 	require.True(t, ok)
+
 	ok, err = st.Commit(ctx, st.upstream.root, st.upstream.root)
 	require.True(t, ok)
 	require.NoError(t, err)
+
+	waitForConjoin(st)
 
 	_, sources, _, err := st.Sources(ctx)
 	require.NoError(t, err)
