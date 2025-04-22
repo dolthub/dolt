@@ -167,9 +167,6 @@ type sessionAwareSafepointController struct {
 
 	waiter *gcctx.GCSafepointWaiter
 	keeper func(hash.Hash) bool
-
-	// NM4 - Maybe here???
-	cmpLvl int
 }
 
 func (sc *sessionAwareSafepointController) visit(ctx context.Context, sess gcctx.GCRootsProvider) error {
