@@ -112,6 +112,9 @@ func (res *ArgParseResults) GetValue(name string) (string, bool) {
 
 func (res *ArgParseResults) GetValueList(name string) ([]string, bool) {
 	val, ok := res.options[name]
+	if !ok {
+		return nil, false
+	}
 	return strings.Split(val, ","), ok
 }
 
