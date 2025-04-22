@@ -64,6 +64,11 @@ func (sc *StatsController) runWorker(ctx context.Context) (err error) {
 		// This loops tries to update stats as long as context
 		// is active. Thread contexts governs who "owns" the update
 		// process. The generation counters ensure atomic swapping.
+		select {
+		case <-ctx.Done():
+			return context.Cause(ctx)
+		default:
+		}
 
 		gcKv = nil
 		genStart := sc.genCnt.Load()
@@ -81,12 +86,7 @@ func (sc *StatsController) runWorker(ctx context.Context) (err error) {
 
 		newStats, err = sc.newStatsForRoot(ctx, gcKv)
 		if errors.Is(err, context.Canceled) {
-			select {
-			case <-ctx.Done():
-				return nil
-			default:
-				continue
-			}
+			continue
 		} else if err != nil {
 			sc.descError("", err)
 		}
@@ -101,14 +101,6 @@ func (sc *StatsController) runWorker(ctx context.Context) (err error) {
 			lastSuccessfulStats = newStats
 			sc.logger.Tracef("stats successful swap: %s\n", newStats.String())
 		}
-
-		select {
-		case <-ctx.Done():
-			// is double check necessary?
-			return context.Cause(ctx)
-		default:
-		}
-
 	}
 }
 
@@ -197,10 +189,7 @@ func (sc *StatsController) newStatsForRoot(baseCtx context.Context, gcKv *memSta
 	defer sql.SessionCommandEnd(ctx.Session)
 
 	dSess := dsess.DSessFromSess(ctx.Session)
-	var dbs []sql.Database
-	func() {
-		dbs = dSess.Provider().AllDatabases(ctx)
-	}()
+	dbs := dSess.Provider().AllDatabases(ctx)
 	newStats = newRootStats()
 	digest := xxhash.New()
 	for _, db := range dbs {
