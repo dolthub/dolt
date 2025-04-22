@@ -381,7 +381,7 @@ func getBlobAddrHash(ctx context.Context, ns NodeStore, v interface{}) (h hash.H
 	if !isBytesWrapper {
 		return hash.Hash{}, fmt.Errorf("expected implementation of sql.BytesWrapper, got %T", v)
 	}
-	if byteArray, isByteArray := v.(val.ByteArray); isByteArray {
+	if byteArray, isByteArray := v.(*val.ByteArray); isByteArray {
 		return byteArray.Addr, nil
 	}
 	b, err := bytesWrapper.Unwrap(ctx)
@@ -401,7 +401,7 @@ func getStringAddrHash(ctx context.Context, ns NodeStore, v interface{}) (h hash
 	if !isStringWrapper {
 		return hash.Hash{}, fmt.Errorf("expected implementation of sql.StringWrapper, got %T", v)
 	}
-	if textStorage, isTextStorage := v.(val.TextStorage); isTextStorage {
+	if textStorage, isTextStorage := v.(*val.TextStorage); isTextStorage {
 		return textStorage.Addr, nil
 	}
 	s, err := stringWrapper.Unwrap(ctx)

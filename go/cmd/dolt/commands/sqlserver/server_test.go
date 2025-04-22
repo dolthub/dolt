@@ -594,6 +594,7 @@ func TestGenerateYamlConfig(t *testing.T) {
   # event_scheduler: "OFF"
   # auto_gc_behavior:
     # enable: false
+    # archive_level: 0
 
 listener:
   # host: localhost

@@ -92,7 +92,7 @@ func getUnscopedDoltDiffSchema(dbName, tableName string) sql.Schema {
 		{Name: "table_name", Type: types.Text, Source: tableName, PrimaryKey: true, DatabaseSource: dbName},
 		{Name: "committer", Type: types.Text, Source: tableName, PrimaryKey: false, DatabaseSource: dbName},
 		{Name: "email", Type: types.Text, Source: tableName, PrimaryKey: false, DatabaseSource: dbName},
-		{Name: "date", Type: types.Datetime, Source: tableName, PrimaryKey: false, DatabaseSource: dbName},
+		{Name: "date", Type: types.DatetimeMaxPrecision, Source: tableName, PrimaryKey: false, DatabaseSource: dbName},
 		{Name: "message", Type: types.Text, Source: tableName, PrimaryKey: false, DatabaseSource: dbName},
 		{Name: "data_change", Type: types.Boolean, Source: tableName, PrimaryKey: false, DatabaseSource: dbName},
 		{Name: "schema_change", Type: types.Boolean, Source: tableName, PrimaryKey: false, DatabaseSource: dbName},
