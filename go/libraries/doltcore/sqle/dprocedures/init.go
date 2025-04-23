@@ -15,9 +15,10 @@
 package dprocedures
 
 import (
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dprocedures/admin"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dprocedures/admin"
 )
 
 var DoltProcedures = []sql.ExternalStoredProcedureDetails{
