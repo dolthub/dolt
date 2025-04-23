@@ -185,6 +185,12 @@ func (sc *StatsController) SetTimers(job, gc int64) {
 	sc.gcInterval = time.Duration(gc)
 }
 
+func (sc *StatsController) newGcTicker() *time.Ticker {
+	sc.mu.Lock()
+	defer sc.mu.Unlock()
+	return time.NewTicker(sc.gcInterval)
+}
+
 func (sc *StatsController) AddFs(ctx *sql.Context, db dsess.SqlDatabase, fs filesys.Filesys, rotateOk bool) error {
 	sc.mu.Lock()
 	defer sc.mu.Unlock()

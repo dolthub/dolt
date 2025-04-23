@@ -18,15 +18,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/cespare/xxhash/v2"
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/stats"
 	"io"
 	"log"
 	"runtime/debug"
 	"strings"
-	"time"
-
-	"github.com/cespare/xxhash/v2"
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/stats"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
@@ -59,7 +57,7 @@ func (sc *StatsController) runWorker(ctx context.Context) (err error) {
 	var gcKv *memStats
 	var newStats *rootStats
 	var lastSuccessfulStats *rootStats
-	gcTicker := time.NewTicker(sc.gcInterval)
+	gcTicker := sc.newGcTicker()
 	for {
 		// This loops tries to update stats as long as context
 		// is active. Thread contexts governs who "owns" the update
