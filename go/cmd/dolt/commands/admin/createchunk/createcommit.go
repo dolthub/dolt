@@ -17,15 +17,16 @@ package createchunk
 import (
 	"bytes"
 	"context"
-
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/gocraft/dbr/v2"
-	"github.com/gocraft/dbr/v2/dialect"
+	"errors"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 // CreateCommitCmd creates a new commit chunk, printing the new chunk's hash on success.
@@ -121,7 +122,7 @@ func (cmd CreateCommitCmd) ArgParser() *argparser.ArgParser {
 	return cli.CreateCreateCommitParser()
 }
 
-func (cmd CreateCommitCmd) Exec(ctx context.Context, commandStr string, args []string, _ *env.DoltEnv, cliCtx cli.CliContext) int {
+func (cmd CreateCommitCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	ap := cmd.ArgParser()
 	usage, _ := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, cli.CommandDocumentationContent{}, ap))
 
@@ -133,39 +134,94 @@ func (cmd CreateCommitCmd) Exec(ctx context.Context, commandStr string, args []s
 		return 1
 	}
 
-	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
-	if err != nil {
-		cli.PrintErrln(errhand.VerboseErrorFromError(err))
-		return 1
-	}
-	if closeFunc != nil {
-		defer closeFunc()
+	desc, _ := apr.GetValue("desc")
+	root, _ := apr.GetValue("root")
+	parents, _ := apr.GetValueList("parents")
+	branch, isBranchSet := apr.GetValue(cli.BranchParam)
+	force := apr.Contains(cli.ForceFlag)
+
+	var name, email string
+	var err error
+	if authorStr, ok := apr.GetValue(cli.AuthorParam); ok {
+		name, email, err = cli.ParseAuthor(authorStr)
+		if err != nil {
+			cli.PrintErrln(errhand.VerboseErrorFromError(err))
+			return 1
+		}
+	} else {
+		name, email, err = env.GetNameAndEmail(cliCtx.Config())
+		if err != nil {
+			cli.PrintErrln(errhand.VerboseErrorFromError(err))
+			return 1
+		}
 	}
 
-	querySql, params, err := generateCreateCommitSQL(cliCtx, apr)
-	if err != nil {
-		cli.PrintErrln(errhand.VerboseErrorFromError(err))
-		return 1
-	}
-	interpolatedQuery, err := dbr.InterpolateForDialect(querySql, params, dialect.MySQL)
-	if err != nil {
-		cli.PrintErrln(errhand.VerboseErrorFromError(err))
-		return 1
-	}
-
-	_, rowIter, _, err := queryist.Query(sqlCtx, interpolatedQuery)
-	if err != nil {
-		cli.PrintErrln(errhand.VerboseErrorFromError(err))
-		return 1
-	}
-
-	rows, err := sql.RowIterToRows(sqlCtx, rowIter)
-	if err != nil {
-		cli.PrintErrln(errhand.VerboseErrorFromError(err))
+	db := dEnv.DbData(ctx).Ddb
+	commitRootHash, ok := hash.MaybeParse(root)
+	if !ok {
+		cli.PrintErrf("invalid root value hash")
 		return 1
 	}
 
-	cli.Println(rows[0][0])
+	var parentCommits []hash.Hash
+	for _, parent := range parents {
+		commitSpec, err := doltdb.NewCommitSpec(parent)
+		if err != nil {
+			cli.PrintErrln(errhand.VerboseErrorFromError(err))
+			return 1
+		}
+
+		headRef := dEnv.RepoState.CWBHeadRef()
+
+		optionalCommit, err := db.Resolve(ctx, commitSpec, headRef)
+		if err != nil {
+			cli.PrintErrln(errhand.VerboseErrorFromError(err))
+			return 1
+		}
+		parentCommits = append(parentCommits, optionalCommit.Addr)
+	}
+
+	commitMeta, err := datas.NewCommitMeta(name, email, desc)
+	if err != nil {
+		cli.PrintErrln(errhand.VerboseErrorFromError(err))
+		return 1
+	}
+
+	// This isn't technically an amend, but the Amend field controls whether the commit must be a child of the ref's current commit (if any)
+	commitOpts := datas.CommitOptions{
+		Parents: parentCommits,
+		Meta:    commitMeta,
+		Amend:   force,
+	}
+
+	rootVal, err := db.ValueReadWriter().ReadValue(ctx, commitRootHash)
+	if err != nil {
+		cli.PrintErrln(errhand.VerboseErrorFromError(err))
+		return 1
+	}
+
+	var commit *doltdb.Commit
+	if isBranchSet {
+		commit, err = db.CommitValue(ctx, ref.NewBranchRef(branch), rootVal, commitOpts)
+		if errors.Is(err, datas.ErrMergeNeeded) {
+			cli.PrintErrf("branch %s already exists. If you wish to overwrite it, add the --force flag", branch)
+			return 1
+		}
+	} else {
+		commit, err = db.CommitDangling(ctx, rootVal, commitOpts)
+	}
+	if err != nil {
+		cli.PrintErrln(errhand.VerboseErrorFromError(err))
+		return 1
+	}
+
+	commitHash, err := commit.HashOf()
+	if err != nil {
+		cli.PrintErrln(errhand.VerboseErrorFromError(err))
+		return 1
+	}
+
+	cli.Println(commitHash.String())
 
 	return 0
 }

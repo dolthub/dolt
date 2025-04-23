@@ -17,8 +17,6 @@ package dprocedures
 import (
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
-
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dprocedures/admin"
 )
 
 var DoltProcedures = []sql.ExternalStoredProcedureDetails{
@@ -59,8 +57,6 @@ var DoltProcedures = []sql.ExternalStoredProcedureDetails{
 	{Name: "dolt_stats_once", Schema: statsFuncSchema, Function: statsFunc(statsOnce)},
 	{Name: "dolt_stats_gc", Schema: statsFuncSchema, Function: statsFunc(statsGc)},
 	{Name: "dolt_stats_timers", Schema: statsFuncSchema, Function: statsFunc(statsTimers)},
-
-	{Name: "dolt_admin_createchunk_commit", Schema: stringSchema("hash"), Function: admin.CreateCommit},
 }
 
 // stringSchema returns a non-nullable schema with all columns as LONGTEXT.
