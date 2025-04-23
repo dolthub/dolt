@@ -230,7 +230,7 @@ func reportPkChanges(ctx context.Context, vMapping val.OrdinalMapping, fromD, to
 	case tree.RemovedDiff:
 		stat.Removes++
 	case tree.ModifiedDiff:
-		stat.CellChanges = prollyCountCellDiff(ctx, vMapping, fromD, toD, val.Tuple(change.From), val.Tuple(change.To))
+		stat.CellChanges = prollyCountCellDiff(ctx, vMapping, fromD, toD, val.Tuple(change.From), val.Tuple(change.To()))
 		stat.Changes++
 	default:
 		return errors.New("unknown change type")
@@ -248,14 +248,14 @@ func reportKeylessChanges(ctx context.Context, vMapping val.OrdinalMapping, from
 	var n, n2 uint64
 	switch change.Type {
 	case tree.AddedDiff:
-		n, _ = toD.GetUint64(0, val.Tuple(change.To))
+		n, _ = toD.GetUint64(0, val.Tuple(change.To()))
 		stat.Adds += n
 	case tree.RemovedDiff:
 		n, _ = fromD.GetUint64(0, val.Tuple(change.From))
 		stat.Removes += n
 	case tree.ModifiedDiff:
 		n, _ = fromD.GetUint64(0, val.Tuple(change.From))
-		n2, _ = toD.GetUint64(0, val.Tuple(change.To))
+		n2, _ = toD.GetUint64(0, val.Tuple(change.To()))
 		if n < n2 {
 			stat.Adds += n2 - n
 		} else {

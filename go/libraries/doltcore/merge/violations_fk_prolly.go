@@ -205,7 +205,7 @@ func prollyChildPriDiffFkConstraintViolations(
 	err = prolly.DiffMaps(ctx, preChildRowData, postChildRowData, considerAllRowsModified, func(ctx context.Context, diff tree.Diff) error {
 		switch diff.Type {
 		case tree.AddedDiff, tree.ModifiedDiff:
-			k, v := val.Tuple(diff.Key), val.Tuple(diff.To)
+			k, v := val.Tuple(diff.Key), val.Tuple(diff.To())
 			partialKey, hasNulls, err := makePartialKey(
 				partialKB,
 				foreignKey.TableColumns,

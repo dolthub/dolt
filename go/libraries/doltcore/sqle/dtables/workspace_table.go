@@ -693,7 +693,7 @@ func getWorkspaceTableRow(
 	idx := 3
 
 	if dif.Type != tree.RemovedDiff {
-		err = toConverter.PutConverted(ctx, val.Tuple(dif.Key), val.Tuple(dif.To), row[idx:idx+tLen])
+		err = toConverter.PutConverted(ctx, val.Tuple(dif.Key), val.Tuple(dif.To()), row[idx:idx+tLen])
 		if err != nil {
 			return nil, err
 		}
@@ -787,12 +787,12 @@ func (itr *workspaceDiffIter) makeWorkspaceRows(
 	if keyless {
 		switch d.Type {
 		case tree.AddedDiff:
-			n = val.ReadKeylessCardinality(val.Tuple(d.To))
+			n = val.ReadKeylessCardinality(val.Tuple(d.To()))
 		case tree.RemovedDiff:
 			n = val.ReadKeylessCardinality(val.Tuple(d.From))
 		case tree.ModifiedDiff:
 			fN := val.ReadKeylessCardinality(val.Tuple(d.From))
-			tN := val.ReadKeylessCardinality(val.Tuple(d.To))
+			tN := val.ReadKeylessCardinality(val.Tuple(d.To()))
 			if fN < tN {
 				n = tN - fN
 				d.Type = tree.AddedDiff

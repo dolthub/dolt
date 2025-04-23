@@ -413,7 +413,7 @@ func (b *binlogProducer) createRowEvents(ctx *sql.Context, tableDeltas []diff.Ta
 			switch diffType {
 			case tree.AddedDiff:
 				data, nullBitmap, err := serializeRowToBinlogBytes(ctx,
-					sch, diff.Key, diff.To, tableDelta.ToTable.NodeStore())
+					sch, diff.Key, diff.To(), tableDelta.ToTable.NodeStore())
 				if err != nil {
 					return err
 				}
@@ -426,7 +426,7 @@ func (b *binlogProducer) createRowEvents(ctx *sql.Context, tableDeltas []diff.Ta
 
 			case tree.ModifiedDiff:
 				data, nullColumns, err := serializeRowToBinlogBytes(ctx,
-					sch, diff.Key, diff.To, tableDelta.ToTable.NodeStore())
+					sch, diff.Key, diff.To(), tableDelta.ToTable.NodeStore())
 				if err != nil {
 					return err
 				}
@@ -585,7 +585,7 @@ func extractRowCountAndDiffType(sch schema.Schema, diff tree.Diff) (rowCount uin
 	vd := sch.GetValueDescriptor(nil)
 	switch diff.Type {
 	case tree.AddedDiff:
-		toRowCount, notNull := vd.GetUint64(0, val.Tuple(diff.To))
+		toRowCount, notNull := vd.GetUint64(0, val.Tuple(diff.To()))
 		if !notNull {
 			return 0, 0, fmt.Errorf(
 				"row count for a keyless table row cannot be null")
@@ -601,7 +601,7 @@ func extractRowCountAndDiffType(sch schema.Schema, diff tree.Diff) (rowCount uin
 		return fromRowCount, diff.Type, nil
 
 	case tree.ModifiedDiff:
-		toRowCount, notNull := vd.GetUint64(0, val.Tuple(diff.To))
+		toRowCount, notNull := vd.GetUint64(0, val.Tuple(diff.To()))
 		if !notNull {
 			return 0, 0, fmt.Errorf(
 				"row count for a keyless table row cannot be null")

@@ -20,6 +20,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/store/prolly/message"
 	"io"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -124,20 +126,48 @@ func mergeProllyTable(
 func mergeProllyTableData(ctx *sql.Context, tm *TableMerger, finalSch schema.Schema, mergeTbl *doltdb.Table, valueMerger *valueMerger, mergeInfo MergeInfo, diffInfo tree.ThreeWayDiffInfo) (*doltdb.Table, *MergeStats, error) {
 	ns := tm.ns
 
-	iter, err := threeWayDiffer(ctx, tm, valueMerger, diffInfo)
-	if err != nil {
-		return nil, nil, err
-	}
+	mergeInfo.InvalidateSecondaryIndexes = true
+
+	// iter, err := threeWayDiffer(ctx, tm, valueMerger, diffInfo)
+	// if err != nil {
+	// 	return nil, nil, err
+	// }
 
 	lr, err := tm.leftTbl.GetRowData(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
-	lIdx, err := durable.ProllyMapFromIndex(lr)
+	leftRows, err := durable.ProllyMapFromIndex(lr)
 	if err != nil {
 		return nil, nil, err
 	}
-	leftEditor := lIdx.Rewriter(finalSch.GetKeyDescriptor(ns), finalSch.GetValueDescriptor(ns))
+
+	rr, err := tm.rightTbl.GetRowData(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	rightRows, err := durable.ProllyMapFromIndex(rr)
+	if err != nil {
+		return nil, nil, err
+	}
+	ar, err := tm.ancTbl.GetRowData(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	ancRows, err := durable.ProllyMapFromIndex(ar)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// lr, err := tm.leftTbl.GetRowData(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	// lIdx, err := durable.ProllyMapFromIndex(lr)
+	if err != nil {
+		return nil, nil, err
+	}
+	// leftEditor := lIdx.Rewriter(finalSch.GetKeyDescriptor(ns), finalSch.GetValueDescriptor(ns))
 
 	ai, err := mergeTbl.GetArtifacts(ctx)
 	if err != nil {
@@ -145,14 +175,14 @@ func mergeProllyTableData(ctx *sql.Context, tm *TableMerger, finalSch schema.Sch
 	}
 	artEditor := durable.ProllyMapFromArtifactIndex(ai).Editor()
 
-	keyless := schema.IsKeyless(tm.leftSch)
+	// keyless := schema.IsKeyless(tm.leftSch)
 
-	defaults, err := resolveDefaults(ctx, tm.name.Name, finalSch, tm.leftSch)
+	// defaults, err := resolveDefaults(ctx, tm.name.Name, finalSch, tm.leftSch)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	pri, err := newPrimaryMerger(leftEditor, tm, valueMerger, finalSch, mergeInfo, defaults)
+	// pri, err := newPrimaryMerger(leftEditor, tm, valueMerger, finalSch, mergeInfo, defaults)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -165,143 +195,174 @@ func mergeProllyTableData(ctx *sql.Context, tm *TableMerger, finalSch schema.Sch
 		return nil, nil, err
 	}
 
-	checkValidator, err := newCheckValidator(ctx, tm, valueMerger, finalSch, artEditor)
+	serializer := message.NewProllyMapSerializer(finalSch.GetValueDescriptor(ns), ns.Pool())
+
+	mergedMap, mergeStats, err := tree.MergeOrderedTrees(ctx, leftRows.Tuples(), rightRows.Tuples(), ancRows.Tuples(), nil, diffInfo.LeftSchemaChange, diffInfo.RightSchemaChange, serializer)
 	if err != nil {
 		return nil, nil, err
 	}
-
-	// validator shares an artifact editor with conflict merge
-	uniq, err := newUniqValidator(ctx, finalSch, tm, valueMerger, artEditor)
-	if err != nil {
-		return nil, nil, err
+	leftHash := leftRows.Tuples().HashOf()
+	cli.Println(leftHash)
+	mergedHash := mergedMap.HashOf()
+	cli.Println(mergedHash)
+	// What about conflicts and constraint violations?
+	s := MergeStats{
+		Operation:            0,
+		Adds:                 mergeStats.Adds,
+		Deletes:              mergeStats.Removes,
+		Modifications:        mergeStats.Modifications,
+		DataConflicts:        0,
+		SchemaConflicts:      0,
+		ConstraintViolations: 0,
 	}
 
-	nullChk, err := newNullValidator(ctx, finalSch, tm, valueMerger, artEditor, leftEditor, sec.leftIdxes)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	s := &MergeStats{
-		Operation: TableModified,
-	}
-	for {
-		diff, err := iter.Next(ctx)
-		if errors.Is(err, io.EOF) {
-			break
-		} else if err != nil {
-			return nil, nil, err
-		}
-		cnt, err := uniq.validateDiff(ctx, diff)
+	finalRows := durable.IndexFromProllyMap(prolly.NewMap(mergedMap.Root, ns, finalSch.GetKeyDescriptor(ns), finalSch.GetValueDescriptor(ns)))
+	/*
+		checkValidator, err := newCheckValidator(ctx, tm, valueMerger, finalSch, artEditor)
 		if err != nil {
 			return nil, nil, err
 		}
-		s.ConstraintViolations += cnt
 
-		cnt, err = nullChk.validateDiff(ctx, diff)
+		// validator shares an artifact editor with conflict merge
+		uniq, err := newUniqValidator(ctx, finalSch, tm, valueMerger, artEditor)
 		if err != nil {
 			return nil, nil, err
 		}
-		s.ConstraintViolations += cnt
-		if cnt > 0 {
-			continue
-		}
 
-		cnt, err = checkValidator.validateDiff(ctx, diff)
+		nullChk, err := newNullValidator(ctx, finalSch, tm, valueMerger, artEditor, leftEditor, sec.leftIdxes)
 		if err != nil {
 			return nil, nil, err
 		}
-		s.ConstraintViolations += cnt
 
-		switch diff.Op {
-		case tree.DiffOpLeftAdd, tree.DiffOpLeftModify:
-			// In the event that the right side introduced a schema change, account for it here.
-			// We still have to migrate when the diff is `tree.DiffOpLeftModify` because of the corner case where
-			// the right side contains a schema change but the changed column is null, so row bytes don't change.
-			err = pri.merge(ctx, diff, tm.leftSch)
-			if err != nil {
-				return nil, nil, err
-			}
+	*/
 
-		case tree.DiffOpDivergentModifyConflict, tree.DiffOpDivergentDeleteConflict:
-			// In this case, a modification or delete was made to one side, and a conflicting delete or modification
-			// was made to the other side, so these cannot be automatically resolved.
-			s.DataConflicts++
-			err = conflicts.merge(ctx, diff, nil)
-			if err != nil {
-				return nil, nil, err
+	/*
+			s := &MergeStats{
+				Operation: TableModified,
 			}
-			err = pri.merge(ctx, diff, tm.leftSch)
-			if err != nil {
-				return nil, nil, err
-			}
-		case tree.DiffOpRightAdd:
-			s.Adds++
-			err = pri.merge(ctx, diff, tm.rightSch)
-			if err != nil {
-				return nil, nil, err
-			}
-			err = sec.merge(ctx, diff, tm.leftSch, tm.rightSch, tm, finalSch)
-			if err != nil {
-				return nil, nil, err
-			}
-		case tree.DiffOpRightModify:
-			s.Modifications++
-			err = pri.merge(ctx, diff, tm.rightSch)
-			if err != nil {
-				return nil, nil, err
-			}
-			err = sec.merge(ctx, diff, tm.leftSch, tm.rightSch, tm, finalSch)
-			if err != nil {
-				return nil, nil, err
-			}
-		case tree.DiffOpRightDelete, tree.DiffOpDivergentDeleteResolved:
-			s.Deletes++
-			err = pri.merge(ctx, diff, tm.rightSch)
-			if err != nil {
-				return nil, nil, err
-			}
-			err = sec.merge(ctx, diff, tm.leftSch, tm.rightSch, tm, finalSch)
-			if err != nil {
-				return nil, nil, err
-			}
-		case tree.DiffOpDivergentModifyResolved:
-			// In this case, both sides of the merge have made different changes to a row, but we were able to
-			// resolve them automatically.
-			s.Modifications++
-			err = pri.merge(ctx, diff, nil)
-			if err != nil {
-				return nil, nil, err
-			}
-			err = sec.merge(ctx, diff, tm.leftSch, tm.rightSch, tm, finalSch)
-			if err != nil {
-				return nil, nil, err
-			}
-		case tree.DiffOpConvergentAdd, tree.DiffOpConvergentModify, tree.DiffOpConvergentDelete:
-			// In this case, both sides of the merge have made the same change, so no additional changes are needed.
-			if keyless {
-				s.DataConflicts++
-				err = conflicts.merge(ctx, diff, nil)
-				if err != nil {
+			for {
+				diff, err := iter.Next(ctx)
+				if errors.Is(err, io.EOF) {
+					break
+				} else if err != nil {
 					return nil, nil, err
 				}
+				/*
+					cnt, err := uniq.validateDiff(ctx, diff)
+					if err != nil {
+						return nil, nil, err
+					}
+					s.ConstraintViolations += cnt
+
+					cnt, err = nullChk.validateDiff(ctx, diff)
+					if err != nil {
+						return nil, nil, err
+					}
+					s.ConstraintViolations += cnt
+					if cnt > 0 {
+						continue
+					}
+
+					cnt, err = checkValidator.validateDiff(ctx, diff)
+					if err != nil {
+						return nil, nil, err
+					}
+					s.ConstraintViolations += cnt
+
+
+
+				switch diff.Op {
+				case tree.DiffOpLeftAdd, tree.DiffOpLeftModify:
+					// In the event that the right side introduced a schema change, account for it here.
+					// We still have to migrate when the diff is `tree.DiffOpLeftModify` because of the corner case where
+					// the right side contains a schema change but the changed column is null, so row bytes don't change.
+					err = pri.merge(ctx, diff, tm.leftSch)
+					if err != nil {
+						return nil, nil, err
+					}
+
+				case tree.DiffOpDivergentModifyConflict, tree.DiffOpDivergentDeleteConflict:
+					// In this case, a modification or delete was made to one side, and a conflicting delete or modification
+					// was made to the other side, so these cannot be automatically resolved.
+					s.DataConflicts++
+					err = conflicts.merge(ctx, diff, nil)
+					if err != nil {
+						return nil, nil, err
+					}
+					err = pri.merge(ctx, diff, tm.leftSch)
+					if err != nil {
+						return nil, nil, err
+					}
+				case tree.DiffOpRightAdd:
+					s.Adds++
+					err = pri.merge(ctx, diff, tm.rightSch)
+					if err != nil {
+						return nil, nil, err
+					}
+					err = sec.merge(ctx, diff, tm.leftSch, tm.rightSch, tm, finalSch)
+					if err != nil {
+						return nil, nil, err
+					}
+				case tree.DiffOpRightModify:
+					s.Modifications++
+					err = pri.merge(ctx, diff, tm.rightSch)
+					if err != nil {
+						return nil, nil, err
+					}
+					err = sec.merge(ctx, diff, tm.leftSch, tm.rightSch, tm, finalSch)
+					if err != nil {
+						return nil, nil, err
+					}
+				case tree.DiffOpRightDelete, tree.DiffOpDivergentDeleteResolved:
+					s.Deletes++
+					err = pri.merge(ctx, diff, tm.rightSch)
+					if err != nil {
+						return nil, nil, err
+					}
+					err = sec.merge(ctx, diff, tm.leftSch, tm.rightSch, tm, finalSch)
+					if err != nil {
+						return nil, nil, err
+					}
+				case tree.DiffOpDivergentModifyResolved:
+					// In this case, both sides of the merge have made different changes to a row, but we were able to
+					// resolve them automatically.
+					s.Modifications++
+					err = pri.merge(ctx, diff, nil)
+					if err != nil {
+						return nil, nil, err
+					}
+					err = sec.merge(ctx, diff, tm.leftSch, tm.rightSch, tm, finalSch)
+					if err != nil {
+						return nil, nil, err
+					}
+				case tree.DiffOpConvergentAdd, tree.DiffOpConvergentModify, tree.DiffOpConvergentDelete:
+					// In this case, both sides of the merge have made the same change, so no additional changes are needed.
+					if keyless {
+						s.DataConflicts++
+						err = conflicts.merge(ctx, diff, nil)
+						if err != nil {
+							return nil, nil, err
+						}
+					}
+				default:
+					// Currently, all changes are applied to the left-side of the merge, so for any left-side diff ops,
+					// we can simply ignore them since that data is already in the destination (the left-side).
+				}
 			}
-		default:
-			// Currently, all changes are applied to the left-side of the merge, so for any left-side diff ops,
-			// we can simply ignore them since that data is already in the destination (the left-side).
+
+
+
+		// After we've resolved all the diffs, it's safe for us to update the schema on the table
+		mergeTbl, err = tm.leftTbl.UpdateSchema(ctx, finalSch)
+		if err != nil {
+			return nil, nil, err
 		}
-	}
 
-	// After we've resolved all the diffs, it's safe for us to update the schema on the table
-	mergeTbl, err = tm.leftTbl.UpdateSchema(ctx, finalSch)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	finalRows, err := pri.finalize(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-
+		finalRows, err := pri.finalize(ctx)
+		if err != nil {
+			return nil, nil, err
+		}
+	*/
 	leftIdxs, rightIdxs, err := sec.finalize(ctx)
 	if err != nil {
 		return nil, nil, err
@@ -330,7 +391,7 @@ func mergeProllyTableData(ctx *sql.Context, tm *TableMerger, finalSch schema.Sch
 		return nil, nil, err
 	}
 
-	return finalTbl, s, nil
+	return finalTbl, &s, nil
 }
 
 func threeWayDiffer(ctx context.Context, tm *TableMerger, valueMerger *valueMerger, diffInfo tree.ThreeWayDiffInfo) (*tree.ThreeWayDiffer[val.Tuple, val.TupleDesc], error) {
@@ -1620,7 +1681,7 @@ func mergeTableArtifacts(ctx context.Context, tm *TableMerger, mergeTbl *doltdb.
 
 	var keyCollision bool
 	collide := func(l, r tree.Diff) (tree.Diff, bool) {
-		if l.Type == r.Type && bytes.Equal(l.To, r.To) {
+		if l.Type == r.Type && bytes.Equal(l.To(), r.To()) {
 			return l, true // convergent edit
 		}
 		keyCollision = true

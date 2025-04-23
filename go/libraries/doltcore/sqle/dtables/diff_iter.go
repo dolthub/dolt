@@ -392,12 +392,12 @@ func (itr prollyDiffIter) makeDiffRowItr(ctx context.Context, d tree.Diff) (*rep
 func (itr prollyDiffIter) getDiffRowAndCardinality(ctx context.Context, d tree.Diff) (r sql.Row, n uint64, err error) {
 	switch d.Type {
 	case tree.AddedDiff:
-		n = val.ReadKeylessCardinality(val.Tuple(d.To))
+		n = val.ReadKeylessCardinality(val.Tuple(d.To()))
 	case tree.RemovedDiff:
 		n = val.ReadKeylessCardinality(val.Tuple(d.From))
 	case tree.ModifiedDiff:
 		fN := val.ReadKeylessCardinality(val.Tuple(d.From))
-		tN := val.ReadKeylessCardinality(val.Tuple(d.To))
+		tN := val.ReadKeylessCardinality(val.Tuple(d.To()))
 		if fN < tN {
 			n = tN - fN
 			d.Type = tree.AddedDiff
@@ -432,7 +432,7 @@ func (itr prollyDiffIter) getDiffTableRow(ctx context.Context, dif tree.Diff) (r
 	// todo (dhruv): implement warnings for row column value coercions.
 
 	if dif.Type != tree.RemovedDiff {
-		err = itr.toConverter.PutConverted(ctx, val.Tuple(dif.Key), val.Tuple(dif.To), row[0:tLen])
+		err = itr.toConverter.PutConverted(ctx, val.Tuple(dif.Key), val.Tuple(dif.To()), row[0:tLen])
 		if err != nil {
 			return nil, err
 		}

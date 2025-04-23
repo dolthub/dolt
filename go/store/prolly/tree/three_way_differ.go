@@ -19,6 +19,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	// "github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"io"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -102,6 +103,13 @@ const (
 	dsMatchFinalize
 )
 
+// Three way differ combines two two-way differs, causing each of them to recurse when necessary.
+// For each example consider the logic but only implement the parts we need.
+// Example 1: Differs each have 1 non-overlapping blocks
+//
+//	Get block from each, see that they don't overlap, return each one.
+//
+// Example 2: Differs each have 1 (overlapping) block
 func (d *ThreeWayDiffer[K, O]) Next(ctx *sql.Context) (ThreeWayDiff, error) {
 	var err error
 	var res ThreeWayDiff
@@ -152,7 +160,27 @@ func (d *ThreeWayDiffer[K, O]) Next(ctx *sql.Context) (ThreeWayDiff, error) {
 				nextState = dsCompare
 			}
 		case dsCompare:
-			cmp := d.lIter.order.Compare(ctx, K(d.lDiff.Key), K(d.rDiff.Key))
+			// We want to compare which side has the next edited row.
+			// But this is made harder by the different semantics between row diffs and range diffs
+			// Row diffs have the next row modified in Key. Range diffs use Key for the largest modified value,
+			//   and PreviousKey for the key before the next key to be edited.
+			// But if both iterators are on the same level this gets easier.
+			// TODO: Add a test where the two trees have different heights.
+			var cmp int
+			if d.lDiff.toCur.isLeaf() {
+				cmp = d.lIter.order.Compare(ctx, K(d.lDiff.Key), K(d.rDiff.Key))
+			} else {
+				if d.lDiff.PreviousKey == nil && d.rDiff.PreviousKey == nil {
+					cmp = 0
+				} else if d.lDiff.PreviousKey == nil {
+					cmp = -1
+				} else if d.rDiff.PreviousKey == nil {
+					cmp = 1
+				} else {
+					cmp = d.lIter.order.Compare(ctx, K(d.lDiff.PreviousKey), K(d.rDiff.PreviousKey))
+				}
+			}
+
 			switch {
 			case cmp < 0:
 				nextState = dsNewLeft
@@ -163,48 +191,79 @@ func (d *ThreeWayDiffer[K, O]) Next(ctx *sql.Context) (ThreeWayDiff, error) {
 			default:
 			}
 		case dsNewLeft:
-			res = d.newLeftEdit(d.lDiff.Key, d.lDiff.To, d.lDiff.Type)
-			d.lDiff, err = d.lIter.Next(ctx)
-			if errors.Is(err, io.EOF) {
-				d.lDone = true
-			} else if err != nil {
-				return ThreeWayDiff{}, err
+			// The next edited row appears on the left.
+			// Determine whether it overlaps with the next edited row on the right.
+			cmp := d.lIter.order.Compare(ctx, K(d.lDiff.Key), K(d.rDiff.PreviousKey))
+			if cmp <= 0 {
+				// left node ends before right block begins. Emit the entire block.
+				// If both, make this its own state?
+				res = d.newLeftEdit(d.lDiff)
+				d.lDiff, err = d.lIter.Next(ctx)
+				if errors.Is(err, io.EOF) {
+					d.lDone = true
+				} else if err != nil {
+					return ThreeWayDiff{}, err
+				}
+				return res, nil
+			} else {
+				// nodes overlap. Split both differs (or just the left one?)
+				d.lDiff, err = d.lIter.split(ctx)
+				if err != nil {
+					return ThreeWayDiff{}, err
+				}
+				// It's no longer guaranteed that the next modified row is on the left.
+				nextState = dsDiffFinalize
+				continue
 			}
-			return res, nil
 		case dsNewRight:
-			res = d.newRightEdit(d.rDiff.Key, d.rDiff.From, d.rDiff.To, d.rDiff.Type)
-			d.rDiff, err = d.rIter.Next(ctx)
-			if errors.Is(err, io.EOF) {
-				d.rDone = true
-			} else if err != nil {
-				return ThreeWayDiff{}, err
+			// The next edited row appears on the right.
+			// Determine whether it overlaps with the next edited row on the left.
+			cmp := d.lIter.order.Compare(ctx, K(d.rDiff.Key), K(d.lDiff.PreviousKey))
+			if cmp <= 0 {
+				res = d.newRightEdit(d.rDiff)
+				d.rDiff, err = d.rIter.Next(ctx)
+				if errors.Is(err, io.EOF) {
+					d.rDone = true
+				} else if err != nil {
+					return ThreeWayDiff{}, err
+				}
+				return res, nil
+			} else {
+				// nodes overlap. Split both differs (or just the right one?)
+				// If both, make this its own state?
+				d.rDiff, err = d.rIter.split(ctx)
+				if err != nil {
+					return ThreeWayDiff{}, err
+				}
+				// It's no longer guaranteed that the next modified row is on the right.
+				nextState = dsDiffFinalize
+				continue
 			}
-			return res, nil
 		case dsMatch:
 			if d.lDiff.To == nil && d.rDiff.To == nil {
-				res = d.newConvergentEdit(d.lDiff.Key, d.lDiff.To, d.lDiff.Type)
+				res = d.newConvergentEdit(d.lDiff.Key, d.lDiff.To(), d.lDiff.Type)
 			} else if d.lDiff.To == nil || d.rDiff.To == nil {
 				// Divergent delete. Attempt to resolve.
-				_, ok, err := d.resolveCb(ctx, val.Tuple(d.lDiff.To), val.Tuple(d.rDiff.To), val.Tuple(d.lDiff.From))
+				_, ok, err := d.resolveCb(ctx, val.Tuple(d.lDiff.To()), val.Tuple(d.rDiff.To()), val.Tuple(d.lDiff.From))
 				if err != nil {
 					return ThreeWayDiff{}, err
 				}
 				if !ok {
-					res = d.newDivergentDeleteConflict(d.lDiff.Key, d.lDiff.From, d.lDiff.To, d.rDiff.To)
+					res = d.newDivergentDeleteConflict(d.lDiff.Key, d.lDiff.From, d.lDiff.To(), d.rDiff.To())
 				} else {
-					res = d.newDivergentDeleteResolved(d.lDiff.Key, d.lDiff.From, d.lDiff.To, d.rDiff.To)
+					res = d.newDivergentDeleteResolved(d.lDiff.Key, d.lDiff.From, d.lDiff.To(), d.rDiff.To())
 				}
-			} else if d.lDiff.Type == d.rDiff.Type && bytes.Equal(d.lDiff.To, d.rDiff.To) {
-				res = d.newConvergentEdit(d.lDiff.Key, d.lDiff.To, d.lDiff.Type)
+			} else if d.lDiff.Type == d.rDiff.Type && bytes.Equal(d.lDiff.To(), d.rDiff.To()) {
+				res = d.newConvergentEdit(d.lDiff.Key, d.lDiff.To(), d.lDiff.Type)
 			} else {
-				resolved, ok, err := d.resolveCb(ctx, val.Tuple(d.lDiff.To), val.Tuple(d.rDiff.To), val.Tuple(d.lDiff.From))
+				resolved, ok, err := d.resolveCb(ctx, val.Tuple(d.lDiff.To()), val.Tuple(d.rDiff.To()), val.Tuple(d.lDiff.From))
 				if err != nil {
 					return ThreeWayDiff{}, err
 				}
 				if !ok {
-					res = d.newDivergentClashConflict(d.lDiff.Key, d.lDiff.From, d.lDiff.To, d.rDiff.To)
+					res = d.newDivergentClashConflict(d.lDiff.Key, d.lDiff.From, d.lDiff.To(), d.rDiff.To())
 				} else {
-					res = d.newDivergentResolved(d.lDiff.Key, d.lDiff.To, d.rDiff.To, Item(resolved))
+					res = d.newDivergentResolved(d.lDiff.Key, d.lDiff.To(), d.rDiff.To(), Item(resolved))
 				}
 			}
 			nextState = dsMatchFinalize
@@ -261,11 +320,13 @@ type ThreeWayDiff struct {
 	// a partial set of tuple values are set
 	// depending on the diffOp
 	Key, Base, Left, Right, Merged val.Tuple
+	// The node is set for a range diff
+	Node Node
 }
 
-func (d *ThreeWayDiffer[K, O]) newLeftEdit(key, left Item, typ DiffType) ThreeWayDiff {
+func (d *ThreeWayDiffer[K, O]) newLeftEdit(diff Diff) ThreeWayDiff {
 	var op DiffOp
-	switch typ {
+	switch diff.Type {
 	case AddedDiff:
 		op = DiffOpLeftAdd
 	case ModifiedDiff:
@@ -277,14 +338,16 @@ func (d *ThreeWayDiffer[K, O]) newLeftEdit(key, left Item, typ DiffType) ThreeWa
 	}
 	return ThreeWayDiff{
 		Op:   op,
-		Key:  val.Tuple(key),
-		Left: val.Tuple(left),
+		Key:  val.Tuple(diff.Key),
+		Base: val.Tuple(diff.From),
+		Left: val.Tuple(diff.To()),
+		Node: diff.toCur.nd,
 	}
 }
 
-func (d *ThreeWayDiffer[K, O]) newRightEdit(key, base, right Item, typ DiffType) ThreeWayDiff {
+func (d *ThreeWayDiffer[K, O]) newRightEdit(diff Diff) ThreeWayDiff {
 	var op DiffOp
-	switch typ {
+	switch diff.Type {
 	case AddedDiff:
 		op = DiffOpRightAdd
 	case ModifiedDiff:
@@ -296,9 +359,10 @@ func (d *ThreeWayDiffer[K, O]) newRightEdit(key, base, right Item, typ DiffType)
 	}
 	return ThreeWayDiff{
 		Op:    op,
-		Key:   val.Tuple(key),
-		Base:  val.Tuple(base),
-		Right: val.Tuple(right),
+		Key:   val.Tuple(diff.Key),
+		Base:  val.Tuple(diff.From),
+		Right: val.Tuple(diff.To()),
+		Node:  diff.toCur.nd,
 	}
 }
 

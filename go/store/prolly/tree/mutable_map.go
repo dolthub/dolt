@@ -22,8 +22,14 @@ import (
 
 // MutableMap is a mutable prolly Static with ordered elements.
 type MutableMap[K, V ~[]byte, O Ordering[K], M MapInterface[K, V, O]] struct {
-	Edits  *skip.List
-	Static M
+	Edits *skip.List
+	// How to handle RangeEdits. What if they overlap with a point edit?
+	// MutableMap might not be the best place for this. Have a separate data structure where things are
+	// Guarenteed to be called in order, no overlaps. Then build it as we go.
+	// That's what apply mutations does.
+	// Just need to make a new iterator. Use a channel?
+	RangeEdits *skip.List
+	Static     M
 }
 
 func (m MutableMap[K, V, O, M]) Put(ctx context.Context, key K, value V) error {

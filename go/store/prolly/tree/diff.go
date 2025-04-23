@@ -160,6 +160,7 @@ func (td Differ[K, O]) next(ctx context.Context, advanceCursors bool) (diff Diff
 			// advance both cursors since we have already determined that they are equal. This needs to be done because
 			// skipCommon will not advance the cursors if they are equal in a collation sensitive comparison but differ
 			// in a byte comparison.
+			td.previousKey = f
 			if err = td.from.advance(ctx); err != nil {
 				return Diff{}, err
 			}
@@ -168,14 +169,18 @@ func (td Differ[K, O]) next(ctx context.Context, advanceCursors bool) (diff Diff
 			}
 
 			// seek ahead to the next diff and loop again
-			if err = skipCommon(ctx, td.from, td.to); err != nil {
+			lastSeenKey, err := skipCommon(ctx, td.from, td.to)
+			if err != nil {
 				return Diff{}, err
+			}
+			if lastSeenKey != nil {
+				td.previousKey = lastSeenKey
 			}
 		}
 	}
 
 	if td.from.Valid() && td.from.compare(td.fromStop) < 0 {
-		return td.sendRemoved(ctx, td.from, advanceCursors)
+		return td.sendRemoved(ctx, advanceCursors)
 	}
 	if td.to.Valid() && td.to.compare(td.toStop) < 0 {
 		return td.sendAdded(ctx, td.to, advanceCursors)
@@ -254,7 +259,7 @@ func (td Differ[K, O]) sibling(ctx context.Context) (diff Diff, err error) {
 		//     When keys are equal, we hit a boundary in the level below. We can stop emitting blocks but we don't go up a level just yet.
 		f := td.from.CurrentKey()
 		t := td.to.CurrentKey()
-		cmp := td.order.Compare(K(f), K(t))
+		cmp := td.order.Compare(ctx, K(f), K(t))
 
 		// If both cursors are at the end, go up a level?
 		switch {
@@ -292,7 +297,7 @@ func (td Differ[K, O]) sibling(ctx context.Context) (diff Diff, err error) {
 			// If the cursor schema has changed, then all rows should be considered modified.
 			// If the cursor schema hasn't changed, rows are modified iff their bytes have changed.
 			if td.considerAllRowsModified || !equalcursorValues(td.from, td.to) {
-				return sendModified(ctx, td.from, td.to, advanceCursors)
+				return td.sendModified(ctx, td.from, td.to, true)
 			}
 
 			// advance both cursors since we have already determined that they are equal. This needs to be done because
@@ -306,17 +311,21 @@ func (td Differ[K, O]) sibling(ctx context.Context) (diff Diff, err error) {
 			}
 
 			// seek ahead to the next diff and loop again
-			if err = skipCommon(ctx, td.from, td.to); err != nil {
+			lastSeenKey, err := skipCommon(ctx, td.from, td.to)
+			if err != nil {
 				return Diff{}, err
+			}
+			if lastSeenKey != nil {
+				td.previousKey = lastSeenKey
 			}
 		}
 	}
-
+	advanceCursors := true
 	if td.from.Valid() && td.from.compare(td.fromStop) < 0 {
-		return td.sendRemoved(ctx, td.from, advanceCursors)
+		return td.sendRemoved(ctx, advanceCursors)
 	}
 	if td.to.Valid() && td.to.compare(td.toStop) < 0 {
-		return sendAdded(ctx, td.to, advanceCursors)
+		return td.sendAdded(ctx, td.to, advanceCursors)
 	}
 
 	return Diff{}, io.EOF
@@ -338,6 +347,7 @@ func (td Differ[K, O]) sendRemoved(ctx context.Context, advanceCursors bool) (di
 	}
 
 	if advanceCursors {
+		td.previousKey = td.from.CurrentKey()
 		if err = td.from.advance(ctx); err != nil {
 			return Diff{}, err
 		}
@@ -360,6 +370,7 @@ func (td Differ[K, O]) sendAdded(ctx context.Context, to *cursor, advanceCursors
 	}
 
 	if advanceCursors {
+		td.previousKey = td.from.CurrentKey()
 		if err = to.advance(ctx); err != nil {
 			return Diff{}, err
 		}
@@ -383,6 +394,7 @@ func (td Differ[K, O]) sendModified(ctx context.Context, from, to *cursor, advan
 	}
 
 	if advanceCursors {
+		td.previousKey = td.from.CurrentKey()
 		if err = from.advance(ctx); err != nil {
 			return Diff{}, err
 		}
@@ -393,7 +405,7 @@ func (td Differ[K, O]) sendModified(ctx context.Context, from, to *cursor, advan
 	return
 }
 
-func skipCommon(ctx context.Context, from, to *cursor) (err error) {
+func skipCommon(ctx context.Context, from, to *cursor) (lastSeenKey Item, err error) {
 	// track when |from.parent| and |to.parent| change
 	// to avoid unnecessary comparisons.
 	parentsAreNew := true
@@ -401,7 +413,7 @@ func skipCommon(ctx context.Context, from, to *cursor) (err error) {
 	for from.Valid() && to.Valid() {
 		if !equalItems(from, to) {
 			// found the next difference
-			return nil
+			return lastSeenKey, nil
 		}
 
 		if parentsAreNew {
@@ -409,7 +421,7 @@ func skipCommon(ctx context.Context, from, to *cursor) (err error) {
 				// if our parents are equal, we can search for differences
 				// faster at the next highest tree Level.
 				if err = skipCommonParents(ctx, from, to); err != nil {
-					return err
+					return lastSeenKey, err
 				}
 				continue
 			}
@@ -421,19 +433,20 @@ func skipCommon(ctx context.Context, from, to *cursor) (err error) {
 		// case we need to Compare parents again.
 		parentsAreNew = from.atNodeEnd() || to.atNodeEnd()
 
+		lastSeenKey = from.CurrentKey()
 		if err = from.advance(ctx); err != nil {
-			return err
+			return lastSeenKey, err
 		}
 		if err = to.advance(ctx); err != nil {
-			return err
+			return lastSeenKey, err
 		}
 	}
 
-	return err
+	return lastSeenKey, err
 }
 
 func skipCommonParents(ctx context.Context, from, to *cursor) (err error) {
-	err = skipCommon(ctx, from.parent, to.parent)
+	_, err = skipCommon(ctx, from.parent, to.parent)
 	if err != nil {
 		return err
 	}

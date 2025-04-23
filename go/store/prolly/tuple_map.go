@@ -159,7 +159,7 @@ func makeDiffCallBack(from, to Map, innerCb tree.DiffFn) tree.DiffFn {
 		// Skip diffs produced by non-canonical tuples. A canonical-tuple is a
 		// tuple where any null suffixes have been trimmed.
 		if diff.Type == tree.ModifiedDiff &&
-			from.valDesc.Compare(ctx, val.Tuple(diff.From), val.Tuple(diff.To)) == 0 {
+			from.valDesc.Compare(ctx, val.Tuple(diff.From), val.Tuple(diff.To())) == 0 {
 			return nil
 		}
 		return innerCb(ctx, diff)

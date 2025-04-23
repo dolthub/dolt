@@ -73,11 +73,20 @@ func ApplyMutations[K ~[]byte, O Ordering[K], S message.Serializer](
 	edits MutationIter,
 ) (Node, error) {
 	newMutation := edits.NextMutation(ctx)
-	if newMutation.Key == nil {
+	if newMutation.Key == nil && newMutation.Node == nil {
 		return root, nil // no mutations
 	}
 
-	cur, err := newCursorAtKey(ctx, ns, root, K(newMutation.Key), order)
+	var cur *cursor
+	var err error
+	if newMutation.Key == nil {
+		// No prior key for node means that this is the very first node in its row.
+		cur, err = newCursorAtStart(ctx, ns, root)
+	} else {
+		// TODO: Do we need to advance before the key?
+		cur, err = newCursorAtKey(ctx, ns, root, K(newMutation.Key), order)
+	}
+
 	if err != nil {
 		return Node{}, err
 	}
@@ -87,7 +96,7 @@ func ApplyMutations[K ~[]byte, O Ordering[K], S message.Serializer](
 		return Node{}, err
 	}
 
-	for newMutation.Key != nil {
+	for {
 		if newMutation.Node == nil {
 			err = applyLeafMutation(ctx, order, chkr, cur, newMutation.Key, newMutation.Value)
 		} else {
@@ -98,8 +107,10 @@ func ApplyMutations[K ~[]byte, O Ordering[K], S message.Serializer](
 		}
 		prev := newMutation.Key
 		newMutation = edits.NextMutation(ctx)
-		if newMutation.Key != nil {
-			assertTrue(order.Compare(K(newMutation.Key), K(prev)) >= 0, "expected sorted edits")
+		if newMutation.Key == nil {
+			break
+		} else if prev != nil {
+			assertTrue(order.Compare(ctx, K(newMutation.Key), K(prev)) >= 0, "expected sorted edits")
 		}
 	}
 
@@ -173,7 +184,7 @@ func applyNodeMutation[K ~[]byte, O Ordering[K], S message.Serializer](
 		return err
 	}
 	// if that key exists in the cursor we may need to advance one into the start of the affected region?
-	if order.Compare(K(prevKey), K(cur.CurrentKey())) == 0 {
+	if order.Compare(ctx, K(prevKey), K(cur.CurrentKey())) == 0 {
 		err = cur.advance(ctx)
 		if err != nil {
 			return err
@@ -181,23 +192,26 @@ func applyNodeMutation[K ~[]byte, O Ordering[K], S message.Serializer](
 	}
 
 	err = chkr.advanceTo(ctx, cur)
-	if err != nil {
-		return err
-	}
-
-		prev := newKey
-		newKey, newValue = edits.NextMutation(ctx)
-		if newKey != nil {
-			assertTrue(order.Compare(K(newKey), K(prev)) > 0, "expected sorted edits")
+	/*
+		if err != nil {
+			return err
 		}
-	}
+
+			prev := newKey
+			newKey, newValue = edits.NextMutation(ctx)
+			if newKey != nil {
+				assertTrue(order.Compare(K(newKey), K(prev)) > 0, "expected sorted edits")
+			}
+		}*/
 	// Append all key-values from the Node.
 	// If we're on a chunk boundary, this will just copy the node in.
-	err = chkr.insertRange(ctx, start, end)
+	endCur := chkr.cur.clone()
+	endCur.skipToNodeEnd()
+	err = chkr.insertRange(ctx, chkr.cur, endCur)
 	if err != nil {
 		return err
 	}
-	err = Seek(ctx, chkr.cur, K(end.CurrentKey()), order)
+	err = Seek(ctx, chkr.cur, K(endCur.CurrentKey()), order)
 	if err != nil {
 		return err
 	}
