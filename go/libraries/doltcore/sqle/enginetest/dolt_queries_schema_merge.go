@@ -855,6 +855,26 @@ var SchemaChangeTestsConstraints = []MergeScriptTest{
 		},
 	},
 	{
+		// https://github.com/dolthub/dolt/issues/9014
+		Name: "foreign keys – drop tables with FK reference between them",
+		AncSetUpScript: []string{
+			"CREATE TABLE a (id int PRIMARY KEY, name varchar(256) NOT NULL);",
+			"CREATE TABLE b (id int PRIMARY KEY, assetId int, KEY file_assetid_foreign (assetId), CONSTRAINT file_assetid_foreign FOREIGN KEY (assetId) REFERENCES a(id));",
+		},
+		RightSetUpScript: []string{
+			"CREATE TABLE c (id int PRIMARY KEY);",
+		},
+		LeftSetUpScript: []string{
+			"DROP TABLE a, b;",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL dolt_merge('right');",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+		},
+	},
+	{
 		Name: "adding a unique key, with unique key violation",
 		AncSetUpScript: []string{
 			"create table t (pk int, col1 int);",
