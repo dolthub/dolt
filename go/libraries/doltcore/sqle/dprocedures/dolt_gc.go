@@ -270,6 +270,16 @@ func RunDoltGC(ctx *sql.Context, ddb *doltdb.DoltDB, mode types.GCMode, cmp chun
 			controller:  gcSafepointController,
 			doltDB:      ddb,
 		}
+		_, err := statsStop(ctx)
+		if err != nil {
+			ctx.GetLogger().Infof("gc stats interrupt failed: %s", err.Error())
+		}
+		defer func() {
+			_, err = statsRestart(ctx)
+			if err != nil {
+				ctx.GetLogger().Infof("gc stats restart failed: %s", err.Error())
+			}
+		}()
 	} else {
 		// Legacy safepoint controller behavior was to not
 		// allow GC on a standby server. GC on a standby server
