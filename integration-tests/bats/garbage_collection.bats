@@ -586,3 +586,30 @@ SQL
         false
     fi
 }
+
+@test "garbage_collection: dolt gc --archive-level not 0" {
+    dolt gc --archive-level 1
+    run dolt admin storage list
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Archive Metadata" ]] || false
+
+    run dolt gc --archive-level 2
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "invalid value for archive-level: 2" ]] || false
+
+    run dolt gc --archive-level -1
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "invalid value for archive-level: -1" ]] || false
+}
+
+@test "garbage_collection: dolt gc --archive-level 0" {
+    dolt gc --archive-level 0
+    run dolt admin storage list
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "Archive Metadata" ]] || false
+}
+
+
+
+
+

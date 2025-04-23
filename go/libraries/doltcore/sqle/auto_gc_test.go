@@ -25,6 +25,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/datas"
 )
 
@@ -39,12 +40,12 @@ func TestAutoGCController(t *testing.T) {
 	}
 	t.Run("Hook", func(t *testing.T) {
 		t.Run("NeverStarted", func(t *testing.T) {
-			controller := NewAutoGCController(NewLogger())
+			controller := NewAutoGCController(chunks.NoArchive, NewLogger())
 			hook := controller.newCommitHook("some_database", nil)
 			hook.stop()
 		})
 		t.Run("StartedBeforeNewHook", func(t *testing.T) {
-			controller := NewAutoGCController(NewLogger())
+			controller := NewAutoGCController(chunks.NoArchive, NewLogger())
 			bg := sql.NewBackgroundThreads()
 			defer bg.Shutdown()
 			err := controller.RunBackgroundThread(bg, CtxFactory)
@@ -56,7 +57,7 @@ func TestAutoGCController(t *testing.T) {
 			hook.stop()
 		})
 		t.Run("StartedAfterNewHook", func(t *testing.T) {
-			controller := NewAutoGCController(NewLogger())
+			controller := NewAutoGCController(chunks.NoArchive, NewLogger())
 			bg := sql.NewBackgroundThreads()
 			defer bg.Shutdown()
 			ctx := context.Background()
@@ -68,7 +69,7 @@ func TestAutoGCController(t *testing.T) {
 			hook.stop()
 		})
 		t.Run("ExecuteOnCanceledCtx", func(t *testing.T) {
-			controller := NewAutoGCController(NewLogger())
+			controller := NewAutoGCController(chunks.NoArchive, NewLogger())
 			ctx, cancel := context.WithCancel(context.Background())
 			cancel()
 			dEnv := CreateTestEnvWithName("some_database")
@@ -78,7 +79,7 @@ func TestAutoGCController(t *testing.T) {
 		})
 	})
 	t.Run("gcBgThread", func(t *testing.T) {
-		controller := NewAutoGCController(NewLogger())
+		controller := NewAutoGCController(chunks.NoArchive, NewLogger())
 		ctx, cancel := context.WithCancel(context.Background())
 		var wg sync.WaitGroup
 		wg.Add(1)
@@ -92,7 +93,7 @@ func TestAutoGCController(t *testing.T) {
 	})
 	t.Run("DatabaseProviderHooks", func(t *testing.T) {
 		t.Run("Unstarted", func(t *testing.T) {
-			controller := NewAutoGCController(NewLogger())
+			controller := NewAutoGCController(chunks.NoArchive, NewLogger())
 			ctx, err := CtxFactory(context.Background())
 			require.NoError(t, err)
 			dEnv := CreateTestEnvWithName("some_database")
@@ -101,7 +102,7 @@ func TestAutoGCController(t *testing.T) {
 			controller.DropDatabaseHook()(nil, "some_database")
 		})
 		t.Run("Started", func(t *testing.T) {
-			controller := NewAutoGCController(NewLogger())
+			controller := NewAutoGCController(chunks.NoArchive, NewLogger())
 			bg := sql.NewBackgroundThreads()
 			defer bg.Shutdown()
 			err := controller.RunBackgroundThread(bg, CtxFactory)
