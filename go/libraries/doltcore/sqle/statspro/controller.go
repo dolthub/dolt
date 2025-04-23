@@ -128,7 +128,7 @@ func (rs *rootStats) String() string {
 
 func NewStatsController(logger *logrus.Logger, bgThreads *sql.BackgroundThreads, dEnv *env.DoltEnv) *StatsController {
 	sq := jobqueue.NewSerialQueue().WithErrorCb(func(err error) {
-		logger.Error("stats executor error", err)
+		logger.Infof("stats executor error: %s\n", err.Error())
 	})
 
 	return &StatsController{
@@ -185,6 +185,12 @@ func (sc *StatsController) SetTimers(job, gc int64) {
 	sc.gcInterval = time.Duration(gc)
 }
 
+func (sc *StatsController) newGcTicker() *time.Ticker {
+	sc.mu.Lock()
+	defer sc.mu.Unlock()
+	return time.NewTicker(sc.gcInterval)
+}
+
 func (sc *StatsController) AddFs(ctx *sql.Context, db dsess.SqlDatabase, fs filesys.Filesys, rotateOk bool) error {
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
@@ -203,7 +209,7 @@ func (sc *StatsController) Info(ctx context.Context) (dprocedures.StatsInfo, err
 
 	// don't use protected access / deadlock
 	cachedBucketCnt := sc.kv.Len()
-	storageCnt, err := sc.kv.Flush(ctx)
+	storageCnt, err := sc.kv.Flush(ctx, sc.sq)
 	if err != nil {
 		return dprocedures.StatsInfo{}, err
 	}
@@ -309,6 +315,11 @@ func (sc *StatsController) AnalyzeTable(ctx *sql.Context, table sql.Table, dbNam
 	if err != nil {
 		return err
 	}
+
+	sql.SessionCommandBegin(newCtx.Session)
+	defer sql.SessionEnd(newCtx.Session)
+	defer sql.SessionCommandEnd(newCtx.Session)
+
 	newCtx.SetCurrentDatabase(ctx.GetCurrentDatabase())
 	err = sc.updateTable(newCtx, newStats, table.Name(), sqlDb, nil)
 	if err != nil {
@@ -478,9 +489,16 @@ func (sc *StatsController) Purge(ctx *sql.Context) error {
 }
 
 func (sc *StatsController) rotateStorage(ctx context.Context) error {
+	sqlCtx, err := sc.ctxGen(ctx)
+	if err != nil {
+		return err
+	}
+	sql.SessionCommandBegin(sqlCtx.Session)
+	defer sql.SessionEnd(sqlCtx.Session)
+	defer sql.SessionCommandEnd(sqlCtx.Session)
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
-	return sc.lockedRotateStorage(ctx)
+	return sc.lockedRotateStorage(sqlCtx)
 }
 
 func (sc *StatsController) lockedRotateStorage(ctx context.Context) error {
@@ -522,16 +540,7 @@ func (sc *StatsController) lockedRotateStorage(ctx context.Context) error {
 		return err
 	}
 
-	sqlCtx, err := sc.ctxGen(ctx)
-	if err != nil {
-		return err
-	}
-
-	sql.SessionCommandBegin(sqlCtx.Session)
-	defer sql.SessionEnd(sqlCtx.Session)
-	defer sql.SessionCommandEnd(sqlCtx.Session)
-
-	newKv, err := sc.initStorage(sqlCtx, newStorageTarget)
+	newKv, err := sc.initStorage(ctx, newStorageTarget)
 	if err != nil {
 		return err
 	}
