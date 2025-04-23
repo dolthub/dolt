@@ -987,7 +987,7 @@ func (cfg YAMLConfig) ValueSet(value string) bool {
 
 type AutoGCBehaviorYAMLConfig struct {
 	Enable_       *bool `yaml:"enable,omitempty" minver:"1.50.0"`
-	ArchiveLevel_ *int  `yaml:"archive_level,omitempty" minver:"TBD"`
+	ArchiveLevel_ *int  `yaml:"archive_level,omitempty" minver:"1.52.1"`
 }
 
 func (a *AutoGCBehaviorYAMLConfig) Enable() bool {
