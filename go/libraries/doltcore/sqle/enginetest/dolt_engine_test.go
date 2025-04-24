@@ -113,51 +113,29 @@ func TestSchemaOverridesWithAdaptiveEncoding(t *testing.T) {
 
 // Convenience test for debugging a single query. Unskip and set to the desired query.
 func TestSingleScript(t *testing.T) {
-	//t.Skip()
-
+	t.Skip()
 	var scripts = []queries.ScriptTest{
 		{
-			Name: "triggers with declare statements and stored procedure",
+			Name: "Describe table as of",
 			SetUpScript: []string{
-				"create table t (i int primary key);",
-				"create table t2 (i int primary key);",
 				`
-create procedure proc(in i int)
-begin
-	insert into t2 values (i);
-end;
-`,
+CREATE PROCEDURE p1()
+BEGIN
+	DECLARE str VARCHAR(20);
+    CALL p2(str);
+	SET str = CONCAT('c', str);
+    SELECT str;
+END`,
 				`
-create trigger trig before
-insert on t for each row begin
-	declare x int;
-	set x = new.i + 10;
-	call proc(x);
-end;
-`,
+CREATE PROCEDURE p2(OUT param VARCHAR(20))
+BEGIN
+	SET param = 'd';
+END`,
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query: "insert into t values (1), (2), (3);",
-					Expected: []sql.Row{
-						{gmstypes.NewOkResult(3)},
-					},
-				},
-				//{
-				//	Query: "select * from t;",
-				//	Expected: []sql.Row{
-				//		{1},
-				//		{2},
-				//		{3},
-				//	},
-				//},
-				{
-					Query:    "select * from t2;",
-					Expected: []sql.Row{
-						//{11},
-						//{12},
-						//{13},
-					},
+					Query:    "CALL p1();",
+					Expected: []sql.Row{{"cd"}},
 				},
 			},
 		},
