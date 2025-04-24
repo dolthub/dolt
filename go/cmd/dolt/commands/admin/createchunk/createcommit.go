@@ -48,7 +48,7 @@ func (cmd CreateCommitCmd) Description() string {
 // RequiresRepo should return false if this interface is implemented, and the command does not have the requirement
 // that it be run from within a data repository directory
 func (cmd CreateCommitCmd) RequiresRepo() bool {
-	return false
+	return true
 }
 
 func (cmd CreateCommitCmd) Docs() *cli.CommandDocumentation {
