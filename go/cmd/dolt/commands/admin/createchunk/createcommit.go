@@ -15,7 +15,6 @@
 package createchunk
 
 import (
-	"bytes"
 	"context"
 	"errors"
 
@@ -35,67 +34,6 @@ import (
 // This is because the journal must end with a root hash, and is only flushed when there is a new root hash.
 // Thus, we must update the root hash before the command finishes, or else changes will not be persisted.
 type CreateCommitCmd struct{}
-
-func generateCreateCommitSQL(cliCtx cli.CliContext, apr *argparser.ArgParseResults) (query string, params []interface{}, err error) {
-	var buffer bytes.Buffer
-	var first bool
-	first = true
-	buffer.WriteString("CALL DOLT_ADMIN_CREATECHUNK_COMMIT(")
-
-	writeParam := func(key, val string) {
-		if !first {
-			buffer.WriteString(", ")
-		}
-		buffer.WriteString("'--")
-		buffer.WriteString(key)
-		buffer.WriteString("', ")
-		buffer.WriteString("?")
-		first = false
-		params = append(params, val)
-	}
-
-	forwardParam := func(key string) {
-		val, ok := apr.GetValue(key)
-		if !ok {
-			return
-		}
-		writeParam(key, val)
-	}
-
-	forwardFlag := func(flag string) {
-		if !apr.Contains(flag) {
-			return
-		}
-		if !first {
-			buffer.WriteString(", ")
-		}
-		buffer.WriteString("'--")
-		buffer.WriteString(flag)
-		buffer.WriteString("'")
-		first = false
-	}
-
-	var author string
-	if apr.Contains(cli.AuthorParam) {
-		author, _ = apr.GetValue(cli.AuthorParam)
-	} else {
-		name, email, err := env.GetNameAndEmail(cliCtx.Config())
-		if err != nil {
-			return "", nil, err
-		}
-		author = name + " <" + email + ">"
-	}
-	writeParam(cli.AuthorParam, author)
-
-	forwardParam("desc")
-	forwardParam("root")
-	forwardParam("parents")
-	forwardParam(cli.BranchParam)
-	forwardFlag(cli.ForceFlag)
-
-	buffer.WriteString(")")
-	return buffer.String(), params, nil
-}
 
 // Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
 func (cmd CreateCommitCmd) Name() string {
