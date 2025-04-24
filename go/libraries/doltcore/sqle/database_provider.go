@@ -1107,7 +1107,7 @@ func isValidCommitHash(ctx *sql.Context, db dsess.SqlDatabase, commitHash string
 	return false, nil
 }
 
-func initialDbState(ctx context.Context, db dsess.SqlDatabase, branch string) (dsess.InitialDbState, error) {
+func initialDbState(ctx *sql.Context, db dsess.SqlDatabase, branch string) (dsess.InitialDbState, error) {
 	rsr := db.DbData().Rsr
 	ddb := db.DbData().Ddb
 
@@ -1116,7 +1116,7 @@ func initialDbState(ctx context.Context, db dsess.SqlDatabase, branch string) (d
 		r = ref.NewBranchRef(branch)
 	} else {
 		var err error
-		r, err = rsr.CWBHeadRef()
+		r, err = rsr.CWBHeadRef(ctx)
 		if err != nil {
 			return dsess.InitialDbState{}, err
 		}
@@ -1393,7 +1393,7 @@ func (p *DoltDatabaseProvider) SessionDatabase(ctx *sql.Context, name string) (d
 		if !ok {
 			usingDefaultBranch = true
 
-			head, err = dsess.DefaultHead(baseName, db)
+			head, err = dsess.DefaultHead(ctx, baseName, db)
 			if err != nil {
 				return nil, false, err
 			}
@@ -1596,7 +1596,7 @@ func initialStateForBranchDb(ctx *sql.Context, srcDb dsess.SqlDatabase) (dsess.I
 		Db:         srcDb,
 		HeadCommit: cm,
 		WorkingSet: ws,
-		DbData: env.DbData{
+		DbData: env.DbData[*sql.Context]{
 			Ddb: srcDb.DbData().Ddb,
 			Rsw: static,
 			Rsr: static,
@@ -1636,7 +1636,7 @@ func initialStateForTagDb(ctx context.Context, srcDb ReadOnlyDatabase) (dsess.In
 		Db:         srcDb,
 		HeadCommit: cm,
 		ReadOnly:   true,
-		DbData: env.DbData{
+		DbData: env.DbData[*sql.Context]{
 			Ddb: srcDb.DbData().Ddb,
 			Rsw: srcDb.DbData().Rsw,
 			Rsr: srcDb.DbData().Rsr,
@@ -1666,7 +1666,7 @@ func revisionDbForCommit(ctx context.Context, srcDb Database, revSpec string, re
 	}}, nil
 }
 
-func initialStateForCommit(ctx context.Context, srcDb ReadOnlyDatabase) (dsess.InitialDbState, error) {
+func initialStateForCommit(ctx *sql.Context, srcDb ReadOnlyDatabase) (dsess.InitialDbState, error) {
 	revSpec := srcDb.Revision()
 
 	spec, err := doltdb.NewCommitSpec(revSpec)
@@ -1674,7 +1674,7 @@ func initialStateForCommit(ctx context.Context, srcDb ReadOnlyDatabase) (dsess.I
 		return dsess.InitialDbState{}, err
 	}
 
-	headRef, err := srcDb.DbData().Rsr.CWBHeadRef()
+	headRef, err := srcDb.DbData().Rsr.CWBHeadRef(ctx)
 	if err != nil {
 		return dsess.InitialDbState{}, err
 	}
@@ -1691,7 +1691,7 @@ func initialStateForCommit(ctx context.Context, srcDb ReadOnlyDatabase) (dsess.I
 		Db:         srcDb,
 		HeadCommit: cm,
 		ReadOnly:   true,
-		DbData: env.DbData{
+		DbData: env.DbData[*sql.Context]{
 			Ddb: srcDb.DbData().Ddb,
 			Rsw: srcDb.DbData().Rsw,
 			Rsr: srcDb.DbData().Rsr,
@@ -1710,10 +1710,10 @@ func initialStateForCommit(ctx context.Context, srcDb ReadOnlyDatabase) (dsess.I
 type staticRepoState struct {
 	branch ref.DoltRef
 	env.RepoStateWriter
-	env.RepoStateReader
+	env.RepoStateReader[*sql.Context]
 }
 
-func (s staticRepoState) CWBHeadRef() (ref.DoltRef, error) {
+func (s staticRepoState) CWBHeadRef(*sql.Context) (ref.DoltRef, error) {
 	return s.branch, nil
 }
 

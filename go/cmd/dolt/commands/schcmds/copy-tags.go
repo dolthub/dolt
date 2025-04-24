@@ -280,7 +280,7 @@ func doltCommitUpdatedTags(ctx context.Context, dEnv *env.DoltEnv, workingRoot d
 		return err
 	}
 
-	headRef, err := dEnv.RepoStateReader().CWBHeadRef()
+	headRef, err := dEnv.RepoStateReader().CWBHeadRef(ctx)
 	if err != nil {
 		return err
 	}

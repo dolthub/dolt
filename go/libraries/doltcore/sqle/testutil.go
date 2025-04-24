@@ -156,7 +156,7 @@ func NewTestEngine(dEnv *env.DoltEnv, ctx context.Context, db dsess.SqlDatabase)
 
 // ExecuteSelect executes the select statement given and returns the resulting rows, or an error if one is encountered.
 func ExecuteSelect(ctx context.Context, dEnv *env.DoltEnv, root doltdb.RootValue, query string) ([]sql.Row, error) {
-	dbData := env.DbData{
+	dbData := env.DbData[context.Context]{
 		Ddb: dEnv.DoltDB(ctx),
 		Rsw: dEnv.RepoStateWriter(),
 		Rsr: dEnv.RepoStateReader(),

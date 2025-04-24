@@ -121,7 +121,7 @@ func doDoltCheckout(ctx *sql.Context, args []string) (statusCode int, successMes
 		return 1, "", ErrEmptyBranchName
 	}
 
-	isModification, err := willModifyDb(dSess, dbData, currentDbName, branchName, updateHead)
+	isModification, err := willModifyDb(ctx, dSess, dbData, currentDbName, branchName, updateHead)
 	if err != nil {
 		return 1, "", err
 	}
@@ -188,7 +188,7 @@ func doDoltCheckout(ctx *sql.Context, args []string) (statusCode int, successMes
 
 	// Check if the user executed `dolt checkout .`
 	if apr.NArg() == 1 && apr.Arg(0) == "." {
-		headRef, err := dbData.Rsr.CWBHeadRef()
+		headRef, err := dbData.Rsr.CWBHeadRef(ctx)
 		if err != nil {
 			return 1, "", err
 		}
@@ -301,7 +301,7 @@ func createWorkingSetForLocalBranch(ctx *sql.Context, ddb *doltdb.DoltDB, branch
 
 // checkoutRemoteBranch checks out a remote branch creating a new local branch with the same name as the remote branch
 // and set its upstream. The upstream persists out of sql session. Returns the name of the upstream remote and branch.
-func checkoutRemoteBranch(ctx *sql.Context, dSess *dsess.DoltSession, dbName string, dbData env.DbData, branchName string, apr *argparser.ArgParseResults, rsc *doltdb.ReplicationStatusController) (upstream string, err error) {
+func checkoutRemoteBranch(ctx *sql.Context, dSess *dsess.DoltSession, dbName string, dbData env.DbData[*sql.Context], branchName string, apr *argparser.ArgParseResults, rsc *doltdb.ReplicationStatusController) (upstream string, err error) {
 	remoteRefs, err := actions.GetRemoteBranchRef(ctx, dbData.Ddb, branchName)
 	if err != nil {
 		return "", errors.New("fatal: unable to read from data repository")
@@ -365,7 +365,7 @@ func checkoutRemoteBranch(ctx *sql.Context, dSess *dsess.DoltSession, dbName str
 			return "", errhand.BuildDError("%s: '%s'", err.Error(), remoteRef.GetRemote()).Build()
 		}
 
-		headRef, err := dbData.Rsr.CWBHeadRef()
+		headRef, err := dbData.Rsr.CWBHeadRef(ctx)
 		if err != nil {
 			return "", err
 		}
@@ -384,7 +384,7 @@ func checkoutRemoteBranch(ctx *sql.Context, dSess *dsess.DoltSession, dbName str
 // checkoutNewBranch creates a new branch and makes it the active branch for the session.
 // If isMove is true, this function also moves the working set from the current branch into the new branch.
 // Returns the name of the new branch and the remote upstream branch (empty string if not applicable.)
-func checkoutNewBranch(ctx *sql.Context, dbName string, dbData env.DbData, apr *argparser.ArgParseResults, rsc *doltdb.ReplicationStatusController, isMove bool) (newBranchName string, remoteAndBranch string, err error) {
+func checkoutNewBranch(ctx *sql.Context, dbName string, dbData env.DbData[*sql.Context], apr *argparser.ArgParseResults, rsc *doltdb.ReplicationStatusController, isMove bool) (newBranchName string, remoteAndBranch string, err error) {
 	var remoteName, remoteBranchName string
 	var startPt = "head"
 	var refSpec ref.RefSpec

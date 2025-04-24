@@ -73,7 +73,7 @@ func countCommits(ctx *sql.Context, args ...string) (ahead uint64, behind uint64
 	if err != nil {
 		return 0, 0, err
 	}
-	headRef, err := rsr.CWBHeadRef()
+	headRef, err := rsr.CWBHeadRef(ctx)
 	if err != nil {
 		return 0, 0, err
 	}

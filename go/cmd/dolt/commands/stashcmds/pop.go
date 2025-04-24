@@ -138,7 +138,7 @@ func applyStashAtIdx(ctx *sql.Context, dEnv *env.DoltEnv, curWorkingRoot doltdb.
 	if err != nil {
 		return false, err
 	}
-	headRef, err := dEnv.RepoStateReader().CWBHeadRef()
+	headRef, err := dEnv.RepoStateReader().CWBHeadRef(ctx)
 	if err != nil {
 		return false, err
 	}

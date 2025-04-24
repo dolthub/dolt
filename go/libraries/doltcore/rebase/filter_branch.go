@@ -95,14 +95,14 @@ func AllBranches(ctx context.Context, dEnv *env.DoltEnv, applyUncommitted bool, 
 
 // CurrentBranch rewrites the history of the current branch using the |replay| function.
 func CurrentBranch(ctx context.Context, dEnv *env.DoltEnv, applyUncommitted bool, commitReplayer CommitReplayer, rootReplayer RootReplayer, nerf NeedsRebaseFn) error {
-	headRef, err := dEnv.RepoStateReader().CWBHeadRef()
+	headRef, err := dEnv.RepoStateReader().CWBHeadRef(ctx)
 	if err != nil {
 		return nil
 	}
 	return rebaseRefs(ctx, dEnv.DbData(ctx), applyUncommitted, commitReplayer, rootReplayer, nerf, headRef)
 }
 
-func rebaseRefs(ctx context.Context, dbData env.DbData, applyUncommitted bool, commitReplayer CommitReplayer, rootReplayer RootReplayer, nerf NeedsRebaseFn, refs ...ref.DoltRef) error {
+func rebaseRefs(ctx context.Context, dbData env.DbData[context.Context], applyUncommitted bool, commitReplayer CommitReplayer, rootReplayer RootReplayer, nerf NeedsRebaseFn, refs ...ref.DoltRef) error {
 	ddb := dbData.Ddb
 	heads := make([]*doltdb.Commit, len(refs))
 	for i, dRef := range refs {
