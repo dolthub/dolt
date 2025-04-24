@@ -113,30 +113,61 @@ func TestSchemaOverridesWithAdaptiveEncoding(t *testing.T) {
 
 // Convenience test for debugging a single query. Unskip and set to the desired query.
 func TestSingleScript(t *testing.T) {
-	t.Skip()
+	//t.Skip()
 	var scripts = []queries.ScriptTest{
 		{
-			Name: "Describe table as of",
+			Name: "Database syntax propagates to inner calls",
 			SetUpScript: []string{
-				`
-CREATE PROCEDURE p1()
+				"CALL DOLT_CHECKOUT('main');",
+				`CREATE PROCEDURE p4()
 BEGIN
-	DECLARE str VARCHAR(20);
-    CALL p2(str);
-	SET str = CONCAT('c', str);
-    SELECT str;
+	CALL p5();
 END`,
-				`
-CREATE PROCEDURE p2(OUT param VARCHAR(20))
+				`CREATE PROCEDURE p5()
 BEGIN
-	SET param = 'd';
+	SELECT 3;
 END`,
+				"CALL DOLT_ADD('-A');",
+				"CALL DOLT_COMMIT('-m', 'commit message');",
+				"CALL DOLT_BRANCH('p45');",
+				"DROP PROCEDURE p4;",
+				"DROP PROCEDURE p5;",
+				`CREATE PROCEDURE p4()
+BEGIN
+	CALL p5();
+END`,
+				`CREATE PROCEDURE p5()
+BEGIN
+	SELECT 4;
+END`,
+				"CALL DOLT_ADD('-A');",
+				"CALL DOLT_COMMIT('-m', 'commit message');",
 			},
 			Assertions: []queries.ScriptTestAssertion{
+				//{
+				//	Query:    "CALL p4();",
+				//	Expected: []sql.Row{{4}},
+				//},
+				//{
+				//	Query:    "CALL p5();",
+				//	Expected: []sql.Row{{4}},
+				//},
+				//{
+				//	Query:    "CALL `mydb/main`.p4();",
+				//	Expected: []sql.Row{{4}},
+				//},
+				//{
+				//	Query:    "CALL `mydb/main`.p5();",
+				//	Expected: []sql.Row{{4}},
+				//},
 				{
-					Query:    "CALL p1();",
-					Expected: []sql.Row{{"cd"}},
+					Query:    "CALL `mydb/p45`.p4();",
+					Expected: []sql.Row{{3}},
 				},
+				//{
+				//	Query:    "CALL `mydb/p45`.p5();",
+				//	Expected: []sql.Row{{3}},
+				//},
 			},
 		},
 	}

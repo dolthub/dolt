@@ -7480,19 +7480,19 @@ END`,
 			},
 			{
 				Query:    "CALL `mydb/main`.p4();",
-				Expected: []sql.Row{{3}},
+				Expected: []sql.Row{{4}},
 			},
 			{
 				Query:    "CALL `mydb/main`.p5();",
-				Expected: []sql.Row{{3}},
+				Expected: []sql.Row{{4}},
 			},
 			{
 				Query:    "CALL `mydb/p45`.p4();",
-				Expected: []sql.Row{{4}},
+				Expected: []sql.Row{{3}},
 			},
 			{
 				Query:    "CALL `mydb/p45`.p5();",
-				Expected: []sql.Row{{4}},
+				Expected: []sql.Row{{3}},
 			},
 		},
 	},
