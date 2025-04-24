@@ -313,6 +313,19 @@ func CreateReflogArgParser() *argparser.ArgParser {
 	return ap
 }
 
+func CreateCreateCommitParser() *argparser.ArgParser {
+	ap := argparser.NewArgParserWithMaxArgs("createchunk commit", 0)
+	ap.SupportsString(AuthorParam, "", "author", "Specify an explicit author using the standard A U Thor {{.LessThan}}author@example.com{{.GreaterThan}} format.")
+	ap.SupportsString("desc", "", "commit description", "the description in the commit")
+
+	ap.SupportsFlag(ForceFlag, "", "when used alongside --branch, allows overwriting an existing branch")
+	ap.SupportsRequiredString("root", "", "database root", "the root hash of the database at this commit")
+	ap.SupportsStringList("parents", "", "parent commits", "a list of the commit hashes of the parent commit")
+	ap.SupportsString(BranchParam, "", "ref to assign to", "if set, the new commit will be reachable at this ref")
+
+	return ap
+}
+
 func CreateGlobalArgParser(name string) *argparser.ArgParser {
 	ap := argparser.NewArgParserWithVariableArgs(name)
 	if name == "dolt" {

@@ -1,4 +1,4 @@
-// Copyright 2022 Dolthub, Inc.
+// Copyright 2025 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,17 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package admin
+package createchunk
 
 import (
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
-	"github.com/dolthub/dolt/go/cmd/dolt/commands/admin/createchunk"
 )
 
-var Commands = cli.NewHiddenSubCommandHandler("admin", "Commands for directly working with Dolt storage for purposes of testing or database recovery", []cli.Command{
-	SetRefCmd{},
-	ShowRootCmd{},
-	ZstdCmd{},
-	StorageCmd{},
-	createchunk.Commands,
+var Commands = cli.NewHiddenSubCommandHandler("createchunk", "Low-level commands for creating chunks", []cli.Command{
+	CreateCommitCmd{},
 })
