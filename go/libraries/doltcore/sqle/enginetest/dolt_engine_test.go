@@ -116,58 +116,51 @@ func TestSingleScript(t *testing.T) {
 	//t.Skip()
 	var scripts = []queries.ScriptTest{
 		{
-			Name: "Database syntax propagates to inner calls",
+			Name: "Database syntax properly handles inter-CALL communication",
 			SetUpScript: []string{
-				"CALL DOLT_CHECKOUT('main');",
-				`CREATE PROCEDURE p4()
+				`CREATE PROCEDURE p1()
 BEGIN
-	CALL p5();
+	DECLARE str VARCHAR(20);
+   CALL p2(str);
+	SET str = CONCAT('a', str);
+   SELECT str;
 END`,
-				`CREATE PROCEDURE p5()
+				`CREATE PROCEDURE p2(OUT param VARCHAR(20))
 BEGIN
-	SELECT 3;
-END`,
-				"CALL DOLT_ADD('-A');",
-				"CALL DOLT_COMMIT('-m', 'commit message');",
-				"CALL DOLT_BRANCH('p45');",
-				"DROP PROCEDURE p4;",
-				"DROP PROCEDURE p5;",
-				`CREATE PROCEDURE p4()
-BEGIN
-	CALL p5();
-END`,
-				`CREATE PROCEDURE p5()
-BEGIN
-	SELECT 4;
+	SET param = 'b';
 END`,
 				"CALL DOLT_ADD('-A');",
-				"CALL DOLT_COMMIT('-m', 'commit message');",
+				"CALL DOLT_COMMIT('-m', 'First procedures');",
+				"CALL DOLT_BRANCH('p12');",
+				"DROP PROCEDURE p1;",
+				"DROP PROCEDURE p2;",
+				`CREATE PROCEDURE p1()
+BEGIN
+	DECLARE str VARCHAR(20);
+    CALL p2(str);
+	SET str = CONCAT('c', str);
+   SELECT str;
+END`,
+				`CREATE PROCEDURE p2(OUT param VARCHAR(20))
+BEGIN
+	SET param = 'd';
+END`,
+				"CALL DOLT_ADD('-A');",
+				"CALL DOLT_COMMIT('-m', 'Second procedures');",
 			},
 			Assertions: []queries.ScriptTestAssertion{
-				//{
-				//	Query:    "CALL p4();",
-				//	Expected: []sql.Row{{4}},
-				//},
-				//{
-				//	Query:    "CALL p5();",
-				//	Expected: []sql.Row{{4}},
-				//},
-				//{
-				//	Query:    "CALL `mydb/main`.p4();",
-				//	Expected: []sql.Row{{4}},
-				//},
-				//{
-				//	Query:    "CALL `mydb/main`.p5();",
-				//	Expected: []sql.Row{{4}},
-				//},
 				{
-					Query:    "CALL `mydb/p45`.p4();",
-					Expected: []sql.Row{{3}},
+					Query:    "CALL p1();",
+					Expected: []sql.Row{{"cd"}},
 				},
-				//{
-				//	Query:    "CALL `mydb/p45`.p5();",
-				//	Expected: []sql.Row{{3}},
-				//},
+				{
+					Query:    "CALL `mydb/main`.p1();",
+					Expected: []sql.Row{{"cd"}},
+				},
+				{
+					Query:    "CALL `mydb/p12`.p1();",
+					Expected: []sql.Row{{"ab"}},
+				},
 			},
 		},
 	}
