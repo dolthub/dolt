@@ -51,7 +51,7 @@ type UnscopedDiffTable struct {
 	ddb              *doltdb.DoltDB
 	head             *doltdb.Commit
 	partitionFilters []sql.Expression
-	commitCheck      doltdb.CommitFilter
+	commitCheck      doltdb.CommitFilter[*sql.Context]
 }
 
 var _ sql.Table = (*UnscopedDiffTable)(nil)
@@ -135,7 +135,7 @@ func (dt *UnscopedDiffTable) PartitionRows(ctx *sql.Context, partition sql.Parti
 			if hasCommitHashEquality {
 				return dt.newCommitHistoryRowItrFromCommits(ctx, cms)
 			}
-			iter := doltdb.CommitItrForRoots(dt.ddb, dt.head)
+			iter := doltdb.CommitItrForRoots[*sql.Context](dt.ddb, dt.head)
 			if dt.commitCheck != nil {
 				iter = doltdb.NewFilteringCommitItr(iter, dt.commitCheck)
 			}
@@ -283,7 +283,7 @@ func (d doltDiffPartition) Key() []byte {
 type doltDiffCommitHistoryRowItr struct {
 	ctx             *sql.Context
 	ddb             *doltdb.DoltDB
-	child           doltdb.CommitItr
+	child           doltdb.CommitItr[*sql.Context]
 	commits         []*doltdb.Commit
 	meta            *datas.CommitMeta
 	hash            hash.Hash
@@ -292,7 +292,7 @@ type doltDiffCommitHistoryRowItr struct {
 }
 
 // newCommitHistoryRowItr creates a doltDiffCommitHistoryRowItr from a CommitItr.
-func (dt *UnscopedDiffTable) newCommitHistoryRowItrFromItr(ctx *sql.Context, iter doltdb.CommitItr) (*doltDiffCommitHistoryRowItr, error) {
+func (dt *UnscopedDiffTable) newCommitHistoryRowItrFromItr(ctx *sql.Context, iter doltdb.CommitItr[*sql.Context]) (*doltDiffCommitHistoryRowItr, error) {
 	dchItr := &doltDiffCommitHistoryRowItr{
 		ctx:             ctx,
 		ddb:             dt.ddb,
@@ -472,12 +472,10 @@ func isTableDataEmpty(ctx *sql.Context, table *doltdb.Table) (bool, error) {
 }
 
 // commitFilterForDiffTableFilterExprs returns CommitFilter used for CommitItr.
-func commitFilterForDiffTableFilterExprs(filters []sql.Expression) (doltdb.CommitFilter, error) {
+func commitFilterForDiffTableFilterExprs(filters []sql.Expression) (doltdb.CommitFilter[*sql.Context], error) {
 	filters = transformFilters(filters...)
 
-	return func(ctx context.Context, h hash.Hash, optCmt *doltdb.OptionalCommit) (filterOut bool, err error) {
-		sc := sql.NewContext(ctx)
-
+	return func(ctx *sql.Context, h hash.Hash, optCmt *doltdb.OptionalCommit) (filterOut bool, err error) {
 		cm, ok := optCmt.ToCommit()
 		if !ok {
 			return false, doltdb.ErrGhostCommitEncountered
@@ -488,7 +486,7 @@ func commitFilterForDiffTableFilterExprs(filters []sql.Expression) (doltdb.Commi
 			return false, err
 		}
 		for _, filter := range filters {
-			res, err := filter.Eval(sc, sql.Row{h.String(), meta.Name, meta.Time()})
+			res, err := filter.Eval(ctx, sql.Row{h.String(), meta.Name, meta.Time()})
 			if err != nil {
 				return false, err
 			}

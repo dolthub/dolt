@@ -97,7 +97,7 @@ func doDoltTag(ctx *sql.Context, args []string) (int, error) {
 	if len(apr.Args) > 1 {
 		startPoint = apr.Arg(1)
 	}
-	headRef, err := dbData.Rsr.CWBHeadRef()
+	headRef, err := dbData.Rsr.CWBHeadRef(ctx)
 	if err != nil {
 		return 0, err
 	}

@@ -256,7 +256,7 @@ func getValueFromRefSpec(ctx context.Context, dEnv *env.DoltEnv, specRef string)
 		if err != nil {
 			return nil, err
 		}
-		headRef, err := dEnv.RepoStateReader().CWBHeadRef()
+		headRef, err := dEnv.RepoStateReader().CWBHeadRef(ctx)
 		optionalCommit, err := dEnv.DoltDB(ctx).Resolve(ctx, commitSpec, headRef)
 		if err != nil {
 			return nil, err

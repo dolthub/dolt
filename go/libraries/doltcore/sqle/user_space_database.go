@@ -89,7 +89,7 @@ func (db *UserSpaceDatabase) InitialDBState(ctx *sql.Context) (dsess.InitialDbSt
 		Db:       db,
 		ReadOnly: true,
 		HeadRoot: db.RootValue,
-		DbData: env.DbData{
+		DbData: env.DbData[*sql.Context]{
 			Rsw: noopRepoStateWriter{},
 		},
 		Remotes: concurrentmap.New[string, env.Remote](),
@@ -113,8 +113,8 @@ func (db *UserSpaceDatabase) GetTemporaryTablesRoot(*sql.Context) (doltdb.RootVa
 	panic("UserSpaceDatabase should not contain any temporary tables")
 }
 
-func (db *UserSpaceDatabase) DbData() env.DbData {
-	return env.DbData{}
+func (db *UserSpaceDatabase) DbData() env.DbData[*sql.Context] {
+	return env.DbData[*sql.Context]{}
 }
 
 func (db *UserSpaceDatabase) EditOptions() editor.Options {

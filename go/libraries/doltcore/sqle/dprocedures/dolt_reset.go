@@ -129,7 +129,7 @@ func doDoltReset(ctx *sql.Context, args []string) (int, error) {
 // resetSoftToRef resets the session HEAD to the commit ref given
 func resetSoftToRef(
 	ctx *sql.Context,
-	dbData env.DbData,
+	dbData env.DbData[*sql.Context],
 	firstArg string,
 	dSess *dsess.DoltSession,
 	dbName string,
@@ -202,7 +202,7 @@ func resetSoftTables(
 func resetSoft(
 	ctx *sql.Context,
 	apr *argparser.ArgParseResults,
-	dbData env.DbData,
+	dbData env.DbData[*sql.Context],
 	dSess *dsess.DoltSession,
 	dbName string,
 ) error {
@@ -237,7 +237,7 @@ func resetHard(
 	ctx *sql.Context,
 	apr *argparser.ArgParseResults,
 	roots doltdb.Roots,
-	dbData env.DbData,
+	dbData env.DbData[*sql.Context],
 	dSess *dsess.DoltSession,
 	dbName string,
 ) error {
@@ -258,7 +258,7 @@ func resetHard(
 
 	// TODO: this overrides the transaction setting, needs to happen at commit, not here
 	if newHead != nil {
-		headRef, err := dbData.Rsr.CWBHeadRef()
+		headRef, err := dbData.Rsr.CWBHeadRef(ctx)
 		if err != nil {
 			return err
 		}

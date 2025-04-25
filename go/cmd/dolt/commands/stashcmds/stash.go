@@ -219,7 +219,7 @@ func stashChanges(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 		}
 	}
 
-	curHeadRef, err := dEnv.RepoStateReader().CWBHeadRef()
+	curHeadRef, err := dEnv.RepoStateReader().CWBHeadRef(ctx)
 	if err != nil {
 		return err
 	}

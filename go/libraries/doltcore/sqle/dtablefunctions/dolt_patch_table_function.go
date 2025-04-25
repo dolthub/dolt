@@ -484,7 +484,7 @@ type patchNode struct {
 	dataPatchStmts   []string
 }
 
-func getPatchNodes(ctx *sql.Context, dbData env.DbData, tableDeltas []diff.TableDelta, fromRefDetails, toRefDetails *refDetails, includeSchemaDiff, includeDataDiff bool) (patches []*patchNode, err error) {
+func getPatchNodes(ctx *sql.Context, dbData env.DbData[*sql.Context], tableDeltas []diff.TableDelta, fromRefDetails, toRefDetails *refDetails, includeSchemaDiff, includeDataDiff bool) (patches []*patchNode, err error) {
 	for _, td := range tableDeltas {
 		if td.FromTable == nil && td.ToTable == nil {
 			// no diff
@@ -557,7 +557,7 @@ func canGetDataDiff(ctx *sql.Context, td diff.TableDelta) bool {
 	return true
 }
 
-func getUserTableDataSqlPatch(ctx *sql.Context, dbData env.DbData, td diff.TableDelta, fromRefDetails, toRefDetails *refDetails) ([]string, error) {
+func getUserTableDataSqlPatch(ctx *sql.Context, dbData env.DbData[*sql.Context], td diff.TableDelta, fromRefDetails, toRefDetails *refDetails) ([]string, error) {
 	// ToTable is used as target table as it cannot be nil at this point
 	diffSch, projections, ri, err := getDiffQuery(ctx, dbData, td, fromRefDetails, toRefDetails)
 	if err != nil {
@@ -622,7 +622,7 @@ func getDataSqlPatchResults(ctx *sql.Context, diffQuerySch, targetSch sql.Schema
 // on diff table function row iter. This function attempts to imitate running a query
 // fmt.Sprintf("select %s, %s from dolt_diff('%s', '%s', '%s')", columnsWithDiff, "diff_type", fromRef, toRef, tableName)
 // on sql engine, which returns the schema and rowIter of the final data diff result.
-func getDiffQuery(ctx *sql.Context, dbData env.DbData, td diff.TableDelta, fromRefDetails, toRefDetails *refDetails) (sql.Schema, []sql.Expression, sql.RowIter, error) {
+func getDiffQuery(ctx *sql.Context, dbData env.DbData[*sql.Context], td diff.TableDelta, fromRefDetails, toRefDetails *refDetails) (sql.Schema, []sql.Expression, sql.RowIter, error) {
 	diffTableSchema, j, err := dtables.GetDiffTableSchemaAndJoiner(td.ToTable.Format(), td.FromSch, td.ToSch)
 	if err != nil {
 		return nil, nil, nil, err
