@@ -1,4 +1,4 @@
-// Copyright 2024 Dolthub, Inc.
+// Copyright 2025 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,9 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// dolt is the command line tool for working with Dolt databases.
-package doltversion
+package createchunk
 
-const (
-	Version = "1.52.2"
+import (
+	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 )
+
+var Commands = cli.NewHiddenSubCommandHandler("createchunk", "Low-level commands for creating chunks", []cli.Command{
+	CreateCommitCmd{},
+})

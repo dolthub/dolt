@@ -42,7 +42,6 @@ import (
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
-	"github.com/dolthub/dolt/go/cmd/dolt/commands/admin"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/ci"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/credcmds"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/cvcmds"
@@ -71,7 +70,6 @@ var dumpDocsCommand = &commands.DumpDocsCmd{}
 var dumpZshCommand = &commands.GenZshCompCmd{}
 
 var commandsWithoutCliCtx = []cli.Command{
-	admin.Commands,
 	commands.CloneCmd{},
 	commands.BackupCmd{},
 	commands.LoginCmd{},

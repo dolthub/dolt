@@ -165,7 +165,7 @@ func doDoltMerge(ctx *sql.Context, args []string) (string, int, int, string, err
 		return "", noConflictsOrViolations, threeWayMerge, "", fmt.Errorf("Could not load database %s", dbName)
 	}
 
-	headRef, err := dbData.Rsr.CWBHeadRef()
+	headRef, err := dbData.Rsr.CWBHeadRef(ctx)
 	if err != nil {
 		return "", noConflictsOrViolations, threeWayMerge, "", err
 	}
@@ -333,7 +333,7 @@ func executeMerge(
 	return mergeRootToWorking(ctx, sess, dbName, squash, force, ws, result, workingDiffs, cm, cmSpec)
 }
 
-func executeFFMerge(ctx *sql.Context, dbName string, squash bool, ws *doltdb.WorkingSet, dbData env.DbData, cm2 *doltdb.Commit, spec *merge.MergeSpec) (*doltdb.WorkingSet, error) {
+func executeFFMerge(ctx *sql.Context, dbName string, squash bool, ws *doltdb.WorkingSet, dbData env.DbData[*sql.Context], cm2 *doltdb.Commit, spec *merge.MergeSpec) (*doltdb.WorkingSet, error) {
 	stagedRoot, err := cm2.GetRootValue(ctx)
 	if err != nil {
 		return ws, err
@@ -349,7 +349,7 @@ func executeFFMerge(ctx *sql.Context, dbName string, squash bool, ws *doltdb.Wor
 	// TODO: This is all incredibly suspect, needs to be replaced with library code that is functional instead of
 	//  altering global state
 	if !squash {
-		headRef, err := dbData.Rsr.CWBHeadRef()
+		headRef, err := dbData.Rsr.CWBHeadRef(ctx)
 		if err != nil {
 			return nil, err
 		}

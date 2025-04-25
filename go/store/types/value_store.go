@@ -547,7 +547,7 @@ type GCSafepointController interface {
 }
 
 // GC traverses the ValueStore from the root and removes unreferenced chunks from the ChunkStore
-func (lvs *ValueStore) GC(ctx context.Context, mode GCMode, oldGenRefs, newGenRefs hash.HashSet, safepoint GCSafepointController) error {
+func (lvs *ValueStore) GC(ctx context.Context, mode GCMode, cmp chunks.GCArchiveLevel, oldGenRefs, newGenRefs hash.HashSet, safepoint GCSafepointController) error {
 	lvs.versOnce.Do(lvs.expectVersion)
 
 	lvs.transitionToOldGenGC()
@@ -605,7 +605,7 @@ func (lvs *ValueStore) GC(ctx context.Context, mode GCMode, oldGenRefs, newGenRe
 			newGenRefs.Insert(root)
 
 			var oldGenFinalizer, newGenFinalizer chunks.GCFinalizer
-			oldGenFinalizer, err = lvs.gc(ctx, oldGenRefs, oldGenHasMany, chksMode, collector, oldGen, nil, func() hash.HashSet {
+			oldGenFinalizer, err = lvs.gc(ctx, oldGenRefs, oldGenHasMany, chksMode, cmp, collector, oldGen, nil, func() hash.HashSet {
 				n := lvs.transitionToNewGenGC()
 				newGenRefs.InsertAll(n)
 				return make(hash.HashSet)
@@ -626,7 +626,7 @@ func (lvs *ValueStore) GC(ctx context.Context, mode GCMode, oldGenRefs, newGenRe
 				oldGenHasMany = newFileHasMany
 			}
 
-			newGenFinalizer, err = lvs.gc(ctx, newGenRefs, oldGenHasMany, chksMode, collector, newGen, safepoint, lvs.transitionToFinalizingGC)
+			newGenFinalizer, err = lvs.gc(ctx, newGenRefs, oldGenHasMany, chksMode, cmp, collector, newGen, safepoint, lvs.transitionToFinalizingGC)
 			if err != nil {
 				return err
 			}
@@ -686,7 +686,7 @@ func (lvs *ValueStore) GC(ctx context.Context, mode GCMode, oldGenRefs, newGenRe
 			newGenRefs.Insert(root)
 
 			var finalizer chunks.GCFinalizer
-			finalizer, err = lvs.gc(ctx, newGenRefs, unfilteredHashFunc, chunks.GCMode_Full, collector, collector, safepoint, lvs.transitionToFinalizingGC)
+			finalizer, err = lvs.gc(ctx, newGenRefs, unfilteredHashFunc, chunks.GCMode_Full, cmp, collector, collector, safepoint, lvs.transitionToFinalizingGC)
 			if err != nil {
 				return err
 			}
@@ -718,10 +718,11 @@ func (lvs *ValueStore) gc(ctx context.Context,
 	toVisit hash.HashSet,
 	hashFilter chunks.HasManyFunc,
 	chksMode chunks.GCMode,
+	cmp chunks.GCArchiveLevel,
 	src, dest chunks.ChunkStoreGarbageCollector,
 	safepointController GCSafepointController,
 	finalize func() hash.HashSet) (chunks.GCFinalizer, error) {
-	sweeper, err := src.MarkAndSweepChunks(ctx, lvs.getAddrs, hashFilter, dest, chksMode)
+	sweeper, err := src.MarkAndSweepChunks(ctx, lvs.getAddrs, hashFilter, dest, chksMode, cmp)
 	if err != nil {
 		return nil, err
 	}

@@ -296,6 +296,7 @@ func CreateGCArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithMaxArgs("gc", 0)
 	ap.SupportsFlag(ShallowFlag, "s", "perform a fast, but incomplete garbage collection pass")
 	ap.SupportsFlag(FullFlag, "f", "perform a full garbage collection, including the old generation")
+	ap.SupportsInt(ArchiveLevelParam, "", "archive compression level", "Specify the archive compression level garbage collection results. Default is 0. Max is 2")
 	return ap
 }
 
@@ -309,6 +310,19 @@ func CreateCountCommitsArgParser() *argparser.ArgParser {
 func CreateReflogArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithMaxArgs("reflog", 1)
 	ap.SupportsFlag(AllFlag, "", "Show all refs, including hidden refs, such as DoltHub workspace refs")
+	return ap
+}
+
+func CreateCreateCommitParser() *argparser.ArgParser {
+	ap := argparser.NewArgParserWithMaxArgs("createchunk commit", 0)
+	ap.SupportsString(AuthorParam, "", "author", "Specify an explicit author using the standard A U Thor {{.LessThan}}author@example.com{{.GreaterThan}} format.")
+	ap.SupportsString("desc", "", "commit description", "the description in the commit")
+
+	ap.SupportsFlag(ForceFlag, "", "when used alongside --branch, allows overwriting an existing branch")
+	ap.SupportsRequiredString("root", "", "database root", "the root hash of the database at this commit")
+	ap.SupportsStringList("parents", "", "parent commits", "a list of the commit hashes of the parent commit")
+	ap.SupportsString(BranchParam, "", "ref to assign to", "if set, the new commit will be reachable at this ref")
+
 	return ap
 }
 

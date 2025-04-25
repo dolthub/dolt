@@ -109,6 +109,9 @@ type NomsBlockStore struct {
 	tables   tableSet
 	upstream manifestContents
 
+	conjoinOp     *conjoinOperation
+	conjoinOpCond *sync.Cond
+
 	// Guarded by |mu|. Notified on gcInProgress and gcOutstandingReads changes.
 	// Used to implement |waitForGC|.
 	gcCond *sync.Cond
@@ -269,34 +272,76 @@ func (nbs *NomsBlockStore) handleUnlockedRead(ctx context.Context, gcb gcBehavio
 	}
 }
 
-func (nbs *NomsBlockStore) conjoinIfRequired(ctx context.Context) (bool, error) {
+func (nbs *NomsBlockStore) startConjoinIfRequired(ctx context.Context) error {
+	if nbs.conjoinOp != nil {
+		return nil
+	}
 	if nbs.conjoiner.conjoinRequired(nbs.tables) {
 		nbs.logger.WithField("upstream_len", len(nbs.tables.upstream)).Info("beginning conjoin of database")
-		newUpstream, cleanup, err := conjoin(ctx, nbs.conjoiner, nbs.upstream, nbs.manifestMgr, nbs.persister, nbs.stats)
+		var op = &conjoinOperation{}
+		err := op.prepareConjoin(ctx, nbs.conjoiner, nbs.upstream)
 		if err != nil {
-			nbs.logger.WithError(err).Info("conjoin of database failed")
-			return false, err
+			return err
 		}
-
-		newTables, err := nbs.tables.rebase(ctx, newUpstream.specs, nil, nbs.stats)
-		if err != nil {
-			nbs.logger.WithError(err).Info("during conjoin, updating database with new table files failed")
-			return false, err
-		}
-
-		nbs.upstream = newUpstream
-		oldTables := nbs.tables
-		nbs.tables = newTables
-		nbs.logger.WithField("new_upstream_len", len(nbs.tables.upstream)).Info("conjoin completed successfully")
-		err = oldTables.close()
-		if err != nil {
-			return true, err
-		}
-		cleanup()
-		return true, nil
-	} else {
-		return false, nil
+		nbs.conjoinOp = op
+		go func(ctx context.Context) {
+			// We use context.Background(), since this context will outlive the caller
+			// and it does not access NomsBlockStore storage directly, instead operating
+			// only on tablePersister and manifestUpdater.
+			err := op.conjoin(ctx, nbs.persister, nbs.stats)
+			nbs.finalizeConjoin(ctx, err)
+		}(context.Background())
 	}
+	return nil
+}
+
+// Called in an asynchronous context from the goroutine that |startConjoinIfRequired| kicks off.
+//
+// Responsible for calling conjoinOp.updateManifest under lock and dealing with its results.
+func (nbs *NomsBlockStore) finalizeConjoin(ctx context.Context, err error) {
+	nbs.mu.Lock()
+	defer nbs.mu.Unlock()
+
+	defer func() {
+		nbs.conjoinOp = nil
+		nbs.conjoinOpCond.Broadcast()
+	}()
+
+	if err != nil {
+		nbs.logger.WithError(err).Warn("conjoin of database failed with error")
+		return
+	}
+
+	nbs.manifestMgr.LockForUpdate()
+	defer func() {
+		err := nbs.manifestMgr.UnlockForUpdate()
+		if err != nil {
+			nbs.logger.WithError(err).Warn("during conjoin, unlocking manifest manager for update failed with error")
+		}
+	}()
+
+	newUpstream, cleanup, err := nbs.conjoinOp.updateManifest(ctx, nbs.upstream, nbs.manifestMgr, nbs.stats)
+	if err != nil {
+		nbs.logger.WithError(err).Warn("during conjoin, updating database manifest with new table files failed")
+	}
+
+	newTables, err := nbs.tables.rebase(ctx, newUpstream.specs, nil, nbs.stats)
+	if err != nil {
+		nbs.logger.WithError(err).Warn("during conjoin, updating database with new table files failed")
+		return
+	}
+
+	nbs.upstream = newUpstream
+	oldTables := nbs.tables
+	nbs.tables = newTables
+	nbs.logger.WithField("new_upstream_len", len(nbs.tables.upstream)).Info("conjoin completed successfully")
+	err = oldTables.close()
+	if err != nil {
+		nbs.logger.WithError(err).Warn("during conjoin, closing old table files failed with error")
+		return
+	}
+
+	cleanup()
 }
 
 func (nbs *NomsBlockStore) UpdateManifest(ctx context.Context, updates map[hash.Hash]uint32) (ManifestInfo, error) {
@@ -321,7 +366,7 @@ func (nbs *NomsBlockStore) updateManifestAddFiles(ctx context.Context, updates m
 		err = errors.Join(err, nbs.manifestMgr.UnlockForUpdate())
 	}()
 
-	_, err = nbs.conjoinIfRequired(ctx)
+	err = nbs.startConjoinIfRequired(ctx)
 	if err != nil {
 		return manifestContents{}, false, err
 	}
@@ -655,6 +700,7 @@ func newNomsBlockStore(ctx context.Context, nbfVerStr string, mm manifestManager
 		logger:      logrus.StandardLogger().WithField("pkg", "store.noms"),
 	}
 	nbs.gcCond = sync.NewCond(&nbs.mu)
+	nbs.conjoinOpCond = sync.NewCond(&nbs.mu)
 
 	t1 := time.Now()
 	defer nbs.stats.OpenLatency.SampleTimeSince(t1)
@@ -1376,12 +1422,9 @@ func (nbs *NomsBlockStore) updateManifest(ctx context.Context, current, last has
 		break
 	}
 
-	didConjoin, err := nbs.conjoinIfRequired(ctx)
+	err := nbs.startConjoinIfRequired(ctx)
 	if err != nil {
 		return err
-	}
-	if didConjoin {
-		return errOptimisticLockFailedTables
 	}
 
 	// check for dangling reference to the new root
@@ -1453,17 +1496,16 @@ func (nbs *NomsBlockStore) AccessMode() chunks.ExclusiveAccessMode {
 	return nbs.persister.AccessMode()
 }
 
-func (nbs *NomsBlockStore) Close() (err error) {
-	if cerr := nbs.persister.Close(); cerr != nil {
-		err = cerr
+func (nbs *NomsBlockStore) Close() error {
+	nbs.mu.Lock()
+	defer nbs.mu.Unlock()
+	for nbs.conjoinOp != nil {
+		nbs.conjoinOpCond.Wait()
 	}
-	if cerr := nbs.tables.close(); cerr != nil {
-		err = cerr
-	}
-	if cerr := nbs.manifestMgr.Close(); cerr != nil {
-		err = cerr
-	}
-	return
+	err := nbs.persister.Close()
+	err = errors.Join(err, nbs.tables.close())
+	err = errors.Join(err, nbs.manifestMgr.Close())
+	return err
 }
 
 func (nbs *NomsBlockStore) Stats() interface{} {
@@ -1849,8 +1891,12 @@ func (nbs *NomsBlockStore) pruneTableFiles(ctx context.Context) (err error) {
 }
 
 func (nbs *NomsBlockStore) BeginGC(keeper func(hash.Hash) bool, _ chunks.GCMode) error {
-	nbs.gcCond.L.Lock()
-	defer nbs.gcCond.L.Unlock()
+	nbs.mu.Lock()
+	defer nbs.mu.Unlock()
+	// Block until there is no ongoing conjoin...
+	for nbs.conjoinOp != nil {
+		nbs.conjoinOpCond.Wait()
+	}
 	if nbs.gcInProgress {
 		return errors.New("gc already in progress")
 	}
@@ -1896,12 +1942,12 @@ func (nbs *NomsBlockStore) beginRead() (endRead func()) {
 	return nil
 }
 
-func (nbs *NomsBlockStore) MarkAndSweepChunks(ctx context.Context, getAddrs chunks.GetAddrsCurry, filter chunks.HasManyFunc, dest chunks.ChunkStore, mode chunks.GCMode) (chunks.MarkAndSweeper, error) {
+func (nbs *NomsBlockStore) MarkAndSweepChunks(ctx context.Context, getAddrs chunks.GetAddrsCurry, filter chunks.HasManyFunc, dest chunks.ChunkStore, mode chunks.GCMode, cmp chunks.GCArchiveLevel) (chunks.MarkAndSweeper, error) {
 	valctx.ValidateContext(ctx)
-	return markAndSweepChunks(ctx, nbs, nbs, dest, getAddrs, filter, mode)
+	return markAndSweepChunks(ctx, nbs, nbs, dest, getAddrs, filter, mode, cmp)
 }
 
-func markAndSweepChunks(ctx context.Context, nbs *NomsBlockStore, src CompressedChunkStoreForGC, dest chunks.ChunkStore, getAddrs chunks.GetAddrsCurry, filter chunks.HasManyFunc, mode chunks.GCMode) (chunks.MarkAndSweeper, error) {
+func markAndSweepChunks(_ context.Context, nbs *NomsBlockStore, src CompressedChunkStoreForGC, dest chunks.ChunkStore, getAddrs chunks.GetAddrsCurry, filter chunks.HasManyFunc, mode chunks.GCMode, cmp chunks.GCArchiveLevel) (chunks.MarkAndSweeper, error) {
 	ops := nbs.SupportedOperations()
 	if !ops.CanGC || !ops.CanPrune {
 		return nil, chunks.ErrUnsupportedOperation
@@ -1949,7 +1995,7 @@ func markAndSweepChunks(ctx context.Context, nbs *NomsBlockStore, src Compressed
 		return nil, fmt.Errorf("NBS does not support copying garbage collection")
 	}
 
-	gcc, err := newGarbageCollectionCopier(tfp)
+	gcc, err := newGarbageCollectionCopier(cmp, tfp)
 	if err != nil {
 		return nil, err
 	}

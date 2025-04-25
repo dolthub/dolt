@@ -29,20 +29,20 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
-func NewMemoryDbData(ctx context.Context, cfg config.ReadableConfig) (DbData, error) {
+func NewMemoryDbData(ctx context.Context, cfg config.ReadableConfig) (DbData[context.Context], error) {
 	branchName := GetDefaultInitBranch(cfg)
 
 	ddb, err := NewMemoryDoltDB(ctx, branchName)
 	if err != nil {
-		return DbData{}, err
+		return DbData[context.Context]{}, err
 	}
 
 	rs, err := NewMemoryRepoState(ctx, ddb, branchName)
 	if err != nil {
-		return DbData{}, err
+		return DbData[context.Context]{}, err
 	}
 
-	return DbData{
+	return DbData[context.Context]{
 		Ddb: ddb,
 		Rsw: rs,
 		Rsr: rs,
@@ -99,15 +99,15 @@ type MemoryRepoState struct {
 	Head   ref.DoltRef
 }
 
-var _ RepoStateReader = MemoryRepoState{}
+var _ RepoStateReader[context.Context] = MemoryRepoState{}
 var _ RepoStateWriter = MemoryRepoState{}
 
-func (m MemoryRepoState) CWBHeadRef() (ref.DoltRef, error) {
+func (m MemoryRepoState) CWBHeadRef(context.Context) (ref.DoltRef, error) {
 	return m.Head, nil
 }
 
-func (m MemoryRepoState) CWBHeadSpec() (*doltdb.CommitSpec, error) {
-	headRef, err := m.CWBHeadRef()
+func (m MemoryRepoState) CWBHeadSpec(ctx context.Context) (*doltdb.CommitSpec, error) {
+	headRef, err := m.CWBHeadRef(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -125,7 +125,7 @@ func (m MemoryRepoState) UpdateStagedRoot(ctx context.Context, newRoot doltdb.Ro
 	ws, err := m.WorkingSet(ctx)
 	if err == doltdb.ErrWorkingSetNotFound {
 		// first time updating root
-		headRef, err := m.CWBHeadRef()
+		headRef, err := m.CWBHeadRef(ctx)
 		if err != nil {
 			return err
 		}
@@ -155,7 +155,7 @@ func (m MemoryRepoState) UpdateWorkingRoot(ctx context.Context, newRoot doltdb.R
 	ws, err := m.WorkingSet(ctx)
 	if err == doltdb.ErrWorkingSetNotFound {
 		// first time updating root
-		headRef, err := m.CWBHeadRef()
+		headRef, err := m.CWBHeadRef(ctx)
 		if err != nil {
 			return err
 		}
@@ -179,7 +179,7 @@ func (m MemoryRepoState) UpdateWorkingRoot(ctx context.Context, newRoot doltdb.R
 }
 
 func (m MemoryRepoState) WorkingSet(ctx context.Context) (*doltdb.WorkingSet, error) {
-	headRef, err := m.CWBHeadRef()
+	headRef, err := m.CWBHeadRef(ctx)
 	if err != nil {
 		return nil, err
 	}

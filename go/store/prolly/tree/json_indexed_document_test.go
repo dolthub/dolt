@@ -472,5 +472,5 @@ func TestIndexedJsonDocument_CreateLargeStringValues(t *testing.T) {
 	require.NoError(t, err)
 	extractedValue, _, err := types.LongText.Convert(ctx, lookup)
 	require.NoError(t, err)
-	require.Equal(t, value, extractedValue)
+	require.Equal(t, "\""+value+"\"", extractedValue)
 }

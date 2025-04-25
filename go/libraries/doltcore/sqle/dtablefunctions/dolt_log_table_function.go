@@ -606,7 +606,7 @@ var _ sql.RowIter = (*logTableFunctionRowIter)(nil)
 
 // logTableFunctionRowIter is a sql.RowIter implementation which iterates over each commit as if it's a row in the table.
 type logTableFunctionRowIter struct {
-	child         doltdb.CommitItr
+	child         doltdb.CommitItr[*sql.Context]
 	showParents   bool
 	showSignature bool
 	decoration    string
@@ -622,7 +622,7 @@ func (ltf *LogTableFunction) NewLogTableFunctionRowIter(ctx *sql.Context, ddb *d
 		return nil, err
 	}
 
-	child, err := commitwalk.GetTopologicalOrderIterator(ctx, ddb, []hash.Hash{h}, matchFn)
+	child, err := commitwalk.GetTopologicalOrderIterator[*sql.Context](ctx, ddb, []hash.Hash{h}, matchFn)
 	if err != nil {
 		return nil, err
 	}
@@ -657,7 +657,7 @@ func (ltf *LogTableFunction) NewDotDotLogTableFunctionRowIter(ctx *sql.Context, 
 		exHashes[i] = h
 	}
 
-	child, err := commitwalk.GetDotDotRevisionsIterator(ctx, ddb, hashes, ddb, exHashes, matchFn)
+	child, err := commitwalk.GetDotDotRevisionsIterator[*sql.Context](ctx, ddb, hashes, ddb, exHashes, matchFn)
 	if err != nil {
 		return nil, err
 	}

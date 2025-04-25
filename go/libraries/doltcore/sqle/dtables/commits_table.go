@@ -136,12 +136,12 @@ func (ct *CommitsTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLooku
 
 // CommitsRowItr is a sql.RowItr which iterates over each commit as if it's a row in the table.
 type CommitsRowItr struct {
-	itr doltdb.CommitItr
+	itr doltdb.CommitItr[*sql.Context]
 }
 
 // NewCommitsRowItr creates a CommitsRowItr from the current environment.
 func NewCommitsRowItr(ctx *sql.Context, ddb *doltdb.DoltDB) (CommitsRowItr, error) {
-	itr, err := doltdb.CommitItrForAllBranches(ctx, ddb)
+	itr, err := doltdb.CommitItrForAllBranches[*sql.Context](ctx, ddb)
 	if err != nil {
 		return CommitsRowItr{}, err
 	}

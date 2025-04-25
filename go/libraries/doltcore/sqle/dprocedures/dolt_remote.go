@@ -84,7 +84,7 @@ func doDoltRemote(ctx *sql.Context, args []string) (int, error) {
 	return 0, nil
 }
 
-func addRemote(_ *sql.Context, dbName string, dbd env.DbData, apr *argparser.ArgParseResults, sess *dsess.DoltSession) error {
+func addRemote(_ *sql.Context, dbName string, dbd env.DbData[*sql.Context], apr *argparser.ArgParseResults, sess *dsess.DoltSession) error {
 	if apr.NArg() != 3 {
 		return fmt.Errorf("error: invalid argument")
 	}
@@ -106,7 +106,7 @@ func addRemote(_ *sql.Context, dbName string, dbd env.DbData, apr *argparser.Arg
 	return dbd.Rsw.AddRemote(r)
 }
 
-func removeRemote(ctx *sql.Context, dbd env.DbData, apr *argparser.ArgParseResults, rsc *doltdb.ReplicationStatusController) error {
+func removeRemote(ctx *sql.Context, dbd env.DbData[*sql.Context], apr *argparser.ArgParseResults, rsc *doltdb.ReplicationStatusController) error {
 	if apr.NArg() != 2 {
 		return fmt.Errorf("error: invalid argument")
 	}

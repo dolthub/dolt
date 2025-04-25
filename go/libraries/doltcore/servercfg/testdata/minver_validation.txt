@@ -14,6 +14,7 @@ BehaviorConfig servercfg.BehaviorYAMLConfig 0.0.0 behavior,omitempty
 -EventSchedulerStatus *string 1.17.0 event_scheduler,omitempty
 -AutoGCBehavior *servercfg.AutoGCBehaviorYAMLConfig 1.50.0 auto_gc_behavior,omitempty
 --Enable_ *bool 1.50.0 enable,omitempty
+--ArchiveLevel_ *int 1.52.1 archive_level,omitempty
 UserConfig servercfg.UserYAMLConfig 0.0.0 user,omitempty
 -Name *string 0.0.0 name,omitempty
 -Password *string 0.0.0 password,omitempty

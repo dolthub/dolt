@@ -41,9 +41,9 @@ func (s SessionStateAdapter) SetCWBHeadRef(ctx context.Context, newRef ref.Marsh
 	return fmt.Errorf("Cannot set cwb head ref with a SessionStateAdapter")
 }
 
-var _ env.RepoStateReader = SessionStateAdapter{}
+var _ env.RepoStateReader[*sql.Context] = SessionStateAdapter{}
 var _ env.RepoStateWriter = SessionStateAdapter{}
-var _ env.RootsProvider = SessionStateAdapter{}
+var _ env.RootsProvider[*sql.Context] = SessionStateAdapter{}
 
 func NewSessionStateAdapter(session *DoltSession, dbName string, remotes *concurrentmap.Map[string, env.Remote], branches *concurrentmap.Map[string, env.BranchConfig], backups *concurrentmap.Map[string, env.Remote]) SessionStateAdapter {
 	if branches == nil {
@@ -52,9 +52,8 @@ func NewSessionStateAdapter(session *DoltSession, dbName string, remotes *concur
 	return SessionStateAdapter{session: session, dbName: dbName, remotes: remotes, branches: branches, backups: backups}
 }
 
-func (s SessionStateAdapter) GetRoots(ctx context.Context) (doltdb.Roots, error) {
-	sqlCtx := sql.NewContext(ctx)
-	state, _, err := s.session.lookupDbState(sqlCtx, s.dbName)
+func (s SessionStateAdapter) GetRoots(ctx *sql.Context) (doltdb.Roots, error) {
+	state, _, err := s.session.lookupDbState(ctx, s.dbName)
 	if err != nil {
 		return doltdb.Roots{}, err
 	}
@@ -62,8 +61,8 @@ func (s SessionStateAdapter) GetRoots(ctx context.Context) (doltdb.Roots, error)
 	return state.roots(), nil
 }
 
-func (s SessionStateAdapter) CWBHeadRef() (ref.DoltRef, error) {
-	workingSet, err := s.session.WorkingSet(sql.NewContext(context.Background()), s.dbName)
+func (s SessionStateAdapter) CWBHeadRef(ctx *sql.Context) (ref.DoltRef, error) {
+	workingSet, err := s.session.WorkingSet(ctx, s.dbName)
 	if err != nil {
 		return nil, err
 	}
@@ -75,9 +74,9 @@ func (s SessionStateAdapter) CWBHeadRef() (ref.DoltRef, error) {
 	return headRef, nil
 }
 
-func (s SessionStateAdapter) CWBHeadSpec() (*doltdb.CommitSpec, error) {
+func (s SessionStateAdapter) CWBHeadSpec(ctx *sql.Context) (*doltdb.CommitSpec, error) {
 	// TODO: get rid of this
-	ref, err := s.CWBHeadRef()
+	ref, err := s.CWBHeadRef(ctx)
 	if err != nil {
 		return nil, err
 	}

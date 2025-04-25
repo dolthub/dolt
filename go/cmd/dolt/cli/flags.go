@@ -22,6 +22,7 @@ const (
 	AllowEmptyFlag       = "allow-empty"
 	AmendFlag            = "amend"
 	AuthorParam          = "author"
+	ArchiveLevelParam    = "archive-level"
 	BranchParam          = "branch"
 	CachedFlag           = "cached"
 	CheckoutCreateBranch = "b"
