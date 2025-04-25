@@ -172,6 +172,23 @@ func (tc *chunker[S]) advanceTo(ctx context.Context, next *cursor) error {
 	return tc.insertRange(ctx, tc.cur, next)
 }
 
+func insertNode[K ~[]byte, S message.Serializer, O Ordering[K]](ctx context.Context, tc *chunker[S], nd *Node, order O) error {
+	startCur, err := newCursorAtStart(ctx, tc.ns, *nd)
+	if err != nil {
+		return err
+	}
+	endCur, err := newCursorAtEnd(ctx, tc.ns, *nd)
+	if err != nil {
+		return err
+	}
+	err = tc.insertRange(ctx, startCur, endCur)
+	if err != nil {
+		return err
+	}
+	// advance original cursor
+	return Seek(ctx, tc.cur, K(endCur.CurrentKey()), order)
+}
+
 func (tc *chunker[S]) insertRange(ctx context.Context, start, end *cursor) error {
 	cur := start
 	cmp := cur.compare(end)
@@ -224,6 +241,7 @@ func (tc *chunker[S]) insertRange(ctx context.Context, start, end *cursor) error
 		return nil
 	}
 
+	// TODO: this won't work if the cursor is from another tree
 	if cur.parent.compare(end.parent) == 0 { // step (3)
 		// (rare) new tree synchronized with old tree at the
 		// same time as the cursor caught up to the next mutation point

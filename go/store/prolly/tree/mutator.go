@@ -179,15 +179,18 @@ func applyNodeMutation[K ~[]byte, O Ordering[K], S message.Serializer](
 
 	// In this mutation type, the key refers to the last key before the start of the chunk.
 	// move |cur| to the NextMutation mutation point
-	err = Seek(ctx, cur, K(prevKey), order)
-	if err != nil {
-		return err
-	}
-	// if that key exists in the cursor we may need to advance one into the start of the affected region?
-	if order.Compare(ctx, K(prevKey), K(cur.CurrentKey())) == 0 {
-		err = cur.advance(ctx)
+	// prevKey may be nil if we're in the very first block.
+	if prevKey != nil {
+		err = Seek(ctx, cur, K(prevKey), order)
 		if err != nil {
 			return err
+		}
+		// if that key exists in the cursor we may need to advance one into the start of the affected region?
+		if order.Compare(ctx, K(prevKey), K(cur.CurrentKey())) == 0 {
+			err = cur.advance(ctx)
+			if err != nil {
+				return err
+			}
 		}
 	}
 
@@ -207,7 +210,7 @@ func applyNodeMutation[K ~[]byte, O Ordering[K], S message.Serializer](
 	// If we're on a chunk boundary, this will just copy the node in.
 	endCur := chkr.cur.clone()
 	endCur.skipToNodeEnd()
-	err = chkr.insertRange(ctx, chkr.cur, endCur)
+	err = insertNode(ctx, chkr, node, order)
 	if err != nil {
 		return err
 	}
