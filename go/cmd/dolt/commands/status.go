@@ -335,8 +335,8 @@ func getRemoteInfo(queryist cli.Queryist, sqlCtx *sql.Context, branchName string
 		if err != nil {
 			return ahead, behind, err
 		}
-		if len(remoteBranches) != 1 {
-			return ahead, behind, fmt.Errorf("could not find remote branch %s", remoteBranchRef)
+		if len(remoteBranches) == 0 {
+			return ahead, behind, nil
 		}
 		remoteBranchCommit := remoteBranches[0][1].(string)
 
