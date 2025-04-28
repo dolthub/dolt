@@ -271,7 +271,7 @@ func (dEnv *DoltEnv) Valid() bool {
 // initWorkingSetFromRepoState sets the working set for the env's head to mirror the contents of the repo state file.
 // This is only necessary to migrate repos written before this method was introduced, and can be removed after 1.0
 func (dEnv *DoltEnv) initWorkingSetFromRepoState(ctx context.Context) error {
-	headRef, err := dEnv.RepoStateReader().CWBHeadRef()
+	headRef, err := dEnv.RepoStateReader().CWBHeadRef(ctx)
 	if err != nil {
 		return err
 	}
@@ -610,8 +610,8 @@ func (dEnv *DoltEnv) InitializeRepoState(ctx context.Context, branchName string)
 	return nil
 }
 
-type RootsProvider interface {
-	GetRoots(ctx context.Context) (doltdb.Roots, error)
+type RootsProvider[C doltdb.Context] interface {
+	GetRoots(ctx C) (doltdb.Roots, error)
 }
 
 // Roots returns the roots for this environment
@@ -691,8 +691,8 @@ func (dEnv *DoltEnv) WorkingSet(ctx context.Context) (*doltdb.WorkingSet, error)
 	return WorkingSet(ctx, dEnv.DoltDB(ctx), dEnv.RepoStateReader())
 }
 
-func WorkingSet(ctx context.Context, ddb *doltdb.DoltDB, rsr RepoStateReader) (*doltdb.WorkingSet, error) {
-	headRef, err := rsr.CWBHeadRef()
+func WorkingSet[C doltdb.Context](ctx C, ddb *doltdb.DoltDB, rsr RepoStateReader[C]) (*doltdb.WorkingSet, error) {
+	headRef, err := rsr.CWBHeadRef(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -760,21 +760,21 @@ type repoStateReader struct {
 	*DoltEnv
 }
 
-func (r *repoStateReader) CWBHeadRef() (ref.DoltRef, error) {
+func (r *repoStateReader) CWBHeadRef(context.Context) (ref.DoltRef, error) {
 	if r.RepoState == nil && r.RSLoadErr != nil {
 		return nil, r.RSLoadErr
 	}
 	return r.RepoState.CWBHeadRef(), nil
 }
 
-func (r *repoStateReader) CWBHeadSpec() (*doltdb.CommitSpec, error) {
+func (r *repoStateReader) CWBHeadSpec(context.Context) (*doltdb.CommitSpec, error) {
 	if r.RepoState == nil && r.RSLoadErr != nil {
 		return nil, r.RSLoadErr
 	}
 	return r.RepoState.CWBHeadSpec(), nil
 }
 
-func (dEnv *DoltEnv) RepoStateReader() RepoStateReader {
+func (dEnv *DoltEnv) RepoStateReader() RepoStateReader[context.Context] {
 	return &repoStateReader{dEnv}
 }
 
@@ -830,8 +830,8 @@ func (dEnv *DoltEnv) HeadCommit(ctx context.Context) (*doltdb.Commit, error) {
 	return dEnv.DoltDB(ctx).ResolveCommitRef(ctx, dEnv.RepoState.CWBHeadRef())
 }
 
-func (dEnv *DoltEnv) DbData(ctx context.Context) DbData {
-	return DbData{
+func (dEnv *DoltEnv) DbData(ctx context.Context) DbData[context.Context] {
+	return DbData[context.Context]{
 		Ddb: dEnv.DoltDB(ctx),
 		Rsw: dEnv.RepoStateWriter(),
 		Rsr: dEnv.RepoStateReader(),
@@ -1160,7 +1160,7 @@ func (dEnv *DoltEnv) FindRef(ctx context.Context, refStr string) (ref.DoltRef, e
 
 // GetRefSpecs takes an optional remoteName and returns all refspecs associated with that remote.  If "" is passed as
 // the remoteName then the default remote is used.
-func GetRefSpecs(rsr RepoStateReader, remoteName string) ([]ref.RemoteRefSpec, error) {
+func GetRefSpecs[C doltdb.Context](rsr RepoStateReader[C], remoteName string) ([]ref.RemoteRefSpec, error) {
 	var remote Remote
 	var err error
 
@@ -1207,7 +1207,7 @@ var ErrCantDetermineDefault = errors.New("unable to determine the default remote
 
 // GetDefaultRemote gets the default remote for the environment.  Not fully implemented yet.  Needs to support multiple
 // repos and a configurable default.
-func GetDefaultRemote(rsr RepoStateReader) (Remote, error) {
+func GetDefaultRemote[C doltdb.Context](rsr RepoStateReader[C]) (Remote, error) {
 	remotes, err := rsr.GetRemotes()
 	if err != nil {
 		return NoRemote, err

@@ -15,7 +15,6 @@
 package merge
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"time"
@@ -81,9 +80,9 @@ func WithSquash(squash bool) MergeSpecOpt {
 }
 
 // NewMergeSpec returns a MergeSpec with the arguments provided.
-func NewMergeSpec(
-	ctx context.Context,
-	rsr env.RepoStateReader,
+func NewMergeSpec[C doltdb.Context](
+	ctx C,
+	rsr env.RepoStateReader[C],
 	ddb *doltdb.DoltDB,
 	roots doltdb.Roots,
 	name, email, commitSpecStr string,
@@ -95,7 +94,7 @@ func NewMergeSpec(
 		return nil, err
 	}
 
-	headRef, err := rsr.CWBHeadRef()
+	headRef, err := rsr.CWBHeadRef(ctx)
 	if err != nil {
 		return nil, err
 	}

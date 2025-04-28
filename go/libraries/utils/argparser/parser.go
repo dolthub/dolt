@@ -141,6 +141,14 @@ func (ap *ArgParser) SupportsString(name, abbrev, valDesc, desc string) *ArgPars
 	return ap
 }
 
+// SupportsRequiredString adds support for a new required string argument with the description given. See SupportOpt for details on params.
+func (ap *ArgParser) SupportsRequiredString(name, abbrev, valDesc, desc string) *ArgParser {
+	opt := &Option{name, abbrev, valDesc, RequiredValue, desc, nil, false}
+	ap.SupportOption(opt)
+
+	return ap
+}
+
 // SupportsStringList adds support for a new string list argument with the description given. See SupportOpt for details on params.
 func (ap *ArgParser) SupportsStringList(name, abbrev, valDesc, desc string) *ArgParser {
 	opt := &Option{name, abbrev, valDesc, OptionalValue, desc, nil, true}
@@ -240,7 +248,7 @@ func (ap *ArgParser) matchModalOptions(arg string) (matches []*Option, rest stri
 func (ap *ArgParser) sortedValueOptions() []string {
 	vos := make([]string, 0, len(ap.Supported))
 	for s, opt := range ap.nameOrAbbrevToOpt {
-		if (opt.OptType == OptionalValue || opt.OptType == OptionalEmptyValue) && s != "" {
+		if (opt.OptType == OptionalValue || opt.OptType == OptionalEmptyValue || opt.OptType == RequiredValue) && s != "" {
 			vos = append(vos, s)
 		}
 	}
@@ -339,6 +347,14 @@ func (ap *ArgParser) Parse(args []string) (*ArgParseResults, error) {
 
 	if ap.MaxArgs != -1 && len(positionalArgs) > ap.MaxArgs {
 		return nil, ap.TooManyArgsErrorFunc(positionalArgs)
+	}
+
+	for _, option := range ap.Supported {
+		if option.OptType == RequiredValue {
+			if _, ok := namedArgs[option.Name]; !ok {
+				return nil, fmt.Errorf("option '%s' is required", option.Name)
+			}
+		}
 	}
 
 	return &ArgParseResults{namedArgs, positionalArgs, ap, positionalArgsSeparatorIndex}, nil

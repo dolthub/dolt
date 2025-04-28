@@ -192,8 +192,8 @@ func transferWorkingChanges(
 }
 
 // willModifyDb determines whether or not this operation is a no-op and can return early with a helpful message.
-func willModifyDb(dSess *dsess.DoltSession, data env.DbData, dbName, branchName string, updateHead bool) (bool, error) {
-	headRef, err := data.Rsr.CWBHeadRef()
+func willModifyDb(ctx *sql.Context, dSess *dsess.DoltSession, data env.DbData[*sql.Context], dbName, branchName string, updateHead bool) (bool, error) {
+	headRef, err := data.Rsr.CWBHeadRef(ctx)
 	// If we're in a detached head state, allow checking out a new branch.
 	if err == doltdb.ErrOperationNotSupportedInDetachedHead {
 		return true, nil

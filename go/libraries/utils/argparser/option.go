@@ -25,6 +25,7 @@ const (
 	OptionalFlag OptionType = iota
 	OptionalValue
 	OptionalEmptyValue
+	RequiredValue
 )
 
 type ValidationFunc func(string) error

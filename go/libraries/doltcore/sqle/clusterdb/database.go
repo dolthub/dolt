@@ -113,7 +113,7 @@ func (db database) InitialDBState(ctx *sql.Context) (dsess.InitialDbState, error
 	//  repo state writer
 	return dsess.InitialDbState{
 		Db: db,
-		DbData: env.DbData{
+		DbData: env.DbData[*sql.Context]{
 			Rsw: noopRepoStateWriter{},
 		},
 		ReadOnly: true,
@@ -134,8 +134,8 @@ func (db database) GetRoot(context *sql.Context) (doltdb.RootValue, error) {
 	return nil, errors.New("unimplemented")
 }
 
-func (db database) DbData() env.DbData {
-	return env.DbData{}
+func (db database) DbData() env.DbData[*sql.Context] {
+	return env.DbData[*sql.Context]{}
 }
 
 func (db database) EditOptions() editor.Options {

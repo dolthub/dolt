@@ -98,7 +98,7 @@ func resolveRefSpecs(ctx *sql.Context, leftSpec, rightSpec string) (left, right 
 		return nil, nil, sql.ErrDatabaseNotFound.New(dbName)
 	}
 
-	headRef, err := dbData.Rsr.CWBHeadRef()
+	headRef, err := dbData.Rsr.CWBHeadRef(ctx)
 	if err != nil {
 		return nil, nil, err
 	}

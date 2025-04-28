@@ -320,7 +320,7 @@ func fullClone(ctx context.Context, srcDB *doltdb.DoltDB, dEnv *env.DoltEnv, src
 
 // shallowCloneDataPull is a shallow clone specific helper function to pull only the data required to show the given branch
 // at the depth given.
-func shallowCloneDataPull(ctx context.Context, destData env.DbData, srcDB *doltdb.DoltDB, remoteName, branch string, depth int) (*doltdb.Commit, error) {
+func shallowCloneDataPull[C doltdb.Context](ctx C, destData env.DbData[C], srcDB *doltdb.DoltDB, remoteName, branch string, depth int) (*doltdb.Commit, error) {
 	remotes, err := destData.Rsr.GetRemotes()
 	if err != nil {
 		return nil, err

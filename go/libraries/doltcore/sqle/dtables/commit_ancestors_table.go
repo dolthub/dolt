@@ -92,7 +92,7 @@ func (ct *CommitAncestorsTable) PartitionRows(ctx *sql.Context, p sql.Partition)
 	switch p := p.(type) {
 	case *doltdb.CommitPart:
 		return &CommitAncestorsRowItr{
-			itr: doltdb.NewOneCommitIter(p.Commit(), p.Hash(), p.Meta()),
+			itr: doltdb.NewOneCommitIter[*sql.Context](p.Commit(), p.Hash(), p.Meta()),
 			ddb: ct.ddb,
 		}, nil
 	default:
@@ -137,14 +137,14 @@ func (ct *CommitAncestorsTable) LookupPartitions(ctx *sql.Context, lookup sql.In
 // CommitAncestorsRowItr is a sql.RowItr which iterates over each
 // (commit, parent_commit) pair as if it's a row in the table.
 type CommitAncestorsRowItr struct {
-	itr   doltdb.CommitItr
+	itr   doltdb.CommitItr[*sql.Context]
 	ddb   *doltdb.DoltDB
 	cache []sql.Row
 }
 
 // NewCommitAncestorsRowItr creates a CommitAncestorsRowItr from the current environment.
 func NewCommitAncestorsRowItr(sqlCtx *sql.Context, ddb *doltdb.DoltDB) (*CommitAncestorsRowItr, error) {
-	itr, err := doltdb.CommitItrForAllBranches(sqlCtx, ddb)
+	itr, err := doltdb.CommitItrForAllBranches[*sql.Context](sqlCtx, ddb)
 	if err != nil {
 		return nil, err
 	}
