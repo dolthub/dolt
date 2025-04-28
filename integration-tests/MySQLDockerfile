@@ -19,7 +19,7 @@ RUN apt update -y && \
     dpkg -i elixir_1.14.3_1_otp_25.3~ubuntu~focal_all.deb
 RUN apt update -y && \
     apt install -y \
-        python3.8 \
+        python3.9 \
         python3-pip \
         curl \
         wget \
