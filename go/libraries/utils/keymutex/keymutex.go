@@ -28,8 +28,8 @@ import (
 //
 // A keymutex's Lock function should respect Context cancelation.
 type Keymutex interface {
-	Lock(ctx context.Context, id string) error
-	Unlock(id string)
+	Lock(ctx context.Context, key string) error
+	Unlock(key string)
 }
 
 // Returns a Keymutex which stores mutexes in a map. This Keymutex has
@@ -57,14 +57,14 @@ func newMapKeymutexState() *mapKeymutexState {
 	}
 }
 
-func (m *mapKeymutex) Lock(ctx context.Context, id string) error {
+func (m *mapKeymutex) Lock(ctx context.Context, key string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	var state *mapKeymutexState
 	var ok bool
-	if state, ok = m.states[id]; !ok {
+	if state, ok = m.states[key]; !ok {
 		state = newMapKeymutexState()
-		m.states[id] = state
+		m.states[key] = state
 	}
 	if state.sema.TryAcquire(1) {
 		return nil
@@ -77,12 +77,12 @@ func (m *mapKeymutex) Lock(ctx context.Context, id string) error {
 	return err
 }
 
-func (m *mapKeymutex) Unlock(id string) {
+func (m *mapKeymutex) Unlock(key string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	state := m.states[id]
+	state := m.states[key]
 	state.sema.Release(1)
 	if state.waitCnt == 0 {
-		delete(m.states, id)
+		delete(m.states, key)
 	}
 }
