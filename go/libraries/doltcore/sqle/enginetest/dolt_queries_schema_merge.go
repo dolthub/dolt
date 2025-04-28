@@ -648,7 +648,7 @@ var SchemaChangeTestsBasicCases = []MergeScriptTest{
 		// One branch adds a new column with NULL as default
 		// Other branch has new rows which need to be migrated.
 		// Created values are NULL, not "NULL".
-		Name: "creating new column to replace ancestor column",
+		Name: "NULL column merge results in NULL values",
 		AncSetUpScript: []string{
 			"CREATE table t (pk int primary key);",
 			"INSERT into t values (1), (2);",
@@ -675,6 +675,37 @@ var SchemaChangeTestsBasicCases = []MergeScriptTest{
 					{4, "four"},
 					{5, nil},
 					{6, nil},
+				},
+			},
+		},
+	},
+	{
+		Name: "setting the default value to string 'NULL'",
+		AncSetUpScript: []string{
+			"CREATE table t (pk int primary key);",
+			"INSERT into t values (1), (2);",
+		},
+		RightSetUpScript: []string{
+			"ALTER TABLE t ADD new_col LONGTEXT DEFAULT 'NULL'",
+			"INSERT INTO t VALUES (3, 'three'), (4, 'four');",
+		},
+		LeftSetUpScript: []string{
+			"INSERT INTO t VALUES (5), (6)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query: "select * from t;",
+				Expected: []sql.Row{
+					{1, "NULL"},
+					{2, "NULL"},
+					{3, "three"},
+					{4, "four"},
+					{5, "NULL"},
+					{6, "NULL"},
 				},
 			},
 		},
