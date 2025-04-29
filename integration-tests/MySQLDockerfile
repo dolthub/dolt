@@ -82,9 +82,9 @@ RUN curl -LO https://download.visualstudio.microsoft.com/download/pr/13b9d84c-a3
     tar -C /usr/local/bin -xzf dotnet-sdk-5.0.400-linux-x64.tar.gz && \
     dotnet --version
 
-# install pip for python3.8
+# install pip for python3.9
 RUN curl -LO https://bootstrap.pypa.io/get-pip.py && \
-  python3.8 get-pip.py && \
+  python3.9 get-pip.py && \
   pip --version
 
 # install mysql connector and pymsql
