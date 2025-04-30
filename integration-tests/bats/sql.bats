@@ -2227,7 +2227,7 @@ INSERT INTO test VALUES (6, 6, 6)
 SQL
     run dolt sql -q "CALL p1(3)" -r=csv
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "(test.pk + x),(test.v1 + x),(test.v2 + x)" ]] || false
+    [[ "$output" =~ "(test.pk + 10),(test.v1 + 10),(test.v2 + 10)" ]] || false
     [[ "$output" =~ "11,11,11" ]] || false
     [[ "$output" =~ "12,12,12" ]] || false
     [[ "$output" =~ "13,13,13" ]] || false
@@ -2238,7 +2238,7 @@ SQL
 
     run dolt sql -q "CALL p1(20)" -r=csv
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "(test.pk + x),(test.v1 + x),(test.v2 + x)" ]] || false
+    [[ "$output" =~ "(test.pk + 20),(test.v1 + 20),(test.v2 + 20)" ]] || false
     [[ "$output" =~ "21,21,21" ]] || false
     [[ "$output" =~ "22,22,22" ]] || false
     [[ "$output" =~ "23,23,23" ]] || false

@@ -113,9 +113,57 @@ func TestSchemaOverridesWithAdaptiveEncoding(t *testing.T) {
 
 // Convenience test for debugging a single query. Unskip and set to the desired query.
 func TestSingleScript(t *testing.T) {
-	t.Skip()
-
-	var scripts = []queries.ScriptTest{}
+	//t.Skip()
+	var scripts = []queries.ScriptTest{
+		{
+			Name: "Database syntax properly handles inter-CALL communication",
+			SetUpScript: []string{
+				`CREATE PROCEDURE p1()
+BEGIN
+	DECLARE str VARCHAR(20);
+   CALL p2(str);
+	SET str = CONCAT('a', str);
+   SELECT str;
+END`,
+				`CREATE PROCEDURE p2(OUT param VARCHAR(20))
+BEGIN
+	SET param = 'b';
+END`,
+				"CALL DOLT_ADD('-A');",
+				"CALL DOLT_COMMIT('-m', 'First procedures');",
+				"CALL DOLT_BRANCH('p12');",
+				"DROP PROCEDURE p1;",
+				"DROP PROCEDURE p2;",
+				`CREATE PROCEDURE p1()
+BEGIN
+	DECLARE str VARCHAR(20);
+    CALL p2(str);
+	SET str = CONCAT('c', str);
+   SELECT str;
+END`,
+				`CREATE PROCEDURE p2(OUT param VARCHAR(20))
+BEGIN
+	SET param = 'd';
+END`,
+				"CALL DOLT_ADD('-A');",
+				"CALL DOLT_COMMIT('-m', 'Second procedures');",
+			},
+			Assertions: []queries.ScriptTestAssertion{
+				{
+					Query:    "CALL p1();",
+					Expected: []sql.Row{{"cd"}},
+				},
+				{
+					Query:    "CALL `mydb/main`.p1();",
+					Expected: []sql.Row{{"cd"}},
+				},
+				{
+					Query:    "CALL `mydb/p12`.p1();",
+					Expected: []sql.Row{{"ab"}},
+				},
+			},
+		},
+	}
 
 	for _, script := range scripts {
 		harness := newDoltHarness(t)
