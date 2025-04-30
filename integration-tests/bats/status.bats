@@ -582,23 +582,25 @@ SQL
 }
 
 @test "status: after remove remote" {
-    remotesrv --grpc-port 1234 --http-port 1234 --repo-mode &
-    remotesrv_pid=$!
-
-    dolt clone http://localhost:1234/test-org/test-repo repo1
+    mkdir remote
+    mkdir repo1
 
     cd repo1
+    dolt init
+    dolt remote add origin file://../remote
+    dolt push origin main
+
+    cd ..
+    dolt clone file://./remote repo2
+    cd repo2
 
     run dolt remote -v
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "origin http://localhost:1234/test-org/test-repo" ]] || false
+    [[ "$output" =~ "origin file:///" ]] || false
 
     dolt remote rm origin
 
     run dolt status
     [ "$status" -eq 0 ]
     [[ "$output" =~ "On branch main" ]] || false
-
-    kill "$remotesrv_pid"
-    wait "$remotesrv_pid" || :
 }
