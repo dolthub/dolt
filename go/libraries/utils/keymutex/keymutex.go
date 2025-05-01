@@ -66,15 +66,22 @@ func (m *mapKeymutex) Lock(ctx context.Context, key string) error {
 		state = newMapKeymutexState()
 		m.states[key] = state
 	}
+	state.waitCnt += 1
 	if state.sema.TryAcquire(1) {
 		return nil
 	}
-	state.waitCnt += 1
 	m.mu.Unlock()
 	err := state.sema.Acquire(ctx, 1)
 	m.mu.Lock()
-	state.waitCnt -= 1
-	return err
+	if err != nil {
+		state.waitCnt -= 1
+		if state.waitCnt == 0 {
+			delete(m.states, key)
+		}
+		return err
+	} else {
+		return nil
+	}
 }
 
 func (m *mapKeymutex) Unlock(key string) {
@@ -82,6 +89,7 @@ func (m *mapKeymutex) Unlock(key string) {
 	defer m.mu.Unlock()
 	state := m.states[key]
 	state.sema.Release(1)
+	state.waitCnt -= 1
 	if state.waitCnt == 0 {
 		delete(m.states, key)
 	}
