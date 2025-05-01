@@ -195,17 +195,18 @@ func applyNodeMutation[K ~[]byte, O Ordering[K], S message.Serializer](
 	}
 
 	err = chkr.advanceTo(ctx, cur)
-	/*
-		if err != nil {
-			return err
-		}
 
-			prev := newKey
-			newKey, newValue = edits.NextMutation(ctx)
-			if newKey != nil {
-				assertTrue(order.Compare(K(newKey), K(prev)) > 0, "expected sorted edits")
-			}
-		}*/
+	if err != nil {
+		return err
+	}
+	/*
+
+		prev := newKey
+		newKey, newValue = edits.NextMutation(ctx)
+		if newKey != nil {
+			assertTrue(order.Compare(K(newKey), K(prev)) > 0, "expected sorted edits")
+		}
+	}*/
 	// Append all key-values from the Node.
 	// If we're on a chunk boundary, this will just copy the node in.
 	endCur := chkr.cur.clone()
