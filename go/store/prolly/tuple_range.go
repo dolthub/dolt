@@ -267,7 +267,7 @@ func IncrementTuple(ctx context.Context, start val.Tuple, n int, desc val.TupleD
 		if !ok {
 			return nil, false, nil
 		}
-		tb.PutString(n, string(v)+"0")
+		tb.PutString(n, string(v)+"\000")
 	case val.Int8Enc:
 		v, ok := desc.GetInt8(n, start)
 		if !ok {

@@ -644,6 +644,41 @@ var SchemaChangeTestsBasicCases = []MergeScriptTest{
 			},
 		},
 	},
+	{
+		// One branch adds a new column with NULL as default
+		// Other branch has new rows which need to be migrated.
+		// Created values are NULL, not "NULL".
+		Name: "creating new column to replace ancestor column",
+		AncSetUpScript: []string{
+			"CREATE table t (pk int primary key);",
+			"INSERT into t values (1), (2);",
+		},
+		RightSetUpScript: []string{
+			"ALTER TABLE t ADD new_col LONGTEXT DEFAULT NULL",
+			"INSERT INTO t VALUES (3, 'three'), (4, 'four');",
+		},
+		LeftSetUpScript: []string{
+			// Put rows on main which are not in the right branch.
+			"INSERT INTO t VALUES (5), (6)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				Query: "select * from t;",
+				Expected: []sql.Row{
+					{1, nil},
+					{2, nil},
+					{3, "three"},
+					{4, "four"},
+					{5, nil},
+					{6, nil},
+				},
+			},
+		},
+	},
 }
 
 var SchemaChangeTestsCollations = []MergeScriptTest{
@@ -851,6 +886,26 @@ var SchemaChangeTestsConstraints = []MergeScriptTest{
 			{
 				Query:    "select * from child;",
 				Expected: []sql.Row{{1, 1}, {2, 1}},
+			},
+		},
+	},
+	{
+		// https://github.com/dolthub/dolt/issues/9014
+		Name: "foreign keys – drop tables with FK reference between them",
+		AncSetUpScript: []string{
+			"CREATE TABLE a (id int PRIMARY KEY, name varchar(256) NOT NULL);",
+			"CREATE TABLE b (id int PRIMARY KEY, assetId int, KEY file_assetid_foreign (assetId), CONSTRAINT file_assetid_foreign FOREIGN KEY (assetId) REFERENCES a(id));",
+		},
+		RightSetUpScript: []string{
+			"CREATE TABLE c (id int PRIMARY KEY);",
+		},
+		LeftSetUpScript: []string{
+			"DROP TABLE a, b;",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL dolt_merge('right');",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
 			},
 		},
 	},

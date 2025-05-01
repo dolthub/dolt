@@ -27,6 +27,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
@@ -173,11 +174,11 @@ func drainIter(ctx *sql.Context, iter sql.RowIter) error {
 func getDbState(t *testing.T, db sql.Database, dEnv *env.DoltEnv) (dsess.InitialDbState, error) {
 	ctx := context.Background()
 
-	headSpec, err := dEnv.RepoStateReader().CWBHeadSpec()
+	headSpec, err := dEnv.RepoStateReader().CWBHeadSpec(ctx)
 	if err != nil {
 		return dsess.InitialDbState{}, err
 	}
-	headRef, err := dEnv.RepoStateReader().CWBHeadRef()
+	headRef, err := dEnv.RepoStateReader().CWBHeadRef(ctx)
 	if err != nil {
 		return dsess.InitialDbState{}, err
 	}
@@ -194,7 +195,23 @@ func getDbState(t *testing.T, db sql.Database, dEnv *env.DoltEnv) (dsess.Initial
 		Db:         db,
 		HeadCommit: headCommit,
 		WorkingSet: ws,
-		DbData:     dEnv.DbData(ctx),
-		Remotes:    dEnv.RepoState.Remotes,
+		DbData: env.DbData[*sql.Context]{
+			Ddb: dEnv.DoltDB(ctx),
+			Rsr: forwardCtxDbData{dEnv.DbData(ctx).Rsr},
+			Rsw: dEnv.DbData(ctx).Rsw,
+		},
+		Remotes: dEnv.RepoState.Remotes,
 	}, nil
+}
+
+type forwardCtxDbData struct {
+	env.RepoStateReader[context.Context]
+}
+
+func (d forwardCtxDbData) CWBHeadSpec(ctx *sql.Context) (*doltdb.CommitSpec, error) {
+	return d.RepoStateReader.CWBHeadSpec(ctx)
+}
+
+func (d forwardCtxDbData) CWBHeadRef(ctx *sql.Context) (ref.DoltRef, error) {
+	return d.RepoStateReader.CWBHeadRef(ctx)
 }

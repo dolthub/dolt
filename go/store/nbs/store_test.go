@@ -213,9 +213,12 @@ func TestNBSPruneTableFiles(t *testing.T) {
 	}, st.refCheck)
 	require.NoError(t, err)
 	require.True(t, ok)
+
 	ok, err = st.Commit(ctx, st.upstream.root, st.upstream.root)
 	require.True(t, ok)
 	require.NoError(t, err)
+
+	waitForConjoin(st)
 
 	_, sources, _, err := st.Sources(ctx)
 	require.NoError(t, err)
@@ -339,7 +342,7 @@ func TestNBSCopyGC(t *testing.T) {
 	noopFilter := func(ctx context.Context, hashes hash.HashSet) (hash.HashSet, error) {
 		return hashes, nil
 	}
-	sweeper, err := st.MarkAndSweepChunks(ctx, noopGetAddrs, noopFilter, nil, chunks.GCMode_Full)
+	sweeper, err := st.MarkAndSweepChunks(ctx, noopGetAddrs, noopFilter, nil, chunks.GCMode_Full, chunks.NoArchive)
 	require.NoError(t, err)
 	keepersSlice := make([]hash.Hash, 0, len(keepers))
 	for h := range keepers {

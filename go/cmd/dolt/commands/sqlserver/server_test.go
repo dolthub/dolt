@@ -508,7 +508,11 @@ func TestReadReplica(t *testing.T) {
 
 	localCfg, ok := multiSetup.GetEnv(readReplicaDbName).Config.GetConfig(env.LocalConfig)
 	require.True(t, ok, "local config does not exist")
-	config.NewPrefixConfig(localCfg, env.SqlServerGlobalsPrefix).SetStrings(map[string]string{dsess.ReadReplicaRemote: "remote1", dsess.ReplicateHeads: "main"})
+	config.NewPrefixConfig(localCfg, env.SqlServerGlobalsPrefix).SetStrings(map[string]string{
+		dsess.ReadReplicaRemote: "remote1",
+		dsess.ReplicateHeads:    "main",
+		dsess.DoltStatsEnabled:  "false",
+	})
 	dsess.InitPersistedSystemVars(multiSetup.GetEnv(readReplicaDbName))
 
 	// start server as read replica
@@ -590,6 +594,7 @@ func TestGenerateYamlConfig(t *testing.T) {
   # event_scheduler: "OFF"
   # auto_gc_behavior:
     # enable: false
+    # archive_level: 0
 
 listener:
   # host: localhost

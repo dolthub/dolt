@@ -332,7 +332,7 @@ func MergeRoots(
 			tblToStats[tblName] = &MergeStats{Operation: TableRemoved}
 
 			// TODO: drop schemas as necessary
-			mergedRoot, err = mergedRoot.RemoveTables(ctx, false, false, tblName)
+			mergedRoot, err = mergedRoot.RemoveTables(ctx, false, true, tblName)
 			if err != nil {
 				return nil, err
 			}
