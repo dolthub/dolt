@@ -7769,4 +7769,36 @@ var DoltTempTableScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name:    "temporary tables in stored procedures",
+		Dialect: "mysql",
+		SetUpScript: []string{
+			`
+create procedure proc()
+begin
+  create temporary table tmp (i int primary key);
+  insert into tmp values (1), (2), (3);
+  select * from tmp;
+end;
+`,
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "call proc();",
+				Expected: []sql.Row{
+					{1},
+					{2},
+					{3},
+				},
+			},
+			{
+				Query: "select * from tmp;",
+				Expected: []sql.Row{
+					{1},
+					{2},
+					{3},
+				},
+			},
+		},
+	},
 }
