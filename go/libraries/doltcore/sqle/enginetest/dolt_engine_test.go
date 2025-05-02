@@ -114,52 +114,52 @@ func TestSchemaOverridesWithAdaptiveEncoding(t *testing.T) {
 // Convenience test for debugging a single query. Unskip and set to the desired query.
 func TestSingleScript(t *testing.T) {
 	//t.Skip()
+
+	
+sql.Row{"v3ovmbhvfpsl60i7ipg9b0vljsc0vcga", "C6", interface {}(nil), interface {}(nil)}, 
+sql.Row{"o9712qt6v19bdbn4gtp9ivha86i6ragf", "C5", interface {}(nil), interface {}(nil)}, 
+sql.Row{"bdvq579k1fhsfg0putcvv2plbpmo4k34", "C4", "bdvq579k1fhsfg0putcvv2plbpmo4k34", "C4"}, 
+sql.Row{"v2puca30nbv69vtqtoo02d66r5hscogp", "C3", "v2puca30nbv69vtqtoo02d66r5hscogp", "C3"}, 
+sql.Row{"1enqqtnn7tmdmsl01782t2l8sfob5s9a", "C2", "1enqqtnn7tmdmsl01782t2l8sfob5s9a", "C2"}, 
+sql.Row{"uhngue3m4jcrucr1phttaqd4h5plu4it", "C1", "uhngue3m4jcrucr1phttaqd4h5plu4it", "C1"}, 
+sql.Row{"oj3aon78aeoftall6saoafdhshb9g1c5", "checkpoint enginetest database mydb", "oj3aon78aeoftall6saoafdhshb9g1c5", "checkpoint enginetest database mydb"}, 
+sql.Row{"gltfgpf6g23r8ht07hg9rs3elm85g92d", "Initialize data repository", "gltfgpf6g23r8ht07hg9rs3elm85g92d", "Initialize data repository"},
+
+
 	var scripts = []queries.ScriptTest{
 		{
-			Name: "Database syntax properly handles inter-CALL communication",
+			Name: "test dolt_branch_status(...)",
 			SetUpScript: []string{
-				`CREATE PROCEDURE p1()
-BEGIN
-	DECLARE str VARCHAR(20);
-   CALL p2(str);
-	SET str = CONCAT('a', str);
-   SELECT str;
-END`,
-				`CREATE PROCEDURE p2(OUT param VARCHAR(20))
-BEGIN
-	SET param = 'b';
-END`,
-				"CALL DOLT_ADD('-A');",
-				"CALL DOLT_COMMIT('-m', 'First procedures');",
-				"CALL DOLT_BRANCH('p12');",
-				"DROP PROCEDURE p1;",
-				"DROP PROCEDURE p2;",
-				`CREATE PROCEDURE p1()
-BEGIN
-	DECLARE str VARCHAR(20);
-    CALL p2(str);
-	SET str = CONCAT('c', str);
-   SELECT str;
-END`,
-				`CREATE PROCEDURE p2(OUT param VARCHAR(20))
-BEGIN
-	SET param = 'd';
-END`,
-				"CALL DOLT_ADD('-A');",
-				"CALL DOLT_COMMIT('-m', 'Second procedures');",
+				"call dolt_tag('anc', 'HEAD');",
+				"call dolt_branch('b1');",
+				"call dolt_commit('-m', 'C1', '--allow-empty');",
+				"call dolt_commit('-m', 'C2', '--allow-empty');",
+				"call dolt_commit('-m', 'C3', '--allow-empty');",
+				"call dolt_tag('t1', 'HEAD');",
+				"call dolt_commit('-m', 'C4', '--allow-empty');",
+				"call dolt_branch('b2');",
+				"call dolt_commit('-m', 'C5', '--allow-empty');",
+				"call dolt_commit('-m', 'C6', '--allow-empty');",
+				"call dolt_checkout('b1');",
+				"call dolt_commit('-m', 'C7', '--allow-empty');",
+				"call dolt_merge('t1', '-m', 'M1');",
+				"call dolt_tag('t2', 'HEAD');",
+				"call dolt_commit('-m', 'C8', '--allow-empty');",
+				"call dolt_checkout('b2');",
+				"call dolt_merge('b1', '-m', 'M2');",
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query:    "CALL p1();",
-					Expected: []sql.Row{{"cd"}},
+					Query:    "select d1.commit_hash, d1.message, d2.commit_hash, d2.message from dolt_log('b2') d1 left join dolt_log('main') d2 on d1.commit_hash = d2.commit_hash;",
+					Expected: []sql.Row{},
 				},
 				{
-					Query:    "CALL `mydb/main`.p1();",
-					Expected: []sql.Row{{"cd"}},
+					Query:    "select d1.commit_hash, d1.message, d2.commit_hash, d2.message from dolt_log('main') d1 left join dolt_log('b2') d2 on d1.commit_hash = d2.commit_hash;",
+					Expected: []sql.Row{},
 				},
 				{
-					Query:    "CALL `mydb/p12`.p1();",
-					Expected: []sql.Row{{"ab"}},
+					Query:    "select * from dolt_branch_status('main', 'b2')",
+					Expected: []sql.Row{},
 				},
 			},
 		},
