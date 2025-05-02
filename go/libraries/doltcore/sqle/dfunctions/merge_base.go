@@ -51,7 +51,7 @@ func (d MergeBase) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 	if !ok {
 		return nil, sql.ErrDatabaseNotFound.New(dbName)
 	}
-	headRef, err := dbData.Rsr.CWBHeadRef()
+	headRef, err := dbData.Rsr.CWBHeadRef(ctx)
 	if err != nil {
 		return nil, err
 	}

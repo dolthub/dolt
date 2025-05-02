@@ -192,7 +192,7 @@ func (b *BranchStatusTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.
 		}
 
 		var ahead, behind uint64
-		if commitIter, iErr := commitwalk.GetTopologicalOrderIterator(ctx, ddb, []hash.Hash{branchHash}, isNotGhostCommit); iErr != nil {
+		if commitIter, iErr := commitwalk.GetTopologicalOrderIterator[doltdb.Context](ctx, ddb, []hash.Hash{branchHash}, isNotGhostCommit); iErr != nil {
 			return nil, iErr
 		} else {
 			for {
@@ -210,7 +210,7 @@ func (b *BranchStatusTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.
 			}
 		}
 
-		if commitIter, iErr := commitwalk.GetTopologicalOrderIterator(ctx, ddb, []hash.Hash{baseHash}, isNotGhostCommit); iErr != nil {
+		if commitIter, iErr := commitwalk.GetTopologicalOrderIterator[doltdb.Context](ctx, ddb, []hash.Hash{baseHash}, isNotGhostCommit); iErr != nil {
 			return nil, iErr
 		} else {
 			for {

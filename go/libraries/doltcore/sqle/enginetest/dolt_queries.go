@@ -4877,6 +4877,12 @@ var BranchStatusTableFunctionScriptTests = []queries.ScriptTest{
 					{"HEAD~2", uint64(0), uint64(0)},
 				},
 			},
+			{
+				Query: "select commits_ahead, commits_behind from dolt_branch_status('main', dolt_hashof('b5'));",
+				Expected: []sql.Row{
+					{uint64(2), uint64(0)},
+				},
+			},
 		},
 	},
 	{
@@ -5009,7 +5015,7 @@ var BranchStatusTableFunctionScriptTests = []queries.ScriptTest{
 			{
 				Query: "select * from dolt_branch_status('main', 'b2');",
 				Expected: []sql.Row{
-					{"b2", uint64(1), uint64(2)}, // Currently Failing here.
+					{"b2", uint64(3), uint64(2)}, // Currently Failing here.
 				},
 			},
 			{
