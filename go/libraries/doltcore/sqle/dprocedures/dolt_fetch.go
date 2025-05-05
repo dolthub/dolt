@@ -87,7 +87,7 @@ func doDoltFetch(ctx *sql.Context, args []string) (int, error) {
 
 	err = srcDB.Rebase(ctx)
 	if err != nil {
-		return 1, fmt.Errorf("failed to rebase remote db: %w", err)
+		return 1, fmt.Errorf("failed to read latest version of remote db: %w", err)
 	}
 
 	prune := apr.Contains(cli.PruneFlag)

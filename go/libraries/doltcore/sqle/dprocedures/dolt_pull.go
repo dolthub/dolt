@@ -134,7 +134,7 @@ func doDoltPull(ctx *sql.Context, args []string) (int, int, string, error) {
 
 	err = srcDB.Rebase(ctx)
 	if err != nil {
-		return noConflictsOrViolations, threeWayMerge, "", fmt.Errorf("failed to rebase remote db: %w", err)
+		return noConflictsOrViolations, threeWayMerge, "", fmt.Errorf("failed to read latest version of remote db: %w", err)
 	}
 
 	ws, err := sess.WorkingSet(ctx, dbName)

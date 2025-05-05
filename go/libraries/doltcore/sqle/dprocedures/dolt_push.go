@@ -97,7 +97,7 @@ func doDoltPush(ctx *sql.Context, args []string) (int, string, error) {
 
 	err = remoteDB.Rebase(ctx)
 	if err != nil {
-		return cmdFailure, "", fmt.Errorf("error rebasing remote database %s@%s: %w", remote.Name, remote.Url, err)
+		return cmdFailure, "", fmt.Errorf("failed to read latest version of remote database %s@%s: %w", remote.Name, remote.Url, err)
 	}
 
 	tmpDir, err := dbData.Rsw.TempTableFilesDir()
