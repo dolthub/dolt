@@ -452,7 +452,7 @@ func (sc *StatsController) updateTable(ctx *sql.Context, newStats *rootStats, ta
 
 			_, template, err = sc.getTemplate(ctx, sqlTable, sqlIdx)
 			if err != nil {
-				return errors.Join(err, fmt.Errorf("stats collection failed to generate a statistic template: %s.%s.%s:%T; %s", sqlDb.RevisionQualifiedName(), tableName, sqlIdx, sqlIdx))
+				return errors.Join(err, fmt.Errorf("stats collection failed to generate a statistic template: %s.%s.%s:%T", sqlDb.RevisionQualifiedName(), tableName, sqlIdx.ID(), sqlIdx))
 			}
 			return nil
 		}); err != nil {
