@@ -416,3 +416,57 @@ tests:
     queries:
     - exec: "USE mydb"
     - exec: "CALL dolt_gc()"
+# Create three servers, all with a clone of a the same file remote.
+# Server #2 creates a table and pushes it.
+# Server #3 pulls the remote, inserts some rows into the table and pushes it.
+# Server #1 pulls the remote and asserts that the inserted rows are there.
+#
+# https://github.com/dolthub/dolt/issues/9164
+- name: file remotes update appropriately
+  multi_repos:
+  - name: server1
+    server:
+      args: ["--port", "{{get_port \"server1\"}}"]
+      dynamic_port: server1
+  - name: server2
+    server:
+      args: ["--port", "{{get_port \"server2\"}}"]
+      dynamic_port: server2
+  - name: server3
+    server:
+      args: ["--port", "{{get_port \"server3\"}}"]
+      dynamic_port: server3
+  connections:
+  - on: server1
+    queries:
+    - exec: "CREATE DATABASE mydb"
+    - exec: "USE mydb"
+    - exec: "CALL dolt_remote('add', 'origin', 'file://{{get_tempdir \"remote_storage\"}}')"
+    - exec: "CALL dolt_push('origin', 'main:main')"
+  - on: server2
+    queries:
+    - exec: "CALL dolt_clone('file://{{get_tempdir \"remote_storage\"}}', 'mydb')"
+  - on: server3
+    queries:
+    - exec: "CALL dolt_clone('file://{{get_tempdir \"remote_storage\"}}', 'mydb')"
+  - on: server2
+    queries:
+    - exec: "USE mydb"
+    - exec: "CREATE TABLE test (id INT PRIMARY KEY)"
+    - exec: "CALL dolt_commit('-Am', 'create test table')"
+    - exec: "CALL dolt_push('origin', 'main')"
+  - on: server3
+    queries:
+    - exec: "USE mydb"
+    - exec: "CALL dolt_pull('origin', 'main')"
+    - exec: "INSERT INTO test VALUES (1), (2), (47)"
+    - exec: "CALL dolt_commit('-am', 'Insert some initial values.')"
+    - exec: "CALL dolt_push('origin', 'main')"
+  - on: server1
+    queries:
+    - exec: "USE mydb"
+    - exec: "CALL dolt_pull('origin', 'main')"
+    - query: "SELECT * FROM test ORDER BY id ASC"
+      result:
+        columns: ["id"]
+        rows: [["1"], ["2"], ["47"]]

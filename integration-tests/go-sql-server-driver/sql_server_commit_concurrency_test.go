@@ -53,7 +53,7 @@ func testSQLTransactionWithAmendCommit(t *testing.T) {
 		Args:        []string{"--port", `{{get_port "server"}}`},
 		DynamicPort: "server",
 	}
-	var ports DynamicPorts
+	var ports DynamicResources
 	ports.global = &GlobalPorts
 	ports.t = t
 	server := MakeServer(t, repo, srvSettings, &ports)
@@ -141,7 +141,7 @@ func testSQLRacingAmend(t *testing.T) {
 		Args:        []string{"--port", `{{get_port "server"}}`},
 		DynamicPort: "server",
 	}
-	var ports DynamicPorts
+	var ports DynamicResources
 	ports.global = &GlobalPorts
 	ports.t = t
 	server := MakeServer(t, repo, srvSettings, &ports)

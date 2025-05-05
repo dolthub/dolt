@@ -95,6 +95,11 @@ func doDoltPush(ctx *sql.Context, args []string) (int, string, error) {
 		return cmdFailure, "", actions.HandleInitRemoteStorageClientErr(remote.Name, remote.Url, err)
 	}
 
+	err = remoteDB.Rebase(ctx)
+	if err != nil {
+		return cmdFailure, "", fmt.Errorf("error rebasing remote database %s@%s: %w", remote.Name, remote.Url, err)
+	}
+
 	tmpDir, err := dbData.Rsw.TempTableFilesDir()
 	if err != nil {
 		return cmdFailure, "", err

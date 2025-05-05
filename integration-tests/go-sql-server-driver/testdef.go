@@ -31,7 +31,7 @@ import (
 	yaml "gopkg.in/yaml.v3"
 )
 
-var GlobalPorts GlobalDynamicPorts
+var GlobalPorts GlobalDynamicResources
 
 type TestDef struct {
 	Tests []Test `yaml:"tests"`
@@ -77,7 +77,7 @@ func ParseTestsFile(path string) (TestDef, error) {
 	return res, err
 }
 
-func MakeRepo(t *testing.T, rs driver.RepoStore, r driver.TestRepo, ports *DynamicPorts) driver.Repo {
+func MakeRepo(t *testing.T, rs driver.RepoStore, r driver.TestRepo, ports *DynamicResources) driver.Repo {
 	repo, err := rs.MakeRepo(r.Name)
 	require.NoError(t, err)
 	for _, f := range r.WithFiles {
@@ -103,6 +103,8 @@ type TestingT interface {
 	Errorf(string, ...any)
 
 	Cleanup(func())
+
+	TempDir() string
 }
 
 // Globally available dynamic ports, backs every instance of
@@ -112,12 +114,12 @@ type TestingT interface {
 // for "available" ports on the running host. It simply avoids handing
 // out the same port to two separate tests that are running at the
 // same time. It recycles ports as tests complete.
-type GlobalDynamicPorts struct {
+type GlobalDynamicResources struct {
 	mu        sync.Mutex
 	available []int
 }
 
-func (g *GlobalDynamicPorts) Get(t TestingT) int {
+func (g *GlobalDynamicResources) GetPort(t TestingT) int {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	if len(g.available) == 0 {
@@ -128,17 +130,18 @@ func (g *GlobalDynamicPorts) Get(t TestingT) int {
 	return next
 }
 
-func (g *GlobalDynamicPorts) Return(n int) {
+func (g *GlobalDynamicResources) Return(n int) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	g.available = append(g.available, n)
 }
 
-// Tracks dynamic ports available for expansion in `{{get_port ...}}`
-// templates for server args and config files.
-type DynamicPorts struct {
+// Tracks dynamic resources available for expansion in test
+// definitions, for example through `{{get_port ...}}` templates for
+// server args and config files.
+type DynamicResources struct {
 	// Where we go when we need a new one.
-	global *GlobalDynamicPorts
+	global *GlobalDynamicResources
 
 	t TestingT
 
@@ -146,27 +149,40 @@ type DynamicPorts struct {
 	// use will get a new unused port from
 	// GlobalDynamicPorts. Then that same port will be returned
 	// from here for all uses. When the test finishes, its Cleanup
-	// returns the port to GlobalDynamicPorts.
-	allocated map[string]int
+	// returns the port to GlobalDynamicResources.
+	allocatedPorts map[string]int
+
+	// Where we put allocated temp directories. These get removed
+	// on cleanup.
+	allocatedTempDirs map[string]string
 }
 
-func (d *DynamicPorts) Get(name string) (int, bool) {
-	if d.allocated != nil {
-		v, ok := d.allocated[name]
+func (d *DynamicResources) GetPort(name string) (int, bool) {
+	if d.allocatedPorts != nil {
+		v, ok := d.allocatedPorts[name]
 		return v, ok
 	} else {
 		return 0, false
 	}
 }
 
-func (d *DynamicPorts) GetOrAllocate(name string) int {
-	v, ok := d.Get(name)
+func (d *DynamicResources) GetTempDir(name string) (string, bool) {
+	if d.allocatedTempDirs != nil {
+		v, ok := d.allocatedTempDirs[name]
+		return v, ok
+	} else {
+		return "", false
+	}
+}
+
+func (d *DynamicResources) GetOrAllocatePort(name string) int {
+	v, ok := d.GetPort(name)
 	if ok {
 		return v
 	}
-	v = d.global.Get(d.t)
-	if d.allocated == nil {
-		d.allocated = make(map[string]int)
+	v = d.global.GetPort(d.t)
+	if d.allocatedPorts == nil {
+		d.allocatedPorts = make(map[string]int)
 		// We register one cleanup function for the entire
 		// DynamicPorts and we return them all at once.
 		//
@@ -182,18 +198,35 @@ func (d *DynamicPorts) GetOrAllocate(name string) int {
 		// would return the second server's ports before it is
 		// shut down if we didn't return them all at once.
 		d.t.Cleanup(func() {
-			for _, p := range d.allocated {
+			for _, p := range d.allocatedPorts {
 				d.global.Return(p)
 			}
 		})
 	}
-	d.allocated[name] = v
+	d.allocatedPorts[name] = v
 	return v
 }
 
-func (d *DynamicPorts) ApplyTemplate(s string) string {
+func (d *DynamicResources) GetOrAllocateTempDir(name string) string {
+	v, ok := d.GetTempDir(name)
+	if ok {
+		return v
+	}
+	v = d.t.TempDir()
+	if d.allocatedTempDirs == nil {
+		d.allocatedTempDirs = make(map[string]string)
+		d.t.Cleanup(func() {
+			d.allocatedTempDirs = nil
+		})
+	}
+	d.allocatedTempDirs[name] = v
+	return v
+}
+
+func (d *DynamicResources) ApplyTemplate(s string) string {
 	tmpl, err := template.New("sql").Funcs(map[string]any{
-		"get_port": d.GetOrAllocate,
+		"get_port": d.GetOrAllocatePort,
+		"get_tempdir": d.GetOrAllocateTempDir,
 	}).Parse(s)
 	require.NoError(d.t, err)
 	var buf bytes.Buffer
@@ -202,13 +235,13 @@ func (d *DynamicPorts) ApplyTemplate(s string) string {
 	return buf.String()
 }
 
-func MakeServer(t *testing.T, dc driver.DoltCmdable, s *driver.Server, dynPorts *DynamicPorts) *driver.SqlServer {
+func MakeServer(t *testing.T, dc driver.DoltCmdable, s *driver.Server, resources *DynamicResources) *driver.SqlServer {
 	if s == nil {
 		return nil
 	}
 	args := make([]string, len(s.Args))
 	for i := range args {
-		args[i] = dynPorts.ApplyTemplate(s.Args[i])
+		args[i] = resources.ApplyTemplate(s.Args[i])
 	}
 	opts := []driver.SqlServerOpt{
 		driver.WithArgs(args...),
@@ -221,7 +254,7 @@ func MakeServer(t *testing.T, dc driver.DoltCmdable, s *driver.Server, dynPorts 
 	if s.DynamicPort == "" {
 		t.Fatal("you must specify s.DynamicPort on these tests; please use {{get_port ...}} and dynamic_port: to specify a dynamic port.")
 	}
-	port, ok := dynPorts.Get(s.DynamicPort)
+	port, ok := resources.GetPort(s.DynamicPort)
 	if !ok {
 		t.Fatalf("cannot find dynamic port %s after expanding server config, requested as dynamic server port", s.DynamicPort)
 	}
@@ -276,7 +309,7 @@ func (test Test) Run(t *testing.T) {
 		t.Skip(test.Skip)
 	}
 
-	var ports DynamicPorts
+	var ports DynamicResources
 	ports.global = &GlobalPorts
 	ports.t = t
 
@@ -459,13 +492,13 @@ func RetryTestRun(t *testing.T, attempts int, test func(TestingT)) {
 	rtt.try(attempts, test)
 }
 
-func RunQuery(t *testing.T, conn *sql.Conn, q driver.Query, ports *DynamicPorts) {
+func RunQuery(t *testing.T, conn *sql.Conn, q driver.Query, ports *DynamicResources) {
 	RetryTestRun(t, q.RetryAttempts, func(t TestingT) {
 		RunQueryAttempt(t, conn, q, ports)
 	})
 }
 
-func RunQueryAttempt(t TestingT, conn *sql.Conn, q driver.Query, ports *DynamicPorts) {
+func RunQueryAttempt(t TestingT, conn *sql.Conn, q driver.Query, ports *DynamicResources) {
 	args := make([]any, len(q.Args))
 	for i := range q.Args {
 		args[i] = q.Args[i]
