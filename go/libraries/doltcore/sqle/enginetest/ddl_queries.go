@@ -522,6 +522,27 @@ var ModifyColumnTypeScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		// https://github.com/dolthub/dolt/issues/9178
+		Name: "alter modify column type float to bigint",
+		SetUpScript: []string{
+			"create table t1 (pk int primary key, c1 float);",
+			"insert into t1 values (1, 0)",
+			"insert into t1 values (2, 128)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "alter table t1 modify column c1 bigint",
+			},
+			{
+				Query: "select * from t1 order by pk",
+				Expected: []sql.Row{
+					{1, int64(0)},
+					{2, int64(128)},
+				},
+			},
+		},
+	},
 }
 
 var DropColumnScripts = []queries.ScriptTest{
