@@ -93,7 +93,7 @@ func TestMapped(t *testing.T) {
 		}()
 		for {
 			mutexes.(*mapKeymutex).mu.Lock()
-			if mutexes.(*mapKeymutex).states["taken"].waitCnt == 65 {
+			if mutexes.(*mapKeymutex).states["taken"].waitCnt == 66 {
 				mutexes.(*mapKeymutex).mu.Unlock()
 				break
 			}

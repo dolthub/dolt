@@ -86,11 +86,11 @@ type AutoGCTest struct {
 	StandbyServer *driver.SqlServer
 	StandbyDB     *sql.DB
 
-	Ports *DynamicPorts
+	Ports *DynamicResources
 }
 
 func (s *AutoGCTest) Setup(ctx context.Context, t *testing.T) {
-	s.Ports = &DynamicPorts{
+	s.Ports = &DynamicResources{
 		global: &GlobalPorts,
 		t:      t,
 	}

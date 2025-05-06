@@ -580,3 +580,27 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "modified:         t1" ]] || false
 }
+
+@test "status: after remove remote" {
+    mkdir remote
+    mkdir repo1
+
+    cd repo1
+    dolt init
+    dolt remote add origin file://../remote
+    dolt push origin main
+
+    cd ..
+    dolt clone file://./remote repo2
+    cd repo2
+
+    run dolt remote -v
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "origin file:///" ]] || false
+
+    dolt remote rm origin
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "On branch main" ]] || false
+}
