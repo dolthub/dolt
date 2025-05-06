@@ -1564,6 +1564,16 @@ func TestLogTableFunctionPrepared(t *testing.T) {
 	RunLogTableFunctionTestsPrepared(t, harness)
 }
 
+func TestBranchStatusTableFunction(t *testing.T) {
+	harness := newDoltEnginetestHarness(t)
+	RunBranchStatusTableFunctionTests(t, harness)
+}
+
+func TestBranchStatusTableFunctionPrepared(t *testing.T) {
+	harness := newDoltEnginetestHarness(t)
+	RunBranchStatusTableFunctionTestsPrepared(t, harness)
+}
+
 func TestDoltReflog(t *testing.T) {
 	h := newDoltEnginetestHarness(t)
 	RunDoltReflogTests(t, h)
