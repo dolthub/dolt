@@ -114,18 +114,6 @@ func TestSchemaOverridesWithAdaptiveEncoding(t *testing.T) {
 // Convenience test for debugging a single query. Unskip and set to the desired query.
 func TestSingleScript(t *testing.T) {
 	//t.Skip()
-
-	
-sql.Row{"v3ovmbhvfpsl60i7ipg9b0vljsc0vcga", "C6", interface {}(nil), interface {}(nil)}, 
-sql.Row{"o9712qt6v19bdbn4gtp9ivha86i6ragf", "C5", interface {}(nil), interface {}(nil)}, 
-sql.Row{"bdvq579k1fhsfg0putcvv2plbpmo4k34", "C4", "bdvq579k1fhsfg0putcvv2plbpmo4k34", "C4"}, 
-sql.Row{"v2puca30nbv69vtqtoo02d66r5hscogp", "C3", "v2puca30nbv69vtqtoo02d66r5hscogp", "C3"}, 
-sql.Row{"1enqqtnn7tmdmsl01782t2l8sfob5s9a", "C2", "1enqqtnn7tmdmsl01782t2l8sfob5s9a", "C2"}, 
-sql.Row{"uhngue3m4jcrucr1phttaqd4h5plu4it", "C1", "uhngue3m4jcrucr1phttaqd4h5plu4it", "C1"}, 
-sql.Row{"oj3aon78aeoftall6saoafdhshb9g1c5", "checkpoint enginetest database mydb", "oj3aon78aeoftall6saoafdhshb9g1c5", "checkpoint enginetest database mydb"}, 
-sql.Row{"gltfgpf6g23r8ht07hg9rs3elm85g92d", "Initialize data repository", "gltfgpf6g23r8ht07hg9rs3elm85g92d", "Initialize data repository"},
-
-
 	var scripts = []queries.ScriptTest{
 		{
 			Name: "test dolt_branch_status(...)",
