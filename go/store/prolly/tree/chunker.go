@@ -23,6 +23,7 @@ package tree
 
 import (
 	"context"
+	"github.com/dolthub/dolt/go/store/hash"
 
 	"github.com/dolthub/dolt/go/store/prolly/message"
 )
@@ -172,21 +173,39 @@ func (tc *chunker[S]) advanceTo(ctx context.Context, next *cursor) error {
 	return tc.insertRange(ctx, tc.cur, next)
 }
 
-func insertNode[K ~[]byte, S message.Serializer, O Ordering[K]](ctx context.Context, tc *chunker[S], nd *Node, order O) error {
-	startCur, err := newCursorAtStart(ctx, tc.ns, *nd)
+func insertNode[K ~[]byte, S message.Serializer, O Ordering[K]](ctx context.Context, tc *chunker[S], fromKey Item, toKey K, addr hash.Hash, subtree uint64, level int, order O) error {
+	// If the start of the range is greater than the last key written, and the tree levels line up, we can just write the supplied address.
+	// If supplied tree level is *above* our current one, we need to load the chunk and write its children until we line up again.
+	// But it might be below, in which case we need to make sure that we write the address at the right level.
+	if tc.atBoundary() >= level {
+		_, err := tc.appendAddress(ctx, Item(toKey), addr, subtree, level)
+		return err
+	}
+	// Resolve the address and add its children recursively.
+	nd, err := tc.ns.Read(ctx, addr)
 	if err != nil {
 		return err
 	}
-	endCur, err := newCursorAtEnd(ctx, tc.ns, *nd)
-	if err != nil {
-		return err
+	if level == 1 {
+		for i := 0; i < nd.Count(); i++ {
+			_, err := tc.append(ctx, nd.GetKey(i), nd.GetValue(i), 0)
+			if err != nil {
+				return err
+			}
+		}
+	} else {
+		for i := 0; i < nd.Count(); i++ {
+			subtreeCount, err := nd.getSubtreeCount(i)
+			if err != nil {
+				return err
+			}
+			err = insertNode[K, S, O](ctx, tc, nil, K(nd.GetKey(i)), nd.getAddress(i), subtreeCount, level-1, order)
+			if err != nil {
+				return err
+			}
+		}
 	}
-	err = tc.insertRange(ctx, startCur, endCur)
-	if err != nil {
-		return err
-	}
-	// advance original cursor
-	return Seek(ctx, tc.cur, K(endCur.CurrentKey()), order)
+	return nil
 }
 
 func (tc *chunker[S]) insertRange(ctx context.Context, start, end *cursor) error {
@@ -338,6 +357,17 @@ func (tc *chunker[S]) append(ctx context.Context, key, value Item, subtree uint6
 	}
 
 	return false, nil
+}
+
+// Returns true if chunk boundary was split.
+func (tc *chunker[S]) appendAddress(ctx context.Context, toKey Item, addr hash.Hash, subtree uint64, level int) (bool, error) {
+	/*if tc.atBoundary() < level {
+		return fmt.Errorf("cannot write chunk at level %d when chunker has pending appends at that level")
+	}*/
+	if level > tc.level {
+		return tc.parent.appendAddress(ctx, toKey, addr, subtree, level)
+	}
+	return tc.append(ctx, toKey, addr[:], subtree)
 }
 
 func (tc *chunker[S]) appendToParent(ctx context.Context, novel novelNode) (bool, error) {
@@ -494,6 +524,17 @@ func (tc *chunker[S]) anyPending() bool {
 
 func (tc *chunker[S]) isLeaf() bool {
 	return tc.level == 0
+}
+
+// atBoundary returns the number of levels of the chunker which are currently on a boundary between chunks.
+func (tc *chunker[S]) atBoundary() int {
+	if tc.builder.count() > 0 {
+		return tc.level
+	}
+	if tc.parent == nil {
+		return tc.level + 1
+	}
+	return tc.parent.atBoundary()
 }
 
 func getCanonicalRoot[S message.Serializer](ctx context.Context, ns NodeStore, builder *nodeBuilder[S]) (Node, error) {

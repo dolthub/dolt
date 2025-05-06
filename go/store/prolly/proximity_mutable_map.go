@@ -74,9 +74,6 @@ func (f ProximityFlusher) ApplyMutationsWithSerializer(
 	mutation := editIter.NextMutation(ctx)
 	maxEditLevel := uint8(0)
 	for mutation.Key != nil {
-		if mutation.Node != nil {
-			return tree.ProximityMap[val.Tuple, val.Tuple, val.TupleDesc]{}, fmt.Errorf("Unexpected range edit when flushing mutator")
-		}
 		keyLevel := tree.DeterministicHashLevel(f.logChunkSize, mutation.Key)
 		if keyLevel > maxEditLevel {
 			maxEditLevel = keyLevel

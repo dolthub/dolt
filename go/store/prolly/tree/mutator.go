@@ -17,16 +17,19 @@ package tree
 import (
 	"bytes"
 	"context"
+	"github.com/dolthub/dolt/go/store/hash"
 
 	"github.com/dolthub/dolt/go/store/prolly/message"
 )
 
 // A Mutation represents a single change being applies to a tree.
-// Node is nil -> The key is being set to the value (or removed if value is nil)
-// Node is non-nil -> The next values after |Key| are the values in |Node|.
+// Either Key and Value are set, or FromKey, ToKey, and Addr are set.
 type Mutation struct {
-	Key, Value Item
-	Node       *Node
+	Key, Value     Item
+	FromKey, ToKey Item
+	Addr           hash.Hash
+	Subtree        uint64
+	Level          int
 }
 
 type MutationIter interface {
@@ -73,18 +76,19 @@ func ApplyMutations[K ~[]byte, O Ordering[K], S message.Serializer](
 	edits MutationIter,
 ) (Node, error) {
 	newMutation := edits.NextMutation(ctx)
-	if newMutation.Key == nil && newMutation.Node == nil {
+	if newMutation.Key == nil && newMutation.ToKey == nil {
 		return root, nil // no mutations
 	}
 
 	var cur *cursor
 	var err error
-	if newMutation.Key == nil {
+	if newMutation.Key != nil {
+		cur, err = newCursorAtKey(ctx, ns, root, K(newMutation.Key), order)
+	} else if newMutation.FromKey != nil {
+		cur, err = newCursorAtKey(ctx, ns, root, K(newMutation.FromKey), order)
+	} else {
 		// No prior key for node means that this is the very first node in its row.
 		cur, err = newCursorAtStart(ctx, ns, root)
-	} else {
-		// TODO: Do we need to advance before the key?
-		cur, err = newCursorAtKey(ctx, ns, root, K(newMutation.Key), order)
 	}
 
 	if err != nil {
@@ -97,10 +101,10 @@ func ApplyMutations[K ~[]byte, O Ordering[K], S message.Serializer](
 	}
 
 	for {
-		if newMutation.Node == nil {
+		if newMutation.ToKey == nil {
 			err = applyLeafMutation(ctx, order, chkr, cur, newMutation.Key, newMutation.Value)
 		} else {
-			err = applyNodeMutation(ctx, order, chkr, cur, newMutation.Key, newMutation.Node)
+			err = applyNodeMutation(ctx, order, chkr, cur, newMutation.FromKey, newMutation.ToKey, newMutation.Addr, newMutation.Subtree, newMutation.Level)
 		}
 		if err != nil {
 			return Node{}, err
@@ -175,18 +179,18 @@ func applyNodeMutation[K ~[]byte, O Ordering[K], S message.Serializer](
 	order O,
 	chkr *chunker[S],
 	cur *cursor,
-	prevKey Item, node *Node) (err error) {
+	fromKey Item, toKey Item, addr hash.Hash, subtree uint64, level int) (err error) {
 
 	// In this mutation type, the key refers to the last key before the start of the chunk.
 	// move |cur| to the NextMutation mutation point
 	// prevKey may be nil if we're in the very first block.
-	if prevKey != nil {
-		err = Seek(ctx, cur, K(prevKey), order)
+	if fromKey != nil {
+		err = Seek(ctx, cur, K(fromKey), order)
 		if err != nil {
 			return err
 		}
 		// if that key exists in the cursor we may need to advance one into the start of the affected region?
-		if order.Compare(ctx, K(prevKey), K(cur.CurrentKey())) == 0 {
+		if order.Compare(ctx, K(fromKey), K(cur.CurrentKey())) == 0 {
 			err = cur.advance(ctx)
 			if err != nil {
 				return err
@@ -209,13 +213,20 @@ func applyNodeMutation[K ~[]byte, O Ordering[K], S message.Serializer](
 	}*/
 	// Append all key-values from the Node.
 	// If we're on a chunk boundary, this will just copy the node in.
-	endCur := chkr.cur.clone()
-	endCur.skipToNodeEnd()
-	err = insertNode(ctx, chkr, node, order)
+
+	// If the start of the range is greater than the last key written, and the tree levels line up, we can just write the supplied address.
+	// If supplied tree level is *above* our current one, we need to load the chunk and write its children until we line up again.
+	// But it might be below, in which case we need to make sure that we write the address at the right level.
+	chkr.isLeaf()
+	err = insertNode(ctx, chkr, fromKey, K(toKey), addr, subtree, level, order)
 	if err != nil {
 		return err
 	}
-	err = Seek(ctx, chkr.cur, K(endCur.CurrentKey()), order)
+	err = Seek(ctx, chkr.cur, K(toKey), order)
+	if err != nil {
+		return err
+	}
+	err = chkr.cur.advance(ctx)
 	if err != nil {
 		return err
 	}

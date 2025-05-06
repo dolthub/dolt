@@ -105,16 +105,34 @@ func (ps patchBuffer) sendPatch(ctx context.Context, diff Diff) error {
 	var m Mutation
 	switch diff.Type {
 	case RangeDiff:
+		var prevKey Item
+		// Do this when diff is returned?
+		if diff.toCur.idx == 0 {
+			prevKey = diff.PreviousKey
+		} else {
+			prevKey = diff.toCur.nd.GetKey(diff.toCur.idx - 1)
+		}
+		// This is slow, send the node and don't compute subtrees unless we need to (or compute them when the node got loaded?)
+		nd, err := diff.toCur.nd.loadSubtrees()
+		if err != nil {
+			return err
+		}
+
+		subtrees, err := nd.getSubtreeCount(diff.toCur.idx)
+		if err != nil {
+			return err
+		}
 		m = Mutation{
-			Key:   diff.PreviousKey,
-			Value: nil,
-			Node:  &diff.toCur.nd,
+			FromKey: prevKey,
+			ToKey:   diff.toCur.nd.GetKey(diff.toCur.idx),
+			Addr:    diff.toCur.nd.getAddress(diff.toCur.idx),
+			Level:   diff.toCur.nd.Level(),
+			Subtree: subtrees,
 		}
 	default:
 		m = Mutation{
 			Key:   diff.Key,
 			Value: diff.To(),
-			Node:  nil,
 		}
 	}
 	select {
