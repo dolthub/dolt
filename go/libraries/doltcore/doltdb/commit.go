@@ -18,8 +18,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sort"
-
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly"
@@ -117,9 +115,6 @@ func (c *Commit) ParentHashes(ctx context.Context) ([]hash.Hash, error) {
 	for i, pr := range c.parents {
 		hashes[i] = pr.Addr()
 	}
-	sort.Slice(hashes, func(i, j int) bool {
-		return hashes[i].Less(hashes[j])
-	})
 	return hashes, nil
 }
 

@@ -113,41 +113,53 @@ func TestSchemaOverridesWithAdaptiveEncoding(t *testing.T) {
 
 // Convenience test for debugging a single query. Unskip and set to the desired query.
 func TestSingleScript(t *testing.T) {
-	//t.Skip()
+	t.Skip()
 	var scripts = []queries.ScriptTest{
 		{
-			Name: "test dolt_branch_status(...)",
+			Name: "Database syntax properly handles inter-CALL communication",
 			SetUpScript: []string{
-				"call dolt_tag('anc', 'HEAD');",
-				"call dolt_branch('b1');",
-				"call dolt_commit('-m', 'C1', '--allow-empty');",
-				"call dolt_commit('-m', 'C2', '--allow-empty');",
-				"call dolt_commit('-m', 'C3', '--allow-empty');",
-				"call dolt_tag('t1', 'HEAD');",
-				"call dolt_commit('-m', 'C4', '--allow-empty');",
-				"call dolt_branch('b2');",
-				"call dolt_commit('-m', 'C5', '--allow-empty');",
-				"call dolt_commit('-m', 'C6', '--allow-empty');",
-				"call dolt_checkout('b1');",
-				"call dolt_commit('-m', 'C7', '--allow-empty');",
-				"call dolt_merge('t1', '-m', 'M1');",
-				"call dolt_tag('t2', 'HEAD');",
-				"call dolt_commit('-m', 'C8', '--allow-empty');",
-				"call dolt_checkout('b2');",
-				"call dolt_merge('b1', '-m', 'M2');",
+				`CREATE PROCEDURE p1()
+BEGIN
+	DECLARE str VARCHAR(20);
+   CALL p2(str);
+	SET str = CONCAT('a', str);
+   SELECT str;
+END`,
+				`CREATE PROCEDURE p2(OUT param VARCHAR(20))
+BEGIN
+	SET param = 'b';
+END`,
+				"CALL DOLT_ADD('-A');",
+				"CALL DOLT_COMMIT('-m', 'First procedures');",
+				"CALL DOLT_BRANCH('p12');",
+				"DROP PROCEDURE p1;",
+				"DROP PROCEDURE p2;",
+				`CREATE PROCEDURE p1()
+BEGIN
+	DECLARE str VARCHAR(20);
+    CALL p2(str);
+	SET str = CONCAT('c', str);
+   SELECT str;
+END`,
+				`CREATE PROCEDURE p2(OUT param VARCHAR(20))
+BEGIN
+	SET param = 'd';
+END`,
+				"CALL DOLT_ADD('-A');",
+				"CALL DOLT_COMMIT('-m', 'Second procedures');",
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query:    "select d1.commit_hash, d1.message, d2.commit_hash, d2.message from dolt_log('b2') d1 left join dolt_log('main') d2 on d1.commit_hash = d2.commit_hash;",
-					Expected: []sql.Row{},
+					Query:    "CALL p1();",
+					Expected: []sql.Row{{"cd"}},
 				},
 				{
-					Query:    "select d1.commit_hash, d1.message, d2.commit_hash, d2.message from dolt_log('main') d1 left join dolt_log('b2') d2 on d1.commit_hash = d2.commit_hash;",
-					Expected: []sql.Row{},
+					Query:    "CALL `mydb/main`.p1();",
+					Expected: []sql.Row{{"cd"}},
 				},
 				{
-					Query:    "select * from dolt_branch_status('main', 'b2')",
-					Expected: []sql.Row{},
+					Query:    "CALL `mydb/p12`.p1();",
+					Expected: []sql.Row{{"ab"}},
 				},
 			},
 		},
@@ -1550,16 +1562,6 @@ func TestLogTableFunction(t *testing.T) {
 func TestLogTableFunctionPrepared(t *testing.T) {
 	harness := newDoltEnginetestHarness(t)
 	RunLogTableFunctionTestsPrepared(t, harness)
-}
-
-func TestBranchStatusTableFunction(t *testing.T) {
-	harness := newDoltEnginetestHarness(t)
-	RunBranchStatusTableFunctionTests(t, harness)
-}
-
-func TestBranchStatusTableFunctionPrepared(t *testing.T) {
-	harness := newDoltEnginetestHarness(t)
-	RunBranchStatusTableFunctionTestsPrepared(t, harness)
 }
 
 func TestDoltReflog(t *testing.T) {
