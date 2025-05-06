@@ -256,7 +256,7 @@ func (gct gcTest) finalize(t *testing.T, ctx context.Context, db *sql.DB) {
 }
 
 func (gct gcTest) run(t *testing.T) {
-	var ports DynamicPorts
+	var ports DynamicResources
 	ports.global = &GlobalPorts
 	ports.t = t
 	u, err := driver.NewDoltUser()

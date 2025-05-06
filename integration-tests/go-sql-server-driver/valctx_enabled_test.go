@@ -27,7 +27,7 @@ import (
 func TestValctxEnabled(t *testing.T) {
 	t.Parallel()
 
-	var ports DynamicPorts
+	var ports DynamicResources
 	ports.global = &GlobalPorts
 	ports.t = t
 	u, err := driver.NewDoltUser()

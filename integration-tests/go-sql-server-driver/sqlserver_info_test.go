@@ -45,7 +45,7 @@ func TestSQLServerInfoFile(t *testing.T) {
 		require.NoError(t, err)
 
 		t.Run("With server running in root", func(t *testing.T) {
-			var ports DynamicPorts
+			var ports DynamicResources
 			ports.global = &GlobalPorts
 			ports.t = t
 			RunServerUntilEndOfTest(t, rs, &driver.Server{
@@ -118,7 +118,7 @@ func TestSQLServerInfoFile(t *testing.T) {
 			require.ErrorIs(t, err, fs.ErrNotExist)
 		})
 		t.Run("With server running in db_one", func(t *testing.T) {
-			var ports DynamicPorts
+			var ports DynamicResources
 			ports.global = &GlobalPorts
 			ports.t = t
 			RunServerUntilEndOfTest(t, dbOne, &driver.Server{
@@ -161,7 +161,7 @@ func TestSQLServerInfoFile(t *testing.T) {
 			})
 		})
 		t.Run("Given a running dolt sql process in root", func(t *testing.T) {
-			var ports DynamicPorts
+			var ports DynamicResources
 			ports.global = &GlobalPorts
 			ports.t = t
 			RunDoltSQLUntilEndOfTest(t, rs)
@@ -199,7 +199,7 @@ func TestSQLServerInfoFile(t *testing.T) {
 			})
 		})
 		t.Run("Given a running dolt sql process in db_one", func(t *testing.T) {
-			var ports DynamicPorts
+			var ports DynamicResources
 			ports.global = &GlobalPorts
 			ports.t = t
 			RunDoltSQLUntilEndOfTest(t, dbOne)
@@ -248,7 +248,7 @@ func TestSQLServerInfoFile(t *testing.T) {
 			})
 		})
 		t.Run("With stale sql-server.info file in root", func(t *testing.T) {
-			var ports DynamicPorts
+			var ports DynamicResources
 			ports.global = &GlobalPorts
 			ports.t = t
 			Setup := func(t *testing.T) {
@@ -290,7 +290,7 @@ func TestSQLServerInfoFile(t *testing.T) {
 			})
 		})
 		t.Run("With malformed sql-server.info file in root", func(t *testing.T) {
-			var ports DynamicPorts
+			var ports DynamicResources
 			ports.global = &GlobalPorts
 			ports.t = t
 			Setup := func(t *testing.T) {
@@ -366,7 +366,7 @@ func TestSQLServerInfoFile(t *testing.T) {
 		// started, they can both run against it. Only one of their
 		// credential files will win the write.
 		t.Run("Can Run Two Servers At Once", func(t *testing.T) {
-			var ports DynamicPorts
+			var ports DynamicResources
 			ports.global = &GlobalPorts
 			ports.t = t
 			RunServerUntilEndOfTest(t, rs, &driver.Server{
@@ -419,7 +419,7 @@ func RunDoltSQLUntilEndOfTest(t *testing.T, dc driver.DoltCmdable) {
 // for doing things like making connections to it, this is only useful for
 // for asserting the behavior of other dolt commands which interact with the
 // server.
-func RunServerUntilEndOfTest(t *testing.T, dc driver.DoltCmdable, s *driver.Server, ports *DynamicPorts) {
+func RunServerUntilEndOfTest(t *testing.T, dc driver.DoltCmdable, s *driver.Server, ports *DynamicResources) {
 	server := MakeServer(t, dc, s, ports)
 	require.NotNil(t, server)
 	db, err := server.DB(driver.Connection{User: "root"})

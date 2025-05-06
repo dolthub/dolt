@@ -59,7 +59,7 @@ func setupMaxConnsTest(t *testing.T, ctx context.Context, args ...string) (*sql.
 		Args:        args,
 		DynamicPort: "server",
 	}
-	var ports DynamicPorts
+	var ports DynamicResources
 	ports.global = &GlobalPorts
 	ports.t = t
 	server := MakeServer(t, repo, srvSettings, &ports)
