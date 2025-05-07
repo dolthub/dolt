@@ -630,14 +630,17 @@ If you're interested in running this command against a remote host, hit us up on
 		}
 	}
 
+	var dbName string
+
 	if hasUseDb {
-		dbName, _ := dsess.SplitRevisionDbName(useDb)
+		dbName, _ = dsess.SplitRevisionDbName(useDb)
 		targetEnv = mrEnv.GetEnv(dbName)
 		if targetEnv == nil {
 			return nil, fmt.Errorf("The provided --use-db %s does not exist.", dbName)
 		}
 	} else {
-		useDb = mrEnv.GetFirstDatabase()
+		dbName = mrEnv.GetFirstDatabase()
+		useDb = dbName
 		if hasBranch {
 			useDb += "/" + useBranch
 		}
@@ -646,7 +649,7 @@ If you're interested in running this command against a remote host, hit us up on
 	// If our targetEnv is still |nil| and we don't have an environment
 	// which we will be using based on |useDb|, then our initialization
 	// here did not find a repository we will be operating against.
-	noValidRepository := targetEnv == nil && (useDb == "" || mrEnv.GetEnv(useDb) == nil)
+	noValidRepository := targetEnv == nil && (useDb == "" || mrEnv.GetEnv(dbName) == nil)
 
 	// Not having a valid repository as we start to execute a CLI command
 	// implementation is allowed for a small number of commands.  We don't
