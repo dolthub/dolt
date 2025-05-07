@@ -144,8 +144,6 @@ SQL
     [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
 }
 
-
-
 @test "global-args: cannot use --branch on invalid branch" {
     cd db1
     run dolt --branch invalidBr status

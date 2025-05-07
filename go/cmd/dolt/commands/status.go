@@ -136,9 +136,9 @@ func (cmd StatusCmd) Exec(ctx context.Context, commandStr string, args []string,
 func createPrintData(err error, queryist cli.Queryist, sqlCtx *sql.Context, showIgnoredTables bool, cliCtx cli.CliContext) (*printData, error) {
 	var branchName string
 
-	if brName, hasBranch := cliCtx.GlobalArgs().GetValue("branch"); hasBranch {
+	if brName, hasBranch := cliCtx.GlobalArgs().GetValue(cli.BranchParam); hasBranch {
 		branchName = brName
-	} else if useDb, hasUseDb := cliCtx.GlobalArgs().GetValue("use-db"); hasUseDb {
+	} else if useDb, hasUseDb := cliCtx.GlobalArgs().GetValue(UseDbFlag); hasUseDb {
 		_, branchName = dsess.SplitRevisionDbName(useDb)
 	} else {
 		var err error
