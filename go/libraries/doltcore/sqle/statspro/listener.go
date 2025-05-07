@@ -83,7 +83,7 @@ func (sc *StatsController) addListener(e listenerEvent) (chan listenerEvent, err
 	return l.c, nil
 }
 
-func (sc *StatsController) Stop() chan struct {} {
+func (sc *StatsController) Stop() chan struct{} {
 	// xxx: do not pause |sq|, analyze jobs still need to run
 	sc.mu.Lock()
 	defer sc.mu.Unlock()

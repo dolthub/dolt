@@ -80,7 +80,7 @@ type StatsController struct {
 	sq *jobqueue.SerialQueue
 
 	activeCtxCancel context.CancelFunc
-	workerDoneCh    chan struct {}
+	workerDoneCh    chan struct{}
 	listeners       []listener
 
 	JobInterval time.Duration
