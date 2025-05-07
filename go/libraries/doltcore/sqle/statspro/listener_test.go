@@ -38,8 +38,9 @@ func TestListening(t *testing.T) {
 	t.Run("IsStoppable", func(t *testing.T) {
 		sc := newStatsCoord(bthreads)
 		eg := errgroup.Group{}
-		ctx := sc.newThreadCtx(context.Background())
+		ctx, _, doneCh := sc.newThreadCtx(context.Background())
 		eg.Go(func() error {
+			defer close(doneCh)
 			return sc.runWorker(ctx)
 		})
 
@@ -53,46 +54,50 @@ func TestListening(t *testing.T) {
 			t.Fatal("expected latest thread ctx to be active")
 		default:
 		}
-		sc.Stop()
+		<-sc.Stop()
 		<-ctx.Done()
 		require.ErrorIs(t, eg.Wait(), context.Canceled)
 	})
 	t.Run("StopsAreIdempotent", func(t *testing.T) {
 		sc := newStatsCoord(bthreads)
 		eg := errgroup.Group{}
-		ctx := sc.newThreadCtx(context.Background())
+		ctx, _, doneCh := sc.newThreadCtx(context.Background())
 		eg.Go(func() error {
+			defer close(doneCh)
 			return sc.runWorker(ctx)
 		})
 
-		sc.Stop()
-		sc.Stop()
-		sc.Stop()
-		sc.Stop()
+		<-sc.Stop()
+		<-sc.Stop()
+		<-sc.Stop()
+		<-sc.Stop()
 		<-ctx.Done()
 		require.ErrorIs(t, eg.Wait(), context.Canceled)
 	})
 	t.Run("IsRestartable", func(t *testing.T) {
 		sc := newStatsCoord(bthreads)
 		eg := errgroup.Group{}
-		ctx1 := sc.newThreadCtx(context.Background())
+		ctx1, _, doneCh1 := sc.newThreadCtx(context.Background())
 		eg.Go(func() error {
+			defer close(doneCh1)
 			return sc.runWorker(ctx1)
 		})
 
-		ctx2 := sc.newThreadCtx(context.Background())
+		ctx2, _, doneCh2 := sc.newThreadCtx(context.Background())
 		eg.Go(func() error {
+			defer close(doneCh2)
 			return sc.runWorker(ctx2)
 		})
 
-		ctx3 := sc.newThreadCtx(context.Background())
+		ctx3, _, doneCh3 := sc.newThreadCtx(context.Background())
 		eg.Go(func() error {
+			defer close(doneCh3)
 			return sc.runWorker(ctx3)
 		})
 
 		<-ctx1.Done()
 		<-ctx2.Done()
-		sc.Stop()
+		<-sc.Stop()
 		<-ctx3.Done()
 		require.ErrorIs(t, eg.Wait(), context.Canceled)
 	})
@@ -153,7 +158,7 @@ func TestListening(t *testing.T) {
 			require.NoError(t, err)
 			l, err = sc.addListener(leUnknown)
 			require.NoError(t, err)
-			sc.Stop()
+			<-sc.Stop()
 			return nil
 		})
 		require.NoError(t, err)
@@ -167,7 +172,7 @@ func TestListening(t *testing.T) {
 	t.Run("ListenerFailsIfStopped", func(t *testing.T) {
 		sc := newStatsCoord(bthreads)
 		require.NoError(t, sc.Restart(ctx))
-		sc.Stop()
+		<-sc.Stop()
 		_, err := sc.addListener(leUnknown)
 		require.ErrorIs(t, err, ErrStatsIssuerPaused)
 	})
@@ -217,7 +222,7 @@ func TestListening(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			defer close(done)
-			sc.Stop()
+			<-sc.Stop()
 			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 			defer cancel()
 			err := sc.waitForSignal(ctx, leSwap, 1)
