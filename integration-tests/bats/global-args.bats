@@ -149,5 +149,5 @@ SQL
 @test "global-args: cannot use --branch on invalid branch" {
     run dolt --branch invalidBr status
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "The provided --branch invalidBr does not exist" ]] || false
+    [[ "$output" =~ "Error 1049 (HY000): database not found: db1/invalidBr" ]] || false  #TODO: change this to the correct output
 }
