@@ -17,6 +17,7 @@ package commands
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -119,7 +120,7 @@ func (cmd StatusCmd) Exec(ctx context.Context, commandStr string, args []string,
 	}
 
 	// get status information from the database
-	pd, err := createPrintData(err, queryist, sqlCtx, showIgnoredTables)
+	pd, err := createPrintData(err, queryist, sqlCtx, showIgnoredTables, cliCtx)
 	if err != nil {
 		return handleStatusVErr(err)
 	}
@@ -132,10 +133,19 @@ func (cmd StatusCmd) Exec(ctx context.Context, commandStr string, args []string,
 	return 0
 }
 
-func createPrintData(err error, queryist cli.Queryist, sqlCtx *sql.Context, showIgnoredTables bool) (*printData, error) {
-	branchName, err := getActiveBranchName(sqlCtx, queryist)
-	if err != nil {
-		return nil, err
+func createPrintData(err error, queryist cli.Queryist, sqlCtx *sql.Context, showIgnoredTables bool, cliCtx cli.CliContext) (*printData, error) {
+	var branchName string
+
+	if brName, hasBranch := cliCtx.GlobalArgs().GetValue("branch"); hasBranch {
+		branchName = brName
+	} else if useDb, hasUseDb := cliCtx.GlobalArgs().GetValue("use-db"); hasUseDb {
+		_, branchName = dsess.SplitRevisionDbName(useDb)
+	} else {
+		var err error
+		branchName, err = getActiveBranchName(sqlCtx, queryist)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	ignorePatterns, err := getIgnoredTablePatternsFromSql(queryist, sqlCtx)
