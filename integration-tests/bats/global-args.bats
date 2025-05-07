@@ -150,5 +150,5 @@ SQL
     cd db1
     run dolt --branch invalidBr status
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "database not found: db1/invalidBr" ]] || false  #TODO: change this to the correct output
+    [[ "$output" =~ "database not found: db1/invalidBr" ]] || false
 }
