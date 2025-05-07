@@ -52,7 +52,7 @@ func (sc *StatsController) signalListener(s listenerEvent) {
 	sc.listeners = sc.listeners[:keep]
 }
 
-func (sc *StatsController) newThreadCtx(ctx context.Context) context.Context {
+func (sc *StatsController) newThreadCtx(ctx context.Context) (context.Context, chan struct{}, chan struct{}) {
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
 
@@ -62,7 +62,9 @@ func (sc *StatsController) newThreadCtx(ctx context.Context) context.Context {
 	}
 	sc.signalListener(leStop)
 	sc.activeCtxCancel = cancel
-	return newCtx
+	workerDoneCh := sc.workerDoneCh
+	sc.workerDoneCh = make(chan struct{})
+	return newCtx, workerDoneCh, sc.workerDoneCh
 }
 
 type listener struct {
@@ -81,7 +83,7 @@ func (sc *StatsController) addListener(e listenerEvent) (chan listenerEvent, err
 	return l.c, nil
 }
 
-func (sc *StatsController) Stop() {
+func (sc *StatsController) Stop() chan struct {} {
 	// xxx: do not pause |sq|, analyze jobs still need to run
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
@@ -90,7 +92,7 @@ func (sc *StatsController) Stop() {
 		sc.activeCtxCancel = nil
 	}
 	sc.signalListener(leStop)
-	return
+	return sc.workerDoneCh
 }
 
 // RefreshFromSysVars reads the environment variables and updates controller
@@ -126,7 +128,9 @@ func (sc *StatsController) Restart(ctx *sql.Context) error {
 
 	done := make(chan struct{})
 	if err := sc.bgThreads.Add("stats_worker", func(ctx context.Context) {
-		ctx = sc.newThreadCtx(ctx)
+		var doneCh chan struct{}
+		ctx, _, doneCh = sc.newThreadCtx(ctx)
+		defer close(doneCh)
 		close(done)
 		err := sc.runWorker(ctx)
 		if err != nil {
