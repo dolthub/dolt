@@ -138,10 +138,9 @@ SQL
 
 @test "global-args: can use --branch on valid branch" {
     cd db1
-    dolt checkout -b br1
-    run dolt --branch br1 status
+    run dolt --branch b1 status
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "On branch br1" ]] || false
+    [[ "$output" =~ "On branch b1" ]] || false
     [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
 }
 
