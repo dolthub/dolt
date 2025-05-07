@@ -137,6 +137,7 @@ SQL
 }
 
 @test "global-args: can use --branch on valid branch" {
+    cd db1
     dolt checkout -b br1
     run dolt --branch br1 status
     [ "$status" -eq 0 ]
