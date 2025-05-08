@@ -16,6 +16,7 @@ package concurrentmap
 
 import (
 	"encoding/json"
+	"maps"
 	"sync"
 )
 
@@ -65,9 +66,7 @@ func (cm *Map[K, V]) DeepCopy() *Map[K, V] {
 	cm.mu.RLock()
 	defer cm.mu.RUnlock()
 	newMap := make(map[K]V, len(cm.m))
-	for k, v := range cm.m {
-		newMap[k] = v
-	}
+	maps.Copy(newMap, cm.m)
 	return &Map[K, V]{m: newMap}
 }
 
@@ -87,9 +86,7 @@ func (cm *Map[K, V]) Snapshot() map[K]V {
 	cm.mu.RLock()
 	defer cm.mu.RUnlock()
 	newMap := make(map[K]V, len(cm.m))
-	for k, v := range cm.m {
-		newMap[k] = v
-	}
+	maps.Copy(newMap, cm.m)
 	return newMap
 }
 
