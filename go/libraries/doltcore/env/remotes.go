@@ -144,9 +144,9 @@ func (r Remote) WithParams(params map[string]string) Remote {
 
 // PushOptions contains information needed for push for
 // one or more branches or a tag for a specific remote database.
-type PushOptions[C doltdb.Context] struct {
+type PushOptions struct {
 	Targets []*PushTarget
-	Rsr     RepoStateReader[C]
+	Rsr     RepoStateReader
 	Rsw     RepoStateWriter
 	Remote  *Remote
 	SrcDb   *doltdb.DoltDB
@@ -164,7 +164,7 @@ type PushTarget struct {
 	HasUpstream bool
 }
 
-func NewPushOpts[C doltdb.Context](ctx C, apr *argparser.ArgParseResults, rsr RepoStateReader[C], ddb *doltdb.DoltDB, force, setUpstream, pushAutoSetupRemote, all bool) ([]*PushTarget, *Remote, error) {
+func NewPushOpts(ctx context.Context, apr *argparser.ArgParseResults, rsr RepoStateReader, ddb *doltdb.DoltDB, force, setUpstream, pushAutoSetupRemote, all bool) ([]*PushTarget, *Remote, error) {
 	if apr.NArg() == 0 {
 		return getPushTargetsAndRemoteFromNoArg(ctx, rsr, ddb, force, setUpstream, pushAutoSetupRemote, all)
 	}
@@ -174,7 +174,7 @@ func NewPushOpts[C doltdb.Context](ctx C, apr *argparser.ArgParseResults, rsr Re
 		return nil, nil, err
 	}
 
-	currentBranch, err := rsr.CWBHeadRef(ctx)
+	currentBranch, err := rsr.CWBHeadRef()
 	if err != nil {
 		return nil, nil, err
 	}
@@ -227,7 +227,7 @@ func NewPushOpts[C doltdb.Context](ctx C, apr *argparser.ArgParseResults, rsr Re
 	}
 }
 
-func getRemote[C doltdb.Context](rsr RepoStateReader[C], name string) (Remote, error) {
+func getRemote(rsr RepoStateReader, name string) (Remote, error) {
 	remotes, err := rsr.GetRemotes()
 	if err != nil {
 		return NoRemote, err
@@ -242,13 +242,13 @@ func getRemote[C doltdb.Context](rsr RepoStateReader[C], name string) (Remote, e
 
 // getPushTargetsAndRemoteFromNoArg pushes the current branch on default remote if upstream is set or `-u` is defined;
 // otherwise, all branches of default remote if `--all` flag is used.
-func getPushTargetsAndRemoteFromNoArg[C doltdb.Context](ctx C, rsr RepoStateReader[C], ddb *doltdb.DoltDB, force, setUpstream, pushAutoSetupRemote, all bool) ([]*PushTarget, *Remote, error) {
+func getPushTargetsAndRemoteFromNoArg(ctx context.Context, rsr RepoStateReader, ddb *doltdb.DoltDB, force, setUpstream, pushAutoSetupRemote, all bool) ([]*PushTarget, *Remote, error) {
 	rsrBranches, err := rsr.GetBranches()
 	if err != nil {
 		return nil, nil, err
 	}
 
-	currentBranch, err := rsr.CWBHeadRef(ctx)
+	currentBranch, err := rsr.CWBHeadRef()
 	if err != nil {
 		return nil, nil, err
 	}
@@ -355,9 +355,9 @@ func getPushTargetFromRefSpec(refSpec ref.RefSpec, currentBranch ref.DoltRef, re
 // If there is no remote specified, the current branch needs to have upstream set to push; otherwise, returns error.
 // This function returns |refSpec| for current branch, name of the remote the branch is associated with and
 // whether the current branch has upstream set.
-func getCurrentBranchRefSpec[C doltdb.Context](ctx C, branches *concurrentmap.Map[string, BranchConfig], rsr RepoStateReader[C], ddb *doltdb.DoltDB, remoteName string, isDefaultRemote, remoteSpecified, setUpstream, pushAutoSetupRemote bool) (ref.RefSpec, string, bool, error) {
+func getCurrentBranchRefSpec(ctx context.Context, branches *concurrentmap.Map[string, BranchConfig], rsr RepoStateReader, ddb *doltdb.DoltDB, remoteName string, isDefaultRemote, remoteSpecified, setUpstream, pushAutoSetupRemote bool) (ref.RefSpec, string, bool, error) {
 	var refSpec ref.RefSpec
-	currentBranch, err := rsr.CWBHeadRef(ctx)
+	currentBranch, err := rsr.CWBHeadRef()
 	if err != nil {
 		return nil, "", false, err
 	}
@@ -387,7 +387,7 @@ func getCurrentBranchRefSpec[C doltdb.Context](ctx C, branches *concurrentmap.Ma
 }
 
 // RemoteForFetchArgs returns the remote and remaining arg strings for a fetch command
-func RemoteForFetchArgs[C doltdb.Context](args []string, rsr RepoStateReader[C]) (Remote, []string, error) {
+func RemoteForFetchArgs(args []string, rsr RepoStateReader) (Remote, []string, error) {
 	var err error
 	remotes, err := rsr.GetRemotes()
 	if err != nil {
@@ -418,7 +418,7 @@ func RemoteForFetchArgs[C doltdb.Context](args []string, rsr RepoStateReader[C])
 // ParseRefSpecs returns the ref specs for the string arguments given for the remote provided, or the default ref
 // specs for that remote if no arguments are provided. In the event that the default ref specs are returned, the
 // returned boolean value will be true.
-func ParseRefSpecs[C doltdb.Context](args []string, rsr RepoStateReader[C], remote Remote) ([]ref.RemoteRefSpec, bool, error) {
+func ParseRefSpecs(args []string, rsr RepoStateReader, remote Remote) ([]ref.RemoteRefSpec, bool, error) {
 	if len(args) != 0 {
 		specs, err := ParseRSFromArgs(remote.Name, args)
 		return specs, false, err
@@ -579,9 +579,9 @@ func WithForce(force bool) PullSpecOpt {
 
 // NewPullSpec returns a PullSpec for the arguments given. This function validates remote and gets remoteRef
 // for given remoteRefName; if it's not defined, it uses current branch to get its upstream branch if it exists.
-func NewPullSpec[C doltdb.Context](
-	ctx C,
-	rsr RepoStateReader[C],
+func NewPullSpec(
+	_ context.Context,
+	rsr RepoStateReader,
 	remoteName, remoteRefName string,
 	remoteOnly bool,
 	opts ...PullSpecOpt,
@@ -605,7 +605,7 @@ func NewPullSpec[C doltdb.Context](
 
 	var remoteRef ref.DoltRef
 	if remoteRefName == "" {
-		branch, err := rsr.CWBHeadRef(ctx)
+		branch, err := rsr.CWBHeadRef()
 		if err != nil {
 			return nil, err
 		}

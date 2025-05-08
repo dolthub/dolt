@@ -28,7 +28,7 @@ var ErrCOWorkspaceDelete = errors.New("attempted to delete checked out workspace
 var ErrBranchNameExists = errors.New("workspace name must not be existing branch name")
 
 func CreateWorkspace(ctx context.Context, dEnv *env.DoltEnv, name, startPoint string) error {
-	headRef, err := dEnv.RepoStateReader().CWBHeadRef(ctx)
+	headRef, err := dEnv.RepoStateReader().CWBHeadRef()
 	if err != nil {
 		return nil
 	}
@@ -94,7 +94,7 @@ func DeleteWorkspace(ctx context.Context, dEnv *env.DoltEnv, workspaceName strin
 		}
 	} else {
 		dref = ref.NewWorkspaceRef(workspaceName)
-		headRef, err := dEnv.RepoStateReader().CWBHeadRef(ctx)
+		headRef, err := dEnv.RepoStateReader().CWBHeadRef()
 		if err != nil {
 			return err
 		}

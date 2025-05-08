@@ -258,7 +258,7 @@ func getNerf(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResu
 		return nil, err
 	}
 
-	headRef, err := dEnv.RepoStateReader().CWBHeadRef(ctx)
+	headRef, err := dEnv.RepoStateReader().CWBHeadRef()
 	if err != nil {
 		return nil, err
 	}

@@ -34,7 +34,7 @@ type TagProps struct {
 }
 
 func CreateTag(ctx context.Context, dEnv *env.DoltEnv, tagName, startPoint string, props TagProps) error {
-	headRef, err := dEnv.RepoStateReader().CWBHeadRef(ctx)
+	headRef, err := dEnv.RepoStateReader().CWBHeadRef()
 	if err != nil {
 		return err
 	}

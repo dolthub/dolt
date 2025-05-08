@@ -32,7 +32,7 @@ import (
 // resetHardTables resolves a new HEAD commit from a refSpec and updates working set roots by
 // resetting the table contexts for tracked tables. New tables are ignored. Returns new HEAD
 // Commit and Roots.
-func resetHardTables[C doltdb.Context](ctx C, dbData env.DbData[C], cSpecStr string, roots doltdb.Roots) (*doltdb.Commit, doltdb.Roots, error) {
+func resetHardTables(ctx *sql.Context, dbData env.DbData, cSpecStr string, roots doltdb.Roots) (*doltdb.Commit, doltdb.Roots, error) {
 	ddb := dbData.Ddb
 	rsr := dbData.Rsr
 
@@ -43,7 +43,7 @@ func resetHardTables[C doltdb.Context](ctx C, dbData env.DbData[C], cSpecStr str
 			return nil, doltdb.Roots{}, err
 		}
 
-		headRef, err := rsr.CWBHeadRef(ctx)
+		headRef, err := rsr.CWBHeadRef()
 		if err != nil {
 			return nil, doltdb.Roots{}, err
 		}
@@ -147,16 +147,16 @@ func GetAllTableNames(ctx context.Context, root doltdb.RootValue) []doltdb.Table
 
 // ResetHardTables resets the tables in working, staged, and head based on the given parameters. Returns the new
 // head commit and resulting roots
-func ResetHardTables[C doltdb.Context](ctx C, dbData env.DbData[C], cSpecStr string, roots doltdb.Roots) (*doltdb.Commit, doltdb.Roots, error) {
+func ResetHardTables(ctx *sql.Context, dbData env.DbData, cSpecStr string, roots doltdb.Roots) (*doltdb.Commit, doltdb.Roots, error) {
 	return resetHardTables(ctx, dbData, cSpecStr, roots)
 }
 
 // ResetHard resets the working, staged, and head to the ones in the provided roots and head ref.
 // The reset can be performed on a non-current branch and working set.
 // Returns an error if the reset fails.
-func ResetHard[C doltdb.Context](
-	ctx C,
-	dbData env.DbData[C],
+func ResetHard(
+	ctx *sql.Context,
+	dbData env.DbData,
 	doltDb *doltdb.DoltDB,
 	username, email string,
 	cSpecStr string,
@@ -222,13 +222,13 @@ func ResetSoftTables(ctx context.Context, tableNames []doltdb.TableName, roots d
 
 // ResetSoftToRef matches the `git reset --soft <REF>` pattern. It returns a new Roots with the Staged and Head values
 // set to the commit specified by the spec string. The Working root is not set
-func ResetSoftToRef[C doltdb.Context](ctx C, dbData env.DbData[C], cSpecStr string) (doltdb.Roots, error) {
+func ResetSoftToRef(ctx context.Context, dbData env.DbData, cSpecStr string) (doltdb.Roots, error) {
 	cs, err := doltdb.NewCommitSpec(cSpecStr)
 	if err != nil {
 		return doltdb.Roots{}, err
 	}
 
-	headRef, err := dbData.Rsr.CWBHeadRef(ctx)
+	headRef, err := dbData.Rsr.CWBHeadRef()
 	if err != nil {
 		return doltdb.Roots{}, err
 	}

@@ -183,7 +183,7 @@ func newQueue() *q {
 // Roughly mimics `git log main..feature` or `git log main...feature` (if
 // more than one `includedHead` is provided).
 func GetDotDotRevisions(ctx context.Context, includedDB *doltdb.DoltDB, includedHeads []hash.Hash, excludedDB *doltdb.DoltDB, excludedHeads []hash.Hash, num int) ([]*doltdb.OptionalCommit, error) {
-	itr, err := GetDotDotRevisionsIterator[context.Context](ctx, includedDB, includedHeads, excludedDB, excludedHeads, nil)
+	itr, err := GetDotDotRevisionsIterator(ctx, includedDB, includedHeads, excludedDB, excludedHeads, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -205,21 +205,21 @@ func GetDotDotRevisions(ctx context.Context, includedDB *doltdb.DoltDB, included
 
 // GetTopologicalOrderCommitIterator returns an iterator for commits generated with the same semantics as
 // GetTopologicalOrderCommits
-func GetTopologicalOrderIterator[C doltdb.Context](ctx context.Context, ddb *doltdb.DoltDB, startCommitHashes []hash.Hash, matchFn func(*doltdb.OptionalCommit) (bool, error)) (doltdb.CommitItr[C], error) {
-	return newCommiterator[C](ctx, ddb, startCommitHashes, matchFn)
+func GetTopologicalOrderIterator(ctx context.Context, ddb *doltdb.DoltDB, startCommitHashes []hash.Hash, matchFn func(*doltdb.OptionalCommit) (bool, error)) (doltdb.CommitItr, error) {
+	return newCommiterator(ctx, ddb, startCommitHashes, matchFn)
 }
 
-type commiterator[C doltdb.Context] struct {
+type commiterator struct {
 	ddb               *doltdb.DoltDB
 	startCommitHashes []hash.Hash
 	matchFn           func(*doltdb.OptionalCommit) (bool, error)
 	q                 *q
 }
 
-var _ doltdb.CommitItr[context.Context] = (*commiterator[context.Context])(nil)
+var _ doltdb.CommitItr = (*commiterator)(nil)
 
-func newCommiterator[C doltdb.Context](ctx context.Context, ddb *doltdb.DoltDB, startCommitHashes []hash.Hash, matchFn func(*doltdb.OptionalCommit) (bool, error)) (*commiterator[C], error) {
-	itr := &commiterator[C]{
+func newCommiterator(ctx context.Context, ddb *doltdb.DoltDB, startCommitHashes []hash.Hash, matchFn func(*doltdb.OptionalCommit) (bool, error)) (*commiterator, error) {
+	itr := &commiterator{
 		ddb:               ddb,
 		startCommitHashes: startCommitHashes,
 		matchFn:           matchFn,
@@ -234,7 +234,7 @@ func newCommiterator[C doltdb.Context](ctx context.Context, ddb *doltdb.DoltDB, 
 }
 
 // Next implements doltdb.CommitItr
-func (iter *commiterator[C]) Next(ctx C) (hash.Hash, *doltdb.OptionalCommit, error) {
+func (iter *commiterator) Next(ctx context.Context) (hash.Hash, *doltdb.OptionalCommit, error) {
 	if iter.q.NumVisiblePending() > 0 {
 		nextC := iter.q.PopPending()
 
@@ -274,7 +274,7 @@ func (iter *commiterator[C]) Next(ctx C) (hash.Hash, *doltdb.OptionalCommit, err
 }
 
 // Reset implements doltdb.CommitItr
-func (i *commiterator[C]) Reset(ctx context.Context) error {
+func (i *commiterator) Reset(ctx context.Context) error {
 	i.q = newQueue()
 	for _, startCommitHash := range i.startCommitHashes {
 		if err := i.q.AddPendingIfUnseen(ctx, i.ddb, startCommitHash); err != nil {
@@ -286,15 +286,15 @@ func (i *commiterator[C]) Reset(ctx context.Context) error {
 
 // GetDotDotRevisionsIterator returns an iterator for commits generated with the same semantics as
 // GetDotDotRevisions
-func GetDotDotRevisionsIterator[C doltdb.Context](ctx context.Context, includedDdb *doltdb.DoltDB, startCommitHashes []hash.Hash, excludedDdb *doltdb.DoltDB, excludingCommitHashes []hash.Hash, matchFn func(*doltdb.OptionalCommit) (bool, error)) (doltdb.CommitItr[C], error) {
-	return newDotDotCommiterator[C](ctx, includedDdb, startCommitHashes, excludedDdb, excludingCommitHashes, matchFn)
+func GetDotDotRevisionsIterator(ctx context.Context, includedDdb *doltdb.DoltDB, startCommitHashes []hash.Hash, excludedDdb *doltdb.DoltDB, excludingCommitHashes []hash.Hash, matchFn func(*doltdb.OptionalCommit) (bool, error)) (doltdb.CommitItr, error) {
+	return newDotDotCommiterator(ctx, includedDdb, startCommitHashes, excludedDdb, excludingCommitHashes, matchFn)
 }
 
 // GetTopNTopoOrderedCommitsMatching returns the first N commits (If N <= 0 then all commits) reachable from the commits in
 // `startCommitHashes` in reverse topological order, with tiebreaking done by the height of the commit graph -- higher
 // commits appear first. Remaining ties are broken by timestamp; newer commits appear first. DO NOT DELETE, USED IN DOLTHUB
 func GetTopNTopoOrderedCommitsMatching(ctx context.Context, ddb *doltdb.DoltDB, startCommitHashes []hash.Hash, n int, matchFn func(commit *doltdb.OptionalCommit) (bool, error)) ([]*doltdb.Commit, error) {
-	itr, err := GetTopologicalOrderIterator[context.Context](ctx, ddb, startCommitHashes, matchFn)
+	itr, err := GetTopologicalOrderIterator(ctx, ddb, startCommitHashes, matchFn)
 	if err != nil {
 		return nil, err
 	}
@@ -316,7 +316,7 @@ func GetTopNTopoOrderedCommitsMatching(ctx context.Context, ddb *doltdb.DoltDB, 
 	return commitList, nil
 }
 
-type dotDotCommiterator[C doltdb.Context] struct {
+type dotDotCommiterator struct {
 	includedDdb           *doltdb.DoltDB
 	excludedDdb           *doltdb.DoltDB
 	startCommitHashes     []hash.Hash
@@ -325,10 +325,10 @@ type dotDotCommiterator[C doltdb.Context] struct {
 	q                     *q
 }
 
-var _ doltdb.CommitItr[context.Context] = (*dotDotCommiterator[context.Context])(nil)
+var _ doltdb.CommitItr = (*dotDotCommiterator)(nil)
 
-func newDotDotCommiterator[C doltdb.Context](ctx context.Context, includedDdb *doltdb.DoltDB, startCommitHashes []hash.Hash, excludedDdb *doltdb.DoltDB, excludingCommitHashes []hash.Hash, matchFn func(*doltdb.OptionalCommit) (bool, error)) (*dotDotCommiterator[C], error) {
-	itr := &dotDotCommiterator[C]{
+func newDotDotCommiterator(ctx context.Context, includedDdb *doltdb.DoltDB, startCommitHashes []hash.Hash, excludedDdb *doltdb.DoltDB, excludingCommitHashes []hash.Hash, matchFn func(*doltdb.OptionalCommit) (bool, error)) (*dotDotCommiterator, error) {
+	itr := &dotDotCommiterator{
 		includedDdb:           includedDdb,
 		excludedDdb:           excludedDdb,
 		startCommitHashes:     startCommitHashes,
@@ -345,7 +345,7 @@ func newDotDotCommiterator[C doltdb.Context](ctx context.Context, includedDdb *d
 }
 
 // Next implements doltdb.CommitItr
-func (i *dotDotCommiterator[C]) Next(ctx C) (hash.Hash, *doltdb.OptionalCommit, error) {
+func (i *dotDotCommiterator) Next(ctx context.Context) (hash.Hash, *doltdb.OptionalCommit, error) {
 	if i.q.NumVisiblePending() > 0 {
 		nextC := i.q.PopPending()
 
@@ -389,7 +389,7 @@ func (i *dotDotCommiterator[C]) Next(ctx C) (hash.Hash, *doltdb.OptionalCommit, 
 }
 
 // Reset implements doltdb.CommitItr
-func (i *dotDotCommiterator[C]) Reset(ctx context.Context) error {
+func (i *dotDotCommiterator) Reset(ctx context.Context) error {
 	i.q = newQueue()
 	for _, excludingCommitHash := range i.excludingCommitHashes {
 		if err := i.q.SetInvisible(ctx, i.excludedDdb, excludingCommitHash); err != nil {

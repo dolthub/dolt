@@ -268,7 +268,7 @@ func (d *DoltSession) RemoveBranchState(ctx *sql.Context, dbName string, branchN
 		return sql.ErrDatabaseNotFound.New(baseName)
 	}
 
-	defaultHead, err := DefaultHead(ctx, baseName, db)
+	defaultHead, err := DefaultHead(baseName, db)
 	if err != nil {
 		return err
 	}
@@ -961,13 +961,13 @@ func (d *DoltSession) GetDoltDB(ctx *sql.Context, dbName string) (*doltdb.DoltDB
 	return branchState.dbData.Ddb, true
 }
 
-func (d *DoltSession) GetDbData(ctx *sql.Context, dbName string) (env.DbData[*sql.Context], bool) {
+func (d *DoltSession) GetDbData(ctx *sql.Context, dbName string) (env.DbData, bool) {
 	branchState, ok, err := d.lookupDbState(ctx, dbName)
 	if err != nil {
-		return env.DbData[*sql.Context]{}, false
+		return env.DbData{}, false
 	}
 	if !ok {
-		return env.DbData[*sql.Context]{}, false
+		return env.DbData{}, false
 	}
 
 	return branchState.dbData, true
@@ -1375,7 +1375,7 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 
 		// The checkedOutRevSpec should be the checked out branch of the database if available, or the revision
 		// string otherwise
-		sessionState.checkedOutRevSpec, err = DefaultHead(ctx, baseName, baseDb)
+		sessionState.checkedOutRevSpec, err = DefaultHead(baseName, baseDb)
 		if err != nil {
 			return err
 		}
@@ -2018,7 +2018,7 @@ func TransactionRoot(ctx *sql.Context, db SqlDatabase) (hash.Hash, error) {
 }
 
 // DefaultHead returns the head for the database given when one isn't specified
-func DefaultHead(ctx *sql.Context, baseName string, db SqlDatabase) (string, error) {
+func DefaultHead(baseName string, db SqlDatabase) (string, error) {
 	head := ""
 
 	// First check the global variable for the default branch
@@ -2038,7 +2038,7 @@ func DefaultHead(ctx *sql.Context, baseName string, db SqlDatabase) (string, err
 	if head == "" {
 		rsr := db.DbData().Rsr
 		if rsr != nil {
-			headRef, err := rsr.CWBHeadRef(ctx)
+			headRef, err := rsr.CWBHeadRef()
 			if err != nil {
 				return "", err
 			}

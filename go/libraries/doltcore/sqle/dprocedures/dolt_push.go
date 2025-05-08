@@ -106,7 +106,7 @@ func doDoltPush(ctx *sql.Context, args []string) (int, string, error) {
 	}
 
 	var returnMsg string
-	po := &env.PushOptions[*sql.Context]{
+	po := &env.PushOptions{
 		Targets: targets,
 		Remote:  remote,
 		Rsr:     dbData.Rsr,

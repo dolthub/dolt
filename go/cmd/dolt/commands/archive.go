@@ -228,7 +228,7 @@ func historicalFuzzyMatching(ctx context.Context, heads hash.HashSet, groupings 
 		hs = append(hs, h)
 	}
 
-	iterator, err := commitwalk.GetTopologicalOrderIterator[context.Context](ctx, db, hs, func(cmt *doltdb.OptionalCommit) (bool, error) {
+	iterator, err := commitwalk.GetTopologicalOrderIterator(ctx, db, hs, func(cmt *doltdb.OptionalCommit) (bool, error) {
 		return true, nil
 	})
 	if err != nil {

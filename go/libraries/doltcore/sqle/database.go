@@ -66,7 +66,7 @@ type Database struct {
 	requestedName string
 	schemaName    string
 	ddb           *doltdb.DoltDB
-	rsr           env.RepoStateReader[*sql.Context]
+	rsr           env.RepoStateReader
 	rsw           env.RepoStateWriter
 	gs            dsess.GlobalStateImpl
 	editOpts      editor.Options
@@ -162,7 +162,7 @@ func (db Database) DoltDatabases() []*doltdb.DoltDB {
 }
 
 // NewDatabase returns a new dolt database to use in queries.
-func NewDatabase(ctx context.Context, name string, dbData env.DbData[context.Context], editOpts editor.Options) (Database, error) {
+func NewDatabase(ctx context.Context, name string, dbData env.DbData, editOpts editor.Options) (Database, error) {
 	globalState, err := dsess.NewGlobalStateStoreForDb(ctx, name, dbData.Ddb)
 	if err != nil {
 		return Database{}, err
@@ -172,23 +172,11 @@ func NewDatabase(ctx context.Context, name string, dbData env.DbData[context.Con
 		baseName:      name,
 		requestedName: name,
 		ddb:           dbData.Ddb,
-		rsr:           forwardCtxDbData{dbData.Rsr},
+		rsr:           dbData.Rsr,
 		rsw:           dbData.Rsw,
 		gs:            globalState,
 		editOpts:      editOpts,
 	}, nil
-}
-
-type forwardCtxDbData struct {
-	env.RepoStateReader[context.Context]
-}
-
-func (d forwardCtxDbData) CWBHeadSpec(ctx *sql.Context) (*doltdb.CommitSpec, error) {
-	return d.RepoStateReader.CWBHeadSpec(ctx)
-}
-
-func (d forwardCtxDbData) CWBHeadRef(ctx *sql.Context) (ref.DoltRef, error) {
-	return d.RepoStateReader.CWBHeadRef(ctx)
 }
 
 // initialDBState returns the InitialDbState for |db|. Other implementations of SqlDatabase outside this file should
@@ -240,7 +228,7 @@ func (db Database) GetDoltDB() *doltdb.DoltDB {
 }
 
 // GetStateReader gets the RepoStateReader for a Database
-func (db Database) GetStateReader() env.RepoStateReader[*sql.Context] {
+func (db Database) GetStateReader() env.RepoStateReader {
 	return db.rsr
 }
 
@@ -249,8 +237,8 @@ func (db Database) GetStateWriter() env.RepoStateWriter {
 	return db.rsw
 }
 
-func (db Database) DbData() env.DbData[*sql.Context] {
-	return env.DbData[*sql.Context]{
+func (db Database) DbData() env.DbData {
+	return env.DbData{
 		Ddb: db.ddb,
 		Rsw: db.rsw,
 		Rsr: db.rsr,
@@ -785,7 +773,7 @@ func workingSetStagedRoot(ctx *sql.Context, dbName string) (doltdb.RootValue, er
 
 // resolveAsOf resolves given expression to a commit, if one exists.
 func resolveAsOf(ctx *sql.Context, db Database, asOf interface{}) (*doltdb.Commit, doltdb.RootValue, error) {
-	head, err := db.rsr.CWBHeadRef(ctx)
+	head, err := db.rsr.CWBHeadRef()
 	if err != nil {
 		return nil, nil, err
 	}
@@ -819,7 +807,7 @@ func resolveAsOfTime(ctx *sql.Context, ddb *doltdb.DoltDB, head ref.DoltRef, asO
 		return nil, nil, err
 	}
 
-	cmItr, err := commitwalk.GetTopologicalOrderIterator[*sql.Context](ctx, ddb, []hash.Hash{h}, nil)
+	cmItr, err := commitwalk.GetTopologicalOrderIterator(ctx, ddb, []hash.Hash{h}, nil)
 	if err != nil {
 		return nil, nil, err
 	}

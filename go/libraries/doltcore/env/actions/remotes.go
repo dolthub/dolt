@@ -102,7 +102,7 @@ func Push(ctx context.Context, tempTableDir string, mode ref.UpdateMode, destRef
 
 // DoPush returns a message about whether the push was successful for each branch or a tag.
 // This includes if there is a new remote branch created, upstream is set or push was rejected for a branch.
-func DoPush[C doltdb.Context](ctx C, pushMeta *env.PushOptions[C], progStarter ProgStarter, progStopper ProgStopper) (returnMsg string, err error) {
+func DoPush(ctx context.Context, pushMeta *env.PushOptions, progStarter ProgStarter, progStopper ProgStopper) (returnMsg string, err error) {
 	var successPush, setUpstreamPush, failedPush []string
 	for _, targets := range pushMeta.Targets {
 		err = push(ctx, pushMeta.Rsr, pushMeta.TmpDir, pushMeta.SrcDb, pushMeta.DestDb, pushMeta.Remote, targets, progStarter, progStopper)
@@ -143,7 +143,7 @@ func DoPush[C doltdb.Context](ctx C, pushMeta *env.PushOptions[C], progStarter P
 }
 
 // push performs push on a branch or a tag.
-func push[C doltdb.Context](ctx C, rsr env.RepoStateReader[C], tmpDir string, src, dest *doltdb.DoltDB, remote *env.Remote, opts *env.PushTarget, progStarter ProgStarter, progStopper ProgStopper) error {
+func push(ctx context.Context, rsr env.RepoStateReader, tmpDir string, src, dest *doltdb.DoltDB, remote *env.Remote, opts *env.PushTarget, progStarter ProgStarter, progStopper ProgStopper) error {
 	switch opts.SrcRef.GetType() {
 	case ref.BranchRefType:
 		if opts.SrcRef == ref.EmptyBranchRef {
@@ -212,7 +212,7 @@ func deleteRemoteBranch(ctx context.Context, toDelete, remoteRef ref.DoltRef, lo
 	return nil
 }
 
-func PushToRemoteBranch[C doltdb.Context](ctx C, rsr env.RepoStateReader[C], tempTableDir string, mode ref.UpdateMode, srcRef, destRef, remoteRef ref.DoltRef, localDB, remoteDB *doltdb.DoltDB, remote env.Remote, progStarter ProgStarter, progStopper ProgStopper) error {
+func PushToRemoteBranch(ctx context.Context, rsr env.RepoStateReader, tempTableDir string, mode ref.UpdateMode, srcRef, destRef, remoteRef ref.DoltRef, localDB, remoteDB *doltdb.DoltDB, remote env.Remote, progStarter ProgStarter, progStopper ProgStopper) error {
 	evt := events.GetEventFromContext(ctx)
 
 	u, err := earl.Parse(remote.Url)
@@ -225,7 +225,7 @@ func PushToRemoteBranch[C doltdb.Context](ctx C, rsr env.RepoStateReader[C], tem
 	}
 
 	cs, _ := doltdb.NewCommitSpec(srcRef.GetPath())
-	headRef, err := rsr.CWBHeadRef(ctx)
+	headRef, err := rsr.CWBHeadRef()
 	if err != nil {
 		return err
 	}
@@ -471,9 +471,9 @@ func FetchRemoteBranch(
 
 // ShallowFetchRefSpec fetches the remote refSpec from the source database to the destination database. Currently it is only
 // used for shallow clones.
-func ShallowFetchRefSpec[C doltdb.Context](
+func ShallowFetchRefSpec(
 	ctx context.Context,
-	dbData env.DbData[C],
+	dbData env.DbData,
 	srcDB *doltdb.DoltDB,
 	refSpecs ref.RemoteRefSpec,
 	remote *env.Remote,
@@ -490,9 +490,9 @@ func ShallowFetchRefSpec[C doltdb.Context](
 // FetchRefSpecs is the common SQL and CLI entrypoint for fetching branches, tags, and heads from a remote.
 // This function takes dbData which is a env.DbData object for handling repoState read and write, and srcDB is
 // a remote *doltdb.DoltDB object that is used to fetch remote branches from.
-func FetchRefSpecs[C doltdb.Context](
+func FetchRefSpecs(
 	ctx context.Context,
-	dbData env.DbData[C],
+	dbData env.DbData,
 	srcDB *doltdb.DoltDB,
 	refSpecs []ref.RemoteRefSpec,
 	defaultRefSpec bool,
@@ -517,9 +517,9 @@ func FetchRefSpecs[C doltdb.Context](
 // - depth: the depth of the fetch. If depth is greater than 0, it is a shallow clone.
 // - progStarter: function that starts the progress reporting
 // - progStopper: function that stops the progress reporting
-func fetchRefSpecsWithDepth[C doltdb.Context](
+func fetchRefSpecsWithDepth(
 	ctx context.Context,
-	dbData env.DbData[C],
+	dbData env.DbData,
 	srcDB *doltdb.DoltDB,
 	refSpecs []ref.RemoteRefSpec,
 	defaultRefSpecs bool,
@@ -740,7 +740,7 @@ func updateSkipList(ctx context.Context, srcDB *doltdb.DoltDB, toFetch []hash.Ha
 	return newFetchList, newSkipList, nil
 }
 
-func pruneBranches[C doltdb.Context](ctx context.Context, dbData env.DbData[C], remote env.Remote, remoteRefs []doltdb.RefWithHash) error {
+func pruneBranches(ctx context.Context, dbData env.DbData, remote env.Remote, remoteRefs []doltdb.RefWithHash) error {
 	remoteRefTypes := map[ref.RefType]struct{}{
 		ref.RemoteRefType: {},
 	}

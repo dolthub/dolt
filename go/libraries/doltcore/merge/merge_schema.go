@@ -1207,7 +1207,7 @@ func mergeTableCollation(_ context.Context, tblName string, ancSch, ourSch, thei
 }
 
 // mergeChecks attempts to combine ourChks, theirChks, and ancChks into a single collection, or gathers the conflicts
-func mergeChecks(ctx *sql.Context, ourChks, theirChks, ancChks schema.CheckCollection) ([]schema.Check, []ChkConflict, error) {
+func mergeChecks(ctx context.Context, ourChks, theirChks, ancChks schema.CheckCollection) ([]schema.Check, []ChkConflict, error) {
 	// Handles modifications
 	common, conflicts := checksInCommon(ourChks.AllChecks(), theirChks.AllChecks(), ancChks.AllChecks())
 
@@ -1248,7 +1248,7 @@ func mergeChecks(ctx *sql.Context, ourChks, theirChks, ancChks schema.CheckColle
 			CheckExpression: chk.Expression(),
 			Enforced:        chk.Enforced(),
 		}
-		colNames, err := ColumnsFromCheckDefinition(ctx, &chkDef)
+		colNames, err := ColumnsFromCheckDefinition(sql.NewContext(ctx), &chkDef)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -1270,7 +1270,7 @@ func mergeChecks(ctx *sql.Context, ourChks, theirChks, ancChks schema.CheckColle
 			CheckExpression: ourChk.Expression(),
 			Enforced:        ourChk.Enforced(),
 		}
-		colNames, err := ColumnsFromCheckDefinition(ctx, &chkDef)
+		colNames, err := ColumnsFromCheckDefinition(sql.NewContext(ctx), &chkDef)
 		if err != nil {
 			return nil, nil, err
 		}
