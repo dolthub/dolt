@@ -167,7 +167,7 @@ func (dt *DiffTable) Collation() sql.CollationID {
 }
 
 func (dt *DiffTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
-	cmItr := doltdb.CommitItrForRoots[*sql.Context](dt.ddb, dt.head)
+	cmItr := doltdb.CommitItrForRoots(dt.ddb, dt.head)
 
 	sf, err := SelectFuncForFilters(ctx, dt.ddb.ValueReadWriter(), dt.partitionFilters)
 	if err != nil {
@@ -361,7 +361,7 @@ func (dt *DiffTable) fromCommitLookupPartitions(ctx *sql.Context, hashes []hash.
 		return nil, err
 	}
 
-	cmItr := doltdb.NewCommitSliceIter[*sql.Context](pCommits, parentHashes)
+	cmItr := doltdb.NewCommitSliceIter(pCommits, parentHashes)
 
 	return &DiffPartitions{
 		tblName:         dt.tableName,
@@ -421,7 +421,7 @@ func (dt *DiffTable) scanHeightForChild(ctx *sql.Context, parent hash.Hash, heig
 // reverseIterForChild finds the commit with the largest height that
 // is a child of the |parent| hash, or nil if no commit is found.
 func (dt *DiffTable) reverseIterForChild(ctx *sql.Context, parent hash.Hash) (*doltdb.Commit, hash.Hash, error) {
-	iter := doltdb.CommitItrForRoots[*sql.Context](dt.ddb, dt.head)
+	iter := doltdb.CommitItrForRoots(dt.ddb, dt.head)
 	for {
 		childHs, optCmt, err := iter.Next(ctx)
 		if errors.Is(err, io.EOF) {
@@ -564,7 +564,7 @@ func (dt *DiffTable) toCommitLookupPartitions(ctx *sql.Context, hashes []hash.Ha
 		return nil, err
 	}
 
-	cmItr := doltdb.NewCommitSliceIter[*sql.Context](pCommits, parentHashes)
+	cmItr := doltdb.NewCommitSliceIter(pCommits, parentHashes)
 
 	return &DiffPartitions{
 		tblName:         dt.tableName,
@@ -768,7 +768,7 @@ var _ sql.PartitionIter = &DiffPartitions{}
 // DiffPartitions a collection of partitions. Implements PartitionItr
 type DiffPartitions struct {
 	tblName         doltdb.TableName
-	cmItr           doltdb.CommitItr[*sql.Context]
+	cmItr           doltdb.CommitItr
 	cmHashToTblInfo map[hash.Hash]TblInfoAtCommit
 	selectFunc      partitionSelectFunc
 	toSch           schema.Schema

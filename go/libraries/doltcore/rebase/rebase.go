@@ -190,7 +190,7 @@ func findRebaseCommits(ctx *sql.Context, currentBranchCommit, upstreamBranchComm
 
 	// We use the dot-dot revision iterator because it gives us the behavior we want for rebase – it finds all
 	// commits reachable from |currentBranchCommit| but NOT reachable by |upstreamBranchCommit|.
-	commitItr, err := commitwalk.GetDotDotRevisionsIterator[*sql.Context](ctx,
+	commitItr, err := commitwalk.GetDotDotRevisionsIterator(ctx,
 		ddb, []hash.Hash{currentBranchCommitHash},
 		ddb, []hash.Hash{upstreamBranchCommitHash}, nil)
 	if err != nil {

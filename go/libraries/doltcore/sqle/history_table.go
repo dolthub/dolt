@@ -15,6 +15,7 @@
 package sqle
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"strings"
@@ -60,8 +61,8 @@ var _ sql.PrimaryKeyTable = (*HistoryTable)(nil)
 type HistoryTable struct {
 	doltTable                  *DoltTable
 	commitFilters              []sql.Expression
-	cmItr                      doltdb.CommitItr[*sql.Context]
-	commitCheck                doltdb.CommitFilter[*sql.Context]
+	cmItr                      doltdb.CommitItr
+	commitCheck                doltdb.CommitFilter
 	indexLookup                sql.IndexLookup
 	projectedCols              []uint64
 	conversionWarningsByColumn map[string]struct{}
@@ -154,7 +155,7 @@ func (ht *HistoryTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLooku
 			return sql.PartitionsToPartitionIter(), nil
 		}
 
-		iter, err := ht.filterIter(ctx, doltdb.NewCommitSliceIter[*sql.Context](commits, hashes))
+		iter, err := ht.filterIter(ctx, doltdb.NewCommitSliceIter(commits, hashes))
 		if err != nil {
 			return nil, err
 		}
@@ -167,7 +168,7 @@ func (ht *HistoryTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLooku
 
 // NewHistoryTable creates a history table
 func NewHistoryTable(table *DoltTable, ddb *doltdb.DoltDB, head *doltdb.Commit) sql.Table {
-	cmItr := doltdb.CommitItrForRoots[*sql.Context](ddb, head)
+	cmItr := doltdb.CommitItrForRoots(ddb, head)
 
 	// System tables don't currently use overridden schemas, so if one is set on |table|,
 	// clear it out to make sure we use the correct schema that matches the data being used.
@@ -215,20 +216,20 @@ func historyTableSchema(tableName string, table *DoltTable) sql.Schema {
 	return newSch
 }
 
-func (ht *HistoryTable) filterIter(ctx *sql.Context, iter doltdb.CommitItr[*sql.Context]) (doltdb.CommitItr[*sql.Context], error) {
+func (ht *HistoryTable) filterIter(ctx *sql.Context, iter doltdb.CommitItr) (doltdb.CommitItr, error) {
 	if len(ht.commitFilters) > 0 {
 		r, err := ht.doltTable.db.GetRoot(ctx)
 		if err != nil {
-			return doltdb.FilteringCommitItr[*sql.Context]{}, err
+			return doltdb.FilteringCommitItr{}, err
 		}
 		h, err := r.HashOf()
 		if err != nil {
-			return doltdb.FilteringCommitItr[*sql.Context]{}, err
+			return doltdb.FilteringCommitItr{}, err
 		}
 		filters := substituteWorkingHash(h, ht.commitFilters)
 		check, err := commitFilterForExprs(ctx, filters)
 		if err != nil {
-			return doltdb.FilteringCommitItr[*sql.Context]{}, err
+			return doltdb.FilteringCommitItr{}, err
 		}
 
 		return doltdb.NewFilteringCommitItr(iter, check), nil
@@ -255,10 +256,10 @@ func substituteWorkingHash(h hash.Hash, f []sql.Expression) []sql.Expression {
 	return ret
 }
 
-func commitFilterForExprs(ctx *sql.Context, filters []sql.Expression) (doltdb.CommitFilter[*sql.Context], error) {
+func commitFilterForExprs(ctx *sql.Context, filters []sql.Expression) (doltdb.CommitFilter, error) {
 	filters = transformFilters(ctx, filters...)
 
-	return func(ctx *sql.Context, h hash.Hash, optCmt *doltdb.OptionalCommit) (filterOut bool, err error) {
+	return func(ctx context.Context, h hash.Hash, optCmt *doltdb.OptionalCommit) (filterOut bool, err error) {
 		cm, ok := optCmt.ToCommit()
 		if !ok {
 			return false, nil // NM4 TEST.
@@ -270,10 +271,11 @@ func commitFilterForExprs(ctx *sql.Context, filters []sql.Expression) (doltdb.Co
 			return false, err
 		}
 
+		sc := sql.NewContext(ctx)
 		r := sql.Row{h.String(), meta.Name, meta.Time()}
 
 		for _, filter := range filters {
-			res, err := filter.Eval(ctx, r)
+			res, err := filter.Eval(sc, r)
 			if err != nil {
 				return false, err
 			}
@@ -451,7 +453,7 @@ func (cp *commitPartition) Key() []byte {
 
 // commitPartitioner creates partitions from a CommitItr
 type commitPartitioner struct {
-	cmItr doltdb.CommitItr[*sql.Context]
+	cmItr doltdb.CommitItr
 }
 
 // Next returns the next partition and nil, io.EOF when complete

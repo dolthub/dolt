@@ -25,7 +25,6 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
@@ -114,7 +113,7 @@ func doDoltBackup(ctx *sql.Context, args []string) (int, error) {
 	return statusOk, nil
 }
 
-func addBackup(ctx *sql.Context, dbData env.DbData[*sql.Context], apr *argparser.ArgParseResults) error {
+func addBackup(ctx *sql.Context, dbData env.DbData, apr *argparser.ArgParseResults) error {
 	if apr.NArg() != 3 {
 		return fmt.Errorf("usage: dolt_backup('add', 'backup_name', 'backup-url')")
 	}
@@ -153,7 +152,7 @@ func addBackup(ctx *sql.Context, dbData env.DbData[*sql.Context], apr *argparser
 	}
 }
 
-func restoreBackup(ctx *sql.Context, _ env.DbData[*sql.Context], apr *argparser.ArgParseResults) error {
+func restoreBackup(ctx *sql.Context, _ env.DbData, apr *argparser.ArgParseResults) error {
 	if apr.NArg() != 3 {
 		return fmt.Errorf("usage: dolt_backup('restore', 'backup_url', 'database_name')")
 	}
@@ -218,7 +217,7 @@ func restoreBackup(ctx *sql.Context, _ env.DbData[*sql.Context], apr *argparser.
 	}
 }
 
-func removeBackup(ctx *sql.Context, dbData env.DbData[*sql.Context], apr *argparser.ArgParseResults) error {
+func removeBackup(ctx *sql.Context, dbData env.DbData, apr *argparser.ArgParseResults) error {
 	if apr.NArg() != 2 {
 		return fmt.Errorf("usage: dolt_backup('remove', 'backup_name')")
 	}
@@ -277,7 +276,7 @@ func loadAwsParams(ctx *sql.Context, sess *dsess.DoltSession, apr *argparser.Arg
 	return params, nil
 }
 
-func syncBackupViaUrl(ctx *sql.Context, dbData env.DbData[*sql.Context], sess *dsess.DoltSession, apr *argparser.ArgParseResults) error {
+func syncBackupViaUrl(ctx *sql.Context, dbData env.DbData, sess *dsess.DoltSession, apr *argparser.ArgParseResults) error {
 	if apr.NArg() != 2 {
 		return fmt.Errorf("usage: dolt_backup('sync-url', BACKUP_URL)")
 	}
@@ -293,7 +292,7 @@ func syncBackupViaUrl(ctx *sql.Context, dbData env.DbData[*sql.Context], sess *d
 	return syncRootsToBackup(ctx, dbData, sess, b)
 }
 
-func syncBackupViaName(ctx *sql.Context, dbData env.DbData[*sql.Context], sess *dsess.DoltSession, apr *argparser.ArgParseResults) error {
+func syncBackupViaName(ctx *sql.Context, dbData env.DbData, sess *dsess.DoltSession, apr *argparser.ArgParseResults) error {
 	if apr.NArg() != 2 {
 		return fmt.Errorf("usage: dolt_backup('sync', BACKUP_NAME)")
 	}
@@ -313,7 +312,7 @@ func syncBackupViaName(ctx *sql.Context, dbData env.DbData[*sql.Context], sess *
 }
 
 // syncRootsToBackup syncs the roots from |dbData| to the backup specified by |backup|.
-func syncRootsToBackup(ctx *sql.Context, dbData env.DbData[*sql.Context], sess *dsess.DoltSession, backup env.Remote) error {
+func syncRootsToBackup(ctx *sql.Context, dbData env.DbData, sess *dsess.DoltSession, backup env.Remote) error {
 	destDb, err := sess.Provider().GetRemoteDB(ctx, dbData.Ddb.ValueReadWriter().Format(), backup, true)
 	if err != nil {
 		return fmt.Errorf("error loading backup destination: %w", err)
@@ -333,7 +332,7 @@ func syncRootsToBackup(ctx *sql.Context, dbData env.DbData[*sql.Context], sess *
 }
 
 // syncRootsFromBackup syncs the roots from the backup specified by |backup| to |dbData|.
-func syncRootsFromBackup[C doltdb.Context](ctx *sql.Context, dbData env.DbData[C], sess *dsess.DoltSession, backup env.Remote) error {
+func syncRootsFromBackup(ctx *sql.Context, dbData env.DbData, sess *dsess.DoltSession, backup env.Remote) error {
 	destDb, err := sess.Provider().GetRemoteDB(ctx, dbData.Ddb.ValueReadWriter().Format(), backup, true)
 	if err != nil {
 		return fmt.Errorf("error loading backup destination: %w", err)

@@ -270,7 +270,7 @@ func (mr *MultiRepoTestSetup) CommitWithWorkingSet(dbName string) *doltdb.Commit
 		panic("pending commit error: " + err.Error())
 	}
 
-	headRef, err := dEnv.RepoStateReader().CWBHeadRef(ctx)
+	headRef, err := dEnv.RepoStateReader().CWBHeadRef()
 	if err != nil {
 		panic("couldn't get working set: " + err.Error())
 	}
@@ -369,7 +369,7 @@ func (mr *MultiRepoTestSetup) PushToRemote(dbName, remoteName, branchName string
 		mr.Errhand(fmt.Sprintf("Failed to access .dolt directory: %s", err.Error()))
 	}
 
-	pushOptions := &env.PushOptions[context.Context]{
+	pushOptions := &env.PushOptions{
 		Targets: targets,
 		Remote:  remote,
 		Rsr:     dEnv.RepoStateReader(),

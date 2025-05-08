@@ -180,7 +180,7 @@ func RootsForBranch(ctx context.Context, roots doltdb.Roots, branchRoot doltdb.R
 // CleanOldWorkingSet resets the source branch's working set to the branch head, leaving the source branch unchanged
 func CleanOldWorkingSet(
 	ctx *sql.Context,
-	dbData env.DbData[*sql.Context],
+	dbData env.DbData,
 	doltDb *doltdb.DoltDB,
 	username, email string,
 	initialRoots doltdb.Roots,

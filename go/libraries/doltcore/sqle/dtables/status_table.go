@@ -35,7 +35,7 @@ type StatusTable struct {
 	tableName     string
 	ddb           *doltdb.DoltDB
 	workingSet    *doltdb.WorkingSet
-	rootsProvider env.RootsProvider[*sql.Context]
+	rootsProvider env.RootsProvider
 }
 
 var _ sql.StatisticsTable = (*StatusTable)(nil)
@@ -90,7 +90,7 @@ func (st StatusTable) PartitionRows(context *sql.Context, _ sql.Partition) (sql.
 }
 
 // NewStatusTable creates a StatusTable
-func NewStatusTable(_ *sql.Context, tableName string, ddb *doltdb.DoltDB, ws *doltdb.WorkingSet, rp env.RootsProvider[*sql.Context]) sql.Table {
+func NewStatusTable(_ *sql.Context, tableName string, ddb *doltdb.DoltDB, ws *doltdb.WorkingSet, rp env.RootsProvider) sql.Table {
 	return &StatusTable{
 		tableName:     tableName,
 		ddb:           ddb,

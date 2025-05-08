@@ -53,7 +53,7 @@ var ErrUnableToMergeColumnDefaultValue = errorkinds.NewKind("unable to automatic
 // conflicts), migrates any existing table data to the specified |mergedSch|, and merges table data from both
 // sides of the merge together.
 func mergeProllyTable(
-	ctx *sql.Context,
+	ctx context.Context,
 	tm *TableMerger,
 	mergedSch schema.Schema,
 	mergeInfo MergeInfo,
@@ -87,19 +87,26 @@ func mergeProllyTable(
 		mergeInfo.RightNeedsRewrite = true
 	}
 
+	// We need a sql.Context to apply column default values in merges; if we don't have one already,
+	// create one, since this code also gets called from the CLI merge code path.
+	sqlCtx, ok := ctx.(*sql.Context)
+	if !ok {
+		sqlCtx = sql.NewContext(ctx)
+	}
+
 	var stats *MergeStats
-	mergeTbl, stats, err = mergeProllyTableData(ctx, tm, mergedSch, mergeTbl, valueMerger, mergeInfo, diffInfo)
+	mergeTbl, stats, err = mergeProllyTableData(sqlCtx, tm, mergedSch, mergeTbl, valueMerger, mergeInfo, diffInfo)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	n, err := mergeTbl.NumRowsInConflict(ctx)
+	n, err := mergeTbl.NumRowsInConflict(sqlCtx)
 	if err != nil {
 		return nil, nil, err
 	}
 	stats.DataConflicts = int(n)
 
-	mergeTbl, err = mergeAutoIncrementValues(ctx, tm.leftTbl, tm.rightTbl, mergeTbl)
+	mergeTbl, err = mergeAutoIncrementValues(sqlCtx, tm.leftTbl, tm.rightTbl, mergeTbl)
 	if err != nil {
 		return nil, nil, err
 	}

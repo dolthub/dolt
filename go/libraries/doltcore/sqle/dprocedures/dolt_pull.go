@@ -182,7 +182,7 @@ func doDoltPull(ctx *sql.Context, args []string) (int, int, string, error) {
 
 			rsSeen = true
 
-			headRef, err := dbData.Rsr.CWBHeadRef(ctx)
+			headRef, err := dbData.Rsr.CWBHeadRef()
 			if err != nil {
 				return noConflictsOrViolations, threeWayMerge, "", err
 			}

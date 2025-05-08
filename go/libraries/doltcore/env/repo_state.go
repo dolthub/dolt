@@ -28,9 +28,9 @@ import (
 )
 
 // TODO: change name to ClientStateReader, move out of env package
-type RepoStateReader[C doltdb.Context] interface {
-	CWBHeadRef(C) (ref.DoltRef, error)
-	CWBHeadSpec(C) (*doltdb.CommitSpec, error)
+type RepoStateReader interface {
+	CWBHeadRef() (ref.DoltRef, error)
+	CWBHeadSpec() (*doltdb.CommitSpec, error)
 	GetRemotes() (*concurrentmap.Map[string, Remote], error)
 	GetBackups() (*concurrentmap.Map[string, Remote], error)
 	GetBranches() (*concurrentmap.Map[string, BranchConfig], error)
@@ -47,8 +47,8 @@ type RepoStateWriter interface {
 	UpdateBranch(name string, new BranchConfig) error
 }
 
-type RepoStateReadWriter[C doltdb.Context] interface {
-	RepoStateReader[C]
+type RepoStateReadWriter interface {
+	RepoStateReader
 	RepoStateWriter
 }
 
@@ -56,10 +56,10 @@ type RepoStateReadWriter[C doltdb.Context] interface {
 type RemoteDbProvider interface {
 	GetRemoteDB(ctx context.Context, format *types.NomsBinFormat, r Remote, withCaching bool) (*doltdb.DoltDB, error)
 }
-type DbData[C doltdb.Context] struct {
+type DbData struct {
 	Ddb *doltdb.DoltDB
 	Rsw RepoStateWriter
-	Rsr RepoStateReader[C]
+	Rsr RepoStateReader
 }
 
 type BranchConfig struct {

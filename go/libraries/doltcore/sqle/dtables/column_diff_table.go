@@ -45,7 +45,7 @@ type ColumnDiffTable struct {
 	ddb              *doltdb.DoltDB
 	head             *doltdb.Commit
 	partitionFilters []sql.Expression
-	commitCheck      doltdb.CommitFilter[*sql.Context]
+	commitCheck      doltdb.CommitFilter
 }
 
 var _ sql.Table = (*ColumnDiffTable)(nil)
@@ -119,7 +119,7 @@ func (dt *ColumnDiffTable) PartitionRows(ctx *sql.Context, partition sql.Partiti
 			if hasCommitHashEquality {
 				return dt.newCommitHistoryRowItrFromCommits(ctx, cms)
 			}
-			iter := doltdb.CommitItrForRoots[*sql.Context](dt.ddb, dt.head)
+			iter := doltdb.CommitItrForRoots(dt.ddb, dt.head)
 			if dt.commitCheck != nil {
 				iter = doltdb.NewFilteringCommitItr(iter, dt.commitCheck)
 			}
@@ -278,7 +278,7 @@ func (d *doltColDiffWorkingSetRowItr) Close(c *sql.Context) error {
 type doltColDiffCommitHistoryRowItr struct {
 	ctx             *sql.Context
 	ddb             *doltdb.DoltDB
-	child           doltdb.CommitItr[*sql.Context]
+	child           doltdb.CommitItr
 	commits         []*doltdb.Commit
 	meta            *datas.CommitMeta
 	hash            hash.Hash
@@ -288,7 +288,7 @@ type doltColDiffCommitHistoryRowItr struct {
 }
 
 // newCommitHistoryRowItr creates a doltDiffCommitHistoryRowItr from a CommitItr.
-func (dt *ColumnDiffTable) newCommitHistoryRowItrFromItr(ctx *sql.Context, iter doltdb.CommitItr[*sql.Context]) (*doltColDiffCommitHistoryRowItr, error) {
+func (dt *ColumnDiffTable) newCommitHistoryRowItrFromItr(ctx *sql.Context, iter doltdb.CommitItr) (*doltColDiffCommitHistoryRowItr, error) {
 	dchItr := &doltColDiffCommitHistoryRowItr{
 		ctx:             ctx,
 		ddb:             dt.ddb,

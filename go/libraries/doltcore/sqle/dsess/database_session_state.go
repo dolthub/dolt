@@ -39,7 +39,7 @@ type InitialDbState struct {
 	// HeadRoot is the root value for databases without a HeadCommit. Nil for databases with a HeadCommit.
 	HeadRoot doltdb.RootValue
 	ReadOnly bool
-	DbData   env.DbData[*sql.Context]
+	DbData   env.DbData
 	Remotes  *concurrentmap.Map[string, env.Remote]
 	Branches *concurrentmap.Map[string, env.BranchConfig]
 	Backups  *concurrentmap.Map[string, env.Remote]
@@ -117,7 +117,7 @@ type branchState struct {
 	// case headCommit must be set
 	workingSet *doltdb.WorkingSet
 	// dbData is an accessor for the underlying doltDb
-	dbData env.DbData[*sql.Context]
+	dbData env.DbData
 	// writeSession is this head's write session
 	writeSession WriteSession
 	// readOnly is true if this database is read only

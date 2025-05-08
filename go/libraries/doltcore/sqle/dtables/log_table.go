@@ -209,7 +209,7 @@ func (dt *LogTable) HeadHash() (hash.Hash, error) {
 
 // LogItr is a sql.RowItr implementation which iterates over each commit as if it's a row in the table.
 type LogItr struct {
-	child doltdb.CommitItr[*sql.Context]
+	child doltdb.CommitItr
 }
 
 // NewLogItr creates a LogItr from the current environment.
@@ -219,7 +219,7 @@ func NewLogItr(ctx *sql.Context, ddb *doltdb.DoltDB, head *doltdb.Commit) (*LogI
 		return nil, err
 	}
 
-	child, err := commitwalk.GetTopologicalOrderIterator[*sql.Context](ctx, ddb, []hash.Hash{h}, nil)
+	child, err := commitwalk.GetTopologicalOrderIterator(ctx, ddb, []hash.Hash{h}, nil)
 	if err != nil {
 		return nil, err
 	}

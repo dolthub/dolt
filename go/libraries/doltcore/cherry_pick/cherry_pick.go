@@ -258,7 +258,7 @@ func cherryPick(ctx *sql.Context, dSess *dsess.DoltSession, roots doltdb.Roots, 
 	if err != nil {
 		return nil, "", err
 	}
-	headRef, err := dbData.Rsr.CWBHeadRef(ctx)
+	headRef, err := dbData.Rsr.CWBHeadRef()
 	if err != nil {
 		return nil, "", err
 	}
