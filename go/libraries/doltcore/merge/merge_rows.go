@@ -378,7 +378,7 @@ func (rm *RootMerger) MaybeShortCircuit(ctx context.Context, tm *TableMerger, op
 		return nil, nil, nil, nil
 	}
 
-	rootHash, mergeHash, ancHash, err := tm.tableHashes(ctx)
+	leftHash, rightHash, baseHash, err := tm.tableHashes(ctx)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -389,13 +389,13 @@ func (rm *RootMerger) MaybeShortCircuit(ctx context.Context, tm *TableMerger, op
 	areRootObjs := tm.leftRootObj != nil || tm.rightRootObj != nil || tm.ancRootObj != nil
 
 	// Nothing changed
-	if leftExists && rightExists && ancExists && rootHash == mergeHash && rootHash == ancHash {
+	if leftExists && rightExists && ancExists && leftHash == rightHash && leftHash == baseHash {
 		return tm.leftTbl, tm.leftRootObj, &MergeStats{Operation: TableUnmodified}, nil
 	}
 
 	// Both made identical changes
 	// For keyless tables, this counts as a conflict
-	if leftExists && rightExists && rootHash == mergeHash && !schema.IsKeyless(tm.leftSch) {
+	if leftExists && rightExists && leftHash == rightHash && !schema.IsKeyless(tm.leftSch) {
 		return tm.leftTbl, tm.leftRootObj, &MergeStats{Operation: TableUnmodified}, nil
 	}
 
@@ -425,12 +425,12 @@ func (rm *RootMerger) MaybeShortCircuit(ctx context.Context, tm *TableMerger, op
 		var childHash hash.Hash
 		if rightExists {
 			childTable = tm.rightTbl
-			childHash = mergeHash
+			childHash = rightHash
 		} else {
 			childTable = tm.leftTbl
-			childHash = rootHash
+			childHash = leftHash
 		}
-		if childHash != ancHash {
+		if childHash != baseHash {
 			schemasEqual, err := doltdb.SchemaHashesEqual(ctx, childTable, tm.ancTbl)
 			if err != nil {
 				return nil, nil, nil, err
@@ -446,15 +446,15 @@ func (rm *RootMerger) MaybeShortCircuit(ctx context.Context, tm *TableMerger, op
 	}
 
 	// Changes only in root, table unmodified
-	if mergeHash == ancHash {
+	if rightHash == baseHash {
 		return tm.leftTbl, tm.leftRootObj, &MergeStats{Operation: TableUnmodified}, nil
 	}
 
 	// Changes only in merge root, fast-forward
 	// TODO : no fast-forward when cherry-picking for now
-	if !opts.IsCherryPick && rootHash == ancHash {
+	if !opts.IsCherryPick && leftHash == baseHash {
 		ms := MergeStats{Operation: TableModified}
-		if rootHash != mergeHash && !areRootObjs {
+		if leftHash != rightHash && !areRootObjs {
 			ms, err = calcTableMergeStats(ctx, tm.leftTbl, tm.rightTbl)
 			if err != nil {
 				return nil, nil, nil, err
