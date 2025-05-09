@@ -292,7 +292,6 @@ func readIndexMeta(r *bufio.Reader) (lookupMeta, error) {
 	if _, err := io.ReadFull(r, addr[:]); err != nil {
 		return lookupMeta{}, err
 	}
-
 	return lookupMeta{
 		batchStart: int64(startOff),
 		batchEnd:   int64(endOff),

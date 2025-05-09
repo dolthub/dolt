@@ -63,8 +63,15 @@ func DiffOrderedTrees[K, V ~[]byte, O Ordering[K]](
 
 	for {
 		var diff Diff
-		if diff, err = differ.Next(ctx); err != nil {
+		if diff, err = differ.next(ctx, false); err != nil {
 			break
+		}
+
+		for diff.Type == RangeDiff {
+			diff, err = differ.split(ctx)
+			if err != nil {
+				break
+			}
 		}
 
 		if err = cb(ctx, diff); err != nil {

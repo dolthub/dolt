@@ -118,6 +118,7 @@ func (ps patchBuffer) sendPatch(ctx context.Context, diff Diff) error {
 			return err
 		}
 
+		// we're pointing past the end in some cases. This shouldn't be possibble
 		subtrees, err := nd.getSubtreeCount(diff.toCur.idx)
 		if err != nil {
 			return err
@@ -169,7 +170,7 @@ func sendPatches[K ~[]byte, O Ordering[K]](
 		lok, rok    = true, true
 	)
 
-	left, err = l.Next(ctx)
+	left, err = l.next(ctx, false)
 	if err == io.EOF {
 		err, lok = nil, false
 	}
@@ -177,7 +178,7 @@ func sendPatches[K ~[]byte, O Ordering[K]](
 		return MergeStats{}, err
 	}
 
-	right, err = r.Next(ctx)
+	right, err = r.next(ctx, false)
 	if err == io.EOF {
 		err, rok = nil, false
 	}
@@ -190,8 +191,12 @@ func sendPatches[K ~[]byte, O Ordering[K]](
 
 		switch {
 		case cmp < 0:
+			//err = l.to.advance(ctx)
+			if err != nil {
+				return MergeStats{}, err
+			}
 			// already in left
-			left, err = l.Next(ctx)
+			left, err = l.next(ctx, false)
 			if err == io.EOF {
 				err, lok = nil, false
 			}
@@ -206,7 +211,11 @@ func sendPatches[K ~[]byte, O Ordering[K]](
 			}
 			updateStats(right, &stats)
 
-			right, err = r.Next(ctx)
+			// err = r.to.advance(ctx)
+			if err != nil {
+				return MergeStats{}, err
+			}
+			right, err = r.next(ctx, false)
 			if err == io.EOF {
 				err, rok = nil, false
 			}
@@ -215,11 +224,33 @@ func sendPatches[K ~[]byte, O Ordering[K]](
 			}
 
 		case cmp == 0:
+			if left.Type == RangeDiff && right.Type == RangeDiff {
+				left, err = l.split(ctx)
+				if err != nil {
+					return MergeStats{}, err
+				}
+
+				right, err = r.split(ctx)
+				if err != nil {
+					return MergeStats{}, err
+				}
+				continue
+			}
 			resolved, ok := cb(left, right)
 			if ok {
 				err = buf.sendPatch(ctx, resolved)
 				updateStats(right, &stats)
 			}
+			if err != nil {
+				return MergeStats{}, err
+			}
+
+			// Not splitting, advance the cursors
+			// err = l.to.advance(ctx)
+			if err != nil {
+				return MergeStats{}, err
+			}
+			// err = l.from.advance(ctx)
 			if err != nil {
 				return MergeStats{}, err
 			}
