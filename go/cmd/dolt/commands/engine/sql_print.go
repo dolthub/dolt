@@ -65,6 +65,7 @@ func PrettyPrintResultsExtended(ctx *sql.Context, resultFormat PrintResultFormat
 }
 
 func prettyPrintResultsWithSummary(ctx *sql.Context, resultFormat PrintResultFormat, sqlSch sql.Schema, rowIter sql.RowIter, summary PrintSummaryBehavior, pageResults bool) (rerr error) {
+
 	defer func() {
 		closeErr := rowIter.Close(ctx)
 		if rerr == nil && closeErr != nil {
@@ -139,7 +140,8 @@ func prettyPrintResultsWithSummary(ctx *sql.Context, resultFormat PrintResultFor
 	}
 
 	if summary == PrintRowCountAndTiming {
-		err = printResultSetSummary(numRows, start)
+		showWarn, _ := ctx.GetSessionVariable(ctx, "sql_warnings")
+		err = printResultSetSummary(numRows, ctx.WarningCount(), showWarn.(int8) == 1, start)
 		if err != nil {
 			return err
 		}
@@ -154,7 +156,7 @@ func prettyPrintResultsWithSummary(ctx *sql.Context, resultFormat PrintResultFor
 	}
 }
 
-func printResultSetSummary(numRows int, start time.Time) error {
+func printResultSetSummary(numRows int, numWarn uint16, showWarn bool, start time.Time) error {
 	if numRows == 0 {
 		printEmptySetResult(start)
 		return nil
@@ -165,8 +167,22 @@ func printResultSetSummary(numRows int, start time.Time) error {
 		noun = "row"
 	}
 
+	warnStr := ""
+	if showWarn && numWarn > 0 {
+		warnStr = ", "
+
+		intWarns := fmt.Sprintf("%d", numWarn)
+		warnStr += intWarns
+
+		if numWarn == 1 {
+			warnStr += " warning"
+		} else {
+			warnStr = " warnings"
+		}
+	}
+
 	secondsSinceStart := secondsSince(start, time.Now())
-	err := iohelp.WriteLine(cli.CliOut, fmt.Sprintf("%d %s in set (%.2f sec)", numRows, noun, secondsSinceStart))
+	err := iohelp.WriteLine(cli.CliOut, fmt.Sprintf("%d %s in set%s (%.2f sec)", numRows, noun, warnStr, secondsSinceStart))
 	if err != nil {
 		return err
 	}
