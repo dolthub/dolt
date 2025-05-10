@@ -256,7 +256,7 @@ func MergeRoots(
 			// If a Full-Text table was both modified and deleted, then we want to ignore the deletion.
 			// If there's a true conflict, then the parent table will catch the conflict.
 			stats = &MergeStats{Operation: TableModified}
-		} else if errors.Is(ErrTableDeletedAndSchemaModified, err) {
+		} else if errors.Is(ErrTableDeletedAndSchemaModified, err) || errors.Is(ErrTableDeletedAndModified, err) {
 			tblToStats[tblName] = &MergeStats{
 				Operation:       TableModified,
 				SchemaConflicts: 1,
