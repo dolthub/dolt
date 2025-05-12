@@ -1154,7 +1154,7 @@ SQL
 
     run dolt merge merge_branch
     log_status_eq 1
-    [[ "$output" =~ "cannot create column pk on table new_name, the tag 9571 was already used in table test1" ]] || false
+    [[ "$output" =~ "cannot merge, column pk on table new_name has duplicate tag as table test1. This was likely because one of the tables is a rename of the other" ]] || false
 }
 
 @test "merge: ourRoot modifies the schema, theirRoot renames" {

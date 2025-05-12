@@ -307,6 +307,11 @@ func MergeRoots(
 			}
 
 			mergedRoot, err = mergedRoot.PutTable(ctx, tblName, mergedTable.table)
+			var errTagPreviouslyUsed schema.ErrTagPrevUsed
+			if errors.As(err, &errTagPreviouslyUsed) {
+				return nil, fmt.Errorf("cannot merge, column %s on table %s has duplicate tag as table %s. This was likely because one of the tables is a rename of the other",
+					errTagPreviouslyUsed.NewColName, errTagPreviouslyUsed.NewTableName, errTagPreviouslyUsed.OldTableName)
+			}
 			if err != nil {
 				return nil, err
 			}
