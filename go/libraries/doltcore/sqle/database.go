@@ -1569,7 +1569,7 @@ func (db Database) createDoltTable(ctx *sql.Context, tableName string, schemaNam
 			return true, err
 		}
 		if exists && oldTableName.Name != tableName {
-			errStr := schema.ErrTagPrevUsed(tag, col.Name, tableName, oldTableName.Name).Error()
+			errStr := schema.NewErrTagPrevUsed(tag, col.Name, tableName, oldTableName.Name).Error()
 			conflictingTbls = append(conflictingTbls, errStr)
 		}
 		return false, nil

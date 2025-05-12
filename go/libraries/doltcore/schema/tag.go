@@ -30,8 +30,26 @@ const (
 	ReservedTagMin uint64 = 1 << 50
 )
 
-func ErrTagPrevUsed(tag uint64, newColName, newTableName, oldTableName string) error {
-	return fmt.Errorf("cannot create column %s on table %s, the tag %d was already used in table %s", newColName, newTableName, tag, oldTableName)
+type ErrTagPrevUsed struct {
+	Tag          uint64
+	NewColName   string
+	NewTableName string
+	OldTableName string
+}
+
+var _ error = ErrTagPrevUsed{}
+
+func (e ErrTagPrevUsed) Error() string {
+	return fmt.Sprintf("cannot create column %s on table %s, the tag %d was already used in table %s", e.NewColName, e.NewTableName, e.Tag, e.OldTableName)
+}
+
+func NewErrTagPrevUsed(tag uint64, newColName, newTableName, oldTableName string) ErrTagPrevUsed {
+	return ErrTagPrevUsed{
+		Tag:          tag,
+		NewColName:   newColName,
+		NewTableName: newTableName,
+		OldTableName: oldTableName,
+	}
 }
 
 type TagMapping map[uint64]string
