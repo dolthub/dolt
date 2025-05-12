@@ -140,8 +140,8 @@ func prettyPrintResultsWithSummary(ctx *sql.Context, resultFormat PrintResultFor
 	}
 
 	if summary == PrintRowCountAndTiming {
-		showWarn, _ := ctx.GetSessionVariable(ctx, "sql_warnings")
-		err = printResultSetSummary(numRows, ctx.WarningCount(), showWarn.(int8) == 1, start)
+		showWarnings, _ := ctx.GetSessionVariable(ctx, "sql_warnings")
+		err = printResultSetSummary(numRows, ctx.WarningCount(), showWarnings.(int8) == 1, start)
 		if err != nil {
 			return err
 		}
@@ -156,9 +156,24 @@ func prettyPrintResultsWithSummary(ctx *sql.Context, resultFormat PrintResultFor
 	}
 }
 
-func printResultSetSummary(numRows int, numWarn uint16, showWarn bool, start time.Time) error {
+func printResultSetSummary(numRows int, numWarnings uint16, showWarnings bool, start time.Time) error {
+
+	warning := ""
+	if showWarnings && numWarnings > 0 {
+		warning = ", "
+
+		warningCount := fmt.Sprintf("%d", numWarnings)
+		warning += warningCount
+
+		if numWarnings == 1 {
+			warning += " warning"
+		} else {
+			warning += " warnings"
+		}
+	}
+
 	if numRows == 0 {
-		printEmptySetResult(start)
+		printEmptySetResult(start, warning)
 		return nil
 	}
 
@@ -167,22 +182,8 @@ func printResultSetSummary(numRows int, numWarn uint16, showWarn bool, start tim
 		noun = "row"
 	}
 
-	warnStr := ""
-	if showWarn && numWarn > 0 {
-		warnStr = ", "
-
-		intWarns := fmt.Sprintf("%d", numWarn)
-		warnStr += intWarns
-
-		if numWarn == 1 {
-			warnStr += " warning"
-		} else {
-			warnStr = " warnings"
-		}
-	}
-
 	secondsSinceStart := secondsSince(start, time.Now())
-	err := iohelp.WriteLine(cli.CliOut, fmt.Sprintf("%d %s in set%s (%.2f sec)", numRows, noun, warnStr, secondsSinceStart))
+	err := iohelp.WriteLine(cli.CliOut, fmt.Sprintf("%d %s in set%s (%.2f sec)", numRows, noun, warning, secondsSinceStart))
 	if err != nil {
 		return err
 	}
@@ -232,9 +233,9 @@ type nullWriter struct{}
 func (n nullWriter) WriteSqlRow(ctx *sql.Context, r sql.Row) error { return nil }
 func (n nullWriter) Close(ctx context.Context) error               { return nil }
 
-func printEmptySetResult(start time.Time) {
+func printEmptySetResult(start time.Time, warning string) {
 	seconds := secondsSince(start, time.Now())
-	cli.Printf("Empty set (%.2f sec)\n", seconds)
+	cli.Printf("Empty set%s (%.2f sec)\n", warning, seconds)
 }
 
 func printOKResult(ctx *sql.Context, iter sql.RowIter, start time.Time) error {
