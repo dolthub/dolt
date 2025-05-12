@@ -437,25 +437,26 @@ func (sc *StatsController) updateTable(ctx *sql.Context, newStats *rootStats, ta
 		var err error
 		var prollyMap prolly.Map
 		var template stats.Statistic
-		if sc.sq.DoSync(ctx, func() (err error) {
+		err = sc.sq.DoSync(ctx, func() (e error) {
 			if strings.EqualFold(sqlIdx.ID(), "PRIMARY") {
-				idx, err = dTab.GetRowData(ctx)
+				idx, e = dTab.GetRowData(ctx)
 			} else {
-				idx, err = dTab.GetIndexRowData(ctx, sqlIdx.ID())
+				idx, e = dTab.GetIndexRowData(ctx, sqlIdx.ID())
 			}
-			if err == nil {
-				prollyMap, err = durable.ProllyMapFromIndex(idx)
-				if err != nil {
-					return err
+			if e == nil {
+				prollyMap, e = durable.ProllyMapFromIndex(idx)
+				if e != nil {
+					return e
 				}
 			}
 
-			_, template, err = sc.getTemplate(ctx, sqlTable, sqlIdx)
-			if err != nil {
-				return errors.Join(err, fmt.Errorf("stats collection failed to generate a statistic template: %s.%s.%s:%T", sqlDb.RevisionQualifiedName(), tableName, sqlIdx.ID(), sqlIdx))
+			_, template, e = sc.getTemplate(ctx, sqlTable, sqlIdx)
+			if e != nil {
+				return errors.Join(e, fmt.Errorf("stats collection failed to generate a statistic template: %s.%s.%s:%T", sqlDb.RevisionQualifiedName(), tableName, sqlIdx.ID(), sqlIdx))
 			}
 			return nil
-		}); err != nil {
+		})
+		if err != nil {
 			return err
 		} else if template.Fds == nil || template.Fds.Empty() {
 			return fmt.Errorf("failed to creat template for %s/%s/%s/%s", sqlDb.Revision(), sqlDb.AliasedName(), tableName, sqlIdx.ID())
