@@ -73,6 +73,8 @@ const (
 	ignoreSkippedRows = "ignore-skipped-rows" // alias for quiet
 	disableFkChecks   = "disable-fk-checks"
 	allTextParam      = "all-text"
+	noHeaderParam     = "no-header" // for CSV files without header row
+	columnsParam      = "columns"   // for specifying column names
 )
 
 var jsonInputFileHelp = "The expected JSON input file format is:" + `
@@ -114,10 +116,10 @@ During import, if there is an error importing any row, the import will be aborte
 In create, update, and replace scenarios the file's extension is used to infer the type of the file.  If a file does not have the expected extension then the {{.EmphasisLeft}}--file-type{{.EmphasisRight}} parameter should be used to explicitly define the format of the file in one of the supported formats (csv, psv, json, xlsx).  For files separated by a delimiter other than a ',' (type csv) or a '|' (type psv), the --delim parameter can be used to specify a delimiter`,
 
 	Synopsis: []string{
-		"-c [-f] [--pk {{.LessThan}}field{{.GreaterThan}}] [--all-text] [--schema {{.LessThan}}file{{.GreaterThan}}] [--map {{.LessThan}}file{{.GreaterThan}}] [--continue]  [--quiet] [--disable-fk-checks] [--file-type {{.LessThan}}type{{.GreaterThan}}] {{.LessThan}}table{{.GreaterThan}} {{.LessThan}}file{{.GreaterThan}}",
-		"-u [--map {{.LessThan}}file{{.GreaterThan}}] [--continue] [--quiet] [--file-type {{.LessThan}}type{{.GreaterThan}}] {{.LessThan}}table{{.GreaterThan}} {{.LessThan}}file{{.GreaterThan}}",
-		"-a [--map {{.LessThan}}file{{.GreaterThan}}] [--continue] [--quiet] [--file-type {{.LessThan}}type{{.GreaterThan}}] {{.LessThan}}table{{.GreaterThan}} {{.LessThan}}file{{.GreaterThan}}",
-		"-r [--map {{.LessThan}}file{{.GreaterThan}}] [--file-type {{.LessThan}}type{{.GreaterThan}}] {{.LessThan}}table{{.GreaterThan}} {{.LessThan}}file{{.GreaterThan}}",
+		"-c [-f] [--pk {{.LessThan}}field{{.GreaterThan}}] [--all-text] [--schema {{.LessThan}}file{{.GreaterThan}}] [--map {{.LessThan}}file{{.GreaterThan}}] [--continue] [--quiet] [--disable-fk-checks] [--file-type {{.LessThan}}type{{.GreaterThan}}] [--no-header] [--columns {{.LessThan}}col1,col2,...{{.GreaterThan}}] {{.LessThan}}table{{.GreaterThan}} {{.LessThan}}file{{.GreaterThan}}",
+		"-u [--map {{.LessThan}}file{{.GreaterThan}}] [--continue] [--quiet] [--file-type {{.LessThan}}type{{.GreaterThan}}] [--no-header] [--columns {{.LessThan}}col1,col2,...{{.GreaterThan}}] {{.LessThan}}table{{.GreaterThan}} {{.LessThan}}file{{.GreaterThan}}",
+		"-a [--map {{.LessThan}}file{{.GreaterThan}}] [--continue] [--quiet] [--file-type {{.LessThan}}type{{.GreaterThan}}] [--no-header] [--columns {{.LessThan}}col1,col2,...{{.GreaterThan}}] {{.LessThan}}table{{.GreaterThan}} {{.LessThan}}file{{.GreaterThan}}",
+		"-r [--map {{.LessThan}}file{{.GreaterThan}}] [--file-type {{.LessThan}}type{{.GreaterThan}}] [--no-header] [--columns {{.LessThan}}col1,col2,...{{.GreaterThan}}] {{.LessThan}}table{{.GreaterThan}} {{.LessThan}}file{{.GreaterThan}}",
 	},
 }
 
@@ -214,16 +216,14 @@ func getImportMoveOptions(ctx *sql.Context, apr *argparser.ArgParseResults, dEnv
 	var srcOpts interface{}
 	switch val := srcLoc.(type) {
 	case mvdata.FileDataLocation:
-		if hasDelim {
+		if val.Format == mvdata.CsvFile || val.Format == mvdata.PsvFile || (hasDelim && val.Format == mvdata.InvalidDataFormat) {
 			if val.Format == mvdata.InvalidDataFormat {
 				val = mvdata.FileDataLocation{Path: val.Path, Format: mvdata.CsvFile}
 				srcLoc = val
 			}
 
-			srcOpts = mvdata.CsvOptions{Delim: delim}
-		}
-
-		if val.Format == mvdata.XlsxFile {
+			srcOpts = extractCsvOptions(apr, hasDelim, delim)
+		} else if val.Format == mvdata.XlsxFile {
 			// table name must match sheet name currently
 			srcOpts = mvdata.XlsxOptions{SheetName: tableName}
 		} else if val.Format == mvdata.JsonFile {
@@ -248,9 +248,7 @@ func getImportMoveOptions(ctx *sql.Context, apr *argparser.ArgParseResults, dEnv
 			srcLoc = val
 		}
 
-		if hasDelim {
-			srcOpts = mvdata.CsvOptions{Delim: delim}
-		}
+		srcOpts = extractCsvOptions(apr, hasDelim, delim)
 	}
 
 	var moveOp mvdata.TableImportOp
@@ -323,6 +321,14 @@ func validateImportArgs(apr *argparser.ArgParseResults) errhand.VerboseError {
 
 	if apr.ContainsAll(allTextParam, schemaParam) {
 		return errhand.BuildDError("parameters %s and %s are mutually exclusive", allTextParam, schemaParam).Build()
+	}
+
+	if apr.Contains(noHeaderParam) && !apr.Contains(columnsParam) {
+		if apr.Contains(createParam) {
+			return errhand.BuildDError("When using --%s with -c (create table), you must also specify --%s to define column names", noHeaderParam, columnsParam).Build()
+		} else {
+			return errhand.BuildDError("When using --%s with existing tables, you must also specify --%s to define the order of columns in your CSV file", noHeaderParam, columnsParam).Build()
+		}
 	}
 
 	tableName := apr.Arg(0)
@@ -402,6 +408,8 @@ func (cmd ImportCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsString(fileTypeParam, "", "file_type", "Explicitly define the type of the file if it can't be inferred from the file extension.")
 	ap.SupportsString(delimParam, "", "delimiter", "Specify a delimiter for a csv style file with a non-comma delimiter.")
 	ap.SupportsFlag(allTextParam, "", "Treats all fields as text. Can only be used when creating a table.")
+	ap.SupportsFlag(noHeaderParam, "", "Treats the first row of a CSV file as data instead of a header row with column names.")
+	ap.SupportsString(columnsParam, "", "columns", "Comma-separated list of column names. If used with --no-header, defines column names for the file. If used without --no-header, overrides the column names in the file's header row.")
 	return ap
 }
 
@@ -967,4 +975,25 @@ func applyMapperToRow(row sql.Row, rowOperationSchema, rdSchema sql.PrimaryKeySc
 	}
 
 	return returnRow
+}
+
+// extractCsvOptions extracts the CSV options from argument parser results
+func extractCsvOptions(apr *argparser.ArgParseResults, hasDelim bool, delim string) mvdata.CsvOptions {
+	noHeaderFlag := apr.Contains(noHeaderParam)
+	columnsVal, hasColumns := apr.GetValue(columnsParam)
+	var columnsList []string
+	if hasColumns {
+		columnsList = strings.Split(columnsVal, ",")
+	}
+
+	csvOpts := mvdata.CsvOptions{NoHeader: noHeaderFlag}
+	if hasDelim {
+		csvOpts.Delim = delim
+	}
+
+	if len(columnsList) > 0 {
+		csvOpts.Columns = columnsList
+	}
+
+	return csvOpts
 }
