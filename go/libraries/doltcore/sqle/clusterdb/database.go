@@ -94,7 +94,7 @@ func (db database) DropView(ctx *sql.Context, name string) error {
 	return errors.New("unimplemented")
 }
 
-func (db database) GetViewDefinition(ctx *sql.Context, viewName string) (sql.ViewDefinition, bool, error) {
+func (db database) GetViewDefinitionAsOf(ctx *sql.Context, viewName string, asOf interface{}) (sql.ViewDefinition, bool, error) {
 	return sql.ViewDefinition{}, false, nil
 }
 

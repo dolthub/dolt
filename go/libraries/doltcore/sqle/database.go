@@ -1781,9 +1781,15 @@ func (db Database) RenameTable(ctx *sql.Context, oldName, newName string) error 
 	return db.SetRoot(ctx, newRoot)
 }
 
-// GetViewDefinition implements sql.ViewDatabase
-func (db Database) GetViewDefinition(ctx *sql.Context, viewName string) (sql.ViewDefinition, bool, error) {
-	root, err := db.GetRoot(ctx)
+// GetViewDefinitionAsOf implements sql.ViewDatabase
+func (db Database) GetViewDefinitionAsOf(ctx *sql.Context, viewName string, asOf interface{}) (sql.ViewDefinition, bool, error) {
+	var root doltdb.RootValue
+	var err error
+	if asOf == nil {
+		root, err = db.GetRoot(ctx)
+	} else {
+		_, root, err = resolveAsOf(ctx, db, asOf)
+	}
 	if err != nil {
 		return sql.ViewDefinition{}, false, err
 	}
@@ -1829,22 +1835,25 @@ func (db Database) GetViewDefinition(ctx *sql.Context, viewName string) (sql.Vie
 		}
 	}
 
-	tbl, _, err := db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
+	tbl, _, err := db.GetTableInsensitiveAsOf(ctx, doltdb.SchemasTableName, asOf)
 	if err != nil {
 		return sql.ViewDefinition{}, false, err
 	}
-
-	wrapper, ok := tbl.(*SchemaTable)
-	if !ok {
-		return sql.ViewDefinition{}, false, fmt.Errorf("expected a SchemaTable, but found %T", tbl)
+	var dTbl *DoltTable
+	switch t := tbl.(type) {
+	case *DoltTable:
+		dTbl = t
+	case *SchemaTable:
+		dTbl = t.backingTable.DoltTable
+	default:
+		return sql.ViewDefinition{}, false, fmt.Errorf("expected a DoltTable, but found %T", tbl)
 	}
-
-	if wrapper.backingTable == nil {
+	if dTbl == nil {
 		dbState.SessionCache().CacheViews(key, nil, db.schemaName)
 		return sql.ViewDefinition{}, false, nil
 	}
 
-	views, viewDef, found, err := getViewDefinitionFromSchemaFragmentsOfView(ctx, wrapper.backingTable, viewName)
+	views, viewDef, found, err := getViewDefinitionFromSchemaFragmentsOfView(ctx, dTbl, viewName)
 	if err != nil {
 		return sql.ViewDefinition{}, false, err
 	}
@@ -1855,7 +1864,7 @@ func (db Database) GetViewDefinition(ctx *sql.Context, viewName string) (sql.Vie
 	return viewDef, found, nil
 }
 
-func getViewDefinitionFromSchemaFragmentsOfView(ctx *sql.Context, tbl *WritableDoltTable, viewName string) ([]sql.ViewDefinition, sql.ViewDefinition, bool, error) {
+func getViewDefinitionFromSchemaFragmentsOfView(ctx *sql.Context, tbl *DoltTable, viewName string) ([]sql.ViewDefinition, sql.ViewDefinition, bool, error) {
 	fragments, err := getSchemaFragmentsOfType(ctx, tbl, viewFragment)
 	if err != nil {
 		return nil, sql.ViewDefinition{}, false, err
@@ -1905,7 +1914,7 @@ func (db Database) AllViews(ctx *sql.Context) ([]sql.ViewDefinition, error) {
 		return nil, nil
 	}
 
-	views, _, _, err := getViewDefinitionFromSchemaFragmentsOfView(ctx, wrapper.backingTable, "")
+	views, _, _, err := getViewDefinitionFromSchemaFragmentsOfView(ctx, wrapper.backingTable.DoltTable, "")
 	if err != nil {
 		return nil, err
 	}
@@ -1971,7 +1980,7 @@ func (db Database) GetTriggers(ctx *sql.Context) ([]sql.TriggerDefinition, error
 		return nil, nil
 	}
 
-	frags, err := getSchemaFragmentsOfType(ctx, wrapper.backingTable, triggerFragment)
+	frags, err := getSchemaFragmentsOfType(ctx, wrapper.backingTable.DoltTable, triggerFragment)
 	if err != nil {
 		return nil, err
 	}
@@ -2023,7 +2032,7 @@ func (db Database) GetEvent(ctx *sql.Context, name string) (sql.EventDefinition,
 		return sql.EventDefinition{}, false, nil
 	}
 
-	frags, err := getSchemaFragmentsOfType(ctx, wrapper.backingTable, eventFragment)
+	frags, err := getSchemaFragmentsOfType(ctx, wrapper.backingTable.DoltTable, eventFragment)
 	if err != nil {
 		return sql.EventDefinition{}, false, err
 	}
@@ -2056,7 +2065,7 @@ func (db Database) GetEvents(ctx *sql.Context) (events []sql.EventDefinition, to
 		return nil, nil, nil
 	}
 
-	frags, err := getSchemaFragmentsOfType(ctx, wrapper.backingTable, eventFragment)
+	frags, err := getSchemaFragmentsOfType(ctx, wrapper.backingTable.DoltTable, eventFragment)
 	if err != nil {
 		return nil, nil, err
 	}

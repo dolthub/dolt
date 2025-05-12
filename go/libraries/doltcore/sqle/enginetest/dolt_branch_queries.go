@@ -222,7 +222,6 @@ var ViewBranchTests = []queries.ScriptTest{
 			{
 				Query:    "select * from v1",
 				Expected: []sql.Row{{3, 3}},
-				Skip:     true, // https://github.com/dolthub/dolt/issues/6078
 			},
 			{
 				Query:            "use mydb/main",
@@ -231,12 +230,48 @@ var ViewBranchTests = []queries.ScriptTest{
 			{
 				Query:       "select * from v1",
 				ExpectedErr: sql.ErrTableNotFound,
-				Skip:        true, // https://github.com/dolthub/dolt/issues/6078
 			},
 			{
 				Query:    "select * from `mydb/b1`.v1",
 				Expected: []sql.Row{{3, 3}},
-				Skip:     true, // https://github.com/dolthub/dolt/issues/6078
+			},
+		},
+	},
+	{
+		Name: "use dropped view on other branch",
+		SetUpScript: []string{
+			"call dolt_branch('v1');",
+			"call dolt_checkout('v1');",
+			"create view v1 as select 1;",
+			"call dolt_commit('-Am', 'create view v1')",
+
+			"call dolt_branch('v2');",
+			"call dolt_checkout('v2');",
+			"create view v2 as select 2;",
+			"call dolt_commit('-Am', 'create view v2')",
+
+			"call dolt_checkout('main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:       "select * from v1;",
+				ExpectedErr: sql.ErrTableNotFound,
+			},
+			{
+				Query:       "select * from v2;",
+				ExpectedErr: sql.ErrTableNotFound,
+			},
+			{
+				Query: "select * from v1 as of v1;",
+				Expected: []sql.Row{
+					{1},
+				},
+			},
+			{
+				Query: "select * from v2 as of v2;",
+				Expected: []sql.Row{
+					{2},
+				},
 			},
 		},
 	},

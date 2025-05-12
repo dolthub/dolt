@@ -411,8 +411,8 @@ type schemaFragment struct {
 	sqlMode string
 }
 
-func getSchemaFragmentsOfType(ctx *sql.Context, tbl *WritableDoltTable, fragType string) (sf []schemaFragment, rerr error) {
-	iter, err := SqlTableToRowIter(ctx, tbl.DoltTable, nil)
+func getSchemaFragmentsOfType(ctx *sql.Context, tbl *DoltTable, fragType string) (sf []schemaFragment, rerr error) {
+	iter, err := SqlTableToRowIter(ctx, tbl, nil)
 	if err != nil {
 		return nil, err
 	}
