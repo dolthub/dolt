@@ -125,7 +125,7 @@ teardown() {
     dolt checkout main
     run dolt cherry-pick branch1
     [ "$status" -eq "1" ]
-    [[ "$output" =~ "conflict: table with same name deleted and modified" ]] || false
+    [[ "$output" =~ "table was modified in one branch and deleted in the other" ]] || false
 
     run dolt sql -q "SHOW TABLES" -r csv
     [[ ! "$output" =~ "branch1table" ]] || false
@@ -137,7 +137,7 @@ teardown() {
     dolt checkout main
     run dolt cherry-pick branch1
     [ "$status" -eq "1" ]
-    [[ "$output" =~ "conflict: table with same name deleted and modified" ]] || false
+    [[ "$output" =~ "table was modified in one branch and deleted in the other" ]] || false
 
     run dolt sql -q "SHOW TABLES" -r csv
     [[ ! "$output" =~ "branch1table" ]] || false
@@ -149,7 +149,7 @@ teardown() {
     dolt checkout main
     run dolt cherry-pick branch1
     [ "$status" -eq "1" ]
-    [[ "$output" =~ "conflict: table with same name deleted and modified" ]] || false
+    [[ "$output" =~ "table was modified in one branch and deleted in the other" ]] || false
 
     run dolt sql -q "SHOW TABLES" -r csv
     [[ ! "$output" =~ "branch1table" ]] || false

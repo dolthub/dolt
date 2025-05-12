@@ -1169,8 +1169,7 @@ SQL
 
     run dolt merge merge_branch
     log_status_eq 1
-    [[ "$output" =~ "cannot create column pk on table new_name" ]] || false
-    [[ "$output" =~ "already used in table test1" ]] || false
+    [[ "$output" =~ "cannot merge, column pk on table new_name has duplicate tag as table test1. This was likely because one of the tables is a rename of the other" ]] || false
 }
 
 @test "merge: dolt merge commits successful non-fast-forward merge" {
