@@ -748,6 +748,7 @@ SQL
     dolt commit -am "add data to test2"
 
     dolt checkout main
+    dolt branch main-backup
     run dolt merge feature-branch
 
     log_status_eq 1
@@ -763,6 +764,21 @@ SQL
     [[ "$output" =~ '|            |   PRIMARY KEY (`pk`)                                              |   PRIMARY KEY (`pk`)                                              |                                                      |' ]] || false
     [[ "$output" =~ '|            | ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin; | ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin; |                                                      |' ]] || false
     [[ "$output" =~ "+------------+-------------------------------------------------------------------+-------------------------------------------------------------------+------------------------------------------------------+" ]] || false
+
+    dolt conflicts resolve --ours test2
+    # resolving in favor of "our" branch means that the table is deleted.
+    run dolt ls
+    log_status_eq 0
+    [[ ! "$output" =~ "test2" ]] || false
+
+    # also test resolving in favor of "their" branch
+    dolt reset --hard main-backup
+    run dolt merge feature-branch
+    dolt conflicts resolve --theirs test2
+
+    run dolt sql -q "select COUNT(*) from test2"
+    log_status_eq 0
+    [[ ! "$output" =~ "3" ]] || false
 
 }
 
@@ -1169,6 +1185,7 @@ SQL
 
     run dolt merge merge_branch
     log_status_eq 1
+    echo "$output"
     [[ "$output" =~ "cannot create column pk on table new_name" ]] || false
     [[ "$output" =~ "already used in table test1" ]] || false
 }
