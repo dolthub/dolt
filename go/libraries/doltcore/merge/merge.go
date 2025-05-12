@@ -256,7 +256,7 @@ func MergeRoots(
 			// If a Full-Text table was both modified and deleted, then we want to ignore the deletion.
 			// If there's a true conflict, then the parent table will catch the conflict.
 			stats = &MergeStats{Operation: TableModified}
-		} else if errors.Is(ErrTableDeletedAndSchemaModified, err) {
+		} else if errors.Is(ErrTableDeletedAndSchemaModified, err) || errors.Is(ErrTableDeletedAndModified, err) {
 			tblToStats[tblName] = &MergeStats{
 				Operation:       TableModified,
 				SchemaConflicts: 1,
@@ -307,6 +307,11 @@ func MergeRoots(
 			}
 
 			mergedRoot, err = mergedRoot.PutTable(ctx, tblName, mergedTable.table)
+			var errTagPreviouslyUsed schema.ErrTagPrevUsed
+			if errors.As(err, &errTagPreviouslyUsed) {
+				return nil, fmt.Errorf("cannot merge, column %s on table %s has duplicate tag as table %s. This was likely because one of the tables is a rename of the other",
+					errTagPreviouslyUsed.NewColName, errTagPreviouslyUsed.NewTableName, errTagPreviouslyUsed.OldTableName)
+			}
 			if err != nil {
 				return nil, err
 			}
