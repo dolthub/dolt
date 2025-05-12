@@ -42,6 +42,7 @@ var slashCmds = []cli.Command{
 	SlashEdit{},
 	SlashPager{},
 	WarningOn{},
+	WarningOff{},
 }
 
 // parseSlashCmd parses a command line string into a slice of strings, splitting on spaces, but allowing spaces within
@@ -268,15 +269,25 @@ func handlePagerCommand(fullCmd string) (bool, error) {
 	return false, fmt.Errorf("Usage: \\pager [on|off]")
 }
 
-type WarningOn struct{}
+type WarningCmd struct{}
 
-func (s WarningOn) Docs() *cli.CommandDocumentation {
+func (s WarningCmd) Docs() *cli.CommandDocumentation {
 	//TODO
 	return &cli.CommandDocumentation{}
 }
 
-func (s WarningOn) ArgParser() *argparser.ArgParser {
+func (s WarningCmd) ArgParser() *argparser.ArgParser {
 	return &argparser.ArgParser{}
+}
+
+// Exec should never be called on warning command; It only changes which information is displayed.
+// handleWarningCommand should be used instead
+func (s WarningCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
+	panic("runtime error. Exec should never be called on warning display commands.")
+}
+
+type WarningOn struct {
+	WarningCmd
 }
 
 var _ cli.Command = WarningOn{}
@@ -287,35 +298,16 @@ func (s WarningOn) Description() string {
 	return "Show generated warnings after sql command"
 }
 
-// Exec should never be called on warning command; It only changes which information is displayed.
-// handleWarningCommand should be used instead
-func (s WarningOn) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
-	panic("runtime error. WarningOn.Exec should never be called.")
-}
-
-type WarningOff struct{}
-
-func (s WarningOff) Docs() *cli.CommandDocumentation {
-	//TODO
-	return &cli.CommandDocumentation{}
-}
-
-func (s WarningOff) ArgParser() *argparser.ArgParser {
-	return &argparser.ArgParser{}
+type WarningOff struct {
+	WarningCmd
 }
 
 var _ cli.Command = WarningOff{}
 
-func (s WarningOff) Name() string { return "W" }
+func (s WarningOff) Name() string { return "w" }
 
 func (s WarningOff) Description() string {
 	return "Hide warnings after sql command"
-}
-
-// Exec should never be called on warning command; It only changes which information is displayed.
-// handleWarningCommand should be used instead
-func (s WarningOff) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
-	panic("runtime error. WarningOff.Exec should never be called.")
 }
 
 func handleWarningCommand(fullCmd string) (bool, error) {
@@ -326,7 +318,7 @@ func handleWarningCommand(fullCmd string) (bool, error) {
 	}
 
 	//Copied from mysql, could also return an error if more argument are passed in?
-	if tokens[0] == "W" {
+	if tokens[0] == "\\W" {
 		return true, nil
 	} else {
 		return false, nil

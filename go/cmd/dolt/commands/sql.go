@@ -797,6 +797,9 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 			}
 
 			if cmdType == DoltCliCommand {
+				_, okOn := subCmd.(WarningOn)
+				_, okOff := subCmd.(WarningOff)
+
 				if _, ok := subCmd.(SlashPager); ok {
 					p, err := handlePagerCommand(query)
 					if err != nil {
@@ -804,7 +807,7 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 					} else {
 						pagerEnabled = p
 					}
-				} else if _, ok := subCmd.(WarningOn); ok {
+				} else if okOn || okOff {
 					w, err := handleWarningCommand(query)
 					if err != nil {
 						shell.Println(color.RedString(err.Error()))
