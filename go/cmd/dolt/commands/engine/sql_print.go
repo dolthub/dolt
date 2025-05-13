@@ -168,16 +168,11 @@ func printResultSetSummary(numRows int, numWarnings uint16, warningSummary bool,
 
 	warning := ""
 	if warningSummary && numWarnings > 0 {
-		warning = ", "
-
-		warningCount := fmt.Sprintf("%d", numWarnings)
-		warning += warningCount
-
-		if numWarnings == 1 {
-			warning += " warning"
-		} else {
-			warning += " warnings"
+		plural := ""
+		if numWarnings > 1 {
+			plural = "s"
 		}
+		warning = fmt.Sprintf(", %d warning%s", numWarnings, plural)
 	}
 
 	if numRows == 0 {
@@ -191,7 +186,7 @@ func printResultSetSummary(numRows int, numWarnings uint16, warningSummary bool,
 	}
 
 	secondsSinceStart := secondsSince(start, time.Now())
-	err := iohelp.WriteLine(cli.CliOut, fmt.Sprintf("%d %s in set%s (%.2f sec)%s", numRows, noun, warning, secondsSinceStart, warnings))
+	err := iohelp.WriteLine(cli.CliOut, fmt.Sprintf("%d %s in set%s (%.2f sec) %s", numRows, noun, warning, secondsSinceStart, warnings))
 	if err != nil {
 		return err
 	}
