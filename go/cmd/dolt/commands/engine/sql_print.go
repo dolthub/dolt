@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/fatih/color"
 	"io"
 	"time"
 
@@ -145,7 +146,7 @@ func prettyPrintResultsWithSummary(ctx *sql.Context, resultFormat PrintResultFor
 		if showWarnings {
 			warnings += "\n"
 			for _, warn := range ctx.Session.Warnings() {
-				warnings += fmt.Sprintf("\nWarning (Code %d): %s", warn.Code, warn.Message)
+				warnings += fmt.Sprintf(color.YellowString("\nWarning (Code %d): %s"), warn.Code, warn.Message)
 			}
 		}
 
