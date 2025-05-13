@@ -49,9 +49,6 @@ teardown() {
    skiponwindows "Need to install expect and make this script work on windows."
 
    run $BATS_TEST_DIRNAME/sql-warning-detail.expect
-   echo -----------
-   echo "$output"
-   echo -----------
 
    [[ "$output" =~ "1 row in set, 1 warning" ]] || false
    [[ "$output" =~ "1 row in set, 2 warnings" ]] || false
