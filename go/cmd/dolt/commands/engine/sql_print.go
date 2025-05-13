@@ -144,9 +144,10 @@ func prettyPrintResultsWithSummary(ctx *sql.Context, resultFormat PrintResultFor
 		warningSummary, _ := ctx.GetSessionVariable(ctx, "sql_warnings")
 		warnings := ""
 		if showWarnings {
-			warnings += "\n"
+
+			warnings = "\n"
 			for _, warn := range ctx.Session.Warnings() {
-				warnings += fmt.Sprintf(color.YellowString("\nWarning (Code %d): %s"), warn.Code, warn.Message)
+				warnings += color.YellowString(fmt.Sprintf("\nWarning (Code %d): %s", warn.Code, warn.Message))
 			}
 		}
 
