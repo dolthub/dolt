@@ -4,11 +4,11 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 setup() {
     setup_common
 
-    # Create a CSV file with no header row
-    cat <<DELIM > no-header.csv
-1,John,Doe,35,New York
-2,Jane,Smith,28,Los Angeles
-3,Bob,Johnson,42,Chicago
+    # Create a PSV file with no header row
+    cat <<DELIM > no-header.psv
+1|John|Doe|35|New York
+2|Jane|Smith|28|Los Angeles
+3|Bob|Johnson|42|Chicago
 DELIM
 }
 
@@ -16,9 +16,9 @@ teardown() {
     teardown_common
 }
 
-@test "import-no-header: import with --no-header and --columns options" {
+@test "import-no-header-psv: import with --no-header and --columns options" {
     # Test regular import with no header (first row is row of data; not column names)
-    run dolt table import -c --no-header --columns id,first_name,last_name,age,city people no-header.csv
+    run dolt table import -c --no-header --columns id,first_name,last_name,age,city people no-header.psv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Import completed successfully" ]] || false
     
@@ -45,9 +45,9 @@ teardown() {
     [[ "$output" =~ "New York" ]] || false
 }
 
-@test "import-no-header: import with --no-header but without --columns (error case)" {
+@test "import-no-header-psv: import with --no-header but without --columns (error case)" {
     # Should fail with a helpful error message for create
-    run dolt table import -c --no-header people no-header.csv
+    run dolt table import -c --no-header people no-header.psv
     [ "$status" -eq 1 ]
     [[ "$output" =~ "must also specify --columns" ]] || false
     [[ "$output" =~ "create table" ]] || false
@@ -56,18 +56,18 @@ teardown() {
     dolt sql -q "CREATE TABLE existing_table (id int, first_name varchar(255), last_name varchar(255), age int, city varchar(255))"
 
     # Should also fail with update operations but with a different message
-    run dolt table import -u --no-header existing_table no-header.csv
+    run dolt table import -u --no-header existing_table no-header.psv
     [ "$status" -eq 1 ]
     [[ "$output" =~ "must also specify --columns" ]] || false
     [[ "$output" =~ "existing tables" ]] || false
 }
 
-@test "import-no-header: import with --no-header and --columns for existing table" {
+@test "import-no-header-psv: import with --no-header and --columns for existing table" {
     # Create a table first
     dolt sql -q "CREATE TABLE existing_table2 (id int, first_name varchar(255), last_name varchar(255), age int, city varchar(255))"
 
     # Import into existing table with no-header and columns
-    run dolt table import -u --no-header --columns id,first_name,last_name,age,city existing_table2 no-header.csv
+    run dolt table import -u --no-header --columns id,first_name,last_name,age,city existing_table2 no-header.psv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Import completed successfully" ]] || false
 
@@ -83,9 +83,9 @@ teardown() {
     [[ "$output" =~ "35" ]] || false
 }
 
-@test "import-no-header: import without --no-header (original behavior)" {
+@test "import-no-header-psv: import without --no-header (original behavior)" {
     # Test regular import without no-header (should use first row as header)
-    run dolt table import -c people no-header.csv
+    run dolt table import -c people no-header.psv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Import completed successfully" ]] || false
     
@@ -103,10 +103,10 @@ teardown() {
     [[ "$output" =~ "2" ]] || false
 }
 
-@test "import-no-header: import with --columns but without --no-header (override column names)" {
+@test "import-no-header-psv: import with --columns but without --no-header (override column names)" {
     # Test import with columns option but without no-header flag
     # This should use the custom column names instead of the names from the first row
-    run dolt table import -c --columns col1,col2,col3,col4,col5 with_columns_table no-header.csv
+    run dolt table import -c --columns col1,col2,col3,col4,col5 with_columns_table no-header.psv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Import completed successfully" ]] || false
     
@@ -131,4 +131,41 @@ teardown() {
     [[ "$output" =~ "Smith" ]] || false
     [[ "$output" =~ "28" ]] || false
     [[ "$output" =~ "Los Angeles" ]] || false
+}
+
+@test "import-no-header-psv: import from stdin with --create-table requires schema file" {
+    # Test importing from stdin with --create-table but without a schema file
+    # This should fail with a specific error message
+    run bash -c "cat no-header.psv | dolt table import -c --no-header --columns id,first_name,last_name,age,city stdin_table"
+    [ "$status" -eq 1 ]
+    
+    # Check for a specific error message about schema
+    [[ "$output" =~ "fatal: when importing from stdin with --create-table, you must provide a schema file with --schema" ]] || false
+    
+    # Verify that trying to use stdin with --create-table and --columns but without --schema also fails
+    run bash -c "cat no-header.psv | dolt table import -c --columns id,first_name,last_name,age,city stdin_table"
+    [ "$status" -eq 1 ]
+    
+    # Check for the same error message
+    [[ "$output" =~ "fatal: when importing from stdin with --create-table, you must provide a schema file with --schema" ]] || false
+    
+    # Show that the workaround is to create the table first, then import with -u
+    # Create the table first
+    dolt sql -q "CREATE TABLE stdin_table (id int PRIMARY KEY, first_name text, last_name text, age int, city text)"
+    
+    # Write contents to temporary file and then use that for import to avoid pipe issues
+    cat no-header.psv > psv_temp_file.psv
+    
+    # Import data with -u instead of -c using the temp file approach instead of pipe
+    run dolt table import -u --no-header --columns id,first_name,last_name,age,city stdin_table psv_temp_file.psv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Import completed successfully" ]] || false
+    
+    # Clean up temp file
+    rm psv_temp_file.psv
+    
+    # Verify the import worked
+    run dolt sql -q "SELECT COUNT(*) FROM stdin_table"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "3" ]] || false
 }

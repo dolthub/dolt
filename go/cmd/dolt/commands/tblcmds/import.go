@@ -315,6 +315,12 @@ func validateImportArgs(apr *argparser.ArgParseResults) errhand.VerboseError {
 		return errhand.BuildDError("fatal: " + schemaParam + " is not supported for update or replace operations").Build()
 	}
 
+	if apr.Contains(createParam) && apr.NArg() <= 1 {
+		if !apr.Contains(schemaParam) {
+			return errhand.BuildDError("fatal: when importing from stdin with --create-table, you must provide a schema file with --schema").Build()
+		}
+	}
+
 	if apr.Contains(allTextParam) && !apr.Contains(createParam) {
 		return errhand.BuildDError("fatal: --%s is only supported for create operations", allTextParam).Build()
 	}
