@@ -212,7 +212,7 @@ func (s SlashEdit) Exec(ctx context.Context, commandStr string, args []string, d
 func (s SlashEdit) Docs() *cli.CommandDocumentation {
 	return &cli.CommandDocumentation{
 		ShortDesc: "Use $EDITOR to edit the last command.",
-		LongDesc:  "",
+		LongDesc:  "Start a text editor to edit your last command. Command will be executed after you finish editing.",
 		Synopsis:  []string{},
 		ArgParser: s.ArgParser(),
 	}
