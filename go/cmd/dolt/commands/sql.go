@@ -813,6 +813,11 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 						shell.Println(color.RedString(err.Error()))
 					} else {
 						showWarnings = w
+						if showWarnings {
+							cli.Println("Show warnings enabled")
+						} else {
+							cli.Println("Show warnings disabled")
+						}
 					}
 				} else {
 					err := handleSlashCommand(sqlCtx, subCmd, query, cliCtx)

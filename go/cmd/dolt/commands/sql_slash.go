@@ -210,8 +210,12 @@ func (s SlashEdit) Exec(ctx context.Context, commandStr string, args []string, d
 }
 
 func (s SlashEdit) Docs() *cli.CommandDocumentation {
-	//TODO implement me
-	return &cli.CommandDocumentation{}
+	return &cli.CommandDocumentation{
+		ShortDesc: "Use $EDITOR to edit the last command.",
+		LongDesc:  "",
+		Synopsis:  []string{},
+		ArgParser: s.ArgParser(),
+	}
 }
 
 func (s SlashEdit) ArgParser() *argparser.ArgParser {
@@ -222,8 +226,12 @@ func (s SlashEdit) ArgParser() *argparser.ArgParser {
 type SlashPager struct{}
 
 func (s SlashPager) Docs() *cli.CommandDocumentation {
-	//TODO
-	return &cli.CommandDocumentation{}
+	return &cli.CommandDocumentation{
+		ShortDesc: "Enable or Disable the result pager",
+		LongDesc:  "Returns results in pager form. Use pager [on|off].",
+		Synopsis:  []string{},
+		ArgParser: s.ArgParser(),
+	}
 }
 
 func (s SlashPager) ArgParser() *argparser.ArgParser {
@@ -272,8 +280,12 @@ func handlePagerCommand(fullCmd string) (bool, error) {
 type WarningCmd struct{}
 
 func (s WarningCmd) Docs() *cli.CommandDocumentation {
-	//TODO
-	return &cli.CommandDocumentation{}
+	return &cli.CommandDocumentation{
+		ShortDesc: "Toggle display of generated warnings after sql command.",
+		LongDesc:  "Displays a detailed list of the warnings generated after each sql command. Use \\W and \\w to enable and disable the setting, respectively.",
+		Synopsis:  []string{},
+		ArgParser: s.ArgParser(),
+	}
 }
 
 func (s WarningCmd) ArgParser() *argparser.ArgParser {
@@ -307,7 +319,7 @@ var _ cli.Command = WarningOff{}
 func (s WarningOff) Name() string { return "w" }
 
 func (s WarningOff) Description() string {
-	return "Hide warnings after sql command"
+	return "Hide generated warnings after sql command"
 }
 
 func handleWarningCommand(fullCmd string) (bool, error) {
