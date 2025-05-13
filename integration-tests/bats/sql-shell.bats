@@ -36,6 +36,29 @@ teardown() {
     [[ "$output" =~ "Division by 0" ]] || false
 }
 
+@test "sql-shell: can toggle warning details" {
+    skiponwindows "Need to install expect and make this script work on windows."
+
+    run $BATS_TEST_DIRNAME/sql-warning-summary.expect
+
+    [[ "$output" =~ "EXPLAIN Output is currently a placeholder" ]] || false
+    ! [[ "$output" =~ "Warning (Code 1365): Division by 0" ]] || false
+}
+
+@test "sql-shell: can toggle warning summary" {
+   skiponwindows "Need to install expect and make this script work on windows."
+
+   run $BATS_TEST_DIRNAME/sql-warning-detail.expect
+   echo -----------
+   echo "$output"
+   echo -----------
+
+   [[ "$output" =~ "1 row in set, 1 warning" ]] || false
+   [[ "$output" =~ "1 row in set, 2 warnings" ]] || false
+   ! [[ "$output" =~ "1 row in set, 3 warnings" ]] || false
+
+}
+
 @test "sql-shell: use user without privileges, and no superuser created" {
     rm -rf .doltcfg
 
@@ -1007,4 +1030,10 @@ expect eof
     [ $status -eq 0 ]
     [[ "$output" =~ "github.com/dolthub/dolt/go" ]] || false
     [[ "$output" =~ "github.com/dolthub/go-mysql-server" ]] || false
+}
+
+@test "sql-shell: toggle detailed warnings" {
+    skiponwindows "Need to install expect and make this script work on windows."
+
+
 }
