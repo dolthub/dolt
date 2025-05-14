@@ -148,6 +148,10 @@ func BenchmarkFindPrefix(b *testing.B) {
 }
 
 func TestFindPrefix(t *testing.T) {
+	if isRaceEnabled() {
+		t.Skip("we do not run TestFindPrefix in race mode")
+	}
+
 	// Test some edge cases in findPrefix.
 	var idx onHeapTableIndex
 	idx.count = 1
