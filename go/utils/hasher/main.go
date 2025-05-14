@@ -16,6 +16,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"strconv"
 
@@ -44,32 +45,38 @@ func main() {
 	}
 
 	if len(os.Args) == 2 {
-		hashStr := os.Args[1]
-		if !hash.IsValid(hashStr) {
-			fmt.Println("Invalid hash")
-			return
-		}
-		h := hash.Parse(hashStr)
-		fmt.Printf("%v\n", h[:])
+		PrintHashToBytes(os.Args[1], os.Stdout)
 	} else {
-		var raw hash.Hash
+		PrintBytesToHash(os.Args[1:], os.Stdout)
+	}
+}
 
-		bytesGiven := len(os.Args) - 1
+func PrintBytesToHash(args []string, out io.Writer) {
+	var raw hash.Hash
 
-		if bytesGiven > hash.ByteLen {
-			fmt.Println("Too many bytes given.")
+	if len(args) > hash.ByteLen {
+		fmt.Fprintln(out, "Too many bytes given.")
+		return
+	}
+
+	for i, arg := range args {
+		val, err := strconv.ParseUint(arg, 10, 8)
+		if err != nil {
+			fmt.Fprintln(out, err)
 			return
 		}
-
-		for i := 1; i < bytesGiven; i++ {
-			val, err := strconv.ParseUint(os.Args[i], 10, 8)
-			if err != nil {
-				fmt.Println(err)
-				return
-			}
-			raw[i-1] = uint8(val)
-		}
-
-		fmt.Printf("%v\n", raw)
+		raw[i] = uint8(val)
 	}
+
+	fmt.Fprintf(out, "%v\n", raw)
+}
+
+func PrintHashToBytes(arg string, out io.Writer) {
+	hashStr := arg
+	if !hash.IsValid(hashStr) {
+		fmt.Fprintln(out, "Invalid hash")
+		return
+	}
+	h := hash.Parse(hashStr)
+	fmt.Fprintf(out, "%v\n", h[:])
 }
