@@ -29,6 +29,8 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
+// TODO: Update tag should be migrated to call the new dolt_update_column_tag() stored procedure
+
 var updateTagDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Update the tag of the specified column",
 	LongDesc: `{{.EmphasisLeft}}dolt schema update-tag{{.EmphasisRight}}
@@ -59,11 +61,7 @@ func (cmd UpdateTagCmd) Docs() *cli.CommandDocumentation {
 }
 
 func (cmd UpdateTagCmd) ArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParserWithMaxArgs(cmd.Name(), 3)
-	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "The name of the table"})
-	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"column", "The name of the column"})
-	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"tag", "The new tag value"})
-	return ap
+	return cli.CreateUpdateTagArgParser()
 }
 
 func (cmd UpdateTagCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
