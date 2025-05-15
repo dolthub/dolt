@@ -84,7 +84,6 @@ type ConnectionQueryist struct {
 var _ cli.Queryist = ConnectionQueryist{}
 
 func (c ConnectionQueryist) Query(ctx *sql.Context, query string) (sql.Schema, sql.RowIter, *sql.QueryFlags, error) {
-	ctx.ClearWarnings()
 	rows, err := c.connection.QueryContext(ctx, query)
 	if err != nil {
 		return nil, nil, nil, err
@@ -95,6 +94,7 @@ func (c ConnectionQueryist) Query(ctx *sql.Context, query string) (sql.Schema, s
 		return nil, nil, nil, err
 	}
 
+	ctx.ClearWarnings()
 	warnRows, err := c.connection.QueryContext(ctx, "show warnings")
 	if err != nil {
 		return nil, nil, nil, err

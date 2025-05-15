@@ -7,12 +7,13 @@ source  "$env(BATS_CWD)/helper/common_expect_functions.tcl"
 
 spawn dolt sql
 
-expect_with_defaults                                                    {dolt-repo-.*>} { send "explain select * from t;"; }
+expect_with_defaults                                                   {dolt-repo-.*>} { send "select 1/0;\r"; }
 
-expect_with_defaults_2 {EXPLAIN output is currently a placeholder}      {dolt-repo-.*>}   { send "\\w\r"; }
+expect_with_defaults_2 {Warning \(Code 1365\): Division by 0}            {dolt-repo-.*>}   { send "\\w\r"; }
 
-expect_with_defaults_2 {Show warnings disabled}                        {dolt-repo-.*>} { send "select 1/0;"; }
+expect_with_defaults_2 {Show warnings disabled}                        {dolt-repo-.*>} { send "select 1/0,1/0;\r"; }
 
-expect_with_defaults                                                    {dolt-repo-.*>} { send "exit;"; }
+expect_with_defaults                                                   {dolt-repo-.*>} { send "quit;\r"; }
 
 expect eof
+exit

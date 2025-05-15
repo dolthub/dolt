@@ -166,7 +166,7 @@ func prettyPrintResultsWithSummary(ctx *sql.Context, resultFormat PrintResultFor
 	}
 }
 
-func printResultSetSummary(numRows int, numWarnings uint16, warningSummary bool, warnings string, start time.Time) error {
+func printResultSetSummary(numRows int, numWarnings uint16, warningSummary bool, warningsList string, start time.Time) error {
 
 	warning := ""
 	if warningSummary && numWarnings > 0 {
@@ -188,7 +188,7 @@ func printResultSetSummary(numRows int, numWarnings uint16, warningSummary bool,
 	}
 
 	secondsSinceStart := secondsSince(start, time.Now())
-	err := iohelp.WriteLine(cli.CliOut, fmt.Sprintf("%d %s in set%s (%.2f sec) %s", numRows, noun, warning, secondsSinceStart, warnings))
+	err := iohelp.WriteLine(cli.CliOut, fmt.Sprintf("%d %s in set%s (%.2f sec) %s", numRows, noun, warning, secondsSinceStart, warningsList))
 	if err != nil {
 		return err
 	}

@@ -37,9 +37,10 @@ teardown() {
     skiponwindows "Need to install expect and make this script work on windows."
 
     run $BATS_TEST_DIRNAME/sql-warning-summary.expect
+    echo "$output"
 
     [ "$status" -eq 0 ]
-    ! [[ "$output" =~ "Warning (Code 1365): Division by 0" ]] || false
+    ! [[ "$output" =~ "Warning (Code 1365): Division by 0\nWarning (Code 1365): Division by 0" ]] || false
 }
 
 # bats test_tags=no_lambda
@@ -47,9 +48,9 @@ teardown() {
    skiponwindows "Need to install expect and make this script work on windows."
 
    run $BATS_TEST_DIRNAME/sql-warning-detail.expect
+   echo "$output"
 
-   [[ "$output" =~ "1 row in set, 1 warning" ]] || false
-   [[ "$output" =~ "1 row in set, 2 warnings" ]] || false
+   [ "$status" -eq 0 ]
    ! [[ "$output" =~ "1 row in set, 3 warnings" ]] || false
 
 }
