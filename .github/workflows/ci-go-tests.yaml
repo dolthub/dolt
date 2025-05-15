@@ -48,10 +48,6 @@ jobs:
             else
               echo "skipping enginetests for -race"
             fi
-            if [[ "${file_arr[$i]}" = *go/store/nbs ]]; then
-              echo "Testing Package: ${file_arr[$i]} without race"
-              go test -vet=off -timeout 3m "${file_arr[$i]}"
-            fi
           else
             go test -vet=off -timeout 45m "${file_arr[$i]}"
           fi

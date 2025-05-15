@@ -149,7 +149,10 @@ func BenchmarkFindPrefix(b *testing.B) {
 
 func TestFindPrefix(t *testing.T) {
 	if isRaceEnabled() {
-		t.Skip("we do not run TestFindPrefix in race mode")
+		t.Skip("We do not run TestFindPrefix in race mode because of its large memory requirement")
+	}
+	if os.Getenv("CI") != "" {
+		t.Skip("We do not run TestFindPrefix in CI for now because of its large memory requirement")
 	}
 
 	// Test some edge cases in findPrefix.
