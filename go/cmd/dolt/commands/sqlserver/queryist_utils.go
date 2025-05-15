@@ -84,14 +84,32 @@ type ConnectionQueryist struct {
 var _ cli.Queryist = ConnectionQueryist{}
 
 func (c ConnectionQueryist) Query(ctx *sql.Context, query string) (sql.Schema, sql.RowIter, *sql.QueryFlags, error) {
+	ctx.ClearWarnings()
 	rows, err := c.connection.QueryContext(ctx, query)
 	if err != nil {
 		return nil, nil, nil, err
 	}
+
 	rowIter, err := NewMysqlRowWrapper(rows)
 	if err != nil {
 		return nil, nil, nil, err
 	}
+
+	warnRows, err := c.connection.QueryContext(ctx, "show warnings")
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	for warnRows.Next() {
+		var code int
+		var msg string
+		var level string
+
+		warnRows.Scan(&level, &code, &msg)
+
+		ctx.Warn(code, msg)
+	}
+
 	return rowIter.Schema(), rowIter, nil, nil
 }
 
@@ -100,23 +118,23 @@ func (c ConnectionQueryist) QueryWithBindings(ctx *sql.Context, query string, _ 
 }
 
 type MysqlRowWrapper struct {
-	rows     *sql2.Rows
-	schema   sql.Schema
-	finished bool
-	vRow     []*string
-	iRow     []interface{}
+	rows    []sql.Row
+	schema  sql.Schema
+	numRows int
+	curRow  int
 }
 
 var _ sql.RowIter = (*MysqlRowWrapper)(nil)
 
-func NewMysqlRowWrapper(rows *sql2.Rows) (*MysqlRowWrapper, error) {
-	colNames, err := rows.Columns()
+func NewMysqlRowWrapper(sqlRows *sql2.Rows) (*MysqlRowWrapper, error) {
+	colNames, err := sqlRows.Columns()
 	if err != nil {
 		return nil, err
 	}
 	schema := make(sql.Schema, len(colNames))
 	vRow := make([]*string, len(colNames))
 	iRow := make([]interface{}, len(colNames))
+	rows := make([]sql.Row, 0)
 	for i, colName := range colNames {
 		schema[i] = &sql.Column{
 			Name:     colName,
@@ -125,12 +143,32 @@ func NewMysqlRowWrapper(rows *sql2.Rows) (*MysqlRowWrapper, error) {
 		}
 		iRow[i] = &vRow[i]
 	}
+
+	for sqlRows.Next() {
+		err := sqlRows.Scan(iRow...)
+		if err != nil {
+			return nil, err
+		}
+		sqlRow := make(sql.Row, len(vRow))
+		for i, val := range vRow {
+			if val != nil {
+				sqlRow[i] = *val
+			}
+		}
+
+		rows = append(rows, sqlRow)
+	}
+
+	closeErr := sqlRows.Close()
+	if closeErr != nil {
+		return nil, err
+	}
+
 	return &MysqlRowWrapper{
-		rows:     rows,
-		schema:   schema,
-		finished: !rows.Next(),
-		vRow:     vRow,
-		iRow:     iRow,
+		rows:    rows,
+		schema:  schema,
+		numRows: len(rows),
+		curRow:  0,
 	}, nil
 }
 
@@ -139,27 +177,19 @@ func (s *MysqlRowWrapper) Schema() sql.Schema {
 }
 
 func (s *MysqlRowWrapper) Next(*sql.Context) (sql.Row, error) {
-	if s.finished {
+	if s.NoMoreRows() {
 		return nil, io.EOF
 	}
-	err := s.rows.Scan(s.iRow...)
-	if err != nil {
-		return nil, err
-	}
-	sqlRow := make(sql.Row, len(s.vRow))
-	for i, val := range s.vRow {
-		if val != nil {
-			sqlRow[i] = *val
-		}
-	}
-	s.finished = !s.rows.Next()
-	return sqlRow, nil
+
+	s.curRow++
+	return s.rows[s.curRow-1], nil
 }
 
-func (s *MysqlRowWrapper) HasMoreRows() bool {
-	return !s.finished
+func (s *MysqlRowWrapper) NoMoreRows() bool {
+	return s.curRow >= s.numRows
 }
 
 func (s *MysqlRowWrapper) Close(*sql.Context) error {
-	return s.rows.Close()
+	s.curRow = s.numRows
+	return nil
 }
