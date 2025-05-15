@@ -80,6 +80,14 @@ func CreateConflictsResolveArgParser() *argparser.ArgParser {
 	return ap
 }
 
+func CreateUpdateTagArgParser() *argparser.ArgParser {
+	ap := argparser.NewArgParserWithMaxArgs("update-tag", 3)
+	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "The name of the table"})
+	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"column", "The name of the column"})
+	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"tag", "The new tag value"})
+	return ap
+}
+
 func CreateMergeArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithMaxArgs("merge", 1)
 	ap.TooManyArgsErrorFunc = func(receivedArgs []string) error {
