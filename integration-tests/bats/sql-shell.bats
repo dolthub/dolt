@@ -21,13 +21,9 @@ teardown() {
     teardown_common
 }
 
-
 # bats test_tags=no_lambda
 @test "sql-shell: warnings are not suppressed" {
     skiponwindows "Need to install expect and make this script work on windows."
-    if [ "$SQL_ENGINE" = "remote-engine" ]; then
-     skip "session ctx in shell is no the same as session in server"
-    fi
     run $BATS_TEST_DIRNAME/sql-shell-warnings.expect
     echo "$output"
 
@@ -36,15 +32,17 @@ teardown() {
     [[ "$output" =~ "Division by 0" ]] || false
 }
 
+# bats test_tags=no_lambda
 @test "sql-shell: can toggle warning details" {
     skiponwindows "Need to install expect and make this script work on windows."
 
     run $BATS_TEST_DIRNAME/sql-warning-summary.expect
 
-    [[ "$output" =~ "EXPLAIN Output is currently a placeholder" ]] || false
+    [ "$status" -eq 0 ]
     ! [[ "$output" =~ "Warning (Code 1365): Division by 0" ]] || false
 }
 
+# bats test_tags=no_lambda
 @test "sql-shell: can toggle warning summary" {
    skiponwindows "Need to install expect and make this script work on windows."
 

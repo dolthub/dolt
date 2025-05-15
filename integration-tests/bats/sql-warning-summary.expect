@@ -7,24 +7,12 @@ source  "$env(BATS_CWD)/helper/common_expect_functions.tcl"
 
 spawn dolt sql
 
-expect {
-    -re "dolt-repo-.*> " {send "explain select * from test;\r"; }
-    timeout { exit 1; }
-    failed { exit 1; }
-}
+expect_with_defaults                                                    {dolt-repo-.*>} { send "explain select * from t;"; }
 
-expect_with_defaults                                                    {dolt-repo-.*>} { send "\\w\r"; }
+expect_with_defaults_2 {EXPLAIN output is currently a placeholder}      {dolt-repo-.*>}   { send "\\w\r"; }
 
-expect {
-    -re "dolt-repo-.*> " { send "select 1/0;\r"; }
-    timeout { exit 1; }
-    failed { exit 1; }
-}
+expect_with_defaults_2 {Show warnings disabled}                        {dolt-repo-.*>} { send "select 1/0;"; }
 
-expect {
-    -re "dolt-repo-.*> " { send "exit;\r"; }
-    timeout { exit 1; }
-    failed { exit 1; }
-}
+expect_with_defaults                                                    {dolt-repo-.*>} { send "exit;"; }
 
 expect eof
