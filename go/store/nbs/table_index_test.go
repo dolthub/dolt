@@ -166,6 +166,11 @@ func TestFindPrefix(t *testing.T) {
 	assert.Equal(t, uint32(0), idx.findPrefix(1))
 	assert.Equal(t, uint32(1), idx.findPrefix(2))
 
+	idx.count = 3
+	idx.prefixTuples = make([]byte, 12*3)
+	// double verify that non-found -> chunk count.
+	assert.Equal(t, uint32(3), idx.findPrefix(1))
+
 	// Enough so that the index * 12 (prefix tuple size) will overflow a uint32
 	idx.prefixTuples = make([]byte, 1<<30*12)
 	idx.count = 1 << 30
