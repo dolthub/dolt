@@ -591,23 +591,23 @@ func GetTableInsensitive(ctx context.Context, root RootValue, tName TableName) (
 	return tbl, resolvedName, ok, nil
 }
 
-// GetTableByColTag looks for the table containing the given column tag.
-func GetTableByColTag(ctx context.Context, root RootValue, tag uint64) (tbl *Table, name TableName, found bool, err error) {
-	err = root.IterTables(ctx, func(tn TableName, t *Table, s schema.Schema) (bool, error) {
-		_, found = s.GetAllCols().GetByTag(tag)
-		if found {
-			name, tbl = tn, t
-		}
-
-		return found, nil
-	})
-
-	if err != nil {
-		return nil, TableName{}, false, err
-	}
-
-	return tbl, name, found, nil
-}
+//// GetTableByColTag looks for the table containing the given column tag.
+//func GetTableByColTag(ctx context.Context, root RootValue, tag uint64) (tbl *Table, name TableName, found bool, err error) {
+//	err = root.IterTables(ctx, func(tn TableName, t *Table, s schema.Schema) (bool, error) {
+//		_, found = s.GetAllCols().GetByTag(tag)
+//		if found {
+//			name, tbl = tn, t
+//		}
+//
+//		return found, nil
+//	})
+//
+//	if err != nil {
+//		return nil, TableName{}, false, err
+//	}
+//
+//	return tbl, name, found, nil
+//}
 
 // GetTableNames retrieves the lists of all tables for a RootValue
 func (root *rootValue) GetTableNames(ctx context.Context, schemaName string) ([]string, error) {
@@ -1361,16 +1361,24 @@ func ValidateTagUniqueness(ctx context.Context, root RootValue, tableName string
 		return err
 	}
 
-	existing, err := GetAllTagsForRoots(ctx, root)
-	if err != nil {
-		return err
-	}
+	// NOTE: Instead of getting all tags in the root, we just get all tags in the table
+	//existing, err := GetAllTagsForRoots(ctx, root)
+	//if err != nil {
+	//	return err
+	//}
 
+	tagsSeen := make(map[uint64]struct{})
 	err = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		oldTableName, ok := existing.Get(tag)
-		if ok && oldTableName != tableName {
-			return true, schema.NewErrTagPrevUsed(tag, col.Name, tableName, oldTableName)
+		if _, ok := tagsSeen[tag]; ok {
+			return true, schema.NewErrTagPrevUsed(tag, col.Name, tableName, tableName)
 		}
+
+		tagsSeen[tag] = struct{}{}
+		//
+		//oldTableName, ok := existing.Get(tag)
+		//if ok && oldTableName != tableName {
+		//	return true, schema.NewErrTagPrevUsed(tag, col.Name, tableName, oldTableName)
+		//}
 		return false, nil
 	})
 	if err != nil {
