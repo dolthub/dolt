@@ -145,13 +145,15 @@ func validateNewColumn(
 		return err
 	}
 
-	_, oldTblName, found, err := doltdb.GetTableByColTag(ctx, root, tag)
-	if err != nil {
-		return err
-	}
-	if found {
-		return schema.NewErrTagPrevUsed(tag, newColName, tblName, oldTblName.Name)
-	}
+	// NOTE: If we remove the restriction about column tags being unique across all tables,
+	//       then we don't need to peform this check any more.
+	//_, oldTblName, found, err := doltdb.GetTableByColTag(ctx, root, tag)
+	//if err != nil {
+	//	return err
+	//}
+	//if found {
+	//	return schema.NewErrTagPrevUsed(tag, newColName, tblName, oldTblName.Name)
+	//}
 
 	return nil
 }

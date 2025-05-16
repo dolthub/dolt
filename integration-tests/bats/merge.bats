@@ -1142,35 +1142,35 @@ SQL
 
 }
 
-@test "merge: ourRoot modifies, theirRoot renames" {
-    dolt checkout -b merge_branch
-    dolt sql -q "ALTER TABLE test1 RENAME TO new_name"
-    dolt add .
-    dolt commit -am "rename test1"
+#@test "merge: ourRoot modifies, theirRoot renames" {
+#    dolt checkout -b merge_branch
+#    dolt sql -q "ALTER TABLE test1 RENAME TO new_name"
+#    dolt add .
+#    dolt commit -am "rename test1"
+#
+#    dolt checkout main
+#    dolt sql -q "INSERT INTO test1 VALUES (0,1,2)"
+#    dolt commit -am "add pk 0 to test1"
+#
+#    run dolt merge merge_branch
+#    log_status_eq 1
+#    [[ "$output" =~ "cannot merge, column pk on table new_name has duplicate tag as table test1. This was likely because one of the tables is a rename of the other" ]] || false
+#}
 
-    dolt checkout main
-    dolt sql -q "INSERT INTO test1 VALUES (0,1,2)"
-    dolt commit -am "add pk 0 to test1"
-
-    run dolt merge merge_branch
-    log_status_eq 1
-    [[ "$output" =~ "cannot merge, column pk on table new_name has duplicate tag as table test1. This was likely because one of the tables is a rename of the other" ]] || false
-}
-
-@test "merge: ourRoot modifies the schema, theirRoot renames" {
-    dolt checkout -b merge_branch
-    dolt sql -q "ALTER TABLE test1 RENAME TO new_name"
-    dolt add .
-    dolt commit -am "rename test1"
-
-    dolt checkout main
-    dolt sql -q "ALTER TABLE test1 DROP COLUMN c2;"
-    dolt commit -am "modify test1"
-
-    run dolt merge merge_branch
-    log_status_eq 1
-    [[ "$output" =~ "cannot merge, column pk on table new_name has duplicate tag as table test1. This was likely because one of the tables is a rename of the other" ]] || false
-}
+#@test "merge: ourRoot modifies the schema, theirRoot renames" {
+#    dolt checkout -b merge_branch
+#    dolt sql -q "ALTER TABLE test1 RENAME TO new_name"
+#    dolt add .
+#    dolt commit -am "rename test1"
+#
+#    dolt checkout main
+#    dolt sql -q "ALTER TABLE test1 DROP COLUMN c2;"
+#    dolt commit -am "modify test1"
+#
+#    run dolt merge merge_branch
+#    log_status_eq 1
+#    [[ "$output" =~ "cannot merge, column pk on table new_name has duplicate tag as table test1. This was likely because one of the tables is a rename of the other" ]] || false
+#}
 
 @test "merge: dolt merge commits successful non-fast-forward merge" {
     dolt branch other

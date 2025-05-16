@@ -167,7 +167,7 @@ func (cc *ColCollection) IndexOf(colName string) int {
 	idx := -1
 
 	var i = 0
-	_ = cc.Iter(func(tag uint64, col Column) (stop bool, err error) {
+	_ = cc.Iter(func(_ uint64, col Column) (stop bool, err error) {
 		defer func() {
 			i++
 		}()
