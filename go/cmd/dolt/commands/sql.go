@@ -447,7 +447,7 @@ func execSingleQuery(
 	}
 
 	if rowIter != nil {
-		err = engine.PrettyPrintResults(sqlCtx, format, sqlSch, rowIter, false)
+		err = engine.PrettyPrintResults(sqlCtx, format, sqlSch, rowIter, false, false)
 		if err != nil {
 			return errhand.VerboseErrorFromError(err)
 		}
@@ -663,7 +663,7 @@ func execBatchMode(ctx *sql.Context, qryist cli.Queryist, input io.Reader, conti
 					fileReadProg.printNewLineIfNeeded()
 				}
 			}
-			err = engine.PrettyPrintResults(ctx, format, sqlSch, rowIter, false)
+			err = engine.PrettyPrintResults(ctx, format, sqlSch, rowIter, false, false)
 			if err != nil {
 				err = buildBatchSqlErr(scanner.state.statementStartLine, query, err)
 				if !continueOnErr {
@@ -753,6 +753,7 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 
 	initialCtx := sqlCtx.Context
 
+	showWarnings := true
 	pagerEnabled := false
 	// Used for the \edit command.
 	lastSqlCmd := ""
@@ -796,12 +797,27 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 			}
 
 			if cmdType == DoltCliCommand {
+				_, okOn := subCmd.(WarningOn)
+				_, okOff := subCmd.(WarningOff)
+
 				if _, ok := subCmd.(SlashPager); ok {
 					p, err := handlePagerCommand(query)
 					if err != nil {
 						shell.Println(color.RedString(err.Error()))
 					} else {
 						pagerEnabled = p
+					}
+				} else if okOn || okOff {
+					w, err := handleWarningCommand(query)
+					if err != nil {
+						shell.Println(color.RedString(err.Error()))
+					} else {
+						showWarnings = w
+						if showWarnings {
+							cli.Println("Show warnings enabled")
+						} else {
+							cli.Println("Show warnings disabled")
+						}
 					}
 				} else {
 					err := handleSlashCommand(sqlCtx, subCmd, query, cliCtx)
@@ -823,9 +839,9 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 				} else if rowIter != nil {
 					switch closureFormat {
 					case engine.FormatTabular, engine.FormatVertical:
-						err = engine.PrettyPrintResultsExtended(sqlCtx, closureFormat, sqlSch, rowIter, pagerEnabled)
+						err = engine.PrettyPrintResultsExtended(sqlCtx, closureFormat, sqlSch, rowIter, pagerEnabled, showWarnings)
 					default:
-						err = engine.PrettyPrintResults(sqlCtx, closureFormat, sqlSch, rowIter, pagerEnabled)
+						err = engine.PrettyPrintResults(sqlCtx, closureFormat, sqlSch, rowIter, pagerEnabled, showWarnings)
 					}
 
 					if err != nil {

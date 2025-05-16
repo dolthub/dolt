@@ -1,0 +1,30 @@
+#!/usr/bin/expect
+
+set timeout 5
+set env(NO_COLOR) 1
+
+source  "$env(BATS_CWD)/helper/common_expect_functions.tcl"
+
+spawn dolt sql
+
+expect {
+    -re "dolt-repo-.*> " {send "explain select * from test;\r"; }
+    timeout { exit 1; }
+    failed { exit 1; }
+}
+
+expect_with_defaults                                                    {dolt-repo-.*>} { send "\\w\r"; }
+
+expect {
+    -re "dolt-repo-.*> " { send "select 1/0;\r"; }
+    timeout { exit 1; }
+    failed { exit 1; }
+}
+
+expect {
+    -re "dolt-repo-.*> " { send "exit;\r"; }
+    timeout { exit 1; }
+    failed { exit 1; }
+}
+
+expect eof
