@@ -94,22 +94,14 @@ func (dl FileDataLocation) NewReader(ctx context.Context, dEnv *env.DoltEnv, opt
 
 	switch dl.Format {
 	case CsvFile:
-		delim := ","
-
-		if opts != nil {
-			csvOpts, _ := opts.(CsvOptions)
-
-			if len(csvOpts.Delim) != 0 {
-				delim = csvOpts.Delim
-			}
-		}
-
-		rd, err := csv.OpenCSVReader(root.VRW().Format(), dl.Path, fs, csv.NewCSVInfo().SetDelim(delim))
+		csvInfo := CreateCSVInfo(opts, ",")
+		rd, err := csv.OpenCSVReader(root.VRW().Format(), dl.Path, fs, csvInfo)
 
 		return rd, false, err
 
 	case PsvFile:
-		rd, err := csv.OpenCSVReader(root.VRW().Format(), dl.Path, fs, csv.NewCSVInfo().SetDelim("|"))
+		csvInfo := CreateCSVInfo(opts, "|")
+		rd, err := csv.OpenCSVReader(root.VRW().Format(), dl.Path, fs, csvInfo)
 		return rd, false, err
 
 	case XlsxFile:
