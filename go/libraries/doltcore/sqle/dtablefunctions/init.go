@@ -22,6 +22,7 @@ var DoltTableFunctions = []sql.TableFunction{
 	&DiffSummaryTableFunction{},
 	&LogTableFunction{},
 	&PatchTableFunction{},
+	&PreviewMergeConflictsSummaryTableFunction{},
 	&SchemaDiffTableFunction{},
 	&ReflogTableFunction{},
 	&QueryDiffTableFunction{},
