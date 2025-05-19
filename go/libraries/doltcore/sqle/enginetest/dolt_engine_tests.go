@@ -2012,6 +2012,16 @@ func RunDoltWorkspaceTests(t *testing.T, h DoltEnginetestHarness) {
 	}
 }
 
+func RundDoltLongLivedBranchTests(t *testing.T, h DoltEnginetestHarness) {
+	for _, script := range DoltLongLivedBranchTests {
+		func() {
+			h = h.NewHarness(t)
+			defer h.Close()
+			enginetest.TestScript(t, h, script)
+		}()
+	}
+}
+
 func RunDoltHelpSystemTableTests(t *testing.T, harness DoltEnginetestHarness) {
 	dtables.DoltCommand = doltcmd.DoltCommand
 
