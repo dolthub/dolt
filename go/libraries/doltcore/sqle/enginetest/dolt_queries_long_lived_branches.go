@@ -15,6 +15,8 @@
 package enginetest
 
 import (
+	"fmt"
+
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/sql"
 )
@@ -40,6 +42,17 @@ var createTablesAndBranches = []string{
 	"CALL DOLT_COMMIT('-am', 'insert into C while on brC');",
 }
 
+// brBChangesTableA is a set of changes that will
+// 1) checkout brB
+// 2) insert 3 values into A
+// 3) record commit as @BR_B_CHANGES_A
+var brBChangesTableA = []string{
+	"CALL DOLT_CHECKOUT('brB');",
+	"INSERT INTO A VALUES (42),(53),(64);",
+	"CALL DOLT_COMMIT('-am', 'insert into A while on brB');",
+	"SET @BR_B_CHANGES_A = (SELECT DOLT_HASHOF('HEAD'));",
+}
+
 var DoltLongLivedBranchTests = []queries.ScriptTest{
 	{
 		// * (HEAD -> A) Merge branch 'B' into A
@@ -50,7 +63,7 @@ var DoltLongLivedBranchTests = []queries.ScriptTest{
 		// | * |         Merge branch 'C' into B
 		// | |\|
 		// | | *         Changes on the C branch of A Table. robomerge "IGNORE"
-		// | * |         more commit on B
+		// | | |
 		// | | *         Changes on C
 		// | |/
 		// | *           changes on B
@@ -58,32 +71,31 @@ var DoltLongLivedBranchTests = []queries.ScriptTest{
 		// *      (main) add the empty tables
 		// *             Initialize data repository
 		Name: "Test revert robomerge ignore",
-		SetUpScript: append(createTablesAndBranches,
-			[]string{
-				"CALL DOLT_CHECKOUT('brC');",
-				"INSERT INTO A VALUES (42),(53),(64);",
-				"CALL DOLT_COMMIT('-am', 'insert into A while on brC. Revert Me');",
-				"SET @revert_me = (SELECT DOLT_HASHOF('HEAD'));",
-				"CALL DOLT_CHECKOUT('brB');",
-				"INSERT INTO B VALUES (40),(50),(60);",
-				"CALL DOLT_COMMIT('-am', 'insert into B while on brB');",
-				"CALL DOLT_MERGE('brC');",
-				"CALL DOLT_REVERT(@revert_me);", // Revert that changes on table A. They should not show up on subsequent merges.
-				"CALL DOLT_RESET('HEAD~1');",
-				"CALL DOLT_COMMIT('-a', '--amend');", // Flatten the revert into the merge commit.
-				"SET @B_MERGE_1 = (SELECT DOLT_HASHOF('HEAD'));",
-				"CALL DOLT_CHECKOUT('brA');",
-				"CALL DOLT_MERGE('brB');",
-				"SET @A_MERGE_1 = (SELECT DOLT_HASHOF('HEAD'));",
-				"CALL DOLT_CHECKOUT('brC');",
-				"INSERT INTO C VALUES (400),(500),(600);",
-				"CALL DOLT_COMMIT('-am', 'insert into C while on branch brC');",
-				"CALL DOLT_CHECKOUT('brB');",
-				"CALL DOLT_MERGE('brC');",
-				"CALL DOLT_CHECKOUT('brA');",
-				"CALL DOLT_MERGE('brB');",
-				"SET @A_MERGE_2 = (SELECT DOLT_HASHOF('HEAD'));",
-			}...,
+		SetUpScript: chain(
+			createTablesAndBranches,
+			"CALL DOLT_CHECKOUT('brC');",
+			"INSERT INTO A VALUES (42),(53),(64);",
+			"CALL DOLT_COMMIT('-am', 'insert into A while on brC. Revert Me');",
+			"SET @revert_me = (SELECT DOLT_HASHOF('HEAD'));",
+			"CALL DOLT_CHECKOUT('brB');",
+			"INSERT INTO B VALUES (40),(50),(60);",
+			"CALL DOLT_COMMIT('-am', 'insert into B while on brB');",
+			"CALL DOLT_MERGE('brC');",
+			"CALL DOLT_REVERT(@revert_me);", // Revert that changes on table A. They should not show up on subsequent merges.
+			"CALL DOLT_RESET('HEAD~1');",
+			"CALL DOLT_COMMIT('-a', '--amend');", // Flatten the revert into the merge commit.
+			"SET @B_MERGE_1 = (SELECT DOLT_HASHOF('HEAD'));",
+			"CALL DOLT_CHECKOUT('brA');",
+			"CALL DOLT_MERGE('brB');",
+			"SET @A_MERGE_1 = (SELECT DOLT_HASHOF('HEAD'));",
+			"CALL DOLT_CHECKOUT('brC');",
+			"INSERT INTO C VALUES (400),(500),(600);",
+			"CALL DOLT_COMMIT('-am', 'insert into C while on branch brC');",
+			"CALL DOLT_CHECKOUT('brB');",
+			"CALL DOLT_MERGE('brC');",
+			"CALL DOLT_CHECKOUT('brA');",
+			"CALL DOLT_MERGE('brB');",
+			"SET @A_MERGE_2 = (SELECT DOLT_HASHOF('HEAD'));",
 		),
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -114,4 +126,57 @@ var DoltLongLivedBranchTests = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "cross merges",
+		SetUpScript: chain(
+			createTablesAndBranches,
+			brBChangesTableA,
+			"CALL DOLT_CHECKOUT('brA');",
+			"SET @A_initial = (SELECT DOLT_HASHOF('HEAD'));",
+			"INSERT INTO A VALUES (1111);",
+			"CALL DOLT_COMMIT('-am', 'insert into A while on brA');",
+			"CALL DOLT_MERGE('--no-ff', @BR_B_CHANGES_A);",
+			"CALL DOLT_REVERT(@BR_B_CHANGES_A);",
+			"SET @reverted_br_b_changes_a = (SELECT DOLT_HASHOF('HEAD'));",
+			"CALL DOLT_CHECKOUT('brB');",
+			"INSERT INTO B VALUES (2222);",
+			"CALL DOLT_COMMIT('-am', 'insert into B while on brB');",
+			"CALL DOLT_MERGE('--no-ff', @A_initial);",
+			"SET @B_MERGE_ME = (SELECT DOLT_HASHOF('HEAD'));",
+			"CALL DOLT_MERGE('--no-ff', @reverted_br_b_changes_a);",
+			"CALL DOLT_CHECKOUT('brA');",
+			"CALL DOLT_MERGE('--no-ff', @B_MERGE_ME);",
+		),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT * FROM A AS OF 'brA';",
+				Expected: []sql.Row{
+					{1}, {2}, {3}, {1111},
+				},
+			},
+			{
+				// Verify that values inserted into A while on brB don't come back after the cross merge.
+				Query: "SELECT * FROM A AS OF 'brB';",
+				Expected: []sql.Row{
+					{1}, {2}, {3}, {1111},
+				},
+			},
+		},
+	},
+}
+
+// chain flattens any mix of string and []string into a single []string.
+func chain(parts ...interface{}) []string {
+	var out []string
+	for _, p := range parts {
+		switch v := p.(type) {
+		case string:
+			out = append(out, v)
+		case []string:
+			out = append(out, v...)
+		default:
+			panic(fmt.Sprintf("chain: unsupported type %T", p))
+		}
+	}
+	return out
 }
