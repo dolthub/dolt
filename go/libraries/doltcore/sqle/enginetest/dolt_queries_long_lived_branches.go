@@ -50,7 +50,7 @@ var brBChangesTableA = []string{
 	"CALL DOLT_CHECKOUT('brB');",
 	"INSERT INTO A VALUES (42),(53),(64);",
 	"CALL DOLT_COMMIT('-am', 'insert into A while on brB');",
-	"SET @BR_B_CHANGES_A = (SELECT DOLT_HASHOF('HEAD'));",
+	captureHEADAs("BR_B_CHANGES_A"),
 }
 
 var DoltLongLivedBranchTests = []queries.ScriptTest{
@@ -76,7 +76,7 @@ var DoltLongLivedBranchTests = []queries.ScriptTest{
 			"CALL DOLT_CHECKOUT('brC');",
 			"INSERT INTO A VALUES (42),(53),(64);",
 			"CALL DOLT_COMMIT('-am', 'insert into A while on brC. Revert Me');",
-			"SET @revert_me = (SELECT DOLT_HASHOF('HEAD'));",
+			captureHEADAs("revert_me"),
 			"CALL DOLT_CHECKOUT('brB');",
 			"INSERT INTO B VALUES (40),(50),(60);",
 			"CALL DOLT_COMMIT('-am', 'insert into B while on brB');",
@@ -84,10 +84,10 @@ var DoltLongLivedBranchTests = []queries.ScriptTest{
 			"CALL DOLT_REVERT(@revert_me);", // Revert that changes on table A. They should not show up on subsequent merges.
 			"CALL DOLT_RESET('HEAD~1');",
 			"CALL DOLT_COMMIT('-a', '--amend');", // Flatten the revert into the merge commit.
-			"SET @B_MERGE_1 = (SELECT DOLT_HASHOF('HEAD'));",
+			captureHEADAs("B_MERGE_1"),
 			"CALL DOLT_CHECKOUT('brA');",
 			"CALL DOLT_MERGE('brB');",
-			"SET @A_MERGE_1 = (SELECT DOLT_HASHOF('HEAD'));",
+			captureHEADAs("A_MERGE_1"),
 			"CALL DOLT_CHECKOUT('brC');",
 			"INSERT INTO C VALUES (400),(500),(600);",
 			"CALL DOLT_COMMIT('-am', 'insert into C while on branch brC');",
@@ -95,7 +95,7 @@ var DoltLongLivedBranchTests = []queries.ScriptTest{
 			"CALL DOLT_MERGE('brC');",
 			"CALL DOLT_CHECKOUT('brA');",
 			"CALL DOLT_MERGE('brB');",
-			"SET @A_MERGE_2 = (SELECT DOLT_HASHOF('HEAD'));",
+			captureHEADAs("A_MERGE_2"),
 		),
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -132,17 +132,17 @@ var DoltLongLivedBranchTests = []queries.ScriptTest{
 			createTablesAndBranches,
 			brBChangesTableA,
 			"CALL DOLT_CHECKOUT('brA');",
-			"SET @A_initial = (SELECT DOLT_HASHOF('HEAD'));",
+			captureHEADAs("A_initial"),
 			"INSERT INTO A VALUES (1111);",
 			"CALL DOLT_COMMIT('-am', 'insert into A while on brA');",
 			"CALL DOLT_MERGE('--no-ff', @BR_B_CHANGES_A);",
 			"CALL DOLT_REVERT(@BR_B_CHANGES_A);",
-			"SET @reverted_br_b_changes_a = (SELECT DOLT_HASHOF('HEAD'));",
+			captureHEADAs("reverted_br_b_changes_a"),
 			"CALL DOLT_CHECKOUT('brB');",
 			"INSERT INTO B VALUES (2222);",
 			"CALL DOLT_COMMIT('-am', 'insert into B while on brB');",
 			"CALL DOLT_MERGE('--no-ff', @A_initial);",
-			"SET @B_MERGE_ME = (SELECT DOLT_HASHOF('HEAD'));",
+			captureHEADAs("B_MERGE_ME"),
 			"CALL DOLT_MERGE('--no-ff', @reverted_br_b_changes_a);",
 			"CALL DOLT_CHECKOUT('brA');",
 			"CALL DOLT_MERGE('--no-ff', @B_MERGE_ME);",
@@ -163,6 +163,11 @@ var DoltLongLivedBranchTests = []queries.ScriptTest{
 			},
 		},
 	},
+}
+
+// captureHEADAs returns a SQL statement that captures the hash of HEAD into a variable with the given name.
+func captureHEADAs(name string) string {
+	return fmt.Sprintf("SET @%s = (SELECT DOLT_HASHOF('HEAD'));", name)
 }
 
 // chain flattens any mix of string and []string into a single []string.
