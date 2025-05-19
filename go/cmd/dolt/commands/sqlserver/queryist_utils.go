@@ -105,7 +105,10 @@ func (c ConnectionQueryist) Query(ctx *sql.Context, query string) (sql.Schema, s
 		var msg string
 		var level string
 
-		warnRows.Scan(&level, &code, &msg)
+		err = warnRows.Scan(&level, &code, &msg)
+		if err != nil {
+			return nil, nil, nil, err
+		}
 
 		ctx.Warn(code, msg)
 	}
