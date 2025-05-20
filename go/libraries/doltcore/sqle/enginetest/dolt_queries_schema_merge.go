@@ -43,7 +43,7 @@ var SchemaChangeTestsForDataConflicts = []MergeScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "select * from dolt_preview_merge_conflicts_summary('main', 'right');",
-				Expected: []sql.Row{{"t", uint(1), uint(0)}},
+				Expected: []sql.Row{{"t", uint64(1), uint64(0)}},
 			},
 			{
 				Query:    "call dolt_merge('right');",
