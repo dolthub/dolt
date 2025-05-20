@@ -45,6 +45,8 @@ type Differ[K ~[]byte, O Ordering[K]] struct {
 	fromStop, toStop        *cursor
 	order                   O
 	considerAllRowsModified bool
+	needToAdvanceFromCursor bool
+	needToAdvanceToCursor   bool
 }
 
 func DifferFromRoots[K ~[]byte, O Ordering[K]](
@@ -127,14 +129,21 @@ func DifferFromCursors[K ~[]byte, O Ordering[K]](
 	}, nil
 }
 
-func (td Differ[K, O]) Next(ctx context.Context) (diff Diff, err error) {
-	return td.next(ctx, true)
-}
-
-// next finds the next diff and then conditionally advances the cursors past the modified chunks.
-// In most cases, we want to advance the cursors, but in some circumstances the caller may want to access the cursors
-// and then advance them manually.
-func (td Differ[K, O]) next(ctx context.Context, advanceCursors bool) (diff Diff, err error) {
+func (td *Differ[K, O]) Next(ctx context.Context) (diff Diff, err error) {
+	if td.needToAdvanceFromCursor {
+		err = td.from.advance(ctx)
+		if err != nil {
+			return diff, err
+		}
+		td.needToAdvanceFromCursor = false
+	}
+	if td.needToAdvanceToCursor {
+		err = td.to.advance(ctx)
+		if err != nil {
+			return diff, err
+		}
+		td.needToAdvanceToCursor = false
+	}
 	for td.from.Valid() && td.from.compare(td.fromStop) < 0 && td.to.Valid() && td.to.compare(td.toStop) < 0 {
 
 		f := td.from.CurrentKey()
@@ -143,16 +152,16 @@ func (td Differ[K, O]) next(ctx context.Context, advanceCursors bool) (diff Diff
 
 		switch {
 		case cmp < 0:
-			return sendRemoved(ctx, td.from, advanceCursors)
+			return td.sendRemoved()
 
 		case cmp > 0:
-			return sendAdded(ctx, td.to, advanceCursors)
+			return td.sendAdded()
 
 		case cmp == 0:
 			// If the cursor schema has changed, then all rows should be considered modified.
 			// If the cursor schema hasn't changed, rows are modified iff their bytes have changed.
 			if td.considerAllRowsModified || !equalcursorValues(td.from, td.to) {
-				return sendModified(ctx, td.from, td.to, advanceCursors)
+				return td.sendModified()
 			}
 
 			// advance both cursors since we have already determined that they are equal. This needs to be done because
@@ -173,61 +182,48 @@ func (td Differ[K, O]) next(ctx context.Context, advanceCursors bool) (diff Diff
 	}
 
 	if td.from.Valid() && td.from.compare(td.fromStop) < 0 {
-		return sendRemoved(ctx, td.from, advanceCursors)
+		return td.sendRemoved()
 	}
 	if td.to.Valid() && td.to.compare(td.toStop) < 0 {
-		return sendAdded(ctx, td.to, advanceCursors)
+		return td.sendAdded()
 	}
 
 	return Diff{}, io.EOF
 }
 
-func sendRemoved(ctx context.Context, from *cursor, advanceCursors bool) (diff Diff, err error) {
+func (td *Differ[K, O]) sendRemoved() (diff Diff, err error) {
 	diff = Diff{
 		Type: RemovedDiff,
-		Key:  from.CurrentKey(),
-		From: from.currentValue(),
+		Key:  td.from.CurrentKey(),
+		From: td.from.currentValue(),
 	}
 
-	if advanceCursors {
-		if err = from.advance(ctx); err != nil {
-			return Diff{}, err
-		}
-	}
+	td.needToAdvanceFromCursor = true
 	return
 }
 
-func sendAdded(ctx context.Context, to *cursor, advanceCursors bool) (diff Diff, err error) {
+func (td *Differ[K, O]) sendAdded() (diff Diff, err error) {
 	diff = Diff{
 		Type: AddedDiff,
-		Key:  to.CurrentKey(),
-		To:   to.currentValue(),
+		Key:  td.to.CurrentKey(),
+		To:   td.to.currentValue(),
 	}
 
-	if advanceCursors {
-		if err = to.advance(ctx); err != nil {
-			return Diff{}, err
-		}
-	}
+	td.needToAdvanceToCursor = true
 	return
 }
 
-func sendModified(ctx context.Context, from, to *cursor, advanceCursors bool) (diff Diff, err error) {
+func (td *Differ[K, O]) sendModified() (diff Diff, err error) {
 	diff = Diff{
 		Type: ModifiedDiff,
-		Key:  from.CurrentKey(),
-		From: from.currentValue(),
-		To:   to.currentValue(),
+		Key:  td.from.CurrentKey(),
+		From: td.from.currentValue(),
+		To:   td.to.currentValue(),
 	}
 
-	if advanceCursors {
-		if err = from.advance(ctx); err != nil {
-			return Diff{}, err
-		}
-		if err = to.advance(ctx); err != nil {
-			return Diff{}, err
-		}
-	}
+	td.needToAdvanceFromCursor = true
+	td.needToAdvanceToCursor = true
+
 	return
 }
 
