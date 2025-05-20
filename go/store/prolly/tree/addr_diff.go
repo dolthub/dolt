@@ -41,7 +41,7 @@ type AddrDiffFn func(context.Context, AddrDiff) error
 func (ads *AddrDiffStream[K, O]) Next(ctx context.Context) (AddrDiff, error) {
 	for {
 		if len(ads.dfr) > 0 {
-			difr := ads.dfr[len(ads.dfr)-1]
+			difr := &ads.dfr[len(ads.dfr)-1]
 			dif, err := difr.Next(ctx)
 			if err != nil {
 				if err != io.EOF {

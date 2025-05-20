@@ -151,12 +151,16 @@ func (jd *IndexedJsonDiffer) Next(ctx context.Context) (diff JsonDiff, err error
 
 			// Either this is the first iteration, or the last iteration exhausted both chunks at the same time.
 			// (ie, both chunks ended at the same JSON path). We can use `Differ.Next` to seek to the next difference.
-			// Passing advanceCursors=false means that instead of using the returned diff, we read the cursors out of
-			// the differ, and advance them manually once we've walked the chunk.
-			_, err := jd.differ.next(ctx, false)
+			_, err := jd.differ.Next(ctx)
 			if err != nil {
 				return JsonDiff{}, err
 			}
+
+			// Ordinarily, the Differ will advance the cursors the next time Next() is called.
+			// The JsonDiffer is a bit of a hack in that we advance the cursors ourselves, possibly many times
+			// before we call Differ.Next again.
+			jd.differ.needToAdvanceToCursor = false
+			jd.differ.needToAdvanceFromCursor = false
 
 			jd.currentFromCursor, err = newJsonCursorFromCursor(ctx, jd.differ.from)
 			if err != nil {
