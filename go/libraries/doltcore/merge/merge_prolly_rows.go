@@ -26,7 +26,6 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/expression"
 	"github.com/dolthub/go-mysql-server/sql/transform"
 	"github.com/dolthub/go-mysql-server/sql/types"
-	"golang.org/x/sync/errgroup"
 	errorkinds "gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -285,7 +284,7 @@ func computeProllyTreePatches(
 // if not, they are recorded as conflicts in the table's artifacts.
 func mergeProllyTableData(ctx *sql.Context, tm *TableMerger, finalSch schema.Schema, mergeTbl *doltdb.Table, valueMerger *valueMerger, mergeInfo MergeInfo, diffInfo tree.ThreeWayDiffInfo) (*doltdb.Table, *MergeStats, error) {
 	ns := tm.ns
-	eg, errCtx := errgroup.WithContext(ctx)
+	eg, errCtx := ctx.NewErrgroup()
 	patchBuffer := tree.NewPatchBuffer(tree.PatchBufferSize)
 
 	mergedKeyDesc := finalSch.GetKeyDescriptor(ns)
@@ -298,7 +297,7 @@ func mergeProllyTableData(ctx *sql.Context, tm *TableMerger, finalSch schema.Sch
 	var conflicts *conflictMerger
 	eg.Go(func() error {
 		var err error
-		sec, conflicts, err = computeProllyTreePatches(ctx, tm, finalSch, mergeTbl, valueMerger, mergeInfo, diffInfo, patchBuffer, s)
+		sec, conflicts, err = computeProllyTreePatches(errCtx, tm, finalSch, mergeTbl, valueMerger, mergeInfo, diffInfo, patchBuffer, s)
 		return err
 	})
 
@@ -330,10 +329,6 @@ func mergeProllyTableData(ctx *sql.Context, tm *TableMerger, finalSch schema.Sch
 
 	// After we've resolved all the diffs, it's safe for us to update the schema on the table
 	mergeTbl, err = tm.leftTbl.UpdateSchema(ctx, finalSch)
-	if err != nil {
-		return nil, nil, err
-	}
-
 	if err != nil {
 		return nil, nil, err
 	}
