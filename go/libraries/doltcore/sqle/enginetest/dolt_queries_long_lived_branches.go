@@ -96,6 +96,42 @@ var mergeBrCToBrBAndBrA = []string{
 	"CALL DOLT_MERGE('--no-ff', 'brA');",
 }
 
+/*
+ * brAextedTableASchema is a set of changes that will:
+ * 1) checkout brA
+ * 2) alter the schema of A Table to add a new_col column (int, default 4321)
+ * 3) Branch B and C will be unchanged.
+ *
+ * A o----o A
+ *
+ * B o      B
+ *
+ * C o      C
+ */
+var brAextendTableASchema = []string{
+	"CALL DOLT_CHECKOUT('brA');",
+	"ALTER TABLE A ADD COLUMN new_col INT DEFAULT 4321;",
+	"CALL DOLT_COMMIT('-am', 'extend table A schema');",
+}
+
+/*
+ * brAextedTableASchema is a set of changes that will:
+ * 1) checkout brA
+ * 2) alter the schema of A Table to add a new_col column (int, default 1221)
+ * 3) Branch A and C will be unchanged
+ *
+ * A o      A
+ *
+ * B o----o B
+ *
+ * C o      C
+ */
+var brBextendTableASchema = []string{
+	"CALL DOLT_CHECKOUT('brB');",
+	"ALTER TABLE A ADD COLUMN new_col INT DEFAULT 1221;",
+	"CALL DOLT_COMMIT('-am', 'extend table A schema on brB');",
+}
+
 var DoltLongLivedBranchTests = []queries.ScriptTest{
 	{
 		// * (HEAD -> A) Merge branch 'B' into A
@@ -269,6 +305,24 @@ var DoltLongLivedBranchTests = []queries.ScriptTest{
 					{5, 5},
 					{6, 6},
 				},
+			},
+		},
+	},
+	{
+		Name: "schema changes which should conflict",
+		SetUpScript: chain(
+			createTablesAndBranches,
+			brAextendTableASchema,
+			"CALL DOLT_CHECKOUT('brB');",
+			"ALTER TABLE A ADD COLUMN new_col INT DEFAULT 1221;",
+			"CALL DOLT_COMMIT('-am', 'extend table A schema on brB');",
+			"CALL DOLT_CHECKOUT('brA');",
+			"SET @@autocommit = 0;",
+		),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('brB');",
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
 			},
 		},
 	},
