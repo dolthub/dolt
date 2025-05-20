@@ -91,9 +91,10 @@ var mergeBrAToBrBAndBrC = []string{
 		A' B' C'
 */
 var mergeBrCToBrBAndBrA = []string{
-	"CALL DOLT_CHECKOUT('brC');",
+	"CALL DOLT_CHECKOUT('brB');",
+	"CALL DOLT_MERGE('--no-ff', 'brC');",
+	"CALL DOLT_CHECKOUT('brA');",
 	"CALL DOLT_MERGE('--no-ff', 'brB');",
-	"CALL DOLT_MERGE('--no-ff', 'brA');",
 }
 
 /*
@@ -238,6 +239,41 @@ var DoltLongLivedBranchTests = []queries.ScriptTest{
 				Query: "SELECT * FROM A AS OF 'brB';",
 				Expected: []sql.Row{
 					{1, 1}, {2, 2}, {3, 3}, {1111, 1111},
+				},
+			},
+		},
+	},
+	{
+		Name: "cross merge using predefined merge variables",
+		SetUpScript: chain(
+			createTablesAndBranches,
+			"CALL DOLT_CHECKOUT('brA');",
+			"INSERT INTO A VALUES (1111,1111);",
+			"CALL DOLT_COMMIT('-am', 'insert into A while on brA');",
+			mergeBrAToBrBAndBrC,
+			"CALL DOLT_CHECKOUT('brB');",
+			"INSERT INTO A VALUES (3333,3333);",
+			"DELETE FROM A WHERE pk = 1111;",
+			"CALL DOLT_COMMIT('-am', 'insert additional into A while on brB');",
+			mergeBrCToBrBAndBrA,
+		),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT * FROM A AS OF 'brA';",
+				Expected: []sql.Row{
+					{1, 1}, {2, 2}, {3, 3}, {1111, 1111}, {3333, 3333},
+				},
+			},
+			{
+				Query: "SELECT * FROM A AS OF 'brB';",
+				Expected: []sql.Row{
+					{1, 1}, {2, 2}, {3, 3}, {1111, 1111},
+				},
+			},
+			{
+				Query: "SELECT * FROM A AS OF 'brC';",
+				Expected: []sql.Row{
+					{1, 1}, {2, 2}, {3, 3}, {1111, 1111}, {3333, 3333},
 				},
 			},
 		},
