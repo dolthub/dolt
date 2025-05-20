@@ -198,12 +198,12 @@ func (pm *PreviewMergeConflictsSummaryTableFunction) RowIter(ctx *sql.Context, r
 		return nil, fmt.Errorf("unexpected database type: %T", pm.database)
 	}
 
-	tables, err := getTablesWithConflicts(ctx, sqledb, leftBranch, rightBranch)
+	conflicts, err := getTablesWithConflicts(ctx, sqledb, leftBranch, rightBranch)
 	if err != nil {
 		return nil, err
 	}
 
-	return NewPreviewMergeConflictsSummaryTableFunctionRowIter(tables), nil
+	return NewPreviewMergeConflictsSummaryTableFunctionRowIter(conflicts), nil
 }
 
 // evaluateArguments returns leftBranchVal amd rightBranchVal.
@@ -384,62 +384,75 @@ func getTablesWithConflicts(ctx *sql.Context, db dsess.SqlDatabase, baseBranch, 
 			continue
 		}
 
-		keyless := schema.IsKeyless(mergeSch)
-
-		leftRows, err := tm.LeftRows(ctx)
+		dataConflicts, err := getDataConflictsForTable(ctx, tm, tblName, mergeSch, diffInfo)
 		if err != nil {
 			return nil, err
 		}
-		rightRows, err := tm.RightRows(ctx)
-		if err != nil {
-			return nil, err
-		}
-		ancRows, err := tm.AncRows(ctx)
-		if err != nil {
-			return nil, err
-		}
-
-		valueMerger := tm.GetNewValueMerger(mergeSch, leftRows)
-
-		differ, err := tree.NewThreeWayDiffer(
-			ctx,
-			leftRows.NodeStore(),
-			leftRows.Tuples(),
-			rightRows.Tuples(),
-			ancRows.Tuples(),
-			valueMerger.TryMerge,
-			keyless,
-			diffInfo,
-			leftRows.Tuples().Order,
-		)
-		if err != nil {
-			return nil, err
-		}
-
-		var numDataConflicts uint64 = 0
-		for {
-			diff, err := differ.Next(ctx)
-			if errors.Is(err, io.EOF) {
-				break
-			} else if err != nil {
-				return nil, err
-			}
-			switch diff.Op {
-			case tree.DiffOpDivergentModifyConflict, tree.DiffOpDivergentDeleteConflict:
-				// In this case, a modification or delete was made to one side, and a conflicting delete or modification
-				// was made to the other side, so these cannot be automatically resolved.
-				numDataConflicts++
-			case tree.DiffOpConvergentAdd, tree.DiffOpConvergentModify, tree.DiffOpConvergentDelete:
-				if keyless {
-					numDataConflicts++
-				}
-			}
-		}
-
-		if numDataConflicts > 0 {
-			conflicted = append(conflicted, tableConflict{tableName: tblName, numSchemaConflicts: &numSchemaConflicts, numDataConflicts: &numDataConflicts})
+		if dataConflicts != nil {
+			conflicted = append(conflicted, *dataConflicts)
 		}
 	}
 
 	return conflicted, nil
+}
+
+func getDataConflictsForTable(ctx *sql.Context, tm *merge.TableMerger, tblName doltdb.TableName, mergeSch schema.Schema, diffInfo tree.ThreeWayDiffInfo) (*tableConflict, error) {
+	keyless := schema.IsKeyless(mergeSch)
+
+	leftRows, err := tm.LeftRows(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rightRows, err := tm.RightRows(ctx)
+	if err != nil {
+		return nil, err
+	}
+	ancRows, err := tm.AncRows(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	valueMerger := tm.GetNewValueMerger(mergeSch, leftRows)
+
+	differ, err := tree.NewThreeWayDiffer(
+		ctx,
+		leftRows.NodeStore(),
+		leftRows.Tuples(),
+		rightRows.Tuples(),
+		ancRows.Tuples(),
+		valueMerger.TryMerge,
+		keyless,
+		diffInfo,
+		leftRows.Tuples().Order,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	var numDataConflicts uint64 = 0
+	for {
+		diff, err := differ.Next(ctx)
+		if errors.Is(err, io.EOF) {
+			break
+		} else if err != nil {
+			return nil, err
+		}
+		switch diff.Op {
+		case tree.DiffOpDivergentModifyConflict, tree.DiffOpDivergentDeleteConflict:
+			// In this case, a modification or delete was made to one side, and a conflicting delete or modification
+			// was made to the other side, so these cannot be automatically resolved.
+			numDataConflicts++
+		case tree.DiffOpConvergentAdd, tree.DiffOpConvergentModify, tree.DiffOpConvergentDelete:
+			if keyless {
+				numDataConflicts++
+			}
+		}
+	}
+
+	if numDataConflicts > 0 {
+		numSchemaConflicts := uint64(0)
+		return &tableConflict{tableName: tblName, numSchemaConflicts: &numSchemaConflicts, numDataConflicts: &numDataConflicts}, nil
+	}
+
+	return nil, nil
 }
