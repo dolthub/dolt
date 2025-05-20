@@ -4030,7 +4030,7 @@ var SchemaConflictScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT * FROM dolt_preview_merge_conflicts_summary('main', 'other')",
-				Expected: []sql.Row{{"t", uint64(0), uint64(1)}},
+				Expected: []sql.Row{{"t", nil, uint64(1)}},
 			},
 			{
 				Query:          "call dolt_merge('other')",
@@ -4062,7 +4062,7 @@ var SchemaConflictScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT * FROM dolt_preview_merge_conflicts_summary('main', 'other')",
-				Expected: []sql.Row{{"t", uint64(0), uint64(1)}},
+				Expected: []sql.Row{{"t", nil, uint64(1)}},
 			},
 			{
 				Query:    "call dolt_merge('other')",

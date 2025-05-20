@@ -77,7 +77,7 @@ jobs:
             TMPDIR=$gw/tmp
             ./${{ env.SCRIPT_DIR}}/setup.sh $TMPDIR $DATADIR
 
-            # small python script times merge, we suppres errcodes but print error messages
+            # small python script times merge, we suppress errcodes but print error messages
             cd $TMPDIR
             python3 -c "import time, subprocess, sys; start = time.time(); res=subprocess.run(['dolt', 'merge', '--squash', 'main'], capture_output=True); err = res.stdout + res.stderr if res.returncode != 0 else ''; latency = time.time() -start; print(latency); sys.stderr.write(str(err))" 1> lat.log 2>err.log
             latency=$(cat lat.log)
