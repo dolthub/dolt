@@ -44,8 +44,8 @@ type PreviewMergeConflictsSummaryTableFunction struct {
 
 var previewMergeConflictsSummarySchema = sql.Schema{
 	&sql.Column{Name: "table", Type: types.Text, Nullable: false},
-	&sql.Column{Name: "num_data_conflicts", Type: types.Uint64, Nullable: false},
-	&sql.Column{Name: "num_schema_conflicts", Type: types.Uint64, Nullable: false},
+	&sql.Column{Name: "num_data_conflicts", Type: types.Uint64, Nullable: true},
+	&sql.Column{Name: "num_schema_conflicts", Type: types.Uint64, Nullable: true},
 }
 
 // NewInstance creates a new instance of TableFunction interface
@@ -198,7 +198,7 @@ func (pm *PreviewMergeConflictsSummaryTableFunction) RowIter(ctx *sql.Context, r
 		return nil, fmt.Errorf("unexpected database type: %T", pm.database)
 	}
 
-	tables, err := findTablesWithConflicts(ctx, sqledb, leftBranch, rightBranch)
+	tables, err := getTablesWithConflicts(ctx, sqledb, leftBranch, rightBranch)
 	if err != nil {
 		return nil, err
 	}
@@ -267,11 +267,20 @@ func (d *previewMergeConflictsSummaryTableFunctionRowIter) Close(context *sql.Co
 }
 
 func getRowFromConflict(conflict tableConflict) sql.Row {
-	return sql.Row{
+	row := sql.Row{
 		conflict.tableName.String(), // table
-		conflict.numDataConflicts,   // num_conflicts
-		conflict.numSchemaConflicts, // num_schema_conflicts
 	}
+	if conflict.numDataConflicts != nil {
+		row = append(row, *conflict.numDataConflicts) // num_data_conflicts
+	} else {
+		row = append(row, nil)
+	}
+	if conflict.numSchemaConflicts != nil {
+		row = append(row, *conflict.numSchemaConflicts) // num_schema_conflicts
+	} else {
+		row = append(row, nil)
+	}
+	return row
 }
 
 func resolveBranchesToRoots(ctx *sql.Context, db dsess.SqlDatabase, leftBranch, rightBranch string) (doltdb.RootValue, doltdb.RootValue, doltdb.RootValue, error) {
@@ -320,11 +329,11 @@ func resolveBranchesToRoots(ctx *sql.Context, db dsess.SqlDatabase, leftBranch, 
 
 type tableConflict struct {
 	tableName          doltdb.TableName
-	numDataConflicts   uint64
-	numSchemaConflicts uint64
+	numDataConflicts   *uint64
+	numSchemaConflicts *uint64
 }
 
-func findTablesWithConflicts(ctx *sql.Context, db dsess.SqlDatabase, baseBranch, mergeBranch string) ([]tableConflict, error) {
+func getTablesWithConflicts(ctx *sql.Context, db dsess.SqlDatabase, baseBranch, mergeBranch string) ([]tableConflict, error) {
 	leftRoot, rightRoot, baseRoot, err := resolveBranchesToRoots(ctx, db, baseBranch, mergeBranch)
 	if err != nil {
 		return nil, err
@@ -368,8 +377,9 @@ func findTablesWithConflicts(ctx *sql.Context, db dsess.SqlDatabase, baseBranch,
 		if err != nil {
 			return nil, err
 		}
-		if schConflicts.Count() > 0 {
-			conflicted = append(conflicted, tableConflict{tblName, 0, uint64(schConflicts.Count())})
+		numSchemaConflicts := uint64(schConflicts.Count())
+		if numSchemaConflicts > 0 {
+			conflicted = append(conflicted, tableConflict{tableName: tblName, numSchemaConflicts: &numSchemaConflicts})
 			// Cannot calculate data conflicts if there are schema conflicts
 			continue
 		}
@@ -427,7 +437,7 @@ func findTablesWithConflicts(ctx *sql.Context, db dsess.SqlDatabase, baseBranch,
 		}
 
 		if numDataConflicts > 0 {
-			conflicted = append(conflicted, tableConflict{tblName, numDataConflicts, 0})
+			conflicted = append(conflicted, tableConflict{tableName: tblName, numSchemaConflicts: &numSchemaConflicts, numDataConflicts: &numDataConflicts})
 		}
 	}
 
