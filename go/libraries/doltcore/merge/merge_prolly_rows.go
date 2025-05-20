@@ -20,6 +20,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/store/prolly/message"
+	"golang.org/x/sync/errgroup"
 	"io"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -106,31 +108,21 @@ func mergeProllyTable(
 	return mergeTbl, stats, nil
 }
 
-// mergeProllyTableData three-way merges the data for a given table. We currently take the left
-// side of the merge and use that data as the starting point to merge in changes from the right
-// side. Eventually, we will need to optimize this to pick the side that needs the least work.
-// We iterate over the calculated diffs using a ThreeWayDiffer instance, and for every change
-// to the right-side, we apply it to the left-side by merging it into the left-side's primary index
-// as well as any secondary indexes, and also checking for unique constraints incrementally. When
-// conflicts are detected, this function attempts to resolve them automatically if possible, and
-// if not, they are recorded as conflicts in the table's artifacts.
-func mergeProllyTableData(ctx *sql.Context, tm *TableMerger, finalSch schema.Schema, mergeTbl *doltdb.Table, valueMerger *valueMerger, mergeInfo MergeInfo, diffInfo tree.ThreeWayDiffInfo) (*doltdb.Table, *MergeStats, error) {
-	ns := tm.ns
+func computeProllyTreePatches(
+	ctx *sql.Context,
+	tm *TableMerger,
+	finalSch schema.Schema,
+	mergeTbl *doltdb.Table,
+	valueMerger *valueMerger,
+	mergeInfo MergeInfo,
+	diffInfo tree.ThreeWayDiffInfo,
+	patchBuffer tree.PatchBuffer,
+	s *MergeStats) (*secondaryMerger, *conflictMerger, error) {
 
 	iter, err := threeWayDiffer(ctx, tm, valueMerger, diffInfo)
 	if err != nil {
 		return nil, nil, err
 	}
-
-	lr, err := tm.leftTbl.GetRowData(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-	lIdx, err := durable.ProllyMapFromIndex(lr)
-	if err != nil {
-		return nil, nil, err
-	}
-	leftEditor := lIdx.Rewriter(finalSch.GetKeyDescriptor(ns), finalSch.GetValueDescriptor(ns))
 
 	ai, err := mergeTbl.GetArtifacts(ctx)
 	if err != nil {
@@ -145,7 +137,7 @@ func mergeProllyTableData(ctx *sql.Context, tm *TableMerger, finalSch schema.Sch
 		return nil, nil, err
 	}
 
-	pri, err := newPrimaryMerger(leftEditor, tm, valueMerger, finalSch, mergeInfo, defaults)
+	pri, err := newPrimaryMerger(patchBuffer, tm, valueMerger, finalSch, mergeInfo, defaults)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -169,14 +161,11 @@ func mergeProllyTableData(ctx *sql.Context, tm *TableMerger, finalSch schema.Sch
 		return nil, nil, err
 	}
 
-	nullChk, err := newNullValidator(ctx, finalSch, tm, valueMerger, artEditor, leftEditor, sec.leftIdxes)
+	nullChk, err := newNullValidator(ctx, finalSch, tm, valueMerger, artEditor, patchBuffer, sec.leftIdxes)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	s := &MergeStats{
-		Operation: TableModified,
-	}
 	for {
 		diff, err := iter.Next(ctx)
 		if errors.Is(err, io.EOF) {
@@ -283,6 +272,61 @@ func mergeProllyTableData(ctx *sql.Context, tm *TableMerger, finalSch schema.Sch
 			// we can simply ignore them since that data is already in the destination (the left-side).
 		}
 	}
+	return sec, conflicts, patchBuffer.SendPatch(ctx, nil, nil)
+}
+
+// mergeProllyTableData three-way merges the data for a given table. We currently take the left
+// side of the merge and use that data as the starting point to merge in changes from the right
+// side. Eventually, we will need to optimize this to pick the side that needs the least work.
+// We iterate over the calculated diffs using a ThreeWayDiffer instance, and for every change
+// to the right-side, we apply it to the left-side by merging it into the left-side's primary index
+// as well as any secondary indexes, and also checking for unique constraints incrementally. When
+// conflicts are detected, this function attempts to resolve them automatically if possible, and
+// if not, they are recorded as conflicts in the table's artifacts.
+func mergeProllyTableData(ctx *sql.Context, tm *TableMerger, finalSch schema.Schema, mergeTbl *doltdb.Table, valueMerger *valueMerger, mergeInfo MergeInfo, diffInfo tree.ThreeWayDiffInfo) (*doltdb.Table, *MergeStats, error) {
+	ns := tm.ns
+	eg, errCtx := errgroup.WithContext(ctx)
+	patchBuffer := tree.NewPatchBuffer(tree.PatchBufferSize)
+
+	mergedKeyDesc := finalSch.GetKeyDescriptor(ns)
+	mergedValDesc := finalSch.GetValueDescriptor(ns)
+
+	s := &MergeStats{
+		Operation: TableModified,
+	}
+	var sec *secondaryMerger
+	var conflicts *conflictMerger
+	eg.Go(func() error {
+		var err error
+		sec, conflicts, err = computeProllyTreePatches(ctx, tm, finalSch, mergeTbl, valueMerger, mergeInfo, diffInfo, patchBuffer, s)
+		return err
+	})
+
+	var mergedRoot tree.Node
+	// consume |patches| and apply them to |left|
+	eg.Go(func() error {
+		leftRowData, err := tm.leftTbl.GetRowData(errCtx)
+		if err != nil {
+			return err
+		}
+
+		lIdx, err := durable.ProllyMapFromIndex(leftRowData)
+		if err != nil {
+			return err
+		}
+
+		serializer := message.NewProllyMapSerializer(mergedValDesc, ns.Pool())
+		mergedRoot, err = tree.ApplyMutations(errCtx, ns, lIdx.Node(), mergedKeyDesc, serializer, patchBuffer)
+		return err
+	})
+
+	err := eg.Wait()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	finalMap := prolly.NewMap(mergedRoot, ns, mergedKeyDesc, mergedValDesc)
+	finalRows := durable.IndexFromProllyMap(finalMap)
 
 	// After we've resolved all the diffs, it's safe for us to update the schema on the table
 	mergeTbl, err = tm.leftTbl.UpdateSchema(ctx, finalSch)
@@ -290,7 +334,6 @@ func mergeProllyTableData(ctx *sql.Context, tm *TableMerger, finalSch schema.Sch
 		return nil, nil, err
 	}
 
-	finalRows, err := pri.finalize(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -853,8 +896,8 @@ type nullValidator struct {
 	leftMap, rightMap val.OrdinalMapping
 	// edits is the artifacts maps editor
 	artEditor *prolly.ArtifactsEditor
-	// leftEdits if the left-side row editor
-	leftEditor *prolly.MutableMap
+	// patchBuffer is used to record rows which must be deleted because they contain violations
+	patchBuffer tree.PatchBuffer
 	// secEditors are the secondary index editors
 	secEditors []MutableSecondaryIdx
 	// theirRootish is the hash.Hash of the right-side revision
@@ -869,7 +912,7 @@ func newNullValidator(
 	tm *TableMerger,
 	vm *valueMerger,
 	artEditor *prolly.ArtifactsEditor,
-	leftEditor *prolly.MutableMap,
+	patchBuffer tree.PatchBuffer,
 	secEditors []MutableSecondaryIdx,
 ) (nullValidator, error) {
 	theirRootish, err := tm.rightSrc.HashOf()
@@ -886,7 +929,7 @@ func newNullValidator(
 		leftMap:      vm.leftMapping,
 		rightMap:     vm.rightMapping,
 		artEditor:    artEditor,
-		leftEditor:   leftEditor,
+		patchBuffer:  patchBuffer,
 		secEditors:   secEditors,
 		theirRootish: theirRootish,
 		ourRootish:   ourRootish,
@@ -961,7 +1004,8 @@ func (nv nullValidator) validateDiff(ctx *sql.Context, diff tree.ThreeWayDiff) (
 			if err != nil {
 				return 0, err
 			}
-			if err = nv.leftEditor.Delete(ctx, diff.Key); err != nil {
+			err = nv.patchBuffer.SendPatch(ctx, tree.Item(diff.Key), nil)
+			if err != nil {
 				return 0, err
 			}
 			for _, editor := range nv.secEditors {
@@ -991,7 +1035,8 @@ func (nv nullValidator) validateDiff(ctx *sql.Context, diff tree.ThreeWayDiff) (
 			if err != nil {
 				return 0, err
 			}
-			if err = nv.leftEditor.Delete(ctx, diff.Key); err != nil {
+			err = nv.patchBuffer.SendPatch(ctx, tree.Item(diff.Key), nil)
+			if err != nil {
 				return 0, err
 			}
 			for _, editor := range nv.secEditors {
@@ -1079,7 +1124,7 @@ func (m *conflictMerger) finalize(ctx context.Context) (durable.ArtifactIndex, e
 // primaryMerger translates three-way diffs
 // on the primary index into merge-left updates.
 type primaryMerger struct {
-	mut         *prolly.MutableMap
+	patchBuffer tree.PatchBuffer
 	valueMerger *valueMerger
 	tableMerger *TableMerger
 	finalSch    schema.Schema
@@ -1087,9 +1132,9 @@ type primaryMerger struct {
 	defaults    []sql.Expression
 }
 
-func newPrimaryMerger(leftEditor *prolly.MutableMap, tableMerger *TableMerger, valueMerger *valueMerger, finalSch schema.Schema, mergeInfo MergeInfo, defaults []sql.Expression) (*primaryMerger, error) {
+func newPrimaryMerger(patchBuffer tree.PatchBuffer, tableMerger *TableMerger, valueMerger *valueMerger, finalSch schema.Schema, mergeInfo MergeInfo, defaults []sql.Expression) (*primaryMerger, error) {
 	return &primaryMerger{
-		mut:         leftEditor,
+		patchBuffer: patchBuffer,
 		valueMerger: valueMerger,
 		tableMerger: tableMerger,
 		finalSch:    finalSch,
@@ -1141,15 +1186,15 @@ func (m *primaryMerger) merge(ctx *sql.Context, diff tree.ThreeWayDiff, sourceSc
 				newTupleValue = tempTupleValue
 			}
 		}
-		return m.mut.Put(ctx, diff.Key, newTupleValue)
+		return m.patchBuffer.SendPatch(ctx, tree.Item(diff.Key), tree.Item(newTupleValue))
 	case tree.DiffOpRightDelete:
-		return m.mut.Put(ctx, diff.Key, diff.Right)
+		return m.patchBuffer.SendPatch(ctx, tree.Item(diff.Key), nil)
 	case tree.DiffOpDivergentDeleteResolved:
 		// WARNING: In theory, we should only have to call MutableMap::Delete if the key is actually being deleted
 		// from the left branch. However, because of https://github.com/dolthub/dolt/issues/7192,
 		// if the left side of the merge is an empty table and we don't attempt to modify the map,
 		// the table will have an unexpected root hash.
-		return m.mut.Delete(ctx, diff.Key)
+		return m.patchBuffer.SendPatch(ctx, tree.Item(diff.Key), nil)
 	case tree.DiffOpDivergentModifyResolved:
 		// any generated columns need to be re-resolved because their computed values may have changed as a result of
 		// the merge
@@ -1178,7 +1223,7 @@ func (m *primaryMerger) merge(ctx *sql.Context, diff tree.ThreeWayDiff, sourceSc
 			merged = tempTupleValue
 		}
 
-		return m.mut.Put(ctx, diff.Key, merged)
+		return m.patchBuffer.SendPatch(ctx, tree.Item(diff.Key), tree.Item(merged))
 	case tree.DiffOpLeftAdd, tree.DiffOpLeftModify, tree.DiffOpDivergentModifyConflict, tree.DiffOpDivergentDeleteConflict:
 		// Remapping when there's no schema change is harmless, but slow.
 		if !m.mergeInfo.LeftNeedsRewrite {
@@ -1187,7 +1232,7 @@ func (m *primaryMerger) merge(ctx *sql.Context, diff tree.ThreeWayDiff, sourceSc
 		// If the right side has a schema change, then newly added rows from the left must be migrated to the new schema.
 		// Rows with unresolvable conflicts must also be migrated to the new schema so that they can resolved manually.
 		if diff.Left == nil {
-			return m.mut.Put(ctx, diff.Key, nil)
+			return m.patchBuffer.SendPatch(ctx, tree.Item(diff.Key), nil)
 		}
 		newTupleValue := diff.Left
 		if schema.IsKeyless(sourceSch) {
@@ -1202,7 +1247,7 @@ func (m *primaryMerger) merge(ctx *sql.Context, diff tree.ThreeWayDiff, sourceSc
 			}
 			newTupleValue = tempTupleValue
 		}
-		return m.mut.Put(ctx, diff.Key, newTupleValue)
+		return m.patchBuffer.SendPatch(ctx, tree.Item(diff.Key), tree.Item(newTupleValue))
 	default:
 		return fmt.Errorf("unexpected diffOp for editing primary index: %s", diff.Op)
 	}
@@ -1278,14 +1323,6 @@ func hasStoredGeneratedColumns(sch schema.Schema) bool {
 		return false, nil
 	})
 	return hasGenerated
-}
-
-func (m *primaryMerger) finalize(ctx context.Context) (durable.Index, error) {
-	mergedMap, err := m.mut.Map(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return durable.IndexFromProllyMap(mergedMap), nil
 }
 
 // secondaryMerger translates diffs on the primary index

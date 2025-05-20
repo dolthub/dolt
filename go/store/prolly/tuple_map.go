@@ -35,7 +35,7 @@ type Map struct {
 	valDesc val.TupleDesc
 }
 
-// NewMap creates an empty prolly Tree Map
+// NewMap creates a Map from the supplied root node
 func NewMap(node tree.Node, ns tree.NodeStore, keyDesc, valDesc val.TupleDesc) Map {
 	tuples := tree.StaticMap[val.Tuple, val.Tuple, val.TupleDesc]{
 		Root:      node,
