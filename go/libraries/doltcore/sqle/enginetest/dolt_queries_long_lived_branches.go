@@ -55,18 +55,20 @@ var brBChangesTableA = []string{
 	captureHEADAs("BR_B_CHANGES_A"),
 }
 
-// mergeBrAToBrB is a set of changes that will:
-// 1) checkout brB, merge brA into it.
-// 2) checkout brC, merge brB into it.
-//  A  B  C
-//	      *
-//	     /|
-//	    / |
-//	   *  |
-//	  /|  |
-//	 / |  |
-//	*  *  *
-//	A' B' C'
+/*
+	 mergeBrAToBrB is a set of changes that will:
+	 1) checkout brB, merge brA into it.
+	 2) checkout brC, merge brB into it.
+	  A  B  C
+		      *
+		     /|
+		    / |
+		   *  |
+		  /|  |
+		 / |  |
+		*  *  *
+		A' B' C'
+*/
 var mergeBrAToBrBAndBrC = []string{
 	"CALL DOLT_CHECKOUT('brB');",
 	"CALL DOLT_MERGE('--no-ff', 'brA');",
@@ -74,18 +76,20 @@ var mergeBrAToBrBAndBrC = []string{
 	"CALL DOLT_MERGE('--no-ff', 'brB');",
 }
 
-// mergeBrCToBrBAndBrA is a set of changes that will:
-// 1) checkout brB, merge brC into it.
-// 2) checkout brA, merge brB into it.
-//  A  B  C
-//	*	
-//	|\
-//	| \
-//	|  *
-//	|  |\
-//	|  | \
-//	*  *  *
-//	A' B' C'
+/*
+	 mergeBrCToBrBAndBrA is a set of changes that will:
+	 1) checkout brB, merge brC into it.
+	 2) checkout brA, merge brB into it.
+	  A  B  C
+		*
+		|\
+		| \
+		|  *
+		|  |\
+		|  | \
+		*  *  *
+		A' B' C'
+*/
 var mergeBrCToBrBAndBrA = []string{
 	"CALL DOLT_CHECKOUT('brC');",
 	"CALL DOLT_MERGE('--no-ff', 'brB');",
