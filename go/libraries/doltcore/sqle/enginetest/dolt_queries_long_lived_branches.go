@@ -244,7 +244,7 @@ var DoltLongLivedBranchTests = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "cross merge using predefined merge variables",
+		Name: "straight merge across all branches both ways",
 		SetUpScript: chain(
 			createTablesAndBranches,
 			"CALL DOLT_CHECKOUT('brA');",
@@ -254,26 +254,20 @@ var DoltLongLivedBranchTests = []queries.ScriptTest{
 			"CALL DOLT_CHECKOUT('brB');",
 			"INSERT INTO A VALUES (3333,3333);",
 			"DELETE FROM A WHERE pk = 1111;",
-			"CALL DOLT_COMMIT('-am', 'insert additional into A while on brB');",
+			"CALL DOLT_COMMIT('-am', 'insert 3333/delete 1111 on A while on brB');",
 			mergeBrCToBrBAndBrA,
 		),
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "SELECT * FROM A AS OF 'brA';",
 				Expected: []sql.Row{
-					{1, 1}, {2, 2}, {3, 3}, {1111, 1111}, {3333, 3333},
+					{1, 1}, {2, 2}, {3, 3}, {3333, 3333},
 				},
 			},
 			{
 				Query: "SELECT * FROM A AS OF 'brB';",
 				Expected: []sql.Row{
-					{1, 1}, {2, 2}, {3, 3}, {1111, 1111},
-				},
-			},
-			{
-				Query: "SELECT * FROM A AS OF 'brC';",
-				Expected: []sql.Row{
-					{1, 1}, {2, 2}, {3, 3}, {1111, 1111}, {3333, 3333},
+					{1, 1}, {2, 2}, {3, 3}, {3333, 3333},
 				},
 			},
 		},
@@ -282,6 +276,8 @@ var DoltLongLivedBranchTests = []queries.ScriptTest{
 		Name: "re-resolve with multiple branches and conflicts",
 		SetUpScript: chain(
 			createTablesAndBranches,
+			"CALL DOLT_CHECKOUT('brB');",
+			"CALL DOLT_MERGE('brA');",
 			"CALL DOLT_CHECKOUT('brA');",
 			"INSERT INTO A VALUES (4, 4);",
 			"CALL DOLT_COMMIT('-Am', 'Insert (4,4) on brA');",
