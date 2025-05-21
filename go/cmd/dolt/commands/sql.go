@@ -753,7 +753,7 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 
 	initialCtx := sqlCtx.Context
 
-	showWarnings := true
+	toggleWarnings := true
 	pagerEnabled := false
 	// Used for the \edit command.
 	lastSqlCmd := ""
@@ -812,8 +812,8 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 					if err != nil {
 						shell.Println(color.RedString(err.Error()))
 					} else {
-						showWarnings = w
-						if showWarnings {
+						toggleWarnings = w
+						if toggleWarnings {
 							cli.Println("Show warnings enabled")
 						} else {
 							cli.Println("Show warnings disabled")
@@ -839,9 +839,9 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 				} else if rowIter != nil {
 					switch closureFormat {
 					case engine.FormatTabular, engine.FormatVertical:
-						err = engine.PrettyPrintResultsExtended(sqlCtx, closureFormat, sqlSch, rowIter, pagerEnabled, showWarnings)
+						err = engine.PrettyPrintResultsExtended(sqlCtx, closureFormat, sqlSch, rowIter, pagerEnabled, toggleWarnings)
 					default:
-						err = engine.PrettyPrintResults(sqlCtx, closureFormat, sqlSch, rowIter, pagerEnabled, showWarnings)
+						err = engine.PrettyPrintResults(sqlCtx, closureFormat, sqlSch, rowIter, pagerEnabled, toggleWarnings)
 					}
 
 					if err != nil {

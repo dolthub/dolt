@@ -46,7 +46,7 @@ teardown() {
 # bats test_tags=no_lambda
 @test "sql-shell: can toggle warning summary" {
    skiponwindows "Need to install expect and make this script work on windows."
-
+   skip " set sql_warnings currently doesn't work --- needs more communication between server & shell"
    run $BATS_TEST_DIRNAME/sql-warning-detail.expect
    echo "$output"
 

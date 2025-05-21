@@ -95,22 +95,24 @@ func (c ConnectionQueryist) Query(ctx *sql.Context, query string) (sql.Schema, s
 	}
 
 	ctx.ClearWarnings()
-	warnRows, err := c.connection.QueryContext(ctx, "show warnings")
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
-	for warnRows.Next() {
-		var code int
-		var msg string
-		var level string
-
-		err = warnRows.Scan(&level, &code, &msg)
+	if query != "show warnings" {
+		warnRows, err := c.connection.QueryContext(ctx, "show warnings")
 		if err != nil {
 			return nil, nil, nil, err
 		}
 
-		ctx.Warn(code, msg)
+		for warnRows.Next() {
+			var code int
+			var msg string
+			var level string
+
+			err = warnRows.Scan(&level, &code, &msg)
+			if err != nil {
+				return nil, nil, nil, err
+			}
+
+			ctx.Warn(code, msg)
+		}
 	}
 
 	return rowIter.Schema(), rowIter, nil, nil
