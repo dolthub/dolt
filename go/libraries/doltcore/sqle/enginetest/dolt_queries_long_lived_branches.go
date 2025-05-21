@@ -55,20 +55,18 @@ var brBChangesTableA = []string{
 	captureHEADAs("BR_B_CHANGES_A"),
 }
 
-/*
-	 mergeBrAToBrB is a set of changes that will:
-	 1) checkout brB, merge brA into it.
-	 2) checkout brC, merge brB into it.
-	  A  B  C
-		      *
-		     /|
-		    / |
-		   *  |
-		  /|  |
-		 / |  |
-		*  *  *
-		A' B' C'
-*/
+/* mergeBrAToBrB is a set of changes that will:
+ * 1) checkout brB, merge brA into it.
+ * 2) checkout brC, merge brB into it.
+ *
+ * A o   A
+ *    \
+ *     \
+ * B o--o  B
+ *       \
+ *        \
+ * C o-----o  C
+ */
 var mergeBrAToBrBAndBrC = []string{
 	"CALL DOLT_CHECKOUT('brB');",
 	"CALL DOLT_MERGE('--no-ff', 'brA');",
@@ -76,25 +74,60 @@ var mergeBrAToBrBAndBrC = []string{
 	"CALL DOLT_MERGE('--no-ff', 'brB');",
 }
 
-/*
-	 mergeBrCToBrBAndBrA is a set of changes that will:
-	 1) checkout brB, merge brC into it.
-	 2) checkout brA, merge brB into it.
-	  A  B  C
-		*
-		|\
-		| \
-		|  *
-		|  |\
-		|  | \
-		*  *  *
-		A' B' C'
-*/
+/* mergeBrCToBrBAndBrA is a set of changes that will:
+ * 1) checkout brB, merge brC into it.
+ * 2) checkout brA, merge brB into it.
+ *
+ * A o-----o A
+ *        /
+ *       /
+ * B o--o  B
+ *     /
+ *    /
+ * C o  C
+ *
+ */
 var mergeBrCToBrBAndBrA = []string{
 	"CALL DOLT_CHECKOUT('brB');",
 	"CALL DOLT_MERGE('--no-ff', 'brC');",
 	"CALL DOLT_CHECKOUT('brA');",
 	"CALL DOLT_MERGE('--no-ff', 'brB');",
+}
+
+/*
+ *	threeWayCrossMerge is a set of changes that will:
+ *  1) Create a variable for each branch that captures the hash of HEAD.
+ *  2) Checkout Each Branch and merge in the other two branches, based on their initial HEAD.
+ *
+ *  This is mainly used as a handy reset to get all three branches to the same state. But it
+ *  does also reflect a possible real world situation.
+ *
+ * A o---o---o  A
+ *    \ /   /
+ *     X   /
+ *    / \ /
+ * B o   x  ... B   (kind of impossible to show the
+ *    \ / \          two commits on B with ascii art, but you get it.)
+ *     X   \
+ *    / \   \
+ * C o---o---o  C
+ */
+var threeWayCrossMerge = []string{
+	"CALL DOLT_CHECKOUT('brA');",
+	captureHEADAs("A_XMERGE_INIT"),
+	"CALL DOLT_CHECKOUT('brB');",
+	captureHEADAs("B_XMERGE_INIT"),
+	"CALL DOLT_CHECKOUT('brC');",
+	captureHEADAs("C_XMERGE_INIT"),
+	// Already on brC
+	"CALL DOLT_MERGE(@B_XMERGE_INIT);",
+	"CALL DOLT_MERGE(@C_XMERGE_INIT);",
+	"CALL DOLT_CHECKOUT('brB');",
+	"CALL DOLT_MERGE(@C_XMERGE_INIT);",
+	"CALL DOLT_MERGE(@A_XMERGE_INIT);",
+	"CALL DOLT_CHECKOUT('brA');",
+	"CALL DOLT_MERGE(@B_XMERGE_INIT);",
+	"CALL DOLT_MERGE(@C_XMERGE_INIT);",
 }
 
 /*
@@ -340,6 +373,77 @@ var DoltLongLivedBranchTests = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "major cross merges preserve simple schema changes",
+		SetUpScript: chain(
+			createTablesAndBranches,
+			brAextendTableASchema,
+			"CALL DOLT_CHECKOUT('brA');",
+			"INSERT INTO A VALUES (321,321,51);",
+			"CALL DOLT_COMMIT('-am', 'insert non-default value into A while on brA');",
+			threeWayCrossMerge,
+			"CALL DOLT_CHECKOUT('brB');",
+			"ALTER TABLE A ALTER COLUMN new_col SET DEFAULT 1234;",
+			"INSERT INTO A (pk,val) VALUES (444,555);",
+			"CALL DOLT_COMMIT('-am', 'alter table A to set default value to 1234 on brB');",
+			captureHEADAs("B_WITH_NEW_DEFAULT"),
+			mergeBrAToBrBAndBrC,
+			"CALL DOLT_CHECKOUT('brA');",
+			"INSERT INTO A (pk,val) VALUES (90,90);",
+			"CALL DOLT_COMMIT('-am', 'insert into A while on brA');",
+			captureHEADAs("A_FIRST_DEFAULT"),
+			"CALL DOLT_CHECKOUT('brC');",
+			"INSERT INTO A (pk,val) VALUES (91,91);",
+			"CALL DOLT_COMMIT('-am', 'insert into A while on brC');",
+			mergeBrCToBrBAndBrA,
+		),
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT * FROM A AS OF @A_FIRST_DEFAULT;",
+				Expected: []sql.Row{
+					{1, 1, 4321},
+					{2, 2, 4321},
+					{3, 3, 4321},
+					{90, 90, 4321},
+					{321, 321, 51},
+				},
+			},
+			{
+				Query: "SELECT * FROM A AS OF @B_WITH_NEW_DEFAULT;",
+				Expected: []sql.Row{
+					{1, 1, 4321},
+					{2, 2, 4321},
+					{3, 3, 4321},
+					{321, 321, 51},
+					{444, 555, 1234},
+				},
+			},
+			{
+				Query: "SELECT * FROM A AS OF 'brA';",
+				Expected: []sql.Row{
+					{1, 1, 4321},
+					{2, 2, 4321},
+					{3, 3, 4321},
+					{90, 90, 4321},
+					{91, 91, 1234},
+					{321, 321, 51},
+					{444, 555, 1234},
+				},
+			},
+			{
+				Query: "SELECT * FROM A AS OF 'brB';",
+				Expected: []sql.Row{
+					{1, 1, 4321},
+					{2, 2, 4321},
+					{3, 3, 4321},
+					{91, 91, 1234},
+					{321, 321, 51},
+					{444, 555, 1234},
+				},
+			},
+		},
+	},
+
 	{
 		Name: "schema changes which should conflict",
 		SetUpScript: chain(
