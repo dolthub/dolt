@@ -266,6 +266,10 @@ var MergeScripts = []queries.ScriptTest{
 				Expected: []sql.Row{},
 			},
 			{
+				Query:    "SELECT * FROM dolt_preview_merge_conflicts('main', 'feature-branch', 'test')",
+				Expected: []sql.Row{},
+			},
+			{
 				// FF-Merge
 				Query:    "CALL DOLT_MERGE('feature-branch')",
 				Expected: []sql.Row{{doltCommit, 1, 0, "merge successful"}},

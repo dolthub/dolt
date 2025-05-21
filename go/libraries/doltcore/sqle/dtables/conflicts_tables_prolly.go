@@ -53,7 +53,7 @@ func newProllyConflictsTable(
 	if err != nil {
 		return nil, err
 	}
-	confSch, versionMappings, err := calculateConflictSchema(baseSch, ourSch, theirSch)
+	confSch, versionMappings, err := CalculateConflictSchema(baseSch, ourSch, theirSch)
 	if err != nil {
 		return nil, err
 	}
@@ -689,7 +689,7 @@ type versionMappings struct {
 }
 
 // returns the schema of the rows returned by the conflicts table and a mappings between each version and the source table.
-func calculateConflictSchema(base, ours, theirs schema.Schema) (schema.Schema, *versionMappings, error) {
+func CalculateConflictSchema(base, ours, theirs schema.Schema) (schema.Schema, *versionMappings, error) {
 	keyless := schema.IsKeyless(ours)
 	n := 4 + ours.GetAllCols().Size() + theirs.GetAllCols().Size() + base.GetAllCols().Size()
 	if keyless {
