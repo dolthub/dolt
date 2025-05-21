@@ -141,7 +141,6 @@ func prettyPrintResultsWithSummary(ctx *sql.Context, resultFormat PrintResultFor
 	}
 
 	if summary == PrintRowCountAndTiming {
-		warningSummary, _ := ctx.GetSessionVariable(ctx, "sql_warnings")
 		warnings := ""
 		if showWarnings {
 
@@ -151,7 +150,7 @@ func prettyPrintResultsWithSummary(ctx *sql.Context, resultFormat PrintResultFor
 			}
 		}
 
-		err = printResultSetSummary(numRows, ctx.WarningCount(), warningSummary.(int8) == 1, warnings, start)
+		err = printResultSetSummary(numRows, ctx.WarningCount(), warnings, start)
 		if err != nil {
 			return err
 		}
@@ -166,10 +165,10 @@ func prettyPrintResultsWithSummary(ctx *sql.Context, resultFormat PrintResultFor
 	}
 }
 
-func printResultSetSummary(numRows int, numWarnings uint16, warningSummary bool, warningsList string, start time.Time) error {
+func printResultSetSummary(numRows int, numWarnings uint16, warningsList string, start time.Time) error {
 
 	warning := ""
-	if warningSummary && numWarnings > 0 {
+	if numWarnings > 0 {
 		plural := ""
 		if numWarnings > 1 {
 			plural = "s"
