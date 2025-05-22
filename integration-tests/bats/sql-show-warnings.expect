@@ -1,0 +1,16 @@
+#!/usr/bin/expect
+
+set timeout 5
+set env(NO_COLOR) 1
+
+source  "$env(BATS_CWD)/helper/common_expect_functions.tcl"
+
+spawn dolt sql
+
+expect_with_defaults                                                    {dolt-repo-.*} { send "  shoW   warNinGs ;  \r"; }
+
+expect_with_defaults_2 {Empty set}                                      {dolt-repo-.*}   { send "select 1/0;\r"; }
+
+expect_with_defaults                                                    {dolt-repo-.*} { send "  shoW   warNinGs ;  \r"; }
+
+expect_with_defaults_2 {Division by 0 }                                 {dolt-repo-.*} { send "exit;\r"; }
