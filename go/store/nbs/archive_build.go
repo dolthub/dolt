@@ -119,6 +119,9 @@ func BuildArchive(ctx context.Context, cs chunks.ChunkStore, dagGroups *ChunkRel
 	var stats Stats
 
 	if gs, ok := cs.(*GenerationalNBS); ok {
+		blahPath, _ := gs.newGen.Path()
+		newGen := gs.newGen.tables.upstream
+
 		outPath, _ := gs.oldGen.Path()
 		oldgen := gs.oldGen.tables.upstream
 
