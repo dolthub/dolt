@@ -25,7 +25,6 @@ teardown() {
 @test "sql-shell: warnings are not suppressed" {
     skiponwindows "Need to install expect and make this script work on windows."
     run $BATS_TEST_DIRNAME/sql-shell-warnings.expect
-    echo "$output"
 
     [[ "$output" =~ "Warning" ]] || false
     [[ "$output" =~ "1365" ]] || false
@@ -35,9 +34,7 @@ teardown() {
 # bats test_tags=no_lambda
 @test "sql-shell: can toggle warning details" {
     skiponwindows "Need to install expect and make this script work on windows."
-
     run $BATS_TEST_DIRNAME/sql-warning-summary.expect
-    echo "$output"
 
     [ "$status" -eq 0 ]
     ! [[ "$output" =~ "Warning (Code 1365): Division by 0\nWarning (Code 1365): Division by 0" ]] || false
@@ -48,11 +45,9 @@ teardown() {
    skiponwindows "Need to install expect and make this script work on windows."
    skip " set sql_warnings currently doesn't work --- needs more communication between server & shell"
    run $BATS_TEST_DIRNAME/sql-warning-detail.expect
-   echo "$output"
 
    [ "$status" -eq 0 ]
    ! [[ "$output" =~ "1 row in set, 3 warnings" ]] || false
-
 }
 
 @test "sql-shell: use user without privileges, and no superuser created" {
@@ -1026,10 +1021,4 @@ expect eof
     [ $status -eq 0 ]
     [[ "$output" =~ "github.com/dolthub/dolt/go" ]] || false
     [[ "$output" =~ "github.com/dolthub/go-mysql-server" ]] || false
-}
-
-@test "sql-shell: toggle detailed warnings" {
-    skiponwindows "Need to install expect and make this script work on windows."
-
-
 }

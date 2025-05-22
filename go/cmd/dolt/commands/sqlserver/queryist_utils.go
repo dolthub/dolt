@@ -19,6 +19,8 @@ import (
 	sql2 "database/sql"
 	"fmt"
 	"io"
+	"regexp"
+	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
@@ -102,7 +104,12 @@ func (c ConnectionQueryist) Query(ctx *sql.Context, query string) (sql.Schema, s
 
 	if c.gatherWarnings != nil && *c.gatherWarnings == true {
 		ctx.ClearWarnings()
-		if query != "show warnings" {
+
+		re := regexp.MustCompile(`\s+`)
+		noSpace := strings.TrimSpace(re.ReplaceAllString(query, " "))
+		isShowWarnings := strings.EqualFold(noSpace, "show warnings")
+
+		if !isShowWarnings {
 			warnRows, err := c.connection.QueryContext(ctx, "show warnings")
 			if err != nil {
 				return nil, nil, nil, err

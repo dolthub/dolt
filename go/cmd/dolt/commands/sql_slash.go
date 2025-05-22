@@ -327,9 +327,10 @@ func handleWarningCommand(fullCmd string) (bool, error) {
 
 	if len(tokens) == 0 || (tokens[0] != "\\w" && tokens[0] != "\\W") {
 		return false, fmt.Errorf("runtime error: Expected \\w or \\W command.")
+	} else if len(tokens) > 1 {
+		return false, fmt.Errorf("Usage: \\w \\w to toggle warnings")
 	}
 
-	//Copied from mysql, could also return an error if more argument are passed in?
 	if tokens[0] == "\\W" {
 		return true, nil
 	} else {
