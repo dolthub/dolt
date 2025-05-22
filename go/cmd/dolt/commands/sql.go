@@ -753,6 +753,11 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 
 	initialCtx := sqlCtx.Context
 
+	//We want to gather the warnings if a server is running, as the connection queryist does not automatically cache them
+	if c, ok := qryist.(cli.ShellServerQueryist); ok {
+		c.EnableGatherWarnings()
+	}
+
 	toggleWarnings := true
 	pagerEnabled := false
 	// Used for the \edit command.

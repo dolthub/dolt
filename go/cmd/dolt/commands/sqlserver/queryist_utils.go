@@ -63,7 +63,8 @@ func BuildConnectionStringQueryist(ctx context.Context, cwdFS filesys.Filesys, c
 
 	conn := &dbr.Connection{DB: sql2.OpenDB(mysqlConnector), EventReceiver: nil, Dialect: dialect.MySQL}
 
-	queryist := ConnectionQueryist{connection: conn}
+	gatherWarnings := false
+	queryist := ConnectionQueryist{connection: conn, gatherWarnings: &gatherWarnings}
 
 	var lateBind cli.LateBindQueryist = func(ctx context.Context) (cli.Queryist, *sql.Context, func(), error) {
 		sqlCtx := sql.NewContext(ctx)
@@ -78,10 +79,15 @@ func BuildConnectionStringQueryist(ctx context.Context, cwdFS filesys.Filesys, c
 
 // ConnectionQueryist executes queries by connecting to a running mySql server.
 type ConnectionQueryist struct {
-	connection *dbr.Connection
+	connection     *dbr.Connection
+	gatherWarnings *bool
 }
 
-var _ cli.Queryist = ConnectionQueryist{}
+var _ cli.Queryist = &ConnectionQueryist{}
+
+func (c ConnectionQueryist) EnableGatherWarnings() {
+	*c.gatherWarnings = true
+}
 
 func (c ConnectionQueryist) Query(ctx *sql.Context, query string) (sql.Schema, sql.RowIter, *sql.QueryFlags, error) {
 	rows, err := c.connection.QueryContext(ctx, query)
@@ -94,24 +100,26 @@ func (c ConnectionQueryist) Query(ctx *sql.Context, query string) (sql.Schema, s
 		return nil, nil, nil, err
 	}
 
-	ctx.ClearWarnings()
-	if query != "show warnings" {
-		warnRows, err := c.connection.QueryContext(ctx, "show warnings")
-		if err != nil {
-			return nil, nil, nil, err
-		}
-
-		for warnRows.Next() {
-			var code int
-			var msg string
-			var level string
-
-			err = warnRows.Scan(&level, &code, &msg)
+	if c.gatherWarnings != nil && *c.gatherWarnings == true {
+		ctx.ClearWarnings()
+		if query != "show warnings" {
+			warnRows, err := c.connection.QueryContext(ctx, "show warnings")
 			if err != nil {
 				return nil, nil, nil, err
 			}
 
-			ctx.Warn(code, msg)
+			for warnRows.Next() {
+				var code int
+				var msg string
+				var level string
+
+				err = warnRows.Scan(&level, &code, &msg)
+				if err != nil {
+					return nil, nil, nil, err
+				}
+
+				ctx.Warn(code, "%s", msg)
+			}
 		}
 	}
 
