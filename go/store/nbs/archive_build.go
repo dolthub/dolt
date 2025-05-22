@@ -40,6 +40,8 @@ const defaultDictionarySize = 1 << 12 // NM4 - maybe just select the largest chu
 const maxSamples = 1000
 const minSamples = 25
 
+var errNotEnoughChunks = errors.New("Not enough samples to build default dictionary")
+
 func UnArchive(ctx context.Context, cs chunks.ChunkStore, smd StorageMetadata, progress chan interface{}) error {
 	if gs, ok := cs.(*GenerationalNBS); ok {
 		outPath, _ := gs.oldGen.Path()
@@ -119,20 +121,24 @@ func BuildArchive(ctx context.Context, cs chunks.ChunkStore, dagGroups *ChunkRel
 	var stats Stats
 
 	if gs, ok := cs.(*GenerationalNBS); ok {
-		blahPath, _ := gs.newGen.Path()
-		newGen := gs.newGen.tables.upstream
+		path, _ := gs.newGen.Path()
+		sourceSet := gs.newGen.tables.upstream
 
-		outPath, _ := gs.oldGen.Path()
-		oldgen := gs.oldGen.tables.upstream
+		//		outPath, _ := gs.oldGen.Path()
+		//		oldgen := gs.oldGen.tables.upstream
 
 		swapMap := make(map[hash.Hash]hash.Hash)
 
-		for tf, ogcs := range oldgen {
-			if _, ok := ogcs.(archiveChunkSource); ok {
+		for tf, cs := range sourceSet {
+			if _, ok := cs.(archiveChunkSource); ok {
 				continue
 			}
 
-			idx, err := ogcs.index()
+			if isJournalAddr(cs.hash()) {
+				continue
+			}
+
+			idx, err := cs.index()
 			if err != nil {
 				return err
 			}
@@ -141,8 +147,13 @@ func BuildArchive(ctx context.Context, cs chunks.ChunkStore, dagGroups *ChunkRel
 
 			archivePath := ""
 			archiveName := hash.Hash{}
-			archivePath, archiveName, err = convertTableFileToArchive(ctx, ogcs, idx, dagGroups, outPath, progress, &stats)
+			archivePath, archiveName, err = convertTableFileToArchive(ctx, cs, idx, dagGroups, path, progress, &stats)
 			if err != nil {
+				if err == errNotEnoughChunks {
+					progress <- fmt.Sprintf("Not enough chunks to build archive for %s. Skipping.", cs.hash().String())
+					continue
+				}
+
 				return err
 			}
 
@@ -171,7 +182,8 @@ func BuildArchive(ctx context.Context, cs chunks.ChunkStore, dagGroups *ChunkRel
 		cleanup := make([]hash.Hash, 0, len(swapMap))
 
 		//NM4 TODO: This code path must only be run on an offline database. We should add a check for that.
-		specs, err := gs.oldGen.tables.toSpecs()
+		specs, err := gs.newGen.tables.toSpecs()
+		//specs, err := gs.oldGen.tables.toSpecs()
 		newSpecs := make([]tableSpec, 0, len(specs))
 		for _, spec := range specs {
 			if newSpec, exists := swapMap[spec.name]; exists {
@@ -181,14 +193,16 @@ func BuildArchive(ctx context.Context, cs chunks.ChunkStore, dagGroups *ChunkRel
 				newSpecs = append(newSpecs, spec)
 			}
 		}
-		err = gs.oldGen.swapTables(ctx, newSpecs, chunks.GCMode_Default)
+
+		err = gs.newGen.swapTables(ctx, newSpecs, chunks.GCMode_Default)
+		//err = gs.oldGen.swapTables(ctx, newSpecs, chunks.GCMode_Default)
 		if err != nil {
 			return err
 		}
 
 		if purge && len(cleanup) > 0 {
 			for _, h := range cleanup {
-				tf := filepath.Join(outPath, h.String())
+				tf := filepath.Join(path, h.String())
 				err = os.Remove(tf)
 				if err != nil {
 					return err
@@ -220,7 +234,7 @@ func convertTableFileToArchive(
 	if len(defaultSamples) >= minSamples {
 		defaultDict = buildDictionary(defaultSamples)
 	} else {
-		return "", hash.Hash{}, errors.New("Not enough samples to build default dictionary")
+		return "", hash.Hash{}, errNotEnoughChunks
 	}
 	defaultSamples = nil
 
