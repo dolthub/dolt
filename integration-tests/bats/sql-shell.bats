@@ -50,7 +50,7 @@ teardown() {
    ! [[ "$output" =~ "1 row in set, 3 warnings" ]] || false
 }
 
-# bats test_tabs=no_lambda
+# bats test_tags=no_lambda
 @test "sql-shell: show warnings hides warning summary, and removes whitespace" {
     skiponwindows "Need to install expect and make this script work on windows."
     run $BATS_TEST_DIRNAME/sql-show-warnings.expect
