@@ -55,9 +55,7 @@ teardown() {
     skiponwindows "Need to install expect and make this script work on windows."
     run $BATS_TEST_DIRNAME/sql-show-warnings.expect
 
-    echo "$output"
     [ "$status" -eq 0 ]
-
 }
 
 @test "sql-shell: use user without privileges, and no superuser created" {
