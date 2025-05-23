@@ -194,7 +194,7 @@ func constructInterpolatedDoltLogQuery(apr *argparser.ArgParseResults, queryist 
 					params = append(params, arg)
 				} else {
 					_, err := GetRowsForSql(queryist, sqlCtx, "select hashof('"+arg+"')")
-					if err != nil {
+					if _, ok := seenRevs[arg]; ok || err != nil {
 						finishedRevs = true
 						if len(existingTables) == 0 {
 							existingTables, err = getExistingTables(apr.Args[:i], queryist, sqlCtx)
@@ -208,28 +208,12 @@ func constructInterpolatedDoltLogQuery(apr *argparser.ArgParseResults, queryist 
 						}
 						tableNames = append(tableNames, arg)
 					} else {
-						if _, ok := seenRevs[arg]; ok {
-							finishedRevs = true
-							if len(existingTables) == 0 {
-								existingTables, err = getExistingTables(apr.Args[:i], queryist, sqlCtx)
-							}
-							if err != nil {
-								return "", err
-							}
-
-							if _, ok := existingTables[arg]; !ok {
-								return "", fmt.Errorf("error: table %s does not exist", arg)
-							}
-							tableNames = append(tableNames, arg)
-						} else {
-							seenRevs[arg] = true
-						}
+						seenRevs[arg] = true
 						writeToBuffer("?")
 						params = append(params, arg)
 					}
 				}
 			}
-
 		}
 
 		if len(tableNames) > 0 {

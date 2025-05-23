@@ -1057,7 +1057,6 @@ export NO_COLOR=1
     dolt commit --allow-empty -m "commit 1 br2"
     dolt checkout main
 
-
     run dolt log --all
 
     [ "$status" -eq 0 ]
@@ -1073,7 +1072,6 @@ export NO_COLOR=1
     [[ "$output" =~ "commit 1 br1" ]] || false
     [[ "$output" =~ "Initialize data repository" ]] || false
 }
-
 
 @test "log: --all works when specifying tables" {
     if [ "$SQL_ENGINE" = "remote-engine" ]; then
@@ -1093,5 +1091,4 @@ export NO_COLOR=1
     [[ "$output" =~ "A table for br1" ]] || false
     ! [[ "$output" =~ "Initialize data repository" ]] || false
     ! [[ "$output" =~ "commit 1 br2" ]] || false
-
 }
