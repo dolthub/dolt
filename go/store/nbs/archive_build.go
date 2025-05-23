@@ -117,101 +117,97 @@ func UnArchive(ctx context.Context, cs chunks.ChunkStore, smd StorageMetadata, p
 }
 
 func BuildArchive(ctx context.Context, cs chunks.ChunkStore, dagGroups *ChunkRelations, purge bool, progress chan interface{}) (err error) {
+	if gs, ok := cs.(*GenerationalNBS); ok {
+		err = archiveSingleBlockStore(ctx, gs.newGen, dagGroups, purge, progress)
+		if err != nil {
+			return err
+		}
+
+		err = archiveSingleBlockStore(ctx, gs.oldGen, dagGroups, purge, progress)
+		if err != nil {
+			return err
+		}
+	} else {
+		return errors.New("Modern DB Expected")
+	}
+	return nil
+}
+
+func archiveSingleBlockStore(ctx context.Context, blockStore *NomsBlockStore, dagGroups *ChunkRelations, purge bool, progress chan interface{}) error {
 	// Currently, we don't have any stats to report. Required for calls to the lower layers tho.
 	var stats Stats
 
-	if gs, ok := cs.(*GenerationalNBS); ok {
-		path, _ := gs.newGen.Path()
-		sourceSet := gs.newGen.tables.upstream
+	path, _ := blockStore.Path()
+	sourceSet := blockStore.tables.upstream
 
-		//		outPath, _ := gs.oldGen.Path()
-		//		oldgen := gs.oldGen.tables.upstream
+	for tf, cs := range sourceSet {
+		if _, ok := cs.(archiveChunkSource); ok {
+			continue
+		}
+		if isJournalAddr(cs.hash()) {
+			continue
+		}
 
-		swapMap := make(map[hash.Hash]hash.Hash)
+		idx, err := cs.index()
+		if err != nil {
+			return err
+		}
 
-		for tf, cs := range sourceSet {
-			if _, ok := cs.(archiveChunkSource); ok {
+		originalSize := idx.tableFileSize()
+
+		archivePath := ""
+		archiveName := hash.Hash{}
+		archivePath, archiveName, err = convertTableFileToArchive(ctx, cs, idx, dagGroups, path, progress, &stats)
+		if err != nil {
+			if errors.Is(err, errNotEnoughChunks) {
+				progress <- fmt.Sprintf("Not enough chunks to build archive for %s. Skipping.", cs.hash().String())
 				continue
 			}
 
-			if isJournalAddr(cs.hash()) {
-				continue
-			}
-
-			idx, err := cs.index()
-			if err != nil {
-				return err
-			}
-
-			originalSize := idx.tableFileSize()
-
-			archivePath := ""
-			archiveName := hash.Hash{}
-			archivePath, archiveName, err = convertTableFileToArchive(ctx, cs, idx, dagGroups, path, progress, &stats)
-			if err != nil {
-				if err == errNotEnoughChunks {
-					progress <- fmt.Sprintf("Not enough chunks to build archive for %s. Skipping.", cs.hash().String())
-					continue
-				}
-
-				return err
-			}
-
-			fileInfo, err := os.Stat(archivePath)
-			if err != nil {
-				progress <- "Failed to stat archive file"
-				return err
-			}
-			archiveSize := fileInfo.Size()
-
-			err = verifyAllChunks(ctx, idx, archivePath, progress, &stats)
-			if err != nil {
-				return err
-			}
-
-			percentReduction := -100.0 * (float64(archiveSize)/float64(originalSize) - 1.0)
-			progress <- fmt.Sprintf("Archived %s (%d -> %d bytes, %.2f%% reduction)", archiveName, originalSize, archiveSize, percentReduction)
-
-			swapMap[tf] = archiveName
+			return err
 		}
 
-		if len(swapMap) == 0 {
-			return fmt.Errorf("No tables found to archive. Run 'dolt gc' first")
+		fileInfo, err := os.Stat(archivePath)
+		if err != nil {
+			progress <- "Failed to stat archive file"
+			return err
+		}
+		archiveSize := fileInfo.Size()
+
+		err = verifyAllChunks(ctx, idx, archivePath, progress, &stats)
+		if err != nil {
+			return err
 		}
 
-		cleanup := make([]hash.Hash, 0, len(swapMap))
+		percentReduction := -100.0 * (float64(archiveSize)/float64(originalSize) - 1.0)
+		progress <- fmt.Sprintf("Archived %s (%d -> %d bytes, %.2f%% reduction)", archiveName, originalSize, archiveSize, percentReduction)
 
-		//NM4 TODO: This code path must only be run on an offline database. We should add a check for that.
-		specs, err := gs.newGen.tables.toSpecs()
-		//specs, err := gs.oldGen.tables.toSpecs()
+		specs, err := blockStore.tables.toSpecs()
 		newSpecs := make([]tableSpec, 0, len(specs))
+		purgeFile := ""
 		for _, spec := range specs {
-			if newSpec, exists := swapMap[spec.name]; exists {
-				newSpecs = append(newSpecs, tableSpec{newSpec, spec.chunkCount})
-				cleanup = append(cleanup, spec.name)
+			if tf == spec.name {
+				newSpecs = append(newSpecs, tableSpec{archiveName, spec.chunkCount})
+				if purge {
+					purgeFile = filepath.Join(path, tf.String())
+				}
 			} else {
 				newSpecs = append(newSpecs, spec)
 			}
 		}
 
-		err = gs.newGen.swapTables(ctx, newSpecs, chunks.GCMode_Default)
-		//err = gs.oldGen.swapTables(ctx, newSpecs, chunks.GCMode_Default)
+		err = blockStore.swapTables(ctx, newSpecs, chunks.GCMode_Default)
 		if err != nil {
 			return err
 		}
 
-		if purge && len(cleanup) > 0 {
-			for _, h := range cleanup {
-				tf := filepath.Join(path, h.String())
-				err = os.Remove(tf)
-				if err != nil {
-					return err
-				}
+		if len(purgeFile) > 0 {
+			err = os.Remove(purgeFile)
+			if err != nil {
+				// failing to purge is non-fatal.
+				progress <- fmt.Sprintf("Failed to purge. %s", purgeFile)
 			}
 		}
-
-	} else {
-		return errors.New("Modern DB Expected")
 	}
 	return nil
 }
