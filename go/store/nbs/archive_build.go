@@ -118,12 +118,12 @@ func UnArchive(ctx context.Context, cs chunks.ChunkStore, smd StorageMetadata, p
 
 func BuildArchive(ctx context.Context, cs chunks.ChunkStore, dagGroups *ChunkRelations, purge bool, progress chan interface{}) (err error) {
 	if gs, ok := cs.(*GenerationalNBS); ok {
-		err = archiveSingleBlockStore(ctx, gs.newGen, dagGroups, purge, progress)
+		err = archiveSingleBlockStore(ctx, func() *NomsBlockStore { return gs.newGen }, dagGroups, purge, progress)
 		if err != nil {
 			return err
 		}
 
-		err = archiveSingleBlockStore(ctx, gs.oldGen, dagGroups, purge, progress)
+		err = archiveSingleBlockStore(ctx, func() *NomsBlockStore { return gs.oldGen }, dagGroups, purge, progress)
 		if err != nil {
 			return err
 		}
@@ -133,10 +133,11 @@ func BuildArchive(ctx context.Context, cs chunks.ChunkStore, dagGroups *ChunkRel
 	return nil
 }
 
-func archiveSingleBlockStore(ctx context.Context, blockStore *NomsBlockStore, dagGroups *ChunkRelations, purge bool, progress chan interface{}) error {
+func archiveSingleBlockStore(ctx context.Context, bscb func() *NomsBlockStore, dagGroups *ChunkRelations, purge bool, progress chan interface{}) error {
 	// Currently, we don't have any stats to report. Required for calls to the lower layers tho.
 	var stats Stats
 
+	blockStore := bscb()
 	path, _ := blockStore.Path()
 	sourceSet := blockStore.tables.upstream
 
@@ -208,6 +209,10 @@ func archiveSingleBlockStore(ctx context.Context, blockStore *NomsBlockStore, da
 				progress <- fmt.Sprintf("Failed to purge. %s", purgeFile)
 			}
 		}
+
+		blockStore = bscb()
+		path, _ = blockStore.Path()
+		sourceSet = blockStore.tables.upstream
 	}
 	return nil
 }
