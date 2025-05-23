@@ -186,7 +186,7 @@ func (s *SerialQueue) Purge() error {
 func (s *SerialQueue) NewRateLimit(rate time.Duration) error {
 	return s.makeReq(schedReq{
 		reqType: schedReqType_SetRate,
-		resp: make(chan schedResp, 1),
+		resp:    make(chan schedResp, 1),
 		newRate: rate,
 	})
 }
@@ -283,7 +283,6 @@ func (s *SerialQueue) runScheduler(ctx context.Context) {
 			}
 		}
 
-
 		select {
 		case msg := <-s.schedCh:
 			switch msg.reqType {
@@ -358,7 +357,7 @@ func (s *SerialQueue) runRunner(ctx context.Context) {
 			}()
 		case ticker = <-s.tickerCh:
 			canRun = false
-		case <- ticker.C:
+		case <-ticker.C:
 			canRun = true
 		case <-ctx.Done():
 			return
