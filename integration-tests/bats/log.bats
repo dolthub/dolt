@@ -1044,3 +1044,54 @@ export NO_COLOR=1
     [[  "${lines[19]}" =~ "* commit" ]] || false                         # *  commit Initialize data repository
 
 }
+
+@test "log: --all correctly gets branches, from anywhere in the repo" {
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+          skip "needs checkout which is unsupported for remote-engine"
+    fi
+
+    dolt checkout -b br1
+    dolt commit --allow-empty -m "commit 1 br1"
+    dolt checkout main
+    dolt checkout -b br2
+    dolt commit --allow-empty -m "commit 1 br2"
+    dolt checkout main
+
+
+    run dolt log --all
+
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "commit 1 br2" ]] || false
+    [[ "$output" =~ "commit 1 br1" ]] || false
+    [[ "$output" =~ "Initialize data repository" ]] || false
+
+    dolt checkout br1
+    run dolt log --all
+
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "commit 1 br2" ]] || false
+    [[ "$output" =~ "commit 1 br1" ]] || false
+    [[ "$output" =~ "Initialize data repository" ]] || false
+}
+
+
+@test "log: --all works when specifying tables" {
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+              skip "needs checkout which is unsupported for remote-engine"
+    fi
+
+    dolt checkout -b br1
+    dolt sql -q "create table test (i int primary key)"
+    dolt commit -A -m "A table for br1"
+    dolt checkout main
+    dolt checkout -b br2
+    dolt commit --allow-empty -m "commit 1 br2"
+    dolt checkout main
+
+    run dolt log --all test
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "A table for br1" ]] || false
+    ! [[ "$output" =~ "Initialize data repository" ]] || false
+    ! [[ "$output" =~ "commit 1 br2" ]] || false
+
+}
