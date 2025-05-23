@@ -67,6 +67,7 @@ type SerialQueue struct {
 	completed chan struct{}
 
 	runnerCh chan work
+	tickerCh chan *time.Ticker
 	schedCh  chan schedReq
 	errCb    func(error)
 }
@@ -77,8 +78,6 @@ type work struct {
 	f func() error
 	// The channel to close after the work is run.
 	done chan struct{}
-	// Update worker rate
-	newRate time.Duration
 }
 
 type schedState int
@@ -87,9 +86,6 @@ const (
 	// When scheduler is running, it is willing to accept new work
 	// and to give work to the work thread.
 	schedState_Running schedState = iota
-	// When scheduler is paused, it is willing to accept new work
-	// but it does not give work to the work thread.
-	schedState_Paused
 	// When scheduler is stopped, it does not accept new work
 	// and it does not give work to the work thread.
 	schedState_Stopped
@@ -99,17 +95,10 @@ type schedReqType int
 
 const (
 	schedReqType_Enqueue schedReqType = iota
+	schedReqType_SetRate
 	schedReqType_Purge
 	schedReqType_Start
-	schedReqType_Pause
 	schedReqType_Stop
-)
-
-type schedPriority int
-
-const (
-	schedPriority_Normal schedPriority = iota
-	schedPriority_High
 )
 
 // Incoming message for the scheduler thread.
@@ -120,9 +109,9 @@ type schedReq struct {
 	// must never block.
 	resp chan schedResp
 	// Set when |reqType| is Enqueue
-	pri schedPriority
-	// Set when |reqType| is Enqueue
 	work work
+	// New rate
+	newRate time.Duration
 }
 
 type schedResp struct {
@@ -139,6 +128,7 @@ func NewSerialQueue() *SerialQueue {
 		completed: make(chan struct{}),
 		runnerCh:  make(chan work),
 		schedCh:   make(chan schedReq),
+		tickerCh:  make(chan *time.Ticker),
 	}
 }
 func (s *SerialQueue) WithErrorCb(errCb func(error)) *SerialQueue {
@@ -175,19 +165,6 @@ func (s *SerialQueue) Start() error {
 	})
 }
 
-// Pause the queue. The queue can be in any state, including already
-// paused.  Note that pausing the queue does not block on any
-// currently running job to complete. A pattern to pause the queue
-// with a guarantee that nothing is currently running is:
-//
-// s.InterruptSync(context.Background(), func() { s.Pause() })
-func (s *SerialQueue) Pause() error {
-	return s.makeReq(schedReq{
-		reqType: schedReqType_Pause,
-		resp:    make(chan schedResp, 1),
-	})
-}
-
 // Stop the queue. The queue can be in any state, including already
 // stopped.  Note that stopping the queue does not block on any
 // currently running job to complete.
@@ -208,33 +185,10 @@ func (s *SerialQueue) Purge() error {
 
 func (s *SerialQueue) NewRateLimit(rate time.Duration) error {
 	return s.makeReq(schedReq{
-		reqType: schedReqType_Enqueue,
-		pri:     schedPriority_High,
-		work: work{
-			f:       func() error { return nil },
-			done:    make(chan struct{}),
-			newRate: rate,
-		},
+		reqType: schedReqType_SetRate,
 		resp: make(chan schedResp, 1),
+		newRate: rate,
 	})
-}
-
-// Run a high priority job on the SerialQueue, blocking for its completion.
-// If done against a Paused queue, this could block indefinitely. The
-// block for completion is gated on the |ctx|.
-func (s *SerialQueue) InterruptSync(ctx context.Context, f func() error) error {
-	w, err := s.submitWork(schedPriority_High, f)
-	if err != nil {
-		return err
-	}
-	select {
-	case <-w.done:
-		return nil
-	case <-ctx.Done():
-		return context.Cause(ctx)
-	case <-s.completed:
-		return ErrCompletedQueue
-	}
 }
 
 // DoSync runs a normal priority job on the SerialQueue, blocking for
@@ -251,7 +205,7 @@ func (s *SerialQueue) DoSync(ctx context.Context, f func() error) error {
 		err = f()
 		return err
 	}
-	w, serr := s.submitWork(schedPriority_Normal, nf)
+	w, serr := s.submitWork(nf)
 	if serr != nil {
 		return serr
 	}
@@ -268,20 +222,10 @@ func (s *SerialQueue) DoSync(ctx context.Context, f func() error) error {
 	}
 }
 
-// Run a high priority job asynchronously on the queue. Returns once the
-// job is accepted.
-func (s *SerialQueue) InterruptAsync(f func() error) error {
-	_, err := s.submitWork(schedPriority_High, f)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
 // Run a normal priority job asynchronously on the queue. Returns once the
 // job is accepted.
 func (s *SerialQueue) DoAsync(f func() error) error {
-	_, err := s.submitWork(schedPriority_Normal, f)
+	_, err := s.submitWork(f)
 	if err != nil {
 		return err
 	}
@@ -290,14 +234,13 @@ func (s *SerialQueue) DoAsync(f func() error) error {
 
 // Helper function to submit work. Returns the work submitted, if it
 // was successful, and an error otherwise.
-func (s *SerialQueue) submitWork(pri schedPriority, f func() error) (work, error) {
+func (s *SerialQueue) submitWork(f func() error) (work, error) {
 	w := work{
 		f:    f,
 		done: make(chan struct{}),
 	}
 	err := s.makeReq(schedReq{
 		reqType: schedReqType_Enqueue,
-		pri:     pri,
 		work:    w,
 		resp:    make(chan schedResp, 1),
 	})
@@ -321,24 +264,25 @@ func (s *SerialQueue) makeReq(req schedReq) error {
 // Deliver that work to the runner channel if it is desired.
 func (s *SerialQueue) runScheduler(ctx context.Context) {
 	state := schedState_Running
-	normalQ := circular.NewBuff[work](16)
-	highQ := circular.NewBuff[work](16)
+	workQ := circular.NewBuff[work](16)
+	var newRateTicker *time.Ticker
 	for {
 		var sendWorkCh chan work
 		var sendWork work
 		var sentWorkCallback func()
+		var sendRateCh chan *time.Ticker
+		if newRateTicker != nil {
+			sendRateCh = s.tickerCh
+		}
 
-		if state == schedState_Running {
-			if highQ.Len() > 0 {
+		if state == schedState_Running && sendRateCh == nil {
+			if workQ.Len() > 0 {
 				sendWorkCh = s.runnerCh
-				sendWork = highQ.Front()
-				sentWorkCallback = highQ.Pop
-			} else if normalQ.Len() > 0 {
-				sendWorkCh = s.runnerCh
-				sendWork = normalQ.Front()
-				sentWorkCallback = normalQ.Pop
+				sendWork = workQ.Front()
+				sentWorkCallback = workQ.Pop
 			}
 		}
+
 
 		select {
 		case msg := <-s.schedCh:
@@ -349,28 +293,23 @@ func (s *SerialQueue) runScheduler(ctx context.Context) {
 						err: ErrStoppedQueue,
 					}
 				} else {
-					if msg.pri == schedPriority_High {
-						highQ.Push(msg.work)
-					} else {
-						normalQ.Push(msg.work)
-					}
+					workQ.Push(msg.work)
 					msg.resp <- schedResp{
 						err: nil,
 					}
 				}
+			case schedReqType_SetRate:
+				newRateTicker = time.NewTicker(msg.newRate)
+				msg.resp <- schedResp{
+					err: nil,
+				}
 			case schedReqType_Purge:
-				highQ = circular.NewBuff[work](highQ.Cap())
-				normalQ = circular.NewBuff[work](normalQ.Cap())
+				workQ = circular.NewBuff[work](workQ.Cap())
 				msg.resp <- schedResp{
 					err: nil,
 				}
 			case schedReqType_Start:
 				state = schedState_Running
-				msg.resp <- schedResp{
-					err: nil,
-				}
-			case schedReqType_Pause:
-				state = schedState_Paused
 				msg.resp <- schedResp{
 					err: nil,
 				}
@@ -383,6 +322,8 @@ func (s *SerialQueue) runScheduler(ctx context.Context) {
 		case sendWorkCh <- sendWork:
 			// Pop from queue the work came from.
 			sentWorkCallback()
+		case sendRateCh <- newRateTicker:
+			newRateTicker = nil
 		case <-ctx.Done():
 			return
 		}
@@ -392,20 +333,18 @@ func (s *SerialQueue) runScheduler(ctx context.Context) {
 // Read off the runner channel and run the submitted work.
 func (s *SerialQueue) runRunner(ctx context.Context) {
 	ticker := time.NewTicker(1)
+	canRun := true
 	for {
+		var workCh chan work
+		if canRun {
+			workCh = s.runnerCh
+		}
+
 		select {
-		case w := <-s.runnerCh:
-			if w.newRate > 0 {
-				ticker.Reset(w.newRate)
-			}
-
-			// do not run jobs more frequently than the ticker rate
-			select {
-			case <-ticker.C:
-			case <-ctx.Done():
-			}
-
+		case w := <-workCh:
+			canRun = false
 			func() {
+				defer close(w.done)
 				var err error
 				defer func() {
 					if r := recover(); r != nil {
@@ -417,7 +356,10 @@ func (s *SerialQueue) runRunner(ctx context.Context) {
 				}()
 				err = w.f()
 			}()
-			close(w.done)
+		case ticker = <-s.tickerCh:
+			canRun = false
+		case <- ticker.C:
+			canRun = true
 		case <-ctx.Done():
 			return
 		}

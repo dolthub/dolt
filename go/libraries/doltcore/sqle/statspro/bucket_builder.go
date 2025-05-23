@@ -92,10 +92,6 @@ type bucketBuilder struct {
 
 	currentKey val.Tuple
 	currentCnt int
-
-	globalDistinct int
-	globalCount    int
-	prevBound      val.Tuple
 }
 
 // newBucket zeroes aggregation statistics. Global counters are not reset for
@@ -158,7 +154,6 @@ func (u *bucketBuilder) add(ctx context.Context, key val.Tuple) {
 	}
 
 	u.count++
-	u.globalCount++
 	for i := 0; i < u.prefixLen; i++ {
 		if key.FieldIsNull(i) {
 			u.nulls++
@@ -170,16 +165,6 @@ func (u *bucketBuilder) add(ctx context.Context, key val.Tuple) {
 // newKey updates state for a new key in the rolling stream.
 func (u *bucketBuilder) newKey(ctx context.Context, key val.Tuple) {
 	u.updateMcv()
-	if u.prevBound != nil {
-		if u.tupleDesc.Compare(ctx, u.prevBound, key) != 0 {
-			u.globalDistinct++
-			u.prevBound = nil
-		} else {
-			// not a globally unique key
-		}
-	} else {
-		u.globalDistinct++
-	}
 	u.distinct++
 	u.currentCnt = 1
 	u.currentKey = key
