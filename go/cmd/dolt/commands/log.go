@@ -160,6 +160,24 @@ func constructInterpolatedDoltLogQuery(apr *argparser.ArgParseResults, queryist 
 		}
 	} else {
 		var existingTables map[string]bool
+		if apr.Contains(cli.AllFlag) {
+			branches, err := getBranches(sqlCtx, queryist, false)
+			var branchNames []string
+			if err != nil {
+				return "", err
+			}
+
+			for _, branch := range branches {
+				writeToBuffer("?")
+				params = append(params, branch.name)
+				branchNames = append(branchNames, branch.name)
+			}
+
+			existingTables, err = getExistingTables(branchNames, queryist, sqlCtx)
+			if err != nil {
+				return "", err
+			}
+		}
 		seenRevs := make(map[string]bool, apr.NArg())
 		finishedRevs := false
 		var tableNames []string
@@ -176,11 +194,13 @@ func constructInterpolatedDoltLogQuery(apr *argparser.ArgParseResults, queryist 
 					params = append(params, arg)
 				} else {
 					_, err := GetRowsForSql(queryist, sqlCtx, "select hashof('"+arg+"')")
-					if err != nil {
+					if _, ok := seenRevs[arg]; ok || err != nil {
 						finishedRevs = true
-						existingTables, err = getExistingTables(apr.Args[:i], queryist, sqlCtx)
-						if err != nil {
-							return "", err
+						if len(existingTables) == 0 {
+							existingTables, err = getExistingTables(apr.Args[:i], queryist, sqlCtx)
+							if err != nil {
+								return "", err
+							}
 						}
 
 						if _, ok := existingTables[arg]; !ok {
@@ -188,27 +208,14 @@ func constructInterpolatedDoltLogQuery(apr *argparser.ArgParseResults, queryist 
 						}
 						tableNames = append(tableNames, arg)
 					} else {
-						if _, ok := seenRevs[arg]; ok {
-							finishedRevs = true
-							existingTables, err = getExistingTables(apr.Args[:i], queryist, sqlCtx)
-							if err != nil {
-								return "", err
-							}
-
-							if _, ok := existingTables[arg]; !ok {
-								return "", fmt.Errorf("error: table %s does not exist", arg)
-							}
-							tableNames = append(tableNames, arg)
-						} else {
-							seenRevs[arg] = true
-						}
+						seenRevs[arg] = true
 						writeToBuffer("?")
 						params = append(params, arg)
 					}
 				}
 			}
-
 		}
+
 		if len(tableNames) > 0 {
 			params = append(params, strings.Join(tableNames, ","))
 			writeToBuffer("'--tables'")

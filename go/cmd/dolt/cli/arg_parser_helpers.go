@@ -289,6 +289,7 @@ func CreateLogArgParser(isTableFunction bool) *argparser.ArgParser {
 	ap.SupportsFlag(ParentsFlag, "", "Shows all parents of each commit in the log.")
 	ap.SupportsString(DecorateFlag, "", "decorate_fmt", "Shows refs next to commits. Valid options are short, full, no, and auto")
 	ap.SupportsStringList(NotFlag, "", "revision", "Excludes commits from revision.")
+	ap.SupportsFlag(AllFlag, "", "Automatically select every branch in database")
 	ap.SupportsFlag(ShowSignatureFlag, "", "Shows the signature of each commit.")
 	if isTableFunction {
 		ap.SupportsStringList(TablesFlag, "t", "table", "Restricts the log to commits that modified the specified tables.")
