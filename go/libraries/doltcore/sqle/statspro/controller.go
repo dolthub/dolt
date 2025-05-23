@@ -128,7 +128,7 @@ func (rs *rootStats) String() string {
 }
 
 func NewStatsController(logger *logrus.Logger, bgThreads *sql.BackgroundThreads, dEnv *env.DoltEnv) *StatsController {
-	sq := jobqueue.NewSerialQueue().WithErrorCb(func(err error) {
+	sq := jobqueue.NewSerialQueue(func(err error) {
 		logger.Infof("stats executor error: %s\n", err.Error())
 	})
 

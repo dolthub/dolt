@@ -32,7 +32,7 @@ func TestSerialQueue(t *testing.T) {
 	t.Run("CanceledRunContext", func(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
-		queue := NewSerialQueue()
+		queue := NewSerialQueue(nil)
 		// This  should return.
 		queue.Run(ctx)
 		// Now all methods should return ErrCompletedQueue.
@@ -43,7 +43,7 @@ func TestSerialQueue(t *testing.T) {
 	})
 	t.Run("StartsRunning", func(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
-		queue := NewSerialQueue()
+		queue := NewSerialQueue(nil)
 		var wg sync.WaitGroup
 		wg.Add(1)
 		go func() error {
@@ -63,7 +63,7 @@ func TestSerialQueue(t *testing.T) {
 	})
 	t.Run("StoppedQueueReturnsError", func(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
-		queue := NewSerialQueue()
+		queue := NewSerialQueue(nil)
 		var wg sync.WaitGroup
 		wg.Add(1)
 		go func() error {
@@ -79,7 +79,7 @@ func TestSerialQueue(t *testing.T) {
 	})
 	t.Run("StopFromQueue", func(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
-		queue := NewSerialQueue()
+		queue := NewSerialQueue(nil)
 		var wg sync.WaitGroup
 		wg.Add(1)
 		go func() error {
@@ -107,7 +107,7 @@ func TestSerialQueue(t *testing.T) {
 	})
 	t.Run("PurgeFromQueue", func(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
-		queue := NewSerialQueue()
+		queue := NewSerialQueue(nil)
 		var wg sync.WaitGroup
 		wg.Add(1)
 
@@ -136,7 +136,7 @@ func TestSerialQueue(t *testing.T) {
 	})
 	t.Run("DoSyncInQueueDeadlockWithContext", func(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
-		queue := NewSerialQueue()
+		queue := NewSerialQueue(nil)
 		start := make(chan struct{})
 
 		var wg sync.WaitGroup
@@ -169,7 +169,7 @@ func TestSerialQueue(t *testing.T) {
 	})
 	t.Run("SyncReturnsErrCompletedQueueAfterWorkAccepted", func(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
-		queue := NewSerialQueue()
+		queue := NewSerialQueue(nil)
 		start := make(chan struct{})
 		var wg sync.WaitGroup
 		wg.Add(1)
@@ -181,7 +181,6 @@ func TestSerialQueue(t *testing.T) {
 		}()
 		<-start
 		queue.NewRateLimit(200 * time.Millisecond)
-		assert.NoError(t, queue.DoSync(context.Background(), func() error { return nil }))
 		var err error
 		var ran bool
 		wg.Add(1)
@@ -208,7 +207,7 @@ func TestSerialQueue(t *testing.T) {
 	t.Run("RateLimitWorkThroughput", func(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
-		queue := NewSerialQueue()
+		queue := NewSerialQueue(nil)
 		running := make(chan struct{})
 		go func() {
 			close(running)

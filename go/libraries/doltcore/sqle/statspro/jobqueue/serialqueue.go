@@ -26,24 +26,20 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/circular"
 )
 
-// A SerialQueue is a job queue which runs one job at a time. Jobs are
-// run in the order they are submitted, with the exception that every
-// interrupt job is run before any normal priority job.
-//
-// A SerialQueue can be paused, in which case it will accept new
-// submissions, but will not run them until it is started again.
+// A SerialQueue is a rate limited job queue which runs one job at a
+// time. Jobs are run in the order they are submitted.
 //
 // A SerialQueue can be purged, which deletes any pending jobs from
-// it.
+// its queue.
 //
 // A SerialQueue can be stopped, in which case it will not accept new
 // submissions and no pending work will be run. Stopping a queue does
 // not purge it, but it is easy for a caller to stop and purge the
 // queue.
 //
-// A stopped or paused SerialQueue can be started, which will cause it
-// to start running submitted jobs again, including any unpurged jobs
-// which were pending when it was stopped or paused.
+// A stopped SerialQueue can be started, which will cause it to start
+// running submitted jobs again, including any unpurged jobs which
+// were pending when it was stopped.
 //
 // A SerialQueue runs background threads to coordinate its
 // behavior. These background threads are launched with a `Context`
@@ -52,11 +48,10 @@ import (
 //
 // In general, jobs running on the queue should not block indefinitely
 // and should be very careful about any synchronization. It is safe
-// for jobs within the queue to call DoAsync, InterruptAsync, Stop,
-// Pause, Purge and Start on the queue itself. It is a deadlock for a
-// job within the queue to perform a DoSync or InterruptSync on the
-// queue itself, although that deadlock may be resolved if the
-// provided |ctx| ends up |Done|.
+// for jobs within the queue to call Stop, Purge and Start on the
+// queue itself.  It is a deadlock for a job within the queue to
+// perform a DoSync on the queue, although that deadlock may be
+// resolved with an error if the provided |ctx| ends up |Done|.
 type SerialQueue struct {
 	running atomic.Bool
 
@@ -123,17 +118,17 @@ var ErrCompletedQueue = errors.New("completed queue: the queue is no longer runn
 
 // Create a new serial queue. All of the methods on the returned
 // SerialQueue block indefinitely until its |Run| method is called.
-func NewSerialQueue() *SerialQueue {
+func NewSerialQueue(errCb func(error)) *SerialQueue {
+	if errCb == nil {
+		errCb = func(error) {}
+	}
 	return &SerialQueue{
 		completed: make(chan struct{}),
 		runnerCh:  make(chan work),
 		schedCh:   make(chan schedReq),
 		tickerCh:  make(chan *time.Ticker),
+		errCb:     errCb,
 	}
-}
-func (s *SerialQueue) WithErrorCb(errCb func(error)) *SerialQueue {
-	s.errCb = errCb
-	return s
 }
 
 // Run the serial queue's background threads with this |ctx|. If the
@@ -215,6 +210,7 @@ func (s *SerialQueue) DoSync(ctx context.Context, f func() error) error {
 	case <-ctx.Done():
 		if started.Swap(true) {
 			<-w.done
+			return err
 		}
 		return context.Cause(ctx)
 	case <-s.completed:
