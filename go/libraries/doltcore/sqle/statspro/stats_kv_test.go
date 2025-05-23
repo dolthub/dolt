@@ -174,7 +174,7 @@ func TestProllyKv(t *testing.T) {
 		cnt, err := kv.Flush(ctx, sq)
 		require.NoError(t, err)
 		require.Equal(t, 20, cnt)
-		
+
 	})
 }
 
