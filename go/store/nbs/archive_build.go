@@ -139,13 +139,23 @@ func archiveSingleBlockStore(ctx context.Context, bscb func() *NomsBlockStore, d
 
 	blockStore := bscb()
 	path, _ := blockStore.Path()
-	sourceSet := blockStore.tables.upstream
 
-	for tf, cs := range sourceSet {
+	allFiles := make([]hash.Hash, 0, len(blockStore.tables.upstream))
+
+	// The source set changes out from under us, but the names of the table files will stay stable enough
+	// to iterate over them.
+	sourceSet := blockStore.tables.upstream
+	for tf := range sourceSet {
+		allFiles = append(allFiles, tf)
+	}
+
+	for _, tf := range allFiles {
+		sourceSet = blockStore.tables.upstream
+		cs := sourceSet[tf]
 		if _, ok := cs.(archiveChunkSource); ok {
 			continue
 		}
-		if isJournalAddr(cs.hash()) {
+		if isJournalAddr(tf) {
 			continue
 		}
 
@@ -181,7 +191,7 @@ func archiveSingleBlockStore(ctx context.Context, bscb func() *NomsBlockStore, d
 		}
 
 		percentReduction := -100.0 * (float64(archiveSize)/float64(originalSize) - 1.0)
-		progress <- fmt.Sprintf("Archived %s (%d -> %d bytes, %.2f%% reduction)", archiveName, originalSize, archiveSize, percentReduction)
+		progress <- fmt.Sprintf("Archived %s (%d -> %d bytes, %.2f%% reduction)\n", archiveName, originalSize, archiveSize, percentReduction)
 
 		specs, err := blockStore.tables.toSpecs()
 		newSpecs := make([]tableSpec, 0, len(specs))
@@ -209,11 +219,8 @@ func archiveSingleBlockStore(ctx context.Context, bscb func() *NomsBlockStore, d
 				progress <- fmt.Sprintf("Failed to purge. %s", purgeFile)
 			}
 		}
-
-		blockStore = bscb()
-		path, _ = blockStore.Path()
-		sourceSet = blockStore.tables.upstream
 	}
+
 	return nil
 }
 
