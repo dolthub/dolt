@@ -32,21 +32,18 @@ func TestSerialQueue(t *testing.T) {
 	t.Run("CanceledRunContext", func(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
-		queue := NewSerialQueue()
+		queue := NewSerialQueue(nil)
 		// This  should return.
 		queue.Run(ctx)
 		// Now all methods should return ErrCompletedQueue.
 		assert.ErrorIs(t, queue.Start(), ErrCompletedQueue)
-		assert.ErrorIs(t, queue.Pause(), ErrCompletedQueue)
 		assert.ErrorIs(t, queue.Stop(), ErrCompletedQueue)
 		assert.ErrorIs(t, queue.DoSync(context.Background(), func() error { return nil }), ErrCompletedQueue)
 		assert.ErrorIs(t, queue.DoAsync(func() error { return nil }), ErrCompletedQueue)
-		assert.ErrorIs(t, queue.InterruptSync(context.Background(), func() error { return nil }), ErrCompletedQueue)
-		assert.ErrorIs(t, queue.InterruptAsync(func() error { return nil }), ErrCompletedQueue)
 	})
 	t.Run("StartsRunning", func(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
-		queue := NewSerialQueue()
+		queue := NewSerialQueue(nil)
 		var wg sync.WaitGroup
 		wg.Add(1)
 		go func() error {
@@ -66,7 +63,7 @@ func TestSerialQueue(t *testing.T) {
 	})
 	t.Run("StoppedQueueReturnsError", func(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
-		queue := NewSerialQueue()
+		queue := NewSerialQueue(nil)
 		var wg sync.WaitGroup
 		wg.Add(1)
 		go func() error {
@@ -80,96 +77,9 @@ func TestSerialQueue(t *testing.T) {
 		cancel()
 		wg.Wait()
 	})
-	t.Run("PausedQueueDoesNotRun", func(t *testing.T) {
-		ctx, cancel := context.WithCancel(context.Background())
-		queue := NewSerialQueue()
-		var wg sync.WaitGroup
-		wg.Add(1)
-		go func() error {
-			defer wg.Done()
-			queue.Run(ctx)
-			return nil
-		}()
-		assert.NoError(t, queue.Pause())
-		var ran bool
-		for i := 0; i < 16; i++ {
-			err := queue.DoAsync(func() error {
-				ran = true
-				return nil
-			})
-			assert.NoError(t, err)
-		}
-		cancel()
-		wg.Wait()
-		assert.False(t, ran, "work did not run on the paused queue.")
-	})
-	t.Run("StartingPausedQueueRunsIt", func(t *testing.T) {
-		ctx, cancel := context.WithCancel(context.Background())
-		queue := NewSerialQueue()
-		var wg sync.WaitGroup
-		wg.Add(1)
-		go func() error {
-			defer wg.Done()
-			queue.Run(ctx)
-			return nil
-		}()
-		assert.NoError(t, queue.Pause())
-		var ran bool
-		for i := 0; i < 16; i++ {
-			err := queue.DoAsync(func() error {
-				ran = true
-				return nil
-			})
-			assert.NoError(t, err)
-		}
-		assert.NoError(t, queue.Start())
-		err := queue.DoSync(context.Background(), func() error { return nil })
-		assert.NoError(t, err)
-		assert.True(t, ran, "work ran after the paused queue was started.")
-		cancel()
-		wg.Wait()
-	})
-	t.Run("InterruptWorkRunsFirst", func(t *testing.T) {
-		ctx, cancel := context.WithCancel(context.Background())
-		queue := NewSerialQueue()
-		var wg sync.WaitGroup
-		wg.Add(1)
-		go func() error {
-			defer wg.Done()
-			queue.Run(ctx)
-			return nil
-		}()
-		assert.NoError(t, queue.Pause())
-		var cnt int
-		queue.DoAsync(func() error {
-			assert.Equal(t, cnt, 2)
-			cnt += 1
-			return nil
-		})
-		queue.DoAsync(func() error {
-			assert.Equal(t, cnt, 3)
-			cnt += 1
-			return nil
-		})
-		queue.InterruptAsync(func() error {
-			assert.Equal(t, cnt, 0)
-			cnt += 1
-			return nil
-		})
-		queue.InterruptAsync(func() error {
-			assert.Equal(t, cnt, 1)
-			cnt += 1
-			return nil
-		})
-		assert.NoError(t, queue.Start())
-		assert.NoError(t, queue.DoSync(context.Background(), func() error { return nil }))
-		assert.Equal(t, cnt, 4)
-		cancel()
-		wg.Wait()
-	})
 	t.Run("StopFromQueue", func(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
-		queue := NewSerialQueue()
+		queue := NewSerialQueue(nil)
 		var wg sync.WaitGroup
 		wg.Add(1)
 		go func() error {
@@ -181,51 +91,23 @@ func TestSerialQueue(t *testing.T) {
 		assert.NoError(t, queue.DoSync(ctx, func() error {
 			return nil
 		}))
-		var cnt int
+		ranCh := make(chan struct{})
 		for i := 0; i < 16; i++ {
 			// Some of these calls may error, since the queue
 			// will be stopped asynchronously.
 			queue.DoAsync(func() error {
-				cnt += 1
 				assert.NoError(t, queue.Stop())
+				close(ranCh)
 				return nil
 			})
 		}
-		assert.Equal(t, cnt, 1)
-		cancel()
-		wg.Wait()
-	})
-	t.Run("PauseFromQueue", func(t *testing.T) {
-		ctx, cancel := context.WithCancel(context.Background())
-		queue := NewSerialQueue()
-		var wg sync.WaitGroup
-		wg.Add(1)
-		go func() error {
-			defer wg.Done()
-			queue.Run(ctx)
-			return nil
-		}()
-		// block until queue is running
-		assert.NoError(t, queue.DoSync(ctx, func() error {
-			return nil
-		}))
-
-		done := make(chan struct{})
-		for i := 0; i < 16; i++ {
-			err := queue.DoAsync(func() error {
-				close(done)
-				assert.NoError(t, queue.Pause())
-				return nil
-			})
-			assert.NoError(t, err)
-		}
-		<-done
+		<-ranCh
 		cancel()
 		wg.Wait()
 	})
 	t.Run("PurgeFromQueue", func(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
-		queue := NewSerialQueue()
+		queue := NewSerialQueue(nil)
 		var wg sync.WaitGroup
 		wg.Add(1)
 
@@ -235,28 +117,26 @@ func TestSerialQueue(t *testing.T) {
 			return nil
 		}()
 
-		assert.NoError(t, queue.Pause())
-		var cnt int
 		didRun := make(chan struct{})
+		allSubmitted := make(chan struct{})
 		for i := 0; i < 16; i++ {
 			err := queue.DoAsync(func() error {
-				cnt += 1
+				<-allSubmitted
 				assert.NoError(t, queue.Purge())
 				close(didRun)
 				return nil
 			})
 			assert.NoError(t, err)
 		}
-		assert.NoError(t, queue.Start())
+		close(allSubmitted)
 		<-didRun
 		assert.NoError(t, queue.DoSync(context.Background(), func() error { return nil }))
-		assert.Equal(t, cnt, 1)
 		cancel()
 		wg.Wait()
 	})
 	t.Run("DoSyncInQueueDeadlockWithContext", func(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
-		queue := NewSerialQueue()
+		queue := NewSerialQueue(nil)
 		start := make(chan struct{})
 
 		var wg sync.WaitGroup
@@ -289,7 +169,7 @@ func TestSerialQueue(t *testing.T) {
 	})
 	t.Run("SyncReturnsErrCompletedQueueAfterWorkAccepted", func(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
-		queue := NewSerialQueue()
+		queue := NewSerialQueue(nil)
 		start := make(chan struct{})
 		var wg sync.WaitGroup
 		wg.Add(1)
@@ -300,13 +180,13 @@ func TestSerialQueue(t *testing.T) {
 			return nil
 		}()
 		<-start
-		queue.Pause()
+		queue.NewRateLimit(200 * time.Millisecond)
 		var err error
 		var ran bool
 		wg.Add(1)
 		go func() error {
 			defer wg.Done()
-			err = queue.InterruptSync(context.Background(), func() error {
+			err = queue.DoSync(context.Background(), func() error {
 				ran = true
 				return nil
 			})
@@ -327,7 +207,7 @@ func TestSerialQueue(t *testing.T) {
 	t.Run("RateLimitWorkThroughput", func(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
-		queue := NewSerialQueue()
+		queue := NewSerialQueue(nil)
 		running := make(chan struct{})
 		go func() {
 			close(running)
@@ -344,7 +224,7 @@ func TestSerialQueue(t *testing.T) {
 			return nil
 		})
 		assert.NoError(t, err)
-		assert.True(t, ran, "the interrupt task never ran.")
+		assert.True(t, ran, "the task ran.")
 
 		// second timeout < jobrate, will fail
 		queue.NewRateLimit(10 * time.Millisecond)
@@ -356,6 +236,6 @@ func TestSerialQueue(t *testing.T) {
 			return nil
 		})
 		assert.ErrorIs(t, err, context.DeadlineExceeded)
-		assert.False(t, ran, "the interrupt task never ran.")
+		assert.False(t, ran, "the expired task did not run.")
 	})
 }

@@ -164,8 +164,8 @@ func (sc *StatsController) Init(ctx context.Context, pro *sqle.DoltDatabaseProvi
 		return err
 	}
 
-	sql.SessionCommandBegin(sqlCtx.Session)
 	defer sql.SessionEnd(sqlCtx.Session)
+	sql.SessionCommandBegin(sqlCtx.Session)
 	defer sql.SessionCommandEnd(sqlCtx.Session)
 
 	for i, db := range dbs {
@@ -252,7 +252,9 @@ func (sc *StatsController) Close() {
 	if sc.activeCtxCancel != nil {
 		sc.activeCtxCancel()
 		sc.activeCtxCancel = nil
-		sc.sq.InterruptAsync(func() error {
+		sc.sq.Purge()
+		sc.sq.DoSync(context.Background(), func() error {
+			sc.sq.Purge()
 			return sc.sq.Stop()
 		})
 	}
