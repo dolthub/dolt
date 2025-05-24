@@ -2104,6 +2104,11 @@ func TestDoltWorkspace(t *testing.T) {
 	RunDoltWorkspaceTests(t, harness)
 }
 
+func TestDoltLongLivedBranches(t *testing.T) {
+	harness := newDoltEnginetestHarness(t)
+	RundDoltLongLivedBranchTests(t, harness)
+}
+
 func TestDoltHelpSystemTable(t *testing.T) {
 	harness := newDoltHarness(t)
 	defer harness.Close()
