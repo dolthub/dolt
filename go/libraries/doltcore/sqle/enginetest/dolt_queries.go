@@ -4795,7 +4795,7 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 			"call dolt_commit_hash_out(@Commit1, '-am', 'commit 1');",
 			"call dolt_commit('--allow-empty', '-m', 'commit 2');",
 			"call dolt_checkout('-b', 'feature');",
-			"call dolt_commit('--allow-empty', '-m', 'feature commit');", 
+			"call dolt_commit('--allow-empty', '-m', 'feature commit');",
 			"call dolt_checkout('main');",
 			"call dolt_commit('--allow-empty', '-m', 'main commit');",
 			"call dolt_merge('feature', '-m', 'merge feature');",
@@ -4836,7 +4836,7 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 					{true},
 				},
 			},
-			// Test that commits on parallel branches can have the same commit_order (height)  
+			// Test that commits on parallel branches can have the same commit_order (height)
 			{
 				Query: "select count(*) from (select commit_order, count(*) as cnt from dolt_log group by commit_order having cnt > 1) as duplicate_orders;",
 				Expected: []sql.Row{
