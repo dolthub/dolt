@@ -31,6 +31,7 @@ import (
 const binlogPositionDirectory = ".doltcfg"
 const binlogPositionFilename = "binlog-position"
 const mysqlFlavor = "MySQL56"
+const mariadbFlavor = "MariaDB"
 
 // binlogPositionStore manages loading and saving data to the binlog position file stored on disk. This provides
 // durable storage for the set of GTIDs that have been successfully executed on the replica, so that the replica
@@ -70,13 +71,19 @@ func (store *binlogPositionStore) Load(filesys filesys.Filesys) (*mysql.Position
 	}
 	positionString := string(bytes)
 
-	// Strip off the "MySQL56/" prefix
-	prefix := "MySQL56/"
-	if strings.HasPrefix(positionString, prefix) {
-		positionString = string(bytes[len(prefix):])
+	// Determine the flavor
+	flavor := ""
+	if strings.HasPrefix(positionString, mysqlFlavor) {
+		positionString = string(bytes[len(mysqlFlavor)+1:])
+		flavor = mysqlFlavor
+	} else if strings.HasPrefix(positionString, mariadbFlavor) {
+		positionString = string(bytes[len(mariadbFlavor)+1:])
+		flavor = mariadbFlavor
+	} else {
+		return nil, fmt.Errorf("unknown binlog position flavor: %s", positionString)
 	}
 
-	position, err := mysql.ParsePosition(mysqlFlavor, positionString)
+	position, err := mysql.ParsePosition(flavor, positionString)
 	if err != nil {
 		return nil, err
 	}
