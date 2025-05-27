@@ -711,7 +711,7 @@ func getCommitInfoWithOptions(queryist cli.Queryist, sqlCtx *sql.Context, ref st
 		return nil, fmt.Errorf("error parsing timestamp '%s': %v", row[3], err)
 	}
 	message := row[4].(string)
-	
+
 	var commitOrder uint64
 	switch v := row[5].(type) {
 	case uint64:
@@ -725,7 +725,7 @@ func getCommitInfoWithOptions(queryist cli.Queryist, sqlCtx *sql.Context, ref st
 	default:
 		return nil, fmt.Errorf("unexpected type for commit_order: %T", v)
 	}
-	
+
 	parent := row[6].(string)
 	height := commitOrder
 
