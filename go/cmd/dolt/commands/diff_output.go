@@ -297,7 +297,7 @@ func (s sqlDiffWriter) WriteViewDiff(ctx context.Context, viewName, oldDefn, new
 }
 
 func (s sqlDiffWriter) WriteTableDiffStats(diffStats []diffStatistics, oldColLen, newColLen int, areTablesKeyless bool) error {
-	return errors.New("SQL format diffs only rendered for schema or data changes")
+	return errors.New("invalid output format: sql. SQL format diffs only rendered for schema or data changes")
 }
 
 func (s sqlDiffWriter) RowWriter(fromTableInfo, toTableInfo *diff.TableInfo, tds diff.TableDeltaSummary, unionSch sql.Schema) (diff.SqlRowDiffWriter, error) {

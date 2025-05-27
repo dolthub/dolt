@@ -888,5 +888,5 @@ EOF
     dolt sql -q "create table t (i int primary key);"
     run dolt diff --stat -r sql
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "SQL format diffs only rendered for schema or data changes" ]] || false
+    [[ "$output" =~ "invalid output format: sql. SQL format diffs only rendered for schema or data changes" ]] || false
 }
