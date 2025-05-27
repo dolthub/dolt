@@ -125,13 +125,13 @@ func (cmd LogCmd) logWithLoggerFunc(ctx context.Context, commandStr string, args
 	return handleErrAndExit(logCommits(apr, logRows, queryist, sqlCtx))
 }
 
-func collectBranches(apr *argparser.ArgParseResults, queryist cli.Queryist, sqlCtx *sql.Context) ([]interface{}, int, error) {
-	var params []interface{}
+func collectRevisions(apr *argparser.ArgParseResults, queryist cli.Queryist, sqlCtx *sql.Context) ([]string, int, error) {
+	var revisions []string
 	tablesIndex := 0
 
 	if apr.PositionalArgsSeparatorIndex >= 0 {
 		for i := 0; i < apr.PositionalArgsSeparatorIndex; i++ {
-			params = append(params, apr.Arg(i))
+			revisions = append(revisions, apr.Arg(i))
 		}
 		tablesIndex = apr.PositionalArgsSeparatorIndex
 	} else {
@@ -140,7 +140,7 @@ func collectBranches(apr *argparser.ArgParseResults, queryist cli.Queryist, sqlC
 		for _, arg := range apr.Args {
 			if strings.Contains(arg, "..") || strings.HasPrefix(arg, "^") || strings.HasPrefix(arg, "refs/") || strings.HasPrefix(arg, "remotes/") {
 				tablesIndex++
-				params = append(params, arg)
+				revisions = append(revisions, arg)
 			} else {
 				_, err := GetRowsForSql(queryist, sqlCtx, "select hashof('"+arg+"')")
 
@@ -150,7 +150,7 @@ func collectBranches(apr *argparser.ArgParseResults, queryist cli.Queryist, sqlC
 				} else {
 					tablesIndex++
 					seenRevs[arg] = true
-					params = append(params, arg)
+					revisions = append(revisions, arg)
 				}
 			}
 		}
@@ -163,23 +163,18 @@ func collectBranches(apr *argparser.ArgParseResults, queryist cli.Queryist, sqlC
 		}
 
 		for _, branch := range branches {
-			params = append(params, branch.name)
+			revisions = append(revisions, branch.name)
 		}
 	}
 
-	return params, tablesIndex, nil
+	return revisions, tablesIndex, nil
 }
 
-func collectTables(apr *argparser.ArgParseResults, writeToBuffer func(string), queryist cli.Queryist, sqlCtx *sql.Context, params []interface{}, startIndex int) ([]interface{}, error) {
+func collectTables(apr *argparser.ArgParseResults, writeToBuffer func(string), queryist cli.Queryist, sqlCtx *sql.Context, params []string, startIndex int) ([]string, error) {
 	var existingTables map[string]bool
-	var branchNames []string
 	var tableNames []string
 
-	for _, arg := range params {
-		branchNames = append(branchNames, arg.(string))
-	}
-
-	existingTables, err := getExistingTables(branchNames, queryist, sqlCtx)
+	existingTables, err := getExistingTables(params, queryist, sqlCtx)
 	if err != nil {
 		return nil, err
 	}
@@ -219,7 +214,7 @@ func constructInterpolatedDoltLogQuery(apr *argparser.ArgParseResults, queryist 
 		first = false
 	}
 
-	params, tablesIndex, err := collectBranches(apr, queryist, sqlCtx)
+	params, tablesIndex, err := collectRevisions(apr, queryist, sqlCtx)
 	if err != nil {
 		return "", err
 	}
@@ -267,7 +262,12 @@ func constructInterpolatedDoltLogQuery(apr *argparser.ArgParseResults, queryist 
 		buffer.WriteString(" limit " + numLines)
 	}
 
-	interpolatedQuery, err := dbr.InterpolateForDialect(buffer.String(), params, dialect.MySQL)
+	interfaceParams := make([]interface{}, len(params))
+	for i, param := range params {
+		interfaceParams[i] = param
+	}
+
+	interpolatedQuery, err := dbr.InterpolateForDialect(buffer.String(), interfaceParams, dialect.MySQL)
 	if err != nil {
 		return "", err
 	}
