@@ -141,5 +141,32 @@ func removeRemote(ctx *sql.Context, dbd env.DbData[*sql.Context], apr *argparser
 		}
 	}
 
+	// Remove branch configurations that reference the removed remote
+	branches, err := dbd.Rsr.GetBranches()
+	if err != nil {
+		return fmt.Errorf("failed to get branches: %w", err)
+	}
+	
+	var branchesToUpdate []string
+	branches.Iter(func(branchName string, config env.BranchConfig) bool {
+		if config.Remote == remote.Name {
+			branchesToUpdate = append(branchesToUpdate, branchName)
+		}
+		return true
+	})
+	
+	// Clear the remote tracking for these branches by updating their configs
+	for _, branchName := range branchesToUpdate {
+		currentConfig, _ := branches.Get(branchName)
+		updatedConfig := env.BranchConfig{
+			Merge:  currentConfig.Merge,
+			Remote: "", // Clear the remote reference
+		}
+		err = dbd.Rsw.UpdateBranch(branchName, updatedConfig)
+		if err != nil {
+			return fmt.Errorf("failed to update branch config for %s: %w", branchName, err)
+		}
+	}
+
 	return dbd.Rsw.RemoveRemote(ctx, remote.Name)
 }
