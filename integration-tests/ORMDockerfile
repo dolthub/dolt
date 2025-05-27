@@ -1,4 +1,4 @@
-FROM --platform=linux/amd64 ubuntu:18.04
+FROM --platform=${BUILDPLATFORM} ubuntu:20.04
 
 # install ORM tools and dependencies
 ENV DEBIAN_FRONTEND=noninteractive
@@ -7,8 +7,8 @@ RUN apt update -y && \
         curl \
         gnupg \
         software-properties-common && \
-    curl -sL https://deb.nodesource.com/setup_14.x | bash - && \
-    apt update -y && \
+    curl -sL https://deb.nodesource.com/setup_22.x | bash -
+RUN apt update -y && \
     apt install -y \
         nodejs \
         python3.9 \
@@ -26,7 +26,7 @@ RUN apt update -y && \
 # install go
 WORKDIR /root
 ENV GO_VERSION=1.23.3
-ENV GOPATH=$HOME/go
+ENV GOPATH=/go
 ENV PATH=$PATH:$GOPATH/bin
 ENV PATH=$PATH:$GOPATH/bin:/usr/local/go/bin
 RUN curl -O "https://dl.google.com/go/go${GO_VERSION}.linux-amd64.tar.gz" && \
@@ -40,7 +40,7 @@ RUN curl -O "https://dl.google.com/go/go${GO_VERSION}.linux-amd64.tar.gz" && \
 RUN pip3 install mysql-connector-python PyMySQL sqlalchemy
 
 # Setup JAVA_HOME -- useful for docker commandline
-ENV JAVA_HOME /usr/lib/jvm/java-17-openjdk-amd64/
+ENV JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64/
 
 # install the current latest maven version, `v3.9.9`, because apt installed one does not work with jdk 17
 ADD https://dlcdn.apache.org/maven/maven-3/3.9.9/binaries/apache-maven-3.9.9-bin.tar.gz apache-maven-3.9.9-bin.tar.gz
@@ -49,7 +49,7 @@ RUN tar zxvf apache-maven-3.9.9-bin.tar.gz && \
     rm -rf apache-maven-3.9.9 apache-maven-3.9.9-bin.tar.gz
 
 # add maven binary
-ENV PATH /opt/apache-maven-3.9.9/bin:$PATH
+ENV PATH=/opt/apache-maven-3.9.9/bin:$PATH
 
 # install dolt from source
 WORKDIR /root/building

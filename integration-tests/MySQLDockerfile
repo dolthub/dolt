@@ -11,7 +11,7 @@ RUN apt update -y && \
         libncurses5 \
         libsctp1 \
         software-properties-common && \
-    curl -sL https://deb.nodesource.com/setup_14.x | bash - && \
+    curl -sL https://deb.nodesource.com/setup_22.x | bash - && \
     add-apt-repository ppa:deadsnakes/ppa -y && \
     curl -OL https://binaries2.erlang-solutions.com/ubuntu/pool/contrib/e/esl-erlang/esl-erlang_25.0-1~ubuntu~focal_amd64.deb && \
     dpkg -i esl-erlang_25.0-1~ubuntu~focal_amd64.deb && \
@@ -93,7 +93,7 @@ RUN pip install PyMySQL==1.0.2
 RUN pip install sqlalchemy==1.4.46
 
 # Setup JAVA_HOME -- useful for docker commandline
-ENV JAVA_HOME /usr/lib/jvm/java-17-openjdk-amd64/
+ENV JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64/
  
 # install mysql connector java
 RUN mkdir -p /mysql-client-tests/java
