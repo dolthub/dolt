@@ -60,6 +60,7 @@ var logTableSchema = sql.Schema{
 	&sql.Column{Name: "email", Type: types.Text},
 	&sql.Column{Name: "date", Type: types.Datetime},
 	&sql.Column{Name: "message", Type: types.Text},
+	&sql.Column{Name: "commit_order", Type: types.Uint64},
 }
 
 // NewInstance creates a new instance of TableFunction interface
@@ -764,7 +765,12 @@ func (itr *logTableFunctionRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 		return nil, err
 	}
 
-	row := sql.NewRow(commitHash.String(), meta.Name, meta.Email, meta.Time(), meta.Description)
+	height, err := commit.Height()
+	if err != nil {
+		return nil, err
+	}
+
+	row := sql.NewRow(commitHash.String(), meta.Name, meta.Email, meta.Time(), meta.Description, height)
 
 	if itr.showParents {
 		prStr, err := getParentsString(ctx, commit)

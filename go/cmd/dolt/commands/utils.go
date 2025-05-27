@@ -711,14 +711,15 @@ func getCommitInfoWithOptions(queryist cli.Queryist, sqlCtx *sql.Context, ref st
 		return nil, fmt.Errorf("error parsing timestamp '%s': %v", row[3], err)
 	}
 	message := row[4].(string)
-	parent := row[5].(string)
-	height := uint64(len(rows))
+	commitOrder := row[5].(uint64)
+	parent := row[6].(string)
+	height := commitOrder
 
 	isHead := commitHash == hashOfHead
 
 	var signature string
-	if len(row) > 7 {
-		signature = row[7].(string)
+	if len(row) > 8 {
+		signature = row[8].(string)
 	}
 
 	localBranchesForHash, err := getBranchesForHash(queryist, sqlCtx, commitHash, true)

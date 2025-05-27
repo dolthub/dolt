@@ -92,6 +92,7 @@ func (dt *LogTable) Schema() sql.Schema {
 		{Name: "email", Type: types.Text, Source: dt.tableName, PrimaryKey: false, DatabaseSource: dt.dbName},
 		{Name: "date", Type: types.Datetime, Source: dt.tableName, PrimaryKey: false, DatabaseSource: dt.dbName},
 		{Name: "message", Type: types.Text, Source: dt.tableName, PrimaryKey: false, DatabaseSource: dt.dbName},
+		{Name: "commit_order", Type: types.Uint64, Source: dt.tableName, PrimaryKey: false, DatabaseSource: dt.dbName},
 	}
 }
 
@@ -109,7 +110,11 @@ func (dt *LogTable) Partitions(*sql.Context) (sql.PartitionIter, error) {
 func (dt *LogTable) PartitionRows(ctx *sql.Context, p sql.Partition) (sql.RowIter, error) {
 	switch p := p.(type) {
 	case *doltdb.CommitPart:
-		return sql.RowsToRowIter(sql.NewRow(p.Hash().String(), p.Meta().Name, p.Meta().Email, p.Meta().Time(), p.Meta().Description)), nil
+		height, err := p.Commit().Height()
+		if err != nil {
+			return nil, err
+		}
+		return sql.RowsToRowIter(sql.NewRow(p.Hash().String(), p.Meta().Name, p.Meta().Email, p.Meta().Time(), p.Meta().Description, height)), nil
 	default:
 		return NewLogItr(ctx, dt.ddb, dt.head)
 	}
@@ -246,7 +251,12 @@ func (itr *LogItr) Next(ctx *sql.Context) (sql.Row, error) {
 		return nil, err
 	}
 
-	return sql.NewRow(h.String(), meta.Name, meta.Email, meta.Time(), meta.Description), nil
+	height, err := cm.Height()
+	if err != nil {
+		return nil, err
+	}
+
+	return sql.NewRow(h.String(), meta.Name, meta.Email, meta.Time(), meta.Description, height), nil
 }
 
 // Close closes the iterator.
