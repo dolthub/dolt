@@ -146,7 +146,7 @@ func removeRemote(ctx *sql.Context, dbd env.DbData[*sql.Context], apr *argparser
 	if err != nil {
 		return fmt.Errorf("failed to get branches: %w", err)
 	}
-	
+
 	var branchesToUpdate []string
 	branches.Iter(func(branchName string, config env.BranchConfig) bool {
 		if config.Remote == remote.Name {
@@ -154,7 +154,7 @@ func removeRemote(ctx *sql.Context, dbd env.DbData[*sql.Context], apr *argparser
 		}
 		return true
 	})
-	
+
 	// Clear the remote tracking for these branches by updating their configs
 	for _, branchName := range branchesToUpdate {
 		currentConfig, _ := branches.Get(branchName)
