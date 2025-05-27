@@ -114,8 +114,8 @@ if rows[2] != "9,8,7,6,5,4".split(","):
     diff --strip-trailing-cr $BATS_TEST_DIRNAME/helper/1pk5col-ints.sql export.sql
 
     # string columns
-    dolt sql -q "create table strings (a varchar(10) primary key, b char(10))"
-    dolt sql -q "insert into strings values ('abc', '123'), ('def', '456')"
+    dolt sql -q "create table strings (a varchar(10) primary key, b char(10), c text, d blob)"
+    dolt sql -q "insert into strings values ('abc', '123', 'do re me', 'qwe'), ('def', '456', 'fa so la', 'rty')"
     dolt add .
     dolt commit -am "Checkpoint"
 
