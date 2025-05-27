@@ -385,7 +385,6 @@ func writeDataToArchive(
 				groupCount++
 
 				cmpBuff = gozstd.Compress(cmpBuff[:0], cg.dict)
-
 				dictId, err := arcW.writeByteSpan(cmpBuff)
 				if err != nil {
 					return 0, 0, 0, err
@@ -473,7 +472,11 @@ func compressChunksInParallel(
 						return
 					}
 					cmpBuff = gozstd.CompressDict(cmpBuff[:0], c.Data(), defaultDict)
-					resultCh <- compressedChunk{h: h, data: cmpBuff}
+
+					// Make a private copy of the compressed data
+					privateCopy := make([]byte, len(cmpBuff))
+					copy(privateCopy, cmpBuff)
+					resultCh <- compressedChunk{h: h, data: privateCopy}
 				}
 			}
 		}()
