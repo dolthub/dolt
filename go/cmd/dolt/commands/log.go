@@ -125,13 +125,12 @@ func (cmd LogCmd) logWithLoggerFunc(ctx context.Context, commandStr string, args
 	return handleErrAndExit(logCommits(apr, logRows, queryist, sqlCtx))
 }
 
-func getParsedBranches(apr *argparser.ArgParseResults, writeToBuffer func(string), queryist cli.Queryist, sqlCtx *sql.Context) ([]interface{}, int, error) {
+func collectBranches(apr *argparser.ArgParseResults, queryist cli.Queryist, sqlCtx *sql.Context) ([]interface{}, int, error) {
 	var params []interface{}
 	tablesIndex := 0
 
 	if apr.PositionalArgsSeparatorIndex >= 0 {
 		for i := 0; i < apr.PositionalArgsSeparatorIndex; i++ {
-			writeToBuffer("?")
 			params = append(params, apr.Arg(i))
 		}
 		tablesIndex = apr.PositionalArgsSeparatorIndex
@@ -139,17 +138,18 @@ func getParsedBranches(apr *argparser.ArgParseResults, writeToBuffer func(string
 		seenRevs := make(map[string]bool, apr.NArg())
 
 		for _, arg := range apr.Args {
-			tablesIndex++
 			if strings.Contains(arg, "..") || strings.HasPrefix(arg, "^") || strings.HasPrefix(arg, "refs/") || strings.HasPrefix(arg, "remotes/") {
-				writeToBuffer("?")
+				tablesIndex++
 				params = append(params, arg)
 			} else {
 				_, err := GetRowsForSql(queryist, sqlCtx, "select hashof('"+arg+"')")
+
+				// Once we get a non-revision argument, we treat the remaining args as tables
 				if _, ok := seenRevs[arg]; ok || err != nil {
 					break
 				} else {
+					tablesIndex++
 					seenRevs[arg] = true
-					writeToBuffer("?")
 					params = append(params, arg)
 				}
 			}
@@ -163,7 +163,6 @@ func getParsedBranches(apr *argparser.ArgParseResults, writeToBuffer func(string
 		}
 
 		for _, branch := range branches {
-			writeToBuffer("?")
 			params = append(params, branch.name)
 		}
 	}
@@ -171,7 +170,7 @@ func getParsedBranches(apr *argparser.ArgParseResults, writeToBuffer func(string
 	return params, tablesIndex, nil
 }
 
-func getParsedTables(apr *argparser.ArgParseResults, writeToBuffer func(string), queryist cli.Queryist, sqlCtx *sql.Context, params []interface{}, startIndex int) ([]interface{}, error) {
+func collectTables(apr *argparser.ArgParseResults, writeToBuffer func(string), queryist cli.Queryist, sqlCtx *sql.Context, params []interface{}, startIndex int) ([]interface{}, error) {
 	var existingTables map[string]bool
 	var branchNames []string
 	var tableNames []string
@@ -186,7 +185,7 @@ func getParsedTables(apr *argparser.ArgParseResults, writeToBuffer func(string),
 	}
 
 	for i := startIndex; i < apr.NArg(); i++ {
-		if _, ok := existingTables[apr.Args[i]]; !ok && apr.PositionalArgsSeparatorIndex >= 0 {
+		if _, ok := existingTables[apr.Args[i]]; !ok && apr.PositionalArgsSeparatorIndex < 0 {
 			return nil, fmt.Errorf("error: table %s does not exist", apr.Args[i])
 		}
 		tableNames = append(tableNames, apr.Args[i])
@@ -194,7 +193,7 @@ func getParsedTables(apr *argparser.ArgParseResults, writeToBuffer func(string),
 
 	if len(tableNames) > 0 {
 		params = append(params, strings.Join(tableNames, ","))
-		writeToBuffer("--tables")
+		writeToBuffer("'--tables'")
 		writeToBuffer("?")
 	}
 
@@ -220,92 +219,18 @@ func constructInterpolatedDoltLogQuery(apr *argparser.ArgParseResults, queryist 
 		first = false
 	}
 
-	/*params, tablesIndex, err := getParsedBranches(apr, writeToBuffer, queryist, sqlCtx)
+	params, tablesIndex, err := collectBranches(apr, queryist, sqlCtx)
 	if err != nil {
 		return "", err
 	}
-	params, err = getParsedTables(apr, writeToBuffer, queryist, sqlCtx, params, tablesIndex)
-	if err != nil {
-		return "", err
-	}*/
+	for range params {
+		writeToBuffer("?")
+	}
 
-	var params []interface{}
-	if apr.PositionalArgsSeparatorIndex >= 0 {
-		for i := 0; i < apr.PositionalArgsSeparatorIndex; i++ {
-			writeToBuffer("?")
-			params = append(params, apr.Arg(i))
-		}
-		var tableNames []string
-		for i := apr.PositionalArgsSeparatorIndex; i < apr.NArg(); i++ {
-			tableNames = append(tableNames, apr.Arg(i))
-		}
-		if len(tableNames) > 0 {
-			params = append(params, strings.Join(tableNames, ","))
-			writeToBuffer("'--tables'")
-			writeToBuffer("?")
-		}
-	} else {
-		var existingTables map[string]bool
-		if apr.Contains(cli.AllFlag) {
-			branches, err := getBranches(sqlCtx, queryist, false)
-			var branchNames []string
-			if err != nil {
-				return "", err
-			}
-
-			for _, branch := range branches {
-				writeToBuffer("?")
-				params = append(params, branch.name)
-				branchNames = append(branchNames, branch.name)
-			}
-
-			existingTables, err = getExistingTables(branchNames, queryist, sqlCtx)
-			if err != nil {
-				return "", err
-			}
-		}
-		seenRevs := make(map[string]bool, apr.NArg())
-		finishedRevs := false
-		var tableNames []string
-		for i, arg := range apr.Args {
-			// once we encounter a rev we can't resolve, we assume the rest are table names
-			if finishedRevs {
-				if _, ok := existingTables[arg]; !ok {
-					return "", fmt.Errorf("error: table %s does not exist", arg)
-				}
-				tableNames = append(tableNames, arg)
-			} else {
-				if strings.Contains(arg, "..") || strings.HasPrefix(arg, "^") || strings.HasPrefix(arg, "refs/") || strings.HasPrefix(arg, "remotes/") {
-					writeToBuffer("?")
-					params = append(params, arg)
-				} else {
-					_, err := GetRowsForSql(queryist, sqlCtx, "select hashof('"+arg+"')")
-					if _, ok := seenRevs[arg]; ok || err != nil {
-						finishedRevs = true
-						if len(existingTables) == 0 {
-							existingTables, err = getExistingTables(apr.Args[:i], queryist, sqlCtx)
-							if err != nil {
-								return "", err
-							}
-						}
-
-						if _, ok := existingTables[arg]; !ok {
-							return "", fmt.Errorf("error: table %s does not exist", arg)
-						}
-						tableNames = append(tableNames, arg)
-					} else {
-						seenRevs[arg] = true
-						writeToBuffer("?")
-						params = append(params, arg)
-					}
-				}
-			}
-		}
-
-		if len(tableNames) > 0 {
-			params = append(params, strings.Join(tableNames, ","))
-			writeToBuffer("'--tables'")
-			writeToBuffer("?")
+	if tablesIndex < len(apr.Args) {
+		params, err = collectTables(apr, writeToBuffer, queryist, sqlCtx, params, tablesIndex)
+		if err != nil {
+			return "", err
 		}
 	}
 
