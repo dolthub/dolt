@@ -125,10 +125,86 @@ func (cmd LogCmd) logWithLoggerFunc(ctx context.Context, commandStr string, args
 	return handleErrAndExit(logCommits(apr, logRows, queryist, sqlCtx))
 }
 
+func getParsedBranches(apr *argparser.ArgParseResults, writeToBuffer func(string), queryist cli.Queryist, sqlCtx *sql.Context) ([]interface{}, int, error) {
+	var params []interface{}
+	tablesIndex := 0
+
+	if apr.PositionalArgsSeparatorIndex >= 0 {
+		for i := 0; i < apr.PositionalArgsSeparatorIndex; i++ {
+			writeToBuffer("?")
+			params = append(params, apr.Arg(i))
+		}
+		tablesIndex = apr.PositionalArgsSeparatorIndex
+	} else {
+		seenRevs := make(map[string]bool, apr.NArg())
+
+		for _, arg := range apr.Args {
+			tablesIndex++
+			if strings.Contains(arg, "..") || strings.HasPrefix(arg, "^") || strings.HasPrefix(arg, "refs/") || strings.HasPrefix(arg, "remotes/") {
+				writeToBuffer("?")
+				params = append(params, arg)
+			} else {
+				_, err := GetRowsForSql(queryist, sqlCtx, "select hashof('"+arg+"')")
+				if _, ok := seenRevs[arg]; ok || err != nil {
+					break
+				} else {
+					seenRevs[arg] = true
+					writeToBuffer("?")
+					params = append(params, arg)
+				}
+			}
+		}
+	}
+
+	if apr.Contains(cli.AllFlag) {
+		branches, err := getBranches(sqlCtx, queryist, false)
+		if err != nil {
+			return nil, 0, err
+		}
+
+		for _, branch := range branches {
+			writeToBuffer("?")
+			params = append(params, branch.name)
+		}
+	}
+
+	return params, tablesIndex, nil
+}
+
+func getParsedTables(apr *argparser.ArgParseResults, writeToBuffer func(string), queryist cli.Queryist, sqlCtx *sql.Context, params []interface{}, startIndex int) ([]interface{}, error) {
+	var existingTables map[string]bool
+	var branchNames []string
+	var tableNames []string
+
+	for _, arg := range params {
+		branchNames = append(branchNames, arg.(string))
+	}
+
+	existingTables, err := getExistingTables(branchNames, queryist, sqlCtx)
+	if err != nil {
+		return nil, err
+	}
+
+	for i := startIndex; i < apr.NArg(); i++ {
+		if _, ok := existingTables[apr.Args[i]]; !ok && apr.PositionalArgsSeparatorIndex >= 0 {
+			return nil, fmt.Errorf("error: table %s does not exist", apr.Args[i])
+		}
+		tableNames = append(tableNames, apr.Args[i])
+	}
+
+	if len(tableNames) > 0 {
+		params = append(params, strings.Join(tableNames, ","))
+		writeToBuffer("--tables")
+		writeToBuffer("?")
+	}
+
+	return params, nil
+
+}
+
 // constructInterpolatedDoltLogQuery generates the sql query necessary to call the DOLT_LOG() function.
 // Also interpolates this query to prevent sql injection.
 func constructInterpolatedDoltLogQuery(apr *argparser.ArgParseResults, queryist cli.Queryist, sqlCtx *sql.Context) (string, error) {
-	var params []interface{}
 
 	var buffer bytes.Buffer
 	var first bool
@@ -144,6 +220,16 @@ func constructInterpolatedDoltLogQuery(apr *argparser.ArgParseResults, queryist 
 		first = false
 	}
 
+	/*params, tablesIndex, err := getParsedBranches(apr, writeToBuffer, queryist, sqlCtx)
+	if err != nil {
+		return "", err
+	}
+	params, err = getParsedTables(apr, writeToBuffer, queryist, sqlCtx, params, tablesIndex)
+	if err != nil {
+		return "", err
+	}*/
+
+	var params []interface{}
 	if apr.PositionalArgsSeparatorIndex >= 0 {
 		for i := 0; i < apr.PositionalArgsSeparatorIndex; i++ {
 			writeToBuffer("?")
