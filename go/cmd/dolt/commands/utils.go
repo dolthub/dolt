@@ -711,15 +711,30 @@ func getCommitInfoWithOptions(queryist cli.Queryist, sqlCtx *sql.Context, ref st
 		return nil, fmt.Errorf("error parsing timestamp '%s': %v", row[3], err)
 	}
 	message := row[4].(string)
-	commitOrder := row[5].(uint64)
+	
+	var commitOrder uint64
+	switch v := row[5].(type) {
+	case uint64:
+		commitOrder = v
+	case string:
+		var err error
+		commitOrder, err = strconv.ParseUint(v, 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("error parsing commit_order '%s': %v", v, err)
+		}
+	default:
+		return nil, fmt.Errorf("unexpected type for commit_order: %T", v)
+	}
+	
 	parent := row[6].(string)
 	height := commitOrder
 
 	isHead := commitHash == hashOfHead
 
 	var signature string
-	if len(row) > 8 {
-		signature = row[8].(string)
+	if opts.showSignature {
+		// Signature is always the last column when present
+		signature = row[len(row)-1].(string)
 	}
 
 	localBranchesForHash, err := getBranchesForHash(queryist, sqlCtx, commitHash, true)
