@@ -27,6 +27,7 @@ export const mergeTests = [
         committer: "dolt",
         email: "dolt@%",
         date: "",
+        commit_order: 3,
         parents: ["", ""],
       },
       {
@@ -35,6 +36,7 @@ export const mergeTests = [
         committer: "Dolt",
         email: "dolt@dolthub.com",
         date: "",
+        commit_order: 2,
         parents: [""],
       },
       {
@@ -43,6 +45,7 @@ export const mergeTests = [
         committer: "mysql-test-runner",
         email: "mysql-test-runner@liquidata.co",
         date: "",
+        commit_order: 1,
         parents: [],
       },
     ],

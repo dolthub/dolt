@@ -67,6 +67,86 @@ teardown() {
     [[ ! "$output" =~ "Added test table" ]] || false
 }
 
+@test "system-tables: dolt_log system table includes commit_order column" {
+    dolt sql -q "create table test (pk int, c1 int, primary key(pk))"
+    dolt add test
+    dolt commit -m "Added test table"
+    dolt commit --allow-empty -m "Empty commit"
+    
+    # Test that dolt_log system table has commit_order column
+    run dolt sql -q "describe dolt_log"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "commit_order" ]] || false
+    
+    # Test that commit_order values are present and numeric
+    run dolt sql -q "select commit_order from dolt_log where message = 'Added test table'"
+    [ $status -eq 0 ]
+    [[ "$output" =~ [0-9]+ ]] || false
+    
+    # Test that we have 3 distinct commit orders (init commit + 2 new commits)
+    run dolt sql -q "select count(distinct commit_order) from dolt_log"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "3" ]] || false
+}
+
+@test "system-tables: dolt_log() table function includes commit_order column" {
+    dolt sql -q "create table test2 (pk int, c1 int, primary key(pk))"
+    dolt add test2
+    dolt commit -m "Added test2 table"
+    
+    # Test that dolt_log() function has commit_order column
+    run dolt sql -q "select commit_order from dolt_log() where message = 'Added test2 table'"
+    [ $status -eq 0 ]
+    [[ "$output" =~ [0-9]+ ]] || false
+    
+    # Test that the function and system table return the same commit_order for the same commit
+    run dolt sql -q "select (select commit_order from dolt_log where message = 'Added test2 table') = (select commit_order from dolt_log() where message = 'Added test2 table') as orders_match"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "true" ]] || false
+}
+
+@test "system-tables: commit_order reflects topological order for branches" {
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+      skip "needs checkout which is unsupported for remote-engine"
+    fi
+    
+    # Create initial commit
+    dolt sql -q "create table test (pk int, c1 int, primary key(pk))"
+    dolt add test
+    dolt commit -m "initial commit"
+    
+    # Create a branch
+    dolt checkout -b feature
+    dolt commit --allow-empty -m "feature commit"
+    
+    # Go back to main and make another commit
+    dolt checkout main
+    dolt commit --allow-empty -m "main commit"
+    
+    # Both feature and main commits should have the same commit_order (height)
+    # since they branched from the same parent
+    # Get the commit hashes and compare their heights using dolt_log() function
+    run dolt sql -q "select commit_hash from dolt_commits where message = 'feature commit'"
+    [ $status -eq 0 ]
+    feature_hash=$(echo "$output" | tail -n 1 | tr -d ' |')
+    
+    run dolt sql -q "select commit_hash from dolt_commits where message = 'main commit'"
+    [ $status -eq 0 ]
+    main_hash=$(echo "$output" | tail -n 1 | tr -d ' |')
+    
+    run dolt sql -q "select (select commit_order from dolt_log('$feature_hash') limit 1) = (select commit_order from dolt_log('$main_hash') limit 1) as same_height"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "true" ]] || false
+    
+    # Merge feature into main
+    dolt merge feature -m "merge feature"
+    
+    # The merge commit should have a higher commit_order than both branch commits
+    run dolt sql -q "select (select commit_order from dolt_log where message = 'merge feature') > (select commit_order from dolt_log where message = 'main commit') as merge_higher"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "true" ]] || false
+}
+
 @test "system-tables: query dolt_branches system table" {
     dolt checkout -b create-table-branch
     dolt sql -q "create table test (pk int, c1 int, primary key(pk))"

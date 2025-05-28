@@ -753,6 +753,7 @@ func BasicSelectTests() []SelectTest {
 					"bigbillieb@fake.horse",
 					time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC).In(LoadedLocalLocation()),
 					"Initialize data repository",
+					uint64(1), // commit_order for the initial commit
 				},
 			},
 			ExpectedSqlSchema: sql.Schema{
@@ -761,6 +762,7 @@ func BasicSelectTests() []SelectTest {
 				&sql.Column{Name: "email", Type: gmstypes.Text},
 				&sql.Column{Name: "date", Type: gmstypes.Datetime},
 				&sql.Column{Name: "message", Type: gmstypes.Text},
+				&sql.Column{Name: "commit_order", Type: gmstypes.Uint64},
 			},
 		},
 		{
