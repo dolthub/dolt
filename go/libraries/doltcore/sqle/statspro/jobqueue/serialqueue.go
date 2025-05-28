@@ -218,15 +218,6 @@ func (s *SerialQueue) DoSync(ctx context.Context, f func() error) error {
 	}
 }
 
-// Run a normal priority job asynchronously on the queue. Returns once the
-// job is accepted.
-func (s *SerialQueue) DoAsync(f func() error) error {
-	_, err := s.submitWork(f)
-	if err != nil {
-		return err
-	}
-	return nil
-}
 
 // Helper function to submit work. Returns the work submitted, if it
 // was successful, and an error otherwise.

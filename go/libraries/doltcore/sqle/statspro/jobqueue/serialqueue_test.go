@@ -39,7 +39,6 @@ func TestSerialQueue(t *testing.T) {
 		assert.ErrorIs(t, queue.Start(), ErrCompletedQueue)
 		assert.ErrorIs(t, queue.Stop(), ErrCompletedQueue)
 		assert.ErrorIs(t, queue.DoSync(context.Background(), func() error { return nil }), ErrCompletedQueue)
-		assert.ErrorIs(t, queue.DoAsync(func() error { return nil }), ErrCompletedQueue)
 	})
 	t.Run("StartsRunning", func(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
@@ -95,11 +94,13 @@ func TestSerialQueue(t *testing.T) {
 		for i := 0; i < 16; i++ {
 			// Some of these calls may error, since the queue
 			// will be stopped asynchronously.
-			queue.DoAsync(func() error {
-				assert.NoError(t, queue.Stop())
-				close(ranCh)
-				return nil
-			})
+			go func() {
+				queue.DoSync(context.Background(), func() error {
+					assert.NoError(t, queue.Stop())
+					close(ranCh)
+					return nil
+				})
+			}()
 		}
 		<-ranCh
 		cancel()
@@ -120,13 +121,14 @@ func TestSerialQueue(t *testing.T) {
 		didRun := make(chan struct{})
 		allSubmitted := make(chan struct{})
 		for i := 0; i < 16; i++ {
-			err := queue.DoAsync(func() error {
-				<-allSubmitted
-				assert.NoError(t, queue.Purge())
-				close(didRun)
-				return nil
-			})
-			assert.NoError(t, err)
+			go func() {
+				queue.DoSync(context.Background(), func() error {
+					<-allSubmitted
+					assert.NoError(t, queue.Purge())
+					close(didRun)
+					return nil
+				})
+			}()
 		}
 		close(allSubmitted)
 		<-didRun

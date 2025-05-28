@@ -190,12 +190,13 @@ func TestListening(t *testing.T) {
 		done := make(chan struct{})
 		wg := sync.WaitGroup{}
 		wg.Add(2)
-		err := sc.sq.DoAsync(func() error {
+		go func() {
 			defer wg.Done()
-			<-done
-			return nil
-		})
-		require.NoError(t, err)
+			sc.sq.DoSync(context.Background(), func() error {
+				<-done
+				return nil
+			})
+		}()
 		go func() {
 			defer wg.Done()
 			defer close(done)
@@ -213,12 +214,13 @@ func TestListening(t *testing.T) {
 		done := make(chan struct{})
 		wg := sync.WaitGroup{}
 		wg.Add(2)
-		err := sc.sq.DoAsync(func() error {
+		go func() {
 			defer wg.Done()
-			<-done
-			return nil
-		})
-		require.NoError(t, err)
+			sc.sq.DoSync(context.Background(), func() error {
+				<-done
+				return nil
+			})
+		}()
 		go func() {
 			defer wg.Done()
 			defer close(done)
@@ -237,12 +239,13 @@ func TestListening(t *testing.T) {
 		done := make(chan struct{})
 		wg := sync.WaitGroup{}
 		wg.Add(2)
-		err := sc.sq.DoAsync(func() error {
+		go func() {
 			defer wg.Done()
-			<-done
-			return nil
-		})
-		require.NoError(t, err)
+			sc.sq.DoSync(context.Background(), func() error {
+				<-done
+				return nil
+			})
+		}()
 		go func() {
 			defer wg.Done()
 			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
