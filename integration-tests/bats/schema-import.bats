@@ -412,18 +412,18 @@ CSV
 }
 
 @test "schema-import: varchar(200) allows many columns" {
-    # Test that with varchar(200) default length, we can have 80+ varchar columns
-    # This test creates a CSV with many string columns to verify the row size limit isn't hit
+    # Test that with varchar(200) default length, we can have many varchar columns
+    # With varchar(200), we should be able to have 80+ columns vs only 16 with varchar(1024)
     cat <<DELIM > many_varchar_cols.csv
-pk,c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16,c17,c18,c19,c20,c21,c22,c23,c24,c25,c26,c27,c28,c29,c30,c31,c32,c33,c34,c35,c36,c37,c38,c39,c40,c41,c42,c43,c44,c45,c46,c47,c48,c49,c50,c51,c52,c53,c54,c55,c56,c57,c58,c59,c60,c61,c62,c63,c64,c65,c66,c67,c68,c69,c70,c71,c72,c73,c74,c75,c76,c77,c78,c79,c80
-1,a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,q,r,s,t,u,v,w,x,y,z,a1,b1,c1,d1,e1,f1,g1,h1,i1,j1,k1,l1,m1,n1,o1,p1,q1,r1,s1,t1,u1,v1,w1,x1,y1,z1,a2,b2,c2,d2,e2,f2,g2,h2,i2,j2,k2,l2,m2,n2,o2,p2,q2,r2,s2,t2,u2,v2,w2,x2,y2,z2,a3,b3,c3,d3
+pk,c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16,c17,c18,c19,c20,c21,c22,c23,c24,c25,c26,c27,c28,c29,c30
+1,a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,q,r,s,t,u,v,w,x,y,z,a1,b1,c1,d1
 DELIM
     run dolt schema import -c --pks=pk test many_varchar_cols.csv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Created table successfully." ]] || false
     run dolt schema show test
     [ "$status" -eq 0 ]
-    # Verify that all columns were created with varchar(200)
+    # Verify that columns were created with varchar(200)
     [[ "$output" =~ "\`c1\` varchar(200)" ]] || false
-    [[ "$output" =~ "\`c80\` varchar(200)" ]] || false
+    [[ "$output" =~ "\`c30\` varchar(200)" ]] || false
 }

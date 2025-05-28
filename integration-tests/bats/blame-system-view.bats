@@ -147,7 +147,7 @@ SQL
     run dolt sql -q "describe dolt_blame_blame_test;"
     [ "$status" -eq 0 ]
 
-    [[ "$output" =~ "+-------------+---------------+------+-----+---------+-------+" ]] || false
+    [[ "$output" =~ "+-------------+-------------+------+-----+---------+-------+" ]] || false
     [[ "$output" =~ "| pk1         | bigint        | YES  |     | NULL    |       |" ]] || false
     [[ "$output" =~ "| commit      | varchar(200) | YES  |     | NULL    |       |" ]] || false
     [[ "$output" =~ "| commit_date | datetime(6)   | YES  |     | NULL    |       |" ]] || false
