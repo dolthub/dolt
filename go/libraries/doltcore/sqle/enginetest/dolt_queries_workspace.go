@@ -65,7 +65,7 @@ var DoltWorkspaceScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{
 					{"id", "bigint unsigned", "NO", "PRI", nil, ""},
 					{"staged", "tinyint(1)", "NO", "", nil, ""},
-					{"diff_type", "varchar(200)", "NO", "", nil, ""},
+					{"diff_type", "varchar(1023)", "NO", "", nil, ""},
 					{"to_pk", "int", "YES", "", nil, ""},
 					{"to_val", "int", "YES", "", nil, ""},
 					{"from_pk", "int", "YES", "", nil, ""},
