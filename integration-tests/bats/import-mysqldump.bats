@@ -238,7 +238,7 @@ CREATE TABLE engine_cost (
   cost_name varchar(64) NOT NULL,
   cost_value float DEFAULT NULL,
   last_update timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  comment varchar(1024) DEFAULT NULL,
+  comment varchar(200) DEFAULT NULL,
   default_value float GENERATED ALWAYS AS ((case cost_name when _utf8mb3'io_block_read_cost' then 1.0 when _utf8mb3'memory_block_read_cost' then 0.25 else NULL end)) VIRTUAL,
   PRIMARY KEY (cost_name,engine_name,device_type)
 ) /*!50100 TABLESPACE mysql */ ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 STATS_PERSISTENT=0 ROW_FORMAT=DYNAMIC;

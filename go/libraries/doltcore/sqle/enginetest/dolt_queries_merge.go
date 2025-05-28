@@ -3085,7 +3085,7 @@ var Dolt1ConflictTableNameTableTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "show create table dolt_conflicts_t;",
-				Expected: []sql.Row{{"dolt_conflicts_t", "CREATE TABLE `dolt_conflicts_t` (\n  `from_root_ish` varchar(1023),\n  `base_pk` int,\n  `base_col1` int,\n  `our_pk` int NOT NULL,\n  `our_col2` int,\n  `our_col1` int,\n  `our_diff_type` varchar(1023),\n  `their_pk` int,\n  `their_col1` int,\n  `their_diff_type` varchar(1023),\n  `dolt_conflict_id` varchar(1023)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+				Expected: []sql.Row{{"dolt_conflicts_t", "CREATE TABLE `dolt_conflicts_t` (\n  `from_root_ish` varchar(200),\n  `base_pk` int,\n  `base_col1` int,\n  `our_pk` int NOT NULL,\n  `our_col2` int,\n  `our_col1` int,\n  `our_diff_type` varchar(200),\n  `their_pk` int,\n  `their_col1` int,\n  `their_diff_type` varchar(200),\n  `dolt_conflict_id` varchar(200)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
 			},
 			{
 				Query: "select base_pk, base_col1, our_pk, our_col1, our_col2, their_pk, their_col1 from dolt_conflicts_t;",

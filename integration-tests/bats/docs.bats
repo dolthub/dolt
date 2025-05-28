@@ -111,7 +111,7 @@ teardown() {
     [[ "$output" =~ "Invalid table name dolt_docs" ]] || false
 
     run dolt sql -q "CREATE TABLE dolt_docs (
-        doc_name varchar(1023) NOT NULL, 
+        doc_name varchar(200) NOT NULL, 
         doc_text longtext, 
         PRIMARY KEY (doc_name)
     );"
