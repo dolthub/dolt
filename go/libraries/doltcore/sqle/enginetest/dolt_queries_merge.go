@@ -553,6 +553,10 @@ var MergeScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{"test", uint64(1), uint64(0)}},
 			},
 			{
+				Query:    "SELECT COUNT(*) FROM dolt_preview_merge_conflicts('main', 'feature-branch', 'test')",
+				Expected: []sql.Row{{1}},
+			},
+			{
 				Query:    "SELECT is_merging, source, target, unmerged_tables FROM DOLT_MERGE_STATUS;",
 				Expected: []sql.Row{{false, nil, nil, nil}},
 			},
@@ -583,6 +587,10 @@ var MergeScripts = []queries.ScriptTest{
 			{
 				Query:    "SELECT * FROM dolt_conflicts",
 				Expected: []sql.Row{{"test", uint64(1)}},
+			},
+			{
+				Query:    "SELECT count(*) FROM dolt_conflicts_test",
+				Expected: []sql.Row{{1}},
 			},
 			{
 				Query:    "DELETE FROM dolt_conflicts_test",

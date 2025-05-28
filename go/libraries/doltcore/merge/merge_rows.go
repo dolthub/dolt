@@ -112,6 +112,10 @@ func (tm TableMerger) AncRows(ctx context.Context) (prolly.Map, error) {
 	return rowsFromTable(ctx, tm.ancTbl)
 }
 
+func (tm TableMerger) InvolvesRootObjects() bool {
+	return tm.leftRootObj != nil || tm.rightRootObj != nil || tm.ancRootObj != nil
+}
+
 func (tm TableMerger) tableHashes(ctx context.Context) (left, right, anc hash.Hash, err error) {
 	if tm.leftTbl != nil {
 		if left, err = tm.leftTbl.HashOf(); err != nil {
@@ -238,8 +242,7 @@ func (rm *RootMerger) MergeTable(
 
 	var tbl *doltdb.Table
 	var rootObj doltdb.RootObject
-	involvesRootObjects := tm.leftRootObj != nil || tm.rightRootObj != nil || tm.ancRootObj != nil
-	if !involvesRootObjects {
+	if !tm.InvolvesRootObjects() {
 		if types.IsFormat_DOLT(tm.vrw.Format()) {
 			tbl, stats, err = mergeProllyTable(ctx, tm, mergeSch, mergeInfo, diffInfo)
 		} else {

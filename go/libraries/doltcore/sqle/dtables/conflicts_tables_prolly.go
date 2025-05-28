@@ -88,7 +88,7 @@ type ProllyConflictsTable struct {
 	rs                        RootSetter
 	artM                      prolly.ArtifactMap
 	sqlTable                  sql.UpdatableTable
-	versionMappings           *versionMappings
+	versionMappings           *VersionMappings
 }
 
 var _ sql.UpdatableTable = ProllyConflictsTable{}
@@ -233,7 +233,6 @@ func (itr *prollyConflictRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 			return nil, err
 		}
 	} else {
-
 		err = itr.putKeylessConflictRowVals(ctx, c, r)
 		if err != nil {
 			return nil, err
@@ -473,7 +472,7 @@ func (itr *prollyConflictRowIter) Close(ctx *sql.Context) error {
 type prollyConflictOurTableUpdater struct {
 	baseSch, ourSch, theirSch schema.Schema
 	srcUpdater                sql.RowUpdater
-	versionMappings           *versionMappings
+	versionMappings           *VersionMappings
 	pkOrdinals                []int
 	schemaOK                  bool
 }
@@ -684,12 +683,12 @@ func (cd *prollyConflictDeleter) Close(ctx *sql.Context) error {
 	return cd.ct.rs.SetRoot(ctx, updatedRoot)
 }
 
-type versionMappings struct {
+type VersionMappings struct {
 	ourMapping, theirMapping, baseMapping val.OrdinalMapping
 }
 
 // returns the schema of the rows returned by the conflicts table and a mappings between each version and the source table.
-func CalculateConflictSchema(base, ours, theirs schema.Schema) (schema.Schema, *versionMappings, error) {
+func CalculateConflictSchema(base, ours, theirs schema.Schema) (schema.Schema, *VersionMappings, error) {
 	keyless := schema.IsKeyless(ours)
 	n := 4 + ours.GetAllCols().Size() + theirs.GetAllCols().Size() + base.GetAllCols().Size()
 	if keyless {
@@ -774,7 +773,7 @@ func CalculateConflictSchema(base, ours, theirs schema.Schema) (schema.Schema, *
 	}
 
 	return sch,
-		&versionMappings{
+		&VersionMappings{
 			ourMapping:   ourColMapping,
 			theirMapping: theirColMapping,
 			baseMapping:  baseColMapping},
