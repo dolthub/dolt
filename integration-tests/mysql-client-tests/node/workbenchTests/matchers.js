@@ -61,7 +61,7 @@ export function branchesMatcher(rows, exp) {
 }
 
 export function logsMatcher(rows, exp) {
-  const exceptionKeys = ["commit_hash", "date", "parents"];
+  const exceptionKeys = ["commit_hash", "date", "parents", "commit_order"];
 
   function getExceptionIsValid(row, key, expRow) {
     const val = row[key];
@@ -75,6 +75,8 @@ export function logsMatcher(rows, exp) {
           val.split(", ").filter((v) => !!v.length).length ===
           expRow.parents.length
         );
+      case "commit_order":
+        return typeof val === "number" && val > 0;
       default:
         return false;
     }
