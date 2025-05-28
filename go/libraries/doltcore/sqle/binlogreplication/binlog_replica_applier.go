@@ -235,13 +235,15 @@ func (a *binlogReplicaApplier) startReplicationEventStream(ctx *sql.Context, con
 		return err
 	}
 
-	if position == nil {
+	if position != nil {
+		ctx.GetLogger().Debugf("Loaded position from position store: %s", position.String())
+	} else {
 		// If the positionStore doesn't have a record of executed GTIDs, check to see if the gtid_purged system
 		// variable is set. If it holds a GTIDSet, then we use that as our starting position. As part of loading
 		// a mysqldump onto a replica, gtid_purged will be set to indicate where to start replication.
 		_, value, ok := sql.SystemVariables.GetGlobal("gtid_purged")
 		gtidPurged, isString := value.(string)
-		if ok && value != nil && isString {
+		if ok && value != nil && isString && gtidPurged != "" {
 			// Starting in MySQL 8.0, when setting the GTID_PURGED sys variable, if the new value starts with '+', then
 			// the specified GTID Set value is added to the current GTID Set value to get a new GTID Set that contains
 			// all the previous GTIDs, plus the new ones from the current assignment. Dolt doesn't support this
@@ -253,25 +255,31 @@ func (a *binlogReplicaApplier) startReplicationEventStream(ctx *sql.Context, con
 				gtidPurged = gtidPurged[1:]
 			}
 
-			purged, err := mysql.ParsePosition(mysqlFlavor, gtidPurged)
+			flavor := mysqlFlavor
+			if conn.IsMariaDB() {
+				flavor = mariadbFlavor
+			}
+			purged, err := mysql.ParsePosition(flavor, gtidPurged)
 			if err != nil {
+				ctx.GetLogger().Errorf("unable to parse gtid_purged: %s", err.Error())
 				return err
 			}
-			position = &purged
+
+			if !purged.IsZero() {
+				position = &purged
+			}
 		}
 	}
 
+	// If we don't have a position that we previously stored, then initialize an empty position.
 	if position == nil {
-		// If we still don't have any record of executed GTIDs, we create a GTIDSet with just one transaction ID
-		// for the 0000 server ID. There doesn't seem to be a cleaner way of saying "start at the very beginning".
-		//
-		// Also... "starting position" is a bit of a misnomer – it's actually the processed GTIDs, which
-		// indicate the NEXT GTID where replication should start, but it's not as direct as specifying
-		// a starting position, like the Vitess function signature seems to suggest.
-		gtid := mysql.Mysql56GTID{
-			Sequence: 1,
+		if conn.IsMariaDB() {
+			ctx.GetLogger().Infof("Initializing empty GTID set (for MariaDB)")
+			position = &mysql.Position{GTIDSet: mysql.MariadbGTIDSet{}}
+		} else {
+			ctx.GetLogger().Infof("Initializing empty GTID set")
+			position = &mysql.Position{GTIDSet: mysql.Mysql56GTIDSet{}}
 		}
-		position = &mysql.Position{GTIDSet: gtid.GTIDSet()}
 	}
 
 	a.currentPosition = position
@@ -485,7 +493,7 @@ func (a *binlogReplicaApplier) processBinlogEvent(ctx *sql.Context, engine *gms.
 			return err
 		}
 		if isBegin {
-			ctx.GetLogger().Errorf("unsupported binlog protocol message: GTID event with 'isBegin' set to true")
+			ctx.GetLogger().Warnf("unsupported binlog protocol message: GTID event with 'isBegin' set to true")
 		}
 		ctx.GetLogger().WithFields(logrus.Fields{
 			"gtid":    gtid,
@@ -549,6 +557,14 @@ func (a *binlogReplicaApplier) processBinlogEvent(ctx *sql.Context, engine *gms.
 		if err != nil {
 			return err
 		}
+
+	case event.Bytes()[4] == 0xA1:
+		// https://mariadb.com/kb/en/binlog_checkpoint_event/
+		ctx.GetLogger().Warnf("received unsupported event: CHECKPOINT_EVENT")
+
+	case event.Bytes()[4] == 0xA3:
+		// https://mariadb.com/kb/en/gtid_list_event/
+		ctx.GetLogger().Warnf("received unsupported event: GTID_LIST_EVENT")
 
 	default:
 		// We can't access the bytes directly because these non-interface types in Vitess are not exposed.
