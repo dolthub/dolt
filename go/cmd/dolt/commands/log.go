@@ -126,31 +126,28 @@ func (cmd LogCmd) logWithLoggerFunc(ctx context.Context, commandStr string, args
 }
 
 func collectRevisions(apr *argparser.ArgParseResults, queryist cli.Queryist, sqlCtx *sql.Context) ([]string, int, error) {
-	var revisions []string
+	revisions := make(map[string]bool, apr.NArg())
 	tablesIndex := 0
 
 	if apr.PositionalArgsSeparatorIndex >= 0 {
 		for i := 0; i < apr.PositionalArgsSeparatorIndex; i++ {
-			revisions = append(revisions, apr.Arg(i))
+			revisions[apr.Args[i]] = true
 		}
 		tablesIndex = apr.PositionalArgsSeparatorIndex
 	} else {
-		seenRevs := make(map[string]bool, apr.NArg())
-
 		for _, arg := range apr.Args {
 			if strings.Contains(arg, "..") || strings.HasPrefix(arg, "^") || strings.HasPrefix(arg, "refs/") || strings.HasPrefix(arg, "remotes/") {
 				tablesIndex++
-				revisions = append(revisions, arg)
+				revisions[arg] = true
 			} else {
 				_, err := GetRowsForSql(queryist, sqlCtx, "select hashof('"+arg+"')")
 
 				// Once we get a non-revision argument, we treat the remaining args as tables
-				if _, ok := seenRevs[arg]; ok || err != nil {
+				if _, ok := revisions[arg]; ok || err != nil {
 					break
 				} else {
 					tablesIndex++
-					seenRevs[arg] = true
-					revisions = append(revisions, arg)
+					revisions[arg] = true
 				}
 			}
 		}
@@ -163,18 +160,25 @@ func collectRevisions(apr *argparser.ArgParseResults, queryist cli.Queryist, sql
 		}
 
 		for _, branch := range branches {
-			revisions = append(revisions, branch.name)
+			revisions[branch.name] = true
 		}
 	}
 
-	return revisions, tablesIndex, nil
+	var revisionNames []string
+	for arg, ok := range revisions {
+		if ok {
+			revisionNames = append(revisionNames, arg)
+		}
+	}
+
+	return revisionNames, tablesIndex, nil
 }
 
-func collectTables(apr *argparser.ArgParseResults, writeToBuffer func(string), queryist cli.Queryist, sqlCtx *sql.Context, params []string, startIndex int) ([]string, error) {
+func collectTables(apr *argparser.ArgParseResults, queryist cli.Queryist, sqlCtx *sql.Context, selectedBranches []string, startIndex int) ([]string, error) {
 	var existingTables map[string]bool
 	var tableNames []string
 
-	existingTables, err := getExistingTables(params, queryist, sqlCtx)
+	existingTables, err := getExistingTables(selectedBranches, queryist, sqlCtx)
 	if err != nil {
 		return nil, err
 	}
@@ -186,13 +190,7 @@ func collectTables(apr *argparser.ArgParseResults, writeToBuffer func(string), q
 		tableNames = append(tableNames, apr.Args[i])
 	}
 
-	if len(tableNames) > 0 {
-		params = append(params, strings.Join(tableNames, ","))
-		writeToBuffer("'--tables'")
-		writeToBuffer("?")
-	}
-
-	return params, nil
+	return tableNames, nil
 
 }
 
@@ -223,9 +221,15 @@ func constructInterpolatedDoltLogQuery(apr *argparser.ArgParseResults, queryist 
 	}
 
 	if tablesIndex < len(apr.Args) {
-		params, err = collectTables(apr, writeToBuffer, queryist, sqlCtx, params, tablesIndex)
+		tableNames, err := collectTables(apr, queryist, sqlCtx, params, tablesIndex)
 		if err != nil {
 			return "", err
+		}
+
+		if len(tableNames) > 0 {
+			params = append(params, strings.Join(tableNames, ","))
+			writeToBuffer("'--tables'")
+			writeToBuffer("?")
 		}
 	}
 
