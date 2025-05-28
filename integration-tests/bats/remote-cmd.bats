@@ -93,6 +93,8 @@ teardown() {
     run dolt status
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Your branch is up to date with 'origin/main'" ]] || false
+
+    grep 'origin' .dolt/repo_state.json
     
     # Remove the remote
     dolt remote remove origin
@@ -102,4 +104,7 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ ! "$output" =~ "origin" ]] || false
     [[ ! "$output" =~ "Your branch is up to date with 'origin/main'" ]] || false
+
+    run grep -q 'origin' .dolt/repo_state.json
+    [ "$status" -eq 1 ]
 }
