@@ -210,7 +210,7 @@ func (s *SerialQueue) DoSync(ctx context.Context, f func() error) error {
 	case <-ctx.Done():
 		if started.Swap(true) {
 			<-w.done
-			return err
+			return errors.Join(err, context.Cause(ctx))
 		}
 		return context.Cause(ctx)
 	case <-s.completed:
@@ -261,6 +261,8 @@ func (s *SerialQueue) makeReq(req schedReq) error {
 func (s *SerialQueue) runScheduler(ctx context.Context) {
 	state := schedState_Running
 	workQ := circular.NewBuff[work](16)
+	// A new ticker we are trying to deliver to
+	// runRunner to set its rate.
 	var newRateTicker *time.Ticker
 	for {
 		var sendWorkCh chan work
@@ -269,9 +271,7 @@ func (s *SerialQueue) runScheduler(ctx context.Context) {
 		var sendRateCh chan *time.Ticker
 		if newRateTicker != nil {
 			sendRateCh = s.tickerCh
-		}
-
-		if state == schedState_Running && sendRateCh == nil {
+		} else if state == schedState_Running {
 			if workQ.Len() > 0 {
 				sendWorkCh = s.runnerCh
 				sendWork = workQ.Front()
@@ -331,8 +331,11 @@ func (s *SerialQueue) runRunner(ctx context.Context) {
 	canRun := true
 	for {
 		var workCh chan work
+		var checkTicker <-chan time.Time
 		if canRun {
 			workCh = s.runnerCh
+		} else {
+			checkTicker = ticker.C
 		}
 
 		select {
@@ -351,9 +354,15 @@ func (s *SerialQueue) runRunner(ctx context.Context) {
 				}()
 				err = w.f()
 			}()
+			// Rate limit by clearing the current ticker
+			// if it has already delivered.
+			select {
+			case <-ticker.C:
+			default:
+			}
 		case ticker = <-s.tickerCh:
 			canRun = false
-		case <-ticker.C:
+		case <-checkTicker:
 			canRun = true
 		case <-ctx.Done():
 			return
