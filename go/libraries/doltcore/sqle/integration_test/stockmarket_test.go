@@ -48,8 +48,8 @@ CREATE TABLE daily_summary (
 
 CREATE TABLE symbols (
   Symbol varchar(10) NOT NULL,
-  Name varchar(1024),
-  Sector varchar(1024),
+  Name varchar(200),
+  Sector varchar(200),
   IPOYear int(11),
   PRIMARY KEY (Symbol)
 );
@@ -65,8 +65,8 @@ CREATE TABLE join_result (
   Close float ,
   Volume float ,
   OpenInt varchar(80) ,
-  Name varchar(1024),
-  Sector varchar(1024),
+  Name varchar(200),
+  Sector varchar(200),
   IPOYear int(11),
   PRIMARY KEY (Symbol,Country,TradingDate)
 );
