@@ -218,7 +218,6 @@ func (s *SerialQueue) DoSync(ctx context.Context, f func() error) error {
 	}
 }
 
-
 // Helper function to submit work. Returns the work submitted, if it
 // was successful, and an error otherwise.
 func (s *SerialQueue) submitWork(f func() error) (work, error) {

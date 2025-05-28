@@ -252,7 +252,7 @@ func (sc *StatsController) newStatsForRoot(baseCtx context.Context, gcKv *memSta
 				newStats.DbCnt++
 
 				for _, tableName := range tableNames {
-					err = sc.updateTable(ctx, newStats, tableName, sqlDb.(dsess.SqlDatabase), gcKv)
+					err = sc.updateTable(ctx, newStats, tableName, sqlDb.(dsess.SqlDatabase), gcKv, false)
 					if err != nil {
 						return nil, err
 					}
@@ -286,14 +286,14 @@ func (sc *StatsController) finalizeHistogram(template stats.Statistic, buckets [
 	return &template
 }
 
-func (sc *StatsController) collectIndexNodes(ctx *sql.Context, prollyMap prolly.Map, idxLen int, nodes []tree.Node) ([]*stats.Bucket, sql.Row, int, error) {
+func (sc *StatsController) collectIndexNodes(ctx *sql.Context, prollyMap prolly.Map, idxLen int, nodes []tree.Node, bypassRateLimit bool) ([]*stats.Bucket, sql.Row, int, error) {
 	updater := newBucketBuilder(sql.StatQualifier{}, idxLen, prollyMap.KeyDesc())
 	keyBuilder := val.NewTupleBuilder(prollyMap.KeyDesc().PrefixDesc(idxLen), prollyMap.NodeStore())
 
 	firstNodeHash := nodes[0].HashOf()
 	lowerBound, ok := sc.GetBound(firstNodeHash, idxLen)
 	if !ok {
-		if err := sc.sq.DoSync(ctx, func() (err error) {
+		if err := sc.execWithOptionalRateLimit(ctx, bypassRateLimit, func() (err error) {
 			lowerBound, err = firstRowForIndex(ctx, idxLen, prollyMap, keyBuilder)
 			if err != nil {
 				return fmt.Errorf("get histogram bucket for node; %w", err)
@@ -312,7 +312,7 @@ func (sc *StatsController) collectIndexNodes(ctx *sql.Context, prollyMap prolly.
 	var writes int
 	var offset uint64
 	for i := 0; i < len(nodes); {
-		err := sc.sq.DoSync(ctx, func() (err error) {
+		err := sc.execWithOptionalRateLimit(ctx, bypassRateLimit, func() (err error) {
 			newWrites := 0
 			for i < len(nodes) && newWrites < collectBatchSize {
 				n := nodes[i]
@@ -387,11 +387,20 @@ func (sc *StatsController) collectIndexNodes(ctx *sql.Context, prollyMap prolly.
 	return buckets, lowerBound, writes, nil
 }
 
-func (sc *StatsController) updateTable(ctx *sql.Context, newStats *rootStats, tableName string, sqlDb dsess.SqlDatabase, gcKv *memStats) error {
+// execWithOptionalRateLimit executes the given function either directly or through the SerialQueue
+// depending on the bypassRateLimit flag
+func (sc *StatsController) execWithOptionalRateLimit(ctx *sql.Context, bypassRateLimit bool, f func() error) error {
+	if bypassRateLimit {
+		return f()
+	}
+	return sc.sq.DoSync(ctx, f)
+}
+
+func (sc *StatsController) updateTable(ctx *sql.Context, newStats *rootStats, tableName string, sqlDb dsess.SqlDatabase, gcKv *memStats, bypassRateLimit bool) error {
 	var err error
 	var sqlTable *sqle.DoltTable
 	var dTab *doltdb.Table
-	if err := sc.sq.DoSync(ctx, func() (err error) {
+	if err := sc.execWithOptionalRateLimit(ctx, bypassRateLimit, func() (err error) {
 		sqlTable, dTab, err = GetLatestTable(ctx, tableName, sqlDb)
 		return err
 	}); err != nil {
@@ -421,7 +430,7 @@ func (sc *StatsController) updateTable(ctx *sql.Context, newStats *rootStats, ta
 	}
 
 	var indexes []sql.Index
-	if err := sc.sq.DoSync(ctx, func() (err error) {
+	if err := sc.execWithOptionalRateLimit(ctx, bypassRateLimit, func() (err error) {
 		indexes, err = sqlTable.GetIndexes(ctx)
 		return err
 	}); err != nil {
@@ -437,7 +446,7 @@ func (sc *StatsController) updateTable(ctx *sql.Context, newStats *rootStats, ta
 		var err error
 		var prollyMap prolly.Map
 		var template stats.Statistic
-		if sc.sq.DoSync(ctx, func() (err error) {
+		if sc.execWithOptionalRateLimit(ctx, bypassRateLimit, func() (err error) {
 			if strings.EqualFold(sqlIdx.ID(), "PRIMARY") {
 				idx, err = dTab.GetRowData(ctx)
 			} else {
@@ -466,7 +475,7 @@ func (sc *StatsController) updateTable(ctx *sql.Context, newStats *rootStats, ta
 		idxLen := len(sqlIdx.Expressions())
 
 		var levelNodes []tree.Node
-		if err := sc.sq.DoSync(ctx, func() (err error) {
+		if err := sc.execWithOptionalRateLimit(ctx, bypassRateLimit, func() (err error) {
 			levelNodes, err = tree.GetHistogramLevel(ctx, prollyMap.Tuples(), bucketLowCnt)
 			if err != nil {
 				sc.descError("get level", err)
@@ -479,7 +488,7 @@ func (sc *StatsController) updateTable(ctx *sql.Context, newStats *rootStats, ta
 		var firstBound sql.Row
 		if len(levelNodes) > 0 {
 			var writes int
-			buckets, firstBound, writes, err = sc.collectIndexNodes(ctx, prollyMap, idxLen, levelNodes)
+			buckets, firstBound, writes, err = sc.collectIndexNodes(ctx, prollyMap, idxLen, levelNodes, bypassRateLimit)
 			if err != nil {
 				sc.descError("", err)
 				continue

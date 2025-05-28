@@ -322,12 +322,13 @@ func (sc *StatsController) AnalyzeTable(ctx *sql.Context, table sql.Table, dbNam
 	defer sql.SessionCommandEnd(newCtx.Session)
 
 	newCtx.SetCurrentDatabase(ctx.GetCurrentDatabase())
-	err = sc.updateTable(newCtx, newStats, table.Name(), sqlDb, nil)
+	err = sc.updateTable(newCtx, newStats, table.Name(), sqlDb, nil, true)
 	if err != nil {
 		return err
 	}
 
 	sc.mu.Lock()
+	// Add/override with new stats
 	for k, v := range newStats.stats {
 		sc.Stats.stats[k] = v
 		sc.Stats.hashes[k] = newStats.hashes[k]
