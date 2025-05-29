@@ -262,7 +262,7 @@ func (itr *prollyConflictRowIter) putConflictRowVals(ctx *sql.Context, c conf, r
 			r[itr.o+itr.kd.Count()+i] = f
 		}
 	}
-	r[itr.o+itr.kd.Count()+itr.oursVD.Count()] = getDiffType(c.bV, c.oV)
+	r[itr.o+itr.kd.Count()+itr.oursVD.Count()] = GetConflictDiffType(c.bV, c.oV)
 
 	if c.tV != nil {
 		for i := 0; i < itr.theirsVD.Count(); i++ {
@@ -273,13 +273,13 @@ func (itr *prollyConflictRowIter) putConflictRowVals(ctx *sql.Context, c conf, r
 			r[itr.t+itr.kd.Count()+i] = f
 		}
 	}
-	r[itr.t+itr.kd.Count()+itr.theirsVD.Count()] = getDiffType(c.bV, c.tV)
+	r[itr.t+itr.kd.Count()+itr.theirsVD.Count()] = GetConflictDiffType(c.bV, c.tV)
 	r[itr.t+itr.kd.Count()+itr.theirsVD.Count()+1] = c.id
 
 	return nil
 }
 
-func getDiffType(base val.Tuple, other val.Tuple) string {
+func GetConflictDiffType(base val.Tuple, other val.Tuple) string {
 	if base == nil {
 		return merge.ConflictDiffTypeAdded
 	} else if other == nil {
@@ -328,7 +328,7 @@ func (itr *prollyConflictRowIter) putKeylessConflictRowVals(ctx *sql.Context, c 
 		r[itr.n-2] = uint64(0)
 	}
 
-	r[itr.o+itr.oursVD.Count()-1] = getDiffType(c.bV, c.oV)
+	r[itr.o+itr.oursVD.Count()-1] = GetConflictDiffType(c.bV, c.oV)
 
 	if c.tV != nil {
 		r[itr.n-1], err = tree.GetField(ctx, itr.theirsVD, 0, c.tV, ns)
@@ -348,7 +348,7 @@ func (itr *prollyConflictRowIter) putKeylessConflictRowVals(ctx *sql.Context, c 
 	}
 
 	o := itr.t + itr.theirsVD.Count() - 1
-	r[o] = getDiffType(c.bV, c.tV)
+	r[o] = GetConflictDiffType(c.bV, c.tV)
 	r[itr.n-4] = c.id
 
 	return nil

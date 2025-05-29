@@ -20,6 +20,7 @@ import (
 	"io"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
@@ -446,10 +447,6 @@ func (pm *PreviewMergeConflictsTableFunction) RowIter(ctx *sql.Context, row sql.
 		n:            n,
 		baseRootish:  baseHash,
 		theirRootish: rightHash,
-		baseHash:     baseHash,
-		theirHash:    rightHash,
-		baseRows:     ancRows,
-		theirRows:    rightRows,
 	}, nil
 }
 
@@ -576,8 +573,18 @@ func (itr *previewMergeConflictsTableFunctionRowIter) nextConflictVals(ctx *sql.
 	c.h = itr.theirRootish
 
 	// To ensure that the conflict id is unique, we hash both TheirRootIsh and the key of the table.
-	b := xxh3.Hash128(append(ca.Key, c.h[:]...)).Bytes()
+	// TODO: This is mutating the key, which is creating a schema with a different capacity than expected
+	// b := xxh3.Hash128(append(ca.Key, c.h[:]...)).Bytes()
+	buf := make([]byte, len(ca.Key)+len(c.h))
+	copy(buf, ca.Key)
+	copy(buf[len(ca.Key):], c.h[:])
+	b := xxh3.Hash128(buf).Bytes()
 	c.id = base64.RawStdEncoding.EncodeToString(b[:])
+
+	err = itr.loadTableMaps(ctx, itr.baseRootish, itr.theirRootish)
+	if err != nil {
+		return conf{}, false, err
+	}
 
 	err = itr.baseRows.Get(ctx, ca.Key, func(_, v val.Tuple) error {
 		c.bV = v
@@ -604,15 +611,64 @@ func (itr *previewMergeConflictsTableFunctionRowIter) nextConflictVals(ctx *sql.
 	return c, true, nil
 }
 
-func getDiffType(base val.Tuple, other val.Tuple) string {
-	if base == nil {
-		return merge.ConflictDiffTypeAdded
-	} else if other == nil {
-		return merge.ConflictDiffTypeRemoved
+// loadTableMaps loads the maps specified in the metadata if they are different from
+// the currently loaded maps. |baseHash| and |theirHash| are table hashes.
+func (itr *previewMergeConflictsTableFunctionRowIter) loadTableMaps(ctx *sql.Context, baseHash, theirHash hash.Hash) error {
+	if itr.baseHash.Compare(baseHash) != 0 {
+		rv, err := doltdb.LoadRootValueFromRootIshAddr(ctx, itr.vrw, itr.ns, baseHash)
+		if err != nil {
+			return err
+		}
+		baseTbl, ok, err := rv.GetTable(ctx, itr.tblName)
+		if err != nil {
+			return err
+		}
+
+		var idx durable.Index
+		if !ok {
+			idx, err = durable.NewEmptyPrimaryIndex(ctx, itr.vrw, itr.ns, itr.ourSch)
+		} else {
+			idx, err = baseTbl.GetRowData(ctx)
+		}
+
+		if err != nil {
+			return err
+		}
+
+		itr.baseRows, err = durable.ProllyMapFromIndex(idx)
+		if err != nil {
+			return err
+		}
+
+		itr.baseHash = baseHash
 	}
 
-	// There has to be some edit, otherwise it wouldn't be a conflict...
-	return merge.ConflictDiffTypeModified
+	if itr.theirHash.Compare(theirHash) != 0 {
+		rv, err := doltdb.LoadRootValueFromRootIshAddr(ctx, itr.vrw, itr.ns, theirHash)
+		if err != nil {
+			return err
+		}
+
+		theirTbl, ok, err := rv.GetTable(ctx, itr.tblName)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return fmt.Errorf("failed to find table %s in right root value", itr.tblName)
+		}
+
+		idx, err := theirTbl.GetRowData(ctx)
+		if err != nil {
+			return err
+		}
+		itr.theirRows, err = durable.ProllyMapFromIndex(idx)
+		if err != nil {
+			return err
+		}
+		itr.theirHash = theirHash
+	}
+
+	return nil
 }
 
 func (itr *previewMergeConflictsTableFunctionRowIter) putConflictRowVals(ctx *sql.Context, c conf, r sql.Row) error {
@@ -635,7 +691,7 @@ func (itr *previewMergeConflictsTableFunctionRowIter) putConflictRowVals(ctx *sq
 			r[itr.o+itr.kd.Count()+i] = f
 		}
 	}
-	r[itr.o+itr.kd.Count()+itr.oursVD.Count()] = getDiffType(c.bV, c.oV)
+	r[itr.o+itr.kd.Count()+itr.oursVD.Count()] = dtables.GetConflictDiffType(c.bV, c.oV)
 
 	if c.tV != nil {
 		for i := 0; i < itr.theirsVD.Count(); i++ {
@@ -646,7 +702,7 @@ func (itr *previewMergeConflictsTableFunctionRowIter) putConflictRowVals(ctx *sq
 			r[itr.t+itr.kd.Count()+i] = f
 		}
 	}
-	r[itr.t+itr.kd.Count()+itr.theirsVD.Count()] = getDiffType(c.bV, c.tV)
+	r[itr.t+itr.kd.Count()+itr.theirsVD.Count()] = dtables.GetConflictDiffType(c.bV, c.tV)
 	r[itr.t+itr.kd.Count()+itr.theirsVD.Count()+1] = c.id
 
 	return nil
@@ -690,7 +746,7 @@ func (itr *previewMergeConflictsTableFunctionRowIter) putKeylessConflictRowVals(
 		r[itr.n-2] = uint64(0)
 	}
 
-	r[itr.o+itr.oursVD.Count()-1] = getDiffType(c.bV, c.oV)
+	r[itr.o+itr.oursVD.Count()-1] = dtables.GetConflictDiffType(c.bV, c.oV)
 
 	if c.tV != nil {
 		r[itr.n-1], err = tree.GetField(ctx, itr.theirsVD, 0, c.tV, ns)
@@ -710,7 +766,7 @@ func (itr *previewMergeConflictsTableFunctionRowIter) putKeylessConflictRowVals(
 	}
 
 	o := itr.t + itr.theirsVD.Count() - 1
-	r[o] = getDiffType(c.bV, c.tV)
+	r[o] = dtables.GetConflictDiffType(c.bV, c.tV)
 	r[itr.n-4] = c.id
 
 	return nil
