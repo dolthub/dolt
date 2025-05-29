@@ -116,7 +116,7 @@ teardown() {
     [[ "${lines[0]}" =~ "test" ]] || false
     [[ "$output" =~ "\`pk\` int" ]] || false
     [[ "$output" =~ "\`int\` int" ]] || false
-    [[ "$output" =~ "\`string\` varchar(1023)" ]] || false
+    [[ "$output" =~ "\`string\` varchar(200)" ]] || false
     [[ "$output" =~ "\`boolean\` tinyint" ]] || false
     [[ "$output" =~ "\`float\` float" ]] || false
     [[ "$output" =~ "\`uint\` int" ]] || false
@@ -141,7 +141,7 @@ DELIM
     [[ "${lines[0]}" =~ "test" ]] || false
     [[ "$output" =~ "\`pk\` int" ]] || false
     [[ "$output" =~ "\`int\` int" ]] || false
-    [[ "$output" =~ "\`string\` varchar(1023)" ]] || false
+    [[ "$output" =~ "\`string\` varchar(200)" ]] || false
     [[ "$output" =~ "\`boolean\` tinyint" ]] || false
     [[ "$output" =~ "\`float\` float" ]] || false
     [[ "$output" =~ "\`uint\` int" ]] || false
@@ -201,8 +201,8 @@ DELIM
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 7 ]
     [[ "${lines[0]}" =~ "test" ]] || false
-    [[ "$output" =~ "\`pk\` varchar(1023)" ]] || false
-    [[ "$output" =~ "\`headerOne\` varchar(1023)" ]] || false
+    [[ "$output" =~ "\`pk\` varchar(200)" ]] || false
+    [[ "$output" =~ "\`headerOne\` varchar(200)" ]] || false
     [[ "$output" =~ "\`headerTwo\` int" ]] || false
 }
 
@@ -227,7 +227,7 @@ DELIM
     [[ "$output" =~ "\`c3\` int" ]] || false
     [[ "$output" =~ "\`c4\` int" ]] || false
     [[ "$output" =~ "\`c5\` int" ]] || false
-    [[ "$output" =~ "\`c6\` varchar(1023)" ]] || false
+    [[ "$output" =~ "\`c6\` varchar(200)" ]] || false
     [[ "$output" =~ "PRIMARY KEY (\`pk\`)" ]] || false
 }
 
@@ -243,12 +243,12 @@ DELIM
     [ "${#lines[@]}" -eq 11 ]
     [[ "${lines[0]}" =~ "test" ]] || false
     [[ "$output" =~ "\`pk\` int" ]] || false
-    [[ "$output" =~ "\`c1\` varchar(1023)" ]] || false
-    [[ "$output" =~ "\`c2\` varchar(1023)" ]] || false
-    [[ "$output" =~ "\`c3\` varchar(1023)" ]] || false
-    [[ "$output" =~ "\`c4\` varchar(1023)" ]] || false
-    [[ "$output" =~ "\`c5\` varchar(1023)" ]] || false
-    [[ "$output" =~ "\`c6\` varchar(1023)" ]] || false
+    [[ "$output" =~ "\`c1\` varchar(200)" ]] || false
+    [[ "$output" =~ "\`c2\` varchar(200)" ]] || false
+    [[ "$output" =~ "\`c3\` varchar(200)" ]] || false
+    [[ "$output" =~ "\`c4\` varchar(200)" ]] || false
+    [[ "$output" =~ "\`c5\` varchar(200)" ]] || false
+    [[ "$output" =~ "\`c6\` varchar(200)" ]] || false
     [[ "$output" =~ "PRIMARY KEY (\`pk\`)" ]] || false
 }
 
@@ -295,7 +295,7 @@ DELIM
 
     run dolt diff --schema
     [ "$status" -eq 0 ]
-    [[ "$output" =~ '+  `x` varchar(1023),' ]] || false
+    [[ "$output" =~ '+  `x` varchar(200),' ]] || false
     [[ "$output" =~ '+  `y` float,' ]] || false
     [[ "$output" =~ '+  `z` int,' ]] || false
     # assert no columns were deleted/replaced
@@ -331,7 +331,7 @@ DELIM
 
     run dolt diff --schema
     [ "$status" -eq 0 ]
-    [[ "$output" =~ '+  `x` varchar(1023),' ]] || false
+    [[ "$output" =~ '+  `x` varchar(200),' ]] || false
     [[ "$output" =~ '+  `y` float,' ]] || false
     [[ "$output" =~ '+  `z` int,' ]] || false
     # assert no columns were deleted/replaced
@@ -373,7 +373,7 @@ DELIM
 
     run dolt diff --schema
     [ "$status" -eq 0 ]
-    [[ "$output" =~ '-  `a` varchar(1023),' ]] || false
+    [[ "$output" =~ '-  `a` varchar(200),' ]] || false
     [[ "$output" =~ '-  `b` float,' ]] || false
     [[ "$output" =~ '-  `c` tinyint(1),' ]] || false
     # assert no columns were added
@@ -409,4 +409,21 @@ CSV
     [ "$status" -eq 1 ]
     [[ "$output" =~ "name" ]] || false
     [[ "$output" =~ "invalid schema" ]] || false
+}
+
+@test "schema-import: varchar(200) allows many columns" {
+    # Test that import operations use varchar(200) as default length, allowing many varchar columns
+    # With varchar(200), we should be able to have 80+ columns vs only 16 with varchar(1023)
+    cat <<DELIM > many_varchar_cols.csv
+pk,c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16,c17,c18,c19,c20,c21,c22,c23,c24,c25,c26,c27,c28,c29,c30
+1,a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,q,r,s,t,u,v,w,x,y,z,a1,b1,c1,d1
+DELIM
+    run dolt schema import -c --pks=pk test many_varchar_cols.csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Created table successfully." ]] || false
+    run dolt schema show test
+    [ "$status" -eq 0 ]
+    # Verify that columns were created with varchar(200)
+    [[ "$output" =~ "\`c1\` varchar(200)" ]] || false
+    [[ "$output" =~ "\`c30\` varchar(200)" ]] || false
 }
