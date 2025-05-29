@@ -21,13 +21,12 @@ import (
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
-	"github.com/dolthub/vitess/go/sqltypes"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/utils/funcitr"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 type ctxKey int
@@ -57,14 +56,8 @@ func init() {
 	if err != nil {
 		panic(err)
 	}
-	// Create explicit varchar(1023) for doc_name column to maintain stable system table schema
-	docNameTypeInfo := typeinfo.CreateVarStringTypeFromSqlType(gmstypes.MustCreateStringWithDefaults(sqltypes.VarChar, 1023))
-	docNameCol, err := schema.NewColumnWithTypeInfo(DocPkColumnName, schema.DocNameTag, docNameTypeInfo, true, "", false, "", schema.NotNullConstraint{})
-	if err != nil {
-		panic(err)
-	}
 	doltDocsColumns := schema.NewColCollection(
-		docNameCol,
+		schema.NewColumn(DocPkColumnName, schema.DocNameTag, types.StringKind, true, schema.NotNullConstraint{}),
 		docTextCol,
 	)
 	DocsSchema = schema.MustSchemaFromCols(doltDocsColumns)

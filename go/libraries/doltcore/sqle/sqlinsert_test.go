@@ -238,7 +238,7 @@ var BasicInsertTests = []InsertTest{
 	{
 		Name: "insert partial columns existing pk",
 		AdditionalSetup: ExecuteSetupSQL(context.Background(), `
-			CREATE TABLE temppeople (id bigint primary key, first_name varchar(200), last_name varchar(200));
+			CREATE TABLE temppeople (id bigint primary key, first_name varchar(1023), last_name varchar(1023));
 			INSERT INTO temppeople VALUES (2, 'Bart', 'Simpson');`),
 		InsertQuery: "insert into temppeople (id, first_name, last_name) values (2, 'Bart', 'Simpson')",
 		ExpectedErr: "duplicate primary key",

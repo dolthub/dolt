@@ -17,7 +17,6 @@ package statspro
 import (
 	"context"
 	"strings"
-	"sync"
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -129,7 +128,7 @@ func TestProllyKv(t *testing.T) {
 		require.False(t, to.GcMark(from, nil, nil, 0, nil))
 	})
 	t.Run("TestGcMarkFlush", func(t *testing.T) {
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx := context.Background()
 		bthreads := sql.NewBackgroundThreads()
 		defer bthreads.Shutdown()
 		prev := NewMemStats()
@@ -156,16 +155,9 @@ func TestProllyKv(t *testing.T) {
 		require.Equal(t, 20, len(to.gcFlusher[tupB]))
 		require.Equal(t, 20, to.Len())
 
-		sq := jobqueue.NewSerialQueue(nil)
-		var wg sync.WaitGroup
-		defer func() {
-			sq.Stop()
-			cancel()
-			wg.Wait()
-		}()
-		wg.Add(1)
+		sq := jobqueue.NewSerialQueue()
+		defer sq.Stop()
 		go func() {
-			defer wg.Done()
 			sq.Run(ctx)
 		}()
 
@@ -174,7 +166,6 @@ func TestProllyKv(t *testing.T) {
 		cnt, err := kv.Flush(ctx, sq)
 		require.NoError(t, err)
 		require.Equal(t, 20, cnt)
-
 	})
 }
 

@@ -412,8 +412,8 @@ CSV
 }
 
 @test "schema-import: varchar(200) allows many columns" {
-    # Test that with varchar(200) default length, we can have many varchar columns
-    # With varchar(200), we should be able to have 80+ columns vs only 16 with varchar(1024)
+    # Test that import operations use varchar(200) as default length, allowing many varchar columns
+    # With varchar(200), we should be able to have 80+ columns vs only 16 with varchar(1023)
     cat <<DELIM > many_varchar_cols.csv
 pk,c1,c2,c3,c4,c5,c6,c7,c8,c9,c10,c11,c12,c13,c14,c15,c16,c17,c18,c19,c20,c21,c22,c23,c24,c25,c26,c27,c28,c29,c30
 1,a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,q,r,s,t,u,v,w,x,y,z,a1,b1,c1,d1

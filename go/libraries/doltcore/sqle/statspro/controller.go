@@ -128,7 +128,7 @@ func (rs *rootStats) String() string {
 }
 
 func NewStatsController(logger *logrus.Logger, bgThreads *sql.BackgroundThreads, dEnv *env.DoltEnv) *StatsController {
-	sq := jobqueue.NewSerialQueue(func(err error) {
+	sq := jobqueue.NewSerialQueue().WithErrorCb(func(err error) {
 		logger.Infof("stats executor error: %s\n", err.Error())
 	})
 
@@ -317,8 +317,8 @@ func (sc *StatsController) AnalyzeTable(ctx *sql.Context, table sql.Table, dbNam
 		return err
 	}
 
-	defer sql.SessionEnd(newCtx.Session)
 	sql.SessionCommandBegin(newCtx.Session)
+	defer sql.SessionEnd(newCtx.Session)
 	defer sql.SessionCommandEnd(newCtx.Session)
 
 	newCtx.SetCurrentDatabase(ctx.GetCurrentDatabase())
@@ -412,8 +412,8 @@ func (sc *StatsController) DropDbStats(ctx *sql.Context, dbName string, flush bo
 		// don't wait to see if the thread context is invalidated
 		func() {
 			sc.mu.Unlock()
-			defer sc.mu.Lock()
 			sc.Restart(ctx)
+			defer sc.mu.Lock()
 		}()
 		if err := sc.lockedRotateStorage(ctx); err != nil {
 			return err
@@ -494,8 +494,8 @@ func (sc *StatsController) rotateStorage(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	defer sql.SessionEnd(sqlCtx.Session)
 	sql.SessionCommandBegin(sqlCtx.Session)
+	defer sql.SessionEnd(sqlCtx.Session)
 	defer sql.SessionCommandEnd(sqlCtx.Session)
 	sc.mu.Lock()
 	defer sc.mu.Unlock()

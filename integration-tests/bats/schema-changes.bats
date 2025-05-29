@@ -215,7 +215,7 @@ SQL
     
     dolt sql -q "ALTER TABLE Test2 MODIFY V1 varchar(300) not null"
     dolt sql -q "ALTER TABLE TEST2 MODIFY PK2 tinyint not null"
-    dolt sql -q "ALTER TABLE Test2 MODIFY V2 varchar(200) not null"
+    dolt sql -q "ALTER TABLE Test2 MODIFY V2 varchar(1024) not null"
 
     # verify that the tags have not changed
     run dolt schema tags -r=csv
@@ -234,7 +234,7 @@ SQL
     [[ "$output" =~ '-  `v2` varchar(120),' ]] || false
     [[ "$output" =~ '+  `PK2` tinyint NOT NULL,' ]] || false
     [[ "$output" =~ '+  `V1` varchar(300) NOT NULL,' ]] || false
-    [[ "$output" =~ '+  `V2` varchar(200) NOT NULL,' ]] || false
+    [[ "$output" =~ '+  `V2` varchar(1024) NOT NULL,' ]] || false
     [[ "$output" =~ 'PRIMARY KEY' ]] || false
 
     dolt add .
@@ -291,7 +291,7 @@ SQL
     [[ "$output" =~ '-  `v2` varchar(120),' ]] || false
     [[ "$output" =~ '+  `PK2` tinyint NOT NULL,' ]] || false
     [[ "$output" =~ '+  `V1` varchar(300) NOT NULL,' ]] || false
-    [[ "$output" =~ '+  `V2` varchar(200) NOT NULL,' ]] || false
+    [[ "$output" =~ '+  `V2` varchar(1024) NOT NULL,' ]] || false
     [[ "$output" =~ 'PRIMARY KEY' ]] || false
 }
 

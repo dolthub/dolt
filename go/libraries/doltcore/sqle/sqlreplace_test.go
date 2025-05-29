@@ -230,7 +230,7 @@ var BasicReplaceTests = []ReplaceTest{
 	{
 		Name: "replace partial columns existing pk",
 		AdditionalSetup: ExecuteSetupSQL(context.Background(), `
-			CREATE TABLE temppeople (id bigint primary key, first_name varchar(200), last_name varchar(200), num bigint);
+			CREATE TABLE temppeople (id bigint primary key, first_name varchar(1023), last_name varchar(1023), num bigint);
 			INSERT INTO temppeople VALUES (2, 'Bart', 'Simpson', 44);`),
 		ReplaceQuery: "replace into temppeople (id, first_name, last_name, num) values (2, 'Bart', 'Simpson', 88)",
 		SelectQuery:  "select id, first_name, last_name, num from temppeople where id = 2 ORDER BY id",
