@@ -20,6 +20,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
@@ -150,18 +151,9 @@ func TestListening(t *testing.T) {
 	t.Run("ListenForStop", func(t *testing.T) {
 		sc := newStatsCoord(bthreads)
 		require.NoError(t, sc.Restart(ctx))
-		var l chan listenerEvent
-		err := sc.sq.DoSync(context.Background(), func() error {
-			// do this in serial queue to make sure we don't race
-			// with swap
-			var err error
-			require.NoError(t, err)
-			l, err = sc.addListener(leUnknown)
-			require.NoError(t, err)
-			<-sc.Stop()
-			return nil
-		})
+		l, err := sc.addListener(leUnknown)
 		require.NoError(t, err)
+		<-sc.Stop()
 		select {
 		case e := <-l:
 			require.Equal(t, e, leStop)
@@ -185,75 +177,35 @@ func TestListening(t *testing.T) {
 	})
 	t.Run("WaitBlocksOnStatsCollection", func(t *testing.T) {
 		sqlCtx, sqlEng, sc := emptySetup(t, bthreads, true, true)
+		_, orig, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsJobInterval)
+		sql.SystemVariables.SetGlobal(sqlCtx, dsess.DoltStatsJobInterval, "60000000000")
+		defer func() {
+			sql.SystemVariables.SetGlobal(sqlCtx, dsess.DoltStatsJobInterval, orig)
+		}()
 		require.NoError(t, executeQuery(sqlCtx, sqlEng, "create table xy (x int primary key, y int)"))
 		require.NoError(t, sc.Restart(ctx))
-		done := make(chan struct{})
-		wg := sync.WaitGroup{}
-		wg.Add(2)
-		go func() {
-			defer wg.Done()
-			sc.sq.DoSync(context.Background(), func() error {
-				<-done
-				return nil
-			})
-		}()
-		go func() {
-			defer wg.Done()
-			defer close(done)
-			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-			defer cancel()
-			err := sc.waitForSignal(ctx, leSwap, 1)
-			require.ErrorIs(t, err, context.DeadlineExceeded)
-		}()
-		wg.Wait()
+		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+		defer cancel()
+		err := sc.waitForSignal(ctx, leSwap, 1)
+		require.ErrorIs(t, err, context.DeadlineExceeded)
 	})
 	t.Run("WaitReturnsIfStoppedBefore", func(t *testing.T) {
 		sqlCtx, sqlEng, sc := emptySetup(t, bthreads, true, true)
 		require.NoError(t, executeQuery(sqlCtx, sqlEng, "create table xy (x int primary key, y int)"))
 		require.NoError(t, sc.Restart(ctx))
-		done := make(chan struct{})
-		wg := sync.WaitGroup{}
-		wg.Add(2)
-		go func() {
-			defer wg.Done()
-			sc.sq.DoSync(context.Background(), func() error {
-				<-done
-				return nil
-			})
-		}()
-		go func() {
-			defer wg.Done()
-			defer close(done)
-			<-sc.Stop()
-			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-			defer cancel()
-			err := sc.waitForSignal(ctx, leSwap, 1)
-			require.ErrorIs(t, err, ErrStatsIssuerPaused)
-		}()
-		wg.Wait()
+		<-sc.Stop()
+		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+		defer cancel()
+		err := sc.waitForSignal(ctx, leSwap, 1)
+		require.ErrorIs(t, err, ErrStatsIssuerPaused)
 	})
 	t.Run("WaitHangsUntilCycleCompletes", func(t *testing.T) {
 		sqlCtx, sqlEng, sc := emptySetup(t, bthreads, true, true)
 		require.NoError(t, executeQuery(sqlCtx, sqlEng, "create table xy (x int primary key, y int)"))
 		require.NoError(t, sc.Restart(ctx))
-		done := make(chan struct{})
-		wg := sync.WaitGroup{}
-		wg.Add(2)
-		go func() {
-			defer wg.Done()
-			sc.sq.DoSync(context.Background(), func() error {
-				<-done
-				return nil
-			})
-		}()
-		go func() {
-			defer wg.Done()
-			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-			defer cancel()
-			err := sc.waitForSignal(ctx, leSwap, 1)
-			require.NoError(t, err)
-		}()
-		close(done)
-		wg.Wait()
+		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+		defer cancel()
+		err := sc.waitForSignal(ctx, leSwap, 1)
+		require.NoError(t, err)
 	})
 }

@@ -123,7 +123,7 @@ func (sc *StatsController) Restart(ctx *sql.Context) error {
 	default:
 	}
 
-	sc.sq.Start()
+	// Rate limiter starts automatically - no need to start it
 	sc.RefreshFromSysVars(ctx)
 
 	done := make(chan struct{})
@@ -145,11 +145,7 @@ func (sc *StatsController) Restart(ctx *sql.Context) error {
 }
 
 func (sc *StatsController) RunQueue() {
-	if err := sc.bgThreads.Add("stats_scheduler", sc.sq.Run); err != nil {
-		sc.descError("start scheduler", err)
-	}
-	// block on queue starting
-	sc.sq.DoSync(context.Background(), func() error { return nil })
+	// Rate limiter runs automatically - no separate background thread needed
 	return
 }
 
@@ -252,11 +248,7 @@ func (sc *StatsController) Close() {
 	if sc.activeCtxCancel != nil {
 		sc.activeCtxCancel()
 		sc.activeCtxCancel = nil
-		sc.sq.Purge()
-		sc.sq.DoSync(context.Background(), func() error {
-			sc.sq.Purge()
-			return sc.sq.Stop()
-		})
+		sc.rateLimiter.stop()
 	}
 	sc.signalListener(leStop)
 

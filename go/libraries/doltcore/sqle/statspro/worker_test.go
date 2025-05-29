@@ -601,7 +601,7 @@ func TestPanic(t *testing.T) {
 
 	require.NoError(t, sc.Restart(ctx))
 
-	sc.sq.DoSync(ctx, func() error {
+	sc.rateLimiter.execute(ctx, func() error {
 		panic("test panic")
 	})
 

@@ -38,7 +38,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dprocedures"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statspro/jobqueue"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/earl"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
@@ -77,7 +76,7 @@ type StatsController struct {
 	// ctxGen lets us fetch the most recent working root
 	ctxGen ctxFactory
 
-	sq *jobqueue.SerialQueue
+	rateLimiter *simpleRateLimiter
 
 	activeCtxCancel context.CancelFunc
 	workerDoneCh    chan struct{}
@@ -128,16 +127,12 @@ func (rs *rootStats) String() string {
 }
 
 func NewStatsController(logger *logrus.Logger, bgThreads *sql.BackgroundThreads, dEnv *env.DoltEnv) *StatsController {
-	sq := jobqueue.NewSerialQueue(func(err error) {
-		logger.Infof("stats executor error: %s\n", err.Error())
-	})
-
 	return &StatsController{
 		mu:          sync.Mutex{},
 		logger:      logger,
 		JobInterval: 500 * time.Millisecond,
 		gcInterval:  24 * time.Hour,
-		sq:          sq,
+		rateLimiter: newSimpleRateLimiter(500 * time.Millisecond),
 		Stats:       newRootStats(),
 		dbFs:        make(map[string]filesys.Filesys),
 		closed:      make(chan struct{}),
@@ -182,7 +177,7 @@ func (sc *StatsController) gcIsSet() bool {
 func (sc *StatsController) SetTimers(job, gc int64) {
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
-	sc.sq.NewRateLimit(time.Duration(max(1, job)))
+	sc.rateLimiter.setInterval(time.Duration(max(1, job)))
 	sc.gcInterval = time.Duration(gc)
 }
 
@@ -210,7 +205,7 @@ func (sc *StatsController) Info(ctx context.Context) (dprocedures.StatsInfo, err
 
 	// don't use protected access / deadlock
 	cachedBucketCnt := sc.kv.Len()
-	storageCnt, err := sc.kv.Flush(ctx, sc.sq)
+	storageCnt, err := sc.kv.Flush(ctx)
 	if err != nil {
 		return dprocedures.StatsInfo{}, err
 	}

@@ -144,7 +144,7 @@ func (sc *StatsController) trySwapStats(ctx context.Context, prevGen uint64, new
 				func() {
 					sc.mu.Unlock()
 					defer sc.mu.Lock()
-					if err := sc.sq.DoSync(ctx, func() error {
+					if err := sc.rateLimiter.execute(ctx, func() error {
 						return sc.rotateStorage(ctx)
 					}); err != nil {
 						sc.descError("", err)
@@ -157,7 +157,7 @@ func (sc *StatsController) trySwapStats(ctx context.Context, prevGen uint64, new
 			func() {
 				sc.mu.Unlock()
 				defer sc.mu.Lock()
-				if _, err := sc.Flush(ctx, sc.sq); err != nil {
+				if _, err := sc.Flush(ctx); err != nil {
 					sc.descError("", err)
 				}
 			}()
@@ -198,7 +198,7 @@ func (sc *StatsController) newStatsForRoot(baseCtx context.Context, gcKv *memSta
 		}
 
 		var branches []ref.DoltRef
-		if err := sc.sq.DoSync(ctx, func() (err error) {
+		if err := sc.rateLimiter.execute(ctx, func() (err error) {
 			root, err := sqlDb.GetRoot(ctx)
 			if err != nil {
 				return err
@@ -227,7 +227,7 @@ func (sc *StatsController) newStatsForRoot(baseCtx context.Context, gcKv *memSta
 			}
 
 			var schDbs []sql.DatabaseSchema
-			if err := sc.sq.DoSync(ctx, func() (err error) {
+			if err := sc.rateLimiter.execute(ctx, func() (err error) {
 				schDbs, err = sqlDb.AllSchemas(ctx)
 				return err
 			}); err != nil {
@@ -241,7 +241,7 @@ func (sc *StatsController) newStatsForRoot(baseCtx context.Context, gcKv *memSta
 					continue
 				}
 				var tableNames []string
-				if err := sc.sq.DoSync(ctx, func() (err error) {
+				if err := sc.rateLimiter.execute(ctx, func() (err error) {
 					tableNames, err = sqlDb.GetTableNames(ctx)
 					return err
 				}); err != nil {
@@ -387,13 +387,13 @@ func (sc *StatsController) collectIndexNodes(ctx *sql.Context, prollyMap prolly.
 	return buckets, lowerBound, writes, nil
 }
 
-// execWithOptionalRateLimit executes the given function either directly or through the SerialQueue
+// execWithOptionalRateLimit executes the given function either directly or through the rate limiter
 // depending on the bypassRateLimit flag
 func (sc *StatsController) execWithOptionalRateLimit(ctx *sql.Context, bypassRateLimit bool, f func() error) error {
 	if bypassRateLimit {
 		return f()
 	}
-	return sc.sq.DoSync(ctx, f)
+	return sc.rateLimiter.execute(ctx, f)
 }
 
 func (sc *StatsController) updateTable(ctx *sql.Context, newStats *rootStats, tableName string, sqlDb dsess.SqlDatabase, gcKv *memStats, bypassRateLimit bool) error {
