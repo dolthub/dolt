@@ -50,7 +50,7 @@ var previewMergeConflictsSummarySchema = sql.Schema{
 }
 
 // NewInstance creates a new instance of TableFunction interface
-func (ds *PreviewMergeConflictsSummaryTableFunction) NewInstance(ctx *sql.Context, db sql.Database, expressions []sql.Expression) (sql.Node, error) {
+func (pm *PreviewMergeConflictsSummaryTableFunction) NewInstance(ctx *sql.Context, db sql.Database, expressions []sql.Expression) (sql.Node, error) {
 	newInstance := &PreviewMergeConflictsSummaryTableFunction{
 		ctx:      ctx,
 		database: db,
@@ -64,66 +64,66 @@ func (ds *PreviewMergeConflictsSummaryTableFunction) NewInstance(ctx *sql.Contex
 	return node, nil
 }
 
-func (ds *PreviewMergeConflictsSummaryTableFunction) DataLength(ctx *sql.Context) (uint64, error) {
-	numBytesPerRow := schema.SchemaAvgLength(ds.Schema())
-	numRows, _, err := ds.RowCount(ctx)
+func (pm *PreviewMergeConflictsSummaryTableFunction) DataLength(ctx *sql.Context) (uint64, error) {
+	numBytesPerRow := schema.SchemaAvgLength(pm.Schema())
+	numRows, _, err := pm.RowCount(ctx)
 	if err != nil {
 		return 0, err
 	}
 	return numBytesPerRow * numRows, nil
 }
 
-func (ds *PreviewMergeConflictsSummaryTableFunction) RowCount(_ *sql.Context) (uint64, bool, error) {
+func (pm *PreviewMergeConflictsSummaryTableFunction) RowCount(_ *sql.Context) (uint64, bool, error) {
 	return previewMergeConflictsDefaultRowCount, false, nil
 }
 
 // Database implements the sql.Databaser interface
-func (ds *PreviewMergeConflictsSummaryTableFunction) Database() sql.Database {
-	return ds.database
+func (pm *PreviewMergeConflictsSummaryTableFunction) Database() sql.Database {
+	return pm.database
 }
 
 // WithDatabase implements the sql.Databaser interface
-func (ds *PreviewMergeConflictsSummaryTableFunction) WithDatabase(database sql.Database) (sql.Node, error) {
-	nds := *ds
-	nds.database = database
-	return &nds, nil
+func (pm *PreviewMergeConflictsSummaryTableFunction) WithDatabase(database sql.Database) (sql.Node, error) {
+	npm := *pm
+	npm.database = database
+	return &npm, nil
 }
 
 // Name implements the sql.TableFunction interface
-func (ds *PreviewMergeConflictsSummaryTableFunction) Name() string {
+func (pm *PreviewMergeConflictsSummaryTableFunction) Name() string {
 	return "dolt_preview_merge_conflicts_summary"
 }
 
 // Resolved implements the sql.Resolvable interface
-func (ds *PreviewMergeConflictsSummaryTableFunction) Resolved() bool {
-	return ds.leftBranchExpr.Resolved() && ds.rightBranchExpr.Resolved()
+func (pm *PreviewMergeConflictsSummaryTableFunction) Resolved() bool {
+	return pm.leftBranchExpr.Resolved() && pm.rightBranchExpr.Resolved()
 }
 
-func (ds *PreviewMergeConflictsSummaryTableFunction) IsReadOnly() bool {
+func (pm *PreviewMergeConflictsSummaryTableFunction) IsReadOnly() bool {
 	return true
 }
 
 // String implements the Stringer interface
-func (ds *PreviewMergeConflictsSummaryTableFunction) String() string {
-	return fmt.Sprintf("DOLT_PREVIEW_MERGE_CONFLICTS_SUMMARY(%s, %s)", ds.leftBranchExpr.String(), ds.rightBranchExpr.String())
+func (pm *PreviewMergeConflictsSummaryTableFunction) String() string {
+	return fmt.Sprintf("DOLT_PREVIEW_MERGE_CONFLICTS_SUMMARY(%s, %s)", pm.leftBranchExpr.String(), pm.rightBranchExpr.String())
 }
 
 // Schema implements the sql.Node interface.
-func (ds *PreviewMergeConflictsSummaryTableFunction) Schema() sql.Schema {
+func (pm *PreviewMergeConflictsSummaryTableFunction) Schema() sql.Schema {
 	return previewMergeConflictsSummarySchema
 }
 
 // Children implements the sql.Node interface.
-func (ds *PreviewMergeConflictsSummaryTableFunction) Children() []sql.Node {
+func (pm *PreviewMergeConflictsSummaryTableFunction) Children() []sql.Node {
 	return nil
 }
 
 // WithChildren implements the sql.Node interface.
-func (ds *PreviewMergeConflictsSummaryTableFunction) WithChildren(children ...sql.Node) (sql.Node, error) {
+func (pm *PreviewMergeConflictsSummaryTableFunction) WithChildren(children ...sql.Node) (sql.Node, error) {
 	if len(children) != 0 {
 		return nil, fmt.Errorf("unexpected children")
 	}
-	return ds, nil
+	return pm, nil
 }
 
 // CheckAuth implements the interface sql.AuthorizationCheckerNode.
@@ -187,11 +187,19 @@ func (pm *PreviewMergeConflictsSummaryTableFunction) RowIter(ctx *sql.Context, r
 
 	leftBranch, err := interfaceToString(leftBranchVal)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("invalid left branch parameter: %w", err)
 	}
 	rightBranch, err := interfaceToString(rightBranchVal)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("invalid right branch parameter: %w", err)
+	}
+
+	// Validate branch names are not empty
+	if leftBranch == "" {
+		return nil, fmt.Errorf("left branch name cannot be empty")
+	}
+	if rightBranch == "" {
+		return nil, fmt.Errorf("right branch name cannot be empty")
 	}
 
 	sqledb, ok := pm.database.(dsess.SqlDatabase)
@@ -207,18 +215,18 @@ func (pm *PreviewMergeConflictsSummaryTableFunction) RowIter(ctx *sql.Context, r
 	return NewPreviewMergeConflictsSummaryTableFunctionRowIter(conflicts), nil
 }
 
-// evaluateArguments returns leftBranchVal amd rightBranchVal.
+// evaluateArguments returns leftBranchVal and rightBranchVal.
 // It evaluates the argument expressions to turn them into values this PreviewMergeConflictsSummaryTableFunction
 // can use. Note that this method only evals the expressions, and doesn't validate the values.
 func (pm *PreviewMergeConflictsSummaryTableFunction) evaluateArguments() (interface{}, interface{}, error) {
 	leftBranchVal, err := pm.leftBranchExpr.Eval(pm.ctx, nil)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("failed to evaluate left branch expression: %w", err)
 	}
 
 	rightBranchVal, err := pm.rightBranchExpr.Eval(pm.ctx, nil)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("failed to evaluate right branch expression: %w", err)
 	}
 
 	return leftBranchVal, rightBranchVal, nil
@@ -235,11 +243,11 @@ type previewMergeConflictsSummaryTableFunctionRowIter struct {
 	conIdx    int
 }
 
-func (d *previewMergeConflictsSummaryTableFunctionRowIter) incrementIndexes() {
-	d.conIdx++
-	if d.conIdx >= len(d.conflicts) {
-		d.conIdx = 0
-		d.conflicts = nil
+func (iter *previewMergeConflictsSummaryTableFunctionRowIter) incrementIndexes() {
+	iter.conIdx++
+	if iter.conIdx >= len(iter.conflicts) {
+		iter.conIdx = 0
+		iter.conflicts = nil
 	}
 }
 
@@ -249,21 +257,17 @@ func NewPreviewMergeConflictsSummaryTableFunctionRowIter(pm []tableConflict) sql
 	}
 }
 
-func (d *previewMergeConflictsSummaryTableFunctionRowIter) Next(ctx *sql.Context) (sql.Row, error) {
-	defer d.incrementIndexes()
-	if d.conIdx >= len(d.conflicts) {
+func (iter *previewMergeConflictsSummaryTableFunctionRowIter) Next(ctx *sql.Context) (sql.Row, error) {
+	defer iter.incrementIndexes()
+	if iter.conIdx >= len(iter.conflicts) || iter.conflicts == nil {
 		return nil, io.EOF
 	}
 
-	if d.conflicts == nil {
-		return nil, io.EOF
-	}
-
-	pm := d.conflicts[d.conIdx]
-	return getRowFromConflict(pm), nil
+	conflict := iter.conflicts[iter.conIdx]
+	return getRowFromConflict(conflict), nil
 }
 
-func (d *previewMergeConflictsSummaryTableFunctionRowIter) Close(context *sql.Context) error {
+func (iter *previewMergeConflictsSummaryTableFunctionRowIter) Close(context *sql.Context) error {
 	return nil
 }
 
@@ -284,6 +288,8 @@ func getRowFromConflict(conflict tableConflict) sql.Row {
 	return row
 }
 
+// resolveBranchesToRoots resolves branch names to their corresponding root values
+// and finds the common merge base. Returns left root, right root, and base root.
 func resolveBranchesToRoots(ctx *sql.Context, db dsess.SqlDatabase, leftBranch, rightBranch string) (doltdb.RootValue, doltdb.RootValue, doltdb.RootValue, error) {
 	sess := dsess.DSessFromSess(ctx.Session)
 
@@ -330,10 +336,13 @@ func resolveBranchesToRoots(ctx *sql.Context, db dsess.SqlDatabase, leftBranch, 
 
 type tableConflict struct {
 	tableName          doltdb.TableName
-	numDataConflicts   *uint64
+	numDataConflicts   *uint64 // nil if schema conflicts exist
 	numSchemaConflicts *uint64
 }
 
+// getTablesWithConflicts analyzes the merge between two branches and returns
+// a list of tables that would have conflicts. It performs a dry-run merge
+// to identify both schema and data conflicts without modifying the database.
 func getTablesWithConflicts(ctx *sql.Context, db dsess.SqlDatabase, baseBranch, mergeBranch string) ([]tableConflict, error) {
 	leftRoot, rightRoot, baseRoot, err := resolveBranchesToRoots(ctx, db, baseBranch, mergeBranch)
 	if err != nil {
@@ -397,6 +406,9 @@ func getTablesWithConflicts(ctx *sql.Context, db dsess.SqlDatabase, baseBranch, 
 	return conflicted, nil
 }
 
+// getDataConflictsForTable calculates the number of data conflicts for a specific table.
+// It performs a three-way diff to identify rows that cannot be automatically merged.
+// Returns nil if no data conflicts are found.
 func getDataConflictsForTable(ctx *sql.Context, tm *merge.TableMerger, tblName doltdb.TableName, mergeSch schema.Schema, diffInfo tree.ThreeWayDiffInfo) (*tableConflict, error) {
 	keyless := schema.IsKeyless(mergeSch)
 
