@@ -45,10 +45,10 @@ func TestLeastPermissiveType(t *testing.T) {
 	}{
 		{"empty string", "", 0.0, typeinfo.UnknownType},
 		{"valid uuid", "00000000-0000-0000-0000-000000000000", 0.0, typeinfo.UuidType},
-		{"invalid uuid", "00000000-0000-0000-0000-00000000000z", 0.0, typeinfo.StringDefaultType},
+		{"invalid uuid", "00000000-0000-0000-0000-00000000000z", 0.0, typeinfo.StringImportDefaultType},
 		{"lower bool", "true", 0.0, typeinfo.BoolType},
 		{"upper bool", "FALSE", 0.0, typeinfo.BoolType},
-		{"yes", "yes", 0.0, typeinfo.StringDefaultType},
+		{"yes", "yes", 0.0, typeinfo.StringImportDefaultType},
 		{"one", "1", 0.0, typeinfo.Int32Type},
 		{"negative one", "-1", 0.0, typeinfo.Int32Type},
 		{"negative one point 0", "-1.0", 0.0, typeinfo.Float32Type},
@@ -57,7 +57,7 @@ func TestLeastPermissiveType(t *testing.T) {
 		{"negative one point 999 with FT of 1.0", "-1.999", 1.0, typeinfo.Int32Type},
 		{"zero point zero zero zero zero", "0.0000", 0.0, typeinfo.Float32Type},
 		{"max int", strconv.FormatUint(math.MaxInt64, 10), 0.0, typeinfo.Int64Type},
-		{"bigger than max int", strconv.FormatUint(math.MaxUint64, 10) + "0", 0.0, typeinfo.StringDefaultType},
+		{"bigger than max int", strconv.FormatUint(math.MaxUint64, 10) + "0", 0.0, typeinfo.StringImportDefaultType},
 	}
 
 	for _, test := range tests {
@@ -82,11 +82,11 @@ func TestLeastPermissiveNumericType(t *testing.T) {
 		{"double decimal point", "0.00.0", 0.0, typeinfo.UnknownType},
 		{"leading zero floats", "05.78", 0.0, typeinfo.Float32Type},
 		{"zero float with high precision", "0.0000", 0.0, typeinfo.Float32Type},
-		{"all zeroes", "0000", 0.0, typeinfo.StringDefaultType},
-		{"leading zeroes", "01", 0.0, typeinfo.StringDefaultType},
+		{"all zeroes", "0000", 0.0, typeinfo.StringImportDefaultType},
+		{"leading zeroes", "01", 0.0, typeinfo.StringImportDefaultType},
 		{"negative int", "-1234", 0.0, typeinfo.Int32Type},
-		{"fits in uint64 but not int64", strconv.FormatUint(math.MaxUint64, 10), 0.0, typeinfo.StringDefaultType},
-		{"negative less than math.MinInt64", "-" + strconv.FormatUint(math.MaxUint64, 10), 0.0, typeinfo.StringDefaultType},
+		{"fits in uint64 but not int64", strconv.FormatUint(math.MaxUint64, 10), 0.0, typeinfo.StringImportDefaultType},
+		{"negative less than math.MinInt64", "-" + strconv.FormatUint(math.MaxUint64, 10), 0.0, typeinfo.StringImportDefaultType},
 		{"math.MinInt64", strconv.FormatInt(math.MinInt64, 10), 0.0, typeinfo.Int64Type},
 	}
 
@@ -186,7 +186,7 @@ func testFindCommonType(t *testing.T) {
 				typeinfo.Int32Type: {},
 				typeinfo.BoolType:  {},
 			},
-			expType: typeinfo.StringDefaultType,
+			expType: typeinfo.StringImportDefaultType,
 		},
 		{
 			name: "floats and bools",
@@ -194,7 +194,7 @@ func testFindCommonType(t *testing.T) {
 				typeinfo.Float32Type: {},
 				typeinfo.BoolType:    {},
 			},
-			expType: typeinfo.StringDefaultType,
+			expType: typeinfo.StringImportDefaultType,
 		},
 		{
 			name: "floats and uuids",
@@ -202,7 +202,7 @@ func testFindCommonType(t *testing.T) {
 				typeinfo.Float32Type: {},
 				typeinfo.UuidType:    {},
 			},
-			expType: typeinfo.StringDefaultType,
+			expType: typeinfo.StringImportDefaultType,
 		},
 	}
 
@@ -230,7 +230,7 @@ func testFindCommonTypeFromSingleType(t *testing.T) {
 		typeinfo.TimeType,
 		typeinfo.TimestampType,
 		typeinfo.DatetimeType,
-		typeinfo.StringDefaultType,
+		typeinfo.StringImportDefaultType,
 	}
 
 	for _, ti := range allTypes {
@@ -371,11 +371,11 @@ func TestInferSchema(t *testing.T) {
 			},
 			map[string]typeinfo.TypeInfo{
 				"int":    typeinfo.Int32Type,
-				"uint":   typeinfo.StringDefaultType,
+				"uint":   typeinfo.StringImportDefaultType,
 				"uuid":   typeinfo.UuidType,
 				"float":  typeinfo.Float32Type,
 				"bool":   typeinfo.BoolType,
-				"string": typeinfo.StringDefaultType,
+				"string": typeinfo.StringImportDefaultType,
 			},
 			nil,
 		},
@@ -387,7 +387,7 @@ func TestInferSchema(t *testing.T) {
 				floatThreshold: 0,
 			},
 			map[string]typeinfo.TypeInfo{
-				"mix":  typeinfo.StringDefaultType,
+				"mix":  typeinfo.StringImportDefaultType,
 				"uuid": typeinfo.UuidType,
 			},
 			nil,

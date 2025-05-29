@@ -171,19 +171,14 @@ SQL
 }
 
 @test "export-tables: broken SQL escaping" {
-    skip "Export embeds single quote in string without escaping it https://github.com/dolthub/dolt/issues/2197"
-
-    dolt sql <<SQL
-create table sets (a varchar(10) primary key, b set('one','two','three\'s'));
-insert into sets values ('abc', 'one,two'), ('def', 'two,three\'s');
-SQL
+    dolt sql -q "create table sets (a varchar(10) primary key, b set('one','two','three\\'s'));"
+    dolt sql -q "insert into sets values ('abc', 'one,two'), ('def', 'two,three\\'s');"
     
-    dolt commit -am "Checkpoint"
+    dolt add .
+    dolt commit -m "Checkpoint"
 
     dolt table export sets -f export.sql
     
-
-   
     dolt sql < export.sql
 
     run dolt status

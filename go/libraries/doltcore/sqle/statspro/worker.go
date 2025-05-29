@@ -183,8 +183,8 @@ func (sc *StatsController) newStatsForRoot(baseCtx context.Context, gcKv *memSta
 		return nil, err
 	}
 
-	sql.SessionCommandBegin(ctx.Session)
 	defer sql.SessionEnd(ctx.Session)
+	sql.SessionCommandBegin(ctx.Session)
 	defer sql.SessionCommandEnd(ctx.Session)
 
 	dSess := dsess.DSessFromSess(ctx.Session)
