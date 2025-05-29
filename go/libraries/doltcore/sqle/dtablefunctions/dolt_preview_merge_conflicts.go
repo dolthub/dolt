@@ -41,6 +41,7 @@ var _ sql.TableFunction = (*PreviewMergeConflictsTableFunction)(nil)
 var _ sql.ExecSourceRel = (*PreviewMergeConflictsTableFunction)(nil)
 var _ sql.AuthorizationCheckerNode = (*PreviewMergeConflictsTableFunction)(nil)
 
+
 type PreviewMergeConflictsTableFunction struct {
 	ctx             *sql.Context
 	leftBranchExpr  sql.Expression
@@ -48,15 +49,14 @@ type PreviewMergeConflictsTableFunction struct {
 	tableNameExpr   sql.Expression
 	database        sql.Database
 
-	root, leftRoot, rightRoot, baseRoot doltdb.RootValue
-	tblName                             doltdb.TableName
-	sqlSch                              sql.PrimaryKeySchema
-	baseSch, ourSch, theirSch           schema.Schema
-	rightSrc, ancestorSrc               doltdb.Rootish
+	rootInfo                  rootInfo
+	tblName                   doltdb.TableName
+	sqlSch                    sql.PrimaryKeySchema
+	baseSch, ourSch, theirSch schema.Schema
 }
 
 // NewInstance creates a new instance of TableFunction interface
-func (ds *PreviewMergeConflictsTableFunction) NewInstance(ctx *sql.Context, db sql.Database, expressions []sql.Expression) (sql.Node, error) {
+func (pm *PreviewMergeConflictsTableFunction) NewInstance(ctx *sql.Context, db sql.Database, expressions []sql.Expression) (sql.Node, error) {
 	newInstance := &PreviewMergeConflictsTableFunction{
 		ctx:      ctx,
 		database: db,
@@ -70,74 +70,74 @@ func (ds *PreviewMergeConflictsTableFunction) NewInstance(ctx *sql.Context, db s
 	return node, nil
 }
 
-func (ds *PreviewMergeConflictsTableFunction) DataLength(ctx *sql.Context) (uint64, error) {
-	numBytesPerRow := schema.SchemaAvgLength(ds.Schema())
-	numRows, _, err := ds.RowCount(ctx)
+func (pm *PreviewMergeConflictsTableFunction) DataLength(ctx *sql.Context) (uint64, error) {
+	numBytesPerRow := schema.SchemaAvgLength(pm.Schema())
+	numRows, _, err := pm.RowCount(ctx)
 	if err != nil {
 		return 0, err
 	}
 	return numBytesPerRow * numRows, nil
 }
 
-func (ds *PreviewMergeConflictsTableFunction) RowCount(_ *sql.Context) (uint64, bool, error) {
+func (pm *PreviewMergeConflictsTableFunction) RowCount(_ *sql.Context) (uint64, bool, error) {
 	return previewMergeConflictsDefaultRowCount, false, nil
 }
 
 // Database implements the sql.Databaser interface
-func (ds *PreviewMergeConflictsTableFunction) Database() sql.Database {
-	return ds.database
+func (pm *PreviewMergeConflictsTableFunction) Database() sql.Database {
+	return pm.database
 }
 
 // WithDatabase implements the sql.Databaser interface
-func (ds *PreviewMergeConflictsTableFunction) WithDatabase(database sql.Database) (sql.Node, error) {
-	nds := *ds
-	nds.database = database
-	return &nds, nil
+func (pm *PreviewMergeConflictsTableFunction) WithDatabase(database sql.Database) (sql.Node, error) {
+	npm := *pm
+	npm.database = database
+	return &npm, nil
 }
 
 // Name implements the sql.TableFunction interface
-func (ds *PreviewMergeConflictsTableFunction) Name() string {
+func (pm *PreviewMergeConflictsTableFunction) Name() string {
 	return "dolt_preview_merge_conflicts"
 }
 
 // Resolved implements the sql.Resolvable interface
-func (ds *PreviewMergeConflictsTableFunction) Resolved() bool {
-	return ds.leftBranchExpr.Resolved() && ds.rightBranchExpr.Resolved() && ds.tableNameExpr.Resolved()
+func (pm *PreviewMergeConflictsTableFunction) Resolved() bool {
+	return pm.leftBranchExpr.Resolved() && pm.rightBranchExpr.Resolved() && pm.tableNameExpr.Resolved()
 }
 
-func (ds *PreviewMergeConflictsTableFunction) IsReadOnly() bool {
+func (pm *PreviewMergeConflictsTableFunction) IsReadOnly() bool {
 	return true
 }
 
 // String implements the Stringer interface
-func (ds *PreviewMergeConflictsTableFunction) String() string {
-	return fmt.Sprintf("DOLT_PREVIEW_MERGE_CONFLICTS(%s, %s, %s)", ds.leftBranchExpr.String(), ds.rightBranchExpr.String(), ds.tableNameExpr.String())
+func (pm *PreviewMergeConflictsTableFunction) String() string {
+	return fmt.Sprintf("DOLT_PREVIEW_MERGE_CONFLICTS(%s, %s, %s)", pm.leftBranchExpr.String(), pm.rightBranchExpr.String(), pm.tableNameExpr.String())
 }
 
 // Schema implements the sql.Node interface.
-func (ds *PreviewMergeConflictsTableFunction) Schema() sql.Schema {
-	if !ds.Resolved() {
+func (pm *PreviewMergeConflictsTableFunction) Schema() sql.Schema {
+	if !pm.Resolved() {
 		return nil
 	}
 
-	if ds.sqlSch.Schema == nil {
+	if pm.sqlSch.Schema == nil {
 		panic("schema hasn't been generated yet")
 	}
 
-	return ds.sqlSch.Schema
+	return pm.sqlSch.Schema
 }
 
 // Children implements the sql.Node interface.
-func (ds *PreviewMergeConflictsTableFunction) Children() []sql.Node {
+func (pm *PreviewMergeConflictsTableFunction) Children() []sql.Node {
 	return nil
 }
 
 // WithChildren implements the sql.Node interface.
-func (ds *PreviewMergeConflictsTableFunction) WithChildren(children ...sql.Node) (sql.Node, error) {
+func (pm *PreviewMergeConflictsTableFunction) WithChildren(children ...sql.Node) (sql.Node, error) {
 	if len(children) != 0 {
 		return nil, fmt.Errorf("unexpected children")
 	}
-	return ds, nil
+	return pm, nil
 }
 
 // CheckAuth implements the interface sql.AuthorizationCheckerNode.
@@ -232,18 +232,13 @@ func (pm *PreviewMergeConflictsTableFunction) generateSchema(ctx *sql.Context, l
 		return err
 	}
 
-	leftRoot, rightRoot, baseRoot, rightSrc, ancestorSrc, err := resolveBranchesToRoots(ctx, sqledb, leftBranch, rightBranch)
-	if err != nil {
-		return err
-	}
-
-	root, err := sqledb.GetRoot(ctx)
+	ri, err := resolveBranchesToRoots(ctx, sqledb, leftBranch, rightBranch)
 	if err != nil {
 		return err
 	}
 
 	tblName := doltdb.TableName{Name: tableName, Schema: doltdb.DefaultSchemaName}
-	baseSch, ourSch, theirSch, err := getConflictSchemasFromRoots(ctx, tblName, leftRoot, rightRoot, baseRoot)
+	baseSch, ourSch, theirSch, err := getConflictSchemasFromRoots(ctx, tblName, ri.leftRoot, ri.rightRoot, ri.baseRoot)
 	if err != nil {
 		return err
 	}
@@ -259,12 +254,7 @@ func (pm *PreviewMergeConflictsTableFunction) generateSchema(ctx *sql.Context, l
 	}
 
 	pm.sqlSch = sqlSch
-	pm.root = root
-	pm.leftRoot = leftRoot
-	pm.rightRoot = rightRoot
-	pm.baseRoot = baseRoot
-	pm.rightSrc = rightSrc
-	pm.ancestorSrc = ancestorSrc
+	pm.rootInfo = ri
 	pm.tblName = tblName
 	pm.baseSch = baseSch
 	pm.ourSch = ourSch
@@ -278,10 +268,7 @@ func getConflictSchemasFromRoots(ctx *sql.Context, tblName doltdb.TableName, lef
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	if !ourOk {
-		return nil, nil, nil, fmt.Errorf("could not find tbl %s in left root value", tblName)
-	}
-
+	
 	baseTbl, baseOk, err := baseRoot.GetTable(ctx, tblName)
 	if err != nil {
 		return nil, nil, nil, err
@@ -289,6 +276,10 @@ func getConflictSchemasFromRoots(ctx *sql.Context, tblName doltdb.TableName, lef
 	theirTbl, theirOK, err := rightRoot.GetTable(ctx, tblName)
 	if err != nil {
 		return nil, nil, nil, err
+	}
+	
+	if !ourOk {
+		return nil, nil, nil, fmt.Errorf("could not find tbl %s in left root value", tblName)
 	}
 	if !theirOK {
 		return nil, nil, nil, fmt.Errorf("could not find tbl %s in right root value", tblName)
@@ -327,8 +318,9 @@ func (pm *PreviewMergeConflictsTableFunction) RowIter(ctx *sql.Context, row sql.
 	if pm.sqlSch.Schema == nil {
 		panic("schema hasn't been generated yet")
 	}
+	
 
-	merger, err := merge.NewMerger(pm.leftRoot, pm.rightRoot, pm.baseRoot, pm.rightSrc, pm.ancestorSrc, pm.leftRoot.VRW(), pm.leftRoot.NodeStore())
+	merger, err := merge.NewMerger(pm.rootInfo.leftRoot, pm.rootInfo.rightRoot, pm.rootInfo.baseRoot, pm.rootInfo.rightCm, pm.rootInfo.ancCm, pm.rootInfo.leftRoot.VRW(), pm.rootInfo.leftRoot.NodeStore())
 	if err != nil {
 		return nil, err
 	}
@@ -363,7 +355,7 @@ func (pm *PreviewMergeConflictsTableFunction) RowIter(ctx *sql.Context, row sql.
 	}
 
 	if !tm.InvolvesRootObjects() {
-		if !dtypes.IsFormat_DOLT(pm.leftRoot.VRW().Format()) {
+		if !dtypes.IsFormat_DOLT(pm.rootInfo.leftRoot.VRW().Format()) {
 			return nil, fmt.Errorf("preview_merge_conflicts table function only supports dolt format")
 		}
 	} else {
@@ -385,20 +377,20 @@ func (pm *PreviewMergeConflictsTableFunction) RowIter(ctx *sql.Context, row sql.
 		return nil, err
 	}
 
-	rightHash, err := pm.rightSrc.HashOf()
+	rightHash, err := pm.rootInfo.rightCm.HashOf()
 	if err != nil {
 		return nil, err
 	}
 
-	baseHash, err := pm.ancestorSrc.HashOf()
+	baseHash, err := pm.rootInfo.ancCm.HashOf()
 	if err != nil {
 		return nil, err
 	}
 
-	kd := pm.baseSch.GetKeyDescriptor(pm.root.NodeStore())
-	baseVD := pm.baseSch.GetValueDescriptor(pm.root.NodeStore())
-	oursVD := pm.ourSch.GetValueDescriptor(pm.root.NodeStore())
-	theirsVD := pm.theirSch.GetValueDescriptor(pm.root.NodeStore())
+	kd := pm.baseSch.GetKeyDescriptor(pm.rootInfo.baseRoot.NodeStore())
+	baseVD := pm.baseSch.GetValueDescriptor(pm.rootInfo.baseRoot.NodeStore())
+	oursVD := pm.ourSch.GetValueDescriptor(pm.rootInfo.leftRoot.NodeStore())
+	theirsVD := pm.theirSch.GetValueDescriptor(pm.rootInfo.rightRoot.NodeStore())
 
 	b := 1
 	var o, t, n int
@@ -432,7 +424,7 @@ func (pm *PreviewMergeConflictsTableFunction) RowIter(ctx *sql.Context, row sql.
 	return &previewMergeConflictsTableFunctionRowIter{
 		itr:          differ,
 		tblName:      pm.tblName,
-		vrw:          pm.leftRoot.VRW(),
+		vrw:          pm.rootInfo.leftRoot.VRW(),
 		ns:           leftRows.NodeStore(),
 		ourRows:      leftRows,
 		keyless:      keyless,
@@ -472,6 +464,10 @@ func (pm *PreviewMergeConflictsTableFunction) evaluateArguments() (interface{}, 
 	tableName, ok := tableNameVal.(string)
 	if !ok {
 		return nil, nil, "", ErrInvalidTableName.New(pm.tableNameExpr.String())
+	}
+
+	if tableName == "" {
+		return nil, nil, "", fmt.Errorf("table name cannot be empty")
 	}
 
 	return leftBranchVal, rightBranchVal, tableName, nil
@@ -572,9 +568,12 @@ func (itr *previewMergeConflictsTableFunctionRowIter) nextConflictVals(ctx *sql.
 	c.k = ca.Key
 	c.h = itr.theirRootish
 
-	// To ensure that the conflict id is unique, we hash both TheirRootIsh and the key of the table.
+	if len(ca.Key) == 0 {
+		return conf{}, false, fmt.Errorf("empty key found in conflict")
+	}
 	// TODO: This is mutating the key, which is creating a schema with a different capacity than expected
 	// b := xxh3.Hash128(append(ca.Key, c.h[:]...)).Bytes()
+	// To ensure that the conflict id is unique, we hash both TheirRootIsh and the key of the table.
 	buf := make([]byte, len(ca.Key)+len(c.h))
 	copy(buf, ca.Key)
 	copy(buf[len(ca.Key):], c.h[:])
