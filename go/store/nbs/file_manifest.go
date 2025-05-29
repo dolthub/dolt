@@ -302,9 +302,6 @@ func writeManifest(temp io.Writer, contents manifestContents) error {
 	if contents.lock.IsEmpty() {
 		return errors.New("runtime error: Lock hash cannot be empty")
 	}
-	if contents.root.IsEmpty() {
-		return errors.New("runtime error: Root hash cannot be empty")
-	}
 
 	strs := make([]string, 2*len(contents.specs)+prefixLen)
 	strs[0], strs[1], strs[2], strs[3], strs[4] = StorageVersion, contents.nbfVers, contents.lock.String(), contents.root.String(), contents.gcGen.String()
