@@ -186,23 +186,10 @@ teardown() {
   [[ "$output" =~ "error: unknown option" ]] || false
 }
 
-@test "init: running init with the new format, creates a new format database" {
-    set_dolt_user "baz", "baz@bash.com"
-
-    run dolt init --new-format
-    [ $status -eq 0 ]
-
-    run dolt init
-    [ "$status" -eq 1 ]
-
-    run cut -d ":" -f 2 .dolt/noms/manifest
-    [ "$output" = "__DOLT__" ]
-}
-
 @test "init: initing a new database displays the correct version" {
     set_dolt_user "baz", "baz@bash.com"
 
-    run dolt init --new-format
+    run dolt init
     [ $status -eq 0 ]
 
     run dolt version -v
@@ -210,28 +197,6 @@ teardown() {
     [[ $output =~ "database storage format: NEW ( __DOLT__ )" ]] || false
 
     run dolt sql -q "SELECT dolt_storage_format();"
-    [[ $output =~ "NEW ( __DOLT__ )" ]] || false
-}
-
-@test "init: run init with --new-format, CREATE DATABASE through sql-server running in new-format repo should create a new format database" {
-    set_dolt_user "baz", "baz@bash.com"
-
-    run dolt init --new-format
-    [ $status -eq 0 ]
-
-    run dolt version --verbose
-    [ "$status" -eq 0 ]
-    [[ ! $output =~ "OLD ( __LD_1__ )" ]] || false
-    [[ $output =~ "NEW ( __DOLT__ )" ]] || false
-
-    dolt sql -q "create database test"
-    run ls
-    [[ $output =~ "test" ]] || false
-
-    cd test
-    run dolt version --verbose
-    [ "$status" -eq 0 ]
-    [[ ! $output =~ "OLD ( __LD_1__ )" ]] || false
     [[ $output =~ "NEW ( __DOLT__ )" ]] || false
 }
 
@@ -247,7 +212,7 @@ teardown() {
     fi
 
     mkdir new_format && cd new_format
-    run dolt init --new-format
+    run dolt init
     [ $status -eq 0 ]
 
     run dolt version --verbose
