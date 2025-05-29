@@ -167,7 +167,7 @@ func TestProllyKv(t *testing.T) {
 func newTestProllyKv(t *testing.T, threads *sql.BackgroundThreads) *prollyStats {
 	dEnv := dtestutils.CreateTestEnv()
 
-	sqlEng, ctx := newTestEngine(context.Background(), dEnv, threads)
+	sqlEng, ctx := newTestEngine(context.Background(), t, dEnv, threads)
 	ctx.Session.SetClient(sql.Client{
 		User:    "billy boy",
 		Address: "bigbillie@fake.horse",

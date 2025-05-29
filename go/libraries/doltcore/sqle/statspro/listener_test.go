@@ -32,13 +32,13 @@ func TestListening(t *testing.T) {
 	ctx := sql.NewEmptyContext()
 	defer bthreads.Shutdown()
 	t.Run("ClosedDoesNotStart", func(t *testing.T) {
-		sc := newStatsCoord(bthreads)
+		sc := newStatsCoord(t, bthreads)
 		sc.Close()
 		require.Error(t, sc.Restart(ctx))
 		require.Nil(t, sc.activeCtxCancel)
 	})
 	t.Run("IsStoppable", func(t *testing.T) {
-		sc := newStatsCoord(bthreads)
+		sc := newStatsCoord(t, bthreads)
 		eg := errgroup.Group{}
 		ctx, _, doneCh := sc.newThreadCtx(context.Background())
 		eg.Go(func() error {
@@ -61,7 +61,7 @@ func TestListening(t *testing.T) {
 		require.ErrorIs(t, eg.Wait(), context.Canceled)
 	})
 	t.Run("StopsAreIdempotent", func(t *testing.T) {
-		sc := newStatsCoord(bthreads)
+		sc := newStatsCoord(t, bthreads)
 		eg := errgroup.Group{}
 		ctx, _, doneCh := sc.newThreadCtx(context.Background())
 		eg.Go(func() error {
@@ -77,7 +77,7 @@ func TestListening(t *testing.T) {
 		require.ErrorIs(t, eg.Wait(), context.Canceled)
 	})
 	t.Run("IsRestartable", func(t *testing.T) {
-		sc := newStatsCoord(bthreads)
+		sc := newStatsCoord(t, bthreads)
 		eg := errgroup.Group{}
 		ctx1, _, doneCh1 := sc.newThreadCtx(context.Background())
 		eg.Go(func() error {
@@ -104,7 +104,7 @@ func TestListening(t *testing.T) {
 		require.ErrorIs(t, eg.Wait(), context.Canceled)
 	})
 	t.Run("ConcurrentStartStopsAreOk", func(t *testing.T) {
-		sc := newStatsCoord(bthreads)
+		sc := newStatsCoord(t, bthreads)
 		wg := sync.WaitGroup{}
 		wg.Add(2)
 		go func() {
@@ -140,7 +140,7 @@ func TestListening(t *testing.T) {
 		wg.Wait()
 	})
 	t.Run("ListenForSwap", func(t *testing.T) {
-		sc := newStatsCoord(bthreads)
+		sc := newStatsCoord(t, bthreads)
 		require.NoError(t, sc.Restart(ctx))
 		l, err := sc.addListener(leSwap)
 		require.NoError(t, err)
@@ -150,7 +150,7 @@ func TestListening(t *testing.T) {
 		}
 	})
 	t.Run("ListenForStop", func(t *testing.T) {
-		sc := newStatsCoord(bthreads)
+		sc := newStatsCoord(t, bthreads)
 		require.NoError(t, sc.Restart(ctx))
 		l, err := sc.addListener(leUnknown)
 		require.NoError(t, err)
@@ -163,14 +163,14 @@ func TestListening(t *testing.T) {
 		}
 	})
 	t.Run("ListenerFailsIfStopped", func(t *testing.T) {
-		sc := newStatsCoord(bthreads)
+		sc := newStatsCoord(t, bthreads)
 		require.NoError(t, sc.Restart(ctx))
 		<-sc.Stop()
 		_, err := sc.addListener(leUnknown)
 		require.ErrorIs(t, err, ErrStatsIssuerPaused)
 	})
 	t.Run("ListenerFailsIfClosed", func(t *testing.T) {
-		sc := newStatsCoord(bthreads)
+		sc := newStatsCoord(t, bthreads)
 		sc.Close()
 		require.Error(t, sc.Restart(ctx))
 		_, err := sc.addListener(leUnknown)
@@ -180,9 +180,9 @@ func TestListening(t *testing.T) {
 		sqlCtx, sqlEng, sc := emptySetup(t, bthreads, true, true)
 		_, orig, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsJobInterval)
 		sql.SystemVariables.SetGlobal(sqlCtx, dsess.DoltStatsJobInterval, "60000000000")
-		defer func() {
+		t.Cleanup(func() {
 			sql.SystemVariables.SetGlobal(sqlCtx, dsess.DoltStatsJobInterval, orig)
-		}()
+		})
 		require.NoError(t, executeQuery(sqlCtx, sqlEng, "create table xy (x int primary key, y int)"))
 		require.NoError(t, sc.Restart(ctx))
 		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
