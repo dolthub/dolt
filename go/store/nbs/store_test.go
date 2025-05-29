@@ -27,6 +27,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dolthub/dolt/go/store/constants"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -49,7 +50,10 @@ func makeTestLocalStore(t *testing.T, maxTableFiles int) (st *NomsBlockStore, no
 	// create a v5 manifest
 	fm, err := getFileManifest(ctx, nomsDir, asyncFlush)
 	require.NoError(t, err)
-	_, err = fm.Update(ctx, hash.Hash{}, manifestContents{}, &Stats{}, nil)
+	_, err = fm.Update(ctx, hash.Hash{}, manifestContents{
+		nbfVers: constants.FormatDoltString,
+		lock:    journalAddr, // Any valid address will do here
+	}, &Stats{}, nil)
 	require.NoError(t, err)
 
 	q = NewUnlimitedMemQuotaProvider()
