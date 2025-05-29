@@ -125,10 +125,78 @@ func (cmd LogCmd) logWithLoggerFunc(ctx context.Context, commandStr string, args
 	return handleErrAndExit(logCommits(apr, logRows, queryist, sqlCtx))
 }
 
+func collectRevisions(apr *argparser.ArgParseResults, queryist cli.Queryist, sqlCtx *sql.Context) ([]string, int, error) {
+	revisions := make(map[string]bool, apr.NArg())
+	tablesIndex := 0
+
+	if apr.PositionalArgsSeparatorIndex >= 0 {
+		for i := 0; i < apr.PositionalArgsSeparatorIndex; i++ {
+			revisions[apr.Args[i]] = true
+		}
+		tablesIndex = apr.PositionalArgsSeparatorIndex
+	} else {
+		for _, arg := range apr.Args {
+			if strings.Contains(arg, "..") || strings.HasPrefix(arg, "^") || strings.HasPrefix(arg, "refs/") || strings.HasPrefix(arg, "remotes/") {
+				tablesIndex++
+				revisions[arg] = true
+			} else {
+				_, err := GetRowsForSql(queryist, sqlCtx, "select hashof('"+arg+"')")
+
+				// Once we get a non-revision argument, we treat the remaining args as tables
+				if _, ok := revisions[arg]; ok || err != nil {
+					break
+				} else {
+					tablesIndex++
+					revisions[arg] = true
+				}
+			}
+		}
+	}
+
+	if apr.Contains(cli.AllFlag) {
+		branches, err := getBranches(sqlCtx, queryist, false)
+		if err != nil {
+			return nil, 0, err
+		}
+
+		for _, branch := range branches {
+			revisions[branch.name] = true
+		}
+	}
+
+	var revisionNames []string
+	for arg, ok := range revisions {
+		if ok {
+			revisionNames = append(revisionNames, arg)
+		}
+	}
+
+	return revisionNames, tablesIndex, nil
+}
+
+func collectTables(apr *argparser.ArgParseResults, queryist cli.Queryist, sqlCtx *sql.Context, selectedBranches []string, startIndex int) ([]string, error) {
+	var existingTables map[string]bool
+	var tableNames []string
+
+	existingTables, err := getExistingTables(selectedBranches, queryist, sqlCtx)
+	if err != nil {
+		return nil, err
+	}
+
+	for i := startIndex; i < apr.NArg(); i++ {
+		if _, ok := existingTables[apr.Args[i]]; !ok && apr.PositionalArgsSeparatorIndex < 0 {
+			return nil, fmt.Errorf("error: table %s does not exist", apr.Args[i])
+		}
+		tableNames = append(tableNames, apr.Args[i])
+	}
+
+	return tableNames, nil
+
+}
+
 // constructInterpolatedDoltLogQuery generates the sql query necessary to call the DOLT_LOG() function.
 // Also interpolates this query to prevent sql injection.
 func constructInterpolatedDoltLogQuery(apr *argparser.ArgParseResults, queryist cli.Queryist, sqlCtx *sql.Context) (string, error) {
-	var params []interface{}
 
 	var buffer bytes.Buffer
 	var first bool
@@ -144,71 +212,20 @@ func constructInterpolatedDoltLogQuery(apr *argparser.ArgParseResults, queryist 
 		first = false
 	}
 
-	if apr.PositionalArgsSeparatorIndex >= 0 {
-		for i := 0; i < apr.PositionalArgsSeparatorIndex; i++ {
-			writeToBuffer("?")
-			params = append(params, apr.Arg(i))
-		}
-		var tableNames []string
-		for i := apr.PositionalArgsSeparatorIndex; i < apr.NArg(); i++ {
-			tableNames = append(tableNames, apr.Arg(i))
-		}
-		if len(tableNames) > 0 {
-			params = append(params, strings.Join(tableNames, ","))
-			writeToBuffer("'--tables'")
-			writeToBuffer("?")
-		}
-	} else {
-		var existingTables map[string]bool
-		seenRevs := make(map[string]bool, apr.NArg())
-		finishedRevs := false
-		var tableNames []string
-		for i, arg := range apr.Args {
-			// once we encounter a rev we can't resolve, we assume the rest are table names
-			if finishedRevs {
-				if _, ok := existingTables[arg]; !ok {
-					return "", fmt.Errorf("error: table %s does not exist", arg)
-				}
-				tableNames = append(tableNames, arg)
-			} else {
-				if strings.Contains(arg, "..") || strings.HasPrefix(arg, "^") || strings.HasPrefix(arg, "refs/") || strings.HasPrefix(arg, "remotes/") {
-					writeToBuffer("?")
-					params = append(params, arg)
-				} else {
-					_, err := GetRowsForSql(queryist, sqlCtx, "select hashof('"+arg+"')")
-					if err != nil {
-						finishedRevs = true
-						existingTables, err = getExistingTables(apr.Args[:i], queryist, sqlCtx)
-						if err != nil {
-							return "", err
-						}
+	params, tablesIndex, err := collectRevisions(apr, queryist, sqlCtx)
+	if err != nil {
+		return "", err
+	}
+	for range params {
+		writeToBuffer("?")
+	}
 
-						if _, ok := existingTables[arg]; !ok {
-							return "", fmt.Errorf("error: table %s does not exist", arg)
-						}
-						tableNames = append(tableNames, arg)
-					} else {
-						if _, ok := seenRevs[arg]; ok {
-							finishedRevs = true
-							existingTables, err = getExistingTables(apr.Args[:i], queryist, sqlCtx)
-							if err != nil {
-								return "", err
-							}
-
-							if _, ok := existingTables[arg]; !ok {
-								return "", fmt.Errorf("error: table %s does not exist", arg)
-							}
-							tableNames = append(tableNames, arg)
-						} else {
-							seenRevs[arg] = true
-						}
-						writeToBuffer("?")
-						params = append(params, arg)
-					}
-				}
-			}
-
+	if tablesIndex < len(apr.Args) {
+		tableNames, err := collectTables(apr, queryist, sqlCtx, params, tablesIndex)
+		if err != nil {
+			return "", err
 		}
+
 		if len(tableNames) > 0 {
 			params = append(params, strings.Join(tableNames, ","))
 			writeToBuffer("'--tables'")
@@ -249,7 +266,12 @@ func constructInterpolatedDoltLogQuery(apr *argparser.ArgParseResults, queryist 
 		buffer.WriteString(" limit " + numLines)
 	}
 
-	interpolatedQuery, err := dbr.InterpolateForDialect(buffer.String(), params, dialect.MySQL)
+	interfaceParams := make([]interface{}, len(params))
+	for i, param := range params {
+		interfaceParams[i] = param
+	}
+
+	interpolatedQuery, err := dbr.InterpolateForDialect(buffer.String(), interfaceParams, dialect.MySQL)
 	if err != nil {
 		return "", err
 	}

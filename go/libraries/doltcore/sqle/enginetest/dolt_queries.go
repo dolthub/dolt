@@ -4786,6 +4786,65 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "commit_order column in dolt_log system table and function",
+		SetUpScript: []string{
+			"create table t (pk int primary key);",
+			"call dolt_add('.')",
+			"set @Commit1 = '';",
+			"call dolt_commit_hash_out(@Commit1, '-am', 'commit 1');",
+			"call dolt_commit('--allow-empty', '-m', 'commit 2');",
+			"call dolt_checkout('-b', 'feature');",
+			"call dolt_commit('--allow-empty', '-m', 'feature commit');",
+			"call dolt_checkout('main');",
+			"call dolt_commit('--allow-empty', '-m', 'main commit');",
+			"call dolt_merge('feature', '-m', 'merge feature');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "describe dolt_log;",
+				Expected: []sql.Row{
+					{"commit_hash", "text", "NO", "PRI", nil, ""},
+					{"committer", "text", "NO", "", nil, ""},
+					{"email", "text", "NO", "", nil, ""},
+					{"date", "datetime", "NO", "", nil, ""},
+					{"message", "text", "NO", "", nil, ""},
+					{"commit_order", "bigint unsigned", "NO", "", nil, ""},
+				},
+			},
+			{
+				Query: "select commit_order from dolt_log where message = 'commit 1';",
+				Expected: []sql.Row{
+					{uint64(2)},
+				},
+			},
+			{
+				Query: "select commit_order from dolt_log() where message = 'commit 1';",
+				Expected: []sql.Row{
+					{uint64(2)},
+				},
+			},
+			{
+				Query: "select (select commit_order from dolt_log where message = 'commit 1') = (select commit_order from dolt_log() where message = 'commit 1') as same_order;",
+				Expected: []sql.Row{
+					{true},
+				},
+			},
+			{
+				Query: "select count(distinct commit_order) = 5 as has_five_orders from dolt_log;",
+				Expected: []sql.Row{
+					{true},
+				},
+			},
+			// Test that commits on parallel branches can have the same commit_order (height)
+			{
+				Query: "select count(*) from (select commit_order, count(*) as cnt from dolt_log group by commit_order having cnt > 1) as duplicate_orders;",
+				Expected: []sql.Row{
+					{1}, // feature and main commits should have same order
+				},
+			},
+		},
+	},
 }
 
 var LargeJsonObjectScriptTests = []queries.ScriptTest{

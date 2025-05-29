@@ -2074,14 +2074,13 @@ SQL
 }
 
 @test "sql: replace count" {
-    skip "right now we always count a replace as a delete and insert when we shouldn't"
     dolt sql -q "CREATE TABLE test(pk BIGINT PRIMARY KEY, v BIGINT);"
     run dolt sql -q "REPLACE INTO test VALUES (1, 1);"
     [ $status -eq 0 ]
-    [[ "${lines[3]}" =~ " 1 " ]] || false
+    [[ "$output" =~ "Query OK, 1 row affected" ]] || false
     run dolt sql -q "REPLACE INTO test VALUES (1, 2);"
     [ $status -eq 0 ]
-    [[ "${lines[3]}" =~ " 2 " ]] || false
+    [[ "$output" =~ "Query OK, 2 rows affected" ]] || false
 }
 
 @test "sql: unix_timestamp function" {
