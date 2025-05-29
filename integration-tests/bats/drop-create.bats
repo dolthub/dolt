@@ -62,14 +62,11 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test" ]] || false
 
-    skip "Dolt can't look into previous commits to reuse table data, only the current branch head"
-    
     run dolt status
     [ "$status" -eq 0 ]
     [[ "$output" =~ "new table" ]] || false
     [[ "$output" =~ "test" ]] || false
 
-    dolt diff HEAD~
     run dolt diff HEAD~
     [ "$status" -eq 0 ]
     [[ ! "$output" =~ "added table" ]] || false
