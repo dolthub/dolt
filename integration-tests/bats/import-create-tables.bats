@@ -254,7 +254,6 @@ CSV
     run dolt table import -c -pk="batmansparents" test 1pk5col-ints.csv
     [ "$status" -eq 1 ]
     [[ "$output" =~ "Error determining the output schema." ]] || false
-    skip "--pk args is not validated to be an existing column"
     [[ "$output" =~ "column 'batmansparents' not found" ]] || false
 }
 
@@ -262,7 +261,6 @@ CSV
     run dolt table import -c -pk="pk,batmansparents" test 1pk5col-ints.csv
     [ "$status" -eq 1 ]
     [[ "$output" =~ "Error determining the output schema." ]] || false
-    skip "--pk args is not validated to be an existing column"
     [[ "$output" =~ "column 'batmansparents' not found" ]] || false
 }
 
