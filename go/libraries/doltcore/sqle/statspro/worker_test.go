@@ -802,7 +802,7 @@ func newTestEngine(ctx context.Context, t *testing.T, dEnv *env.DoltEnv, threads
 
 	sc := NewStatsController(logrus.StandardLogger(), threads, dEnv)
 	t.Cleanup(func() {
-		sc.Stop()
+		sc.Close()
 	})
 
 	gcSafepointController := gcctx.NewGCSafepointController()

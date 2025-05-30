@@ -123,7 +123,6 @@ func (sc *StatsController) Restart(ctx *sql.Context) error {
 	default:
 	}
 
-	// Rate limiter starts automatically - no need to start it
 	sc.RefreshFromSysVars(ctx)
 
 	done := make(chan struct{})
@@ -144,17 +143,11 @@ func (sc *StatsController) Restart(ctx *sql.Context) error {
 	return nil
 }
 
-func (sc *StatsController) RunQueue() {
-	// Rate limiter runs automatically - no separate background thread needed
-	return
-}
-
 // Init should only be called once
 func (sc *StatsController) Init(ctx context.Context, pro *sqle.DoltDatabaseProvider, ctxGen ctxFactory, dbs []sql.Database) error {
 	sc.pro = pro
 	sc.ctxGen = ctxGen
 
-	sc.RunQueue()
 	sqlCtx, err := sc.ctxGen(ctx)
 	if err != nil {
 		return err
@@ -245,6 +238,14 @@ func (sc *StatsController) Gc(ctx *sql.Context) error {
 func (sc *StatsController) Close() {
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
+
+	// Already closed.
+	select {
+	case <-sc.closed:
+		return
+	default:
+	}
+
 	if sc.activeCtxCancel != nil {
 		sc.activeCtxCancel()
 		sc.activeCtxCancel = nil
