@@ -52,6 +52,8 @@ var (
 	MaxVarcharLength = int64(16383)
 	// StringDefaultType is sized to 1k, which allows up to 16 fields per row
 	StringDefaultType = &varStringType{gmstypes.MustCreateStringWithDefaults(sqltypes.VarChar, MaxVarcharLength/16)}
+	// StringImportDefaultType is sized to 200, which allows up to 80+ fields per row during import operations
+	StringImportDefaultType = &varStringType{gmstypes.MustCreateStringWithDefaults(sqltypes.VarChar, 200)}
 )
 
 func CreateVarStringTypeFromSqlType(stringType sql.StringType) TypeInfo {

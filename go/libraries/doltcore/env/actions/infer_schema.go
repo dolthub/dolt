@@ -193,7 +193,7 @@ func leastPermissiveType(strVal string, floatThreshold float64) typeinfo.TypeInf
 	if int64(len(strVal)) > typeinfo.MaxVarcharLength {
 		return typeinfo.TextType
 	} else {
-		return typeinfo.StringDefaultType
+		return typeinfo.StringImportDefaultType
 	}
 }
 
@@ -234,7 +234,7 @@ func leastPermissiveNumericType(strVal string, floatThreshold float64) (ti typei
 
 	// use string for out of range
 	if errors.Is(err, strconv.ErrRange) {
-		return typeinfo.StringDefaultType
+		return typeinfo.StringImportDefaultType
 	}
 
 	if err != nil {
@@ -243,7 +243,7 @@ func leastPermissiveNumericType(strVal string, floatThreshold float64) (ti typei
 
 	// handle leading zero case
 	if len(strVal) > 1 && strVal[0] == '0' {
-		return typeinfo.StringDefaultType
+		return typeinfo.StringImportDefaultType
 	}
 
 	if i >= math.MinInt32 && i <= math.MaxInt32 {
@@ -325,7 +325,7 @@ func findCommonType(ts typeInfoSet) typeinfo.TypeInfo {
 
 	if len(ts) == 0 {
 		// use strings if all values were empty
-		return typeinfo.StringDefaultType
+		return typeinfo.StringImportDefaultType
 	}
 
 	if len(ts) == 1 {
@@ -339,9 +339,9 @@ func findCommonType(ts typeInfoSet) typeinfo.TypeInfo {
 	if setHasType(ts, typeinfo.TextType) {
 		return typeinfo.TextType
 	} else if setHasType(ts, typeinfo.StringDefaultType) {
-		return typeinfo.StringDefaultType
-	} else if setHasType(ts, typeinfo.StringDefaultType) {
-		return typeinfo.StringDefaultType
+		return typeinfo.StringImportDefaultType
+	} else if setHasType(ts, typeinfo.StringImportDefaultType) {
+		return typeinfo.StringImportDefaultType
 	}
 
 	hasNumeric := false
@@ -364,7 +364,7 @@ func findCommonType(ts typeInfoSet) typeinfo.TypeInfo {
 	}
 
 	if hasNumeric && hasNonNumeric {
-		return typeinfo.StringDefaultType
+		return typeinfo.StringImportDefaultType
 	}
 
 	if hasNumeric {
@@ -383,7 +383,7 @@ func findCommonType(ts typeInfoSet) typeinfo.TypeInfo {
 		if setHasType(ts, nct) {
 			// types in nonChronoTypes have only string
 			// as a common type with any other type
-			return typeinfo.StringDefaultType
+			return typeinfo.StringImportDefaultType
 		}
 	}
 

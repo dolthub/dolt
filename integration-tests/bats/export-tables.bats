@@ -114,8 +114,8 @@ if rows[2] != "9,8,7,6,5,4".split(","):
     diff --strip-trailing-cr $BATS_TEST_DIRNAME/helper/1pk5col-ints.sql export.sql
 
     # string columns
-    dolt sql -q "create table strings (a varchar(10) primary key, b char(10))"
-    dolt sql -q "insert into strings values ('abc', '123'), ('def', '456')"
+    dolt sql -q "create table strings (a varchar(10) primary key, b char(10), c text, d blob)"
+    dolt sql -q "insert into strings values ('abc', '123', 'do re me', 'qwe'), ('def', '456', 'fa so la', 'rty')"
     dolt add .
     dolt commit -am "Checkpoint"
 
@@ -171,19 +171,14 @@ SQL
 }
 
 @test "export-tables: broken SQL escaping" {
-    skip "Export embeds single quote in string without escaping it https://github.com/dolthub/dolt/issues/2197"
-
-    dolt sql <<SQL
-create table sets (a varchar(10) primary key, b set('one','two','three\'s'));
-insert into sets values ('abc', 'one,two'), ('def', 'two,three\'s');
-SQL
+    dolt sql -q "create table sets (a varchar(10) primary key, b set('one','two','three\\'s'));"
+    dolt sql -q "insert into sets values ('abc', 'one,two'), ('def', 'two,three\\'s');"
     
-    dolt commit -am "Checkpoint"
+    dolt add .
+    dolt commit -m "Checkpoint"
 
     dolt table export sets -f export.sql
     
-
-   
     dolt sql < export.sql
 
     run dolt status

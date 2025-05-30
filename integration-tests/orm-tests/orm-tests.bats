@@ -6,7 +6,8 @@ setup() {
   cd $REPO_NAME
 
   USER="dolt"
-  dolt sql-server --host 0.0.0.0 --user=$USER --loglevel=trace &
+  dolt sql -q "CREATE USER dolt@'%'; GRANT ALL ON *.* TO dolt@'%';"
+  dolt sql-server --host 0.0.0.0 --loglevel=trace &
   SERVER_PID=$!
 
   # Give the server a chance to start

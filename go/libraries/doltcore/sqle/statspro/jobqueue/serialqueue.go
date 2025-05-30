@@ -26,24 +26,20 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/circular"
 )
 
-// A SerialQueue is a job queue which runs one job at a time. Jobs are
-// run in the order they are submitted, with the exception that every
-// interrupt job is run before any normal priority job.
-//
-// A SerialQueue can be paused, in which case it will accept new
-// submissions, but will not run them until it is started again.
+// A SerialQueue is a rate limited job queue which runs one job at a
+// time. Jobs are run in the order they are submitted.
 //
 // A SerialQueue can be purged, which deletes any pending jobs from
-// it.
+// its queue.
 //
 // A SerialQueue can be stopped, in which case it will not accept new
 // submissions and no pending work will be run. Stopping a queue does
 // not purge it, but it is easy for a caller to stop and purge the
 // queue.
 //
-// A stopped or paused SerialQueue can be started, which will cause it
-// to start running submitted jobs again, including any unpurged jobs
-// which were pending when it was stopped or paused.
+// A stopped SerialQueue can be started, which will cause it to start
+// running submitted jobs again, including any unpurged jobs which
+// were pending when it was stopped.
 //
 // A SerialQueue runs background threads to coordinate its
 // behavior. These background threads are launched with a `Context`
@@ -52,11 +48,10 @@ import (
 //
 // In general, jobs running on the queue should not block indefinitely
 // and should be very careful about any synchronization. It is safe
-// for jobs within the queue to call DoAsync, InterruptAsync, Stop,
-// Pause, Purge and Start on the queue itself. It is a deadlock for a
-// job within the queue to perform a DoSync or InterruptSync on the
-// queue itself, although that deadlock may be resolved if the
-// provided |ctx| ends up |Done|.
+// for jobs within the queue to call Stop, Purge and Start on the
+// queue itself.  It is a deadlock for a job within the queue to
+// perform a DoSync on the queue, although that deadlock may be
+// resolved with an error if the provided |ctx| ends up |Done|.
 type SerialQueue struct {
 	running atomic.Bool
 
@@ -67,6 +62,7 @@ type SerialQueue struct {
 	completed chan struct{}
 
 	runnerCh chan work
+	tickerCh chan *time.Ticker
 	schedCh  chan schedReq
 	errCb    func(error)
 }
@@ -77,8 +73,6 @@ type work struct {
 	f func() error
 	// The channel to close after the work is run.
 	done chan struct{}
-	// Update worker rate
-	newRate time.Duration
 }
 
 type schedState int
@@ -87,9 +81,6 @@ const (
 	// When scheduler is running, it is willing to accept new work
 	// and to give work to the work thread.
 	schedState_Running schedState = iota
-	// When scheduler is paused, it is willing to accept new work
-	// but it does not give work to the work thread.
-	schedState_Paused
 	// When scheduler is stopped, it does not accept new work
 	// and it does not give work to the work thread.
 	schedState_Stopped
@@ -99,17 +90,10 @@ type schedReqType int
 
 const (
 	schedReqType_Enqueue schedReqType = iota
+	schedReqType_SetRate
 	schedReqType_Purge
 	schedReqType_Start
-	schedReqType_Pause
 	schedReqType_Stop
-)
-
-type schedPriority int
-
-const (
-	schedPriority_Normal schedPriority = iota
-	schedPriority_High
 )
 
 // Incoming message for the scheduler thread.
@@ -120,9 +104,9 @@ type schedReq struct {
 	// must never block.
 	resp chan schedResp
 	// Set when |reqType| is Enqueue
-	pri schedPriority
-	// Set when |reqType| is Enqueue
 	work work
+	// New rate
+	newRate time.Duration
 }
 
 type schedResp struct {
@@ -134,16 +118,17 @@ var ErrCompletedQueue = errors.New("completed queue: the queue is no longer runn
 
 // Create a new serial queue. All of the methods on the returned
 // SerialQueue block indefinitely until its |Run| method is called.
-func NewSerialQueue() *SerialQueue {
+func NewSerialQueue(errCb func(error)) *SerialQueue {
+	if errCb == nil {
+		errCb = func(error) {}
+	}
 	return &SerialQueue{
 		completed: make(chan struct{}),
 		runnerCh:  make(chan work),
 		schedCh:   make(chan schedReq),
+		tickerCh:  make(chan *time.Ticker),
+		errCb:     errCb,
 	}
-}
-func (s *SerialQueue) WithErrorCb(errCb func(error)) *SerialQueue {
-	s.errCb = errCb
-	return s
 }
 
 // Run the serial queue's background threads with this |ctx|. If the
@@ -175,19 +160,6 @@ func (s *SerialQueue) Start() error {
 	})
 }
 
-// Pause the queue. The queue can be in any state, including already
-// paused.  Note that pausing the queue does not block on any
-// currently running job to complete. A pattern to pause the queue
-// with a guarantee that nothing is currently running is:
-//
-// s.InterruptSync(context.Background(), func() { s.Pause() })
-func (s *SerialQueue) Pause() error {
-	return s.makeReq(schedReq{
-		reqType: schedReqType_Pause,
-		resp:    make(chan schedResp, 1),
-	})
-}
-
 // Stop the queue. The queue can be in any state, including already
 // stopped.  Note that stopping the queue does not block on any
 // currently running job to complete.
@@ -208,33 +180,10 @@ func (s *SerialQueue) Purge() error {
 
 func (s *SerialQueue) NewRateLimit(rate time.Duration) error {
 	return s.makeReq(schedReq{
-		reqType: schedReqType_Enqueue,
-		pri:     schedPriority_High,
-		work: work{
-			f:       func() error { return nil },
-			done:    make(chan struct{}),
-			newRate: rate,
-		},
-		resp: make(chan schedResp, 1),
+		reqType: schedReqType_SetRate,
+		resp:    make(chan schedResp, 1),
+		newRate: rate,
 	})
-}
-
-// Run a high priority job on the SerialQueue, blocking for its completion.
-// If done against a Paused queue, this could block indefinitely. The
-// block for completion is gated on the |ctx|.
-func (s *SerialQueue) InterruptSync(ctx context.Context, f func() error) error {
-	w, err := s.submitWork(schedPriority_High, f)
-	if err != nil {
-		return err
-	}
-	select {
-	case <-w.done:
-		return nil
-	case <-ctx.Done():
-		return context.Cause(ctx)
-	case <-s.completed:
-		return ErrCompletedQueue
-	}
 }
 
 // DoSync runs a normal priority job on the SerialQueue, blocking for
@@ -251,7 +200,7 @@ func (s *SerialQueue) DoSync(ctx context.Context, f func() error) error {
 		err = f()
 		return err
 	}
-	w, serr := s.submitWork(schedPriority_Normal, nf)
+	w, serr := s.submitWork(nf)
 	if serr != nil {
 		return serr
 	}
@@ -261,6 +210,7 @@ func (s *SerialQueue) DoSync(ctx context.Context, f func() error) error {
 	case <-ctx.Done():
 		if started.Swap(true) {
 			<-w.done
+			return errors.Join(err, context.Cause(ctx))
 		}
 		return context.Cause(ctx)
 	case <-s.completed:
@@ -268,20 +218,10 @@ func (s *SerialQueue) DoSync(ctx context.Context, f func() error) error {
 	}
 }
 
-// Run a high priority job asynchronously on the queue. Returns once the
-// job is accepted.
-func (s *SerialQueue) InterruptAsync(f func() error) error {
-	_, err := s.submitWork(schedPriority_High, f)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
 // Run a normal priority job asynchronously on the queue. Returns once the
 // job is accepted.
 func (s *SerialQueue) DoAsync(f func() error) error {
-	_, err := s.submitWork(schedPriority_Normal, f)
+	_, err := s.submitWork(f)
 	if err != nil {
 		return err
 	}
@@ -290,14 +230,13 @@ func (s *SerialQueue) DoAsync(f func() error) error {
 
 // Helper function to submit work. Returns the work submitted, if it
 // was successful, and an error otherwise.
-func (s *SerialQueue) submitWork(pri schedPriority, f func() error) (work, error) {
+func (s *SerialQueue) submitWork(f func() error) (work, error) {
 	w := work{
 		f:    f,
 		done: make(chan struct{}),
 	}
 	err := s.makeReq(schedReq{
 		reqType: schedReqType_Enqueue,
-		pri:     pri,
 		work:    w,
 		resp:    make(chan schedResp, 1),
 	})
@@ -321,22 +260,22 @@ func (s *SerialQueue) makeReq(req schedReq) error {
 // Deliver that work to the runner channel if it is desired.
 func (s *SerialQueue) runScheduler(ctx context.Context) {
 	state := schedState_Running
-	normalQ := circular.NewBuff[work](16)
-	highQ := circular.NewBuff[work](16)
+	workQ := circular.NewBuff[work](16)
+	// A new ticker we are trying to deliver to
+	// runRunner to set its rate.
+	var newRateTicker *time.Ticker
 	for {
 		var sendWorkCh chan work
 		var sendWork work
 		var sentWorkCallback func()
-
-		if state == schedState_Running {
-			if highQ.Len() > 0 {
+		var sendRateCh chan *time.Ticker
+		if newRateTicker != nil {
+			sendRateCh = s.tickerCh
+		} else if state == schedState_Running {
+			if workQ.Len() > 0 {
 				sendWorkCh = s.runnerCh
-				sendWork = highQ.Front()
-				sentWorkCallback = highQ.Pop
-			} else if normalQ.Len() > 0 {
-				sendWorkCh = s.runnerCh
-				sendWork = normalQ.Front()
-				sentWorkCallback = normalQ.Pop
+				sendWork = workQ.Front()
+				sentWorkCallback = workQ.Pop
 			}
 		}
 
@@ -349,28 +288,23 @@ func (s *SerialQueue) runScheduler(ctx context.Context) {
 						err: ErrStoppedQueue,
 					}
 				} else {
-					if msg.pri == schedPriority_High {
-						highQ.Push(msg.work)
-					} else {
-						normalQ.Push(msg.work)
-					}
+					workQ.Push(msg.work)
 					msg.resp <- schedResp{
 						err: nil,
 					}
 				}
+			case schedReqType_SetRate:
+				newRateTicker = time.NewTicker(msg.newRate)
+				msg.resp <- schedResp{
+					err: nil,
+				}
 			case schedReqType_Purge:
-				highQ = circular.NewBuff[work](highQ.Cap())
-				normalQ = circular.NewBuff[work](normalQ.Cap())
+				workQ = circular.NewBuff[work](workQ.Cap())
 				msg.resp <- schedResp{
 					err: nil,
 				}
 			case schedReqType_Start:
 				state = schedState_Running
-				msg.resp <- schedResp{
-					err: nil,
-				}
-			case schedReqType_Pause:
-				state = schedState_Paused
 				msg.resp <- schedResp{
 					err: nil,
 				}
@@ -383,6 +317,8 @@ func (s *SerialQueue) runScheduler(ctx context.Context) {
 		case sendWorkCh <- sendWork:
 			// Pop from queue the work came from.
 			sentWorkCallback()
+		case sendRateCh <- newRateTicker:
+			newRateTicker = nil
 		case <-ctx.Done():
 			return
 		}
@@ -392,20 +328,21 @@ func (s *SerialQueue) runScheduler(ctx context.Context) {
 // Read off the runner channel and run the submitted work.
 func (s *SerialQueue) runRunner(ctx context.Context) {
 	ticker := time.NewTicker(1)
+	canRun := true
 	for {
+		var workCh chan work
+		var checkTicker <-chan time.Time
+		if canRun {
+			workCh = s.runnerCh
+		} else {
+			checkTicker = ticker.C
+		}
+
 		select {
-		case w := <-s.runnerCh:
-			if w.newRate > 0 {
-				ticker.Reset(w.newRate)
-			}
-
-			// do not run jobs more frequently than the ticker rate
-			select {
-			case <-ticker.C:
-			case <-ctx.Done():
-			}
-
+		case w := <-workCh:
+			canRun = false
 			func() {
+				defer close(w.done)
 				var err error
 				defer func() {
 					if r := recover(); r != nil {
@@ -417,7 +354,16 @@ func (s *SerialQueue) runRunner(ctx context.Context) {
 				}()
 				err = w.f()
 			}()
-			close(w.done)
+			// Rate limit by clearing the current ticker
+			// if it has already delivered.
+			select {
+			case <-ticker.C:
+			default:
+			}
+		case ticker = <-s.tickerCh:
+			canRun = false
+		case <-checkTicker:
+			canRun = true
 		case <-ctx.Done():
 			return
 		}

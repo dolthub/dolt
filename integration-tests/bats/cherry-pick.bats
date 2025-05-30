@@ -377,8 +377,6 @@ teardown() {
 }
 
 @test "cherry-pick: commit with ALTER TABLE rename table name" {
-    skip "flake in CI"
-
     # get main and branch1 in sync, so that the data on branch1 doesn't
     # cause a conflict when we cherry pick the table rename statement
     dolt checkout main
