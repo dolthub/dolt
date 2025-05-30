@@ -1047,6 +1047,10 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 				SkipResultsCheck: true,
 			},
 			{
+				Query:    "/* client b */ select * from dolt_preview_merge_conflicts_summary('new-branch', 'main')",
+				Expected: []sql.Row{{"test", uint64(1), uint64(0)}},
+			},
+			{
 				Query:    "/* client b */ call dolt_merge('main')",
 				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
 			},
@@ -1138,6 +1142,10 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 				SkipResultsCheck: true,
 			},
 			{
+				Query:    "/* client b */ select * from dolt_preview_merge_conflicts_summary('new-branch', 'main')",
+				Expected: []sql.Row{{"test", uint64(1), uint64(0)}},
+			},
+			{
 				Query:    "/* client b */ call dolt_merge('main')",
 				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
 			},
@@ -1225,6 +1233,10 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 			{
 				Query:            "/* client b */ call dolt_commit('-am', 'commit on new-branch')",
 				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client b */ select * from dolt_preview_merge_conflicts_summary('new-branch', 'main')",
+				Expected: []sql.Row{{"test", uint64(1), uint64(0)}},
 			},
 			{
 				Query:    "/* client b */ call dolt_merge('main')",
@@ -1460,6 +1472,14 @@ var DoltStoredProcedureTransactionTests = []queries.TransactionTest{
 				Expected: []sql.Row{},
 			},
 			{
+				Query:    "/* client b */ select * from dolt_preview_merge_conflicts_summary('main', 'feature-branch')",
+				Expected: []sql.Row{{"test", uint64(1), uint64(0)}},
+			},
+			{
+				Query:    "/* client a */ select * from dolt_preview_merge_conflicts_summary('main', 'feature-branch')",
+				Expected: []sql.Row{{"test", uint64(1), uint64(0)}},
+			},
+			{
 				Query:    "/* client a */ CALL DOLT_MERGE('feature-branch')",
 				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
 			},
@@ -1506,6 +1526,10 @@ var DoltStoredProcedureTransactionTests = []queries.TransactionTest{
 			{
 				Query:    "/* client a */ SET @@dolt_allow_commit_conflicts = 0",
 				Expected: []sql.Row{{}},
+			},
+			{
+				Query:    "/* client a */ select * from dolt_preview_merge_conflicts_summary('main', 'feature-branch')",
+				Expected: []sql.Row{{"test", uint64(1), uint64(0)}},
 			},
 			{
 				Query:          "/* client a */ CALL DOLT_MERGE('feature-branch')",

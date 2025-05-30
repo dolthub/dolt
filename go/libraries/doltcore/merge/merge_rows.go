@@ -29,6 +29,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/atomicerr"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -83,6 +84,34 @@ type TableMerger struct {
 	recordViolations bool
 }
 
+func (tm TableMerger) GetNewValueMerger(mergeSch schema.Schema, leftRows prolly.Map) *valueMerger {
+	return NewValueMerger(mergeSch, tm.leftSch, tm.rightSch, tm.ancSch, leftRows.Pool(), leftRows.NodeStore())
+}
+
+func rowsFromTable(ctx context.Context, tbl *doltdb.Table) (prolly.Map, error) {
+	rd, err := tbl.GetRowData(ctx)
+	if err != nil {
+		return prolly.Map{}, err
+	}
+	rows, err := durable.ProllyMapFromIndex(rd)
+	if err != nil {
+		return prolly.Map{}, err
+	}
+	return rows, nil
+}
+
+func (tm TableMerger) LeftRows(ctx context.Context) (prolly.Map, error) {
+	return rowsFromTable(ctx, tm.leftTbl)
+}
+
+func (tm TableMerger) RightRows(ctx context.Context) (prolly.Map, error) {
+	return rowsFromTable(ctx, tm.rightTbl)
+}
+
+func (tm TableMerger) AncRows(ctx context.Context) (prolly.Map, error) {
+	return rowsFromTable(ctx, tm.ancTbl)
+}
+
 func (tm TableMerger) tableHashes(ctx context.Context) (left, right, anc hash.Hash, err error) {
 	if tm.leftTbl != nil {
 		if left, err = tm.leftTbl.HashOf(); err != nil {
@@ -112,6 +141,10 @@ func (tm TableMerger) tableHashes(ctx context.Context) (left, right, anc hash.Ha
 		}
 	}
 	return
+}
+
+func (tm TableMerger) SchemaMerge(ctx *sql.Context, tblName doltdb.TableName) (schema.Schema, SchemaConflict, MergeInfo, tree.ThreeWayDiffInfo, error) {
+	return SchemaMerge(ctx, tm.vrw.Format(), tm.leftSch, tm.rightSch, tm.ancSch, tblName)
 }
 
 type RootMerger struct {
@@ -171,19 +204,19 @@ func (rm *RootMerger) MergeTable(
 	opts editor.Options,
 	mergeOpts MergeOpts,
 ) (*MergedResult, *MergeStats, error) {
-	tm, err := rm.makeTableMerger(ctx, tblName, mergeOpts)
+	tm, err := rm.MakeTableMerger(ctx, tblName, mergeOpts)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	// short-circuit here if we can
-	finished, finishedRootObj, stats, err := rm.maybeShortCircuit(ctx, tm, mergeOpts)
+	finished, finishedRootObj, stats, err := rm.MaybeShortCircuit(ctx, tm, mergeOpts)
 	if finished != nil || stats != nil || err != nil {
 		return &MergedResult{table: finished, rootObj: finishedRootObj}, stats, err
 	}
 
 	// Calculate a merge of the schemas, but don't apply it yet
-	mergeSch, schConflicts, mergeInfo, diffInfo, err := SchemaMerge(ctx, tm.vrw.Format(), tm.leftSch, tm.rightSch, tm.ancSch, tblName)
+	mergeSch, schConflicts, mergeInfo, diffInfo, err := tm.SchemaMerge(ctx, tblName)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -233,7 +266,7 @@ func (rm *RootMerger) MergeTable(
 	return &MergedResult{table: tbl, rootObj: rootObj}, stats, nil
 }
 
-func (rm *RootMerger) makeTableMerger(ctx context.Context, tblName doltdb.TableName, mergeOpts MergeOpts) (*TableMerger, error) {
+func (rm *RootMerger) MakeTableMerger(ctx context.Context, tblName doltdb.TableName, mergeOpts MergeOpts) (*TableMerger, error) {
 	recordViolations := true
 	if mergeOpts.RecordViolationsForTables != nil {
 		if _, ok := mergeOpts.RecordViolationsForTables[tblName.ToLower()]; !ok {
@@ -335,7 +368,7 @@ func (rm *RootMerger) makeTableMerger(ctx context.Context, tblName doltdb.TableN
 	return &tm, nil
 }
 
-func (rm *RootMerger) maybeShortCircuit(ctx context.Context, tm *TableMerger, opts MergeOpts) (*doltdb.Table, doltdb.RootObject, *MergeStats, error) {
+func (rm *RootMerger) MaybeShortCircuit(ctx context.Context, tm *TableMerger, opts MergeOpts) (*doltdb.Table, doltdb.RootObject, *MergeStats, error) {
 	// If we need to re-verify all constraints as part of this merge, then we can't short
 	// circuit considering any tables, so return immediately
 	if opts.ReverifyAllConstraints {
