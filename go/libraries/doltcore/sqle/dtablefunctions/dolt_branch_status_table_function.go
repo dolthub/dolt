@@ -118,6 +118,38 @@ func (b *BranchStatusTableFunction) WithChildren(children ...sql.Node) (sql.Node
 	return b, nil
 }
 
+func isNotGhostCommit(commit *doltdb.OptionalCommit) (bool, error) {
+	_, commitOk := commit.ToCommit()
+	return commitOk, nil
+}
+
+func (b *BranchStatusTableFunction) getCommitMap(ctx *sql.Context, ddb *doltdb.DoltDB, startHash hash.Hash) (map[string]struct{}, error) {
+	commitHashes := make(map[string]struct{})
+	commitIter, err := commitwalk.GetTopologicalOrderIterator[doltdb.Context](ctx, ddb, []hash.Hash{startHash}, isNotGhostCommit)
+	if err != nil {
+		return nil, err
+	}
+	for {
+		_, optCmt, cErr := commitIter.Next(ctx)
+		if cErr != nil {
+			if cErr == io.EOF {
+				break
+			}
+			return nil, cErr
+		}
+		commit, isReal := optCmt.ToCommit()
+		if !isReal {
+			continue
+		}
+		commitHash, hErr := commit.HashOf()
+		if hErr != nil {
+			return nil, hErr
+		}
+		commitHashes[commitHash.String()] = struct{}{}
+	}
+	return commitHashes, nil
+}
+
 // RowIter implements the sql.Node interface
 func (b *BranchStatusTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter, error) {
 	sqlDb, ok := b.db.(dsess.SqlDatabase)
@@ -166,64 +198,39 @@ func (b *BranchStatusTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.
 		return nil, err
 	}
 
-	isNotGhostCommit := func(commit *doltdb.OptionalCommit) (bool, error) {
-		_, commitOk := commit.ToCommit()
-		return commitOk, nil
+	// TODO: There is definitely a more efficient algorithm.
+	//   We waste memory and time here by always traversing until initial commit.
+
+	baseAncestors, err := b.getCommitMap(ctx, ddb, baseHash)
+	if err != nil {
+		return nil, err
 	}
 
 	var rows []sql.Row
 	for i, branchCommit := range branchCommits {
+		var ahead, behind uint64
 		branchHash, hErr := branchCommit.HashOf()
 		if hErr != nil {
 			return nil, hErr
 		}
 
-		ancOptCommit, ancErr := doltdb.GetCommitAncestor(ctx, baseCommit, branchCommit)
-		if ancErr != nil {
-			return nil, err
-		}
-		ancCommit, ancCommitOk := ancOptCommit.ToCommit()
-		if !ancCommitOk {
-			return nil, doltdb.ErrGhostCommitEncountered
-		}
-		ancHash, hErr := ancCommit.HashOf()
-		if hErr != nil {
-			return nil, hErr
+		// same commit will have no differences
+		if branchHash.Equal(baseHash) {
+			rows = append(rows, sql.Row{specs[i+1], ahead, behind})
+			continue
 		}
 
-		var ahead, behind uint64
-		if commitIter, iErr := commitwalk.GetTopologicalOrderIterator[doltdb.Context](ctx, ddb, []hash.Hash{branchHash}, isNotGhostCommit); iErr != nil {
-			return nil, iErr
-		} else {
-			for {
-				hash, _, cErr := commitIter.Next(ctx)
-				if cErr != nil {
-					if cErr == io.EOF {
-						break
-					}
-					return nil, err
-				}
-				if ancHash.Equal(hash) {
-					break
-				}
+		branchAncestors, bErr := b.getCommitMap(ctx, ddb, branchHash)
+		if bErr != nil {
+			return nil, bErr
+		}
+		for branchAncestor := range branchAncestors {
+			if _, ok = baseAncestors[branchAncestor]; !ok {
 				ahead++
 			}
 		}
-
-		if commitIter, iErr := commitwalk.GetTopologicalOrderIterator[doltdb.Context](ctx, ddb, []hash.Hash{baseHash}, isNotGhostCommit); iErr != nil {
-			return nil, iErr
-		} else {
-			for {
-				hash, _, cErr := commitIter.Next(ctx)
-				if cErr != nil {
-					if cErr == io.EOF {
-						break
-					}
-					return nil, err
-				}
-				if ancHash.Equal(hash) {
-					break
-				}
+		for baseAncestor := range baseAncestors {
+			if _, ok = branchAncestors[baseAncestor]; !ok {
 				behind++
 			}
 		}

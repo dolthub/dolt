@@ -4797,12 +4797,12 @@ var BranchStatusTableFunctionScriptTests = []queries.ScriptTest{
 		// | * b2
 		// |
 		// * main
-		// \
-		//  * b3
-		//  |
-		//  * b4
 		//  \
-		//  * b5
+		//   * b3
+		//   |
+		//   * b4
+		//    \
+		//     * b5
 		Name: "test dolt_branch_status(...)",
 		SetUpScript: []string{
 			"call dolt_branch('b1');",
@@ -4966,7 +4966,7 @@ var BranchStatusTableFunctionScriptTests = []queries.ScriptTest{
 			{
 				Query: "select * from dolt_branch_status('b1', 'b2');",
 				Expected: []sql.Row{
-					{"b2", uint64(2), uint64(0)},
+					{"b2", uint64(4), uint64(0)},
 				},
 			},
 		},
@@ -5015,13 +5015,13 @@ var BranchStatusTableFunctionScriptTests = []queries.ScriptTest{
 			{
 				Query: "select * from dolt_branch_status('main', 'b2');",
 				Expected: []sql.Row{
-					{"b2", uint64(3), uint64(2)}, // Currently Failing here.
+					{"b2", uint64(4), uint64(2)},
 				},
 			},
 			{
 				Query: "select * from dolt_branch_status('main', 'b1');",
 				Expected: []sql.Row{
-					{"b1", uint64(2), uint64(3)},
+					{"b1", uint64(3), uint64(3)},
 				},
 			},
 			{
@@ -5040,13 +5040,13 @@ var BranchStatusTableFunctionScriptTests = []queries.ScriptTest{
 				Query: "select * from dolt_branch_status('t1', 'anc', 't2','t2~1', 'main', 'b1', 'b2', 'b2^1', 'b2^2' );",
 				Expected: []sql.Row{
 					{"anc", uint64(0), uint64(3)},
-					{"t2", uint64(1), uint64(0)},
+					{"t2", uint64(2), uint64(0)},
 					{"t2~1", uint64(1), uint64(3)},
 					{"main", uint64(3), uint64(0)},
-					{"b1", uint64(2), uint64(0)},
-					{"b2", uint64(4), uint64(0)},
+					{"b1", uint64(3), uint64(0)},
+					{"b2", uint64(5), uint64(0)},
 					{"b2^1", uint64(1), uint64(0)},
-					{"b2^2", uint64(2), uint64(0)},
+					{"b2^2", uint64(3), uint64(0)},
 				},
 			},
 		},
