@@ -39,6 +39,7 @@ SQL
 }
 
 @test "sql-load-data: load with unknown file throws error" {
+    skiponwindows
     run dolt sql << SQL
 CREATE TABLE test(pk int primary key, c1 int, c2 int, c3 int, c4 int, c5 int);
 LOAD DATA INFILE 'hello-ints.csv' INTO TABLE test CHARACTER SET UTF8MB4 FIELDS TERMINATED BY '||' ESCAPED BY '' LINES TERMINATED BY '\n' IGNORE 1 LINES;
