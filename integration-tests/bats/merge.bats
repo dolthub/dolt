@@ -564,8 +564,15 @@ SQL
     dolt sql -q "INSERT INTO test VALUES (1,19);"
     dolt commit -am "added row"
 
-    skip "merge fails on unique index violation, should log conflict"
-    dolt merge other
+    run dolt merge other
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "CONSTRAINT VIOLATION" ]] || false
+    [[ "$output" =~ "Automatic merge failed" ]] || false
+    
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "You have unmerged tables" ]] || false
+    [[ "$output" =~ "test" ]] || false
 }
 
 @test "merge: composite unique index conflict" {
