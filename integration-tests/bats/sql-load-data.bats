@@ -151,8 +151,6 @@ SQL
 }
 
 @test "sql-load-data: works when column order is mismatched" {
-    skip "This needs to be fixed."
-
     cat <<DELIM > 1pk2col-ints.csv
 pk,c1
 "hi","1"
@@ -161,7 +159,7 @@ DELIM
 
     dolt sql << SQL
 CREATE TABLE test(pk int, c1 longtext);
-LOAD DATA INFILE '1pk2col-ints.csv' INTO TABLE test FIELDS ENCLOSED BY '"' TERMINATED BY ',' IGNORE 1 LINES (c1,pk);
+LOAD DATA INFILE '1pk2col-ints.csv' INTO TABLE test FIELDS TERMINATED BY ',' ENCLOSED BY '"' IGNORE 1 LINES (c1,pk);
 SQL
 
     run dolt sql -r csv -q "select * from test"
