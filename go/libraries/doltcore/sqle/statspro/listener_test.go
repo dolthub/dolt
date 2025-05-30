@@ -23,6 +23,8 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
 
 func TestListening(t *testing.T) {
@@ -30,13 +32,13 @@ func TestListening(t *testing.T) {
 	ctx := sql.NewEmptyContext()
 	defer bthreads.Shutdown()
 	t.Run("ClosedDoesNotStart", func(t *testing.T) {
-		sc := newStatsCoord(bthreads)
+		sc := newStatsCoord(t, bthreads)
 		sc.Close()
 		require.Error(t, sc.Restart(ctx))
 		require.Nil(t, sc.activeCtxCancel)
 	})
 	t.Run("IsStoppable", func(t *testing.T) {
-		sc := newStatsCoord(bthreads)
+		sc := newStatsCoord(t, bthreads)
 		eg := errgroup.Group{}
 		ctx, _, doneCh := sc.newThreadCtx(context.Background())
 		eg.Go(func() error {
@@ -59,7 +61,7 @@ func TestListening(t *testing.T) {
 		require.ErrorIs(t, eg.Wait(), context.Canceled)
 	})
 	t.Run("StopsAreIdempotent", func(t *testing.T) {
-		sc := newStatsCoord(bthreads)
+		sc := newStatsCoord(t, bthreads)
 		eg := errgroup.Group{}
 		ctx, _, doneCh := sc.newThreadCtx(context.Background())
 		eg.Go(func() error {
@@ -75,7 +77,7 @@ func TestListening(t *testing.T) {
 		require.ErrorIs(t, eg.Wait(), context.Canceled)
 	})
 	t.Run("IsRestartable", func(t *testing.T) {
-		sc := newStatsCoord(bthreads)
+		sc := newStatsCoord(t, bthreads)
 		eg := errgroup.Group{}
 		ctx1, _, doneCh1 := sc.newThreadCtx(context.Background())
 		eg.Go(func() error {
@@ -102,7 +104,7 @@ func TestListening(t *testing.T) {
 		require.ErrorIs(t, eg.Wait(), context.Canceled)
 	})
 	t.Run("ConcurrentStartStopsAreOk", func(t *testing.T) {
-		sc := newStatsCoord(bthreads)
+		sc := newStatsCoord(t, bthreads)
 		wg := sync.WaitGroup{}
 		wg.Add(2)
 		go func() {
@@ -138,7 +140,7 @@ func TestListening(t *testing.T) {
 		wg.Wait()
 	})
 	t.Run("ListenForSwap", func(t *testing.T) {
-		sc := newStatsCoord(bthreads)
+		sc := newStatsCoord(t, bthreads)
 		require.NoError(t, sc.Restart(ctx))
 		l, err := sc.addListener(leSwap)
 		require.NoError(t, err)
@@ -148,20 +150,11 @@ func TestListening(t *testing.T) {
 		}
 	})
 	t.Run("ListenForStop", func(t *testing.T) {
-		sc := newStatsCoord(bthreads)
+		sc := newStatsCoord(t, bthreads)
 		require.NoError(t, sc.Restart(ctx))
-		var l chan listenerEvent
-		err := sc.sq.DoSync(context.Background(), func() error {
-			// do this in serial queue to make sure we don't race
-			// with swap
-			var err error
-			require.NoError(t, err)
-			l, err = sc.addListener(leUnknown)
-			require.NoError(t, err)
-			<-sc.Stop()
-			return nil
-		})
+		l, err := sc.addListener(leUnknown)
 		require.NoError(t, err)
+		<-sc.Stop()
 		select {
 		case e := <-l:
 			require.Equal(t, e, leStop)
@@ -170,14 +163,14 @@ func TestListening(t *testing.T) {
 		}
 	})
 	t.Run("ListenerFailsIfStopped", func(t *testing.T) {
-		sc := newStatsCoord(bthreads)
+		sc := newStatsCoord(t, bthreads)
 		require.NoError(t, sc.Restart(ctx))
 		<-sc.Stop()
 		_, err := sc.addListener(leUnknown)
 		require.ErrorIs(t, err, ErrStatsIssuerPaused)
 	})
 	t.Run("ListenerFailsIfClosed", func(t *testing.T) {
-		sc := newStatsCoord(bthreads)
+		sc := newStatsCoord(t, bthreads)
 		sc.Close()
 		require.Error(t, sc.Restart(ctx))
 		_, err := sc.addListener(leUnknown)
@@ -185,72 +178,35 @@ func TestListening(t *testing.T) {
 	})
 	t.Run("WaitBlocksOnStatsCollection", func(t *testing.T) {
 		sqlCtx, sqlEng, sc := emptySetup(t, bthreads, true, true)
+		_, orig, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsJobInterval)
+		sql.SystemVariables.SetGlobal(sqlCtx, dsess.DoltStatsJobInterval, "60000000000")
+		t.Cleanup(func() {
+			sql.SystemVariables.SetGlobal(sqlCtx, dsess.DoltStatsJobInterval, orig)
+		})
 		require.NoError(t, executeQuery(sqlCtx, sqlEng, "create table xy (x int primary key, y int)"))
 		require.NoError(t, sc.Restart(ctx))
-		done := make(chan struct{})
-		wg := sync.WaitGroup{}
-		wg.Add(2)
-		err := sc.sq.DoAsync(func() error {
-			defer wg.Done()
-			<-done
-			return nil
-		})
-		require.NoError(t, err)
-		go func() {
-			defer wg.Done()
-			defer close(done)
-			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-			defer cancel()
-			err := sc.waitForSignal(ctx, leSwap, 1)
-			require.ErrorIs(t, err, context.DeadlineExceeded)
-		}()
-		wg.Wait()
+		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+		defer cancel()
+		err := sc.waitForSignal(ctx, leSwap, 1)
+		require.ErrorIs(t, err, context.DeadlineExceeded)
 	})
 	t.Run("WaitReturnsIfStoppedBefore", func(t *testing.T) {
 		sqlCtx, sqlEng, sc := emptySetup(t, bthreads, true, true)
 		require.NoError(t, executeQuery(sqlCtx, sqlEng, "create table xy (x int primary key, y int)"))
 		require.NoError(t, sc.Restart(ctx))
-		done := make(chan struct{})
-		wg := sync.WaitGroup{}
-		wg.Add(2)
-		err := sc.sq.DoAsync(func() error {
-			defer wg.Done()
-			<-done
-			return nil
-		})
-		require.NoError(t, err)
-		go func() {
-			defer wg.Done()
-			defer close(done)
-			<-sc.Stop()
-			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-			defer cancel()
-			err := sc.waitForSignal(ctx, leSwap, 1)
-			require.ErrorIs(t, err, ErrStatsIssuerPaused)
-		}()
-		wg.Wait()
+		<-sc.Stop()
+		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+		defer cancel()
+		err := sc.waitForSignal(ctx, leSwap, 1)
+		require.ErrorIs(t, err, ErrStatsIssuerPaused)
 	})
 	t.Run("WaitHangsUntilCycleCompletes", func(t *testing.T) {
 		sqlCtx, sqlEng, sc := emptySetup(t, bthreads, true, true)
 		require.NoError(t, executeQuery(sqlCtx, sqlEng, "create table xy (x int primary key, y int)"))
 		require.NoError(t, sc.Restart(ctx))
-		done := make(chan struct{})
-		wg := sync.WaitGroup{}
-		wg.Add(2)
-		err := sc.sq.DoAsync(func() error {
-			defer wg.Done()
-			<-done
-			return nil
-		})
+		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+		defer cancel()
+		err := sc.waitForSignal(ctx, leSwap, 1)
 		require.NoError(t, err)
-		go func() {
-			defer wg.Done()
-			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-			defer cancel()
-			err := sc.waitForSignal(ctx, leSwap, 1)
-			require.NoError(t, err)
-		}()
-		close(done)
-		wg.Wait()
 	})
 }

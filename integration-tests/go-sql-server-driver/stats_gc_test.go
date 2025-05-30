@@ -96,13 +96,13 @@ func TestStatsGCConcurrency(t *testing.T) {
 	}
 	var columndefs = []string{}
 	for _, col := range columns {
-		columndefs = append(columndefs, fmt.Sprintf("`%s` int unique", col))
+		columndefs = append(columndefs, fmt.Sprintf("`%s` bigint unique", col))
 	}
 
 	for _, table := range tables {
 		_, err = db.ExecContext(ctx, fmt.Sprintf(strings.Join([]string{
 			"CREATE TABLE `%s` (",
-			"id INT AUTO_INCREMENT PRIMARY KEY,",
+			"id BIGINT AUTO_INCREMENT PRIMARY KEY,",
 			strings.Join(columndefs, ",\n"),
 			");",
 		}, "\n"), table))
@@ -116,9 +116,7 @@ func TestStatsGCConcurrency(t *testing.T) {
 		_, err = db.ExecContext(ctx, fmt.Sprintf("call dolt_checkout('-b', '%s')", branch))
 		require.NoError(t, err)
 		for _, table := range tables {
-			_, err = db.ExecContext(ctx, fmt.Sprintf("insert into `%s` values (%d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d)",
-				table, rand.IntN(1<<29), rand.IntN(1<<29), rand.IntN(1<<29), rand.IntN(1<<29), rand.IntN(1<<29), rand.IntN(1<<29),
-				rand.IntN(1<<29), rand.IntN(1<<29), rand.IntN(1<<29), rand.IntN(1<<29), rand.IntN(1<<29)))
+			_, err = db.ExecContext(ctx, fmt.Sprintf("insert into `%s` values %s", table, t0_values_str()))
 			require.NoError(t, err)
 		}
 	}
@@ -126,9 +124,7 @@ func TestStatsGCConcurrency(t *testing.T) {
 	_, err = db.ExecContext(ctx, "call dolt_checkout('main')")
 	require.NoError(t, err)
 	for _, table := range tables {
-		_, err = db.ExecContext(ctx, fmt.Sprintf("insert into `%s` values (%d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d)",
-			table, rand.IntN(1<<29), rand.IntN(1<<29), rand.IntN(1<<29), rand.IntN(1<<29), rand.IntN(1<<29), rand.IntN(1<<29),
-			rand.IntN(1<<29), rand.IntN(1<<29), rand.IntN(1<<29), rand.IntN(1<<29), rand.IntN(1<<29)))
+		_, err = db.ExecContext(ctx, fmt.Sprintf("insert into `%s` values %s", table, t0_values_str()))
 		require.NoError(t, err)
 	}
 
@@ -219,4 +215,96 @@ func TestStatsGCConcurrency(t *testing.T) {
 		assert.Greater(t, 3 * time.Second, d)
 		assert.Greater(t, gcDuration, d)
 	}
+}
+
+func TestStatsAnalyzeTableSpeed(t *testing.T) {
+	t.Parallel()
+	// At one time, calling Analyze Table would go through the
+	// rate-limiting system that background stats refresh goes
+	// through. This would make ANALYZE TABLE take a longer time
+	// than necessary, and it would be very dependent on the stats
+	// timer that were in effect.
+	//
+	// This tests that even with very large stats timers, ANALYZE
+	// TABLE behaves reasonably.
+	ctx := context.Background()
+	u, err := driver.NewDoltUser()
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		u.Cleanup()
+	})
+
+	rs, err := u.MakeRepoStore()
+	require.NoError(t, err)
+	repo, err := rs.MakeRepo("stats_analyze_table_test")
+	require.NoError(t, err)
+
+	srvSettings := &driver.Server{
+		Args:        []string{"--port", `{{get_port "server"}}`},
+		DynamicPort: "server",
+	}
+	var ports DynamicResources
+	ports.global = &GlobalPorts
+	ports.t = t
+	server := MakeServer(t, repo, srvSettings, &ports)
+	server.DBName = "stats_analyze_table_test"
+
+	// Connect to the database
+	db, err := server.DB(driver.Connection{User: "root"})
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		db.Close()
+	})
+
+	// Task rate-limiting of one per minute will make things more
+	// than slow enough that ANALYZE TABLE down below will fail on
+	// the context timeout if these rates are effecting the
+	// ANALYZE TABLE call.
+	_, err = db.ExecContext(ctx, "call dolt_stats_timers(60000000000, 60000000000)")
+	require.NoError(t, err)
+
+	var columns = []string{
+		"c0", "c1", "c2", "c3", "c4",
+		"c5", "c6", "c7", "c8", "c9",
+	}
+	var columndefs = []string{}
+	for _, col := range columns {
+		columndefs = append(columndefs, fmt.Sprintf("`%s` bigint unique", col))
+	}
+
+	_, err = db.ExecContext(ctx, fmt.Sprintf(strings.Join([]string{
+		"CREATE TABLE `%s` (",
+		"id BIGINT AUTO_INCREMENT PRIMARY KEY,",
+		strings.Join(columndefs, ",\n"),
+		");",
+	}, "\n"), "t0"))
+	require.NoError(t, err)
+
+	_, err = db.ExecContext(ctx, "call dolt_commit('-Am', 'initial commit')")
+	require.NoError(t, err)
+
+	_, err = db.ExecContext(ctx, "call dolt_checkout('main')")
+	require.NoError(t, err)
+	_, err = db.ExecContext(ctx, fmt.Sprintf("insert into `%s` values %s", "t0", t0_values_strs(65536)))
+	require.NoError(t, err)
+
+	timeoutCtx, cancel := context.WithTimeout(ctx, time.Second * 30)
+	defer cancel()
+	_, err = db.ExecContext(timeoutCtx, "ANALYZE TABLE t0")
+	require.NoError(t, err)
+}
+
+func t0_values_str() string {
+	return fmt.Sprintf("(%d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d)",
+		rand.IntN(1<<48), rand.IntN(1<<48), rand.IntN(1<<48), rand.IntN(1<<48),
+		rand.IntN(1<<48), rand.IntN(1<<48), rand.IntN(1<<48), rand.IntN(1<<48),
+		rand.IntN(1<<48), rand.IntN(1<<48), rand.IntN(1<<48))
+}
+
+func t0_values_strs(n int) string {
+	vals := make([]string, n)
+	for i := range vals {
+		vals[i] = t0_values_str()
+	}
+	return strings.Join(vals, ",")
 }

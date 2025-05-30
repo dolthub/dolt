@@ -17,7 +17,6 @@ package statspro
 import (
 	"context"
 	"strings"
-	"sync"
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -26,7 +25,6 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statspro/jobqueue"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly/message"
@@ -156,32 +154,20 @@ func TestProllyKv(t *testing.T) {
 		require.Equal(t, 20, len(to.gcFlusher[tupB]))
 		require.Equal(t, 20, to.Len())
 
-		sq := jobqueue.NewSerialQueue(nil)
-		var wg sync.WaitGroup
-		defer func() {
-			sq.Stop()
-			cancel()
-			wg.Wait()
-		}()
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			sq.Run(ctx)
-		}()
-
 		kv := newTestProllyKv(t, bthreads)
 		kv.mem = to
-		cnt, err := kv.Flush(ctx, sq)
+		cnt, err := kv.Flush(ctx)
 		require.NoError(t, err)
 		require.Equal(t, 20, cnt)
 
+		cancel()
 	})
 }
 
 func newTestProllyKv(t *testing.T, threads *sql.BackgroundThreads) *prollyStats {
 	dEnv := dtestutils.CreateTestEnv()
 
-	sqlEng, ctx := newTestEngine(context.Background(), dEnv, threads)
+	sqlEng, ctx := newTestEngine(context.Background(), t, dEnv, threads)
 	ctx.Session.SetClient(sql.Client{
 		User:    "billy boy",
 		Address: "bigbillie@fake.horse",
