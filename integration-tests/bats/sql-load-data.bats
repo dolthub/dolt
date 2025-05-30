@@ -113,11 +113,10 @@ SQL
 }
 
 @test "sql-load-data: works with fields separated by tabs" {
-    skip "This is a test problem with CI preserving tabs in this file. Tabs work locally."
     cat <<DELIM > 1pk2col-ints.csv
-pk  c1
-0 1
-1 1
+pk	c1
+0	1
+1	1
 DELIM
 
     dolt sql << SQL
