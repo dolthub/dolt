@@ -315,7 +315,7 @@ func loadCommitStrings(ctx *sql.Context, fromRef, toRef, dotRef interface{}, db 
 func interfaceToString(r interface{}) (string, error) {
 	str, ok := r.(string)
 	if !ok {
-		return "", fmt.Errorf("received '%v' when expecting commit hash string", str)
+		return "", fmt.Errorf("received '%v' when expecting commit hash string", r)
 	}
 	return str, nil
 }
