@@ -41,7 +41,6 @@ var _ sql.TableFunction = (*PreviewMergeConflictsTableFunction)(nil)
 var _ sql.ExecSourceRel = (*PreviewMergeConflictsTableFunction)(nil)
 var _ sql.AuthorizationCheckerNode = (*PreviewMergeConflictsTableFunction)(nil)
 
-
 type PreviewMergeConflictsTableFunction struct {
 	ctx             *sql.Context
 	leftBranchExpr  sql.Expression
@@ -120,8 +119,14 @@ func (pm *PreviewMergeConflictsTableFunction) Schema() sql.Schema {
 		return nil
 	}
 
+	// Lazy schema generation - generate schema on first access
 	if pm.sqlSch.Schema == nil {
-		panic("schema hasn't been generated yet")
+		err := pm.generateSchema(pm.ctx)
+		if err != nil {
+			// Schema generation failed, but we can't return an error from Schema()
+			// This will surface the error when RowIter() is called
+			return nil
+		}
 	}
 
 	return pm.sqlSch.Schema
@@ -200,27 +205,28 @@ func (pm *PreviewMergeConflictsTableFunction) WithExpressions(exprs ...sql.Expre
 		return nil, sql.ErrInvalidArgumentDetails.New(newPmcs.Name(), newPmcs.tableNameExpr.String())
 	}
 
-	leftBranchVal, rightBranchVal, tableName, err := newPmcs.evaluateArguments()
-	if err != nil {
-		return nil, err
-	}
-
-	err = newPmcs.generateSchema(pm.ctx, leftBranchVal, rightBranchVal, tableName)
-	if err != nil {
-		return nil, err
-	}
-
 	return &newPmcs, nil
 }
 
-func (pm *PreviewMergeConflictsTableFunction) generateSchema(ctx *sql.Context, leftBranchVal, rightBranchVal interface{}, tableName string) error {
+// generateSchema generates the schema if it hasn't been generated yet
+// This method is called lazily when the schema is first needed
+func (pm *PreviewMergeConflictsTableFunction) generateSchema(ctx *sql.Context) error {
+	if pm.sqlSch.Schema != nil {
+		return nil // already generated
+	}
+
 	if !pm.Resolved() {
-		return nil
+		return fmt.Errorf("table function not resolved")
 	}
 
 	sqledb, ok := pm.database.(dsess.SqlDatabase)
 	if !ok {
 		return fmt.Errorf("unexpected database type: %T", pm.database)
+	}
+
+	leftBranchVal, rightBranchVal, tableName, err := pm.evaluateArguments()
+	if err != nil {
+		return err
 	}
 
 	leftBranch, err := interfaceToString(leftBranchVal)
@@ -264,61 +270,109 @@ func (pm *PreviewMergeConflictsTableFunction) generateSchema(ctx *sql.Context, l
 }
 
 func getConflictSchemasFromRoots(ctx *sql.Context, tblName doltdb.TableName, leftRoot, rightRoot, baseRoot doltdb.RootValue) (base, sch, mergeSch schema.Schema, err error) {
+	// Get table references from all three roots
 	ourTbl, ourOk, err := leftRoot.GetTable(ctx, tblName)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, fmt.Errorf("failed to get table from left root: %w", err)
 	}
-	
+
 	baseTbl, baseOk, err := baseRoot.GetTable(ctx, tblName)
 	if err != nil {
-		return nil, nil, nil, err
-	}
-	theirTbl, theirOK, err := rightRoot.GetTable(ctx, tblName)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	
-	if !ourOk {
-		return nil, nil, nil, fmt.Errorf("could not find tbl %s in left root value", tblName)
-	}
-	if !theirOK {
-		return nil, nil, nil, fmt.Errorf("could not find tbl %s in right root value", tblName)
+		return nil, nil, nil, fmt.Errorf("failed to get table from base root: %w", err)
 	}
 
-	ourSch, err := ourTbl.GetSchema(ctx)
+	theirTbl, theirOk, err := rightRoot.GetTable(ctx, tblName)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, fmt.Errorf("failed to get table from right root: %w", err)
 	}
 
-	theirSch, err := theirTbl.GetSchema(ctx)
+	// Check if table exists in at least one root
+	if !ourOk && !theirOk && !baseOk {
+		return nil, nil, nil, sql.ErrTableNotFound.New(tblName.String())
+	}
+
+	// Extract schemas from existing tables
+	schemas, err := extractSchemas(ctx, ourTbl, ourOk, theirTbl, theirOk, baseTbl, baseOk)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
-	// If the table does not exist in the ancestor, pretend it existed and that
-	// it was completely empty.
-	if !baseOk {
-		if schema.SchemasAreEqual(ourSch, theirSch) {
-			return ourSch, ourSch, theirSch, nil
-		} else {
-			return nil, nil, nil, fmt.Errorf("expected our schema to equal their schema since the table did not exist in the ancestor")
+	// Apply fallback logic for missing schemas
+	return applySchemaFallbacks(schemas.our, schemas.their, schemas.base, ourOk, theirOk, baseOk)
+}
+
+// extractedSchemas holds the schemas extracted from tables
+type extractedSchemas struct {
+	our, their, base schema.Schema
+}
+
+// extractSchemas retrieves schemas from the provided tables
+func extractSchemas(ctx *sql.Context, ourTbl *doltdb.Table, ourOk bool, theirTbl *doltdb.Table, theirOk bool, baseTbl *doltdb.Table, baseOk bool) (*extractedSchemas, error) {
+	schemas := &extractedSchemas{}
+	var err error
+
+	if ourOk {
+		schemas.our, err = ourTbl.GetSchema(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get schema from our table: %w", err)
 		}
 	}
 
-	baseSch, err := baseTbl.GetSchema(ctx)
-	if err != nil {
-		return nil, nil, nil, err
+	if theirOk {
+		schemas.their, err = theirTbl.GetSchema(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get schema from their table: %w", err)
+		}
 	}
 
-	return baseSch, ourSch, theirSch, nil
+	if baseOk {
+		schemas.base, err = baseTbl.GetSchema(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get schema from base table: %w", err)
+		}
+	}
+
+	return schemas, nil
+}
+
+// applySchemaFallbacks applies fallback logic when schemas are missing
+func applySchemaFallbacks(ourSch, theirSch, baseSch schema.Schema, ourOk, theirOk, baseOk bool) (schema.Schema, schema.Schema, schema.Schema, error) {
+	// Apply fallback for missing "their" schema
+	if !theirOk {
+		if ourOk {
+			theirSch = ourSch
+		} else {
+			theirSch = baseSch
+		}
+	}
+
+	// Apply fallback for missing "our" schema
+	if !ourOk {
+		if theirOk {
+			ourSch = theirSch
+		} else {
+			ourSch = baseSch
+		}
+	}
+
+	// Handle case where table doesn't exist in ancestor
+	if !baseOk {
+		if schema.SchemasAreEqual(ourSch, theirSch) {
+			return ourSch, ourSch, theirSch, nil
+		}
+		return nil, nil, nil, fmt.Errorf("expected our schema to equal their schema since the table did not exist in the ancestor")
+	}
+
+	return ourSch, theirSch, baseSch, nil
 }
 
 // RowIter implements the sql.Node interface
 func (pm *PreviewMergeConflictsTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter, error) {
-	if pm.sqlSch.Schema == nil {
-		panic("schema hasn't been generated yet")
+	// Ensure schema is generated before creating row iterator
+	err := pm.generateSchema(ctx)
+	if err != nil {
+		return nil, err
 	}
-	
 
 	merger, err := merge.NewMerger(pm.rootInfo.leftRoot, pm.rootInfo.rightRoot, pm.rootInfo.baseRoot, pm.rootInfo.rightCm, pm.rootInfo.ancCm, pm.rootInfo.leftRoot.VRW(), pm.rootInfo.leftRoot.NodeStore())
 	if err != nil {
@@ -504,47 +558,49 @@ func (itr *previewMergeConflictsTableFunctionRowIter) Next(ctx *sql.Context) (sq
 		return nil, io.EOF
 	}
 
-	r := make(sql.Row, itr.n)
-	c, exists, err := itr.nextConflictVals(ctx)
-	if err != nil {
-		return nil, err
-	}
-	if !exists {
-		// Move on to next conflict
-		return itr.Next(ctx)
-	}
+	for {
+		r := make(sql.Row, itr.n)
+		c, exists, err := itr.nextConflictVals(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if !exists {
+			// Continue to next iteration if conflict does not exist
+			continue
+		}
 
-	r[0] = c.h.String()
+		r[0] = c.h.String()
 
-	if !itr.keyless {
-		for i := 0; i < itr.kd.Count(); i++ {
-			f, err := tree.GetField(ctx, itr.kd, i, c.k, itr.baseRows.NodeStore())
+		if !itr.keyless {
+			for i := 0; i < itr.kd.Count(); i++ {
+				f, err := tree.GetField(ctx, itr.kd, i, c.k, itr.baseRows.NodeStore())
+				if err != nil {
+					return nil, err
+				}
+				if c.bV != nil {
+					r[itr.b+i] = f
+				}
+				if c.oV != nil {
+					r[itr.o+i] = f
+				}
+				if c.tV != nil {
+					r[itr.t+i] = f
+				}
+			}
+
+			err = itr.putConflictRowVals(ctx, c, r)
 			if err != nil {
 				return nil, err
 			}
-			if c.bV != nil {
-				r[itr.b+i] = f
-			}
-			if c.oV != nil {
-				r[itr.o+i] = f
-			}
-			if c.tV != nil {
-				r[itr.t+i] = f
+		} else {
+			err = itr.putKeylessConflictRowVals(ctx, c, r)
+			if err != nil {
+				return nil, err
 			}
 		}
 
-		err = itr.putConflictRowVals(ctx, c, r)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		err = itr.putKeylessConflictRowVals(ctx, c, r)
-		if err != nil {
-			return nil, err
-		}
+		return r, nil
 	}
-
-	return r, nil
 }
 
 type conf struct {

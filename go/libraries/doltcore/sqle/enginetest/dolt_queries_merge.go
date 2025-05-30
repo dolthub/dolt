@@ -1089,7 +1089,6 @@ var MergeScripts = []queries.ScriptTest{
 				Expected: []sql.Row{},
 			},
 			{
-				Skip:     true, // TODO: could not find tbl test in right root value
 				Query:    "SELECT * FROM dolt_preview_merge_conflicts('HEAD', 'HEAD~1', 'test')",
 				Expected: []sql.Row{},
 			},
@@ -1326,8 +1325,7 @@ var MergeScripts = []queries.ScriptTest{
 				Expected: []sql.Row{},
 			},
 			{
-				Skip:     true, // TODO: could not find tbl test in left root value
-				Query:    "SELECT * FROM dolt_preview_merge_conflicts('main', 'b1', 'test')",
+				Query:    "SELECT * FROM dolt_preview_merge_conflicts('main', 'b1', 't1')",
 				Expected: []sql.Row{},
 			},
 			{
@@ -5268,8 +5266,8 @@ var PreviewMergeConflictsFunctionScripts = []queries.ScriptTest{
 				ExpectedErr: dtablefunctions.ErrInvalidNonLiteralArgument,
 			},
 			{
-				Query:          "SELECT * from dolt_preview_merge_conflicts('main', 'branch1', 'nope');",
-				ExpectedErrStr: "could not find tbl nope in left root value",
+				Query:       "SELECT * from dolt_preview_merge_conflicts('main', 'branch1', 'nope');",
+				ExpectedErr: sql.ErrTableNotFound,
 			},
 		},
 	},
@@ -5430,6 +5428,39 @@ var PreviewMergeConflictsFunctionScripts = []queries.ScriptTest{
 			{
 				Query:    "SELECT count(*) from dolt_preview_merge_conflicts('branch2', 'main', 't2')",
 				Expected: []sql.Row{{1}},
+			},
+		},
+	},
+	{
+		Name: "additional conflicts testing with multiple columns",
+		SetUpScript: []string{
+			"create table test_table (pk int primary key, col1 varchar(20), col2 int);",
+			"insert into test_table values (1, 'original', 100), (2, 'second', 200);",
+			"call dolt_add('.')",
+			"call dolt_commit('-am', 'initial commit');",
+
+			"call dolt_branch('branch1')",
+			"call dolt_checkout('-b', 'branch2')",
+			
+			"update test_table set col1 = 'branch2_val', col2 = 300 where pk = 1;",
+			"call dolt_add('.')",
+			"call dolt_commit('-am', 'modify on branch2');",
+
+			"call dolt_checkout('branch1')",
+			"update test_table set col1 = 'branch1_val', col2 = 400 where pk = 1;",
+			"call dolt_add('.')",
+			"call dolt_commit('-am', 'modify on branch1');",
+
+			"call dolt_checkout('main')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT count(*) from dolt_preview_merge_conflicts('branch1', 'branch2', 'test_table')",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "SELECT base_pk, our_col1, their_col1 from dolt_preview_merge_conflicts('branch1', 'branch2', 'test_table')",
+				Expected: []sql.Row{{1, "branch1_val", "branch2_val"}},
 			},
 		},
 	},
