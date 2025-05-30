@@ -1009,16 +1009,17 @@ SQL
     run dolt diff --where "poop = 0"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "Error running diff query" ]] || false
-    [[ "$output" =~ "where poop = 0" ]] || false
+    [[ "$output" =~ "poop" ]] || false
+    [[ "$output" =~ "could not be found" ]] || false
 
     dolt add test
     dolt commit -m "added two rows"
 
     run dolt diff --where "poop = 0"
-    skip "Empty diffs don't validate the where clause"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "Error running diff query" ]] || false
-    [[ "$output" =~ "where poop = 0" ]] || false
+    [[ "$output" =~ "poop" ]] || false
+    [[ "$output" =~ "could not be found" ]] || false
 }
 
 @test "diff: --cached/--staged" {

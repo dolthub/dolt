@@ -776,6 +776,13 @@ func diffUserTables(queryist cli.Queryist, sqlCtx *sql.Context, dArgs *diffArgs)
 		return errhand.BuildDError("error: unable to get diff summary").AddCause(err).Build()
 	}
 
+	// Validate where clause even if there are no deltas
+	if len(dArgs.where) > 0 && len(deltas) == 0 {
+		if verr := validateWhereClause(queryist, sqlCtx, dArgs); verr != nil {
+			return verr
+		}
+	}
+
 	if dArgs.diffParts&Summary != 0 {
 		return printDiffSummary(sqlCtx, deltas, dArgs)
 	}
@@ -1794,4 +1801,26 @@ func getModifiedCols(
 	}
 
 	return modifiedColNames, nil
+}
+
+// validateWhereClause validates the where clause by attempting a minimal syntax check
+// against the dolt_diff schema. This ensures the where clause is syntactically correct
+// and references valid column patterns, even when there are no changes to show.
+func validateWhereClause(queryist cli.Queryist, sqlCtx *sql.Context, dArgs *diffArgs) errhand.VerboseError {
+	// Build a minimal validation query that doesn't depend on having actual tables
+	// We use a subquery approach so the aliased columns are available in the WHERE clause
+	query := "select * from (select 1 as diff_type, 1 as from_pk, 1 as to_pk) as diff_validation where " + dArgs.where + " limit 0"
+	_, rowIter, _, err := queryist.Query(sqlCtx, query)
+	if sql.ErrSyntaxError.Is(err) {
+		return errhand.BuildDError("Failed to parse diff query. Invalid where clause?").AddCause(err).Build()
+	} else if err != nil {
+		return errhand.BuildDError("Error running diff query").AddCause(err).Build()
+	}
+
+	// Close the iterator since we only wanted to validate
+	if rowIter != nil {
+		rowIter.Close(sqlCtx)
+	}
+
+	return nil
 }
