@@ -90,6 +90,12 @@ type Queryist interface {
 	QueryWithBindings(ctx *sql.Context, query string, parsed sqlparser.Statement, bindings map[string]sqlparser.Expr, qFlags *sql.QueryFlags) (sql.Schema, sql.RowIter, *sql.QueryFlags, error)
 }
 
+// ShellServerQueryist is used to gather warnings in the sql-shell context when a server is running.
+// We call an extra "show warnings" query, but want to avoid this in other cases, (i.e. dolt sql -q)
+type ShellServerQueryist interface {
+	EnableGatherWarnings()
+}
+
 // This type is to store the content of a documented command, elsewhere we can transform this struct into
 // other structs that are used to generate documentation at the command line and in markdown files.
 type CommandDocumentationContent struct {

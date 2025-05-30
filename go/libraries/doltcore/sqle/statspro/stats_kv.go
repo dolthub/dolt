@@ -38,7 +38,7 @@ import (
 
 var ErrIncompatibleVersion = errors.New("client stats version mismatch")
 
-const defaultMaxStatsPending = 64
+const defaultMaxStatsPending = 2048
 
 type StatsKv interface {
 	PutBucket(ctx context.Context, h hash.Hash, b *stats.Bucket, tupB *val.TupleBuilder) error
@@ -302,29 +302,28 @@ func (p *prollyStats) GcGen() uint64 {
 func (p *prollyStats) LoadFromMem(ctx context.Context, sq *jobqueue.SerialQueue) error {
 	p.mem.mu.Lock()
 	defer p.mem.mu.Unlock()
+	// XXX: We used to try to rate limit these writes, since there
+	// can be a lot to flush all at once here. Unfortunately, we
+	// are currently holding the StatsCoordinator mutex and the
+	// prollyStats mutex, and while we hold these locks queries
+	// against the database cannot analyze.
+	//
+	// If we want to rate limit these writes, we need to
+	// restructure things in such a way that all queries can
+	// proceed against the database even while we are flushing the
+	// results here.
 	for tb, keys := range p.mem.gcFlusher {
-		var i int
-		for i < len(keys) {
-			if err := sq.DoSync(ctx, func() error {
-				for j := 0; i < len(keys) && j < defaultMaxStatsPending; {
-					key := keys[i]
-					b, ok := p.mem.buckets[key]
-					if !ok {
-						return fmt.Errorf("memory KV inconsistent, missing bucket for: %s", key)
-					}
-					tupK, err := p.encodeHash(hash.New(key[:hash.ByteLen]), tb.Desc.Count())
-					tupV, err := p.encodeBucket(ctx, b, tb)
-					if err != nil {
-						return err
-					}
-					if err := p.m.Put(ctx, tupK, tupV); err != nil {
-						return err
-					}
-					i++
-					j++
-				}
-				return nil
-			}); err != nil {
+		for _, key := range keys {
+			b, ok := p.mem.buckets[key]
+			if !ok {
+				return fmt.Errorf("memory KV inconsistent, missing bucket for: %s", key)
+			}
+			tupK, err := p.encodeHash(hash.New(key[:hash.ByteLen]), tb.Desc.Count())
+			tupV, err := p.encodeBucket(ctx, b, tb)
+			if err != nil {
+				return err
+			}
+			if err := p.m.Put(ctx, tupK, tupV); err != nil {
 				return err
 			}
 		}

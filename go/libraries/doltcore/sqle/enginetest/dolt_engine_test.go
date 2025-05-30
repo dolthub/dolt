@@ -1196,7 +1196,12 @@ func TestLargeJsonObjects(t *testing.T) {
 
 func TestTransactions(t *testing.T) {
 	h := newDoltEnginetestHarness(t)
-	RunTransactionTests(t, h)
+	RunTransactionTests(t, h, false)
+}
+
+func TestTransactionsPrepared(t *testing.T) {
+	h := newDoltEnginetestHarness(t)
+	RunTransactionTests(t, h, true)
 }
 
 func TestBranchTransactions(t *testing.T) {

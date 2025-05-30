@@ -86,7 +86,7 @@ type ExtendedStatsProvider interface {
 	// Restart starts a new stats thread, finalizes any active thread
 	Restart(ctx *sql.Context) error
 	// Stop finalizes stats thread if active
-	Stop()
+	Stop() chan struct{}
 	// Info returns summary statistics about the current coordinator state
 	Info(ctx context.Context) (StatsInfo, error)
 	// Purge wipes the memory and storage state, and pauses stats collection
@@ -211,7 +211,10 @@ func statsStop(ctx *sql.Context, _ ...string) (interface{}, error) {
 	statsPro := dSess.StatsProvider()
 
 	if afp, ok := statsPro.(ExtendedStatsProvider); ok {
-		afp.Stop()
+		stopDoneCh := afp.Stop()
+		if stopDoneCh != nil {
+			<-stopDoneCh
+		}
 		return OkResult, nil
 	}
 	return nil, fmt.Errorf("provider does not implement ExtendedStatsProvider")

@@ -147,6 +147,47 @@ func BenchmarkFindPrefix(b *testing.B) {
 	})
 }
 
+func TestFindPrefix(t *testing.T) {
+	if isRaceEnabled() {
+		t.Skip("We do not run TestFindPrefix in race mode because of its large memory requirement")
+	}
+	if os.Getenv("CI") != "" {
+		t.Skip("We do not run TestFindPrefix in CI for now because of its large memory requirement")
+	}
+
+	// Test some edge cases in findPrefix.
+	var idx onHeapTableIndex
+	idx.count = 1
+	idx.prefixTuples = make([]byte, 12)
+	assert.Equal(t, uint32(0), idx.findPrefix(0))
+	assert.Equal(t, uint32(1), idx.findPrefix(1))
+	binary.BigEndian.PutUint64(idx.prefixTuples[:], 1)
+	assert.Equal(t, uint32(0), idx.findPrefix(0))
+	assert.Equal(t, uint32(0), idx.findPrefix(1))
+	assert.Equal(t, uint32(1), idx.findPrefix(2))
+
+	idx.count = 3
+	idx.prefixTuples = make([]byte, 12*3)
+	// double verify that non-found -> chunk count.
+	assert.Equal(t, uint32(3), idx.findPrefix(1))
+
+	// Enough so that the index * 12 (prefix tuple size) will overflow a uint32
+	idx.prefixTuples = make([]byte, 1<<30*12)
+	idx.count = 1 << 30
+	for i := 0; i < len(idx.prefixTuples); i += 12 {
+		binary.BigEndian.PutUint64(idx.prefixTuples[i:], uint64(i))
+	}
+	assert.Equal(t, uint32(0), idx.findPrefix(0))
+	assert.Equal(t, uint32(1), idx.findPrefix(1))
+	assert.Equal(t, uint32(1), idx.findPrefix(12))
+	assert.Equal(t, uint32(2), idx.findPrefix(13))
+	assert.Equal(t, uint32(idx.count)-1, idx.findPrefix(((1<<30)*12)-12))
+	assert.Equal(t, uint32(idx.count), idx.findPrefix(((1<<30)*12)-11))
+	assert.Equal(t, uint32(idx.count), idx.findPrefix(((1<<30)*12)+12))
+
+	assert.Equal(t, uint32(0x18d5555), idx.findPrefix(312475644))
+}
+
 // previous implementation for findIndex().
 func prefixIdx(ti onHeapTableIndex, prefix uint64) (idx uint32) {
 	// NOTE: The golang impl of sort.Search is basically inlined here. This method can be called in

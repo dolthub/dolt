@@ -41,6 +41,8 @@ var slashCmds = []cli.Command{
 	SlashHelp{},
 	SlashEdit{},
 	SlashPager{},
+	WarningOn{},
+	WarningOff{},
 }
 
 // parseSlashCmd parses a command line string into a slice of strings, splitting on spaces, but allowing spaces within
@@ -208,8 +210,12 @@ func (s SlashEdit) Exec(ctx context.Context, commandStr string, args []string, d
 }
 
 func (s SlashEdit) Docs() *cli.CommandDocumentation {
-	//TODO implement me
-	return &cli.CommandDocumentation{}
+	return &cli.CommandDocumentation{
+		ShortDesc: "Use $EDITOR to edit the last command.",
+		LongDesc:  "Start a text editor to edit your last command. Command will be executed after you finish editing.",
+		Synopsis:  []string{},
+		ArgParser: s.ArgParser(),
+	}
 }
 
 func (s SlashEdit) ArgParser() *argparser.ArgParser {
@@ -220,8 +226,12 @@ func (s SlashEdit) ArgParser() *argparser.ArgParser {
 type SlashPager struct{}
 
 func (s SlashPager) Docs() *cli.CommandDocumentation {
-	//TODO
-	return &cli.CommandDocumentation{}
+	return &cli.CommandDocumentation{
+		ShortDesc: "Enable or Disable the result pager",
+		LongDesc:  "Returns results in pager form. Use pager [on|off].",
+		Synopsis:  []string{},
+		ArgParser: s.ArgParser(),
+	}
 }
 
 func (s SlashPager) ArgParser() *argparser.ArgParser {
@@ -265,4 +275,65 @@ func handlePagerCommand(fullCmd string) (bool, error) {
 	}
 
 	return false, fmt.Errorf("Usage: \\pager [on|off]")
+}
+
+type WarningCmd struct{}
+
+func (s WarningCmd) Docs() *cli.CommandDocumentation {
+	return &cli.CommandDocumentation{
+		ShortDesc: "Toggle display of generated warnings after sql command.",
+		LongDesc:  "Displays a detailed list of the warnings generated after each sql command. Use \\W and \\w to enable and disable the setting, respectively.",
+		Synopsis:  []string{},
+		ArgParser: s.ArgParser(),
+	}
+}
+
+func (s WarningCmd) ArgParser() *argparser.ArgParser {
+	return &argparser.ArgParser{}
+}
+
+// Exec should never be called on warning command; It only changes which information is displayed.
+// handleWarningCommand should be used instead
+func (s WarningCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
+	panic("runtime error. Exec should never be called on warning display commands.")
+}
+
+type WarningOn struct {
+	WarningCmd
+}
+
+var _ cli.Command = WarningOn{}
+
+func (s WarningOn) Name() string { return "W" }
+
+func (s WarningOn) Description() string {
+	return "Show generated warnings after sql command"
+}
+
+type WarningOff struct {
+	WarningCmd
+}
+
+var _ cli.Command = WarningOff{}
+
+func (s WarningOff) Name() string { return "w" }
+
+func (s WarningOff) Description() string {
+	return "Hide generated warnings after sql command"
+}
+
+func handleWarningCommand(fullCmd string) (bool, error) {
+	tokens := strings.Split(fullCmd, " ")
+
+	if len(tokens) == 0 || (tokens[0] != "\\w" && tokens[0] != "\\W") {
+		return false, fmt.Errorf("runtime error: Expected \\w or \\W command.")
+	} else if len(tokens) > 1 {
+		return false, fmt.Errorf("Usage: \\w \\w to toggle warnings")
+	}
+
+	if tokens[0] == "\\W" {
+		return true, nil
+	} else {
+		return false, nil
+	}
 }

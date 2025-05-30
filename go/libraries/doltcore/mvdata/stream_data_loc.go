@@ -56,22 +56,14 @@ func (dl StreamDataLocation) NewReader(ctx context.Context, dEnv *env.DoltEnv, o
 
 	switch dl.Format {
 	case CsvFile:
-		delim := ","
-
-		if opts != nil {
-			csvOpts, _ := opts.(CsvOptions)
-
-			if len(csvOpts.Delim) != 0 {
-				delim = csvOpts.Delim
-			}
-		}
-
-		rd, err := csv.NewCSVReader(root.VRW().Format(), io.NopCloser(dl.Reader), csv.NewCSVInfo().SetDelim(delim))
+		csvInfo := CreateCSVInfo(opts, ",")
+		rd, err := csv.NewCSVReader(root.VRW().Format(), io.NopCloser(dl.Reader), csvInfo)
 
 		return rd, false, err
 
 	case PsvFile:
-		rd, err := csv.NewCSVReader(root.VRW().Format(), io.NopCloser(dl.Reader), csv.NewCSVInfo().SetDelim("|"))
+		csvInfo := CreateCSVInfo(opts, "|")
+		rd, err := csv.NewCSVReader(root.VRW().Format(), io.NopCloser(dl.Reader), csvInfo)
 		return rd, false, err
 	}
 

@@ -327,7 +327,6 @@ func (p *Puller) Pull(ctx context.Context) error {
 
 	// One thread calls ChunkFetcher.Get on each batch.
 	eg.Go(func() error {
-		defer tracker.Close()
 		for {
 			toFetch, hasMore, err := tracker.GetChunksToFetch(ctx)
 			if err != nil {
@@ -347,6 +346,12 @@ func (p *Puller) Pull(ctx context.Context) error {
 
 	// One thread reads the received chunks, walks their addresses and writes them to the table file.
 	eg.Go(func() (err error) {
+		// Closing the tracker belongs here, because this is
+		// the goroutine that writes to the tracker state with
+		// |Seen| and |TickProcessed| calls.  Once this thread
+		// finishes, there will be no further writes to the
+		// tracker state.
+		defer tracker.Close()
 		defer func() {
 			cerr := rd.Close()
 			err = errors.Join(err, cerr)

@@ -30,3 +30,42 @@ teardown() {
     [[ "$output" =~ "1,0" ]] || false
     [[ "$output" =~ "2,0" ]] || false
 }
+
+@test "merge-3way-schema-changes: migrate a schema merge too large to fit in a MutableMap" {
+  # MutableMap will cache 64K changes before flushing, so creating a table with more than 64K rows
+
+  dolt sql -q "create table test_table(pk int primary key, t varchar(20))"
+  python <<PYTHON | dolt table import -u test_table
+import csv
+import sys
+writer = csv.writer(sys.stdout)
+writer.writerow(["pk", "t"])
+for i in range(70_000):
+  writer.writerow([i, "hello world"])
+PYTHON
+  dolt add .
+  dolt commit -m "create table"
+
+  dolt branch schema_change
+  dolt branch data_change
+
+  dolt checkout schema_change
+  dolt sql -q "alter table test_table modify column t text"
+  dolt add .
+  dolt commit -m "modify column t to text"
+
+  dolt checkout data_change
+  dolt sql -q "update test_table set t = 'new text'"
+  dolt add .
+  dolt commit -m "update column t"
+
+  # Test that merge completes successfully and has the expected data
+  dolt merge schema_change
+  run dolt sql -q "show create table test_table"
+  log_status_eq 0
+  [[ "$output" =~ '`t` text,' ]] || false
+  run dolt sql -q "select count(*) from test_table where t = 'new text'"
+  log_status_eq 0
+  echo "$output"
+  [[ "$output" =~ '70000' ]] || false
+}

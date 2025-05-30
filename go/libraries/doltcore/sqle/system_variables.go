@@ -516,6 +516,13 @@ func AddDoltSystemVariables() {
 			Type:    types.NewSystemBoolType("gpgsign"),
 			Default: int8(0),
 		},
+		&sql.MysqlSystemVariable{
+			Name:    "sql_warnings",
+			Dynamic: true,
+			Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Both),
+			Type:    types.NewSystemBoolType("sql_warnings"),
+			Default: int8(1),
+		},
 	})
 	sql.SystemVariables.AddSystemVariables(DoltSystemVariables)
 }

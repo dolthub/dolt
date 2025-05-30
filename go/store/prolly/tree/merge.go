@@ -23,7 +23,7 @@ import (
 	"github.com/dolthub/dolt/go/store/prolly/message"
 )
 
-const patchBufferSize = 1024
+const PatchBufferSize = 1024
 
 // CollisionFn is a callback that handles 3-way merging of NodeItems when any
 // key collision occurs. A typical implementation will attempt a cell-wise merge
@@ -62,7 +62,7 @@ func ThreeWayMerge[K ~[]byte, O Ordering[K], S message.Serializer](
 	}
 
 	eg, ctx := errgroup.WithContext(ctx)
-	patches := newPatchBuffer(patchBufferSize)
+	patches := NewPatchBuffer(PatchBufferSize)
 
 	// iterate |ld| and |rd| in parallel, populating |patches|
 	eg.Go(func() (err error) {
@@ -88,22 +88,22 @@ func ThreeWayMerge[K ~[]byte, O Ordering[K], S message.Serializer](
 	return final, stats, nil
 }
 
-// patchBuffer implements MutationIter. It consumes Diffs
+// PatchBuffer implements MutationIter. It consumes Diffs
 // from the parallel treeDiffers and transforms them into
 // patches for the chunker to apply.
-type patchBuffer struct {
+type PatchBuffer struct {
 	buf chan patch
 }
 
-var _ MutationIter = patchBuffer{}
+var _ MutationIter = PatchBuffer{}
 
 type patch [2]Item
 
-func newPatchBuffer(sz int) patchBuffer {
-	return patchBuffer{buf: make(chan patch, sz)}
+func NewPatchBuffer(sz int) PatchBuffer {
+	return PatchBuffer{buf: make(chan patch, sz)}
 }
 
-func (ps patchBuffer) sendPatch(ctx context.Context, diff Diff) error {
+func (ps PatchBuffer) SendDiff(ctx context.Context, diff Diff) error {
 	p := patch{diff.Key, diff.To}
 	select {
 	case <-ctx.Done():
@@ -113,8 +113,18 @@ func (ps patchBuffer) sendPatch(ctx context.Context, diff Diff) error {
 	}
 }
 
+func (ps PatchBuffer) SendPatch(ctx context.Context, key, newValue Item) error {
+	p := patch{key, newValue}
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case ps.buf <- p:
+		return nil
+	}
+}
+
 // NextMutation implements MutationIter.
-func (ps patchBuffer) NextMutation(ctx context.Context) (Item, Item) {
+func (ps PatchBuffer) NextMutation(ctx context.Context) (Item, Item) {
 	var p patch
 	select {
 	case p = <-ps.buf:
@@ -124,7 +134,7 @@ func (ps patchBuffer) NextMutation(ctx context.Context) (Item, Item) {
 	}
 }
 
-func (ps patchBuffer) Close() error {
+func (ps PatchBuffer) Close() error {
 	close(ps.buf)
 	return nil
 }
@@ -132,7 +142,7 @@ func (ps patchBuffer) Close() error {
 func sendPatches[K ~[]byte, O Ordering[K]](
 	ctx context.Context,
 	l, r Differ[K, O],
-	buf patchBuffer,
+	buf PatchBuffer,
 	cb CollisionFn,
 ) (stats MergeStats, err error) {
 	var (
@@ -171,7 +181,7 @@ func sendPatches[K ~[]byte, O Ordering[K]](
 			}
 
 		case cmp > 0:
-			err = buf.sendPatch(ctx, right)
+			err = buf.SendDiff(ctx, right)
 			if err != nil {
 				return MergeStats{}, err
 			}
@@ -188,7 +198,7 @@ func sendPatches[K ~[]byte, O Ordering[K]](
 		case cmp == 0:
 			resolved, ok := cb(left, right)
 			if ok {
-				err = buf.sendPatch(ctx, resolved)
+				err = buf.SendDiff(ctx, resolved)
 				updateStats(right, &stats)
 			}
 			if err != nil {
@@ -219,7 +229,7 @@ func sendPatches[K ~[]byte, O Ordering[K]](
 	}
 
 	for rok {
-		err = buf.sendPatch(ctx, right)
+		err = buf.SendDiff(ctx, right)
 		if err != nil {
 			return MergeStats{}, err
 		}

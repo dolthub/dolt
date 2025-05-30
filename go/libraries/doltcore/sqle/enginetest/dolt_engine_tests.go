@@ -549,40 +549,63 @@ func RunLargeJsonObjectsTest(t *testing.T, harness DoltEnginetestHarness) {
 	}
 }
 
-func RunTransactionTests(t *testing.T, h DoltEnginetestHarness) {
+// RunTransactionTests runs transaction tests from GMS, as well as additional Dolt specific transaction tests. If
+// |prepared| is true, then the tests will be run using prepared statements, otherwise the queries will be directly
+// executed.
+func RunTransactionTests(t *testing.T, h DoltEnginetestHarness, prepared bool) {
 	for _, script := range queries.TransactionTests {
 		func() {
 			h := h.NewHarness(t)
 			defer h.Close()
-			enginetest.TestTransactionScript(t, h, script)
+			if prepared {
+				enginetest.TestTransactionScriptPrepared(t, h, script)
+			} else {
+				enginetest.TestTransactionScript(t, h, script)
+			}
 		}()
 	}
 	for _, script := range DoltTransactionTests {
 		func() {
 			h := h.NewHarness(t)
 			defer h.Close()
-			enginetest.TestTransactionScript(t, h, script)
+			if prepared {
+				enginetest.TestTransactionScriptPrepared(t, h, script)
+			} else {
+				enginetest.TestTransactionScript(t, h, script)
+			}
 		}()
 	}
 	for _, script := range DoltStoredProcedureTransactionTests {
 		func() {
 			h := h.NewHarness(t)
 			defer h.Close()
-			enginetest.TestTransactionScript(t, h, script)
+			if prepared {
+				enginetest.TestTransactionScriptPrepared(t, h, script)
+			} else {
+				enginetest.TestTransactionScript(t, h, script)
+			}
 		}()
 	}
 	for _, script := range DoltConflictHandlingTests {
 		func() {
 			h := h.NewHarness(t)
 			defer h.Close()
-			enginetest.TestTransactionScript(t, h, script)
+			if prepared {
+				enginetest.TestTransactionScriptPrepared(t, h, script)
+			} else {
+				enginetest.TestTransactionScript(t, h, script)
+			}
 		}()
 	}
 	for _, script := range DoltConstraintViolationTransactionTests {
 		func() {
 			h := h.NewHarness(t)
 			defer h.Close()
-			enginetest.TestTransactionScript(t, h, script)
+			if prepared {
+				enginetest.TestTransactionScriptPrepared(t, h, script)
+			} else {
+				enginetest.TestTransactionScript(t, h, script)
+			}
 		}()
 	}
 }

@@ -142,6 +142,8 @@ SKIP_SERVER_TESTS=$(cat <<-EOM
 ~archive.bats~
 ~fsck.bats~
 ~createchunk.bats~
+~import-no-header-csv.bats~
+~import-no-header-psv.bats~
 EOM
 )
 

@@ -548,7 +548,7 @@ func TestDropOnlyDb(t *testing.T) {
 	// add first database, switch to prolly?
 	runBlock(t, ctx, sqlEng, "drop database mydb")
 
-	sc.Stop()
+	<-sc.Stop()
 
 	// empty memory KV
 	_, ok = sc.kv.(*memStats)
@@ -688,7 +688,7 @@ func emptySetup(t *testing.T, threads *sql.BackgroundThreads, memOnly bool, gcEn
 	require.NoError(t, executeQuery(ctx, sqlEng, "use mydb"))
 
 	require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
-	sc.Stop()
+	<-sc.Stop()
 
 	var sqlDbs []sqle.Database
 	for _, db := range sqlEng.Analyzer.Catalog.DbProvider.AllDatabases(ctx) {
@@ -915,7 +915,7 @@ func TestStatsGcConcurrency(t *testing.T) {
 		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
 		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_gc()"))
 
-		sc.Stop()
+		<-sc.Stop()
 
 		// 101 dbs, 100 with stats (not main)
 		require.Equal(t, iters/2, len(sc.Stats.stats))
@@ -1000,7 +1000,7 @@ func TestStatsBranchConcurrency(t *testing.T) {
 
 		err = executeQuery(ctx, sqlEng, "call dolt_stats_gc()")
 		require.NoError(t, err)
-		sc.Stop()
+		<-sc.Stop()
 
 		// at the end we should still have |iters/2| databases
 		require.Equal(t, iters/2, len(sc.Stats.stats))
@@ -1064,7 +1064,7 @@ func TestStatsCacheGrowth(t *testing.T) {
 		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
 		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_gc()"))
 
-		sc.Stop()
+		<-sc.Stop()
 
 		// at the end we should still have |iters/2| databases
 		require.Equal(t, iters, len(sc.Stats.stats))

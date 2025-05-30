@@ -620,6 +620,10 @@ func GetStrictLookups(schCols *schema.ColCollection, indexes []sql.Index) []Look
 var _ DoltIndex = (*doltIndex)(nil)
 var _ sql.ExtendedIndex = (*doltIndex)(nil)
 
+func (di *doltIndex) String() string {
+	return di.dbName + "." + di.tblName + "." + di.id
+}
+
 // CanSupport implements sql.Index
 func (di *doltIndex) CanSupport(*sql.Context, ...sql.Range) bool {
 	return true

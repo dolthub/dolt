@@ -23,6 +23,7 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
+	"github.com/fatih/color"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
@@ -55,16 +56,17 @@ const (
 )
 
 // PrettyPrintResults prints the result of a query in the format provided
-func PrettyPrintResults(ctx *sql.Context, resultFormat PrintResultFormat, sqlSch sql.Schema, rowIter sql.RowIter, pageResults bool) (rerr error) {
-	return prettyPrintResultsWithSummary(ctx, resultFormat, sqlSch, rowIter, PrintNoSummary, pageResults)
+func PrettyPrintResults(ctx *sql.Context, resultFormat PrintResultFormat, sqlSch sql.Schema, rowIter sql.RowIter, pageResults bool, showWarnings bool) (rerr error) {
+	return prettyPrintResultsWithSummary(ctx, resultFormat, sqlSch, rowIter, PrintNoSummary, pageResults, showWarnings)
 }
 
 // PrettyPrintResultsExtended prints the result of a query in the format provided, including row count and timing info
-func PrettyPrintResultsExtended(ctx *sql.Context, resultFormat PrintResultFormat, sqlSch sql.Schema, rowIter sql.RowIter, pageResults bool) (rerr error) {
-	return prettyPrintResultsWithSummary(ctx, resultFormat, sqlSch, rowIter, PrintRowCountAndTiming, pageResults)
+func PrettyPrintResultsExtended(ctx *sql.Context, resultFormat PrintResultFormat, sqlSch sql.Schema, rowIter sql.RowIter, pageResults bool, showWarnings bool) (rerr error) {
+	return prettyPrintResultsWithSummary(ctx, resultFormat, sqlSch, rowIter, PrintRowCountAndTiming, pageResults, showWarnings)
 }
 
-func prettyPrintResultsWithSummary(ctx *sql.Context, resultFormat PrintResultFormat, sqlSch sql.Schema, rowIter sql.RowIter, summary PrintSummaryBehavior, pageResults bool) (rerr error) {
+func prettyPrintResultsWithSummary(ctx *sql.Context, resultFormat PrintResultFormat, sqlSch sql.Schema, rowIter sql.RowIter, summary PrintSummaryBehavior, pageResults bool, showWarnings bool) (rerr error) {
+
 	defer func() {
 		closeErr := rowIter.Close(ctx)
 		if rerr == nil && closeErr != nil {
@@ -139,7 +141,15 @@ func prettyPrintResultsWithSummary(ctx *sql.Context, resultFormat PrintResultFor
 	}
 
 	if summary == PrintRowCountAndTiming {
-		err = printResultSetSummary(numRows, start)
+		warnings := ""
+		if showWarnings {
+			warnings = "\n"
+			for _, warn := range ctx.Session.Warnings() {
+				warnings += color.YellowString(fmt.Sprintf("\nWarning (Code %d): %s", warn.Code, warn.Message))
+			}
+		}
+
+		err = printResultSetSummary(numRows, ctx.WarningCount(), warnings, start)
 		if err != nil {
 			return err
 		}
@@ -154,9 +164,19 @@ func prettyPrintResultsWithSummary(ctx *sql.Context, resultFormat PrintResultFor
 	}
 }
 
-func printResultSetSummary(numRows int, start time.Time) error {
+func printResultSetSummary(numRows int, numWarnings uint16, warningsList string, start time.Time) error {
+
+	warning := ""
+	if numWarnings > 0 {
+		plural := ""
+		if numWarnings > 1 {
+			plural = "s"
+		}
+		warning = fmt.Sprintf(", %d warning%s", numWarnings, plural)
+	}
+
 	if numRows == 0 {
-		printEmptySetResult(start)
+		printEmptySetResult(start, warning)
 		return nil
 	}
 
@@ -166,7 +186,7 @@ func printResultSetSummary(numRows int, start time.Time) error {
 	}
 
 	secondsSinceStart := secondsSince(start, time.Now())
-	err := iohelp.WriteLine(cli.CliOut, fmt.Sprintf("%d %s in set (%.2f sec)", numRows, noun, secondsSinceStart))
+	err := iohelp.WriteLine(cli.CliOut, fmt.Sprintf("%d %s in set%s (%.2f sec) %s", numRows, noun, warning, secondsSinceStart, warningsList))
 	if err != nil {
 		return err
 	}
@@ -216,9 +236,9 @@ type nullWriter struct{}
 func (n nullWriter) WriteSqlRow(ctx *sql.Context, r sql.Row) error { return nil }
 func (n nullWriter) Close(ctx context.Context) error               { return nil }
 
-func printEmptySetResult(start time.Time) {
+func printEmptySetResult(start time.Time, warning string) {
 	seconds := secondsSince(start, time.Now())
-	cli.Printf("Empty set (%.2f sec)\n", seconds)
+	cli.Printf("Empty set%s (%.2f sec)\n", warning, seconds)
 }
 
 func printOKResult(ctx *sql.Context, iter sql.RowIter, start time.Time) error {

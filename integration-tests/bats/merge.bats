@@ -751,7 +751,19 @@ SQL
     run dolt merge feature-branch
 
     log_status_eq 1
-    [[ "$output" =~ "conflict: table with same name deleted and modified" ]] || false
+    [[ "$output" =~ "CONFLICT (schema): Merge conflict in test" ]] || false
+
+    run dolt conflicts cat .
+    [[ "$output" =~ "+------------+-------------------------------------------------------------------+-------------------------------------------------------------------+------------------------------------------------------+" ]] || false
+    [[ "$output" =~ "| our_schema | their_schema                                                      | base_schema                                                       | description                                          |" ]] || false
+    [[ "$output" =~ "+------------+-------------------------------------------------------------------+-------------------------------------------------------------------+------------------------------------------------------+" ]] || false
+    [[ "$output" =~ '| <deleted>  | CREATE TABLE `test2` (                                            | CREATE TABLE `test2` (                                            | cannot merge a table deletion with data modification |' ]] || false
+    [[ "$output" =~ '|            |   `pk` int NOT NULL,                                              |   `pk` int NOT NULL,                                              |                                                      |' ]] || false
+    [[ "$output" =~ '|            |   `c1` int,                                                       |   `c1` int,                                                       |                                                      |' ]] || false
+    [[ "$output" =~ '|            |   PRIMARY KEY (`pk`)                                              |   PRIMARY KEY (`pk`)                                              |                                                      |' ]] || false
+    [[ "$output" =~ '|            | ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin; | ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin; |                                                      |' ]] || false
+    [[ "$output" =~ "+------------+-------------------------------------------------------------------+-------------------------------------------------------------------+------------------------------------------------------+" ]] || false
+
 }
 
 @test "merge: merge a branch that edits the schema of a deleted table" {
@@ -812,7 +824,20 @@ SQL
     run dolt merge feature-branch
 
     log_status_eq 1
-    [[ "$output" =~ "conflict: table with same name deleted and modified" ]] || false
+    [[ "$output" =~ "CONFLICT (schema): Merge conflict in test" ]] || false
+
+    run dolt conflicts cat .
+    echo "$output"
+    [[ "$output" =~ "+-------------------------------------------------------------------+--------------+-------------------------------------------------------------------+------------------------------------------------------+" ]] || false
+    [[ "$output" =~ "| our_schema                                                        | their_schema | base_schema                                                       | description                                          |" ]] || false
+    [[ "$output" =~ "+-------------------------------------------------------------------+--------------+-------------------------------------------------------------------+------------------------------------------------------+" ]] || false
+    [[ "$output" =~ '| CREATE TABLE `test2` (                                            | <deleted>    | CREATE TABLE `test2` (                                            | cannot merge a table deletion with data modification |' ]] || false
+    [[ "$output" =~ '|   `pk` int NOT NULL,                                              |              |   `pk` int NOT NULL,                                              |                                                      |' ]] || false
+    [[ "$output" =~ '|   `c1` int,                                                       |              |   `c1` int,                                                       |                                                      |' ]] || false
+    [[ "$output" =~ '|   PRIMARY KEY (`pk`)                                              |              |   PRIMARY KEY (`pk`)                                              |                                                      |' ]] || false
+    [[ "$output" =~ '| ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin; |              | ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin; |                                                      |' ]] || false
+    [[ "$output" =~ "+-------------------------------------------------------------------+--------------+-------------------------------------------------------------------+------------------------------------------------------+" ]] || false
+
 }
 
 @test "merge: merge a branch that deletes a schema-edited table" {
@@ -1076,7 +1101,17 @@ SQL
 
     run dolt merge merge_branch
     log_status_eq 1
-    [[ "$output" =~ "conflict: table with same name deleted and modified" ]] || false
+    run dolt conflicts cat .
+    [[ "$output" =~ "+------------+-------------------------------------------------------------------+-------------------------------------------------------------------+------------------------------------------------------+" ]] || false
+    [[ "$output" =~ "| our_schema | their_schema                                                      | base_schema                                                       | description                                          |" ]] || false
+    [[ "$output" =~ "+------------+-------------------------------------------------------------------+-------------------------------------------------------------------+------------------------------------------------------+" ]] || false
+    [[ "$output" =~ '| <deleted>  | CREATE TABLE `test1` (                                            | CREATE TABLE `test1` (                                            | cannot merge a table deletion with data modification |' ]] || false
+    [[ "$output" =~ '|            |   `pk` int NOT NULL,                                              |   `pk` int NOT NULL,                                              |                                                      |' ]] || false
+    [[ "$output" =~ '|            |   `c1` int,                                                       |   `c1` int,                                                       |                                                      |' ]] || false
+    [[ "$output" =~ '|            |   PRIMARY KEY (`pk`)                                              |   PRIMARY KEY (`pk`)                                              |                                                      |' ]] || false
+    [[ "$output" =~ '|            | ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin; | ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin; |                                                      |' ]] || false
+    [[ "$output" =~ "+------------+-------------------------------------------------------------------+-------------------------------------------------------------------+------------------------------------------------------+" ]] || false
+
 }
 
 @test "merge: ourRoot renames, theirRoot modifies the schema" {
@@ -1119,7 +1154,7 @@ SQL
 
     run dolt merge merge_branch
     log_status_eq 1
-    [[ "$output" =~ "conflict: table with same name deleted and modified" ]] || false
+    [[ "$output" =~ "cannot merge, column pk on table new_name has duplicate tag as table test1. This was likely because one of the tables is a rename of the other" ]] || false
 }
 
 @test "merge: ourRoot modifies the schema, theirRoot renames" {
@@ -1134,8 +1169,7 @@ SQL
 
     run dolt merge merge_branch
     log_status_eq 1
-    [[ "$output" =~ "cannot create column pk on table new_name" ]] || false
-    [[ "$output" =~ "already used in table test1" ]] || false
+    [[ "$output" =~ "cannot merge, column pk on table new_name has duplicate tag as table test1. This was likely because one of the tables is a rename of the other" ]] || false
 }
 
 @test "merge: dolt merge commits successful non-fast-forward merge" {

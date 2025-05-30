@@ -74,9 +74,10 @@ var ErrServerPerformedGC = errors.New("this connection was established when this
 // The only connection which is left up is the connection on which dolt_gc is called, but that connection is
 // invalidated in such a way that all future queries on it return an error.
 type killConnectionsSafepointController struct {
-	callCtx   *sql.Context
-	doltDB    *doltdb.DoltDB
-	origEpoch int
+	callCtx     *sql.Context
+	doltDB      *doltdb.DoltDB
+	origEpoch   int
+	statsDoneCh chan struct{}
 }
 
 func (sc killConnectionsSafepointController) BeginGC(ctx context.Context, keeper func(hash.Hash) bool) error {
@@ -85,6 +86,13 @@ func (sc killConnectionsSafepointController) BeginGC(ctx context.Context, keeper
 }
 
 func (sc killConnectionsSafepointController) EstablishPreFinalizeSafepoint(ctx context.Context) error {
+	if sc.statsDoneCh != nil {
+		select {
+		case <-sc.statsDoneCh:
+		case <-ctx.Done():
+			return context.Cause(ctx)
+		}
+	}
 	return nil
 }
 
@@ -164,6 +172,7 @@ type sessionAwareSafepointController struct {
 	callSession *dsess.DoltSession
 	origEpoch   int
 	doltDB      *doltdb.DoltDB
+	statsDoneCh chan struct{}
 
 	waiter *gcctx.GCSafepointWaiter
 	keeper func(hash.Hash) bool
@@ -185,6 +194,13 @@ func (sc *sessionAwareSafepointController) BeginGC(ctx context.Context, keeper f
 }
 
 func (sc *sessionAwareSafepointController) EstablishPreFinalizeSafepoint(ctx context.Context) error {
+	if sc.statsDoneCh != nil {
+		select {
+		case <-sc.statsDoneCh:
+		case <-ctx.Done():
+			return context.Cause(ctx)
+		}
+	}
 	return sc.waiter.Wait(ctx)
 }
 
@@ -260,26 +276,41 @@ func doDoltGC(ctx *sql.Context, args []string) (int, error) {
 }
 
 func RunDoltGC(ctx *sql.Context, ddb *doltdb.DoltDB, mode types.GCMode, cmp chunks.GCArchiveLevel, dbname string) error {
+	dSess := dsess.DSessFromSess(ctx.Session)
 	var sc types.GCSafepointController
+	var statsDoneCh chan struct{}
+	statsPro := dSess.StatsProvider()
+	if afp, ok := statsPro.(ExtendedStatsProvider); ok {
+		statsDoneCh = afp.Stop()
+	}
+	if statsDoneCh != nil {
+		// If statsDoneCh is nil, we are assuming we are
+		// running in a context where stats was never
+		// started. Restart() here will fail, because the
+		// SerialQueue will not be ready to process the
+		// restart.
+		defer func() {
+			// We receive here as well as in the PreFinalize of the
+			// safepoint controller, since we want to safely
+			// restart stats even when GC itself does not complete
+			// successfully.
+			<-statsDoneCh
+			_, err := statsRestart(ctx)
+			if err != nil {
+				ctx.GetLogger().Infof("gc stats restart failed: %s", err.Error())
+			}
+		}()
+	}
 	if UseSessionAwareSafepointController {
-		dSess := dsess.DSessFromSess(ctx.Session)
 		gcSafepointController := dSess.GCSafepointController()
 		sc = &sessionAwareSafepointController{
 			callSession: dSess,
 			dbname:      dbname,
 			controller:  gcSafepointController,
 			doltDB:      ddb,
+			statsDoneCh: statsDoneCh,
 		}
-		_, err := statsStop(ctx)
-		if err != nil {
-			ctx.GetLogger().Infof("gc stats interrupt failed: %s", err.Error())
-		}
-		defer func() {
-			_, err = statsRestart(ctx)
-			if err != nil {
-				ctx.GetLogger().Infof("gc stats restart failed: %s", err.Error())
-			}
-		}()
+
 	} else {
 		// Legacy safepoint controller behavior was to not
 		// allow GC on a standby server. GC on a standby server
@@ -298,9 +329,10 @@ func RunDoltGC(ctx *sql.Context, ddb *doltdb.DoltDB, mode types.GCMode, cmp chun
 			origepoch = epoch.(int)
 		}
 		sc = killConnectionsSafepointController{
-			origEpoch: origepoch,
-			callCtx:   ctx,
-			doltDB:    ddb,
+			origEpoch:   origepoch,
+			callCtx:     ctx,
+			doltDB:      ddb,
+			statsDoneCh: statsDoneCh,
 		}
 	}
 	return ddb.GC(ctx, mode, cmp, sc)

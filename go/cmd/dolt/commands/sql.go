@@ -447,7 +447,7 @@ func execSingleQuery(
 	}
 
 	if rowIter != nil {
-		err = engine.PrettyPrintResults(sqlCtx, format, sqlSch, rowIter, false)
+		err = engine.PrettyPrintResults(sqlCtx, format, sqlSch, rowIter, false, false)
 		if err != nil {
 			return errhand.VerboseErrorFromError(err)
 		}
@@ -663,7 +663,7 @@ func execBatchMode(ctx *sql.Context, qryist cli.Queryist, input io.Reader, conti
 					fileReadProg.printNewLineIfNeeded()
 				}
 			}
-			err = engine.PrettyPrintResults(ctx, format, sqlSch, rowIter, false)
+			err = engine.PrettyPrintResults(ctx, format, sqlSch, rowIter, false, false)
 			if err != nil {
 				err = buildBatchSqlErr(scanner.state.statementStartLine, query, err)
 				if !continueOnErr {
@@ -753,6 +753,12 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 
 	initialCtx := sqlCtx.Context
 
+	//We want to gather the warnings if a server is running, as the connection queryist does not automatically cache them
+	if c, ok := qryist.(cli.ShellServerQueryist); ok {
+		c.EnableGatherWarnings()
+	}
+
+	toggleWarnings := true
 	pagerEnabled := false
 	// Used for the \edit command.
 	lastSqlCmd := ""
@@ -796,12 +802,27 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 			}
 
 			if cmdType == DoltCliCommand {
+				_, okOn := subCmd.(WarningOn)
+				_, okOff := subCmd.(WarningOff)
+
 				if _, ok := subCmd.(SlashPager); ok {
 					p, err := handlePagerCommand(query)
 					if err != nil {
 						shell.Println(color.RedString(err.Error()))
 					} else {
 						pagerEnabled = p
+					}
+				} else if okOn || okOff {
+					w, err := handleWarningCommand(query)
+					if err != nil {
+						shell.Println(color.RedString(err.Error()))
+					} else {
+						toggleWarnings = w
+						if toggleWarnings {
+							cli.Println("Show warnings enabled")
+						} else {
+							cli.Println("Show warnings disabled")
+						}
 					}
 				} else {
 					err := handleSlashCommand(sqlCtx, subCmd, query, cliCtx)
@@ -823,9 +844,9 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 				} else if rowIter != nil {
 					switch closureFormat {
 					case engine.FormatTabular, engine.FormatVertical:
-						err = engine.PrettyPrintResultsExtended(sqlCtx, closureFormat, sqlSch, rowIter, pagerEnabled)
+						err = engine.PrettyPrintResultsExtended(sqlCtx, closureFormat, sqlSch, rowIter, pagerEnabled, toggleWarnings)
 					default:
-						err = engine.PrettyPrintResults(sqlCtx, closureFormat, sqlSch, rowIter, pagerEnabled)
+						err = engine.PrettyPrintResults(sqlCtx, closureFormat, sqlSch, rowIter, pagerEnabled, toggleWarnings)
 					}
 
 					if err != nil {
@@ -951,8 +972,12 @@ func formattedPrompts(db, branch string, dirty bool) (string, string) {
 // along the way by printing red error messages to the CLI. If there was an issue getting the db name, the ok return
 // value will be false and the strings will be empty.
 func getDBBranchFromSession(sqlCtx *sql.Context, qryist cli.Queryist) (db string, branch string, ok bool) {
-	sqlCtx.Session.LockWarnings()
-	defer sqlCtx.Session.UnlockWarnings()
+	_, _, _, err := qryist.Query(sqlCtx, "set lock_warnings = 1")
+	if err != nil {
+		cli.Println(color.RedString(err.Error()))
+		return "", "", false
+	}
+	defer qryist.Query(sqlCtx, "set lock_warnings = 0")
 
 	_, resp, _, err := qryist.Query(sqlCtx, "select database() as db, active_branch() as branch")
 	if err != nil {
@@ -993,8 +1018,11 @@ func getDBBranchFromSession(sqlCtx *sql.Context, qryist cli.Queryist) (db string
 // isDirty returns true if the workspace is dirty, false otherwise. This function _assumes_ you are on a database
 // with a branch. If you are not, you will get an error.
 func isDirty(sqlCtx *sql.Context, qryist cli.Queryist) (bool, error) {
-	sqlCtx.Session.LockWarnings()
-	defer sqlCtx.Session.UnlockWarnings()
+	_, _, _, err := qryist.Query(sqlCtx, "set lock_warnings = 1")
+	if err != nil {
+		return false, err
+	}
+	defer qryist.Query(sqlCtx, "set lock_warnings = 0")
 
 	_, resp, _, err := qryist.Query(sqlCtx, "select count(table_name) > 0 as dirty from dolt_status")
 

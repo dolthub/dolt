@@ -325,6 +325,7 @@ func (a *binlogReplicaApplier) replicaBinlogEventHandler(ctx *sql.Context) error
 
 		case err := <-eventProducer.ErrorChan():
 			if sqlError, isSqlError := err.(*mysql.SQLError); isSqlError {
+				ctx.GetLogger().Infof("error on replication connection: %v", err)
 				badConnection := sqlError.Message == io.EOF.Error() ||
 					strings.HasPrefix(sqlError.Message, io.ErrUnexpectedEOF.Error())
 				if badConnection {

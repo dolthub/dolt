@@ -33,7 +33,9 @@ import (
 )
 
 type CsvOptions struct {
-	Delim string
+	Delim    string
+	NoHeader bool
+	Columns  []string
 }
 
 type XlsxOptions struct {

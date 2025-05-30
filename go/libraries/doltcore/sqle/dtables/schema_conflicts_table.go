@@ -167,6 +167,7 @@ func newSchemaConflict(ctx *sql.Context, table doltdb.TableName, baseRoot doltdb
 
 	baseFKs, _ := fkc.KeysForTable(table)
 
+	var description string
 	var base string
 	if baseSch != nil {
 		var err error
@@ -187,6 +188,12 @@ func newSchemaConflict(ctx *sql.Context, table doltdb.TableName, baseRoot doltdb
 		}
 	} else {
 		ours = "<deleted>"
+		if schema.SchemasAreEqual(baseSch, c.FromSch) {
+			// If the schemas are equal, then this conflict represents a dropped table conflicting with a data conflict.
+			description = "cannot merge a table deletion with data modification"
+		} else {
+			description = "cannot merge a table deletion with schema modification"
+		}
 	}
 
 	var theirs string
@@ -198,6 +205,12 @@ func newSchemaConflict(ctx *sql.Context, table doltdb.TableName, baseRoot doltdb
 		}
 	} else {
 		theirs = "<deleted>"
+		if schema.SchemasAreEqual(baseSch, c.ToSch) {
+			// If the schemas are equal, then this conflict represents a dropped table conflicting with a data conflict.
+			description = "cannot merge a table deletion with data modification"
+		} else {
+			description = "cannot merge a table deletion with schema modification"
+		}
 	}
 
 	if c.ToSch == nil || c.FromSch == nil {
@@ -206,7 +219,7 @@ func newSchemaConflict(ctx *sql.Context, table doltdb.TableName, baseRoot doltdb
 			baseSch:     base,
 			ourSch:      ours,
 			theirSch:    theirs,
-			description: "cannot merge a table deletion with schema modification",
+			description: description,
 		}, nil
 	}
 

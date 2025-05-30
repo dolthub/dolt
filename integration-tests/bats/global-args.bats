@@ -135,3 +135,18 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "\"sqlserver.global.log_bin\":\"1\"" ]] || false
 }
+
+@test "global-args: can use --branch on valid branch" {
+    cd db1
+    run dolt --branch b1 status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "On branch b1" ]] || false
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+}
+
+@test "global-args: cannot use --branch on invalid branch" {
+    cd db1
+    run dolt --branch invalidBr status
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "database not found: db1/invalidBr" ]] || false
+}
