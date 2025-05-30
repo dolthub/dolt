@@ -69,18 +69,9 @@ func (a *HasAncestor) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 		if err != nil {
 			return nil, err
 		}
-
-		cs, err := doltdb.NewCommitSpec(headStr.(string))
+		headCommit, err = resolveRefSpec(ctx, headRef, ddb, headStr.(string))
 		if err != nil {
 			return nil, err
-		}
-		optCmt, err := ddb.Resolve(ctx, cs, headRef)
-		if err != nil {
-			return nil, fmt.Errorf("error during has_ancestor check: ref not found '%s'", headStr)
-		}
-		headCommit, ok = optCmt.ToCommit()
-		if !ok {
-			return nil, doltdb.ErrGhostCommitEncountered
 		}
 	}
 
@@ -94,19 +85,10 @@ func (a *HasAncestor) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 		if err != nil {
 			return nil, err
 		}
-		cs, err := doltdb.NewCommitSpec(ancStr.(string))
+		ancCommit, err = resolveRefSpec(ctx, headRef, ddb, ancStr.(string))
 		if err != nil {
 			return nil, err
 		}
-		optCmt, err := ddb.Resolve(ctx, cs, headRef)
-		if err != nil {
-			return nil, fmt.Errorf("error during has_ancestor check: ref not found '%s'", ancStr)
-		}
-		ancCommit, ok = optCmt.ToCommit()
-		if !ok {
-			return nil, doltdb.ErrGhostCommitEncountered
-		}
-
 	}
 
 	headHash, err := headCommit.HashOf()
