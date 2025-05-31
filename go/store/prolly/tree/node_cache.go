@@ -20,8 +20,7 @@ import (
 )
 
 const (
-	numStripes      = 32
-	stripeMask byte = 0b00011111
+	numStripes = 256
 )
 
 func newChunkCache(maxSize int) (c nodeCache) {
@@ -37,12 +36,12 @@ type nodeCache struct {
 }
 
 func (c nodeCache) get(addr hash.Hash) (Node, bool) {
-	s := c.stripes[addr[0]&stripeMask]
+	s := c.stripes[addr[0]]
 	return s.get(addr)
 }
 
 func (c nodeCache) insert(addr hash.Hash, node Node) {
-	s := c.stripes[addr[0]&stripeMask]
+	s := c.stripes[addr[0]]
 	s.insert(addr, node)
 }
 
@@ -70,9 +69,7 @@ func (s *stripe) purge() {
 }
 
 func (s *stripe) get(h hash.Hash) (Node, bool) {
-	return s.cache.Peek(h)
-
-	// return s.cache.Get(h)
+	return s.cache.Get(h)
 }
 
 func (s *stripe) insert(addr hash.Hash, node Node) {
