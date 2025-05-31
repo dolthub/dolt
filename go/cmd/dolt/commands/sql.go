@@ -1199,15 +1199,11 @@ func processParsedQuery(ctx *sql.Context, query string, qryist cli.Queryist, sql
 		}
 		return nil, nil, nil, nil
 	case *sqlparser.DDL:
-		_, ri, _, err := qryist.Query(ctx, query)
+		sch, ri, _, err := qryist.Query(ctx, query)
 		if err != nil {
 			return nil, nil, nil, err
 		}
-		_, err = sql.RowIterToRows(ctx, ri)
-		if err != nil {
-			return nil, nil, nil, err
-		}
-		return nil, nil, nil, nil
+		return sch, ri, nil, nil
 	case *sqlparser.Load:
 		if s.Local {
 			return nil, nil, nil, fmt.Errorf("LOCAL supported only in sql-server mode")
