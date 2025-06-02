@@ -160,7 +160,7 @@ func clonePrint(eventCh <-chan pull.TableFileEvent) {
 		if chunksDownloading > remainingChunks {
 			chunksDownloading = remainingChunks
 		}
-		
+
 		p.Printf("%s of %s chunks complete. %s chunks being downloaded currently.\n",
 			strhelp.CommaIfy(chunksDownloaded), strhelp.CommaIfy(chunksC), strhelp.CommaIfy(chunksDownloading))
 		for _, fileId := range sortedKeys(currStats) {
