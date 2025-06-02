@@ -128,11 +128,10 @@ CREATE TABLE employees (
   PRIMARY KEY (idz)
 );
 SQL
-    skip
     run dolt table import -r employees `batshelper employees-tbl.json`
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "Error replacing table" ]] || false
-    [[ "$output" =~ "cause: input primary keys do not match primary keys of existing table" ]] || false
+    [[ "$output" =~ "An error occurred while moving data" ]] || false
+    [[ "$output" =~ "not found in schema" ]] || false
 }
 
 @test "import-replace-tables: replace table using schema with json" {

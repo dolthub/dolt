@@ -357,7 +357,6 @@ teardown() {
 }
 
 @test "cherry-pick: commit with DROP TABLE" {
-    skip # drop or rename case
     dolt sql -q "DROP TABLE test"
     dolt commit -am "Drop table test"
 
@@ -370,7 +369,7 @@ teardown() {
 
     run dolt cherry-pick branch1
     [ "$status" -eq "1" ]
-    [[ "$output" =~ "table was renamed or dropped" ]] || false
+    [[ "$output" =~ "table was modified in one branch and deleted in the other" ]] || false
 
     run dolt sql -q "SHOW TABLES" -r csv
     [[ "$output" =~ "test" ]] || false
