@@ -37,8 +37,8 @@ type BranchStatusTableFunction struct {
 
 // NewInstance creates a new instance of TableFunction interface
 func (b *BranchStatusTableFunction) NewInstance(ctx *sql.Context, db sql.Database, args []sql.Expression) (sql.Node, error) {
-	if len(args) < 1 {
-		return nil, sql.ErrInvalidArgumentNumber.New(b.Name(), "at least 2", len(args))
+	if len(args) == 0 {
+		return nil, sql.ErrInvalidArgumentNumber.New(b.Name(), "at least 1", len(args))
 	}
 	return &BranchStatusTableFunction{
 		db:    db,
@@ -168,6 +168,9 @@ func (b *BranchStatusTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.
 	specs, err := mustExpressionsToString(ctx, b.exprs)
 	if err != nil {
 		return nil, err
+	}
+	if len(specs) == 0 {
+		return nil, sql.ErrInvalidArgumentNumber.New(b.Name(), "at least 1", 0)
 	}
 	if len(specs) == 1 {
 		return sql.RowsToRowIter(), nil

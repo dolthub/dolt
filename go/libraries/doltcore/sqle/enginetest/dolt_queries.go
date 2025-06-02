@@ -4865,14 +4865,22 @@ var BranchStatusTableFunctionScriptTests = []queries.ScriptTest{
 		Name: "test dolt_branch_status(...)",
 		SetUpScript: []string{
 			"call dolt_branch('b1');",
-			"call dolt_branch('b2');",
+
 			"call dolt_commit('-m', 'main', '--allow-empty');",
 
+			"call dolt_checkout('b1');",
+			"call dolt_commit('-m', 'b1', '--allow-empty');",
+
+			"call dolt_branch('b2');",
 			"call dolt_checkout('b2');",
 			"call dolt_commit('-m', 'b2', '--allow-empty');",
 
 			"call dolt_checkout('main');",
 			"call dolt_branch('b3');",
+
+			"call dolt_checkout('b3');",
+			"call dolt_commit('-m', 'b3', '--allow-empty');",
+
 			"call dolt_branch('b4');",
 			"call dolt_checkout('b4');",
 			"call dolt_commit('-m', 'b4', '--allow-empty');",
@@ -4904,42 +4912,42 @@ var BranchStatusTableFunctionScriptTests = []queries.ScriptTest{
 				Query: "select * from dolt_branch_status('main', 'main', 'b1', 'b2', 'b3', 'b4', 'b5');",
 				Expected: []sql.Row{
 					{"main", uint64(0), uint64(0)},
-					{"b1", uint64(0), uint64(1)},
-					{"b2", uint64(1), uint64(1)},
-					{"b3", uint64(0), uint64(0)},
-					{"b4", uint64(1), uint64(0)},
-					{"b5", uint64(2), uint64(0)},
+					{"b1", uint64(1), uint64(1)},
+					{"b2", uint64(2), uint64(1)},
+					{"b3", uint64(1), uint64(0)},
+					{"b4", uint64(2), uint64(0)},
+					{"b5", uint64(3), uint64(0)},
 				},
 			},
 			{
 				Query: "select * from dolt_branch_status('main', 't1', 't2', 't3', 't4', 't5');",
 				Expected: []sql.Row{
-					{"t1", uint64(0), uint64(1)},
-					{"t2", uint64(1), uint64(1)},
-					{"t3", uint64(0), uint64(0)},
-					{"t4", uint64(1), uint64(0)},
-					{"t5", uint64(2), uint64(0)},
+					{"t1", uint64(1), uint64(1)},
+					{"t2", uint64(2), uint64(1)},
+					{"t3", uint64(1), uint64(0)},
+					{"t4", uint64(2), uint64(0)},
+					{"t5", uint64(3), uint64(0)},
 				},
 			},
 			{
 				Query: "select * from dolt_branch_status('b2', 'b5');",
 				Expected: []sql.Row{
-					{"b5", uint64(3), uint64(1)},
+					{"b5", uint64(4), uint64(2)},
 				},
 			},
 			{
 				Query: "select * from dolt_branch_status('main', 'b5', 'HEAD', 'HEAD~1', 'HEAD~2');",
 				Expected: []sql.Row{
-					{"b5", uint64(2), uint64(0)},
-					{"HEAD", uint64(2), uint64(0)},
-					{"HEAD~1", uint64(1), uint64(0)},
-					{"HEAD~2", uint64(0), uint64(0)},
+					{"b5", uint64(3), uint64(0)},
+					{"HEAD", uint64(3), uint64(0)},
+					{"HEAD~1", uint64(2), uint64(0)},
+					{"HEAD~2", uint64(1), uint64(0)},
 				},
 			},
 			{
 				Query: "select commits_ahead, commits_behind from dolt_branch_status('main', dolt_hashof('b5'));",
 				Expected: []sql.Row{
-					{uint64(2), uint64(0)},
+					{uint64(3), uint64(0)},
 				},
 			},
 		},
