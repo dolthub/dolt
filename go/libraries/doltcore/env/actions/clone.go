@@ -98,6 +98,7 @@ func clonePrint(eventCh <-chan pull.TableFileEvent) {
 		chunksDownloaded  int64
 		currStats         = make(map[string]iohelp.ReadStats)
 		tableFiles        = make(map[string]*chunks.TableFile)
+		activeDownloads   = make(map[string]bool)
 	)
 
 	p := cli.NewEphemeralPrinter()
@@ -110,12 +111,19 @@ func clonePrint(eventCh <-chan pull.TableFileEvent) {
 		case pull.Listed:
 			for _, tf := range tblFEvt.TableFiles {
 				c := tf
-				tableFiles[c.FileID()] = &c
-				chunksC += int64(tf.NumChunks())
+				fileID := c.FileID()
+				if _, exists := tableFiles[fileID]; !exists {
+					tableFiles[fileID] = &c
+					chunksC += int64(tf.NumChunks())
+				}
 			}
 		case pull.DownloadStart:
 			for _, tf := range tblFEvt.TableFiles {
-				chunksDownloading += int64(tf.NumChunks())
+				fileID := tf.FileID()
+				if !activeDownloads[fileID] {
+					activeDownloads[fileID] = true
+					chunksDownloading += int64(tf.NumChunks())
+				}
 			}
 		case pull.DownloadStats:
 			for i, s := range tblFEvt.Stats {
@@ -124,17 +132,35 @@ func clonePrint(eventCh <-chan pull.TableFileEvent) {
 			}
 		case pull.DownloadSuccess:
 			for _, tf := range tblFEvt.TableFiles {
-				chunksDownloading -= int64(tf.NumChunks())
-				chunksDownloaded += int64(tf.NumChunks())
-				delete(currStats, tf.FileID())
+				fileID := tf.FileID()
+				if activeDownloads[fileID] {
+					delete(activeDownloads, fileID)
+					chunksDownloading -= int64(tf.NumChunks())
+					chunksDownloaded += int64(tf.NumChunks())
+				}
+				delete(currStats, fileID)
 			}
 		case pull.DownloadFailed:
 			// Ignore for now and output errors on the main thread
 			for _, tf := range tblFEvt.TableFiles {
-				delete(currStats, tf.FileID())
+				fileID := tf.FileID()
+				if activeDownloads[fileID] {
+					delete(activeDownloads, fileID)
+					chunksDownloading -= int64(tf.NumChunks())
+				}
+				delete(currStats, fileID)
 			}
 		}
 
+		// Defensive check to ensure chunksDownloading doesn't exceed remaining chunks
+		remainingChunks := chunksC - chunksDownloaded
+		if remainingChunks < 0 {
+			remainingChunks = 0
+		}
+		if chunksDownloading > remainingChunks {
+			chunksDownloading = remainingChunks
+		}
+		
 		p.Printf("%s of %s chunks complete. %s chunks being downloaded currently.\n",
 			strhelp.CommaIfy(chunksDownloaded), strhelp.CommaIfy(chunksC), strhelp.CommaIfy(chunksDownloading))
 		for _, fileId := range sortedKeys(currStats) {
