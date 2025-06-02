@@ -136,7 +136,6 @@ SQL
 
 @test "sql-batch: batch mode detects subqueries and decides not to do batch insert." {
   # create the second table.
-  skip "TODO: something is wrong with inserting into non null columns using a subquery"
   dolt sql -b << SQL
 CREATE TABLE test2 (
   pk bigint NOT NULL,

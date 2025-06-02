@@ -281,7 +281,6 @@ SQL
 }
 
 @test "sql-cherry-pick: commit with DROP TABLE" {
-    skip # drop or rename case
     dolt sql -q "DROP TABLE test"
     dolt commit -am "Drop table test"
 
@@ -294,7 +293,7 @@ SQL
 
     run dolt sql -q "CALL DOLT_CHERRY_PICK('branch1')"
     [ "$status" -eq "1" ]
-    [[ "$output" =~ "table was renamed or dropped" ]] || false
+    [[ "$output" =~ "table was modified in one branch and deleted in the other" ]] || false
 
     run dolt sql -q "SHOW TABLES" -r csv
     [[ "$output" =~ "test" ]] || false
