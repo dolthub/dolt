@@ -180,7 +180,7 @@ func (b *BranchStatusTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.
 	for i, spec := range specs {
 		cs, cErr := doltdb.NewCommitSpec(spec)
 		if cErr != nil {
-			return nil, err
+			return nil, cErr
 		}
 		optCmt, oErr := ddb.Resolve(ctx, cs, headRef)
 		if oErr != nil {

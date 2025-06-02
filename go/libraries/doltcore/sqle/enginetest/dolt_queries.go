@@ -4897,6 +4897,10 @@ var BranchStatusTableFunctionScriptTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
+				Query:          "select * from dolt_branch_status('main', '');",
+				ExpectedErrStr: "string is not a valid branch or hash",
+			},
+			{
 				Query:          "select * from dolt_branch_status('main', 'non-existent-branch');",
 				ExpectedErrStr: "branch not found: non-existent-branch",
 			},
