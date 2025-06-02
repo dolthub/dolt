@@ -16,16 +16,13 @@ package dtablefunctions
 
 import (
 	"fmt"
-	"io"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions/commitwalk"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/dolt/go/store/hash"
 )
 
 var _ sql.TableFunction = (*BranchStatusTableFunction)(nil)
@@ -118,38 +115,6 @@ func (b *BranchStatusTableFunction) WithChildren(children ...sql.Node) (sql.Node
 	return b, nil
 }
 
-func isNotGhostCommit(commit *doltdb.OptionalCommit) (bool, error) {
-	_, commitOk := commit.ToCommit()
-	return commitOk, nil
-}
-
-func (b *BranchStatusTableFunction) getCommitMap(ctx *sql.Context, ddb *doltdb.DoltDB, startHash hash.Hash) (map[string]struct{}, error) {
-	commitHashes := make(map[string]struct{})
-	commitIter, err := commitwalk.GetTopologicalOrderIterator[doltdb.Context](ctx, ddb, []hash.Hash{startHash}, isNotGhostCommit)
-	if err != nil {
-		return nil, err
-	}
-	for {
-		_, optCmt, cErr := commitIter.Next(ctx)
-		if cErr != nil {
-			if cErr == io.EOF {
-				break
-			}
-			return nil, cErr
-		}
-		commit, isReal := optCmt.ToCommit()
-		if !isReal {
-			continue
-		}
-		commitHash, hErr := commit.HashOf()
-		if hErr != nil {
-			return nil, hErr
-		}
-		commitHashes[commitHash.String()] = struct{}{}
-	}
-	return commitHashes, nil
-}
-
 // RowIter implements the sql.Node interface
 func (b *BranchStatusTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter, error) {
 	sqlDb, ok := b.db.(dsess.SqlDatabase)
@@ -200,40 +165,46 @@ func (b *BranchStatusTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.
 	if err != nil {
 		return nil, err
 	}
-
-	// TODO: There is definitely a more efficient algorithm.
-	//   We waste memory and time here by always traversing until initial commit.
-
-	baseAncestors, err := b.getCommitMap(ctx, ddb, baseHash)
+	baseCommitClosure, err := baseCommit.GetCommitClosure(ctx)
 	if err != nil {
 		return nil, err
 	}
+	baseAncestors, err := baseCommitClosure.AsHashSet(ctx)
+	if err != nil {
+		return nil, err
+	}
+	baseAncestors.Insert(baseHash)
 
 	var rows []sql.Row
 	for i, branchCommit := range branchCommits {
-		var ahead, behind uint64
 		branchHash, hErr := branchCommit.HashOf()
 		if hErr != nil {
 			return nil, hErr
 		}
 
 		// same commit will have no differences
+		var ahead, behind uint64
 		if branchHash.Equal(baseHash) {
 			rows = append(rows, sql.Row{specs[i+1], ahead, behind})
 			continue
 		}
 
-		branchAncestors, bErr := b.getCommitMap(ctx, ddb, branchHash)
+		branchCommitClosure, bErr := branchCommit.GetCommitClosure(ctx)
 		if bErr != nil {
 			return nil, bErr
 		}
+		branchAncestors, bErr := branchCommitClosure.AsHashSet(ctx)
+		if bErr != nil {
+			return nil, bErr
+		}
+		branchAncestors.Insert(branchHash)
 		for branchAncestor := range branchAncestors {
-			if _, ok = baseAncestors[branchAncestor]; !ok {
+			if !baseAncestors.Has(branchAncestor) {
 				ahead++
 			}
 		}
 		for baseAncestor := range baseAncestors {
-			if _, ok = branchAncestors[baseAncestor]; !ok {
+			if !branchAncestors.Has(baseAncestor) {
 				behind++
 			}
 		}
