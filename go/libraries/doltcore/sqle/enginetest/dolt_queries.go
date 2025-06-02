@@ -458,6 +458,10 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 				Query:       "select * from `mydb/branch1~3`.t01;",
 				ExpectedErr: sql.ErrTableNotFound,
 			},
+			{
+				Query:          "select * from dolt_hashof('HEAD^0');",
+				ExpectedErrStr: "invalid ancestor spec",
+			},
 		},
 	},
 	{

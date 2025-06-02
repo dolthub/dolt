@@ -15,6 +15,7 @@
 package doltdb
 
 import (
+	"errors"
 	"strconv"
 	"strings"
 )
@@ -61,7 +62,7 @@ func parseInstructions(aSpec string) ([]int, error) {
 				instructions = append(instructions, 0)
 			}
 		default:
-			return nil, ErrInvalidAncestorSpec
+			return nil, errors.New("Invalid HEAD spec: " + aSpec)
 		}
 	}
 
