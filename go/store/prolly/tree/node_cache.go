@@ -32,46 +32,29 @@ func newChunkCache(maxSize int) (c nodeCache) {
 }
 
 type nodeCache struct {
-	stripes [numStripes]*stripe
+	stripes [numStripes]*lru.TwoQueueCache[hash.Hash, Node]
 }
 
 func (c nodeCache) get(addr hash.Hash) (Node, bool) {
 	s := c.stripes[addr[0]]
-	return s.get(addr)
+	return s.Get(addr)
 }
 
 func (c nodeCache) insert(addr hash.Hash, node Node) {
 	s := c.stripes[addr[0]]
-	s.insert(addr, node)
+	s.Add(addr, node)
 }
 
 func (c nodeCache) purge() {
 	for _, s := range c.stripes {
-		s.purge()
+		s.Purge()
 	}
 }
 
-type stripe struct {
-	cache *lru.TwoQueueCache[hash.Hash, Node]
-}
-
-func newStripe(maxSize int) *stripe {
+func newStripe(maxSize int) *lru.TwoQueueCache[hash.Hash, Node] {
 	c, err := lru.New2Q[hash.Hash, Node](maxSize)
 	if err != nil {
 		panic(err) // A good reason to die. Not enough memory to allocate cache.
 	}
-
-	return &stripe{cache: c}
-}
-
-func (s *stripe) purge() {
-	s.cache.Purge()
-}
-
-func (s *stripe) get(h hash.Hash) (Node, bool) {
-	return s.cache.Get(h)
-}
-
-func (s *stripe) insert(addr hash.Hash, node Node) {
-	s.cache.Add(addr, node)
+	return c
 }
