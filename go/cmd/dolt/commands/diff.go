@@ -1811,9 +1811,7 @@ func validateWhereClause(queryist cli.Queryist, sqlCtx *sql.Context, dArgs *diff
 	// We use a subquery approach so the aliased columns are available in the WHERE clause
 	query := "select * from (select 1 as diff_type, 1 as from_pk, 1 as to_pk) as diff_validation where " + dArgs.where + " limit 0"
 	_, rowIter, _, err := queryist.Query(sqlCtx, query)
-	if sql.ErrSyntaxError.Is(err) {
-		return errhand.BuildDError("Failed to parse diff query. Invalid where clause?").AddCause(err).Build()
-	} else if err != nil {
+	if err != nil {
 		return errhand.BuildDError("Error running diff query").AddCause(err).Build()
 	}
 
