@@ -30,11 +30,15 @@ func TestParseInstructions(t *testing.T) {
 		{"^1", []int{0}, false},
 		{"~", []int{0}, false},
 		{"~1", []int{0}, false},
-		{"^10", []int{9}, false},
+		{"~10", []int{0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, false},
 		{"~3", []int{0, 0, 0}, false},
 		{"^^", []int{0, 0}, false},
-		{"^2~3^5", []int{1, 0, 0, 0, 4}, false},
+		{"^2~3^2", []int{1, 0, 0, 0, 1}, false},
 		{"invalid", nil, true},
+		{"^0", nil, true},
+		{"^3", nil, true},
+		{"^10", nil, true},
+		{"~-5", nil, true},
 	}
 
 	for _, test := range tests {
