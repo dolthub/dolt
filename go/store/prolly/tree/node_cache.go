@@ -15,8 +15,9 @@
 package tree
 
 import (
-	"github.com/dolthub/dolt/go/store/hash"
 	lru "github.com/hashicorp/golang-lru/v2"
+
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 const (
