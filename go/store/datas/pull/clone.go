@@ -111,6 +111,7 @@ func clone(ctx context.Context, srcTS, sinkTS chunks.TableFileStore, sinkCS chun
 	// the sources again, and update the fileIDToTF map with updated info, but not change the files we are downloading.
 	desiredFiles, fileIDToTF, fileIDToNumChunks := mapTableFiles(tblFiles)
 	completed := make([]bool, len(desiredFiles))
+	downloadStarted := make([]bool, len(desiredFiles))
 
 	report(TableFileEvent{EventType: Listed, TableFiles: tblFiles})
 
@@ -137,7 +138,10 @@ func clone(ctx context.Context, srcTS, sinkTS chunks.TableFileStore, sinkCS chun
 					return backoff.Permanent(errors.New("table file not found. please try again"))
 				}
 
-				report(TableFileEvent{EventType: DownloadStart, TableFiles: []chunks.TableFile{tblFile}})
+				if !downloadStarted[idx] {
+					downloadStarted[idx] = true
+					report(TableFileEvent{EventType: DownloadStart, TableFiles: []chunks.TableFile{tblFile}})
+				}
 				err = sinkTS.WriteTableFile(ctx, tblFile.FileID()+tblFile.LocationSuffix(), tblFile.NumChunks(), nil, func() (io.ReadCloser, uint64, error) {
 					rd, contentLength, err := tblFile.Open(ctx)
 					if err != nil {
