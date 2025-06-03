@@ -1175,7 +1175,7 @@ func (db Database) getAllTableNames(ctx *sql.Context, root doltdb.RootValue, sho
 		if err != nil {
 			return nil, err
 		}
-		result = append(result, systemTables...)
+		result = append(result, doltdb.FlattenTableNames(systemTables)...)
 	}
 
 	return result, nil

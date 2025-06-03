@@ -20,6 +20,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/resolve"
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -166,16 +167,39 @@ func GetPersistedSystemTables(ctx context.Context, root RootValue) ([]string, er
 }
 
 // GetGeneratedSystemTables returns table names of all generated system tables.
-func GetGeneratedSystemTables(ctx context.Context, root RootValue) ([]string, error) {
-	s := set.NewStrSet(getGeneratedSystemTables())
+func GetGeneratedSystemTables(ctx context.Context, root RootValue) ([]TableName, error) {
+	s := NewTableNameSet(nil)
 
-	tn, err := root.GetTableNames(ctx, DefaultSchemaName)
+	if !resolve.UseSearchPath {
+		for _, t := range getGeneratedSystemTables() {
+			s.Add(TableName{Name: t})
+		}
+	}
+	
+	schemas, err := root.GetDatabaseSchemas(ctx)
 	if err != nil {
 		return nil, err
 	}
+	
+	// For dolt there are no stored schemas, search the default (empty string) schema
+	if len(schemas) == 0 {
+		schemas = append(schemas, schema.DatabaseSchema{Name: DefaultSchemaName})
+	}
 
-	for _, pre := range generatedSystemTablePrefixes {
-		s.Add(funcitr.MapStrings(tn, func(s string) string { return pre + s })...)
+	for _, schema := range schemas {
+		tableNames, err := root.GetTableNames(ctx, schema.Name)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, pre := range generatedSystemTablePrefixes {
+			for _, tableName := range tableNames {
+				s.Add(TableName{
+					Name:   pre + tableName,
+					Schema: schema.Name,
+				})
+			}
+		}
 	}
 
 	return s.AsSlice(), nil
@@ -208,7 +232,7 @@ var getWriteableSystemTables = func() []string {
 
 // getGeneratedSystemTables is a function which returns the names of all generated system tables. This is not
 // simply a list of constants because doltgres swaps out the functions used to generate different names.
-var getGeneratedSystemTables = func() []string {
+func getGeneratedSystemTables() []string {
 	return []string{
 		GetBranchesTableName(),
 		GetRemoteBranchesTableName(),
