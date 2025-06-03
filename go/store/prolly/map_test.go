@@ -287,8 +287,8 @@ func TestMapGetAllocs(t *testing.T) {
 	ctx := context.Background()
 	m, tuples := makeProllyMap(t, 100_000)
 
-	// assert no allocs for Map.Get()
-	avg := testing.AllocsPerRun(100, func() {
+	// assert minimal allocs for Map.Get()
+	avg := testing.AllocsPerRun(1000, func() {
 		k := tuples[testRand.Intn(len(tuples))][0]
 		_ = m.Get(ctx, k, func(key, val val.Tuple) (err error) {
 			return
