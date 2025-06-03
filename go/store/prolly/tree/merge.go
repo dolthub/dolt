@@ -15,6 +15,7 @@
 package tree
 
 import (
+	"bytes"
 	"context"
 	"io"
 
@@ -51,12 +52,12 @@ func ThreeWayMerge[K ~[]byte, O Ordering[K], S message.Serializer](
 	order O,
 	serializer S,
 ) (final Node, stats MergeStats, err error) {
-	ld, err := DifferFromRoots[K](ctx, ns, ns, base, left, order, leftSchemaChange)
+	ld, err := RangeDifferFromRoots[K](ctx, ns, ns, base, left, order, leftSchemaChange)
 	if err != nil {
 		return Node{}, MergeStats{}, err
 	}
 
-	rd, err := DifferFromRoots[K](ctx, ns, ns, base, right, order, rightSchemaChange)
+	rd, err := RangeDifferFromRoots[K](ctx, ns, ns, base, right, order, rightSchemaChange)
 	if err != nil {
 		return Node{}, MergeStats{}, err
 	}
@@ -71,7 +72,7 @@ func ThreeWayMerge[K ~[]byte, O Ordering[K], S message.Serializer](
 				err = cerr
 			}
 		}()
-		stats, err = sendPatches(ctx, ld, rd, patches, collide)
+		stats, err = SendPatches(ctx, ld, rd, patches, collide)
 		return
 	})
 
@@ -101,20 +102,40 @@ func NewPatchBuffer(sz int) PatchBuffer {
 	return PatchBuffer{buf: make(chan Mutation, sz)}
 }
 
-func (ps PatchBuffer) sendDiff(ctx context.Context, diff Diff) error {
-	var m Mutation
-	switch diff.Type {
-	default:
-		m = Mutation{
-			Key:   diff.Key,
-			Value: diff.To,
-			Node:  nil,
-		}
+func (ps PatchBuffer) SendDiff(ctx context.Context, diff Diff) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case ps.buf <- diff.Mutation:
+		return nil
+	}
+}
+
+func (ps PatchBuffer) SendKV(ctx context.Context, key, value Item) error {
+	patch := Mutation{
+		PreviousKey:  nil,
+		Key:          key,
+		To:           value,
+		SubtreeCount: 1,
+		Level:        0,
 	}
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
-	case ps.buf <- m:
+	case ps.buf <- patch:
+		return nil
+	}
+}
+
+func (ps PatchBuffer) SendDone(ctx context.Context) error {
+	patch := Mutation{
+		PreviousKey: nil,
+		Key:         nil,
+	}
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case ps.buf <- patch:
 		return nil
 	}
 }
@@ -134,7 +155,35 @@ func (ps PatchBuffer) Close() error {
 	return nil
 }
 
-func sendPatches[K ~[]byte, O Ordering[K]](
+// nilCompare compares two keys, treating nil as below all other values
+func nilCompare[K ~[]byte, O Ordering[K]](ctx context.Context, order O, left, right K) int {
+	if left == nil && right == nil {
+		return 0
+	}
+	if left == nil {
+		return -1
+	}
+	if right == nil {
+		return 1
+	}
+	return order.Compare(ctx, left, right)
+}
+
+func getNextAndSplitIfAtEnd[K ~[]byte, O Ordering[K]](ctx context.Context, differ *Differ[K, O]) (diff Diff, err error) {
+	diff, err = differ.Next(ctx)
+	if err != nil {
+		return diff, err
+	}
+	for diff.Type == RangeDiff && differ.to.atEnd() {
+		diff, err = differ.split(ctx)
+		if err != nil {
+			return diff, err
+		}
+	}
+	return diff, nil
+}
+
+func SendPatches[K ~[]byte, O Ordering[K]](
 	ctx context.Context,
 	l, r Differ[K, O],
 	buf PatchBuffer,
@@ -162,11 +211,155 @@ func sendPatches[K ~[]byte, O Ordering[K]](
 	}
 
 	for lok && rok {
+		order := l.order
+		// If they're ranges, compare the start points, see if they overlap.
+		leftLevel := l.to.nd.level
+		rightLevel := r.to.nd.level
+		if leftLevel > 0 && rightLevel > 0 {
+			if nilCompare(ctx, order, K(left.Key), K(right.PreviousKey)) < 0 {
+				// Left change is entirely before right change.
+				// This change is already on the left map, so we ignore it.
+				// left, err = l.Next(ctx)
+				left, err = getNextAndSplitIfAtEnd(ctx, &l)
+				if err == io.EOF {
+					err, lok = nil, false
+				}
+				if err != nil {
+					return MergeStats{}, err
+				}
+			} else if nilCompare(ctx, order, K(left.PreviousKey), K(right.Key)) > 0 {
+				// Right change is entirely before right change.
+				err = buf.SendDiff(ctx, right)
+				if err != nil {
+					return MergeStats{}, err
+				}
+				updateStats(right, &stats)
+
+				right, err = getNextAndSplitIfAtEnd(ctx, &r)
+				//right, err = r.Next(ctx)
+				if err == io.EOF {
+					err, lok = nil, false
+				}
+				if err != nil {
+					return MergeStats{}, err
+				}
+			} else if bytes.Equal(left.To, right.To) {
+				// A concurrent change.
+				// This change is already on the left map, so we ignore it.
+				// left, err = l.Next(ctx)
+				left, err = getNextAndSplitIfAtEnd(ctx, &l)
+				if err == io.EOF {
+					err, lok = nil, false
+				}
+				if err != nil {
+					return MergeStats{}, err
+				}
+
+				// right, err = r.Next(ctx)
+				right, err = getNextAndSplitIfAtEnd(ctx, &r)
+				if err == io.EOF {
+					err, lok = nil, false
+				}
+				if err != nil {
+					return MergeStats{}, err
+				}
+			} else {
+				// In all other cases there's a conflict and we have to split whichever one comes first.
+				// If both have the same start range, split both.
+				cmp := nilCompare(ctx, order, K(left.PreviousKey), K(right.PreviousKey))
+				if cmp <= 0 {
+					left, err = l.split(ctx)
+					if err != nil {
+						return MergeStats{}, err
+					}
+				}
+				if cmp >= 0 {
+					right, err = r.split(ctx)
+					if err != nil {
+						return MergeStats{}, err
+					}
+				}
+			}
+			continue
+		}
+
+		// If one branch returns a range diff and the other returns a point diff, we need to see if they overlap and possibly split the range diff.
+		if rightLevel > 0 {
+			if l.order.Compare(ctx, K(left.Key), K(right.PreviousKey)) <= 0 {
+				// point update comes first
+				// This change is already on the left map, so we ignore it.
+				//left, err = l.Next(ctx)
+				left, err = getNextAndSplitIfAtEnd(ctx, &l)
+				if err == io.EOF {
+					err, lok = nil, false
+				}
+				if err != nil {
+					return MergeStats{}, err
+				}
+			} else if l.order.Compare(ctx, K(left.Key), K(right.Key)) > 0 {
+				// range update comes first
+				err = buf.SendDiff(ctx, right)
+				if err != nil {
+					return MergeStats{}, err
+				}
+				updateStats(right, &stats)
+				right, err = getNextAndSplitIfAtEnd(ctx, &r)
+				if err == io.EOF {
+					err, rok = nil, false
+				}
+				if err != nil {
+					return MergeStats{}, err
+				}
+			} else {
+				// overlap, we need to split the range
+				right, err = r.split(ctx)
+				if err != nil {
+					return MergeStats{}, err
+				}
+			}
+			continue
+		}
+
+		if leftLevel > 0 {
+			if l.order.Compare(ctx, K(right.Key), K(left.PreviousKey)) <= 0 {
+				// point update comes first
+				err = buf.SendDiff(ctx, right)
+				if err != nil {
+					return MergeStats{}, err
+				}
+				updateStats(right, &stats)
+				right, err = r.Next(ctx)
+				if err == io.EOF {
+					err, lok = nil, false
+				}
+				if err != nil {
+					return MergeStats{}, err
+				}
+			} else if l.order.Compare(ctx, K(right.Key), K(left.Key)) > 0 {
+				// range update comes first
+				// This change is already on the left map, so we ignore it.
+				left, err = l.Next(ctx)
+				if err == io.EOF {
+					err, lok = nil, false
+				}
+				if err != nil {
+					return MergeStats{}, err
+				}
+			} else {
+				// overlap, we need to split the range
+				left, err = l.split(ctx)
+				if err != nil {
+					return MergeStats{}, err
+				}
+			}
+			continue
+		}
+
 		cmp := l.order.Compare(ctx, K(left.Key), K(right.Key))
 
 		switch {
 		case cmp < 0:
-			// already in left
+			// This change is already on the left map, so we ignore it.
 			left, err = l.Next(ctx)
 			if err == io.EOF {
 				err, lok = nil, false
@@ -191,13 +384,16 @@ func sendPatches[K ~[]byte, O Ordering[K]](
 			}
 
 		case cmp == 0:
-			resolved, ok := cb(left, right)
-			if ok {
-				err = buf.SendDiff(ctx, resolved)
-				updateStats(right, &stats)
-			}
-			if err != nil {
-				return MergeStats{}, err
+			// Convergent edit:
+			if !bytes.Equal(left.To, right.To) {
+				resolved, ok := cb(left, right)
+				if ok {
+					err = buf.SendDiff(ctx, resolved)
+					updateStats(right, &stats)
+				}
+				if err != nil {
+					return MergeStats{}, err
+				}
 			}
 
 			left, err = l.Next(ctx)
