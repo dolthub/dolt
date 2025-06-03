@@ -147,7 +147,7 @@ func clonePrint(eventCh <-chan pull.TableFileEvent) {
 		}
 		p.Display()
 	}
-	
+
 	// Final status: ensure we show all chunks as complete when clone finishes
 	p.Printf("%s of %s chunks complete.\n",
 		strhelp.CommaIfy(chunksC), strhelp.CommaIfy(chunksC))
