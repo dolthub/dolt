@@ -20,7 +20,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/resolve"
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -138,73 +137,6 @@ func GetNonSystemTableNames(ctx context.Context, root RootValue) ([]string, erro
 	return tn, nil
 }
 
-// GetSystemTableNames gets system table names
-func GetSystemTableNames(ctx context.Context, root RootValue) ([]string, error) {
-	p, err := GetPersistedSystemTables(ctx, root)
-	if err != nil {
-		return nil, err
-	}
-
-	g, err := GetGeneratedSystemTables(ctx, root)
-	if err != nil {
-
-	}
-
-	s := append(p, g...)
-	sort.Strings(s)
-
-	return s, nil
-}
-
-// GetPersistedSystemTables returns table names of all persisted system tables.
-func GetPersistedSystemTables(ctx context.Context, root RootValue) ([]string, error) {
-	tn, err := root.GetTableNames(ctx, DefaultSchemaName)
-	if err != nil {
-		return nil, err
-	}
-	sort.Strings(tn)
-	return funcitr.FilterStrings(tn, HasDoltPrefix), nil
-}
-
-// GetGeneratedSystemTables returns table names of all generated system tables.
-func GetGeneratedSystemTables(ctx context.Context, root RootValue) ([]TableName, error) {
-	s := NewTableNameSet(nil)
-
-	if !resolve.UseSearchPath {
-		for _, t := range getGeneratedSystemTables() {
-			s.Add(TableName{Name: t})
-		}
-	}
-	
-	schemas, err := root.GetDatabaseSchemas(ctx)
-	if err != nil {
-		return nil, err
-	}
-	
-	// For dolt there are no stored schemas, search the default (empty string) schema
-	if len(schemas) == 0 {
-		schemas = append(schemas, schema.DatabaseSchema{Name: DefaultSchemaName})
-	}
-
-	for _, schema := range schemas {
-		tableNames, err := root.GetTableNames(ctx, schema.Name)
-		if err != nil {
-			return nil, err
-		}
-
-		for _, pre := range generatedSystemTablePrefixes {
-			for _, tableName := range tableNames {
-				s.Add(TableName{
-					Name:   pre + tableName,
-					Schema: schema.Name,
-				})
-			}
-		}
-	}
-
-	return s.AsSlice(), nil
-}
-
 // The set of reserved dolt_ tables that should be considered part of user space, like any other user-created table,
 // for the purposes of the dolt command line. These tables cannot be created or altered explicitly, but can be updated
 // like normal SQL tables.
@@ -230,9 +162,9 @@ var getWriteableSystemTables = func() []string {
 	}
 }
 
-// getGeneratedSystemTables is a function which returns the names of all generated system tables. This is not
+// GeneratedSystemTableNames returns the names of all generated system tables. This is not
 // simply a list of constants because doltgres swaps out the functions used to generate different names.
-func getGeneratedSystemTables() []string {
+func GeneratedSystemTableNames() []string {
 	return []string{
 		GetBranchesTableName(),
 		GetRemoteBranchesTableName(),
@@ -248,7 +180,9 @@ func getGeneratedSystemTables() []string {
 	}
 }
 
-var generatedSystemTablePrefixes = []string{
+// GeneratedSystemTablePrefixes returns the prefixes of all generated system tables, the ones that exist for every
+// user table.
+var GeneratedSystemTablePrefixes = []string{
 	DoltDiffTablePrefix,
 	DoltCommitDiffTablePrefix,
 	DoltHistoryTablePrefix,

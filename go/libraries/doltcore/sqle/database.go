@@ -1171,7 +1171,7 @@ func (db Database) getAllTableNames(ctx *sql.Context, root doltdb.RootValue, sho
 	}
 
 	if showSystemTables {
-		systemTables, err := doltdb.GetGeneratedSystemTables(ctx, root)
+		systemTables, err := resolve.GetGeneratedSystemTables(ctx, root)
 		if err != nil {
 			return nil, err
 		}
