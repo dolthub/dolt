@@ -118,7 +118,6 @@ func (pm *PreviewMergeConflictsTableFunction) Schema() sql.Schema {
 	if !pm.Resolved() {
 		return nil
 	}
-
 	// Lazy schema generation - generate schema on first access
 	if pm.sqlSch.Schema == nil {
 		err := pm.generateSchema(pm.ctx)
@@ -209,10 +208,9 @@ func (pm *PreviewMergeConflictsTableFunction) WithExpressions(exprs ...sql.Expre
 }
 
 // generateSchema generates the schema if it hasn't been generated yet
-// This method is called lazily when the schema is first needed
 func (pm *PreviewMergeConflictsTableFunction) generateSchema(ctx *sql.Context) error {
 	if pm.sqlSch.Schema != nil {
-		return nil // already generated
+		return nil
 	}
 
 	if !pm.Resolved() {
@@ -270,7 +268,6 @@ func (pm *PreviewMergeConflictsTableFunction) generateSchema(ctx *sql.Context) e
 }
 
 func getConflictSchemasFromRoots(ctx *sql.Context, tblName doltdb.TableName, leftRoot, rightRoot, baseRoot doltdb.RootValue) (base, sch, mergeSch schema.Schema, err error) {
-	// Get table references from all three roots
 	ourTbl, ourOk, err := leftRoot.GetTable(ctx, tblName)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to get table from left root: %w", err)
@@ -286,27 +283,22 @@ func getConflictSchemasFromRoots(ctx *sql.Context, tblName doltdb.TableName, lef
 		return nil, nil, nil, fmt.Errorf("failed to get table from right root: %w", err)
 	}
 
-	// Check if table exists in at least one root
 	if !ourOk && !theirOk && !baseOk {
 		return nil, nil, nil, sql.ErrTableNotFound.New(tblName.String())
 	}
 
-	// Extract schemas from existing tables
 	schemas, err := extractSchemas(ctx, ourTbl, ourOk, theirTbl, theirOk, baseTbl, baseOk)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
-	// Apply fallback logic for missing schemas
 	return applySchemaFallbacks(schemas.our, schemas.their, schemas.base, ourOk, theirOk, baseOk)
 }
 
-// extractedSchemas holds the schemas extracted from tables
 type extractedSchemas struct {
 	our, their, base schema.Schema
 }
 
-// extractSchemas retrieves schemas from the provided tables
 func extractSchemas(ctx *sql.Context, ourTbl *doltdb.Table, ourOk bool, theirTbl *doltdb.Table, theirOk bool, baseTbl *doltdb.Table, baseOk bool) (*extractedSchemas, error) {
 	schemas := &extractedSchemas{}
 	var err error
@@ -335,9 +327,7 @@ func extractSchemas(ctx *sql.Context, ourTbl *doltdb.Table, ourOk bool, theirTbl
 	return schemas, nil
 }
 
-// applySchemaFallbacks applies fallback logic when schemas are missing
 func applySchemaFallbacks(ourSch, theirSch, baseSch schema.Schema, ourOk, theirOk, baseOk bool) (schema.Schema, schema.Schema, schema.Schema, error) {
-	// Apply fallback for missing "their" schema
 	if !theirOk {
 		if ourOk {
 			theirSch = ourSch
@@ -346,7 +336,6 @@ func applySchemaFallbacks(ourSch, theirSch, baseSch schema.Schema, ourOk, theirO
 		}
 	}
 
-	// Apply fallback for missing "our" schema
 	if !ourOk {
 		if theirOk {
 			ourSch = theirSch
@@ -355,7 +344,6 @@ func applySchemaFallbacks(ourSch, theirSch, baseSch schema.Schema, ourOk, theirO
 		}
 	}
 
-	// Handle case where table doesn't exist in ancestor
 	if !baseOk {
 		if schema.SchemasAreEqual(ourSch, theirSch) {
 			return ourSch, ourSch, theirSch, nil
@@ -368,7 +356,6 @@ func applySchemaFallbacks(ourSch, theirSch, baseSch schema.Schema, ourOk, theirO
 
 // RowIter implements the sql.Node interface
 func (pm *PreviewMergeConflictsTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter, error) {
-	// Ensure schema is generated before creating row iterator
 	err := pm.generateSchema(ctx)
 	if err != nil {
 		return nil, err
@@ -627,9 +614,7 @@ func (itr *previewMergeConflictsTableFunctionRowIter) nextConflictVals(ctx *sql.
 	if len(ca.Key) == 0 {
 		return conf{}, false, fmt.Errorf("empty key found in conflict")
 	}
-	// TODO: This is mutating the key, which is creating a schema with a different capacity than expected
-	// b := xxh3.Hash128(append(ca.Key, c.h[:]...)).Bytes()
-	// To ensure that the conflict id is unique, we hash both TheirRootIsh and the key of the table.
+	// To ensure that the conflict id is unique, we hash both theirRootish and the key of the table.
 	buf := make([]byte, len(ca.Key)+len(c.h))
 	copy(buf, ca.Key)
 	copy(buf[len(ca.Key):], c.h[:])
