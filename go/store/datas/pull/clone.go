@@ -225,7 +225,7 @@ func clone(ctx context.Context, srcTS, sinkTS chunks.TableFileStore, sinkCS chun
 			// provided, or because the table files
 			// themselves have been removed from storage,
 			// then continuing to use these sources will
-			// fail termainally eventually. But in the
+			// fail terminally eventually. But in the
 			// case of doltremoteapi on DoltHub, using
 			// these Sources() will continue to work and
 			// will allow the Clone to proceed.
