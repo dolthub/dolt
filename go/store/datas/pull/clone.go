@@ -204,11 +204,34 @@ func clone(ctx context.Context, srcTS, sinkTS chunks.TableFileStore, sinkCS chun
 		if failureCount >= maxAttempts {
 			return err
 		}
-		if _, sourceFiles, appendixFiles, err = srcTS.Sources(ctx); err != nil {
+		if _, refreshedSourceFiles, refreshedAppendixFiles, err := srcTS.Sources(ctx); err != nil {
 			return err
 		} else {
-			tblFiles = filterAppendicesFromSourceFiles(appendixFiles, sourceFiles)
-			_, fileIDToTF, _ = mapTableFiles(tblFiles)
+			refreshedTblFiles := filterAppendicesFromSourceFiles(refreshedAppendixFiles, refreshedSourceFiles)
+			_, refreshedFileIDToTF, _ := mapTableFiles(refreshedTblFiles)
+			// Sources() will refresh remote table file
+			// sources with new download URLs. However, it
+			// will only return URLs for table files which
+			// are in the remote manifest, which could
+			// have changed since the clone started. Here
+			// we keep around any old TableFile instances
+			// for any TableFiles which have been
+			// conjoined away or have been the victim of a
+			// garbage collection run on the remote.
+			//
+			// If these files are no longer accessible,
+			// for example because the URLs expired
+			// without a RefreshTableFileUrlRequest being
+			// provided, or because the table files
+			// themselves have been removed from storage,
+			// then continuing to use these sources will
+			// fail termainally eventually. But in the
+			// case of doltremoteapi on DoltHub, using
+			// these Sources() will continue to work and
+			// will allow the Clone to proceed.
+			for k, v := range refreshedFileIDToTF {
+				fileIDToTF[k] = v
+			}
 		}
 	}
 
