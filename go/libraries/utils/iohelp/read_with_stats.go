@@ -29,11 +29,12 @@ type ReadStats struct {
 }
 
 type ReaderWithStats struct {
-	read    uint64
-	size    int64
-	rd      io.Reader
-	start   time.Time
-	closeCh chan struct{}
+        read      uint64
+        size      int64
+        rd        io.Reader
+        start     time.Time
+        closeCh   chan struct{}
+        runningCh chan struct{}
 }
 
 func NewReaderWithStats(rd io.Reader, size int64) *ReaderWithStats {
@@ -45,6 +46,11 @@ func NewReaderWithStats(rd io.Reader, size int64) *ReaderWithStats {
 }
 
 func (rws *ReaderWithStats) Start(updateFunc func(ReadStats)) {
+        if rws.runningCh != nil {
+                panic("cannot start ReaderWithStats more than once.")
+        }
+        rws.runningCh = make(chan struct{})
+        defer close(rws.runningCh)
 	rws.start = time.Now()
 	go func() {
 		timer := time.NewTimer(updateFrequency)
@@ -67,6 +73,10 @@ func (rws *ReaderWithStats) Start(updateFunc func(ReadStats)) {
 }
 
 func (rws *ReaderWithStats) Close() error {
+        // Ensure that we never call |updateFunc| after Close() returns.
+        if rws.runningCh != nil {
+                <-rws.runningCh
+        }
 	close(rws.closeCh)
 
 	if closer, ok := rws.rd.(io.Closer); ok {
