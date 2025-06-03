@@ -28,19 +28,19 @@ func TestNodeCache(t *testing.T) {
 		var addr hash.Hash
 		var n Node
 		n.msg = make([]byte, 1024)
-		cache := newChunkCache(64 * 1024)
-		for i := 0; i < 32; i++ {
-			addr[0] = byte(i)
+		cache := newChunkCache(256 * 1024)
+		for i := 0; i < numStripes; i++ {
+			addr[0] = uint8(i)
 			cache.insert(addr, n)
 		}
-		for i := 0; i < 32; i++ {
-			addr[0] = byte(i)
+		for i := 0; i < numStripes; i++ {
+			addr[0] = uint8(i)
 			_, ok := cache.get(addr)
 			assert.True(t, ok)
 		}
 		cache.purge()
-		for i := 0; i < 32; i++ {
-			addr[0] = byte(i)
+		for i := 0; i < numStripes; i++ {
+			addr[0] = uint8(i)
 			_, ok := cache.get(addr)
 			assert.False(t, ok)
 		}
