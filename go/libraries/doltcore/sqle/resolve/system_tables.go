@@ -61,6 +61,16 @@ func GetGeneratedSystemTables(ctx context.Context, root doltdb.RootValue) ([]dol
 				})
 			}
 		}
+		
+		// For doltgres, we also support the legacy dolt_ table names, addressable in any user schema
+		if UseSearchPath && schema.Name != "pg_catalog" && schema.Name != doltdb.DoltNamespace {
+			for _, name := range doltdb.DoltGeneratedTableNames {
+				s.Add(doltdb.TableName{
+					Name:   name,
+					Schema: schema.Name,
+				})
+			} 
+		}
 	}
 
 	return s.AsSlice(), nil

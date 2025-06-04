@@ -404,6 +404,28 @@ const (
 	StatisticsTableName = "dolt_statistics"
 )
 
+// DoltGeneratedTableNames is a list of all the dolt system tables that are not specific to a user table.
+// They are addressable by these names in both Dolt and Doltgres.
+var DoltGeneratedTableNames = []string{
+	LogTableName,
+	DiffTableName,
+	ColumnDiffTableName,
+	TableOfTablesInConflictName,
+	TableOfTablesWithViolationsName,
+	SchemaConflictsTableName,
+	BranchesTableName,
+	RemoteBranchesTableName,
+	RemotesTableName,
+	CommitsTableName,
+	CommitAncestorsTableName,
+	StatusTableName,
+	MergeStatusTableName,
+	TagsTableName,
+	IgnoreTableName,
+	RebaseTableName,
+	StatisticsTableName,
+}
+
 const (
 	// WorkflowsTableName is the dolt CI workflows system table name
 	WorkflowsTableName = "dolt_ci_workflows"
