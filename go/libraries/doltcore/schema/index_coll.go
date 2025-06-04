@@ -165,7 +165,7 @@ func (ixc *indexCollectionImpl) Copy() IndexCollection {
 			nixc.colTagToIndex[tag] = indexesCopy
 		}
 	}
-	
+
 	return nixc
 }
 
