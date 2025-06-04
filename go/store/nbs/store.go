@@ -175,6 +175,9 @@ func (nbs *NomsBlockStore) GetChunkLocationsWithPaths(ctx context.Context, hashe
 	for csP, ranges := range sourcesToRanges {
 		cs := *csP
 		res[cs.hash().String()+cs.suffix()] = ranges
+		for h := range ranges {
+			delete(hashes, h)
+		}
 	}
 	return res, nil
 }
@@ -241,6 +244,9 @@ func (nbs *NomsBlockStore) GetChunkLocations(ctx context.Context, hashes hash.Ha
 	for csP, ranges := range sourcesToRanges {
 		cs := *csP
 		res[cs.hash()] = ranges
+		for h := range ranges {
+			delete(hashes, h)
+		}
 	}
 	return res, nil
 }
