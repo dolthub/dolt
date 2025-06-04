@@ -18,9 +18,6 @@ import (
 	"strings"
 )
 
-// StashRefName is a dummy name, and there cannot be more than one stash ref.
-const StashRefName = "stashes"
-
 type StashRef struct {
 	stash string
 }
@@ -28,8 +25,7 @@ type StashRef struct {
 var _ DoltRef = StashRef{}
 
 // NewStashRef creates a reference to a stashes list. There cannot be more than one stashRef.
-func NewStashRef() StashRef {
-	stashName := StashRefName
+func NewStashRef(stashName string) StashRef {
 	if IsRef(stashName) {
 		prefix := PrefixForType(StashRefType)
 		if strings.HasPrefix(stashName, prefix) {

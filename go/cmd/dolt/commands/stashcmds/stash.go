@@ -242,7 +242,7 @@ func stashChanges(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 		return err
 	}
 
-	err = dEnv.DoltDB(ctx).AddStash(ctx, commit, roots.Staged, datas.NewStashMeta(curBranchName, commitMeta.Description, doltdb.FlattenTableNames(addedTblsToStage)))
+	err = dEnv.DoltDB(ctx).AddStash(ctx, commit, roots.Staged, datas.NewStashMeta(curBranchName, commitMeta.Description, doltdb.FlattenTableNames(addedTblsToStage)), "dolt-cli")
 	if err != nil {
 		return err
 	}

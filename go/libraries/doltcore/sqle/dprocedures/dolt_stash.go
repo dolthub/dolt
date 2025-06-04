@@ -81,7 +81,7 @@ func doDoltStash(ctx *sql.Context, args []string) (string, error) {
 	case "push":
 		status, err = doStashPush(ctx, dSess, dbData, roots, apr)
 	case "pop":
-		status, err = doStashPop(ctx, dbData, apr, roots)
+		status, err = doStashPop(ctx, dbData, apr)
 	case "drop":
 		status, err = doStashDrop(ctx, dbData, apr)
 	case "clear":
@@ -104,7 +104,7 @@ func doStashPush(ctx *sql.Context, dSess *dsess.DoltSession, dbData env.DbData[*
 		return "", err
 	}
 	if !hasChanges {
-		return "", fmt.Errorf("no local changes to save") //What should I do here?
+		return "", fmt.Errorf("no local changes to save")
 	}
 
 	roots, err = actions.StageModifiedAndDeletedTables(ctx, roots)
@@ -155,7 +155,7 @@ func doStashPush(ctx *sql.Context, dSess *dsess.DoltSession, dbData env.DbData[*
 		return "", err
 	}
 
-	err = dbData.Ddb.AddStash(ctx, commit, roots.Staged, datas.NewStashMeta(curBranchName, commitMeta.Description, doltdb.FlattenTableNames(addedTblsToStage)))
+	err = dbData.Ddb.AddStash(ctx, commit, roots.Staged, datas.NewStashMeta(curBranchName, commitMeta.Description, doltdb.FlattenTableNames(addedTblsToStage)), "stashes")
 	if err != nil {
 		return "", err
 	}
@@ -180,7 +180,7 @@ func doStashPush(ctx *sql.Context, dSess *dsess.DoltSession, dbData env.DbData[*
 	return status, nil
 }
 
-func doStashPop(ctx *sql.Context, dbData env.DbData[*sql.Context], apr *argparser.ArgParseResults, roots doltdb.Roots) (string, error) {
+func doStashPop(ctx *sql.Context, dbData env.DbData[*sql.Context], apr *argparser.ArgParseResults) (string, error) {
 	var idx = 0
 	var err error
 	if apr.NArg() == 2 {
@@ -201,7 +201,7 @@ func doStashPop(ctx *sql.Context, dbData env.DbData[*sql.Context], apr *argparse
 	}
 	curWorkingRoot := workingSet.WorkingRoot()
 
-	stashRoot, headCommit, meta, err := dbData.Ddb.GetStashRootAndHeadCommitAtIdx(ctx, idx)
+	stashRoot, headCommit, meta, err := dbData.Ddb.GetStashRootAndHeadCommitAtIdx(ctx, idx, "stashes")
 	if err != nil {
 		return "", err
 	}
@@ -257,37 +257,23 @@ func doStashPop(ctx *sql.Context, dbData env.DbData[*sql.Context], apr *argparse
 		return status, nil
 	}
 
-	//err = dEnv.UpdateWorkingRoot(ctx, result.Root)
-	var h hash.Hash
-	var wsRef ref.WorkingSetRef
-
-	ws, err := env.WorkingSet(ctx, dbData.Ddb, dbData.Rsr)
-	if err == doltdb.ErrWorkingSetNotFound {
-		// first time updating root
-		wsRef, err = ref.WorkingSetRefForHead(headRef)
-		if err != nil {
-			return "", err
-		}
-		ws = doltdb.EmptyWorkingSet(wsRef).WithWorkingRoot(result.Root).WithStagedRoot(result.Root)
-	} else if err != nil {
-		return "", err
-	} else {
-		h, err = ws.HashOf()
-		if err != nil {
-			return "", err
-		}
-
-		wsRef = ws.Ref()
-	}
-
-	wsm := &datas.WorkingSetMeta{
-		Timestamp:   uint64(time.Now().Unix()),
-		Description: "updated from dolt environment",
-	}
-
-	err = dbData.Ddb.UpdateWorkingSet(ctx, wsRef, ws.WithWorkingRoot(result.Root), h, wsm, nil)
+	err = updateWorkingRoot(ctx, dbData, result.Root)
 	if err != nil {
 		return "", err
+	}
+
+	headRoot, err := headCommit.GetRootValue(ctx)
+	if err != nil {
+		return "", err
+	}
+	ws, err := env.WorkingSet(ctx, dbData.Ddb, dbData.Rsr)
+	if err != nil {
+		return "", err
+	}
+	roots := doltdb.Roots{
+		Head:    headRoot,
+		Working: ws.WorkingRoot(),
+		Staged:  ws.StagedRoot(),
 	}
 
 	// added tables need to be staged
@@ -302,12 +288,12 @@ func doStashPop(ctx *sql.Context, dbData env.DbData[*sql.Context], apr *argparse
 		return "", err
 	}
 
-	stashHash, err := dbData.Ddb.GetStashHashAtIdx(ctx, idx)
+	stashHash, err := dbData.Ddb.GetStashHashAtIdx(ctx, idx, "stashes")
 	if err != nil {
 		return "", err
 	}
 
-	err = dbData.Ddb.RemoveStashAtIdx(ctx, idx)
+	err = dbData.Ddb.RemoveStashAtIdx(ctx, idx, "stashes")
 	if err != nil {
 		return "", err
 	}
@@ -327,12 +313,12 @@ func doStashDrop(ctx *sql.Context, dbData env.DbData[*sql.Context], apr *argpars
 		}
 	}
 
-	stashHash, err := dbData.Ddb.GetStashHashAtIdx(ctx, idx)
+	stashHash, err := dbData.Ddb.GetStashHashAtIdx(ctx, idx, "stashes")
 	if err != nil {
 		return "", err
 	}
 
-	err = dbData.Ddb.RemoveStashAtIdx(ctx, idx)
+	err = dbData.Ddb.RemoveStashAtIdx(ctx, idx, "stashes")
 	if err != nil {
 		return "", err
 	}
@@ -343,7 +329,7 @@ func doStashDrop(ctx *sql.Context, dbData env.DbData[*sql.Context], apr *argpars
 }
 
 func doStashClear(ctx *sql.Context, dbData env.DbData[*sql.Context]) error {
-	err := dbData.Ddb.RemoveAllStashes(ctx)
+	err := dbData.Ddb.RemoveAllStashes(ctx, "stashes")
 	if err != nil {
 		return err
 	}
@@ -527,4 +513,45 @@ func bulkDbEaFactory(dbData env.DbData[*sql.Context]) editor.DbEaFactory {
 		return nil
 	}
 	return editor.NewBulkImportTEAFactory(dbData.Ddb.ValueReadWriter(), tmpDir)
+}
+
+func updateWorkingRoot(ctx *sql.Context, dbData env.DbData[*sql.Context], newRoot doltdb.RootValue) error {
+	//err = dEnv.UpdateWorkingRoot(ctx, result.Root)
+	var h hash.Hash
+	var wsRef ref.WorkingSetRef
+	headRef, err := dbData.Rsr.CWBHeadRef(ctx)
+	if err != nil {
+		return err
+	}
+
+	ws, err := env.WorkingSet(ctx, dbData.Ddb, dbData.Rsr)
+	if err == doltdb.ErrWorkingSetNotFound {
+		// first time updating root
+		wsRef, err = ref.WorkingSetRefForHead(headRef)
+		if err != nil {
+			return err
+		}
+		ws = doltdb.EmptyWorkingSet(wsRef).WithWorkingRoot(newRoot).WithStagedRoot(newRoot)
+	} else if err != nil {
+		return err
+	} else {
+		h, err = ws.HashOf()
+		if err != nil {
+			return err
+		}
+
+		wsRef = ws.Ref()
+	}
+
+	wsm := &datas.WorkingSetMeta{
+		Timestamp:   uint64(time.Now().Unix()),
+		Description: "updated from dolt environment",
+	}
+
+	err = dbData.Ddb.UpdateWorkingSet(ctx, wsRef, ws.WithWorkingRoot(newRoot), h, wsm, nil)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

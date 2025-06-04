@@ -8142,3 +8142,203 @@ end;
 		},
 	},
 }
+
+var DoltStashTests = []queries.ScriptTest{
+	{
+		Name: "DOLT_STASH() subcommands error on empty space.",
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "CALL DOLT_STASH('push', 'myStash');",
+				ExpectedErrStr: "no local changes to save",
+			},
+			{
+				Query:          "CALL DOLT_STASH('pop', 'myStash');",
+				ExpectedErrStr: "No stash entries found.",
+			},
+			{
+				Query:          "CALL DOLT_STASH('drop', 'myStash');",
+				ExpectedErrStr: "No stash entries found.",
+			},
+			{
+				Query:    "CALL DOLT_STASH('clear','myStash');",
+				Expected: []sql.Row{},
+			},
+		},
+	},
+	{
+		Name: "Simple push and pop with DOLT_STASH()",
+		SetUpScript: []string{
+			"CREATE TABLE test(pk BIGINT PRIMARY KEY, v varchar(10))",
+			"CALL DOLT_ADD('.')",
+			"CALL DOLT_COMMIT('-m', 'Created table')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "INSERT INTO test VALUES (1, 'a');",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "SELECT * FROM test",
+				Expected: []sql.Row{{1, 'a'}},
+			},
+			{
+				Query:            "CALL DOLT_STASH('push', 'myStash');",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "SELECT * FROM DOLT_STASHES;",
+				Expected: []sql.Row{{"stashes/myStash", "stash@{0}", "refs/heads/main", doltCommit, "Created table"}},
+			},
+			{
+				Query:            "CALL DOLT_STASH('pop', 'myStash');",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "SELECT * FROM DOLT_STASHES",
+				Expected: []sql.Row{},
+			},
+		},
+	},
+	{
+		Name: "Clearing stash removes all entries in stash list",
+		SetUpScript: []string{
+			"CREATE TABLE test(pk BIGINT PRIMARY KEY, v varchar(10))",
+			"CALL DOLT_ADD('.')",
+			"CALL DOLT_COMMIT('-m', 'Created table')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "INSERT INTO test VALUES (1, 'a')",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:            "CALL DOLT_STASH('push', 'myStash');",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "INSERT INTO test VALUES (2, 'b')",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:            "CALL DOLT_STASH('push', 'anotherStash');",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "INSERT INTO test VALUES (3, 'c')",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:            "CALL DOLT_STASH('push', 'anotherStash');",
+				SkipResultsCheck: true,
+			},
+			{
+				Query: "SELECT * FROM dolt_stashes;",
+				Expected: []sql.Row{
+					{"stashes/myStash", "stash@{0}", "refs/heads/main", doltCommit, "Created table"},
+					{"stashes/anotherStash", "stash@{0}", "refs/heads/main", doltCommit, "Created table"},
+					{"stashes/anotherStash", "stash@{1}", "refs/heads/main", doltCommit, "Created table"},
+				},
+			},
+			{
+				Query:            "CALL DOLT_STASH('clear', 'anotherStash');",
+				SkipResultsCheck: true,
+			},
+			{
+				Query: "SELECT * FROM dolt_stashes;",
+				Expected: []sql.Row{
+					{"stashes/myStash", "stash@{0}", "refs/heads/main", doltCommit, "Created table"},
+				},
+			},
+		},
+	},
+	{
+		Name: "Clearing and stashing again",
+		SetUpScript: []string{
+			"CREATE TABLE test(pk BIGINT PRIMARY KEY, v varchar(10))",
+			"CALL DOLT_ADD('.')",
+			"CALL DOLT_COMMIT('-m', 'Created table')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "INSERT INTO test VALUES (1, 'a');",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:            "CALL DOLT_STASH('push', 'myStash');",
+				SkipResultsCheck: true,
+			},
+			{
+				Query: "SELECT * FROM DOLT_STASHES;",
+				Expected: []sql.Row{
+					{"stashes/myStash", "stash@{0}", "refs/heads/main", doltCommit, "Created table"},
+				},
+			},
+			{
+				Query:            "CALL DOLT_STASH('clear', 'myStash');",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "INSERT INTO test VALUES (2, 'b');",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query: "SELECT * FROM DOLT_STASHES;",
+				Expected: []sql.Row{
+					{"stashes/myStash", "stash@{0}", "refs/heads/main", doltCommit, "Created table"},
+				},
+			},
+		},
+	},
+	/*{
+		Name: "Popping specific stashes",
+		SetUpScript: []string{
+			"CREATE TABLE test(pk BIGINT PRIMARY KEY, v varchar(10))",
+			"CALL DOLT_ADD('.')",
+			"CALL DOLT_COMMIT('-m', 'Created table')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:		"INSERT INTO test VALUES (1, 'a');",
+				Expected: 	[]sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "CALL DOLT_STASH('push', 'myStash');",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:		"INSERT INTO test VALUES (2, 'b');",
+				Expected: 	[]sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "CALL DOLT_STASH('push', 'myStash');",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:		"INSERT INTO test VALUES (3, 'c');",
+				Expected: 	[]sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "CALL DOLT_STASH('push', 'myStash');",
+				SkipResultsCheck: true,
+			},{
+				Query:		"INSERT INTO test VALUES (4, 'd');",
+				Expected: 	[]sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    	"CALL DOLT_STASH('push', 'myStash');",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:		"CALL DOLT_STASH('pop', 'myStash', stash@{3}",
+				SkipResultsCheck: true
+			},
+			{
+				Query:		"SELECT * FROM DOLT_STASHES",
+				Expected: 	[]sql.Row{
+					{"stashes/myStash", "stash@{0}", "refs/heads/main", doltCommit, "Created table"},
+				},
+			},
+
+		},
+	},*/
+}
