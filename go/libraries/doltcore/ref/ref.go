@@ -197,7 +197,7 @@ func Parse(str string) (DoltRef, error) {
 			str = str[len(prefix):]
 			switch rType {
 			case StashRefType:
-				return NewStashRef(), nil
+				return NewStashRef(str), nil
 			default:
 				panic("unknown type " + rType)
 			}

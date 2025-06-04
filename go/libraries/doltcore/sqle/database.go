@@ -582,6 +582,14 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 		if !resolve.UseSearchPath || isDoltgresSystemTable {
 			dt, found = dtables.NewRemotesTable(ctx, db.ddb, lwrName), true
 		}
+	case doltdb.StashesTableName, doltdb.GetStashesTableName():
+		isDoltgresSystemTable, err := resolve.IsDoltgresSystemTable(ctx, tname, root)
+		if err != nil {
+			return nil, false, err
+		}
+		if !resolve.UseSearchPath || isDoltgresSystemTable {
+			dt, found = dtables.NewStashesTable(ctx, db.ddb, lwrName), true
+		}
 	case doltdb.CommitsTableName, doltdb.GetCommitsTableName():
 		isDoltgresSystemTable, err := resolve.IsDoltgresSystemTable(ctx, tname, root)
 		if err != nil {
