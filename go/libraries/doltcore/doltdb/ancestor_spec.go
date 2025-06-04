@@ -24,6 +24,10 @@ func isDigit(b byte) bool {
 	return b >= byte('0') && b <= byte('9')
 }
 
+func isValidMergeSpec(num int) bool {
+	return num == 1 || num == 2
+}
+
 func parseInstructions(aSpec string) ([]int, error) {
 	instructions := make([]int, 0)
 
@@ -49,6 +53,9 @@ func parseInstructions(aSpec string) ([]int, error) {
 
 		switch currInst {
 		case '^':
+			if !isValidMergeSpec(num) {
+				return nil, ErrInvalidAncestorSpec
+			}
 			instructions = append(instructions, num-1)
 		case '~':
 			for j := 0; j < num; j++ {

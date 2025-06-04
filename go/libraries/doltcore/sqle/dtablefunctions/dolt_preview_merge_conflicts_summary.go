@@ -275,16 +275,14 @@ func getRowFromConflict(conflict tableConflict) sql.Row {
 	row := sql.Row{
 		conflict.tableName.String(), // table
 	}
-	if conflict.numDataConflicts != nil {
-		row = append(row, *conflict.numDataConflicts) // num_data_conflicts
-	} else {
+	// num_data_conflicts
+	if conflict.numSchemaConflicts > 0 {
 		row = append(row, nil)
-	}
-	if conflict.numSchemaConflicts != nil {
-		row = append(row, *conflict.numSchemaConflicts) // num_schema_conflicts
 	} else {
-		row = append(row, nil)
+		row = append(row, conflict.numDataConflicts)
 	}
+	// num_schema_conflicts
+	row = append(row, conflict.numSchemaConflicts)
 	return row
 }
 
@@ -344,8 +342,8 @@ func resolveBranchesToRoots(ctx *sql.Context, db dsess.SqlDatabase, leftBranch, 
 
 type tableConflict struct {
 	tableName          doltdb.TableName
-	numDataConflicts   *uint64 // nil if schema conflicts exist
-	numSchemaConflicts *uint64
+	numDataConflicts   uint64 // nil if schema conflicts exist
+	numSchemaConflicts uint64
 }
 
 // getTablesWithConflicts analyzes the merge between two branches and returns
@@ -397,7 +395,7 @@ func getTablesWithConflicts(ctx *sql.Context, db dsess.SqlDatabase, baseBranch, 
 		}
 		numSchemaConflicts := uint64(schConflicts.Count())
 		if numSchemaConflicts > 0 {
-			conflicted = append(conflicted, tableConflict{tableName: tblName, numSchemaConflicts: &numSchemaConflicts})
+			conflicted = append(conflicted, tableConflict{tableName: tblName, numSchemaConflicts: numSchemaConflicts})
 			// Cannot calculate data conflicts if there are schema conflicts
 			continue
 		}
@@ -471,8 +469,7 @@ func getDataConflictsForTable(ctx *sql.Context, tm *merge.TableMerger, tblName d
 	}
 
 	if numDataConflicts > 0 {
-		numSchemaConflicts := uint64(0)
-		return &tableConflict{tableName: tblName, numSchemaConflicts: &numSchemaConflicts, numDataConflicts: &numDataConflicts}, nil
+		return &tableConflict{tableName: tblName, numSchemaConflicts: uint64(0), numDataConflicts: numDataConflicts}, nil
 	}
 
 	return nil, nil

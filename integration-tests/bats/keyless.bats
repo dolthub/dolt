@@ -79,7 +79,6 @@ teardown() {
 }
 
 @test "keyless: column add/drop" {
-    skip "unimplemented"
     run dolt sql <<SQL
 ALTER TABLE keyless ADD COLUMN c2 int;
 ALTER TABLE keyless DROP COLUMN c0;
