@@ -597,7 +597,22 @@ var MergeScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{0, 1001}, {1, 1}},
 			},
 			{
-				Skip:     true, // TODO: This shouldn't return anything but does
+				Query:    "SELECT is_merging, source, target, unmerged_tables FROM DOLT_MERGE_STATUS;",
+				Expected: []sql.Row{{true, "feature-branch", "refs/heads/main", ""}},
+			},
+			{
+				Query:    "SELECT * FROM dolt_preview_merge_conflicts_summary('main', 'feature-branch')",
+				Expected: []sql.Row{{"test", uint64(1), uint64(0)}}, // merge wasn't committed yet, so still shows conflict between branches
+			},
+			{
+				Query:    "CALL DOLT_COMMIT('-m', 'merged');",
+				Expected: []sql.Row{{doltCommit}},
+			},
+			{
+				Query:    "SELECT is_merging, source, target, unmerged_tables FROM DOLT_MERGE_STATUS;",
+				Expected: []sql.Row{{false, nil, nil, nil}},
+			},
+			{
 				Query:    "SELECT * FROM dolt_preview_merge_conflicts_summary('main', 'feature-branch')",
 				Expected: []sql.Row{},
 			},
