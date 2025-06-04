@@ -145,7 +145,10 @@ func InferSchema(ctx context.Context, root doltdb.RootValue, rd table.ReadCloser
 	// check that all provided primary keys are being used
 	for _, pk := range pks {
 		col, ok := newCols.GetByName(pk)
-		if !col.IsPartOfPK || !ok {
+		if !ok {
+			return nil, fmt.Errorf("column '%s' not found", pk)
+		}
+		if !col.IsPartOfPK {
 			return nil, ErrProvidedPkNotFound
 		}
 	}

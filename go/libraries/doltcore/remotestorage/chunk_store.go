@@ -36,6 +36,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/sync/errgroup"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	remotesapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/remotesapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/remotestorage/internal/reliable"
@@ -1228,6 +1229,17 @@ func (drtf DoltRemoteTableFile) Open(ctx context.Context) (io.ReadCloser, uint64
 	}
 
 	if resp.StatusCode/100 != 2 {
+		// XXX: If we fail to fetch, and we have the ability
+		// to refresh the URL, set ourselves up to refresh the
+		// next time we are used. This can help if the
+		// remoteapi endpoint gave us a URL that actually
+		// expires for some reason before the RefreshAfter
+		// timestamp. (Local clock drift, remote key rotation,
+		// etc.)
+		if drtf.info.RefreshAfter != nil {
+			drtf.info.RefreshAfter = timestamppb.Now()
+			drtf.info.RefreshAfter.Seconds -= 10
+		}
 		defer resp.Body.Close()
 		body := make([]byte, 4096)
 		n, _ := io.ReadFull(resp.Body, body)

@@ -113,7 +113,7 @@ func TestSchemaOverridesWithAdaptiveEncoding(t *testing.T) {
 
 // Convenience test for debugging a single query. Unskip and set to the desired query.
 func TestSingleScript(t *testing.T) {
-	//t.Skip()
+	t.Skip()
 	var scripts = []queries.ScriptTest{
 		{
 			Name: "Database syntax properly handles inter-CALL communication",
@@ -1577,6 +1577,16 @@ func TestLogTableFunction(t *testing.T) {
 func TestLogTableFunctionPrepared(t *testing.T) {
 	harness := newDoltEnginetestHarness(t)
 	RunLogTableFunctionTestsPrepared(t, harness)
+}
+
+func TestBranchStatusTableFunction(t *testing.T) {
+	harness := newDoltEnginetestHarness(t)
+	RunBranchStatusTableFunctionTests(t, harness)
+}
+
+func TestBranchStatusTableFunctionPrepared(t *testing.T) {
+	harness := newDoltEnginetestHarness(t)
+	RunBranchStatusTableFunctionTestsPrepared(t, harness)
 }
 
 func TestDoltReflog(t *testing.T) {

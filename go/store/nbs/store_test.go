@@ -35,6 +35,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/libraries/utils/test"
 	"github.com/dolthub/dolt/go/store/chunks"
+	"github.com/dolthub/dolt/go/store/constants"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/util/tempfiles"
@@ -49,7 +50,10 @@ func makeTestLocalStore(t *testing.T, maxTableFiles int) (st *NomsBlockStore, no
 	// create a v5 manifest
 	fm, err := getFileManifest(ctx, nomsDir, asyncFlush)
 	require.NoError(t, err)
-	_, err = fm.Update(ctx, hash.Hash{}, manifestContents{}, &Stats{}, nil)
+	_, err = fm.Update(ctx, hash.Hash{}, manifestContents{
+		nbfVers: constants.FormatDoltString,
+		lock:    journalAddr, // Any valid address will do here
+	}, &Stats{}, nil)
 	require.NoError(t, err)
 
 	q = NewUnlimitedMemQuotaProvider()

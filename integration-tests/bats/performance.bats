@@ -1,8 +1,6 @@
 #!/usr/bin/env bats
 load $BATS_TEST_DIRNAME/helper/common.bash
 
-# NOTE: These are currently disabled because the high variance in GitHub CI makes them unreliable.
-
 # This BATS test attempts to detect performance regressions when using standard workflows on large datasets.
 # Please note that this is a rough approach that is not designed to detect all performance issues, merely an extra
 # safeguard against bugs that cause large (order-of-magnitude+) regressions.
@@ -33,7 +31,6 @@ create_repo() {
 }
 
 setup() {
-    skip
     cp -r $BATS_TEST_DIRNAME/performance-repo/ $BATS_TMPDIR/dolt-repo-$$
     cd $BATS_TMPDIR/dolt-repo-$$
 }
