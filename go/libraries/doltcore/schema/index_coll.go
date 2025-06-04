@@ -19,6 +19,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression/function/vector"
 )
 
@@ -202,7 +203,7 @@ func (ixc *indexCollectionImpl) AddIndexByColTags(indexName string, tags []uint6
 		return nil, fmt.Errorf("indexes cannot be prefixed with `dolt_`")
 	}
 	if ixc.Contains(lowerName) {
-		return nil, fmt.Errorf("`%s` already exists as an index for this table", lowerName)
+		return nil, sql.ErrDuplicateKey.New(lowerName)
 	}
 	if !ixc.tagsExist(tags...) {
 		return nil, fmt.Errorf("tags %v do not exist on this table", tags)
