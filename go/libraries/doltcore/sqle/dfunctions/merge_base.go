@@ -24,6 +24,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
 
@@ -40,6 +41,21 @@ func NewMergeBase(left, right sql.Expression) sql.Expression {
 
 // Eval implements the sql.Expression interface.
 func (d MergeBase) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
+	sess := dsess.DSessFromSess(ctx.Session)
+	dbName := ctx.GetCurrentDatabase()
+	dbData, ok := sess.GetDbData(ctx, dbName)
+	if !ok {
+		return nil, sql.ErrDatabaseNotFound.New(dbName)
+	}
+	doltDB, ok := sess.GetDoltDB(ctx, dbName)
+	if !ok {
+		return nil, sql.ErrDatabaseNotFound.New(dbName)
+	}
+	headRef, err := dbData.Rsr.CWBHeadRef(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	leftSpec, err := d.Left().Eval(ctx, row)
 	if err != nil {
 		return nil, err
@@ -48,7 +64,6 @@ func (d MergeBase) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	if leftSpec == nil || rightSpec == nil {
 		return nil, nil
 	}
@@ -57,13 +72,16 @@ func (d MergeBase) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 	if !ok {
 		return nil, errors.New("left value is not a string")
 	}
-
 	rightStr, ok := rightSpec.(string)
 	if !ok {
 		return nil, errors.New("right value is not a string")
 	}
 
-	left, right, err := resolveRefSpecs(ctx, leftStr, rightStr)
+	left, err := resolveRefSpec(ctx, headRef, doltDB, leftStr)
+	if err != nil {
+		return nil, err
+	}
+	right, err := resolveRefSpec(ctx, headRef, doltDB, rightStr)
 	if err != nil {
 		return nil, err
 	}
@@ -76,52 +94,20 @@ func (d MergeBase) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 	return mergeBase.String(), nil
 }
 
-func resolveRefSpecs(ctx *sql.Context, leftSpec, rightSpec string) (left, right *doltdb.Commit, err error) {
-	lcs, err := doltdb.NewCommitSpec(leftSpec)
+func resolveRefSpec(ctx *sql.Context, headRef ref.DoltRef, doltDB *doltdb.DoltDB, spec string) (*doltdb.Commit, error) {
+	cs, err := doltdb.NewCommitSpec(spec)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	rcs, err := doltdb.NewCommitSpec(rightSpec)
+	optCmt, err := doltDB.Resolve(ctx, cs, headRef)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-
-	sess := dsess.DSessFromSess(ctx.Session)
-	dbName := ctx.GetCurrentDatabase()
-
-	dbData, ok := sess.GetDbData(ctx, dbName)
+	commit, ok := optCmt.ToCommit()
 	if !ok {
-		return nil, nil, sql.ErrDatabaseNotFound.New(dbName)
+		return nil, doltdb.ErrGhostCommitEncountered
 	}
-	doltDB, ok := sess.GetDoltDB(ctx, dbName)
-	if !ok {
-		return nil, nil, sql.ErrDatabaseNotFound.New(dbName)
-	}
-
-	headRef, err := dbData.Rsr.CWBHeadRef(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	optCmt, err := doltDB.Resolve(ctx, lcs, headRef)
-	if err != nil {
-		return nil, nil, err
-	}
-	left, ok = optCmt.ToCommit()
-	if !ok {
-		return nil, nil, doltdb.ErrGhostCommitEncountered
-	}
-
-	optCmt, err = doltDB.Resolve(ctx, rcs, headRef)
-	if err != nil {
-		return nil, nil, err
-	}
-	right, ok = optCmt.ToCommit()
-	if !ok {
-		return nil, nil, doltdb.ErrGhostCommitEncountered
-	}
-
-	return
+	return commit, err
 }
 
 // String implements the sql.Expression interface.

@@ -254,7 +254,6 @@ teardown() {
 }
 
 @test "dump: SQL type - with foreign key and import" {
-    skip "dolt dump foreign key option for import NOT implemented"
     dolt sql -q "CREATE TABLE new_table(pk int primary key);"
     dolt sql -q "INSERT INTO new_table VALUES (1);"
     dolt sql -q "CREATE TABLE warehouse(warehouse_id int primary key, warehouse_name longtext);"
