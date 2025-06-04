@@ -134,23 +134,26 @@ func NewIndexCollection(cols *ColCollection, pkCols *ColCollection) IndexCollect
 	return ixc
 }
 
-func (ixc indexCollectionImpl) Copy() IndexCollection {
+func (ixc *indexCollectionImpl) Copy() IndexCollection {
+	// no need to copy the colColl, it's immutable
+	nixc := &indexCollectionImpl{
+		colColl: ixc.colColl,
+	}
+
 	if ixc.pks != nil {
-		pks := make([]uint64, len(ixc.pks))
-		copy(pks, ixc.pks)
-		ixc.pks = pks
+		nixc.pks = make([]uint64, len(ixc.pks))
+		copy(nixc.pks, ixc.pks)
 	}
 
 	if ixc.indexes != nil {
-		indexes := make(map[string]*indexImpl, len(ixc.indexes))
+		nixc.indexes = make(map[string]*indexImpl, len(ixc.indexes))
 		for name, index := range ixc.indexes {
-			indexes[name] = index.copy()
+			nixc.indexes[name] = index.copy()
 		}
-		ixc.indexes = indexes
 	}
 
 	if ixc.colTagToIndex != nil {
-		colTagToIndex := make(map[uint64][]*indexImpl, len(ixc.colTagToIndex))
+		nixc.colTagToIndex = make(map[uint64][]*indexImpl, len(ixc.colTagToIndex))
 		for tag, indexes := range ixc.colTagToIndex {
 			var indexesCopy []*indexImpl
 			if indexes != nil {
@@ -159,13 +162,11 @@ func (ixc indexCollectionImpl) Copy() IndexCollection {
 					indexesCopy[i] = index.copy()
 				}
 			}
-			colTagToIndex[tag] = indexesCopy
+			nixc.colTagToIndex[tag] = indexesCopy
 		}
-		ixc.colTagToIndex = colTagToIndex
 	}
-
-	// no need to copy the colColl, it's immutable
-	return &ixc
+	
+	return nixc
 }
 
 func (ixc *indexCollectionImpl) AddIndex(indexes ...Index) {
@@ -455,7 +456,7 @@ func (ixc *indexCollectionImpl) Merge(indexes ...Index) {
 func (ixc *indexCollectionImpl) RemoveIndex(indexName string) (Index, error) {
 	lowerName := strings.ToLower(indexName)
 	if !ixc.Contains(lowerName) {
-		return nil, fmt.Errorf("`%s` does not exist as an index for this table", lowerName)
+		return nil, sql.ErrIndexNotFound.New(indexName)
 	}
 	index := ixc.indexes[lowerName]
 	delete(ixc.indexes, lowerName)
@@ -474,12 +475,11 @@ func (ixc *indexCollectionImpl) RemoveIndex(indexName string) (Index, error) {
 func (ixc *indexCollectionImpl) RenameIndex(oldName, newName string) (Index, error) {
 	lowerCaseOldName := strings.ToLower(oldName)
 	lowerCaseNewName := strings.ToLower(newName)
-
 	if !ixc.Contains(lowerCaseOldName) {
-		return nil, fmt.Errorf("`%s` does not exist as an index for this table", oldName)
+		return nil, sql.ErrIndexNotFound.New(oldName)
 	}
 	if ixc.Contains(lowerCaseNewName) {
-		return nil, fmt.Errorf("`%s` already exists as an index for this table", newName)
+		return nil, sql.ErrDuplicateKey.New(newName)
 	}
 	index := ixc.indexes[lowerCaseOldName]
 	delete(ixc.indexes, lowerCaseOldName)
