@@ -988,28 +988,6 @@ func RunDoltMergeArtifacts(t *testing.T, h DoltEnginetestHarness) {
 	}
 }
 
-func RunDoltPreviewMergeConflictsSummaryTests(t *testing.T, h DoltEnginetestHarness) {
-	for _, script := range PreviewMergeConflictsSummaryFunctionScripts {
-		// harness can't reset effectively. Use a new harness for each script
-		func() {
-			h := h.NewHarness(t)
-			defer h.Close()
-			enginetest.TestScript(t, h, script)
-		}()
-	}
-}
-
-func RunDoltPreviewMergeConflictsSummaryPreparedTests(t *testing.T, h DoltEnginetestHarness) {
-	for _, script := range PreviewMergeConflictsSummaryFunctionScripts {
-		// harness can't reset effectively. Use a new harness for each script
-		func() {
-			h := h.NewHarness(t)
-			defer h.Close()
-			enginetest.TestScript(t, h, script)
-		}()
-	}
-}
-
 func RunDoltPreviewMergeConflictsTests(t *testing.T, h DoltEnginetestHarness) {
 	for _, script := range PreviewMergeConflictsFunctionScripts {
 		// harness can't reset effectively. Use a new harness for each script

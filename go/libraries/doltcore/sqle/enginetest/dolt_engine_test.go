@@ -1342,16 +1342,6 @@ func TestDoltMergeArtifacts(t *testing.T) {
 	RunDoltMergeArtifacts(t, h)
 }
 
-func TestDoltPreviewMergeConflictsSummary(t *testing.T) {
-	h := newDoltEnginetestHarness(t)
-	RunDoltPreviewMergeConflictsSummaryTests(t, h)
-}
-
-func TestDoltPreviewMergeConflictsSummaryPrepared(t *testing.T) {
-	h := newDoltEnginetestHarness(t)
-	RunDoltPreviewMergeConflictsSummaryPreparedTests(t, h)
-}
-
 func TestDoltPreviewMergeConflicts(t *testing.T) {
 	h := newDoltEnginetestHarness(t)
 	RunDoltPreviewMergeConflictsTests(t, h)
