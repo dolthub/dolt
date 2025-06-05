@@ -106,7 +106,7 @@ func CreateMergeArgParser() *argparser.ArgParser {
 }
 
 func CreateStashArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParserWithMaxArgs("stash", 2)
+	ap := argparser.NewArgParserWithMaxArgs("stash", 3)
 	ap.SupportsFlag("include-untracked", "u", "Untracked tables are also stashed.") //TODO: Add Constant
 	ap.SupportsFlag(AllFlag, "a", "All tables are stashed, including untracked and ignored tables.")
 	return ap

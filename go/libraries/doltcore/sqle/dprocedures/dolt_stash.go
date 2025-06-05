@@ -74,20 +74,35 @@ func doDoltStash(ctx *sql.Context, args []string) (string, error) {
 		return "", err
 	}
 
-	if apr.NArg() == 0 {
-		return "", fmt.Errorf("error: invalid arguments. Must provide valid stash subcommand")
+	if apr.NArg() < 2 {
+		return "", fmt.Errorf("error: invalid arguments. Must provide valid subcommand and stash name")
 	}
 
 	var status string
+	stashName := apr.Arg(1)
 	switch apr.Arg(0) {
 	case "push":
-		status, err = doStashPush(ctx, dSess, dbData, roots, apr)
+		if apr.NArg() > 2 { // Push does not take extra arguments
+			return "", fmt.Errorf("error: invalid arguments. Push takes only subcommand and stash name=")
+		}
+		status, err = doStashPush(ctx, dSess, dbData, roots, apr, stashName)
 	case "pop":
-		status, err = doStashPop(ctx, dbData, apr)
+		idx, err := parseStashIndex(apr.Arg(2))
+		if err != nil {
+			return "", err
+		}
+		status, err = doStashPop(ctx, dbData, stashName, idx)
 	case "drop":
-		status, err = doStashDrop(ctx, dbData, apr)
+		idx, err := parseStashIndex(apr.Arg(2))
+		if err != nil {
+			return "", err
+		}
+		status, err = doStashDrop(ctx, dbData, stashName, idx)
 	case "clear":
-		err = doStashClear(ctx, dbData)
+		if apr.NArg() > 2 { // Clear does not take extra arguments
+			return "", fmt.Errorf("error: invalid arguments. Clear takes only subcommand and stash name")
+		}
+		err = doStashClear(ctx, dbData, stashName)
 	default:
 		return "", fmt.Errorf("unknown stash subcommand %s", apr.Arg(0))
 	}
@@ -99,9 +114,8 @@ func doDoltStash(ctx *sql.Context, args []string) (string, error) {
 	return status, nil
 }
 
-func doStashPush(ctx *sql.Context, dSess *dsess.DoltSession, dbData env.DbData[*sql.Context], roots doltdb.Roots, apr *argparser.ArgParseResults) (string, error) {
-
-	hasChanges, err := hasLocalChanges(ctx, dSess, dbData, roots, apr)
+func doStashPush(ctx *sql.Context, dSess *dsess.DoltSession, dbData env.DbData[*sql.Context], roots doltdb.Roots, apr *argparser.ArgParseResults, stashName string) (string, error) {
+	hasChanges, err := hasLocalChanges(ctx, dSess, roots, apr)
 	if err != nil {
 		return "", err
 	}
@@ -115,7 +129,6 @@ func doStashPush(ctx *sql.Context, dSess *dsess.DoltSession, dbData env.DbData[*
 	}
 
 	// all tables with changes that are going to be stashed are staged at this point
-
 	allTblsToBeStashed, addedTblsToStage, err := stashedTableSets(ctx, roots)
 	if err != nil {
 		return "", err
@@ -133,31 +146,12 @@ func doStashPush(ctx *sql.Context, dSess *dsess.DoltSession, dbData env.DbData[*
 		}
 	}
 
-	curHeadRef, err := dbData.Rsr.CWBHeadRef(ctx)
+	commit, commitMeta, curBranchName, err := gatherCommitData(ctx, dbData)
 	if err != nil {
 		return "", err
 	}
 
-	curBranchName := curHeadRef.String()
-	commitSpec, err := doltdb.NewCommitSpec(curBranchName)
-	if err != nil {
-		return "", err
-	}
-	optCmt, err := dbData.Ddb.Resolve(ctx, commitSpec, curHeadRef)
-	if err != nil {
-		return "", err
-	}
-	commit, ok := optCmt.ToCommit()
-	if !ok {
-		return "", doltdb.ErrGhostCommitEncountered
-	}
-
-	commitMeta, err := commit.GetCommitMeta(ctx)
-	if err != nil {
-		return "", err
-	}
-
-	err = dbData.Ddb.AddStash(ctx, commit, roots.Staged, datas.NewStashMeta(curBranchName, commitMeta.Description, doltdb.FlattenTableNames(addedTblsToStage)), "stashes")
+	err = dbData.Ddb.AddStash(ctx, commit, roots.Staged, datas.NewStashMeta(curBranchName, commitMeta.Description, doltdb.FlattenTableNames(addedTblsToStage)), apr.Arg(1))
 	if err != nil {
 		return "", err
 	}
@@ -182,81 +176,10 @@ func doStashPush(ctx *sql.Context, dSess *dsess.DoltSession, dbData env.DbData[*
 	return status, nil
 }
 
-func doStashPop(ctx *sql.Context, dbData env.DbData[*sql.Context], apr *argparser.ArgParseResults) (string, error) {
-	var idx = 0
-	var err error
-	if apr.NArg() == 2 {
-		idx, err = parseStashIndex(apr.Args[1])
-	}
-
-	headRef, err := dbData.Rsr.CWBHeadRef(ctx)
+func doStashPop(ctx *sql.Context, dbData env.DbData[*sql.Context], stashName string, idx int) (string, error) {
+	headCommit, result, meta, err := handleMerge(ctx, dbData, stashName, idx)
 	if err != nil {
 		return "", err
-	}
-	workingSetRef, err := ref.WorkingSetRefForHead(headRef)
-	if err != nil {
-		return "", err
-	}
-	workingSet, err := dbData.Ddb.ResolveWorkingSet(ctx, workingSetRef)
-	if err != nil {
-		return "", err
-	}
-	curWorkingRoot := workingSet.WorkingRoot()
-
-	stashRoot, headCommit, meta, err := dbData.Ddb.GetStashRootAndHeadCommitAtIdx(ctx, idx, "stashes")
-	if err != nil {
-		return "", err
-	}
-
-	hch, err := headCommit.HashOf()
-	if err != nil {
-		return "", err
-	}
-	headCommitSpec, err := doltdb.NewCommitSpec(hch.String())
-	if err != nil {
-		return "", err
-	}
-
-	optCmt, err := dbData.Ddb.Resolve(ctx, headCommitSpec, headRef)
-	if err != nil {
-		return "", err
-	}
-	parentCommit, ok := optCmt.ToCommit()
-	if !ok {
-		// Should not be possible to get into this situation. The parent of the stashed commit
-		// Must have been present at the time it was created
-		return "", doltdb.ErrGhostCommitEncountered
-	}
-
-	parentRoot, err := parentCommit.GetRootValue(ctx)
-	if err != nil {
-		return "", err
-	}
-
-	tmpDir, err := dbData.Rsw.TempTableFilesDir()
-	if err != nil {
-		return "", err
-	}
-
-	opts := editor.Options{Deaf: bulkDbEaFactory(dbData), Tempdir: tmpDir}
-	result, err := merge.MergeRoots(ctx, curWorkingRoot, stashRoot, parentRoot, stashRoot, parentCommit, opts, merge.MergeOpts{IsCherryPick: false})
-	if err != nil {
-		return "", err
-	}
-
-	var tablesWithConflict []doltdb.TableName
-	for tbl, stats := range result.Stats {
-		if stats.HasConflicts() {
-			tablesWithConflict = append(tablesWithConflict, tbl)
-		}
-	}
-
-	if len(tablesWithConflict) > 0 {
-		tblNames := strings.Join(doltdb.FlattenTableNames(tablesWithConflict), "', '")
-		status := fmt.Sprintf("error: Your local changes to the following tables would be overwritten by applying stash %d:\n"+
-			"\t{'%s'}\n"+
-			"Please commit your changes or stash them before you merge.\nAborting\n", idx, tblNames)
-		return status, nil
 	}
 
 	err = updateWorkingRoot(ctx, dbData, result.Root)
@@ -264,18 +187,9 @@ func doStashPop(ctx *sql.Context, dbData env.DbData[*sql.Context], apr *argparse
 		return "", err
 	}
 
-	headRoot, err := headCommit.GetRootValue(ctx)
+	roots, err := getRoots(ctx, dbData, headCommit)
 	if err != nil {
 		return "", err
-	}
-	ws, err := env.WorkingSet(ctx, dbData.Ddb, dbData.Rsr)
-	if err != nil {
-		return "", err
-	}
-	roots := doltdb.Roots{
-		Head:    headRoot,
-		Working: ws.WorkingRoot(),
-		Staged:  ws.StagedRoot(),
 	}
 
 	// added tables need to be staged
@@ -290,12 +204,12 @@ func doStashPop(ctx *sql.Context, dbData env.DbData[*sql.Context], apr *argparse
 		return "", err
 	}
 
-	stashHash, err := dbData.Ddb.GetStashHashAtIdx(ctx, idx, "stashes")
+	stashHash, err := dbData.Ddb.GetStashHashAtIdx(ctx, idx, stashName)
 	if err != nil {
 		return "", err
 	}
 
-	err = dbData.Ddb.RemoveStashAtIdx(ctx, idx, "stashes")
+	err = dbData.Ddb.RemoveStashAtIdx(ctx, idx, stashName)
 	if err != nil {
 		return "", err
 	}
@@ -304,23 +218,13 @@ func doStashPop(ctx *sql.Context, dbData env.DbData[*sql.Context], apr *argparse
 	return status, err
 }
 
-func doStashDrop(ctx *sql.Context, dbData env.DbData[*sql.Context], apr *argparser.ArgParseResults) (string, error) {
-	var idx = 0
-	var err error
-
-	if apr.NArg() == 2 {
-		idx, err = parseStashIndex(apr.Args[1])
-		if err != nil {
-			return "", err
-		}
-	}
-
-	stashHash, err := dbData.Ddb.GetStashHashAtIdx(ctx, idx, "stashes")
+func doStashDrop(ctx *sql.Context, dbData env.DbData[*sql.Context], stashName string, idx int) (string, error) {
+	stashHash, err := dbData.Ddb.GetStashHashAtIdx(ctx, idx, stashName)
 	if err != nil {
 		return "", err
 	}
 
-	err = dbData.Ddb.RemoveStashAtIdx(ctx, idx, "stashes")
+	err = dbData.Ddb.RemoveStashAtIdx(ctx, idx, stashName)
 	if err != nil {
 		return "", err
 	}
@@ -330,8 +234,8 @@ func doStashDrop(ctx *sql.Context, dbData env.DbData[*sql.Context], apr *argpars
 	return status, nil
 }
 
-func doStashClear(ctx *sql.Context, dbData env.DbData[*sql.Context]) error {
-	err := dbData.Ddb.RemoveAllStashes(ctx, "stashes")
+func doStashClear(ctx *sql.Context, dbData env.DbData[*sql.Context], stashName string) error {
+	err := dbData.Ddb.RemoveAllStashes(ctx, stashName)
 	if err != nil {
 		return err
 	}
@@ -360,7 +264,7 @@ func stashedTableSets(ctx context.Context, roots doltdb.Roots) ([]doltdb.TableNa
 	return allTbls, addedTblsInStaged, nil
 }
 
-func hasLocalChanges(ctx *sql.Context, dSess *dsess.DoltSession, dbData env.DbData[*sql.Context], roots doltdb.Roots, apr *argparser.ArgParseResults) (bool, error) {
+func hasLocalChanges(ctx *sql.Context, dSess *dsess.DoltSession, roots doltdb.Roots, apr *argparser.ArgParseResults) (bool, error) {
 	dbName := ctx.GetCurrentDatabase()
 
 	headCommit, err := dSess.GetHeadCommit(ctx, dbName)
@@ -498,12 +402,12 @@ func updateWorkingSetFromRoots(ctx *sql.Context, dbData env.DbData[*sql.Context]
 	return nil
 }
 
-func parseStashIndex(stashName string) (int, error) {
+func parseStashIndex(stashID string) (int, error) {
 	var idx = 0
-	stashName = strings.TrimSuffix(strings.TrimPrefix(stashName, "stash@{"), "}")
-	idx, err := strconv.Atoi(stashName)
+	stashID = strings.TrimSuffix(strings.TrimPrefix(stashID, "stash@{"), "}")
+	idx, err := strconv.Atoi(stashID)
 	if err != nil {
-		return 0, fmt.Errorf("error: %s is not a valid reference", stashName)
+		return 0, fmt.Errorf("error: %s is not a valid reference", stashID)
 	}
 
 	return idx, nil
@@ -556,4 +460,126 @@ func updateWorkingRoot(ctx *sql.Context, dbData env.DbData[*sql.Context], newRoo
 	}
 
 	return nil
+}
+
+func gatherCommitData(ctx *sql.Context, dbData env.DbData[*sql.Context]) (*doltdb.Commit, *datas.CommitMeta, string, error) {
+	curHeadRef, err := dbData.Rsr.CWBHeadRef(ctx)
+	if err != nil {
+		return nil, nil, "", err
+	}
+
+	curBranchName := curHeadRef.String()
+	commitSpec, err := doltdb.NewCommitSpec(curBranchName)
+	if err != nil {
+		return nil, nil, "", err
+	}
+	optCmt, err := dbData.Ddb.Resolve(ctx, commitSpec, curHeadRef)
+	if err != nil {
+		return nil, nil, "", err
+	}
+	commit, ok := optCmt.ToCommit()
+	if !ok {
+		return nil, nil, "", doltdb.ErrGhostCommitEncountered
+	}
+
+	commitMeta, err := commit.GetCommitMeta(ctx)
+	if err != nil {
+		return nil, nil, "", err
+	}
+
+	return commit, commitMeta, curBranchName, nil
+
+}
+
+func handleMerge(ctx *sql.Context, dbData env.DbData[*sql.Context], stashName string, idx int) (*doltdb.Commit, *merge.Result, *datas.StashMeta, error) {
+	headRef, err := dbData.Rsr.CWBHeadRef(ctx)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	workingSetRef, err := ref.WorkingSetRefForHead(headRef)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	workingSet, err := dbData.Ddb.ResolveWorkingSet(ctx, workingSetRef)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	curWorkingRoot := workingSet.WorkingRoot()
+
+	stashRoot, headCommit, meta, err := dbData.Ddb.GetStashRootAndHeadCommitAtIdx(ctx, idx, stashName)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	hch, err := headCommit.HashOf()
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	headCommitSpec, err := doltdb.NewCommitSpec(hch.String())
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	optCmt, err := dbData.Ddb.Resolve(ctx, headCommitSpec, headRef)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	parentCommit, ok := optCmt.ToCommit()
+	if !ok {
+		// Should not be possible to get into this situation. The parent of the stashed commit
+		// Must have been present at the time it was created
+		return nil, nil, nil, err
+	}
+
+	parentRoot, err := parentCommit.GetRootValue(ctx)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	tmpDir, err := dbData.Rsw.TempTableFilesDir()
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	opts := editor.Options{Deaf: bulkDbEaFactory(dbData), Tempdir: tmpDir}
+	result, err := merge.MergeRoots(ctx, curWorkingRoot, stashRoot, parentRoot, stashRoot, parentCommit, opts, merge.MergeOpts{IsCherryPick: false})
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	var tablesWithConflict []doltdb.TableName
+	for tbl, stats := range result.Stats {
+		if stats.HasConflicts() {
+			tablesWithConflict = append(tablesWithConflict, tbl)
+		}
+	}
+
+	if len(tablesWithConflict) > 0 {
+		tblNames := strings.Join(doltdb.FlattenTableNames(tablesWithConflict), "', '")
+		status := fmt.Errorf("error: Your local changes to the following tables would be overwritten by applying stash %d:\n"+
+			"\t{'%s'}\n"+
+			"Please commit your changes or stash them before you merge.\nAborting\n", idx, tblNames)
+		return nil, nil, nil, status
+	}
+
+	return headCommit, result, meta, nil
+}
+
+func getRoots(ctx *sql.Context, dbData env.DbData[*sql.Context], headCommit *doltdb.Commit) (doltdb.Roots, error) {
+	roots := doltdb.Roots{}
+
+	headRoot, err := headCommit.GetRootValue(ctx)
+	if err != nil {
+		return roots, err
+	}
+	ws, err := env.WorkingSet(ctx, dbData.Ddb, dbData.Rsr)
+	if err != nil {
+		return roots, err
+	}
+
+	roots.Head = headRoot
+	roots.Working = ws.WorkingRoot()
+	roots.Staged = ws.StagedRoot()
+
+	return roots, nil
 }
