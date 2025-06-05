@@ -558,7 +558,10 @@ func (itr *previewMergeConflictsTableFunctionRowIter) nextConflictVals(ctx *sql.
 
 		confVal.Key = ca.Key
 		confVal.Hash = itr.theirRootish
-		confVal.Id = dtables.GetConflictId(ca.Key, confVal.Hash)
+
+		buf := make([]byte, 0, len(ca.Key)+len(confVal.Hash))
+		buf = append(buf, ca.Key...)
+		confVal.Id = dtables.GetConflictId(buf, confVal.Hash)
 
 		err = itr.loadTableMaps(ctx, itr.baseRootish, itr.theirRootish)
 		if err != nil {

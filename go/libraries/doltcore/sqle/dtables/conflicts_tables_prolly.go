@@ -414,11 +414,11 @@ type ConflictVal struct {
 // GetConflictId gets the conflict ID, ensuring that it is unique by hashing both theirRootish and the key of the table.
 func GetConflictId(key val.Tuple, confHash hash.Hash) string {
 	// TODO: We were using this but it makes the dolt_preview_merge_conflicts table function panic with "slice bounds out of range" in flatbuffer table.SchemaBytes
-	// b := xxh3.Hash128(append(key, confHash[:]...)).Bytes()
-	buf := make([]byte, len(key)+len(confHash))
-	copy(buf, key)
-	copy(buf[len(key):], confHash[:])
-	b := xxh3.Hash128(buf).Bytes()
+	b := xxh3.Hash128(append(key, confHash[:]...)).Bytes()
+	// buf := make([]byte, len(key)+len(confHash))
+	// copy(buf, key)
+	// copy(buf[len(key):], confHash[:])
+	// b := xxh3.Hash128(buf).Bytes()
 	return base64.RawStdEncoding.EncodeToString(b[:])
 }
 
