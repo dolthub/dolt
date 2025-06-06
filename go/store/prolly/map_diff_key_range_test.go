@@ -177,7 +177,7 @@ func testKeyRngMapDiffAgainstEmpty(t *testing.T, scale int, rngTest keyRangeDiff
 
 func testKeyRngDeleteDiffs(t *testing.T, from Map, tups [][2]val.Tuple, numDeletes int, rngTest keyRangeDiffTest) {
 	ctx := context.Background()
-	rand.Shuffle(len(tups), func(i, j int) {
+	testRand.Shuffle(len(tups), func(i, j int) {
 		tups[i], tups[j] = tups[j], tups[i]
 	})
 

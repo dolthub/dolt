@@ -242,10 +242,15 @@ type mutationIter struct {
 
 var _ tree.MutationIter = mutationIter{}
 
-func (m mutationIter) NextMutation(ctx context.Context) (key, value tree.Item) {
+func (m mutationIter) NextMutation(ctx context.Context) (mutation tree.Mutation) {
 	k, v := m.iter.Next(ctx)
-	key, value = tree.Item(k), tree.Item(v)
-	return
+	// The mutations generated are always leaf mutations.
+	return tree.Mutation{
+		Key:          tree.Item(k),
+		To:           tree.Item(v),
+		SubtreeCount: 1,
+		Level:        0,
+	}
 }
 
 func (m mutationIter) Close() error {

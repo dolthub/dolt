@@ -159,7 +159,7 @@ func testMapDiffAgainstEmpty(t *testing.T, scale int) {
 
 func testDeleteDiffs(t *testing.T, from Map, tups [][2]val.Tuple, numDeletes int) {
 	ctx := context.Background()
-	rand.Shuffle(len(tups), func(i, j int) {
+	testRand.Shuffle(len(tups), func(i, j int) {
 		tups[i], tups[j] = tups[j], tups[i]
 	})
 
