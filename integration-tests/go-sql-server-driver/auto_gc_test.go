@@ -34,36 +34,52 @@ import (
 func TestAutoGC(t *testing.T) {
 	t.Parallel()
 	var enabled_16, final_16, disabled, final_disabled RepoSize
+	numStatements, numCommits := 512, 16
+	if testing.Short() || os.Getenv("CI") != "" {
+		numStatements = 64
+	}
 	t.Run("Enable", func(t *testing.T) {
 		t.Parallel()
-		t.Run("CommitEvery16", func(t *testing.T) {
-			t.Parallel()
-			var s AutoGCTest
-			s.Enable = true
-			enabled_16, final_16 = runAutoGCTest(t, &s, 64, 16)
-			assert.Contains(t, string(s.PrimaryServer.Output.Bytes()), "Successfully completed auto GC")
-			t.Logf("repo size before final gc: %v", enabled_16)
-			t.Logf("repo size after final gc: %v", final_16)
-		})
-		t.Run("ClusterReplication", func(t *testing.T) {
-			t.Parallel()
-			var s AutoGCTest
-			s.Enable = true
-			s.Replicate = true
-			enabled_16, final_16 = runAutoGCTest(t, &s, 64, 16)
-			assert.Contains(t, string(s.PrimaryServer.Output.Bytes()), "Successfully completed auto GC")
-			assert.Contains(t, string(s.StandbyServer.Output.Bytes()), "Successfully completed auto GC")
-			t.Logf("repo size before final gc: %v", enabled_16)
-			t.Logf("repo size after final gc: %v", final_16)
-			rs, err := GetRepoSize(s.StandbyDir)
-			require.NoError(t, err)
-			t.Logf("standby size: %v", rs)
-		})
+		for _, sa := range []struct {
+			archive bool
+			name    string
+		}{{true, "Archive"}, {false, "NoArchive"}} {
+			t.Run(sa.name, func(t *testing.T) {
+				t.Run("CommitEvery16", func(t *testing.T) {
+					t.Parallel()
+					var s AutoGCTest
+					s.Enable = true
+					s.Archive = sa.archive
+					enabled_16, final_16 = runAutoGCTest(t, &s, numStatements, numCommits)
+					assert.Contains(t, string(s.PrimaryServer.Output.Bytes()), "Successfully completed auto GC")
+					assert.NotContains(t, string(s.PrimaryServer.Output.Bytes()), "dangling references requested during GC")
+					t.Logf("repo size before final gc: %v", enabled_16)
+					t.Logf("repo size after final gc: %v", final_16)
+				})
+				t.Run("ClusterReplication", func(t *testing.T) {
+					t.Parallel()
+					var s AutoGCTest
+					s.Enable = true
+					s.Replicate = true
+					s.Archive = sa.archive
+					enabled_16, final_16 = runAutoGCTest(t, &s, numStatements, numCommits)
+					assert.Contains(t, string(s.PrimaryServer.Output.Bytes()), "Successfully completed auto GC")
+					assert.Contains(t, string(s.StandbyServer.Output.Bytes()), "Successfully completed auto GC")
+					assert.NotContains(t, string(s.PrimaryServer.Output.Bytes()), "dangling references requested during GC")
+					assert.NotContains(t, string(s.StandbyServer.Output.Bytes()), "dangling references requested during GC")
+					t.Logf("repo size before final gc: %v", enabled_16)
+					t.Logf("repo size after final gc: %v", final_16)
+					rs, err := GetRepoSize(s.StandbyDir)
+					require.NoError(t, err)
+					t.Logf("standby size: %v", rs)
+				})
+			})
+		}
 	})
 	t.Run("Disabled", func(t *testing.T) {
 		t.Parallel()
 		var s AutoGCTest
-		disabled, final_disabled = runAutoGCTest(t, &s, 64, 128)
+		disabled, final_disabled = runAutoGCTest(t, &s, numStatements, 128)
 		assert.NotContains(t, string(s.PrimaryServer.Output.Bytes()), "Successfully completed auto GC")
 		t.Logf("repo size before final gc: %v", disabled)
 		t.Logf("repo size after final gc: %v", final_disabled)
@@ -77,6 +93,7 @@ func TestAutoGC(t *testing.T) {
 
 type AutoGCTest struct {
 	Enable        bool
+	Archive       bool
 	PrimaryDir    string
 	PrimaryServer *driver.SqlServer
 	PrimaryDB     *sql.DB
@@ -121,13 +138,19 @@ func (s *AutoGCTest) CreatePrimaryServer(ctx context.Context, t *testing.T, u dr
 	repo, err := rs.MakeRepo("auto_gc_test")
 	require.NoError(t, err)
 
+	archiveFragment := ``
+	if s.Archive {
+		archiveFragment = `
+    archive_level: 1`
+	}
+
 	behaviorFragment := fmt.Sprintf(`
 behavior:
   auto_gc_behavior:
-    enable: %v
+    enable: %v%v
 listener:
   port: {{get_port "primary_server_port"}}
-`, s.Enable)
+`, s.Enable, archiveFragment)
 
 	var clusterFragment string
 	if s.Replicate {
@@ -174,14 +197,20 @@ func (s *AutoGCTest) CreateStandbyServer(ctx context.Context, t *testing.T, u dr
 	repo, err := rs.MakeRepo("auto_gc_test")
 	require.NoError(t, err)
 
+	archiveFragment := ``
+	if s.Archive {
+		archiveFragment = `
+    archive_level: 1`
+	}
+
 	behaviorFragment := fmt.Sprintf(`
 listener:
   host: 0.0.0.0
   port: {{get_port "standby_server_port"}}
 behavior:
   auto_gc_behavior:
-    enable: %v
-`, s.Enable)
+    enable: %v%v
+`, s.Enable, archiveFragment)
 
 	var clusterFragment string
 	if s.Replicate {
