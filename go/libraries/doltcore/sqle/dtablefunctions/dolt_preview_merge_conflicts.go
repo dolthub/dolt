@@ -112,6 +112,12 @@ func (pm *PreviewMergeConflictsTableFunction) String() string {
 }
 
 // Schema implements the sql.Node interface.
+// Returns the schema for the preview merge conflicts table function, which includes:
+//   - from_root_ish: Hash of the right-side commit/working set during merge
+//   - base_[col], our_[col], their_[col]: Each column has these three columns representing the values of each column in the base, our, and their branches respectively
+//   - our_diff_type, their_diff_type: Indicates the type of change for our and their columns respectively ("added", "modified", "removed")
+//   - base_cardinality, our_cardinality, their_cardinality: Additional columns for keyless tables only, indicating the number of rows in the base, our, and their branches
+//   - dolt_conflict_id: Unique identifier for the conflict, derived from the key and the right-side commit hash
 func (pm *PreviewMergeConflictsTableFunction) Schema() sql.Schema {
 	if !pm.Resolved() {
 		return nil
@@ -426,8 +432,8 @@ func (pm *PreviewMergeConflictsTableFunction) RowIter(ctx *sql.Context, row sql.
 		return nil, err
 	}
 
-	vds := dtables.GetConflictValueDescriptors(pm.baseSch, pm.ourSch, pm.theirSch, pm.rootInfo.baseRoot.NodeStore())
-	offsets := dtables.GetConflictOffsets(keyless, vds)
+	cds := dtables.GetConflictDescriptors(pm.baseSch, pm.ourSch, pm.theirSch, pm.rootInfo.baseRoot.NodeStore())
+	offsets := dtables.GetConflictOffsets(keyless, cds)
 
 	valueMerger := tm.GetNewValueMerger(mergeSch, leftRows)
 
@@ -455,7 +461,7 @@ func (pm *PreviewMergeConflictsTableFunction) RowIter(ctx *sql.Context, row sql.
 		keyless:      keyless,
 		ourSch:       pm.ourSch,
 		offsets:      offsets,
-		vds:          vds,
+		cds:          cds,
 		baseRootish:  baseHash,
 		theirRootish: rightHash,
 	}, nil
@@ -507,7 +513,7 @@ type previewMergeConflictsTableFunctionRowIter struct {
 	keyless bool
 	ourSch  schema.Schema
 
-	vds     dtables.ConflictValueDescriptors
+	cds     dtables.ConflictDescriptors
 	offsets dtables.ConflictOffsets
 
 	baseHash, theirHash       hash.Hash
@@ -520,7 +526,7 @@ func (itr *previewMergeConflictsTableFunctionRowIter) Next(ctx *sql.Context) (sq
 		return nil, io.EOF
 	}
 
-	row := make(sql.Row, itr.offsets.N)
+	row := make(sql.Row, itr.offsets.ColCount)
 	confVal, err := itr.nextConflictVals(ctx)
 	if err != nil {
 		return nil, err
@@ -656,12 +662,12 @@ func (itr *previewMergeConflictsTableFunctionRowIter) loadTableMaps(ctx *sql.Con
 
 func (itr *previewMergeConflictsTableFunctionRowIter) putConflictRowVals(ctx *sql.Context, confVal dtables.ConflictVal, row sql.Row) error {
 	ns := itr.baseRows.NodeStore()
-	return dtables.PutConflictRowVals(ctx, confVal, row, itr.offsets, itr.vds, ns)
+	return dtables.PutConflictRowVals(ctx, confVal, row, itr.offsets, itr.cds, ns)
 }
 
 func (itr *previewMergeConflictsTableFunctionRowIter) putKeylessConflictRowVals(ctx *sql.Context, confVal dtables.ConflictVal, row sql.Row) (err error) {
 	ns := itr.baseRows.NodeStore()
-	return dtables.PutKeylessConflictRowVals(ctx, confVal, row, itr.offsets, itr.vds, ns)
+	return dtables.PutKeylessConflictRowVals(ctx, confVal, row, itr.offsets, itr.cds, ns)
 }
 
 func (d *previewMergeConflictsTableFunctionRowIter) Close(context *sql.Context) error {
