@@ -30,10 +30,6 @@ import (
 const stashesDefaultRowCount = 5
 
 var _ sql.Table = (*StashesTable)(nil)
-var _ sql.UpdatableTable = (*StashesTable)(nil)
-var _ sql.DeletableTable = (*StashesTable)(nil)
-var _ sql.InsertableTable = (*StashesTable)(nil)
-var _ sql.ReplaceableTable = (*StashesTable)(nil)
 var _ sql.StatisticsTable = (*StashesTable)(nil)
 
 type StashesTable struct {
@@ -94,26 +90,6 @@ func (st *StashesTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql
 	return NewStashItr(ctx, st.ddb)
 }
 
-func (st *StashesTable) Updater(ctx *sql.Context) sql.RowUpdater {
-	return stashWriter{st}
-}
-
-func (st *StashesTable) Inserter(*sql.Context) sql.RowInserter {
-	return stashWriter{st}
-}
-
-// Deleter returns a RowDeleter for this table. The RowDeleter will get one call to Delete for each row to be deleted,
-// and will end with a call to Close() to finalize the delete operation.
-func (st *StashesTable) Deleter(*sql.Context) sql.RowDeleter {
-	return stashWriter{st}
-}
-
-// Replacer returns a RowReplacer for this table. The RowReplacer will have Insert and optionally Delete called once
-// for each row, followed by a call to Close() when all rows have been processed.
-func (st *StashesTable) Replacer(ctx *sql.Context) sql.RowReplacer {
-	return stashWriter{st}
-}
-
 type StashItr struct {
 	stashes []*doltdb.Stash
 	idx     int
@@ -157,7 +133,7 @@ func (itr *StashItr) Next(ctx *sql.Context) (sql.Row, error) {
 	if err != nil {
 		return nil, err
 	}
-	return sql.NewRow("stashes/stashes", stash.Name, stash.BranchName, commitHash.String(), stash.Description), nil
+	return sql.NewRow(stash.StashReference, stash.Name, stash.BranchName, commitHash.String(), stash.Description), nil
 }
 
 // Close closes the iterator.

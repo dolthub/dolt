@@ -79,21 +79,25 @@ func doDoltStash(ctx *sql.Context, args []string) (string, error) {
 	}
 
 	var status string
+
+	cmdName := apr.Arg(0)
 	stashName := apr.Arg(1)
-	switch apr.Arg(0) {
+	idx, err := parseStashIndex(apr)
+	if err != nil {
+		return "", err
+	}
+
+	switch cmdName {
 	case "push":
 		if apr.NArg() > 2 { // Push does not take extra arguments
 			return "", fmt.Errorf("error: invalid arguments. Push takes only subcommand and stash name=")
 		}
 		status, err = doStashPush(ctx, dSess, dbData, roots, apr, stashName)
 	case "pop":
-		idx, err := parseStashIndex(apr.Arg(2))
-		if err != nil {
-			return "", err
-		}
 		status, err = doStashPop(ctx, dbData, stashName, idx)
 	case "drop":
-		idx, err := parseStashIndex(apr.Arg(2))
+		var idx int
+		idx, err = parseStashIndex(apr)
 		if err != nil {
 			return "", err
 		}
@@ -104,7 +108,7 @@ func doDoltStash(ctx *sql.Context, args []string) (string, error) {
 		}
 		err = doStashClear(ctx, dbData, stashName)
 	default:
-		return "", fmt.Errorf("unknown stash subcommand %s", apr.Arg(0))
+		return "", fmt.Errorf("unknown stash subcommand %s", cmdName)
 	}
 
 	if err != nil {
@@ -151,7 +155,7 @@ func doStashPush(ctx *sql.Context, dSess *dsess.DoltSession, dbData env.DbData[*
 		return "", err
 	}
 
-	err = dbData.Ddb.AddStash(ctx, commit, roots.Staged, datas.NewStashMeta(curBranchName, commitMeta.Description, doltdb.FlattenTableNames(addedTblsToStage)), apr.Arg(1))
+	err = dbData.Ddb.AddStash(ctx, commit, roots.Staged, datas.NewStashMeta(curBranchName, commitMeta.Description, doltdb.FlattenTableNames(addedTblsToStage)), stashName)
 	if err != nil {
 		return "", err
 	}
@@ -402,12 +406,18 @@ func updateWorkingSetFromRoots(ctx *sql.Context, dbData env.DbData[*sql.Context]
 	return nil
 }
 
-func parseStashIndex(stashID string) (int, error) {
-	var idx = 0
-	stashID = strings.TrimSuffix(strings.TrimPrefix(stashID, "stash@{"), "}")
-	idx, err := strconv.Atoi(stashID)
-	if err != nil {
-		return 0, fmt.Errorf("error: %s is not a valid reference", stashID)
+func parseStashIndex(apr *argparser.ArgParseResults) (int, error) {
+	idx := 0
+
+	if apr.NArg() > 2 {
+		stashID := apr.Arg(2)
+		var err error
+
+		stashID = strings.TrimSuffix(strings.TrimPrefix(stashID, "stash@{"), "}")
+		idx, err = strconv.Atoi(stashID)
+		if err != nil {
+			return 0, fmt.Errorf("error: %s is not a valid reference", stashID)
+		}
 	}
 
 	return idx, nil
@@ -462,6 +472,8 @@ func updateWorkingRoot(ctx *sql.Context, dbData env.DbData[*sql.Context], newRoo
 	return nil
 }
 
+// gatherCommitData is a helper function that returns the commit and commit metadata associated with the current head
+// reference as well as the current branch in the form of a string.
 func gatherCommitData(ctx *sql.Context, dbData env.DbData[*sql.Context]) (*doltdb.Commit, *datas.CommitMeta, string, error) {
 	curHeadRef, err := dbData.Rsr.CWBHeadRef(ctx)
 	if err != nil {

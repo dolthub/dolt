@@ -2213,11 +2213,12 @@ func (ddb *DoltDB) GetStashes(ctx context.Context) ([]*Stash, error) {
 	}
 	var stashList []*Stash
 	for _, stash := range stashRefs {
-		stashDS, err := ddb.db.GetDataset(ctx, ref.NewStashRef(stash.String()).String())
+		reference := ref.NewStashRef(stash.String()).String()
+		stashDS, err := ddb.db.GetDataset(ctx, reference)
 		if err != nil {
 			return nil, err
 		}
-		newStashes, err := getStashList(ctx, stashDS, ddb.vrw, ddb.NodeStore())
+		newStashes, err := getStashList(ctx, stashDS, ddb.vrw, ddb.NodeStore(), reference)
 		if err != nil {
 			return nil, err
 		}

@@ -95,12 +95,12 @@ func (cmd StashDropCmd) Exec(ctx context.Context, commandStr string, args []stri
 }
 
 func dropStashAtIdx(ctx context.Context, dEnv *env.DoltEnv, idx int) error {
-	stashHash, err := dEnv.DoltDB(ctx).GetStashHashAtIdx(ctx, idx, "dolt-cli")
+	stashHash, err := dEnv.DoltDB(ctx).GetStashHashAtIdx(ctx, idx, DoltCliRef)
 	if err != nil {
 		return err
 	}
 
-	err = dEnv.DoltDB(ctx).RemoveStashAtIdx(ctx, idx, "dolt-cli")
+	err = dEnv.DoltDB(ctx).RemoveStashAtIdx(ctx, idx, DoltCliRef)
 	if err != nil {
 		return err
 	}

@@ -125,7 +125,7 @@ func (cmd StashPopCmd) Exec(ctx context.Context, commandStr string, args []strin
 }
 
 func applyStashAtIdx(ctx *sql.Context, dEnv *env.DoltEnv, curWorkingRoot doltdb.RootValue, idx int) (bool, error) {
-	stashRoot, headCommit, meta, err := dEnv.DoltDB(ctx).GetStashRootAndHeadCommitAtIdx(ctx, idx, "dolt-cli")
+	stashRoot, headCommit, meta, err := dEnv.DoltDB(ctx).GetStashRootAndHeadCommitAtIdx(ctx, idx, DoltCliRef)
 	if err != nil {
 		return false, err
 	}

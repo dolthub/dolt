@@ -77,7 +77,7 @@ func (cmd StashClearCmd) Exec(ctx context.Context, commandStr string, args []str
 		return 1
 	}
 
-	err := dEnv.DoltDB(ctx).RemoveAllStashes(ctx, "dolt-cli")
+	err := dEnv.DoltDB(ctx).RemoveAllStashes(ctx, DoltCliRef)
 	if err != nil {
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}

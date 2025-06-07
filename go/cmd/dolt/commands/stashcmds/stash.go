@@ -42,6 +42,7 @@ var StashCommands = cli.NewSubCommandHandlerWithUnspecified("stash", "Stash the 
 const (
 	IncludeUntrackedFlag = "include-untracked"
 	AllFlag              = "all"
+	DoltCliRef           = "dolt-cli"
 )
 
 var stashDocs = cli.CommandDocumentationContent{
@@ -242,7 +243,7 @@ func stashChanges(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 		return err
 	}
 
-	err = dEnv.DoltDB(ctx).AddStash(ctx, commit, roots.Staged, datas.NewStashMeta(curBranchName, commitMeta.Description, doltdb.FlattenTableNames(addedTblsToStage)), "dolt-cli")
+	err = dEnv.DoltDB(ctx).AddStash(ctx, commit, roots.Staged, datas.NewStashMeta(curBranchName, commitMeta.Description, doltdb.FlattenTableNames(addedTblsToStage)), DoltCliRef)
 	if err != nil {
 		return err
 	}
