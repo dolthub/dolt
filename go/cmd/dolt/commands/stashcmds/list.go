@@ -80,7 +80,7 @@ func (cmd StashListCmd) Exec(ctx context.Context, commandStr string, args []stri
 }
 
 func listStashes(ctx context.Context, dEnv *env.DoltEnv) error {
-	stashes, err := dEnv.DoltDB(ctx).GetStashes(ctx)
+	stashes, err := dEnv.DoltDB(ctx).GetCommandLineStashes(ctx)
 	if err != nil {
 		return err
 	}

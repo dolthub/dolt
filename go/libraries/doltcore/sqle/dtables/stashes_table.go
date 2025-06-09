@@ -67,11 +67,11 @@ func (st *StashesTable) String() string {
 // Schema is a sql.Table interface function that gets the sql.Schema of the remotes system table
 func (st *StashesTable) Schema() sql.Schema {
 	return []*sql.Column{
-		{Name: "stash reference", Type: types.Text, Source: st.tableName, PrimaryKey: false, Nullable: false},
-		{Name: "stash id", Type: types.Text, Source: st.tableName, PrimaryKey: false, Nullable: false},
+		{Name: "stash_reference", Type: types.Text, Source: st.tableName, PrimaryKey: false, Nullable: false},
+		{Name: "stash_id", Type: types.Text, Source: st.tableName, PrimaryKey: false, Nullable: false},
 		{Name: "branch", Type: types.Text, Source: st.tableName, PrimaryKey: false, Nullable: false},
 		{Name: "hash", Type: types.Text, Source: st.tableName, PrimaryKey: false, Nullable: false},
-		{Name: "commit message", Type: types.Text, Source: st.tableName, PrimaryKey: false, Nullable: true},
+		{Name: "commit_message", Type: types.Text, Source: st.tableName, PrimaryKey: false, Nullable: true},
 	}
 }
 

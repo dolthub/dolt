@@ -2228,6 +2228,25 @@ func (ddb *DoltDB) GetStashes(ctx context.Context) ([]*Stash, error) {
 	return stashList, nil
 }
 
+func (ddb *DoltDB) GetCommandLineStashes(ctx context.Context) ([]*Stash, error) {
+	var stashList []*Stash
+	reference := "refs/stashes/dolt-cli"
+	stashDS, err := ddb.db.GetDataset(ctx, reference)
+	if err != nil {
+		return nil, err
+	}
+	if !stashDS.HasHead() {
+		return stashList, nil
+	}
+	newStashes, err := getStashList(ctx, stashDS, ddb.vrw, ddb.NodeStore(), reference)
+	if err != nil {
+		return nil, err
+	}
+	stashList = append(stashList, newStashes...)
+
+	return stashList, nil
+}
+
 // GetStashHashAtIdx returns hash address only of the stash at given index.
 func (ddb *DoltDB) GetStashHashAtIdx(ctx context.Context, idx int, stashName string) (hash.Hash, error) {
 	ds, err := ddb.db.GetDataset(ctx, ref.NewStashRef(stashName).String())
