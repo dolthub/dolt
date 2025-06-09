@@ -121,6 +121,12 @@ func performCommit(ctx context.Context, commandStr string, args []string, cliCtx
 		defer closeFunc()
 	}
 
+	// cliCtx always uses the session start as its time. We want the current time,
+	// which is stored in ctx.
+	if c, ok := ctx.(*sql.Context); ok {
+		sqlCtx.SetQueryTime(c.QueryTime())
+	}
+
 	// dolt_commit performs this check as well. This nips the problem in the bud early, but is not required.
 	err = branch_control.CheckAccess(sqlCtx, branch_control.Permissions_Write)
 	if err != nil {
