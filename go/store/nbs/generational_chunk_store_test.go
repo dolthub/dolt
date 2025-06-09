@@ -19,6 +19,7 @@ import (
 	"math/rand"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/store/chunks"
@@ -170,4 +171,54 @@ func TestGenerationalCS(t *testing.T) {
 
 	putChunks(t, ctx, chnks, cs, inNew, 15, 16, 17, 18, 19)
 	requireChunks(t, ctx, chnks, cs, inOld, inNew)
+}
+
+func TestGenerationalCSGetChunkLocationsDuplicates(t *testing.T) {
+	// It is technically possible for the same chunk to be in old
+	// gen and new gen.  We used to have a bug where
+	// GetChunkLocations would return duplicates records if this
+	// was the case. Test that we do not do that here.
+	ctx := context.Background()
+	oldGen, _, _ := makeTestLocalStore(t, 64)
+	newGen, _, _ := makeTestLocalStore(t, 64)
+	inOld := make(map[int]bool)
+	inNew := make(map[int]bool)
+	chnks := genChunks(t, 16, 1024)
+
+	putChunks(t, ctx, chnks, oldGen, inOld, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15)
+	oldGen.Commit(ctx, hash.Hash{}, hash.Hash{})
+	putChunks(t, ctx, chnks, newGen, inNew, 0, 1, 2, 3, 4, 5, 6, 7)
+	newGen.Commit(ctx, hash.Hash{}, hash.Hash{})
+
+	cs := NewGenerationalCS(oldGen, newGen, nil)
+
+	res, err := cs.GetChunkLocationsWithPaths(ctx, hashesForChunks(chnks, inNew))
+	require.NoError(t, err)
+	cnt := 0
+	for _, v := range res {
+		cnt += len(v)
+	}
+	assert.Equal(t, 8, cnt)
+	res, err = cs.GetChunkLocationsWithPaths(ctx, hashesForChunks(chnks, inOld))
+	require.NoError(t, err)
+	cnt = 0
+	for _, v := range res {
+		cnt += len(v)
+	}
+	assert.Equal(t, 16, cnt)
+
+	rngs, err := cs.GetChunkLocations(ctx, hashesForChunks(chnks, inNew))
+	require.NoError(t, err)
+	cnt = 0
+	for _, v := range rngs {
+		cnt += len(v)
+	}
+	assert.Equal(t, 8, cnt)
+	rngs, err = cs.GetChunkLocations(ctx, hashesForChunks(chnks, inOld))
+	require.NoError(t, err)
+	cnt = 0
+	for _, v := range rngs {
+		cnt += len(v)
+	}
+	assert.Equal(t, 16, cnt)
 }
