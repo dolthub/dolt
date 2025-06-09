@@ -113,11 +113,12 @@ func (pm *PreviewMergeConflictsTableFunction) String() string {
 
 // Schema implements the sql.Node interface.
 // Returns the schema for the preview merge conflicts table function, which includes:
-//   - from_root_ish: Hash of the right-side commit/working set during merge
-//   - base_[col], our_[col], their_[col]: Each column has these three columns representing the values of each column in the base, our, and their branches respectively
-//   - our_diff_type, their_diff_type: Indicates the type of change for our and their columns respectively ("added", "modified", "removed")
-//   - base_cardinality, our_cardinality, their_cardinality: Additional columns for keyless tables only, indicating the number of rows in the base, our, and their branches
-//   - dolt_conflict_id: Unique identifier for the conflict, derived from the key and the right-side commit hash
+//   - from_root_ish: Hash of the right-side commit/working set during merge.
+//   - For each column on the named table, base_[col], our_[col], and their_[col] represent the value of that column on the base, our, and their branches respectively.
+//     All base columns come first, followed by all our columns, and then their columns.
+//   - our_diff_type, their_diff_type: Indicates the type of change for our and their columns respectively ("added", "modified", "removed").
+//   - base_cardinality, our_cardinality, their_cardinality: Additional columns for keyless tables only, indicating the number of occurrences of the conflicting row in the base, our, and their branches.
+//   - dolt_conflict_id: Unique identifier for the conflict, derived from the key and the right-side commit hash.
 func (pm *PreviewMergeConflictsTableFunction) Schema() sql.Schema {
 	if !pm.Resolved() {
 		return nil

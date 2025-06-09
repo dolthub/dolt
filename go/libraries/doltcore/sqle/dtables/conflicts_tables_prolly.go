@@ -145,6 +145,8 @@ type prollyConflictRowIter struct {
 
 // ConflictOffsets holds the offsets of the columns in a conflict row. The
 // offsets are used to put the values in the correct place in the row.
+// Base is the offset of the first base column, Ours is the offset of the first
+// ours column, and Theirs is the offset of the first theirs column.
 type ConflictOffsets struct {
 	Base, Ours, Theirs int
 	ColCount           int
@@ -157,16 +159,29 @@ type ConflictDescriptors struct {
 }
 
 // GetConflictOffsets returns the offsets of the columns in a conflict row.
+//
+// For keyed tables, the conflict row structure is:
+// [from_root_ish] [base_key...] [base_vals...] [our_key...] [our_vals...] [our_diff_type] [their_key...] [their_vals...] [their_diff_type] [dolt_conflict_id]
+//
+// For keyless tables, the conflict row structure is:
+// [from_root_ish] [base_vals...] [our_vals...] [our_diff_type] [their_vals...] [their_diff_type] [dolt_conflict_id] [base_cardinality] [our_cardinality] [their_cardinality]
 func GetConflictOffsets(keyless bool, cds ConflictDescriptors) ConflictOffsets {
+	// Skip index 0 which is always from_root_ish
 	baseOffset := 1
 	var ourOffset, theirOffset, colCount int
 	if !keyless {
+		// Base section: base key columns + base value columns
 		ourOffset = baseOffset + cds.Key.Count() + cds.BaseVal.Count()
+		// +1 for our_diff_type column that follows the ours section
 		theirOffset = ourOffset + cds.Key.Count() + cds.OurVal.Count() + 1
+		// +2 for their_diff_type and dolt_conflict_id columns at the end
 		colCount = theirOffset + cds.Key.Count() + cds.TheirVal.Count() + 2
 	} else {
+		// For keyless: base values (excluding cardinality which comes at the end)
 		ourOffset = baseOffset + cds.BaseVal.Count() - 1
+		// Ours section: our value columns (excluding cardinality)
 		theirOffset = ourOffset + cds.OurVal.Count()
+		// +4 for our_diff_type, their_diff_type, dolt_conflict_id, and 3 cardinality columns
 		colCount = theirOffset + cds.TheirVal.Count() + 4
 	}
 
