@@ -96,11 +96,6 @@ func doDoltStash(ctx *sql.Context, args []string) (string, error) {
 	case "pop":
 		status, err = doStashPop(ctx, dbData, stashName, idx)
 	case "drop":
-		var idx int
-		idx, err = parseStashIndex(apr)
-		if err != nil {
-			return "", err
-		}
 		status, err = doStashDrop(ctx, dbData, stashName, idx)
 	case "clear":
 		if apr.NArg() > 2 { // Clear does not take extra arguments

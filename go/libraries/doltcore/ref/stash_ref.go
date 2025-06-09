@@ -24,7 +24,7 @@ type StashRef struct {
 
 var _ DoltRef = StashRef{}
 
-// NewStashRef creates a reference to a stashes list. There cannot be more than one stashRef.
+// NewStashRef creates a reference to a stashes list.
 func NewStashRef(stashName string) StashRef {
 	if IsRef(stashName) {
 		prefix := PrefixForType(StashRefType)
