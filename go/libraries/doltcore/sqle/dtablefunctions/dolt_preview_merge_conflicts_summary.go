@@ -243,14 +243,6 @@ type previewMergeConflictsSummaryTableFunctionRowIter struct {
 	conIdx    int
 }
 
-func (iter *previewMergeConflictsSummaryTableFunctionRowIter) incrementIndexes() {
-	iter.conIdx++
-	if iter.conIdx >= len(iter.conflicts) {
-		iter.conIdx = 0
-		iter.conflicts = nil
-	}
-}
-
 func NewPreviewMergeConflictsSummaryTableFunctionRowIter(pm []tableConflict) sql.RowIter {
 	return &previewMergeConflictsSummaryTableFunctionRowIter{
 		conflicts: pm,
@@ -258,12 +250,12 @@ func NewPreviewMergeConflictsSummaryTableFunctionRowIter(pm []tableConflict) sql
 }
 
 func (iter *previewMergeConflictsSummaryTableFunctionRowIter) Next(ctx *sql.Context) (sql.Row, error) {
-	defer iter.incrementIndexes()
-	if iter.conIdx >= len(iter.conflicts) || iter.conflicts == nil {
+	if iter.conIdx >= len(iter.conflicts) {
 		return nil, io.EOF
 	}
 
 	conflict := iter.conflicts[iter.conIdx]
+	iter.conIdx++
 	return getRowFromConflict(conflict), nil
 }
 
@@ -342,7 +334,7 @@ func resolveBranchesToRoots(ctx *sql.Context, db dsess.SqlDatabase, leftBranch, 
 
 type tableConflict struct {
 	tableName          doltdb.TableName
-	numDataConflicts   uint64 // nil if schema conflicts exist
+	numDataConflicts   uint64 // ignored if schema conflicts exist
 	numSchemaConflicts uint64
 }
 
