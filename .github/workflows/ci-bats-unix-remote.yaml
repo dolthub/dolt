@@ -78,9 +78,9 @@ jobs:
         if: ${{ env.use_credentials != 'true' }}
         working-directory: ./.ci_bin
         run: |
-          curl -LO https://dlcdn.apache.org/maven/maven-3/3.9.9/binaries/apache-maven-3.9.9-bin.tar.gz
-          tar -xf apache-maven-3.9.9-bin.tar.gz
-          echo "$(pwd)/apache-maven-3.9.9/bin" >> $GITHUB_PATH
+          curl -LO https://dlcdn.apache.org/maven/maven-3/3.9.10/binaries/apache-maven-3.9.10-bin.tar.gz
+          tar -xf apache-maven-3.9.10-bin.tar.gz
+          echo "$(pwd)/apache-maven-3.9.10/bin" >> $GITHUB_PATH
       - name: Install Hadoop
         if: ${{ env.use_credentials != 'true' }}
         working-directory: ./.ci_bin
