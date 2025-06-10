@@ -586,7 +586,7 @@ func (db *database) doFastForward(ctx context.Context, ds Dataset, newHeadAddr h
 }
 
 func (db *database) BuildNewCommit(ctx context.Context, ds Dataset, v types.Value, opts CommitOptions) (*Commit, error) {
-	if len(opts.Parents) == 0 {
+	if len(opts.Parents) == 0 && !opts.Amend {
 		headAddr, ok := ds.MaybeHeadAddr()
 		if ok {
 			opts.Parents = []hash.Hash{headAddr}
