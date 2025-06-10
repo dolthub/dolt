@@ -26,11 +26,11 @@ import (
 )
 
 type Stash struct {
-	Name           string
-	BranchName     string
-	Description    string
-	HeadCommit     *Commit
-	StashReference string
+	Name            string
+	BranchReference string
+	Description     string
+	HeadCommit      *Commit
+	StashReference  string
 }
 
 const (
@@ -78,7 +78,7 @@ func getStashList(ctx context.Context, ds datas.Dataset, vrw types.ValueReadWrit
 		}
 
 		s.HeadCommit = headCommit
-		s.BranchName = meta.BranchName
+		s.BranchReference = meta.BranchName
 		s.Description = meta.Description
 		s.StashReference = reference
 

@@ -90,7 +90,7 @@ func listStashes(ctx context.Context, dEnv *env.DoltEnv) error {
 		if err != nil {
 			return err
 		}
-		cli.Println(fmt.Sprintf("%s: WIP on %s: %s %s", stash.Name, stash.BranchName, commitHash.String(), stash.Description))
+		cli.Println(fmt.Sprintf("%s: WIP on %s: %s %s", stash.Name, stash.BranchReference, commitHash.String(), stash.Description))
 	}
 	return nil
 }
