@@ -16,6 +16,7 @@ package stashcmds
 
 import (
 	"context"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
