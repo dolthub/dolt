@@ -742,12 +742,7 @@ func (tr tableReader) currentSize() uint64 {
 }
 
 func (tr tableReader) close() error {
-	err := tr.idx.Close()
-	if err != nil {
-		tr.r.Close()
-		return err
-	}
-	return tr.r.Close()
+	return errors.Join(tr.idx.Close(), tr.r.Close())
 }
 
 func (tr tableReader) clone() (tableReader, error) {
