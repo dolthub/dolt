@@ -53,7 +53,7 @@ func newProllyConflictsTable(
 	if err != nil {
 		return nil, err
 	}
-	confSch, versionMappings, err := calculateConflictSchema(baseSch, ourSch, theirSch)
+	confSch, versionMappings, err := CalculateConflictSchema(baseSch, ourSch, theirSch)
 	if err != nil {
 		return nil, err
 	}
@@ -135,20 +135,81 @@ type prollyConflictRowIter struct {
 	keyless bool
 	ourSch  schema.Schema
 
-	kd                       val.TupleDesc
-	baseVD, oursVD, theirsVD val.TupleDesc
-	// offsets for each version
-	b, o, t int
-	n       int
+	cds     ConflictDescriptors
+	offsets ConflictOffsets
 
 	baseHash, theirHash hash.Hash
 	baseRows            prolly.Map
 	theirRows           prolly.Map
 }
 
+// ConflictOffsets holds the offsets of the columns in a conflict row. The
+// offsets are used to put the values in the correct place in the row.
+// Base is the offset of the first base column, Ours is the offset of the first
+// ours column, and Theirs is the offset of the first theirs column.
+type ConflictOffsets struct {
+	Base, Ours, Theirs int
+	ColCount           int
+}
+
+// ConflictDescriptors holds the descriptors for the key and base, ours, and theirs values for a row.
+type ConflictDescriptors struct {
+	BaseVal, OurVal, TheirVal val.TupleDesc
+	Key                       val.TupleDesc
+}
+
+// GetConflictOffsets returns the offsets of the columns in a conflict row.
+//
+// For keyed tables, the conflict row structure is:
+// [from_root_ish] [base_key...] [base_vals...] [our_key...] [our_vals...] [our_diff_type] [their_key...] [their_vals...] [their_diff_type] [dolt_conflict_id]
+//
+// For keyless tables, the conflict row structure is:
+// [from_root_ish] [base_vals...] [our_vals...] [our_diff_type] [their_vals...] [their_diff_type] [dolt_conflict_id] [base_cardinality] [our_cardinality] [their_cardinality]
+func GetConflictOffsets(keyless bool, cds ConflictDescriptors) ConflictOffsets {
+	// Skip index 0 which is always from_root_ish
+	baseOffset := 1
+	var ourOffset, theirOffset, colCount int
+	if !keyless {
+		// Base section: base key columns + base value columns
+		ourOffset = baseOffset + cds.Key.Count() + cds.BaseVal.Count()
+		// +1 for our_diff_type column that follows the ours section
+		theirOffset = ourOffset + cds.Key.Count() + cds.OurVal.Count() + 1
+		// +2 for their_diff_type and dolt_conflict_id columns at the end
+		colCount = theirOffset + cds.Key.Count() + cds.TheirVal.Count() + 2
+	} else {
+		// For keyless: base values (excluding cardinality which comes at the end)
+		ourOffset = baseOffset + cds.BaseVal.Count() - 1
+		// Ours section: our value columns (excluding cardinality)
+		theirOffset = ourOffset + cds.OurVal.Count()
+		// +4 for our_diff_type, their_diff_type, dolt_conflict_id, and 3 cardinality columns
+		colCount = theirOffset + cds.TheirVal.Count() + 4
+	}
+
+	return ConflictOffsets{
+		Base:     baseOffset,
+		Ours:     ourOffset,
+		Theirs:   theirOffset,
+		ColCount: colCount,
+	}
+}
+
+// GetConflictDescriptors returns the descriptors for the key and base, ours, and theirs
+// values.
+func GetConflictDescriptors(baseSch, ourSch, theirSch schema.Schema, ns tree.NodeStore) ConflictDescriptors {
+	key := baseSch.GetKeyDescriptor(ns)
+	baseVD := baseSch.GetValueDescriptor(ns)
+	oursVD := ourSch.GetValueDescriptor(ns)
+	theirsVD := theirSch.GetValueDescriptor(ns)
+	return ConflictDescriptors{
+		BaseVal:  baseVD,
+		OurVal:   oursVD,
+		TheirVal: theirsVD,
+		Key:      key,
+	}
+}
+
 var _ sql.RowIter = (*prollyConflictRowIter)(nil)
 
-// base_cols, our_cols, our_diff_type, their_cols, their_diff_type
 func newProllyConflictRowIter(ctx *sql.Context, ct ProllyConflictsTable) (*prollyConflictRowIter, error) {
 	idx, err := ct.tbl.GetRowData(ctx)
 	if err != nil {
@@ -165,122 +226,116 @@ func newProllyConflictRowIter(ctx *sql.Context, ct ProllyConflictsTable) (*proll
 	}
 
 	keyless := schema.IsKeyless(ct.ourSch)
-
-	kd := ct.baseSch.GetKeyDescriptor(ct.root.NodeStore())
-	baseVD := ct.baseSch.GetValueDescriptor(ct.root.NodeStore())
-	oursVD := ct.ourSch.GetValueDescriptor(ct.root.NodeStore())
-	theirsVD := ct.theirSch.GetValueDescriptor(ct.root.NodeStore())
-
-	b := 1
-	var o, t, n int
-	if !keyless {
-		o = b + kd.Count() + baseVD.Count()
-		t = o + kd.Count() + oursVD.Count() + 1
-		n = t + kd.Count() + theirsVD.Count() + 2
-	} else {
-		o = b + baseVD.Count() - 1
-		t = o + oursVD.Count()
-		n = t + theirsVD.Count() + 4
-	}
+	cds := GetConflictDescriptors(ct.baseSch, ct.ourSch, ct.theirSch, ct.root.NodeStore())
+	offsets := GetConflictOffsets(keyless, cds)
 
 	return &prollyConflictRowIter{
-		itr:      itr,
-		tblName:  ct.tblName,
-		vrw:      ct.tbl.ValueReadWriter(),
-		ns:       ct.tbl.NodeStore(),
-		ourRows:  ourRows,
-		keyless:  keyless,
-		ourSch:   ct.ourSch,
-		kd:       kd,
-		baseVD:   baseVD,
-		oursVD:   oursVD,
-		theirsVD: theirsVD,
-		b:        b,
-		o:        o,
-		t:        t,
-		n:        n,
+		itr:     itr,
+		tblName: ct.tblName,
+		vrw:     ct.tbl.ValueReadWriter(),
+		ns:      ct.tbl.NodeStore(),
+		ourRows: ourRows,
+		keyless: keyless,
+		ourSch:  ct.ourSch,
+		cds:     cds,
+		offsets: offsets,
 	}, nil
 }
 
 func (itr *prollyConflictRowIter) Next(ctx *sql.Context) (sql.Row, error) {
-	c, err := itr.nextConflictVals(ctx)
+	confVal, err := itr.nextConflictVals(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	r := make(sql.Row, itr.n)
-	r[0] = c.h.String()
+	row := make(sql.Row, itr.offsets.ColCount)
+	row[0] = confVal.Hash.String() // from_root_ish
 
 	if !itr.keyless {
-		for i := 0; i < itr.kd.Count(); i++ {
-			f, err := tree.GetField(ctx, itr.kd, i, c.k, itr.baseRows.NodeStore())
-			if err != nil {
-				return nil, err
-			}
-			if c.bV != nil {
-				r[itr.b+i] = f
-			}
-			if c.oV != nil {
-				r[itr.o+i] = f
-			}
-			if c.tV != nil {
-				r[itr.t+i] = f
-			}
-		}
-
-		err = itr.putConflictRowVals(ctx, c, r)
+		err = itr.putConflictRowVals(ctx, confVal, row)
 		if err != nil {
 			return nil, err
 		}
 	} else {
-
-		err = itr.putKeylessConflictRowVals(ctx, c, r)
+		err = itr.putKeylessConflictRowVals(ctx, confVal, row)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	return r, nil
+	return row, nil
 }
 
-func (itr *prollyConflictRowIter) putConflictRowVals(ctx *sql.Context, c conf, r sql.Row) error {
-	if c.bV != nil {
-		for i := 0; i < itr.baseVD.Count(); i++ {
-			f, err := tree.GetField(ctx, itr.baseVD, i, c.bV, itr.baseRows.NodeStore())
-			if err != nil {
-				return err
-			}
-			r[itr.b+itr.kd.Count()+i] = f
+// PutConflictRowVals puts the values of the conflict row into the given row.
+func PutConflictRowVals(ctx *sql.Context, confVal ConflictVal, row sql.Row, offsets ConflictOffsets, cds ConflictDescriptors, ns tree.NodeStore) error {
+	// Sets key columns for the conflict row.
+	for i := 0; i < cds.Key.Count(); i++ {
+		f, err := tree.GetField(ctx, cds.Key, i, confVal.Key, ns)
+		if err != nil {
+			return err
+		}
+		if confVal.Base != nil {
+			row[offsets.Base+i] = f
+		}
+		if confVal.Ours != nil {
+			row[offsets.Ours+i] = f
+		}
+		if confVal.Theirs != nil {
+			row[offsets.Theirs+i] = f
 		}
 	}
 
-	if c.oV != nil {
-		for i := 0; i < itr.oursVD.Count(); i++ {
-			f, err := tree.GetField(ctx, itr.oursVD, i, c.oV, itr.baseRows.NodeStore())
+	if confVal.Base != nil {
+		for i := 0; i < cds.BaseVal.Count(); i++ {
+			f, err := tree.GetField(ctx, cds.BaseVal, i, confVal.Base, ns)
 			if err != nil {
 				return err
 			}
-			r[itr.o+itr.kd.Count()+i] = f
+			baseColOffset := offsets.Base + cds.Key.Count() + i
+			row[baseColOffset] = f // base_[col]
 		}
 	}
-	r[itr.o+itr.kd.Count()+itr.oursVD.Count()] = getDiffType(c.bV, c.oV)
 
-	if c.tV != nil {
-		for i := 0; i < itr.theirsVD.Count(); i++ {
-			f, err := tree.GetField(ctx, itr.theirsVD, i, c.tV, itr.baseRows.NodeStore())
+	if confVal.Ours != nil {
+		for i := 0; i < cds.OurVal.Count(); i++ {
+			f, err := tree.GetField(ctx, cds.OurVal, i, confVal.Ours, ns)
 			if err != nil {
 				return err
 			}
-			r[itr.t+itr.kd.Count()+i] = f
+			ourColOffset := offsets.Ours + cds.Key.Count() + i
+			row[ourColOffset] = f // our_[col]
 		}
 	}
-	r[itr.t+itr.kd.Count()+itr.theirsVD.Count()] = getDiffType(c.bV, c.tV)
-	r[itr.t+itr.kd.Count()+itr.theirsVD.Count()+1] = c.id
+
+	ourDiffTypeOffset := offsets.Ours + cds.Key.Count() + cds.OurVal.Count()
+	row[ourDiffTypeOffset] = getConflictDiffType(confVal.Base, confVal.Ours) // our_diff_type
+
+	if confVal.Theirs != nil {
+		for i := 0; i < cds.TheirVal.Count(); i++ {
+			f, err := tree.GetField(ctx, cds.TheirVal, i, confVal.Theirs, ns)
+			if err != nil {
+				return err
+			}
+			theirColOffset := offsets.Theirs + cds.Key.Count() + i
+			row[theirColOffset] = f // their_[col]
+		}
+	}
+
+	theirDiffTypeOffset := offsets.Theirs + cds.Key.Count() + cds.TheirVal.Count()
+	row[theirDiffTypeOffset] = getConflictDiffType(confVal.Base, confVal.Theirs) // their_diff_type
+
+	conflictIdOffset := theirDiffTypeOffset + 1
+	row[conflictIdOffset] = confVal.Id // dolt_conflict_id
 
 	return nil
 }
 
-func getDiffType(base val.Tuple, other val.Tuple) string {
+func (itr *prollyConflictRowIter) putConflictRowVals(ctx *sql.Context, confVal ConflictVal, row sql.Row) error {
+	ns := itr.baseRows.NodeStore()
+	return PutConflictRowVals(ctx, confVal, row, itr.offsets, itr.cds, ns)
+}
+
+func getConflictDiffType(base val.Tuple, other val.Tuple) string {
 	if base == nil {
 		return merge.ConflictDiffTypeAdded
 	} else if other == nil {
@@ -291,116 +346,129 @@ func getDiffType(base val.Tuple, other val.Tuple) string {
 	return merge.ConflictDiffTypeModified
 }
 
-func (itr *prollyConflictRowIter) putKeylessConflictRowVals(ctx *sql.Context, c conf, r sql.Row) (err error) {
-	ns := itr.baseRows.NodeStore()
-
-	if c.bV != nil {
-		// Cardinality
-		r[itr.n-3], err = tree.GetField(ctx, itr.baseVD, 0, c.bV, ns)
+// PutKeylessConflictRowVals puts the values of the keyless conflict row into the given row.
+func PutKeylessConflictRowVals(ctx *sql.Context, confVal ConflictVal, row sql.Row, offsets ConflictOffsets, cds ConflictDescriptors, ns tree.NodeStore) (err error) {
+	if confVal.Base != nil {
+		f, err := tree.GetField(ctx, cds.BaseVal, 0, confVal.Base, ns)
 		if err != nil {
 			return err
 		}
+		row[offsets.ColCount-3] = f // base_cardinality
 
-		for i := 0; i < itr.baseVD.Count()-1; i++ {
-			f, err := tree.GetField(ctx, itr.baseVD, i+1, c.bV, ns)
+		for i := 0; i < cds.BaseVal.Count()-1; i++ {
+			f, err := tree.GetField(ctx, cds.BaseVal, i+1, confVal.Base, ns)
 			if err != nil {
 				return err
 			}
-			r[itr.b+i] = f
+			baseColOffset := offsets.Base + i
+			row[baseColOffset] = f // base_[col]
 		}
 	} else {
-		r[itr.n-3] = uint64(0)
+		row[offsets.ColCount-3] = uint64(0) // base_cardinality
 	}
 
-	if c.oV != nil {
-		r[itr.n-2], err = tree.GetField(ctx, itr.oursVD, 0, c.oV, ns)
+	if confVal.Ours != nil {
+		f, err := tree.GetField(ctx, cds.OurVal, 0, confVal.Ours, ns)
 		if err != nil {
 			return err
 		}
+		row[offsets.ColCount-2] = f // our_cardinality
 
-		for i := 0; i < itr.oursVD.Count()-1; i++ {
-			f, err := tree.GetField(ctx, itr.oursVD, i+1, c.oV, ns)
+		for i := 0; i < cds.OurVal.Count()-1; i++ {
+			f, err := tree.GetField(ctx, cds.OurVal, i+1, confVal.Ours, ns)
 			if err != nil {
 				return err
 			}
-			r[itr.o+i] = f
+			row[offsets.Ours+i] = f // our_[col]
 		}
 	} else {
-		r[itr.n-2] = uint64(0)
+		row[offsets.ColCount-2] = uint64(0) // our_cardinality
 	}
 
-	r[itr.o+itr.oursVD.Count()-1] = getDiffType(c.bV, c.oV)
+	ourDiffTypeOffset := offsets.Ours + cds.OurVal.Count() - 1
+	row[ourDiffTypeOffset] = getConflictDiffType(confVal.Base, confVal.Ours) // our_diff_type
 
-	if c.tV != nil {
-		r[itr.n-1], err = tree.GetField(ctx, itr.theirsVD, 0, c.tV, ns)
+	if confVal.Theirs != nil {
+		f, err := tree.GetField(ctx, cds.TheirVal, 0, confVal.Theirs, ns)
 		if err != nil {
 			return err
 		}
+		row[offsets.ColCount-1] = f // their_cardinality
 
-		for i := 0; i < itr.theirsVD.Count()-1; i++ {
-			f, err := tree.GetField(ctx, itr.theirsVD, i+1, c.tV, ns)
+		for i := 0; i < cds.TheirVal.Count()-1; i++ {
+			f, err := tree.GetField(ctx, cds.TheirVal, i+1, confVal.Theirs, ns)
 			if err != nil {
 				return err
 			}
-			r[itr.t+i] = f
+			row[offsets.Theirs+i] = f // their_[col]
 		}
 	} else {
-		r[itr.n-1] = uint64(0)
+		row[offsets.ColCount-1] = uint64(0) // their_cardinality
 	}
 
-	o := itr.t + itr.theirsVD.Count() - 1
-	r[o] = getDiffType(c.bV, c.tV)
-	r[itr.n-4] = c.id
+	theirDiffTypeOffset := offsets.Theirs + cds.TheirVal.Count() - 1
+	row[theirDiffTypeOffset] = getConflictDiffType(confVal.Base, confVal.Theirs) // their_diff_type
+
+	row[offsets.ColCount-4] = confVal.Id // dolt_conflict_id
 
 	return nil
 }
 
-type conf struct {
-	k, bV, oV, tV val.Tuple
-	h             hash.Hash
-	id            string
+func (itr *prollyConflictRowIter) putKeylessConflictRowVals(ctx *sql.Context, confVal ConflictVal, row sql.Row) (err error) {
+	ns := itr.baseRows.NodeStore()
+	return PutKeylessConflictRowVals(ctx, confVal, row, itr.offsets, itr.cds, ns)
 }
 
-func (itr *prollyConflictRowIter) nextConflictVals(ctx *sql.Context) (c conf, err error) {
+type ConflictVal struct {
+	Key, Base, Ours, Theirs val.Tuple
+	Hash                    hash.Hash
+	Id                      string
+}
+
+// GetConflictId gets the conflict ID, ensuring that it is unique by hashing both theirRootish and the key of the table.
+func GetConflictId(key val.Tuple, confHash hash.Hash) string {
+	b := xxh3.Hash128(append(key, confHash[:]...)).Bytes()
+	return base64.RawStdEncoding.EncodeToString(b[:])
+}
+
+func (itr *prollyConflictRowIter) nextConflictVals(ctx *sql.Context) (confVal ConflictVal, err error) {
 	ca, err := itr.itr.Next(ctx)
 	if err != nil {
-		return conf{}, err
+		return ConflictVal{}, err
 	}
-	c.k = ca.Key
-	c.h = ca.TheirRootIsh
 
-	// To ensure that the conflict id is unique, we hash both TheirRootIsh and the key of the table.
-	b := xxh3.Hash128(append(ca.Key, c.h[:]...)).Bytes()
-	c.id = base64.RawStdEncoding.EncodeToString(b[:])
+	confVal.Key = ca.Key
+	confVal.Hash = ca.TheirRootIsh
+	confVal.Id = GetConflictId(ca.Key, confVal.Hash)
 
 	err = itr.loadTableMaps(ctx, ca.Metadata.BaseRootIsh, ca.TheirRootIsh)
 	if err != nil {
-		return conf{}, err
+		return ConflictVal{}, err
 	}
 
 	err = itr.baseRows.Get(ctx, ca.Key, func(_, v val.Tuple) error {
-		c.bV = v
+		confVal.Base = v
 		return nil
 	})
 	if err != nil {
-		return conf{}, err
+		return ConflictVal{}, err
 	}
 	err = itr.ourRows.Get(ctx, ca.Key, func(_, v val.Tuple) error {
-		c.oV = v
+		confVal.Ours = v
 		return nil
 	})
 	if err != nil {
-		return conf{}, err
+		return ConflictVal{}, err
 	}
 	err = itr.theirRows.Get(ctx, ca.Key, func(_, v val.Tuple) error {
-		c.tV = v
+		confVal.Theirs = v
 		return nil
 	})
 	if err != nil {
-		return conf{}, err
+		return ConflictVal{}, err
 	}
 
-	return c, nil
+	return confVal, nil
 }
 
 // loadTableMaps loads the maps specified in the metadata if they are different from
@@ -689,7 +757,7 @@ type versionMappings struct {
 }
 
 // returns the schema of the rows returned by the conflicts table and a mappings between each version and the source table.
-func calculateConflictSchema(base, ours, theirs schema.Schema) (schema.Schema, *versionMappings, error) {
+func CalculateConflictSchema(base, ours, theirs schema.Schema) (schema.Schema, *versionMappings, error) {
 	keyless := schema.IsKeyless(ours)
 	n := 4 + ours.GetAllCols().Size() + theirs.GetAllCols().Size() + base.GetAllCols().Size()
 	if keyless {

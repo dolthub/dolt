@@ -278,50 +278,58 @@ func getRowFromConflict(conflict tableConflict) sql.Row {
 	return row
 }
 
+type rootInfo struct {
+	leftRoot  doltdb.RootValue
+	rightRoot doltdb.RootValue
+	baseRoot  doltdb.RootValue
+	rightCm   doltdb.Rootish
+	ancCm     doltdb.Rootish
+}
+
 // resolveBranchesToRoots resolves branch names to their corresponding root values
-// and finds the common merge base. Returns left root, right root, and base root.
-func resolveBranchesToRoots(ctx *sql.Context, db dsess.SqlDatabase, leftBranch, rightBranch string) (doltdb.RootValue, doltdb.RootValue, doltdb.RootValue, error) {
+// and finds the common merge base.
+func resolveBranchesToRoots(ctx *sql.Context, db dsess.SqlDatabase, leftBranch, rightBranch string) (rootInfo, error) {
 	sess := dsess.DSessFromSess(ctx.Session)
 
 	headRef, err := sess.CWBHeadRef(ctx, db.Name())
 	if err != nil {
-		return nil, nil, nil, err
+		return rootInfo{}, err
 	}
 
 	leftCm, err := resolveCommit(ctx, db.DbData().Ddb, headRef, leftBranch)
 	if err != nil {
-		return nil, nil, nil, err
+		return rootInfo{}, err
 	}
 
 	rightCm, err := resolveCommit(ctx, db.DbData().Ddb, headRef, rightBranch)
 	if err != nil {
-		return nil, nil, nil, err
+		return rootInfo{}, err
 	}
 
-	optCmt, err := doltdb.GetCommitAncestor(ctx, leftCm, rightCm)
+	optCm, err := doltdb.GetCommitAncestor(ctx, leftCm, rightCm)
 	if err != nil {
-		return nil, nil, nil, err
+		return rootInfo{}, err
 	}
 
-	mergeBase, ok := optCmt.ToCommit()
+	ancCm, ok := optCm.ToCommit()
 	if !ok {
-		return nil, nil, nil, doltdb.ErrGhostCommitEncountered
+		return rootInfo{}, doltdb.ErrGhostCommitEncountered
 	}
 
 	rightRoot, err := rightCm.GetRootValue(ctx)
 	if err != nil {
-		return nil, nil, nil, err
+		return rootInfo{}, err
 	}
 	leftRoot, err := leftCm.GetRootValue(ctx)
 	if err != nil {
-		return nil, nil, nil, err
+		return rootInfo{}, err
 	}
-	baseRoot, err := mergeBase.GetRootValue(ctx)
+	baseRoot, err := ancCm.GetRootValue(ctx)
 	if err != nil {
-		return nil, nil, nil, err
+		return rootInfo{}, err
 	}
 
-	return leftRoot, rightRoot, baseRoot, nil
+	return rootInfo{leftRoot, rightRoot, baseRoot, rightCm, ancCm}, nil
 }
 
 type tableConflict struct {
@@ -334,17 +342,17 @@ type tableConflict struct {
 // a list of tables that would have conflicts. It performs a dry-run merge
 // to identify both schema and data conflicts without modifying the database.
 func getTablesWithConflicts(ctx *sql.Context, db dsess.SqlDatabase, baseBranch, mergeBranch string) ([]tableConflict, error) {
-	leftRoot, rightRoot, baseRoot, err := resolveBranchesToRoots(ctx, db, baseBranch, mergeBranch)
+	ri, err := resolveBranchesToRoots(ctx, db, baseBranch, mergeBranch)
 	if err != nil {
 		return nil, err
 	}
 
-	merger, err := merge.NewMerger(leftRoot, rightRoot, baseRoot, rightRoot, baseRoot, leftRoot.VRW(), leftRoot.NodeStore())
+	merger, err := merge.NewMerger(ri.leftRoot, ri.rightRoot, ri.baseRoot, ri.rightRoot, ri.baseRoot, ri.leftRoot.VRW(), ri.leftRoot.NodeStore())
 	if err != nil {
 		return nil, err
 	}
 
-	tblNames, err := doltdb.UnionTableNames(ctx, leftRoot, rightRoot)
+	tblNames, err := doltdb.UnionTableNames(ctx, ri.leftRoot, ri.rightRoot)
 	if err != nil {
 		return nil, err
 	}

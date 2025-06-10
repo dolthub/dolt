@@ -1596,6 +1596,10 @@ var SchemaChangeTestsTypeChanges = []MergeScriptTest{
 				Expected: []sql.Row{{"t", nil, uint64(1)}},
 			},
 			{
+				Query:          "select * from dolt_preview_merge_conflicts('main', 'right', 't');",
+				ExpectedErrStr: "schema conflicts found: 1",
+			},
+			{
 				Query:    "call dolt_merge('right');",
 				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
 			},

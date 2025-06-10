@@ -78,7 +78,7 @@ func mergeProllyTable(
 	if err != nil {
 		return nil, nil, err
 	}
-	valueMerger := NewValueMerger(mergedSch, tm.leftSch, tm.rightSch, tm.ancSch, leftRows.Pool(), tm.ns)
+	valueMerger := tm.GetNewValueMerger(mergedSch, leftRows)
 
 	if !valueMerger.leftMapping.IsIdentityMapping() {
 		mergeInfo.LeftNeedsRewrite = true
