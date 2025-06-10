@@ -37,10 +37,6 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
-const (
-	includeUntrackedFlag = "include-untracked"
-)
-
 // doltStash is the stored procedure version for the CLI command `dolt stash`
 // and its options push, pop, drop, and clear
 func doltStash(ctx *sql.Context, args ...string) (sql.RowIter, error) {
@@ -88,7 +84,7 @@ func doDoltStash(ctx *sql.Context, args []string) (int, error) {
 	switch cmdName {
 	case "push":
 		if apr.NArg() > 2 { // Push does not take extra arguments
-			return cmdFailure, fmt.Errorf("error: invalid arguments. Push takes only subcommand and stash name=")
+			return cmdFailure, fmt.Errorf("error: invalid arguments. Push takes only subcommand and stash name")
 		}
 		err = doStashPush(ctx, dSess, dbData, roots, apr, stashName)
 	case "pop":
@@ -131,7 +127,7 @@ func doStashPush(ctx *sql.Context, dSess *dsess.DoltSession, dbData env.DbData[*
 		return err
 	}
 
-	if apr.Contains(includeUntrackedFlag) || apr.Contains(cli.AllFlag) {
+	if apr.Contains(cli.IncludeUntrackedFlag) || apr.Contains(cli.AllFlag) {
 		allTblsToBeStashed, err = doltdb.UnionTableNames(ctx, roots.Staged, roots.Working)
 		if err != nil {
 			return err
@@ -301,7 +297,7 @@ func hasLocalChanges(ctx *sql.Context, dSess *dsess.DoltSession, roots doltdb.Ro
 	}
 
 	// There are unignored, unstaged tables. Is --include-untracked set? If so, nothing else matters. Stash them.
-	if apr.Contains(includeUntrackedFlag) {
+	if apr.Contains(cli.IncludeUntrackedFlag) {
 		return true, nil
 	}
 

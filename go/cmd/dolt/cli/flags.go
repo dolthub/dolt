@@ -42,6 +42,7 @@ const (
 	GraphFlag            = "graph"
 	HardResetParam       = "hard"
 	HostFlag             = "host"
+	IncludeUntrackedFlag = "include-untracked"
 	InteractiveFlag      = "interactive"
 	ListFlag             = "list"
 	MergesFlag           = "merges"

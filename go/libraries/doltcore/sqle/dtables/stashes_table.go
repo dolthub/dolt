@@ -28,8 +28,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 )
 
-const stashesDefaultRowCount = 5
-
 var _ sql.Table = (*StashesTable)(nil)
 var _ sql.StatisticsTable = (*StashesTable)(nil)
 
@@ -103,7 +101,7 @@ func (st *StashesTable) Partitions(*sql.Context) (sql.PartitionIter, error) {
 }
 
 // PartitionRows is a sql.Table interface function that gets a row iterator for a partition
-func (st *StashesTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
+func (st *StashesTable) PartitionRows(ctx *sql.Context, _ sql.Partition) (sql.RowIter, error) {
 	return NewStashItr(ctx, st.ddb)
 }
 
@@ -113,7 +111,7 @@ type StashItr struct {
 }
 
 // NewStashItr creates a StashItr from the current environment.
-func NewStashItr(ctx *sql.Context, ddb *doltdb.DoltDB) (*StashItr, error) {
+func NewStashItr(ctx *sql.Context, _ *doltdb.DoltDB) (*StashItr, error) {
 	dbName := ctx.GetCurrentDatabase()
 
 	if len(dbName) == 0 {
@@ -136,7 +134,7 @@ func NewStashItr(ctx *sql.Context, ddb *doltdb.DoltDB) (*StashItr, error) {
 
 // Next retrieves the next row. It will return io.EOF if it's the last row.
 // After retrieving the last row, Close will be automatically closed.
-func (itr *StashItr) Next(ctx *sql.Context) (sql.Row, error) {
+func (itr *StashItr) Next(*sql.Context) (sql.Row, error) {
 	if itr.idx >= len(itr.stashes) {
 		return nil, io.EOF
 	}
@@ -151,9 +149,23 @@ func (itr *StashItr) Next(ctx *sql.Context) (sql.Row, error) {
 		return nil, err
 	}
 
-	branch := strings.Split(stash.BranchName, "/")[2]
-	stashRef := strings.Split(stash.StashReference, "/")[2]
+	// BranchName and StashReference are of the form refs/heads/name
+	// or refs/stashes/name, so we need to parse them
+	parsedRef := strings.Split(stash.BranchName, "/")
+	var branch string
+	if len(parsedRef) > 2 {
+		branch = parsedRef[2]
+	} else {
+		return nil, fmt.Errorf("Bad reference: %s", stash.BranchName)
+	}
 
+	parsedRef = strings.Split(stash.BranchName, "/")
+	var stashRef string
+	if len(parsedRef) > 2 {
+		stashRef = parsedRef[2]
+	} else {
+		return nil, fmt.Errorf("Bad reference: %s", stash.StashReference)
+	}
 	return sql.NewRow(stashRef, stash.Name, branch, commitHash.String(), stash.Description), nil
 }
 
@@ -174,32 +186,32 @@ type stashWriter struct {
 // Insert inserts the row given, returning an error if it cannot. Insert will be called once for each row to process
 // for the insert operation, which may involve many rows. After all rows in an operation have been processed, Close
 // is called.
-func (bWr stashWriter) Insert(ctx *sql.Context, r sql.Row) error {
-	return fmt.Errorf("the dolt_stashes table is read-only; use the dolt_stash stored procedure to edit remotes")
+func (bWr stashWriter) Insert(_ *sql.Context, _ sql.Row) error {
+	return fmt.Errorf("the dolt_stashes table is read-only; use the dolt_stash stored procedure to edit stashes")
 }
 
 // Update the given row. Provides both the old and new rows.
-func (bWr stashWriter) Update(ctx *sql.Context, old sql.Row, new sql.Row) error {
-	return fmt.Errorf("the dolt_stash table is read-only; use the dolt_stash stored procedure to edit remotes")
+func (bWr stashWriter) Update(_ *sql.Context, _ sql.Row, _ sql.Row) error {
+	return fmt.Errorf("the dolt_stash table is read-only; use the dolt_stash stored procedure to edit stashes")
 }
 
 // Delete deletes the given row. Returns ErrDeleteRowNotFound if the row was not found. Delete will be called once for
 // each row to process for the delete operation, which may involve many rows. After all rows have been processed,
 // Close is called.
-func (bWr stashWriter) Delete(ctx *sql.Context, r sql.Row) error {
-	return fmt.Errorf("the dolt_stash table is read-only; use the dolt_stash stored procedure to edit remotes")
+func (bWr stashWriter) Delete(_ *sql.Context, _ sql.Row) error {
+	return fmt.Errorf("the dolt_stash table is read-only; use the dolt_stash stored procedure to edit stashes")
 }
 
 // StatementBegin implements the interface sql.TableEditor. Currently a no-op.
-func (bWr stashWriter) StatementBegin(ctx *sql.Context) {}
+func (bWr stashWriter) StatementBegin(*sql.Context) {}
 
 // DiscardChanges implements the interface sql.TableEditor. Currently a no-op.
-func (bWr stashWriter) DiscardChanges(ctx *sql.Context, errorEncountered error) error {
+func (bWr stashWriter) DiscardChanges(_ *sql.Context, _ error) error {
 	return nil
 }
 
 // StatementComplete implements the interface sql.TableEditor. Currently a no-op.
-func (bWr stashWriter) StatementComplete(ctx *sql.Context) error {
+func (bWr stashWriter) StatementComplete(*sql.Context) error {
 	return nil
 }
 
