@@ -46,7 +46,7 @@ var DoltProcedures = []sql.ExternalStoredProcedureDetails{
 	{Name: "dolt_remote", Schema: int64Schema("status"), Function: doltRemote, AdminOnly: true},
 	{Name: "dolt_reset", Schema: int64Schema("status"), Function: doltReset},
 	{Name: "dolt_revert", Schema: int64Schema("status"), Function: doltRevert},
-	{Name: "dolt_stash", Schema: stringSchema("status"), Function: doltStash},
+	{Name: "dolt_stash", Schema: int64Schema("status"), Function: doltStash},
 	{Name: "dolt_tag", Schema: int64Schema("status"), Function: doltTag},
 	{Name: "dolt_verify_constraints", Schema: int64Schema("violations"), Function: doltVerifyConstraints},
 

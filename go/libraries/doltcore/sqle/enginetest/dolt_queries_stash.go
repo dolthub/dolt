@@ -46,7 +46,7 @@ var DoltStashTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "CALL DOLT_STASH('clear','myStash');",
-				Expected: []sql.Row{{""}},
+				Expected: []sql.Row{{0}},
 			},
 		},
 	},
@@ -54,15 +54,14 @@ var DoltStashTests = []queries.ScriptTest{
 		Name: "Simple push and pop with DOLT_STASH()",
 		SetUpScript: []string{
 			"CREATE TABLE test(pk BIGINT PRIMARY KEY, v varchar(10))",
-			"CALL DOLT_ADD('.')",
-			"CALL DOLT_COMMIT('-m', 'Created table')",
+			"CALL DOLT_COMMIT('-A', '-m', 'Created table')",
 			"INSERT INTO test VALUES (1, 'a')",
 			"CALL DOLT_STASH('push', 'myStash');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT * FROM DOLT_STASHES;",
-				Expected: []sql.Row{{"refs/stashes/myStash", "stash@{0}", "refs/heads/main", doltCommit, "Created table"}},
+				Expected: []sql.Row{{"myStash", "stash@{0}", "main", doltCommit, "Created table"}},
 			},
 			{
 				Query:            "CALL DOLT_STASH('pop', 'myStash');",
@@ -78,8 +77,7 @@ var DoltStashTests = []queries.ScriptTest{
 		Name: "Clearing stash removes all entries in stash list",
 		SetUpScript: []string{
 			"CREATE TABLE test(pk BIGINT PRIMARY KEY, v varchar(10))",
-			"CALL DOLT_ADD('.')",
-			"CALL DOLT_COMMIT('-m', 'Created table')",
+			"CALL DOLT_COMMIT('-A','-m', 'Created table')",
 			"INSERT INTO test VALUES (1, 'a')",
 			"CALL DOLT_STASH('push', 'stash1')",
 			"INSERT INTO test VALUES (2, 'b')",
@@ -91,9 +89,9 @@ var DoltStashTests = []queries.ScriptTest{
 			{
 				Query: "SELECT * FROM dolt_stashes;",
 				Expected: []sql.Row{
-					{"refs/stashes/stash1", "stash@{0}", "refs/heads/main", doltCommit, "Created table"},
-					{"refs/stashes/stash2", "stash@{0}", "refs/heads/main", doltCommit, "Created table"},
-					{"refs/stashes/stash2", "stash@{1}", "refs/heads/main", doltCommit, "Created table"},
+					{"stash1", "stash@{0}", "main", doltCommit, "Created table"},
+					{"stash2", "stash@{0}", "main", doltCommit, "Created table"},
+					{"stash2", "stash@{1}", "main", doltCommit, "Created table"},
 				},
 			},
 			{
@@ -103,7 +101,7 @@ var DoltStashTests = []queries.ScriptTest{
 			{
 				Query: "SELECT * FROM dolt_stashes;",
 				Expected: []sql.Row{
-					{"refs/stashes/stash1", "stash@{0}", "refs/heads/main", doltCommit, "Created table"},
+					{"stash1", "stash@{0}", "main", doltCommit, "Created table"},
 				},
 			},
 		},
@@ -112,8 +110,7 @@ var DoltStashTests = []queries.ScriptTest{
 		Name: "Clearing and stashing again",
 		SetUpScript: []string{
 			"CREATE TABLE test(pk BIGINT PRIMARY KEY, v varchar(10))",
-			"CALL DOLT_ADD('.')",
-			"CALL DOLT_COMMIT('-m', 'Created table')",
+			"CALL DOLT_COMMIT('-A', '-m', 'Created table')",
 			"INSERT INTO test VALUES (1, 'a')",
 			"CALL DOLT_STASH('push', 'myStash')",
 		},
@@ -121,7 +118,7 @@ var DoltStashTests = []queries.ScriptTest{
 			{
 				Query: "SELECT * FROM DOLT_STASHES;",
 				Expected: []sql.Row{
-					{"refs/stashes/myStash", "stash@{0}", "refs/heads/main", doltCommit, "Created table"},
+					{"myStash", "stash@{0}", "main", doltCommit, "Created table"},
 				},
 			},
 			{
@@ -139,7 +136,7 @@ var DoltStashTests = []queries.ScriptTest{
 			{
 				Query: "SELECT * FROM DOLT_STASHES;",
 				Expected: []sql.Row{
-					{"refs/stashes/myStash", "stash@{0}", "refs/heads/main", doltCommit, "Created table"},
+					{"myStash", "stash@{0}", "main", doltCommit, "Created table"},
 				},
 			},
 		},
@@ -148,8 +145,7 @@ var DoltStashTests = []queries.ScriptTest{
 		Name: "Popping specific stashes",
 		SetUpScript: []string{
 			"CREATE TABLE test(pk BIGINT PRIMARY KEY, v varchar(10))",
-			"CALL DOLT_ADD('.')",
-			"CALL DOLT_COMMIT('-m', 'Created table')",
+			"CALL DOLT_COMMIT('-A','-m', 'Created table')",
 			"INSERT INTO test VALUES (1, 'a')",
 			"CALL DOLT_STASH('push', 'myStash')",
 			"INSERT INTO test VALUES (2, 'b')",
@@ -175,35 +171,19 @@ var DoltStashTests = []queries.ScriptTest{
 		Name: "Stashing on different branches",
 		SetUpScript: []string{
 			"CREATE TABLE test(pk BIGINT PRIMARY KEY, v varchar(10))",
-			"CALL DOLT_ADD('.')",
-			"CALL DOLT_COMMIT('-m', 'Created table')",
+			"CALL DOLT_COMMIT('-A', '-m', 'Created table')",
+			"INSERT INTO test VALUES (1, 'a')",
+			"CALL DOLT_STASH('push', 'myStash')",
+			"CALL DOLT_CHECKOUT('-b', 'br1')",
+			"INSERT INTO test VALUES (2, 'b')",
+			"CALL DOLT_STASH('push', 'myStash')",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "INSERT INTO test VALUES (1, 'a');",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
-			},
-			{
-				Query:            "CALL DOLT_STASH('push', 'myStash');",
-				SkipResultsCheck: true,
-			},
-			{
-				Query:    "CALL DOLT_CHECKOUT('-b', 'br1');",
-				Expected: []sql.Row{{0, "Switched to branch 'br1'"}},
-			},
-			{
-				Query:    "INSERT INTO test VALUES (2, 'b');",
-				Expected: []sql.Row{{types.NewOkResult(1)}},
-			},
-			{
-				Query:            "CALL DOLT_STASH('push', 'myStash');",
-				SkipResultsCheck: true,
-			},
-			{
 				Query: "SELECT * FROM DOLT_STASHES;",
 				Expected: []sql.Row{
-					{"refs/stashes/myStash", "stash@{0}", "refs/heads/br1", doltCommit, "Created table"},
-					{"refs/stashes/myStash", "stash@{1}", "refs/heads/main", doltCommit, "Created table"},
+					{"myStash", "stash@{0}", "br1", doltCommit, "Created table"},
+					{"myStash", "stash@{1}", "main", doltCommit, "Created table"},
 				},
 			},
 		},
@@ -212,17 +192,19 @@ var DoltStashTests = []queries.ScriptTest{
 		Name: "Popping stash onto different branch",
 		SetUpScript: []string{
 			"CREATE TABLE test(pk BIGINT PRIMARY KEY, v varchar(10))",
-			"CALL DOLT_ADD('.')",
-			"CALL DOLT_COMMIT('-m', 'Created table')",
+			"CALL DOLT_COMMIT('-A', '-m', 'Created table')",
+			"CALL DOLT_BRANCH('br1')",
 			"INSERT INTO test VALUES (1, 'a')",
+			"CALL DOLT_COMMIT('-A', '-m', 'Added a row')",
+			"INSERT INTO test VALUES (2, 'b')",
 			"CALL DOLT_STASH('push', 'myStash')",
-			"CALL DOLT_CHECKOUT('-b', 'br1')",
+			"CALL DOLT_CHECKOUT('br1')",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "SELECT * FROM DOLT_STASHES;",
 				Expected: []sql.Row{
-					{"refs/stashes/myStash", "stash@{0}", "refs/heads/main", doltCommit, "Created table"},
+					{"myStash", "stash@{0}", "main", doltCommit, "Added a row"},
 				},
 			},
 			{
@@ -232,7 +214,7 @@ var DoltStashTests = []queries.ScriptTest{
 			{
 				Query: "SELECT * FROM TEST;",
 				Expected: []sql.Row{
-					{1, "a"},
+					{2, "b"},
 				},
 			},
 		},
@@ -241,8 +223,7 @@ var DoltStashTests = []queries.ScriptTest{
 		Name: "Can drop specific stash",
 		SetUpScript: []string{
 			"CREATE TABLE test(pk BIGINT PRIMARY KEY, v varchar(10))",
-			"CALL DOLT_ADD('.')",
-			"CALL DOLT_COMMIT('-m', 'Created table')",
+			"CALL DOLT_COMMIT('-A', '-m', 'Created table')",
 			"INSERT INTO test VALUES (1, 'a')",
 			"CALL DOLT_STASH('push', 'myStash')",
 			"INSERT INTO test VALUES (2, 'b')",
@@ -257,8 +238,8 @@ var DoltStashTests = []queries.ScriptTest{
 			{
 				Query: "SELECT * FROM DOLT_STASHES;",
 				Expected: []sql.Row{
-					{"refs/stashes/myStash", "stash@{0}", "refs/heads/main", doltCommit, "Added 2 b"},
-					{"refs/stashes/myStash", "stash@{1}", "refs/heads/main", doltCommit, "Created table"},
+					{"myStash", "stash@{0}", "main", doltCommit, "Added 2 b"},
+					{"myStash", "stash@{1}", "main", doltCommit, "Created table"},
 				},
 			},
 			{
@@ -272,8 +253,8 @@ var DoltStashTests = []queries.ScriptTest{
 			{
 				Query: "SELECT * FROM DOLT_STASHES;",
 				Expected: []sql.Row{
-					{"refs/stashes/myStash", "stash@{0}", "refs/heads/main", doltCommit, "Added 4 d"},
-					{"refs/stashes/myStash", "stash@{1}", "refs/heads/main", doltCommit, "Created table"},
+					{"myStash", "stash@{0}", "main", doltCommit, "Added 4 d"},
+					{"myStash", "stash@{1}", "main", doltCommit, "Created table"},
 				},
 			},
 		},
@@ -282,8 +263,7 @@ var DoltStashTests = []queries.ScriptTest{
 		Name: "Can pop into dirty working set without conflict",
 		SetUpScript: []string{
 			"CREATE TABLE test(pk BIGINT PRIMARY KEY, v varchar(10))",
-			"CALL DOLT_ADD('.')",
-			"CALL DOLT_COMMIT('-m', 'Created table')",
+			"CALL DOLT_COMMIT('-A', '-m', 'Created table')",
 			"INSERT INTO test VALUES (1, 'a')",
 			"CALL DOLT_STASH('push', 'myStash')",
 			"INSERT INTO test VALUES (2, 'b')",
@@ -303,8 +283,7 @@ var DoltStashTests = []queries.ScriptTest{
 		Name: "Can't pop into dirty working set with conflict",
 		SetUpScript: []string{
 			"CREATE TABLE test(pk BIGINT PRIMARY KEY, v varchar(10))",
-			"CALL DOLT_ADD('.')",
-			"CALL DOLT_COMMIT('-m', 'Created table')",
+			"CALL DOLT_COMMIT('-A','-m', 'Created table')",
 			"INSERT INTO test VALUES (1, 'a')",
 			"CALL DOLT_STASH('push', 'myStash')",
 			"INSERT INTO test VALUES (1, 'b')",
@@ -318,7 +297,7 @@ var DoltStashTests = []queries.ScriptTest{
 			{
 				Query: "SELECT * FROM DOLT_STASHES;",
 				Expected: []sql.Row{
-					{"refs/stashes/myStash", "stash@{0}", "refs/heads/main", doltCommit, "Created table"},
+					{"myStash", "stash@{0}", "main", doltCommit, "Created table"},
 				},
 			},
 			{
@@ -333,8 +312,7 @@ var DoltStashTests = []queries.ScriptTest{
 		Name: "Can stash modified staged and working set of changes",
 		SetUpScript: []string{
 			"CREATE TABLE test(pk BIGINT PRIMARY KEY, v varchar(10))",
-			"CALL DOLT_ADD('.')",
-			"CALL DOLT_COMMIT('-m', 'Created table')",
+			"CALL DOLT_COMMIT('-A', '-m', 'Created table')",
 			"INSERT INTO test VALUES (1, 'a')",
 			"CALL DOLT_ADD('.')",
 			"INSERT INTO test VALUES (2, 'b')",
@@ -447,7 +425,6 @@ var DoltStashTests = []queries.ScriptTest{
 		Name: "stashing working set with deleted table and popping it",
 		SetUpScript: []string{
 			"CREATE TABLE new_tab(id INT PRIMARY KEY)",
-			"CALL DOLT_ADD('.')",
 			"CALL DOLT_COMMIT('-A', '-m', 'Created table')",
 			"DROP TABLE new_tab",
 		},
@@ -482,8 +459,7 @@ var DoltStashTests = []queries.ScriptTest{
 		Name: "popping stash with deleted table that is deleted already on current head",
 		SetUpScript: []string{
 			"CREATE TABLE test(pk BIGINT PRIMARY KEY, v varchar(10))",
-			"CALL DOLT_ADD('.')",
-			"CALL DOLT_COMMIT('-m', 'Created table')",
+			"CALL DOLT_COMMIT('-A', '-m', 'Created table')",
 			"CALL DOLT_BRANCH('branch1');",
 			"CALL DOLT_CHECKOUT('-b', 'branch2');",
 			"DROP TABLE test;",
@@ -523,8 +499,7 @@ var DoltStashTests = []queries.ScriptTest{
 		Name: "popping stash with deleted table that the same table exists on current head",
 		SetUpScript: []string{
 			"CREATE TABLE test(pk BIGINT PRIMARY KEY, v varchar(10))",
-			"CALL DOLT_ADD('.')",
-			"CALL DOLT_COMMIT('-m', 'Created table')",
+			"CALL DOLT_COMMIT('-A', '-m', 'Created table')",
 			"CALL DOLT_BRANCH('branch1');",
 			"CALL DOLT_BRANCH('branch2');",
 			"CALL DOLT_CHECKOUT('branch1');",
@@ -555,8 +530,7 @@ var DoltStashTests = []queries.ScriptTest{
 		Name: "popping stash with deleted table that different table with same name on current head gives conflict",
 		SetUpScript: []string{
 			"CREATE TABLE test(pk BIGINT PRIMARY KEY, v varchar(10))",
-			"CALL DOLT_ADD('.')",
-			"CALL DOLT_COMMIT('-m', 'Created table')",
+			"CALL DOLT_COMMIT('-A', '-m', 'Created table')",
 			"CALL DOLT_BRANCH('branch1')",
 			"CALL DOLT_BRANCH('branch2')",
 			"CALL DOLT_CHECKOUT('branch1')",
@@ -579,8 +553,7 @@ var DoltStashTests = []queries.ScriptTest{
 		Name: "popping stash with added table with PK on current head with the exact same table is added already",
 		SetUpScript: []string{
 			"CREATE TABLE test(pk BIGINT PRIMARY KEY, v varchar(10))",
-			"CALL DOLT_ADD('.')",
-			"CALL DOLT_COMMIT('-m', 'Created table')",
+			"CALL DOLT_COMMIT('-A', '-m', 'Created table')",
 			"CALL DOLT_BRANCH('branch1')",
 			"CALL DOLT_CHECKOUT('-b',  'branch2')",
 			"CREATE TABLE new_test(id INT PRIMARY KEY)",

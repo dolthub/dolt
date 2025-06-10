@@ -17,6 +17,7 @@ package stashcmds
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"strconv"
 	"strings"
 
@@ -95,12 +96,12 @@ func (cmd StashDropCmd) Exec(ctx context.Context, commandStr string, args []stri
 }
 
 func dropStashAtIdx(ctx context.Context, dEnv *env.DoltEnv, idx int) error {
-	stashHash, err := dEnv.DoltDB(ctx).GetStashHashAtIdx(ctx, idx, DoltCliRef)
+	stashHash, err := dEnv.DoltDB(ctx).GetStashHashAtIdx(ctx, idx, doltdb.DoltCliRef)
 	if err != nil {
 		return err
 	}
 
-	err = dEnv.DoltDB(ctx).RemoveStashAtIdx(ctx, idx, DoltCliRef)
+	err = dEnv.DoltDB(ctx).RemoveStashAtIdx(ctx, idx, doltdb.DoltCliRef)
 	if err != nil {
 		return err
 	}

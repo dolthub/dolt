@@ -33,6 +33,10 @@ type Stash struct {
 	StashReference string
 }
 
+const (
+	DoltCliRef = "dolt-cli"
+)
+
 // getStashList returns array of Stash objects containing all stash entries in the stash list map.
 func getStashList(ctx context.Context, ds datas.Dataset, vrw types.ValueReadWriter, ns tree.NodeStore, reference string) ([]*Stash, error) {
 	v, ok := ds.MaybeHead()

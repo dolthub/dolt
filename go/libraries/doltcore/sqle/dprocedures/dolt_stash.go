@@ -52,185 +52,164 @@ func doltStash(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 	return rowToIter(res), nil
 }
 
-func doDoltStash(ctx *sql.Context, args []string) (string, error) {
+func doDoltStash(ctx *sql.Context, args []string) (int, error) {
 	dbName := ctx.GetCurrentDatabase()
 
 	dSess := dsess.DSessFromSess(ctx.Session)
 	dbData, ok := dSess.GetDbData(ctx, dbName)
 	if !ok {
-		return "", fmt.Errorf("Could not load database %s", dbName)
+		return cmdFailure, fmt.Errorf("Could not load database %s", dbName)
 	}
 	if !dbData.Ddb.Format().UsesFlatbuffers() {
-		return "", fmt.Errorf("stash is not supported for old storage format")
+		return cmdFailure, fmt.Errorf("stash is not supported for old storage format")
 	}
 
 	roots, ok := dSess.GetRoots(ctx, dbName)
 	if !ok {
-		return "", fmt.Errorf("Could not load roots for database %s", dbName)
+		return cmdFailure, fmt.Errorf("Could not load roots for database %s", dbName)
 	}
 
 	apr, err := cli.CreateStashArgParser().Parse(args)
 	if err != nil {
-		return "", err
+		return cmdFailure, err
 	}
 
 	if apr.NArg() < 2 {
-		return "", fmt.Errorf("error: invalid arguments. Must provide valid subcommand and stash name")
+		return cmdFailure, fmt.Errorf("error: invalid arguments. Must provide valid subcommand and stash name")
 	}
-
-	var status string
 
 	cmdName := apr.Arg(0)
 	stashName := apr.Arg(1)
 	idx, err := parseStashIndex(apr)
 	if err != nil {
-		return "", err
+		return cmdFailure, err
 	}
 
 	switch cmdName {
 	case "push":
 		if apr.NArg() > 2 { // Push does not take extra arguments
-			return "", fmt.Errorf("error: invalid arguments. Push takes only subcommand and stash name=")
+			return cmdFailure, fmt.Errorf("error: invalid arguments. Push takes only subcommand and stash name=")
 		}
-		status, err = doStashPush(ctx, dSess, dbData, roots, apr, stashName)
+		err = doStashPush(ctx, dSess, dbData, roots, apr, stashName)
 	case "pop":
-		status, err = doStashPop(ctx, dbData, stashName, idx)
+		err = doStashPop(ctx, dbData, stashName, idx)
 	case "drop":
-		status, err = doStashDrop(ctx, dbData, stashName, idx)
+		err = doStashDrop(ctx, dbData, stashName, idx)
 	case "clear":
 		if apr.NArg() > 2 { // Clear does not take extra arguments
-			return "", fmt.Errorf("error: invalid arguments. Clear takes only subcommand and stash name")
+			return cmdFailure, fmt.Errorf("error: invalid arguments. Clear takes only subcommand and stash name")
 		}
 		err = doStashClear(ctx, dbData, stashName)
 	default:
-		return "", fmt.Errorf("unknown stash subcommand %s", cmdName)
+		return cmdFailure, fmt.Errorf("unknown stash subcommand %s", cmdName)
 	}
 
 	if err != nil {
-		return "", err
+		return cmdFailure, err
 	}
 
-	return status, nil
+	return cmdSuccess, nil
 }
 
-func doStashPush(ctx *sql.Context, dSess *dsess.DoltSession, dbData env.DbData[*sql.Context], roots doltdb.Roots, apr *argparser.ArgParseResults, stashName string) (string, error) {
+func doStashPush(ctx *sql.Context, dSess *dsess.DoltSession, dbData env.DbData[*sql.Context], roots doltdb.Roots, apr *argparser.ArgParseResults, stashName string) error {
 	hasChanges, err := hasLocalChanges(ctx, dSess, roots, apr)
 	if err != nil {
-		return "", err
+		return err
 	}
 	if !hasChanges {
-		return "", fmt.Errorf("no local changes to save")
+		return fmt.Errorf("no local changes to save")
 	}
 
 	roots, err = actions.StageModifiedAndDeletedTables(ctx, roots)
 	if err != nil {
-		return "", err
+		return err
 	}
 
 	// all tables with changes that are going to be stashed are staged at this point
 	allTblsToBeStashed, addedTblsToStage, err := stashedTableSets(ctx, roots)
 	if err != nil {
-		return "", err
+		return err
 	}
 
 	if apr.Contains(includeUntrackedFlag) || apr.Contains(cli.AllFlag) {
 		allTblsToBeStashed, err = doltdb.UnionTableNames(ctx, roots.Staged, roots.Working)
 		if err != nil {
-			return "", err
+			return err
 		}
 
 		roots, err = actions.StageTables(ctx, roots, allTblsToBeStashed, !apr.Contains("all"))
 		if err != nil {
-			return "", err
+			return err
 		}
 	}
 
 	commit, commitMeta, curBranchName, err := gatherCommitData(ctx, dbData)
 	if err != nil {
-		return "", err
+		return err
 	}
 
 	err = dbData.Ddb.AddStash(ctx, commit, roots.Staged, datas.NewStashMeta(curBranchName, commitMeta.Description, doltdb.FlattenTableNames(addedTblsToStage)), stashName)
 	if err != nil {
-		return "", err
+		return err
 	}
 
 	roots.Staged = roots.Head
 	roots, err = actions.MoveTablesFromHeadToWorking(ctx, roots, allTblsToBeStashed)
 	if err != nil {
-		return "", err
+		return err
 	}
 
 	err = updateWorkingSetFromRoots(ctx, dbData, roots)
 	if err != nil {
-		return "", err
+		return err
 	}
 
-	commitHash, err := commit.HashOf()
-	if err != nil {
-		return "", err
-	}
-
-	status := fmt.Sprintf("Saved working directory and index state WIP on %s: %s %s", curBranchName, commitHash.String(), commitMeta.Description)
-	return status, nil
+	return nil
 }
 
-func doStashPop(ctx *sql.Context, dbData env.DbData[*sql.Context], stashName string, idx int) (string, error) {
+func doStashPop(ctx *sql.Context, dbData env.DbData[*sql.Context], stashName string, idx int) error {
 	headCommit, result, meta, err := handleMerge(ctx, dbData, stashName, idx)
 	if err != nil {
-		return "", err
+		return err
 	}
 
 	err = updateWorkingRoot(ctx, dbData, result.Root)
 	if err != nil {
-		return "", err
+		return err
 	}
 
 	roots, err := getRoots(ctx, dbData, headCommit)
 	if err != nil {
-		return "", err
+		return err
 	}
 
 	// added tables need to be staged
 	// since these tables are coming from a stash, don't filter for ignored table names.
 	roots, err = actions.StageTables(ctx, roots, doltdb.ToTableNames(meta.TablesToStage, doltdb.DefaultSchemaName), false)
 	if err != nil {
-		return "", err
+		return err
 	}
 
 	err = updateWorkingSetFromRoots(ctx, dbData, roots)
 	if err != nil {
-		return "", err
-	}
-
-	stashHash, err := dbData.Ddb.GetStashHashAtIdx(ctx, idx, stashName)
-	if err != nil {
-		return "", err
+		return err
 	}
 
 	err = dbData.Ddb.RemoveStashAtIdx(ctx, idx, stashName)
 	if err != nil {
-		return "", err
+		return err
 	}
 
-	status := fmt.Sprintf("Dropped refs/stash@{%v} (%s)", idx, stashHash.String())
-	return status, err
+	return nil
 }
 
-func doStashDrop(ctx *sql.Context, dbData env.DbData[*sql.Context], stashName string, idx int) (string, error) {
-	stashHash, err := dbData.Ddb.GetStashHashAtIdx(ctx, idx, stashName)
+func doStashDrop(ctx *sql.Context, dbData env.DbData[*sql.Context], stashName string, idx int) error {
+	err := dbData.Ddb.RemoveStashAtIdx(ctx, idx, stashName)
 	if err != nil {
-		return "", err
+		return err
 	}
 
-	err = dbData.Ddb.RemoveStashAtIdx(ctx, idx, stashName)
-	if err != nil {
-		return "", err
-	}
-
-	status := fmt.Sprintf("Dropped refs/stash@{%v} (%s)", idx, stashHash.String())
-
-	return status, nil
+	return nil
 }
 
 func doStashClear(ctx *sql.Context, dbData env.DbData[*sql.Context], stashName string) error {
@@ -359,7 +338,6 @@ func workingSetContainsOnlyUntrackedTables(ctx context.Context, roots doltdb.Roo
 func updateWorkingSetFromRoots(ctx *sql.Context, dbData env.DbData[*sql.Context], roots doltdb.Roots) error {
 	ws, err := env.WorkingSet(ctx, dbData.Ddb, dbData.Rsr)
 	if err == doltdb.ErrWorkingSetNotFound {
-		// first time updating roots
 		headRef, err := dbData.Rsr.CWBHeadRef(ctx)
 		if err != nil {
 			return err
@@ -427,7 +405,6 @@ func bulkDbEaFactory(dbData env.DbData[*sql.Context]) editor.DbEaFactory {
 }
 
 func updateWorkingRoot(ctx *sql.Context, dbData env.DbData[*sql.Context], newRoot doltdb.RootValue) error {
-	//err = dEnv.UpdateWorkingRoot(ctx, result.Root)
 	var h hash.Hash
 	var wsRef ref.WorkingSetRef
 	headRef, err := dbData.Rsr.CWBHeadRef(ctx)
@@ -437,7 +414,6 @@ func updateWorkingRoot(ctx *sql.Context, dbData env.DbData[*sql.Context], newRoo
 
 	ws, err := env.WorkingSet(ctx, dbData.Ddb, dbData.Rsr)
 	if err == doltdb.ErrWorkingSetNotFound {
-		// first time updating root
 		wsRef, err = ref.WorkingSetRefForHead(headRef)
 		if err != nil {
 			return err

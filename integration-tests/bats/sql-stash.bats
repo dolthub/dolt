@@ -22,13 +22,12 @@ teardown() {
     dolt sql -q "create table t1 (a int primary key, b int)"
     dolt add .
     dolt sql -q "call dolt_stash('push', 'stash1');"
-
-    run dolt sql -q "select * from dolt_stashes"
-    result=$output
-
     dolt push origin main
 
+    cd $TESTDIRS
+    dolt clone file://rem1 repo2
+    cd repo2
     run dolt sql -q "select * from dolt_stashes"
     [ "$status" -eq 0 ]
-    [ "$output" = "$result" ]
+    [ "${#lines[@]}" -eq 0 ]
 }

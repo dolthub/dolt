@@ -2230,13 +2230,16 @@ func (ddb *DoltDB) GetStashes(ctx context.Context) ([]*Stash, error) {
 
 func (ddb *DoltDB) GetCommandLineStashes(ctx context.Context) ([]*Stash, error) {
 	var stashList []*Stash
-	reference := "refs/stashes/dolt-cli"
+	reference := ref.NewStashRef(DoltCliRef).String()
 	stashDS, err := ddb.db.GetDataset(ctx, reference)
 	if err != nil {
 		return nil, err
 	}
+
+	// If the refs/stashes/dolt-cli is empty, hasHead will return false
+	// and in this case we want to end early with no stashes.
 	if !stashDS.HasHead() {
-		return stashList, nil
+		return nil, nil
 	}
 	newStashes, err := getStashList(ctx, stashDS, ddb.vrw, ddb.NodeStore(), reference)
 	if err != nil {

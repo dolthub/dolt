@@ -17,6 +17,7 @@ package dtables
 import (
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
@@ -50,9 +51,25 @@ func (st *StashesTable) DataLength(ctx *sql.Context) (uint64, error) {
 	return numBytesPerRow * numRows, nil
 }
 
-func (st *StashesTable) RowCount(_ *sql.Context) (uint64, bool, error) {
-	return stashesDefaultRowCount, false, nil
-} //Todo: What row count?
+func (st *StashesTable) RowCount(ctx *sql.Context) (uint64, bool, error) {
+	dbName := ctx.GetCurrentDatabase()
+
+	if len(dbName) == 0 {
+		return 0, false, fmt.Errorf("Empty database name.")
+	}
+
+	sess := dsess.DSessFromSess(ctx.Session)
+	dbData, ok := sess.GetDbData(ctx, dbName)
+	if !ok {
+		return 0, false, sql.ErrDatabaseNotFound.New(dbName)
+	}
+
+	stashes, err := dbData.Ddb.GetStashes(ctx)
+	if err != nil {
+		return 0, false, err
+	}
+	return uint64(len(stashes)), true, nil
+}
 
 // Name is a sql.Table interface function which returns the name of the table
 func (st *StashesTable) Name() string {
@@ -67,7 +84,7 @@ func (st *StashesTable) String() string {
 // Schema is a sql.Table interface function that gets the sql.Schema of the remotes system table
 func (st *StashesTable) Schema() sql.Schema {
 	return []*sql.Column{
-		{Name: "stash_reference", Type: types.Text, Source: st.tableName, PrimaryKey: false, Nullable: false},
+		{Name: "name", Type: types.Text, Source: st.tableName, PrimaryKey: false, Nullable: false},
 		{Name: "stash_id", Type: types.Text, Source: st.tableName, PrimaryKey: false, Nullable: false},
 		{Name: "branch", Type: types.Text, Source: st.tableName, PrimaryKey: false, Nullable: false},
 		{Name: "hash", Type: types.Text, Source: st.tableName, PrimaryKey: false, Nullable: false},
@@ -133,7 +150,11 @@ func (itr *StashItr) Next(ctx *sql.Context) (sql.Row, error) {
 	if err != nil {
 		return nil, err
 	}
-	return sql.NewRow(stash.StashReference, stash.Name, stash.BranchName, commitHash.String(), stash.Description), nil
+
+	branch := strings.Split(stash.BranchName, "/")[2]
+	stashRef := strings.Split(stash.StashReference, "/")[2]
+
+	return sql.NewRow(stashRef, stash.Name, branch, commitHash.String(), stash.Description), nil
 }
 
 // Close closes the iterator.
