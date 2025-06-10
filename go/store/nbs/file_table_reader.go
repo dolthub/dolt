@@ -191,7 +191,7 @@ type fileReaderAt struct {
 	path string
 	sz   int64
 	// refcnt, clone() increments and Close() decrements. The *os.File is closed when it reaches 0.
-	cnt  *int32
+	cnt *int32
 }
 
 func (fra *fileReaderAt) clone() (tableReaderAt, error) {
