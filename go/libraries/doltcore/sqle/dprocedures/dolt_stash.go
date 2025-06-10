@@ -288,12 +288,8 @@ func hasLocalChanges(ctx *sql.Context, dSess *dsess.DoltSession, roots doltdb.Ro
 
 	// --all was not set, so we can ignore tables. Is every table ignored?
 	allIgnored, err := diff.WorkingSetContainsOnlyIgnoredTables(ctx, roots)
-	if err != nil {
+	if err != nil || allIgnored {
 		return false, err
-	}
-
-	if allIgnored {
-		return false, nil
 	}
 
 	// There are unignored, unstaged tables. Is --include-untracked set? If so, nothing else matters. Stash them.
@@ -303,12 +299,8 @@ func hasLocalChanges(ctx *sql.Context, dSess *dsess.DoltSession, roots doltdb.Ro
 
 	// --include-untracked was not set, so we can skip untracked tables. Is every table untracked?
 	allUntracked, err := workingSetContainsOnlyUntrackedTables(ctx, roots)
-	if err != nil {
+	if err != nil || allUntracked {
 		return false, err
-	}
-
-	if allUntracked {
-		return false, nil
 	}
 
 	// There are changes to tracked tables. Stash them.

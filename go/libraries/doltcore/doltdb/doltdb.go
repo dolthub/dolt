@@ -2236,8 +2236,8 @@ func (ddb *DoltDB) GetCommandLineStashes(ctx context.Context) ([]*Stash, error) 
 		return nil, err
 	}
 
-	// If the refs/stashes/dolt-cli is empty, hasHead will return false
-	// and in this case we want to end early with no stashes.
+	// If the refs/stashes/dolt-cli is empty, hasHead will return false.
+	// In this case we want to end early and return no stashes.
 	if !stashDS.HasHead() {
 		return nil, nil
 	}

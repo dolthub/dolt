@@ -150,22 +150,19 @@ func (itr *StashItr) Next(*sql.Context) (sql.Row, error) {
 	}
 
 	// BranchName and StashReference are of the form refs/heads/name
-	// or refs/stashes/name, so we need to parse them
+	// or refs/stashes/name, so we need to parse them to get names
 	parsedRef := strings.Split(stash.BranchName, "/")
-	var branch string
-	if len(parsedRef) > 2 {
-		branch = parsedRef[2]
-	} else {
-		return nil, fmt.Errorf("Bad reference: %s", stash.BranchName)
+	if len(parsedRef) != 3 {
+		return nil, fmt.Errorf("Invalid branch name: %s", stash.BranchName)
 	}
+	branch := parsedRef[2]
 
-	parsedRef = strings.Split(stash.BranchName, "/")
-	var stashRef string
-	if len(parsedRef) > 2 {
-		stashRef = parsedRef[2]
-	} else {
+	parsedRef = strings.Split(stash.StashReference, "/")
+	if len(parsedRef) != 3 {
 		return nil, fmt.Errorf("Bad reference: %s", stash.StashReference)
 	}
+	stashRef := parsedRef[2]
+
 	return sql.NewRow(stashRef, stash.Name, branch, commitHash.String(), stash.Description), nil
 }
 
