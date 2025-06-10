@@ -155,12 +155,7 @@ func doStashPush(ctx *sql.Context, dSess *dsess.DoltSession, dbData env.DbData[*
 		return err
 	}
 
-	err = updateWorkingSetFromRoots(ctx, dbData, roots)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return updateWorkingSetFromRoots(ctx, dbData, roots)
 }
 
 func doStashPop(ctx *sql.Context, dbData env.DbData[*sql.Context], stashName string, idx int) error {
@@ -191,29 +186,15 @@ func doStashPop(ctx *sql.Context, dbData env.DbData[*sql.Context], stashName str
 		return err
 	}
 
-	err = dbData.Ddb.RemoveStashAtIdx(ctx, idx, stashName)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return dbData.Ddb.RemoveStashAtIdx(ctx, idx, stashName)
 }
 
 func doStashDrop(ctx *sql.Context, dbData env.DbData[*sql.Context], stashName string, idx int) error {
-	err := dbData.Ddb.RemoveStashAtIdx(ctx, idx, stashName)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return dbData.Ddb.RemoveStashAtIdx(ctx, idx, stashName)
 }
 
 func doStashClear(ctx *sql.Context, dbData env.DbData[*sql.Context], stashName string) error {
-	err := dbData.Ddb.RemoveAllStashes(ctx, stashName)
-	if err != nil {
-		return err
-	}
-	return nil
+	return dbData.Ddb.RemoveAllStashes(ctx, stashName)
 }
 
 func stashedTableSets(ctx context.Context, roots doltdb.Roots) ([]doltdb.TableName, []doltdb.TableName, error) {
@@ -359,12 +340,7 @@ func updateWorkingSetFromRoots(ctx *sql.Context, dbData env.DbData[*sql.Context]
 		Description: "updated from dolt environment",
 	}
 
-	err = dbData.Ddb.UpdateWorkingSet(ctx, ws.Ref(), ws, h, wsm, nil)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return dbData.Ddb.UpdateWorkingSet(ctx, ws.Ref(), ws, h, wsm, nil)
 }
 
 func parseStashIndex(apr *argparser.ArgParseResults) (int, error) {
@@ -423,12 +399,7 @@ func updateWorkingRoot(ctx *sql.Context, dbData env.DbData[*sql.Context], newRoo
 		Description: "updated from dolt environment",
 	}
 
-	err = dbData.Ddb.UpdateWorkingSet(ctx, wsRef, ws.WithWorkingRoot(newRoot), h, wsm, nil)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return dbData.Ddb.UpdateWorkingSet(ctx, wsRef, ws.WithWorkingRoot(newRoot), h, wsm, nil)
 }
 
 // gatherCommitData is a helper function that returns the commit and commit metadata associated with the current head

@@ -16,11 +16,10 @@ package dtables
 
 import (
 	"fmt"
-	"io"
-	"strings"
-
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
+	"io"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -151,17 +150,8 @@ func (itr *StashItr) Next(*sql.Context) (sql.Row, error) {
 
 	// BranchName and StashReference are of the form refs/heads/name
 	// or refs/stashes/name, so we need to parse them to get names
-	parsedRef := strings.Split(stash.BranchName, "/")
-	if len(parsedRef) != 3 {
-		return nil, fmt.Errorf("Invalid branch name: %s", stash.BranchName)
-	}
-	branch := parsedRef[2]
-
-	parsedRef = strings.Split(stash.StashReference, "/")
-	if len(parsedRef) != 3 {
-		return nil, fmt.Errorf("Bad reference: %s", stash.StashReference)
-	}
-	stashRef := parsedRef[2]
+	branch := ref.NewBranchRef(stash.BranchName).GetPath()
+	stashRef := ref.NewStashRef(stash.StashReference).GetPath()
 
 	return sql.NewRow(stashRef, stash.Name, branch, commitHash.String(), stash.Description), nil
 }

@@ -39,10 +39,6 @@ var StashCommands = cli.NewSubCommandHandlerWithUnspecified("stash", "Stash the 
 	StashPopCmd{},
 })
 
-const (
-	AllFlag = "all"
-)
-
 var stashDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Stash the changes in a dirty working directory away.",
 	LongDesc: `Use dolt stash when you want to record the current state of the working directory and the index, but want to go back to a clean working directory. 
@@ -78,7 +74,7 @@ func (cmd StashCmd) Docs() *cli.CommandDocumentation {
 func (cmd StashCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithMaxArgs(cmd.Name(), 0)
 	ap.SupportsFlag(cli.IncludeUntrackedFlag, "u", "Untracked tables are also stashed.")
-	ap.SupportsFlag(AllFlag, "a", "All tables are stashed, including untracked and ignored tables.")
+	ap.SupportsFlag(cli.AllFlag, "a", "All tables are stashed, including untracked and ignored tables.")
 	return ap
 }
 
@@ -143,7 +139,7 @@ func hasLocalChanges(ctx context.Context, dEnv *env.DoltEnv, roots doltdb.Roots,
 	}
 
 	// There are unstaged changes, is --all set? If so, nothing else matters. Stash them.
-	if apr.Contains(AllFlag) {
+	if apr.Contains(cli.AllFlag) {
 		return true, nil
 	}
 
@@ -206,13 +202,13 @@ func stashChanges(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 	// stage untracked files to include them in the stash,
 	// but do not include them in added table set,
 	// because they should not be staged when popped.
-	if apr.Contains(cli.IncludeUntrackedFlag) || apr.Contains(AllFlag) {
+	if apr.Contains(cli.IncludeUntrackedFlag) || apr.Contains(cli.AllFlag) {
 		allTblsToBeStashed, err = doltdb.UnionTableNames(ctx, roots.Staged, roots.Working)
 		if err != nil {
 			return err
 		}
 
-		roots, err = actions.StageTables(ctx, roots, allTblsToBeStashed, !apr.Contains(AllFlag))
+		roots, err = actions.StageTables(ctx, roots, allTblsToBeStashed, !apr.Contains(cli.AllFlag))
 		if err != nil {
 			return err
 		}
