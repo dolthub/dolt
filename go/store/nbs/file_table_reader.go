@@ -190,6 +190,7 @@ type fileReaderAt struct {
 	f    *os.File
 	path string
 	sz   int64
+	// refcnt, clone() increments and Close() decrements. The *os.File is closed when it reaches 0.
 	cnt  *int32
 }
 
@@ -208,7 +209,6 @@ func (fra *fileReaderAt) clone() (tableReaderAt, error) {
 func (fra *fileReaderAt) Close() error {
 	cnt := atomic.AddInt32(fra.cnt, -1)
 	if cnt == 0 {
-		// logrus.Infof("closing %s", fra.path)
 		return fra.f.Close()
 	} else if cnt < 0 {
 		panic("invalid cnt on fileReaderAt")

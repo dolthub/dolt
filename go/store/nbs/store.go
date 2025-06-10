@@ -251,7 +251,7 @@ func (nbs *NomsBlockStore) GetChunkLocations(ctx context.Context, hashes hash.Ha
 	return res, nil
 }
 
-func (nbs *NomsBlockStore) handleUnlockedRead(ctx context.Context, gcb gcBehavior, final bool, endRead func(), err error) (bool, error) {
+func (nbs *NomsBlockStore) handleUnlockedRead(ctx context.Context, gcb gcBehavior, endReadOnSuccess bool, endRead func(), err error) (bool, error) {
 	if err != nil {
 		if endRead != nil {
 			nbs.mu.Lock()
@@ -269,7 +269,7 @@ func (nbs *NomsBlockStore) handleUnlockedRead(ctx context.Context, gcb gcBehavio
 		nbs.mu.Unlock()
 		return true, err
 	} else {
-		if endRead != nil && final {
+		if endRead != nil && endReadOnSuccess {
 			nbs.mu.Lock()
 			endRead()
 			nbs.mu.Unlock()

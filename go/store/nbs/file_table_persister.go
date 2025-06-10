@@ -162,7 +162,6 @@ func (ftp *fsTablePersister) CopyTableFile(ctx context.Context, r io.Reader, fil
 		ftp.toKeep[filepath.Clean(path)] = struct{}{}
 	}
 	defer ftp.removeMu.Unlock()
-	// logrus.Infof("added table file: %s", path)
 	return file.Rename(tn, path)
 }
 
@@ -199,9 +198,9 @@ func (ftp *fsTablePersister) persistTable(ctx context.Context, name hash.Hash, d
 		}
 
 		defer func() {
-			closeErr := temp.Close()
-			if closeErr != nil {
-				ferr = errors.Join(ferr, fmt.Errorf("error Closing temp in persistTable: %w", closeErr))
+			cerr := temp.Close()
+			if cerr != nil {
+				ferr = errors.Join(ferr, fmt.Errorf("error Closing temp in persistTable: %w", cerr))
 			}
 		}()
 
