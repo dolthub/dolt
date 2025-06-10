@@ -738,6 +738,7 @@ func (d *DoltSession) newPendingCommit(ctx *sql.Context, branchState *branchStat
 		mergeParentCommits = []*doltdb.Commit{branchState.WorkingSet().MergeState().Commit()}
 	} else if props.Amend {
 		numParentsHeadForAmend := headCommit.NumParents()
+
 		for i := 0; i < numParentsHeadForAmend; i++ {
 			optCmt, err := headCommit.GetParent(ctx, i)
 			if err != nil {
@@ -753,7 +754,7 @@ func (d *DoltSession) newPendingCommit(ctx *sql.Context, branchState *branchStat
 
 		// If the commit message isn't set and we're amending the previous commit,
 		// go ahead and set the commit message from the current HEAD
-		if props.Message == "" && props.Amend {
+		if props.Message == "" {
 			meta, err := headCommit.GetCommitMeta(ctx)
 			if err != nil {
 				return nil, err
