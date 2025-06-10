@@ -161,6 +161,8 @@ func archiveSingleBlockStore(ctx context.Context, bscb func() *NomsBlockStore, d
 			continue
 		}
 
+		progress <- fmt.Sprintf("Archiving TableFile %s\n", tf.String())
+
 		idx, err := cs.index()
 		if err != nil {
 			return err
