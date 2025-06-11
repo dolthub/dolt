@@ -167,6 +167,14 @@ func compareTableFiles(ctx context.Context, dir string, hash1, hash2 hash.Hash, 
 		return fmt.Errorf("failed to iterate chunks from %s: %v", name2, err)
 	}
 
+	// Verify that the number of collected hashes matches the expected chunk counts
+	if len(hashes1) != int(actualCount1) {
+		cli.Println(fmt.Sprintf("WARNING: %s iteration collected %d hashes but count() returned %d", name1, len(hashes1), actualCount1))
+	}
+	if len(hashes2) != int(actualCount2) {
+		cli.Println(fmt.Sprintf("WARNING: %s iteration collected %d hashes but count() returned %d", name2, len(hashes2), actualCount2))
+	}
+
 	// Compare the collected hashes
 	return compareChunkHashes(hashes1, hashes2, name1, name2)
 }
