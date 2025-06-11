@@ -1722,6 +1722,11 @@ func TestDoltCommit(t *testing.T) {
 	RunDoltCommitTests(t, harness)
 }
 
+func TestAmendInitialDoltCommit(t *testing.T) {
+	harness := newDoltEnginetestHarness(t)
+	RunAmendInitialDoltCommitTests(t, harness)
+}
+
 func TestDoltCommitPrepared(t *testing.T) {
 	harness := newDoltEnginetestHarness(t)
 	RunDoltCommitTestsPrepared(t, harness)

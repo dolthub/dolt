@@ -7388,6 +7388,45 @@ var DoltCommitTests = []queries.ScriptTest{
 	},
 }
 
+var AmendInitialDoltCommitTests = []queries.ScriptTest{
+	{
+		Name: "CALL DOLT_COMMIT('--amend') works on initial commit",
+		SetUpScript: []string{
+			"CALL DOLT_RESET('--hard', 'HEAD~1')", // remove pre-made commit
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT COUNT(*) FROM dolt_log;",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "CALL DOLT_COMMIT('--amend', '-m', 'amended commit message');",
+				Expected: []sql.Row{{doltCommit}},
+			},
+			{
+				Query:    "SELECT message FROM dolt_log;",
+				Expected: []sql.Row{{"amended commit message"}},
+			},
+			{
+				Query:    "SELECT COUNT(*) FROM dolt_log;",
+				Expected: []sql.Row{{1}},
+			},
+			{ // checking double-modification
+				Query:    "CALL DOLT_COMMIT('--amend', '-m', 'amended commit message x2');",
+				Expected: []sql.Row{{doltCommit}},
+			},
+			{
+				Query:    "SELECT message FROM dolt_log;",
+				Expected: []sql.Row{{"amended commit message x2"}},
+			},
+			{
+				Query:    "SELECT COUNT(*) FROM dolt_log;",
+				Expected: []sql.Row{{1}},
+			},
+		},
+	},
+}
+
 var DoltIndexPrefixScripts = []queries.ScriptTest{
 	{
 		Name: "inline secondary indexes with collation",
