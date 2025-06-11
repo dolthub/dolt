@@ -279,6 +279,11 @@ func (db *database) doSetHead(ctx context.Context, ds Dataset, addr hash.Hash, w
 		return err
 	}
 
+	if newHead == nil {
+		// This can happen on an attempt to set a head to an address which does not exist in the database.
+		return fmt.Errorf("SetHead failed: attempt to set a dataset head to an address which is not in the store")
+	}
+
 	newVal := newHead.value()
 
 	headType := newHead.TypeName()
