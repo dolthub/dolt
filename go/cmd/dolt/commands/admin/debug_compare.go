@@ -78,7 +78,7 @@ func (d DebugCompareCmd) Exec(ctx context.Context, commandStr string, args []str
 	// Try oldgen directory first, then fall back to noms directory
 	nomsBaseDir := filepath.Join(abs, ".dolt", "noms")
 	nomsOldgenDir := filepath.Join(nomsBaseDir, "oldgen")
-	
+
 	// Check if either noms directory exists
 	var searchDir string
 	if _, err := os.Stat(nomsOldgenDir); err == nil {
@@ -146,7 +146,7 @@ func compareTableFiles(ctx context.Context, dir string, hash1, hash2 hash.Hash, 
 
 	// Now we can iterate through the chunks to compare content
 	cli.Println(fmt.Sprintf("\nIterating through chunks for detailed comparison..."))
-	
+
 	// Collect hashes from both chunk sources
 	hashes1 := make(map[hash.Hash]bool)
 	hashes2 := make(map[hash.Hash]bool)
@@ -156,10 +156,10 @@ func compareTableFiles(ctx context.Context, dir string, hash1, hash2 hash.Hash, 
 	err = iterateAllChunks(ctx, cs1, func(chunk chunks.Chunk) {
 		hashes1[chunk.Hash()] = true
 		count1++
-		if count1%10000 == 0 {
-			percentage := float64(count1) / float64(actualCount1) * 100
-			fmt.Printf("\033[2K\rProcessing %s: %d/%d chunks (%.1f%%)", name1, count1, actualCount1, percentage)
-		}
+
+		percentage := float64(count1) / float64(actualCount1) * 100
+		fmt.Printf("\033[2K\rProcessing %s: %d/%d chunks (%.1f%%)", name1, count1, actualCount1, percentage)
+
 	})
 	fmt.Printf("\033[2K\rProcessing %s: %d/%d chunks (100.0%%) - Complete\n", name1, count1, actualCount1)
 	if err != nil {
@@ -202,10 +202,10 @@ func compareTableFiles(ctx context.Context, dir string, hash1, hash2 hash.Hash, 
 func loadChunkSource(ctx context.Context, baseDir string, h hash.Hash) (nbs.ChunkSource, string, uint32, error) {
 	// Try both possible locations: .dolt/noms and .dolt/noms/oldgen
 	searchDirs := []string{
-		baseDir,                              // .dolt/noms/oldgen (passed in)
-		filepath.Dir(baseDir),               // .dolt/noms (parent of oldgen)
+		baseDir,               // .dolt/noms/oldgen (passed in)
+		filepath.Dir(baseDir), // .dolt/noms (parent of oldgen)
 	}
-	
+
 	for _, dir := range searchDirs {
 		// Check for regular table file first
 		tablePath := filepath.Join(dir, h.String())
@@ -215,7 +215,7 @@ func loadChunkSource(ctx context.Context, baseDir string, h hash.Hash) (nbs.Chun
 			if err != nil {
 				return nil, "", 0, fmt.Errorf("failed to open table file %s: %v", tablePath, err)
 			}
-			
+
 			chunkCount, _, err := nbs.ReadTableFooter(file)
 			file.Close()
 			if err != nil {
@@ -228,7 +228,7 @@ func loadChunkSource(ctx context.Context, baseDir string, h hash.Hash) (nbs.Chun
 			if err != nil {
 				return nil, "", 0, fmt.Errorf("failed to create table reader for %s: %v", tablePath, err)
 			}
-			
+
 			return cs, "table", chunkCount, nil
 		}
 
@@ -242,13 +242,13 @@ func loadChunkSource(ctx context.Context, baseDir string, h hash.Hash) (nbs.Chun
 			if err != nil {
 				return nil, "", 0, fmt.Errorf("failed to create archive reader for %s: %v", archivePath, err)
 			}
-			
+
 			// Get actual chunk count from the archive
 			chunkCount, err := getChunkCount(cs)
 			if err != nil {
 				return nil, "", 0, fmt.Errorf("failed to get count from archive: %v", err)
 			}
-			
+
 			return cs, "archive", chunkCount, nil
 		}
 	}
@@ -342,11 +342,11 @@ func closeChunkSource(cs nbs.ChunkSource) error {
 	// First try reflection to call exported Close method
 	v := reflect.ValueOf(cs)
 	method := v.MethodByName("Close")
-	
+
 	if method.IsValid() {
 		// Call the method
 		results := method.Call([]reflect.Value{})
-		
+
 		// The Close method should return error
 		if len(results) == 1 {
 			if !results[0].IsNil() {
@@ -356,12 +356,12 @@ func closeChunkSource(cs nbs.ChunkSource) error {
 			return nil
 		}
 	}
-	
+
 	// Fall back to interface assertion for internal close method
 	if closer, ok := cs.(interface{ close() error }); ok {
 		return closer.close()
 	}
-	
+
 	return fmt.Errorf("ChunkSource does not implement close method")
 }
 
@@ -369,11 +369,11 @@ func getChunkCount(cs nbs.ChunkSource) (uint32, error) {
 	// First try reflection to call exported Count method
 	v := reflect.ValueOf(cs)
 	method := v.MethodByName("Count")
-	
+
 	if method.IsValid() {
 		// Call the method
 		results := method.Call([]reflect.Value{})
-		
+
 		// The Count method should return (uint32, error)
 		if len(results) == 2 {
 			count := results[0].Interface().(uint32)
@@ -384,12 +384,12 @@ func getChunkCount(cs nbs.ChunkSource) (uint32, error) {
 			return count, nil
 		}
 	}
-	
+
 	// Fall back to interface assertion for internal count method
 	if counter, ok := cs.(interface{ count() (uint32, error) }); ok {
 		return counter.count()
 	}
-	
+
 	return 0, fmt.Errorf("ChunkSource does not implement count method")
 }
 
@@ -397,16 +397,16 @@ func iterateAllChunks(ctx context.Context, cs nbs.ChunkSource, callback func(chu
 	// First try reflection to call exported IterateAllChunks method
 	v := reflect.ValueOf(cs)
 	method := v.MethodByName("IterateAllChunks")
-	
+
 	if method.IsValid() {
 		// Prepare arguments: ctx, callback, stats
 		ctxValue := reflect.ValueOf(ctx)
 		callbackValue := reflect.ValueOf(callback)
 		statsValue := reflect.ValueOf(&nbs.Stats{})
-		
+
 		// Call the method
 		results := method.Call([]reflect.Value{ctxValue, callbackValue, statsValue})
-		
+
 		// The IterateAllChunks method should return error
 		if len(results) == 1 {
 			if !results[0].IsNil() {
@@ -416,11 +416,13 @@ func iterateAllChunks(ctx context.Context, cs nbs.ChunkSource, callback func(chu
 			return nil
 		}
 	}
-	
+
 	// Fall back to interface assertion for internal iterateAllChunks method
-	if iterator, ok := cs.(interface{ iterateAllChunks(context.Context, func(chunks.Chunk), *nbs.Stats) error }); ok {
+	if iterator, ok := cs.(interface {
+		iterateAllChunks(context.Context, func(chunks.Chunk), *nbs.Stats) error
+	}); ok {
 		return iterator.iterateAllChunks(ctx, callback, &nbs.Stats{})
 	}
-	
+
 	return fmt.Errorf("ChunkSource does not implement iterateAllChunks method")
 }
