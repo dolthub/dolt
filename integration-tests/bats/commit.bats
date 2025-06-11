@@ -193,7 +193,7 @@ SQL
   [[ "$commit_count" = "1" ]] || false)
 }
 
-@test "commit --amend works correctly on new initial commit" {
+@test "commit: --amend works correctly on new initial commit" {
     (rm -rf initcommit
       mkdir initcommit
       cd initcommit
