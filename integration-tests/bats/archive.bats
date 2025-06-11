@@ -50,7 +50,7 @@ UPDATE tbl SET guid = UUID() WHERE i >= @random_id LIMIT 1;"
 
 # A series of 10 update-and-commit-then-insert-and-commit pairs, followed by a dolt_gc call
 #
-# This is useful because we need at least 25 retained chunks to create a commit.
+# This is useful because we need at least 25 retained chunks to create an archive.
 mutations_and_gc_statement() {
   query=`update_statement`
   for ((j=1; j<=9; j++))
@@ -72,14 +72,27 @@ mutations_and_gc_statement() {
   [[ "$output" =~ "Not enough samples to build default dictionary" ]] || false
 }
 
-@test "archive: require gc first" {
-  run dolt archive
-  [ "$status" -eq 1 ]
-  [[ "$output" =~ "Run 'dolt gc' first" ]] || false
+@test "archive: single archive oldgen" {
+  dolt sql -q "$(mutations_and_gc_statement)"
+  dolt archive
+
+  files=$(find . -name "*darc" | wc -l | sed 's/[ \t]//g')
+  [ "$files" -eq "1" ]
+
+  # Ensure updates continue to work.
+  dolt sql -q "$(update_statement)"
 }
 
-@test "archive: single archive" {
+@test "archive: single archive newgen" {
   dolt sql -q "$(mutations_and_gc_statement)"
+
+  mkdir remote
+  dolt remote add origin file://remote
+  dolt push origin main
+
+  dolt clone file://remote cloned
+  cd cloned
+
   dolt archive
 
   files=$(find . -name "*darc" | wc -l | sed 's/[ \t]//g')
@@ -494,11 +507,6 @@ mutations_and_gc_statement() {
     run dolt admin storage
     [ $status -eq 0 ]
 
-    echo "------------------"
-    echo "$output"
-    echo "------------------"
-
-
     ## This output indicates that the new content was fetched from the remote into a table file. Note that since
     ## the remote is all archive, the chunks are translated into the snappy format
     ## multiline regex - no quotes - to match this text:
@@ -508,3 +516,4 @@ mutations_and_gc_statement() {
 
     dolt fsck
 }
+
