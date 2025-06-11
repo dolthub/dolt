@@ -2014,3 +2014,13 @@ func RunDoltHelpSystemTableTests(t *testing.T, harness DoltEnginetestHarness) {
 		})
 	}
 }
+
+func RunDoltStashSystemTableTests(t *testing.T, h DoltEnginetestHarness) {
+	for _, script := range DoltStashTests {
+		func() {
+			h := h.NewHarness(t)
+			defer h.Close()
+			enginetest.TestScript(t, h, script)
+		}()
+	}
+}

@@ -7951,6 +7951,7 @@ var DoltSystemVariables = []queries.ScriptTest{
 					{"dolt_log"},
 					{"dolt_remote_branches"},
 					{"dolt_remotes"},
+					{"dolt_stashes"},
 					{"dolt_status"},
 					{"dolt_workspace_test"},
 					{"test"},

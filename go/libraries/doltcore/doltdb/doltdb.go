@@ -2076,8 +2076,8 @@ func (ddb *DoltDB) GetBranchesByRootHash(ctx context.Context, rootHash hash.Hash
 // AddStash takes current branch head commit, stash root value and stash metadata to create a new stash.
 // It stores the new stash object in stash list Dataset, which can be created if it does not exist.
 // Otherwise, it updates the stash list Dataset as there can only be one stashes Dataset.
-func (ddb *DoltDB) AddStash(ctx context.Context, head *Commit, stash RootValue, meta *datas.StashMeta) error {
-	stashesDS, err := ddb.db.GetDataset(ctx, ref.NewStashRef().String())
+func (ddb *DoltDB) AddStash(ctx context.Context, head *Commit, stash RootValue, meta *datas.StashMeta, stashName string) error {
+	stashesDS, err := ddb.db.GetDataset(ctx, ref.NewStashRef(stashName).String())
 	if err != nil {
 		return err
 	}
@@ -2159,8 +2159,8 @@ func (ddb *DoltDB) GetStatistics(ctx context.Context) (prolly.Map, error) {
 // It removes a Stash message from stash list Dataset, which cannot be performed
 // by database Delete function. This function removes a single stash only and stash
 // list dataset does not get removed if there are no entries left.
-func (ddb *DoltDB) RemoveStashAtIdx(ctx context.Context, idx int) error {
-	stashesDS, err := ddb.db.GetDataset(ctx, ref.NewStashRef().String())
+func (ddb *DoltDB) RemoveStashAtIdx(ctx context.Context, idx int, stashName string) error {
+	stashesDS, err := ddb.db.GetDataset(ctx, ref.NewStashRef(stashName).String())
 	if err != nil {
 		return err
 	}
@@ -2186,7 +2186,7 @@ func (ddb *DoltDB) RemoveStashAtIdx(ctx context.Context, idx int) error {
 	}
 	// if the stash list is empty, remove the stash list Dataset from the database
 	if stashListCount == 0 {
-		return ddb.RemoveAllStashes(ctx)
+		return ddb.RemoveAllStashes(ctx, stashName)
 	}
 
 	stashesDS, err = ddb.db.UpdateStashList(ctx, stashesDS, stashListAddr)
@@ -2195,31 +2195,64 @@ func (ddb *DoltDB) RemoveStashAtIdx(ctx context.Context, idx int) error {
 
 // RemoveAllStashes removes the stash list Dataset from the database,
 // which equivalent to removing Stash entries from the stash list.
-func (ddb *DoltDB) RemoveAllStashes(ctx context.Context) error {
-	err := ddb.deleteRef(ctx, ref.NewStashRef(), nil, "")
+func (ddb *DoltDB) RemoveAllStashes(ctx context.Context, stashName string) error {
+	err := ddb.deleteRef(ctx, ref.NewStashRef(stashName), nil, "")
 	if err == ErrBranchNotFound {
 		return nil
 	}
 	return err
 }
 
+var stashRefFilter = map[ref.RefType]struct{}{ref.StashRefType: {}}
+
 // GetStashes returns array of Stash objects containing all stash entries in the stash list Dataset.
 func (ddb *DoltDB) GetStashes(ctx context.Context) ([]*Stash, error) {
-	stashesDS, err := ddb.db.GetDataset(ctx, ref.NewStashRef().String())
+	stashRefs, err := ddb.GetRefsOfType(ctx, stashRefFilter)
+	if err != nil {
+		return nil, err
+	}
+	var stashList []*Stash
+	for _, stash := range stashRefs {
+		reference := ref.NewStashRef(stash.String()).String()
+		stashDS, err := ddb.db.GetDataset(ctx, reference)
+		if err != nil {
+			return nil, err
+		}
+		newStashes, err := getStashList(ctx, stashDS, ddb.vrw, ddb.NodeStore(), reference)
+		if err != nil {
+			return nil, err
+		}
+		stashList = append(stashList, newStashes...)
+	}
+
+	return stashList, nil
+}
+
+func (ddb *DoltDB) GetCommandLineStashes(ctx context.Context) ([]*Stash, error) {
+	var stashList []*Stash
+	reference := ref.NewStashRef(DoltCliRef).String()
+	stashDS, err := ddb.db.GetDataset(ctx, reference)
 	if err != nil {
 		return nil, err
 	}
 
-	if !stashesDS.HasHead() {
-		return []*Stash{}, nil
+	// If the refs/stashes/dolt-cli is empty, hasHead will return false.
+	// In this case we want to end early and return no stashes.
+	if !stashDS.HasHead() {
+		return nil, nil
 	}
+	newStashes, err := getStashList(ctx, stashDS, ddb.vrw, ddb.NodeStore(), reference)
+	if err != nil {
+		return nil, err
+	}
+	stashList = append(stashList, newStashes...)
 
-	return getStashList(ctx, stashesDS, ddb.vrw, ddb.NodeStore())
+	return stashList, nil
 }
 
 // GetStashHashAtIdx returns hash address only of the stash at given index.
-func (ddb *DoltDB) GetStashHashAtIdx(ctx context.Context, idx int) (hash.Hash, error) {
-	ds, err := ddb.db.GetDataset(ctx, ref.NewStashRef().String())
+func (ddb *DoltDB) GetStashHashAtIdx(ctx context.Context, idx int, stashName string) (hash.Hash, error) {
+	ds, err := ddb.db.GetDataset(ctx, ref.NewStashRef(stashName).String())
 	if err != nil {
 		return hash.Hash{}, err
 	}
@@ -2233,8 +2266,8 @@ func (ddb *DoltDB) GetStashHashAtIdx(ctx context.Context, idx int) (hash.Hash, e
 
 // GetStashRootAndHeadCommitAtIdx returns root value of stash working set and head commit of the branch that the stash was made on
 // of the stash at given index.
-func (ddb *DoltDB) GetStashRootAndHeadCommitAtIdx(ctx context.Context, idx int) (RootValue, *Commit, *datas.StashMeta, error) {
-	ds, err := ddb.db.GetDataset(ctx, ref.NewStashRef().String())
+func (ddb *DoltDB) GetStashRootAndHeadCommitAtIdx(ctx context.Context, idx int, stashName string) (RootValue, *Commit, *datas.StashMeta, error) {
+	ds, err := ddb.db.GetDataset(ctx, ref.NewStashRef(stashName).String())
 	if err != nil {
 		return nil, nil, nil, err
 	}

@@ -17,6 +17,8 @@ package stashcmds
 import (
 	"context"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -77,7 +79,7 @@ func (cmd StashClearCmd) Exec(ctx context.Context, commandStr string, args []str
 		return 1
 	}
 
-	err := dEnv.DoltDB(ctx).RemoveAllStashes(ctx)
+	err := dEnv.DoltDB(ctx).RemoveAllStashes(ctx, doltdb.DoltCliRef)
 	if err != nil {
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}

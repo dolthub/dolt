@@ -80,7 +80,7 @@ func (cmd StashListCmd) Exec(ctx context.Context, commandStr string, args []stri
 }
 
 func listStashes(ctx context.Context, dEnv *env.DoltEnv) error {
-	stashes, err := dEnv.DoltDB(ctx).GetStashes(ctx)
+	stashes, err := dEnv.DoltDB(ctx).GetCommandLineStashes(ctx)
 	if err != nil {
 		return err
 	}
@@ -90,7 +90,7 @@ func listStashes(ctx context.Context, dEnv *env.DoltEnv) error {
 		if err != nil {
 			return err
 		}
-		cli.Println(fmt.Sprintf("%s: WIP on %s: %s %s", stash.Name, stash.BranchName, commitHash.String(), stash.Description))
+		cli.Println(fmt.Sprintf("%s: WIP on %s: %s %s", stash.Name, stash.BranchReference, commitHash.String(), stash.Description))
 	}
 	return nil
 }

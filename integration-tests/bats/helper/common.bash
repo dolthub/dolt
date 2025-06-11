@@ -7,6 +7,7 @@ if [ -z "$BATS_TMPDIR" ]; then
 fi
 
 export DOLT_CONTEXT_VALIDATION_ENABLED=true
+export DOLT_ENABLE_DYNAMIC_ASSERTS=true
 
 nativebatsdir() { echo `nativepath $BATS_TEST_DIRNAME/$1`; }
 batshelper() { echo `nativebatsdir helper/$1`; }
