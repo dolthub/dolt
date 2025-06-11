@@ -105,6 +105,13 @@ func CreateMergeArgParser() *argparser.ArgParser {
 	return ap
 }
 
+func CreateStashArgParser() *argparser.ArgParser {
+	ap := argparser.NewArgParserWithMaxArgs("stash", 3)
+	ap.SupportsFlag(IncludeUntrackedFlag, "u", "Untracked tables are also stashed.")
+	ap.SupportsFlag(AllFlag, "a", "All tables are stashed, including untracked and ignored tables.")
+	return ap
+}
+
 func CreateRebaseArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithMaxArgs("rebase", 1)
 	ap.TooManyArgsErrorFunc = func(receivedArgs []string) error {

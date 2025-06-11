@@ -60,7 +60,7 @@ teardown() {
 @test "ls: --system shows system tables" {
     run dolt ls --system
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 24 ]
+    [ "${#lines[@]}" -eq 25 ]
     [[ "$output" =~ "System tables:" ]] || false
     [[ "$output" =~ "dolt_status" ]] || false
     [[ "$output" =~ "dolt_commits" ]] || false
@@ -85,6 +85,7 @@ teardown() {
     [[ "$output" =~ "dolt_commit_diff_table_two" ]] || false
     [[ "$output" =~ "dolt_workspace_table_one" ]] || false
     [[ "$output" =~ "dolt_workspace_table_two" ]] || false
+    [[ "$output" =~ "dolt_stashes" ]] || false
 }
 
 @test "ls: --all shows tables in working set and system tables" {
