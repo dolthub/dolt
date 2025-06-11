@@ -130,7 +130,7 @@ func BuildArchive(ctx context.Context, cs chunks.ChunkStore, dagGroups *ChunkRel
 			return err
 		}
 	} else {
-		return errors.New("Modern DB Expected")
+		return errors.New("runtime error: GenerationalNBS Expected")
 	}
 	return nil
 }
@@ -475,7 +475,8 @@ func compressChunksInParallel(
 					}
 					cmpBuff = gozstd.CompressDict(cmpBuff[:0], c.Data(), defaultDict)
 
-					// Make a private copy of the compressed data
+					// Make a private copy of the compressed data for the result channel.
+					// Unfortunate alloc. Could use a pool of buffers if this proves to be a bottleneck.
 					privateCopy := make([]byte, len(cmpBuff))
 					copy(privateCopy, cmpBuff)
 					resultCh <- compressedChunk{h: h, data: privateCopy}
