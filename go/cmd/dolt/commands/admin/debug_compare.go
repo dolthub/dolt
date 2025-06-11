@@ -75,21 +75,27 @@ func (d DebugCompareCmd) Exec(ctx context.Context, commandStr string, args []str
 		return 1
 	}
 
-	// Use the oldgen directory within the nbs directory
-	nomsDir := filepath.Join(abs, ".dolt", "noms", "oldgen")
-
-	// Check if the nbs directory exists
-	if _, err := os.Stat(nomsDir); os.IsNotExist(err) {
-		cli.PrintErrln(fmt.Sprintf("NBS directory not found: %s", nomsDir))
+	// Try oldgen directory first, then fall back to noms directory
+	nomsBaseDir := filepath.Join(abs, ".dolt", "noms")
+	nomsOldgenDir := filepath.Join(nomsBaseDir, "oldgen")
+	
+	// Check if either noms directory exists
+	var searchDir string
+	if _, err := os.Stat(nomsOldgenDir); err == nil {
+		searchDir = nomsOldgenDir
+	} else if _, err := os.Stat(nomsBaseDir); err == nil {
+		searchDir = nomsOldgenDir // Pass oldgen dir so the function can check both oldgen and parent
+	} else {
+		cli.PrintErrln(fmt.Sprintf("NBS directory not found: neither %s nor %s exist", nomsBaseDir, nomsOldgenDir))
 		return 1
 	}
 
 	cli.Println(fmt.Sprintf("Comparing tablefile %s with archive %s", tablefileHashStr, archiveHashStr))
-	cli.Println(fmt.Sprintf("Storage directory: %s", nomsDir))
+	cli.Println(fmt.Sprintf("Searching in: %s and %s", nomsOldgenDir, nomsBaseDir))
 
 	// Try to compare the files directly using IterChunks
 	cli.Println("\n--- Comparing Contents ---")
-	err = compareTableFiles(ctx, nomsDir, tablefileHash, archiveHash, tablefileHashStr, archiveHashStr)
+	err = compareTableFiles(ctx, searchDir, tablefileHash, archiveHash, tablefileHashStr, archiveHashStr)
 	if err != nil {
 		cli.PrintErrln(fmt.Sprintf("Comparison failed: %v", err))
 		return 1
@@ -101,10 +107,8 @@ func (d DebugCompareCmd) Exec(ctx context.Context, commandStr string, args []str
 
 func compareTableFiles(ctx context.Context, dir string, hash1, hash2 hash.Hash, name1, name2 string) error {
 	cli.Println(fmt.Sprintf("Comparing %s with %s", name1, name2))
-	fmt.Fprintf(os.Stderr, "DEBUG: compareTableFiles called - hash1=%s, hash2=%s, dir=%s\n", hash1.String(), hash2.String(), dir)
 
 	// Load the first file as a chunkSource
-	fmt.Printf("DEBUG: Loading first chunk source for %s\n", name1)
 	cs1, fileType1, chunkCount1, err := loadChunkSource(ctx, dir, hash1)
 	if err != nil {
 		return fmt.Errorf("failed to load %s: %v", name1, err)
@@ -112,8 +116,7 @@ func compareTableFiles(ctx context.Context, dir string, hash1, hash2 hash.Hash, 
 	defer closeChunkSource(cs1)
 	cli.Println(fmt.Sprintf("Loaded %s file for %s with %d chunks", fileType1, name1, chunkCount1))
 
-	// Load the second file as a chunkSource  
-	fmt.Printf("DEBUG: Loading second chunk source for %s\n", name2)
+	// Load the second file as a chunkSource
 	cs2, fileType2, chunkCount2, err := loadChunkSource(ctx, dir, hash2)
 	if err != nil {
 		return fmt.Errorf("failed to load %s: %v", name2, err)
@@ -168,63 +171,61 @@ func compareTableFiles(ctx context.Context, dir string, hash1, hash2 hash.Hash, 
 	return compareChunkHashes(hashes1, hashes2, name1, name2)
 }
 
-func loadChunkSource(ctx context.Context, dir string, h hash.Hash) (nbs.ChunkSource, string, uint32, error) {
-	fmt.Printf("DEBUG: loadChunkSource called for hash %s in dir %s\n", h.String(), dir)
-	// Check for regular table file first
-	tablePath := filepath.Join(dir, h.String())
-	fmt.Printf("DEBUG: Checking table file at: %s\n", tablePath)
-	if _, err := os.Stat(tablePath); err == nil {
-		fmt.Printf("DEBUG: Table file found\n")
-		// Get chunk count from table footer
-		file, err := os.Open(tablePath)
-		if err != nil {
-			return nil, "", 0, fmt.Errorf("failed to open table file %s: %v", tablePath, err)
-		}
-		
-		chunkCount, _, err := nbs.ReadTableFooter(file)
-		file.Close()
-		if err != nil {
-			return nil, "", 0, fmt.Errorf("failed to read table footer from %s: %v", tablePath, err)
+func loadChunkSource(ctx context.Context, baseDir string, h hash.Hash) (nbs.ChunkSource, string, uint32, error) {
+	// Try both possible locations: .dolt/noms and .dolt/noms/oldgen
+	searchDirs := []string{
+		baseDir,                              // .dolt/noms/oldgen (passed in)
+		filepath.Dir(baseDir),               // .dolt/noms (parent of oldgen)
+	}
+	
+	for _, dir := range searchDirs {
+		// Check for regular table file first
+		tablePath := filepath.Join(dir, h.String())
+		if _, err := os.Stat(tablePath); err == nil {
+			// Get chunk count from table footer
+			file, err := os.Open(tablePath)
+			if err != nil {
+				return nil, "", 0, fmt.Errorf("failed to open table file %s: %v", tablePath, err)
+			}
+			
+			chunkCount, _, err := nbs.ReadTableFooter(file)
+			file.Close()
+			if err != nil {
+				return nil, "", 0, fmt.Errorf("failed to read table footer from %s: %v", tablePath, err)
+			}
+
+			// Create chunk source using NomsFileTableReader
+			quotaProvider := &nbs.UnlimitedQuotaProvider{}
+			cs, err := nbs.NomsFileTableReader(ctx, tablePath, h, chunkCount, quotaProvider)
+			if err != nil {
+				return nil, "", 0, fmt.Errorf("failed to create table reader for %s: %v", tablePath, err)
+			}
+			
+			return cs, "table", chunkCount, nil
 		}
 
-		// Create chunk source using NomsFileTableReader
-		quotaProvider := &nbs.UnlimitedQuotaProvider{}
-		cs, err := nbs.NomsFileTableReader(ctx, tablePath, h, chunkCount, quotaProvider)
-		if err != nil {
-			return nil, "", 0, fmt.Errorf("failed to create table reader for %s: %v", tablePath, err)
+		// Check for archive file
+		archivePath := filepath.Join(dir, h.String()+".darc")
+		if _, err := os.Stat(archivePath); err == nil {
+			// Create chunk source using NewArchiveChunkSource (ignores chunkCount and quota)
+			quotaProvider := &nbs.UnlimitedQuotaProvider{}
+			stats := &nbs.Stats{}
+			cs, err := nbs.NewArchiveChunkSource(ctx, dir, h, 0, quotaProvider, stats)
+			if err != nil {
+				return nil, "", 0, fmt.Errorf("failed to create archive reader for %s: %v", archivePath, err)
+			}
+			
+			// Get actual chunk count from the archive
+			chunkCount, err := getChunkCount(cs)
+			if err != nil {
+				return nil, "", 0, fmt.Errorf("failed to get count from archive: %v", err)
+			}
+			
+			return cs, "archive", chunkCount, nil
 		}
-		
-		return cs, "table", chunkCount, nil
 	}
 
-	// Check for archive file
-	archivePath := filepath.Join(dir, h.String()+".darc")
-	fmt.Printf("DEBUG: Looking for archive file at: %s\n", archivePath)
-	if _, err := os.Stat(archivePath); err == nil {
-		fmt.Fprintf(os.Stderr, "DEBUG: Archive file found, creating chunk source\n")
-		// Create chunk source using NewArchiveChunkSource (ignores chunkCount and quota)
-		quotaProvider := &nbs.UnlimitedQuotaProvider{}
-		stats := &nbs.Stats{}
-		cs, err := nbs.NewArchiveChunkSource(ctx, dir, h, 0, quotaProvider, stats)
-		if err != nil {
-			fmt.Printf("DEBUG: Failed to create archive chunk source: %v\n", err)
-			return nil, "", 0, fmt.Errorf("failed to create archive reader for %s: %v", archivePath, err)
-		}
-		fmt.Printf("DEBUG: Archive chunk source created successfully, type: %T\n", cs)
-		
-		// Get actual chunk count from the archive
-		fmt.Printf("DEBUG: About to call getChunkCount\n")
-		chunkCount, err := getChunkCount(cs)
-		if err != nil {
-			fmt.Printf("DEBUG: getChunkCount failed: %v\n", err)
-			return nil, "", 0, fmt.Errorf("failed to get count from archive: %v", err)
-		}
-		fmt.Printf("DEBUG: Successfully got chunk count: %d\n", chunkCount)
-		
-		return cs, "archive", chunkCount, nil
-	}
-
-	return nil, "", 0, fmt.Errorf("file not found for hash %s", h.String())
+	return nil, "", 0, fmt.Errorf("file not found for hash %s in any of: %v", h.String(), searchDirs)
 }
 
 func compareChunkHashes(hashes1, hashes2 map[hash.Hash]bool, name1, name2 string) error {
