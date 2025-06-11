@@ -32,6 +32,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/dolthub/dolt/go/libraries/utils/dynassert"
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
@@ -195,8 +196,10 @@ type fileReaderAt struct {
 }
 
 func (fra *fileReaderAt) clone() (tableReaderAt, error) {
-	if atomic.AddInt32(fra.cnt, 1) == 1 {
-		panic("attempt to clone a closed fileReaderAt")
+	if dynassert.Assert(atomic.AddInt32(fra.cnt, 1) > 1, "attempt to clone a closed fileReaderAt") {
+		// Restore previous refcnt, even know we're in a weird state...
+		atomic.AddInt32(fra.cnt, -1)
+		return newFileReaderAt(fra.path)
 	}
 	return &fileReaderAt{
 		fra.f,
@@ -208,13 +211,11 @@ func (fra *fileReaderAt) clone() (tableReaderAt, error) {
 
 func (fra *fileReaderAt) Close() error {
 	cnt := atomic.AddInt32(fra.cnt, -1)
+	dynassert.Assert(cnt >= 0, "invalid cnt on fileReaderAt")
 	if cnt == 0 {
 		return fra.f.Close()
-	} else if cnt < 0 {
-		panic("invalid cnt on fileReaderAt")
-	} else {
-		return nil
 	}
+	return nil
 }
 
 func (fra *fileReaderAt) Reader(ctx context.Context) (io.ReadCloser, error) {
