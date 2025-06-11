@@ -68,8 +68,10 @@ mutations_and_gc_statement() {
   dolt gc
 
   run dolt archive
-  [ "$status" -eq 1 ]
-  [[ "$output" =~ "Not enough samples to build default dictionary" ]] || false
+  [ "$status" -eq 0 ]
+
+  lines="$(echo "$output" | grep -cE '^Not enough chunks to build archive for [a-z0-9]+\. Skipping\.$')"
+  [ "$lines" -eq "2" ]
 }
 
 @test "archive: single archive oldgen" {
