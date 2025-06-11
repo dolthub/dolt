@@ -273,6 +273,10 @@ type ChunkSource interface {
 	// the scan, and will likely mean that the scan didn't complete. Note that errors returned by this method are not
 	// related to the callback - if the callback discovers an error, it must manage that out of band.
 	iterateAllChunks(context.Context, func(chunk chunks.Chunk), *Stats) error
+
+	// IterateAllChunksFast efficiently iterates through all chunks by index without reflection overhead.
+	// The callback receives both the hash and the chunk. If the callback returns an error, iteration stops.
+	IterateAllChunksFast(context.Context, func(hash.Hash, chunks.Chunk) error, *Stats) error
 }
 
 // Backward compatibility alias

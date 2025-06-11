@@ -101,3 +101,7 @@ func (ecs emptyChunkSource) clone() (chunkSource, error) {
 func (ecs emptyChunkSource) iterateAllChunks(_ context.Context, _ func(chunks.Chunk), _ *Stats) error {
 	return nil
 }
+
+func (ecs emptyChunkSource) IterateAllChunksFast(_ context.Context, _ func(hash.Hash, chunks.Chunk) error, _ *Stats) error {
+	return nil
+}

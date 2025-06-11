@@ -285,6 +285,14 @@ func (s journalChunkSource) iterateAllChunks(ctx context.Context, cb func(chunks
 	return nil
 }
 
+func (s journalChunkSource) IterateAllChunksFast(ctx context.Context, cb func(hash.Hash, chunks.Chunk) error, _ *Stats) error {
+	// TODO - implement fast iteration for journal chunk source if needed
+	// For now, fall back to the regular iteration
+	return s.iterateAllChunks(ctx, func(chunk chunks.Chunk) {
+		cb(chunk.Hash(), chunk) // Ignore error return from callback for compatibility
+	}, nil)
+}
+
 func equalSpecs(left, right []tableSpec) bool {
 	if len(left) != len(right) {
 		return false

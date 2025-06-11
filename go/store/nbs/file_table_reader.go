@@ -198,6 +198,36 @@ func (ftr *fileTableReader) IterateAllChunks(ctx context.Context, cb func(chunks
 	return ftr.tableReader.iterateAllChunks(ctx, cb, stats)
 }
 
+// IterateAllChunksFast efficiently iterates through all chunks by index without reflection
+func (ftr *fileTableReader) IterateAllChunksFast(ctx context.Context, cb func(hash.Hash, chunks.Chunk) error, stats *Stats) error {
+	count := ftr.tableReader.idx.chunkCount()
+	
+	for i := uint32(0); i < count; i++ {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		
+		var h hash.Hash
+		_, err := ftr.tableReader.idx.indexEntry(i, &h)
+		if err != nil {
+			return err
+		}
+		
+		data, _, err := ftr.tableReader.get(ctx, h, nil, stats)
+		if err != nil {
+			return err
+		}
+		
+		chunk := chunks.NewChunkWithHash(h, data)
+		err = cb(h, chunk)
+		if err != nil {
+			return err
+		}
+	}
+	
+	return nil
+}
+
 type fileReaderAt struct {
 	f    *os.File
 	path string

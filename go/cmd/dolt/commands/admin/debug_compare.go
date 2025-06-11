@@ -153,13 +153,14 @@ func compareTableFiles(ctx context.Context, dir string, hash1, hash2 hash.Hash, 
 
 	// Collect from first source
 	var count1 uint32
-	err = iterateAllChunks(ctx, cs1, func(chunk chunks.Chunk) {
-		hashes1[chunk.Hash()] = true
+	err = iterateAllChunksFast(ctx, cs1, func(h hash.Hash, chunk chunks.Chunk) error {
+		hashes1[h] = true
 		count1++
-
-		percentage := float64(count1) / float64(actualCount1) * 100
-		fmt.Printf("\033[2K\rProcessing %s: %d/%d chunks (%.1f%%)", name1, count1, actualCount1, percentage)
-
+		if count1%10000 == 0 {
+			percentage := float64(count1) / float64(actualCount1) * 100
+			fmt.Printf("\033[2K\rProcessing %s: %d/%d chunks (%.1f%%)", name1, count1, actualCount1, percentage)
+		}
+		return nil
 	})
 	fmt.Printf("\033[2K\rProcessing %s: %d/%d chunks (100.0%%) - Complete\n", name1, count1, actualCount1)
 	if err != nil {
@@ -168,13 +169,14 @@ func compareTableFiles(ctx context.Context, dir string, hash1, hash2 hash.Hash, 
 
 	// Collect from second source
 	var count2 uint32
-	err = iterateAllChunks(ctx, cs2, func(chunk chunks.Chunk) {
-		hashes2[chunk.Hash()] = true
+	err = iterateAllChunksFast(ctx, cs2, func(h hash.Hash, chunk chunks.Chunk) error {
+		hashes2[h] = true
 		count2++
 		if count2%10000 == 0 {
 			percentage := float64(count2) / float64(actualCount2) * 100
 			fmt.Printf("\033[2K\rProcessing %s: %d/%d chunks (%.1f%%)", name2, count2, actualCount2, percentage)
 		}
+		return nil
 	})
 	fmt.Printf("\033[2K\rProcessing %s: %d/%d chunks (100.0%%) - Complete\n", name2, count2, actualCount2)
 	if err != nil {
@@ -425,4 +427,10 @@ func iterateAllChunks(ctx context.Context, cs nbs.ChunkSource, callback func(chu
 	}
 
 	return fmt.Errorf("ChunkSource does not implement iterateAllChunks method")
+}
+
+func iterateAllChunksFast(ctx context.Context, cs nbs.ChunkSource, callback func(hash.Hash, chunks.Chunk) error) error {
+	// Call the interface method directly - no reflection or type assertions needed!
+	stats := &nbs.Stats{}
+	return cs.IterateAllChunksFast(ctx, callback, stats)
 }

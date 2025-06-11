@@ -17,6 +17,7 @@ package nbs
 import (
 	"context"
 
+	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
@@ -56,4 +57,34 @@ func (csa chunkSourceAdapter) clone() (chunkSource, error) {
 		return &chunkSourceAdapter{}, err
 	}
 	return &chunkSourceAdapter{tr, csa.h}, nil
+}
+
+func (csa chunkSourceAdapter) IterateAllChunksFast(ctx context.Context, cb func(hash.Hash, chunks.Chunk) error, stats *Stats) error {
+	// Use the same efficient iteration as fileTableReader since they both wrap tableReader
+	count := csa.tableReader.idx.chunkCount()
+	
+	for i := uint32(0); i < count; i++ {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		
+		var h hash.Hash
+		_, err := csa.tableReader.idx.indexEntry(i, &h)
+		if err != nil {
+			return err
+		}
+		
+		data, _, err := csa.tableReader.get(ctx, h, nil, stats)
+		if err != nil {
+			return err
+		}
+		
+		chunk := chunks.NewChunkWithHash(h, data)
+		err = cb(h, chunk)
+		if err != nil {
+			return err
+		}
+	}
+	
+	return nil
 }

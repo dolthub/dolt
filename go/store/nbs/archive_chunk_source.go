@@ -271,3 +271,34 @@ func (acs archiveChunkSource) iterateAllChunks(ctx context.Context, cb func(chun
 func (acs *archiveChunkSource) IterateAllChunks(ctx context.Context, cb func(chunks.Chunk), stats *Stats) error {
 	return acs.iterateAllChunks(ctx, cb, stats)
 }
+
+// IterateAllChunksFast efficiently iterates through all chunks by index without reflection
+func (acs archiveChunkSource) IterateAllChunksFast(ctx context.Context, cb func(hash.Hash, chunks.Chunk) error, stats *Stats) error {
+	addrCount := uint32(len(acs.aRdr.prefixes))
+	
+	for i := uint32(0); i < addrCount; i++ {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		
+		var h hash.Hash
+		suffix := acs.aRdr.getSuffixByID(i)
+
+		// Reconstruct the hash from the prefix and suffix.
+		binary.BigEndian.PutUint64(h[:uint64Size], acs.aRdr.prefixes[i])
+		copy(h[uint64Size:], suffix[:])
+
+		data, err := acs.aRdr.get(ctx, h, stats)
+		if err != nil {
+			return err
+		}
+
+		chunk := chunks.NewChunkWithHash(h, data)
+		err = cb(h, chunk)
+		if err != nil {
+			return err
+		}
+	}
+	
+	return nil
+}
