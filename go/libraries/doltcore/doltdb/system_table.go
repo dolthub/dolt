@@ -404,8 +404,10 @@ const (
 	StatisticsTableName = "dolt_statistics"
 )
 
-// DoltGeneratedTableNames is a list of all the dolt system tables that are not specific to a user table.
-// They are addressable by these names in both Dolt and Doltgres.
+// DoltGeneratedTableNames is a list of all the generated dolt system tables that are not specific to a user table.
+// It does not include tables in the dolt_ prefix namespace that are user-populated, such as dolt_ignore or dolt_docs.
+// These tables are addressable by these names in both Dolt and Doltgres. In doltgres they are additionally addressable
+// in the `dolt.` schema, e.g. `dolt.branches`
 var DoltGeneratedTableNames = []string{
 	LogTableName,
 	DiffTableName,
@@ -421,7 +423,6 @@ var DoltGeneratedTableNames = []string{
 	StatusTableName,
 	MergeStatusTableName,
 	TagsTableName,
-	IgnoreTableName,
 }
 
 const (
