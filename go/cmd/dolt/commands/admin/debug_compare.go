@@ -153,7 +153,7 @@ func compareTableFiles(ctx context.Context, dir string, hash1, hash2 hash.Hash, 
 
 	// Collect from first source
 	var count1 uint32
-	err = iterateAllChunksFast(ctx, cs1, func(h hash.Hash, chunk chunks.Chunk) error {
+	err = iterateAllChunksFast(ctx, cs1, func(h hash.Hash) error {
 		hashes1[h] = true
 		count1++
 		if count1%10000 == 0 {
@@ -169,7 +169,7 @@ func compareTableFiles(ctx context.Context, dir string, hash1, hash2 hash.Hash, 
 
 	// Collect from second source
 	var count2 uint32
-	err = iterateAllChunksFast(ctx, cs2, func(h hash.Hash, chunk chunks.Chunk) error {
+	err = iterateAllChunksFast(ctx, cs2, func(h hash.Hash) error {
 		hashes2[h] = true
 		count2++
 		if count2%10000 == 0 {
@@ -429,8 +429,7 @@ func iterateAllChunks(ctx context.Context, cs nbs.ChunkSource, callback func(chu
 	return fmt.Errorf("ChunkSource does not implement iterateAllChunks method")
 }
 
-func iterateAllChunksFast(ctx context.Context, cs nbs.ChunkSource, callback func(hash.Hash, chunks.Chunk) error) error {
-	// Call the interface method directly - no reflection or type assertions needed!
+func iterateAllChunksFast(ctx context.Context, cs nbs.ChunkSource, callback func(hash.Hash) error) error {
 	stats := &nbs.Stats{}
-	return cs.IterateAllChunksFast(ctx, callback, stats)
+	return cs.IterateAllHashes(ctx, callback, stats)
 }

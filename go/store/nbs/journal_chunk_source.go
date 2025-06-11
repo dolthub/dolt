@@ -285,11 +285,11 @@ func (s journalChunkSource) iterateAllChunks(ctx context.Context, cb func(chunks
 	return nil
 }
 
-func (s journalChunkSource) IterateAllChunksFast(ctx context.Context, cb func(hash.Hash, chunks.Chunk) error, _ *Stats) error {
+func (s journalChunkSource) IterateAllHashes(ctx context.Context, cb func(hash.Hash) error, _ *Stats) error {
 	// TODO - implement fast iteration for journal chunk source if needed
 	// For now, fall back to the regular iteration
 	return s.iterateAllChunks(ctx, func(chunk chunks.Chunk) {
-		cb(chunk.Hash(), chunk) // Ignore error return from callback for compatibility
+		cb(chunk.Hash()) // Ignore error return from callback for compatibility
 	}, nil)
 }
 

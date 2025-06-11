@@ -102,6 +102,6 @@ func (ecs emptyChunkSource) iterateAllChunks(_ context.Context, _ func(chunks.Ch
 	return nil
 }
 
-func (ecs emptyChunkSource) IterateAllChunksFast(_ context.Context, _ func(hash.Hash, chunks.Chunk) error, _ *Stats) error {
+func (ecs emptyChunkSource) IterateAllHashes(_ context.Context, _ func(hash.Hash) error, _ *Stats) error {
 	return nil
 }

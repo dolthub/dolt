@@ -276,7 +276,7 @@ type ChunkSource interface {
 
 	// IterateAllChunksFast efficiently iterates through all chunks by index without reflection overhead.
 	// The callback receives both the hash and the chunk. If the callback returns an error, iteration stops.
-	IterateAllChunksFast(context.Context, func(hash.Hash, chunks.Chunk) error, *Stats) error
+	IterateAllHashes(context.Context, func(hash.Hash) error, *Stats) error
 }
 
 // Backward compatibility alias
