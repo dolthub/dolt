@@ -152,27 +152,47 @@ func compareTableFiles(ctx context.Context, dir string, hash1, hash2 hash.Hash, 
 	hashes2 := make(map[hash.Hash]bool)
 
 	// Collect from first source
+	var count1 uint32
 	err = iterateAllChunks(ctx, cs1, func(chunk chunks.Chunk) {
 		hashes1[chunk.Hash()] = true
+		count1++
+		if count1%10000 == 0 {
+			percentage := float64(count1) / float64(actualCount1) * 100
+			fmt.Printf("\033[2K\rProcessing %s: %d/%d chunks (%.1f%%)", name1, count1, actualCount1, percentage)
+		}
 	})
+	fmt.Printf("\033[2K\rProcessing %s: %d/%d chunks (100.0%%) - Complete\n", name1, count1, actualCount1)
 	if err != nil {
 		return fmt.Errorf("failed to iterate chunks from %s: %v", name1, err)
 	}
 
 	// Collect from second source
+	var count2 uint32
 	err = iterateAllChunks(ctx, cs2, func(chunk chunks.Chunk) {
 		hashes2[chunk.Hash()] = true
+		count2++
+		if count2%10000 == 0 {
+			percentage := float64(count2) / float64(actualCount2) * 100
+			fmt.Printf("\033[2K\rProcessing %s: %d/%d chunks (%.1f%%)", name2, count2, actualCount2, percentage)
+		}
 	})
+	fmt.Printf("\033[2K\rProcessing %s: %d/%d chunks (100.0%%) - Complete\n", name2, count2, actualCount2)
 	if err != nil {
 		return fmt.Errorf("failed to iterate chunks from %s: %v", name2, err)
 	}
 
 	// Verify that the number of collected hashes matches the expected chunk counts
+	if len(hashes1) != int(count1) {
+		cli.Println(fmt.Sprintf("WARNING: %s has duplicate chunks! Iterated %d chunks but collected %d unique hashes", name1, count1, len(hashes1)))
+	}
+	if len(hashes2) != int(count2) {
+		cli.Println(fmt.Sprintf("WARNING: %s has duplicate chunks! Iterated %d chunks but collected %d unique hashes", name2, count2, len(hashes2)))
+	}
 	if len(hashes1) != int(actualCount1) {
-		cli.Println(fmt.Sprintf("WARNING: %s iteration collected %d hashes but count() returned %d", name1, len(hashes1), actualCount1))
+		cli.Println(fmt.Sprintf("WARNING: %s iteration collected %d unique hashes but count() returned %d", name1, len(hashes1), actualCount1))
 	}
 	if len(hashes2) != int(actualCount2) {
-		cli.Println(fmt.Sprintf("WARNING: %s iteration collected %d hashes but count() returned %d", name2, len(hashes2), actualCount2))
+		cli.Println(fmt.Sprintf("WARNING: %s iteration collected %d unique hashes but count() returned %d", name2, len(hashes2), actualCount2))
 	}
 
 	// Compare the collected hashes
