@@ -158,11 +158,11 @@ func compareTableFiles(ctx context.Context, dir string, hash1, hash2 hash.Hash, 
 		count1++
 		if count1%10000 == 0 {
 			percentage := float64(count1) / float64(actualCount1) * 100
-			fmt.Printf("\033[2K\rProcessing %s: %d/%d chunks (%.1f%%)", name1, count1, actualCount1, percentage)
+			cli.Printf("\033[2K\rProcessing %s: %d/%d chunks (%.1f%%)", name1, count1, actualCount1, percentage)
 		}
 		return nil
 	})
-	fmt.Printf("\033[2K\rProcessing %s: %d/%d chunks (100.0%%) - Complete\n", name1, count1, actualCount1)
+	cli.Printf("\033[2K\rProcessing %s: %d/%d chunks (100.0%%) - Complete\n", name1, count1, actualCount1)
 	if err != nil {
 		return fmt.Errorf("failed to iterate chunks from %s: %v", name1, err)
 	}
@@ -174,11 +174,11 @@ func compareTableFiles(ctx context.Context, dir string, hash1, hash2 hash.Hash, 
 		count2++
 		if count2%10000 == 0 {
 			percentage := float64(count2) / float64(actualCount2) * 100
-			fmt.Printf("\033[2K\rProcessing %s: %d/%d chunks (%.1f%%)", name2, count2, actualCount2, percentage)
+			cli.Printf("\033[2K\rProcessing %s: %d/%d chunks (%.1f%%)", name2, count2, actualCount2, percentage)
 		}
 		return nil
 	})
-	fmt.Printf("\033[2K\rProcessing %s: %d/%d chunks (100.0%%) - Complete\n", name2, count2, actualCount2)
+	cli.Printf("\033[2K\rProcessing %s: %d/%d chunks (100.0%%) - Complete\n", name2, count2, actualCount2)
 	if err != nil {
 		return fmt.Errorf("failed to iterate chunks from %s: %v", name2, err)
 	}
