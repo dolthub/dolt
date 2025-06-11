@@ -172,7 +172,8 @@ func archiveSingleBlockStore(ctx context.Context, bscb func() *NomsBlockStore, d
 
 		archivePath := ""
 		archiveName := hash.Hash{}
-		archivePath, archiveName, err = convertTableFileToArchive(ctx, cs, idx, dagGroups, path, progress, &stats)
+		chkCnt := uint32(0)
+		archivePath, archiveName, chkCnt, err = convertTableFileToArchive(ctx, cs, idx, dagGroups, path, progress, &stats)
 		if err != nil {
 			if errors.Is(err, errNotEnoughChunks) {
 				progress <- fmt.Sprintf("Not enough chunks to build archive for %s. Skipping.", cs.hash().String())
@@ -202,7 +203,7 @@ func archiveSingleBlockStore(ctx context.Context, bscb func() *NomsBlockStore, d
 		purgeFile := ""
 		for _, spec := range specs {
 			if tf == spec.name {
-				newSpecs = append(newSpecs, tableSpec{archiveName, spec.chunkCount})
+				newSpecs = append(newSpecs, tableSpec{archiveName, chkCnt})
 				if purge {
 					purgeFile = filepath.Join(path, tf.String())
 				}
@@ -236,28 +237,28 @@ func convertTableFileToArchive(
 	archivePath string,
 	progress chan interface{},
 	stats *Stats,
-) (string, hash.Hash, error) {
+) (string, hash.Hash, uint32, error) {
 	allChunks, defaultSamples, err := gatherAllChunks(ctx, cs, idx, stats)
 	if err != nil {
-		return "", hash.Hash{}, err
+		return "", hash.Hash{}, 0, err
 	}
 
 	var defaultDict []byte
 	if len(defaultSamples) >= minSamples {
 		defaultDict = buildDictionary(defaultSamples)
 	} else {
-		return "", hash.Hash{}, errNotEnoughChunks
+		return "", hash.Hash{}, 0, errNotEnoughChunks
 	}
 	defaultSamples = nil
 
 	defaultCDict, err := gozstd.NewCDict(defaultDict)
 	if err != nil {
-		return "", hash.Hash{}, err
+		return "", hash.Hash{}, 0, err
 	}
 
 	cgList, err := dagGroups.convertToChunkGroups(ctx, allChunks, defaultCDict, progress, stats)
 	if err != nil {
-		return "", hash.Hash{}, err
+		return "", hash.Hash{}, 0, err
 	}
 	sort.Slice(cgList, func(i, j int) bool {
 		return cgList[i].totalBytesSavedWDict > cgList[j].totalBytesSavedWDict
@@ -273,36 +274,38 @@ func convertTableFileToArchive(
 
 	arcW, err := newArchiveWriter("")
 	if err != nil {
-		return "", hash.Hash{}, err
+		return "", hash.Hash{}, 0, err
 	}
 	var defaultDictByteSpanId uint32
 	defaultDictByteSpanId, err = arcW.writeByteSpan(cmpBuff)
 	if err != nil {
-		return "", hash.Hash{}, err
+		return "", hash.Hash{}, 0, err
 	}
 
 	_, grouped, singles, err := writeDataToArchive(ctx, allChunks, cgList, defaultDictByteSpanId, defaultCDict, arcW, progress, stats)
 	if err != nil {
-		return "", hash.Hash{}, err
+		return "", hash.Hash{}, 0, err
 	}
 
 	err = indexFinalizeFlushArchive(arcW, archivePath, cs.hash())
 	if err != nil {
-		return "", hash.Hash{}, err
+		return "", hash.Hash{}, 0, err
 	}
 
-	if grouped+singles != idx.chunkCount() {
-		// Leaving as a panic. This should never happen.
-		missing := idx.chunkCount() - (grouped + singles)
-		panic(fmt.Sprintf("chunk count mismatch. Missing: %d", missing))
+	chunkCount := grouped + singles
+	if chunkCount != idx.chunkCount() {
+		// Table files can have duplicate chunks, and the archive build will dedupe them. So we do end
+		// up with fewer total chunks in the archive.
+		dupes := idx.chunkCount() - (grouped + singles)
+		progress <- fmt.Sprintf("\nChunk count mismatch. Duplicate chunks: %d\n", dupes)
 	}
 
 	name, err := arcW.getName()
 	if err != nil {
-		return "", hash.Hash{}, err
+		return "", hash.Hash{}, 0, err
 	}
 
-	return arcW.finalPath, name, err
+	return arcW.finalPath, name, chunkCount, err
 }
 
 func indexFinalize(arcW *archiveWriter, originTableFile hash.Hash) error {
