@@ -754,7 +754,7 @@ func (d *DoltSession) newPendingCommit(ctx *sql.Context, branchState *branchStat
 
 		// If the commit message isn't set and we're amending the previous commit,
 		// go ahead and set the commit message from the current HEAD
-		if props.Message == "" {
+		if props.Message == "" && props.Amend {
 			meta, err := headCommit.GetCommitMeta(ctx)
 			if err != nil {
 				return nil, err
