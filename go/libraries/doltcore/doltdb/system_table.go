@@ -422,8 +422,6 @@ var DoltGeneratedTableNames = []string{
 	MergeStatusTableName,
 	TagsTableName,
 	IgnoreTableName,
-	RebaseTableName,
-	StatisticsTableName,
 }
 
 const (
