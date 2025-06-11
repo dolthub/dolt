@@ -33,6 +33,7 @@ import (
 	"time"
 
 	"github.com/dolthub/dolt/go/libraries/utils/dynassert"
+	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
@@ -78,20 +79,20 @@ func archiveFileExists(ctx context.Context, dir string, name string) (bool, erro
 	return err == nil, err
 }
 
-func newFileTableReader(ctx context.Context, dir string, h hash.Hash, chunkCount uint32, q MemoryQuotaProvider, stats *Stats) (cs chunkSource, err error) {
+func newFileTableReader(ctx context.Context, dir string, h hash.Hash, chunkCount uint32, q MemoryQuotaProvider, stats *Stats) (cs ChunkSource, err error) {
 	// we either have a table file or an archive file
 	tfExists, err := tableFileExists(ctx, dir, h)
 	if err != nil {
 		return nil, err
 	} else if tfExists {
-		return nomsFileTableReader(ctx, filepath.Join(dir, h.String()), h, chunkCount, q)
+		return NomsFileTableReader(ctx, filepath.Join(dir, h.String()), h, chunkCount, q)
 	}
 
 	afExists, err := archiveFileExists(ctx, dir, h.String())
 	if err != nil {
 		return nil, err
 	} else if afExists {
-		return newArchiveChunkSource(ctx, dir, h, chunkCount, q, stats)
+		return NewArchiveChunkSource(ctx, dir, h, chunkCount, q, stats)
 	}
 	return nil, fmt.Errorf("error opening table file: %w: %s/%s", ErrTableFileNotFound, dir, h.String())
 }
@@ -114,7 +115,7 @@ func newFileReaderAt(path string) (*fileReaderAt, error) {
 	return &fileReaderAt{f, path, fi.Size(), cnt}, nil
 }
 
-func nomsFileTableReader(ctx context.Context, path string, h hash.Hash, chunkCount uint32, q MemoryQuotaProvider) (cs chunkSource, err error) {
+func NomsFileTableReader(ctx context.Context, path string, h hash.Hash, chunkCount uint32, q MemoryQuotaProvider) (cs ChunkSource, err error) {
 	fra, err := newFileReaderAt(path)
 	if err != nil {
 		return nil, err
@@ -179,12 +180,22 @@ func (ftr *fileTableReader) Close() error {
 	return ftr.tableReader.close()
 }
 
-func (ftr *fileTableReader) clone() (chunkSource, error) {
+func (ftr *fileTableReader) clone() (ChunkSource, error) {
 	tr, err := ftr.tableReader.clone()
 	if err != nil {
 		return &fileTableReader{}, err
 	}
 	return &fileTableReader{tr, ftr.h}, nil
+}
+
+// Count is an exported wrapper for the count method
+func (ftr *fileTableReader) Count() (uint32, error) {
+	return ftr.tableReader.count()
+}
+
+// IterateAllChunks is an exported wrapper for the iterateAllChunks method
+func (ftr *fileTableReader) IterateAllChunks(ctx context.Context, cb func(chunks.Chunk), stats *Stats) error {
+	return ftr.tableReader.iterateAllChunks(ctx, cb, stats)
 }
 
 type fileReaderAt struct {

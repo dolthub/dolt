@@ -237,7 +237,7 @@ type chunkReader interface {
 	close() error
 }
 
-type chunkSource interface {
+type ChunkSource interface {
 	chunkReader
 
 	// hash returns the hash address of this chunkSource.
@@ -260,7 +260,7 @@ type chunkSource interface {
 	// cannot be |Close|d more than once, so if a |chunkSource| is being
 	// retained in two objects with independent life-cycle, it should be
 	// |Clone|d first.
-	clone() (chunkSource, error)
+	clone() (ChunkSource, error)
 
 	// currentSize returns the current total physical size of the chunkSource.
 	currentSize() uint64
@@ -274,6 +274,9 @@ type chunkSource interface {
 	// related to the callback - if the callback discovers an error, it must manage that out of band.
 	iterateAllChunks(context.Context, func(chunk chunks.Chunk), *Stats) error
 }
+
+// Backward compatibility alias
+type chunkSource = ChunkSource
 
 type chunkSources []chunkSource
 

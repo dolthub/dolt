@@ -32,21 +32,21 @@ type archiveChunkSource struct {
 	aRdr archiveReader
 }
 
-var _ chunkSource = &archiveChunkSource{}
+var _ ChunkSource = &archiveChunkSource{}
 
-func newArchiveChunkSource(ctx context.Context, dir string, h hash.Hash, chunkCount uint32, q MemoryQuotaProvider, stats *Stats) (archiveChunkSource, error) {
+func NewArchiveChunkSource(ctx context.Context, dir string, h hash.Hash, chunkCount uint32, q MemoryQuotaProvider, stats *Stats) (ChunkSource, error) {
 	archiveFile := filepath.Join(dir, h.String()+ArchiveFileSuffix)
 
 	fra, err := newFileReaderAt(archiveFile)
 	if err != nil {
-		return archiveChunkSource{}, err
+		return nil, err
 	}
 
 	aRdr, err := newArchiveReader(ctx, fra, uint64(fra.sz), stats)
 	if err != nil {
-		return archiveChunkSource{}, err
+		return nil, err
 	}
-	return archiveChunkSource{archiveFile, aRdr}, nil
+	return &archiveChunkSource{archiveFile, aRdr}, nil
 }
 
 func newAWSArchiveChunkSource(ctx context.Context,
@@ -140,7 +140,17 @@ func (acs archiveChunkSource) count() (uint32, error) {
 	return acs.aRdr.count(), nil
 }
 
+// Count is an exported wrapper for the count method
+func (acs *archiveChunkSource) Count() (uint32, error) {
+	return acs.aRdr.count(), nil
+}
+
 func (acs archiveChunkSource) close() error {
+	return acs.aRdr.close()
+}
+
+// Close is an exported wrapper for the close method
+func (acs *archiveChunkSource) Close() error {
 	return acs.aRdr.close()
 }
 
@@ -172,7 +182,7 @@ func (acs archiveChunkSource) index() (tableIndex, error) {
 	return nil, errors.New("Archive chunk source does not expose table file indexes")
 }
 
-func (acs archiveChunkSource) clone() (chunkSource, error) {
+func (acs archiveChunkSource) clone() (ChunkSource, error) {
 	reader, err := acs.aRdr.clone()
 	if err != nil {
 		return nil, err
@@ -255,4 +265,9 @@ func (acs archiveChunkSource) iterateAllChunks(ctx context.Context, cb func(chun
 		cb(chunks.NewChunkWithHash(h, data))
 	}
 	return nil
+}
+
+// IterateAllChunks is an exported wrapper for the iterateAllChunks method
+func (acs *archiveChunkSource) IterateAllChunks(ctx context.Context, cb func(chunks.Chunk), stats *Stats) error {
+	return acs.iterateAllChunks(ctx, cb, stats)
 }
