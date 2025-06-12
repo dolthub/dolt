@@ -7145,8 +7145,47 @@ var DoltCommitTests = []queries.ScriptTest{
 		},
 	},
 	{
+		Name: "CALL DOLT_COMMIT('--amend') works on initial commit",
+		SetUpScript: []string{
+			"CALL DOLT_BRANCH('initcommit')",
+			"CALL DOLT_CHECKOUT('initcommit')",
+			"CALL DOLT_RESET('--hard', 'HEAD~7')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT COUNT(*) FROM dolt_log;",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "CALL DOLT_COMMIT('--amend', '-m', 'amended commit message');",
+				Expected: []sql.Row{{doltCommit}},
+			},
+			{
+				Query:    "SELECT message FROM dolt_log;",
+				Expected: []sql.Row{{"amended commit message"}},
+			},
+			{
+				Query:    "SELECT COUNT(*) FROM dolt_log;",
+				Expected: []sql.Row{{1}},
+			},
+			{ // checking double-modification
+				Query:    "CALL DOLT_COMMIT('--amend', '-m', 'amended commit message x2');",
+				Expected: []sql.Row{{doltCommit}},
+			},
+			{
+				Query:    "SELECT message FROM dolt_log;",
+				Expected: []sql.Row{{"amended commit message x2"}},
+			},
+			{
+				Query:    "SELECT COUNT(*) FROM dolt_log;",
+				Expected: []sql.Row{{1}},
+			},
+		},
+	},
+	{
 		Name: "CALL DOLT_COMMIT('-amend') works to add changes to a commit",
 		SetUpScript: []string{
+			"CALL DOLT_CHECKOUT('main')",
 			"SET @@AUTOCOMMIT=0;",
 			"INSERT INTO test (id) VALUES (3)",
 			"CALL DOLT_ADD('.');",
@@ -7165,7 +7204,7 @@ var DoltCommitTests = []queries.ScriptTest{
 				Expected: []sql.Row{{0}},
 			},
 			{
-				Query: "SELECT  message FROM dolt_log;",
+				Query: "SELECT message FROM dolt_log;",
 				Expected: []sql.Row{
 					{"original commit message for adding changes to a commit"},
 					{"amended commit message"},
@@ -7383,45 +7422,6 @@ var DoltCommitTests = []queries.ScriptTest{
 			{
 				Query:    "SELECT COUNT(parent_hash) FROM dolt_commit_ancestors WHERE commit_hash= @hash;",
 				Expected: []sql.Row{{2}},
-			},
-		},
-	},
-}
-
-var AmendInitialDoltCommitTests = []queries.ScriptTest{
-	{
-		Name: "CALL DOLT_COMMIT('--amend') works on initial commit",
-		SetUpScript: []string{
-			"CALL DOLT_RESET('--hard', 'HEAD~1')", // remove pre-made commit
-		},
-		Assertions: []queries.ScriptTestAssertion{
-			{
-				Query:    "SELECT COUNT(*) FROM dolt_log;",
-				Expected: []sql.Row{{1}},
-			},
-			{
-				Query:    "CALL DOLT_COMMIT('--amend', '-m', 'amended commit message');",
-				Expected: []sql.Row{{doltCommit}},
-			},
-			{
-				Query:    "SELECT message FROM dolt_log;",
-				Expected: []sql.Row{{"amended commit message"}},
-			},
-			{
-				Query:    "SELECT COUNT(*) FROM dolt_log;",
-				Expected: []sql.Row{{1}},
-			},
-			{ // checking double-modification
-				Query:    "CALL DOLT_COMMIT('--amend', '-m', 'amended commit message x2');",
-				Expected: []sql.Row{{doltCommit}},
-			},
-			{
-				Query:    "SELECT message FROM dolt_log;",
-				Expected: []sql.Row{{"amended commit message x2"}},
-			},
-			{
-				Query:    "SELECT COUNT(*) FROM dolt_log;",
-				Expected: []sql.Row{{1}},
 			},
 		},
 	},

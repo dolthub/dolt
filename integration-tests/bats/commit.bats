@@ -176,48 +176,6 @@ SQL
     [ "${#lines[@]}" -eq 8 ] || false
 }
 
-@test "commit: --amend works correctly on initial commit" {
-  rm -rf initcommit
-  mkdir initcommit
-  cd initcommit
-  dolt init
-
-  run dolt commit --amend -m "dolt init"
-  [ $status -eq 0 ]
-  [[ "$output" =~ "dolt init" ]] || false
-  run dolt log
-  [ $status -eq 0 ]
-  commit_count=$(grep -o -E "commit [0-9a-z]+" <<< "$output" | wc -l)
-  echo "$commit_count"
-  echo "$output"
-  [[ "$commit_count" = "1" ]] || false
-}
-
-@test "commit: --amend works correctly on new initial commit" {
-    rm -rf initcommit
-    mkdir initcommit
-    cd initcommit
-    dolt init
-    run dolt commit --amend -m "dolt init"
-    [ $status -eq 0 ]
-    [[ "$output" =~ "dolt init" ]] || false
-    run dolt log
-    [ $status -eq 0 ]
-    commit_count=$(grep -o -E "commit [0-9a-z]+" <<< "$output" | wc -l)
-    echo "$commit_count"
-    echo "$output"
-    [[ "$commit_count" = "1" ]] || false
-    run dolt commit --amend -m "dolt init 2"
-    [ $status -eq 0 ]
-    [[ "$output" =~ "dolt init" ]] || false
-    run dolt log
-    [ $status -eq 0 ]
-    commit_count=$(grep -o -E "commit [0-9a-z]+" <<< "$output" | wc -l)
-    echo "$commit_count"
-    echo "$output"
-    [[ "$commit_count" = "1" ]] || false
-}
-
 @test "commit: dolt commit with unstaged tables leaves them in the working set" {
     dolt sql -q "CREATE table t1 (pk int primary key);"
     dolt sql -q "CREATE table t2 (pk int primary key);"

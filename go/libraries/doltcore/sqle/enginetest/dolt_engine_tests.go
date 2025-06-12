@@ -1571,13 +1571,6 @@ func RunDoltCommitTests(t *testing.T, harness DoltEnginetestHarness) {
 	}
 }
 
-func RunAmendInitialDoltCommitTests(t *testing.T, harness DoltEnginetestHarness) {
-	defer harness.Close()
-	for _, script := range AmendInitialDoltCommitTests {
-		enginetest.TestScript(t, harness, script)
-	}
-}
-
 func RunDoltCommitTestsPrepared(t *testing.T, harness DoltEnginetestHarness) {
 	defer harness.Close()
 	for _, script := range DoltCommitTests {
