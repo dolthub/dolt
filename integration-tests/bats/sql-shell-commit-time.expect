@@ -1,0 +1,38 @@
+#!/usr/bin/expect
+
+set timeout 5
+set env(NO_COLOR) 1
+
+source  "$env(BATS_CWD)/helper/common_expect_functions.tcl"
+
+spawn dolt sql  
+
+expect_with_defaults                                                    {dolt-repo-[0-9]+/main\*> } { send "\\commit -A -m \"created a table\"\r"; }
+
+expect_with_defaults  {Date:\s+([^\r]+)}   {
+    global first_commit_date
+    set first_commit_date $expect_out(1,string)
+}
+
+expect_with_defaults                                                    {dolt-repo-[0-9]+/main> }   { send "insert into test (pk) values (1);\r"; }
+
+# We want to check for different timestamps, so we wait some time to ensure that.
+after 2000
+
+expect_with_defaults                                                    {dolt-repo-[0-9]+/main> }   { send "\\commit -A -m \"added a row\"\r"; }
+
+expect_with_defaults  {Date:\s+([^\r]+)}              {
+    global second_commit_date
+    set second_commit_date $expect_out(1,string)
+}
+
+if { $first_commit_date eq $second_commit_date } {
+    puts "Test failure: commit time stamps did not differ"
+    puts "Compared $first_commit_date to $second_commit_date"
+    exit 1
+}
+
+expect_with_defaults                                                    {dolt-repo-[0-9]+/main> }    { send "quit\r" }
+
+expect eof
+exit
