@@ -82,7 +82,6 @@ type StatsController struct {
 	workerDoneCh    chan struct{}
 	listeners       []listener
 
-	JobInterval time.Duration
 	gcInterval  time.Duration
 	memOnly     bool
 	enableGc    bool
@@ -126,13 +125,15 @@ func (rs *rootStats) String() string {
 	return string(str)
 }
 
+const defaultJobInterval = 500 * time.Millisecond
+const defaultGcInterval = 24 * time.Hour
+
 func NewStatsController(logger *logrus.Logger, bgThreads *sql.BackgroundThreads, dEnv *env.DoltEnv) *StatsController {
 	return &StatsController{
 		mu:          sync.Mutex{},
 		logger:      logger,
-		JobInterval: 500 * time.Millisecond,
-		gcInterval:  24 * time.Hour,
-		rateLimiter: newSimpleRateLimiter(500 * time.Millisecond),
+		gcInterval:  defaultGcInterval,
+		rateLimiter: newSimpleRateLimiter(defaultJobInterval),
 		Stats:       newRootStats(),
 		dbFs:        make(map[string]filesys.Filesys),
 		closed:      make(chan struct{}),

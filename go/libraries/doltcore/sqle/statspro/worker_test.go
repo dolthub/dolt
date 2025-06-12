@@ -634,7 +634,7 @@ func newStatsCoord(t *testing.T, bthreads *sql.BackgroundThreads) *StatsControll
 		Address: "bigbillie@fake.horse",
 	})
 
-	setTimers(t, ctx, 1*time.Nanosecond, 100*time.Nanosecond)
+	setTimers(t, ctx, 1*time.Millisecond, 100*time.Millisecond)
 
 	return sqlEng.Analyzer.Catalog.StatsProvider.(*StatsController)
 }
@@ -647,7 +647,7 @@ func emptySetup(t *testing.T, threads *sql.BackgroundThreads, memOnly bool, gcEn
 		Address: "bigbillie@fake.horse",
 	})
 
-	setTimers(t, ctx, 1*time.Nanosecond, 100*time.Nanosecond)
+	setTimers(t, ctx, 1*time.Millisecond, 100*time.Millisecond)
 	if memOnly {
 		sql.SystemVariables.AssignValues(map[string]interface{}{
 			dsess.DoltStatsMemoryOnly: int8(1),
@@ -841,14 +841,14 @@ func newTestEngine(ctx context.Context, t *testing.T, dEnv *env.DoltEnv, threads
 func setTimers(t *testing.T, ctx *sql.Context, jobI, gcI time.Duration) {
 	if jobI > 0 {
 		_, origJob, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsJobInterval)
-		sql.SystemVariables.SetGlobal(ctx, dsess.DoltStatsJobInterval, strconv.Itoa(int(jobI/time.Nanosecond)))
+		sql.SystemVariables.SetGlobal(ctx, dsess.DoltStatsJobInterval, strconv.Itoa(int(jobI/time.Millisecond)))
 		t.Cleanup(func() {
 			sql.SystemVariables.SetGlobal(ctx, dsess.DoltStatsJobInterval, origJob)
 		})
 	}
 	if gcI > 0 {
 		_, origGc, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsGCInterval)
-		sql.SystemVariables.SetGlobal(ctx, dsess.DoltStatsGCInterval, strconv.Itoa(int(gcI/time.Nanosecond)))
+		sql.SystemVariables.SetGlobal(ctx, dsess.DoltStatsGCInterval, strconv.Itoa(int(gcI/time.Millisecond)))
 		t.Cleanup(func() {
 			sql.SystemVariables.SetGlobal(ctx, dsess.DoltStatsGCInterval, origGc)
 		})
@@ -860,7 +860,7 @@ func TestStatsGcConcurrency(t *testing.T) {
 	defer threads.Shutdown()
 	ctx, sqlEng, sc := emptySetup(t, threads, false, true)
 	sc.SetEnableGc(true)
-	setTimers(t, ctx, 1*time.Nanosecond, 100*time.Nanosecond)
+	setTimers(t, ctx, 1*time.Millisecond, 100*time.Millisecond)
 	require.NoError(t, sc.Restart(ctx))
 
 	addDb := func(ctx *sql.Context, dbName string) {
@@ -940,7 +940,7 @@ func TestStatsBranchConcurrency(t *testing.T) {
 	threads := sql.NewBackgroundThreads()
 	defer threads.Shutdown()
 	ctx, sqlEng, sc := emptySetup(t, threads, false, false)
-	setTimers(t, ctx, 1*time.Nanosecond, time.Hour)
+	setTimers(t, ctx, 1*time.Millisecond, time.Hour)
 	require.NoError(t, sc.Restart(ctx))
 
 	addBranch := func(ctx *sql.Context, i int) {
@@ -1023,7 +1023,7 @@ func TestStatsCacheGrowth(t *testing.T) {
 	defer threads.Shutdown()
 	ctx, sqlEng, sc := emptySetup(t, threads, false, true)
 	sc.SetEnableGc(true)
-	setTimers(t, ctx, 1*time.Nanosecond, time.Hour)
+	setTimers(t, ctx, 1*time.Millisecond, time.Hour)
 	require.NoError(t, sc.Restart(ctx))
 
 	addBranch := func(ctx *sql.Context, i int) {

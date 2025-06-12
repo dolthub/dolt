@@ -328,7 +328,8 @@ func TestSimpleRateLimiter_ConcurrentUsage(t *testing.T) {
 		wg.Wait()
 
 		// At least one should have executed before stop
-		require.True(t, atomic.LoadInt64(&executedCount) >= 1)
+		require.GreaterOrEqual(t, executedCount, int64(1))
+		require.Less(t, executedCount, int64(5))
 	})
 
 	t.Run("ConcurrentExecuteSetIntervalAndStop", func(t *testing.T) {
@@ -373,7 +374,7 @@ func TestSimpleRateLimiter_ConcurrentUsage(t *testing.T) {
 		wg.Wait()
 
 		// Should have executed at least some operations
-		require.True(t, atomic.LoadInt64(&executedCount) >= 1)
+		require.GreaterOrEqual(t, executedCount, int64(1))
 	})
 }
 
@@ -406,6 +407,29 @@ func TestSimpleRateLimiter_EdgeCases(t *testing.T) {
 			return nil
 		})
 
+		require.NoError(t, err)
+		require.True(t, executed)
+	})
+
+	t.Run("NegativeInterval", func(t *testing.T) {
+		rl := newSimpleRateLimiter(-128)
+		defer rl.stop()
+
+		ctx := context.Background()
+		executed := false
+		err := rl.execute(ctx, func() error {
+			executed = true
+			return nil
+		})
+		require.NoError(t, err)
+		require.True(t, executed)
+
+		rl.setInterval(-256)
+		executed = false
+		err = rl.execute(ctx, func() error {
+			executed = true
+			return nil
+		})
 		require.NoError(t, err)
 		require.True(t, executed)
 	})
