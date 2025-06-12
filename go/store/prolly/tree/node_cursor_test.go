@@ -166,7 +166,7 @@ var valDesc = val.NewTupleDescriptor(
 
 func randomTupleItemPairs(count int, ns NodeStore) (items [][2]Item) {
 	ctx := sql.NewEmptyContext()
-	tups, err := RandomTuplePairs(ctx, count, keyDesc, valDesc, ns)
+	tups, err := RandomTuplePairs(ctx, testRand, count, keyDesc, valDesc, ns)
 	if err != nil {
 		panic(err)
 	}

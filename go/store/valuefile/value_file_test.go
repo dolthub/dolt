@@ -15,6 +15,7 @@
 package valuefile
 
 import (
+	"math/rand"
 	"os"
 	"path/filepath"
 	"testing"
@@ -32,6 +33,8 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
 )
+
+var testRand = rand.New(rand.NewSource(1))
 
 func TestReadWriteValueFile(t *testing.T) {
 	const numMaps = 1
@@ -133,7 +136,7 @@ var vd = val.NewTupleDescriptor(
 
 func makeProllyMap(t *testing.T, ns tree.NodeStore, count int) (prolly.Map, [][2]val.Tuple) {
 	ctx := sql.NewEmptyContext()
-	tuples, err := tree.RandomTuplePairs(ctx, count, kd, vd, ns)
+	tuples, err := tree.RandomTuplePairs(ctx, testRand, count, kd, vd, ns)
 	require.NoError(t, err)
 	om := mustProllyMapFromTuples(t, kd, vd, ns, tuples)
 

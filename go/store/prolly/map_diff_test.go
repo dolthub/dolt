@@ -28,7 +28,45 @@ import (
 
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
+
+	xxhash "github.com/cespare/xxhash/v2"
 )
+
+type rngSeed struct {
+	digest *xxhash.Digest
+}
+
+func newRngSeed() rngSeed {
+	return rngSeed{xxhash.New()}
+}
+
+func (r rngSeed) Hash() int64 {
+	return int64(r.digest.Sum64())
+}
+
+func (r rngSeed) AppendString(s string) rngSeed {
+	marshalled, _ := r.digest.MarshalBinary()
+	r.digest = xxhash.New()
+	r.digest.UnmarshalBinary(marshalled)
+	r.digest.WriteString(s)
+	return r
+}
+
+func (r rngSeed) AppendBytes(b []byte) rngSeed {
+	marshalled, _ := r.digest.MarshalBinary()
+	r.digest = xxhash.New()
+	r.digest.UnmarshalBinary(marshalled)
+	r.digest.Write(b)
+	return r
+}
+
+func (r rngSeed) AppendInt(i int) rngSeed {
+	return r.AppendString(fmt.Sprintf("%d", i))
+}
+
+func (r rngSeed) AppendByte(b byte) rngSeed {
+	return r.AppendBytes([]byte{b})
+}
 
 func TestMapDiff(t *testing.T) {
 	scales := []int{
@@ -38,10 +76,14 @@ func TestMapDiff(t *testing.T) {
 		10000,
 	}
 
+	// seedGenerator := newRngSeed()
+
 	for _, s := range scales {
 		name := fmt.Sprintf("test proCur map at scale %d", s)
 		t.Run(name, func(t *testing.T) {
-			prollyMap, tuples := makeProllyMap(t, s)
+			seed := int64(xxhash.Sum64String(t.Name()))
+			testRand := rand.New(rand.NewSource(seed))
+			prollyMap, tuples := makeProllyMap(t, testRand, s)
 			require.Equal(t, s, len(tuples))
 
 			t.Run("map diff error handling", func(t *testing.T) {
@@ -56,30 +98,45 @@ func TestMapDiff(t *testing.T) {
 
 			// deletes
 			t.Run("single delete diff", func(t *testing.T) {
-				for k := 0; k < 100; k++ {
-					testDeleteDiffs(t, prollyMap.(Map), tuples, 1)
+				// seed := seedGenerator.AppendString("single delete diff").Hash()
+				seed := int64(xxhash.Sum64String(t.Name()))
+				for k := int64(0); k < 100; k++ {
+					testRand := rand.New(rand.NewSource(seed + k))
+					testDeleteDiffs(t, testRand, prollyMap.(Map), tuples, 1)
 				}
 			})
 			t.Run("many delete diffs", func(t *testing.T) {
-				for k := 0; k < 10; k++ {
-					testDeleteDiffs(t, prollyMap.(Map), tuples, s/10)
-					testDeleteDiffs(t, prollyMap.(Map), tuples, s/2)
+				//seed := seedGenerator.AppendString("many delete diffs").Hash()
+				seed := int64(xxhash.Sum64String(t.Name()))
+				for k := int64(0); k < 10; k++ {
+					testRand := rand.New(rand.NewSource(seed + k))
+					testDeleteDiffs(t, testRand, prollyMap.(Map), tuples, s/10)
+					testDeleteDiffs(t, testRand, prollyMap.(Map), tuples, s/2)
 				}
 			})
 			t.Run("diff against empty map", func(t *testing.T) {
-				testDeleteDiffs(t, prollyMap.(Map), tuples, s)
+				// seed := seedGenerator.AppendString("diff against empty map").Hash()
+				seed := int64(xxhash.Sum64String(t.Name()))
+				testRand := rand.New(rand.NewSource(seed))
+				testDeleteDiffs(t, testRand, prollyMap.(Map), tuples, s)
 			})
 
 			// inserts
 			t.Run("single insert diff", func(t *testing.T) {
-				for k := 0; k < 100; k++ {
-					testInsertDiffs(t, prollyMap.(Map), tuples, 1)
+				seed := int64(xxhash.Sum64String(t.Name()))
+				for k := int64(0); k < 100; k++ {
+					testRand := rand.New(rand.NewSource(seed + k))
+					testInsertDiffs(t, testRand, prollyMap.(Map), tuples, 1)
 				}
 			})
 			t.Run("many insert diffs", func(t *testing.T) {
-				for k := 0; k < 10; k++ {
-					testInsertDiffs(t, prollyMap.(Map), tuples, s/10)
-					testInsertDiffs(t, prollyMap.(Map), tuples, s/2)
+				seed := int64(xxhash.Sum64String(t.Name()))
+				for k := int64(0); k < 10; k++ {
+					t.Run(fmt.Sprintf("iteration %d", k), func(t *testing.T) {
+						testRand := rand.New(rand.NewSource(seed + k))
+						testInsertDiffs(t, testRand, prollyMap.(Map), tuples, s/10)
+						testInsertDiffs(t, testRand, prollyMap.(Map), tuples, s/2)
+					})
 				}
 			})
 
@@ -131,8 +188,8 @@ func testEqualMapDiff(t *testing.T, m Map) {
 
 func testMapDiffAgainstEmpty(t *testing.T, scale int) {
 	ctx := context.Background()
-	m, tuples := makeProllyMap(t, scale)
-	empty, _ := makeProllyMap(t, 0)
+	m, tuples := makeProllyMap(t, testRand, scale)
+	empty, _ := makeProllyMap(t, testRand, 0)
 
 	cnt := 0
 	err := DiffMaps(ctx, m.(Map), empty.(Map), false, func(ctx context.Context, diff tree.Diff) error {
@@ -157,9 +214,10 @@ func testMapDiffAgainstEmpty(t *testing.T, scale int) {
 	assert.Equal(t, scale, cnt)
 }
 
-func testDeleteDiffs(t *testing.T, from Map, tups [][2]val.Tuple, numDeletes int) {
+func testDeleteDiffs(t *testing.T, testRand *rand.Rand, from Map, tups [][2]val.Tuple, numDeletes int) {
 	ctx := context.Background()
-	rand.Shuffle(len(tups), func(i, j int) {
+
+	testRand.Shuffle(len(tups), func(i, j int) {
 		tups[i], tups[j] = tups[j], tups[i]
 	})
 
@@ -180,9 +238,9 @@ func testDeleteDiffs(t *testing.T, from Map, tups [][2]val.Tuple, numDeletes int
 	assert.Equal(t, numDeletes, cnt)
 }
 
-func testInsertDiffs(t *testing.T, from Map, tups [][2]val.Tuple, numInserts int) {
+func testInsertDiffs(t *testing.T, testRand *rand.Rand, from Map, tups [][2]val.Tuple, numInserts int) {
 	ctx := context.Background()
-	to, inserts := makeMapWithInserts(t, from, numInserts)
+	to, inserts := makeMapWithInserts(t, testRand, from, numInserts)
 
 	var cnt int
 	err := DiffMaps(ctx, from, to, false, func(ctx context.Context, diff tree.Diff) error {
@@ -211,7 +269,7 @@ func testUpdateDiffs(t *testing.T, from Map, tups [][2]val.Tuple, numUpdates int
 	})
 
 	kd, vd := from.Descriptors()
-	updates := makeUpdatesToTuples(kd, vd, sub...)
+	updates := makeUpdatesToTuples(testRand, kd, vd, sub...)
 	to := makeMapWithUpdates(t, from, updates...)
 
 	var cnt int
@@ -250,10 +308,10 @@ func makeMapWithDeletes(t *testing.T, m Map, deletes ...[2]val.Tuple) Map {
 	return mm
 }
 
-func makeMapWithInserts(t *testing.T, m Map, numInserts int) (Map, [][2]val.Tuple) {
+func makeMapWithInserts(t *testing.T, testRand *rand.Rand, m Map, numInserts int) (Map, [][2]val.Tuple) {
 	ctx := context.Background()
 	kd, vd := m.Descriptors()
-	inserts := generateInserts(t, m, kd, vd, numInserts)
+	inserts := generateInserts(t, testRand, m, kd, vd, numInserts)
 	mut := m.Mutate()
 	for _, pair := range inserts {
 		err := mut.Put(ctx, pair[0], pair[1])
@@ -265,10 +323,10 @@ func makeMapWithInserts(t *testing.T, m Map, numInserts int) (Map, [][2]val.Tupl
 }
 
 // generates tuple pairs not currently in |m|
-func generateInserts(t *testing.T, m testMap, kd, vd val.TupleDesc, numInserts int) [][2]val.Tuple {
+func generateInserts(t *testing.T, testRand *rand.Rand, m testMap, kd, vd val.TupleDesc, numInserts int) [][2]val.Tuple {
 	ctx := context.Background()
 	ns := tree.NewTestNodeStore()
-	tups, err := tree.RandomTuplePairs(ctx, numInserts*2, kd, vd, ns)
+	tups, err := tree.RandomTuplePairs(ctx, testRand, numInserts*2, kd, vd, ns)
 	require.NoError(t, err)
 	inserts, extra := tups[:numInserts], tups[numInserts:]
 
@@ -311,7 +369,7 @@ func makeMapWithUpdates(t *testing.T, m Map, updates ...[3]val.Tuple) Map {
 	return mm
 }
 
-func makeUpdatesToTuples(kd, vd val.TupleDesc, tuples ...[2]val.Tuple) (updates [][3]val.Tuple) {
+func makeUpdatesToTuples(testRand *rand.Rand, kd, vd val.TupleDesc, tuples ...[2]val.Tuple) (updates [][3]val.Tuple) {
 	ctx := context.Background()
 	ns := tree.NewTestNodeStore()
 	updates = make([][3]val.Tuple, len(tuples))
@@ -322,7 +380,7 @@ func makeUpdatesToTuples(kd, vd val.TupleDesc, tuples ...[2]val.Tuple) (updates 
 		var err error
 		updates[i][0] = tuples[i][0]
 		updates[i][1] = tuples[i][1]
-		updates[i][2], err = tree.RandomTuple(valBuilder, ns)
+		updates[i][2], err = tree.RandomTuple(valBuilder, testRand, ns)
 		if err != nil {
 			panic(err)
 		}

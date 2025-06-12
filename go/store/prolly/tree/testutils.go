@@ -45,18 +45,18 @@ func NewTupleLeafNode(keys, values []val.Tuple) Node {
 	return newLeafNode(ks, vs)
 }
 
-func RandomTuplePairs(ctx context.Context, count int, keyDesc, valDesc val.TupleDesc, ns NodeStore) (items [][2]val.Tuple, err error) {
+func RandomTuplePairs(ctx context.Context, testRand *rand.Rand, count int, keyDesc, valDesc val.TupleDesc, ns NodeStore) (items [][2]val.Tuple, err error) {
 	keyBuilder := val.NewTupleBuilder(keyDesc, ns)
 	valBuilder := val.NewTupleBuilder(valDesc, ns)
 
 	items = make([][2]val.Tuple, count)
 	for i := range items {
 		var err error
-		items[i][0], err = RandomTuple(keyBuilder, ns)
+		items[i][0], err = RandomTuple(keyBuilder, testRand, ns)
 		if err != nil {
 			return nil, err
 		}
-		items[i][1], err = RandomTuple(valBuilder, ns)
+		items[i][1], err = RandomTuple(valBuilder, testRand, ns)
 		if err != nil {
 			return nil, err
 		}
@@ -79,7 +79,7 @@ func RandomTuplePairs(ctx context.Context, count int, keyDesc, valDesc val.Tuple
 
 		// replace duplicates and validate again
 		for _, d := range dupes {
-			items[d][0], _ = RandomTuple(keyBuilder, ns)
+			items[d][0], _ = RandomTuple(keyBuilder, testRand, ns)
 		}
 		dupes = dupes[:0]
 	}
@@ -95,7 +95,7 @@ func RandomCompositeTuplePairs(ctx context.Context, count int, keyDesc, valDesc 
 		panic("expected composite key")
 	}
 
-	tt, err := RandomTuplePairs(ctx, count, keyDesc, valDesc, ns)
+	tt, err := RandomTuplePairs(ctx, testRand, count, keyDesc, valDesc, ns)
 	if err != nil {
 		return nil, err
 	}
@@ -144,9 +144,9 @@ func AscendingUintTuples(count int) (tuples [][2]val.Tuple, desc val.TupleDesc) 
 	return
 }
 
-func RandomTuple(tb *val.TupleBuilder, ns NodeStore) (tup val.Tuple, err error) {
+func RandomTuple(tb *val.TupleBuilder, testRand *rand.Rand, ns NodeStore) (tup val.Tuple, err error) {
 	for i, typ := range tb.Desc.Types {
-		randomField(tb, i, typ, ns)
+		randomField(tb, testRand, i, typ, ns)
 	}
 	return tb.Build(sharedPool)
 }
@@ -208,7 +208,7 @@ func deduplicateTuples(ctx context.Context, desc val.TupleDesc, tups [][2]val.Tu
 	return
 }
 
-func randomField(tb *val.TupleBuilder, idx int, typ val.Type, ns NodeStore) {
+func randomField(tb *val.TupleBuilder, testRand *rand.Rand, idx int, typ val.Type, ns NodeStore) {
 	// todo(andy): add NULLs
 
 	neg := -1

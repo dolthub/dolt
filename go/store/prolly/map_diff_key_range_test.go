@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/cespare/xxhash/v2"
 	"io"
 	"math/rand"
 	"sort"
@@ -41,18 +42,22 @@ func TestDiffKeyRangeMaps(t *testing.T) {
 	for _, s := range scales {
 		name := fmt.Sprintf("test map RangeDiff at scale %d", s)
 		t.Run(name, func(t *testing.T) {
-			om, tuples := makeProllyMap(t, s)
+			seed := int64(xxhash.Sum64String(t.Name()))
+			testRand := rand.New(rand.NewSource(seed))
+			om, tuples := makeProllyMap(t, testRand, s)
 			require.Equal(t, s, len(tuples))
 			prollyMap := om.(Map)
 			kd, vd := prollyMap.Descriptors()
 
 			t.Run("BoundedKeyRange", func(t *testing.T) {
-				rngTest := makeRandomBoundedKeyRange(kd, tuples)
+				rngTest := makeRandomBoundedKeyRange(testRand, kd, tuples)
 				runDiffTestsWithKeyRange(t, s, prollyMap, tuples, rngTest)
 			})
 
 			t.Run("BoundedKeyRangeWithMissingKeys", func(t *testing.T) {
-				rngTest := makeBoundedKeyRangeWithMissingKeys(t, prollyMap, kd, vd, tuples)
+				seed := int64(xxhash.Sum64String(t.Name()))
+				testRand := rand.New(rand.NewSource(seed))
+				rngTest := makeBoundedKeyRangeWithMissingKeys(t, testRand, prollyMap, kd, vd, tuples)
 				runDiffTestsWithKeyRange(t, s, prollyMap, tuples, rngTest)
 			})
 
@@ -98,27 +103,41 @@ func runDiffTestsWithKeyRange(t *testing.T, s int, prollyMap testMap, tuples [][
 
 	// inserts
 	t.Run("single insert diff", func(t *testing.T) {
+		seed := int64(xxhash.Sum64String(t.Name()))
+		testRand := rand.New(rand.NewSource(seed))
 		for k := 0; k < 100; k++ {
-			testKeyRngInsertDiffs(t, prollyMap.(Map), tuples, 1, rngTest)
+			testKeyRngInsertDiffs(t, testRand, prollyMap.(Map), tuples, 1, rngTest)
 		}
 	})
 	t.Run("many insert diffs", func(t *testing.T) {
-		for k := 0; k < 10; k++ {
-			testKeyRngInsertDiffs(t, prollyMap.(Map), tuples, s/10, rngTest)
-			testKeyRngInsertDiffs(t, prollyMap.(Map), tuples, s/2, rngTest)
+		seed := int64(xxhash.Sum64String(t.Name()))
+		for k := int64(0); k < 10; k++ {
+			t.Run(fmt.Sprintf("iteration %d", k), func(t *testing.T) {
+				testRand := rand.New(rand.NewSource(seed + k))
+				testKeyRngInsertDiffs(t, testRand, prollyMap.(Map), tuples, s/10, rngTest)
+				testKeyRngInsertDiffs(t, testRand, prollyMap.(Map), tuples, s/2, rngTest)
+			})
 		}
 	})
 
 	// updates
 	t.Run("single update diff", func(t *testing.T) {
-		for k := 0; k < 100; k++ {
-			testKeyRngUpdateDiffs(t, prollyMap.(Map), tuples, 1, rngTest)
+		seed := int64(xxhash.Sum64String(t.Name()))
+		for k := int64(0); k < 100; k++ {
+			t.Run(fmt.Sprintf("iteration %d", k), func(t *testing.T) {
+				testRand := rand.New(rand.NewSource(seed + k))
+				testKeyRngUpdateDiffs(t, testRand, prollyMap.(Map), tuples, 1, rngTest)
+			})
 		}
 	})
 	t.Run("many update diffs", func(t *testing.T) {
-		for k := 0; k < 10; k++ {
-			testKeyRngUpdateDiffs(t, prollyMap.(Map), tuples, s/10, rngTest)
-			testKeyRngUpdateDiffs(t, prollyMap.(Map), tuples, s/2, rngTest)
+		seed := int64(xxhash.Sum64String(t.Name()))
+		for k := int64(0); k < 100; k++ {
+			t.Run(fmt.Sprintf("iteration %d", k), func(t *testing.T) {
+				testRand := rand.New(rand.NewSource(seed + k))
+				testKeyRngUpdateDiffs(t, testRand, prollyMap.(Map), tuples, s/10, rngTest)
+				testKeyRngUpdateDiffs(t, testRand, prollyMap.(Map), tuples, s/2, rngTest)
+			})
 		}
 	})
 }
@@ -146,8 +165,8 @@ func testKeyRngEqualMapDiff(t *testing.T, m Map, rngTest keyRangeDiffTest) {
 
 func testKeyRngMapDiffAgainstEmpty(t *testing.T, scale int, rngTest keyRangeDiffTest) {
 	ctx := context.Background()
-	m, tuples := makeProllyMap(t, scale)
-	empty, _ := makeProllyMap(t, 0)
+	m, tuples := makeProllyMap(t, testRand, scale)
+	empty, _ := makeProllyMap(t, testRand, 0)
 
 	inRange := getPairsInKeyRange(tuples, rngTest.keyRange)
 	cnt := 0
@@ -200,9 +219,9 @@ func testKeyRngDeleteDiffs(t *testing.T, from Map, tups [][2]val.Tuple, numDelet
 	assert.Equal(t, len(inRange), cnt)
 }
 
-func testKeyRngInsertDiffs(t *testing.T, from Map, tups [][2]val.Tuple, numInserts int, rngTest keyRangeDiffTest) {
+func testKeyRngInsertDiffs(t *testing.T, testRand *rand.Rand, from Map, tups [][2]val.Tuple, numInserts int, rngTest keyRangeDiffTest) {
 	ctx := context.Background()
-	to, inserts := makeMapWithInserts(t, from, numInserts)
+	to, inserts := makeMapWithInserts(t, testRand, from, numInserts)
 
 	inRange := getPairsInKeyRange(inserts, rngTest.keyRange)
 	cnt := 0
@@ -210,9 +229,11 @@ func testKeyRngInsertDiffs(t *testing.T, from Map, tups [][2]val.Tuple, numInser
 		if !assert.Equal(t, tree.AddedDiff, diff.Type) {
 			fmt.Println("")
 		}
-		assert.Equal(t, inRange[cnt][0], val.Tuple(diff.Key))
-		assert.Equal(t, inRange[cnt][1], val.Tuple(diff.To))
-		assert.True(t, rngTest.keyRange.includes(val.Tuple(diff.Key)))
+		if assert.Less(t, cnt, len(inRange)) {
+			assert.Equal(t, inRange[cnt][0], val.Tuple(diff.Key))
+			assert.Equal(t, inRange[cnt][1], val.Tuple(diff.To))
+			assert.True(t, rngTest.keyRange.includes(val.Tuple(diff.Key)))
+		}
 		cnt++
 		return nil
 	})
@@ -220,10 +241,10 @@ func testKeyRngInsertDiffs(t *testing.T, from Map, tups [][2]val.Tuple, numInser
 	assert.Equal(t, len(inRange), cnt)
 }
 
-func testKeyRngUpdateDiffs(t *testing.T, from Map, tups [][2]val.Tuple, numUpdates int, rngTest keyRangeDiffTest) {
+func testKeyRngUpdateDiffs(t *testing.T, testRand *rand.Rand, from Map, tups [][2]val.Tuple, numUpdates int, rngTest keyRangeDiffTest) {
 	ctx := context.Background()
 
-	rand.Shuffle(len(tups), func(i, j int) {
+	testRand.Shuffle(len(tups), func(i, j int) {
 		tups[i], tups[j] = tups[j], tups[i]
 	})
 
@@ -233,7 +254,7 @@ func testKeyRngUpdateDiffs(t *testing.T, from Map, tups [][2]val.Tuple, numUpdat
 	})
 
 	kd, vd := from.Descriptors()
-	updates := makeUpdatesToTuples(kd, vd, sub...)
+	updates := makeUpdatesToTuples(testRand, kd, vd, sub...)
 	to := makeMapWithUpdates(t, from, updates...)
 	var inRange [][3]val.Tuple
 	for _, pair := range updates {
@@ -245,9 +266,11 @@ func testKeyRngUpdateDiffs(t *testing.T, from Map, tups [][2]val.Tuple, numUpdat
 	var cnt int
 	err := DiffMapsKeyRange(ctx, from, to, rngTest.keyRange.start, rngTest.keyRange.stop, func(ctx context.Context, diff tree.Diff) error {
 		assert.Equal(t, tree.ModifiedDiff, diff.Type)
-		assert.Equal(t, inRange[cnt][0], val.Tuple(diff.Key))
-		assert.Equal(t, inRange[cnt][1], val.Tuple(diff.From))
-		assert.Equal(t, inRange[cnt][2], val.Tuple(diff.To))
+		if assert.Less(t, cnt, len(inRange)) {
+			assert.Equal(t, inRange[cnt][0], val.Tuple(diff.Key))
+			assert.Equal(t, inRange[cnt][1], val.Tuple(diff.From))
+			assert.Equal(t, inRange[cnt][2], val.Tuple(diff.To))
+		}
 		assert.True(t, rngTest.keyRange.includes(val.Tuple(diff.Key)))
 		cnt++
 		return nil
@@ -256,9 +279,9 @@ func testKeyRngUpdateDiffs(t *testing.T, from Map, tups [][2]val.Tuple, numUpdat
 	assert.Equal(t, len(inRange), cnt)
 }
 
-func makeRandomBoundedKeyRange(kd val.TupleDesc, tuples [][2]val.Tuple) keyRangeDiffTest {
-	i := rand.Intn(len(tuples))
-	j := rand.Intn(len(tuples))
+func makeRandomBoundedKeyRange(testRand *rand.Rand, kd val.TupleDesc, tuples [][2]val.Tuple) keyRangeDiffTest {
+	i := testRand.Intn(len(tuples))
+	j := testRand.Intn(len(tuples))
 	if j < i {
 		i, j = j, i
 	}
@@ -288,9 +311,9 @@ func makeRandomUnboundedUpperKeyRange(kd val.TupleDesc, tuples [][2]val.Tuple) k
 	return keyRangeDiffTest{tuples: tuples, keyRange: kR}
 }
 
-func makeBoundedKeyRangeWithMissingKeys(t *testing.T, m Map, kd val.TupleDesc, vd val.TupleDesc, tuples [][2]val.Tuple) keyRangeDiffTest {
+func makeBoundedKeyRangeWithMissingKeys(t *testing.T, testRand *rand.Rand, m Map, kd val.TupleDesc, vd val.TupleDesc, tuples [][2]val.Tuple) keyRangeDiffTest {
 	ctx := context.Background()
-	inserts := generateInserts(t, m, kd, vd, 2)
+	inserts := generateInserts(t, testRand, m, kd, vd, 2)
 	low, hi := inserts[0][0], inserts[1][0]
 	if kd.Compare(ctx, low, hi) > 0 {
 		hi, low = low, hi

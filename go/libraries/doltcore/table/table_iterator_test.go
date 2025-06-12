@@ -71,7 +71,7 @@ func mustMakeProllyMap(t *testing.T, count int) (prolly.Map, [][2]val.Tuple) {
 
 	ns := tree.NewTestNodeStore()
 
-	tuples, err := tree.RandomTuplePairs(ctx, count, kd, vd, ns)
+	tuples, err := tree.RandomTuplePairs(ctx, testRand, count, kd, vd, ns)
 	require.NoError(t, err)
 	om := mustProllyMapFromTuples(t, kd, vd, tuples)
 
