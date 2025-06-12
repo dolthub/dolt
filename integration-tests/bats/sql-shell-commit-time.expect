@@ -1,0 +1,26 @@
+#!/usr/bin/expect
+
+set timeout 5
+set env(NO_COLOR) 1
+exp_internal 1
+
+source  "$env(BATS_CWD)/helper/common_expect_functions.tcl"
+
+spawn dolt sql
+
+expect_with_defaults                                                    {dolt-repo-[0-9]+/main\*> } { send "\\commit -A -m \"created a table\"\r"; }
+
+expect_with_defaults                                                    {Date:\s+(.+)}              { set first_commit_date $expect_out(1,string) }
+
+expect_with_defaults                                                    {dolt-repo-[0-9]+/main> }   { send "insert into test (pk) values (1);\r"; }
+
+after 1000 # We want to check for different timestamps, so we wait a second to ensure that.
+
+expect_with_defaults                                                    {dolt-repo-[0-9]+/main> }   { send "\\commit -A -m \"added a row\"\r"; }
+
+expect_with_defaults                                                    {Date:\s+(.+)}              { set second_commit_date $expect_out(1, string)}
+
+expect_with_defaults_2 {Date:\s+(.+)}                                                    {dolt-repo-[0-9]+/main> }    { send "quit\r" }
+
+expect eof
+exit
