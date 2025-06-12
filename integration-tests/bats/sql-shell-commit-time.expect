@@ -19,7 +19,7 @@ expect_with_defaults  {Date:\s+([^\r]+)}   {
 
 expect_with_defaults                                                    {dolt-repo-[0-9]+/main> }   { send "insert into test (pk) values (1);\r"; }
 
-# We want to check for different timestamps, so we wait a second to ensure that.
+# We want to check for different timestamps, so we wait some time to ensure that.
 after 2000
 
 expect_with_defaults                                                    {dolt-repo-[0-9]+/main> }   { send "\\commit -A -m \"added a row\"\r"; }
@@ -29,14 +29,12 @@ expect_with_defaults  {Date:\s+([^\r]+)}              {
     set second_commit_date $expect_out(1,string)
 }
 
-#if { $first_commit_date eq $second_commit_date } {
-    #puts "Test failure: commit time stamps did not differ"
-    #exit 1
-#}
+if { $first_commit_date eq $second_commit_date } {
+    puts "Test failure: commit time stamps did not differ"
+    puts "Compared $first_commit_date to $second_commit_date"
+    exit 1
+}
 
-puts "\r\r------------------------\r\r"
-puts "Compared $first_commit_date to $second_commit_date"
-puts "\r\r------------------------\r\r"
 expect_with_defaults                                                    {dolt-repo-[0-9]+/main> }    { send "quit\r" }
 
 expect eof
