@@ -27,6 +27,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtablefunctions"
 )
 
 type MergeScriptTest struct {
@@ -261,6 +262,14 @@ var MergeScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
+				Query:    "SELECT * FROM dolt_preview_merge_conflicts_summary('main', 'feature-branch')",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT * FROM dolt_preview_merge_conflicts('main', 'feature-branch', 'test')",
+				Expected: []sql.Row{},
+			},
+			{
 				// FF-Merge
 				Query:    "CALL DOLT_MERGE('feature-branch')",
 				Expected: []sql.Row{{doltCommit, 1, 0, "merge successful"}},
@@ -338,6 +347,14 @@ var MergeScripts = []queries.ScriptTest{
 			"use `mydb/main~`",
 		},
 		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "SELECT * FROM dolt_preview_merge_conflicts_summary('main', 'feature-branch')",
+				ExpectedErrStr: "this operation is not supported while in a detached head state",
+			},
+			{
+				Query:          "SELECT * FROM dolt_preview_merge_conflicts('main', 'feature-branch', 'test')",
+				ExpectedErrStr: "this operation is not supported while in a detached head state",
+			},
 			{
 				Query:          "CALL DOLT_MERGE('feature-branch')",
 				ExpectedErrStr: "this operation is not supported while in a detached head state",
@@ -536,6 +553,22 @@ var MergeScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
+				Query:    "SELECT * FROM dolt_preview_merge_conflicts_summary('main', 'feature-branch')",
+				Expected: []sql.Row{{"test", uint64(1), uint64(0)}},
+			},
+			{
+				Query:    "SELECT base_pk, base_val, our_pk, our_val, our_diff_type, their_pk, their_val, their_diff_type FROM dolt_preview_merge_conflicts('main', 'feature-branch', 'test')",
+				Expected: []sql.Row{{0, 0, 0, 1001, "modified", 0, 1000, "modified"}},
+			},
+			{
+				Query:    "SELECT is_merging, source, target, unmerged_tables FROM DOLT_MERGE_STATUS;",
+				Expected: []sql.Row{{false, nil, nil, nil}},
+			},
+			{
+				Query:    "SELECT * from dolt_status",
+				Expected: []sql.Row{},
+			},
+			{
 				Query:    "CALL DOLT_MERGE('feature-branch', '-m', 'this is a merge')",
 				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
 			},
@@ -556,8 +589,12 @@ var MergeScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{"update a value"}},
 			},
 			{
-				Query:    "SELECT COUNT(*) FROM dolt_conflicts",
-				Expected: []sql.Row{{1}},
+				Query:    "SELECT * FROM dolt_conflicts",
+				Expected: []sql.Row{{"test", uint64(1)}},
+			},
+			{
+				Query:    "SELECT base_pk, base_val, our_pk, our_val, our_diff_type, their_pk, their_val, their_diff_type FROM dolt_conflicts_test",
+				Expected: []sql.Row{{0, 0, 0, 1001, "modified", 0, 1000, "modified"}},
 			},
 			{
 				Query:    "DELETE FROM dolt_conflicts_test",
@@ -574,6 +611,26 @@ var MergeScripts = []queries.ScriptTest{
 			{
 				Query:    "SELECT * from test ORDER BY pk",
 				Expected: []sql.Row{{0, 1001}, {1, 1}},
+			},
+			{
+				Query:    "SELECT is_merging, source, target, unmerged_tables FROM DOLT_MERGE_STATUS;",
+				Expected: []sql.Row{{true, "feature-branch", "refs/heads/main", ""}},
+			},
+			{
+				Query:    "SELECT * FROM dolt_preview_merge_conflicts_summary('main', 'feature-branch')",
+				Expected: []sql.Row{{"test", uint64(1), uint64(0)}}, // merge wasn't committed yet, so still shows conflict between branches
+			},
+			{
+				Query:    "CALL DOLT_COMMIT('-m', 'merged');",
+				Expected: []sql.Row{{doltCommit}},
+			},
+			{
+				Query:    "SELECT is_merging, source, target, unmerged_tables FROM DOLT_MERGE_STATUS;",
+				Expected: []sql.Row{{false, nil, nil, nil}},
+			},
+			{
+				Query:    "SELECT * FROM dolt_preview_merge_conflicts_summary('main', 'feature-branch')",
+				Expected: []sql.Row{},
 			},
 		},
 	},
@@ -1043,8 +1100,24 @@ var MergeScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
+				Query:    "SELECT * FROM dolt_preview_merge_conflicts_summary('HEAD', 'HEAD~1')",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT * FROM dolt_preview_merge_conflicts('HEAD', 'HEAD~1', 'test')",
+				Expected: []sql.Row{},
+			},
+			{
 				Query:    "CALL DOLT_MERGE('HEAD~1')",
 				Expected: []sql.Row{{"", 0, 0, "cannot fast forward from a to b. a is ahead of b already"}},
+			},
+			{
+				Query:    "SELECT * FROM dolt_preview_merge_conflicts_summary('HEAD', 'HEAD')",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT * FROM dolt_preview_merge_conflicts('HEAD', 'HEAD', 'test')",
+				Expected: []sql.Row{},
 			},
 			{
 				Query:    "CALL DOLT_MERGE('HEAD')",
@@ -1070,16 +1143,28 @@ var MergeScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
+				Query:    "SELECT * FROM dolt_preview_merge_conflicts_summary('main', 'feature-branch')",
+				Expected: []sql.Row{{"test", uint64(1), uint64(0)}},
+			},
+			{
+				Query:    "SELECT COUNT(*) FROM dolt_preview_merge_conflicts('main', 'feature-branch', 'test')",
+				Expected: []sql.Row{{1}},
+			},
+			{
 				Query:    "CALL DOLT_MERGE('feature-branch')",
 				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
 			},
 			{
-				Query:    "SELECT count(*) from dolt_conflicts_test",
+				Query:    "SELECT * FROM dolt_conflicts",
+				Expected: []sql.Row{{"test", uint64(1)}},
+			},
+			{
+				Query:    "SELECT COUNT(*) FROM dolt_conflicts_test",
 				Expected: []sql.Row{{1}},
 			},
 			{
 				// Test case-insensitive table name
-				Query:    "SELECT count(*) from dolt_conflicts_TeST",
+				Query:    "SELECT count(*) FROM dolt_conflicts_TeST",
 				Expected: []sql.Row{{1}},
 			},
 			{
@@ -1215,6 +1300,14 @@ var MergeScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
+				Query:    "SELECT * FROM dolt_preview_merge_conflicts_summary('main', 'feature-branch')",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT * FROM dolt_preview_merge_conflicts('main', 'feature-branch', 'test')",
+				Expected: []sql.Row{},
+			},
+			{
 				Query:          "CALL DOLT_MERGE('feature-branch', '-m', 'this is a merge')",
 				ExpectedErrStr: "error: local changes would be stomped by merge:\n\ttest\n Please commit your changes before you merge.",
 			},
@@ -1242,6 +1335,14 @@ var MergeScripts = []queries.ScriptTest{
 			"call dolt_commit('-am', 'main primary key change')",
 		},
 		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT * FROM dolt_preview_merge_conflicts_summary('main', 'b1')",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT * FROM dolt_preview_merge_conflicts('main', 'b1', 't1')",
+				Expected: []sql.Row{},
+			},
 			{
 				Query:    "call dolt_merge('b1')",
 				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
@@ -1549,6 +1650,10 @@ var MergeScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
+				Query:          "SELECT * FROM dolt_preview_merge_conflicts_summary('main', 'other')",
+				ExpectedErrStr: "table with same name 't' added in 2 commits can't be merged",
+			},
+			{
 				Query:          "CALL DOLT_MERGE('other');",
 				ExpectedErrStr: "table with same name 't' added in 2 commits can't be merged",
 			},
@@ -1571,6 +1676,10 @@ var MergeScripts = []queries.ScriptTest{
 			"CALL DOLT_COMMIT('-am', 'left');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT * FROM dolt_preview_merge_conflicts_summary('main', 'other')",
+				Expected: []sql.Row{},
+			},
 			{
 				Query:    "CALL DOLT_MERGE('other');",
 				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
@@ -1598,6 +1707,10 @@ var MergeScripts = []queries.ScriptTest{
 			"CALL DOLT_COMMIT('-am', 'left');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT * FROM dolt_preview_merge_conflicts_summary('main', 'other')",
+				Expected: []sql.Row{{"t", uint64(1), uint64(0)}},
+			},
 			{
 				Query:    "CALL DOLT_MERGE('other');",
 				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
@@ -1657,6 +1770,10 @@ var MergeScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
+				Query:    "SELECT * FROM dolt_preview_merge_conflicts_summary('main', 'test')",
+				Expected: []sql.Row{},
+			},
+			{
 				Query:    "CALL dolt_merge('test');",
 				Expected: []sql.Row{{doltCommit, 1, 0, "merge successful"}},
 			},
@@ -1693,6 +1810,10 @@ var MergeScripts = []queries.ScriptTest{
 			"CALL dolt_commit('-a', '-m', 'cm3');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT * FROM dolt_preview_merge_conflicts_summary('main', 'test')",
+				Expected: []sql.Row{},
+			},
 			{
 				Query:    "CALL dolt_merge('test');",
 				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
@@ -1765,6 +1886,10 @@ var MergeScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
+				Query:    "SELECT * FROM dolt_preview_merge_conflicts_summary('main', 'test')",
+				Expected: []sql.Row{},
+			},
+			{
 				Query:    "CALL dolt_merge('test');",
 				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
 			},
@@ -1803,6 +1928,10 @@ var MergeScripts = []queries.ScriptTest{
 			"CALL DOLT_COMMIT('-am', 'left cm');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT * FROM dolt_preview_merge_conflicts_summary('main', 'right')",
+				Expected: []sql.Row{},
+			},
 			{
 				Query:    "CALL DOLT_MERGE('right');",
 				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
@@ -1950,6 +2079,11 @@ var MergeScripts = []queries.ScriptTest{
 			"set dolt_force_transaction_commit = on;",
 		},
 		Assertions: []queries.ScriptTestAssertion{
+			{
+				Skip:     true, // TODO: constraint violations
+				Query:    "SELECT * FROM dolt_preview_merge_conflicts_summary('main', 'other')",
+				Expected: []sql.Row{{"test", uint64(1), uint64(0)}},
+			},
 			{
 				Query:    "CALL DOLT_MERGE('other');",
 				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
@@ -2100,6 +2234,10 @@ var MergeScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
+				Query:    "SELECT * FROM dolt_preview_merge_conflicts_summary('main', 'feature')",
+				Expected: []sql.Row{{"xyz", uint64(1), uint64(0)}},
+			},
+			{
 				Query:    "CALL DOLT_MERGE('feature');",
 				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
 			},
@@ -2127,6 +2265,10 @@ var MergeScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
+				Query:    "SELECT * FROM dolt_preview_merge_conflicts_summary('main', 'feature')",
+				Expected: []sql.Row{{"xyz", uint64(1), uint64(0)}},
+			},
+			{
 				Query:    "CALL DOLT_MERGE('feature');",
 				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
 			},
@@ -2153,6 +2295,10 @@ var MergeScripts = []queries.ScriptTest{
 			"CALL DOLT_COMMIT('-am', 'left commit');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "SELECT * FROM dolt_preview_merge_conflicts_summary('main', 'right')",
+				ExpectedErrStr: "error: cannot merge because table t has different primary keys",
+			},
 			{
 				Query:          "CALL DOLT_MERGE('right');",
 				ExpectedErrStr: "error: cannot merge because table t has different primary keys",
@@ -2384,8 +2530,13 @@ var MergeScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:            "call dolt_merge('other')",
-				SkipResultsCheck: true, // contains commit hash, we just need it to not error
+				Skip:     true, // TODO: conflict: table with same name deleted and modified
+				Query:    "SELECT * FROM dolt_preview_merge_conflicts_summary('main', 'other')",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "call dolt_merge('other')",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
 			},
 			{
 				Query: "SELECT v1 FROM test WHERE MATCH(v1) AGAINST ('abc def ghi');",
@@ -2420,6 +2571,10 @@ var MergeScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
+				Query:    "SELECT * FROM dolt_preview_merge_conflicts_summary('branch1', 'main')",
+				Expected: []sql.Row{},
+			},
+			{
 				// We can merge from main -> branch1, even though the column tags are not identical
 				Query:    "call dolt_merge('main')",
 				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
@@ -2436,6 +2591,10 @@ var MergeScripts = []queries.ScriptTest{
 			{
 				Query:    "CALL dolt_checkout('main');",
 				Expected: []sql.Row{{0, "Switched to branch 'main'"}},
+			},
+			{
+				Query:    "SELECT * FROM dolt_preview_merge_conflicts_summary('main', 'branch1')",
+				Expected: []sql.Row{},
 			},
 			{
 				// We can merge from branch1 -> main, even though the column tags are not identical
@@ -2522,6 +2681,10 @@ var MergeScripts = []queries.ScriptTest{
 			"call dolt_commit('-Am', 'change default on other');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT * FROM dolt_preview_merge_conflicts_summary('other', 'main')",
+				Expected: []sql.Row{},
+			},
 			{
 				Query:    "call dolt_merge('main')",
 				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
@@ -2687,6 +2850,10 @@ var DoltConflictTableNameTableTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
+				Query:    "SELECT * FROM dolt_preview_merge_conflicts_summary('main', 'other')",
+				Expected: []sql.Row{{"t", uint64(4), uint64(0)}},
+			},
+			{
 				Query:    "CALL DOLT_MERGE('other');",
 				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
 			},
@@ -2730,6 +2897,10 @@ var DoltConflictTableNameTableTests = []queries.ScriptTest{
 			"CALL DOLT_COMMIT('-am', 'left');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT * FROM dolt_preview_merge_conflicts_summary('main', 'right')",
+				Expected: []sql.Row{{"t", uint64(6), uint64(0)}},
+			},
 			{
 				Query:    "CALL DOLT_MERGE('right');",
 				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
@@ -3274,6 +3445,10 @@ var MergeArtifactsScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
+				Query:    "SELECT * FROM dolt_preview_merge_conflicts_summary('main', 'other2')",
+				Expected: []sql.Row{{"t", uint64(1), uint64(0)}},
+			},
+			{
 				Query:          "CALL DOLT_MERGE('other2');",
 				ExpectedErrStr: "the existing conflicts are of a different schema than the conflicts generated by this merge. Please resolve them and try again",
 			},
@@ -3435,6 +3610,11 @@ var MergeArtifactsScripts = []queries.ScriptTest{
 			"CALL DOLT_COMMIT('-am', 'left insert');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
+			{
+				Skip:     true, // TODO: constraint violations
+				Query:    "SELECT * FROM dolt_preview_merge_conflicts_summary('main', 'left2')",
+				Expected: []sql.Row{{"t", uint64(1), uint64(0)}},
+			},
 			{
 				Query:    "CALL DOLT_MERGE('left2');",
 				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
@@ -3837,6 +4017,10 @@ var SchemaConflictScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
+				Query:    "SELECT * FROM dolt_preview_merge_conflicts_summary('main', 'other')",
+				Expected: []sql.Row{{"t", nil, uint64(1)}},
+			},
+			{
 				Query:          "call dolt_merge('other')",
 				ExpectedErrStr: dsess.ErrUnresolvedConflictsAutoCommit.Error(),
 			},
@@ -3864,6 +4048,10 @@ var SchemaConflictScripts = []queries.ScriptTest{
 			"call dolt_commit('-am', 'altered t on branch main')",
 		},
 		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT * FROM dolt_preview_merge_conflicts_summary('main', 'other')",
+				Expected: []sql.Row{{"t", nil, uint64(1)}},
+			},
 			{
 				Query:    "call dolt_merge('other')",
 				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
@@ -4262,6 +4450,10 @@ var GeneratedColumnMergeTestScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
+				Query:    "SELECT * FROM dolt_preview_merge_conflicts_summary('main', 'branch1')",
+				Expected: []sql.Row{},
+			},
+			{
 				Query:    "call dolt_merge('branch1')",
 				Expected: []sql.Row{{doltCommit, 1, 0, "merge successful"}},
 			},
@@ -4314,6 +4506,10 @@ var GeneratedColumnMergeTestScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
+				Query:    "SELECT * FROM dolt_preview_merge_conflicts_summary('main', 'branch1')",
+				Expected: []sql.Row{},
+			},
+			{
 				Query:    "call dolt_merge('branch1')",
 				Expected: []sql.Row{{doltCommit, 1, 0, "merge successful"}},
 			},
@@ -4327,6 +4523,10 @@ var GeneratedColumnMergeTestScripts = []queries.ScriptTest{
 			{
 				Query:    "select id from t1 where v3 = 5",
 				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "SELECT * FROM dolt_preview_merge_conflicts_summary('main', 'branch2')",
+				Expected: []sql.Row{},
 			},
 			{
 				Query:    "call dolt_merge('branch2')",
@@ -4402,6 +4602,10 @@ var GeneratedColumnMergeTestScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
+				Query:    "SELECT * FROM dolt_preview_merge_conflicts_summary('main', 'branch1')",
+				Expected: []sql.Row{},
+			},
+			{
 				Query:    "call dolt_merge('branch1')",
 				Expected: []sql.Row{{doltCommit, 1, 0, "merge successful"}},
 			},
@@ -4473,6 +4677,801 @@ var GeneratedColumnMergeTestScripts = []queries.ScriptTest{
 			{
 				Query:    "select id from t1 where v3 = 23",
 				Expected: []sql.Row{{10}},
+			},
+		},
+	},
+}
+
+var PreviewMergeConflictsFunctionScripts = []queries.ScriptTest{
+	{
+		Name: "invalid arguments",
+		SetUpScript: []string{
+			"create table t (pk int primary key, c1 varchar(20), c2 varchar(20));",
+			"insert into t values (1, 'one', 'two'), (2, 'two', 'three');",
+			"call dolt_add('.')",
+			"call dolt_commit('-am', 'creating table t');",
+
+			"call dolt_branch('branch1')",
+			"call dolt_branch('branch2')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			// dolt_preview_merge_conflicts_summary
+			{
+				Query:       "SELECT * from dolt_preview_merge_conflicts_summary();",
+				ExpectedErr: sql.ErrInvalidArgumentNumber,
+			},
+			{
+				Query:       "SELECT * from dolt_preview_merge_conflicts_summary('t');",
+				ExpectedErr: sql.ErrInvalidArgumentNumber,
+			},
+			{
+				Query:       "SELECT * from dolt_preview_merge_conflicts_summary('main', 'branch1', 't');",
+				ExpectedErr: sql.ErrInvalidArgumentNumber,
+			},
+			{
+				Query:       "SELECT * from dolt_preview_merge_conflicts_summary(null, null);",
+				ExpectedErr: sql.ErrInvalidArgumentDetails,
+			},
+			{
+				Query:       "SELECT * from dolt_preview_merge_conflicts_summary('main', 123);",
+				ExpectedErr: sql.ErrInvalidArgumentDetails,
+			},
+			{
+				Query:       "SELECT * from dolt_preview_merge_conflicts_summary(123, 'branch1');",
+				ExpectedErr: sql.ErrInvalidArgumentDetails,
+			},
+			{
+				Query:          "SELECT * from dolt_preview_merge_conflicts_summary('fake-branch', 'main');",
+				ExpectedErrStr: "branch not found: fake-branch",
+			},
+			{
+				Query:          "SELECT * from dolt_preview_merge_conflicts_summary('main', 'fake-branch');",
+				ExpectedErrStr: "branch not found: fake-branch",
+			},
+			{
+				Query:          "SELECT * from dolt_preview_merge_conflicts_summary('main...branch1', 'branch2');",
+				ExpectedErrStr: "string is not a valid branch or hash",
+			},
+			{
+				Query:       "SELECT * from dolt_preview_merge_conflicts_summary('main', concat('branch', '1'));",
+				ExpectedErr: dtablefunctions.ErrInvalidNonLiteralArgument,
+			},
+			{
+				Query:       "SELECT * from dolt_preview_merge_conflicts_summary(hashof('main'), 'branch1');",
+				ExpectedErr: dtablefunctions.ErrInvalidNonLiteralArgument,
+			},
+			// dolt_preview_merge_conflicts
+			{
+				Query:       "SELECT * from dolt_preview_merge_conflicts();",
+				ExpectedErr: sql.ErrInvalidArgumentNumber,
+			},
+			{
+				Query:       "SELECT * from dolt_preview_merge_conflicts('t');",
+				ExpectedErr: sql.ErrInvalidArgumentNumber,
+			},
+			{
+				Query:       "SELECT * from dolt_preview_merge_conflicts('main', 'branch1');",
+				ExpectedErr: sql.ErrInvalidArgumentNumber,
+			},
+			{
+				Query:       "SELECT * from dolt_preview_merge_conflicts('main', 'branch1', 't', 'extra');",
+				ExpectedErr: sql.ErrInvalidArgumentNumber,
+			},
+			{
+				Query:       "SELECT * from dolt_preview_merge_conflicts(null, null, null);",
+				ExpectedErr: sql.ErrInvalidArgumentDetails,
+			},
+			{
+				Query:       "SELECT * from dolt_preview_merge_conflicts('main', 123, 't');",
+				ExpectedErr: sql.ErrInvalidArgumentDetails,
+			},
+			{
+				Query:       "SELECT * from dolt_preview_merge_conflicts(123, 'branch1', 't');",
+				ExpectedErr: sql.ErrInvalidArgumentDetails,
+			},
+			{
+				Query:       "SELECT * from dolt_preview_merge_conflicts('main', 'branch1', 123);",
+				ExpectedErr: sql.ErrInvalidArgumentDetails,
+			},
+			{
+				Query:          "SELECT * from dolt_preview_merge_conflicts('fake-branch', 'main', 't');",
+				ExpectedErrStr: "branch not found: fake-branch",
+			},
+			{
+				Query:          "SELECT * from dolt_preview_merge_conflicts('main', 'fake-branch', 't');",
+				ExpectedErrStr: "branch not found: fake-branch",
+			},
+			{
+				Query:          "SELECT * from dolt_preview_merge_conflicts('main...branch1', 'branch2', 't');",
+				ExpectedErrStr: "string is not a valid branch or hash",
+			},
+			{
+				Query:       "SELECT * from dolt_preview_merge_conflicts('main', concat('branch', '1'), 't');",
+				ExpectedErr: dtablefunctions.ErrInvalidNonLiteralArgument,
+			},
+			{
+				Query:       "SELECT * from dolt_preview_merge_conflicts(hashof('main'), 'branch1', 't');",
+				ExpectedErr: dtablefunctions.ErrInvalidNonLiteralArgument,
+			},
+			{
+				Query:       "SELECT * from dolt_preview_merge_conflicts('main', 'branch1', 'nope');",
+				ExpectedErr: sql.ErrTableNotFound,
+			},
+		},
+	},
+	{
+		Name: "basic case with single table",
+		SetUpScript: []string{
+			"create table t (pk int primary key, c1 varchar(20), c2 varchar(20));",
+			"insert into t values (1, 'one', 'two'), (2, 'two', 'three');",
+			"call dolt_add('.')",
+			"set @Commit1 = '';",
+			"call dolt_commit_hash_out(@Commit1, '-am', 'creating table t');",
+
+			"call dolt_branch('branch1')",
+			"call dolt_checkout('-b', 'branch2')",
+			"update t set c1='one!' where pk=1",
+			"set @Commit2 = '';",
+			"call dolt_commit_hash_out(@Commit2, '-am', 'update row 1 on branch2');",
+
+			"call dolt_checkout('branch1')",
+			"update t set c1='one?' where pk=1",
+			"set @Commit3 = '';",
+			"call dolt_commit_hash_out(@Commit3, '-am', 'update row 1 on branch1');",
+
+			"call dolt_checkout('main')",
+			"call dolt_merge('branch1')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT * from dolt_preview_merge_conflicts_summary('main', 'branch1')",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT * from dolt_preview_merge_conflicts('main', 'branch1', 't')",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT * from dolt_preview_merge_conflicts_summary('main', 'branch2')",
+				Expected: []sql.Row{{"t", uint64(1), uint64(0)}},
+			},
+			{
+				Query:    "SELECT base_pk, base_c1, base_c2, our_pk, our_c1, our_c2, our_diff_type, their_pk, their_c1, their_c2, their_diff_type from dolt_preview_merge_conflicts('main', 'branch2', 't')",
+				Expected: []sql.Row{{1, "one", "two", 1, "one?", "two", "modified", 1, "one!", "two", "modified"}},
+			},
+			{
+				Query:    "SELECT * from dolt_preview_merge_conflicts_summary('branch1', 'branch2')",
+				Expected: []sql.Row{{"t", uint64(1), uint64(0)}},
+			},
+			{
+				Query:    "SELECT base_pk, base_c1, base_c2, our_pk, our_c1, our_c2, our_diff_type, their_pk, their_c1, their_c2, their_diff_type from dolt_preview_merge_conflicts('branch1', 'branch2', 't')",
+				Expected: []sql.Row{{1, "one", "two", 1, "one?", "two", "modified", 1, "one!", "two", "modified"}},
+			},
+			{
+				Query:    "SELECT * from dolt_preview_merge_conflicts_summary(@Commit1, @Commit2)", // not branches
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT * from dolt_preview_merge_conflicts(@Commit1, @Commit2, 't')", // not branches
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT * from dolt_preview_merge_conflicts_summary('branch2', 'main')",
+				Expected: []sql.Row{{"t", uint64(1), uint64(0)}},
+			},
+			{
+				Query:    "SELECT base_pk, base_c1, base_c2, our_pk, our_c1, our_c2, our_diff_type, their_pk, their_c1, their_c2, their_diff_type from dolt_preview_merge_conflicts('branch2', 'main', 't')",
+				Expected: []sql.Row{{1, "one", "two", 1, "one!", "two", "modified", 1, "one?", "two", "modified"}},
+			},
+		},
+	},
+	{
+		Name: "basic case with keyless table",
+		SetUpScript: []string{
+			"create table t (pk int, c1 varchar(20), c2 varchar(20));",
+			"insert into t values (1, 'one', 'two'), (2, 'two', 'three');",
+			"call dolt_add('.')",
+			"set @Commit1 = '';",
+			"call dolt_commit_hash_out(@Commit1, '-am', 'creating table t');",
+
+			"call dolt_branch('branch1')",
+			"call dolt_checkout('-b', 'branch2')",
+			"update t set c1='one!' where pk=1",
+			"set @Commit2 = '';",
+			"call dolt_commit_hash_out(@Commit2, '-am', 'update row 1 on branch2');",
+
+			"call dolt_checkout('branch1')",
+			"update t set c1='one?' where pk=1",
+			"set @Commit3 = '';",
+			"call dolt_commit_hash_out(@Commit3, '-am', 'update row 1 on branch1');",
+
+			"call dolt_checkout('main')",
+			"call dolt_merge('branch1')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT * from dolt_preview_merge_conflicts_summary('main', 'branch1')",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT * from dolt_preview_merge_conflicts('main', 'branch1', 't')",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT * from dolt_preview_merge_conflicts_summary('main', 'branch2')",
+				Expected: []sql.Row{{"t", uint64(1), uint64(0)}},
+			},
+			{
+				Query:    "SELECT count(*) from dolt_preview_merge_conflicts('main', 'branch2', 't')",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "SELECT * from dolt_preview_merge_conflicts_summary('branch1', 'branch2')",
+				Expected: []sql.Row{{"t", uint64(1), uint64(0)}},
+			},
+			{
+				Query:    "SELECT count(*) from dolt_preview_merge_conflicts('branch1', 'branch2', 't')",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "SELECT * from dolt_preview_merge_conflicts_summary(@Commit1, @Commit2)", // not branches
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT * from dolt_preview_merge_conflicts(@Commit1, @Commit2, 't')", // not branches
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT * from dolt_preview_merge_conflicts_summary('branch2', 'main')",
+				Expected: []sql.Row{{"t", uint64(1), uint64(0)}},
+			},
+			{
+				Query:    "SELECT count(*) from dolt_preview_merge_conflicts('branch2', 'main', 't')",
+				Expected: []sql.Row{{1}},
+			},
+		},
+	},
+	{
+		Name: "basic case with multiple tables, data conflicts",
+		SetUpScript: []string{
+			"create table t (pk int primary key, c1 varchar(20), c2 varchar(20));",
+			"create table t2 (pk int primary key, c1 varchar(20));",
+			"insert into t values (1, 'one', 'two'), (2, 'two', 'three');",
+			"insert into t2 values(100, 'hundred');",
+			"call dolt_add('.')",
+			"set @Commit1 = '';",
+			"call dolt_commit_hash_out(@Commit1, '-am', 'creating table t');",
+
+			"call dolt_branch('branch1')",
+			"call dolt_checkout('-b', 'branch2')",
+			"update t set c1='one!' where pk=1",
+			"update t2 set c1='hundred!' where pk=100",
+			"set @Commit2 = '';",
+			"call dolt_commit_hash_out(@Commit2, '-am', 'update row 1 on branch2');",
+
+			"call dolt_checkout('branch1')",
+			"update t set c1='one?' where pk=1",
+			"update t2 set c1='hundred?' where pk=100",
+			"set @Commit3 = '';",
+			"call dolt_commit_hash_out(@Commit3, '-am', 'update row 1 on branch1');",
+
+			"call dolt_checkout('main')",
+			"call dolt_merge('branch1')",
+
+			"create table keyless (id int);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT * from dolt_preview_merge_conflicts_summary('main', 'branch1')",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT * from dolt_preview_merge_conflicts('main', 'branch1', 't')",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT * from dolt_preview_merge_conflicts('main', 'branch1', 't2')",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT * from dolt_preview_merge_conflicts_summary('main', 'branch2')",
+				Expected: []sql.Row{{"t", uint64(1), uint64(0)}, {"t2", uint64(1), uint64(0)}},
+			},
+			{
+				Query:    "SELECT count(*) from dolt_preview_merge_conflicts('main', 'branch2', 't')",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "SELECT count(*) from dolt_preview_merge_conflicts('main', 'branch2', 't2')",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "SELECT * from dolt_preview_merge_conflicts_summary('branch1', 'branch2')",
+				Expected: []sql.Row{{"t", uint64(1), uint64(0)}, {"t2", uint64(1), uint64(0)}},
+			},
+			{
+				Query:    "SELECT count(*) from dolt_preview_merge_conflicts('branch1', 'branch2', 't')",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "SELECT count(*) from dolt_preview_merge_conflicts('branch1', 'branch2', 't2')",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "SELECT * from dolt_preview_merge_conflicts_summary(@Commit1, @Commit2)", // not branches
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT * from dolt_preview_merge_conflicts(@Commit1, @Commit2, 't')", // not branches
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT * from dolt_preview_merge_conflicts_summary('branch2', 'main')",
+				Expected: []sql.Row{{"t", uint64(1), uint64(0)}, {"t2", uint64(1), uint64(0)}},
+			},
+			{
+				Query:    "SELECT count(*) from dolt_preview_merge_conflicts('branch2', 'main', 't')",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "SELECT count(*) from dolt_preview_merge_conflicts('branch2', 'main', 't2')",
+				Expected: []sql.Row{{1}},
+			},
+		},
+	},
+	{
+		Name: "basic case with multiple tables, schema conflict",
+		SetUpScript: []string{
+			"create table t (pk int primary key, c1 varchar(20), c2 varchar(20));",
+			"create table t2 (pk int primary key, c1 varchar(20));",
+			"insert into t values (1, 'one', 'two'), (2, 'two', 'three');",
+			"insert into t2 values(100, 'hundred');",
+			"call dolt_add('.')",
+			"set @Commit1 = '';",
+			"call dolt_commit_hash_out(@Commit1, '-am', 'creating table t');",
+
+			"call dolt_branch('branch1')",
+			"call dolt_checkout('-b', 'branch2')",
+			"update t set c1='one!' where pk=1",
+			"alter table t2 alter column c1 set default 'default';",
+			"set @Commit2 = '';",
+			"call dolt_commit_hash_out(@Commit2, '-am', 'update row 1 on branch2');",
+
+			"call dolt_checkout('branch1')",
+			"update t set c1='one?' where pk=1",
+			"alter table t2 alter column c1 set default 'default2';",
+			"set @Commit3 = '';",
+			"call dolt_commit_hash_out(@Commit3, '-am', 'update row 1 on branch1');",
+
+			"call dolt_checkout('main')",
+			"call dolt_merge('branch1')",
+
+			"create table keyless (id int);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT * from dolt_preview_merge_conflicts_summary('main', 'branch1')",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT * from dolt_preview_merge_conflicts('main', 'branch1', 't')",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT * from dolt_preview_merge_conflicts('main', 'branch1', 't2')",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT * from dolt_preview_merge_conflicts_summary('main', 'branch2')",
+				Expected: []sql.Row{{"t", uint64(1), uint64(0)}, {"t2", nil, uint64(1)}},
+			},
+			{
+				Query:    "SELECT count(*) from dolt_preview_merge_conflicts('main', 'branch2', 't')",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:          "SELECT count(*) from dolt_preview_merge_conflicts('main', 'branch2', 't2')",
+				ExpectedErrStr: "schema conflicts found: 1",
+			},
+			{
+				Query:    "SELECT * from dolt_preview_merge_conflicts_summary('branch1', 'branch2')",
+				Expected: []sql.Row{{"t", uint64(1), uint64(0)}, {"t2", nil, uint64(1)}},
+			},
+			{
+				Query:    "SELECT count(*) from dolt_preview_merge_conflicts('branch1', 'branch2', 't')",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:          "SELECT count(*) from dolt_preview_merge_conflicts('branch1', 'branch2', 't2')",
+				ExpectedErrStr: "schema conflicts found: 1",
+			},
+			{
+				Query:    "SELECT * from dolt_preview_merge_conflicts_summary(@Commit1, @Commit2)", // not branches
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT * from dolt_preview_merge_conflicts(@Commit1, @Commit2, 't')", // not branches
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT * from dolt_preview_merge_conflicts_summary('branch2', 'main')",
+				Expected: []sql.Row{{"t", uint64(1), uint64(0)}, {"t2", nil, uint64(1)}},
+			},
+			{
+				Query:    "SELECT count(*) from dolt_preview_merge_conflicts('branch2', 'main', 't')",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:          "SELECT count(*) from dolt_preview_merge_conflicts('branch2', 'main', 't2')",
+				ExpectedErrStr: "schema conflicts found: 1",
+			},
+		},
+	},
+	{
+		Name: "schema-only conflicts",
+		SetUpScript: []string{
+			"create table t (pk int primary key, c1 varchar(20) default 'orig', c2 varchar(20));",
+			"insert into t values (1, 'one', 'two'), (2, 'two', 'three');",
+			"call dolt_add('.')",
+			"call dolt_commit('-am', 'creating table t');",
+
+			"call dolt_branch('branch1')",
+			"call dolt_checkout('-b', 'branch2')",
+			"alter table t alter column c1 set default 'default1';",
+			"call dolt_commit('-am', 'change default on branch2');",
+
+			"call dolt_checkout('branch1')",
+			"alter table t alter column c1 set default 'default2';",
+			"call dolt_commit('-am', 'change default on branch1');",
+
+			"call dolt_checkout('main')",
+			"call dolt_merge('branch1')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT * from dolt_preview_merge_conflicts_summary('main', 'branch1')",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT * from dolt_preview_merge_conflicts('main', 'branch1', 't')",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT * from dolt_preview_merge_conflicts_summary('main', 'branch2')",
+				Expected: []sql.Row{{"t", nil, uint64(1)}},
+			},
+			{
+				Query:          "SELECT * from dolt_preview_merge_conflicts('main', 'branch2', 't')",
+				ExpectedErrStr: "schema conflicts found: 1",
+			},
+			{
+				Query:    "SELECT * from dolt_preview_merge_conflicts_summary('branch1', 'branch2')",
+				Expected: []sql.Row{{"t", nil, uint64(1)}},
+			},
+			{
+				Query:          "SELECT * from dolt_preview_merge_conflicts('branch1', 'branch2', 't')",
+				ExpectedErrStr: "schema conflicts found: 1",
+			},
+		},
+	},
+	{
+		Name: "mixed schema and data conflicts in same table",
+		SetUpScript: []string{
+			"create table t (pk int primary key, c1 varchar(20) default 'orig', c2 varchar(20));",
+			"insert into t values (1, 'one', 'two'), (2, 'two', 'three');",
+			"call dolt_add('.')",
+			"call dolt_commit('-am', 'creating table t');",
+
+			"call dolt_branch('branch1')",
+			"call dolt_checkout('-b', 'branch2')",
+			"update t set c1='one!' where pk=1",
+			"alter table t alter column c1 set default 'default1';",
+			"call dolt_commit('-am', 'data and schema changes on branch2');",
+
+			"call dolt_checkout('branch1')",
+			"update t set c1='one?' where pk=1",
+			"alter table t alter column c1 set default 'default2';",
+			"call dolt_commit('-am', 'data and schema changes on branch1');",
+
+			"call dolt_checkout('main')",
+			"call dolt_merge('branch1')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT * from dolt_preview_merge_conflicts_summary('main', 'branch1')",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT * from dolt_preview_merge_conflicts('main', 'branch1', 't')",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT * from dolt_preview_merge_conflicts_summary('main', 'branch2')",
+				Expected: []sql.Row{{"t", nil, uint64(1)}},
+			},
+			{
+				Query:          "SELECT * from dolt_preview_merge_conflicts('main', 'branch2', 't')",
+				ExpectedErrStr: "schema conflicts found: 1",
+			},
+			{
+				Query:    "SELECT * from dolt_preview_merge_conflicts_summary('branch1', 'branch2')",
+				Expected: []sql.Row{{"t", nil, uint64(1)}},
+			},
+			{
+				Query:          "SELECT * from dolt_preview_merge_conflicts('branch1', 'branch2', 't')",
+				ExpectedErrStr: "schema conflicts found: 1",
+			},
+		},
+	},
+	{
+		Name: "column type conflicts",
+		SetUpScript: []string{
+			"create table t (pk int primary key, c1 varchar(20));",
+			"insert into t values (1, 'one');",
+			"call dolt_add('.')",
+			"call dolt_commit('-am', 'initial commit');",
+
+			"call dolt_branch('branch1')",
+			"call dolt_checkout('-b', 'branch2')",
+			"alter table t modify column c1 varchar(50);",
+			"call dolt_commit('-am', 'change column to varchar(50) on branch2');",
+
+			"call dolt_checkout('branch1')",
+			"alter table t modify column c1 text;",
+			"call dolt_commit('-am', 'change column to text on branch1');",
+
+			"call dolt_checkout('main')",
+			"call dolt_merge('branch1')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT * from dolt_preview_merge_conflicts_summary('main', 'branch1')",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT * from dolt_preview_merge_conflicts_summary('main', 'branch2')",
+				Expected: []sql.Row{{"t", nil, uint64(1)}},
+			},
+			{
+				Query:    "SELECT * from dolt_preview_merge_conflicts_summary('branch1', 'branch2')",
+				Expected: []sql.Row{{"t", nil, uint64(1)}},
+			},
+		},
+	},
+	{
+		Name: "foreign key constraint conflicts",
+		SetUpScript: []string{
+			"create table parent (pk int primary key, name varchar(20));",
+			"create table child (pk int primary key, parent_pk int, data varchar(20));",
+			"insert into parent values (1, 'parent1'), (2, 'parent2');",
+			"insert into child values (1, 1, 'child1'), (2, 2, 'child2');",
+			"call dolt_add('.')",
+			"call dolt_commit('-am', 'initial tables');",
+
+			"call dolt_branch('branch1')",
+			"call dolt_checkout('-b', 'branch2')",
+			"alter table child add constraint fk1 foreign key (parent_pk) references parent(pk) on delete cascade;",
+			"call dolt_commit('-am', 'add fk with cascade on branch2');",
+
+			"call dolt_checkout('branch1')",
+			"alter table child add constraint fk1 foreign key (parent_pk) references parent(pk) on delete restrict;",
+			"call dolt_commit('-am', 'add fk with restrict on branch1');",
+
+			"call dolt_checkout('main')",
+			"call dolt_merge('branch1')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT * from dolt_preview_merge_conflicts_summary('main', 'branch1')",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT * from dolt_preview_merge_conflicts_summary('main', 'branch2')",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT * from dolt_preview_merge_conflicts_summary('branch1', 'branch2')",
+				Expected: []sql.Row{},
+			},
+		},
+	},
+	{
+		Name: "check constraint conflicts",
+		SetUpScript: []string{
+			"create table t (pk int primary key, score int);",
+			"insert into t values (1, 85), (2, 92);",
+			"call dolt_add('.')",
+			"call dolt_commit('-am', 'initial table');",
+
+			"call dolt_branch('branch1')",
+			"call dolt_checkout('-b', 'branch2')",
+			"alter table t add constraint chk1 check (score >= 0);",
+			"call dolt_commit('-am', 'add check >= 0 on branch2');",
+
+			"call dolt_checkout('branch1')",
+			"alter table t add constraint chk1 check (score > 0);",
+			"call dolt_commit('-am', 'add check > 0 on branch1');",
+
+			"call dolt_checkout('main')",
+			"call dolt_merge('branch1')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT * from dolt_preview_merge_conflicts_summary('main', 'branch1')",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT * from dolt_preview_merge_conflicts_summary('main', 'branch2')",
+				Expected: []sql.Row{{"t", nil, uint64(2)}},
+			},
+			{
+				Query:    "SELECT * from dolt_preview_merge_conflicts_summary('branch1', 'branch2')",
+				Expected: []sql.Row{{"t", nil, uint64(2)}},
+			},
+		},
+	},
+	{
+		Name: "index conflicts",
+		SetUpScript: []string{
+			"create table t (pk int primary key, name varchar(20), email varchar(50));",
+			"insert into t values (1, 'alice', 'alice@email.com'), (2, 'bob', 'bob@email.com');",
+			"call dolt_add('.')",
+			"call dolt_commit('-am', 'initial table');",
+
+			"call dolt_branch('branch1')",
+			"call dolt_checkout('-b', 'branch2')",
+			"create index idx_name on t(name);",
+			"call dolt_commit('-am', 'add name index on branch2');",
+
+			"call dolt_checkout('branch1')",
+			"create unique index idx_name on t(name);",
+			"call dolt_commit('-am', 'add unique name index on branch1');",
+
+			"call dolt_checkout('main')",
+			"call dolt_merge('branch1')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT * from dolt_preview_merge_conflicts_summary('main', 'branch1')",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT * from dolt_preview_merge_conflicts_summary('main', 'branch2')",
+				Expected: []sql.Row{{"t", nil, uint64(2)}},
+			},
+			{
+				Query:    "SELECT * from dolt_preview_merge_conflicts_summary('branch1', 'branch2')",
+				Expected: []sql.Row{{"t", nil, uint64(2)}},
+			},
+		},
+	},
+	{
+		Name: "many data conflicts",
+		SetUpScript: []string{
+			"create table t (pk int primary key, c1 varchar(20), c2 varchar(20), c3 varchar(20));",
+			"insert into t values (1, 'a1', 'b1', 'c1'), (2, 'a2', 'b2', 'c2'), (3, 'a3', 'b3', 'c3'), (4, 'a4', 'b4', 'c4'), (5, 'a5', 'b5', 'c5');",
+			"call dolt_add('.')",
+			"call dolt_commit('-am', 'initial data');",
+
+			"call dolt_branch('branch1')",
+			"call dolt_checkout('-b', 'branch2')",
+			"update t set c1=concat(c1, '_branch2') where pk in (1,2,3);",
+			"update t set c2=concat(c2, '_branch2') where pk in (2,4);",
+			"call dolt_commit('-am', 'modify multiple rows on branch2');",
+
+			"call dolt_checkout('branch1')",
+			"update t set c1=concat(c1, '_branch1') where pk in (1,2,3);",
+			"update t set c2=concat(c2, '_branch1') where pk in (2,4);",
+			"update t set c3=concat(c3, '_branch1') where pk = 5;",
+			"call dolt_commit('-am', 'modify multiple rows on branch1');",
+
+			"call dolt_checkout('main')",
+			"call dolt_merge('branch1')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT * from dolt_preview_merge_conflicts_summary('main', 'branch1')",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT COUNT(*) from dolt_preview_merge_conflicts('main', 'branch1', 't')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT * from dolt_preview_merge_conflicts_summary('main', 'branch2')",
+				Expected: []sql.Row{{"t", uint64(4), uint64(0)}}, // 4 rows have conflicts (1,2,3,4)
+			},
+			{
+				Query:    "SELECT COUNT(*) from dolt_preview_merge_conflicts('main', 'branch2', 't')",
+				Expected: []sql.Row{{4}},
+			},
+			{
+				Query:    "SELECT * from dolt_preview_merge_conflicts_summary('branch1', 'branch2')",
+				Expected: []sql.Row{{"t", uint64(4), uint64(0)}},
+			},
+			{
+				Query:    "SELECT COUNT(*) from dolt_preview_merge_conflicts('branch1', 'branch2', 't')",
+				Expected: []sql.Row{{4}},
+			},
+		},
+	},
+	{
+		Name: "additional conflicts testing with multiple columns",
+		SetUpScript: []string{
+			"create table test_table (pk int primary key, col1 varchar(20), col2 int);",
+			"insert into test_table values (1, 'original', 100), (2, 'second', 200);",
+			"call dolt_add('.')",
+			"call dolt_commit('-am', 'initial commit');",
+
+			"call dolt_branch('branch1')",
+			"call dolt_checkout('-b', 'branch2')",
+
+			"update test_table set col1 = 'branch2_val', col2 = 300 where pk = 1;",
+			"call dolt_add('.')",
+			"call dolt_commit('-am', 'modify on branch2');",
+
+			"call dolt_checkout('branch1')",
+			"update test_table set col1 = 'branch1_val', col2 = 400 where pk = 1;",
+			"call dolt_add('.')",
+			"call dolt_commit('-am', 'modify on branch1');",
+
+			"call dolt_checkout('main')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT count(*) from dolt_preview_merge_conflicts('branch1', 'branch2', 'test_table')",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "SELECT base_pk, our_col1, their_col1 from dolt_preview_merge_conflicts('branch1', 'branch2', 'test_table')",
+				Expected: []sql.Row{{1, "branch1_val", "branch2_val"}},
+			},
+		},
+	},
+	{
+		Name: "empty result when no conflicts",
+		SetUpScript: []string{
+			"create table t (pk int primary key, value varchar(20));",
+			"insert into t values (1, 'original');",
+			"call dolt_add('.')",
+			"call dolt_commit('-am', 'initial setup');",
+
+			"call dolt_branch('branch1')",
+			"call dolt_checkout('-b', 'branch2')",
+			"insert into t values (2, 'branch2_new');",
+			"call dolt_commit('-am', 'add row on branch2');",
+
+			"call dolt_checkout('branch1')",
+			"insert into t values (3, 'branch1_new');",
+			"call dolt_commit('-am', 'add row on branch1');",
+
+			"call dolt_checkout('main')",
+			"call dolt_merge('branch1')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT * from dolt_preview_merge_conflicts_summary('main', 'branch1')",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT * from dolt_preview_merge_conflicts_summary('main', 'branch2')",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT * from dolt_preview_merge_conflicts_summary('branch1', 'branch2')",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT * from dolt_preview_merge_conflicts('main', 'branch1', 't')",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT * from dolt_preview_merge_conflicts('main', 'branch2', 't')",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT * from dolt_preview_merge_conflicts('branch1', 'branch2', 't')",
+				Expected: []sql.Row{},
 			},
 		},
 	},

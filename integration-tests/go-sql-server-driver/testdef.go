@@ -245,7 +245,10 @@ func MakeServer(t *testing.T, dc driver.DoltCmdable, s *driver.Server, resources
 	}
 	opts := []driver.SqlServerOpt{
 		driver.WithArgs(args...),
-		driver.WithEnvs(append([]string{"DOLT_CONTEXT_VALIDATION_ENABLED=true"}, s.Envs...)...),
+		driver.WithEnvs(append([]string{
+			"DOLT_CONTEXT_VALIDATION_ENABLED=true",
+			"DOLT_ENABLE_DYNAMIC_ASSERTS=true",
+		}, s.Envs...)...),
 		driver.WithName(s.Name),
 	}
 	if s.Port != 0 {

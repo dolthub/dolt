@@ -338,23 +338,14 @@ func (ts tableSet) physicalLen() (uint64, error) {
 	return lenNovel + lenUp, nil
 }
 
-func (ts tableSet) close() error {
-	var firstErr error
-	setErr := func(err error) {
-		if err != nil && firstErr == nil {
-			firstErr = err
-		}
-	}
-
+func (ts tableSet) close() (err error) {
 	for _, t := range ts.novel {
-		err := t.close()
-		setErr(err)
+		err = errors.Join(err, t.close())
 	}
 	for _, t := range ts.upstream {
-		err := t.close()
-		setErr(err)
+		err = errors.Join(err, t.close())
 	}
-	return firstErr
+	return
 }
 
 // Size returns the number of tables in this tableSet.

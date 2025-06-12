@@ -113,7 +113,7 @@ func TestSchemaOverridesWithAdaptiveEncoding(t *testing.T) {
 
 // Convenience test for debugging a single query. Unskip and set to the desired query.
 func TestSingleScript(t *testing.T) {
-	//t.Skip()
+	t.Skip()
 	var scripts = []queries.ScriptTest{
 		{
 			Name: "Database syntax properly handles inter-CALL communication",
@@ -1342,6 +1342,16 @@ func TestDoltMergeArtifacts(t *testing.T) {
 	RunDoltMergeArtifacts(t, h)
 }
 
+func TestDoltPreviewMergeConflicts(t *testing.T) {
+	h := newDoltEnginetestHarness(t)
+	RunDoltPreviewMergeConflictsTests(t, h)
+}
+
+func TestDoltPreviewMergeConflictsPrepared(t *testing.T) {
+	h := newDoltEnginetestHarness(t)
+	RunDoltPreviewMergeConflictsPreparedTests(t, h)
+}
+
 // these tests are temporary while there is a difference between the old format
 // and new format merge behaviors.
 func TestOldFormatMergeConflictsAndCVs(t *testing.T) {
@@ -1567,6 +1577,16 @@ func TestLogTableFunction(t *testing.T) {
 func TestLogTableFunctionPrepared(t *testing.T) {
 	harness := newDoltEnginetestHarness(t)
 	RunLogTableFunctionTestsPrepared(t, harness)
+}
+
+func TestBranchStatusTableFunction(t *testing.T) {
+	harness := newDoltEnginetestHarness(t)
+	RunBranchStatusTableFunctionTests(t, harness)
+}
+
+func TestBranchStatusTableFunctionPrepared(t *testing.T) {
+	harness := newDoltEnginetestHarness(t)
+	RunBranchStatusTableFunctionTestsPrepared(t, harness)
 }
 
 func TestDoltReflog(t *testing.T) {
@@ -2108,4 +2128,10 @@ func TestDoltHelpSystemTable(t *testing.T) {
 	harness := newDoltHarness(t)
 	defer harness.Close()
 	RunDoltHelpSystemTableTests(t, harness)
+}
+
+func TestDoltStash(t *testing.T) {
+	harness := newDoltEnginetestHarness(t)
+	defer harness.Close()
+	RunDoltStashSystemTableTests(t, harness)
 }

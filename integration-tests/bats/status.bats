@@ -332,7 +332,6 @@ SQL
     dolt commit -am "added table"
     dolt sql -q "rename table one to one_super"
 
-    skip "fails with error error: Failed to reset changes. cause: error: failed to write table back to database"
     dolt reset --hard
 }
 

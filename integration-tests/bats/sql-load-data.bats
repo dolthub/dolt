@@ -39,7 +39,7 @@ SQL
 }
 
 @test "sql-load-data: load with unknown file throws error" {
-    skip "Different error msg on windows."
+    skiponwindows
     run dolt sql << SQL
 CREATE TABLE test(pk int primary key, c1 int, c2 int, c3 int, c4 int, c5 int);
 LOAD DATA INFILE 'hello-ints.csv' INTO TABLE test CHARACTER SET UTF8MB4 FIELDS TERMINATED BY '||' ESCAPED BY '' LINES TERMINATED BY '\n' IGNORE 1 LINES;
@@ -113,11 +113,10 @@ SQL
 }
 
 @test "sql-load-data: works with fields separated by tabs" {
-    skip "This is a test problem with CI preserving tabs in this file. Tabs work locally."
     cat <<DELIM > 1pk2col-ints.csv
-pk  c1
-0 1
-1 1
+pk	c1
+0	1
+1	1
 DELIM
 
     dolt sql << SQL
@@ -151,8 +150,6 @@ SQL
 }
 
 @test "sql-load-data: works when column order is mismatched" {
-    skip "This needs to be fixed."
-
     cat <<DELIM > 1pk2col-ints.csv
 pk,c1
 "hi","1"
@@ -161,7 +158,7 @@ DELIM
 
     dolt sql << SQL
 CREATE TABLE test(pk int, c1 longtext);
-LOAD DATA INFILE '1pk2col-ints.csv' INTO TABLE test FIELDS ENCLOSED BY '"' TERMINATED BY ',' IGNORE 1 LINES (c1,pk);
+LOAD DATA INFILE '1pk2col-ints.csv' INTO TABLE test FIELDS TERMINATED BY ',' ENCLOSED BY '"' IGNORE 1 LINES (c1,pk);
 SQL
 
     run dolt sql -r csv -q "select * from test"

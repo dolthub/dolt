@@ -798,7 +798,7 @@ func generateAllTextSchema(rd table.ReadCloser, impOpts *importOptions) (schema.
 		var colType typeinfo.TypeInfo
 		if slices.Contains(impOpts.primaryKeys, col.Name) || (len(impOpts.primaryKeys) == 0 && len(cols) == 0) {
 			// text type is not supported for primary keys, pk is either explicitly set or is the first column
-			colType = typeinfo.StringDefaultType
+			colType = typeinfo.StringImportDefaultType
 		} else {
 			colType = typeinfo.TextType
 		}

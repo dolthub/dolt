@@ -34,36 +34,65 @@ import (
 func TestAutoGC(t *testing.T) {
 	t.Parallel()
 	var enabled_16, final_16, disabled, final_disabled RepoSize
+	numStatements, numCommits := 512, 16
+	if testing.Short() || os.Getenv("CI") != "" {
+		numStatements = 64
+	}
 	t.Run("Enable", func(t *testing.T) {
 		t.Parallel()
-		t.Run("CommitEvery16", func(t *testing.T) {
-			t.Parallel()
-			var s AutoGCTest
-			s.Enable = true
-			enabled_16, final_16 = runAutoGCTest(t, &s, 64, 16)
-			assert.Contains(t, string(s.PrimaryServer.Output.Bytes()), "Successfully completed auto GC")
-			t.Logf("repo size before final gc: %v", enabled_16)
-			t.Logf("repo size after final gc: %v", final_16)
-		})
-		t.Run("ClusterReplication", func(t *testing.T) {
-			t.Parallel()
-			var s AutoGCTest
-			s.Enable = true
-			s.Replicate = true
-			enabled_16, final_16 = runAutoGCTest(t, &s, 64, 16)
-			assert.Contains(t, string(s.PrimaryServer.Output.Bytes()), "Successfully completed auto GC")
-			assert.Contains(t, string(s.StandbyServer.Output.Bytes()), "Successfully completed auto GC")
-			t.Logf("repo size before final gc: %v", enabled_16)
-			t.Logf("repo size after final gc: %v", final_16)
-			rs, err := GetRepoSize(s.StandbyDir)
-			require.NoError(t, err)
-			t.Logf("standby size: %v", rs)
-		})
+		for _, sa := range []struct {
+			archive bool
+			name    string
+		}{{true, "Archive"}, {false, "NoArchive"}} {
+			t.Run(sa.name, func(t *testing.T) {
+				t.Run("CommitEvery16", func(t *testing.T) {
+					t.Parallel()
+					var s AutoGCTest
+					s.Enable = true
+					s.Archive = sa.archive
+					enabled_16, final_16 = runAutoGCTest(t, &s, numStatements, numCommits)
+					assert.Contains(t, string(s.PrimaryServer.Output.Bytes()), "Successfully completed auto GC")
+					assert.NotContains(t, string(s.PrimaryServer.Output.Bytes()), "dangling references requested during GC")
+					t.Logf("repo size before final gc: %v", enabled_16)
+					t.Logf("repo size after final gc: %v", final_16)
+				})
+				t.Run("ClusterReplication", func(t *testing.T) {
+					t.Parallel()
+					var s AutoGCTest
+					s.Enable = true
+					s.Replicate = true
+					s.Archive = sa.archive
+					enabled_16, final_16 = runAutoGCTest(t, &s, numStatements, numCommits)
+					assert.Contains(t, string(s.PrimaryServer.Output.Bytes()), "Successfully completed auto GC")
+					assert.Contains(t, string(s.StandbyServer.Output.Bytes()), "Successfully completed auto GC")
+					assert.NotContains(t, string(s.PrimaryServer.Output.Bytes()), "dangling references requested during GC")
+					assert.NotContains(t, string(s.StandbyServer.Output.Bytes()), "dangling references requested during GC")
+					t.Logf("repo size before final gc: %v", enabled_16)
+					t.Logf("repo size after final gc: %v", final_16)
+					rs, err := GetRepoSize(s.StandbyDir)
+					require.NoError(t, err)
+					t.Logf("standby size: %v", rs)
+				})
+				t.Run("PushToRemotesAPI", func(t *testing.T) {
+					t.Parallel()
+					var s AutoGCTest
+					s.Enable = true
+					s.EnableRemotesAPI = true
+					s.Archive = sa.archive
+					enabled_16, final_16 = runAutoGCTest(t, &s, numStatements, 2)
+					// XXX: Reenable these after tuning to be more reliable.
+					// assert.Contains(t, string(s.PrimaryServer.Output.Bytes()), "Successfully completed auto GC")
+					// assert.Contains(t, string(s.StandbyServer.Output.Bytes()), "Successfully completed auto GC")
+					assert.NotContains(t, string(s.PrimaryServer.Output.Bytes()), "dangling references requested during GC")
+					assert.NotContains(t, string(s.StandbyServer.Output.Bytes()), "dangling references requested during GC")
+				})
+			})
+		}
 	})
 	t.Run("Disabled", func(t *testing.T) {
 		t.Parallel()
 		var s AutoGCTest
-		disabled, final_disabled = runAutoGCTest(t, &s, 64, 128)
+		disabled, final_disabled = runAutoGCTest(t, &s, numStatements, 128)
 		assert.NotContains(t, string(s.PrimaryServer.Output.Bytes()), "Successfully completed auto GC")
 		t.Logf("repo size before final gc: %v", disabled)
 		t.Logf("repo size after final gc: %v", final_disabled)
@@ -77,6 +106,7 @@ func TestAutoGC(t *testing.T) {
 
 type AutoGCTest struct {
 	Enable        bool
+	Archive       bool
 	PrimaryDir    string
 	PrimaryServer *driver.SqlServer
 	PrimaryDB     *sql.DB
@@ -85,6 +115,8 @@ type AutoGCTest struct {
 	StandbyDir    string
 	StandbyServer *driver.SqlServer
 	StandbyDB     *sql.DB
+
+	EnableRemotesAPI bool
 
 	Ports *DynamicResources
 }
@@ -102,7 +134,7 @@ func (s *AutoGCTest) Setup(ctx context.Context, t *testing.T) {
 
 	s.CreatePrimaryServer(ctx, t, u)
 
-	if s.Replicate {
+	if s.Replicate || s.EnableRemotesAPI {
 		u, err := driver.NewDoltUser()
 		require.NoError(t, err)
 		t.Cleanup(func() {
@@ -112,6 +144,10 @@ func (s *AutoGCTest) Setup(ctx context.Context, t *testing.T) {
 	}
 
 	s.CreatePrimaryDatabase(ctx, t)
+
+	if s.EnableRemotesAPI {
+		s.CreateUsersAndRemotes(ctx, t, u)
+	}
 }
 
 func (s *AutoGCTest) CreatePrimaryServer(ctx context.Context, t *testing.T, u driver.DoltUser) {
@@ -121,13 +157,19 @@ func (s *AutoGCTest) CreatePrimaryServer(ctx context.Context, t *testing.T, u dr
 	repo, err := rs.MakeRepo("auto_gc_test")
 	require.NoError(t, err)
 
+	archiveFragment := ``
+	if s.Archive {
+		archiveFragment = `
+    archive_level: 1`
+	}
+
 	behaviorFragment := fmt.Sprintf(`
 behavior:
   auto_gc_behavior:
-    enable: %v
+    enable: %v%v
 listener:
   port: {{get_port "primary_server_port"}}
-`, s.Enable)
+`, s.Enable, archiveFragment)
 
 	var clusterFragment string
 	if s.Replicate {
@@ -153,6 +195,7 @@ cluster:
 	server := MakeServer(t, repo, &driver.Server{
 		Args:        []string{"--config", "server.yaml"},
 		DynamicPort: "primary_server_port",
+		Envs:        []string{"DOLT_REMOTE_PASSWORD=insecurepassword"},
 	}, s.Ports)
 	server.DBName = "auto_gc_test"
 
@@ -174,14 +217,29 @@ func (s *AutoGCTest) CreateStandbyServer(ctx context.Context, t *testing.T, u dr
 	repo, err := rs.MakeRepo("auto_gc_test")
 	require.NoError(t, err)
 
+	archiveFragment := ``
+	if s.Archive {
+		archiveFragment = `
+    archive_level: 1`
+	}
+
 	behaviorFragment := fmt.Sprintf(`
 listener:
   host: 0.0.0.0
   port: {{get_port "standby_server_port"}}
 behavior:
   auto_gc_behavior:
-    enable: %v
-`, s.Enable)
+    enable: %v%v
+`, s.Enable, archiveFragment)
+
+	var remotesapiFragment string
+	if s.EnableRemotesAPI {
+		remotesapiFragment = `
+remotesapi:
+  port: {{get_port "standby_remotesapi_port"}}
+  read_only: false
+`
+	}
 
 	var clusterFragment string
 	if s.Replicate {
@@ -199,7 +257,7 @@ cluster:
 
 	err = driver.WithFile{
 		Name:     "server.yaml",
-		Contents: behaviorFragment + clusterFragment,
+		Contents: behaviorFragment + remotesapiFragment + clusterFragment,
 		Template: s.Ports.ApplyTemplate,
 	}.WriteAtDir(repo.Dir)
 	require.NoError(t, err)
@@ -256,6 +314,26 @@ create table vals (
 	require.NoError(t, conn.Close())
 }
 
+// Create a user on the stanby used for pushing from the primary to the standby.
+// Create the remote itself on the primary, pointing to the standby.
+func (s *AutoGCTest) CreateUsersAndRemotes(ctx context.Context, t *testing.T, u driver.DoltUser) {
+	conn, err := s.StandbyDB.Conn(ctx)
+	require.NoError(t, err)
+	_, err = conn.ExecContext(ctx, "create user remoteuser@'%' identified by 'insecurepassword'")
+	require.NoError(t, err)
+	_, err = conn.ExecContext(ctx, "grant all on *.* to remoteuser@'%'")
+	require.NoError(t, err)
+	require.NoError(t, conn.Close())
+
+	conn, err = s.PrimaryDB.Conn(ctx)
+	require.NoError(t, err)
+	port, ok := s.Ports.GetPort("standby_remotesapi_port")
+	require.True(t, ok)
+	_, err = conn.ExecContext(ctx, fmt.Sprintf("call dolt_remote('add', 'origin', 'http://localhost:%d/auto_gc_test')", port))
+	require.NoError(t, err)
+	require.NoError(t, conn.Close())
+}
+
 func autoGCInsertStatement(i int) string {
 	var vals []string
 	for j := i * 1024; j < (i+1)*1024; j++ {
@@ -278,6 +356,8 @@ func runAutoGCTest(t *testing.T, s *AutoGCTest, numStatements int, commitEvery i
 	ctx := context.Background()
 	s.Setup(ctx, t)
 
+	var pushAttempts, pushSuccesses int
+
 	for i := 0; i < numStatements; i++ {
 		stmt := autoGCInsertStatement(i)
 		conn, err := s.PrimaryDB.Conn(ctx)
@@ -286,8 +366,23 @@ func runAutoGCTest(t *testing.T, s *AutoGCTest, numStatements int, commitEvery i
 		if i%commitEvery == 0 {
 			_, err = conn.ExecContext(ctx, "call dolt_commit('-am', 'insert from "+strconv.Itoa(i*1024)+"')")
 			require.NoError(t, err)
+			if s.EnableRemotesAPI {
+				// Pushes are allowed to fail transiently, since the pushed data can be GCd before
+				// it is added to the store. But pushes should mostly succeed.
+				pushAttempts += 1
+				_, err = conn.ExecContext(ctx, "call dolt_push('origin', '--force', '--user', 'remoteuser', 'main')")
+				if err == nil {
+					pushSuccesses += 1
+				}
+			}
 		}
 		require.NoError(t, conn.Close())
+	}
+
+	if s.EnableRemotesAPI {
+		// Pushes should succeed at least 33% of the time.
+		// This is a conservative lower bound.
+		require.Less(t, float64(pushAttempts)*.33, float64(pushSuccesses))
 	}
 
 	before, err := GetRepoSize(s.PrimaryDir)

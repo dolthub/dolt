@@ -29,8 +29,10 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"time"
 
+	"github.com/dolthub/dolt/go/libraries/utils/dynassert"
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
@@ -107,7 +109,9 @@ func newFileReaderAt(path string) (*fileReaderAt, error) {
 		// Size returns the number of bytes for regular files and is system dependent for others (Some of which can be negative).
 		return nil, fmt.Errorf("%s has invalid size: %d", path, fi.Size())
 	}
-	return &fileReaderAt{f, path, fi.Size()}, nil
+	cnt := new(int32)
+	*cnt = 1
+	return &fileReaderAt{f, path, fi.Size(), cnt}, nil
 }
 
 func nomsFileTableReader(ctx context.Context, path string, h hash.Hash, chunkCount uint32, q MemoryQuotaProvider) (cs chunkSource, err error) {
@@ -187,22 +191,31 @@ type fileReaderAt struct {
 	f    *os.File
 	path string
 	sz   int64
+	// refcnt, clone() increments and Close() decrements. The *os.File is closed when it reaches 0.
+	cnt *int32
 }
 
 func (fra *fileReaderAt) clone() (tableReaderAt, error) {
-	f, err := os.Open(fra.path)
-	if err != nil {
-		return nil, err
+	if dynassert.Assert(atomic.AddInt32(fra.cnt, 1) > 1, "attempt to clone a closed fileReaderAt") {
+		// Restore previous refcnt, even know we're in a weird state...
+		atomic.AddInt32(fra.cnt, -1)
+		return newFileReaderAt(fra.path)
 	}
 	return &fileReaderAt{
-		f,
+		fra.f,
 		fra.path,
 		fra.sz,
+		fra.cnt,
 	}, nil
 }
 
 func (fra *fileReaderAt) Close() error {
-	return fra.f.Close()
+	cnt := atomic.AddInt32(fra.cnt, -1)
+	dynassert.Assert(cnt >= 0, "invalid cnt on fileReaderAt")
+	if cnt == 0 {
+		return fra.f.Close()
+	}
+	return nil
 }
 
 func (fra *fileReaderAt) Reader(ctx context.Context) (io.ReadCloser, error) {

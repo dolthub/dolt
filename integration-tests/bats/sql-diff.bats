@@ -502,8 +502,7 @@ SQL
     dolt sql -q 'create view double_view as select pk*2 from test'
     run dolt diff -r sql
     [ "$status" -eq 0 ]
-    skip "create view statements not implemented"
-    [[ "$output" =~ "CREATE VIEW `double_view`" ]] || false
+    [[ "$output" =~ "create view double_view" ]] || false
 }
 
 @test "sql-diff: diff sql recreates tables with all types" {

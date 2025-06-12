@@ -78,7 +78,7 @@ func mergeProllyTable(
 	if err != nil {
 		return nil, nil, err
 	}
-	valueMerger := newValueMerger(mergedSch, tm.leftSch, tm.rightSch, tm.ancSch, leftRows.Pool(), tm.ns)
+	valueMerger := tm.GetNewValueMerger(mergedSch, leftRows)
 
 	if !valueMerger.leftMapping.IsIdentityMapping() {
 		mergeInfo.LeftNeedsRewrite = true
@@ -397,7 +397,7 @@ func threeWayDiffer(ctx context.Context, tm *TableMerger, valueMerger *valueMerg
 		leftRows.Tuples(),
 		rightRows.Tuples(),
 		ancRows.Tuples(),
-		valueMerger.tryMerge,
+		valueMerger.TryMerge,
 		valueMerger.keyless,
 		diffInfo,
 		leftRows.Tuples().Order,
@@ -1681,7 +1681,7 @@ type valueMerger struct {
 	ns                                     tree.NodeStore
 }
 
-func newValueMerger(merged, leftSch, rightSch, baseSch schema.Schema, syncPool pool.BuffPool, ns tree.NodeStore) *valueMerger {
+func NewValueMerger(merged, leftSch, rightSch, baseSch schema.Schema, syncPool pool.BuffPool, ns tree.NodeStore) *valueMerger {
 	leftMapping, rightMapping, baseMapping := generateSchemaMappings(merged, leftSch, rightSch, baseSch)
 
 	baseToLeftMapping, baseToRightMapping, baseToResultMapping := generateSchemaMappings(baseSch, leftSch, rightSch, merged)
@@ -1753,11 +1753,11 @@ func findNonPKColumnMappingByTagOrName(sch schema.Schema, col schema.Column) int
 	}
 }
 
-// tryMerge performs a cell-wise merge given left, right, and base cell value
+// TryMerge performs a cell-wise merge given left, right, and base cell value
 // tuples. It returns the merged cell value tuple and a bool indicating if a
-// conflict occurred. tryMerge should only be called if left and right produce
+// conflict occurred. TryMerge should only be called if left and right produce
 // non-identical diffs against base.
-func (m *valueMerger) tryMerge(ctx *sql.Context, left, right, base val.Tuple) (val.Tuple, bool, error) {
+func (m *valueMerger) TryMerge(ctx *sql.Context, left, right, base val.Tuple) (val.Tuple, bool, error) {
 	// If we're merging a keyless table and the keys match, but the values are different,
 	// that means that the row data is the same, but the cardinality has changed, and if the
 	// cardinality has changed in different ways on each merge side, we can't auto resolve.
