@@ -7147,9 +7147,9 @@ var DoltCommitTests = []queries.ScriptTest{
 	{
 		Name: "CALL DOLT_COMMIT('--amend') works on initial commit",
 		SetUpScript: []string{
-			"CALL DOLT_BRANCH('initcommit')",
-			"CALL DOLT_CHECKOUT('initcommit')",
-			"CALL DOLT_RESET('--hard', 'HEAD~7')",
+			"SET @hash = (SELECT commit_hash FROM dolt_log ORDER BY commit_order ASC LIMIT 1);",
+			"CALL DOLT_BRANCH('initcommit', @hash);",
+			"CALL DOLT_CHECKOUT('initcommit');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
