@@ -30,6 +30,11 @@ teardown() {
     $BATS_TEST_DIRNAME/go/go $USER $PORT $REPO_NAME
 }
 
+@test "go go-mysql test" {
+    (cd $BATS_TEST_DIRNAME/go-mysql; go build .)
+    $BATS_TEST_DIRNAME/go-mysql/go $USER $PORT $REPO_NAME
+}
+
 @test "python mysql.connector client" {
     python3.9 $BATS_TEST_DIRNAME/python/mysql.connector-test.py $USER $PORT $REPO_NAME
 }
