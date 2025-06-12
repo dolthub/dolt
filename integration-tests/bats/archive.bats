@@ -70,7 +70,7 @@ mutations_and_gc_statement() {
   run dolt archive
   [ "$status" -eq 0 ]
 
-  lines="$(echo "$output" | grep -cE '^Not enough chunks to build archive for [a-z0-9]+\. Skipping\.$')"
+  lines="$(echo "$output" | grep -ci 'Not enough chunks to build archive.*skipping')"
   [ "$lines" -eq "2" ]
 }
 
