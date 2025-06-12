@@ -1034,9 +1034,7 @@ expect eof
 # bats test_tags=no_lambda
 @test "sql-shell: commit time set correctly in shell" {
         skiponwindows "Need to install expect and make this script work on windows."
+
         run $BATS_TEST_DIRNAME/sql-shell-commit-time.expect
-
-        echo "$output"
-
         [ "$status" -eq 0 ]
 }
