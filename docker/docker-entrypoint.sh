@@ -99,6 +99,20 @@ set_dolt_config_if_defined() {
     fi
 }
 
+create_default_database_from_env() {
+    local database=""
+
+    if [ -n "$DOLT_DATABASE" ]; then
+        database="$DOLT_DATABASE"
+    elif [ -n "$MYSQL_DATABASE" ]; then
+        database="$MYSQL_DATABASE"
+    fi
+
+    if [ -n "$database" ]; then
+        dolt sql -q "CREATE DATABASE IF NOT EXISTS $database;"
+    fi
+}
+
 _main() {
     # check for dolt binary executable
     check_for_dolt
@@ -127,11 +141,14 @@ _main() {
                     GRANT ALL ON *.* TO 'root'@'${DOLT_ROOT_HOST}' WITH GRANT OPTION;"
     fi
 
-     # Ensure the root@localhost user exists, with the requested password
-     echo "Ensuring root@localhost user exists"
-     dolt sql -q "CREATE USER IF NOT EXISTS 'root'@'localhost' IDENTIFIED BY '${DOLT_ROOT_PASSWORD}';
-                  ALTER USER 'root'@'localhost' IDENTIFIED BY '${DOLT_ROOT_PASSWORD}';
-                  GRANT ALL ON *.* TO 'root'@'localhost' WITH GRANT OPTION;"
+    # If DOLT_DATABASE or MYSQL_DATABASE has been specified, create the database if it does not exist
+    create_default_database_from_env
+
+    # Ensure the root@localhost user exists, with the requested password
+    echo "Ensuring root@localhost user exists"
+    dolt sql -q "CREATE USER IF NOT EXISTS 'root'@'localhost' IDENTIFIED BY '${DOLT_ROOT_PASSWORD}';
+    ALTER USER 'root'@'localhost' IDENTIFIED BY '${DOLT_ROOT_PASSWORD}';
+    GRANT ALL ON *.* TO 'root'@'localhost' WITH GRANT OPTION;"
 
     if [[ ! -f $INIT_COMPLETED ]]; then
         # run any file provided in /docker-entrypoint-initdb.d directory before the server starts
