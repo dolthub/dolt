@@ -5,10 +5,7 @@ set env(NO_COLOR) 1
 
 source  "$env(BATS_CWD)/helper/common_expect_functions.tcl"
 
-spawn dolt sql
-
-set first_commit_date ""
-set second_commit_date ""
+spawn dolt sql  
 
 expect_with_defaults                                                    {dolt-repo-[0-9]+/main\*> } { send "\\commit -A -m \"created a table\"\r"; }
 
