@@ -24,6 +24,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -39,6 +40,9 @@ import (
 const defaultDictionarySize = 1 << 12 // NM4 - maybe just select the largest chunk. TBD.
 const maxSamples = 1000
 const minSamples = 25
+const fourMb = 1 << 22
+
+var errNotEnoughChunks = errors.New("Not enough samples to build default dictionary")
 
 func UnArchive(ctx context.Context, cs chunks.ChunkStore, smd StorageMetadata, progress chan interface{}) error {
 	if gs, ok := cs.(*GenerationalNBS); ok {
@@ -115,87 +119,112 @@ func UnArchive(ctx context.Context, cs chunks.ChunkStore, smd StorageMetadata, p
 }
 
 func BuildArchive(ctx context.Context, cs chunks.ChunkStore, dagGroups *ChunkRelations, purge bool, progress chan interface{}) (err error) {
-	// Currently, we don't have any stats to report. Required for calls to the lower layers tho.
-	var stats Stats
-
 	if gs, ok := cs.(*GenerationalNBS); ok {
-		outPath, _ := gs.oldGen.Path()
-		oldgen := gs.oldGen.tables.upstream
-
-		swapMap := make(map[hash.Hash]hash.Hash)
-
-		for tf, ogcs := range oldgen {
-			if _, ok := ogcs.(archiveChunkSource); ok {
-				continue
-			}
-
-			idx, err := ogcs.index()
-			if err != nil {
-				return err
-			}
-
-			originalSize := idx.tableFileSize()
-
-			archivePath := ""
-			archiveName := hash.Hash{}
-			archivePath, archiveName, err = convertTableFileToArchive(ctx, ogcs, idx, dagGroups, outPath, progress, &stats)
-			if err != nil {
-				return err
-			}
-
-			fileInfo, err := os.Stat(archivePath)
-			if err != nil {
-				progress <- "Failed to stat archive file"
-				return err
-			}
-			archiveSize := fileInfo.Size()
-
-			err = verifyAllChunks(ctx, idx, archivePath, progress, &stats)
-			if err != nil {
-				return err
-			}
-
-			percentReduction := -100.0 * (float64(archiveSize)/float64(originalSize) - 1.0)
-			progress <- fmt.Sprintf("Archived %s (%d -> %d bytes, %.2f%% reduction)", archiveName, originalSize, archiveSize, percentReduction)
-
-			swapMap[tf] = archiveName
-		}
-
-		if len(swapMap) == 0 {
-			return fmt.Errorf("No tables found to archive. Run 'dolt gc' first")
-		}
-
-		cleanup := make([]hash.Hash, 0, len(swapMap))
-
-		//NM4 TODO: This code path must only be run on an offline database. We should add a check for that.
-		specs, err := gs.oldGen.tables.toSpecs()
-		newSpecs := make([]tableSpec, 0, len(specs))
-		for _, spec := range specs {
-			if newSpec, exists := swapMap[spec.name]; exists {
-				newSpecs = append(newSpecs, tableSpec{newSpec, spec.chunkCount})
-				cleanup = append(cleanup, spec.name)
-			} else {
-				newSpecs = append(newSpecs, spec)
-			}
-		}
-		err = gs.oldGen.swapTables(ctx, newSpecs, chunks.GCMode_Default)
+		err = archiveSingleBlockStore(ctx, func() *NomsBlockStore { return gs.newGen }, dagGroups, purge, progress)
 		if err != nil {
 			return err
 		}
 
-		if purge && len(cleanup) > 0 {
-			for _, h := range cleanup {
-				tf := filepath.Join(outPath, h.String())
-				err = os.Remove(tf)
-				if err != nil {
-					return err
+		err = archiveSingleBlockStore(ctx, func() *NomsBlockStore { return gs.oldGen }, dagGroups, purge, progress)
+		if err != nil {
+			return err
+		}
+	} else {
+		return errors.New("runtime error: GenerationalNBS Expected")
+	}
+	return nil
+}
+
+func archiveSingleBlockStore(ctx context.Context, bscb func() *NomsBlockStore, dagGroups *ChunkRelations, purge bool, progress chan interface{}) error {
+	// Currently, we don't have any stats to report. Required for calls to the lower layers tho.
+	var stats Stats
+
+	blockStore := bscb()
+	path, _ := blockStore.Path()
+
+	allFiles := make([]hash.Hash, 0, len(blockStore.tables.upstream))
+
+	// The source set changes out from under us, but the names of the table files will stay stable enough
+	// to iterate over them.
+	sourceSet := blockStore.tables.upstream
+	for tf := range sourceSet {
+		allFiles = append(allFiles, tf)
+	}
+
+	for _, tf := range allFiles {
+		sourceSet = blockStore.tables.upstream
+		cs := sourceSet[tf]
+		if _, ok := cs.(archiveChunkSource); ok {
+			continue
+		}
+		if isJournalAddr(tf) {
+			continue
+		}
+
+		progress <- fmt.Sprintf("Archiving TableFile %s\n", tf.String())
+
+		idx, err := cs.index()
+		if err != nil {
+			return err
+		}
+
+		originalSize := idx.tableFileSize()
+
+		archivePath := ""
+		archiveName := hash.Hash{}
+		archivePath, archiveName, err = convertTableFileToArchive(ctx, cs, idx, dagGroups, path, progress, &stats)
+		if err != nil {
+			if errors.Is(err, errNotEnoughChunks) {
+				progress <- fmt.Sprintf("Not enough chunks to build archive for %s. Skipping.", cs.hash().String())
+				continue
+			}
+
+			return err
+		}
+
+		fileInfo, err := os.Stat(archivePath)
+		if err != nil {
+			progress <- "Failed to stat archive file"
+			return err
+		}
+		archiveSize := fileInfo.Size()
+
+		err = verifyAllChunks(ctx, idx, archivePath, progress, &stats)
+		if err != nil {
+			return err
+		}
+
+		percentReduction := -100.0 * (float64(archiveSize)/float64(originalSize) - 1.0)
+		progress <- fmt.Sprintf("Archived %s (%d -> %d bytes, %.2f%% reduction)\n", archiveName, originalSize, archiveSize, percentReduction)
+
+		specs, err := blockStore.tables.toSpecs()
+		newSpecs := make([]tableSpec, 0, len(specs))
+		purgeFile := ""
+		for _, spec := range specs {
+			if tf == spec.name {
+				newSpecs = append(newSpecs, tableSpec{archiveName, spec.chunkCount})
+				if purge {
+					purgeFile = filepath.Join(path, tf.String())
 				}
+			} else {
+				newSpecs = append(newSpecs, spec)
 			}
 		}
 
-	} else {
-		return errors.New("Modern DB Expected")
+		err = blockStore.swapTables(ctx, newSpecs, chunks.GCMode_Default)
+		if err != nil {
+			return err
+		}
+
+		if len(purgeFile) > 0 {
+			err = os.Remove(purgeFile)
+			if err != nil {
+				// failing to purge is non-fatal.
+				progress <- fmt.Sprintf("Failed to purge. %s", purgeFile)
+			}
+		}
 	}
+
 	return nil
 }
 
@@ -217,7 +246,7 @@ func convertTableFileToArchive(
 	if len(defaultSamples) >= minSamples {
 		defaultDict = buildDictionary(defaultSamples)
 	} else {
-		return "", hash.Hash{}, errors.New("Not enough samples to build default dictionary")
+		return "", hash.Hash{}, errNotEnoughChunks
 	}
 	defaultSamples = nil
 
@@ -239,12 +268,7 @@ func convertTableFileToArchive(
 	//	cg.print(n, p)
 	//}
 
-	const fourMb = 1 << 22
-
-	// Allocate buffer used to compress chunks.
-	cmpBuff := make([]byte, 0, fourMb)
-
-	cmpBuff = gozstd.Compress(cmpBuff[:0], defaultDict)
+	cmpBuff := gozstd.Compress(nil, defaultDict)
 	// p("Default Dict Raw vs Compressed: %d , %d\n", len(defaultDict), len(cmpDefDict))
 
 	arcW, err := newArchiveWriter("")
@@ -257,7 +281,7 @@ func convertTableFileToArchive(
 		return "", hash.Hash{}, err
 	}
 
-	_, grouped, singles, err := writeDataToArchive(ctx, cmpBuff[:0], allChunks, cgList, defaultDictByteSpanId, defaultCDict, arcW, progress, stats)
+	_, grouped, singles, err := writeDataToArchive(ctx, allChunks, cgList, defaultDictByteSpanId, defaultCDict, arcW, progress, stats)
 	if err != nil {
 		return "", hash.Hash{}, err
 	}
@@ -331,7 +355,6 @@ func indexFinalizeFlushArchive(arcW *archiveWriter, archivePath string, originTa
 
 func writeDataToArchive(
 	ctx context.Context,
-	cmpBuff []byte,
 	chunkCache *simpleChunkSourceCache,
 	cgList []*chunkGroup,
 	defaultSpanId uint32,
@@ -345,6 +368,9 @@ func writeDataToArchive(
 	if err != nil {
 		return 0, 0, 0, err
 	}
+
+	// Allocate buffer used to compress chunks.
+	cmpBuff := make([]byte, 0, fourMb)
 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -361,7 +387,6 @@ func writeDataToArchive(
 				groupCount++
 
 				cmpBuff = gozstd.Compress(cmpBuff[:0], cg.dict)
-
 				dictId, err := arcW.writeByteSpan(cmpBuff)
 				if err != nil {
 					return 0, 0, 0, err
@@ -394,42 +419,107 @@ func writeDataToArchive(
 		}
 	}
 
-	ungroupedChunkCount := int32(len(allChunks))
-	ungroupedChunkProgress := int32(0)
+	ungroupedChunks, err := compressChunksInParallel(ctx, allChunks, chunkCache, arcW, defaultDict, defaultSpanId, progress, stats)
+	if err != nil {
+		return 0, 0, 0, err
+	}
 
-	// Any chunks remaining will be written out individually, using the default dictionary.
+	return groupCount, groupedChunkCount, ungroupedChunks, nil
+
+}
+func compressChunksInParallel(
+	ctx context.Context,
+	allChunks hash.HashSet,
+	chunkCache *simpleChunkSourceCache,
+	arcW *archiveWriter,
+	defaultDict *gozstd.CDict,
+	defaultSpanId uint32,
+	progress chan<- interface{},
+	stats *Stats,
+) (uint32, error) {
+	type compressedChunk struct {
+		h    hash.Hash
+		data []byte
+	}
+
+	const workerCount = 32
+
+	workCh := make(chan hash.Hash, len(allChunks))
+	resultCh := make(chan compressedChunk, workerCount)
+	errCh := make(chan error, 1)
+	var wg sync.WaitGroup
+
+	// Prepopulate work channel
 	for h := range allChunks {
-		select {
-		case <-ctx.Done():
-			return 0, 0, 0, ctx.Err()
-		default:
-			dictId := uint32(0)
+		workCh <- h
+	}
+	close(workCh)
 
-			c, e2 := chunkCache.get(ctx, h, stats)
-			if e2 != nil {
-				return 0, 0, 0, e2
+	// Start worker goroutines
+	for i := 0; i < workerCount; i++ {
+		wg.Add(1)
+		go func() {
+			// Allocate buffer used to compress chunks.
+			cmpBuff := make([]byte, 0, fourMb)
+
+			defer wg.Done()
+			for h := range workCh {
+				select {
+				case <-ctx.Done():
+					return
+				default:
+					c, e2 := chunkCache.get(ctx, h, stats)
+					if e2 != nil {
+						errCh <- e2
+						return
+					}
+					cmpBuff = gozstd.CompressDict(cmpBuff[:0], c.Data(), defaultDict)
+
+					// Make a private copy of the compressed data for the result channel.
+					// Unfortunate alloc. Could use a pool of buffers if this proves to be a bottleneck.
+					privateCopy := make([]byte, len(cmpBuff))
+					copy(privateCopy, cmpBuff)
+					resultCh <- compressedChunk{h: h, data: privateCopy}
+				}
 			}
+		}()
+	}
 
-			cmpBuff = gozstd.CompressDict(cmpBuff[:0], c.Data(), defaultDict)
-			dictId = defaultSpanId
+	// Close resultCh once all workers finish
+	go func() {
+		wg.Wait()
+		close(resultCh)
+	}()
 
-			id, err := arcW.writeByteSpan(cmpBuff)
-			if err != nil {
-				return 0, 0, 0, err
-			}
-			err = arcW.stageZStdChunk(h, dictId, id)
-			if err != nil {
-				return 0, 0, 0, err
-			}
+	// Collector: serial arcW calls
+	completed := int32(0)
+	totalChunks := int32(len(allChunks))
+	for cc := range resultCh {
+		id, err := arcW.writeByteSpan(cc.data)
+		if err != nil {
+			return 0, err
+		}
+		err = arcW.stageZStdChunk(cc.h, defaultSpanId, id)
+		if err != nil {
+			return 0, err
+		}
 
-			ungroupedChunkProgress++
-			progress <- ArchiveBuildProgressMsg{Stage: "Writing Ungrouped Chunks", Total: ungroupedChunkCount, Completed: ungroupedChunkProgress}
+		completed++
+		progress <- ArchiveBuildProgressMsg{
+			Stage:     "Writing Ungrouped Chunks",
+			Total:     totalChunks,
+			Completed: completed,
 		}
 	}
 
-	individualChunkCount = uint32(len(allChunks))
-
-	return
+	select {
+	case err := <-errCh:
+		return 0, err
+	case <-ctx.Done():
+		return 0, ctx.Err()
+	default:
+		return uint32(totalChunks), nil
+	}
 }
 
 // gatherAllChunks reads all the chunks from the chunk source and returns them in a map. The map is keyed by the hash of
