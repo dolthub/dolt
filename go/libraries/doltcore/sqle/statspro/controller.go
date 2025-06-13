@@ -82,12 +82,12 @@ type StatsController struct {
 	workerDoneCh    chan struct{}
 	listeners       []listener
 
-	gcInterval  time.Duration
-	memOnly     bool
-	enableGc    bool
-	doGc        bool
-	Debug       bool
-	closed      chan struct{}
+	gcInterval time.Duration
+	memOnly    bool
+	enableGc   bool
+	doGc       bool
+	Debug      bool
+	closed     chan struct{}
 
 	// kv is a content-addressed cache of histogram objects:
 	// buckets, first bounds, and schema-specific statistic
