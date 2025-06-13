@@ -7185,7 +7185,6 @@ var DoltCommitTests = []queries.ScriptTest{
 	{
 		Name: "CALL DOLT_COMMIT('-amend') works to add changes to a commit",
 		SetUpScript: []string{
-			"CALL DOLT_CHECKOUT('main')",
 			"SET @@AUTOCOMMIT=0;",
 			"INSERT INTO test (id) VALUES (3)",
 			"CALL DOLT_ADD('.');",

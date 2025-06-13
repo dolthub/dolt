@@ -173,7 +173,7 @@ SQL
 
     run dolt log
     [ $status -eq 0 ]
-    [ "${#lines[@]}" -eq 8 ] || false
+    [ "${#lines[@]}" -eq 8 ]
 }
 
 @test "commit: dolt commit with unstaged tables leaves them in the working set" {
