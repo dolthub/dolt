@@ -586,16 +586,15 @@ func (db *database) doFastForward(ctx context.Context, ds Dataset, newHeadAddr h
 }
 
 func (db *database) BuildNewCommit(ctx context.Context, ds Dataset, v types.Value, opts CommitOptions) (*Commit, error) {
-	if len(opts.Parents) == 0 {
+	if !opts.Amend {
 		headAddr, ok := ds.MaybeHeadAddr()
 		if ok {
-			opts.Parents = []hash.Hash{headAddr}
-		}
-	} else if !opts.Amend {
-		curr, ok := ds.MaybeHeadAddr()
-		if ok {
-			if !hasParentHash(opts, curr) {
-				return nil, ErrMergeNeeded
+			if len(opts.Parents) == 0 {
+				opts.Parents = []hash.Hash{headAddr}
+			} else {
+				if !hasParentHash(opts, headAddr) {
+					return nil, ErrMergeNeeded
+				}
 			}
 		}
 	}

@@ -7145,6 +7145,44 @@ var DoltCommitTests = []queries.ScriptTest{
 		},
 	},
 	{
+		Name: "CALL DOLT_COMMIT('--amend') works on initial commit",
+		SetUpScript: []string{
+			"SET @hash = (SELECT commit_hash FROM dolt_log ORDER BY commit_order ASC LIMIT 1);",
+			"CALL DOLT_BRANCH('initcommit', @hash);",
+			"CALL DOLT_CHECKOUT('initcommit');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT COUNT(*) FROM dolt_log;",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "CALL DOLT_COMMIT('--amend', '-m', 'amended commit message');",
+				Expected: []sql.Row{{doltCommit}},
+			},
+			{
+				Query:    "SELECT message FROM dolt_log;",
+				Expected: []sql.Row{{"amended commit message"}},
+			},
+			{
+				Query:    "SELECT COUNT(*) FROM dolt_log;",
+				Expected: []sql.Row{{1}},
+			},
+			{ // checking double-modification
+				Query:    "CALL DOLT_COMMIT('--amend', '-m', 'amended commit message x2');",
+				Expected: []sql.Row{{doltCommit}},
+			},
+			{
+				Query:    "SELECT message FROM dolt_log;",
+				Expected: []sql.Row{{"amended commit message x2"}},
+			},
+			{
+				Query:    "SELECT COUNT(*) FROM dolt_log;",
+				Expected: []sql.Row{{1}},
+			},
+		},
+	},
+	{
 		Name: "CALL DOLT_COMMIT('-amend') works to add changes to a commit",
 		SetUpScript: []string{
 			"SET @@AUTOCOMMIT=0;",
@@ -7165,7 +7203,7 @@ var DoltCommitTests = []queries.ScriptTest{
 				Expected: []sql.Row{{0}},
 			},
 			{
-				Query: "SELECT  message FROM dolt_log;",
+				Query: "SELECT message FROM dolt_log;",
 				Expected: []sql.Row{
 					{"original commit message for adding changes to a commit"},
 					{"amended commit message"},
