@@ -29,7 +29,6 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statspro/jobqueue"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
@@ -47,7 +46,7 @@ type StatsKv interface {
 	PutTemplate(key templateCacheKey, stat stats.Statistic)
 	GetBound(h hash.Hash, len int) (sql.Row, bool)
 	PutBound(h hash.Hash, r sql.Row, l int)
-	Flush(ctx context.Context, sq *jobqueue.SerialQueue) (int, error)
+	Flush(ctx context.Context) (int, error)
 	Len() int
 	GcGen() uint64
 }
@@ -177,7 +176,7 @@ func (m *memStats) GetBucket(_ context.Context, h hash.Hash, tupB *val.TupleBuil
 	return b, ok, nil
 }
 
-func (m *memStats) Flush(context.Context, *jobqueue.SerialQueue) (int, error) {
+func (m *memStats) Flush(context.Context) (int, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.gcFlusher != nil {
@@ -299,7 +298,7 @@ func (p *prollyStats) GcGen() uint64 {
 	return p.mem.gcGen
 }
 
-func (p *prollyStats) LoadFromMem(ctx context.Context, sq *jobqueue.SerialQueue) error {
+func (p *prollyStats) LoadFromMem(ctx context.Context) error {
 	p.mem.mu.Lock()
 	defer p.mem.mu.Unlock()
 	// XXX: We used to try to rate limit these writes, since there
@@ -332,8 +331,8 @@ func (p *prollyStats) LoadFromMem(ctx context.Context, sq *jobqueue.SerialQueue)
 	return nil
 }
 
-func (p *prollyStats) Flush(ctx context.Context, sq *jobqueue.SerialQueue) (int, error) {
-	if err := p.LoadFromMem(ctx, sq); err != nil {
+func (p *prollyStats) Flush(ctx context.Context) (int, error) {
+	if err := p.LoadFromMem(ctx); err != nil {
 		return 0, err
 	}
 
@@ -536,7 +535,7 @@ func (sc *StatsController) PutBound(h hash.Hash, r sql.Row, l int) {
 	sc.kv.PutBound(h, r, l)
 }
 
-func (sc *StatsController) Flush(ctx context.Context, sq *jobqueue.SerialQueue) (int, error) {
+func (sc *StatsController) Flush(ctx context.Context) (int, error) {
 	sqlCtx, err := sc.ctxGen(ctx)
 	if err != nil {
 		return 0, err
@@ -548,7 +547,7 @@ func (sc *StatsController) Flush(ctx context.Context, sq *jobqueue.SerialQueue) 
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
 	defer sc.signalListener(leFlush)
-	return sc.kv.Flush(sqlCtx, sq)
+	return sc.kv.Flush(sqlCtx)
 }
 
 func (sc *StatsController) Len() int {
