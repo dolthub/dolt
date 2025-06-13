@@ -23,6 +23,7 @@ package tree
 
 import (
 	"context"
+
 	"github.com/dolthub/dolt/go/store/hash"
 
 	"github.com/dolthub/dolt/go/store/prolly/message"
