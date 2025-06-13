@@ -568,16 +568,16 @@ func materializeMap(t *testing.T, mut *MutableMap) Map {
 	err := mut.Checkpoint(ctx)
 	require.NoError(t, err)
 	iter := mut.tuples.Mutations()
-	prev, _ := iter.NextMutation(ctx)
-	require.NotNil(t, prev)
+	prevMutation := iter.NextMutation(ctx)
+	require.NotNil(t, prevMutation.Key)
 	for {
-		next, _ := iter.NextMutation(ctx)
-		if next == nil {
+		nextMutation := iter.NextMutation(ctx)
+		if nextMutation.Key == nil {
 			break
 		}
-		cmp := mut.keyDesc.Compare(ctx, val.Tuple(prev), val.Tuple(next))
+		cmp := mut.keyDesc.Compare(ctx, val.Tuple(prevMutation.Key), val.Tuple(nextMutation.Key))
 		assert.True(t, cmp < 0)
-		prev = next
+		prevMutation = nextMutation
 	}
 
 	m, err := mut.Map(ctx)
