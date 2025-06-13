@@ -34,7 +34,7 @@ type archiveChunkSource struct {
 
 var _ ChunkSource = &archiveChunkSource{}
 
-func NewArchiveChunkSource(ctx context.Context, dir string, h hash.Hash, chunkCount uint32, q MemoryQuotaProvider, stats *Stats) (ChunkSource, error) {
+func NewArchiveChunkSource(ctx context.Context, dir string, h hash.Hash, _ uint32, q MemoryQuotaProvider, stats *Stats) (ChunkSource, error) {
 	archiveFile := filepath.Join(dir, h.String()+ArchiveFileSuffix)
 
 	fra, err := newFileReaderAt(archiveFile)
