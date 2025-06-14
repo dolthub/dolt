@@ -46,7 +46,7 @@ type archiveReader struct {
 type suffix [hash.SuffixLen]byte
 
 type archiveFooter struct {
-	indexSize     uint32
+	indexSize     uint64
 	byteSpanCount uint32
 	chunkCount    uint32
 	metadataSize  uint32
@@ -302,7 +302,7 @@ func buildFooter(fileSize uint64, buf []byte) (f archiveFooter, err error) {
 		return
 	}
 
-	f.indexSize = binary.BigEndian.Uint32(buf[afrIndexLenOffset : afrIndexChkSumOffset+uint32Size])
+	f.indexSize = binary.BigEndian.Uint64(buf[afrIndexLenOffset : afrIndexChkSumOffset+uint64Size])
 	f.byteSpanCount = binary.BigEndian.Uint32(buf[afrByteSpanOffset : afrByteSpanOffset+uint32Size])
 	f.chunkCount = binary.BigEndian.Uint32(buf[afrChunkCountOffset : afrChunkCountOffset+uint32Size])
 	f.metadataSize = binary.BigEndian.Uint32(buf[afrMetaLenOffset : afrMetaLenOffset+uint32Size])

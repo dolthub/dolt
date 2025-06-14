@@ -168,7 +168,7 @@ const (
 	archiveFileSignature = "DOLTARC"
 	archiveFileSigSize   = uint64(len(archiveFileSignature))
 	archiveCheckSumSize  = sha512.Size * 3 // sha512 3 times.
-	archiveFooterSize    = uint32Size +    // index length
+	archiveFooterSize    = uint64Size + // index length
 		uint32Size + // byte span count
 		uint32Size + // chunk count
 		uint32Size + // metadataSpan length
