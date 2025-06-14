@@ -190,7 +190,10 @@ func newArchiveReader(ctx context.Context, reader tableReaderAt, fileSize uint64
 		return archiveReader{}, errors.New("Failed to loadFooter: " + err.Error())
 	}
 
-	return buildArchiveReader(ctx, reader, footer, stats)
+	s := fmt.Sprintf("Footer loaded: %v", footer)
+	return archiveReader{}, errors.New(s)
+
+	//return buildArchiveReader(ctx, reader, footer, stats)
 }
 
 func buildArchiveReader(ctx context.Context, reader tableReaderAt, footer archiveFooter, stats *Stats) (archiveReader, error) {
