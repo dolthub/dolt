@@ -74,7 +74,7 @@ func (f archiveFooter) totalIndexSpan() byteSpan {
 // indexByteOffsetSpan returns the span of the byte offsets section of the index. This is the first part of the index
 func (f archiveFooter) indexByteOffsetSpan() byteSpan {
 	totalIdx := f.totalIndexSpan()
-	return byteSpan{offset: totalIdx.offset, length: uint64(f.byteSpanCount * uint64Size)}
+	return byteSpan{offset: totalIdx.offset, length: uint64(f.byteSpanCount) * uint64Size}
 }
 
 // indexPrefixSpan returns the span of the prefix section of the index. This is the second part of the index.
