@@ -15,12 +15,12 @@
 package tblcmds
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/rowconv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 )
 
@@ -71,43 +71,32 @@ func TestValidatePrimaryKeysAgainstSchema(t *testing.T) {
 			primaryKeys:   []string{"invalid_col"},
 			schema:        testSchema,
 			expectError:   true,
-			errorContains: "primary key 'invalid_col' not found",
-		},
-		{
-			name:          "invalid single primary key shows available columns",
-			primaryKeys:   []string{"invalid_col"},
-			schema:        testSchema,
-			expectError:   true,
-			errorContains: "Available columns: id, name, email, age",
+			errorContains: "primary key 'invalid_col' not found in import file. Available columns: id, name, email, age",
 		},
 		{
 			name:          "mix of valid and invalid primary keys",
 			primaryKeys:   []string{"id", "invalid_col1", "name", "invalid_col2"},
 			schema:        testSchema,
 			expectError:   true,
-			errorContains: "primary keys [invalid_col1 invalid_col2] not found",
+			errorContains: "primary keys [invalid_col1 invalid_col2] not found in import file. Available columns: id, name, email, age",
 		},
 		{
 			name:          "all invalid primary keys",
 			primaryKeys:   []string{"col1", "col2", "col3"},
 			schema:        testSchema,
 			expectError:   true,
-			errorContains: "primary keys [col1 col2 col3] not found",
+			errorContains: "primary keys [col1 col2 col3] not found in import file. Available columns: id, name, email, age",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := validatePrimaryKeysAgainstSchema(tt.primaryKeys, tt.schema)
+			err := validatePrimaryKeysAgainstSchema(tt.primaryKeys, tt.schema, rowconv.NameMapper{})
 
 			if tt.expectError {
 				assert.Error(t, err)
 				if tt.errorContains != "" {
 					assert.Contains(t, err.Error(), tt.errorContains)
-				}
-				// Verify that available columns are shown in error message
-				if strings.Contains(tt.errorContains, "not found") {
-					assert.Contains(t, err.Error(), "Available columns:")
 				}
 			} else {
 				assert.NoError(t, err)
@@ -133,13 +122,70 @@ func TestValidatePrimaryKeysAgainstSchemaColumnOrder(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	err = validatePrimaryKeysAgainstSchema([]string{"invalid"}, testSchema)
+	err = validatePrimaryKeysAgainstSchema([]string{"invalid"}, testSchema, rowconv.NameMapper{})
 	assert.Error(t, err)
+	// The implementation returns a detailed error with available columns
+	assert.Contains(t, err.Error(), "primary key 'invalid' not found in import file. Available columns: zebra, alpha, beta, gamma")
+}
 
-	// The error message should contain all available columns
-	errMsg := err.Error()
-	assert.Contains(t, errMsg, "alpha")
-	assert.Contains(t, errMsg, "beta")
-	assert.Contains(t, errMsg, "gamma")
-	assert.Contains(t, errMsg, "zebra")
+func TestValidatePrimaryKeysWithNameMapping(t *testing.T) {
+	// Create a test schema with columns: user_id, user_name, user_email
+	testCols := []schema.Column{
+		{Name: "user_id", Tag: 0, IsPartOfPK: true},
+		{Name: "user_name", Tag: 1, IsPartOfPK: false},
+		{Name: "user_email", Tag: 2, IsPartOfPK: false},
+	}
+	testSchema, err := schema.NewSchema(
+		schema.NewColCollection(testCols...),
+		nil,
+		schema.Collation_Default,
+		nil,
+		nil,
+	)
+	require.NoError(t, err)
+
+	// Create a name mapper that maps user_id -> id, user_name -> name, user_email -> email
+	nameMapper := rowconv.NameMapper{
+		"user_id":    "id",
+		"user_name":  "name",
+		"user_email": "email",
+	}
+
+	tests := []struct {
+		name        string
+		primaryKeys []string
+		expectError bool
+	}{
+		{
+			name:        "primary key using mapped name",
+			primaryKeys: []string{"id"}, // mapped from user_id
+			expectError: false,
+		},
+		{
+			name:        "primary key using original name",
+			primaryKeys: []string{"user_id"}, // original column name
+			expectError: false,
+		},
+		{
+			name:        "multiple primary keys with mixed names",
+			primaryKeys: []string{"id", "name"}, // mapped names
+			expectError: false,
+		},
+		{
+			name:        "invalid primary key not in mapping",
+			primaryKeys: []string{"invalid_col"},
+			expectError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validatePrimaryKeysAgainstSchema(tt.primaryKeys, testSchema, nameMapper)
+			if tt.expectError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
 }
