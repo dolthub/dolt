@@ -412,7 +412,7 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 				return nil, false, err
 			}
 		}
-		return NewDoltSchemasHistoryTable(db.ddb, head), true, nil
+		return NewDoltSchemasHistoryTable(db.ddb, head, db), true, nil
 
 	case strings.HasPrefix(lwrName, doltdb.DoltHistoryTablePrefix):
 		baseTableName := tblName[len(doltdb.DoltHistoryTablePrefix):]

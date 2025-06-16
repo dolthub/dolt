@@ -22,6 +22,7 @@ import (
 	"github.com/dolthub/vitess/go/sqltypes"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 )
 
 // doltSchemasHistoryTable implements the dolt_history_dolt_schemas system table
@@ -29,17 +30,19 @@ type doltSchemasHistoryTable struct {
 	name string
 	ddb  *doltdb.DoltDB
 	head *doltdb.Commit
+	db   Database // Add database reference for DoltTable creation
 }
 
 var _ sql.Table = (*doltSchemasHistoryTable)(nil)
 var _ sql.PrimaryKeyTable = (*doltSchemasHistoryTable)(nil)
 
 // NewDoltSchemasHistoryTable creates a new dolt_schemas history table instance
-func NewDoltSchemasHistoryTable(ddb *doltdb.DoltDB, head *doltdb.Commit) sql.Table {
+func NewDoltSchemasHistoryTable(ddb *doltdb.DoltDB, head *doltdb.Commit, db Database) sql.Table {
 	return &doltSchemasHistoryTable{
 		name: doltdb.DoltHistoryTablePrefix + doltdb.SchemasTableName,
 		ddb:  ddb,
 		head: head,
+		db:   db,
 	}
 }
 
@@ -93,9 +96,10 @@ func (dsht *doltSchemasHistoryTable) Partitions(ctx *sql.Context) (sql.Partition
 func (dsht *doltSchemasHistoryTable) PartitionRows(ctx *sql.Context, partition sql.Partition) (sql.RowIter, error) {
 	cp := partition.(*commitPartition)
 	return &doltSchemasHistoryRowIter{
-		ctx:    ctx,
-		ddb:    dsht.ddb,
-		commit: cp.cm,
+		ctx:     ctx,
+		ddb:     dsht.ddb,
+		commit:  cp.cm,
+		history: dsht,
 	}, nil
 }
 
@@ -109,11 +113,12 @@ func (dsht *doltSchemasHistoryTable) PrimaryKeySchema() sql.PrimaryKeySchema {
 
 // doltSchemasHistoryRowIter iterates through dolt_schemas rows for a single commit
 type doltSchemasHistoryRowIter struct {
-	ctx    *sql.Context
-	ddb    *doltdb.DoltDB
-	commit *doltdb.Commit
-	rows   []sql.Row
-	idx    int
+	ctx     *sql.Context
+	ddb     *doltdb.DoltDB
+	commit  *doltdb.Commit
+	history *doltSchemasHistoryTable // Add reference to parent table
+	rows    []sql.Row
+	idx     int
 }
 
 func (dshri *doltSchemasHistoryRowIter) Next(ctx *sql.Context) (sql.Row, error) {
@@ -142,7 +147,7 @@ func (dshri *doltSchemasHistoryRowIter) loadRows() error {
 	}
 
 	// Check if dolt_schemas table exists in this commit
-	tbl, ok, err := root.GetTable(dshri.ctx, doltdb.TableName{Name: doltdb.SchemasTableName})
+	_, ok, err := root.GetTable(dshri.ctx, doltdb.TableName{Name: doltdb.SchemasTableName})
 	if err != nil {
 		return err
 	}
@@ -167,34 +172,77 @@ func (dshri *doltSchemasHistoryRowIter) loadRows() error {
 	committerStr := commitMeta.Name + " <" + commitMeta.Email + ">"
 	commitDate := commitMeta.Time()
 
-	// Get the schema from the table  
+	// Get the table at this commit
+	tbl, ok, err := root.GetTable(dshri.ctx, doltdb.TableName{Name: doltdb.SchemasTableName})
+	if err != nil {
+		return err
+	}
+	if !ok {
+		// No dolt_schemas table in this commit, return empty rows
+		dshri.rows = make([]sql.Row, 0)
+		return nil
+	}
+
+	// Get the schema
 	sch, err := tbl.GetSchema(dshri.ctx)
 	if err != nil {
 		return err
 	}
 
-	// Read the table data using SqlRowsFromDurableIndex with error handling
-	rowData, err := tbl.GetRowData(dshri.ctx)
+	// Create a DoltTable using the database reference we now have
+	doltTable, err := NewDoltTable(doltdb.SchemasTableName, sch, tbl, dshri.history.db, editor.Options{})
 	if err != nil {
 		return err
 	}
 
-	// Try to read the rows, but handle errors gracefully due to JSON column issues
+	// Lock the table to this specific commit's root
+	lockedTable, err := doltTable.LockedToRoot(dshri.ctx, root)
+	if err != nil {
+		return err
+	}
+
+	// Get partitions and read rows
+	partitions, err := lockedTable.Partitions(dshri.ctx)
+	if err != nil {
+		return err
+	}
+
 	var baseRows []sql.Row
-	func() {
-		defer func() {
-			if r := recover(); r != nil {
-				// If there's a panic (like JSON issues), just return empty rows
-				baseRows = []sql.Row{}
-			}
-		}()
-		
-		baseRows, err = SqlRowsFromDurableIndex(rowData, sch)
-		if err != nil {
-			// If there's an error, return empty rows
-			baseRows = []sql.Row{}
+	for {
+		partition, err := partitions.Next(dshri.ctx)
+		if err == io.EOF {
+			break
 		}
-	}()
+		if err != nil {
+			return err
+		}
+
+		rowIter, err := lockedTable.PartitionRows(dshri.ctx, partition)
+		if err != nil {
+			return err
+		}
+
+		for {
+			row, err := rowIter.Next(dshri.ctx)
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				return err
+			}
+			baseRows = append(baseRows, row)
+		}
+
+		err = rowIter.Close(dshri.ctx)
+		if err != nil {
+			return err
+		}
+	}
+
+	err = partitions.Close(dshri.ctx)
+	if err != nil {
+		return err
+	}
 
 	// Add commit metadata to each row
 	rows := make([]sql.Row, 0, len(baseRows))
@@ -211,6 +259,84 @@ func (dshri *doltSchemasHistoryRowIter) loadRows() error {
 
 	dshri.rows = rows
 	return nil
+	
+	/*
+	TODO: Fix this implementation once we can provide proper database parameter
+	
+	// Create a basic DoltTable - we'll pass minimal required fields
+	doltTable, err := NewDoltTable(doltdb.SchemasTableName, sch, tbl, nil, editor.Options{})
+	if err != nil {
+		// If we can't create the DoltTable, fall back to simple approach
+		// For now, return empty rows to avoid crashes
+		dshri.rows = make([]sql.Row, 0)
+		return nil
+	}
+
+	// Lock the table to this specific commit's root
+	lockedTable, err := doltTable.LockedToRoot(dshri.ctx, root)
+	if err != nil {
+		// If we can't lock to root, return empty rows
+		dshri.rows = make([]sql.Row, 0)
+		return nil
+	}
+
+	// Get partitions and read rows
+	partitions, err := lockedTable.Partitions(dshri.ctx)
+	if err != nil {
+		dshri.rows = make([]sql.Row, 0)
+		return nil
+	}
+
+	var baseRows []sql.Row
+	for {
+		partition, err := partitions.Next(dshri.ctx)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			// Skip error partitions
+			continue
+		}
+
+		rowIter, err := lockedTable.PartitionRows(dshri.ctx, partition)
+		if err != nil {
+			// Skip error partitions
+			continue
+		}
+
+		for {
+			row, err := rowIter.Next(dshri.ctx)
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				// Skip problematic rows but continue processing
+				continue
+			}
+			baseRows = append(baseRows, row)
+		}
+
+		_ = rowIter.Close(dshri.ctx)
+	}
+
+	_ = partitions.Close(dshri.ctx)
+
+	// Add commit metadata to each row
+	rows := make([]sql.Row, 0, len(baseRows))
+	for _, baseRow := range baseRows {
+		// Append commit columns to the base row
+		sqlRow := make(sql.Row, len(baseRow)+3)
+		copy(sqlRow, baseRow)
+		sqlRow[len(baseRow)] = commitHashStr
+		sqlRow[len(baseRow)+1] = committerStr
+		sqlRow[len(baseRow)+2] = commitDate
+
+		rows = append(rows, sqlRow)
+	}
+
+	dshri.rows = rows
+	return nil
+	*/
 }
 
 func (dshri *doltSchemasHistoryRowIter) Close(ctx *sql.Context) error {

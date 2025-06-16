@@ -108,10 +108,43 @@ func doltSchemasHistoryTableTests() []doltSchemasTableTest {
 			},
 		},
 		{
-			name:  "basic table access without errors",
-			query: "SELECT 1 AS test_query",
+			name:  "verify dolt_history_dolt_schemas shows view in history",
+			query: "SELECT type, name FROM dolt_history_dolt_schemas WHERE type = 'view' ORDER BY name",
 			rows: []sql.Row{
-				{int8(1)}, // Simple test to verify test framework works
+				{"view", "test_view"},
+				{"view", "test_view"},
+				{"view", "test_view"},
+				{"view", "test_view"},
+			},
+		},
+		{
+			name:  "verify dolt_history_dolt_schemas shows trigger in history",
+			query: "SELECT type, name FROM dolt_history_dolt_schemas WHERE type = 'trigger' ORDER BY name",
+			rows: []sql.Row{
+				{"trigger", "test_trigger"},
+				{"trigger", "test_trigger"},
+				{"trigger", "test_trigger"},
+			},
+		},
+		{
+			name:  "verify dolt_history_dolt_schemas shows event in history",
+			query: "SELECT type, name FROM dolt_history_dolt_schemas WHERE type = 'event' ORDER BY name",
+			rows: []sql.Row{
+				{"event", "test_event"},
+			},
+		},
+		{
+			name:  "verify commit metadata is present",
+			query: "SELECT COUNT(*) FROM dolt_history_dolt_schemas WHERE commit_hash IS NOT NULL AND committer IS NOT NULL AND commit_date IS NOT NULL",
+			rows: []sql.Row{
+				{int64(8)}, // Should have 8 rows total: view(4) + trigger(3) + event(1)
+			},
+		},
+		{
+			name:  "verify history shows modifications across commits",
+			query: "SELECT COUNT(DISTINCT commit_hash) FROM dolt_history_dolt_schemas WHERE type = 'view' AND name = 'test_view'",
+			rows: []sql.Row{
+				{int64(4)}, // View should appear in 4 commits (all commits after creation)
 			},
 		},
 	}
