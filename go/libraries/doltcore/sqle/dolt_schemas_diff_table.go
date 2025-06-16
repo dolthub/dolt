@@ -23,6 +23,7 @@ import (
 	"github.com/dolthub/vitess/go/sqltypes"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 )
 
 const (
@@ -266,24 +267,51 @@ func (dsdri *doltSchemasDiffRowIter) readDoltSchemasRows(tbl *doltdb.Table, root
 		return err
 	}
 
-	// Read the table data using SqlRowsFromDurableIndex
-	rowData, err := tbl.GetRowData(dsdri.ctx)
+	// Create a DoltTable wrapper to handle the reading properly
+	doltTable, err := NewDoltTable(doltdb.SchemasTableName, sch, tbl, nil, editor.Options{})
 	if err != nil {
 		return err
 	}
 
-	rows, err := SqlRowsFromDurableIndex(rowData, sch)
+	// Get partitions and iterate through rows
+	partitionIter, err := doltTable.Partitions(dsdri.ctx)
 	if err != nil {
 		return err
 	}
+	defer partitionIter.Close(dsdri.ctx)
 
-	// Process each row and add to map
-	for _, row := range rows {
-		// Create key from type and name columns
-		if len(row) >= 2 && row[0] != nil && row[1] != nil {
-			key := strings.ToLower(row[0].(string)) + ":" + strings.ToLower(row[1].(string))
-			rowMap[key] = row
+	for {
+		partition, err := partitionIter.Next(dsdri.ctx)
+		if err == io.EOF {
+			break
 		}
+		if err != nil {
+			return err
+		}
+
+		rowIter, err := doltTable.PartitionRows(dsdri.ctx, partition)
+		if err != nil {
+			return err
+		}
+
+		for {
+			row, err := rowIter.Next(dsdri.ctx)
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				rowIter.Close(dsdri.ctx)
+				return err
+			}
+
+			// Create key from type and name columns
+			if len(row) >= 2 && row[0] != nil && row[1] != nil {
+				key := strings.ToLower(row[0].(string)) + ":" + strings.ToLower(row[1].(string))
+				rowMap[key] = row
+			}
+		}
+
+		rowIter.Close(dsdri.ctx)
 	}
 
 	return nil

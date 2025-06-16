@@ -22,38 +22,37 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/require"
 
-	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	cmd "github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 )
 
-func TestSchemaHistoryTable(t *testing.T) {
+func TestDoltSchemasHistoryTable(t *testing.T) {
 	SkipByDefaultInCI(t)
 	ctx := context.Background()
-	dEnv := setupSchemaHistoryTests(t)
+	dEnv := setupDoltSchemasHistoryTests(t)
 	defer dEnv.DoltDB(ctx).Close()
-	for _, test := range schemaHistoryTableTests() {
+	for _, test := range doltSchemasHistoryTableTests() {
 		t.Run(test.name, func(t *testing.T) {
-			testSchemaHistoryTable(t, test, dEnv)
+			testDoltSchemasHistoryTable(t, test, dEnv)
 		})
 	}
 }
 
-func TestSchemaDiffTable(t *testing.T) {
+func TestDoltSchemasDiffTable(t *testing.T) {
 	SkipByDefaultInCI(t)
 	ctx := context.Background()
-	dEnv := setupSchemaDiffTests(t)
+	dEnv := setupDoltSchemasDiffTests(t)
 	defer dEnv.DoltDB(ctx).Close()
-	for _, test := range schemaDiffTableTests() {
+	for _, test := range doltSchemasDiffTableTests() {
 		t.Run(test.name, func(t *testing.T) {
-			testSchemaDiffTable(t, test, dEnv)
+			testDoltSchemasDiffTable(t, test, dEnv)
 		})
 	}
 }
 
-type schemaTableTest struct {
+type doltSchemasTableTest struct {
 	name  string
 	setup []testCommand
 	query string
@@ -62,13 +61,13 @@ type schemaTableTest struct {
 
 // Global variables to store commit hashes for test validation
 var (
-	SCHEMA_HEAD    string
-	SCHEMA_HEAD_1  string
-	SCHEMA_HEAD_2  string
-	SCHEMA_INIT    string
+	DOLT_SCHEMAS_HEAD    string
+	DOLT_SCHEMAS_HEAD_1  string
+	DOLT_SCHEMAS_HEAD_2  string
+	DOLT_SCHEMAS_INIT    string
 )
 
-var setupSchemaCommon = []testCommand{
+var setupDoltSchemasCommon = []testCommand{
 	// Create initial view
 	{cmd.SqlCmd{}, args{"-q", "CREATE VIEW test_view AS SELECT 1 as col1"}},
 	{cmd.AddCmd{}, args{"."}},
@@ -105,23 +104,23 @@ func doltSchemasHistoryTableTests() []doltSchemasTableTest {
 			name:  "select all columns from dolt_history_dolt_schemas",
 			query: "SELECT type, name, commit_hash FROM dolt_history_dolt_schemas ORDER BY commit_hash, type, name",
 			rows: []sql.Row{
-				{"view", "test_view", SCHEMA_HEAD},
-				{"trigger", "test_trigger", SCHEMA_HEAD},
-				{"event", "test_event", SCHEMA_HEAD},
-				{"view", "test_view", SCHEMA_HEAD_1},
-				{"trigger", "test_trigger", SCHEMA_HEAD_1},
-				{"view", "test_view", SCHEMA_HEAD_2},
-				{"trigger", "test_trigger", SCHEMA_HEAD_2},
-				{"view", "test_view", SCHEMA_INIT},
+				{"view", "test_view", DOLT_SCHEMAS_HEAD},
+				{"trigger", "test_trigger", DOLT_SCHEMAS_HEAD},
+				{"event", "test_event", DOLT_SCHEMAS_HEAD},
+				{"view", "test_view", DOLT_SCHEMAS_HEAD_1},
+				{"trigger", "test_trigger", DOLT_SCHEMAS_HEAD_1},
+				{"view", "test_view", DOLT_SCHEMAS_HEAD_2},
+				{"trigger", "test_trigger", DOLT_SCHEMAS_HEAD_2},
+				{"view", "test_view", DOLT_SCHEMAS_INIT},
 			},
 		},
 		{
 			name:  "filter for trigger history only",
 			query: "SELECT type, name, commit_hash FROM dolt_history_dolt_schemas WHERE type = 'trigger' ORDER BY commit_hash",
 			rows: []sql.Row{
-				{"trigger", "test_trigger", SCHEMA_HEAD},
-				{"trigger", "test_trigger", SCHEMA_HEAD_1},
-				{"trigger", "test_trigger", SCHEMA_HEAD_2},
+				{"trigger", "test_trigger", DOLT_SCHEMAS_HEAD},
+				{"trigger", "test_trigger", DOLT_SCHEMAS_HEAD_1},
+				{"trigger", "test_trigger", DOLT_SCHEMAS_HEAD_2},
 			},
 		},
 		{
@@ -135,9 +134,9 @@ func doltSchemasHistoryTableTests() []doltSchemasTableTest {
 			name:  "filter for view changes only",
 			query: "SELECT type, name, commit_hash FROM dolt_history_dolt_schemas WHERE type = 'view' ORDER BY commit_hash",
 			rows: []sql.Row{
-				{"view", "test_view", SCHEMA_HEAD},
-				{"view", "test_view", SCHEMA_HEAD_1},
-				{"view", "test_view", SCHEMA_INIT},
+				{"view", "test_view", DOLT_SCHEMAS_HEAD},
+				{"view", "test_view", DOLT_SCHEMAS_HEAD_1},
+				{"view", "test_view", DOLT_SCHEMAS_INIT},
 			},
 		},
 		{
@@ -165,7 +164,7 @@ func doltSchemasHistoryTableTests() []doltSchemasTableTest {
 	}
 }
 
-var setupSchemaDiffCommon = []testCommand{
+var setupDoltSchemasDiffCommon = []testCommand{
 	// Start with a clean state
 	{cmd.SqlCmd{}, args{"-q", "CREATE VIEW original_view AS SELECT 1 as id"}},
 	{cmd.SqlCmd{}, args{"-q", "CREATE TABLE diff_table (id INT PRIMARY KEY)"}},
@@ -186,8 +185,8 @@ var setupSchemaDiffCommon = []testCommand{
 		DO SELECT 1`}}, // added
 }
 
-func schemaDiffTableTests() []schemaTableTest {
-	return []schemaTableTest{
+func doltSchemasDiffTableTests() []doltSchemasTableTest {
+	return []doltSchemasTableTest{
 		{
 			name:  "select all from dolt_diff_dolt_schemas",
 			query: "SELECT type, name, diff_type FROM dolt_diff_dolt_schemas ORDER BY diff_type, type, name",
@@ -247,13 +246,13 @@ func schemaDiffTableTests() []schemaTableTest {
 	}
 }
 
-func setupSchemaHistoryTests(t *testing.T) *env.DoltEnv {
+func setupDoltSchemasHistoryTests(t *testing.T) *env.DoltEnv {
 	dEnv := dtestutils.CreateTestEnv()
 	ctx := context.Background()
 	cliCtx, verr := cmd.NewArgFreeCliContext(ctx, dEnv, dEnv.FS)
 	require.NoError(t, verr)
 
-	for _, c := range setupSchemaCommon {
+	for _, c := range setupDoltSchemasCommon {
 		exitCode := c.cmd.Exec(ctx, c.cmd.Name(), c.args, dEnv, cliCtx)
 		require.Equal(t, 0, exitCode)
 	}
@@ -266,21 +265,21 @@ func setupSchemaHistoryTests(t *testing.T) *env.DoltEnv {
 	require.NoError(t, err)
 	require.Equal(t, 5, len(rows)) // 4 commits + initial commit
 
-	SCHEMA_HEAD = rows[0][0].(string)
-	SCHEMA_HEAD_1 = rows[1][0].(string)
-	SCHEMA_HEAD_2 = rows[2][0].(string)
-	SCHEMA_INIT = rows[4][0].(string) // Skip one to get to the first real commit
+	DOLT_SCHEMAS_HEAD = rows[0][0].(string)
+	DOLT_SCHEMAS_HEAD_1 = rows[1][0].(string)
+	DOLT_SCHEMAS_HEAD_2 = rows[2][0].(string)
+	DOLT_SCHEMAS_INIT = rows[4][0].(string) // Skip one to get to the first real commit
 
 	return dEnv
 }
 
-func setupSchemaDiffTests(t *testing.T) *env.DoltEnv {
+func setupDoltSchemasDiffTests(t *testing.T) *env.DoltEnv {
 	dEnv := dtestutils.CreateTestEnv()
 	ctx := context.Background()
 	cliCtx, verr := cmd.NewArgFreeCliContext(ctx, dEnv, dEnv.FS)
 	require.NoError(t, verr)
 
-	for _, c := range setupSchemaDiffCommon {
+	for _, c := range setupDoltSchemasDiffCommon {
 		exitCode := c.cmd.Exec(ctx, c.cmd.Name(), c.args, dEnv, cliCtx)
 		require.Equal(t, 0, exitCode)
 	}
@@ -288,7 +287,7 @@ func setupSchemaDiffTests(t *testing.T) *env.DoltEnv {
 	return dEnv
 }
 
-func testSchemaHistoryTable(t *testing.T, test schemaTableTest, dEnv *env.DoltEnv) {
+func testDoltSchemasHistoryTable(t *testing.T, test doltSchemasTableTest, dEnv *env.DoltEnv) {
 	ctx := context.Background()
 	cliCtx, verr := cmd.NewArgFreeCliContext(ctx, dEnv, dEnv.FS)
 	require.NoError(t, verr)
@@ -304,10 +303,10 @@ func testSchemaHistoryTable(t *testing.T, test schemaTableTest, dEnv *env.DoltEn
 	// Replace placeholder in query with actual commit hash
 	query := test.query
 	if query == fmt.Sprintf("SELECT type, name FROM dolt_history_dolt_schemas WHERE commit_hash = '%s' ORDER BY type, name", "%s") {
-		query = fmt.Sprintf("SELECT type, name FROM dolt_history_dolt_schemas WHERE commit_hash = '%s' ORDER BY type, name", SCHEMA_INIT)
+		query = fmt.Sprintf("SELECT type, name FROM dolt_history_dolt_schemas WHERE commit_hash = '%s' ORDER BY type, name", DOLT_SCHEMAS_INIT)
 	}
 	if query == "SELECT type, name FROM dolt_history_dolt_schemas WHERE type IN ('trigger', 'event') AND commit_hash = '"+"%s"+"' ORDER BY type, name" {
-		query = fmt.Sprintf("SELECT type, name FROM dolt_history_dolt_schemas WHERE type IN ('trigger', 'event') AND commit_hash = '%s' ORDER BY type, name", SCHEMA_HEAD)
+		query = fmt.Sprintf("SELECT type, name FROM dolt_history_dolt_schemas WHERE type IN ('trigger', 'event') AND commit_hash = '%s' ORDER BY type, name", DOLT_SCHEMAS_HEAD)
 	}
 
 	actRows, err := sqle.ExecuteSelect(ctx, dEnv, root, query)
@@ -316,7 +315,7 @@ func testSchemaHistoryTable(t *testing.T, test schemaTableTest, dEnv *env.DoltEn
 	require.ElementsMatch(t, test.rows, actRows)
 }
 
-func testSchemaDiffTable(t *testing.T, test schemaTableTest, dEnv *env.DoltEnv) {
+func testDoltSchemasDiffTable(t *testing.T, test doltSchemasTableTest, dEnv *env.DoltEnv) {
 	ctx := context.Background()
 	cliCtx, verr := cmd.NewArgFreeCliContext(ctx, dEnv, dEnv.FS)
 	require.NoError(t, verr)

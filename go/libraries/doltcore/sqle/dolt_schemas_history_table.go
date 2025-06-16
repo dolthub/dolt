@@ -22,6 +22,7 @@ import (
 	"github.com/dolthub/vitess/go/sqltypes"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 )
 
 // doltSchemasHistoryTable implements the dolt_history_dolt_schemas system table
@@ -167,20 +168,53 @@ func (dshri *doltSchemasHistoryRowIter) loadRows() error {
 	committerStr := commitMeta.Name + " <" + commitMeta.Email + ">"
 	commitDate := commitMeta.Time()
 
-	// Read the table data using SqlRowsFromDurableIndex
+	// Create a DoltTable wrapper to handle the reading properly
 	sch, err := tbl.GetSchema(dshri.ctx)
 	if err != nil {
 		return err
 	}
 
-	rowData, err := tbl.GetRowData(dshri.ctx)
+	doltTable, err := NewDoltTable(doltdb.SchemasTableName, sch, tbl, nil, editor.Options{})
 	if err != nil {
 		return err
 	}
 
-	baseRows, err := SqlRowsFromDurableIndex(rowData, sch)
+	// Get partitions and iterate through rows
+	partitionIter, err := doltTable.Partitions(dshri.ctx)
 	if err != nil {
 		return err
+	}
+	defer partitionIter.Close(dshri.ctx)
+
+	var baseRows []sql.Row
+	for {
+		partition, err := partitionIter.Next(dshri.ctx)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return err
+		}
+
+		rowIter, err := doltTable.PartitionRows(dshri.ctx, partition)
+		if err != nil {
+			return err
+		}
+
+		for {
+			row, err := rowIter.Next(dshri.ctx)
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				rowIter.Close(dshri.ctx)
+				return err
+			}
+
+			baseRows = append(baseRows, row)
+		}
+
+		rowIter.Close(dshri.ctx)
 	}
 
 	// Add commit metadata to each row
