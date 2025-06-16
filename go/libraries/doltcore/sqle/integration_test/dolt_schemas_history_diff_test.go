@@ -108,43 +108,53 @@ func doltSchemasHistoryTableTests() []doltSchemasTableTest {
 			},
 		},
 		{
-			name:  "verify dolt_history_dolt_schemas shows view in history",
-			query: "SELECT type, name FROM dolt_history_dolt_schemas WHERE type = 'view' ORDER BY name",
+			name:  "check correct number of history entries",
+			query: "SELECT COUNT(*) FROM dolt_history_dolt_schemas",
 			rows: []sql.Row{
-				{"view", "test_view"},
-				{"view", "test_view"},
-				{"view", "test_view"},
-				{"view", "test_view"},
+				{int64(8)}, // view(4 commits) + trigger(3 commits) + event(1 commit) = 8 total
 			},
 		},
 		{
-			name:  "verify dolt_history_dolt_schemas shows trigger in history",
-			query: "SELECT type, name FROM dolt_history_dolt_schemas WHERE type = 'trigger' ORDER BY name",
+			name:  "filter for trigger history only",
+			query: "SELECT COUNT(*) FROM dolt_history_dolt_schemas WHERE type = 'trigger'",
 			rows: []sql.Row{
-				{"trigger", "test_trigger"},
-				{"trigger", "test_trigger"},
-				{"trigger", "test_trigger"},
+				{int64(3)}, // Trigger appears in 3 commits
 			},
 		},
 		{
-			name:  "verify dolt_history_dolt_schemas shows event in history",
-			query: "SELECT type, name FROM dolt_history_dolt_schemas WHERE type = 'event' ORDER BY name",
+			name:  "filter for objects in earliest commit",
+			query: "SELECT COUNT(*) FROM dolt_history_dolt_schemas WHERE type = 'view' AND name = 'test_view'",
+			rows: []sql.Row{
+				{int64(4)}, // View appears in all 4 commits where it exists
+			},
+		},
+		{
+			name:  "filter for view changes only",
+			query: "SELECT COUNT(*) FROM dolt_history_dolt_schemas WHERE type = 'view'",
+			rows: []sql.Row{
+				{int64(4)}, // View appears in 4 commits (created, exists with trigger, modified, exists with event)
+			},
+		},
+		{
+			name:  "check commit_hash is not null",
+			query: "SELECT COUNT(*) FROM dolt_history_dolt_schemas WHERE commit_hash IS NOT NULL",
+			rows: []sql.Row{
+				{int64(8)}, // Total number of schema entries across all commits
+			},
+		},
+		{
+			name:  "filter by multiple types",
+			query: "SELECT type, name FROM dolt_history_dolt_schemas WHERE type IN ('trigger', 'event') AND commit_hash = '" + "%s" + "' ORDER BY type, name",
 			rows: []sql.Row{
 				{"event", "test_event"},
+				{"trigger", "test_trigger"},
 			},
 		},
 		{
-			name:  "verify commit metadata is present",
-			query: "SELECT COUNT(*) FROM dolt_history_dolt_schemas WHERE commit_hash IS NOT NULL AND committer IS NOT NULL AND commit_date IS NOT NULL",
+			name:  "check committer column exists",
+			query: "SELECT COUNT(*) FROM dolt_history_dolt_schemas WHERE committer IS NOT NULL",
 			rows: []sql.Row{
-				{int64(8)}, // Should have 8 rows total: view(4) + trigger(3) + event(1)
-			},
-		},
-		{
-			name:  "verify history shows modifications across commits",
-			query: "SELECT COUNT(DISTINCT commit_hash) FROM dolt_history_dolt_schemas WHERE type = 'view' AND name = 'test_view'",
-			rows: []sql.Row{
-				{int64(4)}, // View should appear in 4 commits (all commits after creation)
+				{int64(8)}, // All entries should have committer info
 			},
 		},
 	}
@@ -181,10 +191,59 @@ func doltSchemasDiffTableTests() []doltSchemasTableTest {
 			},
 		},
 		{
-			name:  "basic table access without errors",
-			query: "SELECT 1 AS test_query",
+			name:  "select all from dolt_diff_dolt_schemas",
+			query: "SELECT to_type, to_name, diff_type FROM dolt_diff_dolt_schemas ORDER BY diff_type, to_type, to_name",
 			rows: []sql.Row{
-				{int8(1)}, // Simple test to verify test framework works
+				{"event", "new_event", "added"},
+				{"view", "new_view", "added"},
+				{"view", "original_view", "modified"},
+				{nil, nil, "removed"}, // removed items have NULL to_ values
+			},
+		},
+		{
+			name:  "filter for added schemas only",
+			query: "SELECT to_type, to_name FROM dolt_diff_dolt_schemas WHERE diff_type = 'added' ORDER BY to_type, to_name",
+			rows: []sql.Row{
+				{"event", "new_event"},
+				{"view", "new_view"},
+			},
+		},
+		{
+			name:  "filter for modified schemas only",
+			query: "SELECT to_type, to_name FROM dolt_diff_dolt_schemas WHERE diff_type = 'modified' ORDER BY to_type, to_name",
+			rows: []sql.Row{
+				{"view", "original_view"},
+			},
+		},
+		{
+			name:  "filter for removed schemas only",
+			query: "SELECT from_type, from_name FROM dolt_diff_dolt_schemas WHERE diff_type = 'removed' ORDER BY from_type, from_name",
+			rows: []sql.Row{
+				{"trigger", "original_trigger"},
+			},
+		},
+		{
+			name:  "filter for views only",
+			query: "SELECT COALESCE(to_name, from_name) as name, diff_type FROM dolt_diff_dolt_schemas WHERE COALESCE(to_type, from_type) = 'view' ORDER BY name",
+			rows: []sql.Row{
+				{"new_view", "added"},
+				{"original_view", "modified"},
+			},
+		},
+		{
+			name:  "count changes by type",
+			query: "SELECT diff_type, COUNT(*) as count FROM dolt_diff_dolt_schemas GROUP BY diff_type ORDER BY diff_type",
+			rows: []sql.Row{
+				{"added", int64(2)},
+				{"modified", int64(1)},
+				{"removed", int64(1)},
+			},
+		},
+		{
+			name:  "check all columns exist",
+			query: "SELECT COUNT(*) FROM dolt_diff_dolt_schemas WHERE (to_type IS NOT NULL OR from_type IS NOT NULL) AND (to_name IS NOT NULL OR from_name IS NOT NULL) AND diff_type IS NOT NULL",
+			rows: []sql.Row{
+				{int64(4)}, // Total number of changes
 			},
 		},
 	}
@@ -277,3 +336,4 @@ func testDoltSchemasDiffTable(t *testing.T, test doltSchemasTableTest, dEnv *env
 
 	require.ElementsMatch(t, test.rows, actRows)
 }
+

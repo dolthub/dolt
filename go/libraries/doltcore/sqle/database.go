@@ -348,8 +348,8 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 			return nil, false, err
 		}
 
-		// For diff tables, we compare working vs head by default
-		return NewDoltSchemasDiffTable(ctx, db.ddb, root, headRoot, "WORKING", "HEAD"), true, nil
+		// For diff tables, we compare HEAD vs working to show changes from HEAD to working
+		return NewDoltSchemasDiffTable(ctx, db.ddb, headRoot, root, "HEAD", "WORKING", db), true, nil
 
 	case strings.HasPrefix(lwrName, doltdb.DoltDiffTablePrefix):
 		if head == nil {

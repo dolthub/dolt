@@ -23,6 +23,7 @@ import (
 	"github.com/dolthub/vitess/go/sqltypes"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 )
 
 const (
@@ -38,13 +39,14 @@ type doltSchemasDiffTable struct {
 	toRoot   doltdb.RootValue
 	fromRef  string
 	toRef    string
+	db       Database // Add database reference for DoltTable creation
 }
 
 var _ sql.Table = (*doltSchemasDiffTable)(nil)
 var _ sql.PrimaryKeyTable = (*doltSchemasDiffTable)(nil)
 
 // NewDoltSchemasDiffTable creates a new dolt_schemas diff table instance
-func NewDoltSchemasDiffTable(ctx *sql.Context, ddb *doltdb.DoltDB, fromRoot, toRoot doltdb.RootValue, fromRef, toRef string) sql.Table {
+func NewDoltSchemasDiffTable(ctx *sql.Context, ddb *doltdb.DoltDB, fromRoot, toRoot doltdb.RootValue, fromRef, toRef string, db Database) sql.Table {
 	return &doltSchemasDiffTable{
 		name:     doltdb.DoltDiffTablePrefix + doltdb.SchemasTableName,
 		ddb:      ddb,
@@ -52,6 +54,7 @@ func NewDoltSchemasDiffTable(ctx *sql.Context, ddb *doltdb.DoltDB, fromRoot, toR
 		toRoot:   toRoot,
 		fromRef:  fromRef,
 		toRef:    toRef,
+		db:       db,
 	}
 }
 
@@ -116,6 +119,7 @@ func (dsdt *doltSchemasDiffTable) PartitionRows(ctx *sql.Context, partition sql.
 		toRoot:   p.toRoot,
 		fromRef:  p.fromRef,
 		toRef:    p.toRef,
+		db:       dsdt.db, // Pass database reference
 	}, nil
 }
 
@@ -173,6 +177,7 @@ type doltSchemasDiffRowIter struct {
 	toRoot   doltdb.RootValue
 	fromRef  string
 	toRef    string
+	db       Database // Add database reference for DoltTable creation
 	rows     []sql.Row
 	idx      int
 }
@@ -265,31 +270,63 @@ func (dsdri *doltSchemasDiffRowIter) readDoltSchemasRows(tbl *doltdb.Table, root
 		return err
 	}
 
-	// Read the table data using SqlRowsFromDurableIndex with error handling
-	rowData, err := tbl.GetRowData(dsdri.ctx)
+	// Create a DoltTable using the database reference we have
+	doltTable, err := NewDoltTable(doltdb.SchemasTableName, sch, tbl, dsdri.db, editor.Options{})
 	if err != nil {
 		return err
 	}
 
-	// Try to read the rows, but handle errors gracefully
-	var rows []sql.Row
-	func() {
-		defer func() {
-			if r := recover(); r != nil {
-				// If there's a panic (like JSON issues), just return empty rows
-				rows = []sql.Row{}
-			}
-		}()
-		
-		rows, err = SqlRowsFromDurableIndex(rowData, sch)
-		if err != nil {
-			// If there's an error, return empty rows
-			rows = []sql.Row{}
+	// Lock the table to this specific root
+	lockedTable, err := doltTable.LockedToRoot(dsdri.ctx, root)
+	if err != nil {
+		return err
+	}
+
+	// Get partitions and read rows
+	partitions, err := lockedTable.Partitions(dsdri.ctx)
+	if err != nil {
+		return err
+	}
+
+	var baseRows []sql.Row
+	for {
+		partition, err := partitions.Next(dsdri.ctx)
+		if err == io.EOF {
+			break
 		}
-	}()
+		if err != nil {
+			return err
+		}
+
+		rowIter, err := lockedTable.PartitionRows(dsdri.ctx, partition)
+		if err != nil {
+			return err
+		}
+
+		for {
+			row, err := rowIter.Next(dsdri.ctx)
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				return err
+			}
+			baseRows = append(baseRows, row)
+		}
+
+		err = rowIter.Close(dsdri.ctx)
+		if err != nil {
+			return err
+		}
+	}
+
+	err = partitions.Close(dsdri.ctx)
+	if err != nil {
+		return err
+	}
 
 	// Process each row and add to map
-	for _, row := range rows {
+	for _, row := range baseRows {
 		// Create key from type and name columns
 		if len(row) >= 2 && row[0] != nil && row[1] != nil {
 			key := strings.ToLower(row[0].(string)) + ":" + strings.ToLower(row[1].(string))
