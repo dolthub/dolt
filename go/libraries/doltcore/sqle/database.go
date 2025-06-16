@@ -332,6 +332,25 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 	// TODO: these tables that cache a root value at construction time should not, they need to get it from the session
 	//  at runtime
 	switch {
+	case lwrName == doltdb.DoltDiffTablePrefix + doltdb.SchemasTableName:
+		// Special handling for dolt_diff_dolt_schemas
+		if head == nil {
+			var err error
+			head, err = ds.GetHeadCommit(ctx, db.RevisionQualifiedName())
+			if err != nil {
+				return nil, false, err
+			}
+		}
+
+		// Get working root and head root for diff
+		headRoot, err := head.GetRootValue(ctx)
+		if err != nil {
+			return nil, false, err
+		}
+
+		// For diff tables, we compare working vs head by default
+		return NewDoltSchemasDiffTable(ctx, db.ddb, root, headRoot, "WORKING", "HEAD"), true, nil
+
 	case strings.HasPrefix(lwrName, doltdb.DoltDiffTablePrefix):
 		if head == nil {
 			var err error
@@ -383,6 +402,17 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 			return nil, false, err
 		}
 		return dt, true, nil
+
+	case lwrName == doltdb.DoltHistoryTablePrefix + doltdb.SchemasTableName:
+		// Special handling for dolt_history_dolt_schemas
+		if head == nil {
+			var err error
+			head, err = ds.GetHeadCommit(ctx, db.RevisionQualifiedName())
+			if err != nil {
+				return nil, false, err
+			}
+		}
+		return NewDoltSchemasHistoryTable(db.ddb, head), true, nil
 
 	case strings.HasPrefix(lwrName, doltdb.DoltHistoryTablePrefix):
 		baseTableName := tblName[len(doltdb.DoltHistoryTablePrefix):]

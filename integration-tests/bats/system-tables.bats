@@ -476,6 +476,89 @@ SQL
     [[ $output =~ "1,1234567890,13,1,,,modified" ]] || false
 }
 
+@test "system-tables: query dolt_history_dolt_schemas system table" {
+    # Create initial database objects (views, triggers, etc.)
+    dolt sql -q "CREATE VIEW test_view AS SELECT 1 as id"
+    dolt add .
+    dolt commit -m "Added test_view"
+    
+    # Add a trigger
+    dolt sql -q "CREATE TABLE test_table (id INT PRIMARY KEY, name VARCHAR(50))"
+    dolt sql -q "CREATE TRIGGER test_trigger BEFORE INSERT ON test_table FOR EACH ROW SET NEW.name = UPPER(NEW.name)"
+    dolt add .
+    dolt commit -m "Added test_table and test_trigger"
+    
+    # Modify the view
+    dolt sql -q "DROP VIEW test_view"
+    dolt sql -q "CREATE VIEW test_view AS SELECT 1 as id, 'modified' as status"
+    dolt add .
+    dolt commit -m "Modified test_view"
+    
+    # Test basic query
+    run dolt sql -r csv -q 'SELECT type, name FROM dolt_history_dolt_schemas ORDER BY commit_date DESC, type, name'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "view,test_view" ]] || false
+    [[ "$output" =~ "trigger,test_trigger" ]] || false
+    
+    # Test filtering by type
+    run dolt sql -r csv -q 'SELECT name FROM dolt_history_dolt_schemas WHERE type = "view"'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "test_view" ]] || false
+    
+    # Test commit hash filtering
+    run dolt sql -r csv -q 'SELECT COUNT(*) as count FROM dolt_history_dolt_schemas WHERE commit_hash IS NOT NULL'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "count" ]] || false
+    
+    # Test committer column exists
+    run dolt sql -r csv -q 'SELECT COUNT(*) as count FROM dolt_history_dolt_schemas WHERE committer IS NOT NULL'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "count" ]] || false
+}
+
+@test "system-tables: query dolt_diff_dolt_schemas system table" {
+    # Create base database objects (views, triggers, etc.)
+    dolt sql -q "CREATE VIEW original_view AS SELECT 1 as id"
+    dolt sql -q "CREATE TABLE diff_table (id INT PRIMARY KEY)"
+    dolt sql -q "CREATE TRIGGER original_trigger BEFORE INSERT ON diff_table FOR EACH ROW SET NEW.id = NEW.id + 1"
+    dolt add .
+    dolt commit -m "Base commit with original schemas"
+    
+    # Make changes for diff (working directory changes)
+    dolt sql -q "DROP VIEW original_view"
+    dolt sql -q "CREATE VIEW original_view AS SELECT 1 as id, 'modified' as status"  # modified
+    dolt sql -q "CREATE VIEW new_view AS SELECT 'added' as status"  # added
+    dolt sql -q "DROP TRIGGER original_trigger"  # removed
+    dolt sql -q "CREATE EVENT new_event ON SCHEDULE EVERY 1 HOUR DO SELECT 1"  # added
+    
+    # Test basic diff query
+    run dolt sql -r csv -q 'SELECT type, name, diff_type FROM dolt_diff_dolt_schemas ORDER BY diff_type, type, name'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "event,new_event,added" ]] || false
+    [[ "$output" =~ "view,new_view,added" ]] || false
+    [[ "$output" =~ "view,original_view,modified" ]] || false
+    [[ "$output" =~ "trigger,original_trigger,removed" ]] || false
+    
+    # Test filtering by diff_type
+    run dolt sql -r csv -q 'SELECT type, name FROM dolt_diff_dolt_schemas WHERE diff_type = "added" ORDER BY type, name'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "event,new_event" ]] || false
+    [[ "$output" =~ "view,new_view" ]] || false
+    
+    # Test filtering by type
+    run dolt sql -r csv -q 'SELECT name, diff_type FROM dolt_diff_dolt_schemas WHERE type = "view" ORDER BY name'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "new_view,added" ]] || false
+    [[ "$output" =~ "original_view,modified" ]] || false
+    
+    # Test count by diff_type
+    run dolt sql -r csv -q 'SELECT diff_type, COUNT(*) as count FROM dolt_diff_dolt_schemas GROUP BY diff_type ORDER BY diff_type'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "added" ]] || false
+    [[ "$output" =~ "modified" ]] || false
+    [[ "$output" =~ "removed" ]] || false
+}
+
 @test "system-tables: query dolt_history_ system table" {
     dolt sql -q "create table test (pk int, c1 int, primary key(pk))"
     dolt add test
