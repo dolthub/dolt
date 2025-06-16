@@ -179,7 +179,7 @@ func (dshri *doltSchemasHistoryRowIter) loadRows() error {
 		return err
 	}
 
-	// Try to read the rows, but handle errors gracefully
+	// Try to read the rows, but handle errors gracefully due to JSON column issues
 	var baseRows []sql.Row
 	func() {
 		defer func() {
