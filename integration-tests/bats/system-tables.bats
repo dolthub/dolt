@@ -494,6 +494,18 @@ SQL
     dolt add .
     dolt commit -m "Modified test_view"
     
+    # Test schema structure
+    run dolt sql -r csv -q 'DESCRIBE dolt_history_dolt_schemas'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "type,varchar(64)" ]] || false
+    [[ "$output" =~ "name,varchar(64)" ]] || false
+    [[ "$output" =~ "fragment,longtext" ]] || false
+    [[ "$output" =~ "extra,json" ]] || false
+    [[ "$output" =~ "sql_mode,varchar(256)" ]] || false
+    [[ "$output" =~ "commit_hash,char(32)" ]] || false
+    [[ "$output" =~ "committer,varchar(1024)" ]] || false
+    [[ "$output" =~ "commit_date,datetime" ]] || false
+    
     # Test basic query
     run dolt sql -r csv -q 'SELECT type, name FROM dolt_history_dolt_schemas ORDER BY commit_date DESC, type, name'
     [ "$status" -eq 0 ]
@@ -531,25 +543,43 @@ SQL
     dolt sql -q "DROP TRIGGER original_trigger"  # removed
     dolt sql -q "CREATE EVENT new_event ON SCHEDULE EVERY 1 HOUR DO SELECT 1"  # added
     
-    # Test basic diff query
-    run dolt sql -r csv -q 'SELECT type, name, diff_type FROM dolt_diff_dolt_schemas ORDER BY diff_type, type, name'
+    # Test schema structure
+    run dolt sql -r csv -q 'DESCRIBE dolt_diff_dolt_schemas'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "to_type,varchar(64)" ]] || false
+    [[ "$output" =~ "to_name,varchar(64)" ]] || false
+    [[ "$output" =~ "to_fragment,longtext" ]] || false
+    [[ "$output" =~ "to_extra,json" ]] || false
+    [[ "$output" =~ "to_sql_mode,varchar(256)" ]] || false
+    [[ "$output" =~ "to_commit,varchar(1023)" ]] || false
+    [[ "$output" =~ "to_commit_date,datetime(6)" ]] || false
+    [[ "$output" =~ "from_type,varchar(64)" ]] || false
+    [[ "$output" =~ "from_name,varchar(64)" ]] || false
+    [[ "$output" =~ "from_fragment,longtext" ]] || false
+    [[ "$output" =~ "from_extra,json" ]] || false
+    [[ "$output" =~ "from_sql_mode,varchar(256)" ]] || false
+    [[ "$output" =~ "from_commit,varchar(1023)" ]] || false
+    [[ "$output" =~ "from_commit_date,datetime(6)" ]] || false
+    [[ "$output" =~ "diff_type,varchar(1023)" ]] || false
+    
+    # Test basic diff query using to_/from_ columns
+    run dolt sql -r csv -q 'SELECT COALESCE(to_type, from_type) as type, COALESCE(to_name, from_name) as name, diff_type FROM dolt_diff_dolt_schemas ORDER BY diff_type, type, name'
     [ "$status" -eq 0 ]
     [[ "$output" =~ "event,new_event,added" ]] || false
     [[ "$output" =~ "view,new_view,added" ]] || false
     [[ "$output" =~ "view,original_view,modified" ]] || false
     [[ "$output" =~ "trigger,original_trigger,removed" ]] || false
     
-    # Test filtering by diff_type
-    run dolt sql -r csv -q 'SELECT type, name FROM dolt_diff_dolt_schemas WHERE diff_type = "added" ORDER BY type, name'
+    # Test filtering by diff_type for added items
+    run dolt sql -r csv -q 'SELECT to_type, to_name FROM dolt_diff_dolt_schemas WHERE diff_type = "added" ORDER BY to_type, to_name'
     [ "$status" -eq 0 ]
     [[ "$output" =~ "event,new_event" ]] || false
     [[ "$output" =~ "view,new_view" ]] || false
     
-    # Test filtering by type
-    run dolt sql -r csv -q 'SELECT name, diff_type FROM dolt_diff_dolt_schemas WHERE type = "view" ORDER BY name'
+    # Test filtering by diff_type for removed items
+    run dolt sql -r csv -q 'SELECT from_type, from_name FROM dolt_diff_dolt_schemas WHERE diff_type = "removed" ORDER BY from_type, from_name'
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "new_view,added" ]] || false
-    [[ "$output" =~ "original_view,modified" ]] || false
+    [[ "$output" =~ "trigger,original_trigger" ]] || false
     
     # Test count by diff_type
     run dolt sql -r csv -q 'SELECT diff_type, COUNT(*) as count FROM dolt_diff_dolt_schemas GROUP BY diff_type ORDER BY diff_type'

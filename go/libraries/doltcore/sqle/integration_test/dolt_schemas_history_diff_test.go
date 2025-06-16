@@ -101,6 +101,20 @@ var setupDoltSchemasCommon = []testCommand{
 func doltSchemasHistoryTableTests() []doltSchemasTableTest {
 	return []doltSchemasTableTest{
 		{
+			name:  "describe dolt_history_dolt_schemas schema",
+			query: "DESCRIBE dolt_history_dolt_schemas",
+			rows: []sql.Row{
+				{"type", "varchar(64) COLLATE utf8mb4_0900_ai_ci", "NO", "PRI", nil, ""},
+				{"name", "varchar(64) COLLATE utf8mb4_0900_ai_ci", "NO", "PRI", nil, ""},
+				{"fragment", "longtext", "YES", "", nil, ""},
+				{"extra", "json", "YES", "", nil, ""},
+				{"sql_mode", "varchar(256) COLLATE utf8mb4_0900_ai_ci", "YES", "", nil, ""},
+				{"commit_hash", "char(32) CHARACTER SET ascii COLLATE ascii_bin", "NO", "MUL", nil, ""},
+				{"committer", "varchar(1024) CHARACTER SET ascii COLLATE ascii_bin", "NO", "", nil, ""},
+				{"commit_date", "datetime", "NO", "", nil, ""},
+			},
+		},
+		{
 			name:  "select all columns from dolt_history_dolt_schemas",
 			query: "SELECT type, name, commit_hash FROM dolt_history_dolt_schemas ORDER BY commit_hash, type, name",
 			rows: []sql.Row{
@@ -188,18 +202,39 @@ var setupDoltSchemasDiffCommon = []testCommand{
 func doltSchemasDiffTableTests() []doltSchemasTableTest {
 	return []doltSchemasTableTest{
 		{
+			name:  "describe dolt_diff_dolt_schemas schema",
+			query: "DESCRIBE dolt_diff_dolt_schemas",
+			rows: []sql.Row{
+				{"to_type", "varchar(64) COLLATE utf8mb4_0900_ai_ci", "YES", "MUL", nil, ""},
+				{"to_name", "varchar(64) COLLATE utf8mb4_0900_ai_ci", "YES", "", nil, ""},
+				{"to_fragment", "longtext", "YES", "", nil, ""},
+				{"to_extra", "json", "YES", "", nil, ""},
+				{"to_sql_mode", "varchar(256) COLLATE utf8mb4_0900_ai_ci", "YES", "", nil, ""},
+				{"to_commit", "varchar(1023)", "YES", "UNI", nil, ""},
+				{"to_commit_date", "datetime(6)", "YES", "", nil, ""},
+				{"from_type", "varchar(64) COLLATE utf8mb4_0900_ai_ci", "YES", "", nil, ""},
+				{"from_name", "varchar(64) COLLATE utf8mb4_0900_ai_ci", "YES", "", nil, ""},
+				{"from_fragment", "longtext", "YES", "", nil, ""},
+				{"from_extra", "json", "YES", "", nil, ""},
+				{"from_sql_mode", "varchar(256) COLLATE utf8mb4_0900_ai_ci", "YES", "", nil, ""},
+				{"from_commit", "varchar(1023)", "YES", "UNI", nil, ""},
+				{"from_commit_date", "datetime(6)", "YES", "", nil, ""},
+				{"diff_type", "varchar(1023)", "YES", "", nil, ""},
+			},
+		},
+		{
 			name:  "select all from dolt_diff_dolt_schemas",
-			query: "SELECT type, name, diff_type FROM dolt_diff_dolt_schemas ORDER BY diff_type, type, name",
+			query: "SELECT to_type, to_name, diff_type FROM dolt_diff_dolt_schemas ORDER BY diff_type, to_type, to_name",
 			rows: []sql.Row{
 				{"event", "new_event", "added"},
 				{"view", "new_view", "added"},
 				{"view", "original_view", "modified"},
-				{"trigger", "original_trigger", "removed"},
+				{nil, nil, "removed"}, // removed items have NULL to_ values
 			},
 		},
 		{
 			name:  "filter for added schemas only",
-			query: "SELECT type, name FROM dolt_diff_dolt_schemas WHERE diff_type = 'added' ORDER BY type, name",
+			query: "SELECT to_type, to_name FROM dolt_diff_dolt_schemas WHERE diff_type = 'added' ORDER BY to_type, to_name",
 			rows: []sql.Row{
 				{"event", "new_event"},
 				{"view", "new_view"},
@@ -207,21 +242,21 @@ func doltSchemasDiffTableTests() []doltSchemasTableTest {
 		},
 		{
 			name:  "filter for modified schemas only",
-			query: "SELECT type, name FROM dolt_diff_dolt_schemas WHERE diff_type = 'modified' ORDER BY type, name",
+			query: "SELECT to_type, to_name FROM dolt_diff_dolt_schemas WHERE diff_type = 'modified' ORDER BY to_type, to_name",
 			rows: []sql.Row{
 				{"view", "original_view"},
 			},
 		},
 		{
 			name:  "filter for removed schemas only",
-			query: "SELECT type, name FROM dolt_diff_dolt_schemas WHERE diff_type = 'removed' ORDER BY type, name",
+			query: "SELECT from_type, from_name FROM dolt_diff_dolt_schemas WHERE diff_type = 'removed' ORDER BY from_type, from_name",
 			rows: []sql.Row{
 				{"trigger", "original_trigger"},
 			},
 		},
 		{
 			name:  "filter for views only",
-			query: "SELECT name, diff_type FROM dolt_diff_dolt_schemas WHERE type = 'view' ORDER BY name",
+			query: "SELECT COALESCE(to_name, from_name) as name, diff_type FROM dolt_diff_dolt_schemas WHERE COALESCE(to_type, from_type) = 'view' ORDER BY name",
 			rows: []sql.Row{
 				{"new_view", "added"},
 				{"original_view", "modified"},
@@ -238,7 +273,7 @@ func doltSchemasDiffTableTests() []doltSchemasTableTest {
 		},
 		{
 			name:  "check all columns exist",
-			query: "SELECT COUNT(*) FROM dolt_diff_dolt_schemas WHERE type IS NOT NULL AND name IS NOT NULL AND diff_type IS NOT NULL",
+			query: "SELECT COUNT(*) FROM dolt_diff_dolt_schemas WHERE (to_type IS NOT NULL OR from_type IS NOT NULL) AND (to_name IS NOT NULL OR from_name IS NOT NULL) AND diff_type IS NOT NULL",
 			rows: []sql.Row{
 				{int64(4)}, // Total number of changes
 			},
