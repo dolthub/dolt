@@ -149,14 +149,6 @@ func doDoltCheckout(ctx *sql.Context, args []string) (statusCode int, successMes
 		return 1, "", ErrEmptyBranchName
 	}
 
-	isModification, err := willModifyDb(ctx, dSess, dbData, currentDbName, firstArg, updateHead)
-	if err != nil {
-		return 1, "", err
-	}
-	if !isModification && apr.NArg() == 1 {
-		return 0, fmt.Sprintf("Already on branch '%s'", firstArg), nil
-	}
-
 	// No branch explicitly specified but table(s) specified
 	dashDashPos := apr.PositionalArgsSeparatorIndex
 	if dashDashPos == 0 {
@@ -165,6 +157,14 @@ func doDoltCheckout(ctx *sql.Context, args []string) (statusCode int, successMes
 			return 1, "", err
 		}
 		return 0, successMessage, nil
+	}
+
+	isModification, err := willModifyDb(ctx, dSess, dbData, currentDbName, firstArg, updateHead)
+	if err != nil {
+		return 1, "", err
+	}
+	if !isModification && apr.NArg() == 1 {
+		return 0, fmt.Sprintf("Already on branch '%s'", firstArg), nil
 	}
 
 	localExists, err := actions.IsBranch(ctx, dbData.Ddb, firstArg)
@@ -178,6 +178,7 @@ func doDoltCheckout(ctx *sql.Context, args []string) (statusCode int, successMes
 	}
 
 	validRemoteRef := remoteRefs != nil && len(remoteRefs) == 1
+	isBranch, _ := actions.IsBranch(ctx, dbData.Ddb, firstArg)
 	if dashDashPos == 1 && (localExists || validRemoteRef) {
 		if apr.NArg() == 1 {
 			if localExists {
@@ -187,7 +188,7 @@ func doDoltCheckout(ctx *sql.Context, args []string) (statusCode int, successMes
 				}
 				return 0, generateSuccessMessage(firstArg, ""), nil
 			} else {
-				upstream, err := checkoutRemoteBranch(ctx, dSess, currentDbName, dbData, firstArg, apr, &rsc)
+				upstream, err := checkoutRemoteBranch(ctx, dSess, currentDbName, dbData, firstArg, apr, rsc)
 				if err != nil {
 					return 1, "", err
 				}
@@ -195,7 +196,7 @@ func doDoltCheckout(ctx *sql.Context, args []string) (statusCode int, successMes
 			}
 		}
 
-		// Git requires a local ref to already exist to check out tables from a commit
+		// Git requires a local ref to already exist to check out tables
 		err = checkoutTablesFromCommit(ctx, currentDbName, firstArg, apr.Args, rsc)
 		if err != nil {
 			return 1, "", err
@@ -208,10 +209,10 @@ func doDoltCheckout(ctx *sql.Context, args []string) (statusCode int, successMes
 		return 1, "", err
 	}
 
-	// Ambiguity - `foo` is a table AND matches a tracking branch
+	// Ambiguity `foo` is a table AND matches a tracking branch, but a local branch does not exist already
 	if validRemoteRef && !localExists && isTable {
 		return 1, "", fmt.Errorf("'%s' could be both a local table and a tracking branch.\n"+
-			"Please use -- (and optionally --no-guess) to disambiguate.", firstArg)
+			"Please use -- to disambiguate.", firstArg)
 	}
 
 	if apr.NArg() > 1 {
@@ -222,25 +223,23 @@ func doDoltCheckout(ctx *sql.Context, args []string) (statusCode int, successMes
 		return 0, "", nil
 	}
 
-	err = checkoutTablesFromHead(ctx, roots, currentDbName, apr.Args)
-	if err != nil && apr.NArg() == 1 {
-		if localExists {
-			err = checkoutExistingBranchWithWorkingSetFallback(ctx, currentDbName, firstArg, apr, &rsc)
-			if err != nil {
-				return 1, "", err
-			}
-			return 0, generateSuccessMessage(firstArg, ""), nil
-		}
-		upstream, err := checkoutRemoteBranch(ctx, dSess, currentDbName, dbData, firstArg, apr, &rsc)
+	if localExists {
+		err = checkoutExistingBranchWithWorkingSetFallback(ctx, currentDbName, firstArg, apr, &rsc)
 		if err != nil {
 			return 1, "", err
 		}
-		successMessage = generateSuccessMessage(firstArg, upstream)
+		return 0, generateSuccessMessage(firstArg, ""), nil
 	}
 
-	dsess.WaitForReplicationController(ctx, rsc)
+	upstream, err := checkoutRemoteBranch(ctx, dSess, currentDbName, dbData, firstArg, apr, rsc)
+	if err != nil {
+		err = checkoutTablesFromHead(ctx, roots, currentDbName, apr.Args)
+		if err != nil {
+			return 1, "", err
+		}
+	}
 
-	return 0, successMessage, nil
+	return 0, generateSuccessMessage(firstArg, upstream), nil
 }
 
 // parseBranchArgs returns the name of the new branch and whether or not it should be created forcibly. This asserts
@@ -327,7 +326,7 @@ func createWorkingSetForLocalBranch(ctx *sql.Context, ddb *doltdb.DoltDB, branch
 
 // checkoutRemoteBranch checks out a remote branch creating a new local branch with the same name as the remote branch
 // and set its upstream. The upstream persists out of sql session. Returns the name of the upstream remote and branch.
-func checkoutRemoteBranch(ctx *sql.Context, dSess *dsess.DoltSession, dbName string, dbData env.DbData[*sql.Context], branchName string, apr *argparser.ArgParseResults, rsc *doltdb.ReplicationStatusController) (upstream string, err error) {
+func checkoutRemoteBranch(ctx *sql.Context, dSess *dsess.DoltSession, dbName string, dbData env.DbData[*sql.Context], branchName string, apr *argparser.ArgParseResults, rsc doltdb.ReplicationStatusController) (upstream string, err error) {
 	remoteRefs, err := actions.GetRemoteBranchRef(ctx, dbData.Ddb, branchName)
 	if err != nil {
 		return "", errors.New("fatal: unable to read from data repository")
@@ -362,7 +361,7 @@ func checkoutRemoteBranch(ctx *sql.Context, dSess *dsess.DoltSession, dbName str
 		return "", fmt.Errorf("error: could not find %s", branchName)
 	} else if len(remoteRefs) == 1 {
 		remoteRef := remoteRefs[0]
-		err = actions.CreateBranchWithStartPt(ctx, dbData, branchName, remoteRef.String(), false, rsc)
+		err = actions.CreateBranchWithStartPt(ctx, dbData, branchName, remoteRef.String(), false, &rsc)
 		if err != nil {
 			return "", err
 		}
@@ -370,7 +369,7 @@ func checkoutRemoteBranch(ctx *sql.Context, dSess *dsess.DoltSession, dbName str
 		// We need to commit the transaction here or else the branch we just created isn't visible to the current transaction,
 		// and we are about to switch to it. So set the new branch head for the new transaction, then commit this one
 		sess := dsess.DSessFromSess(ctx.Session)
-		err = commitTransaction(ctx, sess, rsc)
+		err = commitTransaction(ctx, sess, &rsc)
 		if err != nil {
 			return "", err
 		}
@@ -400,6 +399,8 @@ func checkoutRemoteBranch(ctx *sql.Context, dSess *dsess.DoltSession, dbName str
 		if err != nil {
 			return "", err
 		}
+
+		dsess.WaitForReplicationController(ctx, rsc)
 
 		return remoteRef.GetPath(), nil
 	} else {
@@ -512,7 +513,7 @@ func checkoutExistingBranch(ctx *sql.Context, dbName string, branchName string, 
 	dSess := dsess.DSessFromSess(ctx.Session)
 
 	if apr.Contains(cli.MoveFlag) {
-		err = doGlobalCheckout(ctx, branchName, apr.Contains(cli.ForceFlag), false)
+		return doGlobalCheckout(ctx, branchName, apr.Contains(cli.ForceFlag), false)
 	} else {
 		err = dSess.SwitchWorkingSet(ctx, dbName, wsRef)
 		if err != nil {
@@ -658,7 +659,7 @@ func checkoutTablesFromHead(ctx *sql.Context, roots doltdb.Roots, name string, t
 			return err
 		}
 		if !exists {
-			return fmt.Errorf("error: given tables do not exist")
+			return fmt.Errorf("tablespec '%s' did not match any table(s) known to dolt", table)
 		}
 		tableNames[i] = tbl
 	}
