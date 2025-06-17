@@ -477,6 +477,25 @@ SQL
 }
 
 @test "system-tables: query dolt_history_dolt_schemas system table" {
+    # Set up test data with views, triggers, and events across multiple commits
+    dolt sql -q "CREATE VIEW test_view AS SELECT 1 as col1"
+    dolt add .
+    dolt commit -m "add test view"
+    
+    dolt sql -q "CREATE TABLE test_table (id INT PRIMARY KEY, name VARCHAR(50))"
+    dolt sql -q "CREATE TRIGGER test_trigger BEFORE INSERT ON test_table FOR EACH ROW SET NEW.name = UPPER(NEW.name)"
+    dolt add .
+    dolt commit -m "add table and trigger"
+    
+    dolt sql -q "DROP VIEW test_view"
+    dolt sql -q "CREATE VIEW test_view AS SELECT 1 as col1, 2 as col2"
+    dolt add .
+    dolt commit -m "modify test view"
+    
+    dolt sql -q "CREATE EVENT test_event ON SCHEDULE EVERY 1 DAY DO SELECT 1"
+    dolt add .
+    dolt commit -m "add event"
+    
     # Test that the table exists and has correct schema
     run dolt sql -r csv -q 'DESCRIBE dolt_history_dolt_schemas'
     [ "$status" -eq 0 ]
@@ -489,16 +508,53 @@ SQL
     [[ "$output" =~ "committer,varchar(1024)" ]] || false
     [[ "$output" =~ "commit_date,datetime" ]] || false
     
-    # Test basic table access (should not crash)
-    run dolt sql -q 'SELECT COUNT(*) FROM dolt_history_dolt_schemas'
+    # Test that we have schema objects in history (view appears in all 4 commits, trigger in 3, event in 1)
+    run dolt sql -q 'SELECT COUNT(*) FROM dolt_history_dolt_schemas WHERE type = "view"'
     [ "$status" -eq 0 ]
+    # Should have 4 view entries (view exists in all 4 commits)
+    [[ "$output" =~ "4" ]] || false
     
-    # Test that we can select specific columns without errors
-    run dolt sql -q 'SELECT type, name, commit_hash FROM dolt_history_dolt_schemas LIMIT 1'
+    # Test that we have trigger history (trigger appears in 3 commits after creation)
+    run dolt sql -q 'SELECT COUNT(*) FROM dolt_history_dolt_schemas WHERE type = "trigger"'
     [ "$status" -eq 0 ]
+    # Should have 3 trigger entries (trigger exists in last 3 commits)
+    [[ "$output" =~ "3" ]] || false
+    
+    # Test that we have event history (event appears in 1 commit)
+    run dolt sql -q 'SELECT COUNT(*) FROM dolt_history_dolt_schemas WHERE type = "event"'
+    [ "$status" -eq 0 ]
+    # Should have 1 event entry (event only in last commit)
+    [[ "$output" =~ "1" ]] || false
+    
+    # Test filtering by schema object type works
+    run dolt sql -q 'SELECT DISTINCT type FROM dolt_history_dolt_schemas ORDER BY type'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "event" ]] || false
+    [[ "$output" =~ "trigger" ]] || false
+    [[ "$output" =~ "view" ]] || false
+    
+    # Test commit metadata is present for all entries
+    run dolt sql -q 'SELECT COUNT(*) FROM dolt_history_dolt_schemas WHERE commit_hash IS NOT NULL AND committer IS NOT NULL'
+    [ "$status" -eq 0 ]
+    # Should have 8 total entries (4 view + 3 trigger + 1 event)
+    [[ "$output" =~ "8" ]] || false
 }
 
 @test "system-tables: query dolt_diff_dolt_schemas system table" {
+    # Set up test data for diff scenarios
+    dolt sql -q "CREATE VIEW original_view AS SELECT 1 as id"
+    dolt sql -q "CREATE TABLE diff_table (id INT PRIMARY KEY)"
+    dolt sql -q "CREATE TRIGGER original_trigger BEFORE INSERT ON diff_table FOR EACH ROW SET NEW.id = NEW.id + 1"
+    dolt add .
+    dolt commit -m "base commit with original schemas"
+    
+    # Make changes for diff (working directory changes)
+    dolt sql -q "DROP VIEW original_view"
+    dolt sql -q "CREATE VIEW original_view AS SELECT 1 as id, 'modified' as status"  # modified
+    dolt sql -q "CREATE VIEW new_view AS SELECT 'added' as status"  # added
+    dolt sql -q "DROP TRIGGER original_trigger"  # removed
+    dolt sql -q "CREATE EVENT new_event ON SCHEDULE EVERY 1 HOUR DO SELECT 1"  # added
+    
     # Test that the table exists and has correct schema
     run dolt sql -r csv -q 'DESCRIBE dolt_diff_dolt_schemas'
     [ "$status" -eq 0 ]
@@ -518,13 +574,43 @@ SQL
     [[ "$output" =~ "from_commit_date,datetime(6)" ]] || false
     [[ "$output" =~ "diff_type,varchar(1023)" ]] || false
     
-    # Test basic table access (should not crash)
+    # Test actual diff functionality - should show 4 changes (2 added, 1 modified, 1 removed)
     run dolt sql -q 'SELECT COUNT(*) FROM dolt_diff_dolt_schemas'
     [ "$status" -eq 0 ]
+    [[ "$output" =~ "4" ]] || false
     
-    # Test that we can select specific columns without errors
-    run dolt sql -q 'SELECT to_type, to_name, diff_type FROM dolt_diff_dolt_schemas LIMIT 1'
+    # Test added schemas (new_view and new_event)
+    run dolt sql -q 'SELECT COUNT(*) FROM dolt_diff_dolt_schemas WHERE diff_type = "added"'
     [ "$status" -eq 0 ]
+    [[ "$output" =~ "2" ]] || false
+    
+    # Test removed schemas (original_trigger)
+    run dolt sql -q 'SELECT COUNT(*) FROM dolt_diff_dolt_schemas WHERE diff_type = "removed"'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1" ]] || false
+    
+    # Test modified schemas (original_view)
+    run dolt sql -q 'SELECT COUNT(*) FROM dolt_diff_dolt_schemas WHERE diff_type = "modified"'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1" ]] || false
+    
+    # Test that we can identify specific added objects
+    run dolt sql -q 'SELECT to_name FROM dolt_diff_dolt_schemas WHERE diff_type = "added" ORDER BY to_name'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "new_event" ]] || false
+    [[ "$output" =~ "new_view" ]] || false
+    
+    # Test that we can identify specific removed objects
+    run dolt sql -q 'SELECT from_name FROM dolt_diff_dolt_schemas WHERE diff_type = "removed"'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "original_trigger" ]] || false
+    
+    # Test that diff_type values are correct
+    run dolt sql -q 'SELECT DISTINCT diff_type FROM dolt_diff_dolt_schemas ORDER BY diff_type'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "added" ]] || false
+    [[ "$output" =~ "modified" ]] || false
+    [[ "$output" =~ "removed" ]] || false
 }
 
 @test "system-tables: query dolt_history_ system table" {
