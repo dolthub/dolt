@@ -116,92 +116,9 @@ func doDoltCheckout(ctx *sql.Context, args []string) (statusCode int, successMes
 		}
 	}
 
-	// firstArg purpose depends on the context, it may be a branch, table, etc.
-	firstArg := apr.Arg(0)
-	if len(firstArg) == 0 {
-		return 1, "", ErrEmptyBranchName
-	}
-
-	isModification, err := willModifyDb(ctx, dSess, dbData, currentDbName, firstArg, updateHead)
-	if err != nil {
-		return 1, "", err
-	}
-	if !isModification && apr.NArg() == 1 {
-		return 0, fmt.Sprintf("Already on branch '%s'", firstArg), nil
-	}
-
 	roots, ok := dSess.GetRoots(ctx, currentDbName)
 	if !ok {
 		return 1, "", fmt.Errorf("Could not load database %s", currentDbName)
-	}
-
-	// No branch explicitly specified but table(s) specified
-	dashDashPos := apr.PositionalArgsSeparatorIndex
-	if dashDashPos == 0 {
-		err = checkoutTablesFromHead(ctx, roots, currentDbName, apr.Args)
-		if err != nil {
-			return 1, "", err
-		}
-		return 0, successMessage, nil
-	}
-
-	localBranchExists, err := actions.IsBranch(ctx, dbData.Ddb, firstArg)
-	if err != nil {
-		return 1, "", err
-	}
-
-	remoteRefs, err := actions.GetRemoteBranchRef(ctx, dbData.Ddb, firstArg)
-	if err != nil {
-		return 1, "", fmt.Errorf("unable to read remote refs from data repository: %v", err)
-	}
-
-	if dashDashPos == 1 && (localBranchExists || (remoteRefs != nil && len(remoteRefs) == 1)) {
-		if apr.NArg() == 1 {
-			if !localBranchExists {
-				upstream, err := checkoutRemoteBranch(ctx, dSess, currentDbName, dbData, firstArg, apr, &rsc)
-				if err != nil {
-					return 1, "", err
-				}
-				return 0, generateSuccessMessage(firstArg, upstream), nil
-			}
-
-			err = checkoutExistingBranch(ctx, currentDbName, firstArg, apr)
-			if err != nil {
-				return 1, "", err
-			}
-			return 0, successMessage, nil
-		}
-
-		if !localBranchExists {
-			err = actions.CreateBranchWithStartPt(ctx, dbData, firstArg, remoteRefs[0].String(), false, &rsc)
-			if err != nil {
-				return 1, "", err
-			}
-			// We need to commit the transaction here or else the branch we just created isn't visible to the current transaction
-			sess := dsess.DSessFromSess(ctx.Session)
-			err = commitTransaction(ctx, sess, &rsc)
-			if err != nil {
-				return 1, "", err
-			}
-		}
-
-		err = checkoutTablesFromCommit(ctx, currentDbName, firstArg, apr.Args[1:], rsc)
-		if err != nil {
-			return 1, "", err
-		}
-
-		return 0, "", nil
-	}
-
-	_, _, isTable, err := actions.FindTableInRoots(ctx, roots, firstArg)
-	if err != nil {
-		return 1, "", err
-	}
-
-	// Ambiguity - `foo` is a table AND matches a tracking branch, it cannot be ambiguous when '--' is not used
-	if remoteRefs != nil && len(remoteRefs) >= 1 && isTable {
-		return 1, "", fmt.Errorf("'%s' could be both a local table and a tracking branch.\n"+
-			"Please use -- (and optionally --no-guess) to disambiguate.", firstArg)
 	}
 
 	// Check if the user executed `dolt checkout .` (reset working set)
@@ -224,9 +141,96 @@ func doDoltCheckout(ctx *sql.Context, args []string) (statusCode int, successMes
 			return 1, "", err
 		}
 		return 0, "", err
-	}im
+	}
 
-	err = checkoutTablesFromHead(ctx, roots, currentDbName, apr.Args)
+	// firstArg purpose depends on the context, it may be a branch, table, etc.
+	firstArg := apr.Arg(0)
+	if len(firstArg) == 0 {
+		return 1, "", ErrEmptyBranchName
+	}
+
+	isModification, err := willModifyDb(ctx, dSess, dbData, currentDbName, firstArg, updateHead)
+	if err != nil {
+		return 1, "", err
+	}
+	if !isModification && apr.NArg() == 1 {
+		return 0, fmt.Sprintf("Already on branch '%s'", firstArg), nil
+	}
+
+	// No branch explicitly specified but table(s) specified
+	dashDashPos := apr.PositionalArgsSeparatorIndex
+	if dashDashPos == 0 {
+		err = checkoutTablesFromHead(ctx, roots, currentDbName, apr.Args)
+		if err != nil {
+			return 1, "", err
+		}
+		return 0, successMessage, nil
+	}
+
+	localExists, err := actions.IsBranch(ctx, dbData.Ddb, firstArg)
+	if err != nil {
+		return 1, "", err
+	}
+
+	remoteRefs, err := actions.GetRemoteBranchRef(ctx, dbData.Ddb, firstArg)
+	if err != nil {
+		return 1, "", fmt.Errorf("unable to read remote refs from data repository: %v", err)
+	}
+
+	validRemoteRef := remoteRefs != nil && len(remoteRefs) == 1
+	if dashDashPos == 1 && (localExists || validRemoteRef) {
+		if apr.NArg() == 1 {
+			if localExists {
+				err = checkoutExistingBranch(ctx, currentDbName, firstArg, apr)
+				if err != nil {
+					return 1, "", err
+				}
+				return 0, fmt.Sprintf("Switched to branch '%s'", firstArg), nil
+			} else {
+				upstream, err := checkoutRemoteBranch(ctx, dSess, currentDbName, dbData, firstArg, apr, &rsc)
+				if err != nil {
+					return 1, "", err
+				}
+				return 0, generateSuccessMessage(firstArg, upstream), nil
+			}
+		}
+
+		// In both scenarios we want to checkout table(s) from remote or local but need a local copy for remote
+		if !localExists {
+			err = actions.CreateBranchWithStartPt(ctx, dbData, firstArg, remoteRefs[0].String(), false, &rsc)
+			if err != nil {
+				return 1, "", err
+			}
+			// We need to commit the transaction here or else the branch we just created isn't visible to the current transaction
+			sess := dsess.DSessFromSess(ctx.Session)
+			err = commitTransaction(ctx, sess, &rsc)
+			if err != nil {
+				return 1, "", err
+			}
+		}
+		err = checkoutTablesFromCommit(ctx, currentDbName, firstArg, apr.Args, rsc)
+		if err != nil {
+			return 1, "", err
+		}
+		return 0, "", nil
+	}
+
+	_, _, isTable, err := actions.FindTableInRoots(ctx, roots, firstArg)
+	if err != nil {
+		return 1, "", err
+	}
+
+	// Ambiguity - `foo` is a table AND matches a tracking branch
+	if validRemoteRef && isTable {
+		return 1, "", fmt.Errorf("'%s' could be both a local table and a tracking branch.\n"+
+			"Please use -- (and optionally --no-guess) to disambiguate.", firstArg)
+	}
+
+	if isTable {
+		err = checkoutTablesFromHead(ctx, roots, currentDbName, apr.Args)
+	} else {
+		err = checkoutExistingBranch(ctx, currentDbName, firstArg, apr)
+	}
 	if err != nil && apr.NArg() == 1 {
 		upstream, err := checkoutRemoteBranch(ctx, dSess, currentDbName, dbData, firstArg, apr, &rsc)
 		if err != nil {
