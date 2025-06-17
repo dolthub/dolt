@@ -195,19 +195,7 @@ func doDoltCheckout(ctx *sql.Context, args []string) (statusCode int, successMes
 			}
 		}
 
-		// In both scenarios we want to checkout table(s) from remote or local but need a local copy for remote
-		if !localExists {
-			err = actions.CreateBranchWithStartPt(ctx, dbData, firstArg, remoteRefs[0].String(), false, &rsc)
-			if err != nil {
-				return 1, "", err
-			}
-			// We need to commit the transaction here or else the branch we just created isn't visible to the current transaction
-			sess := dsess.DSessFromSess(ctx.Session)
-			err = commitTransaction(ctx, sess, &rsc)
-			if err != nil {
-				return 1, "", err
-			}
-		}
+		// Git requires a local ref to already exist to check out tables from a commit
 		err = checkoutTablesFromCommit(ctx, currentDbName, firstArg, apr.Args, rsc)
 		if err != nil {
 			return 1, "", err
@@ -221,18 +209,28 @@ func doDoltCheckout(ctx *sql.Context, args []string) (statusCode int, successMes
 	}
 
 	// Ambiguity - `foo` is a table AND matches a tracking branch
-	if validRemoteRef && isTable {
+	if validRemoteRef && !localExists && isTable {
 		return 1, "", fmt.Errorf("'%s' could be both a local table and a tracking branch.\n"+
 			"Please use -- (and optionally --no-guess) to disambiguate.", firstArg)
 	}
 
-	if isTable {
-		err = checkoutTablesFromHead(ctx, roots, currentDbName, apr.Args)
-	} else {
-		err = checkoutExistingBranchWithWorkingSetFallback(ctx, currentDbName, firstArg, apr, &rsc)
-		successMessage = generateSuccessMessage(firstArg, "")
+	if apr.NArg() > 1 {
+		err = checkoutTablesFromCommit(ctx, currentDbName, firstArg, apr.Args[1:], rsc)
+		if err != nil {
+			return 1, "", err
+		}
+		return 0, "", nil
 	}
+
+	err = checkoutTablesFromHead(ctx, roots, currentDbName, apr.Args)
 	if err != nil && apr.NArg() == 1 {
+		if localExists {
+			err = checkoutExistingBranchWithWorkingSetFallback(ctx, currentDbName, firstArg, apr, &rsc)
+			if err != nil {
+				return 1, "", err
+			}
+			return 0, generateSuccessMessage(firstArg, ""), nil
+		}
 		upstream, err := checkoutRemoteBranch(ctx, dSess, currentDbName, dbData, firstArg, apr, &rsc)
 		if err != nil {
 			return 1, "", err
