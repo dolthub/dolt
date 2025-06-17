@@ -196,7 +196,8 @@ func doltSchemasDiffTableTests() []doltSchemasTableTest {
 			rows: []sql.Row{
 				{"event", "new_event", "added"},
 				{"view", "new_view", "added"},
-				{"view", "original_view", "added"}, // all current objects show as "added" from empty state
+				{"view", "original_view", "modified"}, // HEAD vs WORKING: shows proper diff types
+				{nil, nil, "removed"}, // removed trigger has NULL to_ values
 			},
 		},
 		{
@@ -204,22 +205,21 @@ func doltSchemasDiffTableTests() []doltSchemasTableTest {
 			query: "SELECT to_type, to_name FROM dolt_diff_dolt_schemas WHERE diff_type = 'added' ORDER BY to_type, to_name",
 			rows: []sql.Row{
 				{"event", "new_event"},
-				{"view", "new_view"},
-				{"view", "original_view"}, // original_view also shows as "added" from empty state
+				{"view", "new_view"}, // Only truly added objects
 			},
 		},
 		{
 			name:  "filter for modified schemas only",
 			query: "SELECT to_type, to_name FROM dolt_diff_dolt_schemas WHERE diff_type = 'modified' ORDER BY to_type, to_name",
 			rows: []sql.Row{
-				// No modified entries with EMPTY vs WORKING comparison
+				{"view", "original_view"}, // View was modified between HEAD and WORKING
 			},
 		},
 		{
 			name:  "filter for removed schemas only",
 			query: "SELECT from_type, from_name FROM dolt_diff_dolt_schemas WHERE diff_type = 'removed' ORDER BY from_type, from_name",
 			rows: []sql.Row{
-				// No removed entries with EMPTY vs WORKING comparison
+				{"trigger", "original_trigger"}, // Trigger was removed between HEAD and WORKING
 			},
 		},
 		{
@@ -227,35 +227,37 @@ func doltSchemasDiffTableTests() []doltSchemasTableTest {
 			query: "SELECT COALESCE(to_name, from_name) as name, diff_type FROM dolt_diff_dolt_schemas WHERE COALESCE(to_type, from_type) = 'view' ORDER BY name",
 			rows: []sql.Row{
 				{"new_view", "added"},
-				{"original_view", "added"}, // original_view shows as "added" from empty state
+				{"original_view", "modified"}, // original_view shows as "modified" in HEAD vs WORKING
 			},
 		},
 		{
 			name:  "count changes by type",
 			query: "SELECT diff_type, COUNT(*) as count FROM dolt_diff_dolt_schemas GROUP BY diff_type ORDER BY diff_type",
 			rows: []sql.Row{
-				{"added", int64(3)}, // All 3 current objects show as "added" from empty state
+				{"added", int64(2)},    // new_event, new_view
+				{"modified", int64(1)}, // original_view
+				{"removed", int64(1)},  // original_trigger
 			},
 		},
 		{
 			name:  "check all columns exist",
 			query: "SELECT COUNT(*) FROM dolt_diff_dolt_schemas WHERE (to_type IS NOT NULL OR from_type IS NOT NULL) AND (to_name IS NOT NULL OR from_name IS NOT NULL) AND diff_type IS NOT NULL",
 			rows: []sql.Row{
-				{int64(3)}, // Total number of changes (all current objects as "added")
+				{int64(4)}, // Total number of changes (2 added + 1 modified + 1 removed)
 			},
 		},
 		{
 			name:  "verify commit columns are populated",
 			query: "SELECT COUNT(*) FROM dolt_diff_dolt_schemas WHERE to_commit IS NOT NULL AND from_commit IS NOT NULL",
 			rows: []sql.Row{
-				{int64(3)}, // All rows should have both commit fields populated
+				{int64(4)}, // All rows should have both commit fields populated
 			},
 		},
 		{
 			name:  "verify to_commit is WORKING and from_commit is a valid hash",
 			query: "SELECT DISTINCT to_commit, LENGTH(from_commit) as from_commit_len FROM dolt_diff_dolt_schemas",
 			rows: []sql.Row{
-				{"WORKING", int32(32)}, // to_commit should be WORKING, from_commit should be 32-char hash
+				{"WORKING", int32(32)}, // All entries: to_commit should be WORKING, from_commit should be 32-char hash
 			},
 		},
 	}

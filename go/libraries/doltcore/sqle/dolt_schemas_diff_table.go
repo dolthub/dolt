@@ -350,10 +350,12 @@ func (dsdri *doltSchemasDiffRowIter) createDiffRow(toRow, fromRow sql.Row, diffT
 		row[5] = dsdri.toRef       // to_commit
 		row[6] = nil               // to_commit_date (null for WORKING state)
 	} else {
-		// All to_* columns are null for removed rows
-		for i := 0; i < 7; i++ {
+		// to_* schema columns are null for removed rows, but commit info should be populated
+		for i := 0; i < 5; i++ {
 			row[i] = nil
 		}
+		row[5] = dsdri.toRef // to_commit should always be populated (will be "WORKING")
+		row[6] = nil         // to_commit_date is null for WORKING state
 	}
 
 	// FROM columns (indices 7-13)

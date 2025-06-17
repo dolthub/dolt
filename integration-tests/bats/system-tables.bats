@@ -548,11 +548,10 @@ SQL
     dolt add .
     dolt commit -m "base commit with original schemas"
 
-    run dolt sql -q "select * from dolt_diff_dolt_schemas"
+    # Initially, after commit, there should be no differences (HEAD == WORKING)
+    run dolt sql -q 'SELECT COUNT(*) FROM dolt_diff_dolt_schemas'
     [ "$status" -eq 0 ]
-    # Should show the view and trigger as "added" from NULL (empty state)
-    [[ "$output" =~ "original_view" ]] || false
-    [[ "$output" =~ "original_trigger" ]] || false
+    [[ "$output" =~ "0" ]] || false
     
     # Make changes for diff (working directory changes)
     dolt sql -q "DROP VIEW original_view"
@@ -580,43 +579,50 @@ SQL
     [[ "$output" =~ "from_commit_date,datetime(6)" ]] || false
     [[ "$output" =~ "diff_type,varchar(1023)" ]] || false
     
-    # Test actual diff functionality - should show 3 changes (all current objects as "added" from empty state)
-    # With EMPTY vs WORKING comparison: original_view (modified), new_view (added), new_event (added)
-    # The removed trigger doesn't appear because it doesn't exist in WORKING
+    # Test actual diff functionality - should show 4 changes (HEAD vs WORKING)
+    # original_view (modified), new_view (added), new_event (added), original_trigger (removed)
     run dolt sql -q 'SELECT COUNT(*) FROM dolt_diff_dolt_schemas'
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "3" ]] || false
+    [[ "$output" =~ "4" ]] || false
     
-    # Test that all schemas show as "added" from empty state
+    # Test that we have changes of different types
     run dolt sql -q 'SELECT COUNT(*) FROM dolt_diff_dolt_schemas WHERE diff_type = "added"'
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "3" ]] || false
-    
-    # With EMPTY vs WORKING, there should be no "removed" or "modified" entries
-    run dolt sql -q 'SELECT COUNT(*) FROM dolt_diff_dolt_schemas WHERE diff_type = "removed"'
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "0" ]] || false
+    [[ "$output" =~ "2" ]] || false  # new_view and new_event
     
     run dolt sql -q 'SELECT COUNT(*) FROM dolt_diff_dolt_schemas WHERE diff_type = "modified"'
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "0" ]] || false
+    [[ "$output" =~ "1" ]] || false  # original_view
     
-    # Test that we can identify specific added objects
+    run dolt sql -q 'SELECT COUNT(*) FROM dolt_diff_dolt_schemas WHERE diff_type = "removed"'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1" ]] || false  # original_trigger
+    
+    # Test that we can identify specific changes
     run dolt sql -q 'SELECT to_name FROM dolt_diff_dolt_schemas WHERE diff_type = "added" ORDER BY to_name'
     [ "$status" -eq 0 ]
     [[ "$output" =~ "new_event" ]] || false
     [[ "$output" =~ "new_view" ]] || false
+    
+    run dolt sql -q 'SELECT to_name FROM dolt_diff_dolt_schemas WHERE diff_type = "modified"'
+    [ "$status" -eq 0 ]
     [[ "$output" =~ "original_view" ]] || false
     
-    # Test that diff_type values are correct (only "added" with EMPTY vs WORKING)
+    run dolt sql -q 'SELECT from_name FROM dolt_diff_dolt_schemas WHERE diff_type = "removed"'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "original_trigger" ]] || false
+    
+    # Test that diff_type values are correct
     run dolt sql -q 'SELECT DISTINCT diff_type FROM dolt_diff_dolt_schemas ORDER BY diff_type'
     [ "$status" -eq 0 ]
     [[ "$output" =~ "added" ]] || false
+    [[ "$output" =~ "modified" ]] || false
+    [[ "$output" =~ "removed" ]] || false
     
-    # Test that from_commit is always populated (should be the initial commit hash)
+    # Test that from_commit is always populated (should be HEAD commit hash)
     run dolt sql -q 'SELECT COUNT(*) FROM dolt_diff_dolt_schemas WHERE from_commit IS NOT NULL'
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "3" ]] || false
+    [[ "$output" =~ "4" ]] || false
     
     # Test that from_commit is a valid commit hash (not "EMPTY" or "WORKING")
     run dolt sql -q 'SELECT DISTINCT from_commit FROM dolt_diff_dolt_schemas'
