@@ -334,6 +334,14 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 	switch {
 	case lwrName == doltdb.DoltDiffTablePrefix+doltdb.SchemasTableName:
 		// Special handling for dolt_diff_dolt_schemas
+		// For schema diff tables, we want to show all schema objects going from the initial commit
+		// to their current defined state, similar to how regular diff tables work
+		
+		// Get the initial commit (first commit in the database)
+		var initialCommit *doltdb.Commit
+		var initialCommitHash string
+		
+		// Get the initial commit by walking back to the beginning
 		if head == nil {
 			var err error
 			head, err = ds.GetHeadCommit(ctx, db.RevisionQualifiedName())
@@ -341,15 +349,44 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 				return nil, false, err
 			}
 		}
-
-		// Get working root and head root for diff
-		headRoot, err := head.GetRootValue(ctx)
+		
+		// Walk back to find the initial commit
+		initialCommit = head
+		for {
+			parents, err := initialCommit.ParentHashes(ctx)
+			if err != nil {
+				return nil, false, err
+			}
+			if len(parents) == 0 {
+				// This is the initial commit
+				break
+			}
+			// Get the first parent (main line)
+			parentOptCommit, err := db.ddb.ReadCommit(ctx, parents[0])
+			if err != nil {
+				return nil, false, err
+			}
+			parentCommit, ok := parentOptCommit.ToCommit()
+			if !ok {
+				return nil, false, fmt.Errorf("expected commit, got ghost commit")
+			}
+			initialCommit = parentCommit
+		}
+		
+		// Get the hash and root of the initial commit
+		initialHash, err := initialCommit.HashOf()
+		if err != nil {
+			return nil, false, err
+		}
+		initialCommitHash = initialHash.String()
+		
+		initialRoot, err := initialCommit.GetRootValue(ctx)
 		if err != nil {
 			return nil, false, err
 		}
 
-		// For diff tables, we compare HEAD vs working to show changes from HEAD to working
-		return NewDoltSchemasDiffTable(ctx, db.ddb, headRoot, root, "HEAD", "WORKING", db), true, nil
+		// Compare initial commit state vs current working state to show all changes since inception
+		return NewDoltSchemasDiffTable(ctx, db.ddb, initialRoot, root, initialCommitHash, "WORKING", db), true, nil
 
 	case strings.HasPrefix(lwrName, doltdb.DoltDiffTablePrefix):
 		if head == nil {

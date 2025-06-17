@@ -25,6 +25,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 const (
@@ -347,7 +348,7 @@ func (dsdri *doltSchemasDiffRowIter) createDiffRow(toRow, fromRow sql.Row, diffT
 	if toRow != nil && len(toRow) >= 5 {
 		copy(row[0:5], toRow[0:5]) // to_type, to_name, to_fragment, to_extra, to_sql_mode
 		row[5] = dsdri.toRef       // to_commit
-		row[6] = nil               // to_commit_date (we'll set this later if needed)
+		row[6] = nil               // to_commit_date (null for WORKING state)
 	} else {
 		// All to_* columns are null for removed rows
 		for i := 0; i < 7; i++ {
@@ -359,18 +360,39 @@ func (dsdri *doltSchemasDiffRowIter) createDiffRow(toRow, fromRow sql.Row, diffT
 	if fromRow != nil && len(fromRow) >= 5 {
 		copy(row[7:12], fromRow[0:5]) // from_type, from_name, from_fragment, from_extra, from_sql_mode
 		row[12] = dsdri.fromRef       // from_commit
-		row[13] = nil                 // from_commit_date (we'll set this later if needed)
+		row[13] = dsdri.getFromCommitDate() // from_commit_date from actual commit
 	} else {
-		// All from_* columns are null for added rows
-		for i := 7; i < 14; i++ {
+		// from_* schema columns are null for added rows, but commit info should be populated
+		for i := 7; i < 12; i++ {
 			row[i] = nil
 		}
+		row[12] = dsdri.fromRef // from_commit should always be populated (actual commit hash)
+		row[13] = dsdri.getFromCommitDate() // from_commit_date from actual commit
 	}
 
 	// Diff type column (index 14)
 	row[14] = diffType
 
 	return row
+}
+
+// getFromCommitDate gets the commit date for the from_commit
+func (dsdri *doltSchemasDiffRowIter) getFromCommitDate() interface{} {
+	// If fromRef is a commit hash, try to get its commit date
+	if dsdri.fromRef != "WORKING" && dsdri.fromRef != "EMPTY" && len(dsdri.fromRef) > 0 {
+		// Try to parse fromRef as a commit hash and get its date
+		if hash.IsValid(dsdri.fromRef) {
+			commitHash := hash.Parse(dsdri.fromRef)
+			if optCommit, err := dsdri.db.GetDoltDB().ReadCommit(dsdri.ctx, commitHash); err == nil {
+				if commit, ok := optCommit.ToCommit(); ok {
+					if meta, err := commit.GetCommitMeta(dsdri.ctx); err == nil {
+						return meta.Time()
+					}
+				}
+			}
+		}
+	}
+	return nil
 }
 
 // rowsEqual compares two SQL rows for equality
