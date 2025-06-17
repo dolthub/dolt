@@ -1,4 +1,4 @@
-// Copyright 2024 Dolthub, Inc.
+// Copyright 2025 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -7,7 +7,7 @@
 //     http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
-//distributed under the License is distributed on an "AS IS" BASIS,
+// distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
@@ -80,7 +80,7 @@ func (dsdt *doltSchemasDiffTable) Schema() sql.Schema {
 		&sql.Column{Name: "to_" + doltdb.SchemasTablesSqlModeCol, Type: types.MustCreateString(sqltypes.VarChar, 256, sql.Collation_utf8mb4_0900_ai_ci), Nullable: true, Source: dsdt.name},
 		&sql.Column{Name: "to_commit", Type: types.MustCreateString(sqltypes.VarChar, 1023, sql.Collation_utf8mb4_0900_ai_ci), Nullable: true, Source: dsdt.name},
 		&sql.Column{Name: "to_commit_date", Type: types.DatetimeMaxPrecision, Nullable: true, Source: dsdt.name},
-		
+
 		// FROM columns
 		&sql.Column{Name: "from_" + doltdb.SchemasTablesTypeCol, Type: types.MustCreateString(sqltypes.VarChar, 64, sql.Collation_utf8mb4_0900_ai_ci), Nullable: true, Source: dsdt.name},
 		&sql.Column{Name: "from_" + doltdb.SchemasTablesNameCol, Type: types.MustCreateString(sqltypes.VarChar, 64, sql.Collation_utf8mb4_0900_ai_ci), Nullable: true, Source: dsdt.name},
@@ -89,7 +89,7 @@ func (dsdt *doltSchemasDiffTable) Schema() sql.Schema {
 		&sql.Column{Name: "from_" + doltdb.SchemasTablesSqlModeCol, Type: types.MustCreateString(sqltypes.VarChar, 256, sql.Collation_utf8mb4_0900_ai_ci), Nullable: true, Source: dsdt.name},
 		&sql.Column{Name: "from_commit", Type: types.MustCreateString(sqltypes.VarChar, 1023, sql.Collation_utf8mb4_0900_ai_ci), Nullable: true, Source: dsdt.name},
 		&sql.Column{Name: "from_commit_date", Type: types.DatetimeMaxPrecision, Nullable: true, Source: dsdt.name},
-		
+
 		// Diff type column
 		&sql.Column{Name: DiffTypeCol, Type: types.MustCreateString(sqltypes.VarChar, 1023, sql.Collation_utf8mb4_0900_ai_ci), Nullable: false, Source: dsdt.name},
 	}
@@ -341,22 +341,22 @@ func (dsdri *doltSchemasDiffRowIter) readDoltSchemasRows(tbl *doltdb.Table, root
 func (dsdri *doltSchemasDiffRowIter) createDiffRow(toRow, fromRow sql.Row, diffType string) sql.Row {
 	// Expected schema: 7 to_* columns + 7 from_* columns + 1 diff_type = 15 columns
 	row := make(sql.Row, 15)
-	
+
 	// TO columns (indices 0-6)
 	if toRow != nil && len(toRow) >= 5 {
-		copy(row[0:5], toRow[0:5])  // to_type, to_name, to_fragment, to_extra, to_sql_mode
-		row[5] = dsdri.toRef      // to_commit
-		row[6] = nil              // to_commit_date (we'll set this later if needed)
+		copy(row[0:5], toRow[0:5]) // to_type, to_name, to_fragment, to_extra, to_sql_mode
+		row[5] = dsdri.toRef       // to_commit
+		row[6] = nil               // to_commit_date (we'll set this later if needed)
 	} else {
 		// All to_* columns are null for removed rows
 		for i := 0; i < 7; i++ {
 			row[i] = nil
 		}
 	}
-	
+
 	// FROM columns (indices 7-13)
 	if fromRow != nil && len(fromRow) >= 5 {
-		copy(row[7:12], fromRow[0:5])  // from_type, from_name, from_fragment, from_extra, from_sql_mode
+		copy(row[7:12], fromRow[0:5]) // from_type, from_name, from_fragment, from_extra, from_sql_mode
 		row[12] = dsdri.fromRef       // from_commit
 		row[13] = nil                 // from_commit_date (we'll set this later if needed)
 	} else {
@@ -365,10 +365,10 @@ func (dsdri *doltSchemasDiffRowIter) createDiffRow(toRow, fromRow sql.Row, diffT
 			row[i] = nil
 		}
 	}
-	
+
 	// Diff type column (index 14)
 	row[14] = diffType
-	
+
 	return row
 }
 
@@ -397,4 +397,3 @@ func rowsEqual(row1, row2 sql.Row) bool {
 func (dsdri *doltSchemasDiffRowIter) Close(ctx *sql.Context) error {
 	return nil
 }
-

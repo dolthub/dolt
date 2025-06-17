@@ -61,10 +61,10 @@ type doltSchemasTableTest struct {
 
 // Global variables to store commit hashes for test validation
 var (
-	DOLT_SCHEMAS_HEAD    string
-	DOLT_SCHEMAS_HEAD_1  string
-	DOLT_SCHEMAS_HEAD_2  string
-	DOLT_SCHEMAS_INIT    string
+	DOLT_SCHEMAS_HEAD   string
+	DOLT_SCHEMAS_HEAD_1 string
+	DOLT_SCHEMAS_HEAD_2 string
+	DOLT_SCHEMAS_INIT   string
 )
 
 var setupDoltSchemasCommon = []testCommand{
@@ -72,7 +72,7 @@ var setupDoltSchemasCommon = []testCommand{
 	{cmd.SqlCmd{}, args{"-q", "CREATE VIEW test_view AS SELECT 1 as col1"}},
 	{cmd.AddCmd{}, args{"."}},
 	{cmd.CommitCmd{}, args{"-m", "first commit: added test_view"}},
-	
+
 	// Create a trigger
 	{cmd.SqlCmd{}, args{"-q", "CREATE TABLE test_table (id INT PRIMARY KEY, name VARCHAR(50))"}},
 	{cmd.SqlCmd{}, args{"-q", `CREATE TRIGGER test_trigger 
@@ -81,20 +81,20 @@ var setupDoltSchemasCommon = []testCommand{
 		SET NEW.name = UPPER(NEW.name)`}},
 	{cmd.AddCmd{}, args{"."}},
 	{cmd.CommitCmd{}, args{"-m", "second commit: added test_table and test_trigger"}},
-	
+
 	// Modify the view
 	{cmd.SqlCmd{}, args{"-q", "DROP VIEW test_view"}},
 	{cmd.SqlCmd{}, args{"-q", "CREATE VIEW test_view AS SELECT 1 as col1, 2 as col2"}},
 	{cmd.AddCmd{}, args{"."}},
 	{cmd.CommitCmd{}, args{"-m", "third commit: modified test_view"}},
-	
+
 	// Add an event
 	{cmd.SqlCmd{}, args{"-q", `CREATE EVENT test_event 
 		ON SCHEDULE EVERY 1 DAY 
 		DO INSERT INTO test_table VALUES (1, 'daily')`}},
 	{cmd.AddCmd{}, args{"."}},
 	{cmd.CommitCmd{}, args{"-m", "fourth commit: added test_event"}},
-	
+
 	{cmd.LogCmd{}, args{}},
 }
 
@@ -170,12 +170,12 @@ var setupDoltSchemasDiffCommon = []testCommand{
 		SET NEW.id = NEW.id + 1`}},
 	{cmd.AddCmd{}, args{"."}},
 	{cmd.CommitCmd{}, args{"-m", "base commit with original schemas"}},
-	
+
 	// Make changes for diff (working directory changes)
 	{cmd.SqlCmd{}, args{"-q", "DROP VIEW original_view"}},
 	{cmd.SqlCmd{}, args{"-q", "CREATE VIEW original_view AS SELECT 1 as id, 'modified' as status"}}, // modified
-	{cmd.SqlCmd{}, args{"-q", "CREATE VIEW new_view AS SELECT 'added' as status"}}, // added
-	{cmd.SqlCmd{}, args{"-q", "DROP TRIGGER original_trigger"}}, // removed
+	{cmd.SqlCmd{}, args{"-q", "CREATE VIEW new_view AS SELECT 'added' as status"}},                  // added
+	{cmd.SqlCmd{}, args{"-q", "DROP TRIGGER original_trigger"}},                                     // removed
 	{cmd.SqlCmd{}, args{"-q", `CREATE EVENT new_event 
 		ON SCHEDULE EVERY 1 HOUR 
 		DO SELECT 1`}}, // added
@@ -336,4 +336,3 @@ func testDoltSchemasDiffTable(t *testing.T, test doltSchemasTableTest, dEnv *env
 
 	require.ElementsMatch(t, test.rows, actRows)
 }
-

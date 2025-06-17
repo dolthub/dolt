@@ -332,7 +332,7 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 	// TODO: these tables that cache a root value at construction time should not, they need to get it from the session
 	//  at runtime
 	switch {
-	case lwrName == doltdb.DoltDiffTablePrefix + doltdb.SchemasTableName:
+	case lwrName == doltdb.DoltDiffTablePrefix+doltdb.SchemasTableName:
 		// Special handling for dolt_diff_dolt_schemas
 		if head == nil {
 			var err error
@@ -403,7 +403,7 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 		}
 		return dt, true, nil
 
-	case lwrName == doltdb.DoltHistoryTablePrefix + doltdb.SchemasTableName:
+	case lwrName == doltdb.DoltHistoryTablePrefix+doltdb.SchemasTableName:
 		// Special handling for dolt_history_dolt_schemas
 		if head == nil {
 			var err error
