@@ -130,13 +130,13 @@ func (dsdt *doltSchemasDiffTable) Partitions(ctx *sql.Context) (sql.PartitionIte
 
 	// Initialize commit hash to table info mapping (use HEAD, not WORKING, so we get historical diffs)
 	cmHashToTblInfo := make(map[hash.Hash]SchemaTableInfoAtCommit)
-	
+
 	// Set up HEAD as the comparison target (so commits are compared against HEAD)
 	headCommitHash, err := dsdt.head.HashOf()
 	if err != nil {
 		return nil, err
 	}
-	headMeta, err := dsdt.head.GetCommitMeta(ctx) 
+	headMeta, err := dsdt.head.GetCommitMeta(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -156,7 +156,7 @@ func (dsdt *doltSchemasDiffTable) Partitions(ctx *sql.Context) (sql.PartitionIte
 			return nil, err
 		}
 	}
-	
+
 	cmHashToTblInfo[cmHash] = SchemaTableInfoAtCommit{headCommitHash.String(), &headCommitDate, headSchemasTable, headTblHash}
 
 	err = cmItr.Reset(ctx)
@@ -165,13 +165,13 @@ func (dsdt *doltSchemasDiffTable) Partitions(ctx *sql.Context) (sql.PartitionIte
 	}
 
 	return &DoltSchemasDiffPartitions{
-		cmItr:               cmItr,
-		cmHashToTblInfo:     cmHashToTblInfo,
-		db:                  dsdt.db,
-		head:                dsdt.head,
-		workingRoot:         dsdt.workingRoot,
+		cmItr:                cmItr,
+		cmHashToTblInfo:      cmHashToTblInfo,
+		db:                   dsdt.db,
+		head:                 dsdt.head,
+		workingRoot:          dsdt.workingRoot,
 		workingPartitionDone: false,
-		stagedPartitionDone: false,
+		stagedPartitionDone:  false,
 	}, nil
 }
 
@@ -199,13 +199,13 @@ type SchemaTableInfoAtCommit struct {
 
 // DoltSchemasDiffPartitions iterates through commit history for schema diffs
 type DoltSchemasDiffPartitions struct {
-	cmItr               doltdb.CommitItr[*sql.Context]
-	cmHashToTblInfo     map[hash.Hash]SchemaTableInfoAtCommit
-	db                  Database
-	head                *doltdb.Commit
-	workingRoot         doltdb.RootValue
+	cmItr                doltdb.CommitItr[*sql.Context]
+	cmHashToTblInfo      map[hash.Hash]SchemaTableInfoAtCommit
+	db                   Database
+	head                 *doltdb.Commit
+	workingRoot          doltdb.RootValue
 	workingPartitionDone bool
-	stagedPartitionDone bool
+	stagedPartitionDone  bool
 }
 
 var _ sql.PartitionIter = (*DoltSchemasDiffPartitions)(nil)
@@ -375,7 +375,6 @@ func (dsdp *DoltSchemasDiffPartitions) createWorkingPartition(ctx *sql.Context) 
 	if err != nil {
 		return nil, err
 	}
-	
 
 	return &DoltSchemasDiffPartition{
 		toTable:   workingSchemasTable,
@@ -430,7 +429,6 @@ func (dsdp *DoltSchemasDiffPartition) GetRowIter(ctx *sql.Context) (sql.RowIter,
 	}, nil
 }
 
-
 // doltSchemasDiffPartitionRowIter implements a row iterator for a single diff partition
 type doltSchemasDiffPartitionRowIter struct {
 	ctx       *sql.Context
@@ -470,7 +468,7 @@ func (dspri *doltSchemasDiffPartitionRowIter) loadDiffRowsForCommitPair() error 
 	// Build maps of schema rows for comparison
 	fromRows := make(map[string]sql.Row)
 	toRows := make(map[string]sql.Row)
-	
+
 	// Read from table if it exists
 	if dspri.fromTable != nil && dspri.fromRoot != nil {
 		if err := dspri.readDoltSchemasRowsFromRoot(dspri.fromTable, dspri.fromRoot, fromRows); err != nil {
@@ -604,7 +602,7 @@ func (dspri *doltSchemasDiffPartitionRowIter) createDiffRow(toRow, fromRow sql.R
 	// TO columns (indices 0-6)
 	if toRow != nil && len(toRow) >= 5 {
 		copy(row[0:5], toRow[0:5]) // to_type, to_name, to_fragment, to_extra, to_sql_mode
-		row[5] = dspri.toName       // to_commit
+		row[5] = dspri.toName      // to_commit
 		if dspri.toDate != nil {
 			row[6] = time.Time(*dspri.toDate) // to_commit_date converted to time.Time
 		} else {
