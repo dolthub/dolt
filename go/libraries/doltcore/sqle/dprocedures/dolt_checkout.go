@@ -178,7 +178,6 @@ func doDoltCheckout(ctx *sql.Context, args []string) (statusCode int, successMes
 	}
 
 	validRemoteRef := remoteRefs != nil && len(remoteRefs) == 1
-	isBranch, _ := actions.IsBranch(ctx, dbData.Ddb, firstArg)
 	if dashDashPos == 1 && (localExists || validRemoteRef) {
 		if apr.NArg() == 1 {
 			if localExists {
