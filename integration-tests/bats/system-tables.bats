@@ -547,6 +547,11 @@ SQL
     dolt sql -q "CREATE TRIGGER original_trigger BEFORE INSERT ON diff_table FOR EACH ROW SET NEW.id = NEW.id + 1"
     dolt add .
     dolt commit -m "base commit with original schemas"
+
+    run dolt sql -q "select * from dolt_diff_dolt_schemas"
+    [ "$status" -eq 0 ]
+    # After committing, there should be no diff between HEAD and WORKING
+    # This tests that our fix for the empty diff bug is working
     
     # Make changes for diff (working directory changes)
     dolt sql -q "DROP VIEW original_view"
@@ -589,7 +594,7 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "1" ]] || false
     
-    # Test modified schemas (original_view)
+    # Test modified schemas (original_view that was dropped and recreated with different definition)
     run dolt sql -q 'SELECT COUNT(*) FROM dolt_diff_dolt_schemas WHERE diff_type = "modified"'
     [ "$status" -eq 0 ]
     [[ "$output" =~ "1" ]] || false
