@@ -15,6 +15,7 @@
 package sqle
 
 import (
+	"fmt"
 	"io"
 	"strings"
 
@@ -386,7 +387,12 @@ func rowsEqual(row1, row2 sql.Row) bool {
 		if val1 == nil || val2 == nil {
 			return false
 		}
-		if val1 != val2 {
+
+		// Handle JSON types specially - convert to string for comparison
+		// JSON values might have different internal representations but same content
+		str1 := fmt.Sprintf("%v", val1)
+		str2 := fmt.Sprintf("%v", val2)
+		if str1 != str2 {
 			return false
 		}
 	}
