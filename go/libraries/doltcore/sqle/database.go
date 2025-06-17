@@ -344,7 +344,7 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 		}
 
 		// Use the same pattern as regular diff tables - this will show complete history
-		return NewDoltSchemasDiffTableWithHistory(ctx, db.ddb, head, root, db), true, nil
+		return DoltSchemasDiffTable(ctx, db.ddb, head, root, db), true, nil
 
 	case strings.HasPrefix(lwrName, doltdb.DoltDiffTablePrefix):
 		if head == nil {
@@ -407,7 +407,7 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 				return nil, false, err
 			}
 		}
-		return NewDoltSchemasHistoryTable(db.ddb, head, db), true, nil
+		return DoltSchemasHistoryTable(db.ddb, head, db), true, nil
 
 	case strings.HasPrefix(lwrName, doltdb.DoltHistoryTablePrefix):
 		baseTableName := tblName[len(doltdb.DoltHistoryTablePrefix):]

@@ -36,8 +36,8 @@ type doltSchemasHistoryTable struct {
 var _ sql.Table = (*doltSchemasHistoryTable)(nil)
 var _ sql.PrimaryKeyTable = (*doltSchemasHistoryTable)(nil)
 
-// NewDoltSchemasHistoryTable creates a new dolt_schemas history table instance
-func NewDoltSchemasHistoryTable(ddb *doltdb.DoltDB, head *doltdb.Commit, db Database) sql.Table {
+// DoltSchemasHistoryTable creates a dolt_schemas history table instance
+func DoltSchemasHistoryTable(ddb *doltdb.DoltDB, head *doltdb.Commit, db Database) sql.Table {
 	return &doltSchemasHistoryTable{
 		name: doltdb.DoltHistoryTablePrefix + doltdb.SchemasTableName,
 		ddb:  ddb,

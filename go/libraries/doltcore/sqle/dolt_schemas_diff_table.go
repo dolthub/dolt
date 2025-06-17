@@ -35,10 +35,10 @@ const (
 	DiffTypeCol = "diff_type"
 )
 
-// NewDoltSchemasDiffTableWithHistory creates a new dolt_schemas diff table that shows complete history
+// DoltSchemasDiffTable creates a dolt_schemas diff table that shows complete history
 // like regular dolt_diff_ tables
-func NewDoltSchemasDiffTableWithHistory(ctx *sql.Context, ddb *doltdb.DoltDB, head *doltdb.Commit, workingRoot doltdb.RootValue, db Database) sql.Table {
-	return &doltSchemasDiffHistoryTable{
+func DoltSchemasDiffTable(ctx *sql.Context, ddb *doltdb.DoltDB, head *doltdb.Commit, workingRoot doltdb.RootValue, db Database) sql.Table {
+	return &doltSchemasDiffTable{
 		name:        doltdb.DoltDiffTablePrefix + doltdb.SchemasTableName,
 		ddb:         ddb,
 		head:        head,
@@ -47,9 +47,9 @@ func NewDoltSchemasDiffTableWithHistory(ctx *sql.Context, ddb *doltdb.DoltDB, he
 	}
 }
 
-// doltSchemasDiffHistoryTable implements the dolt_diff_dolt_schemas system table with complete history
+// doltSchemasDiffTable implements the dolt_diff_dolt_schemas system table with complete history
 // It follows the same pattern as regular dolt_diff_ tables
-type doltSchemasDiffHistoryTable struct {
+type doltSchemasDiffTable struct {
 	name        string
 	ddb         *doltdb.DoltDB
 	head        *doltdb.Commit
@@ -57,66 +57,66 @@ type doltSchemasDiffHistoryTable struct {
 	db          Database
 }
 
-var _ sql.Table = (*doltSchemasDiffHistoryTable)(nil)
-var _ sql.PrimaryKeyTable = (*doltSchemasDiffHistoryTable)(nil)
+var _ sql.Table = (*doltSchemasDiffTable)(nil)
+var _ sql.PrimaryKeyTable = (*doltSchemasDiffTable)(nil)
 
 // Name implements sql.Table
-func (dsht *doltSchemasDiffHistoryTable) Name() string {
-	return dsht.name
+func (dsdt *doltSchemasDiffTable) Name() string {
+	return dsdt.name
 }
 
 // String implements sql.Table
-func (dsht *doltSchemasDiffHistoryTable) String() string {
-	return dsht.name
+func (dsdt *doltSchemasDiffTable) String() string {
+	return dsdt.name
 }
 
 // Schema implements sql.Table
-func (dsht *doltSchemasDiffHistoryTable) Schema() sql.Schema {
+func (dsdt *doltSchemasDiffTable) Schema() sql.Schema {
 	// Same schema as the regular diff table
 	return sql.Schema{
 		// TO columns
-		&sql.Column{Name: "to_" + doltdb.SchemasTablesTypeCol, Type: gmstypes.MustCreateString(sqltypes.VarChar, 64, sql.Collation_utf8mb4_0900_ai_ci), Nullable: true, Source: dsht.name},
-		&sql.Column{Name: "to_" + doltdb.SchemasTablesNameCol, Type: gmstypes.MustCreateString(sqltypes.VarChar, 64, sql.Collation_utf8mb4_0900_ai_ci), Nullable: true, Source: dsht.name},
-		&sql.Column{Name: "to_" + doltdb.SchemasTablesFragmentCol, Type: gmstypes.LongText, Nullable: true, Source: dsht.name},
-		&sql.Column{Name: "to_" + doltdb.SchemasTablesExtraCol, Type: gmstypes.JSON, Nullable: true, Source: dsht.name},
-		&sql.Column{Name: "to_" + doltdb.SchemasTablesSqlModeCol, Type: gmstypes.MustCreateString(sqltypes.VarChar, 256, sql.Collation_utf8mb4_0900_ai_ci), Nullable: true, Source: dsht.name},
-		&sql.Column{Name: "to_commit", Type: gmstypes.MustCreateString(sqltypes.VarChar, 1023, sql.Collation_utf8mb4_0900_ai_ci), Nullable: true, Source: dsht.name},
-		&sql.Column{Name: "to_commit_date", Type: gmstypes.DatetimeMaxPrecision, Nullable: true, Source: dsht.name},
+		&sql.Column{Name: "to_" + doltdb.SchemasTablesTypeCol, Type: gmstypes.MustCreateString(sqltypes.VarChar, 64, sql.Collation_utf8mb4_0900_ai_ci), Nullable: true, Source: dsdt.name},
+		&sql.Column{Name: "to_" + doltdb.SchemasTablesNameCol, Type: gmstypes.MustCreateString(sqltypes.VarChar, 64, sql.Collation_utf8mb4_0900_ai_ci), Nullable: true, Source: dsdt.name},
+		&sql.Column{Name: "to_" + doltdb.SchemasTablesFragmentCol, Type: gmstypes.LongText, Nullable: true, Source: dsdt.name},
+		&sql.Column{Name: "to_" + doltdb.SchemasTablesExtraCol, Type: gmstypes.JSON, Nullable: true, Source: dsdt.name},
+		&sql.Column{Name: "to_" + doltdb.SchemasTablesSqlModeCol, Type: gmstypes.MustCreateString(sqltypes.VarChar, 256, sql.Collation_utf8mb4_0900_ai_ci), Nullable: true, Source: dsdt.name},
+		&sql.Column{Name: "to_commit", Type: gmstypes.MustCreateString(sqltypes.VarChar, 1023, sql.Collation_utf8mb4_0900_ai_ci), Nullable: true, Source: dsdt.name},
+		&sql.Column{Name: "to_commit_date", Type: gmstypes.DatetimeMaxPrecision, Nullable: true, Source: dsdt.name},
 
 		// FROM columns
-		&sql.Column{Name: "from_" + doltdb.SchemasTablesTypeCol, Type: gmstypes.MustCreateString(sqltypes.VarChar, 64, sql.Collation_utf8mb4_0900_ai_ci), Nullable: true, Source: dsht.name},
-		&sql.Column{Name: "from_" + doltdb.SchemasTablesNameCol, Type: gmstypes.MustCreateString(sqltypes.VarChar, 64, sql.Collation_utf8mb4_0900_ai_ci), Nullable: true, Source: dsht.name},
-		&sql.Column{Name: "from_" + doltdb.SchemasTablesFragmentCol, Type: gmstypes.LongText, Nullable: true, Source: dsht.name},
-		&sql.Column{Name: "from_" + doltdb.SchemasTablesExtraCol, Type: gmstypes.JSON, Nullable: true, Source: dsht.name},
-		&sql.Column{Name: "from_" + doltdb.SchemasTablesSqlModeCol, Type: gmstypes.MustCreateString(sqltypes.VarChar, 256, sql.Collation_utf8mb4_0900_ai_ci), Nullable: true, Source: dsht.name},
-		&sql.Column{Name: "from_commit", Type: gmstypes.MustCreateString(sqltypes.VarChar, 1023, sql.Collation_utf8mb4_0900_ai_ci), Nullable: true, Source: dsht.name},
-		&sql.Column{Name: "from_commit_date", Type: gmstypes.DatetimeMaxPrecision, Nullable: true, Source: dsht.name},
+		&sql.Column{Name: "from_" + doltdb.SchemasTablesTypeCol, Type: gmstypes.MustCreateString(sqltypes.VarChar, 64, sql.Collation_utf8mb4_0900_ai_ci), Nullable: true, Source: dsdt.name},
+		&sql.Column{Name: "from_" + doltdb.SchemasTablesNameCol, Type: gmstypes.MustCreateString(sqltypes.VarChar, 64, sql.Collation_utf8mb4_0900_ai_ci), Nullable: true, Source: dsdt.name},
+		&sql.Column{Name: "from_" + doltdb.SchemasTablesFragmentCol, Type: gmstypes.LongText, Nullable: true, Source: dsdt.name},
+		&sql.Column{Name: "from_" + doltdb.SchemasTablesExtraCol, Type: gmstypes.JSON, Nullable: true, Source: dsdt.name},
+		&sql.Column{Name: "from_" + doltdb.SchemasTablesSqlModeCol, Type: gmstypes.MustCreateString(sqltypes.VarChar, 256, sql.Collation_utf8mb4_0900_ai_ci), Nullable: true, Source: dsdt.name},
+		&sql.Column{Name: "from_commit", Type: gmstypes.MustCreateString(sqltypes.VarChar, 1023, sql.Collation_utf8mb4_0900_ai_ci), Nullable: true, Source: dsdt.name},
+		&sql.Column{Name: "from_commit_date", Type: gmstypes.DatetimeMaxPrecision, Nullable: true, Source: dsdt.name},
 
 		// Diff type column
-		&sql.Column{Name: DiffTypeCol, Type: gmstypes.MustCreateString(sqltypes.VarChar, 1023, sql.Collation_utf8mb4_0900_ai_ci), Nullable: false, Source: dsht.name},
+		&sql.Column{Name: DiffTypeCol, Type: gmstypes.MustCreateString(sqltypes.VarChar, 1023, sql.Collation_utf8mb4_0900_ai_ci), Nullable: false, Source: dsdt.name},
 	}
 }
 
 // Collation implements sql.Table
-func (dsht *doltSchemasDiffHistoryTable) Collation() sql.CollationID {
+func (dsdt *doltSchemasDiffTable) Collation() sql.CollationID {
 	return sql.Collation_Default
 }
 
 // Partitions implements sql.Table - follows the pattern of regular diff tables
-func (dsht *doltSchemasDiffHistoryTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
+func (dsdt *doltSchemasDiffTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
 	// Create commit iterator for the entire history
-	cmItr := doltdb.CommitItrForRoots[*sql.Context](dsht.ddb, dsht.head)
+	cmItr := doltdb.CommitItrForRoots[*sql.Context](dsdt.ddb, dsdt.head)
 
 	// Set up commit iterator like regular diff tables
 	// Get working schemas table for iteration setup
-	_, exists, err := dsht.workingRoot.GetTable(ctx, doltdb.TableName{Name: doltdb.SchemasTableName})
+	_, exists, err := dsdt.workingRoot.GetTable(ctx, doltdb.TableName{Name: doltdb.SchemasTableName})
 	if err != nil {
 		return nil, err
 	}
 
 	// Get working table hash
 	if exists {
-		_, _, err = dsht.workingRoot.GetTableHash(ctx, doltdb.TableName{Name: doltdb.SchemasTableName})
+		_, _, err = dsdt.workingRoot.GetTableHash(ctx, doltdb.TableName{Name: doltdb.SchemasTableName})
 		if err != nil {
 			return nil, err
 		}
@@ -132,16 +132,16 @@ func (dsht *doltSchemasDiffHistoryTable) Partitions(ctx *sql.Context) (sql.Parti
 	cmHashToTblInfo := make(map[hash.Hash]SchemaTableInfoAtCommit)
 	
 	// Set up HEAD as the comparison target (so commits are compared against HEAD)
-	headCommitHash, err := dsht.head.HashOf()
+	headCommitHash, err := dsdt.head.HashOf()
 	if err != nil {
 		return nil, err
 	}
-	headMeta, err := dsht.head.GetCommitMeta(ctx) 
+	headMeta, err := dsdt.head.GetCommitMeta(ctx) 
 	if err != nil {
 		return nil, err
 	}
 	headCommitDate := types.Timestamp(headMeta.Time())
-	headRoot, err := dsht.head.GetRootValue(ctx)
+	headRoot, err := dsdt.head.GetRootValue(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -167,24 +167,24 @@ func (dsht *doltSchemasDiffHistoryTable) Partitions(ctx *sql.Context) (sql.Parti
 	return &DoltSchemasDiffPartitions{
 		cmItr:               cmItr,
 		cmHashToTblInfo:     cmHashToTblInfo,
-		db:                  dsht.db,
-		head:                dsht.head,
-		workingRoot:         dsht.workingRoot,
+		db:                  dsdt.db,
+		head:                dsdt.head,
+		workingRoot:         dsdt.workingRoot,
 		workingPartitionDone: false,
 		stagedPartitionDone: false,
 	}, nil
 }
 
 // PartitionRows implements sql.Table
-func (dsht *doltSchemasDiffHistoryTable) PartitionRows(ctx *sql.Context, partition sql.Partition) (sql.RowIter, error) {
+func (dsdt *doltSchemasDiffTable) PartitionRows(ctx *sql.Context, partition sql.Partition) (sql.RowIter, error) {
 	p := partition.(*DoltSchemasDiffPartition)
 	return p.GetRowIter(ctx)
 }
 
 // PrimaryKeySchema implements sql.PrimaryKeyTable
-func (dsht *doltSchemasDiffHistoryTable) PrimaryKeySchema() sql.PrimaryKeySchema {
+func (dsdt *doltSchemasDiffTable) PrimaryKeySchema() sql.PrimaryKeySchema {
 	return sql.PrimaryKeySchema{
-		Schema:     dsht.Schema(),
+		Schema:     dsdt.Schema(),
 		PkOrdinals: []int{0, 1}, // to_type, to_name
 	}
 }
