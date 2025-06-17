@@ -197,7 +197,7 @@ func doltSchemasDiffTableTests() []doltSchemasTableTest {
 				{"event", "new_event", "added"},
 				{"view", "new_view", "added"},
 				{"view", "original_view", "modified"}, // HEAD vs WORKING: shows proper diff types
-				{nil, nil, "removed"}, // removed trigger has NULL to_ values
+				{nil, nil, "removed"},                 // removed trigger has NULL to_ values
 			},
 		},
 		{

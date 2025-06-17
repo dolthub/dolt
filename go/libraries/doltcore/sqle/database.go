@@ -336,7 +336,7 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 		// Special handling for dolt_diff_dolt_schemas
 		// For schema diff tables, we want to show differences between HEAD and WORKING
 		// (or HEAD and STAGED), similar to how regular diff tables work
-		
+
 		// Get the HEAD commit
 		if head == nil {
 			var err error
@@ -345,14 +345,14 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 				return nil, false, err
 			}
 		}
-		
+
 		// Get the HEAD commit hash and root
 		headHash, err := head.HashOf()
 		if err != nil {
 			return nil, false, err
 		}
 		headCommitHash := headHash.String()
-		
+
 		headRoot, err := head.GetRootValue(ctx)
 		if err != nil {
 			return nil, false, err
