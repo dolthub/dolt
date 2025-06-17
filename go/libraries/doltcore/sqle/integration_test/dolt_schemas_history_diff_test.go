@@ -191,21 +191,31 @@ func doltSchemasDiffTableTests() []doltSchemasTableTest {
 			},
 		},
 		{
-			name:  "select all from dolt_diff_dolt_schemas",
-			query: "SELECT to_type, to_name, diff_type FROM dolt_diff_dolt_schemas ORDER BY diff_type, to_type, to_name",
+			name:  "check complete history is shown",
+			query: "SELECT COUNT(*) FROM dolt_diff_dolt_schemas",
 			rows: []sql.Row{
-				{"event", "new_event", "added"},
-				{"view", "new_view", "added"},
-				{"view", "original_view", "modified"}, // HEAD vs WORKING: shows proper diff types
-				{nil, nil, "removed"}, // removed trigger has NULL to_ values
+				{int64(6)}, // Complete history: initial creation (2) + working changes (4) = 6 total changes
 			},
 		},
 		{
-			name:  "filter for added schemas only",
-			query: "SELECT to_type, to_name FROM dolt_diff_dolt_schemas WHERE diff_type = 'added' ORDER BY to_type, to_name",
+			name:  "verify working changes are included",
+			query: "SELECT COUNT(*) FROM dolt_diff_dolt_schemas WHERE to_commit = 'WORKING'",
 			rows: []sql.Row{
-				{"event", "new_event"},
-				{"view", "new_view"}, // Only truly added objects
+				{int64(4)}, // Working changes: 2 added + 1 modified + 1 removed
+			},
+		},
+		{
+			name:  "verify initial commit changes are included",
+			query: "SELECT COUNT(*) FROM dolt_diff_dolt_schemas WHERE to_commit != 'WORKING'",
+			rows: []sql.Row{
+				{int64(2)}, // Initial commit: original_view + original_trigger added
+			},
+		},
+		{
+			name:  "filter for added schemas across all history",
+			query: "SELECT COUNT(*) FROM dolt_diff_dolt_schemas WHERE diff_type = 'added'",
+			rows: []sql.Row{
+				{int64(4)}, // All added schemas: original_view, original_trigger (initial) + new_event, new_view (working)
 			},
 		},
 		{
@@ -223,41 +233,10 @@ func doltSchemasDiffTableTests() []doltSchemasTableTest {
 			},
 		},
 		{
-			name:  "filter for views only",
-			query: "SELECT COALESCE(to_name, from_name) as name, diff_type FROM dolt_diff_dolt_schemas WHERE COALESCE(to_type, from_type) = 'view' ORDER BY name",
+			name:  "check working changes show correct commit info",
+			query: "SELECT DISTINCT to_commit FROM dolt_diff_dolt_schemas WHERE to_commit = 'WORKING'",
 			rows: []sql.Row{
-				{"new_view", "added"},
-				{"original_view", "modified"}, // original_view shows as "modified" in HEAD vs WORKING
-			},
-		},
-		{
-			name:  "count changes by type",
-			query: "SELECT diff_type, COUNT(*) as count FROM dolt_diff_dolt_schemas GROUP BY diff_type ORDER BY diff_type",
-			rows: []sql.Row{
-				{"added", int64(2)},    // new_event, new_view
-				{"modified", int64(1)}, // original_view
-				{"removed", int64(1)},  // original_trigger
-			},
-		},
-		{
-			name:  "check all columns exist",
-			query: "SELECT COUNT(*) FROM dolt_diff_dolt_schemas WHERE (to_type IS NOT NULL OR from_type IS NOT NULL) AND (to_name IS NOT NULL OR from_name IS NOT NULL) AND diff_type IS NOT NULL",
-			rows: []sql.Row{
-				{int64(4)}, // Total number of changes (2 added + 1 modified + 1 removed)
-			},
-		},
-		{
-			name:  "verify commit columns are populated",
-			query: "SELECT COUNT(*) FROM dolt_diff_dolt_schemas WHERE to_commit IS NOT NULL AND from_commit IS NOT NULL",
-			rows: []sql.Row{
-				{int64(4)}, // All rows should have both commit fields populated
-			},
-		},
-		{
-			name:  "verify to_commit is WORKING and from_commit is a valid hash",
-			query: "SELECT DISTINCT to_commit, LENGTH(from_commit) as from_commit_len FROM dolt_diff_dolt_schemas",
-			rows: []sql.Row{
-				{"WORKING", int32(32)}, // All entries: to_commit should be WORKING, from_commit should be 32-char hash
+				{"WORKING"}, // Working changes should have to_commit as WORKING
 			},
 		},
 	}

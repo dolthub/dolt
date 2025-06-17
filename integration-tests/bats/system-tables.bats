@@ -545,13 +545,20 @@ SQL
     dolt sql -q "CREATE VIEW original_view AS SELECT 1 as id"
     dolt sql -q "CREATE TABLE diff_table (id INT PRIMARY KEY)"
     dolt sql -q "CREATE TRIGGER original_trigger BEFORE INSERT ON diff_table FOR EACH ROW SET NEW.id = NEW.id + 1"
+
+    # Before we commit our schema changes we should see two new rows in the
+    # diff table where to_commit='WORKING'
+    run dolt sql -q "SELECT COUNT(*) FROM dolt_diff_dolt_schemas where to_commit='WORKING'"
+    [ "$status" -eq 0 ]                                                        
+    [[ "$output" =~ "2" ]] || false 
+    
     dolt add .
     dolt commit -m "base commit with original schemas"
 
-    # Initially, after commit, there should be no differences (HEAD == WORKING)
+    # After commit, this should still contain two changes, just now the from  comit and two commit should be populated with commits not working
     run dolt sql -q 'SELECT COUNT(*) FROM dolt_diff_dolt_schemas'
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "0" ]] || false
+    [[ "$output" =~ "2" ]] || false
     
     # Make changes for diff (working directory changes)
     dolt sql -q "DROP VIEW original_view"
@@ -579,16 +586,18 @@ SQL
     [[ "$output" =~ "from_commit_date,datetime(6)" ]] || false
     [[ "$output" =~ "diff_type,varchar(1023)" ]] || false
     
-    # Test actual diff functionality - should show 4 changes (HEAD vs WORKING)
-    # original_view (modified), new_view (added), new_event (added), original_trigger (removed)
+    # Test actual diff functionality - should show complete history plus working changes
+    # Initial commit: 2 added (original_view, original_trigger)
+    # Working changes: 4 changes (original_view modified, new_view added, new_event added, original_trigger removed)
+    # Total: 6 changes
     run dolt sql -q 'SELECT COUNT(*) FROM dolt_diff_dolt_schemas'
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "4" ]] || false
+    [[ "$output" =~ "6" ]] || false
     
     # Test that we have changes of different types
     run dolt sql -q 'SELECT COUNT(*) FROM dolt_diff_dolt_schemas WHERE diff_type = "added"'
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "2" ]] || false  # new_view and new_event
+    [[ "$output" =~ "4" ]] || false  # initial: original_view, original_trigger + working: new_view, new_event
     
     run dolt sql -q 'SELECT COUNT(*) FROM dolt_diff_dolt_schemas WHERE diff_type = "modified"'
     [ "$status" -eq 0 ]
@@ -619,10 +628,10 @@ SQL
     [[ "$output" =~ "modified" ]] || false
     [[ "$output" =~ "removed" ]] || false
     
-    # Test that from_commit is always populated (should be HEAD commit hash)
+    # Test that from_commit is always populated (should be commit hashes)
     run dolt sql -q 'SELECT COUNT(*) FROM dolt_diff_dolt_schemas WHERE from_commit IS NOT NULL'
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "4" ]] || false
+    [[ "$output" =~ "6" ]] || false
     
     # Test that from_commit is a valid commit hash (not "EMPTY" or "WORKING")
     run dolt sql -q 'SELECT DISTINCT from_commit FROM dolt_diff_dolt_schemas'
@@ -631,6 +640,12 @@ SQL
     [[ ! "$output" =~ "WORKING" ]] || false
     # Should be a 32-character hash (using Dolt's character set)
     [[ "$output" =~ [a-z0-9]{32} ]] || false
+    
+    # Test timestamp conversion works correctly (was causing conversion errors)
+    run dolt sql -q "SELECT * FROM dolt_diff_dolt_schemas LIMIT 1" -r vertical
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "to_commit_date:" ]] || false
+    [[ "$output" =~ "from_commit_date:" ]] || false
 }
 
 @test "system-tables: query dolt_history_ system table" {

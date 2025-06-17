@@ -333,11 +333,10 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 	//  at runtime
 	switch {
 	case lwrName == doltdb.DoltDiffTablePrefix+doltdb.SchemasTableName:
-		// Special handling for dolt_diff_dolt_schemas
-		// For schema diff tables, we want to show differences between HEAD and WORKING
-		// (or HEAD and STAGED), similar to how regular diff tables work
+		// dolt_diff_dolt_schemas should work like other dolt_diff_ tables:
+		// showing the complete history of all schema changes across commits,
+		// plus any current working/staged changes
 		
-		// Get the HEAD commit
 		if head == nil {
 			var err error
 			head, err = ds.GetHeadCommit(ctx, db.RevisionQualifiedName())
@@ -345,21 +344,9 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 				return nil, false, err
 			}
 		}
-		
-		// Get the HEAD commit hash and root
-		headHash, err := head.HashOf()
-		if err != nil {
-			return nil, false, err
-		}
-		headCommitHash := headHash.String()
-		
-		headRoot, err := head.GetRootValue(ctx)
-		if err != nil {
-			return nil, false, err
-		}
 
-		// Compare HEAD vs current working state to show recent changes
-		return NewDoltSchemasDiffTable(ctx, db.ddb, headRoot, root, headCommitHash, "WORKING", db), true, nil
+		// Use the same pattern as regular diff tables - this will show complete history
+		return NewDoltSchemasDiffTableWithHistory(ctx, db.ddb, head, root, db), true, nil
 
 	case strings.HasPrefix(lwrName, doltdb.DoltDiffTablePrefix):
 		if head == nil {
