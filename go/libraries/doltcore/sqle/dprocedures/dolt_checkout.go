@@ -17,9 +17,6 @@ package dprocedures
 import (
 	"errors"
 	"fmt"
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/types"
-
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -30,6 +27,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/resolve"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/types"
 )
 
 var ErrEmptyBranchName = errors.New("error: cannot checkout empty string")
@@ -149,7 +148,7 @@ func doDoltCheckout(ctx *sql.Context, args []string) (statusCode int, successMes
 		return 1, "", ErrEmptyBranchName
 	}
 
-	// No branch explicitly specified but table(s) specified
+	// No branch explicitly specified but table(s) are
 	dashDashPos := apr.PositionalArgsSeparatorIndex
 	if dashDashPos == 0 {
 		err = checkoutTablesFromHead(ctx, roots, currentDbName, apr.Args)
@@ -215,7 +214,11 @@ func doDoltCheckout(ctx *sql.Context, args []string) (statusCode int, successMes
 	}
 
 	if apr.NArg() > 1 {
-		err = checkoutTablesFromCommit(ctx, currentDbName, firstArg, apr.Args[1:], rsc)
+		if !isTable {
+			err = checkoutTablesFromCommit(ctx, currentDbName, firstArg, apr.Args[1:], rsc)
+		} else {
+			err = checkoutTablesFromHead(ctx, roots, currentDbName, apr.Args)
+		}
 		if err != nil {
 			return 1, "", err
 		}
