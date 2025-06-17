@@ -62,7 +62,7 @@ func MoveWorkingSetToBranch(ctx *sql.Context, brName string, force bool, isNewBr
 
 	workingSetExists := true
 	initialWs, err := dSess.WorkingSet(ctx, dbName)
-	if err == doltdb.ErrWorkingSetNotFound {
+	if errors.Is(err, doltdb.ErrWorkingSetNotFound) {
 		// ignore, but don't reset the working set
 		workingSetExists = false
 	} else if err != nil {

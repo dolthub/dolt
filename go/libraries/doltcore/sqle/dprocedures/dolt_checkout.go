@@ -181,11 +181,11 @@ func doDoltCheckout(ctx *sql.Context, args []string) (statusCode int, successMes
 	if dashDashPos == 1 && (localExists || validRemoteRef) {
 		if apr.NArg() == 1 {
 			if localExists {
-				err = checkoutExistingBranch(ctx, currentDbName, firstArg, apr)
+				err = checkoutExistingBranchWithWorkingSetFallback(ctx, currentDbName, firstArg, apr, &rsc)
 				if err != nil {
 					return 1, "", err
 				}
-				return 0, fmt.Sprintf("Switched to branch '%s'", firstArg), nil
+				return 0, generateSuccessMessage(firstArg, ""), nil
 			} else {
 				upstream, err := checkoutRemoteBranch(ctx, dSess, currentDbName, dbData, firstArg, apr, &rsc)
 				if err != nil {
@@ -229,7 +229,8 @@ func doDoltCheckout(ctx *sql.Context, args []string) (statusCode int, successMes
 	if isTable {
 		err = checkoutTablesFromHead(ctx, roots, currentDbName, apr.Args)
 	} else {
-		err = checkoutExistingBranch(ctx, currentDbName, firstArg, apr)
+		err = checkoutExistingBranchWithWorkingSetFallback(ctx, currentDbName, firstArg, apr, &rsc)
+		successMessage = generateSuccessMessage(firstArg, "")
 	}
 	if err != nil && apr.NArg() == 1 {
 		upstream, err := checkoutRemoteBranch(ctx, dSess, currentDbName, dbData, firstArg, apr, &rsc)
@@ -377,27 +378,6 @@ func checkoutRemoteBranch(ctx *sql.Context, dSess *dsess.DoltSession, dbName str
 		}
 
 		err = checkoutExistingBranch(ctx, dbName, branchName, apr)
-		if errors.Is(err, doltdb.ErrWorkingSetNotFound) {
-			// If there is a branch but there is no working set,
-			// somehow the local branch ref was created without a
-			// working set. This happened with old versions of dolt
-			// when running as a read replica, for example. Try to
-			// create a working set pointing at the existing branch
-			// HEAD and check out the branch again.
-			err = createWorkingSetForLocalBranch(ctx, dbData.Ddb, branchName)
-			if err != nil {
-				return "", err
-			}
-
-			// Since we've created new refs since the transaction began, we need to commit this transaction and
-			// start a new one to avoid not found errors after this
-			err = commitTransaction(ctx, sess, rsc)
-			if err != nil {
-				return "", err
-			}
-
-			err = checkoutExistingBranch(ctx, dbName, branchName, apr)
-		}
 		if err != nil {
 			return "", err
 		}
@@ -534,7 +514,7 @@ func checkoutExistingBranch(ctx *sql.Context, dbName string, branchName string, 
 	dSess := dsess.DSessFromSess(ctx.Session)
 
 	if apr.Contains(cli.MoveFlag) {
-		return doGlobalCheckout(ctx, branchName, apr.Contains(cli.ForceFlag), false)
+		err = doGlobalCheckout(ctx, branchName, apr.Contains(cli.ForceFlag), false)
 	} else {
 		err = dSess.SwitchWorkingSet(ctx, dbName, wsRef)
 		if err != nil {
@@ -542,6 +522,41 @@ func checkoutExistingBranch(ctx *sql.Context, dbName string, branchName string, 
 		}
 	}
 
+	return nil
+}
+
+func checkoutExistingBranchWithWorkingSetFallback(ctx *sql.Context, dbName string, branchName string, apr *argparser.ArgParseResults, rsc *doltdb.ReplicationStatusController) error {
+	err := checkoutExistingBranch(ctx, dbName, branchName, apr)
+	dbData, ok := dsess.DSessFromSess(ctx.Session).GetDbData(ctx, dbName)
+	if !ok {
+		return fmt.Errorf("Could not load database %s", dbName)
+	}
+	if errors.Is(err, doltdb.ErrWorkingSetNotFound) {
+		// If there is a branch but there is no working set,
+		// somehow the local branch ref was created without a
+		// working set. This happened with old versions of dolt
+		// when running as a read replica, for example. Try to
+		// create a working set pointing at the existing branch
+		// HEAD and check out the branch again.
+		//
+		// TODO: This is all quite racey, but so is the
+		// handling in doltDB, etc.
+		err = createWorkingSetForLocalBranch(ctx, dbData.Ddb, branchName)
+		if err != nil {
+			return err
+		}
+
+		// Since we've created new refs since the transaction began, we need to commit this transaction and
+		// start a new one to avoid not found errors after this
+		// TODO: this is much worse than other places we do this, because it's two layers of implicit behavior
+		sess := dsess.DSessFromSess(ctx.Session)
+		err = commitTransaction(ctx, sess, rsc)
+		if err != nil {
+			return err
+		}
+
+		err = checkoutExistingBranch(ctx, dbName, branchName, apr)
+	}
 	return nil
 }
 
@@ -627,7 +642,7 @@ func checkoutTablesFromCommit(
 // the new branch and persisting the checked-out branch into future sessions
 func doGlobalCheckout(ctx *sql.Context, branchName string, isForce bool, isNewBranch bool) error {
 	err := MoveWorkingSetToBranch(ctx, branchName, isForce, isNewBranch)
-	if err != nil && err != doltdb.ErrAlreadyOnBranch {
+	if err != nil && !errors.Is(err, doltdb.ErrAlreadyOnBranch) {
 		return err
 	}
 
