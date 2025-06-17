@@ -541,6 +541,11 @@ SQL
 }
 
 @test "system-tables: query dolt_diff_dolt_schemas system table" {
+    # dolt_diff_dolt_schemas starts empty
+    run dolt sql -q 'SELECT COUNT(*) FROM dolt_diff_dolt_schemas'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ " 0 " ]] || false
+
     # Set up test data for diff scenarios
     dolt sql -q "CREATE VIEW original_view AS SELECT 1 as id"
     dolt sql -q "CREATE TABLE diff_table (id INT PRIMARY KEY)"
@@ -550,7 +555,7 @@ SQL
     # diff table where to_commit='WORKING'
     run dolt sql -q "SELECT COUNT(*) FROM dolt_diff_dolt_schemas where to_commit='WORKING'"
     [ "$status" -eq 0 ]                                                        
-    [[ "$output" =~ "2" ]] || false 
+    [[ "$output" =~ " 2 " ]] || false 
     
     dolt add .
     dolt commit -m "base commit with original schemas"
@@ -592,20 +597,20 @@ SQL
     # Total: 6 changes
     run dolt sql -q 'SELECT COUNT(*) FROM dolt_diff_dolt_schemas'
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "6" ]] || false
+    [[ "$output" =~ " 6 " ]] || false
     
     # Test that we have changes of different types
     run dolt sql -q 'SELECT COUNT(*) FROM dolt_diff_dolt_schemas WHERE diff_type = "added"'
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "4" ]] || false  # initial: original_view, original_trigger + working: new_view, new_event
+    [[ "$output" =~ " 4 " ]] || false  # initial: original_view, original_trigger + working: new_view, new_event
     
     run dolt sql -q 'SELECT COUNT(*) FROM dolt_diff_dolt_schemas WHERE diff_type = "modified"'
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "1" ]] || false  # original_view
+    [[ "$output" =~ " 1 " ]] || false  # original_view
     
     run dolt sql -q 'SELECT COUNT(*) FROM dolt_diff_dolt_schemas WHERE diff_type = "removed"'
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "1" ]] || false  # original_trigger
+    [[ "$output" =~ " 1 " ]] || false  # original_trigger
     
     # Test that we can identify specific changes
     run dolt sql -q 'SELECT to_name FROM dolt_diff_dolt_schemas WHERE diff_type = "added" ORDER BY to_name'
@@ -638,7 +643,7 @@ SQL
     [ "$status" -eq 0 ]
     [[ ! "$output" =~ "EMPTY" ]] || false
     [[ ! "$output" =~ "WORKING" ]] || false
-    # Should be a 32-character hash (using Dolt's character set)
+    # Should be a 32-character hash
     [[ "$output" =~ [a-z0-9]{32} ]] || false
     
     # Test timestamp conversion works correctly (was causing conversion errors)
