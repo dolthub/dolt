@@ -194,7 +194,10 @@ func doltSchemasDiffTableTests() []doltSchemasTableTest {
 			name:  "check complete history is shown",
 			query: "SELECT COUNT(*) FROM dolt_diff_dolt_schemas",
 			rows: []sql.Row{
-				{int64(6)}, // Complete history: initial creation (2) + working changes (4) = 6 total changes
+				{"event", "new_event", "added"},
+				{"view", "new_view", "added"},
+				{"view", "original_view", "modified"}, // HEAD vs WORKING: shows proper diff types
+				{nil, nil, "removed"},                 // removed trigger has NULL to_ values
 			},
 		},
 		{

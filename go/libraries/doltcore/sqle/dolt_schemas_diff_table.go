@@ -374,15 +374,15 @@ func (dsdri *doltSchemasDiffRowIter) createDiffRow(toRow, fromRow sql.Row, diffT
 
 	// FROM columns (indices 7-13)
 	if fromRow != nil && len(fromRow) >= 5 {
-		copy(row[7:12], fromRow[0:5]) // from_type, from_name, from_fragment, from_extra, from_sql_mode
-		row[12] = dsdri.fromRef       // from_commit
+		copy(row[7:12], fromRow[0:5])       // from_type, from_name, from_fragment, from_extra, from_sql_mode
+		row[12] = dsdri.fromRef             // from_commit
 		row[13] = dsdri.getFromCommitDate() // from_commit_date from actual commit
 	} else {
 		// from_* schema columns are null for added rows, but commit info should be populated
 		for i := 7; i < 12; i++ {
 			row[i] = nil
 		}
-		row[12] = dsdri.fromRef // from_commit should always be populated (actual commit hash)
+		row[12] = dsdri.fromRef             // from_commit should always be populated (actual commit hash)
 		row[13] = dsdri.getFromCommitDate() // from_commit_date from actual commit
 	}
 
