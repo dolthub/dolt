@@ -125,6 +125,12 @@ func doDoltCheckout(ctx *sql.Context, args []string) (statusCode int, successMes
 		return 1, "", ErrEmptyBranchName
 	}
 
+	// check for detached HEAD state early - if the user is trying to checkout a tag or commit hash
+	err = checkDetachedHeadState(ctx, dbData.Ddb, firstArg, updateHead)
+	if err != nil {
+		return 1, "", err
+	}
+
 	isModification, err := willModifyDb(ctx, dSess, dbData, currentDbName, firstArg, updateHead)
 	if err != nil {
 		return 1, "", err
@@ -175,12 +181,7 @@ func doDoltCheckout(ctx *sql.Context, args []string) (statusCode int, successMes
 		return 1, "", fmt.Errorf("unable to read remote refs from data repository: %v", err)
 	}
 
-	isTag, err := actions.IsTag(ctx, dbData.Ddb, firstArg)
-	if err != nil {
-		return 1, "", fmt.Errorf("unable to read tags from data repository: %v", err)
-	}
-
-	validRemoteRef := remoteRefs != nil && len(remoteRefs) == 1 || isTag
+	validRemoteRef := remoteRefs != nil && len(remoteRefs) == 1
 
 	if dashDashPos == 1 && (localExists || validRemoteRef) {
 		if apr.NArg() == 1 { // Assume some <ref> specified because dashDashPos is 1
@@ -342,31 +343,6 @@ func checkoutRemoteBranch(ctx *sql.Context, dSess *dsess.DoltSession, dbName str
 	}
 
 	if len(remoteRefs) == 0 {
-		if isTag, err := actions.IsTag(ctx, dbData.Ddb, branchName); err != nil {
-			return "", err
-		} else if isTag {
-			// User tried to enter a detached head state, which we don't support.
-			// Inform and suggest that they check-out a new branch at this tag instead.
-			if apr.Contains(cli.MoveFlag) {
-				return "", fmt.Errorf(`dolt does not support a detached head state. To create a branch at this tag, run: 
-	dolt checkout %s -b {new_branch_name}`, branchName)
-			} else {
-				return "", fmt.Errorf(`dolt does not support a detached head state. To create a branch at this tag, run: 
-	CALL DOLT_CHECKOUT('%s', '-b', <new_branch_name>)`, branchName)
-			}
-		}
-
-		if doltdb.IsValidCommitHash(branchName) {
-			// User tried to enter a detached head state, which we don't support.
-			// Inform and suggest that they check-out a new branch at this commit instead.
-			if apr.Contains(cli.MoveFlag) {
-				return "", fmt.Errorf(`dolt does not support a detached head state. To create a branch at this commit instead, run:
-	dolt checkout %s -b {new_branch_name}`, branchName)
-			} else {
-				return "", fmt.Errorf(`dolt does not support a detached head state. To create a branch at this commit instead, run:
-	CALL DOLT_CHECKOUT('%s', '-b', <new_branch_name>)`, branchName)
-			}
-		}
 		return "", fmt.Errorf("error: could not find %s", branchName)
 	} else if len(remoteRefs) == 1 {
 		remoteRef := remoteRefs[0]
@@ -538,6 +514,7 @@ func checkoutExistingBranchWithWorkingSetFallback(ctx *sql.Context, dbName strin
 	if !ok {
 		return fmt.Errorf("could not load database %s", dbName)
 	}
+
 	if isBranch, err := actions.IsBranch(ctx, dbData.Ddb, branchName); err != nil {
 		return err
 	} else if isBranch {
@@ -695,4 +672,37 @@ func checkoutTablesFromHead(ctx *sql.Context, roots doltdb.Roots, name string, t
 
 	dSess := dsess.DSessFromSess(ctx.Session)
 	return dSess.SetRoots(ctx, name, roots)
+}
+
+// checkDetachedHeadState checks if the given branchName refers to a tag or commit hash
+// which would result in a detached HEAD state, which Dolt doesn't support.
+// Returns an error with appropriate message if it's a detached HEAD state, nil otherwise.
+func checkDetachedHeadState(ctx *sql.Context, ddb *doltdb.DoltDB, branchName string, isMoveFlag bool) error {
+	if isTag, err := actions.IsTag(ctx, ddb, branchName); err != nil {
+		return err
+	} else if isTag {
+		// User tried to enter a detached head state, which we don't support.
+		// Inform and suggest that they check-out a new branch at this tag instead.
+		if isMoveFlag {
+			return fmt.Errorf(`dolt does not support a detached head state. To create a branch at this tag, run: 
+	dolt checkout %s -b {new_branch_name}`, branchName)
+		} else {
+			return fmt.Errorf(`dolt does not support a detached head state. To create a branch at this tag, run: 
+	CALL DOLT_CHECKOUT('%s', '-b', <new_branch_name>)`, branchName)
+		}
+	}
+
+	if doltdb.IsValidCommitHash(branchName) {
+		// User tried to enter a detached head state, which we don't support.
+		// Inform and suggest that they check-out a new branch at this commit instead.
+		if isMoveFlag {
+			return fmt.Errorf(`dolt does not support a detached head state. To create a branch at this commit instead, run:
+	dolt checkout %s -b {new_branch_name}`, branchName)
+		} else {
+			return fmt.Errorf(`dolt does not support a detached head state. To create a branch at this commit instead, run:
+	CALL DOLT_CHECKOUT('%s', '-b', <new_branch_name>)`, branchName)
+		}
+	}
+
+	return nil
 }
