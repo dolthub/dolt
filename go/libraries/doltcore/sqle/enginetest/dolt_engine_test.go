@@ -1342,6 +1342,16 @@ func TestDoltMergeArtifacts(t *testing.T) {
 	RunDoltMergeArtifacts(t, h)
 }
 
+func TestDoltPreviewMergeConflicts(t *testing.T) {
+	h := newDoltEnginetestHarness(t)
+	RunDoltPreviewMergeConflictsTests(t, h)
+}
+
+func TestDoltPreviewMergeConflictsPrepared(t *testing.T) {
+	h := newDoltEnginetestHarness(t)
+	RunDoltPreviewMergeConflictsPreparedTests(t, h)
+}
+
 // these tests are temporary while there is a difference between the old format
 // and new format merge behaviors.
 func TestOldFormatMergeConflictsAndCVs(t *testing.T) {
@@ -2118,4 +2128,10 @@ func TestDoltHelpSystemTable(t *testing.T) {
 	harness := newDoltHarness(t)
 	defer harness.Close()
 	RunDoltHelpSystemTableTests(t, harness)
+}
+
+func TestDoltStash(t *testing.T) {
+	harness := newDoltEnginetestHarness(t)
+	defer harness.Close()
+	RunDoltStashSystemTableTests(t, harness)
 }

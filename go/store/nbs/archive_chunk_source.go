@@ -212,6 +212,9 @@ func (acs archiveChunkSource) getRecordRanges(_ context.Context, requests []getR
 func (acs archiveChunkSource) getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, ToChunker), keeper keeperF, stats *Stats) (bool, gcBehavior, error) {
 	foundAll := true
 	for i, req := range reqs {
+		if req.found {
+			continue
+		}
 		h := *req.a
 		toChk, err := acs.aRdr.getAsToChunker(ctx, h, stats)
 		if err != nil {

@@ -601,7 +601,7 @@ func TestPanic(t *testing.T) {
 
 	require.NoError(t, sc.Restart(ctx))
 
-	sc.sq.DoSync(ctx, func() error {
+	sc.rateLimiter.execute(ctx, func() error {
 		panic("test panic")
 	})
 
@@ -626,34 +626,28 @@ func TestMemoryOnly(t *testing.T) {
 	require.True(t, ok, "expected *memStats")
 }
 
-func newStatsCoord(bthreads *sql.BackgroundThreads) *StatsController {
+func newStatsCoord(t *testing.T, bthreads *sql.BackgroundThreads) *StatsController {
 	dEnv := dtestutils.CreateTestEnv()
-	sqlEng, ctx := newTestEngine(context.Background(), dEnv, bthreads)
+	sqlEng, ctx := newTestEngine(context.Background(), t, dEnv, bthreads)
 	ctx.Session.SetClient(sql.Client{
 		User:    "billy boy",
 		Address: "bigbillie@fake.horse",
 	})
 
-	sql.SystemVariables.AssignValues(map[string]interface{}{
-		dsess.DoltStatsGCInterval:  100,
-		dsess.DoltStatsJobInterval: 1,
-	})
+	setTimers(t, ctx, 1*time.Millisecond, 100*time.Millisecond)
 
 	return sqlEng.Analyzer.Catalog.StatsProvider.(*StatsController)
 }
 
 func emptySetup(t *testing.T, threads *sql.BackgroundThreads, memOnly bool, gcEnabled bool) (*sql.Context, *gms.Engine, *StatsController) {
 	dEnv := dtestutils.CreateTestEnv()
-	sqlEng, ctx := newTestEngine(context.Background(), dEnv, threads)
+	sqlEng, ctx := newTestEngine(context.Background(), t, dEnv, threads)
 	ctx.Session.SetClient(sql.Client{
 		User:    "billy boy",
 		Address: "bigbillie@fake.horse",
 	})
 
-	sql.SystemVariables.AssignValues(map[string]interface{}{
-		dsess.DoltStatsGCInterval:  100,
-		dsess.DoltStatsJobInterval: 1,
-	})
+	setTimers(t, ctx, 1*time.Millisecond, 100*time.Millisecond)
 	if memOnly {
 		sql.SystemVariables.AssignValues(map[string]interface{}{
 			dsess.DoltStatsMemoryOnly: int8(1),
@@ -675,7 +669,6 @@ func emptySetup(t *testing.T, threads *sql.BackgroundThreads, memOnly bool, gcEn
 
 	sc := sqlEng.Analyzer.Catalog.StatsProvider.(*StatsController)
 	sc.SetEnableGc(false)
-	sc.JobInterval = time.Nanosecond
 
 	require.NoError(t, sc.Restart(ctx))
 
@@ -796,7 +789,7 @@ func executeQueryResults(ctx *sql.Context, eng *gms.Engine, query string) ([]sql
 	return ret, iter.Close(ctx) // tx commit
 }
 
-func newTestEngine(ctx context.Context, dEnv *env.DoltEnv, threads *sql.BackgroundThreads) (*gms.Engine, *sql.Context) {
+func newTestEngine(ctx context.Context, t *testing.T, dEnv *env.DoltEnv, threads *sql.BackgroundThreads) (*gms.Engine, *sql.Context) {
 	pro, err := sqle.NewDoltDatabaseProviderWithDatabases("main", dEnv.FS, nil, nil)
 	if err != nil {
 		panic(err)
@@ -808,6 +801,9 @@ func newTestEngine(ctx context.Context, dEnv *env.DoltEnv, threads *sql.Backgrou
 	}
 
 	sc := NewStatsController(logrus.StandardLogger(), threads, dEnv)
+	t.Cleanup(func() {
+		sc.Close()
+	})
 
 	gcSafepointController := gcctx.NewGCSafepointController()
 
@@ -842,13 +838,29 @@ func newTestEngine(ctx context.Context, dEnv *env.DoltEnv, threads *sql.Backgrou
 	return sqlEng, sqlCtx
 }
 
+func setTimers(t *testing.T, ctx *sql.Context, jobI, gcI time.Duration) {
+	if jobI > 0 {
+		_, origJob, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsJobInterval)
+		sql.SystemVariables.SetGlobal(ctx, dsess.DoltStatsJobInterval, strconv.Itoa(int(jobI/time.Millisecond)))
+		t.Cleanup(func() {
+			sql.SystemVariables.SetGlobal(ctx, dsess.DoltStatsJobInterval, origJob)
+		})
+	}
+	if gcI > 0 {
+		_, origGc, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsGCInterval)
+		sql.SystemVariables.SetGlobal(ctx, dsess.DoltStatsGCInterval, strconv.Itoa(int(gcI/time.Millisecond)))
+		t.Cleanup(func() {
+			sql.SystemVariables.SetGlobal(ctx, dsess.DoltStatsGCInterval, origGc)
+		})
+	}
+}
+
 func TestStatsGcConcurrency(t *testing.T) {
 	threads := sql.NewBackgroundThreads()
 	defer threads.Shutdown()
 	ctx, sqlEng, sc := emptySetup(t, threads, false, true)
 	sc.SetEnableGc(true)
-	sc.JobInterval = 1 * time.Nanosecond
-	sc.gcInterval = 100 * time.Nanosecond
+	setTimers(t, ctx, 1*time.Millisecond, 100*time.Millisecond)
 	require.NoError(t, sc.Restart(ctx))
 
 	addDb := func(ctx *sql.Context, dbName string) {
@@ -928,9 +940,7 @@ func TestStatsBranchConcurrency(t *testing.T) {
 	threads := sql.NewBackgroundThreads()
 	defer threads.Shutdown()
 	ctx, sqlEng, sc := emptySetup(t, threads, false, false)
-
-	sc.JobInterval = 1
-	sc.gcInterval = time.Hour
+	setTimers(t, ctx, 1*time.Millisecond, time.Hour)
 	require.NoError(t, sc.Restart(ctx))
 
 	addBranch := func(ctx *sql.Context, i int) {
@@ -946,7 +956,6 @@ func TestStatsBranchConcurrency(t *testing.T) {
 		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_checkout('"+branchName+"')"))
 		require.NoError(t, executeQuery(ctx, sqlEng, "create table xy (x int primary key, y int)"))
 		require.NoError(t, executeQuery(ctx, sqlEng, "insert into xy values (0,0),(1,1),(2,2),(3,3),(4,4),(5,5), (6,"+strconv.Itoa(i)+")"))
-		//require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
 		require.NoError(t, executeQuery(ctx, sqlEng, "call dolt_stats_wait()"))
 	}
 
@@ -1014,9 +1023,7 @@ func TestStatsCacheGrowth(t *testing.T) {
 	defer threads.Shutdown()
 	ctx, sqlEng, sc := emptySetup(t, threads, false, true)
 	sc.SetEnableGc(true)
-
-	sc.JobInterval = 1
-	sc.gcInterval = time.Hour
+	setTimers(t, ctx, 1*time.Millisecond, time.Hour)
 	require.NoError(t, sc.Restart(ctx))
 
 	addBranch := func(ctx *sql.Context, i int) {

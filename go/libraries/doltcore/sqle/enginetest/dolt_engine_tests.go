@@ -988,6 +988,28 @@ func RunDoltMergeArtifacts(t *testing.T, h DoltEnginetestHarness) {
 	}
 }
 
+func RunDoltPreviewMergeConflictsTests(t *testing.T, h DoltEnginetestHarness) {
+	for _, script := range PreviewMergeConflictsFunctionScripts {
+		// harness can't reset effectively. Use a new harness for each script
+		func() {
+			h := h.NewHarness(t)
+			defer h.Close()
+			enginetest.TestScript(t, h, script)
+		}()
+	}
+}
+
+func RunDoltPreviewMergeConflictsPreparedTests(t *testing.T, h DoltEnginetestHarness) {
+	for _, script := range PreviewMergeConflictsFunctionScripts {
+		// harness can't reset effectively. Use a new harness for each script
+		func() {
+			h := h.NewHarness(t)
+			defer h.Close()
+			enginetest.TestScript(t, h, script)
+		}()
+	}
+}
+
 func RunDoltResetTest(t *testing.T, h DoltEnginetestHarness) {
 	for _, script := range DoltResetTestScripts {
 		// dolt versioning conflicts with reset harness -- use new harness every time
@@ -1990,5 +2012,15 @@ func RunDoltHelpSystemTableTests(t *testing.T, harness DoltEnginetestHarness) {
 			defer harness.Close()
 			enginetest.TestScript(t, harness, script)
 		})
+	}
+}
+
+func RunDoltStashSystemTableTests(t *testing.T, h DoltEnginetestHarness) {
+	for _, script := range DoltStashTests {
+		func() {
+			h := h.NewHarness(t)
+			defer h.Close()
+			enginetest.TestScript(t, h, script)
+		}()
 	}
 }

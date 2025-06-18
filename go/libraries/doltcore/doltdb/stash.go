@@ -26,14 +26,19 @@ import (
 )
 
 type Stash struct {
-	Name        string
-	BranchName  string
-	Description string
-	HeadCommit  *Commit
+	Name            string
+	BranchReference string
+	Description     string
+	HeadCommit      *Commit
+	StashReference  string
 }
 
+const (
+	DoltCliRef = "dolt-cli"
+)
+
 // getStashList returns array of Stash objects containing all stash entries in the stash list map.
-func getStashList(ctx context.Context, ds datas.Dataset, vrw types.ValueReadWriter, ns tree.NodeStore) ([]*Stash, error) {
+func getStashList(ctx context.Context, ds datas.Dataset, vrw types.ValueReadWriter, ns tree.NodeStore, reference string) ([]*Stash, error) {
 	v, ok := ds.MaybeHead()
 	if !ok {
 		return nil, errors.New("stashes not found")
@@ -73,8 +78,9 @@ func getStashList(ctx context.Context, ds datas.Dataset, vrw types.ValueReadWrit
 		}
 
 		s.HeadCommit = headCommit
-		s.BranchName = meta.BranchName
+		s.BranchReference = meta.BranchName
 		s.Description = meta.Description
+		s.StashReference = reference
 
 		sl[i] = &s
 	}

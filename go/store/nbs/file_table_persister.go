@@ -25,6 +25,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"io/fs"
 	"os"
@@ -133,8 +134,8 @@ func (ftp *fsTablePersister) CopyTableFile(ctx context.Context, r io.Reader, fil
 
 		defer func() {
 			cerr := temp.Close()
-			if err == nil {
-				err = cerr
+			if cerr != nil {
+				err = errors.Join(err, fmt.Errorf("error Closing temp in CopyTableFile: %w", cerr))
 			}
 		}()
 
@@ -197,9 +198,9 @@ func (ftp *fsTablePersister) persistTable(ctx context.Context, name hash.Hash, d
 		}
 
 		defer func() {
-			closeErr := temp.Close()
-			if ferr == nil {
-				ferr = closeErr
+			cerr := temp.Close()
+			if cerr != nil {
+				ferr = errors.Join(ferr, fmt.Errorf("error Closing temp in persistTable: %w", cerr))
 			}
 		}()
 
@@ -408,7 +409,7 @@ func (ftp *fsTablePersister) PruneTableFiles(ctx context.Context, keeper func() 
 		if _, ok := ftp.curTmps[filepath.Clean(p)]; !ok {
 			err := file.Remove(p)
 			if err != nil && !errors.Is(err, fs.ErrNotExist) {
-				ea.add(p, err)
+				ea.add(p, fmt.Errorf("error file.Remove unfilteredTempFiles: %w", err))
 			}
 		}
 		ftp.removeMu.Unlock()
@@ -419,7 +420,7 @@ func (ftp *fsTablePersister) PruneTableFiles(ctx context.Context, keeper func() 
 		if _, ok := ftp.toKeep[filepath.Clean(p)]; !ok {
 			err := file.Remove(p)
 			if err != nil && !errors.Is(err, fs.ErrNotExist) {
-				ea.add(p, err)
+				ea.add(p, fmt.Errorf("error file.Remove unfilteredTableFiles: %w", err))
 			}
 		}
 		ftp.removeMu.Unlock()

@@ -177,6 +177,7 @@ func GeneratedSystemTableNames() []string {
 		GetRemotesTableName(),
 		GetHelpTableName(),
 		GetBackupsTableName(),
+		GetStashesTableName(),
 	}
 }
 
@@ -351,6 +352,10 @@ var GetBackupsTableName = func() string {
 	return BackupsTableName
 }
 
+var GetStashesTableName = func() string {
+	return StashesTableName
+}
+
 const (
 	// LogTableName is the log system table name
 	LogTableName = "dolt_log"
@@ -402,6 +407,9 @@ const (
 
 	// StatisticsTableName is the statistics system table name
 	StatisticsTableName = "dolt_statistics"
+
+	// StashesTableName is the stashes system table name
+	StashesTableName = "dolt_stashes"
 )
 
 // DoltGeneratedTableNames is a list of all the generated dolt system tables that are not specific to a user table.

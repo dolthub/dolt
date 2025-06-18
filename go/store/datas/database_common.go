@@ -279,6 +279,11 @@ func (db *database) doSetHead(ctx context.Context, ds Dataset, addr hash.Hash, w
 		return err
 	}
 
+	if newHead == nil {
+		// This can happen on an attempt to set a head to an address which does not exist in the database.
+		return fmt.Errorf("SetHead failed: attempt to set a dataset head to an address which is not in the store")
+	}
+
 	newVal := newHead.value()
 
 	headType := newHead.TypeName()
@@ -581,16 +586,15 @@ func (db *database) doFastForward(ctx context.Context, ds Dataset, newHeadAddr h
 }
 
 func (db *database) BuildNewCommit(ctx context.Context, ds Dataset, v types.Value, opts CommitOptions) (*Commit, error) {
-	if len(opts.Parents) == 0 {
+	if !opts.Amend {
 		headAddr, ok := ds.MaybeHeadAddr()
 		if ok {
-			opts.Parents = []hash.Hash{headAddr}
-		}
-	} else if !opts.Amend {
-		curr, ok := ds.MaybeHeadAddr()
-		if ok {
-			if !hasParentHash(opts, curr) {
-				return nil, ErrMergeNeeded
+			if len(opts.Parents) == 0 {
+				opts.Parents = []hash.Hash{headAddr}
+			} else {
+				if !hasParentHash(opts, headAddr) {
+					return nil, ErrMergeNeeded
+				}
 			}
 		}
 	}

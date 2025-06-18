@@ -33,7 +33,7 @@ jobs:
   winget-bump:
     needs: get-version
     name: Bump Dolt winget
-    runs-on: windows-2019
+    runs-on: windows-latest
     defaults:
       run:
         shell: powershell

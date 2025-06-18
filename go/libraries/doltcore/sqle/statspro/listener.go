@@ -123,7 +123,6 @@ func (sc *StatsController) Restart(ctx *sql.Context) error {
 	default:
 	}
 
-	sc.sq.Start()
 	sc.RefreshFromSysVars(ctx)
 
 	done := make(chan struct{})
@@ -144,21 +143,11 @@ func (sc *StatsController) Restart(ctx *sql.Context) error {
 	return nil
 }
 
-func (sc *StatsController) RunQueue() {
-	if err := sc.bgThreads.Add("stats_scheduler", sc.sq.Run); err != nil {
-		sc.descError("start scheduler", err)
-	}
-	// block on queue starting
-	sc.sq.DoSync(context.Background(), func() error { return nil })
-	return
-}
-
 // Init should only be called once
 func (sc *StatsController) Init(ctx context.Context, pro *sqle.DoltDatabaseProvider, ctxGen ctxFactory, dbs []sql.Database) error {
 	sc.pro = pro
 	sc.ctxGen = ctxGen
 
-	sc.RunQueue()
 	sqlCtx, err := sc.ctxGen(ctx)
 	if err != nil {
 		return err
@@ -249,14 +238,18 @@ func (sc *StatsController) Gc(ctx *sql.Context) error {
 func (sc *StatsController) Close() {
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
+
+	// Already closed.
+	select {
+	case <-sc.closed:
+		return
+	default:
+	}
+
 	if sc.activeCtxCancel != nil {
 		sc.activeCtxCancel()
 		sc.activeCtxCancel = nil
-		sc.sq.Purge()
-		sc.sq.DoSync(context.Background(), func() error {
-			sc.sq.Purge()
-			return sc.sq.Stop()
-		})
+		sc.rateLimiter.stop()
 	}
 	sc.signalListener(leStop)
 

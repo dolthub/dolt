@@ -175,6 +175,9 @@ func (nbs *NomsBlockStore) GetChunkLocationsWithPaths(ctx context.Context, hashe
 	for csP, ranges := range sourcesToRanges {
 		cs := *csP
 		res[cs.hash().String()+cs.suffix()] = ranges
+		for h := range ranges {
+			delete(hashes, h)
+		}
 	}
 	return res, nil
 }
@@ -213,14 +216,14 @@ func (nbs *NomsBlockStore) getChunkLocations(ctx context.Context, hashes hash.Ha
 		ranges := make(map[*chunkSource]map[hash.Hash]Range)
 
 		gcb, err := fn(tables.upstream, gr, ranges, keeper)
-		if needsContinue, err := nbs.handleUnlockedRead(ctx, gcb, endRead, err); err != nil {
+		if needsContinue, err := nbs.handleUnlockedRead(ctx, gcb, false, endRead, err); err != nil {
 			return nil, err
 		} else if needsContinue {
 			continue
 		}
 
 		gcb, err = fn(tables.novel, gr, ranges, keeper)
-		if needsContinue, err := nbs.handleUnlockedRead(ctx, gcb, endRead, err); err != nil {
+		if needsContinue, err := nbs.handleUnlockedRead(ctx, gcb, true, endRead, err); err != nil {
 			return nil, err
 		} else if needsContinue {
 			continue
@@ -241,11 +244,14 @@ func (nbs *NomsBlockStore) GetChunkLocations(ctx context.Context, hashes hash.Ha
 	for csP, ranges := range sourcesToRanges {
 		cs := *csP
 		res[cs.hash()] = ranges
+		for h := range ranges {
+			delete(hashes, h)
+		}
 	}
 	return res, nil
 }
 
-func (nbs *NomsBlockStore) handleUnlockedRead(ctx context.Context, gcb gcBehavior, endRead func(), err error) (bool, error) {
+func (nbs *NomsBlockStore) handleUnlockedRead(ctx context.Context, gcb gcBehavior, endReadOnSuccess bool, endRead func(), err error) (bool, error) {
 	if err != nil {
 		if endRead != nil {
 			nbs.mu.Lock()
@@ -263,7 +269,7 @@ func (nbs *NomsBlockStore) handleUnlockedRead(ctx context.Context, gcb gcBehavio
 		nbs.mu.Unlock()
 		return true, err
 	} else {
-		if endRead != nil {
+		if endRead != nil && endReadOnSuccess {
 			nbs.mu.Lock()
 			endRead()
 			nbs.mu.Unlock()
@@ -913,7 +919,7 @@ func (nbs *NomsBlockStore) Get(ctx context.Context, h hash.Hash) (chunks.Chunk, 
 		nbs.mu.Unlock()
 
 		data, gcb, err := tables.get(ctx, h, keeper, nbs.stats)
-		needContinue, err := nbs.handleUnlockedRead(ctx, gcb, endRead, err)
+		needContinue, err := nbs.handleUnlockedRead(ctx, gcb, true, endRead, err)
 		if err != nil {
 			return chunks.EmptyChunk, err
 		}
@@ -1008,7 +1014,7 @@ func (nbs *NomsBlockStore) getManyWithFunc(
 			_, gcb, err := getManyFunc(ctx, tables, eg, reqs, keeper, nbs.stats)
 			return gcb, errors.Join(err, eg.Wait())
 		}()
-		needContinue, err := nbs.handleUnlockedRead(ctx, gcb, endRead, err)
+		needContinue, err := nbs.handleUnlockedRead(ctx, gcb, true, endRead, err)
 		if err != nil {
 			return err
 		}
@@ -1097,7 +1103,7 @@ func (nbs *NomsBlockStore) Has(ctx context.Context, h hash.Hash) (bool, error) {
 		nbs.mu.Unlock()
 
 		has, gcb, err := tables.has(h, keeper)
-		needsContinue, err := nbs.handleUnlockedRead(ctx, gcb, endRead, err)
+		needsContinue, err := nbs.handleUnlockedRead(ctx, gcb, true, endRead, err)
 		if err != nil {
 			return false, err
 		}
@@ -1159,7 +1165,7 @@ func (nbs *NomsBlockStore) hasManyDep(ctx context.Context, hashes hash.HashSet, 
 		nbs.mu.Unlock()
 
 		remaining, gcb, err := tables.hasMany(reqs, keeper)
-		needContinue, err := nbs.handleUnlockedRead(ctx, gcb, endRead, err)
+		needContinue, err := nbs.handleUnlockedRead(ctx, gcb, true, endRead, err)
 		if err != nil {
 			return nil, err
 		}
@@ -1798,7 +1804,7 @@ func (nbs *NomsBlockStore) addTableFilesToManifest(ctx context.Context, fileIdTo
 		// checks pass.
 		sources, err := nbs.openChunkSourcesForAddTableFiles(ctx, fileIdHashToNumChunks)
 		if err != nil {
-			return err
+			return fmt.Errorf("addTableFiles, openChunkSources: %w", err)
 		}
 		// If these sources get added to the store, they will get cloned.
 		// Either way, we want to close these instances when we are done.
@@ -1820,7 +1826,7 @@ func (nbs *NomsBlockStore) addTableFilesToManifest(ctx context.Context, fileIdTo
 			err = refCheckAllSources(ctx, getAddrs, refCheck, sources.sources, nbs.stats)
 			if err != nil {
 				// There was an error checking all references.
-				return err
+				return fmt.Errorf("addTableFiles, refCheckAllSources: %w", err)
 			}
 		}
 
@@ -1828,7 +1834,7 @@ func (nbs *NomsBlockStore) addTableFilesToManifest(ctx context.Context, fileIdTo
 		// We add them to the set of table files in the store.
 		_, gcGenMismatch, err := nbs.updateManifestAddFiles(ctx, fileIdHashToNumChunks, nil, &sources.gcGen, sources.sources)
 		if err != nil {
-			return err
+			return fmt.Errorf("addTableFiles, updateManifestAddFiles: %w", err)
 		} else if gcGenMismatch {
 			// A gcGenMismatch means that the store has changed out from under
 			// us as we were running these checks. We want to retry.
@@ -2227,13 +2233,13 @@ func (nbs *NomsBlockStore) swapTables(ctx context.Context, specs []tableSpec, mo
 	// replace nbs.tables.upstream with gc compacted tables
 	ts, err := nbs.tables.rebase(ctx, upstream.specs, nil, nbs.stats)
 	if err != nil {
-		return err
+		return fmt.Errorf("swapTables, rebase: %w", err)
 	}
 	oldTables := nbs.tables
 	nbs.tables, nbs.upstream = ts, upstream
 	err = oldTables.close()
 	if err != nil {
-		return err
+		return fmt.Errorf("swapTables, oldTables.close(): %w", err)
 	}
 
 	// When this is called, we are at a safepoint in the GC process.
@@ -2244,13 +2250,7 @@ func (nbs *NomsBlockStore) swapTables(ctx context.Context, specs []tableSpec, mo
 	for _, css := range oldNovel {
 		err = css.close()
 		if err != nil {
-			return err
-		}
-	}
-	if nbs.memtable != nil {
-		var thrown []string
-		for a := range nbs.memtable.chunks {
-			thrown = append(thrown, a.String())
+			return fmt.Errorf("swapTables, oldNovel css.close(): %w", err)
 		}
 	}
 	nbs.memtable = nil
