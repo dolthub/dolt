@@ -80,6 +80,7 @@ teardown() {
     run dolt branch
     [[ ! "$output" =~ "other" ]] || false
 
+    dolt branch -D other # branch must not exist locally, git default to local checkout if it exists
     run dolt checkout other
     [ "$status" -eq 1 ]
     [[ "$output" =~ "'other' matched multiple (2) remote tracking branches" ]] || false
