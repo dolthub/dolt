@@ -14,7 +14,17 @@
 
 package stashcmds
 
-/*var stashListDocs = cli.CommandDocumentationContent{
+import (
+	"fmt"
+	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/cmd/dolt/commands"
+	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
+	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+)
+
+var stashListDocs = cli.CommandDocumentationContent{
 	ShortDesc: "List the stash entries that you currently have.",
 	LongDesc: `Each stash entry is listed with its name (e.g. stash@{0} is the latest entry, stash@{1} is the one before, etc.), the name of the branch that was current when the entry was made, and a short description of the commit the entry was based on.
 `,
@@ -81,4 +91,4 @@ func listStashes(ctx context.Context, dEnv *env.DoltEnv) error {
 		cli.Println(fmt.Sprintf("%s: WIP on %s: %s %s", stash.Name, stash.BranchReference, commitHash.String(), stash.Description))
 	}
 	return nil
-}*/
+}
