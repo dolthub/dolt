@@ -314,6 +314,7 @@ teardown() {
 
     dolt sql -q "INSERT INTO test VALUES (1, 'b')"
     run dolt stash pop
+    echo "$output"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "error: Your local changes to the following tables would be overwritten by applying stash" ]] || false
     [[ "$output" =~ "The stash entry is kept in case you need it again." ]] || false
