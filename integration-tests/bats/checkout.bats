@@ -798,7 +798,7 @@ SQL
 
 }
 
-@test "checkout: DWIM scenarios - table and branch name conflict with -- separator" {
+@test "checkout: table and branch name conflict with -- separator" {
     # setup a table with the same name as a branch we'll create
     dolt sql -q "create table feature (id int primary key, value int);"
     dolt sql -q "insert into feature values (1, 100);"
@@ -832,7 +832,7 @@ SQL
     [[ "$output" =~ "* main" ]] || false
 }
 
-@test "checkout: DWIM scenarios - explicit branch checkout with -- separator" {
+@test "checkout: explicit branch checkout with -- separator" {
     # setup a table with the same name as a branch
     dolt sql -q "create table feature (id int primary key, value int);"
     dolt sql -q "insert into feature values (1, 100);"
@@ -861,7 +861,7 @@ SQL
     [[ "$output" =~ "1,200" ]] || false
 }
 
-@test "checkout: DWIM scenarios - checkout specific table from branch" {
+@test "checkout: checkout specific table from branch" {
     # setup tables
     dolt sql -q "create table users (id int primary key, name varchar(50));"
     dolt sql -q "create table products (id int primary key, name varchar(50));"
@@ -898,7 +898,7 @@ SQL
     [[ "$output" =~ "* main" ]] || false
 }
 
-@test "checkout: DWIM scenarios - remote tracking branch shorthand" {
+@test "checkout: remote tracking branch shorthand" {
     mkdir -p remote-repo
     mkdir -p local-repo
     cd local-repo
@@ -940,7 +940,7 @@ SQL
     [[ "$output" =~ "1,200" ]] || false
 }
 
-@test "checkout: DWIM scenarios - error on ambiguous name matching tracking branch and table" {
+@test "checkout: error on ambiguous name matching tracking branch and table" {
     mkdir -p remote-repo
     mkdir -p local-repo
     cd local-repo
@@ -972,9 +972,6 @@ SQL
     dolt add .
     dolt commit -m "Create table with same name as tracking branch"
 
-    # make a change to the feature table
-    dolt sql -q "update feature set value = 150 where id = 1;"
-
     # try to checkout "feature" without disambiguation
     # this should fail because it could refer to either the table or the tracking branch
     dolt branch -D feature  # delete local branch since this only happens when it does not exist
@@ -1005,7 +1002,60 @@ SQL
     [[ "$output" =~ "* feature" ]] || false
 }
 
-@test "checkout: DWIM scenarios - error with multiple refs using --" {
+@test "checkout: default to local branch checkout after disambiguation" {
+    mkdir -p remote-repo
+    mkdir -p local-repo
+    cd local-repo
+    dolt init
+    dolt remote add origin file://../remote-repo
+    dolt push -u origin main
+
+    # create a branch called 'feature' on the remote
+    dolt sql -q "create table test (id int primary key, val int);"
+    dolt sql -q "insert into test values (1, 50);"
+    dolt add .
+    dolt commit -m "Initial commit"
+    dolt push origin main
+    dolt checkout -b feature
+    dolt sql -q "update test set val = 200 where id = 1;"
+    dolt add .
+    dolt commit -m "Update on feature branch"
+    dolt push origin feature
+
+    # verify remote tracking branch exists
+    run dolt branch -a
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "remotes/origin/feature" ]] || false
+
+    # create a table with the same name as the tracking branch
+    dolt checkout main
+    dolt sql -q "create table feature (id int primary key, value int);"
+    dolt sql -q "insert into feature values (1, 100);"
+    dolt add .
+    dolt commit -m "Create table with same name as tracking branch"
+
+    # try to checkout "feature" without disambiguation
+    # this should fail because it could refer to either the table or the tracking branch
+    dolt branch -D feature  # delete local branch since this only happens when it does not exist
+
+    # test that we can disambiguate for the branch using --
+    dolt checkout feature --
+
+    # verify we're now on a local feature branch
+    run dolt branch
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "* feature" ]] || false
+
+    run dolt checkout main
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Switched to branch 'main'" ]] || false
+
+    run dolt checkout feature
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Switched to branch 'feature'" ]] || false
+}
+
+@test "checkout: error with multiple refs using --" {
     # setup branches and tables
     dolt sql -q "create table feature (id int primary key, value int);"
     dolt add .
@@ -1026,7 +1076,7 @@ SQL
     [[ "$output" =~ "* main" ]] || false
 }
 
-@test "checkout: DWIM scenarios - checkout multiple tables using --" {
+@test "checkout: checkout multiple tables using --" {
     # setup multiple tables
     dolt sql -q "create table table1 (id int primary key, value int);"
     dolt sql -q "create table table2 (id int primary key, name varchar(50));"
