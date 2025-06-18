@@ -19,14 +19,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
+	"github.com/dolthub/go-mysql-server/sql"
 	"strconv"
 	"strings"
 
-	"github.com/dolthub/go-mysql-server/sql"
-
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
-	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -34,7 +34,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/store/datas"
-	"github.com/dolthub/dolt/go/store/hash"
 )
 
 var ErrStashNotSupportedForOldFormat = errors.New("stash is not supported for old storage format")
@@ -42,7 +41,6 @@ var ErrStashNotSupportedForOldFormat = errors.New("stash is not supported for ol
 var StashCommands = cli.NewSubCommandHandlerWithUnspecified("stash", "Stash the changes in a dirty working directory away.", false, StashCmd{}, []cli.Command{
 	StashClearCmd{},
 	StashDropCmd{},
-	StashListCmd{},
 	StashPopCmd{},
 })
 
@@ -90,7 +88,7 @@ func (cmd StashCmd) EventType() eventsapi.ClientEventType {
 	return eventsapi.ClientEventType_STASH
 }
 
-// generateStashSql returns the query that will call the `DOLT_ADD` stored proceudre.
+// generateStashSql returns the query that will call the `DOLT_STASH` stored proceudre.
 func generateStashSql(apr *argparser.ArgParseResults, subcommand string) string {
 	var buffer bytes.Buffer
 	first := true
@@ -122,6 +120,51 @@ func generateStashSql(apr *argparser.ArgParseResults, subcommand string) string 
 
 	buffer.WriteString(")")
 	return buffer.String()
+
+}
+
+func getStashesSQL(ctx context.Context, sqlCtx *sql.Context, queryist cli.Queryist, dEnv *env.DoltEnv) ([]*doltdb.Stash, error) {
+	qry := fmt.Sprintf("select stash_id, branch, hash, commit_message from dolt_stashes where name = '%s'", doltdb.DoltCliRef)
+	rows, err := commands.GetRowsForSql(queryist, sqlCtx, qry)
+	if err != nil {
+		return nil, err
+	}
+
+	var stashes []*doltdb.Stash
+	for _, s := range rows {
+		id, ok := s[0].(string)
+		if !ok {
+			return nil, fmt.Errorf("invalid  stash id")
+		}
+
+		branch, ok := s[1].(string)
+		if !ok {
+			return nil, fmt.Errorf("invalid stash branch")
+		}
+		fullBranch := ref.NewBranchRef(branch).String()
+
+		stashHash, ok := s[2].(string)
+		if !ok {
+			return nil, fmt.Errorf("invalid stash hash")
+		}
+		maybeCommit, err := actions.MaybeGetCommit(ctx, dEnv, stashHash)
+		if err != nil {
+			return nil, err
+		}
+
+		msg, ok := s[3].(string)
+		if !ok {
+			return nil, fmt.Errorf("invalid stash message")
+		}
+		stashes = append(stashes, &doltdb.Stash{
+			Name:            id,
+			BranchReference: fullBranch,
+			Description:     msg,
+			HeadCommit:      maybeCommit,
+		})
+	}
+
+	return stashes, nil
 }
 
 // Exec executes the command
@@ -135,132 +178,30 @@ func (cmd StashCmd) Exec(ctx context.Context, commandStr string, args []string, 
 		cli.PrintErrln(fmt.Errorf("dolt stash takes 2 arguments, received %d", len(apr.Args)))
 		return 1
 	}
-	roots, err := dEnv.Roots(ctx)
-	if err != nil {
-		cli.PrintErrln(fmt.Errorf("couldn't get working root, cause: %s", err.Error()))
-		return 1
-	}
 
 	subcommand := "push"
 	if len(apr.Args) > 0 {
 		subcommand = strings.ToLower(apr.Arg(0))
 	}
 
-	var rowIter sql.RowIter
-	var curBranchName string
-	var commit *doltdb.Commit
-	var commitMeta *datas.CommitMeta
-	var commitHash hash.Hash
-	var stashes []*doltdb.Stash
-	idx, err := parseStashIndex(apr)
-	if err != nil {
-		cli.PrintErrln(errhand.VerboseErrorFromError(err))
-		return 1
-	}
+	var err error
 	switch subcommand {
 	case "push":
-		hasChanges, err := hasLocalChanges(ctx, dEnv, roots, apr)
-		if err != nil {
-			cli.PrintErrln(errhand.VerboseErrorFromError(err))
-			return 1
-		}
-		if !hasChanges {
-			cli.Println("No local changes to save")
-			return 0
-		}
-		curBranchName, commit, commitMeta, err = pushPrintData(ctx, dEnv)
-		if err != nil {
-			cli.PrintErrln(errhand.VerboseErrorFromError(err))
-			return 1
-		}
+		err = stashPush(ctx, cliCtx, dEnv, apr, subcommand)
 	case "pop", "drop":
-		commitHash, err = dEnv.DoltDB(ctx).GetStashHashAtIdx(ctx, idx, doltdb.DoltCliRef)
-		if err != nil {
-			cli.PrintErrln(errhand.VerboseErrorFromError(err))
-			return 1
-		}
+		err = stashRemove(ctx, cliCtx, dEnv, apr, subcommand)
 	case "list":
-		stashes, err = dEnv.DoltDB(ctx).GetCommandLineStashes(ctx)
-		if err != nil {
-			cli.PrintErrln(errhand.VerboseErrorFromError(err))
-			return 1
-		}
+		err = listStashes(ctx, cliCtx, dEnv)
+	case "clear":
+		err = stashClear(ctx, cliCtx, apr, subcommand)
 	}
 
-	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
 		cli.PrintErrln(errhand.VerboseErrorFromError(err))
 		return 1
-	}
-	if closeFunc != nil {
-		defer closeFunc()
-	}
-
-	if subcommand != "list" {
-		_, rowIter, _, err = queryist.Query(sqlCtx, generateStashSql(apr, subcommand))
-		if err != nil {
-			cli.PrintErrln(errhand.VerboseErrorFromError(err))
-			return 1
-		}
-	}
-
-	switch subcommand {
-	case "push":
-		err = printStashPush(curBranchName, commit, commitMeta)
-		if err != nil {
-			cli.PrintErrln(errhand.VerboseErrorFromError(err))
-			return 1
-		}
-	case "drop":
-		err = printStashDrop(idx, commitHash)
-		if err != nil {
-			cli.PrintErrln(errhand.VerboseErrorFromError(err))
-			return 1
-		}
-	case "pop":
-		ret := commands.StatusCmd{}.Exec(sqlCtx, "status", []string{}, dEnv, cliCtx)
-		if ret != 0 {
-			cli.Println("The stash entry is kept in case you need it again.")
-			return 1
-		}
-		err = printStashDrop(idx, commitHash)
-		if err != nil {
-			cli.PrintErrln(errhand.VerboseErrorFromError(err))
-			return 1
-		}
-	case "list":
-		err = printStashList(stashes)
-		if err != nil {
-			cli.PrintErrln(errhand.VerboseErrorFromError(err))
-			return 1
-		}
-	}
-
-	if subcommand != "list" {
-		_, err = sql.RowIterToRows(sqlCtx, rowIter)
-		if err != nil {
-			cli.PrintErrln(errhand.VerboseErrorFromError(err))
-			return 1
-		}
 	}
 
 	return 0
-}
-
-func printStashDrop(idx int, stashHash hash.Hash) error {
-	cli.Println(fmt.Sprintf("Dropped refs/stash@{%v} (%s)", idx, stashHash.String()))
-	return nil
-}
-
-func printStashList(stashes []*doltdb.Stash) error {
-	for _, stash := range stashes {
-		commitHash, err := stash.HeadCommit.HashOf()
-		if err != nil {
-			return err
-		}
-		cli.Println(fmt.Sprintf("%s: WIP on %s: %s %s", stash.Name, stash.BranchReference, commitHash.String(), stash.Description))
-	}
-	return nil
 }
 
 // gatherPrintData is a helper function that returns the current branch and the commit meta for the most recent commit
@@ -291,14 +232,107 @@ func pushPrintData(ctx context.Context, dEnv *env.DoltEnv) (string, *doltdb.Comm
 	return curBranchName, commit, commitMeta, nil
 }
 
-func printStashPush(curBranchName string, commit *doltdb.Commit, commitMeta *datas.CommitMeta) error {
+func stashPush(ctx context.Context, cliCtx cli.CliContext, dEnv *env.DoltEnv, apr *argparser.ArgParseResults, subcommand string) error {
+	var rowIter sql.RowIter
+
+	roots, err := dEnv.Roots(ctx)
+	if err != nil {
+		return err
+	}
+
+	hasChanges, err := hasLocalChanges(ctx, dEnv, roots, apr)
+	if err != nil {
+		return err
+	}
+	if !hasChanges {
+		cli.Println("No local changes to save")
+		return nil
+	}
+	curBranchName, commit, commitMeta, err := pushPrintData(ctx, dEnv)
+	if err != nil {
+		return err
+	}
+
 	commitHash, err := commit.HashOf()
 	if err != nil {
 		return err
 	}
 
+	rowIter, sqlCtx, closeFunc, err := stashQuery(ctx, cliCtx, apr, subcommand)
+	if err != nil {
+		return err
+	}
+	if closeFunc != nil {
+		defer closeFunc()
+	}
+
 	cli.Println(fmt.Sprintf("Saved working directory and index state WIP on %s: %s %s", curBranchName, commitHash.String(), commitMeta.Description))
+	_, err = sql.RowIterToRows(sqlCtx, rowIter)
+	return err
+}
+
+func stashRemove(ctx context.Context, cliCtx cli.CliContext, dEnv *env.DoltEnv, apr *argparser.ArgParseResults, subcommand string) error {
+	idx, err := parseStashIndex(apr)
+	if err != nil {
+		return err
+	}
+	commitHash, err := dEnv.DoltDB(ctx).GetStashHashAtIdx(ctx, idx, doltdb.DoltCliRef)
+	if err != nil {
+		return err
+	}
+
+	rowIter, sqlCtx, closeFunc, err := stashQuery(ctx, cliCtx, apr, subcommand)
+	if err != nil {
+		return err
+	}
+	if closeFunc != nil {
+		defer closeFunc()
+	}
+
+	if subcommand == "pop" {
+		ret := commands.StatusCmd{}.Exec(sqlCtx, "status", []string{}, dEnv, cliCtx)
+		if ret != 0 {
+			cli.Println("The stash entry is kept in case you need it again.")
+			return err
+		}
+	}
+
+	cli.Println(fmt.Sprintf("Dropped refs/stash@{%v} (%s)", idx, commitHash.String()))
+	_, err = sql.RowIterToRows(sqlCtx, rowIter)
+	return err
+}
+
+func listStashes(ctx context.Context, cliCtx cli.CliContext, dEnv *env.DoltEnv) error {
+	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
+	if err != nil {
+		return err
+	}
+	if closeFunc != nil {
+		defer closeFunc()
+	}
+	stashes, err := getStashesSQL(ctx, sqlCtx, queryist, dEnv)
+
+	for _, stash := range stashes {
+		commitHash, err := stash.HeadCommit.HashOf()
+		if err != nil {
+			return err
+		}
+		cli.Println(fmt.Sprintf("%s: WIP on %s: %s %s", stash.Name, stash.BranchReference, commitHash.String(), stash.Description))
+	}
+
 	return nil
+}
+
+func stashClear(ctx context.Context, cliCtx cli.CliContext, apr *argparser.ArgParseResults, subcommand string) error {
+	rowIter, sqlCtx, closeFunc, err := stashQuery(ctx, cliCtx, apr, subcommand)
+	if err != nil {
+		return err
+	}
+	if closeFunc != nil {
+		defer closeFunc()
+	}
+	_, err = sql.RowIterToRows(sqlCtx, rowIter)
+	return err
 }
 
 func hasLocalChanges(ctx context.Context, dEnv *env.DoltEnv, roots doltdb.Roots, apr *argparser.ArgParseResults) (bool, error) {
@@ -369,6 +403,20 @@ func hasLocalChanges(ctx context.Context, dEnv *env.DoltEnv, roots doltdb.Roots,
 
 	// There are changes to tracked tables. Stash them.
 	return true, nil
+}
+
+func stashQuery(ctx context.Context, cliCtx cli.CliContext, apr *argparser.ArgParseResults, subcommand string) (sql.RowIter, *sql.Context, func(), error) {
+	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	_, rowIter, _, err := queryist.Query(sqlCtx, generateStashSql(apr, subcommand))
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	return rowIter, sqlCtx, closeFunc, nil
 }
 
 func stashChanges(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults) error {
