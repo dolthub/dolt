@@ -261,13 +261,16 @@ func (c *SessionCache) CacheTableChecks(key doltdb.DataCacheKey, checks []sql.Ch
 	c.checks[key] = checks
 }
 
-func (c *SessionCache) GetCachedTableMap(key uint64) (map[string]string, bool) {
+// GetTableNameMap returns the cached names of tables in a given root, keyed by their lower-case name, to their 
+// case-sensitive name
+func (c *SessionCache) GetTableNameMap(key uint64) (map[string]string, bool) {
 	tables, ok := c.tableMaps[key]
 	return tables, ok
 }
 
-// CacheTableChecks caches sql.CheckConstraints for the table named
-func (c *SessionCache) CacheTableMap(key uint64, tables map[string]string) {
+// CacheTableNameMap caches the names of tables in a given root, keyed by their lower-case name, to their 
+// case-sensitive name
+func (c *SessionCache) CacheTableNameMap(key uint64, tables map[string]string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 

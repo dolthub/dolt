@@ -1042,8 +1042,12 @@ func (db Database) tableInsensitive(ctx *sql.Context, root doltdb.RootValue, tab
 		return doltdb.TableName{}, nil, false, fmt.Errorf("no state for database %s", db.RevisionQualifiedName())
 	}
 
-	if tableListKey := root.TableListHash(); tableListKey != 0 {
-		tableList, ok := dbState.SessionCache().GetCachedTableMap(tableListKey)
+	tableListKey := root.TableListHash()
+	
+	// TODO: refactor to make caching logic more obvious, cache and then retrieve
+	// TODO: why would tableListKey ever be zero?
+	if tableListKey != 0 {
+		tableList, ok := dbState.SessionCache().GetTableNameMap(tableListKey)
 		if ok {
 			tname, ok := tableList[strings.ToLower(tableName)]
 			if ok {
@@ -1059,17 +1063,17 @@ func (db Database) tableInsensitive(ctx *sql.Context, root doltdb.RootValue, tab
 		}
 	}
 
-	tableNames, err := db.getAllTableNames(ctx, root, true)
+	tableNames, err := db.getAllTableNames(ctx, root, false)
 	if err != nil {
 		return doltdb.TableName{}, nil, false, err
 	}
 
-	if tableListKey := root.TableListHash(); tableListKey != 0 {
+	if tableListKey != 0 {
 		tableMap := make(map[string]string)
 		for _, table := range tableNames {
 			tableMap[strings.ToLower(table)] = table
 		}
-		dbState.SessionCache().CacheTableMap(tableListKey, tableMap)
+		dbState.SessionCache().CacheTableNameMap(tableListKey, tableMap)
 	}
 
 	tableName, ok = sql.GetTableNameInsensitive(tableName, tableNames)
@@ -1150,7 +1154,7 @@ func (db Database) GetAllTableNames(ctx *sql.Context, showSystemTables bool) ([]
 	return db.getAllTableNames(ctx, root, showSystemTables)
 }
 
-func (db Database) getAllTableNames(ctx *sql.Context, root doltdb.RootValue, showSystemTables bool) ([]string, error) {
+func (db Database) getAllTableNames(ctx *sql.Context, root doltdb.RootValue, includeGeneratedSystemTables bool) ([]string, error) {
 	var err error
 	var result []string
 	// If we are in a schema-enabled session and the schema name is not set, we need to union all table names in all
@@ -1170,7 +1174,9 @@ func (db Database) getAllTableNames(ctx *sql.Context, root doltdb.RootValue, sho
 		}
 	}
 
-	if showSystemTables {
+	if includeGeneratedSystemTables {
+		// TODO: this should work on the current schema only, if there is one
+		// TODO: this is getting called with showSystemTables = true, which seems wrong in most cases
 		systemTables, err := resolve.GetGeneratedSystemTables(ctx, root)
 		if err != nil {
 			return nil, err
