@@ -534,38 +534,46 @@ func checkoutExistingBranch(ctx *sql.Context, dbName string, branchName string, 
 }
 
 func checkoutExistingBranchWithWorkingSetFallback(ctx *sql.Context, dbName string, branchName string, apr *argparser.ArgParseResults, rsc *doltdb.ReplicationStatusController) error {
-	err := checkoutExistingBranch(ctx, dbName, branchName, apr)
 	dbData, ok := dsess.DSessFromSess(ctx.Session).GetDbData(ctx, dbName)
 	if !ok {
-		return fmt.Errorf("Could not load database %s", dbName)
+		return fmt.Errorf("could not load database %s", dbName)
 	}
-	if errors.Is(err, doltdb.ErrWorkingSetNotFound) {
-		// If there is a branch but there is no working set,
-		// somehow the local branch ref was created without a
-		// working set. This happened with old versions of dolt
-		// when running as a read replica, for example. Try to
-		// create a working set pointing at the existing branch
-		// HEAD and check out the branch again.
-		//
-		// TODO: This is all quite racey, but so is the
-		// handling in doltDB, etc.
-		err = createWorkingSetForLocalBranch(ctx, dbData.Ddb, branchName)
-		if err != nil {
-			return err
-		}
-
-		// Since we've created new refs since the transaction began, we need to commit this transaction and
-		// start a new one to avoid not found errors after this
-		// TODO: this is much worse than other places we do this, because it's two layers of implicit behavior
-		sess := dsess.DSessFromSess(ctx.Session)
-		err = commitTransaction(ctx, sess, rsc)
-		if err != nil {
-			return err
-		}
-
+	if isBranch, err := actions.IsBranch(ctx, dbData.Ddb, branchName); err != nil {
+		return err
+	} else if isBranch {
 		err = checkoutExistingBranch(ctx, dbName, branchName, apr)
+		if errors.Is(err, doltdb.ErrWorkingSetNotFound) {
+			// If there is a branch but there is no working set,
+			// somehow the local branch ref was created without a
+			// working set. This happened with old versions of dolt
+			// when running as a read replica, for example. Try to
+			// create a working set pointing at the existing branch
+			// HEAD and check out the branch again.
+			//
+			// TODO: This is all quite racey, but so is the
+			// handling in doltDB, etc.
+			err = createWorkingSetForLocalBranch(ctx, dbData.Ddb, branchName)
+			if err != nil {
+				return err
+			}
+
+			// Since we've created new refs since the transaction began, we need to commit this transaction and
+			// start a new one to avoid not found errors after this
+			// TODO: this is much worse than other places we do this, because it's two layers of implicit behavior
+			sess := dsess.DSessFromSess(ctx.Session)
+			err = commitTransaction(ctx, sess, rsc)
+			if err != nil {
+				return err
+			}
+
+			err = checkoutExistingBranch(ctx, dbName, branchName, apr)
+		}
+		if err != nil {
+			return err
+		}
+		return nil
 	}
-	return nil
+	return fmt.Errorf("'%s' is not a branch", branchName)
 }
 
 // checkoutTablesFromCommit checks out the tables named from the branch named and overwrites those tables in the
