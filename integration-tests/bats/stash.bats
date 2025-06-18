@@ -40,6 +40,7 @@ teardown() {
     [[ "$output" =~ "stash@{0}" ]] || false
 
     run dolt stash pop
+    echo "$output"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Dropped refs/stash@{0}" ]] || false
 
