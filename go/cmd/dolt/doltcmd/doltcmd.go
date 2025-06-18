@@ -83,7 +83,7 @@ var doltSubCommands = []cli.Command{
 	dumpDocsCommand,
 	dumpZshCommand,
 	docscmds.Commands,
-	stashcmds.StashCommands,
+	stashcmds.StashCmd{},
 	&commands.Assist{},
 	commands.ProfileCmd{},
 	commands.QueryDiff{},

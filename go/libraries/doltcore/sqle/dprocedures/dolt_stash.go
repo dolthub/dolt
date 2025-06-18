@@ -500,7 +500,7 @@ func handleMerge(ctx *sql.Context, dbData env.DbData[*sql.Context], stashName st
 		tblNames := strings.Join(doltdb.FlattenTableNames(tablesWithConflict), "', '")
 		status := fmt.Errorf("error: Your local changes to the following tables would be overwritten by applying stash %d:\n"+
 			"\t{'%s'}\n"+
-			"Please commit your changes or stash them before you merge.\nAborting\n", idx, tblNames)
+			"Please commit your changes or stash them before you merge.\nAborting\n\"The stash entry is kept in case you need it again.\n", idx, tblNames)
 		return nil, nil, nil, status
 	}
 
