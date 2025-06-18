@@ -329,6 +329,13 @@ func CreateReflogArgParser() *argparser.ArgParser {
 	return ap
 }
 
+func CreateRmArgParser() *argparser.ArgParser {
+	ap := argparser.NewArgParserWithVariableArgs("add")
+	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "table(s) to remove from the list of tables staged to be committed."})
+
+	return ap
+}
+
 func CreateCreateCommitParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithMaxArgs("createchunk commit", 0)
 	ap.SupportsString(AuthorParam, "", "author", "Specify an explicit author using the standard A U Thor {{.LessThan}}author@example.com{{.GreaterThan}} format.")
