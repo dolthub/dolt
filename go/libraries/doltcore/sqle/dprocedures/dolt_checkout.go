@@ -126,9 +126,11 @@ func doDoltCheckout(ctx *sql.Context, args []string) (statusCode int, successMes
 	}
 
 	// check for detached HEAD state early - if the user is trying to checkout a tag or commit hash
-	err = checkDetachedHeadState(ctx, dbData.Ddb, firstArg, updateHead)
-	if err != nil {
-		return 1, "", err
+	if apr.NArg() == 1 {
+		err = checkDetachedHeadState(ctx, dbData.Ddb, firstArg, updateHead)
+		if err != nil {
+			return 1, "", err
+		}
 	}
 
 	isModification, err := willModifyDb(ctx, dSess, dbData, currentDbName, firstArg, updateHead)
