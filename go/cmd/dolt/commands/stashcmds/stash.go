@@ -38,12 +38,6 @@ import (
 
 var ErrStashNotSupportedForOldFormat = errors.New("stash is not supported for old storage format")
 
-var StashCommands = cli.NewSubCommandHandlerWithUnspecified("stash", "Stash the changes in a dirty working directory away.", false, StashCmd{}, []cli.Command{
-	StashClearCmd{},
-	StashDropCmd{},
-	StashPopCmd{},
-})
-
 var stashDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Stash the changes in a dirty working directory away.",
 	LongDesc: `Use dolt stash when you want to record the current state of the working directory and the index, but want to go back to a clean working directory. 
@@ -191,7 +185,7 @@ func (cmd StashCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	case "pop", "drop":
 		err = stashRemove(ctx, cliCtx, dEnv, apr, subcommand)
 	case "list":
-		err = listStashes(ctx, cliCtx, dEnv)
+		err = stashList(ctx, cliCtx, dEnv)
 	case "clear":
 		err = stashClear(ctx, cliCtx, apr, subcommand)
 	}
@@ -302,7 +296,7 @@ func stashRemove(ctx context.Context, cliCtx cli.CliContext, dEnv *env.DoltEnv, 
 	return err
 }
 
-func listStashes(ctx context.Context, cliCtx cli.CliContext, dEnv *env.DoltEnv) error {
+func stashList(ctx context.Context, cliCtx cli.CliContext, dEnv *env.DoltEnv) error {
 	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
 		return err
