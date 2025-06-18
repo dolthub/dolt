@@ -819,7 +819,6 @@ SQL
 
     # use -- to explicitly indicate we want to checkout the table, not the branch
     run dolt checkout -- feature
-    echo "$output"
 
     # verify the table was reset (not switched to feature branch)
     run dolt sql -q "select * from feature;" -r csv
@@ -923,7 +922,6 @@ SQL
     # verify the remote tracking branch exists
     run dolt branch -a
     [ "$status" -eq 0 ]
-    echo "$output"
     [[ "$output" =~ "remotes/origin/feature" ]] || false
 
     # use DWIM to checkout and create a local branch from remote tracking branch
