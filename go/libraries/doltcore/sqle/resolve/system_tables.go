@@ -25,7 +25,7 @@ import (
 func GetGeneratedSystemTables(ctx context.Context, root doltdb.RootValue) ([]doltdb.TableName, error) {
 	s := doltdb.NewTableNameSet(nil)
 
-	// Depending on whether the search path is used, the generated system tables will either be in the dolt namespace 
+	// Depending on whether the search path is used, the generated system tables will either be in the dolt namespace
 	// or the empty (default) namespace
 	if !UseSearchPath {
 		for _, t := range doltdb.GeneratedSystemTableNames() {
@@ -61,7 +61,7 @@ func GetGeneratedSystemTables(ctx context.Context, root doltdb.RootValue) ([]dol
 				})
 			}
 		}
-		
+
 		// For doltgres, we also support the legacy dolt_ table names, addressable in any user schema
 		if UseSearchPath && schema.Name != "pg_catalog" && schema.Name != doltdb.DoltNamespace {
 			for _, name := range doltdb.DoltGeneratedTableNames {
@@ -69,10 +69,9 @@ func GetGeneratedSystemTables(ctx context.Context, root doltdb.RootValue) ([]dol
 					Name:   name,
 					Schema: schema.Name,
 				})
-			} 
+			}
 		}
 	}
 
 	return s.AsSlice(), nil
 }
-
