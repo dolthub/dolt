@@ -135,7 +135,7 @@ teardown() {
 @test "empty-repo: dolt checkout non-existent branch" {
     run dolt checkout foo
     [ "$status" -ne 0 ]
-    [ "$output" = "error: could not find foo" ]
+    [ "$output" = "tablespec 'foo' did not match any table(s) known to dolt" ]
 }
 
 @test "empty-repo: create and checkout a branch" {
