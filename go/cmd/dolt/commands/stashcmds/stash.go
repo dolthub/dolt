@@ -82,85 +82,6 @@ func (cmd StashCmd) EventType() eventsapi.ClientEventType {
 	return eventsapi.ClientEventType_STASH
 }
 
-// generateStashSql returns the query that will call the `DOLT_STASH` stored proceudre.
-func generateStashSql(apr *argparser.ArgParseResults, subcommand string) string {
-	var buffer bytes.Buffer
-	first := true
-	buffer.WriteString("CALL DOLT_STASH(")
-
-	write := func(s string) {
-		if !first {
-			buffer.WriteString(", ")
-		}
-		buffer.WriteString("'")
-		buffer.WriteString(s)
-		buffer.WriteString("'")
-		first = false
-	}
-
-	write(subcommand)
-	write(doltdb.DoltCliRef) // Cli always uses "dolt-cli" stash reference
-	if len(apr.Args) == 2 {
-		// Add stash identifier (i.e. "stash@{0}")
-		write(apr.Arg(1))
-	}
-
-	if apr.Contains(cli.AllFlag) {
-		write("-a")
-	}
-	if apr.Contains(cli.IncludeUntrackedFlag) {
-		write("-u")
-	}
-
-	buffer.WriteString(")")
-	return buffer.String()
-
-}
-
-func getStashesSQL(ctx context.Context, sqlCtx *sql.Context, queryist cli.Queryist, dEnv *env.DoltEnv) ([]*doltdb.Stash, error) {
-	qry := fmt.Sprintf("select stash_id, branch, hash, commit_message from dolt_stashes where name = '%s'", doltdb.DoltCliRef)
-	rows, err := commands.GetRowsForSql(queryist, sqlCtx, qry)
-	if err != nil {
-		return nil, err
-	}
-
-	var stashes []*doltdb.Stash
-	for _, s := range rows {
-		id, ok := s[0].(string)
-		if !ok {
-			return nil, fmt.Errorf("invalid  stash id")
-		}
-
-		branch, ok := s[1].(string)
-		if !ok {
-			return nil, fmt.Errorf("invalid stash branch")
-		}
-		fullBranch := ref.NewBranchRef(branch).String()
-
-		stashHash, ok := s[2].(string)
-		if !ok {
-			return nil, fmt.Errorf("invalid stash hash")
-		}
-		maybeCommit, err := actions.MaybeGetCommit(ctx, dEnv, stashHash)
-		if err != nil {
-			return nil, err
-		}
-
-		msg, ok := s[3].(string)
-		if !ok {
-			return nil, fmt.Errorf("invalid stash message")
-		}
-		stashes = append(stashes, &doltdb.Stash{
-			Name:            id,
-			BranchReference: fullBranch,
-			Description:     msg,
-			HeadCommit:      maybeCommit,
-		})
-	}
-
-	return stashes, nil
-}
-
 // Exec executes the command
 func (cmd StashCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	ap := cli.CreateStashArgParser()
@@ -198,37 +119,7 @@ func (cmd StashCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	return 0
 }
 
-// gatherPrintData is a helper function that returns the current branch and the commit meta for the most recent commit
-func pushPrintData(ctx context.Context, dEnv *env.DoltEnv) (string, *doltdb.Commit, *datas.CommitMeta, error) {
-	curHeadRef, err := dEnv.RepoStateReader().CWBHeadRef(ctx)
-	if err != nil {
-		return "", nil, nil, err
-	}
-	curBranchName := curHeadRef.String()
-	commitSpec, err := doltdb.NewCommitSpec(curBranchName)
-	if err != nil {
-		return "", nil, nil, err
-	}
-	optCmt, err := dEnv.DoltDB(ctx).Resolve(ctx, commitSpec, curHeadRef)
-	if err != nil {
-		return "", nil, nil, err
-	}
-	commit, ok := optCmt.ToCommit()
-	if !ok {
-		return "", nil, nil, err
-	}
-
-	commitMeta, err := commit.GetCommitMeta(ctx)
-	if err != nil {
-		return "", nil, nil, err
-	}
-
-	return curBranchName, commit, commitMeta, nil
-}
-
 func stashPush(ctx context.Context, cliCtx cli.CliContext, dEnv *env.DoltEnv, apr *argparser.ArgParseResults, subcommand string) error {
-	var rowIter sql.RowIter
-
 	roots, err := dEnv.Roots(ctx)
 	if err != nil {
 		return err
@@ -242,7 +133,7 @@ func stashPush(ctx context.Context, cliCtx cli.CliContext, dEnv *env.DoltEnv, ap
 		cli.Println("No local changes to save")
 		return nil
 	}
-	curBranchName, commit, commitMeta, err := pushPrintData(ctx, dEnv)
+	curBranchName, commit, commitMeta, err := getStashPushData(ctx, dEnv)
 	if err != nil {
 		return err
 	}
@@ -304,8 +195,8 @@ func stashList(ctx context.Context, cliCtx cli.CliContext, dEnv *env.DoltEnv) er
 	if closeFunc != nil {
 		defer closeFunc()
 	}
-	stashes, err := getStashesSQL(ctx, sqlCtx, queryist, dEnv)
 
+	stashes, err := getStashesSQL(ctx, sqlCtx, queryist, dEnv)
 	for _, stash := range stashes {
 		commitHash, err := stash.HeadCommit.HashOf()
 		if err != nil {
@@ -327,6 +218,85 @@ func stashClear(ctx context.Context, cliCtx cli.CliContext, apr *argparser.ArgPa
 	}
 	_, err = sql.RowIterToRows(sqlCtx, rowIter)
 	return err
+}
+
+func getStashesSQL(ctx context.Context, sqlCtx *sql.Context, queryist cli.Queryist, dEnv *env.DoltEnv) ([]*doltdb.Stash, error) {
+	qry := fmt.Sprintf("select stash_id, branch, hash, commit_message from dolt_stashes where name = '%s'", doltdb.DoltCliRef)
+	rows, err := commands.GetRowsForSql(queryist, sqlCtx, qry)
+	if err != nil {
+		return nil, err
+	}
+
+	var stashes []*doltdb.Stash
+	for _, s := range rows {
+		id, ok := s[0].(string)
+		if !ok {
+			return nil, fmt.Errorf("invalid stash id")
+		}
+
+		branch, ok := s[1].(string)
+		if !ok {
+			return nil, fmt.Errorf("invalid stash branch")
+		}
+		fullBranch := ref.NewBranchRef(branch).String()
+
+		stashHash, ok := s[2].(string)
+		if !ok {
+			return nil, fmt.Errorf("invalid stash hash")
+		}
+		maybeCommit, err := actions.MaybeGetCommit(ctx, dEnv, stashHash)
+		if err != nil {
+			return nil, err
+		}
+
+		msg, ok := s[3].(string)
+		if !ok {
+			return nil, fmt.Errorf("invalid stash message")
+		}
+		stashes = append(stashes, &doltdb.Stash{
+			Name:            id,
+			BranchReference: fullBranch,
+			HeadCommit:      maybeCommit,
+			Description:     msg,
+		})
+	}
+
+	return stashes, nil
+}
+
+// generateStashSql returns the query that will call the `DOLT_STASH` stored proceudre.
+func generateStashSql(apr *argparser.ArgParseResults, subcommand string) string {
+	var buffer bytes.Buffer
+	first := true
+	buffer.WriteString("CALL DOLT_STASH(")
+
+	write := func(s string) {
+		if !first {
+			buffer.WriteString(", ")
+		}
+		buffer.WriteString("'")
+		buffer.WriteString(s)
+		buffer.WriteString("'")
+		first = false
+	}
+
+	write(subcommand)
+	write(doltdb.DoltCliRef)
+
+	if len(apr.Args) == 2 {
+		// Add stash identifier (i.e. "stash@{0}")
+		write(apr.Arg(1))
+	}
+
+	if apr.Contains(cli.AllFlag) {
+		write("-a")
+	}
+	if apr.Contains(cli.IncludeUntrackedFlag) {
+		write("-u")
+	}
+
+	buffer.WriteString(")")
+	return buffer.String()
 }
 
 func hasLocalChanges(ctx context.Context, dEnv *env.DoltEnv, roots doltdb.Roots, apr *argparser.ArgParseResults) (bool, error) {
@@ -397,6 +367,34 @@ func hasLocalChanges(ctx context.Context, dEnv *env.DoltEnv, roots doltdb.Roots,
 
 	// There are changes to tracked tables. Stash them.
 	return true, nil
+}
+
+// getStashPushData is a helper function that returns the current branch, the commit itself, and the commit meta for the most recent commit
+func getStashPushData(ctx context.Context, dEnv *env.DoltEnv) (string, *doltdb.Commit, *datas.CommitMeta, error) {
+	curHeadRef, err := dEnv.RepoStateReader().CWBHeadRef(ctx)
+	if err != nil {
+		return "", nil, nil, err
+	}
+	curBranchName := curHeadRef.String()
+	commitSpec, err := doltdb.NewCommitSpec(curBranchName)
+	if err != nil {
+		return "", nil, nil, err
+	}
+	optCmt, err := dEnv.DoltDB(ctx).Resolve(ctx, commitSpec, curHeadRef)
+	if err != nil {
+		return "", nil, nil, err
+	}
+	commit, ok := optCmt.ToCommit()
+	if !ok {
+		return "", nil, nil, err
+	}
+
+	commitMeta, err := commit.GetCommitMeta(ctx)
+	if err != nil {
+		return "", nil, nil, err
+	}
+
+	return curBranchName, commit, commitMeta, nil
 }
 
 func stashQuery(ctx context.Context, cliCtx cli.CliContext, apr *argparser.ArgParseResults, subcommand string) (sql.RowIter, *sql.Context, func(), error) {
