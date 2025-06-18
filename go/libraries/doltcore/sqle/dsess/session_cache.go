@@ -261,14 +261,14 @@ func (c *SessionCache) CacheTableChecks(key doltdb.DataCacheKey, checks []sql.Ch
 	c.checks[key] = checks
 }
 
-// GetTableNameMap returns the cached names of tables in a given root, keyed by their lower-case name, to their 
+// GetTableNameMap returns the cached names of tables in a given root, keyed by their lower-case name, to their
 // case-sensitive name
 func (c *SessionCache) GetTableNameMap(key uint64) (map[string]string, bool) {
 	tables, ok := c.tableMaps[key]
 	return tables, ok
 }
 
-// CacheTableNameMap caches the names of tables in a given root, keyed by their lower-case name, to their 
+// CacheTableNameMap caches the names of tables in a given root, keyed by their lower-case name, to their
 // case-sensitive name
 func (c *SessionCache) CacheTableNameMap(key uint64, tables map[string]string) {
 	c.mu.Lock()

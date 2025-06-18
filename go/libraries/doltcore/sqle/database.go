@@ -1043,7 +1043,7 @@ func (db Database) tableInsensitive(ctx *sql.Context, root doltdb.RootValue, tab
 	}
 
 	tableListKey := root.TableListHash()
-	
+
 	// TODO: refactor to make caching logic more obvious, cache and then retrieve
 	// TODO: why would tableListKey ever be zero?
 	if tableListKey != 0 {
