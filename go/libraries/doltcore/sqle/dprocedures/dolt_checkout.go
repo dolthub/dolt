@@ -176,7 +176,12 @@ func doDoltCheckout(ctx *sql.Context, args []string) (statusCode int, successMes
 		return 1, "", fmt.Errorf("unable to read remote refs from data repository: %v", err)
 	}
 
-	validRemoteRef := remoteRefs != nil && len(remoteRefs) == 1
+	isTag, err := actions.IsTag(ctx, dbData.Ddb, firstArg)
+	if err != nil {
+		return 1, "", fmt.Errorf("unable to read tags from data repository: %v", err)
+	}
+
+	validRemoteRef := remoteRefs != nil && len(remoteRefs) == 1 || isTag
 
 	if dashDashPos == 1 && (localExists || validRemoteRef) {
 		if apr.NArg() == 1 { // Assume some <ref> specified because dashDashPos is 1
