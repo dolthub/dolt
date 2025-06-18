@@ -65,7 +65,6 @@ func doDoltCheckout(ctx *sql.Context, args []string) (statusCode int, successMes
 	// The --move flag is used internally by the `dolt checkout` CLI command. It is not intended for external use.
 	// It mimics the behavior of the `dolt checkout` command line, moving the working set into the new branch.
 	argParser.SupportsFlag(cli.MoveFlag, "m", "")
-
 	apr, err := argParser.Parse(args)
 	if err != nil {
 		return 1, "", err
@@ -120,6 +119,20 @@ func doDoltCheckout(ctx *sql.Context, args []string) (statusCode int, successMes
 		return 1, "", fmt.Errorf("Could not load database %s", currentDbName)
 	}
 
+	// firstArg purpose depends on the context, it may be a branch, table, etc.
+	firstArg := apr.Arg(0)
+	if len(firstArg) == 0 {
+		return 1, "", ErrEmptyBranchName
+	}
+
+	isModification, err := willModifyDb(ctx, dSess, dbData, currentDbName, firstArg, updateHead)
+	if err != nil {
+		return 1, "", err
+	}
+	if !isModification && apr.NArg() == 1 {
+		return 0, fmt.Sprintf("Already on branch '%s'", firstArg), nil
+	}
+
 	// Check if the user executed `dolt checkout .` (reset working set)
 	if apr.NArg() == 1 && apr.Arg(0) == "." {
 		headRef, err := dbData.Rsr.CWBHeadRef(ctx)
@@ -142,12 +155,6 @@ func doDoltCheckout(ctx *sql.Context, args []string) (statusCode int, successMes
 		return 0, "", err
 	}
 
-	// firstArg purpose depends on the context, it may be a branch, table, etc.
-	firstArg := apr.Arg(0)
-	if len(firstArg) == 0 {
-		return 1, "", ErrEmptyBranchName
-	}
-
 	// No ref explicitly specified but table(s) are
 	dashDashPos := apr.PositionalArgsSeparatorIndex
 	if dashDashPos == 0 {
@@ -156,14 +163,6 @@ func doDoltCheckout(ctx *sql.Context, args []string) (statusCode int, successMes
 			return 1, "", err
 		}
 		return 0, successMessage, nil
-	}
-
-	isModification, err := willModifyDb(ctx, dSess, dbData, currentDbName, firstArg, updateHead)
-	if err != nil {
-		return 1, "", err
-	}
-	if !isModification && apr.NArg() == 1 {
-		return 0, fmt.Sprintf("Already on branch '%s'", firstArg), nil
 	}
 
 	localExists, err := actions.IsBranch(ctx, dbData.Ddb, firstArg)
@@ -651,7 +650,7 @@ func checkoutTablesFromCommit(
 // the new branch and persisting the checked-out branch into future sessions
 func doGlobalCheckout(ctx *sql.Context, branchName string, isForce bool, isNewBranch bool) error {
 	err := MoveWorkingSetToBranch(ctx, branchName, isForce, isNewBranch)
-	if err != nil && !errors.Is(err, doltdb.ErrAlreadyOnBranch) {
+	if err != nil && err != doltdb.ErrAlreadyOnBranch {
 		return err
 	}
 
