@@ -82,7 +82,6 @@ teardown() {
 
     run dolt checkout other
     [ "$status" -eq 1 ]
-    echo "$output"
     [[ "$output" =~ "'other' matched multiple (2) remote tracking branches" ]] || false
 }
 
@@ -1547,7 +1546,6 @@ SQL
 
     run dolt pull
     [ "$status" -eq 0 ]
-    echo "$output"
     [[ "$output" =~ "Everything up-to-date" ]] || false
 }
 
