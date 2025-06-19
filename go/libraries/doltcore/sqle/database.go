@@ -1050,12 +1050,12 @@ func (db Database) tableInsensitive(ctx *sql.Context, root doltdb.RootValue, tab
 		return doltdb.TableName{}, nil, false, fmt.Errorf("no state for database %s", db.RevisionQualifiedName())
 	}
 
-	tableListKey := root.TableListHash()
-
-	// TODO: refactor to make caching logic more obvious, cache and then retrieve
-	// TODO: why would tableListKey ever be zero?
-	if tableListKey != 0 {
-		tableList, ok := dbState.SessionCache().GetTableNameMap(tableListKey)
+	// TODO: this logic is broken in the presence of schemas. It's set on a root value but always uses a single schema.
+	//  It needs to use the values of every table in every schema when computing the cache. It's also only set on a 
+	//  call to GetTableNames, and is unset before such a call. This also means that doltgres cannot make use of this
+	//  caching, because the getAllTableNames below switches to different logic for doltgres. 
+	if root.TableListHash() != 0 {
+		tableList, ok := dbState.SessionCache().GetTableNameMap(root.TableListHash())
 		if ok {
 			tname, ok := tableList[strings.ToLower(tableName)]
 			if ok {
@@ -1076,12 +1076,12 @@ func (db Database) tableInsensitive(ctx *sql.Context, root doltdb.RootValue, tab
 		return doltdb.TableName{}, nil, false, err
 	}
 
-	if tableListKey != 0 {
+	if root.TableListHash() != 0 {
 		tableMap := make(map[string]string)
 		for _, table := range tableNames {
 			tableMap[strings.ToLower(table)] = table
 		}
-		dbState.SessionCache().CacheTableNameMap(tableListKey, tableMap)
+		dbState.SessionCache().CacheTableNameMap(root.TableListHash(), tableMap)
 	}
 
 	tableName, ok = sql.GetTableNameInsensitive(tableName, tableNames)
