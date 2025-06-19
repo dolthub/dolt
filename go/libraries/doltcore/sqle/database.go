@@ -1051,9 +1051,9 @@ func (db Database) tableInsensitive(ctx *sql.Context, root doltdb.RootValue, tab
 	}
 
 	// TODO: this logic is broken in the presence of schemas. It's set on a root value but always uses a single schema.
-	//  It needs to use the values of every table in every schema when computing the cache. It's also only set on a 
+	//  It needs to use the values of every table in every schema when computing the cache. It's also only set on a
 	//  call to GetTableNames, and is unset before such a call. This also means that doltgres cannot make use of this
-	//  caching, because the getAllTableNames below switches to different logic for doltgres. 
+	//  caching, because the getAllTableNames below switches to different logic for doltgres.
 	if root.TableListHash() != 0 {
 		tableList, ok := dbState.SessionCache().GetTableNameMap(root.TableListHash())
 		if ok {
