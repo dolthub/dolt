@@ -16,8 +16,8 @@ teardown() {
 
 @test "stash: stashing on clean working set" {
     run dolt stash
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "No local changes to save" ]] || false
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "no local changes to save" ]] || false
 }
 
 @test "stash: simple stashing and popping stash" {
@@ -369,8 +369,8 @@ teardown() {
     [[ "$output" =~ "Untracked tables:" ]] || false
 
     run dolt stash
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "No local changes to save" ]] || false
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "no local changes to save" ]] || false
 
     run dolt ls
     [ "$status" -eq 0 ]
