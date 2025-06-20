@@ -378,6 +378,56 @@ func validateImportArgs(apr *argparser.ArgParseResults) errhand.VerboseError {
 	return nil
 }
 
+// validatePrimaryKeysAgainstSchema checks if all provided primary keys exist in the reader's schema
+// considering any name mapping that may be applied
+func validatePrimaryKeysAgainstSchema(primaryKeys []string, rdSchema schema.Schema, nameMapper rowconv.NameMapper) error {
+	if len(primaryKeys) == 0 {
+		return nil
+	}
+
+	cols := rdSchema.GetAllCols()
+	var missingKeys []string
+
+	for _, pk := range primaryKeys {
+		// First check if the primary key exists directly in the schema
+		if _, ok := cols.GetByName(pk); ok {
+			continue
+		}
+
+		// If not found directly, check if any column maps to this primary key name
+		found := false
+		cols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+			if nameMapper.Map(col.Name) == pk {
+				found = true
+				return true, nil
+			}
+			return false, nil
+		})
+
+		if !found {
+			missingKeys = append(missingKeys, pk)
+		}
+	}
+
+	if len(missingKeys) > 0 {
+		// Build list of available columns for helpful error message
+		var availableCols []string
+		cols.Iter(func(tag uint64, col schema.Column) (bool, error) {
+			availableCols = append(availableCols, col.Name)
+			return false, nil
+		})
+
+		if len(missingKeys) == 1 {
+			return fmt.Errorf("primary key '%s' not found in import file. Available columns: %s",
+				missingKeys[0], strings.Join(availableCols, ", "))
+		}
+		return fmt.Errorf("primary keys %v not found in import file. Available columns: %s",
+			missingKeys, strings.Join(availableCols, ", "))
+	}
+
+	return nil
+}
+
 type ImportCmd struct{}
 
 // Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
@@ -527,6 +577,15 @@ func newImportDataReader(ctx context.Context, root doltdb.RootValue, dEnv *env.D
 	rd, _, err := impOpts.src.NewReader(ctx, dEnv, impOpts.srcOptions)
 	if err != nil {
 		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.CreateReaderErr, Cause: err}
+	}
+
+	// Validate primary keys early for create operations, so that we return validation errors early
+	if impOpts.operation == mvdata.CreateOp && len(impOpts.primaryKeys) > 0 && impOpts.schFile == "" {
+		rdSchema := rd.GetSchema()
+		if err := validatePrimaryKeysAgainstSchema(impOpts.primaryKeys, rdSchema, impOpts.nameMapper); err != nil {
+			rd.Close(ctx)
+			return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.SchemaErr, Cause: err}
+		}
 	}
 
 	return rd, nil
