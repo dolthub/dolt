@@ -2115,3 +2115,25 @@ EOF
     [[ "$output" =~ "br3  | true" ]] || false
     [[ "$output" =~ "main | false" ]] || false
 }
+
+@test "sql-server: warning log on forced __dolt_local_user__ drop after restart" {
+    skiponwindows "Missing dependencies"
+
+    cd repo1
+    start_sql_server > server_log.txt 2>&1
+
+    # use root account to avoid err on drop
+    run dolt -u root -p "" sql -q "drop user if exists __dolt_local_user__@localhost"
+    [ $status -eq 0 ]
+    run dolt -u root -p "" sql -q "create user __dolt_local_user__@localhost"
+    [ $status -eq 0 ]
+    run dolt sql
+    [ $status -ne 0 ]
+    [[ "$output" =~ "Error 1045 (28000): Access denied for user" ]] || false
+
+    stop_sql_server 1 && sleep 0.5
+    start_sql_server > server_log.txt 2>&1 && sleep 0.5
+
+    run grep -F "Dropped persistent '__dolt_local_user__@localhost' as it conflicts with dolt reserved '__dolt_local_user__@localhost'" server_log.txt
+    [ $status -eq 0 ]
+}
