@@ -108,6 +108,15 @@ func (cmd ArchiveCmd) Exec(ctx context.Context, commandStr string, args []string
 	progress := make(chan interface{}, 32)
 	handleProgress(ctx, progress)
 
+	defer func() {
+		// Scrappy pause to flush messages from the progress channel before terminating.
+		// This only works because by the time we attempt to return to from this function,
+		// we know there are no more messages being written to the channel.
+		for len(progress) > 0 {
+			time.Sleep(10 * time.Millisecond)
+		}
+	}()
+
 	if apr.Contains(revertFlag) {
 		err := nbs.UnArchive(ctx, cs, ourDbMD, progress)
 		if err != nil {
@@ -143,7 +152,6 @@ func (cmd ArchiveCmd) Exec(ctx context.Context, commandStr string, args []string
 			cli.PrintErrln(err)
 			return 1
 		}
-
 	}
 	return 0
 }
@@ -213,7 +221,6 @@ func handleProgress(ctx context.Context, progress chan interface{}) {
 
 				p.Display()
 			}
-
 		}
 	}()
 }
