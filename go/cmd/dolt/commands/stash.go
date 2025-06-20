@@ -20,8 +20,6 @@ import (
 	"fmt"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/gocraft/dbr/v2"
 	"github.com/gocraft/dbr/v2/dialect"
@@ -68,10 +66,7 @@ func (cmd StashCmd) Docs() *cli.CommandDocumentation {
 }
 
 func (cmd StashCmd) ArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParserWithMaxArgs(cmd.Name(), 0)
-	ap.SupportsFlag(cli.IncludeUntrackedFlag, "u", "Untracked tables are also stashed.")
-	ap.SupportsFlag(cli.AllFlag, "a", "All tables are stashed, including untracked and ignored tables.")
-	return ap
+	return cli.CreateStashArgParser()
 }
 
 // EventType returns the type of the event to log
@@ -132,13 +127,7 @@ func stashPush(ctx context.Context, cliCtx cli.CliContext, apr *argparser.ArgPar
 		return err
 	}
 	stash := stashes[0]
-	stashHash, err := stash.HeadCommit.HashOf()
-	if err != nil {
-		return err
-	}
-	hashStr := stashHash.String()
-
-	cli.Println(fmt.Sprintf("Saved working directory and index state WIP on %s: %s %s", stash.BranchReference, hashStr, stash.Description))
+	cli.Println(fmt.Sprintf("Saved working directory and index state WIP on %s: %s %s", stash.BranchReference, stash.CommitHash, stash.Description))
 	_, err = sql.RowIterToRows(sqlCtx, rowIter)
 	return err
 }
@@ -167,11 +156,6 @@ func stashRemove(ctx context.Context, cliCtx cli.CliContext, apr *argparser.ArgP
 	if len(stashes)-1 < idx {
 		return fmt.Errorf("stash index stash@{%d} does not exist", idx)
 	}
-	commit := stashes[idx].HeadCommit
-	stashHash, err := commit.HashOf()
-	if err != nil {
-		return err
-	}
 
 	qry, params := generateStashSql(apr, subcommand)
 	interpolatedQuery, err := dbr.InterpolateForDialect(qry, params, dialect.MySQL)
@@ -184,15 +168,14 @@ func stashRemove(ctx context.Context, cliCtx cli.CliContext, apr *argparser.ArgP
 	}
 
 	if subcommand == "pop" {
-		var dEnv *env.DoltEnv
-		ret := StatusCmd{}.Exec(sqlCtx, "status", []string{}, dEnv, cliCtx)
+		ret := StatusCmd{}.Exec(sqlCtx, "status", []string{}, nil, cliCtx)
 		if ret != 0 {
 			cli.Println("The stash entry is kept in case you need it again.")
 			return err
 		}
 	}
 
-	cli.Println(fmt.Sprintf("Dropped refs/stash@{%v} (%s)", idx, stashHash.String()))
+	cli.Println(fmt.Sprintf("Dropped refs/stash@{%v} (%s)", idx, stashes[idx].CommitHash))
 	_, err = sql.RowIterToRows(sqlCtx, rowIter)
 	return err
 }
@@ -207,12 +190,11 @@ func stashList(ctx context.Context, cliCtx cli.CliContext) error {
 	}
 
 	stashes, err := getStashesSQL(ctx, sqlCtx, queryist, 0)
+	if err != nil {
+		return err
+	}
 	for _, stash := range stashes {
-		commitHash, err := stash.HeadCommit.HashOf()
-		if err != nil {
-			return err
-		}
-		cli.Println(fmt.Sprintf("%s: WIP on %s: %s %s", stash.Name, stash.BranchReference, commitHash.String(), stash.Description))
+		cli.Println(fmt.Sprintf("%s: WIP on %s: %s %s", stash.Name, stash.BranchReference, stash.CommitHash, stash.Description))
 	}
 
 	return nil
@@ -232,12 +214,6 @@ func stashClear(ctx context.Context, cliCtx cli.CliContext, apr *argparser.ArgPa
 
 // getStashesSQL queries the dolt_stashes system table to return the requested number of stashes. A limit of 0 will get all stashes
 func getStashesSQL(ctx context.Context, sqlCtx *sql.Context, queryist cli.Queryist, limit int) ([]*doltdb.Stash, error) {
-	sess := dsess.DSessFromSess(sqlCtx.Session)
-	dbName := sqlCtx.GetCurrentDatabase()
-	doltDb, ok := sess.GetDbData(sqlCtx, dbName)
-	if !ok {
-		return nil, fmt.Errorf("No doltdb found for %s", dbName)
-	}
 	limitStr := fmt.Sprintf("limit %d", limit)
 	if limit == 0 {
 		limitStr = ""
@@ -266,16 +242,6 @@ func getStashesSQL(ctx context.Context, sqlCtx *sql.Context, queryist cli.Queryi
 		if !ok {
 			return nil, fmt.Errorf("invalid stash hash")
 		}
-		fullHash, ok := hash.MaybeParse(stashHash)
-		if !ok {
-			return nil, fmt.Errorf("invalid stash hash")
-		}
-
-		var commit *doltdb.Commit
-		optCommit, err := doltDb.Ddb.ReadCommit(ctx, fullHash)
-		if err == nil {
-			commit, ok = optCommit.ToCommit()
-		}
 
 		msg, ok := s[3].(string)
 		if !ok {
@@ -286,54 +252,31 @@ func getStashesSQL(ctx context.Context, sqlCtx *sql.Context, queryist cli.Queryi
 			Name:            id,
 			BranchReference: fullBranch,
 			Description:     msg,
-			HeadCommit:      commit,
+			CommitHash:      stashHash,
 		})
 	}
 
 	return stashes, nil
 }
 
-// generateStashSql returns the query that will call the `DOLT_STASH` stored proceudre.
+// generateStashSql returns the query that will call the `DOLT_STASH` stored procedure.
 func generateStashSql(apr *argparser.ArgParseResults, subcommand string) (string, []interface{}) {
 	var buffer bytes.Buffer
 	var params []interface{}
-	var param bool
-	first := true
-	buffer.WriteString("CALL DOLT_STASH(")
-
-	write := func(s string) {
-		if !first {
-			buffer.WriteString(", ")
-		}
-		if !param {
-			buffer.WriteString("'")
-		}
-		buffer.WriteString(s)
-		if !param {
-			buffer.WriteString("'")
-		}
-		first = false
-		param = false
-	}
-
-	param = true
-	write("?")
-	param = true
-	write("?")
+	buffer.WriteString("CALL DOLT_STASH(?, ?")
 	params = append(params, subcommand)
 	params = append(params, doltdb.DoltCliRef)
 
 	if len(apr.Args) == 2 {
-		param = true
 		params = append(params, apr.Arg(1))
-		write("?")
+		buffer.WriteString(", ?")
 	}
 
 	if apr.Contains(cli.AllFlag) {
-		write("-a")
+		buffer.WriteString(", '-a'")
 	}
 	if apr.Contains(cli.IncludeUntrackedFlag) {
-		write("-u")
+		buffer.WriteString(", '-u'")
 	}
 
 	buffer.WriteString(")")

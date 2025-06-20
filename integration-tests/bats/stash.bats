@@ -159,6 +159,9 @@ teardown() {
 }
 
 @test "stash: popping neither latest nor oldest stash" {
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+          skip "needs checkout which is unsupported for remote-engine"
+    fi
     dolt sql -q "INSERT INTO test VALUES (1, 'a')"
     run dolt stash
     [ "$status" -eq 0 ]
@@ -211,6 +214,9 @@ teardown() {
 }
 
 @test "stash: stashing multiple entries on different branches" {
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+          skip "needs checkout which is unsupported for remote-engine"
+    fi
     dolt sql -q "INSERT INTO test VALUES (1, 'a')"
     run dolt stash
     [ "$status" -eq 0 ]
@@ -227,6 +233,9 @@ teardown() {
 }
 
 @test "stash: popping stash on different branch" {
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+          skip "needs checkout which is unsupported for remote-engine"
+    fi
     dolt sql -q "INSERT INTO test VALUES (1, 'a')"
     run dolt stash
     [ "$status" -eq 0 ]
@@ -538,6 +547,9 @@ teardown() {
 }
 
 @test "stash: popping stash with deleted table that is deleted already on current head" {
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+          skip "needs checkout which is unsupported for remote-engine"
+    fi
     dolt branch branch1
     dolt checkout -b branch2
     dolt sql -q "DROP TABLE test;"
@@ -566,6 +578,9 @@ teardown() {
 }
 
 @test "stash: popping stash with deleted table that the same table exists on current head" {
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+          skip "needs checkout which is unsupported for remote-engine"
+    fi
     dolt branch branch1
     dolt branch branch2
 
@@ -598,6 +613,9 @@ teardown() {
 }
 
 @test "stash: popping stash with deleted table that different table with same name on current head gives conflict" {
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+          skip "needs checkout which is unsupported for remote-engine"
+    fi
     dolt branch branch1
     dolt branch branch2
 
@@ -627,6 +645,9 @@ teardown() {
 }
 
 @test "stash: popping stash with added table with PK on current head with the exact same table is added already" {
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+              skip "needs checkout which is unsupported for remote-engine"
+    fi
     dolt branch branch1
     dolt checkout -b branch2
     dolt sql -q "CREATE TABLE new_test(id INT PRIMARY KEY); INSERT INTO new_test VALUES (1);"
@@ -656,6 +677,9 @@ teardown() {
 }
 
 @test "stash: popping stash with added keyless table on current head with the exact same table is added already" {
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+              skip "needs checkout which is unsupported for remote-engine"
+    fi
     dolt branch branch1
     dolt checkout -b branch2
     dolt sql -q "CREATE TABLE new_test(id INT); INSERT INTO new_test VALUES (1);"
