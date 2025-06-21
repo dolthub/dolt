@@ -144,17 +144,13 @@ func (itr *StashItr) Next(*sql.Context) (sql.Row, error) {
 	}()
 
 	stash := itr.stashes[itr.idx]
-	commitHash, err := stash.HeadCommit.HashOf()
-	if err != nil {
-		return nil, err
-	}
 
 	// BranchName and StashReference are of the form refs/heads/name
 	// or refs/stashes/name, so we need to parse them to get names
 	branch := ref.NewBranchRef(stash.BranchReference).GetPath()
 	stashRef := ref.NewStashRef(stash.StashReference).GetPath()
 
-	return sql.NewRow(stashRef, stash.Name, branch, commitHash.String(), stash.Description), nil
+	return sql.NewRow(stashRef, stash.Name, branch, stash.CommitHash, stash.Description), nil
 }
 
 // Close closes the iterator.
