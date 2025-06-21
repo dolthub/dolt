@@ -23,27 +23,6 @@ docker_process_sql() {
   dolt sql
 }
 
-# usage: file_env VAR [DEFAULT]
-#    ie: file_env 'XYZ_DB_PASSWORD' 'example'
-# (will allow for "$XYZ_DB_PASSWORD_FILE" to fill in the value of
-#  "$XYZ_DB_PASSWORD" from a file, especially for Docker's secrets feature)
-file_env() {
-	local var="$1"
-	local fileVar="${var}_FILE"
-	local def="${2:-}"
-	if [ "${!var:-}" ] && [ "${!fileVar:-}" ]; then
-		mysql_error "Both $var and $fileVar are set (but are exclusive)"
-	fi
-	local val="$def"
-	if [ "${!var:-}" ]; then
-		val="${!var}"
-	elif [ "${!fileVar:-}" ]; then
-		val="$(< "${!fileVar}")"
-	fi
-	export "$var"="$val"
-	unset "$fileVar"
-}
-
 CONTAINER_DATA_DIR="/var/lib/dolt"
 INIT_COMPLETED="$CONTAINER_DATA_DIR/.init_completed"
 DOLT_CONFIG_DIR="/etc/dolt/doltcfg.d"
@@ -163,52 +142,40 @@ create_default_database_from_env() {
 }
 
 create_user_from_env() {
-    local user
-    local password
-    local database
+  local user
+  local password
+  local database
 
-    user=$(get_env_var "USER")
-    password=$(get_env_var "PASSWORD")
-    database=$(get_env_var "DATABASE")
+  user=$(get_env_var "USER")
+  password=$(get_env_var "PASSWORD")
+  database=$(get_env_var "DATABASE")
 
-    if [ "$user" = 'root' ]; then
-      # TODO: add ALLOW_EMPTY_PASSWORD and RANDOM_ROOT_PASSWORD support, add MYSQL_ROOT_PASSWORD support
-mysql_error <<-EOF
+  if [ "$user" = 'root' ]; then
+    # TODO: add ALLOW_EMPTY_PASSWORD and RANDOM_ROOT_PASSWORD support, add MYSQL_ROOT_PASSWORD support
+    mysql_error <<-EOF
     $(get_env_var_name "USER")="root", $(get_env_var_name "USER") and $(get_env_var_name "PASSWORD") are for configuring a regular user and cannot be used for the root user
         Remove $(get_env_var_name "USER")="root" and use the following to control the root user password:
         - DOLT_ROOT_PASSWORD
 EOF
+  fi
+
+  if [ -n "$user" ] && [ -z "$password" ]; then
+    mysql_warn "$(get_env_var_name "USER") specified, but missing $(get_env_var_name "PASSWORD"); user will not be created"
+    return
+  elif [ -z "$user" ] && [ -n "$password" ]; then
+    mysql_warn "$(get_env_var_name "PASSWORD") specified, but missing $(get_env_var_name "USER"); password will be ignored"
+    return
+  fi
+
+  if [ -n "$user" ] && [ -n "$password" ]; then
+    mysql_note "Creating user ${user}"
+    dolt sql -q "CREATE USER IF NOT EXISTS '$user'@'%' IDENTIFIED BY '$password';"
+
+    if [ -n "$database" ]; then
+      mysql_note "Giving user ${user} access to schema ${database}"
+      dolt sql -q "GRANT ALL ON \`${database//_/\\_}\`.* TO '$user'@'%';"
     fi
-
-    if [ -n "$user" ] && [ -z "$password" ]; then
-        mysql_warn "$(get_env_var_name "USER") specified, but missing $(get_env_var_name "PASSWORD"); user will not be created"
-        return
-    elif [ -z "$user" ] && [ -n "$password" ]; then
-        mysql_warn "$(get_env_var_name "PASSWORD") specified, but missing $(get_env_var_name "USER"); password will be ignored"
-        return
-    fi
-
-    if [ -n "$user" ] && [ -n "$password" ]; then
-        mysql_note "Creating user ${user}"
-        dolt sql -q "CREATE USER IF NOT EXISTS '$user'@'%' IDENTIFIED BY '$password';"
-
-        if [ -n "$database" ]; then
-            mysql_note "Giving user ${user} access to schema ${database}"
-            dolt sql -q "GRANT ALL ON \`${database//_/\\_}\`.* TO '$user'@'%';"
-        fi
-    fi
-}
-
-setup_env_vars() {
-    # Initialize values that might be stored in a file
-    file_env 'MYSQL_DATABASE'
-    file_env 'MYSQL_USER'
-    file_env 'MYSQL_PASSWORD'
-    file_env 'DOLT_DATABASE'
-    file_env 'DOLT_USER'
-    file_env 'DOLT_PASSWORD'
-    file_env 'DOLT_ROOT_PASSWORD'
-    file_env 'DOLT_ROOT_HOST' 'localhost'
+  fi
 }
 
 _main() {
