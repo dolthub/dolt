@@ -128,30 +128,21 @@ set_dolt_config_if_defined() {
 }
 
 create_default_database_from_env() {
-    local database=""
-
-    if [ -n "$DOLT_DATABASE" ]; then
-        database="$DOLT_DATABASE"
-    elif [ -n "$MYSQL_DATABASE" ]; then
-        database="$MYSQL_DATABASE"
-    fi
-
-    if [ -n "$database" ]; then
-        dolt sql -q "CREATE DATABASE IF NOT EXISTS $database;"
-    fi
-}
-
-create_user_from_env() {
     local user
     local password
     local database
 
+    database=$(get_env_var "DATABASE")
     user=$(get_env_var "USER")
     password=$(get_env_var "PASSWORD")
-    database=$(get_env_var "DATABASE")
+
+    if [ -n "$database" ]; then
+      mysql_note "Creating database ${database}"
+        dolt sql -q "CREATE DATABASE IF NOT EXISTS $database;"
+    fi
 
     if [ "$user" = 'root' ]; then
-      # TODO: add ALLOW_EMPTY_PASSWORD and RANDOM_ROOT_PASSWORD support, add MYSQL_ROOT_PASSWORD support
+        # TODO: add ALLOW_EMPTY_PASSWORD and RANDOM_ROOT_PASSWORD support
 mysql_error <<-EOF
     $(get_env_var_name "USER")="root", $(get_env_var_name "USER") and $(get_env_var_name "PASSWORD") are for configuring a regular user and cannot be used for the root user
         Remove $(get_env_var_name "USER")="root" and use the following to control the root user password:
@@ -194,10 +185,11 @@ _main() {
     # if there is a single yaml provided in /etc/dolt/servercfg.d directory,
     # it will be used to start the server with --config flag
     get_config_file_path_if_exists "$SERVER_CONFIG_DIR" "yaml"
-    if [ ! -z $CONFIG_PROVIDED ]; then
-        set -- "$@" --config=$CONFIG_PROVIDED
+    if [ ! -z "$CONFIG_PROVIDED" ]; then
+        set -- "$@" --config="$CONFIG_PROVIDED"
     fi
 
+    # TODO: add support for MYSQL_ROOT_HOST and MYSQL_ROOT_PASSWORD
     # If DOLT_ROOT_HOST has been specified – create a root user for that host with the specified password
     if [ -n "$DOLT_ROOT_HOST" ] && [ "$DOLT_ROOT_HOST" != 'localhost' ]; then
        echo "Ensuring root@${DOLT_ROOT_HOST} superuser exists (DOLT_ROOT_HOST was specified)"
@@ -214,8 +206,6 @@ _main() {
 
     # If DOLT_DATABASE or MYSQL_DATABASE has been specified, create the database if it does not exist
     create_default_database_from_env
-
-    create_user_from_env
 
     if [[ ! -f $INIT_COMPLETED ]]; then
         # run any file provided in /docker-entrypoint-initdb.d directory before the server starts
