@@ -847,7 +847,7 @@ SQL
 
     dolt checkout main
 
-    # Use explicit branch reference
+    # use explicit branch reference
     dolt checkout feature --
 
     # verify we switched to feature branch
@@ -1146,9 +1146,15 @@ SQL
     echo "$output"
     [[ "$output" =~ "'feature' matched multiple (2) remote tracking branches" ]] || false
 
+    run dolt checkout --track origin/feature
+    [ "$status" -eq 0 ]
+    echo "$output"
+    [[ "$output" =~ "Switched to branch 'feature'" ]] || false
+    [[ "$output" =~ "branch 'feature' set up to track 'origin/feature'" ]] || false
+
     # verify we're still on main branch
     run dolt branch
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "* main" ]] || false
+    [[ "$output" =~ "* feature" ]] || false
 }
 

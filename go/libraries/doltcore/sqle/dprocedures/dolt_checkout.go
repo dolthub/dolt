@@ -558,10 +558,13 @@ func checkoutExistingBranchWithWorkingSetFallback(
 		}
 
 		err = checkoutExistingBranch(ctx, dbName, branchName, apr)
-	}
-	if err != nil {
+		if err != nil {
+			return err
+		}
+	} else if err != nil {
 		return err
 	}
+
 	return nil
 }
 
