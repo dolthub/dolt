@@ -2134,6 +2134,6 @@ EOF
     stop_sql_server 1 && sleep 0.5
     start_sql_server > server_log.txt 2>&1 && sleep 0.5
 
-    run grep -F "Dropped persistent '__dolt_local_user__@localhost' as it conflicts with dolt reserved '__dolt_local_user__@localhost'" server_log.txt
+    run grep -F "Dropping persisted '__dolt_local_user__@localhost' because this account name is reserved for Dolt" server_log.txt
     [ $status -eq 0 ]
 }

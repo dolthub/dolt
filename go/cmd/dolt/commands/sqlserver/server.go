@@ -19,7 +19,6 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
-	"github.com/dolthub/vitess/go/vt/log"
 	"net"
 	"net/http"
 	"os"
@@ -521,46 +520,38 @@ func ConfigureServices(
 			mysqlDb := sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb
 
 			host := "localhost"
-			// LocalConnectionUser is reserved for `dolt sql` otherwise the ephemeral user can't be created
-			reserved := [...]string{LocalConnectionUser} // users necessary at startup to enter dolt sql-server
+			// this is reserved for `dolt sql` connections when sql-server is running
+			reservedUser := LocalConnectionUser
 
-			// check for reserved user conflicts
 			rd := mysqlDb.Reader()
-			var warn strings.Builder
-			conflicts := make([]mysql_db.UserPrimaryKey, 0, len(reserved))
-			for _, user := range reserved {
-				conflict, _ := rd.GetUser(mysql_db.UserPrimaryKey{Host: host, User: user})
-				if conflict != nil && !conflict.IsEphemeral {
-					warn.WriteString(fmt.Sprintf("Dropped persistent '%s@%s' as it conflicts with dolt reserved '%s@%s'", conflict.User, conflict.Host, user, host))
-					conflicts = append(conflicts, mysql_db.UserPrimaryKey{Host: conflict.Host, User: conflict.User})
-				}
-			}
+			conflict, _ := rd.GetUser(mysql_db.UserPrimaryKey{Host: host, User: reservedUser})
 			rd.Close()
+
+			var conflicts []mysql_db.UserPrimaryKey
+			if conflict != nil && !conflict.IsEphemeral {
+				logrus.Warningf("Dropping persisted '%s@%s' because this account name is reserved for Dolt", conflict.User, conflict.Host)
+				conflicts = append(conflicts, mysql_db.UserPrimaryKey{Host: conflict.Host, User: conflict.User})
+			}
 
 			ed := mysqlDb.Editor()
 			defer ed.Close()
 
-			for _, conflict := range conflicts {
-				ed.RemoveUser(conflict)
-
-				ed.RemoveRoleEdgesFromKey(mysql_db.RoleEdgesFromKey{
-					FromHost: conflict.Host,
-					FromUser: conflict.User,
-				})
-
-				ed.RemoveRoleEdgesToKey(mysql_db.RoleEdgesToKey{
-					ToHost: conflict.Host,
-					ToUser: conflict.User,
-				})
-			}
-
 			if len(conflicts) > 0 {
-				log.Warning(warn.String())
+				c := conflicts[0]
+				ed.RemoveUser(c)
+				ed.RemoveRoleEdgesFromKey(mysql_db.RoleEdgesFromKey{
+					FromHost: c.Host,
+					FromUser: c.User,
+				})
+				ed.RemoveRoleEdgesToKey(mysql_db.RoleEdgesToKey{
+					ToHost: c.Host,
+					ToUser: c.User,
+				})
+
 				sqlCtx, err := sqlEngine.NewDefaultContext(ctx)
 				if err != nil {
 					return fmt.Errorf("failed to create SQL context: %v", err)
 				}
-
 				if err := mysqlDb.Persist(sqlCtx, ed); err != nil {
 					return fmt.Errorf("failed to persist changes to privileges database: %v", err)
 				}
