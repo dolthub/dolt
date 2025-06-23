@@ -1160,7 +1160,7 @@ var SchemaChangeTestsConstraints = []MergeScriptTest{
 				Expected: []sql.Row{{"t", uint64(1)}},
 			},
 			{
-				Query:    "select violation_type, pk, col1, col2, violation_info like '\\%NOT((col1 = col2))\\%' from dolt_constraint_violations_t;",
+				Query:    "select violation_type, pk, col1, col2, violation_info like '\\%NOT((`col1` = `col2`))\\%' from dolt_constraint_violations_t;",
 				Expected: []sql.Row{{"check constraint", 1, 4, 4, true}},
 			},
 		},
@@ -1223,7 +1223,7 @@ var SchemaChangeTestsConstraints = []MergeScriptTest{
 				Expected: []sql.Row{{"t", uint64(1)}},
 			},
 			{
-				Query:    "select violation_type, pk, col1, col2, violation_info like '%(col1 + col2)%' from dolt_constraint_violations_t;",
+				Query:    "select violation_type, pk, col1, col2, violation_info like '%(`col1` + `col2`)%' from dolt_constraint_violations_t;",
 				Expected: []sql.Row{{"check constraint", 1, 0, 0, true}},
 			},
 		},
@@ -1253,7 +1253,7 @@ var SchemaChangeTestsConstraints = []MergeScriptTest{
 				Expected: []sql.Row{{"t", uint64(1)}},
 			},
 			{
-				Query:    "select violation_type, pk, col2, col3, violation_info like '\\%NOT((col2 = col3))\\%' from dolt_constraint_violations_t;",
+				Query:    "select violation_type, pk, col2, col3, violation_info like '\\%NOT((`col2` = `col3`))\\%' from dolt_constraint_violations_t;",
 				Expected: []sql.Row{{"check constraint", 1, 100, 100, true}},
 			},
 		},
@@ -1367,7 +1367,7 @@ var SchemaChangeTestsConstraints = []MergeScriptTest{
 				Expected: []sql.Row{{"t", uint64(1)}},
 			},
 			{
-				Query:    `select violation_type, pk, col1, violation_info like "\%NOT((col1 = concat('he','llo')))\%" from dolt_constraint_violations_t;`,
+				Query:    "select violation_type, pk, col1, violation_info like \"%NOT((`col1` = concat('he','llo')))%\" from dolt_constraint_violations_t;",
 				Expected: []sql.Row{{"check constraint", 2, "hello", true}},
 			},
 		},
@@ -1396,7 +1396,7 @@ var SchemaChangeTestsConstraints = []MergeScriptTest{
 				Expected: []sql.Row{{"t", uint64(1)}},
 			},
 			{
-				Query:    `select violation_type, c0, col0, col1, violation_info like "\%NOT((col1 = concat('he','llo')))\%" from dolt_constraint_violations_t;`,
+				Query:    "select violation_type, c0, col0, col1, violation_info like \"%NOT((`col1` = concat('he','llo')))%\" from dolt_constraint_violations_t;",
 				Expected: []sql.Row{{"check constraint", 2, "hola", "hello", true}},
 			},
 		},
