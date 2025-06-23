@@ -393,13 +393,13 @@ var mergeSchemaConflictTests = []mergeSchemaConflictTest{
 			ChkConflicts: []merge.ChkConflict{
 				{
 					Kind:   merge.TagCollision,
-					Ours:   schema.NewCheck("chk", "(c3 > 0)", true),
-					Theirs: schema.NewCheck("chk", "(c3 < 0)", true),
+					Ours:   schema.NewCheck("chk", "(`c3` > 0)", true),
+					Theirs: schema.NewCheck("chk", "(`c3` < 0)", true),
 				},
 				{
 					Kind:   merge.NameCollision,
-					Ours:   schema.NewCheck("chk", "(c3 > 0)", true),
-					Theirs: schema.NewCheck("chk", "(c3 < 0)", true),
+					Ours:   schema.NewCheck("chk", "(`c3` > 0)", true),
+					Theirs: schema.NewCheck("chk", "(`c3` < 0)", true),
 				},
 			},
 		},
@@ -436,13 +436,13 @@ var mergeSchemaConflictTests = []mergeSchemaConflictTest{
 			ChkConflicts: []merge.ChkConflict{
 				{
 					Kind:   merge.TagCollision,
-					Ours:   schema.NewCheck("chk", "(c3 > 10)", true),
-					Theirs: schema.NewCheck("chk", "(c3 < 10)", true),
+					Ours:   schema.NewCheck("chk", "(`c3` > 10)", true),
+					Theirs: schema.NewCheck("chk", "(`c3` < 10)", true),
 				},
 				{
 					Kind:   merge.NameCollision,
-					Ours:   schema.NewCheck("chk", "(c3 > 10)", true),
-					Theirs: schema.NewCheck("chk", "(c3 < 10)", true),
+					Ours:   schema.NewCheck("chk", "(`c3` > 10)", true),
+					Theirs: schema.NewCheck("chk", "(`c3` < 10)", true),
 				},
 			},
 		},
