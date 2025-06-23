@@ -152,7 +152,7 @@ func doDoltCheckout(ctx *sql.Context, args []string) (statusCode int, successMes
 		return 0, successMessage, nil
 	}
 
-	localExists, err := actions.IsBranch(ctx, dbData.Ddb, firstArg)
+	localRefExists, err := actions.IsBranch(ctx, dbData.Ddb, firstArg)
 	if err != nil {
 		return 1, "", err
 	}
@@ -162,12 +162,12 @@ func doDoltCheckout(ctx *sql.Context, args []string) (statusCode int, successMes
 		return 1, "", fmt.Errorf("unable to read remote refs from data repository: %v", err)
 	}
 
-	validRemoteRef := remoteRefs != nil && len(remoteRefs) >= 1
-
-	if dashDashPos == 1 && (localExists || validRemoteRef) {
+	validRemoteRefExists := remoteRefs != nil && len(remoteRefs) >= 1
+	``
+	if dashDashPos == 1 && (localRefExists || validRemoteRefExists) {
 		// dolt checkout <ref> --: disambiguates a tracking branch when it shares a name with local table(s).
 		if apr.NArg() == 1 { // assume some <ref> specified because dashDashPos is 1
-			if localExists {
+			if localRefExists {
 				err = checkoutExistingBranchWithWorkingSetFallback(ctx, currentDbName, firstArg, apr, dSess, &rsc)
 				if err != nil {
 					return 1, "", err
@@ -196,7 +196,7 @@ func doDoltCheckout(ctx *sql.Context, args []string) (statusCode int, successMes
 	}
 
 	// ambiguity `foo` is a table AND matches a tracking branch, but a local branch does not exist already
-	if validRemoteRef && !localExists && firstArgIsTable {
+	if validRemoteRefExists && !localRefExists && firstArgIsTable {
 		return 1, "", fmt.Errorf("'%s' could be both a local table and a tracking branch.\n"+
 			"Please use -- to disambiguate.", firstArg)
 	}
@@ -210,7 +210,7 @@ func doDoltCheckout(ctx *sql.Context, args []string) (statusCode int, successMes
 	}
 
 	// git prioritizes local and remote refs over tables
-	if localExists {
+	if localRefExists {
 		err = checkoutExistingBranchWithWorkingSetFallback(ctx, currentDbName, firstArg, apr, dSess, &rsc)
 		if err != nil {
 			return 1, "", err
@@ -218,7 +218,7 @@ func doDoltCheckout(ctx *sql.Context, args []string) (statusCode int, successMes
 		return 0, generateSuccessMessage(firstArg, ""), nil
 	}
 
-	if validRemoteRef {
+	if validRemoteRefExists {
 		upstream, err := checkoutRemoteBranch(ctx, dSess, currentDbName, dbData, firstArg, apr, &rsc)
 		if err != nil {
 			return 1, "", err
