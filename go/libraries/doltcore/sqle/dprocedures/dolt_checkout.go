@@ -677,7 +677,7 @@ func checkoutTablesFromHead(ctx *sql.Context, roots doltdb.Roots, name string, t
 				return err
 			}
 			if !exists {
-				return fmt.Errorf("error: given tables do not exist")
+				return fmt.Errorf("tablespec '%s' did not match any table(s) known to dolt", table) // commitref not mentioned in git
 			}
 			tableNames[i] = tbl
 		}
