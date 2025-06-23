@@ -141,32 +141,10 @@ func doDoltCheckout(ctx *sql.Context, args []string) (statusCode int, successMes
 		return 0, fmt.Sprintf("Already on branch '%s'", firstArg), nil
 	}
 
-	// Check if the user executed `dolt checkout .` (reset working set)
-	if apr.NArg() == 1 && apr.Arg(0) == "." {
-		headRef, err := dbData.Rsr.CWBHeadRef(ctx)
-		if err != nil {
-			return 1, "", err
-		}
-
-		ws, err := dSess.WorkingSet(ctx, currentDbName)
-		if err != nil {
-			return 1, "", err
-		}
-		doltDb, hasDb := dSess.GetDoltDB(ctx, currentDbName)
-		if !hasDb {
-			return 1, "", errors.New("Unable to load database")
-		}
-		err = actions.ResetHard(ctx, dbData, doltDb, dSess.Username(), dSess.Email(), "", roots, headRef, ws)
-		if err != nil {
-			return 1, "", err
-		}
-		return 0, "", err
-	}
-
 	// No ref explicitly specified but table(s) are
 	dashDashPos := apr.PositionalArgsSeparatorIndex
 	if dashDashPos == 0 {
-		err = checkoutTablesFromHead(ctx, roots, currentDbName, apr.Args)
+		err = checkoutTablesFromHead(ctx, roots, currentDbName, apr.Args, rsc)
 		if err != nil {
 			return 1, "", err
 		}
@@ -186,7 +164,7 @@ func doDoltCheckout(ctx *sql.Context, args []string) (statusCode int, successMes
 	validRemoteRef := remoteRefs != nil && len(remoteRefs) >= 1
 
 	if dashDashPos == 1 && (localExists || validRemoteRef) {
-		if apr.NArg() == 1 { // Assume some <ref> specified because dashDashPos is 1
+		if apr.NArg() == 1 { // assume some <ref> specified because dashDashPos is 1
 			if localExists {
 				err = checkoutExistingBranchWithWorkingSetFallback(ctx, currentDbName, firstArg, apr, &rsc)
 				if err != nil {
@@ -215,7 +193,7 @@ func doDoltCheckout(ctx *sql.Context, args []string) (statusCode int, successMes
 		return 1, "", err
 	}
 
-	// Ambiguity `foo` is a table AND matches a tracking branch, but a local branch does not exist already
+	// ambiguity `foo` is a table AND matches a tracking branch, but a local branch does not exist already
 	if validRemoteRef && !localExists && isTable {
 		return 1, "", fmt.Errorf("'%s' could be both a local table and a tracking branch.\n"+
 			"Please use -- to disambiguate.", firstArg)
@@ -246,7 +224,7 @@ func doDoltCheckout(ctx *sql.Context, args []string) (statusCode int, successMes
 		return 0, generateSuccessMessage(firstArg, upstream), nil
 	}
 
-	err = checkoutTablesFromHead(ctx, roots, currentDbName, apr.Args)
+	err = checkoutTablesFromHead(ctx, roots, currentDbName, apr.Args, rsc)
 	if err != nil {
 		return 1, "", err
 	}
@@ -618,7 +596,7 @@ func checkoutTablesFromCommit(
 				return err
 			}
 			if !tableExistsInHead {
-				return fmt.Errorf("table %s does not exist in %s", table, commitRef)
+				return fmt.Errorf("tablespec '%s' did not match any table(s) known to dolt", table) // commitref not mentioned in git
 			}
 			tableNames[i] = name
 		}
@@ -646,34 +624,8 @@ func doGlobalCheckout(ctx *sql.Context, branchName string, isForce bool, isNewBr
 
 // checkoutTablesFromHead checks out the tables named from the current head and overwrites those tables in the
 // working root. The working root is then set as the new staged root.
-func checkoutTablesFromHead(ctx *sql.Context, roots doltdb.Roots, name string, tables []string) error {
-	tableNames := make([]doltdb.TableName, len(tables))
-
-	for i, table := range tables {
-		tbl, _, exists, err := actions.FindTableInRoots(ctx, roots, table)
-		if err != nil {
-			return err
-		}
-		if !exists {
-			return fmt.Errorf("tablespec '%s' did not match any table(s) known to dolt", table)
-		}
-		tableNames[i] = tbl
-	}
-
-	roots, err := actions.MoveTablesFromHeadToWorking(ctx, roots, tableNames)
-	if err != nil {
-		if doltdb.IsRootValUnreachable(err) {
-			rt := doltdb.GetUnreachableRootType(err)
-			return fmt.Errorf("error: unable to read the %s", rt.String())
-		} else if actions.IsTblNotExist(err) {
-			return fmt.Errorf("error: given tables do not exist")
-		} else {
-			return fmt.Errorf("fatal: Unexpected error checking out tables")
-		}
-	}
-
-	dSess := dsess.DSessFromSess(ctx.Session)
-	return dSess.SetRoots(ctx, name, roots)
+func checkoutTablesFromHead(ctx *sql.Context, roots doltdb.Roots, name string, tables []string, rsc doltdb.ReplicationStatusController) error {
+	return checkoutTablesFromCommit(ctx, name, "HEAD", tables, rsc)
 }
 
 // validateNoDetachedHead checks if the given branchName refers to a tag or commit hash
