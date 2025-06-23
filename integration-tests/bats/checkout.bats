@@ -1115,3 +1115,42 @@ SQL
     [[ "$output" =~ "* main" ]] || false
 }
 
+@test "checkout: more than one remote share same branch name" {
+    # setup two remotes with the same branch name
+    mkdir -p remote1
+    mkdir -p remote2
+    mkdir -p local-repo
+    cd local-repo
+    dolt init
+    dolt remote add origin file://../remote1
+    dolt remote add origin2 file://../remote2
+
+    # create a branch on both remotes
+    dolt checkout -b feature
+    dolt sql -q "create table test (id int primary key, value int);"
+    dolt sql -q "insert into test values (1, 100);"
+    dolt add .
+    dolt commit -m "Add feature table"
+    dolt push origin feature
+    dolt push origin2 feature
+
+    # verify both remotes have the feature branch
+    run dolt branch -a
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "remotes/origin/feature" ]] || false
+    [[ "$output" =~ "remotes/origin2/feature" ]] || false
+
+    dolt checkout main
+    dolt branch -D feature  # delete local feature branch to cause ambiguity
+
+    # try to checkout feature without disambiguation, should fail
+    run dolt checkout feature
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "'feature' matched multiple (2) remote tracking braches" ]] || false
+
+    # verify we're still on main branch
+    run dolt branch
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "* main" ]] || false
+}
+

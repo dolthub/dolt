@@ -29,6 +29,7 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
+	"github.com/fatih/color"
 )
 
 var ErrEmptyBranchName = errors.New("error: cannot checkout empty string")
@@ -144,7 +145,7 @@ func doDoltCheckout(ctx *sql.Context, args []string) (statusCode int, successMes
 	// No ref explicitly specified but table(s) are
 	dashDashPos := apr.PositionalArgsSeparatorIndex
 	if dashDashPos == 0 {
-		err = checkoutTablesFromHead(ctx, roots, currentDbName, apr.Args, rsc)
+		err = checkoutTablesFromHead(ctx, roots, currentDbName, apr.Args, &rsc)
 		if err != nil {
 			return 1, "", err
 		}
@@ -182,7 +183,7 @@ func doDoltCheckout(ctx *sql.Context, args []string) (statusCode int, successMes
 		}
 
 		// git requires a local ref to already exist to check out tables
-		err = checkoutTablesFromCommit(ctx, currentDbName, firstArg, apr.Args[1:], rsc)
+		err = checkoutTablesFromCommit(ctx, currentDbName, firstArg, apr.Args[1:], &rsc)
 		if err != nil {
 			return 1, "", err
 		}
@@ -201,7 +202,7 @@ func doDoltCheckout(ctx *sql.Context, args []string) (statusCode int, successMes
 	}
 
 	if apr.NArg() > 1 && !isTable {
-		err = checkoutTablesFromCommit(ctx, currentDbName, firstArg, apr.Args[1:], rsc)
+		err = checkoutTablesFromCommit(ctx, currentDbName, firstArg, apr.Args[1:], &rsc)
 		if err != nil {
 			return 1, "", err
 		}
@@ -225,7 +226,7 @@ func doDoltCheckout(ctx *sql.Context, args []string) (statusCode int, successMes
 		return 0, generateSuccessMessage(firstArg, upstream), nil
 	}
 
-	err = checkoutTablesFromHead(ctx, roots, currentDbName, apr.Args, rsc)
+	err = checkoutTablesFromHead(ctx, roots, currentDbName, apr.Args, &rsc)
 	if err != nil {
 		return 1, "", err
 	}
@@ -370,7 +371,12 @@ func checkoutRemoteBranch(ctx *sql.Context, dSess *dsess.DoltSession, dbName str
 
 		return remoteRef.GetPath(), nil
 	} else {
-		return "", fmt.Errorf("'%s' matched multiple (%v) remote tracking branches", branchName, len(remoteRefs))
+		hint := `hint: If you meant to check out a remote tracking branch, on, e.g., 'origin',
+hint: you can do so by fully qualifying the name with the --track option:
+hint:
+hint:        dolt checkout --track origin/<name>
+`
+		return "", fmt.Errorf(color.YellowString(hint)+"'%s' matched multiple (%v) remote tracking branches", branchName, len(remoteRefs))
 	}
 }
 
@@ -490,6 +496,9 @@ func checkoutExistingBranch(ctx *sql.Context, dbName string, branchName string, 
 	return nil
 }
 
+// checkoutExistingBranchWithWorkingSetFallback checks out an existing branch, and if the working set does not exist,
+// it creates a new working set for the branch pointing to the existing branch HEAD. This resolves the issue where
+// a local branch ref was created without a working set, such as when running as a read replica with an old version of dolt.
 func checkoutExistingBranchWithWorkingSetFallback(ctx *sql.Context, dbName string, branchName string, apr *argparser.ArgParseResults, rsc *doltdb.ReplicationStatusController) error {
 	dbData, ok := dsess.DSessFromSess(ctx.Session).GetDbData(ctx, dbName)
 	if !ok {
@@ -541,7 +550,7 @@ func checkoutTablesFromCommit(
 	databaseName string,
 	commitRef string,
 	tables []string,
-	rsc doltdb.ReplicationStatusController,
+	rsc *doltdb.ReplicationStatusController,
 ) error {
 	dSess := dsess.DSessFromSess(ctx.Session)
 	dbData, ok := dSess.GetDbData(ctx, databaseName)
@@ -608,7 +617,7 @@ func checkoutTablesFromCommit(
 		return err
 	}
 
-	dsess.WaitForReplicationController(ctx, rsc)
+	dsess.WaitForReplicationController(ctx, *rsc)
 	return dSess.SetWorkingSet(ctx, databaseName, ws.WithStagedRoot(newRoot).WithWorkingRoot(newRoot))
 }
 
@@ -625,7 +634,7 @@ func doGlobalCheckout(ctx *sql.Context, branchName string, isForce bool, isNewBr
 
 // checkoutTablesFromHead checks out the tables named from the current head and overwrites those tables in the
 // working root. The working root is then set as the new staged root.
-func checkoutTablesFromHead(ctx *sql.Context, roots doltdb.Roots, name string, tables []string, rsc doltdb.ReplicationStatusController) error {
+func checkoutTablesFromHead(ctx *sql.Context, roots doltdb.Roots, name string, tables []string, rsc *doltdb.ReplicationStatusController) error {
 	return checkoutTablesFromCommit(ctx, name, "HEAD", tables, rsc)
 }
 
