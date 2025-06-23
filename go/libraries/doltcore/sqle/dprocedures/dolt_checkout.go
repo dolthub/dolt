@@ -127,7 +127,7 @@ func doDoltCheckout(ctx *sql.Context, args []string) (statusCode int, successMes
 
 	// check for detached HEAD state early - if the user is trying to checkout a tag or commit hash
 	if apr.NArg() == 1 {
-		err = checkDetachedHeadState(ctx, dbData.Ddb, firstArg, updateHead)
+		err = validateNoDetachedHead(ctx, dbData.Ddb, firstArg, updateHead)
 		if err != nil {
 			return 1, "", err
 		}
@@ -676,10 +676,10 @@ func checkoutTablesFromHead(ctx *sql.Context, roots doltdb.Roots, name string, t
 	return dSess.SetRoots(ctx, name, roots)
 }
 
-// checkDetachedHeadState checks if the given branchName refers to a tag or commit hash
+// validateNoDetachedHead checks if the given branchName refers to a tag or commit hash
 // which would result in a detached HEAD state, which Dolt doesn't support.
 // Returns an error with appropriate message if it's a detached HEAD state, nil otherwise.
-func checkDetachedHeadState(ctx *sql.Context, ddb *doltdb.DoltDB, branchName string, isMoveFlag bool) error {
+func validateNoDetachedHead(ctx *sql.Context, ddb *doltdb.DoltDB, branchName string, isMoveFlag bool) error {
 	if isTag, err := actions.IsTag(ctx, ddb, branchName); err != nil {
 		return err
 	} else if isTag {
