@@ -34,11 +34,19 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 )
 
-var stashDocs = cli.CommandDocumentationContent{
-	ShortDesc: "Stash the changes in a dirty working directory away.",
-	LongDesc: `Use dolt stash when you want to record the current state of the working directory and the index, but want to go back to a clean working directory. 
+const (
+	PushCmdRef  = "push"
+	PopCmdRef   = "pop"
+	DropCmdRef  = "drop"
+	ClearCmdRef = "clear"
+	ListCmdRef  = "list"
+)
 
-The command saves your local modifications away and reverts the working directory to match the HEAD commit. The stash entries that are saved away can be listed with 'dolt stash list'.
+var stashDocs = cli.CommandDocumentationContent{
+	ShortDesc: "Stash the changes in a dirty workspace away.",
+	LongDesc: `Use dolt stash when you want to record the current state of the workspace and the index, but want to go back to a clean workspace. 
+
+The command saves your local modifications away and reverts the workspace to match the HEAD commit. The stash entries that are saved away can be listed with 'dolt stash list'.
 `,
 	Synopsis: []string{
 		"", // this is for `dolt stash` itself.
@@ -58,7 +66,7 @@ func (cmd StashCmd) Name() string {
 
 // Description returns a description of the command
 func (cmd StashCmd) Description() string {
-	return "Stash the changes in a dirty working directory away."
+	return "Stash the changes in a dirty workspace away."
 }
 
 func (cmd StashCmd) Docs() *cli.CommandDocumentation {
@@ -93,23 +101,40 @@ func (cmd StashCmd) Exec(ctx context.Context, commandStr string, args []string, 
 		subcommand = strings.ToLower(apr.Arg(0))
 	}
 
-	var err error
+	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
+	if err != nil {
+		cli.PrintErrln(errhand.VerboseErrorFromError(err))
+		return 1
+	}
+	if closeFunc != nil {
+		defer closeFunc()
+	}
+
+	idx := 0
+	if apr.NArg() > 1 {
+		idx, err = parseStashIndex(apr.Arg(1))
+		if err != nil {
+			cli.PrintErrln(errhand.VerboseErrorFromError(err))
+			return 1
+		}
+	}
+
 	switch subcommand {
-	case "push":
-		err = stashPush(ctx, cliCtx, apr, subcommand)
-	case "pop", "drop":
-		err = stashRemove(ctx, cliCtx, apr, subcommand)
-	case "list":
+	case PushCmdRef:
+		err = stashPush(queryist, sqlCtx, apr, subcommand)
+	case PopCmdRef, DropCmdRef:
+		err = stashRemove(queryist, sqlCtx, cliCtx, apr, subcommand, idx)
+	case ListCmdRef:
 		err = stashList(ctx, cliCtx)
-	case "clear":
-		err = stashClear(ctx, cliCtx, apr, subcommand)
+	case ClearCmdRef:
+		err = stashClear(queryist, sqlCtx, apr, subcommand)
 	default:
 		err = fmt.Errorf("unknown stash subcommand %s", subcommand)
 	}
 
 	if err != nil {
 		cli.PrintErrln(errhand.VerboseErrorFromError(err))
-		if err.Error() == "No local changes to save" {
+		if strings.Contains(err.Error(), "No local changes to save") {
 			return 0
 		}
 		return 1
@@ -117,13 +142,10 @@ func (cmd StashCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	return 0
 }
 
-func stashPush(ctx context.Context, cliCtx cli.CliContext, apr *argparser.ArgParseResults, subcommand string) error {
-	rowIter, queryist, sqlCtx, closeFunc, err := stashQuery(ctx, cliCtx, apr, subcommand)
+func stashPush(queryist cli.Queryist, sqlCtx *sql.Context, apr *argparser.ArgParseResults, subcommand string) error {
+	rowIter, err := stashQuery(queryist, sqlCtx, apr, subcommand)
 	if err != nil {
 		return err
-	}
-	if closeFunc != nil {
-		defer closeFunc()
 	}
 
 	stashes, err := getStashesSQL(sqlCtx, queryist, 1)
@@ -136,20 +158,7 @@ func stashPush(ctx context.Context, cliCtx cli.CliContext, apr *argparser.ArgPar
 	return err
 }
 
-func stashRemove(ctx context.Context, cliCtx cli.CliContext, apr *argparser.ArgParseResults, subcommand string) error {
-	idx, err := parseStashIndex(apr)
-	if err != nil {
-		return err
-	}
-
-	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
-	if err != nil {
-		return err
-	}
-	if closeFunc != nil {
-		defer closeFunc()
-	}
-
+func stashRemove(queryist cli.Queryist, sqlCtx *sql.Context, cliCtx cli.CliContext, apr *argparser.ArgParseResults, subcommand string, idx int) error {
 	stashes, err := getStashesSQL(sqlCtx, queryist, 0)
 	if err != nil {
 		return err
@@ -170,8 +179,8 @@ func stashRemove(ctx context.Context, cliCtx cli.CliContext, apr *argparser.ArgP
 		return err
 	}
 
-	if subcommand == "pop" {
-		ret := StatusCmd{}.Exec(sqlCtx, "status", []string{}, nil, cliCtx)
+	if subcommand == PopCmdRef {
+		ret := StatusCmd{}.Exec(sqlCtx, StatusCmd{}.Name(), []string{}, nil, cliCtx)
 		if ret != 0 {
 			cli.Println("The stash entry is kept in case you need it again.")
 			return err
@@ -203,13 +212,10 @@ func stashList(ctx context.Context, cliCtx cli.CliContext) error {
 	return nil
 }
 
-func stashClear(ctx context.Context, cliCtx cli.CliContext, apr *argparser.ArgParseResults, subcommand string) error {
-	rowIter, _, sqlCtx, closeFunc, err := stashQuery(ctx, cliCtx, apr, subcommand)
+func stashClear(queryist cli.Queryist, sqlCtx *sql.Context, apr *argparser.ArgParseResults, subcommand string) error {
+	rowIter, err := stashQuery(queryist, sqlCtx, apr, subcommand)
 	if err != nil {
 		return err
-	}
-	if closeFunc != nil {
-		defer closeFunc()
 	}
 	_, err = sql.RowIterToRows(sqlCtx, rowIter)
 	return err
@@ -276,10 +282,10 @@ func generateStashSql(apr *argparser.ArgParseResults, subcommand string) (string
 	}
 
 	if apr.Contains(cli.AllFlag) {
-		buffer.WriteString(", '-a'")
+		buffer.WriteString(", '--all'")
 	}
 	if apr.Contains(cli.IncludeUntrackedFlag) {
-		buffer.WriteString(", '-u'")
+		buffer.WriteString(", '--include-untracked'")
 	}
 
 	buffer.WriteString(")")
@@ -287,37 +293,26 @@ func generateStashSql(apr *argparser.ArgParseResults, subcommand string) (string
 	return interpolatedQuery, err
 }
 
-func stashQuery(ctx context.Context, cliCtx cli.CliContext, apr *argparser.ArgParseResults, subcommand string) (sql.RowIter, cli.Queryist, *sql.Context, func(), error) {
-	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
-	if err != nil {
-		return nil, nil, nil, nil, err
-	}
-
+func stashQuery(queryist cli.Queryist, sqlCtx *sql.Context, apr *argparser.ArgParseResults, subcommand string) (sql.RowIter, error) {
 	interpolatedQuery, err := generateStashSql(apr, subcommand)
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return nil, err
 	}
 
 	_, rowIter, _, err := queryist.Query(sqlCtx, interpolatedQuery)
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return nil, err
 	}
 
-	return rowIter, queryist, sqlCtx, closeFunc, nil
+	return rowIter, nil
 }
 
-func parseStashIndex(apr *argparser.ArgParseResults) (int, error) {
-	idx := 0
-
-	if apr.NArg() > 1 {
-		stashID := apr.Arg(1)
-		var err error
-
-		stashID = strings.TrimSuffix(strings.TrimPrefix(stashID, "stash@{"), "}")
-		idx, err = strconv.Atoi(stashID)
-		if err != nil {
-			return 0, fmt.Errorf("error: %s is not a valid reference", stashID)
-		}
+func parseStashIndex(stashID string) (int, error) {
+	var err error
+	stashID = strings.TrimSuffix(strings.TrimPrefix(stashID, "stash@{"), "}")
+	idx, err := strconv.Atoi(stashID)
+	if err != nil {
+		return 0, fmt.Errorf("error: %s is not a valid reference", stashID)
 	}
 
 	return idx, nil

@@ -26,7 +26,7 @@ var DoltStashTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:          "CALL DOLT_STASH('push', 'myStash');",
-				ExpectedErrStr: "no local changes to save",
+				ExpectedErrStr: "No local changes to save",
 			},
 			{
 				Query:    "CREATE TABLE test (i int)",
@@ -34,7 +34,7 @@ var DoltStashTests = []queries.ScriptTest{
 			},
 			{
 				Query:          "CALL DOLT_STASH('push', 'myStash');",
-				ExpectedErrStr: "no local changes to save",
+				ExpectedErrStr: "No local changes to save",
 			},
 			{
 				Query:          "CALL DOLT_STASH('pop', 'myStash');",
