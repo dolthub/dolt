@@ -2021,3 +2021,18 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "new branch" ]] || false
 }
+
+@test "remotes: can clone to . when local temp files are being used" {
+    mkdir toclone
+
+    mkdir topush
+    cd topush
+    dolt init
+    dolt remote add origin file://../toclone
+    dolt push origin main:main
+    cd ..
+
+    mkdir dest
+    cd dest
+    env DOLT_FORCE_LOCAL_TEMP_FILES=1 dolt clone file://../toclone .
+}

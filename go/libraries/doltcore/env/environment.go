@@ -18,7 +18,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -472,40 +471,77 @@ func (dEnv *DoltEnv) InitRepoWithNoData(ctx context.Context, nbf *types.NomsBinF
 	return err
 }
 
-func (dEnv *DoltEnv) createDirectories(dir string) (string, error) {
-	absPath, err := dEnv.FS.Abs(dir)
+var ErrCannotCreateDirDoesNotExist = errors.New("dir does not exist")
+var ErrCannotCreateDirPathIsFile = errors.New("dir path is a file")
+var ErrCannotCreateDoltDirAlreadyExists = errors.New(".dolt dir already exists")
 
+// Returns |true, nil| if it is allowed to create a database at the given |dir|.
+// Returns |false| and potentially an error if it is not allowed.
+//
+// For the purposes of this function, it is allowed to create a
+// database at |dir| if:
+//
+// * |dir| itself already exists and is a directory.
+// * |dir|/.dolt does not exist, or
+// * |dir|/.dolt exists and is a directory and is empty, or
+// * |dir|/.dolt exists and is a directory and has only one other entry in it, a directory with name "tmp", or
+// * |dir|/.dolt exists and is a directory and has only one other entry in it, a file with name "config.json", or
+// * |dir|/.dolt exists and is a directory and contains both a |tmp| directory and a |config.json| file and nothing else.
+func CanCreateDatabaseAtPath(fs filesys.Filesys, dir string) (bool, error) {
+	absPath, err := fs.Abs(dir)
+	if err != nil {
+		return false, err
+	}
+	dirExists, dirIsDir := fs.Exists(absPath)
+	if !dirExists {
+		return false, fmt.Errorf("%w: '%s' does not exist so could not create '%s", ErrCannotCreateDirDoesNotExist, absPath, dbfactory.DoltDataDir)
+	} else if !dirIsDir {
+		return false, fmt.Errorf("%w: '%s' exists but it's a file not a directory", ErrCannotCreateDirPathIsFile, absPath)
+	}
+	doltDirPath := filepath.Join(absPath, dbfactory.DoltDir)
+	doltDirExists, doltDirIsDir := fs.Exists(doltDirPath)
+	if doltDirExists {
+		if !doltDirIsDir {
+			return false, fmt.Errorf("%w: '%s' exists but is a file, not a directory", ErrCannotCreateDirPathIsFile, doltDirPath)
+		}
+		tmpPath := filepath.Join(doltDirPath, TmpDirName)
+		configPath := filepath.Join(doltDirPath, configFile)
+		isOK := true
+		err := fs.Iter(doltDirPath, true, func(path string, sz int64, isDir bool) (stop bool) {
+			if path == doltDirPath {
+				return false
+			} else if path == tmpPath && isDir {
+				return false
+			} else if path == configPath && !isDir {
+				return false
+			} else {
+				isOK = false
+				return true
+			}
+		})
+		if err != nil {
+			return false, err
+		}
+		if !isOK {
+			return false, fmt.Errorf("%w: .dolt directory already exists at '%s'", ErrCannotCreateDoltDirAlreadyExists, dir)
+		}
+
+	}
+	return true, nil
+}
+
+func (dEnv *DoltEnv) createDirectories(dir string) (string, error) {
+	canCreate, err := CanCreateDatabaseAtPath(dEnv.FS, dir)
 	if err != nil {
 		return "", err
 	}
-
-	exists, isDir := dEnv.FS.Exists(absPath)
-
-	if !exists {
-		return "", fmt.Errorf("'%s' does not exist so could not create '%s", absPath, dbfactory.DoltDataDir)
-	} else if !isDir {
-		return "", fmt.Errorf("'%s' exists but it's a file not a directory", absPath)
+	if !canCreate {
+		return "", fmt.Errorf("cannot create a dolt database at '%s'", dir)
 	}
 
-	if dEnv.hasDoltDir(dir) {
-		// Special case a completely empty directory, or one which has a "tmp" directory but nothing else.
-		// The `.dolt/tmp` directory is created while verifying that we can rename table files which is early
-		// in the startup process. It will only exist if we need it because the TMPDIR environment variable is set to
-		// a path which is on a different partition than the .dolt directory.
-		dotDolt := mustAbs(dEnv, dbfactory.DoltDir)
-		entries, err := os.ReadDir(dotDolt)
-		if err != nil {
-			return "", err
-		}
-
-		if len(entries) == 1 {
-			entry := entries[0]
-			if (entry.IsDir() && entry.Name() != TmpDirName) || (!entry.IsDir() && entry.Name() != configFile) {
-				return "", fmt.Errorf(".dolt directory already exists at '%s'", dir)
-			}
-		} else if len(entries) != 0 {
-			return "", fmt.Errorf(".dolt directory already exists at '%s'", dir)
-		}
+	absPath, err := dEnv.FS.Abs(dir)
+	if err != nil {
+		return "", err
 	}
 
 	absDataDir := filepath.Join(absPath, dbfactory.DoltDataDir)
