@@ -145,7 +145,7 @@ func doDoltCheckout(ctx *sql.Context, args []string) (statusCode int, successMes
 	// No ref explicitly specified but table(s) are
 	dashDashPos := apr.PositionalArgsSeparatorIndex
 	if dashDashPos == 0 {
-		err = checkoutTablesFromHead(ctx, currentDbName, apr.Args, &rsc)
+		err = checkoutTablesFromHead(ctx, roots, currentDbName, apr.Args)
 		if err != nil {
 			return 1, "", err
 		}
@@ -226,7 +226,7 @@ func doDoltCheckout(ctx *sql.Context, args []string) (statusCode int, successMes
 		return 0, generateSuccessMessage(firstArg, upstream), nil
 	}
 
-	err = checkoutTablesFromHead(ctx, currentDbName, apr.Args, &rsc)
+	err = checkoutTablesFromHead(ctx, roots, currentDbName, apr.Args)
 	if err != nil {
 		return 1, "", err
 	}
@@ -658,9 +658,45 @@ func doGlobalCheckout(ctx *sql.Context, branchName string, isForce bool, isNewBr
 }
 
 // checkoutTablesFromHead checks out the tables named from the current head and overwrites those tables in the
-// working root. The working root is then set as the new staged root.
-func checkoutTablesFromHead(ctx *sql.Context, name string, tables []string, rsc *doltdb.ReplicationStatusController) error {
-	return checkoutTablesFromCommit(ctx, name, "HEAD", tables, rsc)
+// working root. The working root is then set as the new staged root. Necessary since tables may exist outside
+// of HEAD commit
+func checkoutTablesFromHead(ctx *sql.Context, roots doltdb.Roots, name string, tables []string) error {
+	var tableNames []doltdb.TableName
+	var err error
+
+	if len(tables) == 1 && tables[0] == "." {
+		tableNames, err = doltdb.UnionTableNames(ctx, roots.Working)
+		if err != nil {
+			return err
+		}
+	} else {
+		tableNames = make([]doltdb.TableName, len(tables))
+		for i, table := range tables {
+			tbl, _, exists, err := actions.FindTableInRoots(ctx, roots, table)
+			if err != nil {
+				return err
+			}
+			if !exists {
+				return fmt.Errorf("error: given tables do not exist")
+			}
+			tableNames[i] = tbl
+		}
+	}
+
+	roots, err = actions.MoveTablesFromHeadToWorking(ctx, roots, tableNames)
+	if err != nil {
+		if doltdb.IsRootValUnreachable(err) {
+			rt := doltdb.GetUnreachableRootType(err)
+			return fmt.Errorf("error: unable to read the %s", rt.String())
+		} else if actions.IsTblNotExist(err) {
+			return fmt.Errorf("error: given tables do not exist")
+		} else {
+			return fmt.Errorf("fatal: Unexpected error checking out tables")
+		}
+	}
+
+	dSess := dsess.DSessFromSess(ctx.Session)
+	return dSess.SetRoots(ctx, name, roots)
 }
 
 // validateNoDetachedHead checks if the given branchName refers to a tag or commit hash
