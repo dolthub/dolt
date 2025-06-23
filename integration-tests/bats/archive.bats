@@ -1,6 +1,13 @@
 #!/usr/bin/env bats
 load $BATS_TEST_DIRNAME/helper/common.bash
 
+# Note on Testing Archive format versions: Currently the archive format version is 3. All archives which are built
+# as part of these tests will be produced in version 3 format.
+#
+# Version 1 and 2 archives are currently present as tracked artifacts in our tests. Any test which first copies
+# from the archive-test-repos directory will implicitly be demonstrating our continued ability to open and read
+# those archives.
+
 setup() {
     setup_common
 
@@ -497,7 +504,6 @@ mutations_and_gc_statement() {
     echo "------------------"
     echo "$output"
     echo "------------------"
-
 
     ## This output indicates that the new content was fetched from the remote into a table file. Note that since
     ## the remote is all archive, the chunks are translated into the snappy format
