@@ -71,7 +71,7 @@ func TestArchiveSingleZStdChunk(t *testing.T) {
 	// Index size is not deterministic from the number of chunks, but when 1 dictionary and one chunk are in play, 44 bytes is correct:
 	// [SpanIndex - two ByteSpans]   [Prefix Map]   [chunk ref ]    [hash.Suffix --]
 	//        16 (2 uint64s)       + 8 (1 uint64) + 8 (2 uint32s) + 12                = ___44___
-	assert.Equal(t, uint32(44), aw.indexLen)
+	assert.Equal(t, uint64(44), aw.indexLen)
 
 	err = aw.writeMetadata([]byte(""))
 	assert.NoError(t, err)
@@ -123,7 +123,7 @@ func TestArchiveSingleSnappyChunk(t *testing.T) {
 	// Index size is not deterministic from the number of chunks, but when no dictionary and one chunk are in play, 36 bytes is correct:
 	// [SpanIndex - one ByteSpans]   [Prefix Map]   [chunk ref ]    [hash.Suffix --]
 	//        8 (2 uint64s)        + 8 (1 uint64) + 8 (2 uint32s) + 12                = ___36___
-	assert.Equal(t, uint32(36), aw.indexLen)
+	assert.Equal(t, uint64(36), aw.indexLen)
 
 	err = aw.writeMetadata([]byte(""))
 	assert.NoError(t, err)
