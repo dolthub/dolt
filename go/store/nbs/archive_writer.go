@@ -60,7 +60,7 @@ type archiveWriter struct {
 	stagedBytes      stagedByteSpanSlice
 	stagedChunks     stagedChunkRefSlice
 	seenChunks       hash.HashSet
-	indexLen         uint32
+	indexLen         uint64
 	metadataLen      uint32
 	dataCheckSum     sha512Sum
 	indexCheckSum    sha512Sum
@@ -289,7 +289,7 @@ func (aw *archiveWriter) writeIndex() error {
 		aw.bytesWritten += hash.SuffixLen
 	}
 
-	aw.indexLen = uint32(indexSize)
+	aw.indexLen = indexSize
 	aw.indexCheckSum = sha512Sum(aw.output.GetSum())
 	aw.output.ResetHasher()
 	aw.workflowStage = stageMetadata
@@ -331,7 +331,7 @@ func (aw *archiveWriter) writeFooter() error {
 	}
 
 	// Write out the index length
-	err := aw.writeUint32(aw.indexLen)
+	err := aw.writeUint64(aw.indexLen)
 	if err != nil {
 		return err
 	}

@@ -409,10 +409,10 @@ mutations_and_gc_statement() {
     ## This output indicates that the new content pushed to the remote all landed as zStd chunks
     ## in an archive file. multiline regex - no quotes - to match this text:
     #   Archive Metadata:
-    #     Format Version: 2
+    #     Format Version: 3
     #     Snappy Chunk Count: 0 (bytes: 0)
     #     ZStd Chunk Count: 1609
-    [[ $output =~ Archive[[:space:]]Metadata:[[:space:]]*Format[[:space:]]Version:[[:space:]]2[[:space:]]*Snappy[[:space:]]Chunk[[:space:]]Count:[[:space:]]0.*ZStd[[:space:]]Chunk[[:space:]]Count:[[:space:]]1609 ]] || false
+    [[ $output =~ Archive[[:space:]]Metadata:[[:space:]]*Format[[:space:]]Version:[[:space:]]3[[:space:]]*Snappy[[:space:]]Chunk[[:space:]]Count:[[:space:]]0.*ZStd[[:space:]]Chunk[[:space:]]Count:[[:space:]]1609 ]] || false
 }
 
 @test "archive: small push remote with archive default produces archive with snappy chunks" {
@@ -441,9 +441,9 @@ mutations_and_gc_statement() {
     ## This output indicates that the new content pushed to the remote all landed as snappy chunks
     ## in an archive file. multiline regex - no quotes - to match this text:
     #   Archive Metadata:
-    #     Format Version: 2
+    #     Format Version: 3
     #     Snappy Chunk Count: 9
-    [[ $output =~ Archive[[:space:]]Metadata:[[:space:]]*Format[[:space:]]Version:[[:space:]]2[[:space:]]*Snappy[[:space:]]Chunk[[:space:]]Count:[[:space:]]9[[:space:]] ]] || false
+    [[ $output =~ Archive[[:space:]]Metadata:[[:space:]]*Format[[:space:]]Version:[[:space:]]3[[:space:]]*Snappy[[:space:]]Chunk[[:space:]]Count:[[:space:]]9[[:space:]] ]] || false
 }
 
 @test "archive: fetch into empty database with archive default" {
@@ -467,10 +467,10 @@ mutations_and_gc_statement() {
     ## the remote is all archive, the chunks end up as zStd as well.
     ## multiline regex - no quotes - to match this text:
     #   Archive Metadata:
-    #     Format Version: 2
+    #     Format Version: 3
     #     Snappy Chunk Count: 0 (bytes: 0)
     #     ZStd Chunk Count: 260
-    [[ $output =~ Archive[[:space:]]Metadata:[[:space:]]*Format[[:space:]]Version:[[:space:]]2[[:space:]]*Snappy[[:space:]]Chunk[[:space:]]Count:[[:space:]]0.*ZStd[[:space:]]Chunk[[:space:]]Count:[[:space:]]260 ]] || false
+    [[ $output =~ Archive[[:space:]]Metadata:[[:space:]]*Format[[:space:]]Version:[[:space:]]3[[:space:]]*Snappy[[:space:]]Chunk[[:space:]]Count:[[:space:]]0.*ZStd[[:space:]]Chunk[[:space:]]Count:[[:space:]]260 ]] || false
 
     dolt fsck
 }
