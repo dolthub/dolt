@@ -123,7 +123,7 @@ func stashPush(ctx context.Context, cliCtx cli.CliContext, apr *argparser.ArgPar
 		defer closeFunc()
 	}
 
-	stashes, err := getStashesSQL(ctx, sqlCtx, queryist, 1)
+	stashes, err := getStashesSQL(sqlCtx, queryist, 1)
 	if err != nil {
 		return err
 	}
@@ -147,7 +147,7 @@ func stashRemove(ctx context.Context, cliCtx cli.CliContext, apr *argparser.ArgP
 		defer closeFunc()
 	}
 
-	stashes, err := getStashesSQL(ctx, sqlCtx, queryist, 0)
+	stashes, err := getStashesSQL(sqlCtx, queryist, 0)
 	if err != nil {
 		return err
 	}
@@ -158,8 +158,7 @@ func stashRemove(ctx context.Context, cliCtx cli.CliContext, apr *argparser.ArgP
 		return fmt.Errorf("stash index stash@{%d} does not exist", idx)
 	}
 
-	qry, params := generateStashSql(apr, subcommand)
-	interpolatedQuery, err := dbr.InterpolateForDialect(qry, params, dialect.MySQL)
+	interpolatedQuery, err := generateStashSql(apr, subcommand)
 	if err != nil {
 		return err
 	}
@@ -190,7 +189,7 @@ func stashList(ctx context.Context, cliCtx cli.CliContext) error {
 		defer closeFunc()
 	}
 
-	stashes, err := getStashesSQL(ctx, sqlCtx, queryist, 0)
+	stashes, err := getStashesSQL(sqlCtx, queryist, 0)
 	if err != nil {
 		return err
 	}
@@ -214,7 +213,7 @@ func stashClear(ctx context.Context, cliCtx cli.CliContext, apr *argparser.ArgPa
 }
 
 // getStashesSQL queries the dolt_stashes system table to return the requested number of stashes. A limit of 0 will get all stashes
-func getStashesSQL(ctx context.Context, sqlCtx *sql.Context, queryist cli.Queryist, limit int) ([]*doltdb.Stash, error) {
+func getStashesSQL(sqlCtx *sql.Context, queryist cli.Queryist, limit int) ([]*doltdb.Stash, error) {
 	limitStr := fmt.Sprintf("limit %d", limit)
 	if limit == 0 {
 		limitStr = ""
@@ -261,7 +260,7 @@ func getStashesSQL(ctx context.Context, sqlCtx *sql.Context, queryist cli.Queryi
 }
 
 // generateStashSql returns the query that will call the `DOLT_STASH` stored procedure.
-func generateStashSql(apr *argparser.ArgParseResults, subcommand string) (string, []interface{}) {
+func generateStashSql(apr *argparser.ArgParseResults, subcommand string) (string, error) {
 	var buffer bytes.Buffer
 	var params []interface{}
 	buffer.WriteString("CALL DOLT_STASH(?, ?")
@@ -281,7 +280,8 @@ func generateStashSql(apr *argparser.ArgParseResults, subcommand string) (string
 	}
 
 	buffer.WriteString(")")
-	return buffer.String(), params
+	interpolatedQuery, err := dbr.InterpolateForDialect(buffer.String(), params, dialect.MySQL)
+	return interpolatedQuery, err
 }
 
 func stashQuery(ctx context.Context, cliCtx cli.CliContext, apr *argparser.ArgParseResults, subcommand string) (sql.RowIter, cli.Queryist, *sql.Context, func(), error) {
@@ -290,8 +290,7 @@ func stashQuery(ctx context.Context, cliCtx cli.CliContext, apr *argparser.ArgPa
 		return nil, nil, nil, nil, err
 	}
 
-	qry, params := generateStashSql(apr, subcommand)
-	interpolatedQuery, err := dbr.InterpolateForDialect(qry, params, dialect.MySQL)
+	interpolatedQuery, err := generateStashSql(apr, subcommand)
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}

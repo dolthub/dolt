@@ -57,6 +57,7 @@ var DoltHelpScripts = []queries.ScriptTest{
 			{"dolt_backup"},
 			{"dolt_tag"},
 			{"dolt_gc"},
+			{"dolt_stash"},
 			{"dolt_rebase"},
 		},
 	},
