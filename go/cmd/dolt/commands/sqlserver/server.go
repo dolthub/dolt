@@ -529,7 +529,7 @@ func ConfigureServices(
 
 			var conflicts []mysql_db.UserPrimaryKey
 			if conflict != nil && !conflict.IsEphemeral {
-				logrus.Warningf("Dropping persisted '%s@%s' because this account name is reserved for Dolt", conflict.User, conflict.Host)
+				logrus.Warnf("Dropping persisted '%s@%s' because this account name is reserved for Dolt", conflict.User, conflict.Host)
 				conflicts = append(conflicts, mysql_db.UserPrimaryKey{Host: conflict.Host, User: conflict.User})
 			}
 
