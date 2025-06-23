@@ -1119,11 +1119,8 @@ SQL
     # setup two remotes with the same branch name
     mkdir -p remote1
     mkdir -p remote2
-    mkdir -p local-repo
-    cd local-repo
-    dolt init
-    dolt remote add origin file://../remote1
-    dolt remote add origin2 file://../remote2
+    dolt remote add origin file://remote1
+    dolt remote add origin2 file://remote2
 
     # create a branch on both remotes
     dolt checkout -b feature
@@ -1146,7 +1143,8 @@ SQL
     # try to checkout feature without disambiguation, should fail
     run dolt checkout feature
     [ "$status" -ne 0 ]
-    [[ "$output" =~ "'feature' matched multiple (2) remote tracking braches" ]] || false
+    echo "$output"
+    [[ "$output" =~ "'feature' matched multiple (2) remote tracking branches" ]] || false
 
     # verify we're still on main branch
     run dolt branch

@@ -145,7 +145,7 @@ func doDoltCheckout(ctx *sql.Context, args []string) (statusCode int, successMes
 	// No ref explicitly specified but table(s) are
 	dashDashPos := apr.PositionalArgsSeparatorIndex
 	if dashDashPos == 0 {
-		err = checkoutTablesFromHead(ctx, roots, currentDbName, apr.Args, &rsc)
+		err = checkoutTablesFromHead(ctx, currentDbName, apr.Args, &rsc)
 		if err != nil {
 			return 1, "", err
 		}
@@ -168,7 +168,7 @@ func doDoltCheckout(ctx *sql.Context, args []string) (statusCode int, successMes
 		// dolt checkout <ref> --: disambiguates a tracking branch when it shares a name with local table(s).
 		if apr.NArg() == 1 { // assume some <ref> specified because dashDashPos is 1
 			if localExists {
-				err = checkoutExistingBranchWithWorkingSetFallback(ctx, currentDbName, firstArg, apr, &rsc)
+				err = checkoutExistingBranchWithWorkingSetFallback(ctx, currentDbName, firstArg, apr, dSess, &rsc)
 				if err != nil {
 					return 1, "", err
 				}
@@ -190,18 +190,18 @@ func doDoltCheckout(ctx *sql.Context, args []string) (statusCode int, successMes
 		return 0, "", nil
 	}
 
-	_, _, isTable, err := actions.FindTableInRoots(ctx, roots, firstArg)
+	_, _, firstArgIsTable, err := actions.FindTableInRoots(ctx, roots, firstArg)
 	if err != nil {
 		return 1, "", err
 	}
 
 	// ambiguity `foo` is a table AND matches a tracking branch, but a local branch does not exist already
-	if validRemoteRef && !localExists && isTable {
+	if validRemoteRef && !localExists && firstArgIsTable {
 		return 1, "", fmt.Errorf("'%s' could be both a local table and a tracking branch.\n"+
 			"Please use -- to disambiguate.", firstArg)
 	}
 
-	if apr.NArg() > 1 && !isTable {
+	if apr.NArg() > 1 && !firstArgIsTable {
 		err = checkoutTablesFromCommit(ctx, currentDbName, firstArg, apr.Args[1:], &rsc)
 		if err != nil {
 			return 1, "", err
@@ -211,7 +211,7 @@ func doDoltCheckout(ctx *sql.Context, args []string) (statusCode int, successMes
 
 	// git prioritizes local and remote refs over tables
 	if localExists {
-		err = checkoutExistingBranchWithWorkingSetFallback(ctx, currentDbName, firstArg, apr, &rsc)
+		err = checkoutExistingBranchWithWorkingSetFallback(ctx, currentDbName, firstArg, apr, dSess, &rsc)
 		if err != nil {
 			return 1, "", err
 		}
@@ -226,7 +226,7 @@ func doDoltCheckout(ctx *sql.Context, args []string) (statusCode int, successMes
 		return 0, generateSuccessMessage(firstArg, upstream), nil
 	}
 
-	err = checkoutTablesFromHead(ctx, roots, currentDbName, apr.Args, &rsc)
+	err = checkoutTablesFromHead(ctx, currentDbName, apr.Args, &rsc)
 	if err != nil {
 		return 1, "", err
 	}
@@ -318,7 +318,15 @@ func createWorkingSetForLocalBranch(ctx *sql.Context, ddb *doltdb.DoltDB, branch
 
 // checkoutRemoteBranch checks out a remote branch creating a new local branch with the same name as the remote branch
 // and set its upstream. The upstream persists out of sql session. Returns the name of the upstream remote and branch.
-func checkoutRemoteBranch(ctx *sql.Context, dSess *dsess.DoltSession, dbName string, dbData env.DbData[*sql.Context], branchName string, apr *argparser.ArgParseResults, rsc *doltdb.ReplicationStatusController) (upstream string, err error) {
+func checkoutRemoteBranch(
+	ctx *sql.Context,
+	dSess *dsess.DoltSession,
+	dbName string,
+	dbData env.DbData[*sql.Context],
+	branchName string,
+	apr *argparser.ArgParseResults,
+	rsc *doltdb.ReplicationStatusController,
+) (upstream string, err error) {
 	remoteRefs, err := actions.GetRemoteBranchRef(ctx, dbData.Ddb, branchName)
 	if err != nil {
 		return "", errors.New("fatal: unable to read from data repository")
@@ -383,7 +391,14 @@ hint:        dolt checkout --track origin/<name>
 // checkoutNewBranch creates a new branch and makes it the active branch for the session.
 // If isMove is true, this function also moves the working set from the current branch into the new branch.
 // Returns the name of the new branch and the remote upstream branch (empty string if not applicable.)
-func checkoutNewBranch(ctx *sql.Context, dbName string, dbData env.DbData[*sql.Context], apr *argparser.ArgParseResults, rsc *doltdb.ReplicationStatusController, isMove bool) (newBranchName string, remoteAndBranch string, err error) {
+func checkoutNewBranch(
+	ctx *sql.Context,
+	dbName string,
+	dbData env.DbData[*sql.Context],
+	apr *argparser.ArgParseResults,
+	rsc *doltdb.ReplicationStatusController,
+	isMove bool,
+) (newBranchName string, remoteAndBranch string, err error) {
 	var remoteName, remoteBranchName string
 	var startPt = "head"
 	var refSpec ref.RefSpec
@@ -472,7 +487,12 @@ func checkoutNewBranch(ctx *sql.Context, dbName string, dbData env.DbData[*sql.C
 }
 
 // checkoutExistingBranch updates the active branch reference to point to an already existing branch.
-func checkoutExistingBranch(ctx *sql.Context, dbName string, branchName string, apr *argparser.ArgParseResults) error {
+func checkoutExistingBranch(
+	ctx *sql.Context,
+	dbName string,
+	branchName string,
+	apr *argparser.ArgParseResults,
+) error {
 	wsRef, err := ref.WorkingSetRefForHead(ref.NewBranchRef(branchName))
 	if err != nil {
 		return err
@@ -499,48 +519,50 @@ func checkoutExistingBranch(ctx *sql.Context, dbName string, branchName string, 
 // checkoutExistingBranchWithWorkingSetFallback checks out an existing branch, and if the working set does not exist,
 // it creates a new working set for the branch pointing to the existing branch HEAD. This resolves the issue where
 // a local branch ref was created without a working set, such as when running as a read replica with an old version of dolt.
-func checkoutExistingBranchWithWorkingSetFallback(ctx *sql.Context, dbName string, branchName string, apr *argparser.ArgParseResults, rsc *doltdb.ReplicationStatusController) error {
-	dbData, ok := dsess.DSessFromSess(ctx.Session).GetDbData(ctx, dbName)
+func checkoutExistingBranchWithWorkingSetFallback(
+	ctx *sql.Context,
+	dbName string,
+	branchName string,
+	apr *argparser.ArgParseResults,
+	dSess *dsess.DoltSession,
+	rsc *doltdb.ReplicationStatusController,
+) error {
+	dbData, ok := dSess.GetDbData(ctx, dbName)
 	if !ok {
 		return fmt.Errorf("could not load database %s", dbName)
 	}
 
-	if isBranch, err := actions.IsBranch(ctx, dbData.Ddb, branchName); err != nil {
-		return err
-	} else if isBranch {
-		err = checkoutExistingBranch(ctx, dbName, branchName, apr)
-		if errors.Is(err, doltdb.ErrWorkingSetNotFound) {
-			// If there is a branch but there is no working set,
-			// somehow the local branch ref was created without a
-			// working set. This happened with old versions of dolt
-			// when running as a read replica, for example. Try to
-			// create a working set pointing at the existing branch
-			// HEAD and check out the branch again.
-			//
-			// TODO: This is all quite racey, but so is the
-			// handling in doltDB, etc.
-			err = createWorkingSetForLocalBranch(ctx, dbData.Ddb, branchName)
-			if err != nil {
-				return err
-			}
-
-			// Since we've created new refs since the transaction began, we need to commit this transaction and
-			// start a new one to avoid not found errors after this
-			// TODO: this is much worse than other places we do this, because it's two layers of implicit behavior
-			sess := dsess.DSessFromSess(ctx.Session)
-			err = commitTransaction(ctx, sess, rsc)
-			if err != nil {
-				return err
-			}
-
-			err = checkoutExistingBranch(ctx, dbName, branchName, apr)
-		}
+	err := checkoutExistingBranch(ctx, dbName, branchName, apr)
+	if errors.Is(err, doltdb.ErrWorkingSetNotFound) {
+		// If there is a branch but there is no working set,
+		// somehow the local branch ref was created without a
+		// working set. This happened with old versions of dolt
+		// when running as a read replica, for example. Try to
+		// create a working set pointing at the existing branch
+		// HEAD and check out the branch again.
+		//
+		// TODO: This is all quite racey, but so is the
+		// handling in doltDB, etc.
+		err = createWorkingSetForLocalBranch(ctx, dbData.Ddb, branchName)
 		if err != nil {
 			return err
 		}
-		return nil
+
+		// Since we've created new refs since the transaction began, we need to commit this transaction and
+		// start a new one to avoid not found errors after this
+		// TODO: this is much worse than other places we do this, because it's two layers of implicit behavior
+		sess := dsess.DSessFromSess(ctx.Session)
+		err = commitTransaction(ctx, sess, rsc)
+		if err != nil {
+			return err
+		}
+
+		err = checkoutExistingBranch(ctx, dbName, branchName, apr)
 	}
-	return fmt.Errorf("'%s' is not a branch", branchName)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // checkoutTablesFromCommit checks out the tables named from the branch named and overwrites those tables in the
@@ -634,7 +656,7 @@ func doGlobalCheckout(ctx *sql.Context, branchName string, isForce bool, isNewBr
 
 // checkoutTablesFromHead checks out the tables named from the current head and overwrites those tables in the
 // working root. The working root is then set as the new staged root.
-func checkoutTablesFromHead(ctx *sql.Context, roots doltdb.Roots, name string, tables []string, rsc *doltdb.ReplicationStatusController) error {
+func checkoutTablesFromHead(ctx *sql.Context, name string, tables []string, rsc *doltdb.ReplicationStatusController) error {
 	return checkoutTablesFromCommit(ctx, name, "HEAD", tables, rsc)
 }
 
