@@ -541,7 +541,17 @@ func ConfigureServices(
 			defer ed.Close()
 
 			for _, conflict := range conflicts {
-				ed.RemoveUserAndRoles(conflict)
+				ed.RemoveUser(conflict)
+
+				ed.RemoveRoleEdgesFromKey(mysql_db.RoleEdgesFromKey{
+					FromHost: conflict.Host,
+					FromUser: conflict.User,
+				})
+
+				ed.RemoveRoleEdgesToKey(mysql_db.RoleEdgesToKey{
+					ToHost: conflict.Host,
+					ToUser: conflict.User,
+				})
 			}
 
 			if len(conflicts) > 0 {
