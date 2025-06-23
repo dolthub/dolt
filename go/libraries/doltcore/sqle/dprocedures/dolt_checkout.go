@@ -164,6 +164,7 @@ func doDoltCheckout(ctx *sql.Context, args []string) (statusCode int, successMes
 	validRemoteRef := remoteRefs != nil && len(remoteRefs) >= 1
 
 	if dashDashPos == 1 && (localExists || validRemoteRef) {
+		// dolt checkout <ref> --: disambiguates a tracking branch when it shares a name with local table(s).
 		if apr.NArg() == 1 { // assume some <ref> specified because dashDashPos is 1
 			if localExists {
 				err = checkoutExistingBranchWithWorkingSetFallback(ctx, currentDbName, firstArg, apr, &rsc)
@@ -173,7 +174,7 @@ func doDoltCheckout(ctx *sql.Context, args []string) (statusCode int, successMes
 				return 0, generateSuccessMessage(firstArg, ""), nil
 			}
 
-			upstream, err := checkoutRemoteBranch(ctx, dSess, currentDbName, dbData, firstArg, apr, rsc)
+			upstream, err := checkoutRemoteBranch(ctx, dSess, currentDbName, dbData, firstArg, apr, &rsc)
 			if err != nil {
 				return 1, "", err
 			}
@@ -217,7 +218,7 @@ func doDoltCheckout(ctx *sql.Context, args []string) (statusCode int, successMes
 	}
 
 	if validRemoteRef {
-		upstream, err := checkoutRemoteBranch(ctx, dSess, currentDbName, dbData, firstArg, apr, rsc)
+		upstream, err := checkoutRemoteBranch(ctx, dSess, currentDbName, dbData, firstArg, apr, &rsc)
 		if err != nil {
 			return 1, "", err
 		}
@@ -316,7 +317,7 @@ func createWorkingSetForLocalBranch(ctx *sql.Context, ddb *doltdb.DoltDB, branch
 
 // checkoutRemoteBranch checks out a remote branch creating a new local branch with the same name as the remote branch
 // and set its upstream. The upstream persists out of sql session. Returns the name of the upstream remote and branch.
-func checkoutRemoteBranch(ctx *sql.Context, dSess *dsess.DoltSession, dbName string, dbData env.DbData[*sql.Context], branchName string, apr *argparser.ArgParseResults, rsc doltdb.ReplicationStatusController) (upstream string, err error) {
+func checkoutRemoteBranch(ctx *sql.Context, dSess *dsess.DoltSession, dbName string, dbData env.DbData[*sql.Context], branchName string, apr *argparser.ArgParseResults, rsc *doltdb.ReplicationStatusController) (upstream string, err error) {
 	remoteRefs, err := actions.GetRemoteBranchRef(ctx, dbData.Ddb, branchName)
 	if err != nil {
 		return "", errors.New("fatal: unable to read from data repository")
@@ -326,7 +327,7 @@ func checkoutRemoteBranch(ctx *sql.Context, dSess *dsess.DoltSession, dbName str
 		return "", fmt.Errorf("error: could not find %s", branchName)
 	} else if len(remoteRefs) == 1 {
 		remoteRef := remoteRefs[0]
-		err = actions.CreateBranchWithStartPt(ctx, dbData, branchName, remoteRef.String(), false, &rsc)
+		err = actions.CreateBranchWithStartPt(ctx, dbData, branchName, remoteRef.String(), false, rsc)
 		if err != nil {
 			return "", err
 		}
@@ -334,7 +335,7 @@ func checkoutRemoteBranch(ctx *sql.Context, dSess *dsess.DoltSession, dbName str
 		// We need to commit the transaction here or else the branch we just created isn't visible to the current transaction,
 		// and we are about to switch to it. So set the new branch head for the new transaction, then commit this one
 		sess := dsess.DSessFromSess(ctx.Session)
-		err = commitTransaction(ctx, sess, &rsc)
+		err = commitTransaction(ctx, sess, rsc)
 		if err != nil {
 			return "", err
 		}
@@ -365,7 +366,7 @@ func checkoutRemoteBranch(ctx *sql.Context, dSess *dsess.DoltSession, dbName str
 			return "", err
 		}
 
-		dsess.WaitForReplicationController(ctx, rsc)
+		dsess.WaitForReplicationController(ctx, *rsc)
 
 		return remoteRef.GetPath(), nil
 	} else {

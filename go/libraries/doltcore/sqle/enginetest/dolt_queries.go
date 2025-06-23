@@ -3388,7 +3388,7 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 			},
 			{
 				Query:          "call dolt_checkout('HEAD', 't3')",
-				ExpectedErrStr: "table t3 does not exist in HEAD",
+				ExpectedErrStr: "tablespec 't3' did not match any table(s) known to dolt",
 			},
 		},
 	},
