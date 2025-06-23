@@ -163,7 +163,7 @@ func doDoltCheckout(ctx *sql.Context, args []string) (statusCode int, successMes
 	}
 
 	validRemoteRefExists := remoteRefs != nil && len(remoteRefs) >= 1
-	``
+
 	if dashDashPos == 1 && (localRefExists || validRemoteRefExists) {
 		// dolt checkout <ref> --: disambiguates a tracking branch when it shares a name with local table(s).
 		if apr.NArg() == 1 { // assume some <ref> specified because dashDashPos is 1
