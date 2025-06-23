@@ -16,8 +16,8 @@ teardown() {
 
 @test "stash: stashing on clean working set" {
     run dolt stash
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "no local changes to save" ]] || false
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "No local changes to save" ]] || false
 }
 
 @test "stash: simple stashing and popping stash" {
@@ -159,9 +159,6 @@ teardown() {
 }
 
 @test "stash: popping neither latest nor oldest stash" {
-    if [ "$SQL_ENGINE" = "remote-engine" ]; then
-          skip "needs checkout which is unsupported for remote-engine"
-    fi
     dolt sql -q "INSERT INTO test VALUES (1, 'a')"
     run dolt stash
     [ "$status" -eq 0 ]
@@ -199,31 +196,28 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ "3,c" ]] || false
 
-    dolt checkout test
-    run dolt stash list
+    dolt branch test
+    run dolt --branch test stash list
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 2 ]
 
-    run dolt stash pop stash@{1}
+    run dolt --branch test stash pop stash@{1}
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Dropped refs/stash@{1}" ]] || false
 
-    run dolt sql -q "SELECT * FROM test" -r csv
+    run dolt --branch test sql -q "SELECT * FROM test" -r csv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "1,a" ]] || false
 }
 
 @test "stash: stashing multiple entries on different branches" {
-    if [ "$SQL_ENGINE" = "remote-engine" ]; then
-          skip "needs checkout which is unsupported for remote-engine"
-    fi
     dolt sql -q "INSERT INTO test VALUES (1, 'a')"
     run dolt stash
     [ "$status" -eq 0 ]
 
-    dolt checkout -b newbranch
-    dolt sql -q "INSERT INTO test VALUES (1, 'b')"
-    run dolt stash
+    dolt branch newbranch
+    dolt --branch newbranch sql -q "INSERT INTO test VALUES (1, 'b')"
+    run dolt --branch newbranch stash
     [ "$status" -eq 0 ]
 
     run dolt stash list
@@ -233,9 +227,6 @@ teardown() {
 }
 
 @test "stash: popping stash on different branch" {
-    if [ "$SQL_ENGINE" = "remote-engine" ]; then
-          skip "needs checkout which is unsupported for remote-engine"
-    fi
     dolt sql -q "INSERT INTO test VALUES (1, 'a')"
     run dolt stash
     [ "$status" -eq 0 ]
@@ -244,11 +235,11 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ "stash@{0}: WIP on refs/heads/main:" ]] || false
 
-    dolt checkout -b newbranch
-    run dolt stash pop
+    dolt branch newbranch
+    run dolt --branch newbranch stash pop
     [ "$status" -eq 0 ]
 
-    run dolt sql -q "SELECT * FROM test" -r csv
+    run dolt --branch newbranch sql -q "SELECT * FROM test" -r csv
     [[ "$output" =~ "1,a" ]] || false
 }
 
@@ -378,8 +369,8 @@ teardown() {
     [[ "$output" =~ "Untracked tables:" ]] || false
 
     run dolt stash
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "no local changes to save" ]] || false
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "No local changes to save" ]] || false
 
     run dolt ls
     [ "$status" -eq 0 ]
@@ -547,65 +538,55 @@ teardown() {
 }
 
 @test "stash: popping stash with deleted table that is deleted already on current head" {
-    if [ "$SQL_ENGINE" = "remote-engine" ]; then
-          skip "needs checkout which is unsupported for remote-engine"
-    fi
-    dolt branch branch1
-    dolt checkout -b branch2
-    dolt sql -q "DROP TABLE test;"
-    dolt commit -am "table 'test' is dropped"
+    dolt branch br1
+    dolt branch br2
+    dolt --branch br2 sql -q "DROP TABLE test;"
+    dolt --branch br2 commit -am "table 'test' is dropped"
 
-    dolt checkout branch1
-    run dolt ls
+    run dolt --branch br1 ls
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test" ]] || false
 
-    dolt sql -q "DROP TABLE test;"
-    run dolt stash
+    dolt --branch br1 sql -q "DROP TABLE test;"
+    run dolt --branch br1 stash
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Saved working directory and index state" ]] || false
 
-    dolt checkout branch2
-    run dolt stash list
+    run dolt --branch br2 stash list
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 1 ]
     [[ "$output" =~ "stash@{0}" ]] || false
 
-    run dolt stash pop
+    run dolt --branch br2 stash pop
     [ "$status" -eq 0 ]
     [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
     [[ "$output" =~ "Dropped refs/stash@{0}" ]] || false
 }
 
 @test "stash: popping stash with deleted table that the same table exists on current head" {
-    if [ "$SQL_ENGINE" = "remote-engine" ]; then
-          skip "needs checkout which is unsupported for remote-engine"
-    fi
-    dolt branch branch1
-    dolt branch branch2
+    dolt branch br1
+    dolt branch br2
 
-    dolt checkout branch1
-    run dolt ls
+    run dolt --branch br1 ls
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test" ]] || false
 
-    dolt sql -q "DROP TABLE test;"
-    run dolt stash
+    dolt --branch br1 sql -q "DROP TABLE test;"
+    run dolt --branch br1 stash
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Saved working directory and index state" ]] || false
 
-    dolt checkout branch2
-    run dolt ls
+    run dolt --branch br2 ls
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test" ]] || false
 
-    run dolt stash list
+    run dolt --branch br2 stash list
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 1 ]
     [[ "$output" =~ "stash@{0}" ]] || false
 
     # if the table is the same, it's dropped
-    run dolt stash pop
+    run dolt --branch br2 stash pop
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Changes not staged for commit:" ]] || false
     [[ "$output" =~ "deleted:          test" ]] || false
@@ -613,97 +594,83 @@ teardown() {
 }
 
 @test "stash: popping stash with deleted table that different table with same name on current head gives conflict" {
-    if [ "$SQL_ENGINE" = "remote-engine" ]; then
-          skip "needs checkout which is unsupported for remote-engine"
-    fi
-    dolt branch branch1
-    dolt branch branch2
+    dolt branch br1
+    dolt branch br2
 
-    dolt checkout branch1
-    run dolt ls
+    run dolt --branch br1 ls
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test" ]] || false
 
-    dolt sql -q "DROP TABLE test;"
-    run dolt stash
+    dolt --branch br1 sql -q "DROP TABLE test;"
+    run dolt --branch br1 stash
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Saved working directory and index state" ]] || false
 
-    dolt checkout branch2
-    dolt sql -q "DROP TABLE test;"
-    dolt sql -q "CREATE TABLE test (id BIGINT PRIMARY KEY);"
+    dolt --branch br2 sql -q "DROP TABLE test;"
+    dolt --branch br2 sql -q "CREATE TABLE test (id BIGINT PRIMARY KEY);"
 
-    run dolt stash list
+    run dolt --branch br2 stash list
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 1 ]
     [[ "$output" =~ "stash@{0}" ]] || false
 
     # if the table is different with the same name, it gives conflict
-    run dolt stash pop
+    run dolt --branch br2 stash pop
     [ "$status" -eq 1 ]
     [[ "$output" =~ "table was modified in one branch and deleted in the other" ]] || false
 }
 
 @test "stash: popping stash with added table with PK on current head with the exact same table is added already" {
-    if [ "$SQL_ENGINE" = "remote-engine" ]; then
-              skip "needs checkout which is unsupported for remote-engine"
-    fi
-    dolt branch branch1
-    dolt checkout -b branch2
-    dolt sql -q "CREATE TABLE new_test(id INT PRIMARY KEY); INSERT INTO new_test VALUES (1);"
-    dolt commit -Am "new table 'new_test' is created"
+    dolt branch br1
+    dolt branch br2
 
-    dolt checkout branch1
-    run dolt ls
+    dolt --branch br2 sql -q "CREATE TABLE new_test(id INT PRIMARY KEY); INSERT INTO new_test VALUES (1);"
+    dolt --branch br2 commit -Am "new table 'new_test' is created"
+
+    run dolt --branch br1 ls
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test" ]] || false
 
-    dolt sql -q "CREATE TABLE new_test(id INT PRIMARY KEY); INSERT INTO new_test VALUES (1);"
-    dolt add .
-    run dolt stash
+    dolt --branch br1 sql -q "CREATE TABLE new_test(id INT PRIMARY KEY); INSERT INTO new_test VALUES (1);"
+    dolt --branch br1 add .
+    run dolt --branch br1 stash
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Saved working directory and index state" ]] || false
 
-    dolt checkout branch2
-    run dolt stash list
+    run dolt --branch br2 stash list
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 1 ]
     [[ "$output" =~ "stash@{0}" ]] || false
 
-    run dolt stash pop
+    run dolt --branch br2 stash pop
     [ "$status" -eq 0 ]
     [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
     [[ "$output" =~ "Dropped refs/stash@{0}" ]] || false
 }
 
 @test "stash: popping stash with added keyless table on current head with the exact same table is added already" {
-    if [ "$SQL_ENGINE" = "remote-engine" ]; then
-              skip "needs checkout which is unsupported for remote-engine"
-    fi
-    dolt branch branch1
-    dolt checkout -b branch2
-    dolt sql -q "CREATE TABLE new_test(id INT); INSERT INTO new_test VALUES (1);"
-    dolt commit -Am "new table 'new_test' is created"
+    dolt branch br1
+    dolt branch br2
+    dolt --branch br2 sql -q "CREATE TABLE new_test(id INT); INSERT INTO new_test VALUES (1);"
+    dolt --branch br2 commit -Am "new table 'new_test' is created"
 
-    dolt checkout branch1
-    run dolt ls
+    run dolt --branch br1 ls
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test" ]] || false
 
-    dolt sql -q "CREATE TABLE new_test(id INT); INSERT INTO new_test VALUES (1);"
-    dolt add .
-    run dolt stash
+    dolt --branch br1 sql -q "CREATE TABLE new_test(id INT); INSERT INTO new_test VALUES (1);"
+    dolt --branch br1 add .
+    run dolt --branch br1 stash
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Saved working directory and index state" ]] || false
 
-    dolt checkout branch2
-    run dolt stash list
+    run dolt --branch br2 stash list
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 1 ]
     [[ "$output" =~ "stash@{0}" ]] || false
 
     skip # stash of the exact copy of keyless table causes merge conflict, where it should not
-    run dolt stash pop
+    run dolt --branch br2 stash pop
     [ "$status" -eq 0 ]
     [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
     [[ "$output" =~ "Dropped refs/stash@{0}" ]] || false

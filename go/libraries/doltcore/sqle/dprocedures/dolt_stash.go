@@ -113,7 +113,7 @@ func doStashPush(ctx *sql.Context, dSess *dsess.DoltSession, dbData env.DbData[*
 		return err
 	}
 	if !hasChanges {
-		return fmt.Errorf("no local changes to save")
+		return fmt.Errorf("No local changes to save")
 	}
 
 	roots, err = actions.StageModifiedAndDeletedTables(ctx, roots)

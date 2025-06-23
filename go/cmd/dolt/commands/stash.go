@@ -109,6 +109,9 @@ func (cmd StashCmd) Exec(ctx context.Context, commandStr string, args []string, 
 
 	if err != nil {
 		cli.PrintErrln(errhand.VerboseErrorFromError(err))
+		if err.Error() == "No local changes to save" {
+			return 0
+		}
 		return 1
 	}
 	return 0
