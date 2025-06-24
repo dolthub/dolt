@@ -451,11 +451,13 @@ func (sc *StatsController) updateTable(ctx *sql.Context, newStats *rootStats, ta
 			} else {
 				idx, err = dTab.GetIndexRowData(ctx, sqlIdx.ID())
 			}
-			if err == nil {
-				prollyMap, err = durable.ProllyMapFromIndex(idx)
-				if err != nil {
-					return err
-				}
+			if err != nil {
+				return err
+			}
+
+			prollyMap, err = durable.ProllyMapFromIndex(idx)
+			if err != nil {
+				return err
 			}
 
 			_, template, err = sc.getTemplate(ctx, sqlTable, sqlIdx)
