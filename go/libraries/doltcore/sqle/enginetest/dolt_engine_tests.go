@@ -1032,12 +1032,12 @@ func RunDoltCheckoutTests(t *testing.T, h DoltEnginetestHarness) {
 	}
 
 	h = h.NewHarness(t)
-	defer h.Close()
 	h.UseLocalFileSystem()
-	remoteRepoPath := filepath.Join("..", "remote-repo-483")
-	remoteURL := "file://" + filepath.ToSlash(remoteRepoPath)
-	err := os.MkdirAll(remoteRepoPath, 0755)
+	defer h.Close()
+	remoteRepoPath, err := os.MkdirTemp("", "remote-repo-483")
 	require.NoError(t, err)
+	defer os.RemoveAll(remoteRepoPath)
+	remoteURL := "file://" + filepath.ToSlash(remoteRepoPath)
 	ambiguityScript := queries.ScriptTest{
 		Name: "dolt_checkout disambiguation with remote tracking branch and table",
 		SetUpScript: []string{
@@ -1107,7 +1107,10 @@ func RunDoltCheckoutPreparedTests(t *testing.T, h DoltEnginetestHarness) {
 	}
 
 	h = h.NewHarness(t)
-	defer h.Close()
+	defer func() {
+		time.Sleep(200 * time.Millisecond) // Give time for OS/process to release lock
+		h.Close()
+	}()
 	engine, err := h.NewEngine(t)
 	require.NoError(t, err)
 	readOnlyEngine, err := h.NewReadOnlyEngine(engine.EngineAnalyzer().Catalog.DbProvider)
