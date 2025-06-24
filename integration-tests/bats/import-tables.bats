@@ -47,3 +47,4 @@ teardown() {
     dolt table import -r -pk '`Key4' t `batshelper escaped-characters.csv`
     dolt table import -r -pk "/Key5" t `batshelper escaped-characters.csv`
 }
+
