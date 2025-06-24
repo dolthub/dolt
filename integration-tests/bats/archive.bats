@@ -1,13 +1,6 @@
 #!/usr/bin/env bats
 load $BATS_TEST_DIRNAME/helper/common.bash
 
-# Note on Testing Archive format versions: Currently the archive format version is 3. All archives which are built
-# as part of these tests will be produced in version 3 format.
-#
-# Version 1 and 2 archives are currently present as tracked artifacts in our tests. Any test which first copies
-# from the archive-test-repos directory will implicitly be demonstrating our continued ability to open and read
-# those archives.
-
 setup() {
     setup_common
 
@@ -509,4 +502,20 @@ mutations_and_gc_statement() {
     [[ $output =~ Table[[:space:]]File[[:space:]]Metadata:[[:space:]]*Snappy[[:space:]]Chunk[[:space:]]Count:[[:space:]]260[[:space:]] ]] || false
 
     dolt fsck
+}
+
+@test "archive: read legacy v1 database" {
+  mkdir -p original/.dolt
+  cp -R $BATS_TEST_DIRNAME/archive-test-repos/v1/* original/.dolt
+  cd original
+
+  dolt fsck
+}
+
+@test "archive: read legacy v2 database" {
+  mkdir -p original/.dolt
+  cp -R $BATS_TEST_DIRNAME/archive-test-repos/v2/* original/.dolt
+  cd original
+
+  dolt fsck
 }
