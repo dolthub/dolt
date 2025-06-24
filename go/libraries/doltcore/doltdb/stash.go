@@ -29,7 +29,7 @@ type Stash struct {
 	Name            string
 	BranchReference string
 	Description     string
-	HeadCommit      *Commit
+	CommitHash      string
 	StashReference  string
 }
 
@@ -76,8 +76,12 @@ func getStashList(ctx context.Context, ds datas.Dataset, vrw types.ValueReadWrit
 		if err != nil {
 			return nil, err
 		}
+		headCommitHash, err := headCommit.HashOf()
+		if err != nil {
+			return nil, err
+		}
 
-		s.HeadCommit = headCommit
+		s.CommitHash = headCommitHash.String()
 		s.BranchReference = meta.BranchName
 		s.Description = meta.Description
 		s.StashReference = reference

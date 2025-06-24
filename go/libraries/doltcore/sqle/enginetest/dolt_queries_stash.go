@@ -26,7 +26,7 @@ var DoltStashTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:          "CALL DOLT_STASH('push', 'myStash');",
-				ExpectedErrStr: "no local changes to save",
+				ExpectedErrStr: "No local changes to save",
 			},
 			{
 				Query:    "CREATE TABLE test (i int)",
@@ -34,7 +34,7 @@ var DoltStashTests = []queries.ScriptTest{
 			},
 			{
 				Query:          "CALL DOLT_STASH('push', 'myStash');",
-				ExpectedErrStr: "no local changes to save",
+				ExpectedErrStr: "No local changes to save",
 			},
 			{
 				Query:          "CALL DOLT_STASH('pop', 'myStash');",
@@ -292,7 +292,7 @@ var DoltStashTests = []queries.ScriptTest{
 			{
 				Query: "CALL DOLT_STASH('pop', 'myStash');",
 				ExpectedErrStr: "error: Your local changes to the following tables would be overwritten by applying stash 0:\n\t{'test'}\n" +
-					"Please commit your changes or stash them before you merge.\nAborting\n",
+					"Please commit your changes or stash them before you merge.\nAborting\nThe stash entry is kept in case you need it again.\n",
 			},
 			{
 				Query: "SELECT * FROM DOLT_STASHES;",
