@@ -113,7 +113,7 @@ func (dsdt *doltSchemasDiffTable) Partitions(ctx *sql.Context) (sql.PartitionIte
 		return nil, err
 	}
 
-	return &DoltSchemasDiffPartitions{
+	return &DoltSchemasDiffPartitionItr{
 		cmItr:                cmItr,
 		db:                   dsdt.db,
 		head:                 dsdt.head,
@@ -137,8 +137,8 @@ func (dsdt *doltSchemasDiffTable) PrimaryKeySchema() sql.PrimaryKeySchema {
 }
 
 
-// DoltSchemasDiffPartitions iterates through commit history for schema diffs
-type DoltSchemasDiffPartitions struct {
+// DoltSchemasDiffPartitionItr iterates through commit history for schema diffs
+type DoltSchemasDiffPartitionItr struct {
 	cmItr                doltdb.CommitItr[*sql.Context]
 	db                   Database
 	head                 *doltdb.Commit
@@ -146,9 +146,10 @@ type DoltSchemasDiffPartitions struct {
 	workingPartitionDone bool
 }
 
-var _ sql.PartitionIter = (*DoltSchemasDiffPartitions)(nil)
+var _ sql.PartitionIter = (*DoltSchemasDiffPartitionItr)(nil)
 
-func (dsdp *DoltSchemasDiffPartitions) Next(ctx *sql.Context) (sql.Partition, error) {
+// Next implements sql.PartitionIter
+func (dsdp *DoltSchemasDiffPartitionItr) Next(ctx *sql.Context) (sql.Partition, error) {
 	// First iterate through commit history, then add working partition as the final step
 	for {
 		cmHash, optCmt, err := dsdp.cmItr.Next(ctx)
@@ -286,7 +287,7 @@ func (dsdp *DoltSchemasDiffPartitions) Next(ctx *sql.Context) (sql.Partition, er
 	}
 }
 
-func (dsdp *DoltSchemasDiffPartitions) createWorkingPartition(ctx *sql.Context) (sql.Partition, error) {
+func (dsdp *DoltSchemasDiffPartitionItr) createWorkingPartition(ctx *sql.Context) (sql.Partition, error) {
 	// Get HEAD commit details
 	headRoot, err := dsdp.head.GetRootValue(ctx)
 	if err != nil {
@@ -327,7 +328,8 @@ func (dsdp *DoltSchemasDiffPartitions) createWorkingPartition(ctx *sql.Context) 
 	}, nil
 }
 
-func (dsdp *DoltSchemasDiffPartitions) Close(ctx *sql.Context) error {
+// Close implements sql.PartitionIter
+func (dsdp *DoltSchemasDiffPartitionItr) Close(ctx *sql.Context) error {
 	return nil
 }
 
@@ -346,10 +348,12 @@ type DoltSchemasDiffPartition struct {
 
 var _ sql.Partition = (*DoltSchemasDiffPartition)(nil)
 
+// Key implements sql.Partition
 func (dsdp *DoltSchemasDiffPartition) Key() []byte {
 	return []byte(dsdp.toName + dsdp.fromName)
 }
 
+// GetRowIter implements sql.Partition
 func (dsdp *DoltSchemasDiffPartition) GetRowIter(ctx *sql.Context) (sql.RowIter, error) {
 	// Create a special diff iterator just for this partition
 	return &doltSchemasDiffPartitionRowIter{
@@ -384,6 +388,7 @@ type doltSchemasDiffPartitionRowIter struct {
 	done      bool
 }
 
+// Next implements sql.RowIter
 func (dspri *doltSchemasDiffPartitionRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 	if dspri.rows == nil && !dspri.done {
 		// Initialize diff rows for this specific commit pair
@@ -587,6 +592,7 @@ func (dspri *doltSchemasDiffPartitionRowIter) createDiffRow(toRow, fromRow sql.R
 	return row
 }
 
+// Close implements sql.RowIter
 func (dspri *doltSchemasDiffPartitionRowIter) Close(ctx *sql.Context) error {
 	return nil
 }

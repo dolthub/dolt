@@ -121,6 +121,7 @@ type doltSchemasHistoryRowIter struct {
 	idx     int
 }
 
+// Next implements sql.RowIter
 func (dshri *doltSchemasHistoryRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 	if dshri.rows == nil {
 		// Initialize rows from the commit's dolt_schemas table
@@ -250,6 +251,7 @@ func (dshri *doltSchemasHistoryRowIter) loadRows() error {
 	return nil
 }
 
+// Close implements sql.RowIter
 func (dshri *doltSchemasHistoryRowIter) Close(ctx *sql.Context) error {
 	return nil
 }
