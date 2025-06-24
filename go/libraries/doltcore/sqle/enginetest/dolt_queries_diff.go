@@ -3673,8 +3673,15 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "SELECT statement_order, table_name, diff_type, statement FROM dolt_patch('HEAD', 'WORKING')",
-				Expected: []sql.Row{{1, "foo", "schema", "CREATE TABLE `foo` (\n  `pk` int NOT NULL,\n  `c1` int,\n  PRIMARY KEY (`pk`),\n  CONSTRAINT `foo_chk_eq3jn5ra` CHECK ((c1 > 3))\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"}},
+				Query: "SELECT statement_order, table_name, diff_type, statement FROM dolt_patch('HEAD', 'WORKING')",
+				Expected: []sql.Row{
+					{1, "foo", "schema", "CREATE TABLE `foo` (\n" +
+						"  `pk` int NOT NULL,\n" +
+						"  `c1` int,\n" +
+						"  PRIMARY KEY (`pk`),\n" +
+						"  CONSTRAINT `foo_chk_rvgogafi` CHECK ((`c1` > 3))\n" +
+						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"},
+				},
 			},
 		},
 	},

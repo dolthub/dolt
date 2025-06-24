@@ -74,7 +74,7 @@ func ResolveCheckExpression(ctx *sql.Context, tableName string, sch schema.Schem
 func stripTableNamesFromExpression(expr sql.Expression) sql.Expression {
 	e, _, _ := transform.Expr(expr, func(e sql.Expression) (sql.Expression, transform.TreeIdentity, error) {
 		if col, ok := e.(*expression.GetField); ok {
-			return col.WithTable(""), transform.NewTree, nil
+			return col.WithTable("").WithQuotedNames(sql.GlobalSchemaFormatter, true), transform.NewTree, nil
 		}
 		return e, transform.SameTree, nil
 	})
