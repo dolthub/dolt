@@ -146,8 +146,8 @@ func (dshri *doltSchemasHistoryRowIter) loadRows() error {
 		return err
 	}
 
-	// Check if dolt_schemas table exists in this commit
-	_, ok, err := root.GetTable(dshri.ctx, doltdb.TableName{Name: doltdb.SchemasTableName})
+	// Get the table at this commit
+	tbl, ok, err := root.GetTable(dshri.ctx, doltdb.TableName{Name: doltdb.SchemasTableName})
 	if err != nil {
 		return err
 	}
@@ -171,17 +171,6 @@ func (dshri *doltSchemasHistoryRowIter) loadRows() error {
 	commitHashStr := commitHash.String()
 	committerStr := commitMeta.Name + " <" + commitMeta.Email + ">"
 	commitDate := commitMeta.Time()
-
-	// Get the table at this commit
-	tbl, ok, err := root.GetTable(dshri.ctx, doltdb.TableName{Name: doltdb.SchemasTableName})
-	if err != nil {
-		return err
-	}
-	if !ok {
-		// No dolt_schemas table in this commit, return empty rows
-		dshri.rows = make([]sql.Row, 0)
-		return nil
-	}
 
 	// Get the schema
 	sch, err := tbl.GetSchema(dshri.ctx)
