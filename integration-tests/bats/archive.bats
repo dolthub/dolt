@@ -501,10 +501,6 @@ mutations_and_gc_statement() {
     run dolt admin storage
     [ $status -eq 0 ]
 
-    echo "------------------"
-    echo "$output"
-    echo "------------------"
-
     ## This output indicates that the new content was fetched from the remote into a table file. Note that since
     ## the remote is all archive, the chunks are translated into the snappy format
     ## multiline regex - no quotes - to match this text:
