@@ -951,7 +951,8 @@ DELIM
 
 }
 
-@test "import-create-tables: validate primary keys exist in CSV file (issue #1083)" {
+# See: https://github.com/dolthub/dolt/issues/1083
+@test "import-create-tables: validate primary keys exist in CSV file" {
     # Create a test CSV file
     cat <<DELIM > test_pk_validation.csv
 id,name,email,age
@@ -988,7 +989,6 @@ DELIM
     [[ "$output" =~ "PRI" ]] || false
 
     # Test 5: Valid multiple primary keys should succeed
-    rm -f test_table
     run dolt table import -c --pk "id,name" test_table2 test_pk_validation.csv
     [ "$status" -eq 0 ]
     
@@ -1023,9 +1023,6 @@ DELIM
     [[ "$output" =~ "primary key 'invalid_column' not found in import file" ]] || false
     # Should fail in less than 2 seconds (immediate validation)
     [ "$duration" -lt 2 ] || false
-
-    # Cleanup
-    rm -f test_pk_validation.csv test_pk_validation.psv large_test.csv
 }
 
 @test "import-create-tables: primary key validation with schema file should skip validation" {
@@ -1054,7 +1051,4 @@ SQL
     run dolt sql -q "SHOW CREATE TABLE test_with_schema;"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "PRIMARY KEY (\`name\`)" ]] || false
-
-    # Cleanup
-    rm -f test_data.csv test_schema.sql
 }
