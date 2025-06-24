@@ -3392,51 +3392,50 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 			},
 		},
 	},
-	//{
-	//	Name: "dolt_checkout disambiguation with remote tracking branch and table",
-	//	SetUpScript: []string{
-	//		"call dolt_remote('add','origin','file://" + filepath.ToSlash(filepath.Join(os.TempDir(), "remote-repo-483")) + "');",
-	//		"call dolt_push('origin', 'main');",
-	//		"create table feature (id int primary key, value int);",
-	//		"insert into feature values (1, 100);",
-	//		"call dolt_add('.');",
-	//		"call dolt_commit('-m', 'Add feature table');",
-	//		"call dolt_checkout('-b', 'feature');",
-	//		"insert into feature values (2, 200);",
-	//		"call dolt_add('.');",
-	//		"call dolt_commit('-m', 'Add row to feature table');",
-	//		"call dolt_push('origin', 'feature');",
-	//		"call dolt_checkout('main');",
-	//		"update feature set value = 101 where id = 1;",
-	//		"call dolt_branch('-D', 'feature');", // Remove local branch to force remote tracking branch ambiguity
-	//	},
-	//	Assertions: []queries.ScriptTestAssertion{
-	//		{
-	//			Query:    "call dolt_checkout('--', 'feature');",
-	//			Expected: []sql.Row{{0, ""}},
-	//		},
-	//		{
-	//			Query:    "select * from feature order by id;",
-	//			Expected: []sql.Row{{1, 100}},
-	//		},
-	//		{
-	//			Query:          "call dolt_checkout('feature')",
-	//			ExpectedErrStr: "'feature' could be both a local table and a tracking branch.\nPlease use -- to disambiguate.",
-	//		},
-	//		{
-	//			Query:    "call dolt_checkout('feature', '--');",
-	//			Expected: []sql.Row{{0, "Switched to branch 'feature'\nbranch 'feature' set up to track 'origin/feature'."}},
-	//		},
-	//		{
-	//			Query:    "select active_branch();",
-	//			Expected: []sql.Row{{"feature"}},
-	//		},
-	//		{
-	//			Query:    "select * from feature order by id;",
-	//			Expected: []sql.Row{{1, 100}, {2, 200}},
-	//		},
-	//	},
-	//},
+	{
+		Name: "dolt_checkout with tracking branch and table with same name",
+		SetUpScript: []string{
+			"call dolt_remote('add','origin','file://../remote-repo-483');",
+			"create table feature (id int primary key, value int);",
+			"insert into feature values (1, 100);",
+			"call dolt_add('.');",
+			"call dolt_commit('-m', 'Add feature table');",
+			"call dolt_checkout('-b', 'feature');",
+			"insert into feature values (2, 200);",
+			"call dolt_add('.');",
+			"call dolt_commit('-m', 'Add row to feature table');",
+			"call dolt_push('origin', 'feature');",
+			"call dolt_checkout('main');",
+			"update feature set value = 101 where id = 1;",
+			"call dolt_branch('-D', 'feature');", // remove local branch to force remote tracking branch ambiguity
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_checkout('--', 'feature');",
+				Expected: []sql.Row{{0, ""}},
+			},
+			{
+				Query:    "select * from feature order by id;",
+				Expected: []sql.Row{{1, 100}},
+			},
+			{
+				Query:          "call dolt_checkout('feature')",
+				ExpectedErrStr: "'feature' could be both a local table and a tracking branch.\nPlease use -- to disambiguate.",
+			},
+			{
+				Query:    "call dolt_checkout('feature', '--');",
+				Expected: []sql.Row{{0, "Switched to branch 'feature'\nbranch 'feature' set up to track 'origin/feature'."}},
+			},
+			{
+				Query:    "select active_branch();",
+				Expected: []sql.Row{{"feature"}},
+			},
+			{
+				Query:    "select * from feature order by id;",
+				Expected: []sql.Row{{1, 100}, {2, 200}},
+			},
+		},
+	},
 }
 
 var DoltCheckoutReadOnlyScripts = []queries.ScriptTest{

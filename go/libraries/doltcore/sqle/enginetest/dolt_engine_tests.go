@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -1027,63 +1026,12 @@ func RunDoltCheckoutTests(t *testing.T, h DoltEnginetestHarness) {
 		func() {
 			h := h.NewHarness(t)
 			defer h.Close()
+			if script.Name == "dolt_checkout with tracking branch and table with same name" {
+				h.UseLocalFileSystem()
+			}
 			enginetest.TestScript(t, h, script)
 		}()
 	}
-
-	h = h.NewHarness(t)
-	h.UseLocalFileSystem()
-	defer h.Close()
-	remoteRepoPath, err := os.MkdirTemp("", "remote-repo-483")
-	require.NoError(t, err)
-	defer os.RemoveAll(remoteRepoPath)
-	remoteURL := "file://" + filepath.ToSlash(remoteRepoPath)
-	ambiguityScript := queries.ScriptTest{
-		Name: "dolt_checkout disambiguation with remote tracking branch and table",
-		SetUpScript: []string{
-			"call dolt_remote('add','origin','" + remoteURL + "');",
-			"create table feature (id int primary key, value int);",
-			"insert into feature values (1, 100);",
-			"call dolt_add('.');",
-			"call dolt_commit('-m', 'Add feature table');",
-			"call dolt_checkout('-b', 'feature');",
-			"insert into feature values (2, 200);",
-			"call dolt_add('.');",
-			"call dolt_commit('-m', 'Add row to feature table');",
-			"call dolt_push('origin', 'feature');",
-			"call dolt_checkout('main');",
-			"update feature set value = 101 where id = 1;",
-			"call dolt_branch('-D', 'feature');", // Remove local branch to force remote tracking branch ambiguity
-		},
-		Assertions: []queries.ScriptTestAssertion{
-			{
-				Query:    "call dolt_checkout('--', 'feature');",
-				Expected: []sql.Row{{0, ""}},
-			},
-			{
-				Query:    "select * from feature order by id;",
-				Expected: []sql.Row{{1, 100}},
-			},
-			{
-				Query:          "call dolt_checkout('feature')",
-				ExpectedErrStr: "'feature' could be both a local table and a tracking branch.\nPlease use -- to disambiguate.",
-			},
-			{
-				Query:    "call dolt_checkout('feature', '--');",
-				Expected: []sql.Row{{0, "Switched to branch 'feature'\nbranch 'feature' set up to track 'origin/feature'."}},
-			},
-			{
-				Query:    "select active_branch();",
-				Expected: []sql.Row{{"feature"}},
-			},
-			{
-				Query:    "select * from feature order by id;",
-				Expected: []sql.Row{{1, 100}, {2, 200}},
-			},
-		},
-	}
-
-	enginetest.TestScript(t, h, ambiguityScript)
 
 	h = h.NewHarness(t)
 	defer h.Close()
@@ -1102,6 +1050,9 @@ func RunDoltCheckoutPreparedTests(t *testing.T, h DoltEnginetestHarness) {
 		func() {
 			h := h.NewHarness(t)
 			defer h.Close()
+			if script.Name == "dolt_checkout with tracking branch and table with same name" {
+				h.UseLocalFileSystem()
+			}
 			enginetest.TestScript(t, h, script)
 		}()
 	}
