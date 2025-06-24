@@ -3395,7 +3395,7 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 	{
 		Name: "dolt_checkout disambiguation with remote tracking branch and table",
 		SetUpScript: []string{
-			"call dolt_remote('add','origin','file://../remote-repo');",
+			"call dolt_remote('add','origin','file:///remote-repo');",
 			"create table feature (id int primary key, value int);",
 			"insert into feature values (1, 100);",
 			"call dolt_add('.');",
