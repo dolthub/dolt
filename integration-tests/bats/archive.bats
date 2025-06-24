@@ -104,6 +104,36 @@ mutations_and_gc_statement() {
   dolt sql -q "$(update_statement)"
 }
 
+@test "archive: multi archive newgen then revert" {
+  # Getting multiple table files in `newgen` is a little gross.
+  dolt sql -q "$(mutations_and_gc_statement)"
+  mkdir remote
+  dolt remote add origin file://remote
+  dolt push origin main
+
+  dolt clone file://remote cloned
+  cd cloned
+  dolt archive --purge
+  files=$(find . -name "*darc" | wc -l | sed 's/[ \t]//g')
+  [ "$files" -eq "1" ]
+
+  cd ..
+  dolt sql -q "$(mutations_and_gc_statement)"
+  dolt push origin main
+
+  cd cloned
+  dolt fetch
+  dolt archive --purge
+  files=$(find . -name "*darc" | wc -l | sed 's/[ \t]//g')
+  [ "$files" -eq "2" ]
+
+  dolt archive --revert
+  files=$(find . -name "*darc" | wc -l | sed 's/[ \t]//g')
+  [ "$files" -eq "0" ]
+
+  dolt fsck
+}
+
 @test "archive: multiple archives" {
   dolt sql -q "$(mutations_and_gc_statement)"
   dolt sql -q "$(mutations_and_gc_statement)"
