@@ -108,70 +108,17 @@ func (dsdt *doltSchemasDiffTable) Partitions(ctx *sql.Context) (sql.PartitionIte
 	cmItr := doltdb.CommitItrForRoots[*sql.Context](dsdt.ddb, dsdt.head)
 
 	// Set up commit iterator like regular diff tables
-	// Get working schemas table for iteration setup
-	_, exists, err := dsdt.workingRoot.GetTable(ctx, doltdb.TableName{Name: doltdb.SchemasTableName})
-	if err != nil {
-		return nil, err
-	}
-
-	// Get working table hash
-	if exists {
-		_, _, err = dsdt.workingRoot.GetTableHash(ctx, doltdb.TableName{Name: doltdb.SchemasTableName})
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	// Get the first commit hash for initial setup (like regular diff tables)
-	cmHash, _, err := cmItr.Next(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	// Initialize commit hash to table info mapping (use HEAD, not WORKING, so we get historical diffs)
-	cmHashToTblInfo := make(map[hash.Hash]SchemaTableInfoAtCommit)
-
-	// Set up HEAD as the comparison target (so commits are compared against HEAD)
-	headCommitHash, err := dsdt.head.HashOf()
-	if err != nil {
-		return nil, err
-	}
-	headMeta, err := dsdt.head.GetCommitMeta(ctx)
-	if err != nil {
-		return nil, err
-	}
-	headCommitDate := types.Timestamp(headMeta.Time())
-	headRoot, err := dsdt.head.GetRootValue(ctx)
-	if err != nil {
-		return nil, err
-	}
-	headSchemasTable, headExists, err := headRoot.GetTable(ctx, doltdb.TableName{Name: doltdb.SchemasTableName})
-	if err != nil {
-		return nil, err
-	}
-	var headTblHash hash.Hash
-	if headExists {
-		headTblHash, _, err = headRoot.GetTableHash(ctx, doltdb.TableName{Name: doltdb.SchemasTableName})
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	cmHashToTblInfo[cmHash] = SchemaTableInfoAtCommit{headCommitHash.String(), &headCommitDate, headSchemasTable, headTblHash}
-
-	err = cmItr.Reset(ctx)
+	err := cmItr.Reset(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	return &DoltSchemasDiffPartitions{
 		cmItr:                cmItr,
-		cmHashToTblInfo:      cmHashToTblInfo,
 		db:                   dsdt.db,
 		head:                 dsdt.head,
 		workingRoot:          dsdt.workingRoot,
 		workingPartitionDone: false,
-		stagedPartitionDone:  false,
 	}, nil
 }
 
@@ -189,23 +136,14 @@ func (dsdt *doltSchemasDiffTable) PrimaryKeySchema() sql.PrimaryKeySchema {
 	}
 }
 
-// Define our own table info struct since TblInfoAtCommit has unexported fields
-type SchemaTableInfoAtCommit struct {
-	name    string
-	date    *types.Timestamp
-	tbl     *doltdb.Table
-	tblHash hash.Hash
-}
 
 // DoltSchemasDiffPartitions iterates through commit history for schema diffs
 type DoltSchemasDiffPartitions struct {
 	cmItr                doltdb.CommitItr[*sql.Context]
-	cmHashToTblInfo      map[hash.Hash]SchemaTableInfoAtCommit
 	db                   Database
 	head                 *doltdb.Commit
 	workingRoot          doltdb.RootValue
 	workingPartitionDone bool
-	stagedPartitionDone  bool
 }
 
 var _ sql.PartitionIter = (*DoltSchemasDiffPartitions)(nil)
