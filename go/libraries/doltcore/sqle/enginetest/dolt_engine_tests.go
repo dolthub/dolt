@@ -1048,6 +1048,7 @@ func RunDoltCheckoutPreparedTests(t *testing.T, h DoltEnginetestHarness) {
 		func() {
 			h := h.NewHarness(t)
 			defer h.Close()
+			h.UseLocalFileSystem()
 			enginetest.TestScript(t, h, script)
 		}()
 	}
