@@ -443,20 +443,21 @@ func (sc *StatsController) updateTable(ctx *sql.Context, newStats *rootStats, ta
 			continue
 		}
 		var idx durable.Index
-		var err error
 		var prollyMap prolly.Map
 		var template stats.Statistic
-		if sc.execWithOptionalRateLimit(ctx, bypassRateLimit, func() (err error) {
+		if err := sc.execWithOptionalRateLimit(ctx, bypassRateLimit, func() (err error) {
 			if strings.EqualFold(sqlIdx.ID(), "PRIMARY") {
 				idx, err = dTab.GetRowData(ctx)
 			} else {
 				idx, err = dTab.GetIndexRowData(ctx, sqlIdx.ID())
 			}
-			if err == nil {
-				prollyMap, err = durable.ProllyMapFromIndex(idx)
-				if err != nil {
-					return err
-				}
+			if err != nil {
+				return err
+			}
+
+			prollyMap, err = durable.ProllyMapFromIndex(idx)
+			if err != nil {
+				return err
 			}
 
 			_, template, err = sc.getTemplate(ctx, sqlTable, sqlIdx)
