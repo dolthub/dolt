@@ -136,7 +136,6 @@ func (dsdt *doltSchemasDiffTable) PrimaryKeySchema() sql.PrimaryKeySchema {
 	}
 }
 
-
 // DoltSchemasDiffPartitions iterates through commit history for schema diffs
 type DoltSchemasDiffPartitions struct {
 	cmItr                doltdb.CommitItr[*sql.Context]
