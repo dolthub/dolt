@@ -30,7 +30,6 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-
 // DoltSchemasDiffTable creates a dolt_schemas diff table that shows complete history
 // like regular dolt_diff_ tables
 func DoltSchemasDiffTable(ctx *sql.Context, ddb *doltdb.DoltDB, head *doltdb.Commit, workingRoot doltdb.RootValue, db Database) sql.Table {

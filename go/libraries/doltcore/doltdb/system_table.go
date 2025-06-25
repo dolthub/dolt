@@ -298,7 +298,7 @@ const (
 	// ToCommitCol is the column name for the "to" commit in diff tables
 	ToCommitCol = "to_commit"
 
-	// FromCommitCol is the column name for the "from" commit in diff tables  
+	// FromCommitCol is the column name for the "from" commit in diff tables
 	FromCommitCol = "from_commit"
 
 	// ToCommitDateCol is the column name for the "to" commit date in diff tables
