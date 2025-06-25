@@ -23,11 +23,12 @@ import (
 type DiffType byte
 
 const (
-	NoDiff       DiffType = 0
-	AddedDiff    DiffType = 1
-	ModifiedDiff DiffType = 2
-	RemovedDiff  DiffType = 3
-	RangeDiff    DiffType = 4
+	NoDiff           DiffType = 0
+	AddedDiff        DiffType = 1
+	ModifiedDiff     DiffType = 2
+	RemovedDiff      DiffType = 3
+	RangeDiff        DiffType = 4
+	RangeRemovedDiff DiffType = 5
 )
 
 type Diff struct {
@@ -46,6 +47,20 @@ func newRangeDiff(previousKey, key Item, from, to Item, subtreeCount uint64, lev
 			To:           to,
 			SubtreeCount: subtreeCount,
 			Level:        level,
+		},
+	}
+}
+
+func newRangeRemovedDiff(previousKey, key Item, from Item) Diff {
+	return Diff{
+		Type: RangeRemovedDiff,
+		From: from,
+		Mutation: Mutation{
+			PreviousKey:  previousKey,
+			Key:          key,
+			To:           nil,
+			SubtreeCount: 0,
+			Level:        0,
 		},
 	}
 }
@@ -238,7 +253,7 @@ func (td *Differ[K, O]) advanceToNextDiff(ctx context.Context) (err error) {
 
 func (td *Differ[K, O]) NextRange(ctx context.Context) (diff Diff, err error) {
 	switch td.previousDiffType {
-	case RemovedDiff:
+	case RemovedDiff, RangeRemovedDiff:
 		td.previousKey = td.from.CurrentKey()
 		err = td.from.advance(ctx)
 		if err != nil {
@@ -355,8 +370,7 @@ func (td *Differ[K, O]) NextRange(ctx context.Context) (diff Diff, err error) {
 // split iterates through the children of the current nodes to find the first change.
 // We only call this if both nodes are non-leaf nodes with different hashes, so we're guaranteed to find one.
 func (td *Differ[K, O]) split(ctx context.Context) (diff Diff, err error) {
-	if !td.to.Valid() {
-		// A corner case: we're splitting the RemoveDiff that appears at the end.
+	if td.previousDiffType == RangeRemovedDiff {
 		fromChild, err := fetchChild(ctx, td.from.nrw, td.from.currentRef())
 		if err != nil {
 			return Diff{}, err
@@ -367,7 +381,11 @@ func (td *Differ[K, O]) split(ctx context.Context) (diff Diff, err error) {
 			parent: td.from,
 			nrw:    td.from.nrw,
 		}
-		return td.sendRemoved()
+		if td.from.nd.level > 0 {
+			return td.sendRange()
+		} else {
+			return td.sendRemoved()
+		}
 	}
 
 	toChild, err := fetchChild(ctx, td.to.nrw, td.to.currentRef())
@@ -434,10 +452,6 @@ func (td *Differ[K, O]) sendModified() (diff Diff, err error) {
 
 func (td *Differ[K, O]) sendRange() (diff Diff, err error) {
 	var subtreeCount uint64
-	subtreeCount, err = td.to.currentSubtreeSize()
-	if err != nil {
-		return Diff{}, err
-	}
 	level, err := td.to.level()
 	if err != nil {
 		return Diff{}, err
@@ -446,13 +460,20 @@ func (td *Differ[K, O]) sendRange() (diff Diff, err error) {
 	if td.from.Valid() {
 		fromValue = td.from.currentValue()
 	}
-	var toValue Item
-	if td.to.Valid() {
-		toValue = td.to.currentValue()
+	subtreeCount, err = td.to.currentSubtreeSize()
+	if err != nil {
+		return Diff{}, err
 	}
-	diff = newRangeDiff(td.previousKey, td.to.CurrentKey(), fromValue, toValue, subtreeCount, int(level))
+
+	diff = newRangeDiff(td.previousKey, td.to.CurrentKey(), fromValue, td.to.currentValue(), subtreeCount, int(level))
 
 	td.previousDiffType = RangeDiff
+	return diff, nil
+}
+
+func (td *Differ[K, O]) sendRangeRemoved() (diff Diff, err error) {
+	diff = newRangeRemovedDiff(td.previousKey, td.from.CurrentKey(), td.from.currentValue())
+	td.previousDiffType = RangeRemovedDiff
 	return diff, nil
 }
 
