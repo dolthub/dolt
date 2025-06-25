@@ -332,6 +332,7 @@ func CreateReflogArgParser() *argparser.ArgParser {
 func CreateRmArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithVariableArgs("add")
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "table(s) to remove from the list of tables staged to be committed."})
+	ap.SupportsFlag(CachedFlag, "", "description here") //TODO
 
 	return ap
 }
