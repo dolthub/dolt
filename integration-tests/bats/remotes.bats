@@ -1546,7 +1546,6 @@ SQL
 
     run dolt pull
     [ "$status" -eq 0 ]
-    echo "$output"
     [[ "$output" =~ "Everything up-to-date" ]] || false
 }
 

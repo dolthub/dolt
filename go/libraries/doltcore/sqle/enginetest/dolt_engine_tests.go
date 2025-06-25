@@ -1026,6 +1026,9 @@ func RunDoltCheckoutTests(t *testing.T, h DoltEnginetestHarness) {
 		func() {
 			h := h.NewHarness(t)
 			defer h.Close()
+			if script.Name == "dolt_checkout with tracking branch and table with same name" {
+				h.UseLocalFileSystem()
+			}
 			enginetest.TestScript(t, h, script)
 		}()
 	}
@@ -1047,12 +1050,18 @@ func RunDoltCheckoutPreparedTests(t *testing.T, h DoltEnginetestHarness) {
 		func() {
 			h := h.NewHarness(t)
 			defer h.Close()
+			if script.Name == "dolt_checkout with tracking branch and table with same name" {
+				h.UseLocalFileSystem()
+			}
 			enginetest.TestScript(t, h, script)
 		}()
 	}
 
 	h = h.NewHarness(t)
-	defer h.Close()
+	defer func() {
+		time.Sleep(200 * time.Millisecond) // Give time for OS/process to release lock
+		h.Close()
+	}()
 	engine, err := h.NewEngine(t)
 	require.NoError(t, err)
 	readOnlyEngine, err := h.NewReadOnlyEngine(engine.EngineAnalyzer().Catalog.DbProvider)
