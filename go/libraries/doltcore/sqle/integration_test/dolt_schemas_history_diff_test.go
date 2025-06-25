@@ -351,16 +351,16 @@ type doltProceduresTableTest struct {
 
 var setupDoltProceduresDiffCommon = []testCommand{
 	// Start with a clean state
-	{cmd.SqlCmd{}, args{"-q", "CREATE PROCEDURE original_proc(x INT) BEGIN SELECT x * 2 as result; END"}},
-	{cmd.SqlCmd{}, args{"-q", "CREATE PROCEDURE helper_proc() BEGIN SELECT 'helper' as message; END"}},
+	{cmd.SqlCmd{}, args{"-q", "CREATE PROCEDURE original_proc(x INT) SELECT x * 2 as result"}},
+	{cmd.SqlCmd{}, args{"-q", "CREATE PROCEDURE helper_proc() SELECT 'helper' as message"}},
 	{cmd.AddCmd{}, args{"."}},
 	{cmd.CommitCmd{}, args{"-m", "base commit with original procedures"}},
 
 	// Make changes for diff (working directory changes)
 	{cmd.SqlCmd{}, args{"-q", "DROP PROCEDURE original_proc"}},
-	{cmd.SqlCmd{}, args{"-q", "CREATE PROCEDURE original_proc(x INT, y INT) BEGIN SELECT x + y as sum; END"}},                       // modified
-	{cmd.SqlCmd{}, args{"-q", "CREATE PROCEDURE new_proc(name VARCHAR(50)) BEGIN SELECT CONCAT('Hello, ', name) as greeting; END"}}, // added
-	{cmd.SqlCmd{}, args{"-q", "DROP PROCEDURE helper_proc"}},                                                                        // removed
+	{cmd.SqlCmd{}, args{"-q", "CREATE PROCEDURE original_proc(x INT, y INT) SELECT x + y as sum"}},                       // modified
+	{cmd.SqlCmd{}, args{"-q", "CREATE PROCEDURE new_proc(name VARCHAR(50)) SELECT CONCAT('Hello, ', name) as greeting"}}, // added
+	{cmd.SqlCmd{}, args{"-q", "DROP PROCEDURE helper_proc"}},                                                              // removed
 }
 
 func doltProceduresDiffTableTests() []doltProceduresTableTest {
