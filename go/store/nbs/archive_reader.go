@@ -197,7 +197,7 @@ func newArchiveReaderFromFooter(ctx context.Context, reader tableReaderAt, fileS
 func newArchiveReader(ctx context.Context, reader tableReaderAt, fileSize uint64, stats *Stats) (archiveReader, error) {
 	footer, err := loadFooter(ctx, reader, fileSize, stats)
 	if err != nil {
-		return archiveReader{}, errors.New("Failed to loadFooter: " + err.Error())
+		return archiveReader{}, fmt.Errorf("Failed to loadFooter: %w", err)
 	}
 
 	return buildArchiveReader(ctx, reader, footer, stats)
@@ -210,7 +210,7 @@ func buildArchiveReader(ctx context.Context, reader tableReaderAt, footer archiv
 	byteSpans[0] = 0 // Null byteSpan to simplify logic.
 	err := binary.Read(secRdr, binary.BigEndian, byteSpans[1:])
 	if err != nil {
-		return archiveReader{}, errors.New("Failed to read byte spans: " + err.Error())
+		return archiveReader{}, fmt.Errorf("Failed to read byte spans: %w", err)
 	}
 
 	prefixSpan := footer.indexPrefixSpan()
@@ -218,7 +218,7 @@ func buildArchiveReader(ctx context.Context, reader tableReaderAt, footer archiv
 	prefixes := make([]uint64, footer.chunkCount)
 	err = binary.Read(prefixRdr, binary.BigEndian, prefixes[:])
 	if err != nil {
-		return archiveReader{}, errors.New("Failed to read prefixes: " + err.Error())
+		return archiveReader{}, fmt.Errorf("Failed to read prefixes: %w", err)
 	}
 
 	chunkRefSpan := footer.indexChunkRefSpan()
@@ -226,7 +226,7 @@ func buildArchiveReader(ctx context.Context, reader tableReaderAt, footer archiv
 	chnks := make([]uint32, footer.chunkCount*2)
 	err = binary.Read(chunkRdr, binary.BigEndian, chnks[:])
 	if err != nil {
-		return archiveReader{}, errors.New("Failed to read chunk references: " + err.Error())
+		return archiveReader{}, fmt.Errorf("Failed to read chunk references: %w", err)
 	}
 
 	suffixSpan := footer.indexSuffixSpan()
@@ -234,7 +234,7 @@ func buildArchiveReader(ctx context.Context, reader tableReaderAt, footer archiv
 	suffixes := make([]byte, footer.chunkCount*hash.SuffixLen)
 	_, err = io.ReadFull(sufRdr, suffixes)
 	if err != nil {
-		return archiveReader{}, errors.New("Failed to read suffixes: " + err.Error())
+		return archiveReader{}, fmt.Errorf("Failed to read suffixes: %w", err)
 	}
 
 	dictCache, err := lru.New2Q[uint32, *DecompBundle](256)
