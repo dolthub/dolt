@@ -249,6 +249,42 @@ const (
 	// SchemasTablesSqlModeCol is the name of the column that stores the SQL_MODE string used when this fragment
 	// was originally defined. Mode settings, such as ANSI_QUOTES, are needed to correctly parse the fragment.
 	SchemasTablesSqlModeCol = "sql_mode"
+
+	// DiffTypeCol is the column name for the type of change (added, modified, removed) in diff tables
+	DiffTypeCol = "diff_type"
+
+	// ToCommitCol is the column name for the "to" commit in diff tables
+	ToCommitCol = "to_commit"
+
+	// FromCommitCol is the column name for the "from" commit in diff tables
+	FromCommitCol = "from_commit"
+
+	// ToCommitDateCol is the column name for the "to" commit date in diff tables
+	ToCommitDateCol = "to_commit_date"
+
+	// FromCommitDateCol is the column name for the "from" commit date in diff tables
+	FromCommitDateCol = "from_commit_date"
+
+	// WorkingCommitRef is the special commit reference for working changes
+	WorkingCommitRef = "WORKING"
+
+	// EmptyCommitRef is the special commit reference for empty/initial state
+	EmptyCommitRef = "EMPTY"
+
+	// DiffTypeAdded represents a row that was added in a diff
+	DiffTypeAdded = "added"
+
+	// DiffTypeModified represents a row that was modified in a diff
+	DiffTypeModified = "modified"
+
+	// DiffTypeRemoved represents a row that was removed in a diff
+	DiffTypeRemoved = "removed"
+
+	// DiffToPrefix is the prefix for "to" columns in diff tables
+	DiffToPrefix = "to_"
+
+	// DiffFromPrefix is the prefix for "from" columns in diff tables
+	DiffFromPrefix = "from_"
 )
 
 const (
