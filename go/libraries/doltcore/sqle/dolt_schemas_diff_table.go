@@ -30,10 +30,6 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-const (
-	// DiffTypeCol is the column name for the type of change (added, modified, removed)
-	DiffTypeCol = "diff_type"
-)
 
 // DoltSchemasDiffTable creates a dolt_schemas diff table that shows complete history
 // like regular dolt_diff_ tables
@@ -75,25 +71,25 @@ func (dsdt *doltSchemasDiffTable) Schema() sql.Schema {
 	// Same schema as the regular diff table
 	return sql.Schema{
 		// TO columns
-		&sql.Column{Name: "to_" + doltdb.SchemasTablesTypeCol, Type: gmstypes.MustCreateString(sqltypes.VarChar, 64, sql.Collation_utf8mb4_0900_ai_ci), Nullable: true, Source: dsdt.name},
-		&sql.Column{Name: "to_" + doltdb.SchemasTablesNameCol, Type: gmstypes.MustCreateString(sqltypes.VarChar, 64, sql.Collation_utf8mb4_0900_ai_ci), Nullable: true, Source: dsdt.name},
-		&sql.Column{Name: "to_" + doltdb.SchemasTablesFragmentCol, Type: gmstypes.LongText, Nullable: true, Source: dsdt.name},
-		&sql.Column{Name: "to_" + doltdb.SchemasTablesExtraCol, Type: gmstypes.JSON, Nullable: true, Source: dsdt.name},
-		&sql.Column{Name: "to_" + doltdb.SchemasTablesSqlModeCol, Type: gmstypes.MustCreateString(sqltypes.VarChar, 256, sql.Collation_utf8mb4_0900_ai_ci), Nullable: true, Source: dsdt.name},
-		&sql.Column{Name: "to_commit", Type: gmstypes.MustCreateString(sqltypes.VarChar, 1023, sql.Collation_utf8mb4_0900_ai_ci), Nullable: true, Source: dsdt.name},
-		&sql.Column{Name: "to_commit_date", Type: gmstypes.DatetimeMaxPrecision, Nullable: true, Source: dsdt.name},
+		&sql.Column{Name: doltdb.DiffToPrefix + doltdb.SchemasTablesTypeCol, Type: gmstypes.MustCreateString(sqltypes.VarChar, 64, sql.Collation_utf8mb4_0900_ai_ci), Nullable: true, Source: dsdt.name},
+		&sql.Column{Name: doltdb.DiffToPrefix + doltdb.SchemasTablesNameCol, Type: gmstypes.MustCreateString(sqltypes.VarChar, 64, sql.Collation_utf8mb4_0900_ai_ci), Nullable: true, Source: dsdt.name},
+		&sql.Column{Name: doltdb.DiffToPrefix + doltdb.SchemasTablesFragmentCol, Type: gmstypes.LongText, Nullable: true, Source: dsdt.name},
+		&sql.Column{Name: doltdb.DiffToPrefix + doltdb.SchemasTablesExtraCol, Type: gmstypes.JSON, Nullable: true, Source: dsdt.name},
+		&sql.Column{Name: doltdb.DiffToPrefix + doltdb.SchemasTablesSqlModeCol, Type: gmstypes.MustCreateString(sqltypes.VarChar, 256, sql.Collation_utf8mb4_0900_ai_ci), Nullable: true, Source: dsdt.name},
+		&sql.Column{Name: doltdb.ToCommitCol, Type: gmstypes.MustCreateString(sqltypes.VarChar, 1023, sql.Collation_utf8mb4_0900_ai_ci), Nullable: true, Source: dsdt.name},
+		&sql.Column{Name: doltdb.ToCommitDateCol, Type: gmstypes.DatetimeMaxPrecision, Nullable: true, Source: dsdt.name},
 
 		// FROM columns
-		&sql.Column{Name: "from_" + doltdb.SchemasTablesTypeCol, Type: gmstypes.MustCreateString(sqltypes.VarChar, 64, sql.Collation_utf8mb4_0900_ai_ci), Nullable: true, Source: dsdt.name},
-		&sql.Column{Name: "from_" + doltdb.SchemasTablesNameCol, Type: gmstypes.MustCreateString(sqltypes.VarChar, 64, sql.Collation_utf8mb4_0900_ai_ci), Nullable: true, Source: dsdt.name},
-		&sql.Column{Name: "from_" + doltdb.SchemasTablesFragmentCol, Type: gmstypes.LongText, Nullable: true, Source: dsdt.name},
-		&sql.Column{Name: "from_" + doltdb.SchemasTablesExtraCol, Type: gmstypes.JSON, Nullable: true, Source: dsdt.name},
-		&sql.Column{Name: "from_" + doltdb.SchemasTablesSqlModeCol, Type: gmstypes.MustCreateString(sqltypes.VarChar, 256, sql.Collation_utf8mb4_0900_ai_ci), Nullable: true, Source: dsdt.name},
-		&sql.Column{Name: "from_commit", Type: gmstypes.MustCreateString(sqltypes.VarChar, 1023, sql.Collation_utf8mb4_0900_ai_ci), Nullable: true, Source: dsdt.name},
-		&sql.Column{Name: "from_commit_date", Type: gmstypes.DatetimeMaxPrecision, Nullable: true, Source: dsdt.name},
+		&sql.Column{Name: doltdb.DiffFromPrefix + doltdb.SchemasTablesTypeCol, Type: gmstypes.MustCreateString(sqltypes.VarChar, 64, sql.Collation_utf8mb4_0900_ai_ci), Nullable: true, Source: dsdt.name},
+		&sql.Column{Name: doltdb.DiffFromPrefix + doltdb.SchemasTablesNameCol, Type: gmstypes.MustCreateString(sqltypes.VarChar, 64, sql.Collation_utf8mb4_0900_ai_ci), Nullable: true, Source: dsdt.name},
+		&sql.Column{Name: doltdb.DiffFromPrefix + doltdb.SchemasTablesFragmentCol, Type: gmstypes.LongText, Nullable: true, Source: dsdt.name},
+		&sql.Column{Name: doltdb.DiffFromPrefix + doltdb.SchemasTablesExtraCol, Type: gmstypes.JSON, Nullable: true, Source: dsdt.name},
+		&sql.Column{Name: doltdb.DiffFromPrefix + doltdb.SchemasTablesSqlModeCol, Type: gmstypes.MustCreateString(sqltypes.VarChar, 256, sql.Collation_utf8mb4_0900_ai_ci), Nullable: true, Source: dsdt.name},
+		&sql.Column{Name: doltdb.FromCommitCol, Type: gmstypes.MustCreateString(sqltypes.VarChar, 1023, sql.Collation_utf8mb4_0900_ai_ci), Nullable: true, Source: dsdt.name},
+		&sql.Column{Name: doltdb.FromCommitDateCol, Type: gmstypes.DatetimeMaxPrecision, Nullable: true, Source: dsdt.name},
 
 		// Diff type column
-		&sql.Column{Name: DiffTypeCol, Type: gmstypes.MustCreateString(sqltypes.VarChar, 1023, sql.Collation_utf8mb4_0900_ai_ci), Nullable: false, Source: dsdt.name},
+		&sql.Column{Name: doltdb.DiffTypeCol, Type: gmstypes.MustCreateString(sqltypes.VarChar, 1023, sql.Collation_utf8mb4_0900_ai_ci), Nullable: false, Source: dsdt.name},
 	}
 }
 
@@ -208,7 +204,7 @@ func (dsdp *DoltSchemasDiffPartitionItr) Next(ctx *sql.Context) (sql.Partition, 
 					toTable:   cmSchemasTable,
 					fromTable: nil, // Empty state
 					toName:    cmHash.String(),
-					fromName:  "EMPTY",
+					fromName:  doltdb.EmptyCommitRef,
 					toDate:    &cmCommitDate,
 					fromDate:  nil,
 					toRoot:    cmRoot,
@@ -319,7 +315,7 @@ func (dsdp *DoltSchemasDiffPartitionItr) createWorkingPartition(ctx *sql.Context
 	return &DoltSchemasDiffPartition{
 		toTable:   workingSchemasTable,
 		fromTable: headSchemasTable,
-		toName:    "WORKING",
+		toName:    doltdb.WorkingCommitRef,
 		fromName:  headCommitHash.String(),
 		toDate:    nil,
 		fromDate:  &headCommitDate,
@@ -436,12 +432,12 @@ func (dspri *doltSchemasDiffPartitionRowIter) loadDiffRowsForCommitPair() error 
 			// Compare rows to see if modified
 			if !rowsEqual(fromRow, toRow) {
 				// Modified row: to_* columns from toRow, from_* columns from fromRow
-				diffRow := dspri.createDiffRow(toRow, fromRow, "modified")
+				diffRow := dspri.createDiffRow(toRow, fromRow, doltdb.DiffTypeModified)
 				rows = append(rows, diffRow)
 			}
 		} else {
 			// Added row: to_* columns from toRow, from_* columns are null
-			diffRow := dspri.createDiffRow(toRow, nil, "added")
+			diffRow := dspri.createDiffRow(toRow, nil, doltdb.DiffTypeAdded)
 			rows = append(rows, diffRow)
 		}
 	}
@@ -450,7 +446,7 @@ func (dspri *doltSchemasDiffPartitionRowIter) loadDiffRowsForCommitPair() error 
 	for key, fromRow := range fromRows {
 		if _, exists := toRows[key]; !exists {
 			// Removed row: to_* columns are null, from_* columns from fromRow
-			diffRow := dspri.createDiffRow(nil, fromRow, "removed")
+			diffRow := dspri.createDiffRow(nil, fromRow, doltdb.DiffTypeRemoved)
 			rows = append(rows, diffRow)
 		}
 	}
