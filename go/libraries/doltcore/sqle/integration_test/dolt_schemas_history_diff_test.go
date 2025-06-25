@@ -329,3 +329,144 @@ func testDoltSchemasDiffTable(t *testing.T, test doltSchemasTableTest, dEnv *env
 
 	require.ElementsMatch(t, test.rows, actRows)
 }
+
+func TestDoltProceduresDiffTable(t *testing.T) {
+	SkipByDefaultInCI(t)
+	ctx := context.Background()
+	dEnv := setupDoltProceduresDiffTests(t)
+	defer dEnv.DoltDB(ctx).Close()
+	for _, test := range doltProceduresDiffTableTests() {
+		t.Run(test.name, func(t *testing.T) {
+			testDoltProceduresDiffTable(t, test, dEnv)
+		})
+	}
+}
+
+type doltProceduresTableTest struct {
+	name  string
+	setup []testCommand
+	query string
+	rows  []sql.Row
+}
+
+var setupDoltProceduresDiffCommon = []testCommand{
+	// Start with a clean state
+	{cmd.SqlCmd{}, args{"-q", "CREATE PROCEDURE original_proc(x INT) BEGIN SELECT x * 2 as result; END"}},
+	{cmd.SqlCmd{}, args{"-q", "CREATE PROCEDURE helper_proc() BEGIN SELECT 'helper' as message; END"}},
+	{cmd.AddCmd{}, args{"."}},
+	{cmd.CommitCmd{}, args{"-m", "base commit with original procedures"}},
+
+	// Make changes for diff (working directory changes)
+	{cmd.SqlCmd{}, args{"-q", "DROP PROCEDURE original_proc"}},
+	{cmd.SqlCmd{}, args{"-q", "CREATE PROCEDURE original_proc(x INT, y INT) BEGIN SELECT x + y as sum; END"}}, // modified
+	{cmd.SqlCmd{}, args{"-q", "CREATE PROCEDURE new_proc(name VARCHAR(50)) BEGIN SELECT CONCAT('Hello, ', name) as greeting; END"}}, // added
+	{cmd.SqlCmd{}, args{"-q", "DROP PROCEDURE helper_proc"}}, // removed
+}
+
+func doltProceduresDiffTableTests() []doltProceduresTableTest {
+	return []doltProceduresTableTest{
+		{
+			name:  "verify dolt_diff_dolt_procedures has all required columns",
+			query: "SELECT COUNT(*) FROM (SELECT to_name, to_create_stmt, to_created_at, to_modified_at, to_sql_mode, to_commit, to_commit_date, from_name, from_create_stmt, from_created_at, from_modified_at, from_sql_mode, from_commit, from_commit_date, diff_type FROM dolt_diff_dolt_procedures LIMIT 0) AS procedures_check",
+			rows: []sql.Row{
+				{int64(0)}, // Should return 0 rows but verify all columns exist
+			},
+		},
+		{
+			name:  "check complete history is shown",
+			query: "SELECT COUNT(*) FROM dolt_diff_dolt_procedures",
+			rows: []sql.Row{
+				{int64(5)}, // Initial commit: 2 added (original_proc, helper_proc) + Working changes: 3 changes (new_proc added; original_proc modified; helper_proc removed)
+			},
+		},
+		{
+			name:  "verify working changes are included",
+			query: "SELECT COUNT(*) FROM dolt_diff_dolt_procedures WHERE to_commit = 'WORKING'",
+			rows: []sql.Row{
+				{int64(3)}, // Working changes: 1 added + 1 modified + 1 removed
+			},
+		},
+		{
+			name:  "verify initial commit changes are included",
+			query: "SELECT COUNT(*) FROM dolt_diff_dolt_procedures WHERE to_commit != 'WORKING'",
+			rows: []sql.Row{
+				{int64(2)}, // Initial commit: original_proc + helper_proc added
+			},
+		},
+		{
+			name:  "filter for added procedures across all history",
+			query: "SELECT COUNT(*) FROM dolt_diff_dolt_procedures WHERE diff_type = 'added'",
+			rows: []sql.Row{
+				{int64(3)}, // All added procedures: original_proc, helper_proc (initial) + new_proc (working)
+			},
+		},
+		{
+			name:  "filter for modified procedures only",
+			query: "SELECT to_name FROM dolt_diff_dolt_procedures WHERE diff_type = 'modified' ORDER BY to_name",
+			rows: []sql.Row{
+				{"original_proc"}, // Procedure was modified between HEAD and WORKING
+			},
+		},
+		{
+			name:  "filter for removed procedures only",
+			query: "SELECT from_name FROM dolt_diff_dolt_procedures WHERE diff_type = 'removed' ORDER BY from_name",
+			rows: []sql.Row{
+				{"helper_proc"}, // Procedure was removed between HEAD and WORKING
+			},
+		},
+		{
+			name:  "check working changes show correct commit info",
+			query: "SELECT DISTINCT to_commit FROM dolt_diff_dolt_procedures WHERE to_commit = 'WORKING'",
+			rows: []sql.Row{
+				{"WORKING"}, // Working changes should have to_commit as WORKING
+			},
+		},
+		{
+			name:  "verify procedure definitions are captured correctly",
+			query: "SELECT to_name FROM dolt_diff_dolt_procedures WHERE to_create_stmt LIKE '%x + y%'",
+			rows: []sql.Row{
+				{"original_proc"}, // Modified procedure should contain new definition
+			},
+		},
+		{
+			name:  "verify from_name and to_name for modified procedure",
+			query: "SELECT from_name, to_name FROM dolt_diff_dolt_procedures WHERE diff_type = 'modified'",
+			rows: []sql.Row{
+				{"original_proc", "original_proc"}, // Same procedure name but different content
+			},
+		},
+	}
+}
+
+func setupDoltProceduresDiffTests(t *testing.T) *env.DoltEnv {
+	dEnv := dtestutils.CreateTestEnv()
+	ctx := context.Background()
+	cliCtx, verr := cmd.NewArgFreeCliContext(ctx, dEnv, dEnv.FS)
+	require.NoError(t, verr)
+
+	for _, c := range setupDoltProceduresDiffCommon {
+		exitCode := c.cmd.Exec(ctx, c.cmd.Name(), c.args, dEnv, cliCtx)
+		require.Equal(t, 0, exitCode)
+	}
+
+	return dEnv
+}
+
+func testDoltProceduresDiffTable(t *testing.T, test doltProceduresTableTest, dEnv *env.DoltEnv) {
+	ctx := context.Background()
+	cliCtx, verr := cmd.NewArgFreeCliContext(ctx, dEnv, dEnv.FS)
+	require.NoError(t, verr)
+
+	for _, c := range test.setup {
+		exitCode := c.cmd.Exec(ctx, c.cmd.Name(), c.args, dEnv, cliCtx)
+		require.Equal(t, 0, exitCode)
+	}
+
+	root, err := dEnv.WorkingRoot(ctx)
+	require.NoError(t, err)
+
+	actRows, err := sqle.ExecuteSelect(ctx, dEnv, root, test.query)
+	require.NoError(t, err)
+
+	require.ElementsMatch(t, test.rows, actRows)
+}

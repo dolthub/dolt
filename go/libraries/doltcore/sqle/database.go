@@ -346,6 +346,20 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 		// Use the same pattern as regular diff tables - this will show complete history
 		return DoltSchemasDiffTable(ctx, db.ddb, head, root, db), true, nil
 
+	case lwrName == doltdb.DoltDiffTablePrefix+doltdb.ProceduresTableName:
+		// Special handling for dolt_diff_dolt_procedures
+		// Get the HEAD commit
+		if head == nil {
+			var err error
+			head, err = ds.GetHeadCommit(ctx, db.RevisionQualifiedName())
+			if err != nil {
+				return nil, false, err
+			}
+		}
+
+		// Use the same pattern as regular diff tables - this will show complete history
+		return DoltProceduresDiffTable(ctx, db.ddb, head, root, db), true, nil
+
 	case strings.HasPrefix(lwrName, doltdb.DoltDiffTablePrefix):
 		if head == nil {
 			var err error

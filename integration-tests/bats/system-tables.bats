@@ -908,3 +908,94 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "-m <msg>, --message=<msg>".*"Use the given msg as the tag message." ]] || false
 }
+
+@test "system-tables: query dolt_diff_dolt_procedures system table" {
+    # dolt_diff_dolt_procedures starts empty
+    run dolt sql -q 'SELECT COUNT(*) FROM dolt_diff_dolt_procedures'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ " 0 " ]] || false
+
+    # Set up test data for diff scenarios
+    dolt sql -q "CREATE PROCEDURE original_proc(x INT) BEGIN SELECT x * 2 as result; END"
+    dolt sql -q "CREATE PROCEDURE helper_proc() BEGIN SELECT 'helper' as message; END"
+
+    # Before we commit our procedure changes we should see two new rows in the
+    # diff table where to_commit='WORKING'
+    run dolt sql -q "SELECT COUNT(*) FROM dolt_diff_dolt_procedures where to_commit='WORKING'"
+    [ "$status" -eq 0 ]                                                        
+    [[ "$output" =~ " 2 " ]] || false 
+    
+    dolt add .
+    dolt commit -m "base commit with original procedures"
+
+    # After commit, this should still contain two changes, just now the from commit and to commit should be populated with commits not working
+    run dolt sql -q 'SELECT COUNT(*) FROM dolt_diff_dolt_procedures'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "2" ]] || false
+    
+    # Make changes for diff (working directory changes)
+    dolt sql -q "DROP PROCEDURE original_proc"
+    dolt sql -q "CREATE PROCEDURE original_proc(x INT, y INT) BEGIN SELECT x + y as sum; END"  # modified
+    dolt sql -q "CREATE PROCEDURE new_proc(name VARCHAR(50)) BEGIN SELECT CONCAT('Hello, ', name) as greeting; END"  # added
+    dolt sql -q "DROP PROCEDURE helper_proc"  # removed
+    
+    # Test that the table exists and has correct schema
+    run dolt sql -r csv -q 'DESCRIBE dolt_diff_dolt_procedures'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "to_name,varchar(64)" ]] || false
+    [[ "$output" =~ "to_create_stmt,varchar(4096)" ]] || false
+    [[ "$output" =~ "to_created_at,timestamp" ]] || false
+    [[ "$output" =~ "to_modified_at,timestamp" ]] || false
+    [[ "$output" =~ "to_sql_mode,varchar(256)" ]] || false
+    [[ "$output" =~ "to_commit,varchar(1023)" ]] || false
+    [[ "$output" =~ "to_commit_date,datetime(6)" ]] || false
+    [[ "$output" =~ "from_name,varchar(64)" ]] || false
+    [[ "$output" =~ "from_create_stmt,varchar(4096)" ]] || false
+    [[ "$output" =~ "from_created_at,timestamp" ]] || false
+    [[ "$output" =~ "from_modified_at,timestamp" ]] || false
+    [[ "$output" =~ "from_sql_mode,varchar(256)" ]] || false
+    [[ "$output" =~ "from_commit,varchar(1023)" ]] || false
+    [[ "$output" =~ "from_commit_date,datetime(6)" ]] || false
+    [[ "$output" =~ "diff_type,varchar(1023)" ]] || false
+    
+    # Test that we have procedure diffs for the complete history including working changes
+    run dolt sql -q 'SELECT COUNT(*) FROM dolt_diff_dolt_procedures'
+    [ "$status" -eq 0 ]
+    # Should have: Initial commit: 2 added + Working changes: 3 changes (1 added, 1 modified, 1 removed) = 5 total
+    [[ "$output" =~ "5" ]] || false
+    
+    # Test working changes are included
+    run dolt sql -q 'SELECT COUNT(*) FROM dolt_diff_dolt_procedures WHERE to_commit = "WORKING"'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "3" ]] || false
+    
+    # Test filtering by diff_type
+    run dolt sql -q 'SELECT COUNT(*) FROM dolt_diff_dolt_procedures WHERE diff_type = "added"'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "3" ]] || false  # original_proc, helper_proc (initial) + new_proc (working)
+    
+    run dolt sql -q 'SELECT COUNT(*) FROM dolt_diff_dolt_procedures WHERE diff_type = "modified"'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1" ]] || false  # original_proc was modified
+    
+    run dolt sql -q 'SELECT COUNT(*) FROM dolt_diff_dolt_procedures WHERE diff_type = "removed"'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1" ]] || false  # helper_proc was removed
+    
+    # Test that procedure definitions are captured correctly
+    run dolt sql -q 'SELECT to_name FROM dolt_diff_dolt_procedures WHERE to_create_stmt LIKE "%x + y%"'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "original_proc" ]] || false
+    
+    # Test distinct procedure names
+    run dolt sql -q 'SELECT DISTINCT COALESCE(to_name, from_name) as name FROM dolt_diff_dolt_procedures ORDER BY name'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "helper_proc" ]] || false
+    [[ "$output" =~ "new_proc" ]] || false
+    [[ "$output" =~ "original_proc" ]] || false
+    
+    # Test commit metadata is present for all entries
+    run dolt sql -q 'SELECT COUNT(*) FROM dolt_diff_dolt_procedures WHERE to_commit IS NOT NULL OR from_commit IS NOT NULL'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "5" ]] || false
+}
