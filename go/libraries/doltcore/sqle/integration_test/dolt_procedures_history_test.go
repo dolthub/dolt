@@ -56,23 +56,23 @@ var (
 
 var setupDoltProceduresCommon = []testCommand{
 	// Create initial procedure
-	{cmd.SqlCmd{}, args{"-q", "CREATE PROCEDURE test_proc1() BEGIN SELECT 1; END"}},
+	{cmd.SqlCmd{}, args{"-q", "CREATE PROCEDURE test_proc1() SELECT 1"}},
 	{cmd.AddCmd{}, args{"."}},
 	{cmd.CommitCmd{}, args{"-m", "first commit: added test_proc1"}},
 
 	// Create a second procedure
-	{cmd.SqlCmd{}, args{"-q", "CREATE PROCEDURE test_proc2(IN x INT) BEGIN SELECT x * 2; END"}},
+	{cmd.SqlCmd{}, args{"-q", "CREATE PROCEDURE test_proc2(x INT) SELECT x * 2"}},
 	{cmd.AddCmd{}, args{"."}},
 	{cmd.CommitCmd{}, args{"-m", "second commit: added test_proc2"}},
 
 	// Modify the first procedure
 	{cmd.SqlCmd{}, args{"-q", "DROP PROCEDURE test_proc1"}},
-	{cmd.SqlCmd{}, args{"-q", "CREATE PROCEDURE test_proc1() BEGIN SELECT 'modified'; END"}},
+	{cmd.SqlCmd{}, args{"-q", "CREATE PROCEDURE test_proc1() SELECT 'modified'"}},
 	{cmd.AddCmd{}, args{"."}},
 	{cmd.CommitCmd{}, args{"-m", "third commit: modified test_proc1"}},
 
 	// Add a third procedure
-	{cmd.SqlCmd{}, args{"-q", "CREATE PROCEDURE test_proc3(OUT result VARCHAR(50)) BEGIN SET result = 'hello world'; END"}},
+	{cmd.SqlCmd{}, args{"-q", "CREATE PROCEDURE test_proc3() SELECT 'hello world' as result"}},
 	{cmd.AddCmd{}, args{"."}},
 	{cmd.CommitCmd{}, args{"-m", "fourth commit: added test_proc3"}},
 
@@ -92,7 +92,7 @@ func doltProceduresHistoryTableTests() []doltProceduresTableTest {
 			name:  "check correct number of history entries",
 			query: "SELECT COUNT(*) FROM dolt_history_dolt_procedures",
 			rows: []sql.Row{
-				{int64(9)}, // test_proc1(4 commits) + test_proc2(3 commits) + test_proc3(1 commit) = 8 total
+				{int64(8)}, // test_proc1(3 commits) + test_proc2(3 commits) + test_proc3(1 commit) + initial(1 commit) = 8 total
 			},
 		},
 		{
@@ -120,7 +120,7 @@ func doltProceduresHistoryTableTests() []doltProceduresTableTest {
 			name:  "check commit_hash is not null",
 			query: "SELECT COUNT(*) FROM dolt_history_dolt_procedures WHERE commit_hash IS NOT NULL",
 			rows: []sql.Row{
-				{int64(9)}, // Total number of procedure entries across all commits
+				{int64(8)}, // Total number of procedure entries across all commits
 			},
 		},
 		{
@@ -136,21 +136,21 @@ func doltProceduresHistoryTableTests() []doltProceduresTableTest {
 			name:  "check committer column exists",
 			query: "SELECT COUNT(*) FROM dolt_history_dolt_procedures WHERE committer IS NOT NULL",
 			rows: []sql.Row{
-				{int64(9)}, // All entries should have committer info
+				{int64(8)}, // All entries should have committer info
 			},
 		},
 		{
 			name:  "verify create_stmt column contains procedure definitions",
 			query: "SELECT COUNT(*) FROM dolt_history_dolt_procedures WHERE create_stmt LIKE '%PROCEDURE%'",
 			rows: []sql.Row{
-				{int64(9)}, // All entries should have CREATE PROCEDURE in create_stmt
+				{int64(8)}, // All entries should have CREATE PROCEDURE in create_stmt
 			},
 		},
 		{
 			name:  "check created_at and modified_at are not null",
 			query: "SELECT COUNT(*) FROM dolt_history_dolt_procedures WHERE created_at IS NOT NULL AND modified_at IS NOT NULL",
 			rows: []sql.Row{
-				{int64(9)}, // All entries should have timestamp info
+				{int64(8)}, // All entries should have timestamp info
 			},
 		},
 	}

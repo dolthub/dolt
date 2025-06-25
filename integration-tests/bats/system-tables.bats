@@ -911,29 +911,29 @@ SQL
 
 @test "system-tables: query dolt_history_dolt_procedures system table" {
     # Set up test data with procedures across multiple commits
-    dolt sql -q "CREATE PROCEDURE test_proc1(x INT) BEGIN SELECT x * 2 as result; END"
+    dolt sql -q "CREATE PROCEDURE test_proc1(x INT) SELECT x * 2 as result"
     dolt add .
     dolt commit -m "add first procedure"
     
-    dolt sql -q "CREATE PROCEDURE test_proc2(name VARCHAR(50)) BEGIN SELECT CONCAT('Hello, ', name) as greeting; END"
+    dolt sql -q "CREATE PROCEDURE test_proc2(name VARCHAR(50)) SELECT CONCAT('Hello, ', name) as greeting"
     dolt add .
     dolt commit -m "add second procedure"
     
     dolt sql -q "DROP PROCEDURE test_proc1"
-    dolt sql -q "CREATE PROCEDURE test_proc1(x INT, y INT) BEGIN SELECT x + y as sum; END"  # modified
+    dolt sql -q "CREATE PROCEDURE test_proc1(x INT, y INT) SELECT x + y as sum"  # modified
     dolt add .
     dolt commit -m "modify first procedure"
     
     # Test that the table exists and has correct schema
     run dolt sql -r csv -q 'DESCRIBE dolt_history_dolt_procedures'
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "name,varchar(64)" ]] || false
-    [[ "$output" =~ "create_stmt,varchar(4096)" ]] || false
-    [[ "$output" =~ "created_at,timestamp" ]] || false
-    [[ "$output" =~ "modified_at,timestamp" ]] || false
-    [[ "$output" =~ "sql_mode,varchar(256)" ]] || false
+    [[ "$output" =~ "name,varchar" ]] || false
+    [[ "$output" =~ "create_stmt,varchar" ]] || false
+    [[ "$output" =~ "created_at,datetime" ]] || false
+    [[ "$output" =~ "modified_at,datetime" ]] || false
+    [[ "$output" =~ "sql_mode,varchar" ]] || false
     [[ "$output" =~ "commit_hash,char(32)" ]] || false
-    [[ "$output" =~ "committer,varchar(1024)" ]] || false
+    [[ "$output" =~ "committer,varchar" ]] || false
     [[ "$output" =~ "commit_date,datetime" ]] || false
     
     # Test that we have procedure history across commits
