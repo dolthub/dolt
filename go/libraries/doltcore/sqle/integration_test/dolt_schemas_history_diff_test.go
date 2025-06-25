@@ -358,9 +358,9 @@ var setupDoltProceduresDiffCommon = []testCommand{
 
 	// Make changes for diff (working directory changes)
 	{cmd.SqlCmd{}, args{"-q", "DROP PROCEDURE original_proc"}},
-	{cmd.SqlCmd{}, args{"-q", "CREATE PROCEDURE original_proc(x INT, y INT) BEGIN SELECT x + y as sum; END"}}, // modified
+	{cmd.SqlCmd{}, args{"-q", "CREATE PROCEDURE original_proc(x INT, y INT) BEGIN SELECT x + y as sum; END"}},                       // modified
 	{cmd.SqlCmd{}, args{"-q", "CREATE PROCEDURE new_proc(name VARCHAR(50)) BEGIN SELECT CONCAT('Hello, ', name) as greeting; END"}}, // added
-	{cmd.SqlCmd{}, args{"-q", "DROP PROCEDURE helper_proc"}}, // removed
+	{cmd.SqlCmd{}, args{"-q", "DROP PROCEDURE helper_proc"}},                                                                        // removed
 }
 
 func doltProceduresDiffTableTests() []doltProceduresTableTest {
