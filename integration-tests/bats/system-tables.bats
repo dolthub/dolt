@@ -929,8 +929,8 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "name,varchar" ]] || false
     [[ "$output" =~ "create_stmt,varchar" ]] || false
-    [[ "$output" =~ "created_at,datetime" ]] || false
-    [[ "$output" =~ "modified_at,datetime" ]] || false
+    [[ "$output" =~ "created_at,timestamp" ]] || false
+    [[ "$output" =~ "modified_at,timestamp" ]] || false
     [[ "$output" =~ "sql_mode,varchar" ]] || false
     [[ "$output" =~ "commit_hash,char(32)" ]] || false
     [[ "$output" =~ "committer,varchar" ]] || false
