@@ -2633,6 +2633,28 @@ WHERE z IN (
 			},
 		},
 	},
+	{
+		Name: "dolt_history table non-unique pk columns ignored for max1row optimization",
+		SetUpScript: []string{
+			`CREATE TABLE t1 (id INT PRIMARY KEY, message TEXT);
+			INSERT INTO t1 (id, message) VALUES (1, 'test1');
+			INSERT INTO t1 (id, message) VALUES (2, 'irrelevant');
+			CALL DOLT_COMMIT('-A', '-m', 'test commit 1');
+			
+			UPDATE t1 SET message='test2' WHERE id=1;
+			CALL DOLT_COMMIT('-a', '-m', 'test commit 2');`
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT id, message FROM dolt_history_t1 where id = 1 order by commit_date desc;",
+				Expected: []sql.Row{{1, "test2"}, {1, "test1"}},
+			},
+			{
+				Query: "SELECT id, message FROM dolt_history_t1 where id = 2;",
+				Expected: []sql.Row{{2, "irrelevant"}, {2, "irrelevant"}},
+			},
+		},
+	},
 }
 
 // BrokenHistorySystemTableScriptTests contains tests that work for non-prepared, but don't work
