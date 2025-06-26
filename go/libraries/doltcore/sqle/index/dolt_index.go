@@ -330,6 +330,7 @@ func DoltHistoryIndexesFromTable(ctx context.Context, db, tbl string, t *doltdb.
 		// weren't asked for (because the index needed may not exist at all revisions)
 		di.order = sql.IndexOrderNone
 		di.constrainedToLookupExpression = false
+		di.unique = false
 		unorderedIndexes[i] = di
 	}
 
