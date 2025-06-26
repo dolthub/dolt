@@ -1210,7 +1210,7 @@ func sanitizeSignedUrl(url string) string {
 
 // Open returns an io.ReadCloser which can be used to read the bytes of a table file.
 func (drtf DoltRemoteTableFile) Open(ctx context.Context) (io.ReadCloser, uint64, error) {
-	if drtf.info.RefreshAfter != nil && drtf.info.RefreshAfter.AsTime().After(time.Now()) {
+	if drtf.info.RefreshAfter != nil && time.Now().After(drtf.info.RefreshAfter.AsTime()) {
 		resp, err := drtf.dcs.csClient.RefreshTableFileUrl(ctx, drtf.info.RefreshRequest)
 		if err == nil {
 			drtf.info.Url = resp.Url

@@ -409,10 +409,10 @@ mutations_and_gc_statement() {
     ## This output indicates that the new content pushed to the remote all landed as zStd chunks
     ## in an archive file. multiline regex - no quotes - to match this text:
     #   Archive Metadata:
-    #     Format Version: 2
+    #     Format Version: 3
     #     Snappy Chunk Count: 0 (bytes: 0)
     #     ZStd Chunk Count: 1609
-    [[ $output =~ Archive[[:space:]]Metadata:[[:space:]]*Format[[:space:]]Version:[[:space:]]2[[:space:]]*Snappy[[:space:]]Chunk[[:space:]]Count:[[:space:]]0.*ZStd[[:space:]]Chunk[[:space:]]Count:[[:space:]]1609 ]] || false
+    [[ $output =~ Archive[[:space:]]Metadata:[[:space:]]*Format[[:space:]]Version:[[:space:]]3[[:space:]]*Snappy[[:space:]]Chunk[[:space:]]Count:[[:space:]]0.*ZStd[[:space:]]Chunk[[:space:]]Count:[[:space:]]1609 ]] || false
 }
 
 @test "archive: small push remote with archive default produces archive with snappy chunks" {
@@ -441,9 +441,9 @@ mutations_and_gc_statement() {
     ## This output indicates that the new content pushed to the remote all landed as snappy chunks
     ## in an archive file. multiline regex - no quotes - to match this text:
     #   Archive Metadata:
-    #     Format Version: 2
+    #     Format Version: 3
     #     Snappy Chunk Count: 9
-    [[ $output =~ Archive[[:space:]]Metadata:[[:space:]]*Format[[:space:]]Version:[[:space:]]2[[:space:]]*Snappy[[:space:]]Chunk[[:space:]]Count:[[:space:]]9[[:space:]] ]] || false
+    [[ $output =~ Archive[[:space:]]Metadata:[[:space:]]*Format[[:space:]]Version:[[:space:]]3[[:space:]]*Snappy[[:space:]]Chunk[[:space:]]Count:[[:space:]]9[[:space:]] ]] || false
 }
 
 @test "archive: fetch into empty database with archive default" {
@@ -467,10 +467,10 @@ mutations_and_gc_statement() {
     ## the remote is all archive, the chunks end up as zStd as well.
     ## multiline regex - no quotes - to match this text:
     #   Archive Metadata:
-    #     Format Version: 2
+    #     Format Version: 3
     #     Snappy Chunk Count: 0 (bytes: 0)
     #     ZStd Chunk Count: 260
-    [[ $output =~ Archive[[:space:]]Metadata:[[:space:]]*Format[[:space:]]Version:[[:space:]]2[[:space:]]*Snappy[[:space:]]Chunk[[:space:]]Count:[[:space:]]0.*ZStd[[:space:]]Chunk[[:space:]]Count:[[:space:]]260 ]] || false
+    [[ $output =~ Archive[[:space:]]Metadata:[[:space:]]*Format[[:space:]]Version:[[:space:]]3[[:space:]]*Snappy[[:space:]]Chunk[[:space:]]Count:[[:space:]]0.*ZStd[[:space:]]Chunk[[:space:]]Count:[[:space:]]260 ]] || false
 
     dolt fsck
 }
@@ -494,11 +494,6 @@ mutations_and_gc_statement() {
     run dolt admin storage
     [ $status -eq 0 ]
 
-    echo "------------------"
-    echo "$output"
-    echo "------------------"
-
-
     ## This output indicates that the new content was fetched from the remote into a table file. Note that since
     ## the remote is all archive, the chunks are translated into the snappy format
     ## multiline regex - no quotes - to match this text:
@@ -507,4 +502,20 @@ mutations_and_gc_statement() {
     [[ $output =~ Table[[:space:]]File[[:space:]]Metadata:[[:space:]]*Snappy[[:space:]]Chunk[[:space:]]Count:[[:space:]]260[[:space:]] ]] || false
 
     dolt fsck
+}
+
+@test "archive: read legacy v1 database" {
+  mkdir -p original/.dolt
+  cp -R $BATS_TEST_DIRNAME/archive-test-repos/v1/* original/.dolt
+  cd original
+
+  dolt fsck
+}
+
+@test "archive: read legacy v2 database" {
+  mkdir -p original/.dolt
+  cp -R $BATS_TEST_DIRNAME/archive-test-repos/v2/* original/.dolt
+  cd original
+
+  dolt fsck
 }

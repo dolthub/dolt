@@ -91,3 +91,28 @@ Storage Artifact:
   Path: /Users/neil/Documents/data_dir_1/db1/clone2/.dolt/noms/oldgen/c5j9u4ced6eg6cnegk0mgdglc3t04air
   Table File Metadata:
     Snappy Chunk Count: 273 (bytes: 377979)
+
+--------------------------------------------------------------------------
+v1: A copy of base. This is used to verify we can read from an archive
+        file which was created with the version 1 archive format.
+
+Content: see `base` above.
+
+--------------------------------------------------------------------------
+v2: This is used to verify we can read from an archive in format 2.
+
+$ dolt admin storage
+Storage Artifact:
+  ID: i8ivrn485g73hao1foo3p7l2clq3gqqv
+  Path: /Users/neil/Documents/data_dir_1/db8/.dolt/noms/i8ivrn485g73hao1foo3p7l2clq3gqqv
+  Table File Metadata:
+    Snappy Chunk Count: 2 (bytes: 383)
+
+Storage Artifact:
+  ID: 27avtn2a3upddh52eu750m4709gfps7s
+  Path: /Users/neil/Documents/data_dir_1/db8/.dolt/noms/oldgen/27avtn2a3upddh52eu750m4709gfps7s.darc
+  Archive Metadata:
+    Format Version: 2
+    Snappy Chunk Count: 0 (bytes: 0)
+    ZStd Chunk Count: 230 (bytes: 58956)
+    Dictionary Count: 1 (bytes: 2968)
