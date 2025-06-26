@@ -2042,4 +2042,15 @@ func RunDoltRmTests(t *testing.T, h DoltEnginetestHarness) {
 			enginetest.TestScript(t, h, script)
 		}()
 	}
+
+	h = h.NewHarness(t)
+	defer h.Close()
+	engine, err := h.NewEngine(t)
+	require.NoError(t, err)
+	readOnlyEngine, err := h.NewReadOnlyEngine(engine.EngineAnalyzer().Catalog.DbProvider)
+	require.NoError(t, err)
+
+	for _, script := range DoltRmReadOnlyTests {
+		enginetest.TestScriptWithEngine(t, readOnlyEngine, h, script)
+	}
 }

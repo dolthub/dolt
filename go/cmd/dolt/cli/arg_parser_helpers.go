@@ -330,9 +330,9 @@ func CreateReflogArgParser() *argparser.ArgParser {
 }
 
 func CreateRmArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParserWithVariableArgs("add")
+	ap := argparser.NewArgParserWithVariableArgs("rm")
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "table(s) to remove from the list of tables staged to be committed."})
-	ap.SupportsFlag(CachedFlag, "", "description here") //TODO
+	ap.SupportsFlag(CachedFlag, "", "Use this option to unstage and remove tables only from the index. Working tree tables, whether modified or not, will be left alone.") //TODO
 
 	return ap
 }

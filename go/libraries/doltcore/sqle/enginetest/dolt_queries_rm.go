@@ -19,6 +19,18 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 )
 
+var DoltRmReadOnlyTests = []queries.ScriptTest{
+	{
+		Name: "dolt Rm returns error for read-only database",
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "call dolt_rm('t')",
+				ExpectedErrStr: "unable to rm in read-only databases",
+			},
+		},
+	},
+}
+
 var DoltRmTests = []queries.ScriptTest{
 	{
 		Name: "dolt Rm without tables",
@@ -50,12 +62,12 @@ var DoltRmTests = []queries.ScriptTest{
 		Name: "dolt Rm staged table",
 		SetUpScript: []string{
 			"CREATE TABLE test (i int)",
-			"CALL DOLT_ADD('.')",
+			"CALL DOLT_ADD('test')",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:          "call dolt_rm('test');",
-				ExpectedErrStr: "error: the table(s) test have changes saved in the index.",
+				ExpectedErrStr: "error: the table(s) test have changes saved in the index. Use --cached or commit.",
 			},
 		},
 	},
@@ -67,7 +79,35 @@ var DoltRmTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:          "call dolt_rm('test');",
-				ExpectedErrStr: "error: the table(s) test do not exist",
+				ExpectedErrStr: "error: the table(s) test have unstaged changes.",
+			},
+		},
+	},
+	{
+		Name: "dolt Rm staged table with unstaged changes",
+		SetUpScript: []string{
+			"CREATE TABLE test (i int)",
+			"CALL DOLT_ADD('test')",
+			"INSERT INTO test VALUES (1)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "call dolt_rm('test');",
+				ExpectedErrStr: "error: the table(s) test have unstaged changes.",
+			},
+		},
+	},
+	{
+		Name: "dolt Rm committed table with unstaged changes",
+		SetUpScript: []string{
+			"CREATE TABLE test (i int)",
+			"CALL DOLT_COMMIT('-A', '-m', 'created table')",
+			"INSERT INTO test VALUES (1);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "call dolt_rm('test');",
+				ExpectedErrStr: "error: the table(s) test have unstaged changes.",
 			},
 		},
 	},
@@ -75,14 +115,16 @@ var DoltRmTests = []queries.ScriptTest{
 		Name: "dolt Rm with cached option",
 		SetUpScript: []string{
 			"CREATE TABLE test (i int)",
-			"INSERT INTO test VALUES (1)",
 			"CALL DOLT_COMMIT('-A', '-m', 'created table')",
 			"call dolt_rm('test', '--cached');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "select * from test;",
-				Expected: []sql.Row{{1}},
+				Query: "select * from dolt_status;",
+				Expected: []sql.Row{
+					{"test", true, "deleted"},
+					{"test", false, "new table"},
+				},
 			},
 		},
 	},
@@ -90,7 +132,7 @@ var DoltRmTests = []queries.ScriptTest{
 		Name: "dolt Rm staged table with cached option",
 		SetUpScript: []string{
 			"CREATE TABLE test (i int)",
-			"CALL DOLT_ADD('.')",
+			"CALL DOLT_ADD('test')",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -111,7 +153,7 @@ var DoltRmTests = []queries.ScriptTest{
 			"CREATE TABLE committed (i int)",
 			"CALL DOLT_COMMIT('-A', '-m', 'created table')",
 			"CREATE TABLE staged (i int)",
-			"CALL DOLT_ADD('.')",
+			"CALL DOLT_ADD('staged')",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -128,8 +170,18 @@ var DoltRmTests = []queries.ScriptTest{
 			},
 		},
 	},
-	/*TODO:
-	ADD TESTS RELATED TO STUFF WHEN YOU SHOULDN'T BE ABLE TO REMOVE
-	FOR EXAMPLE, FOREIGN KEY CONSTRAINTS.
-	*/
+	{
+		Name: "dolt Rm errors on foreign key constrained table",
+		SetUpScript: []string{
+			"CREATE TABLE parent (pk int primary key, p1 int)",
+			"CREATE TABLE child (pk int primary key, c1 int, FOREIGN KEY (c1) REFERENCES parent (pk))",
+			"CALL DOLT_COMMIT('-A', '-m', 'created tables')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "call dolt_rm('parent');",
+				ExpectedErrStr: "unable to remove `parent` since it is referenced from table `child`",
+			},
+		},
+	},
 }

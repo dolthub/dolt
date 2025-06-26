@@ -21,6 +21,7 @@ import (
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
+	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
@@ -71,7 +72,7 @@ func doDoltRm(ctx *sql.Context, args []string) (int, error) {
 
 	roots, ok := dSess.GetRoots(ctx, dbName)
 	if !ok {
-		return 1, fmt.Errorf("Could not load database %s", dbName)
+		return 1, fmt.Errorf("Could not load roots for database %s", dbName)
 	}
 
 	checkStaged := apr.Contains(cli.CachedFlag)
@@ -105,10 +106,12 @@ func doDoltRm(ctx *sql.Context, args []string) (int, error) {
 
 func verifyTables(ctx *sql.Context, unqualifiedTables []string, checkStaged bool, roots doltdb.Roots) ([]doltdb.TableName, error) {
 	var missingTables []string
-	var missingStaged []string
+	var missingStagedTables []string
+	var unstagedTables []string
 	var TableNames []doltdb.TableName
 
 	for _, name := range unqualifiedTables {
+
 		_, okHead, err := resolve.TableName(ctx, roots.Head, name)
 		if err != nil {
 			return nil, err
@@ -118,28 +121,86 @@ func verifyTables(ctx *sql.Context, unqualifiedTables []string, checkStaged bool
 			return nil, err
 		}
 
-		// If tables exist in both staged and head roots, we can remove them
-		// If it is not in the head, we either error if --cached was not used, or add it otherwise
-		// If neither is true it does not exist in staged, or does not exist in both.
-		// In this case there's nothing to remove, so we error.
-		if okHead && okStage {
-			TableNames = append(TableNames, tblName)
-		} else if okStage {
-			if checkStaged {
+		// Does the table have unstaged changes? If so, error out
+		hasChanges, err := hasUnstagedChanges(ctx, roots, name, okStage, okHead)
+		if err != nil {
+			return nil, err
+		}
+		if hasChanges {
+			unstagedTables = append(unstagedTables, name)
+			continue
+		}
+
+		// If the table exists in staged:
+		// If we use --cached, or it exists in HEAD, we can remove it safely
+		// Otherwise we error out.
+		// If the table does not exist in staged:
+		// If it is in HEAD we can remove it safely
+		// If it isn't in HEAD it doesn't exist, and so we error
+		if okStage {
+			if okHead || checkStaged {
 				TableNames = append(TableNames, tblName)
 			} else {
-				missingStaged = append(missingStaged, name)
+				missingStagedTables = append(missingStagedTables, name)
 			}
 		} else {
-			missingTables = append(missingTables, name)
+			if okHead {
+				TableNames = append(TableNames, tblName)
+			} else {
+				missingTables = append(missingTables, name)
+			}
 		}
 	}
 
 	if len(missingTables) > 0 {
 		return nil, actions.NewTblNotExistError(doltdb.ToTableNames(missingTables, doltdb.DefaultSchemaName))
-	} else if len(missingStaged) > 0 {
-		return nil, actions.NewTblStagedError(doltdb.ToTableNames(missingStaged, doltdb.DefaultSchemaName))
+	} else if len(unstagedTables) > 0 {
+		return nil, actions.NewTblUnstagedError(doltdb.ToTableNames(unstagedTables, doltdb.DefaultSchemaName))
+	} else if len(missingStagedTables) > 0 {
+		return nil, actions.NewTblStagedError(doltdb.ToTableNames(missingStagedTables, doltdb.DefaultSchemaName))
 	}
 
 	return TableNames, nil
+}
+
+func hasUnstagedChanges(ctx *sql.Context, roots doltdb.Roots, name string, okStaged bool, okHead bool) (bool, error) {
+	// Check diff between working and staged.
+	// We'll check this if the table exists in the staged root or if it doesn't exist in the HEAD root
+	if okStaged || !okHead {
+		tableDiff, err := diff.GetTableDeltas(ctx, roots.Staged, roots.Working)
+		if err != nil {
+			return false, err
+		}
+
+		for _, tbl := range tableDiff {
+			hasChanges, err := tbl.HasChanges()
+			if err != nil {
+				return false, err
+			}
+			if tbl.ToName.String() == name && hasChanges {
+				return true, nil
+			}
+		}
+	}
+
+	// Now check diff between working and HEAD
+	// We'll check this if the table exists in the HEAD root or if it doesn't exist in the staged root
+	if okHead || !okStaged {
+		tableDiff, err := diff.GetTableDeltas(ctx, roots.Head, roots.Working)
+		if err != nil {
+			return false, err
+		}
+
+		for _, tbl := range tableDiff {
+			hasChanges, err := tbl.HasChanges()
+			if err != nil {
+				return false, err
+			}
+			if tbl.ToName.String() == name && hasChanges {
+				return true, nil
+			}
+		}
+	}
+
+	return false, nil
 }
