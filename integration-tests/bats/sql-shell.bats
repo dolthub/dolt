@@ -1038,3 +1038,33 @@ expect eof
         run $BATS_TEST_DIRNAME/sql-shell-commit-time.expect
         [ "$status" -eq 0 ]
 }
+
+@test "sql-shell: CREATE TABLE should show Query OK confirmation" {
+    run dolt sql -q "CREATE TABLE test_table (id int primary key, name varchar(50))"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Query OK, 0 rows affected" ]] || false
+}
+
+@test "sql-shell: CREATE TRIGGER should show Query OK confirmation" {
+    # First create the table that the trigger will reference
+    dolt sql -q "CREATE TABLE trigger_test (id int primary key, name varchar(50))"
+    
+    run dolt sql -q "CREATE TRIGGER test_trigger BEFORE INSERT ON trigger_test FOR EACH ROW SET NEW.name = UPPER(NEW.name)"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Query OK, 0 rows affected" ]] || false
+}
+
+@test "sql-shell: ALTER TABLE should show Query OK confirmation" {
+    # First create the table to alter
+    dolt sql -q "CREATE TABLE alter_test (id int primary key)"
+    
+    run dolt sql -q "ALTER TABLE alter_test ADD COLUMN name varchar(50)"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Query OK, 0 rows affected" ]] || false
+}
+
+@test "sql-shell: SET should show Query OK confirmation" {
+    run dolt sql -q "SET @@session.autocommit = 1"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Query OK, 0 rows affected" ]] || false
+}
