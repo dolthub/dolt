@@ -2664,7 +2664,7 @@ WHERE z IN (
 
 			"CALL DOLT_CHECKOUT('-b', 'branch2');",
 			"UPDATE t1 SET message='test2' WHERE id=1;",
-			"CALL DOLT_COMMIT('-a', '-m', 'test commit 2');",
+			"CALL DOLT_COMMIT('-A', '-m', 'test commit 2');",
 
 			"CALL DOLT_CHECKOUT('branch1');",
 			"INSERT INTO t1 (id, message) VALUES (2, 'test3');",
@@ -2676,6 +2676,10 @@ WHERE z IN (
 			{
 				Query:    "SELECT parent_index FROM dolt_commit_ancestors WHERE commit_hash = (SELECT hashof('HEAD'));",
 				Expected: []sql.Row{{0}, {1}},
+			},
+			{
+				Query:    "SELECT dca.parent_index, (SELECT message FROM dolt_log WHERE commit_hash = dca.parent_hash) AS message FROM dolt_commit_ancestors dca WHERE dca.commit_hash = (SELECT hashof('HEAD')) ORDER BY dca.parent_index;",
+				Expected: []sql.Row{{0, "test commit 3"}, {1, "test commit 2"}},
 			},
 		},
 	},
