@@ -2654,6 +2654,35 @@ WHERE z IN (
 			},
 		},
 	},
+	{
+		Name: "dolt_commit_ancestors table with commit_hash filter ignored for max1row optimization",
+		SetUpScript: []string{
+			"CALL DOLT_CHECKOUT('-b', 'branch1');",
+			"CREATE TABLE t1 (id INT PRIMARY KEY, message TEXT);",
+			"INSERT INTO t1 (id, message) VALUES (1, 'test1');",
+			"CALL DOLT_COMMIT('-A', '-m', 'test commit 1');",
+
+			"CALL DOLT_CHECKOUT('-b', 'branch2');",
+			"UPDATE t1 SET message='test2' WHERE id=1;",
+			"CALL DOLT_COMMIT('-A', '-m', 'test commit 2');",
+
+			"CALL DOLT_CHECKOUT('branch1');",
+			"INSERT INTO t1 (id, message) VALUES (2, 'test3');",
+			"CALL DOLT_COMMIT('-A', '-m', 'test commit 3');",
+
+			"CALL DOLT_MERGE('--no-ff', 'branch2');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT parent_index FROM dolt_commit_ancestors WHERE commit_hash = (SELECT hashof('HEAD'));",
+				Expected: []sql.Row{{0}, {1}},
+			},
+			{
+				Query:    "SELECT dca.parent_index, (SELECT message FROM dolt_log WHERE commit_hash = dca.parent_hash) AS message FROM dolt_commit_ancestors dca WHERE dca.commit_hash = (SELECT hashof('HEAD')) ORDER BY dca.parent_index;",
+				Expected: []sql.Row{{0, "test commit 3"}, {1, "test commit 2"}},
+			},
+		},
+	},
 }
 
 // BrokenHistorySystemTableScriptTests contains tests that work for non-prepared, but don't work
