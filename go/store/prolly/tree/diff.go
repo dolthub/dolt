@@ -131,15 +131,16 @@ func DifferFromRoots[K ~[]byte, O Ordering[K]](
 
 	// Maintain invariant that the |from| cursor is never at a higher level than the |to| cursor.
 	// TODO: This might not be necessary.
-	for fc.nd.level > tc.nd.level {
-		nd, err := fetchChild(ctx, fromNs, fc.currentRef())
-		if err != nil {
-			return Differ[K, O]{}, err
-		}
+	/*
+		for fc.nd.level > tc.nd.level {
+			nd, err := fetchChild(ctx, fromNs, fc.currentRef())
+			if err != nil {
+				return Differ[K, O]{}, err
+			}
 
-		parent := fc
-		fc = &cursor{nd: nd, parent: parent, nrw: fromNs}
-	}
+			parent := fc
+			fc = &cursor{nd: nd, parent: parent, nrw: fromNs}
+		}*/
 
 	fs, err := newCursorPastEnd(ctx, fromNs, from)
 	if err != nil {
@@ -229,6 +230,9 @@ func (td *Differ[K, O]) advanceToNextDiff(ctx context.Context) (err error) {
 	// advance both cursors even if we previously determined they are equal. This needs to be done because
 	// skipCommon will not advance the cursors if they are equal in a collation sensitive comparison but differ
 	// in a byte comparison.
+	if td.to.Valid() {
+		td.previousKey = td.to.CurrentKey()
+	}
 	err = td.from.advance(ctx)
 	if err != nil {
 		return err
@@ -236,9 +240,6 @@ func (td *Differ[K, O]) advanceToNextDiff(ctx context.Context) (err error) {
 	err = td.to.advance(ctx)
 	if err != nil {
 		return err
-	}
-	if td.to.Valid() {
-		td.previousKey = td.to.CurrentKey()
 	}
 	var lastSeenKey Item
 	lastSeenKey, td.from, td.to, err = skipCommon(ctx, td.from, td.to)
@@ -297,6 +298,10 @@ func (td *Differ[K, O]) NextRange(ctx context.Context) (diff Diff, err error) {
 
 				for cmp != 0 {
 					if cmp > 0 {
+						// If this was the very end of the |to| tree, all remaining ranges in |from| have been removed.
+						if !td.to.Valid() {
+							return td.sendRangeRemoved()
+						}
 						// The current from node contains additional rows that overlap with the new to node.
 						// We can encode this as another range.
 						return td.sendRange()
@@ -305,6 +310,10 @@ func (td *Differ[K, O]) NextRange(ctx context.Context) (diff Diff, err error) {
 					err = td.from.advance(ctx)
 					if err != nil {
 						return diff, err
+					}
+					// If we reach the end of the |from| tree, all remaining nodes in |to| have been added.
+					if !td.from.Valid() {
+						return td.sendRange()
 					}
 					cmp = td.order.Compare(ctx, K(td.from.CurrentKey()), K(td.previousKey))
 				}
@@ -352,8 +361,8 @@ func (td *Differ[K, O]) NextRange(ctx context.Context) (diff Diff, err error) {
 	}
 
 	if td.from.Valid() && compareWithEnd(td.from, td.fromStop) < 0 {
-		if td.to.nd.level > 0 {
-			return td.sendRange()
+		if td.from.nd.level > 0 {
+			return td.sendRangeRemoved()
 		}
 		return td.sendRemoved()
 	}
@@ -382,9 +391,29 @@ func (td *Differ[K, O]) split(ctx context.Context) (diff Diff, err error) {
 			nrw:    td.from.nrw,
 		}
 		if td.from.nd.level > 0 {
-			return td.sendRange()
+			return td.sendRangeRemoved()
 		} else {
 			return td.sendRemoved()
+		}
+	}
+
+	// TODO: should this be a rangeAdded diff type?
+	// Probably, otherwise we have to track the stop cursor.
+	if !td.from.Valid() {
+		toChild, err := fetchChild(ctx, td.to.nrw, td.to.currentRef())
+		if err != nil {
+			return Diff{}, err
+		}
+		td.to = &cursor{
+			nd:     toChild,
+			idx:    0,
+			parent: td.to,
+			nrw:    td.to.nrw,
+		}
+		if td.to.nd.level > 0 {
+			return td.sendRange()
+		} else {
+			return td.sendAdded()
 		}
 	}
 
