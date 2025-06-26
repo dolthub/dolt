@@ -300,3 +300,57 @@ teardown() {
     [ $status -eq "1" ]
     [[ "$output" =~ "is an invalid branch name" ]] || false
 }
+
+@test "branch: renaming default branch should update init.defaultbranch config" {
+    # Set up initial default branch config
+    dolt config --local --add init.defaultbranch main
+    
+    # Verify initial configuration
+    run dolt config --local --get init.defaultbranch
+    [ $status -eq 0 ]
+    [[ "$output" =~ "main" ]] || false
+    
+    # Rename the default branch using SQL function
+    dolt sql -q "CALL DOLT_BRANCH('-m', 'main', 'altmain')"
+    
+    # Verify the branch was renamed
+    run dolt branch --show-current
+    [ $status -eq 0 ]
+    [[ "$output" =~ "altmain" ]] || false
+    
+    # The init.defaultbranch config should be updated when the default branch is renamed
+    run dolt config --local --get init.defaultbranch
+    [ $status -eq 0 ]
+    [[ "$output" =~ "altmain" ]] || false
+}
+
+@test "branch: renaming non-default branch should not affect init.defaultbranch config" {
+    # Set up initial default branch config
+    dolt config --local --add init.defaultbranch main
+    
+    # Create a non-default branch
+    dolt sql -q "CALL DOLT_BRANCH('feature')"
+    
+    # Verify initial configuration
+    run dolt config --local --get init.defaultbranch
+    [ $status -eq 0 ]
+    [[ "$output" =~ "main" ]] || false
+    
+    # Rename the non-default branch using SQL function
+    dolt sql -q "CALL DOLT_BRANCH('-m', 'feature', 'newfeature')"
+    
+    # Verify the branch was renamed
+    run dolt branch
+    [ $status -eq 0 ]
+    [[ "$output" =~ "newfeature" ]] || false
+    
+    # Verify the old branch name is gone
+    run dolt sql -r csv -q "select count(*) from dolt_branches where name='feature';"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "0" ]] || false
+    
+    # The init.defaultbranch config should remain unchanged when a non-default branch is renamed
+    run dolt config --local --get init.defaultbranch
+    [ $status -eq 0 ]
+    [[ "$output" =~ "main" ]] || false
+}

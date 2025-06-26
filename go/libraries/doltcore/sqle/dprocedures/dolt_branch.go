@@ -30,6 +30,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqlserver"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
@@ -192,6 +193,19 @@ func renameBranch(ctx *sql.Context, dbData env.DbData[*sql.Context], apr *argpar
 		err = sess.SwitchWorkingSet(ctx, dbName, wsRef)
 		if err != nil {
 			return err
+		}
+	}
+
+	// Update init.defaultbranch config if the renamed branch was the default branch
+	doltConfig := loadConfig(ctx)
+	currentDefaultBranch := doltConfig.GetStringOrDefault(config.InitBranchName, "")
+	if currentDefaultBranch == oldBranchName {
+		// Get the local config for writing
+		if localConfig, ok := doltConfig.GetConfig(env.LocalConfig); ok {
+			err = localConfig.SetStrings(map[string]string{config.InitBranchName: newBranchName})
+			if err != nil {
+				return fmt.Errorf("failed to update init.defaultbranch config: %w", err)
+			}
 		}
 	}
 
