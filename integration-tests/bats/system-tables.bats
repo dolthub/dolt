@@ -991,6 +991,9 @@ SQL
     
     # Test commit metadata is present for all entries
     run dolt sql -q 'SELECT COUNT(*) FROM dolt_diff_dolt_procedures WHERE to_commit IS NOT NULL OR from_commit IS NOT NULL'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "5" ]] || false
+}
 
 @test "system-tables: query dolt_history_dolt_procedures system table" {
     # Set up test data with procedures across multiple commits
