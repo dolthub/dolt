@@ -87,20 +87,20 @@ func doDoltRm(ctx *sql.Context, args []string) (int, error) {
 	}
 
 	// If --cached was not used, we want to fully delete the tables, so we remove them from the working set as well.
-	if !checkStaged {
-		roots.Working, err = roots.Working.RemoveTables(ctx, false, false, verifiedTables...)
-		if err != nil {
-			return 1, err
-		}
+	newWorking, err := roots.Working.RemoveTables(ctx, false, false, verifiedTables...)
+	if err != nil {
+		return 1, err
 	}
-
+	if !checkStaged {
+		roots.Working = newWorking
+	}
+	
 	if err = dSess.SetRoots(ctx, dbName, roots); err != nil {
 		return 1, err
 	}
 	if err = commitTransaction(ctx, dSess, nil); err != nil {
 		return 1, err
 	}
-
 	return 0, nil
 }
 
@@ -111,7 +111,6 @@ func verifyTables(ctx *sql.Context, unqualifiedTables []string, checkStaged bool
 	var TableNames []doltdb.TableName
 
 	for _, name := range unqualifiedTables {
-
 		_, okHead, err := resolve.TableName(ctx, roots.Head, name)
 		if err != nil {
 			return nil, err
@@ -163,11 +162,11 @@ func verifyTables(ctx *sql.Context, unqualifiedTables []string, checkStaged bool
 	return TableNames, nil
 }
 
-func hasUnstagedChanges(ctx *sql.Context, roots doltdb.Roots, name string, okStaged bool, okHead bool) (bool, error) {
-	// Check diff between working and staged.
-	// We'll check this if the table exists in the staged root or if it doesn't exist in the HEAD root
-	if okStaged || !okHead {
-		tableDiff, err := diff.GetTableDeltas(ctx, roots.Staged, roots.Working)
+// hasUnstagedChanges checks the HEAD and staged roots for the table, then compares them against the table in the working root.
+// okStaged and okHead are booleans identifying if the table exists in the staged root, or the head root, respectively.
+func hasUnstagedChanges(ctx *sql.Context, roots doltdb.Roots, name string, inStaged bool, inHead bool) (bool, error) {
+	checkTableChanges := func(rootVal doltdb.RootValue) (bool, error) {
+		tableDiff, err := diff.GetTableDeltas(ctx, rootVal, roots.Working)
 		if err != nil {
 			return false, err
 		}
@@ -180,25 +179,31 @@ func hasUnstagedChanges(ctx *sql.Context, roots doltdb.Roots, name string, okSta
 			if tbl.ToName.String() == name && hasChanges {
 				return true, nil
 			}
+		}
+		return false, nil
+	}
+
+	// Check diff between working and staged.
+	// We'll check this if the table exists in the staged root or if it doesn't exist in the HEAD root
+	if inStaged || !inHead {
+		hasChanges, err := checkTableChanges(roots.Staged)
+		if err != nil {
+			return false, err
+		}
+		if hasChanges {
+			return true, nil
 		}
 	}
 
 	// Now check diff between working and HEAD
 	// We'll check this if the table exists in the HEAD root or if it doesn't exist in the staged root
-	if okHead || !okStaged {
-		tableDiff, err := diff.GetTableDeltas(ctx, roots.Head, roots.Working)
+	if inHead || !inStaged {
+		hasChanges, err := checkTableChanges(roots.Head)
 		if err != nil {
 			return false, err
 		}
-
-		for _, tbl := range tableDiff {
-			hasChanges, err := tbl.HasChanges()
-			if err != nil {
-				return false, err
-			}
-			if tbl.ToName.String() == name && hasChanges {
-				return true, nil
-			}
+		if hasChanges {
+			return true, nil
 		}
 	}
 

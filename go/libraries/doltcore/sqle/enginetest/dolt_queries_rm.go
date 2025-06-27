@@ -184,4 +184,33 @@ var DoltRmTests = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "dolt Rm errors on staged foreign key constrained table with cached option",
+		SetUpScript: []string{
+			"CREATE TABLE parent (pk int primary key, p1 int)",
+			"CALL DOLT_COMMIT('-A', '-m', 'created tables')",
+			"CREATE TABLE child (pk int primary key, c1 int, FOREIGN KEY (c1) REFERENCES parent (pk))",
+			"CALL DOLT_ADD('child')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "call dolt_rm('parent','--cached');",
+				ExpectedErrStr: "unable to remove `parent` since it is referenced from table `child`",
+			},
+		},
+	},
+	{
+		Name: "dolt Rm errors on unstaged foreign key constrained table with cached option",
+		SetUpScript: []string{
+			"CREATE TABLE parent (pk int primary key, p1 int)",
+			"CALL DOLT_COMMIT('-A', '-m', 'created tables')",
+			"CREATE TABLE child (pk int primary key, c1 int, FOREIGN KEY (c1) REFERENCES parent (pk))",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "call dolt_rm('parent', '--cached');",
+				ExpectedErrStr: "unable to remove `parent` since it is referenced from table `child`",
+			},
+		},
+	},
 }
