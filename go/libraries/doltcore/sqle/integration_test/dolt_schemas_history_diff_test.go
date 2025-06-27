@@ -342,13 +342,6 @@ func TestDoltProceduresDiffTable(t *testing.T) {
 	}
 }
 
-type doltProceduresTableTest struct {
-	name  string
-	setup []testCommand
-	query string
-	rows  []sql.Row
-}
-
 var setupDoltProceduresDiffCommon = []testCommand{
 	// Start with a clean state
 	{cmd.SqlCmd{}, args{"-q", "CREATE PROCEDURE original_proc(x INT) SELECT x * 2 as result"}},
