@@ -27,6 +27,7 @@ import (
 
 	"github.com/abiosoft/readline"
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/ishell"
 	"github.com/dolthub/vitess/go/vt/sqlparser"
 	"github.com/dolthub/vitess/go/vt/vterrors"
@@ -1188,26 +1189,35 @@ func processParsedQuery(ctx *sql.Context, query string, qryist cli.Queryist, sql
 		}
 		cli.Println("Database changed")
 		return sch, nil, nil, err
-	case *sqlparser.AlterTable, *sqlparser.Set, *sqlparser.Commit:
-		_, ri, _, err := qryist.Query(ctx, query)
+	case *sqlparser.Set, *sqlparser.AlterTable, *sqlparser.Commit:
+		sch, ri, flags, err := qryist.Query(ctx, query)
 		if err != nil {
 			return nil, nil, nil, err
 		}
-		_, err = sql.RowIterToRows(ctx, ri)
+		rows, err := sql.RowIterToRows(ctx, ri)
 		if err != nil {
 			return nil, nil, nil, err
 		}
-		return nil, nil, nil, nil
+		// For statements returning OkResult, ensure we use the proper OkResultSchema
+		if len(rows) > 0 && len(rows[0]) == 1 {
+			if _, ok := rows[0][0].(types.OkResult); ok {
+				newRowIter := sql.RowsToRowIter(rows...)
+				return types.OkResultSchema, newRowIter, flags, nil
+			}
+		}
+		newRowIter := sql.RowsToRowIter(rows...)
+		return sch, newRowIter, flags, nil
 	case *sqlparser.DDL:
-		_, ri, _, err := qryist.Query(ctx, query)
+		sch, ri, flags, err := qryist.Query(ctx, query)
 		if err != nil {
 			return nil, nil, nil, err
 		}
-		_, err = sql.RowIterToRows(ctx, ri)
+		rows, err := sql.RowIterToRows(ctx, ri)
 		if err != nil {
 			return nil, nil, nil, err
 		}
-		return nil, nil, nil, nil
+		newRowIter := sql.RowsToRowIter(rows...)
+		return sch, newRowIter, flags, nil
 	case *sqlparser.Load:
 		if s.Local {
 			return nil, nil, nil, fmt.Errorf("LOCAL supported only in sql-server mode")
