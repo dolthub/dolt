@@ -94,7 +94,7 @@ func doDoltRm(ctx *sql.Context, args []string) (int, error) {
 	if !checkStaged {
 		roots.Working = newWorking
 	}
-	
+
 	if err = dSess.SetRoots(ctx, dbName, roots); err != nil {
 		return 1, err
 	}
