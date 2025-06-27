@@ -407,7 +407,7 @@ func writeDataToArchive(
 	defer cancel()
 
 	possibleGroupCount := len(cgList)
-	groupsCompleted := int32(0)
+	groupsCompleted := uint32(0)
 
 	for _, cg := range cgList {
 		select {
@@ -446,7 +446,7 @@ func writeDataToArchive(
 				}
 			}
 			groupsCompleted++
-			progress <- ArchiveBuildProgressMsg{Stage: "Materializing Chunk Groups", Total: int32(possibleGroupCount), Completed: groupsCompleted}
+			progress <- ArchiveBuildProgressMsg{Stage: "Materializing Chunk Groups", Total: uint32(possibleGroupCount), Completed: groupsCompleted}
 		}
 	}
 
@@ -475,82 +475,92 @@ func compressChunksInParallel(
 
 	const workerCount = 32
 
-	workCh := make(chan hash.Hash, len(allChunks))
+	totalChunks := uint32(len(allChunks))
+	workCh := make(chan hash.Hash, workerCount)
 	resultCh := make(chan compressedChunk, workerCount)
-	errCh := make(chan error, 1)
-	var wg sync.WaitGroup
 
-	// Prepopulate work channel
-	for h := range allChunks {
-		workCh <- h
-	}
-	close(workCh)
+	eg, ctx := errgroup.WithContext(context.Background())
+	eg.Go(func() error {
+		for h := range allChunks {
+			select {
+			case workCh <- h:
+			case <-ctx.Done():
+				return context.Cause(ctx)
+			}
+		}
+		close(workCh)
+		return nil
+	})
 
-	// Start worker goroutines
+	workerGroup := sync.WaitGroup{}
+	workerGroup.Add(workerCount)
 	for i := 0; i < workerCount; i++ {
-		wg.Add(1)
-		go func() {
-			// Allocate buffer used to compress chunks.
+		eg.Go(func() error {
+			defer workerGroup.Done()
 			cmpBuff := make([]byte, 0, fourMb)
-
-			defer wg.Done()
-			for h := range workCh {
+			for {
 				select {
-				case <-ctx.Done():
-					return
-				default:
-					c, e2 := chunkCache.get(ctx, h, stats)
-					if e2 != nil {
-						errCh <- e2
-						return
+				case addr, ok := <-workCh:
+					if !ok {
+						return nil
+					}
+					c, err := chunkCache.get(ctx, addr, stats)
+					if err != nil {
+						return err
 					}
 					cmpBuff = gozstd.CompressDict(cmpBuff[:0], c.Data(), defaultDict)
-
-					// Make a private copy of the compressed data for the result channel.
-					// Unfortunate alloc. Could use a pool of buffers if this proves to be a bottleneck.
-					privateCopy := make([]byte, len(cmpBuff))
-					copy(privateCopy, cmpBuff)
-					resultCh <- compressedChunk{h: h, data: privateCopy}
+					cp := append([]byte{}, cmpBuff...)
+					select {
+					case resultCh <- compressedChunk{h: addr, data: cp}:
+					case <-ctx.Done():
+						return context.Cause(ctx)
+					}
+				case <-ctx.Done():
+					return context.Cause(ctx)
 				}
 			}
-		}()
+		})
 	}
-
-	// Close resultCh once all workers finish
-	go func() {
-		wg.Wait()
-		close(resultCh)
-	}()
-
-	// Collector: serial arcW calls
-	completed := int32(0)
-	totalChunks := int32(len(allChunks))
-	for cc := range resultCh {
-		id, err := arcW.writeByteSpan(cc.data)
-		if err != nil {
-			return 0, err
+	var completed uint32
+	eg.Go(func() error {
+		for {
+			select {
+			case cc, ok := <-resultCh:
+				if !ok {
+					return nil
+				}
+				id, err := arcW.writeByteSpan(cc.data)
+				if err != nil {
+					return err
+				}
+				err = arcW.stageZStdChunk(cc.h, defaultSpanId, id)
+				if err != nil {
+					return err
+				}
+				completed++
+				select {
+				case progress <- ArchiveBuildProgressMsg{
+					Stage:     "Writing Ungrouped Chunks",
+					Total:     totalChunks,
+					Completed: completed,
+				}:
+				case <-ctx.Done():
+					return context.Cause(ctx)
+				}
+			case <-ctx.Done():
+				return context.Cause(ctx)
+			}
 		}
-		err = arcW.stageZStdChunk(cc.h, defaultSpanId, id)
-		if err != nil {
-			return 0, err
-		}
+	})
 
-		completed++
-		progress <- ArchiveBuildProgressMsg{
-			Stage:     "Writing Ungrouped Chunks",
-			Total:     totalChunks,
-			Completed: completed,
-		}
-	}
+	workerGroup.Wait()
+	close(resultCh)
 
-	select {
-	case err := <-errCh:
+	err := eg.Wait()
+	if err != nil {
 		return 0, err
-	case <-ctx.Done():
-		return 0, ctx.Err()
-	default:
-		return uint32(totalChunks), nil
 	}
+	return totalChunks, nil
 }
 
 // gatherAllChunks reads all the chunks from the chunk source and returns them in a map. The map is keyed by the hash of
@@ -611,8 +621,8 @@ func verifyAllChunks(ctx context.Context, idx tableIndex, archiveFile string, pr
 		hashList[i], hashList[j] = hashList[j], hashList[i]
 	})
 
-	chunkCount := int32(idx.chunkCount())
-	chunkProgress := int32(0)
+	chunkCount := idx.chunkCount()
+	chunkProgress := uint32(0)
 
 	for _, h := range hashList {
 		if !index.has(h) {
@@ -873,8 +883,8 @@ func (cr *ChunkRelations) Count() int {
 
 type ArchiveBuildProgressMsg struct {
 	Stage     string
-	Total     int32
-	Completed int32
+	Total     uint32
+	Completed uint32
 }
 
 func (cr *ChunkRelations) convertToChunkGroups(
@@ -892,8 +902,8 @@ func (cr *ChunkRelations) convertToChunkGroups(
 	groups := cr.groups()
 
 	if len(groups) > 0 {
-		groupCount := int32(len(groups))
-		completedGroupCount := int32(0)
+		groupCount := uint32(len(groups))
+		completedGroupCount := uint32(0)
 
 		groupChannel := make(chan hash.HashSet, len(groups))
 		resultChannel := make(chan *chunkGroup, len(groups))
@@ -914,7 +924,7 @@ func (cr *ChunkRelations) convertToChunkGroups(
 							if err != nil {
 								return err
 							}
-							atomic.AddInt32(&completedGroupCount, 1)
+							atomic.AddUint32(&completedGroupCount, 1)
 							progress <- ArchiveBuildProgressMsg{Stage: "Building Chunk Group Dictionaries", Total: groupCount, Completed: completedGroupCount}
 							resultChannel <- chkGrp
 						}
@@ -952,7 +962,7 @@ func (cr *ChunkRelations) convertToChunkGroups(
 			}
 		}
 	} else {
-		progress <- ArchiveBuildProgressMsg{Stage: "Chunk Grouping Skipped", Total: -1, Completed: -1}
+		progress <- ArchiveBuildProgressMsg{Stage: "Chunk Grouping Skipped", Total: 0, Completed: 0}
 	}
 
 	return result, nil
