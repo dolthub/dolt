@@ -86,11 +86,14 @@ func doDoltRm(ctx *sql.Context, args []string) (int, error) {
 		return 1, err
 	}
 
-	// If --cached was not used, we want to fully delete the tables, so we remove them from the working set as well.
+	// RemoveTables() validates foreign keys, and the above call will not catch foreign key constraints on tables that
+	// exist only in the working set. So we need to run the below line on each dolt_rm() to avoid wiping constrained tables.
 	newWorking, err := roots.Working.RemoveTables(ctx, false, false, verifiedTables...)
 	if err != nil {
 		return 1, err
 	}
+
+	// If --cached was not used, we want to fully delete the tables, so we remove them from the working set as well.
 	if !checkStaged {
 		roots.Working = newWorking
 	}
@@ -163,7 +166,7 @@ func verifyTables(ctx *sql.Context, unqualifiedTables []string, checkStaged bool
 }
 
 // hasUnstagedChanges checks the HEAD and staged roots for the table, then compares them against the table in the working root.
-// okStaged and okHead are booleans identifying if the table exists in the staged root, or the head root, respectively.
+// inStaged and inHead are booleans identifying if the table exists in the staged root, or the head root, respectively.
 func hasUnstagedChanges(ctx *sql.Context, roots doltdb.Roots, name string, inStaged bool, inHead bool) (bool, error) {
 	checkTableChanges := func(rootVal doltdb.RootValue) (bool, error) {
 		tableDiff, err := diff.GetTableDeltas(ctx, rootVal, roots.Working)
