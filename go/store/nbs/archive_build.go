@@ -75,14 +75,15 @@ func unArchiveSingleBlockStore(ctx context.Context, blockStore *NomsBlockStore, 
 	revertMap := smd.RevertMap()
 
 	for _, id := range allFiles {
+		if isJournalAddr(id) {
+			continue
+		}
+
 		sourceSet = blockStore.tables.upstream
 		cs := sourceSet[id]
 
 		arc, ok := cs.(archiveChunkSource)
 		if !ok {
-			continue
-		}
-		if isJournalAddr(id) {
 			continue
 		}
 
@@ -193,12 +194,12 @@ func archiveSingleBlockStore(ctx context.Context, blockStore *NomsBlockStore, da
 	}
 
 	for _, tf := range allFiles {
+		if isJournalAddr(tf) {
+			continue
+		}
 		sourceSet = blockStore.tables.upstream
 		cs := sourceSet[tf]
 		if _, ok := cs.(archiveChunkSource); ok {
-			continue
-		}
-		if isJournalAddr(tf) {
 			continue
 		}
 
