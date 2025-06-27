@@ -223,7 +223,7 @@ func buildArchiveReader(ctx context.Context, reader tableReaderAt, footer archiv
 
 	chunkRefSpan := footer.indexChunkRefSpan()
 	chunkRdr := newSectionReader(ctx, reader, int64(chunkRefSpan.offset), int64(chunkRefSpan.length), stats)
-	chnks := make([]uint32, footer.chunkCount*2)
+	chnks := make([]uint32, uint64(footer.chunkCount)*2)
 	err = binary.Read(chunkRdr, binary.BigEndian, chnks[:])
 	if err != nil {
 		return archiveReader{}, fmt.Errorf("Failed to read chunk references: %w", err)
@@ -231,7 +231,7 @@ func buildArchiveReader(ctx context.Context, reader tableReaderAt, footer archiv
 
 	suffixSpan := footer.indexSuffixSpan()
 	sufRdr := newSectionReader(ctx, reader, int64(suffixSpan.offset), int64(suffixSpan.length), stats)
-	suffixes := make([]byte, footer.chunkCount*hash.SuffixLen)
+	suffixes := make([]byte, uint64(footer.chunkCount)*hash.SuffixLen)
 	_, err = io.ReadFull(sufRdr, suffixes)
 	if err != nil {
 		return archiveReader{}, fmt.Errorf("Failed to read suffixes: %w", err)
