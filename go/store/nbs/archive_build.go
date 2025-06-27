@@ -72,8 +72,6 @@ func unArchiveSingleBlockStore(ctx context.Context, blockStore *NomsBlockStore, 
 		allFiles = append(allFiles, tf)
 	}
 
-	revertMap := smd.RevertMap()
-
 	for _, id := range allFiles {
 		if isJournalAddr(id) {
 			continue
@@ -87,52 +85,40 @@ func unArchiveSingleBlockStore(ctx context.Context, blockStore *NomsBlockStore, 
 			continue
 		}
 
-		orginTfId := revertMap[id]
-		exists, err := smd.oldGenTableExists(orginTfId)
-		if err != nil {
-			return err
-		}
-
 		chkCnt, err := arc.count()
 		if err != nil {
 			return fmt.Errorf("failed to count chunks in archive %s: %w", id.String(), err)
 		}
 
 		var newTF hash.Hash
-		if exists {
-			// We have a fast path to follow because original table file is still on disk.
-			newTF = orginTfId
-		} else {
-			// We don't have the original table file id, so we have to create a new one.
-			classicTable, err := NewCmpChunkTableWriter("")
-			if err != nil {
-				return err
-			}
-
-			err = arc.iterate(ctx, func(chk chunks.Chunk) error {
-				cmpChk := ChunkToCompressedChunk(chk)
-				_, err := classicTable.AddChunk(cmpChk)
-				if err != nil {
-					return err
-				}
-
-				return nil
-			}, &Stats{})
-			if err != nil {
-				return err
-			}
-
-			_, id, err := classicTable.Finish()
-			if err != nil {
-				return err
-			}
-			err = classicTable.FlushToFile(filepath.Join(outPath, id))
-			if err != nil {
-				return err
-			}
-
-			newTF = hash.Parse(id)
+		classicTable, err := NewCmpChunkTableWriter("")
+		if err != nil {
+			return err
 		}
+
+		err = arc.iterate(ctx, func(chk chunks.Chunk) error {
+			cmpChk := ChunkToCompressedChunk(chk)
+			_, err := classicTable.AddChunk(cmpChk)
+			if err != nil {
+				return err
+			}
+
+			return nil
+		}, &Stats{})
+		if err != nil {
+			return err
+		}
+
+		_, newId, err := classicTable.Finish()
+		if err != nil {
+			return err
+		}
+		err = classicTable.FlushToFile(filepath.Join(outPath, newId))
+		if err != nil {
+			return err
+		}
+
+		newTF = hash.Parse(newId)
 
 		specs, err := blockStore.tables.toSpecs()
 		newSpecs := make([]tableSpec, 0, len(specs))
