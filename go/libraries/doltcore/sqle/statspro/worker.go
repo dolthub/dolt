@@ -190,7 +190,7 @@ func (sc *StatsController) newStatsForRoot(baseCtx context.Context, gcKv *memSta
 	// In a single SessionCommand we load up the schemas for all branches of all the databases we will be inspecting.
 	// This gets each branch root into the DoltSession dbStates, which will be retained by VisitGCRoots.
 	type toCollect struct {
-		schs  []sql.DatabaseSchema
+		schs []sql.DatabaseSchema
 	}
 	var toVisit []toCollect
 	if err := sc.rateLimiter.execute(ctx, func() error {
