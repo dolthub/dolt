@@ -30,6 +30,8 @@ const (
 	tblErrTypeInConflict  tblErrorType = "are in conflict"
 	tblErrTypeSchConflict tblErrorType = "have schema conflicts"
 	tblErrTypeConstViols  tblErrorType = "have constraint violations"
+	tblErrStagedChanges   tblErrorType = "have changes saved in the index. Use --cached or commit."
+	tblErrUnstagedChanges tblErrorType = "have unstaged changes."
 )
 
 type TblError struct {
@@ -39,6 +41,14 @@ type TblError struct {
 
 func NewTblNotExistError(tbls []doltdb.TableName) TblError {
 	return TblError{tbls, tblErrTypeNotExist}
+}
+
+func NewTblStagedError(tbls []doltdb.TableName) TblError {
+	return TblError{tbls, tblErrStagedChanges}
+}
+
+func NewTblUnstagedError(tbls []doltdb.TableName) TblError {
+	return TblError{tbls, tblErrUnstagedChanges}
 }
 
 func NewTblInConflictError(tbls []doltdb.TableName) TblError {

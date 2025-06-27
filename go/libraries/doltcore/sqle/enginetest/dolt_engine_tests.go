@@ -2033,3 +2033,24 @@ func RunDoltStashSystemTableTests(t *testing.T, h DoltEnginetestHarness) {
 		}()
 	}
 }
+
+func RunDoltRmTests(t *testing.T, h DoltEnginetestHarness) {
+	for _, script := range DoltRmTests {
+		func() {
+			h := h.NewHarness(t)
+			defer h.Close()
+			enginetest.TestScript(t, h, script)
+		}()
+	}
+
+	h = h.NewHarness(t)
+	defer h.Close()
+	engine, err := h.NewEngine(t)
+	require.NoError(t, err)
+	readOnlyEngine, err := h.NewReadOnlyEngine(engine.EngineAnalyzer().Catalog.DbProvider)
+	require.NoError(t, err)
+
+	for _, script := range DoltRmReadOnlyTests {
+		enginetest.TestScriptWithEngine(t, readOnlyEngine, h, script)
+	}
+}
