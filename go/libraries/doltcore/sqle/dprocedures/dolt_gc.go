@@ -172,7 +172,6 @@ type sessionAwareSafepointController struct {
 	callSession *dsess.DoltSession
 	origEpoch   int
 	doltDB      *doltdb.DoltDB
-	statsDoneCh chan struct{}
 
 	waiter *gcctx.GCSafepointWaiter
 	keeper func(hash.Hash) bool
@@ -194,13 +193,6 @@ func (sc *sessionAwareSafepointController) BeginGC(ctx context.Context, keeper f
 }
 
 func (sc *sessionAwareSafepointController) EstablishPreFinalizeSafepoint(ctx context.Context) error {
-	if sc.statsDoneCh != nil {
-		select {
-		case <-sc.statsDoneCh:
-		case <-ctx.Done():
-			return context.Cause(ctx)
-		}
-	}
 	return sc.waiter.Wait(ctx)
 }
 
@@ -280,27 +272,6 @@ func RunDoltGC(ctx *sql.Context, ddb *doltdb.DoltDB, mode types.GCMode, cmp chun
 	var sc types.GCSafepointController
 	var statsDoneCh chan struct{}
 	statsPro := dSess.StatsProvider()
-	if afp, ok := statsPro.(ExtendedStatsProvider); ok {
-		statsDoneCh = afp.Stop()
-	}
-	if statsDoneCh != nil {
-		// If statsDoneCh is nil, we are assuming we are
-		// running in a context where stats was never
-		// started. Restart() here will fail, because the
-		// SerialQueue will not be ready to process the
-		// restart.
-		defer func() {
-			// We receive here as well as in the PreFinalize of the
-			// safepoint controller, since we want to safely
-			// restart stats even when GC itself does not complete
-			// successfully.
-			<-statsDoneCh
-			_, err := statsRestart(ctx)
-			if err != nil {
-				ctx.GetLogger().Infof("gc stats restart failed: %s", err.Error())
-			}
-		}()
-	}
 	if UseSessionAwareSafepointController {
 		gcSafepointController := dSess.GCSafepointController()
 		sc = &sessionAwareSafepointController{
@@ -308,10 +279,30 @@ func RunDoltGC(ctx *sql.Context, ddb *doltdb.DoltDB, mode types.GCMode, cmp chun
 			dbname:      dbname,
 			controller:  gcSafepointController,
 			doltDB:      ddb,
-			statsDoneCh: statsDoneCh,
 		}
 
 	} else {
+		if afp, ok := statsPro.(ExtendedStatsProvider); ok {
+			statsDoneCh = afp.Stop()
+		}
+		if statsDoneCh != nil {
+			// If statsDoneCh is nil, we are assuming we are
+			// running in a context where stats was never
+			// started. Restart() here will fail, because the
+			// SerialQueue will not be ready to process the
+			// restart.
+			defer func() {
+				// We receive here as well as in the PreFinalize of the
+				// safepoint controller, since we want to safely
+				// restart stats even when GC itself does not complete
+				// successfully.
+				<-statsDoneCh
+				_, err := statsRestart(ctx)
+				if err != nil {
+					ctx.GetLogger().Infof("gc stats restart failed: %s", err.Error())
+				}
+			}()
+		}
 		// Legacy safepoint controller behavior was to not
 		// allow GC on a standby server. GC on a standby server
 		// with killConnections safepoints should be safe now,
