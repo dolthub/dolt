@@ -73,6 +73,7 @@ func TestScheduleLoop(t *testing.T) {
 		require.Equal(t, 4, len(kv.templates))
 		require.Equal(t, 2, len(sc.Stats.stats))
 		stat := sc.Stats.stats[tableIndexesKey{"mydb", "main", "ab", ""}]
+		require.Equal(t, 2, len(stat))
 		require.Equal(t, 7, len(stat[0].Hist))
 		require.Equal(t, 7, len(stat[1].Hist))
 	}
