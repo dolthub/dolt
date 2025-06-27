@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"sync"
 	"time"
 
 	"github.com/pkg/errors"
@@ -105,8 +106,14 @@ func (cmd ArchiveCmd) Exec(ctx context.Context, commandStr string, args []string
 		ourDbMD = md
 	}
 
+	wg := sync.WaitGroup{}
 	progress := make(chan interface{}, 32)
-	handleProgress(ctx, progress)
+	handleProgress(ctx, &wg, progress)
+
+	defer func() {
+		close(progress)
+		wg.Wait()
+	}()
 
 	if apr.Contains(revertFlag) {
 		err := nbs.UnArchive(ctx, cs, ourDbMD, progress)
@@ -143,13 +150,15 @@ func (cmd ArchiveCmd) Exec(ctx context.Context, commandStr string, args []string
 			cli.PrintErrln(err)
 			return 1
 		}
-
 	}
 	return 0
 }
 
-func handleProgress(ctx context.Context, progress chan interface{}) {
+func handleProgress(ctx context.Context, wg *sync.WaitGroup, progress chan interface{}) {
 	go func() {
+		wg.Add(1)
+		defer wg.Done()
+
 		rotation := 0
 		p := cli.NewEphemeralPrinter()
 		currentMessage := "Starting Archive Build"
@@ -213,7 +222,6 @@ func handleProgress(ctx context.Context, progress chan interface{}) {
 
 				p.Display()
 			}
-
 		}
 	}()
 }

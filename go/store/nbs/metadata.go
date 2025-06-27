@@ -131,20 +131,6 @@ func (sm *StorageMetadata) RevertMap() map[hash.Hash]hash.Hash {
 	return revertMap
 }
 
-// oldGenTableExists returns true if the table file exists in the oldgen directory. This is a file system check for
-// a table file we have no record of, but may be useful in the process of reverting an archive operation.
-func (sm *StorageMetadata) oldGenTableExists(id hash.Hash) (bool, error) {
-	path := filepath.Join(sm.root, ".dolt", "noms", "oldgen", id.String())
-	_, err := os.Stat(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return false, nil
-		}
-		return false, err
-	}
-	return true, nil
-}
-
 // GetStorageMetadata returns metadata about the local filesystem storage for a single database. The path given must be
 // the path to DB directory - ie, containing the .dolt directory.
 func GetStorageMetadata(ctx context.Context, path string, stats *Stats) (StorageMetadata, error) {
