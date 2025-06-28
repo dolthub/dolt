@@ -46,7 +46,7 @@ func TestDoltTransactionCommitOneClient(t *testing.T) {
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client a */ SET @@autocommit=0;",
-				Expected: []sql.Row{{}},
+				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			// start transaction implicitly commits the current transaction, so we have to do so before we turn on dolt commits
 			{
@@ -59,15 +59,15 @@ func TestDoltTransactionCommitOneClient(t *testing.T) {
 			},
 			{
 				Query:    "/* client a */ SET @@dolt_transaction_commit=1;",
-				Expected: []sql.Row{{}},
+				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
 				Query:    "/* client a */ SET @initial_head=@@mydb_head;",
-				Expected: []sql.Row{{}},
+				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
 				Query:    "/* client b */ SET @initial_head=@@mydb_head;",
-				Expected: []sql.Row{{}},
+				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
 				Query:    "/* client a */ SELECT @@mydb_head like @initial_head;",
@@ -147,7 +147,7 @@ func TestDoltTransactionCommitOneClient(t *testing.T) {
 			},
 			{
 				Query:    "/* client a */ SET @@dolt_transaction_commit_message='Commit Message 42';",
-				Expected: []sql.Row{{}},
+				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
 				Query:    "/* client a */ create table newTable(pk int primary key);",
@@ -219,11 +219,11 @@ func TestDoltTransactionCommitTwoClients(t *testing.T) {
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client a */ SET @@autocommit=0;",
-				Expected: []sql.Row{{}},
+				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
 				Query:    "/* client b */ SET @@autocommit=0;",
-				Expected: []sql.Row{{}},
+				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			// start transaction implicitly commits the current transaction, so we have to do so before we turn on dolt commits
 			{
@@ -252,19 +252,19 @@ func TestDoltTransactionCommitTwoClients(t *testing.T) {
 			// Now we have the two concurrent transactions commit their changes.
 			{
 				Query:    "/* client a */ SET @@dolt_transaction_commit=1;",
-				Expected: []sql.Row{{}},
+				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
 				Query:    "/* client b */ SET @@dolt_transaction_commit=1;",
-				Expected: []sql.Row{{}},
+				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
 				Query:    "/* client a */ SET @initial_head=@@mydb_head;",
-				Expected: []sql.Row{{}},
+				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
 				Query:    "/* client b */ SET @initial_head=@@mydb_head;",
-				Expected: []sql.Row{{}},
+				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
 				Query:    "/* client a */ INSERT INTO x VALUES (2,2);",
@@ -292,7 +292,7 @@ func TestDoltTransactionCommitTwoClients(t *testing.T) {
 			},
 			{
 				Query:    "/* client b */ SET @@dolt_transaction_commit_message='ClientB Commit';",
-				Expected: []sql.Row{{}},
+				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
 				Query:    "/* client b */ COMMIT;",
@@ -304,7 +304,7 @@ func TestDoltTransactionCommitTwoClients(t *testing.T) {
 			},
 			{
 				Query:    "/* client a */ SET @@dolt_transaction_commit_message='ClientA Commit';",
-				Expected: []sql.Row{{}},
+				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
 				Query:    "/* client a */ COMMIT;",
@@ -395,15 +395,15 @@ func TestDoltTransactionCommitAutocommit(t *testing.T) {
 			// these SET statements currently commit a transaction (since autocommit is on)
 			{
 				Query:    "/* client a */ SET @@dolt_transaction_commit=1;",
-				Expected: []sql.Row{{}},
+				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
 				Query:    "/* client b */ SET @@dolt_transaction_commit=1;",
-				Expected: []sql.Row{{}},
+				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
 				Query:    "/* client b */ SET @@dolt_transaction_commit_message='ClientB Commit';",
-				Expected: []sql.Row{{}},
+				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
 				Query:    "/* client a */ INSERT INTO x VALUES (2,2);",
@@ -481,11 +481,11 @@ func TestDoltTransactionCommitLateFkResolution(t *testing.T) {
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client a */ SET @@autocommit=0;",
-				Expected: []sql.Row{{}},
+				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
 				Query:    "/* client b */ SET @@autocommit=0;",
-				Expected: []sql.Row{{}},
+				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
 				Query:    "/* client a */ START TRANSACTION;",

@@ -811,7 +811,7 @@ var DoltScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "SET @hashofdb = dolt_hashof_db();",
-				Expected: []sql.Row{{}},
+				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
 				Query:    "SELECT @hashofdb = dolt_hashof_db('HEAD');",
@@ -868,7 +868,7 @@ var DoltScripts = []queries.ScriptTest{
 
 			{
 				Query:    "SET @hashofdb = dolt_hashof_db();",
-				Expected: []sql.Row{{}},
+				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
 				Query:    "SELECT @hashofdb = dolt_hashof_db('STAGED');",
@@ -918,7 +918,7 @@ var DoltScripts = []queries.ScriptTest{
 
 			{
 				Query:    "SET @hashofdb = dolt_hashof_db();",
-				Expected: []sql.Row{{}},
+				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
 				Query:    "create procedure proc1() SELECT * FROM t3;",
@@ -3411,7 +3411,7 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "SET @commit1 = (select commit_hash from dolt_log order by date desc limit 1);",
-				Expected: []sql.Row{{}},
+				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
 				Query: "call dolt_checkout(@commit1, 't1')",
@@ -7510,7 +7510,7 @@ var DoltCommitTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "SET @hash=(SELECT commit_hash FROM dolt_log LIMIT 1);",
-				Expected: []sql.Row{{}},
+				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
 				Query:    "SELECT COUNT(parent_hash) FROM dolt_commit_ancestors WHERE commit_hash= @hash;",
