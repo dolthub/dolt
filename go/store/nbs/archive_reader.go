@@ -104,7 +104,7 @@ func (f archiveFooter) indexChunkRefSpan() byteSpan {
 
 // indexSuffixSpan returns the span of the suffix section of the index. This is the fourth part of the index.
 func (f archiveFooter) indexSuffixSpan() byteSpan {
-	suffixLen := uint64(f.chunkCount * hash.SuffixLen)
+	suffixLen := uint64(f.chunkCount) * hash.SuffixLen
 	chunkRefs := f.indexChunkRefSpan()
 	return byteSpan{chunkRefs.offset + chunkRefs.length, suffixLen}
 }
@@ -231,7 +231,7 @@ func buildArchiveReader(ctx context.Context, reader tableReaderAt, footer archiv
 
 	suffixSpan := footer.indexSuffixSpan()
 	sufRdr := newSectionReader(ctx, reader, int64(suffixSpan.offset), int64(suffixSpan.length), stats)
-	suffixes := make([]byte, uint64(footer.chunkCount)*hash.SuffixLen)
+	suffixes := make([]byte, suffixSpan.length)
 	_, err = io.ReadFull(sufRdr, suffixes)
 	if err != nil {
 		return archiveReader{}, fmt.Errorf("Failed to read suffixes: %w", err)
