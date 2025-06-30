@@ -183,6 +183,16 @@ func getNextAndSplitIfAtEnd[K ~[]byte, O Ordering[K]](ctx context.Context, diffe
 	return diff, nil
 }
 
+// getLevel returns the level that a differ is currently emitting diffs for.
+// usually this is the level of the |to| cursor, but if that cursor is exhausted,
+// then the differ is emitting removed diffs on the level of the |from| cursor.
+func getLevel[K ~[]byte, O Ordering[K]](d Differ[K, O]) (uint64, error) {
+	if d.to.Valid() {
+		return d.to.level()
+	}
+	return d.from.level()
+}
+
 func SendPatches[K ~[]byte, O Ordering[K]](
 	ctx context.Context,
 	l, r Differ[K, O],
@@ -213,10 +223,10 @@ func SendPatches[K ~[]byte, O Ordering[K]](
 	for lok && rok {
 		order := l.order
 		// If they're ranges, compare the start points, see if they overlap.
-		leftLevel := l.to.nd.level
-		rightLevel := r.to.nd.level
+		leftLevel, _ := getLevel(l)
+		rightLevel, _ := getLevel(r)
 		if leftLevel > 0 && rightLevel > 0 {
-			if nilCompare(ctx, order, K(left.Key), K(right.PreviousKey)) < 0 {
+			if nilCompare(ctx, order, K(left.Key), K(right.PreviousKey)) <= 0 {
 				// Left change is entirely before right change.
 				// This change is already on the left map, so we ignore it.
 				// left, err = l.Next(ctx)
@@ -227,7 +237,7 @@ func SendPatches[K ~[]byte, O Ordering[K]](
 				if err != nil {
 					return MergeStats{}, err
 				}
-			} else if nilCompare(ctx, order, K(left.PreviousKey), K(right.Key)) > 0 {
+			} else if nilCompare(ctx, order, K(right.Key), K(left.PreviousKey)) <= 0 {
 				// Right change is entirely before right change.
 				err = buf.SendDiff(ctx, right)
 				if err != nil {
@@ -236,9 +246,8 @@ func SendPatches[K ~[]byte, O Ordering[K]](
 				updateStats(right, &stats)
 
 				right, err = getNextAndSplitIfAtEnd(ctx, &r)
-				//right, err = r.Next(ctx)
 				if err == io.EOF {
-					err, lok = nil, false
+					err, rok = nil, false
 				}
 				if err != nil {
 					return MergeStats{}, err
@@ -246,7 +255,6 @@ func SendPatches[K ~[]byte, O Ordering[K]](
 			} else if bytes.Equal(left.To, right.To) {
 				// A concurrent change.
 				// This change is already on the left map, so we ignore it.
-				// left, err = l.Next(ctx)
 				left, err = getNextAndSplitIfAtEnd(ctx, &l)
 				if err == io.EOF {
 					err, lok = nil, false
@@ -258,14 +266,14 @@ func SendPatches[K ~[]byte, O Ordering[K]](
 				// right, err = r.Next(ctx)
 				right, err = getNextAndSplitIfAtEnd(ctx, &r)
 				if err == io.EOF {
-					err, lok = nil, false
+					err, rok = nil, false
 				}
 				if err != nil {
 					return MergeStats{}, err
 				}
 			} else {
 				// In all other cases there's a conflict and we have to split whichever one comes first.
-				// If both have the same start range, split both.
+				// If both have the same start key, split both.
 				cmp := nilCompare(ctx, order, K(left.PreviousKey), K(right.PreviousKey))
 				if cmp <= 0 {
 					left, err = l.split(ctx)
@@ -288,7 +296,6 @@ func SendPatches[K ~[]byte, O Ordering[K]](
 			if l.order.Compare(ctx, K(left.Key), K(right.PreviousKey)) <= 0 {
 				// point update comes first
 				// This change is already on the left map, so we ignore it.
-				//left, err = l.Next(ctx)
 				left, err = getNextAndSplitIfAtEnd(ctx, &l)
 				if err == io.EOF {
 					err, lok = nil, false
@@ -321,7 +328,7 @@ func SendPatches[K ~[]byte, O Ordering[K]](
 		}
 
 		if leftLevel > 0 {
-			if l.order.Compare(ctx, K(right.Key), K(left.PreviousKey)) <= 0 {
+			if nilCompare(ctx, l.order, K(right.Key), K(left.PreviousKey)) <= 0 {
 				// point update comes first
 				err = buf.SendDiff(ctx, right)
 				if err != nil {
@@ -330,12 +337,12 @@ func SendPatches[K ~[]byte, O Ordering[K]](
 				updateStats(right, &stats)
 				right, err = r.Next(ctx)
 				if err == io.EOF {
-					err, lok = nil, false
+					err, rok = nil, false
 				}
 				if err != nil {
 					return MergeStats{}, err
 				}
-			} else if l.order.Compare(ctx, K(right.Key), K(left.Key)) > 0 {
+			} else if nilCompare(ctx, l.order, K(right.Key), K(left.Key)) > 0 {
 				// range update comes first
 				// This change is already on the left map, so we ignore it.
 				left, err = l.Next(ctx)
