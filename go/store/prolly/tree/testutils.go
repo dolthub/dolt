@@ -377,3 +377,51 @@ func (v nodeStoreValidator) PurgeCaches() {
 func (v nodeStoreValidator) Format() *types.NomsBinFormat {
 	return v.ns.Format()
 }
+
+func MakeTreeForTest(tuples [][2]val.Tuple) (Node, error) {
+	ctx := context.Background()
+	ns := NewTestNodeStore()
+
+	// todo(andy): move this test
+	s := message.NewProllyMapSerializer(val.TupleDesc{}, ns.Pool())
+	chunker, err := newEmptyChunker(ctx, ns, s)
+	if err != nil {
+		return Node{}, err
+	}
+	for _, pair := range tuples {
+		if pair[1] == nil {
+			continue
+		}
+		err := chunker.AddPair(ctx, Item(pair[0]), Item(pair[1]))
+		if err != nil {
+			return Node{}, err
+		}
+	}
+	root, err := chunker.Done(ctx)
+	if err != nil {
+		return Node{}, err
+	}
+	return root, nil
+}
+
+func GetAddressFromLevelAndKeyForTest(ctx context.Context, ns NodeStore, root Node, level int, key val.Tuple, keyDesc val.TupleDesc) (addr hash.Hash, ok bool, err error) {
+	i := 0
+	for i < root.Count() {
+		childKey := root.GetKey(i)
+		cmp := keyDesc.Compare(ctx, val.Tuple(childKey), key)
+		if cmp >= 0 {
+			childAddr := root.getAddress(i)
+			if root.Level() == level {
+				return childAddr, true, nil
+			} else {
+				childNode, err := fetchChild(ctx, ns, childAddr)
+				if err != nil {
+					return hash.Hash{}, false, err
+				}
+				return GetAddressFromLevelAndKeyForTest(ctx, ns, childNode, level, key, keyDesc)
+			}
+		}
+		i++
+	}
+	return hash.Hash{}, false, nil
+}

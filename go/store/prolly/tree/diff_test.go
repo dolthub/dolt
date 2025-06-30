@@ -15,6 +15,7 @@
 package tree
 
 import (
+	"github.com/stretchr/testify/require"
 	"io"
 	"testing"
 
@@ -32,17 +33,18 @@ func TestDifferFromRoots(t *testing.T) {
 	ns := NewTestNodeStore()
 
 	fromTups, desc := AscendingUintTuples(1234)
-	fromRoot := makeTree(t, fromTups)
+	fromRoot, err := MakeTreeForTest(fromTups)
+	assert.NoError(t, err)
 
 	toTups := make([][2]val.Tuple, len(fromTups))
 	// Copy elements from the original slice to the new slice
 	copy(toTups, fromTups)
 	bld := val.NewTupleBuilder(desc, ns)
 	bld.PutUint32(0, uint32(42))
-	var err error
 	toTups[23][1], err = bld.Build(sharedPool) // modify value at index 23.
 	assert.NoError(t, err)
-	toRoot := makeTree(t, toTups)
+	toRoot, err := MakeTreeForTest(toTups)
+	assert.NoError(t, err)
 
 	dfr, err := DifferFromRoots(ctx, ns, ns, fromRoot, toRoot, desc, false)
 	assert.NoError(t, err)

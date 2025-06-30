@@ -15,15 +15,12 @@
 package tree
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/store/hash"
-	"github.com/dolthub/dolt/go/store/prolly/message"
-	"github.com/dolthub/dolt/go/store/val"
 )
 
 var goldenHash = hash.Hash{
@@ -36,27 +33,11 @@ var goldenHash = hash.Hash{
 // todo(andy): need an analogous test in pkg prolly
 func TestContentAddress(t *testing.T) {
 	tups, _ := AscendingUintTuples(12345)
-	m := makeTree(t, tups)
+	m, err := MakeTreeForTest(tups)
+	assert.NoError(t, err)
 	require.NotNil(t, m)
 	require.Equal(t, goldenHash, m.HashOf())
 	tc, err := m.TreeCount()
 	require.NoError(t, err)
 	assert.Equal(t, 12345, tc)
-}
-
-func makeTree(t *testing.T, tuples [][2]val.Tuple) Node {
-	ctx := context.Background()
-	ns := NewTestNodeStore()
-
-	// todo(andy): move this test
-	s := message.NewProllyMapSerializer(val.TupleDesc{}, ns.Pool())
-	chunker, err := newEmptyChunker(ctx, ns, s)
-	require.NoError(t, err)
-	for _, pair := range tuples {
-		err := chunker.AddPair(ctx, Item(pair[0]), Item(pair[1]))
-		require.NoError(t, err)
-	}
-	root, err := chunker.Done(ctx)
-	require.NoError(t, err)
-	return root
 }
