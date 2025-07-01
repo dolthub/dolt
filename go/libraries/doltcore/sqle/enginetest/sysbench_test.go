@@ -103,27 +103,27 @@ s_dist_07, s_dist_08, s_dist_09, s_dist_10, s_ytd, s_order_cnt, s_remote_cnt, s_
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client a */ SET SESSION transaction_isolation='REPEATABLE-READ';",
-				Expected: []sql.Row{{}},
+				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
 				Query:    "/* client b */ SET SESSION transaction_isolation='REPEATABLE-READ';",
-				Expected: []sql.Row{{}},
+				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
 				Query:    "/* client a */ SET FOREIGN_KEY_CHECKS=0;",
-				Expected: []sql.Row{{}},
+				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
 				Query:    "/* client b */ SET FOREIGN_KEY_CHECKS=0;",
-				Expected: []sql.Row{{}},
+				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
 				Query:    "/* client a */ SET autocommit=0;",
-				Expected: []sql.Row{{}},
+				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
 				Query:    "/* client b */ SET autocommit=0;",
-				Expected: []sql.Row{{}},
+				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
 				Query:    "/* client a */ BEGIN;",
