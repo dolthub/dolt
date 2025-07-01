@@ -305,20 +305,7 @@ func (sc *StatsController) AnalyzeTable(ctx *sql.Context, table sql.Table, dbNam
 
 	newStats := newRootStats()
 
-	// XXX: Use a new context for this operation. |updateTable| does GC
-	// lifecycle callbacks on the context. |ctx| already has lifecycle
-	// callbacks registered because we are part of a SQL handler.
-	newCtx, err := sc.ctxGen(ctx.Context)
-	if err != nil {
-		return err
-	}
-
-	defer sql.SessionEnd(newCtx.Session)
-	sql.SessionCommandBegin(newCtx.Session)
-	defer sql.SessionCommandEnd(newCtx.Session)
-
-	newCtx.SetCurrentDatabase(ctx.GetCurrentDatabase())
-	err = sc.updateTable(newCtx, newStats, table.Name(), sqlDb, nil, true)
+	err = sc.updateTable(ctx, newStats, table.Name(), sqlDb, nil, true, false)
 	if err != nil {
 		return err
 	}
