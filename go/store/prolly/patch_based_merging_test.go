@@ -12,7 +12,7 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-// slicePatchIter implements tree.PatchIter and is used in tests to inspect a list of mutations from a RangeDiffer
+// slicePatchIter implements tree.PatchIter and is used in tests to inspect a list of patches from a RangeDiffer
 // before applying them.
 type slicePatchIter struct {
 	slice []tree.Patch
@@ -34,9 +34,9 @@ func (s *slicePatchIter) Close() error {
 	return nil
 }
 
-// produceMutations produces a set of mutations that can be applied to the left tree to produce the result of a three way merge.
-// It passes the produced MutationIter to the callback function.
-func produceMutations[K ~[]byte, O tree.Ordering[K]](
+// producePatches produces a set of patches that can be applied to the left tree to produce the result of a three way merge.
+// It passes the produced PatchIter to the callback function.
+func producePatches[K ~[]byte, O tree.Ordering[K]](
 	ctx context.Context,
 	ns tree.NodeStore,
 	left, right, base tree.Node,
@@ -73,8 +73,8 @@ func produceMutations[K ~[]byte, O tree.Ordering[K]](
 	return nil
 }
 
-// pointMutation is a description of a single key-value change, used for tests.
-type pointMutation struct {
+// pointPatch is a description of a single key-value change, used for tests.
+type pointPatch struct {
 	key   uint32
 	value *uint32
 }
@@ -83,15 +83,15 @@ func ptr(i uint32) *uint32 {
 	return &i
 }
 
-func update(key, value uint32) pointMutation {
-	return pointMutation{key, ptr(value)}
+func update(key, value uint32) pointPatch {
+	return pointPatch{key, ptr(value)}
 }
 
-func remove(key uint32) pointMutation {
-	return pointMutation{key, nil}
+func remove(key uint32) pointPatch {
+	return pointPatch{key, nil}
 }
 
-type rangeMutation struct {
+type rangePatch struct {
 	startKey, endKey uint32
 	noStartKey       bool
 	level            int
@@ -100,8 +100,8 @@ type rangeMutation struct {
 	isRemoval        bool
 }
 
-func pointUpdate(key, value uint32) rangeMutation {
-	return rangeMutation{
+func pointUpdate(key, value uint32) rangePatch {
+	return rangePatch{
 		startKey:     key - 1,
 		endKey:       key,
 		noStartKey:   false,
@@ -112,8 +112,8 @@ func pointUpdate(key, value uint32) rangeMutation {
 	}
 }
 
-func pointRemove(key uint32) rangeMutation {
-	return rangeMutation{
+func pointRemove(key uint32) rangePatch {
+	return rangePatch{
 		startKey:   key - 1,
 		endKey:     key,
 		noStartKey: false,
@@ -121,64 +121,64 @@ func pointRemove(key uint32) rangeMutation {
 	}
 }
 
-func manyPointRemoves(keyStart, keyEnd uint32) (mutations []rangeMutation) {
+func manyPointRemoves(keyStart, keyEnd uint32) (patches []rangePatch) {
 	for i := keyStart; i <= keyEnd; i++ {
-		mutations = append(mutations, pointRemove(i))
+		patches = append(patches, pointRemove(i))
 	}
-	return mutations
+	return patches
 }
 
-func testThreeWayMutator(
+func testPatchBasedMerging(
 	t *testing.T,
 	ctx context.Context,
 	ns tree.NodeStore,
 	keyDesc val.TupleDesc,
 	baseRoot, leftRoot, rightRoot tree.Node,
-	expectedMutations []rangeMutation,
+	expectedPatches []rangePatch,
 ) {
-	err := produceMutations(ctx, ns, leftRoot, rightRoot, baseRoot, nil, keyDesc, func(iter tree.PatchIter) error {
-		var actualMutations []tree.Patch
-		actualMutation := iter.NextPatch(ctx)
-		for actualMutation.EndKey != nil {
-			actualMutations = append(actualMutations, actualMutation)
-			actualMutation = iter.NextPatch(ctx)
+	err := producePatches(ctx, ns, leftRoot, rightRoot, baseRoot, nil, keyDesc, func(iter tree.PatchIter) error {
+		var actualPatches []tree.Patch
+		actualPatch := iter.NextPatch(ctx)
+		for actualPatch.EndKey != nil {
+			actualPatches = append(actualPatches, actualPatch)
+			actualPatch = iter.NextPatch(ctx)
 		}
-		require.Equal(t, len(expectedMutations), len(actualMutations), "expected %d mutations but found %d", len(expectedMutations), len(actualMutations))
-		for i, actualMutation := range actualMutations {
-			expectedMutation := expectedMutations[i]
-			require.Equal(t, expectedMutation.level, actualMutation.Level)
-			if expectedMutation.noStartKey || expectedMutation.level == 0 {
-				assert.Nil(t, actualMutation.KeyBelowStart)
+		require.Equal(t, len(expectedPatches), len(actualPatches), "expected %d patches but found %d", len(expectedPatches), len(actualPatches))
+		for i, actualPatch := range actualPatches {
+			expectedPatch := expectedPatches[i]
+			require.Equal(t, expectedPatch.level, actualPatch.Level)
+			if expectedPatch.noStartKey || expectedPatch.level == 0 {
+				assert.Nil(t, actualPatch.KeyBelowStart)
 			} else {
-				require.NotNil(t, actualMutation.KeyBelowStart)
-				actualStartKey, _ := keyDesc.GetUint32(0, val.Tuple(actualMutation.KeyBelowStart))
-				assert.Equal(t, expectedMutation.startKey, actualStartKey, "mutation %d has unexpected start key. Expected %d, found %d", i, expectedMutation.startKey, actualStartKey)
+				require.NotNil(t, actualPatch.KeyBelowStart)
+				actualStartKey, _ := keyDesc.GetUint32(0, val.Tuple(actualPatch.KeyBelowStart))
+				assert.Equal(t, expectedPatch.startKey, actualStartKey, "patch %d has unexpected start key. Expected %d, found %d", i, expectedPatch.startKey, actualStartKey)
 			}
 
-			actualEndKey, _ := keyDesc.GetUint32(0, val.Tuple(actualMutation.EndKey))
-			assert.Equal(t, expectedMutation.endKey, actualEndKey, "mutation %d has unexpected end key. Expected %d, found %d", i, expectedMutation.endKey, actualEndKey)
-			if actualMutation.To == nil {
-				assert.True(t, expectedMutation.isRemoval)
+			actualEndKey, _ := keyDesc.GetUint32(0, val.Tuple(actualPatch.EndKey))
+			assert.Equal(t, expectedPatch.endKey, actualEndKey, "patch %d has unexpected end key. Expected %d, found %d", i, expectedPatch.endKey, actualEndKey)
+			if actualPatch.To == nil {
+				assert.True(t, expectedPatch.isRemoval)
 			} else {
-				if actualMutation.Level > 0 {
-					assert.Equal(t, expectedMutation.subtreeCount, actualMutation.SubtreeCount)
-					expectedAddress, ok, err := tree.GetAddressFromLevelAndKeyForTest(ctx, ns, rightRoot, actualMutation.Level, val.Tuple(actualMutation.EndKey), keyDesc)
+				if actualPatch.Level > 0 {
+					assert.Equal(t, expectedPatch.subtreeCount, actualPatch.SubtreeCount)
+					expectedAddress, ok, err := tree.GetAddressFromLevelAndKeyForTest(ctx, ns, rightRoot, actualPatch.Level, val.Tuple(actualPatch.EndKey), keyDesc)
 					require.NoError(t, err)
 					require.True(t, ok)
-					assert.Equal(t, tree.Item(expectedAddress[:]), actualMutation.To)
+					assert.Equal(t, tree.Item(expectedAddress[:]), actualPatch.To)
 				} else {
-					actualToValue, _ := keyDesc.GetUint32(0, val.Tuple(actualMutation.To))
-					assert.Equal(t, expectedMutation.toValue, actualToValue)
+					actualToValue, _ := keyDesc.GetUint32(0, val.Tuple(actualPatch.To))
+					assert.Equal(t, expectedPatch.toValue, actualToValue)
 				}
 			}
 		}
 
-		mutationIter := slicePatchIter{slice: actualMutations}
+		patchIter := slicePatchIter{slice: actualPatches}
 
 		serializer := message.NewProllyMapSerializer(keyDesc, ns.Pool())
 		// verify that this is equivalent to a traditional merge.
 		traditionalMergeRoot, _, err := tree.ThreeWayMerge(ctx, ns, leftRoot, rightRoot, baseRoot, nil, keyDesc, serializer)
-		mergedRoot, err := tree.ApplyPatches(ctx, ns, leftRoot, keyDesc, serializer, &mutationIter)
+		mergedRoot, err := tree.ApplyPatches(ctx, ns, leftRoot, keyDesc, serializer, &patchIter)
 		require.NoError(t, err)
 		assert.Equal(t, mergedRoot, traditionalMergeRoot)
 
@@ -187,7 +187,7 @@ func testThreeWayMutator(
 	require.NoError(t, err)
 }
 
-func mutate(t *testing.T, ctx context.Context, baseRoot tree.Node, keyDesc, valDesc val.TupleDesc, mutations []pointMutation) tree.Node {
+func mutate(t *testing.T, ctx context.Context, baseRoot tree.Node, keyDesc, valDesc val.TupleDesc, patches []pointPatch) tree.Node {
 	baseMap := NewMap(baseRoot, ns, keyDesc, valDesc)
 
 	keyBld := val.NewTupleBuilder(keyDesc, ns)
@@ -195,7 +195,7 @@ func mutate(t *testing.T, ctx context.Context, baseRoot tree.Node, keyDesc, valD
 	var err error
 
 	mutMap := baseMap.Mutate()
-	for _, m := range mutations {
+	for _, m := range patches {
 		keyBld.PutUint32(0, m.key)
 		var newValue val.Tuple
 		if m.value != nil {
@@ -214,11 +214,11 @@ func mutate(t *testing.T, ctx context.Context, baseRoot tree.Node, keyDesc, valD
 	return newMap.Node()
 }
 
-func makeDeleteMutations(start, stop uint32) (mutations []pointMutation) {
+func makeDeletePatches(start, stop uint32) (patches []pointPatch) {
 	for i := start; i <= stop; i++ {
-		mutations = append(mutations, pointMutation{key: i, value: nil})
+		patches = append(patches, pointPatch{key: i, value: nil})
 	}
-	return mutations
+	return patches
 }
 
 func makeSimpleIntMap(t *testing.T, start, stop int) (tree.Node, val.TupleDesc) {
@@ -228,8 +228,8 @@ func makeSimpleIntMap(t *testing.T, start, stop int) (tree.Node, val.TupleDesc) 
 	return root, desc
 }
 
-// The ThreeWayMerge process should produce the minimal set of mutations which must be applied to the left tree from the right tree.
-func TestThreeWayMutator(t *testing.T) {
+// TestPatchBasedMerging tests that The patching process should produce the minimal set of patches which must be applied to the left tree from the right tree.
+func TestPatchBasedMerging(t *testing.T) {
 
 	ctx := context.Background()
 	ns := tree.NewTestNodeStore()
@@ -241,26 +241,26 @@ func TestThreeWayMutator(t *testing.T) {
 	chunkBoundaries := []uint32{414, 718, 830}
 	maxKey := uint32(1024)
 
-	mapWithUpdates := func(root tree.Node, updates ...pointMutation) tree.Node {
+	mapWithUpdates := func(root tree.Node, updates ...pointPatch) tree.Node {
 		return mutate(t, ctx, root, desc, desc, updates)
 	}
 
-	t.Run("concurrent updates in same leaf node produce level 0 mutation", func(t *testing.T) {
-		testThreeWayMutator(
+	t.Run("concurrent updates in same leaf node produce level 0 patch", func(t *testing.T) {
+		testPatchBasedMerging(
 			t, ctx, ns, desc, threeAndAHalfChunks,
 			mapWithUpdates(threeAndAHalfChunks, update(1, 0)),
 			mapWithUpdates(threeAndAHalfChunks, update(chunkBoundaries[0]-4, 1)),
-			[]rangeMutation{pointUpdate(chunkBoundaries[0]-4, 1)},
+			[]rangePatch{pointUpdate(chunkBoundaries[0]-4, 1)},
 		)
 	})
 
-	t.Run("update in first child node produces top-level mutation with no start key", func(t *testing.T) {
-		testThreeWayMutator(
+	t.Run("update in first child node produces top-level patch with no start key", func(t *testing.T) {
+		testPatchBasedMerging(
 			t, ctx, ns, desc,
 			threeAndAHalfChunks,
 			mapWithUpdates(threeAndAHalfChunks, update(1000, 1)),
 			mapWithUpdates(threeAndAHalfChunks, update(chunkBoundaries[0]-10, 1)),
-			[]rangeMutation{
+			[]rangePatch{
 				{
 					noStartKey:   true,
 					endKey:       chunkBoundaries[0],
@@ -271,13 +271,13 @@ func TestThreeWayMutator(t *testing.T) {
 		)
 	})
 
-	t.Run("update in middle child node produces top-level mutation with start key", func(t *testing.T) {
-		testThreeWayMutator(
+	t.Run("update in middle child node produces top-level patch with start key", func(t *testing.T) {
+		testPatchBasedMerging(
 			t, ctx, ns, desc,
 			threeAndAHalfChunks,
 			mapWithUpdates(threeAndAHalfChunks, update(1, 1)),
 			mapWithUpdates(threeAndAHalfChunks, update(chunkBoundaries[2]-50, 1)),
-			[]rangeMutation{
+			[]rangePatch{
 				{
 					startKey:     chunkBoundaries[1],
 					endKey:       chunkBoundaries[2],
@@ -287,13 +287,13 @@ func TestThreeWayMutator(t *testing.T) {
 			})
 	})
 
-	t.Run("update in final child node produces top-level mutation with start key", func(t *testing.T) {
-		testThreeWayMutator(
+	t.Run("update in final child node produces top-level patch with start key", func(t *testing.T) {
+		testPatchBasedMerging(
 			t, ctx, ns, desc,
 			threeAndAHalfChunks,
 			mapWithUpdates(threeAndAHalfChunks, update(1, 1)),
 			mapWithUpdates(threeAndAHalfChunks, update(maxKey-100, 1)),
-			[]rangeMutation{
+			[]rangePatch{
 				{
 					startKey:     chunkBoundaries[2],
 					endKey:       maxKey,
@@ -304,12 +304,12 @@ func TestThreeWayMutator(t *testing.T) {
 	})
 
 	t.Run("an insert beyond the final key doesn't create an extra chunk boundary", func(t *testing.T) {
-		testThreeWayMutator(
+		testPatchBasedMerging(
 			t, ctx, ns, desc,
 			threeAndAHalfChunks,
 			mapWithUpdates(threeAndAHalfChunks, update(0, 1)),
 			mapWithUpdates(threeAndAHalfChunks, update(maxKey+1, 1)),
-			[]rangeMutation{
+			[]rangePatch{
 				{
 					startKey:     chunkBoundaries[2],
 					endKey:       maxKey + 1,
@@ -320,12 +320,12 @@ func TestThreeWayMutator(t *testing.T) {
 	})
 
 	t.Run("an insert before the first key doesn't create an extra chunk boundary", func(t *testing.T) {
-		testThreeWayMutator(
+		testPatchBasedMerging(
 			t, ctx, ns, desc,
 			threeAndAHalfChunks,
 			mapWithUpdates(threeAndAHalfChunks, update(maxKey+1, 1)),
 			mapWithUpdates(threeAndAHalfChunks, update(0, 1)),
-			[]rangeMutation{
+			[]rangePatch{
 				{
 					noStartKey:   true,
 					endKey:       chunkBoundaries[0],
@@ -336,13 +336,13 @@ func TestThreeWayMutator(t *testing.T) {
 	})
 
 	// Tests that insert and remove
-	t.Run("removing a value from a leaf node produces a top-level mutation", func(t *testing.T) {
-		testThreeWayMutator(
+	t.Run("removing a value from a leaf node produces a top-level patch", func(t *testing.T) {
+		testPatchBasedMerging(
 			t, ctx, ns, desc,
 			threeAndAHalfChunks,
 			mapWithUpdates(threeAndAHalfChunks, remove(1)),
 			mapWithUpdates(threeAndAHalfChunks, remove(maxKey-20)),
-			[]rangeMutation{
+			[]rangePatch{
 				{
 					startKey:     chunkBoundaries[2],
 					endKey:       maxKey,
@@ -352,13 +352,13 @@ func TestThreeWayMutator(t *testing.T) {
 			})
 	})
 
-	t.Run("concurrent removals in a leaf node produces a leaf-level mutation", func(t *testing.T) {
-		testThreeWayMutator(
+	t.Run("concurrent removals in a leaf node produces a leaf-level patch", func(t *testing.T) {
+		testPatchBasedMerging(
 			t, ctx, ns, desc,
 			threeAndAHalfChunks,
 			mapWithUpdates(threeAndAHalfChunks, remove(1)),
 			mapWithUpdates(threeAndAHalfChunks, remove(2)),
-			[]rangeMutation{
+			[]rangePatch{
 				{
 					startKey:     1,
 					endKey:       2,
@@ -370,12 +370,12 @@ func TestThreeWayMutator(t *testing.T) {
 	})
 
 	t.Run("deleting an entire chunk produces a single range", func(t *testing.T) {
-		testThreeWayMutator(
+		testPatchBasedMerging(
 			t, ctx, ns, desc,
 			threeAndAHalfChunks,
 			mapWithUpdates(threeAndAHalfChunks, remove(1)),
-			mapWithUpdates(threeAndAHalfChunks, makeDeleteMutations(831, 1024)...),
-			[]rangeMutation{
+			mapWithUpdates(threeAndAHalfChunks, makeDeletePatches(831, 1024)...),
+			[]rangePatch{
 				{
 					startKey:  chunkBoundaries[2],
 					endKey:    maxKey,
@@ -388,25 +388,25 @@ func TestThreeWayMutator(t *testing.T) {
 	// This needs to recurse into the leaf node in order to verify that the concurrently modified isn't a conflict.
 	// Once we confirm there's no conflict, we could potentially emit a single range diff, but the logic would be
 	// more complicated.
-	expectedMutations := manyPointRemoves(831, 999)
-	expectedMutations = append(expectedMutations, manyPointRemoves(1001, 1024)...)
+	expectedPatches := manyPointRemoves(831, 999)
+	expectedPatches = append(expectedPatches, manyPointRemoves(1001, 1024)...)
 	t.Run("deleting an entire chunk concurrent with a point delete", func(t *testing.T) {
-		testThreeWayMutator(
+		testPatchBasedMerging(
 			t, ctx, ns, desc,
 			threeAndAHalfChunks,
 			mapWithUpdates(threeAndAHalfChunks, remove(1000)),
-			mapWithUpdates(threeAndAHalfChunks, makeDeleteMutations(831, 1024)...),
-			expectedMutations,
+			mapWithUpdates(threeAndAHalfChunks, makeDeletePatches(831, 1024)...),
+			expectedPatches,
 		)
 	})
 
 	t.Run("deleting an entire chunk and some previous rows", func(t *testing.T) {
-		testThreeWayMutator(
+		testPatchBasedMerging(
 			t, ctx, ns, desc,
 			threeAndAHalfChunks,
 			mapWithUpdates(threeAndAHalfChunks, remove(1)),
-			mapWithUpdates(threeAndAHalfChunks, makeDeleteMutations(820, 1024)...),
-			[]rangeMutation{
+			mapWithUpdates(threeAndAHalfChunks, makeDeletePatches(820, 1024)...),
+			[]rangePatch{
 				{
 					startKey:     chunkBoundaries[1],
 					endKey:       819,
@@ -429,11 +429,11 @@ func TestThreeWayMutator(t *testing.T) {
 	})
 
 	t.Run("range insert at end", func(t *testing.T) {
-		testThreeWayMutator(t, ctx, ns, desc,
+		testPatchBasedMerging(t, ctx, ns, desc,
 			threeChunks,
 			mapWithUpdates(threeChunks, update(1, 0)),
 			threeAndAHalfChunks,
-			[]rangeMutation{
+			[]rangePatch{
 				{
 					startKey:     chunkBoundaries[2],
 					endKey:       maxKey,
@@ -445,11 +445,11 @@ func TestThreeWayMutator(t *testing.T) {
 	})
 
 	t.Run("identical changes to overlapping regions", func(t *testing.T) {
-		testThreeWayMutator(t, ctx, ns, desc,
+		testPatchBasedMerging(t, ctx, ns, desc,
 			threeChunks,
 			mapWithUpdates(threeChunks, update(1, 0), update(2, 0)),
 			mapWithUpdates(threeChunks, update(2, 0), update(3, 0)),
-			[]rangeMutation{
+			[]rangePatch{
 				pointUpdate(3, 0),
 			},
 		)
@@ -458,11 +458,11 @@ func TestThreeWayMutator(t *testing.T) {
 	// Tests that change the chunk boundaries
 	newChunkBoundary := uint32(436)
 	t.Run("deleting a chunk boundary shifts the chunk boundaries and produces range diffs until they re-align", func(t *testing.T) {
-		testThreeWayMutator(t, ctx, ns, desc,
+		testPatchBasedMerging(t, ctx, ns, desc,
 			threeAndAHalfChunks,
 			mapWithUpdates(threeAndAHalfChunks, remove(1000)),
 			mapWithUpdates(threeAndAHalfChunks, remove(414)),
-			[]rangeMutation{
+			[]rangePatch{
 				{
 					noStartKey:   true,
 					endKey:       newChunkBoundary,
