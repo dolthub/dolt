@@ -140,7 +140,7 @@ func (cmd TagsCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	}
 
 	sqlCtx := sql.NewContext(ctx)
-	err = engine.PrettyPrintResults(sqlCtx, outputFmt, headerSchema, sql.RowsToRowIter(rows...), false, false)
+	err = engine.PrettyPrintResults(sqlCtx, outputFmt, headerSchema, sql.RowsToRowIter(rows...), false, false, false)
 
 	return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 }

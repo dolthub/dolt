@@ -447,7 +447,7 @@ func execSingleQuery(
 	}
 
 	if rowIter != nil {
-		err = engine.PrettyPrintResults(sqlCtx, format, sqlSch, rowIter, false, false)
+		err = engine.PrettyPrintResults(sqlCtx, format, sqlSch, rowIter, false, false, false)
 		if err != nil {
 			return errhand.VerboseErrorFromError(err)
 		}
@@ -663,7 +663,7 @@ func execBatchMode(ctx *sql.Context, qryist cli.Queryist, input io.Reader, conti
 					fileReadProg.printNewLineIfNeeded()
 				}
 			}
-			err = engine.PrettyPrintResults(ctx, format, sqlSch, rowIter, false, false)
+			err = engine.PrettyPrintResults(ctx, format, sqlSch, rowIter, false, false, false)
 			if err != nil {
 				err = buildBatchSqlErr(scanner.state.statementStartLine, query, err)
 				if !continueOnErr {
@@ -844,9 +844,9 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 				} else if rowIter != nil {
 					switch closureFormat {
 					case engine.FormatTabular, engine.FormatVertical:
-						err = engine.PrettyPrintResultsExtended(sqlCtx, closureFormat, sqlSch, rowIter, pagerEnabled, toggleWarnings)
+						err = engine.PrettyPrintResultsExtended(sqlCtx, closureFormat, sqlSch, rowIter, pagerEnabled, toggleWarnings, true)
 					default:
-						err = engine.PrettyPrintResults(sqlCtx, closureFormat, sqlSch, rowIter, pagerEnabled, toggleWarnings)
+						err = engine.PrettyPrintResults(sqlCtx, closureFormat, sqlSch, rowIter, pagerEnabled, toggleWarnings, true)
 					}
 
 					if err != nil {
@@ -1188,7 +1188,7 @@ func processParsedQuery(ctx *sql.Context, query string, qryist cli.Queryist, sql
 		}
 		cli.Println("Database changed")
 		return sch, nil, nil, err
-	case *sqlparser.AlterTable, *sqlparser.Set, *sqlparser.Commit:
+	case *sqlparser.Set, *sqlparser.Commit:
 		_, ri, _, err := qryist.Query(ctx, query)
 		if err != nil {
 			return nil, nil, nil, err
@@ -1198,16 +1198,18 @@ func processParsedQuery(ctx *sql.Context, query string, qryist cli.Queryist, sql
 			return nil, nil, nil, err
 		}
 		return nil, nil, nil, nil
-	case *sqlparser.DDL:
-		_, ri, _, err := qryist.Query(ctx, query)
+	case *sqlparser.Insert, *sqlparser.Update, *sqlparser.Delete,
+		*sqlparser.AlterTable, *sqlparser.DDL:
+		sch, ri, _, err := qryist.Query(ctx, query)
 		if err != nil {
 			return nil, nil, nil, err
 		}
-		_, err = sql.RowIterToRows(ctx, ri)
+		rows, err := sql.RowIterToRows(ctx, ri)
 		if err != nil {
 			return nil, nil, nil, err
 		}
-		return nil, nil, nil, nil
+		newRowIter := sql.RowsToRowIter(rows...)
+		return sch, newRowIter, nil, nil
 	case *sqlparser.Load:
 		if s.Local {
 			return nil, nil, nil, fmt.Errorf("LOCAL supported only in sql-server mode")

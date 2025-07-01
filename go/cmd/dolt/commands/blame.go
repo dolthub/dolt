@@ -130,7 +130,7 @@ func (cmd BlameCmd) Exec(ctx context.Context, commandStr string, args []string, 
 		return 1
 	}
 
-	err = engine.PrettyPrintResults(sqlCtx, engine.FormatTabular, schema, ri, false, false)
+	err = engine.PrettyPrintResults(sqlCtx, engine.FormatTabular, schema, ri, false, false, true)
 	if err != nil {
 		iohelp.WriteLine(cli.CliOut, err.Error())
 		return 1
