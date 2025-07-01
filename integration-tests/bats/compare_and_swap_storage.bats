@@ -58,53 +58,43 @@ mutations_and_gc_statement() {
 }
 
 @test "compare-and-swap-storage: basic compare and swap test" {
-  # 1) Create a repo with enough chunks to merit archiving. DONT archive yet.
   dolt sql -q "$(mutations_and_gc_statement)"
   
-  # 2) Copy the repo into a preserved copy.
-  cp -R .dolt preserved_copy/.dolt
-  
-  # 3) Use find to locate all the table files in the repository.
-  # Find table files in oldgen directory (32-character hex filenames)
-  old_table_files=$(find .dolt/noms -type f -print | awk -F/ 'length($NF) == 32 && $NF ~ /^[a-v0-9]{32}$/')
-  
-  # Ensure we have at least one table file to work with
-  [ -n "$old_table_files" ]
-  
-  # Get the first table file ID for testing
-  old_table_id=$(echo "$old_table_files" | head -1 | awk -F/ '{print $NF}')
-  
-  # 4) Run `dolt archive --purge` on the original repository.
+  mkdir -p preserved_copy/.dolt
+  cp -R .dolt/* preserved_copy/.dolt
+
   dolt archive --purge
   
-  # Verify archive was created
+  # Verify one darc file was create
   archive_files=$(find .dolt -name "*.darc" | wc -l | sed 's/[ \t]//g')
-  [ "$archive_files" -ge "1" ]
-  
-  # 5) Copy the new `.darc` into the noms directory of the copy.
-  cp .dolt/noms/*.darc preserved_copy/noms/
-  
-  # Get a new table file ID from the preserved copy (should be different after archiving)
+  [ "$archive_files" -eq "1" ]
+
+  # Find file in .dolt not in preserved_copy/.dolt
+  extra_in_dolt=$(cd .dolt && find . -type f ! -exec test -e "../preserved_copy/.dolt/{}" \; -print)
+
+  # Find file in preserved_copy/.dolt not in .dolt
+  extra_in_preserved=$(cd preserved_copy/.dolt && find . -type f ! -exec test -e "../../.dolt/{}" \; -print)
+
+  # convert paths to 32 char file ids.
+  extra_in_dolt=${extra_in_dolt##*/}
+  extra_in_dolt=${extra_in_dolt%.darc}
+  extra_in_preserved=${extra_in_preserved##*/}
+
+  # The extra file in .dolt should be darc file.
+  cp ".dolt/$extra_in_dolt" preserved_copy/.dolt/noms/oldgen
+
   cd preserved_copy
-  new_table_files=$(find .dolt/noms/oldgen -type f -print | awk -F/ 'length($NF) == 32 && $NF ~ /^[a-v0-9]{32}$/')
-  
-  # If no table files exist in preserved copy, use a dummy ID for testing
-  if [ -z "$new_table_files" ]; then
-    new_table_id="00000000000000000000000000000000"
-  else
-    new_table_id=$(echo "$new_table_files" | head -1 | awk -F/ '{print $NF}')
-  fi
-  
+
   # 6) Run `dolt admin compare-and-swap-storage --from <old table id> --to <new table id>
   # Note: This test is expected to fail since we haven't implemented the --from and --to flags yet
   run dolt admin compare-and-swap-storage --from "$old_table_id" --to "$new_table_id"
-  
-  # For now, we expect this to fail since the command doesn't support --from and --to flags yet
-  # Once implemented, this should succeed
-  # [ "$status" -eq 0 ]
-  
-  # Temporary assertion - expect failure until implementation is complete
-  [ "$status" -ne 0 ]
+  [ "$status" -eq 0 ]
+
+  # Verify that the preserved copy has the new file as a storage artifact, and that the old file
+  # is not used for storage. The file will still exist, but it won't be in the manifest.
+  run dolt admin storage
+  [[ ! "$output" =~ "$extra_in_preserved" ]] || false
+  [[ "$output" =~ "$extra_in_dolt" ]] || false
 }
 
 @test "compare-and-swap-storage: test with invalid table IDs" {
@@ -118,23 +108,3 @@ mutations_and_gc_statement() {
   [ "$status" -ne 0 ]
 }
 
-@test "compare-and-swap-storage: test with same from and to IDs" {
-  # Create a repo with enough chunks
-  dolt sql -q "$(mutations_and_gc_statement)"
-  
-  # Find a valid table file
-  table_files=$(find .dolt/noms/oldgen -type f -print | awk -F/ 'length($NF) == 32 && $NF ~ /^[a-v0-9]{32}$/')
-  
-  if [ -n "$table_files" ]; then
-    table_id=$(echo "$table_files" | head -1 | awk -F/ '{print $NF}')
-    
-    # Test with same from and to IDs
-    run dolt admin compare-and-swap-storage --from "$table_id" --to "$table_id"
-    
-    # Should handle this case appropriately (likely succeed as no-op or fail with appropriate message)
-    # For now, expect failure until implementation is complete
-    [ "$status" -ne 0 ]
-  else
-    skip "No table files found for testing"
-  fi
-}
