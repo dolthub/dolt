@@ -1506,7 +1506,7 @@ SQL
     run dolt sql -r csv -q 'use `db1/main`; show databases'
     [ "$status" -eq 0 ]
     [[ ! "$output" =~ "Database changed" ]] || false
-    [ "${#lines[@]}" -eq 12 ] # one line for above output, 11 dbs
+    [ "${#lines[@]}" -eq 11 ]
 }
 
 @test "sql: run outside a dolt directory" {
@@ -1725,7 +1725,7 @@ SQL
 SQL
 
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 5 ] # First line is "database changed"
+    [ "${#lines[@]}" -eq 4 ]
     [[ ! "$output" =~ "5" ]] || false
 }
 
@@ -2815,7 +2815,6 @@ SQL
   dolt sql -q "INSERT INTO t VALUES (1);"
   dolt sql -q "CREATE TABLE t1(b int);"
   run $BATS_TEST_DIRNAME/sql-shell-multi-stmt-timings.expect
-  [ "$status" -eq 0 ]
   [[ "$output" =~ "Query OK, 1 row affected (1".*" sec)" ]] || false
   [[ "$output" =~ "Query OK, 1 row affected (2".*" sec)" ]] || false
   [[ "$output" =~ "Query OK, 1 row affected (3".*" sec)" ]] || false

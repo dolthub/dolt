@@ -1183,7 +1183,7 @@ func processQuery(ctx *sql.Context, query string, qryist cli.Queryist) (sql.Sche
 // and an error if one occurs.
 func processParsedQuery(ctx *sql.Context, query string, qryist cli.Queryist, sqlStatement sqlparser.Statement) (sql.Schema, sql.RowIter, *sql.QueryFlags, error) {
 	switch s := sqlStatement.(type) {
-	case *sqlparser.Use, *sqlparser.Set, *sqlparser.Commit:
+	case *sqlparser.Use, *sqlparser.Commit:
 		_, ri, _, err := qryist.Query(ctx, query)
 		if err != nil {
 			return nil, nil, nil, err
@@ -1194,7 +1194,7 @@ func processParsedQuery(ctx *sql.Context, query string, qryist cli.Queryist, sql
 		}
 		return nil, nil, nil, nil
 	case *sqlparser.Insert, *sqlparser.Update, *sqlparser.Delete,
-		*sqlparser.AlterTable, *sqlparser.DDL:
+		*sqlparser.AlterTable, *sqlparser.DDL, *sqlparser.Set:
 		sch, ri, _, err := qryist.Query(ctx, query)
 		if err != nil {
 			return nil, nil, nil, err
