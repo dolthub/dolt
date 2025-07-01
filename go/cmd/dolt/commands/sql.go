@@ -836,21 +836,27 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 					trackHistory(shell, query+";")
 				}
 				lastSqlCmd = query
-				var sqlSch sql.Schema
-				var rowIter sql.RowIter
-				if sqlSch, rowIter, _, err = processQuery(sqlCtx, query, qryist); err != nil {
-					verr := formatQueryError("", err)
-					shell.Println(verr.Verbose())
-				} else if rowIter != nil {
-					switch closureFormat {
-					case engine.FormatTabular, engine.FormatVertical:
-						err = engine.PrettyPrintResultsExtended(sqlCtx, closureFormat, sqlSch, rowIter, pagerEnabled, toggleWarnings, true)
-					default:
-						err = engine.PrettyPrintResults(sqlCtx, closureFormat, sqlSch, rowIter, pagerEnabled, toggleWarnings, true)
-					}
-
+				sqlStmt, err := sqlparser.Parse(query)
+				// silently skip empty statements
+				if err == nil || err == sqlparser.ErrEmpty {
+					sqlSch, rowIter, _, err := processParsedQuery(sqlCtx, query, qryist, sqlStmt)
 					if err != nil {
-						shell.Println(color.RedString(err.Error()))
+						verr := formatQueryError("", err)
+						shell.Println(verr.Verbose())
+					} else if rowIter != nil {
+						switch closureFormat {
+						case engine.FormatTabular, engine.FormatVertical:
+							err = engine.PrettyPrintResultsExtended(sqlCtx, closureFormat, sqlSch, rowIter, pagerEnabled, toggleWarnings, true)
+						default:
+							err = engine.PrettyPrintResults(sqlCtx, closureFormat, sqlSch, rowIter, pagerEnabled, toggleWarnings, true)
+						}
+					}
+				}
+				if err != nil {
+					shell.Println(color.RedString(err.Error()))
+				} else {
+					if _, isUseStmt := sqlStmt.(*sqlparser.Use); isUseStmt {
+						cli.Println("Database Changed")
 					}
 				}
 			}
@@ -1177,18 +1183,7 @@ func processQuery(ctx *sql.Context, query string, qryist cli.Queryist) (sql.Sche
 // and an error if one occurs.
 func processParsedQuery(ctx *sql.Context, query string, qryist cli.Queryist, sqlStatement sqlparser.Statement) (sql.Schema, sql.RowIter, *sql.QueryFlags, error) {
 	switch s := sqlStatement.(type) {
-	case *sqlparser.Use:
-		sch, ri, _, err := qryist.Query(ctx, query)
-		if err != nil {
-			return nil, nil, nil, err
-		}
-		_, err = sql.RowIterToRows(ctx, ri)
-		if err != nil {
-			return nil, nil, nil, err
-		}
-		cli.Println("Database changed")
-		return sch, nil, nil, err
-	case *sqlparser.Set, *sqlparser.Commit:
+	case *sqlparser.Use, *sqlparser.Set, *sqlparser.Commit:
 		_, ri, _, err := qryist.Query(ctx, query)
 		if err != nil {
 			return nil, nil, nil, err
