@@ -244,14 +244,8 @@ func createTracklessBranchArgParser() *argparser.ArgParser {
 
 func CreateBranchArgParser() *argparser.ArgParser {
 	ap := createTracklessBranchArgParser()
-	ap.SupportsString(TrackFlag, "t", "", "When creating a new branch, set up 'upstream' configuration.")
-
-	return ap
-}
-
-func CreateBranchArgParserWithNoTrackValue() *argparser.ArgParser {
-	ap := createTracklessBranchArgParser()
 	ap.SupportsFlag(TrackFlag, "t", "When creating a new branch, set up 'upstream' configuration.")
+	ap.SupportsString(SetUpstreamFlag, "u", "", "Set 'upstream' configuration for either an existing or new branch.")
 
 	return ap
 }
