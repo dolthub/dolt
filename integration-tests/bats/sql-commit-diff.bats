@@ -80,7 +80,6 @@ teardown() {
 
     run dolt sql -q "select from_pk1, from_pk2, to_pk1, to_pk2, diff_type from dolt_commit_diff_test_two_pk where from_commit = DOLT_HASHOF('initial') and to_commit = DOLT_HASHOF('update') and from_pk1 = 2;"
     [ $status -eq 0 ]
-    echo "$output"
     [[ "${#lines[@]}" = "6" ]] # 2 rows + 4 formatting lines
     [[ "$output" =~ "| 2        | 21       | 2      | 21     | modified  |" ]] || false
     [[ "$output" =~ "| 2        | 20       | NULL   | NULL   | removed   |" ]] || false

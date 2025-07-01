@@ -218,7 +218,7 @@ func DoltToFromCommitIndexes(tbl string, sch schema.Schema) (indexes []sql.Index
 			order:                         sql.IndexOrderNone,
 			constrainedToLookupExpression: false,
 			// We pass a nil ValueStore into the key builder, because we don't have one. This would cause an issue
-			// if any of the columns uss Adaptive encoding, but that shouldn't be possible in the primary key.
+			// if any of the columns use Adaptive encoding, but that shouldn't be possible in the primary key.
 			keyBld: val.NewTupleBuilder(sch.GetKeyDescriptor(nil), nil),
 		})
 	}
