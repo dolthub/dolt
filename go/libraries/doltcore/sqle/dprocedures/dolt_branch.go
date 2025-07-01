@@ -460,7 +460,7 @@ func createNewBranch(ctx *sql.Context, dbData env.DbData[*sql.Context], apr *arg
 		startPt = apr.Arg(2)
 	} else if apr.NArg() == 2 && !apr.Contains(cli.TrackFlag) {
 		startPt = apr.Arg(1)
-	} else if setTrackUpstream { // If a start was not given and we're setting upstream, we use the remote as the start.
+	} else if setTrackUpstream { // If a start was not given, and we're setting upstream, we use the remote as the start.
 		startPt = trackVal
 	}
 	if len(startPt) == 0 {
@@ -479,7 +479,6 @@ func createNewBranch(ctx *sql.Context, dbData env.DbData[*sql.Context], apr *arg
 	if err != nil {
 		return err
 	}
-
 	err = actions.CreateBranchWithStartPt(ctx, dbData, branchName, startPt, apr.Contains(cli.ForceFlag), rsc)
 	if err != nil {
 		return err

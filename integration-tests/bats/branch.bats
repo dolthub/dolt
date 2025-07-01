@@ -362,11 +362,20 @@ teardown() {
     cd repo1
     dolt init
     dolt remote add origin file://../remote
-    dolt push --set-upstream origin main
+    dolt branch br1
+    dolt --branch br1 sql -q "create table t (i int)"
+    dolt --branch br1 commit -Am "Created table"
+    dolt --branch br1 push --set-upstream origin main
 
-    run dolt branch br1 --set-upstream origin/main
+    run dolt branch testUpstream --set-upstream origin/main
     [ $status -eq 0 ]
-    [[ "$output" =~ "branch 'br1' set up to track 'origin/main'" ]] || false
+    [[ "$output" =~ "branch 'testUpstream' set up to track 'origin/main'" ]] || false
+
+    dolt pull
+    run dolt ls
+    [ $status -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
+    [ "$output" =~ "Tables in working set:" ]] || false
 }
 
 @test "branch: can change upstream of existing branch with --set-upstream" {
