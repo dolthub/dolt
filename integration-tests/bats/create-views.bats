@@ -186,11 +186,11 @@ create view my_users_view as select id from my_users order by id asc;
 select * from my_users_view;
 SQL
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 8 ]
-    [[ "${lines[2]}" =~ ' id ' ]] || false
-    [[ "${lines[4]}" =~ ' 1 ' ]] || false
-    [[ "${lines[5]}" =~ ' 2 ' ]] || false
-    [[ "${lines[6]}" =~ ' 3 ' ]] || false
+    [ "${#lines[@]}" -eq 7 ]
+    [[ "${lines[1]}" =~ ' id ' ]] || false
+    [[ "${lines[3]}" =~ ' 1 ' ]] || false
+    [[ "${lines[4]}" =~ ' 2 ' ]] || false
+    [[ "${lines[5]}" =~ ' 3 ' ]] || false
 
     # check information_schema.VIEWS table
     # TODO: view_definition should be "select `mybin`.`my_users`.`id` AS `id` from `mybin`.`my_users` order by `mybin`.`my_users`.`id`"
@@ -207,14 +207,14 @@ insert into my_users values (4), (5), (6);
 select * from my_users_view;
 SQL
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 12 ]
-    [[ "${lines[3]}" =~ ' id ' ]] || false
-    [[ "${lines[5]}" =~ ' 1 ' ]] || false
-    [[ "${lines[6]}" =~ ' 2 ' ]] || false
-    [[ "${lines[7]}" =~ ' 3 ' ]] || false
-    [[ "${lines[8]}" =~ ' 4 ' ]] || false
-    [[ "${lines[9]}" =~ ' 5 ' ]] || false
-    [[ "${lines[10]}" =~ ' 6 ' ]] || false
+    [ "${#lines[@]}" -eq 10 ]
+    [[ "${lines[1]}" =~ ' id ' ]] || false
+    [[ "${lines[3]}" =~ ' 1 ' ]] || false
+    [[ "${lines[4]}" =~ ' 2 ' ]] || false
+    [[ "${lines[5]}" =~ ' 3 ' ]] || false
+    [[ "${lines[6]}" =~ ' 4 ' ]] || false
+    [[ "${lines[7]}" =~ ' 5 ' ]] || false
+    [[ "${lines[8]}" =~ ' 6 ' ]] || false
 }
 
 @test "create-views: select view with alias" {
@@ -226,14 +226,14 @@ insert into my_users values (4), (5), (6);
 select v.* from my_users_view as V;
 SQL
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 12 ]
-    [[ "${lines[3]}" =~ ' id ' ]] || false
-    [[ "${lines[5]}" =~ ' 1 ' ]] || false
-    [[ "${lines[6]}" =~ ' 2 ' ]] || false
-    [[ "${lines[7]}" =~ ' 3 ' ]] || false
-    [[ "${lines[8]}" =~ ' 4 ' ]] || false
-    [[ "${lines[9]}" =~ ' 5 ' ]] || false
-    [[ "${lines[10]}" =~ ' 6 ' ]] || false
+    [ "${#lines[@]}" -eq 10 ]
+    [[ "${lines[1]}" =~ ' id ' ]] || false
+    [[ "${lines[3]}" =~ ' 1 ' ]] || false
+    [[ "${lines[4]}" =~ ' 2 ' ]] || false
+    [[ "${lines[5]}" =~ ' 3 ' ]] || false
+    [[ "${lines[6]}" =~ ' 4 ' ]] || false
+    [[ "${lines[7]}" =~ ' 5 ' ]] || false
+    [[ "${lines[8]}" =~ ' 6 ' ]] || false
 }
 
 @test "create-views: selecting from broken view fails" {

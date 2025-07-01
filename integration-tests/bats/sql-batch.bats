@@ -39,7 +39,7 @@ teardown() {
     dolt sql -batch -q "insert into test values (2,0,0,0,0,0)" > out.txt
     lastline=$(tail -n 1 out.txt; echo x)
     lastline=${lastline%x}
-    [[ $lastline =~ $'\n'$ ]] || false
+    [[ $lastline = "" ]] || false
 }
 
 @test "sql-batch: Piped SQL files interpreted in batch mode" {
