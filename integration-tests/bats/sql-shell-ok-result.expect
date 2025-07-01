@@ -19,6 +19,8 @@ expect_with_defaults_2 {Query OK, 1 row affected} {dolt-repo-[0-9]+/main\*> }  {
 
 expect_with_defaults_2 {Query OK, 2 rows affected} {dolt-repo-[0-9]+/main\*> }  { send "drop table t;\r" }
 
+expect_with_defaults_2 {Query OK, 0 rows affected} {dolt-repo-[0-9]+/main\*> }  { send "set @a = 123;\r" }
+
 expect_with_defaults_2 {Query OK, 0 rows affected} {dolt-repo-[0-9]+/main\*> }  { send "quit\r" }
 
 expect eof
