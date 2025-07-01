@@ -1189,7 +1189,7 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "SET dolt_allow_commit_conflicts = 0",
-				Expected: []sql.Row{{}},
+				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
 				Query:          "CALL DOLT_MERGE('feature-branch')",
@@ -3559,7 +3559,7 @@ var MergeArtifactsScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "SET FOREIGN_KEY_CHECKS=0;",
-				Expected: []sql.Row{{}},
+				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
 				Query:    "UPDATE child set fk = 4;",
@@ -4098,7 +4098,7 @@ var OldFormatMergeConflictsAndCVsScripts = []queries.ScriptTest{
 				// transaction commit constraint violations that occur as a
 				// result of a merge.
 				Query:    "set autocommit = off, dolt_force_transaction_commit = on",
-				Expected: []sql.Row{{}},
+				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
 				Query:    "DELETE FROM parent where pk = 1;",
@@ -4243,7 +4243,7 @@ var OldFormatMergeConflictsAndCVsScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SET dolt_force_transaction_commit = 1",
-				Expected: []sql.Row{{}},
+				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
 				Query:    "CALL DOLT_MERGE('other');",
@@ -4317,7 +4317,7 @@ var OldFormatMergeConflictsAndCVsScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SET dolt_force_transaction_commit = 1;",
-				Expected: []sql.Row{{}},
+				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
 				Query:    "CALL DOLT_MERGE('other');",

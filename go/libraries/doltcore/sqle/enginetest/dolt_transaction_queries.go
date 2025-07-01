@@ -754,7 +754,7 @@ var DoltTransactionTests = []queries.TransactionTest{
 			{
 				// Turn @@foreign_key_checks back on in client a
 				Query:    "/* client a */ SET @@foreign_key_checks=1;",
-				Expected: []sql.Row{{}},
+				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
 				// Reference the table with an unresolved FK, so that it gets loaded and resolved
@@ -859,7 +859,7 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client a */ set autocommit = off",
-				Expected: []sql.Row{{}},
+				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
 				Query:    "/* client a */ start transaction",
@@ -867,7 +867,7 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client b */ set autocommit = off",
-				Expected: []sql.Row{{}},
+				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
 				Query:    "/* client b */ start transaction",
@@ -910,7 +910,7 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client a */ set autocommit = off, dolt_allow_commit_conflicts = on",
-				Expected: []sql.Row{{}},
+				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
 				Query:    "/* client a */ start transaction",
@@ -918,7 +918,7 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client b */ set autocommit = off, dolt_allow_commit_conflicts = on",
-				Expected: []sql.Row{{}},
+				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
 				Query:    "/* client b */ start transaction",
@@ -961,7 +961,7 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client a */ set autocommit = off, dolt_force_transaction_commit = on",
-				Expected: []sql.Row{{}},
+				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
 				Query:    "/* client a */ start transaction",
@@ -969,7 +969,7 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client b */ set autocommit = off, dolt_force_transaction_commit = on",
-				Expected: []sql.Row{{}},
+				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
 				Query:    "/* client b */ start transaction",
@@ -1012,7 +1012,7 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client a */ set autocommit = off, dolt_allow_commit_conflicts = on",
-				Expected: []sql.Row{{}},
+				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
 				Query:    "/* client a */ start transaction",
@@ -1020,7 +1020,7 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client b */ set autocommit = off, dolt_allow_commit_conflicts = on",
-				Expected: []sql.Row{{}},
+				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
 				Query:    "/* client b */ start transaction",
@@ -1107,7 +1107,7 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client a */ set autocommit = off, dolt_force_transaction_commit = on",
-				Expected: []sql.Row{{}},
+				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
 				Query:    "/* client a */ start transaction",
@@ -1115,7 +1115,7 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client b */ set autocommit = off, dolt_force_transaction_commit = on",
-				Expected: []sql.Row{{}},
+				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
 				Query:    "/* client b */ start transaction",
@@ -1200,7 +1200,7 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client a */ set autocommit = off",
-				Expected: []sql.Row{{}},
+				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
 				Query:    "/* client a */ start transaction",
@@ -1208,7 +1208,7 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client b */ set autocommit = off",
-				Expected: []sql.Row{{}},
+				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
 				Query:    "/* client b */ start transaction",
@@ -1286,11 +1286,11 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client a */ SET @@autocommit=0;",
-				Expected: []sql.Row{{}},
+				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
 				Query:    "/* client b */ SET @@autocommit=0;",
-				Expected: []sql.Row{{}},
+				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
 				Query:    "/* client a */ SELECT base_pk, base_col1, our_pk, our_col1, their_pk, their_col1 from dolt_conflicts_t;",
@@ -1312,7 +1312,7 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client a */ SET dolt_allow_commit_conflicts = on;",
-				Expected: []sql.Row{{}},
+				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
 				Query:    "/* client a */ COMMIT;",
@@ -1493,7 +1493,7 @@ var DoltStoredProcedureTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client a */ set dolt_allow_commit_conflicts = 1",
-				Expected: []sql.Row{{}},
+				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
 				Query:    "/* client a */ commit",
@@ -1525,7 +1525,7 @@ var DoltStoredProcedureTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client a */ SET @@dolt_allow_commit_conflicts = 0",
-				Expected: []sql.Row{{}},
+				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
 				Query:    "/* client a */ select * from dolt_preview_merge_conflicts_summary('main', 'feature-branch')",
@@ -1942,7 +1942,7 @@ var DoltStoredProcedureTransactionTests = []queries.TransactionTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client a */ set autocommit = off",
-				Expected: []sql.Row{{}},
+				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
 				Query:    "/* client a */ call dolt_add('t1')",
@@ -1954,7 +1954,7 @@ var DoltStoredProcedureTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client b */ set autocommit = off",
-				Expected: []sql.Row{{}},
+				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
 				Query:    "/* client a */ start transaction",
@@ -2078,11 +2078,11 @@ var DoltConstraintViolationTransactionTests = []queries.TransactionTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client a */ SET @@autocommit=0;",
-				Expected: []sql.Row{{}},
+				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
 				Query:    "/* client b */ SET @@autocommit=0;",
-				Expected: []sql.Row{{}},
+				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
 				Query:    "/* client a */ START TRANSACTION;",
@@ -2175,7 +2175,7 @@ var DoltConstraintViolationTransactionTests = []queries.TransactionTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client a */ SET FOREIGN_KEY_CHECKS = 0;",
-				Expected: []sql.Row{{}},
+				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
 				Query:    "/* client a */ START TRANSACTION;",
@@ -2205,7 +2205,7 @@ var DoltConstraintViolationTransactionTests = []queries.TransactionTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client a */ SET FOREIGN_KEY_CHECKS = 0;",
-				Expected: []sql.Row{{}},
+				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
 				Query:    "/* client a */ START TRANSACTION;",
@@ -3088,11 +3088,11 @@ var MultiDbSavepointTests = []queries.TransactionTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client a */ set autocommit = off",
-				Expected: []sql.Row{{}},
+				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
 				Query:    "/* client b */ set autocommit = off",
-				Expected: []sql.Row{{}},
+				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 			{
 				Query:    "/* client a */ start transaction",
