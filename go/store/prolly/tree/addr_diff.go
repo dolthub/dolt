@@ -39,28 +39,19 @@ type AddrDiffStream[K ~[]byte, O Ordering[K]] struct {
 type AddrDiffFn func(context.Context, AddrDiff) error
 
 func (ads *AddrDiffStream[K, O]) Next(ctx context.Context) (AddrDiff, error) {
-	level := 1
 	for {
 		if len(ads.dfr) > 0 {
-			difr := &ads.dfr[len(ads.dfr)-1]
+			difr := ads.dfr[len(ads.dfr)-1]
 			dif, err := difr.Next(ctx)
 			if err != nil {
 				if err != io.EOF {
 					return AddrDiff{}, err
 				}
 				ads.dfr = ads.dfr[:len(ads.dfr)-1]
-				level++
 				continue
 			}
 
-			for dif.Level > level {
-				dif, err = difr.split(ctx)
-				if err != nil {
-					return AddrDiff{}, err
-				}
-			}
-
-			if dif.Type == RangeDiff {
+			if dif.Type == ModifiedDiff {
 				return AddrDiff{hash.Hash(dif.From), hash.Hash(dif.To)}, nil
 			} // else, continue
 		} else {
@@ -89,9 +80,16 @@ func layerDifferFromRoots[K ~[]byte, O Ordering[K]](
 	differs := make([]Differ[K, O], 0, from.Level())
 	for i := from.Level(); i > 0; i-- {
 		// We use the standard leaf diff walker, but adjust the cursors to the desired level.
-		leafDiffer, err := RangeDifferFromRoots[K, O](ctx, fromNs, toNs, from, to, order, false)
+		leafDiffer, err := DifferFromRoots[K, O](ctx, fromNs, toNs, from, to, order, false)
 		if err != nil {
 			return AddrDiffStream[K, O]{}, err
+		}
+
+		for leafDiffer.from.nd.Level() < i {
+			leafDiffer.from = leafDiffer.from.parent
+			leafDiffer.to = leafDiffer.to.parent
+			leafDiffer.fromStop = leafDiffer.fromStop.parent
+			leafDiffer.toStop = leafDiffer.toStop.parent
 		}
 
 		differs = append(differs, leafDiffer)

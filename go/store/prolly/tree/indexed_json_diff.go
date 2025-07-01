@@ -26,7 +26,7 @@ type IndexedJsonDiffer struct {
 	differ                             Differ[jsonLocationKey, *jsonLocationOrdering]
 	currentFromCursor, currentToCursor *JsonCursor
 	from, to                           IndexedJsonDocument
-	smallDocuments                     bool
+	started                            bool
 }
 
 var _ IJsonDiffer = &IndexedJsonDiffer{}
@@ -43,13 +43,15 @@ func NewIndexedJsonDiffer(ctx context.Context, from, to IndexedJsonDocument) (*I
 	// We want to diff the prolly tree as if it was an address map pointing to the individual blob fragments, rather
 	// than diffing the blob fragments themselves. We can accomplish this by just replacing the cursors in the differ
 	// with their parents.
-	smallDocuments := false
+	differ.from = differ.from.parent
+	differ.to = differ.to.parent
+	differ.fromStop = differ.fromStop.parent
+	differ.toStop = differ.toStop.parent
 
 	var currentFromCursor, currentToCursor *JsonCursor
-	if from.m.Height() == 1 {
+	if differ.from == nil {
 		// The "from" document fits inside a single chunk.
 		// We can't create the "from" cursor from the differ, so we create it here instead.
-		smallDocuments = true
 		diffKey := []byte{byte(startOfValue)}
 		currentFromCursor, err = newJsonCursorAtStartOfChunk(ctx, from.m.NodeStore, from.m.Root, diffKey)
 		if err != nil {
@@ -62,10 +64,9 @@ func NewIndexedJsonDiffer(ctx context.Context, from, to IndexedJsonDocument) (*I
 		}
 	}
 
-	if to.m.Height() == 1 {
+	if differ.to == nil {
 		// The "to" document fits inside a single chunk.
 		// We can't create the "from" cursor from the differ, so we create it here instead.
-		smallDocuments = true
 		diffKey := []byte{byte(startOfValue)}
 		currentToCursor, err = newJsonCursorAtStartOfChunk(ctx, to.m.NodeStore, to.m.Root, diffKey)
 		if err != nil {
@@ -84,7 +85,6 @@ func NewIndexedJsonDiffer(ctx context.Context, from, to IndexedJsonDocument) (*I
 		to:                to,
 		currentFromCursor: currentFromCursor,
 		currentToCursor:   currentToCursor,
-		smallDocuments:    smallDocuments,
 	}, nil
 }
 
@@ -144,14 +144,16 @@ func (jd *IndexedJsonDiffer) Next(ctx context.Context) (diff JsonDiff, err error
 
 	for {
 		if jd.currentFromCursor == nil && jd.currentToCursor == nil {
-			if jd.smallDocuments {
+			if jd.differ.from == nil || jd.differ.to == nil {
 				// One of the documents fits in a single chunk. We must have walked the entire document by now.
 				return JsonDiff{}, io.EOF
 			}
 
 			// Either this is the first iteration, or the last iteration exhausted both chunks at the same time.
 			// (ie, both chunks ended at the same JSON path). We can use `Differ.Next` to seek to the next difference.
-			_, err := jd.differ.Next(ctx)
+			// Passing advanceCursors=false means that instead of using the returned diff, we read the cursors out of
+			// the differ, and advance them manually once we've walked the chunk.
+			_, err := jd.differ.next(ctx, false)
 			if err != nil {
 				return JsonDiff{}, err
 			}
