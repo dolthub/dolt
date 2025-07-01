@@ -244,12 +244,9 @@ var _ tree.MutationIter = mutationIter{}
 
 func (m mutationIter) NextMutation(ctx context.Context) (mutation tree.Mutation) {
 	k, v := m.iter.Next(ctx)
-	// The mutations generated are always leaf mutations.
 	return tree.Mutation{
-		Key:          tree.Item(k),
-		To:           tree.Item(v),
-		SubtreeCount: 1,
-		Level:        0,
+		Key:   tree.Item(k),
+		Value: tree.Item(v),
 	}
 }
 

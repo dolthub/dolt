@@ -80,7 +80,7 @@ func (f ProximityFlusher) ApplyMutationsWithSerializer(
 		}
 		edits = append(edits, VectorIndexKV{
 			key:   mutation.Key,
-			value: mutation.To,
+			value: mutation.Value,
 			level: int(keyLevel),
 		})
 		mutation = editIter.NextMutation(ctx)

@@ -23,6 +23,7 @@ import (
 type DiffType byte
 
 const (
+	NoDiff       DiffType = 0
 	AddedDiff    DiffType = 1
 	ModifiedDiff DiffType = 2
 	RemovedDiff  DiffType = 3

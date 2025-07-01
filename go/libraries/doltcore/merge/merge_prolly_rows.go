@@ -178,9 +178,6 @@ func computeProllyTreePatches(
 
 	var mergeErr error
 	onConflict := func(left, right tree.Diff) (tree.Diff, bool) {
-		if left.Level != 0 {
-			panic("unexpected internal node")
-		}
 		m, b, err := valueMerger.TryMerge(ctx, val.Tuple(left.To), val.Tuple(right.To), val.Tuple(left.From))
 		if err != nil {
 			mergeErr = err
@@ -268,29 +265,25 @@ func computeProllyTreePatches(
 	needsSecondaryIndexMerge := len(sec.leftIdxes) > 0 && !mergeInfo.InvalidateSecondaryIndexes
 	// either skip if there's secondary indexes, or merge secondary indexes.
 	needsSchemaMigration := mergeInfo.RightNeedsRewrite || mergeInfo.LeftNeedsRewrite
-	canFastMergeProllyTrees := !keyless && !needsUniquenessValidation && !needsCheckValidation && !needsNullValidation && !needsSecondaryIndexMerge && !needsSchemaMigration
+	canFastMergeProllyTrees := !keyless &&
+		!needsUniquenessValidation &&
+		!needsCheckValidation &&
+		!needsNullValidation &&
+		!needsSecondaryIndexMerge &&
+		!needsSchemaMigration &&
+		!diffInfo.RightSchemaChange &&
+		!diffInfo.LeftSchemaChange
 	if canFastMergeProllyTrees {
-		lDiff, err := tree.RangeDifferFromRoots(ctx, ns, ns, ancRows.Node(), leftRows.Node(), leftRows.Tuples().Order, diffInfo.LeftSchemaChange)
-		if err != nil {
-			return nil, nil, err
-		}
+		lDiff := tree.PatchGeneratorFromRoots(ctx, ns, ns, ancRows.Node(), leftRows.Node(), leftRows.Tuples().Order)
+		rDiff := tree.PatchGeneratorFromRoots(ctx, ns, ns, ancRows.Node(), rightRows.Node(), rightRows.Tuples().Order)
 
-		rDiff, err := tree.RangeDifferFromRoots(ctx, ns, ns, ancRows.Node(), rightRows.Node(), rightRows.Tuples().Order, diffInfo.LeftSchemaChange)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		newMergeStats, err := tree.SendPatches(ctx, lDiff, rDiff, patchBuffer, onConflict)
+		err := tree.SendPatches(ctx, lDiff, rDiff, patchBuffer, onConflict)
 		if err != nil {
 			return nil, nil, err
 		}
 		if mergeErr != nil {
 			return nil, nil, mergeErr
 		}
-
-		s.Adds = newMergeStats.Adds
-		s.Deletes = newMergeStats.Removes
-		s.Modifications = newMergeStats.Modifications
 
 		return sec, conflicts, patchBuffer.SendDone(ctx)
 	} else {
@@ -446,7 +439,7 @@ func mergeProllyTableData(ctx *sql.Context, tm *TableMerger, finalSch schema.Sch
 		}
 
 		serializer := message.NewProllyMapSerializer(mergedValDesc, ns.Pool())
-		mergedRoot, err = tree.ApplyMutations(errCtx, ns, lIdx.Node(), mergedKeyDesc, serializer, patchBuffer)
+		mergedRoot, err = tree.ApplyPatches(errCtx, ns, lIdx.Node(), mergedKeyDesc, serializer, patchBuffer)
 		return err
 	})
 

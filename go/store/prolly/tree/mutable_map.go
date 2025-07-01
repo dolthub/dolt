@@ -107,7 +107,7 @@ type orderedListIter[K, V ~[]byte] struct {
 var _ MutationIter = &orderedListIter[Item, Item]{}
 
 func (it orderedListIter[K, V]) NextMutation(context.Context) (mutation Mutation) {
-	mutation.Key, mutation.To = it.iter.Current()
+	mutation.Key, mutation.Value = it.iter.Current()
 	if mutation.Key == nil {
 		return mutation
 	}

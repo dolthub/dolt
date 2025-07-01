@@ -12,25 +12,25 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-// sliceMutationIter implements tree.MutationIter and is used in tests to inspect a list of mutations from a RangeDiffer
+// slicePatchIter implements tree.PatchIter and is used in tests to inspect a list of mutations from a RangeDiffer
 // before applying them.
-type sliceMutationIter struct {
-	slice []tree.Mutation
+type slicePatchIter struct {
+	slice []tree.Patch
 	index int
 }
 
-var _ tree.MutationIter = &sliceMutationIter{}
+var _ tree.PatchIter = &slicePatchIter{}
 
-func (s *sliceMutationIter) NextMutation(ctx context.Context) tree.Mutation {
+func (s *slicePatchIter) NextPatch(ctx context.Context) tree.Patch {
 	if s.index >= len(s.slice) {
-		return tree.Mutation{}
+		return tree.Patch{}
 	}
 	result := s.slice[s.index]
 	s.index++
 	return result
 }
 
-func (s *sliceMutationIter) Close() error {
+func (s *slicePatchIter) Close() error {
 	return nil
 }
 
@@ -41,19 +41,12 @@ func produceMutations[K ~[]byte, O tree.Ordering[K]](
 	ns tree.NodeStore,
 	left, right, base tree.Node,
 	collide tree.CollisionFn,
-	leftSchemaChange, rightSchemaChange bool,
 	order O,
-	cb func(buffer tree.MutationIter) error,
-) (stats tree.MergeStats, err error) {
-	ld, err := tree.RangeDifferFromRoots[K](ctx, ns, ns, base, left, order, leftSchemaChange)
-	if err != nil {
-		return tree.MergeStats{}, err
-	}
+	cb func(buffer tree.PatchIter) error,
+) (err error) {
+	ld := tree.PatchGeneratorFromRoots[K](ctx, ns, ns, base, left, order)
 
-	rd, err := tree.RangeDifferFromRoots[K](ctx, ns, ns, base, right, order, rightSchemaChange)
-	if err != nil {
-		return tree.MergeStats{}, err
-	}
+	rd := tree.PatchGeneratorFromRoots[K](ctx, ns, ns, base, right, order)
 
 	eg, ctx := errgroup.WithContext(ctx)
 	patches := tree.NewPatchBuffer(tree.PatchBufferSize)
@@ -65,7 +58,7 @@ func produceMutations[K ~[]byte, O tree.Ordering[K]](
 				err = cerr
 			}
 		}()
-		stats, err = tree.SendPatches(ctx, ld, rd, patches, collide)
+		err = tree.SendPatches(ctx, ld, rd, patches, collide)
 		return
 	})
 
@@ -74,10 +67,10 @@ func produceMutations[K ~[]byte, O tree.Ordering[K]](
 	})
 
 	if err = eg.Wait(); err != nil {
-		return tree.MergeStats{}, err
+		return err
 	}
 
-	return stats, nil
+	return nil
 }
 
 // pointMutation is a description of a single key-value change, used for tests.
@@ -143,35 +136,33 @@ func testThreeWayMutator(
 	baseRoot, leftRoot, rightRoot tree.Node,
 	expectedMutations []rangeMutation,
 ) {
-	_, err := produceMutations(ctx, ns, leftRoot, rightRoot, baseRoot, nil, false, false, keyDesc, func(iter tree.MutationIter) error {
-		var actualMutations []tree.Mutation
-		actualMutation := iter.NextMutation(ctx)
-		for actualMutation.Key != nil {
+	err := produceMutations(ctx, ns, leftRoot, rightRoot, baseRoot, nil, keyDesc, func(iter tree.PatchIter) error {
+		var actualMutations []tree.Patch
+		actualMutation := iter.NextPatch(ctx)
+		for actualMutation.EndKey != nil {
 			actualMutations = append(actualMutations, actualMutation)
-			actualMutation = iter.NextMutation(ctx)
+			actualMutation = iter.NextPatch(ctx)
 		}
 		require.Equal(t, len(expectedMutations), len(actualMutations), "expected %d mutations but found %d", len(expectedMutations), len(actualMutations))
 		for i, actualMutation := range actualMutations {
 			expectedMutation := expectedMutations[i]
-
-			if expectedMutation.noStartKey {
-				assert.Nil(t, actualMutation.PreviousKey)
+			require.Equal(t, expectedMutation.level, actualMutation.Level)
+			if expectedMutation.noStartKey || expectedMutation.level == 0 {
+				assert.Nil(t, actualMutation.KeyBelowStart)
 			} else {
-				require.NotNil(t, actualMutation.PreviousKey)
-				actualStartKey, _ := keyDesc.GetUint32(0, val.Tuple(actualMutation.PreviousKey))
+				require.NotNil(t, actualMutation.KeyBelowStart)
+				actualStartKey, _ := keyDesc.GetUint32(0, val.Tuple(actualMutation.KeyBelowStart))
 				assert.Equal(t, expectedMutation.startKey, actualStartKey, "mutation %d has unexpected start key. Expected %d, found %d", i, expectedMutation.startKey, actualStartKey)
 			}
 
-			actualEndKey, _ := keyDesc.GetUint32(0, val.Tuple(actualMutation.Key))
+			actualEndKey, _ := keyDesc.GetUint32(0, val.Tuple(actualMutation.EndKey))
 			assert.Equal(t, expectedMutation.endKey, actualEndKey, "mutation %d has unexpected end key. Expected %d, found %d", i, expectedMutation.endKey, actualEndKey)
 			if actualMutation.To == nil {
 				assert.True(t, expectedMutation.isRemoval)
 			} else {
-				assert.Equal(t, expectedMutation.level, actualMutation.Level)
-				assert.Equal(t, expectedMutation.subtreeCount, actualMutation.SubtreeCount)
-
 				if actualMutation.Level > 0 {
-					expectedAddress, ok, err := tree.GetAddressFromLevelAndKeyForTest(ctx, ns, rightRoot, actualMutation.Level, val.Tuple(actualMutation.Key), keyDesc)
+					assert.Equal(t, expectedMutation.subtreeCount, actualMutation.SubtreeCount)
+					expectedAddress, ok, err := tree.GetAddressFromLevelAndKeyForTest(ctx, ns, rightRoot, actualMutation.Level, val.Tuple(actualMutation.EndKey), keyDesc)
 					require.NoError(t, err)
 					require.True(t, ok)
 					assert.Equal(t, tree.Item(expectedAddress[:]), actualMutation.To)
@@ -182,12 +173,12 @@ func testThreeWayMutator(
 			}
 		}
 
-		mutationIter := sliceMutationIter{slice: actualMutations}
+		mutationIter := slicePatchIter{slice: actualMutations}
 
 		serializer := message.NewProllyMapSerializer(keyDesc, ns.Pool())
 		// verify that this is equivalent to a traditional merge.
-		traditionalMergeRoot, _, err := tree.ThreeWayMerge(ctx, ns, leftRoot, rightRoot, baseRoot, nil, false, false, keyDesc, serializer)
-		mergedRoot, err := tree.ApplyMutations(ctx, ns, leftRoot, keyDesc, serializer, &mutationIter)
+		traditionalMergeRoot, _, err := tree.ThreeWayMerge(ctx, ns, leftRoot, rightRoot, baseRoot, nil, keyDesc, serializer)
+		mergedRoot, err := tree.ApplyPatches(ctx, ns, leftRoot, keyDesc, serializer, &mutationIter)
 		require.NoError(t, err)
 		assert.Equal(t, mergedRoot, traditionalMergeRoot)
 
@@ -399,7 +390,7 @@ func TestThreeWayMutator(t *testing.T) {
 	// more complicated.
 	expectedMutations := manyPointRemoves(831, 999)
 	expectedMutations = append(expectedMutations, manyPointRemoves(1001, 1024)...)
-	t.Run("deleting a an entire chunk concurrent with a point delete", func(t *testing.T) {
+	t.Run("deleting an entire chunk concurrent with a point delete", func(t *testing.T) {
 		testThreeWayMutator(
 			t, ctx, ns, desc,
 			threeAndAHalfChunks,
@@ -409,7 +400,7 @@ func TestThreeWayMutator(t *testing.T) {
 		)
 	})
 
-	t.Run("deleting a an entire chunk and some previous rows", func(t *testing.T) {
+	t.Run("deleting an entire chunk and some previous rows", func(t *testing.T) {
 		testThreeWayMutator(
 			t, ctx, ns, desc,
 			threeAndAHalfChunks,
@@ -425,11 +416,13 @@ func TestThreeWayMutator(t *testing.T) {
 				{
 					startKey:  819,
 					endKey:    chunkBoundaries[2],
+					level:     1,
 					isRemoval: true,
 				},
 				{
 					startKey:  chunkBoundaries[2],
 					endKey:    1024,
+					level:     1,
 					isRemoval: true,
 				},
 			})
