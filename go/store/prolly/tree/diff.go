@@ -23,60 +23,15 @@ import (
 type DiffType byte
 
 const (
-	NoDiff           DiffType = 0
-	AddedDiff        DiffType = 1
-	ModifiedDiff     DiffType = 2
-	RemovedDiff      DiffType = 3
-	RangeDiff        DiffType = 4
-	RangeRemovedDiff DiffType = 5
+	AddedDiff    DiffType = 1
+	ModifiedDiff DiffType = 2
+	RemovedDiff  DiffType = 3
 )
 
 type Diff struct {
-	Type DiffType
-	From Item
-	Mutation
-}
-
-func newRangeDiff(previousKey, key Item, from, to Item, subtreeCount uint64, level int) Diff {
-	return Diff{
-		Type: RangeDiff,
-		From: from,
-		Mutation: Mutation{
-			PreviousKey:  previousKey,
-			Key:          key,
-			To:           to,
-			SubtreeCount: subtreeCount,
-			Level:        level,
-		},
-	}
-}
-
-func newRangeRemovedDiff(previousKey, key Item, from Item, level int) Diff {
-	return Diff{
-		Type: RangeRemovedDiff,
-		From: from,
-		Mutation: Mutation{
-			PreviousKey:  previousKey,
-			Key:          key,
-			To:           nil,
-			SubtreeCount: 0,
-			Level:        level,
-		},
-	}
-}
-
-func newNonRangeDiff(diffType DiffType, previousKey, key Item, from, to Item) Diff {
-	return Diff{
-		Type: diffType,
-		From: from,
-		Mutation: Mutation{
-			PreviousKey:  previousKey,
-			Key:          key,
-			To:           to,
-			SubtreeCount: 1,
-			Level:        0,
-		},
-	}
+	Key      Item
+	From, To Item
+	Type     DiffType
 }
 
 type DiffFn func(context.Context, Diff) error
@@ -86,30 +41,15 @@ type DiffFn func(context.Context, Diff) error
 // is useful in cases where the schema has changed and we want to consider a leaf changed even if the byte representation
 // of the leaf is the same.
 type Differ[K ~[]byte, O Ordering[K]] struct {
-	previousKey             Item
 	from, to                *cursor
 	fromStop, toStop        *cursor
 	order                   O
 	considerAllRowsModified bool
-	previousDiffType        DiffType
-	emitRanges              bool
-}
-
-func RangeDifferFromRoots[K ~[]byte, O Ordering[K]](
-	ctx context.Context,
-	fromNs NodeStore, toNs NodeStore,
-	from, to Node,
-	order O,
-	considerAllRowsModified bool,
-) (Differ[K, O], error) {
-	differ, err := DifferFromRoots(ctx, fromNs, toNs, from, to, order, considerAllRowsModified)
-	differ.emitRanges = true
-	return differ, err
 }
 
 func DifferFromRoots[K ~[]byte, O Ordering[K]](
 	ctx context.Context,
-	fromNs, toNs NodeStore,
+	fromNs NodeStore, toNs NodeStore,
 	from, to Node,
 	order O,
 	considerAllRowsModified bool,
@@ -118,13 +58,19 @@ func DifferFromRoots[K ~[]byte, O Ordering[K]](
 	var err error
 
 	if !from.empty() {
-		fc = newCursorAtRoot(ctx, fromNs, from)
+		fc, err = newCursorAtStart(ctx, fromNs, from)
+		if err != nil {
+			return Differ[K, O]{}, err
+		}
 	} else {
 		fc = &cursor{}
 	}
 
 	if !to.empty() {
-		tc = newCursorAtRoot(ctx, toNs, to)
+		tc, err = newCursorAtStart(ctx, toNs, to)
+		if err != nil {
+			return Differ[K, O]{}, err
+		}
 	} else {
 		tc = &cursor{}
 	}
@@ -173,331 +119,119 @@ func DifferFromCursors[K ~[]byte, O Ordering[K]](
 		return Differ[K, O]{}, err
 	}
 	return Differ[K, O]{
-		from:       fromStart,
-		to:         toStart,
-		fromStop:   fromStop,
-		toStop:     toStop,
-		order:      order,
-		emitRanges: false,
+		from:     fromStart,
+		to:       toStart,
+		fromStop: fromStop,
+		toStop:   toStop,
+		order:    order,
 	}, nil
 }
 
-func (td *Differ[K, O]) Next(ctx context.Context) (diff Diff, err error) {
-	diff, err = td.NextRange(ctx)
-	if err != nil {
-		return Diff{}, err
-	}
-	if !td.emitRanges {
-		for diff.Level > 0 {
-			diff, err = td.split(ctx)
-			if err != nil {
-				return Diff{}, err
-			}
-		}
-	}
-	return diff, nil
+func (td Differ[K, O]) Next(ctx context.Context) (diff Diff, err error) {
+	return td.next(ctx, true)
 }
 
-func compareWithEnd(cur, end *cursor) int {
-	// We can't just compare the cursors because |end| is always a cursor to a leaf node,
-	// but |cur| may not be.
-	// Assume that we're checking to see if we've reached the end.
-	// A cursor at a higher level hasn't reached the end yet.
-	if cur.nd.level > end.nd.level {
-		cmp := compareWithEnd(cur, end.parent)
-		if cmp == 0 {
-			return -1
-		}
-		return cmp
-	}
-	return compareCursors(cur, end)
-}
+// next finds the next diff and then conditionally advances the cursors past the modified chunks.
+// In most cases, we want to advance the cursors, but in some circumstances the caller may want to access the cursors
+// and then advance them manually.
+func (td Differ[K, O]) next(ctx context.Context, advanceCursors bool) (diff Diff, err error) {
+	for td.from.Valid() && td.from.compare(td.fromStop) < 0 && td.to.Valid() && td.to.compare(td.toStop) < 0 {
 
-func (td *Differ[K, O]) advanceToNextDiff(ctx context.Context) (err error) {
-	// advance both cursors even if we previously determined they are equal. This needs to be done because
-	// skipCommon will not advance the cursors if they are equal in a collation sensitive comparison but differ
-	// in a byte comparison.
-	if td.to.Valid() {
-		td.previousKey = td.to.CurrentKey()
-	}
-	err = td.from.advance(ctx)
-	if err != nil {
-		return err
-	}
-	err = td.to.advance(ctx)
-	if err != nil {
-		return err
-	}
-	var lastSeenKey Item
-	lastSeenKey, td.from, td.to, err = skipCommon(ctx, td.from, td.to)
-	if err != nil {
-		return err
-	}
-	if lastSeenKey != nil {
-		td.previousKey = lastSeenKey
-	}
-	return nil
-}
-
-func (td *Differ[K, O]) NextRange(ctx context.Context) (diff Diff, err error) {
-	switch td.previousDiffType {
-	case RemovedDiff, RangeRemovedDiff:
-		td.previousKey = td.from.CurrentKey()
-		err = td.from.advance(ctx)
-		if err != nil {
-			return Diff{}, err
-		}
-	case AddedDiff:
-		td.previousKey = td.to.CurrentKey()
-		// If we've already exhausted the |from| iterator, then returning to the parent
-		// at the end of each block lets us avoid visiting leaf nodes unnecessarily.
-		for td.to.atNodeEnd() && td.to.parent != nil && !td.from.Valid() {
-			td.to = td.to.parent
-		}
-		err = td.to.advance(ctx)
-		if err != nil {
-			return diff, err
-		}
-	case ModifiedDiff:
-		err = td.advanceToNextDiff(ctx)
-		if err != nil {
-			return diff, err
-		}
-	case RangeDiff:
-		td.previousKey = td.to.CurrentKey()
-		// If we've already exhausted the |from| iterator, then returning to the parent
-		// at the end of each block lets us avoid visiting leaf nodes unnecessarily.
-		for td.to.atNodeEnd() && td.to.parent != nil && !td.from.Valid() {
-			td.to = td.to.parent
-		}
-		err = td.to.advance(ctx)
-		if err != nil {
-			return diff, err
-		}
-		// Everything less than or equal to the key of the last emitted range has been covered.
-		// Skip to the first node greater than that key.
-		// If the last to block was small we may not advance from at all.
-
-		if td.from.Valid() {
-			currentKey := td.from.CurrentKey()
-			if currentKey != nil {
-				cmp := nilCompare(ctx, td.order, K(currentKey), K(td.previousKey))
-
-				for cmp != 0 {
-					if cmp > 0 {
-						// If this was the very end of the |to| tree, all remaining ranges in |from| have been removed.
-						if !td.to.Valid() {
-							return td.sendRangeRemoved()
-						}
-						// The current from node contains additional rows that overlap with the new to node.
-						// We can encode this as another range.
-						return td.sendRange()
-					}
-					// Every value in the from node was covered by the previous diff. Advance it and check again.
-					err = td.from.advance(ctx)
-					if err != nil {
-						return diff, err
-					}
-					// If we reach the end of the |from| tree, all remaining nodes in |to| have been added.
-					if !td.from.Valid() {
-						if !td.to.Valid() {
-							// TODO: being smarter about state should help us avoid this
-							return Diff{}, io.EOF
-						}
-						return td.sendRange()
-					}
-					cmp = td.order.Compare(ctx, K(td.from.CurrentKey()), K(td.previousKey))
-				}
-				// At this point, the from cursor lines up with the max key emitted by the previous range diff.
-				// Advancing the from cursor one more time guarantees that both cursors reference chunks with the same start range.
-				err = td.from.advance(ctx)
-				if err != nil {
-					return diff, err
-				}
-			}
-		}
-	}
-
-	for td.from.Valid() && compareWithEnd(td.from, td.fromStop) < 0 && td.to.Valid() && compareWithEnd(td.to, td.toStop) < 0 {
-		level, err := td.to.level()
-		if err != nil {
-			return Diff{}, err
-		}
 		f := td.from.CurrentKey()
 		t := td.to.CurrentKey()
 		cmp := td.order.Compare(ctx, K(f), K(t))
 
-		if cmp == 0 {
+		switch {
+		case cmp < 0:
+			return sendRemoved(ctx, td.from, advanceCursors)
+
+		case cmp > 0:
+			return sendAdded(ctx, td.to, advanceCursors)
+
+		case cmp == 0:
 			// If the cursor schema has changed, then all rows should be considered modified.
 			// If the cursor schema hasn't changed, rows are modified iff their bytes have changed.
 			if td.considerAllRowsModified || !equalcursorValues(td.from, td.to) {
-				if level > 0 {
-					return td.sendRange()
-				} else {
-					return td.sendModified()
-				}
+				return sendModified(ctx, td.from, td.to, advanceCursors)
 			}
 
-			err = td.advanceToNextDiff(ctx)
-			if err != nil {
-				return diff, err
+			// advance both cursors since we have already determined that they are equal. This needs to be done because
+			// skipCommon will not advance the cursors if they are equal in a collation sensitive comparison but differ
+			// in a byte comparison.
+			if err = td.from.advance(ctx); err != nil {
+				return Diff{}, err
 			}
-		} else if level > 0 {
-			return td.sendRange()
-		} else if cmp < 0 {
-			return td.sendRemoved()
-		} else {
-			return td.sendAdded()
+			if err = td.to.advance(ctx); err != nil {
+				return Diff{}, err
+			}
+
+			// seek ahead to the next diff and loop again
+			if err = skipCommon(ctx, td.from, td.to); err != nil {
+				return Diff{}, err
+			}
 		}
 	}
 
-	if td.from.Valid() && compareWithEnd(td.from, td.fromStop) < 0 {
-		if td.from.nd.level > 0 {
-			return td.sendRangeRemoved()
-		}
-		return td.sendRemoved()
+	if td.from.Valid() && td.from.compare(td.fromStop) < 0 {
+		return sendRemoved(ctx, td.from, advanceCursors)
 	}
-	if td.to.Valid() && compareWithEnd(td.to, td.toStop) < 0 {
-		if td.to.nd.level > 0 {
-			return td.sendRange()
-		}
-		return td.sendAdded()
+	if td.to.Valid() && td.to.compare(td.toStop) < 0 {
+		return sendAdded(ctx, td.to, advanceCursors)
 	}
 
 	return Diff{}, io.EOF
 }
 
-// split iterates through the children of the current nodes to find the first change.
-// We only call this if both nodes are non-leaf nodes with different hashes, so we're guaranteed to find one.
-func (td *Differ[K, O]) split(ctx context.Context) (diff Diff, err error) {
-	if td.previousDiffType == RangeRemovedDiff {
-		fromChild, err := fetchChild(ctx, td.from.nrw, td.from.currentRef())
-		if err != nil {
+func sendRemoved(ctx context.Context, from *cursor, advanceCursors bool) (diff Diff, err error) {
+	diff = Diff{
+		Type: RemovedDiff,
+		Key:  from.CurrentKey(),
+		From: from.currentValue(),
+	}
+
+	if advanceCursors {
+		if err = from.advance(ctx); err != nil {
 			return Diff{}, err
 		}
-		td.from = &cursor{
-			nd:     fromChild,
-			idx:    0,
-			parent: td.from,
-			nrw:    td.from.nrw,
-		}
-		if td.from.nd.level > 0 {
-			return td.sendRangeRemoved()
-		} else {
-			return td.sendRemoved()
-		}
+	}
+	return
+}
+
+func sendAdded(ctx context.Context, to *cursor, advanceCursors bool) (diff Diff, err error) {
+	diff = Diff{
+		Type: AddedDiff,
+		Key:  to.CurrentKey(),
+		To:   to.currentValue(),
 	}
 
-	// TODO: should this be a rangeAdded diff type?
-	// Probably, otherwise we have to track the stop cursor.
-	if !td.from.Valid() {
-		toChild, err := fetchChild(ctx, td.to.nrw, td.to.currentRef())
-		if err != nil {
+	if advanceCursors {
+		if err = to.advance(ctx); err != nil {
 			return Diff{}, err
 		}
-		td.to = &cursor{
-			nd:     toChild,
-			idx:    0,
-			parent: td.to,
-			nrw:    td.to.nrw,
+	}
+	return
+}
+
+func sendModified(ctx context.Context, from, to *cursor, advanceCursors bool) (diff Diff, err error) {
+	diff = Diff{
+		Type: ModifiedDiff,
+		Key:  from.CurrentKey(),
+		From: from.currentValue(),
+		To:   to.currentValue(),
+	}
+
+	if advanceCursors {
+		if err = from.advance(ctx); err != nil {
+			return Diff{}, err
 		}
-		if td.to.nd.level > 0 {
-			return td.sendRange()
-		} else {
-			return td.sendAdded()
+		if err = to.advance(ctx); err != nil {
+			return Diff{}, err
 		}
 	}
-
-	toChild, err := fetchChild(ctx, td.to.nrw, td.to.currentRef())
-	if err != nil {
-		return Diff{}, err
-	}
-	toChild, err = toChild.loadSubtrees()
-	if err != nil {
-		return Diff{}, err
-	}
-
-	// Maintain invariant that the |from| cursor is never at a higher level than the |to| cursor.
-	// TODO: This might not be necessary.
-	if td.from.nd.level < td.to.nd.level {
-		// We split because there is something in the child we need to emit.
-		td.to = &cursor{
-			nd:     toChild,
-			idx:    0,
-			parent: td.to,
-			nrw:    td.to.nrw,
-		}
-		td.previousDiffType = NoDiff
-		return td.Next(ctx)
-	}
-
-	fromChild, err := fetchChild(ctx, td.from.nrw, td.from.currentRef())
-	if err != nil {
-		return Diff{}, err
-	}
-
-	td.from = &cursor{
-		nd:     fromChild,
-		idx:    0,
-		parent: td.from,
-		nrw:    td.from.nrw,
-	}
-	td.to = &cursor{
-		nd:     toChild,
-		idx:    0,
-		parent: td.to,
-		nrw:    td.to.nrw,
-	}
-	td.previousDiffType = NoDiff
-	return td.Next(ctx)
+	return
 }
 
-func (td *Differ[K, O]) sendRemoved() (diff Diff, err error) {
-	diff = newNonRangeDiff(RemovedDiff, td.previousKey, td.from.CurrentKey(), td.from.currentValue(), nil)
-	td.previousDiffType = RemovedDiff
-	return diff, nil
-}
-
-func (td *Differ[K, O]) sendAdded() (diff Diff, err error) {
-	diff = newNonRangeDiff(AddedDiff, td.previousKey, td.to.CurrentKey(), nil, td.to.currentValue())
-	td.previousDiffType = AddedDiff
-	return diff, nil
-}
-
-func (td *Differ[K, O]) sendModified() (diff Diff, err error) {
-	diff = newNonRangeDiff(ModifiedDiff, td.previousKey, td.to.CurrentKey(), td.from.currentValue(), td.to.currentValue())
-	td.previousDiffType = ModifiedDiff
-	return diff, nil
-}
-
-func (td *Differ[K, O]) sendRange() (diff Diff, err error) {
-	var subtreeCount uint64
-	level, err := td.to.level()
-	if err != nil {
-		return Diff{}, err
-	}
-	var fromValue Item
-	if td.from.Valid() {
-		fromValue = td.from.currentValue()
-	}
-	subtreeCount, err = td.to.currentSubtreeSize()
-	if err != nil {
-		return Diff{}, err
-	}
-
-	diff = newRangeDiff(td.previousKey, td.to.CurrentKey(), fromValue, td.to.currentValue(), subtreeCount, int(level))
-
-	td.previousDiffType = RangeDiff
-	return diff, nil
-}
-
-func (td *Differ[K, O]) sendRangeRemoved() (diff Diff, err error) {
-	diff = newRangeRemovedDiff(td.previousKey, td.from.CurrentKey(), td.from.currentValue(), td.from.nd.Level())
-	td.previousDiffType = RangeRemovedDiff
-	return diff, nil
-}
-
-func skipCommon(ctx context.Context, from, to *cursor) (lastSeenKey Item, newFrom, newTo *cursor, err error) {
+func skipCommon(ctx context.Context, from, to *cursor) (err error) {
 	// track when |from.parent| and |to.parent| change
 	// to avoid unnecessary comparisons.
 	parentsAreNew := true
@@ -505,14 +239,17 @@ func skipCommon(ctx context.Context, from, to *cursor) (lastSeenKey Item, newFro
 	for from.Valid() && to.Valid() {
 		if !equalItems(from, to) {
 			// found the next difference
-			return lastSeenKey, from, to, nil
+			return nil
 		}
 
 		if parentsAreNew {
 			if equalParents(from, to) {
 				// if our parents are equal, we can search for differences
 				// faster at the next highest tree Level.
-				return skipCommon(ctx, from.parent, to.parent)
+				if err = skipCommonParents(ctx, from, to); err != nil {
+					return err
+				}
+				continue
 			}
 			parentsAreNew = false
 		}
@@ -522,16 +259,42 @@ func skipCommon(ctx context.Context, from, to *cursor) (lastSeenKey Item, newFro
 		// case we need to Compare parents again.
 		parentsAreNew = from.atNodeEnd() || to.atNodeEnd()
 
-		lastSeenKey = from.CurrentKey()
 		if err = from.advance(ctx); err != nil {
-			return lastSeenKey, from, to, err
+			return err
 		}
 		if err = to.advance(ctx); err != nil {
-			return lastSeenKey, from, to, err
+			return err
 		}
 	}
 
-	return lastSeenKey, from, to, err
+	return err
+}
+
+func skipCommonParents(ctx context.Context, from, to *cursor) (err error) {
+	err = skipCommon(ctx, from.parent, to.parent)
+	if err != nil {
+		return err
+	}
+
+	if from.parent.Valid() {
+		if err = from.fetchNode(ctx); err != nil {
+			return err
+		}
+		from.skipToNodeStart()
+	} else {
+		from.invalidateAtEnd()
+	}
+
+	if to.parent.Valid() {
+		if err = to.fetchNode(ctx); err != nil {
+			return err
+		}
+		to.skipToNodeStart()
+	} else {
+		to.invalidateAtEnd()
+	}
+
+	return
 }
 
 // todo(andy): assumes equal byte representations
