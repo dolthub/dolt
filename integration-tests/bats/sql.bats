@@ -2077,10 +2077,10 @@ SQL
     dolt sql -q "CREATE TABLE test(pk BIGINT PRIMARY KEY, v BIGINT);"
     run dolt sql -q "REPLACE INTO test VALUES (1, 1);"
     [ $status -eq 0 ]
-    [[ "$output" =~ "Query OK, 1 row affected" ]] || false
+    [[ "$output" = "" ]] || false
     run dolt sql -q "REPLACE INTO test VALUES (1, 2);"
     [ $status -eq 0 ]
-    [[ "$output" =~ "Query OK, 2 rows affected" ]] || false
+    [[ "$output" = "" ]] || false
 }
 
 @test "sql: unix_timestamp function" {
@@ -2814,14 +2814,11 @@ SQL
   dolt sql -q "CREATE TABLE t(a int);"
   dolt sql -q "INSERT INTO t VALUES (1);"
   dolt sql -q "CREATE TABLE t1(b int);"
-  run dolt sql <<SQL
-insert into t1 (SELECT * FROM t WHERE EXISTS(SELECT SLEEP(1) UNION SELECT 1));
-insert into t1 (SELECT * FROM t WHERE EXISTS(SELECT SLEEP(2) UNION SELECT 1));
-insert into t1 (SELECT * FROM t WHERE EXISTS(SELECT SLEEP(3) UNION SELECT 1));
-SQL
-[[ "$output" =~ "Query OK, 1 row affected (1".*" sec)" ]] || false
-[[ "$output" =~ "Query OK, 1 row affected (2".*" sec)" ]] || false
-[[ "$output" =~ "Query OK, 1 row affected (3".*" sec)" ]] || false
+  run $BATS_TEST_DIRNAME/sql-shell-multi-stmt-timings.expect
+  [ "$status" -eq "0" ]
+  [[ "$output" =~ "Query OK, 1 row affected (1".*" sec)" ]] || false
+  [[ "$output" =~ "Query OK, 1 row affected (2".*" sec)" ]] || false
+  [[ "$output" =~ "Query OK, 1 row affected (3".*" sec)" ]] || false
 }
 
 

@@ -1,0 +1,21 @@
+#!/usr/bin/expect
+
+spawn dolt sql
+set first $spawn_id
+
+expect -i first -re "\rdolt_repo_.*> "
+send -i first "insert into t1 (SELECT * FROM t WHERE EXISTS(SELECT SLEEP(1) UNION SELECT 1));\r"
+expect -i first "insert into t1 (SELECT * FROM t WHERE EXISTS(SELECT SLEEP(1) UNION SELECT 1));\r"
+
+expect -i first -re "\rdolt_repo_.*> "
+send -i first "insert into t1 (SELECT * FROM t WHERE EXISTS(SELECT SLEEP(2) UNION SELECT 1));\r"
+expect -i first "insert into t1 (SELECT * FROM t WHERE EXISTS(SELECT SLEEP(2) UNION SELECT 1));\r"
+
+expect -i first -re "\rdolt_repo_.*> "
+send -i first "insert into t1 (SELECT * FROM t WHERE EXISTS(SELECT SLEEP(3) UNION SELECT 1));\r"
+expect -i first "insert into t1 (SELECT * FROM t WHERE EXISTS(SELECT SLEEP(3) UNION SELECT 1));\r"
+
+expect -i first -re "\rdolt_repo_.*> "
+send -i first "quit\r"
+expect -i first "quit\r"
+expect -i first eof

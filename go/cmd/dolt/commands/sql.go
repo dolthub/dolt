@@ -1214,7 +1214,16 @@ func processParsedQuery(ctx *sql.Context, query string, qryist cli.Queryist, sql
 		if s.Local {
 			return nil, nil, nil, fmt.Errorf("LOCAL supported only in sql-server mode")
 		}
-		return qryist.Query(ctx, query)
+		sch, ri, _, err := qryist.Query(ctx, query)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		rows, err := sql.RowIterToRows(ctx, ri)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		newRowIter := sql.RowsToRowIter(rows...)
+		return sch, newRowIter, nil, nil
 	default:
 		return qryist.QueryWithBindings(ctx, query, sqlStatement, nil, nil)
 	}
