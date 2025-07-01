@@ -1505,7 +1505,7 @@ SQL
     # make sure we aren't double-counting revision dbs
     run dolt sql -r csv -q 'use `db1/main`; show databases'
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Database changed" ]] || false
+    [[ ! "$output" =~ "Database changed" ]] || false
     [ "${#lines[@]}" -eq 12 ] # one line for above output, 11 dbs
 }
 
@@ -2815,7 +2815,7 @@ SQL
   dolt sql -q "INSERT INTO t VALUES (1);"
   dolt sql -q "CREATE TABLE t1(b int);"
   run $BATS_TEST_DIRNAME/sql-shell-multi-stmt-timings.expect
-  [ "$status" -eq "0" ]
+  [ "$status" -eq 0 ]
   [[ "$output" =~ "Query OK, 1 row affected (1".*" sec)" ]] || false
   [[ "$output" =~ "Query OK, 1 row affected (2".*" sec)" ]] || false
   [[ "$output" =~ "Query OK, 1 row affected (3".*" sec)" ]] || false
@@ -2883,7 +2883,7 @@ SQL
 
     # spot check result
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Database changed" ]] || false
+    [[ ! "$output" =~ "Database changed" ]] || false
     [[ "$output" =~ "columns" ]] || false
 
     run dolt sql <<SQL
@@ -2893,7 +2893,7 @@ SQL
 
     # spot check result
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Database changed" ]] || false
+    [[ ! "$output" =~ "Database changed" ]] || false
     [[ "$output" =~ "role_edges" ]] || false
 
 }

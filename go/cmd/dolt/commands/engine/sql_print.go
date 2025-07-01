@@ -77,6 +77,7 @@ func prettyPrintResultsWithSummary(ctx *sql.Context, resultFormat PrintResultFor
 
 	// TODO: this isn't appropriate for JSON, CSV, other structured result formats
 	if isOkResult(sqlSch) {
+		// OkResult is only printed when we are in interactive terminal (TTY)
 		if !printOkResult {
 			return nil
 		}
