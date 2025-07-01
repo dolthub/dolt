@@ -36,7 +36,7 @@ func TestAutoGC(t *testing.T) {
 	var enabled_16, final_16, disabled, final_disabled RepoSize
 	numStatements, numCommits := 512, 16
 	if testing.Short() || os.Getenv("CI") != "" {
-		numStatements = 64
+		numStatements = 96
 	}
 	t.Run("Enable", func(t *testing.T) {
 		t.Parallel()
