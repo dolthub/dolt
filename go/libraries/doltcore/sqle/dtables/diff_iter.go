@@ -265,6 +265,8 @@ func newProllyDiffIter(ctx *sql.Context, dp DiffPartition, targetFromSchema, tar
 	var err error
 	if lookup.Index != nil {
 		for i := range lookup.Ranges.(sql.MySQLRangeCollection) {
+			// The first two columns of the index (to_commit and from_commit) don't actually exist on the underlying table.
+			// We strip them out here so that we can generate the correct ranges for the eventual Diff.
 			lookup.Ranges.(sql.MySQLRangeCollection)[i] = lookup.Ranges.(sql.MySQLRangeCollection)[i][2:]
 		}
 		ranges, err = index.ProllyRangesFromIndexLookup(ctx, lookup)
