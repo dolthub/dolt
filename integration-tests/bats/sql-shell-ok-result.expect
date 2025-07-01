@@ -1,0 +1,26 @@
+#!/usr/bin/expect
+
+set timeout 5
+set env(NO_COLOR) 1
+
+source  "$env(BATS_CWD)/helper/common_expect_functions.tcl"
+
+spawn dolt sql
+
+expect_with_defaults                               {dolt-repo-[0-9]+/main\*>}   { send "create table t (i int);\r" }
+
+expect_with_defaults_2 {Query OK, 0 rows affected} {dolt-repo-[0-9]+/main\*> }  { send "alter table t add column j int;\r" }
+
+expect_with_defaults_2 {Query OK, 0 rows affected} {dolt-repo-[0-9]+/main\*> }  { send "insert into t values (1, 2), (3, 4);\r" }
+
+expect_with_defaults_2 {Query OK, 2 rows affected} {dolt-repo-[0-9]+/main\*> }  { send "update t set j = 20 where i = 1;\r" }
+
+expect_with_defaults_2 {Query OK, 1 row affected} {dolt-repo-[0-9]+/main\*> }  { send "delete from t where i > 0;\r" }
+
+expect_with_defaults_2 {Query OK, 2 rows affected} {dolt-repo-[0-9]+/main\*> }  { send "drop table t;\r" }
+
+expect_with_defaults_2 {Query OK, 0 rows affected} {dolt-repo-[0-9]+/main\*> }  { send "quit\r" }
+
+expect eof
+exit
+

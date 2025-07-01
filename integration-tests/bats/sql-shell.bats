@@ -22,6 +22,20 @@ teardown() {
 }
 
 # bats test_tags=no_lambda
+@test "sql-shell: OkResult is printed in interactive shell" {
+    skiponwindows "Need to install expect and make this script work on windows."
+    run $BATS_TEST_DIRNAME/sql-shell-ok-result.expect
+    [ "$status" -eq 0 ]
+}
+
+# bats test_tags=no_lambda
+@test "sql-shell: database changed is printed in interactive shell" {
+    skiponwindows "Need to install expect and make this script work on windows."
+    run $BATS_TEST_DIRNAME/sql-shell-use.expect
+    [ "$status" -eq 0 ]
+}
+
+# bats test_tags=no_lambda
 @test "sql-shell: warnings are not suppressed" {
     skiponwindows "Need to install expect and make this script work on windows."
     run $BATS_TEST_DIRNAME/sql-shell-warnings.expect

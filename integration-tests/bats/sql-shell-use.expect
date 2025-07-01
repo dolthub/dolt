@@ -1,0 +1,18 @@
+#!/usr/bin/expect
+
+set timeout 5
+set env(NO_COLOR) 1
+
+source  "$env(BATS_CWD)/helper/common_expect_functions.tcl"
+
+spawn dolt sql
+
+expect_with_defaults                              {dolt-repo-[0-9]+/main\*>}  { send "create database anewdb;\r" }
+
+expect_with_defaults_2 {Query OK, 1 row affected} {dolt-repo-[0-9]+/main\*> } { send "use anewdb;\r" }
+
+expect_with_defaults_2 {Database Changed} {anewdb/main> } { send "quit\r" }
+
+expect eof
+exit
+
