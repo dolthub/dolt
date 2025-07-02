@@ -197,19 +197,32 @@ func DoltDiffIndexesFromTable(ctx context.Context, db, tbl string, t *doltdb.Tab
 	return indexes, nil
 }
 
-func DoltToFromCommitIndex(tbl string) sql.Index {
-	return &doltIndex{
-		id:      "commits",
-		tblName: doltdb.DoltCommitDiffTablePrefix + tbl,
-		columns: []schema.Column{
+func DoltToFromCommitIndexes(tbl string, sch schema.Schema) (indexes []sql.Index) {
+	for _, toFrom := range []string{"to", "from"} {
+		cols := make([]schema.Column, 0, len(sch.GetAllCols().GetColumns())+2)
+		cols = append(cols,
 			schema.NewColumn(ToCommitIndexId, schema.DiffCommitTag, types.StringKind, false),
 			schema.NewColumn(FromCommitIndexId, schema.DiffCommitTag, types.StringKind, false),
-		},
-		unique:                        true,
-		comment:                       "",
-		order:                         sql.IndexOrderNone,
-		constrainedToLookupExpression: false,
+		)
+		for _, col := range sch.GetPKCols().GetColumns() {
+			col.Name = toFrom + "_" + col.Name
+			cols = append(cols, col)
+		}
+
+		indexes = append(indexes, &doltIndex{
+			id:                            "commits_" + toFrom,
+			tblName:                       doltdb.DoltCommitDiffTablePrefix + tbl,
+			columns:                       cols,
+			unique:                        true,
+			comment:                       "",
+			order:                         sql.IndexOrderNone,
+			constrainedToLookupExpression: false,
+			// We pass a nil ValueStore into the key builder, because we don't have one. This would cause an issue
+			// if any of the columns use Adaptive encoding, but that shouldn't be possible in the primary key.
+			keyBld: val.NewTupleBuilder(sch.GetKeyDescriptor(nil), nil),
+		})
 	}
+	return indexes
 }
 
 // MockIndex returns a sql.Index that is not backed by an actual datastore. It's useful for system tables and

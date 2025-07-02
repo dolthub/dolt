@@ -75,8 +75,7 @@ type DiffTable struct {
 	sqlSch           sql.PrimaryKeySchema
 	partitionFilters []sql.Expression
 
-	table  *doltdb.Table
-	lookup sql.IndexLookup
+	table *doltdb.Table
 
 	// noms only
 	joiner *rowconv.Joiner
@@ -253,7 +252,7 @@ func (dt *DiffTable) HeadHash() (hash.Hash, error) {
 
 func (dt *DiffTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
 	dp := part.(DiffPartition)
-	return dp.GetRowIter(ctx, dt.ddb, dt.joiner, dt.lookup)
+	return dp.GetRowIter(ctx, dt.ddb, dt.joiner)
 }
 
 func (dt *DiffTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
@@ -654,9 +653,10 @@ type DiffPartition struct {
 	// fromSch and toSch are usually identical. It is the schema of the table at head.
 	toSch   schema.Schema
 	fromSch schema.Schema
+	lookup  sql.IndexLookup
 }
 
-func NewDiffPartition(to, from *doltdb.Table, toName, fromName string, toDate, fromDate *types.Timestamp, toSch, fromSch schema.Schema) *DiffPartition {
+func NewDiffPartition(to, from *doltdb.Table, toName, fromName string, toDate, fromDate *types.Timestamp, toSch, fromSch schema.Schema, lookup sql.IndexLookup) *DiffPartition {
 	return &DiffPartition{
 		to:       to,
 		from:     from,
@@ -666,6 +666,7 @@ func NewDiffPartition(to, from *doltdb.Table, toName, fromName string, toDate, f
 		fromDate: fromDate,
 		toSch:    toSch,
 		fromSch:  fromSch,
+		lookup:   lookup,
 	}
 }
 
@@ -674,11 +675,11 @@ func (dp DiffPartition) Key() []byte {
 	return []byte(dp.toName + dp.fromName)
 }
 
-func (dp DiffPartition) GetRowIter(ctx *sql.Context, ddb *doltdb.DoltDB, joiner *rowconv.Joiner, lookup sql.IndexLookup) (sql.RowIter, error) {
+func (dp DiffPartition) GetRowIter(ctx *sql.Context, ddb *doltdb.DoltDB, joiner *rowconv.Joiner) (sql.RowIter, error) {
 	if types.IsFormat_DOLT(ddb.Format()) {
-		return newProllyDiffIter(ctx, dp, dp.fromSch, dp.toSch)
+		return newProllyDiffIter(ctx, dp, dp.fromSch, dp.toSch, dp.lookup)
 	} else {
-		return newLdDiffIter(ctx, ddb, joiner, dp, lookup)
+		return newLdDiffIter(ctx, ddb, joiner, dp, dp.lookup)
 	}
 }
 
