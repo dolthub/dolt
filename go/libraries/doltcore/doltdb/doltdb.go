@@ -952,16 +952,16 @@ func (ddb *DoltDB) CommitWithParentCommits(ctx context.Context, valHash hash.Has
 	}
 	commitOpts := datas.CommitOptions{Parents: parents, Meta: cm}
 
-	return ddb.CommitValue(ctx, dref, val, commitOpts)
+	return ddb.CommitRootHash(ctx, dref, valHash, commitOpts)
 }
 
-func (ddb *DoltDB) CommitValue(ctx context.Context, dref ref.DoltRef, val types.Value, commitOpts datas.CommitOptions) (*Commit, error) {
+func (ddb *DoltDB) CommitRootHash(ctx context.Context, dref ref.DoltRef, rootHash hash.Hash, commitOpts datas.CommitOptions) (*Commit, error) {
 	ds, err := ddb.db.GetDataset(ctx, dref.String())
 	if err != nil {
 		return nil, err
 	}
 
-	ds, err = ddb.db.Commit(ctx, ds, val, commitOpts)
+	ds, err = ddb.db.CommitWithRootHash(ctx, ds, rootHash, commitOpts)
 	if err != nil {
 		return nil, err
 	}
@@ -1007,14 +1007,14 @@ func (ddb *DoltDB) CommitDanglingWithParentCommits(ctx context.Context, valHash 
 	}
 	commitOpts := datas.CommitOptions{Parents: parents, Meta: cm}
 
-	return ddb.CommitDangling(ctx, val, commitOpts)
+	return ddb.CommitDangling(ctx, valHash, commitOpts)
 }
 
 // CommitDangling creates a new Commit for |val| that is not referenced by any DoltRef.
-func (ddb *DoltDB) CommitDangling(ctx context.Context, val types.Value, opts datas.CommitOptions) (*Commit, error) {
+func (ddb *DoltDB) CommitDangling(ctx context.Context, rootHash hash.Hash, opts datas.CommitOptions) (*Commit, error) {
 	cs := datas.ChunkStoreFromDatabase(ddb.db)
 
-	dcommit, err := datas.NewCommitForValue(ctx, cs, ddb.vrw, ddb.ns, val, opts)
+	dcommit, err := datas.NewCommitForRootHash(ctx, cs, ddb.vrw, ddb.ns, rootHash, opts)
 	if err != nil {
 		return nil, err
 	}

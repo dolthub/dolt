@@ -602,8 +602,33 @@ func (db *database) BuildNewCommit(ctx context.Context, ds Dataset, v types.Valu
 	return newCommitForValue(ctx, ds.db.chunkStore(), ds.db, ds.db.nodeStore(), v, opts)
 }
 
+func (db *database) BuildNewCommitForRootHash(ctx context.Context, ds Dataset, rootHash hash.Hash, opts CommitOptions) (*Commit, error) {
+	if !opts.Amend {
+		headAddr, ok := ds.MaybeHeadAddr()
+		if ok {
+			if len(opts.Parents) == 0 {
+				opts.Parents = []hash.Hash{headAddr}
+			} else {
+				if !hasParentHash(opts, headAddr) {
+					return nil, ErrMergeNeeded
+				}
+			}
+		}
+	}
+
+	return newCommitForRootHash(ctx, ds.db.chunkStore(), ds.db, ds.db.nodeStore(), rootHash, opts)
+}
+
 func (db *database) Commit(ctx context.Context, ds Dataset, v types.Value, opts CommitOptions) (Dataset, error) {
 	commit, err := db.BuildNewCommit(ctx, ds, v, opts)
+	if err != nil {
+		return Dataset{}, err
+	}
+	return db.WriteCommit(ctx, ds, commit)
+}
+
+func (db *database) CommitWithRootHash(ctx context.Context, ds Dataset, rootHash hash.Hash, opts CommitOptions) (Dataset, error) {
+	commit, err := db.BuildNewCommitForRootHash(ctx, ds, rootHash, opts)
 	if err != nil {
 		return Dataset{}, err
 	}

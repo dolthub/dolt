@@ -342,6 +342,7 @@ func CreateCreateCommitParser() *argparser.ArgParser {
 	ap.SupportsString("desc", "", "commit description", "the description in the commit")
 
 	ap.SupportsFlag(ForceFlag, "", "when used alongside --branch, allows overwriting an existing branch")
+	ap.SupportsFlag("allow-missing-hash", "", "skips validating that the supplied root hash exists in the db")
 	ap.SupportsRequiredString("root", "", "database root", "the root hash of the database at this commit")
 	ap.SupportsStringList("parents", "", "parent commits", "a list of the commit hashes of the parent commit")
 	ap.SupportsString(BranchParam, "", "ref to assign to", "if set, the new commit will be reachable at this ref")

@@ -138,12 +138,12 @@ func newCommit(ctx context.Context, value types.Value, parentsList types.List, p
 	}
 }
 
-func NewCommitForValue(ctx context.Context, cs chunks.ChunkStore, vrw types.ValueReadWriter, ns tree.NodeStore, v types.Value, opts CommitOptions) (*Commit, error) {
+func NewCommitForRootHash(ctx context.Context, cs chunks.ChunkStore, vrw types.ValueReadWriter, ns tree.NodeStore, rootHash hash.Hash, opts CommitOptions) (*Commit, error) {
 	if opts.Parents == nil || len(opts.Parents) == 0 {
 		return nil, errors.New("cannot create commit without parents")
 	}
 
-	return newCommitForValue(ctx, cs, vrw, ns, v, opts)
+	return newCommitForRootHash(ctx, cs, vrw, ns, rootHash, opts)
 }
 
 func commit_flatbuffer(vaddr hash.Hash, opts CommitOptions, heights []uint64, parentsClosureAddr hash.Hash) (serial.Message, uint64) {
@@ -212,30 +212,7 @@ func newCommitForValue(ctx context.Context, cs chunks.ChunkStore, vrw types.Valu
 		if err != nil {
 			return nil, err
 		}
-		parents := make([]*serial.Commit, len(opts.Parents))
-		heights := make([]uint64, len(opts.Parents))
-		parentValues, err := vrw.ReadManyValues(ctx, opts.Parents)
-		if err != nil {
-			return nil, err
-		}
-		for i := range heights {
-			parents[i], err = serial.TryGetRootAsCommit([]byte(parentValues[i].(types.SerialMessage)), serial.MessagePrefixSz)
-			if err != nil {
-				return nil, err
-			}
-			heights[i] = parents[i].Height()
-		}
-		parentClosureAddr, err := writeFbCommitParentClosure(ctx, cs, vrw, ns, parents, opts.Parents)
-		if err != nil {
-			return nil, err
-		}
-		bs, height := commit_flatbuffer(r.TargetHash(), opts, heights, parentClosureAddr)
-		v := types.SerialMessage(bs)
-		addr, err := v.Hash(vrw.Format())
-		if err != nil {
-			return nil, err
-		}
-		return &Commit{v, addr, height}, nil
+		return newCommitForRootHash(ctx, cs, vrw, ns, r.TargetHash(), opts)
 	}
 
 	metaSt, err := opts.Meta.toNomsStruct(vrw.Format())
@@ -277,6 +254,37 @@ func newCommitForValue(ctx context.Context, cs chunks.ChunkStore, vrw types.Valu
 		return nil, err
 	}
 	return &Commit{cv, r.TargetHash(), r.Height()}, nil
+}
+
+func newCommitForRootHash(ctx context.Context, cs chunks.ChunkStore, vrw types.ValueReadWriter, ns tree.NodeStore, rootHash hash.Hash, opts CommitOptions) (*Commit, error) {
+	if opts.Meta == nil {
+		opts.Meta = &CommitMeta{}
+	}
+
+	parents := make([]*serial.Commit, len(opts.Parents))
+	heights := make([]uint64, len(opts.Parents))
+	parentValues, err := vrw.ReadManyValues(ctx, opts.Parents)
+	if err != nil {
+		return nil, err
+	}
+	for i := range heights {
+		parents[i], err = serial.TryGetRootAsCommit([]byte(parentValues[i].(types.SerialMessage)), serial.MessagePrefixSz)
+		if err != nil {
+			return nil, err
+		}
+		heights[i] = parents[i].Height()
+	}
+	parentClosureAddr, err := writeFbCommitParentClosure(ctx, cs, vrw, ns, parents, opts.Parents)
+	if err != nil {
+		return nil, err
+	}
+	bs, height := commit_flatbuffer(rootHash, opts, heights, parentClosureAddr)
+	v := types.SerialMessage(bs)
+	addr, err := v.Hash(vrw.Format())
+	if err != nil {
+		return nil, err
+	}
+	return &Commit{v, addr, height}, nil
 }
 
 func commitPtr(nbf *types.NomsBinFormat, v types.Value, r *types.Ref) (*Commit, error) {

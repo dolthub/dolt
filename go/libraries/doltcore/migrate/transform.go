@@ -172,17 +172,13 @@ func migrateCommit(ctx context.Context, menv Environment, oldCm *doltdb.Commit, 
 	if err != nil {
 		return err
 	}
-	value, err := new.ValueReadWriter().ReadValue(ctx, addr)
-	if err != nil {
-		return err
-	}
 
 	opts, err := migrateCommitOptions(ctx, oldCm, prog)
 	if err != nil {
 		return err
 	}
 
-	migratedCm, err := new.CommitDangling(ctx, value, opts)
+	migratedCm, err := new.CommitDangling(ctx, addr, opts)
 	if err != nil {
 		return err
 	}

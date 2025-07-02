@@ -149,6 +149,14 @@ func (db hooksDatabase) Commit(ctx context.Context, ds datas.Dataset, v types.Va
 	return ds, err
 }
 
+func (db hooksDatabase) CommitWithRootHash(ctx context.Context, ds datas.Dataset, rootHash hash.Hash, opts datas.CommitOptions) (datas.Dataset, error) {
+	ds, err := db.Database.CommitWithRootHash(ctx, ds, rootHash, opts)
+	if err == nil {
+		db.ExecuteCommitHooks(ctx, ds, false)
+	}
+	return ds, err
+}
+
 func (db hooksDatabase) WriteCommit(ctx context.Context, ds datas.Dataset, commit *datas.Commit) (datas.Dataset, error) {
 	ds, err := db.Database.WriteCommit(ctx, ds, commit)
 	if err == nil {

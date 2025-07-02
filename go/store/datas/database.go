@@ -86,6 +86,7 @@ type Database interface {
 	// an 'ErrMergeNeeded' error.
 	Commit(ctx context.Context, ds Dataset, v types.Value, opts CommitOptions) (Dataset, error)
 
+	CommitWithRootHash(ctx context.Context, ds Dataset, root hash.Hash, opts CommitOptions) (Dataset, error)
 	// WriteCommit has the same behavior as Commit but accepts an already-constructed Commit
 	// instead of constructing one from a Value and CommitOptions
 	WriteCommit(ctx context.Context, ds Dataset, commit *Commit) (Dataset, error)

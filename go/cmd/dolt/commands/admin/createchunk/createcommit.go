@@ -140,13 +140,13 @@ func (cmd CreateCommitCmd) Exec(ctx context.Context, commandStr string, args []s
 
 	var commit *doltdb.Commit
 	if isBranchSet {
-		commit, err = db.CommitValue(ctx, ref.NewBranchRef(branch), rootVal, commitOpts)
+		commit, err = db.CommitRootHash(ctx, ref.NewBranchRef(branch), commitRootHash, commitOpts)
 		if errors.Is(err, datas.ErrMergeNeeded) {
 			cli.PrintErrf("branch %s already exists. If you wish to overwrite it, add the --force flag", branch)
 			return 1
 		}
 	} else {
-		commit, err = db.CommitDangling(ctx, rootVal, commitOpts)
+		commit, err = db.CommitDangling(ctx, commitRootHash, commitOpts)
 	}
 	if err != nil {
 		cli.PrintErrln(errhand.VerboseErrorFromError(err))
