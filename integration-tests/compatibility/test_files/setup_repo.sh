@@ -59,6 +59,8 @@ SQL
 dolt add .
 dolt commit -m "made changes to $DEFAULT_BRANCH"
 
+dolt branch check_merge
+
 dolt checkout other
 dolt sql <<SQL
 DELETE FROM abc WHERE pk=2;
@@ -71,7 +73,7 @@ SQL
 dolt add .
 dolt commit -m "made changes to other"
 
-dolt checkout -b check_merge
+dolt checkout check_merge
 dolt sql <<SQL
 INSERT INTO def VALUES (5), (6), (7);
 SQL
