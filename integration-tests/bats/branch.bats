@@ -428,7 +428,6 @@ teardown() {
     [[ "$output" =~ "error: branch not found: origin/invalid" ]] || false
 
     run dolt branch main --set-upstream-to origin/invalid
-    echo "$output"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "error: branch not found: origin/invalid" ]] || false
 }
@@ -501,7 +500,6 @@ teardown() {
 
     dolt branch setUpstream --set-upstream-to origin/main
     run dolt sql -q "select latest_commit_message from dolt_branches where name = 'setUpstream'" -r csv
-    echo "$output"
     [ $status -eq 0 ]
     [[ "$output" =~ "Initialize data repository" ]] || false
 

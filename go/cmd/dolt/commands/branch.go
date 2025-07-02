@@ -343,7 +343,7 @@ func updateUpstream(sqlCtx *sql.Context, queryEngine cli.Queryist, apr *argparse
 		remoteName = apr.Arg(1)
 	} else if apr.Contains(cli.SetUpstreamToFlag) {
 		if apr.NArg() > 2 {
-			cli.PrintErrln("error: --set-upstream takes branch name and remote name")
+			cli.PrintErrln("error: --set-upstream-to takes branch name and remote name")
 			return 1
 		}
 		remoteName, _ = apr.GetValue(cli.SetUpstreamToFlag)

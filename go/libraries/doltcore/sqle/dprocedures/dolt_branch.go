@@ -389,7 +389,6 @@ func setBranchUpstream(ctx *sql.Context, dbData env.DbData[*sql.Context], apr *a
 		if apr.NArg() < 2 || apr.NArg() > 3 {
 			return InvalidArgErr
 		}
-
 		fullRemote = apr.Arg(1)
 	} else {
 		if apr.NArg() > 2 {
@@ -417,7 +416,6 @@ func setBranchUpstream(ctx *sql.Context, dbData env.DbData[*sql.Context], apr *a
 	if err != nil {
 		return err
 	}
-
 	return nil
 }
 
@@ -453,8 +451,6 @@ func createNewBranch(ctx *sql.Context, dbData env.DbData[*sql.Context], apr *arg
 		startPt = apr.Arg(2)
 	} else if apr.NArg() == 2 && !apr.Contains(cli.TrackFlag) {
 		startPt = apr.Arg(1)
-	} else if setTrackUpstream { // If a start was not given, and we're setting upstream, we use the remote as the start.
-		startPt = trackVal
 	}
 	if len(startPt) == 0 {
 		return InvalidArgErr
