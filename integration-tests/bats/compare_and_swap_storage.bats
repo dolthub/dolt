@@ -76,25 +76,23 @@ mutations_and_gc_statement() {
   extra_in_preserved=$(cd preserved_copy/.dolt && find . -type f ! -exec test -e "../../.dolt/{}" \; -print)
 
   # convert paths to 32 char file ids.
-  extra_in_dolt=${extra_in_dolt##*/}
-  extra_in_dolt=${extra_in_dolt%.darc}
-  extra_in_preserved=${extra_in_preserved##*/}
+  archive_id=${extra_in_dolt##*/}
+  archive_id=${archive_id%.darc}
+  table_id=${extra_in_preserved##*/}
 
   # The extra file in .dolt should be darc file.
   cp ".dolt/$extra_in_dolt" preserved_copy/.dolt/noms/oldgen
 
   cd preserved_copy
 
-  # 6) Run `dolt admin compare-and-swap-storage --from <old table id> --to <new table id>
-  # Note: This test is expected to fail since we haven't implemented the --from and --to flags yet
-  run dolt admin compare-and-swap-storage --from "$old_table_id" --to "$new_table_id"
+  run dolt admin compare-and-swap-storage --drop "$table_id" --add "$archive_id"
   [ "$status" -eq 0 ]
 
   # Verify that the preserved copy has the new file as a storage artifact, and that the old file
   # is not used for storage. The file will still exist, but it won't be in the manifest.
   run dolt admin storage
-  [[ ! "$output" =~ "$extra_in_preserved" ]] || false
-  [[ "$output" =~ "$extra_in_dolt" ]] || false
+  [[ ! "$output" =~ "$table_id" ]] || false
+  [[ "$output" =~ "$archive_id" ]] || false
 }
 
 @test "compare-and-swap-storage: test with invalid table IDs" {

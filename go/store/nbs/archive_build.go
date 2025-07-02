@@ -234,34 +234,47 @@ func archiveSingleBlockStore(ctx context.Context, blockStore *NomsBlockStore, da
 		percentReduction := -100.0 * (float64(archiveSize)/float64(originalSize) - 1.0)
 		progress <- fmt.Sprintf("Archived %s (%d -> %d bytes, %.2f%% reduction)\n", archiveName, originalSize, archiveSize, percentReduction)
 
-		specs, err := blockStore.tables.toSpecs()
-		newSpecs := make([]tableSpec, 0, len(specs))
-		purgeFile := ""
-		for _, spec := range specs {
-			if tf == spec.name {
-				newSpecs = append(newSpecs, tableSpec{archiveName, chkCnt})
-				if purge {
-					purgeFile = filepath.Join(path, tf.String())
-				}
-			} else {
-				newSpecs = append(newSpecs, spec)
-			}
-		}
-
-		err = blockStore.swapTables(ctx, newSpecs, chunks.GCMode_Default)
+		err = swapAndPurge(ctx, tf, archiveName, chkCnt, blockStore, purge, progress)
 		if err != nil {
-			return err
-		}
-
-		if len(purgeFile) > 0 {
-			err = os.Remove(purgeFile)
-			if err != nil {
-				// failing to purge is non-fatal.
-				progress <- fmt.Sprintf("Failed to purge. %s", purgeFile)
-			}
+			return fmt.Errorf("failed to swap and purge table file %s: %w", tf.String(), err)
 		}
 	}
 
+	return nil
+}
+
+func swapAndPurge(ctx context.Context, tfHash hash.Hash, arcHash hash.Hash, chkCnt uint32, blockStore *NomsBlockStore, purge bool, progress chan interface{}) error {
+	path, ok := blockStore.Path()
+	if !ok {
+		return fmt.Errorf("could not get path for block store")
+	}
+
+	specs, err := blockStore.tables.toSpecs()
+	newSpecs := make([]tableSpec, 0, len(specs))
+	purgeFile := ""
+	for _, spec := range specs {
+		if tfHash == spec.name {
+			newSpecs = append(newSpecs, tableSpec{arcHash, chkCnt})
+			if purge {
+				purgeFile = filepath.Join(path, tfHash.String())
+			}
+		} else {
+			newSpecs = append(newSpecs, spec)
+		}
+	}
+
+	err = blockStore.swapTables(ctx, newSpecs, chunks.GCMode_Default)
+	if err != nil {
+		return err
+	}
+
+	if len(purgeFile) > 0 {
+		err = os.Remove(purgeFile)
+		if err != nil {
+			// failing to purge is non-fatal.
+			progress <- fmt.Sprintf("Failed to purge. %s", purgeFile)
+		}
+	}
 	return nil
 }
 
@@ -651,6 +664,62 @@ func verifyAllChunks(ctx context.Context, tfIdx tableIndex, arcIdx archiveReader
 	}
 
 	return nil
+}
+
+func CompareAndSwapStorage(
+	ctx context.Context,
+	cs chunks.ChunkStore,
+	add hash.Hash,
+	drop hash.Hash,
+	progress chan interface{},
+) error {
+	stats := Stats{}
+
+	if gs, ok := cs.(*GenerationalNBS); ok {
+		inNewGen := true
+		ts, ok := gs.newGen.tables.upstream[drop]
+		if !ok {
+			ts, ok = gs.oldGen.tables.upstream[drop]
+			if !ok {
+				return fmt.Errorf("Table File %s not found in either generation", drop.String())
+			}
+			inNewGen = false
+		}
+
+		tfIdx, err := ts.index()
+		if err != nil {
+			return err
+		}
+
+		path := ""
+		if inNewGen {
+			path, _ = gs.newGen.Path()
+		} else {
+			path, _ = gs.oldGen.Path()
+		}
+		archivePath := filepath.Join(path, add.String()+ArchiveFileSuffix)
+		fra, err := newFileReaderAt(archivePath)
+		if err != nil {
+			return err
+		}
+		ar, err := newArchiveReader(ctx, fra, uint64(fra.sz), &stats)
+		if err != nil {
+			return err
+		}
+		err = verifyAllChunks(ctx, tfIdx, ar, progress, &stats)
+		if err != nil {
+			return err
+		}
+
+		chunkCount := ar.count()
+		if inNewGen {
+			return swapAndPurge(ctx, drop, add, chunkCount, gs.newGen, false, progress)
+		} else {
+			return swapAndPurge(ctx, drop, add, chunkCount, gs.oldGen, false, progress)
+		}
+	} else {
+		return errors.New("runtime error: GenerationalNBS Expected")
+	}
 }
 
 // chunkGroup is a collection of chunks that are compressed together using the same Dictionary. It also contains

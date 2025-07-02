@@ -17,23 +17,16 @@ package admin
 import (
 	"context"
 	"fmt"
-	"io"
 	"sync"
 	"time"
 
-	"github.com/pkg/errors"
-
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
-	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions/commitwalk"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/nbs"
-	"github.com/dolthub/dolt/go/store/prolly/tree"
 )
 
 type CompareAndSwapStorageCmd struct {
@@ -45,16 +38,12 @@ func (cmd CompareAndSwapStorageCmd) Name() string {
 
 var compareAndSwapDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Perform compare-and-swap operations on storage.",
-	LongDesc: `Run this command on a dolt database to perform compare-and-swap operations on storage. This command will compare storage states and swap as needed.`,
+	LongDesc:  `Run this command on a dolt database to perform compare-and-swap operations on storage. This command will compare storage states and swap as needed.`,
 
 	Synopsis: []string{
-		`[--group-chunks]`,
+		`--add <table id> --drop <table id>`,
 	},
 }
-
-const compareAndSwapGroupChunksFlag = "group-chunks"
-const compareAndSwapRevertFlag = "revert"
-const compareAndSwapPurgeFlag = "purge"
 
 // Description returns a description of the command
 func (cmd CompareAndSwapStorageCmd) Description() string {
@@ -70,9 +59,8 @@ func (cmd CompareAndSwapStorageCmd) Docs() *cli.CommandDocumentation {
 
 func (cmd CompareAndSwapStorageCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithMaxArgs(cmd.Name(), 0)
-	ap.SupportsFlag(compareAndSwapGroupChunksFlag, "", "Attempt to group chunks. This will produce smaller archives, but can take much longer to build.")
-	ap.SupportsFlag(compareAndSwapRevertFlag, "", "Return to unpurged table files, or rebuilt table files from archives")
-	ap.SupportsFlag(compareAndSwapPurgeFlag, "", "remove table files after archiving")
+	ap.SupportsString("add", "", "Table ID to add to the storage archive.", "")
+	ap.SupportsString("drop", "", "Table ID to drop from the storage archive.", "")
 	return ap
 }
 func (cmd CompareAndSwapStorageCmd) Hidden() bool {
@@ -91,76 +79,46 @@ func (cmd CompareAndSwapStorageCmd) Exec(ctx context.Context, commandStr string,
 		return 1
 	}
 
-	storageMetadata, err := env.GetMultiEnvStorageMetadata(ctx, dEnv.FS)
-	if err != nil {
-		cli.PrintErrln(err)
+	addHashStr, ok := apr.GetValue("add")
+	if !ok {
+		cli.PrintErrln("compare-and-swap-storage command requires --add argument")
 		return 1
 	}
-	if len(storageMetadata) != 1 {
-		cli.PrintErrln("Runtime error: Multiple databases found where one expected")
+	addHash := hash.Parse(addHashStr)
+
+	dropHashStr, ok := apr.GetValue("drop")
+	if !ok {
+		cli.PrintErrln("compare-and-swap-storage command requires --drop argument")
 		return 1
 	}
-	var ourDbMD nbs.StorageMetadata
-	for _, md := range storageMetadata {
-		ourDbMD = md
-	}
+	dropHash := hash.Parse(dropHashStr)
 
 	wg := sync.WaitGroup{}
 	progress := make(chan interface{}, 32)
-	handleCompareAndSwapProgress(ctx, &wg, progress)
+	handleProgress(ctx, &wg, progress)
 
 	defer func() {
 		close(progress)
 		wg.Wait()
 	}()
 
-	if apr.Contains(compareAndSwapRevertFlag) {
-		err := nbs.UnArchive(ctx, cs, ourDbMD, progress)
-		if err != nil {
-			cli.PrintErrln(err)
-			return 1
-		}
-	} else {
-		datasets, err := db.Datasets(ctx)
-		if err != nil {
-			cli.PrintErrln(err)
-			return 1
-		}
-
-		hs := hash.NewHashSet()
-		err = datasets.IterAll(ctx, func(id string, hash hash.Hash) error {
-			hs.Insert(hash)
-			return nil
-		})
-
-		groupings := nbs.NewChunkRelations()
-		if apr.Contains(compareAndSwapGroupChunksFlag) {
-			err = compareAndSwapHistoricalFuzzyMatching(ctx, hs, &groupings, dEnv.DoltDB(ctx))
-			if err != nil {
-				cli.PrintErrln(err)
-				return 1
-			}
-		}
-
-		purge := apr.Contains(compareAndSwapPurgeFlag)
-
-		err = nbs.BuildArchive(ctx, cs, &groupings, purge, progress)
-		if err != nil {
-			cli.PrintErrln(err)
-			return 1
-		}
+	err := nbs.CompareAndSwapStorage(ctx, cs, addHash, dropHash, progress)
+	if err != nil {
+		cli.PrintErrf("Error during compare-and-swap: %v\n", err)
+		return 1
 	}
 	return 0
 }
 
-func handleCompareAndSwapProgress(ctx context.Context, wg *sync.WaitGroup, progress chan interface{}) {
+// NM4 - update to be more cas specfific.
+func handleProgress(ctx context.Context, wg *sync.WaitGroup, progress chan interface{}) {
 	go func() {
 		wg.Add(1)
 		defer wg.Done()
 
 		rotation := 0
 		p := cli.NewEphemeralPrinter()
-		currentMessage := "Starting Compare-and-Swap Storage Build"
+		currentMessage := "Starting Archive Build"
 		var lastProgressMsg *nbs.ArchiveBuildProgressMsg
 		lastUpdateTime := time.Now()
 
@@ -223,121 +181,4 @@ func handleCompareAndSwapProgress(ctx context.Context, wg *sync.WaitGroup, progr
 			}
 		}
 	}()
-}
-
-func compareAndSwapHistoricalFuzzyMatching(ctx context.Context, heads hash.HashSet, groupings *nbs.ChunkRelations, db *doltdb.DoltDB) error {
-	var hs []hash.Hash
-	for h := range heads {
-		_, err := db.ReadCommit(ctx, h)
-		if err != nil {
-			continue
-		}
-		hs = append(hs, h)
-	}
-
-	iterator, err := commitwalk.GetTopologicalOrderIterator[context.Context](ctx, db, hs, func(cmt *doltdb.OptionalCommit) (bool, error) {
-		return true, nil
-	})
-	if err != nil {
-		return err
-	}
-	for {
-		h, _, err := iterator.Next(ctx)
-		if err != nil {
-			if err == io.EOF {
-				break
-			}
-			return err
-		}
-
-		err = compareAndSwapRelateCommitToParentChunks(ctx, h, groupings, db)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-var ErrCompareAndSwapNoShallowClones = errors.New("building archives only allowed for full clones")
-
-func compareAndSwapRelateCommitToParentChunks(ctx context.Context, commit hash.Hash, groupings *nbs.ChunkRelations, db *doltdb.DoltDB) error {
-	oCmt, err := db.ReadCommit(ctx, commit)
-	if err != nil {
-		return nil // Only want commits. Skip others.
-	}
-	cmt, ok := oCmt.ToCommit()
-	if !ok {
-		return ErrCompareAndSwapNoShallowClones
-	}
-	cmtRv, err := cmt.GetRootValue(ctx)
-	if err != nil {
-		return err
-	}
-
-	// Dolt supports only 1 or 2 parents, but the logic is the same for each. And if there are no parents, no op.
-	for i := 0; i < cmt.NumParents(); i++ {
-		oCmt, err = cmt.GetParent(ctx, i)
-		if err != nil {
-			return err
-		}
-		parent, exists := oCmt.ToCommit()
-		if !exists {
-			return ErrCompareAndSwapNoShallowClones
-		}
-
-		parentRv, err := parent.GetRootValue(ctx)
-		if err != nil {
-			return err
-		}
-
-		deltas, err := diff.GetTableDeltas(ctx, cmtRv, parentRv)
-		if err != nil {
-			return err
-		}
-
-		for _, delta := range deltas {
-			schChg, err := delta.HasSchemaChanged(ctx)
-			if err != nil {
-				return err
-			}
-			if schChg {
-				continue
-			}
-			if delta.HasPrimaryKeySetChanged() {
-				continue
-			}
-
-			changed, err := delta.HasDataChanged(ctx)
-			if err != nil {
-				return err
-			}
-			if !changed {
-				continue
-			}
-
-			from, to, err := delta.GetRowData(ctx)
-
-			f, err := durable.ProllyMapFromIndex(from)
-			if err != nil {
-				return err
-			}
-			t, err := durable.ProllyMapFromIndex(to)
-			if err != nil {
-				return err
-			}
-
-			if f.Node().Level() != t.Node().Level() {
-				continue
-			}
-			err = tree.ChunkAddressDiffOrderedTrees(ctx, f.Tuples(), t.Tuples(), func(ctx context.Context, diff tree.AddrDiff) error {
-				groupings.Add(diff.From, diff.To)
-				return nil
-			})
-			if err != nil {
-				return err
-			}
-		}
-	}
-	return nil
 }
