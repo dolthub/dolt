@@ -16,7 +16,8 @@ package expranalysis
 
 import (
 	"fmt"
-
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlfmt"
 	"github.com/dolthub/go-mysql-server/memory"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/analyzer"
@@ -24,9 +25,6 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/dolthub/go-mysql-server/sql/planbuilder"
 	"github.com/dolthub/go-mysql-server/sql/transform"
-
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlfmt"
 )
 
 // ResolveDefaultExpression returns a sql.Expression for the column default or generated expression for the
@@ -63,7 +61,10 @@ func ResolveCheckExpression(ctx *sql.Context, tableName string, sch schema.Schem
 	}
 
 	for _, check := range ct.Checks() {
-		if stripTableNamesFromExpression(check.Expr).String() == checkExpr {
+		// Check definitions created before v1.55.3 may not have backquotes around identifiers
+		quotedExpr := stripTableNamesFromExpression(check.Expr, true).String()
+		unquotedExpr := stripTableNamesFromExpression(check.Expr, false).String()
+		if quotedExpr == checkExpr || unquotedExpr == checkExpr {
 			return check.Expr, nil
 		}
 	}
@@ -71,10 +72,10 @@ func ResolveCheckExpression(ctx *sql.Context, tableName string, sch schema.Schem
 	return nil, fmt.Errorf("unable to find check expression")
 }
 
-func stripTableNamesFromExpression(expr sql.Expression) sql.Expression {
+func stripTableNamesFromExpression(expr sql.Expression, quoted bool) sql.Expression {
 	e, _, _ := transform.Expr(expr, func(e sql.Expression) (sql.Expression, transform.TreeIdentity, error) {
 		if col, ok := e.(*expression.GetField); ok {
-			return col.WithTable("").WithQuotedNames(sql.GlobalSchemaFormatter, true), transform.NewTree, nil
+			return col.WithTable("").WithQuotedNames(sql.GlobalSchemaFormatter, quoted), transform.NewTree, nil
 		}
 		return e, transform.SameTree, nil
 	})
