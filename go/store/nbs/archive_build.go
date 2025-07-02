@@ -218,7 +218,15 @@ func archiveSingleBlockStore(ctx context.Context, blockStore *NomsBlockStore, da
 		}
 		archiveSize := fileInfo.Size()
 
-		err = verifyAllChunks(ctx, idx, archivePath, progress, &stats)
+		fra, err := newFileReaderAt(archivePath)
+		if err != nil {
+			return err
+		}
+		ar, err := newArchiveReader(ctx, fra, uint64(fra.sz), &stats)
+		if err != nil {
+			return err
+		}
+		err = verifyAllChunks(ctx, idx, ar, progress, &stats)
 		if err != nil {
 			return err
 		}
@@ -594,22 +602,12 @@ func gatherAllChunks(ctx context.Context, cs chunkSource, idx tableIndex, stats 
 	return chkCache, defaultSamples, nil
 }
 
-func verifyAllChunks(ctx context.Context, idx tableIndex, archiveFile string, progress chan interface{}, stats *Stats) error {
-	fra, err := newFileReaderAt(archiveFile)
-	if err != nil {
-		return err
-	}
+func verifyAllChunks(ctx context.Context, tfIdx tableIndex, arcIdx archiveReader, progress chan interface{}, stats *Stats) error {
+	hashList := make([]hash.Hash, 0, tfIdx.chunkCount())
 
-	index, err := newArchiveReader(ctx, fra, uint64(fra.sz), stats)
-	if err != nil {
-		return err
-	}
-
-	hashList := make([]hash.Hash, 0, idx.chunkCount())
-
-	for i := uint32(0); i < idx.chunkCount(); i++ {
+	for i := uint32(0); i < tfIdx.chunkCount(); i++ {
 		var h hash.Hash
-		_, err := idx.indexEntry(i, &h)
+		_, err := tfIdx.indexEntry(i, &h)
 		if err != nil {
 			return err
 		}
@@ -621,16 +619,16 @@ func verifyAllChunks(ctx context.Context, idx tableIndex, archiveFile string, pr
 		hashList[i], hashList[j] = hashList[j], hashList[i]
 	})
 
-	chunkCount := idx.chunkCount()
+	chunkCount := tfIdx.chunkCount()
 	chunkProgress := uint32(0)
 
 	for _, h := range hashList {
-		if !index.has(h) {
+		if !arcIdx.has(h) {
 			msg := fmt.Sprintf("chunk not found in archive: %s", h.String())
 			return errors.New(msg)
 		}
 
-		data, err := index.get(ctx, h, stats)
+		data, err := arcIdx.get(ctx, h, stats)
 		if err != nil {
 			return fmt.Errorf("error reading chunk: %s (err: %w)", h.String(), err)
 		}
