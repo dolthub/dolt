@@ -71,16 +71,16 @@ SQL
 dolt add .
 dolt commit -m "made changes to other"
 
-dolt checkout "$DEFAULT_BRANCH"
-dolt table export abc abc.csv
-dolt schema export abc abc_schema.json
-
 dolt checkout -b check_merge
 dolt sql <<SQL
 INSERT INTO def VALUES (5), (6), (7);
 SQL
 dolt add .
 dolt commit -m "made changes to check_merge"
+
+dolt checkout "$DEFAULT_BRANCH"
+dolt table export abc abc.csv
+dolt schema export abc abc_schema.json
 
 # add info to the log
 echo
