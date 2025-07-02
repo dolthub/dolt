@@ -234,8 +234,8 @@ func (acs archiveChunkSource) getManyCompressed(ctx context.Context, eg *errgrou
 }
 
 func (acs archiveChunkSource) iterateAllChunks(ctx context.Context, cb func(chunks.Chunk), stats *Stats) error {
-	addrCount := uint32(len(acs.aRdr.prefixes))
-	for i := uint32(0); i < addrCount; i++ {
+	addrCount := uint64(len(acs.aRdr.prefixes))
+	for i := uint64(0); i < addrCount; i++ {
 		var h hash.Hash
 		suffix := acs.aRdr.getSuffixByID(i)
 
