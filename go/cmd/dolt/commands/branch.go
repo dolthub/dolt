@@ -140,7 +140,7 @@ func (cmd BranchCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return printCurrentBranch(sqlCtx, queryEngine)
 	case apr.Contains(datasetsFlag):
 		return printAllDatasets(sqlCtx, dEnv)
-	case apr.ContainsAny(cli.SetUpstreamFlag, cli.TrackFlag):
+	case apr.ContainsAny(cli.SetUpstreamToFlag, cli.TrackFlag):
 		return updateUpstream(sqlCtx, queryEngine, apr, args)
 	case apr.NArg() > 0:
 		return createBranch(sqlCtx, queryEngine, apr, args, usage)
@@ -332,8 +332,8 @@ func updateUpstream(sqlCtx *sql.Context, queryEngine cli.Queryist, apr *argparse
 		branchName = apr.Arg(0)
 	}
 
-	if apr.Contains(cli.TrackFlag) && apr.Contains(cli.SetUpstreamFlag) {
-		cli.PrintErrln(fmt.Sprintf("error: --%s and --%s are mutually exclusive options.", cli.SetUpstreamFlag, cli.TrackFlag))
+	if apr.Contains(cli.TrackFlag) && apr.Contains(cli.SetUpstreamToFlag) {
+		cli.PrintErrln(fmt.Sprintf("error: --%s and --%s are mutually exclusive options.", cli.SetUpstreamToFlag, cli.TrackFlag))
 		return 1
 	} else if apr.Contains(cli.TrackFlag) {
 		if apr.NArg() < 2 || apr.NArg() > 3 {
@@ -341,12 +341,12 @@ func updateUpstream(sqlCtx *sql.Context, queryEngine cli.Queryist, apr *argparse
 			return 1
 		}
 		remoteName = apr.Arg(1)
-	} else if apr.Contains(cli.SetUpstreamFlag) {
+	} else if apr.Contains(cli.SetUpstreamToFlag) {
 		if apr.NArg() > 2 {
 			cli.PrintErrln("error: --set-upstream takes branch name and remote name")
 			return 1
 		}
-		remoteName, _ = apr.GetValue(cli.SetUpstreamFlag)
+		remoteName, _ = apr.GetValue(cli.SetUpstreamToFlag)
 	}
 
 	res := callStoredProcedure(sqlCtx, queryEngine, args)
@@ -358,7 +358,7 @@ func updateUpstream(sqlCtx *sql.Context, queryEngine cli.Queryist, apr *argparse
 }
 
 func createBranch(sqlCtx *sql.Context, queryEngine cli.Queryist, apr *argparser.ArgParseResults, args []string, usage cli.UsagePrinter) int {
-	remoteName, useUpstream := apr.GetValue(cli.SetUpstreamFlag)
+	remoteName, useUpstream := apr.GetValue(cli.SetUpstreamToFlag)
 
 	if apr.NArg() != 1 && apr.NArg() != 2 {
 		usage()

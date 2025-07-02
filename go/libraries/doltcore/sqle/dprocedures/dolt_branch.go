@@ -79,7 +79,7 @@ func doDoltBranch(ctx *sql.Context, args []string) (int, error) {
 		err = renameBranch(ctx, dbData, apr, dSess, dbName, &rsc)
 	case apr.Contains(cli.DeleteFlag), apr.Contains(cli.DeleteForceFlag):
 		err = deleteBranches(ctx, dbData, apr, dSess, dbName, &rsc)
-	case apr.ContainsAny(cli.SetUpstreamFlag, cli.TrackFlag):
+	case apr.ContainsAny(cli.SetUpstreamToFlag, cli.TrackFlag):
 		err = setBranchUpstream(ctx, dbData, apr, &rsc)
 	default:
 		err = createNewBranch(ctx, dbData, apr, &rsc)
@@ -396,26 +396,19 @@ func setBranchUpstream(ctx *sql.Context, dbData env.DbData[*sql.Context], apr *a
 			return InvalidArgErr
 		}
 		var ok bool
-		fullRemote, ok = apr.GetValue(cli.SetUpstreamFlag)
+		fullRemote, ok = apr.GetValue(cli.SetUpstreamToFlag)
 		if !ok {
 			return fmt.Errorf("could not parse upstream value for dolt branch")
 		}
 	}
 
-	// Check that the specified remote branch exists. Is there a better way?
-	headRef, err := dbData.Rsr.CWBHeadRef(ctx)
+	err = validateRemote(ctx, dbData, fullRemote)
 	if err != nil {
-		return err
-	}
-	cs, err := doltdb.NewCommitSpec(fullRemote)
-	if err != nil {
-		return err
-	}
-	if _, err = dbData.Ddb.Resolve(ctx, cs, headRef); err != nil {
 		return err
 	}
 
 	remoteName, remoteBranch := actions.ParseRemoteBranchName(fullRemote)
+
 	refSpec, err := ref.ParseRefSpecForRemote(remoteName, remoteBranch)
 	if err != nil {
 		return err
@@ -444,10 +437,10 @@ func createNewBranch(ctx *sql.Context, dbData env.DbData[*sql.Context], apr *arg
 	var err error
 	var trackVal string
 	var setTrackUpstream bool
-	if apr.Contains(cli.SetUpstreamFlag) && apr.Contains(cli.TrackFlag) {
-		return fmt.Errorf("error: --%s and --%s are mutually exclusive options.", cli.SetUpstreamFlag, cli.TrackFlag)
-	} else if apr.Contains(cli.SetUpstreamFlag) {
-		trackVal, setTrackUpstream = apr.GetValue(cli.SetUpstreamFlag)
+	if apr.Contains(cli.SetUpstreamToFlag) && apr.Contains(cli.TrackFlag) {
+		return fmt.Errorf("error: --%s and --%s are mutually exclusive options.", cli.SetUpstreamToFlag, cli.TrackFlag)
+	} else if apr.Contains(cli.SetUpstreamToFlag) {
+		trackVal, setTrackUpstream = apr.GetValue(cli.SetUpstreamToFlag)
 	} else if apr.Contains(cli.TrackFlag) {
 		if apr.NArg() < 2 { // Must specify both branch and remote name.
 			return InvalidArgErr
@@ -468,7 +461,15 @@ func createNewBranch(ctx *sql.Context, dbData env.DbData[*sql.Context], apr *arg
 	}
 
 	if setTrackUpstream {
+		err = validateRemote(ctx, dbData, trackVal)
+		if err != nil {
+			return err
+		}
+
 		remoteName, remoteBranch = actions.ParseRemoteBranchName(trackVal)
+		if remoteName == "" || remoteBranch == "" {
+			return fmt.Errorf("error: invalid remote")
+		}
 		refSpec, err = ref.ParseRefSpecForRemote(remoteName, remoteBranch)
 		if err != nil {
 			return err
@@ -539,6 +540,23 @@ func copyABranch(ctx *sql.Context, dbData env.DbData[*sql.Context], srcBr string
 	}
 	err = branch_control.AddAdminForContext(ctx, destBr)
 	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// validateRemote takes in a full remote path, like `origin/main`, and checks that the branch exists.
+func validateRemote(ctx *sql.Context, dbData env.DbData[*sql.Context], fullRemote string) error {
+	headRef, err := dbData.Rsr.CWBHeadRef(ctx)
+	if err != nil {
+		return err
+	}
+	cs, err := doltdb.NewCommitSpec(fullRemote)
+	if err != nil {
+		return err
+	}
+	if _, err = dbData.Ddb.Resolve(ctx, cs, headRef); err != nil {
 		return err
 	}
 
