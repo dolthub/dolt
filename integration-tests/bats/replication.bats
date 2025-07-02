@@ -897,8 +897,8 @@ SQL
     dolt config --local --add sqlserver.global.dolt_replicate_all_heads 1
     run dolt sql -b -q "USE \`repo1/feature-branch\`; show tables" -r csv
     [ "$status" -eq 0 ]
-    [[ "${lines[1]}" =~ "Table" ]] || false
-    [[ "${lines[2]}" =~ "t1" ]] || false
+    [[ "${lines[0]}" =~ "Table" ]] || false
+    [[ "${lines[1]}" =~ "t1" ]] || false
 }
 
 @test "replication: database autofetch doesn't change replication heads setting" {

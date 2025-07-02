@@ -34,7 +34,7 @@ select database(), active_branch();
 select * from test;
 SQL
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "Database changed" ]] || false
+    [[ ! "$output" =~ "Database changed" ]] || false
     [[ "$output" =~ "1,green" ]] || false
     [[ "$output" =~ "2,blue" ]] || false
     [[ ! "$output" =~ "3,purple" ]] || false
@@ -61,7 +61,7 @@ use $database_name/branch1;
 insert into test values (100, 'beige');
 SQL
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "OK, 1 row affected" ]] || false
+    [[ "$output" = "" ]] || false
 }
 
 @test "db-revision-specifiers: tag-qualified database revisions" {
@@ -71,7 +71,7 @@ use $database_name/v1;
 select * from test;
 SQL
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "Database changed" ]] || false
+    [[ ! "$output" =~ "Database changed" ]] || false
     [[ "$output" =~ "1,green" ]] || false
     [[ ! "$output" =~ "2,blue" ]] || false
     [[ ! "$output" =~ "3,purple" ]] || false
@@ -110,7 +110,7 @@ use $database_name/$commit;
 select * from test;
 SQL
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "Database changed" ]] || false
+    [[ ! "$output" =~ "Database changed" ]] || false
     [[ "$output" =~ "1,green" ]] || false
     [[ "$output" =~ "2,blue" ]] || false
     [[ "$output" =~ "3,purple" ]] || false

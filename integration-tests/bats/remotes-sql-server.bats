@@ -371,7 +371,7 @@ teardown() {
     
     run dolt sql -q "use \`repo2/$head_hash\`"
     [ $status -eq 0 ]
-    [ "$output" = "Database changed" ]
+    [ ! "$output" = "Database changed" ]
 }
 
 @test "remotes-sql-server: connect to tag works" {
@@ -396,7 +396,7 @@ teardown() {
 
     run dolt sql -q "use \`repo2/v1\`"
     [ $status -eq 0 ]
-    [ "$output" = "Database changed" ]
+    [ ! "$output" = "Database changed" ]
 }
 
 @test "remotes-sql-server: connect to remote branch that does not exist locally" {
