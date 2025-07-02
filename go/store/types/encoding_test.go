@@ -619,8 +619,6 @@ func TestWriteEmptyUnionList(t *testing.T) {
 func TestNomsBinFormat(t *testing.T) {
 	v, _ := os.LookupEnv(dconfig.EnvDefaultBinFormat)
 	switch v {
-	case constants.FormatLD1String:
-		assert.Equal(t, Format_LD_1, Format_Default)
 	case constants.FormatDoltString:
 		assert.Equal(t, Format_DOLT, Format_Default)
 	}

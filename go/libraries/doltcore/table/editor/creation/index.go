@@ -133,33 +133,24 @@ func CreateIndex(
 }
 
 func BuildSecondaryIndex(ctx *sql.Context, tbl *doltdb.Table, idx schema.Index, tableName string, opts editor.Options) (durable.Index, error) {
-	switch tbl.Format() {
-	case types.Format_LD_1:
-		m, err := editor.RebuildIndex(ctx, tbl, idx.Name(), opts)
-		if err != nil {
-			return nil, err
-		}
-		return durable.IndexFromNomsMap(m, tbl.ValueReadWriter(), tbl.NodeStore()), nil
-
-	case types.Format_DOLT:
-		sch, err := tbl.GetSchema(ctx)
-		if err != nil {
-			return nil, err
-		}
-		m, err := tbl.GetRowData(ctx)
-		if err != nil {
-			return nil, err
-		}
-		primary, err := durable.ProllyMapFromIndex(m)
-		if err != nil {
-			return nil, err
-		}
-
-		return BuildSecondaryProllyIndex(ctx, tbl.ValueReadWriter(), tbl.NodeStore(), sch, tableName, idx, primary)
-
-	default:
-		return nil, fmt.Errorf("unknown NomsBinFormat")
+	if tbl.Format() != types.Format_DOLT {
+		return nil, fmt.Errorf("unsupported table format: %s", tbl.Format().VersionString())
 	}
+
+	sch, err := tbl.GetSchema(ctx)
+	if err != nil {
+		return nil, err
+	}
+	m, err := tbl.GetRowData(ctx)
+	if err != nil {
+		return nil, err
+	}
+	primary, err := durable.ProllyMapFromIndex(m)
+	if err != nil {
+		return nil, err
+	}
+
+	return BuildSecondaryProllyIndex(ctx, tbl.ValueReadWriter(), tbl.NodeStore(), sch, tableName, idx, primary)
 }
 
 // BuildSecondaryProllyIndex builds secondary index data for the given primary

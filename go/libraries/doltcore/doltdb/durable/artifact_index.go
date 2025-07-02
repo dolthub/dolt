@@ -44,36 +44,26 @@ type ArtifactIndex interface {
 
 // RefFromArtifactIndex persists |idx| and returns the types.Ref targeting it.
 func RefFromArtifactIndex(ctx context.Context, vrw types.ValueReadWriter, idx ArtifactIndex) (types.Ref, error) {
-	switch idx.Format() {
-	case types.Format_LD_1:
-		panic("TODO")
-
-	case types.Format_DOLT:
-		b := shim.ValueFromMap(idx.(prollyArtifactIndex).index)
-		return refFromNomsValue(ctx, vrw, b)
-
-	default:
-		return types.Ref{}, errNbfUnknown
+	if idx.Format() != types.Format_DOLT {
+		return types.Ref{}, fmt.Errorf("unsupported format: %s", idx.Format().VersionString())
 	}
+
+	b := shim.ValueFromMap(idx.(prollyArtifactIndex).index)
+	return refFromNomsValue(ctx, vrw, b)
 }
 
 // NewEmptyArtifactIndex returns an ArtifactIndex with no artifacts.
 func NewEmptyArtifactIndex(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, tableSch schema.Schema) (ArtifactIndex, error) {
-	switch vrw.Format() {
-	case types.Format_LD_1:
-		panic("TODO")
-
-	case types.Format_DOLT:
-		kd := tableSch.GetKeyDescriptor(ns)
-		m, err := prolly.NewArtifactMapFromTuples(ctx, ns, kd)
-		if err != nil {
-			return nil, err
-		}
-		return ArtifactIndexFromProllyMap(m), nil
-
-	default:
-		return nil, errNbfUnknown
+	if vrw.Format() != types.Format_DOLT {
+		return nil, fmt.Errorf("unsupported format: %s", vrw.Format().VersionString())
 	}
+
+	kd := tableSch.GetKeyDescriptor(ns)
+	m, err := prolly.NewArtifactMapFromTuples(ctx, ns, kd)
+	if err != nil {
+		return nil, err
+	}
+	return ArtifactIndexFromProllyMap(m), nil
 }
 
 func ArtifactIndexFromProllyMap(m prolly.ArtifactMap) ArtifactIndex {
@@ -96,25 +86,20 @@ func artifactIndexFromAddr(ctx context.Context, vrw types.ValueReadWriter, ns tr
 		return nil, err
 	}
 
-	switch vrw.Format() {
-	case types.Format_LD_1:
-		panic("TODO")
-
-	case types.Format_DOLT:
-		root, fileId, err := shim.NodeFromValue(v)
-		if err != nil {
-			return nil, err
-		}
-		if fileId != serial.MergeArtifactsFileID {
-			return nil, fmt.Errorf("unexpected file ID for artifact node, expected %s, found %s", serial.MergeArtifactsFileID, fileId)
-		}
-		kd := tableSch.GetKeyDescriptor(ns)
-		m := prolly.NewArtifactMap(root, ns, kd)
-		return ArtifactIndexFromProllyMap(m), nil
-
-	default:
-		return nil, errNbfUnknown
+	if vrw.Format() != types.Format_DOLT {
+		return nil, fmt.Errorf("unsupported format: %s", vrw.Format().VersionString())
 	}
+
+	root, fileId, err := shim.NodeFromValue(v)
+	if err != nil {
+		return nil, err
+	}
+	if fileId != serial.MergeArtifactsFileID {
+		return nil, fmt.Errorf("unexpected file ID for artifact node, expected %s, found %s", serial.MergeArtifactsFileID, fileId)
+	}
+	kd := tableSch.GetKeyDescriptor(ns)
+	m := prolly.NewArtifactMap(root, ns, kd)
+	return ArtifactIndexFromProllyMap(m), nil
 }
 
 type prollyArtifactIndex struct {

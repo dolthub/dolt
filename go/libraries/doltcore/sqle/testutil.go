@@ -517,46 +517,28 @@ func CreateTestDatabase() (*env.DoltEnv, error) {
 func SqlRowsFromDurableIndex(idx durable.Index, sch schema.Schema) ([]sql.Row, error) {
 	ctx := context.Background()
 	var sqlRows []sql.Row
-	if types.Format_Default == types.Format_DOLT {
-		rowData, err := durable.ProllyMapFromIndex(idx)
+	rowData, err := durable.ProllyMapFromIndex(idx)
+	if err != nil {
+		return nil, err
+	}
+	kd, vd := rowData.Descriptors()
+	iter, err := rowData.IterAll(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for {
+		var k, v val.Tuple
+		k, v, err = iter.Next(ctx)
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			return nil, err
+		}
+		sqlRow, err := sqlRowFromTuples(sch, kd, vd, k, v)
 		if err != nil {
 			return nil, err
 		}
-		kd, vd := rowData.Descriptors()
-		iter, err := rowData.IterAll(ctx)
-		if err != nil {
-			return nil, err
-		}
-		for {
-			var k, v val.Tuple
-			k, v, err = iter.Next(ctx)
-			if err == io.EOF {
-				break
-			} else if err != nil {
-				return nil, err
-			}
-			sqlRow, err := sqlRowFromTuples(sch, kd, vd, k, v)
-			if err != nil {
-				return nil, err
-			}
-			sqlRows = append(sqlRows, sqlRow)
-		}
-
-	} else {
-		// types.Format_LD_1
-		rowData := durable.NomsMapFromIndex(idx)
-		_ = rowData.IterAll(ctx, func(key, value types.Value) error {
-			r, err := row.FromNoms(sch, key.(types.Tuple), value.(types.Tuple))
-			if err != nil {
-				return err
-			}
-			sqlRow, err := sqlutil.DoltRowToSqlRow(r, sch)
-			if err != nil {
-				return err
-			}
-			sqlRows = append(sqlRows, sqlRow)
-			return nil
-		})
+		sqlRows = append(sqlRows, sqlRow)
 	}
 	return sqlRows, nil
 }

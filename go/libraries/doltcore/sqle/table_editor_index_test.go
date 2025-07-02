@@ -20,15 +20,11 @@ import (
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/row"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 func setupEditorIndexTest(ctx context.Context, t *testing.T) (*env.DoltEnv, doltdb.RootValue) {
@@ -147,39 +143,6 @@ UPDATE onepk SET pk1 = v1 + pk1 ORDER BY pk1 DESC;
 			idx_v2v1 := twopkSch.Indexes().GetByName("idx_v2v1")
 			require.NotNil(t, idx_v2v1)
 
-			if types.Format_Default != types.Format_LD_1 {
-				t.Skip("need a prolly sql row iter")
-			}
-
-			idx_v1RowData, err := onepk.GetNomsIndexRowData(context.Background(), idx_v1.Name())
-			require.NoError(t, err)
-			idx_v2v1RowData, err := twopk.GetNomsIndexRowData(context.Background(), idx_v2v1.Name())
-			require.NoError(t, err)
-
-			if assert.Equal(t, uint64(len(test.expectedIdxv1)), idx_v1RowData.Len()) && len(test.expectedIdxv1) > 0 {
-				var sqlRows []sql.Row
-				_ = idx_v1RowData.IterAll(context.Background(), func(key, value types.Value) error {
-					r, err := row.FromNoms(idx_v1.Schema(), key.(types.Tuple), value.(types.Tuple))
-					assert.NoError(t, err)
-					sqlRow, err := sqlutil.DoltRowToSqlRow(r, idx_v1.Schema())
-					assert.NoError(t, err)
-					sqlRows = append(sqlRows, sqlRow)
-					return nil
-				})
-				assert.ElementsMatch(t, convertSqlRowToInt64(test.expectedIdxv1), sqlRows)
-			}
-			if assert.Equal(t, uint64(len(test.expectedIdxv2v1)), idx_v2v1RowData.Len()) && len(test.expectedIdxv2v1) > 0 {
-				var sqlRows []sql.Row
-				_ = idx_v2v1RowData.IterAll(context.Background(), func(key, value types.Value) error {
-					r, err := row.FromNoms(idx_v2v1.Schema(), key.(types.Tuple), value.(types.Tuple))
-					assert.NoError(t, err)
-					sqlRow, err := sqlutil.DoltRowToSqlRow(r, idx_v2v1.Schema())
-					assert.NoError(t, err)
-					sqlRows = append(sqlRows, sqlRow)
-					return nil
-				})
-				assert.ElementsMatch(t, convertSqlRowToInt64(test.expectedIdxv2v1), sqlRows)
-			}
 		})
 	}
 }
@@ -318,39 +281,6 @@ UPDATE oneuni SET v1 = v1 + pk1;
 			idx_v1v2 := twouniSch.Indexes().GetByName("idx_v1v2")
 			require.NotNil(t, idx_v1v2)
 
-			if types.Format_Default != types.Format_LD_1 {
-				t.Skip("need a prolly sql row iter")
-			}
-
-			idx_v1RowData, err := oneuni.GetNomsIndexRowData(context.Background(), idx_v1.Name())
-			require.NoError(t, err)
-			idx_v1v2RowData, err := twouni.GetNomsIndexRowData(context.Background(), idx_v1v2.Name())
-			require.NoError(t, err)
-
-			if assert.Equal(t, uint64(len(test.expectedIdxv1)), idx_v1RowData.Len()) && len(test.expectedIdxv1) > 0 {
-				var sqlRows []sql.Row
-				_ = idx_v1RowData.IterAll(context.Background(), func(key, value types.Value) error {
-					r, err := row.FromNoms(idx_v1.Schema(), key.(types.Tuple), value.(types.Tuple))
-					assert.NoError(t, err)
-					sqlRow, err := sqlutil.DoltRowToSqlRow(r, idx_v1.Schema())
-					assert.NoError(t, err)
-					sqlRows = append(sqlRows, sqlRow)
-					return nil
-				})
-				assert.ElementsMatch(t, convertSqlRowToInt64(test.expectedIdxv1), sqlRows)
-			}
-			if assert.Equal(t, uint64(len(test.expectedIdxv1v2)), idx_v1v2RowData.Len()) && len(test.expectedIdxv1v2) > 0 {
-				var sqlRows []sql.Row
-				_ = idx_v1v2RowData.IterAll(context.Background(), func(key, value types.Value) error {
-					r, err := row.FromNoms(idx_v1v2.Schema(), key.(types.Tuple), value.(types.Tuple))
-					assert.NoError(t, err)
-					sqlRow, err := sqlutil.DoltRowToSqlRow(r, idx_v1v2.Schema())
-					assert.NoError(t, err)
-					sqlRows = append(sqlRows, sqlRow)
-					return nil
-				})
-				assert.ElementsMatch(t, convertSqlRowToInt64(test.expectedIdxv1v2), sqlRows)
-			}
 		})
 	}
 }

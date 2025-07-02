@@ -44,48 +44,12 @@ type TypeCompatibilityChecker interface {
 // NewTypeCompatabilityCheckerForStorageFormat returns a new TypeCompatibilityChecker
 // instance for the given storage format.
 func NewTypeCompatabilityCheckerForStorageFormat(format *storetypes.NomsBinFormat) TypeCompatibilityChecker {
-	switch format {
-	case storetypes.Format_DOLT:
-		return newDoltTypeCompatibilityChecker()
-	case storetypes.Format_LD_1:
-		return ld1TypeCompatibilityChecker{}
-	default:
+	if format != storetypes.Format_DOLT {
 		panic("unsupported storage format: " + format.VersionString())
 	}
+	return newDoltTypeCompatibilityChecker()
 }
 
-// ld1TypeCompatibilityChecker implements TypeCompatibilityChecker for the deprecated LD_1
-// storage format. This type should never be directly instantiated; use
-// newTypeCompatabilityCheckerForStorageFormat instead.
-type ld1TypeCompatibilityChecker struct{}
-
-var _ TypeCompatibilityChecker = ld1TypeCompatibilityChecker{}
-
-// IsTypeChangeCompatible implements TypeCompatibilityChecker.IsTypeChangeCompatible for the
-// deprecated LD_1 storage format.
-func (l ld1TypeCompatibilityChecker) IsTypeChangeCompatible(from, to typeinfo.TypeInfo) (res TypeChangeInfo) {
-	// If the types are exactly identical, then they are always compatible
-	fromSqlType := from.ToSqlType()
-	toSqlType := to.ToSqlType()
-	if fromSqlType.Equals(toSqlType) {
-		res.Compatible = true
-		return res
-	}
-
-	// For the older, LD_1 storage format, our compatibility rules are looser
-	if from.NomsKind() != to.NomsKind() {
-		return res
-	}
-
-	if to.ToSqlType().Type() == query.Type_GEOMETRY {
-		// We need to do this because some spatial type changes require a full table check, but not all.
-		// TODO: This could be narrowed down to a smaller set of spatial type changes
-		return res
-	}
-
-	res.Compatible = true
-	return res
-}
 
 // doltTypeCompatibilityChecker implements TypeCompatibilityChecker for the DOLT storage
 // format. This type should never be directly instantiated; use

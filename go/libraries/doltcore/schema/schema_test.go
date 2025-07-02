@@ -337,15 +337,6 @@ func TestArePrimaryKeySetsDiffableTypeChanges(t *testing.T) {
 			Diffable: false,
 			Format:   types.Format_DOLT,
 		},
-		{
-			Name: "Int -> String (Old Format)",
-			From: MustSchemaFromCols(NewColCollection(
-				NewColumn("pk", 0, types.IntKind, true))),
-			To: MustSchemaFromCols(NewColCollection(
-				NewColumn("pk", 0, types.StringKind, true))),
-			Diffable: true,
-			Format:   types.Format_LD_1,
-		},
 	}
 
 	for _, test := range tests {

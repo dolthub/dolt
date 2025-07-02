@@ -73,9 +73,7 @@ func (s *nomsShowTestSuite) writeTestData(str string, value types.Value) types.R
 }
 
 func (s *nomsShowTestSuite) TestNomsShow() {
-	if types.Format_Default != types.Format_LD_1 {
-		s.T().Skip()
-	}
+	s.T().Skip("noms commands are specific to LD_1 format")
 	datasetName := "dsTest"
 	str := spec.CreateValueSpecString("nbs", s.DBDir, datasetName)
 

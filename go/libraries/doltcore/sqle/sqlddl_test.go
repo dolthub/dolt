@@ -541,9 +541,7 @@ func TestAddColumn(t *testing.T) {
 			assert.NoError(t, err)
 			equalSchemas(t, tt.expectedSchema, sch)
 
-			if types.Format_Default != types.Format_LD_1 {
-				return // todo: convert these to enginetests
-			}
+			// todo: convert these to enginetests
 
 			updatedTable, ok, err := updatedRoot.GetTable(ctx, doltdb.TableName{Name: "people"})
 			assert.NoError(t, err)
@@ -661,9 +659,7 @@ func TestRenameColumn(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, tt.expectedSchema, sch)
 
-			if types.Format_Default != types.Format_LD_1 {
-				return // todo: convert these to enginetests
-			}
+			// todo: convert these to enginetests
 
 			updatedTable, ok, err := updatedRoot.GetTable(ctx, doltdb.TableName{Name: "people"})
 			assert.NoError(t, err)
@@ -783,9 +779,7 @@ func TestRenameTableStatements(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, tt.expectedSchema, sch)
 
-			if types.Format_Default != types.Format_LD_1 {
-				return // todo: convert these to enginetests
-			}
+			// todo: convert these to enginetests
 
 			rowData, err := newTable.GetNomsRowData(ctx)
 			require.NoError(t, err)

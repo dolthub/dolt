@@ -237,7 +237,7 @@ func read(ctx context.Context, rd io.Reader) (hash.Hash, *FileValueStore, error)
 	var nbf *types.NomsBinFormat
 	switch string(data) {
 	case types.Format_LD_1.VersionString():
-		nbf = types.Format_LD_1
+		return hash.Hash{}, nil, fmt.Errorf("unsupported legacy format: %s", string(data))
 	case types.Format_DOLT.VersionString():
 		nbf = types.Format_DOLT
 	default:

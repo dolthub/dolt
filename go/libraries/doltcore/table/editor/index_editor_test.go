@@ -52,7 +52,7 @@ var id2, _ = uuid.NewRandom()
 var id3, _ = uuid.NewRandom()
 
 func TestIndexEditorConcurrency(t *testing.T) {
-	format := types.Format_LD_1
+	format := types.Format_DOLT
 	_, vrw, _, err := dbfactory.MemFactory{}.CreateDB(context.Background(), format, nil, nil)
 	require.Equal(t, format, vrw.Format())
 	require.NoError(t, err)
@@ -148,7 +148,7 @@ func TestIndexEditorConcurrency(t *testing.T) {
 }
 
 func TestIndexEditorConcurrencyPostInsert(t *testing.T) {
-	format := types.Format_LD_1
+	format := types.Format_DOLT
 	_, vrw, _, err := dbfactory.MemFactory{}.CreateDB(context.Background(), format, nil, nil)
 	require.Equal(t, format, vrw.Format())
 	require.NoError(t, err)
@@ -241,7 +241,7 @@ func TestIndexEditorConcurrencyPostInsert(t *testing.T) {
 }
 
 func TestIndexEditorUniqueMultipleNil(t *testing.T) {
-	format := types.Format_LD_1
+	format := types.Format_DOLT
 	_, vrw, _, err := dbfactory.MemFactory{}.CreateDB(context.Background(), format, nil, nil)
 	require.Equal(t, format, vrw.Format())
 	require.NoError(t, err)
@@ -287,7 +287,7 @@ func TestIndexEditorUniqueMultipleNil(t *testing.T) {
 }
 
 func TestIndexEditorWriteAfterFlush(t *testing.T) {
-	format := types.Format_LD_1
+	format := types.Format_DOLT
 	_, vrw, _, err := dbfactory.MemFactory{}.CreateDB(context.Background(), format, nil, nil)
 	require.Equal(t, format, vrw.Format())
 	require.NoError(t, err)
@@ -356,7 +356,7 @@ func TestIndexEditorWriteAfterFlush(t *testing.T) {
 }
 
 func TestIndexEditorUniqueErrorDoesntPersist(t *testing.T) {
-	format := types.Format_LD_1
+	format := types.Format_DOLT
 	_, vrw, _, err := dbfactory.MemFactory{}.CreateDB(context.Background(), format, nil, nil)
 	require.Equal(t, format, vrw.Format())
 	require.NoError(t, err)
@@ -400,8 +400,8 @@ func TestIndexEditorUniqueErrorDoesntPersist(t *testing.T) {
 }
 
 func TestIndexRebuildingWithZeroIndexes(t *testing.T) {
-	_, vrw, ns, _ := dbfactory.MemFactory{}.CreateDB(context.Background(), types.Format_LD_1, nil, nil)
-	require.Equal(t, types.Format_LD_1, vrw.Format())
+	_, vrw, ns, _ := dbfactory.MemFactory{}.CreateDB(context.Background(), types.Format_DOLT, nil, nil)
+	require.Equal(t, types.Format_DOLT, vrw.Format())
 	tSchema := createTestSchema(t)
 	_, err := tSchema.Indexes().RemoveIndex(testSchemaIndexName)
 	require.NoError(t, err)
@@ -423,8 +423,8 @@ func TestIndexRebuildingWithZeroIndexes(t *testing.T) {
 }
 
 func TestIndexRebuildingWithOneIndex(t *testing.T) {
-	_, vrw, ns, _ := dbfactory.MemFactory{}.CreateDB(context.Background(), types.Format_LD_1, nil, nil)
-	require.Equal(t, types.Format_LD_1, vrw.Format())
+	_, vrw, ns, _ := dbfactory.MemFactory{}.CreateDB(context.Background(), types.Format_DOLT, nil, nil)
+	require.Equal(t, types.Format_DOLT, vrw.Format())
 	tSchema := createTestSchema(t)
 	_, err := tSchema.Indexes().RemoveIndex(testSchemaIndexAge)
 	require.NoError(t, err)
@@ -441,7 +441,7 @@ func TestIndexRebuildingWithOneIndex(t *testing.T) {
 			require.True(t, ok)
 			indexKey[tag] = val
 		}
-		indexExpectedRows[i], err = row.New(types.Format_LD_1, indexSch, indexKey)
+		indexExpectedRows[i], err = row.New(types.Format_DOLT, indexSch, indexKey)
 		require.NoError(t, err)
 	}
 
@@ -476,8 +476,8 @@ func TestIndexRebuildingWithOneIndex(t *testing.T) {
 }
 
 func TestIndexRebuildingWithTwoIndexes(t *testing.T) {
-	_, vrw, ns, _ := dbfactory.MemFactory{}.CreateDB(context.Background(), types.Format_LD_1, nil, nil)
-	require.Equal(t, types.Format_LD_1, vrw.Format())
+	_, vrw, ns, _ := dbfactory.MemFactory{}.CreateDB(context.Background(), types.Format_DOLT, nil, nil)
+	require.Equal(t, types.Format_DOLT, vrw.Format())
 	tSchema := createTestSchema(t)
 
 	indexName := tSchema.Indexes().GetByName(testSchemaIndexName)
@@ -601,8 +601,8 @@ func TestIndexRebuildingWithTwoIndexes(t *testing.T) {
 }
 
 func TestIndexRebuildingUniqueSuccessOneCol(t *testing.T) {
-	_, vrw, ns, _ := dbfactory.MemFactory{}.CreateDB(context.Background(), types.Format_LD_1, nil, nil)
-	require.Equal(t, types.Format_LD_1, vrw.Format())
+	_, vrw, ns, _ := dbfactory.MemFactory{}.CreateDB(context.Background(), types.Format_DOLT, nil, nil)
+	require.Equal(t, types.Format_DOLT, vrw.Format())
 	colColl := schema.NewColCollection(
 		schema.NewColumn("pk1", 1, types.IntKind, true, schema.NotNullConstraint{}),
 		schema.NewColumn("v1", 2, types.IntKind, false),
@@ -632,8 +632,8 @@ func TestIndexRebuildingUniqueSuccessOneCol(t *testing.T) {
 }
 
 func TestIndexRebuildingUniqueSuccessTwoCol(t *testing.T) {
-	_, vrw, ns, _ := dbfactory.MemFactory{}.CreateDB(context.Background(), types.Format_LD_1, nil, nil)
-	require.Equal(t, types.Format_LD_1, vrw.Format())
+	_, vrw, ns, _ := dbfactory.MemFactory{}.CreateDB(context.Background(), types.Format_DOLT, nil, nil)
+	require.Equal(t, types.Format_DOLT, vrw.Format())
 	colColl := schema.NewColCollection(
 		schema.NewColumn("pk1", 1, types.IntKind, true, schema.NotNullConstraint{}),
 		schema.NewColumn("v1", 2, types.IntKind, false),
@@ -663,8 +663,8 @@ func TestIndexRebuildingUniqueSuccessTwoCol(t *testing.T) {
 }
 
 func TestIndexRebuildingUniqueFailOneCol(t *testing.T) {
-	_, vrw, ns, _ := dbfactory.MemFactory{}.CreateDB(context.Background(), types.Format_LD_1, nil, nil)
-	require.Equal(t, types.Format_LD_1, vrw.Format())
+	_, vrw, ns, _ := dbfactory.MemFactory{}.CreateDB(context.Background(), types.Format_DOLT, nil, nil)
+	require.Equal(t, types.Format_DOLT, vrw.Format())
 	colColl := schema.NewColCollection(
 		schema.NewColumn("pk1", 1, types.IntKind, true, schema.NotNullConstraint{}),
 		schema.NewColumn("v1", 2, types.IntKind, false),
@@ -694,8 +694,8 @@ func TestIndexRebuildingUniqueFailOneCol(t *testing.T) {
 }
 
 func TestIndexRebuildingUniqueFailTwoCol(t *testing.T) {
-	_, vrw, ns, _ := dbfactory.MemFactory{}.CreateDB(context.Background(), types.Format_LD_1, nil, nil)
-	require.Equal(t, types.Format_LD_1, vrw.Format())
+	_, vrw, ns, _ := dbfactory.MemFactory{}.CreateDB(context.Background(), types.Format_DOLT, nil, nil)
+	require.Equal(t, types.Format_DOLT, vrw.Format())
 	colColl := schema.NewColCollection(
 		schema.NewColumn("pk1", 1, types.IntKind, true, schema.NotNullConstraint{}),
 		schema.NewColumn("v1", 2, types.IntKind, false),
@@ -729,7 +729,7 @@ func TestIndexRebuildingUniqueFailTwoCol(t *testing.T) {
 func TestIndexEditorCapacityExceeded(t *testing.T) {
 	// In the event that we reach the iea capacity on Undo, we need to verify that all code paths fail and remain failing
 	ctx := context.Background()
-	format := types.Format_LD_1
+	format := types.Format_DOLT
 	_, vrw, _, err := dbfactory.MemFactory{}.CreateDB(ctx, format, nil, nil)
 	require.Equal(t, format, vrw.Format())
 	require.NoError(t, err)
@@ -814,7 +814,7 @@ func createTestRowDataFromTaggedValues(t *testing.T, vrw types.ValueReadWriter, 
 	ed := m.Edit()
 
 	for i, val := range vals {
-		r, err := row.New(types.Format_LD_1, sch, val)
+		r, err := row.New(types.Format_DOLT, sch, val)
 		require.NoError(t, err)
 		rows[i] = r
 		ed = ed.Set(r.NomsMapKey(sch), r.NomsMapValue(sch))
@@ -861,7 +861,7 @@ func rowsToIndexRows(t *testing.T, rows []row.Row, indexName schema.Index, index
 			require.True(t, ok)
 			indexNameKey[tag] = val
 		}
-		indexNameExpectedRows[i], err = row.New(types.Format_LD_1, indexNameSch, indexNameKey)
+		indexNameExpectedRows[i], err = row.New(types.Format_DOLT, indexNameSch, indexNameKey)
 		require.NoError(t, err)
 
 		indexAgeKey := make(row.TaggedValues)
@@ -870,7 +870,7 @@ func rowsToIndexRows(t *testing.T, rows []row.Row, indexName schema.Index, index
 			require.True(t, ok)
 			indexAgeKey[tag] = val
 		}
-		indexAgeExpectedRows[i], err = row.New(types.Format_LD_1, indexAgeSch, indexAgeKey)
+		indexAgeExpectedRows[i], err = row.New(types.Format_DOLT, indexAgeSch, indexAgeKey)
 		require.NoError(t, err)
 	}
 	return

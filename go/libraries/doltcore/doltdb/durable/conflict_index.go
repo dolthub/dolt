@@ -32,34 +32,20 @@ type ConflictIndex interface {
 
 // RefFromConflictIndex persists |idx| and returns the types.Ref targeting it.
 func RefFromConflictIndex(ctx context.Context, vrw types.ValueReadWriter, idx ConflictIndex) (types.Ref, error) {
-	switch idx.Format() {
-	case types.Format_LD_1:
-		return refFromNomsValue(ctx, vrw, idx.(nomsConflictIndex).index)
-
-	case types.Format_DOLT:
-		return types.Ref{}, fmt.Errorf("__DOLT__ conflicts should be stored in ArtifactIndex")
-
-	default:
-		return types.Ref{}, errNbfUnknown
+	if idx.Format() != types.Format_DOLT {
+		return types.Ref{}, fmt.Errorf("unsupported format: %s", idx.Format().VersionString())
 	}
+
+	return types.Ref{}, fmt.Errorf("__DOLT__ conflicts should be stored in ArtifactIndex")
 }
 
 // NewEmptyConflictIndex returns an ConflictIndex with no rows.
 func NewEmptyConflictIndex(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, oursSch, theirsSch, baseSch schema.Schema) (ConflictIndex, error) {
-	switch vrw.Format() {
-	case types.Format_LD_1:
-		m, err := types.NewMap(ctx, vrw)
-		if err != nil {
-			return nil, err
-		}
-		return ConflictIndexFromNomsMap(m, vrw), nil
-
-	case types.Format_DOLT:
-		return nil, fmt.Errorf("__DOLT__ conflicts should be stored in ArtifactIndex")
-
-	default:
-		return nil, errNbfUnknown
+	if vrw.Format() != types.Format_DOLT {
+		return nil, fmt.Errorf("unsupported format: %s", vrw.Format().VersionString())
 	}
+
+	return nil, fmt.Errorf("__DOLT__ conflicts should be stored in ArtifactIndex")
 }
 
 func ConflictIndexFromNomsMap(m types.Map, vrw types.ValueReadWriter) ConflictIndex {
@@ -78,21 +64,11 @@ func conflictIndexFromRef(ctx context.Context, vrw types.ValueReadWriter, ns tre
 }
 
 func conflictIndexFromAddr(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, ourSch, theirSch, baseSch schema.Schema, addr hash.Hash) (ConflictIndex, error) {
-	v, err := vrw.ReadValue(ctx, addr)
-	if err != nil {
-		return nil, err
+	if vrw.Format() != types.Format_DOLT {
+		return nil, fmt.Errorf("unsupported format: %s", vrw.Format().VersionString())
 	}
 
-	switch vrw.Format() {
-	case types.Format_LD_1:
-		return ConflictIndexFromNomsMap(v.(types.Map), vrw), nil
-
-	case types.Format_DOLT:
-		return nil, fmt.Errorf("__DOLT__ conflicts should be stored in ArtifactIndex")
-
-	default:
-		return nil, errNbfUnknown
-	}
+	return nil, fmt.Errorf("__DOLT__ conflicts should be stored in ArtifactIndex")
 }
 
 type nomsConflictIndex struct {

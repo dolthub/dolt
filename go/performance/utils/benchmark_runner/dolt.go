@@ -17,6 +17,7 @@ package benchmark_runner
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"syscall"
@@ -125,11 +126,7 @@ func (b *doltBenchmarkerImpl) Benchmark(ctx context.Context) (Results, error) {
 func InitDoltRepo(ctx context.Context, dir, serverExec, nomsBinFormat, dbName string) (string, error) {
 	testRepo := filepath.Join(dir, dbName)
 	if nomsBinFormat == types.Format_LD_1.VersionString() {
-		err := ExecCommand(ctx, serverExec, doltCloneCommand, bigEmptyRepo, dbName).Run()
-		if err != nil {
-			return "", err
-		}
-		return testRepo, nil
+		return "", fmt.Errorf("LD_1 format is no longer supported")
 	}
 
 	err := os.MkdirAll(testRepo, os.ModePerm)

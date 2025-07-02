@@ -84,17 +84,12 @@ type IndexSet interface {
 
 // RefFromIndex persists the Index and returns a types.Ref to it.
 func RefFromIndex(ctx context.Context, vrw types.ValueReadWriter, idx Index) (types.Ref, error) {
-	switch idx.Format() {
-	case types.Format_LD_1:
-		return refFromNomsValue(ctx, vrw, idx.(nomsIndex).index)
-
-	case types.Format_DOLT:
-		b := shim.ValueFromMap(MapFromIndex(idx))
-		return refFromNomsValue(ctx, vrw, b)
-
-	default:
-		return types.Ref{}, errNbfUnknown
+	if idx.Format() != types.Format_DOLT {
+		return types.Ref{}, fmt.Errorf("unsupported format: %s", idx.Format().VersionString())
 	}
+
+	b := shim.ValueFromMap(MapFromIndex(idx))
+	return refFromNomsValue(ctx, vrw, b)
 }
 
 // indexFromRef reads the types.Ref from storage and returns the Index it points to.
@@ -109,20 +104,15 @@ func indexFromAddr(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeS
 		return nil, err
 	}
 
-	switch vrw.Format() {
-	case types.Format_LD_1:
-		return IndexFromNomsMap(v.(types.Map), vrw, ns), nil
-
-	case types.Format_DOLT:
-		m, err := shim.MapInterfaceFromValue(ctx, v, sch, ns, isKeylessTable)
-		if err != nil {
-			return nil, err
-		}
-		return IndexFromMapInterface(m), nil
-
-	default:
-		return nil, errNbfUnknown
+	if vrw.Format() != types.Format_DOLT {
+		return nil, fmt.Errorf("unsupported format: %s", vrw.Format().VersionString())
 	}
+
+	m, err := shim.MapInterfaceFromValue(ctx, v, sch, ns, isKeylessTable)
+	if err != nil {
+		return nil, err
+	}
+	return IndexFromMapInterface(m), nil
 }
 
 // NewEmptyPrimaryIndex creates a new empty Index for use as the primary index in a table.
@@ -144,27 +134,18 @@ func NewEmptyIndexFromTableSchema(ctx context.Context, vrw types.ValueReadWriter
 
 // newEmptyIndex returns an index with no rows.
 func newEmptyIndex(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, sch schema.Schema, isVector bool, isKeylessSecondary bool) (Index, error) {
-	switch vrw.Format() {
-	case types.Format_LD_1:
-		m, err := types.NewMap(ctx, vrw)
-		if err != nil {
-			return nil, err
-		}
-		return IndexFromNomsMap(m, vrw, ns), nil
+	if vrw.Format() != types.Format_DOLT {
+		return nil, fmt.Errorf("unsupported format: %s", vrw.Format().VersionString())
+	}
 
-	case types.Format_DOLT:
-		kd, vd := sch.GetMapDescriptors(ns)
-		if isKeylessSecondary {
-			kd = prolly.AddHashToSchema(kd)
-		}
-		if isVector {
-			return NewEmptyProximityIndex(ctx, ns, kd, vd)
-		} else {
-			return NewEmptyProllyIndex(ctx, ns, kd, vd)
-		}
-
-	default:
-		return nil, errNbfUnknown
+	kd, vd := sch.GetMapDescriptors(ns)
+	if isKeylessSecondary {
+		kd = prolly.AddHashToSchema(kd)
+	}
+	if isVector {
+		return NewEmptyProximityIndex(ctx, ns, kd, vd)
+	} else {
+		return NewEmptyProllyIndex(ctx, ns, kd, vd)
 	}
 }
 

@@ -34,7 +34,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/json"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 type jsonValueTest struct {
@@ -45,9 +44,7 @@ type jsonValueTest struct {
 }
 
 func TestJsonValues(t *testing.T) {
-	if types.Format_Default != types.Format_LD_1 {
-		t.Skip() // todo: convert to enginetests
-	}
+	t.Skip("todo: convert to enginetests")
 
 	SkipByDefaultInCI(t)
 	setupCommon := []testCommand{
@@ -162,9 +159,7 @@ func testJsonValue(t *testing.T, test jsonValueTest, setupCommon []testCommand) 
 
 // round-trips large random JSON objects through the SQL engine
 func TestLargeJsonObjects(t *testing.T) {
-	if types.Format_Default != types.Format_LD_1 {
-		t.Skip() // todo: convert to enginetests
-	}
+	t.Skip("todo: convert to enginetests")
 
 	SkipByDefaultInCI(t)
 	setupCommon := []testCommand{

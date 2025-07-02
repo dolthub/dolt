@@ -87,13 +87,7 @@ func LoadedLocalLocation() *time.Location {
 
 // BasicSelectTests cover basic select statement features and error handling
 func BasicSelectTests() []SelectTest {
-	var headCommitHash string
-	switch types.Format_Default {
-	case types.Format_DOLT:
-		headCommitHash = "ias4mf52sgeig337ce2le7ov9vpltppr"
-	case types.Format_LD_1:
-		headCommitHash = "73hc2robs4v0kt9taoe3m5hd49dmrgun"
-	}
+	headCommitHash := "ias4mf52sgeig337ce2le7ov9vpltppr"
 
 	return []SelectTest{
 		{
@@ -1269,9 +1263,7 @@ func TestSelect(t *testing.T) {
 }
 
 func TestAsOfQueries(t *testing.T) {
-	if types.Format_Default != types.Format_LD_1 {
-		t.Skip("") // todo: convert to enginetests
-	}
+	t.Skip("todo: convert to enginetests")
 	for _, test := range AsOfTests {
 		t.Run(test.Name, func(t *testing.T) {
 			// AS OF queries use the same history as the diff tests, so exercise the same test setup
