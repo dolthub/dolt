@@ -59,6 +59,24 @@ var DoltRmTests = []queries.ScriptTest{
 		},
 	},
 	{
+		Name: "dolt Rm multiple tables",
+		SetUpScript: []string{
+			"CREATE TABLE test1 (i int)",
+			"CREATE TABLE test2 (i int)",
+			"CALL DOLT_COMMIT('-A', '-m', 'created tables')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_rm('test1', 'test2');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "show tables;",
+				Expected: []sql.Row{},
+			},
+		},
+	},
+	{
 		Name: "dolt Rm staged table",
 		SetUpScript: []string{
 			"CREATE TABLE test (i int)",
