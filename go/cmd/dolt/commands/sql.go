@@ -850,6 +850,7 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 						default:
 							err = engine.PrettyPrintResults(sqlCtx, closureFormat, sqlSch, rowIter, pagerEnabled, toggleWarnings, true)
 						}
+					} else {
 						if _, isUseStmt := sqlStmt.(*sqlparser.Use); isUseStmt {
 							cli.Println("Database Changed")
 						}
