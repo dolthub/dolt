@@ -36,6 +36,11 @@ CREATE TABLE big (
   pk int PRIMARY KEY,
   str longtext
 );
+
+CREATE TABLE def (
+  i INT check (i > 0)
+);
+INSERT INTO def VALUES (1), (2), (3);
 SQL
 dolt sql < "../../test_files/big_table.sql"  # inserts 1K rows to `big`
 dolt add .
@@ -69,6 +74,13 @@ dolt commit -m "made changes to other"
 dolt checkout "$DEFAULT_BRANCH"
 dolt table export abc abc.csv
 dolt schema export abc abc_schema.json
+
+dolt checkout -b check_merge
+dolt sql <<SQL
+INSERT INTO def VALUES (5), (6), (7);
+SQL
+dolt add .
+dolt commit -m "made changes to check_merge"
 
 # add info to the log
 echo

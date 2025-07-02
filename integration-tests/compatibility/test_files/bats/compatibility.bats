@@ -206,3 +206,8 @@ EOF
 
     dolt sql -q 'drop table abc2'
 }
+
+@test "dolt merge with check constraints" {
+    run dolt merge check_merge
+    [ "$status" -eq 0 ]
+}
