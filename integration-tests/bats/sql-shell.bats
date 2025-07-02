@@ -26,6 +26,7 @@ teardown() {
     skiponwindows "Need to install expect and make this script work on windows."
     if [ "$SQL_ENGINE" = "remote-engine" ]; then
         skip "shell on server returns Empty Set instead of OkResult"
+    fi
     run $BATS_TEST_DIRNAME/sql-shell-ok-result.expect
     [ "$status" -eq 0 ]
 }
@@ -35,6 +36,7 @@ teardown() {
     skiponwindows "Need to install expect and make this script work on windows."
     if [ "$SQL_ENGINE" = "remote-engine" ]; then
         skip "shell on server returns Empty Set instead of OkResult"
+    fi
     run $BATS_TEST_DIRNAME/sql-shell-use.expect
     [ "$status" -eq 0 ]
 }
