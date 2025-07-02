@@ -77,6 +77,7 @@ func (cmd CreateCommitCmd) Exec(ctx context.Context, commandStr string, args []s
 	parents, _ := apr.GetValueList("parents")
 	branch, isBranchSet := apr.GetValue(cli.BranchParam)
 	force := apr.Contains(cli.ForceFlag)
+	allowMissingHash := apr.Contains("allow-missing-hash")
 
 	var name, email string
 	var err error
@@ -132,10 +133,16 @@ func (cmd CreateCommitCmd) Exec(ctx context.Context, commandStr string, args []s
 		Amend:   force,
 	}
 
-	rootVal, err := db.ValueReadWriter().ReadValue(ctx, commitRootHash)
-	if err != nil {
-		cli.PrintErrln(errhand.VerboseErrorFromError(err))
-		return 1
+	if !allowMissingHash {
+		rootVal, err := db.ValueReadWriter().ReadValue(ctx, commitRootHash)
+		if err != nil {
+			cli.PrintErrln(errhand.VerboseErrorFromError(err))
+			return 1
+		}
+		if rootVal == nil {
+			cli.PrintErrln("root value could not be resolved. If this is deliberate, add the --allow-missing-hash flag.")
+			return 1
+		}
 	}
 
 	var commit *doltdb.Commit
