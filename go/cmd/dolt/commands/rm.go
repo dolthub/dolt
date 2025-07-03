@@ -41,11 +41,9 @@ The dolt status command can be used to obtain a summary of which tables have cha
 
 type RmCmd struct{}
 
-/*var _ cli.RepoNotRequiredCommand = RmCmd{}
-
 func (cmd RmCmd) RequiresRepo() bool {
 	return false
-}*/ //TODO DO WE NEED THIS
+}
 
 // Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
 func (cmd RmCmd) Name() string {
@@ -122,5 +120,4 @@ func generateRmSql(args []string) (string, error) {
 	buffer.WriteString(")")
 
 	return dbr.InterpolateForDialect(buffer.String(), queryValues, dialect.MySQL)
-
 }
