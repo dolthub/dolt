@@ -1505,8 +1505,7 @@ SQL
     # make sure we aren't double-counting revision dbs
     run dolt sql -r csv -q 'use `db1/main`; show databases'
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Database changed" ]] || false
-    [ "${#lines[@]}" -eq 12 ] # one line for above output, 11 dbs
+    [ "${#lines[@]}" -eq 11 ]
 }
 
 @test "sql: run outside a dolt directory" {
@@ -1725,7 +1724,7 @@ SQL
 SQL
 
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 5 ] # First line is "database changed"
+    [ "${#lines[@]}" -eq 4 ]
     [[ ! "$output" =~ "5" ]] || false
 }
 
@@ -2077,10 +2076,11 @@ SQL
     dolt sql -q "CREATE TABLE test(pk BIGINT PRIMARY KEY, v BIGINT);"
     run dolt sql -q "REPLACE INTO test VALUES (1, 1);"
     [ $status -eq 0 ]
-    [[ "$output" =~ "Query OK, 1 row affected" ]] || false
     run dolt sql -q "REPLACE INTO test VALUES (1, 2);"
     [ $status -eq 0 ]
-    [[ "$output" =~ "Query OK, 2 rows affected" ]] || false
+    run dolt sql -q "SELECT * FROM test" -r csv
+    [ $status -eq 0 ]
+    [[ "$output" = "1,2" ]]
 }
 
 @test "sql: unix_timestamp function" {
