@@ -112,11 +112,11 @@ func (cmd GarbageCollectionCmd) Exec(ctx context.Context, commandStr string, arg
 	}
 
 	_, _, _, err = queryist.Query(sqlCtx, query)
-	if err != nil && err != chunks.ErrNothingToCollect {
+	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	return HandleVErrAndExitCode(nil, usage)
+	return 0
 }
 
 // constructDoltGCQuery generates the sql query necessary to call DOLT_GC()
