@@ -42,6 +42,17 @@ teardown() {
 }
 
 # bats test_tags=no_lambda
+@test "sql-shell: multi statement query returns accurate timing" {
+    dolt sql -q "CREATE TABLE t(a int);"
+    dolt sql -q "INSERT INTO t VALUES (1);"
+    dolt sql -q "CREATE TABLE t1(b int);"
+    run $BATS_TEST_DIRNAME/sql-shell-multi-stmt-timings.expect
+    [[ "$output" =~ "Query OK, 1 row affected (1".*" sec)" ]] || false
+    [[ "$output" =~ "Query OK, 1 row affected (2".*" sec)" ]] || false
+    [[ "$output" =~ "Query OK, 1 row affected (3".*" sec)" ]] || false
+}
+
+# bats test_tags=no_lambda
 @test "sql-shell: warnings are not suppressed" {
     skiponwindows "Need to install expect and make this script work on windows."
     run $BATS_TEST_DIRNAME/sql-shell-warnings.expect
