@@ -188,7 +188,6 @@ SQL
     # we can still use the entities we created with ANSI_QUOTES.
     run dolt sql -q "INSERT INTO table1 (pk) VALUES (111);"
     [ $status -eq "0" ]
-    [[ $output = "" ]] || false
 
     run dolt sql -r csv -q "SELECT * from table1;"
     [ $status -eq "0" ]

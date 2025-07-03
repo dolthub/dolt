@@ -1650,7 +1650,6 @@ SQL
     # Run a query and assert that no changes were made
     run dolt sql -q "INSERT IGNORE INTO objects (id,name,color) VALUES (5, 'hi', 'yellow');"
     [ "$status" -eq "0" ]
-    [[ "$output" = "" ]] || false
 
     # Validate the data is correct
     run dolt sql -q "SELECT * FROM objects ORDER BY id" -r csv

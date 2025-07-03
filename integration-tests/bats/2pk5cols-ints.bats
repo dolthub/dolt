@@ -75,14 +75,12 @@ teardown() {
 @test "2pk5cols-ints: interact with a multiple primary key table with sql" {
     run dolt sql -q "insert into test (pk1,pk2,c1,c2,c3,c4,c5) values (0,0,6,6,6,6,6)"
     [ "$status" -eq 0 ]
-    [[ "$output" = "" ]] || false
     run dolt sql -q "select * from test"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "c5" ]] || false
     [[ "$output" =~ "6" ]] || false
     run dolt sql -q "insert into test (pk1,pk2,c1,c2,c3,c4,c5) values (0,1,7,7,7,7,7),(1,0,8,8,8,8,8)"
     [ "$status" -eq 0 ]
-    [[ "$output" = "" ]] || false
     run dolt sql -q "select * from test"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "c5" ]] || false

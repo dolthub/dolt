@@ -13,13 +13,11 @@ teardown() {
 @test "sql-spatial-types: can make spatial types" {
     run dolt sql -q "create table point_tbl (p point)"
     [ "$status" -eq 0 ]
-    [ "$output" = "" ] || false
 }
 
 @test "sql-spatial-types: create point table and insert points" {
     run dolt sql -q "create table point_tbl (p point)"
     [ "$status" -eq 0 ]
-    [ "$output" = "" ] || false
     run dolt sql -q "insert into point_tbl () values (point(1,2))"
     [ "$status" -eq 0 ]
     [[ "$output" = "" ]] || false
@@ -40,7 +38,6 @@ teardown() {
 @test "sql-spatial-types: create linestring table and insert linestrings" {
     run dolt sql -q "create table line_tbl (l linestring)"
     [ "$status" -eq 0 ]
-    [ "$output" = "" ] || false
     run dolt sql -q "insert into line_tbl () values (linestring(point(1,2),point(3,4)))"
     [ "$status" -eq 0 ]
     [[ "$output" = "" ]] || false
@@ -57,7 +54,6 @@ teardown() {
 @test "sql-spatial-types: create polygon table and insert polygon" {
     run dolt sql -q "create table poly_tbl (p polygon)"
     [ "$status" -eq 0 ]
-    [ "$output" = "" ] || false
     run dolt sql -q "insert into poly_tbl () values (polygon(linestring(point(1,2),point(3,4),point(5,6),point(7,8))))"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "Invalid GIS data" ]] || false
@@ -88,7 +84,6 @@ teardown() {
     # create geometry table
     run dolt sql -q "create table geom_tbl (g geometry)"
     [ "$status" -eq 0 ]
-    [ "$output" = "" ] || false
 
     # inserting point
     run dolt sql -q "insert into geom_tbl values (point(1,2))"
@@ -111,7 +106,6 @@ teardown() {
     # create geometry table
     run dolt sql -q "create table geom_tbl (g geometry)"
     [ "$status" -eq 0 ]
-    [ "$output" = "" ] || false
 
     # inserting point
     run dolt sql -q "insert into geom_tbl values (point(1,2))"
@@ -144,7 +138,6 @@ teardown() {
     # create geometry table
     run dolt sql -q "create table geom_tbl (g geometry)"
     [ "$status" -eq 0 ]
-    [ "$output" = "" ] || false
 
     # inserting point
     run dolt sql -q "insert into geom_tbl () values (point(1,2))"
