@@ -611,6 +611,11 @@ func (lvs *ValueStore) GC(ctx context.Context, mode GCMode, cmp chunks.GCArchive
 				return make(hash.HashSet)
 			})
 			if err != nil {
+				if errors.Is(err, chunks.ErrNothingToCollect) {
+					// nothing to do. not an error.
+					return nil
+				}
+
 				return err
 			}
 
