@@ -45,18 +45,18 @@ func NewTupleLeafNode(keys, values []val.Tuple) Node {
 	return newLeafNode(ks, vs)
 }
 
-func RandomTuplePairs(ctx context.Context, count int, keyDesc, valDesc val.TupleDesc, ns NodeStore) (items [][2]val.Tuple, err error) {
+func RandomTuplePairs(ctx context.Context, testRand *rand.Rand, count int, keyDesc, valDesc val.TupleDesc, ns NodeStore) (items [][2]val.Tuple, err error) {
 	keyBuilder := val.NewTupleBuilder(keyDesc, ns)
 	valBuilder := val.NewTupleBuilder(valDesc, ns)
 
 	items = make([][2]val.Tuple, count)
 	for i := range items {
 		var err error
-		items[i][0], err = RandomTuple(keyBuilder, ns)
+		items[i][0], err = RandomTuple(keyBuilder, testRand, ns)
 		if err != nil {
 			return nil, err
 		}
-		items[i][1], err = RandomTuple(valBuilder, ns)
+		items[i][1], err = RandomTuple(valBuilder, testRand, ns)
 		if err != nil {
 			return nil, err
 		}
@@ -79,7 +79,7 @@ func RandomTuplePairs(ctx context.Context, count int, keyDesc, valDesc val.Tuple
 
 		// replace duplicates and validate again
 		for _, d := range dupes {
-			items[d][0], _ = RandomTuple(keyBuilder, ns)
+			items[d][0], _ = RandomTuple(keyBuilder, testRand, ns)
 		}
 		dupes = dupes[:0]
 	}
@@ -95,7 +95,7 @@ func RandomCompositeTuplePairs(ctx context.Context, count int, keyDesc, valDesc 
 		panic("expected composite key")
 	}
 
-	tt, err := RandomTuplePairs(ctx, count, keyDesc, valDesc, ns)
+	tt, err := RandomTuplePairs(ctx, testRand, count, keyDesc, valDesc, ns)
 	if err != nil {
 		return nil, err
 	}
@@ -144,9 +144,33 @@ func AscendingUintTuples(count int) (tuples [][2]val.Tuple, desc val.TupleDesc) 
 	return
 }
 
-func RandomTuple(tb *val.TupleBuilder, ns NodeStore) (tup val.Tuple, err error) {
+func AscendingUintTuplesWithStep(count int, keyStart int, valStart int, step int) (tuples [][2]val.Tuple, desc val.TupleDesc) {
+	desc = val.NewTupleDescriptor(val.Type{Enc: val.Uint32Enc})
+	bld := val.NewTupleBuilder(desc, nil)
+	tuples = make([][2]val.Tuple, count)
+	var err error
+	key := keyStart
+	value := valStart
+	for i := range tuples {
+		bld.PutUint32(0, uint32(key))
+		tuples[i][0], err = bld.Build(sharedPool)
+		if err != nil {
+			panic(err)
+		}
+		bld.PutUint32(0, uint32(value))
+		tuples[i][1], err = bld.Build(sharedPool)
+		if err != nil {
+			panic(err)
+		}
+		key += step
+		value += step
+	}
+	return
+}
+
+func RandomTuple(tb *val.TupleBuilder, testRand *rand.Rand, ns NodeStore) (tup val.Tuple, err error) {
 	for i, typ := range tb.Desc.Types {
-		randomField(tb, i, typ, ns)
+		randomField(tb, testRand, i, typ, ns)
 	}
 	return tb.Build(sharedPool)
 }
@@ -208,7 +232,7 @@ func deduplicateTuples(ctx context.Context, desc val.TupleDesc, tups [][2]val.Tu
 	return
 }
 
-func randomField(tb *val.TupleBuilder, idx int, typ val.Type, ns NodeStore) {
+func randomField(tb *val.TupleBuilder, testRand *rand.Rand, idx int, typ val.Type, ns NodeStore) {
 	// todo(andy): add NULLs
 
 	neg := -1
@@ -376,4 +400,52 @@ func (v nodeStoreValidator) PurgeCaches() {
 
 func (v nodeStoreValidator) Format() *types.NomsBinFormat {
 	return v.ns.Format()
+}
+
+func MakeTreeForTest(tuples [][2]val.Tuple) (Node, error) {
+	ctx := context.Background()
+	ns := NewTestNodeStore()
+
+	// todo(andy): move this test
+	s := message.NewProllyMapSerializer(val.TupleDesc{}, ns.Pool())
+	chunker, err := newEmptyChunker(ctx, ns, s)
+	if err != nil {
+		return Node{}, err
+	}
+	for _, pair := range tuples {
+		if pair[1] == nil {
+			continue
+		}
+		err := chunker.AddPair(ctx, Item(pair[0]), Item(pair[1]))
+		if err != nil {
+			return Node{}, err
+		}
+	}
+	root, err := chunker.Done(ctx)
+	if err != nil {
+		return Node{}, err
+	}
+	return root, nil
+}
+
+func GetAddressFromLevelAndKeyForTest(ctx context.Context, ns NodeStore, root Node, level int, key val.Tuple, keyDesc val.TupleDesc) (addr hash.Hash, ok bool, err error) {
+	i := 0
+	for i < root.Count() {
+		childKey := root.GetKey(i)
+		cmp := keyDesc.Compare(ctx, val.Tuple(childKey), key)
+		if cmp >= 0 {
+			childAddr := root.getAddress(i)
+			if root.Level() == level {
+				return childAddr, true, nil
+			} else {
+				childNode, err := fetchChild(ctx, ns, childAddr)
+				if err != nil {
+					return hash.Hash{}, false, err
+				}
+				return GetAddressFromLevelAndKeyForTest(ctx, ns, childNode, level, key, keyDesc)
+			}
+		}
+		i++
+	}
+	return hash.Hash{}, false, nil
 }

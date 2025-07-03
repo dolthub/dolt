@@ -71,19 +71,19 @@ func (f ProximityFlusher) ApplyMutationsWithSerializer(
 	}
 	edits := make([]VectorIndexKV, 0, mutableMap.tuples.Edits.Count())
 	editIter := mutableMap.tuples.Mutations()
-	key, value := editIter.NextMutation(ctx)
+	mutation := editIter.NextMutation(ctx)
 	maxEditLevel := uint8(0)
-	for key != nil {
-		keyLevel := tree.DeterministicHashLevel(f.logChunkSize, key)
+	for mutation.Key != nil {
+		keyLevel := tree.DeterministicHashLevel(f.logChunkSize, mutation.Key)
 		if keyLevel > maxEditLevel {
 			maxEditLevel = keyLevel
 		}
 		edits = append(edits, VectorIndexKV{
-			key:   key,
-			value: value,
+			key:   mutation.Key,
+			value: mutation.Value,
 			level: int(keyLevel),
 		})
-		key, value = editIter.NextMutation(ctx)
+		mutation = editIter.NextMutation(ctx)
 	}
 	var newRoot tree.Node
 	var err error

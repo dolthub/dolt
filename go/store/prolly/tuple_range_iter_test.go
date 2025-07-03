@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"math/rand"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -500,11 +501,11 @@ func testIterOrdinalRangeWithBounds(t *testing.T, om Map, tuples [][2]val.Tuple,
 	})
 }
 
-func testIterKeyRange(t *testing.T, m Map, tuples [][2]val.Tuple) {
+func testIterKeyRange(t *testing.T, testRand *rand.Rand, m Map, tuples [][2]val.Tuple) {
 	ctx := context.Background()
 
 	t.Run("RandomKeyRange", func(t *testing.T) {
-		bounds := generateInserts(t, m, m.keyDesc, m.valDesc, 2)
+		bounds := generateInserts(t, testRand, m, m.keyDesc, m.valDesc, 2)
 		start, stop := bounds[0][0], bounds[1][0]
 		if m.keyDesc.Compare(ctx, start, stop) > 0 {
 			start, stop = stop, start

@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/cespare/xxhash/v2"
 	"io"
 	"math/rand"
 	"sort"
@@ -41,7 +42,7 @@ func TestMapRangeDiff(t *testing.T) {
 	for _, s := range scales {
 		name := fmt.Sprintf("test map RangeDiff at scale %d", s)
 		t.Run(name, func(t *testing.T) {
-			prollyMap, tuples := makeProllyMap(t, s)
+			prollyMap, tuples := makeProllyMap(t, testRand, s)
 			require.Equal(t, s, len(tuples))
 
 			kd := prollyMap.(Map).keyDesc
@@ -93,27 +94,43 @@ func runDiffTestsWithRange(t *testing.T, s int, prollyMap testMap, tuples [][2]v
 
 	// inserts
 	t.Run("single insert diff", func(t *testing.T) {
-		for k := 0; k < 100; k++ {
-			testRngInsertDiffs(t, prollyMap.(Map), tuples, 1, rngTest)
+		seed := int64(xxhash.Sum64String(t.Name()))
+		for k := int64(0); k < 100; k++ {
+			t.Run(fmt.Sprintf("iteration %d", k), func(t *testing.T) {
+				testRand := rand.New(rand.NewSource(seed + k))
+				testRngInsertDiffs(t, testRand, prollyMap.(Map), tuples, 1, rngTest)
+			})
 		}
 	})
 	t.Run("many insert diffs", func(t *testing.T) {
-		for k := 0; k < 10; k++ {
-			testRngInsertDiffs(t, prollyMap.(Map), tuples, s/10, rngTest)
-			testRngInsertDiffs(t, prollyMap.(Map), tuples, s/2, rngTest)
+		seed := int64(xxhash.Sum64String(t.Name()))
+		for k := int64(0); k < 10; k++ {
+			t.Run(fmt.Sprintf("iteration %d", k), func(t *testing.T) {
+				testRand := rand.New(rand.NewSource(seed + k))
+				testRngInsertDiffs(t, testRand, prollyMap.(Map), tuples, s/10, rngTest)
+				testRngInsertDiffs(t, testRand, prollyMap.(Map), tuples, s/2, rngTest)
+			})
 		}
 	})
 
 	// updates
 	t.Run("single update diff", func(t *testing.T) {
-		for k := 0; k < 100; k++ {
-			testRngUpdateDiffs(t, prollyMap.(Map), tuples, 1, rngTest)
+		seed := int64(xxhash.Sum64String(t.Name()))
+		for k := int64(0); k < 100; k++ {
+			t.Run(fmt.Sprintf("iteration %d", k), func(t *testing.T) {
+				testRand := rand.New(rand.NewSource(seed + k))
+				testRngUpdateDiffs(t, testRand, prollyMap.(Map), tuples, 1, rngTest)
+			})
 		}
 	})
 	t.Run("many update diffs", func(t *testing.T) {
-		for k := 0; k < 10; k++ {
-			testRngUpdateDiffs(t, prollyMap.(Map), tuples, s/10, rngTest)
-			testRngUpdateDiffs(t, prollyMap.(Map), tuples, s/2, rngTest)
+		seed := int64(xxhash.Sum64String(t.Name()))
+		for k := int64(0); k < 10; k++ {
+			t.Run(fmt.Sprintf("iteration %d", k), func(t *testing.T) {
+				testRand := rand.New(rand.NewSource(seed + k))
+				testRngUpdateDiffs(t, testRand, prollyMap.(Map), tuples, s/10, rngTest)
+				testRngUpdateDiffs(t, testRand, prollyMap.(Map), tuples, s/2, rngTest)
+			})
 		}
 	})
 }
@@ -141,8 +158,8 @@ func testRngEqualMapDiff(t *testing.T, m Map, rngTest rangeDiffTest) {
 
 func testRngMapDiffAgainstEmpty(t *testing.T, scale int, rngTest rangeDiffTest) {
 	ctx := context.Background()
-	m, tuples := makeProllyMap(t, scale)
-	empty, _ := makeProllyMap(t, 0)
+	m, tuples := makeProllyMap(t, testRand, scale)
+	empty, _ := makeProllyMap(t, testRand, 0)
 
 	inRange := getPairsInRange(tuples, rngTest.rng)
 	cnt := 0
@@ -195,9 +212,9 @@ func testRngDeleteDiffs(t *testing.T, from Map, tups [][2]val.Tuple, numDeletes 
 	assert.Equal(t, len(inRange), cnt)
 }
 
-func testRngInsertDiffs(t *testing.T, from Map, tups [][2]val.Tuple, numInserts int, rngTest rangeDiffTest) {
+func testRngInsertDiffs(t *testing.T, testRand *rand.Rand, from Map, tups [][2]val.Tuple, numInserts int, rngTest rangeDiffTest) {
 	ctx := context.Background()
-	to, inserts := makeMapWithInserts(t, from, numInserts)
+	to, inserts := makeMapWithInserts(t, testRand, from, numInserts)
 
 	inRange := getPairsInRange(inserts, rngTest.rng)
 	cnt := 0
@@ -215,10 +232,10 @@ func testRngInsertDiffs(t *testing.T, from Map, tups [][2]val.Tuple, numInserts 
 	assert.Equal(t, len(inRange), cnt)
 }
 
-func testRngUpdateDiffs(t *testing.T, from Map, tups [][2]val.Tuple, numUpdates int, rngTest rangeDiffTest) {
+func testRngUpdateDiffs(t *testing.T, testRand *rand.Rand, from Map, tups [][2]val.Tuple, numUpdates int, rngTest rangeDiffTest) {
 	ctx := context.Background()
 
-	rand.Shuffle(len(tups), func(i, j int) {
+	testRand.Shuffle(len(tups), func(i, j int) {
 		tups[i], tups[j] = tups[j], tups[i]
 	})
 
@@ -228,7 +245,7 @@ func testRngUpdateDiffs(t *testing.T, from Map, tups [][2]val.Tuple, numUpdates 
 	})
 
 	kd, vd := from.Descriptors()
-	updates := makeUpdatesToTuples(kd, vd, sub...)
+	updates := makeUpdatesToTuples(testRand, kd, vd, sub...)
 	to := makeMapWithUpdates(t, from, updates...)
 	var inRange [][3]val.Tuple
 	for _, pair := range updates {

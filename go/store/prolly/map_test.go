@@ -17,6 +17,7 @@ package prolly
 import (
 	"context"
 	"fmt"
+	"github.com/cespare/xxhash/v2"
 	"io"
 	"math/rand"
 	"strconv"
@@ -49,10 +50,12 @@ func TestMap(t *testing.T) {
 	for _, s := range scales {
 		name := fmt.Sprintf("test prolly map at scale %d", s)
 		t.Run(name, func(t *testing.T) {
-			prollyMap, tuples := makeProllyMap(t, s)
+			prollyMap, tuples := makeProllyMap(t, testRand, s)
 
 			t.Run("get item from map", func(t *testing.T) {
-				testGet(t, prollyMap, tuples)
+				seed := int64(xxhash.Sum64String(t.Name()))
+				testRand := rand.New(rand.NewSource(seed))
+				testGet(t, testRand, prollyMap, tuples)
 			})
 			t.Run("iter all from map", func(t *testing.T) {
 				testIterAll(t, prollyMap, tuples)
@@ -113,7 +116,7 @@ func TestMutateMapWithTupleIter(t *testing.T) {
 
 	for _, s := range scales {
 		t.Run("scale "+strconv.Itoa(s), func(t *testing.T) {
-			all, err := tree.RandomTuplePairs(ctx, s, kd, vd, ns)
+			all, err := tree.RandomTuplePairs(ctx, testRand, s, kd, vd, ns)
 			require.NoError(t, err)
 
 			// randomize |all| and partition
@@ -246,7 +249,7 @@ func TestVisitMapLevelOrder(t *testing.T) {
 	for _, s := range scales {
 		t.Run("scale "+strconv.Itoa(s), func(t *testing.T) {
 			ctx := context.Background()
-			tm, _ := makeProllyMap(t, s)
+			tm, _ := makeProllyMap(t, testRand, s)
 			set1 := hash.NewHashSet()
 			err := tm.(Map).WalkAddresses(ctx, func(ctx context.Context, addr hash.Hash) error {
 				set1.Insert(addr)
@@ -285,7 +288,7 @@ func TestNewEmptyNode(t *testing.T) {
 // credit: https://github.com/tailscale/tailscale/commit/88586ec4a43542b758d6f4e15990573970fb4e8a
 func TestMapGetAllocs(t *testing.T) {
 	ctx := context.Background()
-	m, tuples := makeProllyMap(t, 100_000)
+	m, tuples := makeProllyMap(t, testRand, 100_000)
 
 	// assert no allocs for Map.Get()
 	avg := testing.AllocsPerRun(100, func() {
@@ -297,7 +300,7 @@ func TestMapGetAllocs(t *testing.T) {
 	assert.Equal(t, 0.0, avg)
 }
 
-func makeProllyMap(t *testing.T, count int) (testMap, [][2]val.Tuple) {
+func makeProllyMap(t *testing.T, testRand *rand.Rand, count int) (testMap, [][2]val.Tuple) {
 	ctx := context.Background()
 	kd := val.NewTupleDescriptor(
 		val.Type{Enc: val.Uint32Enc, Nullable: false},
@@ -309,7 +312,7 @@ func makeProllyMap(t *testing.T, count int) (testMap, [][2]val.Tuple) {
 	)
 	ns := tree.NewTestNodeStore()
 
-	tuples, err := tree.RandomTuplePairs(ctx, count, kd, vd, ns)
+	tuples, err := tree.RandomTuplePairs(ctx, testRand, count, kd, vd, ns)
 	require.NoError(t, err)
 	om := mustProllyMapFromTuples(t, kd, vd, tuples, ns)
 
@@ -331,7 +334,7 @@ func makeProllySecondaryIndex(t *testing.T, count int) (testMap, [][2]val.Tuple)
 	return om, tuples
 }
 
-func testGet(t *testing.T, om testMap, tuples [][2]val.Tuple) {
+func testGet(t *testing.T, testRand *rand.Rand, om testMap, tuples [][2]val.Tuple) {
 	ctx := context.Background()
 
 	// test get
@@ -354,7 +357,7 @@ func testGet(t *testing.T, om testMap, tuples [][2]val.Tuple) {
 
 	// test get with non-existent keys
 	kd, vd := om.Descriptors()
-	inserts := generateInserts(t, om, kd, vd, len(tuples)/2)
+	inserts := generateInserts(t, testRand, om, kd, vd, len(tuples)/2)
 	for _, kv := range inserts {
 		err := om.Get(ctx, kv[0], func(key, val val.Tuple) (err error) {
 			assert.Equal(t, 0, len(key), "Got %s", kd.Format(ctx, key))

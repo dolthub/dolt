@@ -16,6 +16,7 @@ package sort
 
 import (
 	"fmt"
+	"math/rand"
 	"os"
 	"strings"
 	"testing"
@@ -27,6 +28,8 @@ import (
 	"github.com/dolthub/dolt/go/store/util/tempfiles"
 	"github.com/dolthub/dolt/go/store/val"
 )
+
+var testRand = rand.New(rand.NewSource(1))
 
 func TestFlush(t *testing.T) {
 	ctx := sql.NewEmptyContext()
@@ -465,7 +468,7 @@ func testTuples(ns tree.NodeStore, kd val.TupleDesc, cnt int) []val.Tuple {
 
 	var keys []val.Tuple
 	for i := 0; i < cnt; i++ {
-		key, err := tree.RandomTuple(keyBuilder, ns)
+		key, err := tree.RandomTuple(keyBuilder, testRand, ns)
 		if err != nil {
 			panic(err)
 		}

@@ -152,10 +152,9 @@ func MergeOrderedTrees[K, V ~[]byte, O Ordering[K], S message.Serializer](
 	ctx context.Context,
 	l, r, base StaticMap[K, V, O],
 	cb CollisionFn,
-	leftSchemaChanged, rightSchemaChanged bool,
 	serializer S,
 ) (StaticMap[K, V, O], MergeStats, error) {
-	root, stats, err := ThreeWayMerge[K](ctx, base.NodeStore, l.Root, r.Root, base.Root, cb, leftSchemaChanged, rightSchemaChanged, base.Order, serializer)
+	root, stats, err := ThreeWayMerge[K](ctx, base.NodeStore, l.Root, r.Root, base.Root, cb, base.Order, serializer)
 	if err != nil {
 		return StaticMap[K, V, O]{}, MergeStats{}, err
 	}
