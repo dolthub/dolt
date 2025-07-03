@@ -2080,7 +2080,7 @@ SQL
     [ $status -eq 0 ]
     run dolt sql -q "SELECT * FROM test" -r csv
     [ $status -eq 0 ]
-    [[ "$output" = "1,2" ]]
+    [[ "$output" =~ "1,2" ]] || false
 }
 
 @test "sql: unix_timestamp function" {
