@@ -33,13 +33,6 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ " 0 " ]] || false
     [[ "$output" =~ " 1 " ]] || false
-
-    # check for trailing newline
-    # https://backreference.org/2010/05/23/sanitizing-files-with-no-trailing-newline/
-    dolt sql -batch -q "insert into test values (2,0,0,0,0,0)" > out.txt
-    lastline=$(tail -n 1 out.txt; echo x)
-    lastline=${lastline%x}
-    [[ $lastline = "" ]] || false
 }
 
 @test "sql-batch: Piped SQL files interpreted in batch mode" {

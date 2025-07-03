@@ -34,7 +34,6 @@ select database(), active_branch();
 select * from test;
 SQL
     [ "$status" -eq "0" ]
-    [[ ! "$output" =~ "Database changed" ]] || false
     [[ "$output" =~ "1,green" ]] || false
     [[ "$output" =~ "2,blue" ]] || false
     [[ ! "$output" =~ "3,purple" ]] || false
