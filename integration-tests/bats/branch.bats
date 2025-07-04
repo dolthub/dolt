@@ -354,3 +354,179 @@ teardown() {
     [ $status -eq 0 ]
     [[ "$output" =~ "main" ]] || false
 }
+
+@test "branch: dolt branch set upstream flag sets upstream" {
+    mkdir remote
+    mkdir repo1
+
+    cd repo1
+    dolt init
+    dolt remote add origin file://../remote
+    dolt branch br1
+    dolt --branch br1 push --set-upstream origin main
+
+    run dolt branch testUpstream --set-upstream-to origin/main
+    [ $status -eq 0 ]
+    [[ "$output" =~ "branch 'testUpstream' set up to track 'origin/main'" ]] || false
+
+    run dolt sql -q "select remote, branch from dolt_branches where name = 'testUpstream'" -r csv
+    [ $status -eq 0 ]
+    [[ "$output" =~ "origin,main" ]] || false
+}
+
+@test "branch: can change upstream of existing branch with --set-upstream-to" {
+    mkdir remote
+    mkdir repo1
+
+    cd repo1
+    dolt init
+    dolt remote add origin file://../remote
+    dolt push --set-upstream origin main
+    dolt branch br1 --set-upstream-to origin/main
+    dolt branch other
+    dolt --branch other push --set-upstream origin other
+
+    run dolt sql -q "select remote, branch from dolt_branches where name = 'br1'" -r csv
+    [ $status -eq 0 ]
+    [[ "$output" =~ "origin,main" ]] || false
+
+    dolt branch br1 --set-upstream-to origin/other
+
+    run dolt sql -q "select remote, branch from dolt_branches where name = 'br1'" -r csv
+    [ $status -eq 0 ]
+    [[ "$output" =~ "origin,other" ]] || false
+}
+
+@test "branch: can change upstream of existing branch with --set-upstream-to and selected branch is assumed" {
+    mkdir remote
+    mkdir repo1
+
+    cd repo1
+    dolt init
+    dolt remote add origin file://../remote
+    dolt push --set-upstream origin main
+    dolt branch other
+    dolt --branch other push --set-upstream origin other
+
+
+    dolt branch --set-upstream-to origin/other
+
+    run dolt sql -q "select remote, branch from dolt_branches where name = 'main'" -r csv
+    [ $status -eq 0 ]
+    [[ "$output" =~ "origin,other" ]] || false
+}
+
+@test "branch: cannot set upstream of branches with invalid remote" {
+    mkdir remote
+    mkdir repo1
+
+    cd repo1
+    dolt init
+    dolt remote add origin file://../remote
+    run dolt branch br1 --set-upstream-to origin/invalid
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "error: branch not found: origin/invalid" ]] || false
+
+    run dolt branch main --set-upstream-to origin/invalid
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "error: branch not found: origin/invalid" ]] || false
+}
+
+@test "branch: cannot use both --track and --set-upstream-to" {
+    mkdir remote
+    mkdir repo1
+
+    cd repo1
+    dolt init
+    dolt remote add origin file://../remote
+    dolt push --set-upstream origin main
+
+    run dolt branch br1 --set-upstream-to origin/main --track origin/main
+    [ $status -eq 1 ]
+    [[ "$output" =~ "error: --set-upstream-to and --track are mutually exclusive options" ]] || false
+}
+
+@test "branch: --track sets upstream" {
+        mkdir remote
+        mkdir repo1
+
+        cd repo1
+        dolt init
+        dolt remote add origin file://../remote
+        dolt push --set-upstream origin main
+
+        run dolt branch br1 --track origin/main
+        [ $status -eq 0 ]
+        [[ "$output" =~ "branch 'br1' set up to track 'origin/main'" ]] || false
+}
+
+@test "branch: --set-upstream-to and --track work with starting point" {
+    mkdir remote
+    mkdir repo1
+
+    cd repo1
+    dolt init
+    dolt remote add origin file://../remote
+    dolt sql -q "create table t (i int)"
+    dolt commit -Am "Created a table"
+    dolt push --set-upstream origin main
+
+    # get the second to last commit hash
+    hash=`dolt sql -q "select commit_hash from dolt_log where message = 'Initialize data repository'" -r csv | sed -n '2p'`
+    dolt branch br1 --set-upstream-to origin/main "$hash"
+
+    run dolt --branch br1 ls
+    [ $status -eq 0 ]
+    [[ "$output" =~ "No tables in working set" ]] || false
+
+    dolt branch br2 --track origin/main "$hash"
+
+    run dolt --branch br2 ls
+    [ $status -eq 0 ]
+    [[ "$output" =~ "No tables in working set" ]] || false
+}
+
+@test "branch: --set-upstream-to and --track presume HEAD starting point" {
+    mkdir remote
+    mkdir repo1
+
+    cd repo1
+    dolt init
+    dolt remote add origin file://../remote
+
+    dolt branch br1
+    dolt --branch br1 commit --allow-empty -m "A new commit"
+    dolt --branch br1 push --set-upstream origin main
+
+    dolt branch setUpstream --set-upstream-to origin/main
+    run dolt sql -q "select latest_commit_message from dolt_branches where name = 'setUpstream'" -r csv
+    [ $status -eq 0 ]
+    [[ "$output" =~ "Initialize data repository" ]] || false
+
+    dolt branch trackUpstream --track origin/main
+    run dolt sql -q "select latest_commit_message from dolt_branches where name = 'trackUpstream'" -r csv
+    [ $status -eq 0 ]
+    [[ "$output" =~ "Initialize data repository" ]] || false
+}
+
+@test "branch: --set-upstream-to and --track can set HEAD starting point" {
+    mkdir remote
+    mkdir repo1
+
+    cd repo1
+    dolt init
+    dolt remote add origin file://../remote
+    dolt branch br1
+    dolt --branch br1 commit --allow-empty -m "A new commit"
+    dolt --branch br1 push --set-upstream origin main
+
+    dolt branch setUpstream --set-upstream-to origin/main HEAD
+    run dolt sql -q "select latest_commit_message from dolt_branches where name = 'setUpstream'" -r csv
+    [ $status -eq 0 ]
+    [[ "$output" =~ "Initialize data repository" ]] || false
+
+    dolt branch trackUpstream --track origin/main
+    run dolt sql -q "select latest_commit_message from dolt_branches where name = 'trackUpstream'" -r csv
+    [ $status -eq 0 ]
+    [[ "$output" =~ "Initialize data repository" ]] || false
+}
