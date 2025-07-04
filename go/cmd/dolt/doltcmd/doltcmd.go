@@ -91,6 +91,7 @@ var doltSubCommands = []cli.Command{
 	commands.ArchiveCmd{},
 	ci.Commands,
 	commands.DebugCmd{},
+	commands.RmCmd{},
 }
 
 var DoltCommand = cli.NewSubCommandHandler("dolt", "it's git for data", doltSubCommands)
