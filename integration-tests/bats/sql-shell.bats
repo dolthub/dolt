@@ -47,9 +47,7 @@ teardown() {
     dolt sql -q "INSERT INTO t VALUES (1);"
     dolt sql -q "CREATE TABLE t1(b int);"
     run $BATS_TEST_DIRNAME/sql-shell-multi-stmt-timings.expect
-    [[ "$output" =~ "Query OK, 1 row affected (1".*" sec)" ]] || false
-    [[ "$output" =~ "Query OK, 1 row affected (2".*" sec)" ]] || false
-    [[ "$output" =~ "Query OK, 1 row affected (3".*" sec)" ]] || false
+    [ "$status" -eq 0 ]
 }
 
 # bats test_tags=no_lambda

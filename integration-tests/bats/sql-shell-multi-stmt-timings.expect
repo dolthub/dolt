@@ -1,24 +1,19 @@
 #!/usr/bin/expect
 
+set timeout 10
+set env(NO_COLOR) 1
+
+source  "$env(BATS_CWD)/helper/common_expect_functions.tcl"
+
 spawn dolt sql
-set first $spawn_id
 
-# output is checked in the bats
-expect -i first -re "\rdolt_repo_.*> "
-send -i first "insert into t1 (SELECT * FROM t WHERE EXISTS(SELECT SLEEP(1) UNION SELECT 1));\r"
-expect -i first "insert into t1 (SELECT * FROM t WHERE EXISTS(SELECT SLEEP(1) UNION SELECT 1));\r"
+expect_with_defaults                                  {dolt-repo-[0-9]+/main\*>} { send "insert into t1 (SELECT * FROM t WHERE EXISTS(SELECT SLEEP(1) UNION SELECT 1));\r" }
 
-# output is checked in the bats
-expect -i first -re "\rdolt_repo_.*> "
-send -i first "insert into t1 (SELECT * FROM t WHERE EXISTS(SELECT SLEEP(2) UNION SELECT 1));\r"
-expect -i first "insert into t1 (SELECT * FROM t WHERE EXISTS(SELECT SLEEP(2) UNION SELECT 1));\r"
+expect_with_defaults_2 {Query OK, 1 row affected \(1} {dolt-repo-[0-9]+/main\*>} { send "insert into t1 (SELECT * FROM t WHERE EXISTS(SELECT SLEEP(2) UNION SELECT 1));\r" }
 
-# output is checked in the bats
-expect -i first -re "\rdolt_repo_.*> "
-send -i first "insert into t1 (SELECT * FROM t WHERE EXISTS(SELECT SLEEP(3) UNION SELECT 1));\r"
-expect -i first "insert into t1 (SELECT * FROM t WHERE EXISTS(SELECT SLEEP(3) UNION SELECT 1));\r"
+expect_with_defaults_2 {Query OK, 1 row affected \(2} {dolt-repo-[0-9]+/main\*>} { send "insert into t1 (SELECT * FROM t WHERE EXISTS(SELECT SLEEP(3) UNION SELECT 1));\r" }
 
-expect -i first -re "\rdolt_repo_.*> "
-send -i first "quit\r"
-expect -i first "quit\r"
-expect -i first eof
+expect_with_defaults_2 {Query OK, 1 row affected \(3} {dolt-repo-[0-9]+/main\*>} { send "quit\r" }
+
+expect eof
+exit
