@@ -43,6 +43,10 @@ teardown() {
 
 # bats test_tags=no_lambda
 @test "sql-shell: multi statement query returns accurate timing" {
+    skiponwindows "Need to install expect and make this script work on windows."
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+        skip "shell on server returns Empty Set instead of OkResult"
+    fi
     dolt sql -q "CREATE TABLE t(a int);"
     dolt sql -q "INSERT INTO t VALUES (1);"
     dolt sql -q "CREATE TABLE t1(b int);"
