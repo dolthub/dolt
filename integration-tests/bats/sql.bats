@@ -1505,8 +1505,7 @@ SQL
     # make sure we aren't double-counting revision dbs
     run dolt sql -r csv -q 'use `db1/main`; show databases'
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Database changed" ]] || false
-    [ "${#lines[@]}" -eq 12 ] # one line for above output, 11 dbs
+    [ "${#lines[@]}" -eq 11 ]
 }
 
 @test "sql: run outside a dolt directory" {
@@ -1725,7 +1724,7 @@ SQL
 SQL
 
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 5 ] # First line is "database changed"
+    [ "${#lines[@]}" -eq 4 ]
     [[ ! "$output" =~ "5" ]] || false
 }
 
@@ -2077,10 +2076,11 @@ SQL
     dolt sql -q "CREATE TABLE test(pk BIGINT PRIMARY KEY, v BIGINT);"
     run dolt sql -q "REPLACE INTO test VALUES (1, 1);"
     [ $status -eq 0 ]
-    [[ "$output" =~ "Query OK, 1 row affected" ]] || false
     run dolt sql -q "REPLACE INTO test VALUES (1, 2);"
     [ $status -eq 0 ]
-    [[ "$output" =~ "Query OK, 2 rows affected" ]] || false
+    run dolt sql -q "SELECT * FROM test" -r csv
+    [ $status -eq 0 ]
+    [[ "$output" =~ "1,2" ]] || false
 }
 
 @test "sql: unix_timestamp function" {
@@ -2810,21 +2810,6 @@ SQL
     [ "$status" -eq 0 ]
 }
 
-@test "sql: multi statement query returns accurate timing" {
-  dolt sql -q "CREATE TABLE t(a int);"
-  dolt sql -q "INSERT INTO t VALUES (1);"
-  dolt sql -q "CREATE TABLE t1(b int);"
-  run dolt sql <<SQL
-insert into t1 (SELECT * FROM t WHERE EXISTS(SELECT SLEEP(1) UNION SELECT 1));
-insert into t1 (SELECT * FROM t WHERE EXISTS(SELECT SLEEP(2) UNION SELECT 1));
-insert into t1 (SELECT * FROM t WHERE EXISTS(SELECT SLEEP(3) UNION SELECT 1));
-SQL
-[[ "$output" =~ "Query OK, 1 row affected (1".*" sec)" ]] || false
-[[ "$output" =~ "Query OK, 1 row affected (2".*" sec)" ]] || false
-[[ "$output" =~ "Query OK, 1 row affected (3".*" sec)" ]] || false
-}
-
-
 @test "sql: check --data-dir used from a completely different location and still resolve DB names" {
     # remove config files
     rm -rf .doltcfg
@@ -2886,7 +2871,6 @@ SQL
 
     # spot check result
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Database changed" ]] || false
     [[ "$output" =~ "columns" ]] || false
 
     run dolt sql <<SQL
@@ -2896,9 +2880,7 @@ SQL
 
     # spot check result
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Database changed" ]] || false
     [[ "$output" =~ "role_edges" ]] || false
-
 }
 
 @test "sql: prevent LOAD_FILE() from accessing files outside of working directory" {

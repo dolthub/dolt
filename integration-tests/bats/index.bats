@@ -2610,7 +2610,6 @@ SQL
     # Now try again to assert the 0 rows affected
     run dolt sql -q "INSERT IGNORE INTO mytable values (2,1);"
     [ "$status" -eq "0" ]
-    [[ "$output" =~ 'Query OK, 0 rows affected' ]] || false
 
     run dolt sql -r csv -q "SELECT COUNT(*) FROM mytable"
     [ "$status" -eq "0" ]

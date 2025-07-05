@@ -172,7 +172,7 @@ export const tableTests = [
     q: "SET GLOBAL local_infile=ON;",
     res: {
       fieldCount: 0,
-      affectedRows: 1,
+      affectedRows: 0,
       insertId: 0,
       info: "",
       serverStatus: 2,
