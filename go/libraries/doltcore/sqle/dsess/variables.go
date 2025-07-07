@@ -66,6 +66,8 @@ const (
 	DoltStatsJobInterval = "dolt_stats_job_interval"
 	DoltStatsGCInterval  = "dolt_stats_gc_interval"
 	DoltStatsGCEnabled   = "dolt_stats_gc_enabled"
+
+	DoltAutoGCEnabled = "dolt_auto_gc_enabled"
 )
 
 const URLTemplateDatabasePlaceholder = "{database}"

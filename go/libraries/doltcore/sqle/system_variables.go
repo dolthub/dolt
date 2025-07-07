@@ -268,6 +268,13 @@ var DoltSystemVariables = []sql.SystemVariable{
 		Type:    types.NewSystemStringType(dsess.DoltStatsBranches),
 		Default: "",
 	},
+	&sql.MysqlSystemVariable{
+		Name:    dsess.DoltAutoGCEnabled,
+		Dynamic: false,
+		Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Global),
+		Type:    types.NewSystemBoolType(dsess.DoltAutoGCEnabled),
+		Default: int8(0),
+	},
 }
 
 func AddDoltSystemVariables() {
