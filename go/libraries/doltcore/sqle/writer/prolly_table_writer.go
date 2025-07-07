@@ -166,19 +166,8 @@ func (w *prollyTableWriter) Insert(ctx *sql.Context, sqlRow sql.Row) (err error)
 
 	w.setAutoIncrement = true
 
-	// Extract auto-increment value from sqlRow if this table has an auto-increment column
-	if w.aiCol.AutoIncrement {
-		// Find the auto-increment column index in the SQL schema
-		var aiValue interface{}
-		for i, col := range w.sqlSch {
-			if col.Name == w.aiCol.Name {
-				aiValue = sqlRow[i]
-				break
-			}
-		}
-		// TODO: need schema name in ai tracker
-		w.aiTracker.Next(ctx, w.tableName.Name, aiValue)
-	}
+	// TODO: need schema name in ai tracker
+	w.aiTracker.Next(ctx, w.tableName.Name, sqlRow)
 	return nil
 }
 
