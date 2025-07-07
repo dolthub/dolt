@@ -196,8 +196,8 @@ type fileReaderAt struct {
 }
 
 func (fra *fileReaderAt) clone() (tableReaderAt, error) {
-	if dynassert.Assert(atomic.AddInt32(fra.cnt, 1) > 1, "attempt to clone a closed fileReaderAt") {
-		// Restore previous refcnt, even know we're in a weird state...
+	if !dynassert.Assert(atomic.AddInt32(fra.cnt, 1) > 1, "attempt to clone a closed fileReaderAt") {
+		// Restore previous refcnt, despite being in a weird state...
 		atomic.AddInt32(fra.cnt, -1)
 		return newFileReaderAt(fra.path)
 	}
