@@ -22,7 +22,7 @@ teardown() {
 
     run dolt rm test
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "rm 'test'" ]] || false
+    [[ "$output" =~ "dropped 'test'" ]] || false
 
     run dolt ls
     [ "$status" -eq 0 ]
@@ -42,8 +42,8 @@ teardown() {
 
     run dolt rm test1 test2
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "rm 'test1'" ]] || false
-    [[ "$output" =~ "rm 'test2'" ]] || false
+    [[ "$output" =~ "dropped 'test1'" ]] || false
+    [[ "$output" =~ "dropped 'test2'" ]] || false
 
     run dolt ls
     [ "$status" -eq 0 ]

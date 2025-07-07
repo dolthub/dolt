@@ -104,7 +104,7 @@ func (cmd RmCmd) Exec(ctx context.Context, commandStr string, args []string, _ *
 		}
 	} else {
 		for _, arg := range apr.Args {
-			cli.Printf("rm '%s'\n", arg)
+			cli.Printf("dropped '%s'\n", arg)
 		}
 	}
 	return 0
