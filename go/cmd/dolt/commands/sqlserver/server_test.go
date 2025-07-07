@@ -563,6 +563,149 @@ func TestReadReplica(t *testing.T) {
 	})
 }
 
+func TestReadOnlySystemVariable(t *testing.T) {
+	ctx := context.Background()
+	
+	// Create a completely isolated test environment like other tests do
+	dEnv, err := sqle.CreateEnvWithSeedData()
+	require.NoError(t, err)
+	defer func() {
+		assert.NoError(t, dEnv.DoltDB(ctx).Close())
+	}()
+
+	// Test read-only server with command line flag
+	serverConfig := DefaultCommandLineServerConfig().withReadOnly(true).WithPort(15500)
+	sc := svcs.NewController()
+	defer sc.Stop()
+	go func() {
+		_, _ = Serve(context.Background(), &Config{
+			Version:      "0.0.0",
+			ServerConfig: serverConfig,
+			Controller:   sc,
+			DoltEnv:      dEnv,
+		})
+	}()
+	err = sc.WaitForStart()
+	require.NoError(t, err)
+
+	conn, err := dbr.Open("mysql", servercfg.ConnectionString(serverConfig, "dolt"), nil)
+	require.NoError(t, err)
+	defer conn.Close()
+	sess := conn.NewSession(nil)
+
+	// Test that @@read_only is set to 1
+	var readOnlyValue []struct {
+		Value int `db:"@@read_only"`
+	}
+	_, err = sess.SelectBySql("SELECT @@read_only").LoadContext(ctx, &readOnlyValue)
+	require.NoError(t, err)
+	require.Len(t, readOnlyValue, 1)
+	assert.Equal(t, 1, readOnlyValue[0].Value)
+
+	// Test that @@global.read_only is set to 1
+	var globalReadOnlyValue []struct {
+		Value int `db:"@@global.read_only"`
+	}
+	_, err = sess.SelectBySql("SELECT @@global.read_only").LoadContext(ctx, &globalReadOnlyValue)
+	require.NoError(t, err)
+	require.Len(t, globalReadOnlyValue, 1)
+	assert.Equal(t, 1, globalReadOnlyValue[0].Value)
+}
+
+func TestReadOnlySystemVariableYaml(t *testing.T) {
+	const yamlConfig = `
+log_level: info
+
+behavior:
+    read_only: true
+
+listener:
+    host: localhost
+    port: 15501
+    read_timeout_millis: 5000
+    write_timeout_millis: 5000
+`
+	ctx := context.Background()
+	
+	// Create a completely isolated test environment like other tests do
+	dEnv, err := sqle.CreateEnvWithSeedData()
+	require.NoError(t, err)
+	defer func() {
+		assert.NoError(t, dEnv.DoltDB(ctx).Close())
+	}()
+	
+	controller := svcs.NewController()
+	defer controller.Stop()
+	go func() {
+		dEnv.FS.WriteFile("config.yaml", []byte(yamlConfig), os.ModePerm)
+		err := StartServer(context.Background(), "0.0.0", "dolt sql-server", []string{
+			"--config", "config.yaml",
+		}, dEnv, dEnv.FS, controller)
+		require.NoError(t, err)
+	}()
+	err = controller.WaitForStart()
+	require.NoError(t, err)
+
+	conn, err := dbr.Open("mysql", "root@tcp(localhost:15501)/dolt", nil)
+	require.NoError(t, err)
+	defer conn.Close()
+	sess := conn.NewSession(nil)
+
+	// Test that @@read_only is set to 1
+	var readOnlyValue []struct {
+		Value int `db:"@@read_only"`
+	}
+	_, err = sess.SelectBySql("SELECT @@read_only").LoadContext(ctx, &readOnlyValue)
+	require.NoError(t, err)
+	require.Len(t, readOnlyValue, 1)
+	assert.Equal(t, 1, readOnlyValue[0].Value)
+}
+
+func TestReadOnlyEnforcement(t *testing.T) {
+	ctx := context.Background()
+	
+	// Create a completely isolated test environment like other tests do
+	dEnv, err := sqle.CreateEnvWithSeedData()
+	require.NoError(t, err)
+	defer func() {
+		assert.NoError(t, dEnv.DoltDB(ctx).Close())
+	}()
+
+	// Test read-only server with command line flag
+	serverConfig := DefaultCommandLineServerConfig().withReadOnly(true).WithPort(15502)
+	sc := svcs.NewController()
+	defer sc.Stop()
+	go func() {
+		_, _ = Serve(context.Background(), &Config{
+			Version:      "0.0.0",
+			ServerConfig: serverConfig,
+			Controller:   sc,
+			DoltEnv:      dEnv,
+		})
+	}()
+	err = sc.WaitForStart()
+	require.NoError(t, err)
+
+	conn, err := dbr.Open("mysql", servercfg.ConnectionString(serverConfig, "dolt"), nil)
+	require.NoError(t, err)
+	defer conn.Close()
+	sess := conn.NewSession(nil)
+
+	// Test that @@read_only is set to 1
+	var readOnlyValue []struct {
+		Value int `db:"@@read_only"`
+	}
+	_, err = sess.SelectBySql("SELECT @@read_only").LoadContext(ctx, &readOnlyValue)
+	require.NoError(t, err)
+	require.Len(t, readOnlyValue, 1)
+	assert.Equal(t, 1, readOnlyValue[0].Value)
+
+	// Test that write operations are blocked
+	_, err = sess.SelectBySql("CREATE TABLE test_table (id INT PRIMARY KEY)").LoadContext(ctx, nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "read only mode")
+}
+
 func TestGenerateYamlConfig(t *testing.T) {
 	args := []string{
 		"--timeout", "11",
