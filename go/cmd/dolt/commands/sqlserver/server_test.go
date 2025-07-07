@@ -338,152 +338,6 @@ type defaultBranchTest struct {
 	expectedErrStr string
 }
 
-func TestServerSetDefaultBranch(t *testing.T) {
-	ctx := context.Background()
-	dEnv, err := sqle.CreateEnvWithSeedData()
-	require.NoError(t, err)
-	defer func() {
-		assert.NoError(t, dEnv.DoltDB(ctx).Close())
-	}()
-
-	serverConfig := DefaultCommandLineServerConfig().withLogLevel(servercfg.LogLevel_Fatal).WithPort(15302)
-
-	sc := svcs.NewController()
-	defer sc.Stop()
-	go func() {
-		_, _ = Serve(context.Background(), &Config{
-			Version:      "0.0.0",
-			ServerConfig: serverConfig,
-			Controller:   sc,
-			DoltEnv:      dEnv,
-		})
-	}()
-	err = sc.WaitForStart()
-	require.NoError(t, err)
-
-	const dbName = "dolt"
-
-	defaultBranch := env.DefaultInitBranch
-
-	conn, err := dbr.Open("mysql", servercfg.ConnectionString(serverConfig, dbName), nil)
-	require.NoError(t, err)
-	sess := conn.NewSession(nil)
-
-	tests := []defaultBranchTest{
-		{
-			query:       sess.SelectBySql("select active_branch() as branch"),
-			expectedRes: []testResult{{defaultBranch}},
-		},
-		{
-			query:       sess.SelectBySql("call dolt_checkout('-b', 'new')"),
-			expectedRes: []testResult{{""}},
-		},
-		{
-			query:       sess.SelectBySql("call dolt_checkout('-b', 'new2')"),
-			expectedRes: []testResult{{""}},
-		},
-	}
-
-	runDefaultBranchTests(t, tests, conn)
-
-	conn, err = dbr.Open("mysql", servercfg.ConnectionString(serverConfig, dbName), nil)
-	require.NoError(t, err)
-	sess = conn.NewSession(nil)
-
-	tests = []defaultBranchTest{
-		{
-			query:       sess.SelectBySql("select active_branch() as branch"),
-			expectedRes: []testResult{{defaultBranch}},
-		},
-		{
-			query:       sess.SelectBySql("set GLOBAL dolt_default_branch = 'refs/heads/new'"),
-			expectedRes: nil,
-		},
-		{
-			query:       sess.SelectBySql("select active_branch() as branch"),
-			expectedRes: []testResult{{"main"}},
-		},
-		{
-			query:       sess.SelectBySql("call dolt_checkout('main')"),
-			expectedRes: []testResult{{""}},
-		},
-	}
-
-	runDefaultBranchTests(t, tests, conn)
-
-	conn, err = dbr.Open("mysql", servercfg.ConnectionString(serverConfig, dbName), nil)
-	require.NoError(t, err)
-	sess = conn.NewSession(nil)
-
-	tests = []defaultBranchTest{
-		{
-			query:       sess.SelectBySql("select active_branch() as branch"),
-			expectedRes: []testResult{{"new"}},
-		},
-		{
-			query:       sess.SelectBySql("set GLOBAL dolt_default_branch = 'new2'"),
-			expectedRes: nil,
-		},
-	}
-
-	runDefaultBranchTests(t, tests, conn)
-
-	conn, err = dbr.Open("mysql", servercfg.ConnectionString(serverConfig, dbName), nil)
-	require.NoError(t, err)
-	sess = conn.NewSession(nil)
-
-	tests = []defaultBranchTest{
-		{
-			query:       sess.SelectBySql("select active_branch() as branch"),
-			expectedRes: []testResult{{"new2"}},
-		},
-	}
-
-	runDefaultBranchTests(t, tests, conn)
-
-	conn, err = dbr.Open("mysql", servercfg.ConnectionString(serverConfig, dbName), nil)
-	require.NoError(t, err)
-	sess = conn.NewSession(nil)
-
-	tests = []defaultBranchTest{
-		{
-			query:       sess.SelectBySql("set GLOBAL dolt_default_branch = 'doesNotExist'"),
-			expectedRes: nil,
-		},
-	}
-
-	runDefaultBranchTests(t, tests, conn)
-
-	conn, err = dbr.Open("mysql", servercfg.ConnectionString(serverConfig, dbName), nil)
-	require.NoError(t, err)
-	sess = conn.NewSession(nil)
-
-	tests = []defaultBranchTest{
-		{
-			query:          sess.SelectBySql("select active_branch() as branch"),
-			expectedErrStr: "cannot resolve default branch head", // TODO: should be a better error message
-		},
-	}
-
-	runDefaultBranchTests(t, tests, conn)
-}
-
-func runDefaultBranchTests(t *testing.T, tests []defaultBranchTest, conn *dbr.Connection) {
-	for _, test := range tests {
-		t.Run(test.query.Query, func(t *testing.T) {
-			var branch []testResult
-			_, err := test.query.LoadContext(context.Background(), &branch)
-			if test.expectedErrStr != "" {
-				require.Error(t, err)
-				assert.Containsf(t, err.Error(), test.expectedErrStr, "expected error string not found")
-			} else {
-				require.NoError(t, err)
-				assert.Equal(t, test.expectedRes, branch)
-			}
-		})
-	}
-	require.NoError(t, conn.Close())
-}
 
 func TestReadReplica(t *testing.T) {
 	cwd, err := os.Getwd()
@@ -566,7 +420,7 @@ func TestReadReplica(t *testing.T) {
 func TestReadOnlySystemVariable(t *testing.T) {
 	ctx := context.Background()
 
-	// Create a completely isolated test environment like other tests do
+	// Use the same reliable environment creation as other tests that work
 	dEnv, err := sqle.CreateEnvWithSeedData()
 	require.NoError(t, err)
 	defer func() {
@@ -627,7 +481,7 @@ listener:
 `
 	ctx := context.Background()
 
-	// Create a completely isolated test environment like other tests do
+	// Use the same reliable environment creation as other tests that work
 	dEnv, err := sqle.CreateEnvWithSeedData()
 	require.NoError(t, err)
 	defer func() {
@@ -664,7 +518,7 @@ listener:
 func TestReadOnlyEnforcement(t *testing.T) {
 	ctx := context.Background()
 
-	// Create a completely isolated test environment like other tests do
+	// Use the same reliable environment creation as other tests that work
 	dEnv, err := sqle.CreateEnvWithSeedData()
 	require.NoError(t, err)
 	defer func() {
@@ -818,4 +672,152 @@ branch_control_file: dir1/dir2/abc.db
 	require.NoError(t, err)
 
 	assert.Equal(t, expected, generateYamlConfig(serverConfig))
+}
+
+// TestServerSetDefaultBranch is placed at the end because it sets global state that pollutes other tests
+func TestServerSetDefaultBranch(t *testing.T) {
+	ctx := context.Background()
+	dEnv, err := sqle.CreateEnvWithSeedData()
+	require.NoError(t, err)
+	defer func() {
+		assert.NoError(t, dEnv.DoltDB(ctx).Close())
+	}()
+
+	serverConfig := DefaultCommandLineServerConfig().withLogLevel(servercfg.LogLevel_Fatal).WithPort(15302)
+
+	sc := svcs.NewController()
+	defer sc.Stop()
+	go func() {
+		_, _ = Serve(context.Background(), &Config{
+			Version:      "0.0.0",
+			ServerConfig: serverConfig,
+			Controller:   sc,
+			DoltEnv:      dEnv,
+		})
+	}()
+	err = sc.WaitForStart()
+	require.NoError(t, err)
+
+	const dbName = "dolt"
+
+	defaultBranch := env.DefaultInitBranch
+
+	conn, err := dbr.Open("mysql", servercfg.ConnectionString(serverConfig, dbName), nil)
+	require.NoError(t, err)
+	sess := conn.NewSession(nil)
+
+	tests := []defaultBranchTest{
+		{
+			query:       sess.SelectBySql("select active_branch() as branch"),
+			expectedRes: []testResult{{defaultBranch}},
+		},
+		{
+			query:       sess.SelectBySql("call dolt_checkout('-b', 'new')"),
+			expectedRes: []testResult{{""}},
+		},
+		{
+			query:       sess.SelectBySql("call dolt_checkout('-b', 'new2')"),
+			expectedRes: []testResult{{""}},
+		},
+	}
+
+	runDefaultBranchTests(t, tests, conn)
+
+	conn, err = dbr.Open("mysql", servercfg.ConnectionString(serverConfig, dbName), nil)
+	require.NoError(t, err)
+	sess = conn.NewSession(nil)
+
+	tests = []defaultBranchTest{
+		{
+			query:       sess.SelectBySql("select active_branch() as branch"),
+			expectedRes: []testResult{{defaultBranch}},
+		},
+		{
+			query:       sess.SelectBySql("set GLOBAL dolt_default_branch = 'refs/heads/new'"),
+			expectedRes: nil,
+		},
+		{
+			query:       sess.SelectBySql("select active_branch() as branch"),
+			expectedRes: []testResult{{"main"}},
+		},
+		{
+			query:       sess.SelectBySql("call dolt_checkout('main')"),
+			expectedRes: []testResult{{""}},
+		},
+	}
+
+	runDefaultBranchTests(t, tests, conn)
+
+	conn, err = dbr.Open("mysql", servercfg.ConnectionString(serverConfig, dbName), nil)
+	require.NoError(t, err)
+	sess = conn.NewSession(nil)
+
+	tests = []defaultBranchTest{
+		{
+			query:       sess.SelectBySql("select active_branch() as branch"),
+			expectedRes: []testResult{{"new"}},
+		},
+		{
+			query:       sess.SelectBySql("set GLOBAL dolt_default_branch = 'new2'"),
+			expectedRes: nil,
+		},
+	}
+
+	runDefaultBranchTests(t, tests, conn)
+
+	conn, err = dbr.Open("mysql", servercfg.ConnectionString(serverConfig, dbName), nil)
+	require.NoError(t, err)
+	sess = conn.NewSession(nil)
+
+	tests = []defaultBranchTest{
+		{
+			query:       sess.SelectBySql("select active_branch() as branch"),
+			expectedRes: []testResult{{"new2"}},
+		},
+	}
+
+	runDefaultBranchTests(t, tests, conn)
+
+	conn, err = dbr.Open("mysql", servercfg.ConnectionString(serverConfig, dbName), nil)
+	require.NoError(t, err)
+	sess = conn.NewSession(nil)
+
+	tests = []defaultBranchTest{
+		{
+			query:       sess.SelectBySql("set GLOBAL dolt_default_branch = 'doesNotExist'"),
+			expectedRes: nil,
+		},
+	}
+
+	runDefaultBranchTests(t, tests, conn)
+
+	conn, err = dbr.Open("mysql", servercfg.ConnectionString(serverConfig, dbName), nil)
+	require.NoError(t, err)
+	sess = conn.NewSession(nil)
+
+	tests = []defaultBranchTest{
+		{
+			query:          sess.SelectBySql("select active_branch() as branch"),
+			expectedErrStr: "cannot resolve default branch head", // TODO: should be a better error message
+		},
+	}
+
+	runDefaultBranchTests(t, tests, conn)
+}
+
+func runDefaultBranchTests(t *testing.T, tests []defaultBranchTest, conn *dbr.Connection) {
+	for _, test := range tests {
+		t.Run(test.query.Query, func(t *testing.T) {
+			var branch []testResult
+			_, err := test.query.LoadContext(context.Background(), &branch)
+			if test.expectedErrStr != "" {
+				require.Error(t, err)
+				assert.Containsf(t, err.Error(), test.expectedErrStr, "expected error string not found")
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, test.expectedRes, branch)
+			}
+		})
+	}
+	require.NoError(t, conn.Close())
 }
