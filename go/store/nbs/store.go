@@ -2047,7 +2047,7 @@ func (i *markAndSweeper) SaveHashes(ctx context.Context, hashes []hash.Hash) err
 		// the work we are doing here does not result in a timely
 		// error once the context is canceled.
 		if ctx.Err() != nil {
-			return ctx.Err()
+			return context.Cause(ctx)
 		}
 
 		if !first {
@@ -2099,10 +2099,10 @@ func (i *markAndSweeper) SaveHashes(ctx context.Context, hashes []hash.Hash) err
 			addErr = i.getAddrs(c)(ctx, nextToVisit, func(h hash.Hash) bool { return false })
 		}, gcDependencyMode_NoDependency)
 		if err != nil {
-			return err
+			return fmt.Errorf("SaveHashes, error calling getManyCompressed: %w", err)
 		}
 		if addErr != nil {
-			return addErr
+			return fmt.Errorf("SaveHashes, error calling gcc.addChunk: %w", addErr)
 		}
 		if found != len(toVisit) {
 			return fmt.Errorf("dangling references requested during GC. GC not successful. %v", toVisit)
@@ -2250,7 +2250,7 @@ func (nbs *NomsBlockStore) swapTables(ctx context.Context, specs []tableSpec, mo
 	for _, css := range oldNovel {
 		err = css.close()
 		if err != nil {
-			return fmt.Errorf("swapTables, oldNovel css.close(): %w", err)
+			return fmt.Errorf("swapTables, oldNovel css.close(), err: %w", err)
 		}
 	}
 	nbs.memtable = nil

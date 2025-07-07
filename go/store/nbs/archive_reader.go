@@ -258,7 +258,7 @@ func buildArchiveReader(ctx context.Context, reader tableReaderAt, footer archiv
 func (ar archiveReader) clone() (archiveReader, error) {
 	reader, err := ar.reader.clone()
 	if err != nil {
-		return archiveReader{}, nil
+		return archiveReader{}, err
 	}
 	return archiveReader{
 		reader:    reader,

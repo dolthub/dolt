@@ -74,7 +74,11 @@ func (gcc *gcCopier) addChunk(ctx context.Context, c ToChunker) error {
 // If the writer should be closed and deleted, instead of being used with
 // copyTablesToDir, call this method.
 func (gcc *gcCopier) cancel(_ context.Context) error {
-	return gcc.writer.Cancel()
+	err := gcc.writer.Cancel()
+	if err != nil {
+		return fmt.Errorf("gcCopier cancel err: %w", err)
+	}
+	return nil
 }
 
 func (gcc *gcCopier) copyTablesToDir(ctx context.Context) (ts []tableSpec, err error) {
@@ -127,14 +131,14 @@ func (gcc *gcCopier) copyTablesToDir(ctx context.Context) (ts []tableSpec, err e
 	// Otherwise, write the file through CopyTableFile.
 	r, err := gcc.writer.Reader()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("gc_copier, Reader() error: %w", err)
 	}
 	defer r.Close()
 	sz := gcc.writer.FullLength()
 
 	err = gcc.tfp.CopyTableFile(ctx, r, filename, sz, uint32(gcc.writer.ChunkCount()))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("gc_copier, CopyTableFile error: %w", err)
 	}
 
 	return []tableSpec{
