@@ -187,4 +187,4 @@ replace github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi => ./gen/pr
 
 go 1.24.0
 
-replace github.com/dolthub/go-mysql-server => /workspace/go-mysql-server
+replace github.com/dolthub/go-mysql-server => ../../go-mysql-server
