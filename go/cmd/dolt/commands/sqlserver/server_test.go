@@ -338,7 +338,6 @@ type defaultBranchTest struct {
 	expectedErrStr string
 }
 
-
 func TestReadReplica(t *testing.T) {
 	cwd, err := os.Getwd()
 	if err != nil {
