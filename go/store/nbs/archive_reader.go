@@ -357,7 +357,7 @@ func (ar archiveReader) search(hash hash.Hash) int {
 	}
 
 	for idx := possibleMatch; idx < len(ar.prefixes) && ar.prefixes[idx] == prefix; idx++ {
-		if ar.getSuffixByID(uint32(idx)) == suffix(targetSfx) {
+		if ar.getSuffixByID(uint64(idx)) == suffix(targetSfx) {
 			return idx
 		}
 	}
@@ -503,7 +503,7 @@ func (ar archiveReader) getByteSpanByID(id uint32) byteSpan {
 }
 
 // getSuffixByID returns the suffix for the chunk at the given index. Assumes good input!
-func (ar archiveReader) getSuffixByID(id uint32) suffix {
+func (ar archiveReader) getSuffixByID(id uint64) suffix {
 	start := id * hash.SuffixLen
 	return suffix(ar.suffixes[start : start+hash.SuffixLen])
 }
@@ -533,7 +533,7 @@ func (ar archiveReader) iterate(ctx context.Context, cb func(chunks.Chunk) error
 		var hasBytes [hash.ByteLen]byte
 
 		binary.BigEndian.PutUint64(hasBytes[:uint64Size], ar.prefixes[i])
-		suf := ar.getSuffixByID(i)
+		suf := ar.getSuffixByID(uint64(i))
 		copy(hasBytes[hash.ByteLen-hash.SuffixLen:], suf[:])
 		h := hash.New(hasBytes[:])
 
