@@ -82,7 +82,7 @@ teardown() {
 
     run dolt rm --cached test
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "rm 'test'" ]] || false
+    [[ "$output" =~ "removed 'test' from tracking" ]] || false
 
     run dolt status
     [ "$status" -eq 0 ]

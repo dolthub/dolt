@@ -98,8 +98,14 @@ func (cmd RmCmd) Exec(ctx context.Context, commandStr string, args []string, _ *
 		return 1
 	}
 
-	for _, arg := range apr.Args {
-		cli.Printf("rm '%s'\n", arg)
+	if apr.Contains(cli.CachedFlag) {
+		for _, arg := range apr.Args {
+			cli.Printf("removed '%s' from tracking\n", arg)
+		}
+	} else {
+		for _, arg := range apr.Args {
+			cli.Printf("rm '%s'\n", arg)
+		}
 	}
 	return 0
 }
