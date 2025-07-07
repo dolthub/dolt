@@ -186,5 +186,3 @@ require (
 replace github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi => ./gen/proto/dolt/services/eventsapi
 
 go 1.24.0
-
-replace github.com/dolthub/go-mysql-server => /workspace/go-mysql-server
