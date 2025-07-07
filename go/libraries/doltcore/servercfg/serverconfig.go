@@ -378,13 +378,6 @@ func ApplySystemVariables(ctx *sql.Context, cfg ServerConfig, sysVarTarget Syste
 		}
 	}
 
-	if cfg.ValueSet(ReadOnlyKey) {
-		err := sysVarTarget.SetGlobal(ctx, "read_only", cfg.ReadOnly())
-		if err != nil {
-			return err
-		}
-	}
-
 	return nil
 }
 

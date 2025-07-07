@@ -363,18 +363,7 @@ func (cfg *commandLineServerConfig) UserVars() []servercfg.UserSessionVars {
 }
 
 func (cfg *commandLineServerConfig) SystemVars() map[string]interface{} {
-	vars := make(map[string]interface{})
-
-	// Set read_only system variable if the server is configured as read-only
-	if cfg.ReadOnly() {
-		vars["read_only"] = true
-	}
-
-	if len(vars) == 0 {
-		return nil
-	}
-
-	return vars
+	return nil
 }
 
 func (cfg *commandLineServerConfig) JwksConfig() []servercfg.JwksConfig {

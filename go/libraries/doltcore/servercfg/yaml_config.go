@@ -761,25 +761,11 @@ func (cfg YAMLConfig) UserVars() []UserSessionVars {
 }
 
 func (cfg YAMLConfig) SystemVars() map[string]interface{} {
-	vars := make(map[string]interface{})
-
-	// Start with explicitly configured system variables
-	if cfg.SystemVars_ != nil {
-		for k, v := range cfg.SystemVars_ {
-			vars[k] = v
-		}
-	}
-
-	// Set read_only system variable if the server is configured as read-only
-	if cfg.ReadOnly() {
-		vars["read_only"] = true
-	}
-
-	if len(vars) == 0 {
+	if cfg.SystemVars_ == nil {
 		return map[string]interface{}{}
 	}
 
-	return vars
+	return cfg.SystemVars_
 }
 
 // wksConfig is JSON Web Key Set config, and used to validate a user authed with a jwt (JSON Web Token).

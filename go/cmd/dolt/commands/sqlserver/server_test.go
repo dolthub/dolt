@@ -565,7 +565,7 @@ func TestReadReplica(t *testing.T) {
 
 func TestReadOnlySystemVariable(t *testing.T) {
 	ctx := context.Background()
-	
+
 	// Create a completely isolated test environment like other tests do
 	dEnv, err := sqle.CreateEnvWithSeedData()
 	require.NoError(t, err)
@@ -626,14 +626,14 @@ listener:
     write_timeout_millis: 5000
 `
 	ctx := context.Background()
-	
+
 	// Create a completely isolated test environment like other tests do
 	dEnv, err := sqle.CreateEnvWithSeedData()
 	require.NoError(t, err)
 	defer func() {
 		assert.NoError(t, dEnv.DoltDB(ctx).Close())
 	}()
-	
+
 	controller := svcs.NewController()
 	defer controller.Stop()
 	go func() {
@@ -663,7 +663,7 @@ listener:
 
 func TestReadOnlyEnforcement(t *testing.T) {
 	ctx := context.Background()
-	
+
 	// Create a completely isolated test environment like other tests do
 	dEnv, err := sqle.CreateEnvWithSeedData()
 	require.NoError(t, err)
