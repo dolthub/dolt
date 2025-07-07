@@ -386,11 +386,17 @@ func setBranchUpstream(ctx *sql.Context, dbData env.DbData[*sql.Context], apr *a
 
 	var fullRemote string
 	if apr.Contains(cli.TrackFlag) {
-		if apr.NArg() < 2 || apr.NArg() > 3 {
+		if apr.NArg() == 1 {
+			fullRemote, err = currentBranch(ctx)
+			if err != nil {
+				return err
+			}
+		} else if apr.NArg() == 2 {
+			fullRemote = apr.Arg(1)
+		} else {
 			return InvalidArgErr
 		}
-		fullRemote = apr.Arg(1)
-	} else {
+	} else if apr.Contains(cli.SetUpstreamToFlag) {
 		if apr.NArg() > 2 {
 			return InvalidArgErr
 		}
@@ -401,12 +407,10 @@ func setBranchUpstream(ctx *sql.Context, dbData env.DbData[*sql.Context], apr *a
 		}
 	}
 
-	err = validateRemote(ctx, dbData, fullRemote)
+	remoteName, remoteBranch, err := validateTracking(ctx, dbData, fullRemote, branchName)
 	if err != nil {
 		return err
 	}
-
-	remoteName, remoteBranch := actions.ParseRemoteBranchName(fullRemote)
 
 	refSpec, err := ref.ParseRefSpecForRemote(remoteName, remoteBranch)
 	if err != nil {
@@ -420,7 +424,7 @@ func setBranchUpstream(ctx *sql.Context, dbData env.DbData[*sql.Context], apr *a
 }
 
 func createNewBranch(ctx *sql.Context, dbData env.DbData[*sql.Context], apr *argparser.ArgParseResults, rsc *doltdb.ReplicationStatusController) error {
-	if apr.NArg() == 0 || apr.NArg() > 3 {
+	if apr.NArg() == 0 || apr.NArg() > 2 {
 		return InvalidArgErr
 	}
 
@@ -440,16 +444,20 @@ func createNewBranch(ctx *sql.Context, dbData env.DbData[*sql.Context], apr *arg
 	} else if apr.Contains(cli.SetUpstreamToFlag) {
 		trackVal, setTrackUpstream = apr.GetValue(cli.SetUpstreamToFlag)
 	} else if apr.Contains(cli.TrackFlag) {
-		if apr.NArg() < 2 { // Must specify both branch and remote name.
+		if apr.NArg() == 1 {
+			trackVal, err = currentBranch(ctx)
+			if err != nil {
+				return err
+			}
+		} else if apr.NArg() == 2 {
+			trackVal = apr.Arg(1)
+		} else {
 			return InvalidArgErr
 		}
 		setTrackUpstream = true
-		trackVal = apr.Arg(1)
 	}
 
-	if apr.NArg() == 3 {
-		startPt = apr.Arg(2)
-	} else if apr.NArg() == 2 && !apr.Contains(cli.TrackFlag) {
+	if apr.NArg() == 2 && !apr.Contains(cli.TrackFlag) {
 		startPt = apr.Arg(1)
 	}
 	if len(startPt) == 0 {
@@ -457,14 +465,9 @@ func createNewBranch(ctx *sql.Context, dbData env.DbData[*sql.Context], apr *arg
 	}
 
 	if setTrackUpstream {
-		err = validateRemote(ctx, dbData, trackVal)
+		remoteName, remoteBranch, err = validateTracking(ctx, dbData, trackVal, branchName)
 		if err != nil {
 			return err
-		}
-
-		remoteName, remoteBranch = actions.ParseRemoteBranchName(trackVal)
-		if remoteName == "" || remoteBranch == "" {
-			return fmt.Errorf("error: invalid remote")
 		}
 		refSpec, err = ref.ParseRefSpecForRemote(remoteName, remoteBranch)
 		if err != nil {
@@ -542,19 +545,41 @@ func copyABranch(ctx *sql.Context, dbData env.DbData[*sql.Context], srcBr string
 	return nil
 }
 
-// validateRemote takes in a full remote path, like `origin/main`, and checks that the branch exists.
-func validateRemote(ctx *sql.Context, dbData env.DbData[*sql.Context], fullRemote string) error {
+// validateTracking takes in a full remote path, like `origin/main`, or a branch like 'main' and verifies that it's a valid upstream.
+// It errors out if it can't find the remote, or if it can't find the given branch. It returns the remote name and upstream branch.
+func validateTracking(ctx *sql.Context, dbData env.DbData[*sql.Context], maybeUpstream string, selectedBranch string) (string, string, error) {
+
+	//First we check if it's a remote
 	headRef, err := dbData.Rsr.CWBHeadRef(ctx)
 	if err != nil {
-		return err
+		return "", "", err
 	}
-	cs, err := doltdb.NewCommitSpec(fullRemote)
+	cs, err := doltdb.NewCommitSpec(maybeUpstream)
 	if err != nil {
-		return err
+		return "", "", err
 	}
-	if _, err = dbData.Ddb.Resolve(ctx, cs, headRef); err != nil {
-		return err
+	_, err = dbData.Ddb.Resolve(ctx, cs, headRef)
+
+	if err == nil { // Valid remote
+		remoteName, remoteBranch := actions.ParseRemoteBranchName(maybeUpstream)
+		if remoteName != "" && remoteBranch != "" {
+			return remoteName, remoteBranch, nil
+		}
 	}
 
-	return nil
+	// It's not a remote, so now we check if it's a valid branch
+	ok, err := actions.IsBranch(ctx, dbData.Ddb, maybeUpstream)
+	if err != nil {
+		return "", "", err
+	}
+	if !ok {
+		return "", "", fmt.Errorf("branch not found: %s", maybeUpstream)
+	}
+
+	if maybeUpstream == selectedBranch {
+		return "", "", fmt.Errorf("	not setting '%s' as its own upstream", selectedBranch)
+	}
+
+	// In this case we use the local branch for upstream, so the remote name is empty
+	return "", maybeUpstream, nil
 }

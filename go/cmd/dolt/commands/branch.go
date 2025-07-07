@@ -336,11 +336,18 @@ func updateUpstream(sqlCtx *sql.Context, queryEngine cli.Queryist, apr *argparse
 		cli.PrintErrln(fmt.Sprintf("error: --%s and --%s are mutually exclusive options.", cli.SetUpstreamToFlag, cli.TrackFlag))
 		return 1
 	} else if apr.Contains(cli.TrackFlag) {
-		if apr.NArg() < 2 || apr.NArg() > 3 {
+		if apr.NArg() == 1 {
+			remoteName, err = getActiveBranchName(sqlCtx, queryEngine)
+			if err != nil {
+				cli.PrintErrln("error: --track takes branch name and remote name")
+				return 1
+			}
+		} else if apr.NArg() == 2 {
+			remoteName = apr.Arg(1)
+		} else {
 			cli.PrintErrln("error: --track takes branch name and remote name")
 			return 1
 		}
-		remoteName = apr.Arg(1)
 	} else if apr.Contains(cli.SetUpstreamToFlag) {
 		if apr.NArg() > 2 {
 			cli.PrintErrln("error: --set-upstream-to takes branch name and remote name")
