@@ -635,6 +635,114 @@ var MergeScripts = []queries.ScriptTest{
 		},
 	},
 	{
+		Name: "CALL DOLT_MERGE with non-conflicting schema changes can be correctly resolved when autocommit is off",
+		SetUpScript: []string{
+			"CREATE TABLE test (pk int primary key, val int, val2 int)",
+			"call DOLT_ADD('.')",
+			"INSERT INTO test VALUES (0, 0, 0)",
+			"SET autocommit = 0",
+			"CALL DOLT_COMMIT('-a', '-m', 'Step 1', '--date', '2022-08-06T12:00:01');",
+			"CALL DOLT_CHECKOUT('-b', 'feature-branch')",
+			"ALTER TABLE test DROP COLUMN val2;",
+			"INSERT INTO test VALUES (1, 1);",
+			"UPDATE test SET val=1000 WHERE pk=0;",
+			"CALL DOLT_COMMIT('-a', '-m', 'this is a normal commit', '--date', '2022-08-06T12:00:02');",
+			"CALL DOLT_CHECKOUT('main');",
+			"ALTER TABLE test DROP COLUMN val2;",
+			"INSERT INTO test VALUES (1, 2);",
+			"UPDATE test SET val=1001 WHERE pk=0;",
+			"CALL DOLT_COMMIT('-a', '-m', 'update a value', '--date', '2022-08-06T12:00:03');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT * FROM dolt_preview_merge_conflicts_summary('main', 'feature-branch')",
+				Expected: []sql.Row{{"test", uint64(2), uint64(0)}},
+			},
+			{
+				Query: "SELECT base_pk, base_val, our_pk, our_val, our_diff_type, their_pk, their_val, their_diff_type FROM dolt_preview_merge_conflicts('main', 'feature-branch', 'test')",
+				Expected: []sql.Row{
+					{0, 0, 0, 1001, "modified", 0, 1000, "modified"},
+					{nil, nil, 1, 2, "added", 1, 1, "added"},
+				},
+			},
+			{
+				Query:    "SELECT is_merging, source, target, unmerged_tables FROM DOLT_MERGE_STATUS;",
+				Expected: []sql.Row{{false, nil, nil, nil}},
+			},
+			{
+				Query:    "SELECT * from dolt_status",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "CALL DOLT_MERGE('feature-branch', '-m', 'this is a merge')",
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+			},
+			{
+				Query:    "SELECT is_merging, source, target, unmerged_tables FROM DOLT_MERGE_STATUS;",
+				Expected: []sql.Row{{true, "feature-branch", "refs/heads/main", "test"}},
+			},
+			{
+				Query:    "SELECT * from dolt_status",
+				Expected: []sql.Row{{"test", false, "conflict"}},
+			},
+			{
+				Query:    "SELECT COUNT(*) FROM dolt_log",
+				Expected: []sql.Row{{4}},
+			},
+			{
+				Query:    "select message from dolt_log where date < '2022-08-08' order by date DESC LIMIT 1;",
+				Expected: []sql.Row{{"update a value"}},
+			},
+			{
+				Query:    "SELECT * FROM dolt_conflicts",
+				Expected: []sql.Row{{"test", uint64(2)}},
+			},
+			{
+				Query: "SELECT base_pk, base_val, our_pk, our_val, our_diff_type, their_pk, their_val, their_diff_type FROM dolt_conflicts_test",
+				Expected: []sql.Row{
+					{0, 0, 0, 1001, "modified", 0, 1000, "modified"},
+					{nil, nil, 1, 2, "added", 1, 1, "added"},
+				},
+			},
+			{
+				Query:    "DELETE FROM dolt_conflicts_test",
+				Expected: []sql.Row{{types.NewOkResult(2)}},
+			},
+			{
+				Query:    "commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT * from dolt_status",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT * from test ORDER BY pk",
+				Expected: []sql.Row{{0, 1001}, {1, 2}},
+			},
+			{
+				Query:    "SELECT is_merging, source, target, unmerged_tables FROM DOLT_MERGE_STATUS;",
+				Expected: []sql.Row{{true, "feature-branch", "refs/heads/main", ""}},
+			},
+			{
+				Query:    "SELECT * FROM dolt_preview_merge_conflicts_summary('main', 'feature-branch')",
+				Expected: []sql.Row{{"test", uint64(2), uint64(0)}}, // merge wasn't committed yet, so still shows conflict between branches
+			},
+			{
+				Query:    "CALL DOLT_COMMIT('-m', 'merged');",
+				Expected: []sql.Row{{doltCommit}},
+			},
+			{
+				Query:    "SELECT is_merging, source, target, unmerged_tables FROM DOLT_MERGE_STATUS;",
+				Expected: []sql.Row{{false, nil, nil, nil}},
+			},
+			{
+				Query:    "SELECT * FROM dolt_preview_merge_conflicts_summary('main', 'feature-branch')",
+				Expected: []sql.Row{},
+			},
+		},
+	},
+	{
 		// TODO: These tests are skipped, because we have temporarily disabled dolt_conflicts_resolve
 		//       when there are schema conflicts, since schema conflicts prevent table data from being
 		//       merged, and resolving the schema changes, but not completing the data merge will likely
