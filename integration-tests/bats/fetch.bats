@@ -197,7 +197,6 @@ teardown() {
 }
 
 @test "fetch: fetch only tag" {
-    # skip "todo tag refspec support, and/or --tags option"
     cd repo1
     dolt tag v1
     dolt push origin v1
