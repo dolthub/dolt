@@ -104,6 +104,8 @@ func ParseRefSpecForRemote(remote, refSpecStr string) (RefSpec, error) {
 		return NewLocalToRemoteTrackingRef(remote, fromRef.(BranchRef), toRef.(RemoteRef))
 	} else if fromRef.GetType() == BranchRefType && toRef.GetType() == BranchRefType {
 		return NewBranchToBranchRefSpec(fromRef.(BranchRef), toRef.(BranchRef))
+	} else if fromRef.GetType() == BranchRefType && toRef.GetType() == TagRefType {
+		return NewBranchToTagRefSpec(fromRef.(BranchRef), toRef.(TagRef))
 	} else if fromRef.GetType() == TagRefType && toRef.GetType() == TagRefType {
 		return NewTagToTagRefSpec(fromRef.(TagRef), toRef.(TagRef))
 	}
@@ -169,6 +171,44 @@ func (rs BranchToBranchRefSpec) DestRef(r DoltRef) DoltRef {
 	return nil
 }
 
+type BranchToTagRefSpec struct {
+	srcRef  DoltRef
+	destRef DoltRef
+}
+
+// NewBranchToTagRefSpec takes a source BranchRef and destination TagRef and returns a RefSpec that maps source to dest.
+func NewBranchToTagRefSpec(srcRef BranchRef, destRef TagRef) (RefSpec, error) {
+	return BranchToTagRefSpec{
+		srcRef:  srcRef,
+		destRef: destRef,
+	}, nil
+}
+
+// SrcRef will always determine the DoltRef specified as the source ref regardless to the cwbRef
+func (rs BranchToTagRefSpec) SrcRef(_ DoltRef) DoltRef {
+	return rs.srcRef
+}
+
+// DestRef verifies the localRef matches the refspecs local pattern, and then maps it to a remote tracking branch, or
+// nil if it does not match the local pattern.
+func (rs BranchToTagRefSpec) DestRef(r DoltRef) DoltRef {
+	if Equals(r, rs.srcRef) {
+		return rs.destRef
+	}
+
+	return nil
+}
+
+// GetRemote returns the name of the remote being operated on.
+func (rs BranchToTagRefSpec) GetRemote() string {
+	return ""
+}
+
+// GetRemRefToLocal returns the local tracking branch.
+func (rs BranchToTagRefSpec) GetRemRefToLocal() branchMapper {
+	return identityBranchMapper(rs.srcRef.GetPath())
+}
+
 type TagToTagRefSpec struct {
 	srcRef  DoltRef
 	destRef DoltRef
@@ -195,6 +235,16 @@ func (rs TagToTagRefSpec) DestRef(r DoltRef) DoltRef {
 	}
 
 	return nil
+}
+
+// GetRemote returns the name of the remote being operated on.
+func (rs TagToTagRefSpec) GetRemote() string {
+	return ""
+}
+
+// GetRemRefToLocal returns the local tracking branch.
+func (rs TagToTagRefSpec) GetRemRefToLocal() branchMapper {
+	return identityBranchMapper(rs.srcRef.GetPath())
 }
 
 // BranchToTrackingBranchRefSpec maps a branch to the branch that should be tracking it

@@ -197,7 +197,7 @@ teardown() {
 }
 
 @test "fetch: fetch only tag" {
-    skip "todo tag refspec support, and/or --tags option"
+    # skip "todo tag refspec support, and/or --tags option"
     cd repo1
     dolt tag v1
     dolt push origin v1
@@ -208,7 +208,7 @@ teardown() {
 
     dolt fetch origin refs/tags/v1:refs/tags/v1
 
-    run dolt diff main origin/v1
+    run dolt diff main v1
     [ "$status" -eq 0 ]
     [[ "$output" =~ "added table" ]] || false
 
