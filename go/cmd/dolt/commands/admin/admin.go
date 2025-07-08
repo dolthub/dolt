@@ -24,5 +24,6 @@ var Commands = cli.NewHiddenSubCommandHandler("admin", "Commands for directly wo
 	ShowRootCmd{},
 	ZstdCmd{},
 	StorageCmd{},
+	NewGenToOldGenCmd{},
 	createchunk.Commands,
 })
