@@ -36,6 +36,9 @@ func MoveNewGenToOldGen(
 		allFiles := make([]hash.Hash, 0, len(gs.newGen.tables.upstream))
 		sourceSet := gs.newGen.tables.upstream
 		for tf := range sourceSet {
+			if isJournalAddr(tf) {
+				continue
+			}
 			allFiles = append(allFiles, tf)
 		}
 
