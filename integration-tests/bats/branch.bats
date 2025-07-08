@@ -535,7 +535,6 @@ teardown() {
     [[ "$output" =~ "not setting 'main' as its own upstream" ]] || false
 
     run dolt branch br1 --track br1
-    echo "$output"
     [ $status -eq 1 ]
     [[ "$output" =~ "branch not found: 'br1'" ]] || false
 }
