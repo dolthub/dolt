@@ -295,8 +295,11 @@ func getImportMoveOptions(ctx *sql.Context, apr *argparser.ArgParseResults, dEnv
 }
 
 func validateImportArgs(apr *argparser.ArgParseResults) errhand.VerboseError {
-	if apr.NArg() == 0 || apr.NArg() > 2 {
-		return errhand.BuildDError("expected 1 or 2 arguments").SetPrintUsage().Build()
+	if apr.NArg() == 0 {
+		return errhand.BuildDError("expected 1 argument (for stdin) or 2 arguments (table and file), but received 0").SetPrintUsage().Build()
+	}
+	if apr.NArg() > 2 {
+		return errhand.BuildDError("expected at most 2 arguments (table and file), but received %d", apr.NArg()).SetPrintUsage().Build()
 	}
 
 	if apr.Contains(schemaParam) && apr.Contains(primaryKeyParam) {
