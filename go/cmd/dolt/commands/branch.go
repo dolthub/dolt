@@ -140,6 +140,8 @@ func (cmd BranchCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return printCurrentBranch(sqlCtx, queryEngine)
 	case apr.Contains(datasetsFlag):
 		return printAllDatasets(sqlCtx, dEnv)
+	case apr.ContainsAny(cli.SetUpstreamToFlag, cli.TrackFlag):
+		return updateUpstream(sqlCtx, queryEngine, apr, args)
 	case apr.NArg() > 0:
 		return createBranch(sqlCtx, queryEngine, apr, args, usage)
 	default:
@@ -317,34 +319,56 @@ func generateBranchSql(args []string) (string, error) {
 	return dbr.InterpolateForDialect(buffer.String(), queryValues, dialect.MySQL)
 }
 
-func createBranch(sqlCtx *sql.Context, queryEngine cli.Queryist, apr *argparser.ArgParseResults, args []string, usage cli.UsagePrinter) int {
-
-	trackVal, setTrackUpstream := apr.GetValue(cli.TrackFlag)
-	if setTrackUpstream {
-		if trackVal == "inherit" {
-			return HandleVErrAndExitCode(errhand.BuildDError("--track='inherit' is not supported yet").Build(), usage)
+func updateUpstream(sqlCtx *sql.Context, queryEngine cli.Queryist, apr *argparser.ArgParseResults, args []string) int {
+	var branchName, upstreamBranch string
+	var err error
+	if apr.NArg() == 0 {
+		if apr.Contains(cli.TrackFlag) {
+			cli.PrintErrln("error: must specify branch to be created when using --track")
 		}
-
-		if trackVal == "direct" {
-			if apr.NArg() != 2 {
-				return HandleVErrAndExitCode(errhand.BuildDError("invalid arguments").Build(), usage)
-			}
-		} else {
-			// --track did not have an associated parameter; we parsed a positional arg as its value.
-			// There is no way to determine what position that arg was supposed to be in.
-
-			// --track accepts a parameter but can also be passed in on its own.
-			// We can determine which based on the number of arguments.
-			// We initially parsed args assuming that --track accepted a parameter,
-			// but now we have to parse the args again with it as a flag instead.
-
-			var err error
-			apr, err = cli.CreateBranchArgParserWithNoTrackValue().Parse(args)
-			if err != nil {
-				return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-			}
+		branchName, err = getActiveBranchName(sqlCtx, queryEngine)
+		if err != nil {
+			cli.PrintErrln("error: failed to get current branch from database")
+			return 1
 		}
+	} else {
+		branchName = apr.Arg(0)
 	}
+
+	if apr.Contains(cli.TrackFlag) && apr.Contains(cli.SetUpstreamToFlag) {
+		cli.PrintErrln(fmt.Sprintf("error: --%s and --%s are mutually exclusive options.", cli.SetUpstreamToFlag, cli.TrackFlag))
+		return 1
+	} else if apr.Contains(cli.TrackFlag) {
+		if apr.NArg() == 1 { // If we're only given the branch, we'll presume the current branch will be the upstream
+			upstreamBranch, err = getActiveBranchName(sqlCtx, queryEngine)
+			if err != nil {
+				cli.PrintErrln("error: If --track is used, you must specify the branch to modify, or a new branch.")
+				return 1
+			}
+		} else if apr.NArg() == 2 {
+			upstreamBranch = apr.Arg(1)
+		} else {
+			cli.PrintErrln("error: If --track is used, you must specify the branch to modify, or a new branch.")
+			return 1
+		}
+	} else if apr.Contains(cli.SetUpstreamToFlag) {
+		if apr.NArg() > 2 {
+			cli.PrintErrln("error: If --set-upstream-to is used, you must specify the branch to be modified, then upstream branch.")
+			return 1
+		}
+		upstreamBranch, _ = apr.GetValue(cli.SetUpstreamToFlag)
+	}
+
+	res := callStoredProcedure(sqlCtx, queryEngine, args)
+	if res != 0 {
+		return res
+	}
+	cli.Printf("branch '%s' set up to track '%s'\n", branchName, upstreamBranch)
+	return 0
+}
+
+func createBranch(sqlCtx *sql.Context, queryEngine cli.Queryist, apr *argparser.ArgParseResults, args []string, usage cli.UsagePrinter) int {
+	remoteName, useUpstream := apr.GetValue(cli.SetUpstreamToFlag)
 
 	if apr.NArg() != 1 && apr.NArg() != 2 {
 		usage()
@@ -378,8 +402,8 @@ func createBranch(sqlCtx *sql.Context, queryEngine cli.Queryist, apr *argparser.
 		return result
 	}
 
-	if apr.Contains(cli.TrackFlag) {
-		cli.Printf("branch '%s' set up to track '%s'\n", apr.Arg(0), apr.Arg(1))
+	if useUpstream {
+		cli.Printf("branch '%s' set up to track '%s'\n", apr.Arg(0), remoteName)
 	}
 
 	return 0

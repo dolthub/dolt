@@ -552,6 +552,22 @@ SQL
     [[ "${lines[2]}" = "  (use \"dolt push\" to publish your local commits)" ]] || false
 }
 
+@test "status: with local upstream" {
+    dolt branch br1 --track
+
+    run dolt --branch br1 status
+    [ "$status" -eq 0 ]
+    [[ "${lines[0]}" = "On branch br1" ]] || false
+    [[ "${lines[1]}" = "Your branch is up to date with 'main'." ]] || false
+    [[ "${lines[2]}" = "nothing to commit, working tree clean" ]] || false
+
+    dolt commit --allow-empty -m "Empty commit"
+    run dolt --branch br1 status
+    [ "$status" -eq 0 ]
+    [[ "${lines[0]}" = "On branch br1" ]] || false
+    [[ "${lines[1]}" = "Your branch is behind 'main' by 1 commit, and can be fast-forwarded." ]] || false
+}
+
 @test "status: tables with no observable changes don't show in status but can be staged" {
 dolt sql <<SQL
 create table t1 (id int primary key);
