@@ -427,7 +427,7 @@ func (ftp *fsTablePersister) PruneTableFiles(ctx context.Context, keeper func() 
 	for _, p := range unfilteredTableFiles {
 		ftp.removeMu.Lock()
 		_, exists := ftp.toKeep[filepath.Clean(p)]
-		_, archiveExists := ftp.toKeep[filepath.Clean(p + ArchiveFileSuffix)]
+		_, archiveExists := ftp.toKeep[filepath.Clean(p+ArchiveFileSuffix)]
 		_, trimmedExists := ftp.toKeep[filepath.Clean(strings.TrimSuffix(p, ArchiveFileSuffix))]
 		if !exists && !archiveExists && !trimmedExists {
 			err := file.Remove(p)
