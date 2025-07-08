@@ -37,7 +37,7 @@ func (cmd NewGenToOldGenCmd) Name() string {
 
 var newGenToOldGenDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Promote everything in newgen to oldgen. Skips GC.",
-	LongDesc:  `Admin command to force the promotion of all tables in the new generation to the old generation.`,
+	LongDesc:  `Admin command to force the promotion of all table files in the new generation to the old generation.`,
 	Synopsis:  []string{},
 }
 
