@@ -5226,7 +5226,6 @@ var CommitDiffSystemTableScriptTests = []queries.ScriptTest{
 			},
 		},
 	},
-
 	{
 		// When a column is dropped and recreated with a different type, we expect only the new column
 		// to be included in dolt_commit_diff output, with previous values coerced (with any warnings reported) to the new type
@@ -5356,7 +5355,6 @@ var CommitDiffSystemTableScriptTests = []queries.ScriptTest{
 			},
 		},
 	},
-
 	{
 		Name: "added and dropped table",
 		SetUpScript: []string{
@@ -5402,6 +5400,28 @@ var CommitDiffSystemTableScriptTests = []queries.ScriptTest{
 			{
 				Query:    "SELECT to_pk, to_c1, from_pk, from_c1, diff_type FROM DOLT_commit_DIFF_t where from_commit=@Commit1 and to_commit=@Commit4;",
 				Expected: []sql.Row{{nil, nil, 3, 4, "removed"}},
+			},
+		},
+	},
+	{
+		// Test a LEFT JOIN to exercise the case where the CommitDiffIterator
+		// must reload its partitions multiple times while executing the join.
+		Name: "Left outer join on dolt_commit_diff",
+		SetUpScript: []string{
+			"CREATE TABLE t (pk int primary key, c1 varchar(100));",
+			"CALL DOLT_COMMIT('-Am', 'Create table t on main');",
+			"INSERT INTO t VALUES (1, 'one'), (2, 'two');",
+			"CALL DOLT_COMMIT('-Am', 'Adding two rows to t on main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT * from t LEFT JOIN (SELECT from_pk, from_c1 from dolt_commit_diff_t where from_commit = HASHOF('HEAD~') and to_commit = HASHOF('HEAD')) as dt on 1 = 1;",
+				Expected: []sql.Row{
+					{1, "one", interface{}(nil), interface{}(nil)},
+					{1, "one", interface{}(nil), interface{}(nil)},
+					{2, "two", interface{}(nil), interface{}(nil)},
+					{2, "two", interface{}(nil), interface{}(nil)},
+				},
 			},
 		},
 	},
