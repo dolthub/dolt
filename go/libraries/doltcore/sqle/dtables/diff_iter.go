@@ -262,13 +262,9 @@ func newProllyDiffIter(ctx *sql.Context, dp DiffPartition, targetFromSchema, tar
 	}
 
 	var ranges []prolly.Range
-	var err error
+	lookup = copyIndexLookupWithoutCommitRanges(lookup)
 	if lookup.Index != nil {
-		for i := range lookup.Ranges.(sql.MySQLRangeCollection) {
-			// The first two columns of the index (to_commit and from_commit) don't actually exist on the underlying table.
-			// We strip them out here so that we can generate the correct ranges for the eventual Diff.
-			lookup.Ranges.(sql.MySQLRangeCollection)[i] = lookup.Ranges.(sql.MySQLRangeCollection)[i][2:]
-		}
+		var err error
 		ranges, err = index.ProllyRangesFromIndexLookup(ctx, lookup)
 		if err != nil {
 			return prollyDiffIter{}, err
@@ -332,6 +328,24 @@ func newProllyDiffIter(ctx *sql.Context, dp DiffPartition, targetFromSchema, tar
 	}()
 
 	return iter, nil
+}
+
+// copyIndexLookupWithoutCommitRanges returns a copy of the specified |lookup|, with the lookup ranges for to_commit
+// and from_commit removed. This allows the lookup ranges to be used to filter on the primary key index for the
+// underlying table (if a third range for the primary key has been provided).
+func copyIndexLookupWithoutCommitRanges(lookup sql.IndexLookup) sql.IndexLookup {
+	if lookup.Ranges == nil {
+		return lookup
+	}
+
+	// The first two columns of the index (to_commit and from_commit) don't actually exist on the underlying table.
+	// We strip them out here so that we can generate the correct ranges for the eventual Diff.
+	rangesCopy := make(sql.MySQLRangeCollection, 0)
+	for i := range lookup.Ranges.(sql.MySQLRangeCollection) {
+		rangesCopy = append(rangesCopy, lookup.Ranges.(sql.MySQLRangeCollection)[i][2:])
+	}
+	return sql.NewIndexLookup(lookup.Index, rangesCopy,
+		lookup.IsPointLookup, lookup.IsEmptyRange, lookup.IsSpatialLookup, lookup.IsReverse)
 }
 
 func (itr prollyDiffIter) Next(ctx *sql.Context) (sql.Row, error) {
