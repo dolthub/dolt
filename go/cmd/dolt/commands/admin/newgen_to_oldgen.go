@@ -16,7 +16,6 @@ package admin
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"sync"
 	"time"
@@ -71,7 +70,7 @@ func (cmd NewGenToOldGenCmd) Exec(ctx context.Context, commandStr string, args [
 	}
 
 	wg := sync.WaitGroup{}
-	progress := make(chan interface{}, 32)
+	progress := make(chan string, 32)
 	handleNewGenToOldGenProgress(ctx, &wg, progress)
 
 	defer func() {
@@ -90,7 +89,7 @@ func (cmd NewGenToOldGenCmd) Exec(ctx context.Context, commandStr string, args [
 }
 
 // NM4 - update to be more cas specfific.
-func handleNewGenToOldGenProgress(ctx context.Context, wg *sync.WaitGroup, progress chan interface{}) {
+func handleNewGenToOldGenProgress(ctx context.Context, wg *sync.WaitGroup, progress chan string) {
 	go func() {
 		wg.Add(1)
 		defer wg.Done()
@@ -98,7 +97,6 @@ func handleNewGenToOldGenProgress(ctx context.Context, wg *sync.WaitGroup, progr
 		rotation := 0
 		p := cli.NewEphemeralPrinter()
 		currentMessage := "Converting NewGen to OldGen"
-		var lastProgressMsg *nbs.ArchiveBuildProgressMsg
 		lastUpdateTime := time.Now()
 
 		for {
@@ -109,22 +107,8 @@ func handleNewGenToOldGenProgress(ctx context.Context, wg *sync.WaitGroup, progr
 				if !ok {
 					return
 				}
-				switch v := msg.(type) {
-				case string:
-					cli.Printf("%s\n", v)
-				case nbs.ArchiveBuildProgressMsg:
-					if v.Total == v.Completed {
-						p.Printf("%s: Done\n", v.Stage)
-						lastProgressMsg = nil
-						currentMessage = ""
-						p.Display()
-						cli.Printf("\n")
-					} else {
-						lastProgressMsg = &v
-					}
-				default:
-					cli.Printf("Unexpected Message: %v\n", v)
-				}
+				currentMessage = msg
+				cli.Printf("%s\n", msg)
 			// If no events come in, we still want to update the progress bar every second.
 			case <-time.After(1 * time.Second):
 			}
@@ -140,17 +124,6 @@ func handleNewGenToOldGenProgress(ctx context.Context, wg *sync.WaitGroup, progr
 					p.Printf("| ")
 				case 3:
 					p.Printf("/ ")
-				}
-
-				if lastProgressMsg != nil {
-					percentDone := 0.0
-					totalCount := lastProgressMsg.Total
-					if lastProgressMsg.Total > 0 {
-						percentDone = float64(lastProgressMsg.Completed) / float64(lastProgressMsg.Total)
-						percentDone *= 100.0
-					}
-
-					currentMessage = fmt.Sprintf("%s: %d/%d (%.2f%%)", lastProgressMsg.Stage, lastProgressMsg.Completed, totalCount, percentDone)
 				}
 
 				p.Printf("%s", currentMessage) // Don't update message, but allow ticker to turn.

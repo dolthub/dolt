@@ -27,7 +27,7 @@ import (
 func MoveNewGenToOldGen(
 	ctx context.Context,
 	cs chunks.ChunkStore,
-	progress chan interface{},
+	progress chan string,
 ) error {
 	if gs, ok := cs.(*GenerationalNBS); ok {
 		srcPath, _ := gs.newGen.Path()
