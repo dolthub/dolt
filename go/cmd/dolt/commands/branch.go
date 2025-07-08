@@ -320,9 +320,12 @@ func generateBranchSql(args []string) (string, error) {
 }
 
 func updateUpstream(sqlCtx *sql.Context, queryEngine cli.Queryist, apr *argparser.ArgParseResults, args []string) int {
-	var branchName, remoteName string
+	var branchName, upstreamBranch string
 	var err error
 	if apr.NArg() == 0 {
+		if apr.Contains(cli.TrackFlag) {
+			cli.PrintErrln("error: must specify branch to be created when using --track")
+		}
 		branchName, err = getActiveBranchName(sqlCtx, queryEngine)
 		if err != nil {
 			cli.PrintErrln("error: failed to get current branch from database")
@@ -336,31 +339,31 @@ func updateUpstream(sqlCtx *sql.Context, queryEngine cli.Queryist, apr *argparse
 		cli.PrintErrln(fmt.Sprintf("error: --%s and --%s are mutually exclusive options.", cli.SetUpstreamToFlag, cli.TrackFlag))
 		return 1
 	} else if apr.Contains(cli.TrackFlag) {
-		if apr.NArg() == 1 {
-			remoteName, err = getActiveBranchName(sqlCtx, queryEngine)
+		if apr.NArg() == 1 { // If we're only given the branch, we'll presume the current branch will be the upstream
+			upstreamBranch, err = getActiveBranchName(sqlCtx, queryEngine)
 			if err != nil {
-				cli.PrintErrln("error: --track takes branch name and remote name")
+				cli.PrintErrln("error: If --track is used, you must specify the branch to modify, or a new branch.")
 				return 1
 			}
 		} else if apr.NArg() == 2 {
-			remoteName = apr.Arg(1)
+			upstreamBranch = apr.Arg(1)
 		} else {
-			cli.PrintErrln("error: --track takes branch name and remote name")
+			cli.PrintErrln("error: If --track is used, you must specify the branch to modify, or a new branch.")
 			return 1
 		}
 	} else if apr.Contains(cli.SetUpstreamToFlag) {
 		if apr.NArg() > 2 {
-			cli.PrintErrln("error: --set-upstream-to takes branch name and remote name")
+			cli.PrintErrln("error: If --set-upstream-to is used, you must specify the branch to be modified, then upstream branch.")
 			return 1
 		}
-		remoteName, _ = apr.GetValue(cli.SetUpstreamToFlag)
+		upstreamBranch, _ = apr.GetValue(cli.SetUpstreamToFlag)
 	}
 
 	res := callStoredProcedure(sqlCtx, queryEngine, args)
 	if res != 0 {
 		return res
 	}
-	cli.Printf("branch '%s' set up to track '%s'\n", branchName, remoteName)
+	cli.Printf("branch '%s' set up to track '%s'\n", branchName, upstreamBranch)
 	return 0
 }
 

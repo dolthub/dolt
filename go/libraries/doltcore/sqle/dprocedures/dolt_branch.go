@@ -79,7 +79,7 @@ func doDoltBranch(ctx *sql.Context, args []string) (int, error) {
 		err = renameBranch(ctx, dbData, apr, dSess, dbName, &rsc)
 	case apr.Contains(cli.DeleteFlag), apr.Contains(cli.DeleteForceFlag):
 		err = deleteBranches(ctx, dbData, apr, dSess, dbName, &rsc)
-	case apr.ContainsAny(cli.SetUpstreamToFlag, cli.TrackFlag):
+	case apr.Contains(cli.SetUpstreamToFlag):
 		err = setBranchUpstream(ctx, dbData, apr, &rsc)
 	default:
 		err = createNewBranch(ctx, dbData, apr, &rsc)
@@ -365,7 +365,7 @@ func loadConfig(ctx *sql.Context) *env.DoltCliConfig {
 }
 
 func setBranchUpstream(ctx *sql.Context, dbData env.DbData[*sql.Context], apr *argparser.ArgParseResults, rsc *doltdb.ReplicationStatusController) error {
-	var branchName string
+	var branchName, fullRemote string
 	var err error
 
 	if apr.NArg() == 0 {
@@ -384,27 +384,12 @@ func setBranchUpstream(ctx *sql.Context, dbData env.DbData[*sql.Context], apr *a
 		}
 	}
 
-	var fullRemote string
-	if apr.Contains(cli.TrackFlag) {
-		if apr.NArg() == 1 {
-			fullRemote, err = currentBranch(ctx)
-			if err != nil {
-				return err
-			}
-		} else if apr.NArg() == 2 {
-			fullRemote = apr.Arg(1)
-		} else {
-			return InvalidArgErr
-		}
-	} else if apr.Contains(cli.SetUpstreamToFlag) {
-		if apr.NArg() > 2 {
-			return InvalidArgErr
-		}
-		var ok bool
-		fullRemote, ok = apr.GetValue(cli.SetUpstreamToFlag)
-		if !ok {
-			return fmt.Errorf("could not parse upstream value for dolt branch")
-		}
+	if apr.NArg() > 2 {
+		return InvalidArgErr
+	}
+	fullRemote, ok := apr.GetValue(cli.SetUpstreamToFlag)
+	if !ok {
+		return fmt.Errorf("could not parse upstream value for dolt branch")
 	}
 
 	remoteName, remoteBranch, err := validateTracking(ctx, dbData, fullRemote, branchName)
@@ -573,7 +558,7 @@ func validateTracking(ctx *sql.Context, dbData env.DbData[*sql.Context], maybeUp
 		return "", "", err
 	}
 	if !ok {
-		return "", "", fmt.Errorf("branch not found: %s", maybeUpstream)
+		return "", "", fmt.Errorf("branch not found: '%s'", maybeUpstream)
 	}
 
 	if maybeUpstream == selectedBranch {

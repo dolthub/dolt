@@ -405,7 +405,6 @@ teardown() {
     dolt branch other
     dolt --branch other push --set-upstream origin other
 
-
     dolt branch --set-upstream-to origin/other
 
     run dolt sql -q "select remote, branch from dolt_branches where name = 'main'" -r csv
@@ -422,11 +421,11 @@ teardown() {
     dolt remote add origin file://../remote
     run dolt branch br1 --track origin/invalid
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "error: branch not found: origin/invalid" ]] || false
+    [[ "$output" =~ "error: branch not found: 'origin/invalid'" ]] || false
 
     run dolt branch main --set-upstream-to origin/invalid
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "error: branch not found: origin/invalid" ]] || false
+    [[ "$output" =~ "error: branch not found: 'origin/invalid'" ]] || false
 }
 
 @test "branch: cannot use both --track and --set-upstream-to" {
@@ -535,11 +534,20 @@ teardown() {
     [ $status -eq 1 ]
     [[ "$output" =~ "not setting 'main' as its own upstream" ]] || false
 
-    run dolt branch main --track main
+    run dolt branch br1 --track br1
+    echo "$output"
     [ $status -eq 1 ]
-    [[ "$output" =~ "not setting 'main' as its own upstream" ]] || false
+    [[ "$output" =~ "branch not found: 'br1'" ]] || false
+}
 
-    run dolt branch main --track
-    [ $status -eq 1 ]
-    [[ "$output" =~ "not setting 'main' as its own upstream" ]] || false
+@test "branch: --set-upstream-to and --track cannot set relative commit as upstream" {
+    dolt commit --allow-empty -m "Empty commit 1"
+
+    run dolt branch br1 --track HEAD~1
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "branch not found: 'HEAD~1'" ]] || false
+
+    run dolt branch br1 --set-upstream-to HEAD~1
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "branch not found: 'HEAD~1'" ]] || false
 }
