@@ -1989,9 +1989,10 @@ func markAndSweepChunks(_ context.Context, nbs *NomsBlockStore, src CompressedCh
 			return len(upstreams) == 0
 		}
 
-		anyPossiblyNovelChunks := nbs.hasLocalGCNovelty()
-		manifestMatchesTables := sameSpecs(nbs.tables.upstream, nbs.upstream)
-		if anyPossiblyNovelChunks || !manifestMatchesTables {
+		if nbs.hasLocalGCNovelty() || !sameSpecs(nbs.tables.upstream, nbs.upstream) {
+			// If we have any novelty or if we have different table files than
+			// upstream, the precheck always succeeds and we go ahead and run
+			// a GC.
 			return nil
 		}
 

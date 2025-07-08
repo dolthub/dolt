@@ -645,7 +645,7 @@ func (jm *journalManifest) UpdateGCGen(ctx context.Context, lastLock hash.Hash, 
 
 func updateGCGenManifestCheck(upstream, contents manifestContents) error {
 	if contents.root != upstream.root {
-		return errors.New("UpdateGCGen() cannot update the root")
+		return errors.New("UpdateGCGen() cannot update the root. The attempt to do this is a bug in Dolt. Please report at https://github.com/dolthub/dolt/issues.")
 	} else if contents.gcGen == upstream.gcGen {
 		// Allow a no-op update.  These can happen
 		// when we went through a GC cycle because the
