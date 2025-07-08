@@ -17,7 +17,6 @@ package nbs
 import (
 	"bytes"
 	"context"
-	"errors"
 
 	"github.com/dolthub/dolt/go/store/blobstore"
 	"github.com/dolthub/dolt/go/store/chunks"
@@ -87,18 +86,7 @@ func (bsm blobstoreManifest) Update(ctx context.Context, lastLock hash.Hash, new
 }
 
 func (bsm blobstoreManifest) UpdateGCGen(ctx context.Context, lastLock hash.Hash, newContents manifestContents, stats *Stats, writeHook func() error) (manifestContents, error) {
-	checker := func(upstream, contents manifestContents) error {
-		if contents.gcGen == upstream.gcGen {
-			return errors.New("UpdateGCGen() must update the garbage collection generation")
-		}
-
-		if contents.root != upstream.root {
-			return errors.New("UpdateGCGen() cannot update the root")
-		}
-		return nil
-	}
-
-	return updateBSWithChecker(ctx, bsm.bs, checker, lastLock, newContents, writeHook)
+	return updateBSWithChecker(ctx, bsm.bs, updateGCGenManifestCheck, lastLock, newContents, writeHook)
 }
 
 func updateBSWithChecker(ctx context.Context, bs blobstore.Blobstore, validate manifestChecker, lastLock hash.Hash, newContents manifestContents, writeHook func() error) (mc manifestContents, err error) {

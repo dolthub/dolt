@@ -1953,6 +1953,21 @@ func (nbs *NomsBlockStore) MarkAndSweepChunks(ctx context.Context, getAddrs chun
 	return markAndSweepChunks(ctx, nbs, nbs, dest, getAddrs, filter, mode, cmp)
 }
 
+// Returns true if this NomsBlockStore instance is carrying local
+// changes which wouldn't be reflected in a GCGen.
+func (nbs *NomsBlockStore) hasLocalGCNovelty() bool {
+	if nbs.memtable != nil {
+		return true
+	}
+	if len(nbs.tables.novel) != 0 {
+		return true
+	}
+	if cj := nbs.ChunkJournal(); cj != nil && cj.wr != nil {
+		return true
+	}
+	return false
+}
+
 func markAndSweepChunks(_ context.Context, nbs *NomsBlockStore, src CompressedChunkStoreForGC, dest chunks.ChunkStore, getAddrs chunks.GetAddrsCurry, filter chunks.HasManyFunc, mode chunks.GCMode, cmp chunks.GCArchiveLevel) (chunks.MarkAndSweeper, error) {
 	ops := nbs.SupportedOperations()
 	if !ops.CanGC || !ops.CanPrune {
@@ -1962,6 +1977,23 @@ func markAndSweepChunks(_ context.Context, nbs *NomsBlockStore, src CompressedCh
 	precheck := func() error {
 		nbs.mu.RLock()
 		defer nbs.mu.RUnlock()
+
+		sameSpecs := func(upstreamSrcs chunkSourceSet, contents manifestContents) bool {
+			upstreams := make(map[hash.Hash]struct{})
+			for k := range upstreamSrcs {
+				upstreams[k] = struct{}{}
+			}
+			for _, spec := range contents.specs {
+				delete(upstreams, spec.name)
+			}
+			return len(upstreams) == 0
+		}
+
+		anyPossiblyNovelChunks := nbs.hasLocalGCNovelty()
+		manifestMatchesTables := sameSpecs(nbs.tables.upstream, nbs.upstream)
+		if anyPossiblyNovelChunks || !manifestMatchesTables {
+			return nil
+		}
 
 		// Check to see if the specs have changed since last gc. If they haven't bail early.
 		gcGenCheck := generateLockHash(nbs.upstream.root, nbs.upstream.specs, nbs.upstream.appendix, []byte("full"))
@@ -2210,14 +2242,16 @@ func (nbs *NomsBlockStore) swapTables(ctx context.Context, specs []tableSpec, mo
 		specs:   specs,
 	}
 
-	// Nothing has changed. Bail early.
-	if newContents.gcGen == nbs.upstream.gcGen {
+	sameGcGen := newContents.gcGen == nbs.upstream.gcGen
+	hasLocalNovelty := nbs.hasLocalGCNovelty()
+	if sameGcGen && !hasLocalNovelty {
+		// Nothing has changed. Bail early.
 		return nil
 	}
 
-	upstream, uerr := nbs.manifestMgr.UpdateGCGen(ctx, nbs.upstream.lock, newContents, nbs.stats, nil)
-	if uerr != nil {
-		return uerr
+	upstream, err := nbs.manifestMgr.UpdateGCGen(ctx, nbs.upstream.lock, newContents, nbs.stats, nil)
+	if err != nil {
+		return err
 	}
 
 	if upstream.lock != newContents.lock {

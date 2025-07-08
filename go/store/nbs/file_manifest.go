@@ -207,16 +207,7 @@ func (fm fileManifest) UpdateGCGen(ctx context.Context, lastLock hash.Hash, newC
 		}
 	}()
 
-	checker := func(upstream, contents manifestContents) error {
-		if contents.gcGen == upstream.gcGen {
-			return errors.New("UpdateGCGen() must update the garbage collection generation")
-		} else if contents.root != upstream.root {
-			return errors.New("UpdateGCGen() cannot update the root")
-		}
-		return nil
-	}
-
-	return updateWithChecker(ctx, fm.dir, fm.mode, checker, lastLock, newContents, writeHook)
+	return updateWithChecker(ctx, fm.dir, fm.mode, updateGCGenManifestCheck, lastLock, newContents, writeHook)
 }
 
 // parseV5Manifest parses the v5 manifest from the Reader given. Assumes the first field (the manifest version and
