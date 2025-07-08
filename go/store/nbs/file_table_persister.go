@@ -370,6 +370,17 @@ func (ftp *fsTablePersister) PruneTableFiles(ctx context.Context, keeper func() 
 	unfilteredTableFiles := make([]string, 0)
 	unfilteredTempFiles := make([]string, 0)
 
+	isTableFileName := func(name string) bool {
+		if strings.HasSuffix(name, ArchiveFileSuffix) {
+			name = strings.TrimSuffix(name, ArchiveFileSuffix)
+		}
+		if len(name) != 32 {
+			return false
+		}
+		_, ok := hash.MaybeParse(name)
+		return ok
+	}
+
 	for _, info := range fileInfos {
 		if info.IsDir() {
 			continue
@@ -382,17 +393,15 @@ func (ftp *fsTablePersister) PruneTableFiles(ctx context.Context, keeper func() 
 			continue
 		}
 
-		if len(info.Name()) != 32 {
-			continue // not a table file
-		}
-
-		if _, ok := hash.MaybeParse(info.Name()); !ok {
-			continue // not a table file
+		if !isTableFileName(info.Name()) {
+			continue
 		}
 
 		i, err := info.Info()
 		if err != nil {
-			ea.add(filePath, err)
+			if !errors.Is(err, fs.ErrNotExist) {
+				ea.add(filePath, err)
+			}
 			continue
 		}
 
