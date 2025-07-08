@@ -17,7 +17,6 @@ package admin
 import (
 	"context"
 	"os"
-	"sync"
 	"time"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -26,6 +25,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/nbs"
+	"golang.org/x/sync/errgroup"
 )
 
 type NewGenToOldGenCmd struct {
@@ -61,7 +61,7 @@ func (cmd NewGenToOldGenCmd) Hidden() bool {
 	return true
 }
 
-func (cmd NewGenToOldGenCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
+func (cmd NewGenToOldGenCmd) Exec(ctx context.Context, _ string, _ []string, dEnv *env.DoltEnv, _ cli.CliContext) int {
 	db := doltdb.HackDatasDatabaseFromDoltDB(dEnv.DoltDB(ctx))
 	cs := datas.ChunkStoreFromDatabase(db)
 	if _, ok := cs.(*nbs.GenerationalNBS); !ok {
@@ -69,18 +69,21 @@ func (cmd NewGenToOldGenCmd) Exec(ctx context.Context, commandStr string, args [
 		return 1
 	}
 
-	wg := sync.WaitGroup{}
+	var eg errgroup.Group
 	progress := make(chan string, 32)
-	handleNewGenToOldGenProgress(ctx, &wg, progress)
-
+	eg.Go(func() error {
+		handleNewGenToOldGenProgress(ctx, progress)
+		return nil
+	})
+	eg.Go(func() error {
+		defer close(progress)
+		return nbs.MoveNewGenToOldGen(ctx, cs, progress)
+	})
 	defer func() {
-		close(progress)
-		wg.Wait()
 		os.Stdout.Sync()
 		os.Stderr.Sync()
 	}()
-
-	err := nbs.MoveNewGenToOldGen(ctx, cs, progress)
+	err := eg.Wait()
 	if err != nil {
 		cli.PrintErrf("Error during newgen-to-oldgen: %v\n", err)
 		return 1
@@ -88,49 +91,43 @@ func (cmd NewGenToOldGenCmd) Exec(ctx context.Context, commandStr string, args [
 	return 0
 }
 
-// NM4 - update to be more cas specfific.
-func handleNewGenToOldGenProgress(ctx context.Context, wg *sync.WaitGroup, progress chan string) {
-	go func() {
-		wg.Add(1)
-		defer wg.Done()
+func handleNewGenToOldGenProgress(ctx context.Context, progress chan string) {
+	rotation := 0
+	p := cli.NewEphemeralPrinter()
+	currentMessage := "Converting NewGen to OldGen"
+	lastUpdateTime := time.Now()
 
-		rotation := 0
-		p := cli.NewEphemeralPrinter()
-		currentMessage := "Converting NewGen to OldGen"
-		lastUpdateTime := time.Now()
-
-		for {
-			select {
-			case <-ctx.Done():
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case msg, ok := <-progress:
+			if !ok {
 				return
-			case msg, ok := <-progress:
-				if !ok {
-					return
-				}
-				currentMessage = msg
-				cli.Printf("%s\n", msg)
-			// If no events come in, we still want to update the progress bar every second.
-			case <-time.After(1 * time.Second):
 			}
-
-			if now := time.Now(); now.Sub(lastUpdateTime) > 1*time.Second {
-				rotation++
-				switch rotation % 4 {
-				case 0:
-					p.Printf("- ")
-				case 1:
-					p.Printf("\\ ")
-				case 2:
-					p.Printf("| ")
-				case 3:
-					p.Printf("/ ")
-				}
-
-				p.Printf("%s", currentMessage) // Don't update message, but allow ticker to turn.
-				lastUpdateTime = now
-
-				p.Display()
-			}
+			currentMessage = msg
+			cli.Printf("%s\n", msg)
+		// If no events come in, we still want to update the progress bar every second.
+		case <-time.After(1 * time.Second):
 		}
-	}()
+
+		if now := time.Now(); now.Sub(lastUpdateTime) > 1*time.Second {
+			rotation++
+			switch rotation % 4 {
+			case 0:
+				p.Printf("- ")
+			case 1:
+				p.Printf("\\ ")
+			case 2:
+				p.Printf("| ")
+			case 3:
+				p.Printf("/ ")
+			}
+
+			p.Printf("%s", currentMessage) // Don't update message, but allow ticker to turn.
+			lastUpdateTime = now
+
+			p.Display()
+		}
+	}
 }
