@@ -505,9 +505,9 @@ func (tr tableReader) getManyAtOffsetsWithReadFunc(
 	offsetRecords offsetRecSlice,
 	stats *Stats,
 	readAtOffsets func(
-	ctx context.Context,
-	rb readBatch,
-	stats *Stats) error,
+		ctx context.Context,
+		rb readBatch,
+		stats *Stats) error,
 ) error {
 	batches := toReadBatches(offsetRecords, tr.blockSize)
 	for i := range batches {
