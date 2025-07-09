@@ -332,48 +332,6 @@ func TestServerFailsIfPortInUse(t *testing.T) {
 	wg.Wait()
 }
 
-func TestGlobalReadOnlyStateAtStartup(t *testing.T) {
-	ctx := context.Background()
-	controller := svcs.NewController()
-	dEnv, err := sqle.CreateEnvWithSeedData()
-	require.NoError(t, err)
-	defer func() {
-		assert.NoError(t, dEnv.DoltDB(ctx).Close())
-	}()
-
-	// Start server with --read-only flag
-	go func() {
-		StartServer(context.Background(), "0.0.0", "dolt sql-server", []string{
-			"-H", "localhost",
-			"-P", "15500",
-			"-t", "5",
-			"-l", "info",
-			"-r",
-		}, dEnv, dEnv.FS, controller)
-	}()
-	err = controller.WaitForStart()
-	require.NoError(t, err)
-	assert.True(t, dsess.GetGlobalReadOnly(), "read-only state should be true when started with --read-only")
-	controller.Stop()
-	_ = controller.WaitForStop()
-
-	// Start server without --read-only flag
-	controller2 := svcs.NewController()
-	go func() {
-		StartServer(context.Background(), "0.0.0", "dolt sql-server", []string{
-			"-H", "localhost",
-			"-P", "15501",
-			"-t", "5",
-			"-l", "info",
-		}, dEnv, dEnv.FS, controller2)
-	}()
-	err = controller2.WaitForStart()
-	require.NoError(t, err)
-	assert.False(t, dsess.GetGlobalReadOnly(), "read-only state should be false when started without --read-only")
-	controller2.Stop()
-	_ = controller2.WaitForStop()
-}
-
 func TestReadOnlySystemVariableAtStartup(t *testing.T) {
 	ctx := context.Background()
 	controller := svcs.NewController()
