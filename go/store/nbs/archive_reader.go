@@ -529,11 +529,7 @@ func (ar archiveReader) verifyMetaCheckSum(ctx context.Context, stats *Stats) er
 }
 
 func (ar archiveReader) iterate(ctx context.Context, cb func(chunks.Chunk) error, stats *Stats) error {
-	// ar.spanIndex already contains sorted end offsets of ByteSpans
-	// spanIndex[i] is the end offset of ByteSpan ID (i+1)
-	// We can use this directly for efficient offset lookup
-
-	// Build separate reverse indexes for dictionary and data ByteSpans
+	// Build reverse indexes for dictionary and data ByteSpans
 	// dictReverseIndex: Dictionary ByteSpan ID -> struct{} - indicates that we expect that span to be a dictionary.
 	// dataReverseIndex: Data ByteSpan ID -> chunk ref index - indicates that we expect that span to be a data chunk,
 	//                   and the value is the index into the chunkRefs slice where the chunk reference is stored.
@@ -543,27 +539,25 @@ func (ar archiveReader) iterate(ctx context.Context, cb func(chunks.Chunk) error
 	for chunkRefIdx := uint32(0); chunkRefIdx < ar.footer.chunkCount; chunkRefIdx++ {
 		dictId, dataId := ar.getChunkRef(int(chunkRefIdx))
 
-		// Add mapping for dictionary ByteSpan (if not null)
 		if dictId != 0 {
 			dictReverseIndex[dictId] = struct{}{}
 		}
 
-		// Add mapping for data ByteSpan
 		dataReverseIndex[dataId] = chunkRefIdx
 	}
 
-	// Load data in 1MB chunks starting from the first byte of the data section
-	const bufferSize = 1024 * 1024 // 1MB
+	// Load data in 4MB chunks starting from the first byte of the data section
+	const bufferSize = 4 * 1024 * 1024
 	dataSpan := ar.footer.dataSpan()
 	currentBlockStart := dataSpan.offset // This is 0 with all current archive formats. Probably won't ever change.
 
-	loadedDictionaries := make(map[uint32]*DecompBundle)
+	loadedDictionaries := make(map[uint32]*gozstd.DDict)
 	byteSpanCounter := uint32(1)
 
 	// Read the data block
 	dataBlock := make([]byte, bufferSize)
 	for currentBlockStart < (dataSpan.offset + dataSpan.length) {
-		// Calculate how much data to read (up to 1MB or remaining data)
+		// Calculate how much data to read (up tp bufferSize) from the current block.
 		remainingData := dataSpan.offset + dataSpan.length - currentBlockStart
 		readSize := bufferSize
 		if remainingData < bufferSize {
@@ -582,6 +576,10 @@ func (ar archiveReader) iterate(ctx context.Context, cb func(chunks.Chunk) error
 		currentBlockStart = blockEnd
 
 		for byteSpanCounter <= ar.footer.byteSpanCount {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+
 			span := ar.getByteSpanByID(byteSpanCounter)
 
 			adjustedOffset := span.offset - blockStart
@@ -599,10 +597,8 @@ func (ar archiveReader) iterate(ctx context.Context, cb func(chunks.Chunk) error
 				if err != nil {
 					return fmt.Errorf("Failure creating dictionary from bytes: %w", err)
 				}
-				loadedDictionaries[byteSpanCounter] = dict
-				goto NEXT
+				loadedDictionaries[byteSpanCounter] = dict.dDict
 			} else if _, exists := dataReverseIndex[byteSpanCounter]; exists {
-				// Process data ByteSpan - determine compression type
 				chunkId := dataReverseIndex[byteSpanCounter]
 				dictId, dataId := ar.getChunkRef(int(chunkId))
 
@@ -610,7 +606,6 @@ func (ar archiveReader) iterate(ctx context.Context, cb func(chunks.Chunk) error
 					panic("Reverse Index incorrect: ByteSpan ID does not match data ID in chunk reference")
 				}
 
-				// Reconstruct the hash for this chunk
 				var hashBytes [hash.ByteLen]byte
 				binary.BigEndian.PutUint64(hashBytes[:uint64Size], ar.prefixes[chunkId])
 				suf := ar.getSuffixByID(uint64(chunkId))
@@ -639,13 +634,12 @@ func (ar archiveReader) iterate(ctx context.Context, cb func(chunks.Chunk) error
 						panic("Reverse Index incomplete: Dictionary ID not found in loaded dictionaries")
 					}
 
-					chunkData, err = gozstd.DecompressDict(nil, spanData, dict.dDict)
+					chunkData, err = gozstd.DecompressDict(nil, spanData, dict)
 					if err != nil {
 						return err
 					}
 				}
 
-				// Create and process the chunk
 				chk := chunks.NewChunkWithHash(h, chunkData)
 				err = cb(chk)
 				if err != nil {
@@ -654,7 +648,6 @@ func (ar archiveReader) iterate(ctx context.Context, cb func(chunks.Chunk) error
 			} else {
 				panic("Reverse Index incomplete: ByteSpan ID not found in either dictionary or data reverse index")
 			}
-		NEXT:
 			byteSpanCounter++
 		}
 	}
