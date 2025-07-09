@@ -505,9 +505,9 @@ func (tr tableReader) getManyAtOffsetsWithReadFunc(
 	offsetRecords offsetRecSlice,
 	stats *Stats,
 	readAtOffsets func(
-		ctx context.Context,
-		rb readBatch,
-		stats *Stats) error,
+	ctx context.Context,
+	rb readBatch,
+	stats *Stats) error,
 ) error {
 	batches := toReadBatches(offsetRecords, tr.blockSize)
 	for i := range batches {
@@ -769,17 +769,14 @@ func (tr tableReader) iterateAllChunks(ctx context.Context, cb func(chunk chunks
 		return nil
 	}
 
-	// Build offset records similar to the extract method
+	// Collect all chunk info then sort by offset.
 	// The index is sorted by prefix, but we need to process chunkRecs in storage order (by offset)
 	type chunkRecord struct {
 		offset uint64
 		length uint32
 		hash   hash.Hash
 	}
-
 	chunkRecs := make([]chunkRecord, 0, count)
-
-	// First pass: collect all chunk info, and sort by offset.
 	for i := uint32(0); i < count; i++ {
 		var h hash.Hash
 		ie, err := tr.idx.indexEntry(i, &h)
@@ -800,12 +797,11 @@ func (tr tableReader) iterateAllChunks(ctx context.Context, cb func(chunk chunks
 	lastChunk := chunkRecs[len(chunkRecs)-1]
 	totalDataSize := lastChunk.offset + uint64(lastChunk.length)
 
-	// Read data in 1MB chunkRecs
-	const bufferSize = 1024 * 1024 // 1MB
+	// Read data in 4MB chunkRecs
+	const bufferSize = 4 * 1024 * 1024
 	currentOffset := uint64(0)
 	chunkIndex := 0
 
-	// Reuse buffer across reads
 	dataBlock := make([]byte, bufferSize)
 
 	for chunkIndex < len(chunkRecs) {
@@ -825,7 +821,7 @@ func (tr tableReader) iterateAllChunks(ctx context.Context, cb func(chunk chunks
 		blockStart := currentOffset
 		blockEnd := currentOffset + uint64(readSize)
 
-		// Process all chunkRecs that are fully contained within this block
+		// Process the chunks in the current block
 		for chunkIndex < len(chunkRecs) {
 			if ctx.Err() != nil {
 				return ctx.Err()
