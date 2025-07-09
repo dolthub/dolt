@@ -505,9 +505,9 @@ func (tr tableReader) getManyAtOffsetsWithReadFunc(
 	offsetRecords offsetRecSlice,
 	stats *Stats,
 	readAtOffsets func(
-		ctx context.Context,
-		rb readBatch,
-		stats *Stats) error,
+	ctx context.Context,
+	rb readBatch,
+	stats *Stats) error,
 ) error {
 	batches := toReadBatches(offsetRecords, tr.blockSize)
 	for i := range batches {
@@ -765,36 +765,101 @@ func (tr tableReader) clone() (tableReader, error) {
 
 func (tr tableReader) iterateAllChunks(ctx context.Context, cb func(chunk chunks.Chunk), stats *Stats) error {
 	count := tr.idx.chunkCount()
-	for i := uint32(0); i < count; i++ {
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
+	if count == 0 {
+		return nil
+	}
 
+	// Build offset records similar to the extract method
+	// The index is sorted by prefix, but we need to process chunkRecs in storage order (by offset)
+	type chunkRecord struct {
+		offset uint64
+		length uint32
+		hash   hash.Hash
+	}
+
+	chunkRecs := make([]chunkRecord, 0, count)
+
+	// First pass: collect all chunk info, and sort by offset.
+	for i := uint32(0); i < count; i++ {
 		var h hash.Hash
 		ie, err := tr.idx.indexEntry(i, &h)
 		if err != nil {
 			return err
 		}
 
-		res := make([]byte, ie.Length())
-		n, err := tr.r.ReadAtWithStats(ctx, res, int64(ie.Offset()), stats)
-		if err != nil {
-			return err
-		}
-		if uint32(n) != ie.Length() {
-			return errors.New("failed to read all data")
-		}
-
-		cchk, err := NewCompressedChunk(h, res)
-		if err != nil {
-			return err
-		}
-		chk, err := cchk.ToChunk()
-		if err != nil {
-			return err
-		}
-
-		cb(chk)
+		chunkRecs = append(chunkRecs, chunkRecord{
+			offset: ie.Offset(),
+			length: ie.Length(),
+			hash:   h,
+		})
 	}
+	sort.Slice(chunkRecs, func(i, j int) bool {
+		return chunkRecs[i].offset < chunkRecs[j].offset
+	})
+
+	lastChunk := chunkRecs[len(chunkRecs)-1]
+	totalDataSize := lastChunk.offset + uint64(lastChunk.length)
+
+	// Read data in 1MB chunkRecs
+	const bufferSize = 1024 * 1024 // 1MB
+	currentOffset := uint64(0)
+	chunkIndex := 0
+
+	// Reuse buffer across reads
+	dataBlock := make([]byte, bufferSize)
+
+	for chunkIndex < len(chunkRecs) {
+		// Calculate how much data to read
+		remainingData := totalDataSize - currentOffset
+		readSize := bufferSize
+		if remainingData < bufferSize {
+			readSize = int(remainingData)
+			dataBlock = dataBlock[:readSize]
+		}
+
+		_, err := tr.r.ReadAtWithStats(ctx, dataBlock, int64(currentOffset), stats)
+		if err != nil {
+			return err
+		}
+
+		blockStart := currentOffset
+		blockEnd := currentOffset + uint64(readSize)
+
+		// Process all chunkRecs that are fully contained within this block
+		for chunkIndex < len(chunkRecs) {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+
+			chunk := chunkRecs[chunkIndex]
+			chunkEnd := chunk.offset + uint64(chunk.length)
+			currentOffset = blockEnd
+
+			// Check if chunk extends beyond current block
+			if chunkEnd > blockEnd {
+				// This chunk extends beyond current block, read next block starting here
+				currentOffset = chunk.offset
+				break
+			}
+
+			bufferOffset := chunk.offset - blockStart
+			chunkData := make([]byte, chunk.length)
+			copy(chunkData, dataBlock[bufferOffset:bufferOffset+uint64(chunk.length)])
+			cchk, err := NewCompressedChunk(chunk.hash, chunkData)
+			if err != nil {
+				return err
+			}
+			chk, err := cchk.ToChunk()
+			if err != nil {
+				return err
+			}
+
+			// Process the chunk
+			cb(chk)
+
+			chunkIndex++
+		}
+	}
+
 	return nil
 }
