@@ -235,7 +235,7 @@ var _ sql.RowIter = prollyDiffIter{}
 // than |targetFromSchema| or |targetToSchema|. We convert the rows from the
 // schema of |from| to |targetFromSchema| and the schema of |to| to
 // |targetToSchema|. See the tablediff_prolly package.
-func newProllyDiffIter(ctx *sql.Context, dp DiffPartition, targetFromSchema, targetToSchema schema.Schema, lookup sql.IndexLookup) (prollyDiffIter, error) {
+func newProllyDiffIter(ctx *sql.Context, dp DiffPartition, targetFromSchema, targetToSchema schema.Schema, ranges []prolly.Range) (prollyDiffIter, error) {
 	fromCm := commitInfo2{
 		name: dp.fromName,
 		ts:   (*time.Time)(dp.fromDate),
@@ -257,16 +257,6 @@ func newProllyDiffIter(ctx *sql.Context, dp DiffPartition, targetFromSchema, tar
 			return prollyDiffIter{}, err
 		}
 		if fsch, err = dp.from.GetSchema(ctx); err != nil {
-			return prollyDiffIter{}, err
-		}
-	}
-
-	var ranges []prolly.Range
-	lookup = copyIndexLookupWithoutCommitRanges(lookup)
-	if lookup.Index != nil {
-		var err error
-		ranges, err = index.ProllyRangesFromIndexLookup(ctx, lookup)
-		if err != nil {
 			return prollyDiffIter{}, err
 		}
 	}
