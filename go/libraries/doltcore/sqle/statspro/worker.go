@@ -39,12 +39,12 @@ import (
 
 const collectBatchSize = 20
 
-func (sc *StatsController) CollectOnce(ctx context.Context) (string, error) {
+func (sc *StatsController) CollectOnce(ctx *sql.Context) (string, error) {
 	genStart := sc.genCnt.Load()
-	newStats, err := sc.newStatsForRoot(ctx, nil)
-	if errors.Is(err, context.Canceled) {
-		return "", nil
-	} else if err != nil {
+	bypassRateLimit := true
+	openSessionCmds := false
+	newStats, err := sc.newStatsForRoot(ctx, nil, bypassRateLimit, openSessionCmds)
+	if err != nil {
 		return "", err
 	}
 	if ok, err := sc.trySwapStats(ctx, genStart, newStats, nil); err != nil || !ok {
@@ -82,7 +82,8 @@ func (sc *StatsController) runWorker(ctx context.Context) (err error) {
 			gcKv.gcGen = genStart
 		}
 
-		newStats, err = sc.newStatsForRoot(ctx, gcKv)
+		bypassRateLimit := false
+		newStats, err = sc.newStatsForRootWithSession(ctx, gcKv, bypassRateLimit)
 		if errors.Is(err, context.Canceled) {
 			continue
 		} else if err != nil {
@@ -167,7 +168,17 @@ func (sc *StatsController) trySwapStats(ctx context.Context, prevGen uint64, new
 	return false, nil
 }
 
-func (sc *StatsController) newStatsForRoot(baseCtx context.Context, gcKv *memStats) (newStats *rootStats, err error) {
+func (sc *StatsController) newStatsForRootWithSession(baseCtx context.Context, gcKv *memStats, bypassRateLimit bool) (newStats *rootStats, err error) {
+	ctx, err := sc.ctxGen(baseCtx)
+	if err != nil {
+		return nil, err
+	}
+	defer sql.SessionEnd(ctx.Session)
+
+	return sc.newStatsForRoot(ctx, gcKv, bypassRateLimit, true)
+}
+
+func (sc *StatsController) newStatsForRoot(ctx *sql.Context, gcKv *memStats, bypassRateLimit, openSessionCmds bool) (newStats *rootStats, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = fmt.Errorf("worker panicked running work: %s\n%s", r, string(debug.Stack()))
@@ -176,12 +187,6 @@ func (sc *StatsController) newStatsForRoot(baseCtx context.Context, gcKv *memSta
 			sc.descError("stats update interrupted", err)
 		}
 	}()
-
-	ctx, err := sc.ctxGen(baseCtx)
-	if err != nil {
-		return nil, err
-	}
-	defer sql.SessionEnd(ctx.Session)
 
 	newStats = newRootStats()
 	dSess := dsess.DSessFromSess(ctx.Session)
@@ -193,9 +198,7 @@ func (sc *StatsController) newStatsForRoot(baseCtx context.Context, gcKv *memSta
 		schs []sql.DatabaseSchema
 	}
 	var toVisit []toCollect
-	if err := sc.rateLimiter.execute(ctx, func() error {
-		sql.SessionCommandBegin(ctx.Session)
-		defer sql.SessionCommandEnd(ctx.Session)
+	if err := sc.execWithOptionalRateLimit(ctx, bypassRateLimit, openSessionCmds, func() error {
 		dbs := dSess.Provider().AllDatabases(ctx)
 		for _, db := range dbs {
 			sessDb, ok := db.(dsess.SqlDatabase)
@@ -248,9 +251,7 @@ func (sc *StatsController) newStatsForRoot(baseCtx context.Context, gcKv *memSta
 				continue
 			}
 			var tableNames []string
-			if err := sc.rateLimiter.execute(ctx, func() (err error) {
-				sql.SessionCommandBegin(ctx.Session)
-				defer sql.SessionCommandEnd(ctx.Session)
+			if err := sc.execWithOptionalRateLimit(ctx, bypassRateLimit, openSessionCmds, func() error {
 				tableNames, err = sqlDb.GetTableNames(ctx)
 				return err
 			}); err != nil {
@@ -261,7 +262,7 @@ func (sc *StatsController) newStatsForRoot(baseCtx context.Context, gcKv *memSta
 			newStats.DbCnt++
 
 			for _, tableName := range tableNames {
-				err = sc.updateTable(ctx, newStats, tableName, sqlDb.(dsess.SqlDatabase), gcKv, false, true)
+				err = sc.updateTable(ctx, newStats, tableName, sqlDb.(dsess.SqlDatabase), gcKv, bypassRateLimit, openSessionCmds)
 				if err != nil {
 					return nil, err
 				}
@@ -294,7 +295,7 @@ func (sc *StatsController) finalizeHistogram(template stats.Statistic, buckets [
 	return &template
 }
 
-func (sc *StatsController) collectIndexNodes(ctx *sql.Context, prollyMap prolly.Map, idxLen int, nodes []tree.Node, bypassRateLimit bool, openSessionCmds bool) ([]*stats.Bucket, sql.Row, int, error) {
+func (sc *StatsController) collectIndexNodes(ctx *sql.Context, prollyMap prolly.Map, idxLen int, nodes []tree.Node, bypassRateLimit, openSessionCmds bool) ([]*stats.Bucket, sql.Row, int, error) {
 	updater := newBucketBuilder(sql.StatQualifier{}, idxLen, prollyMap.KeyDesc())
 	keyBuilder := val.NewTupleBuilder(prollyMap.KeyDesc().PrefixDesc(idxLen), prollyMap.NodeStore())
 
@@ -414,7 +415,7 @@ func (sc *StatsController) execWithOptionalRateLimit(ctx *sql.Context, bypassRat
 	return sc.rateLimiter.execute(ctx, f)
 }
 
-func (sc *StatsController) updateTable(ctx *sql.Context, newStats *rootStats, tableName string, sqlDb dsess.SqlDatabase, gcKv *memStats, bypassRateLimit bool, openSessionCmds bool) error {
+func (sc *StatsController) updateTable(ctx *sql.Context, newStats *rootStats, tableName string, sqlDb dsess.SqlDatabase, gcKv *memStats, bypassRateLimit, openSessionCmds bool) error {
 	var err error
 	var sqlTable *sqle.DoltTable
 	var dTab *doltdb.Table
@@ -463,6 +464,7 @@ func (sc *StatsController) updateTable(ctx *sql.Context, newStats *rootStats, ta
 		var idx durable.Index
 		var prollyMap prolly.Map
 		var template stats.Statistic
+		var templateKey templateCacheKey
 		if err := sc.execWithOptionalRateLimit(ctx, bypassRateLimit, openSessionCmds, func() (err error) {
 			if strings.EqualFold(sqlIdx.ID(), "PRIMARY") {
 				idx, err = dTab.GetRowData(ctx)
@@ -478,7 +480,7 @@ func (sc *StatsController) updateTable(ctx *sql.Context, newStats *rootStats, ta
 				return err
 			}
 
-			_, template, err = sc.getTemplate(ctx, sqlTable, sqlIdx)
+			templateKey, template, err = sc.getTemplate(ctx, sqlTable, sqlIdx)
 			if err != nil {
 				return errors.Join(err, fmt.Errorf("stats collection failed to generate a statistic template: %s.%s.%s:%T", sqlDb.RevisionQualifiedName(), tableName, sqlIdx.ID(), sqlIdx))
 			}
@@ -522,19 +524,7 @@ func (sc *StatsController) updateTable(ctx *sql.Context, newStats *rootStats, ta
 			if !gcKv.GcMark(sc.kv, levelNodes, buckets, idxLen, keyBuilder) {
 				return fmt.Errorf("GC interrupted updated")
 			}
-			if err := sc.execWithOptionalRateLimit(ctx, true /* no need to rate limit here */, openSessionCmds, func() error {
-				schHash, _, err := sqlTable.IndexCacheKey(ctx)
-				if err != nil {
-					return err
-				}
-				key := templateCacheKey{h: schHash.Hash, idxName: sqlIdx.ID()}
-				if t, ok := sc.GetTemplate(key); ok {
-					gcKv.PutTemplate(key, t)
-				}
-				return nil
-			}); err != nil {
-				return err
-			}
+			gcKv.PutTemplate(templateKey, template)
 		}
 	}
 	newStats.stats[tableKey] = newTableStats
