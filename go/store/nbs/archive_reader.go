@@ -554,7 +554,6 @@ func (ar archiveReader) iterate(ctx context.Context, cb func(chunks.Chunk) error
 	loadedDictionaries := make(map[uint32]*gozstd.DDict)
 	byteSpanCounter := uint32(1)
 
-	// Read the data block
 	dataBlock := make([]byte, bufferSize)
 	for currentBlockStart < (dataSpan.offset + dataSpan.length) {
 		// Calculate how much data to read (up tp bufferSize) from the current block.
