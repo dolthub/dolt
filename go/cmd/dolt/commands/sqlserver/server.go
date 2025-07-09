@@ -318,7 +318,22 @@ func ConfigureServices(
 				mrEnv,
 				config,
 			)
-			return err
+			if err != nil {
+				return err
+			}
+
+			// Set the read_only system variable based on the engine configuration
+			sqlCtx := sql.NewEmptyContext()
+			readOnlyValue := int8(0)
+			if config.IsReadOnly {
+				readOnlyValue = int8(1)
+			}
+			err = sql.SystemVariables.SetGlobal(sqlCtx, "read_only", readOnlyValue)
+			if err != nil {
+				return err
+			}
+
+			return nil
 		},
 		StopF: func() error {
 			sqlEngine.Close()
