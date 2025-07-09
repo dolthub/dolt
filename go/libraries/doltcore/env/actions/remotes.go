@@ -630,43 +630,53 @@ func fetchRefSpecsWithDepth[C doltdb.Context](
 	}
 
 	for _, newHead := range newHeads {
-		optCmt, err := dbData.Ddb.ReadCommit(ctx, newHead.Hash)
-		if err != nil {
-			return err
-		}
-		commit, ok := optCmt.ToCommit()
-		if !ok {
-			// Dest DB should have each hash in `newHeads` now. If we can't read a commit, something is wrong.
-			return doltdb.ErrGhostCommitRuntimeFailure
-		}
-
 		remoteTrackRef := newHead.Ref
 
-		if mode.Force {
-			// TODO: can't be used safely in a SQL context
-			err := dbData.Ddb.SetHeadToCommit(ctx, remoteTrackRef, commit)
+		// Handle tag references differently from commit references
+		if remoteTrackRef.GetType() == ref.TagRefType {
+			// For tag references, use SetHead directly with the tag hash
+			err := dbData.Ddb.SetHead(ctx, remoteTrackRef, newHead.Hash)
 			if err != nil {
 				return err
 			}
 		} else {
-			ok, err := dbData.Ddb.CanFastForward(ctx, remoteTrackRef, commit)
-			if err != nil && !errors.Is(err, doltdb.ErrUpToDate) {
-				return fmt.Errorf("%w: %s", ErrCantFF, err.Error())
+			// For commit references, use the existing logic
+			optCmt, err := dbData.Ddb.ReadCommit(ctx, newHead.Hash)
+			if err != nil {
+				return err
 			}
+			commit, ok := optCmt.ToCommit()
 			if !ok {
-				return ErrCantFF
+				// Dest DB should have each hash in `newHeads` now. If we can't read a commit, something is wrong.
+				return doltdb.ErrGhostCommitRuntimeFailure
 			}
 
-			switch err {
-			case doltdb.ErrUpToDate:
-			case doltdb.ErrIsAhead, nil:
+			if mode.Force {
 				// TODO: can't be used safely in a SQL context
-				err = dbData.Ddb.FastForward(ctx, remoteTrackRef, commit)
+				err := dbData.Ddb.SetHeadToCommit(ctx, remoteTrackRef, commit)
+				if err != nil {
+					return err
+				}
+			} else {
+				ok, err := dbData.Ddb.CanFastForward(ctx, remoteTrackRef, commit)
 				if err != nil && !errors.Is(err, doltdb.ErrUpToDate) {
 					return fmt.Errorf("%w: %s", ErrCantFF, err.Error())
 				}
-			default:
-				return fmt.Errorf("%w: %s", ErrCantFF, err.Error())
+				if !ok {
+					return ErrCantFF
+				}
+
+				switch err {
+				case doltdb.ErrUpToDate:
+				case doltdb.ErrIsAhead, nil:
+					// TODO: can't be used safely in a SQL context
+					err = dbData.Ddb.FastForward(ctx, remoteTrackRef, commit)
+					if err != nil && !errors.Is(err, doltdb.ErrUpToDate) {
+						return fmt.Errorf("%w: %s", ErrCantFF, err.Error())
+					}
+				default:
+					return fmt.Errorf("%w: %s", ErrCantFF, err.Error())
+				}
 			}
 		}
 	}
