@@ -843,9 +843,7 @@ func (tr tableReader) iterateAllChunks(ctx context.Context, cb func(chunk chunks
 			}
 
 			bufferOffset := chunk.offset - blockStart
-			chunkData := make([]byte, chunk.length)
-			copy(chunkData, dataBlock[bufferOffset:bufferOffset+uint64(chunk.length)])
-			cchk, err := NewCompressedChunk(chunk.hash, chunkData)
+			cchk, err := NewCompressedChunk(chunk.hash, dataBlock[bufferOffset:bufferOffset+uint64(chunk.length)])
 			if err != nil {
 				return err
 			}
