@@ -21,7 +21,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -48,23 +47,6 @@ const (
 )
 
 var ErrSessionNotPersistable = errors.New("session is not persistable")
-
-// Global read-only state for the server. 0 = writable, 1 = read-only
-var globalReadOnlyState int32
-
-// GetGlobalReadOnly returns true if the server is in read-only mode
-func GetGlobalReadOnly() bool {
-	return atomic.LoadInt32(&globalReadOnlyState) == 1
-}
-
-// SetGlobalReadOnly sets the server's read-only mode
-func SetGlobalReadOnly(readOnly bool) {
-	if readOnly {
-		atomic.StoreInt32(&globalReadOnlyState, 1)
-	} else {
-		atomic.StoreInt32(&globalReadOnlyState, 0)
-	}
-}
 
 // DoltSession is the sql.Session implementation used by dolt. It is accessible through a *sql.Context instance
 type DoltSession struct {

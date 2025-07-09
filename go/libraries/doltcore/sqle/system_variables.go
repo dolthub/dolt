@@ -33,13 +33,6 @@ func init() {
 var DoltSystemVariables = []sql.SystemVariable{
 	// MySQL-compatible read_only variable
 	&sql.MysqlSystemVariable{
-		Name:    "read_only",
-		Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Global),
-		Dynamic: true,
-		Type:    types.NewSystemBoolType("read_only"),
-		Default: int8(0),
-	},
-	&sql.MysqlSystemVariable{
 		Name:              "log_bin_branch",
 		Scope:             sql.GetMysqlScope(sql.SystemVariableScope_Persist),
 		Dynamic:           true,
