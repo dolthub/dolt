@@ -31,6 +31,7 @@ import (
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/servercfg"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/svcs"
@@ -265,6 +266,18 @@ func StartServer(ctx context.Context, versionStr, commandStr string, args []stri
 	if err != nil {
 		return err
 	}
+
+	// Set the initial global read-only state
+	dsess.SetGlobalReadOnly(serverConfig.ReadOnly())
+
+	// Set the global value of the read_only system variable
+	var readOnlyVal int8
+	if serverConfig.ReadOnly() {
+		readOnlyVal = 1
+	} else {
+		readOnlyVal = 0
+	}
+	sql.SystemVariables.SetGlobal(nil, "read_only", readOnlyVal)
 
 	err = generateYamlConfigIfNone(ap, help, args, dEnv, serverConfig)
 	if err != nil {

@@ -332,6 +332,105 @@ func TestServerFailsIfPortInUse(t *testing.T) {
 	wg.Wait()
 }
 
+func TestGlobalReadOnlyStateAtStartup(t *testing.T) {
+	ctx := context.Background()
+	controller := svcs.NewController()
+	dEnv, err := sqle.CreateEnvWithSeedData()
+	require.NoError(t, err)
+	defer func() {
+		assert.NoError(t, dEnv.DoltDB(ctx).Close())
+	}()
+
+	// Start server with --read-only flag
+	go func() {
+		StartServer(context.Background(), "0.0.0", "dolt sql-server", []string{
+			"-H", "localhost",
+			"-P", "15500",
+			"-t", "5",
+			"-l", "info",
+			"-r",
+		}, dEnv, dEnv.FS, controller)
+	}()
+	err = controller.WaitForStart()
+	require.NoError(t, err)
+	assert.True(t, dsess.GetGlobalReadOnly(), "read-only state should be true when started with --read-only")
+	controller.Stop()
+	_ = controller.WaitForStop()
+
+	// Start server without --read-only flag
+	controller2 := svcs.NewController()
+	go func() {
+		StartServer(context.Background(), "0.0.0", "dolt sql-server", []string{
+			"-H", "localhost",
+			"-P", "15501",
+			"-t", "5",
+			"-l", "info",
+		}, dEnv, dEnv.FS, controller2)
+	}()
+	err = controller2.WaitForStart()
+	require.NoError(t, err)
+	assert.False(t, dsess.GetGlobalReadOnly(), "read-only state should be false when started without --read-only")
+	controller2.Stop()
+	_ = controller2.WaitForStop()
+}
+
+func TestReadOnlySystemVariableAtStartup(t *testing.T) {
+	ctx := context.Background()
+	controller := svcs.NewController()
+	dEnv, err := sqle.CreateEnvWithSeedData()
+	require.NoError(t, err)
+	defer func() {
+		assert.NoError(t, dEnv.DoltDB(ctx).Close())
+	}()
+
+	// Start server with --read-only flag
+	go func() {
+		StartServer(context.Background(), "0.0.0", "dolt sql-server", []string{
+			"-H", "localhost",
+			"-P", "15510",
+			"-t", "5",
+			"-l", "info",
+			"-r",
+		}, dEnv, dEnv.FS, controller)
+	}()
+	err = controller.WaitForStart()
+	require.NoError(t, err)
+
+	conn, err := dbr.Open("mysql", "root@tcp(localhost:15510)/dolt", nil)
+	require.NoError(t, err)
+	sess := conn.NewSession(nil)
+	var readOnlyVal int8
+	err = sess.SelectBySql("SELECT @@read_only").LoadOneContext(ctx, &readOnlyVal)
+	require.NoError(t, err)
+	assert.Equal(t, int8(1), readOnlyVal, "@@read_only should be 1 when started with --read-only")
+	conn.Close()
+	controller.Stop()
+	_ = controller.WaitForStop()
+
+	// Start server without --read-only flag
+	controller2 := svcs.NewController()
+	go func() {
+		StartServer(context.Background(), "0.0.0", "dolt sql-server", []string{
+			"-H", "localhost",
+			"-P", "15511",
+			"-t", "5",
+			"-l", "info",
+		}, dEnv, dEnv.FS, controller2)
+	}()
+	err = controller2.WaitForStart()
+	require.NoError(t, err)
+
+	conn2, err := dbr.Open("mysql", "root@tcp(localhost:15511)/dolt", nil)
+	require.NoError(t, err)
+	sess2 := conn2.NewSession(nil)
+	err = sess2.SelectBySql("SELECT @@read_only").LoadOneContext(ctx, &readOnlyVal)
+	require.NoError(t, err)
+	assert.Equal(t, int8(0), readOnlyVal, "@@read_only should be 0 when started without --read-only")
+	conn2.Close()
+	controller2.Stop()
+	_ = controller2.WaitForStop()
+}
+
 type defaultBranchTest struct {
 	query          *dbr.SelectStmt
 	expectedRes    []testResult
