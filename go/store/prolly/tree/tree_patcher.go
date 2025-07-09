@@ -21,6 +21,7 @@ import (
 	"github.com/dolthub/dolt/go/store/prolly/message"
 )
 
+// ApplyPatches iterates over |edits|, applying the patches to |root| to produce a new tree.
 func ApplyPatches[K ~[]byte, O Ordering[K], S message.Serializer](
 	ctx context.Context,
 	ns NodeStore,

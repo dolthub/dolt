@@ -95,20 +95,6 @@ func nilCompare[K ~[]byte, O Ordering[K]](ctx context.Context, order O, left, ri
 	return order.Compare(ctx, left, right)
 }
 
-func getNextAndSplitIfAtEnd[K ~[]byte, O Ordering[K]](ctx context.Context, patchGenerator *PatchGenerator[K, O]) (patch Patch, diffType DiffType, err error) {
-	patch, diffType, err = patchGenerator.Next(ctx)
-	if err != nil {
-		return Patch{}, NoDiff, err
-	}
-	for patchGenerator.to.atEnd() && patch.Level > 0 {
-		patch, diffType, err = patchGenerator.split(ctx)
-		if err != nil {
-			return Patch{}, NoDiff, err
-		}
-	}
-	return patch, diffType, nil
-}
-
 // getLevel returns the level that a patch generator is currently emitting patches for.
 // usually this is the level of the |to| cursor, but if that cursor is exhausted,
 // then the patch generator is emitting removed diffs on the level of the |from| cursor.
@@ -119,6 +105,30 @@ func (d *PatchGenerator[K, O]) getLevel() (uint64, error) {
 	return d.from.level()
 }
 
+// resolveCollision takes two point Patches with the same key and resolves the changes.
+func resolveCollision(left Patch, lDiffType DiffType, right Patch, rDiffType DiffType, cb CollisionFn) (merged Patch, ok bool) {
+	leftDiff := Diff{
+		Key:  left.EndKey,
+		From: left.From,
+		To:   left.To,
+		Type: lDiffType,
+	}
+	rightDiff := Diff{
+		Key:  right.EndKey,
+		From: right.From,
+		To:   right.To,
+		Type: rDiffType,
+	}
+	resolved, ok := cb(leftDiff, rightDiff)
+	return Patch{
+		From:   resolved.From,
+		EndKey: resolved.Key,
+		To:     resolved.To,
+		Level:  0,
+	}, ok
+}
+
+// SendPatches iterates over |l| and |r| in parallel, sending an ordered non-overlapping series of patches into |buf|.
 func SendPatches[K ~[]byte, O Ordering[K]](
 	ctx context.Context,
 	l, r PatchGenerator[K, O],
@@ -156,7 +166,7 @@ func SendPatches[K ~[]byte, O Ordering[K]](
 			if nilCompare(ctx, order, K(left.EndKey), K(right.KeyBelowStart)) <= 0 {
 				// Left change is entirely before right change.
 				// This change is already on the left map, so we ignore it.
-				left, lDiffType, err = getNextAndSplitIfAtEnd(ctx, &l)
+				left, lDiffType, err = l.Next(ctx)
 				if err == io.EOF {
 					err, lok = nil, false
 				}
@@ -170,7 +180,7 @@ func SendPatches[K ~[]byte, O Ordering[K]](
 					return err
 				}
 
-				right, rDiffType, err = getNextAndSplitIfAtEnd(ctx, &r)
+				right, rDiffType, err = r.Next(ctx)
 				if err == io.EOF {
 					err, rok = nil, false
 				}
@@ -180,7 +190,7 @@ func SendPatches[K ~[]byte, O Ordering[K]](
 			} else if bytes.Equal(left.To, right.To) {
 				// A concurrent change.
 				// This change is already on the left map, so we ignore it.
-				left, lDiffType, err = getNextAndSplitIfAtEnd(ctx, &l)
+				left, lDiffType, err = l.Next(ctx)
 				if err == io.EOF {
 					err, lok = nil, false
 				}
@@ -188,7 +198,7 @@ func SendPatches[K ~[]byte, O Ordering[K]](
 					return err
 				}
 
-				right, rDiffType, err = getNextAndSplitIfAtEnd(ctx, &r)
+				right, rDiffType, err = r.Next(ctx)
 				if err == io.EOF {
 					err, rok = nil, false
 				}
@@ -215,12 +225,12 @@ func SendPatches[K ~[]byte, O Ordering[K]](
 			continue
 		}
 
-		// If one branch returns a range diff and the other returns a point diff, we need to see if they overlap and possibly split the range diff.
+		// If one branch returns a range patch and the other returns a point patch, we need to see if they overlap and possibly split the range diff.
 		if rightLevel > 0 {
-			if l.order.Compare(ctx, K(left.EndKey), K(right.KeyBelowStart)) <= 0 {
+			if nilCompare(ctx, l.order, K(left.EndKey), K(right.KeyBelowStart)) <= 0 {
 				// point update comes first
 				// This change is already on the left map, so we ignore it.
-				left, lDiffType, err = getNextAndSplitIfAtEnd(ctx, &l)
+				left, lDiffType, err = l.Next(ctx)
 				if err == io.EOF {
 					err, lok = nil, false
 				}
@@ -233,7 +243,7 @@ func SendPatches[K ~[]byte, O Ordering[K]](
 				if err != nil {
 					return err
 				}
-				right, rDiffType, err = getNextAndSplitIfAtEnd(ctx, &r)
+				right, rDiffType, err = r.Next(ctx)
 				if err == io.EOF {
 					err, rok = nil, false
 				}
@@ -314,25 +324,7 @@ func SendPatches[K ~[]byte, O Ordering[K]](
 		case cmp == 0:
 			// Convergent edit:
 			if !bytes.Equal(left.To, right.To) {
-				leftDiff := Diff{
-					Key:  left.EndKey,
-					From: left.From,
-					To:   left.To,
-					Type: lDiffType,
-				}
-				rightDiff := Diff{
-					Key:  right.EndKey,
-					From: right.From,
-					To:   right.To,
-					Type: rDiffType,
-				}
-				resolved, ok := cb(leftDiff, rightDiff)
-				resolvedPatch := Patch{
-					From:   resolved.From,
-					EndKey: resolved.Key,
-					To:     resolved.To,
-					Level:  0,
-				}
+				resolvedPatch, ok := resolveCollision(left, lDiffType, right, rDiffType, cb)
 				if ok {
 					err = buf.SendPatch(ctx, resolvedPatch)
 				}

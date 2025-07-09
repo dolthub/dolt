@@ -128,7 +128,7 @@ func (ps PatchBuffer) SendDone(ctx context.Context) error {
 	}
 }
 
-// NextMutation implements PatchIter.
+// NextPatch implements PatchIter.
 func (ps PatchBuffer) NextPatch(ctx context.Context) (patch Patch) {
 	select {
 	case patch = <-ps.buf:
@@ -143,10 +143,7 @@ func (ps PatchBuffer) Close() error {
 	return nil
 }
 
-// Differ computes the diff between two prolly trees.
-// If `considerAllRowsModified` is true, it will consider every leaf to be modified and generate a diff for every leaf. (This
-// is useful in cases where the schema has changed and we want to consider a leaf changed even if the byte representation
-// of the leaf is the same.
+// PatchGenerator takes two cursors and produces a set of Patches that describe the difference between them.
 type PatchGenerator[K ~[]byte, O Ordering[K]] struct {
 	previousKey        Item
 	from, to           *cursor
@@ -182,21 +179,6 @@ func PatchGeneratorFromRoots[K ~[]byte, O Ordering[K]](
 	}
 }
 
-func compareWithEnd(cur, end *cursor) int {
-	// We can't just compare the cursors because |end| is always a cursor to a leaf node,
-	// but |cur| may not be.
-	// Assume that we're checking to see if we've reached the end.
-	// A cursor at a higher level hasn't reached the end yet.
-	if cur.nd.level > end.nd.level {
-		cmp := compareWithEnd(cur, end.parent)
-		if cmp == 0 {
-			return -1
-		}
-		return cmp
-	}
-	return compareCursors(cur, end)
-}
-
 func (td *PatchGenerator[K, O]) advanceToNextDiff(ctx context.Context) (err error) {
 	// advance both cursors even if we previously determined they are equal. This needs to be done because
 	// skipCommon will not advance the cursors if they are equal in a collation sensitive comparison but differ
@@ -223,6 +205,9 @@ func (td *PatchGenerator[K, O]) advanceToNextDiff(ctx context.Context) (err erro
 	return nil
 }
 
+// advanceFromPreviousPatch advances the cursors past the end of the previous patches.
+// In the event that the chunk boundaries have shifted between the two versions of the tree,
+// this process might produce additional patches until the boundaries line up again.
 func (td *PatchGenerator[K, O]) advanceFromPreviousPatch(ctx context.Context) (patch Patch, diffType DiffType, err error) {
 	if td.previousPatchLevel > 0 {
 		switch td.previousDiffType {
@@ -338,8 +323,6 @@ func (td *PatchGenerator[K, O]) findNextPatch(ctx context.Context) (patch Patch,
 		cmp := td.order.Compare(ctx, K(f), K(t))
 
 		if cmp == 0 {
-			// If the cursor schema has changed, then all rows should be considered modified.
-			// If the cursor schema hasn't changed, rows are modified iff their bytes have changed.
 			if !equalcursorValues(td.from, td.to) {
 				if level > 0 {
 					return td.sendModifiedRange()
@@ -427,21 +410,6 @@ func (td *PatchGenerator[K, O]) split(ctx context.Context) (patch Patch, diffTyp
 			return Patch{}, NoDiff, err
 		}
 
-		/*
-			// Maintain invariant that the |from| cursor is never at a higher level than the |to| cursor.
-			// TODO: This might not be necessary.
-			if td.from.nd.level < td.to.nd.level {
-				// We split because there is something in the child we need to emit.
-				td.to = &cursor{
-					nd:     toChild,
-					idx:    0,
-					parent: td.to,
-					nrw:    td.to.nrw,
-				}
-				td.previousDiffType = NoDiff
-				return td.Next(ctx)
-			}*/
-
 		fromChild, err := fetchChild(ctx, td.from.nrw, td.from.currentRef())
 		if err != nil {
 			return Patch{}, NoDiff, err
@@ -525,6 +493,8 @@ func (td *PatchGenerator[K, O]) sendRemovedRange() (patch Patch) {
 	return patch
 }
 
+// skipCommonVisitingParents advances the cursors past any elements they have in common.
+// Unlike skipCommon, if both cursors reach the end of a node together, they move up a level in the tree.
 func skipCommonVisitingParents(ctx context.Context, from, to *cursor) (lastSeenKey Item, newFrom, newTo *cursor, err error) {
 	// track when |from.parent| and |to.parent| change
 	// to avoid unnecessary comparisons.

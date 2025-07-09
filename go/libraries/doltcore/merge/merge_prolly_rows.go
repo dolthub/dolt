@@ -177,53 +177,6 @@ func computeProllyTreePatches(
 	}
 
 	var mergeErr error
-	onConflict := func(left, right tree.Diff) (tree.Diff, bool) {
-		m, b, err := valueMerger.TryMerge(ctx, val.Tuple(left.To), val.Tuple(right.To), val.Tuple(left.From))
-		if err != nil {
-			mergeErr = err
-			return tree.Diff{}, false
-		}
-		if !b {
-			s.DataConflicts++
-			conflictDiff := tree.ThreeWayDiff{
-				Op:    tree.DiffOpDivergentModifyConflict,
-				Key:   val.Tuple(left.Key),
-				Base:  val.Tuple(left.From),
-				Left:  val.Tuple(left.To),
-				Right: val.Tuple(right.To),
-			}
-			err = conflicts.merge(ctx, conflictDiff, nil)
-		}
-		if hasStoredGeneratedColumns(finalSch) {
-			defaults, err := resolveDefaults(ctx, tm.name.Name, finalSch, tm.rightSch)
-			if err != nil {
-				mergeErr = err
-				return tree.Diff{}, false
-			}
-
-			tempTupleValue, err := remapTupleWithColumnDefaults(
-				ctx,
-				val.Tuple(left.Key),
-				m,
-				finalSch.GetValueDescriptor(valueMerger.ns),
-				valueMerger.rightMapping,
-				tm,
-				tm.rightSch,
-				finalSch,
-				defaults,
-				valueMerger.syncPool,
-				false)
-			if err != nil {
-				mergeErr = err
-				return tree.Diff{}, false
-			}
-			m = tempTupleValue
-		}
-
-		mergeDiff := left
-		mergeDiff.To = tree.Item(m)
-		return mergeDiff, b
-	}
 
 	checkValidator, err := newCheckValidator(ctx, tm, valueMerger, finalSch, artEditor)
 	if err != nil {
@@ -277,7 +230,54 @@ func computeProllyTreePatches(
 		lDiff := tree.PatchGeneratorFromRoots(ctx, ns, ns, ancRows.Node(), leftRows.Node(), leftRows.Tuples().Order)
 		rDiff := tree.PatchGeneratorFromRoots(ctx, ns, ns, ancRows.Node(), rightRows.Node(), rightRows.Tuples().Order)
 
-		err := tree.SendPatches(ctx, lDiff, rDiff, patchBuffer, onConflict)
+		err := tree.SendPatches(ctx, lDiff, rDiff, patchBuffer, func(left, right tree.Diff) (tree.Diff, bool) {
+			// On conflict, attempt to merge rows
+			m, b, err := valueMerger.TryMerge(ctx, val.Tuple(left.To), val.Tuple(right.To), val.Tuple(left.From))
+			if err != nil {
+				mergeErr = err
+				return tree.Diff{}, false
+			}
+			if !b {
+				s.DataConflicts++
+				conflictDiff := tree.ThreeWayDiff{
+					Op:    tree.DiffOpDivergentModifyConflict,
+					Key:   val.Tuple(left.Key),
+					Base:  val.Tuple(left.From),
+					Left:  val.Tuple(left.To),
+					Right: val.Tuple(right.To),
+				}
+				err = conflicts.merge(ctx, conflictDiff, nil)
+			}
+			if hasStoredGeneratedColumns(finalSch) {
+				defaults, err := resolveDefaults(ctx, tm.name.Name, finalSch, tm.rightSch)
+				if err != nil {
+					mergeErr = err
+					return tree.Diff{}, false
+				}
+
+				tempTupleValue, err := remapTupleWithColumnDefaults(
+					ctx,
+					val.Tuple(left.Key),
+					m,
+					finalSch.GetValueDescriptor(valueMerger.ns),
+					valueMerger.rightMapping,
+					tm,
+					tm.rightSch,
+					finalSch,
+					defaults,
+					valueMerger.syncPool,
+					false)
+				if err != nil {
+					mergeErr = err
+					return tree.Diff{}, false
+				}
+				m = tempTupleValue
+			}
+
+			mergeDiff := left
+			mergeDiff.To = tree.Item(m)
+			return mergeDiff, b
+		})
 		if err != nil {
 			return nil, nil, err
 		}

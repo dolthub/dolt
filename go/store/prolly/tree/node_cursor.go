@@ -434,10 +434,6 @@ func (cur *cursor) atNodeEnd() bool {
 	return cur.idx == lastKeyIdx
 }
 
-func (cur *cursor) atEnd() bool {
-	return cur.atNodeEnd() && (cur.parent == nil || cur.parent.atNodeEnd())
-}
-
 func (cur *cursor) isLeaf() bool {
 	return cur.nd.level == 0
 }
