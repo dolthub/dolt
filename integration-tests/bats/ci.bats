@@ -227,7 +227,7 @@ EOF
     [ "$status" -eq 0 ]
     [[ ${output} == *"(new)"* ]] || false
     [[ ${output} == *"dolt_ci_workflow_steps"* ]] || false
-    [[ ${output} == *"expected_column_row_comparison_type"* ]] || false
+    [[ ${output} == *"expected_row_count_comparison_type"* ]] || false
     [[ ${output} == *"dolt_ci_workflow_saved_query_step_expected_row_column_results"* ]] || false
 }
 
