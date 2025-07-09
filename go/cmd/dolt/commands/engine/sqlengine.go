@@ -229,6 +229,13 @@ func NewSqlEngine(
 		pro.DropDatabaseHooks = append(pro.DropDatabaseHooks, config.AutoGCController.DropDatabaseHook())
 		// XXX: We force session aware safepoint controller if auto_gc is on.
 		dprocedures.UseSessionAwareSafepointController = true
+		sql.SystemVariables.AssignValues(map[string]interface{}{
+			dsess.DoltAutoGCEnabled: int8(1),
+		})
+	} else {
+		sql.SystemVariables.AssignValues(map[string]interface{}{
+			dsess.DoltAutoGCEnabled: int8(0),
+		})
 	}
 
 	var statsPro sql.StatsProvider

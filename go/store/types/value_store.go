@@ -611,6 +611,11 @@ func (lvs *ValueStore) GC(ctx context.Context, mode GCMode, cmp chunks.GCArchive
 				return make(hash.HashSet)
 			})
 			if err != nil {
+				if errors.Is(err, chunks.ErrNothingToCollect) {
+					// nothing to do. not an error.
+					return nil
+				}
+
 				return err
 			}
 
@@ -730,7 +735,7 @@ func (lvs *ValueStore) gc(ctx context.Context,
 	err = sweeper.SaveHashes(ctx, toVisit.ToSlice())
 	if err != nil {
 		cErr := sweeper.Close(ctx)
-		return nil, errors.Join(err, cErr)
+		return nil, errors.Join(fmt.Errorf("Error in SaveHashes call: %w", err), cErr)
 	}
 	toVisit = nil
 

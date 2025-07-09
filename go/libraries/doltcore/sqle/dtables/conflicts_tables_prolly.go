@@ -667,9 +667,9 @@ func (cd *prollyConflictDeleter) putPrimaryKeys(ctx *sql.Context, r sql.Row) err
 	o := func() int {
 		if o := 1; r[o] != nil {
 			return o
-		} else if o = 1 + cd.kd.Count() - 2 + cd.vd.Count(); r[o] != nil {
+		} else if o = 1 + cd.baseColSize; r[o] != nil {
 			return o
-		} else if o = 1 + (cd.kd.Count()-2+cd.vd.Count())*2 + 1; r[o] != nil {
+		} else if o = 1 + cd.baseColSize + cd.ourColSize + 1; r[o] != nil { // advance past from_root_ish, base cols, our cols, and our_diff_type
 			return o
 		} else {
 			panic("neither base, ours, or theirs had a key")

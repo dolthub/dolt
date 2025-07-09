@@ -24,6 +24,7 @@ import (
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/enginetest/scriptgen/setup"
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/stretchr/testify/require"
 )
 
@@ -32,7 +33,8 @@ import (
 func DoltPreparedScripts(t *testing.T, harness enginetest.Harness) {
 	tests := []queries.QueryTest{
 		{
-			Query: "set @@SESSION.dolt_show_system_tables = 1",
+			Query:    "set @@SESSION.dolt_show_system_tables = 1",
+			Expected: []sql.Row{{types.NewOkResult(0)}},
 		},
 		{
 			Query: "SELECT table_name FROM information_schema.columns WHERE table_name = ? group by table_name ORDER BY ORDINAL_POSITION",

@@ -23,7 +23,10 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
+	"syscall"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -36,7 +39,7 @@ func TestAutoGC(t *testing.T) {
 	var enabled_16, final_16, disabled, final_disabled RepoSize
 	numStatements, numCommits := 512, 16
 	if testing.Short() || os.Getenv("CI") != "" {
-		numStatements = 96
+		numStatements = 64
 	}
 	t.Run("Enable", func(t *testing.T) {
 		t.Parallel()
@@ -45,6 +48,7 @@ func TestAutoGC(t *testing.T) {
 			name    string
 		}{{true, "Archive"}, {false, "NoArchive"}} {
 			t.Run(sa.name, func(t *testing.T) {
+				t.Parallel()
 				t.Run("CommitEvery16", func(t *testing.T) {
 					t.Parallel()
 					var s AutoGCTest
@@ -80,9 +84,8 @@ func TestAutoGC(t *testing.T) {
 					s.EnableRemotesAPI = true
 					s.Archive = sa.archive
 					enabled_16, final_16 = runAutoGCTest(t, &s, numStatements, 2)
-					// XXX: Reenable these after tuning to be more reliable.
-					// assert.Contains(t, string(s.PrimaryServer.Output.Bytes()), "Successfully completed auto GC")
-					// assert.Contains(t, string(s.StandbyServer.Output.Bytes()), "Successfully completed auto GC")
+					assert.Contains(t, string(s.PrimaryServer.Output.Bytes()), "Successfully completed auto GC")
+					assert.Contains(t, string(s.StandbyServer.Output.Bytes()), "Successfully completed auto GC")
 					assert.NotContains(t, string(s.PrimaryServer.Output.Bytes()), "dangling references requested during GC")
 					assert.NotContains(t, string(s.StandbyServer.Output.Bytes()), "dangling references requested during GC")
 				})
@@ -389,7 +392,24 @@ func runAutoGCTest(t *testing.T, s *AutoGCTest, numStatements int, commitEvery i
 	require.NoError(t, err)
 	conn, err := s.PrimaryDB.Conn(ctx)
 	require.NoError(t, err)
-	_, err = conn.ExecContext(ctx, "call dolt_gc('--full')")
+
+	done := make(chan struct{})
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer close(done)
+		defer wg.Done()
+		_, err = conn.ExecContext(ctx, "call dolt_gc('--full')")
+	}()
+	go func() {
+		defer wg.Done()
+		select {
+		case <-done:
+		case <-time.After(1*time.Minute):
+			s.PrimaryServer.Cmd.Process.Signal(syscall.SIGQUIT)
+		}
+	}()
+	wg.Wait()
 	require.NoError(t, err)
 	require.NoError(t, conn.Close())
 	after, err := GetRepoSize(s.PrimaryDir)

@@ -592,6 +592,9 @@ func (asw *ArchiveStreamWriter) Cancel() error {
 }
 
 func (asw *ArchiveStreamWriter) Remove() error {
+	if asw.writer.finalPath == "" {
+		return nil
+	}
 	return os.Remove(asw.writer.finalPath)
 }
 

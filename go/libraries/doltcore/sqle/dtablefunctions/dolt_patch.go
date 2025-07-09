@@ -635,7 +635,8 @@ func getDiffQuery(ctx *sql.Context, dbData env.DbData[*sql.Context], td diff.Tab
 	columnsWithDiff := getColumnNamesWithDiff(td.FromSch, td.ToSch)
 	diffQuerySqlSch, projections := getDiffQuerySqlSchemaAndProjections(diffPKSch.Schema, columnsWithDiff)
 
-	dp := dtables.NewDiffPartition(td.ToTable, td.FromTable, toRefDetails.hashStr, fromRefDetails.hashStr, toRefDetails.commitTime, fromRefDetails.commitTime, td.ToSch, td.FromSch)
+	var indexLookup sql.IndexLookup
+	dp := dtables.NewDiffPartition(td.ToTable, td.FromTable, toRefDetails.hashStr, fromRefDetails.hashStr, toRefDetails.commitTime, fromRefDetails.commitTime, td.ToSch, td.FromSch, indexLookup)
 	ri := dtables.NewDiffPartitionRowIter(dp, dbData.Ddb, j)
 
 	return diffQuerySqlSch, projections, ri, nil

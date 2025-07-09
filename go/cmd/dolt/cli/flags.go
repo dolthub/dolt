@@ -68,6 +68,7 @@ const (
 	QuietFlag            = "quiet"
 	RemoteParam          = "remote"
 	SetUpstreamFlag      = "set-upstream"
+	SetUpstreamToFlag    = "set-upstream-to"
 	ShallowFlag          = "shallow"
 	ShowIgnoredFlag      = "ignored"
 	ShowSignatureFlag    = "show-signature"

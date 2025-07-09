@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 	"sync"
 	"time"
 
@@ -113,6 +114,8 @@ func (cmd ArchiveCmd) Exec(ctx context.Context, commandStr string, args []string
 	defer func() {
 		close(progress)
 		wg.Wait()
+		os.Stdout.Sync()
+		os.Stderr.Sync()
 	}()
 
 	if apr.Contains(revertFlag) {
@@ -133,6 +136,10 @@ func (cmd ArchiveCmd) Exec(ctx context.Context, commandStr string, args []string
 			hs.Insert(hash)
 			return nil
 		})
+		if err != nil {
+			cli.PrintErrln(fmt.Errorf("failed to get HEADs: %w", err))
+			return 1
+		}
 
 		groupings := nbs.NewChunkRelations()
 		if apr.Contains(groupChunksFlag) {

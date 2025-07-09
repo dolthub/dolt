@@ -36,6 +36,11 @@ CREATE TABLE big (
   pk int PRIMARY KEY,
   str longtext
 );
+
+CREATE TABLE def (
+  i INT check (i > 0)
+);
+INSERT INTO def VALUES (1), (2), (3);
 SQL
 dolt sql < "../../test_files/big_table.sql"  # inserts 1K rows to `big`
 dolt add .
@@ -54,6 +59,8 @@ SQL
 dolt add .
 dolt commit -m "made changes to $DEFAULT_BRANCH"
 
+dolt branch check_merge
+
 dolt checkout other
 dolt sql <<SQL
 DELETE FROM abc WHERE pk=2;
@@ -65,6 +72,13 @@ UPDATE abc SET z = 122;
 SQL
 dolt add .
 dolt commit -m "made changes to other"
+
+dolt checkout check_merge
+dolt sql <<SQL
+INSERT INTO def VALUES (5), (6), (7);
+SQL
+dolt add .
+dolt commit -m "made changes to check_merge"
 
 dolt checkout "$DEFAULT_BRANCH"
 dolt table export abc abc.csv

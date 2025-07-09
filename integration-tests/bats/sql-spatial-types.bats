@@ -13,22 +13,20 @@ teardown() {
 @test "sql-spatial-types: can make spatial types" {
     run dolt sql -q "create table point_tbl (p point)"
     [ "$status" -eq 0 ]
-    [ "$output" = "" ] || false
 }
 
 @test "sql-spatial-types: create point table and insert points" {
     run dolt sql -q "create table point_tbl (p point)"
     [ "$status" -eq 0 ]
-    [ "$output" = "" ] || false
     run dolt sql -q "insert into point_tbl () values (point(1,2))"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Query OK" ]] || false
+    [[ "$output" = "" ]] || false
     run dolt sql -q "insert into point_tbl () values (point(3,4)), (point(5,6))"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Query OK" ]] || false
+    [[ "$output" = "" ]] || false
     run dolt sql -q "insert into point_tbl () values (point(123.456, 0.789))"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Query OK" ]] || false
+    [[ "$output" = "" ]] || false
     run dolt sql -q "select st_aswkt(p) from point_tbl"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "POINT(1 2)" ]] || false
@@ -40,13 +38,12 @@ teardown() {
 @test "sql-spatial-types: create linestring table and insert linestrings" {
     run dolt sql -q "create table line_tbl (l linestring)"
     [ "$status" -eq 0 ]
-    [ "$output" = "" ] || false
     run dolt sql -q "insert into line_tbl () values (linestring(point(1,2),point(3,4)))"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Query OK" ]] || false
+    [[ "$output" = "" ]] || false
     run dolt sql -q "insert into line_tbl () values (linestring(point(1.2345, 678.9), point(111.222, 333.444), point(55.66, 77.88))), (linestring(point(1.1, 2.2),point(3.3, 4)))"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Query OK" ]] || false
+    [[ "$output" = "" ]] || false
     run dolt sql -q "select st_aswkt(l) from line_tbl"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "LINESTRING(1 2,3 4)" ]] || false
@@ -57,16 +54,15 @@ teardown() {
 @test "sql-spatial-types: create polygon table and insert polygon" {
     run dolt sql -q "create table poly_tbl (p polygon)"
     [ "$status" -eq 0 ]
-    [ "$output" = "" ] || false
     run dolt sql -q "insert into poly_tbl () values (polygon(linestring(point(1,2),point(3,4),point(5,6),point(7,8))))"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "Invalid GIS data" ]] || false
     run dolt sql -q "insert into poly_tbl () values (polygon(linestring(point(1,2),point(3,4),point(5,6),point(1,2))))"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Query OK" ]] || false
+    [[ "$output" = "" ]] || false
     run dolt sql -q "insert into poly_tbl () values (polygon(linestring(point(1,1),point(2,2),point(3,3),point(1,1)))), (polygon(linestring(point(0.123,0.456),point(1.22,1.33),point(1.11,0.99),point(0.123,0.456))))"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Query OK" ]] || false
+    [[ "$output" = "" ]] || false
     run dolt sql -q "select st_aswkt(p) from poly_tbl"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "POLYGON((1 2,3 4,5 6,1 2))" ]] || false
@@ -77,7 +73,7 @@ teardown() {
 @test "sql-spatial-types: can create large geometry" {
     run dolt sql < $BATS_TEST_DIRNAME/helper/big_spatial.sql
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Query OK" ]] || false
+    [[ "$output" = "" ]] || false
 
     run dolt sql -q "select count(*) from t"
     [ "$status" -eq 0 ]
@@ -88,12 +84,11 @@ teardown() {
     # create geometry table
     run dolt sql -q "create table geom_tbl (g geometry)"
     [ "$status" -eq 0 ]
-    [ "$output" = "" ] || false
 
     # inserting point
     run dolt sql -q "insert into geom_tbl values (point(1,2))"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Query OK" ]] || false
+    [[ "$output" = "" ]] || false
 
     run dolt sql -q "select st_aswkt(g) from geom_tbl"
     [ "$status" -eq 0 ]
@@ -111,12 +106,11 @@ teardown() {
     # create geometry table
     run dolt sql -q "create table geom_tbl (g geometry)"
     [ "$status" -eq 0 ]
-    [ "$output" = "" ] || false
 
     # inserting point
     run dolt sql -q "insert into geom_tbl values (point(1,2))"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Query OK" ]] || false
+    [[ "$output" = "" ]] || false
 
     run dolt add .
     [ "$status" -eq 0 ]
@@ -144,22 +138,21 @@ teardown() {
     # create geometry table
     run dolt sql -q "create table geom_tbl (g geometry)"
     [ "$status" -eq 0 ]
-    [ "$output" = "" ] || false
 
     # inserting point
     run dolt sql -q "insert into geom_tbl () values (point(1,2))"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Query OK" ]] || false
+    [[ "$output" = "" ]] || false
 
     # inserting linestring
     run dolt sql -q "insert into geom_tbl () values (linestring(point(1,2),point(3,4)))"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Query OK" ]] || false
+    [[ "$output" = "" ]] || false
 
     # inserting polygon
     run dolt sql -q "insert into geom_tbl () values (polygon(linestring(point(1,2),point(3,4),point(5,6),point(1,2))))"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Query OK" ]] || false
+    [[ "$output" = "" ]] || false
 
     # select everything
     run dolt sql -q "select st_aswkt(g) from geom_tbl"

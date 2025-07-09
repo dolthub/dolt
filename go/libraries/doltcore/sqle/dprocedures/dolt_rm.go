@@ -28,7 +28,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/resolve"
 )
 
-// doltRm is the stored procedure for the NOT YET IMPLEMENTED cli command dolt rm
+// doltRm is the stored procedure for the cli command dolt rm
 func doltRm(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 	res, err := doDoltRm(ctx, args)
 	if err != nil {

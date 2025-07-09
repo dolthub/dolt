@@ -49,7 +49,6 @@ teardown() {
 @test "1pk5col-strings: interact with a strings type table with sql" {
     run dolt sql -q "insert into test (pk,c1,c2,c3,c4,c5) values ('tim','is','super','duper','rad','fo sho')"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Query OK, 1 row affected" ]] || false
     run dolt sql -q "select * from test"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "c5" ]] || false
@@ -91,8 +90,6 @@ teardown() {
     [ "$status" -eq 0 ]
     run dolt sql <<< "insert into test (pk,c1) values ('test2', 'this; should; work')"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Query OK, 1 row affected" ]] || false
     run dolt sql <<< "insert into test (pk,c1) values ('test3', 'this \\\\'' should \\\\'' work')"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Query OK, 1 row affected" ]] || false
 }
