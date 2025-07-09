@@ -39,7 +39,7 @@ import (
 
 const collectBatchSize = 20
 
-func (sc *StatsController) CollectOnce(ctx context.Context) (string, error) {
+func (sc *StatsController) CollectOnce(ctx *sql.Context) (string, error) {
 	genStart := sc.genCnt.Load()
 	bypassRateLimit := true
 	openSessionCmds := false
@@ -83,8 +83,7 @@ func (sc *StatsController) runWorker(ctx context.Context) (err error) {
 		}
 
 		bypassRateLimit := false
-		openSessionCmds := true
-		newStats, err = sc.newStatsForRoot(ctx, gcKv, bypassRateLimit, openSessionCmds)
+		newStats, err = sc.newStatsForRootWithSession(ctx, gcKv, bypassRateLimit)
 		if errors.Is(err, context.Canceled) {
 			continue
 		} else if err != nil {
@@ -169,7 +168,17 @@ func (sc *StatsController) trySwapStats(ctx context.Context, prevGen uint64, new
 	return false, nil
 }
 
-func (sc *StatsController) newStatsForRoot(baseCtx context.Context, gcKv *memStats, bypassRateLimit, openSessionCmds bool) (newStats *rootStats, err error) {
+func (sc *StatsController) newStatsForRootWithSession(baseCtx context.Context, gcKv *memStats, bypassRateLimit bool) (newStats *rootStats, err error) {
+	ctx, err := sc.ctxGen(baseCtx)
+	if err != nil {
+		return nil, err
+	}
+	defer sql.SessionEnd(ctx.Session)
+
+	return sc.newStatsForRoot(ctx, gcKv, bypassRateLimit, true)
+}
+
+func (sc *StatsController) newStatsForRoot(ctx *sql.Context, gcKv *memStats, bypassRateLimit, openSessionCmds bool) (newStats *rootStats, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = fmt.Errorf("worker panicked running work: %s\n%s", r, string(debug.Stack()))
@@ -178,12 +187,6 @@ func (sc *StatsController) newStatsForRoot(baseCtx context.Context, gcKv *memSta
 			sc.descError("stats update interrupted", err)
 		}
 	}()
-
-	ctx, err := sc.ctxGen(baseCtx)
-	if err != nil {
-		return nil, err
-	}
-	defer sql.SessionEnd(ctx.Session)
 
 	newStats = newRootStats()
 	dSess := dsess.DSessFromSess(ctx.Session)
@@ -248,9 +251,7 @@ func (sc *StatsController) newStatsForRoot(baseCtx context.Context, gcKv *memSta
 				continue
 			}
 			var tableNames []string
-			if err := sc.rateLimiter.execute(ctx, func() (err error) {
-				sql.SessionCommandBegin(ctx.Session)
-				defer sql.SessionCommandEnd(ctx.Session)
+			if err := sc.execWithOptionalRateLimit(ctx, bypassRateLimit, openSessionCmds, func() error {
 				tableNames, err = sqlDb.GetTableNames(ctx)
 				return err
 			}); err != nil {
