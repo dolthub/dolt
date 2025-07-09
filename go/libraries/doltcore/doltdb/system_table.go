@@ -591,7 +591,7 @@ const (
 	WorkflowSavedQueryStepExpectedRowColumnResultsExpectedColumnCountComparisonTypeColName = "expected_column_count_comparison_type"
 
 	// WorkflowSavedQueryStepExpectedRowColumnResultsExpectedRowCountComparisonTypeColName is the name of the expected row count comparison type column on the workflow saved query step expected row column results table
-	WorkflowSavedQueryStepExpectedRowColumnResultsExpectedRowCountComparisonTypeColName = "expected_column_row_comparison_type"
+	WorkflowSavedQueryStepExpectedRowColumnResultsExpectedRowCountComparisonTypeColName = "expected_row_count_comparison_type"
 
 	// WorkflowSavedQueryStepExpectedRowColumnResultsExpectedColumnCountColName is the name of the expected column count column on the workflow saved query step expected row column results table
 	WorkflowSavedQueryStepExpectedRowColumnResultsExpectedColumnCountColName = "expected_column_count"

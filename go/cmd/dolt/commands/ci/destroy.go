@@ -16,6 +16,8 @@ package ci
 
 import (
 	"context"
+	"fmt"
+	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions/dolt_ci"
 
@@ -84,6 +86,13 @@ func (cmd DestroyCmd) Exec(ctx context.Context, commandStr string, args []string
 	}
 	if closeFunc != nil {
 		defer closeFunc()
+
+		_, ok := queryist.(*engine.SqlEngine)
+		if !ok {
+			msg := fmt.Sprintf(cli.RemoteUnsupportedMsg, commandStr)
+			cli.Println(msg)
+			return 1
+		}
 	}
 
 	db, err := newDatabase(sqlCtx, sqlCtx.GetCurrentDatabase(), dEnv, false)
