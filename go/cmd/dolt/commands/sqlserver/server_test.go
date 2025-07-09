@@ -84,8 +84,17 @@ func TestServerArgs(t *testing.T) {
 	}()
 	err = controller.WaitForStart()
 	require.NoError(t, err)
+
 	conn, err := dbr.Open("mysql", "username:password@tcp(localhost:15200)/", nil)
 	require.NoError(t, err)
+
+	// @@read_only should be true when the server is started with --readonly
+	sess := conn.NewSession(nil)
+	var ro []int
+	_, err = sess.SelectBySql("SELECT @@read_only;").LoadContext(context.Background(), &ro)
+	require.NoError(t, err)
+	require.Equal(t, []int{1}, ro)
+
 	err = conn.Close()
 	require.NoError(t, err)
 	controller.Stop()
@@ -144,8 +153,17 @@ listener:
 	}()
 	err = controller.WaitForStart()
 	require.NoError(t, err)
+
 	conn, err := dbr.Open("mysql", "username:password@tcp(localhost:15200)/", nil)
 	require.NoError(t, err)
+
+	// @@read_only should be true when behavior.read_only is set in config
+	sess := conn.NewSession(nil)
+	var ro []int
+	_, err = sess.SelectBySql("SELECT @@read_only;").LoadContext(context.Background(), &ro)
+	require.NoError(t, err)
+	require.Equal(t, []int{1}, ro)
+
 	err = conn.Close()
 	require.NoError(t, err)
 	controller.Stop()
