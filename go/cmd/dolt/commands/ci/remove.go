@@ -17,6 +17,7 @@ package ci
 import (
 	"context"
 	"fmt"
+
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
