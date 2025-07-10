@@ -266,6 +266,15 @@ func StartServer(ctx context.Context, versionStr, commandStr string, args []stri
 		return err
 	}
 
+	// Set the global value of the read_only system variable
+	var readOnlyVal int8
+	if serverConfig.ReadOnly() {
+		readOnlyVal = 1
+	} else {
+		readOnlyVal = 0
+	}
+	sql.SystemVariables.SetGlobal(nil, "read_only", readOnlyVal)
+
 	err = generateYamlConfigIfNone(ap, help, args, dEnv, serverConfig)
 	if err != nil {
 		return err

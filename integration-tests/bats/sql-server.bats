@@ -2137,3 +2137,30 @@ EOF
     run grep -F "Dropping persisted '__dolt_local_user__@localhost' because this account name is reserved for Dolt" server_log.txt
     [ $status -eq 0 ]
 }
+
+@test "sql-server: @@read_only reflects startup flag" {
+    cd repo1
+    DEFAULT_DB=repo1
+    dolt sql -q "create table if not exists t(pk int primary key)"
+    PORT=$(definePORT)
+    echo "Starting server on port $PORT in $(pwd)" >&2
+    dolt sql-server --readonly --port=$PORT --socket "dolt.$PORT.sock" > log.txt 2>&1 &
+    SERVER_PID=$!
+    wait_for_connection $PORT 8500 || (echo "--- log.txt ---"; cat log.txt; exit 1)
+    run dolt --host 127.0.0.1 --port $PORT --no-tls sql -q "select @@read_only;"
+    echo "$output"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "1" ]] || false
+    stop_sql_server
+
+    PORT2=$(definePORT)
+    echo "Starting server on port $PORT2 in $(pwd)" >&2
+    dolt sql-server --port=$PORT2 --socket "dolt.$PORT2.sock" > log.txt 2>&1 &
+    SERVER_PID=$!
+    wait_for_connection $PORT2 8500 || (echo "--- log.txt ---"; cat log.txt; exit 1)
+    run dolt --host 127.0.0.1 --port $PORT2 --no-tls sql -q "select @@read_only;"
+    echo "$output"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "0" ]] || false
+    stop_sql_server
+}
