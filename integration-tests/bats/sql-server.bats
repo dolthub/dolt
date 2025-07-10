@@ -273,6 +273,11 @@ user_session_vars:
     # Start up the server in read-only mode
     start_sql_server_with_args "--readonly"
 
+    # @@read_only should be true when the server is read-only
+    run dolt --host=127.0.0.1 --port=$PORT --no-tls sql -q "SELECT @@read_only;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1" ]] || false
+
     # Assert that we can still checkout other branches and run dolt status
     # while the sql-server is running in read-only mode
     dolt sql -q "call dolt_checkout('other');"

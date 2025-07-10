@@ -969,6 +969,8 @@ func (c ClusterRemotesAPIYAMLConfig) ServerNameDNSMatches() []string {
 
 func (cfg YAMLConfig) ValueSet(value string) bool {
 	switch value {
+	case ReadOnlyKey:
+		return cfg.BehaviorConfig.ReadOnly != nil
 	case ReadTimeoutKey:
 		return cfg.ListenerConfig.ReadTimeoutMillis != nil
 	case WriteTimeoutKey:
