@@ -968,21 +968,23 @@ func (c ClusterRemotesAPIYAMLConfig) ServerNameDNSMatches() []string {
 }
 
 func (cfg YAMLConfig) ValueSet(value string) bool {
-	switch value {
-	case ReadTimeoutKey:
-		return cfg.ListenerConfig.ReadTimeoutMillis != nil
-	case WriteTimeoutKey:
-		return cfg.ListenerConfig.WriteTimeoutMillis != nil
-	case MaxConnectionsKey:
-		return cfg.ListenerConfig.MaxConnections != nil
-	case MaxWaitConnectionsKey:
-		return cfg.ListenerConfig.BackLog != nil
-	case MaxWaitConnectionsTimeoutKey:
-		return cfg.ListenerConfig.MaxConnectionsTimeoutMs != nil
-	case EventSchedulerKey:
-		return cfg.BehaviorConfig.EventSchedulerStatus != nil
-	}
-	return false
+    switch value {
+    case ReadOnlyKey:
+        return cfg.BehaviorConfig.ReadOnly != nil
+    case ReadTimeoutKey:
+        return cfg.ListenerConfig.ReadTimeoutMillis != nil
+    case WriteTimeoutKey:
+        return cfg.ListenerConfig.WriteTimeoutMillis != nil
+    case MaxConnectionsKey:
+        return cfg.ListenerConfig.MaxConnections != nil
+    case MaxWaitConnectionsKey:
+        return cfg.ListenerConfig.BackLog != nil
+    case MaxWaitConnectionsTimeoutKey:
+        return cfg.ListenerConfig.MaxConnectionsTimeoutMs != nil
+    case EventSchedulerKey:
+        return cfg.BehaviorConfig.EventSchedulerStatus != nil
+    }
+    return false
 }
 
 type AutoGCBehaviorYAMLConfig struct {

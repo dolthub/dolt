@@ -73,19 +73,20 @@ func TestServerArgs(t *testing.T) {
 	defer func() {
 		assert.NoError(t, dEnv.DoltDB(ctx).Close())
 	}()
-	go func() {
-		StartServer(context.Background(), "0.0.0", "dolt sql-server", []string{
-			"-H", "localhost",
-			"-P", "15200",
-			"-t", "5",
-			"-l", "info",
-			"-r",
-		}, dEnv, dEnv.FS, controller)
-	}()
+		go func() {
+			StartServer(context.Background(), "0.0.0", "dolt sql-server", []string{
+				"-H", "localhost",
+				"-P", "15200",
+				"-t", "5",
+				"-l", "info",
+				"-r",
+				"--allow-cleartext-passwords", "true",
+			}, dEnv, dEnv.FS, controller)
+		}()
 	err = controller.WaitForStart()
 	require.NoError(t, err)
 
-	conn, err := dbr.Open("mysql", "username:password@tcp(localhost:15200)/", nil)
+	conn, err := dbr.Open("mysql", fmt.Sprintf("%s@tcp(localhost:15200)/?allowCleartextPasswords=1", servercfg.DefaultUser), nil)
 	require.NoError(t, err)
 
 	// @@read_only should be true when the server is started with --readonly
@@ -136,6 +137,7 @@ listener:
     port: 15200
     read_timeout_millis: 5000
     write_timeout_millis: 5000
+    allow_cleartext_passwords: true
 `
 	ctx := context.Background()
 	dEnv, err := sqle.CreateEnvWithSeedData()
@@ -154,7 +156,7 @@ listener:
 	err = controller.WaitForStart()
 	require.NoError(t, err)
 
-	conn, err := dbr.Open("mysql", "username:password@tcp(localhost:15200)/", nil)
+	conn, err := dbr.Open("mysql", fmt.Sprintf("%s@tcp(localhost:15200)/?allowCleartextPasswords=1", servercfg.DefaultUser), nil)
 	require.NoError(t, err)
 
 	// @@read_only should be true when behavior.read_only is set in config
