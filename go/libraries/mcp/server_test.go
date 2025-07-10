@@ -7,11 +7,17 @@ import (
 )
 
 func TestMCPServer(t *testing.T) {
-	// t.Run("NewMCPServer success", nil)
-	t.Run("NewMCPServer fails", testNewMCPServerFails)
+	t.Run("NewMCPServer success", testNewMCPServerSuccess)
+	// t.Run("NewMCPServer fails", testNewMCPServerFail)
 }
 
-func testNewMCPServerFails(t *testing.T) {
+func testNewMCPServerSuccess(t *testing.T) {
+	t.Run("Valid Config", func(t *testing.T) {
+		RunTest(t, "Without DSN", testSuccessWithoutDSN)
+	})
+}
+
+func testNewMCPServerFail(t *testing.T) {
 	t.Run("Invalid Config", func(t *testing.T) {
 		RunTest(t, "Missing Host and DSN", testMissingHostAndDSN)
 		// RunTest(t, "Missing User and DSN", testMissingUserAndDSN)
@@ -23,11 +29,26 @@ func testNewMCPServerFails(t *testing.T) {
 	// t.Run("Invalid SQL grants", nil)
 }
 
+func testSuccessWithoutDSN(suite *testSuite) {
+	config := Config{
+		Host: doltServerHost,
+		User: mcpTestUserName,	
+		Password: mcpTestPassword,
+		Port: doltServerPort,
+		DatabaseName: mcpTestDatabaseName,
+	}
+
+	mcpServer, err := NewMCPServer(config)
+	require.NoError(suite.t, err)
+	require.NotNil(suite.t, mcpServer)
+}
+
 func testMissingHostAndDSN(suite *testSuite) {
 	config := Config{
 		User: mcpTestUserName,	
 		Password: mcpTestPassword,
 		Port: doltServerPort,
+		DatabaseName: mcpTestDatabaseName,
 	}
 
 	mcpServer, err := NewMCPServer(config)
