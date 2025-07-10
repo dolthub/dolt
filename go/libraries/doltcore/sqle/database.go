@@ -1437,10 +1437,14 @@ func (db Database) CreateTable(ctx *sql.Context, tableName string, sch sql.Prima
 		return ErrReservedTableName.New(tableName)
 	}
 
-	if doltdb.HasDoltCIPrefix(tableName) {
-		if !doltdb.DoltCICanBypass(ctx) {
-			return ErrReservedTableName.New(tableName)
-		}
+	canCreateCIVar, err := ctx.GetSessionVariable(ctx, dsess.AllowCICreation)
+	if err != nil {
+		return err
+	}
+	canCreateCI := canCreateCIVar.(int8) == 1
+	
+	if doltdb.HasDoltCIPrefix(tableName) && !canCreateCI {
+		return ErrReservedTableName.New(tableName)
 	}
 
 	if strings.HasPrefix(tableName, diff.DBPrefix) {

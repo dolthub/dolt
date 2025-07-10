@@ -16,13 +16,11 @@ package dolt_ci
 
 import (
 	"fmt"
-
+	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/go-mysql-server/sql"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
 
 // WrappedTableName is a struct that wraps a doltdb.TableName
@@ -63,26 +61,29 @@ type queryFunc func(ctx *sql.Context, query string) (sql.Schema, sql.RowIter, *s
 
 // HasDoltCITables reports whether a database has all expected dolt_ci tables which store continuous integration config.
 // If the database has only some of the expected tables, an error is returned.
-func HasDoltCITables(ctx *sql.Context) (bool, error) {
-	dbName := ctx.GetCurrentDatabase()
-	dSess := dsess.DSessFromSess(ctx.Session)
-	ws, err := dSess.WorkingSet(ctx, dbName)
-	if err != nil {
-		return false, err
-	}
-
-	root := ws.WorkingRoot()
-	activeOnly := ExpectedDoltCITablesOrdered.ActiveTableNames()
-
+func HasDoltCITables(queryist cli.Queryist, sqlCtx *sql.Context) (bool, error) {
 	exists := 0
 	var hasSome bool
 	var hasAll bool
+	activeOnly := ExpectedDoltCITablesOrdered.ActiveTableNames()
+
 	for _, tableName := range activeOnly {
-		found, err := root.HasTable(ctx, tableName)
+		query := fmt.Sprintf("SHOW TABLES LIKE '%s';", tableName.Name)
+
+		_, _, _, err := queryist.Query(sqlCtx, "set @@dolt_show_system_tables = 1")
 		if err != nil {
 			return false, err
 		}
-		if found {
+		rows, err := commands.GetRowsForSql(queryist, sqlCtx, query)
+		if err != nil {
+			return false, err
+		}
+		_, _, _, err = queryist.Query(sqlCtx, "set @@dolt_show_system_tables = 0")
+		if err != nil {
+			return false, err
+		}
+
+		if len(rows) > 0 {
 			exists++
 		}
 	}
@@ -98,30 +99,6 @@ func HasDoltCITables(ctx *sql.Context) (bool, error) {
 	return true, nil
 }
 
-func getExistingDoltCITables(ctx *sql.Context) ([]doltdb.TableName, error) {
-	existing := make([]doltdb.TableName, 0)
-	dbName := ctx.GetCurrentDatabase()
-	dSess := dsess.DSessFromSess(ctx.Session)
-	ws, err := dSess.WorkingSet(ctx, dbName)
-	if err != nil {
-		return nil, err
-	}
-
-	root := ws.WorkingRoot()
-
-	for _, wrapt := range ExpectedDoltCITablesOrdered {
-		found, err := root.HasTable(ctx, wrapt.TableName)
-		if err != nil {
-			return nil, err
-		}
-		if found {
-			existing = append(existing, wrapt.TableName)
-		}
-	}
-
-	return existing, nil
-}
-
 func sqlWriteQuery(ctx *sql.Context, queryFunc queryFunc, query string) error {
 	_, rowIter, _, err := queryFunc(ctx, query)
 	if err != nil {
@@ -131,70 +108,67 @@ func sqlWriteQuery(ctx *sql.Context, queryFunc queryFunc, query string) error {
 	return err
 }
 
-func commitCIDestroy(ctx *sql.Context, queryFunc queryFunc, tableNames []doltdb.TableName, commiterName, commiterEmail string) error {
+func commitCIDestroy(queryist cli.Queryist, ctx *sql.Context, tableNames []doltdb.TableName, name, email string) error {
 	// stage table in reverse order so child tables
 	// are staged before parent tables
 	for i := len(tableNames) - 1; i >= 0; i-- {
 		tn := tableNames[i]
-		err := sqlWriteQuery(ctx, queryFunc, fmt.Sprintf("CALL DOLT_ADD('%s');", tn.Name))
+		_, err := commands.GetRowsForSql(queryist, ctx, fmt.Sprintf("CALL DOLT_ADD('%s');", tn.Name))
 		if err != nil {
 			return err
 		}
 	}
-	return sqlWriteQuery(ctx, queryFunc, fmt.Sprintf("CALL DOLT_COMMIT('-m' 'Successfully destroyed Dolt CI', '--author', '%s <%s>');", commiterName, commiterEmail))
+
+	query := fmt.Sprintf("CALL DOLT_COMMIT('-m', 'Successfully destroyed Dolt CI', '--author', '%s <%s>');", name, email)
+	_, err := commands.GetRowsForSql(queryist, ctx, query)
+	return err
 }
 
-func commitCIInit(ctx *sql.Context, queryFunc queryFunc, tableNames []doltdb.TableName, commiterName, commiterEmail string) error {
+func commitCIInit(ctx *sql.Context, queryist cli.Queryist, tableNames []doltdb.TableName, name, email string) error {
 	// stage table in reverse order so child tables
 	// are staged before parent tables
 	for i := len(tableNames) - 1; i >= 0; i-- {
 		tn := tableNames[i]
-		err := sqlWriteQuery(ctx, queryFunc, fmt.Sprintf("CALL DOLT_ADD('%s');", tn.Name))
+		query := fmt.Sprintf("CALL DOLT_ADD('%s');", tn.Name)
+		_, err := commands.GetRowsForSql(queryist, ctx, query)
 		if err != nil {
 			return err
 		}
 	}
-	return sqlWriteQuery(ctx, queryFunc, fmt.Sprintf("CALL DOLT_COMMIT('-m' 'Successfully initialized Dolt CI', '--author', '%s <%s>');", commiterName, commiterEmail))
+
+	query := fmt.Sprintf("CALL DOLT_COMMIT('-m', 'Successfully initialized Dolt CI', '--author', '%s <%s>');", name, email)
+	_, err := commands.GetRowsForSql(queryist, ctx, query)
+	return err
 }
 
 // DestroyDoltCITables drops all dolt_ci tables and creates a new Dolt commit.
-func DestroyDoltCITables(ctx *sql.Context, db sqle.Database, queryFunc queryFunc, commiterName, commiterEmail string) error {
-	if err := dsess.CheckAccessForDb(ctx, db, branch_control.Permissions_Write); err != nil {
-		return err
-	}
+func DestroyDoltCITables(queryist cli.Queryist, ctx *sql.Context, name, email string) error {
+	//TODO DO I NEED TO CHECK PERMISSIONS
 
-	// disable foreign key checks
-	err := sqlWriteQuery(ctx, queryFunc, "SET FOREIGN_KEY_CHECKS=0;")
+	//disable foreign key checks
+	_, _, _, err := queryist.Query(ctx, "SET FOREIGN_KEY_CHECKS=0;")
 	if err != nil {
 		return err
 	}
 
-	existing, err := getExistingDoltCITables(ctx)
-	if err != nil {
-		return err
-	}
-
-	for _, tableName := range existing {
-		err = sqlWriteQuery(ctx, queryFunc, fmt.Sprintf("DROP TABLE IF EXISTS %s;", tableName.Name))
+	ciTables := ExpectedDoltCITablesOrdered.ActiveTableNames()
+	for _, tableName := range ciTables {
+		query := fmt.Sprintf("DROP TABLE IF EXISTS %s", tableName.Name)
+		_, err := commands.GetRowsForSql(queryist, ctx, query)
 		if err != nil {
 			return err
 		}
 	}
 
-	// enable foreign keys again
-	err = sqlWriteQuery(ctx, queryFunc, "SET FOREIGN_KEY_CHECKS=1;")
+	_, _, _, err = queryist.Query(ctx, "SET FOREIGN_KEY_CHECKS=1;")
 	if err != nil {
 		return err
 	}
-
-	return commitCIDestroy(ctx, queryFunc, existing, commiterName, commiterEmail)
+	return commitCIDestroy(queryist, ctx, ciTables, name, email)
 }
 
-// CreateDoltCITables creates all dolt_ci tables and creates a new Dolt commit.
-func CreateDoltCITables(ctx *sql.Context, db sqle.Database, queryFunc queryFunc, commiterName, commiterEmail string) error {
-	if err := dsess.CheckAccessForDb(ctx, db, branch_control.Permissions_Write); err != nil {
-		return err
-	}
+func CreateDoltCITables(queryist cli.Queryist, sqlCtx *sql.Context, name, email string) error {
+	//TODO DO I NEED TO CHECK PERMISSIONS
 
 	orderedCreateTableQueries := []string{
 		createWorkflowsTableQuery(),
@@ -208,16 +182,24 @@ func CreateDoltCITables(ctx *sql.Context, db sqle.Database, queryFunc queryFunc,
 		deleteAllFromWorkflowsTableQuery(), // as last step run delete to create resolve all indexes/fks
 	}
 
-	newCtx := doltdb.ContextWithDoltCICreateBypassKey(ctx)
+	_, _, _, err := queryist.Query(sqlCtx, "set @@dolt_allow_ci_creation = 1")
+	if err != nil {
+		return err
+	}
 
 	for _, query := range orderedCreateTableQueries {
-		err := sqlWriteQuery(newCtx, queryFunc, query)
+		_, err = commands.GetRowsForSql(queryist, sqlCtx, query)
 		if err != nil {
 			return err
 		}
 	}
 
-	return commitCIInit(newCtx, queryFunc, ExpectedDoltCITablesOrdered.ActiveTableNames(), commiterName, commiterEmail)
+	_, _, _, err = queryist.Query(sqlCtx, "set @@dolt_allow_ci_creation = 0")
+	if err != nil {
+		return err
+	}
+
+	return commitCIInit(sqlCtx, queryist, ExpectedDoltCITablesOrdered.ActiveTableNames(), name, email)
 }
 
 func createWorkflowsTableQuery() string {

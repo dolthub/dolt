@@ -22,7 +22,7 @@ get_commit_hash() {
 }
 
 @test "ci: init should create dolt ci workflow tables" {
-    skip_remote_engine
+    #skip_remote_engine
 
     dolt ci init
 
@@ -41,7 +41,7 @@ get_commit_hash() {
 }
 
 @test "ci: destroy should destroy dolt ci workflow tables" {
-    skip_remote_engine
+    #skip_remote_engine
 
     dolt ci init
 
@@ -63,7 +63,7 @@ get_commit_hash() {
 }
 
 @test "ci: should allow users to alter data in workflow tables" {
-    skip_remote_engine
+    #skip_remote_engine
 
     dolt ci init
 
@@ -79,7 +79,7 @@ get_commit_hash() {
 }
 
 @test "ci: init should error if database has already initialized ci" {
-    skip_remote_engine
+    #skip_remote_engine
 
     dolt ci init
     run dolt ci init
@@ -88,7 +88,7 @@ get_commit_hash() {
 }
 
 @test "ci: user cannot manually create ci tables in dolt_ci namespace" {
-    skip_remote_engine
+    #skip_remote_engine
 
     run dolt sql -q "create table dolt_ci_workflows(pk int primary key);"
     [ "$status" -eq 1 ]
@@ -96,7 +96,7 @@ get_commit_hash() {
 }
 
 @test "ci: workflow tables do not appear in show tables output" {
-    skip_remote_engine
+    #skip_remote_engine
     dolt ci init
     run dolt sql -q "show tables;"
     [ "$status" -eq 0 ]
@@ -104,7 +104,7 @@ get_commit_hash() {
 }
 
 @test "ci: workflow tables do not appear in dolt ls" {
-    skip_remote_engine
+    #skip_remote_engine
     dolt ci init
     run dolt ls
     [ "$status" -eq 0 ]
@@ -112,7 +112,7 @@ get_commit_hash() {
 }
 
 @test "ci: workflow tables do appear in diffs" {
-    skip_remote_engine
+    #skip_remote_engine
     first=$(get_commit_hash 1)
 
     dolt ci init
@@ -123,7 +123,7 @@ get_commit_hash() {
 }
 
 @test "ci: init command should only commit changes relevant to the ci tables" {
-    skip_remote_engine
+    #skip_remote_engine
 
     dolt sql -q "create table t1(pk int primary key);"
     dolt ci init
@@ -136,7 +136,7 @@ get_commit_hash() {
 }
 
 @test "ci: destroy command should only commit changes relevant to the ci tables" {
-    skip_remote_engine
+    #skip_remote_engine
 
     dolt sql -q "create table t1(pk int primary key);"
     dolt ci init
@@ -149,7 +149,7 @@ get_commit_hash() {
 }
 
 @test "ci: import command will import a valid workflow.yaml file" {
-    skip_remote_engine
+    #skip_remote_engine
     cat > workflow.yaml <<EOF
 name: my_workflow
 on:
@@ -171,7 +171,7 @@ EOF
 }
 
 @test "ci: import command will error on an invalid workflow.yaml file" {
-    skip_remote_engine
+    #skip_remote_engine
     cat > workflow.yaml <<EOF
 name: my_workflow
 on:
@@ -191,7 +191,7 @@ EOF
 }
 
 @test "ci: import command will update existing workflow" {
-    skip_remote_engine
+    #skip_remote_engine
     cat > workflow_1.yaml <<EOF
 name: workflow_1
 on:
@@ -272,7 +272,7 @@ jobs:
         expected_rows: "> 0"
 EOF
 
-    skip_remote_engine
+    #skip_remote_engine
     dolt ci init
     dolt ci import ./workflow.yaml
     run dolt ci import ./workflow.yaml
@@ -281,7 +281,8 @@ EOF
 }
 
 @test "ci: ls lists existing workflows" {
-    skip_remote_engine
+    #skip_remote_engine
+    
     cat > workflow.yaml <<EOF
 name: my_workflow
 on:
@@ -303,7 +304,7 @@ EOF
 }
 
 @test "ci: export exports a workflow to a yaml file" {
-    skip_remote_engine
+    #skip_remote_engine
     cat > workflow.yaml <<EOF
 name: my_workflow
 on:
@@ -332,7 +333,7 @@ EOF
 }
 
 @test "ci: remove deletes a workflow" {
-    skip_remote_engine
+    #skip_remote_engine
     cat > workflow_1.yaml <<EOF
 name: workflow_1
 on:

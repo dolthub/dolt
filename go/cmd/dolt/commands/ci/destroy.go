@@ -16,9 +16,6 @@ package ci
 
 import (
 	"context"
-	"fmt"
-	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions/dolt_ci"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -71,14 +68,10 @@ func (cmd DestroyCmd) ArgParser() *argparser.ArgParser {
 }
 
 // Exec implements cli.Command.
-func (cmd DestroyCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
+func (cmd DestroyCmd) Exec(ctx context.Context, commandStr string, args []string, _ *env.DoltEnv, cliCtx cli.CliContext) int {
 	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, destroyDocs, ap))
 	cli.ParseArgsOrDie(ap, args, help)
-
-	if !cli.CheckEnvIsValid(dEnv) {
-		return 1
-	}
 
 	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
@@ -86,30 +79,10 @@ func (cmd DestroyCmd) Exec(ctx context.Context, commandStr string, args []string
 	}
 	if closeFunc != nil {
 		defer closeFunc()
-
-		_, ok := queryist.(*engine.SqlEngine)
-		if !ok {
-			msg := fmt.Sprintf(cli.RemoteUnsupportedMsg, commandStr)
-			cli.Println(msg)
-			return 1
-		}
 	}
 
-	db, err := newDatabase(sqlCtx, sqlCtx.GetCurrentDatabase(), dEnv, false)
-	if err != nil {
-		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-	}
+	name, email, err := env.GetNameAndEmail(cliCtx.Config())
 
-	name, email, err := env.GetNameAndEmail(dEnv.Config)
-	if err != nil {
-		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-	}
-
-	var verr errhand.VerboseError
-	err = dolt_ci.DestroyDoltCITables(sqlCtx, db, queryist.Query, name, email)
-	if err != nil {
-		verr = errhand.VerboseErrorFromError(err)
-	}
-
-	return commands.HandleVErrAndExitCode(verr, usage)
+	err = dolt_ci.DestroyDoltCITables(queryist, sqlCtx, name, email)
+	return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 }

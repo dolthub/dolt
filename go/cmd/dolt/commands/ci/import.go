@@ -17,7 +17,6 @@ package ci
 import (
 	"context"
 	"fmt"
-	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"os"
 	"path/filepath"
 	"strings"
@@ -75,13 +74,10 @@ func (cmd ImportCmd) ArgParser() *argparser.ArgParser {
 }
 
 // Exec implements cli.Command.
-func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
+func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string, _ *env.DoltEnv, cliCtx cli.CliContext) int {
 	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, importDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
-	if !cli.CheckEnvIsValid(dEnv) {
-		return 1
-	}
 
 	var verr errhand.VerboseError
 	verr = validateImportArgs(apr)
@@ -101,25 +97,12 @@ func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string,
 	}
 	if closeFunc != nil {
 		defer closeFunc()
-
-		_, ok := queryist.(*engine.SqlEngine)
-		if !ok {
-			msg := fmt.Sprintf(cli.RemoteUnsupportedMsg, commandStr)
-			cli.Println(msg)
-			return 1
-		}
 	}
 
-	user, email, err := env.GetNameAndEmail(dEnv.Config)
+	hasTables, err := dolt_ci.HasDoltCITables(queryist, sqlCtx)
 	if err != nil {
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
-
-	hasTables, err := dolt_ci.HasDoltCITables(sqlCtx)
-	if err != nil {
-		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-	}
-
 	if !hasTables {
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(fmt.Errorf("dolt ci has not been initialized, please initialize with: dolt ci init")), usage)
 	}
@@ -134,25 +117,23 @@ func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	wm := dolt_ci.NewWorkflowManager(user, email, queryist.Query)
-
-	db, err := newDatabase(sqlCtx, sqlCtx.GetCurrentDatabase(), dEnv, false)
+	user, email, err := env.GetNameAndEmail(cliCtx.Config())
 	if err != nil {
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
+	wm := dolt_ci.NewWorkflowManager(user, email, queryist.Query)
 
-	err = wm.StoreAndCommit(sqlCtx, db, workflowConfig)
+	err = wm.StoreAndCommit(sqlCtx, workflowConfig)
 	if err != nil {
 		errorText := err.Error()
 		switch {
-		case strings.Contains("nothing to commit", errorText):
+		case strings.Contains(errorText, "nothing to commit"):
 			cli.Println(color.CyanString(fmt.Sprintf("Dolt CI Workflow '%s' up to date.", workflowConfig.Name.Value)))
 			return 0
 		default:
 			return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 		}
 	}
-
 	return 0
 }
 
