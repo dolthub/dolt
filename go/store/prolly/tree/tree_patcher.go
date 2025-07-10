@@ -30,13 +30,18 @@ func ApplyPatches[K ~[]byte, O Ordering[K], S message.Serializer](
 	serializer S,
 	edits PatchIter,
 ) (Node, error) {
-	newMutation := edits.NextPatch(ctx)
+	newMutation, err := edits.NextPatch(ctx)
+	if err != nil {
+		return Node{}, err
+	}
+	// The iterator marks the end of the sequence with a zero object.
+	// Since KeyBelowStart is nil for the first chunk, but EndKey should never be nil, we check EndKey to detect when
+	// we've reached the end.
 	if newMutation.EndKey == nil {
 		return root, nil // no mutations
 	}
 
 	var cur *cursor
-	var err error
 	if newMutation.KeyBelowStart != nil {
 		cur, err = newCursorAtKey(ctx, ns, root, K(newMutation.EndKey), order)
 	} else {
@@ -63,11 +68,11 @@ func ApplyPatches[K ~[]byte, O Ordering[K], S message.Serializer](
 			return Node{}, err
 		}
 		prev := newMutation.EndKey
-		newMutation = edits.NextPatch(ctx)
-		nextKey := newMutation.EndKey
-		if nextKey == nil {
-			nextKey = newMutation.KeyBelowStart
+		newMutation, err = edits.NextPatch(ctx)
+		if err != nil {
+			return Node{}, err
 		}
+		nextKey := newMutation.EndKey
 		if nextKey == nil {
 			break
 		} else if prev != nil {
@@ -172,7 +177,7 @@ func applyNodePatch[K ~[]byte, O Ordering[K], S message.Serializer](
 		}
 	}
 
-	err = Seek(ctx, chkr.cur, K(toKey), order)
+	// err = Seek(ctx, chkr.cur, K(toKey), order)
 	if err != nil {
 		return err
 	}

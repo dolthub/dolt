@@ -157,8 +157,8 @@ func SendPatches[K ~[]byte, O Ordering[K]](
 		return err
 	}
 
+	order := l.order
 	for lok && rok {
-		order := l.order
 		// If they're ranges, compare the start points, see if they overlap.
 		leftLevel, _ := l.getLevel()
 		rightLevel, _ := r.getLevel()
@@ -174,7 +174,7 @@ func SendPatches[K ~[]byte, O Ordering[K]](
 					return err
 				}
 			} else if nilCompare(ctx, order, K(right.EndKey), K(left.KeyBelowStart)) <= 0 {
-				// Right change is entirely before right change.
+				// Right change is entirely before left change.
 				err = buf.SendPatch(ctx, right)
 				if err != nil {
 					return err
@@ -188,7 +188,16 @@ func SendPatches[K ~[]byte, O Ordering[K]](
 					return err
 				}
 			} else if bytes.Equal(left.To, right.To) {
-				// A concurrent change.
+				// Since these are both at level > 0, this means that both patches contain an address pointing to
+				// the same content-addressed chunk.
+				// This necessarily means that their end keys are the same. But if one side has added or removed
+				// an entire chunk that immediately preceeds this chunk, then their start keys may differ.
+				// If the left side added or removed a chunk, we can safely ignore it. If the right side added a chunk,
+				// then we already encountered it. But if the right side removed a chunk, we need to emit a patch here
+				// that reflects that.
+				if order.Compare(ctx, K(left.KeyBelowStart), K(right.KeyBelowStart)) > 0 {
+					err = buf.SendPatch(ctx, right)
+				}
 				// This change is already on the left map, so we ignore it.
 				left, lDiffType, err = l.Next(ctx)
 				if err == io.EOF {
@@ -227,7 +236,7 @@ func SendPatches[K ~[]byte, O Ordering[K]](
 
 		// If one branch returns a range patch and the other returns a point patch, we need to see if they overlap and possibly split the range diff.
 		if rightLevel > 0 {
-			if nilCompare(ctx, l.order, K(left.EndKey), K(right.KeyBelowStart)) <= 0 {
+			if nilCompare(ctx, order, K(left.EndKey), K(right.KeyBelowStart)) <= 0 {
 				// point update comes first
 				// This change is already on the left map, so we ignore it.
 				left, lDiffType, err = l.Next(ctx)
@@ -237,7 +246,7 @@ func SendPatches[K ~[]byte, O Ordering[K]](
 				if err != nil {
 					return err
 				}
-			} else if l.order.Compare(ctx, K(left.EndKey), K(right.EndKey)) > 0 {
+			} else if order.Compare(ctx, K(left.EndKey), K(right.EndKey)) > 0 {
 				// range update comes first
 				err = buf.SendPatch(ctx, right)
 				if err != nil {
@@ -261,7 +270,7 @@ func SendPatches[K ~[]byte, O Ordering[K]](
 		}
 
 		if leftLevel > 0 {
-			if nilCompare(ctx, l.order, K(right.EndKey), K(left.KeyBelowStart)) <= 0 {
+			if nilCompare(ctx, order, K(right.EndKey), K(left.KeyBelowStart)) <= 0 {
 				// point update comes first
 				err = buf.SendPatch(ctx, right)
 				if err != nil {
@@ -274,7 +283,7 @@ func SendPatches[K ~[]byte, O Ordering[K]](
 				if err != nil {
 					return err
 				}
-			} else if nilCompare(ctx, l.order, K(right.EndKey), K(left.EndKey)) > 0 {
+			} else if nilCompare(ctx, order, K(right.EndKey), K(left.EndKey)) > 0 {
 				// range update comes first
 				// This change is already on the left map, so we ignore it.
 				left, lDiffType, err = l.Next(ctx)
@@ -325,11 +334,13 @@ func SendPatches[K ~[]byte, O Ordering[K]](
 			// Convergent edit:
 			if !bytes.Equal(left.To, right.To) {
 				resolvedPatch, ok := resolveCollision(left, lDiffType, right, rDiffType, cb)
+				// If the collision can be resolved, we record it as a patch.
+				// Otherwise, the callback function records the conflict and we don't have to do anything here.
 				if ok {
 					err = buf.SendPatch(ctx, resolvedPatch)
-				}
-				if err != nil {
-					return err
+					if err != nil {
+						return err
+					}
 				}
 			}
 

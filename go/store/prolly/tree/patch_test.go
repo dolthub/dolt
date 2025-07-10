@@ -81,6 +81,8 @@ func TestPatchGeneratorFromRoots(t *testing.T) {
 
 		fromTups, desc := AscendingUintTuples(1024)
 		fromRoot, err := MakeTreeForTest(fromTups)
+		chunkBoundaries := []uint32{414, 718, 830}
+		maxKey := uint32(1023)
 		assert.NoError(t, err)
 
 		toTups := make([][2]val.Tuple, 512)
@@ -113,13 +115,13 @@ func TestPatchGeneratorFromRoots(t *testing.T) {
 
 		require.ErrorIs(t, err, io.EOF)
 
-		// Range splits into all 512 removes.
+		// Range splits into level 0 removes until the next chunk boundary, then level 1 removes.
 		dfr = PatchGeneratorFromRoots(ctx, ns, ns, fromRoot, toRoot, desc)
 		_, _, err = dfr.Next(ctx)
 		require.NoError(t, err)
 
 		dif, diffType, err = dfr.split(ctx)
-		for i := 512; i < 1024; i++ {
+		for i := uint32(512); i <= chunkBoundaries[1]; i++ {
 			require.NoError(t, err)
 			require.NotNil(t, dif, "%d", i)
 			require.Equal(t, RemovedDiff, diffType)
@@ -128,6 +130,29 @@ func TestPatchGeneratorFromRoots(t *testing.T) {
 			assert.Nil(t, dif.To)
 			dif, diffType, err = dfr.Next(ctx)
 		}
+		require.NotNil(t, dif)
+		require.Equal(t, RemovedDiff, diffType)
+		require.Equal(t, 1, dif.Level)
+		endKey, ok := desc.GetUint32(0, val.Tuple(dif.EndKey))
+		require.True(t, ok)
+		require.Equal(t, chunkBoundaries[2], endKey)
+		startKey, ok := desc.GetUint32(0, val.Tuple(dif.KeyBelowStart))
+		require.True(t, ok)
+		require.Equal(t, chunkBoundaries[1], startKey)
+		require.Nil(t, dif.To)
+		dif, diffType, err = dfr.Next(ctx)
+
+		require.NotNil(t, dif)
+		require.Equal(t, RemovedDiff, diffType)
+		require.Equal(t, 1, dif.Level)
+		endKey, ok = desc.GetUint32(0, val.Tuple(dif.EndKey))
+		require.True(t, ok)
+		require.Equal(t, maxKey, endKey)
+		startKey, ok = desc.GetUint32(0, val.Tuple(dif.KeyBelowStart))
+		require.True(t, ok)
+		require.Equal(t, chunkBoundaries[2], startKey)
+		require.Nil(t, dif.To)
+		dif, diffType, err = dfr.Next(ctx)
 
 		assert.Equal(t, io.EOF, err)
 	})
@@ -303,6 +328,8 @@ func TestPatchGeneratorFromRoots(t *testing.T) {
 
 		fromTups, desc := AscendingUintTuples(1024)
 		fromRoot, err := MakeTreeForTest(fromTups)
+		chunkBoundaries := []uint32{414, 718, 830}
+		maxKey := uint32(1023)
 		assert.NoError(t, err)
 
 		toTups := make([][2]val.Tuple, 0)
@@ -326,21 +353,57 @@ func TestPatchGeneratorFromRoots(t *testing.T) {
 		assert.Equal(t, KeyBelowStart, Item(fromTups[1023][0]))
 		assert.Equal(t, io.EOF, err)
 
-		// Range splits into all 1024 removes.
+		// Range splits into level 0 removes until the next chunk boundary, then level 1 removes.
 		dfr = PatchGeneratorFromRoots(ctx, ns, ns, fromRoot, toRoot, desc)
 		_, _, err = dfr.Next(ctx)
 		require.NoError(t, err)
 
 		dif, diffType, err = dfr.split(ctx)
-		for i := 0; i < 1024; i++ {
+		for i := uint32(0); i <= chunkBoundaries[0]; i++ {
 			require.NoError(t, err)
-			require.NotNil(t, dif)
+			require.NotNil(t, dif, "%d", i)
 			require.Equal(t, RemovedDiff, diffType)
-			assert.Equal(t, fromTups[i][0], val.Tuple(dif.EndKey))
-			assert.Equal(t, fromTups[i][1], val.Tuple(dif.From))
+			assert.Equal(t, fromTups[i][0], val.Tuple(dif.EndKey), "%d", i)
+			assert.Equal(t, fromTups[i][1], val.Tuple(dif.From), "%d", i)
 			assert.Nil(t, dif.To)
 			dif, diffType, err = dfr.Next(ctx)
 		}
+
+		require.NotNil(t, dif)
+		require.Equal(t, RemovedDiff, diffType)
+		require.Equal(t, 1, dif.Level)
+		endKey, ok := desc.GetUint32(0, val.Tuple(dif.EndKey))
+		require.True(t, ok)
+		require.Equal(t, chunkBoundaries[1], endKey)
+		startKey, ok := desc.GetUint32(0, val.Tuple(dif.KeyBelowStart))
+		require.True(t, ok)
+		require.Equal(t, chunkBoundaries[0], startKey)
+		require.Nil(t, dif.To)
+		dif, diffType, err = dfr.Next(ctx)
+
+		require.NotNil(t, dif)
+		require.Equal(t, RemovedDiff, diffType)
+		require.Equal(t, 1, dif.Level)
+		endKey, ok = desc.GetUint32(0, val.Tuple(dif.EndKey))
+		require.True(t, ok)
+		require.Equal(t, chunkBoundaries[2], endKey)
+		startKey, ok = desc.GetUint32(0, val.Tuple(dif.KeyBelowStart))
+		require.True(t, ok)
+		require.Equal(t, chunkBoundaries[1], startKey)
+		require.Nil(t, dif.To)
+		dif, diffType, err = dfr.Next(ctx)
+
+		require.NotNil(t, dif)
+		require.Equal(t, RemovedDiff, diffType)
+		require.Equal(t, 1, dif.Level)
+		endKey, ok = desc.GetUint32(0, val.Tuple(dif.EndKey))
+		require.True(t, ok)
+		require.Equal(t, maxKey, endKey)
+		startKey, ok = desc.GetUint32(0, val.Tuple(dif.KeyBelowStart))
+		require.True(t, ok)
+		require.Equal(t, chunkBoundaries[2], startKey)
+		require.Nil(t, dif.To)
+		dif, diffType, err = dfr.Next(ctx)
 
 		assert.Equal(t, io.EOF, err)
 	})

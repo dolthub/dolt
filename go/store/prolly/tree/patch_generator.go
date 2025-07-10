@@ -77,7 +77,7 @@ func newLeafPatch(key Item, from, to Item) Patch {
 }
 
 type PatchIter interface {
-	NextPatch(ctx context.Context) Patch
+	NextPatch(ctx context.Context) (Patch, error)
 	Close() error
 }
 
@@ -97,44 +97,31 @@ func NewPatchBuffer(sz int) PatchBuffer {
 func (ps PatchBuffer) SendPatch(ctx context.Context, patch Patch) error {
 	select {
 	case <-ctx.Done():
-		return ctx.Err()
+		return context.Cause(ctx)
 	case ps.buf <- patch:
 		return nil
 	}
 }
 
 func (ps PatchBuffer) SendKV(ctx context.Context, key, value Item) error {
-	patch := Patch{
-		EndKey:       key,
-		To:           value,
-		SubtreeCount: 1,
-		Level:        0,
-	}
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case ps.buf <- patch:
-		return nil
-	}
+	return ps.SendPatch(ctx, Patch{
+		EndKey: key,
+		To:     value,
+		Level:  0,
+	})
 }
 
 func (ps PatchBuffer) SendDone(ctx context.Context) error {
-	// A zero-valued patch is used to signal that all patches have been sent.
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case ps.buf <- Patch{}:
-		return nil
-	}
+	return ps.Close()
 }
 
 // NextPatch implements PatchIter.
-func (ps PatchBuffer) NextPatch(ctx context.Context) (patch Patch) {
+func (ps PatchBuffer) NextPatch(ctx context.Context) (patch Patch, err error) {
 	select {
 	case patch = <-ps.buf:
-		return patch
+		return patch, nil
 	case <-ctx.Done():
-		return patch
+		return Patch{}, context.Cause(ctx)
 	}
 }
 
@@ -213,8 +200,8 @@ func (td *PatchGenerator[K, O]) advanceFromPreviousPatch(ctx context.Context) (p
 		switch td.previousDiffType {
 		case AddedDiff:
 			td.previousKey = td.to.CurrentKey()
-			// If we've already exhausted the |from| iterator, then returning to the parent
-			// at the end of each block lets us avoid visiting leaf nodes unnecessarily.
+			// This can only happen if we've exhausted the |from| iterator.
+			// If we're at the end of a node in |to|, we go up a level to avoid continuing into the next sibling.
 			for td.to.atNodeEnd() && td.to.parent != nil {
 				td.to = td.to.parent
 			}
@@ -224,6 +211,11 @@ func (td *PatchGenerator[K, O]) advanceFromPreviousPatch(ctx context.Context) (p
 			}
 		case RemovedDiff:
 			td.previousKey = td.from.CurrentKey()
+			// This can only happen if we've exhausted the |to| iterator.
+			// If we're at the end of a node in |from|, we go up a level to avoid continuing into the next sibling.
+			for td.from.atNodeEnd() && td.from.parent != nil {
+				td.from = td.from.parent
+			}
 			err = td.from.advance(ctx)
 			if err != nil {
 				return Patch{}, NoDiff, err
@@ -277,6 +269,11 @@ func (td *PatchGenerator[K, O]) advanceFromPreviousPatch(ctx context.Context) (p
 		switch td.previousDiffType {
 		case RemovedDiff:
 			td.previousKey = td.from.CurrentKey()
+			// If we've already exhausted the |to| iterator, then returning to the parent
+			// at the end of the block lets us avoid visiting leaf nodes unnecessarily.
+			for td.from.atNodeEnd() && td.from.parent != nil && !td.to.Valid() {
+				td.from = td.from.parent
+			}
 			err = td.from.advance(ctx)
 			if err != nil {
 				return Patch{}, NoDiff, err
@@ -284,7 +281,7 @@ func (td *PatchGenerator[K, O]) advanceFromPreviousPatch(ctx context.Context) (p
 		case AddedDiff:
 			td.previousKey = td.to.CurrentKey()
 			// If we've already exhausted the |from| iterator, then returning to the parent
-			// at the end of each block lets us avoid visiting leaf nodes unnecessarily.
+			// at the end of the block lets us avoid visiting leaf nodes unnecessarily.
 			for td.to.atNodeEnd() && td.to.parent != nil && !td.from.Valid() {
 				td.to = td.to.parent
 			}
