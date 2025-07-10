@@ -39,6 +39,15 @@ var DoltDiffPlanTests = []queries.QueryPlanTest{
 			"",
 	},
 	{
+		Query: `select * from dolt_diff_one_pk where from_pk>=10 and from_pk<=100`,
+		ExpectedPlan: "Filter\n" +
+			" ├─ ((dolt_diff_one_pk.from_pk >= 10) AND (dolt_diff_one_pk.from_pk <= 100))\n" +
+			" └─ IndexedTableAccess(dolt_diff_one_pk)\n" +
+			"     ├─ index: [dolt_diff_one_pk.from_pk]\n" +
+			"     └─ filters: [{[10, 100]}]\n" +
+			"",
+	},
+	{
 		Query: `select * from dolt_diff_two_pk where to_pk1=1`,
 		ExpectedPlan: "Filter\n" +
 			" ├─ (dolt_diff_two_pk.to_pk1 = 1)\n" +
@@ -63,6 +72,15 @@ var DoltDiffPlanTests = []queries.QueryPlanTest{
 			" └─ IndexedTableAccess(dolt_diff_two_pk)\n" +
 			"     ├─ index: [dolt_diff_two_pk.to_pk1,dolt_diff_two_pk.to_pk2]\n" +
 			"     └─ filters: [{(NULL, 1), (10, ∞)}]\n" +
+			"",
+	},
+	{
+		Query: `select * from dolt_diff_two_pk where from_pk1 < 1 and from_pk2 = 10`,
+		ExpectedPlan: "Filter\n" +
+			" ├─ ((dolt_diff_two_pk.from_pk1 < 1) AND (dolt_diff_two_pk.from_pk2 = 10))\n" +
+			" └─ IndexedTableAccess(dolt_diff_two_pk)\n" +
+			"     ├─ index: [dolt_diff_two_pk.from_pk1,dolt_diff_two_pk.from_pk2]\n" +
+			"     └─ filters: [{(NULL, 1), [10, 10]}]\n" +
 			"",
 	},
 }

@@ -160,6 +160,10 @@ func (td TupleDesc) PrefixDesc(n int) TupleDesc {
 // GetField returns the ith field of |tup|.
 func (td TupleDesc) GetField(i int, tup Tuple) []byte {
 	if i < len(td.fast) {
+		cnt := tup.Count()
+		if i >= cnt {
+			return nil
+		}
 		start, stop := td.fast[i][0], td.fast[i][1]
 		return tup[start:stop]
 	}

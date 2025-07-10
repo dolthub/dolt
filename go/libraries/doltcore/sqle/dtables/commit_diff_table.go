@@ -154,8 +154,8 @@ func (dt *CommitDiffTable) Partitions(ctx *sql.Context) (sql.PartitionIter, erro
 	return nil, fmt.Errorf("error querying table %s: %w", dt.Name(), ErrExactlyOneToCommit)
 }
 
-func (dt *CommitDiffTable) LookupPartitions(ctx *sql.Context, i sql.IndexLookup) (sql.PartitionIter, error) {
-	ranges, ok := i.Ranges.(sql.MySQLRangeCollection)
+func (dt *CommitDiffTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
+	ranges, ok := lookup.Ranges.(sql.MySQLRangeCollection)
 	if !ok {
 		return nil, fmt.Errorf("commit diff table requires MySQL ranges")
 	}
@@ -211,6 +211,12 @@ func (dt *CommitDiffTable) LookupPartitions(ctx *sql.Context, i sql.IndexLookup)
 		return nil, err
 	}
 
+	lookup = copyIndexLookupWithoutCommitRanges(lookup)
+	prollyRanges, err := index.ProllyRangesFromIndexLookup(ctx, lookup)
+	if err != nil {
+		return nil, err
+	}
+
 	dp := DiffPartition{
 		to:       toTable,
 		from:     fromTable,
@@ -220,7 +226,7 @@ func (dt *CommitDiffTable) LookupPartitions(ctx *sql.Context, i sql.IndexLookup)
 		fromDate: fromDate,
 		toSch:    dt.targetSchema,
 		fromSch:  dt.targetSchema,
-		lookup:   i,
+		ranges:   prollyRanges,
 	}
 
 	isDiffable, _, err := dp.isDiffablePartition(ctx)
