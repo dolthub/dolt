@@ -224,6 +224,40 @@ func TestValidateForInsert(t *testing.T) {
 		assert.Error(t, err)
 		assert.Equal(t, err, ErrColTagCollision)
 	})
+
+	t.Run("AutoIncrement on various types should be allowed", func(t *testing.T) {
+		// Test that auto_increment validation is no longer enforced at database layer
+		// The validation should now be handled by the go-mysql-server layer
+		testCases := []struct {
+			name     string
+			kind     types.NomsKind
+			typeInfo typeinfo.TypeInfo
+		}{
+			{"VARCHAR", types.StringKind, typeinfo.StringDefaultType},
+			{"INT", types.IntKind, typeinfo.FromKind(types.IntKind)},
+			{"UINT", types.UintKind, typeinfo.FromKind(types.UintKind)},
+			{"FLOAT", types.FloatKind, typeinfo.FromKind(types.FloatKind)},
+		}
+
+		for _, tc := range testCases {
+			t.Run(tc.name, func(t *testing.T) {
+				autoIncCol := Column{
+					Name:          "auto_inc_col", 
+					Tag:           999, 
+					Kind:          tc.kind, 
+					IsPartOfPK:    true, 
+					AutoIncrement: true, 
+					TypeInfo:      tc.typeInfo,
+				}
+				cols := []Column{autoIncCol}
+				colColl := NewColCollection(cols...)
+
+				// Should not error - validation moved to GMS layer
+				err := ValidateForInsert(colColl)
+				assert.NoError(t, err, "auto_increment validation should not be enforced at database layer for %s", tc.name)
+			})
+		}
+	})
 }
 
 func TestArePrimaryKeySetsDiffable(t *testing.T) {
