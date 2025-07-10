@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"fmt"
 	"github.com/mark3labs/mcp-go/server"
 )
 
@@ -19,6 +20,12 @@ type serverImpl struct {
 var _ Server = &serverImpl{}
 
 func NewMCPServer(config Config) (Server, error) {
+	fmt.Println("DUSTIN: validating config")
+	err := config.Validate()
+	if err != nil {
+		return nil, err
+	}
+	fmt.Println("DUSTIN: config is valid")
 	db, err := NewDatabase(config)
 	if err != nil {
 		return nil, err

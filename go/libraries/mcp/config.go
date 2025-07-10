@@ -1,9 +1,15 @@
 package mcp
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 )
+
+var ErrNoHostDefined = errors.New("no host defined")
+var ErrNoUserDefined = errors.New("no user defined")
+var ErrNoDatabaseNameDefined = errors.New("no database name defined")
+var ErrNoPortDefined = errors.New("no port defined")
 
 type Config struct {
 	DSN             string `yaml:"dsn" json:"dsn"`
@@ -48,5 +54,23 @@ func (c *Config) GetDSN() string {
 
 	dsn += c.getDSNOptions()
 	return dsn
+}
+
+func (c *Config) Validate() error {
+	if c.DSN == "" {
+		if c.Host == "" {
+			return ErrNoHostDefined
+		}
+		if c.User == "" {
+			return ErrNoUserDefined
+		}
+		if c.DatabaseName == "" {
+			return ErrNoDatabaseNameDefined
+		}
+		if c.Port == 0 {
+			return ErrNoPortDefined
+		}
+	}
+	return nil
 }
 
