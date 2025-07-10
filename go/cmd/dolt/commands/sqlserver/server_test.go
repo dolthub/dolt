@@ -73,16 +73,16 @@ func TestServerArgs(t *testing.T) {
 	defer func() {
 		assert.NoError(t, dEnv.DoltDB(ctx).Close())
 	}()
-		go func() {
-			StartServer(context.Background(), "0.0.0", "dolt sql-server", []string{
-				"-H", "localhost",
-				"-P", "15200",
-				"-t", "5",
-				"-l", "info",
-				"-r",
-				"--allow-cleartext-passwords", "true",
-			}, dEnv, dEnv.FS, controller)
-		}()
+	go func() {
+		StartServer(context.Background(), "0.0.0", "dolt sql-server", []string{
+			"-H", "localhost",
+			"-P", "15200",
+			"-t", "5",
+			"-l", "info",
+			"-r",
+			"--allow-cleartext-passwords", "true",
+		}, dEnv, dEnv.FS, controller)
+	}()
 	err = controller.WaitForStart()
 	require.NoError(t, err)
 
