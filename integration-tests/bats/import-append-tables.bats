@@ -111,7 +111,7 @@ name, size, color
 CSV
     [ "$status" -eq 1 ]
     [[ "$output" =~ "An error occurred while moving data" ]] || false
-    [[ "$output" =~ "cause: value other is not valid for this Enum" ]] || false
+    [[ "$output" =~ "cause: Data truncated for column 'size' at row 2" ]] || false
     [[ "$output" =~ "A bad row was encountered inserting into table shirts (on line 3):" ]] || false    # table name
     [[ "$output" =~ "name: shirt2" ]] || false                                              # column names
     [[ "$output" =~ "size: other" ]] || false
