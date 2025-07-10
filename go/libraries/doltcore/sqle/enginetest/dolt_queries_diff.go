@@ -594,13 +594,14 @@ var DiffSystemTableScriptTests = []queries.ScriptTest{
 			"set @Commit2 = '';",
 			"CALL DOLT_COMMIT_HASH_OUT(@Commit2, '-am', 'second commit');",
 			"update t set c1 = 0 where pk > 5;",
+			"delete from t where pk = 1;",
 			"set @Commit3 = '';",
 			"CALL DOLT_COMMIT_HASH_OUT(@Commit3, '-am', 'third commit');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT COUNT(*) FROM DOLT_DIFF_t;",
-				Expected: []sql.Row{{4}},
+				Expected: []sql.Row{{5}},
 			},
 			{
 				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type FROM DOLT_DIFF_t WHERE to_pk = 1 ORDER BY to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type;",
@@ -609,11 +610,76 @@ var DiffSystemTableScriptTests = []queries.ScriptTest{
 				},
 			},
 			{
+				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type FROM DOLT_DIFF_t WHERE to_pk IS NULL ORDER BY to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type;",
+				Expected: []sql.Row{
+					{nil, nil, nil, 1, 2, 3, "removed"},
+				},
+			},
+			{
+				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type FROM DOLT_DIFF_t WHERE to_pk IS NOT NULL ORDER BY to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type;",
+				Expected: []sql.Row{
+					{1, 2, 3, nil, nil, nil, "added"},
+					{4, 5, 6, nil, nil, nil, "added"},
+					{7, 0, 9, 7, 8, 9, "modified"},
+					{7, 8, 9, nil, nil, nil, "added"},
+				},
+			},
+			{
 				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type FROM DOLT_DIFF_t WHERE to_pk > 1 ORDER BY to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type;",
 				Expected: []sql.Row{
 					{4, 5, 6, nil, nil, nil, "added"},
 					{7, 0, 9, 7, 8, 9, "modified"},
 					{7, 8, 9, nil, nil, nil, "added"},
+				},
+			},
+		},
+	},
+	{
+		Name: "selecting from_pk columns",
+		SetUpScript: []string{
+			"create table t (pk int primary key, c1 int, c2 int);",
+			"call dolt_add('.')",
+			"insert into t values (1, 2, 3), (4, 5, 6);",
+			"set @Commit1 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit1, '-am', 'first commit');",
+			"insert into t values (7, 8, 9);",
+			"set @Commit2 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit2, '-am', 'second commit');",
+			"update t set c1 = 0 where pk > 5;",
+			"delete from t where pk = 1;",
+			"set @Commit3 = '';",
+			"CALL DOLT_COMMIT_HASH_OUT(@Commit3, '-am', 'third commit');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT COUNT(*) FROM DOLT_DIFF_t;",
+				Expected: []sql.Row{{5}},
+			},
+			{
+				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type FROM DOLT_DIFF_t WHERE from_pk = 1 ORDER BY to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type;",
+				Expected: []sql.Row{
+					{nil, nil, nil, 1, 2, 3, "removed"},
+				},
+			},
+			{
+				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type FROM DOLT_DIFF_t WHERE from_pk IS NULL ORDER BY to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type;",
+				Expected: []sql.Row{
+					{1, 2, 3, nil, nil, nil, "added"},
+					{4, 5, 6, nil, nil, nil, "added"},
+					{7, 8, 9, nil, nil, nil, "added"},
+				},
+			},
+			{
+				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type FROM DOLT_DIFF_t WHERE from_pk IS NOT NULL ORDER BY to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type;",
+				Expected: []sql.Row{
+					{nil, nil, nil, 1, 2, 3, "removed"},
+					{7, 0, 9, 7, 8, 9, "modified"},
+				},
+			},
+			{
+				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type FROM DOLT_DIFF_t WHERE from_pk > 1 ORDER BY to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type;",
+				Expected: []sql.Row{
+					{7, 0, 9, 7, 8, 9, "modified"},
 				},
 			},
 		},
@@ -5034,6 +5100,30 @@ var CommitDiffSystemTableScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type FROM DOLT_COMMIT_DIFF_t WHERE TO_COMMIT=@Commit5 and FROM_COMMIT=@Commit0 ORDER BY to_pk;",
+				Expected: []sql.Row{
+					{4, 5, 6, nil, nil, nil, "added"},
+				},
+			},
+			{
+				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type FROM DOLT_COMMIT_DIFF_t WHERE TO_COMMIT=@Commit5 and FROM_COMMIT=@Commit0 AND from_pk IS NULL;",
+				Expected: []sql.Row{
+					{4, 5, 6, nil, nil, nil, "added"},
+				},
+			},
+			{
+				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type FROM DOLT_COMMIT_DIFF_t WHERE TO_COMMIT=@Commit5 and FROM_COMMIT=@Commit3 AND from_pk IS NOT NULL;",
+				Expected: []sql.Row{
+					{nil, nil, nil, 1, 2, -1, "removed"},
+				},
+			},
+			{
+				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type FROM DOLT_commit_DIFF_t WHERE TO_COMMIT=@Commit5 and FROM_COMMIT=@Commit4 AND to_pk IS NULL;",
+				Expected: []sql.Row{
+					{nil, nil, nil, 1, 2, -2, "removed"},
+				},
+			},
+			{
+				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type FROM DOLT_commit_DIFF_t WHERE TO_COMMIT=@Commit5 and FROM_COMMIT=@Commit0 AND to_pk IS NOT NULL;",
 				Expected: []sql.Row{
 					{4, 5, 6, nil, nil, nil, "added"},
 				},
