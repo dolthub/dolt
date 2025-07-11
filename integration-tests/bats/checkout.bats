@@ -1158,3 +1158,45 @@ SQL
     [[ "$output" =~ "* feature" ]] || false
 }
 
+@test "checkout: warning on missing table checkout" {
+    # create a table and commit it
+    dolt sql -q "create table test (id int primary key, value int);"
+    dolt sql -q "insert into test values (1, 100);"
+    dolt add .
+    dolt commit -m "Add test table"
+
+    # make modifications to existing table
+    dolt sql -q "update test set value = 200 where id = 1;"
+
+    # try to checkout a non-existent table, should fail
+    run dolt checkout missing_table
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "tablespec 'missing_table' did not match any table(s) known to dolt" ]] || false
+
+    # verify the existing table modifications are still present
+    run dolt sql -q "select * from test;" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1,200" ]] || false
+
+    # try to checkout multiple tables with one missing, should fail
+    run dolt checkout -- test missing_table
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "tablespec 'missing_table' did not match any table(s) known to dolt" ]] || false
+
+    # verify the existing table was checkout successfully
+    run dolt sql -q "select * from test;" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1,100" ]] || false
+
+    # try to checkout multiple missing tables, should fail with multiple errors
+    run dolt checkout -- missing1 missing2
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "tablespec 'missing1' did not match any table(s) known to dolt" ]] || false
+    [[ "$output" =~ "tablespec 'missing2' did not match any table(s) known to dolt" ]] || false
+
+    # verify we're still on main branch
+    run dolt branch
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "* main" ]] || false
+}
+

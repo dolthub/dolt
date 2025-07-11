@@ -17,6 +17,7 @@ package dprocedures
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
@@ -664,6 +665,7 @@ func doGlobalCheckout(ctx *sql.Context, branchName string, isForce bool, isNewBr
 // of HEAD commit
 func checkoutTablesFromHead(ctx *sql.Context, roots doltdb.Roots, name string, tables []string) error {
 	var tableNames []doltdb.TableName
+	var warningMsg strings.Builder
 	var err error
 
 	if len(tables) == 1 && tables[0] == "." {
@@ -672,33 +674,49 @@ func checkoutTablesFromHead(ctx *sql.Context, roots doltdb.Roots, name string, t
 			return err
 		}
 	} else {
-		tableNames = make([]doltdb.TableName, len(tables))
-		for i, table := range tables {
+		tableNames = make([]doltdb.TableName, 0, len(tables))
+		for _, table := range tables {
 			tbl, _, exists, err := actions.FindTableInRoots(ctx, roots, table)
 			if err != nil {
 				return err
 			}
 			if !exists {
-				return fmt.Errorf("tablespec '%s' did not match any table(s) known to dolt", table) // commitref not mentioned in git
+				warningMsg.WriteString(fmt.Sprintf("error: tablespec '%s' did not match any table(s) known to dolt\n", table))
+				continue
 			}
-			tableNames[i] = tbl
+			tableNames = append(tableNames, tbl)
+		}
+		if len(tableNames) == 0 && warningMsg.Len() > 0 {
+			return errors.New(strings.TrimSuffix(warningMsg.String(), "\n"))
 		}
 	}
 
-	roots, err = actions.MoveTablesFromHeadToWorking(ctx, roots, tableNames)
-	if err != nil {
-		if doltdb.IsRootValUnreachable(err) {
-			rt := doltdb.GetUnreachableRootType(err)
-			return fmt.Errorf("error: unable to read the %s", rt.String())
-		} else if actions.IsTblNotExist(err) {
-			return fmt.Errorf("error: given tables do not exist")
-		} else {
-			return fmt.Errorf("fatal: Unexpected error checking out tables")
+	if len(tableNames) > 0 {
+		roots, err = actions.MoveTablesFromHeadToWorking(ctx, roots, tableNames)
+		if err != nil {
+			if doltdb.IsRootValUnreachable(err) {
+				rt := doltdb.GetUnreachableRootType(err)
+				return fmt.Errorf("error: unable to read the %s", rt.String())
+			} else if actions.IsTblNotExist(err) {
+				return fmt.Errorf("error: given tables do not exist")
+			} else {
+				return fmt.Errorf("fatal: Unexpected error checking out tables")
+			}
+		}
+
+		dSess := dsess.DSessFromSess(ctx.Session)
+		if err := dSess.SetRoots(ctx, name, roots); err != nil {
+			return err
+		}
+		if err := commitTransaction(ctx, dSess, nil); err != nil {
+			return err
 		}
 	}
 
-	dSess := dsess.DSessFromSess(ctx.Session)
-	return dSess.SetRoots(ctx, name, roots)
+	if warningMsg.Len() > 0 {
+		return errors.New(strings.TrimSuffix(warningMsg.String(), "\n"))
+	}
+	return nil
 }
 
 // validateNoDetachedHead checks if the given branchName refers to a tag or commit hash

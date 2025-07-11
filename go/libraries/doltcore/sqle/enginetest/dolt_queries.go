@@ -3486,6 +3486,34 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "dolt_checkout multiple tables with one missing",
+		SetUpScript: []string{
+			"create table t1 (pk int primary key, c int);",
+			"call dolt_commit('-Am', 'created table');",
+			"insert into t1 values (1,1);",
+			"call dolt_commit('-am', 'add row');",
+			"insert into t1 values (2,2);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "call dolt_checkout('t1', 'missing');",
+				ExpectedErrStr: "error: tablespec 'missing' did not match any table(s) known to dolt",
+			},
+			{
+				Query:    "select * from t1 order by 1;",
+				Expected: []sql.Row{{1, 1}},
+			},
+			{
+				Query:          "call dolt_checkout('t1', 'missing', 'missing2');",
+				ExpectedErrStr: "error: tablespec 'missing' did not match any table(s) known to dolt\nerror: tablespec 'missing2' did not match any table(s) known to dolt",
+			},
+			{
+				Query:          "call dolt_checkout('--', 'missing', 't1', 'missing2');",
+				ExpectedErrStr: "error: tablespec 'missing' did not match any table(s) known to dolt\nerror: tablespec 'missing2' did not match any table(s) known to dolt",
+			},
+		},
+	},
 }
 
 var DoltCheckoutReadOnlyScripts = []queries.ScriptTest{
