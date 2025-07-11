@@ -105,7 +105,6 @@ SQL
 }
 
 @test "feature-version: older client maintains access to feature branch" {
-    skip https://github.com/dolthub/dolt/issues/6303
     setup_remote_tests
 
     pushd clone_repo
