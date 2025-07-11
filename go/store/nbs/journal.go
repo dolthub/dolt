@@ -640,15 +640,21 @@ func (jm *journalManifest) UpdateGCGen(ctx context.Context, lastLock hash.Hash, 
 
 	t1 := time.Now()
 	defer func() { stats.WriteManifestLatency.SampleTimeSince(t1) }()
-	checker := func(upstream, contents manifestContents) error {
-		if contents.gcGen == upstream.gcGen {
-			return errors.New("UpdateGCGen() must update the garbage collection generation")
-		} else if contents.root != upstream.root {
-			return errors.New("UpdateGCGen() cannot update the root")
-		}
+	return updateWithChecker(ctx, jm.dir, syncFlush, updateGCGenManifestCheck, lastLock, newContents, writeHook)
+}
+
+func updateGCGenManifestCheck(upstream, contents manifestContents) error {
+	if contents.root != upstream.root {
+		return errors.New("UpdateGCGen() cannot update the root. The attempt to do this is a bug in Dolt. Please report at https://github.com/dolthub/dolt/issues.")
+	} else if contents.gcGen == upstream.gcGen {
+		// Allow a no-op update.  These can happen
+		// when we went through a GC cycle because the
+		// store had novelty (novel upstreams,
+		// memtables), but the end state was still the
+		// same as what was in the manifest.
 		return nil
 	}
-	return updateWithChecker(ctx, jm.dir, syncFlush, checker, lastLock, newContents, writeHook)
+	return nil
 }
 
 func (jm *journalManifest) Close() (err error) {

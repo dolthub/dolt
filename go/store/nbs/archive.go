@@ -40,6 +40,8 @@ Format Version Differences:
   - Version 2: In addition to zStd compressed chunks, we also support Snappy compressed chunks, in the same format
                as Noms table files. Any Snappy compressed chunk will have a dictionary ID of 0, and the chunk data
                will be stored in the second Bytespan. It is stored with 32 bit CRC, just like Noms table files.
+  - Version 3: In addition to the previous versions, we now support larger Indexes. The Index Length is now a Uint64,
+               which expands the size of the footer by 4 bytes.
 
 A Dolt Archive file follows the following format:
    +------------+------------+-----+------------+-------+----------+--------+
@@ -50,7 +52,7 @@ In reverse order, since that's how we read it
 
 Footer:
    +----------------------+-------------------------+----------------------+--------------------------+-----------------+------------------------+--------------------+
-   | (Uint32) IndexLength | (Uint32) ByteSpan Count | (Uint32) Chunk Count | (Uint32) Metadata Length | (192) CheckSums | (Uint8) Format Version | (7) File Signature |
+   | (Uint64) IndexLength | (Uint32) ByteSpan Count | (Uint32) Chunk Count | (Uint32) Metadata Length | (192) CheckSums | (Uint8) Format Version | (7) File Signature |
    +----------------------+-------------------------+----------------------+--------------------------+-----------------+------------------------+--------------------+
    - Index Length: The length of the Index in bytes.
    - ByteSpan Count: (N) The number of ByteSpans in the Archive. (does not include the null ByteSpan)
@@ -61,6 +63,10 @@ Footer:
    - CheckSums: See Below.
    - Format Version: Sequence starting at 1. Currently, 1 and 2 are supported.
    - File Signature: Some would call this a magic number. Not on my watch. Dolt Archives have a 7 byte signature: "DOLTARC"
+
+   *** Note that the footer size for the versions 1 and 2 or archives are 4 bytes shorter. The IndexLength is a Uint32
+       rather than a Uint64. This was expanded to support much larger Indexes in version 3. The way this is implemented
+       is that we load the larger footer for all versions, but ignore the first 4 bytes for versions 1 and 2.
 
    CheckSums:
    +----------------------------+-------------------+----------------------+
@@ -168,7 +174,7 @@ const (
 	archiveFileSignature = "DOLTARC"
 	archiveFileSigSize   = uint64(len(archiveFileSignature))
 	archiveCheckSumSize  = sha512.Size * 3 // sha512 3 times.
-	archiveFooterSize    = uint32Size +    // index length
+	archiveFooterSize    = uint64Size +    // index length
 		uint32Size + // byte span count
 		uint32Size + // chunk count
 		uint32Size + // metadataSpan length
@@ -180,12 +186,16 @@ const (
 
 /*
 +----------------------+-------------------------+----------------------+--------------------------+-----------------+------------------------+--------------------+
-| (Uint32) IndexLength | (Uint32) ByteSpan Count | (Uint32) Chunk Count | (Uint32) Metadata Length | (192) CheckSums | (Uint8) Format Version | (7) File Signature |
+| (Uint64) IndexLength | (Uint32) ByteSpan Count | (Uint32) Chunk Count | (Uint32) Metadata Length | (192) CheckSums | (Uint8) Format Version | (7) File Signature |
 +----------------------+-------------------------+----------------------+--------------------------+-----------------+------------------------+--------------------+
+
+Note that all offsets are based on the footer total size determined by the version 3 format (archiveVersionGiantIndexSupport),
+which is the largest. Versions 1 and 2 have a smaller footer size, but the only special case offset is for the index
+length, which is at the start of the footer.
 */
 const ( // afr = Archive FooteR
 	afrIndexLenOffset    = 0
-	afrByteSpanOffset    = afrIndexLenOffset + uint32Size
+	afrByteSpanOffset    = afrIndexLenOffset + uint64Size
 	afrChunkCountOffset  = afrByteSpanOffset + uint32Size
 	afrMetaLenOffset     = afrChunkCountOffset + uint32Size
 	afrDataChkSumOffset  = afrMetaLenOffset + uint32Size
@@ -197,9 +207,10 @@ const ( // afr = Archive FooteR
 
 // Archive Format Versions.
 const (
-	archiveVersionInitial       = uint8(1)
-	archiveVersionSnappySupport = uint8(2)
-	archiveFormatVersionMax     = archiveVersionSnappySupport
+	archiveVersionInitial           = uint8(1)
+	archiveVersionSnappySupport     = uint8(2)
+	archiveVersionGiantIndexSupport = uint8(3)
+	archiveFormatVersionMax         = archiveVersionGiantIndexSupport
 )
 
 // Archive Metadata Data Keys are the fields in the archive metadata that are stored in the footer. These are used

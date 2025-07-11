@@ -285,16 +285,31 @@ SQL
   # Related to the above issue, multiple deletions would report matches even when they should have all been deleted
   run dolt sql -q "DELETE FROM dolt_branch_control;"
   [ $status -eq 0 ]
-  [[ $output =~ "3 rows affected" ]] || false
+  run dolt sql -q "SELECT COUNT(1) FROM dolt_branch_control;" -r=csv
+  [ $status -eq 0 ]
+  [ ${lines[0]} = "COUNT(1)" ]
+  [ ${lines[1]} = "0" ]
+
   run dolt sql -q "DELETE FROM dolt_branch_control;"
   [ $status -eq 0 ]
-  [[ $output =~ "0 rows affected" ]] || false
+  run dolt sql -q "SELECT COUNT(1) FROM dolt_branch_control;" -r=csv
+  [ $status -eq 0 ]
+  [ ${lines[0]} = "COUNT(1)" ]
+  [ ${lines[1]} = "0" ]
+
   run dolt sql -q "DELETE FROM dolt_branch_control;"
   [ $status -eq 0 ]
-  [[ $output =~ "0 rows affected" ]] || false
+  run dolt sql -q "SELECT COUNT(1) FROM dolt_branch_control;" -r=csv
+  [ $status -eq 0 ]
+  [ ${lines[0]} = "COUNT(1)" ]
+  [ ${lines[1]} = "0" ]
+
   run dolt sql -q "DELETE FROM dolt_branch_control;"
   [ $status -eq 0 ]
-  [[ $output =~ "0 rows affected" ]] || false
+  run dolt sql -q "SELECT COUNT(1) FROM dolt_branch_control;" -r=csv
+  [ $status -eq 0 ]
+  [ ${lines[0]} = "COUNT(1)" ]
+  [ ${lines[1]} = "0" ]
 }
 
 @test "branch-control: Issue #8622 ttask" {

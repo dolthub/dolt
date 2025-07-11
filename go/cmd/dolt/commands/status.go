@@ -178,7 +178,7 @@ func createPrintData(err error, queryist cli.Queryist, sqlCtx *sql.Context, show
 		return nil, err
 	}
 
-	ahead, behind, err := getRemoteInfo(queryist, sqlCtx, branchName, remoteName, remoteBranchName, currentBranchCommit)
+	ahead, behind, err := getUpstreamInfo(queryist, sqlCtx, branchName, remoteName, remoteBranchName, currentBranchCommit)
 	if err != nil {
 		return nil, err
 	}
@@ -334,31 +334,38 @@ func getConflictedTables(statusRows []sql.Row) map[string]bool {
 	return conflictedTables
 }
 
-func getRemoteInfo(queryist cli.Queryist, sqlCtx *sql.Context, branchName string, remoteName string, remoteBranchName string, currentBranchCommit string) (ahead int64, behind int64, err error) {
+func getUpstreamInfo(queryist cli.Queryist, sqlCtx *sql.Context, branchName string, remoteName string, upstreamBranchName string, currentBranchCommit string) (ahead int64, behind int64, err error) {
 	ahead = 0
 	behind = 0
-	if len(remoteName) > 0 {
+	if len(remoteName) > 0 || len(upstreamBranchName) > 0 {
 		// get remote branch
-		remoteBranchRef := fmt.Sprintf("remotes/%s/%s", remoteName, remoteBranchName)
-		q := fmt.Sprintf("select name, hash from dolt_remote_branches where name = '%s';", remoteBranchRef)
-		remoteBranches, err := GetRowsForSql(queryist, sqlCtx, q)
+		var q string
+		var upstreamBranchRef string
+		if remoteName != "" {
+			upstreamBranchRef = fmt.Sprintf("remotes/%s/%s", remoteName, upstreamBranchName)
+			q = fmt.Sprintf("select name, hash from dolt_remote_branches where name = '%s';", upstreamBranchRef)
+		} else if upstreamBranchName != "" {
+			q = fmt.Sprintf("select name, hash from dolt_branches where name = '%s'", upstreamBranchName)
+		}
+
+		upstreamBranches, err := GetRowsForSql(queryist, sqlCtx, q)
 		if err != nil {
 			return ahead, behind, err
 		}
-		if len(remoteBranches) > 1 {
-			return ahead, behind, fmt.Errorf("runtime error: too many results returned for remote branch %s", remoteBranchRef)
-		} else if len(remoteBranches) == 0 {
+		if len(upstreamBranches) > 1 {
+			return ahead, behind, fmt.Errorf("runtime error: too many results returned for upstream branch %s", upstreamBranchRef)
+		} else if len(upstreamBranches) == 0 {
 			return ahead, behind, nil
 		}
-		remoteBranchCommit := remoteBranches[0][1].(string)
+		upstreamBranchCommit := upstreamBranches[0][1].(string)
 
-		q = fmt.Sprintf("call dolt_count_commits('--from', '%s', '--to', '%s')", currentBranchCommit, remoteBranchCommit)
+		q = fmt.Sprintf("call dolt_count_commits('--from', '%s', '--to', '%s')", currentBranchCommit, upstreamBranchCommit)
 		rows, err := GetRowsForSql(queryist, sqlCtx, q)
 		if err != nil {
 			return ahead, behind, err
 		}
 		if len(rows) != 1 {
-			return ahead, behind, fmt.Errorf("could not count commits between %s and %s", currentBranchCommit, remoteBranchCommit)
+			return ahead, behind, fmt.Errorf("could not count commits between %s and %s", currentBranchCommit, upstreamBranchCommit)
 		}
 		aheadDb := rows[0][0]
 		behindDb := rows[0][1]
@@ -496,11 +503,14 @@ func printEverything(data *printData) error {
 	cli.Printf(branchHeader, data.branchName)
 
 	// remote info
-	if data.remoteName != "" {
+	if data.remoteName != "" || data.remoteBranchName != "" {
 		ahead := data.ahead
 		behind := data.behind
-		remoteBranchRef := fmt.Sprintf("%s/%s", data.remoteName, data.remoteBranchName)
-
+		var remoteBranchRef string
+		if data.remoteName != "" {
+			remoteBranchRef = fmt.Sprintf("%s/", data.remoteName)
+		}
+		remoteBranchRef += data.remoteBranchName
 		if ahead > 0 && behind > 0 {
 			cli.Printf(`Your branch and '%s' have diverged,
 and have %v and %v different commits each, respectively.

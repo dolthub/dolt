@@ -18,7 +18,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -26,7 +25,6 @@ import (
 	"github.com/dustin/go-humanize"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
-	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
@@ -58,13 +56,14 @@ var ErrCloneFailed = errors.New("clone failed")
 
 // EnvForClone creates a new DoltEnv and configures it with repo state from the specified remote. The returned DoltEnv is ready for content to be cloned into it. The directory used for the new DoltEnv is determined by resolving the specified dir against the specified Filesys.
 func EnvForClone(ctx context.Context, nbf *types.NomsBinFormat, r env.Remote, dir string, fs filesys.Filesys, version string, homeProvider env.HomeDirProvider) (*env.DoltEnv, error) {
-	exists, _ := fs.Exists(filepath.Join(dir, dbfactory.DoltDir))
-
-	if exists {
-		return nil, fmt.Errorf("%w: %s", ErrRepositoryExists, dir)
+	canCreate, err := env.CanCreateDatabaseAtPath(fs, dir)
+	if !canCreate {
+		if errors.Is(err, env.ErrCannotCreateDoltDirAlreadyExists) {
+			return nil, fmt.Errorf("%w: %s", ErrRepositoryExists, dir)
+		}
 	}
 
-	err := fs.MkDirs(dir)
+	err = fs.MkDirs(dir)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %s; %s", ErrFailedToCreateDirectory, dir, err.Error())
 	}

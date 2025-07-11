@@ -41,6 +41,7 @@ type CommitDiffTable struct {
 	tableName   doltdb.TableName
 	dbName      string
 	ddb         *doltdb.DoltDB
+	table       *doltdb.Table
 	joiner      *rowconv.Joiner
 	sqlSch      sql.PrimaryKeySchema
 	workingRoot doltdb.RootValue
@@ -85,6 +86,7 @@ func NewCommitDiffTable(ctx *sql.Context, dbName string, tblName doltdb.TableNam
 	return &CommitDiffTable{
 		dbName:       dbName,
 		tableName:    tblName,
+		table:        table,
 		ddb:          ddb,
 		workingRoot:  wRoot,
 		stagedRoot:   sRoot,
@@ -126,7 +128,11 @@ func (dt *CommitDiffTable) Collation() sql.CollationID {
 
 // GetIndexes implements sql.IndexAddressable
 func (dt *CommitDiffTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
-	return []sql.Index{index.DoltToFromCommitIndex(dt.tableName.Name)}, nil
+	sch, err := dt.table.GetSchema(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return index.DoltToFromCommitIndexes(dt.tableName.Name, sch), nil
 }
 
 // IndexedAccess implements sql.IndexAddressable
@@ -148,12 +154,12 @@ func (dt *CommitDiffTable) Partitions(ctx *sql.Context) (sql.PartitionIter, erro
 	return nil, fmt.Errorf("error querying table %s: %w", dt.Name(), ErrExactlyOneToCommit)
 }
 
-func (dt *CommitDiffTable) LookupPartitions(ctx *sql.Context, i sql.IndexLookup) (sql.PartitionIter, error) {
-	ranges, ok := i.Ranges.(sql.MySQLRangeCollection)
+func (dt *CommitDiffTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
+	ranges, ok := lookup.Ranges.(sql.MySQLRangeCollection)
 	if !ok {
 		return nil, fmt.Errorf("commit diff table requires MySQL ranges")
 	}
-	if len(ranges) != 1 || len(ranges[0]) != 2 {
+	if len(ranges) != 1 || len(ranges[0]) < 2 {
 		return nil, ErrInvalidCommitDiffTableArgs
 	}
 	to := ranges[0][0]
@@ -205,6 +211,12 @@ func (dt *CommitDiffTable) LookupPartitions(ctx *sql.Context, i sql.IndexLookup)
 		return nil, err
 	}
 
+	lookup = copyIndexLookupWithoutCommitRanges(lookup)
+	prollyRanges, err := index.ProllyRangesFromIndexLookup(ctx, lookup)
+	if err != nil {
+		return nil, err
+	}
+
 	dp := DiffPartition{
 		to:       toTable,
 		from:     fromTable,
@@ -214,6 +226,7 @@ func (dt *CommitDiffTable) LookupPartitions(ctx *sql.Context, i sql.IndexLookup)
 		fromDate: fromDate,
 		toSch:    dt.targetSchema,
 		fromSch:  dt.targetSchema,
+		ranges:   prollyRanges,
 	}
 
 	isDiffable, _, err := dp.isDiffablePartition(ctx)
@@ -303,5 +316,5 @@ func (dt *CommitDiffTable) rootValForHash(ctx *sql.Context, hashStr string) (dol
 
 func (dt *CommitDiffTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
 	dp := part.(DiffPartition)
-	return dp.GetRowIter(ctx, dt.ddb, dt.joiner, sql.IndexLookup{})
+	return dp.GetRowIter(ctx, dt.ddb, dt.joiner)
 }

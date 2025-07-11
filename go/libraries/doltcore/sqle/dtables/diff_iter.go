@@ -206,6 +206,7 @@ type prollyDiffIter struct {
 	targetFromSch, targetToSch schema.Schema
 	fromConverter, toConverter ProllyRowConverter
 	keyless                    bool
+	ranges                     []prolly.Range
 
 	fromCm commitInfo2
 	toCm   commitInfo2
@@ -234,7 +235,7 @@ var _ sql.RowIter = prollyDiffIter{}
 // than |targetFromSchema| or |targetToSchema|. We convert the rows from the
 // schema of |from| to |targetFromSchema| and the schema of |to| to
 // |targetToSchema|. See the tablediff_prolly package.
-func newProllyDiffIter(ctx *sql.Context, dp DiffPartition, targetFromSchema, targetToSchema schema.Schema) (prollyDiffIter, error) {
+func newProllyDiffIter(ctx *sql.Context, dp DiffPartition, targetFromSchema, targetToSchema schema.Schema, ranges []prolly.Range) (prollyDiffIter, error) {
 	fromCm := commitInfo2{
 		name: dp.fromName,
 		ts:   (*time.Time)(dp.fromDate),
@@ -306,6 +307,7 @@ func newProllyDiffIter(ctx *sql.Context, dp DiffPartition, targetFromSchema, tar
 		keyless:       keyless,
 		fromCm:        fromCm,
 		toCm:          toCm,
+		ranges:        ranges,
 		rows:          make(chan sql.Row, 64),
 		errChan:       make(chan error),
 		cancel:        cancel,
@@ -316,6 +318,24 @@ func newProllyDiffIter(ctx *sql.Context, dp DiffPartition, targetFromSchema, tar
 	}()
 
 	return iter, nil
+}
+
+// copyIndexLookupWithoutCommitRanges returns a copy of the specified |lookup|, with the lookup ranges for to_commit
+// and from_commit removed. This allows the lookup ranges to be used to filter on the primary key index for the
+// underlying table (if a third range for the primary key has been provided).
+func copyIndexLookupWithoutCommitRanges(lookup sql.IndexLookup) sql.IndexLookup {
+	if lookup.Ranges == nil {
+		return lookup
+	}
+
+	// The first two columns of the index (to_commit and from_commit) don't actually exist on the underlying table.
+	// We strip them out here so that we can generate the correct ranges for the eventual Diff.
+	rangesCopy := make(sql.MySQLRangeCollection, 0)
+	for i := range lookup.Ranges.(sql.MySQLRangeCollection) {
+		rangesCopy = append(rangesCopy, lookup.Ranges.(sql.MySQLRangeCollection)[i][2:])
+	}
+	return sql.NewIndexLookup(lookup.Index, rangesCopy,
+		lookup.IsPointLookup, lookup.IsEmptyRange, lookup.IsSpatialLookup, lookup.IsReverse)
 }
 
 func (itr prollyDiffIter) Next(ctx *sql.Context) (sql.Row, error) {
@@ -339,8 +359,7 @@ func (itr prollyDiffIter) Close(ctx *sql.Context) error {
 
 func (itr prollyDiffIter) queueRows(ctx context.Context) {
 	// TODO: Determine whether or not the schema has changed. If it has, then all rows should count as modifications in the diff.
-	considerAllRowsModified := false
-	err := prolly.DiffMaps(ctx, itr.from, itr.to, considerAllRowsModified, func(ctx context.Context, d tree.Diff) error {
+	cb := func(ctx context.Context, d tree.Diff) error {
 		dItr, err := itr.makeDiffRowItr(ctx, d)
 		if err != nil {
 			return err
@@ -360,13 +379,33 @@ func (itr prollyDiffIter) queueRows(ctx context.Context) {
 				continue
 			}
 		}
-	})
-	if err != nil && err != io.EOF {
-		select {
-		case <-ctx.Done():
-		case itr.errChan <- err:
+	}
+	if itr.ranges == nil {
+		considerAllRowsModified := false
+		err := prolly.DiffMaps(ctx, itr.from, itr.to, considerAllRowsModified, cb)
+		if err != nil && err != io.EOF {
+			select {
+			case <-ctx.Done():
+			case itr.errChan <- err:
+			}
+			return
 		}
-		return
+	}
+	for _, rng := range itr.ranges {
+		var err error
+		// if the filter can match all NILs, then we need to return every added/removed diff
+		if rng.Matches(ctx, val.EmptyTuple) {
+			err = prolly.DiffMaps(ctx, itr.from, itr.to, false, cb)
+		} else {
+			err = prolly.RangeDiffMaps(ctx, itr.from, itr.to, rng, cb)
+		}
+		if err != nil && err != io.EOF {
+			select {
+			case <-ctx.Done():
+			case itr.errChan <- err:
+			}
+			return
+		}
 	}
 	// we need to drain itr.rows before returning io.EOF
 	close(itr.rows)
@@ -525,7 +564,7 @@ func (itr *diffPartitionRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 			return nil, io.EOF
 		}
 		if itr.currentRowIter == nil {
-			rowIter, err := itr.currentPartition.GetRowIter(ctx, itr.ddb, itr.joiner, sql.IndexLookup{})
+			rowIter, err := itr.currentPartition.GetRowIter(ctx, itr.ddb, itr.joiner)
 			if err != nil {
 				return nil, err
 			}

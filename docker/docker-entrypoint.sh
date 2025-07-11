@@ -36,6 +36,34 @@ check_for_dolt() {
     fi
 }
 
+get_env_var() {
+    local var_name="$1"
+    local mysql_var="MYSQL_${var_name}"
+    local dolt_var="DOLT_${var_name}"
+
+    if [ -n "${!mysql_var}" ]; then
+        echo "${!mysql_var}"
+    elif [ -n "${!dolt_var}" ]; then
+        echo "${!dolt_var}"
+    else
+        echo ""
+    fi
+}
+
+get_env_var_name() {
+    local var_name="$1"
+    local mysql_var="MYSQL_${var_name}"
+    local dolt_var="DOLT_${var_name}"
+
+    if [ -n "${!mysql_var}" ]; then
+        echo "MYSQL_${var_name}"
+    elif [ -n "${!dolt_var}" ]; then
+        echo "DOLT_${var_name}"
+    else
+        echo "MYSQL_${var_name}/DOLT_${var_name}"
+    fi
+}
+
 # arg $1 is the directory to search in
 # arg $2 is the type file to search for
 get_config_file_path_if_exists() {
@@ -100,16 +128,44 @@ set_dolt_config_if_defined() {
 }
 
 create_default_database_from_env() {
-    local database=""
+    local user
+    local password
+    local database
 
-    if [ -n "$DOLT_DATABASE" ]; then
-        database="$DOLT_DATABASE"
-    elif [ -n "$MYSQL_DATABASE" ]; then
-        database="$MYSQL_DATABASE"
-    fi
+    database=$(get_env_var "DATABASE")
+    user=$(get_env_var "USER")
+    password=$(get_env_var "PASSWORD")
 
     if [ -n "$database" ]; then
+      mysql_note "Creating database ${database}"
         dolt sql -q "CREATE DATABASE IF NOT EXISTS $database;"
+    fi
+
+    if [ "$user" = 'root' ]; then
+        # TODO: add ALLOW_EMPTY_PASSWORD and RANDOM_ROOT_PASSWORD support
+mysql_error <<-EOF
+    $(get_env_var_name "USER")="root", $(get_env_var_name "USER") and $(get_env_var_name "PASSWORD") are for configuring a regular user and cannot be used for the root user
+        Remove $(get_env_var_name "USER")="root" and use the following to control the root user password:
+        - DOLT_ROOT_PASSWORD
+EOF
+    fi
+
+    if [ -n "$user" ] && [ -z "$password" ]; then
+        mysql_warn "$(get_env_var_name "USER") specified, but missing $(get_env_var_name "PASSWORD"); user will not be created"
+        return
+    elif [ -z "$user" ] && [ -n "$password" ]; then
+        mysql_warn "$(get_env_var_name "PASSWORD") specified, but missing $(get_env_var_name "USER"); password will be ignored"
+        return
+    fi
+
+    if [ -n "$user" ] && [ -n "$password" ]; then
+        mysql_note "Creating user ${user}"
+        dolt sql -q "CREATE USER IF NOT EXISTS '$user'@'%' IDENTIFIED BY '$password';"
+
+        if [ -n "$database" ]; then
+            mysql_note "Giving user ${user} access to schema ${database}"
+            dolt sql -q "GRANT ALL ON \`${database//_/\\_}\`.* TO '$user'@'%';"
+        fi
     fi
 }
 
@@ -129,10 +185,11 @@ _main() {
     # if there is a single yaml provided in /etc/dolt/servercfg.d directory,
     # it will be used to start the server with --config flag
     get_config_file_path_if_exists "$SERVER_CONFIG_DIR" "yaml"
-    if [ ! -z $CONFIG_PROVIDED ]; then
-        set -- "$@" --config=$CONFIG_PROVIDED
+    if [ ! -z "$CONFIG_PROVIDED" ]; then
+        set -- "$@" --config="$CONFIG_PROVIDED"
     fi
 
+    # TODO: add support for MYSQL_ROOT_HOST and MYSQL_ROOT_PASSWORD
     # If DOLT_ROOT_HOST has been specified – create a root user for that host with the specified password
     if [ -n "$DOLT_ROOT_HOST" ] && [ "$DOLT_ROOT_HOST" != 'localhost' ]; then
        echo "Ensuring root@${DOLT_ROOT_HOST} superuser exists (DOLT_ROOT_HOST was specified)"

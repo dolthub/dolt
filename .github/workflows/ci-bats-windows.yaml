@@ -67,7 +67,7 @@ jobs:
     defaults:
       run:
         shell: bash
-    runs-on: windows-2019
+    runs-on: windows-latest
     env:
       use_credentials: ${{ secrets.AWS_SECRET_ACCESS_KEY != '' && secrets.AWS_ACCESS_KEY_ID != '' }}
     strategy:

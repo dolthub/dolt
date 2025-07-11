@@ -50,7 +50,7 @@ UPDATE tbl SET guid = UUID() WHERE i >= @random_id LIMIT 1;"
 
 # A series of 10 update-and-commit-then-insert-and-commit pairs, followed by a dolt_gc call
 #
-# This is useful because we need at least 25 retained chunks to create a commit.
+# This is useful because we need at least 25 retained chunks to create an archive.
 mutations_and_gc_statement() {
   query=`update_statement`
   for ((j=1; j<=9; j++))
@@ -68,17 +68,13 @@ mutations_and_gc_statement() {
   dolt gc
 
   run dolt archive
-  [ "$status" -eq 1 ]
-  [[ "$output" =~ "Not enough samples to build default dictionary" ]] || false
+  [ "$status" -eq 0 ]
+
+  lines="$(echo "$output" | grep -ci 'Not enough chunks to build archive.*skipping')"
+  [ "$lines" -eq "2" ]
 }
 
-@test "archive: require gc first" {
-  run dolt archive
-  [ "$status" -eq 1 ]
-  [[ "$output" =~ "Run 'dolt gc' first" ]] || false
-}
-
-@test "archive: single archive" {
+@test "archive: single archive oldgen" {
   dolt sql -q "$(mutations_and_gc_statement)"
   dolt archive
 
@@ -87,6 +83,55 @@ mutations_and_gc_statement() {
 
   # Ensure updates continue to work.
   dolt sql -q "$(update_statement)"
+}
+
+@test "archive: single archive newgen" {
+  dolt sql -q "$(mutations_and_gc_statement)"
+
+  mkdir remote
+  dolt remote add origin file://remote
+  dolt push origin main
+
+  dolt clone file://remote cloned
+  cd cloned
+
+  dolt archive
+
+  files=$(find . -name "*darc" | wc -l | sed 's/[ \t]//g')
+  [ "$files" -eq "1" ]
+
+  # Ensure updates continue to work.
+  dolt sql -q "$(update_statement)"
+}
+
+@test "archive: multi archive newgen then revert" {
+  # Getting multiple table files in `newgen` is a little gross.
+  dolt sql -q "$(mutations_and_gc_statement)"
+  mkdir remote
+  dolt remote add origin file://remote
+  dolt push origin main
+
+  dolt clone file://remote cloned
+  cd cloned
+  dolt archive --purge
+  files=$(find . -name "*darc" | wc -l | sed 's/[ \t]//g')
+  [ "$files" -eq "1" ]
+
+  cd ..
+  dolt sql -q "$(mutations_and_gc_statement)"
+  dolt push origin main
+
+  cd cloned
+  dolt fetch
+  dolt archive --purge
+  files=$(find . -name "*darc" | wc -l | sed 's/[ \t]//g')
+  [ "$files" -eq "2" ]
+
+  dolt archive --revert
+  files=$(find . -name "*darc" | wc -l | sed 's/[ \t]//g')
+  [ "$files" -eq "0" ]
+
+  dolt fsck
 }
 
 @test "archive: multiple archives" {
@@ -409,10 +454,10 @@ mutations_and_gc_statement() {
     ## This output indicates that the new content pushed to the remote all landed as zStd chunks
     ## in an archive file. multiline regex - no quotes - to match this text:
     #   Archive Metadata:
-    #     Format Version: 2
+    #     Format Version: 3
     #     Snappy Chunk Count: 0 (bytes: 0)
     #     ZStd Chunk Count: 1609
-    [[ $output =~ Archive[[:space:]]Metadata:[[:space:]]*Format[[:space:]]Version:[[:space:]]2[[:space:]]*Snappy[[:space:]]Chunk[[:space:]]Count:[[:space:]]0.*ZStd[[:space:]]Chunk[[:space:]]Count:[[:space:]]1609 ]] || false
+    [[ $output =~ Archive[[:space:]]Metadata:[[:space:]]*Format[[:space:]]Version:[[:space:]]3[[:space:]]*Snappy[[:space:]]Chunk[[:space:]]Count:[[:space:]]0.*ZStd[[:space:]]Chunk[[:space:]]Count:[[:space:]]1609 ]] || false
 }
 
 @test "archive: small push remote with archive default produces archive with snappy chunks" {
@@ -441,9 +486,9 @@ mutations_and_gc_statement() {
     ## This output indicates that the new content pushed to the remote all landed as snappy chunks
     ## in an archive file. multiline regex - no quotes - to match this text:
     #   Archive Metadata:
-    #     Format Version: 2
+    #     Format Version: 3
     #     Snappy Chunk Count: 9
-    [[ $output =~ Archive[[:space:]]Metadata:[[:space:]]*Format[[:space:]]Version:[[:space:]]2[[:space:]]*Snappy[[:space:]]Chunk[[:space:]]Count:[[:space:]]9[[:space:]] ]] || false
+    [[ $output =~ Archive[[:space:]]Metadata:[[:space:]]*Format[[:space:]]Version:[[:space:]]3[[:space:]]*Snappy[[:space:]]Chunk[[:space:]]Count:[[:space:]]9[[:space:]] ]] || false
 }
 
 @test "archive: fetch into empty database with archive default" {
@@ -467,10 +512,10 @@ mutations_and_gc_statement() {
     ## the remote is all archive, the chunks end up as zStd as well.
     ## multiline regex - no quotes - to match this text:
     #   Archive Metadata:
-    #     Format Version: 2
+    #     Format Version: 3
     #     Snappy Chunk Count: 0 (bytes: 0)
     #     ZStd Chunk Count: 260
-    [[ $output =~ Archive[[:space:]]Metadata:[[:space:]]*Format[[:space:]]Version:[[:space:]]2[[:space:]]*Snappy[[:space:]]Chunk[[:space:]]Count:[[:space:]]0.*ZStd[[:space:]]Chunk[[:space:]]Count:[[:space:]]260 ]] || false
+    [[ $output =~ Archive[[:space:]]Metadata:[[:space:]]*Format[[:space:]]Version:[[:space:]]3[[:space:]]*Snappy[[:space:]]Chunk[[:space:]]Count:[[:space:]]0.*ZStd[[:space:]]Chunk[[:space:]]Count:[[:space:]]260 ]] || false
 
     dolt fsck
 }
@@ -494,11 +539,6 @@ mutations_and_gc_statement() {
     run dolt admin storage
     [ $status -eq 0 ]
 
-    echo "------------------"
-    echo "$output"
-    echo "------------------"
-
-
     ## This output indicates that the new content was fetched from the remote into a table file. Note that since
     ## the remote is all archive, the chunks are translated into the snappy format
     ## multiline regex - no quotes - to match this text:
@@ -507,4 +547,20 @@ mutations_and_gc_statement() {
     [[ $output =~ Table[[:space:]]File[[:space:]]Metadata:[[:space:]]*Snappy[[:space:]]Chunk[[:space:]]Count:[[:space:]]260[[:space:]] ]] || false
 
     dolt fsck
+}
+
+@test "archive: read legacy v1 database" {
+  mkdir -p original/.dolt
+  cp -R $BATS_TEST_DIRNAME/archive-test-repos/v1/* original/.dolt
+  cd original
+
+  dolt fsck
+}
+
+@test "archive: read legacy v2 database" {
+  mkdir -p original/.dolt
+  cp -R $BATS_TEST_DIRNAME/archive-test-repos/v2/* original/.dolt
+  cd original
+
+  dolt fsck
 }

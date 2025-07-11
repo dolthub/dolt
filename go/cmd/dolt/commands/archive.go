@@ -18,6 +18,8 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
+	"sync"
 	"time"
 
 	"github.com/pkg/errors"
@@ -105,8 +107,16 @@ func (cmd ArchiveCmd) Exec(ctx context.Context, commandStr string, args []string
 		ourDbMD = md
 	}
 
+	wg := sync.WaitGroup{}
 	progress := make(chan interface{}, 32)
-	handleProgress(ctx, progress)
+	handleProgress(ctx, &wg, progress)
+
+	defer func() {
+		close(progress)
+		wg.Wait()
+		os.Stdout.Sync()
+		os.Stderr.Sync()
+	}()
 
 	if apr.Contains(revertFlag) {
 		err := nbs.UnArchive(ctx, cs, ourDbMD, progress)
@@ -126,6 +136,10 @@ func (cmd ArchiveCmd) Exec(ctx context.Context, commandStr string, args []string
 			hs.Insert(hash)
 			return nil
 		})
+		if err != nil {
+			cli.PrintErrln(fmt.Errorf("failed to get HEADs: %w", err))
+			return 1
+		}
 
 		groupings := nbs.NewChunkRelations()
 		if apr.Contains(groupChunksFlag) {
@@ -143,13 +157,15 @@ func (cmd ArchiveCmd) Exec(ctx context.Context, commandStr string, args []string
 			cli.PrintErrln(err)
 			return 1
 		}
-
 	}
 	return 0
 }
 
-func handleProgress(ctx context.Context, progress chan interface{}) {
+func handleProgress(ctx context.Context, wg *sync.WaitGroup, progress chan interface{}) {
 	go func() {
+		wg.Add(1)
+		defer wg.Done()
+
 		rotation := 0
 		p := cli.NewEphemeralPrinter()
 		currentMessage := "Starting Archive Build"
@@ -213,7 +229,6 @@ func handleProgress(ctx context.Context, progress chan interface{}) {
 
 				p.Display()
 			}
-
 		}
 	}()
 }

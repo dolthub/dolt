@@ -75,8 +75,7 @@ type DiffTable struct {
 	sqlSch           sql.PrimaryKeySchema
 	partitionFilters []sql.Expression
 
-	table  *doltdb.Table
-	lookup sql.IndexLookup
+	table *doltdb.Table
 
 	// noms only
 	joiner *rowconv.Joiner
@@ -167,6 +166,10 @@ func (dt *DiffTable) Collation() sql.CollationID {
 }
 
 func (dt *DiffTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
+	return dt.PartitionRanges(ctx, nil)
+}
+
+func (dt *DiffTable) PartitionRanges(ctx *sql.Context, ranges []prolly.Range) (sql.PartitionIter, error) {
 	cmItr := doltdb.CommitItrForRoots[*sql.Context](dt.ddb, dt.head)
 
 	sf, err := SelectFuncForFilters(ctx, dt.ddb.ValueReadWriter(), dt.partitionFilters)
@@ -207,6 +210,7 @@ func (dt *DiffTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
 		selectFunc:      sf,
 		toSch:           dt.targetSch,
 		fromSch:         dt.targetSch,
+		ranges:          ranges,
 	}, nil
 }
 
@@ -253,7 +257,7 @@ func (dt *DiffTable) HeadHash() (hash.Hash, error) {
 
 func (dt *DiffTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
 	dp := part.(DiffPartition)
-	return dp.GetRowIter(ctx, dt.ddb, dt.joiner, dt.lookup)
+	return dp.GetRowIter(ctx, dt.ddb, dt.joiner)
 }
 
 func (dt *DiffTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
@@ -279,7 +283,11 @@ func (dt *DiffTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) 
 		}
 		return dt.fromCommitLookupPartitions(ctx, hashes, commits)
 	default:
-		return dt.Partitions(ctx)
+		ranges, err := index.ProllyRangesFromIndexLookup(ctx, lookup)
+		if err != nil {
+			return nil, err
+		}
+		return dt.PartitionRanges(ctx, ranges)
 	}
 }
 
@@ -654,9 +662,10 @@ type DiffPartition struct {
 	// fromSch and toSch are usually identical. It is the schema of the table at head.
 	toSch   schema.Schema
 	fromSch schema.Schema
+	ranges  []prolly.Range
 }
 
-func NewDiffPartition(to, from *doltdb.Table, toName, fromName string, toDate, fromDate *types.Timestamp, toSch, fromSch schema.Schema) *DiffPartition {
+func NewDiffPartition(to, from *doltdb.Table, toName, fromName string, toDate, fromDate *types.Timestamp, toSch, fromSch schema.Schema, ranges []prolly.Range) *DiffPartition {
 	return &DiffPartition{
 		to:       to,
 		from:     from,
@@ -666,6 +675,7 @@ func NewDiffPartition(to, from *doltdb.Table, toName, fromName string, toDate, f
 		fromDate: fromDate,
 		toSch:    toSch,
 		fromSch:  fromSch,
+		ranges:   ranges,
 	}
 }
 
@@ -674,12 +684,8 @@ func (dp DiffPartition) Key() []byte {
 	return []byte(dp.toName + dp.fromName)
 }
 
-func (dp DiffPartition) GetRowIter(ctx *sql.Context, ddb *doltdb.DoltDB, joiner *rowconv.Joiner, lookup sql.IndexLookup) (sql.RowIter, error) {
-	if types.IsFormat_DOLT(ddb.Format()) {
-		return newProllyDiffIter(ctx, dp, dp.fromSch, dp.toSch)
-	} else {
-		return newLdDiffIter(ctx, ddb, joiner, dp, lookup)
-	}
+func (dp DiffPartition) GetRowIter(ctx *sql.Context, ddb *doltdb.DoltDB, joiner *rowconv.Joiner) (sql.RowIter, error) {
+	return newProllyDiffIter(ctx, dp, dp.fromSch, dp.toSch, dp.ranges)
 }
 
 // isDiffablePartition checks if the commit pair for this partition is "diffable".
@@ -774,6 +780,7 @@ type DiffPartitions struct {
 	toSch           schema.Schema
 	fromSch         schema.Schema
 	stopNext        bool
+	ranges          []prolly.Range
 }
 
 // processCommit is called in a commit iteration loop. Adds partitions when it finds a commit and its parent that have
@@ -806,6 +813,7 @@ func (dps *DiffPartitions) processCommit(ctx *sql.Context, cmHash hash.Hash, cm 
 			fromDate: &ts,
 			fromSch:  dps.fromSch,
 			toSch:    dps.toSch,
+			ranges:   dps.ranges,
 		}
 		selected, err := dps.selectFunc(ctx, partition)
 

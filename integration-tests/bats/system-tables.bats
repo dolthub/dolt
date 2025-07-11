@@ -476,6 +476,183 @@ SQL
     [[ $output =~ "1,1234567890,13,1,,,modified" ]] || false
 }
 
+@test "system-tables: query dolt_history_dolt_schemas system table" {
+    # Set up test data with views, triggers, and events across multiple commits
+    dolt sql -q "CREATE VIEW test_view AS SELECT 1 as col1"
+    dolt add .
+    dolt commit -m "add test view"
+    
+    dolt sql -q "CREATE TABLE test_table (id INT PRIMARY KEY, name VARCHAR(50))"
+    dolt sql -q "CREATE TRIGGER test_trigger BEFORE INSERT ON test_table FOR EACH ROW SET NEW.name = UPPER(NEW.name)"
+    dolt add .
+    dolt commit -m "add table and trigger"
+    
+    dolt sql -q "DROP VIEW test_view"
+    dolt sql -q "CREATE VIEW test_view AS SELECT 1 as col1, 2 as col2"
+    dolt add .
+    dolt commit -m "modify test view"
+    
+    dolt sql -q "CREATE EVENT test_event ON SCHEDULE EVERY 1 DAY DO SELECT 1"
+    dolt add .
+    dolt commit -m "add event"
+    
+    # Test that the table exists and has correct schema
+    run dolt sql -r csv -q 'DESCRIBE dolt_history_dolt_schemas'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "type,varchar(64)" ]] || false
+    [[ "$output" =~ "name,varchar(64)" ]] || false
+    [[ "$output" =~ "fragment,longtext" ]] || false
+    [[ "$output" =~ "extra,json" ]] || false
+    [[ "$output" =~ "sql_mode,varchar(256)" ]] || false
+    [[ "$output" =~ "commit_hash,char(32)" ]] || false
+    [[ "$output" =~ "committer,varchar(1024)" ]] || false
+    [[ "$output" =~ "commit_date,datetime" ]] || false
+    
+    # Test that we have schema objects in history (view appears in all 4 commits, trigger in 3, event in 1)
+    run dolt sql -q 'SELECT COUNT(*) FROM dolt_history_dolt_schemas WHERE type = "view"'
+    [ "$status" -eq 0 ]
+    # Should have 4 view entries (view exists in all 4 commits)
+    [[ "$output" =~ "4" ]] || false
+    
+    # Test that we have trigger history (trigger appears in 3 commits after creation)
+    run dolt sql -q 'SELECT COUNT(*) FROM dolt_history_dolt_schemas WHERE type = "trigger"'
+    [ "$status" -eq 0 ]
+    # Should have 3 trigger entries (trigger exists in last 3 commits)
+    [[ "$output" =~ "3" ]] || false
+    
+    # Test that we have event history (event appears in 1 commit)
+    run dolt sql -q 'SELECT COUNT(*) FROM dolt_history_dolt_schemas WHERE type = "event"'
+    [ "$status" -eq 0 ]
+    # Should have 1 event entry (event only in last commit)
+    [[ "$output" =~ "1" ]] || false
+    
+    # Test filtering by schema object type works
+    run dolt sql -q 'SELECT DISTINCT type FROM dolt_history_dolt_schemas ORDER BY type'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "event" ]] || false
+    [[ "$output" =~ "trigger" ]] || false
+    [[ "$output" =~ "view" ]] || false
+    
+    # Test commit metadata is present for all entries
+    run dolt sql -q 'SELECT COUNT(*) FROM dolt_history_dolt_schemas WHERE commit_hash IS NOT NULL AND committer IS NOT NULL'
+    [ "$status" -eq 0 ]
+    # Should have 8 total entries (4 view + 3 trigger + 1 event)
+    [[ "$output" =~ "8" ]] || false
+}
+
+@test "system-tables: query dolt_diff_dolt_schemas system table" {
+    # dolt_diff_dolt_schemas starts empty
+    run dolt sql -q 'SELECT COUNT(*) FROM dolt_diff_dolt_schemas'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ " 0 " ]] || false
+
+    # Set up test data for diff scenarios
+    dolt sql -q "CREATE VIEW original_view AS SELECT 1 as id"
+    dolt sql -q "CREATE TABLE diff_table (id INT PRIMARY KEY)"
+    dolt sql -q "CREATE TRIGGER original_trigger BEFORE INSERT ON diff_table FOR EACH ROW SET NEW.id = NEW.id + 1"
+
+    # Before we commit our schema changes we should see two new rows in the
+    # diff table where to_commit='WORKING'
+    run dolt sql -q "SELECT COUNT(*) FROM dolt_diff_dolt_schemas where to_commit='WORKING'"
+    [ "$status" -eq 0 ]                                                        
+    [[ "$output" =~ " 2 " ]] || false 
+    
+    dolt add .
+    dolt commit -m "base commit with original schemas"
+
+    # After commit, this should still contain two changes, just now the from  comit and two commit should be populated with commits not working
+    run dolt sql -q 'SELECT COUNT(*) FROM dolt_diff_dolt_schemas'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "2" ]] || false
+    
+    # Make changes for diff (working directory changes)
+    dolt sql -q "DROP VIEW original_view"
+    dolt sql -q "CREATE VIEW original_view AS SELECT 1 as id, 'modified' as status"  # modified
+    dolt sql -q "CREATE VIEW new_view AS SELECT 'added' as status"  # added
+    dolt sql -q "DROP TRIGGER original_trigger"  # removed
+    dolt sql -q "CREATE EVENT new_event ON SCHEDULE EVERY 1 HOUR DO SELECT 1"  # added
+    
+    # Test that the table exists and has correct schema
+    run dolt sql -r csv -q 'DESCRIBE dolt_diff_dolt_schemas'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "to_type,varchar(64)" ]] || false
+    [[ "$output" =~ "to_name,varchar(64)" ]] || false
+    [[ "$output" =~ "to_fragment,longtext" ]] || false
+    [[ "$output" =~ "to_extra,json" ]] || false
+    [[ "$output" =~ "to_sql_mode,varchar(256)" ]] || false
+    [[ "$output" =~ "to_commit,varchar(1023)" ]] || false
+    [[ "$output" =~ "to_commit_date,datetime(6)" ]] || false
+    [[ "$output" =~ "from_type,varchar(64)" ]] || false
+    [[ "$output" =~ "from_name,varchar(64)" ]] || false
+    [[ "$output" =~ "from_fragment,longtext" ]] || false
+    [[ "$output" =~ "from_extra,json" ]] || false
+    [[ "$output" =~ "from_sql_mode,varchar(256)" ]] || false
+    [[ "$output" =~ "from_commit,varchar(1023)" ]] || false
+    [[ "$output" =~ "from_commit_date,datetime(6)" ]] || false
+    [[ "$output" =~ "diff_type,varchar(1023)" ]] || false
+    
+    # Test actual diff functionality - should show complete history plus working changes
+    # Initial commit: 2 added (original_view, original_trigger)
+    # Working changes: 4 changes (original_view modified, new_view added, new_event added, original_trigger removed)
+    # Total: 6 changes
+    run dolt sql -q 'SELECT COUNT(*) FROM dolt_diff_dolt_schemas'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ " 6 " ]] || false
+    
+    # Test that we have changes of different types
+    run dolt sql -q 'SELECT COUNT(*) FROM dolt_diff_dolt_schemas WHERE diff_type = "added"'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ " 4 " ]] || false  # initial: original_view, original_trigger + working: new_view, new_event
+    
+    run dolt sql -q 'SELECT COUNT(*) FROM dolt_diff_dolt_schemas WHERE diff_type = "modified"'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ " 1 " ]] || false  # original_view
+    
+    run dolt sql -q 'SELECT COUNT(*) FROM dolt_diff_dolt_schemas WHERE diff_type = "removed"'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ " 1 " ]] || false  # original_trigger
+    
+    # Test that we can identify specific changes
+    run dolt sql -q 'SELECT to_name FROM dolt_diff_dolt_schemas WHERE diff_type = "added" ORDER BY to_name'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "new_event" ]] || false
+    [[ "$output" =~ "new_view" ]] || false
+    
+    run dolt sql -q 'SELECT to_name FROM dolt_diff_dolt_schemas WHERE diff_type = "modified"'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "original_view" ]] || false
+    
+    run dolt sql -q 'SELECT from_name FROM dolt_diff_dolt_schemas WHERE diff_type = "removed"'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "original_trigger" ]] || false
+    
+    # Test that diff_type values are correct
+    run dolt sql -q 'SELECT DISTINCT diff_type FROM dolt_diff_dolt_schemas ORDER BY diff_type'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "added" ]] || false
+    [[ "$output" =~ "modified" ]] || false
+    [[ "$output" =~ "removed" ]] || false
+    
+    # Test that from_commit is always populated (should be commit hashes)
+    run dolt sql -q 'SELECT COUNT(*) FROM dolt_diff_dolt_schemas WHERE from_commit IS NOT NULL'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "6" ]] || false
+    
+    # Test that from_commit is a valid commit hash (not "EMPTY" or "WORKING")
+    run dolt sql -q 'SELECT DISTINCT from_commit FROM dolt_diff_dolt_schemas'
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "EMPTY" ]] || false
+    [[ ! "$output" =~ "WORKING" ]] || false
+    # Should be a 32-character hash
+    [[ "$output" =~ [a-z0-9]{32} ]] || false
+    
+    # Test timestamp conversion works correctly (was causing conversion errors)
+    run dolt sql -q "SELECT * FROM dolt_diff_dolt_schemas LIMIT 1" -r vertical
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "to_commit_date:" ]] || false
+    [[ "$output" =~ "from_commit_date:" ]] || false
+}
+
 @test "system-tables: query dolt_history_ system table" {
     dolt sql -q "create table test (pk int, c1 int, primary key(pk))"
     dolt add test
@@ -730,4 +907,158 @@ SQL
     run dolt sql -q "select arguments from dolt_help where name='dolt_tag'"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "-m <msg>, --message=<msg>".*"Use the given msg as the tag message." ]] || false
+}
+
+@test "system-tables: query dolt_diff_dolt_procedures system table" {
+    # Set up test data for diff scenarios (diff table doesn't exist until there are procedures)
+    dolt sql -q "CREATE PROCEDURE original_proc(x INT) SELECT x * 2 as result"
+    dolt sql -q "CREATE PROCEDURE helper_proc() SELECT 'helper' as message"
+
+    # Before we commit our procedure changes we should see two new rows in the
+    # diff table where to_commit='WORKING'
+    run dolt sql -q "SELECT COUNT(*) FROM dolt_diff_dolt_procedures where to_commit='WORKING'"
+    [ "$status" -eq 0 ]                                                        
+    [[ "$output" =~ " 2 " ]] || false 
+    
+    dolt add .
+    dolt commit -m "base commit with original procedures"
+
+    # After commit, this should still contain two changes, just now the from commit and to commit should be populated with commits not working
+    run dolt sql -q 'SELECT COUNT(*) FROM dolt_diff_dolt_procedures'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "2" ]] || false
+    
+    # Make changes for diff (working directory changes)
+    dolt sql -q "DROP PROCEDURE original_proc"
+    dolt sql -q "CREATE PROCEDURE original_proc(x INT, y INT) SELECT x + y as sum"  # modified
+    dolt sql -q "CREATE PROCEDURE new_proc(name VARCHAR(50)) SELECT CONCAT('Hello, ', name) as greeting"  # added
+    dolt sql -q "DROP PROCEDURE helper_proc"  # removed
+    
+    # Test that the table exists and has correct schema
+    run dolt sql -r csv -q 'DESCRIBE dolt_diff_dolt_procedures'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "to_name,varchar" ]] || false
+    [[ "$output" =~ "to_create_stmt,varchar" ]] || false
+    [[ "$output" =~ "to_created_at," ]] || false
+    [[ "$output" =~ "to_modified_at," ]] || false
+    [[ "$output" =~ "to_sql_mode,varchar" ]] || false
+    [[ "$output" =~ "to_commit,varchar" ]] || false
+    [[ "$output" =~ "to_commit_date,datetime" ]] || false
+    [[ "$output" =~ "from_name,varchar" ]] || false
+    [[ "$output" =~ "from_create_stmt,varchar" ]] || false
+    [[ "$output" =~ "from_created_at," ]] || false
+    [[ "$output" =~ "from_modified_at," ]] || false
+    [[ "$output" =~ "from_sql_mode,varchar" ]] || false
+    [[ "$output" =~ "from_commit,varchar" ]] || false
+    [[ "$output" =~ "from_commit_date,datetime" ]] || false
+    [[ "$output" =~ "diff_type,varchar" ]] || false
+    
+    # Test that we have procedure diffs for the complete history including working changes
+    run dolt sql -q 'SELECT COUNT(*) FROM dolt_diff_dolt_procedures'
+    [ "$status" -eq 0 ]
+    # Should have: Initial commit: 2 added + Working changes: 3 changes (1 added, 1 modified, 1 removed) = 5 total
+    [[ "$output" =~ "5" ]] || false
+    
+    # Test working changes are included
+    run dolt sql -q 'SELECT COUNT(*) FROM dolt_diff_dolt_procedures WHERE to_commit = "WORKING"'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "3" ]] || false
+    
+    # Test filtering by diff_type
+    run dolt sql -q 'SELECT COUNT(*) FROM dolt_diff_dolt_procedures WHERE diff_type = "added"'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "3" ]] || false  # original_proc, helper_proc (initial) + new_proc (working)
+    
+    run dolt sql -q 'SELECT COUNT(*) FROM dolt_diff_dolt_procedures WHERE diff_type = "modified"'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1" ]] || false  # original_proc was modified
+    
+    run dolt sql -q 'SELECT COUNT(*) FROM dolt_diff_dolt_procedures WHERE diff_type = "removed"'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1" ]] || false  # helper_proc was removed
+    
+    # Test that procedure definitions are captured correctly
+    run dolt sql -q 'SELECT to_name FROM dolt_diff_dolt_procedures WHERE to_create_stmt LIKE "%x + y%"'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "original_proc" ]] || false
+    
+    # Test distinct procedure names
+    run dolt sql -q 'SELECT DISTINCT COALESCE(to_name, from_name) as name FROM dolt_diff_dolt_procedures ORDER BY name'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "helper_proc" ]] || false
+    [[ "$output" =~ "new_proc" ]] || false
+    [[ "$output" =~ "original_proc" ]] || false
+    
+    # Test commit metadata is present for all entries
+    run dolt sql -q 'SELECT COUNT(*) FROM dolt_diff_dolt_procedures WHERE to_commit IS NOT NULL OR from_commit IS NOT NULL'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "5" ]] || false
+}
+
+@test "system-tables: query dolt_history_dolt_procedures system table" {
+    # Set up test data with procedures across multiple commits
+    dolt sql -q "CREATE PROCEDURE test_proc1(x INT) SELECT x * 2 as result"
+    dolt add .
+    dolt commit -m "add first procedure"
+    
+    dolt sql -q "CREATE PROCEDURE test_proc2(name VARCHAR(50)) SELECT CONCAT('Hello, ', name) as greeting"
+    dolt add .
+    dolt commit -m "add second procedure"
+    
+    dolt sql -q "DROP PROCEDURE test_proc1"
+    dolt sql -q "CREATE PROCEDURE test_proc1(x INT, y INT) SELECT x + y as sum"  # modified
+    dolt add .
+    dolt commit -m "modify first procedure"
+    
+    # Test that the table exists and has correct schema
+    run dolt sql -r csv -q 'DESCRIBE dolt_history_dolt_procedures'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "name,varchar" ]] || false
+    [[ "$output" =~ "create_stmt,varchar" ]] || false
+    [[ "$output" =~ "created_at,timestamp" ]] || false
+    [[ "$output" =~ "modified_at,timestamp" ]] || false
+    [[ "$output" =~ "sql_mode,varchar" ]] || false
+    [[ "$output" =~ "commit_hash,char(32)" ]] || false
+    [[ "$output" =~ "committer,varchar" ]] || false
+    [[ "$output" =~ "commit_date,datetime" ]] || false
+    
+    # Test that we have procedure history across commits
+    run dolt sql -q 'SELECT COUNT(*) FROM dolt_history_dolt_procedures'
+    [ "$status" -eq 0 ]
+    # Should have entries for: test_proc1 (3 commits), test_proc2 (2 commits) = 5 total
+    [[ "$output" =~ "5" ]] || false
+    
+    # Test filtering by procedure name
+    run dolt sql -q 'SELECT COUNT(*) FROM dolt_history_dolt_procedures WHERE name = "test_proc1"'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "3" ]] || false
+    
+    run dolt sql -q 'SELECT COUNT(*) FROM dolt_history_dolt_procedures WHERE name = "test_proc2"'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "2" ]] || false
+    
+    # Test that procedure definitions are captured correctly
+    run dolt sql -q 'SELECT name FROM dolt_history_dolt_procedures WHERE create_stmt LIKE "%x * 2%"'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "test_proc1" ]] || false
+    
+    run dolt sql -q 'SELECT name FROM dolt_history_dolt_procedures WHERE create_stmt LIKE "%x + y%"'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "test_proc1" ]] || false
+    
+    # Test commit metadata is present for all entries
+    run dolt sql -q 'SELECT COUNT(*) FROM dolt_history_dolt_procedures WHERE commit_hash IS NOT NULL AND committer IS NOT NULL'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "5" ]] || false
+    
+    # Test distinct procedure names
+    run dolt sql -q 'SELECT DISTINCT name FROM dolt_history_dolt_procedures ORDER BY name'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "test_proc1" ]] || false
+    [[ "$output" =~ "test_proc2" ]] || false
+    
+    # Test that all entries have created_at and modified_at timestamps
+    run dolt sql -q 'SELECT COUNT(*) FROM dolt_history_dolt_procedures WHERE created_at IS NOT NULL AND modified_at IS NOT NULL'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "5" ]] || false
 }

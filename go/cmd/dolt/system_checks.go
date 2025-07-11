@@ -15,6 +15,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -75,7 +76,11 @@ func reconfigIfTempFileMoveFails(dataDir filesys.Filesys) error {
 
 	movedName := filepath.Join(doltTmpDir, "testfile")
 
-	err = file.Rename(name, movedName)
+	if os.Getenv("DOLT_FORCE_LOCAL_TEMP_FILES") == "" {
+		err = file.Rename(name, movedName)
+	} else {
+		err = errors.New("treating rename as failed because DOLT_FORCE_LOCAL_TEMP_FILES is set")
+	}
 	if err == nil {
 		// If rename was successful, then the tmp dir is fine, so no need to change it. Clean up the things we created.
 		_ = file.Remove(movedName)

@@ -89,18 +89,15 @@ teardown() {
 @test "1pk5col-ints: dolt sql all manner of inserts" {
     run dolt sql -q "insert into test (pk,c1,c2,c3,c4,c5) values (0,6,6,6,6,6)"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Query OK, 1 row affected" ]] || false
     run dolt sql -q "select * from test"
     [[ "$output" =~ "6" ]] || false
     run dolt sql -q "insert into test (pk,c1,c2,c3,c4,c5) values (1,7,7,7,7,7),(2,8,8,8,8,8)"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Query OK, 2 rows affected" ]] || false
     run dolt sql -q "select * from test"
     [[ "$output" =~ "7" ]] || false
     [[ "$output" =~ "8" ]] || false
     run dolt sql -q "insert into test (pk,c1,c3,c5) values (3,9,9,9)"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Query OK, 1 row affected" ]] || false
     run dolt sql -q "select * from test"
     [[ "$output" =~ "9" ]] || false
     run dolt sql -q "insert into test (c1,c3,c5) values (50,55,60)"
@@ -123,7 +120,6 @@ teardown() {
 @test "1pk5col-ints: dolt sql insert no columns specified" {
     run dolt sql -q "insert into test values (0,0,0,0,0,0)"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Query OK, 1 row affected" ]] || false
     run dolt sql -q "select * from test"
     [[ "$output" =~ "0" ]] || false
     run dolt sql -q "insert into test values (4,1,2)"
@@ -135,7 +131,6 @@ teardown() {
     dolt sql -q "insert into test (pk,c1,c2,c3,c4,c5) values (0,6,6,6,6,6)"
     run dolt sql -q "insert ignore into test (pk,c1,c2,c3,c4,c5) values (0,6,6,6,6,6),(11,111,111,111,111,111)"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Query OK, 1 row affected" ]] || false
     run dolt sql -q "select * from test"
     [[ "$output" =~ "111" ]] || false
 }
@@ -144,7 +139,6 @@ teardown() {
     dolt sql -q "insert into test (pk,c1,c2,c3,c4,c5) values (0,6,6,6,6,6)"
     run dolt sql -q "replace into test (pk,c1,c2,c3,c4,c5) values (0,7,7,7,7,7),(1,8,8,8,8,8)"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Query OK, 3 rows affected" ]] || false
     run dolt sql -q "select * from test"
     [[ "$output" =~ "7" ]] || false
     [[ "$output" =~ "8" ]] || false
@@ -154,10 +148,8 @@ teardown() {
 @test "1pk5col-ints: dolt sql insert and dolt sql select" {
     run dolt sql -q "insert into test (pk,c1,c2,c3,c4,c5) values (0,1,2,3,4,5)"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Query OK, 1 row affected" ]] || false
     run dolt sql -q "insert into test (pk,c1,c2,c3,c4,c5) values (101,102,103,104,105,106),(1,6,7,8,9,10)"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Query OK, 2 rows affected" ]] || false
     run dolt sql -q "select * from test"
     [ "$status" -eq 0 ]
     [[ "$output" =~ \|[[:space:]]+c5 ]] || false
@@ -259,8 +251,6 @@ teardown() {
     dolt sql -q "insert into test (pk,c1,c2,c3,c4,c5) values (0,1,2,3,4,5),(1,11,12,13,14,15),(2,21,22,23,24,25)"
     run dolt sql -q "update test set c1=6,c2=7,c3=8,c4=9,c5=10 where pk=0"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Query OK, 1 row affected" ]] || false
-    [[ "$output" =~ "Rows matched: 1  Changed: 1  Warnings: 0" ]] || false
     run dolt sql -q "select * from test where pk=0"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "10" ]] || false
@@ -268,16 +258,12 @@ teardown() {
     dolt sql -q "insert into test (pk,c1,c2,c3,c4,c5) values (4,11,12,13,14,15)"
     run dolt sql -q "update test set c2=11,c3=11,c4=11,c5=11 where c1=11"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Query OK, 2 rows affected" ]] || false
-    [[ "$output" =~ "Rows matched: 2  Changed: 2  Warnings: 0" ]] || false
     run dolt sql -q "select * from test"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "11" ]] || false
     [[ ! "$output" =~ "12" ]] || false
     run dolt sql -q "update test set c2=50,c3=50,c4=50,c5=50 where c1=50"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Query OK, 0 rows affected" ]] || false
-    [[ "$output" =~ "Rows matched: 0  Changed: 0  Warnings: 0" ]] || false
     run dolt sql -q "select * from test"
     [ "$status" -eq 0 ]
     [[ ! "$output" =~ "50" ]] || false
@@ -289,8 +275,6 @@ teardown() {
     [[ "$output" =~ "error: 'foo' is not a valid value for 'bigint'" ]] || false
     run dolt sql -q "update test set c1=100,c2=100,c3=100,c4=100,c5=100 where pk>0"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Query OK, 3 rows affected" ]] || false
-    [[ "$output" =~ "Rows matched: 3  Changed: 3  Warnings: 0" ]] || false
     run dolt sql -q "select * from test"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "100" ]] || false
@@ -302,24 +286,19 @@ teardown() {
     dolt sql -q "insert into test (pk,c1,c2,c3,c4,c5) values (0,1,2,3,4,5),(1,11,12,13,14,15),(2,21,22,23,24,25)"
     run dolt sql -q "delete from test where pk=2"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Query OK, 1 row affected" ]] || false
     run dolt sql -q "delete from test"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Query OK, 2 rows affected" ]] || false
     dolt sql -q "insert into test (pk,c1,c2,c3,c4,c5) values (0,1,2,3,4,5),(1,11,12,13,14,15),(2,21,22,23,24,25)"
     run dolt sql -q "delete from test where pk>0"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Query OK, 2 rows affected" ]] || false    
     run dolt sql -q "delete from test where c1=1"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Query OK, 1 row affected" ]] || false    
     dolt sql -q "insert into test (pk,c1,c2,c3,c4,c5) values (0,1,2,3,4,5),(1,11,12,13,14,15),(2,21,22,23,24,25)"
     run dolt sql -q "delete from test where c10=1"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "column \"c10\" could not be found in any table in scope" ]] || false
     run dolt sql -q "delete from test where c1='foo'"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Query OK, 0 rows affected" ]] || false    
 }
 
 @test "1pk5col-ints: dolt checkout to put a table back to its checked in state" {
@@ -729,42 +708,29 @@ DELIM
 }
 
 @test "1pk5col-ints: display correct merge stats" {
-    dolt checkout -b test-branch
-    dolt add test
-    dolt commit -m "added test table"
-    dolt checkout main
-    dolt branch test-branch-m
-    dolt branch test-branch-alt
-    dolt checkout test-branch-m
-    dolt merge test-branch --no-commit
-    dolt checkout test-branch-alt
-    dolt sql -q "CREATE TABLE test_alt (pk BIGINT NOT NULL, c1 BIGINT, PRIMARY KEY (pk));"
-    dolt add test_alt
-    dolt commit -m 'add test_alt'
-    dolt checkout test-branch-m
-    dolt merge test-branch-alt --no-commit
-    dolt add test_alt
-    dolt commit -m 'merge test_alt'
-    dolt checkout test-branch
-    dolt sql -q "insert into test values (0, 1, 2, 3, 4, 5)"
-    dolt add test
-    dolt commit -m "added row to test"
-    dolt checkout test-branch-m
-    run dolt merge test-branch -m "merge"
-    [ "$status" -eq 0 ]
-    [ "${lines[6]}" = "test | 1 +" ]
-    [ "${lines[7]}" = "1 tables changed, 1 rows added(+), 0 rows modified(*), 0 rows deleted(-)" ]
-}
-
-@test "1pk5col-ints: checkout table with branch of same name" {
-    dolt checkout -b test
-    dolt add .
-    dolt commit -m "added test table"
-    dolt sql -q "insert into test values (0, 1, 2, 3, 4, 5)"
-    run dolt checkout test
-    skip "Should distinguish between branch name and table name" [ "$status" -eq 0 ]
-    [ "${lines[0]}" != "Already on branch 'test'" ]
-    run dolt status
-    [ "$status" -eq 0 ]
-    [ "${lines[4]}" != "	modified:       test" ]
+  dolt checkout -b test-branch
+  dolt add test
+  dolt commit -m "added test table"
+  dolt checkout main
+  dolt branch test-branch-m
+  dolt branch test-branch-alt
+  dolt checkout test-branch-m
+  dolt merge test-branch --no-commit
+  dolt checkout test-branch-alt
+  dolt sql -q "CREATE TABLE test_alt (pk BIGINT NOT NULL, c1 BIGINT, PRIMARY KEY (pk));"
+  dolt add test_alt
+  dolt commit -m 'add test_alt'
+  dolt checkout test-branch-m
+  dolt merge test-branch-alt --no-commit
+  dolt add test_alt
+  dolt commit -m 'merge test_alt'
+  dolt checkout test-branch
+  dolt sql -q "insert into test values (0, 1, 2, 3, 4, 5)"
+  dolt add test
+  dolt commit -m "added row to test"
+  dolt checkout test-branch-m
+  run dolt merge test-branch -m "merge"
+  [ "$status" -eq 0 ]
+  [ "${lines[6]}" = "test | 1 +" ]
+  [ "${lines[7]}" = "1 tables changed, 1 rows added(+), 0 rows modified(*), 0 rows deleted(-)" ]
 }

@@ -26,7 +26,6 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/indexcmds"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/schcmds"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/sqlserver"
-	"github.com/dolthub/dolt/go/cmd/dolt/commands/stashcmds"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/tblcmds"
 	"github.com/dolthub/dolt/go/cmd/dolt/doltversion"
 )
@@ -83,7 +82,7 @@ var doltSubCommands = []cli.Command{
 	dumpDocsCommand,
 	dumpZshCommand,
 	docscmds.Commands,
-	stashcmds.StashCommands,
+	commands.StashCmd{},
 	&commands.Assist{},
 	commands.ProfileCmd{},
 	commands.QueryDiff{},
@@ -92,6 +91,7 @@ var doltSubCommands = []cli.Command{
 	commands.ArchiveCmd{},
 	ci.Commands,
 	commands.DebugCmd{},
+	commands.RmCmd{},
 }
 
 var DoltCommand = cli.NewSubCommandHandler("dolt", "it's git for data", doltSubCommands)

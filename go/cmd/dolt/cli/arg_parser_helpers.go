@@ -244,14 +244,8 @@ func createTracklessBranchArgParser() *argparser.ArgParser {
 
 func CreateBranchArgParser() *argparser.ArgParser {
 	ap := createTracklessBranchArgParser()
-	ap.SupportsString(TrackFlag, "t", "", "When creating a new branch, set up 'upstream' configuration.")
-
-	return ap
-}
-
-func CreateBranchArgParserWithNoTrackValue() *argparser.ArgParser {
-	ap := createTracklessBranchArgParser()
-	ap.SupportsFlag(TrackFlag, "t", "When creating a new branch, set up 'upstream' configuration.")
+	ap.SupportsFlag(TrackFlag, "t", "Set up upstream configuration for a branch. Uses current branch as default")
+	ap.SupportsString(SetUpstreamToFlag, "u", "", "Set upstream configuration for a branch.")
 
 	return ap
 }
@@ -326,6 +320,13 @@ func CreateCountCommitsArgParser() *argparser.ArgParser {
 func CreateReflogArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithMaxArgs("reflog", 1)
 	ap.SupportsFlag(AllFlag, "", "Show all refs, including hidden refs, such as DoltHub workspace refs")
+	return ap
+}
+
+func CreateRmArgParser() *argparser.ArgParser {
+	ap := argparser.NewArgParserWithVariableArgs("rm")
+	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "table(s) to remove from the list of tables staged to be committed."})
+	ap.SupportsFlag(CachedFlag, "", "Use this option to unstage and remove tables only from the index. Working tree tables, whether modified or not, will be left alone.") //TODO
 	return ap
 }
 

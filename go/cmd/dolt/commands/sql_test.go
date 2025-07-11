@@ -322,16 +322,19 @@ func TestInsert(t *testing.T) {
 			expectedRes: 1,
 		},
 		{
-			name:  "bad syntax",
-			query: "insert into table", expectedRes: 1,
+			name:        "bad syntax",
+			query:       "insert into table",
+			expectedRes: 1,
 		},
 		{
-			name:  "bad syntax",
-			query: "insert into people (id) values", expectedRes: 1,
+			name:        "bad syntax",
+			query:       "insert into people (id) values",
+			expectedRes: 1,
 		},
 		{
-			name:  "table doesn't exist",
-			query: "insert into dne (id) values (00000000-0000-0000-0000-000000000005)", expectedRes: 1,
+			name:        "table doesn't exist",
+			query:       "insert into dne (id) values (00000000-0000-0000-0000-000000000005)",
+			expectedRes: 1,
 		},
 		{
 			name: "insert one row",

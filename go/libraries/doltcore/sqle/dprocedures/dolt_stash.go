@@ -113,7 +113,7 @@ func doStashPush(ctx *sql.Context, dSess *dsess.DoltSession, dbData env.DbData[*
 		return err
 	}
 	if !hasChanges {
-		return fmt.Errorf("no local changes to save")
+		return fmt.Errorf("No local changes to save")
 	}
 
 	roots, err = actions.StageModifiedAndDeletedTables(ctx, roots)
@@ -197,6 +197,8 @@ func doStashClear(ctx *sql.Context, dbData env.DbData[*sql.Context], stashName s
 	return dbData.Ddb.RemoveAllStashes(ctx, stashName)
 }
 
+// stashedTableSets returns array of table names for all tables that are being stashed and added tables in staged.
+// These table names are determined from all tables in the staged set of changes as they are being stashed only.
 func stashedTableSets(ctx context.Context, roots doltdb.Roots) ([]doltdb.TableName, []doltdb.TableName, error) {
 	var addedTblsInStaged []doltdb.TableName
 	var allTbls []doltdb.TableName
@@ -288,6 +290,8 @@ func hasLocalChanges(ctx *sql.Context, dSess *dsess.DoltSession, roots doltdb.Ro
 	return true, nil
 }
 
+// workingSetContainsOnlyUntrackedTables returns true if all changes in working set are untracked files/added tables.
+// Untracked files are part of working set changes, but should not be stashed unless staged or --include-untracked flag is used.
 func workingSetContainsOnlyUntrackedTables(ctx context.Context, roots doltdb.Roots) (bool, error) {
 	_, unstaged, err := diff.GetStagedUnstagedTableDeltas(ctx, roots)
 	if err != nil {
@@ -500,7 +504,7 @@ func handleMerge(ctx *sql.Context, dbData env.DbData[*sql.Context], stashName st
 		tblNames := strings.Join(doltdb.FlattenTableNames(tablesWithConflict), "', '")
 		status := fmt.Errorf("error: Your local changes to the following tables would be overwritten by applying stash %d:\n"+
 			"\t{'%s'}\n"+
-			"Please commit your changes or stash them before you merge.\nAborting\n", idx, tblNames)
+			"Please commit your changes or stash them before you merge.\nAborting\nThe stash entry is kept in case you need it again.\n", idx, tblNames)
 		return nil, nil, nil, status
 	}
 

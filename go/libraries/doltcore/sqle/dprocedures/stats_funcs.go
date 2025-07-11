@@ -102,7 +102,7 @@ type ExtendedStatsProvider interface {
 	WaitForFlush(ctx *sql.Context) error
 	// CollectOnce performs a stats update in-thread. This will contend
 	// with background collection and most useful in a non-server context.
-	CollectOnce(ctx context.Context) (string, error)
+	CollectOnce(ctx *sql.Context) (string, error)
 	// SetTimers is an access point for editing the statistics
 	// delay timer. This will block if the scheduler is not running.
 	SetTimers(int64, int64)

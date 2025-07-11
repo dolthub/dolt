@@ -137,50 +137,6 @@ func GetNonSystemTableNames(ctx context.Context, root RootValue) ([]string, erro
 	return tn, nil
 }
 
-// GetSystemTableNames gets system table names
-func GetSystemTableNames(ctx context.Context, root RootValue) ([]string, error) {
-	p, err := GetPersistedSystemTables(ctx, root)
-	if err != nil {
-		return nil, err
-	}
-
-	g, err := GetGeneratedSystemTables(ctx, root)
-	if err != nil {
-
-	}
-
-	s := append(p, g...)
-	sort.Strings(s)
-
-	return s, nil
-}
-
-// GetPersistedSystemTables returns table names of all persisted system tables.
-func GetPersistedSystemTables(ctx context.Context, root RootValue) ([]string, error) {
-	tn, err := root.GetTableNames(ctx, DefaultSchemaName)
-	if err != nil {
-		return nil, err
-	}
-	sort.Strings(tn)
-	return funcitr.FilterStrings(tn, HasDoltPrefix), nil
-}
-
-// GetGeneratedSystemTables returns table names of all generated system tables.
-func GetGeneratedSystemTables(ctx context.Context, root RootValue) ([]string, error) {
-	s := set.NewStrSet(getGeneratedSystemTables())
-
-	tn, err := root.GetTableNames(ctx, DefaultSchemaName)
-	if err != nil {
-		return nil, err
-	}
-
-	for _, pre := range generatedSystemTablePrefixes {
-		s.Add(funcitr.MapStrings(tn, func(s string) string { return pre + s })...)
-	}
-
-	return s.AsSlice(), nil
-}
-
 // The set of reserved dolt_ tables that should be considered part of user space, like any other user-created table,
 // for the purposes of the dolt command line. These tables cannot be created or altered explicitly, but can be updated
 // like normal SQL tables.
@@ -206,9 +162,9 @@ var getWriteableSystemTables = func() []string {
 	}
 }
 
-// getGeneratedSystemTables is a function which returns the names of all generated system tables. This is not
+// GeneratedSystemTableNames returns the names of all generated system tables. This is not
 // simply a list of constants because doltgres swaps out the functions used to generate different names.
-var getGeneratedSystemTables = func() []string {
+func GeneratedSystemTableNames() []string {
 	return []string{
 		GetBranchesTableName(),
 		GetRemoteBranchesTableName(),
@@ -225,7 +181,9 @@ var getGeneratedSystemTables = func() []string {
 	}
 }
 
-var generatedSystemTablePrefixes = []string{
+// GeneratedSystemTablePrefixes returns the prefixes of all generated system tables, the ones that exist for every
+// user table.
+var GeneratedSystemTablePrefixes = []string{
 	DoltDiffTablePrefix,
 	DoltCommitDiffTablePrefix,
 	DoltHistoryTablePrefix,
@@ -291,6 +249,42 @@ const (
 	// SchemasTablesSqlModeCol is the name of the column that stores the SQL_MODE string used when this fragment
 	// was originally defined. Mode settings, such as ANSI_QUOTES, are needed to correctly parse the fragment.
 	SchemasTablesSqlModeCol = "sql_mode"
+
+	// DiffTypeCol is the column name for the type of change (added, modified, removed) in diff tables
+	DiffTypeCol = "diff_type"
+
+	// ToCommitCol is the column name for the "to" commit in diff tables
+	ToCommitCol = "to_commit"
+
+	// FromCommitCol is the column name for the "from" commit in diff tables
+	FromCommitCol = "from_commit"
+
+	// ToCommitDateCol is the column name for the "to" commit date in diff tables
+	ToCommitDateCol = "to_commit_date"
+
+	// FromCommitDateCol is the column name for the "from" commit date in diff tables
+	FromCommitDateCol = "from_commit_date"
+
+	// WorkingCommitRef is the special commit reference for working changes
+	WorkingCommitRef = "WORKING"
+
+	// EmptyCommitRef is the special commit reference for empty/initial state
+	EmptyCommitRef = "EMPTY"
+
+	// DiffTypeAdded represents a row that was added in a diff
+	DiffTypeAdded = "added"
+
+	// DiffTypeModified represents a row that was modified in a diff
+	DiffTypeModified = "modified"
+
+	// DiffTypeRemoved represents a row that was removed in a diff
+	DiffTypeRemoved = "removed"
+
+	// DiffToPrefix is the prefix for "to" columns in diff tables
+	DiffToPrefix = "to_"
+
+	// DiffFromPrefix is the prefix for "from" columns in diff tables
+	DiffFromPrefix = "from_"
 )
 
 const (
@@ -453,6 +447,27 @@ const (
 	// StashesTableName is the stashes system table name
 	StashesTableName = "dolt_stashes"
 )
+
+// DoltGeneratedTableNames is a list of all the generated dolt system tables that are not specific to a user table.
+// It does not include tables in the dolt_ prefix namespace that are user-populated, such as dolt_ignore or dolt_docs.
+// These tables are addressable by these names in both Dolt and Doltgres. In doltgres they are additionally addressable
+// in the `dolt.` schema, e.g. `dolt.branches`
+var DoltGeneratedTableNames = []string{
+	LogTableName,
+	DiffTableName,
+	ColumnDiffTableName,
+	TableOfTablesInConflictName,
+	TableOfTablesWithViolationsName,
+	SchemaConflictsTableName,
+	BranchesTableName,
+	RemoteBranchesTableName,
+	RemotesTableName,
+	CommitsTableName,
+	CommitAncestorsTableName,
+	StatusTableName,
+	MergeStatusTableName,
+	TagsTableName,
+}
 
 const (
 	// WorkflowsTableName is the dolt CI workflows system table name

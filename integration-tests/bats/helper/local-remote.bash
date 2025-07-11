@@ -114,7 +114,6 @@ SKIP_SERVER_TESTS=$(cat <<-EOM
 ~sql-fetch.bats~
 ~foreign-keys-invert-pk.bats~
 ~merge-base.bats~
-~branch.bats~
 ~auto_increment.bats~
 ~creds.bats~
 ~schema-conflicts.bats~
@@ -128,7 +127,6 @@ SKIP_SERVER_TESTS=$(cat <<-EOM
 ~doltpy.bats~
 ~sql-batch.bats~
 ~send-metrics.bats~
-~stash.bats~
 ~commit.bats~
 ~sql-commit.bats~
 ~reset.bats~

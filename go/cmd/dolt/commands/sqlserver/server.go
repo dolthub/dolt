@@ -516,11 +516,49 @@ func ConfigureServices(
 	controller.Register(InitMetricsListener)
 
 	InitLockSuperUser := &svcs.AnonService{
-		InitF: func(context.Context) error {
+		InitF: func(ctx context.Context) error {
 			mysqlDb := sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb
+
+			host := "localhost"
+			// this is reserved for `dolt sql` connections when sql-server is running
+			reservedUser := LocalConnectionUser
+
+			rd := mysqlDb.Reader()
+			conflict, _ := rd.GetUser(mysql_db.UserPrimaryKey{Host: host, User: reservedUser})
+			rd.Close()
+
+			var conflicts []mysql_db.UserPrimaryKey
+			if conflict != nil && !conflict.IsEphemeral {
+				logrus.Warnf("Dropping persisted '%s@%s' because this account name is reserved for Dolt", conflict.User, conflict.Host)
+				conflicts = append(conflicts, mysql_db.UserPrimaryKey{Host: conflict.Host, User: conflict.User})
+			}
+
 			ed := mysqlDb.Editor()
+			defer ed.Close()
+
+			if len(conflicts) > 0 {
+				c := conflicts[0]
+				ed.RemoveUser(c)
+				ed.RemoveRoleEdgesFromKey(mysql_db.RoleEdgesFromKey{
+					FromHost: c.Host,
+					FromUser: c.User,
+				})
+				ed.RemoveRoleEdgesToKey(mysql_db.RoleEdgesToKey{
+					ToHost: c.Host,
+					ToUser: c.User,
+				})
+
+				sqlCtx, err := sqlEngine.NewDefaultContext(ctx)
+				if err != nil {
+					return fmt.Errorf("failed to create SQL context: %v", err)
+				}
+				if err := mysqlDb.Persist(sqlCtx, ed); err != nil {
+					return fmt.Errorf("failed to persist changes to privileges database: %v", err)
+				}
+			}
+
 			mysqlDb.AddEphemeralSuperUser(ed, LocalConnectionUser, "localhost", localCreds.Secret)
-			ed.Close()
+
 			return nil
 		},
 	}
@@ -1144,4 +1182,5 @@ func getEventSchedulerStatus(status string) (eventscheduler.SchedulerStatus, err
 	default:
 		return eventscheduler.SchedulerDisabled, fmt.Errorf("Error while setting value '%s' to 'event_scheduler'.", status)
 	}
+
 }

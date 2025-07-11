@@ -133,32 +133,34 @@ func DoltDiffIndexesFromTable(ctx context.Context, db, tbl string, t *doltdb.Tab
 
 	cols := sch.GetPKCols().GetColumns()
 
-	// add to_ prefix
-	toCols := make([]schema.Column, len(cols))
-	for i, col := range cols {
-		toCols[i] = col
-		toCols[i].Name = "to_" + col.Name
-	}
+	for _, toFrom := range []string{"to", "from"} {
+		// add to_ prefix
+		keyCols := make([]schema.Column, len(cols))
+		for i, col := range cols {
+			keyCols[i] = col
+			keyCols[i].Name = toFrom + "_" + col.Name
+		}
 
-	// to_ columns
-	toIndex := doltIndex{
-		id:       "PRIMARY",
-		tblName:  doltdb.DoltDiffTablePrefix + tbl,
-		dbName:   db,
-		columns:  toCols,
-		indexSch: sch,
-		tableSch: sch,
-		unique:   true,
-		comment:  "",
-		vrw:      t.ValueReadWriter(),
-		ns:       t.NodeStore(),
-		keyBld:   keyBld,
-		// only ordered on PK within a diff partition
-		order:                         sql.IndexOrderNone,
-		constrainedToLookupExpression: false,
-	}
+		// to_ columns
+		keyIndex := doltIndex{
+			id:       toFrom + "_pks",
+			tblName:  doltdb.DoltDiffTablePrefix + tbl,
+			dbName:   db,
+			columns:  keyCols,
+			indexSch: sch,
+			tableSch: sch,
+			unique:   true,
+			comment:  "",
+			vrw:      t.ValueReadWriter(),
+			ns:       t.NodeStore(),
+			keyBld:   keyBld,
+			// only ordered on PK within a diff partition
+			order:                         sql.IndexOrderNone,
+			constrainedToLookupExpression: false,
+		}
 
-	indexes = append(indexes, &toIndex)
+		indexes = append(indexes, &keyIndex)
+	}
 	if types.IsFormat_DOLT(t.Format()) {
 		indexes = append(indexes, NewCommitIndex(&doltIndex{
 			id:      ToCommitIndexId,
@@ -197,19 +199,32 @@ func DoltDiffIndexesFromTable(ctx context.Context, db, tbl string, t *doltdb.Tab
 	return indexes, nil
 }
 
-func DoltToFromCommitIndex(tbl string) sql.Index {
-	return &doltIndex{
-		id:      "commits",
-		tblName: doltdb.DoltCommitDiffTablePrefix + tbl,
-		columns: []schema.Column{
+func DoltToFromCommitIndexes(tbl string, sch schema.Schema) (indexes []sql.Index) {
+	for _, toFrom := range []string{"to", "from"} {
+		cols := make([]schema.Column, 0, len(sch.GetAllCols().GetColumns())+2)
+		cols = append(cols,
 			schema.NewColumn(ToCommitIndexId, schema.DiffCommitTag, types.StringKind, false),
 			schema.NewColumn(FromCommitIndexId, schema.DiffCommitTag, types.StringKind, false),
-		},
-		unique:                        true,
-		comment:                       "",
-		order:                         sql.IndexOrderNone,
-		constrainedToLookupExpression: false,
+		)
+		for _, col := range sch.GetPKCols().GetColumns() {
+			col.Name = toFrom + "_" + col.Name
+			cols = append(cols, col)
+		}
+
+		indexes = append(indexes, &doltIndex{
+			id:                            "commits_" + toFrom,
+			tblName:                       doltdb.DoltCommitDiffTablePrefix + tbl,
+			columns:                       cols,
+			unique:                        true,
+			comment:                       "",
+			order:                         sql.IndexOrderNone,
+			constrainedToLookupExpression: false,
+			// We pass a nil ValueStore into the key builder, because we don't have one. This would cause an issue
+			// if any of the columns use Adaptive encoding, but that shouldn't be possible in the primary key.
+			keyBld: val.NewTupleBuilder(sch.GetKeyDescriptor(nil), nil),
+		})
 	}
+	return indexes
 }
 
 // MockIndex returns a sql.Index that is not backed by an actual datastore. It's useful for system tables and
@@ -330,6 +345,7 @@ func DoltHistoryIndexesFromTable(ctx context.Context, db, tbl string, t *doltdb.
 		// weren't asked for (because the index needed may not exist at all revisions)
 		di.order = sql.IndexOrderNone
 		di.constrainedToLookupExpression = false
+		di.unique = false
 		unorderedIndexes[i] = di
 	}
 

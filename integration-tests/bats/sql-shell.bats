@@ -22,6 +22,39 @@ teardown() {
 }
 
 # bats test_tags=no_lambda
+@test "sql-shell: OkResult is printed in interactive shell" {
+    skiponwindows "Need to install expect and make this script work on windows."
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+        skip "shell on server returns Empty Set instead of OkResult"
+    fi
+    run $BATS_TEST_DIRNAME/sql-shell-ok-result.expect
+    [ "$status" -eq 0 ]
+}
+
+# bats test_tags=no_lambda
+@test "sql-shell: database changed is printed in interactive shell" {
+    skiponwindows "Need to install expect and make this script work on windows."
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+        skip "shell on server returns Empty Set instead of OkResult"
+    fi
+    run $BATS_TEST_DIRNAME/sql-shell-use.expect
+    [ "$status" -eq 0 ]
+}
+
+# bats test_tags=no_lambda
+@test "sql-shell: multi statement query returns accurate timing" {
+    skiponwindows "Need to install expect and make this script work on windows."
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+        skip "shell on server returns Empty Set instead of OkResult"
+    fi
+    dolt sql -q "CREATE TABLE t(a int);"
+    dolt sql -q "INSERT INTO t VALUES (1);"
+    dolt sql -q "CREATE TABLE t1(b int);"
+    run $BATS_TEST_DIRNAME/sql-shell-multi-stmt-timings.expect
+    [ "$status" -eq 0 ]
+}
+
+# bats test_tags=no_lambda
 @test "sql-shell: warnings are not suppressed" {
     skiponwindows "Need to install expect and make this script work on windows."
     run $BATS_TEST_DIRNAME/sql-shell-warnings.expect
@@ -168,7 +201,6 @@ SQL
     # we can still use the entities we created with ANSI_QUOTES.
     run dolt sql -q "INSERT INTO table1 (pk) VALUES (111);"
     [ $status -eq "0" ]
-    [[ $output =~ "Query OK" ]] || false
 
     run dolt sql -r csv -q "SELECT * from table1;"
     [ $status -eq "0" ]

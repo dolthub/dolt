@@ -136,3 +136,15 @@ on the host system, it can also be mounted to this default location.
 ```shell
 $ docker run -p 3307:3306 -v /Users/jennifer/docker/databases/:/var/lib/dolt/ dolthub/dolt-sql-server:latest
 ```
+
+## Environment Variables
+
+The Dolt SQL Server image supports the following environment variables:
+
+- `DOLT_ROOT_PASSWORD`: Sets the password for the root user
+- `DOLT_ROOT_HOST`: Specifies a host for the root user (default: localhost)
+- `DOLT_DATABASE` / `MYSQL_DATABASE`: Creates a database with this name if it doesn't exist
+- `DOLT_USER` / `MYSQL_USER`: Creates a user with this name if it doesn't exist
+- `DOLT_PASSWORD` / `MYSQL_PASSWORD`: Sets the password for the user specified in `DOLT_USER`/`MYSQL_USER`
+
+The user will be granted all privileges on the database specified by `DOLT_DATABASE`/`MYSQL_DATABASE` if provided.

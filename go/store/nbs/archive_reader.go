@@ -46,7 +46,7 @@ type archiveReader struct {
 type suffix [hash.SuffixLen]byte
 
 type archiveFooter struct {
-	indexSize     uint32
+	indexSize     uint64
 	byteSpanCount uint32
 	chunkCount    uint32
 	metadataSize  uint32
@@ -59,22 +59,32 @@ type archiveFooter struct {
 	hash          hash.Hash
 }
 
+// actualFooterSize returns the footer size, in bytes for a specific archive. Due to the evolution of the archive format,
+// the footer size expanded in format version 3, so we need to calculate the footer size when calculating offsets
+// for this instance.
+func (f archiveFooter) actualFooterSize() uint64 {
+	if f.formatVersion < archiveVersionGiantIndexSupport {
+		// Version 1 and 2 archives have a smaller footer.
+		return archiveFooterSize - 4
+	}
+	return archiveFooterSize
+}
+
 // dataSpan returns the span of the data section of the archive. This is not generally used directly since we usually
 // read individual spans for each chunk.
 func (f archiveFooter) dataSpan() byteSpan {
-	return byteSpan{offset: 0, length: f.fileSize - archiveFooterSize - uint64(f.metadataSize) - uint64(f.indexSize)}
+	return byteSpan{offset: 0, length: f.fileSize - f.actualFooterSize() - uint64(f.metadataSize) - uint64(f.indexSize)}
 }
 
-// totalIndexSpan returns the span of the entire index section of the archive. This span is not directly useful as
-// the index is broken into a compressed section and an uncompressed section. Use indexCompressedSpan and indexSuffixSpan
+// totalIndexSpan returns the span of the entire index section of the archive.
 func (f archiveFooter) totalIndexSpan() byteSpan {
-	return byteSpan{offset: f.fileSize - archiveFooterSize - uint64(f.metadataSize) - uint64(f.indexSize), length: uint64(f.indexSize)}
+	return byteSpan{offset: f.fileSize - f.actualFooterSize() - uint64(f.metadataSize) - uint64(f.indexSize), length: uint64(f.indexSize)}
 }
 
 // indexByteOffsetSpan returns the span of the byte offsets section of the index. This is the first part of the index
 func (f archiveFooter) indexByteOffsetSpan() byteSpan {
 	totalIdx := f.totalIndexSpan()
-	return byteSpan{offset: totalIdx.offset, length: uint64(f.byteSpanCount * uint64Size)}
+	return byteSpan{offset: totalIdx.offset, length: uint64(f.byteSpanCount) * uint64Size}
 }
 
 // indexPrefixSpan returns the span of the prefix section of the index. This is the second part of the index.
@@ -94,14 +104,14 @@ func (f archiveFooter) indexChunkRefSpan() byteSpan {
 
 // indexSuffixSpan returns the span of the suffix section of the index. This is the fourth part of the index.
 func (f archiveFooter) indexSuffixSpan() byteSpan {
-	suffixLen := uint64(f.chunkCount * hash.SuffixLen)
+	suffixLen := uint64(f.chunkCount) * hash.SuffixLen
 	chunkRefs := f.indexChunkRefSpan()
 	return byteSpan{chunkRefs.offset + chunkRefs.length, suffixLen}
 }
 
 // metadataSpan returns the span of the metadata section of the archive.
 func (f archiveFooter) metadataSpan() byteSpan {
-	return byteSpan{offset: f.fileSize - archiveFooterSize - uint64(f.metadataSize), length: uint64(f.metadataSize)}
+	return byteSpan{offset: f.fileSize - f.actualFooterSize() - uint64(f.metadataSize), length: uint64(f.metadataSize)}
 }
 
 func newArchiveMetadata(ctx context.Context, reader tableReaderAt, fileSize uint64, stats *Stats) (*ArchiveMetadata, error) {
@@ -187,7 +197,7 @@ func newArchiveReaderFromFooter(ctx context.Context, reader tableReaderAt, fileS
 func newArchiveReader(ctx context.Context, reader tableReaderAt, fileSize uint64, stats *Stats) (archiveReader, error) {
 	footer, err := loadFooter(ctx, reader, fileSize, stats)
 	if err != nil {
-		return archiveReader{}, err
+		return archiveReader{}, fmt.Errorf("Failed to loadFooter: %w", err)
 	}
 
 	return buildArchiveReader(ctx, reader, footer, stats)
@@ -200,7 +210,7 @@ func buildArchiveReader(ctx context.Context, reader tableReaderAt, footer archiv
 	byteSpans[0] = 0 // Null byteSpan to simplify logic.
 	err := binary.Read(secRdr, binary.BigEndian, byteSpans[1:])
 	if err != nil {
-		return archiveReader{}, err
+		return archiveReader{}, fmt.Errorf("Failed to read byte spans: %w", err)
 	}
 
 	prefixSpan := footer.indexPrefixSpan()
@@ -208,23 +218,23 @@ func buildArchiveReader(ctx context.Context, reader tableReaderAt, footer archiv
 	prefixes := make([]uint64, footer.chunkCount)
 	err = binary.Read(prefixRdr, binary.BigEndian, prefixes[:])
 	if err != nil {
-		return archiveReader{}, err
+		return archiveReader{}, fmt.Errorf("Failed to read prefixes: %w", err)
 	}
 
 	chunkRefSpan := footer.indexChunkRefSpan()
 	chunkRdr := newSectionReader(ctx, reader, int64(chunkRefSpan.offset), int64(chunkRefSpan.length), stats)
-	chunks := make([]uint32, footer.chunkCount*2)
-	err = binary.Read(chunkRdr, binary.BigEndian, chunks[:])
+	chnks := make([]uint32, uint64(footer.chunkCount)*2)
+	err = binary.Read(chunkRdr, binary.BigEndian, chnks[:])
 	if err != nil {
-		return archiveReader{}, err
+		return archiveReader{}, fmt.Errorf("Failed to read chunk references: %w", err)
 	}
 
 	suffixSpan := footer.indexSuffixSpan()
 	sufRdr := newSectionReader(ctx, reader, int64(suffixSpan.offset), int64(suffixSpan.length), stats)
-	suffixes := make([]byte, footer.chunkCount*hash.SuffixLen)
+	suffixes := make([]byte, suffixSpan.length)
 	_, err = io.ReadFull(sufRdr, suffixes)
 	if err != nil {
-		return archiveReader{}, err
+		return archiveReader{}, fmt.Errorf("Failed to read suffixes: %w", err)
 	}
 
 	dictCache, err := lru.New2Q[uint32, *DecompBundle](256)
@@ -236,7 +246,7 @@ func buildArchiveReader(ctx context.Context, reader tableReaderAt, footer archiv
 		reader:    reader,
 		prefixes:  prefixes,
 		spanIndex: byteSpans,
-		chunkRefs: chunks,
+		chunkRefs: chnks,
 		suffixes:  suffixes,
 		footer:    footer,
 		dictCache: dictCache,
@@ -248,7 +258,7 @@ func buildArchiveReader(ctx context.Context, reader tableReaderAt, footer archiv
 func (ar archiveReader) clone() (archiveReader, error) {
 	reader, err := ar.reader.clone()
 	if err != nil {
-		return archiveReader{}, nil
+		return archiveReader{}, err
 	}
 	return archiveReader{
 		reader:    reader,
@@ -289,17 +299,33 @@ func buildFooter(fileSize uint64, buf []byte) (f archiveFooter, err error) {
 	f.formatVersion = buf[afrVersionOffset]
 	f.fileSignature = string(buf[afrSigOffset:])
 	// Verify File Signature
-	if f.fileSignature != string(archiveFileSignature) {
+	if f.fileSignature != archiveFileSignature {
 		err = ErrInvalidFileSignature
 		return
 	}
-	// Verify Format Version. 1 and 2 supported.
+	// Verify Format Version. 1,2,3 supported.
 	if f.formatVersion > archiveFormatVersionMax {
 		err = ErrInvalidFormatVersion
 		return
 	}
 
-	f.indexSize = binary.BigEndian.Uint32(buf[afrIndexLenOffset : afrIndexChkSumOffset+uint32Size])
+	smallFooter := false
+	if f.formatVersion < archiveVersionGiantIndexSupport {
+		smallFooter = true
+	}
+
+	if smallFooter {
+		// Version 1 and 2 archives have a smaller footer. Ignore the first 4 bytes.
+		if afrIndexLenOffset != 0 {
+			// Future proofing for the event where we need to extend the footer with additional fields. This is intended
+			// to blow up in development if we try and change it.
+			panic("runtime error: afrIndexChkSumOffset must be 0.")
+		}
+		f.indexSize = uint64(binary.BigEndian.Uint32(buf[4 : 4+uint32Size]))
+	} else {
+		f.indexSize = binary.BigEndian.Uint64(buf[afrIndexLenOffset : afrIndexLenOffset+uint64Size])
+	}
+
 	f.byteSpanCount = binary.BigEndian.Uint32(buf[afrByteSpanOffset : afrByteSpanOffset+uint32Size])
 	f.chunkCount = binary.BigEndian.Uint32(buf[afrChunkCountOffset : afrChunkCountOffset+uint32Size])
 	f.metadataSize = binary.BigEndian.Uint32(buf[afrMetaLenOffset : afrMetaLenOffset+uint32Size])
@@ -310,6 +336,10 @@ func buildFooter(fileSize uint64, buf []byte) (f archiveFooter, err error) {
 
 	// calculate the hash of the footer. We don't currently verify that this is what was used to load the content.
 	sha := sha512.New()
+	if smallFooter {
+		buf = buf[4:]
+	}
+
 	sha.Write(buf)
 	f.hash = hash.New(sha.Sum(nil)[:hash.ByteLen])
 
@@ -327,7 +357,7 @@ func (ar archiveReader) search(hash hash.Hash) int {
 	}
 
 	for idx := possibleMatch; idx < len(ar.prefixes) && ar.prefixes[idx] == prefix; idx++ {
-		if ar.getSuffixByID(uint32(idx)) == suffix(targetSfx) {
+		if ar.getSuffixByID(uint64(idx)) == suffix(targetSfx) {
 			return idx
 		}
 	}
@@ -473,7 +503,7 @@ func (ar archiveReader) getByteSpanByID(id uint32) byteSpan {
 }
 
 // getSuffixByID returns the suffix for the chunk at the given index. Assumes good input!
-func (ar archiveReader) getSuffixByID(id uint32) suffix {
+func (ar archiveReader) getSuffixByID(id uint64) suffix {
 	start := id * hash.SuffixLen
 	return suffix(ar.suffixes[start : start+hash.SuffixLen])
 }
@@ -503,7 +533,7 @@ func (ar archiveReader) iterate(ctx context.Context, cb func(chunks.Chunk) error
 		var hasBytes [hash.ByteLen]byte
 
 		binary.BigEndian.PutUint64(hasBytes[:uint64Size], ar.prefixes[i])
-		suf := ar.getSuffixByID(i)
+		suf := ar.getSuffixByID(uint64(i))
 		copy(hasBytes[hash.ByteLen-hash.SuffixLen:], suf[:])
 		h := hash.New(hasBytes[:])
 

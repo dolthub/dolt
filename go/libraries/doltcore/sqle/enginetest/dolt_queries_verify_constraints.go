@@ -589,7 +589,7 @@ var DoltVerifyConstraintsTestScripts = []queries.ScriptTest{
 			{
 				Query: "select violation_type, pk, col1, cast(violation_info as char) as violation_info from dolt_constraint_violations_t;",
 				Expected: []sql.Row{
-					{"check constraint", 1, 42, `{"Name": "t_chk_5eebhnk4", "Expression": "(NOT((col1 = col2)))"}`},
+					{"check constraint", 1, 42, "{\"Name\": \"t_chk_jtampqtl\", \"Expression\": \"(NOT((`col1` = `col2`)))\"}"},
 				},
 			},
 			{
@@ -608,7 +608,7 @@ var DoltVerifyConstraintsTestScripts = []queries.ScriptTest{
 			{
 				Query: "select violation_type, pk, col1, cast(violation_info as char) as violation_info from dolt_constraint_violations_t;",
 				Expected: []sql.Row{
-					{"check constraint", 1, 42, `{"Name": "t_chk_5eebhnk4", "Expression": "(NOT((col1 = col2)))"}`},
+					{"check constraint", 1, 42, "{\"Name\": \"t_chk_jtampqtl\", \"Expression\": \"(NOT((`col1` = `col2`)))\"}"},
 				},
 			},
 		},
@@ -636,7 +636,7 @@ var DoltVerifyConstraintsTestScripts = []queries.ScriptTest{
 			{
 				Query: "select violation_type, pk, col1, cast(violation_info as char) as violation_info from dolt_constraint_violations_t;",
 				Expected: []sql.Row{
-					{"check constraint", 1, 42, `{"Name": "t_chk_5eebhnk4", "Expression": "(NOT((col1 = col2)))"}`},
+					{"check constraint", 1, 42, "{\"Name\": \"t_chk_jtampqtl\", \"Expression\": \"(NOT((`col1` = `col2`)))\"}"},
 				},
 			},
 			{
@@ -660,7 +660,7 @@ var DoltVerifyConstraintsTestScripts = []queries.ScriptTest{
 			{
 				Query: "select violation_type, pk, col1, cast(violation_info as char) as violation_info from dolt_constraint_violations_t;",
 				Expected: []sql.Row{
-					{"check constraint", 1, 42, `{"Name": "t_chk_5eebhnk4", "Expression": "(NOT((col1 = col2)))"}`},
+					{"check constraint", 1, 42, "{\"Name\": \"t_chk_jtampqtl\", \"Expression\": \"(NOT((`col1` = `col2`)))\"}"},
 				},
 			},
 		},
@@ -685,7 +685,7 @@ var DoltVerifyConstraintsTestScripts = []queries.ScriptTest{
 			{
 				Query: "select violation_type, pk, col1, cast(violation_info as char) as violation_info from dolt_constraint_violations_t;",
 				Expected: []sql.Row{
-					{"check constraint", 1, 42, `{"Name": "t_chk_5eebhnk4", "Expression": "(NOT((col1 = col2)))"}`},
+					{"check constraint", 1, 42, "{\"Name\": \"t_chk_jtampqtl\", \"Expression\": \"(NOT((`col1` = `col2`)))\"}"},
 				},
 			},
 			{
@@ -704,7 +704,7 @@ var DoltVerifyConstraintsTestScripts = []queries.ScriptTest{
 			{
 				Query: "select violation_type, pk, col1, cast(violation_info as char) as violation_info from dolt_constraint_violations_t;",
 				Expected: []sql.Row{
-					{"check constraint", 1, 42, `{"Name": "t_chk_5eebhnk4", "Expression": "(NOT((col1 = col2)))"}`},
+					{"check constraint", 1, 42, "{\"Name\": \"t_chk_jtampqtl\", \"Expression\": \"(NOT((`col1` = `col2`)))\"}"},
 				},
 			},
 		},
@@ -729,7 +729,7 @@ var DoltVerifyConstraintsTestScripts = []queries.ScriptTest{
 			{
 				Query: "select violation_type, pk, col1, cast(violation_info as char) as violation_info from dolt_constraint_violations_t;",
 				Expected: []sql.Row{
-					{"check constraint", 1, 42, `{"Name": "t_chk_5eebhnk4", "Expression": "(NOT((col1 = col2)))"}`},
+					{"check constraint", 1, 42, "{\"Name\": \"t_chk_jtampqtl\", \"Expression\": \"(NOT((`col1` = `col2`)))\"}"},
 				},
 			},
 			{
@@ -771,7 +771,7 @@ var DoltVerifyConstraintsTestScripts = []queries.ScriptTest{
 			{
 				Query: "select violation_type, pk, col1, cast(violation_info as char) as violation_info from dolt_constraint_violations_t;",
 				Expected: []sql.Row{
-					{"check constraint", 1, 42, `{"Name": "t_chk_5eebhnk4", "Expression": "(NOT((col1 = col2)))"}`},
+					{"check constraint", 1, 42, "{\"Name\": \"t_chk_jtampqtl\", \"Expression\": \"(NOT((`col1` = `col2`)))\"}"},
 				},
 			},
 			{

@@ -47,3 +47,26 @@ teardown() {
     dolt table import -r -pk '`Key4' t `batshelper escaped-characters.csv`
     dolt table import -r -pk "/Key5" t `batshelper escaped-characters.csv`
 }
+
+@test "import-tables: error message shows actual argument count when too few arguments" {
+    run dolt table import -c
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "expected 1 argument (for stdin) or 2 arguments (table and file), but received 0" ]] || false
+}
+
+@test "import-tables: error message shows actual argument count when single argument provided" {
+    # Test with just table name (missing file)
+    run dolt table import -c table_name
+    [ "$status" -eq 1 ]
+    # This should succeed in our validation but fail when trying to read from stdin
+    # since we're providing 1 argument which is valid
+}
+
+@test "import-tables: handles incorrect flag format gracefully" {
+    # Test the specific case from the issue with -pks instead of --pk
+    run dolt table import -c -pks "year,state_fips" precinct_results test.csv
+    [ "$status" -eq 1 ]
+    # The argparser treats the unknown flag's value as a positional argument
+    [[ "$output" =~ "error: import has too many positional arguments" ]] || false
+    [[ "$output" =~ "Expected at most 2, found 3" ]] || false
+}

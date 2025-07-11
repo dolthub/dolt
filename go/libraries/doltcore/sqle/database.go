@@ -332,6 +332,34 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 	// TODO: these tables that cache a root value at construction time should not, they need to get it from the session
 	//  at runtime
 	switch {
+	case lwrName == doltdb.DoltDiffTablePrefix+doltdb.SchemasTableName:
+		// Special handling for dolt_diff_dolt_schemas
+		// Get the HEAD commit
+		if head == nil {
+			var err error
+			head, err = ds.GetHeadCommit(ctx, db.RevisionQualifiedName())
+			if err != nil {
+				return nil, false, err
+			}
+		}
+
+		// Use the same pattern as regular diff tables - this will show complete history
+		return DoltSchemasDiffTable(ctx, db.ddb, head, root, db), true, nil
+
+	case lwrName == doltdb.DoltDiffTablePrefix+doltdb.ProceduresTableName:
+		// Special handling for dolt_diff_dolt_procedures
+		// Get the HEAD commit
+		if head == nil {
+			var err error
+			head, err = ds.GetHeadCommit(ctx, db.RevisionQualifiedName())
+			if err != nil {
+				return nil, false, err
+			}
+		}
+
+		// Use the same pattern as regular diff tables - this will show complete history
+		return DoltProceduresDiffTable(ctx, db.ddb, head, root, db), true, nil
+
 	case strings.HasPrefix(lwrName, doltdb.DoltDiffTablePrefix):
 		if head == nil {
 			var err error
@@ -383,6 +411,28 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 			return nil, false, err
 		}
 		return dt, true, nil
+
+	case lwrName == doltdb.DoltHistoryTablePrefix+doltdb.SchemasTableName:
+		// Special handling for dolt_history_dolt_schemas
+		if head == nil {
+			var err error
+			head, err = ds.GetHeadCommit(ctx, db.RevisionQualifiedName())
+			if err != nil {
+				return nil, false, err
+			}
+		}
+		return DoltSchemasHistoryTable(db.ddb, head, db), true, nil
+
+	case lwrName == doltdb.DoltHistoryTablePrefix+doltdb.ProceduresTableName:
+		// Special handling for dolt_history_dolt_procedures
+		if head == nil {
+			var err error
+			head, err = ds.GetHeadCommit(ctx, db.RevisionQualifiedName())
+			if err != nil {
+				return nil, false, err
+			}
+		}
+		return DoltProceduresHistoryTable(db.ddb, head, db), true, nil
 
 	case strings.HasPrefix(lwrName, doltdb.DoltHistoryTablePrefix):
 		baseTableName := tblName[len(doltdb.DoltHistoryTablePrefix):]
@@ -1050,8 +1100,12 @@ func (db Database) tableInsensitive(ctx *sql.Context, root doltdb.RootValue, tab
 		return doltdb.TableName{}, nil, false, fmt.Errorf("no state for database %s", db.RevisionQualifiedName())
 	}
 
-	if tableListKey := root.TableListHash(); tableListKey != 0 {
-		tableList, ok := dbState.SessionCache().GetCachedTableMap(tableListKey)
+	// TODO: this logic is broken in the presence of schemas. It's set on a root value but always uses a single schema.
+	//  It needs to use the values of every table in every schema when computing the cache. It's also only set on a
+	//  call to GetTableNames, and is unset before such a call. This also means that doltgres cannot make use of this
+	//  caching, because the getAllTableNames below switches to different logic for doltgres.
+	if root.TableListHash() != 0 {
+		tableList, ok := dbState.SessionCache().GetTableNameMap(root.TableListHash())
 		if ok {
 			tname, ok := tableList[strings.ToLower(tableName)]
 			if ok {
@@ -1067,17 +1121,17 @@ func (db Database) tableInsensitive(ctx *sql.Context, root doltdb.RootValue, tab
 		}
 	}
 
-	tableNames, err := db.getAllTableNames(ctx, root, true)
+	tableNames, err := db.getAllTableNames(ctx, root, false)
 	if err != nil {
 		return doltdb.TableName{}, nil, false, err
 	}
 
-	if tableListKey := root.TableListHash(); tableListKey != 0 {
+	if root.TableListHash() != 0 {
 		tableMap := make(map[string]string)
 		for _, table := range tableNames {
 			tableMap[strings.ToLower(table)] = table
 		}
-		dbState.SessionCache().CacheTableMap(tableListKey, tableMap)
+		dbState.SessionCache().CacheTableNameMap(root.TableListHash(), tableMap)
 	}
 
 	tableName, ok = sql.GetTableNameInsensitive(tableName, tableNames)
@@ -1158,7 +1212,7 @@ func (db Database) GetAllTableNames(ctx *sql.Context, showSystemTables bool) ([]
 	return db.getAllTableNames(ctx, root, showSystemTables)
 }
 
-func (db Database) getAllTableNames(ctx *sql.Context, root doltdb.RootValue, showSystemTables bool) ([]string, error) {
+func (db Database) getAllTableNames(ctx *sql.Context, root doltdb.RootValue, includeGeneratedSystemTables bool) ([]string, error) {
 	var err error
 	var result []string
 	// If we are in a schema-enabled session and the schema name is not set, we need to union all table names in all
@@ -1178,12 +1232,14 @@ func (db Database) getAllTableNames(ctx *sql.Context, root doltdb.RootValue, sho
 		}
 	}
 
-	if showSystemTables {
-		systemTables, err := doltdb.GetGeneratedSystemTables(ctx, root)
+	if includeGeneratedSystemTables {
+		// TODO: this should work on the current schema only, if there is one
+		// TODO: this is getting called with showSystemTables = true, which seems wrong in most cases
+		systemTables, err := resolve.GetGeneratedSystemTables(ctx, root)
 		if err != nil {
 			return nil, err
 		}
-		result = append(result, systemTables...)
+		result = append(result, doltdb.FlattenTableNames(systemTables)...)
 	}
 
 	return result, nil

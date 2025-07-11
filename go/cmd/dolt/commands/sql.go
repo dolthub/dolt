@@ -447,7 +447,7 @@ func execSingleQuery(
 	}
 
 	if rowIter != nil {
-		err = engine.PrettyPrintResults(sqlCtx, format, sqlSch, rowIter, false, false)
+		err = engine.PrettyPrintResults(sqlCtx, format, sqlSch, rowIter, false, false, false)
 		if err != nil {
 			return errhand.VerboseErrorFromError(err)
 		}
@@ -663,7 +663,7 @@ func execBatchMode(ctx *sql.Context, qryist cli.Queryist, input io.Reader, conti
 					fileReadProg.printNewLineIfNeeded()
 				}
 			}
-			err = engine.PrettyPrintResults(ctx, format, sqlSch, rowIter, false, false)
+			err = engine.PrettyPrintResults(ctx, format, sqlSch, rowIter, false, false, false)
 			if err != nil {
 				err = buildBatchSqlErr(scanner.state.statementStartLine, query, err)
 				if !continueOnErr {
@@ -836,22 +836,28 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 					trackHistory(shell, query+";")
 				}
 				lastSqlCmd = query
-				var sqlSch sql.Schema
-				var rowIter sql.RowIter
-				if sqlSch, rowIter, _, err = processQuery(sqlCtx, query, qryist); err != nil {
-					verr := formatQueryError("", err)
-					shell.Println(verr.Verbose())
-				} else if rowIter != nil {
-					switch closureFormat {
-					case engine.FormatTabular, engine.FormatVertical:
-						err = engine.PrettyPrintResultsExtended(sqlCtx, closureFormat, sqlSch, rowIter, pagerEnabled, toggleWarnings)
-					default:
-						err = engine.PrettyPrintResults(sqlCtx, closureFormat, sqlSch, rowIter, pagerEnabled, toggleWarnings)
-					}
-
+				sqlStmt, err := sqlparser.Parse(query)
+				// silently skip empty statements
+				if err == nil || err == sqlparser.ErrEmpty {
+					sqlSch, rowIter, _, err := processParsedQuery(sqlCtx, query, qryist, sqlStmt)
 					if err != nil {
-						shell.Println(color.RedString(err.Error()))
+						verr := formatQueryError("", err)
+						shell.Println(verr.Verbose())
+					} else if rowIter != nil {
+						switch closureFormat {
+						case engine.FormatTabular, engine.FormatVertical:
+							err = engine.PrettyPrintResultsExtended(sqlCtx, closureFormat, sqlSch, rowIter, pagerEnabled, toggleWarnings, true)
+						default:
+							err = engine.PrettyPrintResults(sqlCtx, closureFormat, sqlSch, rowIter, pagerEnabled, toggleWarnings, true)
+						}
+					} else {
+						if _, isUseStmt := sqlStmt.(*sqlparser.Use); isUseStmt {
+							cli.Println("Database Changed")
+						}
 					}
+				}
+				if err != nil {
+					shell.Println(color.RedString(err.Error()))
 				}
 			}
 
@@ -1177,42 +1183,42 @@ func processQuery(ctx *sql.Context, query string, qryist cli.Queryist) (sql.Sche
 // and an error if one occurs.
 func processParsedQuery(ctx *sql.Context, query string, qryist cli.Queryist, sqlStatement sqlparser.Statement) (sql.Schema, sql.RowIter, *sql.QueryFlags, error) {
 	switch s := sqlStatement.(type) {
-	case *sqlparser.Use:
+	case *sqlparser.Use, *sqlparser.Commit:
+		_, ri, _, err := qryist.Query(ctx, query)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		_, err = sql.RowIterToRows(ctx, ri)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		return nil, nil, nil, nil
+	case *sqlparser.Insert, *sqlparser.Update, *sqlparser.Delete,
+		*sqlparser.AlterTable, *sqlparser.DDL, *sqlparser.Set:
 		sch, ri, _, err := qryist.Query(ctx, query)
 		if err != nil {
 			return nil, nil, nil, err
 		}
-		_, err = sql.RowIterToRows(ctx, ri)
+		rows, err := sql.RowIterToRows(ctx, ri)
 		if err != nil {
 			return nil, nil, nil, err
 		}
-		cli.Println("Database changed")
-		return sch, nil, nil, err
-	case *sqlparser.AlterTable, *sqlparser.Set, *sqlparser.Commit:
-		_, ri, _, err := qryist.Query(ctx, query)
-		if err != nil {
-			return nil, nil, nil, err
-		}
-		_, err = sql.RowIterToRows(ctx, ri)
-		if err != nil {
-			return nil, nil, nil, err
-		}
-		return nil, nil, nil, nil
-	case *sqlparser.DDL:
-		_, ri, _, err := qryist.Query(ctx, query)
-		if err != nil {
-			return nil, nil, nil, err
-		}
-		_, err = sql.RowIterToRows(ctx, ri)
-		if err != nil {
-			return nil, nil, nil, err
-		}
-		return nil, nil, nil, nil
+		newRowIter := sql.RowsToRowIter(rows...)
+		return sch, newRowIter, nil, nil
 	case *sqlparser.Load:
 		if s.Local {
 			return nil, nil, nil, fmt.Errorf("LOCAL supported only in sql-server mode")
 		}
-		return qryist.Query(ctx, query)
+		sch, ri, _, err := qryist.Query(ctx, query)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		rows, err := sql.RowIterToRows(ctx, ri)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		newRowIter := sql.RowsToRowIter(rows...)
+		return sch, newRowIter, nil, nil
 	default:
 		return qryist.QueryWithBindings(ctx, query, sqlStatement, nil, nil)
 	}
