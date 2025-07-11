@@ -13,16 +13,18 @@ import (
 
 	"github.com/dolthub/dolt/go/performance/utils/benchmark_runner"
 	"github.com/dolthub/dolt/go/store/constants"
+	"golang.org/x/sync/errgroup"
 )
 
 const (
-	mcpTestDatabaseName   = "test"
-	mcpTestRootUserName   = "root"
-	mcpTestClientUserName = "mcp"
-	mcpTestRootPassword   = ""
-	mcpTestClientPassword = "passw0rd"
-	doltServerHost        = "0.0.0.0"
-	doltServerPort        = 3306
+	mcpTestDatabaseName         = "test"
+	mcpTestRootUserName         = "root"
+	mcpTestMCPServerSQLUser     = "mcp-server"
+	mcpTestRootPassword         = ""
+	mcpTestMCPServerSQLPassword = "passw0rd"
+	doltServerHost              = "0.0.0.0"
+	doltServerPort              = 3306
+	mcpServerPort               = 6900
 )
 
 var ErrNoDatabaseConnection = errors.New("no database connection")
@@ -34,6 +36,9 @@ type testSuite struct {
 	dsn                   string
 	testDb                *sql.DB
 	doltServer            benchmark_runner.Server
+	mcpServer             Server
+	mcpErrGroup           *errgroup.Group
+	mcpErrGroupCancelFunc context.CancelFunc
 }
 
 func (s *testSuite) Ping() error {
@@ -107,7 +112,7 @@ func (s *testSuite) GlobalSetup() error {
 		return err
 	}
 
-	err = s.createSQLUser(mcpTestClientUserName, mcpTestClientPassword)
+	err = s.createSQLUser(mcpTestMCPServerSQLUser, mcpTestMCPServerSQLPassword)
 	if err != nil {
 		return err
 	}
@@ -230,18 +235,40 @@ func createMCPDoltServerTestSuite(ctx context.Context, doltBinPath string) (*tes
 		return nil, err
 	}
 
+	config := Config{
+		Host:     doltServerHost,
+		Port:     doltServerPort,
+		User:     mcpTestMCPServerSQLUser,
+		Password: mcpTestMCPServerSQLPassword,
+	}
+
+	mcpServer, err := NewMCPServer(config)
+	if err != nil {
+		return nil, err
+	}
+
+	newCtx, cancelFunc := context.WithCancel(ctx)
+
+	eg, egCtx := errgroup.WithContext(newCtx)
+
+	eg.Go(func() error {
+		mcpServer.ListenAndServe(egCtx, mcpServerPort)
+		return nil
+	})
+
 	return &testSuite{
 		dsn:                   dsn,
 		doltServer:            doltServer,
 		doltDatabaseParentDir: doltDatabaseParentDir,
 		doltDatabaseDir:       doltDatabaseDir,
 		testDb:                testDb,
+		mcpServer:             mcpServer,
+		mcpErrGroup:           eg,
+		mcpErrGroupCancelFunc: cancelFunc,
 	}, nil
 }
 
 func teardownMCPDoltServerTestSuite(s *testSuite) {
-	fmt.Println("DUSTIN: teardownMCPDoltServerTestSuite is running")
-
 	if s == nil {
 		return
 	}
@@ -251,19 +278,18 @@ func teardownMCPDoltServerTestSuite(s *testSuite) {
 	}()
 
 	if s.testDb != nil {
-		err := s.testDb.Close()
-		if err != nil {
-			fmt.Println("DUSTIN: testDb.Close() error:", err.Error())
-		}
+		s.testDb.Close()
 		s.testDb = nil
 	}
 
 	if s.doltServer != nil {
-		err := s.doltServer.Stop()
-		if err != nil {
-			fmt.Println("DUSTIN: doltServer.Close() error:", err.Error())
-		}
+		s.doltServer.Stop()
 		s.doltServer = nil
+	}
+
+	if s.mcpErrGroup != nil && s.mcpErrGroupCancelFunc != nil {
+		s.mcpErrGroupCancelFunc()
+		s.mcpErrGroup.Wait()
 	}
 }
 

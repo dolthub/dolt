@@ -3,7 +3,6 @@ package mcp
 import (
 	"fmt"
 	"testing"
-
 	"github.com/stretchr/testify/require"
 )
 
@@ -29,7 +28,7 @@ func testNewMCPServerFail(t *testing.T) {
 }
 
 func testSuccessWithDSN(suite *testSuite) {
-	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s", mcpTestClientUserName, mcpTestClientPassword, doltServerHost, doltServerPort, mcpTestDatabaseName)
+	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s", mcpTestMCPServerSQLUser, mcpTestMCPServerSQLPassword, doltServerHost, doltServerPort, mcpTestDatabaseName)
 	config := Config{
 		DSN: dsn,
 	}
@@ -42,8 +41,8 @@ func testSuccessWithDSN(suite *testSuite) {
 func testSuccessWithoutDSN(suite *testSuite) {
 	config := Config{
 		Host:         doltServerHost,
-		User:         mcpTestClientUserName,
-		Password:     mcpTestClientPassword,
+		User:         mcpTestMCPServerSQLUser,
+		Password:     mcpTestMCPServerSQLPassword,
 		Port:         doltServerPort,
 		DatabaseName: mcpTestDatabaseName,
 	}
@@ -55,8 +54,8 @@ func testSuccessWithoutDSN(suite *testSuite) {
 
 func testMissingHostAndDSN(suite *testSuite) {
 	config := Config{
-		User:         mcpTestClientUserName,
-		Password:     mcpTestClientPassword,
+		User:         mcpTestMCPServerSQLUser,
+		Password:     mcpTestMCPServerSQLPassword,
 		Port:         doltServerPort,
 		DatabaseName: mcpTestDatabaseName,
 	}
@@ -70,7 +69,7 @@ func testMissingHostAndDSN(suite *testSuite) {
 func testMissingUserAndDSN(suite *testSuite) {
 	config := Config{
 		Host:         doltServerHost,
-		Password:     mcpTestClientPassword,
+		Password:     mcpTestMCPServerSQLPassword,
 		Port:         doltServerPort,
 		DatabaseName: mcpTestDatabaseName,
 	}
@@ -84,8 +83,8 @@ func testMissingUserAndDSN(suite *testSuite) {
 func testMissingDatabaseNameAndDSN(suite *testSuite) {
 	config := Config{
 		Host:         doltServerHost,
-		User:         mcpTestClientUserName,
-		Password:     mcpTestClientPassword,
+		User:         mcpTestMCPServerSQLUser,
+		Password:     mcpTestMCPServerSQLPassword,
 		Port:         doltServerPort,
 	}
 
@@ -98,8 +97,8 @@ func testMissingDatabaseNameAndDSN(suite *testSuite) {
 func testMissingPortAndDSN(suite *testSuite) {
 	config := Config{
 		Host:         doltServerHost,
-		User:         mcpTestClientUserName,
-		Password:     mcpTestClientPassword,
+		User:         mcpTestMCPServerSQLUser,
+		Password:     mcpTestMCPServerSQLPassword,
 		DatabaseName: mcpTestDatabaseName,
 	}
 
@@ -108,4 +107,18 @@ func testMissingPortAndDSN(suite *testSuite) {
 	require.Equal(suite.t, err, ErrNoPortDefined)
 	require.Nil(suite.t, mcpServer)
 }
+
+// func testLiveServerPing(suite *testSuite) {
+// 	config := Config{
+// 		Host:         doltServerHost,
+// 		User:         mcpTestClientUserName,
+// 		Password:     mcpTestClientPassword,
+// 		Port:         doltServerPort,
+// 		DatabaseName: mcpTestDatabaseName,
+// 	}
+//
+// 	mcpServer, err := NewMCPServer(config)
+// 	require.NoError(suite.t, err)
+// 	require.NotNil(suite.t, mcpServer)
+// }
 
