@@ -225,18 +225,17 @@ func TestValidateForInsert(t *testing.T) {
 		assert.Equal(t, err, ErrColTagCollision)
 	})
 
-	t.Run("AutoIncrement on various types should be allowed", func(t *testing.T) {
+	t.Run("AutoIncrement on integer types should be allowed", func(t *testing.T) {
 		// Test that auto_increment validation is no longer enforced at database layer
 		// The validation should now be handled by the go-mysql-server layer
+		// Only integer types should be allowed per MySQL 8.4.5 behavior
 		testCases := []struct {
 			name     string
 			kind     types.NomsKind
 			typeInfo typeinfo.TypeInfo
 		}{
-			{"VARCHAR", types.StringKind, typeinfo.StringDefaultType},
 			{"INT", types.IntKind, typeinfo.FromKind(types.IntKind)},
 			{"UINT", types.UintKind, typeinfo.FromKind(types.UintKind)},
-			{"FLOAT", types.FloatKind, typeinfo.FromKind(types.FloatKind)},
 		}
 
 		for _, tc := range testCases {
