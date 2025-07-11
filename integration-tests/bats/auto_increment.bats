@@ -158,32 +158,20 @@ SQL
     [[ "$output" =~ "23,3" ]] || false
 }
 
-@test "auto_increment: insert into auto_increment table with correct floating point rounding" {
-    dolt sql <<SQL
+@test "auto_increment: FLOAT AUTO_INCREMENT should be rejected" {
+    run dolt sql <<SQL
 CREATE TABLE auto_float (
     pk float NOT NULL PRIMARY KEY AUTO_INCREMENT,
     c0 int
 );
 SQL
-
-    dolt sql -q "INSERT INTO auto_float (c0) VALUES (1);"
-    dolt sql -q "INSERT INTO auto_float (pk, c0) VALUES (2.1,2);"
-    dolt sql -q "INSERT INTO auto_float (c0) VALUES (3);"
-    dolt sql -q "INSERT INTO auto_float (pk, c0) VALUES (3.9,4);"
-    dolt sql -q "INSERT INTO auto_float (c0) VALUES (5);"
-
-    run dolt sql -q "SELECT * FROM auto_float ORDER BY pk;" -r csv
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "1,1" ]] || false
-    [[ "$output" =~ "2.1,2" ]] || false
-    [[ "$output" =~ "3,3" ]] || false
-    [[ "$output" =~ "3.9,4" ]] || false
-    [[ "$output" =~ "5,5" ]] || false
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Incorrect column specifier for column 'pk'" ]] || false
 }
 
-@test "auto_increment: create auto_increment tables with all numeric types" {
-    # signed integer types and floating point
-    for TYPE in TINYINT SMALLINT MEDIUMINT INT BIGINT FLOAT DOUBLE
+@test "auto_increment: create auto_increment tables with integer types" {
+    # signed integer types only (MySQL 8.4.5+ behavior)
+    for TYPE in TINYINT SMALLINT MEDIUMINT INT BIGINT
     do
         dolt sql <<SQL
 CREATE TABLE auto_$TYPE (
@@ -216,6 +204,22 @@ SQL
         run dolt sql -q "SELECT * FROM auto2_$TYPE WHERE c0 > 1 ORDER BY pk;" -r csv
         [ "$status" -eq 0 ]
         [[ "$output" =~ "2,2" ]] || false
+    done
+}
+
+@test "auto_increment: FLOAT and DOUBLE AUTO_INCREMENT should be rejected" {
+    # floating point types should be rejected in MySQL 8.4.5+
+    for TYPE in FLOAT DOUBLE
+    do
+        run dolt sql <<SQL
+CREATE TABLE auto_$TYPE (
+    pk $TYPE NOT NULL PRIMARY KEY AUTO_INCREMENT,
+    c0 int
+);
+SQL
+        echo "Testing $TYPE rejection"
+        [ "$status" -eq 1 ]
+        [[ "$output" =~ "Incorrect column specifier for column 'pk'" ]] || false
     done
 }
 
@@ -642,6 +646,7 @@ SQL
 }
 
 @test "auto_increment: alter table modify column to auto inc with different types" {
+    # Test successful ALTER with integer types
     dolt sql -q "create table t(pk int unsigned primary key, v int);"
     dolt sql -q "insert into t values (1,1);"
     dolt sql -q "ALTER TABLE t modify COLUMN pk int unsigned NOT NULL AUTO_INCREMENT;"
@@ -652,16 +657,13 @@ SQL
     [[ "${lines[1]}" =~ "1" ]] || false
     [[ "${lines[2]}" =~ "2" ]] || false
 
+    # Test rejected ALTER with float type
     dolt sql -q "drop table t"
     dolt sql -q "create table t(pk float primary key, v int);"
     dolt sql -q "insert into t values (1,1);"
-    dolt sql -q "ALTER TABLE t modify COLUMN pk float NOT NULL AUTO_INCREMENT;"
-
-    dolt sql -q 'insert into t(pk) values (NULL)'
-    run dolt sql -q "SELECT * FROM t ORDER BY pk" -r csv
-    [[ "${lines[0]}" =~ "pk" ]] || false
-    [[ "${lines[1]}" =~ "1" ]] || false
-    [[ "${lines[2]}" =~ "2" ]] || false
+    run dolt sql -q "ALTER TABLE t modify COLUMN pk float NOT NULL AUTO_INCREMENT;"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Incorrect column specifier for column 'pk'" ]] || false
 
     # type changes in the alter statement
     dolt sql -q "drop table t"
