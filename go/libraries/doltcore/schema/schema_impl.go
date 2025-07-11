@@ -198,7 +198,6 @@ func ValidateForInsert(allCols *ColCollection) error {
 		}
 		colNames[col.Name] = true
 
-
 		return false, nil
 	})
 
@@ -240,7 +239,6 @@ func MaxRowStorageSize(sch sql.Schema) int64 {
 	}
 	return numBytesPerRow
 }
-
 
 // UnkeyedSchemaFromCols creates a schema without any primary keys to be used for displaying to users, tests, etc. Such
 // unkeyed schemas are not suitable to be inserted into storage.

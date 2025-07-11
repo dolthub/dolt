@@ -241,11 +241,11 @@ func TestValidateForInsert(t *testing.T) {
 		for _, tc := range testCases {
 			t.Run(tc.name, func(t *testing.T) {
 				autoIncCol := Column{
-					Name:          "auto_inc_col", 
-					Tag:           999, 
-					Kind:          tc.kind, 
-					IsPartOfPK:    true, 
-					AutoIncrement: true, 
+					Name:          "auto_inc_col",
+					Tag:           999,
+					Kind:          tc.kind,
+					IsPartOfPK:    true,
+					AutoIncrement: true,
 					TypeInfo:      tc.typeInfo,
 				}
 				cols := []Column{autoIncCol}
