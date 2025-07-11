@@ -1,12 +1,11 @@
 #!/usr/bin/env bats
 load $BATS_TEST_DIRNAME/helper/common.bash
+load $BATS_TEST_DIRNAME/helper/data-generation.bash
 
 setup() {
     setup_common
 
-    dolt sql -q "create table tbl (i int auto_increment primary key, guid char(36))"
-    dolt commit -A -m "create tbl"
-
+    create_test_table
     dolt sql -q "$(insert_statement)"
 }
 
@@ -21,47 +20,6 @@ teardown() {
     teardown_common
 }
 
-# Inserts 25 new rows and commits them.
-insert_statement() {
-  res="INSERT INTO tbl (guid) VALUES (UUID());"
-  for ((i=1; i<=24; i++))
-  do
-    res="$res INSERT INTO tbl (guid) VALUES (UUID());"
-  done
-  res="$res call dolt_commit(\"-A\", \"--allow-empty\", \"-m\", \"Add 25 values\");"
-  echo "$res"
-}
-
-# Updates 10 random rows and commits the changes.
-update_statement() {
-  res="SET @max_id = (SELECT MAX(i) FROM tbl);
-SET @random_id = FLOOR(1 + RAND() * @max_id);
-UPDATE tbl SET guid = UUID() WHERE i >= @random_id LIMIT 1;"
-  for ((i=1; i<=9; i++))
-  do
-    res="$res
-SET @max_id = (SELECT MAX(i) FROM tbl);
-SET @random_id = FLOOR(1 + RAND() * @max_id);
-UPDATE tbl SET guid = UUID() WHERE i >= @random_id LIMIT 1;"
-  done
-  res="$res call dolt_commit(\"-A\", \"--allow-empty\", \"-m\", \"Update 10 values\");"
-  echo "$res"
-}
-
-# A series of 10 update-and-commit-then-insert-and-commit pairs, followed by a dolt_gc call
-#
-# This is useful because we need at least 25 retained chunks to create an archive.
-mutations_and_gc_statement() {
-  query=`update_statement`
-  for ((j=1; j<=9; j++))
-  do
-    query="$query $(insert_statement)"
-    query="$query $(update_statement)"
-  done
-  query="$query $(insert_statement)"
-  query="$query call dolt_gc();"
-  echo "$query"
-}
 
 @test "archive: too few chunks" {
   dolt sql -q "$(update_statement)"
