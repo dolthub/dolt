@@ -8,7 +8,6 @@ import (
 	"context"
 
 	"os"
-	"os/exec"
 	"syscall"
 
 	"github.com/dolthub/dolt/go/performance/utils/benchmark_runner"
@@ -24,42 +23,27 @@ const (
 )
 
 type testSuite struct {
-	t          *testing.T
+	t                     *testing.T
 	doltDatabaseParentDir string
-	doltDatabaseDir string
-	dsn string
-	testDb *sql.DB
-	doltServer benchmark_runner.Server
+	doltDatabaseDir       string
+	dsn                   string
+	testDb                *sql.DB
+	doltServer            benchmark_runner.Server
 }
 
-var suite *testSuite
+func (s *testSuite) Setup(t *testing.T) {
+	s.t = t
+	// todo: checkout a new testing branch
+	// todo: optionally allow tests to modify database before test run
+}
 
-func TestMain(m *testing.M) {
-	ctx := context.Background()
-
-	doltBinPath, err := exec.LookPath("dolt")
-	if err != nil {
-		fmt.Println("dolt binary not found in PATH, skipping mcp test")
-		os.Exit(0)
-	}
-	
-	suite, err = createMCPDoltServerTestSuite(ctx, doltBinPath)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "failed to create dolt server test suite: %v\n", err)
-		os.Exit(1)
-	}
-	defer func() {
-		teardownMCPDoltServerTestSuite(suite)
-		os.RemoveAll(suite.doltDatabaseParentDir)
-	}()
-
-	code := m.Run()
-
-	os.Exit(code)
+func (s *testSuite) Teardown(t *testing.T) {
+	s.t = t
+	// todo: checkout the main branch, then delete the testing branch
 }
 
 func createMCPDoltServerTestSuite(ctx context.Context, doltBinPath string) (*testSuite, error) {
-	doltDatabaseParentDir, err := os.MkdirTemp("", "mcp-tests-*")
+	doltDatabaseParentDir, err := os.MkdirTemp("", "mcp-server-tests-*")
 	if err != nil {
 		return nil, err
 	}
@@ -97,11 +81,11 @@ func createMCPDoltServerTestSuite(ctx context.Context, doltBinPath string) (*tes
 		return nil, err
 	}
 
-	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s", mcpTestUserName, mcpTestPassword, doltServerHost, doltServerPort, mcpTestDatabaseName)
+	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?multiStatements=true&parseTime=true", mcpTestUserName, mcpTestPassword, doltServerHost, doltServerPort, mcpTestDatabaseName)
 	testDb, err := sql.Open("mysql", dsn)
-    if err != nil {
+	if err != nil {
 		return nil, err
-    }
+	}
 
 	err = testDb.PingContext(ctx)
 	if err != nil {
@@ -109,25 +93,30 @@ func createMCPDoltServerTestSuite(ctx context.Context, doltBinPath string) (*tes
 	}
 
 	return &testSuite{
-		dsn: dsn,
-		doltServer: doltServer,
+		dsn:                   dsn,
+		doltServer:            doltServer,
 		doltDatabaseParentDir: doltDatabaseParentDir,
-		doltDatabaseDir: doltDatabaseDir,
-		testDb: testDb,
+		doltDatabaseDir:       doltDatabaseDir,
+		testDb:                testDb,
 	}, nil
 }
 
-func (s *testSuite) Setup(t *testing.T) {
-	s.t = t
-}
+func teardownMCPDoltServerTestSuite(s *testSuite) {
+	if s == nil {
+		return
+	}
 
-func (s *testSuite) Teardown(t *testing.T) {
-	s.t = t
+	defer func() {
+		os.RemoveAll(s.doltDatabaseParentDir)
+	}()
+
+	if s.testDb != nil {
+		s.testDb.Close()
+		s.testDb = nil
+	}
+
 	if s.doltServer != nil {
-		err := s.doltServer.Stop()
-		if err != nil {
-			s.t.Fatalf("failed to terminate container: %s", err)
-		}
+		s.doltServer.Stop()
 		s.doltServer = nil
 	}
 }
@@ -140,4 +129,3 @@ func RunTest(t *testing.T, testName string, testFunc func(s *testSuite)) {
 		testFunc(suite)
 	})
 }
-
