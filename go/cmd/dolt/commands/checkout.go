@@ -226,6 +226,8 @@ func handleErrors(branchName string, err error) errhand.VerboseError {
 		return errhand.VerboseErrorFromError(err)
 	} else if strings.Contains(err.Error(), "error: could not find") {
 		return errhand.VerboseErrorFromError(err)
+	} else if strings.Contains(err.Error(), "did not match any table") {
+		return errhand.VerboseErrorFromError(err)
 	} else if doltdb.IsRootValUnreachable(err) {
 		return errhand.VerboseErrorFromError(err)
 	} else if actions.IsCheckoutWouldOverwrite(err) {
