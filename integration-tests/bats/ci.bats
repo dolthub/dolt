@@ -117,7 +117,6 @@ get_commit_hash() {
 
     dolt ci init
     last=$(get_commit_hash 1)
-    dolt diff "$first" "$last" --system
     run dolt diff "$first" "$last" --system
     [ "$status" -eq 0 ]
     [[ ${output} == *"dolt_ci"* ]] || false

@@ -2185,7 +2185,7 @@ EOF
     [ "${#lines[@]}" -eq 3 ]
 }
 
-@test "diff: --system shows system tables" {
+@test "diff: diff only shows system tables with --system flag" {
     dolt sql -q "insert into dolt_ignore values ('test', 1)"
     dolt add . 
     dolt commit -m "added row to dolt_ignore"
