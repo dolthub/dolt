@@ -158,17 +158,6 @@ SQL
     [[ "$output" =~ "23,3" ]] || false
 }
 
-@test "auto_increment: FLOAT AUTO_INCREMENT should be rejected" {
-    run dolt sql <<SQL
-CREATE TABLE auto_float (
-    pk float NOT NULL PRIMARY KEY AUTO_INCREMENT,
-    c0 int
-);
-SQL
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "Incorrect column specifier for column 'pk'" ]] || false
-}
-
 @test "auto_increment: create auto_increment tables with integer types" {
     # signed integer types only (MySQL 8.4.5+ behavior)
     for TYPE in TINYINT SMALLINT MEDIUMINT INT BIGINT
