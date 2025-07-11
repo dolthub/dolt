@@ -529,25 +529,128 @@ func (ar archiveReader) verifyMetaCheckSum(ctx context.Context, stats *Stats) er
 }
 
 func (ar archiveReader) iterate(ctx context.Context, cb func(chunks.Chunk) error, stats *Stats) error {
-	for i := uint32(0); i < ar.footer.chunkCount; i++ {
-		var hasBytes [hash.ByteLen]byte
+	// Build reverse indexes for dictionary and data ByteSpans
+	// dictReverseIndex: Dictionary ByteSpan ID -> struct{} - indicates that we expect that span to be a dictionary.
+	// dataReverseIndex: Data ByteSpan ID -> chunk ref index - indicates that we expect that span to be a data chunk,
+	//                   and the value is the index into the chunkRefs slice where the chunk reference is stored.
+	dictReverseIndex := make(map[uint32]struct{})
+	dataReverseIndex := make(map[uint32]uint32)
 
-		binary.BigEndian.PutUint64(hasBytes[:uint64Size], ar.prefixes[i])
-		suf := ar.getSuffixByID(uint64(i))
-		copy(hasBytes[hash.ByteLen-hash.SuffixLen:], suf[:])
-		h := hash.New(hasBytes[:])
+	for chunkRefIdx := uint32(0); chunkRefIdx < ar.footer.chunkCount; chunkRefIdx++ {
+		dictId, dataId := ar.getChunkRef(int(chunkRefIdx))
 
-		data, err := ar.get(ctx, h, stats)
+		if dictId != 0 {
+			dictReverseIndex[dictId] = struct{}{}
+		}
+
+		dataReverseIndex[dataId] = chunkRefIdx
+	}
+
+	// Load data in 4MB chunks starting from the first byte of the data section
+	const bufferSize = 4 * 1024 * 1024
+	dataSpan := ar.footer.dataSpan()
+	currentBlockStart := dataSpan.offset // This is 0 with all current archive formats. Probably won't ever change.
+
+	loadedDictionaries := make(map[uint32]*gozstd.DDict)
+	byteSpanCounter := uint32(1)
+
+	dataBlock := make([]byte, bufferSize)
+	for currentBlockStart < (dataSpan.offset + dataSpan.length) {
+		// Calculate how much data to read (up tp bufferSize) from the current block.
+		remainingData := dataSpan.offset + dataSpan.length - currentBlockStart
+		readSize := bufferSize
+		if remainingData < bufferSize {
+			readSize = int(remainingData)
+			dataBlock = dataBlock[:readSize] // Resize to remaining data
+		}
+		_, err := ar.reader.ReadAtWithStats(ctx, dataBlock, int64(currentBlockStart), stats)
 		if err != nil {
 			return err
 		}
 
-		chk := chunks.NewChunkWithHash(h, data)
-		err = cb(chk)
-		if err != nil {
-			return err
+		// blockStart and blockEnd are used in the for loop below to calculate adjusted offsets. They are absolute - ie
+		// relative to the dataSpan.
+		blockStart := currentBlockStart
+		blockEnd := currentBlockStart + uint64(readSize)
+		currentBlockStart = blockEnd
+
+		for byteSpanCounter <= ar.footer.byteSpanCount {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+
+			span := ar.getByteSpanByID(byteSpanCounter)
+
+			adjustedOffset := span.offset - blockStart
+			if (span.offset + span.length) > blockEnd {
+				// Read the next buffer. update the currentBlockStart to ensure we don't cut off the next span.
+				currentBlockStart = span.offset
+				// Break _without_ bumping byteSpanCounter, so we can reprocess this span in the next iteration.
+				break
+			}
+
+			spanData := dataBlock[adjustedOffset : adjustedOffset+span.length]
+
+			if _, exists := dictReverseIndex[byteSpanCounter]; exists {
+				dict, err := NewDecompBundle(spanData)
+				if err != nil {
+					return fmt.Errorf("Failure creating dictionary from bytes: %w", err)
+				}
+				loadedDictionaries[byteSpanCounter] = dict.dDict
+			} else if _, exists := dataReverseIndex[byteSpanCounter]; exists {
+				chunkId := dataReverseIndex[byteSpanCounter]
+				dictId, dataId := ar.getChunkRef(int(chunkId))
+
+				if byteSpanCounter != dataId {
+					panic("Reverse Index incorrect: ByteSpan ID does not match data ID in chunk reference")
+				}
+
+				var hashBytes [hash.ByteLen]byte
+				binary.BigEndian.PutUint64(hashBytes[:uint64Size], ar.prefixes[chunkId])
+				suf := ar.getSuffixByID(uint64(chunkId))
+				copy(hashBytes[hash.ByteLen-hash.SuffixLen:], suf[:])
+				h := hash.New(hashBytes[:])
+
+				var chunkData []byte
+				if dictId == 0 {
+					// Snappy compression (no dictionary)
+					if ar.footer.formatVersion >= archiveVersionSnappySupport {
+						cc, err := NewCompressedChunk(h, spanData)
+						if err != nil {
+							return err
+						}
+						chk, err := cc.ToChunk()
+						if err != nil {
+							return err
+						}
+						chunkData = chk.Data()
+					} else {
+						return errors.New("runtime error: no dictionary for old format version")
+					}
+				} else {
+					dict, ok := loadedDictionaries[dictId]
+					if !ok {
+						panic("Reverse Index incomplete: Dictionary ID not found in loaded dictionaries")
+					}
+
+					chunkData, err = gozstd.DecompressDict(nil, spanData, dict)
+					if err != nil {
+						return err
+					}
+				}
+
+				chk := chunks.NewChunkWithHash(h, chunkData)
+				err = cb(chk)
+				if err != nil {
+					return err
+				}
+			} else {
+				panic("Reverse Index incomplete: ByteSpan ID not found in either dictionary or data reverse index")
+			}
+			byteSpanCounter++
 		}
 	}
+
 	return nil
 }
 
