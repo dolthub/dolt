@@ -80,12 +80,12 @@ func (cmd ConjoinCmd) Exec(ctx context.Context, commandStr string, args []string
 	// Validate that either --all flag is used OR storage file IDs are provided, but not both
 	if allFlag && len(storageIds) > 0 {
 		verr := errhand.BuildDError("--all flag and storage file IDs are mutually exclusive").SetPrintUsage().Build()
-		commands.HandleVErrAndExitCode(verr, usage)
+		return commands.HandleVErrAndExitCode(verr, usage)
 	}
 
 	if !allFlag && len(storageIds) == 0 {
 		verr := errhand.BuildDError("must specify either --all flag or storage file IDs").SetPrintUsage().Build()
-		commands.HandleVErrAndExitCode(verr, usage)
+		return commands.HandleVErrAndExitCode(verr, usage)
 	}
 
 	// Validate storage file IDs and convert to hash.Hash instances
@@ -95,14 +95,12 @@ func (cmd ConjoinCmd) Exec(ctx context.Context, commandStr string, args []string
 			fileIdHash, ok := hash.MaybeParse(id)
 			if !ok {
 				verr := errhand.BuildDError("invalid storage file ID: %s", id).SetPrintUsage().Build()
-				commands.HandleVErrAndExitCode(verr, usage)
+				return commands.HandleVErrAndExitCode(verr, usage)
 			}
 			storageIdHashes = append(storageIdHashes, fileIdHash)
 		}
 	}
 
 	verr := errhand.BuildDError("conjoin command not yet implemented").Build()
-	commands.HandleVErrAndExitCode(verr, usage)
-
-	return 0
+	return commands.HandleVErrAndExitCode(verr, usage)
 }
