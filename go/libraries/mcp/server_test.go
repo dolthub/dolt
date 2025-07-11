@@ -1,19 +1,21 @@
 package mcp
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
 
 func TestMCPServer(t *testing.T) {
-	t.Run("NewMCPServer success", testNewMCPServerSuccess)
-	t.Run("NewMCPServer fails", testNewMCPServerFail)
+	t.Run("NewMCPServer create success", testNewMCPServerSuccess)
+	t.Run("NewMCPServer create fails", testNewMCPServerFail)
 }
 
 func testNewMCPServerSuccess(t *testing.T) {
 	t.Run("Valid Config", func(t *testing.T) {
 		RunTest(t, "Without DSN", testSuccessWithoutDSN)
+		RunTest(t, "With DSN", testSuccessWithDSN)
 	})
 }
 
@@ -24,9 +26,17 @@ func testNewMCPServerFail(t *testing.T) {
 		RunTest(t, "Missing Database Name and DSN", testMissingDatabaseNameAndDSN)
 		RunTest(t, "Missing Port and DSN", testMissingPortAndDSN)
 	})
-	// t.Run("Invalid SQL user", nil)
-	// t.Run("Invalid SQL password", nil)
-	// t.Run("Invalid SQL grants", nil)
+}
+
+func testSuccessWithDSN(suite *testSuite) {
+	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s", mcpTestClientUserName, mcpTestClientPassword, doltServerHost, doltServerPort, mcpTestDatabaseName)
+	config := Config{
+		DSN: dsn,
+	}
+
+	mcpServer, err := NewMCPServer(config)
+	require.NoError(suite.t, err)
+	require.NotNil(suite.t, mcpServer)
 }
 
 func testSuccessWithoutDSN(suite *testSuite) {
