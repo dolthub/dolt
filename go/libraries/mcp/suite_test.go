@@ -8,6 +8,8 @@ import (
 
 	"os"
 	"os/exec"
+
+	"github.com/google/uuid"
 )
 
 var suite *testSuite
@@ -31,9 +33,44 @@ func TestMain(m *testing.M) {
 		os.RemoveAll(suite.doltDatabaseParentDir)
 	}()
 
-	// todo: seed the database with test users and schema
+	err = suite.GlobalSetup()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to perform test suite global setup: %v\n", err)
+		os.Exit(1)
+	}
+
 	code := m.Run()
 
 	os.Exit(code)
+}
+
+func generateTestBranchName() string {
+	return uuid.NewString()
+}
+
+func RunTest(t *testing.T, testName string, testFunc func(s *testSuite)) {
+	t.Run(testName, func(t *testing.T) {
+		if suite == nil {
+			t.Fatalf("no test suite")
+		}
+		suite.t = t
+		testBranchName := generateTestBranchName()
+		suite.Setup(testBranchName, "")
+		defer suite.Teardown(testBranchName)
+		testFunc(suite)
+	})
+}
+
+func RunTestWithSetupSQL(t *testing.T, testName, setupSQL string, testFunc func(s *testSuite)) {
+	t.Run(testName, func(t *testing.T) {
+		if suite == nil {
+			t.Fatalf("no test suite")
+		}
+		suite.t = t
+		testBranchName := generateTestBranchName()
+		suite.Setup(testBranchName, setupSQL)
+		defer suite.Teardown(testBranchName)
+		testFunc(suite)
+	})
 }
 

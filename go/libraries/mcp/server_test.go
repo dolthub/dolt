@@ -31,10 +31,10 @@ func testNewMCPServerFail(t *testing.T) {
 
 func testSuccessWithoutDSN(suite *testSuite) {
 	config := Config{
-		Host: doltServerHost,
-		User: mcpTestUserName,	
-		Password: mcpTestPassword,
-		Port: doltServerPort,
+		Host:         doltServerHost,
+		User:         mcpTestClientUserName,
+		Password:     mcpTestClientPassword,
+		Port:         doltServerPort,
 		DatabaseName: mcpTestDatabaseName,
 	}
 
@@ -45,9 +45,9 @@ func testSuccessWithoutDSN(suite *testSuite) {
 
 func testMissingHostAndDSN(suite *testSuite) {
 	config := Config{
-		User: mcpTestUserName,	
-		Password: mcpTestPassword,
-		Port: doltServerPort,
+		User:         mcpTestClientUserName,
+		Password:     mcpTestClientPassword,
+		Port:         doltServerPort,
 		DatabaseName: mcpTestDatabaseName,
 	}
 
