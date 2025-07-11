@@ -2184,3 +2184,17 @@ EOF
     # Count the line numbers to make sure there are no schema changes output
     [ "${#lines[@]}" -eq 3 ]
 }
+
+@test "diff: --system shows system tables" {
+    dolt sql -q "insert into dolt_ignore values ('test', 1)"
+    dolt add . 
+    dolt commit -m "added row to dolt_ignore"
+
+    run dolt diff HEAD HEAD~1
+    [ "$status" -eq 0 ]
+    ! [[ "$output" =~ "dolt_ignore" ]] || false
+
+    run dolt diff HEAD HEAD~1 --system
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "dolt_ignore" ]] || false
+}

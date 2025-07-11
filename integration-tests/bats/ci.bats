@@ -117,8 +117,8 @@ get_commit_hash() {
 
     dolt ci init
     last=$(get_commit_hash 1)
-    dolt diff "$first" "$last"
-    run dolt diff "$first" "$last"
+    dolt diff "$first" "$last" --system
+    run dolt diff "$first" "$last" --system
     [ "$status" -eq 0 ]
     [[ ${output} == *"dolt_ci"* ]] || false
 }
@@ -224,7 +224,7 @@ jobs:
 EOF
     dolt ci import ./workflow_1_updated.yaml
     updated=$(get_commit_hash 1)
-    run dolt diff "$original" "$updated"
+    run dolt diff "$original" "$updated" --system
     [ "$status" -eq 0 ]
     [[ ${output} == *"(new)"* ]] || false
     [[ ${output} == *"dolt_ci_workflow_steps"* ]] || false

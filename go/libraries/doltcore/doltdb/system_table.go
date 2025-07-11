@@ -82,7 +82,7 @@ func DoltCICanBypass(ctx context.Context) bool {
 // HasDoltPrefix returns a boolean whether or not the provided string is prefixed with the DoltNamespace. Users should
 // not be able to create tables in this reserved namespace.
 func HasDoltPrefix(s string) bool {
-	return strings.HasPrefix(strings.ToLower(s), DoltNamespace) && !HasDoltCIPrefix(s)
+	return strings.HasPrefix(strings.ToLower(s), DoltNamespace)
 }
 
 // HasDoltCIPrefix returns a boolean whether or not the provided string is prefixed with the DoltCINamespace. Users should
