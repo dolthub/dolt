@@ -179,6 +179,7 @@ func (cmd DiffCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsString(DiffMode, "", "diff mode", "Determines how to display modified rows with tabular output. Valid values are row, line, in-place, context. Defaults to context.")
 	ap.SupportsFlag(ReverseFlag, "R", "Reverses the direction of the diff.")
 	ap.SupportsFlag(NameOnlyFlag, "", "Only shows table names.")
+	ap.SupportsFlag(cli.SystemFlag, "", "Show system tables in addition to user tables")
 	return ap
 }
 
@@ -199,13 +200,19 @@ func (cmd DiffCmd) Exec(ctx context.Context, commandStr string, args []string, _
 		return HandleVErrAndExitCode(verr, usage)
 	}
 
-	queryist, oldSqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
-	sqlCtx := doltdb.ContextWithDoltCICreateBypassKey(oldSqlCtx)
+	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 	if closeFunc != nil {
 		defer closeFunc()
+	}
+
+	if apr.Contains(cli.SystemFlag) {
+		_, _, _, err = queryist.Query(sqlCtx, "SET @@dolt_show_system_tables = 1")
+		if err != nil {
+			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+		}
 	}
 
 	dArgs, err := parseDiffArgs(queryist, sqlCtx, apr)
@@ -214,6 +221,13 @@ func (cmd DiffCmd) Exec(ctx context.Context, commandStr string, args []string, _
 	}
 
 	verr = diffUserTables(queryist, sqlCtx, dArgs)
+
+	if apr.Contains(cli.SystemFlag) {
+		_, _, _, err = queryist.Query(sqlCtx, "SET @@dolt_show_system_tables = 0")
+		if err != nil {
+			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+		}
+	}
 	return HandleVErrAndExitCode(verr, usage)
 }
 
