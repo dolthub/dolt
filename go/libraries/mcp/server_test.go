@@ -20,9 +20,9 @@ func testNewMCPServerSuccess(t *testing.T) {
 func testNewMCPServerFail(t *testing.T) {
 	t.Run("Invalid Config", func(t *testing.T) {
 		RunTest(t, "Missing Host and DSN", testMissingHostAndDSN)
-		// RunTest(t, "Missing User and DSN", testMissingUserAndDSN)
-		// RunTest(t, "Missing Database Name and DSN", testMissingDatabaseNameAndDSN)
-		// RunTest(t, "Missing Port and DSN", testMissingPortAndDSN)
+		RunTest(t, "Missing User and DSN", testMissingUserAndDSN)
+		RunTest(t, "Missing Database Name and DSN", testMissingDatabaseNameAndDSN)
+		RunTest(t, "Missing Port and DSN", testMissingPortAndDSN)
 	})
 	// t.Run("Invalid SQL user", nil)
 	// t.Run("Invalid SQL password", nil)
@@ -57,15 +57,45 @@ func testMissingHostAndDSN(suite *testSuite) {
 	require.Nil(suite.t, mcpServer)
 }
 
-// func testMissingUserAndDSN(suite *testSuite) {
-//
-// }
-//
-// func testMissingDatabaseNameAndDSN(suite *testSuite) {
-//
-// }
-//
-// func testMissingPortAndDSN(suite *testSuite) {
-//
-// }
-//
+func testMissingUserAndDSN(suite *testSuite) {
+	config := Config{
+		Host:         doltServerHost,
+		Password:     mcpTestClientPassword,
+		Port:         doltServerPort,
+		DatabaseName: mcpTestDatabaseName,
+	}
+
+	mcpServer, err := NewMCPServer(config)
+	require.Error(suite.t, err)
+	require.Equal(suite.t, err, ErrNoUserDefined)
+	require.Nil(suite.t, mcpServer)
+}
+
+func testMissingDatabaseNameAndDSN(suite *testSuite) {
+	config := Config{
+		Host:         doltServerHost,
+		User:         mcpTestClientUserName,
+		Password:     mcpTestClientPassword,
+		Port:         doltServerPort,
+	}
+
+	mcpServer, err := NewMCPServer(config)
+	require.Error(suite.t, err)
+	require.Equal(suite.t, err, ErrNoDatabaseNameDefined)
+	require.Nil(suite.t, mcpServer)
+}
+
+func testMissingPortAndDSN(suite *testSuite) {
+	config := Config{
+		Host:         doltServerHost,
+		User:         mcpTestClientUserName,
+		Password:     mcpTestClientPassword,
+		DatabaseName: mcpTestDatabaseName,
+	}
+
+	mcpServer, err := NewMCPServer(config)
+	require.Error(suite.t, err)
+	require.Equal(suite.t, err, ErrNoPortDefined)
+	require.Nil(suite.t, mcpServer)
+}
+
