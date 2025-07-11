@@ -28,10 +28,6 @@ func TestMain(m *testing.M) {
 		fmt.Fprintf(os.Stderr, "failed to create dolt server test suite: %v\n", err)
 		os.Exit(1)
 	}
-	defer func() {
-		teardownMCPDoltServerTestSuite(suite)
-		os.RemoveAll(suite.doltDatabaseParentDir)
-	}()
 
 	err = suite.GlobalSetup()
 	if err != nil {
@@ -40,6 +36,9 @@ func TestMain(m *testing.M) {
 	}
 
 	code := m.Run()
+
+	teardownMCPDoltServerTestSuite(suite)
+	os.RemoveAll(suite.doltDatabaseParentDir)
 
 	os.Exit(code)
 }
@@ -73,4 +72,3 @@ func RunTestWithSetupSQL(t *testing.T, testName, setupSQL string, testFunc func(
 		testFunc(suite)
 	})
 }
-

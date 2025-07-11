@@ -1,7 +1,6 @@
 package mcp
 
 import (
-	"fmt"
 	"database/sql"
 	_ "github.com/go-sql-driver/mysql"
 )
@@ -28,7 +27,6 @@ func NewDatabase(config Config) (Database, error) {
 
 func newDB(config Config) (*sql.DB, error) {
     dsn := config.GetDSN()
-	fmt.Println("DUSTIN: dsn:", dsn)
 
     db, err := sql.Open("mysql", dsn)
     if err != nil {

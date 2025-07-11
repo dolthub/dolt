@@ -43,6 +43,19 @@ func (s *testSuite) Ping() error {
 	return s.testDb.Ping()
 }
 
+func (s *testSuite) createSQLUser(user, password string) error {
+	err := s.Ping()
+	if err != nil {
+		s.t.Fatalf("failed to reach database before creating user: %s", err.Error())
+	}
+	_, err = s.testDb.Exec(fmt.Sprintf("CREATE USER '%s'@'%s' IDENTIFIED BY '%s';", user, "%", password))
+	if err != nil {
+		return err
+	}
+	_, err = s.testDb.Exec(fmt.Sprintf("GRANT ALL PRIVILEGES ON `%s`.* TO '%s'@'%s';", mcpTestDatabaseName, user, "%"))
+	return err
+}
+
 func (s *testSuite) checkoutBranch(branchName string) error {
 	err := s.Ping()
 	if err != nil {
@@ -89,7 +102,17 @@ func (s *testSuite) exec(sql string) error {
 }
 
 func (s *testSuite) GlobalSetup() error {
-	// todo: add the users and schema and shit here
+	err := s.exec(fmt.Sprintf("USE %s;", mcpTestDatabaseName))
+	if err != nil {
+		return err
+	}
+
+	err = s.createSQLUser(mcpTestClientUserName, mcpTestClientPassword)
+	if err != nil {
+		return err
+	}
+
+	// todo: add the schema and shit here
 	return nil
 }
 
@@ -98,7 +121,12 @@ func (s *testSuite) Setup(newBranchName, setupSQL string) {
 		s.t.Fatalf("no new branch name provided")
 	}
 
-	err := s.checkoutBranch("main")
+	err := s.exec(fmt.Sprintf("USE %s;", mcpTestDatabaseName))
+	if err != nil {
+		s.t.Fatalf("failed to use database during test setup: %s", err.Error())
+	}
+
+	err = s.checkoutBranch("main")
 	if err != nil {
 		s.t.Fatalf("failed checkout main branch during test setup: %s", err.Error())
 	}
@@ -134,6 +162,11 @@ func (s *testSuite) Teardown(branchName string) {
 	err := s.Ping()
 	if err != nil {
 		s.t.Fatalf("failed to reach database: %s", err.Error())
+	}
+
+	err = s.exec(fmt.Sprintf("USE %s;", mcpTestDatabaseName))
+	if err != nil {
+		s.t.Fatalf("failed to use database during test setup: %s", err.Error())
 	}
 
 	err = s.checkoutBranch("main")
@@ -207,6 +240,8 @@ func createMCPDoltServerTestSuite(ctx context.Context, doltBinPath string) (*tes
 }
 
 func teardownMCPDoltServerTestSuite(s *testSuite) {
+	fmt.Println("DUSTIN: teardownMCPDoltServerTestSuite is running")
+
 	if s == nil {
 		return
 	}
@@ -216,12 +251,19 @@ func teardownMCPDoltServerTestSuite(s *testSuite) {
 	}()
 
 	if s.testDb != nil {
-		s.testDb.Close()
+		err := s.testDb.Close()
+		if err != nil {
+			fmt.Println("DUSTIN: testDb.Close() error:", err.Error())
+		}
 		s.testDb = nil
 	}
 
 	if s.doltServer != nil {
-		s.doltServer.Stop()
+		err := s.doltServer.Stop()
+		if err != nil {
+			fmt.Println("DUSTIN: doltServer.Close() error:", err.Error())
+		}
 		s.doltServer = nil
 	}
 }
+

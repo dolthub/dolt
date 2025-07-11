@@ -8,7 +8,7 @@ import (
 
 func TestMCPServer(t *testing.T) {
 	t.Run("NewMCPServer success", testNewMCPServerSuccess)
-	// t.Run("NewMCPServer fails", testNewMCPServerFail)
+	t.Run("NewMCPServer fails", testNewMCPServerFail)
 }
 
 func testNewMCPServerSuccess(t *testing.T) {
@@ -53,6 +53,7 @@ func testMissingHostAndDSN(suite *testSuite) {
 
 	mcpServer, err := NewMCPServer(config)
 	require.Error(suite.t, err)
+	require.Equal(suite.t, err, ErrNoHostDefined)
 	require.Nil(suite.t, mcpServer)
 }
 
