@@ -81,8 +81,8 @@ func ThreeWayMerge[K ~[]byte, O Ordering[K], S message.Serializer](
 	return final, stats, nil
 }
 
-// nilCompare compares two keys, treating nil as below all other values
-func nilCompare[K ~[]byte, O Ordering[K]](ctx context.Context, order O, left, right K) int {
+// compareWithNilAsMin compares two keys, treating nil as below all other values
+func compareWithNilAsMin[K ~[]byte, O Ordering[K]](ctx context.Context, order O, left, right K) int {
 	if left == nil && right == nil {
 		return 0
 	}
@@ -163,7 +163,7 @@ func SendPatches[K ~[]byte, O Ordering[K]](
 		leftLevel, _ := l.getLevel()
 		rightLevel, _ := r.getLevel()
 		if leftLevel > 0 && rightLevel > 0 {
-			if nilCompare(ctx, order, K(left.EndKey), K(right.KeyBelowStart)) <= 0 {
+			if compareWithNilAsMin(ctx, order, K(left.EndKey), K(right.KeyBelowStart)) <= 0 {
 				// Left change is entirely before right change.
 				// This change is already on the left map, so we ignore it.
 				left, lDiffType, err = l.Next(ctx)
@@ -173,7 +173,7 @@ func SendPatches[K ~[]byte, O Ordering[K]](
 				if err != nil {
 					return err
 				}
-			} else if nilCompare(ctx, order, K(right.EndKey), K(left.KeyBelowStart)) <= 0 {
+			} else if compareWithNilAsMin(ctx, order, K(right.EndKey), K(left.KeyBelowStart)) <= 0 {
 				// Right change is entirely before left change.
 				err = buf.SendPatch(ctx, right)
 				if err != nil {
@@ -195,7 +195,7 @@ func SendPatches[K ~[]byte, O Ordering[K]](
 				// If the left side added or removed a chunk, we can safely ignore it. If the right side added a chunk,
 				// then we already encountered it. But if the right side removed a chunk, we need to emit a patch here
 				// that reflects that.
-				if order.Compare(ctx, K(left.KeyBelowStart), K(right.KeyBelowStart)) > 0 {
+				if compareWithNilAsMin(ctx, order, K(left.KeyBelowStart), K(right.KeyBelowStart)) > 0 {
 					err = buf.SendPatch(ctx, right)
 				}
 				// This change is already on the left map, so we ignore it.
@@ -217,7 +217,7 @@ func SendPatches[K ~[]byte, O Ordering[K]](
 			} else {
 				// In all other cases there's a conflict and we have to split whichever one comes first.
 				// If both have the same start key, split both.
-				cmp := nilCompare(ctx, order, K(left.KeyBelowStart), K(right.KeyBelowStart))
+				cmp := compareWithNilAsMin(ctx, order, K(left.KeyBelowStart), K(right.KeyBelowStart))
 				if cmp <= 0 {
 					left, lDiffType, err = l.split(ctx)
 					if err != nil {
@@ -236,7 +236,7 @@ func SendPatches[K ~[]byte, O Ordering[K]](
 
 		// If one branch returns a range patch and the other returns a point patch, we need to see if they overlap and possibly split the range diff.
 		if rightLevel > 0 {
-			if nilCompare(ctx, order, K(left.EndKey), K(right.KeyBelowStart)) <= 0 {
+			if compareWithNilAsMin(ctx, order, K(left.EndKey), K(right.KeyBelowStart)) <= 0 {
 				// point update comes first
 				// This change is already on the left map, so we ignore it.
 				left, lDiffType, err = l.Next(ctx)
@@ -270,7 +270,7 @@ func SendPatches[K ~[]byte, O Ordering[K]](
 		}
 
 		if leftLevel > 0 {
-			if nilCompare(ctx, order, K(right.EndKey), K(left.KeyBelowStart)) <= 0 {
+			if compareWithNilAsMin(ctx, order, K(right.EndKey), K(left.KeyBelowStart)) <= 0 {
 				// point update comes first
 				err = buf.SendPatch(ctx, right)
 				if err != nil {
@@ -283,7 +283,7 @@ func SendPatches[K ~[]byte, O Ordering[K]](
 				if err != nil {
 					return err
 				}
-			} else if nilCompare(ctx, order, K(right.EndKey), K(left.EndKey)) > 0 {
+			} else if order.Compare(ctx, K(right.EndKey), K(left.EndKey)) > 0 {
 				// range update comes first
 				// This change is already on the left map, so we ignore it.
 				left, lDiffType, err = l.Next(ctx)
@@ -303,7 +303,7 @@ func SendPatches[K ~[]byte, O Ordering[K]](
 			continue
 		}
 
-		cmp := l.order.Compare(ctx, K(left.EndKey), K(right.EndKey))
+		cmp := order.Compare(ctx, K(left.EndKey), K(right.EndKey))
 
 		switch {
 		case cmp < 0:

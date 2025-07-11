@@ -231,7 +231,7 @@ func (td *PatchGenerator[K, O]) advanceFromPreviousPatch(ctx context.Context) (p
 			// If the last to block was small we may not advance from at all.
 			currentKey := td.from.CurrentKey()
 			if currentKey != nil {
-				cmp := nilCompare(ctx, td.order, K(currentKey), K(td.previousKey))
+				cmp := compareWithNilAsMin(ctx, td.order, K(currentKey), K(td.previousKey))
 
 				for cmp != 0 {
 					if cmp > 0 {
