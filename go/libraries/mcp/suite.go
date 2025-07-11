@@ -48,19 +48,6 @@ func (s *testSuite) Ping() error {
 	return s.testDb.Ping()
 }
 
-func (s *testSuite) createSQLUser(user, password string) error {
-	err := s.Ping()
-	if err != nil {
-		s.t.Fatalf("failed to reach database before creating user: %s", err.Error())
-	}
-	_, err = s.testDb.Exec(fmt.Sprintf("CREATE USER '%s'@'%s' IDENTIFIED BY '%s';", user, "%", password))
-	if err != nil {
-		return err
-	}
-	_, err = s.testDb.Exec(fmt.Sprintf("GRANT ALL PRIVILEGES ON `%s`.* TO '%s'@'%s';", mcpTestDatabaseName, user, "%"))
-	return err
-}
-
 func (s *testSuite) checkoutBranch(branchName string) error {
 	err := s.Ping()
 	if err != nil {
@@ -82,7 +69,7 @@ func (s *testSuite) createBranch(branchName string) error {
 func (s *testSuite) deleteBranch(branchName string) error {
 	err := s.Ping()
 	if err != nil {
-		s.t.Fatalf("failed to reach database before deleteing a branch: %s", err.Error())
+		s.t.Fatalf("failed to reach database before deleting a branch: %s", err.Error())
 	}
 	_, err = s.testDb.Exec(fmt.Sprintf("CALL DOLT_BRANCH('-d', '%s');", branchName))
 	return err
@@ -104,21 +91,6 @@ func (s *testSuite) exec(sql string) error {
 	}
 	_, err = s.testDb.Exec(sql)
 	return err
-}
-
-func (s *testSuite) GlobalSetup() error {
-	err := s.exec(fmt.Sprintf("USE %s;", mcpTestDatabaseName))
-	if err != nil {
-		return err
-	}
-
-	err = s.createSQLUser(mcpTestMCPServerSQLUser, mcpTestMCPServerSQLPassword)
-	if err != nil {
-		return err
-	}
-
-	// todo: add the schema and shit here
-	return nil
 }
 
 func (s *testSuite) Setup(newBranchName, setupSQL string) {
@@ -227,23 +199,46 @@ func createMCPDoltServerTestSuite(ctx context.Context, doltBinPath string) (*tes
 	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?multiStatements=true&parseTime=true", mcpTestRootUserName, mcpTestRootPassword, doltServerHost, doltServerPort, mcpTestDatabaseName)
 	testDb, err := sql.Open("mysql", dsn)
 	if err != nil {
+		doltServer.Stop()
 		return nil, err
 	}
 
 	err = testDb.PingContext(ctx)
 	if err != nil {
+		doltServer.Stop()
+		testDb.Close()
 		return nil, err
 	}
+
+	_, err = testDb.ExecContext(ctx, fmt.Sprintf("USE %s;", mcpTestDatabaseName))
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = testDb.ExecContext(ctx, fmt.Sprintf("CREATE USER '%s'@'%s' IDENTIFIED BY '%s';", mcpTestMCPServerSQLUser, "%", mcpTestMCPServerSQLPassword))
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = testDb.ExecContext(ctx, fmt.Sprintf("GRANT ALL PRIVILEGES ON `%s`.* TO '%s'@'%s';", mcpTestDatabaseName, mcpTestMCPServerSQLUser, "%"))
+	if err != nil {
+		return nil, err
+	}
+
+	// todo: do schema creation stuff here
 
 	config := Config{
 		Host:     doltServerHost,
 		Port:     doltServerPort,
 		User:     mcpTestMCPServerSQLUser,
 		Password: mcpTestMCPServerSQLPassword,
+		DatabaseName: mcpTestDatabaseName,
 	}
 
 	mcpServer, err := NewMCPServer(config)
 	if err != nil {
+		doltServer.Stop()
+		testDb.Close()
 		return nil, err
 	}
 

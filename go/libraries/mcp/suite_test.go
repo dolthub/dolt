@@ -29,16 +29,9 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
-	err = suite.GlobalSetup()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "failed to perform test suite global setup: %v\n", err)
-		os.Exit(1)
-	}
-
 	code := m.Run()
 
 	teardownMCPDoltServerTestSuite(suite)
-	os.RemoveAll(suite.doltDatabaseParentDir)
 
 	os.Exit(code)
 }
