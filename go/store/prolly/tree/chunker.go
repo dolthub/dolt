@@ -24,6 +24,8 @@ package tree
 import (
 	"context"
 
+	"github.com/dolthub/dolt/go/store/hash"
+
 	"github.com/dolthub/dolt/go/store/prolly/message"
 )
 
@@ -252,6 +254,60 @@ func (tc *chunker[S]) advanceTo(ctx context.Context, next *cursor) error {
 	if err != nil {
 		return err
 	}
+	return nil
+}
+
+func insertNode[K ~[]byte, S message.Serializer, O Ordering[K]](ctx context.Context, tc *chunker[S], fromKey K, toKey K, addr hash.Hash, subtree uint64, level int, order O) error {
+	// In the best case, the start of the supplied range is greater than the last key written, and the tree levels line up. In that case
+	// we can just advance to the start and write the supplied address.
+
+	// If the supplied tree level is *above* our current one, we need to load the chunk and write its children until the chunk boundaries line up.
+	if level == tc.level {
+		// The chunker is on a boundary at the required level: we can simply write the address at that level.
+		_, err := tc.append(ctx, Item(toKey), addr[:], subtree)
+		return err
+	}
+	if tc.builder.count() == 0 {
+		// The supplied address is at a higher level. There are no pending writes on this level so we can simply
+		// call the parent chunker.
+		if tc.parent == nil {
+			if err := tc.createParentChunker(ctx); err != nil {
+				return err
+			}
+		}
+		return insertNode(ctx, tc.parent, fromKey, toKey, addr, subtree, level, order)
+	}
+
+	// The supplied address is at a higher level, but we have pending writes on this level. Recurse.
+	// Resolve the address and add its children recursively.
+	nd, err := tc.ns.Read(ctx, addr)
+	if err != nil {
+		return err
+	}
+	if level == 1 {
+		for i := 0; i < nd.Count(); i++ {
+			_, err := tc.append(ctx, nd.GetKey(i), nd.GetValue(i), 0)
+			if err != nil {
+				return err
+			}
+		}
+	} else {
+		nd, err = nd.loadSubtrees()
+		if err != nil {
+			return err
+		}
+		for i := 0; i < nd.Count(); i++ {
+			subtreeCount, err := nd.getSubtreeCount(i)
+			if err != nil {
+				return err
+			}
+			err = insertNode[K, S, O](ctx, tc, nil, K(nd.GetKey(i)), nd.getAddress(i), subtreeCount, level-1, order)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
 	return nil
 }
 

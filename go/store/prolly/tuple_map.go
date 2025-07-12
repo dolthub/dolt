@@ -169,11 +169,8 @@ func makeDiffCallBack(from, to Map, innerCb tree.DiffFn) tree.DiffFn {
 func MergeMaps(ctx context.Context, left, right, base Map, cb tree.CollisionFn) (Map, tree.MergeStats, error) {
 	serializer := message.NewProllyMapSerializer(left.valDesc, base.NodeStore().Pool())
 	// TODO: MergeMaps does not properly detect merge conflicts when one side adds a NULL to the end of its tuple.
-	// To fix this, accurate values of `leftSchemaChanged` and `rightSchemaChanged` must be computed.
 	// However, since `MergeMaps` is not currently called, fixing this is not a priority.
-	leftSchemaChanged := false
-	rightSchemaChanged := false
-	tuples, stats, err := tree.MergeOrderedTrees(ctx, left.tuples, right.tuples, base.tuples, cb, leftSchemaChanged, rightSchemaChanged, serializer)
+	tuples, stats, err := tree.MergeOrderedTrees(ctx, left.tuples, right.tuples, base.tuples, cb, serializer)
 	if err != nil {
 		return Map{}, tree.MergeStats{}, err
 	}
