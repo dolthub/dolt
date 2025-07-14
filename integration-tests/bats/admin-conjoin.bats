@@ -42,16 +42,16 @@ get_oldgen_storage_ids() {
     [[ "$output" =~ "invalid storage file ID: invalidhash" ]] || false
 }
 
-@test "conjoin: --all flag works (not yet implemented)" {
+@test "conjoin: --all flag works" {
     run dolt admin conjoin --all
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "conjoin command not yet implemented" ]] || false
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "No table files to conjoin" ]] || false
 }
 
-@test "conjoin: valid storage file ID works (not yet implemented)" {
+@test "conjoin: valid storage file ID works" {
     run dolt admin conjoin abcdef1234567890abcdef1234567890
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "conjoin command not yet implemented" ]] || false
+    [[ "$output" =~ "storage file not found" ]] || false
 }
 
 @test "conjoin: get storage file IDs and test conjoin with specific IDs" {
@@ -76,9 +76,9 @@ get_oldgen_storage_ids() {
     [ "${#id1}" -eq 32 ]
     [ "${#id2}" -eq 32 ]
     
-    # Test conjoin with the specific IDs (expected to fail with "not yet implemented")
+    # Test conjoin with the specific IDs (should succeed)
     run dolt admin conjoin "$id1" "$id2"
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "conjoin command not yet implemented" ]] || false
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Successfully conjoined table files" ]] || false
 }
 

@@ -2317,3 +2317,88 @@ func CalcReads(nbs *NomsBlockStore, hashes hash.HashSet, blockSize uint64, keepe
 
 	return reads, split, gcb, err
 }
+
+// ConjoinTableFiles conjoins the specified table files into a single new table file.
+// The storageIds slice contains the hash IDs of the table files to conjoin.
+// Returns the hash of the newly created conjoined table file.
+func (nbs *NomsBlockStore) ConjoinTableFiles(ctx context.Context, storageIds []hash.Hash) (hash.Hash, error) {
+	nbs.mu.RLock()
+	defer nbs.mu.RUnlock()
+
+	// If no storageIds provided, collect all table files from the current table set
+	if len(storageIds) == 0 {
+		// Collect all table files from the current table set
+		for _, tf := range nbs.tables.novel {
+			storageIds = append(storageIds, tf.hash())
+		}
+		for _, tf := range nbs.tables.upstream {
+			storageIds = append(storageIds, tf.hash())
+		}
+		
+		if len(storageIds) == 0 {
+			return hash.Hash{}, errors.New("no table files to conjoin")
+		}
+	}
+
+	// Convert storage IDs to chunkSources
+	var sources chunkSources
+	stats := &Stats{}
+
+	for _, storageId := range storageIds {
+		// Find the table spec to get chunk count
+		tableSpec, found := nbs.findTableSpec(storageId)
+		if !found {
+			return hash.Hash{}, errors.New("storage file not found: " + storageId.String())
+		}
+
+		// Open the chunkSource for this storage ID
+		cs, err := nbs.persister.Open(ctx, storageId, tableSpec.chunkCount, stats)
+		if err != nil {
+			return hash.Hash{}, err
+		}
+		sources = append(sources, cs)
+	}
+
+	// Perform the conjoin operation
+	conjoinedSource, cleanup, err := nbs.persister.ConjoinAll(ctx, sources, stats)
+	if err != nil {
+		return hash.Hash{}, err
+	}
+	defer cleanup()
+
+	// Get the hash of the newly created table file
+	conjoinedHash := conjoinedSource.hash()
+	return conjoinedHash, nil
+}
+
+
+// findTableSpec finds a table spec by hash in the current manifest
+func (nbs *NomsBlockStore) findTableSpec(storageId hash.Hash) (tableSpec, bool) {
+	// Check in upstream tables
+	for _, spec := range nbs.upstream.specs {
+		if spec.name == storageId {
+			return spec, true
+		}
+	}
+	// Check in novel tables
+	for _, tf := range nbs.tables.novel {
+		if tf.hash() == storageId {
+			count, err := tf.count()
+			if err != nil {
+				return tableSpec{name: storageId, chunkCount: 0}, false
+			}
+			return tableSpec{name: storageId, chunkCount: count}, true
+		}
+	}
+	// Check in upstream tables
+	for _, tf := range nbs.tables.upstream {
+		if tf.hash() == storageId {
+			count, err := tf.count()
+			if err != nil {
+				return tableSpec{name: storageId, chunkCount: 0}, false
+			}
+			return tableSpec{name: storageId, chunkCount: count}, true
+		}
+	}
+	return tableSpec{name: storageId, chunkCount: 0}, false
+}

@@ -20,9 +20,12 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/nbs"
 )
 
 type ConjoinCmd struct {
@@ -101,6 +104,44 @@ func (cmd ConjoinCmd) Exec(ctx context.Context, commandStr string, args []string
 		}
 	}
 
-	verr := errhand.BuildDError("conjoin command not yet implemented").Build()
-	return commands.HandleVErrAndExitCode(verr, usage)
+	// Get the ChunkStore from DoltDB
+	ddb := dEnv.DoltDB(ctx)
+	db := doltdb.HackDatasDatabaseFromDoltDB(ddb)
+	cs := datas.ChunkStoreFromDatabase(db)
+
+	// Handle both NomsBlockStore and GenerationalNBS
+	var targetNBS *nbs.NomsBlockStore
+	if gnbs, ok := cs.(*nbs.GenerationalNBS); ok {
+		// For GenerationalNBS, we'll work with the oldGen which contains the storage files
+		targetNBS = gnbs.OldGen().(*nbs.NomsBlockStore)
+	} else {
+		verr := errhand.BuildDError("ChunkStore is not a supported type for conjoin operation").Build()
+		return commands.HandleVErrAndExitCode(verr, usage)
+	}
+
+	// Use ConjoinTableFiles for both --all and specific IDs
+	// When --all is specified, pass empty slice to conjoin all files
+	var targetStorageIds []hash.Hash
+	if allFlag {
+		targetStorageIds = nil // Empty slice will trigger "conjoin all" behavior
+	} else {
+		targetStorageIds = storageIdHashes
+	}
+	
+	conjoinedHash, err := targetNBS.ConjoinTableFiles(ctx, targetStorageIds)
+	if err != nil {
+		if err.Error() == "no table files to conjoin" {
+			cli.Printf("No table files to conjoin.\n")
+			return 0
+		}
+		verr := errhand.BuildDError("failed to conjoin table files: %v", err).Build()
+		return commands.HandleVErrAndExitCode(verr, usage)
+	}
+	
+	if allFlag {
+		cli.Printf("Successfully conjoined all table files. New table file: %s\n", conjoinedHash.String())
+	} else {
+		cli.Printf("Successfully conjoined table files. New table file: %s\n", conjoinedHash.String())
+	}
+	return 0
 }
