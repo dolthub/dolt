@@ -33,7 +33,7 @@ type ConjoinCmd struct {
 
 var conjoinDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Conjoin storage files in the database",
-	LongDesc: `Admin command to conjoin oldgen storage files in the database. Conjoining combines multiple storage files into a single file, which can improve performance chunk search time.
+	LongDesc: `Admin command to conjoin oldgen storage files in the database. Conjoining combines multiple storage files into a single file, which can improve chunk search time.
 
 Use --all to conjoin all storage in oldgen, or specify individual storage file IDs (32-character hex strings) to conjoin only those files.`,
 	Synopsis: []string{
