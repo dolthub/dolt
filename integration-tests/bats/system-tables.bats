@@ -1068,24 +1068,32 @@ SQL
     dolt sql -q "create table test (pk int, c1 int, primary key(pk))"
     dolt add test
     dolt commit -m "initial commit"
+    dolt sql -q "create table test2 (pk int, c1 int, primary key(pk))"
+    dolt add test2
+    dolt commit -m "second commit"
     
-    # Test basic bind variable support
-    run dolt sql -q "prepare stmt1 from 'select count(*) from dolt_log(?)';"
+    # Test basic bind variable support - single parameter
+    run dolt sql -q "prepare stmt1 from 'select count(*) from dolt_log(?)'; set @v1 = 'HEAD'; execute stmt1 using @v1;"
     [ "$status" -eq 0 ]
+    [[ "$output" =~ "3" ]] || false  # Should have 3 commits (init + 2 commits)
     
-    # Test multiple bind variables
-    run dolt sql -q "prepare stmt2 from 'select count(*) from dolt_log(?, ?)';"
+    # Test multiple bind variables with range
+    run dolt sql -q "prepare stmt2 from 'select count(*) from dolt_log(?)'; set @v1 = 'HEAD~1..HEAD'; execute stmt2 using @v1;"
     [ "$status" -eq 0 ]
+    [[ "$output" =~ "1" ]] || false  # Should have 1 commit in the range
     
     # Test the original customer issue: dolt_log with --not flag and bind variables
-    run dolt sql -q "prepare stmt3 from 'select count(*) from dolt_log(?, \"--not\", ?)';"
+    run dolt sql -q "prepare stmt3 from 'select count(*) from dolt_log(?, \"--not\", ?)'; set @v1 = 'HEAD', @v2 = 'HEAD~1'; execute stmt3 using @v1, @v2;"
     [ "$status" -eq 0 ]
+    [[ "$output" =~ "1" ]] || false  # Should have 1 commit (HEAD excluding HEAD~1)
     
     # Test bind variables with other flags
-    run dolt sql -q "prepare stmt4 from 'select count(*) from dolt_log(?, \"--parents\")';"
+    run dolt sql -q "prepare stmt4 from 'select commit_hash from dolt_log(?, \"--parents\")'; set @v1 = 'HEAD'; execute stmt4 using @v1;"
     [ "$status" -eq 0 ]
+    # Should return results without error (exact output depends on commit structure)
     
-    # Verify prepared statements work without errors (no actual execution test due to bind variable complexity)
-    run dolt sql -q "show tables"
+    # Test mixed literals and bind variables
+    run dolt sql -q "prepare stmt5 from 'select count(*) from dolt_log(?, \"--not\", \"HEAD~2\")'; set @v1 = 'HEAD'; execute stmt5 using @v1;"
     [ "$status" -eq 0 ]
+    [[ "$output" =~ "2" ]] || false  # Should have 2 commits (HEAD excluding HEAD~2)
 }

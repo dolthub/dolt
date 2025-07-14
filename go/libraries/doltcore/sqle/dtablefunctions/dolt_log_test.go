@@ -26,15 +26,15 @@ import (
 
 func TestDoltLogBindVariables(t *testing.T) {
 	ctx := sql.NewEmptyContext()
-	
+
 	// Test that bind variables are properly handled in evalArguments
 	ltf := &LogTableFunction{ctx: ctx}
-	
+
 	// This should not fail during prepare phase
 	node, err := ltf.evalArguments(expression.NewBindVar("v1"))
 	assert.NoError(t, err)
 	assert.NotNil(t, node)
-	
+
 	// Test mixed bind variables and literals
 	node, err = ltf.evalArguments(
 		expression.NewBindVar("v1"),
@@ -42,7 +42,7 @@ func TestDoltLogBindVariables(t *testing.T) {
 	)
 	assert.NoError(t, err)
 	assert.NotNil(t, node)
-	
+
 	// Test the exact customer issue case: dolt_log(?, "--not", ?)
 	node, err = ltf.evalArguments(
 		expression.NewBindVar("v1"),
@@ -57,11 +57,9 @@ func TestDoltLogExpressionsInterface(t *testing.T) {
 	ctx := sql.NewEmptyContext()
 	ltf := &LogTableFunction{
 		ctx: ctx,
-		revisionExprs: []sql.Expression{
+		argumentExprs: []sql.Expression{
 			expression.NewBindVar("v1"),
 			expression.NewLiteral("HEAD", types.Text),
-		},
-		notRevisionExprs: []sql.Expression{
 			expression.NewBindVar("v2"),
 		},
 	}
@@ -69,26 +67,28 @@ func TestDoltLogExpressionsInterface(t *testing.T) {
 	// Test that Expressions method returns all expressions for bind variable replacement
 	exprs := ltf.Expressions()
 	assert.Len(t, exprs, 3)
-	
+
 	// Test that WithExpressions method correctly reconstructs the function
 	newExprs := []sql.Expression{
 		expression.NewLiteral("main", types.Text),
 		expression.NewLiteral("HEAD", types.Text),
 		expression.NewLiteral("HEAD~1", types.Text),
 	}
-	
+
 	newNode, err := ltf.WithExpressions(newExprs...)
 	require.NoError(t, err)
-	
+
 	newLtf, ok := newNode.(*LogTableFunction)
 	require.True(t, ok)
-	assert.Len(t, newLtf.revisionExprs, 2)
-	assert.Len(t, newLtf.notRevisionExprs, 1)
+	assert.Len(t, newLtf.argumentExprs, 3)
+	assert.Equal(t, "'main'", newLtf.argumentExprs[0].String())
+	assert.Equal(t, "'HEAD'", newLtf.argumentExprs[1].String())
+	assert.Equal(t, "'HEAD~1'", newLtf.argumentExprs[2].String())
 }
 
 func TestDoltLogValidateRevisionExpressions(t *testing.T) {
 	ctx := sql.NewEmptyContext()
-	
+
 	// Test that validation works with literals
 	ltf := &LogTableFunction{
 		ctx: ctx,
@@ -96,7 +96,7 @@ func TestDoltLogValidateRevisionExpressions(t *testing.T) {
 			expression.NewLiteral("HEAD", types.Text),
 		},
 	}
-	
+
 	err := ltf.validateRevisionExpressions()
 	assert.NoError(t, err) // Should validate normally
 }
@@ -106,25 +106,25 @@ func TestDoltLogCustomerIssue9508(t *testing.T) {
 	// This test ensures that the specific prepared statement pattern works
 	ctx := sql.NewEmptyContext()
 	ltf := &LogTableFunction{ctx: ctx}
-	
+
 	// The customer's exact case: prepare stmt1 from 'select * from dolt_log(?, "--not", ?)'
 	customerExpressions := []sql.Expression{
 		expression.NewBindVar("v1"),
 		expression.NewLiteral("--not", types.Text),
 		expression.NewBindVar("v2"),
 	}
-	
+
 	// This should succeed during prepare phase with deferred parsing
 	node, err := ltf.evalArguments(customerExpressions...)
 	assert.NoError(t, err)
 	assert.NotNil(t, node)
-	
+
 	// Verify the function has stored the expressions for deferred parsing
 	newLtf, ok := node.(*LogTableFunction)
 	require.True(t, ok)
 	assert.NotNil(t, newLtf.argumentExprs)
 	assert.Len(t, newLtf.argumentExprs, 3)
-	
+
 	// Verify expressions interface works with deferred parsing
 	exprs := newLtf.Expressions()
 	assert.Len(t, exprs, 3)

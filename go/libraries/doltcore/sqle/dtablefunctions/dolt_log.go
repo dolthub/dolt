@@ -53,7 +53,7 @@ type LogTableFunction struct {
 	decoration    string
 
 	database sql.Database
-	
+
 	// argumentExprs stores the original expressions for deferred parsing
 	argumentExprs []sql.Expression
 }
@@ -213,16 +213,11 @@ func (ltf *LogTableFunction) CheckAuth(ctx *sql.Context, opChecker sql.Privilege
 
 // Expressions implements the sql.Expressioner interface.
 func (ltf *LogTableFunction) Expressions() []sql.Expression {
-	// If we're using deferred parsing, return the original argument expressions
+	// Always return the original argument expressions from deferred parsing
 	if ltf.argumentExprs != nil {
 		return ltf.argumentExprs
 	}
-	
-	// Legacy behavior for expressions already parsed
-	var expressions []sql.Expression
-	expressions = append(expressions, ltf.revisionExprs...)
-	expressions = append(expressions, ltf.notRevisionExprs...)
-	return expressions
+	return []sql.Expression{}
 }
 
 // getDoltArgs builds an argument string from sql expressions so that we can
@@ -293,39 +288,18 @@ func (ltf *LogTableFunction) addOptions(expression []sql.Expression) error {
 }
 
 func (ltf *LogTableFunction) WithExpressions(exprs ...sql.Expression) (sql.Node, error) {
-	// If we're using deferred parsing, replace argumentExprs and clear parsed expressions
-	if ltf.argumentExprs != nil {
-		if len(exprs) != len(ltf.argumentExprs) {
-			return nil, sql.ErrInvalidChildrenNumber.New(len(ltf.argumentExprs), len(exprs))
-		}
-		
-		newLtf := *ltf
-		newLtf.argumentExprs = exprs
-		// Clear parsed expressions so they get re-parsed with new values
-		newLtf.revisionExprs = nil
-		newLtf.notRevisionExprs = nil
-		newLtf.notRevisionStrs = nil
-		
-		return &newLtf, nil
+	// Always use deferred parsing approach - this handles both bind variables and literals
+	if len(exprs) == 0 {
+		return ltf, nil
 	}
-	
-	// Legacy behavior for expressions already parsed
-	expectedLen := len(ltf.revisionExprs) + len(ltf.notRevisionExprs)
-	if len(exprs) != expectedLen {
-		return nil, sql.ErrInvalidChildrenNumber.New(expectedLen, len(exprs))
-	}
-	
+
 	newLtf := *ltf
-	
-	// Split the expressions back into revisionExprs and notRevisionExprs
-	revisionCount := len(ltf.revisionExprs)
-	if revisionCount > 0 {
-		newLtf.revisionExprs = exprs[:revisionCount]
-	}
-	if len(ltf.notRevisionExprs) > 0 {
-		newLtf.notRevisionExprs = exprs[revisionCount:]
-	}
-	
+	newLtf.argumentExprs = exprs
+	// Clear any previously parsed expressions
+	newLtf.revisionExprs = nil
+	newLtf.notRevisionExprs = nil
+	newLtf.notRevisionStrs = nil
+
 	return &newLtf, nil
 }
 
@@ -349,7 +323,7 @@ func (ltf *LogTableFunction) evalArguments(expressions ...sql.Expression) (sql.N
 	newLtf := *ltf
 	// Store the expressions for later parsing during RowIter (execute phase)
 	newLtf.argumentExprs = expressions
-	
+
 	// If there are no bind variables, we can parse arguments immediately for validation
 	hasBindVars := false
 	for _, expr := range expressions {
@@ -358,7 +332,7 @@ func (ltf *LogTableFunction) evalArguments(expressions ...sql.Expression) (sql.N
 			break
 		}
 	}
-	
+
 	if !hasBindVars {
 		// No bind variables, safe to parse and validate immediately
 		if err := newLtf.parseArgumentsAndValidate(); err != nil {
@@ -479,7 +453,7 @@ func (ltf *LogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter
 			return nil, err
 		}
 	}
-	
+
 	revisionValStrs, notRevisionValStrs, threeDot, err := ltf.evaluateArguments()
 	if err != nil {
 		return nil, err
