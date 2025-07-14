@@ -5,7 +5,6 @@ load $BATS_TEST_DIRNAME/helper/data-generation.bash
 setup() {
     setup_common
     
-    # Create initial table for testing using efficient data generation
     create_test_table
     dolt sql -q "$(insert_statement)"
 }
@@ -48,76 +47,71 @@ get_chunk_count() {
     [[ "$output" =~ "invalid storage file ID: invalidhash" ]] || false
 }
 
-@test "conjoin: --all flag works" {
-    # Run fsck before conjoin
-    run dolt fsck
-    [ "$status" -eq 0 ]
-    chunks_before=$(get_chunk_count "$output")
-    
+@test "conjoin: --all messages when no oldgen files exist" {
     run dolt admin conjoin --all
     [ "$status" -eq 0 ]
     [[ "$output" =~ "No table files to conjoin" ]] || false
-    
-    # Run fsck after conjoin and verify chunk count is identical
-    run dolt fsck
-    [ "$status" -eq 0 ]
-    chunks_after=$(get_chunk_count "$output")
-    [ "$chunks_before" -eq "$chunks_after" ]
 }
 
-@test "conjoin: valid storage file ID works" {
-    # Run fsck before conjoin
-    run dolt fsck
-    [ "$status" -eq 0 ]
-    chunks_before=$(get_chunk_count "$output")
-    
+@test "conjoin: valid storage file ID that doesn't exist" {
     run dolt admin conjoin abcdef1234567890abcdef1234567890
     [ "$status" -eq 1 ]
     [[ "$output" =~ "storage file not found" ]] || false
-    
-    # Run fsck after failed conjoin and verify chunk count is identical
-    run dolt fsck
-    [ "$status" -eq 0 ]
-    chunks_after=$(get_chunk_count "$output")
-    [ "$chunks_before" -eq "$chunks_after" ]
 }
 
-@test "conjoin: get storage file IDs and test conjoin with specific IDs" {
+@test "conjoin: test conjoin with specific IDs" {
     dolt sql -q "$(mutations_and_gc_statement)"
     dolt sql -q "$(mutations_and_gc_statement)"
     dolt sql -q "$(mutations_and_gc_statement)"
     
-    # Get storage file IDs from oldgen
     storage_ids=($(get_oldgen_storage_ids))
 
     [ "${#storage_ids[@]}" -eq 3 ]
     
-    # Select first 2 IDs
     id1="${storage_ids[0]}"
     id2="${storage_ids[1]}"
     
-    # Verify we got valid IDs for debugging
-    [ -n "$id1" ] || (echo "ERROR: id1 is empty" && false)
-    [ -n "$id2" ] || (echo "ERROR: id2 is empty" && false)
-    
-    # Verify the IDs look correct (32 characters, valid hash format)
-    [ "${#id1}" -eq 32 ]
-    [ "${#id2}" -eq 32 ]
-    
-    # Run fsck before conjoin
     run dolt fsck
     [ "$status" -eq 0 ]
     chunks_before=$(get_chunk_count "$output")
     
-    # Test conjoin with the specific IDs (should succeed)
     run dolt admin conjoin "$id1" "$id2"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Successfully conjoined table files" ]] || false
     
-    # Run fsck after conjoin and verify chunk count is identical
     run dolt fsck
     [ "$status" -eq 0 ]
     chunks_after=$(get_chunk_count "$output")
-    [ "$chunks_before" -eq "$chunks_after" ]
+    [[ "$chunks_before" -eq "$chunks_after" ]] || false
+
+    storage_ids=($(get_oldgen_storage_ids))
+    [ "${#storage_ids[@]}" -eq 2 ]
 }
 
+
+@test "conjoin: test conjoin with --all" {
+    dolt sql -q "$(mutations_and_gc_statement)"
+    dolt sql -q "$(mutations_and_gc_statement)"
+    dolt sql -q "$(mutations_and_gc_statement)"
+    dolt sql -q "$(mutations_and_gc_statement)"
+    dolt sql -q "$(mutations_and_gc_statement)"
+
+    storage_ids=($(get_oldgen_storage_ids))
+    [ "${#storage_ids[@]}" -eq 5 ]
+
+    run dolt fsck
+    [ "$status" -eq 0 ]
+    chunks_before=$(get_chunk_count "$output")
+
+    run dolt admin conjoin --all
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Successfully conjoined all table files" ]] || false
+
+    run dolt fsck
+    [ "$status" -eq 0 ]
+    chunks_after=$(get_chunk_count "$output")
+    [[ "$chunks_before" -eq "$chunks_after" ]] || false
+
+    storage_ids=($(get_oldgen_storage_ids))
+    [ "${#storage_ids[@]}" -eq 1 ]
+}

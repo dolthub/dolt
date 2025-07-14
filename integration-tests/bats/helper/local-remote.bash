@@ -142,6 +142,7 @@ SKIP_SERVER_TESTS=$(cat <<-EOM
 ~createchunk.bats~
 ~import-no-header-csv.bats~
 ~import-no-header-psv.bats~
+~admin-conjoin.bats~
 EOM
 )
 
