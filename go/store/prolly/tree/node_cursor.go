@@ -600,6 +600,11 @@ func (cur *cursor) clone() *cursor {
 	return &cln
 }
 
+// atEnd returns if the cursor is pointing to the very last item in the tree.
+func (cur *cursor) atEnd() bool {
+	return cur.atNodeEnd() && (cur.parent == nil || cur.parent.atNodeEnd())
+}
+
 func (cur *cursor) copy(other *cursor) {
 	cur.nd = other.nd
 	cur.idx = other.idx

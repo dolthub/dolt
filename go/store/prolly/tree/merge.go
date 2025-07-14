@@ -37,6 +37,23 @@ type MergeStats struct {
 	Removes       int
 }
 
+// getNextAndSplitIfAtEnd fetches the next Patch from |patchGenerator|, but it avoids emitting a range patch for the
+// very last node in a level. This is because those nodes don't represent natural chunk boundaries and thus aren't
+// valid patches.
+func getNextAndSplitIfAtEnd[K ~[]byte, O Ordering[K]](ctx context.Context, patchGenerator *PatchGenerator[K, O]) (patch Patch, diffType DiffType, err error) {
+	patch, diffType, err = patchGenerator.Next(ctx)
+	if err != nil {
+		return Patch{}, NoDiff, err
+	}
+	for patchGenerator.to.atEnd() && patch.Level > 0 && diffType != RemovedDiff {
+		patch, diffType, err = patchGenerator.split(ctx)
+		if err != nil {
+			return Patch{}, NoDiff, err
+		}
+	}
+	return patch, diffType, nil
+}
+
 // ThreeWayMerge implements a three-way merge algorithm using |base| as the common ancestor, |right| as
 // the source branch, and |left| as the destination branch. Both |left| and |right| are diff'd against
 // |base| to compute merge patches, but rather than applying both sets of patches to |base|, patches from
@@ -155,7 +172,7 @@ func SendPatches[K ~[]byte, O Ordering[K]](
 		return err
 	}
 
-	right, rDiffType, err = r.Next(ctx)
+	right, rDiffType, err = getNextAndSplitIfAtEnd(ctx, &r)
 	if err == io.EOF {
 		err, rok = nil, false
 	}
@@ -186,7 +203,7 @@ func SendPatches[K ~[]byte, O Ordering[K]](
 					return err
 				}
 
-				right, rDiffType, err = r.Next(ctx)
+				right, rDiffType, err = getNextAndSplitIfAtEnd(ctx, &r)
 				if err == io.EOF {
 					err, rok = nil, false
 				}
@@ -213,7 +230,7 @@ func SendPatches[K ~[]byte, O Ordering[K]](
 					return err
 				}
 
-				right, rDiffType, err = r.Next(ctx)
+				right, rDiffType, err = getNextAndSplitIfAtEnd(ctx, &r)
 				if err == io.EOF {
 					err, rok = nil, false
 				}
@@ -258,7 +275,7 @@ func SendPatches[K ~[]byte, O Ordering[K]](
 				if err != nil {
 					return err
 				}
-				right, rDiffType, err = r.Next(ctx)
+				right, rDiffType, err = getNextAndSplitIfAtEnd(ctx, &r)
 				if err == io.EOF {
 					err, rok = nil, false
 				}
@@ -282,7 +299,7 @@ func SendPatches[K ~[]byte, O Ordering[K]](
 				if err != nil {
 					return err
 				}
-				right, rDiffType, err = r.Next(ctx)
+				right, rDiffType, err = getNextAndSplitIfAtEnd(ctx, &r)
 				if err == io.EOF {
 					err, rok = nil, false
 				}
@@ -328,7 +345,7 @@ func SendPatches[K ~[]byte, O Ordering[K]](
 				return err
 			}
 
-			right, rDiffType, err = r.Next(ctx)
+			right, rDiffType, err = getNextAndSplitIfAtEnd(ctx, &r)
 			if err == io.EOF {
 				err, rok = nil, false
 			}
@@ -358,7 +375,7 @@ func SendPatches[K ~[]byte, O Ordering[K]](
 				return err
 			}
 
-			right, rDiffType, err = r.Next(ctx)
+			right, rDiffType, err = getNextAndSplitIfAtEnd(ctx, &r)
 			if err == io.EOF {
 				err, rok = nil, false
 			}
@@ -379,7 +396,7 @@ func SendPatches[K ~[]byte, O Ordering[K]](
 			return err
 		}
 
-		right, rDiffType, err = r.Next(ctx)
+		right, rDiffType, err = getNextAndSplitIfAtEnd(ctx, &r)
 		if err == io.EOF {
 			err, rok = nil, false
 		}
