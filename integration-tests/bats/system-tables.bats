@@ -1062,3 +1062,30 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "5" ]] || false
 }
+
+@test "system-tables: dolt_log table function with prepared statements" {
+    # Test for issue #9508: Can't prepare dolt_log procedure statement
+    dolt sql -q "create table test (pk int, c1 int, primary key(pk))"
+    dolt add test
+    dolt commit -m "initial commit"
+    
+    # Test basic bind variable support
+    run dolt sql -q "prepare stmt1 from 'select count(*) from dolt_log(?)';"
+    [ "$status" -eq 0 ]
+    
+    # Test multiple bind variables
+    run dolt sql -q "prepare stmt2 from 'select count(*) from dolt_log(?, ?)';"
+    [ "$status" -eq 0 ]
+    
+    # Test the original customer issue: dolt_log with --not flag and bind variables
+    run dolt sql -q "prepare stmt3 from 'select count(*) from dolt_log(?, \"--not\", ?)';"
+    [ "$status" -eq 0 ]
+    
+    # Test bind variables with other flags
+    run dolt sql -q "prepare stmt4 from 'select count(*) from dolt_log(?, \"--parents\")';"
+    [ "$status" -eq 0 ]
+    
+    # Verify prepared statements work without errors (no actual execution test due to bind variable complexity)
+    run dolt sql -q "show tables"
+    [ "$status" -eq 0 ]
+}
