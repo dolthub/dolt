@@ -150,16 +150,16 @@ func applyNodePatch[K ~[]byte, O Ordering[K], S message.Serializer](
 		if err != nil {
 			return err
 		}
+		err = chkr.advanceTo(ctx, cur)
+
 		// The range (fromKey, toKey] is open from below. If there's already something at |fromKey|, advance past it.
 		if cur.Valid() && order.Compare(ctx, K(fromKey), K(cur.CurrentKey())) == 0 {
-			err = cur.advance(ctx)
+			err = chkr.AddPair(ctx, cur.CurrentKey(), cur.currentValue())
 			if err != nil {
 				return err
 			}
 		}
 	}
-
-	err = chkr.advanceTo(ctx, cur)
 
 	if err != nil {
 		return err
@@ -177,9 +177,16 @@ func applyNodePatch[K ~[]byte, O Ordering[K], S message.Serializer](
 		}
 	}
 
-	// err = Seek(ctx, chkr.cur, K(toKey), order)
+	// TODO: Add SeekPast / AdvancePast functions
+	err = Seek(ctx, chkr.cur, K(toKey), order)
 	if err != nil {
 		return err
+	}
+	if chkr.cur.Valid() && order.Compare(ctx, K(toKey), K(chkr.cur.CurrentKey())) == 0 {
+		err = chkr.skip(ctx)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
