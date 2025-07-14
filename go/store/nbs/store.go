@@ -2319,7 +2319,8 @@ func CalcReads(nbs *NomsBlockStore, hashes hash.HashSet, blockSize uint64, keepe
 }
 
 // ConjoinTableFiles conjoins the specified table files into a single new table file.
-// The storageIds slice contains the hash IDs of the table files to conjoin.
+// The storageIds slice contains the hash IDs of the table files to conjoin. If the slice is empty, then all
+// files in oldgen are conjoined together.
 // Returns the hash of the newly created conjoined table file.
 func (nbs *NomsBlockStore) ConjoinTableFiles(ctx context.Context, storageIds []hash.Hash) (hash.Hash, error) {
 	nbs.mu.RLock()
@@ -2334,33 +2335,21 @@ func (nbs *NomsBlockStore) ConjoinTableFiles(ctx context.Context, storageIds []h
 		if len(storageIds) == 0 {
 			return hash.Hash{}, errors.New("no table files to conjoin")
 		}
+	} else {
+		// Validate user input
+		for _, storageId := range storageIds {
+			_, found := nbs.findTableSpec(storageId)
+			if !found {
+				return hash.Hash{}, errors.New("storage file not found: " + storageId.String())
+			}
+		}
 	}
 
-	// Convert storage IDs to chunkSources
-	var sources chunkSources
-	stats := &Stats{}
-
-	for _, storageId := range storageIds {
-		// Find the table spec to get chunk count
-		tableSpec, found := nbs.findTableSpec(storageId)
-		if !found {
-			return hash.Hash{}, errors.New("storage file not found: " + storageId.String())
-		}
-
-		// Open the chunkSource for this storage ID
-		cs, err := nbs.persister.Open(ctx, storageId, tableSpec.chunkCount, stats)
-		if err != nil {
-			return hash.Hash{}, err
-		}
-		sources = append(sources, cs)
-	}
-
-	// Store the original manifest for comparison
+	// record the original manifest for comparison below.
 	originalUpstream := nbs.upstream
 
-	// Use the existing conjoin infrastructure to properly update the manifest
 	strategy := &specificFilesConjoiner{targetStorageIds: storageIds}
-	newUpstream, finalCleanup, err := conjoin(ctx, strategy, nbs.upstream, nbs.manifestMgr, nbs.persister, stats)
+	newUpstream, finalCleanup, err := conjoin(ctx, strategy, nbs.upstream, nbs.manifestMgr, nbs.persister, nbs.stats)
 	if err != nil {
 		return hash.Hash{}, err
 	}
@@ -2373,16 +2362,12 @@ func (nbs *NomsBlockStore) ConjoinTableFiles(ctx context.Context, storageIds []h
 	}
 	nbs.tables = newTables
 
-	// Call the final cleanup
+	// Cleanup of original files. This is destructive, so we only do it when the rebase doesn't error.
+	// Also note that nothing below here actually makes any changes to the db, so we can do the cleanup now.
 	finalCleanup()
 
 	// Find the new conjoined table file hash from the updated manifest
 	// Since we removed the old files and added one new file, we need to find which one is new
-	oldIdSet := make(map[hash.Hash]bool)
-	for _, id := range storageIds {
-		oldIdSet[id] = true
-	}
-
 	// Create a set of original spec names for comparison
 	originalSpecSet := make(map[hash.Hash]bool)
 	for _, spec := range originalUpstream.specs {
@@ -2391,9 +2376,7 @@ func (nbs *NomsBlockStore) ConjoinTableFiles(ctx context.Context, storageIds []h
 
 	var conjoinedHash hash.Hash
 	for _, spec := range newUpstream.specs {
-		// If this spec is not in the original manifest and not one of the old files we removed,
-		// it must be the new conjoined file
-		if !originalSpecSet[spec.name] && !oldIdSet[spec.name] {
+		if !originalSpecSet[spec.name] {
 			conjoinedHash = spec.name
 			break
 		}
