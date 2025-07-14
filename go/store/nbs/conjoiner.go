@@ -28,7 +28,7 @@ import (
 	"time"
 
 	"golang.org/x/sync/errgroup"
-	
+
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
@@ -106,7 +106,7 @@ func (s *specificFilesConjoiner) chooseConjoinees(specs []tableSpec) (conjoinees
 	for _, id := range s.targetStorageIds {
 		targetSet[id] = true
 	}
-	
+
 	// Separate specs into conjoinees and keepers
 	for _, spec := range specs {
 		if targetSet[spec.name] {
@@ -115,7 +115,7 @@ func (s *specificFilesConjoiner) chooseConjoinees(specs []tableSpec) (conjoinees
 			keepers = append(keepers, spec)
 		}
 	}
-	
+
 	return conjoinees, keepers, nil
 }
 
