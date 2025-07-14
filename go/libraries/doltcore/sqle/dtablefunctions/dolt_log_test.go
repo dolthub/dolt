@@ -42,6 +42,15 @@ func TestDoltLogBindVariables(t *testing.T) {
 	)
 	assert.NoError(t, err)
 	assert.NotNil(t, node)
+	
+	// Test the exact customer issue case: dolt_log(?, "--not", ?)
+	node, err = ltf.evalArguments(
+		expression.NewBindVar("v1"),
+		expression.NewLiteral("--not", types.Text),
+		expression.NewBindVar("v2"),
+	)
+	assert.NoError(t, err)
+	assert.NotNil(t, node)
 }
 
 func TestDoltLogExpressionsInterface(t *testing.T) {
@@ -90,4 +99,36 @@ func TestDoltLogValidateRevisionExpressions(t *testing.T) {
 	
 	err := ltf.validateRevisionExpressions()
 	assert.NoError(t, err) // Should validate normally
+}
+
+func TestDoltLogCustomerIssue9508(t *testing.T) {
+	// Test the exact customer issue from GitHub issue #9508
+	// This test ensures that the specific prepared statement pattern works
+	ctx := sql.NewEmptyContext()
+	ltf := &LogTableFunction{ctx: ctx}
+	
+	// The customer's exact case: prepare stmt1 from 'select * from dolt_log(?, "--not", ?)'
+	customerExpressions := []sql.Expression{
+		expression.NewBindVar("v1"),
+		expression.NewLiteral("--not", types.Text),
+		expression.NewBindVar("v2"),
+	}
+	
+	// This should succeed during prepare phase with deferred parsing
+	node, err := ltf.evalArguments(customerExpressions...)
+	assert.NoError(t, err)
+	assert.NotNil(t, node)
+	
+	// Verify the function has stored the expressions for deferred parsing
+	newLtf, ok := node.(*LogTableFunction)
+	require.True(t, ok)
+	assert.NotNil(t, newLtf.argumentExprs)
+	assert.Len(t, newLtf.argumentExprs, 3)
+	
+	// Verify expressions interface works with deferred parsing
+	exprs := newLtf.Expressions()
+	assert.Len(t, exprs, 3)
+	assert.True(t, expression.IsBindVar(exprs[0]))
+	assert.False(t, expression.IsBindVar(exprs[1]))
+	assert.True(t, expression.IsBindVar(exprs[2]))
 }
