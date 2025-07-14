@@ -29,37 +29,37 @@ get_chunk_count() {
     echo "$fsck_output" | grep "Chunks Scanned:" | sed 's/Chunks Scanned: //' | tr -d '\n'
 }
 
-@test "conjoin: --all flag and storage file IDs are mutually exclusive" {
+@test "admin-conjoin: --all flag and storage file IDs are mutually exclusive" {
     run dolt admin conjoin --all somevalidhash1234567890abcdef12345678
     [ "$status" -eq 1 ]
     [[ "$output" =~ "--all flag and storage file IDs are mutually exclusive" ]] || false
 }
 
-@test "conjoin: must specify either --all flag or storage file IDs" {
+@test "admin-conjoin: must specify either --all flag or storage file IDs" {
     run dolt admin conjoin
     [ "$status" -eq 1 ]
     [[ "$output" =~ "must specify either --all flag or storage file IDs" ]] || false
 }
 
-@test "conjoin: invalid storage file ID format" {
+@test "admin-conjoin: invalid storage file ID format" {
     run dolt admin conjoin invalidhash
     [ "$status" -eq 1 ]
     [[ "$output" =~ "invalid storage file ID: invalidhash" ]] || false
 }
 
-@test "conjoin: --all messages when no oldgen files exist" {
+@test "admin-conjoin: --all messages when no oldgen files exist" {
     run dolt admin conjoin --all
     [ "$status" -eq 0 ]
     [[ "$output" =~ "No table files to conjoin" ]] || false
 }
 
-@test "conjoin: valid storage file ID that doesn't exist" {
+@test "admin-conjoin: valid storage file ID that doesn't exist" {
     run dolt admin conjoin abcdef1234567890abcdef1234567890
     [ "$status" -eq 1 ]
     [[ "$output" =~ "storage file not found" ]] || false
 }
 
-@test "conjoin: test conjoin with specific IDs" {
+@test "admin-conjoin: test conjoin with specific IDs" {
     dolt sql -q "$(mutations_and_gc_statement)"
     dolt sql -q "$(mutations_and_gc_statement)"
     dolt sql -q "$(mutations_and_gc_statement)"
@@ -89,7 +89,7 @@ get_chunk_count() {
 }
 
 
-@test "conjoin: test conjoin with --all" {
+@test "admin-conjoin: test conjoin with --all" {
     dolt sql -q "$(mutations_and_gc_statement)"
     dolt sql -q "$(mutations_and_gc_statement)"
     dolt sql -q "$(mutations_and_gc_statement)"
