@@ -131,15 +131,31 @@ func manyPointRemoves(keyStart, keyEnd uint32) (patches []expectedPatch[uint32])
 	return patches
 }
 
-func testPatchBasedMerging[T interface{}](
+func manyPointInserts(keyStart, keyEnd uint32) (patches []expectedPatch[uint32]) {
+	for i := keyStart; i <= keyEnd; i++ {
+		patches = append(patches, pointUpdate(i, i))
+	}
+	return patches
+}
+
+func testPatchBasedMergingResultsOnly[T interface{}](
 	t *testing.T,
 	ctx context.Context,
 	ns tree.NodeStore,
 	keyDesc val.TupleDesc,
+	collide tree.CollisionFn,
 	baseRoot, leftRoot, rightRoot tree.Node,
 	expectedPatches []expectedPatch[T],
-	collide tree.CollisionFn,
 ) {
+	serializer := message.NewProllyMapSerializer(keyDesc, ns.Pool())
+	traditionalMergeRoot, err := traditionalThreeWayMerge(ctx, ns, leftRoot, rightRoot, baseRoot, collide, false, false, keyDesc, serializer)
+	patchBasedMergeRoot, _, err := tree.ThreeWayMerge(ctx, ns, leftRoot, rightRoot, baseRoot, collide, keyDesc, serializer)
+	require.NoError(t, err)
+	assert.Equal(t, patchBasedMergeRoot, traditionalMergeRoot)
+
+}
+
+func testPatchBasedMerging[T interface{}](t *testing.T, ctx context.Context, ns tree.NodeStore, keyDesc val.TupleDesc, collide tree.CollisionFn, baseRoot, leftRoot, rightRoot tree.Node, expectedPatches []expectedPatch[T]) {
 	err := producePatches(ctx, ns, leftRoot, rightRoot, baseRoot, collide, keyDesc, func(iter tree.PatchIter) error {
 		var actualPatches []tree.Patch
 		actualPatch, err := iter.NextPatch(ctx)
@@ -149,7 +165,8 @@ func testPatchBasedMerging[T interface{}](
 			actualPatch, err = iter.NextPatch(ctx)
 			require.NoError(t, err)
 		}
-		require.Equal(t, len(expectedPatches), len(actualPatches), "expected %d patches but found %d", len(expectedPatches), len(actualPatches))
+
+		assert.Equal(t, len(expectedPatches), len(actualPatches), "expected %d patches but found %d", len(expectedPatches), len(actualPatches))
 		for i, actualPatch := range actualPatches {
 			expectedPatch := expectedPatches[i]
 			require.Equal(t, expectedPatch.level, actualPatch.Level, "patch %d has unexpected level. Expected %d, found %d", i, expectedPatch.level, actualPatch.Level)
@@ -199,7 +216,7 @@ func testPatchBasedMerging[T interface{}](
 
 		serializer := message.NewProllyMapSerializer(keyDesc, ns.Pool())
 		// verify that this is equivalent to a traditional merge.
-		traditionalMergeRoot, _, err := tree.ThreeWayMerge(ctx, ns, leftRoot, rightRoot, baseRoot, collide, keyDesc, serializer)
+		traditionalMergeRoot, err := traditionalThreeWayMerge(ctx, ns, leftRoot, rightRoot, baseRoot, collide, false, false, keyDesc, serializer)
 		mergedRoot, err := tree.ApplyPatches(ctx, ns, leftRoot, keyDesc, serializer, &patchIter)
 		require.NoError(t, err)
 		assert.Equal(t, mergedRoot, traditionalMergeRoot)
@@ -290,10 +307,12 @@ func TestPatchBasedMerging(t *testing.T) {
 
 	emptyMap, err := tree.MakeTreeForTest(nil)
 	require.NoError(t, err)
-	threeAndAHalfChunks, desc := makeSimpleIntMap(t, 1, 1024)
+	fourAndAHalfChunks, desc := makeSimpleIntMap(t, 1, 1250)
+	threeAndAHalfChunks, _ := makeSimpleIntMap(t, 1, 1024)
 	threeChunks, _ := makeSimpleIntMap(t, 1, 830)
+	twoAndAHalfChunks, _ := makeSimpleIntMap(t, 1, 800)
 	// The base map will happen to have these chunk boundaries.
-	chunkBoundaries := []uint32{414, 718, 830}
+	chunkBoundaries := []uint32{414, 718, 830, 1207}
 	maxKey := uint32(1024)
 
 	mapWithUpdates := func(root tree.Node, updates ...mutation[uint32]) tree.Node {
@@ -305,167 +324,232 @@ func TestPatchBasedMerging(t *testing.T) {
 	}
 
 	t.Run("concurrent updates in same leaf node produce level 0 patch", func(t *testing.T) {
-		testPatchBasedMerging(t, ctx, ns, desc, threeAndAHalfChunks, mapWithUpdates(threeAndAHalfChunks, update[uint32](1, 0)), mapWithUpdates(threeAndAHalfChunks, update[uint32](chunkBoundaries[0]-4, 1)), []expectedPatch[uint32]{pointUpdate(chunkBoundaries[0]-4, 1)}, nil)
+		testPatchBasedMerging(t, ctx, ns, desc, nil,
+			threeAndAHalfChunks,
+			mapWithUpdates(threeAndAHalfChunks, update[uint32](1, 0)),
+			mapWithUpdates(threeAndAHalfChunks, update[uint32](chunkBoundaries[0]-4, 1)),
+			[]expectedPatch[uint32]{pointUpdate(chunkBoundaries[0]-4, 1)})
 	})
 
 	t.Run("update in first child node produces top-level patch with no start key", func(t *testing.T) {
-		testPatchBasedMerging(t, ctx, ns, desc, threeAndAHalfChunks, mapWithUpdates(threeAndAHalfChunks, update[uint32](1000, 1)), mapWithUpdates(threeAndAHalfChunks, update[uint32](chunkBoundaries[0]-10, 1)), []expectedPatch[uint32]{
-			{
-				noStartKey:   true,
-				endKey:       chunkBoundaries[0],
-				level:        1,
-				subtreeCount: uint64(chunkBoundaries[0]),
-			},
-		}, nil)
+		testPatchBasedMerging(t, ctx, ns, desc, nil,
+			threeAndAHalfChunks,
+			mapWithUpdates(threeAndAHalfChunks, update[uint32](1000, 1)),
+			mapWithUpdates(threeAndAHalfChunks, update[uint32](chunkBoundaries[0]-10, 1)),
+			[]expectedPatch[uint32]{
+				{
+					noStartKey:   true,
+					endKey:       chunkBoundaries[0],
+					level:        1,
+					subtreeCount: uint64(chunkBoundaries[0]),
+				},
+			})
 	})
 
 	t.Run("update in middle child node produces top-level patch with start key", func(t *testing.T) {
-		testPatchBasedMerging(t, ctx, ns, desc, threeAndAHalfChunks, mapWithUpdates(threeAndAHalfChunks, update[uint32](1, 1)), mapWithUpdates(threeAndAHalfChunks, update[uint32](chunkBoundaries[2]-50, 1)), []expectedPatch[uint32]{
-			{
-				startKey:     chunkBoundaries[1],
-				endKey:       chunkBoundaries[2],
-				level:        1,
-				subtreeCount: uint64(chunkBoundaries[2] - chunkBoundaries[1]),
-			},
-		}, nil)
+		testPatchBasedMerging(t, ctx, ns, desc, nil,
+			threeAndAHalfChunks,
+			mapWithUpdates(threeAndAHalfChunks, update[uint32](1, 1)),
+			mapWithUpdates(threeAndAHalfChunks, update[uint32](chunkBoundaries[2]-50, 1)),
+			[]expectedPatch[uint32]{
+				{
+					startKey:     chunkBoundaries[1],
+					endKey:       chunkBoundaries[2],
+					level:        1,
+					subtreeCount: uint64(chunkBoundaries[2] - chunkBoundaries[1]),
+				},
+			})
 	})
 
-	t.Run("update in final child node produces top-level patch with start key", func(t *testing.T) {
-		testPatchBasedMerging(t, ctx, ns, desc, threeAndAHalfChunks, mapWithUpdates(threeAndAHalfChunks, update[uint32](1, 1)), mapWithUpdates(threeAndAHalfChunks, update[uint32](maxKey-100, 1)), []expectedPatch[uint32]{
-			{
-				startKey:     chunkBoundaries[2],
-				endKey:       maxKey,
-				level:        1,
-				subtreeCount: uint64(maxKey - chunkBoundaries[2]),
-			},
-		}, nil)
+	t.Run("update in final child node produces leaf patch (a top-level patch would not end on a proper chunk boundary)", func(t *testing.T) {
+		testPatchBasedMerging(t, ctx, ns, desc, nil,
+			threeAndAHalfChunks,
+			mapWithUpdates(threeAndAHalfChunks, update[uint32](1, 1)),
+			mapWithUpdates(threeAndAHalfChunks, update[uint32](maxKey-100, 1)),
+			[]expectedPatch[uint32]{
+				{
+					level:   0,
+					endKey:  maxKey - 100,
+					toValue: 1,
+				},
+			})
 	})
 
 	t.Run("an insert beyond the final key doesn't create an extra chunk boundary", func(t *testing.T) {
-		testPatchBasedMerging(t, ctx, ns, desc, threeAndAHalfChunks, mapWithUpdates(threeAndAHalfChunks, update[uint32](0, 1)), mapWithUpdates(threeAndAHalfChunks, update[uint32](maxKey+1, 1)), []expectedPatch[uint32]{
-			{
-				startKey:     chunkBoundaries[2],
-				endKey:       maxKey + 1,
-				level:        1,
-				subtreeCount: uint64(maxKey + 1 - chunkBoundaries[2]),
-			},
-		}, nil)
+		testPatchBasedMerging(t, ctx, ns, desc, nil,
+			threeAndAHalfChunks,
+			mapWithUpdates(threeAndAHalfChunks, update[uint32](0, 1)),
+			mapWithUpdates(threeAndAHalfChunks, update[uint32](maxKey+1, 1)),
+			[]expectedPatch[uint32]{
+				{
+					level:   0,
+					endKey:  maxKey + 1,
+					toValue: 1,
+				},
+			})
 	})
 
 	t.Run("an insert before the first key doesn't create an extra chunk boundary", func(t *testing.T) {
-		testPatchBasedMerging(t, ctx, ns, desc, threeAndAHalfChunks, mapWithUpdates(threeAndAHalfChunks, update[uint32](maxKey+1, 1)), mapWithUpdates(threeAndAHalfChunks, update[uint32](0, 1)), []expectedPatch[uint32]{
-			{
-				noStartKey:   true,
-				endKey:       chunkBoundaries[0],
-				level:        1,
-				subtreeCount: uint64(chunkBoundaries[0] + 1),
-			},
-		}, nil)
+		testPatchBasedMerging(t, ctx, ns, desc, nil,
+			threeAndAHalfChunks,
+			mapWithUpdates(threeAndAHalfChunks, update[uint32](maxKey+1, 1)),
+			mapWithUpdates(threeAndAHalfChunks, update[uint32](0, 1)),
+			[]expectedPatch[uint32]{
+				{
+					noStartKey:   true,
+					endKey:       chunkBoundaries[0],
+					level:        1,
+					subtreeCount: uint64(chunkBoundaries[0] + 1),
+				},
+			})
 	})
 
 	t.Run("removing a value from a leaf node produces a top-level patch", func(t *testing.T) {
-		testPatchBasedMerging(t, ctx, ns, desc, threeAndAHalfChunks, mapWithUpdates(threeAndAHalfChunks, remove[uint32](1)), mapWithUpdates(threeAndAHalfChunks, remove[uint32](maxKey-20)), []expectedPatch[uint32]{
-			{
-				startKey:     chunkBoundaries[2],
-				endKey:       maxKey,
-				level:        1,
-				subtreeCount: uint64(maxKey - chunkBoundaries[2] - 1),
-			},
-		}, nil)
+		testPatchBasedMerging(t, ctx, ns, desc, nil,
+			threeAndAHalfChunks,
+			mapWithUpdates(threeAndAHalfChunks, remove[uint32](maxKey-20)),
+			mapWithUpdates(threeAndAHalfChunks, remove[uint32](1)),
+			[]expectedPatch[uint32]{
+				{
+					noStartKey:   true,
+					endKey:       chunkBoundaries[0],
+					level:        1,
+					subtreeCount: uint64(chunkBoundaries[0] - 1),
+				},
+			})
 	})
 
 	t.Run("concurrent removals in a leaf node produces a leaf-level patch", func(t *testing.T) {
-		testPatchBasedMerging(t, ctx, ns, desc, threeAndAHalfChunks, mapWithUpdates(threeAndAHalfChunks, remove[uint32](1)), mapWithUpdates(threeAndAHalfChunks, remove[uint32](2)), []expectedPatch[uint32]{
-			{
-				startKey:     1,
-				endKey:       2,
-				level:        0,
-				subtreeCount: 1,
-				isRemoval:    true,
-			},
-		}, nil)
+		testPatchBasedMerging(t, ctx, ns, desc, nil,
+			threeAndAHalfChunks,
+			mapWithUpdates(threeAndAHalfChunks, remove[uint32](1)),
+			mapWithUpdates(threeAndAHalfChunks, remove[uint32](2)),
+			[]expectedPatch[uint32]{
+				{
+					endKey:    2,
+					level:     0,
+					isRemoval: true,
+				},
+			})
 	})
 
 	t.Run("deleting an entire chunk at the end produces a single range", func(t *testing.T) {
-		testPatchBasedMerging(t, ctx, ns, desc, threeAndAHalfChunks, mapWithUpdates(threeAndAHalfChunks, remove[uint32](1)), mapWithUpdates(threeAndAHalfChunks, makeDeletePatches(chunkBoundaries[2]+1, maxKey)...), []expectedPatch[uint32]{
-			{
-				startKey:  chunkBoundaries[2],
-				endKey:    maxKey,
-				level:     1,
-				isRemoval: true,
-			},
-		}, nil)
+		testPatchBasedMerging(t, ctx, ns, desc, nil,
+			threeAndAHalfChunks,
+			mapWithUpdates(threeAndAHalfChunks, remove[uint32](1)),
+			mapWithUpdates(threeAndAHalfChunks, makeDeletePatches(chunkBoundaries[2]+1, maxKey)...),
+			[]expectedPatch[uint32]{
+				{
+					startKey:  chunkBoundaries[2],
+					endKey:    maxKey,
+					level:     1,
+					isRemoval: true,
+				},
+			})
 	})
 
 	// We expect removing an entire chunk produces a single range covering the removed chunk and the subsequent one.
 	t.Run("deleting an entire chunk in the middle", func(t *testing.T) {
-		testPatchBasedMerging(t, ctx, ns, desc, threeAndAHalfChunks, mapWithUpdates(threeAndAHalfChunks, remove[uint32](1)), mapWithUpdates(threeAndAHalfChunks, makeDeletePatches(chunkBoundaries[1]+1, chunkBoundaries[2])...), []expectedPatch[uint32]{
-			{
-				startKey:     chunkBoundaries[1],
-				endKey:       maxKey,
-				level:        1,
-				subtreeCount: uint64(maxKey - chunkBoundaries[2]),
-			},
-		}, nil)
+		testPatchBasedMerging(t, ctx, ns, desc, nil,
+			threeAndAHalfChunks,
+			mapWithUpdates(threeAndAHalfChunks, remove[uint32](1)),
+			mapWithUpdates(threeAndAHalfChunks, makeDeletePatches(chunkBoundaries[0]+1, chunkBoundaries[1])...),
+			[]expectedPatch[uint32]{
+				{
+					startKey:     chunkBoundaries[0],
+					endKey:       chunkBoundaries[2],
+					level:        1,
+					subtreeCount: uint64(chunkBoundaries[2] - chunkBoundaries[1]),
+				},
+			})
 	})
 
 	t.Run("deleting an entire chunk concurrent with a point delete", func(t *testing.T) {
 		// This needs to recurse into the leaf node in order to verify that the concurrently modified key isn't a conflict.
 		// Once we confirm there's no conflict, we could potentially emit a single high-level patch, but the logic would be
 		// more complicated. So currently we emit multiple patches instead.
+		pointDelete := mapWithUpdates(threeAndAHalfChunks, remove[uint32](1000))
+		chunkDelete := mapWithUpdates(threeAndAHalfChunks, makeDeletePatches(831, 1024)...)
 		expectedPatches := manyPointRemoves(831, 999)
 		expectedPatches = append(expectedPatches, manyPointRemoves(1001, 1024)...)
-		testPatchBasedMerging(t, ctx, ns, desc, threeAndAHalfChunks, mapWithUpdates(threeAndAHalfChunks, remove[uint32](1000)), mapWithUpdates(threeAndAHalfChunks, makeDeletePatches(831, 1024)...), expectedPatches, nil)
+		testPatchBasedMerging(t, ctx, ns, desc, nil,
+			threeAndAHalfChunks,
+			pointDelete,
+			chunkDelete,
+			expectedPatches)
+		// When the left side contains the larger change, the merged tree is the same as the left tree and there
+		// are no patches to emit.
+		testPatchBasedMerging(t, ctx, ns, desc, nil,
+			threeAndAHalfChunks,
+			chunkDelete,
+			pointDelete,
+			[]expectedPatch[uint32]{})
 	})
 
 	t.Run("deleting many rows at the end", func(t *testing.T) {
-		// We expect the chunk before the deleted rows to be modified, and then a removal patch for each chunk until the end.
+		// We expect the chunk before the deleted rows to be modified, and emit then a removal patch for each chunk until the end.
 		// Again, we could potentially emit a single removal patch, or even a single modified patch, but the logic would be
 		// more complicated.
-		newMaxKey := uint32(819)
-		testPatchBasedMerging(t, ctx, ns, desc, threeAndAHalfChunks, mapWithUpdates(threeAndAHalfChunks, remove[uint32](1)), mapWithUpdates(threeAndAHalfChunks, makeDeletePatches(newMaxKey+1, maxKey)...), []expectedPatch[uint32]{
-			{
-				startKey:     chunkBoundaries[1],
-				endKey:       newMaxKey,
-				level:        1,
-				subtreeCount: uint64(newMaxKey - chunkBoundaries[1]),
-			},
-			{
-				startKey:  newMaxKey,
-				endKey:    chunkBoundaries[2],
-				level:     1,
-				isRemoval: true,
-			},
-			{
-				startKey:  chunkBoundaries[2],
-				endKey:    1024,
-				level:     1,
-				isRemoval: true,
-			},
-		}, nil)
+		newMaxKey := chunkBoundaries[2] - 1
+		testPatchBasedMerging(t, ctx, ns, desc, nil,
+			threeAndAHalfChunks,
+			mapWithUpdates(threeAndAHalfChunks, remove[uint32](1)),
+			mapWithUpdates(threeAndAHalfChunks, makeDeletePatches(newMaxKey+1, maxKey)...),
+			[]expectedPatch[uint32]{
+				{
+					level:     0,
+					endKey:    chunkBoundaries[2],
+					isRemoval: true,
+				},
+				{
+					startKey:  chunkBoundaries[2],
+					endKey:    1024,
+					level:     1,
+					isRemoval: true,
+				},
+			})
 	})
 
 	t.Run("deleting many rows at the end doesn't emit unnecessary leaf removals", func(t *testing.T) {
 		newMaxKey := chunkBoundaries[2] - 1
-		testPatchBasedMerging(t, ctx, ns, desc, threeAndAHalfChunks, mapWithUpdates(threeAndAHalfChunks, remove[uint32](818)), mapWithUpdates(threeAndAHalfChunks, makeDeletePatches(newMaxKey+1, maxKey)...), []expectedPatch[uint32]{
-			{
-				endKey:       chunkBoundaries[2],
-				level:        0,
-				subtreeCount: uint64(newMaxKey - chunkBoundaries[1]),
-				isRemoval:    true,
-			},
-			{
-				startKey:  chunkBoundaries[2],
-				endKey:    1024,
-				level:     1,
-				isRemoval: true,
-			},
-		}, nil)
+		testPatchBasedMerging(t, ctx, ns, desc, nil,
+			threeAndAHalfChunks,
+			mapWithUpdates(threeAndAHalfChunks, remove[uint32](818)),
+			mapWithUpdates(threeAndAHalfChunks, makeDeletePatches(newMaxKey+1, maxKey)...),
+			[]expectedPatch[uint32]{
+				{
+					endKey:       chunkBoundaries[2],
+					level:        0,
+					subtreeCount: uint64(newMaxKey - chunkBoundaries[1]),
+					isRemoval:    true,
+				},
+				{
+					startKey:  chunkBoundaries[2],
+					endKey:    1024,
+					level:     1,
+					isRemoval: true,
+				},
+			})
+	})
+
+	t.Run("deleting many rows in the middle doesn't emit unnecessary leaf removals", func(t *testing.T) {
+		var expectedPatches []expectedPatch[uint32]
+		expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+			level:        1,
+			startKey:     chunkBoundaries[0],
+			endKey:       1237,
+			subtreeCount: uint64(1237 - chunkBoundaries[0] - (1210 - 715) - 1),
+		})
+		testPatchBasedMerging(t, ctx, ns, desc, nil,
+			fourAndAHalfChunks,
+			mapWithUpdates(fourAndAHalfChunks, remove[uint32](100)),
+			mapWithUpdates(fourAndAHalfChunks, makeDeletePatches(715, 1210)...),
+			expectedPatches)
 	})
 
 	t.Run("deleting an chunk boundary produces new boundaries until they realign", func(t *testing.T) {
 		newChunkBoundary := uint32(436)
-		testPatchBasedMerging(t, ctx, ns, desc, threeAndAHalfChunks, mapWithUpdates(threeAndAHalfChunks, remove[uint32](1000)), mapWithUpdates(threeAndAHalfChunks, remove[uint32](chunkBoundaries[0])), []expectedPatch[uint32]{
+		testPatchBasedMerging(t, ctx, ns, desc, nil, threeAndAHalfChunks, mapWithUpdates(threeAndAHalfChunks, remove[uint32](1000)), mapWithUpdates(threeAndAHalfChunks, remove[uint32](chunkBoundaries[0])), []expectedPatch[uint32]{
 			{
 				noStartKey:   true,
 				endKey:       newChunkBoundary, // new chunk boundary
@@ -478,26 +562,789 @@ func TestPatchBasedMerging(t *testing.T) {
 				level:        1,
 				subtreeCount: uint64(chunkBoundaries[1] - newChunkBoundary),
 			},
-		}, nil)
+		})
 	})
 
 	t.Run("range insert at end", func(t *testing.T) {
-		testPatchBasedMerging(t, ctx, ns, desc, threeChunks, mapWithUpdates(threeChunks, update[uint32](1, 0)), threeAndAHalfChunks, []expectedPatch[uint32]{
-			{
-				startKey:     chunkBoundaries[2],
-				endKey:       maxKey,
-				level:        1,
-				subtreeCount: uint64(maxKey - chunkBoundaries[2]),
-			},
-		}, nil)
+		// The last chunk from the base is replaced, a new chunk is added, and the remaining rows,
+		// which don't end in a natural chunk boundary, get emitted as individual rows.
+		var expectedPatches []expectedPatch[uint32]
+		expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+			startKey:     chunkBoundaries[1],
+			endKey:       chunkBoundaries[2],
+			level:        1,
+			subtreeCount: uint64(chunkBoundaries[2] - chunkBoundaries[1]),
+		})
+		expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+			startKey:     chunkBoundaries[2],
+			endKey:       chunkBoundaries[3],
+			level:        1,
+			subtreeCount: uint64(chunkBoundaries[3] - chunkBoundaries[2]),
+		})
+		for i := chunkBoundaries[3] + 1; i <= 1250; i++ {
+			expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+				endKey:  i,
+				toValue: i,
+				level:   0,
+			})
+		}
+		testPatchBasedMerging(t, ctx, ns, desc, nil, twoAndAHalfChunks, mapWithUpdates(twoAndAHalfChunks, update[uint32](1, 0)), fourAndAHalfChunks, expectedPatches)
 	})
 
 	t.Run("non-overlapping inserts to empty map", func(t *testing.T) {
-		lowerMap, _ := makeSimpleIntMap(t, 1, 1000)
-		upperMap, _ := makeSimpleIntMap(t, 1001, 2000)
+		lowerMap, _ := makeSimpleIntMap(t, 1, 831)
+		upperMap, _ := makeSimpleIntMap(t, 1001, 1847)
 		upperMapChunkBoundary := []uint32{1237, 1450, 1846}
+		{
+			// The right map is the upper map.
+			// Because nodes don't store their lower bound, we have to recurse to the leaf level for the first patches.
+			// This could be improved in the future.
+			// Once we hit the first chunk boundary, we emit higher level patches.
+			var expectedPatches []expectedPatch[uint32]
+			expectedPatches = append(expectedPatches, manyPointInserts(1001, upperMapChunkBoundary[0])...)
+			expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+				level:        1,
+				startKey:     upperMapChunkBoundary[0],
+				endKey:       upperMapChunkBoundary[1],
+				subtreeCount: uint64(upperMapChunkBoundary[1] - upperMapChunkBoundary[0]),
+			})
+			expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+				level:        1,
+				startKey:     upperMapChunkBoundary[1],
+				endKey:       upperMapChunkBoundary[2],
+				subtreeCount: uint64(upperMapChunkBoundary[2] - upperMapChunkBoundary[1]),
+			})
+			expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+				level:   0,
+				endKey:  1847,
+				toValue: 1847,
+			})
+
+			testPatchBasedMerging(t, ctx, ns, desc, nil, emptyMap, lowerMap, upperMap, expectedPatches)
+		}
+		{
+			// The right map is the lower map.
+			// Because nodes don't store their lower bound, we have to recurse to the leaf level for the first patches.
+			// This could be improved in the future.
+			// Once we hit the first chunk boundary, we emit higher level patches.
+			var expectedPatches []expectedPatch[uint32]
+			expectedPatches = append(expectedPatches, manyPointInserts(1, chunkBoundaries[0])...)
+			expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+				level:        1,
+				startKey:     chunkBoundaries[0],
+				endKey:       chunkBoundaries[1],
+				subtreeCount: uint64(chunkBoundaries[1] - chunkBoundaries[0]),
+			})
+			expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+				level:        1,
+				startKey:     chunkBoundaries[1],
+				endKey:       chunkBoundaries[2],
+				subtreeCount: uint64(chunkBoundaries[2] - chunkBoundaries[1]),
+			})
+			expectedPatches = append(expectedPatches, pointUpdate[uint32](831, 831))
+			testPatchBasedMerging(t, ctx, ns, desc, nil, emptyMap, upperMap, lowerMap, expectedPatches)
+		}
+	})
+
+	t.Run("non-overlapping inserts to nearly empty map", func(t *testing.T) {
+		baseMap, _ := makeSimpleIntMap(t, 1000, 1000)
+		lowerMap, _ := makeSimpleIntMap(t, 1, 831)
+		upperMap, _ := makeSimpleIntMap(t, 1001, 1847)
+		upperMapChunkBoundary := []uint32{1237, 1450, 1846}
+		{
+			// The right map is the upper map.
+			// Because nodes don't store their lower bound, we have to recurse to the leaf level for the first patches.
+			// This could be improved in the future.
+			// Once we hit the first chunk boundary, we emit higher level patches.
+			var expectedPatches []expectedPatch[uint32]
+			expectedPatches = append(expectedPatches, manyPointInserts(1001, upperMapChunkBoundary[0])...)
+			expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+				level:        1,
+				startKey:     upperMapChunkBoundary[0],
+				endKey:       upperMapChunkBoundary[1],
+				subtreeCount: uint64(upperMapChunkBoundary[1] - upperMapChunkBoundary[0]),
+			})
+			expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+				level:        1,
+				startKey:     upperMapChunkBoundary[1],
+				endKey:       upperMapChunkBoundary[2],
+				subtreeCount: uint64(upperMapChunkBoundary[2] - upperMapChunkBoundary[1]),
+			})
+			expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+				level:   0,
+				endKey:  1847,
+				toValue: 1847,
+			})
+			// Because nodes don't store their lower bound, we have to recurse to the leaf level for the first patches.
+			// This could be improved in the future.
+			testPatchBasedMerging(t, ctx, ns, desc, nil, baseMap, lowerMap, upperMap, expectedPatches)
+		}
+		{
+			// The right map is the lower map.
+			// Because nodes don't store their lower bound, we have to recurse to the leaf level for the first patches.
+			// This could be improved in the future.
+			// Once we hit the first chunk boundary, we emit higher level patches.
+			var expectedPatches []expectedPatch[uint32]
+			expectedPatches = append(expectedPatches, manyPointInserts(1, chunkBoundaries[0])...)
+			expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+				level:        1,
+				startKey:     chunkBoundaries[0],
+				endKey:       chunkBoundaries[1],
+				subtreeCount: uint64(chunkBoundaries[1] - chunkBoundaries[0]),
+			})
+			expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+				level:        1,
+				startKey:     chunkBoundaries[1],
+				endKey:       chunkBoundaries[2],
+				subtreeCount: uint64(chunkBoundaries[2] - chunkBoundaries[1]),
+			})
+			expectedPatches = append(expectedPatches, pointUpdate[uint32](831, 831))
+			testPatchBasedMerging(t, ctx, ns, desc, nil, emptyMap, upperMap, lowerMap, expectedPatches)
+		}
+	})
+
+	t.Run("overlapping inserts to empty map", func(t *testing.T) {
+		lowerMap, _ := makeSimpleIntMap(t, 1, 1000)
+		upperMap, _ := makeSimpleIntMap(t, 751, 1847)
+		upperMapChunkBoundary := []uint32{1012, 1237, 1450, 1846}
+		t.Run("right map is the upper map", func(t *testing.T) {
+			var expectedPatches []expectedPatch[uint32]
+			expectedPatches = append(expectedPatches, manyPointInserts(1001, upperMapChunkBoundary[0])...)
+			expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+				level:        1,
+				startKey:     upperMapChunkBoundary[0],
+				endKey:       upperMapChunkBoundary[1],
+				subtreeCount: uint64(upperMapChunkBoundary[1] - upperMapChunkBoundary[0]),
+			})
+			expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+				level:        1,
+				startKey:     upperMapChunkBoundary[1],
+				endKey:       upperMapChunkBoundary[2],
+				subtreeCount: uint64(upperMapChunkBoundary[2] - upperMapChunkBoundary[1]),
+			})
+			expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+				level:        1,
+				startKey:     upperMapChunkBoundary[2],
+				endKey:       upperMapChunkBoundary[3],
+				subtreeCount: uint64(upperMapChunkBoundary[3] - upperMapChunkBoundary[2]),
+			})
+			expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+				level:   0,
+				endKey:  1847,
+				toValue: 1847,
+			})
+			// Because nodes don't store their lower bound, we have to recurse to the leaf level for the first patches.
+			// This could be improved in the future.
+			testPatchBasedMerging(t, ctx, ns, desc, nil, emptyMap, lowerMap, upperMap, expectedPatches)
+		})
+		t.Run("right map is the lower map", func(t *testing.T) {
+			var expectedPatches []expectedPatch[uint32]
+			expectedPatches = append(expectedPatches, manyPointInserts(1, chunkBoundaries[0])...)
+			expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+				level:        1,
+				startKey:     chunkBoundaries[0],
+				endKey:       chunkBoundaries[1],
+				subtreeCount: uint64(chunkBoundaries[1] - chunkBoundaries[0]),
+			})
+			expectedPatches = append(expectedPatches, manyPointInserts(chunkBoundaries[1]+1, 750)...)
+
+			testPatchBasedMerging(t, ctx, ns, desc, nil, emptyMap, upperMap, lowerMap, expectedPatches)
+		})
+	})
+
+	t.Run("unequal sized inserts to empty map: small before large", func(t *testing.T) {
+		lowerMap, _ := makeSimpleIntMap(t, 1, 1)
+		upperMap, _ := makeSimpleIntMap(t, 1001, 1847)
+		upperMapChunkBoundaries := []uint32{1237, 1450, 1846}
+		t.Run("right map is the upper map", func(t *testing.T) {
+			var expectedPatches []expectedPatch[uint32]
+			for i := uint32(1001); i <= upperMapChunkBoundaries[0]; i++ {
+				expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+					level:   0,
+					endKey:  i,
+					toValue: i,
+				})
+			}
+			expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+				level:        1,
+				startKey:     upperMapChunkBoundaries[0],
+				endKey:       upperMapChunkBoundaries[1],
+				subtreeCount: uint64(upperMapChunkBoundaries[1] - upperMapChunkBoundaries[0]),
+			})
+			expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+				level:        1,
+				startKey:     upperMapChunkBoundaries[1],
+				endKey:       upperMapChunkBoundaries[2],
+				subtreeCount: uint64(upperMapChunkBoundaries[2] - upperMapChunkBoundaries[1]),
+			})
+			expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+				level:   0,
+				endKey:  1847,
+				toValue: 1847,
+			})
+			// Because nodes don't store their lower bound, we have to recurse to the leaf level for the first patches.
+			// This could be improved in the future.
+			testPatchBasedMerging(t, ctx, ns, desc, nil, emptyMap, lowerMap, upperMap, expectedPatches)
+		})
+		t.Run("right map is the lower map", func(t *testing.T) {
+			var expectedPatches = []expectedPatch[uint32]{
+				pointUpdate[uint32](1, 1),
+			}
+			testPatchBasedMerging(t, ctx, ns, desc, nil, emptyMap, upperMap, lowerMap, expectedPatches)
+		})
+	})
+
+	t.Run("unequal sized inserts to nearly empty map: small insert, then base, then large insert", func(t *testing.T) {
+		baseMap, _ := makeSimpleIntMap(t, 500, 500)
+		lowerMap, _ := makeSimpleIntMap(t, 1, 1)
+		upperMap, _ := makeSimpleIntMap(t, 1001, 1847)
+		rightMapChunkBoundaries := []uint32{1237, 1450, 1846}
+		t.Run("right map is the upper map", func(t *testing.T) {
+			var expectedPatches []expectedPatch[uint32]
+			for i := uint32(1001); i <= rightMapChunkBoundaries[0]; i++ {
+				expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+					level:   0,
+					endKey:  i,
+					toValue: i,
+				})
+			}
+			expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+				level:        1,
+				startKey:     rightMapChunkBoundaries[0],
+				endKey:       rightMapChunkBoundaries[1],
+				subtreeCount: uint64(rightMapChunkBoundaries[1] - rightMapChunkBoundaries[0]),
+			})
+			expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+				level:        1,
+				startKey:     rightMapChunkBoundaries[1],
+				endKey:       rightMapChunkBoundaries[2],
+				subtreeCount: uint64(rightMapChunkBoundaries[2] - rightMapChunkBoundaries[1]),
+			})
+			expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+				level:   0,
+				endKey:  1847,
+				toValue: 1847,
+			})
+			// Because nodes don't store their lower bound, we have to recurse to the leaf level for the first patches.
+			// This could be improved in the future.
+			testPatchBasedMerging(t, ctx, ns, desc, nil, baseMap, lowerMap, upperMap, expectedPatches)
+		})
+		t.Run("right map is the lower map", func(t *testing.T) {
+			var expectedPatches = []expectedPatch[uint32]{
+				pointUpdate[uint32](1, 1),
+			}
+			testPatchBasedMerging(t, ctx, ns, desc, nil, emptyMap, upperMap, lowerMap, expectedPatches)
+		})
+	})
+
+	t.Run("unequal sized inserts to nearly empty map: small insert, then large insert, then base", func(t *testing.T) {
+		baseMap, _ := makeSimpleIntMap(t, 2000, 2000)
+		lowerMap, _ := makeSimpleIntMap(t, 1, 1)
+		upperMap, _ := makeSimpleIntMap(t, 1001, 1847)
+		upperMapChunkBoundaires := []uint32{1237, 1450, 1846}
+		t.Run("right map is the upper map", func(t *testing.T) {
+			var expectedPatches []expectedPatch[uint32]
+			for i := uint32(1001); i <= upperMapChunkBoundaires[0]; i++ {
+				expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+					level:   0,
+					endKey:  i,
+					toValue: i,
+				})
+			}
+			expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+				level:        1,
+				startKey:     upperMapChunkBoundaires[0],
+				endKey:       upperMapChunkBoundaires[1],
+				subtreeCount: uint64(upperMapChunkBoundaires[1] - upperMapChunkBoundaires[0]),
+			})
+			expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+				level:        1,
+				startKey:     upperMapChunkBoundaires[1],
+				endKey:       upperMapChunkBoundaires[2],
+				subtreeCount: uint64(upperMapChunkBoundaires[2] - upperMapChunkBoundaires[1]),
+			})
+			expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+				level:   0,
+				endKey:  1847,
+				toValue: 1847,
+			})
+			// Because nodes don't store their lower bound, we have to recurse to the leaf level for the first patches.
+			// This could be improved in the future.
+			testPatchBasedMerging(t, ctx, ns, desc, nil, baseMap, lowerMap, upperMap, expectedPatches)
+		})
+		t.Run("right map is the lower map", func(t *testing.T) {
+			var expectedPatches = []expectedPatch[uint32]{
+				pointUpdate[uint32](1, 1),
+			}
+			testPatchBasedMerging(t, ctx, ns, desc, nil, emptyMap, upperMap, lowerMap, expectedPatches)
+		})
+	})
+
+	t.Run("unequal sized inserts to nearly empty map: base, then small insert, then large insert", func(t *testing.T) {
+		baseMap, _ := makeSimpleIntMap(t, 0, 0)
+		lowerMap, _ := makeSimpleIntMap(t, 500, 500)
+		upperMap, _ := makeSimpleIntMap(t, 1001, 1847)
+		upperMapChunkBoundaries := []uint32{1237, 1450, 1846}
+		t.Run("right map is the upper map", func(t *testing.T) {
+			var expectedPatches []expectedPatch[uint32]
+			expectedPatches = append(expectedPatches, manyPointInserts(1001, upperMapChunkBoundaries[0])...)
+			expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+				level:        1,
+				startKey:     upperMapChunkBoundaries[0],
+				endKey:       upperMapChunkBoundaries[1],
+				subtreeCount: uint64(upperMapChunkBoundaries[1] - upperMapChunkBoundaries[0]),
+			})
+			expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+				level:        1,
+				startKey:     upperMapChunkBoundaries[1],
+				endKey:       upperMapChunkBoundaries[2],
+				subtreeCount: uint64(upperMapChunkBoundaries[2] - upperMapChunkBoundaries[1]),
+			})
+			expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+				level:   0,
+				endKey:  1847,
+				toValue: 1847,
+			})
+			// Because nodes don't store their lower bound, we have to recurse to the leaf level for the first patches.
+			// This could be improved in the future.
+			testPatchBasedMerging(t, ctx, ns, desc, nil, baseMap, lowerMap, upperMap, expectedPatches)
+		})
+		t.Run("right map is the lower map", func(t *testing.T) {
+			var expectedPatches = []expectedPatch[uint32]{
+				pointUpdate[uint32](500, 500),
+			}
+			testPatchBasedMerging(t, ctx, ns, desc, nil, emptyMap, upperMap, lowerMap, expectedPatches)
+		})
+	})
+
+	t.Run("unequal sized inserts to empty map: small after large", func(t *testing.T) {
+		upperMap, _ := makeSimpleIntMap(t, 2000, 2000)
+		lowerMap, _ := makeSimpleIntMap(t, 1, 1000)
+		lowerMapChunkBoundaries := []uint32{414, 718, 830}
+		t.Run("right map is the lower map", func(t *testing.T) {
+			var expectedPatches []expectedPatch[uint32]
+			expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+				level:        1,
+				noStartKey:   true,
+				endKey:       lowerMapChunkBoundaries[0],
+				subtreeCount: uint64(lowerMapChunkBoundaries[0]),
+			})
+			expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+				level:        1,
+				startKey:     lowerMapChunkBoundaries[0],
+				endKey:       lowerMapChunkBoundaries[1],
+				subtreeCount: uint64(lowerMapChunkBoundaries[1] - lowerMapChunkBoundaries[0]),
+			})
+			expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+				level:        1,
+				startKey:     lowerMapChunkBoundaries[1],
+				endKey:       lowerMapChunkBoundaries[2],
+				subtreeCount: uint64(lowerMapChunkBoundaries[2] - lowerMapChunkBoundaries[1]),
+			})
+
+			for i := lowerMapChunkBoundaries[2] + 1; i <= 1000; i++ {
+				expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+					level:   0,
+					endKey:  i,
+					toValue: i,
+				})
+			}
+
+			// Because nodes don't store their lower bound, we have to recurse to the leaf level for the first patches.
+			// This could be improved in the future.
+			testPatchBasedMerging(t, ctx, ns, desc, nil, emptyMap, upperMap, lowerMap, expectedPatches)
+		})
+		t.Run("right map is the upper map", func(t *testing.T) {
+			var expectedPatches = []expectedPatch[uint32]{
+				pointUpdate[uint32](2000, 2000),
+			}
+			testPatchBasedMerging(t, ctx, ns, desc, nil, emptyMap, lowerMap, upperMap, expectedPatches)
+		})
+	})
+
+	t.Run("unequal sized inserts to nearly empty map: large insert, then base, then small insert", func(t *testing.T) {
+		// The right map will need to recurse down to the leaf level to verify that the key at 500 is not modified.
+		// This is a place where we could then emit a range for the entire node once we verify that all changes are
+		// concurrent, but we currently don't.
+		baseMap, _ := makeSimpleIntMap(t, 900, 900)
+		upperMap, _ := makeSimpleIntMap(t, 2000, 2000)
+		lowerMap, _ := makeSimpleIntMap(t, 1, 831)
+		lowerMapChunkBoundaries := []uint32{414, 718, 830}
+		t.Run("right map is the lower map", func(t *testing.T) {
+			var expectedPatches []expectedPatch[uint32]
+			expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+				level:        1,
+				noStartKey:   true,
+				endKey:       lowerMapChunkBoundaries[0],
+				subtreeCount: uint64(lowerMapChunkBoundaries[0]),
+			})
+			expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+				level:        1,
+				startKey:     lowerMapChunkBoundaries[0],
+				endKey:       lowerMapChunkBoundaries[1],
+				subtreeCount: uint64(lowerMapChunkBoundaries[1] - lowerMapChunkBoundaries[0]),
+			})
+			expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+				level:        1,
+				startKey:     lowerMapChunkBoundaries[1],
+				endKey:       lowerMapChunkBoundaries[2],
+				subtreeCount: uint64(lowerMapChunkBoundaries[2] - lowerMapChunkBoundaries[1]),
+			})
+			expectedPatches = append(expectedPatches, pointUpdate[uint32](831, 831))
+			// Because nodes don't store their lower bound, we have to recurse to the leaf level for the first patches.
+			// This could be improved in the future.
+			testPatchBasedMerging(t, ctx, ns, desc, nil, baseMap, upperMap, lowerMap, expectedPatches)
+		})
+		t.Run("right map is the upper map", func(t *testing.T) {
+			var expectedPatches = []expectedPatch[uint32]{
+				pointUpdate[uint32](2000, 2000),
+			}
+			testPatchBasedMerging(t, ctx, ns, desc, nil, baseMap, lowerMap, upperMap, expectedPatches)
+		})
+	})
+
+	t.Run("unequal sized inserts to nearly empty map: base, then large insert, then small insert", func(t *testing.T) {
+		// The right map will need to recurse down to the leaf level to verify that the key at 500 is not modified.
+		// This is a place where we could then emit a range for the entire node once we verify that all changes are
+		// concurrent, but we currently don't.
+		baseMap, _ := makeSimpleIntMap(t, 0, 0)
+		upperMap, _ := makeSimpleIntMap(t, 2000, 2000)
+		lowerMap, _ := makeSimpleIntMap(t, 1, 831)
+		lowerMapChunkBoundaries := []uint32{414, 718, 830}
+		t.Run("right map is the lower map", func(t *testing.T) {
+			var expectedPatches []expectedPatch[uint32]
+			expectedPatches = append(expectedPatches, manyPointInserts(1, lowerMapChunkBoundaries[0])...)
+
+			expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+				level:        1,
+				startKey:     lowerMapChunkBoundaries[0],
+				endKey:       lowerMapChunkBoundaries[1],
+				subtreeCount: uint64(lowerMapChunkBoundaries[1] - lowerMapChunkBoundaries[0]),
+			})
+			expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+				level:        1,
+				startKey:     lowerMapChunkBoundaries[1],
+				endKey:       lowerMapChunkBoundaries[2],
+				subtreeCount: uint64(lowerMapChunkBoundaries[2] - lowerMapChunkBoundaries[1]),
+			})
+			expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+				level:   0,
+				endKey:  831,
+				toValue: 831,
+			})
+			// Because nodes don't store their lower bound, we have to recurse to the leaf level for the first patches.
+			// This could be improved in the future.
+			testPatchBasedMerging(t, ctx, ns, desc, nil, baseMap, upperMap, lowerMap, expectedPatches)
+		})
+		t.Run("right map is the upper map", func(t *testing.T) {
+			expectedPatches := []expectedPatch[uint32]{
+				pointUpdate[uint32](2000, 2000),
+			}
+			testPatchBasedMerging(t, ctx, ns, desc, nil, baseMap, lowerMap, upperMap, expectedPatches)
+		})
+	})
+
+	t.Run("unequal sized inserts to nearly empty map: large insert, then small insert, then base", func(t *testing.T) {
+		// The right map will need to recurse down to the leaf level to verify that the key at 500 is not modified.
+		// This is a place where we could then emit a range for the entire node once we verify that all changes are
+		// concurrent, but we currently don't.
+		baseMap, _ := makeSimpleIntMap(t, 3000, 3000)
+		upperMap, _ := makeSimpleIntMap(t, 2000, 2000)
+		lowerMap, _ := makeSimpleIntMap(t, 1, 831)
+		rightMapChunkBoundaries := []uint32{414, 718, 830}
+		t.Run("right map is the lower map", func(t *testing.T) {
+			var expectedPatches []expectedPatch[uint32]
+			expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+				level:        1,
+				noStartKey:   true,
+				endKey:       rightMapChunkBoundaries[0],
+				subtreeCount: uint64(rightMapChunkBoundaries[0]),
+			})
+			for i := uint32(415); i < 500; i++ {
+				expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+					level:   0,
+					endKey:  i,
+					toValue: i,
+				})
+			}
+			for i := uint32(501); i <= 718; i++ {
+				expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+					level:   0,
+					endKey:  i,
+					toValue: i,
+				})
+			}
+			expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+				level:        1,
+				startKey:     rightMapChunkBoundaries[1],
+				endKey:       rightMapChunkBoundaries[2],
+				subtreeCount: uint64(rightMapChunkBoundaries[2] - rightMapChunkBoundaries[1]),
+			})
+			expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+				level:   0,
+				endKey:  831,
+				toValue: 831,
+			})
+			// Because nodes don't store their lower bound, we have to recurse to the leaf level for the first patches.
+			// This could be improved in the future.
+			testPatchBasedMerging(t, ctx, ns, desc, nil, baseMap, upperMap, lowerMap, expectedPatches)
+		})
+		t.Run("right map is the upper map", func(t *testing.T) {
+			expectedPatches := []expectedPatch[uint32]{
+				pointUpdate[uint32](2000, 2000),
+			}
+			testPatchBasedMerging(t, ctx, ns, desc, nil, baseMap, lowerMap, upperMap, expectedPatches)
+		})
+	})
+
+	t.Run("unequal sized inserts to nearly empty map: large insert concurrent with base, then small insert", func(t *testing.T) {
+		// The right map will need to recurse down to the leaf level to verify that the key at 500 is not modified.
+		// This is a place where we could then emit a range for the entire node once we verify that all changes are
+		// concurrent, but we currently don't.
+		baseMap, _ := makeSimpleIntMap(t, 500, 500)
+		upperMap := mapWithUpdates(baseMap, update[uint32](2000, 2000))
+		lowerMap, _ := makeSimpleIntMap(t, 1, 831)
+		lowerMapChunkBoundaries := []uint32{414, 718, 830}
+		t.Run("right map is the lower map", func(t *testing.T) {
+			var expectedPatches []expectedPatch[uint32]
+			expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+				level:        1,
+				noStartKey:   true,
+				endKey:       lowerMapChunkBoundaries[0],
+				subtreeCount: uint64(lowerMapChunkBoundaries[0]),
+			})
+			// We're able to emit a level 1 patch that covers the left key 500, because there's no diff on the left
+			// for that key; this is safe.
+			expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+				level:        1,
+				startKey:     lowerMapChunkBoundaries[0],
+				endKey:       lowerMapChunkBoundaries[1],
+				subtreeCount: uint64(lowerMapChunkBoundaries[1] - lowerMapChunkBoundaries[0]),
+			})
+
+			expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+				level:        1,
+				startKey:     lowerMapChunkBoundaries[1],
+				endKey:       lowerMapChunkBoundaries[2],
+				subtreeCount: uint64(lowerMapChunkBoundaries[2] - lowerMapChunkBoundaries[1]),
+			})
+			expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+				level:   0,
+				endKey:  831,
+				toValue: 831,
+			})
+			// Because nodes don't store their lower bound, we have to recurse to the leaf level for the first patches.
+			// This could be improved in the future.
+			testPatchBasedMerging(t, ctx, ns, desc, nil, baseMap, upperMap, lowerMap, expectedPatches)
+		})
+		t.Run("right map is the upper map", func(t *testing.T) {
+			expectedPatches := []expectedPatch[uint32]{
+				pointUpdate[uint32](2000, 2000),
+			}
+			testPatchBasedMerging(t, ctx, ns, desc, nil, baseMap, lowerMap, upperMap, expectedPatches)
+		})
+	})
+
+	t.Run("unequal sized inserts to empty map: concurrent", func(t *testing.T) {
+		subsetMap, _ := makeSimpleIntMap(t, 500, 500)
+		supersetMap, _ := makeSimpleIntMap(t, 1, 831)
+		supersetMapChunkBoundaries := []uint32{414, 718, 830}
+		t.Run("right map is superset", func(t *testing.T) {
+			var expectedPatches []expectedPatch[uint32]
+			expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+				level:        1,
+				noStartKey:   true,
+				endKey:       supersetMapChunkBoundaries[0],
+				subtreeCount: uint64(supersetMapChunkBoundaries[0]),
+			})
+			for i := uint32(415); i < 500; i++ {
+				expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+					level:   0,
+					endKey:  i,
+					toValue: i,
+				})
+			}
+			for i := uint32(501); i <= supersetMapChunkBoundaries[1]; i++ {
+				expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+					level:   0,
+					endKey:  i,
+					toValue: i,
+				})
+			}
+			expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+				level:        1,
+				startKey:     supersetMapChunkBoundaries[1],
+				endKey:       supersetMapChunkBoundaries[2],
+				subtreeCount: uint64(supersetMapChunkBoundaries[2] - supersetMapChunkBoundaries[1]),
+			})
+			expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+				level:   0,
+				endKey:  831,
+				toValue: 831,
+			})
+			// Because nodes don't store their lower bound, we have to recurse to the leaf level for the first patches.
+			// This could be improved in the future.
+			testPatchBasedMerging(t, ctx, ns, desc, nil, emptyMap, subsetMap, supersetMap, expectedPatches)
+		})
+		t.Run("right map is subset", func(t *testing.T) {
+			expectedPatches := []expectedPatch[uint32]{}
+			testPatchBasedMerging(t, ctx, ns, desc, nil, emptyMap, supersetMap, subsetMap, expectedPatches)
+		})
+	})
+
+	t.Run("merge with resolvable conflicts", func(t *testing.T) {
+		valueOnCollision := uint32(3000)
+		collide := func(left, right tree.Diff) (tree.Diff, bool) {
+			tupleBuilder := val.NewTupleBuilder(desc, ns)
+			tupleBuilder.PutUint32(0, valueOnCollision)
+			newVal, err := tupleBuilder.Build(sharedPool)
+			require.NoError(t, err)
+			// Resolve conflicts by returning a special value that we check for
+			return tree.Diff{
+				Key:  left.Key,
+				From: left.From,
+				To:   tree.Item(newVal),
+				Type: tree.ModifiedDiff,
+			}, true
+		}
+		testPatchBasedMerging(t, ctx, ns, desc, collide, threeChunks, mapWithUpdates(threeChunks, update[uint32](1, 10), update[uint32](990, 0)), mapWithUpdates(threeChunks, update[uint32](1, 20), update[uint32](1000, 0)), []expectedPatch[uint32]{
+			{
+				endKey:  1,
+				level:   0,
+				toValue: valueOnCollision,
+			},
+			{
+				endKey:  1000,
+				level:   0,
+				toValue: 0,
+			},
+		})
+	})
+
+	t.Run("merge with unresolvable conflicts", func(t *testing.T) {
+		var conflicts []struct{ left, right tree.Diff }
+		// A custom callback records all conflicts and treats them as unresolvable.
+		collide := func(left, right tree.Diff) (tree.Diff, bool) {
+			conflicts = append(conflicts, struct{ left, right tree.Diff }{left, right})
+			return tree.Diff{}, false
+		}
+		testPatchBasedMerging(t, ctx, ns, desc, collide, threeAndAHalfChunks, mapWithUpdates(threeAndAHalfChunks, update[uint32](1, 10), update[uint32](500, 0)), mapWithUpdates(threeAndAHalfChunks, update[uint32](1, 20), update[uint32](800, 0)), []expectedPatch[uint32]{
+			{
+				startKey:     chunkBoundaries[1],
+				endKey:       chunkBoundaries[2],
+				level:        1,
+				subtreeCount: uint64(chunkBoundaries[2] - chunkBoundaries[1]),
+			},
+		})
+		// The callback will be called twice: once during the tree merge, and once during the traditional merge
+		// we're comparing the results to.
+		require.Len(t, conflicts, 2)
+		for _, conflict := range conflicts {
+			collisionKey, ok := desc.GetUint32(0, val.Tuple(conflict.left.Key))
+			require.True(t, ok)
+			assert.Equal(t, collisionKey, uint32(1))
+		}
+	})
+
+	t.Run("both branches produce same address with different key ranges", func(t *testing.T) {
+		// This is a corner case that can happen when one branch adds or removes an entire chunk, immediately before
+		// a chunk that is concurrently modified.
+		testPatchBasedMerging(t, ctx, ns, desc, nil, threeAndAHalfChunks, mapWithUpdates(threeAndAHalfChunks, update[uint32](chunkBoundaries[2]-30, 0)), mapWithUpdates(threeAndAHalfChunks, append(makeDeletePatches(chunkBoundaries[0]+1, chunkBoundaries[1]), update[uint32](chunkBoundaries[2]-30, 0))...), []expectedPatch[uint32]{
+			{
+				startKey:     chunkBoundaries[0],
+				endKey:       chunkBoundaries[2],
+				level:        1,
+				subtreeCount: uint64(chunkBoundaries[2] - chunkBoundaries[1]),
+			},
+		})
+	})
+
+	t.Run("multi-level tree: deleting many rows off the end produces minimal diffs", func(t *testing.T) {
+		desc = val.NewTupleDescriptor(val.Type{Enc: val.StringEnc})
+		bld := val.NewTupleBuilder(desc, nil)
+		tuples := make([][2]val.Tuple, 10000)
+		var err error
+		for i := range tuples {
+			err = bld.PutString(0, "long_string_key_goes_here_"+strconv.Itoa(i))
+			require.NoError(t, err)
+			tuples[i][0], err = bld.Build(sharedPool)
+			require.NoError(t, err)
+			err = bld.PutString(0, "long_string_value_goes_here_"+strconv.Itoa(i))
+			require.NoError(t, err)
+			tuples[i][1], err = bld.Build(sharedPool)
+			require.NoError(t, err)
+		}
+		baseRoot, err := tree.MakeTreeForTest(tuples)
+		require.NoError(t, err)
+		leftRoot := stringMapWithUpdates(baseRoot, update[string]("long_string_key_goes_here_8659", ""))
+		require.NoError(t, err)
+		// This key is specifically chosen to be the last key of the last key of the last key:
+		// Removing it should result in exactly three diffs, one at each level.
+		rightRoot, err := tree.MakeTreeForTest(tuples[:8660])
+		require.NoError(t, err)
+		// The base map will happen to have these chunk boundaries.
+		testPatchBasedMerging[string](t, ctx, ns, desc, nil, baseRoot, leftRoot, rightRoot, []expectedPatch[string]{
+			{
+				endKey:    "long_string_key_goes_here_8660",
+				level:     0,
+				isRemoval: true,
+			},
+			{
+				startKey:  "long_string_key_goes_here_8660",
+				endKey:    "long_string_key_goes_here_8702",
+				level:     1,
+				isRemoval: true,
+			},
+			{
+				startKey:  "long_string_key_goes_here_8702",
+				endKey:    "long_string_key_goes_here_9999",
+				level:     2,
+				isRemoval: true,
+			},
+		})
+	})
+}
+
+// TestPatchBasedMergingSkipPatches tests that patching process produces the same merged tree as a traditional merge,
+// but does not require that the set of produced patches exactly matches the expected set of patches.
+// These tests document cases where we may not produce the optimal set of patches, but still produce the correct final result.
+func TestPatchBasedMergingSkipPatches(t *testing.T) {
+
+	ctx := context.Background()
+	ns := tree.NewTestNodeStore()
+
+	fourAndAHalfChunks, desc := makeSimpleIntMap(t, 1, 1250)
+	chunkBoundaries := []uint32{414, 718, 830, 1207}
+
+	emptyMap, err := tree.MakeTreeForTest(nil)
+	require.NoError(t, err)
+
+	mapWithUpdates := func(root tree.Node, updates ...mutation[uint32]) tree.Node {
+		return mutate(t, ctx, root, desc, desc, updates)
+	}
+
+	// Currently, if part of a contiguous key range presents as a leaf change (such as the insertion of row 501 on the right),
+	// every subsequent changed row also presents as a leaf change.
+	t.Run("unequal sized inserts to nearly empty map: concurrent, right diff is superset", func(t *testing.T) {
+		baseMap, _ := makeSimpleIntMap(t, 2000, 2000)
+		leftMap, _ := makeSimpleIntMap(t, 500, 500)
+		rightMap, _ := makeSimpleIntMap(t, 1, 831)
+		rightMapChunkBoundaries := []uint32{414, 718, 830}
 		var expectedPatches []expectedPatch[uint32]
-		for i := uint32(1001); i <= upperMapChunkBoundary[0]; i++ {
+		expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+			level:        1,
+			noStartKey:   true,
+			endKey:       rightMapChunkBoundaries[0],
+			subtreeCount: uint64(rightMapChunkBoundaries[0]),
+		})
+		for i := rightMapChunkBoundaries[0] + 1; i < 500; i++ {
+			expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+				level:   0,
+				endKey:  i,
+				toValue: i,
+			})
+		}
+		for i := uint32(501); i < rightMapChunkBoundaries[1]; i++ {
 			expectedPatches = append(expectedPatches, expectedPatch[uint32]{
 				level:   0,
 				endKey:  i,
@@ -506,30 +1353,104 @@ func TestPatchBasedMerging(t *testing.T) {
 		}
 		expectedPatches = append(expectedPatches, expectedPatch[uint32]{
 			level:        1,
-			startKey:     upperMapChunkBoundary[0],
-			endKey:       upperMapChunkBoundary[1],
-			subtreeCount: uint64(upperMapChunkBoundary[1] - upperMapChunkBoundary[0]),
+			noStartKey:   true,
+			endKey:       rightMapChunkBoundaries[2],
+			subtreeCount: uint64(rightMapChunkBoundaries[2] - rightMapChunkBoundaries[1]),
 		})
+
+		// Because nodes don't store their lower bound, we have to recurse to the leaf level for the first patches.
+		// This could be improved in the future.
+		testPatchBasedMergingResultsOnly(t, ctx, ns, desc, nil, baseMap, leftMap, rightMap, expectedPatches)
+	})
+
+	t.Run("non-overlapping removals produce empty map: right removes lower bound", func(t *testing.T) {
+		// The patch generator for the right branch needs to recurse into the leaves in order to know the minimum
+		// key value of the first child node. A result, we get a separate patch for each removed key. This can likely
+		// be improved in the future.
+		baseMap, _ := makeSimpleIntMap(t, 1, 2000)
+		lowerMap, _ := makeSimpleIntMap(t, 1, 1000)
+		upperMap, _ := makeSimpleIntMap(t, 1001, 2000)
+		var expectedPatches []expectedPatch[uint32]
+		for i := uint32(1); i <= 1000; i++ {
+			expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+				level:     0,
+				endKey:    i,
+				isRemoval: true,
+			})
+		}
+		testPatchBasedMergingResultsOnly(t, ctx, ns, desc, nil, baseMap, lowerMap, upperMap, expectedPatches)
+	})
+
+	t.Run("non-overlapping removals produce empty map: right removes upper bound", func(t *testing.T) {
+		// The patch generator for the right branch needs to recurse into the leaves in order to know the minimum
+		// key value of the first child node.
+		baseMap, _ := makeSimpleIntMap(t, 1, 2000)
+		lowerMap, _ := makeSimpleIntMap(t, 1, 1000)
+		upperMap, _ := makeSimpleIntMap(t, 1001, 2000)
+		upperMapChunkBoundary := []uint32{1237, 1450, 1846}
+		var expectedPatches []expectedPatch[uint32]
+		for i := uint32(1001); i <= upperMapChunkBoundary[0]; i++ {
+			expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+				level:     0,
+				endKey:    i,
+				isRemoval: true,
+			})
+		}
 		expectedPatches = append(expectedPatches, expectedPatch[uint32]{
 			level:        1,
 			startKey:     upperMapChunkBoundary[1],
 			endKey:       upperMapChunkBoundary[2],
 			subtreeCount: uint64(upperMapChunkBoundary[2] - upperMapChunkBoundary[1]),
 		})
-		expectedPatches = append(expectedPatches, expectedPatch[uint32]{
-			level:        1,
-			startKey:     upperMapChunkBoundary[2],
-			endKey:       2000,
-			subtreeCount: uint64(2000 - upperMapChunkBoundary[2]),
-		})
-		// Because nodes don't store their lower bound, we have to recurse to the leaf level for the first patches.
-		// This could be improved in the future.
-		testPatchBasedMerging(t, ctx, ns, desc, emptyMap, lowerMap, upperMap, expectedPatches, nil)
+		testPatchBasedMergingResultsOnly(t, ctx, ns, desc, nil, baseMap, upperMap, lowerMap, expectedPatches)
 	})
 
-	t.Run("overlapping inserts to empty map", func(t *testing.T) {
-		lowerMap, _ := makeSimpleIntMap(t, 1, 1000)
-		upperMap, _ := makeSimpleIntMap(t, 501, 2000)
+	t.Run("non-overlapping removals produce nearly-empty map: right removes lower bound", func(t *testing.T) {
+		// The patch generator for the right branch needs to recurse into the leaves in order to know the minimum
+		// key value of the first child node. A result, we get a separate patch for each removed key. This can likely
+		// be improved in the future.
+		baseMap, _ := makeSimpleIntMap(t, 1, 2000)
+		lowerMap, _ := makeSimpleIntMap(t, 1, 999)
+		upperMap, _ := makeSimpleIntMap(t, 1001, 2000)
+		var expectedPatches []expectedPatch[uint32]
+		for i := uint32(1); i <= 1000; i++ {
+			expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+				level:     0,
+				endKey:    i,
+				isRemoval: true,
+			})
+		}
+		testPatchBasedMergingResultsOnly(t, ctx, ns, desc, nil, baseMap, lowerMap, upperMap, expectedPatches)
+	})
+
+	t.Run("non-overlapping removals produce nearly-empty map: right removes upper bound", func(t *testing.T) {
+		// The patch generator for the right branch needs to recurse into the leaves in order to know the minimum
+		// key value of the first child node.
+		baseMap, _ := makeSimpleIntMap(t, 1, 2000)
+		lowerMap, _ := makeSimpleIntMap(t, 1, 999)
+		upperMap, _ := makeSimpleIntMap(t, 1001, 2000)
+		upperMapChunkBoundary := []uint32{1237, 1450, 1846}
+		var expectedPatches []expectedPatch[uint32]
+		for i := uint32(1001); i <= upperMapChunkBoundary[0]; i++ {
+			expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+				level:     0,
+				endKey:    i,
+				isRemoval: true,
+			})
+		}
+		expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+			level:        1,
+			startKey:     upperMapChunkBoundary[1],
+			endKey:       upperMapChunkBoundary[2],
+			subtreeCount: uint64(upperMapChunkBoundary[2] - upperMapChunkBoundary[1]),
+		})
+		testPatchBasedMergingResultsOnly(t, ctx, ns, desc, nil, baseMap, upperMap, lowerMap, expectedPatches)
+	})
+
+	t.Run("overlapping removals produce empty map: right removes upper bound", func(t *testing.T) {
+		baseMap, _ := makeSimpleIntMap(t, 1, 2000)
+		lowerMap, _ := makeSimpleIntMap(t, 1, 500)
+		upperMap, _ := makeSimpleIntMap(t, 1500, 2000)
 		upperMapChunkBoundary := []uint32{1207, 1450, 1846}
 		var expectedPatches []expectedPatch[uint32]
 		for i := uint32(1001); i <= upperMapChunkBoundary[0]; i++ {
@@ -559,12 +1480,125 @@ func TestPatchBasedMerging(t *testing.T) {
 		})
 		// Because nodes don't store their lower bound, we have to recurse to the leaf level for the first patches.
 		// This could be improved in the future.
-		testPatchBasedMerging(t, ctx, ns, desc, emptyMap, lowerMap, upperMap, expectedPatches, nil)
+		testPatchBasedMergingResultsOnly(t, ctx, ns, desc, nil, baseMap, lowerMap, upperMap, expectedPatches)
 	})
 
-	t.Run("unequal sized inserts to empty map: small before large", func(t *testing.T) {
+	t.Run("overlapping removals produce empty map: right removes lower bound", func(t *testing.T) {
+		baseMap, _ := makeSimpleIntMap(t, 1, 2000)
+		lowerMap, _ := makeSimpleIntMap(t, 1, 500)
+		upperMap, _ := makeSimpleIntMap(t, 1500, 2000)
+		upperMapChunkBoundary := []uint32{1207, 1450, 1846}
+		var expectedPatches []expectedPatch[uint32]
+		for i := uint32(1001); i <= upperMapChunkBoundary[0]; i++ {
+			expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+				level:   0,
+				endKey:  i,
+				toValue: i,
+			})
+		}
+		expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+			level:        1,
+			startKey:     upperMapChunkBoundary[0],
+			endKey:       upperMapChunkBoundary[1],
+			subtreeCount: uint64(upperMapChunkBoundary[1] - upperMapChunkBoundary[0]),
+		})
+		expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+			level:        1,
+			startKey:     upperMapChunkBoundary[1],
+			endKey:       upperMapChunkBoundary[2],
+			subtreeCount: uint64(upperMapChunkBoundary[2] - upperMapChunkBoundary[1]),
+		})
+		expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+			level:        1,
+			startKey:     upperMapChunkBoundary[2],
+			endKey:       2000,
+			subtreeCount: uint64(2000 - upperMapChunkBoundary[2]),
+		})
+		// Because nodes don't store their lower bound, we have to recurse to the leaf level for the first patches.
+		// This could be improved in the future.
+		testPatchBasedMergingResultsOnly(t, ctx, ns, desc, nil, baseMap, upperMap, lowerMap, expectedPatches)
+	})
+
+	t.Run("overlapping removals produce nearly empty map: right removes upper bound", func(t *testing.T) {
+		baseMap, _ := makeSimpleIntMap(t, 1, 2000)
+		lowerMap, _ := makeSimpleIntMap(t, 1, 500)
+		lowerMap = mapWithUpdates(lowerMap, update[uint32](2000, 2000))
+		upperMap, _ := makeSimpleIntMap(t, 1500, 2000)
+		upperMap = mapWithUpdates(lowerMap, update[uint32](1, 1))
+		upperMapChunkBoundary := []uint32{1207, 1450, 1846}
+		var expectedPatches []expectedPatch[uint32]
+		for i := uint32(1001); i <= upperMapChunkBoundary[0]; i++ {
+			expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+				level:   0,
+				endKey:  i,
+				toValue: i,
+			})
+		}
+		expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+			level:        1,
+			startKey:     upperMapChunkBoundary[0],
+			endKey:       upperMapChunkBoundary[1],
+			subtreeCount: uint64(upperMapChunkBoundary[1] - upperMapChunkBoundary[0]),
+		})
+		expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+			level:        1,
+			startKey:     upperMapChunkBoundary[1],
+			endKey:       upperMapChunkBoundary[2],
+			subtreeCount: uint64(upperMapChunkBoundary[2] - upperMapChunkBoundary[1]),
+		})
+		expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+			level:        1,
+			startKey:     upperMapChunkBoundary[2],
+			endKey:       2000,
+			subtreeCount: uint64(2000 - upperMapChunkBoundary[2]),
+		})
+		// Because nodes don't store their lower bound, we have to recurse to the leaf level for the first patches.
+		// This could be improved in the future.
+		testPatchBasedMergingResultsOnly(t, ctx, ns, desc, nil, baseMap, lowerMap, upperMap, expectedPatches)
+	})
+
+	t.Run("overlapping removals produce nearly empty map: right removes lower bound", func(t *testing.T) {
+		baseMap, _ := makeSimpleIntMap(t, 1, 2000)
+		lowerMap, _ := makeSimpleIntMap(t, 1, 500)
+		lowerMap = mapWithUpdates(lowerMap, update[uint32](2000, 2000))
+		upperMap, _ := makeSimpleIntMap(t, 1500, 2000)
+		upperMap = mapWithUpdates(lowerMap, update[uint32](1, 1))
+		upperMapChunkBoundary := []uint32{1207, 1450, 1846}
+		var expectedPatches []expectedPatch[uint32]
+		for i := uint32(1001); i <= upperMapChunkBoundary[0]; i++ {
+			expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+				level:   0,
+				endKey:  i,
+				toValue: i,
+			})
+		}
+		expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+			level:        1,
+			startKey:     upperMapChunkBoundary[0],
+			endKey:       upperMapChunkBoundary[1],
+			subtreeCount: uint64(upperMapChunkBoundary[1] - upperMapChunkBoundary[0]),
+		})
+		expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+			level:        1,
+			startKey:     upperMapChunkBoundary[1],
+			endKey:       upperMapChunkBoundary[2],
+			subtreeCount: uint64(upperMapChunkBoundary[2] - upperMapChunkBoundary[1]),
+		})
+		expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+			level:        1,
+			startKey:     upperMapChunkBoundary[2],
+			endKey:       2000,
+			subtreeCount: uint64(2000 - upperMapChunkBoundary[2]),
+		})
+		// Because nodes don't store their lower bound, we have to recurse to the leaf level for the first patches.
+		// This could be improved in the future.
+		testPatchBasedMergingResultsOnly(t, ctx, ns, desc, nil, baseMap, upperMap, lowerMap, expectedPatches)
+	})
+
+	t.Run("unequal sized removals produce empty map: small left before large right", func(t *testing.T) {
+		baseMap, _ := makeSimpleIntMap(t, 1, 2000)
 		leftLowerMap, _ := makeSimpleIntMap(t, 1, 1)
-		rightUpperMap, _ := makeSimpleIntMap(t, 1001, 2000)
+		rightUpperMap, _ := makeSimpleIntMap(t, 2, 2000)
 		rightMapChunkBoundaries := []uint32{1237, 1450, 1846}
 		var expectedPatches []expectedPatch[uint32]
 		for i := uint32(1001); i <= rightMapChunkBoundaries[0]; i++ {
@@ -594,20 +1628,22 @@ func TestPatchBasedMerging(t *testing.T) {
 		})
 		// Because nodes don't store their lower bound, we have to recurse to the leaf level for the first patches.
 		// This could be improved in the future.
-		testPatchBasedMerging(t, ctx, ns, desc, emptyMap, leftLowerMap, rightUpperMap, expectedPatches, nil)
+		testPatchBasedMergingResultsOnly(t, ctx, ns, desc, nil, baseMap, leftLowerMap, rightUpperMap, expectedPatches)
 	})
 
-	t.Run("unequal sized inserts to empty map: small after large", func(t *testing.T) {
-		leftUpperMap, _ := makeSimpleIntMap(t, 2000, 2000)
-		rightLowerMap, _ := makeSimpleIntMap(t, 1, 1000)
-		rightMapChunkBoundaries := []uint32{414, 718, 830}
+	t.Run("unequal sized removals produce nearly empty map: small left before large right", func(t *testing.T) {
+		baseMap, _ := makeSimpleIntMap(t, 1, 2000)
+		leftLowerMap, _ := makeSimpleIntMap(t, 1, 1)
+		rightUpperMap, _ := makeSimpleIntMap(t, 3, 2000)
+		rightMapChunkBoundaries := []uint32{1237, 1450, 1846}
 		var expectedPatches []expectedPatch[uint32]
-		expectedPatches = append(expectedPatches, expectedPatch[uint32]{
-			level:        1,
-			noStartKey:   true,
-			endKey:       rightMapChunkBoundaries[0],
-			subtreeCount: uint64(rightMapChunkBoundaries[0]),
-		})
+		for i := uint32(1001); i <= rightMapChunkBoundaries[0]; i++ {
+			expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+				level:   0,
+				endKey:  i,
+				toValue: i,
+			})
+		}
 		expectedPatches = append(expectedPatches, expectedPatch[uint32]{
 			level:        1,
 			startKey:     rightMapChunkBoundaries[0],
@@ -620,21 +1656,237 @@ func TestPatchBasedMerging(t *testing.T) {
 			endKey:       rightMapChunkBoundaries[2],
 			subtreeCount: uint64(rightMapChunkBoundaries[2] - rightMapChunkBoundaries[1]),
 		})
-
 		expectedPatches = append(expectedPatches, expectedPatch[uint32]{
 			level:        1,
 			startKey:     rightMapChunkBoundaries[2],
-			endKey:       1000,
-			subtreeCount: uint64(1000 - rightMapChunkBoundaries[2]),
+			endKey:       2000,
+			subtreeCount: uint64(2000 - rightMapChunkBoundaries[2]),
 		})
 		// Because nodes don't store their lower bound, we have to recurse to the leaf level for the first patches.
 		// This could be improved in the future.
-		testPatchBasedMerging(t, ctx, ns, desc, emptyMap, leftUpperMap, rightLowerMap, expectedPatches, nil)
+		testPatchBasedMergingResultsOnly(t, ctx, ns, desc, nil, baseMap, leftLowerMap, rightUpperMap, expectedPatches)
 	})
 
-	t.Run("unequal sized inserts to empty map: concurrent", func(t *testing.T) {
-		leftUpperMap, _ := makeSimpleIntMap(t, 500, 500)
-		rightLowerMap, _ := makeSimpleIntMap(t, 1, 1000)
+	t.Run("unequal sized removals produce empty map: small left after large right", func(t *testing.T) {
+		baseMap, _ := makeSimpleIntMap(t, 1, 2000)
+		leftLowerMap, _ := makeSimpleIntMap(t, 1, 1)
+		rightUpperMap, _ := makeSimpleIntMap(t, 2, 2000)
+		rightMapChunkBoundaries := []uint32{1237, 1450, 1846}
+		var expectedPatches []expectedPatch[uint32]
+		for i := uint32(1001); i <= rightMapChunkBoundaries[0]; i++ {
+			expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+				level:   0,
+				endKey:  i,
+				toValue: i,
+			})
+		}
+		expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+			level:        1,
+			startKey:     rightMapChunkBoundaries[0],
+			endKey:       rightMapChunkBoundaries[1],
+			subtreeCount: uint64(rightMapChunkBoundaries[1] - rightMapChunkBoundaries[0]),
+		})
+		expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+			level:        1,
+			startKey:     rightMapChunkBoundaries[1],
+			endKey:       rightMapChunkBoundaries[2],
+			subtreeCount: uint64(rightMapChunkBoundaries[2] - rightMapChunkBoundaries[1]),
+		})
+		expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+			level:        1,
+			startKey:     rightMapChunkBoundaries[2],
+			endKey:       2000,
+			subtreeCount: uint64(2000 - rightMapChunkBoundaries[2]),
+		})
+		// Because nodes don't store their lower bound, we have to recurse to the leaf level for the first patches.
+		// This could be improved in the future.
+		testPatchBasedMergingResultsOnly(t, ctx, ns, desc, nil, baseMap, leftLowerMap, rightUpperMap, expectedPatches)
+	})
+
+	t.Run("unequal sized removals produce nearly empty map: small left after large right", func(t *testing.T) {
+		baseMap, _ := makeSimpleIntMap(t, 1, 2000)
+		leftLowerMap, _ := makeSimpleIntMap(t, 1, 1)
+		rightUpperMap, _ := makeSimpleIntMap(t, 3, 2000)
+		rightMapChunkBoundaries := []uint32{1237, 1450, 1846}
+		var expectedPatches []expectedPatch[uint32]
+		for i := uint32(1001); i <= rightMapChunkBoundaries[0]; i++ {
+			expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+				level:   0,
+				endKey:  i,
+				toValue: i,
+			})
+		}
+		expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+			level:        1,
+			startKey:     rightMapChunkBoundaries[0],
+			endKey:       rightMapChunkBoundaries[1],
+			subtreeCount: uint64(rightMapChunkBoundaries[1] - rightMapChunkBoundaries[0]),
+		})
+		expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+			level:        1,
+			startKey:     rightMapChunkBoundaries[1],
+			endKey:       rightMapChunkBoundaries[2],
+			subtreeCount: uint64(rightMapChunkBoundaries[2] - rightMapChunkBoundaries[1]),
+		})
+		expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+			level:        1,
+			startKey:     rightMapChunkBoundaries[2],
+			endKey:       2000,
+			subtreeCount: uint64(2000 - rightMapChunkBoundaries[2]),
+		})
+		// Because nodes don't store their lower bound, we have to recurse to the leaf level for the first patches.
+		// This could be improved in the future.
+		testPatchBasedMergingResultsOnly(t, ctx, ns, desc, nil, baseMap, leftLowerMap, rightUpperMap, expectedPatches)
+	})
+
+	t.Run("unequal sized removals produce empty map: large left before small right", func(t *testing.T) {
+		baseMap, _ := makeSimpleIntMap(t, 1, 2000)
+		leftLowerMap, _ := makeSimpleIntMap(t, 1, 1)
+		rightUpperMap, _ := makeSimpleIntMap(t, 2, 2000)
+		rightMapChunkBoundaries := []uint32{1237, 1450, 1846}
+		var expectedPatches []expectedPatch[uint32]
+		for i := uint32(1001); i <= rightMapChunkBoundaries[0]; i++ {
+			expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+				level:   0,
+				endKey:  i,
+				toValue: i,
+			})
+		}
+		expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+			level:        1,
+			startKey:     rightMapChunkBoundaries[0],
+			endKey:       rightMapChunkBoundaries[1],
+			subtreeCount: uint64(rightMapChunkBoundaries[1] - rightMapChunkBoundaries[0]),
+		})
+		expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+			level:        1,
+			startKey:     rightMapChunkBoundaries[1],
+			endKey:       rightMapChunkBoundaries[2],
+			subtreeCount: uint64(rightMapChunkBoundaries[2] - rightMapChunkBoundaries[1]),
+		})
+		expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+			level:        1,
+			startKey:     rightMapChunkBoundaries[2],
+			endKey:       2000,
+			subtreeCount: uint64(2000 - rightMapChunkBoundaries[2]),
+		})
+		// Because nodes don't store their lower bound, we have to recurse to the leaf level for the first patches.
+		// This could be improved in the future.
+		testPatchBasedMergingResultsOnly(t, ctx, ns, desc, nil, baseMap, leftLowerMap, rightUpperMap, expectedPatches)
+	})
+
+	t.Run("unequal sized removals produce nearly empty map: large left before small right", func(t *testing.T) {
+		baseMap, _ := makeSimpleIntMap(t, 1, 2000)
+		leftLowerMap, _ := makeSimpleIntMap(t, 1, 1)
+		rightUpperMap, _ := makeSimpleIntMap(t, 3, 2000)
+		rightMapChunkBoundaries := []uint32{1237, 1450, 1846}
+		var expectedPatches []expectedPatch[uint32]
+		for i := uint32(1001); i <= rightMapChunkBoundaries[0]; i++ {
+			expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+				level:   0,
+				endKey:  i,
+				toValue: i,
+			})
+		}
+		expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+			level:        1,
+			startKey:     rightMapChunkBoundaries[0],
+			endKey:       rightMapChunkBoundaries[1],
+			subtreeCount: uint64(rightMapChunkBoundaries[1] - rightMapChunkBoundaries[0]),
+		})
+		expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+			level:        1,
+			startKey:     rightMapChunkBoundaries[1],
+			endKey:       rightMapChunkBoundaries[2],
+			subtreeCount: uint64(rightMapChunkBoundaries[2] - rightMapChunkBoundaries[1]),
+		})
+		expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+			level:        1,
+			startKey:     rightMapChunkBoundaries[2],
+			endKey:       2000,
+			subtreeCount: uint64(2000 - rightMapChunkBoundaries[2]),
+		})
+		// Because nodes don't store their lower bound, we have to recurse to the leaf level for the first patches.
+		// This could be improved in the future.
+		testPatchBasedMergingResultsOnly(t, ctx, ns, desc, nil, baseMap, leftLowerMap, rightUpperMap, expectedPatches)
+	})
+
+	t.Run("unequal sized removals produce empty map: large left after small right", func(t *testing.T) {
+		baseMap, _ := makeSimpleIntMap(t, 1, 2000)
+		leftLowerMap, _ := makeSimpleIntMap(t, 1, 1)
+		rightUpperMap, _ := makeSimpleIntMap(t, 2, 2000)
+		rightMapChunkBoundaries := []uint32{1237, 1450, 1846}
+		var expectedPatches []expectedPatch[uint32]
+		for i := uint32(1001); i <= rightMapChunkBoundaries[0]; i++ {
+			expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+				level:   0,
+				endKey:  i,
+				toValue: i,
+			})
+		}
+		expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+			level:        1,
+			startKey:     rightMapChunkBoundaries[0],
+			endKey:       rightMapChunkBoundaries[1],
+			subtreeCount: uint64(rightMapChunkBoundaries[1] - rightMapChunkBoundaries[0]),
+		})
+		expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+			level:        1,
+			startKey:     rightMapChunkBoundaries[1],
+			endKey:       rightMapChunkBoundaries[2],
+			subtreeCount: uint64(rightMapChunkBoundaries[2] - rightMapChunkBoundaries[1]),
+		})
+		expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+			level:        1,
+			startKey:     rightMapChunkBoundaries[2],
+			endKey:       2000,
+			subtreeCount: uint64(2000 - rightMapChunkBoundaries[2]),
+		})
+		// Because nodes don't store their lower bound, we have to recurse to the leaf level for the first patches.
+		// This could be improved in the future.
+		testPatchBasedMergingResultsOnly(t, ctx, ns, desc, nil, baseMap, leftLowerMap, rightUpperMap, expectedPatches)
+	})
+
+	t.Run("unequal sized removals produce nearly empty map: large left after small right", func(t *testing.T) {
+		baseMap, _ := makeSimpleIntMap(t, 1, 2000)
+		leftLowerMap, _ := makeSimpleIntMap(t, 1, 1)
+		rightUpperMap, _ := makeSimpleIntMap(t, 3, 2000)
+		rightMapChunkBoundaries := []uint32{1237, 1450, 1846}
+		var expectedPatches []expectedPatch[uint32]
+		for i := uint32(1001); i <= rightMapChunkBoundaries[0]; i++ {
+			expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+				level:   0,
+				endKey:  i,
+				toValue: i,
+			})
+		}
+		expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+			level:        1,
+			startKey:     rightMapChunkBoundaries[0],
+			endKey:       rightMapChunkBoundaries[1],
+			subtreeCount: uint64(rightMapChunkBoundaries[1] - rightMapChunkBoundaries[0]),
+		})
+		expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+			level:        1,
+			startKey:     rightMapChunkBoundaries[1],
+			endKey:       rightMapChunkBoundaries[2],
+			subtreeCount: uint64(rightMapChunkBoundaries[2] - rightMapChunkBoundaries[1]),
+		})
+		expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+			level:        1,
+			startKey:     rightMapChunkBoundaries[2],
+			endKey:       2000,
+			subtreeCount: uint64(2000 - rightMapChunkBoundaries[2]),
+		})
+		// Because nodes don't store their lower bound, we have to recurse to the leaf level for the first patches.
+		// This could be improved in the future.
+		testPatchBasedMergingResultsOnly(t, ctx, ns, desc, nil, baseMap, leftLowerMap, rightUpperMap, expectedPatches)
+	})
+
+	t.Run("unequal sized removals produce empty map: concurrent, right is empty", func(t *testing.T) {
+		// TODO: This can be improved by emitting a single modfied patch instead of many removed patches.
+		baseMap, _ := makeSimpleIntMap(t, 1, 2000)
+		leftMap := mapWithUpdates(baseMap, remove[uint32](500))
 		rightMapChunkBoundaries := []uint32{414, 718, 830}
 		var expectedPatches []expectedPatch[uint32]
 		expectedPatches = append(expectedPatches, expectedPatch[uint32]{
@@ -672,136 +1924,175 @@ func TestPatchBasedMerging(t *testing.T) {
 		})
 		// Because nodes don't store their lower bound, we have to recurse to the leaf level for the first patches.
 		// This could be improved in the future.
-		testPatchBasedMerging(t, ctx, ns, desc, emptyMap, leftUpperMap, rightLowerMap, expectedPatches, nil)
+		testPatchBasedMergingResultsOnly(t, ctx, ns, desc, nil, baseMap, leftMap, emptyMap, expectedPatches)
 	})
 
-	t.Run("merge with resolvable conflicts", func(t *testing.T) {
-		valueOnCollision := uint32(3000)
-		collide := func(left, right tree.Diff) (tree.Diff, bool) {
-			tupleBuilder := val.NewTupleBuilder(desc, ns)
-			tupleBuilder.PutUint32(0, valueOnCollision)
-			newVal, err := tupleBuilder.Build(sharedPool)
-			require.NoError(t, err)
-			// Resolve conflicts by returning a special value that we check for
-			return tree.Diff{
-				Key:  left.Key,
-				From: left.From,
-				To:   tree.Item(newVal),
-				Type: tree.ModifiedDiff,
-			}, true
+	t.Run("unequal sized removals produce empty map: concurrent, left is empty", func(t *testing.T) {
+		baseMap, _ := makeSimpleIntMap(t, 1, 2000)
+		rightMap := mapWithUpdates(baseMap, remove[uint32](500))
+		// In this case, the left contains a superset of the changes from the right.
+		// The merge is equal to leftMap, with no patches necessary.
+		expectedPatches := []expectedPatch[uint32]{}
+		testPatchBasedMergingResultsOnly(t, ctx, ns, desc, nil, baseMap, emptyMap, rightMap, expectedPatches)
+	})
+
+	t.Run("unequal sized removals produce almost empty map: concurrent, right is nearly empty", func(t *testing.T) {
+		baseMap, _ := makeSimpleIntMap(t, 1, 2000)
+		leftMap := mapWithUpdates(baseMap, remove[uint32](500))
+		rightMap, _ := makeSimpleIntMap(t, 1000, 1000)
+		rightMapChunkBoundaries := []uint32{414, 718, 830}
+		var expectedPatches []expectedPatch[uint32]
+		expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+			level:        1,
+			noStartKey:   true,
+			endKey:       rightMapChunkBoundaries[0],
+			subtreeCount: uint64(rightMapChunkBoundaries[0]),
+		})
+		for i := uint32(415); i < 500; i++ {
+			expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+				level:   0,
+				endKey:  i,
+				toValue: i,
+			})
 		}
-		testPatchBasedMerging(
-			t, ctx, ns, desc,
-			threeChunks,
-			mapWithUpdates(threeChunks, update[uint32](1, 10), update[uint32](990, 0)),
-			mapWithUpdates(threeChunks, update[uint32](1, 20), update[uint32](1000, 0)),
-			[]expectedPatch[uint32]{
-				{
-					endKey:  1,
+		for i := uint32(501); i <= rightMapChunkBoundaries[1]; i++ {
+			expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+				level:   0,
+				endKey:  i,
+				toValue: i,
+			})
+		}
+		expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+			level:        1,
+			startKey:     rightMapChunkBoundaries[1],
+			endKey:       rightMapChunkBoundaries[2],
+			subtreeCount: uint64(rightMapChunkBoundaries[2] - rightMapChunkBoundaries[1]),
+		})
+
+		expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+			level:        1,
+			startKey:     rightMapChunkBoundaries[2],
+			endKey:       1000,
+			subtreeCount: uint64(1000 - rightMapChunkBoundaries[2]),
+		})
+		// Because nodes don't store their lower bound, we have to recurse to the leaf level for the first patches.
+		// This could be improved in the future.
+		testPatchBasedMergingResultsOnly(t, ctx, ns, desc, nil, baseMap, leftMap, rightMap, expectedPatches)
+	})
+
+	t.Run("unequal sized removals produce almost empty map: concurrent, left is nearly empty", func(t *testing.T) {
+		baseMap, _ := makeSimpleIntMap(t, 1, 2000)
+		leftMap, _ := makeSimpleIntMap(t, 1000, 1000)
+		rightMap := mapWithUpdates(baseMap, remove[uint32](500))
+		// In this case, the left contains a superset of the changes from the right.
+		// The merge is equal to leftMap, with no patches necessary.
+		expectedPatches := []expectedPatch[uint32]{}
+		testPatchBasedMergingResultsOnly(t, ctx, ns, desc, nil, baseMap, leftMap, rightMap, expectedPatches)
+	})
+
+	t.Run("many leaf row removals in the middle doesn't emit unnecessary leaf removals", func(t *testing.T) {
+		// If we need to emit leaf removals for a continuous range of removals, we should be able to eventually emit
+		// a node modification.
+		var expectedPatches []expectedPatch[uint32]
+		expectedPatches = append(expectedPatches, manyPointRemoves(715, 718)...)
+		expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+			level:        1,
+			startKey:     chunkBoundaries[1],
+			endKey:       chunkBoundaries[3],
+			subtreeCount: uint64(chunkBoundaries[3] - chunkBoundaries[2]),
+		})
+		expectedPatches = append(expectedPatches, manyPointRemoves(1207, 1210)...)
+		testPatchBasedMergingResultsOnly(t, ctx, ns, desc, nil,
+			fourAndAHalfChunks,
+			mapWithUpdates(fourAndAHalfChunks, remove[uint32](710)),
+			mapWithUpdates(fourAndAHalfChunks, makeDeletePatches(715, 1210)...),
+			expectedPatches)
+	})
+
+	t.Run("overlapping inserts to nearly empty map", func(t *testing.T) {
+		baseMap, _ := makeSimpleIntMap(t, 800, 800)
+		lowerMap, _ := makeSimpleIntMap(t, 1, 1000)
+		upperMap, _ := makeSimpleIntMap(t, 751, 1847)
+		upperMapChunkBoundary := []uint32{1207, 1450, 1846}
+		t.Run("right map is the upper map", func(t *testing.T) {
+			var expectedPatches []expectedPatch[uint32]
+			for i := uint32(1001); i <= upperMapChunkBoundary[0]; i++ {
+				expectedPatches = append(expectedPatches, expectedPatch[uint32]{
 					level:   0,
-					toValue: valueOnCollision,
-				},
-				{
-					endKey:  1000,
-					level:   0,
-					toValue: 0,
-				},
-			},
-			collide,
-		)
+					endKey:  i,
+					toValue: i,
+				})
+			}
+			expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+				level:        1,
+				startKey:     upperMapChunkBoundary[0],
+				endKey:       upperMapChunkBoundary[1],
+				subtreeCount: uint64(upperMapChunkBoundary[1] - upperMapChunkBoundary[0]),
+			})
+			expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+				level:        1,
+				startKey:     upperMapChunkBoundary[1],
+				endKey:       upperMapChunkBoundary[2],
+				subtreeCount: uint64(upperMapChunkBoundary[2] - upperMapChunkBoundary[1]),
+			})
+			expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+				level:   0,
+				endKey:  1847,
+				toValue: 1847,
+			})
+
+			// Because nodes don't store their lower bound, we have to recurse to the leaf level for the first patches.
+			// This could be improved in the future.
+			testPatchBasedMerging(t, ctx, ns, desc, nil, baseMap, lowerMap, upperMap, expectedPatches)
+		})
+		t.Run("right map is the lower map", func(t *testing.T) {
+			var expectedPatches []expectedPatch[uint32]
+			expectedPatches = append(expectedPatches, manyPointInserts(1, chunkBoundaries[0])...)
+			expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+				level:        1,
+				startKey:     chunkBoundaries[0],
+				endKey:       chunkBoundaries[1],
+				subtreeCount: uint64(chunkBoundaries[1] - chunkBoundaries[0]),
+			})
+			expectedPatches = append(expectedPatches, manyPointInserts(chunkBoundaries[1]+1, 750)...)
+
+			testPatchBasedMergingResultsOnly(t, ctx, ns, desc, nil, baseMap, upperMap, lowerMap, expectedPatches)
+		})
 	})
 
-	t.Run("merge with unresolvable conflicts", func(t *testing.T) {
-		var conflicts []struct{ left, right tree.Diff }
-		// A custom callback records all conflicts and treats them as unresolvable.
-		collide := func(left, right tree.Diff) (tree.Diff, bool) {
-			conflicts = append(conflicts, struct{ left, right tree.Diff }{left, right})
-			return tree.Diff{}, false
-		}
-		testPatchBasedMerging(
-			t, ctx, ns, desc,
-			threeAndAHalfChunks,
-			mapWithUpdates(threeAndAHalfChunks, update[uint32](1, 10), update[uint32](500, 0)),
-			mapWithUpdates(threeAndAHalfChunks, update[uint32](1, 20), update[uint32](1000, 0)),
-			[]expectedPatch[uint32]{
-				{
-					startKey:     chunkBoundaries[2],
-					endKey:       maxKey,
-					level:        1,
-					subtreeCount: uint64(maxKey - chunkBoundaries[2]),
-				},
-			},
-			collide,
-		)
-		// The callback will be called twice: once during the tree merge, and once during the traditional merge
-		// we're comparing the results to.
-		require.Len(t, conflicts, 2)
-		for _, conflict := range conflicts {
-			collisionKey, ok := desc.GetUint32(0, val.Tuple(conflict.left.Key))
-			require.True(t, ok)
-			assert.Equal(t, collisionKey, uint32(1))
-		}
+	t.Run("unequal sized inserts to nearly empty map: concurrent", func(t *testing.T) {
+		baseMap, _ := makeSimpleIntMap(t, 2000, 2000)
+		subsetMap, _ := makeSimpleIntMap(t, 750, 750)
+		supersetMap, _ := makeSimpleIntMap(t, 1, 1208)
+		t.Run("left diff is superset", func(t *testing.T) {
+			expectedPatches := []expectedPatch[uint32]{}
+			testPatchBasedMerging(t, ctx, ns, desc, nil, baseMap, supersetMap, subsetMap, expectedPatches)
+		})
+		t.Run("right diff is superset", func(t *testing.T) {
+			var expectedPatches []expectedPatch[uint32]
+			expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+				level:        1,
+				noStartKey:   true,
+				endKey:       chunkBoundaries[0],
+				subtreeCount: uint64(chunkBoundaries[0]),
+			})
+			expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+				level:        1,
+				startKey:     chunkBoundaries[0],
+				endKey:       chunkBoundaries[1],
+				subtreeCount: uint64(chunkBoundaries[1] - chunkBoundaries[0]),
+			})
+			expectedPatches = append(expectedPatches, manyPointInserts(chunkBoundaries[1]+1, 749)...)
+			expectedPatches = append(expectedPatches, manyPointInserts(751, chunkBoundaries[2])...)
+			expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+				level:        1,
+				startKey:     chunkBoundaries[2],
+				endKey:       chunkBoundaries[3],
+				subtreeCount: uint64(chunkBoundaries[3] - chunkBoundaries[2]),
+			})
+			expectedPatches = append(expectedPatches, pointUpdate[uint32](1208, 1208))
+			testPatchBasedMergingResultsOnly(t, ctx, ns, desc, nil, baseMap, subsetMap, supersetMap, expectedPatches)
+		})
 	})
 
-	t.Run("both branches produce same address with different key ranges", func(t *testing.T) {
-		// This is a corner case that can happen when one branch adds or removes an entire chunk, immediately before
-		// a chunk that is concurrently modified.
-		testPatchBasedMerging(
-			t, ctx, ns, desc,
-			threeAndAHalfChunks,
-			mapWithUpdates(threeAndAHalfChunks, update[uint32](chunkBoundaries[2]-30, 0)),
-			mapWithUpdates(threeAndAHalfChunks, append(makeDeletePatches(chunkBoundaries[0]+1, chunkBoundaries[1]), update[uint32](chunkBoundaries[2]-30, 0))...), []expectedPatch[uint32]{
-				{
-					startKey:     chunkBoundaries[0],
-					endKey:       chunkBoundaries[2],
-					level:        1,
-					subtreeCount: uint64(chunkBoundaries[2] - chunkBoundaries[1]),
-				},
-			}, nil)
-	})
-
-	t.Run("multi-level tree: deleting many rows off the end produces minimal diffs", func(t *testing.T) {
-		desc = val.NewTupleDescriptor(val.Type{Enc: val.StringEnc})
-		bld := val.NewTupleBuilder(desc, nil)
-		tuples := make([][2]val.Tuple, 10000)
-		var err error
-		for i := range tuples {
-			err = bld.PutString(0, "long_string_key_goes_here_"+strconv.Itoa(i))
-			require.NoError(t, err)
-			tuples[i][0], err = bld.Build(sharedPool)
-			require.NoError(t, err)
-			err = bld.PutString(0, "long_string_value_goes_here_"+strconv.Itoa(i))
-			require.NoError(t, err)
-			tuples[i][1], err = bld.Build(sharedPool)
-			require.NoError(t, err)
-		}
-		baseRoot, err := tree.MakeTreeForTest(tuples)
-		require.NoError(t, err)
-		leftRoot := stringMapWithUpdates(baseRoot, update[string]("long_string_key_goes_here_8659", ""))
-		require.NoError(t, err)
-		// This key is specifically chosen to be the last key of the last key of the last key:
-		// Removing it should result in exactly three diffs, one at each level.
-		rightRoot, err := tree.MakeTreeForTest(tuples[:8660])
-		require.NoError(t, err)
-		// The base map will happen to have these chunk boundaries.
-		testPatchBasedMerging[string](t, ctx, ns, desc, baseRoot, leftRoot, rightRoot, []expectedPatch[string]{
-			{
-				endKey:    "long_string_key_goes_here_8660",
-				level:     0,
-				isRemoval: true,
-			},
-			{
-				startKey:  "long_string_key_goes_here_8660",
-				endKey:    "long_string_key_goes_here_8702",
-				level:     1,
-				isRemoval: true,
-			},
-			{
-				startKey:  "long_string_key_goes_here_8702",
-				endKey:    "long_string_key_goes_here_9999",
-				level:     2,
-				isRemoval: true,
-			},
-		}, nil)
-	})
 }
