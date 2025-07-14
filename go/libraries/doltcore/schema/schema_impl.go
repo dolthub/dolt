@@ -25,7 +25,6 @@ import (
 	"github.com/dolthub/vitess/go/vt/proto/query"
 
 	"github.com/dolthub/dolt/go/gen/fb/serial"
-	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
@@ -199,10 +198,6 @@ func ValidateForInsert(allCols *ColCollection) error {
 		}
 		colNames[col.Name] = true
 
-		if col.AutoIncrement && !(isAutoIncrementKind(col.Kind) || isAutoIncrementType(col.TypeInfo.ToSqlType().Type())) {
-			return true, ErrNonAutoIncType
-		}
-
 		return false, nil
 	})
 
@@ -243,24 +238,6 @@ func MaxRowStorageSize(sch sql.Schema) int64 {
 		}
 	}
 	return numBytesPerRow
-}
-
-// isAutoIncrementKind returns true is |k| is a numeric kind.
-func isAutoIncrementKind(k types.NomsKind) bool {
-	return k == types.IntKind || k == types.UintKind || k == types.FloatKind
-}
-
-// isAutoIncrementType returns true is |t| is a numeric type.
-// This is an alternative way for the numeric type check.
-func isAutoIncrementType(t query.Type) bool {
-	switch t {
-	case query.Type_INT8, query.Type_INT16, query.Type_INT24, query.Type_INT32, query.Type_INT64,
-		query.Type_UINT8, query.Type_UINT16, query.Type_UINT24, query.Type_UINT32, query.Type_UINT64,
-		query.Type_FLOAT32, query.Type_FLOAT64, query.Type_DECIMAL:
-		return true
-	default:
-		return false
-	}
 }
 
 // UnkeyedSchemaFromCols creates a schema without any primary keys to be used for displaying to users, tests, etc. Such
