@@ -1,0 +1,30 @@
+#!/usr/bin/expect
+
+set timeout 5
+set env(NO_COLOR) 1
+
+source  "$env(BATS_CWD)/helper/common_expect_functions.tcl"
+
+spawn dolt sql
+
+expect_with_defaults                                                   {dolt-repo-.*>} { send "\\diff HEAD HEAD~1 --system\r"; }
+
+expect_with_defaults                                                   {dolt-repo-.*>} { send "show tables;\r"; }
+
+expect {
+    -re {dolt_log} {
+        puts "\diff did not maintain system tables variables"
+        exit 1
+    }
+}
+
+expect_with_defaults                                                   {dolt-repo-.*>}   { send "SET @@dolt_show_system_tables = 1;\r"; }
+
+expect_with_defaults                                                   {dolt-repo-.*>} { send "\\diff HEAD HEAD~1 \r"; }
+
+expect_with_defaults                                                   {dolt-repo-.*>} { send "show tables;\r"; }
+
+expect_with_defaults_2 {dolt_log}                                      {dolt-repo-.*>}   { send "quit;\r"; }
+
+expect eof
+exit

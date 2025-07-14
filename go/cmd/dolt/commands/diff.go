@@ -208,12 +208,7 @@ func (cmd DiffCmd) Exec(ctx context.Context, commandStr string, args []string, _
 		defer closeFunc()
 	}
 
-	if apr.Contains(cli.SystemFlag) {
-		_, _, _, err = queryist.Query(sqlCtx, "SET @@dolt_show_system_tables = 1")
-		if err != nil {
-			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-		}
-	}
+	systemVarVal, err := setSystemVar(queryist, sqlCtx, apr.Contains(cli.SystemFlag))
 
 	dArgs, err := parseDiffArgs(queryist, sqlCtx, apr)
 	if err != nil {
@@ -222,13 +217,34 @@ func (cmd DiffCmd) Exec(ctx context.Context, commandStr string, args []string, _
 
 	verr = diffUserTables(queryist, sqlCtx, dArgs)
 
-	if apr.Contains(cli.SystemFlag) {
-		_, _, _, err = queryist.Query(sqlCtx, "SET @@dolt_show_system_tables = 0")
-		if err != nil {
-			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-		}
+	query := fmt.Sprintf("SET @@dolt_show_system_tables = %d", systemVarVal)
+	_, _, _, err = queryist.Query(sqlCtx, query)
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
+
 	return HandleVErrAndExitCode(verr, usage)
+}
+
+func setSystemVar(queryist cli.Queryist, sqlCtx *sql.Context, showSystem bool) (int8, error) {
+	_, rowIter, _, err := queryist.Query(sqlCtx, "SHOW VARIABLES WHERE VARIABLE_NAME='dolt_show_system_tables'")
+	if err != nil {
+		return 0, err
+	}
+
+	row, err := sql.RowIterToRows(sqlCtx, rowIter)
+	if err != nil {
+		return 0, err
+	}
+	prevVal := row[0][1].(int8)
+
+	newVal := 0
+	if showSystem {
+		newVal = 1
+	}
+	query := fmt.Sprintf("SET @@dolt_show_system_tables = %d", newVal)
+	_, _, _, err = queryist.Query(sqlCtx, query)
+	return prevVal, err
 }
 
 func (cmd DiffCmd) validateArgs(apr *argparser.ArgParseResults) errhand.VerboseError {
