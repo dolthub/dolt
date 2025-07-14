@@ -708,3 +708,14 @@ func (asw *ArchiveStreamWriter) convertSnappyAndStage(cc CompressedChunk) (uint3
 
 	return bytesWritten, asw.writer.stageZStdChunk(h, dictId, dataId)
 }
+
+// conjoinAll combines two or more archiveReader instances into a single archive.
+// This method takes a slice of archiveReader instances and merges their contents
+// into the current archiveWriter.
+func (aw *archiveWriter) conjoinAll(readers []archiveReader) (archiveReader, error) {
+	if len(readers) < 2 {
+		return archiveReader{}, fmt.Errorf("conjoinAll requires at least 2 archive readers, got %d", len(readers))
+	}
+
+	return archiveReader{}, fmt.Errorf("conjoinAll not yet implemented")
+}
