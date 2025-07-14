@@ -435,6 +435,12 @@ func (td *PatchGenerator[K, O]) split(ctx context.Context) (patch Patch, diffTyp
 				parent: td.from,
 				nrw:    td.from.nrw,
 			}
+			for compareWithNilAsMin(ctx, td.order, K(td.from.CurrentKey()), K(td.previousKey)) <= 0 {
+				err = td.from.advance(ctx)
+				if err != nil {
+					return Patch{}, NoDiff, err
+				}
+			}
 		}
 
 		td.to = &cursor{
