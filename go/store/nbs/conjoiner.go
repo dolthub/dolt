@@ -28,6 +28,8 @@ import (
 	"time"
 
 	"golang.org/x/sync/errgroup"
+	
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 type conjoinStrategy interface {
@@ -85,6 +87,36 @@ func (c noopConjoiner) conjoinRequired(ts tableSet) bool {
 func (c noopConjoiner) chooseConjoinees(sources []tableSpec) (conjoinees, keepers []tableSpec, err error) {
 	keepers = sources
 	return
+}
+
+// specificFilesConjoiner is a conjoin strategy that conjoins specific storage files
+type specificFilesConjoiner struct {
+	targetStorageIds []hash.Hash
+}
+
+var _ conjoinStrategy = &specificFilesConjoiner{}
+
+func (s *specificFilesConjoiner) conjoinRequired(ts tableSet) bool {
+	return len(s.targetStorageIds) > 0
+}
+
+func (s *specificFilesConjoiner) chooseConjoinees(specs []tableSpec) (conjoinees, keepers []tableSpec, err error) {
+	// Convert target storage IDs to a set for efficient lookup
+	targetSet := make(map[hash.Hash]bool)
+	for _, id := range s.targetStorageIds {
+		targetSet[id] = true
+	}
+	
+	// Separate specs into conjoinees and keepers
+	for _, spec := range specs {
+		if targetSet[spec.name] {
+			conjoinees = append(conjoinees, spec)
+		} else {
+			keepers = append(keepers, spec)
+		}
+	}
+	
+	return conjoinees, keepers, nil
 }
 
 // A conjoinOperation is a multi-step process that a NomsBlockStore runs to

@@ -46,12 +46,16 @@ get_oldgen_storage_ids() {
     run dolt admin conjoin --all
     [ "$status" -eq 0 ]
     [[ "$output" =~ "No table files to conjoin" ]] || false
+    
+    dolt fsck
 }
 
 @test "conjoin: valid storage file ID works" {
     run dolt admin conjoin abcdef1234567890abcdef1234567890
     [ "$status" -eq 1 ]
     [[ "$output" =~ "storage file not found" ]] || false
+    
+    dolt fsck
 }
 
 @test "conjoin: get storage file IDs and test conjoin with specific IDs" {
@@ -80,5 +84,7 @@ get_oldgen_storage_ids() {
     run dolt admin conjoin "$id1" "$id2"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Successfully conjoined table files" ]] || false
+    
+    dolt fsck
 }
 

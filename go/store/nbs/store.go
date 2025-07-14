@@ -2359,18 +2359,52 @@ func (nbs *NomsBlockStore) ConjoinTableFiles(ctx context.Context, storageIds []h
 		sources = append(sources, cs)
 	}
 
-	// Perform the conjoin operation
-	conjoinedSource, cleanup, err := nbs.persister.ConjoinAll(ctx, sources, stats)
+	// Store the original manifest for comparison
+	originalUpstream := nbs.upstream
+	
+	// Use the existing conjoin infrastructure to properly update the manifest
+	strategy := &specificFilesConjoiner{targetStorageIds: storageIds}
+	newUpstream, finalCleanup, err := conjoin(ctx, strategy, nbs.upstream, nbs.manifestMgr, nbs.persister, stats)
 	if err != nil {
 		return hash.Hash{}, err
 	}
-	defer cleanup()
-
-	// Get the hash of the newly created table file
-	conjoinedHash := conjoinedSource.hash()
+	
+	// Update the in-memory state
+	nbs.upstream = newUpstream
+	newTables, err := nbs.tables.rebase(ctx, newUpstream.specs, nil, nbs.stats)
+	if err != nil {
+		return hash.Hash{}, err
+	}
+	nbs.tables = newTables
+	
+	// Call the final cleanup
+	finalCleanup()
+	
+	// Find the new conjoined table file hash from the updated manifest
+	// Since we removed the old files and added one new file, we need to find which one is new
+	oldIdSet := make(map[hash.Hash]bool)
+	for _, id := range storageIds {
+		oldIdSet[id] = true
+	}
+	
+	// Create a set of original spec names for comparison
+	originalSpecSet := make(map[hash.Hash]bool)
+	for _, spec := range originalUpstream.specs {
+		originalSpecSet[spec.name] = true
+	}
+	
+	var conjoinedHash hash.Hash
+	for _, spec := range newUpstream.specs {
+		// If this spec is not in the original manifest and not one of the old files we removed,
+		// it must be the new conjoined file
+		if !originalSpecSet[spec.name] && !oldIdSet[spec.name] {
+			conjoinedHash = spec.name
+			break
+		}
+	}
+	
 	return conjoinedHash, nil
 }
-
 
 // findTableSpec finds a table spec by hash in the current manifest
 func (nbs *NomsBlockStore) findTableSpec(storageId hash.Hash) (tableSpec, bool) {
