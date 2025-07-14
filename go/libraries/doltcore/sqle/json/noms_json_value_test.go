@@ -158,7 +158,7 @@ func TestJSONCompare(t *testing.T) {
 		name := fmt.Sprintf("%v_%v__%d", test.left, test.right, test.cmp)
 		t.Run(name, func(t *testing.T) {
 			left, right := MustNomsJSON(test.left), MustNomsJSON(test.right)
-			cmp, err := gmstypes.CompareJSON(left, right)
+			cmp, err := gmstypes.CompareJSON(t.Context(), left, right)
 			require.NoError(t, err)
 			assert.Equal(t, test.cmp, cmp)
 		})

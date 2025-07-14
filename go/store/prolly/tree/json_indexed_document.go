@@ -41,14 +41,43 @@ type StaticJsonMap = StaticMap[jsonLocationKey, address, *jsonLocationOrdering]
 // The |interfaceFunc| field caches the result of ToInterface in the event it gets called multiple times.
 type IndexedJsonDocument struct {
 	m             StaticJsonMap
-	interfaceFunc func() (interface{}, error)
-	ctx           context.Context
+	interfaceFunc func(ctx context.Context) (interface{}, error)
 }
 
 var _ types.JSONBytes = IndexedJsonDocument{}
 var _ types.MutableJSON = IndexedJsonDocument{}
 var _ fmt.Stringer = IndexedJsonDocument{}
 var _ driver.Valuer = IndexedJsonDocument{}
+
+func OnceContextValues[T1, T2 any](f func(ctx context.Context) (T1, T2)) func(context.Context) (T1, T2) {
+	var (
+		once  sync.Once
+		valid bool
+		p     any
+		r1    T1
+		r2    T2
+	)
+	g := func(ctx context.Context) {
+		defer func() {
+			p = recover()
+			if !valid {
+				panic(p)
+			}
+		}()
+		r1, r2 = f(ctx)
+		f = nil
+		valid = true
+	}
+	return func(ctx context.Context) (T1, T2) {
+		once.Do(func() {
+			g(ctx)
+		})
+		if !valid {
+			panic(p)
+		}
+		return r1, r2
+	}
+}
 
 func NewIndexedJsonDocument(ctx context.Context, root Node, ns NodeStore) IndexedJsonDocument {
 	m := StaticMap[jsonLocationKey, address, *jsonLocationOrdering]{
@@ -58,10 +87,9 @@ func NewIndexedJsonDocument(ctx context.Context, root Node, ns NodeStore) Indexe
 	}
 	return IndexedJsonDocument{
 		m: m,
-		interfaceFunc: sync.OnceValues(func() (interface{}, error) {
+		interfaceFunc: OnceContextValues(func(ctx context.Context) (interface{}, error) {
 			return getInterfaceFromIndexedJsonMap(ctx, m)
 		}),
-		ctx: ctx,
 	}
 }
 
@@ -72,16 +100,15 @@ func (i IndexedJsonDocument) Clone(ctx context.Context) sql.JSONWrapper {
 	m := i.m
 	return IndexedJsonDocument{
 		m: m,
-		interfaceFunc: sync.OnceValues(func() (interface{}, error) {
+		interfaceFunc: OnceContextValues(func(ctx context.Context) (interface{}, error) {
 			return getInterfaceFromIndexedJsonMap(ctx, m)
 		}),
-		ctx: ctx,
 	}
 }
 
 // ToInterface implements sql.JSONWrapper
-func (i IndexedJsonDocument) ToInterface() (interface{}, error) {
-	return i.interfaceFunc()
+func (i IndexedJsonDocument) ToInterface(ctx context.Context) (interface{}, error) {
+	return i.interfaceFunc(ctx)
 }
 
 // getInterfaceFromIndexedJsonMap extracts the JSON document from a StaticJsonMap and converts it into an interface{}
@@ -120,7 +147,7 @@ func tryWithFallback(
 				sqlCtx.GetLogger().Warn(err)
 			}
 		}
-		v, err := i.ToInterface()
+		v, err := i.ToInterface(ctx)
 		if err != nil {
 			return err
 		}
@@ -251,7 +278,7 @@ func (i IndexedJsonDocument) insertIntoCursor(ctx context.Context, keyPath jsonL
 				return i, false, err
 			}
 
-			insertedValueBytes, err := types.MarshallJson(val)
+			insertedValueBytes, err := types.MarshallJson(ctx, val)
 			if err != nil {
 				return IndexedJsonDocument{}, false, err
 			}
@@ -291,7 +318,7 @@ func (i IndexedJsonDocument) insertIntoCursor(ctx context.Context, keyPath jsonL
 		return i, false, nil
 	}
 
-	insertedValueBytes, err := types.MarshallJson(val)
+	insertedValueBytes, err := types.MarshallJson(ctx, val)
 	if err != nil {
 		return IndexedJsonDocument{}, false, err
 	}
@@ -528,7 +555,7 @@ func (i IndexedJsonDocument) replaceIntoCursor(ctx context.Context, keyPath json
 		return IndexedJsonDocument{}, false, err
 	}
 
-	insertedValueBytes, err := types.MarshallJson(val)
+	insertedValueBytes, err := types.MarshallJson(ctx, val)
 	if err != nil {
 		return IndexedJsonDocument{}, false, err
 	}
@@ -548,31 +575,32 @@ func (i IndexedJsonDocument) replaceIntoCursor(ctx context.Context, keyPath json
 }
 
 // ArrayInsert is not yet implemented, so we call it on a types.JSONDocument instead.
-func (i IndexedJsonDocument) ArrayInsert(path string, val sql.JSONWrapper) (types.MutableJSON, bool, error) {
-	v, err := i.ToInterface()
+func (i IndexedJsonDocument) ArrayInsert(ctx context.Context, path string, val sql.JSONWrapper) (types.MutableJSON, bool, error) {
+	v, err := i.ToInterface(ctx)
 	if err != nil {
 		return nil, false, err
 	}
-	return types.JSONDocument{Val: v}.ArrayInsert(path, val)
+	return types.JSONDocument{Val: v}.ArrayInsert(ctx, path, val)
 }
 
 // ArrayAppend is not yet implemented, so we call it on a types.JSONDocument instead.
-func (i IndexedJsonDocument) ArrayAppend(path string, val sql.JSONWrapper) (types.MutableJSON, bool, error) {
-	v, err := i.ToInterface()
+func (i IndexedJsonDocument) ArrayAppend(ctx context.Context, path string, val sql.JSONWrapper) (types.MutableJSON, bool, error) {
+	v, err := i.ToInterface(ctx)
 	if err != nil {
 		return nil, false, err
 	}
-	return types.JSONDocument{Val: v}.ArrayAppend(path, val)
+	return types.JSONDocument{Val: v}.ArrayAppend(ctx, path, val)
 }
 
 // Value implements driver.Valuer for interoperability with other go libraries
 func (i IndexedJsonDocument) Value() (driver.Value, error) {
-	return types.JsonToMySqlString(i)
+	// :-/.
+	return types.JsonToMySqlString(context.TODO(), i)
 }
 
 // String implements the fmt.Stringer interface.
 func (i IndexedJsonDocument) String() string {
-	s, err := types.JsonToMySqlString(i)
+	s, err := types.JsonToMySqlString(context.TODO(), i)
 	if err != nil {
 		return fmt.Sprintf("error while stringifying JSON: %s", err.Error())
 	}
@@ -580,9 +608,8 @@ func (i IndexedJsonDocument) String() string {
 }
 
 // GetBytes implements the JSONBytes interface.
-func (i IndexedJsonDocument) GetBytes() (bytes []byte, err error) {
-	// TODO: Add context parameter to JSONBytes.GetBytes
-	return getBytesFromIndexedJsonMap(i.ctx, i.m)
+func (i IndexedJsonDocument) GetBytes(ctx context.Context) (bytes []byte, err error) {
+	return getBytesFromIndexedJsonMap(ctx, i.m)
 }
 
 func (i IndexedJsonDocument) getFirstCharacter(ctx context.Context) (byte, error) {
@@ -601,22 +628,22 @@ func (i IndexedJsonDocument) getFirstCharacter(ctx context.Context) (byte, error
 	return firstCharacter, nil
 }
 
-func (i IndexedJsonDocument) getTypeCategory() (jsonTypeCategory, error) {
-	firstCharacter, err := i.getFirstCharacter(i.ctx)
+func (i IndexedJsonDocument) getTypeCategory(ctx context.Context) (jsonTypeCategory, error) {
+	firstCharacter, err := i.getFirstCharacter(ctx)
 	if err != nil {
 		return 0, err
 	}
 	return getTypeCategoryFromFirstCharacter(firstCharacter), nil
 }
 
-func GetTypeCategory(wrapper sql.JSONWrapper) (jsonTypeCategory, error) {
+func GetTypeCategory(ctx context.Context, wrapper sql.JSONWrapper) (jsonTypeCategory, error) {
 	switch doc := wrapper.(type) {
 	case IndexedJsonDocument:
-		return doc.getTypeCategory()
+		return doc.getTypeCategory(ctx)
 	case *types.LazyJSONDocument:
 		return getTypeCategoryFromFirstCharacter(doc.Bytes[0]), nil
 	default:
-		val, err := doc.ToInterface()
+		val, err := doc.ToInterface(ctx)
 		if err != nil {
 			return 0, err
 		}
@@ -638,7 +665,7 @@ func (i IndexedJsonDocument) Type(ctx context.Context) (string, error) {
 		return "ARRAY", nil
 	}
 	// At this point the value must be a scalar, so it's okay to just load the whole thing.
-	val, err := i.ToInterface()
+	val, err := i.ToInterface(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -646,29 +673,29 @@ func (i IndexedJsonDocument) Type(ctx context.Context) (string, error) {
 }
 
 // Compare implements types.ComparableJson
-func (i IndexedJsonDocument) Compare(other interface{}) (int, error) {
-	thisTypeCategory, err := i.getTypeCategory()
+func (i IndexedJsonDocument) Compare(ctx context.Context, other interface{}) (int, error) {
+	thisTypeCategory, err := i.getTypeCategory(ctx)
 	if err != nil {
 		return 0, err
 	}
 
 	otherIndexedDocument, ok := other.(IndexedJsonDocument)
 	if !ok {
-		val, err := i.ToInterface()
+		val, err := i.ToInterface(ctx)
 		if err != nil {
 			return 0, err
 		}
 		otherVal := other
 		if otherWrapper, ok := other.(sql.JSONWrapper); ok {
-			otherVal, err = otherWrapper.ToInterface()
+			otherVal, err = otherWrapper.ToInterface(ctx)
 			if err != nil {
 				return 0, err
 			}
 		}
-		return types.CompareJSON(val, otherVal)
+		return types.CompareJSON(ctx, val, otherVal)
 	}
 
-	otherTypeCategory, err := otherIndexedDocument.getTypeCategory()
+	otherTypeCategory, err := otherIndexedDocument.getTypeCategory(ctx)
 	if err != nil {
 		return 0, err
 	}
@@ -684,11 +711,11 @@ func (i IndexedJsonDocument) Compare(other interface{}) (int, error) {
 	case jsonTypeArray, jsonTypeObject:
 		// To compare two values that are both arrays or both objects, we must locate the first location
 		// where they differ.
-		jsonDiffer, err := NewIndexedJsonDiffer(i.ctx, i, otherIndexedDocument)
+		jsonDiffer, err := NewIndexedJsonDiffer(ctx, i, otherIndexedDocument)
 		if err != nil {
 			return 0, err
 		}
-		firstDiff, err := jsonDiffer.Next(i.ctx)
+		firstDiff, err := jsonDiffer.Next(ctx)
 		if err == io.EOF {
 			// The two documents have no differences.
 			return 0, nil
@@ -705,15 +732,15 @@ func (i IndexedJsonDocument) Compare(other interface{}) (int, error) {
 		case ModifiedDiff:
 			// Since both modified values have already been loaded into memory,
 			// We can just compare them.
-			return types.JSON.Compare(i.ctx, firstDiff.From, firstDiff.To)
+			return types.JSON.Compare(ctx, firstDiff.From, firstDiff.To)
 		default:
 			panic("Impossible diff type")
 		}
 	default:
-		val, err := i.ToInterface()
+		val, err := i.ToInterface(ctx)
 		if err != nil {
 			return 0, err
 		}
-		return types.CompareJSON(val, other)
+		return types.CompareJSON(ctx, val, other)
 	}
 }

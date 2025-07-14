@@ -46,7 +46,7 @@ func NomsJSONFromJSONValue(ctx context.Context, vrw types.ValueReadWriter, val s
 		return noms, nil
 	}
 
-	sqlVal, err := val.ToInterface()
+	sqlVal, err := val.ToInterface(ctx)
 	if err != nil {
 		return NomsJSON{}, err
 	}
@@ -140,13 +140,13 @@ func marshalJSONObject(ctx context.Context, vrw types.ValueReadWriter, obj map[s
 	return types.NewMap(ctx, vrw, vals...)
 }
 
-func (v NomsJSON) ToInterface() (interface{}, error) {
+func (v NomsJSON) ToInterface(ctx context.Context) (interface{}, error) {
 	nomsVal, err := types.JSON(v).Inner()
 	if err != nil {
 		return nil, err
 	}
 
-	val, err := unmarshalJSON(context.Background(), nomsVal)
+	val, err := unmarshalJSON(ctx, nomsVal)
 	if err != nil {
 		return nil, err
 	}

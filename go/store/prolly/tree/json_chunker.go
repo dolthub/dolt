@@ -45,7 +45,7 @@ func SerializeJsonToAddr(ctx context.Context, ns NodeStore, j sql.JSONWrapper) (
 	if indexedJson, ok := j.(IndexedJsonDocument); ok {
 		return indexedJson.m.Root, nil
 	}
-	jsonBytes, err := types.MarshallJson(j)
+	jsonBytes, err := types.MarshallJson(ctx, j)
 	if err != nil {
 		return Node{}, err
 	}

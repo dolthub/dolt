@@ -150,7 +150,7 @@ func testJsonValue(t *testing.T, test jsonValueTest, setupCommon []testCommand) 
 
 			// special logic for comparing JSONValues
 			if js, ok := exp.(json.NomsJSON); ok {
-				cmp, err := gmstypes.CompareJSON(js, act.(json.NomsJSON))
+				cmp, err := gmstypes.CompareJSON(ctx, js, act.(json.NomsJSON))
 				require.NoError(t, err)
 				assert.Zero(t, cmp)
 			} else {

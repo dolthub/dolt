@@ -223,7 +223,7 @@ func testRoundTripProllyFields(t *testing.T, test prollyFieldTest) {
 	require.NoError(t, err)
 
 	if js, ok := v.(sql.JSONWrapper); ok {
-		v, err = js.ToInterface()
+		v, err = js.ToInterface(ctx)
 		require.NoError(t, err)
 	}
 
@@ -231,7 +231,7 @@ func testRoundTripProllyFields(t *testing.T, test prollyFieldTest) {
 	assert.NoError(t, err)
 
 	if js, ok := expectedValue.(sql.JSONWrapper); ok {
-		expectedValue, err = js.ToInterface()
+		expectedValue, err = js.ToInterface(ctx)
 		require.NoError(t, err)
 	}
 

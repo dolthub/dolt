@@ -152,7 +152,7 @@ func vectorFromKey(t *testing.T, ctx context.Context, ns tree.NodeStore, keyDesc
 	vectorHash, _ := keyDesc.GetJSONAddr(0, key)
 	jsonWrapper, err := getJsonValueFromHash(ctx, ns, vectorHash)
 	require.NoError(t, err)
-	floats, err := sql.ConvertToVector(jsonWrapper)
+	floats, err := sql.ConvertToVector(ctx, jsonWrapper)
 	require.NoError(t, err)
 	return floats
 }

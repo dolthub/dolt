@@ -418,7 +418,7 @@ func testUpdateQuery(t *testing.T, test UpdateTest) {
 		assert.Equal(t, len(expectedRows[i]), len(actualRows[i]))
 		for j := 0; j < len(expectedRows[i]); j++ {
 			if _, ok := actualRows[i][j].(json.NomsJSON); ok {
-				cmp, err := gmstypes.CompareJSON(actualRows[i][j].(json.NomsJSON), expectedRows[i][j].(json.NomsJSON))
+				cmp, err := gmstypes.CompareJSON(ctx, actualRows[i][j].(json.NomsJSON), expectedRows[i][j].(json.NomsJSON))
 				assert.NoError(t, err)
 				assert.Equal(t, 0, cmp)
 			} else {

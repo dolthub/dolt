@@ -63,7 +63,7 @@ func (f ProximityFlusher) ApplyMutationsWithSerializer(
 		if err != nil {
 			panic(err)
 		}
-		floats, err := sql.ConvertToVector(jsonWrapper)
+		floats, err := sql.ConvertToVector(ctx, jsonWrapper)
 		if err != nil {
 			panic(err)
 		}

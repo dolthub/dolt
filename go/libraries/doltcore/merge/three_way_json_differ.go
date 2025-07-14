@@ -102,7 +102,7 @@ func (differ *ThreeWayJsonDiffer) Next(ctx context.Context) (ThreeWayJsonDiff, e
 			if differ.leftCurrentDiff.From == nil {
 				// Key did not exist at base, so both sides are inserts.
 				// Check that they're inserting the same value.
-				valueCmp, err := types.CompareJSON(differ.leftCurrentDiff.To, differ.rightCurrentDiff.To)
+				valueCmp, err := types.CompareJSON(ctx, differ.leftCurrentDiff.To, differ.rightCurrentDiff.To)
 				if err != nil {
 					return ThreeWayJsonDiff{}, err
 				}

@@ -58,7 +58,7 @@ func (m UniqCVMeta) Clone(_ context.Context) sql.JSONWrapper {
 	return m
 }
 
-func (m UniqCVMeta) ToInterface() (interface{}, error) {
+func (m UniqCVMeta) ToInterface(context.Context) (interface{}, error) {
 	return map[string]interface{}{
 		"Columns": m.Columns,
 		"Name":    m.Name,
@@ -157,7 +157,7 @@ func newNotNullViolationMeta(violations []string, value val.Tuple) (prolly.Const
 	}, nil
 }
 
-func (m NullViolationMeta) ToInterface() (interface{}, error) {
+func (m NullViolationMeta) ToInterface(context.Context) (interface{}, error) {
 	return map[string]interface{}{
 		"Columns": m.Columns,
 	}, nil
@@ -205,7 +205,7 @@ func (m CheckCVMeta) Unmarshall(_ *sql.Context) (val types.JSONDocument, err err
 	return types.JSONDocument{Val: m}, nil
 }
 
-func (m CheckCVMeta) ToInterface() (interface{}, error) {
+func (m CheckCVMeta) ToInterface(context.Context) (interface{}, error) {
 	return map[string]interface{}{
 		"Name":       m.Name,
 		"Expression": m.Expression,

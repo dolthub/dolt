@@ -453,7 +453,7 @@ func (m FkCVMeta) Clone(_ context.Context) sql.JSONWrapper {
 
 var _ sql.JSONWrapper = FkCVMeta{}
 
-func (m FkCVMeta) ToInterface() (interface{}, error) {
+func (m FkCVMeta) ToInterface(context.Context) (interface{}, error) {
 	return map[string]interface{}{
 		"Columns":           m.Columns,
 		"ForeignKey":        m.ForeignKey,
