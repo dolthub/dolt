@@ -15,6 +15,7 @@
 package binlogreplication
 
 import (
+	"context"
 	"encoding/binary"
 	"fmt"
 	"math"
@@ -54,8 +55,8 @@ const maxOffsetSize = uint32(65_535)
 //
 // And a third-party description is here:
 // https://lafengnan.gitbooks.io/blog/content/mysql/chapter2.html
-func encodeJsonDoc(jsonDoc sql.JSONWrapper) (buffer []byte, err error) {
-	val, err := jsonDoc.ToInterface()
+func encodeJsonDoc(ctx context.Context, jsonDoc sql.JSONWrapper) (buffer []byte, err error) {
+	val, err := jsonDoc.ToInterface(ctx)
 	if err != nil {
 		return nil, err
 	}

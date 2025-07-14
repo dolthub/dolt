@@ -507,12 +507,12 @@ func runTest(t *testing.T, test jsonDiffTest) {
 		if !bytes.Equal(expected.Key, actual.Key) {
 			return false
 		}
-		cmp, err := types.CompareJSON(expected.From, actual.From)
+		cmp, err := types.CompareJSON(ctx, expected.From, actual.From)
 		require.NoError(t, err)
 		if cmp != 0 {
 			return false
 		}
-		cmp, err = types.CompareJSON(expected.To, actual.To)
+		cmp, err = types.CompareJSON(ctx, expected.To, actual.To)
 		require.NoError(t, err)
 
 		return cmp == 0

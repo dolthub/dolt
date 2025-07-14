@@ -771,7 +771,7 @@ func (j jsonSerializer) serialize(ctx *sql.Context, typ sql.Type, descriptor val
 			return nil, fmt.Errorf("unsupported JSON type: %T", json)
 		}
 
-		jsonBuffer, err := encodeJsonDoc(jsonDoc)
+		jsonBuffer, err := encodeJsonDoc(ctx, jsonDoc)
 		jsonLengthBuffer := make([]byte, 4)
 		binary.LittleEndian.PutUint32(jsonLengthBuffer, uint32(len(jsonBuffer)))
 		data = append(data, jsonLengthBuffer...)

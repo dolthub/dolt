@@ -15,6 +15,7 @@
 package tree
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -69,8 +70,8 @@ func getTypeCategoryFromFirstCharacter(c byte) jsonTypeCategory {
 	}
 }
 
-func IsJsonObject(json sql.JSONWrapper) (bool, error) {
-	valType, err := GetTypeCategory(json)
+func IsJsonObject(ctx context.Context, json sql.JSONWrapper) (bool, error) {
+	valType, err := GetTypeCategory(ctx, json)
 	if err != nil {
 		return false, err
 	}

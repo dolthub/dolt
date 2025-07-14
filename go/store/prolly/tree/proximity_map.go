@@ -191,7 +191,7 @@ func (t ProximityMap[K, V, O]) GetClosest(ctx context.Context, query interface{}
 		return nil
 	}
 
-	queryVector, err := sql.ConvertToVector(query)
+	queryVector, err := sql.ConvertToVector(ctx, query)
 	if err != nil {
 		return err
 	}
@@ -275,5 +275,5 @@ func getVectorFromHash(ctx context.Context, ns NodeStore, h hash.Hash) ([]float6
 	if err != nil {
 		return nil, err
 	}
-	return sql.ConvertToVector(otherValue)
+	return sql.ConvertToVector(ctx, otherValue)
 }

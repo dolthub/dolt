@@ -156,7 +156,7 @@ func TestIndexedJsonDocument_Insert(t *testing.T) {
 				require.NotEqual(t, newBoundary, previousBoundary)
 
 				// test that new value is valid by converting it to interface{}
-				v, err := newDoc.ToInterface()
+				v, err := newDoc.ToInterface(ctx)
 				require.NoError(t, err)
 				newJsonDocument := types.JSONDocument{Val: v}
 
@@ -211,7 +211,7 @@ func TestIndexedJsonDocument_Remove(t *testing.T) {
 				require.True(t, changed)
 
 				// test that new value is valid by calling ToInterface
-				v, err := newDoc.ToInterface()
+				v, err := newDoc.ToInterface(ctx)
 				require.NoError(t, err)
 
 				// If the removed value was an object key, check that the key no longer exists.
@@ -225,7 +225,7 @@ func TestIndexedJsonDocument_Remove(t *testing.T) {
 					getParentArray := func(doc IndexedJsonDocument) []interface{} {
 						arrayWrapper, err := doc.lookupByLocation(ctx, parentLocation)
 						require.NoError(t, err)
-						arrayInterface, err := arrayWrapper.ToInterface()
+						arrayInterface, err := arrayWrapper.ToInterface(ctx)
 						require.NoError(t, err)
 						require.IsType(t, []interface{}{}, arrayInterface)
 						return arrayInterface.([]interface{})
@@ -323,7 +323,7 @@ func TestJsonCompare(t *testing.T) {
 			rightJSON, inRange, err := types.JSON.Convert(ctx, right)
 			require.NoError(t, err)
 			require.True(t, bool(inRange))
-			rightInterface, err := rightJSON.(sql.JSONWrapper).ToInterface()
+			rightInterface, err := rightJSON.(sql.JSONWrapper).ToInterface(ctx)
 			require.NoError(t, err)
 			right = types.JSONDocument{Val: rightInterface}
 		}
@@ -421,19 +421,19 @@ func TestJsonCompare(t *testing.T) {
 		{
 			Name:  "inserting into end of array makes it greater",
 			Left:  largeArray,
-			Right: noError(largeArray.ArrayAppend("$", types.MustJSON("1"))),
+			Right: noError(largeArray.ArrayAppend(ctx, "$", types.MustJSON("1"))),
 			Cmp:   -1,
 		},
 		{
 			Name:  "inserting high value into beginning of array makes it greater",
 			Left:  largeArray,
-			Right: noError(largeArray.ArrayInsert("$[0]", types.MustJSON("true"))),
+			Right: noError(largeArray.ArrayInsert(ctx, "$[0]", types.MustJSON("true"))),
 			Cmp:   -1,
 		},
 		{
 			Name:  "inserting low value into beginning of array makes it less",
 			Left:  largeArray,
-			Right: noError(largeArray.ArrayInsert("$[0]", types.MustJSON("1"))),
+			Right: noError(largeArray.ArrayInsert(ctx, "$[0]", types.MustJSON("1"))),
 			Cmp:   1,
 		},
 		{
@@ -468,7 +468,7 @@ func TestIndexedJsonDocument_CreateLargeStringValues(t *testing.T) {
 	root, err := SerializeJsonToAddr(ctx, ns, doc.(sql.JSONWrapper))
 	require.NoError(t, err)
 	indexedDoc, err := NewJSONDoc(root.HashOf(), ns).ToIndexedJSONDocument(ctx)
-	lookup, err := types.LookupJSONValue(indexedDoc, "$.key")
+	lookup, err := types.LookupJSONValue(ctx, indexedDoc, "$.key")
 	require.NoError(t, err)
 	extractedValue, _, err := types.LongText.Convert(ctx, lookup)
 	require.NoError(t, err)

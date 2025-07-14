@@ -152,7 +152,7 @@ func NewProximityMap(ns tree.NodeStore, node tree.Node, keyDesc val.TupleDesc, v
 			if err != nil {
 				panic(err)
 			}
-			floats, err := sql.ConvertToVector(jsonWrapper)
+			floats, err := sql.ConvertToVector(ctx, jsonWrapper)
 			if err != nil {
 				panic(err)
 			}
@@ -602,5 +602,5 @@ func getVectorFromHash(ctx context.Context, ns tree.NodeStore, h hash.Hash) ([]f
 	if err != nil {
 		return nil, err
 	}
-	return sql.ConvertToVector(otherValue)
+	return sql.ConvertToVector(ctx, otherValue)
 }

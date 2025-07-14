@@ -2070,15 +2070,15 @@ func mergeJSON(ctx context.Context, ns tree.NodeStore, base, left, right sql.JSO
 	// First, deserialize each value into JSON.
 	// We can only merge if the value at all three commits is a JSON object.
 
-	baseIsObject, err := tree.IsJsonObject(base)
+	baseIsObject, err := tree.IsJsonObject(ctx, base)
 	if err != nil {
 		return nil, true, err
 	}
-	leftIsObject, err := tree.IsJsonObject(left)
+	leftIsObject, err := tree.IsJsonObject(ctx, left)
 	if err != nil {
 		return nil, true, err
 	}
-	rightIsObject, err := tree.IsJsonObject(right)
+	rightIsObject, err := tree.IsJsonObject(ctx, right)
 	if err != nil {
 		return nil, true, err
 	}
@@ -2087,7 +2087,7 @@ func mergeJSON(ctx context.Context, ns tree.NodeStore, base, left, right sql.JSO
 		// At least one of the commits does not have a JSON object.
 		// If both left and right have the same value, use that value.
 		// But if they differ, this is an unresolvable merge conflict.
-		cmp, err := types.CompareJSON(left, right)
+		cmp, err := types.CompareJSON(ctx, left, right)
 		if err != nil {
 			return types.JSONDocument{}, true, err
 		}
@@ -2112,11 +2112,11 @@ func mergeJSON(ctx context.Context, ns tree.NodeStore, base, left, right sql.JSO
 			return nil, true, err
 		}
 	} else {
-		baseObject, err := base.ToInterface()
+		baseObject, err := base.ToInterface(ctx)
 		if err != nil {
 			return nil, true, err
 		}
-		leftObject, err := left.ToInterface()
+		leftObject, err := left.ToInterface(ctx)
 		if err != nil {
 			return nil, true, err
 		}
@@ -2130,11 +2130,11 @@ func mergeJSON(ctx context.Context, ns tree.NodeStore, base, left, right sql.JSO
 			return nil, true, err
 		}
 	} else {
-		baseObject, err := base.ToInterface()
+		baseObject, err := base.ToInterface(ctx)
 		if err != nil {
 			return nil, true, err
 		}
-		rightObject, err := right.ToInterface()
+		rightObject, err := right.ToInterface(ctx)
 		if err != nil {
 			return nil, true, err
 		}

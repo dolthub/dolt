@@ -436,7 +436,7 @@ func getJSONAddrHash(ctx context.Context, ns NodeStore, v interface{}) (hash.Has
 }
 
 func serializeJsonToBlob(ctx context.Context, ns NodeStore, j sql.JSONWrapper) (Node, hash.Hash, error) {
-	buf, err := types.MarshallJson(j)
+	buf, err := types.MarshallJson(ctx, j)
 	if err != nil {
 		return Node{}, hash.Hash{}, err
 	}

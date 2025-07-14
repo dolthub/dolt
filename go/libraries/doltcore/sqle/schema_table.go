@@ -518,7 +518,7 @@ func loadDefaultSqlMode() (string, error) {
 }
 
 func getCreatedTime(ctx *sql.Context, extraCol sql.JSONWrapper) (int64, error) {
-	doc, err := extraCol.ToInterface()
+	doc, err := extraCol.ToInterface(ctx)
 	if err != nil {
 		return 0, err
 	}
