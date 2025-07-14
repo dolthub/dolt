@@ -43,7 +43,7 @@ func ApplyPatches[K ~[]byte, O Ordering[K], S message.Serializer](
 
 	var cur *cursor
 	if newMutation.KeyBelowStart != nil {
-		cur, err = newCursorAtKey(ctx, ns, root, K(newMutation.EndKey), order)
+		cur, err = newCursorAtKey(ctx, ns, root, K(newMutation.KeyBelowStart), order)
 	} else {
 		// No prior key for node means that this is the very first node in its row.
 		cur, err = newCursorAtStart(ctx, ns, root)
@@ -67,7 +67,7 @@ func ApplyPatches[K ~[]byte, O Ordering[K], S message.Serializer](
 		if err != nil {
 			return Node{}, err
 		}
-		prev := newMutation.EndKey
+		prevMutation := newMutation
 		newMutation, err = edits.NextPatch(ctx)
 		if err != nil {
 			return Node{}, err
@@ -75,8 +75,8 @@ func ApplyPatches[K ~[]byte, O Ordering[K], S message.Serializer](
 		nextKey := newMutation.EndKey
 		if nextKey == nil {
 			break
-		} else if prev != nil {
-			assertTrue(order.Compare(ctx, K(nextKey), K(prev)) >= 0, "expected sorted edits")
+		} else if prevMutation.EndKey != nil {
+			assertTrue(order.Compare(ctx, K(nextKey), K(prevMutation.EndKey)) >= 0, "expected patches to be sorted by key, but got %v before %v", prevMutation, newMutation)
 		}
 	}
 
