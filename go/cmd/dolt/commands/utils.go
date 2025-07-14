@@ -370,6 +370,8 @@ func GetInt8ColAsBool(col interface{}) (bool, error) {
 	switch v := col.(type) {
 	case int8:
 		return v != 0, nil
+	case string:
+		return v != "0", nil
 	default:
 		return false, fmt.Errorf("unexpected type %T, was expecting int8", v)
 	}

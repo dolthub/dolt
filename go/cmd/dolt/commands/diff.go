@@ -209,6 +209,9 @@ func (cmd DiffCmd) Exec(ctx context.Context, commandStr string, args []string, _
 	}
 
 	updateSystemVar, err := setSystemVar(queryist, sqlCtx, apr.Contains(cli.SystemFlag))
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	}
 
 	dArgs, err := parseDiffArgs(queryist, sqlCtx, apr)
 	if err != nil {
