@@ -774,6 +774,61 @@ func TestArchiveChunkGroup(t *testing.T) {
 	assertIntBetween(t, cg.avgRawChunkSize, 990, 1010)
 }
 
+func TestArchiveConjoinAll(t *testing.T) {
+	// Create first archive with chunks having prefix 42
+	chunks1 := [][]byte{
+		{10, 11, 12, 13, 14, 15, 16, 17, 18, 19},
+		{20, 21, 22, 23, 24, 25, 26, 27, 28, 29},
+	}
+	archiveReader1, hashes1 := createTestArchive(t, 42, chunks1, "archive1")
+
+	// Create second archive with chunks having prefix 84
+	chunks2 := [][]byte{
+		{30, 31, 32, 33, 34, 35, 36, 37, 38, 39},
+		{40, 41, 42, 43, 44, 45, 46, 47, 48, 49},
+	}
+	archiveReader2, hashes2 := createTestArchive(t, 84, chunks2, "archive2")
+
+	// Create new archive writer to test conjoinAll
+	writerCombined := NewFixedBufferByteSink(make([]byte, 8192))
+	awCombined := newArchiveWriterWithSink(writerCombined)
+
+	// Test conjoinAll method
+	readers := []archiveReader{archiveReader1, archiveReader2}
+	combinedReader, err := awCombined.conjoinAll(readers)
+
+	// Since conjoinAll is not implemented yet, we expect a specific error
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "conjoinAll not yet implemented")
+	assert.Equal(t, archiveReader{}, combinedReader)
+
+	// Verify combined reader contains all chunks
+	assert.True(t, combinedReader.has(hashes1[0]))
+	assert.True(t, combinedReader.has(hashes1[1]))
+	assert.True(t, combinedReader.has(hashes2[0]))
+	assert.True(t, combinedReader.has(hashes2[1]))
+
+	// Verify data integrity
+	ctx := context.Background()
+	stats := &Stats{}
+
+	data, err := combinedReader.get(ctx, hashes1[0], stats)
+	assert.NoError(t, err)
+	assert.Equal(t, chunks1[0], data)
+
+	data, err = combinedReader.get(ctx, hashes1[1], stats)
+	assert.NoError(t, err)
+	assert.Equal(t, chunks1[1], data)
+
+	data, err = combinedReader.get(ctx, hashes2[0], stats)
+	assert.NoError(t, err)
+	assert.Equal(t, chunks2[0], data)
+
+	data, err = combinedReader.get(ctx, hashes2[1], stats)
+	assert.NoError(t, err)
+	assert.Equal(t, chunks2[1], data)
+}
+
 func assertFloatBetween(t *testing.T, actual, min, max float64) {
 	if actual < min || actual > max {
 		t.Errorf("Expected %f to be between %f and %f", actual, min, max)
@@ -931,4 +986,48 @@ func (tcs *testChunkSource) currentSize() uint64 {
 
 func (tcs *testChunkSource) iterateAllChunks(_ context.Context, _ func(chunks.Chunk), _ *Stats) error {
 	panic("never used")
+}
+
+// createTestArchive creates a test archive with the specified chunks and returns an archiveReader and the fake hashes
+// created for the chunks (in the same order).
+func createTestArchive(t *testing.T, prefix uint64, chunks [][]byte, metadata string) (archiveReader, []hash.Hash) {
+	writer := NewFixedBufferByteSink(make([]byte, 4096))
+	aw := newArchiveWriterWithSink(writer)
+
+	// Write dictionary
+	dId, err := aw.writeByteSpan(defaultDict)
+	assert.NoError(t, err)
+
+	// Write chunks and stage them
+	var hashes []hash.Hash
+	for _, chunkData := range chunks {
+		bsId, err := aw.writeByteSpan(chunkData)
+		assert.NoError(t, err)
+
+		chunkHash := hashWithPrefix(t, prefix)
+		hashes = append(hashes, chunkHash)
+
+		err = aw.stageZStdChunk(chunkHash, dId, bsId)
+		assert.NoError(t, err)
+	}
+
+	// Finalize archive
+	err = aw.finalizeByteSpans()
+	assert.NoError(t, err)
+	err = aw.writeIndex()
+	assert.NoError(t, err)
+	err = aw.writeMetadata([]byte(metadata))
+	assert.NoError(t, err)
+	err = aw.writeFooter()
+	assert.NoError(t, err)
+
+	// Create reader
+	theBytes := writer.buff[:writer.pos]
+	fileSize := uint64(len(theBytes))
+	readerAt := bytes.NewReader(theBytes)
+	tra := tableReaderAtAdapter{readerAt}
+	archiveReader, err := newArchiveReader(context.Background(), tra, fileSize, &Stats{})
+	assert.NoError(t, err)
+
+	return archiveReader, hashes
 }
