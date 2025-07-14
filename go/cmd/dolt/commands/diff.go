@@ -208,7 +208,7 @@ func (cmd DiffCmd) Exec(ctx context.Context, commandStr string, args []string, _
 		defer closeFunc()
 	}
 
-	systemVarVal, err := setSystemVar(queryist, sqlCtx, apr.Contains(cli.SystemFlag))
+	updateSystemVar, systemVarVal, err := setSystemVar(queryist, sqlCtx, apr.Contains(cli.SystemFlag))
 
 	dArgs, err := parseDiffArgs(queryist, sqlCtx, apr)
 	if err != nil {
@@ -217,34 +217,46 @@ func (cmd DiffCmd) Exec(ctx context.Context, commandStr string, args []string, _
 
 	verr = diffUserTables(queryist, sqlCtx, dArgs)
 
-	query := fmt.Sprintf("SET @@dolt_show_system_tables = %d", systemVarVal)
-	_, _, _, err = queryist.Query(sqlCtx, query)
-	if err != nil {
-		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	if updateSystemVar {
+		query := fmt.Sprintf("SET @@dolt_show_system_tables = %t", systemVarVal)
+		_, _, _, err = queryist.Query(sqlCtx, query)
+		if err != nil {
+			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+		}
 	}
 
 	return HandleVErrAndExitCode(verr, usage)
 }
 
-func setSystemVar(queryist cli.Queryist, sqlCtx *sql.Context, showSystem bool) (int8, error) {
+// setSystemVar sets the @@dolt_show_system_tables variable if necessary, and returns the value it must be
+// set to after the commands completion, if necessary.
+func setSystemVar(queryist cli.Queryist, sqlCtx *sql.Context, showSystem bool) (bool, bool, error) {
 	_, rowIter, _, err := queryist.Query(sqlCtx, "SHOW VARIABLES WHERE VARIABLE_NAME='dolt_show_system_tables'")
+	updateSystemVar := false
 	if err != nil {
-		return 0, err
+		return false, false, err
 	}
 
 	row, err := sql.RowIterToRows(sqlCtx, rowIter)
 	if err != nil {
-		return 0, err
+		return false, false, err
 	}
-	prevVal := row[0][1].(int8)
+	prevVal, err := GetInt8ColAsBool(row[0][1])
+	if err != nil {
+		return false, false, err
+	}
 
-	newVal := 0
+	newVal := false
 	if showSystem {
-		newVal = 1
+		newVal = true
 	}
-	query := fmt.Sprintf("SET @@dolt_show_system_tables = %d", newVal)
-	_, _, _, err = queryist.Query(sqlCtx, query)
-	return prevVal, err
+	if newVal != prevVal {
+		query := fmt.Sprintf("SET @@dolt_show_system_tables = %t", newVal)
+		_, _, _, err = queryist.Query(sqlCtx, query)
+		updateSystemVar = true
+	}
+
+	return updateSystemVar, prevVal, err
 }
 
 func (cmd DiffCmd) validateArgs(apr *argparser.ArgParseResults) errhand.VerboseError {

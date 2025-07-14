@@ -13,7 +13,7 @@ expect_with_defaults                                                   {dolt-rep
 
 expect {
     -re {dolt_log} {
-        puts "\diff did not maintain system tables variables"
+        puts "\diff did not preserve existing session variable @@dolt_show_system_tables"
         exit 1
     }
 }

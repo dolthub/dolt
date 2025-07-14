@@ -363,6 +363,18 @@ func GetTinyIntColAsBool(col interface{}) (bool, error) {
 	}
 }
 
+// GetInt8ColAsBool returns the value of an int8 column as a bool
+// This is necessary because Queryist may return an int8 column as a bool (when using SQLEngine)
+// or as a string (when using ConnectionQueryist).
+func GetInt8ColAsBool(col interface{}) (bool, error) {
+	switch v := col.(type) {
+	case int8:
+		return v == 1, nil
+	default:
+		return false, fmt.Errorf("unexpected type %T, was expecting int8", v)
+	}
+}
+
 // getInt64ColAsInt64 returns the value of an int64 column as a string
 // This is necessary because Queryist may return an int64 column as an int64 (when using SQLEngine)
 // or as a string (when using ConnectionQueryist).
