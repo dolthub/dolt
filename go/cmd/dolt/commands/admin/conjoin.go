@@ -112,18 +112,18 @@ func (cmd ConjoinCmd) Exec(ctx context.Context, commandStr string, args []string
 	db := doltdb.HackDatasDatabaseFromDoltDB(ddb)
 	cs := datas.ChunkStoreFromDatabase(db)
 
-	// Handle both NomsBlockStore and GenerationalNBS
 	var targetNBS *nbs.NomsBlockStore
 	if gnbs, ok := cs.(*nbs.GenerationalNBS); ok {
-		// For GenerationalNBS, we'll work with the oldGen which contains the storage files
-		targetNBS = gnbs.OldGen().(*nbs.NomsBlockStore)
+		targetNBS, ok = gnbs.OldGen().(*nbs.NomsBlockStore)
+		if !ok {
+			verr := errhand.BuildDError("ChunkStore is not a NomsBlockStore").Build()
+			return commands.HandleVErrAndExitCode(verr, usage)
+		}
 	} else {
 		verr := errhand.BuildDError("ChunkStore is not a supported type for conjoin operation").Build()
 		return commands.HandleVErrAndExitCode(verr, usage)
 	}
 
-	// Use ConjoinTableFiles for both --all and specific IDs
-	// When --all is specified, pass empty slice to conjoin all files
 	var targetStorageIds []hash.Hash
 	if allFlag {
 		targetStorageIds = nil // Empty slice will trigger "conjoin all" behavior
