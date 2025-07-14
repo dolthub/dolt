@@ -19,6 +19,7 @@ import (
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/expression"
 	"github.com/dolthub/go-mysql-server/sql/types"
 	"gopkg.in/src-d/go-errors.v1"
 
@@ -209,7 +210,10 @@ func (ltf *LogTableFunction) CheckAuth(ctx *sql.Context, opChecker sql.Privilege
 
 // Expressions implements the sql.Expressioner interface.
 func (ltf *LogTableFunction) Expressions() []sql.Expression {
-	return []sql.Expression{}
+	var expressions []sql.Expression
+	expressions = append(expressions, ltf.revisionExprs...)
+	expressions = append(expressions, ltf.notRevisionExprs...)
+	return expressions
 }
 
 // getDoltArgs builds an argument string from sql expressions so that we can
@@ -218,6 +222,11 @@ func getDoltArgs(ctx *sql.Context, expressions []sql.Expression, name string) ([
 	var args []string
 
 	for _, expr := range expressions {
+		// Skip bind variables during prepare phase - they will be evaluated during execute
+		if expression.IsBindVar(expr) {
+			continue
+		}
+		
 		childVal, err := expr.Eval(ctx, nil)
 		if err != nil {
 			return nil, err
@@ -280,16 +289,33 @@ func (ltf *LogTableFunction) addOptions(expression []sql.Expression) error {
 }
 
 func (ltf *LogTableFunction) WithExpressions(exprs ...sql.Expression) (sql.Node, error) {
-	if len(exprs) != 0 {
-		return nil, sql.ErrInvalidChildrenNumber.New(0, len(exprs))
+	expectedLen := len(ltf.revisionExprs) + len(ltf.notRevisionExprs)
+	if len(exprs) != expectedLen {
+		return nil, sql.ErrInvalidChildrenNumber.New(expectedLen, len(exprs))
 	}
-	return ltf, nil
+	
+	newLtf := *ltf
+	
+	// Split the expressions back into revisionExprs and notRevisionExprs
+	revisionCount := len(ltf.revisionExprs)
+	if revisionCount > 0 {
+		newLtf.revisionExprs = exprs[:revisionCount]
+	}
+	if len(ltf.notRevisionExprs) > 0 {
+		newLtf.notRevisionExprs = exprs[revisionCount:]
+	}
+	
+	return &newLtf, nil
 }
 
 // evalArguments converts the input expressions into string literals and
 // formats them as function arguments.
-func (ltf *LogTableFunction) evalArguments(expression ...sql.Expression) (sql.Node, error) {
-	for _, expr := range expression {
+func (ltf *LogTableFunction) evalArguments(expressions ...sql.Expression) (sql.Node, error) {
+	for _, expr := range expressions {
+		// Allow bind variables (used in prepared statements) to pass through
+		if expression.IsBindVar(expr) {
+			continue
+		}
 		if !expr.Resolved() {
 			return nil, ErrInvalidNonLiteralArgument.New(ltf.Name(), expr.String())
 		}
@@ -300,13 +326,13 @@ func (ltf *LogTableFunction) evalArguments(expression ...sql.Expression) (sql.No
 	}
 
 	newLtf := *ltf
-	if err := newLtf.addOptions(expression); err != nil {
+	if err := newLtf.addOptions(expressions); err != nil {
 		return nil, err
 	}
 
 	// Gets revisions, excluding any flag-related expression
-	for i, ex := range expression {
-		if !strings.Contains(ex.String(), "--") && !(i > 0 && strings.Contains(expression[i-1].String(), "--")) {
+	for i, ex := range expressions {
+		if !strings.Contains(ex.String(), "--") && !(i > 0 && strings.Contains(expressions[i-1].String(), "--")) {
 			exStr := strings.ReplaceAll(ex.String(), "'", "")
 			if strings.HasPrefix(exStr, "^") {
 				newLtf.notRevisionExprs = append(newLtf.notRevisionExprs, ex)
@@ -326,6 +352,19 @@ func (ltf *LogTableFunction) evalArguments(expression ...sql.Expression) (sql.No
 func (ltf *LogTableFunction) validateRevisionExpressions() error {
 	// We must convert the expressions to strings before making string comparisons
 	// For dolt_log('^main'), ltf.revisionExpr.String() = "'^main'"" and revisionStr = "^main"
+	// Skip validation if there are bind variables - they will be validated during execution
+
+	// Check if any expressions are bind variables
+	for _, expr := range ltf.revisionExprs {
+		if expression.IsBindVar(expr) {
+			return nil // Skip validation during prepare phase
+		}
+	}
+	for _, expr := range ltf.notRevisionExprs {
+		if expression.IsBindVar(expr) {
+			return nil // Skip validation during prepare phase
+		}
+	}
 
 	revisionStrs, err := mustExpressionsToString(ltf.ctx, ltf.revisionExprs)
 	if err != nil {
