@@ -179,6 +179,7 @@ func (cmd DiffCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsString(DiffMode, "", "diff mode", "Determines how to display modified rows with tabular output. Valid values are row, line, in-place, context. Defaults to context.")
 	ap.SupportsFlag(ReverseFlag, "R", "Reverses the direction of the diff.")
 	ap.SupportsFlag(NameOnlyFlag, "", "Only shows table names.")
+	ap.SupportsFlag(cli.SystemFlag, "", "Show system tables in addition to user tables")
 	return ap
 }
 
@@ -199,13 +200,17 @@ func (cmd DiffCmd) Exec(ctx context.Context, commandStr string, args []string, _
 		return HandleVErrAndExitCode(verr, usage)
 	}
 
-	queryist, oldSqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
-	sqlCtx := doltdb.ContextWithDoltCICreateBypassKey(oldSqlCtx)
+	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 	if closeFunc != nil {
 		defer closeFunc()
+	}
+
+	updateSystemVar, err := setSystemVar(queryist, sqlCtx, apr.Contains(cli.SystemFlag))
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
 	dArgs, err := parseDiffArgs(queryist, sqlCtx, apr)
@@ -214,7 +219,51 @@ func (cmd DiffCmd) Exec(ctx context.Context, commandStr string, args []string, _
 	}
 
 	verr = diffUserTables(queryist, sqlCtx, dArgs)
-	return HandleVErrAndExitCode(verr, usage)
+	if verr != nil {
+		return HandleVErrAndExitCode(verr, usage)
+	}
+
+	if updateSystemVar != nil {
+		err = updateSystemVar()
+	}
+
+	return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+}
+
+// setSystemVar sets the @@dolt_show_system_tables variable if necessary, and returns the value it must be
+// set to after the commands completion, if necessary.
+func setSystemVar(queryist cli.Queryist, sqlCtx *sql.Context, showSystem bool) (func() error, error) {
+	_, rowIter, _, err := queryist.Query(sqlCtx, "SHOW VARIABLES WHERE VARIABLE_NAME='dolt_show_system_tables'")
+	if err != nil {
+		return nil, err
+	}
+
+	row, err := sql.RowIterToRows(sqlCtx, rowIter)
+	if err != nil {
+		return nil, err
+	}
+	prevVal, err := GetInt8ColAsBool(row[0][1])
+	if err != nil {
+		return nil, err
+	}
+
+	newVal := false
+	var update func() error
+
+	if showSystem {
+		newVal = true
+	}
+	if newVal != prevVal {
+		query := fmt.Sprintf("SET @@dolt_show_system_tables = %t", newVal)
+		_, _, _, err = queryist.Query(sqlCtx, query)
+		update = func() error {
+			query := fmt.Sprintf("SET @@dolt_show_system_tables = %t", prevVal)
+			_, _, _, err := queryist.Query(sqlCtx, query)
+			return err
+		}
+	}
+
+	return update, err
 }
 
 func (cmd DiffCmd) validateArgs(apr *argparser.ArgParseResults) errhand.VerboseError {

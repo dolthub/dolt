@@ -2184,3 +2184,26 @@ EOF
     # Count the line numbers to make sure there are no schema changes output
     [ "${#lines[@]}" -eq 3 ]
 }
+
+@test "diff: diff only shows system tables with --system flag" {
+    dolt sql -q "insert into dolt_ignore values ('test', 1)"
+    dolt add . 
+    dolt commit -m "added row to dolt_ignore"
+
+    run dolt diff HEAD HEAD~1
+    [ "$status" -eq 0 ]
+    ! [[ "$output" =~ "dolt_ignore" ]] || false
+
+    run dolt diff HEAD HEAD~1 --system
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "dolt_ignore" ]] || false
+}
+
+# bats test_tags=no_lambda
+@test "diff: --system preserves dolt_show_system_tables value in sql-shell" {
+     skiponwindows "Need to install expect and make this script work on windows."
+     dolt commit --allow-empty -m "Commit"
+
+     run $BATS_TEST_DIRNAME/diff-system.expect
+     [ "$status" -eq 0 ]
+}

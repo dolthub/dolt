@@ -976,7 +976,7 @@ func (db Database) GetTableNamesAsOf(ctx *sql.Context, time interface{}) ([]stri
 		return nil, err
 	}
 
-	return filterDoltInternalTables(ctx, tblNames, db.schemaName), nil
+	return filterDoltInternalTables(tblNames, db.schemaName, showSystemTables), nil
 }
 
 // getTable returns the user table with the given baseName from the root given
@@ -1194,7 +1194,7 @@ func (db Database) GetTableNames(ctx *sql.Context) ([]string, error) {
 	}
 
 	// TODO: Figure out way to remove filterDoltInternalTables
-	return filterDoltInternalTables(ctx, tblNames, db.schemaName), nil
+	return filterDoltInternalTables(tblNames, db.schemaName, showSystemTables), nil
 }
 
 func (db Database) SchemaName() string {
@@ -1245,14 +1245,12 @@ func (db Database) getAllTableNames(ctx *sql.Context, root doltdb.RootValue, inc
 	return result, nil
 }
 
-func filterDoltInternalTables(ctx *sql.Context, tblNames []string, schemaName string) []string {
+func filterDoltInternalTables(tblNames []string, schemaName string, includeWriteable bool) []string {
 	result := []string{}
 
 	for _, tbl := range tblNames {
-		if doltdb.IsDoltCITable(tbl) {
-			if doltdb.DoltCICanBypass(ctx) {
-				result = append(result, tbl)
-			}
+		if includeWriteable && !doltdb.IsReadOnlySystemTable(doltdb.TableName{Name: tbl, Schema: schemaName}) {
+			result = append(result, tbl)
 		} else if !doltdb.IsSystemTable(doltdb.TableName{Name: tbl, Schema: schemaName}) {
 			result = append(result, tbl)
 		}
@@ -1435,7 +1433,7 @@ func (db Database) CreateTable(ctx *sql.Context, tableName string, sch sql.Prima
 		return err
 	}
 
-	if doltdb.IsSystemTable(doltdb.TableName{Name: tableName, Schema: db.schemaName}) && !doltdb.IsFullTextTable(tableName) {
+	if doltdb.IsSystemTable(doltdb.TableName{Name: tableName, Schema: db.schemaName}) && !doltdb.IsFullTextTable(tableName) && !doltdb.HasDoltCIPrefix(tableName) {
 		return ErrReservedTableName.New(tableName)
 	}
 
