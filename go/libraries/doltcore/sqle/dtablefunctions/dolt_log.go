@@ -53,6 +53,9 @@ type LogTableFunction struct {
 	decoration    string
 
 	database sql.Database
+	
+	// argumentExprs stores the original expressions for deferred parsing
+	argumentExprs []sql.Expression
 }
 
 var logTableSchema = sql.Schema{
@@ -210,6 +213,12 @@ func (ltf *LogTableFunction) CheckAuth(ctx *sql.Context, opChecker sql.Privilege
 
 // Expressions implements the sql.Expressioner interface.
 func (ltf *LogTableFunction) Expressions() []sql.Expression {
+	// If we're using deferred parsing, return the original argument expressions
+	if ltf.argumentExprs != nil {
+		return ltf.argumentExprs
+	}
+	
+	// Legacy behavior for expressions already parsed
 	var expressions []sql.Expression
 	expressions = append(expressions, ltf.revisionExprs...)
 	expressions = append(expressions, ltf.notRevisionExprs...)
@@ -222,11 +231,6 @@ func getDoltArgs(ctx *sql.Context, expressions []sql.Expression, name string) ([
 	var args []string
 
 	for _, expr := range expressions {
-		// Skip bind variables during prepare phase - they will be evaluated during execute
-		if expression.IsBindVar(expr) {
-			continue
-		}
-		
 		childVal, err := expr.Eval(ctx, nil)
 		if err != nil {
 			return nil, err
@@ -289,6 +293,23 @@ func (ltf *LogTableFunction) addOptions(expression []sql.Expression) error {
 }
 
 func (ltf *LogTableFunction) WithExpressions(exprs ...sql.Expression) (sql.Node, error) {
+	// If we're using deferred parsing, replace argumentExprs and clear parsed expressions
+	if ltf.argumentExprs != nil {
+		if len(exprs) != len(ltf.argumentExprs) {
+			return nil, sql.ErrInvalidChildrenNumber.New(len(ltf.argumentExprs), len(exprs))
+		}
+		
+		newLtf := *ltf
+		newLtf.argumentExprs = exprs
+		// Clear parsed expressions so they get re-parsed with new values
+		newLtf.revisionExprs = nil
+		newLtf.notRevisionExprs = nil
+		newLtf.notRevisionStrs = nil
+		
+		return &newLtf, nil
+	}
+	
+	// Legacy behavior for expressions already parsed
 	expectedLen := len(ltf.revisionExprs) + len(ltf.notRevisionExprs)
 	if len(exprs) != expectedLen {
 		return nil, sql.ErrInvalidChildrenNumber.New(expectedLen, len(exprs))
@@ -308,8 +329,8 @@ func (ltf *LogTableFunction) WithExpressions(exprs ...sql.Expression) (sql.Node,
 	return &newLtf, nil
 }
 
-// evalArguments converts the input expressions into string literals and
-// formats them as function arguments.
+// evalArguments stores the input expressions for later evaluation during execution.
+// This defers argument parsing until the execute phase to properly handle bind variables.
 func (ltf *LogTableFunction) evalArguments(expressions ...sql.Expression) (sql.Node, error) {
 	for _, expr := range expressions {
 		// Allow bind variables (used in prepared statements) to pass through
@@ -326,45 +347,57 @@ func (ltf *LogTableFunction) evalArguments(expressions ...sql.Expression) (sql.N
 	}
 
 	newLtf := *ltf
-	if err := newLtf.addOptions(expressions); err != nil {
-		return nil, err
-	}
-
-	// Gets revisions, excluding any flag-related expression
-	for i, ex := range expressions {
-		if !strings.Contains(ex.String(), "--") && !(i > 0 && strings.Contains(expressions[i-1].String(), "--")) {
-			exStr := strings.ReplaceAll(ex.String(), "'", "")
-			if strings.HasPrefix(exStr, "^") {
-				newLtf.notRevisionExprs = append(newLtf.notRevisionExprs, ex)
-			} else {
-				newLtf.revisionExprs = append(newLtf.revisionExprs, ex)
-			}
+	// Store the expressions for later parsing during RowIter (execute phase)
+	newLtf.argumentExprs = expressions
+	
+	// If there are no bind variables, we can parse arguments immediately for validation
+	hasBindVars := false
+	for _, expr := range expressions {
+		if expression.IsBindVar(expr) {
+			hasBindVars = true
+			break
 		}
 	}
-
-	if err := newLtf.validateRevisionExpressions(); err != nil {
-		return nil, err
+	
+	if !hasBindVars {
+		// No bind variables, safe to parse and validate immediately
+		if err := newLtf.parseArgumentsAndValidate(); err != nil {
+			return nil, err
+		}
 	}
 
 	return &newLtf, nil
 }
 
+// parseArgumentsAndValidate parses the stored argument expressions and validates them.
+// This should only be called when all bind variables have been resolved.
+func (ltf *LogTableFunction) parseArgumentsAndValidate() error {
+	if err := ltf.addOptions(ltf.argumentExprs); err != nil {
+		return err
+	}
+
+	// Gets revisions, excluding any flag-related expression
+	for i, ex := range ltf.argumentExprs {
+		if !strings.Contains(ex.String(), "--") && !(i > 0 && strings.Contains(ltf.argumentExprs[i-1].String(), "--")) {
+			exStr := strings.ReplaceAll(ex.String(), "'", "")
+			if strings.HasPrefix(exStr, "^") {
+				ltf.notRevisionExprs = append(ltf.notRevisionExprs, ex)
+			} else {
+				ltf.revisionExprs = append(ltf.revisionExprs, ex)
+			}
+		}
+	}
+
+	if err := ltf.validateRevisionExpressions(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (ltf *LogTableFunction) validateRevisionExpressions() error {
 	// We must convert the expressions to strings before making string comparisons
 	// For dolt_log('^main'), ltf.revisionExpr.String() = "'^main'"" and revisionStr = "^main"
-	// Skip validation if there are bind variables - they will be validated during execution
-
-	// Check if any expressions are bind variables
-	for _, expr := range ltf.revisionExprs {
-		if expression.IsBindVar(expr) {
-			return nil // Skip validation during prepare phase
-		}
-	}
-	for _, expr := range ltf.notRevisionExprs {
-		if expression.IsBindVar(expr) {
-			return nil // Skip validation during prepare phase
-		}
-	}
 
 	revisionStrs, err := mustExpressionsToString(ltf.ctx, ltf.revisionExprs)
 	if err != nil {
@@ -440,6 +473,13 @@ func (ltf *LogTableFunction) invalidArgDetailsErr(reason string) *errors.Error {
 
 // RowIter implements the sql.Node interface
 func (ltf *LogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter, error) {
+	// If we have stored argument expressions, parse them now (bind variables should be resolved by now)
+	if ltf.argumentExprs != nil && len(ltf.revisionExprs) == 0 && len(ltf.notRevisionExprs) == 0 {
+		if err := ltf.parseArgumentsAndValidate(); err != nil {
+			return nil, err
+		}
+	}
+	
 	revisionValStrs, notRevisionValStrs, threeDot, err := ltf.evaluateArguments()
 	if err != nil {
 		return nil, err

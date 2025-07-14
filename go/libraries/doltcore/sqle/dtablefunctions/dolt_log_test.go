@@ -80,14 +80,14 @@ func TestDoltLogExpressionsInterface(t *testing.T) {
 func TestDoltLogValidateRevisionExpressions(t *testing.T) {
 	ctx := sql.NewEmptyContext()
 	
-	// Test that validation is skipped when bind variables are present
+	// Test that validation works with literals
 	ltf := &LogTableFunction{
 		ctx: ctx,
 		revisionExprs: []sql.Expression{
-			expression.NewBindVar("v1"),
+			expression.NewLiteral("HEAD", types.Text),
 		},
 	}
 	
 	err := ltf.validateRevisionExpressions()
-	assert.NoError(t, err) // Should skip validation with bind variables
+	assert.NoError(t, err) // Should validate normally
 }
