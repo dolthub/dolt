@@ -31,6 +31,17 @@ import (
 type ConjoinCmd struct {
 }
 
+var conjoinDocs = cli.CommandDocumentationContent{
+	ShortDesc: "Conjoin storage files in the database",
+	LongDesc: `Admin command to conjoin oldgen storage files in the database. Conjoining combines multiple storage files into a single file, which can improve performance chunk search time.
+
+Use --all to conjoin all storage in oldgen, or specify individual storage file IDs (32-character hex strings) to conjoin only those files.`,
+	Synopsis: []string{
+		"--all",
+		"<storage_file_id>...",
+	},
+}
+
 // Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
 func (cmd ConjoinCmd) Name() string {
 	return "conjoin"
@@ -48,16 +59,8 @@ func (cmd ConjoinCmd) RequiresRepo() bool {
 }
 
 func (cmd ConjoinCmd) Docs() *cli.CommandDocumentation {
-	return &cli.CommandDocumentation{
-		CommandStr: "conjoin",
-		ShortDesc:  "Conjoin storage files in the database",
-		LongDesc:   `Admin command to conjoin storage files in the database. Use --all to conjoin all storage files, or specify individual storage file IDs.`,
-		Synopsis: []string{
-			"conjoin --all",
-			"conjoin <storage_file_id>...",
-		},
-		ArgParser: cmd.ArgParser(),
-	}
+	ap := cmd.ArgParser()
+	return cli.NewCommandDocumentation(conjoinDocs, ap)
 }
 
 func (cmd ConjoinCmd) ArgParser() *argparser.ArgParser {
@@ -73,7 +76,7 @@ func (cmd ConjoinCmd) Hidden() bool {
 // Exec executes the command
 func (cmd ConjoinCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, _ cli.CliContext) int {
 	ap := cmd.ArgParser()
-	usage, _ := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, cli.CommandDocumentationContent{}, ap))
+	usage, _ := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, conjoinDocs, ap))
 
 	apr := cli.ParseArgsOrDie(ap, args, usage)
 
@@ -127,7 +130,7 @@ func (cmd ConjoinCmd) Exec(ctx context.Context, commandStr string, args []string
 	} else {
 		targetStorageIds = storageIdHashes
 	}
-	
+
 	conjoinedHash, err := targetNBS.ConjoinTableFiles(ctx, targetStorageIds)
 	if err != nil {
 		if err.Error() == "no table files to conjoin" {
@@ -137,7 +140,7 @@ func (cmd ConjoinCmd) Exec(ctx context.Context, commandStr string, args []string
 		verr := errhand.BuildDError("failed to conjoin table files: %v", err).Build()
 		return commands.HandleVErrAndExitCode(verr, usage)
 	}
-	
+
 	if allFlag {
 		cli.Printf("Successfully conjoined all table files. New table file: %s\n", conjoinedHash.String())
 	} else {
