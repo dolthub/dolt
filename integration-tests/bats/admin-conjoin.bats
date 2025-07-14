@@ -24,6 +24,12 @@ get_oldgen_storage_ids() {
     find .dolt/noms/oldgen -type f -name "????????????????????????????????" 2>/dev/null | grep -v LOCK | grep -v manifest | xargs -I {} basename {}
 }
 
+# Helper function to extract chunk count from fsck output
+get_chunk_count() {
+    local fsck_output="$1"
+    echo "$fsck_output" | grep "Chunks Scanned:" | sed 's/Chunks Scanned: //' | tr -d '\n'
+}
+
 @test "conjoin: --all flag and storage file IDs are mutually exclusive" {
     run dolt admin conjoin --all somevalidhash1234567890abcdef12345678
     [ "$status" -eq 1 ]
@@ -43,19 +49,37 @@ get_oldgen_storage_ids() {
 }
 
 @test "conjoin: --all flag works" {
+    # Run fsck before conjoin
+    run dolt fsck
+    [ "$status" -eq 0 ]
+    chunks_before=$(get_chunk_count "$output")
+    
     run dolt admin conjoin --all
     [ "$status" -eq 0 ]
     [[ "$output" =~ "No table files to conjoin" ]] || false
     
-    dolt fsck
+    # Run fsck after conjoin and verify chunk count is identical
+    run dolt fsck
+    [ "$status" -eq 0 ]
+    chunks_after=$(get_chunk_count "$output")
+    [ "$chunks_before" -eq "$chunks_after" ]
 }
 
 @test "conjoin: valid storage file ID works" {
+    # Run fsck before conjoin
+    run dolt fsck
+    [ "$status" -eq 0 ]
+    chunks_before=$(get_chunk_count "$output")
+    
     run dolt admin conjoin abcdef1234567890abcdef1234567890
     [ "$status" -eq 1 ]
     [[ "$output" =~ "storage file not found" ]] || false
     
-    dolt fsck
+    # Run fsck after failed conjoin and verify chunk count is identical
+    run dolt fsck
+    [ "$status" -eq 0 ]
+    chunks_after=$(get_chunk_count "$output")
+    [ "$chunks_before" -eq "$chunks_after" ]
 }
 
 @test "conjoin: get storage file IDs and test conjoin with specific IDs" {
@@ -80,11 +104,20 @@ get_oldgen_storage_ids() {
     [ "${#id1}" -eq 32 ]
     [ "${#id2}" -eq 32 ]
     
+    # Run fsck before conjoin
+    run dolt fsck
+    [ "$status" -eq 0 ]
+    chunks_before=$(get_chunk_count "$output")
+    
     # Test conjoin with the specific IDs (should succeed)
     run dolt admin conjoin "$id1" "$id2"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Successfully conjoined table files" ]] || false
     
-    dolt fsck
+    # Run fsck after conjoin and verify chunk count is identical
+    run dolt fsck
+    [ "$status" -eq 0 ]
+    chunks_after=$(get_chunk_count "$output")
+    [ "$chunks_before" -eq "$chunks_after" ]
 }
 
