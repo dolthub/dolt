@@ -2327,14 +2327,10 @@ func (nbs *NomsBlockStore) ConjoinTableFiles(ctx context.Context, storageIds []h
 
 	// If no storageIds provided, collect all table files from the current table set
 	if len(storageIds) == 0 {
-		// Collect all table files from the current table set
-		for _, tf := range nbs.tables.novel {
-			storageIds = append(storageIds, tf.hash())
-		}
 		for _, tf := range nbs.tables.upstream {
 			storageIds = append(storageIds, tf.hash())
 		}
-		
+
 		if len(storageIds) == 0 {
 			return hash.Hash{}, errors.New("no table files to conjoin")
 		}
@@ -2361,14 +2357,14 @@ func (nbs *NomsBlockStore) ConjoinTableFiles(ctx context.Context, storageIds []h
 
 	// Store the original manifest for comparison
 	originalUpstream := nbs.upstream
-	
+
 	// Use the existing conjoin infrastructure to properly update the manifest
 	strategy := &specificFilesConjoiner{targetStorageIds: storageIds}
 	newUpstream, finalCleanup, err := conjoin(ctx, strategy, nbs.upstream, nbs.manifestMgr, nbs.persister, stats)
 	if err != nil {
 		return hash.Hash{}, err
 	}
-	
+
 	// Update the in-memory state
 	nbs.upstream = newUpstream
 	newTables, err := nbs.tables.rebase(ctx, newUpstream.specs, nil, nbs.stats)
@@ -2376,23 +2372,23 @@ func (nbs *NomsBlockStore) ConjoinTableFiles(ctx context.Context, storageIds []h
 		return hash.Hash{}, err
 	}
 	nbs.tables = newTables
-	
+
 	// Call the final cleanup
 	finalCleanup()
-	
+
 	// Find the new conjoined table file hash from the updated manifest
 	// Since we removed the old files and added one new file, we need to find which one is new
 	oldIdSet := make(map[hash.Hash]bool)
 	for _, id := range storageIds {
 		oldIdSet[id] = true
 	}
-	
+
 	// Create a set of original spec names for comparison
 	originalSpecSet := make(map[hash.Hash]bool)
 	for _, spec := range originalUpstream.specs {
 		originalSpecSet[spec.name] = true
 	}
-	
+
 	var conjoinedHash hash.Hash
 	for _, spec := range newUpstream.specs {
 		// If this spec is not in the original manifest and not one of the old files we removed,
@@ -2402,29 +2398,18 @@ func (nbs *NomsBlockStore) ConjoinTableFiles(ctx context.Context, storageIds []h
 			break
 		}
 	}
-	
+
 	return conjoinedHash, nil
 }
 
-// findTableSpec finds a table spec by hash in the current manifest
+// findTableSpec finds a table spec by hash in the current manifest. This will ignore novel tables, as it's not
+// needed currently.
 func (nbs *NomsBlockStore) findTableSpec(storageId hash.Hash) (tableSpec, bool) {
-	// Check in upstream tables
 	for _, spec := range nbs.upstream.specs {
 		if spec.name == storageId {
 			return spec, true
 		}
 	}
-	// Check in novel tables
-	for _, tf := range nbs.tables.novel {
-		if tf.hash() == storageId {
-			count, err := tf.count()
-			if err != nil {
-				return tableSpec{name: storageId, chunkCount: 0}, false
-			}
-			return tableSpec{name: storageId, chunkCount: count}, true
-		}
-	}
-	// Check in upstream tables
 	for _, tf := range nbs.tables.upstream {
 		if tf.hash() == storageId {
 			count, err := tf.count()
