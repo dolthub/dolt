@@ -139,12 +139,7 @@ type PatchGenerator[K ~[]byte, O Ordering[K]] struct {
 	previousPatchLevel int
 }
 
-func PatchGeneratorFromRoots[K ~[]byte, O Ordering[K]](
-	ctx context.Context,
-	fromNs, toNs NodeStore,
-	from, to Node,
-	order O,
-) PatchGenerator[K, O] {
+func PatchGeneratorFromRoots[K ~[]byte, O Ordering[K]](ctx context.Context, fromNs, toNs NodeStore, from, to Node, order O) (PatchGenerator[K, O], error) {
 	var fc, tc *cursor
 
 	if !from.empty() {
@@ -159,11 +154,25 @@ func PatchGeneratorFromRoots[K ~[]byte, O Ordering[K]](
 		tc = &cursor{}
 	}
 
+	for fc.nd.level > tc.nd.level {
+		fromChild, err := fetchChild(ctx, fc.nrw, fc.currentRef())
+		if err != nil {
+			return PatchGenerator[K, O]{}, err
+		}
+
+		fc = &cursor{
+			nd:     fromChild,
+			idx:    0,
+			parent: fc,
+			nrw:    fc.nrw,
+		}
+	}
+
 	return PatchGenerator[K, O]{
 		from:  fc,
 		to:    tc,
 		order: order,
-	}
+	}, nil
 }
 
 func (td *PatchGenerator[K, O]) advanceToNextDiff(ctx context.Context) (err error) {
@@ -227,7 +236,7 @@ func (td *PatchGenerator[K, O]) advanceFromPreviousPatch(ctx context.Context) (p
 				return Patch{}, NoDiff, err
 			}
 			// Everything less than or equal to the key of the last emitted range has been covered.
-			// Skip to the first node greater than that key.
+			// Advance the |from| cursor to the first node that contains keys greater than that key.
 			// If the last to block was small we may not advance from at all.
 			currentKey := td.from.CurrentKey()
 			if currentKey != nil {
@@ -239,7 +248,7 @@ func (td *PatchGenerator[K, O]) advanceFromPreviousPatch(ctx context.Context) (p
 						if !td.to.Valid() {
 							return td.sendRemovedRange(), RemovedDiff, nil
 						}
-						// The current from node contains additional rows that overlap with the new to node.
+						// The current |from| node contains additional rows that overlap with the new |to| node.
 						// We can encode this as another range.
 						return td.sendModifiedRange()
 					}
@@ -333,6 +342,12 @@ func (td *PatchGenerator[K, O]) findNextPatch(ctx context.Context) (patch Patch,
 				return Patch{}, NoDiff, err
 			}
 		} else if level > 0 {
+			// There is a corner case where this *seems* incorrect, but is actually correct.
+			// If the |from| cursor is pointing to a node whose range is entire before the node pointed to by |to|,
+			// we don't know whether the |to| node still exists in the |from| tree. Given that, it may seem weird to
+			// emit a Patch on the |to| node. However, if the |to| node does exist in the |from| tree, then every node
+			// between the current |from| node and that node has been deleted. This is encoded as a Patch whose node
+			// is the |to| node and whose key range is the entire range of the removed nodes.
 			return td.sendModifiedRange()
 		} else if cmp < 0 {
 			return td.sendRemovedKey(), RemovedDiff, nil
@@ -407,17 +422,21 @@ func (td *PatchGenerator[K, O]) split(ctx context.Context) (patch Patch, diffTyp
 			return Patch{}, NoDiff, err
 		}
 
-		fromChild, err := fetchChild(ctx, td.from.nrw, td.from.currentRef())
-		if err != nil {
-			return Patch{}, NoDiff, err
+		// Maintain invariant that the |from| cursor is never at a higher level than the |to| cursor.
+		if td.from.nd.level == td.to.nd.level {
+			fromChild, err := fetchChild(ctx, td.from.nrw, td.from.currentRef())
+			if err != nil {
+				return Patch{}, NoDiff, err
+			}
+
+			td.from = &cursor{
+				nd:     fromChild,
+				idx:    0,
+				parent: td.from,
+				nrw:    td.from.nrw,
+			}
 		}
 
-		td.from = &cursor{
-			nd:     fromChild,
-			idx:    0,
-			parent: td.from,
-			nrw:    td.from.nrw,
-		}
 		td.to = &cursor{
 			nd:     toChild,
 			idx:    0,

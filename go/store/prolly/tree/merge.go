@@ -51,8 +51,14 @@ func ThreeWayMerge[K ~[]byte, O Ordering[K], S message.Serializer](
 	order O,
 	serializer S,
 ) (final Node, stats MergeStats, err error) {
-	ld := PatchGeneratorFromRoots[K](ctx, ns, ns, base, left, order)
-	rd := PatchGeneratorFromRoots[K](ctx, ns, ns, base, right, order)
+	ld, err := PatchGeneratorFromRoots[K](ctx, ns, ns, base, left, order)
+	if err != nil {
+		return Node{}, MergeStats{}, err
+	}
+	rd, err := PatchGeneratorFromRoots[K](ctx, ns, ns, base, right, order)
+	if err != nil {
+		return Node{}, MergeStats{}, err
+	}
 
 	eg, ctx := errgroup.WithContext(ctx)
 	patches := NewPatchBuffer(PatchBufferSize)

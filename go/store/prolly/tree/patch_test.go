@@ -44,7 +44,8 @@ func TestPatchGeneratorFromRoots(t *testing.T) {
 		toRoot, err := MakeTreeForTest(toTups)
 		assert.NoError(t, err)
 
-		dfr := PatchGeneratorFromRoots(ctx, ns, ns, fromRoot, toRoot, desc)
+		dfr, err := PatchGeneratorFromRoots(ctx, ns, ns, fromRoot, toRoot, desc)
+		require.NoError(t, err)
 
 		// Range and then EOF
 		dif, diffType, err := dfr.Next(ctx)
@@ -56,7 +57,8 @@ func TestPatchGeneratorFromRoots(t *testing.T) {
 		require.ErrorIs(t, err, io.EOF)
 
 		// Range and split visits the one different tuple.
-		dfr = PatchGeneratorFromRoots(ctx, ns, ns, fromRoot, toRoot, desc)
+		dfr, err = PatchGeneratorFromRoots(ctx, ns, ns, fromRoot, toRoot, desc)
+		require.NoError(t, err)
 		_, _, err = dfr.Next(ctx)
 		require.NoError(t, err)
 
@@ -90,7 +92,8 @@ func TestPatchGeneratorFromRoots(t *testing.T) {
 		toRoot, err := MakeTreeForTest(toTups)
 		assert.NoError(t, err)
 
-		dfr := PatchGeneratorFromRoots(ctx, ns, ns, fromRoot, toRoot, desc)
+		dfr, err := PatchGeneratorFromRoots(ctx, ns, ns, fromRoot, toRoot, desc)
+		require.NoError(t, err)
 
 		dif, diffType, err := dfr.Next(ctx)
 		require.NoError(t, err)
@@ -116,7 +119,8 @@ func TestPatchGeneratorFromRoots(t *testing.T) {
 		require.ErrorIs(t, err, io.EOF)
 
 		// Range splits into level 0 removes until the next chunk boundary, then level 1 removes.
-		dfr = PatchGeneratorFromRoots(ctx, ns, ns, fromRoot, toRoot, desc)
+		dfr, err = PatchGeneratorFromRoots(ctx, ns, ns, fromRoot, toRoot, desc)
+		require.NoError(t, err)
 		_, _, err = dfr.Next(ctx)
 		require.NoError(t, err)
 
@@ -171,7 +175,8 @@ func TestPatchGeneratorFromRoots(t *testing.T) {
 		toRoot, err := MakeTreeForTest(toTups)
 		assert.NoError(t, err)
 
-		dfr := PatchGeneratorFromRoots(ctx, ns, ns, fromRoot, toRoot, desc)
+		dfr, err := PatchGeneratorFromRoots(ctx, ns, ns, fromRoot, toRoot, desc)
+		require.NoError(t, err)
 
 		// Range and then EOF
 		dif, diffType, err := dfr.Next(ctx)
@@ -185,7 +190,8 @@ func TestPatchGeneratorFromRoots(t *testing.T) {
 		require.ErrorIs(t, err, io.EOF)
 
 		// Range splits into all 512 removes.
-		dfr = PatchGeneratorFromRoots(ctx, ns, ns, fromRoot, toRoot, desc)
+		dfr, err = PatchGeneratorFromRoots(ctx, ns, ns, fromRoot, toRoot, desc)
+		require.NoError(t, err)
 		_, _, err = dfr.Next(ctx)
 		require.NoError(t, err)
 
@@ -217,7 +223,7 @@ func TestPatchGeneratorFromRoots(t *testing.T) {
 		fromRoot, err := MakeTreeForTest(fromTups)
 		assert.NoError(t, err)
 
-		dfr := PatchGeneratorFromRoots(ctx, ns, ns, fromRoot, toRoot, desc)
+		dfr, err := PatchGeneratorFromRoots(ctx, ns, ns, fromRoot, toRoot, desc)
 		require.NoError(t, err)
 
 		// At least one ModifiedDiff. The previous key is less than the first added key, and the end key is greater.
@@ -242,7 +248,8 @@ func TestPatchGeneratorFromRoots(t *testing.T) {
 		require.ErrorIs(t, err, io.EOF)
 
 		// Range splits into all 512 removes.
-		dfr = PatchGeneratorFromRoots(ctx, ns, ns, fromRoot, toRoot, desc)
+		dfr, err = PatchGeneratorFromRoots(ctx, ns, ns, fromRoot, toRoot, desc)
+		require.NoError(t, err)
 
 		dif, diffType, err = dfr.Next(ctx)
 		for i := 0; i < 512; i++ {
@@ -278,7 +285,7 @@ func TestPatchGeneratorFromRoots(t *testing.T) {
 		fromRoot, err := MakeTreeForTest(fromTups)
 		assert.NoError(t, err)
 
-		dfr := PatchGeneratorFromRoots(ctx, ns, ns, fromRoot, toRoot, desc)
+		dfr, err := PatchGeneratorFromRoots(ctx, ns, ns, fromRoot, toRoot, desc)
 		require.NoError(t, err)
 
 		// At least one ModifiedDiff. The previous key is nil because it comes before any other observed keys, and the end key is greater.
@@ -301,7 +308,8 @@ func TestPatchGeneratorFromRoots(t *testing.T) {
 		require.ErrorIs(t, err, io.EOF)
 
 		// Range splits into all 512 removes.
-		dfr = PatchGeneratorFromRoots(ctx, ns, ns, fromRoot, toRoot, desc)
+		dfr, err = PatchGeneratorFromRoots(ctx, ns, ns, fromRoot, toRoot, desc)
+		require.NoError(t, err)
 
 		dif, diffType, err = dfr.Next(ctx)
 		for i := 0; i < 512; i++ {
@@ -336,7 +344,7 @@ func TestPatchGeneratorFromRoots(t *testing.T) {
 		toRoot, err := MakeTreeForTest(toTups)
 		assert.NoError(t, err)
 
-		dfr := PatchGeneratorFromRoots(ctx, ns, ns, fromRoot, toRoot, desc)
+		dfr, err := PatchGeneratorFromRoots(ctx, ns, ns, fromRoot, toRoot, desc)
 		require.NoError(t, err)
 
 		var KeyBelowStart Item
@@ -354,7 +362,8 @@ func TestPatchGeneratorFromRoots(t *testing.T) {
 		assert.Equal(t, io.EOF, err)
 
 		// Range splits into level 0 removes until the next chunk boundary, then level 1 removes.
-		dfr = PatchGeneratorFromRoots(ctx, ns, ns, fromRoot, toRoot, desc)
+		dfr, err = PatchGeneratorFromRoots(ctx, ns, ns, fromRoot, toRoot, desc)
+		require.NoError(t, err)
 		_, _, err = dfr.Next(ctx)
 		require.NoError(t, err)
 
@@ -420,7 +429,8 @@ func TestPatchGeneratorFromRoots(t *testing.T) {
 		fromRoot, err := MakeTreeForTest(fromTups)
 		assert.NoError(t, err)
 
-		dfr := PatchGeneratorFromRoots(ctx, ns, ns, fromRoot, toRoot, desc)
+		dfr, err := PatchGeneratorFromRoots(ctx, ns, ns, fromRoot, toRoot, desc)
+		require.NoError(t, err)
 
 		var KeyBelowStart Item
 
@@ -437,7 +447,8 @@ func TestPatchGeneratorFromRoots(t *testing.T) {
 		}
 		require.ErrorIs(t, err, io.EOF)
 
-		dfr = PatchGeneratorFromRoots(ctx, ns, ns, fromRoot, toRoot, desc)
+		dfr, err = PatchGeneratorFromRoots(ctx, ns, ns, fromRoot, toRoot, desc)
+		require.NoError(t, err)
 		for i := 0; i < 1024; i++ {
 			dif, diffType, err = dfr.Next(ctx)
 			require.NoError(t, err)

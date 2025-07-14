@@ -45,9 +45,15 @@ func producePatches[K ~[]byte, O tree.Ordering[K]](
 	order O,
 	cb func(buffer tree.PatchIter) error,
 ) (err error) {
-	ld := tree.PatchGeneratorFromRoots[K](ctx, ns, ns, base, left, order)
+	ld, err := tree.PatchGeneratorFromRoots[K](ctx, ns, ns, base, left, order)
+	if err != nil {
+		return err
+	}
 
-	rd := tree.PatchGeneratorFromRoots[K](ctx, ns, ns, base, right, order)
+	rd, err := tree.PatchGeneratorFromRoots[K](ctx, ns, ns, base, right, order)
+	if err != nil {
+		return err
+	}
 
 	eg, ctx := errgroup.WithContext(ctx)
 	patches := tree.NewPatchBuffer(tree.PatchBufferSize)

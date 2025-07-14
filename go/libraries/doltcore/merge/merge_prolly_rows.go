@@ -227,10 +227,15 @@ func computeProllyTreePatches(
 		!diffInfo.RightSchemaChange &&
 		!diffInfo.LeftSchemaChange
 	if canFastMergeProllyTrees {
-		lDiff := tree.PatchGeneratorFromRoots(ctx, ns, ns, ancRows.Node(), leftRows.Node(), leftRows.Tuples().Order)
-		rDiff := tree.PatchGeneratorFromRoots(ctx, ns, ns, ancRows.Node(), rightRows.Node(), rightRows.Tuples().Order)
-
-		err := tree.SendPatches(ctx, lDiff, rDiff, patchBuffer, func(left, right tree.Diff) (tree.Diff, bool) {
+		lDiff, err := tree.PatchGeneratorFromRoots(ctx, ns, ns, ancRows.Node(), leftRows.Node(), leftRows.Tuples().Order)
+		if err != nil {
+			return nil, nil, err
+		}
+		rDiff, err := tree.PatchGeneratorFromRoots(ctx, ns, ns, ancRows.Node(), rightRows.Node(), rightRows.Tuples().Order)
+		if err != nil {
+			return nil, nil, err
+		}
+		err = tree.SendPatches(ctx, lDiff, rDiff, patchBuffer, func(left, right tree.Diff) (tree.Diff, bool) {
 			// On conflict, attempt to merge rows
 			m, b, err := valueMerger.TryMerge(ctx, val.Tuple(left.To), val.Tuple(right.To), val.Tuple(left.From))
 			if err != nil {
