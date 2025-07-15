@@ -32,7 +32,6 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
-
 type stagedByteSpanSlice []byteSpan
 
 type stagedChunkRef struct {
@@ -714,9 +713,12 @@ func (asw *ArchiveStreamWriter) convertSnappyAndStage(cc CompressedChunk) (uint3
 // conjoinAll combines two or more archiveReader instances into a single archive.
 // This method takes a slice of archiveReader instances and merges their contents
 // into the current archiveWriter.
-func (aw *archiveWriter) conjoinAll(ctx context.Context, readers []archiveReader) (archiveReader, error) {
+//
+// This method finalizes the index and footer. Effectively completes the in memory archive writing
+// process, but does not write it to disk.
+func (aw *archiveWriter) conjoinAll(ctx context.Context, readers []archiveReader) error {
 	if len(readers) < 2 {
-		return archiveReader{}, fmt.Errorf("conjoinAll requires at least 2 archive readers, got %d", len(readers))
+		return fmt.Errorf("conjoinAll requires at least 2 archive readers, got %d", len(readers))
 	}
 
 	// Sort readers by data span length (largest first)
@@ -737,7 +739,7 @@ func (aw *archiveWriter) conjoinAll(ctx context.Context, readers []archiveReader
 
 	written, err := io.Copy(aw.output, sectionReader)
 	if err != nil {
-		return archiveReader{}, fmt.Errorf("failed to copy data from first archive: %w", err)
+		return fmt.Errorf("failed to copy data from first archive: %w", err)
 	}
 	aw.bytesWritten += uint64(written)
 
@@ -782,7 +784,7 @@ func (aw *archiveWriter) conjoinAll(ctx context.Context, readers []archiveReader
 
 		written, err := io.Copy(aw.output, sectionReader)
 		if err != nil {
-			return archiveReader{}, fmt.Errorf("failed to copy data from archive: %w", err)
+			return fmt.Errorf("failed to copy data from archive: %w", err)
 		}
 		aw.bytesWritten += uint64(written)
 
@@ -816,7 +818,7 @@ func (aw *archiveWriter) conjoinAll(ctx context.Context, readers []archiveReader
 
 			// Error on duplicates for the time being.
 			if aw.seenChunks.Has(chunkHash) {
-				return archiveReader{}, fmt.Errorf("Duplicate chunk found during conjoinAll: %s", chunkHash.String())
+				return fmt.Errorf("Duplicate chunk found during conjoinAll: %s", chunkHash.String())
 			}
 			aw.seenChunks.Insert(chunkHash)
 
@@ -835,24 +837,11 @@ func (aw *archiveWriter) conjoinAll(ctx context.Context, readers []archiveReader
 			})
 		}
 	}
-
-	// Complete the archive writing process using the standard workflow
-	tempDir := "/tmp"
-	err = indexFinalizeFlushArchive(aw, tempDir, hash.Hash{})
+	
+	err = indexFinalize(aw, hash.Hash{})
 	if err != nil {
-		return archiveReader{}, fmt.Errorf("failed to finalize and flush archive: %w", err)
+		return fmt.Errorf("failed to finalize archive: %w", err)
 	}
 
-	// Create archive reader from the file that was just written
-	fra, err := newFileReaderAt(aw.finalPath)
-	if err != nil {
-		return archiveReader{}, fmt.Errorf("failed to create file reader: %w", err)
-	}
-
-	aRdr, err := newArchiveReader(ctx, fra, uint64(fra.sz), stats)
-	if err != nil {
-		return archiveReader{}, fmt.Errorf("failed to create archive reader: %w", err)
-	}
-
-	return aRdr, nil
+	return nil
 }
