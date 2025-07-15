@@ -775,29 +775,31 @@ func TestArchiveChunkGroup(t *testing.T) {
 }
 
 func TestArchiveConjoinAll(t *testing.T) {
-	// Create first archive with chunks having prefix 42
 	chunks1 := [][]byte{
 		{10, 11, 12, 13, 14, 15, 16, 17, 18, 19},
 		{20, 21, 22, 23, 24, 25, 26, 27, 28, 29},
 	}
 	archiveReader1, hashes1 := createTestArchive(t, 42, chunks1, "archive1")
 
-	// Create second archive with chunks having prefix 84
 	chunks2 := [][]byte{
 		{30, 31, 32, 33, 34, 35, 36, 37, 38, 39},
 		{40, 41, 42, 43, 44, 45, 46, 47, 48, 49},
 	}
 	archiveReader2, hashes2 := createTestArchive(t, 84, chunks2, "archive2")
 
-	// Create new archive writer to test conjoinAll
 	writerCombined := NewFixedBufferByteSink(make([]byte, 8192))
 	awCombined := newArchiveWriterWithSink(writerCombined)
 
-	// Test conjoinAll method
 	readers := []archiveReader{archiveReader1, archiveReader2}
-	combinedReader, err := awCombined.conjoinAll(context.Background(), readers)
+	err := awCombined.conjoinAll(context.Background(), readers)
+	assert.NoError(t, err)
 
-	// conjoinAll should succeed
+	theBytes := writerCombined.buff[:writerCombined.pos]
+	fileSize := uint64(len(theBytes))
+	readerAt := bytes.NewReader(theBytes)
+	tra := tableReaderAtAdapter{readerAt}
+
+	combinedReader, err := newArchiveReader(context.Background(), tra, fileSize, &Stats{})
 	assert.NoError(t, err)
 
 	// Verify combined reader contains all chunks
