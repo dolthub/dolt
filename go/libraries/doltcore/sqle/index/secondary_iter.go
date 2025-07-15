@@ -40,9 +40,9 @@ type strictLookupIter struct {
 }
 
 func (i *strictLookupIter) Next(_ context.Context) (k, v val.Tuple, err error) {
-	k, v = i.k, i.v // TODO: when are these even updated?
+	k, v = i.k, i.v
 	i.k, i.v = nil, nil
-	if k == nil && v == nil {
+	if k == nil {
 		return nil, nil, io.EOF
 	}
 	return k, v, nil
