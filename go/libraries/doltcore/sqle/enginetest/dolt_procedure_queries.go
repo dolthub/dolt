@@ -449,4 +449,50 @@ END
 			},
 		},
 	},
+	{
+		Name: "dolt_commit with --branch flag",
+		SetUpScript: []string{
+			"create table t(a int primary key, b int);",
+			"insert into t values (1, 100);",
+			"call dolt_commit('-Am', 'initial commit');",
+			"call dolt_branch('br1');",
+			"call dolt_checkout('br1');",
+			"insert into t values (2, 200);",
+			"call dolt_checkout('main');",
+			"insert into t values (3, 300);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "call dolt_commit('--branch', 'br1', '-a', '-m', 'commit on br1 from main');",
+				Expected: []sql.Row{
+					{gmstypes.OkResult{}},
+				},
+			},
+			{
+				// verify commit didn't change our current branch.
+				Query:    "select active_branch()",
+				Expected: []sql.Row{{"main"}},
+			},
+			{
+				// Verify that commit didn't change the content of the main branch.
+				Query:    "select * from t order by a",
+				Expected: []sql.Row{{1, 100}, {3, 300}},
+			},
+			{
+				// Verify that main branch is still dirty (has uncommitted changes).
+				Query:    "select table_name from dolt_status where staged = 0",
+				Expected: []sql.Row{{"t"}},
+			},
+			{
+				// Verify that br1 is not dirty (no uncommitted changes).
+				Query:    "select table_name from `mydb/br1`.dolt_status where staged = 0",
+				Expected: []sql.Row{},
+			},
+			{
+				// Verify that br1 contains the committed data.
+				Query:    "select * from `mydb/br1`.t order by a",
+				Expected: []sql.Row{{1, 100}, {2, 200}},
+			},
+		},
+	},
 }
