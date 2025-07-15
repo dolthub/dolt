@@ -87,7 +87,7 @@ func TestSignAndVerifyCommit(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			apr, err := cli.CreateCommitArgParser().Parse(test.commitArgs)
+			apr, err := cli.CreateCommitArgParser(false).Parse(test.commitArgs)
 			require.NoError(t, err)
 
 			_, err = execCommand(ctx, dbDir, CommitCmd{}, test.commitArgs, apr, map[string]string{}, global)
