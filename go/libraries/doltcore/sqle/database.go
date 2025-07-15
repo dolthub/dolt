@@ -1442,7 +1442,7 @@ func (db Database) CreateTable(ctx *sql.Context, tableName string, sch sql.Prima
 		return err
 	}
 	canCreateCI := canCreateCIVar.(int8) == 1
-	
+
 	if doltdb.HasDoltCIPrefix(tableName) && !canCreateCI {
 		return ErrReservedTableName.New(tableName)
 	}
