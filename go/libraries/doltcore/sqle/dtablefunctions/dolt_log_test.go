@@ -91,7 +91,7 @@ func TestDoltLogValidateRevisionStrings(t *testing.T) {
 
 	// Test that validation works with parsed strings
 	ltf := &LogTableFunction{
-		ctx: ctx,
+		ctx:          ctx,
 		revisionStrs: []string{"HEAD"},
 	}
 
@@ -111,4 +111,27 @@ func TestDoltLogValidateRevisionStrings(t *testing.T) {
 	err = ltf.validateRevisionStrings()
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "--not revision cannot contain '..'")
+}
+
+func TestDoltLogTypeValidation(t *testing.T) {
+	ctx := sql.NewEmptyContext()
+
+	// Test that type validation still works in addOptions via getDoltArgs
+	// No type check in validateRevisionStrings because getDoltArgs already validates types
+	ltf := &LogTableFunction{
+		ctx: ctx,
+	}
+
+	// Test with non-text expression (integer)
+	err := ltf.addOptions([]sql.Expression{
+		expression.NewLiteral(123, types.Int32),
+	})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "Invalid argument to dolt_log: 123")
+
+	// Test with text expression (should work)
+	err = ltf.addOptions([]sql.Expression{
+		expression.NewLiteral("HEAD", types.Text),
+	})
+	assert.NoError(t, err)
 }

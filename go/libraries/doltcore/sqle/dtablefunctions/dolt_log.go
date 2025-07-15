@@ -337,6 +337,7 @@ func (ltf *LogTableFunction) evalArguments(expressions ...sql.Expression) (sql.N
 func (ltf *LogTableFunction) validateRevisionStrings() error {
 	// validate revision specifications for semantic errors
 	// this works with the parsed string values from CLI parser
+	// no type validation needed here since getDoltArgs already validates expression types
 
 	for _, revisionStr := range ltf.revisionStrs {
 		if strings.Contains(revisionStr, "..") && (len(ltf.revisionStrs) > 1 || len(ltf.notRevisionStrs) > 0) {
