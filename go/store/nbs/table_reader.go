@@ -22,6 +22,7 @@
 package nbs
 
 import (
+	"bufio"
 	"context"
 	"encoding/binary"
 	"errors"
@@ -797,62 +798,38 @@ func (tr tableReader) iterateAllChunks(ctx context.Context, cb func(chunk chunks
 	lastChunk := chunkRecs[len(chunkRecs)-1]
 	totalDataSize := lastChunk.offset + uint64(lastChunk.length)
 
-	// Read data in 4MB chunkRecs
-	const bufferSize = 4 * 1024 * 1024
-	currentOffset := uint64(0)
-	chunkIndex := 0
+	dataReader := io.NewSectionReader(&bridgeReaderAt{
+		rdr:   tr.r,
+		ctx:   ctx,
+		stats: stats,
+	}, int64(0), int64(totalDataSize))
+	bufReader := bufio.NewReader(dataReader)
 
-	dataBlock := make([]byte, bufferSize)
+	chunkIndex := 0
+	buf := make([]byte, 4*1024*1024)
 
 	for chunkIndex < len(chunkRecs) {
-		// Calculate how much data to read
-		remainingData := totalDataSize - currentOffset
-		readSize := bufferSize
-		if remainingData < bufferSize {
-			readSize = int(remainingData)
-			dataBlock = dataBlock[:readSize]
+		if ctx.Err() != nil {
+			return context.Cause(ctx)
 		}
 
-		_, err := tr.r.ReadAtWithStats(ctx, dataBlock, int64(currentOffset), stats)
+		chunk := chunkRecs[chunkIndex]
+		_, err := io.ReadFull(bufReader, buf[:chunk.length])
+		chunkData := buf[:chunk.length]
+
+		cchk, err := NewCompressedChunk(chunk.hash, chunkData)
+		if err != nil {
+			return err
+		}
+		chk, err := cchk.ToChunk()
 		if err != nil {
 			return err
 		}
 
-		blockStart := currentOffset
-		blockEnd := currentOffset + uint64(readSize)
+		// Process the chunk
+		cb(chk)
 
-		// Process the chunks in the current block
-		for chunkIndex < len(chunkRecs) {
-			if ctx.Err() != nil {
-				return ctx.Err()
-			}
-
-			chunk := chunkRecs[chunkIndex]
-			chunkEnd := chunk.offset + uint64(chunk.length)
-			currentOffset = blockEnd
-
-			// Check if chunk extends beyond current block
-			if chunkEnd > blockEnd {
-				// This chunk extends beyond current block, read next block starting here
-				currentOffset = chunk.offset
-				break
-			}
-
-			bufferOffset := chunk.offset - blockStart
-			cchk, err := NewCompressedChunk(chunk.hash, dataBlock[bufferOffset:bufferOffset+uint64(chunk.length)])
-			if err != nil {
-				return err
-			}
-			chk, err := cchk.ToChunk()
-			if err != nil {
-				return err
-			}
-
-			// Process the chunk
-			cb(chk)
-
-			chunkIndex++
-		}
+		chunkIndex++
 	}
 
 	return nil
