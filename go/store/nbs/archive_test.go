@@ -795,12 +795,10 @@ func TestArchiveConjoinAll(t *testing.T) {
 
 	// Test conjoinAll method
 	readers := []archiveReader{archiveReader1, archiveReader2}
-	combinedReader, err := awCombined.conjoinAll(readers)
+	combinedReader, err := awCombined.conjoinAll(context.Background(), readers)
 
-	// Since conjoinAll is not implemented yet, we expect a specific error
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "conjoinAll not yet implemented")
-	assert.Equal(t, archiveReader{}, combinedReader)
+	// conjoinAll should succeed
+	assert.NoError(t, err)
 
 	// Verify combined reader contains all chunks
 	assert.True(t, combinedReader.has(hashes1[0]))
@@ -1001,7 +999,9 @@ func createTestArchive(t *testing.T, prefix uint64, chunks [][]byte, metadata st
 	// Write chunks and stage them
 	var hashes []hash.Hash
 	for _, chunkData := range chunks {
-		bsId, err := aw.writeByteSpan(chunkData)
+		// Compress the chunk data using the default dictionary
+		compressedData := gozstd.CompressDict(nil, chunkData, defaultCDict)
+		bsId, err := aw.writeByteSpan(compressedData)
 		assert.NoError(t, err)
 
 		chunkHash := hashWithPrefix(t, prefix)
