@@ -16,11 +16,11 @@ package index
 
 import (
 	"context"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
+	"io"
 )
 
 // SecondaryLookupIterGen is responsible for creating secondary
@@ -39,8 +39,11 @@ type strictLookupIter struct {
 }
 
 func (i *strictLookupIter) Next(_ context.Context) (k, v val.Tuple, err error) {
-	k, v = i.k, i.v
+	k, v = i.k, i.v // TODO: when are these even updated?
 	i.k, i.v = nil, nil
+	if k == nil && v == nil {
+		return nil, nil, io.EOF
+	}
 	return k, v, nil
 }
 
