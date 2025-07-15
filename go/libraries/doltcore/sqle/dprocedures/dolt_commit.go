@@ -73,7 +73,7 @@ func doDoltCommit(ctx *sql.Context, args []string) (string, bool, error) {
 	if err != nil {
 		return "", false, err
 	}
-	
+
 	targetBranch, branchSpecified := apr.GetValue(cli.BranchParam)
 	if branchSpecified {
 		// Use revision-qualified database name for the target branch. This will enable you to commit
