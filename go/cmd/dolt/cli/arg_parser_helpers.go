@@ -137,11 +137,14 @@ func CreatePushArgParser() *argparser.ArgParser {
 	return ap
 }
 
-func CreateAddArgParser() *argparser.ArgParser {
+func CreateAddArgParser(supportsBranchFlag bool) *argparser.ArgParser {
 	ap := argparser.NewArgParserWithVariableArgs("add")
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "Working table(s) to add to the list tables staged to be committed. The abbreviation '.' can be used to add all tables."})
 	ap.SupportsFlag(AllFlag, "A", "Stages any and all changes (adds, deletes, and modifications) except for ignored tables.")
 	ap.SupportsFlag(ForceFlag, "f", "Allow adding otherwise ignored tables.")
+	if supportsBranchFlag {
+		ap.SupportsString(BranchParam, "", "branch", "Add to the specified branch instead of the current branch.")
+	}
 
 	return ap
 }
