@@ -784,6 +784,8 @@ func TestArchiveConjoinAll(t *testing.T) {
 	chunks2 := [][]byte{
 		{30, 31, 32, 33, 34, 35, 36, 37, 38, 39},
 		{40, 41, 42, 43, 44, 45, 46, 47, 48, 49},
+		{50, 51, 52, 53, 54, 55, 56, 57, 58, 59},
+		{60, 61, 62, 63, 64, 65, 66, 67, 68, 69},
 	}
 	archiveReader2, hashes2 := createTestArchive(t, 84, chunks2, "archive2")
 
@@ -803,30 +805,20 @@ func TestArchiveConjoinAll(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Verify combined reader contains all chunks
-	assert.True(t, combinedReader.has(hashes1[0]))
-	assert.True(t, combinedReader.has(hashes1[1]))
-	assert.True(t, combinedReader.has(hashes2[0]))
-	assert.True(t, combinedReader.has(hashes2[1]))
-
-	// Verify data integrity
 	ctx := context.Background()
 	stats := &Stats{}
-
-	data, err := combinedReader.get(ctx, hashes1[0], stats)
-	assert.NoError(t, err)
-	assert.Equal(t, chunks1[0], data)
-
-	data, err = combinedReader.get(ctx, hashes1[1], stats)
-	assert.NoError(t, err)
-	assert.Equal(t, chunks1[1], data)
-
-	data, err = combinedReader.get(ctx, hashes2[0], stats)
-	assert.NoError(t, err)
-	assert.Equal(t, chunks2[0], data)
-
-	data, err = combinedReader.get(ctx, hashes2[1], stats)
-	assert.NoError(t, err)
-	assert.Equal(t, chunks2[1], data)
+	for i, h := range hashes1 {
+		assert.True(t, combinedReader.has(h))
+		data, err := combinedReader.get(ctx, h, stats)
+		assert.NoError(t, err)
+		assert.Equal(t, chunks1[i], data)
+	}
+	for i, h := range hashes2 {
+		assert.True(t, combinedReader.has(h))
+		data, err := combinedReader.get(ctx, h, stats)
+		assert.NoError(t, err)
+		assert.Equal(t, chunks2[i], data)
+	}
 }
 
 func assertFloatBetween(t *testing.T, actual, min, max float64) {
