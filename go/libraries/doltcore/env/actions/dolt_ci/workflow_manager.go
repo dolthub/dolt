@@ -581,7 +581,12 @@ func (d *doltWorkflowManager) commitRemoveWorkflow(ctx *sql.Context, tableNames 
 }
 
 func (d *doltWorkflowManager) sqlWriteQuery(ctx *sql.Context, query string) error {
-	return sqlWriteQuery(ctx, d.queryFunc, query)
+	_, rowIter, _, err := d.queryFunc(ctx, query)
+	if err != nil {
+		return err
+	}
+	_, err = sql.RowIterToRows(ctx, rowIter)
+	return err
 }
 
 func (d *doltWorkflowManager) sqlReadQuery(ctx *sql.Context, query string, cb func(ctx *sql.Context, cvs columnValues) error) error {

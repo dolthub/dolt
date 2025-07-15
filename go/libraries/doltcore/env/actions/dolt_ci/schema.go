@@ -103,15 +103,6 @@ func HasDoltCITables(queryist cli.Queryist, sqlCtx *sql.Context) (bool, error) {
 	return true, nil
 }
 
-func sqlWriteQuery(sqlCtx *sql.Context, queryFunc queryFunc, query string) error {
-	_, rowIter, _, err := queryFunc(sqlCtx, query)
-	if err != nil {
-		return err
-	}
-	_, err = sql.RowIterToRows(sqlCtx, rowIter)
-	return err
-}
-
 func commitCIDestroy(queryist cli.Queryist, sqlCtx *sql.Context, tableNames []doltdb.TableName, name, email string) error {
 	// stage table in reverse order so child tables
 	// are staged before parent tables
