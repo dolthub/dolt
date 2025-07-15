@@ -39,6 +39,7 @@ import (
 )
 
 type server struct {
+	grpc_health_v1.UnimplementedHealthServer
 	md metadata.MD
 }
 
