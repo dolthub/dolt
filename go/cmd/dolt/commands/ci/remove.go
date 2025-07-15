@@ -69,14 +69,10 @@ func (cmd RemoveCmd) ArgParser() *argparser.ArgParser {
 }
 
 // Exec implements cli.Command.
-func (cmd RemoveCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
+func (cmd RemoveCmd) Exec(ctx context.Context, commandStr string, args []string, _ *env.DoltEnv, cliCtx cli.CliContext) int {
 	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, removeDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
-	if !cli.CheckEnvIsValid(dEnv) {
-		return 1
-	}
-
 	var verr errhand.VerboseError
 	verr = validateRemoveArgs(apr)
 	if verr != nil {
@@ -93,28 +89,21 @@ func (cmd RemoveCmd) Exec(ctx context.Context, commandStr string, args []string,
 		defer closeFunc()
 	}
 
-	user, email, err := env.GetNameAndEmail(dEnv.Config)
+	hasTables, err := dolt_ci.HasDoltCITables(queryist, sqlCtx)
 	if err != nil {
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
-
-	hasTables, err := dolt_ci.HasDoltCITables(sqlCtx)
-	if err != nil {
-		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-	}
-
 	if !hasTables {
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(fmt.Errorf("dolt ci has not been initialized, please initialize with: dolt ci init")), usage)
 	}
 
-	wm := dolt_ci.NewWorkflowManager(user, email, queryist.Query)
-
-	db, err := newDatabase(sqlCtx, sqlCtx.GetCurrentDatabase(), dEnv, false)
+	user, email, err := env.GetNameAndEmail(cliCtx.Config())
 	if err != nil {
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
+	wm := dolt_ci.NewWorkflowManager(user, email, queryist.Query)
 
-	err = wm.RemoveWorkflow(sqlCtx, db, workflowName)
+	err = wm.RemoveWorkflow(sqlCtx, workflowName)
 	if err != nil {
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}

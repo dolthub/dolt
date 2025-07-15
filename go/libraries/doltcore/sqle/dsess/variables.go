@@ -54,6 +54,7 @@ const (
 	ShowBranchDatabases                  = "dolt_show_branch_databases"
 	DoltLogLevel                         = "dolt_log_level"
 	ShowSystemTables                     = "dolt_show_system_tables"
+	AllowCICreation                      = "dolt_allow_ci_creation"
 
 	DoltClusterRoleVariable         = "dolt_cluster_role"
 	DoltClusterRoleEpochVariable    = "dolt_cluster_role_epoch"

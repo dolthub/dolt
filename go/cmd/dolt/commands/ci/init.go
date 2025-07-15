@@ -23,8 +23,6 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions/dolt_ci"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 )
 
@@ -69,14 +67,10 @@ func (cmd InitCmd) ArgParser() *argparser.ArgParser {
 }
 
 // Exec implements cli.Command.
-func (cmd InitCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
+func (cmd InitCmd) Exec(ctx context.Context, commandStr string, args []string, _ *env.DoltEnv, cliCtx cli.CliContext) int {
 	ap := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, initDocs, ap))
 	cli.ParseArgsOrDie(ap, args, help)
-
-	if !cli.CheckEnvIsValid(dEnv) {
-		return 1
-	}
 
 	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
@@ -86,46 +80,19 @@ func (cmd InitCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		defer closeFunc()
 	}
 
-	db, err := newDatabase(sqlCtx, sqlCtx.GetCurrentDatabase(), dEnv, false)
+	hasTables, err := dolt_ci.HasDoltCITables(queryist, sqlCtx)
 	if err != nil {
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
-
-	name, email, err := env.GetNameAndEmail(dEnv.Config)
-	if err != nil {
-		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-	}
-
-	hasTables, err := dolt_ci.HasDoltCITables(sqlCtx)
-	if err != nil {
-		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-	}
-
 	if hasTables {
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(fmt.Errorf("dolt ci has already been initialized")), usage)
 	}
 
-	var verr errhand.VerboseError
-	err = dolt_ci.CreateDoltCITables(sqlCtx, db, queryist.Query, name, email)
+	name, email, err := env.GetNameAndEmail(cliCtx.Config())
 	if err != nil {
-		verr = errhand.VerboseErrorFromError(err)
+		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	return commands.HandleVErrAndExitCode(verr, usage)
-}
-
-func newDatabase(ctx context.Context, name string, dEnv *env.DoltEnv, useBulkEditor bool) (sqle.Database, error) {
-	deaf := dEnv.DbEaFactory(ctx)
-	if useBulkEditor {
-		deaf = dEnv.BulkDbEaFactory(ctx)
-	}
-	tmpDir, err := dEnv.TempTableFilesDir()
-	if err != nil {
-		return sqle.Database{}, err
-	}
-	opts := editor.Options{
-		Deaf:    deaf,
-		Tempdir: tmpDir,
-	}
-	return sqle.NewDatabase(ctx, name, dEnv.DbData(ctx), opts)
+	err = dolt_ci.CreateDoltCITables(queryist, sqlCtx, name, email)
+	return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 }
