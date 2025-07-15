@@ -15,8 +15,8 @@
 package dtables
 
 import (
-	"io"
 	"errors"
+	"io"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
