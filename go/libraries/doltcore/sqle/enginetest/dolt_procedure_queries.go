@@ -463,10 +463,12 @@ END
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query: "call dolt_commit('--branch', 'br1', '-a', '-m', 'commit on br1 from main');",
-				Expected: []sql.Row{
-					{gmstypes.OkResult{}},
-				},
+				Query:          "call dolt_commit('--branch', 'nonexistent', '-a', '-m', 'commit to nonexistent branch');",
+				ExpectedErrStr: "Could not load database mydb/nonexistent",
+			},
+			{
+				Query:       "call dolt_commit('--branch', 'br1', '-a', '-m', 'commit on br1 from main');",
+				ExpectedErr: nil,
 			},
 			{
 				// verify commit didn't change our current branch.
