@@ -46,11 +46,9 @@ var _ sql.AuthorizationCheckerNode = (*LogTableFunction)(nil)
 type LogTableFunction struct {
 	ctx *sql.Context
 
-	revisionExprs    []sql.Expression
-	notRevisionExprs []sql.Expression
-	revisionStrs     []string
-	notRevisionStrs  []string
-	tableNames       []string
+	revisionStrs    []string
+	notRevisionStrs []string
+	tableNames      []string
 
 	minParents    int
 	showParents   bool
@@ -119,7 +117,9 @@ func (ltf *LogTableFunction) Name() string {
 
 // Resolved implements the sql.Resolvable interface
 func (ltf *LogTableFunction) Resolved() bool {
-	for _, expr := range ltf.revisionExprs {
+	// In the new string-based approach, we're resolved when we have argument expressions
+	// (which get resolved during normal SQL analysis) or when we have parsed strings
+	for _, expr := range ltf.argumentExprs {
 		if !expr.Resolved() {
 			return false
 		}
@@ -139,12 +139,12 @@ func (ltf *LogTableFunction) String() string {
 func (ltf *LogTableFunction) getOptionsString() string {
 	var options []string
 
-	for _, expr := range ltf.revisionExprs {
-		options = append(options, expr.String())
+	for _, revStr := range ltf.revisionStrs {
+		options = append(options, revStr)
 	}
 
-	for _, expr := range ltf.notRevisionStrs {
-		options = append(options, fmt.Sprintf("^%s", expr))
+	for _, notRevStr := range ltf.notRevisionStrs {
+		options = append(options, fmt.Sprintf("^%s", notRevStr))
 	}
 
 	if ltf.minParents > 0 {
@@ -218,7 +218,7 @@ func (ltf *LogTableFunction) CheckAuth(ctx *sql.Context, opChecker sql.Privilege
 
 // Expressions implements the sql.Expressioner interface.
 func (ltf *LogTableFunction) Expressions() []sql.Expression {
-	// Always return the original argument expressions from deferred parsing
+	// always return the original argument expressions from deferred parsing
 	return ltf.argumentExprs
 }
 
@@ -297,14 +297,13 @@ func (ltf *LogTableFunction) addOptions(expression []sql.Expression) error {
 		}
 	}
 
-	return nil
+	// validate revision specifications for semantic errors
+	return ltf.validateRevisionStrings()
 }
 
 func (ltf *LogTableFunction) WithExpressions(exprs ...sql.Expression) (sql.Node, error) {
 	newLtf := *ltf
 	newLtf.argumentExprs = exprs
-	newLtf.revisionExprs = nil
-	newLtf.notRevisionExprs = nil
 	newLtf.revisionStrs = nil
 	newLtf.notRevisionStrs = nil
 
@@ -335,36 +334,16 @@ func (ltf *LogTableFunction) evalArguments(expressions ...sql.Expression) (sql.N
 	return &newLtf, nil
 }
 
-func (ltf *LogTableFunction) validateRevisionExpressions() error {
-	// We must convert the expressions to strings before making string comparisons
-	// For dolt_log('^main'), ltf.revisionExpr.String() = "'^main'"" and revisionStr = "^main"
+func (ltf *LogTableFunction) validateRevisionStrings() error {
+	// validate revision specifications for semantic errors
+	// this works with the parsed string values from CLI parser
 
-	revisionStrs, err := expressionsToString(ltf.ctx, ltf.revisionExprs)
-	if err != nil {
-		return err
-	}
-	notRevisionStrs, err := expressionsToString(ltf.ctx, ltf.notRevisionExprs)
-	if err != nil {
-		return err
-	}
-
-	for i, revisionStr := range revisionStrs {
-		if !types.IsText(ltf.revisionExprs[i].Type()) {
-			return ltf.invalidArgDetailsErr(ltf.revisionExprs[i].String())
-		}
-		if strings.Contains(revisionStr, "..") && (len(revisionStrs) > 1 || ltf.notRevisionExprs != nil || ltf.notRevisionStrs != nil) {
+	for _, revisionStr := range ltf.revisionStrs {
+		if strings.Contains(revisionStr, "..") && (len(ltf.revisionStrs) > 1 || len(ltf.notRevisionStrs) > 0) {
 			return ltf.invalidArgDetailsErr("revision cannot contain '..' or '...' if multiple revisions exist")
 		}
 	}
 
-	for i, notRevisionStr := range notRevisionStrs {
-		if !types.IsText(ltf.notRevisionExprs[i].Type()) {
-			return ltf.invalidArgDetailsErr(ltf.notRevisionExprs[i].String())
-		}
-		if strings.Contains(notRevisionStr, "..") {
-			return ltf.invalidArgDetailsErr("revision cannot contain both '..' or '...' and '^'")
-		}
-	}
 	for _, notRevStr := range ltf.notRevisionStrs {
 		if strings.Contains(notRevStr, "..") {
 			return ltf.invalidArgDetailsErr("--not revision cannot contain '..'")
@@ -415,7 +394,9 @@ func (ltf *LogTableFunction) invalidArgDetailsErr(reason string) *errors.Error {
 func (ltf *LogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter, error) {
 	// Parse args if they were deferred from the analysis phase
 	if ltf.argumentExprs != nil {
-
+		if err := ltf.addOptions(ltf.argumentExprs); err != nil {
+			return nil, err
+		}
 	}
 
 	revisionValStrs, notRevisionValStrs, threeDot, err := ltf.evaluateArguments()
@@ -532,40 +513,33 @@ func (ltf *LogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter
 	return ltf.NewDotDotLogTableFunctionRowIter(ctx, sqledb.DbData().Ddb, commits, notCommits, matchFunc, cHashToRefs, ltf.tableNames)
 }
 
+// parseRevisionRange processes a revision string for range syntax (.., ...)
+// Returns (revisions, notRevisions, threeDot, isRange)
+func parseRevisionRange(revisionStr string) ([]string, []string, bool, bool) {
+	if strings.Contains(revisionStr, "..") {
+		if strings.Contains(revisionStr, "...") {
+			refs := strings.Split(revisionStr, "...")
+			return refs, nil, true, true
+		}
+		refs := strings.Split(revisionStr, "..")
+		return []string{refs[1]}, []string{refs[0]}, false, true
+	}
+	return nil, nil, false, false
+}
+
 // evaluateArguments returns revisionValStrs, notRevisionValStrs, and three dot boolean.
-// It evaluates the argument expressions to turn them into values this LogTableFunction
-// can use. Note that this method only evals the expressions, and doesn't validate the values.
+// It processes the stored revision strings from the CLI parser and handles range syntax.
 func (ltf *LogTableFunction) evaluateArguments() (revisionValStrs []string, notRevisionValStrs []string, threeDot bool, err error) {
-	for _, expr := range ltf.revisionExprs {
-		valStr, err := expressionToString(ltf.ctx, expr)
-		if err != nil {
-			return nil, nil, false, err
+	// Process stored revision strings (from CLI parser)
+	for _, revisionStr := range ltf.revisionStrs {
+		if revs, notRevs, isThreeDot, isRange := parseRevisionRange(revisionStr); isRange {
+			return revs, notRevs, isThreeDot, nil
 		}
-
-		if strings.Contains(valStr, "..") {
-			if strings.Contains(valStr, "...") {
-				refs := strings.Split(valStr, "...")
-				return refs, nil, true, nil
-			}
-			refs := strings.Split(valStr, "..")
-			return []string{refs[1]}, []string{refs[0]}, false, nil
-		}
-
-		revisionValStrs = append(revisionValStrs, valStr)
+		revisionValStrs = append(revisionValStrs, revisionStr)
 	}
 
-	for _, notExpr := range ltf.notRevisionExprs {
-		notValStr, err := expressionToString(ltf.ctx, notExpr)
-		if err != nil {
-			return nil, nil, false, err
-		}
-
-		if strings.HasPrefix(notValStr, "^") {
-			notValStr = strings.TrimPrefix(notValStr, "^")
-		}
-
-		notRevisionValStrs = append(notRevisionValStrs, notValStr)
-	}
+	// Process stored not-revision strings
+	notRevisionValStrs = append(notRevisionValStrs, ltf.notRevisionStrs...)
 
 	return revisionValStrs, notRevisionValStrs, false, nil
 }

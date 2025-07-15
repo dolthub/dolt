@@ -86,17 +86,29 @@ func TestDoltLogExpressionsInterface(t *testing.T) {
 	assert.Equal(t, "'HEAD~1'", newLtf.argumentExprs[2].String())
 }
 
-func TestDoltLogValidateRevisionExpressions(t *testing.T) {
+func TestDoltLogValidateRevisionStrings(t *testing.T) {
 	ctx := sql.NewEmptyContext()
 
-	// Test that validation works with literals
+	// Test that validation works with parsed strings
 	ltf := &LogTableFunction{
 		ctx: ctx,
-		revisionExprs: []sql.Expression{
-			expression.NewLiteral("HEAD", types.Text),
-		},
+		revisionStrs: []string{"HEAD"},
 	}
 
-	err := ltf.validateRevisionExpressions()
-	assert.NoError(t, err) // Should validate normally
+	// Should validate normally
+	err := ltf.validateRevisionStrings()
+	assert.NoError(t, err)
+
+	// Test range syntax conflict detection
+	ltf.revisionStrs = []string{"HEAD..main", "other"}
+	err = ltf.validateRevisionStrings()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "revision cannot contain '..' or '...' if multiple revisions exist")
+
+	// Test --not revision validation
+	ltf.revisionStrs = []string{"HEAD"}
+	ltf.notRevisionStrs = []string{"main..other"}
+	err = ltf.validateRevisionStrings()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "--not revision cannot contain '..'")
 }
