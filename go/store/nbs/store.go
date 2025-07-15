@@ -2317,3 +2317,90 @@ func CalcReads(nbs *NomsBlockStore, hashes hash.HashSet, blockSize uint64, keepe
 
 	return reads, split, gcb, err
 }
+
+// ConjoinTableFiles conjoins the specified table files into a single new table file.
+// The storageIds slice contains the hash IDs of the table files to conjoin. If the slice is empty, then all
+// files in oldgen are conjoined together.
+// Returns the hash of the newly created conjoined table file.
+func (nbs *NomsBlockStore) ConjoinTableFiles(ctx context.Context, storageIds []hash.Hash) (hash.Hash, error) {
+	nbs.mu.RLock()
+	defer nbs.mu.RUnlock()
+
+	// If no storageIds provided, collect all table files from the current table set
+	if len(storageIds) == 0 {
+		for _, tf := range nbs.tables.upstream {
+			storageIds = append(storageIds, tf.hash())
+		}
+
+		if len(storageIds) == 0 {
+			return hash.Hash{}, errors.New("no table files to conjoin")
+		}
+	} else {
+		// Validate user input
+		for _, storageId := range storageIds {
+			_, found := nbs.findTableSpec(storageId)
+			if !found {
+				return hash.Hash{}, errors.New("storage file not found: " + storageId.String())
+			}
+		}
+	}
+
+	// record the original manifest for comparison below.
+	originalUpstream := nbs.upstream
+
+	strategy := &specificFilesConjoiner{targetStorageIds: storageIds}
+	newUpstream, finalCleanup, err := conjoin(ctx, strategy, nbs.upstream, nbs.manifestMgr, nbs.persister, nbs.stats)
+	if err != nil {
+		return hash.Hash{}, err
+	}
+
+	// Update the in-memory state
+	nbs.upstream = newUpstream
+	newTables, err := nbs.tables.rebase(ctx, newUpstream.specs, nil, nbs.stats)
+	if err != nil {
+		return hash.Hash{}, err
+	}
+	nbs.tables = newTables
+
+	// Cleanup of original files. This is destructive, so we only do it when the rebase doesn't error.
+	// Also note that nothing below here actually makes any changes to the db, so we can do the cleanup now.
+	finalCleanup()
+
+	// Find the new conjoined table file hash from the updated manifest
+	// Since we removed the old files and added one new file, we need to find which one is new
+	// Create a set of original spec names for comparison
+	originalSpecSet := make(map[hash.Hash]bool)
+	for _, spec := range originalUpstream.specs {
+		originalSpecSet[spec.name] = true
+	}
+
+	var conjoinedHash hash.Hash
+	for _, spec := range newUpstream.specs {
+		if !originalSpecSet[spec.name] {
+			conjoinedHash = spec.name
+			break
+		}
+	}
+
+	return conjoinedHash, nil
+}
+
+// findTableSpec finds a table spec by hash in the current manifest. This will ignore novel tables, as it's not
+// needed currently.
+func (nbs *NomsBlockStore) findTableSpec(storageId hash.Hash) (tableSpec, bool) {
+	for _, spec := range nbs.upstream.specs {
+		if spec.name == storageId {
+			return spec, true
+		}
+	}
+	for _, tf := range nbs.tables.upstream {
+		if tf.hash() == storageId {
+			count, err := tf.count()
+			if err != nil {
+				return tableSpec{name: storageId, chunkCount: 0}, false
+			}
+			return tableSpec{name: storageId, chunkCount: count}, true
+		}
+	}
+	return tableSpec{name: storageId, chunkCount: 0}, false
+}
