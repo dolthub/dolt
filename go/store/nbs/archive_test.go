@@ -821,6 +821,58 @@ func TestArchiveConjoinAll(t *testing.T) {
 	}
 }
 
+func TestArchiveConjoinAllDuplicateChunk(t *testing.T) {
+	// Create shared chunk data that will be present in both archives
+	sharedChunk := []byte{100, 101, 102, 103, 104, 105, 106, 107, 108, 109}
+	sharedChunkHash := hash.Of(sharedChunk)
+
+	// Create first archive with unique chunk + shared chunk
+	chunks1 := [][]byte{
+		{10, 11, 12, 13, 14, 15, 16, 17, 18, 19},
+		sharedChunk,
+	}
+	archiveReader1, hashes1 := createArchiveWithDuplicates(t, chunks1, map[int]hash.Hash{1: sharedChunkHash}, 42, "archive1")
+
+	// Create second archive with shared chunk + unique chunks
+	chunks2 := [][]byte{
+		sharedChunk,
+		{30, 31, 32, 33, 34, 35, 36, 37, 38, 39},
+		{40, 41, 42, 43, 44, 45, 46, 47, 48, 49},
+	}
+	archiveReader2, hashes2 := createArchiveWithDuplicates(t, chunks2, map[int]hash.Hash{0: sharedChunkHash}, 84, "archive2")
+
+	writerCombined := NewFixedBufferByteSink(make([]byte, 8192))
+	awCombined := newArchiveWriterWithSink(writerCombined)
+
+	readers := []archiveReader{archiveReader1, archiveReader2}
+	err := awCombined.conjoinAll(context.Background(), readers)
+	assert.NoError(t, err)
+
+	theBytes := writerCombined.buff[:writerCombined.pos]
+	fileSize := uint64(len(theBytes))
+	readerAt := bytes.NewReader(theBytes)
+	tra := tableReaderAtAdapter{readerAt}
+
+	combinedReader, err := newArchiveReader(context.Background(), tra, fileSize, &Stats{})
+	assert.NoError(t, err)
+
+	// Verify combined reader contains all chunks (duplicates should be deduplicated)
+	ctx := context.Background()
+	stats := &Stats{}
+	for i, h := range hashes1 {
+		assert.True(t, combinedReader.has(h))
+		data, err := combinedReader.get(ctx, h, stats)
+		assert.NoError(t, err)
+		assert.Equal(t, chunks1[i], data)
+	}
+	for i, h := range hashes2 {
+		assert.True(t, combinedReader.has(h))
+		data, err := combinedReader.get(ctx, h, stats)
+		assert.NoError(t, err)
+		assert.Equal(t, chunks2[i], data)
+	}
+}
+
 func assertFloatBetween(t *testing.T, actual, min, max float64) {
 	if actual < min || actual > max {
 		t.Errorf("Expected %f to be between %f and %f", actual, min, max)
@@ -1024,4 +1076,60 @@ func createTestArchive(t *testing.T, prefix uint64, chunks [][]byte, metadata st
 	assert.NoError(t, err)
 
 	return archiveReader, hashes
+}
+
+// createTestArchiveWithHashes creates a test archive with specific hashes for each chunk
+func createTestArchiveWithHashes(t *testing.T, chunks [][]byte, hashes []hash.Hash, metadata string) (archiveReader, []hash.Hash) {
+	require.Equal(t, len(chunks), len(hashes), "chunks and hashes must have same length")
+
+	writer := NewFixedBufferByteSink(make([]byte, 4096))
+	aw := newArchiveWriterWithSink(writer)
+
+	// Write dictionary
+	dId, err := aw.writeByteSpan(defaultDict)
+	assert.NoError(t, err)
+
+	// Write chunks and stage them
+	for i, chunkData := range chunks {
+		// Compress the chunk data using the default dictionary
+		compressedData := gozstd.CompressDict(nil, chunkData, defaultCDict)
+		bsId, err := aw.writeByteSpan(compressedData)
+		assert.NoError(t, err)
+
+		err = aw.stageZStdChunk(hashes[i], dId, bsId)
+		assert.NoError(t, err)
+	}
+
+	// Finalize archive
+	err = aw.finalizeByteSpans()
+	assert.NoError(t, err)
+	err = aw.writeIndex()
+	assert.NoError(t, err)
+	err = aw.writeMetadata([]byte(metadata))
+	assert.NoError(t, err)
+	err = aw.writeFooter()
+	assert.NoError(t, err)
+
+	// Create reader
+	theBytes := writer.buff[:writer.pos]
+	fileSize := uint64(len(theBytes))
+	readerAt := bytes.NewReader(theBytes)
+	tra := tableReaderAtAdapter{readerAt}
+	archiveReader, err := newArchiveReader(context.Background(), tra, fileSize, &Stats{})
+	assert.NoError(t, err)
+	return archiveReader, hashes
+}
+
+// createArchiveWithDuplicates creates an archive where some chunks use predefined hashes (for duplicates)
+// and others use random hashes with the given prefix
+func createArchiveWithDuplicates(t *testing.T, chunks [][]byte, duplicateHashes map[int]hash.Hash, prefix uint64, metadata string) (archiveReader, []hash.Hash) {
+	var hashes []hash.Hash
+	for i := range chunks {
+		if duplicateHash, exists := duplicateHashes[i]; exists {
+			hashes = append(hashes, duplicateHash)
+		} else {
+			hashes = append(hashes, hashWithPrefix(t, prefix))
+		}
+	}
+	return createTestArchiveWithHashes(t, chunks, hashes, metadata)
 }
