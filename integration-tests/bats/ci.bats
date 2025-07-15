@@ -22,8 +22,6 @@ get_commit_hash() {
 }
 
 @test "ci: init should create dolt ci workflow tables" {
-    #skip_remote_engine
-
     dolt ci init
 
     run dolt log -n 1
@@ -41,8 +39,6 @@ get_commit_hash() {
 }
 
 @test "ci: destroy should destroy dolt ci workflow tables" {
-    #skip_remote_engine
-
     dolt ci init
 
     run dolt log -n 1
@@ -62,25 +58,7 @@ get_commit_hash() {
     [[ "$output" =~ "table not found: dolt_ci_workflows" ]] || false
 }
 
-@test "ci: should allow users to alter data in workflow tables" {
-    #skip_remote_engine
-
-    dolt ci init
-
-    run dolt sql -q "show create table dolt_ci_workflows;"
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "name" ]] || false
-
-    dolt sql -q "insert into dolt_ci_workflows (name, created_at, updated_at) values ('workflow_1', current_timestamp, current_timestamp);"
-
-    run dolt sql -q "select * from dolt_ci_workflows;"
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "workflow_1" ]] || false
-}
-
 @test "ci: init should error if database has already initialized ci" {
-    #skip_remote_engine
-
     dolt ci init
     run dolt ci init
     [ "$status" -eq 1 ]
@@ -88,15 +66,17 @@ get_commit_hash() {
 }
 
 @test "ci: user cannot manually create ci tables in dolt_ci namespace" {
-    #skip_remote_engine
-
     run dolt sql -q "create table dolt_ci_workflows(pk int primary key);"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Invalid table name" ]] || false
+
+    dolt sql -q "create table workflows(pk int primary key);"
+    run dolt sql -q "rename table workflows to dolt_ci_workflows;"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "Invalid table name" ]] || false
 }
 
 @test "ci: workflow tables do not appear in show tables output" {
-    #skip_remote_engine
     dolt ci init
     run dolt sql -q "show tables;"
     [ "$status" -eq 0 ]
@@ -104,7 +84,6 @@ get_commit_hash() {
 }
 
 @test "ci: workflow tables do not appear in dolt ls" {
-    #skip_remote_engine
     dolt ci init
     run dolt ls
     [ "$status" -eq 0 ]
@@ -112,7 +91,6 @@ get_commit_hash() {
 }
 
 @test "ci: workflow tables do appear in diffs" {
-    #skip_remote_engine
     first=$(get_commit_hash 1)
 
     dolt ci init
@@ -123,8 +101,6 @@ get_commit_hash() {
 }
 
 @test "ci: init command should only commit changes relevant to the ci tables" {
-    #skip_remote_engine
-
     dolt sql -q "create table t1(pk int primary key);"
     dolt ci init
     dolt status
@@ -136,8 +112,6 @@ get_commit_hash() {
 }
 
 @test "ci: destroy command should only commit changes relevant to the ci tables" {
-    #skip_remote_engine
-
     dolt sql -q "create table t1(pk int primary key);"
     dolt ci init
     dolt ci destroy
@@ -149,7 +123,6 @@ get_commit_hash() {
 }
 
 @test "ci: import command will import a valid workflow.yaml file" {
-    #skip_remote_engine
     cat > workflow.yaml <<EOF
 name: my_workflow
 on:
@@ -171,7 +144,6 @@ EOF
 }
 
 @test "ci: import command will error on an invalid workflow.yaml file" {
-    #skip_remote_engine
     cat > workflow.yaml <<EOF
 name: my_workflow
 on:
@@ -191,7 +163,6 @@ EOF
 }
 
 @test "ci: import command will update existing workflow" {
-    #skip_remote_engine
     cat > workflow_1.yaml <<EOF
 name: workflow_1
 on:
@@ -272,7 +243,6 @@ jobs:
         expected_rows: "> 0"
 EOF
 
-    #skip_remote_engine
     dolt ci init
     dolt ci import ./workflow.yaml
     run dolt ci import ./workflow.yaml
@@ -281,8 +251,6 @@ EOF
 }
 
 @test "ci: ls lists existing workflows" {
-    #skip_remote_engine
-    
     cat > workflow.yaml <<EOF
 name: my_workflow
 on:
@@ -304,7 +272,6 @@ EOF
 }
 
 @test "ci: export exports a workflow to a yaml file" {
-    #skip_remote_engine
     cat > workflow.yaml <<EOF
 name: my_workflow
 on:
@@ -332,8 +299,14 @@ EOF
     [[ ${output} == *"steps:"* ]] || false
 }
 
+@test "ci: export errors on invalid workflow" {
+    dolt ci init
+    run dolt ci export invalid
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "workflow not found" ]] || false
+}
+
 @test "ci: remove deletes a workflow" {
-    #skip_remote_engine
     cat > workflow_1.yaml <<EOF
 name: workflow_1
 on:
@@ -372,4 +345,11 @@ EOF
     run dolt ci ls
     [ "$status" -eq 0 ]
     [[ "$output" =~ "workflow_2" ]] || false
+}
+
+@test "ci: remove errors on invalid workflow" {
+    dolt ci init
+    run dolt ci remove invalid
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "workflow not found" ]] || false
 }

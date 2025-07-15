@@ -1926,13 +1926,10 @@ func (d *doltWorkflowManager) storeFromConfig(ctx *sql.Context, config *Workflow
 }
 
 func (d *doltWorkflowManager) GetWorkflowConfig(ctx *sql.Context, workflowName string) (*WorkflowConfig, error) {
-	//TODO CHECK PERMISSIONS MAYBE, PERHAPS
 	return d.getWorkflowConfig(ctx, workflowName)
 }
 
 func (d *doltWorkflowManager) ListWorkflows(ctx *sql.Context) ([]string, error) {
-	//TODO CHECK PERMISSIONS
-
 	names := make([]string, 0)
 	workflows, err := d.listWorkflows(ctx)
 	if err != nil {
@@ -1948,7 +1945,6 @@ func (d *doltWorkflowManager) ListWorkflows(ctx *sql.Context) ([]string, error) 
 }
 
 func (d *doltWorkflowManager) RemoveWorkflow(ctx *sql.Context, workflowName string) error {
-	//TODO CHECK PERMS
 	_, err := d.getWorkflow(ctx, workflowName)
 	if err != nil {
 		return err
@@ -1962,8 +1958,6 @@ func (d *doltWorkflowManager) RemoveWorkflow(ctx *sql.Context, workflowName stri
 }
 
 func (d *doltWorkflowManager) StoreAndCommit(ctx *sql.Context, config *WorkflowConfig) error {
-	//TODO CHECK PERMISSIONS?
-
 	err := d.storeFromConfig(ctx, config)
 	if err != nil {
 		return err
