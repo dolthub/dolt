@@ -16,6 +16,7 @@ package nbs
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha512"
 	"encoding/binary"
 	"errors"
@@ -30,6 +31,7 @@ import (
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 )
+
 
 type stagedByteSpanSlice []byteSpan
 
@@ -712,10 +714,145 @@ func (asw *ArchiveStreamWriter) convertSnappyAndStage(cc CompressedChunk) (uint3
 // conjoinAll combines two or more archiveReader instances into a single archive.
 // This method takes a slice of archiveReader instances and merges their contents
 // into the current archiveWriter.
-func (aw *archiveWriter) conjoinAll(readers []archiveReader) (archiveReader, error) {
+func (aw *archiveWriter) conjoinAll(ctx context.Context, readers []archiveReader) (archiveReader, error) {
 	if len(readers) < 2 {
 		return archiveReader{}, fmt.Errorf("conjoinAll requires at least 2 archive readers, got %d", len(readers))
 	}
 
-	return archiveReader{}, fmt.Errorf("conjoinAll not yet implemented")
+	// Sort readers by data span length (largest first)
+	sort.Slice(readers, func(i, j int) bool {
+		dataSpanI := readers[i].footer.dataSpan()
+		dataSpanJ := readers[j].footer.dataSpan()
+		return dataSpanI.length > dataSpanJ.length
+	})
+
+	stats := &Stats{}
+
+	// Process first reader - write data blocks and collect byte span info
+	firstReader := readers[0]
+
+	// Write the entire data section from the first reader using io.Copy
+	dataSpan := firstReader.footer.dataSpan()
+	sectionReader := newSectionReader(ctx, firstReader.reader, int64(dataSpan.offset), int64(dataSpan.length), stats)
+
+	written, err := io.Copy(aw.output, sectionReader)
+	if err != nil {
+		return archiveReader{}, fmt.Errorf("failed to copy data from first archive: %w", err)
+	}
+	aw.bytesWritten += uint64(written)
+
+	// Build byte span index from first reader
+	for i := uint32(1); i <= firstReader.footer.byteSpanCount; i++ {
+		span := firstReader.getByteSpanByID(i)
+		aw.stagedBytes = append(aw.stagedBytes, span)
+	}
+
+	// Process chunks from first reader and build hash set
+	for i := 0; i < int(firstReader.footer.chunkCount); i++ {
+		// Get chunk reference
+		dictId, dataId := firstReader.getChunkRef(i)
+
+		// Reconstruct the hash from prefix and suffix
+		prefix := firstReader.prefixes[i]
+		suffix := firstReader.getSuffixByID(uint64(i))
+
+		// Create hash from prefix and suffix
+		hashBytes := make([]byte, hash.ByteLen)
+		binary.BigEndian.PutUint64(hashBytes[:hash.PrefixLen], prefix)
+		copy(hashBytes[hash.PrefixLen:], suffix[:])
+		chunkHash := hash.New(hashBytes)
+
+		// Add to seen chunks and staged chunks
+		aw.seenChunks.Insert(chunkHash)
+		aw.stagedChunks = append(aw.stagedChunks, stagedChunkRef{
+			hash:       chunkHash,
+			dictionary: dictId,
+			data:       dataId,
+		})
+	}
+
+	// Process remaining readers
+	for _, reader := range readers[1:] {
+		// Track the current byte offset to adjust byte span IDs
+		currentByteOffset := aw.bytesWritten
+
+		// Write the entire data section - this is not the final solution because of duplicate chunks.
+		dataSpan := reader.footer.dataSpan()
+		sectionReader := newSectionReader(ctx, reader.reader, int64(dataSpan.offset), int64(dataSpan.length), stats)
+
+		written, err := io.Copy(aw.output, sectionReader)
+		if err != nil {
+			return archiveReader{}, fmt.Errorf("failed to copy data from archive: %w", err)
+		}
+		aw.bytesWritten += uint64(written)
+
+		// Map byte span IDs from this reader to the combined archive
+		spanIdOffset := uint32(len(aw.stagedBytes))
+
+		// Add byte spans from this reader, adjusting offsets
+		for i := uint32(1); i <= reader.footer.byteSpanCount; i++ {
+			span := reader.getByteSpanByID(i)
+			adjustedSpan := byteSpan{
+				offset: span.offset + currentByteOffset,
+				length: span.length,
+			}
+			aw.stagedBytes = append(aw.stagedBytes, adjustedSpan)
+		}
+
+		// Process chunks from this reader
+		for i := 0; i < int(reader.footer.chunkCount); i++ {
+			// Get chunk reference
+			dictId, dataId := reader.getChunkRef(i)
+
+			// Reconstruct the hash from prefix and suffix
+			prefix := reader.prefixes[i]
+			suffix := reader.getSuffixByID(uint64(i))
+
+			// Create hash from prefix and suffix
+			hashBytes := make([]byte, hash.ByteLen)
+			binary.BigEndian.PutUint64(hashBytes[:hash.PrefixLen], prefix)
+			copy(hashBytes[hash.PrefixLen:], suffix[:])
+			chunkHash := hash.New(hashBytes)
+
+			// Error on duplicates for the time being.
+			if aw.seenChunks.Has(chunkHash) {
+				return archiveReader{}, fmt.Errorf("Duplicate chunk found during conjoinAll: %s", chunkHash.String())
+			}
+			aw.seenChunks.Insert(chunkHash)
+
+			// Adjust byte span IDs for the combined archive
+			adjustedDictId := dictId
+			adjustedDataId := dataId
+			if dictId != 0 {
+				adjustedDictId = dictId + spanIdOffset
+			}
+			adjustedDataId = dataId + spanIdOffset
+
+			aw.stagedChunks = append(aw.stagedChunks, stagedChunkRef{
+				hash:       chunkHash,
+				dictionary: adjustedDictId,
+				data:       adjustedDataId,
+			})
+		}
+	}
+
+	// Complete the archive writing process using the standard workflow
+	tempDir := "/tmp"
+	err = indexFinalizeFlushArchive(aw, tempDir, hash.Hash{})
+	if err != nil {
+		return archiveReader{}, fmt.Errorf("failed to finalize and flush archive: %w", err)
+	}
+
+	// Create archive reader from the file that was just written
+	fra, err := newFileReaderAt(aw.finalPath)
+	if err != nil {
+		return archiveReader{}, fmt.Errorf("failed to create file reader: %w", err)
+	}
+
+	aRdr, err := newArchiveReader(ctx, fra, uint64(fra.sz), stats)
+	if err != nil {
+		return archiveReader{}, fmt.Errorf("failed to create archive reader: %w", err)
+	}
+
+	return aRdr, nil
 }
