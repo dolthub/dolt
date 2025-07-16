@@ -1066,47 +1066,12 @@ func (tcs *testChunkSource) iterateAllChunks(_ context.Context, _ func(chunks.Ch
 // createTestArchive creates a test archive with the specified chunks and returns an archiveReader and the fake hashes
 // created for the chunks (in the same order).
 func createTestArchive(t *testing.T, prefix uint64, chunks [][]byte, metadata string) (archiveReader, []hash.Hash) {
-	writer := NewFixedBufferByteSink(make([]byte, 4096))
-	aw := newArchiveWriterWithSink(writer)
-
-	// Write dictionary
-	dId, err := aw.writeByteSpan(defaultDict)
-	assert.NoError(t, err)
-
-	// Write chunks and stage them
+	// Generate hashes using the provided prefix
 	var hashes []hash.Hash
-	for _, chunkData := range chunks {
-		// Compress the chunk data using the default dictionary
-		compressedData := gozstd.CompressDict(nil, chunkData, defaultCDict)
-		bsId, err := aw.writeByteSpan(compressedData)
-		assert.NoError(t, err)
-
-		chunkHash := hashWithPrefix(t, prefix)
-		hashes = append(hashes, chunkHash)
-
-		err = aw.stageZStdChunk(chunkHash, dId, bsId)
-		assert.NoError(t, err)
+	for range chunks {
+		hashes = append(hashes, hashWithPrefix(t, prefix))
 	}
-
-	// Finalize archive
-	err = aw.finalizeByteSpans()
-	assert.NoError(t, err)
-	err = aw.writeIndex()
-	assert.NoError(t, err)
-	err = aw.writeMetadata([]byte(metadata))
-	assert.NoError(t, err)
-	err = aw.writeFooter()
-	assert.NoError(t, err)
-
-	// Create reader
-	theBytes := writer.buff[:writer.pos]
-	fileSize := uint64(len(theBytes))
-	readerAt := bytes.NewReader(theBytes)
-	tra := tableReaderAtAdapter{readerAt}
-	archiveReader, err := newArchiveReader(context.Background(), tra, fileSize, &Stats{})
-	assert.NoError(t, err)
-
-	return archiveReader, hashes
+	return createTestArchiveWithHashes(t, chunks, hashes, metadata)
 }
 
 // createTestArchiveWithHashes creates a test archive with specific hashes for each chunk
