@@ -275,6 +275,13 @@ var DoltSystemVariables = []sql.SystemVariable{
 		Type:    types.NewSystemBoolType(dsess.DoltAutoGCEnabled),
 		Default: int8(0),
 	},
+	&sql.MysqlSystemVariable{
+		Name:    dsess.AllowCICreation,
+		Dynamic: true,
+		Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Session),
+		Type:    types.NewSystemBoolType(dsess.AllowCICreation),
+		Default: int8(0),
+	},
 }
 
 func AddDoltSystemVariables() {
@@ -529,6 +536,13 @@ func AddDoltSystemVariables() {
 			Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Both),
 			Type:    types.NewSystemBoolType("sql_warnings"),
 			Default: int8(1),
+		},
+		&sql.MysqlSystemVariable{
+			Name:    dsess.AllowCICreation,
+			Dynamic: true,
+			Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Session),
+			Type:    types.NewSystemBoolType(dsess.AllowCICreation),
+			Default: int8(0),
 		},
 	})
 	sql.SystemVariables.AddSystemVariables(DoltSystemVariables)

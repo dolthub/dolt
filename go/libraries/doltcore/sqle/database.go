@@ -1437,10 +1437,14 @@ func (db Database) CreateTable(ctx *sql.Context, tableName string, sch sql.Prima
 		return ErrReservedTableName.New(tableName)
 	}
 
-	if doltdb.HasDoltCIPrefix(tableName) {
-		if !doltdb.DoltCICanBypass(ctx) {
-			return ErrReservedTableName.New(tableName)
-		}
+	canCreateCIVar, err := ctx.GetSessionVariable(ctx, dsess.AllowCICreation)
+	if err != nil {
+		return err
+	}
+	canCreateCI := canCreateCIVar.(int8) == 1
+
+	if doltdb.HasDoltCIPrefix(tableName) && !canCreateCI {
+		return ErrReservedTableName.New(tableName)
 	}
 
 	if strings.HasPrefix(tableName, diff.DBPrefix) {
@@ -1460,14 +1464,18 @@ func (db Database) CreateIndexedTable(ctx *sql.Context, tableName string, sch sq
 		return err
 	}
 
-	if doltdb.IsSystemTable(doltdb.TableName{Name: tableName, Schema: db.schemaName}) {
+	if doltdb.IsSystemTable(doltdb.TableName{Name: tableName, Schema: db.schemaName}) && !doltdb.IsFullTextTable(tableName) && !doltdb.HasDoltCIPrefix(tableName) {
 		return ErrReservedTableName.New(tableName)
 	}
 
-	if doltdb.HasDoltCIPrefix(tableName) {
-		if !doltdb.DoltCICanBypass(ctx) {
-			return ErrReservedTableName.New(tableName)
-		}
+	canCreateCIVar, err := ctx.GetSessionVariable(ctx, dsess.AllowCICreation)
+	if err != nil {
+		return err
+	}
+	canCreateCI := canCreateCIVar.(int8) == 1
+
+	if doltdb.HasDoltCIPrefix(tableName) && !canCreateCI {
+		return ErrReservedTableName.New(tableName)
 	}
 
 	if strings.HasPrefix(tableName, diff.DBPrefix) {
@@ -1655,10 +1663,18 @@ func (db Database) CreateTemporaryTable(ctx *sql.Context, tableName string, pkSc
 		return ErrReservedTableName.New(tableName)
 	}
 
-	if doltdb.HasDoltCIPrefix(tableName) {
-		if !doltdb.DoltCICanBypass(ctx) {
-			return ErrReservedTableName.New(tableName)
-		}
+	if doltdb.IsSystemTable(doltdb.TableName{Name: tableName, Schema: db.schemaName}) && !doltdb.IsFullTextTable(tableName) && !doltdb.HasDoltCIPrefix(tableName) {
+		return ErrReservedTableName.New(tableName)
+	}
+
+	canCreateCIVar, err := ctx.GetSessionVariable(ctx, dsess.AllowCICreation)
+	if err != nil {
+		return err
+	}
+	canCreateCI := canCreateCIVar.(int8) == 1
+
+	if doltdb.HasDoltCIPrefix(tableName) && !canCreateCI {
+		return ErrReservedTableName.New(tableName)
 	}
 
 	if strings.HasPrefix(tableName, diff.DBPrefix) {
@@ -1801,14 +1817,18 @@ func (db Database) RenameTable(ctx *sql.Context, oldName, newName string) error 
 		return ErrSystemTableAlter.New(oldName)
 	}
 
-	if doltdb.IsSystemTable(doltdb.TableName{Name: newName, Schema: db.schemaName}) {
+	if doltdb.IsSystemTable(doltdb.TableName{Name: newName, Schema: db.schemaName}) && !doltdb.IsFullTextTable(newName) && !doltdb.HasDoltCIPrefix(newName) {
 		return ErrReservedTableName.New(newName)
 	}
 
-	if doltdb.HasDoltCIPrefix(newName) {
-		if !doltdb.DoltCICanBypass(ctx) {
-			return ErrReservedTableName.New(newName)
-		}
+	canCreateCIVar, err := ctx.GetSessionVariable(ctx, dsess.AllowCICreation)
+	if err != nil {
+		return err
+	}
+	canCreateCI := canCreateCIVar.(int8) == 1
+
+	if doltdb.HasDoltCIPrefix(newName) && !canCreateCI {
+		return ErrReservedTableName.New(newName)
 	}
 
 	if strings.HasPrefix(newName, diff.DBPrefix) {

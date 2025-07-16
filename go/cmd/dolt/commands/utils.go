@@ -1015,3 +1015,34 @@ func execEditor(initialMsg string, suffix string, cliCtx cli.CliContext) (edited
 
 	return editedMsg, nil
 }
+
+// SetSystemVar sets the @@dolt_show_system_tables variable if necessary, and returns a function
+// resetting the variable for after the commands completion, if necessary.
+func SetSystemVar(queryist cli.Queryist, sqlCtx *sql.Context, newVal bool) (func() error, error) {
+	_, rowIter, _, err := queryist.Query(sqlCtx, "SHOW VARIABLES WHERE VARIABLE_NAME='dolt_show_system_tables'")
+	if err != nil {
+		return nil, err
+	}
+
+	row, err := sql.RowIterToRows(sqlCtx, rowIter)
+	if err != nil {
+		return nil, err
+	}
+	prevVal, err := GetInt8ColAsBool(row[0][1])
+	if err != nil {
+		return nil, err
+	}
+
+	var update func() error
+	if newVal != prevVal {
+		query := fmt.Sprintf("SET @@dolt_show_system_tables = %t", newVal)
+		_, _, _, err = queryist.Query(sqlCtx, query)
+		update = func() error {
+			query := fmt.Sprintf("SET @@dolt_show_system_tables = %t", prevVal)
+			_, _, _, err := queryist.Query(sqlCtx, query)
+			return err
+		}
+	}
+
+	return update, err
+}

@@ -26,9 +26,7 @@ import (
 	"github.com/google/uuid"
 	"gopkg.in/yaml.v3"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
 
@@ -41,13 +39,13 @@ var ErrMultipleWorkflowsFound = errors.New("multiple workflows found")
 
 type WorkflowManager interface {
 	// RemoveWorkflow deletes a workflow from the database and creates a Dolt commit
-	RemoveWorkflow(ctx *sql.Context, db sqle.Database, workflowName string) error
+	RemoveWorkflow(ctx *sql.Context, workflowName string) error
 	// ListWorkflows lists all workflows in the database.
-	ListWorkflows(ctx *sql.Context, db sqle.Database) ([]string, error)
+	ListWorkflows(ctx *sql.Context) ([]string, error)
 	// GetWorkflowConfig returns the WorkflowConfig for a workflow by name.
-	GetWorkflowConfig(ctx *sql.Context, db sqle.Database, workflowName string) (*WorkflowConfig, error)
+	GetWorkflowConfig(ctx *sql.Context, workflowName string) (*WorkflowConfig, error)
 	// StoreAndCommit creates or updates a workflow and creates a Dolt commit
-	StoreAndCommit(ctx *sql.Context, db sqle.Database, config *WorkflowConfig) error
+	StoreAndCommit(ctx *sql.Context, config *WorkflowConfig) error
 }
 
 type doltWorkflowManager struct {
@@ -583,7 +581,12 @@ func (d *doltWorkflowManager) commitRemoveWorkflow(ctx *sql.Context, tableNames 
 }
 
 func (d *doltWorkflowManager) sqlWriteQuery(ctx *sql.Context, query string) error {
-	return sqlWriteQuery(ctx, d.queryFunc, query)
+	_, rowIter, _, err := d.queryFunc(ctx, query)
+	if err != nil {
+		return err
+	}
+	_, err = sql.RowIterToRows(ctx, rowIter)
+	return err
 }
 
 func (d *doltWorkflowManager) sqlReadQuery(ctx *sql.Context, query string, cb func(ctx *sql.Context, cvs columnValues) error) error {
@@ -1927,17 +1930,11 @@ func (d *doltWorkflowManager) storeFromConfig(ctx *sql.Context, config *Workflow
 	return d.updateExistingWorkflow(ctx, config)
 }
 
-func (d *doltWorkflowManager) GetWorkflowConfig(ctx *sql.Context, db sqle.Database, workflowName string) (*WorkflowConfig, error) {
-	if err := dsess.CheckAccessForDb(ctx, db, branch_control.Permissions_Read); err != nil {
-		return nil, err
-	}
+func (d *doltWorkflowManager) GetWorkflowConfig(ctx *sql.Context, workflowName string) (*WorkflowConfig, error) {
 	return d.getWorkflowConfig(ctx, workflowName)
 }
 
-func (d *doltWorkflowManager) ListWorkflows(ctx *sql.Context, db sqle.Database) ([]string, error) {
-	if err := dsess.CheckAccessForDb(ctx, db, branch_control.Permissions_Read); err != nil {
-		return nil, err
-	}
+func (d *doltWorkflowManager) ListWorkflows(ctx *sql.Context) ([]string, error) {
 	names := make([]string, 0)
 	workflows, err := d.listWorkflows(ctx)
 	if err != nil {
@@ -1952,10 +1949,7 @@ func (d *doltWorkflowManager) ListWorkflows(ctx *sql.Context, db sqle.Database) 
 	return names, nil
 }
 
-func (d *doltWorkflowManager) RemoveWorkflow(ctx *sql.Context, db sqle.Database, workflowName string) error {
-	if err := dsess.CheckAccessForDb(ctx, db, branch_control.Permissions_Write); err != nil {
-		return err
-	}
+func (d *doltWorkflowManager) RemoveWorkflow(ctx *sql.Context, workflowName string) error {
 	_, err := d.getWorkflow(ctx, workflowName)
 	if err != nil {
 		return err
@@ -1968,11 +1962,7 @@ func (d *doltWorkflowManager) RemoveWorkflow(ctx *sql.Context, db sqle.Database,
 	return d.commitRemoveWorkflow(ctx, ExpectedDoltCITablesOrdered.ActiveTableNames(), workflowName)
 }
 
-func (d *doltWorkflowManager) StoreAndCommit(ctx *sql.Context, db sqle.Database, config *WorkflowConfig) error {
-	if err := dsess.CheckAccessForDb(ctx, db, branch_control.Permissions_Write); err != nil {
-		return err
-	}
-
+func (d *doltWorkflowManager) StoreAndCommit(ctx *sql.Context, config *WorkflowConfig) error {
 	err := d.storeFromConfig(ctx, config)
 	if err != nil {
 		return err

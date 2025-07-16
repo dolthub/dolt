@@ -20,8 +20,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/dolthub/go-mysql-server/sql"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/utils/funcitr"
@@ -61,22 +59,6 @@ func init() {
 		docTextCol,
 	)
 	DocsSchema = schema.MustSchemaFromCols(doltDocsColumns)
-}
-
-// ContextWithDoltCICreateBypassKey returns the sql.Context with a key that will
-// allow dolt_ci tables to be created
-func ContextWithDoltCICreateBypassKey(ctx *sql.Context) *sql.Context {
-	return ctx.WithContext(context.WithValue(ctx, doltCICtxKey, doltCICtxValueAllow))
-}
-
-// DoltCICanBypass checks whether dolt_ci tables can be created
-func DoltCICanBypass(ctx context.Context) bool {
-	if v := ctx.Value(doltCICtxKey); v != nil {
-		if v == doltCICtxValueAllow {
-			return true
-		}
-	}
-	return false
 }
 
 // HasDoltPrefix returns a boolean whether or not the provided string is prefixed with the DoltNamespace. Users should
@@ -591,7 +573,7 @@ const (
 	WorkflowSavedQueryStepExpectedRowColumnResultsExpectedColumnCountComparisonTypeColName = "expected_column_count_comparison_type"
 
 	// WorkflowSavedQueryStepExpectedRowColumnResultsExpectedRowCountComparisonTypeColName is the name of the expected row count comparison type column on the workflow saved query step expected row column results table
-	WorkflowSavedQueryStepExpectedRowColumnResultsExpectedRowCountComparisonTypeColName = "expected_column_row_comparison_type"
+	WorkflowSavedQueryStepExpectedRowColumnResultsExpectedRowCountComparisonTypeColName = "expected_row_count_comparison_type"
 
 	// WorkflowSavedQueryStepExpectedRowColumnResultsExpectedColumnCountColName is the name of the expected column count column on the workflow saved query step expected row column results table
 	WorkflowSavedQueryStepExpectedRowColumnResultsExpectedColumnCountColName = "expected_column_count"
