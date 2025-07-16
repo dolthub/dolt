@@ -1101,4 +1101,13 @@ SQL
     run dolt sql -q "prepare stmt6 from 'select count(*) from dolt_log(?, \"--not\", \"HEAD~2\")'; set @v1 = 'HEAD'; execute stmt6 using @v1;"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "2" ]] || false  # Should have 2 commits (HEAD excluding HEAD~2)
+    
+    # Test bind variable as option flag - schema-affecting flags as bind variables don't add columns to schema
+    run dolt sql -q "prepare stmt7 from 'select commit_hash from dolt_log(\"HEAD\", ?)'; set @flag = '--parents'; execute stmt7 using @flag;"
+    [ "$status" -eq 0 ]
+    
+    # Selecting optional columns when flag is bind variable fails during analysis
+    run dolt sql -q "prepare stmt_fail from 'select commit_hash, parents from dolt_log(\"HEAD\", ?)'; set @flag = '--parents'; execute stmt_fail using @flag;"
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "column \"parents\" could not be found" ]] || false
 }

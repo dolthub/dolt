@@ -228,6 +228,12 @@ func getDoltArgs(ctx *sql.Context, expressions []sql.Expression, name string) ([
 	var args []string
 
 	for _, expr := range expressions {
+		// Skip bind variables during analysis phase (can't evaluate yet)
+		// During execution phase, bind variables are resolved to literals by SQL engine
+		if expression.IsBindVar(expr) {
+			continue
+		}
+
 		childVal, err := expr.Eval(ctx, nil)
 		if err != nil {
 			return nil, err
@@ -313,21 +319,30 @@ func (ltf *LogTableFunction) WithExpressions(exprs ...sql.Expression) (sql.Node,
 // evalArguments stores the input expressions for later evaluation during execution.
 // This defers argument parsing until the execute phase to properly handle bind variables.
 func (ltf *LogTableFunction) evalArguments(expressions ...sql.Expression) (sql.Node, error) {
+	bindVarsExist := false
 	for _, expr := range expressions {
 		// functions are not allowed as arguments
 		if _, ok := expr.(sql.FunctionExpression); ok {
 			return nil, ErrInvalidNonLiteralArgument.New(ltf.Name(), expr.String())
 		}
-		// if there are bind variables, defer parsing to execution time
+		// Also check for UnresolvedFunction which might not implement FunctionExpression
+		if _, ok := expr.(*expression.UnresolvedFunction); ok {
+			return nil, ErrInvalidNonLiteralArgument.New(ltf.Name(), expr.String())
+		}
 		if expression.IsBindVar(expr) {
-			return ltf.WithExpressions(expressions...)
+			bindVarsExist = true
 		}
 	}
 
 	node, _ := ltf.WithExpressions(expressions...)
 	newLtf := *node.(*LogTableFunction)
-	// no bind variables, parse options now (addOptions sets showParents, etc. for Schema())
-	if err := newLtf.addOptions(newLtf.argumentExprs); err != nil {
+
+	// Parse literal arguments for schema determination during analysis phase
+	// getDoltArgs will skip bind variables (can't evaluate them yet)
+	// Only return errors if no bind variables exist (incomplete args are expected with bind vars)
+	// TODO: This approach means schema-affecting flags as bind variables don't add columns to schema.
+	// This may be a common problem for dynamic table functions that need execution-time schema changes.
+	if err := newLtf.addOptions(newLtf.argumentExprs); err != nil && !bindVarsExist {
 		return nil, err
 	}
 
@@ -393,7 +408,8 @@ func (ltf *LogTableFunction) invalidArgDetailsErr(reason string) *errors.Error {
 
 // RowIter implements the sql.Node interface
 func (ltf *LogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter, error) {
-	// Parse args if they were deferred from the analysis phase
+	// Parse args again during execution phase to handle bind variables
+	// At this point, bind variables are resolved to actual values by SQL engine
 	if ltf.argumentExprs != nil {
 		if err := ltf.addOptions(ltf.argumentExprs); err != nil {
 			return nil, err

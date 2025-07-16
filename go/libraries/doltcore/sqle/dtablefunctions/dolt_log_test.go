@@ -205,3 +205,81 @@ func TestDoltLogBindVariableWithParents(t *testing.T) {
 	}
 	assert.True(t, parentColumnAfterExecution, "parents column should remain in schema after execution parsing")
 }
+
+func TestDoltLogBindVariableAsOption(t *testing.T) {
+	ctx := sql.NewEmptyContext()
+
+	// Test where the bind variable itself is an option flag like --parents
+	// This tests the case where schema-affecting flags are also bind variables
+	ltf := &LogTableFunction{ctx: ctx}
+
+	// Test case: dolt_log("HEAD", ?) where ? will be "--parents"
+	bindVarAsOptionExprs := []sql.Expression{
+		expression.NewLiteral("HEAD", types.Text),
+		expression.NewBindVar("flag"),
+	}
+
+	// During analysis phase, schema determination should not include parents column
+	// because --parents is in a bind variable, not a literal
+	node, err := ltf.evalArguments(bindVarAsOptionExprs...)
+	assert.NoError(t, err)
+	assert.NotNil(t, node)
+
+	newLtf, ok := node.(*LogTableFunction)
+	assert.True(t, ok)
+
+	// Should have stored the original expressions for deferred parsing
+	assert.Equal(t, 2, len(newLtf.argumentExprs))
+	assert.Equal(t, "'HEAD'", newLtf.argumentExprs[0].String())
+	assert.True(t, expression.IsBindVar(newLtf.argumentExprs[1]))
+
+	// showParents should be false during analysis (flag is in bind variable)
+	assert.False(t, newLtf.showParents)
+
+	// Schema should NOT include parents column during analysis (flag is in bind variable)
+	schema := newLtf.Schema()
+	parentColumn := false
+	for _, col := range schema {
+		if col.Name == "parents" {
+			parentColumn = true
+			break
+		}
+	}
+	assert.False(t, parentColumn, "parents column should not be in schema when --parents is in bind variable")
+
+	// Now test execution phase - simulate what happens when bind variable is resolved
+	// This simulates the SQL engine substituting the bind variable with the actual value
+	executionExprs := []sql.Expression{
+		expression.NewLiteral("HEAD", types.Text),
+		expression.NewLiteral("--parents", types.Text),
+	}
+
+	// This simulates what happens in RowIter when bind variables are resolved
+	err = newLtf.addOptions(executionExprs)
+	assert.NoError(t, err)
+
+	// After execution parsing, showParents should be true
+	assert.True(t, newLtf.showParents)
+}
+
+func TestDoltLogFunctionsRejected(t *testing.T) {
+	ctx := sql.NewEmptyContext()
+
+	// Test that functions are rejected even when used alongside bind variables
+	ltf := &LogTableFunction{ctx: ctx}
+
+	// Create a simple function expression that implements sql.FunctionExpression
+	upperFunc := expression.NewUnresolvedFunction("UPPER", false, nil, expression.NewLiteral("--parents", types.Text))
+
+	// Test case: dolt_log(?, UPPER("--parents")) - bind var + function
+	bindVarWithFunctionExprs := []sql.Expression{
+		expression.NewBindVar("rev"),
+		upperFunc,
+	}
+
+	// Should fail during analysis because functions are not allowed, regardless of bind variables
+	node, err := ltf.evalArguments(bindVarWithFunctionExprs...)
+	assert.Error(t, err)
+	assert.Nil(t, node)
+	assert.Contains(t, err.Error(), "only literal values supported")
+}
