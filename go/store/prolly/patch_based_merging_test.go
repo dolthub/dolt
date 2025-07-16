@@ -1267,7 +1267,12 @@ func TestPatchBasedMerging(t *testing.T) {
 		rightMapChunkBoundaries := getChunkBoundaries(t, desc, mapWithPointRemoval)
 		t.Run("right is empty", func(t *testing.T) {
 			var expectedPatches []expectedPatch[uint32]
-			expectedPatches = append(expectedPatches, manyPointRemoves(1, rightMapChunkBoundaries[0])...)
+			expectedPatches = append(expectedPatches, expectedPatch[uint32]{
+				level:      1,
+				noStartKey: true,
+				endKey:     rightMapChunkBoundaries[0],
+				isRemoval:  true,
+			})
 			expectedPatches = append(expectedPatches, expectedPatch[uint32]{
 				level:     1,
 				startKey:  rightMapChunkBoundaries[0],

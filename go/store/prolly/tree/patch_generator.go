@@ -150,22 +150,22 @@ func PatchGeneratorFromRoots[K ~[]byte, O Ordering[K]](ctx context.Context, from
 
 	if !to.empty() {
 		tc = newCursorAtRoot(ctx, toNs, to)
+		// Maintain invariant that the |from| cursor is never at a higher level than the |to| cursor.
+		for fc.nd.level > tc.nd.level {
+			fromChild, err := fetchChild(ctx, fc.nrw, fc.currentRef())
+			if err != nil {
+				return PatchGenerator[K, O]{}, err
+			}
+
+			fc = &cursor{
+				nd:     fromChild,
+				idx:    0,
+				parent: fc,
+				nrw:    fc.nrw,
+			}
+		}
 	} else {
 		tc = &cursor{}
-	}
-
-	for fc.nd.level > tc.nd.level {
-		fromChild, err := fetchChild(ctx, fc.nrw, fc.currentRef())
-		if err != nil {
-			return PatchGenerator[K, O]{}, err
-		}
-
-		fc = &cursor{
-			nd:     fromChild,
-			idx:    0,
-			parent: fc,
-			nrw:    fc.nrw,
-		}
 	}
 
 	return PatchGenerator[K, O]{
