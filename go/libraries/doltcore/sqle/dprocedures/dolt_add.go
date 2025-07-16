@@ -48,22 +48,28 @@ func doDoltAdd(ctx *sql.Context, args []string) (int, error) {
 		return 1, err
 	}
 
-	apr, err := cli.CreateAddArgParser().Parse(args)
+	apr, err := cli.CreateAddArgParser(true).Parse(args)
 	if err != nil {
 		return 1, err
+	}
+
+	targetBranch, branchSpecified := apr.GetValue(cli.BranchParam)
+	if branchSpecified {
+		// Use revision-qualified database name for the target branch. This will enable you to add
+		// to branches other than the current branch.
+		dbName = fmt.Sprintf("%s/%s", dbName, targetBranch)
 	}
 
 	allFlag := apr.Contains(cli.AllFlag)
 
 	dSess := dsess.DSessFromSess(ctx.Session)
 	roots, ok := dSess.GetRoots(ctx, dbName)
+	if !ok {
+		return 1, fmt.Errorf("Could not load database %s", dbName)
+	}
 	if apr.NArg() == 0 && !allFlag {
 		return 1, fmt.Errorf("Nothing specified, nothing added. Maybe you wanted to say 'dolt add .'?")
 	} else if allFlag || apr.NArg() == 1 && apr.Arg(0) == "." {
-		if !ok {
-			return 1, fmt.Errorf("db session not found")
-		}
-
 		roots, err = actions.StageAllTables(ctx, roots, !apr.Contains(cli.ForceFlag))
 		if err != nil {
 			return 1, err

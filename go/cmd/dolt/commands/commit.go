@@ -72,12 +72,12 @@ func (cmd CommitCmd) Description() string {
 }
 
 func (cmd CommitCmd) Docs() *cli.CommandDocumentation {
-	ap := cli.CreateCommitArgParser()
+	ap := cli.CreateCommitArgParser(false)
 	return cli.NewCommandDocumentation(commitDocs, ap)
 }
 
 func (cmd CommitCmd) ArgParser() *argparser.ArgParser {
-	return cli.CreateCommitArgParser()
+	return cli.CreateCommitArgParser(false)
 }
 
 func (cmd CommitCmd) RequiresRepo() bool {
@@ -102,7 +102,7 @@ func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string,
 // status code indicating success or failure, as well as a boolean that indicates if the commit was skipped
 // (e.g. because --skip-empty was specified as an argument).
 func performCommit(ctx context.Context, commandStr string, args []string, cliCtx cli.CliContext, temporaryDEnv *env.DoltEnv) (int, bool) {
-	ap := cli.CreateCommitArgParser()
+	ap := cli.CreateCommitArgParser(false)
 	apr, usage, terminate, status := ParseArgsOrPrintHelp(ap, commandStr, args, commitDocs)
 	if terminate {
 		return status, false
