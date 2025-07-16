@@ -31,6 +31,14 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
+// reconstructHashFromPrefixAndSuffix creates a hash from a prefix and suffix
+func reconstructHashFromPrefixAndSuffix(prefix uint64, suffix [hash.SuffixLen]byte) hash.Hash {
+	hashBytes := make([]byte, hash.ByteLen)
+	binary.BigEndian.PutUint64(hashBytes[:hash.PrefixLen], prefix)
+	copy(hashBytes[hash.PrefixLen:], suffix[:])
+	return hash.New(hashBytes)
+}
+
 // archiveReader is a reader for the archive format. We use primitive type slices where possible. These are read directly
 // from disk into memory for speed. The downside is complexity on the read path, but it's all constant time.
 type archiveReader struct {
@@ -530,12 +538,9 @@ func (ar archiveReader) verifyMetaCheckSum(ctx context.Context, stats *Stats) er
 
 func (ar archiveReader) iterate(ctx context.Context, cb func(chunks.Chunk) error, stats *Stats) error {
 	for i := uint32(0); i < ar.footer.chunkCount; i++ {
-		var hasBytes [hash.ByteLen]byte
-
-		binary.BigEndian.PutUint64(hasBytes[:uint64Size], ar.prefixes[i])
-		suf := ar.getSuffixByID(uint64(i))
-		copy(hasBytes[hash.ByteLen-hash.SuffixLen:], suf[:])
-		h := hash.New(hasBytes[:])
+		prefix := ar.prefixes[i]
+		suffix := ar.getSuffixByID(uint64(i))
+		h := reconstructHashFromPrefixAndSuffix(prefix, suffix)
 
 		data, err := ar.get(ctx, h, stats)
 		if err != nil {
