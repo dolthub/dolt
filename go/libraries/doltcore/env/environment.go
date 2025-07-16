@@ -606,7 +606,7 @@ func (dEnv *DoltEnv) InitDBWithCommitMetaGenerator(ctx context.Context, nbf *typ
 		return err
 	}
 
-	err = dEnv.DoltDB(ctx).WriteRepoWithCommitMetaGeneratorAndAgentDoc(ctx, branchName, commitMeta)
+	err = dEnv.DoltDB(ctx).WriteRepoWithCommitMetaGenerator(ctx, branchName, commitMeta)
 	if err != nil {
 		return fmt.Errorf("%w: %v", doltdb.ErrNomsIO, err)
 	}

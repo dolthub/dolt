@@ -34,7 +34,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/earl"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/chunks"
@@ -2563,28 +2562,34 @@ For more information, visit: https://doltdb.com`
 		return nil, err
 	}
 
-	// Create a table editor to insert the row
-	tableEditor, err := editor.NewTableEditor(ctx, table, DocsSchema, DocTableName, editor.Options{})
+	// Get the table's primary index and add the row directly
+	primaryIndex, err := table.GetRowData(ctx)
 	if err != nil {
 		return nil, err
 	}
 
+	// Create a mutator for the primary index
+	mutator := primaryIndex.Mutator()
+	
 	// Insert the row
-	err = tableEditor.InsertRow(ctx, r)
+	err = mutator.Put(ctx, r.NomsMapKey(DocsSchema), r.NomsMapValue(DocsSchema))
 	if err != nil {
-		tableEditor.Close(ctx)
 		return nil, err
 	}
 
-	// Get the updated table
-	updatedTable, err := tableEditor.Table(ctx)
+	// Get the updated primary index
+	updatedPrimaryIndex, err := mutator.Map(ctx)
 	if err != nil {
-		tableEditor.Close(ctx)
 		return nil, err
 	}
 
-	// Close the editor
-	err = tableEditor.Close(ctx)
+	// Create updated table with new primary index
+	indexes, err := table.GetIndexSet(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	updatedTable, err := NewTable(ctx, ddb.vrw, ddb.ns, DocsSchema, updatedPrimaryIndex, indexes, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -2596,4 +2601,22 @@ For more information, visit: https://doltdb.com`
 	}
 
 	return finalRoot, nil
+}
+
+// WriteRepoWithCommitMetaGenerator initializes a new repo with an empty commit and creates the default AGENT.md document.
+func (ddb *DoltDB) WriteRepoWithCommitMetaGenerator(ctx context.Context, branchName string, commitMeta datas.CommitMetaGenerator) error {
+	// Create an empty root value 
+	emptyRoot, err := EmptyRootValue(ctx, ddb.vrw, ddb.ns)
+	if err != nil {
+		return err
+	}
+
+	// Create the AGENT.md document in the root
+	rootWithAgent, err := ddb.createAgentDocInRoot(ctx, emptyRoot)
+	if err != nil {
+		return err
+	}
+
+	// Create the initial commit with the root that includes the AGENT.md document
+	return ddb.WriteRepo(ctx, branchName, rootWithAgent, commitMeta)
 }
