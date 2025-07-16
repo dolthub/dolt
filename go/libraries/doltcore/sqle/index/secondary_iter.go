@@ -16,6 +16,7 @@ package index
 
 import (
 	"context"
+	"io"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/prolly"
@@ -41,6 +42,9 @@ type strictLookupIter struct {
 func (i *strictLookupIter) Next(_ context.Context) (k, v val.Tuple, err error) {
 	k, v = i.k, i.v
 	i.k, i.v = nil, nil
+	if k == nil {
+		return nil, nil, io.EOF
+	}
 	return k, v, nil
 }
 
