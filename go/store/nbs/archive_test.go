@@ -19,6 +19,7 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 	"math"
 	"math/rand"
@@ -826,20 +827,23 @@ func TestArchiveConjoinAllDuplicateChunk(t *testing.T) {
 	sharedChunk := []byte{100, 101, 102, 103, 104, 105, 106, 107, 108, 109}
 	sharedChunkHash := hash.Of(sharedChunk)
 
-	// Create first archive with unique chunk + shared chunk
+	// Create first archive with unique chunk + shared chunk + more unique chunks
 	chunks1 := [][]byte{
 		{10, 11, 12, 13, 14, 15, 16, 17, 18, 19},
 		sharedChunk,
+		{50, 51, 52, 53, 54, 55, 56, 57, 58, 59},
+		{60, 61, 62, 63, 64, 65, 66, 67, 68, 69},
 	}
 	archiveReader1, hashes1 := createArchiveWithDuplicates(t, chunks1, map[int]hash.Hash{1: sharedChunkHash}, 42, "archive1")
 
-	// Create second archive with shared chunk + unique chunks
+	// Create second archive with unique chunks + shared chunk + more unique chunks
 	chunks2 := [][]byte{
-		sharedChunk,
+		{20, 21, 22, 23, 24, 25, 26, 27, 28, 29},
 		{30, 31, 32, 33, 34, 35, 36, 37, 38, 39},
+		sharedChunk,
 		{40, 41, 42, 43, 44, 45, 46, 47, 48, 49},
 	}
-	archiveReader2, hashes2 := createArchiveWithDuplicates(t, chunks2, map[int]hash.Hash{0: sharedChunkHash}, 84, "archive2")
+	archiveReader2, hashes2 := createArchiveWithDuplicates(t, chunks2, map[int]hash.Hash{2: sharedChunkHash}, 84, "archive2")
 
 	writerCombined := NewFixedBufferByteSink(make([]byte, 8192))
 	awCombined := newArchiveWriterWithSink(writerCombined)
@@ -856,6 +860,16 @@ func TestArchiveConjoinAllDuplicateChunk(t *testing.T) {
 	combinedReader, err := newArchiveReader(context.Background(), tra, fileSize, &Stats{})
 	assert.NoError(t, err)
 
+	// Check chunk counts - should have 8 chunks total (4 from archive1 + 4 from archive2)
+	// The duplicate chunk should appear twice in the index.
+	expectedChunkCount := len(chunks1) + len(chunks2)
+	actualChunkCount := int(combinedReader.footer.chunkCount)
+	assert.Equal(t, expectedChunkCount, actualChunkCount, "Combined archive should have correct number of unique chunks")
+
+	expectedByteSpanCount := 10 // 1 dict + 4 data from archive1, 1 dict + 4 data from archive2
+	actualByteSpanCount := int(combinedReader.footer.byteSpanCount)
+	assert.Equal(t, expectedByteSpanCount, actualByteSpanCount, "Combined archive should have correct number of byte spans")
+
 	// Verify combined reader contains all chunks (duplicates should be deduplicated)
 	ctx := context.Background()
 	stats := &Stats{}
@@ -871,6 +885,23 @@ func TestArchiveConjoinAllDuplicateChunk(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, chunks2[i], data)
 	}
+
+	sharedChunkCount := 0
+	otherChunksSeen := make(map[hash.Hash]bool)
+	err = combinedReader.iterate(ctx, func(c chunks.Chunk) error {
+		h := c.Hash()
+		if h == sharedChunkHash {
+			sharedChunkCount++
+		} else {
+			if _, seen := otherChunksSeen[h]; seen {
+				return fmt.Errorf("unexpected duplicate chunk %s", h)
+			}
+			otherChunksSeen[h] = true
+		}
+		return nil
+	}, &Stats{})
+	assert.Equal(t, 2, sharedChunkCount)
+	assert.NoError(t, err)
 }
 
 func assertFloatBetween(t *testing.T, actual, min, max float64) {
