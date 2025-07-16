@@ -1124,9 +1124,35 @@ func TestArchiveConjoinAllComprehensive(t *testing.T) {
 	actualChunkCount := int(finalCombinedReader.footer.chunkCount)
 	assert.Equal(t, len(allExpectedChunks), actualChunkCount, "Final combined archive should have correct chunk count including duplicates")
 
-	// Verify some basic properties
-	assert.Greater(t, actualChunkCount, 30, "Should have substantial number of chunks")
-	assert.Greater(t, len(allExpectedHashes), 20, "Should have processed substantial number of unique chunks")
+	expectedChunkCount := len(allExpectedChunks)
+	assert.Equal(t, expectedChunkCount, actualChunkCount, "Should have exactly %d chunks", expectedChunkCount)
+	assert.Equal(t, expectedChunkCount, len(allExpectedHashes), "Should have exactly %d expected hashes", expectedChunkCount)
+
+	// Verify iteration - each chunk should be seen exactly once during iteration
+	// but duplicate chunks should appear multiple times based on their occurrence count
+	chunkOccurrences := make(map[hash.Hash]int)
+	for _, h := range allExpectedHashes {
+		chunkOccurrences[h]++
+	}
+
+	iterationCount := 0
+	seenChunks := make(map[hash.Hash]int)
+
+	err = finalCombinedReader.iterate(ctx, func(chunk chunks.Chunk) error {
+		iterationCount++
+		seenChunks[chunk.Hash()]++
+		return nil
+	}, stats)
+	assert.NoError(t, err)
+
+	assert.Equal(t, actualChunkCount, iterationCount, "Iteration should visit each chunk ref exactly once")
+
+	// Verify each unique chunk was seen the correct number of times
+	for expectedHash, expectedCount := range chunkOccurrences {
+		actualCount, found := seenChunks[expectedHash]
+		assert.True(t, found, "Chunk %s should be found during iteration", expectedHash)
+		assert.Equal(t, expectedCount, actualCount, "Chunk %s should appear %d times", expectedHash, expectedCount)
+	}
 }
 
 func assertFloatBetween(t *testing.T, actual, min, max float64) {
