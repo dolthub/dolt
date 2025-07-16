@@ -640,7 +640,6 @@ func fetchRefSpecsWithDepth[C doltdb.Context](
 				return err
 			}
 		} else {
-			// For commit references, use the existing logic
 			optCmt, err := dbData.Ddb.ReadCommit(ctx, newHead.Hash)
 			if err != nil {
 				return err
