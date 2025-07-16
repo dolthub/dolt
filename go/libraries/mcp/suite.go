@@ -19,9 +19,9 @@ import (
 const (
 	mcpTestDatabaseName         = "test"
 	mcpTestRootUserName         = "root"
-	mcpTestMCPServerSQLUser     = "mcp-server"
+	mcpTestMCPClientSQLUser     = "mcp-client-1"
+	mcpTestMCPClientSQLPassword = "passw0rd"
 	mcpTestRootPassword         = ""
-	mcpTestMCPServerSQLPassword = "passw0rd"
 	doltServerHost              = "0.0.0.0"
 	doltServerPort              = 3306
 	mcpServerPort               = 6900
@@ -215,12 +215,12 @@ func createMCPDoltServerTestSuite(ctx context.Context, doltBinPath string) (*tes
 		return nil, err
 	}
 
-	_, err = testDb.ExecContext(ctx, fmt.Sprintf("CREATE USER '%s'@'%s' IDENTIFIED BY '%s';", mcpTestMCPServerSQLUser, "%", mcpTestMCPServerSQLPassword))
+	_, err = testDb.ExecContext(ctx, fmt.Sprintf("CREATE USER '%s'@'%s' IDENTIFIED BY '%s';", mcpTestMCPClientSQLUser, "%", mcpTestMCPClientSQLPassword))
 	if err != nil {
 		return nil, err
 	}
 
-	_, err = testDb.ExecContext(ctx, fmt.Sprintf("GRANT ALL PRIVILEGES ON `%s`.* TO '%s'@'%s';", mcpTestDatabaseName, mcpTestMCPServerSQLUser, "%"))
+	_, err = testDb.ExecContext(ctx, fmt.Sprintf("GRANT ALL PRIVILEGES ON `%s`.* TO '%s'@'%s';", mcpTestDatabaseName, mcpTestMCPClientSQLUser, "%"))
 	if err != nil {
 		return nil, err
 	}
@@ -230,8 +230,8 @@ func createMCPDoltServerTestSuite(ctx context.Context, doltBinPath string) (*tes
 	config := Config{
 		Host:     doltServerHost,
 		Port:     doltServerPort,
-		User:     mcpTestMCPServerSQLUser,
-		Password: mcpTestMCPServerSQLPassword,
+		User:     mcpTestMCPClientSQLUser,
+		Password: mcpTestMCPClientSQLPassword,
 		DatabaseName: mcpTestDatabaseName,
 	}
 

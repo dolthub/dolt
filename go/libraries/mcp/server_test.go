@@ -28,7 +28,7 @@ func testNewMCPServerFail(t *testing.T) {
 }
 
 func testSuccessWithDSN(suite *testSuite) {
-	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s", mcpTestMCPServerSQLUser, mcpTestMCPServerSQLPassword, doltServerHost, doltServerPort, mcpTestDatabaseName)
+	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s", mcpTestMCPClientSQLUser, mcpTestMCPClientSQLPassword, doltServerHost, doltServerPort, mcpTestDatabaseName)
 	config := Config{
 		DSN: dsn,
 	}
@@ -41,8 +41,8 @@ func testSuccessWithDSN(suite *testSuite) {
 func testSuccessWithoutDSN(suite *testSuite) {
 	config := Config{
 		Host:         doltServerHost,
-		User:         mcpTestMCPServerSQLUser,
-		Password:     mcpTestMCPServerSQLPassword,
+		User:         mcpTestMCPClientSQLUser,
+		Password:     mcpTestMCPClientSQLPassword,
 		Port:         doltServerPort,
 		DatabaseName: mcpTestDatabaseName,
 	}
@@ -54,8 +54,8 @@ func testSuccessWithoutDSN(suite *testSuite) {
 
 func testMissingHostAndDSN(suite *testSuite) {
 	config := Config{
-		User:         mcpTestMCPServerSQLUser,
-		Password:     mcpTestMCPServerSQLPassword,
+		User:         mcpTestMCPClientSQLUser,
+		Password:     mcpTestMCPClientSQLPassword,
 		Port:         doltServerPort,
 		DatabaseName: mcpTestDatabaseName,
 	}
@@ -69,7 +69,7 @@ func testMissingHostAndDSN(suite *testSuite) {
 func testMissingUserAndDSN(suite *testSuite) {
 	config := Config{
 		Host:         doltServerHost,
-		Password:     mcpTestMCPServerSQLPassword,
+		Password:     mcpTestMCPClientSQLPassword,
 		Port:         doltServerPort,
 		DatabaseName: mcpTestDatabaseName,
 	}
@@ -83,8 +83,8 @@ func testMissingUserAndDSN(suite *testSuite) {
 func testMissingDatabaseNameAndDSN(suite *testSuite) {
 	config := Config{
 		Host:         doltServerHost,
-		User:         mcpTestMCPServerSQLUser,
-		Password:     mcpTestMCPServerSQLPassword,
+		User:         mcpTestMCPClientSQLUser,
+		Password:     mcpTestMCPClientSQLPassword,
 		Port:         doltServerPort,
 	}
 
@@ -97,8 +97,8 @@ func testMissingDatabaseNameAndDSN(suite *testSuite) {
 func testMissingPortAndDSN(suite *testSuite) {
 	config := Config{
 		Host:         doltServerHost,
-		User:         mcpTestMCPServerSQLUser,
-		Password:     mcpTestMCPServerSQLPassword,
+		User:         mcpTestMCPClientSQLUser,
+		Password:     mcpTestMCPClientSQLPassword,
 		DatabaseName: mcpTestDatabaseName,
 	}
 

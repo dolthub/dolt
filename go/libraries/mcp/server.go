@@ -10,12 +10,19 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
 
 const (
 	DoltMCPServerName    = "dolt-mcp"
 	DoltMCPServerVersion = "0.1.0"
+
+	PingToolName = "ping"
+	PingSQLQuery = "SELECT 'LIVE';"
+
+	ListDatabasesToolName = "list_databases"
+	ListDatabasesSQLQuery = "SHOW DATABASES;"
 )
 
 type Server interface {
@@ -57,12 +64,35 @@ func (s *serverImpl) ListenAndServe(ctx context.Context, port int) {
 	serve(ctx, httpServer, port)
 }
 
+func (s *serverImpl) registerPingTool() {
+	pingTool := mcp.NewTool(PingToolName, mcp.WithDescription("Pings the Dolt server."))
+	s.mcp.AddTool(pingTool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		result, err := s.db.QueryContext(ctx, PingSQLQuery)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(result), nil
+	})
+}
+
+func (s *serverImpl) registerListDatabasesTool() {
+	listDatabasesTool := mcp.NewTool(ListDatabasesToolName, mcp.WithDescription("List all databases in the Dolt server"))
+	s.mcp.AddTool(listDatabasesTool, func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		result, err := s.db.QueryContext(ctx, ListDatabasesSQLQuery)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		return mcp.NewToolResultText(result), nil
+	})
+}
+
 func (s *serverImpl) RegisterPrompts() error {
 	return nil
 }
 
-func (s *serverImpl) RegisterTools() error {
-	return nil
+func (s *serverImpl) RegisterTools() {
+	s.registerPingTool()
+	s.registerListDatabasesTool()
 }
 
 func serve(ctx context.Context, httpServer *server.StreamableHTTPServer, port int) {
@@ -105,4 +135,3 @@ func serve(ctx context.Context, httpServer *server.StreamableHTTPServer, port in
 
 	fmt.Println("mcp server stopped.")
 }
-
