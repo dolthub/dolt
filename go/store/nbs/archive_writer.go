@@ -723,13 +723,6 @@ func (aw *archiveWriter) conjoinAll(ctx context.Context, readers []archiveReader
 		return fmt.Errorf("conjoinAll requires at least 2 archive readers, got %d", len(readers))
 	}
 
-	// Sort readers by data span length (largest first)
-	sort.Slice(readers, func(i, j int) bool {
-		dataSpanI := readers[i].footer.dataSpan()
-		dataSpanJ := readers[j].footer.dataSpan()
-		return dataSpanI.length > dataSpanJ.length
-	})
-
 	stats := &Stats{}
 
 	for _, reader := range readers {
