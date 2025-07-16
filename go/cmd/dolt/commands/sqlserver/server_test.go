@@ -338,6 +338,342 @@ type defaultBranchTest struct {
 	expectedErrStr string
 }
 
+func TestReadReplica(t *testing.T) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("no working directory: %s", err.Error())
+	}
+	defer os.Chdir(cwd)
+
+	ctx := context.Background()
+
+	multiSetup := testcommands.NewMultiRepoTestSetup(t.Fatal)
+	defer os.RemoveAll(multiSetup.Root)
+	defer multiSetup.Close()
+
+	multiSetup.NewDB("read_replica")
+	multiSetup.NewRemote("remote1")
+	multiSetup.PushToRemote("read_replica", "remote1", "main")
+	multiSetup.CloneDB("remote1", "source_db")
+
+	readReplicaDbName := multiSetup.DbNames[0]
+	sourceDbName := multiSetup.DbNames[1]
+
+	localCfg, ok := multiSetup.GetEnv(readReplicaDbName).Config.GetConfig(env.LocalConfig)
+	require.True(t, ok, "local config does not exist")
+	config.NewPrefixConfig(localCfg, env.SqlServerGlobalsPrefix).SetStrings(map[string]string{
+		dsess.ReadReplicaRemote: "remote1",
+		dsess.ReplicateHeads:    "main",
+		dsess.DoltStatsEnabled:  "false",
+	})
+	dsess.InitPersistedSystemVars(multiSetup.GetEnv(readReplicaDbName))
+
+	// start server as read replica
+	sc := svcs.NewController()
+	serverConfig := DefaultCommandLineServerConfig().withLogLevel(servercfg.LogLevel_Fatal).WithPort(15303)
+
+	// set socket to nil to force tcp
+	serverConfig = serverConfig.WithHost("127.0.0.1").WithSocket("")
+
+	os.Chdir(multiSetup.DbPaths[readReplicaDbName])
+	go func() {
+		err, _ = Serve(context.Background(), &Config{
+			Version:      "0.0.0",
+			ServerConfig: serverConfig,
+			Controller:   sc,
+			DoltEnv:      multiSetup.GetEnv(readReplicaDbName),
+		})
+		require.NoError(t, err)
+	}()
+	require.NoError(t, sc.WaitForStart())
+	defer sc.Stop()
+
+	replicatedTable := "new_table"
+	multiSetup.CreateTable(ctx, sourceDbName, replicatedTable)
+	multiSetup.StageAll(sourceDbName)
+	_ = multiSetup.CommitWithWorkingSet(sourceDbName)
+	multiSetup.PushToRemote(sourceDbName, "remote1", "main")
+
+	t.Run("read replica pulls multiple branches", func(t *testing.T) {
+		conn, err := dbr.Open("mysql", servercfg.ConnectionString(serverConfig, readReplicaDbName), nil)
+		defer conn.Close()
+		require.NoError(t, err)
+		sess := conn.NewSession(nil)
+
+		multiSetup.NewBranch(ctx, sourceDbName, "feature")
+		multiSetup.CheckoutBranch(sourceDbName, "feature")
+		multiSetup.PushToRemote(sourceDbName, "remote1", "feature")
+
+		// Configure the read replica to pull the new feature branch we just created
+		config.NewPrefixConfig(localCfg, env.SqlServerGlobalsPrefix).SetStrings(map[string]string{dsess.ReadReplicaRemote: "remote1", dsess.ReplicateHeads: "main,feature"})
+		dsess.InitPersistedSystemVars(multiSetup.GetEnv(readReplicaDbName))
+
+		var res []int
+		q := sess.SelectBySql("call dolt_checkout('feature');")
+		_, err = q.LoadContext(context.Background(), &res)
+		require.NoError(t, err)
+		assert.ElementsMatch(t, res, []int{0})
+	})
+}
+
+func TestReadOnlySystemVariable(t *testing.T) {
+	ctx := context.Background()
+
+	// Use the same reliable environment creation as other tests that work
+	dEnv, err := sqle.CreateEnvWithSeedData()
+	require.NoError(t, err)
+	defer func() {
+		assert.NoError(t, dEnv.DoltDB(ctx).Close())
+	}()
+
+	// Test read-only server with command line flag
+	serverConfig := DefaultCommandLineServerConfig().withReadOnly(true).WithPort(15500)
+	sc := svcs.NewController()
+	defer sc.Stop()
+	go func() {
+		_, _ = Serve(context.Background(), &Config{
+			Version:      "0.0.0",
+			ServerConfig: serverConfig,
+			Controller:   sc,
+			DoltEnv:      dEnv,
+		})
+	}()
+	err = sc.WaitForStart()
+	require.NoError(t, err)
+
+	conn, err := dbr.Open("mysql", servercfg.ConnectionString(serverConfig, "dolt"), nil)
+	require.NoError(t, err)
+	defer conn.Close()
+	sess := conn.NewSession(nil)
+
+	// Test that @@read_only is set to 1
+	var readOnlyValue []struct {
+		Value int `db:"@@read_only"`
+	}
+	_, err = sess.SelectBySql("SELECT @@read_only").LoadContext(ctx, &readOnlyValue)
+	require.NoError(t, err)
+	require.Len(t, readOnlyValue, 1)
+	assert.Equal(t, 1, readOnlyValue[0].Value)
+
+	// Test that @@global.read_only is set to 1
+	var globalReadOnlyValue []struct {
+		Value int `db:"@@global.read_only"`
+	}
+	_, err = sess.SelectBySql("SELECT @@global.read_only").LoadContext(ctx, &globalReadOnlyValue)
+	require.NoError(t, err)
+	require.Len(t, globalReadOnlyValue, 1)
+	assert.Equal(t, 1, globalReadOnlyValue[0].Value)
+}
+
+func TestReadOnlySystemVariableYaml(t *testing.T) {
+	const yamlConfig = `
+log_level: info
+
+behavior:
+    read_only: true
+
+listener:
+    host: localhost
+    port: 15501
+    read_timeout_millis: 5000
+    write_timeout_millis: 5000
+`
+	ctx := context.Background()
+
+	// Use the same reliable environment creation as other tests that work
+	dEnv, err := sqle.CreateEnvWithSeedData()
+	require.NoError(t, err)
+	defer func() {
+		assert.NoError(t, dEnv.DoltDB(ctx).Close())
+	}()
+
+	controller := svcs.NewController()
+	defer controller.Stop()
+	go func() {
+		dEnv.FS.WriteFile("config.yaml", []byte(yamlConfig), os.ModePerm)
+		err := StartServer(context.Background(), "0.0.0", "dolt sql-server", []string{
+			"--config", "config.yaml",
+		}, dEnv, dEnv.FS, controller)
+		require.NoError(t, err)
+	}()
+	err = controller.WaitForStart()
+	require.NoError(t, err)
+
+	conn, err := dbr.Open("mysql", "root@tcp(localhost:15501)/dolt", nil)
+	require.NoError(t, err)
+	defer conn.Close()
+	sess := conn.NewSession(nil)
+
+	// Test that @@read_only is set to 1
+	var readOnlyValue []struct {
+		Value int `db:"@@read_only"`
+	}
+	_, err = sess.SelectBySql("SELECT @@read_only").LoadContext(ctx, &readOnlyValue)
+	require.NoError(t, err)
+	require.Len(t, readOnlyValue, 1)
+	assert.Equal(t, 1, readOnlyValue[0].Value)
+}
+
+func TestReadOnlyEnforcement(t *testing.T) {
+	ctx := context.Background()
+
+	// Use the same reliable environment creation as other tests that work
+	dEnv, err := sqle.CreateEnvWithSeedData()
+	require.NoError(t, err)
+	defer func() {
+		assert.NoError(t, dEnv.DoltDB(ctx).Close())
+	}()
+
+	// Test read-only server with command line flag
+	serverConfig := DefaultCommandLineServerConfig().withReadOnly(true).WithPort(15502)
+	sc := svcs.NewController()
+	defer sc.Stop()
+	go func() {
+		_, _ = Serve(context.Background(), &Config{
+			Version:      "0.0.0",
+			ServerConfig: serverConfig,
+			Controller:   sc,
+			DoltEnv:      dEnv,
+		})
+	}()
+	err = sc.WaitForStart()
+	require.NoError(t, err)
+
+	conn, err := dbr.Open("mysql", servercfg.ConnectionString(serverConfig, "dolt"), nil)
+	require.NoError(t, err)
+	defer conn.Close()
+	sess := conn.NewSession(nil)
+
+	// Test that @@read_only is set to 1
+	var readOnlyValue []struct {
+		Value int `db:"@@read_only"`
+	}
+	_, err = sess.SelectBySql("SELECT @@read_only").LoadContext(ctx, &readOnlyValue)
+	require.NoError(t, err)
+	require.Len(t, readOnlyValue, 1)
+	assert.Equal(t, 1, readOnlyValue[0].Value)
+
+	// Test that write operations are blocked
+	_, err = sess.SelectBySql("CREATE TABLE test_table (id INT PRIMARY KEY)").LoadContext(ctx, nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "read only mode")
+}
+
+func TestGenerateYamlConfig(t *testing.T) {
+	args := []string{
+		"--timeout", "11",
+		"--branch-control-file", "dir1/dir2/abc.db",
+	}
+
+	privilegeFilePath, err := filepath.Localize(".doltcfg/privileges.db")
+	require.NoError(t, err)
+
+	expected := `# Dolt SQL server configuration
+#
+# Uncomment and edit lines as necessary to modify your configuration.
+# Full documentation: https://docs.dolthub.com/sql-reference/server/configuration
+#
+
+# log_level: info
+
+# log_format: text
+
+# max_logged_query_len: 0
+
+# encode_logged_query: false
+
+# behavior:
+  # read_only: false
+  # autocommit: true
+  # disable_client_multi_statements: false
+  # dolt_transaction_commit: false
+  # event_scheduler: "OFF"
+  # auto_gc_behavior:
+    # enable: false
+    # archive_level: 0
+
+listener:
+  # host: localhost
+  # port: 3306
+  # max_connections: 1000
+  # back_log: 50
+  # max_connections_timeout_millis: 60000
+  read_timeout_millis: 11000
+  write_timeout_millis: 11000
+  # tls_key: key.pem
+  # tls_cert: cert.pem
+  # require_secure_transport: false
+  # allow_cleartext_passwords: false
+  # socket: /tmp/mysql.sock
+
+# data_dir: .
+
+# cfg_dir: .doltcfg
+
+# remotesapi:
+  # port: 8000
+  # read_only: false
+
+# privilege_file: ` + privilegeFilePath +
+		`
+
+branch_control_file: dir1/dir2/abc.db
+
+# user_session_vars:
+# - name: root
+  # vars:
+    # dolt_log_level: warn
+    # dolt_show_system_tables: 1
+
+# system_variables:
+  # dolt_log_level: info
+  # dolt_transaction_commit: 1
+
+# jwks: []
+
+# metrics:
+  # labels: {}
+  # host: localhost
+  # port: 9091
+
+# cluster:
+  # standby_remotes:
+  # - name: standby_replica_one
+    # remote_url_template: https://standby_replica_one.svc.cluster.local:50051/{database}
+  # - name: standby_replica_two
+    # remote_url_template: https://standby_replica_two.svc.cluster.local:50051/{database}
+  # bootstrap_role: primary
+  # bootstrap_epoch: 1
+  # remotesapi:
+    # address: 127.0.0.1
+    # port: 50051
+    # tls_key: remotesapi_key.pem
+    # tls_cert: remotesapi_chain.pem
+    # tls_ca: standby_cas.pem
+    # server_name_urls:
+    # - https://standby_replica_one.svc.cluster.local
+    # - https://standby_replica_two.svc.cluster.local
+    # server_name_dns:
+    # - standby_replica_one.svc.cluster.local
+    # - standby_replica_two.svc.cluster.local`
+
+	ap := SqlServerCmd{}.ArgParser()
+
+	dEnv := sqle.CreateTestEnv()
+
+	cwd, err := os.Getwd()
+	require.NoError(t, err)
+	cwdFs, err := filesys.LocalFilesysWithWorkingDir(cwd)
+	require.NoError(t, err)
+
+	apr := cli.ParseArgsOrDie(ap, args, nil)
+	serverConfig, err := ServerConfigFromArgs(apr, dEnv, cwdFs)
+	require.NoError(t, err)
+
+	assert.Equal(t, expected, generateYamlConfig(serverConfig))
+}
+
+// TestServerSetDefaultBranch is placed at the end because it sets global state that pollutes other tests
 func TestServerSetDefaultBranch(t *testing.T) {
 	ctx := context.Background()
 	dEnv, err := sqle.CreateEnvWithSeedData()
@@ -483,196 +819,4 @@ func runDefaultBranchTests(t *testing.T, tests []defaultBranchTest, conn *dbr.Co
 		})
 	}
 	require.NoError(t, conn.Close())
-}
-
-func TestReadReplica(t *testing.T) {
-	cwd, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("no working directory: %s", err.Error())
-	}
-	defer os.Chdir(cwd)
-
-	ctx := context.Background()
-
-	multiSetup := testcommands.NewMultiRepoTestSetup(t.Fatal)
-	defer os.RemoveAll(multiSetup.Root)
-	defer multiSetup.Close()
-
-	multiSetup.NewDB("read_replica")
-	multiSetup.NewRemote("remote1")
-	multiSetup.PushToRemote("read_replica", "remote1", "main")
-	multiSetup.CloneDB("remote1", "source_db")
-
-	readReplicaDbName := multiSetup.DbNames[0]
-	sourceDbName := multiSetup.DbNames[1]
-
-	localCfg, ok := multiSetup.GetEnv(readReplicaDbName).Config.GetConfig(env.LocalConfig)
-	require.True(t, ok, "local config does not exist")
-	config.NewPrefixConfig(localCfg, env.SqlServerGlobalsPrefix).SetStrings(map[string]string{
-		dsess.ReadReplicaRemote: "remote1",
-		dsess.ReplicateHeads:    "main",
-		dsess.DoltStatsEnabled:  "false",
-	})
-	dsess.InitPersistedSystemVars(multiSetup.GetEnv(readReplicaDbName))
-
-	// start server as read replica
-	sc := svcs.NewController()
-	serverConfig := DefaultCommandLineServerConfig().withLogLevel(servercfg.LogLevel_Fatal).WithPort(15303)
-
-	// set socket to nil to force tcp
-	serverConfig = serverConfig.WithHost("127.0.0.1").WithSocket("")
-
-	os.Chdir(multiSetup.DbPaths[readReplicaDbName])
-	go func() {
-		err, _ = Serve(context.Background(), &Config{
-			Version:      "0.0.0",
-			ServerConfig: serverConfig,
-			Controller:   sc,
-			DoltEnv:      multiSetup.GetEnv(readReplicaDbName),
-		})
-		require.NoError(t, err)
-	}()
-	require.NoError(t, sc.WaitForStart())
-	defer sc.Stop()
-
-	replicatedTable := "new_table"
-	multiSetup.CreateTable(ctx, sourceDbName, replicatedTable)
-	multiSetup.StageAll(sourceDbName)
-	_ = multiSetup.CommitWithWorkingSet(sourceDbName)
-	multiSetup.PushToRemote(sourceDbName, "remote1", "main")
-
-	t.Run("read replica pulls multiple branches", func(t *testing.T) {
-		conn, err := dbr.Open("mysql", servercfg.ConnectionString(serverConfig, readReplicaDbName), nil)
-		defer conn.Close()
-		require.NoError(t, err)
-		sess := conn.NewSession(nil)
-
-		multiSetup.NewBranch(ctx, sourceDbName, "feature")
-		multiSetup.CheckoutBranch(sourceDbName, "feature")
-		multiSetup.PushToRemote(sourceDbName, "remote1", "feature")
-
-		// Configure the read replica to pull the new feature branch we just created
-		config.NewPrefixConfig(localCfg, env.SqlServerGlobalsPrefix).SetStrings(map[string]string{dsess.ReadReplicaRemote: "remote1", dsess.ReplicateHeads: "main,feature"})
-		dsess.InitPersistedSystemVars(multiSetup.GetEnv(readReplicaDbName))
-
-		var res []int
-		q := sess.SelectBySql("call dolt_checkout('feature');")
-		_, err = q.LoadContext(context.Background(), &res)
-		require.NoError(t, err)
-		assert.ElementsMatch(t, res, []int{0})
-	})
-}
-
-func TestGenerateYamlConfig(t *testing.T) {
-	args := []string{
-		"--timeout", "11",
-		"--branch-control-file", "dir1/dir2/abc.db",
-	}
-
-	privilegeFilePath, err := filepath.Localize(".doltcfg/privileges.db")
-	require.NoError(t, err)
-
-	expected := `# Dolt SQL server configuration
-#
-# Uncomment and edit lines as necessary to modify your configuration.
-# Full documentation: https://docs.dolthub.com/sql-reference/server/configuration
-#
-
-# log_level: info
-
-# log_format: text
-
-# max_logged_query_len: 0
-
-# encode_logged_query: false
-
-# behavior:
-  # read_only: false
-  # autocommit: true
-  # disable_client_multi_statements: false
-  # dolt_transaction_commit: false
-  # event_scheduler: "OFF"
-  # auto_gc_behavior:
-    # enable: false
-    # archive_level: 0
-
-listener:
-  # host: localhost
-  # port: 3306
-  # max_connections: 1000
-  # back_log: 50
-  # max_connections_timeout_millis: 60000
-  read_timeout_millis: 11000
-  write_timeout_millis: 11000
-  # tls_key: key.pem
-  # tls_cert: cert.pem
-  # require_secure_transport: false
-  # allow_cleartext_passwords: false
-  # socket: /tmp/mysql.sock
-
-# data_dir: .
-
-# cfg_dir: .doltcfg
-
-# remotesapi:
-  # port: 8000
-  # read_only: false
-
-# privilege_file: ` + privilegeFilePath +
-		`
-
-branch_control_file: dir1/dir2/abc.db
-
-# user_session_vars:
-# - name: root
-  # vars:
-    # dolt_log_level: warn
-    # dolt_show_system_tables: 1
-
-# system_variables:
-  # dolt_log_level: info
-  # dolt_transaction_commit: 1
-
-# jwks: []
-
-# metrics:
-  # labels: {}
-  # host: localhost
-  # port: 9091
-
-# cluster:
-  # standby_remotes:
-  # - name: standby_replica_one
-    # remote_url_template: https://standby_replica_one.svc.cluster.local:50051/{database}
-  # - name: standby_replica_two
-    # remote_url_template: https://standby_replica_two.svc.cluster.local:50051/{database}
-  # bootstrap_role: primary
-  # bootstrap_epoch: 1
-  # remotesapi:
-    # address: 127.0.0.1
-    # port: 50051
-    # tls_key: remotesapi_key.pem
-    # tls_cert: remotesapi_chain.pem
-    # tls_ca: standby_cas.pem
-    # server_name_urls:
-    # - https://standby_replica_one.svc.cluster.local
-    # - https://standby_replica_two.svc.cluster.local
-    # server_name_dns:
-    # - standby_replica_one.svc.cluster.local
-    # - standby_replica_two.svc.cluster.local`
-
-	ap := SqlServerCmd{}.ArgParser()
-
-	dEnv := sqle.CreateTestEnv()
-
-	cwd, err := os.Getwd()
-	require.NoError(t, err)
-	cwdFs, err := filesys.LocalFilesysWithWorkingDir(cwd)
-	require.NoError(t, err)
-
-	apr := cli.ParseArgsOrDie(ap, args, nil)
-	serverConfig, err := ServerConfigFromArgs(apr, dEnv, cwdFs)
-	require.NoError(t, err)
-
-	assert.Equal(t, expected, generateYamlConfig(serverConfig))
 }
