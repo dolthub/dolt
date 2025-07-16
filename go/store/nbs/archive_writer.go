@@ -32,7 +32,6 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
-
 type stagedByteSpanSlice []byteSpan
 
 type stagedChunkRef struct {
