@@ -21,8 +21,12 @@ import (
 	"github.com/dolthub/dolt/go/store/prolly/message"
 )
 
+type Mutation struct {
+	Key, Value Item
+}
+
 type MutationIter interface {
-	NextMutation(ctx context.Context) (key, value Item)
+	NextMutation(ctx context.Context) Mutation
 	Close() error
 }
 
@@ -64,7 +68,9 @@ func ApplyMutations[K ~[]byte, O Ordering[K], S message.Serializer](
 	serializer S,
 	edits MutationIter,
 ) (Node, error) {
-	newKey, newValue := edits.NextMutation(ctx)
+	newMutation := edits.NextMutation(ctx)
+	newKey := newMutation.Key
+	newValue := newMutation.Value
 	if newKey == nil {
 		return root, nil // no mutations
 	}
@@ -99,14 +105,18 @@ func ApplyMutations[K ~[]byte, O Ordering[K], S message.Serializer](
 			// this includes comparing the key bytes because two equal keys may have different bytes,
 			// in which case we need to update the index to match the bytes in the table.
 			if equalValues(newValue, oldValue) && bytes.Equal(newKey, cur.CurrentKey()) {
-				newKey, newValue = edits.NextMutation(ctx)
+				newMutation = edits.NextMutation(ctx)
+				newKey = newMutation.Key
+				newValue = newMutation.Value
 				continue
 			}
 		}
 
 		if oldValue == nil && newValue == nil {
 			// Don't try to delete what isn't there.
-			newKey, newValue = edits.NextMutation(ctx)
+			newMutation = edits.NextMutation(ctx)
+			newKey = newMutation.Key
+			newValue = newMutation.Value
 			continue
 		}
 
@@ -130,7 +140,9 @@ func ApplyMutations[K ~[]byte, O Ordering[K], S message.Serializer](
 		}
 
 		prev := newKey
-		newKey, newValue = edits.NextMutation(ctx)
+		newMutation = edits.NextMutation(ctx)
+		newKey = newMutation.Key
+		newValue = newMutation.Value
 		if newKey != nil {
 			assertTrue(order.Compare(ctx, K(newKey), K(prev)) > 0, "expected sorted edits: %v, %v", prev, newKey)
 		}
