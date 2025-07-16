@@ -32,6 +32,7 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
+
 type stagedByteSpanSlice []byteSpan
 
 type stagedChunkRef struct {
@@ -56,10 +57,12 @@ type archiveWriter struct {
 	md5Summer *HashingByteSink
 	// SHA512 is calculated on chunks of the output stream, so will be reset at appropriate times. This
 	// sinker is what archive code writes to, and it wraps the MD5 sink.
-	output           *HashingByteSink
-	bytesWritten     uint64
-	stagedBytes      stagedByteSpanSlice
-	stagedChunks     stagedChunkRefSlice
+	output       *HashingByteSink
+	bytesWritten uint64
+	stagedBytes  stagedByteSpanSlice
+	stagedChunks stagedChunkRefSlice
+	// seenChunks is used when building archives chunk-by-chunk, to ensure that we do not write the same chunk multiple
+	// times. It is not used for any other purpose, and there are cases where we bypass checking it (e.g. conjoining archives).
 	seenChunks       hash.HashSet
 	indexLen         uint64
 	metadataLen      uint32
@@ -730,55 +733,10 @@ func (aw *archiveWriter) conjoinAll(ctx context.Context, readers []archiveReader
 
 	stats := &Stats{}
 
-	// Process first reader - write data blocks and collect byte span info
-	firstReader := readers[0]
-
-	// Write the entire data section from the first reader using io.Copy
-	dataSpan := firstReader.footer.dataSpan()
-	sectionReader := newSectionReader(ctx, firstReader.reader, int64(dataSpan.offset), int64(dataSpan.length), stats)
-
-	written, err := io.Copy(aw.output, sectionReader)
-	if err != nil {
-		return fmt.Errorf("failed to copy data from first archive: %w", err)
-	}
-	aw.bytesWritten += uint64(written)
-
-	// Build byte span index from first reader
-	for i := uint32(1); i <= firstReader.footer.byteSpanCount; i++ {
-		span := firstReader.getByteSpanByID(i)
-		aw.stagedBytes = append(aw.stagedBytes, span)
-	}
-
-	// Process chunks from first reader and build hash set
-	for i := 0; i < int(firstReader.footer.chunkCount); i++ {
-		// Get chunk reference
-		dictId, dataId := firstReader.getChunkRef(i)
-
-		// Reconstruct the hash from prefix and suffix
-		prefix := firstReader.prefixes[i]
-		suffix := firstReader.getSuffixByID(uint64(i))
-
-		// Create hash from prefix and suffix
-		hashBytes := make([]byte, hash.ByteLen)
-		binary.BigEndian.PutUint64(hashBytes[:hash.PrefixLen], prefix)
-		copy(hashBytes[hash.PrefixLen:], suffix[:])
-		chunkHash := hash.New(hashBytes)
-
-		// Add to seen chunks and staged chunks
-		aw.seenChunks.Insert(chunkHash)
-		aw.stagedChunks = append(aw.stagedChunks, stagedChunkRef{
-			hash:       chunkHash,
-			dictionary: dictId,
-			data:       dataId,
-		})
-	}
-
-	// Process remaining readers
-	for _, reader := range readers[1:] {
-		// Track the current byte offset to adjust byte span IDs
+	for _, reader := range readers {
 		currentByteOffset := aw.bytesWritten
 
-		// Write the entire data section - this is not the final solution because of duplicate chunks.
+		// Write the entire data section for the current reader.
 		dataSpan := reader.footer.dataSpan()
 		sectionReader := newSectionReader(ctx, reader.reader, int64(dataSpan.offset), int64(dataSpan.length), stats)
 
@@ -790,8 +748,6 @@ func (aw *archiveWriter) conjoinAll(ctx context.Context, readers []archiveReader
 
 		// Map byte span IDs from this reader to the combined archive
 		spanIdOffset := uint32(len(aw.stagedBytes))
-
-		// Add byte spans from this reader, adjusting offsets
 		for i := uint32(1); i <= reader.footer.byteSpanCount; i++ {
 			span := reader.getByteSpanByID(i)
 			adjustedSpan := byteSpan{
@@ -801,23 +757,16 @@ func (aw *archiveWriter) conjoinAll(ctx context.Context, readers []archiveReader
 			aw.stagedBytes = append(aw.stagedBytes, adjustedSpan)
 		}
 
-		// Process chunks from this reader
 		for i := 0; i < int(reader.footer.chunkCount); i++ {
-			// Get chunk reference
 			dictId, dataId := reader.getChunkRef(i)
 
 			// Reconstruct the hash from prefix and suffix
 			prefix := reader.prefixes[i]
 			suffix := reader.getSuffixByID(uint64(i))
+			chunkHash := reconstructHashFromPrefixAndSuffix(prefix, suffix)
 
-			// Create hash from prefix and suffix
-			hashBytes := make([]byte, hash.ByteLen)
-			binary.BigEndian.PutUint64(hashBytes[:hash.PrefixLen], prefix)
-			copy(hashBytes[hash.PrefixLen:], suffix[:])
-			chunkHash := hash.New(hashBytes)
-
-			// Add to seen chunks and staged chunks. Note that we allow duplicates here, whereas we don't we doing
-			// a chunk-by-chunk build of an archive.
+			// Add to seen chunks and staged chunks. Note that we allow duplicates here, whereas we quietly skip
+			// duplicates when doing a chunk-by-chunk build of an archive.
 			aw.seenChunks.Insert(chunkHash)
 
 			// Adjust byte span IDs for the combined archive
@@ -836,7 +785,7 @@ func (aw *archiveWriter) conjoinAll(ctx context.Context, readers []archiveReader
 		}
 	}
 
-	err = indexFinalize(aw, hash.Hash{})
+	err := indexFinalize(aw, hash.Hash{})
 	if err != nil {
 		return fmt.Errorf("failed to finalize archive: %w", err)
 	}
