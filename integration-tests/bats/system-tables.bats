@@ -1111,3 +1111,60 @@ SQL
     [ "$status" -ne 0 ]
     [[ "$output" =~ "column \"parents\" could not be found" ]] || false
 }
+
+@test "system-tables: dolt_diff bind variable rejection - dynamic table function" {
+    dolt sql -q "create table users (id int primary key, name varchar(100))"
+    dolt sql -q "insert into users values (1, 'Alice'), (2, 'Bob')"
+    dolt add users
+    dolt commit -m "Added users table"
+    
+    dolt sql -q "insert into users values (3, 'Charlie')"
+    dolt add users
+    dolt commit -m "Added Charlie"
+    
+    # Test dolt_diff with bind variables (should fail - requires literals)
+    # NOTE: dolt_diff is a dynamic table function (schema changes based on table structure)
+    # and intentionally rejects bind variables to ensure schema can be determined at analysis time
+    run dolt sql -q "prepare stmt_diff from 'select * from dolt_diff(?, ?, \"users\")'; set @from = 'HEAD~1'; set @to = 'HEAD'; execute stmt_diff using @from, @to;"
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "Invalid argument to dolt_diff:" ]] || false
+}
+
+@test "system-tables: dolt_query_diff bind variable rejection - dynamic table function" {
+    dolt sql -q "create table users (id int primary key, name varchar(100))"
+    dolt sql -q "insert into users values (1, 'Alice'), (2, 'Bob')"
+    dolt add users
+    dolt commit -m "Added users table"
+    
+    # Test dolt_query_diff with bind variables (should fail - requires literals)
+    # NOTE: dolt_query_diff is a dynamic table function (schema changes based on query structure)
+    # and has bind variable issues similar to other dynamic table functions
+    run dolt sql -q "prepare stmt_query_diff from 'select * from dolt_query_diff(?, ?)'; set @q1 = 'select 1'; set @q2 = 'select 2'; execute stmt_query_diff using @q1, @q2;"
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "unbound variable" ]] || false
+}
+
+@test "system-tables: dolt_preview_merge_conflicts bind variable support - dynamic table function" {
+    dolt sql -q "create table users (id int primary key, name varchar(100))"
+    dolt sql -q "insert into users values (1, 'Alice')"
+    dolt add users
+    dolt commit -m "Added users table"
+    
+    # Create a branch and make conflicting changes
+    dolt checkout -b other
+    dolt sql -q "update users set name = 'Bob' where id = 1"
+    dolt add users
+    dolt commit -m "Changed Alice to Bob"
+    
+    dolt checkout main
+    dolt sql -q "update users set name = 'Charlie' where id = 1"
+    dolt add users
+    dolt commit -m "Changed Alice to Charlie"
+    
+    # Test dolt_preview_merge_conflicts with bind variables (should work)
+    # NOTE: dolt_preview_merge_conflicts is a dynamic table function but supports bind variables
+    # because it has !expression.IsBindVar() checks in its WithExpressions method
+    run dolt sql -q "prepare stmt_preview from 'select * from dolt_preview_merge_conflicts(?, ?, ?)'; set @branch = 'other'; set @base = 'main'; set @table = 'users'; execute stmt_preview using @branch, @base, @table;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "dolt_conflict_id" ]] || false
+}
