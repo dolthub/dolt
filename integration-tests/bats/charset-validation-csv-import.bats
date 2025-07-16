@@ -32,10 +32,11 @@ SQL
     
     # CSV import should show proper charset validation error messages  
     # Use -f to force overwrite and capture stderr with stdout
-    run bash -c "dolt table import -c -f --file-type=csv products mixed-charset.csv < /dev/null 2>&1"
-    [[ "$output" =~ "Incorrect string value:" ]] || false || false
-    [[ "$output" =~ "for column 'name'" ]] || false || false
-    [[ "$output" =~ "at row" ]] || false || false
+    run dolt table import -c -f products mixed-charset.csv
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Incorrect string value:" ]] || false
+    [[ "$output" =~ "for column 'name'" ]] || false
+    [[ "$output" =~ "at row" ]] || false
 }
 
 @test "charset-validation-csv-import: demonstrates charset validation during CSV import" {
@@ -43,11 +44,11 @@ SQL
     
     # This test shows that dolt's CSV import now properly validates charset
     # and provides meaningful error messages (addressing issue #8893)
-    run bash -c "dolt table import -c -f --file-type=csv products mixed-charset.csv < /dev/null 2>&1"
+    run dolt table import -c -f products mixed-charset.csv
     
     # Verify that charset validation is working properly
-    [[ "$output" =~ "Incorrect string value:" ]] || false || false
-    [[ "$output" =~ "for column 'name'" ]] || false || false
+    [[ "$output" =~ "Incorrect string value:" ]] || false
+    [[ "$output" =~ "for column 'name'" ]] || false
 }
 
 @test "charset-validation-csv-import: customer scenario with mixed encoding data" {
@@ -55,26 +56,26 @@ SQL
     
     # Customer's original problem: had Latin1-encoded data in UTF8MB4 columns
     # This caused issues when trying to query or modify the data
-    run bash -c "dolt table import -c -f --file-type=csv products mixed-charset.csv < /dev/null 2>&1"
+    run dolt table import -c -f products mixed-charset.csv
     
     # Verify charset validation now properly handles mixed encoding during import
-    [[ "$output" =~ "Incorrect string value:" ]] || false || false
-    [[ "$output" =~ "for column 'name'" ]] || false || false
-    [[ "$output" =~ "at row" ]] || false || false
+    [[ "$output" =~ "Incorrect string value:" ]] || false
+    [[ "$output" =~ "for column 'name'" ]] || false
+    [[ "$output" =~ "at row" ]] || false
     
     # Verify error shows the actual problematic data for debugging
-    [[ "$output" =~ "DoltLab" ]] || false || false  # Shows the actual data that failed
+    [[ "$output" =~ "DoltLab" ]] || false  # Shows the actual data that failed
 }
 
 @test "charset-validation-csv-import: error messages show proper charset validation details" {
     dolt sql < charset-schema.sql
     
     # Import should show specific charset validation error details  
-    run bash -c "dolt table import -c -f --file-type=csv products mixed-charset.csv < /dev/null 2>&1"
+    run dolt table import -c -f products mixed-charset.csv
     
     # Verify error message format matches MySQL charset validation
-    [[ "$output" =~ "Incorrect string value:" ]] || false || false
-    [[ "$output" =~ "\\x" ]] || false || false  # Should show hex byte format like \xAE
-    [[ "$output" =~ "for column 'name'" ]] || false || false
-    [[ "$output" =~ "at row" ]] || false || false
+    [[ "$output" =~ "Incorrect string value:" ]] || false
+    [[ "$output" =~ "\\x" ]] || false  # Should show hex byte format like \xAE
+    [[ "$output" =~ "for column 'name'" ]] || false
+    [[ "$output" =~ "at row" ]] || false
 }
