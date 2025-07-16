@@ -16,11 +16,13 @@ package tree
 
 import (
 	"context"
-	"github.com/dolthub/dolt/go/store/val"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"io"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 func TestPatchGeneratorFromRoots(t *testing.T) {

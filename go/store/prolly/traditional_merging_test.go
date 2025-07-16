@@ -17,10 +17,12 @@ package prolly
 import (
 	"bytes"
 	"context"
+	"io"
+
+	"golang.org/x/sync/errgroup"
+
 	"github.com/dolthub/dolt/go/store/prolly/message"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
-	"golang.org/x/sync/errgroup"
-	"io"
 )
 
 func traditionalThreeWayMerge[K ~[]byte, O tree.Ordering[K], S message.Serializer](ctx context.Context, ns tree.NodeStore, left, right, base tree.Node, collide tree.CollisionFn, leftSchemaChange, rightSchemaChange bool, order O, serializer S) (final tree.Node, err error) {
