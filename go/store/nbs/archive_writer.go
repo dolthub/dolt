@@ -816,10 +816,8 @@ func (aw *archiveWriter) conjoinAll(ctx context.Context, readers []archiveReader
 			copy(hashBytes[hash.PrefixLen:], suffix[:])
 			chunkHash := hash.New(hashBytes)
 
-			// Error on duplicates for the time being.
-			if aw.seenChunks.Has(chunkHash) {
-				return fmt.Errorf("Duplicate chunk found during conjoinAll: %s", chunkHash.String())
-			}
+			// Add to seen chunks and staged chunks. Note that we allow duplicates here, whereas we don't we doing
+			// a chunk-by-chunk build of an archive.
 			aw.seenChunks.Insert(chunkHash)
 
 			// Adjust byte span IDs for the combined archive
@@ -837,7 +835,7 @@ func (aw *archiveWriter) conjoinAll(ctx context.Context, readers []archiveReader
 			})
 		}
 	}
-	
+
 	err = indexFinalize(aw, hash.Hash{})
 	if err != nil {
 		return fmt.Errorf("failed to finalize archive: %w", err)
