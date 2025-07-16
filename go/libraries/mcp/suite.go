@@ -24,7 +24,7 @@ const (
 	mcpTestRootPassword         = ""
 	doltServerHost              = "0.0.0.0"
 	doltServerPort              = 3306
-	mcpServerPort               = 6900
+	mcpServerPort               = 8080
 )
 
 var ErrNoDatabaseConnection = errors.New("no database connection")
@@ -46,6 +46,10 @@ func (s *testSuite) Ping() error {
 		return ErrNoDatabaseConnection
 	}
 	return s.testDb.Ping()
+}
+
+func (s *testSuite) GetMCPServerUrl() string {
+	return "http://0.0.0.0:8080/mcp"
 }
 
 func (s *testSuite) checkoutBranch(branchName string) error {
@@ -225,17 +229,14 @@ func createMCPDoltServerTestSuite(ctx context.Context, doltBinPath string) (*tes
 		return nil, err
 	}
 
-	// todo: do schema creation stuff here
+	// TODO: do schema creation stuff here
 
-	config := Config{
-		Host:     doltServerHost,
-		Port:     doltServerPort,
-		User:     mcpTestMCPClientSQLUser,
-		Password: mcpTestMCPClientSQLPassword,
-		DatabaseName: mcpTestDatabaseName,
-	}
+	// TODO: this should be test specific
+	middleware := []Middleware{
+		NoopAuthenticationHTTPMiddleware,
+	} 
 
-	mcpServer, err := NewMCPServer(config)
+	mcpServer, err := NewMCPServer(middleware)
 	if err != nil {
 		doltServer.Stop()
 		testDb.Close()
