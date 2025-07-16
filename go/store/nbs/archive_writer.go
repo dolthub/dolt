@@ -16,6 +16,7 @@ package nbs
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha512"
 	"encoding/binary"
 	"errors"
@@ -55,10 +56,12 @@ type archiveWriter struct {
 	md5Summer *HashingByteSink
 	// SHA512 is calculated on chunks of the output stream, so will be reset at appropriate times. This
 	// sinker is what archive code writes to, and it wraps the MD5 sink.
-	output           *HashingByteSink
-	bytesWritten     uint64
-	stagedBytes      stagedByteSpanSlice
-	stagedChunks     stagedChunkRefSlice
+	output       *HashingByteSink
+	bytesWritten uint64
+	stagedBytes  stagedByteSpanSlice
+	stagedChunks stagedChunkRefSlice
+	// seenChunks is used when building archives chunk-by-chunk, to ensure that we do not write the same chunk multiple
+	// times. It is not used for any other purpose, and there are cases where we bypass checking it (e.g. conjoining archives).
 	seenChunks       hash.HashSet
 	indexLen         uint64
 	metadataLen      uint32
@@ -707,4 +710,77 @@ func (asw *ArchiveStreamWriter) convertSnappyAndStage(cc CompressedChunk) (uint3
 	bytesWritten := uint32(len(compressedData))
 
 	return bytesWritten, asw.writer.stageZStdChunk(h, dictId, dataId)
+}
+
+// conjoinAll combines two or more archiveReader instances into a single archive.
+// This method takes a slice of archiveReader instances and merges their contents
+// into the current archiveWriter.
+//
+// This method finalizes the index and footer. Effectively completes the in memory archive writing
+// process, but does not write it to disk.
+func (aw *archiveWriter) conjoinAll(ctx context.Context, readers []archiveReader) error {
+	if len(readers) < 2 {
+		return fmt.Errorf("conjoinAll requires at least 2 archive readers, got %d", len(readers))
+	}
+
+	stats := &Stats{}
+
+	for _, reader := range readers {
+		currentByteOffset := aw.bytesWritten
+
+		// Write the entire data section for the current reader.
+		dataSpan := reader.footer.dataSpan()
+		sectionReader := newSectionReader(ctx, reader.reader, int64(dataSpan.offset), int64(dataSpan.length), stats)
+
+		written, err := io.Copy(aw.output, sectionReader)
+		if err != nil {
+			return fmt.Errorf("failed to copy data from archive: %w", err)
+		}
+		aw.bytesWritten += uint64(written)
+
+		// Map byte span IDs from this reader to the combined archive
+		spanIdOffset := uint32(len(aw.stagedBytes))
+		for i := uint32(1); i <= reader.footer.byteSpanCount; i++ {
+			span := reader.getByteSpanByID(i)
+			adjustedSpan := byteSpan{
+				offset: span.offset + currentByteOffset,
+				length: span.length,
+			}
+			aw.stagedBytes = append(aw.stagedBytes, adjustedSpan)
+		}
+
+		for i := 0; i < int(reader.footer.chunkCount); i++ {
+			dictId, dataId := reader.getChunkRef(i)
+
+			// Reconstruct the hash from prefix and suffix
+			prefix := reader.prefixes[i]
+			suffix := reader.getSuffixByID(uint64(i))
+			chunkHash := reconstructHashFromPrefixAndSuffix(prefix, suffix)
+
+			// Add to seen chunks and staged chunks. Note that we allow duplicates here, whereas we quietly skip
+			// duplicates when doing a chunk-by-chunk build of an archive.
+			aw.seenChunks.Insert(chunkHash)
+
+			// Adjust byte span IDs for the combined archive
+			adjustedDictId := dictId
+			adjustedDataId := dataId
+			if dictId != 0 {
+				adjustedDictId = dictId + spanIdOffset
+			}
+			adjustedDataId = dataId + spanIdOffset
+
+			aw.stagedChunks = append(aw.stagedChunks, stagedChunkRef{
+				hash:       chunkHash,
+				dictionary: adjustedDictId,
+				data:       adjustedDataId,
+			})
+		}
+	}
+
+	err := indexFinalize(aw, hash.Hash{})
+	if err != nil {
+		return fmt.Errorf("failed to finalize archive: %w", err)
+	}
+
+	return nil
 }
