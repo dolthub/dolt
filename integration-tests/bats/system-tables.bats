@@ -1092,8 +1092,13 @@ SQL
     [ "$status" -eq 0 ]
     # Should return results without error (exact output depends on commit structure)
     
+    # Test that parents column is available when using --parents with bind variables
+    run dolt sql -q "prepare stmt5 from 'select commit_hash, parents from dolt_log(?, \"--parents\")'; set @v1 = 'HEAD'; execute stmt5 using @v1;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "parents" ]] || false
+    
     # Test mixed literals and bind variables
-    run dolt sql -q "prepare stmt5 from 'select count(*) from dolt_log(?, \"--not\", \"HEAD~2\")'; set @v1 = 'HEAD'; execute stmt5 using @v1;"
+    run dolt sql -q "prepare stmt6 from 'select count(*) from dolt_log(?, \"--not\", \"HEAD~2\")'; set @v1 = 'HEAD'; execute stmt6 using @v1;"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "2" ]] || false  # Should have 2 commits (HEAD excluding HEAD~2)
 }

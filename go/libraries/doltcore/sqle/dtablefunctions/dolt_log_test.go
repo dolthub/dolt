@@ -135,3 +135,73 @@ func TestDoltLogTypeValidation(t *testing.T) {
 	})
 	assert.NoError(t, err)
 }
+
+func TestDoltLogBindVariableWithParents(t *testing.T) {
+	ctx := sql.NewEmptyContext()
+
+	// Test bind variable with --parents flag to ensure schema is properly determined
+	// during execution phase when bind variables are resolved
+	ltf := &LogTableFunction{ctx: ctx}
+
+	// Test case: dolt_log(?, "--parents") - bind variable with parents flag
+	bindVarExprs := []sql.Expression{
+		expression.NewBindVar("v1"),
+		expression.NewLiteral("--parents", types.Text),
+	}
+
+	// During analysis phase, this should defer parsing due to bind variable
+	node, err := ltf.evalArguments(bindVarExprs...)
+	assert.NoError(t, err)
+	assert.NotNil(t, node)
+
+	newLtf, ok := node.(*LogTableFunction)
+	assert.True(t, ok)
+
+	// Should have stored the original expressions for deferred parsing
+	assert.Equal(t, 2, len(newLtf.argumentExprs))
+	assert.True(t, expression.IsBindVar(newLtf.argumentExprs[0]))
+	assert.Equal(t, "'--parents'", newLtf.argumentExprs[1].String())
+
+	// Should not have parsed the arguments yet (no revision strings)
+	assert.Empty(t, newLtf.revisionStrs)
+	assert.Empty(t, newLtf.notRevisionStrs)
+
+	// showParents should be true during analysis when --parents is a literal flag
+	assert.True(t, newLtf.showParents)
+
+	// Schema should include parents column during analysis when --parents is literal
+	schema := newLtf.Schema()
+	parentColumn := false
+	for _, col := range schema {
+		if col.Name == "parents" {
+			parentColumn = true
+			break
+		}
+	}
+	assert.True(t, parentColumn, "parents column should be in schema during analysis phase when --parents is literal")
+
+	// Now test execution phase - simulate what happens in RowIter
+	// Replace bind variable with actual value
+	executionExprs := []sql.Expression{
+		expression.NewLiteral("HEAD", types.Text),
+		expression.NewLiteral("--parents", types.Text),
+	}
+
+	// This simulates what happens in RowIter when bind variables are resolved
+	err = newLtf.addOptions(executionExprs)
+	assert.NoError(t, err)
+
+	// After execution parsing, showParents should still be true
+	assert.True(t, newLtf.showParents)
+
+	// Schema should still include parents column (unchanged from analysis)
+	schemaAfterExecution := newLtf.Schema()
+	parentColumnAfterExecution := false
+	for _, col := range schemaAfterExecution {
+		if col.Name == "parents" {
+			parentColumnAfterExecution = true
+			break
+		}
+	}
+	assert.True(t, parentColumnAfterExecution, "parents column should remain in schema after execution parsing")
+}
