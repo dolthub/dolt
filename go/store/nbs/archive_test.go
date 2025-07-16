@@ -964,6 +964,171 @@ func TestArchiveConjoinAllMixedCompression(t *testing.T) {
 	assert.Equal(t, expectedChunkCount, actualChunkCount, "Combined archive should have correct chunk count")
 }
 
+func TestArchiveConjoinAllComprehensive(t *testing.T) {
+	rand.Seed(42)
+
+	// Create shared chunks that will be duplicated across archives
+	sharedChunks := [][]byte{
+		generateRandomBytes(100, 50),  // 50 bytes - will be in multiple archives
+		generateRandomBytes(200, 100), // 100 bytes - will be in multiple archives
+		generateRandomBytes(300, 25),  // 25 bytes - will be in multiple archives
+	}
+
+	// Create shared hashes for these chunks
+	sharedHashes := []hash.Hash{
+		hashWithPrefix(t, 1000),
+		hashWithPrefix(t, 2000),
+		hashWithPrefix(t, 3000),
+	}
+
+	// Create 10 archive readers with mixed compression, chunk sizes, and duplicates
+	var readers []archiveReader
+	var allExpectedChunks [][]byte
+	var allExpectedHashes []hash.Hash
+
+	for i := 0; i < 10; i++ {
+		// Generate random chunk sizes between 10 and 250 bytes
+		chunkCount := 3 + rand.Intn(5) // 3-7 chunks per archive
+		archiveChunks := make([][]byte, 0, chunkCount)
+		archiveHashes := make([]hash.Hash, 0, chunkCount)
+		useSnappy := make(map[int]bool)
+
+		// Add 1-2 shared chunks to create duplicates
+		duplicateCount := 1 + rand.Intn(2) // 1-2 duplicates per archive
+		for j := 0; j < duplicateCount && j < len(sharedChunks); j++ {
+			archiveChunks = append(archiveChunks, sharedChunks[j])
+			archiveHashes = append(archiveHashes, sharedHashes[j])
+			// Some shared chunks should be Snappy compressed
+			if j%2 == 0 {
+				useSnappy[len(archiveChunks)-1] = true
+			}
+		}
+
+		// Add unique chunks with random sizes
+		for j := len(archiveChunks); j < chunkCount; j++ {
+			chunkSize := 10 + rand.Intn(241) // 10-250 bytes
+			seed := int64(i*1000 + j*100 + chunkSize)
+			chunkData := generateRandomBytes(seed, chunkSize)
+
+			archiveChunks = append(archiveChunks, chunkData)
+			archiveHashes = append(archiveHashes, hashWithPrefix(t, uint64(i*10000+j)))
+
+			// Randomly assign compression type (about 40% Snappy)
+			if rand.Float32() < 0.4 {
+				useSnappy[j] = true
+			}
+		}
+
+		// Create archive reader
+		metadata := fmt.Sprintf("archive_%d", i)
+		reader, hashes := createTestArchiveWithHashes(t, archiveChunks, archiveHashes, useSnappy, metadata)
+		readers = append(readers, reader)
+
+		// Track all expected chunks and hashes
+		allExpectedChunks = append(allExpectedChunks, archiveChunks...)
+		allExpectedHashes = append(allExpectedHashes, hashes...)
+	}
+
+	// First conjoin: combine all 10 readers
+	writer1 := NewFixedBufferByteSink(make([]byte, 65536))
+	aw1 := newArchiveWriterWithSink(writer1)
+
+	err := aw1.conjoinAll(context.Background(), readers)
+	assert.NoError(t, err)
+
+	// Create first combined reader
+	bytes1 := writer1.buff[:writer1.pos]
+	fileSize1 := uint64(len(bytes1))
+	readerAt1 := bytes.NewReader(bytes1)
+	tra1 := tableReaderAtAdapter{readerAt1}
+
+	combinedReader1, err := newArchiveReader(context.Background(), tra1, fileSize1, &Stats{})
+	assert.NoError(t, err)
+
+	// Create additional readers for second conjoin
+	var additionalReaders []archiveReader
+
+	for i := 0; i < 3; i++ {
+		// Create chunks with some duplicates from the first conjoin
+		chunkCount := 4 + rand.Intn(4) // 4-7 chunks per additional archive
+		archiveChunks := make([][]byte, 0, chunkCount)
+		archiveHashes := make([]hash.Hash, 0, chunkCount)
+		useSnappy := make(map[int]bool)
+
+		// Add 1-2 chunks that duplicate existing ones
+		duplicateCount := 1 + rand.Intn(2)
+		for j := 0; j < duplicateCount && j < len(sharedChunks); j++ {
+			archiveChunks = append(archiveChunks, sharedChunks[j])
+			archiveHashes = append(archiveHashes, sharedHashes[j])
+			// Mix compression types for duplicates
+			if (i+j)%2 == 1 {
+				useSnappy[len(archiveChunks)-1] = true
+			}
+		}
+
+		for j := len(archiveChunks); j < chunkCount; j++ {
+			chunkSize := 15 + rand.Intn(236) // 15-250 bytes
+			seed := int64(i*2000 + j*200 + chunkSize + 50000)
+			chunkData := generateRandomBytes(seed, chunkSize)
+
+			archiveChunks = append(archiveChunks, chunkData)
+			archiveHashes = append(archiveHashes, hashWithPrefix(t, uint64(i*20000+j+50000)))
+
+			if rand.Float32() < 0.6 {
+				useSnappy[j] = true
+			}
+		}
+
+		// Create additional archive reader
+		metadata := fmt.Sprintf("additional_archive_%d", i)
+		reader, hashes := createTestArchiveWithHashes(t, archiveChunks, archiveHashes, useSnappy, metadata)
+		additionalReaders = append(additionalReaders, reader)
+
+		// Add to all expected chunks and hashes
+		allExpectedChunks = append(allExpectedChunks, archiveChunks...)
+		allExpectedHashes = append(allExpectedHashes, hashes...)
+	}
+
+	// Second conjoin: combine the first result with additional readers
+	allReadersForSecondConjoin := append([]archiveReader{combinedReader1}, additionalReaders...)
+
+	writer2 := NewFixedBufferByteSink(make([]byte, 131072))
+	aw2 := newArchiveWriterWithSink(writer2)
+
+	err = aw2.conjoinAll(context.Background(), allReadersForSecondConjoin)
+	assert.NoError(t, err)
+
+	// Create final combined reader
+	bytes2 := writer2.buff[:writer2.pos]
+	fileSize2 := uint64(len(bytes2))
+	readerAt2 := bytes.NewReader(bytes2)
+	tra2 := tableReaderAtAdapter{readerAt2}
+
+	finalCombinedReader, err := newArchiveReader(context.Background(), tra2, fileSize2, &Stats{})
+	assert.NoError(t, err)
+
+	// Verify all expected chunks can be read from the final combined archive
+	ctx := context.Background()
+	stats := &Stats{}
+
+	// Test all chunks
+	for i, h := range allExpectedHashes {
+		assert.True(t, finalCombinedReader.has(h), "chunk %d should be present", i)
+		data, err := finalCombinedReader.get(ctx, h, stats)
+		assert.NoError(t, err)
+		assert.Equal(t, allExpectedChunks[i], data, "chunk %d should have correct data", i)
+	}
+
+	// Verify the final archive has all expected chunks (including duplicates)
+	// Note: duplicates are allowed, so we count all occurrences
+	actualChunkCount := int(finalCombinedReader.footer.chunkCount)
+	assert.Equal(t, len(allExpectedChunks), actualChunkCount, "Final combined archive should have correct chunk count including duplicates")
+
+	// Verify some basic properties
+	assert.Greater(t, actualChunkCount, 30, "Should have substantial number of chunks")
+	assert.Greater(t, len(allExpectedHashes), 20, "Should have processed substantial number of unique chunks")
+}
+
 func assertFloatBetween(t *testing.T, actual, min, max float64) {
 	if actual < min || actual > max {
 		t.Errorf("Expected %f to be between %f and %f", actual, min, max)
@@ -1139,7 +1304,7 @@ func createTestArchive(t *testing.T, prefix uint64, chunks [][]byte, metadata st
 func createTestArchiveWithHashes(t *testing.T, chunkData [][]byte, hashes []hash.Hash, useSnappy map[int]bool, metadata string) (archiveReader, []hash.Hash) {
 	require.Equal(t, len(chunkData), len(hashes), "chunkData and hashes must have same length")
 
-	writer := NewFixedBufferByteSink(make([]byte, 4096))
+	writer := NewFixedBufferByteSink(make([]byte, 8192))
 	aw := newArchiveWriterWithSink(writer)
 
 	// Write dictionary for zStd chunks
