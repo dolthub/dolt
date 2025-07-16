@@ -128,11 +128,11 @@ teardown() {
     # Get the commit hashes and compare their heights using dolt_log() function
     run dolt sql -q "select commit_hash from dolt_commits where message = 'feature commit'"
     [ $status -eq 0 ]
-    feature_hash=$(echo "$output" | tail -n 1 | tr -d ' |')
+    feature_hash=$(echo "$output" | sed -n '4p' | tr -d ' |')
     
     run dolt sql -q "select commit_hash from dolt_commits where message = 'main commit'"
     [ $status -eq 0 ]
-    main_hash=$(echo "$output" | tail -n 1 | tr -d ' |')
+    main_hash=$(echo "$output" | sed -n '4p' | tr -d ' |')
     
     run dolt sql -q "select (select commit_order from dolt_log('$feature_hash') limit 1) = (select commit_order from dolt_log('$main_hash') limit 1) as same_height"
     [ $status -eq 0 ]
