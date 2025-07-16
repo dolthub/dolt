@@ -606,7 +606,7 @@ func (dEnv *DoltEnv) InitDBWithCommitMetaGenerator(ctx context.Context, nbf *typ
 		return err
 	}
 
-	err = dEnv.DoltDB(ctx).WriteEmptyRepoWithCommitMetaGenerator(ctx, branchName, commitMeta)
+	err = dEnv.DoltDB(ctx).WriteRepoWithCommitMetaGeneratorAndAgentDoc(ctx, branchName, commitMeta)
 	if err != nil {
 		return fmt.Errorf("%w: %v", doltdb.ErrNomsIO, err)
 	}
@@ -1309,3 +1309,4 @@ func (dEnv *DoltEnv) BulkDbEaFactory(ctx context.Context) editor.DbEaFactory {
 func (dEnv *DoltEnv) IsAccessModeReadOnly(ctx context.Context) bool {
 	return dEnv.DoltDB(ctx).AccessMode() == chunks.ExclusiveAccessMode_ReadOnly
 }
+

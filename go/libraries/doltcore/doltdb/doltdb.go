@@ -32,6 +32,9 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
+	"github.com/dolthub/dolt/go/libraries/doltcore/row"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/earl"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/chunks"
@@ -191,6 +194,10 @@ func (ddb *DoltDB) WriteEmptyRepoWithCommitMetaGenerator(ctx context.Context, in
 	return ddb.WriteEmptyRepoWithCommitMetaGeneratorAndDefaultBranch(ctx, commitMeta, ref.NewBranchRef(initBranch))
 }
 
+func (ddb *DoltDB) WriteRepoWithCommitMetaGeneratorAndAgentDoc(ctx context.Context, initBranch string, commitMeta datas.CommitMetaGenerator) error {
+	return ddb.WriteRepoWithCommitMetaGeneratorAndAgentDocAndDefaultBranch(ctx, commitMeta, ref.NewBranchRef(initBranch))
+}
+
 func (ddb *DoltDB) WriteEmptyRepoWithCommitTimeAndDefaultBranch(
 	ctx context.Context,
 	name, email string,
@@ -217,6 +224,85 @@ func (ddb *DoltDB) WriteEmptyRepoWithCommitMetaGeneratorAndDefaultBranch(
 
 	rv, err := EmptyRootValue(ctx, ddb.vrw, ddb.ns)
 
+	if err != nil {
+		return err
+	}
+
+	rv, _, err = ddb.WriteRootValue(ctx, rv)
+
+	if err != nil {
+		return err
+	}
+
+	var firstCommit *datas.Commit
+	for {
+		cm, err := commitMetaGenerator.Next()
+		if err != nil {
+			return err
+		}
+
+		commitOpts := datas.CommitOptions{Meta: cm}
+
+		cb := ref.NewInternalRef(CreationBranch)
+		ds, err = ddb.db.GetDataset(ctx, cb.String())
+		if err != nil {
+			return err
+		}
+
+		firstCommit, err = ddb.db.BuildNewCommit(ctx, ds, rv.NomsValue(), commitOpts)
+		if err != nil {
+			return err
+		}
+
+		if commitMetaGenerator.IsGoodCommit(firstCommit) {
+			break
+		}
+	}
+
+	firstCommitDs, err := ddb.db.WriteCommit(ctx, ds, firstCommit)
+
+	if err != nil {
+		return err
+	}
+
+	ds, err = ddb.db.GetDataset(ctx, init.String())
+
+	if err != nil {
+		return err
+	}
+
+	headAddr, ok := firstCommitDs.MaybeHeadAddr()
+	if !ok {
+		return errors.New("commit without head")
+	}
+
+	_, err = ddb.db.SetHead(ctx, ds, headAddr, "")
+	return err
+}
+
+func (ddb *DoltDB) WriteRepoWithCommitMetaGeneratorAndAgentDocAndDefaultBranch(
+	ctx context.Context,
+	commitMetaGenerator datas.CommitMetaGenerator,
+	init ref.BranchRef,
+) error {
+	ds, err := ddb.db.GetDataset(ctx, CreationBranch)
+
+	if err != nil {
+		return err
+	}
+
+	if ds.HasHead() {
+		return errors.New("database already exists")
+	}
+
+	rv, err := EmptyRootValue(ctx, ddb.vrw, ddb.ns)
+
+	if err != nil {
+		return err
+	}
+
+	// Create the AGENT.md document as part of the initial commit
+	rv, err = ddb.createAgentDocInRoot(ctx, rv)
 	if err != nil {
 		return err
 	}
@@ -2404,4 +2490,110 @@ func (ddb *DoltDB) FSCK(ctx context.Context, progress chan string) (*FSCKReport,
 	FSCKReport := FSCKReport{Problems: errs, ChunkCount: chunkCount}
 
 	return &FSCKReport, nil
+}
+
+// createAgentDocInRoot creates the AGENT.md document in the root value as part of the initial commit
+func (ddb *DoltDB) createAgentDocInRoot(ctx context.Context, root RootValue) (RootValue, error) {
+	const agentDocContent = `# Dolt Database Repository
+
+This directory contains a Dolt database.
+
+## About Dolt
+
+Dolt is a SQL database with Git-like version control. You can use familiar SQL commands to query and modify data, and Git-like commands to track changes, branch, and merge.
+
+## Quick Start
+
+- **Access the database**: Use ` + "`dolt sql`" + ` to start an interactive SQL shell
+- **Version control**: Dolt commands work like Git commands:
+  - ` + "`dolt add .`" + ` - Stage changes
+  - ` + "`dolt commit -m \"message\"`" + ` - Commit changes  
+  - ` + "`dolt diff`" + ` - Show changes
+  - ` + "`dolt log`" + ` - Show commit history
+  - ` + "`dolt branch`" + ` - List or create branches
+  - ` + "`dolt merge`" + ` - Merge branches
+
+## Common Commands
+
+- ` + "`dolt status`" + ` - Show working tree status
+- ` + "`dolt schema show`" + ` - Show table schemas
+- ` + "`dolt table ls`" + ` - List tables
+- ` + "`dolt docs print README`" + ` - Print README documentation
+- ` + "`dolt docs print LICENSE`" + ` - Print LICENSE documentation
+
+## SQL + Version Control
+
+Unlike traditional databases, Dolt lets you:
+- Track every change to your data
+- Create branches for experimental changes
+- Merge changes from multiple contributors
+- Roll back to any previous state
+- Collaborate on data like code
+
+For more information, visit: https://doltdb.com`
+
+	// Create the dolt_docs table if it doesn't exist
+	tableName := TableName{Name: DocTableName}
+	if hasTable, err := root.HasTable(ctx, tableName); err != nil {
+		return nil, err
+	} else if !hasTable {
+		root, err = CreateEmptyTable(ctx, root, tableName, DocsSchema)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// Get the table
+	table, found, err := root.GetTable(ctx, tableName)
+	if err != nil {
+		return nil, err
+	}
+	if !found {
+		return nil, fmt.Errorf("table %s not found after creation", DocTableName)
+	}
+
+	// Create the row for AGENT.md
+	taggedVals := row.TaggedValues{
+		schema.DocNameTag: types.String(AgentDoc),
+		schema.DocTextTag: types.String(agentDocContent),
+	}
+
+	r, err := row.New(ddb.vrw.Format(), DocsSchema, taggedVals)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create a table editor to insert the row
+	tableEditor, err := editor.NewTableEditor(ctx, table, DocsSchema, DocTableName, editor.Options{})
+	if err != nil {
+		return nil, err
+	}
+
+	// Insert the row
+	err = tableEditor.InsertRow(ctx, r)
+	if err != nil {
+		tableEditor.Close(ctx)
+		return nil, err
+	}
+
+	// Get the updated table
+	updatedTable, err := tableEditor.Table(ctx)
+	if err != nil {
+		tableEditor.Close(ctx)
+		return nil, err
+	}
+
+	// Close the editor
+	err = tableEditor.Close(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Put the updated table back into the root
+	finalRoot, err := root.PutTable(ctx, tableName, updatedTable)
+	if err != nil {
+		return nil, err
+	}
+
+	return finalRoot, nil
 }
