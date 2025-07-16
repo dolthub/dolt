@@ -904,6 +904,66 @@ func TestArchiveConjoinAllDuplicateChunk(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+func TestArchiveConjoinAllMixedCompression(t *testing.T) {
+	// Create first archive with mixed zStd and Snappy compression
+	chunks1 := [][]byte{
+		{10, 11, 12, 13, 14, 15, 16, 17, 18, 19}, // zStd
+		{20, 21, 22, 23, 24, 25, 26, 27, 28, 29}, // Snappy
+		{30, 31, 32, 33, 34, 35, 36, 37, 38, 39}, // zStd
+	}
+	useSnappy1 := map[int]bool{1: true} // Only chunk at index 1 uses Snappy
+	archiveReader1, hashes1 := createMixedCompressionArchive(t, chunks1, useSnappy1, 42, "archive1")
+
+	// Create second archive with different mix of compression
+	chunks2 := [][]byte{
+		{40, 41, 42, 43, 44, 45, 46, 47, 48, 49}, // Snappy
+		{50, 51, 52, 53, 54, 55, 56, 57, 58, 59}, // zStd
+		{60, 61, 62, 63, 64, 65, 66, 67, 68, 69}, // Snappy
+	}
+	useSnappy2 := map[int]bool{0: true, 2: true} // Chunks at indices 0 and 2 use Snappy
+	archiveReader2, hashes2 := createMixedCompressionArchive(t, chunks2, useSnappy2, 84, "archive2")
+
+	writerCombined := NewFixedBufferByteSink(make([]byte, 8192))
+	awCombined := newArchiveWriterWithSink(writerCombined)
+
+	readers := []archiveReader{archiveReader1, archiveReader2}
+	err := awCombined.conjoinAll(context.Background(), readers)
+	assert.NoError(t, err)
+
+	theBytes := writerCombined.buff[:writerCombined.pos]
+	fileSize := uint64(len(theBytes))
+	readerAt := bytes.NewReader(theBytes)
+	tra := tableReaderAtAdapter{readerAt}
+
+	combinedReader, err := newArchiveReader(context.Background(), tra, fileSize, &Stats{})
+	assert.NoError(t, err)
+
+	// Verify all chunks can be read from the combined archive
+	ctx := context.Background()
+	stats := &Stats{}
+
+	// Test chunks from first archive
+	for i, h := range hashes1 {
+		assert.True(t, combinedReader.has(h), "chunk %d from archive1 should be present", i)
+		data, err := combinedReader.get(ctx, h, stats)
+		assert.NoError(t, err)
+		assert.Equal(t, chunks1[i], data, "chunk %d from archive1 should have correct data", i)
+	}
+
+	// Test chunks from second archive
+	for i, h := range hashes2 {
+		assert.True(t, combinedReader.has(h), "chunk %d from archive2 should be present", i)
+		data, err := combinedReader.get(ctx, h, stats)
+		assert.NoError(t, err)
+		assert.Equal(t, chunks2[i], data, "chunk %d from archive2 should have correct data", i)
+	}
+
+	// Verify we have the expected number of chunks
+	expectedChunkCount := len(chunks1) + len(chunks2)
+	actualChunkCount := int(combinedReader.footer.chunkCount)
+	assert.Equal(t, expectedChunkCount, actualChunkCount, "Combined archive should have correct chunk count")
+}
+
 func assertFloatBetween(t *testing.T, actual, min, max float64) {
 	if actual < min || actual > max {
 		t.Errorf("Expected %f to be between %f and %f", actual, min, max)
@@ -1071,29 +1131,43 @@ func createTestArchive(t *testing.T, prefix uint64, chunks [][]byte, metadata st
 	for range chunks {
 		hashes = append(hashes, hashWithPrefix(t, prefix))
 	}
-	return createTestArchiveWithHashes(t, chunks, hashes, metadata)
+	return createTestArchiveWithHashes(t, chunks, hashes, nil, metadata)
 }
 
 // createTestArchiveWithHashes creates a test archive with specific hashes for each chunk
-func createTestArchiveWithHashes(t *testing.T, chunks [][]byte, hashes []hash.Hash, metadata string) (archiveReader, []hash.Hash) {
-	require.Equal(t, len(chunks), len(hashes), "chunks and hashes must have same length")
+// useSnappy specifies which chunks should use Snappy compression (others use zStd)
+func createTestArchiveWithHashes(t *testing.T, chunkData [][]byte, hashes []hash.Hash, useSnappy map[int]bool, metadata string) (archiveReader, []hash.Hash) {
+	require.Equal(t, len(chunkData), len(hashes), "chunkData and hashes must have same length")
 
 	writer := NewFixedBufferByteSink(make([]byte, 4096))
 	aw := newArchiveWriterWithSink(writer)
 
-	// Write dictionary
+	// Write dictionary for zStd chunks
 	dId, err := aw.writeByteSpan(defaultDict)
 	assert.NoError(t, err)
 
-	// Write chunks and stage them
-	for i, chunkData := range chunks {
-		// Compress the chunk data using the default dictionary
-		compressedData := gozstd.CompressDict(nil, chunkData, defaultCDict)
-		bsId, err := aw.writeByteSpan(compressedData)
-		assert.NoError(t, err)
+	// Write chunks and stage them with appropriate compression
+	for i, data := range chunkData {
+		chunkHash := hashes[i]
 
-		err = aw.stageZStdChunk(hashes[i], dId, bsId)
-		assert.NoError(t, err)
+		if useSnappy[i] {
+			// Use Snappy compression
+			chk := chunks.NewChunkWithHash(chunkHash, data)
+			cmp := ChunkToCompressedChunk(chk)
+			chId, err := aw.writeByteSpan(cmp.FullCompressedChunk)
+			assert.NoError(t, err)
+
+			err = aw.stageSnappyChunk(chunkHash, chId)
+			assert.NoError(t, err)
+		} else {
+			// Use zStd compression with dictionary
+			compressedData := gozstd.CompressDict(nil, data, defaultCDict)
+			bsId, err := aw.writeByteSpan(compressedData)
+			assert.NoError(t, err)
+
+			err = aw.stageZStdChunk(chunkHash, dId, bsId)
+			assert.NoError(t, err)
+		}
 	}
 
 	// Finalize archive
@@ -1127,5 +1201,16 @@ func createArchiveWithDuplicates(t *testing.T, chunks [][]byte, duplicateHashes 
 			hashes = append(hashes, hashWithPrefix(t, prefix))
 		}
 	}
-	return createTestArchiveWithHashes(t, chunks, hashes, metadata)
+	return createTestArchiveWithHashes(t, chunks, hashes, nil, metadata)
+}
+
+// createMixedCompressionArchive creates an archive with mixed zStd and Snappy compression
+// useSnappy is a map of indices that should use Snappy compression (others use zStd)
+func createMixedCompressionArchive(t *testing.T, chunkData [][]byte, useSnappy map[int]bool, prefix uint64, metadata string) (archiveReader, []hash.Hash) {
+	// Generate hashes using the provided prefix
+	var hashes []hash.Hash
+	for range chunkData {
+		hashes = append(hashes, hashWithPrefix(t, prefix))
+	}
+	return createTestArchiveWithHashes(t, chunkData, hashes, useSnappy, metadata)
 }
