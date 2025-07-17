@@ -355,6 +355,9 @@ EOF
 }
 
 @test "ci: dolt ci view shows ci" {
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+          skip "Dolt sql --save has not been migrated to be used with an active server"
+    fi
     cat > workflow.yaml <<EOF
 name: workflow
 on:
