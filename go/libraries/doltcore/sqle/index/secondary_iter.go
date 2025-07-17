@@ -188,7 +188,7 @@ func (c *covLaxSecondaryLookupGen) New(ctx context.Context, k val.Tuple) (prolly
 	}
 
 	var err error
-	if c.prefixDesc.Count() >= c.m.KeyDesc().Count()-1 {
+	if c.prefixDesc.Count() >= c.m.KeyDesc().Count() {
 		// key range optimization only works for full length key
 		start := k
 		stop, ok, err := prolly.IncrementTuple(ctx, start, c.prefixDesc.Count()-1, c.prefixDesc, c.m.Pool(), c.NodeStore())
