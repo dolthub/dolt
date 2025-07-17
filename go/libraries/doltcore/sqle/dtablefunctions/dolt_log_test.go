@@ -27,16 +27,16 @@ import (
 func TestDoltLogBindVariables(t *testing.T) {
 	ctx := sql.NewEmptyContext()
 
-	// Test that bind variables are properly handled in evalArguments
+	// Test that bind variables are properly handled in deferExpressions
 	ltf := &LogTableFunction{ctx: ctx}
 
 	// This should not fail during prepare phase
-	node, err := ltf.evalArguments(expression.NewBindVar("v1"))
+	node, err := ltf.deferExpressions(expression.NewBindVar("v1"))
 	assert.NoError(t, err)
 	assert.NotNil(t, node)
 
 	// Test mixed bind variables and literals
-	node, err = ltf.evalArguments(
+	node, err = ltf.deferExpressions(
 		expression.NewBindVar("v1"),
 		expression.NewLiteral("--parents", types.Text),
 	)
@@ -44,7 +44,7 @@ func TestDoltLogBindVariables(t *testing.T) {
 	assert.NotNil(t, node)
 
 	// Test the exact customer issue case: dolt_log(?, "--not", ?) #9508
-	node, err = ltf.evalArguments(
+	node, err = ltf.deferExpressions(
 		expression.NewBindVar("v1"),
 		expression.NewLiteral("--not", types.Text),
 		expression.NewBindVar("v2"),
@@ -150,7 +150,7 @@ func TestDoltLogBindVariableWithParents(t *testing.T) {
 	}
 
 	// During analysis phase, this should defer parsing due to bind variable
-	node, err := ltf.evalArguments(bindVarExprs...)
+	node, err := ltf.deferExpressions(bindVarExprs...)
 	assert.NoError(t, err)
 	assert.NotNil(t, node)
 
@@ -221,7 +221,7 @@ func TestDoltLogBindVariableAsOption(t *testing.T) {
 
 	// During analysis phase, schema determination should not include parents column
 	// because --parents is in a bind variable, not a literal
-	node, err := ltf.evalArguments(bindVarAsOptionExprs...)
+	node, err := ltf.deferExpressions(bindVarAsOptionExprs...)
 	assert.NoError(t, err)
 	assert.NotNil(t, node)
 
@@ -278,7 +278,7 @@ func TestDoltLogFunctionsRejected(t *testing.T) {
 	}
 
 	// Should fail during analysis because functions are not allowed, regardless of bind variables
-	node, err := ltf.evalArguments(bindVarWithFunctionExprs...)
+	node, err := ltf.deferExpressions(bindVarWithFunctionExprs...)
 	assert.Error(t, err)
 	assert.Nil(t, node)
 	assert.Contains(t, err.Error(), "only literal values supported")

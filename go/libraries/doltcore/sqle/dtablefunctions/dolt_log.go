@@ -14,10 +14,6 @@
 
 package dtablefunctions
 
-// This table function violates SQL analyzer principles by evaluating expressions
-// during both analysis and execution phases. This is necessary because CLI
-// arguments requires pre-evaluated strings for schema determination. Bind variables
-// are handled by skipping evaluation during analysis and deferring to execution.
 import (
 	"fmt"
 	"strings"
@@ -77,7 +73,7 @@ func (ltf *LogTableFunction) NewInstance(ctx *sql.Context, db sql.Database, expr
 		database: db,
 	}
 
-	node, err := newInstance.evalArguments(expressions...)
+	node, err := newInstance.deferExpressions(expressions...)
 	if err != nil {
 		return nil, err
 	}
@@ -90,6 +86,7 @@ func (ltf *LogTableFunction) Database() sql.Database {
 	return ltf.database
 }
 
+// DataLength estimates total data size for query planning.
 func (ltf *LogTableFunction) DataLength(ctx *sql.Context) (uint64, error) {
 	numBytesPerRow := schema.SchemaAvgLength(ltf.Schema())
 	numRows, _, err := ltf.RowCount(ctx)
@@ -99,6 +96,7 @@ func (ltf *LogTableFunction) DataLength(ctx *sql.Context) (uint64, error) {
 	return numBytesPerRow * numRows, nil
 }
 
+// RowCount returns estimated row count for query planning.
 func (ltf *LogTableFunction) RowCount(_ *sql.Context) (uint64, bool, error) {
 	return logTableDefaultRowCount, false, nil
 }
@@ -127,6 +125,7 @@ func (ltf *LogTableFunction) Resolved() bool {
 	return true
 }
 
+// IsReadOnly returns true since log operations don't modify data.
 func (ltf *LogTableFunction) IsReadOnly() bool {
 	return true
 }
@@ -136,6 +135,7 @@ func (ltf *LogTableFunction) String() string {
 	return fmt.Sprintf("DOLT_LOG(%s)", ltf.getOptionsString())
 }
 
+// getOptionsString builds comma-separated argument list for display.
 func (ltf *LogTableFunction) getOptionsString() string {
 	var options []string
 
@@ -256,8 +256,9 @@ func getDoltArgs(ctx *sql.Context, expressions []sql.Expression, name string) ([
 	return args, nil
 }
 
-func (ltf *LogTableFunction) addOptions(expression []sql.Expression) error {
-	args, err := getDoltArgs(ltf.ctx, expression, ltf.Name())
+// addOptions modifies struct state (revisionStrs, notRevisionStrs, showParents, etc.) by parsing expressions.
+func (ltf *LogTableFunction) addOptions(expressions []sql.Expression) error {
+	args, err := getDoltArgs(ltf.ctx, expressions, ltf.Name())
 	if err != nil {
 		return err
 	}
@@ -293,7 +294,7 @@ func (ltf *LogTableFunction) addOptions(expression []sql.Expression) error {
 	ltf.decoration = decorateOption
 
 	// store revision strs directly from cli parse instead of mapping back exprs
-	// avoid circular conv expr -> str -> expr, downstream (evaluateArguments) works with strs already
+	// avoid circular conv expr -> str -> expr, downstream
 	for _, revisionStr := range apr.Args {
 		if strings.HasPrefix(revisionStr, "^") {
 			revisionStr = strings.TrimPrefix(revisionStr, "^")
@@ -307,6 +308,7 @@ func (ltf *LogTableFunction) addOptions(expression []sql.Expression) error {
 	return ltf.validateRevisionStrings()
 }
 
+// WithExpressions returns copy with expressions stored and revision strings cleared.
 func (ltf *LogTableFunction) WithExpressions(exprs ...sql.Expression) (sql.Node, error) {
 	newLtf := *ltf
 	newLtf.argumentExprs = exprs
@@ -316,16 +318,21 @@ func (ltf *LogTableFunction) WithExpressions(exprs ...sql.Expression) (sql.Node,
 	return &newLtf, nil
 }
 
-// evalArguments stores the input expressions for later evaluation during execution.
-// This defers argument parsing until the execute phase to properly handle bind variables.
-func (ltf *LogTableFunction) evalArguments(expressions ...sql.Expression) (sql.Node, error) {
+// deferExpressions stores the input expressions for later evaluation during execution.
+// This table function violates SQL analyzer principles by evaluating expressions
+// during analysis. This is necessary because the schema changes based on what
+// arguments are supplied (e.g., --parent), and the schema needs to be known
+// during analysis time. Bind variables are skipped over during the initial analysis
+// of the prepared statement, and get fully resolved when they are bound when the
+// prepared statement is later executed.
+func (ltf *LogTableFunction) deferExpressions(expressions ...sql.Expression) (sql.Node, error) {
 	bindVarsExist := false
 	for _, expr := range expressions {
 		// functions are not allowed as arguments
 		if _, ok := expr.(sql.FunctionExpression); ok {
 			return nil, ErrInvalidNonLiteralArgument.New(ltf.Name(), expr.String())
 		}
-		// Also check for UnresolvedFunction which might not implement FunctionExpression
+		// also check for UnresolvedFunction which might not implement FunctionExpression
 		if _, ok := expr.(*expression.UnresolvedFunction); ok {
 			return nil, ErrInvalidNonLiteralArgument.New(ltf.Name(), expr.String())
 		}
@@ -339,9 +346,9 @@ func (ltf *LogTableFunction) evalArguments(expressions ...sql.Expression) (sql.N
 
 	// Parse literal arguments for schema determination during analysis phase
 	// getDoltArgs will skip bind variables (can't evaluate them yet)
-	// Only return errors if no bind variables exist (incomplete args are expected with bind vars)
-	// TODO: This approach means schema-affecting flags as bind variables don't add columns to schema.
-	// This may be a common problem for dynamic table functions that need execution-time schema changes.
+	// only return errors if no bind variables exist (incomplete args are expected with bind vars)
+	// TODO: schema-affecting flags as bind variables don't add columns to schema
+	// this may be a common problem for dynamic table functions that need execution-time schema changes
 	if err := newLtf.addOptions(newLtf.argumentExprs); err != nil && !bindVarsExist {
 		return nil, err
 	}
@@ -349,6 +356,7 @@ func (ltf *LogTableFunction) evalArguments(expressions ...sql.Expression) (sql.N
 	return &newLtf, nil
 }
 
+// validateRevisionStrings checks the revision strings for semantic errors.
 func (ltf *LogTableFunction) validateRevisionStrings() error {
 	// validate revision specifications for semantic errors
 	// this works with the parsed string values from CLI parser
@@ -372,7 +380,7 @@ func (ltf *LogTableFunction) validateRevisionStrings() error {
 	return nil
 }
 
-// mustExpressionsToString converts a slice of expressions to a slice of resolved strings.
+// expressionsToString converts a slice of expressions to a slice of resolved strings using Eval.
 func expressionsToString(ctx *sql.Context, expr []sql.Expression) ([]string, error) {
 	var valStrs []string
 
@@ -388,6 +396,7 @@ func expressionsToString(ctx *sql.Context, expr []sql.Expression) ([]string, err
 	return valStrs, nil
 }
 
+// expressionToString uses the result of Eval to convert an expression to a string.
 func expressionToString(ctx *sql.Context, expr sql.Expression) (string, error) {
 	val, err := expr.Eval(ctx, nil)
 	if err != nil {
@@ -402,6 +411,7 @@ func expressionToString(ctx *sql.Context, expr sql.Expression) (string, error) {
 	return valStr, nil
 }
 
+// invalidArgDetailsErr creates an error with the given reason for invalid arguments.
 func (ltf *LogTableFunction) invalidArgDetailsErr(reason string) *errors.Error {
 	return sql.ErrInvalidArgumentDetails.New(ltf.Name(), reason)
 }
@@ -416,10 +426,7 @@ func (ltf *LogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter
 		}
 	}
 
-	revisionValStrs, notRevisionValStrs, threeDot, err := ltf.evaluateArguments()
-	if err != nil {
-		return nil, err
-	}
+	revisionValStrs, notRevisionValStrs, threeDot := ltf.evaluateArguments()
 	notRevisionValStrs = append(notRevisionValStrs, ltf.notRevisionStrs...)
 
 	sqledb, ok := ltf.database.(dsess.SqlDatabase)
@@ -530,37 +537,28 @@ func (ltf *LogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter
 	return ltf.NewDotDotLogTableFunctionRowIter(ctx, sqledb.DbData().Ddb, commits, notCommits, matchFunc, cHashToRefs, ltf.tableNames)
 }
 
-// parseRevisionRange processes a revision string for range syntax (.., ...)
-// Returns (revisions, notRevisions, threeDot, isRange)
-func parseRevisionRange(revisionStr string) ([]string, []string, bool, bool) {
-	if strings.Contains(revisionStr, "..") {
+// evaluateArguments handles range syntax for revisions and returns processed strings.
+func (ltf *LogTableFunction) evaluateArguments() (revisionValStrs []string, notRevisionValStrs []string, threeDot bool) {
+	for _, revisionStr := range ltf.revisionStrs {
 		if strings.Contains(revisionStr, "...") {
 			refs := strings.Split(revisionStr, "...")
-			return refs, nil, true, true
+			return refs, nil, true
 		}
-		refs := strings.Split(revisionStr, "..")
-		return []string{refs[1]}, []string{refs[0]}, false, true
-	}
-	return nil, nil, false, false
-}
 
-// evaluateArguments returns revisionValStrs, notRevisionValStrs, and three dot boolean.
-// It processes the stored revision strings from the CLI parser and handles range syntax.
-func (ltf *LogTableFunction) evaluateArguments() (revisionValStrs []string, notRevisionValStrs []string, threeDot bool, err error) {
-	// Process stored revision strings (from CLI parser)
-	for _, revisionStr := range ltf.revisionStrs {
-		if revs, notRevs, isThreeDot, isRange := parseRevisionRange(revisionStr); isRange {
-			return revs, notRevs, isThreeDot, nil
+		if strings.Contains(revisionStr, "..") {
+			refs := strings.Split(revisionStr, "..")
+			return []string{refs[1]}, []string{refs[0]}, false
 		}
+
 		revisionValStrs = append(revisionValStrs, revisionStr)
 	}
 
-	// Process stored not-revision strings
 	notRevisionValStrs = append(notRevisionValStrs, ltf.notRevisionStrs...)
 
-	return revisionValStrs, notRevisionValStrs, false, nil
+	return revisionValStrs, notRevisionValStrs, false
 }
 
+// getCommitHashToRefs builds map of commit hashes to branch/tag names for decoration.
 func getCommitHashToRefs(ctx *sql.Context, ddb *doltdb.DoltDB, decoration string) (map[hash.Hash][]string, error) {
 	cHashToRefs := map[hash.Hash][]string{}
 
@@ -625,6 +623,7 @@ type logTableFunctionRowIter struct {
 	tableNames []string
 }
 
+// NewLogTableFunctionRowIter creates iterator for single commit history traversal.
 func (ltf *LogTableFunction) NewLogTableFunctionRowIter(ctx *sql.Context, ddb *doltdb.DoltDB, commit *doltdb.Commit, matchFn func(*doltdb.OptionalCommit) (bool, error), cHashToRefs map[hash.Hash][]string, tableNames []string) (*logTableFunctionRowIter, error) {
 	h, err := commit.HashOf()
 	if err != nil {
@@ -647,6 +646,7 @@ func (ltf *LogTableFunction) NewLogTableFunctionRowIter(ctx *sql.Context, ddb *d
 	}, nil
 }
 
+// NewDotDotLogTableFunctionRowIter creates iterator for range queries with inclusion/exclusion commits.
 func (ltf *LogTableFunction) NewDotDotLogTableFunctionRowIter(ctx *sql.Context, ddb *doltdb.DoltDB, commits []*doltdb.Commit, excludingCommits []*doltdb.Commit, matchFn func(*doltdb.OptionalCommit) (bool, error), cHashToRefs map[hash.Hash][]string, tableNames []string) (*logTableFunctionRowIter, error) {
 	hashes := make([]hash.Hash, len(commits))
 	for i, commit := range commits {
@@ -810,10 +810,12 @@ func (itr *logTableFunctionRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 	return row, nil
 }
 
+// Close releases any resources held by the iterator.
 func (itr *logTableFunctionRowIter) Close(_ *sql.Context) error {
 	return nil
 }
 
+// getRefsString formats branch names into display string with parentheses.
 func getRefsString(branchNames []string, isHead bool) string {
 	if len(branchNames) == 0 {
 		return ""
@@ -827,6 +829,7 @@ func getRefsString(branchNames []string, isHead bool) string {
 	return refStr
 }
 
+// getParentsString returns space-separated parent commit hashes.
 func getParentsString(ctx *sql.Context, cm *doltdb.Commit) (string, error) {
 	parents, err := cm.ParentHashes(ctx)
 	if err != nil {
@@ -845,6 +848,7 @@ func getParentsString(ctx *sql.Context, cm *doltdb.Commit) (string, error) {
 }
 
 // Default ("auto") for the dolt_log table function is "no"
+// shouldDecorateWithRefs returns true if decoration setting enables ref display.
 func shouldDecorateWithRefs(decoration string) bool {
 	return decoration == "full" || decoration == "short"
 }

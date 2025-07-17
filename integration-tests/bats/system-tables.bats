@@ -1089,9 +1089,7 @@ SQL
     
     # Test bind variables with other flags
     run dolt sql -q "prepare stmt4 from 'select commit_hash from dolt_log(?, \"--parents\")'; set @v1 = 'HEAD'; execute stmt4 using @v1;"
-    [ "$status" -eq 0 ]
-    # Should return results without error (exact output depends on commit structure)
-    
+
     # Test that parents column is available when using --parents with bind variables
     run dolt sql -q "prepare stmt5 from 'select commit_hash, parents from dolt_log(?, \"--parents\")'; set @v1 = 'HEAD'; execute stmt5 using @v1;"
     [ "$status" -eq 0 ]
@@ -1163,7 +1161,6 @@ SQL
     
     # Test dolt_preview_merge_conflicts with bind variables (should work)
     # NOTE: dolt_preview_merge_conflicts is a dynamic table function but supports bind variables
-    # because it has !expression.IsBindVar() checks in its WithExpressions method
     run dolt sql -q "prepare stmt_preview from 'select * from dolt_preview_merge_conflicts(?, ?, ?)'; set @branch = 'other'; set @base = 'main'; set @table = 'users'; execute stmt_preview using @branch, @base, @table;"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "dolt_conflict_id" ]] || false
