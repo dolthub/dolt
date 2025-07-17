@@ -228,8 +228,8 @@ func getDoltArgs(ctx *sql.Context, expressions []sql.Expression, name string) ([
 	var args []string
 
 	for _, expr := range expressions {
-		// Skip bind variables during analysis phase (can't evaluate yet)
-		// During execution phase, bind variables are resolved to literals by SQL engine
+		// Skip bind variables during prepared statement analysis, since we can't evaluate them.
+		// During execution of a prepared statement, bind variables are replaced with eval'able expressions.
 		if expression.IsBindVar(expr) {
 			continue
 		}
