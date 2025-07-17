@@ -375,7 +375,6 @@ EOF
 
     run dolt ci view "workflow"
     [ "$status" -eq 0 ]
-    echo "$output"
     [[ "$output" =~ "name: \"workflow\"" ]] || false
     [[ "$output" =~ "saved_query_name: \"get tables\"" ]] || false
     [[ "$output" =~ "saved_query_statement: \"show tables\"" ]] || false
@@ -384,7 +383,6 @@ EOF
 @test "ci: dolt ci view errors on invalid workflow" {
     dolt ci init
     run dolt ci view "invalid"
-    echo "$output"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "workflow not found" ]] || false
 }
@@ -407,7 +405,6 @@ EOF
     dolt ci init
     dolt ci import ./workflow_1.yaml
     run dolt ci view "workflow_1"
-    echo "$output"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "saved_query_statement: \"saved query not found\"" ]] || false
 }
@@ -430,7 +427,6 @@ EOF
     dolt ci init
     dolt ci import ./workflow_1.yaml
     run dolt ci view "workflow_1" --job "validate tables"
-    echo "$output"
     [ "$status" -eq 0 ]
     ! [[ "$output" =~ "workflow_1" ]] || false
     ! [[ "$output" =~ "master" ]] || false
@@ -438,7 +434,7 @@ EOF
     [[ "$output" =~ "saved_query_name: \"get tables\"" ]] || false
 }
 
-@test " ci: view with --job option errors on bad job name" {
+@test "ci: view with --job option errors on bad job name" {
     cat > workflow_1.yaml <<EOF
 name: workflow_1
 on:

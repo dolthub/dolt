@@ -33,6 +33,7 @@ var viewDocs = cli.CommandDocumentationContent{
 	LongDesc:  "View details of a specific Dolt CI workflow including steps, configuration, and status",
 	Synopsis: []string{
 		"{{.LessThan}}workflow name{{.GreaterThan}}",
+		"{{.LessThan}}workflow name{{.GreaterThan}} --job {{.LessThan}}job name{{.GreaterThan}}",
 	},
 }
 
@@ -67,7 +68,7 @@ func (cmd ViewCmd) Hidden() bool {
 // ArgParser implements cli.Command.
 func (cmd ViewCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithMaxArgs(cmd.Name(), 1)
-	ap.SupportsString(cli.JobFlag, "j", "job", "View details for the given {{.lessThan}}job name{{.greaterThan}}")
+	ap.SupportsString(cli.JobFlag, "j", "job", "View workflow details for the given {{.LessThan}}job name{{.GreaterThan}}")
 	return ap
 }
 
@@ -117,13 +118,9 @@ func (cmd ViewCmd) Exec(ctx context.Context, commandStr string, args []string, _
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	var toPrint interface{}
-	jobVal, ok := apr.GetValue(cli.JobFlag)
-	if ok {
-		toPrint, err = updateConfigQueryStatements(config, savedQueries, jobVal)
-	} else {
-		toPrint, err = updateConfigQueryStatements(config, savedQueries, "")
-	}
+	// Check if --job was used. A jobVal of "" will be used if the flag was not set, and toPrint will get the full workflow.
+	jobVal, _ := apr.GetValue(cli.JobFlag)
+	toPrint, err := updateConfigQueryStatements(config, savedQueries, jobVal)
 
 	if err != nil {
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
@@ -146,7 +143,7 @@ func printWorkflowConfig(toPrint interface{}) error {
 
 func updateConfigQueryStatements(config *dolt_ci.WorkflowConfig, savedQueries map[string]string, jobName string) (interface{}, error) {
 	for i, job := range config.Jobs {
-		for j, _ := range job.Steps {
+		for j := range job.Steps {
 			step := job.Steps[j]
 			if name := savedQueries[step.SavedQueryName.Value]; name != "" {
 				config.Jobs[i].Steps[j].SavedQueryStatement = yaml.Node{
