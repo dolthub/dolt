@@ -1564,41 +1564,7 @@ func (d *doltWorkflowManager) writeWorkflowSavedQueryStepExpectedRowColumnResult
 }
 
 func (d *doltWorkflowManager) parseSavedQueryExpectedResultString(str string) (WorkflowSavedQueryExpectedRowColumnComparisonType, int64, error) {
-	if str == "" {
-		return WorkflowSavedQueryExpectedRowColumnComparisonTypeUnspecified, 0, nil
-	}
-
-	parts := strings.Split(strings.TrimSpace(str), " ")
-	if len(parts) == 1 {
-		i, err := strconv.ParseInt(parts[0], 10, 64)
-		if err != nil {
-			return 0, 0, err
-		}
-		return WorkflowSavedQueryExpectedRowColumnComparisonTypeEquals, i, nil
-	}
-	if len(parts) == 2 {
-		i, err := strconv.ParseInt(parts[1], 10, 64)
-		if err != nil {
-			return 0, 0, err
-		}
-		switch strings.TrimSpace(parts[0]) {
-		case "==":
-			return WorkflowSavedQueryExpectedRowColumnComparisonTypeEquals, i, nil
-		case "!=":
-			return WorkflowSavedQueryExpectedRowColumnComparisonTypeNotEquals, i, nil
-		case ">":
-			return WorkflowSavedQueryExpectedRowColumnComparisonTypeGreaterThan, i, nil
-		case ">=":
-			return WorkflowSavedQueryExpectedRowColumnComparisonTypeGreaterThanOrEqual, i, nil
-		case "<":
-			return WorkflowSavedQueryExpectedRowColumnComparisonTypeLessThan, i, nil
-		case "<=":
-			return WorkflowSavedQueryExpectedRowColumnComparisonTypeLessThanOrEqual, i, nil
-		default:
-			return 0, 0, errors.New("unknown comparison type")
-		}
-	}
-	return 0, 0, fmt.Errorf("unable to parse comparison string: %s", str)
+	return ParseSavedQueryExpectedResultString(str)
 }
 
 func (d *doltWorkflowManager) toSavedQueryExpectedResultString(comparisonType WorkflowSavedQueryExpectedRowColumnComparisonType, count int64) (string, error) {

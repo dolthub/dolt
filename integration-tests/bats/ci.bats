@@ -458,3 +458,12 @@ EOF
     [ "$status" -eq 1 ]
     [[ "$output" =~ "cannot find job with name: invalid job" ]] || false
 }
+
+
+# TESTS FOR CI RUN
+# RUN W EXPECTED COLUMNS
+# RUN W EXPECTED ROWS
+# RUN WITH EXPECTED ROWS AND COLUMNS
+# ONLY/ALL ASSERTIONS FAILS
+# SOME ASSERTIONS PASS, SOME ASSERTIONS FAIL
+# RUN ON INVALID WORKFLOW
