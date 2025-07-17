@@ -17,6 +17,7 @@ package ci
 import (
 	"context"
 	"fmt"
+
 	"github.com/dolthub/go-mysql-server/sql"
 	"gopkg.in/yaml.v3"
 
