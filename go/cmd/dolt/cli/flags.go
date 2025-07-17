@@ -44,6 +44,7 @@ const (
 	HostFlag             = "host"
 	IncludeUntrackedFlag = "include-untracked"
 	InteractiveFlag      = "interactive"
+	JobFlag              = "job"
 	ListFlag             = "list"
 	MergesFlag           = "merges"
 	MessageArg           = "message"
