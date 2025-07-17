@@ -358,16 +358,14 @@ func ApplySystemVariables(ctx *sql.Context, cfg ServerConfig, sysVarTarget Syste
 	}
 
 	if cfg.ValueSet(ReadTimeoutKey) {
-		// "net_read_timeout" uses seconds instead of milliseconds
-		err := sysVarTarget.SetGlobal(ctx, "net_read_timeout", cfg.ReadTimeout()/1000)
+		err := sysVarTarget.SetGlobal(ctx, "net_read_timeout", cfg.ReadTimeout())
 		if err != nil {
 			return err
 		}
 	}
 
 	if cfg.ValueSet(WriteTimeoutKey) {
-		// "net_write_timeout" uses seconds instead of milliseconds
-		err := sysVarTarget.SetGlobal(ctx, "net_write_timeout", cfg.WriteTimeout()/1000)
+		err := sysVarTarget.SetGlobal(ctx, "net_write_timeout", cfg.WriteTimeout())
 		if err != nil {
 			return err
 		}
