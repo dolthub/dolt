@@ -26,8 +26,9 @@ const (
 )
 
 type Server interface {
-	GetBaseUrl() (string, error) 
+	GetHTTPEndpoint() (string, error) 
 	GetMCPServer() *server.MCPServer
+	RegisterTools()
 	ListenAndServe(ctx context.Context, port int)
 }
 
@@ -36,6 +37,7 @@ type Middleware func(http.Handler) http.Handler
 type serverImpl struct {
 	mcp *server.MCPServer
 	handler http.Handler
+	port int
 }
 
 var _ Server = &serverImpl{}
@@ -66,7 +68,7 @@ func (s *serverImpl) GetMCPServer() *server.MCPServer {
 }
 
 func (s *serverImpl) ListenAndServe(ctx context.Context, port int) {
-	// httpServer := server.NewStreamableHTTPServer(s.mcp) 
+	s.port = port
 	serve(ctx, s.handler, port)
 }
 
@@ -128,8 +130,12 @@ func (s *serverImpl) RegisterTools() {
 	s.registerListDatabasesTool()
 }
 
-func (s *serverImpl) GetBaseUrl() (string, error) {
-	return "", nil	
+func (s *serverImpl) GetHTTPEndpoint() (string, error) {
+	if s.port != 0 {
+		return fmt.Sprintf("http://localhost:%d/mcp", s.port), nil	
+	}
+
+	return "", nil
 }
 
 func serve(ctx context.Context, handler http.Handler, port int) {

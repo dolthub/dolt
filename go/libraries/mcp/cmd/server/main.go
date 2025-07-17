@@ -7,10 +7,14 @@ import (
 )
 
 func main() {
-	srv, err := mcp.NewMCPServer(nil)
+	middleware := []mcp.Middleware{
+		mcp.NoopAuthenticationHTTPMiddleware,
+	}
+	srv, err := mcp.NewMCPServer(middleware)
 	if err != nil {
 		panic(err)
 	}
+	srv.RegisterTools()
 	srv.ListenAndServe(context.Background(), 8080)
 }
 
