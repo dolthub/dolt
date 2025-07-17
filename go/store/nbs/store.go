@@ -2386,7 +2386,7 @@ func (nbs *NomsBlockStore) ConjoinTableFiles(ctx context.Context, storageIds []h
 }
 
 // findTableSpec finds a table spec by hash in the current manifest. This will ignore novel tables, as it's not
-// needed currently.
+// needed currently. This function also checks for archive files via the persister.
 func (nbs *NomsBlockStore) findTableSpec(storageId hash.Hash) (tableSpec, bool) {
 	for _, spec := range nbs.upstream.specs {
 		if spec.name == storageId {
@@ -2402,5 +2402,18 @@ func (nbs *NomsBlockStore) findTableSpec(storageId hash.Hash) (tableSpec, bool) 
 			return tableSpec{name: storageId, chunkCount: count}, true
 		}
 	}
+	
+	// Check if the storage ID corresponds to an archive file by attempting to open it
+	// The persister's Open method will check for both table files and archive files
+	ctx := context.Background()
+	cs, err := nbs.persister.Open(ctx, storageId, 0, nbs.stats)
+	if err == nil {
+		defer cs.close()
+		count, err := cs.count()
+		if err == nil {
+			return tableSpec{name: storageId, chunkCount: count}, true
+		}
+	}
+	
 	return tableSpec{name: storageId, chunkCount: 0}, false
 }

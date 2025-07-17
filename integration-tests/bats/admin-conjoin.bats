@@ -115,3 +115,35 @@ get_chunk_count() {
     storage_ids=($(get_oldgen_storage_ids))
     [ "${#storage_ids[@]}" -eq 1 ]
 }
+
+@test "admin-conjoin: test conjoin with archive files" {
+    dolt sql -q "$(mutations_and_gc_statement)"
+    dolt sql -q "$(mutations_and_gc_statement)"
+    dolt sql -q "$(mutations_and_gc_statement)"
+    
+    storage_ids=($(get_oldgen_storage_ids))
+    [ "${#storage_ids[@]}" -eq 3 ]
+    
+    dolt archive --purge
+
+    # Get archive file IDs - these should be .darc files in oldgen
+    archive_ids=($(find .dolt/noms/oldgen -type f -name "*.darc" 2>/dev/null | xargs -I {} basename {} .darc))
+    [ "${#archive_ids[@]}" -eq 3 ]
+    
+    # Record chunk count before conjoin
+    run dolt fsck
+    [ "$status" -eq 0 ]
+    chunks_before=$(get_chunk_count "$output")
+
+    id1="${archive_ids[0]}"
+    id2="${archive_ids[1]}"
+    run dolt admin conjoin "$id1" "$id2"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Successfully conjoined" ]] || false
+    
+    # Verify data integrity after conjoin
+    run dolt fsck
+    [ "$status" -eq 0 ]
+    chunks_after=$(get_chunk_count "$output")
+    [[ "$chunks_before" -eq "$chunks_after" ]] || false
+}
