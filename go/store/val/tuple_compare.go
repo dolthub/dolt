@@ -44,10 +44,6 @@ var _ TupleComparator = DefaultTupleComparator{}
 
 // Compare implements TupleComparator
 func (d DefaultTupleComparator) Compare(ctx context.Context, left, right Tuple, desc TupleDesc) (cmp int) {
-	if left.Count() < len(desc.fast) || right.Count() < len(desc.fast) {
-		return d.comparePrefix(left, right, desc)
-	}
-
 	for i := range desc.fast {
 		start, stop := desc.fast[i][0], desc.fast[i][1]
 		cmp = compare(desc.Types[i], left[start:stop], right[start:stop])
@@ -60,17 +56,6 @@ func (d DefaultTupleComparator) Compare(ctx context.Context, left, right Tuple, 
 	for i, typ := range desc.Types[off:] {
 		j := i + off
 		cmp = compare(typ, left.GetField(j), right.GetField(j))
-		if cmp != 0 {
-			return cmp
-		}
-	}
-	return
-}
-
-func (d DefaultTupleComparator) comparePrefix(left, right Tuple, desc TupleDesc) (cmp int) {
-	prefixLength := min(left.Count(), right.Count())
-	for i := 0; i < prefixLength; i++ {
-		cmp = compare(desc.Types[i], left.GetField(i), right.GetField(i))
 		if cmp != 0 {
 			return cmp
 		}
