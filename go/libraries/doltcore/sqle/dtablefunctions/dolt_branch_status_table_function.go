@@ -130,7 +130,7 @@ func (b *BranchStatusTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.
 		return nil, err
 	}
 
-	specs, err := mustExpressionsToString(ctx, b.exprs)
+	specs, err := expressionsToString(ctx, b.exprs)
 	if err != nil {
 		return nil, err
 	}

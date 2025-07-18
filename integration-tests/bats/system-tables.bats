@@ -128,11 +128,11 @@ teardown() {
     # Get the commit hashes and compare their heights using dolt_log() function
     run dolt sql -q "select commit_hash from dolt_commits where message = 'feature commit'"
     [ $status -eq 0 ]
-    feature_hash=$(echo "$output" | tail -n 1 | tr -d ' |')
+    feature_hash=$(echo "$output" | sed -n '4p' | tr -d ' |')
     
     run dolt sql -q "select commit_hash from dolt_commits where message = 'main commit'"
     [ $status -eq 0 ]
-    main_hash=$(echo "$output" | tail -n 1 | tr -d ' |')
+    main_hash=$(echo "$output" | sed -n '4p' | tr -d ' |')
     
     run dolt sql -q "select (select commit_order from dolt_log('$feature_hash') limit 1) = (select commit_order from dolt_log('$main_hash') limit 1) as same_height"
     [ $status -eq 0 ]
@@ -1061,4 +1061,107 @@ SQL
     run dolt sql -q 'SELECT COUNT(*) FROM dolt_history_dolt_procedures WHERE created_at IS NOT NULL AND modified_at IS NOT NULL'
     [ "$status" -eq 0 ]
     [[ "$output" =~ "5" ]] || false
+}
+
+@test "system-tables: dolt_log table function with prepared statements" {
+    # Test for issue #9508: Can't prepare dolt_log procedure statement
+    dolt sql -q "create table test (pk int, c1 int, primary key(pk))"
+    dolt add test
+    dolt commit -m "initial commit"
+    dolt sql -q "create table test2 (pk int, c1 int, primary key(pk))"
+    dolt add test2
+    dolt commit -m "second commit"
+    
+    # Test basic bind variable support - single parameter
+    run dolt sql -q "prepare stmt1 from 'select count(*) from dolt_log(?)'; set @v1 = 'HEAD'; execute stmt1 using @v1;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "3" ]] || false  # Should have 3 commits (init + 2 commits)
+    
+    # Test multiple bind variables with range
+    run dolt sql -q "prepare stmt2 from 'select count(*) from dolt_log(?)'; set @v1 = 'HEAD~1..HEAD'; execute stmt2 using @v1;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1" ]] || false  # Should have 1 commit in the range
+    
+    # Test the original customer issue: dolt_log with --not flag and bind variables
+    run dolt sql -q "prepare stmt3 from 'select count(*) from dolt_log(?, \"--not\", ?)'; set @v1 = 'HEAD', @v2 = 'HEAD~1'; execute stmt3 using @v1, @v2;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1" ]] || false  # Should have 1 commit (HEAD excluding HEAD~1)
+    
+    # Test bind variables with other flags
+    run dolt sql -q "prepare stmt4 from 'select commit_hash from dolt_log(?, \"--parents\")'; set @v1 = 'HEAD'; execute stmt4 using @v1;"
+
+    # Test that parents column is available when using --parents with bind variables
+    run dolt sql -q "prepare stmt5 from 'select commit_hash, parents from dolt_log(?, \"--parents\")'; set @v1 = 'HEAD'; execute stmt5 using @v1;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "parents" ]] || false
+    
+    # Test mixed literals and bind variables
+    run dolt sql -q "prepare stmt6 from 'select count(*) from dolt_log(?, \"--not\", \"HEAD~2\")'; set @v1 = 'HEAD'; execute stmt6 using @v1;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "2" ]] || false  # Should have 2 commits (HEAD excluding HEAD~2)
+    
+    # Test bind variable as option flag - schema-affecting flags as bind variables don't add columns to schema
+    run dolt sql -q "prepare stmt7 from 'select commit_hash from dolt_log(\"HEAD\", ?)'; set @flag = '--parents'; execute stmt7 using @flag;"
+    [ "$status" -eq 0 ]
+    
+    # Selecting optional columns when flag is bind variable fails during analysis
+    run dolt sql -q "prepare stmt_fail from 'select commit_hash, parents from dolt_log(\"HEAD\", ?)'; set @flag = '--parents'; execute stmt_fail using @flag;"
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "column \"parents\" could not be found" ]] || false
+}
+
+@test "system-tables: dolt_diff bind variable rejection - dynamic table function" {
+    dolt sql -q "create table users (id int primary key, name varchar(100))"
+    dolt sql -q "insert into users values (1, 'Alice'), (2, 'Bob')"
+    dolt add users
+    dolt commit -m "Added users table"
+    
+    dolt sql -q "insert into users values (3, 'Charlie')"
+    dolt add users
+    dolt commit -m "Added Charlie"
+    
+    # Test dolt_diff with bind variables (should fail - requires literals)
+    # NOTE: dolt_diff is a dynamic table function (schema changes based on table structure)
+    # and intentionally rejects bind variables to ensure schema can be determined at analysis time
+    run dolt sql -q "prepare stmt_diff from 'select * from dolt_diff(?, ?, \"users\")'; set @from = 'HEAD~1'; set @to = 'HEAD'; execute stmt_diff using @from, @to;"
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "Invalid argument to dolt_diff:" ]] || false
+}
+
+@test "system-tables: dolt_query_diff bind variable rejection - dynamic table function" {
+    dolt sql -q "create table users (id int primary key, name varchar(100))"
+    dolt sql -q "insert into users values (1, 'Alice'), (2, 'Bob')"
+    dolt add users
+    dolt commit -m "Added users table"
+    
+    # Test dolt_query_diff with bind variables (should fail - requires literals)
+    # NOTE: dolt_query_diff is a dynamic table function (schema changes based on query structure)
+    # and has bind variable issues similar to other dynamic table functions
+    run dolt sql -q "prepare stmt_query_diff from 'select * from dolt_query_diff(?, ?)'; set @q1 = 'select 1'; set @q2 = 'select 2'; execute stmt_query_diff using @q1, @q2;"
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "unbound variable" ]] || false
+}
+
+@test "system-tables: dolt_preview_merge_conflicts bind variable support - dynamic table function" {
+    dolt sql -q "create table users (id int primary key, name varchar(100))"
+    dolt sql -q "insert into users values (1, 'Alice')"
+    dolt add users
+    dolt commit -m "Added users table"
+    
+    # Create a branch and make conflicting changes
+    dolt checkout -b other
+    dolt sql -q "update users set name = 'Bob' where id = 1"
+    dolt add users
+    dolt commit -m "Changed Alice to Bob"
+    
+    dolt checkout main
+    dolt sql -q "update users set name = 'Charlie' where id = 1"
+    dolt add users
+    dolt commit -m "Changed Alice to Charlie"
+    
+    # Test dolt_preview_merge_conflicts with bind variables (should work)
+    # NOTE: dolt_preview_merge_conflicts is a dynamic table function but supports bind variables
+    run dolt sql -q "prepare stmt_preview from 'select * from dolt_preview_merge_conflicts(?, ?, ?)'; set @branch = 'other'; set @base = 'main'; set @table = 'users'; execute stmt_preview using @branch, @base, @table;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "dolt_conflict_id" ]] || false
 }
