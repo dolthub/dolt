@@ -138,7 +138,11 @@ func (a *AutoIncrementTracker) Next(ctx *sql.Context, tbl string, insertVal inte
 	}
 
 	if given >= curr {
-		a.sequences.Store(tbl, given+1)
+		if a.shouldCapAutoIncrement(ctx, tbl, given) {
+			a.sequences.Store(tbl, given)
+		} else {
+			a.sequences.Store(tbl, given+1)
+		}
 		return given, nil
 	}
 
@@ -516,6 +520,39 @@ func (a *AutoIncrementTracker) initWithRoots(ctx context.Context, roots ...doltd
 	}
 
 	return eg.Wait()
+}
+
+func (a *AutoIncrementTracker) shouldCapAutoIncrement(ctx *sql.Context, tbl string, currentVal uint64) bool {
+	sess := DSessFromSess(ctx.Session)
+	db, ok := sess.Provider().BaseDatabase(ctx, a.dbName)
+	if !ok || !db.Versioned() {
+		return false
+	}
+
+	ws, err := sess.WorkingSet(ctx, a.dbName)
+	if err != nil {
+		return false
+	}
+
+	table, _, ok, err := doltdb.GetTableInsensitive(ctx, ws.WorkingRoot(), doltdb.TableName{Name: tbl})
+	if err != nil || !ok {
+		return false
+	}
+
+	sch, err := table.GetSchema(ctx)
+	if err != nil {
+		return false
+	}
+
+	aiCol, ok := schema.GetAutoIncrementColumn(sch)
+	if !ok {
+		return false
+	}
+
+	sqlType := aiCol.TypeInfo.ToSqlType()
+	nextVal := currentVal + 1
+	_, inRange, err := sqlType.Convert(ctx, nextVal)
+	return err != nil || inRange != sql.InRange
 }
 
 func (a *AutoIncrementTracker) InitWithRoots(ctx context.Context, roots ...doltdb.Rootish) error {
