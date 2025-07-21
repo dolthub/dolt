@@ -27,6 +27,8 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
+	expcreds "google.golang.org/grpc/experimental/credentials"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/creds"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
@@ -91,7 +93,7 @@ func (p GRPCDialProvider) GetGRPCDialParams(config grpcendpoint.Config) (dbfacto
 
 	var opts []grpc.DialOption
 	if config.TLSConfig != nil {
-		tc := credentials.NewTLS(config.TLSConfig)
+		tc := expcreds.NewTLSWithALPNDisabled(config.TLSConfig)
 		opts = append(opts, grpc.WithTransportCredentials(tc))
 
 		transport := &http.Transport{
@@ -109,9 +111,9 @@ func (p GRPCDialProvider) GetGRPCDialParams(config grpcendpoint.Config) (dbfacto
 			Transport: transport,
 		}
 	} else if config.Insecure {
-		opts = append(opts, grpc.WithInsecure())
+		opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	} else {
-		tc := credentials.NewTLS(&tls.Config{})
+		tc := expcreds.NewTLSWithALPNDisabled(&tls.Config{})
 		opts = append(opts, grpc.WithTransportCredentials(tc))
 	}
 
