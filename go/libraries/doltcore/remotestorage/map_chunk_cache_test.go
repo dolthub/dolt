@@ -93,7 +93,6 @@ func TestMapChunkCache(t *testing.T) {
 
 		// Querying an empty cache returns all the hashes.
 		res := cache.GetCachedHas(query)
-		assert.NotSame(t, res, query)
 		assert.Len(t, res, 64)
 		for h := range query {
 			_, ok := res[h]

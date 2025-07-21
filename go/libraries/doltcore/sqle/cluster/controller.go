@@ -38,6 +38,8 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
+	expcreds "google.golang.org/grpc/experimental/credentials"
 	"google.golang.org/grpc/status"
 
 	replicationapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/replicationapi/v1alpha1"
@@ -1154,9 +1156,9 @@ type replicationServiceClient struct {
 func (c *Controller) replicationServiceDialOptions() []grpc.DialOption {
 	var ret []grpc.DialOption
 	if c.tlsCfg == nil {
-		ret = append(ret, grpc.WithInsecure())
+		ret = append(ret, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	} else {
-		ret = append(ret, grpc.WithTransportCredentials(credentials.NewTLS(c.tlsCfg)))
+		ret = append(ret, grpc.WithTransportCredentials(expcreds.NewTLSWithALPNDisabled(c.tlsCfg)))
 	}
 
 	ret = append(ret, grpc.WithStreamInterceptor(c.cinterceptor.Stream()))
