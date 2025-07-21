@@ -42,14 +42,14 @@ RUN pip3 install mysql-connector-python PyMySQL sqlalchemy
 # Setup JAVA_HOME -- useful for docker commandline
 ENV JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64/
 
-# install the current latest maven version, `v3.9.10`, because apt installed one does not work with jdk 17
-ADD https://dlcdn.apache.org/maven/maven-3/3.9.10/binaries/apache-maven-3.9.10-bin.tar.gz apache-maven-3.9.10-bin.tar.gz
-RUN tar zxvf apache-maven-3.9.10-bin.tar.gz && \
-    cp -r apache-maven-3.9.10 /opt && \
-    rm -rf apache-maven-3.9.10 apache-maven-3.9.10-bin.tar.gz
+# install the current latest maven version, `v3.9.11`, because apt installed one does not work with jdk 17
+ADD https://dlcdn.apache.org/maven/maven-3/3.9.11/binaries/apache-maven-3.9.11-bin.tar.gz apache-maven-3.9.11-bin.tar.gz
+RUN tar zxvf apache-maven-3.9.11-bin.tar.gz && \
+    cp -r apache-maven-3.9.11 /opt && \
+    rm -rf apache-maven-3.9.11 apache-maven-3.9.11-bin.tar.gz
 
 # add maven binary
-ENV PATH=/opt/apache-maven-3.9.10/bin:$PATH
+ENV PATH=/opt/apache-maven-3.9.11/bin:$PATH
 
 # install dolt from source
 WORKDIR /root/building

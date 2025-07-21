@@ -23,9 +23,10 @@ import (
 type DiffType byte
 
 const (
-	AddedDiff    DiffType = 0
-	ModifiedDiff DiffType = 1
-	RemovedDiff  DiffType = 2
+	NoDiff       DiffType = 0
+	AddedDiff    DiffType = 1
+	ModifiedDiff DiffType = 2
+	RemovedDiff  DiffType = 3
 )
 
 type Diff struct {

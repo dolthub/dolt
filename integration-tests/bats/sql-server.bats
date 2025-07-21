@@ -280,6 +280,66 @@ user_session_vars:
     dolt status
 }
 
+@test "sql-server: read-only mode sets @@read_only system variable" {
+    skiponwindows "Missing dependencies"
+
+    cd repo1
+
+    # Start up the server in read-only mode
+    start_sql_server_with_args "--readonly"
+
+    # Verify that @@read_only system variable is set to 1
+    run dolt sql -q "SELECT @@read_only;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1" ]] || false
+
+    # Verify that @@global.read_only system variable is set to 1
+    run dolt sql -q "SELECT @@global.read_only;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1" ]] || false
+
+    # Verify that write operations are blocked
+    run dolt sql -q "CREATE TABLE test_readonly_table (id INT PRIMARY KEY);"
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "read only mode" ]] || false
+}
+
+@test "sql-server: read-only mode via YAML config sets @@read_only system variable" {
+    skiponwindows "Missing dependencies"
+
+    cd repo1
+
+    # Create YAML config with read-only enabled
+    PORT=$( definePORT )
+    cat > config.yml <<EOF
+log_level: info
+behavior:
+  read_only: true
+listener:
+  host: 0.0.0.0
+  port: $PORT
+EOF
+
+    # Start up the server with YAML config
+    if [ "$IS_WINDOWS" == true ]; then
+      dolt sql-server --config config.yml &
+    else
+      dolt sql-server --config config.yml --socket "dolt.$PORT.sock" &
+    fi
+    SERVER_PID=$!
+    wait_for_connection $PORT 8500
+
+    # Verify that @@read_only system variable is set to 1
+    run dolt sql -q "SELECT @@read_only;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1" ]] || false
+
+    # Verify that write operations are blocked
+    run dolt sql -q "CREATE TABLE test_readonly_yaml_table (id INT PRIMARY KEY);"
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "read only mode" ]] || false
+}
+
 @test "sql-server: inspect sql-server using CLI" {
     skiponwindows "Missing dependencies"
 

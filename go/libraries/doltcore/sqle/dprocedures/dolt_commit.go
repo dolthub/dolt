@@ -69,9 +69,16 @@ func doDoltCommit(ctx *sql.Context, args []string) (string, bool, error) {
 	// Get the information for the sql context.
 	dbName := ctx.GetCurrentDatabase()
 
-	apr, err := cli.CreateCommitArgParser().Parse(args)
+	apr, err := cli.CreateCommitArgParser(true).Parse(args)
 	if err != nil {
 		return "", false, err
+	}
+
+	targetBranch, branchSpecified := apr.GetValue(cli.BranchParam)
+	if branchSpecified {
+		// Use revision-qualified database name for the target branch. This will enable you to commit
+		// to branches other than the current branch.
+		dbName = fmt.Sprintf("%s/%s", dbName, targetBranch)
 	}
 
 	if err := cli.VerifyCommitArgs(apr); err != nil {

@@ -30,7 +30,8 @@ func TestAddressDifferFromRootsOneLayer(t *testing.T) {
 	ctx := sql.NewEmptyContext()
 	ns := NewTestNodeStore()
 	fromTups, desc := AscendingUintTuples(42)
-	fromRoot := makeTree(t, fromTups)
+	fromRoot, err := MakeTreeForTest(fromTups)
+	assert.NoError(t, err)
 	assert.Equal(t, 42, fromRoot.Count())
 	assert.Equal(t, 0, fromRoot.Level())
 
@@ -39,11 +40,11 @@ func TestAddressDifferFromRootsOneLayer(t *testing.T) {
 	copy(toTups, fromTups)
 	bld := val.NewTupleBuilder(desc, ns)
 	// modify value in the first half of the tree
-	var err error
 	bld.PutUint32(0, uint32(42))
 	toTups[23][1], err = bld.Build(sharedPool)
 	assert.NoError(t, err)
-	toRoot := makeTree(t, toTups)
+	toRoot, err := MakeTreeForTest(toTups)
+	assert.NoError(t, err)
 
 	dfr, err := layerDifferFromRoots(ctx, ns, ns, fromRoot, toRoot, desc)
 	assert.NoError(t, err)
@@ -57,7 +58,8 @@ func TestAddressDifferFromRootsTwoLayer(t *testing.T) {
 	ns := NewTestNodeStore()
 
 	fromTups, desc := AscendingUintTuples(416)
-	fromRoot := makeTree(t, fromTups)
+	fromRoot, err := MakeTreeForTest(fromTups)
+	assert.NoError(t, err)
 	assert.Equal(t, 2, fromRoot.Count())
 	assert.Equal(t, 1, fromRoot.Level())
 
@@ -70,10 +72,10 @@ func TestAddressDifferFromRootsTwoLayer(t *testing.T) {
 	bld := val.NewTupleBuilder(desc, ns)
 	// modify value early in the tree, to ensure the modification happens on the first child of the root.
 	bld.PutUint32(0, uint32(42))
-	var err error
 	toTups[23][1], err = bld.Build(sharedPool)
 	assert.NoError(t, err)
-	toRoot := makeTree(t, toTups)
+	toRoot, err := MakeTreeForTest(toTups)
+	assert.NoError(t, err)
 
 	after := toRoot.getAddress(0)
 	assert.NotEqual(t, before, after)
@@ -98,7 +100,8 @@ func TestAddressDifferFromRootsThreeLayer(t *testing.T) {
 	// of its own, which is the content. If we alter the content in the last ~250 elements of the tuple, it should
 	// result in a modification of the second child of the root.
 	fromTups, desc := AscendingUintTuples(23800)
-	fromRoot := makeTree(t, fromTups)
+	fromRoot, err := MakeTreeForTest(fromTups)
+	assert.NoError(t, err)
 	assert.Equal(t, 2, fromRoot.Count())
 	assert.Equal(t, 2, fromRoot.Level())
 
@@ -108,10 +111,10 @@ func TestAddressDifferFromRootsThreeLayer(t *testing.T) {
 	bld := val.NewTupleBuilder(desc, ns)
 	// modify value in the second half of the tree
 	bld.PutUint32(0, uint32(42))
-	var err error
 	toTups[23700][1], err = bld.Build(sharedPool)
 	assert.NoError(t, err)
-	toRoot := makeTree(t, toTups)
+	toRoot, err := MakeTreeForTest(toTups)
+	assert.NoError(t, err)
 
 	dfr, err := layerDifferFromRoots(ctx, ns, ns, fromRoot, toRoot, desc)
 	assert.NoError(t, err)
@@ -142,17 +145,19 @@ func TestAddressDifferFromRootsThreeLayer(t *testing.T) {
 
 func TestAddressDifferFromRootsLayerMismatch(t *testing.T) {
 	fromTups, desc := AscendingUintTuples(416)
-	fromRoot := makeTree(t, fromTups)
+	fromRoot, err := MakeTreeForTest(fromTups)
+	assert.NoError(t, err)
 	assert.Equal(t, 2, fromRoot.Count())
 	assert.Equal(t, 1, fromRoot.Level())
 
 	toTups := fromTups[:415]
-	toRoot := makeTree(t, toTups)
+	toRoot, err := MakeTreeForTest(toTups)
+	assert.NoError(t, err)
 	assert.Equal(t, 415, toRoot.Count())
 	assert.Equal(t, 0, toRoot.Level())
 
 	ctx := sql.NewEmptyContext()
 	ns := NewTestNodeStore()
-	_, err := layerDifferFromRoots(ctx, ns, ns, fromRoot, toRoot, desc)
+	_, err = layerDifferFromRoots(ctx, ns, ns, fromRoot, toRoot, desc)
 	assert.Equal(t, ErrRootDepthMismatch, err)
 }

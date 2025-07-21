@@ -70,12 +70,12 @@ func (cmd AddCmd) Description() string {
 }
 
 func (cmd AddCmd) Docs() *cli.CommandDocumentation {
-	ap := cli.CreateAddArgParser()
+	ap := cli.CreateAddArgParser(false)
 	return cli.NewCommandDocumentation(addDocs, ap)
 }
 
 func (cmd AddCmd) ArgParser() *argparser.ArgParser {
-	return cli.CreateAddArgParser()
+	return cli.CreateAddArgParser(false)
 }
 
 // generateAddSql returns the query that will call the `DOLT_ADD` stored proceudre.
@@ -111,7 +111,7 @@ func generateAddSql(apr *argparser.ArgParseResults) string {
 
 // Exec executes the command
 func (cmd AddCmd) Exec(ctx context.Context, commandStr string, args []string, _ *env.DoltEnv, cliCtx cli.CliContext) int {
-	ap := cli.CreateAddArgParser()
+	ap := cli.CreateAddArgParser(false)
 
 	// This flag is only supported in a CLI context, not the in the dolt procedure.
 	ap.SupportsFlag(cli.PatchFlag, "p", "Interactively select changes to add to the staged set.")

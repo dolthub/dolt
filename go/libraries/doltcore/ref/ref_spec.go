@@ -197,6 +197,16 @@ func (rs TagToTagRefSpec) DestRef(r DoltRef) DoltRef {
 	return nil
 }
 
+// GetRemote returns the name of the remote being operated on.
+func (rs TagToTagRefSpec) GetRemote() string {
+	return ""
+}
+
+// GetRemRefToLocal returns the local tracking branch.
+func (rs TagToTagRefSpec) GetRemRefToLocal() branchMapper {
+	return identityBranchMapper(rs.srcRef.GetPath())
+}
+
 // BranchToTrackingBranchRefSpec maps a branch to the branch that should be tracking it
 type BranchToTrackingBranchRefSpec struct {
 	localPattern  pattern

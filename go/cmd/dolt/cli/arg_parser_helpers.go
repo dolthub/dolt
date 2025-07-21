@@ -58,7 +58,7 @@ const (
 var branchForceFlagDesc = "Reset {{.LessThan}}branchname{{.GreaterThan}} to {{.LessThan}}startpoint{{.GreaterThan}}, even if {{.LessThan}}branchname{{.GreaterThan}} exists already. Without {{.EmphasisLeft}}-f{{.EmphasisRight}}, {{.EmphasisLeft}}dolt branch{{.EmphasisRight}} refuses to change an existing branch. In combination with {{.EmphasisLeft}}-d{{.EmphasisRight}} (or {{.EmphasisLeft}}--delete{{.EmphasisRight}}), allow deleting the branch irrespective of its merged status. In combination with -m (or {{.EmphasisLeft}}--move{{.EmphasisRight}}), allow renaming the branch even if the new branch name already exists, the same applies for {{.EmphasisLeft}}-c{{.EmphasisRight}} (or {{.EmphasisLeft}}--copy{{.EmphasisRight}})."
 
 // CreateCommitArgParser creates the argparser shared dolt commit cli and DOLT_COMMIT.
-func CreateCommitArgParser() *argparser.ArgParser {
+func CreateCommitArgParser(supportsBranchFlag bool) *argparser.ArgParser {
 	ap := argparser.NewArgParserWithMaxArgs("commit", 0)
 	ap.SupportsString(MessageArg, "m", "msg", "Use the given {{.LessThan}}msg{{.GreaterThan}} as the commit message.")
 	ap.SupportsFlag(AllowEmptyFlag, "", "Allow recording a commit that has the exact same data as its sole parent. This is usually a mistake, so it is disabled by default. This option bypasses that safety. Cannot be used with --skip-empty.")
@@ -70,6 +70,9 @@ func CreateCommitArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(UpperCaseAllFlag, "A", "Adds all tables and databases (including new tables) in the working set to the staged set.")
 	ap.SupportsFlag(AmendFlag, "", "Amend previous commit")
 	ap.SupportsOptionalString(SignFlag, "S", "key-id", "Sign the commit using GPG. If no key-id is provided the key-id is taken from 'user.signingkey' the in the configuration")
+	if supportsBranchFlag {
+		ap.SupportsString(BranchParam, "", "branch", "Commit to the specified branch instead of the current branch.")
+	}
 	return ap
 }
 
@@ -134,11 +137,14 @@ func CreatePushArgParser() *argparser.ArgParser {
 	return ap
 }
 
-func CreateAddArgParser() *argparser.ArgParser {
+func CreateAddArgParser(supportsBranchFlag bool) *argparser.ArgParser {
 	ap := argparser.NewArgParserWithVariableArgs("add")
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "Working table(s) to add to the list tables staged to be committed. The abbreviation '.' can be used to add all tables."})
 	ap.SupportsFlag(AllFlag, "A", "Stages any and all changes (adds, deletes, and modifications) except for ignored tables.")
 	ap.SupportsFlag(ForceFlag, "f", "Allow adding otherwise ignored tables.")
+	if supportsBranchFlag {
+		ap.SupportsString(BranchParam, "", "branch", "Add to the specified branch instead of the current branch.")
+	}
 
 	return ap
 }
@@ -306,7 +312,7 @@ func CreateGCArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithMaxArgs("gc", 0)
 	ap.SupportsFlag(ShallowFlag, "s", "perform a fast, but incomplete garbage collection pass")
 	ap.SupportsFlag(FullFlag, "f", "perform a full garbage collection, including the old generation")
-	ap.SupportsInt(ArchiveLevelParam, "", "archive compression level", "Specify the archive compression level garbage collection results. Default is 0. Max is 2")
+	ap.SupportsInt(ArchiveLevelParam, "", "archive compression level", "Specify the archive compression level garbage collection results. Default is 0. Max is 1")
 	return ap
 }
 

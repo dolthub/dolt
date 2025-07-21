@@ -24,10 +24,11 @@ import (
 )
 
 type Step struct {
-	Name            yaml.Node `yaml:"name"`
-	SavedQueryName  yaml.Node `yaml:"saved_query_name"`
-	ExpectedColumns yaml.Node `yaml:"expected_columns,omitempty"`
-	ExpectedRows    yaml.Node `yaml:"expected_rows,omitempty"`
+	Name                yaml.Node `yaml:"name"`
+	SavedQueryName      yaml.Node `yaml:"saved_query_name"`
+	SavedQueryStatement yaml.Node `yaml:"saved_query_statement"`
+	ExpectedColumns     yaml.Node `yaml:"expected_columns,omitempty"`
+	ExpectedRows        yaml.Node `yaml:"expected_rows,omitempty"`
 }
 
 type Job struct {
