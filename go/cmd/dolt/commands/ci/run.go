@@ -17,13 +17,14 @@ package ci
 import (
 	"context"
 	"fmt"
-
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions/dolt_ci"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/fatih/color"
 )
 
 var runDocs = cli.CommandDocumentationContent{
@@ -76,7 +77,7 @@ func (cmd RunCmd) Exec(ctx context.Context, commandStr string, args []string, _ 
 
 	// Check if workflow name provided
 	if len(args) == 0 {
-		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(fmt.Errorf("workflow name is required")),
+		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(fmt.Errorf("must specify workflow name")),
 			usage)
 	}
 	workflowName := args[0]
@@ -102,6 +103,7 @@ func (cmd RunCmd) Exec(ctx context.Context, commandStr string, args []string, _ 
 	if err != nil {
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
+
 	wm := dolt_ci.NewWorkflowManager(name, email, queryist.Query)
 
 	config, err := wm.GetWorkflowConfig(sqlCtx, workflowName)
@@ -109,13 +111,82 @@ func (cmd RunCmd) Exec(ctx context.Context, commandStr string, args []string, _ 
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	savedQueries, err := 
+	savedQueries, err := getSavedQueries(sqlCtx, queryist)
+	if err != nil {
+		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	}
+	cli.Println(color.CyanString("Running workflow: %s", workflowName))
+	queryAndPrint(sqlCtx, queryist, config, savedQueries)
 
+	return 0
+}
+
+// QueryAndPrint iterates through the jobs and steps for the given config, the runs each saved query and given assertion
+func queryAndPrint(sqlCtx *sql.Context, queryist cli.Queryist, config *dolt_ci.WorkflowConfig, savedQueries map[string]string) {
 	for _, job := range config.Jobs {
+		cli.Println(color.GreenString("Running job: %s", job.Name.Value))
 		for _, step := range job.Steps {
-			//Do something
+			cli.Printf("Step: %s - ", step.Name.Value)
+
+			rows, err := runCIQuery(queryist, sqlCtx, step, savedQueries)
+			if err == nil {
+				err = assertQueries(rows, step)
+			}
+
+			if err != nil {
+				cli.Println("FAIL")
+				cli.Println(color.RedString("%s", err))
+			} else {
+				cli.Println("PASS")
+			}
+		}
+	}
+}
+
+func runCIQuery(queryist cli.Queryist, sqlCtx *sql.Context, step dolt_ci.Step, savedQueries map[string]string) ([]sql.Row, error) {
+	query := savedQueries[step.SavedQueryName.Value]
+	if query == "" {
+		return nil, fmt.Errorf("Could not find saved query: %s", step.SavedQueryName.Value)
+	}
+
+	rows, err := commands.GetRowsForSql(queryist, sqlCtx, query)
+	if err != nil {
+		return nil, fmt.Errorf("Query error: %s", err.Error())
+	}
+
+	return rows, nil
+}
+
+func assertQueries(rows []sql.Row, step dolt_ci.Step) error {
+	var colCount int64
+	rowCount := int64(len(rows))
+	if rowCount > 0 {
+		colCount = int64(len(rows[0]))
+	}
+
+	var colAssertError, rowAssertError string
+	rowCompType, expectedRows, err := dolt_ci.ParseSavedQueryExpectedResultString(step.ExpectedRows.Value)
+	if rowCompType != dolt_ci.WorkflowSavedQueryExpectedRowColumnComparisonTypeUnspecified {
+		err = dolt_ci.ValidateQueryExpectedRowOrColumnCount(rowCount, expectedRows, rowCompType, "row")
+		if err != nil {
+			rowAssertError = fmt.Sprintf("Assertion failed: %s", err.Error())
+		}
+	}
+	colCompType, expectedCols, err := dolt_ci.ParseSavedQueryExpectedResultString(step.ExpectedColumns.Value)
+	if colCompType != dolt_ci.WorkflowSavedQueryExpectedRowColumnComparisonTypeUnspecified {
+		err = dolt_ci.ValidateQueryExpectedRowOrColumnCount(colCount, expectedCols, colCompType, "column")
+		if err != nil {
+			colAssertError = fmt.Sprintf("Assertion failed: %s", err.Error())
 		}
 	}
 
-	return 0
+	var errStr, newLine string
+	if colAssertError != "" && rowAssertError != "" {
+		newLine = "\n"
+	}
+	errStr = fmt.Sprintf("%s%s%s", colAssertError, rowAssertError, newLine)
+	if errStr != "" {
+		return fmt.Errorf(errStr)
+	}
+	return nil
 }

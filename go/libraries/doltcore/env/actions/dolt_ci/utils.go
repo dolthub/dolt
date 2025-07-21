@@ -58,3 +58,36 @@ func ParseSavedQueryExpectedResultString(str string) (WorkflowSavedQueryExpected
 	}
 	return 0, 0, fmt.Errorf("unable to parse comparison string: %s", str)
 }
+
+func ValidateQueryExpectedRowOrColumnCount(countReal int64, countExpected int64, comp WorkflowSavedQueryExpectedRowColumnComparisonType, RowColumnType string) error {
+	switch comp {
+	case WorkflowSavedQueryExpectedRowColumnComparisonTypeEquals:
+		if countReal != countExpected {
+			return fmt.Errorf("expected %s count %d, got %d", RowColumnType, countExpected, countReal)
+		}
+	case WorkflowSavedQueryExpectedRowColumnComparisonTypeNotEquals:
+		if countReal == countExpected {
+			return fmt.Errorf("expected %s count not %d and got %d", RowColumnType, countExpected, countReal)
+		}
+	case WorkflowSavedQueryExpectedRowColumnComparisonTypeGreaterThan:
+		if countReal <= countExpected {
+			return fmt.Errorf("expected %s count greater than %d, got %d", RowColumnType, countExpected, countReal)
+		}
+	case WorkflowSavedQueryExpectedRowColumnComparisonTypeGreaterThanOrEqual:
+		if countReal < countExpected {
+			return fmt.Errorf("expected %s count greater than or equal to %d, got %d", RowColumnType, countExpected, countReal)
+		}
+	case WorkflowSavedQueryExpectedRowColumnComparisonTypeLessThan:
+		if countReal >= countExpected {
+			return fmt.Errorf("expected %s count less than %d, got %d", RowColumnType, countExpected, countReal)
+		}
+	case WorkflowSavedQueryExpectedRowColumnComparisonTypeLessThanOrEqual:
+		if countReal > countExpected {
+			return fmt.Errorf("expected %s count less than or equal to %d, got %d", RowColumnType, countExpected, countReal)
+		}
+	default:
+		return fmt.Errorf("no assertion run")
+	}
+
+	return nil
+}
