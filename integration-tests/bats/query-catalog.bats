@@ -36,39 +36,28 @@ teardown() {
     teardown_common
 }
 
-@test "query-catalog: save query" {
-    run dolt sql -q "desc dolt_query_catalog"
-    [ "$status" -eq 1 ]
-    run dolt sql -q "select pk,pk1,pk2 from one_pk,two_pk where one_pk.c1=two_pk.c1" -s "my name" -m "my message"
+@test "query-catalog: can describe dolt_query_catalog" {
+    run dolt sql -q "desc dolt_query_catalog" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "id" ]] || false
+    [[ "$output" =~ "query" ]] || false
+}
+
+@test "query-catalog: save query without message" {
+    run dolt sql -q "select pk from one_pk" -s "select"
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 8 ]
-    run dolt sql -q "desc dolt_query_catalog"
+}
+
+@test "query-catalog: save query with message" {
+    run dolt sql -q "select pk from one_pk" -s "select" -m "my message"
     [ "$status" -eq 0 ]
-    run dolt sql -q "select * from dolt_query_catalog" -r csv
+    [ "${#lines[@]}" -eq 8 ]
+
+    run dolt sql -l -r csv
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 2 ]
-    [[ "$output" =~ "id,display_order,name,query,description" ]] || false
+    [[ "$output" =~ "select" ]] || false
     [[ "$output" =~ "my message" ]] || false
-    [[ "$output" =~ "my name" ]] || false
-    [[ "$output" =~ "select pk,pk1,pk2 from one_pk,two_pk where one_pk.c1=two_pk.c1" ]] || false
-
-    run dolt status
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "dolt_query_catalog" ]] || false
-
-    run dolt add dolt_query_catalog
-    [ "$status" -eq 0 ]
-
-    run dolt commit -m "Added query catalog"
-    [ "$status" -eq 0 ]
-
-    run dolt status
-    [ "$status" -eq 0 ]
-    ! [[ "$output" =~ "dolt_query_catalog" ]] || false
-
-    run dolt sql -q "select * from dolt_query_catalog" -r csv
-    [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 2 ]
 }
 
 @test "query-catalog: empty directory" {
@@ -77,45 +66,17 @@ teardown() {
     run dolt sql -q "show databases" --save name
     [ "$status" -ne 0 ]
     [[ ! "$output" =~ panic ]] || false
-    [[ "$output" =~ "--save must be used in a dolt database directory" ]] || false
+    [[ "$output" =~ "The current directory is not a valid dolt repository." ]] || false
 
     run dolt sql --list-saved
     [ "$status" -ne 0 ]
     [[ ! "$output" =~ panic ]] || false
-    [[ "$output" =~ "--list-saved must be used in a dolt database directory" ]] || false
+    [[ "$output" =~ "The current directory is not a valid dolt repository." ]] || false
 
     run dolt sql --execute name
     [ "$status" -ne 0 ]
     [[ ! "$output" =~ panic ]] || false
-    [[ "$output" =~ "--execute must be used in a dolt database directory" ]] || false
-}
-
-@test "query-catalog: conflict" {
-    dolt sql -q "select pk,pk1,pk2 from one_pk,two_pk where one_pk.c1=two_pk.c1" -s "name1" -m "my message"
-    dolt add .
-    dolt commit -m 'Added a test query'
-
-    dolt checkout -b edit_a
-    dolt sql -q "update dolt_query_catalog set name='name_a'"
-    dolt add .
-    dolt commit -m 'Changed name to edit_a'
-
-    dolt checkout main
-    dolt checkout -b edit_b
-    dolt sql -q "update dolt_query_catalog set name='name_b'"
-    dolt add .
-    dolt commit -m 'Changed name to edit_b'
-
-    dolt checkout main
-    dolt merge edit_a -m "merge edit_a"
-    run dolt merge edit_b -m "merge edit_b"
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "Merge conflict in dolt_query_catalog" ]] || false
-
-    run dolt conflicts cat .
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "name_a" ]] || false
-    [[ "$output" =~ "name_b" ]] || false
+    [[ "$output" =~ "The current directory is not a valid dolt repository." ]] || false
 }
 
 @test "query-catalog: executed saved" {
@@ -135,6 +96,7 @@ EOF
 )
 
     run dolt sql -r csv -x name1
+    echo "$output"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "$EXPECTED" ]] || false
 
@@ -163,6 +125,7 @@ EOF
 )
 
     run dolt sql --list-saved -r csv
+    echo "$output"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "$EXPECTED" ]] || false
 
@@ -179,6 +142,7 @@ EOF
 )
 
     run dolt sql --list-saved -r csv
+    echo "$output"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "$EXPECTED" ]] || false
     
