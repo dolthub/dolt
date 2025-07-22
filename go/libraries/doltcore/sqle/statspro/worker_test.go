@@ -641,7 +641,16 @@ func newStatsCoord(t *testing.T, bthreads *sql.BackgroundThreads) *StatsControll
 }
 
 func emptySetup(t *testing.T, threads *sql.BackgroundThreads, memOnly bool, gcEnabled bool) (*sql.Context, *gms.Engine, *StatsController) {
-	dEnv := dtestutils.CreateTestEnv()
+	return emptySetupDetail(t, threads, memOnly, gcEnabled, false)
+}
+
+func emptySetupDetail(t *testing.T, threads *sql.BackgroundThreads, memOnly bool, gcEnabled bool, fsEnabled bool) (*sql.Context, *gms.Engine, *StatsController) {
+	var dEnv *env.DoltEnv
+	if fsEnabled {
+		dEnv = dtestutils.CreateTestEnvForLocalFilesystem()
+	} else {
+		dEnv = dtestutils.CreateTestEnv()
+	}
 	sqlEng, ctx := newTestEngine(context.Background(), t, dEnv, threads)
 	ctx.Session.SetClient(sql.Client{
 		User:    "billy boy",
@@ -703,7 +712,11 @@ func emptySetup(t *testing.T, threads *sql.BackgroundThreads, memOnly bool, gcEn
 }
 
 func defaultSetup(t *testing.T, threads *sql.BackgroundThreads, memOnly bool, gcEnabled bool) (*sql.Context, *gms.Engine, *StatsController) {
-	ctx, sqlEng, sc := emptySetup(t, threads, memOnly, gcEnabled)
+	return defaultSetupDetail(t, threads, memOnly, gcEnabled, false)
+}
+
+func defaultSetupDetail(t *testing.T, threads *sql.BackgroundThreads, memOnly bool, gcEnabled bool, fsEnabled bool) (*sql.Context, *gms.Engine, *StatsController) {
+	ctx, sqlEng, sc := emptySetupDetail(t, threads, memOnly, gcEnabled, fsEnabled)
 	//sc.Debug = true
 
 	require.NoError(t, executeQuery(ctx, sqlEng, "create table xy (x int primary key, y int, key (y,x))"))

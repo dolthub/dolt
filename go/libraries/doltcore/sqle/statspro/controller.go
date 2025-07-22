@@ -542,22 +542,21 @@ func (sc *StatsController) rm(fs filesys.Filesys) error {
 		return err
 	}
 
+	dropDbLoc, err := statsFs.Abs("")
+	if err != nil {
+		return err
+	}
+
+	if err = dbfactory.DeleteFromSingletonCache(filepath.ToSlash(dropDbLoc+"/.dolt/noms"), true); err != nil {
+		// Swallow this error for now. This only comes from closing the database, and closing is not always successful.
+	}
+
 	if ok, _ := statsFs.Exists(""); ok {
 		if err := statsFs.Delete("", true); err != nil {
 			return err
 		}
 	}
 
-	dropDbLoc, err := statsFs.Abs("")
-	if err != nil {
-		return err
-	}
-
-	//log.Println("rm", dropDbLoc)
-
-	if err = dbfactory.DeleteFromSingletonCache(filepath.ToSlash(dropDbLoc + "/.dolt/noms")); err != nil {
-		return err
-	}
 	return nil
 }
 

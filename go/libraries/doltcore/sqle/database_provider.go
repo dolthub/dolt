@@ -798,13 +798,15 @@ func (p *DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error
 	}
 
 	// If this database is re-created, we don't want to return any cached results.
-	err = dbfactory.DeleteFromSingletonCache(filepath.ToSlash(dropDbLoc + "/.dolt/noms"))
+	err = dbfactory.DeleteFromSingletonCache(filepath.ToSlash(dropDbLoc+"/.dolt/noms"), false)
 	if err != nil {
 		return err
 	}
-	err = dbfactory.DeleteFromSingletonCache(filepath.ToSlash(dropDbLoc + "/.dolt/stats/.dolt/noms"))
+	err = dbfactory.DeleteFromSingletonCache(filepath.ToSlash(dropDbLoc+"/.dolt/stats/.dolt/noms"), true)
 	if err != nil {
-		return err
+		// Swallow the error closing `stats` database.
+		// TODO: Log this.
+		err = nil
 	}
 
 	err = p.droppedDatabaseManager.DropDatabase(ctx, name, dropDbLoc)
