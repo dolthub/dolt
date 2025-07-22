@@ -526,27 +526,27 @@ func (a *AutoIncrementTracker) canIncrementAutoIncVal(ctx *sql.Context, tbl stri
 	sess := DSessFromSess(ctx.Session)
 	db, ok := sess.Provider().BaseDatabase(ctx, a.dbName)
 	if !ok || !db.Versioned() {
-		return true
+		return false
 	}
 
 	ws, err := sess.WorkingSet(ctx, a.dbName)
 	if err != nil {
-		return true
+		return false
 	}
 
 	table, _, ok, err := doltdb.GetTableInsensitive(ctx, ws.WorkingRoot(), doltdb.TableName{Name: tbl})
 	if err != nil || !ok {
-		return true
+		return false
 	}
 
 	sch, err := table.GetSchema(ctx)
 	if err != nil {
-		return true
+		return false
 	}
 
 	aiCol, ok := schema.GetAutoIncrementColumn(sch)
 	if !ok {
-		return true
+		return false
 	}
 
 	sqlType := aiCol.TypeInfo.ToSqlType()
