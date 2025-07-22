@@ -91,6 +91,9 @@ type mergeJoinKvIter struct {
 	isLeftJoin   bool
 	matchedLeft  bool
 	exhaustLeft  bool
+
+	// MERGE_JOIN impl details
+	isReversed bool
 }
 
 var _ sql.RowIter = (*mergeJoinKvIter)(nil)
@@ -123,7 +126,11 @@ compare:
 	// if equal continue to match buffer stage
 	// if unequal increment one side
 	for {
-		switch l.lrCmp(l.leftKey, l.leftVal, l.rightKey, l.rightVal) {
+		cmp := l.lrCmp(l.leftKey, l.leftVal, l.rightKey, l.rightVal)
+		if l.isReversed {
+			cmp = -cmp
+		}
+		switch cmp {
 		case -1:
 			// left side has to consider left join non-matches
 			var oldLeftKey, oldLeftVal val.Tuple
