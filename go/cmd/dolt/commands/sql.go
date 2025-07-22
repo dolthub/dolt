@@ -17,6 +17,7 @@ package commands
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/store/val"
 	"io"
 	"os"
 	"os/signal"
@@ -42,7 +43,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/libraries/utils/osutil"
@@ -157,7 +157,7 @@ func (cmd SqlCmd) EventType() eventsapi.ClientEventType {
 // that parameter is not provided there is additional error handling within this command to make sure that this was in
 // fact run from within a dolt data repository directory.
 func (cmd SqlCmd) RequiresRepo() bool {
-	return false
+	return true
 }
 
 // Exec executes the command
@@ -361,24 +361,23 @@ func listSavedQueries(ctx *sql.Context, qryist cli.Queryist, dEnv *env.DoltEnv, 
 	return sqlHandleVErrAndExitCode(qryist, execSingleQuery(ctx, qryist, query, format), usage)
 }
 
-func executeSavedQuery(ctx *sql.Context, qryist cli.Queryist, dEnv *env.DoltEnv, savedQueryName string, format engine.PrintResultFormat, usage cli.UsagePrinter) int {
-	if !dEnv.Valid() {
-		return sqlHandleVErrAndExitCode(qryist, errhand.BuildDError("error: --%s must be used in a dolt database directory.", executeFlag).Build(), usage)
+func executeSavedQuery(ctx *sql.Context, qryist cli.Queryist, _ *env.DoltEnv, savedQueryName string, format engine.PrintResultFormat, usage cli.UsagePrinter) int {
+	searchQuery := fmt.Sprintf("SELECT query FROM dolt_query_catalog where name = '%s'", savedQueryName)
+	rows, err := GetRowsForSql(qryist, ctx, searchQuery)
+	if err != nil {
+		return sqlHandleVErrAndExitCode(qryist, errhand.VerboseErrorFromError(err), usage)
+	} else if len(rows) == 0 {
+		err = fmt.Errorf("no saved queries found")
+		return sqlHandleVErrAndExitCode(qryist, errhand.VerboseErrorFromError(err), usage)
 	}
 
-	workingRoot, err := dEnv.WorkingRoot(ctx)
+	query, err := rows[0][0].(*val.TextStorage).Unwrap(ctx)
 	if err != nil {
 		return sqlHandleVErrAndExitCode(qryist, errhand.VerboseErrorFromError(err), usage)
 	}
 
-	sq, err := dtables.RetrieveFromQueryCatalog(ctx, workingRoot, savedQueryName)
-
-	if err != nil {
-		return sqlHandleVErrAndExitCode(qryist, errhand.VerboseErrorFromError(err), usage)
-	}
-
-	cli.PrintErrf("Executing saved query '%s':\n%s\n", savedQueryName, sq.Query)
-	return sqlHandleVErrAndExitCode(qryist, execSingleQuery(ctx, qryist, sq.Query, format), usage)
+	cli.PrintErrf("Executing saved query: '%s': \n%s\n", savedQueryName, query)
+	return sqlHandleVErrAndExitCode(qryist, execSingleQuery(ctx, qryist, query, format), usage)
 }
 
 func queryMode(
@@ -401,11 +400,7 @@ func queryMode(
 	return 0
 }
 
-func execSaveQuery(ctx *sql.Context, dEnv *env.DoltEnv, qryist cli.Queryist, apr *argparser.ArgParseResults, query string, format engine.PrintResultFormat, usage cli.UsagePrinter) int {
-	if !dEnv.Valid() {
-		return sqlHandleVErrAndExitCode(qryist, errhand.BuildDError("error: --%s must be used in a dolt database directory.", saveFlag).Build(), usage)
-	}
-
+func execSaveQuery(ctx *sql.Context, _ *env.DoltEnv, qryist cli.Queryist, apr *argparser.ArgParseResults, query string, format engine.PrintResultFormat, usage cli.UsagePrinter) int {
 	saveName := apr.GetValueOrDefault(saveFlag, "")
 
 	verr := execSingleQuery(ctx, qryist, query, format)
@@ -413,23 +408,22 @@ func execSaveQuery(ctx *sql.Context, dEnv *env.DoltEnv, qryist cli.Queryist, apr
 		return sqlHandleVErrAndExitCode(qryist, verr, usage)
 	}
 
-	workingRoot, err := dEnv.WorkingRoot(ctx)
+	order := int32(1)
+	rows, err := GetRowsForSql(qryist, ctx, "SELECT MAX(display_order) FROM dolt_query_catalog")
 	if err != nil {
-		return sqlHandleVErrAndExitCode(qryist, errhand.BuildDError("error: failed to get working root").AddCause(err).Build(), usage)
+		return sqlHandleVErrAndExitCode(qryist, errhand.VerboseErrorFromError(err), usage)
+	}
+	if len(rows) > 0 && rows[0][0] != nil {
+		order = rows[0][0].(int32) + 1
 	}
 
 	saveMessage := apr.GetValueOrDefault(messageFlag, "")
-	newRoot, verr := saveQuery(ctx, workingRoot, query, saveName, saveMessage)
-	if verr != nil {
-		return sqlHandleVErrAndExitCode(qryist, verr, usage)
-	}
+	insertQuery := fmt.Sprintf("INSERT INTO dolt_query_catalog VALUES ('%s', %d, '%s', '%s', '%s') "+
+		"ON DUPLICATE KEY UPDATE query = '%s', description = '%s'", saveName, order, saveName, query, saveMessage, query, saveMessage)
 
-	err = dEnv.UpdateWorkingRoot(ctx, newRoot)
-	if err != nil {
-		return sqlHandleVErrAndExitCode(qryist, errhand.BuildDError("error: failed to update working root").AddCause(err).Build(), usage)
-	}
+	_, err = GetRowsForSql(qryist, ctx, insertQuery)
 
-	return 0
+	return sqlHandleVErrAndExitCode(qryist, errhand.VerboseErrorFromError(err), usage)
 }
 
 // execSingleQuery runs a single query and prints the results. This is not intended for use in interactive modes, especially
@@ -602,16 +596,6 @@ func validateSqlArgs(apr *argparser.ArgParseResults) error {
 	}
 
 	return nil
-}
-
-// Saves the query given to the catalog with the name and message given.
-func saveQuery(ctx *sql.Context, root doltdb.RootValue, query string, name string, message string) (doltdb.RootValue, errhand.VerboseError) {
-	_, newRoot, err := dtables.NewQueryCatalogEntryWithNameAsID(ctx, root, name, query, message)
-	if err != nil {
-		return nil, errhand.BuildDError("Couldn't save query").AddCause(err).Build()
-	}
-
-	return newRoot, nil
 }
 
 // execBatchMode runs all the queries in the input reader
