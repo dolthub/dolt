@@ -85,11 +85,17 @@ func CloseAllLocalDatabases() (err error) {
 	return
 }
 
-func DeleteFromSingletonCache(path string) error {
+func DeleteFromSingletonCache(path string, closeIt bool) error {
 	singletonLock.Lock()
 	defer singletonLock.Unlock()
+	var err error
+	if closeIt {
+		if s, ok := singletons[path]; ok {
+			err = s.ddb.Close()
+		}
+	}
 	delete(singletons, path)
-	return nil
+	return err
 }
 
 // PrepareDB creates the directory for the DB if it doesn't exist, and returns an error if a file or symlink is at the
