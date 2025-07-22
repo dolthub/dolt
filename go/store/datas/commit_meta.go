@@ -200,7 +200,7 @@ func (cm *CommitMeta) toNomsStruct(nbf *types.NomsBinFormat) (types.Struct, erro
 
 // Time returns the time at which the commit occurred
 func (cm *CommitMeta) Time() time.Time {
-	return time.UnixMilli(cm.UserTimestamp)
+	return time.UnixMilli(cm.UserTimestamp).In(CommitLoc)
 }
 
 // FormatTS takes the internal timestamp and turns it into a human readable string in the time.RubyDate format
