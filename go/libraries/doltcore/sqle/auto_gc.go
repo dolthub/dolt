@@ -72,7 +72,7 @@ func NewAutoGCController(arcLevel chunks.GCArchiveLevel, lgr *logrus.Logger) *Au
 // submit one dolt_gc request at a time.
 type autoGCWork struct {
 	db   *doltdb.DoltDB
-	done chan struct{}
+	done chan *gcWorkReport
 	name string // only for logging.
 }
 
@@ -145,13 +145,21 @@ func (c *AutoGCController) gcBgThread(ctx context.Context) {
 
 func (c *AutoGCController) doWork(ctx context.Context, work autoGCWork, ctxF func(context.Context) (*sql.Context, error)) {
 	defer close(work.done)
+	var err error
+	start := time.Now()
+	defer func() {
+		work.done <- &gcWorkReport{
+			start: start,
+			end:   time.Now(),
+			err:   err,
+		}
+	}()
 	sqlCtx, err := ctxF(ctx)
 	if err != nil {
 		c.lgr.Warnf("sqle/auto_gc: Could not create session to GC %s: %v", work.name, err)
 		return
 	}
 	c.lgr.Tracef("sqle/auto_gc: Beginning auto GC of database %s", work.name)
-	start := time.Now()
 	defer sql.SessionEnd(sqlCtx.Session)
 	sql.SessionCommandBegin(sqlCtx.Session)
 	defer sql.SessionCommandEnd(sqlCtx.Session)
@@ -159,6 +167,7 @@ func (c *AutoGCController) doWork(ctx context.Context, work autoGCWork, ctxF fun
 	if err != nil {
 		if !errors.Is(err, chunks.ErrNothingToCollect) {
 			c.lgr.Warnf("sqle/auto_gc: Attempt to auto GC database %s failed with error: %v", work.name, err)
+			err = nil
 		}
 		return
 	}
@@ -168,13 +177,13 @@ func (c *AutoGCController) doWork(ctx context.Context, work autoGCWork, ctxF fun
 func (c *AutoGCController) newCommitHook(name string, db *doltdb.DoltDB) *autoGCCommitHook {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	closed := make(chan struct{})
+	closed := make(chan *gcWorkReport)
 	close(closed)
 	ret := &autoGCCommitHook{
 		c:      c,
 		name:   name,
 		done:   closed,
-		next:   make(chan struct{}),
+		next:   make(chan *gcWorkReport, 1),
 		db:     db,
 		tickCh: make(chan struct{}),
 		stopCh: make(chan struct{}),
@@ -188,6 +197,12 @@ func (c *AutoGCController) newCommitHook(name string, db *doltdb.DoltDB) *autoGC
 	return ret
 }
 
+type gcWorkReport struct {
+	start time.Time
+	end   time.Time
+	err   error
+}
+
 // The doltdb.CommitHook which watches for database changes and
 // requests dolt_gcs.
 type autoGCCommitHook struct {
@@ -198,12 +213,12 @@ type autoGCCommitHook struct {
 	// pending request for GC or a GC is currently running. Once
 	// |done| is closed, we can check for auto GC conditions on
 	// the database to see if we should request a new GC.
-	done chan struct{}
+	done chan *gcWorkReport
 	// It simplifies the logic and efficiency of the
 	// implementation a bit to have an already allocated channel
 	// we can try to send when we request a GC. If will become our
 	// new |done| channel once we send it successfully.
-	next chan struct{}
+	next chan *gcWorkReport
 	// lastSz is set the first time we observe StoreSizes after a
 	// GC or after the server comes up. It is used in some simple
 	// growth heuristics to figure out if we want to run a GC. We
@@ -211,6 +226,9 @@ type autoGCCommitHook struct {
 	// to GC, so that we observe and store the new size after the
 	// GC is finished.
 	lastSz *doltdb.StoreSizes
+	// This records stats about the last run of Auto GC. It starts
+	// |nil| and will only be populated after a successful run.
+	lastGcWorkReport *gcWorkReport
 
 	db *doltdb.DoltDB
 
@@ -271,7 +289,7 @@ func (h *autoGCCommitHook) requestGC(ctx context.Context) error {
 	select {
 	case h.c.workCh <- autoGCWork{h.db, h.next, h.name}:
 		h.done = h.next
-		h.next = make(chan struct{})
+		h.next = make(chan *gcWorkReport, 1)
 		h.lastSz = nil
 		return nil
 	case <-ctx.Done():
@@ -295,9 +313,33 @@ const checkInterval = 1 * time.Second
 const size_128mb = (1 << 27)
 const defaultCheckSizeThreshold = size_128mb
 
+func shouldRequestGC(currSz, lastSz doltdb.StoreSizes, lastGcReport *gcWorkReport, now time.Time) bool {
+	grew := currSz.TotalBytes > lastSz.TotalBytes
+	growth := currSz.TotalBytes - lastSz.TotalBytes
+	if lastGcReport == nil || lastGcReport.err != nil {
+		return (currSz.JournalBytes > defaultCheckSizeThreshold) || (grew && growth > defaultCheckSizeThreshold)
+	} else {
+		// Because we have run a GC already, we know how long it took and we know how big the new gen was
+		// (approximately) after we finished it. Here we check that
+		// 1) more time has elapsed since the end of our last GC than it took for that GC to run
+		// 2) the total growth in store size is greater than the size of new gen at the end of our last GC
+		// 3) the new gen is at least defaultCheckSizeThreshold
+		enoughTimeHasPassed := now.Sub(lastGcReport.end) > lastGcReport.end.Sub(lastGcReport.start)
+		storeHasGrownEngouh := grew && currSz.TotalBytes-lastSz.TotalBytes > lastSz.NewGenBytes
+		newGenIsBigEnough := currSz.NewGenBytes > defaultCheckSizeThreshold
+		if enoughTimeHasPassed && storeHasGrownEngouh && newGenIsBigEnough {
+			return true
+		}
+	}
+	return false
+}
+
 func (h *autoGCCommitHook) checkForGC(ctx context.Context) error {
 	select {
-	case <-h.done:
+	case report, ok := <-h.done:
+		if ok {
+			h.lastGcWorkReport = report
+		}
 		sz, err := h.db.StoreSizes(ctx)
 		if err != nil {
 			// Something is probably quite wrong. Regardless, can't determine if we should GC.
@@ -306,11 +348,7 @@ func (h *autoGCCommitHook) checkForGC(ctx context.Context) error {
 		if h.lastSz == nil {
 			h.lastSz = &sz
 		}
-		if sz.JournalBytes > defaultCheckSizeThreshold {
-			// Our first heuristic is simply if journal is greater than a fixed size...
-			return h.requestGC(ctx)
-		} else if sz.TotalBytes > h.lastSz.TotalBytes && sz.TotalBytes-h.lastSz.TotalBytes > defaultCheckSizeThreshold {
-			// Or if the store has grown by a fixed size since our last GC / we started watching it...
+		if shouldRequestGC(sz, *h.lastSz, h.lastGcWorkReport, time.Now()) {
 			return h.requestGC(ctx)
 		}
 	default:
