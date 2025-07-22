@@ -122,8 +122,8 @@ func TestAutoGCController(t *testing.T) {
 func TestShouldRequestGC(t *testing.T) {
 	lastSz := doltdb.StoreSizes{
 		JournalBytes: 0,
-		NewGenBytes: 0,
-		TotalBytes: 1 << 28,
+		NewGenBytes:  0,
+		TotalBytes:   1 << 28,
 	}
 	var report *gcWorkReport
 	now := time.Now()
@@ -145,7 +145,7 @@ func TestShouldRequestGC(t *testing.T) {
 	currSz = lastSz
 	report = &gcWorkReport{
 		start: now.Add(-15 * time.Second),
-		end: now.Add(-10 * time.Second),
+		end:   now.Add(-10 * time.Second),
 	}
 	assert.False(t, shouldRequestGC(currSz, lastSz, report, now))
 	// New bytes after last GC
@@ -156,7 +156,7 @@ func TestShouldRequestGC(t *testing.T) {
 	currSz.TotalBytes += 1
 	currSz.NewGenBytes += 1
 	assert.True(t, shouldRequestGC(currSz, lastSz, report, now))
-	assert.False(t, shouldRequestGC(currSz, lastSz, report, now.Add(-6 * time.Second)))
+	assert.False(t, shouldRequestGC(currSz, lastSz, report, now.Add(-6*time.Second)))
 	// Needs to grow by lastSz.NewGenBytes
 	lastSz.NewGenBytes = lastSz.TotalBytes
 	currSz = lastSz
