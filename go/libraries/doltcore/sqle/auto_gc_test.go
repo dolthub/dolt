@@ -23,8 +23,10 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/sirupsen/logrus"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/datas"
 )
@@ -115,4 +117,55 @@ func TestAutoGCController(t *testing.T) {
 			controller.DropDatabaseHook()(nil, "some_database")
 		})
 	})
+}
+
+func TestShouldRequestGC(t *testing.T) {
+	lastSz := doltdb.StoreSizes{
+		JournalBytes: 0,
+		NewGenBytes:  0,
+		TotalBytes:   1 << 28,
+	}
+	var report *gcWorkReport
+	now := time.Now()
+	// No changes
+	assert.False(t, shouldRequestGC(lastSz, lastSz, report, now))
+	// New bytes after startup
+	currSz := lastSz
+	currSz.TotalBytes += defaultCheckSizeThreshold
+	assert.False(t, shouldRequestGC(currSz, lastSz, report, now))
+	currSz.TotalBytes += 1
+	assert.True(t, shouldRequestGC(currSz, lastSz, report, now))
+	// Journal after startup
+	currSz = lastSz
+	currSz.JournalBytes += defaultCheckSizeThreshold
+	assert.False(t, shouldRequestGC(currSz, lastSz, report, now))
+	currSz.JournalBytes += 1
+	assert.True(t, shouldRequestGC(currSz, lastSz, report, now))
+	// Error free report. Enough time has passed. Empty lastSz new gen.
+	currSz = lastSz
+	report = &gcWorkReport{
+		start: now.Add(-15 * time.Second),
+		end:   now.Add(-10 * time.Second),
+	}
+	assert.False(t, shouldRequestGC(currSz, lastSz, report, now))
+	// New bytes after last GC
+	currSz = lastSz
+	currSz.TotalBytes += defaultCheckSizeThreshold
+	currSz.NewGenBytes += defaultCheckSizeThreshold
+	assert.False(t, shouldRequestGC(currSz, lastSz, report, now))
+	currSz.TotalBytes += 1
+	currSz.NewGenBytes += 1
+	assert.True(t, shouldRequestGC(currSz, lastSz, report, now))
+	assert.False(t, shouldRequestGC(currSz, lastSz, report, now.Add(-6*time.Second)))
+	// Needs to grow by lastSz.NewGenBytes
+	lastSz.NewGenBytes = lastSz.TotalBytes
+	currSz = lastSz
+	currSz.JournalBytes += lastSz.TotalBytes
+	currSz.NewGenBytes += lastSz.TotalBytes
+	currSz.TotalBytes += lastSz.TotalBytes
+	assert.False(t, shouldRequestGC(currSz, lastSz, report, now))
+	currSz.JournalBytes += 1
+	currSz.NewGenBytes += 1
+	currSz.TotalBytes += 1
+	assert.True(t, shouldRequestGC(currSz, lastSz, report, now))
 }
