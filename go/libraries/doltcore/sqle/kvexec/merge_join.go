@@ -127,6 +127,8 @@ compare:
 	// if unequal increment one side
 	for {
 		cmp := l.lrCmp(l.leftKey, l.leftVal, l.rightKey, l.rightVal)
+		// merge_join assumes left and right iterators are sorted in ascending order, so need to flip comparison for
+		// iterators that are sorted in descending order.
 		if l.isReversed {
 			cmp = -cmp
 		}
