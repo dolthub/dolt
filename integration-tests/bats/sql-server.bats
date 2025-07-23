@@ -2197,3 +2197,28 @@ EOF
     run grep -F "Dropping persisted '__dolt_local_user__@localhost' because this account name is reserved for Dolt" server_log.txt
     [ $status -eq 0 ]
 }
+
+@test "sql-server: can create and use saved queries with --host and --use-db" {
+    cd repo1
+    dolt sql -q "create table test (i int)"
+    start_sql_server_with_args --host 0.0.0.0
+
+    cd ../repo2
+
+    run dolt --host 0.0.0.0 --no-tls --port $PORT --use-db repo1 sql -q "show tables" --save "show"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "test" ]] || false
+
+    run dolt --host 0.0.0.0 --no-tls --port $PORT --use-db repo1 sql -l -r csv
+    echo "$output"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "show,1,show,show tables,\"\"" ]] || false
+
+    run dolt --host 0.0.0.0 --no-tls --port $PORT --use-db repo1 sql -x "show"
+    echo "$output"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "test" ]] || false
+
+    stop_sql_server 1 && sleep 0.5
+    rm -rf $BATS_TMPDIR/sql-server-test$$
+}
