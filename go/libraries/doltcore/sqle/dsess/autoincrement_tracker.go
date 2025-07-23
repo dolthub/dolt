@@ -522,44 +522,41 @@ func (a *AutoIncrementTracker) initWithRoots(ctx context.Context, roots ...doltd
 	return eg.Wait()
 }
 
+// incrementAutoIncVal determines whether to increment the auto-increment value.
+// Returns true (fail-open) for all infrastructure errors, missing tables, or missing
+// auto-increment columns to avoid breaking legitimate operations like ALTER TABLE.
+// Returns false (fail-closed) only when we can definitively determine that incrementing
+// would cause a type overflow on an existing auto-increment column.
 func (a *AutoIncrementTracker) incrementAutoIncVal(ctx *sql.Context, tbl string, currentVal uint64) bool {
 	sess := DSessFromSess(ctx.Session)
 	db, ok := sess.Provider().BaseDatabase(ctx, a.dbName)
 	if !ok || !db.Versioned() {
-		// Database not found or not versioned - fail-open for infrastructure errors
 		return true
 	}
 
 	ws, err := sess.WorkingSet(ctx, a.dbName)
 	if err != nil {
-		// Working set access error - fail-open for infrastructure errors
 		return true
 	}
 
 	table, _, ok, err := doltdb.GetTableInsensitive(ctx, ws.WorkingRoot(), doltdb.TableName{Name: tbl})
 	if err != nil || !ok {
-		// Table access error or table not found - fail-open for infrastructure errors
 		return true
 	}
 
 	sch, err := table.GetSchema(ctx)
 	if err != nil {
-		// Schema access error - fail-open for infrastructure errors
 		return true
 	}
 
 	aiCol, ok := schema.GetAutoIncrementColumn(sch)
 	if !ok {
-		// No auto-increment column found - fail-open to allow ALTER TABLE operations
-		// where the auto-increment column is being added in a transitional state
 		return true
 	}
 
 	sqlType := aiCol.TypeInfo.ToSqlType()
 	nextVal := currentVal + 1
 	_, inRange, err := sqlType.Convert(ctx, nextVal)
-	// The only return false case is when we have a definitive auto-increment column 
-	// and can verify type overflow would occur - this is the fail-closed for protection scenario
 	return err == nil && inRange == sql.InRange
 }
 
