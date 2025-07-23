@@ -2141,3 +2141,9 @@ func TestDoltRm(t *testing.T) {
 	defer harness.Close()
 	RunDoltRmTests(t, harness)
 }
+
+func TestTimeQueries(t *testing.T) {
+	harness := newDoltHarness(t)
+	defer harness.Close()
+	enginetest.TestTimeQueries(t, harness)
+}
