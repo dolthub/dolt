@@ -275,6 +275,7 @@ func jsonPathElementsFromMySQLJsonPath(pathBytes []byte) (jsonLocation, error) {
 			}
 		case lexStateKey:
 			if pathBytes[i] == '"' {
+				tok = i // Point tok to the opening quote
 				state = lexStateQuotedKey
 				i += 1
 			} else if pathBytes[i] == '.' || pathBytes[i] == '[' {
@@ -292,7 +293,7 @@ func jsonPathElementsFromMySQLJsonPath(pathBytes []byte) (jsonLocation, error) {
 			}
 		case lexStateQuotedKey:
 			if pathBytes[i] == '"' {
-				if tok+1 == i-1 {
+				if tok+1 == i {
 					return jsonLocation{}, fmt.Errorf("Invalid JSON path expression. Expected field name after '.' at character %v of %s", i, string(pathBytes))
 				}
 				pathKey := unescapeKey(pathBytes[tok+1 : i])

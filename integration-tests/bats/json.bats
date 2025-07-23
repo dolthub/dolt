@@ -294,3 +294,47 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Blob" ]] || false
 }
+
+# Tests for dolthub/dolt#9556: JSON path handling with unnecessary quotes
+# This tests Django compatibility where compile_json_path() always quotes keys
+@test "json: JSON_SET with quoted field names" {
+    dolt sql <<SQL
+    CREATE TABLE test_data (data JSON);
+    INSERT INTO test_data VALUES ('{}');
+SQL
+
+    # Test unquoted JSON paths (should work)
+    run dolt sql -q "UPDATE test_data SET data = JSON_SET(data, '$.a', 'b');"
+    [ "$status" -eq 0 ]
+    
+    run dolt sql -q "SELECT data FROM test_data;" -r csv
+    [ "$status" -eq 0 ]
+    [ "${lines[1]}" = '"{""a"":""b""}"' ]
+
+    # Test necessarily quoted JSON paths (should work)  
+    run dolt sql -q "UPDATE test_data SET data = JSON_SET(data, '$.\"a key\"', 'b');"
+    [ "$status" -eq 0 ]
+    
+    run dolt sql -q "SELECT data FROM test_data;" -r csv
+    [ "$status" -eq 0 ]
+    [ "${lines[1]}" = '"{""a"":""b"",""a key"":""b""}"' ]
+
+    # Test unnecessarily quoted JSON paths (this was the failing case)
+    run dolt sql -q "UPDATE test_data SET data = JSON_SET(data, '$.\"c\"', 'test');"
+    [ "$status" -eq 0 ]
+    
+    run dolt sql -q "SELECT data FROM test_data;" -r csv
+    [ "$status" -eq 0 ]
+    [ "${lines[1]}" = '"{""a"":""b"",""a key"":""b"",""c"":""test""}"' ]
+
+    # Test nested unnecessarily quoted paths (first create the parent object)
+    run dolt sql -q "UPDATE test_data SET data = JSON_SET(data, '$.\"d\"', JSON_OBJECT());"
+    [ "$status" -eq 0 ]
+    
+    run dolt sql -q "UPDATE test_data SET data = JSON_SET(data, '$.\"d\".\"e\"', 'nested');"
+    [ "$status" -eq 0 ]
+    
+    run dolt sql -q "SELECT data FROM test_data;" -r csv  
+    [ "$status" -eq 0 ]
+    [ "${lines[1]}" = '"{""a"":""b"",""a key"":""b"",""c"":""test"",""d"":{""e"":""nested""}}"' ]
+}
