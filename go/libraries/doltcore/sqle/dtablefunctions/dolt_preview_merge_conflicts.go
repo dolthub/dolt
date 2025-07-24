@@ -17,6 +17,7 @@ package dtablefunctions
 import (
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
@@ -28,6 +29,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/resolve"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly"
@@ -247,7 +249,11 @@ func (pm *PreviewMergeConflictsTableFunction) generateSchema(ctx *sql.Context) e
 		return err
 	}
 
-	tblName := doltdb.TableName{Name: tableName, Schema: doltdb.DefaultSchemaName}
+	tblName, err := getTableName(ctx, tableName, ri)
+	if err != nil {
+		return err
+	}
+
 	baseSch, ourSch, theirSch, err := getConflictSchemasFromRoots(ctx, tblName, ri.leftRoot, ri.rightRoot, ri.baseRoot)
 	if err != nil {
 		return err
@@ -271,6 +277,73 @@ func (pm *PreviewMergeConflictsTableFunction) generateSchema(ctx *sql.Context) e
 	pm.theirSch = theirSch
 
 	return nil
+}
+
+// getTableName resolves the table name from the provided root info.
+// If UseSearchPath is true, it first looks for the table name in the search path in order,
+// then checks for the rest of the schemas as a fallback.
+func getTableName(ctx *sql.Context, tableName string, ri rootInfo) (doltdb.TableName, error) {
+	if !resolve.UseSearchPath {
+		return doltdb.TableName{Name: tableName, Schema: doltdb.DefaultSchemaName}, nil
+	}
+
+	schemasToSearch, err := resolve.SearchPath(ctx)
+	if err != nil {
+		return doltdb.TableName{}, err
+	}
+
+	for _, schemaName := range schemasToSearch {
+		// Check if the table exists in this schema in any of the roots
+		tblName := doltdb.TableName{Name: tableName, Schema: schemaName}
+
+		if hasTable, err := ri.leftRoot.HasTable(ctx, tblName); err != nil {
+			return doltdb.TableName{}, err
+		} else if hasTable {
+			return tblName, nil
+		}
+
+		if hasTable, err := ri.rightRoot.HasTable(ctx, tblName); err != nil {
+			return doltdb.TableName{}, err
+		} else if hasTable {
+			return tblName, nil
+		}
+
+		if hasTable, err := ri.baseRoot.HasTable(ctx, tblName); err != nil {
+			return doltdb.TableName{}, err
+		} else if hasTable {
+			return tblName, nil
+		}
+	}
+
+	// If not found in search path, fall back to checking all other schemas
+	tableNames, err := doltdb.UnionTableNames(ctx, ri.leftRoot, ri.rightRoot, ri.baseRoot)
+	if err != nil {
+		return doltdb.TableName{}, err
+	}
+
+	for _, tn := range tableNames {
+		if strings.EqualFold(tn.Name, tableName) {
+			schemaInSearchPath := false
+			for _, searchSchema := range schemasToSearch {
+				if tn.Schema == searchSchema {
+					schemaInSearchPath = true
+					break
+				}
+			}
+
+			if !schemaInSearchPath {
+				return tn, nil
+			}
+		}
+	}
+
+	// If table not found anywhere, default to first existing schema on search path
+	schemaName, err := resolve.FirstExistingSchemaOnSearchPath(ctx, ri.leftRoot)
+	if err != nil {
+		return doltdb.TableName{}, err
+	}
+
+	return doltdb.TableName{Name: tableName, Schema: schemaName}, nil
 }
 
 func getConflictSchemasFromRoots(ctx *sql.Context, tblName doltdb.TableName, leftRoot, rightRoot, baseRoot doltdb.RootValue) (base, sch, mergeSch schema.Schema, err error) {
