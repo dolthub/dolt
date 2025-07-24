@@ -377,6 +377,7 @@ EOF
     dolt ci import ./workflow.yaml
 
     run dolt ci view "workflow"
+    echo "$output"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "name: \"workflow\"" ]] || false
     [[ "$output" =~ "saved_query_name: \"get tables\"" ]] || false

@@ -25,7 +25,6 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -258,17 +257,6 @@ var systemTableReplaceTests = []ReplaceTest{
 		SelectQuery:    "select * from dolt_docs",
 		ExpectedRows:   []sql.Row{{"LICENSE.md", "Some text"}},
 		ExpectedSchema: CompressSchema(doltdb.DocsSchema),
-	},
-	{
-		Name: "replace into dolt_query_catalog",
-		AdditionalSetup: CreateTableFn(doltdb.DoltQueryCatalogTableName, dtables.DoltQueryCatalogSchema,
-			"INSERT INTO dolt_query_catalog VALUES ('existingEntry', 1, 'example', 'select 2+2 from dual', 'description')"),
-		ReplaceQuery: "replace into dolt_query_catalog (id, display_order, name, query, description) values ('existingEntry', 1, 'example', 'select 1+1 from dual', 'description')",
-		SelectQuery:  "select * from dolt_query_catalog",
-		ExpectedRows: ToSqlRows(CompressSchema(dtables.DoltQueryCatalogSchema),
-			NewRow(types.String("existingEntry"), types.Uint(1), types.String("example"), types.String("select 1+1 from dual"), types.String("description")),
-		),
-		ExpectedSchema: CompressSchema(dtables.DoltQueryCatalogSchema),
 	},
 	{
 		Name: "replace into dolt_schemas",

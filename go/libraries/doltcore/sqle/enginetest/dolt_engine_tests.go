@@ -2054,3 +2054,15 @@ func RunDoltRmTests(t *testing.T, h DoltEnginetestHarness) {
 		enginetest.TestScriptWithEngine(t, readOnlyEngine, h, script)
 	}
 }
+
+func RunDoltQueryCatalogTests(t *testing.T, harness DoltEnginetestHarness) {
+	dtables.DoltCommand = doltcmd.DoltCommand
+
+	for _, script := range DoltQueryCatalogScripts {
+		t.Run(script.Name, func(t *testing.T) {
+			harness = harness.NewHarness(t)
+			defer harness.Close()
+			enginetest.TestScript(t, harness, script)
+		})
+	}
+}
