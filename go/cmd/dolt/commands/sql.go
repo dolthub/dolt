@@ -402,14 +402,13 @@ func SaveQuery(ctx *sql.Context, qryist cli.Queryist, apr *argparser.ArgParseRes
 	}
 
 	order := int32(1)
-	var ok bool
 	rows, err := GetRowsForSql(qryist, ctx, "SELECT MAX(display_order) FROM dolt_query_catalog")
 	if err != nil {
 		return sqlHandleVErrAndExitCode(qryist, errhand.VerboseErrorFromError(err), usage)
 	}
 	if len(rows) > 0 && rows[0][0] != nil {
-		if order, ok = rows[0][0].(int32); !ok {
-			err = fmt.Errorf("could not get display_order from dolt_query_catalog")
+		order, err = getInt32ColAsInt32(rows[0][0])
+		if err != nil {
 			return sqlHandleVErrAndExitCode(qryist, errhand.VerboseErrorFromError(err), usage)
 		}
 		order++

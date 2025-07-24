@@ -17,6 +17,7 @@ package ci
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/store/val"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"gopkg.in/yaml.v3"
@@ -202,7 +203,15 @@ func getSavedQueries(sqlCtx *sql.Context, queryist cli.Queryist) (map[string]str
 			return nil, err
 		}
 		for _, row := range rows {
-			savedQueries[row[2].(string)] = row[3].(string)
+			queryName, err := row[2].(*val.TextStorage).Unwrap(sqlCtx)
+			if err != nil {
+				return nil, err
+			}
+			queryStatement, err := row[3].(*val.TextStorage).Unwrap(sqlCtx)
+			if err != nil {
+				return nil, err
+			}
+			savedQueries[queryName] = queryStatement
 		}
 	}
 

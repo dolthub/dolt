@@ -377,7 +377,7 @@ func GetInt8ColAsBool(col interface{}) (bool, error) {
 	}
 }
 
-// getInt64ColAsInt64 returns the value of an int64 column as a string
+// getInt64ColAsInt64 returns the value of an int64 column as an int64
 // This is necessary because Queryist may return an int64 column as an int64 (when using SQLEngine)
 // or as a string (when using ConnectionQueryist).
 func getInt64ColAsInt64(col interface{}) (int64, error) {
@@ -399,7 +399,7 @@ func getInt64ColAsInt64(col interface{}) (int64, error) {
 	}
 }
 
-// getUint64ColAsUint64 returns the value of an uint64 column as a string
+// getUint64ColAsUint64 returns the value of an uint64 column as a uint64
 // This is necessary because Queryist may return an uint64 column as an uint64 (when using SQLEngine)
 // or as a string (when using ConnectionQueryist).
 func getUint64ColAsUint64(col interface{}) (uint64, error) {
@@ -418,6 +418,28 @@ func getUint64ColAsUint64(col interface{}) (uint64, error) {
 		return uiv, nil
 	default:
 		return 0, fmt.Errorf("unexpected type %T, was expecting int64, uint64 or string", v)
+	}
+}
+
+// getInt32ColAsInt32 returns the value of an int32 column as an int32
+// This is necessary because Queryist may return an uint64 column as an uint64 (when using SQLEngine)
+// or as a string (when using ConnectionQueryist).
+func getInt32ColAsInt32(col interface{}) (int32, error) {
+	switch v := col.(type) {
+	case int:
+		return int32(v), nil
+	case int32:
+		return v, nil
+	case uint32:
+		return int32(v), nil
+	case string:
+		iv, err := strconv.ParseInt(v, 10, 32)
+		if err != nil {
+			return 0, err
+		}
+		return int32(iv), nil
+	default:
+		return 0, fmt.Errorf("unexpected type %T, was expecting int32, uint32 or string", v)
 	}
 }
 
