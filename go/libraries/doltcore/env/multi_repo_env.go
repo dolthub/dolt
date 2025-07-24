@@ -166,6 +166,17 @@ func MultiEnvForDirectory(
 	envSet := map[string]*DoltEnv{}
 	if newDEnv.Valid() {
 		envSet[dbName] = newDEnv
+	} else {
+		dbErr := newDEnv.DBLoadError
+		if dbErr != nil {
+			if !errors.Is(dbErr, doltdb.ErrMissingDoltDataDir) {
+				logrus.Warnf("failed to load database with error: %s", dbErr.Error())
+			}
+		}
+		cfgErr := newDEnv.CfgLoadErr
+		if cfgErr != nil {
+			logrus.Warnf("failed to load database configuration with error: %s", cfgErr.Error())
+		}
 	}
 
 	// If there are other directories in the directory, try to load them as additional databases
