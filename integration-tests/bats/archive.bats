@@ -199,7 +199,7 @@ teardown() {
     [[ "$output" =~ "138075" ]] || false # i = 1 - 525, sum is 138075
 }
 
-@test "archive: can clone respiratory with mixed types" {
+@test "archive: can clone repository with mixed types" {
     mkdir -p remote/.dolt
     mkdir cloned
 
