@@ -18,9 +18,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/dolthub/dolt/go/store/val"
-	"github.com/gocraft/dbr/v2"
-	"github.com/gocraft/dbr/v2/dialect"
 	"io"
 	"os"
 	"os/signal"
@@ -36,6 +33,8 @@ import (
 	"github.com/dolthub/vitess/go/vt/vterrors"
 	"github.com/fatih/color"
 	"github.com/flynn-archive/go-shlex"
+	"github.com/gocraft/dbr/v2"
+	"github.com/gocraft/dbr/v2/dialect"
 	textunicode "golang.org/x/text/encoding/unicode"
 	"golang.org/x/text/transform"
 	"gopkg.in/src-d/go-errors.v1"
@@ -50,6 +49,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/libraries/utils/osutil"
 	eventsapi "github.com/dolthub/eventsapi_schema/dolt/services/eventsapi/v1alpha1"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 var sqlDocs = cli.CommandDocumentationContent{
