@@ -17,7 +17,6 @@ package ci
 import (
 	"context"
 	"fmt"
-	"github.com/dolthub/dolt/go/store/val"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"gopkg.in/yaml.v3"
@@ -28,6 +27,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions/dolt_ci"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 var viewDocs = cli.CommandDocumentationContent{
