@@ -43,6 +43,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/tabular"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/libraries/utils/osutil"
@@ -95,6 +96,11 @@ const (
 	ProfileFlag           = "profile"
 	timeFlag              = "time"
 	outputFlag            = "output"
+	binaryAsHexFlag       = "binary-as-hex"
+	skipBinaryAsHexFlag   = "skip-binary-as-hex"
+	// TODO: Consider simplifying to use MySQL's skip pattern with single flag definition
+	// MySQL handles both --binary-as-hex and --skip-binary-as-hex with one option definition
+	// and uses disabled_my_option to distinguish between enable/disable
 
 	welcomeMsg = `# Welcome to the DoltSQL shell.
 # Statements must be terminated with ';'.
@@ -104,6 +110,22 @@ const (
 // TODO: get rid of me, use a real integration point to define system variables
 func init() {
 	dsqle.AddDoltSystemVariables()
+}
+
+// applyBinaryAsHexContext sets binary-as-hex context if enabled based on flags and default
+func applyBinaryAsHexContext(sqlCtx *sql.Context, apr *argparser.ArgParseResults, defaultValue bool) *sql.Context {
+	// Priority: --skip-binary-as-hex > --binary-as-hex > default
+	enabled := defaultValue
+	if apr.Contains(skipBinaryAsHexFlag) {
+		enabled = false
+	} else if apr.Contains(binaryAsHexFlag) {
+		enabled = true
+	}
+	
+	if enabled {
+		return tabular.WithBinaryAsHex(sqlCtx, true)
+	}
+	return sqlCtx
 }
 
 type SqlCmd struct {
@@ -144,6 +166,9 @@ func (cmd SqlCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(BatchFlag, "b", "Use to enable more efficient batch processing for large SQL import scripts. This mode is no longer supported and this flag is a no-op. To speed up your SQL imports, use either LOAD DATA, or structure your SQL import script to insert many rows per statement.")
 	ap.SupportsFlag(continueFlag, "c", "Continue running queries on an error. Used for batch mode only.")
 	ap.SupportsString(fileInputFlag, "f", "input file", "Execute statements from the file given.")
+	ap.SupportsFlag(binaryAsHexFlag, "", "Print binary data as hex. Enabled by default for interactive terminals.")
+	// --skip-binary-as-hex is supported but not shown in help, matching MySQL's behavior
+	ap.SupportsFlag(skipBinaryAsHexFlag, "", "")
 	return ap
 }
 
@@ -219,11 +244,17 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	}
 
 	if query, queryOK := apr.GetValue(QueryFlag); queryOK {
+		// Apply binary-as-hex logic for query mode (default: false for non-interactive)
+		sqlCtx = applyBinaryAsHexContext(sqlCtx, apr, false)
+		
 		if apr.Contains(saveFlag) {
 			return execSaveQuery(sqlCtx, dEnv, queryist, apr, query, format, usage)
 		}
 		return queryMode(sqlCtx, queryist, apr, query, format, usage)
 	} else if savedQueryName, exOk := apr.GetValue(executeFlag); exOk {
+		// Apply binary-as-hex logic for execute saved query mode (default: false for non-interactive)
+		sqlCtx = applyBinaryAsHexContext(sqlCtx, apr, false)
+		
 		return executeSavedQuery(sqlCtx, queryist, dEnv, savedQueryName, format, usage)
 	} else if apr.Contains(listSavedFlag) {
 		return listSavedQueries(sqlCtx, queryist, dEnv, format, usage)
@@ -260,6 +291,9 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 			fileReadProg = &fileReadProgress{bytesRead: 0, totalBytes: info.Size(), printed: 0, displayStrLen: 0}
 			defer fileReadProg.close()
 		}
+
+		// Determine binary-as-hex behavior based on flags and TTY detection (like MySQL)
+		sqlCtx = applyBinaryAsHexContext(sqlCtx, apr, isTty)
 
 		if isTty {
 			err := execShell(sqlCtx, queryist, format, cliCtx)

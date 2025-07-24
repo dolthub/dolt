@@ -2913,3 +2913,49 @@ SQL
     dolt sql < $BATS_TEST_DIRNAME/helper/with_utf16be_bom.sql
     dolt table rm t1
 }
+
+@test "sql: client binary-as-hex behavior works with local database" {
+    # Setup: Create table with binary data
+    dolt sql -q "CREATE TABLE binary_test (pk INT PRIMARY KEY, vb VARBINARY(20)); INSERT INTO binary_test VALUES (1, 0x0A000000), (2, 'abc');"
+    
+    # Client non-interactive mode (using -q flag) should show raw bytes by default
+    run dolt sql -q "SELECT vb FROM binary_test WHERE pk = 1"
+    [ $status -eq 0 ]
+    # Should show raw bytes (invisible chars), not hex format
+    ! [[ "$output" =~ "0x0A000000" ]] || false
+    
+    # Printable data should show as text
+    run dolt sql -q "SELECT vb FROM binary_test WHERE pk = 2"  
+    [ $status -eq 0 ]
+    [[ "$output" =~ "abc" ]] || false
+    
+    # HEX() function should work consistently
+    run dolt sql -q "SELECT HEX(vb) FROM binary_test WHERE pk = 1"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "0A000000" ]] || false
+    
+    # Test --binary-as-hex flag forces hex display in non-interactive mode
+    run dolt sql --binary-as-hex -q "SELECT vb FROM binary_test WHERE pk = 1"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "0x0A000000" ]] || false
+    
+    # Test --binary-as-hex with printable data
+    run dolt sql --binary-as-hex -q "SELECT vb FROM binary_test WHERE pk = 2"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "0x616263" ]] || false
+    
+    # Test --skip-binary-as-hex flag forces raw display
+    run dolt sql --skip-binary-as-hex -q "SELECT vb FROM binary_test WHERE pk = 2"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "abc" ]] || false
+    ! [[ "$output" =~ "0x616263" ]] || false
+    
+    # Test flag priority: --skip-binary-as-hex overrides --binary-as-hex
+    run dolt sql --binary-as-hex --skip-binary-as-hex -q "SELECT vb FROM binary_test WHERE pk = 2"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "abc" ]] || false
+    ! [[ "$output" =~ "0x616263" ]] || false
+    
+    # Cleanup
+    dolt sql -q "DROP TABLE binary_test"
+}
