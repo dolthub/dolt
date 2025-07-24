@@ -34,9 +34,6 @@ var DoltQueryCatalogScripts = []queries.ScriptTest{
 	},
 	{
 		Name: "can drop dolt query catalog, cannot drop twice",
-		SetUpScript: []string{
-			"insert into dolt_query_catalog values ('test', 1, 'test', 'show tables;', '')",
-		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "drop table dolt_query_catalog",
@@ -83,6 +80,21 @@ var DoltQueryCatalogScripts = []queries.ScriptTest{
 				Query: "REPLACE INTO dolt_query_catalog VALUES ('test', 1, 'new name', 'describe dolt_query_catalog;', 'a new message')",
 				Expected: []sql.Row{
 					{types.OkResult{RowsAffected: 2}},
+				},
+			},
+		},
+	},
+	{
+		Name: "can update dolt query catalog",
+		SetUpScript: []string{
+			"INSERT INTO dolt_query_catalog VALUES ('show', 1, 'show', 'show tables;', '')",
+			"UPDATE dolt_query_catalog SET display_order = display_order + 1",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT * FROM dolt_query_catalog",
+				Expected: []sql.Row{
+					{"show", 2, "show", "show tables;", ""},
 				},
 			},
 		},

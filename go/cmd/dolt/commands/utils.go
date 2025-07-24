@@ -422,7 +422,7 @@ func getUint64ColAsUint64(col interface{}) (uint64, error) {
 }
 
 // getInt32ColAsInt32 returns the value of an int32 column as an int32
-// This is necessary because Queryist may return an uint64 column as an uint64 (when using SQLEngine)
+// This is necessary because Queryist may return an int32 column as an int32 (when using SQLEngine)
 // or as a string (when using ConnectionQueryist).
 func getInt32ColAsInt32(col interface{}) (int32, error) {
 	switch v := col.(type) {

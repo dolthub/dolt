@@ -26,7 +26,6 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/json"
 )
 
@@ -366,15 +365,6 @@ var systemTableUpdateTests = []UpdateTest{
 		SelectQuery:    "select * from dolt_docs",
 		ExpectedRows:   []sql.Row{{"LICENSE.md", "Some text"}},
 		ExpectedSchema: CompressSchema(doltdb.DocsSchema),
-	},
-	{
-		Name: "update dolt_query_catalog",
-		AdditionalSetup: CreateTableFn(doltdb.DoltQueryCatalogTableName, dtables.DoltQueryCatalogSchema,
-			"INSERT INTO dolt_query_catalog VALUES ('abc123', 1, 'example', 'select 2+2 from dual', 'description')"),
-		UpdateQuery:    "update dolt_query_catalog set display_order = display_order + 1",
-		SelectQuery:    "select * from dolt_query_catalog",
-		ExpectedRows:   []sql.Row{{"abc123", uint64(2), "example", "select 2+2 from dual", "description"}},
-		ExpectedSchema: CompressSchema(dtables.DoltQueryCatalogSchema),
 	},
 }
 
