@@ -20,7 +20,6 @@ import (
 	"os"
 
 	"github.com/dolthub/dolt/go/libraries/utils/file"
-
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
@@ -30,7 +29,7 @@ type archiveIndexReader interface {
 	getChunkRef(idx int) (dict, data uint32)
 	getSuffix(idx uint64) suffix
 	searchPrefixes(target uint64) int
-	close() error
+	io.Closer
 }
 
 // mmapIndexReader lazily loads archive index data from a memory-mapped file.
@@ -181,7 +180,8 @@ func (m *mmapIndexReader) prollyBinSearch(target uint64, items int) int {
 }
 
 // close unmaps the memory region
-func (m *mmapIndexReader) close() error {
+func (m *mmapIndexReader) Close() error {
+	// Currently we never unmap mmapped indexes in order to prevent a data race with the AutoIncrementTracker.
 	/*if m.data != nil {
 		data := m.data
 		m.data = nil

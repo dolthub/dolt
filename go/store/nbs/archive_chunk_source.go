@@ -234,13 +234,13 @@ func (acs archiveChunkSource) getManyCompressed(ctx context.Context, eg *errgrou
 }
 
 func (acs archiveChunkSource) iterateAllChunks(ctx context.Context, cb func(chunks.Chunk), stats *Stats) error {
-	addrCount := uint64(len(acs.aRdr.prefixes))
+	addrCount := uint64(acs.aRdr.footer.chunkCount)
 	for i := uint64(0); i < addrCount; i++ {
 		var h hash.Hash
 		suffix := acs.aRdr.getSuffixByID(i)
 
 		// Reconstruct the hash from the prefix and suffix.
-		binary.BigEndian.PutUint64(h[:uint64Size], acs.aRdr.prefixes[i])
+		binary.BigEndian.PutUint64(h[:uint64Size], acs.aRdr.indexReader.getPrefix(uint32(i)))
 		copy(h[uint64Size:], suffix[:])
 
 		if ctx.Err() != nil {
