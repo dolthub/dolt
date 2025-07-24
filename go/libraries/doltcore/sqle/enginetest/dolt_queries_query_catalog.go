@@ -49,11 +49,27 @@ var DoltQueryCatalogScripts = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "delete from query catalog preserves columns", //TODO MIGHT WANT TO CHANGE THIS I'M JUST TRYING TO GET IT TO WORK RIGHT NOW
+		Name: "delete from query catalog preserves columns", //TODO MIGHT WANT TO CHANGE THIS BEHAVIOR I'M JUST TRYING TO GET IT TO WORK RIGHT NOW
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "DELETE FROM dolt_query_catalog",
-				Expected: []sql.Row{},
+				Query: "DELETE FROM dolt_query_catalog",
+				Expected: []sql.Row{
+					{types.OkResult{RowsAffected: 0}},
+				},
+			},
+		},
+	},
+	{
+		Name: "select from dolt_query_catalog",
+		SetUpScript: []string{
+			"INSERT INTO dolt_query_catalog VALUES ('show', 1, 'show', 'show tables;', 'my message')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT * FROM dolt_query_catalog",
+				Expected: []sql.Row{
+					{"show", 1, "show", "show tables;", "my message"},
+				},
 			},
 		},
 	},
