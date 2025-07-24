@@ -18,13 +18,26 @@ import (
 	"context"
 
 	"github.com/dolthub/dolt/go/store/hash"
+
+	"github.com/dolthub/go-mysql-server/sql"
 )
 
 // RootObject is an object that is located on the root, rather than inside another object (table, schema, etc.). This is
 // primarily used by Doltgres to store root-level objects (sequences, functions, etc.).
 type RootObject interface {
+	// HasConflicts returns whether the root object contains conflicts.
+	HasConflicts(ctx context.Context) (bool, error)
 	// HashOf returns the hash of the underlying struct.
 	HashOf(ctx context.Context) (hash.Hash, error)
-	// Name returns the name of the custom table.
+	// Name returns the name of the root object.
 	Name() TableName
+}
+
+// ConflictRootObject is a RootObject that contains conflict information.
+type ConflictRootObject interface {
+	RootObject
+	// Schema returns the schema that should be displayed.
+	Schema(originatingTableName string) sql.Schema
+	// Rows returns the rows that represent conflicting portions of a root object.
+	Rows(ctx *sql.Context) (sql.RowIter, error)
 }
