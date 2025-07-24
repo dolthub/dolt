@@ -34,6 +34,9 @@ var DoltQueryCatalogScripts = []queries.ScriptTest{
 	},
 	{
 		Name: "can drop dolt query catalog, cannot drop twice",
+		SetUpScript: []string{
+			"INSERT INTO dolt_query_catalog VALUES ('show', 1, 'show', 'show tables;', '')",
+		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "drop table dolt_query_catalog",
@@ -46,7 +49,7 @@ var DoltQueryCatalogScripts = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "delete from query catalog preserves columns", //TODO MIGHT WANT TO CHANGE THIS BEHAVIOR I'M JUST TRYING TO GET IT TO WORK RIGHT NOW
+		Name: "delete from query catalog preserves columns",
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "DELETE FROM dolt_query_catalog",
