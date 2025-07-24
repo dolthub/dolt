@@ -346,14 +346,14 @@ func listSavedQueries(ctx *sql.Context, qryist cli.Queryist, format engine.Print
 
 func executeSavedQuery(ctx *sql.Context, qryist cli.Queryist, savedQueryName string, format engine.PrintResultFormat, usage cli.UsagePrinter) int {
 	var buffer bytes.Buffer
-	buffer.WriteString("SELECT query FROM dolt_query_catalog where name = ?")
+	buffer.WriteString("SELECT query FROM dolt_query_catalog where id = ?")
 	searchQuery, err := dbr.InterpolateForDialect(buffer.String(), []interface{}{savedQueryName}, dialect.MySQL)
 
 	rows, err := GetRowsForSql(qryist, ctx, searchQuery)
 	if err != nil {
 		return sqlHandleVErrAndExitCode(qryist, errhand.VerboseErrorFromError(err), usage)
 	} else if len(rows) == 0 {
-		err = fmt.Errorf("no saved queries found")
+		err = fmt.Errorf("saved query %s not found", savedQueryName)
 		return sqlHandleVErrAndExitCode(qryist, errhand.VerboseErrorFromError(err), usage)
 	}
 
@@ -369,7 +369,7 @@ func executeSavedQuery(ctx *sql.Context, qryist cli.Queryist, savedQueryName str
 		}
 	}
 
-	cli.PrintErrf("Executing saved query '%s': \n%s\n", savedQueryName, query)
+	cli.PrintErrf("Executing saved query '%s':\n%s\n", savedQueryName, query)
 	return sqlHandleVErrAndExitCode(qryist, execSingleQuery(ctx, qryist, query, format), usage)
 }
 

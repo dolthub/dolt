@@ -2210,12 +2210,10 @@ EOF
     [[ "$output" =~ "test" ]] || false
 
     run dolt --host 0.0.0.0 --no-tls --port $PORT --use-db repo1 sql -l -r csv
-    echo "$output"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "show,1,show,show tables,\"\"" ]] || false
 
     run dolt --host 0.0.0.0 --no-tls --port $PORT --use-db repo1 sql -x "show"
-    echo "$output"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test" ]] || false
 
