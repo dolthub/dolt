@@ -60,7 +60,7 @@ teardown() {
     [[ "$output" =~ "my message" ]] || false
 }
 
-@test "can list saved queries" {
+@test "query-catalog: can list saved queries" {
     Q1="select pk, pk1, pk2 from one_pk,two_pk where one_pk.c1=two_pk.c1 order by 1"
     Q2="select pk from one_pk order by pk"
     dolt sql -q "$Q1" -s name1
@@ -78,7 +78,7 @@ EOF
     [[ "$output" =~ "$EXPECTED" ]] || false
 }
 
-@test "can execute saved queries" {
+@test "query-catalog: can execute saved queries" {
     Q1="select pk, pk1, pk2 from one_pk,two_pk where one_pk.c1=two_pk.c1 order by 1"
     dolt sql -q "$Q1" -s name1
 
@@ -96,7 +96,7 @@ EOF
     [[ "$output" =~ "$EXPECTED" ]] || false
 }
 
-@test "can update saved query with --save" {
+@test "query-catalog: can update saved query with --save" {
     Q1="select pk, pk1, pk2 from one_pk,two_pk where one_pk.c1=two_pk.c1 order by 1"
     Q2="select pk from one_pk order by pk"
     dolt sql -q "$Q1" -s name1
