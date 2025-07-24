@@ -48,11 +48,11 @@ func (i *QueryCatalogTable) String() string {
 
 func doltQueryCatalogSchema() sql.Schema {
 	return []*sql.Column{
-		{Name: doltdb.QueryCatalogIdCol, Type: sqlTypes.LongText, PrimaryKey: true},
-		{Name: doltdb.QueryCatalogOrderCol, Type: sqlTypes.Int32, Nullable: false},
-		{Name: doltdb.QueryCatalogNameCol, Type: sqlTypes.Text},
-		{Name: doltdb.QueryCatalogQueryCol, Type: sqlTypes.Text},
-		{Name: doltdb.QueryCatalogDescriptionCol, Type: sqlTypes.Text},
+		{Name: doltdb.QueryCatalogIdCol, Type: sqlTypes.LongText, Source: doltdb.GetQueryCatalogTableName(), PrimaryKey: true},
+		{Name: doltdb.QueryCatalogOrderCol, Type: sqlTypes.Int32, Source: doltdb.GetQueryCatalogTableName(), Nullable: false},
+		{Name: doltdb.QueryCatalogNameCol, Type: sqlTypes.Text, Source: doltdb.GetQueryCatalogTableName()},
+		{Name: doltdb.QueryCatalogQueryCol, Type: sqlTypes.Text, Source: doltdb.GetQueryCatalogTableName()},
+		{Name: doltdb.QueryCatalogDescriptionCol, Type: sqlTypes.Text, Source: doltdb.GetQueryCatalogTableName()},
 	}
 }
 
