@@ -121,7 +121,7 @@ func applyBinaryAsHexContext(sqlCtx *sql.Context, apr *argparser.ArgParseResults
 	} else if apr.Contains(binaryAsHexFlag) {
 		enabled = true
 	}
-	
+
 	if enabled {
 		return tabular.WithBinaryAsHex(sqlCtx, true)
 	}
@@ -246,7 +246,7 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	if query, queryOK := apr.GetValue(QueryFlag); queryOK {
 		// Apply binary-as-hex logic for query mode (default: false for non-interactive)
 		sqlCtx = applyBinaryAsHexContext(sqlCtx, apr, false)
-		
+
 		if apr.Contains(saveFlag) {
 			return execSaveQuery(sqlCtx, dEnv, queryist, apr, query, format, usage)
 		}
@@ -254,7 +254,7 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	} else if savedQueryName, exOk := apr.GetValue(executeFlag); exOk {
 		// Apply binary-as-hex logic for execute saved query mode (default: false for non-interactive)
 		sqlCtx = applyBinaryAsHexContext(sqlCtx, apr, false)
-		
+
 		return executeSavedQuery(sqlCtx, queryist, dEnv, savedQueryName, format, usage)
 	} else if apr.Contains(listSavedFlag) {
 		return listSavedQueries(sqlCtx, queryist, dEnv, format, usage)

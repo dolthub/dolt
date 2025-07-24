@@ -1,0 +1,26 @@
+#!/usr/bin/expect
+
+set port [lindex $argv 0]
+set timeout 10
+
+spawn dolt --host 127.0.0.1 --port $port --no-tls sql --binary-as-hex
+expect ">"
+
+send "USE repo1;\r"
+expect ">"
+
+send "SELECT * FROM binary_test;\r"
+expect {
+    "0x0A000000" {
+        # Found hex output - this is correct
+        expect ">"
+        send "exit\r"
+        expect eof
+        exit 0
+    }
+    timeout {
+        send "exit\r"
+        expect eof
+        exit 1
+    }
+}
