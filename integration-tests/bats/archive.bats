@@ -522,3 +522,30 @@ teardown() {
 
   dolt fsck
 }
+
+@test "archive: can mmap archive index" {
+    mkdir -p remote/.dolt
+
+    # Copy the archive test repo to remote directory
+    cp -R $BATS_TEST_DIRNAME/archive-test-repos/base/* remote/.dolt
+    cd remote
+
+    # When mmap_archive_indexes is not set in the config, or is set to false,
+    # setting DOLT_TEST_ASSERT_NO_IN_MEMORY_ARCHIVE_INDEX should result in an error
+    run env DOLT_TEST_ASSERT_NO_IN_MEMORY_ARCHIVE_INDEX=1 dolt sql -q 'select sum(i) from tbl;'
+    [ $status -ne 0 ]
+    echo "$output"
+    [[ $output =~ "attempted to load archive index into memory but DOLT_TEST_ASSERT_NO_IN_MEMORY_ARCHIVE_INDEX was set" ]] || false
+
+    dolt config --local --set "mmap_archive_indexes" false
+    run env DOLT_TEST_ASSERT_NO_IN_MEMORY_ARCHIVE_INDEX=1 dolt sql -q 'select sum(i) from tbl;'
+    [ $status -ne 0 ]
+    [[ $output =~ "attempted to load archive index into memory but DOLT_TEST_ASSERT_NO_IN_MEMORY_ARCHIVE_INDEX was set" ]] || false
+
+    dolt config --local --set "mmap_archive_indexes" true
+    # Verify we can read data
+    run env DOLT_TEST_ASSERT_NO_IN_MEMORY_ARCHIVE_INDEX=1 dolt sql -q 'select sum(i) from tbl;'
+    echo "$output"
+    [[ "$status" -eq 0 ]] || false
+    [[ "$output" =~ "138075" ]] || false # i = 1 - 525, sum is 138075
+}
