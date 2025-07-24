@@ -28,6 +28,7 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
+
 // DoltRowToSqlRow constructs a go-mysql-server sql.Row from a Dolt row.Row.
 func DoltRowToSqlRow(doltRow row.Row, sch schema.Schema) (sql.Row, error) {
 	if doltRow == nil {

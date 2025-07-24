@@ -2197,3 +2197,31 @@ EOF
     run grep -F "Dropping persisted '__dolt_local_user__@localhost' because this account name is reserved for Dolt" server_log.txt
     [ $status -eq 0 ]
 }
+
+
+@test "sql-server: client interactive binary-as-hex behavior works with server connections" {
+    skiponwindows "Missing dependencies"
+    which expect > /dev/null || skip "expect not available"
+    
+    cd repo1
+    
+    # Setup: Create table with binary data and commit it
+    dolt sql -q "DROP TABLE IF EXISTS binary_test; CREATE TABLE binary_test (pk INT PRIMARY KEY, vb VARBINARY(20)); INSERT INTO binary_test VALUES (1, 0x0A000000), (2, 'abc');"
+    dolt add .
+    dolt commit -m "Add binary test data"
+    
+    start_sql_server repo1
+    
+    # Test --binary-as-hex flag in interactive mode (should show hex)
+    run expect "$BATS_TEST_DIRNAME/binary-as-hex-server-interactive.expect" $PORT
+    echo "EXPECT OUTPUT: $output"
+    echo "EXPECT STATUS: $status"
+    [ $status -eq 0 ]
+    
+    # Test --skip-binary-as-hex flag in interactive mode (should show raw)
+    run expect "$BATS_TEST_DIRNAME/binary-as-hex-skip-flag-interactive.expect" $PORT
+    [ $status -eq 0 ]
+    
+    stop_sql_server 1
+}
+
