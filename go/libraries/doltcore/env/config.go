@@ -16,7 +16,9 @@ package env
 
 import (
 	"errors"
+	"fmt"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
@@ -173,6 +175,22 @@ func (dcc *DoltCliConfig) GetConfig(element ConfigScope) (config.ReadWriteConfig
 // the default string value
 func (dcc *DoltCliConfig) GetStringOrDefault(key, defStr string) string {
 	return GetStringOrDefault(dcc.ch, key, defStr)
+}
+
+func (dcc *DoltCliConfig) GetBool(key string, defaultValue bool) (bool, error) {
+	configString, err := dcc.GetString(config.MmapArchiveIndexes)
+	if err == config.ErrConfigParamNotFound {
+		return defaultValue, nil
+	}
+	if err != nil {
+		return false, err
+	}
+
+	configBool, err := strconv.ParseBool(configString)
+	if err != nil {
+		return false, fmt.Errorf("failed to parse config %s: %w", key, err)
+	}
+	return configBool, nil
 }
 
 // IfEmptyUseConfig looks at a strings value and if it is an empty string will try to return a value from the config

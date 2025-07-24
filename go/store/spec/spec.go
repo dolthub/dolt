@@ -317,7 +317,7 @@ func (sp Spec) NewChunkStore(ctx context.Context) chunks.ChunkStore {
 	case "oci":
 		return parseOCISpec(ctx, sp.Href(), sp.Options)
 	case "nbs":
-		cs, err := nbs.NewLocalStore(ctx, types.Format_Default.VersionString(), sp.DatabaseName, 1<<28, nbs.NewUnlimitedMemQuotaProvider())
+		cs, err := nbs.NewLocalStore(ctx, types.Format_Default.VersionString(), sp.DatabaseName, 1<<28, nbs.NewUnlimitedMemQuotaProvider(), false)
 		d.PanicIfError(err)
 		return cs
 	case "mem":
@@ -510,18 +510,18 @@ func (sp Spec) createDatabase(ctx context.Context) (datas.Database, types.ValueR
 			return getStandardLocalStore(ctx, sp.DatabaseName)
 		}
 
-		newGenSt, err := nbs.NewLocalJournalingStore(ctx, types.Format_Default.VersionString(), sp.DatabaseName, nbs.NewUnlimitedMemQuotaProvider())
+		newGenSt, err := nbs.NewLocalJournalingStore(ctx, types.Format_Default.VersionString(), sp.DatabaseName, nbs.NewUnlimitedMemQuotaProvider(), false)
 
 		// If the journaling store can't be created, fall back to a standard local store
 		if err != nil {
 			var localErr error
-			newGenSt, localErr = nbs.NewLocalStore(ctx, types.Format_Default.VersionString(), sp.DatabaseName, 1<<28, nbs.NewUnlimitedMemQuotaProvider())
+			newGenSt, localErr = nbs.NewLocalStore(ctx, types.Format_Default.VersionString(), sp.DatabaseName, 1<<28, nbs.NewUnlimitedMemQuotaProvider(), false)
 			if localErr != nil {
 				d.PanicIfError(err)
 			}
 		}
 
-		oldGenSt, err := nbs.NewLocalStore(ctx, newGenSt.Version(), oldgenDb, 1<<28, nbs.NewUnlimitedMemQuotaProvider())
+		oldGenSt, err := nbs.NewLocalStore(ctx, newGenSt.Version(), oldgenDb, 1<<28, nbs.NewUnlimitedMemQuotaProvider(), false)
 		d.PanicIfError(err)
 
 		cs := nbs.NewGenerationalCS(oldGenSt, newGenSt, nil)
@@ -551,7 +551,7 @@ func (sp Spec) createDatabase(ctx context.Context) (datas.Database, types.ValueR
 func getStandardLocalStore(ctx context.Context, dbName string) (datas.Database, types.ValueReadWriter, tree.NodeStore) {
 	os.Mkdir(dbName, 0777)
 
-	cs, err := nbs.NewLocalStore(ctx, types.Format_Default.VersionString(), dbName, 1<<28, nbs.NewUnlimitedMemQuotaProvider())
+	cs, err := nbs.NewLocalStore(ctx, types.Format_Default.VersionString(), dbName, 1<<28, nbs.NewUnlimitedMemQuotaProvider(), false)
 	d.PanicIfError(err)
 
 	vrw := types.NewValueStore(cs)

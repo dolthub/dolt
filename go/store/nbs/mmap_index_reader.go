@@ -24,6 +24,7 @@ import (
 )
 
 type archiveIndexReader interface {
+	getNumChunks() int
 	getSpanIndex(idx uint32) uint64
 	getPrefix(idx uint32) uint64
 	getChunkRef(idx int) (dict, data uint32)
@@ -75,6 +76,10 @@ func newMmapIndexReader(fileHandle *os.File, footer archiveFooter) (*mmapIndexRe
 	}, nil
 }
 
+func (m *mmapIndexReader) getNumChunks() int {
+	return int(m.chunkCount)
+}
+
 // getSpanIndex returns the span index value at the given position
 func (m *mmapIndexReader) getSpanIndex(idx uint32) uint64 {
 	if idx == 0 {
@@ -123,60 +128,7 @@ func (m *mmapIndexReader) getSuffix(idx uint64) (suf suffix) {
 
 // searchPrefixes performs binary search on the memory-mapped prefixes
 func (m *mmapIndexReader) searchPrefixes(target uint64) int {
-	items := int(m.chunkCount)
-	if items == 0 {
-		return 0
-	}
-
-	// Use the same prollyBinSearch logic but with memory-mapped access
-	return m.prollyBinSearch(target, items)
-}
-
-// prollyBinSearch performs the same probabilistic binary search as the original
-func (m *mmapIndexReader) prollyBinSearch(target uint64, items int) int {
-	if items == 0 {
-		return 0
-	}
-
-	lft, rht := 0, items
-	lo, hi := m.getPrefix(0), m.getPrefix(uint32(rht-1))
-
-	if target > hi {
-		return rht
-	}
-	if lo >= target {
-		return lft
-	}
-
-	for lft < rht {
-		valRangeSz := hi - lo
-		idxRangeSz := uint64(rht - lft - 1)
-		shiftedTgt := target - lo
-
-		mhi, mlo := bits.Mul64(shiftedTgt, idxRangeSz)
-		dU64, _ := bits.Div64(mhi, mlo, valRangeSz)
-
-		idx := int(dU64) + lft
-		if idx >= items {
-			idx = items - 1
-		}
-
-		if m.getPrefix(uint32(idx)) < target {
-			lft = idx + 1
-			if lft < items {
-				lo = m.getPrefix(uint32(lft))
-				if lo >= target {
-					return lft
-				}
-			}
-		} else {
-			rht = idx
-			if rht > 0 {
-				hi = m.getPrefix(uint32(rht))
-			}
-		}
-	}
-	return lft
+	return prollyBinSearch(m, target)
 }
 
 // close unmaps the memory region

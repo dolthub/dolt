@@ -115,7 +115,7 @@ func GetMultiEnvStorageMetadata(ctx context.Context, dataDirFS filesys.Filesys) 
 			return nil, err
 		}
 
-		sm, err := nbs.GetStorageMetadata(ctx, fsStr, &nbs.Stats{})
+		sm, err := nbs.GetStorageMetadata(ctx, fsStr, &nbs.Stats{}, false)
 		if err != nil {
 			return nil, err
 		}
