@@ -37,7 +37,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
-
 // BuildConnectionStringQueryist returns a Queryist that connects to the server specified by the given server config. Presence in this
 // module isn't ideal, but it's the only way to get the server config into the queryist.
 func BuildConnectionStringQueryist(ctx context.Context, cwdFS filesys.Filesys, creds *cli.UserPassword, apr *argparser.ArgParseResults, host string, port int, useTLS bool, dbRev string) (cli.LateBindQueryist, error) {
@@ -165,7 +164,7 @@ func NewMysqlRowWrapper(sqlRows *sql2.Rows) (*MysqlRowWrapper, error) {
 			// Normalize both BINARY and VARBINARY to VarBinary for simpler formatting logic
 			sqlType = types.MustCreateBinary(sqltypes.VarBinary, 255)
 		}
-		
+
 		schema[i] = &sql.Column{
 			Name:     colType.Name(),
 			Type:     sqlType,
