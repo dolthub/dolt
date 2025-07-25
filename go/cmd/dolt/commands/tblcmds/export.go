@@ -19,6 +19,7 @@ import (
 	"os"
 	"path/filepath"
 
+	eventsapi "github.com/dolthub/eventsapi_schema/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/fatih/color"
 
@@ -35,7 +36,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
-	eventsapi "github.com/dolthub/eventsapi_schema/dolt/services/eventsapi/v1alpha1"
 )
 
 var exportDocs = cli.CommandDocumentationContent{

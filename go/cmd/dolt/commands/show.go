@@ -20,6 +20,7 @@ import (
 	"regexp"
 	"strings"
 
+	eventsapi "github.com/dolthub/eventsapi_schema/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/pkg/errors"
 
@@ -32,7 +33,6 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/util/outputpager"
-	eventsapi "github.com/dolthub/eventsapi_schema/dolt/services/eventsapi/v1alpha1"
 )
 
 var hashRegex = regexp.MustCompile(`^#?[0-9a-v]{32}$`)

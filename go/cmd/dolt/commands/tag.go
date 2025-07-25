@@ -21,6 +21,7 @@ import (
 	"strings"
 	"time"
 
+	eventsapi "github.com/dolthub/eventsapi_schema/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/fatih/color"
 
@@ -29,7 +30,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/store/datas"
-	eventsapi "github.com/dolthub/eventsapi_schema/dolt/services/eventsapi/v1alpha1"
 )
 
 type tagInfo struct {
