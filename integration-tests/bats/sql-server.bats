@@ -2199,7 +2199,7 @@ EOF
 }
 
 
-@test "sql-server: client interactive binary-as-hex behavior works with server connections" {
+@test "sql-server: client binary-as-hex behavior works with server connections" {
     skiponwindows "Missing dependencies"
     which expect > /dev/null || skip "expect not available"
     
@@ -2212,15 +2212,58 @@ EOF
     
     start_sql_server repo1
     
-    # Test --binary-as-hex flag in interactive mode (should show hex)
-    run expect "$BATS_TEST_DIRNAME/binary-as-hex-server-interactive.expect" $PORT
-    echo "EXPECT OUTPUT: $output"
-    echo "EXPECT STATUS: $status"
+    # 1. Test default interactive behavior (should show hex by default)
+    run expect "$BATS_TEST_DIRNAME/binary-as-hex-server-default-interactive.expect" $PORT
     [ $status -eq 0 ]
     
-    # Test --skip-binary-as-hex flag in interactive mode (should show raw)
+    # 2. Test --binary-as-hex flag in interactive mode (should show hex)
+    run expect "$BATS_TEST_DIRNAME/binary-as-hex-server-interactive.expect" $PORT
+    [ $status -eq 0 ]
+    
+    # 3. Test --skip-binary-as-hex flag in interactive mode (should show raw)
     run expect "$BATS_TEST_DIRNAME/binary-as-hex-skip-flag-interactive.expect" $PORT
     [ $status -eq 0 ]
+    
+    # 4. Test flag precedence: --skip-binary-as-hex overrides --binary-as-hex
+    run expect "$BATS_TEST_DIRNAME/binary-as-hex-flag-precedence-interactive.expect" $PORT
+    [ $status -eq 0 ]
+    
+    # 5. Test non-interactive server behavior with -q flag (should show raw by default)
+    run dolt --host 127.0.0.1 --port $PORT --no-tls sql -q "USE repo1; SELECT vb FROM binary_test WHERE pk = 1"
+    [ $status -eq 0 ]
+    ! [[ "$output" =~ "0x0A000000" ]] || false
+    
+    # 6. Test non-interactive server behavior with --binary-as-hex flag
+    run dolt --host 127.0.0.1 --port $PORT --no-tls sql --binary-as-hex -q "USE repo1; SELECT vb FROM binary_test WHERE pk = 1"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "0x0A000000" ]] || false
+    
+    # 7. Test non-interactive server behavior with printable data
+    run dolt --host 127.0.0.1 --port $PORT --no-tls sql -q "USE repo1; SELECT vb FROM binary_test WHERE pk = 2"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "abc" ]] || false
+    
+    # 8. Test non-interactive server flag precedence
+    run dolt --host 127.0.0.1 --port $PORT --no-tls sql --binary-as-hex --skip-binary-as-hex -q "USE repo1; SELECT vb FROM binary_test WHERE pk = 2"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "abc" ]] || false
+    ! [[ "$output" =~ "0x616263" ]] || false
+    
+    # 9. Test non-interactive server behavior with -q flag (should show raw by default)
+    run dolt --host 127.0.0.1 --port $PORT --no-tls sql -q "USE repo1; SELECT vb FROM binary_test WHERE pk = 1"
+    [ $status -eq 0 ]
+    ! [[ "$output" =~ "0x0A000000" ]] || false
+    
+    # 10. Test non-interactive server behavior with -q and --binary-as-hex flags
+    run dolt --host 127.0.0.1 --port $PORT --no-tls sql --binary-as-hex -q "USE repo1; SELECT vb FROM binary_test WHERE pk = 1"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "0x0A000000" ]] || false
+    
+    # 11. Test non-interactive server -q flag precedence
+    run dolt --host 127.0.0.1 --port $PORT --no-tls sql --binary-as-hex --skip-binary-as-hex -q "USE repo1; SELECT vb FROM binary_test WHERE pk = 2"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "abc" ]] || false
+    ! [[ "$output" =~ "0x616263" ]] || false
     
     stop_sql_server 1
 }

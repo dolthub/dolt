@@ -23,8 +23,6 @@ import (
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/types"
-	"github.com/dolthub/vitess/go/sqltypes"
 	"github.com/dolthub/vitess/go/vt/sqlparser"
 	"github.com/go-sql-driver/mysql"
 	"github.com/gocraft/dbr/v2"
@@ -33,10 +31,10 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/servercfg"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
-
 
 // BuildConnectionStringQueryist returns a Queryist that connects to the server specified by the given server config. Presence in this
 // module isn't ideal, but it's the only way to get the server config into the queryist.
@@ -158,20 +156,9 @@ func NewMysqlRowWrapper(sqlRows *sql2.Rows) (*MysqlRowWrapper, error) {
 	iRow := make([]interface{}, len(colTypes))
 	rows := make([]sql.Row, 0)
 	for i, colType := range colTypes {
-		// Check if this is a binary type by examining the database type name
-		typeName := strings.ToLower(colType.DatabaseTypeName())
-		var sqlType sql.Type
-		switch typeName {
-		case "binary", "varbinary", "tinyblob", "blob", "mediumblob", "longblob":
-			sqlType = types.MustCreateBinary(sqltypes.VarBinary, 255)
-		default:
-			// Default to LongText for all other types (as was done before)
-			sqlType = types.LongText
-		}
-
 		schema[i] = &sql.Column{
 			Name:     colType.Name(),
-			Type:     sqlType,
+			Type:     sqlutil.DatabaseTypeNameToSqlType(colType.DatabaseTypeName()),
 			Nullable: true,
 		}
 		iRow[i] = &vRow[i]

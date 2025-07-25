@@ -112,52 +112,6 @@ func init() {
 	dsqle.AddDoltSystemVariables()
 }
 
-// binaryAsHexRowIter wraps a row iterator and converts binary data to hex format
-type binaryAsHexRowIter struct {
-	inner  sql.RowIter
-	schema sql.Schema
-}
-
-func newBinaryAsHexRowIter(inner sql.RowIter, schema sql.Schema) sql.RowIter {
-	return &binaryAsHexRowIter{
-		inner:  inner, 
-		schema: schema,
-	}
-}
-
-func (iter *binaryAsHexRowIter) Next(ctx *sql.Context) (sql.Row, error) {
-	row, err := iter.inner.Next(ctx)
-	if err != nil {
-		return nil, err
-	}
-	
-	// Transform binary data to hex format
-	for i, val := range row {
-		if val != nil && i < len(iter.schema) {
-			if stringType, ok := iter.schema[i].Type.(sql.StringType); ok {
-				sqlType := stringType.Type()
-				switch sqlType {
-				case sqltypes.Binary, sqltypes.VarBinary:
-					// Handle byte slice for VARBINARY/BINARY columns (local connections)
-					if binaryBytes, ok := val.([]byte); ok {
-						row[i] = fmt.Sprintf("0x%X", binaryBytes)
-					} else if binaryString, ok := val.(string); ok {
-						// Handle string data that contains binary (server connections)
-						row[i] = fmt.Sprintf("0x%X", []byte(binaryString))
-					}
-				}
-			}
-		}
-	}
-	
-	return row, nil
-}
-
-func (iter *binaryAsHexRowIter) Close(ctx *sql.Context) error {
-	return iter.inner.Close(ctx)
-}
-
-
 type SqlCmd struct {
 	VersionStr string
 }
@@ -197,8 +151,8 @@ func (cmd SqlCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(continueFlag, "c", "Continue running queries on an error. Used for batch mode only.")
 	ap.SupportsString(fileInputFlag, "f", "input file", "Execute statements from the file given.")
 	ap.SupportsFlag(binaryAsHexFlag, "", "Print binary data as hex. Enabled by default for interactive terminals.")
-	// --skip-binary-as-hex is supported but not shown in help, matching MySQL's behavior
-	ap.SupportsFlag(skipBinaryAsHexFlag, "", "")
+	// TODO: MySQL uses a skip- pattern for negating flags and doesn't show them in help
+	ap.SupportsFlag(skipBinaryAsHexFlag, "", "Disable binary data as hex output.")
 	return ap
 }
 
@@ -265,19 +219,8 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	// Determine if we're running in a TTY (used by all modes)
-	isTty := false
-	fi, err := os.Stdin.Stat()
-	if err != nil {
-		if !osutil.IsWindows {
-			return HandleVErrAndExitCode(errhand.BuildDError("Couldn't stat STDIN. This is a bug.").Build(), usage)
-		}
-	} else {
-		isTty = fi.Mode()&os.ModeCharDevice != 0
-	}
-
-	// Determine binary-as-hex behavior once (default based on TTY, flags can override)
-	binaryAsHex := isTty
+	// Determine binary-as-hex behavior from flags (default false for non-interactive modes)
+	binaryAsHex := false
 	if apr.Contains(skipBinaryAsHexFlag) {
 		binaryAsHex = false
 	} else if apr.Contains(binaryAsHexFlag) {
@@ -303,6 +246,15 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		return listSavedQueries(sqlCtx, queryist, dEnv, format, usage)
 	} else {
 		// Run in either batch mode for piped input, or shell mode for interactive
+		isTty := false
+		fi, err := os.Stdin.Stat()
+		if err != nil {
+			if !osutil.IsWindows {
+				return sqlHandleVErrAndExitCode(queryist, errhand.BuildDError("Couldn't stat STDIN. This is a bug.").Build(), usage)
+			}
+		} else {
+			isTty = fi.Mode()&os.ModeCharDevice != 0
+		}
 
 		_, continueOnError := apr.GetValue(continueFlag)
 
@@ -326,7 +278,9 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		}
 
 		if isTty {
-			err := execShell(sqlCtx, queryist, format, cliCtx, binaryAsHex)
+			// In shell mode, default to hex format unless explicitly disabled
+			shellBinaryAsHex := !apr.Contains(skipBinaryAsHexFlag)
+			err := execShell(sqlCtx, queryist, format, cliCtx, shellBinaryAsHex)
 			if err != nil {
 				return sqlHandleVErrAndExitCode(queryist, errhand.VerboseErrorFromError(err), usage)
 			}
@@ -513,10 +467,7 @@ func execSingleQuery(
 
 	if rowIter != nil {
 		// Apply binary-as-hex formatting if enabled
-		if binaryAsHex {
-			rowIter = newBinaryAsHexRowIter(rowIter, sqlSch)
-		}
-		err = engine.PrettyPrintResults(sqlCtx, format, sqlSch, rowIter, false, false, false)
+		err = engine.PrettyPrintResults(sqlCtx, format, sqlSch, rowIter, false, false, false, binaryAsHex)
 		if err != nil {
 			return errhand.VerboseErrorFromError(err)
 		}
@@ -732,11 +683,7 @@ func execBatchMode(ctx *sql.Context, qryist cli.Queryist, input io.Reader, conti
 					fileReadProg.printNewLineIfNeeded()
 				}
 			}
-			// Apply binary-as-hex formatting if enabled
-			if binaryAsHex {
-				rowIter = newBinaryAsHexRowIter(rowIter, sqlSch)
-			}
-			err = engine.PrettyPrintResults(ctx, format, sqlSch, rowIter, false, false, false)
+			err = engine.PrettyPrintResults(ctx, format, sqlSch, rowIter, false, false, false, binaryAsHex)
 			if err != nil {
 				err = buildBatchSqlErr(scanner.state.statementStartLine, query, err)
 				if !continueOnErr {
@@ -917,15 +864,11 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 						verr := formatQueryError("", err)
 						shell.Println(verr.Verbose())
 					} else if rowIter != nil {
-						// Apply binary-as-hex formatting to row data if enabled
-						if binaryAsHex {
-							rowIter = newBinaryAsHexRowIter(rowIter, sqlSch)
-						}
 						switch closureFormat {
 						case engine.FormatTabular, engine.FormatVertical:
-							err = engine.PrettyPrintResultsExtended(sqlCtx, closureFormat, sqlSch, rowIter, pagerEnabled, toggleWarnings, true)
+							err = engine.PrettyPrintResultsExtended(sqlCtx, closureFormat, sqlSch, rowIter, pagerEnabled, toggleWarnings, true, binaryAsHex)
 						default:
-							err = engine.PrettyPrintResults(sqlCtx, closureFormat, sqlSch, rowIter, pagerEnabled, toggleWarnings, true)
+							err = engine.PrettyPrintResults(sqlCtx, closureFormat, sqlSch, rowIter, pagerEnabled, toggleWarnings, true, binaryAsHex)
 						}
 					} else {
 						if _, isUseStmt := sqlStmt.(*sqlparser.Use); isUseStmt {

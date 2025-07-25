@@ -3,7 +3,7 @@
 set port [lindex $argv 0]
 set timeout 10
 
-spawn dolt --host 127.0.0.1 --port $port --no-tls sql --skip-binary-as-hex
+spawn dolt --host 127.0.0.1 --port $port --no-tls sql --binary-as-hex --skip-binary-as-hex
 expect ">"
 
 send "USE repo1;\r"
