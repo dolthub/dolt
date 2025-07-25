@@ -367,8 +367,8 @@ func createCVsForPartialKeyMatches(
 
 	kb := val.NewTupleBuilder(primaryKD, primaryIdx.NodeStore())
 
-	for k, _, err := itr.Next(ctx); err == nil; k, _, err = itr.Next(ctx) {
-
+	var k val.Tuple
+	for k, _, err = itr.Next(ctx); err == nil; k, _, err = itr.Next(ctx) {
 		// convert secondary idx entry to primary row key
 		// the pks of the table are the last keys of the index
 		o := k.Count() - primaryKD.Count()
@@ -390,9 +390,13 @@ func createCVsForPartialKeyMatches(
 			return err
 		}
 
-		err = receiver.ProllyFKViolationFound(ctx, primaryIdxKey, value)
-		if err != nil {
-			return err
+		// If a value was found, then there is a row in the child table that references the deleted parent row,
+		// so we need to report a constraint violation.
+		if value != nil {
+			err = receiver.ProllyFKViolationFound(ctx, primaryIdxKey, value)
+			if err != nil {
+				return err
+			}
 		}
 	}
 	if err != nil && err != io.EOF {
