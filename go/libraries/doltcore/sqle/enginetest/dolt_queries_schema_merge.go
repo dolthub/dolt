@@ -864,6 +864,33 @@ var SchemaChangeTestsCollations = []MergeScriptTest{
 
 var SchemaChangeTestsConstraints = []MergeScriptTest{
 	{
+		// Regression test for a bug where rows weren't being deleted in
+		// a secondary index because the incorrect/non-matching tuple was
+		// used to update the index, and foreign key violations were
+		// incorrectly identified.
+		Name: "updating fk index when ancestor schema has changed",
+		AncSetUpScript: []string{
+			"CREATE TABLE parent(pk int primary key, c1 varchar(100));",
+			"CREATE TABLE child(pk int primary key, remove_me int, parent_id int, KEY `fk_idx1` (`parent_id`), foreign key fk1 (parent_id) references parent(pk));",
+			"INSERT INTO parent VALUES (100, 'one hundred'), (200, 'two hundred');",
+			"INSERT INTO child VALUES (1, -1, 100), (2, -1, 200);",
+		},
+		RightSetUpScript: []string{
+			"DELETE FROM child;",
+			"DELETE FROM parent;",
+			"ALTER TABLE child drop column remove_me;",
+		},
+		LeftSetUpScript: []string{
+			"ALTER TABLE child drop column remove_me;",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('right');",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+		},
+	},
+	{
 		Name: "removing a not-null constraint",
 		AncSetUpScript: []string{
 			"create table t (pk int primary key, col1 int not null);",
