@@ -9,14 +9,29 @@ expect ">"
 send "USE repo1;\r"
 expect ">"
 
-send "SELECT * FROM binary_test;\r"
+send "SELECT pk, vb FROM binary_test WHERE pk = 2;\r"
 expect {
-    "0x0A000000" {
-        # Found hex output - this is correct
+    "0x616263" {
         expect ">"
+        send "SELECT pk, vb FROM binary_test WHERE pk = 1;\r"
+        expect {
+            "0x0A000000" {
+                expect ">"
+                send "exit\r"
+                expect eof
+                exit 0
+            }
+            timeout {
+                send "exit\r"
+                expect eof
+                exit 1
+            }
+        }
+    }
+    "abc" {
         send "exit\r"
         expect eof
-        exit 0
+        exit 1
     }
     timeout {
         send "exit\r"

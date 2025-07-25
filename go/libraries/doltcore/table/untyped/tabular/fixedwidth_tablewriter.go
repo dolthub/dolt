@@ -32,7 +32,6 @@ import (
 
 const writeBufSize = 256 * 1024
 
-
 // FixedWidthTableWriter is a TableWriter that applies a fixed width transform to its fields. All fields are
 // expected to be strings.
 type FixedWidthTableWriter struct {

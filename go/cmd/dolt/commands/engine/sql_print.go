@@ -23,6 +23,7 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
+	"github.com/dolthub/vitess/go/sqltypes"
 	"github.com/fatih/color"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -56,16 +57,16 @@ const (
 )
 
 // PrettyPrintResults prints the result of a query in the format provided
-func PrettyPrintResults(ctx *sql.Context, resultFormat PrintResultFormat, sqlSch sql.Schema, rowIter sql.RowIter, pageResults, showWarnings, printOkResult bool) (rerr error) {
-	return prettyPrintResultsWithSummary(ctx, resultFormat, sqlSch, rowIter, PrintNoSummary, pageResults, showWarnings, printOkResult)
+func PrettyPrintResults(ctx *sql.Context, resultFormat PrintResultFormat, sqlSch sql.Schema, rowIter sql.RowIter, pageResults, showWarnings, printOkResult, binaryAsHex bool) (rerr error) {
+	return prettyPrintResultsWithSummary(ctx, resultFormat, sqlSch, rowIter, PrintNoSummary, pageResults, showWarnings, printOkResult, binaryAsHex)
 }
 
 // PrettyPrintResultsExtended prints the result of a query in the format provided, including row count and timing info
-func PrettyPrintResultsExtended(ctx *sql.Context, resultFormat PrintResultFormat, sqlSch sql.Schema, rowIter sql.RowIter, pageResults, showWarnings, printOkResult bool) (rerr error) {
-	return prettyPrintResultsWithSummary(ctx, resultFormat, sqlSch, rowIter, PrintRowCountAndTiming, pageResults, showWarnings, printOkResult)
+func PrettyPrintResultsExtended(ctx *sql.Context, resultFormat PrintResultFormat, sqlSch sql.Schema, rowIter sql.RowIter, pageResults, showWarnings, printOkResult, binaryAsHex bool) (rerr error) {
+	return prettyPrintResultsWithSummary(ctx, resultFormat, sqlSch, rowIter, PrintRowCountAndTiming, pageResults, showWarnings, printOkResult, binaryAsHex)
 }
 
-func prettyPrintResultsWithSummary(ctx *sql.Context, resultFormat PrintResultFormat, sqlSch sql.Schema, rowIter sql.RowIter, summary PrintSummaryBehavior, pageResults, showWarnings, printOkResult bool) (rerr error) {
+func prettyPrintResultsWithSummary(ctx *sql.Context, resultFormat PrintResultFormat, sqlSch sql.Schema, rowIter sql.RowIter, summary PrintSummaryBehavior, pageResults, showWarnings, printOkResult, binaryAsHex bool) (rerr error) {
 	defer func() {
 		closeErr := rowIter.Close(ctx)
 		if rerr == nil && closeErr != nil {
@@ -124,6 +125,11 @@ func prettyPrintResultsWithSummary(ctx *sql.Context, resultFormat PrintResultFor
 			if err != nil {
 				return
 			}
+		}
+
+		// Wrap iterator with binary-to-hex transformation if needed
+		if binaryAsHex {
+			rowIter = newBinaryHexIterator(rowIter, sqlSch)
 		}
 
 		numRows, err = writeResultSet(ctx, rowIter, wr)
@@ -195,6 +201,55 @@ func printResultSetSummary(numRows int, numWarnings uint16, warningsList string,
 	}
 
 	return nil
+}
+
+// binaryHexIterator wraps a row iterator and transforms binary data to hex format
+type binaryHexIterator struct {
+	inner  sql.RowIter
+	schema sql.Schema
+}
+
+// newBinaryHexIterator creates a new iterator that transforms binary data to hex format.
+// It wraps the provided iterator and transforms BINARY and VARBINARY column values
+// to hex string representation (e.g., "0x41424344").
+func newBinaryHexIterator(inner sql.RowIter, schema sql.Schema) sql.RowIter {
+	return &binaryHexIterator{
+		inner:  inner,
+		schema: schema,
+	}
+}
+
+// Next returns the next row from the wrapped iterator with binary data transformed to hex format.
+// Binary and VarBinary column values are converted to uppercase hex strings prefixed with "0x".
+func (iter *binaryHexIterator) Next(ctx *sql.Context) (sql.Row, error) {
+	row, err := iter.inner.Next(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Transform binary column values to hex string format in place
+	// Currently supports BINARY and VARBINARY types only.
+	// TODO: Add support for BLOB types (TINYBLOB, BLOB, MEDIUMBLOB, LONGBLOB) and BIT type
+	// as confirmed by testing MySQL 8.4+ binary-as-hex behavior
+	for i, val := range row {
+		if val != nil && i < len(iter.schema) {
+			switch iter.schema[i].Type.Type() {
+			case sqltypes.Binary, sqltypes.VarBinary:
+				if bytes, ok := val.([]byte); ok {
+					row[i] = fmt.Sprintf("0x%X", bytes)
+				} else {
+					row[i] = fmt.Sprintf("0x%X", []byte(fmt.Sprint(val)))
+				}
+			}
+		}
+	}
+
+	return row, nil
+}
+
+// Close closes the wrapped iterator and releases any resources.
+func (iter *binaryHexIterator) Close(ctx *sql.Context) error {
+	return iter.inner.Close(ctx)
 }
 
 // writeResultSet drains the iterator given, printing rows from it to the writer given. Returns the number of rows.
