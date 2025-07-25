@@ -19,6 +19,9 @@ jobs:
           if [ "$REPO" == "go-mysql-server" ]
           then
             echo "label=gms-bump" >> $GITHUB_OUTPUT
+          elif [ "$REPO" == "eventsapi_schema" ]
+          then
+            echo "label=eventsapi_schema-bump" >> $GITHUB_OUTPUT
           else
             echo "$REPO is unsupported"
             exit 1
