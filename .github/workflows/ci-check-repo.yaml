@@ -159,7 +159,9 @@ jobs:
           (cd third_party/protobuf && bazel build //:protoc)
           (cd third_party/protobuf-go && go build -o ._protoc-gen-go ./cmd/protoc-gen-go)
           (cd third_party/grpc-go/cmd/protoc-gen-go-grpc && go build -o ._protoc-gen-go-grpc .)
-          make clean all
+          make clean 
+          find ../go/gen/proto -name '*.pb.go' -exec gofmt -s -w {} +
+          find ../go/gen/proto -name '*.pb.go' -exec goimports -w {} +
           changes=$(git status --porcelain)
           diff=$(git diff)
           if [ ! -z "$changes" ]; then
