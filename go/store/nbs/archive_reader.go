@@ -317,10 +317,6 @@ func (f *inMemoryArchiveIndexReader) getSuffix(idx uint64) suffix {
 	return suffix(f.suffixes[start : start+hash.SuffixLen])
 }
 
-func (f *inMemoryArchiveIndexReader) searchPrefixes(target uint64) int {
-	return prollyBinSearch(f, target)
-}
-
 func (f *inMemoryArchiveIndexReader) Close() error {
 	return nil
 }
@@ -418,7 +414,7 @@ func buildFooter(fileSize uint64, buf []byte) (f archiveFooter, err error) {
 // search returns the index of the hash in the archive. If the hash is not found, -1 is returned.
 func (ar archiveReader) search(hash hash.Hash) int {
 	prefix := hash.Prefix()
-	possibleMatch := ar.indexReader.searchPrefixes(prefix)
+	possibleMatch := prollyBinSearch(ar.indexReader, prefix)
 	targetSfx := hash.Suffix()
 
 	if possibleMatch < 0 || possibleMatch >= int(ar.footer.chunkCount) {
@@ -643,7 +639,7 @@ func verifyCheckSum(ctx context.Context, reader tableReaderAt, span byteSpan, ch
 //
 // For our purposes where we are just trying to get the index, we must compare the resulting index to our target to
 // determine if it is a match.
-func prollyBinSearch(m archiveIndexReader, target uint64) int {
+func prollyBinSearch(m prefixList, target uint64) int {
 	items := m.getNumChunks()
 	if items == 0 {
 		return 0

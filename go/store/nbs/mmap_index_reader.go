@@ -23,13 +23,28 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
-type archiveIndexReader interface {
+type prefixList interface {
 	getNumChunks() int
-	getSpanIndex(idx uint32) uint64
 	getPrefix(idx uint32) uint64
+}
+
+type slicePrefixList []uint64
+
+var _ prefixList = slicePrefixList{}
+
+func (s slicePrefixList) getNumChunks() int {
+	return len(s)
+}
+
+func (s slicePrefixList) getPrefix(idx uint32) uint64 {
+	return s[idx]
+}
+
+type archiveIndexReader interface {
+	prefixList
+	getSpanIndex(idx uint32) uint64
 	getChunkRef(idx int) (dict, data uint32)
 	getSuffix(idx uint64) suffix
-	searchPrefixes(target uint64) int
 	io.Closer
 }
 
@@ -124,11 +139,6 @@ func (m *mmapIndexReader) getSuffix(idx uint64) (suf suffix) {
 	start := m.suffixesOffset + int64(idx)*hash.SuffixLen
 	_, _ = m.data.ReadAt(suf[:], start)
 	return
-}
-
-// searchPrefixes performs binary search on the memory-mapped prefixes
-func (m *mmapIndexReader) searchPrefixes(target uint64) int {
-	return prollyBinSearch(m, target)
 }
 
 // close unmaps the memory region
