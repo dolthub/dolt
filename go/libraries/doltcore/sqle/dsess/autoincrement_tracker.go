@@ -138,7 +138,11 @@ func (a *AutoIncrementTracker) Next(ctx *sql.Context, tbl string, insertVal inte
 	}
 
 	if given >= curr {
-		a.sequences.Store(tbl, given+1)
+		nextVal := given
+		if a.incrementAutoIncVal(ctx, tbl, given) {
+			nextVal++
+		}
+		a.sequences.Store(tbl, nextVal)
 		return given, nil
 	}
 
@@ -516,6 +520,44 @@ func (a *AutoIncrementTracker) initWithRoots(ctx context.Context, roots ...doltd
 	}
 
 	return eg.Wait()
+}
+
+// incrementAutoIncVal determines whether to increment the auto-increment value.
+// Returns true (fail-open) for all infrastructure errors, missing tables, or missing
+// auto-increment columns to avoid breaking legitimate operations like ALTER TABLE.
+// Returns false (fail-closed) only when we can definitively determine that incrementing
+// would cause a type overflow on an existing auto-increment column.
+func (a *AutoIncrementTracker) incrementAutoIncVal(ctx *sql.Context, tbl string, currentVal uint64) bool {
+	sess := DSessFromSess(ctx.Session)
+	db, ok := sess.Provider().BaseDatabase(ctx, a.dbName)
+	if !ok || !db.Versioned() {
+		return true
+	}
+
+	ws, err := sess.WorkingSet(ctx, a.dbName)
+	if err != nil {
+		return true
+	}
+
+	table, _, ok, err := doltdb.GetTableInsensitive(ctx, ws.WorkingRoot(), doltdb.TableName{Name: tbl})
+	if err != nil || !ok {
+		return true
+	}
+
+	sch, err := table.GetSchema(ctx)
+	if err != nil {
+		return true
+	}
+
+	aiCol, ok := schema.GetAutoIncrementColumn(sch)
+	if !ok {
+		return true
+	}
+
+	sqlType := aiCol.TypeInfo.ToSqlType()
+	nextVal := currentVal + 1
+	_, inRange, err := sqlType.Convert(ctx, nextVal)
+	return err == nil && inRange == sql.InRange
 }
 
 func (a *AutoIncrementTracker) InitWithRoots(ctx context.Context, roots ...doltdb.Rootish) error {
