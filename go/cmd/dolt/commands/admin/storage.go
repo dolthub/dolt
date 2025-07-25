@@ -17,8 +17,9 @@ package admin
 import (
 	"context"
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"strconv"
+
+	"github.com/dolthub/dolt/go/libraries/utils/config"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"

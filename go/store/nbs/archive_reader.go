@@ -21,13 +21,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
-	"github.com/dolthub/gozstd"
-	lru "github.com/hashicorp/golang-lru/v2"
 	"io"
 	"math/bits"
 	"os"
 
+	"github.com/dolthub/gozstd"
+	lru "github.com/hashicorp/golang-lru/v2"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 )
