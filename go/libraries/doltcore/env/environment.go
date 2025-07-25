@@ -208,7 +208,15 @@ func Load(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, urlStr s
 
 func LoadDoltDB(ctx context.Context, fs filesys.Filesys, urlStr string, dEnv *DoltEnv) {
 	dEnv.loadDBOnce.Do(func() {
-		ddb, dbLoadErr := doltdb.LoadDoltDB(ctx, types.Format_Default, urlStr, fs)
+
+		mmapArchiveIndexes, err := dEnv.Config.GetBool(config.MmapArchiveIndexes, false)
+		if err != nil {
+			dEnv.DBLoadError = err
+			return
+		}
+
+		params := map[string]interface{}{dbfactory.MMapArchiveIndexesParam: mmapArchiveIndexes}
+		ddb, dbLoadErr := doltdb.LoadDoltDBWithParams(ctx, types.Format_Default, urlStr, fs, params)
 		dEnv.doltDB = ddb
 		dEnv.DBLoadError = dbLoadErr
 		dEnv.urlStr = urlStr

@@ -17,6 +17,9 @@ package admin
 import (
 	"context"
 	"fmt"
+	"strconv"
+
+	"github.com/dolthub/dolt/go/libraries/utils/config"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -42,7 +45,15 @@ func (s StorageCmd) Exec(ctx context.Context, _ string, _ []string, dEnv *env.Do
 		return 1
 	}
 
-	smd, err := nbs.GetStorageMetadata(ctx, abs, &nbs.Stats{})
+	mmapArchiveIndexesString := dEnv.Config.GetStringOrDefault(config.MmapArchiveIndexes, "false")
+
+	mmapArchiveIndexes, err := strconv.ParseBool(mmapArchiveIndexesString)
+	if err != nil {
+		cli.Println(fmt.Sprintf("Couldn't parse : %v", err))
+		return 1
+	}
+
+	smd, err := nbs.GetStorageMetadata(ctx, abs, &nbs.Stats{}, mmapArchiveIndexes)
 
 	for _, artifact := range smd.GetArtifacts() {
 		cli.Println(artifact.SummaryString())

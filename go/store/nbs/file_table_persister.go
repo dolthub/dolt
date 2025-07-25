@@ -43,13 +43,14 @@ import (
 
 const tempTablePrefix = "nbs_table_"
 
-func newFSTablePersister(dir string, q MemoryQuotaProvider) tablePersister {
-	return &fsTablePersister{dir, q, sync.Mutex{}, nil, make(map[string]struct{})}
+func newFSTablePersister(dir string, q MemoryQuotaProvider, mmapArchiveIndexes bool) tablePersister {
+	return &fsTablePersister{dir, q, mmapArchiveIndexes, sync.Mutex{}, nil, make(map[string]struct{})}
 }
 
 type fsTablePersister struct {
-	dir string
-	q   MemoryQuotaProvider
+	dir                string
+	q                  MemoryQuotaProvider
+	mmapArchiveIndexes bool
 
 	// Protects the following two maps.
 	removeMu sync.Mutex
@@ -70,7 +71,7 @@ var _ tablePersister = &fsTablePersister{}
 var _ tableFilePersister = &fsTablePersister{}
 
 func (ftp *fsTablePersister) Open(ctx context.Context, name hash.Hash, chunkCount uint32, stats *Stats) (chunkSource, error) {
-	return newFileTableReader(ctx, ftp.dir, name, chunkCount, ftp.q, stats)
+	return newFileTableReader(ctx, ftp.dir, name, chunkCount, ftp.q, ftp.mmapArchiveIndexes, stats)
 }
 
 func (ftp *fsTablePersister) Exists(ctx context.Context, name string, chunkCount uint32, stats *Stats) (bool, error) {

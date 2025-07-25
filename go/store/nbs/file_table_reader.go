@@ -78,7 +78,7 @@ func archiveFileExists(ctx context.Context, dir string, name string) (bool, erro
 	return err == nil, err
 }
 
-func newFileTableReader(ctx context.Context, dir string, h hash.Hash, chunkCount uint32, q MemoryQuotaProvider, stats *Stats) (cs chunkSource, err error) {
+func newFileTableReader(ctx context.Context, dir string, h hash.Hash, chunkCount uint32, q MemoryQuotaProvider, mmapArchiveIndexes bool, stats *Stats) (cs chunkSource, err error) {
 	// we either have a table file or an archive file
 	tfExists, err := tableFileExists(ctx, dir, h)
 	if err != nil {
@@ -91,12 +91,12 @@ func newFileTableReader(ctx context.Context, dir string, h hash.Hash, chunkCount
 	if err != nil {
 		return nil, err
 	} else if afExists {
-		return newArchiveChunkSource(ctx, dir, h, chunkCount, q, stats)
+		return newArchiveChunkSource(ctx, dir, h, chunkCount, q, mmapArchiveIndexes, stats)
 	}
 	return nil, fmt.Errorf("error opening table file: %w: %s/%s", ErrTableFileNotFound, dir, h.String())
 }
 
-func newFileReaderAt(path string) (*fileReaderAt, error) {
+func newFileReaderAt(path string, mmapArchiveIndexes bool) (*fileReaderAt, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
@@ -111,11 +111,12 @@ func newFileReaderAt(path string) (*fileReaderAt, error) {
 	}
 	cnt := new(int32)
 	*cnt = 1
-	return &fileReaderAt{f, path, fi.Size(), cnt}, nil
+	return &fileReaderAt{f, path, fi.Size(), cnt, mmapArchiveIndexes}, nil
 }
 
 func nomsFileTableReader(ctx context.Context, path string, h hash.Hash, chunkCount uint32, q MemoryQuotaProvider) (cs chunkSource, err error) {
-	fra, err := newFileReaderAt(path)
+	// noms files never support mmapped indexes
+	fra, err := newFileReaderAt(path, false)
 	if err != nil {
 		return nil, err
 	}
@@ -192,20 +193,22 @@ type fileReaderAt struct {
 	path string
 	sz   int64
 	// refcnt, clone() increments and Close() decrements. The *os.File is closed when it reaches 0.
-	cnt *int32
+	cnt         *int32
+	mmapIndexes bool // If possible, the file reader will mmap the file for reading index data.
 }
 
 func (fra *fileReaderAt) clone() (tableReaderAt, error) {
 	if !dynassert.Assert(atomic.AddInt32(fra.cnt, 1) > 1, "attempt to clone a closed fileReaderAt") {
 		// Restore previous refcnt, despite being in a weird state...
 		atomic.AddInt32(fra.cnt, -1)
-		return newFileReaderAt(fra.path)
+		return newFileReaderAt(fra.path, fra.mmapIndexes)
 	}
 	return &fileReaderAt{
 		fra.f,
 		fra.path,
 		fra.sz,
 		fra.cnt,
+		fra.mmapIndexes,
 	}, nil
 }
 
@@ -232,7 +235,8 @@ func (fra *fileReaderAt) ReadAtWithStats(ctx context.Context, p []byte, off int6
 }
 
 func newTableFileMetadata(path string, chunkCount uint32) (*TableFileMetadata, error) {
-	fra, err := newFileReaderAt(path)
+	// table files can never have mmapped indexes
+	fra, err := newFileReaderAt(path, false)
 	if err != nil {
 		return nil, err
 	}

@@ -72,7 +72,7 @@ func TestFSTablePersisterPersist(t *testing.T) {
 	assert := assert.New(t)
 	dir := makeTempDir(t)
 	defer file.RemoveAll(dir)
-	fts := newFSTablePersister(dir, &UnlimitedQuotaProvider{})
+	fts := newFSTablePersister(dir, &UnlimitedQuotaProvider{}, false)
 
 	src, err := persistTableData(fts, testChunks...)
 	require.NoError(t, err)
@@ -112,7 +112,7 @@ func TestFSTablePersisterPersistNoData(t *testing.T) {
 
 	dir := makeTempDir(t)
 	defer file.RemoveAll(dir)
-	fts := newFSTablePersister(dir, &UnlimitedQuotaProvider{})
+	fts := newFSTablePersister(dir, &UnlimitedQuotaProvider{}, false)
 
 	src, _, err := fts.Persist(context.Background(), mt, existingTable, nil, &Stats{})
 	require.NoError(t, err)
@@ -130,7 +130,7 @@ func TestFSTablePersisterConjoinAll(t *testing.T) {
 
 	dir := makeTempDir(t)
 	defer file.RemoveAll(dir)
-	fts := newFSTablePersister(dir, &UnlimitedQuotaProvider{})
+	fts := newFSTablePersister(dir, &UnlimitedQuotaProvider{}, false)
 
 	for i, c := range testChunks {
 		randChunk := make([]byte, (i+1)*13)
@@ -168,7 +168,7 @@ func TestFSTablePersisterConjoinAllDups(t *testing.T) {
 	assert := assert.New(t)
 	dir := makeTempDir(t)
 	defer file.RemoveAll(dir)
-	fts := newFSTablePersister(dir, &UnlimitedQuotaProvider{})
+	fts := newFSTablePersister(dir, &UnlimitedQuotaProvider{}, false)
 
 	reps := 3
 	sources := make(chunkSources, reps)

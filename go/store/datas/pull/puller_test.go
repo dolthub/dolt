@@ -44,7 +44,7 @@ func TestNbsPuller(t *testing.T) {
 
 		nbf := types.Format_Default.VersionString()
 		q := nbs.NewUnlimitedMemQuotaProvider()
-		st, err := nbs.NewLocalStore(ctx, nbf, dir, clienttest.DefaultMemTableSize, q)
+		st, err := nbs.NewLocalStore(ctx, nbf, dir, clienttest.DefaultMemTableSize, q, false)
 		require.NoError(t, err)
 
 		ns := tree.NewNodeStore(st)
@@ -62,7 +62,7 @@ func TestChunkJournalPuller(t *testing.T) {
 		nbf := types.Format_Default.VersionString()
 		q := nbs.NewUnlimitedMemQuotaProvider()
 
-		st, err := nbs.NewLocalJournalingStore(ctx, nbf, dir, q)
+		st, err := nbs.NewLocalJournalingStore(ctx, nbf, dir, q, false)
 		require.NoError(t, err)
 
 		ns := tree.NewNodeStore(st)
@@ -95,7 +95,7 @@ func TestPuller(t *testing.T) {
 		nbf := types.Format_Default.VersionString()
 		q := nbs.NewUnlimitedMemQuotaProvider()
 
-		st, err := nbs.NewLocalJournalingStore(ctx, nbf, dir, q)
+		st, err := nbs.NewLocalJournalingStore(ctx, nbf, dir, q, false)
 		require.NoError(t, err)
 
 		plr, err := NewPuller(ctx, t.TempDir(), 1<<20, gs, st, waf, []hash.Hash{ghost}, statsCh)

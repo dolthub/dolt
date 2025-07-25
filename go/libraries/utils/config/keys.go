@@ -31,6 +31,7 @@ var ConfigOptions = map[string]struct{}{
 	PushAutoSetupRemote:   {},
 	ProfileKey:            {},
 	VersionCheckDisabled:  {},
+	MmapArchiveIndexes:    {},
 }
 
 const UserEmailKey = "user.email"
@@ -68,3 +69,5 @@ const VersionCheckDisabled = "versioncheck.disabled"
 const SignCommitsKey = "commit.gpgsign"
 
 const GPGSigningKeyKey = "user.signingkey"
+
+const MmapArchiveIndexes = "mmap_archive_indexes"
