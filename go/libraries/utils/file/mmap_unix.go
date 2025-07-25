@@ -21,9 +21,6 @@ package file
 // mmap doesn't support mapping in only part of a file.
 
 import (
-	"errors"
-	"fmt"
-	"io"
 	"os"
 	"runtime"
 	"syscall"
@@ -65,18 +62,4 @@ func (m *mmapData) Close() error {
 	originalData := m.originalData
 	m.originalData = nil
 	return syscall.Munmap(originalData)
-}
-
-func (m *mmapData) ReadAt(p []byte, off int64) (int, error) {
-	if m.data == nil {
-		return 0, errors.New("mmap: closed")
-	}
-	if off < 0 || int64(len(m.data)) < off {
-		return 0, fmt.Errorf("mmap: invalid ReadAt offset %d", off)
-	}
-	n := copy(p, m.data[off:])
-	if n < len(p) {
-		return n, io.EOF
-	}
-	return n, nil
 }
