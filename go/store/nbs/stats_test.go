@@ -45,7 +45,7 @@ func TestStats(t *testing.T) {
 	dir, err := os.MkdirTemp("", "")
 	require.NoError(t, err)
 	defer file.RemoveAll(dir)
-	store, err := NewLocalStore(context.Background(), constants.FormatDefaultString, dir, testMemTableSize, NewUnlimitedMemQuotaProvider())
+	store, err := NewLocalStore(context.Background(), constants.FormatDefaultString, dir, testMemTableSize, NewUnlimitedMemQuotaProvider(), false)
 	require.NoError(t, err)
 	defer store.Close()
 
