@@ -22,7 +22,6 @@ import (
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/vitess/go/sqltypes"
 	"github.com/fatih/color"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
@@ -33,19 +32,6 @@ import (
 
 const writeBufSize = 256 * 1024
 
-// Context key for binary-as-hex flag
-type ctxKey int
-
-const binaryAsHexKey ctxKey = iota
-
-// WithBinaryAsHex returns a new context with binary-as-hex flag set
-func WithBinaryAsHex(ctx *sql.Context, enabled bool) *sql.Context {
-	if ctx == nil {
-		return ctx
-	}
-	newCtx := context.WithValue(ctx.Context, binaryAsHexKey, enabled)
-	return ctx.WithContext(newCtx)
-}
 
 // FixedWidthTableWriter is a TableWriter that applies a fixed width transform to its fields. All fields are
 // expected to be strings.
@@ -232,29 +218,6 @@ func (w *FixedWidthTableWriter) flushSampleBuffer() error {
 func (w *FixedWidthTableWriter) stringValue(ctx *sql.Context, idx int, i interface{}) (string, error) {
 	if i == nil {
 		return "NULL", nil
-	}
-
-	// Client-side binary-as-hex formatting (like MySQL client does)
-	if ctx != nil {
-		if val := ctx.Value(binaryAsHexKey); val != nil {
-			if enabled, ok := val.(bool); ok && enabled {
-				// Check if this is a binary type that should be formatted as hex
-				// Only check for VarBinary since MysqlRowWrapper normalizes both BINARY and VARBINARY to VarBinary
-				// TODO: Add support for other binary types per MySQL 8.4 docs:
-				// https://dev.mysql.com/doc/refman/8.4/en/mysql-command-options.html#option_mysql_binary-as-hex
-				if stringType, ok := w.schema[idx].Type.(sql.StringType); ok {
-					if stringType.Type() == sqltypes.VarBinary {
-						if binaryBytes, ok := i.([]byte); ok {
-							return fmt.Sprintf("0x%X", binaryBytes), nil
-						}
-						// Handle binary data that comes as string (from server connections)
-						if binaryString, ok := i.(string); ok {
-							return fmt.Sprintf("0x%X", []byte(binaryString)), nil
-						}
-					}
-				}
-			}
-		}
 	}
 
 	return sqlutil.SqlColToStr(ctx, w.schema[idx].Type, i)

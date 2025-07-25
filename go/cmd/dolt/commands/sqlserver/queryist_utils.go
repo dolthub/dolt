@@ -37,6 +37,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
+
 // BuildConnectionStringQueryist returns a Queryist that connects to the server specified by the given server config. Presence in this
 // module isn't ideal, but it's the only way to get the server config into the queryist.
 func BuildConnectionStringQueryist(ctx context.Context, cwdFS filesys.Filesys, creds *cli.UserPassword, apr *argparser.ArgParseResults, host string, port int, useTLS bool, dbRev string) (cli.LateBindQueryist, error) {
@@ -157,12 +158,15 @@ func NewMysqlRowWrapper(sqlRows *sql2.Rows) (*MysqlRowWrapper, error) {
 	iRow := make([]interface{}, len(colTypes))
 	rows := make([]sql.Row, 0)
 	for i, colType := range colTypes {
-		// Preserve binary type information for client-side binary-as-hex formatting
-		sqlType := types.LongText
-		dbTypeName := strings.ToUpper(colType.DatabaseTypeName())
-		if dbTypeName == "VARBINARY" || dbTypeName == "BINARY" {
-			// Normalize both BINARY and VARBINARY to VarBinary for simpler formatting logic
+		// Check if this is a binary type by examining the database type name
+		typeName := strings.ToLower(colType.DatabaseTypeName())
+		var sqlType sql.Type
+		switch typeName {
+		case "binary", "varbinary", "tinyblob", "blob", "mediumblob", "longblob":
 			sqlType = types.MustCreateBinary(sqltypes.VarBinary, 255)
+		default:
+			// Default to LongText for all other types (as was done before)
+			sqlType = types.LongText
 		}
 
 		schema[i] = &sql.Column{
