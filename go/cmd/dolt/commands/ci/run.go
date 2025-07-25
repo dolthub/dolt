@@ -77,8 +77,7 @@ func (cmd RunCmd) Exec(ctx context.Context, commandStr string, args []string, _ 
 
 	// Check if workflow name provided
 	if len(args) == 0 {
-		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(fmt.Errorf("must specify workflow name")),
-			usage)
+		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(fmt.Errorf("must specify workflow name")), usage)
 	}
 	workflowName := args[0]
 
@@ -121,7 +120,7 @@ func (cmd RunCmd) Exec(ctx context.Context, commandStr string, args []string, _ 
 	return 0
 }
 
-// QueryAndPrint iterates through the jobs and steps for the given config, the runs each saved query and given assertion
+// queryAndPrint iterates through the jobs and steps for the given config, the runs each saved query and given assertion
 func queryAndPrint(sqlCtx *sql.Context, queryist cli.Queryist, config *dolt_ci.WorkflowConfig, savedQueries map[string]string) {
 	for _, job := range config.Jobs {
 		cli.Println(color.GreenString("Running job: %s", job.Name.Value))
@@ -130,7 +129,7 @@ func queryAndPrint(sqlCtx *sql.Context, queryist cli.Queryist, config *dolt_ci.W
 
 			rows, err := runCIQuery(queryist, sqlCtx, step, savedQueries)
 			if err == nil {
-				err = assertQueries(rows, step)
+				err = assertQueries(rows, step.ExpectedRows.Value, step.ExpectedColumns.Value)
 			}
 
 			if err != nil {
@@ -157,7 +156,9 @@ func runCIQuery(queryist cli.Queryist, sqlCtx *sql.Context, step dolt_ci.Step, s
 	return rows, nil
 }
 
-func assertQueries(rows []sql.Row, step dolt_ci.Step) error {
+// assertQueries takes in the result of a saved query execution, and the unparsed assertions,
+// then returns if the assertions failed
+func assertQueries(rows []sql.Row, expectedRowsAndComparison string, expectedColumnsAndComparison string) error {
 	var colCount int64
 	rowCount := int64(len(rows))
 	if rowCount > 0 {
@@ -165,14 +166,14 @@ func assertQueries(rows []sql.Row, step dolt_ci.Step) error {
 	}
 
 	var colAssertError, rowAssertError string
-	rowCompType, expectedRows, err := dolt_ci.ParseSavedQueryExpectedResultString(step.ExpectedRows.Value)
+	rowCompType, expectedRows, err := dolt_ci.ParseSavedQueryExpectedResultString(expectedRowsAndComparison)
 	if rowCompType != dolt_ci.WorkflowSavedQueryExpectedRowColumnComparisonTypeUnspecified {
 		err = dolt_ci.ValidateQueryExpectedRowOrColumnCount(rowCount, expectedRows, rowCompType, "row")
 		if err != nil {
 			rowAssertError = fmt.Sprintf("Assertion failed: %s", err.Error())
 		}
 	}
-	colCompType, expectedCols, err := dolt_ci.ParseSavedQueryExpectedResultString(step.ExpectedColumns.Value)
+	colCompType, expectedCols, err := dolt_ci.ParseSavedQueryExpectedResultString(expectedColumnsAndComparison)
 	if colCompType != dolt_ci.WorkflowSavedQueryExpectedRowColumnComparisonTypeUnspecified {
 		err = dolt_ci.ValidateQueryExpectedRowOrColumnCount(colCount, expectedCols, colCompType, "column")
 		if err != nil {

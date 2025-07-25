@@ -572,7 +572,7 @@ EOF
     [[ "$output" =~ "Assertion failed: expected column count less than 5, got 5" ]] || false
 }
 
-@test "ci: ci run fails on invalid query" {
+@test "ci: ci run fails on bad query" {
     cat > workflow.yaml <<EOF
 name: workflow
 on:
@@ -589,7 +589,6 @@ EOF
     dolt sql --save "invalid table" -q "select * from invalid;"
     dolt sql -q "drop table invalid;"
     run dolt ci run "workflow"
-    echo "$output"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Running workflow: workflow" ]] || false
     [[ "$output" =~ "Step: should fail, bad table name - FAIL" ]] || false
@@ -601,6 +600,26 @@ EOF
     run dolt ci run "invalid"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "workflow not found" ]] || false
+}
+
+@test "ci: ci run fails on invalid query name" {
+    cat > workflow.yaml <<EOF
+name: workflow5
+on:
+  push: {}
+jobs:
+  - name: "bad saved queries"
+    steps:
+      - name: should fail, bad query name
+        saved_query_name: invalid query
+EOF
+    dolt ci init
+    dolt ci import workflow.yaml
+    run dolt ci run "workflow"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Running workflow: workflow" ]] || false
+    [[ "$output" =~ "Step: should fail, bad query name - FAIL" ]] || false
+    [[ "$output" =~ "Could not find saved query: invalid query" ]] || false
 }
 
 # test ci with workflow with invalid query name
