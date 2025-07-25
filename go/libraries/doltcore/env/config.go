@@ -178,6 +178,9 @@ func (dcc *DoltCliConfig) GetStringOrDefault(key, defStr string) string {
 }
 
 func (dcc *DoltCliConfig) GetBool(key string, defaultValue bool) (bool, error) {
+	if dcc == nil {
+		return defaultValue, nil
+	}
 	configString, err := dcc.GetString(config.MmapArchiveIndexes)
 	if err == config.ErrConfigParamNotFound {
 		return defaultValue, nil
