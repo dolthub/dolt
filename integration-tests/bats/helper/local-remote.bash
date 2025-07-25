@@ -41,7 +41,6 @@ SKIP_SERVER_TESTS=$(cat <<-EOM
 ~sql-create-tables.bats~
 ~sql-multi-db.bats~
 ~blame-system-view.bats~
-~query-catalog.bats~
 ~import-mysqldump.bats~
 ~1pksupportedtypes.bats~
 ~init.bats~

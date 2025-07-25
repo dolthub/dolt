@@ -27,6 +27,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions/dolt_ci"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 var viewDocs = cli.CommandDocumentationContent{
@@ -202,7 +203,15 @@ func getSavedQueries(sqlCtx *sql.Context, queryist cli.Queryist) (map[string]str
 			return nil, err
 		}
 		for _, row := range rows {
-			savedQueries[row[2].(string)] = row[3].(string)
+			queryName, err := row[2].(*val.TextStorage).Unwrap(sqlCtx)
+			if err != nil {
+				return nil, err
+			}
+			queryStatement, err := row[3].(*val.TextStorage).Unwrap(sqlCtx)
+			if err != nil {
+				return nil, err
+			}
+			savedQueries[queryName] = queryStatement
 		}
 	}
 
