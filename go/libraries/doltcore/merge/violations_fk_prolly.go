@@ -367,7 +367,10 @@ func createCVsForPartialKeyMatches(
 
 	kb := val.NewTupleBuilder(primaryKD, primaryIdx.NodeStore())
 
-	for k, _, err := itr.Next(ctx); err == nil; k, _, err = itr.Next(ctx) {
+	for k, _, err := itr.Next(ctx); err != io.EOF; k, _, err = itr.Next(ctx) {
+		if err != nil {
+			return err
+		}
 
 		// convert secondary idx entry to primary row key
 		// the pks of the table are the last keys of the index
@@ -390,13 +393,19 @@ func createCVsForPartialKeyMatches(
 			return err
 		}
 
+		// If a value wasn't found, then there is a row in the secondary index
+		// that can't be found in the primary index. This is never expected, so
+		// we return an error.
+		if value == nil {
+			return fmt.Errorf("unable to find row from secondary index in the primary index, with key: %v", primaryIdxKey)
+		}
+
+		// If a value was found, then there is a row in the child table that references the
+		// deleted parent row, so we report a constraint violation.
 		err = receiver.ProllyFKViolationFound(ctx, primaryIdxKey, value)
 		if err != nil {
 			return err
 		}
-	}
-	if err != nil && err != io.EOF {
-		return err
 	}
 
 	return nil
