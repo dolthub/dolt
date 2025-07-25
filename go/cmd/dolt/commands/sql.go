@@ -95,6 +95,11 @@ const (
 	ProfileFlag           = "profile"
 	timeFlag              = "time"
 	outputFlag            = "output"
+	binaryAsHexFlag       = "binary-as-hex"
+	skipBinaryAsHexFlag   = "skip-binary-as-hex"
+	// TODO: Consider simplifying to use MySQL's skip pattern with single flag definition
+	// MySQL handles both --binary-as-hex and --skip-binary-as-hex with one option definition
+	// and uses disabled_my_option to distinguish between enable/disable
 
 	welcomeMsg = `# Welcome to the DoltSQL shell.
 # Statements must be terminated with ';'.
@@ -144,6 +149,9 @@ func (cmd SqlCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(BatchFlag, "b", "Use to enable more efficient batch processing for large SQL import scripts. This mode is no longer supported and this flag is a no-op. To speed up your SQL imports, use either LOAD DATA, or structure your SQL import script to insert many rows per statement.")
 	ap.SupportsFlag(continueFlag, "c", "Continue running queries on an error. Used for batch mode only.")
 	ap.SupportsString(fileInputFlag, "f", "input file", "Execute statements from the file given.")
+	ap.SupportsFlag(binaryAsHexFlag, "", "Print binary data as hex. Enabled by default for interactive terminals.")
+	// TODO: MySQL uses a skip- pattern for negating flags and doesn't show them in help
+	ap.SupportsFlag(skipBinaryAsHexFlag, "", "Disable binary data as hex output.")
 	return ap
 }
 
@@ -210,6 +218,14 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
+	// Determine binary-as-hex behavior from flags (default false for non-interactive modes)
+	binaryAsHex := false
+	if apr.Contains(skipBinaryAsHexFlag) {
+		binaryAsHex = false
+	} else if apr.Contains(binaryAsHexFlag) {
+		binaryAsHex = true
+	}
+
 	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
@@ -220,17 +236,16 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 
 	if query, queryOK := apr.GetValue(QueryFlag); queryOK {
 		if apr.Contains(saveFlag) {
-			return execSaveQuery(sqlCtx, dEnv, queryist, apr, query, format, usage)
+			return execSaveQuery(sqlCtx, dEnv, queryist, apr, query, format, usage, binaryAsHex)
 		}
-		return queryMode(sqlCtx, queryist, apr, query, format, usage)
+		return queryMode(sqlCtx, queryist, apr, query, format, usage, binaryAsHex)
 	} else if savedQueryName, exOk := apr.GetValue(executeFlag); exOk {
-		return executeSavedQuery(sqlCtx, queryist, dEnv, savedQueryName, format, usage)
+		return executeSavedQuery(sqlCtx, queryist, dEnv, savedQueryName, format, usage, binaryAsHex)
 	} else if apr.Contains(listSavedFlag) {
 		return listSavedQueries(sqlCtx, queryist, dEnv, format, usage)
 	} else {
 		// Run in either batch mode for piped input, or shell mode for interactive
 		isTty := false
-
 		fi, err := os.Stdin.Stat()
 		if err != nil {
 			if !osutil.IsWindows {
@@ -262,13 +277,15 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		}
 
 		if isTty {
-			err := execShell(sqlCtx, queryist, format, cliCtx)
+			// In shell mode, default to hex format unless explicitly disabled
+			shellBinaryAsHex := !apr.Contains(skipBinaryAsHexFlag)
+			err := execShell(sqlCtx, queryist, format, cliCtx, shellBinaryAsHex)
 			if err != nil {
 				return sqlHandleVErrAndExitCode(queryist, errhand.VerboseErrorFromError(err), usage)
 			}
 		} else {
 			input = transform.NewReader(input, textunicode.BOMOverride(transform.Nop))
-			err := execBatchMode(sqlCtx, queryist, input, continueOnError, format)
+			err := execBatchMode(sqlCtx, queryist, input, continueOnError, format, binaryAsHex)
 			if err != nil {
 				return sqlHandleVErrAndExitCode(queryist, errhand.VerboseErrorFromError(err), usage)
 			}
@@ -358,10 +375,10 @@ func listSavedQueries(ctx *sql.Context, qryist cli.Queryist, dEnv *env.DoltEnv, 
 	}
 
 	query := "SELECT * FROM " + doltdb.DoltQueryCatalogTableName
-	return sqlHandleVErrAndExitCode(qryist, execSingleQuery(ctx, qryist, query, format), usage)
+	return sqlHandleVErrAndExitCode(qryist, execSingleQuery(ctx, qryist, query, format, false), usage)
 }
 
-func executeSavedQuery(ctx *sql.Context, qryist cli.Queryist, dEnv *env.DoltEnv, savedQueryName string, format engine.PrintResultFormat, usage cli.UsagePrinter) int {
+func executeSavedQuery(ctx *sql.Context, qryist cli.Queryist, dEnv *env.DoltEnv, savedQueryName string, format engine.PrintResultFormat, usage cli.UsagePrinter, binaryAsHex bool) int {
 	if !dEnv.Valid() {
 		return sqlHandleVErrAndExitCode(qryist, errhand.BuildDError("error: --%s must be used in a dolt database directory.", executeFlag).Build(), usage)
 	}
@@ -378,7 +395,7 @@ func executeSavedQuery(ctx *sql.Context, qryist cli.Queryist, dEnv *env.DoltEnv,
 	}
 
 	cli.PrintErrf("Executing saved query '%s':\n%s\n", savedQueryName, sq.Query)
-	return sqlHandleVErrAndExitCode(qryist, execSingleQuery(ctx, qryist, sq.Query, format), usage)
+	return sqlHandleVErrAndExitCode(qryist, execSingleQuery(ctx, qryist, sq.Query, format, binaryAsHex), usage)
 }
 
 func queryMode(
@@ -388,12 +405,12 @@ func queryMode(
 	query string,
 	format engine.PrintResultFormat,
 	usage cli.UsagePrinter,
+	binaryAsHex bool,
 ) int {
-
 	_, continueOnError := apr.GetValue(continueFlag)
 
 	input := strings.NewReader(query)
-	err := execBatchMode(ctx, qryist, input, continueOnError, format)
+	err := execBatchMode(ctx, qryist, input, continueOnError, format, binaryAsHex)
 	if err != nil {
 		return sqlHandleVErrAndExitCode(qryist, errhand.VerboseErrorFromError(err), usage)
 	}
@@ -401,14 +418,14 @@ func queryMode(
 	return 0
 }
 
-func execSaveQuery(ctx *sql.Context, dEnv *env.DoltEnv, qryist cli.Queryist, apr *argparser.ArgParseResults, query string, format engine.PrintResultFormat, usage cli.UsagePrinter) int {
+func execSaveQuery(ctx *sql.Context, dEnv *env.DoltEnv, qryist cli.Queryist, apr *argparser.ArgParseResults, query string, format engine.PrintResultFormat, usage cli.UsagePrinter, binaryAsHex bool) int {
 	if !dEnv.Valid() {
 		return sqlHandleVErrAndExitCode(qryist, errhand.BuildDError("error: --%s must be used in a dolt database directory.", saveFlag).Build(), usage)
 	}
 
 	saveName := apr.GetValueOrDefault(saveFlag, "")
 
-	verr := execSingleQuery(ctx, qryist, query, format)
+	verr := execSingleQuery(ctx, qryist, query, format, binaryAsHex)
 	if verr != nil {
 		return sqlHandleVErrAndExitCode(qryist, verr, usage)
 	}
@@ -439,6 +456,7 @@ func execSingleQuery(
 	qryist cli.Queryist,
 	query string,
 	format engine.PrintResultFormat,
+	binaryAsHex bool,
 ) errhand.VerboseError {
 
 	sqlSch, rowIter, _, err := processQuery(sqlCtx, query, qryist)
@@ -447,7 +465,8 @@ func execSingleQuery(
 	}
 
 	if rowIter != nil {
-		err = engine.PrettyPrintResults(sqlCtx, format, sqlSch, rowIter, false, false, false)
+		// Apply binary-as-hex formatting if enabled
+		err = engine.PrettyPrintResults(sqlCtx, format, sqlSch, rowIter, false, false, false, binaryAsHex)
 		if err != nil {
 			return errhand.VerboseErrorFromError(err)
 		}
@@ -615,7 +634,7 @@ func saveQuery(ctx *sql.Context, root doltdb.RootValue, query string, name strin
 }
 
 // execBatchMode runs all the queries in the input reader
-func execBatchMode(ctx *sql.Context, qryist cli.Queryist, input io.Reader, continueOnErr bool, format engine.PrintResultFormat) error {
+func execBatchMode(ctx *sql.Context, qryist cli.Queryist, input io.Reader, continueOnErr bool, format engine.PrintResultFormat, binaryAsHex bool) error {
 	scanner := NewStreamScanner(input)
 	var query string
 	for scanner.Scan() {
@@ -663,7 +682,7 @@ func execBatchMode(ctx *sql.Context, qryist cli.Queryist, input io.Reader, conti
 					fileReadProg.printNewLineIfNeeded()
 				}
 			}
-			err = engine.PrettyPrintResults(ctx, format, sqlSch, rowIter, false, false, false)
+			err = engine.PrettyPrintResults(ctx, format, sqlSch, rowIter, false, false, false, binaryAsHex)
 			if err != nil {
 				err = buildBatchSqlErr(scanner.state.statementStartLine, query, err)
 				if !continueOnErr {
@@ -689,7 +708,7 @@ func buildBatchSqlErr(stmtStartLine int, query string, err error) error {
 
 // execShell starts a SQL shell. Returns when the user exits the shell. The Root of the sqlEngine may
 // be updated by any queries which were processed.
-func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResultFormat, cliCtx cli.CliContext) error {
+func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResultFormat, cliCtx cli.CliContext, binaryAsHex bool) error {
 	_ = iohelp.WriteLine(cli.CliOut, welcomeMsg)
 	historyFile := filepath.Join(".sqlhistory") // history file written to working dir
 
@@ -846,9 +865,9 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 					} else if rowIter != nil {
 						switch closureFormat {
 						case engine.FormatTabular, engine.FormatVertical:
-							err = engine.PrettyPrintResultsExtended(sqlCtx, closureFormat, sqlSch, rowIter, pagerEnabled, toggleWarnings, true)
+							err = engine.PrettyPrintResultsExtended(sqlCtx, closureFormat, sqlSch, rowIter, pagerEnabled, toggleWarnings, true, binaryAsHex)
 						default:
-							err = engine.PrettyPrintResults(sqlCtx, closureFormat, sqlSch, rowIter, pagerEnabled, toggleWarnings, true)
+							err = engine.PrettyPrintResults(sqlCtx, closureFormat, sqlSch, rowIter, pagerEnabled, toggleWarnings, true, binaryAsHex)
 						}
 					} else {
 						if _, isUseStmt := sqlStmt.(*sqlparser.Use); isUseStmt {

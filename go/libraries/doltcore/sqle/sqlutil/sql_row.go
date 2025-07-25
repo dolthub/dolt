@@ -18,10 +18,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
+
 	// Necessary for the empty context used by some functions to be initialized with system vars
 	_ "github.com/dolthub/go-mysql-server/sql/variables"
+	"github.com/dolthub/vitess/go/sqltypes"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -247,4 +251,22 @@ func SqlColToStr(ctx *sql.Context, sqlType sql.Type, col interface{}) (string, e
 	}
 
 	return "", nil
+}
+
+// DatabaseTypeNameToSqlType converts a MySQL wire protocol database type name
+// to a go-mysql-server sql.Type. This uses the same type mapping logic as the existing
+// Dolt type system for consistency.
+// TODO: Add support for BLOB types (TINYBLOB, BLOB, MEDIUMBLOB, LONGBLOB) and BIT type
+// as confirmed by testing MySQL 8.4+ binary-as-hex behavior
+func DatabaseTypeNameToSqlType(databaseTypeName string) sql.Type {
+	typeName := strings.ToLower(databaseTypeName)
+	switch typeName {
+	case "binary":
+		return gmstypes.MustCreateBinary(sqltypes.Binary, 255)
+	case "varbinary":
+		return gmstypes.MustCreateBinary(sqltypes.VarBinary, 255)
+	default:
+		// Default to LongText for all other types (as was done before)
+		return gmstypes.LongText
+	}
 }
