@@ -19,12 +19,12 @@ import (
 	"path/filepath"
 	"testing"
 
-	eventsapi "github.com/dolthub/eventsapi_schema/dolt/services/eventsapi/v1alpha1"
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/grpc"
 
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	testLib "github.com/dolthub/dolt/go/libraries/utils/test"
+	eventsapi "github.com/dolthub/eventsapi_schema/dolt/services/eventsapi/v1alpha1"
 )
 
 var (

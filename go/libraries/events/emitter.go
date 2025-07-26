@@ -22,7 +22,6 @@ import (
 	"strings"
 	"time"
 
-	eventsapi "github.com/dolthub/eventsapi_schema/dolt/services/eventsapi/v1alpha1"
 	"github.com/fatih/color"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
@@ -30,6 +29,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
+	eventsapi "github.com/dolthub/eventsapi_schema/dolt/services/eventsapi/v1alpha1"
 )
 
 // Application is the application ID used for all events emitted by this application. Other applications (not dolt)
