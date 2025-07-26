@@ -9,7 +9,7 @@ go install golang.org/x/tools/cmd/goimports
 
 paths=`find . -maxdepth 1 -mindepth 1 \( -name gen -prune -o -type d -print -o -type f -name '*.go' -print \)`
 
-bad_files=$(goimports -l -local github.com/dolthub/dolt $paths)
+bad_files=$(goimports -l -local github.com/dolthub/dolt,github.com/dolthub/eventsapi_schema $paths)
 if [ "$bad_files" != "" ]; then
     echo "ERROR: The following files do not match goimports output:"
     echo "$bad_files"

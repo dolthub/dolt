@@ -19,8 +19,8 @@ import (
 
 	"google.golang.org/grpc"
 
-	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/events"
+	eventsapi "github.com/dolthub/eventsapi_schema/dolt/services/eventsapi/v1alpha1"
 )
 
 func EventsUnaryClientInterceptor(collector *events.Collector) grpc.UnaryClientInterceptor {

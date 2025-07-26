@@ -20,7 +20,7 @@ import (
 
 	"google.golang.org/protobuf/types/known/durationpb"
 
-	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
+	eventsapi "github.com/dolthub/eventsapi_schema/dolt/services/eventsapi/v1alpha1"
 )
 
 // EventMetric is an interface for getting the eventsapi.ClientEventMetric encoding of a metric
