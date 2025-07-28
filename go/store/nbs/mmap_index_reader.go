@@ -50,7 +50,7 @@ type archiveIndexReader interface {
 
 // mmapIndexReader lazily loads archive index data from a memory-mapped file.
 type mmapIndexReader struct {
-	data          file.FileReaderAt
+	data          *file.MmapData
 	indexSize     uint64
 	byteSpanCount uint32
 	chunkCount    uint32
@@ -74,7 +74,7 @@ func newMmapIndexReader(fileHandle *os.File, footer archiveFooter) (*mmapIndexRe
 	suffixesOffset := chunkRefsOffset + int64(footer.chunkCount)*2*int64(uint32Size)
 
 	// Memory map the entire index section
-	mappedData, err := file.Mmap(fileHandle, int64(indexSpan.offset), int64(indexSpan.length))
+	mappedData, err := file.Mmap(fileHandle, int64(indexSpan.offset), int(indexSpan.length))
 	if err != nil {
 		return nil, fmt.Errorf("failed to mmap index: %w", err)
 	}

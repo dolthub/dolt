@@ -15,11 +15,14 @@
 package file
 
 import (
+	"github.com/edsrzf/mmap-go"
+
 	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
 	"os"
+	"runtime"
 )
 
 const (
@@ -27,24 +30,23 @@ const (
 	uint32Size = 4
 )
 
-type FileReaderAt interface {
-	io.ReaderAt
-	io.Closer
-	GetUint64(offset int64) uint64
-	GetUint32(offset int64) uint32
+// MmapData holds both the page-aligned mapped region, and the actual requested data range
+type MmapData struct {
+	data         []byte
+	originalData mmap.MMap
 }
 
 var mmapAlignment = int64(os.Getpagesize())
 
-func (m mmapData) GetUint64(offset int64) uint64 {
+func (m MmapData) GetUint64(offset int64) uint64 {
 	return binary.BigEndian.Uint64(m.data[offset : offset+uint64Size])
 }
 
-func (m mmapData) GetUint32(offset int64) uint32 {
+func (m MmapData) GetUint32(offset int64) uint32 {
 	return binary.BigEndian.Uint32(m.data[offset : offset+uint32Size])
 }
 
-func (m *mmapData) ReadAt(p []byte, off int64) (int, error) {
+func (m *MmapData) ReadAt(p []byte, off int64) (int, error) {
 	if m.data == nil {
 		return 0, errors.New("mmap: closed")
 	}
@@ -56,4 +58,36 @@ func (m *mmapData) ReadAt(p []byte, off int64) (int, error) {
 		return n, io.EOF
 	}
 	return n, nil
+}
+
+func Mmap(file *os.File, offset int64, length int) (reader *MmapData, err error) {
+	// Align offset to page boundary
+	alignedOffset := offset & ^(mmapAlignment - 1)
+	adjustment := offset - alignedOffset
+	adjustedLength := length + int(adjustment)
+
+	// Map the region
+	mappedData, err := mmap.MapRegion(file, adjustedLength, mmap.RDONLY, 0, alignedOffset)
+	if err != nil {
+		return &MmapData{}, err
+	}
+
+	// Return the adjusted slice starting at the actual offset
+	reader = &MmapData{
+		data:         mappedData[adjustment : adjustment+int64(length)],
+		originalData: mappedData,
+	}
+
+	runtime.SetFinalizer(reader, (*MmapData).Close)
+	return reader, err
+}
+
+func (m *MmapData) Close() error {
+	if m.data == nil {
+		return nil
+	}
+	m.data = nil
+	originalData := m.originalData
+	m.originalData = nil
+	return originalData.Unmap()
 }
