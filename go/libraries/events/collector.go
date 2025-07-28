@@ -22,7 +22,7 @@ import (
 	"github.com/cenkalti/backoff/v4"
 	"github.com/denisbrodbeck/machineid"
 
-	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
+	eventsapi "github.com/dolthub/eventsapi_schema/dolt/services/eventsapi/v1alpha1"
 )
 
 var machineID = "invalid"
