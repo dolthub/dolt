@@ -233,7 +233,7 @@ func SqlColToStr(ctx *sql.Context, sqlType sql.Type, col interface{}) (string, e
 		if hexVal, ok := col.(BinaryAsHexDisplayValue); ok {
 			return string(hexVal), nil
 		}
-		
+
 		switch typedCol := col.(type) {
 		case bool:
 			if typedCol {

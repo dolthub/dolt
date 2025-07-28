@@ -203,7 +203,6 @@ func printResultSetSummary(numRows int, numWarnings uint16, warningsList string,
 	return nil
 }
 
-
 // binaryHexIterator wraps a row iterator and transforms binary data to hex format
 type binaryHexIterator struct {
 	inner  sql.RowIter
