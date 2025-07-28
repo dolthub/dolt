@@ -15,8 +15,6 @@
 package dtables
 
 import (
-	"fmt"
-
 	"github.com/dolthub/go-mysql-server/sql"
 	sqlTypes "github.com/dolthub/go-mysql-server/sql/types"
 
@@ -24,7 +22,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/resolve"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
@@ -162,83 +159,14 @@ func (qw *queryCatalogWriter) Delete(ctx *sql.Context, r sql.Row) error {
 // StatementBegin is called before the first operation of a statement. Integrators should mark the state of the data
 // in some way that it may be returned to in the case of an error.
 func (qw *queryCatalogWriter) StatementBegin(ctx *sql.Context) {
-	dbName := ctx.GetCurrentDatabase()
-	dSess := dsess.DSessFromSess(ctx.Session)
-
-	roots, ok := dSess.GetRoots(ctx, dbName)
-	if !ok {
-		qw.errDuringStatementBegin = fmt.Errorf("could not get roots for database %s", dbName)
-		return
-	}
-	dbState, ok, err := dSess.LookupDbState(ctx, dbName)
+	name := getDoltQueryCatalogTableName()
+	prevHash, tableWriter, err := createWriteableSystemTable(ctx, name, qw.qt.Schema())
 	if err != nil {
 		qw.errDuringStatementBegin = err
 		return
 	}
-	if !ok {
-		qw.errDuringStatementBegin = fmt.Errorf("no root value found in session")
-		return
-	}
-
-	prevHash, err := roots.Working.HashOf()
-	if err != nil {
-		qw.errDuringStatementBegin = err
-		return
-	}
-
-	qw.prevHash = &prevHash
-
-	tname := getDoltQueryCatalogTableName()
-	found, err := roots.Working.HasTable(ctx, tname)
-	if err != nil {
-		qw.errDuringStatementBegin = err
-		return
-	}
-
-	if !found {
-		sch := sql.NewPrimaryKeySchema(qw.qt.Schema())
-		doltSch, err := sqlutil.ToDoltSchema(ctx, roots.Working, tname, sch, roots.Head, sql.Collation_Default)
-		if err != nil {
-			qw.errDuringStatementBegin = err
-			return
-		}
-
-		// underlying table doesn't exist. Record this, then create the table.
-		newRootValue, err := doltdb.CreateEmptyTable(ctx, roots.Working, tname, doltSch)
-		if err != nil {
-			qw.errDuringStatementBegin = err
-			return
-		}
-		if dbState.WorkingSet() == nil {
-			qw.errDuringStatementBegin = doltdb.ErrOperationNotSupportedInDetachedHead
-			return
-		}
-
-		// We use WriteSession.SetWorkingSet instead of DoltSession.SetWorkingRoot because we want to avoid modifying the root
-		// until the end of the transaction, but we still want the WriteSession to be able to find the newly
-		// created table.
-		if ws := dbState.WriteSession(); ws != nil {
-			err = ws.SetWorkingSet(ctx, dbState.WorkingSet().WithWorkingRoot(newRootValue))
-			if err != nil {
-				qw.errDuringStatementBegin = err
-				return
-			}
-		} else {
-			qw.errDuringStatementBegin = fmt.Errorf("could not create dolt_query_catalog table, database does not allow writing")
-		}
-	}
-
-	if ws := dbState.WriteSession(); ws != nil {
-		tableWriter, err := ws.GetTableWriter(ctx, tname, dbName, dSess.SetWorkingRoot, false)
-		if err != nil {
-			qw.errDuringStatementBegin = err
-			return
-		}
-		qw.tableWriter = tableWriter
-		tableWriter.StatementBegin(ctx)
-	} else {
-		qw.errDuringStatementBegin = fmt.Errorf("could not create dolt_query_catalog table, database does not allow writing")
-	}
+	qw.prevHash = prevHash
+	qw.tableWriter = tableWriter
 }
 
 func getDoltQueryCatalogTableName() doltdb.TableName {

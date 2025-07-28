@@ -15,8 +15,6 @@
 package dtables
 
 import (
-	"fmt"
-
 	"github.com/dolthub/go-mysql-server/sql"
 	sqlTypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/sqltypes"
@@ -198,78 +196,13 @@ func getDoltDocsTableName() doltdb.TableName {
 // StatementBegin is called before the first operation of a statement. Integrators should mark the state of the data
 // in some way that it may be returned to in the case of an error.
 func (iw *docsWriter) StatementBegin(ctx *sql.Context) {
-	dbName := ctx.GetCurrentDatabase()
-	dSess := dsess.DSessFromSess(ctx.Session)
-
-	roots, _ := dSess.GetRoots(ctx, dbName)
-	dbState, ok, err := dSess.LookupDbState(ctx, dbName)
+	name := getDoltDocsTableName()
+	prevHash, tableWriter, err := createWriteableSystemTable(ctx, name, iw.it.Schema())
 	if err != nil {
 		iw.errDuringStatementBegin = err
-		return
 	}
-	if !ok {
-		iw.errDuringStatementBegin = fmt.Errorf("no root value found in session")
-		return
-	}
-
-	prevHash, err := roots.Working.HashOf()
-	if err != nil {
-		iw.errDuringStatementBegin = err
-		return
-	}
-
-	iw.prevHash = &prevHash
-
-	docsTableName := getDoltDocsTableName()
-	found, err := roots.Working.HasTable(ctx, docsTableName)
-
-	if err != nil {
-		iw.errDuringStatementBegin = err
-		return
-	}
-
-	if !found {
-		// TODO: This is effectively a duplicate of the schema declaration above in a different format.
-		// We should find a way to not repeat ourselves.
-		newSchema := doltdb.DocsSchema
-
-		// underlying table doesn't exist. Record this, then create the table.
-		newRootValue, err := doltdb.CreateEmptyTable(ctx, roots.Working, docsTableName, newSchema)
-		if err != nil {
-			iw.errDuringStatementBegin = err
-			return
-		}
-
-		if dbState.WorkingSet() == nil {
-			iw.errDuringStatementBegin = doltdb.ErrOperationNotSupportedInDetachedHead
-			return
-		}
-
-		// We use WriteSession.SetWorkingSet instead of DoltSession.SetWorkingRoot because we want to avoid modifying the root
-		// until the end of the transaction, but we still want the WriteSession to be able to find the newly
-		// created table.
-		if ws := dbState.WriteSession(); ws != nil {
-			err = ws.SetWorkingSet(ctx, dbState.WorkingSet().WithWorkingRoot(newRootValue))
-			if err != nil {
-				iw.errDuringStatementBegin = err
-				return
-			}
-		} else {
-			iw.errDuringStatementBegin = fmt.Errorf("could not create dolt_docs table, database does not allow writing")
-		}
-	}
-
-	if ws := dbState.WriteSession(); ws != nil {
-		tableWriter, err := ws.GetTableWriter(ctx, docsTableName, dbName, dSess.SetWorkingRoot, false)
-		if err != nil {
-			iw.errDuringStatementBegin = err
-			return
-		}
-		iw.tableWriter = tableWriter
-		tableWriter.StatementBegin(ctx)
-	} else {
-		iw.errDuringStatementBegin = fmt.Errorf("could not create dolt_docs table, database does not allow writing")
-	}
+	iw.prevHash = prevHash
+	iw.tableWriter = tableWriter
 }
 
 // DiscardChanges is called if a statement encounters an error, and all current changes since the statement beginning
