@@ -215,7 +215,10 @@ func LoadDoltDB(ctx context.Context, fs filesys.Filesys, urlStr string, dEnv *Do
 			return
 		}
 
-		params := map[string]interface{}{dbfactory.MMapArchiveIndexesParam: mmapArchiveIndexes}
+		var params map[string]interface{}
+		if mmapArchiveIndexes {
+			params = map[string]interface{}{dbfactory.MMapArchiveIndexesParam: struct{}{}}
+		}
 		ddb, dbLoadErr := doltdb.LoadDoltDBWithParams(ctx, types.Format_Default, urlStr, fs, params)
 		dEnv.doltDB = ddb
 		dEnv.DBLoadError = dbLoadErr

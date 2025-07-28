@@ -152,8 +152,7 @@ func (fact FileFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, 
 	var mmapArchiveIndexes bool
 	if params != nil {
 		_, useJournal = params[ChunkJournalParam]
-		mmapArchiveIndexesValue, mmapArchiveIndexesPresent := params[MMapArchiveIndexesParam]
-		mmapArchiveIndexes = mmapArchiveIndexesPresent && (mmapArchiveIndexesValue != false)
+		_, mmapArchiveIndexes = params[MMapArchiveIndexesParam]
 	}
 
 	var newGenSt *nbs.NomsBlockStore
