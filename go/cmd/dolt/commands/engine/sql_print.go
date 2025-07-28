@@ -203,12 +203,6 @@ func printResultSetSummary(numRows int, numWarnings uint16, warningsList string,
 	return nil
 }
 
-// binaryAsHexDisplayValue wraps hex-formatted binary data to bypass validation
-type binaryAsHexDisplayValue string
-
-func (h binaryAsHexDisplayValue) String() string {
-	return string(h)
-}
 
 // binaryHexIterator wraps a row iterator and transforms binary data to hex format
 type binaryHexIterator struct {
@@ -237,9 +231,9 @@ func (iter *binaryHexIterator) Next(ctx *sql.Context) (sql.Row, error) {
 			switch iter.schema[i].Type.Type() {
 			case sqltypes.Binary, sqltypes.VarBinary:
 				if bytes, ok := val.([]byte); ok {
-					row[i] = binaryAsHexDisplayValue(fmt.Sprintf("0x%X", bytes))
+					row[i] = sqlutil.BinaryAsHexDisplayValue(fmt.Sprintf("0x%X", bytes))
 				} else {
-					row[i] = binaryAsHexDisplayValue(fmt.Sprintf("0x%X", []byte(fmt.Sprint(val))))
+					row[i] = sqlutil.BinaryAsHexDisplayValue(fmt.Sprintf("0x%X", []byte(fmt.Sprint(val))))
 				}
 			}
 		}
