@@ -285,8 +285,8 @@ type inMemoryArchiveIndexReader struct {
 	suffixes  []byte
 }
 
-func (f *inMemoryArchiveIndexReader) getNumChunks() int {
-	return len(f.prefixes)
+func (f *inMemoryArchiveIndexReader) getNumChunks() uint32 {
+	return uint32(len(f.prefixes))
 }
 
 func (f *inMemoryArchiveIndexReader) getSpanIndex(idx uint32) uint64 {
@@ -303,15 +303,19 @@ func (f *inMemoryArchiveIndexReader) getPrefix(idx uint32) uint64 {
 	return f.prefixes[idx]
 }
 
-func (f *inMemoryArchiveIndexReader) getChunkRef(idx int) (dict, data uint32) {
-	if idx < 0 || idx*2+1 >= len(f.chunkRefs) {
+func (f *inMemoryArchiveIndexReader) searchPrefix(prefix uint64) int32 {
+	return prollyBinSearch(f, prefix)
+}
+
+func (f *inMemoryArchiveIndexReader) getChunkRef(idx uint32) (dict, data uint32) {
+	if idx < 0 || idx*2+1 >= uint32(len(f.chunkRefs)) {
 		return 0, 0
 	}
 	return f.chunkRefs[idx*2], f.chunkRefs[idx*2+1]
 }
 
-func (f *inMemoryArchiveIndexReader) getSuffix(idx uint64) suffix {
-	if idx >= uint64(len(f.suffixes)/hash.SuffixLen) {
+func (f *inMemoryArchiveIndexReader) getSuffix(idx uint32) suffix {
+	if idx >= uint32(len(f.suffixes)/hash.SuffixLen) {
 		return suffix{}
 	}
 	start := idx * hash.SuffixLen
@@ -415,16 +419,16 @@ func buildFooter(fileSize uint64, buf []byte) (f archiveFooter, err error) {
 // search returns the index of the hash in the archive. If the hash is not found, -1 is returned.
 func (ar archiveReader) search(hash hash.Hash) int {
 	prefix := hash.Prefix()
-	possibleMatch := prollyBinSearch(ar.indexReader, prefix)
+	possibleMatch := ar.indexReader.searchPrefix(prefix)
 	targetSfx := hash.Suffix()
 
-	if possibleMatch < 0 || possibleMatch >= int(ar.footer.chunkCount) {
+	if possibleMatch < 0 || uint32(possibleMatch) >= ar.footer.chunkCount {
 		return -1
 	}
 
-	for idx := possibleMatch; idx < int(ar.footer.chunkCount) && ar.indexReader.getPrefix(uint32(idx)) == prefix; idx++ {
-		if ar.indexReader.getSuffix(uint64(idx)) == suffix(targetSfx) {
-			return idx
+	for idx := uint32(possibleMatch); idx < ar.footer.chunkCount && ar.indexReader.getPrefix(idx) == prefix; idx++ {
+		if ar.indexReader.getSuffix(idx) == suffix(targetSfx) {
+			return int(idx)
 		}
 	}
 	return -1
@@ -556,7 +560,7 @@ func (ar archiveReader) getRaw(ctx context.Context, hash hash.Hash, stats *Stats
 
 // getChunkRef returns the dictionary and data references for the chunk at the given index. Assumes good input!
 func (ar archiveReader) getChunkRef(idx int) (dict, data uint32) {
-	return ar.indexReader.getChunkRef(idx)
+	return ar.indexReader.getChunkRef(uint32(idx))
 }
 
 // getByteSpanByID returns the byte span for the chunk at the given index. Assumes good input!
@@ -572,7 +576,7 @@ func (ar archiveReader) getByteSpanByID(id uint32) byteSpan {
 
 // getSuffixByID returns the suffix for the chunk at the given index. Assumes good input!
 func (ar archiveReader) getSuffixByID(id uint64) suffix {
-	return ar.indexReader.getSuffix(id)
+	return ar.indexReader.getSuffix(uint32(id))
 }
 
 func (ar archiveReader) getMetadata(ctx context.Context, stats *Stats) ([]byte, error) {
@@ -600,7 +604,7 @@ func (ar archiveReader) iterate(ctx context.Context, cb func(chunks.Chunk) error
 		var hasBytes [hash.ByteLen]byte
 
 		binary.BigEndian.PutUint64(hasBytes[:uint64Size], ar.indexReader.getPrefix(i))
-		suf := ar.indexReader.getSuffix(uint64(i))
+		suf := ar.indexReader.getSuffix(i)
 		copy(hasBytes[hash.ByteLen-hash.SuffixLen:], suf[:])
 		h := hash.New(hasBytes[:])
 
@@ -640,12 +644,12 @@ func verifyCheckSum(ctx context.Context, reader tableReaderAt, span byteSpan, ch
 //
 // For our purposes where we are just trying to get the index, we must compare the resulting index to our target to
 // determine if it is a match.
-func prollyBinSearch[T prefixList](prefixes T, target uint64) int {
-	items := prefixes.getNumChunks()
+func prollyBinSearch[T prefixList](prefixes T, target uint64) int32 {
+	items := int32(prefixes.getNumChunks())
 	if items == 0 {
 		return 0
 	}
-	lft, rht := 0, items
+	lft, rht := int32(0), items
 	lo, hi := prefixes.getPrefix(0), prefixes.getPrefix(uint32(rht-1))
 
 	if target > hi {
@@ -660,7 +664,7 @@ func prollyBinSearch[T prefixList](prefixes T, target uint64) int {
 		shiftedTgt := target - lo
 		mhi, mlo := bits.Mul64(shiftedTgt, idxRangeSz)
 		dU64, _ := bits.Div64(mhi, mlo, valRangeSz)
-		idx := int(dU64) + lft
+		idx := int32(dU64) + lft
 		if prefixes.getPrefix(uint32(idx)) < target {
 			lft = idx + 1
 			if lft < items {

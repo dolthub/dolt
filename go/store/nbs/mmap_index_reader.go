@@ -24,27 +24,32 @@ import (
 )
 
 type prefixList interface {
-	getNumChunks() int
+	getNumChunks() uint32
 	getPrefix(idx uint32) uint64
+	searchPrefix(uint64) int32
 }
 
 type slicePrefixList []uint64
 
 var _ prefixList = slicePrefixList{}
 
-func (s slicePrefixList) getNumChunks() int {
-	return len(s)
+func (s slicePrefixList) getNumChunks() uint32 {
+	return uint32(len(s))
 }
 
 func (s slicePrefixList) getPrefix(idx uint32) uint64 {
 	return s[idx]
 }
 
+func (s slicePrefixList) searchPrefix(prefix uint64) int32 {
+	return prollyBinSearch(s, prefix)
+}
+
 type archiveIndexReader interface {
 	prefixList
 	getSpanIndex(idx uint32) uint64
-	getChunkRef(idx int) (dict, data uint32)
-	getSuffix(idx uint64) suffix
+	getChunkRef(idx uint32) (dict, data uint32)
+	getSuffix(idx uint32) suffix
 	io.Closer
 }
 
@@ -91,8 +96,8 @@ func newMmapIndexReader(fileHandle *os.File, footer archiveFooter) (*mmapIndexRe
 	}, nil
 }
 
-func (m *mmapIndexReader) getNumChunks() int {
-	return int(m.chunkCount)
+func (m *mmapIndexReader) getNumChunks() uint32 {
+	return m.chunkCount
 }
 
 // getSpanIndex returns the span index value at the given position
@@ -117,9 +122,13 @@ func (m *mmapIndexReader) getPrefix(idx uint32) uint64 {
 	return m.data.GetUint64(offset)
 }
 
+func (m *mmapIndexReader) searchPrefix(prefix uint64) int32 {
+	return prollyBinSearch(m, prefix)
+}
+
 // getChunkRef returns the dictionary and data references for the chunk at the given index
-func (m *mmapIndexReader) getChunkRef(idx int) (dict, data uint32) {
-	if idx < 0 || idx >= int(m.chunkCount) {
+func (m *mmapIndexReader) getChunkRef(idx uint32) (dict, data uint32) {
+	if idx < 0 || idx >= m.chunkCount {
 		return 0, 0
 	}
 
@@ -131,8 +140,8 @@ func (m *mmapIndexReader) getChunkRef(idx int) (dict, data uint32) {
 }
 
 // getSuffix returns the suffix for the chunk at the given index
-func (m *mmapIndexReader) getSuffix(idx uint64) (suf suffix) {
-	if idx >= uint64(m.chunkCount) {
+func (m *mmapIndexReader) getSuffix(idx uint32) (suf suffix) {
+	if idx >= m.chunkCount {
 		return suffix{}
 	}
 
