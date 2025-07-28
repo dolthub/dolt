@@ -640,13 +640,13 @@ func verifyCheckSum(ctx context.Context, reader tableReaderAt, span byteSpan, ch
 //
 // For our purposes where we are just trying to get the index, we must compare the resulting index to our target to
 // determine if it is a match.
-func prollyBinSearch(m prefixList, target uint64) int {
-	items := m.getNumChunks()
+func prollyBinSearch[T prefixList](prefixes T, target uint64) int {
+	items := prefixes.getNumChunks()
 	if items == 0 {
 		return 0
 	}
 	lft, rht := 0, items
-	lo, hi := m.getPrefix(0), m.getPrefix(uint32(rht-1))
+	lo, hi := prefixes.getPrefix(0), prefixes.getPrefix(uint32(rht-1))
 
 	if target > hi {
 		return rht
@@ -661,17 +661,17 @@ func prollyBinSearch(m prefixList, target uint64) int {
 		mhi, mlo := bits.Mul64(shiftedTgt, idxRangeSz)
 		dU64, _ := bits.Div64(mhi, mlo, valRangeSz)
 		idx := int(dU64) + lft
-		if m.getPrefix(uint32(idx)) < target {
+		if prefixes.getPrefix(uint32(idx)) < target {
 			lft = idx + 1
 			if lft < items {
-				lo = m.getPrefix(uint32(lft))
+				lo = prefixes.getPrefix(uint32(lft))
 				if lo >= target {
 					return lft
 				}
 			}
 		} else {
 			rht = idx
-			hi = m.getPrefix(uint32(rht))
+			hi = prefixes.getPrefix(uint32(rht))
 		}
 	}
 	return lft
