@@ -203,15 +203,20 @@ func printResultSetSummary(numRows int, numWarnings uint16, warningsList string,
 	return nil
 }
 
+// binaryAsHexDisplayValue wraps hex-formatted binary data to bypass validation
+type binaryAsHexDisplayValue string
+
+func (h binaryAsHexDisplayValue) String() string {
+	return string(h)
+}
+
 // binaryHexIterator wraps a row iterator and transforms binary data to hex format
 type binaryHexIterator struct {
 	inner  sql.RowIter
 	schema sql.Schema
 }
 
-// newBinaryHexIterator creates a new iterator that transforms binary data to hex format.
-// It wraps the provided iterator and transforms BINARY and VARBINARY column values
-// to hex string representation (e.g., "0x41424344").
+// newBinaryHexIterator creates a new iterator that transforms binary data to hex format
 func newBinaryHexIterator(inner sql.RowIter, schema sql.Schema) sql.RowIter {
 	return &binaryHexIterator{
 		inner:  inner,
@@ -219,26 +224,22 @@ func newBinaryHexIterator(inner sql.RowIter, schema sql.Schema) sql.RowIter {
 	}
 }
 
-// Next returns the next row from the wrapped iterator with binary data transformed to hex format.
-// Binary and VarBinary column values are converted to uppercase hex strings prefixed with "0x".
+// Next returns the next row with binary data transformed to hex format
 func (iter *binaryHexIterator) Next(ctx *sql.Context) (sql.Row, error) {
 	row, err := iter.inner.Next(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	// Transform binary column values to hex string format in place
-	// Currently supports BINARY and VARBINARY types only.
 	// TODO: Add support for BLOB types (TINYBLOB, BLOB, MEDIUMBLOB, LONGBLOB) and BIT type
-	// as confirmed by testing MySQL 8.4+ binary-as-hex behavior
 	for i, val := range row {
 		if val != nil && i < len(iter.schema) {
 			switch iter.schema[i].Type.Type() {
 			case sqltypes.Binary, sqltypes.VarBinary:
 				if bytes, ok := val.([]byte); ok {
-					row[i] = fmt.Sprintf("0x%X", bytes)
+					row[i] = binaryAsHexDisplayValue(fmt.Sprintf("0x%X", bytes))
 				} else {
-					row[i] = fmt.Sprintf("0x%X", []byte(fmt.Sprint(val)))
+					row[i] = binaryAsHexDisplayValue(fmt.Sprintf("0x%X", []byte(fmt.Sprint(val))))
 				}
 			}
 		}

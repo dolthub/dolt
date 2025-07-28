@@ -223,10 +223,18 @@ func keylessDoltRowFromSqlRow(ctx context.Context, vrw types.ValueReadWriter, sq
 	return row.KeylessRow(vrw.Format(), vals[:j]...)
 }
 
+type binaryAsHexDisplayValue interface {
+	String() string
+}
+
 // SqlColToStr is a utility function for converting a sql column of type interface{} to a string.
 // NULL values are treated as empty strings. Handle nil separately if you require other behavior.
 func SqlColToStr(ctx *sql.Context, sqlType sql.Type, col interface{}) (string, error) {
 	if col != nil {
+		if hexVal, ok := col.(binaryAsHexDisplayValue); ok {
+			return hexVal.String(), nil
+		}
+		
 		switch typedCol := col.(type) {
 		case bool:
 			if typedCol {

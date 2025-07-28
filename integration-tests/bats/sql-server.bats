@@ -2288,4 +2288,32 @@ EOF
     stop_sql_server 1
 }
 
+@test "sql-server: binary-as-hex works with data at column constraint limits" {
+    skiponwindows "Missing dependencies"
+    
+    cd repo1
+    
+    # Setup: Create table with binary data at column size limits
+    dolt sql -q "CREATE TABLE constraint_test (pk INT PRIMARY KEY, data VARBINARY(20));"
+    dolt sql -q "INSERT INTO constraint_test VALUES (1, UNHEX('00112233445566778899AABBCCDDEEFF00112233'));"
+    dolt sql -q "INSERT INTO constraint_test VALUES (2, X'');"
+    dolt add .
+    dolt commit -m "Add constraint test data"
+    
+    start_sql_server repo1
+    
+    # Test server connection with binary-as-hex at column constraint limits
+    run dolt --host 127.0.0.1 --port $PORT --no-tls sql --binary-as-hex -q "USE repo1; SELECT * FROM constraint_test ORDER BY pk"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "0x00112233445566778899AABBCCDDEEFF00112233" ]] || false
+    [[ "$output" =~ "0x" ]] || false  # Empty binary shows as "0x"
+    
+    # Test CSV format with server connection
+    run dolt --host 127.0.0.1 --port $PORT --no-tls sql --binary-as-hex --result-format=csv -q "USE repo1; SELECT * FROM constraint_test WHERE pk = 1"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "1,0x00112233445566778899AABBCCDDEEFF00112233" ]] || false
+    
+    stop_sql_server
+}
+
 

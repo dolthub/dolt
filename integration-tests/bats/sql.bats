@@ -2960,6 +2960,33 @@ SQL
     dolt sql -q "DROP TABLE binary_test"
 }
 
+@test "sql: binary-as-hex works with data at column constraint limits" {
+    # Test case for issue #9554: binary data that approaches or reaches column size limits
+    # should display correctly as hex without validation errors
+    
+    # Create table with VARBINARY(20) and insert 20 bytes of data (maximum for column)
+    dolt sql -q "CREATE TABLE constraint_test (pk INT PRIMARY KEY, data VARBINARY(20));"
+    dolt sql -q "INSERT INTO constraint_test VALUES (1, UNHEX('00112233445566778899AABBCCDDEEFF00112233'));"
+    dolt sql -q "INSERT INTO constraint_test VALUES (2, X'');"  # Empty binary data
+    
+    # Verify the data length is exactly 20 bytes
+    run dolt sql -q "SELECT LENGTH(data) FROM constraint_test WHERE pk = 1"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "20" ]] || false
+    
+    # Test binary-as-hex display works without validation errors
+    # The 20-byte data becomes 42-character hex string "0x00112233445566778899AABBCCDDEEFF00112233"
+    run dolt sql --binary-as-hex -q "SELECT * FROM constraint_test ORDER BY pk"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "0x00112233445566778899AABBCCDDEEFF00112233" ]] || false
+    [[ "$output" =~ "0x" ]] || false  # Empty binary shows as "0x"
+    
+    # Test CSV format also works
+    run dolt sql --binary-as-hex --result-format=csv -q "SELECT * FROM constraint_test WHERE pk = 1"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "1,0x00112233445566778899AABBCCDDEEFF00112233" ]] || false
+}
+
 @test "sql: interactive binary-as-hex behavior with local database non-filtered selects" {
     skiponwindows "Missing dependencies"
     which expect > /dev/null || skip "expect not available"
