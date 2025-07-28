@@ -439,7 +439,12 @@ func dividePlan(ctx context.Context, plan compactionPlan, minPartSize, maxPartSi
 			continue
 		}
 
-		// Now, we need to break the data into some number of parts such that for all parts minPartSize <= size(part) <= maxPartSize. This code tries to split the part evenly, such that all new parts satisfy the previous inequality. This gets tricky around edge cases. Consider min = 5b and max = 10b and a data length of 101b. You need to send 11 parts, but you can't just send 10 parts of 10 bytes and 1 part of 1 byte -- the last is too small. You also can't send 10 parts of 9 bytes each and 1 part of 11 bytes, because the last is too big. You have to distribute the extra bytes across all the parts so that all of them fall into the proper size range.
+		// Now, we need to break the data into some number of parts such that for all parts minPartSize <= size(part) <= maxPartSize.
+		// This code tries to split the part evenly, such that all new parts satisfy the previous inequality. This gets
+		// tricky around edge cases. Consider min = 5b and max = 10b and a data length of 101b. You need to send 11 parts,
+		// but you can't just send 10 parts of 10 bytes and 1 part of 1 byte -- the last is too small. You also can't
+		// send 10 parts of 9 bytes each and 1 part of 11 bytes, because the last is too big. You have to distribute the
+		// extra bytes across all the parts so that all of them fall into the proper size range.
 		lens := splitOnMaxSize(sws.dataLen, maxPartSize)
 
 		var srcStart int64
