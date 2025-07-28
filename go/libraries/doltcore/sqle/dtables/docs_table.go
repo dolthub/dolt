@@ -201,7 +201,6 @@ func (iw *docsWriter) StatementBegin(ctx *sql.Context) {
 	dbName := ctx.GetCurrentDatabase()
 	dSess := dsess.DSessFromSess(ctx.Session)
 
-	// TODO: this needs to use a revision qualified name
 	roots, _ := dSess.GetRoots(ctx, dbName)
 	dbState, ok, err := dSess.LookupDbState(ctx, dbName)
 	if err != nil {
@@ -249,19 +248,14 @@ func (iw *docsWriter) StatementBegin(ctx *sql.Context) {
 		// We use WriteSession.SetWorkingSet instead of DoltSession.SetWorkingRoot because we want to avoid modifying the root
 		// until the end of the transaction, but we still want the WriteSession to be able to find the newly
 		// created table.
-
 		if ws := dbState.WriteSession(); ws != nil {
 			err = ws.SetWorkingSet(ctx, dbState.WorkingSet().WithWorkingRoot(newRootValue))
 			if err != nil {
 				iw.errDuringStatementBegin = err
 				return
 			}
-		}
-
-		err = dSess.SetWorkingRoot(ctx, dbName, newRootValue)
-		if err != nil {
-			iw.errDuringStatementBegin = err
-			return
+		} else {
+			iw.errDuringStatementBegin = fmt.Errorf("could not create dolt_docs table, database does not allow writing")
 		}
 	}
 
@@ -273,6 +267,8 @@ func (iw *docsWriter) StatementBegin(ctx *sql.Context) {
 		}
 		iw.tableWriter = tableWriter
 		tableWriter.StatementBegin(ctx)
+	} else {
+		iw.errDuringStatementBegin = fmt.Errorf("could not create dolt_docs table, database does not allow writing")
 	}
 }
 

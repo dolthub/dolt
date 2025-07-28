@@ -192,7 +192,6 @@ func (iw *ignoreWriter) StatementBegin(ctx *sql.Context) {
 	dbName := ctx.GetCurrentDatabase()
 	dSess := dsess.DSessFromSess(ctx.Session)
 
-	// TODO: this needs to use a revision qualified name
 	roots, _ := dSess.GetRoots(ctx, dbName)
 	dbState, ok, err := dSess.LookupDbState(ctx, dbName)
 	if err != nil {
@@ -249,9 +248,9 @@ func (iw *ignoreWriter) StatementBegin(ctx *sql.Context) {
 				iw.errDuringStatementBegin = err
 				return
 			}
+		} else {
+			iw.errDuringStatementBegin = fmt.Errorf("could not create dolt_ignore table, database does not allow writing")
 		}
-
-		dSess.SetWorkingRoot(ctx, dbName, newRootValue)
 	}
 
 	if ws := dbState.WriteSession(); ws != nil {
@@ -262,6 +261,8 @@ func (iw *ignoreWriter) StatementBegin(ctx *sql.Context) {
 		}
 		iw.tableWriter = tableWriter
 		tableWriter.StatementBegin(ctx)
+	} else {
+		iw.errDuringStatementBegin = fmt.Errorf("could not create dolt_ignore table, database does not allow writing")
 	}
 }
 

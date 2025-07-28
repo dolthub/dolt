@@ -33,9 +33,8 @@ var _ sql.UpdatableTable = (*QueryCatalogTable)(nil)
 var _ sql.DeletableTable = (*QueryCatalogTable)(nil)
 var _ sql.InsertableTable = (*QueryCatalogTable)(nil)
 var _ sql.ReplaceableTable = (*QueryCatalogTable)(nil)
-var _ sql.IndexAddressableTable = (*QueryCatalogTable)(nil)
 
-// QueryCatalogTable is the system table that stores patterns for table names that should not be committed.
+// QueryCatalogTable is the system table that stores saved queries.
 type QueryCatalogTable struct {
 	backingTable VersionableTable
 }
@@ -52,8 +51,8 @@ func doltQueryCatalogSchema() sql.Schema {
 	return []*sql.Column{
 		{Name: doltdb.QueryCatalogIdCol, Type: sqlTypes.LongText, Source: doltdb.GetQueryCatalogTableName(), PrimaryKey: true},
 		{Name: doltdb.QueryCatalogOrderCol, Type: sqlTypes.Int32, Source: doltdb.GetQueryCatalogTableName(), Nullable: false},
-		{Name: doltdb.QueryCatalogNameCol, Type: sqlTypes.Text, Source: doltdb.GetQueryCatalogTableName()},
-		{Name: doltdb.QueryCatalogQueryCol, Type: sqlTypes.Text, Source: doltdb.GetQueryCatalogTableName()},
+		{Name: doltdb.QueryCatalogNameCol, Type: sqlTypes.Text, Source: doltdb.GetQueryCatalogTableName(), Nullable: false},
+		{Name: doltdb.QueryCatalogQueryCol, Type: sqlTypes.Text, Source: doltdb.GetQueryCatalogTableName(), Nullable: false},
 		{Name: doltdb.QueryCatalogDescriptionCol, Type: sqlTypes.Text, Source: doltdb.GetQueryCatalogTableName()},
 	}
 }
@@ -116,21 +115,6 @@ func (qt *QueryCatalogTable) Deleter(*sql.Context) sql.RowDeleter {
 	return newQueryCatalogWriter(qt)
 }
 
-// IndexedAccess implements IndexAddressableTable, but QueryCatalogTables has no indexes.
-// Thus, this should never be called.
-func (qt *QueryCatalogTable) IndexedAccess(_ *sql.Context, _ sql.IndexLookup) sql.IndexedTable {
-	panic("Unreachable")
-}
-
-// GetIndexes implements IndexAddressableTable, but QueryCatalogTables has no indexes.
-func (qt *QueryCatalogTable) GetIndexes(_ *sql.Context) ([]sql.Index, error) {
-	return nil, nil
-}
-
-func (qt *QueryCatalogTable) PreciseMatch() bool {
-	return true
-}
-
 var _ sql.RowReplacer = (*queryCatalogWriter)(nil)
 var _ sql.RowUpdater = (*queryCatalogWriter)(nil)
 var _ sql.RowInserter = (*queryCatalogWriter)(nil)
@@ -181,8 +165,11 @@ func (qw *queryCatalogWriter) StatementBegin(ctx *sql.Context) {
 	dbName := ctx.GetCurrentDatabase()
 	dSess := dsess.DSessFromSess(ctx.Session)
 
-	// TODO: this needs to use a revision qualified name
-	roots, _ := dSess.GetRoots(ctx, dbName)
+	roots, ok := dSess.GetRoots(ctx, dbName)
+	if !ok {
+		qw.errDuringStatementBegin = fmt.Errorf("could not get roots for database %s", dbName)
+		return
+	}
 	dbState, ok, err := dSess.LookupDbState(ctx, dbName)
 	if err != nil {
 		qw.errDuringStatementBegin = err
@@ -218,12 +205,10 @@ func (qw *queryCatalogWriter) StatementBegin(ctx *sql.Context) {
 
 		// underlying table doesn't exist. Record this, then create the table.
 		newRootValue, err := doltdb.CreateEmptyTable(ctx, roots.Working, tname, doltSch)
-
 		if err != nil {
 			qw.errDuringStatementBegin = err
 			return
 		}
-
 		if dbState.WorkingSet() == nil {
 			qw.errDuringStatementBegin = doltdb.ErrOperationNotSupportedInDetachedHead
 			return
@@ -238,9 +223,9 @@ func (qw *queryCatalogWriter) StatementBegin(ctx *sql.Context) {
 				qw.errDuringStatementBegin = err
 				return
 			}
+		} else {
+			qw.errDuringStatementBegin = fmt.Errorf("could not create dolt_query_catalog table, database does not allow writing")
 		}
-
-		dSess.SetWorkingRoot(ctx, dbName, newRootValue)
 	}
 
 	if ws := dbState.WriteSession(); ws != nil {
@@ -251,6 +236,8 @@ func (qw *queryCatalogWriter) StatementBegin(ctx *sql.Context) {
 		}
 		qw.tableWriter = tableWriter
 		tableWriter.StatementBegin(ctx)
+	} else {
+		qw.errDuringStatementBegin = fmt.Errorf("could not create dolt_query_catalog table, database does not allow writing")
 	}
 }
 
