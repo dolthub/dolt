@@ -2959,3 +2959,17 @@ SQL
     # Cleanup
     dolt sql -q "DROP TABLE binary_test"
 }
+
+@test "sql: interactive binary-as-hex behavior with local database non-filtered selects" {
+    skiponwindows "Missing dependencies"
+    which expect > /dev/null || skip "expect not available"
+    
+    # Test interactive shell with --binary-as-hex flag (includes non-filtered SELECT *)
+    run expect "$BATS_TEST_DIRNAME/binary-as-hex-local-db-interactive.expect"
+    [ $status -eq 0 ]
+    
+    # Test interactive shell with --skip-binary-as-hex flag (includes non-filtered SELECT *)
+    run expect "$BATS_TEST_DIRNAME/binary-as-hex-local-db-skip-interactive.expect"
+    [ $status -eq 0 ]
+}
+

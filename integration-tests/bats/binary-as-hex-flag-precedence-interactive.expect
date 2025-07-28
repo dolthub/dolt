@@ -2,12 +2,35 @@
 
 set port [lindex $argv 0]
 set timeout 10
+log_user 0
 
 spawn dolt --host 127.0.0.1 --port $port --no-tls sql --binary-as-hex --skip-binary-as-hex
 expect ">"
 
 send "USE repo1;\r"
 expect ">"
+
+send "SELECT * FROM binary_test;\r"
+expect {
+    "abc" {
+        expect ">"
+    }
+    "0x616263" {
+        send "exit\r"
+        expect eof
+        exit 1
+    }
+    "0x0A000000" {
+        send "exit\r"
+        expect eof
+        exit 1
+    }
+    timeout {
+        send "exit\r"
+        expect eof
+        exit 1
+    }
+}
 
 send "SELECT pk, vb FROM binary_test WHERE pk = 2;\r"
 expect {

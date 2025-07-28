@@ -2265,6 +2265,27 @@ EOF
     [[ "$output" =~ "abc" ]] || false
     ! [[ "$output" =~ "0x616263" ]] || false
     
+    # 12. Test non-filtered SELECT with default behavior (should show raw by default)
+    run dolt --host 127.0.0.1 --port $PORT --no-tls sql -q "USE repo1; SELECT * FROM binary_test"
+    [ $status -eq 0 ]
+    ! [[ "$output" =~ "0x0A000000" ]] || false
+    ! [[ "$output" =~ "0x616263" ]] || false
+    [[ "$output" =~ "abc" ]] || false
+    
+    # 13. Test non-filtered SELECT with --binary-as-hex flag
+    run dolt --host 127.0.0.1 --port $PORT --no-tls sql --binary-as-hex -q "USE repo1; SELECT * FROM binary_test"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "0x0A000000" ]] || false
+    [[ "$output" =~ "0x616263" ]] || false
+    
+    # 14. Test non-filtered SELECT with --skip-binary-as-hex flag
+    run dolt --host 127.0.0.1 --port $PORT --no-tls sql --skip-binary-as-hex -q "USE repo1; SELECT * FROM binary_test"
+    [ $status -eq 0 ]
+    ! [[ "$output" =~ "0x0A000000" ]] || false
+    ! [[ "$output" =~ "0x616263" ]] || false
+    [[ "$output" =~ "abc" ]] || false
+    
     stop_sql_server 1
 }
+
 
