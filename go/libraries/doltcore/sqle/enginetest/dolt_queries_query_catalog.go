@@ -49,7 +49,7 @@ var DoltQueryCatalogScripts = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "delete from query catalog preserves columns",
+		Name: "delete from query catalog compiles when deleting every row",
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "DELETE FROM dolt_query_catalog",
@@ -63,12 +63,22 @@ var DoltQueryCatalogScripts = []queries.ScriptTest{
 		Name: "select from dolt_query_catalog",
 		SetUpScript: []string{
 			"INSERT INTO dolt_query_catalog VALUES ('show', 1, 'show', 'show tables;', 'my message')",
+			"INSERT INTO dolt_query_catalog VALUES ('get commits', 2, 'get commits', 'select * from dolt_commits;', '')",
+			"INSERT INTO dolt_query_catalog VALUES ('get branches', 3, 'get branches', 'select * from dolt_branches;', '')",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "SELECT * FROM dolt_query_catalog",
 				Expected: []sql.Row{
 					{"show", 1, "show", "show tables;", "my message"},
+					{"get commits", 2, "get commits", "select * from dolt_commits;", ""},
+					{"get branches", 3, "get branches", "select * from dolt_branches;", ""},
+				},
+			},
+			{
+				Query: "SELECT * FROM dolt_query_catalog where display_order = 2",
+				Expected: []sql.Row{
+					{"get commits", 2, "get commits", "select * from dolt_commits;", ""},
 				},
 			},
 		},
@@ -77,12 +87,15 @@ var DoltQueryCatalogScripts = []queries.ScriptTest{
 		Name: "can replace row in dolt_query_catalog",
 		SetUpScript: []string{
 			"INSERT INTO dolt_query_catalog VALUES ('test', 1, 'test', 'show tables;', '')",
+			"INSERT INTO dolt_query_catalog VALUES ('test2', 2, 'test2', 'select * from dolt_commits;', '')",
+			"REPLACE INTO dolt_query_catalog VALUES ('test', 1, 'new name', 'describe dolt_query_catalog;', 'a new message')",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query: "REPLACE INTO dolt_query_catalog VALUES ('test', 1, 'new name', 'describe dolt_query_catalog;', 'a new message')",
+				Query: "SELECT * FROM dolt_query_catalog",
 				Expected: []sql.Row{
-					{types.OkResult{RowsAffected: 2}},
+					{"test", 1, "new name", "describe dolt_query_catalog;", "a new message"},
+					{"test2", 2, "test2", "select * from dolt_commits;", ""},
 				},
 			},
 		},

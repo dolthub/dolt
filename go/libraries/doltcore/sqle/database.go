@@ -804,14 +804,6 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 			dt, found = dtables.NewBackupsTable(db, lwrName), true
 		}
 	case doltdb.DoltQueryCatalogTableName:
-		if resolve.UseSearchPath && db.schemaName == "" {
-			schemaName, err := resolve.FirstExistingSchemaOnSearchPath(ctx, root)
-			if err != nil {
-				return nil, false, err
-			}
-			db.schemaName = schemaName
-		}
-
 		backingTable, _, err := db.getTable(ctx, root, doltdb.DoltQueryCatalogTableName)
 		if err != nil {
 			return nil, false, err

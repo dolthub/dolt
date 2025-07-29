@@ -2216,7 +2216,4 @@ EOF
     run dolt --host 0.0.0.0 --no-tls --port $PORT --use-db repo1 sql -x "show"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test" ]] || false
-
-    stop_sql_server 1 && sleep 0.5
-    rm -rf $BATS_TMPDIR/sql-server-test$$
 }

@@ -44,16 +44,21 @@ teardown() {
 }
 
 @test "query-catalog: save query without message" {
-    run dolt sql -q "select pk from one_pk" -s "select"
+    EXPECTED=$(cat <<'EOF'
+pk
+0
+1
+2
+3
+EOF
+)
+    run dolt sql -q "select pk from one_pk" -s "select" -r csv
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 8 ]
+    [[ "$output" =~ "$EXPECTED" ]] || false
 }
 
 @test "query-catalog: save query with message" {
-    run dolt sql -q "select pk from one_pk" -s "select" -m "my message"
-    [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 8 ]
-
+    dolt sql -q "select pk from one_pk" -s "select" -m "my message"
     run dolt sql -l -r csv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "select" ]] || false
