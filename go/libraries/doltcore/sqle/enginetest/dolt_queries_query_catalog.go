@@ -49,7 +49,7 @@ var DoltQueryCatalogScripts = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "delete from query catalog compiles when deleting every row",
+		Name: "can run delete from on dolt query catalog",
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "DELETE FROM dolt_query_catalog",
