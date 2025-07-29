@@ -78,8 +78,7 @@ RUN go install .
 WORKDIR /
 
 # install dotnet
-RUN curl -LO https://download.visualstudio.microsoft.com/download/pr/13b9d84c-a35b-4ffe-8f62-447a01403d64/1f9ae31daa0f7d98513e7551246899f2/dotnet-sdk-5.0.400-linux-x64.tar.gz && \
-    tar -C /usr/local/bin -xzf dotnet-sdk-5.0.400-linux-x64.tar.gz && \
+RUN curl -sSL https://dot.net/v1/dotnet-install.sh | bash /dev/stdin --channel 8.0 --install-dir /usr/local/bin --no-path && \
     dotnet --version
 
 # install pip for python3.9
