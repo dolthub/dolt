@@ -15,12 +15,17 @@
 package dsess
 
 import (
+	"context"
 	"fmt"
+	"sync"
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
-
 	"github.com/stretchr/testify/assert"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess/mutexmap"
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 func TestCoerceAutoIncrementValue(t *testing.T) {
@@ -72,4 +77,42 @@ func TestCoerceAutoIncrementValue(t *testing.T) {
 			assert.Equal(t, test.exp, act)
 		})
 	}
+}
+
+func TestInitWithRoots(t *testing.T) {
+	t.Run("EmptyRoots", func(t *testing.T) {
+		ait := AutoIncrementTracker{
+			dbName:     "test_database",
+			sequences:  &sync.Map{},
+			mm:         mutexmap.NewMutexMap(),
+			init:       make(chan struct{}),
+			cancelInit: make(chan struct{}),
+		}
+		go ait.initWithRoots(context.Background())
+		assert.NoError(t, ait.waitForInit())
+	})
+	t.Run("CloseCancelsInit", func(t *testing.T) {
+		ait := AutoIncrementTracker{
+			dbName:     "test_database",
+			sequences:  &sync.Map{},
+			mm:         mutexmap.NewMutexMap(),
+			init:       make(chan struct{}),
+			cancelInit: make(chan struct{}),
+		}
+		go ait.initWithRoots(context.Background(), blockingRoot{})
+		ait.Close()
+		assert.Error(t, ait.waitForInit())
+	})
+}
+
+type blockingRoot struct {
+}
+
+func (blockingRoot) ResolveRootValue(ctx context.Context) (doltdb.RootValue, error) {
+	<-ctx.Done()
+	return nil, context.Cause(ctx)
+}
+
+func (blockingRoot) HashOf() (hash.Hash, error) {
+	return hash.Hash{}, nil
 }
