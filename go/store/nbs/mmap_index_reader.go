@@ -152,12 +152,5 @@ func (m *mmapIndexReader) getSuffix(idx uint32) (suf suffix) {
 
 // close unmaps the memory region
 func (m *mmapIndexReader) Close() error {
-	// Currently we never unmap mmapped indexes in order to prevent a data race with the AutoIncrementTracker.
-	/*if m.data != nil {
-		data := m.data
-		m.data = nil
-		err := data.munmap()
-		return err
-	}*/
-	return nil
+	return m.data.Close()
 }
