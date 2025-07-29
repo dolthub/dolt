@@ -10,12 +10,6 @@ teardown() {
     teardown_common
 }
 
-skip_remote_engine() {
-    if [ "$SQL_ENGINE" = "remote-engine" ]; then
-     skip "session ctx in shell is not the same as session in server"
-    fi
-}
-
 get_commit_hash() {
   local logline=$(dolt log -n "$1")
   echo ${logline:12:32}
@@ -355,9 +349,6 @@ EOF
 }
 
 @test "ci: dolt ci view shows ci" {
-    if [ "$SQL_ENGINE" = "remote-engine" ]; then
-          skip "Dolt sql --save has not been migrated to be used with an active server"
-    fi
     cat > workflow.yaml <<EOF
 name: workflow
 on:
@@ -592,7 +583,8 @@ EOF
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Running workflow: workflow" ]] || false
     [[ "$output" =~ "Step: should fail, bad table name - FAIL" ]] || false
-    [[ "$output" =~ "Query error: table not found: invalid" ]] || false
+    [[ "$output" =~ "Query error" ]] || false
+    [[ "$output" =~ "table not found: invalid" ]] || false
 }
 
 @test "ci: ci run fails on invalid workflow name" {
@@ -600,11 +592,14 @@ EOF
     run dolt ci run "invalid"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "workflow not found" ]] || false
+    run dolt ci run
+     [ "$status" -eq 1 ]
+     [[ "$output" =~ "must specify workflow name" ]] || false
 }
 
 @test "ci: ci run fails on invalid query name" {
     cat > workflow.yaml <<EOF
-name: workflow5
+name: workflow
 on:
   push: {}
 jobs:
@@ -621,5 +616,3 @@ EOF
     [[ "$output" =~ "Step: should fail, bad query name - FAIL" ]] || false
     [[ "$output" =~ "Could not find saved query: invalid query" ]] || false
 }
-
-# test ci with workflow with invalid query name
