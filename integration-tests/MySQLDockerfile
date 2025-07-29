@@ -78,7 +78,7 @@ RUN go install .
 WORKDIR /
 
 # install dotnet
-RUN curl -sSL https://dot.net/v1/dotnet-install.sh | bash /dev/stdin --channel 8.0 --install-dir /usr/local/bin --no-path && \
+RUN curl -sSL https://dot.net/v1/dotnet-install.sh | bash /dev/stdin --version 8.0.412 --install-dir /usr/local/bin --no-path && \
     dotnet --version
 
 # install pip for python3.9
