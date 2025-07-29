@@ -140,6 +140,10 @@ func (db Database) ValidateSchema(sch sql.Schema) error {
 	return nil
 }
 
+func (db Database) Close() {
+	db.gs.Close()
+}
+
 // Revision implements dsess.RevisionDatabase
 func (db Database) Revision() string {
 	return db.revision

@@ -54,7 +54,7 @@ import (
 
 // SqlEngine packages up the context necessary to run sql queries against dsqle.
 type SqlEngine struct {
-	provider       sql.DatabaseProvider
+	provider       *dsqle.DoltDatabaseProvider
 	ContextFactory sql.ContextFactory
 	dsessFactory   sessionFactory
 	engine         *gms.Engine
@@ -435,13 +435,17 @@ func (se *SqlEngine) FileSystem() filesys.Filesys {
 }
 
 func (se *SqlEngine) Close() error {
+	var err error
 	if se.engine != nil {
 		if se.engine.Analyzer.Catalog.BinlogReplicaController != nil {
 			dblr.DoltBinlogReplicaController.Close()
 		}
-		return se.engine.Close()
+		err = se.engine.Close()
 	}
-	return nil
+	if se.provider != nil {
+		se.provider.Close()
+	}
+	return err
 }
 
 // configureBinlogReplicaController configures the binlog replication controller with the |engine|.
