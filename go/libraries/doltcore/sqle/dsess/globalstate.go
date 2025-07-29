@@ -100,7 +100,7 @@ func NewGlobalStateStoreForDb(ctx context.Context, dbName string, db *doltdb.Dol
 }
 
 type GlobalStateImpl struct {
-	aiTracker globalstate.AutoIncrementTracker
+	aiTracker *AutoIncrementTracker
 	mu        *sync.Mutex
 }
 
@@ -108,4 +108,8 @@ var _ globalstate.GlobalState = GlobalStateImpl{}
 
 func (g GlobalStateImpl) AutoIncrementTracker(ctx *sql.Context) (globalstate.AutoIncrementTracker, error) {
 	return g.aiTracker, nil
+}
+
+func (g GlobalStateImpl) Close() {
+	g.aiTracker.Close()
 }
