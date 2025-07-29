@@ -2,11 +2,11 @@
 
     <PropertyGroup>
         <OutputType>Exe</OutputType>
-        <TargetFramework>net5.0</TargetFramework>
+        <TargetFramework>net8.0</TargetFramework>
     </PropertyGroup>
 
     <ItemGroup>
-      <PackageReference Include="MySqlConnector" Version="1.3.0-beta.1" />
+      <PackageReference Include="MySqlConnector" Version="2.4.0" />
     </ItemGroup>
 
 </Project>
