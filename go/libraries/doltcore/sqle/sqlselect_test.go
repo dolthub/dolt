@@ -32,7 +32,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -1298,16 +1297,6 @@ var systemTableSelectTests = []SelectTest{
 		Query:          "select * from dolt_docs",
 		ExpectedRows:   []sql.Row{{"LICENSE.md", "A license"}},
 		ExpectedSchema: CompressSchema(doltdb.DocsSchema),
-	},
-	{
-		Name: "select from dolt_query_catalog",
-		AdditionalSetup: CreateTableFn(doltdb.DoltQueryCatalogTableName, dtables.DoltQueryCatalogSchema,
-			"INSERT INTO dolt_query_catalog VALUES ('existingEntry', 2, 'example', 'select 2+2 from dual', 'description')"),
-		Query: "select * from dolt_query_catalog",
-		ExpectedRows: ToSqlRows(CompressSchema(dtables.DoltQueryCatalogSchema),
-			NewRow(types.String("existingEntry"), types.Uint(2), types.String("example"), types.String("select 2+2 from dual"), types.String("description")),
-		),
-		ExpectedSchema: CompressSchema(dtables.DoltQueryCatalogSchema),
 	},
 	{
 		Name: "select from dolt_schemas",

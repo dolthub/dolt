@@ -807,6 +807,17 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 		if !resolve.UseSearchPath || isDoltgresSystemTable {
 			dt, found = dtables.NewBackupsTable(db, lwrName), true
 		}
+	case doltdb.DoltQueryCatalogTableName:
+		backingTable, _, err := db.getTable(ctx, root, doltdb.DoltQueryCatalogTableName)
+		if err != nil {
+			return nil, false, err
+		}
+		if backingTable == nil {
+			dt, found = dtables.NewEmptyQueryCatalogTable(ctx), true
+		} else {
+			versionableTable := backingTable.(dtables.VersionableTable)
+			dt, found = dtables.NewQueryCatalogTable(ctx, versionableTable), true
+		}
 	}
 
 	if found {
