@@ -55,6 +55,8 @@ const (
 	ChunkJournalParam = "journal"
 
 	DatabaseNameParam = "database_name"
+
+	MMapArchiveIndexesParam = "mmap_archive_indexes"
 )
 
 // DoltDataDir is the directory where noms files will be stored
@@ -147,16 +149,18 @@ func (fact FileFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, 
 	}
 
 	var useJournal bool
+	var mmapArchiveIndexes bool
 	if params != nil {
 		_, useJournal = params[ChunkJournalParam]
+		_, mmapArchiveIndexes = params[MMapArchiveIndexesParam]
 	}
 
 	var newGenSt *nbs.NomsBlockStore
 	q := nbs.NewUnlimitedMemQuotaProvider()
 	if useJournal && chunkJournalFeatureFlag {
-		newGenSt, err = nbs.NewLocalJournalingStore(ctx, nbf.VersionString(), path, q)
+		newGenSt, err = nbs.NewLocalJournalingStore(ctx, nbf.VersionString(), path, q, mmapArchiveIndexes)
 	} else {
-		newGenSt, err = nbs.NewLocalStore(ctx, nbf.VersionString(), path, defaultMemTableSize, q)
+		newGenSt, err = nbs.NewLocalStore(ctx, nbf.VersionString(), path, defaultMemTableSize, q, mmapArchiveIndexes)
 	}
 
 	if err != nil {
@@ -176,7 +180,7 @@ func (fact FileFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, 
 		}
 	}
 
-	oldGenSt, err := nbs.NewLocalStore(ctx, newGenSt.Version(), oldgenPath, defaultMemTableSize, q)
+	oldGenSt, err := nbs.NewLocalStore(ctx, newGenSt.Version(), oldgenPath, defaultMemTableSize, q, mmapArchiveIndexes)
 	if err != nil {
 		return nil, nil, nil, err
 	}

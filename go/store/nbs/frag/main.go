@@ -69,7 +69,7 @@ func main() {
 	var store *nbs.NomsBlockStore
 	if *dir != "" {
 		var err error
-		store, err = nbs.NewLocalStore(ctx, types.Format_Default.VersionString(), *dir, memTableSize, nbs.NewUnlimitedMemQuotaProvider())
+		store, err = nbs.NewLocalStore(ctx, types.Format_Default.VersionString(), *dir, memTableSize, nbs.NewUnlimitedMemQuotaProvider(), false)
 		d.PanicIfError(err)
 
 		*dbName = *dir
