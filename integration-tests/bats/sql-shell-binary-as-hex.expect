@@ -1,5 +1,6 @@
 #!/usr/bin/expect
 # dolthub/dolt#9554
+# https://github.com/dolthub/dolt/issues/9554
 # Test script for binary-a-hex flag behavior in dolt sql.
 #
 # Usage:
