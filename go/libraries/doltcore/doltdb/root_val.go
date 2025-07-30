@@ -70,6 +70,11 @@ type RootValue interface {
 	GetCollation(ctx context.Context) (schema.Collation, error)
 	// GetRootObject will retrieve a root object by its case-sensitive name.
 	GetRootObject(ctx context.Context, objName TableName) (RootObject, bool, error)
+	// GetConflictRootObject will retrieve a conflict root object by its case-sensitive name.
+	GetConflictRootObject(ctx context.Context, tName TableName) (ConflictRootObject, bool, error)
+	// GetConflictRootObjects retrieves all conflict root objects. These will be of type ConflictRootObject, however the
+	// generic RootObject type is more versatile since it's a returned slice.
+	GetConflictRootObjects(ctx context.Context) ([]RootObject, error)
 	// GetDatabaseSchemas returns all schemas. These differ from a table's schema.
 	GetDatabaseSchemas(ctx context.Context) ([]schema.DatabaseSchema, error)
 	// GetFeatureVersion returns the feature version of this root, if one is written
@@ -306,6 +311,16 @@ func (root *rootValue) SetCollation(ctx context.Context, collation schema.Collat
 // GetRootObject is only used by Doltgres.
 func (root *rootValue) GetRootObject(ctx context.Context, tName TableName) (RootObject, bool, error) {
 	return nil, false, nil
+}
+
+// GetConflictRootObject is only used by Doltgres.
+func (root *rootValue) GetConflictRootObject(ctx context.Context, tName TableName) (ConflictRootObject, bool, error) {
+	return nil, false, nil
+}
+
+// GetConflictRootObjects is only used by Doltgres.
+func (root *rootValue) GetConflictRootObjects(ctx context.Context) ([]RootObject, error) {
+	return nil, nil
 }
 
 func (root *rootValue) GetTableSchemaHash(ctx context.Context, tName TableName) (hash.Hash, error) {
