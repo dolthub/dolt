@@ -37,7 +37,7 @@ type conjoinStrategy interface {
 	conjoinRequired(ts tableSet) bool
 
 	// chooseConjoinees chooses which chunkSources to conjoin from |sources|
-	chooseConjoinees(specs []tableSpec) (conjoinees, keepers []tableSpec, err error)
+	chooseConjoinees(ts tableSet, specs []tableSpec) (conjoinees, keepers []tableSpec, err error)
 }
 
 type inlineConjoiner struct {
@@ -47,13 +47,24 @@ type inlineConjoiner struct {
 var _ conjoinStrategy = inlineConjoiner{}
 
 func (c inlineConjoiner) conjoinRequired(ts tableSet) bool {
-	return ts.Size() > c.maxTables && len(ts.upstream) >= 2
+	aCnt := 0
+	tCnt := 0
+	for _, spec := range ts.upstream {
+		if _, ok := spec.(archiveChunkSource); ok {
+			aCnt++
+		} else {
+			tCnt++
+		}
+	}
+
+	// NM4 - not sure what the logic should be, but one of the sets should be largish.
+	return aCnt > c.maxTables && len(ts.upstream) >= 2
 }
 
 // chooseConjoinees implements conjoinStrategy. Current approach is to choose the smallest N tables which,
 // when removed and replaced with the conjoinment, will leave the conjoinment as the smallest table.
 // We also keep taking table files until we get below maxTables.
-func (c inlineConjoiner) chooseConjoinees(upstream []tableSpec) (conjoinees, keepers []tableSpec, err error) {
+func (c inlineConjoiner) chooseConjoinees(ts tableSet, upstream []tableSpec) (conjoinees, keepers []tableSpec, err error) {
 	sorted := make([]tableSpec, len(upstream))
 	copy(sorted, upstream)
 
@@ -61,19 +72,43 @@ func (c inlineConjoiner) chooseConjoinees(upstream []tableSpec) (conjoinees, kee
 		return sorted[i].chunkCount < sorted[j].chunkCount
 	})
 
-	i := 2
-	sum := sorted[0].chunkCount + sorted[1].chunkCount
+	conjoinees = make([]tableSpec, 0, len(sorted))
+	keepers = make([]tableSpec, 0, len(sorted))
+
+	sources := ts.upstream
+
+	i := 0
+	// sum := uint32(0)
 	for i < len(sorted) {
-		next := sorted[i].chunkCount
-		if sum <= next {
-			if c.maxTables == 0 || len(sorted)-i < c.maxTables {
-				break
-			}
+		name := sorted[i].name
+		src, ok := sources[name]
+		if !ok {
+			// This table is not in the manifest, so we cannot conjoin it. NM4 - not sure if this will ever happen.
+			keepers = append(keepers, sorted[i])
+			i++
+			continue
 		}
-		sum += next
+
+		// NM4 - filter on only archives for the moment.
+		if _, ok := src.(archiveChunkSource); !ok {
+			keepers = append(keepers, sorted[i])
+			i++
+			continue
+		}
+
+		// next := sorted[i].chunkCount
+		//if sum <= next {
+		// NM4 - understand when c.maxTables is set to 0
+		// For the time being, we will conjoin all archives.
+		//if c.maxTables == 0 || len(sorted)-i < c.maxTables {
+		//	break
+		//}
+		//}
+		//sum += next
+		conjoinees = append(conjoinees, sorted[i])
 		i++
 	}
-	return sorted[:i], sorted[i:], nil
+	return
 }
 
 type noopConjoiner struct{}
@@ -84,7 +119,7 @@ func (c noopConjoiner) conjoinRequired(ts tableSet) bool {
 	return false
 }
 
-func (c noopConjoiner) chooseConjoinees(sources []tableSpec) (conjoinees, keepers []tableSpec, err error) {
+func (c noopConjoiner) chooseConjoinees(_ tableSet, sources []tableSpec) (conjoinees, keepers []tableSpec, err error) {
 	keepers = sources
 	return
 }
@@ -100,7 +135,7 @@ func (s *specificFilesConjoiner) conjoinRequired(ts tableSet) bool {
 	return len(s.targetStorageIds) > 0
 }
 
-func (s *specificFilesConjoiner) chooseConjoinees(specs []tableSpec) (conjoinees, keepers []tableSpec, err error) {
+func (s *specificFilesConjoiner) chooseConjoinees(_ tableSet, specs []tableSpec) (conjoinees, keepers []tableSpec, err error) {
 	// Convert target storage IDs to a set for efficient lookup
 	targetSet := make(map[hash.Hash]bool)
 	for _, id := range s.targetStorageIds {
@@ -156,12 +191,12 @@ type conjoinOperation struct {
 
 // Compute what we will conjoin and prepare to do it. This should be
 // done synchronously and with the Mutex held by NomsBlockStore.
-func (op *conjoinOperation) prepareConjoin(ctx context.Context, strat conjoinStrategy, upstream manifestContents) error {
+func (op *conjoinOperation) prepareConjoin(_ context.Context, strat conjoinStrategy, ts tableSet, upstream manifestContents) error {
 	if upstream.NumAppendixSpecs() != 0 {
 		upstream, _ = upstream.removeAppendixSpecs()
 	}
 	var err error
-	op.conjoinees, _, err = strat.chooseConjoinees(upstream.specs)
+	op.conjoinees, _, err = strat.chooseConjoinees(ts, upstream.specs)
 	if err != nil {
 		return err
 	}
@@ -264,7 +299,7 @@ func (op *conjoinOperation) updateManifest(ctx context.Context, upstream manifes
 // situation.
 func conjoin(ctx context.Context, s conjoinStrategy, upstream manifestContents, mm manifestUpdater, p tablePersister, stats *Stats) (manifestContents, cleanupFunc, error) {
 	var op conjoinOperation
-	err := op.prepareConjoin(ctx, s, upstream)
+	err := op.prepareConjoin(ctx, s, tableSet{}, upstream) // NM4 - tableSet{} is a placeholder, should be replaced with actual tableSet
 	if err != nil {
 		return manifestContents{}, nil, err
 	}
