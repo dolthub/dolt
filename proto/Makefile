@@ -68,7 +68,7 @@ $(call PROTOC_template,\
   $(1),\
   $(addprefix $(3)/$(2)/,$(notdir $(call PBGO_output,$(1)))),\
 	--go_out=paths=source_relative:$(3) \
-        --go-grpc_out=$(3))
+        --go-grpc_out=paths=source_relative:$(3))
 endef
 
 $(foreach p,$(PBGO_pkgs),\
