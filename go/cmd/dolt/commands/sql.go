@@ -463,7 +463,6 @@ func execSingleQuery(
 	}
 
 	if rowIter != nil {
-		// Apply binary-as-hex formatting if enabled
 		err = engine.PrettyPrintResults(sqlCtx, format, sqlSch, rowIter, false, false, false, binaryAsHex)
 		if err != nil {
 			return errhand.VerboseErrorFromError(err)
