@@ -13,6 +13,8 @@ expect_with_defaults_2 {Query OK, 0 rows affected} {dolt-repo-[0-9]+/main\*> }  
 
 expect_with_defaults_2 {Query OK, 0 rows affected} {dolt-repo-[0-9]+/main\*> }  { send "insert into t values (1, 2), (3, 4);\r" }
 
+expect_with_defaults_2 {Query OK, 2 rows affected} {dolt-repo-[0-9]+/main\*> }  { send "alter table t modify column j bigint;\r" }
+
 expect_with_defaults_2 {Query OK, 2 rows affected} {dolt-repo-[0-9]+/main\*> }  { send "update t set j = 20 where i = 1;\r" }
 
 expect_with_defaults_2 {Query OK, 1 row affected} {dolt-repo-[0-9]+/main\*> }  { send "delete from t where i > 0;\r" }
