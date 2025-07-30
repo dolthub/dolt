@@ -97,6 +97,5 @@ run_query "SELECT *, LENGTH(b) FROM test_bin;" {
     }
 }
 
-expect_with_defaults {>} { send "exit\r" }
-expect eof
+run_query "exit;" { expect eof }
 exit 0

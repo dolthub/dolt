@@ -232,9 +232,9 @@ func (iter *binaryHexIterator) Next(ctx *sql.Context) (sql.Row, error) {
 			switch iter.schema[i].Type.Type() {
 			case sqltypes.Binary, sqltypes.VarBinary:
 				switch v := val.(type) {
-				case []byte:
+				case []byte: // hex fmt is explicitly upper case
 					rowData[i] = sqlutil.BinaryAsHexDisplayValue(fmt.Sprintf("0x%X", v))
-				case string: // handles results from sql-server; mysql wire protocol returns strings
+				case string: // handles results from sql-server; MySQL wire protocol returns strings
 					rowData[i] = sqlutil.BinaryAsHexDisplayValue(fmt.Sprintf("0x%X", []byte(v)))
 				default:
 					return nil, fmt.Errorf("unexpected type %T for binary column %s", val, iter.schema[i].Name)
