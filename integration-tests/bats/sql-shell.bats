@@ -1073,7 +1073,6 @@ expect eof
 
 @test "sql-shell: -binary-as-hex, -skip-binary-as-hex flag is respected in server and local contexts" {
     skiponwindows "Missing Dependencies"
-    which expect > /dev/null || skip "expect is not installed"
 
     # Default behavior for interactive runs is to output binary as hex
     run expect "$BATS_TEST_DIRNAME"/sql-shell-binary-as-hex.expect
