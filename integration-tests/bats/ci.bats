@@ -554,7 +554,6 @@ EOF
     dolt ci import ./workflow.yaml
     dolt sql --save "main" -q "select * from dolt_commits;"
     run dolt ci run "workflow"
-    echo "$output"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Running workflow: workflow" ]] || false
     [[ "$output" =~ "Step: expect rows - FAIL" ]] || false

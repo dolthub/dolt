@@ -26,6 +26,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/fatih/color"
+	"strings"
 )
 
 var runDocs = cli.CommandDocumentationContent{
@@ -71,7 +72,6 @@ func (cmd RunCmd) Exec(ctx context.Context, commandStr string, args []string, _ 
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, runDocs, ap))
 	_ = cli.ParseArgsOrDie(ap, args, help)
 
-	// Check if workflow name provided
 	if len(args) == 0 {
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(fmt.Errorf("must specify workflow name")), usage)
 	}
@@ -158,34 +158,31 @@ func runCIQuery(queryist cli.Queryist, sqlCtx *sql.Context, step dolt_ci.Step, s
 // then returns if the assertions failed
 func assertQueries(rows []sql.Row, expectedRowsAndComparison string, expectedColumnsAndComparison string) error {
 	var colCount int64
+	var errs []string
 	rowCount := int64(len(rows))
 	if rowCount > 0 {
 		colCount = int64(len(rows[0]))
 	}
 
-	var colAssertError, rowAssertError string
-	rowCompType, expectedRows, err := dolt_ci.ParseSavedQueryExpectedResultString(expectedRowsAndComparison)
-	if rowCompType != dolt_ci.WorkflowSavedQueryExpectedRowColumnComparisonTypeUnspecified {
-		err = dolt_ci.ValidateQueryExpectedRowOrColumnCount(rowCount, expectedRows, rowCompType, "row")
-		if err != nil {
-			rowAssertError = fmt.Sprintf("Assertion failed: %s", err.Error())
-		}
-	}
 	colCompType, expectedCols, err := dolt_ci.ParseSavedQueryExpectedResultString(expectedColumnsAndComparison)
 	if colCompType != dolt_ci.WorkflowSavedQueryExpectedRowColumnComparisonTypeUnspecified {
 		err = dolt_ci.ValidateQueryExpectedRowOrColumnCount(colCount, expectedCols, colCompType, "column")
 		if err != nil {
-			colAssertError = fmt.Sprintf("Assertion failed: %s", err.Error())
+			errStr := fmt.Sprintf("Assertion failed: %s", err.Error())
+			errs = append(errs, errStr)
+		}
+	}
+	rowCompType, expectedRows, err := dolt_ci.ParseSavedQueryExpectedResultString(expectedRowsAndComparison)
+	if rowCompType != dolt_ci.WorkflowSavedQueryExpectedRowColumnComparisonTypeUnspecified {
+		err = dolt_ci.ValidateQueryExpectedRowOrColumnCount(rowCount, expectedRows, rowCompType, "row")
+		if err != nil {
+			errStr := fmt.Sprintf("Assertion failed: %s", err.Error())
+			errs = append(errs, errStr)
 		}
 	}
 
-	var errStr, newLine string
-	if colAssertError != "" && rowAssertError != "" {
-		newLine = "\n"
-	}
-	errStr = fmt.Sprintf("%s%s%s", colAssertError, rowAssertError, newLine)
-	if errStr != "" {
-		return errors.New(errStr)
+	if len(errs) > 0 {
+		return errors.New(strings.Join(errs, "\n"))
 	}
 	return nil
 }
