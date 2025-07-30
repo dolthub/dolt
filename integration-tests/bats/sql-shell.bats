@@ -1090,11 +1090,11 @@ expect eof
     # Non-interactive runs should not output binary as hex by default
     run dolt sql -q "SELECT * FROM test_vbin"
     [ "$status" -eq 0 ]
-    [[ ! $output =~ 0x[0-9A-F]+ ]]
+    [[ ! $output =~ 0x[0-9A-F]+ ]] || false
 
     run dolt sql -q "SELECT * FROM test_bin"
     [ "$status" -eq 0 ]
-    [[ ! $output =~ 0x[0-9A-F]+ ]]
+    [[ ! $output =~ 0x[0-9A-F]+ ]] || false
 
     run dolt sql -q "SELECT * FROM test_vbin" --binary-as-hex
     [ "$status" -eq 0 ]
@@ -1110,11 +1110,11 @@ expect eof
 
     run dolt sql -q "SELECT * FROM test_vbin" --skip-binary-as-hex
     [ "$status" -eq 0 ]
-    [[ ! $output =~ 0x[0-9A-F]+ ]]
+    [[ ! $output =~ 0x[0-9A-F]+ ]] || false
 
     run dolt sql -q "SELECT * FROM test_bin" --skip-binary-as-hex
     [ "$status" -eq 0 ]
-    [[ ! $output =~ 0x[0-9A-F]+ ]]
+    [[ ! $output =~ 0x[0-9A-F]+ ]] || false
 
     run dolt sql -q "" --binary-as-hex --skip-binary-as-hex
     [ "$status" -eq 1 ]
