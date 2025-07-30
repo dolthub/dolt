@@ -1070,3 +1070,69 @@ expect eof
         run $BATS_TEST_DIRNAME/sql-shell-commit-time.expect
         [ "$status" -eq 0 ]
 }
+
+@test "sql-shell: -binary-as-hex, -skip-binary-as-hex flag is respected in server and local contexts" {
+#    skiponwindows "Missing Dependencies"
+    which expect > /dev/null || skip "expect is not installed"
+
+    # Default behavior for interactive runs is to output binary as hex
+    run expect "$BATS_TEST_DIRNAME"/sql-shell-binary-as-hex.expect
+    [ "$status" -eq 0 ]
+
+    run expect "$BATS_TEST_DIRNAME"/sql-shell-binary-as-hex.expect --binary-as-hex
+    [ "$status" -eq 0 ]
+
+    run expect "$BATS_TEST_DIRNAME"/sql-shell-binary-as-hex.expect --skip-binary-as-hex
+    [ "$status" -eq 0 ]
+
+    run expect "$BATS_TEST_DIRNAME"/sql-shell-binary-as-hex.expect --binary-as-hex --skip-binary-as-hex
+    [ "$status" -eq 3 ]
+
+    # Non-interactive runs should not output binary as hex by default
+    run dolt sql -q "SELECT * FROM test_vbin"
+    [ "$status" -eq 0 ]
+    [[ ! $output =~ 0x[0-9A-F]+ ]]
+
+    run dolt sql -q "SELECT * FROM test_bin"
+    [ "$status" -eq 0 ]
+    [[ ! $output =~ 0x[0-9A-F]+ ]]
+
+    run dolt sql -q "SELECT * FROM test_vbin" --binary-as-hex
+    [ "$status" -eq 0 ]
+    [[ $output =~ 1.*0x616263 ]] || false
+    [[ $output =~ 2.*0x0A000000001000112233 ]] || false
+    [[ $output =~ 3.*0x ]] || false
+
+    run dolt sql -q "SELECT * FROM test_bin" --binary-as-hex
+    [ $status -eq 0 ]
+    [[ $output =~ 1.*0x61626300000000000000 ]] || false
+    [[ $output =~ 2.*0x0A000000001000112233 ]] || false
+    [[ $output =~ 3.*0x00000000000000000000 ]] || false
+
+    run dolt sql -q "SELECT * FROM test_vbin" --skip-binary-as-hex
+    [ "$status" -eq 0 ]
+    [[ ! $output =~ 0x[0-9A-F]+ ]]
+
+    run dolt sql -q "SELECT * FROM test_bin" --skip-binary-as-hex
+    [ "$status" -eq 0 ]
+    [[ ! $output =~ 0x[0-9A-F]+ ]]
+
+    run dolt sql -q "" --binary-as-hex --skip-binary-as-hex
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "cannot use both --binary-as-hex and --skip-binary-as-hex" ]] || false
+
+    # Check other formats output is correct
+    run dolt sql -r csv -q "SELECT * FROM test_vbin WHERE id = 1;" --binary-as-hex
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1,0x616263" ]] || false
+
+    run dolt sql -r csv -q "SELECT * FROM test_vbin WHERE id = 1;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1,abc" ]] || false
+
+    run dolt sql -r csv -q "SELECT * FROM test_bin" --binary-as-hex
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1,0x61626300000000000000" ]] || false
+    [[ "$output" =~ "2,0x0A000000001000112233" ]] || false
+    [[ "$output" =~ "3,0x00000000000000000000" ]] || false
+}

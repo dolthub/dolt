@@ -209,6 +209,8 @@ type binaryHexIterator struct {
 	schema sql.Schema
 }
 
+var _ sql.RowIter = (*binaryHexIterator)(nil)
+
 // newBinaryHexIterator creates a new iterator that transforms binary data to hex format
 func newBinaryHexIterator(inner sql.RowIter, schema sql.Schema) sql.RowIter {
 	return &binaryHexIterator{
@@ -219,26 +221,29 @@ func newBinaryHexIterator(inner sql.RowIter, schema sql.Schema) sql.RowIter {
 
 // Next returns the next row with binary data transformed to hex format
 func (iter *binaryHexIterator) Next(ctx *sql.Context) (sql.Row, error) {
-	row, err := iter.inner.Next(ctx)
+	rowData, err := iter.inner.Next(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	// TODO: Add support for BLOB types (TINYBLOB, BLOB, MEDIUMBLOB, LONGBLOB) and BIT type
-	for i, val := range row {
+	for i, val := range rowData {
 		if val != nil && i < len(iter.schema) {
 			switch iter.schema[i].Type.Type() {
 			case sqltypes.Binary, sqltypes.VarBinary:
-				if bytes, ok := val.([]byte); ok {
-					row[i] = sqlutil.BinaryAsHexDisplayValue(fmt.Sprintf("0x%X", bytes))
-				} else {
-					row[i] = sqlutil.BinaryAsHexDisplayValue(fmt.Sprintf("0x%X", []byte(fmt.Sprint(val))))
+				switch v := val.(type) {
+				case []byte:
+					rowData[i] = sqlutil.BinaryAsHexDisplayValue(fmt.Sprintf("0x%X", v))
+				case string: // handles results from sql-server; mysql wire protocol returns strings
+					rowData[i] = sqlutil.BinaryAsHexDisplayValue(fmt.Sprintf("0x%X", []byte(v)))
+				default:
+					return nil, fmt.Errorf("unexpected type %T for binary column %s", val, iter.schema[i].Name)
 				}
 			}
 		}
 	}
 
-	return row, nil
+	return rowData, nil
 }
 
 // Close closes the wrapped iterator and releases any resources.

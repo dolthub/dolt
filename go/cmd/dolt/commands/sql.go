@@ -219,11 +219,9 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	}
 
 	// Determine binary-as-hex behavior from flags (default false for non-interactive modes)
-	binaryAsHex := false
-	if apr.Contains(skipBinaryAsHexFlag) {
-		binaryAsHex = false
-	} else if apr.Contains(binaryAsHexFlag) {
-		binaryAsHex = true
+	binaryAsHex := apr.Contains(binaryAsHexFlag)
+	if binaryAsHex && apr.Contains(skipBinaryAsHexFlag) { // We stray from MYSQL here to make usage clear for users
+		return HandleVErrAndExitCode(errhand.BuildDError("cannot use both --%s and --%s", binaryAsHexFlag, skipBinaryAsHexFlag).Build(), usage)
 	}
 
 	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
