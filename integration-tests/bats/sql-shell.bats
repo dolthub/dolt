@@ -1070,3 +1070,15 @@ expect eof
         run $BATS_TEST_DIRNAME/sql-shell-commit-time.expect
         [ "$status" -eq 0 ]
 }
+
+# bats test_tags=no_lambda
+@test "sql-shell: ALTER TABLE MODIFY COLUMN reports correct row count" {
+    skiponwindows "Need to install expect and make this script work on windows."
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+        skip "shell on server returns Empty Set instead of OkResult"
+    fi
+    
+    # Test for Issue #9606: ALTER TABLE MODIFY COLUMN should report actual row count
+    run $BATS_TEST_DIRNAME/alter-table-modify-rows-affected.expect
+    [ "$status" -eq 0 ]
+}

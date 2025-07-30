@@ -1,0 +1,20 @@
+#!/usr/bin/expect
+
+set timeout 5
+set env(NO_COLOR) 1
+
+source  "$env(BATS_CWD)/helper/common_expect_functions.tcl"
+
+spawn dolt sql
+
+# Simple isolated test of ALTER TABLE MODIFY COLUMN row count
+expect_with_defaults                               {dolt-repo-[0-9]+/main\*>}   { send "create table test_alter (id int primary key, data varchar(10));\r" }
+
+expect_with_defaults                               {dolt-repo-[0-9]+/main\*>}   { send "insert into test_alter values (1, 'a'), (2, 'b');\r" }
+
+expect_with_defaults_2 {Query OK, 2 rows affected} {dolt-repo-[0-9]+/main\*> }  { send "alter table test_alter modify column data varchar(50);\r" }
+
+expect_with_defaults                               {dolt-repo-[0-9]+/main\*>}   { send "quit\r" }
+
+expect eof
+exit
