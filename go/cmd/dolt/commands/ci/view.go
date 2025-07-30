@@ -62,11 +62,6 @@ func (cmd ViewCmd) Docs() *cli.CommandDocumentation {
 	return cli.NewCommandDocumentation(viewDocs, ap)
 }
 
-// Hidden should return true if this command should be hidden from the help text
-func (cmd ViewCmd) Hidden() bool {
-	return false
-}
-
 // ArgParser implements cli.Command.
 func (cmd ViewCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithMaxArgs(cmd.Name(), 1)

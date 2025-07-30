@@ -16,6 +16,7 @@ package ci
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
@@ -56,11 +57,6 @@ func (cmd RunCmd) RequiresRepo() bool {
 func (cmd RunCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
 	return cli.NewCommandDocumentation(runDocs, ap)
-}
-
-// Hidden should return true if this command should be hidden from the help text
-func (cmd RunCmd) Hidden() bool {
-	return false
 }
 
 // ArgParser implements cli.Command.
@@ -120,13 +116,15 @@ func (cmd RunCmd) Exec(ctx context.Context, commandStr string, args []string, _ 
 	return 0
 }
 
-// queryAndPrint iterates through the jobs and steps for the given config, the runs each saved query and given assertion
+// queryAndPrint iterates through the jobs and steps for the given config, then runs each saved query and given assertion
 func queryAndPrint(sqlCtx *sql.Context, queryist cli.Queryist, config *dolt_ci.WorkflowConfig, savedQueries map[string]string) {
 	for _, job := range config.Jobs {
 		cli.Println(color.GreenString("Running job: %s", job.Name.Value))
 		for _, step := range job.Steps {
 			cli.Printf("Step: %s - ", step.Name.Value)
 
+			// We break up the query running and assertions into two steps.
+			// If either fails, we'll set error and let the user know that the step failed, then give an error message
 			rows, err := runCIQuery(queryist, sqlCtx, step, savedQueries)
 			if err == nil {
 				err = assertQueries(rows, step.ExpectedRows.Value, step.ExpectedColumns.Value)
@@ -187,7 +185,7 @@ func assertQueries(rows []sql.Row, expectedRowsAndComparison string, expectedCol
 	}
 	errStr = fmt.Sprintf("%s%s%s", colAssertError, rowAssertError, newLine)
 	if errStr != "" {
-		return fmt.Errorf(errStr)
+		return errors.New(errStr)
 	}
 	return nil
 }

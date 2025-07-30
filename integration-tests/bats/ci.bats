@@ -456,9 +456,9 @@ name: workflow
 on:
   push: {}
 jobs:
-  - name: verify initial commit
+  - name: verify initial commits
     steps:
-      - name: "verify initial commit"
+      - name: "verify initial commits"
         saved_query_name: check dolt commit
         expected_rows: "== 3"
 EOF
@@ -468,8 +468,8 @@ EOF
     run dolt ci run "workflow"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Running workflow: workflow" ]] || false
-    [[ "$output" =~ "Running job: verify initial commit" ]] || false
-    [[ "$output" =~ "Step: verify initial commit - PASS" ]] || false
+    [[ "$output" =~ "Running job: verify initial commits" ]] || false
+    [[ "$output" =~ "Step: verify initial commits - PASS" ]] || false
 }
 
 @test "ci: ci run with expected columns" {
@@ -478,9 +478,9 @@ name: workflow
 on:
   push: {}
 jobs:
-  - name: verify initial commit
+  - name: verify dolt commit
     steps:
-      - name: "verify initial commit"
+      - name: "verify dolt commit"
         saved_query_name: check dolt commit
         expected_columns: "== 5"
 EOF
@@ -490,8 +490,8 @@ EOF
     run dolt ci run "workflow"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Running workflow: workflow" ]] || false
-    [[ "$output" =~ "Running job: verify initial commit" ]] || false
-    [[ "$output" =~ "Step: verify initial commit - PASS" ]] || false
+    [[ "$output" =~ "Running job: verify dolt commit" ]] || false
+    [[ "$output" =~ "Step: verify dolt commit - PASS" ]] || false
 }
 
 @test "ci: each assertion type can be used" {
