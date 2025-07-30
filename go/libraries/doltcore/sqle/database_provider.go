@@ -210,6 +210,12 @@ func (p *DoltDatabaseProvider) FileSystem() filesys.Filesys {
 	return p.fs
 }
 
+func (p *DoltDatabaseProvider) Close() {
+	for _, db := range p.databases {
+		db.Close()
+	}
+}
+
 // Installs an InitDatabaseHook which configures new databases--those
 // created with `CREATE DATABASE` and `call dolt_clone` for
 // example--for push replication. Pull-on-read replication is already

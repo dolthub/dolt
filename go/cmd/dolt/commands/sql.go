@@ -15,6 +15,7 @@
 package commands
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -32,6 +33,8 @@ import (
 	"github.com/dolthub/vitess/go/vt/vterrors"
 	"github.com/fatih/color"
 	"github.com/flynn-archive/go-shlex"
+	"github.com/gocraft/dbr/v2"
+	"github.com/gocraft/dbr/v2/dialect"
 	textunicode "golang.org/x/text/encoding/unicode"
 	"golang.org/x/text/transform"
 	"gopkg.in/src-d/go-errors.v1"
@@ -42,10 +45,10 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/libraries/utils/osutil"
+	"github.com/dolthub/dolt/go/store/val"
 	eventsapi "github.com/dolthub/eventsapi_schema/dolt/services/eventsapi/v1alpha1"
 )
 
@@ -234,13 +237,13 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 
 	if query, queryOK := apr.GetValue(QueryFlag); queryOK {
 		if apr.Contains(saveFlag) {
-			return execSaveQuery(sqlCtx, dEnv, queryist, apr, query, format, usage, binaryAsHex)
+			return SaveQuery(sqlCtx, queryist, apr, query, format, usage, binaryAsHex)
 		}
 		return queryMode(sqlCtx, queryist, apr, query, format, usage, binaryAsHex)
 	} else if savedQueryName, exOk := apr.GetValue(executeFlag); exOk {
-		return executeSavedQuery(sqlCtx, queryist, dEnv, savedQueryName, format, usage, binaryAsHex)
+		return executeSavedQuery(sqlCtx, queryist, savedQueryName, format, usage, binaryAsHex)
 	} else if apr.Contains(listSavedFlag) {
-		return listSavedQueries(sqlCtx, queryist, dEnv, format, usage)
+		return listSavedQueries(sqlCtx, queryist, format, usage)
 	} else {
 		// Run in either batch mode for piped input, or shell mode for interactive
 		isTty := false
@@ -351,49 +354,38 @@ func (cmd SqlCmd) handleLegacyArguments(ap *argparser.ArgParser, commandStr stri
 
 }
 
-func listSavedQueries(ctx *sql.Context, qryist cli.Queryist, dEnv *env.DoltEnv, format engine.PrintResultFormat, usage cli.UsagePrinter) int {
-	if !dEnv.Valid() {
-		return sqlHandleVErrAndExitCode(qryist, errhand.BuildDError("error: --%s must be used in a dolt database directory.", listSavedFlag).Build(), usage)
-	}
-
-	workingRoot, err := dEnv.WorkingRoot(ctx)
-	if err != nil {
-		return sqlHandleVErrAndExitCode(qryist, errhand.VerboseErrorFromError(err), usage)
-	}
-
-	hasQC, err := workingRoot.HasTable(ctx, doltdb.TableName{Name: doltdb.DoltQueryCatalogTableName})
-
-	if err != nil {
-		verr := errhand.BuildDError("error: Failed to read from repository.").AddCause(err).Build()
-		return sqlHandleVErrAndExitCode(qryist, verr, usage)
-	}
-
-	if !hasQC {
-		return 0
-	}
-
+func listSavedQueries(ctx *sql.Context, qryist cli.Queryist, format engine.PrintResultFormat, usage cli.UsagePrinter) int {
 	query := "SELECT * FROM " + doltdb.DoltQueryCatalogTableName
 	return sqlHandleVErrAndExitCode(qryist, execSingleQuery(ctx, qryist, query, format, false), usage)
 }
 
-func executeSavedQuery(ctx *sql.Context, qryist cli.Queryist, dEnv *env.DoltEnv, savedQueryName string, format engine.PrintResultFormat, usage cli.UsagePrinter, binaryAsHex bool) int {
-	if !dEnv.Valid() {
-		return sqlHandleVErrAndExitCode(qryist, errhand.BuildDError("error: --%s must be used in a dolt database directory.", executeFlag).Build(), usage)
-	}
+func executeSavedQuery(ctx *sql.Context, qryist cli.Queryist, savedQueryName string, format engine.PrintResultFormat, usage cli.UsagePrinter, binaryAsHex bool) int {
+	var buffer bytes.Buffer
+	buffer.WriteString("SELECT query FROM dolt_query_catalog where id = ?")
+	searchQuery, err := dbr.InterpolateForDialect(buffer.String(), []interface{}{savedQueryName}, dialect.MySQL)
 
-	workingRoot, err := dEnv.WorkingRoot(ctx)
+	rows, err := GetRowsForSql(qryist, ctx, searchQuery)
 	if err != nil {
+		return sqlHandleVErrAndExitCode(qryist, errhand.VerboseErrorFromError(err), usage)
+	} else if len(rows) == 0 {
+		err = fmt.Errorf("saved query %s not found", savedQueryName)
 		return sqlHandleVErrAndExitCode(qryist, errhand.VerboseErrorFromError(err), usage)
 	}
 
-	sq, err := dtables.RetrieveFromQueryCatalog(ctx, workingRoot, savedQueryName)
-
-	if err != nil {
-		return sqlHandleVErrAndExitCode(qryist, errhand.VerboseErrorFromError(err), usage)
+	var query string
+	if ts, ok := rows[0][0].(*val.TextStorage); ok {
+		query, err = ts.Unwrap(ctx)
+		if err != nil {
+			return sqlHandleVErrAndExitCode(qryist, errhand.VerboseErrorFromError(err), usage)
+		}
+	} else {
+		if s, ok := rows[0][0].(string); ok {
+			query = s
+		}
 	}
 
-	cli.PrintErrf("Executing saved query '%s':\n%s\n", savedQueryName, sq.Query)
-	return sqlHandleVErrAndExitCode(qryist, execSingleQuery(ctx, qryist, sq.Query, format, binaryAsHex), usage)
+	cli.PrintErrf("Executing saved query '%s':\n%s\n", savedQueryName, query)
+	return sqlHandleVErrAndExitCode(qryist, execSingleQuery(ctx, qryist, query, format, binaryAsHex), usage)
 }
 
 func queryMode(
@@ -416,11 +408,7 @@ func queryMode(
 	return 0
 }
 
-func execSaveQuery(ctx *sql.Context, dEnv *env.DoltEnv, qryist cli.Queryist, apr *argparser.ArgParseResults, query string, format engine.PrintResultFormat, usage cli.UsagePrinter, binaryAsHex bool) int {
-	if !dEnv.Valid() {
-		return sqlHandleVErrAndExitCode(qryist, errhand.BuildDError("error: --%s must be used in a dolt database directory.", saveFlag).Build(), usage)
-	}
-
+func SaveQuery(ctx *sql.Context, qryist cli.Queryist, apr *argparser.ArgParseResults, query string, format engine.PrintResultFormat, usage cli.UsagePrinter, binaryAsHex bool) int {
 	saveName := apr.GetValueOrDefault(saveFlag, "")
 
 	verr := execSingleQuery(ctx, qryist, query, format, binaryAsHex)
@@ -428,23 +416,31 @@ func execSaveQuery(ctx *sql.Context, dEnv *env.DoltEnv, qryist cli.Queryist, apr
 		return sqlHandleVErrAndExitCode(qryist, verr, usage)
 	}
 
-	workingRoot, err := dEnv.WorkingRoot(ctx)
+	order := int32(1)
+	rows, err := GetRowsForSql(qryist, ctx, "SELECT MAX(display_order) FROM dolt_query_catalog")
 	if err != nil {
-		return sqlHandleVErrAndExitCode(qryist, errhand.BuildDError("error: failed to get working root").AddCause(err).Build(), usage)
+		return sqlHandleVErrAndExitCode(qryist, errhand.VerboseErrorFromError(err), usage)
+	}
+	if len(rows) > 0 && rows[0][0] != nil {
+		order, err = getInt32ColAsInt32(rows[0][0])
+		if err != nil {
+			return sqlHandleVErrAndExitCode(qryist, errhand.VerboseErrorFromError(err), usage)
+		}
+		order++
 	}
 
 	saveMessage := apr.GetValueOrDefault(messageFlag, "")
-	newRoot, verr := saveQuery(ctx, workingRoot, query, saveName, saveMessage)
-	if verr != nil {
-		return sqlHandleVErrAndExitCode(qryist, verr, usage)
-	}
-
-	err = dEnv.UpdateWorkingRoot(ctx, newRoot)
+	var buffer bytes.Buffer
+	buffer.WriteString("INSERT INTO dolt_query_catalog VALUES (?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE query = ?, description = ?")
+	params := []interface{}{saveName, order, saveName, query, saveMessage, query, saveMessage}
+	insertQuery, err := dbr.InterpolateForDialect(buffer.String(), params, dialect.MySQL)
 	if err != nil {
-		return sqlHandleVErrAndExitCode(qryist, errhand.BuildDError("error: failed to update working root").AddCause(err).Build(), usage)
+		return sqlHandleVErrAndExitCode(qryist, errhand.VerboseErrorFromError(err), usage)
 	}
 
-	return 0
+	_, err = GetRowsForSql(qryist, ctx, insertQuery)
+
+	return sqlHandleVErrAndExitCode(qryist, errhand.VerboseErrorFromError(err), usage)
 }
 
 // execSingleQuery runs a single query and prints the results. This is not intended for use in interactive modes, especially
@@ -618,16 +614,6 @@ func validateSqlArgs(apr *argparser.ArgParseResults) error {
 	}
 
 	return nil
-}
-
-// Saves the query given to the catalog with the name and message given.
-func saveQuery(ctx *sql.Context, root doltdb.RootValue, query string, name string, message string) (doltdb.RootValue, errhand.VerboseError) {
-	_, newRoot, err := dtables.NewQueryCatalogEntryWithNameAsID(ctx, root, name, query, message)
-	if err != nil {
-		return nil, errhand.BuildDError("Couldn't save query").AddCause(err).Build()
-	}
-
-	return newRoot, nil
 }
 
 // execBatchMode runs all the queries in the input reader

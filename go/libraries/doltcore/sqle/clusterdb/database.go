@@ -49,6 +49,9 @@ func (db database) Schema() string {
 	return ""
 }
 
+func (db database) Close() {
+}
+
 func (db database) GetTableInsensitive(ctx *sql.Context, tblName string) (sql.Table, bool, error) {
 	tblName = strings.ToLower(tblName)
 	if tblName == StatusTableName {

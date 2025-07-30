@@ -17,6 +17,7 @@ package dsess
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"math"
 	"strings"
@@ -51,8 +52,18 @@ type AutoIncrementTracker struct {
 	sequences *sync.Map // map[string]uint64
 	mm        *mutexmap.MutexMap
 	lockMode  LockMode
-	init      chan struct{}
-	initErr   error
+
+	// AutoIncrementTracker is lazily initialized by loading
+	// tracker state for every given |root|.  On first access, we
+	// block on initialization being completed and we terminally
+	// return |initErr| if there was any error initializing.
+	init    chan struct{}
+	initErr error
+
+	// To clean up effectively we need to stop all access to
+	// storage. As part of that, we have the possibility to cancel
+	// async initialization and block on the process completing.
+	cancelInit chan struct{}
 }
 
 var _ globalstate.AutoIncrementTracker = &AutoIncrementTracker{}
@@ -63,10 +74,11 @@ var _ globalstate.AutoIncrementTracker = &AutoIncrementTracker{}
 // branches that don't have a local working set)
 func NewAutoIncrementTracker(ctx context.Context, dbName string, roots ...doltdb.Rootish) (*AutoIncrementTracker, error) {
 	ait := AutoIncrementTracker{
-		dbName:    dbName,
-		sequences: &sync.Map{},
-		mm:        mutexmap.NewMutexMap(),
-		init:      make(chan struct{}),
+		dbName:     dbName,
+		sequences:  &sync.Map{},
+		mm:         mutexmap.NewMutexMap(),
+		init:       make(chan struct{}),
+		cancelInit: make(chan struct{}),
 	}
 	gcSafepointController := getGCSafepointController(ctx)
 	ctx = context.Background()
@@ -98,6 +110,11 @@ func loadAutoIncValue(sequences *sync.Map, tableName string) uint64 {
 		return 0
 	}
 	return current.(uint64)
+}
+
+func (a *AutoIncrementTracker) Close() {
+	close(a.cancelInit)
+	<-a.init
 }
 
 // Current returns the next value to be generated in the auto increment sequence for the table named
@@ -483,30 +500,45 @@ func (a *AutoIncrementTracker) waitForInit() error {
 // |initWithRoots| is called with appropriately outlives the end of
 // the method and that it participates in GC lifecycle callbacks
 // appropriately, if that is necessary.
-func (a *AutoIncrementTracker) initWithRoots(ctx context.Context, roots ...doltdb.Rootish) error {
+func (a *AutoIncrementTracker) initWithRoots(ctx context.Context, roots ...doltdb.Rootish) {
 	defer close(a.init)
-	eg, egCtx := errgroup.WithContext(ctx)
+
+	// Cancel the parent context so that the errgroup work will
+	// complete with an error if we see cancelInit closed.
+	finishedCh := make(chan struct{})
+	defer close(finishedCh)
+	ctx, cancel := context.WithCancelCause(ctx)
+	go func() {
+		select {
+		case <-a.cancelInit:
+			fmt.Printf("canceling it...\n")
+			cancel(errors.New("initialization canceled. did not complete successfully."))
+		case <-finishedCh:
+		}
+	}()
+
+	eg, ctx := errgroup.WithContext(ctx)
 	eg.SetLimit(128)
 
 	for _, root := range roots {
 		eg.Go(func() error {
-			if egCtx.Err() != nil {
-				return egCtx.Err()
+			if ctx.Err() != nil {
+				return context.Cause(ctx)
 			}
 
-			r, rerr := root.ResolveRootValue(egCtx)
-			if rerr != nil {
-				return rerr
+			r, err := root.ResolveRootValue(ctx)
+			if err != nil {
+				return err
 			}
 
-			return r.IterTables(egCtx, func(tableName doltdb.TableName, table *doltdb.Table, sch schema.Schema) (bool, error) {
+			return r.IterTables(ctx, func(tableName doltdb.TableName, table *doltdb.Table, sch schema.Schema) (bool, error) {
 				if !schema.HasAutoIncrement(sch) {
 					return false, nil
 				}
 
-				seq, iErr := table.GetAutoIncrementValue(egCtx)
-				if iErr != nil {
-					return true, iErr
+				seq, err := table.GetAutoIncrementValue(ctx)
+				if err != nil {
+					return true, err
 				}
 
 				tableNameStr := tableName.ToLower().Name
@@ -519,7 +551,7 @@ func (a *AutoIncrementTracker) initWithRoots(ctx context.Context, roots ...doltd
 		})
 	}
 
-	return eg.Wait()
+	a.initErr = eg.Wait()
 }
 
 // incrementAutoIncVal determines whether to increment the auto-increment value.

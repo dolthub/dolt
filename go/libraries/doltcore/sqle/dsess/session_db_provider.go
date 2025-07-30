@@ -138,4 +138,12 @@ type SqlDatabase interface {
 	DoltDatabases() []*doltdb.DoltDB
 	// Schema returns the schema of the database.
 	Schema() string
+
+	// Clean up any global resources associated with the
+	// SqlDatabase itself.  For DoltDatabases, this notably does
+	// not close the DoltDB, for example, but should shut down
+	// background threads not managed through
+	// sql.BackgroundThreads but which could be accessing or
+	// mutating database state.
+	Close()
 }
