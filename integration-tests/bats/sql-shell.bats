@@ -1071,6 +1071,7 @@ expect eof
         [ "$status" -eq 0 ]
 }
 
+# bats test_tags=no_lambda
 @test "sql-shell: -binary-as-hex, -skip-binary-as-hex flag is respected in server and local contexts" {
     skiponwindows "Missing Dependencies"
 
