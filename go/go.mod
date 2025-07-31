@@ -13,7 +13,7 @@ require (
 	github.com/dolthub/fslock v0.0.3
 	github.com/dolthub/ishell v0.0.0-20240701202509-2b217167d718
 	github.com/dolthub/sqllogictest/go v0.0.0-20201107003712-816f3ae12d81
-	github.com/dolthub/vitess v0.0.0-20250729231828-87bce34800ce
+	github.com/dolthub/vitess v0.0.0-20250730174048-497aebb8cea7
 	github.com/dustin/go-humanize v1.0.1
 	github.com/fatih/color v1.13.0
 	github.com/flynn-archive/go-shlex v0.0.0-20150515145356-3f9db97f8568
@@ -60,7 +60,7 @@ require (
 	github.com/dolthub/aws-sdk-go-ini-parser v0.0.0-20250305001723-2821c37f6c12
 	github.com/dolthub/eventsapi_schema v0.0.0-20250725194025-a087efa1ee55
 	github.com/dolthub/flatbuffers/v23 v23.3.3-dh.2
-	github.com/dolthub/go-mysql-server v0.20.1-0.20250730053026-797f25fcfc4f
+	github.com/dolthub/go-mysql-server v0.20.1-0.20250730230831-a37e01595edd
 	github.com/dolthub/gozstd v0.0.0-20240423170813-23a2903bca63
 	github.com/esote/minmaxheap v1.0.0
 	github.com/goccy/go-json v0.10.2
