@@ -35,6 +35,8 @@ type prollyRowIter struct {
 	// ordProj is a concatenated list of output ordinals for |keyProj| and |valProj|
 	ordProj []int
 	rowLen  int
+
+	row sql.Row
 }
 
 var _ sql.RowIter = prollyRowIter{}
@@ -173,25 +175,32 @@ func (it prollyRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 		return nil, err
 	}
 
-	row := make(sql.Row, it.rowLen)
+	if it.row != nil {
+		sql.PutRow(it.row)
+	}
+	it.row = sql.GetRow(it.rowLen)
+
 	for i, idx := range it.keyProj {
 		outputIdx := it.ordProj[i]
-		row[outputIdx], err = tree.GetField(ctx, it.keyDesc, idx, key, it.ns)
+		it.row[outputIdx], err = tree.GetField(ctx, it.keyDesc, idx, key, it.ns)
 		if err != nil {
 			return nil, err
 		}
 	}
 	for i, idx := range it.valProj {
 		outputIdx := it.ordProj[len(it.keyProj)+i]
-		row[outputIdx], err = tree.GetField(ctx, it.valDesc, idx, value, it.ns)
+		it.row[outputIdx], err = tree.GetField(ctx, it.valDesc, idx, value, it.ns)
 		if err != nil {
 			return nil, err
 		}
 	}
-	return row, nil
+	return it.row, nil
 }
 
-func (it prollyRowIter) Close(ctx *sql.Context) error {
+func (it prollyRowIter) Close(_ *sql.Context) error {
+	if it.row != nil {
+		sql.PutRow(it.row)
+	}
 	return nil
 }
 
