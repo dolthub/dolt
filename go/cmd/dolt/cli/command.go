@@ -26,13 +26,13 @@ import (
 	"github.com/dolthub/vitess/go/vt/sqlparser"
 	"github.com/fatih/color"
 
-	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/events"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	config "github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/store/nbs"
 	"github.com/dolthub/dolt/go/store/types"
+	eventsapi "github.com/dolthub/eventsapi_schema/dolt/services/eventsapi/v1alpha1"
 )
 
 func IsHelp(str string) bool {

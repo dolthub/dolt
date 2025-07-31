@@ -85,6 +85,7 @@ func (b Builder) Build(ctx *sql.Context, n sql.Node, r sql.Row) (sql.RowIter, er
 						var rowJoiner *prollyToSqlJoiner
 						rowJoiner = newRowJoiner([]schema.Schema{leftState.priSch, rightState.priSch}, []int{split}, projections, leftState.idxMap.NodeStore())
 						if iter, err := newMergeKvIter(leftState, rightState, rowJoiner, lrCmp, llCmp, filters, n.Op.IsLeftOuter(), n.Op.IsExcludeNulls()); err == nil {
+							iter.isReversed = n.IsReversed
 							return iter, nil
 						}
 					}

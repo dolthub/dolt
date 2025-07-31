@@ -140,6 +140,10 @@ func (db Database) ValidateSchema(sch sql.Schema) error {
 	return nil
 }
 
+func (db Database) Close() {
+	db.gs.Close()
+}
+
 // Revision implements dsess.RevisionDatabase
 func (db Database) Revision() string {
 	return db.revision
@@ -802,6 +806,17 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 		}
 		if !resolve.UseSearchPath || isDoltgresSystemTable {
 			dt, found = dtables.NewBackupsTable(db, lwrName), true
+		}
+	case doltdb.DoltQueryCatalogTableName:
+		backingTable, _, err := db.getTable(ctx, root, doltdb.DoltQueryCatalogTableName)
+		if err != nil {
+			return nil, false, err
+		}
+		if backingTable == nil {
+			dt, found = dtables.NewEmptyQueryCatalogTable(ctx), true
+		} else {
+			versionableTable := backingTable.(dtables.VersionableTable)
+			dt, found = dtables.NewQueryCatalogTable(ctx, versionableTable), true
 		}
 	}
 

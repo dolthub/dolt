@@ -35,7 +35,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
 	"github.com/dolthub/dolt/go/store/types"
@@ -819,11 +818,10 @@ func TestAlterSystemTables(t *testing.T) {
 
 		CreateTestTable(t, dEnv, "dolt_docs", doltdb.DocsSchema,
 			"INSERT INTO dolt_docs VALUES ('LICENSE.md','A license')")
-		CreateTestTable(t, dEnv, doltdb.DoltQueryCatalogTableName, dtables.DoltQueryCatalogSchema,
-			"INSERT INTO dolt_query_catalog VALUES ('abc123', 1, 'example', 'select 2+2 from dual', 'description')")
 		ExecuteSetupSQL(context.Background(), `
     CREATE VIEW name as select 2+2 from dual;
 		CREATE PROCEDURE simple_proc2() SELECT 1+1;
+		INSERT INTO dolt_query_catalog VALUES ('test', 1, 'test', 'show tables;', '');
 		INSERT INTO dolt_ignore VALUES ('test', 1);`)(t, dEnv)
 	}
 

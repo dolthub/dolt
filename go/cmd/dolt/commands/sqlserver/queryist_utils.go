@@ -23,7 +23,6 @@ import (
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/vt/sqlparser"
 	"github.com/go-sql-driver/mysql"
 	"github.com/gocraft/dbr/v2"
@@ -32,6 +31,7 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/servercfg"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
@@ -147,18 +147,18 @@ type MysqlRowWrapper struct {
 var _ sql.RowIter = (*MysqlRowWrapper)(nil)
 
 func NewMysqlRowWrapper(sqlRows *sql2.Rows) (*MysqlRowWrapper, error) {
-	colNames, err := sqlRows.Columns()
+	colTypes, err := sqlRows.ColumnTypes()
 	if err != nil {
 		return nil, err
 	}
-	schema := make(sql.Schema, len(colNames))
-	vRow := make([]*string, len(colNames))
-	iRow := make([]interface{}, len(colNames))
+	schema := make(sql.Schema, len(colTypes))
+	vRow := make([]*string, len(colTypes))
+	iRow := make([]interface{}, len(colTypes))
 	rows := make([]sql.Row, 0)
-	for i, colName := range colNames {
+	for i, colType := range colTypes {
 		schema[i] = &sql.Column{
-			Name:     colName,
-			Type:     types.LongText,
+			Name:     colType.Name(),
+			Type:     sqlutil.DatabaseTypeNameToSqlType(colType.DatabaseTypeName()),
 			Nullable: true,
 		}
 		iRow[i] = &vRow[i]
