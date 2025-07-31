@@ -18,6 +18,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
@@ -124,6 +125,23 @@ func doDoltCommit(ctx *sql.Context, args []string) (string, bool, error) {
 		email = fmt.Sprintf("%s@%s", ctx.Client().User, ctx.Client().Address)
 	}
 
+	// Parse committer info if provided
+	var committerName, committerEmail string
+	var committerDate time.Time
+	if committerStr, ok := apr.GetValue(cli.CommitterParam); ok {
+		committerName, committerEmail, err = cli.ParseAuthor(committerStr)
+		if err != nil {
+			return "", false, err
+		}
+	}
+
+	if committerDateStr, ok := apr.GetValue(cli.CommitterDateParam); ok {
+		committerDate, err = dconfig.ParseDate(committerDateStr)
+		if err != nil {
+			return "", false, err
+		}
+	}
+
 	amend := apr.Contains(cli.AmendFlag)
 
 	msg, msgOk := apr.GetValue(cli.MessageArg)
@@ -151,7 +169,7 @@ func doDoltCommit(ctx *sql.Context, args []string) (string, bool, error) {
 		if err != nil {
 			return "", false, err
 		}
-	} else if datas.CustomAuthorDate {
+	} else if datas.CustomAuthorDate() {
 		t = datas.AuthorDate()
 	}
 
@@ -163,14 +181,17 @@ func doDoltCommit(ctx *sql.Context, args []string) (string, bool, error) {
 	}
 
 	csp := actions.CommitStagedProps{
-		Message:    msg,
-		Date:       t,
-		AllowEmpty: apr.Contains(cli.AllowEmptyFlag),
-		SkipEmpty:  apr.Contains(cli.SkipEmptyFlag),
-		Amend:      amend,
-		Force:      apr.Contains(cli.ForceFlag),
-		Name:       name,
-		Email:      email,
+		Message:        msg,
+		Date:           t,
+		AllowEmpty:     apr.Contains(cli.AllowEmptyFlag),
+		SkipEmpty:      apr.Contains(cli.SkipEmptyFlag),
+		Amend:          amend,
+		Force:          apr.Contains(cli.ForceFlag),
+		Name:           name,
+		Email:          email,
+		CommitterName:  committerName,
+		CommitterEmail: committerEmail,
+		CommitterDate:  committerDate,
 	}
 
 	shouldSign, err := dsess.GetBooleanSystemVar(ctx, "gpgsign")

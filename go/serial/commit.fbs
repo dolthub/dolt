@@ -23,11 +23,22 @@ table Commit {
 
   parent_closure:[ubyte];
 
-  name:string (required);
-  email:string (required);
+  // Deprecated fields - maintained for backward compatibility
+  name:string (required);  // Deprecated: use author_name
+  email:string (required); // Deprecated: use author_email
+  
   description:string (required);
-  timestamp_millis:uint64;
-  user_timestamp_millis:int64;
+  timestamp_millis:uint64;      // Deprecated: use committer_timestamp_millis
+  user_timestamp_millis:int64;  // Deprecated: use author_timestamp_millis
+  
+  // New fields for author/committer separation
+  author_name:string;
+  author_email:string;
+  author_timestamp_millis:uint64;
+  committer_name:string;
+  committer_email:string;
+  committer_timestamp_millis:uint64;
+  
   signature:string;
 }
 

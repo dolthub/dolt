@@ -74,9 +74,18 @@ func (ct *CommitsTable) String() string {
 func (ct *CommitsTable) Schema() sql.Schema {
 	return []*sql.Column{
 		{Name: "commit_hash", Type: types.Text, Source: ct.tableName, PrimaryKey: true, DatabaseSource: ct.dbName},
+		// Author fields
+		{Name: "author", Type: types.Text, Source: ct.tableName, PrimaryKey: false, DatabaseSource: ct.dbName},
+		{Name: "author_email", Type: types.Text, Source: ct.tableName, PrimaryKey: false, DatabaseSource: ct.dbName},
+		{Name: "author_date", Type: types.Datetime, Source: ct.tableName, PrimaryKey: false, DatabaseSource: ct.dbName},
+		// Committer fields
 		{Name: "committer", Type: types.Text, Source: ct.tableName, PrimaryKey: false, DatabaseSource: ct.dbName},
-		{Name: "email", Type: types.Text, Source: ct.tableName, PrimaryKey: false, DatabaseSource: ct.dbName},
-		{Name: "date", Type: types.Datetime, Source: ct.tableName, PrimaryKey: false, DatabaseSource: ct.dbName},
+		{Name: "committer_email", Type: types.Text, Source: ct.tableName, PrimaryKey: false, DatabaseSource: ct.dbName},
+		{Name: "committer_date", Type: types.Datetime, Source: ct.tableName, PrimaryKey: false, DatabaseSource: ct.dbName},
+		// Backward compatibility columns
+		{Name: "email", Type: types.Text, Source: ct.tableName, PrimaryKey: false, DatabaseSource: ct.dbName},    // Deprecated: use author_email
+		{Name: "date", Type: types.Datetime, Source: ct.tableName, PrimaryKey: false, DatabaseSource: ct.dbName}, // Deprecated: use author_date
+		// Message
 		{Name: "message", Type: types.Text, Source: ct.tableName, PrimaryKey: false, DatabaseSource: ct.dbName},
 	}
 }
@@ -175,5 +184,16 @@ func (itr CommitsRowItr) Close(*sql.Context) error {
 }
 
 func formatCommitTableRow(h hash.Hash, meta *datas.CommitMeta) sql.Row {
-	return sql.NewRow(h.String(), meta.Name, meta.Email, meta.Time(), meta.Description)
+	return sql.NewRow(
+		h.String(),           // commit_hash
+		meta.AuthorName,      // author
+		meta.AuthorEmail,     // author_email
+		meta.AuthorTime(),    // author_date
+		meta.CommitterName,   // committer
+		meta.CommitterEmail,  // committer_email
+		meta.CommitterTime(), // committer_date
+		meta.AuthorEmail,     // email (deprecated, for backward compatibility)
+		meta.AuthorTime(),    // date (deprecated, for backward compatibility)
+		meta.Description,     // message
+	)
 }

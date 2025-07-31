@@ -214,7 +214,7 @@ func (rcv *Commit) MutateUserTimestampMillis(n int64) bool {
 	return rcv._tab.MutateInt64Slot(20, n)
 }
 
-func (rcv *Commit) Signature() []byte {
+func (rcv *Commit) AuthorName() []byte {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(22))
 	if o != 0 {
 		return rcv._tab.ByteVector(o + rcv._tab.Pos)
@@ -222,7 +222,63 @@ func (rcv *Commit) Signature() []byte {
 	return nil
 }
 
-const CommitNumFields = 10
+func (rcv *Commit) AuthorEmail() []byte {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(24))
+	if o != 0 {
+		return rcv._tab.ByteVector(o + rcv._tab.Pos)
+	}
+	return nil
+}
+
+func (rcv *Commit) AuthorTimestampMillis() uint64 {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(26))
+	if o != 0 {
+		return rcv._tab.GetUint64(o + rcv._tab.Pos)
+	}
+	return 0
+}
+
+func (rcv *Commit) MutateAuthorTimestampMillis(n uint64) bool {
+	return rcv._tab.MutateUint64Slot(26, n)
+}
+
+func (rcv *Commit) CommitterName() []byte {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(28))
+	if o != 0 {
+		return rcv._tab.ByteVector(o + rcv._tab.Pos)
+	}
+	return nil
+}
+
+func (rcv *Commit) CommitterEmail() []byte {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(30))
+	if o != 0 {
+		return rcv._tab.ByteVector(o + rcv._tab.Pos)
+	}
+	return nil
+}
+
+func (rcv *Commit) CommitterTimestampMillis() uint64 {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(32))
+	if o != 0 {
+		return rcv._tab.GetUint64(o + rcv._tab.Pos)
+	}
+	return 0
+}
+
+func (rcv *Commit) MutateCommitterTimestampMillis(n uint64) bool {
+	return rcv._tab.MutateUint64Slot(32, n)
+}
+
+func (rcv *Commit) Signature() []byte {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(34))
+	if o != 0 {
+		return rcv._tab.ByteVector(o + rcv._tab.Pos)
+	}
+	return nil
+}
+
+const CommitNumFields = 16
 
 func CommitStart(builder *flatbuffers.Builder) {
 	builder.StartObject(CommitNumFields)
@@ -263,8 +319,26 @@ func CommitAddTimestampMillis(builder *flatbuffers.Builder, timestampMillis uint
 func CommitAddUserTimestampMillis(builder *flatbuffers.Builder, userTimestampMillis int64) {
 	builder.PrependInt64Slot(8, userTimestampMillis, 0)
 }
+func CommitAddAuthorName(builder *flatbuffers.Builder, authorName flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(9, flatbuffers.UOffsetT(authorName), 0)
+}
+func CommitAddAuthorEmail(builder *flatbuffers.Builder, authorEmail flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(10, flatbuffers.UOffsetT(authorEmail), 0)
+}
+func CommitAddAuthorTimestampMillis(builder *flatbuffers.Builder, authorTimestampMillis uint64) {
+	builder.PrependUint64Slot(11, authorTimestampMillis, 0)
+}
+func CommitAddCommitterName(builder *flatbuffers.Builder, committerName flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(12, flatbuffers.UOffsetT(committerName), 0)
+}
+func CommitAddCommitterEmail(builder *flatbuffers.Builder, committerEmail flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(13, flatbuffers.UOffsetT(committerEmail), 0)
+}
+func CommitAddCommitterTimestampMillis(builder *flatbuffers.Builder, committerTimestampMillis uint64) {
+	builder.PrependUint64Slot(14, committerTimestampMillis, 0)
+}
 func CommitAddSignature(builder *flatbuffers.Builder, signature flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(9, flatbuffers.UOffsetT(signature), 0)
+	builder.PrependUOffsetTSlot(15, flatbuffers.UOffsetT(signature), 0)
 }
 func CommitEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()

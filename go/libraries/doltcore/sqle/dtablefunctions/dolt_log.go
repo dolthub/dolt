@@ -778,7 +778,7 @@ func (itr *logTableFunctionRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 		return nil, err
 	}
 
-	row := sql.NewRow(commitHash.String(), meta.Name, meta.Email, meta.Time(), meta.Description, height)
+	row := sql.NewRow(commitHash.String(), meta.AuthorName, meta.AuthorEmail, meta.AuthorTime(), meta.Description, height)
 
 	if itr.showParents {
 		prStr, err := getParentsString(ctx, commit)

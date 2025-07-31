@@ -88,9 +88,18 @@ func (dt *LogTable) String() string {
 func (dt *LogTable) Schema() sql.Schema {
 	return []*sql.Column{
 		{Name: "commit_hash", Type: types.Text, Source: dt.tableName, PrimaryKey: true, DatabaseSource: dt.dbName},
+		// Author fields
+		{Name: "author", Type: types.Text, Source: dt.tableName, PrimaryKey: false, DatabaseSource: dt.dbName},
+		{Name: "author_email", Type: types.Text, Source: dt.tableName, PrimaryKey: false, DatabaseSource: dt.dbName},
+		{Name: "author_date", Type: types.Datetime, Source: dt.tableName, PrimaryKey: false, DatabaseSource: dt.dbName},
+		// Committer fields
 		{Name: "committer", Type: types.Text, Source: dt.tableName, PrimaryKey: false, DatabaseSource: dt.dbName},
-		{Name: "email", Type: types.Text, Source: dt.tableName, PrimaryKey: false, DatabaseSource: dt.dbName},
-		{Name: "date", Type: types.Datetime, Source: dt.tableName, PrimaryKey: false, DatabaseSource: dt.dbName},
+		{Name: "committer_email", Type: types.Text, Source: dt.tableName, PrimaryKey: false, DatabaseSource: dt.dbName},
+		{Name: "committer_date", Type: types.Datetime, Source: dt.tableName, PrimaryKey: false, DatabaseSource: dt.dbName},
+		// Backward compatibility columns
+		{Name: "email", Type: types.Text, Source: dt.tableName, PrimaryKey: false, DatabaseSource: dt.dbName},    // Deprecated: use author_email
+		{Name: "date", Type: types.Datetime, Source: dt.tableName, PrimaryKey: false, DatabaseSource: dt.dbName}, // Deprecated: use author_date
+		// Message and order
 		{Name: "message", Type: types.Text, Source: dt.tableName, PrimaryKey: false, DatabaseSource: dt.dbName},
 		{Name: "commit_order", Type: types.Uint64, Source: dt.tableName, PrimaryKey: false, DatabaseSource: dt.dbName},
 	}
@@ -256,7 +265,19 @@ func (itr *LogItr) Next(ctx *sql.Context) (sql.Row, error) {
 		return nil, err
 	}
 
-	return sql.NewRow(h.String(), meta.Name, meta.Email, meta.Time(), meta.Description, height), nil
+	return sql.NewRow(
+		h.String(),           // commit_hash
+		meta.AuthorName,      // author
+		meta.AuthorEmail,     // author_email
+		meta.AuthorTime(),    // author_date
+		meta.CommitterName,   // committer
+		meta.CommitterEmail,  // committer_email
+		meta.CommitterTime(), // committer_date
+		meta.AuthorEmail,     // email (deprecated, for backward compatibility)
+		meta.AuthorTime(),    // date (deprecated, for backward compatibility)
+		meta.Description,     // message
+		height,               // commit_order
+	), nil
 }
 
 // Close closes the iterator.

@@ -171,9 +171,16 @@ func commit_flatbuffer(vaddr hash.Hash, opts CommitOptions, heights []uint64, pa
 
 	pcaddroff := builder.CreateByteVector(parentsClosureAddr[:])
 
+	// Create strings for both old and new fields for backward compatibility
 	nameoff := builder.CreateString(opts.Meta.Name)
 	emailoff := builder.CreateString(opts.Meta.Email)
 	descoff := builder.CreateString(opts.Meta.Description)
+
+	// New author/committer fields
+	authorNameOff := builder.CreateString(opts.Meta.AuthorName)
+	authorEmailOff := builder.CreateString(opts.Meta.AuthorEmail)
+	committerNameOff := builder.CreateString(opts.Meta.CommitterName)
+	committerEmailOff := builder.CreateString(opts.Meta.CommitterEmail)
 
 	var sigoff flatbuffers.UOffsetT
 	if len(opts.Meta.Signature) != 0 {
@@ -190,6 +197,13 @@ func commit_flatbuffer(vaddr hash.Hash, opts CommitOptions, heights []uint64, pa
 	serial.CommitAddDescription(builder, descoff)
 	serial.CommitAddTimestampMillis(builder, opts.Meta.Timestamp)
 	serial.CommitAddUserTimestampMillis(builder, opts.Meta.UserTimestamp)
+	// Add new author/committer fields
+	serial.CommitAddAuthorName(builder, authorNameOff)
+	serial.CommitAddAuthorEmail(builder, authorEmailOff)
+	serial.CommitAddAuthorTimestampMillis(builder, opts.Meta.AuthorDate)
+	serial.CommitAddCommitterName(builder, committerNameOff)
+	serial.CommitAddCommitterEmail(builder, committerEmailOff)
+	serial.CommitAddCommitterTimestampMillis(builder, opts.Meta.CommitterDate)
 	serial.CommitAddSignature(builder, sigoff)
 
 	bytes := serial.FinishMessage(builder, serial.CommitEnd(builder), []byte(serial.CommitFileID))
@@ -584,12 +598,34 @@ func GetCommitMeta(ctx context.Context, cv types.Value) (*CommitMeta, error) {
 			return nil, err
 		}
 		ret := &CommitMeta{}
+		// Always populate deprecated fields for backward compatibility
 		ret.Name = string(cmsg.Name())
 		ret.Email = string(cmsg.Email())
 		ret.Description = string(cmsg.Description())
 		ret.Timestamp = cmsg.TimestampMillis()
 		ret.UserTimestamp = cmsg.UserTimestampMillis()
 		ret.Signature = string(cmsg.Signature())
+
+		// Check if new fields are present
+		// In newer commits, AuthorName will be set (even if empty string in old commits)
+		// We check CommitterName as that's only present in new format
+		if cmsg.CommitterName() != nil {
+			// New format with separate author/committer
+			ret.AuthorName = string(cmsg.AuthorName())
+			ret.AuthorEmail = string(cmsg.AuthorEmail())
+			ret.AuthorDate = cmsg.AuthorTimestampMillis()
+			ret.CommitterName = string(cmsg.CommitterName())
+			ret.CommitterEmail = string(cmsg.CommitterEmail())
+			ret.CommitterDate = cmsg.CommitterTimestampMillis()
+		} else {
+			// Old format - use deprecated fields
+			ret.AuthorName = ret.Name
+			ret.AuthorEmail = ret.Email
+			ret.AuthorDate = uint64(ret.UserTimestamp)
+			ret.CommitterName = ret.Name
+			ret.CommitterEmail = ret.Email
+			ret.CommitterDate = ret.Timestamp
+		}
 		return ret, nil
 	}
 	c, ok := cv.(types.Struct)

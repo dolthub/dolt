@@ -66,6 +66,8 @@ func CreateCommitArgParser(supportsBranchFlag bool) *argparser.ArgParser {
 	ap.SupportsString(DateParam, "", "date", "Specify the date used in the commit. If not specified the current system time is used.")
 	ap.SupportsFlag(ForceFlag, "f", "Ignores any foreign key warnings and proceeds with the commit.")
 	ap.SupportsString(AuthorParam, "", "author", "Specify an explicit author using the standard A U Thor {{.LessThan}}author@example.com{{.GreaterThan}} format.")
+	ap.SupportsString(CommitterParam, "", "committer", "Specify an explicit committer using the standard A U Thor {{.LessThan}}committer@example.com{{.GreaterThan}} format.")
+	ap.SupportsString(CommitterDateParam, "", "committer-date", "Specify the committer date used in the commit. If not specified the current system time is used.")
 	ap.SupportsFlag(AllFlag, "a", "Adds all existing, changed tables (but not new tables) in the working set to the staged set.")
 	ap.SupportsFlag(UpperCaseAllFlag, "A", "Adds all tables and databases (including new tables) in the working set to the staged set.")
 	ap.SupportsFlag(AmendFlag, "", "Amend previous commit")

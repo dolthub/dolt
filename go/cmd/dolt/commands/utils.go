@@ -643,9 +643,9 @@ func PrintCommitInfo(pager *outputpager.Pager, minParents int, showParents, show
 		}
 	}
 
-	pager.Writer.Write([]byte(fmt.Sprintf("\nAuthor: %s <%s>", comm.commitMeta.Name, comm.commitMeta.Email)))
+	pager.Writer.Write([]byte(fmt.Sprintf("\nAuthor: %s <%s>", comm.commitMeta.AuthorName, comm.commitMeta.AuthorEmail)))
 
-	timeStr := comm.commitMeta.FormatTS()
+	timeStr := comm.commitMeta.AuthorTime().In(datas.CommitLoc).Round(time.Second).Format(time.RubyDate)
 	pager.Writer.Write([]byte(fmt.Sprintf("\nDate:  %s", timeStr)))
 
 	formattedDesc := "\n\n\t" + strings.Replace(comm.commitMeta.Description, "\n", "\n\t", -1) + "\n\n"
@@ -740,11 +740,27 @@ func getCommitInfoWithOptions(queryist cli.Queryist, sqlCtx *sql.Context, ref st
 
 	row := rows[0]
 	commitHash := row[0].(string)
+	// dolt_log table function returns: commit_hash, committer, email, date, message, commit_order, [parents], [refs], [signature]
+	// For backward compatibility, committer and email are the author fields
 	name := row[1].(string)
 	email := row[2].(string)
-	timestamp, err := getTimestampColAsUint64(row[3])
-	if err != nil {
-		return nil, fmt.Errorf("error parsing timestamp '%s': %v", row[3], err)
+	// Parse timestamp - it could be a time.Time or a string
+	var timestamp uint64
+	switch v := row[3].(type) {
+	case time.Time:
+		timestamp = uint64(v.UnixMilli())
+	case string:
+		t, err := time.Parse(time.DateTime, v)
+		if err != nil {
+			// Try MySQL datetime format
+			t, err = time.Parse("2006-01-02 15:04:05", v)
+			if err != nil {
+				return nil, fmt.Errorf("error parsing timestamp '%s': %v", v, err)
+			}
+		}
+		timestamp = uint64(t.UnixMilli())
+	default:
+		return nil, fmt.Errorf("unexpected type for timestamp: %T", v)
 	}
 	message := row[4].(string)
 
@@ -788,6 +804,15 @@ func getCommitInfoWithOptions(queryist cli.Queryist, sqlCtx *sql.Context, ref st
 
 	ci := &CommitInfo{
 		commitMeta: &datas.CommitMeta{
+			// New fields - for now, author and committer are the same
+			// This is populated from dolt_log which doesn't have separate fields yet
+			AuthorName:     name,
+			AuthorEmail:    email,
+			AuthorDate:     timestamp,
+			CommitterName:  name,
+			CommitterEmail: email,
+			CommitterDate:  timestamp,
+			// Deprecated fields
 			Name:          name,
 			Email:         email,
 			Timestamp:     timestamp,

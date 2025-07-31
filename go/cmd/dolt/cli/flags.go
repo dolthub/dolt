@@ -23,6 +23,8 @@ const (
 	AmendFlag            = "amend"
 	AuthorParam          = "author"
 	ArchiveLevelParam    = "archive-level"
+	CommitterParam       = "committer"
+	CommitterDateParam   = "committer-date"
 	BranchParam          = "branch"
 	CachedFlag           = "cached"
 	CheckoutCreateBranch = "b"
