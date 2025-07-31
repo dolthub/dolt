@@ -1165,3 +1165,4 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "dolt_conflict_id" ]] || false
 }
+

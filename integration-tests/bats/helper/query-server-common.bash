@@ -18,7 +18,7 @@ wait_for_connection() {
   fi
 
   user=${SQL_USER:-root}
-  end_time=$((SECONDS+($timeout/1000)))
+  end_time=$((SECONDS+(timeout/1000)))
 
   while [ $SECONDS -lt $end_time ]; do
     run dolt -u $user -p "$DOLT_REMOTE_PASSWORD" --host localhost --no-tls --port $port --use-db "$DEFAULT_DB" sql -q "SELECT 1;"
