@@ -588,6 +588,9 @@ func (a *AutoIncrementTracker) incrementAutoIncVal(ctx *sql.Context, tbl string,
 
 	sqlType := aiCol.TypeInfo.ToSqlType()
 	nextVal := currentVal + 1
+	if nextVal < currentVal {
+		return false // overflow, fail-closed
+	}
 	_, inRange, err := sqlType.Convert(ctx, nextVal)
 	return err == nil && inRange == sql.InRange
 }
