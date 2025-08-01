@@ -16,6 +16,7 @@ package enginetest
 
 import (
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
@@ -1347,8 +1348,8 @@ var DoltScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{types.NewOkResult(2)}},
 			},
 			{
-				Query:    "SELECT * FROM dolt_docs;",
-				Expected: []sql.Row{{"name", "789"}},
+				Query:    "SELECT * FROM dolt_docs order by doc_name desc;",
+				Expected: []sql.Row{{"name", "789"}, {doltdb.AgentDoc, doltdb.DefaultAgentDocValue}},
 			},
 		},
 	},
