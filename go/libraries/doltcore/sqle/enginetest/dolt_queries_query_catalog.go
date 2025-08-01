@@ -115,4 +115,26 @@ var DoltQueryCatalogScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "can use 'as of' on dolt_query_catalog",
+		SetUpScript: []string{
+			"INSERT INTO dolt_query_catalog VALUES ('show', 1, 'show', 'show tables;', '')",
+			"CALL DOLT_COMMIT('-A','-m', 'first commit')",
+			"INSERT INTO dolt_query_catalog VALUES ('select', 2, 'select', 'select * from dolt_query_catalog;', '')",
+			"CALL DOLT_COMMIT('-A', '-m', 'second commit')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT * FROM dolt_query_catalog as of 'HEAD~2'",
+				Expected: []sql.Row{},
+			},
+			{
+				Query: "SELECT * FROM dolt_query_catalog as of 'HEAD'",
+				Expected: []sql.Row{
+					{"show", 1, "show", "show tables;", ""},
+					{"select", 2, "select", "select * from dolt_query_catalog;", ""},
+				},
+			},
+		},
+	},
 }

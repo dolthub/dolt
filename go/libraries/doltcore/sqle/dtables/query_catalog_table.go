@@ -30,6 +30,8 @@ var _ sql.UpdatableTable = (*QueryCatalogTable)(nil)
 var _ sql.DeletableTable = (*QueryCatalogTable)(nil)
 var _ sql.InsertableTable = (*QueryCatalogTable)(nil)
 var _ sql.ReplaceableTable = (*QueryCatalogTable)(nil)
+var _ VersionableTable = (*QueryCatalogTable)(nil)
+var _ sql.IndexAddressableTable = (*QueryCatalogTable)(nil)
 
 // QueryCatalogTable is the system table that stores saved queries.
 type QueryCatalogTable struct {
@@ -110,6 +112,28 @@ func (qt *QueryCatalogTable) Inserter(*sql.Context) sql.RowInserter {
 // and will end with a call to Close() to finalize the delete operation.
 func (qt *QueryCatalogTable) Deleter(*sql.Context) sql.RowDeleter {
 	return newQueryCatalogWriter(qt)
+}
+
+func (qt *QueryCatalogTable) LockedToRoot(ctx *sql.Context, root doltdb.RootValue) (sql.IndexAddressableTable, error) {
+	if qt.backingTable == nil {
+		return qt, nil
+	}
+	return qt.backingTable.LockedToRoot(ctx, root)
+}
+
+// IndexedAccess implements IndexAddressableTable, but IgnoreTables has no indexes.
+// Thus, this should never be called.
+func (qt *QueryCatalogTable) IndexedAccess(ctx *sql.Context, lookup sql.IndexLookup) sql.IndexedTable {
+	panic("Unreachable")
+}
+
+// GetIndexes implements IndexAddressableTable, but IgnoreTables has no indexes.
+func (qt *QueryCatalogTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
+	return nil, nil
+}
+
+func (qt *QueryCatalogTable) PreciseMatch() bool {
+	return true
 }
 
 var _ sql.RowReplacer = (*queryCatalogWriter)(nil)
