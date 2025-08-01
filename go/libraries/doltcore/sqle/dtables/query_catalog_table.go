@@ -121,13 +121,13 @@ func (qt *QueryCatalogTable) LockedToRoot(ctx *sql.Context, root doltdb.RootValu
 	return qt.backingTable.LockedToRoot(ctx, root)
 }
 
-// IndexedAccess implements IndexAddressableTable, but IgnoreTables has no indexes.
+// IndexedAccess implements IndexAddressableTable, but QueryCatalogTable has no indexes.
 // Thus, this should never be called.
 func (qt *QueryCatalogTable) IndexedAccess(ctx *sql.Context, lookup sql.IndexLookup) sql.IndexedTable {
 	panic("Unreachable")
 }
 
-// GetIndexes implements IndexAddressableTable, but IgnoreTables has no indexes.
+// GetIndexes implements IndexAddressableTable, but QueryCatalogTable has no indexes.
 func (qt *QueryCatalogTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 	return nil, nil
 }
