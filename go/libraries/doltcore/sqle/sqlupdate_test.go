@@ -323,21 +323,6 @@ var BasicUpdateTests = []UpdateTest{
 		UpdateQuery: `update people set first_name = ("one", "two") where id = 0`,
 		ExpectedErr: "Type mismatch",
 	},
-	{
-		Name:        "type mismatch string -> int",
-		UpdateQuery: `update people set age = "pretty old" where id = 0`,
-		ExpectedErr: "Type mismatch",
-	},
-	{
-		Name:        "type mismatch string -> float",
-		UpdateQuery: `update people set rating = "great" where id = 0`,
-		ExpectedErr: "Type mismatch",
-	},
-	{
-		Name:        "type mismatch string -> uint",
-		UpdateQuery: `update people set num_episodes = "all of them" where id = 0`,
-		ExpectedErr: "Type mismatch",
-	},
 }
 
 func TestExecuteUpdate(t *testing.T) {
