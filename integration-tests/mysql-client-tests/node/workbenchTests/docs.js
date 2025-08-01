@@ -5,10 +5,28 @@ const readmeText = `# README
 - Item 2
 `;
 
+const agentText = `# Agent Config Info`
+
 export const docsTests = [
   {
+    q: "INSERT INTO dolt_docs VALUES (:docName, :docText);",
+    p: {
+      docName: "AGENT.md",
+      docText: agentText,
+    },
+    res: {
+      fieldCount: 0,
+      affectedRows: 1,
+      insertId: 0,
+      info: "",
+      serverStatus: 2,
+      warningStatus: 0,
+      changedRows: 0,
+    },
+  },
+  {
     q: "select * from dolt_docs",
-    res: [],
+    res: [{doc_name: "AGENT.md", doc_text: agentText}],
   },
   {
     q: "REPLACE INTO dolt_docs VALUES (:docName, :docText);",
@@ -27,9 +45,12 @@ export const docsTests = [
     },
   },
   {
-    q: `select * from dolt_docs where doc_name=:docName`,
+    q: `select * from dolt_docs where doc_name=:docName order by doc_name desc`,
     p: { docName: "README.md" },
-    res: [{ doc_name: "README.md", doc_text: readmeText }],
+    res: [
+      { doc_name: "README.md", doc_text: readmeText },
+      { doc_name: "AGENT.md", doc_text: agentText },
+    ],
   },
   {
     q: "DELETE FROM dolt_docs WHERE doc_name=:docName",
