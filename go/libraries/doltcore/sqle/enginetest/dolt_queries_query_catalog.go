@@ -129,6 +129,12 @@ var DoltQueryCatalogScripts = []queries.ScriptTest{
 				Expected: []sql.Row{},
 			},
 			{
+				Query: "SELECT * FROM dolt_query_catalog as of 'HEAD~1'",
+				Expected: []sql.Row{
+					{"show", 1, "show", "show tables;", ""},
+				},
+			},
+			{
 				Query: "SELECT * FROM dolt_query_catalog as of 'HEAD'",
 				Expected: []sql.Row{
 					{"show", 1, "show", "show tables;", ""},
