@@ -174,7 +174,7 @@ const (
 	// AgentDoc is the key for accessing the agent documentation within the docs table
 	AgentDoc = "AGENT.md"
 
-	DefaultAgentDocValue = `This directory contains a dolt database.
+	DefaultAgentDocValue = `This directory contains a Dolt database.
 
 You can access the dolt command line by typing dolt.
 dolt is like git for sql databases so all git commands work the same in dolt.
