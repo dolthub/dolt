@@ -125,9 +125,10 @@ func queryAndPrint(sqlCtx *sql.Context, queryist cli.Queryist, config *dolt_ci.W
 
 			// We break up the query running and assertions into two steps.
 			// If either fails, we'll set error and let the user know that the step failed, then give an error message
-			rows, err := runCIQuery(queryist, sqlCtx, step, savedQueries)
+			query := savedQueries[step.SavedQueryName.Value]
+			rows, err := runCIQuery(queryist, sqlCtx, step, query)
 			if err == nil {
-				err = assertQueries(rows, step.ExpectedRows.Value, step.ExpectedColumns.Value)
+				err = assertQueries(rows, step.ExpectedRows.Value, step.ExpectedColumns.Value, query)
 			}
 
 			if err != nil {
@@ -140,15 +141,18 @@ func queryAndPrint(sqlCtx *sql.Context, queryist cli.Queryist, config *dolt_ci.W
 	}
 }
 
-func runCIQuery(queryist cli.Queryist, sqlCtx *sql.Context, step dolt_ci.Step, savedQueries map[string]string) ([]sql.Row, error) {
-	query := savedQueries[step.SavedQueryName.Value]
+func runCIQuery(queryist cli.Queryist, sqlCtx *sql.Context, step dolt_ci.Step, query string) ([]sql.Row, error) {
 	if query == "" {
 		return nil, fmt.Errorf("Could not find saved query: %s", step.SavedQueryName.Value)
 	}
 
 	rows, err := commands.GetRowsForSql(queryist, sqlCtx, query)
 	if err != nil {
-		return nil, fmt.Errorf("Query error: %s", err.Error())
+		statementErr := fmt.Sprintf("Ran query: %s", query)
+		queryErr := fmt.Sprintf("Query error: %s", err.Error())
+		err = errors.New(strings.Join([]string{statementErr, queryErr}, "\n"))
+
+		return nil, err
 	}
 
 	return rows, nil
@@ -156,7 +160,7 @@ func runCIQuery(queryist cli.Queryist, sqlCtx *sql.Context, step dolt_ci.Step, s
 
 // assertQueries takes in the result of a saved query execution, and the unparsed assertions,
 // then returns if the assertions failed
-func assertQueries(rows []sql.Row, expectedRowsAndComparison string, expectedColumnsAndComparison string) error {
+func assertQueries(rows []sql.Row, expectedRowsAndComparison string, expectedColumnsAndComparison string, query string) error {
 	var colCount int64
 	var errs []string
 	rowCount := int64(len(rows))
@@ -182,6 +186,8 @@ func assertQueries(rows []sql.Row, expectedRowsAndComparison string, expectedCol
 	}
 
 	if len(errs) > 0 {
+		statementErr := fmt.Sprintf("Ran query: %s", query)
+		errs := append([]string{statementErr}, errs...)
 		return errors.New(strings.Join(errs, "\n"))
 	}
 	return nil

@@ -557,8 +557,10 @@ EOF
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Running workflow: workflow" ]] || false
     [[ "$output" =~ "Step: expect rows - FAIL" ]] || false
+    [[ "$output" =~ "Ran query: select * from dolt_commits;" ]] || false
     [[ "$output" =~ "Assertion failed: expected row count 2, got 3" ]] || false
     [[ "$output" =~ "Step: expect columns - FAIL" ]] || false
+    [[ "$output" =~ "Ran query: select * from dolt_commits;" ]] || false
     [[ "$output" =~ "Assertion failed: expected column count less than 5, got 5" ]] || false
 }
 
@@ -582,6 +584,7 @@ EOF
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Running workflow: workflow" ]] || false
     [[ "$output" =~ "Step: should fail, bad table name - FAIL" ]] || false
+    [[ "$output" =~ "Ran query: select * from invalid" ]] || false
     [[ "$output" =~ "Query error" ]] || false
     [[ "$output" =~ "table not found: invalid" ]] || false
 }
