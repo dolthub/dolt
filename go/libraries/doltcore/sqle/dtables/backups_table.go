@@ -63,7 +63,7 @@ func (bt BackupsTable) Partitions(context *sql.Context) (sql.PartitionIter, erro
 }
 
 func (bt BackupsTable) PartitionRows(context *sql.Context, _ sql.Partition) (sql.RowIter, error) {
-	return newBackupsIter(context)
+	return newBackupsIter(context, bt.db.Name())
 }
 
 type backupsItr struct {
@@ -85,8 +85,7 @@ func (bi *backupsItr) Next(ctx *sql.Context) (sql.Row, error) {
 
 func (bi *backupsItr) Close(_ *sql.Context) error { return nil }
 
-func newBackupsIter(ctx *sql.Context) (*backupsItr, error) {
-	dbName := ctx.GetCurrentDatabase()
+func newBackupsIter(ctx *sql.Context, dbName string) (*backupsItr, error) {
 	if len(dbName) == 0 {
 		return nil, fmt.Errorf("Empty database name.")
 	}

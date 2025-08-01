@@ -39,13 +39,14 @@ var _ sql.StatisticsTable = (*RemotesTable)(nil)
 
 // RemotesTable is a sql.Table implementation that implements a system table which shows the dolt remotes
 type RemotesTable struct {
+	dbName    string
 	ddb       *doltdb.DoltDB
 	tableName string
 }
 
 // NewRemotesTable creates a RemotesTable
-func NewRemotesTable(_ *sql.Context, ddb *doltdb.DoltDB, tableName string) sql.Table {
-	return &RemotesTable{ddb, tableName}
+func NewRemotesTable(_ *sql.Context, dbName string, ddb *doltdb.DoltDB, tableName string) sql.Table {
+	return &RemotesTable{dbName: dbName, ddb: ddb, tableName: tableName}
 }
 
 func (rt *RemotesTable) DataLength(ctx *sql.Context) (uint64, error) {
@@ -93,7 +94,7 @@ func (rt *RemotesTable) Partitions(*sql.Context) (sql.PartitionIter, error) {
 
 // PartitionRows is a sql.Table interface function that gets a row iterator for a partition
 func (rt *RemotesTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
-	return NewRemoteItr(ctx, rt.ddb)
+	return NewRemoteItr(ctx, rt.dbName, rt.ddb)
 }
 
 // RemoteItr is a sql.RowItr implementation which iterates over each commit as if it's a row in the table.
@@ -103,9 +104,7 @@ type RemoteItr struct {
 }
 
 // NewRemoteItr creates a RemoteItr from the current environment.
-func NewRemoteItr(ctx *sql.Context, ddb *doltdb.DoltDB) (*RemoteItr, error) {
-	dbName := ctx.GetCurrentDatabase()
-
+func NewRemoteItr(ctx *sql.Context, dbName string, ddb *doltdb.DoltDB) (*RemoteItr, error) {
 	if len(dbName) == 0 {
 		return nil, fmt.Errorf("Empty database name.")
 	}
