@@ -16,7 +16,6 @@ package enginetest
 
 import (
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
@@ -26,6 +25,7 @@ import (
 	"github.com/dolthub/vitess/go/vt/sqlparser"
 	"github.com/google/uuid"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtablefunctions"
 )
 
