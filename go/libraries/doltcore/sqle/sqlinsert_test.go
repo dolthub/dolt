@@ -378,9 +378,22 @@ var systemTableInsertTests = []InsertTest{
 		Name:            "insert into dolt_docs",
 		AdditionalSetup: CreateTableFn("dolt_docs", doltdb.DocsSchema, ""),
 		InsertQuery:     "insert into dolt_docs (doc_name, doc_text) values ('README.md', 'Some text')",
+		SelectQuery:     "select * from dolt_docs order by doc_name DESC",
+		ExpectedRows: []sql.Row{
+			{"README.md", "Some text"},
+			{doltdb.AgentDoc, doltdb.DefaultAgentDocValue},
+		},
+		ExpectedSchema: CompressSchema(doltdb.DocsSchema),
+	},
+	{
+		Name:            "insert AGENT.md into dolt_docs",
+		AdditionalSetup: CreateTableFn("dolt_docs", doltdb.DocsSchema, ""),
+		InsertQuery:     "insert into dolt_docs (doc_name, doc_text) values ('AGENT.md', 'Some text')",
 		SelectQuery:     "select * from dolt_docs",
-		ExpectedRows:    []sql.Row{{"README.md", "Some text"}},
-		ExpectedSchema:  CompressSchema(doltdb.DocsSchema),
+		ExpectedRows: []sql.Row{
+			{"AGENT.md", "Some text"},
+		},
+		ExpectedSchema: CompressSchema(doltdb.DocsSchema),
 	},
 	{
 		Name:            "insert into dolt_schemas",
