@@ -45,11 +45,10 @@ export const docsTests = [
     },
   },
   {
-    q: `select * from dolt_docs where doc_name=:docName order by doc_name desc`,
+    q: `select * from dolt_docs where doc_name=:docName`,
     p: { docName: "README.md" },
     res: [
-      { doc_name: "README.md", doc_text: readmeText },
-      { doc_name: "AGENT.md", doc_text: agentText },
+      { doc_name: "README.md", doc_text: readmeText }
     ],
   },
   {
