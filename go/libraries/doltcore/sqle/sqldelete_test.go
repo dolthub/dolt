@@ -192,7 +192,7 @@ var systemTableDeleteTests = []DeleteTest{
 			"INSERT INTO dolt_docs VALUES ('LICENSE.md','A license')"),
 		DeleteQuery:    "delete from dolt_docs where doc_name = 'LICENSE.md'",
 		SelectQuery:    "select * from dolt_docs",
-		ExpectedRows:   []sql.Row{},
+		ExpectedRows:   []sql.Row{{doltdb.AgentDoc, doltdb.DefaultAgentDocValue}},
 		ExpectedSchema: CompressSchema(doltdb.DocsSchema),
 	},
 	{

@@ -25,6 +25,7 @@ import (
 	"github.com/dolthub/vitess/go/vt/sqlparser"
 	"github.com/google/uuid"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtablefunctions"
 )
 
@@ -1347,8 +1348,8 @@ var DoltScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{types.NewOkResult(2)}},
 			},
 			{
-				Query:    "SELECT * FROM dolt_docs;",
-				Expected: []sql.Row{{"name", "789"}},
+				Query:    "SELECT * FROM dolt_docs order by doc_name desc;",
+				Expected: []sql.Row{{"name", "789"}, {doltdb.AgentDoc, doltdb.DefaultAgentDocValue}},
 			},
 		},
 	},

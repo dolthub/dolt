@@ -989,8 +989,11 @@ var AsOfTests = []SelectTest{
 		Name: "select from dolt_docs as of main",
 		AdditionalSetup: CreateTableFn("dolt_docs", doltdb.DocsSchema,
 			"INSERT INTO dolt_docs VALUES ('LICENSE.md','A license')"),
-		Query:          "select * from dolt_docs as of 'main'",
-		ExpectedRows:   []sql.Row{{"LICENSE.md", "A license"}},
+		Query: "select * from dolt_docs as of 'main' order by doc_name desc",
+		ExpectedRows: []sql.Row{
+			{"LICENSE.md", "A license"},
+			{doltdb.AgentDoc, doltdb.DefaultAgentDocValue},
+		},
 		ExpectedSchema: CompressSchema(doltdb.DocsSchema),
 	},
 }
@@ -1294,8 +1297,11 @@ var systemTableSelectTests = []SelectTest{
 		Name: "select from dolt_docs",
 		AdditionalSetup: CreateTableFn("dolt_docs", doltdb.DocsSchema,
 			"INSERT INTO dolt_docs VALUES ('LICENSE.md','A license')"),
-		Query:          "select * from dolt_docs",
-		ExpectedRows:   []sql.Row{{"LICENSE.md", "A license"}},
+		Query: "select * from dolt_docs order by doc_name desc",
+		ExpectedRows: []sql.Row{
+			{"LICENSE.md", "A license"},
+			{doltdb.AgentDoc, doltdb.DefaultAgentDocValue},
+		},
 		ExpectedSchema: CompressSchema(doltdb.DocsSchema),
 	},
 	{

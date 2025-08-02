@@ -253,9 +253,21 @@ var systemTableReplaceTests = []ReplaceTest{
 		Name: "replace into dolt_docs",
 		AdditionalSetup: CreateTableFn("dolt_docs", doltdb.DocsSchema,
 			"INSERT INTO dolt_docs VALUES ('LICENSE.md','A license')"),
-		ReplaceQuery:   "replace into dolt_docs (doc_name, doc_text) values ('LICENSE.md', 'Some text')",
-		SelectQuery:    "select * from dolt_docs",
-		ExpectedRows:   []sql.Row{{"LICENSE.md", "Some text"}},
+		ReplaceQuery: "replace into dolt_docs (doc_name, doc_text) values ('LICENSE.md', 'Some text')",
+		SelectQuery:  "select * from dolt_docs order by doc_name desc",
+		ExpectedRows: []sql.Row{
+			{"LICENSE.md", "Some text"},
+			{doltdb.AgentDoc, doltdb.DefaultAgentDocValue},
+		},
+		ExpectedSchema: CompressSchema(doltdb.DocsSchema),
+	},
+	{
+		Name:         "replace AGENT.md into dolt_docs",
+		ReplaceQuery: "replace into dolt_docs (doc_name, doc_text) values ('AGENT.md', 'updated agent config info')",
+		SelectQuery:  "select * from dolt_docs",
+		ExpectedRows: []sql.Row{
+			{doltdb.AgentDoc, "updated agent config info"},
+		},
 		ExpectedSchema: CompressSchema(doltdb.DocsSchema),
 	},
 	{

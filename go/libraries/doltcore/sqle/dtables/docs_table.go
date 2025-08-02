@@ -15,6 +15,8 @@
 package dtables
 
 import (
+	"io"
+
 	"github.com/dolthub/go-mysql-server/sql"
 	sqlTypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/sqltypes"
@@ -87,13 +89,49 @@ func (dt *DocsTable) Partitions(context *sql.Context) (sql.PartitionIter, error)
 	return dt.backingTable.Partitions(context)
 }
 
-func (dt *DocsTable) PartitionRows(context *sql.Context, partition sql.Partition) (sql.RowIter, error) {
+func (dt *DocsTable) PartitionRows(ctx *sql.Context, partition sql.Partition) (sql.RowIter, error) {
+	var rowIter sql.RowIter
 	if dt.backingTable == nil {
-		// no backing table; return an empty iter.
-		return sql.RowsToRowIter(), nil
+		// no backing table; empty iter.
+		rowIter = sql.RowsToRowIter()
+	} else {
+		var err error
+		rowIter, err = dt.backingTable.PartitionRows(ctx, partition)
+
+		if err != nil && err != io.EOF {
+			return nil, err
+		}
 	}
 
-	return dt.backingTable.PartitionRows(context, partition)
+	rows, err := sql.RowIterToRows(ctx, rowIter)
+
+	if err != nil {
+		return nil, err
+	}
+
+	found := false
+	for i := range rows {
+		name, ok := rows[i][0].(string)
+		if !ok {
+			continue
+		}
+
+		if name == doltdb.AgentDoc {
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		rows = append(rows, []interface{}{
+			doltdb.AgentDoc,
+			doltdb.DefaultAgentDocValue,
+		})
+	}
+
+	rowIter = sql.RowsToRowIter(rows...)
+
+	return rowIter, nil
 }
 
 // Replacer returns a RowReplacer for this table. The RowReplacer will have Insert and optionally Delete called once

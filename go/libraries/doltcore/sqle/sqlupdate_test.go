@@ -361,9 +361,12 @@ var systemTableUpdateTests = []UpdateTest{
 		Name: "update dolt_docs",
 		AdditionalSetup: CreateTableFn("dolt_docs", doltdb.DocsSchema,
 			"INSERT INTO dolt_docs VALUES ('LICENSE.md','A license')"),
-		UpdateQuery:    "update dolt_docs set doc_text = 'Some text';",
-		SelectQuery:    "select * from dolt_docs",
-		ExpectedRows:   []sql.Row{{"LICENSE.md", "Some text"}},
+		UpdateQuery: "update dolt_docs set doc_text = 'Some text';",
+		SelectQuery: "select * from dolt_docs ORDER by doc_name DESC",
+		ExpectedRows: []sql.Row{
+			{"LICENSE.md", "Some text"},
+			{"AGENT.md", "Some text"},
+		},
 		ExpectedSchema: CompressSchema(doltdb.DocsSchema),
 	},
 }

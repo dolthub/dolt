@@ -19,6 +19,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
+	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -89,6 +91,12 @@ func (cmd PrintCmd) Exec(ctx context.Context, commandStr string, args []string, 
 }
 
 func writeDoltDoc(ctx context.Context, dEnv *env.DoltEnv, docName string) error {
+	// if we can't upload a doc with a different name, we shouldn't be able to try to read it either
+	valid := []string{doltdb.ReadmeDoc, doltdb.LicenseDoc, doltdb.AgentDoc}
+	if !slices.Contains(valid, docName) {
+		return fmt.Errorf("invalid doc name %s, valid names are: %s", docName, strings.Join(valid, ", "))
+	}
+
 	eng, dbName, err := engine.NewSqlEngineForEnv(ctx, dEnv)
 	if err != nil {
 		return err

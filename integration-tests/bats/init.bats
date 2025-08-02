@@ -290,3 +290,69 @@ assert_valid_repository () {
   [ "$status" -eq 0 ]
   [[ "$output" =~ "Initialize data repository" ]] || false
 }
+
+@test "init: creates AGENT.md document automatically" {
+  set_dolt_user "baz", "baz@bash.com"
+  
+  run dolt init
+  [ "$status" -eq 0 ]
+  
+  # Check that AGENT.md document was created
+  run dolt docs print AGENT.md
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "This directory contains a Dolt database" ]] || false
+
+  # Verify it's in the docs table
+  run dolt sql -q "SELECT doc_name FROM dolt_docs WHERE doc_name = 'AGENT.md'" -r csv
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "AGENT.md" ]] || false
+  
+  # Verify it's version controlled (should be in initial commit)
+  run dolt sql -q "SELECT COUNT(*) FROM dolt_docs WHERE doc_name = 'AGENT.md'" -r csv
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "1" ]] || false
+  
+  # Most importantly: verify there's no diff after init (clean working tree)
+  run dolt diff
+  [ "$status" -eq 0 ]
+  [ "$output" = "" ] || false
+  
+  # Also verify status shows clean working tree
+  run dolt status
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+  
+  assert_valid_repository
+}
+
+@test "init: --fun flag creates AGENT.md document with fun hash" {
+  set_dolt_user "baz", "baz@bash.com"
+  
+  run dolt init --fun
+  [ "$status" -eq 0 ]
+  
+  # Check that --fun flag produces the expected hash pattern
+  run dolt log
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "commit dolt" ]] || [[ "$output" =~ "commit do1t" ]] || [[ "$output" =~ "commit d0lt" ]] || [[ "$output" =~ "commit d01t" ]] || false
+  
+  # Check that AGENT.md document was still created
+  run dolt docs print AGENT.md
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "This directory contains a Dolt database" ]] || false
+
+  # Verify it's in the docs table
+  run dolt sql -q "SELECT doc_name FROM dolt_docs WHERE doc_name = 'AGENT.md'" -r csv
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "AGENT.md" ]] || false
+  
+  # Verify there's no diff after init --fun (clean working tree)
+  run dolt diff
+  [ "$status" -eq 0 ]
+  [ "$output" = "" ] || false
+  
+  # Also verify status shows clean working tree
+  run dolt status
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+}
