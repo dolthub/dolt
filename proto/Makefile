@@ -12,11 +12,6 @@ PROTOC_FLAGS = --plugin=protoc-gen-go=$(PROTOC_GEN_GO) --plugin=protoc-gen-go-gr
 
 pbgo_out := ../go/gen/proto
 
-EVENTSAPI_protos := \
-  dolt/services/eventsapi/v1alpha1/client_event.proto \
-  dolt/services/eventsapi/v1alpha1/event_constants.proto
-EVENTSAPI_pbgo_pkg_path := dolt/services/eventsapi/v1alpha1
-
 REMOTESAPI_protos := \
   dolt/services/remotesapi/v1alpha1/chunkstore.proto \
   dolt/services/remotesapi/v1alpha1/credentials.proto
@@ -32,8 +27,7 @@ nonservice_protos := \
 PBGO_pkgs := \
   CLIENTEVENTS \
   REMOTESAPI \
-  REPLICATIONAPI \
-  EVENTSAPI
+  REPLICATIONAPI
 
 all:
 
@@ -74,7 +68,7 @@ $(call PROTOC_template,\
   $(1),\
   $(addprefix $(3)/$(2)/,$(notdir $(call PBGO_output,$(1)))),\
 	--go_out=paths=source_relative:$(3) \
-        --go-grpc_out=$(3))
+        --go-grpc_out=paths=source_relative:$(3))
 endef
 
 $(foreach p,$(PBGO_pkgs),\

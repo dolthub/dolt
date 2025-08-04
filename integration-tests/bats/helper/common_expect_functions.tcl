@@ -60,3 +60,21 @@ proc expect_with_defaults_2 {patternA patternB action} {
     }
 }
 
+proc expect_without_pattern {bad_pattern action} {
+    expect {
+        -re $bad_pattern {
+            puts "ERROR: Found unexpected pattern: $bad_pattern"
+            exit 1
+        }
+        timeout {
+            eval $action
+        }
+        eof {
+            eval $action
+        }
+        failed {
+            puts "<<Failed>>"
+            exit 1
+        }
+    }
+}

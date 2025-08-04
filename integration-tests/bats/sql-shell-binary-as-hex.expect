@@ -1,0 +1,102 @@
+#!/usr/bin/expect
+# dolthub/dolt#9554
+# https://github.com/dolthub/dolt/issues/9554
+# Test script for binary-a-hex flag behavior in dolt sql.
+#
+# Usage:
+#   expect binary-hex-test.expect [flags...]
+#
+# Tracked flags:
+#   --binary-as-hex:        Use binary as hex encoding for VARBINARY and BINARY types.
+#   --skip-binary-as-hex:   Skip binary as hex encoding for VARBINARY and BINARY types.
+
+source "$env(BATS_CWD)/helper/common_expect_functions.tcl"
+
+set timeout 10
+set env(NO_COLOR) 1
+
+set has_binary_hex 0
+set has_skip_hex 0
+
+foreach arg $argv {
+    if {$arg eq "--binary-as-hex"} {set has_binary_hex 1}
+    if {$arg eq "--skip-binary-as-hex"} {set has_skip_hex 1}
+}
+
+# In the interactive shell, the default behavior is to use binary as hex output.
+if {!$has_skip_hex} {
+    set has_binary_hex 1
+}
+
+proc run_query {query expect_proc} {
+    global has_skip_hex has_binary_hex argv
+    expect_with_defaults {>} "send {$query\r}"
+    eval $expect_proc
+}
+
+# Handles the following cases:
+# 1. check dolt's ability to detect conflicting flags.
+# 2. spawns interactive shell
+spawn dolt sql {*}$argv
+
+if {$has_binary_hex && $has_skip_hex} {
+    expect {
+        "cannot use both --binary-as-hex and --skip-binary-as-hex" {
+            expect eof
+            exit 3 # differentiate exit err from common_expect_functions.tcl
+        }
+        eof {
+            puts "Process ended without error message."
+            exit 1
+        }
+    }
+}
+
+run_query "DROP TABLE IF EXISTS test_vbin;" {}
+run_query "CREATE TABLE test_vbin (id INT PRIMARY KEY, v VARBINARY(10));" {}
+run_query "INSERT INTO test_vbin VALUES (1, 'abc');" {}
+run_query "SELECT *, LENGTH(v) FROM test_vbin;" {
+    if {$has_skip_hex} {
+        expect_without_pattern {0x[0-9A-F]+} {}
+    } else {
+        expect_with_defaults_2 {0x616263} {\| 3 } {}
+    }
+}
+
+run_query "INSERT INTO test_vbin VALUES (2, UNHEX('0A000000001000112233'));" {}
+run_query "INSERT INTO test_vbin VALUES (3, UNHEX(''));" {}
+run_query "SELECT *, LENGTH(v) FROM test_vbin;" {
+    if {$has_skip_hex} {
+        expect_without_pattern {0x[0-9A-F]+} {}
+    } else {
+        expect_with_defaults_2 {0x616263} {\| 3 } {}
+        expect_with_defaults_2 {0x0A000000001000112233} {\| 10 } {}
+        expect_with_defaults_2 {0x} {\| 0 } {}
+    }
+}
+
+run_query "DROP TABLE IF EXISTS test_bin;" {}
+run_query "CREATE TABLE test_bin (id INT PRIMARY KEY, b BINARY(10));" {}
+run_query "INSERT INTO test_bin VALUES (1, 'abc');" {}
+run_query "SELECT *, LENGTH(b) FROM test_bin;" {
+    if {$has_skip_hex} {
+        expect_without_pattern {0x[0-9A-F]+} {}
+    } else {
+        expect_with_defaults_2 {0x61626300000000000000} {\| 10 } {}
+    }
+}
+
+run_query "INSERT INTO test_bin VALUES (2, UNHEX('0A000000001000112233'));" {}
+run_query "INSERT INTO test_bin VALUES (3, UNHEX(''));" {}
+run_query "SELECT *, LENGTH(b) FROM test_bin;" {
+    if {$has_skip_hex} {
+        expect_without_pattern {0x[0-9A-F]+} {}
+    } else {
+        expect_with_defaults_2 {0x61626300000000000000} {\| 10 } {}
+        expect_with_defaults_2 {0x0A000000001000112233} {\| 10 } {}
+        expect_with_defaults_2 {0x00000000000000000000} {\| 10 } {}
+    }
+}
+
+run_query "exit;" { expect eof }
+exit 0

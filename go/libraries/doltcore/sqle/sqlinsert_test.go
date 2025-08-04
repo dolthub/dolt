@@ -25,7 +25,6 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -382,18 +381,6 @@ var systemTableInsertTests = []InsertTest{
 		SelectQuery:     "select * from dolt_docs",
 		ExpectedRows:    []sql.Row{{"README.md", "Some text"}},
 		ExpectedSchema:  CompressSchema(doltdb.DocsSchema),
-	},
-	{
-		Name: "insert into dolt_query_catalog",
-		AdditionalSetup: CreateTableFn(doltdb.DoltQueryCatalogTableName, dtables.DoltQueryCatalogSchema,
-			"INSERT INTO dolt_query_catalog VALUES ('existingEntry', 2, 'example', 'select 2+2 from dual', 'description')"),
-		InsertQuery: "insert into dolt_query_catalog (id, display_order, name, query, description) values ('abc123', 1, 'example', 'select 1+1 from dual', 'description')",
-		SelectQuery: "select * from dolt_query_catalog ORDER BY id",
-		ExpectedRows: ToSqlRows(CompressSchema(dtables.DoltQueryCatalogSchema),
-			NewRow(types.String("abc123"), types.Uint(1), types.String("example"), types.String("select 1+1 from dual"), types.String("description")),
-			NewRow(types.String("existingEntry"), types.Uint(2), types.String("example"), types.String("select 2+2 from dual"), types.String("description")),
-		),
-		ExpectedSchema: CompressSchema(dtables.DoltQueryCatalogSchema),
 	},
 	{
 		Name:            "insert into dolt_schemas",

@@ -909,3 +909,119 @@ SQL
     [[ "$main_hash" = "$ai0_hash" ]] || false
     [[ "$main_hash" = "$ai1_hash" ]] || false
 }
+
+@test "auto_increment: overflow protection for TINYINT" {
+    # Test for Issue #9530: auto increment overflow behavior
+    dolt sql <<SQL
+CREATE TABLE tinyint_overflow (
+    id TINYINT AUTO_INCREMENT PRIMARY KEY,
+    data VARCHAR(50)
+);
+SQL
+
+    # Insert value at max TINYINT (127)
+    run dolt sql -q "INSERT INTO tinyint_overflow (id, data) VALUES (127, 'max_value');"
+    [ "$status" -eq 0 ]
+    
+    # Verify SHOW CREATE TABLE shows correct AUTO_INCREMENT value (should be 127, not 128)
+    run dolt sql -q "SHOW CREATE TABLE tinyint_overflow;" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "AUTO_INCREMENT=127" ]] || false
+    
+    # Try to insert without specifying id - should fail with duplicate key error (not overflow error)
+    run dolt sql -q "INSERT INTO tinyint_overflow (data) VALUES ('should_fail');"
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "duplicate primary key given: [127]" ]] || false
+}
+
+@test "auto_increment: overflow protection for SMALLINT" {
+    dolt sql <<SQL
+CREATE TABLE smallint_overflow (
+    id SMALLINT AUTO_INCREMENT PRIMARY KEY,
+    data VARCHAR(50)
+);
+SQL
+
+    # Insert value at max SMALLINT (32767)
+    run dolt sql -q "INSERT INTO smallint_overflow (id, data) VALUES (32767, 'max_value');"
+    [ "$status" -eq 0 ]
+    
+    # Verify SHOW CREATE TABLE shows correct AUTO_INCREMENT value
+    run dolt sql -q "SHOW CREATE TABLE smallint_overflow;" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "AUTO_INCREMENT=32767" ]] || false
+    
+    # Try to insert without specifying id - should fail with duplicate key error
+    run dolt sql -q "INSERT INTO smallint_overflow (data) VALUES ('should_fail');"
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "duplicate primary key given: [32767]" ]] || false
+}
+
+@test "auto_increment: overflow protection for MEDIUMINT" {
+    dolt sql <<SQL
+CREATE TABLE mediumint_overflow (
+    id MEDIUMINT AUTO_INCREMENT PRIMARY KEY,
+    data VARCHAR(50)
+);
+SQL
+
+    # Insert value at max MEDIUMINT (8388607)
+    run dolt sql -q "INSERT INTO mediumint_overflow (id, data) VALUES (8388607, 'max_value');"
+    [ "$status" -eq 0 ]
+    
+    # Verify SHOW CREATE TABLE shows correct AUTO_INCREMENT value
+    run dolt sql -q "SHOW CREATE TABLE mediumint_overflow;" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "AUTO_INCREMENT=8388607" ]] || false
+    
+    # Try to insert without specifying id - should fail with duplicate key error
+    run dolt sql -q "INSERT INTO mediumint_overflow (data) VALUES ('should_fail');"
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "duplicate primary key given: [8388607]" ]] || false
+}
+
+@test "auto_increment: overflow protection for INT" {
+    dolt sql <<SQL
+CREATE TABLE int_overflow (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    data VARCHAR(50)
+);
+SQL
+
+    # Insert value at max INT (2147483647)
+    run dolt sql -q "INSERT INTO int_overflow (id, data) VALUES (2147483647, 'max_value');"
+    [ "$status" -eq 0 ]
+    
+    # Verify SHOW CREATE TABLE shows correct AUTO_INCREMENT value
+    run dolt sql -q "SHOW CREATE TABLE int_overflow;" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "AUTO_INCREMENT=2147483647" ]] || false
+    
+    # Try to insert without specifying id - should fail with duplicate key error
+    run dolt sql -q "INSERT INTO int_overflow (data) VALUES ('should_fail');"
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "duplicate primary key given: [2147483647]" ]] || false
+}
+
+@test "auto_increment: overflow protection for BIGINT" {
+    dolt sql <<SQL
+CREATE TABLE bigint_overflow (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    data VARCHAR(50)
+);
+SQL
+
+    # Insert value at max BIGINT (9223372036854775807)
+    run dolt sql -q "INSERT INTO bigint_overflow (id, data) VALUES (9223372036854775807, 'max_value');"
+    [ "$status" -eq 0 ]
+    
+    # Verify SHOW CREATE TABLE shows correct AUTO_INCREMENT value
+    run dolt sql -q "SHOW CREATE TABLE bigint_overflow;" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "AUTO_INCREMENT=9223372036854775807" ]] || false
+    
+    # Try to insert without specifying id - should fail with duplicate key error
+    run dolt sql -q "INSERT INTO bigint_overflow (data) VALUES ('should_fail');"
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "duplicate primary key given: [9223372036854775807]" ]] || false
+}

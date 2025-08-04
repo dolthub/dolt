@@ -39,9 +39,9 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
-	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+	eventsapi "github.com/dolthub/eventsapi_schema/dolt/services/eventsapi/v1alpha1"
 )
 
 type DebugCmd struct {
@@ -436,5 +436,5 @@ func execDebugMode(ctx *sql.Context, qryist cli.Queryist, queryFile *os.File, co
 	}()
 	input := bufio.NewReader(transform.NewReader(queryFile, textunicode.BOMOverride(transform.Nop)))
 
-	return execBatchMode(ctx, qryist, input, continueOnErr, format)
+	return execBatchMode(ctx, qryist, input, continueOnErr, format, false)
 }

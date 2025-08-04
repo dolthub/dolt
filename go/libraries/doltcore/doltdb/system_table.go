@@ -31,15 +31,6 @@ type ctxKey int
 type ctxValue int
 
 const (
-	doltCICtxKey ctxKey = iota
-)
-
-const (
-	doltCICtxValueUnspecified ctxValue = iota
-	doltCICtxValueAllow
-)
-
-const (
 	// DoltNamespace is the name prefix of dolt system tables. We reserve all tables that begin with dolt_ for system use.
 	DoltNamespace   = "dolt"
 	DoltCINamespace = DoltNamespace + "_ci"
@@ -130,6 +121,7 @@ var getWriteableSystemTables = func() []string {
 		ProceduresTableName,
 		IgnoreTableName,
 		GetRebaseTableName(),
+		GetQueryCatalogTableName(),
 
 		// TODO: find way to make these writable by the dolt process
 		// TODO: but not by user
@@ -373,6 +365,8 @@ var GetBackupsTableName = func() string {
 var GetStashesTableName = func() string {
 	return StashesTableName
 }
+
+var GetQueryCatalogTableName = func() string { return DoltQueryCatalogTableName }
 
 const (
 	// LogTableName is the log system table name

@@ -189,80 +189,14 @@ func (iw *ignoreWriter) Delete(ctx *sql.Context, r sql.Row) error {
 // StatementBegin is called before the first operation of a statement. Integrators should mark the state of the data
 // in some way that it may be returned to in the case of an error.
 func (iw *ignoreWriter) StatementBegin(ctx *sql.Context) {
-	dbName := ctx.GetCurrentDatabase()
-	dSess := dsess.DSessFromSess(ctx.Session)
-
-	// TODO: this needs to use a revision qualified name
-	roots, _ := dSess.GetRoots(ctx, dbName)
-	dbState, ok, err := dSess.LookupDbState(ctx, dbName)
+	name := doltdb.TableName{Name: doltdb.IgnoreTableName, Schema: iw.it.schemaName}
+	prevHash, tableWriter, err := createWriteableSystemTable(ctx, name, iw.it.Schema())
 	if err != nil {
 		iw.errDuringStatementBegin = err
 		return
 	}
-	if !ok {
-		iw.errDuringStatementBegin = fmt.Errorf("no root value found in session")
-		return
-	}
-
-	prevHash, err := roots.Working.HashOf()
-	if err != nil {
-		iw.errDuringStatementBegin = err
-		return
-	}
-
-	iw.prevHash = &prevHash
-
-	tname := doltdb.TableName{Name: doltdb.IgnoreTableName, Schema: iw.it.schemaName}
-	found, err := roots.Working.HasTable(ctx, tname)
-	if err != nil {
-		iw.errDuringStatementBegin = err
-		return
-	}
-
-	if !found {
-		sch := sql.NewPrimaryKeySchema(iw.it.Schema())
-		doltSch, err := sqlutil.ToDoltSchema(ctx, roots.Working, tname, sch, roots.Head, sql.Collation_Default)
-		if err != nil {
-			iw.errDuringStatementBegin = err
-			return
-		}
-
-		// underlying table doesn't exist. Record this, then create the table.
-		newRootValue, err := doltdb.CreateEmptyTable(ctx, roots.Working, tname, doltSch)
-
-		if err != nil {
-			iw.errDuringStatementBegin = err
-			return
-		}
-
-		if dbState.WorkingSet() == nil {
-			iw.errDuringStatementBegin = doltdb.ErrOperationNotSupportedInDetachedHead
-			return
-		}
-
-		// We use WriteSession.SetWorkingSet instead of DoltSession.SetWorkingRoot because we want to avoid modifying the root
-		// until the end of the transaction, but we still want the WriteSession to be able to find the newly
-		// created table.
-		if ws := dbState.WriteSession(); ws != nil {
-			err = ws.SetWorkingSet(ctx, dbState.WorkingSet().WithWorkingRoot(newRootValue))
-			if err != nil {
-				iw.errDuringStatementBegin = err
-				return
-			}
-		}
-
-		dSess.SetWorkingRoot(ctx, dbName, newRootValue)
-	}
-
-	if ws := dbState.WriteSession(); ws != nil {
-		tableWriter, err := ws.GetTableWriter(ctx, tname, dbName, dSess.SetWorkingRoot, false)
-		if err != nil {
-			iw.errDuringStatementBegin = err
-			return
-		}
-		iw.tableWriter = tableWriter
-		tableWriter.StatementBegin(ctx)
-	}
+	iw.prevHash = prevHash
+	iw.tableWriter = tableWriter
 }
 
 // DiscardChanges is called if a statement encounters an error, and all current changes since the statement beginning
@@ -289,4 +223,75 @@ func (iw ignoreWriter) Close(ctx *sql.Context) error {
 		return iw.tableWriter.Close(ctx)
 	}
 	return nil
+}
+
+// CreateWriteableSystemTable is a helper function that creates a writeable system table (dolt_ignore, dolt_docs...) if it does not exist
+// Then returns the hash of the previous working root, and a TableWriter.
+func createWriteableSystemTable(ctx *sql.Context, tblName doltdb.TableName, tblSchema sql.Schema) (*hash.Hash, dsess.TableWriter, error) {
+	dbName := ctx.GetCurrentDatabase()
+	dSess := dsess.DSessFromSess(ctx.Session)
+
+	roots, _ := dSess.GetRoots(ctx, dbName)
+	dbState, ok, err := dSess.LookupDbState(ctx, dbName)
+	if err != nil {
+		return nil, nil, err
+
+	}
+	if !ok {
+		return nil, nil, fmt.Errorf("no root value found in session")
+	}
+
+	prevHash, err := roots.Working.HashOf()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	found, err := roots.Working.HasTable(ctx, tblName)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if !found {
+		sch := sql.NewPrimaryKeySchema(tblSchema)
+		doltSch, err := sqlutil.ToDoltSchema(ctx, roots.Working, tblName, sch, roots.Head, sql.Collation_Default)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		// underlying table doesn't exist. Record this, then create the table.
+		newRootValue, err := doltdb.CreateEmptyTable(ctx, roots.Working, tblName, doltSch)
+
+		if err != nil {
+			return nil, nil, err
+		}
+
+		if dbState.WorkingSet() == nil {
+			return nil, nil, doltdb.ErrOperationNotSupportedInDetachedHead
+		}
+
+		// We use WriteSession.SetWorkingSet instead of DoltSession.SetWorkingRoot because we want to avoid modifying the root
+		// until the end of the transaction, but we still want the WriteSession to be able to find the newly
+		// created table.
+		if ws := dbState.WriteSession(); ws != nil {
+			err = ws.SetWorkingSet(ctx, dbState.WorkingSet().WithWorkingRoot(newRootValue))
+			if err != nil {
+				return nil, nil, err
+			}
+		} else {
+			return nil, nil, fmt.Errorf("could not create dolt_ignore table, database does not allow writing")
+		}
+	}
+
+	var tableWriter dsess.TableWriter
+	if ws := dbState.WriteSession(); ws != nil {
+		tableWriter, err = ws.GetTableWriter(ctx, tblName, dbName, dSess.SetWorkingRoot, false)
+		if err != nil {
+			return nil, nil, err
+		}
+		tableWriter.StatementBegin(ctx)
+	} else {
+		return nil, nil, fmt.Errorf("could not create dolt_ignore table, database does not allow writing")
+	}
+
+	return &prevHash, tableWriter, nil
 }

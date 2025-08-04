@@ -10,12 +10,6 @@ teardown() {
     teardown_common
 }
 
-skip_remote_engine() {
-    if [ "$SQL_ENGINE" = "remote-engine" ]; then
-     skip "session ctx in shell is not the same as session in server"
-    fi
-}
-
 get_commit_hash() {
   local logline=$(dolt log -n "$1")
   echo ${logline:12:32}
@@ -355,9 +349,6 @@ EOF
 }
 
 @test "ci: dolt ci view shows ci" {
-    if [ "$SQL_ENGINE" = "remote-engine" ]; then
-          skip "Dolt sql --save has not been migrated to be used with an active server"
-    fi
     cat > workflow.yaml <<EOF
 name: workflow
 on:
@@ -457,4 +448,173 @@ EOF
     run dolt ci view "workflow_1" --job "invalid job"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "cannot find job with name: invalid job" ]] || false
+}
+
+@test "ci: run with expected rows" {
+    cat > workflow.yaml <<EOF
+name: workflow
+on:
+  push: {}
+jobs:
+  - name: verify initial commits
+    steps:
+      - name: "verify initial commits"
+        saved_query_name: check dolt commit
+        expected_rows: "== 3"
+EOF
+    dolt ci init
+    dolt ci import ./workflow.yaml
+    dolt sql --save "check dolt commit" -q "select * from dolt_commits;"
+    run dolt ci run "workflow"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Running workflow: workflow" ]] || false
+    [[ "$output" =~ "Running job: verify initial commits" ]] || false
+    [[ "$output" =~ "Step: verify initial commits - PASS" ]] || false
+}
+
+@test "ci: ci run with expected columns" {
+    cat > workflow.yaml <<EOF
+name: workflow
+on:
+  push: {}
+jobs:
+  - name: verify dolt commit
+    steps:
+      - name: "verify dolt commit"
+        saved_query_name: check dolt commit
+        expected_columns: "== 5"
+EOF
+    dolt ci init
+    dolt ci import ./workflow.yaml
+    dolt sql --save "check dolt commit" -q "select * from dolt_commits;"
+    run dolt ci run "workflow"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Running workflow: workflow" ]] || false
+    [[ "$output" =~ "Running job: verify dolt commit" ]] || false
+    [[ "$output" =~ "Step: verify dolt commit - PASS" ]] || false
+}
+
+@test "ci: each assertion type can be used" {
+    cat > workflow.yaml <<EOF
+name: workflow
+on:
+  push: {}
+jobs:
+  - name: check comparisons
+    steps:
+      - name: equals comp
+        saved_query_name: main
+        expected_columns: "== 5"
+      - name: not equals comp
+        saved_query_name: main
+        expected_columns: "!= 1"
+      - name: greater than comp
+        saved_query_name: main
+        expected_columns: "> 4"
+      - name: greater or equal than comp
+        saved_query_name: main
+        expected_columns: ">= 5"
+      - name: less than comp
+        saved_query_name: main
+        expected_columns: "< 6"
+      - name: less or equal than comp
+        saved_query_name: main
+        expected_columns: "<= 5"
+EOF
+    dolt ci init
+    dolt ci import ./workflow.yaml
+    dolt sql --save "main" -q "select * from dolt_commits;"
+    run dolt ci run "workflow"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Running workflow: workflow" ]] || false
+    [[ "$output" =~ "Step: equals comp - PASS" ]] || false
+    [[ "$output" =~ "Step: not equals comp - PASS" ]] || false
+    [[ "$output" =~ "Step: greater than comp - PASS" ]] || false
+    [[ "$output" =~ "Step: greater or equal than comp - PASS" ]] || false
+    [[ "$output" =~ "Step: less than comp - PASS" ]] || false
+    [[ "$output" =~ "Step: less or equal than comp - PASS" ]] || false
+}
+
+@test "ci: saved queries fail with ci run" {
+    cat > workflow.yaml <<EOF
+name: workflow
+on:
+  push: {}
+jobs:
+  - name: "bad query assertions"
+    steps:
+      - name: expect rows
+        saved_query_name: main
+        expected_rows: "== 2"
+      - name: expect columns
+        saved_query_name: main
+        expected_columns: "< 5"
+EOF
+    dolt ci init
+    dolt ci import ./workflow.yaml
+    dolt sql --save "main" -q "select * from dolt_commits;"
+    run dolt ci run "workflow"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Running workflow: workflow" ]] || false
+    [[ "$output" =~ "Step: expect rows - FAIL" ]] || false
+    [[ "$output" =~ "Ran query: select * from dolt_commits;" ]] || false
+    [[ "$output" =~ "Assertion failed: expected row count 2, got 3" ]] || false
+    [[ "$output" =~ "Step: expect columns - FAIL" ]] || false
+    [[ "$output" =~ "Ran query: select * from dolt_commits;" ]] || false
+    [[ "$output" =~ "Assertion failed: expected column count less than 5, got 5" ]] || false
+}
+
+@test "ci: ci run fails on bad query" {
+    cat > workflow.yaml <<EOF
+name: workflow
+on:
+  push: {}
+jobs:
+  - name: "bad saved queries"
+    steps:
+      - name: should fail, bad table name
+        saved_query_name: invalid table
+EOF
+    dolt ci init
+    dolt ci import ./workflow.yaml
+    dolt sql -q "create table invalid (i int);"
+    dolt sql --save "invalid table" -q "select * from invalid;"
+    dolt sql -q "drop table invalid;"
+    run dolt ci run "workflow"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Running workflow: workflow" ]] || false
+    [[ "$output" =~ "Step: should fail, bad table name - FAIL" ]] || false
+    [[ "$output" =~ "Ran query: select * from invalid" ]] || false
+    [[ "$output" =~ "Query error" ]] || false
+    [[ "$output" =~ "table not found: invalid" ]] || false
+}
+
+@test "ci: ci run fails on invalid workflow name" {
+    dolt ci init
+    run dolt ci run "invalid"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "workflow not found" ]] || false
+    run dolt ci run
+     [ "$status" -eq 1 ]
+     [[ "$output" =~ "must specify workflow name" ]] || false
+}
+
+@test "ci: ci run fails on invalid query name" {
+    cat > workflow.yaml <<EOF
+name: workflow
+on:
+  push: {}
+jobs:
+  - name: "bad saved queries"
+    steps:
+      - name: should fail, bad query name
+        saved_query_name: invalid query
+EOF
+    dolt ci init
+    dolt ci import workflow.yaml
+    run dolt ci run "workflow"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Running workflow: workflow" ]] || false
+    [[ "$output" =~ "Step: should fail, bad query name - FAIL" ]] || false
+    [[ "$output" =~ "Could not find saved query: invalid query" ]] || false
 }
