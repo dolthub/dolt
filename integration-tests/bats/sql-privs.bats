@@ -797,7 +797,7 @@ teardown() {
      dolt sql -q "FLUSH PRIVILEGES"
 
      PORT=$( definePORT )
-     dolt sql-server --host=0.0.0.0 --port $PORT &
+     dolt sql-server --port $PORT &
      SERVER_PID=$!
      sleep 1
 
@@ -816,10 +816,24 @@ teardown() {
      [ $status -eq 0 ]
      [[ $output =~ "wildcard_user@127.0.0.%" ]] || false
 
-     # Test that authentication works consistently across different clients
-     run mysql --host 127.0.0.1 --port $PORT --user wildcard_user --password=password -e "SELECT 'wildcard_auth_success'"
+     # Test with dolt client - specific IP user authentication
+     run dolt --host=127.0.0.1 --port=$PORT --user=specific_user --password=password --no-tls sql -q "SELECT USER(), CONNECTION_ID()"
      [ $status -eq 0 ]
-     [[ $output =~ "wildcard_auth_success" ]] || false
+     [[ $output =~ "specific_user@127.0.0.1" ]] || false
+
+     # Test with dolt client - wildcard IP user authentication
+     run dolt --host=127.0.0.1 --port=$PORT --user=wildcard_user --password=password --no-tls sql -q "SELECT USER(), CONNECTION_ID()"
+     [ $status -eq 0 ]
+     [[ $output =~ "wildcard_user@127.0.0.%" ]] || false
+
+     # Test that authentication works consistently across different clients
+     run mysql --host 127.0.0.1 --port $PORT --user wildcard_user --password=password -e "SELECT 'mysql_client_success'"
+     [ $status -eq 0 ]
+     [[ $output =~ "mysql_client_success" ]] || false
+
+     run dolt --host=127.0.0.1 --port=$PORT --user=wildcard_user --password=password --no-tls sql -q "SELECT 'dolt_client_success'"
+     [ $status -eq 0 ]
+     [[ $output =~ "dolt_client_success" ]] || false
 
      stop_sql_server 1
 }
