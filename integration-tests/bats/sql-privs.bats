@@ -785,3 +785,53 @@ teardown() {
      [[ $output =~ "GRANT USAGE ON *.* TO \`tester\`@\`localhost\`" ]] || false
      ! [[ $output =~ "SELECT" ]] || false
 }
+
+# bats test_tags=no_lambda
+@test "sql-privs: wildcard user authentication works for IP patterns" {
+     make_test_repo
+
+     # Create users with specific IP and wildcard IP patterns (reproduces issue #9624 scenario)
+     # Original customer had 'foo'@'10.0.0.1' and 'bar'@'10.0.0.%' 
+     dolt sql -q "CREATE USER 'specific_user'@'127.0.0.1' IDENTIFIED BY 'password'"
+     dolt sql -q "CREATE USER 'wildcard_user'@'127.0.0.%' IDENTIFIED BY 'password'"
+     dolt sql -q "GRANT ALL PRIVILEGES ON test_db.* TO 'specific_user'@'127.0.0.1'"
+     dolt sql -q "GRANT ALL PRIVILEGES ON test_db.* TO 'wildcard_user'@'127.0.0.%'"
+     dolt sql -q "FLUSH PRIVILEGES"
+
+     PORT=$( definePORT )
+     dolt sql-server --host 0.0.0.0 --port=$PORT --socket "dolt.$PORT.sock" &
+     SERVER_PID=$!
+     sleep 1
+
+     # Test specific IP user authentication (equivalent to customer's 'foo'@'10.0.0.1')
+     run mysql --host 127.0.0.1 --port $PORT --user specific_user --password=password -e "SELECT USER(), CONNECTION_ID()"
+     [ $status -eq 0 ]
+     [[ $output =~ "specific_user@127.0.0.1" ]] || false
+
+     # Test wildcard IP user authentication (equivalent to customer's 'bar'@'10.0.0.%')
+     # This was broken before the fix - wildcard patterns failed with "No authentication methods available"
+     run mysql --host 127.0.0.1 --port $PORT --user wildcard_user --password=password -e "SELECT USER(), CONNECTION_ID()"
+     [ $status -eq 0 ]
+     [[ $output =~ "wildcard_user@127.0.0.%" ]] || false
+
+     # Test with dolt client - specific IP user authentication
+     run dolt --host=127.0.0.1 --port=$PORT --user=specific_user --password=password --no-tls sql -q "SELECT USER(), CONNECTION_ID()"
+     [ $status -eq 0 ]
+     [[ $output =~ "specific_user@127.0.0.1" ]] || false
+
+     # Test with dolt client - wildcard IP user authentication
+     run dolt --host=127.0.0.1 --port=$PORT --user=wildcard_user --password=password --no-tls sql -q "SELECT USER(), CONNECTION_ID()"
+     [ $status -eq 0 ]
+     [[ $output =~ "wildcard_user@127.0.0.%" ]] || false
+
+     # Verify authentication works consistently across both MySQL and Dolt clients
+     run mysql --host 127.0.0.1 --port $PORT --user wildcard_user --password=password -e "SELECT 'mysql_client_success'"
+     [ $status -eq 0 ]
+     [[ $output =~ "mysql_client_success" ]] || false
+
+     run dolt --host=127.0.0.1 --port=$PORT --user=wildcard_user --password=password --no-tls sql -q "SELECT 'dolt_client_success'"
+     [ $status -eq 0 ]
+     [[ $output =~ "dolt_client_success" ]] || false
+
+     stop_sql_server 1
+}
