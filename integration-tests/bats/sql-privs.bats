@@ -786,6 +786,7 @@ teardown() {
      ! [[ $output =~ "SELECT" ]] || false
 }
 
+# bats test_tags=no_lambda
 @test "sql-privs: wildcard user authentication works for IP patterns" {
      make_test_repo
 
