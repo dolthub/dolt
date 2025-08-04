@@ -16,7 +16,6 @@ package nbs
 
 import (
 	"context"
-	"encoding/binary"
 	"io"
 	"path/filepath"
 
@@ -234,25 +233,10 @@ func (acs archiveChunkSource) getManyCompressed(ctx context.Context, eg *errgrou
 }
 
 func (acs archiveChunkSource) iterateAllChunks(ctx context.Context, cb func(chunks.Chunk), stats *Stats) error {
-	addrCount := uint64(len(acs.aRdr.prefixes))
-	for i := uint64(0); i < addrCount; i++ {
-		var h hash.Hash
-		suffix := acs.aRdr.getSuffixByID(i)
-
-		// Reconstruct the hash from the prefix and suffix.
-		binary.BigEndian.PutUint64(h[:uint64Size], acs.aRdr.prefixes[i])
-		copy(h[uint64Size:], suffix[:])
-
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-
-		data, err := acs.aRdr.get(ctx, h, stats)
-		if err != nil {
-			return err
-		}
-
-		cb(chunks.NewChunkWithHash(h, data))
+	errCb := func(c chunks.Chunk) error {
+		cb(c)
+		return nil
 	}
-	return nil
+
+	return acs.aRdr.iterate(ctx, errCb, stats)
 }
