@@ -634,6 +634,11 @@ teardown() {
     run dolt log -n 1
     [ $status -eq 0 ]
     [[ "$output" =~ "Original Author <original@example.com>" ]] || false
+    
+    # Verify dolt_log table also shows correct author
+    run dolt sql -q "SELECT committer, email FROM dolt_log WHERE message = 'commit with specific author'" -r csv
+    [ $status -eq 0 ]
+    [[ "$output" =~ "Original Author,original@example.com" ]] || false
 }
 
 @test "cherry-pick: multiple authors preserved in sequence with merge workflow" {
@@ -689,4 +694,13 @@ teardown() {
     [[ "$output" =~ "Bob Engineer <bob@company.com>" ]] || false  
     [[ "$output" =~ "Carol Architect <carol@company.com>" ]] || false
     [[ "$output" =~ "Integration Manager <integration@company.com>" ]] || false
+    
+    # Verify dolt_log table shows all authors correctly in commit order (including merge workflow)
+    run dolt sql -q "SELECT committer, email, message FROM dolt_log WHERE committer IN ('Alice Developer', 'Bob Engineer', 'Carol Architect', 'Integration Manager') OR message LIKE 'Merge%' ORDER BY commit_order" -r csv
+    [ $status -eq 0 ]
+    [[ "$output" =~ "Alice Developer,alice@company.com" ]] || false
+    [[ "$output" =~ "Bob Engineer,bob@company.com" ]] || false
+    [[ "$output" =~ "Carol Architect,carol@company.com" ]] || false
+    [[ "$output" =~ "Integration Manager,integration@company.com" ]] || false
+    [[ "$output" =~ "Merge integration_branch" ]] || false
 }
