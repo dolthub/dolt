@@ -187,6 +187,9 @@ Dolt is "Git for Data" - a SQL database with version control capabilities. All G
 - ` + "`git merge` → `dolt merge`" + `
 - ` + "`git diff` → `dolt diff`" + `
 
+For help and documentation on commands, you can run `dolt help` and
+`dolt <command` help`.
+
 ## Essential Dolt CLI Commands
 
 ### Repository Operations
