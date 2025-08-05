@@ -551,8 +551,8 @@ func TestProllyBinSearchUneven(t *testing.T) {
 		pf[i] = uint64(10000000 + i)
 	}
 	// In normal circumstances, a value of 12345 would be far to the left side of the list
-	found := prollyBinSearch(slicePrefixList(pf), target)
-	assert.Equal(t, int32(900), found)
+	found := prollyBinSearch(pf, target)
+	assert.Equal(t, 900, found)
 
 	// Same test, but from something on the right side of the list.
 	for i := 999; i > 100; i-- {
@@ -563,8 +563,8 @@ func TestProllyBinSearchUneven(t *testing.T) {
 	for i := 99; i >= 0; i-- {
 		pf[i] = uint64(10000000 - i)
 	}
-	found = prollyBinSearch(slicePrefixList(pf), target)
-	assert.Equal(t, int32(100), found)
+	found = prollyBinSearch(pf, target)
+	assert.Equal(t, 100, found)
 }
 
 func TestProllyBinSearch(t *testing.T) {
@@ -577,21 +577,21 @@ func TestProllyBinSearch(t *testing.T) {
 	}
 
 	for i := 0; i < 10000; i++ {
-		idx := prollyBinSearch(slicePrefixList(pf), pf[i])
+		idx := prollyBinSearch(pf, pf[i])
 		// There are dupes in the list, so we don't always end up with the same index.
 		assert.Equal(t, pf[i], pf[idx])
 	}
 
-	idx := prollyBinSearch(slicePrefixList(pf), pf[0]-1)
-	assert.Equal(t, int32(0), idx)
-	idx = prollyBinSearch(slicePrefixList(pf), pf[9999]+1)
-	assert.Equal(t, int32(10000), idx)
+	idx := prollyBinSearch(pf, pf[0]-1)
+	assert.Equal(t, 0, idx)
+	idx = prollyBinSearch(pf, pf[9999]+1)
+	assert.Equal(t, 10000, idx)
 
 	// 23 is not a dupe, and neighbors don't match. stable due to seed.
-	idx = prollyBinSearch(slicePrefixList(pf), pf[23]+1)
-	assert.Equal(t, int32(24), idx)
-	idx = prollyBinSearch(slicePrefixList(pf), pf[23]-1)
-	assert.Equal(t, int32(23), idx)
+	idx = prollyBinSearch(pf, pf[23]+1)
+	assert.Equal(t, 24, idx)
+	idx = prollyBinSearch(pf, pf[23]-1)
+	assert.Equal(t, 23, idx)
 
 }
 
