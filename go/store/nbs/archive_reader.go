@@ -304,7 +304,7 @@ func (f *inMemoryArchiveIndexReader) getPrefix(idx uint32) uint64 {
 }
 
 func (f *inMemoryArchiveIndexReader) searchPrefix(prefix uint64) int32 {
-	return prollyBinSearch(f, prefix)
+	return int32(prollyBinSearch(f.prefixes, prefix))
 }
 
 func (f *inMemoryArchiveIndexReader) getChunkRef(idx uint32) (dict, data uint32) {
@@ -644,14 +644,13 @@ func verifyCheckSum(ctx context.Context, reader tableReaderAt, span byteSpan, ch
 //
 // For our purposes where we are just trying to get the index, we must compare the resulting index to our target to
 // determine if it is a match.
-func prollyBinSearch[T prefixList](prefixes T, target uint64) int32 {
-	items := int32(prefixes.getNumChunks())
+func prollyBinSearch(slice []uint64, target uint64) int {
+	items := len(slice)
 	if items == 0 {
 		return 0
 	}
-	lft, rht := int32(0), items
-	lo, hi := prefixes.getPrefix(0), prefixes.getPrefix(uint32(rht-1))
-
+	lft, rht := 0, items
+	lo, hi := slice[lft], slice[rht-1]
 	if target > hi {
 		return rht
 	}
@@ -664,18 +663,20 @@ func prollyBinSearch[T prefixList](prefixes T, target uint64) int32 {
 		shiftedTgt := target - lo
 		mhi, mlo := bits.Mul64(shiftedTgt, idxRangeSz)
 		dU64, _ := bits.Div64(mhi, mlo, valRangeSz)
-		idx := int32(dU64) + lft
-		if prefixes.getPrefix(uint32(idx)) < target {
+		idx := int(dU64) + lft
+		if slice[idx] < target {
 			lft = idx + 1
+			// No need to update lo if i == items, since this loop will be ending.
 			if lft < items {
-				lo = prefixes.getPrefix(uint32(lft))
+				lo = slice[lft]
+				// Interpolation doesn't like lo >= target, so if we're already there, just return |i|.
 				if lo >= target {
 					return lft
 				}
 			}
 		} else {
 			rht = idx
-			hi = prefixes.getPrefix(uint32(rht))
+			hi = slice[rht]
 		}
 	}
 	return lft

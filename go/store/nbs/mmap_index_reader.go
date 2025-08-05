@@ -17,36 +17,17 @@ package nbs
 import (
 	"fmt"
 	"io"
+	"math/bits"
 	"os"
 
 	"github.com/dolthub/dolt/go/libraries/utils/file"
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
-type prefixList interface {
+type archiveIndexReader interface {
 	getNumChunks() uint32
 	getPrefix(idx uint32) uint64
 	searchPrefix(uint64) int32
-}
-
-type slicePrefixList []uint64
-
-var _ prefixList = slicePrefixList{}
-
-func (s slicePrefixList) getNumChunks() uint32 {
-	return uint32(len(s))
-}
-
-func (s slicePrefixList) getPrefix(idx uint32) uint64 {
-	return s[idx]
-}
-
-func (s slicePrefixList) searchPrefix(prefix uint64) int32 {
-	return prollyBinSearch(s, prefix)
-}
-
-type archiveIndexReader interface {
-	prefixList
 	getSpanIndex(idx uint32) uint64
 	getChunkRef(idx uint32) (dict, data uint32)
 	getSuffix(idx uint32) suffix
@@ -122,8 +103,41 @@ func (m *mmapIndexReader) getPrefix(idx uint32) uint64 {
 	return m.data.GetUint64(offset)
 }
 
-func (m *mmapIndexReader) searchPrefix(prefix uint64) int32 {
-	return prollyBinSearch(m, prefix)
+func (m *mmapIndexReader) searchPrefix(target uint64) int32 {
+	items := int32(m.chunkCount)
+	if items == 0 {
+		return 0
+	}
+	lft, rht := int32(0), items
+	lo, hi := m.getPrefix(0), m.getPrefix(uint32(rht-1))
+
+	if target > hi {
+		return rht
+	}
+	if lo >= target {
+		return lft
+	}
+	for lft < rht {
+		valRangeSz := hi - lo
+		idxRangeSz := uint64(rht - lft - 1)
+		shiftedTgt := target - lo
+		mhi, mlo := bits.Mul64(shiftedTgt, idxRangeSz)
+		dU64, _ := bits.Div64(mhi, mlo, valRangeSz)
+		idx := int32(dU64) + lft
+		if m.getPrefix(uint32(idx)) < target {
+			lft = idx + 1
+			if lft < items {
+				lo = m.getPrefix(uint32(lft))
+				if lo >= target {
+					return lft
+				}
+			}
+		} else {
+			rht = idx
+			hi = m.getPrefix(uint32(rht))
+		}
+	}
+	return lft
 }
 
 // getChunkRef returns the dictionary and data references for the chunk at the given index
