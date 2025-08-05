@@ -187,7 +187,7 @@ Dolt is "Git for Data" - a SQL database with version control capabilities. All G
 - ` + "`git merge` → `dolt merge`" + `
 - ` + "`git diff` → `dolt diff`" + `
 
-For help and documentation on commands, you can run ` + "`dolt help`" + ` and ` + "`dolt <command> help`" + `.
+For help and documentation on commands, you can run ` + "`dolt --help`" + ` and ` + "`dolt <command> --help`" + `.
 
 ## Essential Dolt CLI Commands
 
@@ -460,8 +460,6 @@ DELETE FROM dolt_query_catalog WHERE id = 'old_query_name';
    - Track changes to CI configuration
    - Use branches for CI development
 
-**Note:** Dolt CI looks for workflow YAML files in your current directory when you run ` + "`dolt ci run <workflow-name>`" + `.
-
 ## System Tables for Version Control
 
 Dolt exposes version control operations through system tables accessible via SQL:
@@ -608,6 +606,9 @@ dolt sql -q "ALTER TABLE users ADD COLUMN email VARCHAR(255);"
 
 # Create CI validation query
 dolt sql --save "schema_check" -q "DESCRIBE users;"
+
+# Define a CI workflow
+dolt ci import schema-validation.yaml
 
 # Test with CI
 dolt ci run schema-validation
