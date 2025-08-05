@@ -96,6 +96,7 @@ func validateDocName(docName string) errhand.VerboseError {
 	valid := []string{
 		doltdb.ReadmeDoc,
 		doltdb.LicenseDoc,
+		doltdb.AgentDoc,
 	}
 
 	for _, name := range valid {

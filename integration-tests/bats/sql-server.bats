@@ -2217,3 +2217,34 @@ EOF
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test" ]] || false
 }
+
+@test "sql-server: SHOW TABLE STATUS with explicit database should not fail with Empty database name" {
+    # This test reproduces the DBeaver infinite loop issue where system tables
+    # fail with "Empty database name" when queried with explicit database context
+    cd repo1
+    dolt sql -q "CREATE TABLE test_table (id INT PRIMARY KEY, name VARCHAR(50));"
+    dolt add test_table
+    dolt commit -m "Add test table"
+    
+    start_sql_server repo1
+    
+    # Test information_schema query that fails early in DBeaver connection process
+    run dolt --use-db repo1 sql -q "SELECT * FROM information_schema.TABLES WHERE TABLE_SCHEMA = 'information_schema' AND TABLE_NAME = 'CHECK_CONSTRAINTS';"
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "Empty database name" ]] || false
+    
+    # Enable system tables visibility (mimics DBeaver's bootstrap SQL)
+    # and test queries that caused DBeaver infinite loop
+    # This should fail with "Empty database name" when the bug is present
+    run dolt --use-db repo1 sql -q "SET @@dolt_show_system_tables=1; SHOW TABLE STATUS FROM \`repo1\` LIKE 'dolt_remotes';"
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "Empty database name" ]] || false
+    
+    run dolt --use-db repo1 sql -q "SET @@dolt_show_system_tables=1; SHOW TABLE STATUS FROM \`repo1\` LIKE 'dolt_branches';"
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "Empty database name" ]] || false
+    
+    run dolt --use-db repo1 sql -q "SET @@dolt_show_system_tables=1; SHOW TABLE STATUS FROM \`repo1\` LIKE 'dolt_commits';"
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "Empty database name" ]] || false
+}

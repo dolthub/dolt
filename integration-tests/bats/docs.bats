@@ -155,3 +155,221 @@ TXT
     [[ "$output" =~ "-  0. You just DO WHAT THE FUCK YOU WANT TO"               ]] || false
     [[ "$output" =~ "+  0. You just DO WHAT THE F*CK YOU WANT TO"               ]] || false
 }
+
+# AGENT document tests
+@test "docs: AGENT document is created automatically during init" {
+    # Create a fresh repo to test init behavior
+    cd ..
+    rm -rf test-agent-init
+    mkdir test-agent-init
+    cd test-agent-init
+    
+    # Initialize new repo
+    dolt init
+    
+    # Check that AGENT.md document exists
+    run dolt docs print AGENT.md
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "# AGENT.md - Dolt Database Operations Guide" ]] || false
+
+    # Verify AGENT.md is in the docs table
+    run dolt sql -q "SELECT doc_name FROM dolt_docs WHERE doc_name = 'AGENT.md'" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "AGENT.md" ]] || false
+    
+    # CRITICAL: Verify there's no diff after init (clean working tree)
+    run dolt diff
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ] || false
+    
+    # Also verify status shows clean working tree
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+    
+    # Clean up
+    cd ../dolt-repo-$$
+}
+
+@test "docs: AGENT document print functionality" {
+    # Check basic print functionality
+    run dolt docs print AGENT.md
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "# AGENT.md - Dolt Database Operations Guide" ]] || false
+}
+
+@test "docs: AGENT document can be uploaded and modified" {
+    # Create a custom AGENT.md file
+    cat <<TXT > custom_agent.md
+# Custom Agent Documentation
+
+This is a custom agent document for testing.
+
+## Custom Section
+
+- Custom command 1
+- Custom command 2
+
+Visit: https://example.com
+TXT
+
+    # Upload the custom document
+    dolt docs upload AGENT.md custom_agent.md
+    
+    # Verify the upload worked
+    run dolt docs print AGENT.md
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "# Custom Agent Documentation" ]] || false
+    [[ "$output" =~ "This is a custom agent document for testing" ]] || false
+    [[ "$output" =~ "Custom command 1" ]] || false
+    [[ "$output" =~ "https://example.com" ]] || false
+    
+    # Verify original content is replaced
+    [[ ! "$output" =~ "# AGENT.md - Dolt Database Operations Guide" ]] || false
+}
+
+@test "docs: AGENT document diff functionality" {
+    # Create a modified AGENT.md
+    cat <<TXT > modified_agent.md
+# Modified Dolt Database Repository
+
+This directory contains a modified Dolt database.
+
+## About Dolt - Modified
+
+Dolt is a modified SQL database with Git-like version control.
+
+## Modified Quick Start
+
+- **Modified Access**: Use \`dolt sql\` to start an interactive SQL shell
+- **Modified version control**: Dolt commands work like Git commands
+
+For more information, visit: https://modified.example.com
+TXT
+
+    # Upload the modified document
+    dolt docs upload AGENT.md modified_agent.md
+    
+    # Test diff functionality
+    run dolt docs diff AGENT.md
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "-# AGENT.md - Dolt Database Operations Guide" ]] || false
+    [[ "$output" =~ "+This directory contains a modified Dolt database" ]] || false
+}
+
+@test "docs: AGENT document export to CLAUDE.md functionality" {
+    # Export AGENT.md to CLAUDE.md
+    dolt docs print AGENT.md > CLAUDE.md
+    
+    # Verify the file was created
+    [ -f CLAUDE.md ]
+    
+    # Verify the content matches
+    run cat CLAUDE.md
+    [[ "$output" =~ "# AGENT.md - Dolt Database Operations Guide" ]] || false
+
+    # Compare with direct docs print
+    dolt docs print AGENT.md > direct_output.md
+    run diff CLAUDE.md direct_output.md
+    [ "$status" -eq 0 ]
+    [[ "${#lines[@]}" = "0" ]] || false
+}
+
+@test "docs: AGENT document is available from SQL" {
+    # Check that AGENT.md is available via SQL
+    run dolt sql -q "SELECT doc_name FROM dolt_docs WHERE doc_name = 'AGENT.md'" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "AGENT.md" ]] || false
+    
+    # Check that we can query the content
+    run dolt sql -q "SELECT doc_text FROM dolt_docs WHERE doc_name = 'AGENT.md'" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "# AGENT.md - Dolt Database Operations Guide" ]] || false
+}
+
+@test "docs: AGENT document can be modified via SQL" {
+    # Modify AGENT.md via SQL
+    dolt sql -q "UPDATE dolt_docs SET doc_text = '# SQL Modified Agent Doc\n\nThis was modified via SQL.' WHERE doc_name = 'AGENT.md'"
+    
+    # Verify the modification
+    run dolt docs print AGENT.md
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "# SQL Modified Agent Doc" ]] || false
+    [[ "$output" =~ "This was modified via SQL" ]] || false
+    
+    # Verify original content is gone
+    [[ ! "$output" =~ "# AGENT.md - Dolt Database Operations Guide" ]] || false
+}
+
+@test "docs: AGENT document validation works correctly" {
+    # Test valid document name
+    run dolt docs upload AGENT.md README.md
+    [ "$status" -eq 0 ]
+    
+    # Test invalid document name should fail
+    run dolt docs upload INVALID.md README.md
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "invalid doc name" ]] || false
+    [[ "$output" =~ "valid names are" ]] || false
+    [[ "$output" =~ "AGENT.md" ]] || false
+    [[ "$output" =~ "LICENSE.md" ]] || false
+    [[ "$output" =~ "README.md" ]] || false
+}
+
+@test "docs: AGENT document can be staged and committed" {
+    # Modify AGENT.md
+    cat <<TXT > test_agent.md
+# Test Agent Document
+
+This is a test modification.
+TXT
+
+    dolt docs upload AGENT.md test_agent.md
+    
+    # Check that dolt_docs table shows up in status
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "dolt_docs" ]] || false
+    
+    # Stage and commit
+    dolt add .
+    dolt commit -m "Modified AGENT.md"
+    
+    # Verify clean status
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+    
+    # Verify the content persists
+    run dolt docs print AGENT.md
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "# Test Agent Document" ]] || false
+    [[ "$output" =~ "This is a test modification" ]] || false
+}
+
+@test "docs: AGENT document works with multiple document types" {
+    # Upload all three document types
+    dolt docs upload README.md README.md
+    dolt docs upload LICENSE.md LICENSE.md
+    # AGENT.md is already created during init
+    
+    # Verify all three exist
+    run dolt sql -q "SELECT doc_name FROM dolt_docs ORDER BY doc_name" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "AGENT.md" ]] || false
+    [[ "$output" =~ "LICENSE.md" ]] || false
+    [[ "$output" =~ "README.md" ]] || false
+    
+    # Verify each can be printed
+    run dolt docs print AGENT.md
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "# AGENT.md - Dolt Database Operations Guide" ]] || false
+
+    run dolt docs print README.md
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "# Dolt is Git for Data!" ]] || false
+    
+    run dolt docs print LICENSE.md
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "DO WHAT THE FUCK YOU WANT TO PUBLIC LICENSE" ]] || false
+}

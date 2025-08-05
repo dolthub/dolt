@@ -155,8 +155,14 @@ func (a *AutoIncrementTracker) Next(ctx *sql.Context, tbl string, insertVal inte
 	}
 
 	if given >= curr {
+		// Check if the given value is valid for this column type
+		if !a.validateAutoIncrementBounds(ctx, tbl, given, false) {
+			return given, nil // Out of bounds, don't update sequence
+		}
+
+		// Value is valid, determine next sequence value
 		nextVal := given
-		if a.incrementAutoIncVal(ctx, tbl, given) {
+		if a.validateAutoIncrementBounds(ctx, tbl, given, true) {
 			nextVal++
 		}
 		a.sequences.Store(tbl, nextVal)
@@ -210,13 +216,15 @@ func (a *AutoIncrementTracker) Set(ctx *sql.Context, tableName string, table *do
 	defer release()
 
 	existing := loadAutoIncValue(a.sequences, tableName)
-	if newAutoIncVal > existing {
+	if newAutoIncVal > existing && a.validateAutoIncrementBounds(ctx, tableName, newAutoIncVal, true) {
 		a.sequences.Store(tableName, newAutoIncVal)
 		return table.SetAutoIncrementValue(ctx, newAutoIncVal)
-	} else {
-		// If the value is not greater than the current tracker, we have more work to do
-		return a.deepSet(ctx, tableName, table, ws, newAutoIncVal)
+	} else if newAutoIncVal > existing {
+		// Value is greater but out of bounds, don't update
+		return table, nil
 	}
+	// Value is not greater than current, do deep check across branches
+	return a.deepSet(ctx, tableName, table, ws, newAutoIncVal)
 }
 
 // deepSet sets the auto increment value for the table named, if it's greater than the one on any branch head for this
@@ -362,7 +370,9 @@ func (a *AutoIncrementTracker) deepSet(ctx *sql.Context, tableName string, table
 		}
 	}
 
-	a.sequences.Store(tableName, maxAutoInc)
+	if a.validateAutoIncrementBounds(ctx, tableName, maxAutoInc, true) {
+		a.sequences.Store(tableName, maxAutoInc)
+	}
 	return table, nil
 }
 
@@ -554,16 +564,12 @@ func (a *AutoIncrementTracker) initWithRoots(ctx context.Context, roots ...doltd
 	a.initErr = eg.Wait()
 }
 
-// incrementAutoIncVal determines whether to increment the auto-increment value.
-// Returns true (fail-open) for all infrastructure errors, missing tables, or missing
-// auto-increment columns to avoid breaking legitimate operations like ALTER TABLE.
-// Returns false (fail-closed) only when we can definitively determine that incrementing
-// would cause a type overflow on an existing auto-increment column.
-func (a *AutoIncrementTracker) incrementAutoIncVal(ctx *sql.Context, tbl string, currentVal uint64) bool {
+// validateAutoIncrementBounds checks if a value (or value+1 if checkIncrement) is valid for the auto-increment column type
+func (a *AutoIncrementTracker) validateAutoIncrementBounds(ctx *sql.Context, tbl string, val uint64, checkIncrement bool) bool {
 	sess := DSessFromSess(ctx.Session)
 	db, ok := sess.Provider().BaseDatabase(ctx, a.dbName)
 	if !ok || !db.Versioned() {
-		return true
+		return true // fail-open for infrastructure errors
 	}
 
 	ws, err := sess.WorkingSet(ctx, a.dbName)
@@ -587,8 +593,18 @@ func (a *AutoIncrementTracker) incrementAutoIncVal(ctx *sql.Context, tbl string,
 	}
 
 	sqlType := aiCol.TypeInfo.ToSqlType()
-	nextVal := currentVal + 1
-	_, inRange, err := sqlType.Convert(ctx, nextVal)
+
+	testVal := val
+	if checkIncrement {
+		// Check if incrementing would overflow
+		nextVal := val + 1
+		if nextVal < val {
+			return false // uint64 overflow
+		}
+		testVal = nextVal
+	}
+
+	_, inRange, err := sqlType.Convert(ctx, testVal)
 	return err == nil && inRange == sql.InRange
 }
 

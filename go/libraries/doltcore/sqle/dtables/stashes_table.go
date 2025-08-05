@@ -32,12 +32,13 @@ var _ sql.Table = (*StashesTable)(nil)
 var _ sql.StatisticsTable = (*StashesTable)(nil)
 
 type StashesTable struct {
+	dbName    string
 	ddb       *doltdb.DoltDB
 	tableName string
 }
 
-func NewStashesTable(_ *sql.Context, ddb *doltdb.DoltDB, tableName string) sql.Table {
-	return &StashesTable{ddb, tableName}
+func NewStashesTable(_ *sql.Context, dbName string, ddb *doltdb.DoltDB, tableName string) sql.Table {
+	return &StashesTable{dbName: dbName, ddb: ddb, tableName: tableName}
 }
 
 func (st *StashesTable) DataLength(ctx *sql.Context) (uint64, error) {
@@ -50,7 +51,7 @@ func (st *StashesTable) DataLength(ctx *sql.Context) (uint64, error) {
 }
 
 func (st *StashesTable) RowCount(ctx *sql.Context) (uint64, bool, error) {
-	dbName := ctx.GetCurrentDatabase()
+	dbName := st.dbName
 
 	if len(dbName) == 0 {
 		return 0, false, fmt.Errorf("Empty database name.")
@@ -102,7 +103,7 @@ func (st *StashesTable) Partitions(*sql.Context) (sql.PartitionIter, error) {
 
 // PartitionRows is a sql.Table interface function that gets a row iterator for a partition
 func (st *StashesTable) PartitionRows(ctx *sql.Context, _ sql.Partition) (sql.RowIter, error) {
-	return NewStashItr(ctx, st.ddb)
+	return NewStashItr(ctx, st.dbName, st.ddb)
 }
 
 type StashItr struct {
@@ -111,9 +112,7 @@ type StashItr struct {
 }
 
 // NewStashItr creates a StashItr from the current environment.
-func NewStashItr(ctx *sql.Context, _ *doltdb.DoltDB) (*StashItr, error) {
-	dbName := ctx.GetCurrentDatabase()
-
+func NewStashItr(ctx *sql.Context, dbName string, _ *doltdb.DoltDB) (*StashItr, error) {
 	if len(dbName) == 0 {
 		return nil, fmt.Errorf("Empty database name.")
 	}

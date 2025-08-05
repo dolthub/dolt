@@ -26,4 +26,5 @@ var Commands = cli.NewSubCommandHandler("ci", "Commands for working with Dolt co
 	ListCmd{},
 	RemoveCmd{},
 	ViewCmd{},
+	RunCmd{},
 })

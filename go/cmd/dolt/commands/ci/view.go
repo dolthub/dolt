@@ -62,11 +62,6 @@ func (cmd ViewCmd) Docs() *cli.CommandDocumentation {
 	return cli.NewCommandDocumentation(viewDocs, ap)
 }
 
-// Hidden should return true if this command should be hidden from the help text
-func (cmd ViewCmd) Hidden() bool {
-	return false
-}
-
 // ArgParser implements cli.Command.
 func (cmd ViewCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithMaxArgs(cmd.Name(), 1)
@@ -203,17 +198,29 @@ func getSavedQueries(sqlCtx *sql.Context, queryist cli.Queryist) (map[string]str
 			return nil, err
 		}
 		for _, row := range rows {
-			queryName, err := row[2].(*val.TextStorage).Unwrap(sqlCtx)
+			var queryName, queryStatement string
+			queryName, err = getStringColAsString(sqlCtx, row[2])
 			if err != nil {
 				return nil, err
 			}
-			queryStatement, err := row[3].(*val.TextStorage).Unwrap(sqlCtx)
+			queryStatement, err := getStringColAsString(sqlCtx, row[3])
 			if err != nil {
 				return nil, err
 			}
 			savedQueries[queryName] = queryStatement
 		}
 	}
-
 	return savedQueries, nil
+}
+
+// The dolt_query_catalog system table returns *val.TextStorage types under certain situations,
+// so we use a special parser to get the correct string values
+func getStringColAsString(sqlCtx *sql.Context, tableValue interface{}) (string, error) {
+	if ts, ok := tableValue.(*val.TextStorage); ok {
+		return ts.Unwrap(sqlCtx)
+	} else if str, ok := tableValue.(string); ok {
+		return str, nil
+	} else {
+		return "", fmt.Errorf("unexpected type %T, was expecting string", tableValue)
+	}
 }

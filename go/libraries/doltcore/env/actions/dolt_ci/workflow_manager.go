@@ -1319,7 +1319,7 @@ func (d *doltWorkflowManager) updateExistingWorkflow(ctx *sql.Context, config *W
 								newExpectedColumnComparisonType := WorkflowSavedQueryExpectedRowColumnComparisonTypeUnspecified
 								var newExpectedColumnCount int64
 								if configStep.ExpectedColumns.Value != "" {
-									newExpectedColumnComparisonType, newExpectedColumnCount, err = d.parseSavedQueryExpectedResultString(configStep.ExpectedColumns.Value)
+									newExpectedColumnComparisonType, newExpectedColumnCount, err = ParseSavedQueryExpectedResultString(configStep.ExpectedColumns.Value)
 									if err != nil {
 										return err
 									}
@@ -1328,7 +1328,7 @@ func (d *doltWorkflowManager) updateExistingWorkflow(ctx *sql.Context, config *W
 								newExpectedRowComparisonType := WorkflowSavedQueryExpectedRowColumnComparisonTypeUnspecified
 								var newExpectedRowCount int64
 								if configStep.ExpectedRows.Value != "" {
-									newExpectedRowComparisonType, newExpectedRowCount, err = d.parseSavedQueryExpectedResultString(configStep.ExpectedRows.Value)
+									newExpectedRowComparisonType, newExpectedRowCount, err = ParseSavedQueryExpectedResultString(configStep.ExpectedRows.Value)
 									if err != nil {
 										return err
 									}
@@ -1369,12 +1369,12 @@ func (d *doltWorkflowManager) updateExistingWorkflow(ctx *sql.Context, config *W
 					return err
 				}
 
-				expectedColumnComparisonType, expectedColumnCount, err := d.parseSavedQueryExpectedResultString(step.ExpectedColumns.Value)
+				expectedColumnComparisonType, expectedColumnCount, err := ParseSavedQueryExpectedResultString(step.ExpectedColumns.Value)
 				if err != nil {
 					return err
 				}
 
-				expectedRowComparisonType, expectedRowCount, err := d.parseSavedQueryExpectedResultString(step.ExpectedRows.Value)
+				expectedRowComparisonType, expectedRowCount, err := ParseSavedQueryExpectedResultString(step.ExpectedRows.Value)
 				if err != nil {
 					return err
 				}
@@ -1409,12 +1409,12 @@ func (d *doltWorkflowManager) updateExistingWorkflow(ctx *sql.Context, config *W
 				return err
 			}
 
-			expectedColumnComparisonType, expectedColumnCount, err := d.parseSavedQueryExpectedResultString(step.ExpectedColumns.Value)
+			expectedColumnComparisonType, expectedColumnCount, err := ParseSavedQueryExpectedResultString(step.ExpectedColumns.Value)
 			if err != nil {
 				return err
 			}
 
-			expectedRowComparisonType, expectedRowCount, err := d.parseSavedQueryExpectedResultString(step.ExpectedRows.Value)
+			expectedRowComparisonType, expectedRowCount, err := ParseSavedQueryExpectedResultString(step.ExpectedRows.Value)
 			if err != nil {
 				return err
 			}
@@ -1561,44 +1561,6 @@ func (d *doltWorkflowManager) writeWorkflowSavedQueryStepExpectedRowColumnResult
 		return "", err
 	}
 	return WorkflowSavedQueryExpectedRowColumnResultId(resultID), nil
-}
-
-func (d *doltWorkflowManager) parseSavedQueryExpectedResultString(str string) (WorkflowSavedQueryExpectedRowColumnComparisonType, int64, error) {
-	if str == "" {
-		return WorkflowSavedQueryExpectedRowColumnComparisonTypeUnspecified, 0, nil
-	}
-
-	parts := strings.Split(strings.TrimSpace(str), " ")
-	if len(parts) == 1 {
-		i, err := strconv.ParseInt(parts[0], 10, 64)
-		if err != nil {
-			return 0, 0, err
-		}
-		return WorkflowSavedQueryExpectedRowColumnComparisonTypeEquals, i, nil
-	}
-	if len(parts) == 2 {
-		i, err := strconv.ParseInt(parts[1], 10, 64)
-		if err != nil {
-			return 0, 0, err
-		}
-		switch strings.TrimSpace(parts[0]) {
-		case "==":
-			return WorkflowSavedQueryExpectedRowColumnComparisonTypeEquals, i, nil
-		case "!=":
-			return WorkflowSavedQueryExpectedRowColumnComparisonTypeNotEquals, i, nil
-		case ">":
-			return WorkflowSavedQueryExpectedRowColumnComparisonTypeGreaterThan, i, nil
-		case ">=":
-			return WorkflowSavedQueryExpectedRowColumnComparisonTypeGreaterThanOrEqual, i, nil
-		case "<":
-			return WorkflowSavedQueryExpectedRowColumnComparisonTypeLessThan, i, nil
-		case "<=":
-			return WorkflowSavedQueryExpectedRowColumnComparisonTypeLessThanOrEqual, i, nil
-		default:
-			return 0, 0, errors.New("unknown comparison type")
-		}
-	}
-	return 0, 0, fmt.Errorf("unable to parse comparison string: %s", str)
 }
 
 func (d *doltWorkflowManager) toSavedQueryExpectedResultString(comparisonType WorkflowSavedQueryExpectedRowColumnComparisonType, count int64) (string, error) {
@@ -1757,12 +1719,12 @@ func (d *doltWorkflowManager) createWorkflow(ctx *sql.Context, config *WorkflowC
 
 				if resultType == WorkflowSavedQueryExpectedResultsTypeRowColumnCount {
 					// insert into expected results
-					expectedColumnComparisonType, expectedColumnCount, err := d.parseSavedQueryExpectedResultString(step.ExpectedColumns.Value)
+					expectedColumnComparisonType, expectedColumnCount, err := ParseSavedQueryExpectedResultString(step.ExpectedColumns.Value)
 					if err != nil {
 						return err
 					}
 
-					expectedRowComparisonType, expectedRowCount, err := d.parseSavedQueryExpectedResultString(step.ExpectedRows.Value)
+					expectedRowComparisonType, expectedRowCount, err := ParseSavedQueryExpectedResultString(step.ExpectedRows.Value)
 					if err != nil {
 						return err
 					}
