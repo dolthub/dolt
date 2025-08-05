@@ -187,8 +187,7 @@ Dolt is "Git for Data" - a SQL database with version control capabilities. All G
 - ` + "`git merge` → `dolt merge`" + `
 - ` + "`git diff` → `dolt diff`" + `
 
-For help and documentation on commands, you can run `dolt help` and
-`dolt <command` help`.
+For help and documentation on commands, you can run ` + "`dolt help`" + ` and ` + "`dolt <command> help`" + `.
 
 ## Essential Dolt CLI Commands
 
@@ -299,28 +298,23 @@ dolt ci run <workflow-name>
 #### 1. Create Saved Queries First
 Before creating workflows, save your validation queries:
 
+` + "```bash" + `
+# Save queries using CLI
+dolt sql --save "show_tables" -q "SHOW TABLES;"
+dolt sql --save "user_count_check" -q "SELECT COUNT(*) as user_count FROM users;"
+dolt sql --save "valid_emails" -q "SELECT COUNT(*) FROM users WHERE email NOT LIKE '%@%';"
+` + "```" + `
+
+Or insert directly into the query catalog:
 ` + "```sql" + `
--- Save a query to validate table existence
-CALL dolt_saved_query_save(
-    'show_tables', 
-    'SHOW TABLES;'
-);
-
--- Save a query with expected results
-CALL dolt_saved_query_save(
-    'user_count_check',
-    'SELECT COUNT(*) as user_count FROM users;'
-);
-
--- Save a data validation query
-CALL dolt_saved_query_save(
-    'valid_emails',
-    'SELECT COUNT(*) FROM users WHERE email NOT LIKE "%@%";'
-);
+INSERT INTO dolt_query_catalog VALUES 
+('show_tables', 1, 'show_tables', 'SHOW TABLES;', 'Table existence check'),
+('user_count_check', 2, 'user_count_check', 'SELECT COUNT(*) as user_count FROM users;', 'User count validation'),
+('valid_emails', 3, 'valid_emails', 'SELECT COUNT(*) FROM users WHERE email NOT LIKE "%@%";', 'Email format check');
 ` + "```" + `
 
 #### 2. Create Workflow YAML File
-Create a workflow file (e.g., ` + "`.dolt/workflows/data-validation.yaml`" + `):
+Create a workflow file (e.g., ` + "`data-validation.yaml`" + `) in your current directory:
 
 ` + "```yaml" + `
 name: data validation workflow
@@ -422,30 +416,25 @@ jobs:
 
 ### Managing Saved Queries for CI
 
+` + "```bash" + `
+# List all saved queries
+dolt sql --list-saved
+# or
+dolt sql -l
+` + "```" + `
+
 ` + "```sql" + `
--- List all saved queries
-SELECT * FROM dolt_saved_query;
+-- View saved queries via SQL
+SELECT * FROM dolt_query_catalog;
 
--- Create query for CI validation
-CALL dolt_saved_query_save(
-    'table_row_counts',
-    'SELECT 
-        table_name, 
-        table_rows 
-     FROM information_schema.tables 
-     WHERE table_schema = database();'
-);
-
--- Update existing saved query
-CALL dolt_saved_query_save(
-    'user_validation',
-    'SELECT COUNT(*) as invalid_users 
-     FROM users 
-     WHERE email IS NULL OR email = "";'
-);
+-- Create queries by inserting into catalog
+INSERT INTO dolt_query_catalog VALUES 
+('table_row_counts', 4, 'table_row_counts', 
+ 'SELECT table_name, table_rows FROM information_schema.tables WHERE table_schema = database();', 
+ 'Count rows in all tables');
 
 -- Delete saved query
-CALL dolt_saved_query_delete('old_query_name');
+DELETE FROM dolt_query_catalog WHERE id = 'old_query_name';
 ` + "```" + `
 
 ### Best Practices for CI
@@ -470,6 +459,8 @@ CALL dolt_saved_query_delete('old_query_name');
    - Commit workflow files to repository
    - Track changes to CI configuration
    - Use branches for CI development
+
+**Note:** Dolt CI looks for workflow YAML files in your current directory when you run ` + "`dolt ci run <workflow-name>`" + `.
 
 ## System Tables for Version Control
 
@@ -499,33 +490,22 @@ SELECT * FROM dolt_conflicts_<table_name>;
 SELECT * FROM dolt_commits;
 ` + "```" + `
 
-### Version Control Stored Procedures
+### Version Control Operations via SQL
 
-Execute version control operations via SQL:
+When working in SQL sessions, you can execute version control operations using stored procedures:
 
 ` + "```sql" + `
--- Stage changes
-CALL dolt_add('<table_name>');
-CALL dolt_add('.');  -- stage all
-
--- Commit changes
+-- Stage and commit changes
+CALL dolt_add('.');
 CALL dolt_commit('-m', 'commit message');
 
--- Create branch
+-- Branch operations
 CALL dolt_branch('<branch_name>');
-
--- Switch branches
 CALL dolt_checkout('<branch_name>');
-
--- Merge branches
 CALL dolt_merge('<branch_name>');
-
--- Reset changes
-CALL dolt_reset('--hard');
-
--- Create tag
-CALL dolt_tag('<tag_name>');
 ` + "```" + `
+
+**Note:** Use CLI commands (` + "`dolt add`, `dolt commit`, etc." + `) for most operations. SQL procedures are useful when already in a SQL session.
 
 ### Advanced System Tables
 ` + "```sql" + `
@@ -541,6 +521,20 @@ SELECT * FROM dolt_statistics;
 -- See ignored tables
 SELECT * FROM dolt_ignore;
 ` + "```" + `
+
+## CLI vs SQL Approach
+
+**Prefer CLI commands for:**
+- Version control operations (add, commit, branch, merge)
+- Repository management (init, clone, push, pull)
+- Conflict resolution
+- Status checking and history viewing
+
+**Use SQL for:**
+- Data queries and analysis
+- Complex data transformations
+- Examining system tables (dolt_log, dolt_status, etc.)
+- When already in an active SQL session
 
 ## Best Practices for Agents
 
@@ -561,22 +555,16 @@ dolt checkout main
 dolt merge feature/agent-changes
 ` + "```" + `
 
-### 2. Use SQL Server for Complex Operations
-` + "```sql" + `
--- Start transaction
-START TRANSACTION;
+### 2. Use SQL for Data Operations, CLI for Version Control
+` + "```bash" + `
+# Use dolt sql for data changes
+dolt sql -q "INSERT INTO users VALUES (1, 'Alice');"
+dolt sql -q "UPDATE products SET price = price * 1.1 WHERE category = 'electronics';"
 
--- Make multiple changes
-INSERT INTO users VALUES (1, 'Alice');
-UPDATE products SET price = price * 1.1 WHERE category = 'electronics';
-
--- Check changes before committing
-SELECT * FROM dolt_status;
-
--- Commit transaction and version control
-COMMIT;
-CALL dolt_add('.');
-CALL dolt_commit('-m', 'Update user and product data');
+# Check status and commit using CLI
+dolt status
+dolt add .
+dolt commit -m "Update user and product data"
 ` + "```" + `
 
 ### 3. Validate Changes with System Tables
@@ -598,16 +586,14 @@ Create workflows to validate:
 - Cross-table relationships
 
 ### 5. Handle Conflicts Gracefully
-` + "```sql" + `
--- Check for conflicts
-SELECT * FROM dolt_conflicts;
+` + "```bash" + `
+# Check for conflicts using CLI
+dolt conflicts cat <table_name>
+dolt conflicts resolve --ours <table_name>
+dolt conflicts resolve --theirs <table_name>
 
--- View specific table conflicts
-SELECT * FROM dolt_conflicts_<table_name>;
-
--- Resolve conflicts by choosing version
-CALL dolt_conflicts_resolve('--ours', '<table_name>');
-CALL dolt_conflicts_resolve('--theirs', '<table_name>');
+# Or use SQL to examine conflicts
+dolt sql -q "SELECT * FROM dolt_conflicts_<table_name>;"
 ` + "```" + `
 
 ## Common Workflow Examples
@@ -620,8 +606,8 @@ dolt checkout -b migration/update-schema
 # Apply schema changes via SQL
 dolt sql -q "ALTER TABLE users ADD COLUMN email VARCHAR(255);"
 
-# Create CI validation
-dolt sql -q "CALL dolt_saved_query_save('schema_check', 'DESCRIBE users;');"
+# Create CI validation query
+dolt sql --save "schema_check" -q "DESCRIBE users;"
 
 # Test with CI
 dolt ci run schema-validation
@@ -636,19 +622,19 @@ dolt merge migration/update-schema
 ` + "```" + `
 
 ### Data Analysis Workflow
-` + "```sql" + `
--- Work on analysis branch
-CALL dolt_checkout('-b', 'analysis/user-behavior');
+` + "```bash" + `
+# Create analysis branch
+dolt checkout -b analysis/user-behavior
 
--- Create analysis tables
-CREATE TABLE user_metrics AS 
-SELECT user_id, COUNT(*) as actions 
-FROM user_actions 
-GROUP BY user_id;
+# Create analysis tables via SQL
+dolt sql -q "CREATE TABLE user_metrics AS 
+            SELECT user_id, COUNT(*) as actions 
+            FROM user_actions 
+            GROUP BY user_id;"
 
--- Stage and commit analysis
-CALL dolt_add('user_metrics');
-CALL dolt_commit('-m', 'Add user behavior analysis');
+# Stage and commit using CLI
+dolt add user_metrics
+dolt commit -m "Add user behavior analysis"
 ` + "```" + `
 
 ## Integration with External Tools
