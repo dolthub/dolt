@@ -69,7 +69,7 @@ func (a *HasAncestor) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 		if err != nil {
 			return nil, err
 		}
-		headCommit, err = resolveRefSpec(ctx, headRef, ddb, headStr.(string))
+		headCommit, err = ResolveRefSpec(ctx, headRef, ddb, headStr.(string))
 		if err != nil {
 			return nil, err
 		}
@@ -85,7 +85,7 @@ func (a *HasAncestor) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 		if err != nil {
 			return nil, err
 		}
-		ancCommit, err = resolveRefSpec(ctx, headRef, ddb, ancStr.(string))
+		ancCommit, err = ResolveRefSpec(ctx, headRef, ddb, ancStr.(string))
 		if err != nil {
 			return nil, err
 		}
