@@ -615,3 +615,78 @@ teardown() {
     [ $status -eq 1 ]
     [[ $output =~ "error: cannot merge because table test has different primary keys" ]] || false
 }
+
+@test "cherry-pick: author preserved during cherry-pick" {
+    dolt checkout branch1
+    dolt sql -q "INSERT INTO test VALUES (99, 'auth')"
+    dolt add .
+    dolt commit --author="Original Author <original@example.com>" -m "commit with specific author"
+    COMMIT_HASH=$(get_head_commit)
+    
+    run dolt log -n 1
+    [ $status -eq 0 ]
+    [[ "$output" =~ "Original Author <original@example.com>" ]] || false
+    
+    dolt checkout main
+    run dolt cherry-pick $COMMIT_HASH
+    [ $status -eq 0 ]
+    
+    run dolt log -n 1
+    [ $status -eq 0 ]
+    [[ "$output" =~ "Original Author <original@example.com>" ]] || false
+}
+
+@test "cherry-pick: multiple authors preserved in sequence with merge workflow" {
+    dolt checkout branch1
+    
+    dolt sql -q "INSERT INTO test VALUES (200, 'alice')"
+    dolt add .
+    dolt commit --author="Alice Developer <alice@company.com>" -m "Alice's feature"
+    ALICE_HASH=$(get_head_commit)
+    
+    dolt sql -q "INSERT INTO test VALUES (201, 'bob')"
+    dolt add .
+    dolt commit --author="Bob Engineer <bob@company.com>" -m "Bob's improvement"
+    BOB_HASH=$(get_head_commit)
+    
+    dolt sql -q "INSERT INTO test VALUES (202, 'carol')"
+    dolt add .
+    dolt commit --author="Carol Architect <carol@company.com>" -m "Carol's refactor"  
+    CAROL_HASH=$(get_head_commit)
+    
+    dolt checkout main
+    
+    run dolt cherry-pick $ALICE_HASH
+    [ $status -eq 0 ]
+    run dolt log -n 1
+    [[ "$output" =~ "Alice Developer <alice@company.com>" ]] || false
+    
+    run dolt cherry-pick $BOB_HASH  
+    [ $status -eq 0 ]
+    run dolt log -n 1
+    [[ "$output" =~ "Bob Engineer <bob@company.com>" ]] || false
+    
+    run dolt cherry-pick $CAROL_HASH
+    [ $status -eq 0 ]
+    run dolt log -n 1
+    [[ "$output" =~ "Carol Architect <carol@company.com>" ]] || false
+    
+    # Test merge workflow - customer requirement for merge commits
+    dolt checkout -b integration_branch
+    dolt sql -q "INSERT INTO test VALUES (300, 'merge')"
+    dolt add .
+    dolt commit --author="Integration Manager <integration@company.com>" -m "prepare for merge"
+    
+    dolt checkout main  
+    run dolt merge integration_branch --no-ff -m "Merge integration_branch"
+    [ $status -eq 0 ]
+    
+    run dolt log -n 1
+    [[ "$output" =~ "Merge integration_branch" ]] || false
+    
+    run dolt log -n 5
+    [[ "$output" =~ "Alice Developer <alice@company.com>" ]] || false
+    [[ "$output" =~ "Bob Engineer <bob@company.com>" ]] || false  
+    [[ "$output" =~ "Carol Architect <carol@company.com>" ]] || false
+    [[ "$output" =~ "Integration Manager <integration@company.com>" ]] || false
+}

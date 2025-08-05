@@ -77,11 +77,11 @@ func (d MergeBase) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 		return nil, errors.New("right value is not a string")
 	}
 
-	left, err := resolveRefSpec(ctx, headRef, doltDB, leftStr)
+	left, err := ResolveRefSpec(ctx, headRef, doltDB, leftStr)
 	if err != nil {
 		return nil, err
 	}
-	right, err := resolveRefSpec(ctx, headRef, doltDB, rightStr)
+	right, err := ResolveRefSpec(ctx, headRef, doltDB, rightStr)
 	if err != nil {
 		return nil, err
 	}
@@ -94,7 +94,8 @@ func (d MergeBase) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 	return mergeBase.String(), nil
 }
 
-func resolveRefSpec(ctx *sql.Context, headRef ref.DoltRef, doltDB *doltdb.DoltDB, spec string) (*doltdb.Commit, error) {
+// ResolveRefSpec resolves a commit spec string to a Commit object using the provided headRef and doltDB.
+func ResolveRefSpec(ctx *sql.Context, headRef ref.DoltRef, doltDB *doltdb.DoltDB, spec string) (*doltdb.Commit, error) {
 	cs, err := doltdb.NewCommitSpec(spec)
 	if err != nil {
 		return nil, err

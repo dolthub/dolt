@@ -78,7 +78,7 @@ func CherryPick(ctx *sql.Context, commit string, options CherryPickOptions) (str
 		return "", nil, fmt.Errorf("failed to get roots for current session")
 	}
 
-	mergeResult, commitMsg, err := cherryPick(ctx, doltSession, roots, dbName, commit, options.EmptyCommitHandling)
+	mergeResult, commitMsg, originalCommit, err := cherryPick(ctx, doltSession, roots, dbName, commit, options.EmptyCommitHandling)
 	if err != nil {
 		return "", mergeResult, err
 	}
@@ -108,7 +108,7 @@ func CherryPick(ctx *sql.Context, commit string, options CherryPickOptions) (str
 		return "", mergeResult, nil
 	}
 
-	commitProps, err := CreateCommitStagedPropsFromCherryPickOptions(ctx, options)
+	commitProps, err := CreateCommitStagedPropsFromCherryPickOptions(ctx, options, originalCommit)
 	if err != nil {
 		return "", nil, err
 	}
@@ -152,11 +152,16 @@ func CherryPick(ctx *sql.Context, commit string, options CherryPickOptions) (str
 
 // CreateCommitStagedPropsFromCherryPickOptions converts the specified cherry-pick |options| into a CommitStagedProps
 // instance that can be used to create a pending commit.
-func CreateCommitStagedPropsFromCherryPickOptions(ctx *sql.Context, options CherryPickOptions) (*actions.CommitStagedProps, error) {
+func CreateCommitStagedPropsFromCherryPickOptions(ctx *sql.Context, options CherryPickOptions, originalCommit *doltdb.Commit) (*actions.CommitStagedProps, error) {
+	originalMeta, err := originalCommit.GetCommitMeta(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	commitProps := actions.CommitStagedProps{
 		Date:  ctx.QueryTime(),
-		Name:  ctx.Client().User,
-		Email: fmt.Sprintf("%s@%s", ctx.Client().User, ctx.Client().Address),
+		Name:  originalMeta.Name,
+		Email: originalMeta.Email,
 	}
 
 	if options.CommitMessage != "" {
@@ -224,104 +229,104 @@ func AbortCherryPick(ctx *sql.Context, dbName string) error {
 // cherryPick checks that the current working set is clean, verifies the cherry-pick commit is not a merge commit
 // or a commit without parent commit, performs merge and returns the new working set root value and
 // the commit message of cherry-picked commit as the commit message of the new commit created during this command.
-func cherryPick(ctx *sql.Context, dSess *dsess.DoltSession, roots doltdb.Roots, dbName, cherryStr string, emptyCommitHandling doltdb.EmptyCommitHandling) (*merge.Result, string, error) {
+func cherryPick(ctx *sql.Context, dSess *dsess.DoltSession, roots doltdb.Roots, dbName, cherryStr string, emptyCommitHandling doltdb.EmptyCommitHandling) (*merge.Result, string, *doltdb.Commit, error) {
 	// check for clean working set
 	wsOnlyHasIgnoredTables, err := diff.WorkingSetContainsOnlyIgnoredTables(ctx, roots)
 	if err != nil {
-		return nil, "", err
+		return nil, "", nil, err
 	}
 	if !wsOnlyHasIgnoredTables {
-		return nil, "", ErrCherryPickUncommittedChanges
+		return nil, "", nil, ErrCherryPickUncommittedChanges
 	}
 
 	headRootHash, err := roots.Head.HashOf()
 	if err != nil {
-		return nil, "", err
+		return nil, "", nil, err
 	}
 
 	workingRootHash, err := roots.Working.HashOf()
 	if err != nil {
-		return nil, "", err
+		return nil, "", nil, err
 	}
 
 	doltDB, ok := dSess.GetDoltDB(ctx, dbName)
 	if !ok {
-		return nil, "", fmt.Errorf("failed to get doltDB")
+		return nil, "", nil, fmt.Errorf("failed to get doltDB")
 	}
 
 	dbData, ok := dSess.GetDbData(ctx, dbName)
 	if !ok {
-		return nil, "", fmt.Errorf("failed to get dbData")
+		return nil, "", nil, fmt.Errorf("failed to get dbData")
 	}
 
 	cherryCommitSpec, err := doltdb.NewCommitSpec(cherryStr)
 	if err != nil {
-		return nil, "", err
+		return nil, "", nil, err
 	}
 	headRef, err := dbData.Rsr.CWBHeadRef(ctx)
 	if err != nil {
-		return nil, "", err
+		return nil, "", nil, err
 	}
 	optCmt, err := doltDB.Resolve(ctx, cherryCommitSpec, headRef)
 	if err != nil {
-		return nil, "", err
+		return nil, "", nil, err
 	}
 	cherryCommit, ok := optCmt.ToCommit()
 	if !ok {
-		return nil, "", doltdb.ErrGhostCommitEncountered
+		return nil, "", nil, doltdb.ErrGhostCommitEncountered
 	}
 
 	if len(cherryCommit.DatasParents()) > 1 {
-		return nil, "", fmt.Errorf("cherry-picking a merge commit is not supported")
+		return nil, "", nil, fmt.Errorf("cherry-picking a merge commit is not supported")
 	}
 	if len(cherryCommit.DatasParents()) == 0 {
-		return nil, "", fmt.Errorf("cherry-picking a commit without parents is not supported")
+		return nil, "", nil, fmt.Errorf("cherry-picking a commit without parents is not supported")
 	}
 
 	cherryRoot, err := cherryCommit.GetRootValue(ctx)
 	if err != nil {
-		return nil, "", err
+		return nil, "", nil, err
 	}
 
 	// When cherry-picking, we need to use the parent of the cherry-picked commit as the ancestor. This
 	// ensures that only the delta from the cherry-pick commit is applied.
 	optCmt, err = doltDB.ResolveParent(ctx, cherryCommit, 0)
 	if err != nil {
-		return nil, "", err
+		return nil, "", nil, err
 	}
 	parentCommit, ok := optCmt.ToCommit()
 	if !ok {
-		return nil, "", doltdb.ErrGhostCommitEncountered
+		return nil, "", nil, doltdb.ErrGhostCommitEncountered
 	}
 
 	parentRoot, err := parentCommit.GetRootValue(ctx)
 	if err != nil {
-		return nil, "", err
+		return nil, "", nil, err
 	}
 
 	isEmptyCommit, err := rootsEqual(cherryRoot, parentRoot)
 	if err != nil {
-		return nil, "", err
+		return nil, "", nil, err
 	}
 	if isEmptyCommit {
 		switch emptyCommitHandling {
 		case doltdb.KeepEmptyCommit:
 			// No action; keep processing the empty commit
 		case doltdb.DropEmptyCommit:
-			return nil, "", nil
+			return nil, "", nil, nil
 		case doltdb.ErrorOnEmptyCommit:
-			return nil, "", fmt.Errorf("The previous cherry-pick commit is empty. " +
+			return nil, "", nil, fmt.Errorf("The previous cherry-pick commit is empty. " +
 				"Use --allow-empty to cherry-pick empty commits.")
 		default:
-			return nil, "", fmt.Errorf("Unsupported empty commit handling options: %v", emptyCommitHandling)
+			return nil, "", nil, fmt.Errorf("Unsupported empty commit handling options: %v", emptyCommitHandling)
 		}
 	}
 
 	dbState, ok, err := dSess.LookupDbState(ctx, dbName)
 	if err != nil {
-		return nil, "", err
+		return nil, "", nil, err
 	} else if !ok {
-		return nil, "", sql.ErrDatabaseNotFound.New(dbName)
+		return nil, "", nil, sql.ErrDatabaseNotFound.New(dbName)
 	}
 
 	mo := merge.MergeOpts{
@@ -330,28 +335,28 @@ func cherryPick(ctx *sql.Context, dSess *dsess.DoltSession, roots doltdb.Roots, 
 	}
 	result, err := merge.MergeRoots(ctx, roots.Working, cherryRoot, parentRoot, cherryCommit, parentCommit, dbState.EditOpts(), mo)
 	if err != nil {
-		return result, "", err
+		return result, "", nil, err
 	}
 
 	workingRootHash, err = result.Root.HashOf()
 	if err != nil {
-		return nil, "", err
+		return nil, "", nil, err
 	}
 
 	// If the cherry-pick modifies a deleted table, we don't have a good way to surface that. Abort.
 	for _, schConflict := range result.SchemaConflicts {
 		if schConflict.ModifyDeleteConflict {
-			return nil, "", schConflict
+			return nil, "", nil, schConflict
 		}
 	}
 
 	if headRootHash.Equal(workingRootHash) && !isEmptyCommit {
-		return nil, "", fmt.Errorf("no changes were made, nothing to commit")
+		return nil, "", nil, fmt.Errorf("no changes were made, nothing to commit")
 	}
 
 	cherryCommitMeta, err := cherryCommit.GetCommitMeta(ctx)
 	if err != nil {
-		return nil, "", err
+		return nil, "", nil, err
 	}
 
 	// If any of the merge stats show a data or schema conflict or a constraint
@@ -360,19 +365,19 @@ func cherryPick(ctx *sql.Context, dSess *dsess.DoltSession, roots doltdb.Roots, 
 		if stats.HasArtifacts() {
 			ws, err := dSess.WorkingSet(ctx, dbName)
 			if err != nil {
-				return nil, "", err
+				return nil, "", nil, err
 			}
 			newWorkingSet := ws.StartCherryPick(cherryCommit, cherryStr)
 			err = dSess.SetWorkingSet(ctx, dbName, newWorkingSet)
 			if err != nil {
-				return nil, "", err
+				return nil, "", nil, err
 			}
 
 			break
 		}
 	}
 
-	return result, cherryCommitMeta.Description, nil
+	return result, cherryCommitMeta.Description, cherryCommit, nil
 }
 
 func rootsEqual(root1, root2 doltdb.RootValue) (bool, error) {
