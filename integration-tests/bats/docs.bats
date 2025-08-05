@@ -170,7 +170,7 @@ TXT
     # Check that AGENT.md document exists
     run dolt docs print AGENT.md
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "This directory contains a Dolt database." ]] || false
+    [[ "$output" =~ "# AGENT.md - Dolt Database Operations Guide" ]] || false
 
     # Verify AGENT.md is in the docs table
     run dolt sql -q "SELECT doc_name FROM dolt_docs WHERE doc_name = 'AGENT.md'" -r csv
@@ -195,7 +195,7 @@ TXT
     # Check basic print functionality
     run dolt docs print AGENT.md
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "This directory contains a Dolt database." ]] || false
+    [[ "$output" =~ "# AGENT.md - Dolt Database Operations Guide" ]] || false
 }
 
 @test "docs: AGENT document can be uploaded and modified" {
@@ -225,7 +225,7 @@ TXT
     [[ "$output" =~ "https://example.com" ]] || false
     
     # Verify original content is replaced
-    [[ ! "$output" =~ "# Dolt Database Repository" ]] || false
+    [[ ! "$output" =~ "# AGENT.md - Dolt Database Operations Guide" ]] || false
 }
 
 @test "docs: AGENT document diff functionality" {
@@ -253,7 +253,7 @@ TXT
     # Test diff functionality
     run dolt docs diff AGENT.md
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "-This directory contains a Dolt database" ]] || false
+    [[ "$output" =~ "-# AGENT.md - Dolt Database Operations Guide" ]] || false
     [[ "$output" =~ "+This directory contains a modified Dolt database" ]] || false
 }
 
@@ -266,7 +266,7 @@ TXT
     
     # Verify the content matches
     run cat CLAUDE.md
-    [[ "$output" =~ "This directory contains a Dolt database" ]] || false
+    [[ "$output" =~ "# AGENT.md - Dolt Database Operations Guide" ]] || false
 
     # Compare with direct docs print
     dolt docs print AGENT.md > direct_output.md
@@ -284,7 +284,7 @@ TXT
     # Check that we can query the content
     run dolt sql -q "SELECT doc_text FROM dolt_docs WHERE doc_name = 'AGENT.md'" -r csv
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "This directory contains a Dolt database" ]] || false
+    [[ "$output" =~ "# AGENT.md - Dolt Database Operations Guide" ]] || false
 }
 
 @test "docs: AGENT document can be modified via SQL" {
@@ -298,7 +298,7 @@ TXT
     [[ "$output" =~ "This was modified via SQL" ]] || false
     
     # Verify original content is gone
-    [[ ! "$output" =~ "This directory contains a Dolt database" ]] || false
+    [[ ! "$output" =~ "# AGENT.md - Dolt Database Operations Guide" ]] || false
 }
 
 @test "docs: AGENT document validation works correctly" {
@@ -363,7 +363,7 @@ TXT
     # Verify each can be printed
     run dolt docs print AGENT.md
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "This directory contains a Dolt database" ]] || false
+    [[ "$output" =~ "# AGENT.md - Dolt Database Operations Guide" ]] || false
 
     run dolt docs print README.md
     [ "$status" -eq 0 ]

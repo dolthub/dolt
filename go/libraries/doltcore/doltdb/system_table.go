@@ -174,11 +174,502 @@ const (
 	// AgentDoc is the key for accessing the agent documentation within the docs table
 	AgentDoc = "AGENT.md"
 
-	DefaultAgentDocValue = `This directory contains a Dolt database.
+	DefaultAgentDocValue = `# AGENT.md - Dolt Database Operations Guide
 
-You can access the dolt command line by typing dolt.
-dolt is like git for sql databases so all git commands work the same in dolt.
-For example "git add" becomes "dolt add" and "git diff" becomes "dolt diff".`
+This file provides guidance for AI agents working with Dolt databases to maximize productivity and follow best practices.
+
+## Quick Start
+
+Dolt is "Git for Data" - a SQL database with version control capabilities. All Git commands have Dolt equivalents:
+- ` + "`git add` → `dolt add`" + `  
+- ` + "`git commit` → `dolt commit`" + `
+- ` + "`git branch` → `dolt branch`" + `
+- ` + "`git merge` → `dolt merge`" + `
+- ` + "`git diff` → `dolt diff`" + `
+
+## Essential Dolt CLI Commands
+
+### Repository Operations
+` + "```bash" + `
+# Initialize new database
+dolt init
+
+# Clone existing database
+dolt clone <remote-url>
+
+# Show current status
+dolt status
+
+# View commit history
+dolt log
+` + "```" + `
+
+### Branch Management
+` + "```bash" + `
+# List branches
+dolt branch
+
+# Create new branch
+dolt branch <branch-name>
+
+# Switch branches
+dolt checkout <branch-name>
+
+# Create and switch to new branch
+dolt checkout -b <branch-name>
+` + "```" + `
+
+### Data Operations
+` + "```bash" + `
+# Stage changes
+dolt add <table-name>
+dolt add .  # stage all changes
+
+# Commit changes
+dolt commit -m "commit message"
+
+# View differences
+dolt diff
+dolt diff <table-name>
+dolt diff <branch1> <branch2>
+
+# Merge branches
+dolt merge <branch-name>
+` + "```" + `
+
+## Starting and Connecting to Dolt SQL Server
+
+### Start SQL Server
+` + "```bash" + `
+# Start server on default port (3306)
+dolt sql-server
+
+# Start on specific port
+dolt sql-server --port=3307
+
+# Start with specific host
+dolt sql-server --host=0.0.0.0 --port=3307
+
+# Start in background
+dolt sql-server --port=3307 &
+` + "```" + `
+
+### Connecting to SQL Server
+` + "```bash" + `
+# Connect with dolt sql command
+dolt sql
+
+# Connect with mysql client
+mysql -h 127.0.0.1 -P 3306 -u root
+
+# Connect with specific database
+mysql -h 127.0.0.1 -P 3306 -u root -D <database-name>
+` + "```" + `
+
+## Dolt CI Testing
+
+### Prerequisites
+- Requires Dolt v1.43.14 or later
+- Must initialize CI capabilities: ` + "`dolt ci init`" + `
+- Workflows defined in YAML files
+
+### Available CI Commands
+` + "```bash" + `
+# Initialize CI capabilities
+dolt ci init
+
+# List available workflows
+dolt ci ls
+
+# View workflow details
+dolt ci view <workflow-name>
+
+# View specific job in workflow
+dolt ci view <workflow-name> <job-name>
+
+# Run workflow locally
+dolt ci run <workflow-name>
+` + "```" + `
+
+### Creating CI Workflows
+
+#### 1. Create Saved Queries First
+Before creating workflows, save your validation queries:
+
+` + "```sql" + `
+-- Save a query to validate table existence
+CALL dolt_saved_query_save(
+    'show_tables', 
+    'SHOW TABLES;'
+);
+
+-- Save a query with expected results
+CALL dolt_saved_query_save(
+    'user_count_check',
+    'SELECT COUNT(*) as user_count FROM users;'
+);
+
+-- Save a data validation query
+CALL dolt_saved_query_save(
+    'valid_emails',
+    'SELECT COUNT(*) FROM users WHERE email NOT LIKE "%@%";'
+);
+` + "```" + `
+
+#### 2. Create Workflow YAML File
+Create a workflow file (e.g., ` + "`.dolt/workflows/data-validation.yaml`" + `):
+
+` + "```yaml" + `
+name: data validation workflow
+on:
+  push:
+    branches:
+      - master
+      - main
+jobs:
+  - name: validate schema
+    steps:
+      - name: check required tables exist
+        saved_query_name: show_tables
+        expected_rows: ">= 3"
+      
+      - name: validate user data
+        saved_query_name: user_count_check
+        expected_columns: "== 1"
+        expected_rows: "> 0"
+  
+  - name: data integrity checks
+    steps:
+      - name: check email format
+        saved_query_name: valid_emails
+        expected_rows: "== 0"  # No invalid emails
+` + "```" + `
+
+#### 3. Workflow Structure Reference
+
+**Required Fields:**
+- ` + "`name`" + `: Unique workflow identifier
+- ` + "`on`" + `: Trigger configuration (currently only ` + "`push`" + ` supported)
+- ` + "`jobs`" + `: Array of job definitions
+
+**Job Structure:**
+- ` + "`name`" + `: Job identifier
+- ` + "`steps`" + `: Array of step definitions
+
+**Step Structure:**
+- ` + "`name`" + `: Step description
+- ` + "`saved_query_name`" + `: Reference to saved query
+- ` + "`expected_rows`" + `: Optional row count validation (operators: ` + "`==`, `>`, `<`, `>=`, `<=`" + `)
+- ` + "`expected_columns`" + `: Optional column count validation
+
+**Trigger Options:**
+` + "```yaml" + `
+on:
+  push:
+    branches:
+      - master
+      - main
+      - feature/*
+` + "```" + `
+
+### Advanced CI Examples
+
+#### Schema Validation Workflow
+` + "```yaml" + `
+name: schema validation
+on:
+  push:
+    branches: ["*"]
+jobs:
+  - name: table structure
+    steps:
+      - name: users table has required columns
+        saved_query_name: describe_users
+        expected_rows: "== 5"
+      
+      - name: products table exists
+        saved_query_name: check_products_table
+        expected_rows: "> 0"
+` + "```" + `
+
+#### Data Quality Workflow
+` + "```yaml" + `
+name: data quality checks
+on:
+  push:
+    branches:
+      - production
+jobs:
+  - name: referential integrity
+    steps:
+      - name: no orphaned orders
+        saved_query_name: orphaned_orders_check
+        expected_rows: "== 0"
+      
+      - name: valid price ranges
+        saved_query_name: price_validation
+        expected_rows: "== 0"
+  
+  - name: business rules
+    steps:
+      - name: active users have orders
+        saved_query_name: active_users_orders
+        expected_rows: "> 0"
+` + "```" + `
+
+### Managing Saved Queries for CI
+
+` + "```sql" + `
+-- List all saved queries
+SELECT * FROM dolt_saved_query;
+
+-- Create query for CI validation
+CALL dolt_saved_query_save(
+    'table_row_counts',
+    'SELECT 
+        table_name, 
+        table_rows 
+     FROM information_schema.tables 
+     WHERE table_schema = database();'
+);
+
+-- Update existing saved query
+CALL dolt_saved_query_save(
+    'user_validation',
+    'SELECT COUNT(*) as invalid_users 
+     FROM users 
+     WHERE email IS NULL OR email = "";'
+);
+
+-- Delete saved query
+CALL dolt_saved_query_delete('old_query_name');
+` + "```" + `
+
+### Best Practices for CI
+
+1. **Create Comprehensive Validation Queries**
+   - Test data integrity constraints
+   - Validate business rules
+   - Check schema requirements
+   - Verify data relationships
+
+2. **Use Descriptive Names**
+   - Clear workflow names
+   - Meaningful job descriptions
+   - Descriptive step names
+
+3. **Test Locally First**
+   ` + "```bash" + `
+   dolt ci run <workflow-name>
+   ` + "```" + `
+
+4. **Version Control Your Workflows**
+   - Commit workflow files to repository
+   - Track changes to CI configuration
+   - Use branches for CI development
+
+## System Tables for Version Control
+
+Dolt exposes version control operations through system tables accessible via SQL:
+
+### Core System Tables
+` + "```sql" + `
+-- View commit history
+SELECT * FROM dolt_log;
+
+-- Check current status
+SELECT * FROM dolt_status;
+
+-- View branch information
+SELECT * FROM dolt_branches;
+
+-- See table diffs
+SELECT * FROM dolt_diff_<table_name>;
+
+-- View schema changes
+SELECT * FROM dolt_schema_diff;
+
+-- Check conflicts during merge
+SELECT * FROM dolt_conflicts_<table_name>;
+
+-- View commit metadata
+SELECT * FROM dolt_commits;
+` + "```" + `
+
+### Version Control Stored Procedures
+
+Execute version control operations via SQL:
+
+` + "```sql" + `
+-- Stage changes
+CALL dolt_add('<table_name>');
+CALL dolt_add('.');  -- stage all
+
+-- Commit changes
+CALL dolt_commit('-m', 'commit message');
+
+-- Create branch
+CALL dolt_branch('<branch_name>');
+
+-- Switch branches
+CALL dolt_checkout('<branch_name>');
+
+-- Merge branches
+CALL dolt_merge('<branch_name>');
+
+-- Reset changes
+CALL dolt_reset('--hard');
+
+-- Create tag
+CALL dolt_tag('<tag_name>');
+` + "```" + `
+
+### Advanced System Tables
+` + "```sql" + `
+-- View remotes
+SELECT * FROM dolt_remotes;
+
+-- Check merge conflicts
+SELECT * FROM dolt_conflicts;
+
+-- View statistics
+SELECT * FROM dolt_statistics;
+
+-- See ignored tables
+SELECT * FROM dolt_ignore;
+` + "```" + `
+
+## Best Practices for Agents
+
+### 1. Always Work on Feature Branches
+` + "```bash" + `
+# Create feature branch before making changes
+dolt checkout -b feature/agent-changes
+
+# Make changes on feature branch
+dolt sql -q "INSERT INTO users VALUES (1, 'Alice');"
+
+# Stage and commit
+dolt add .
+dolt commit -m "Add new user Alice"
+
+# Switch back to main to merge
+dolt checkout main
+dolt merge feature/agent-changes
+` + "```" + `
+
+### 2. Use SQL Server for Complex Operations
+` + "```sql" + `
+-- Start transaction
+START TRANSACTION;
+
+-- Make multiple changes
+INSERT INTO users VALUES (1, 'Alice');
+UPDATE products SET price = price * 1.1 WHERE category = 'electronics';
+
+-- Check changes before committing
+SELECT * FROM dolt_status;
+
+-- Commit transaction and version control
+COMMIT;
+CALL dolt_add('.');
+CALL dolt_commit('-m', 'Update user and product data');
+` + "```" + `
+
+### 3. Validate Changes with System Tables
+` + "```sql" + `
+-- Before major operations, check current state
+SELECT * FROM dolt_status;
+SELECT * FROM dolt_branches;
+
+-- After changes, verify with diffs
+SELECT * FROM dolt_diff_users;
+SELECT * FROM dolt_schema_diff;
+` + "```" + `
+
+### 4. Use CI for Data Validation
+Create workflows to validate:
+- Data integrity after changes
+- Schema compatibility
+- Business rule compliance
+- Cross-table relationships
+
+### 5. Handle Conflicts Gracefully
+` + "```sql" + `
+-- Check for conflicts
+SELECT * FROM dolt_conflicts;
+
+-- View specific table conflicts
+SELECT * FROM dolt_conflicts_<table_name>;
+
+-- Resolve conflicts by choosing version
+CALL dolt_conflicts_resolve('--ours', '<table_name>');
+CALL dolt_conflicts_resolve('--theirs', '<table_name>');
+` + "```" + `
+
+## Common Workflow Examples
+
+### Data Migration Workflow
+` + "```bash" + `
+# Create migration branch
+dolt checkout -b migration/update-schema
+
+# Apply schema changes via SQL
+dolt sql -q "ALTER TABLE users ADD COLUMN email VARCHAR(255);"
+
+# Create CI validation
+dolt sql -q "CALL dolt_saved_query_save('schema_check', 'DESCRIBE users;');"
+
+# Test with CI
+dolt ci run schema-validation
+
+# Stage and commit
+dolt add .
+dolt commit -m "Add email column to users table"
+
+# Merge back
+dolt checkout main
+dolt merge migration/update-schema
+` + "```" + `
+
+### Data Analysis Workflow
+` + "```sql" + `
+-- Work on analysis branch
+CALL dolt_checkout('-b', 'analysis/user-behavior');
+
+-- Create analysis tables
+CREATE TABLE user_metrics AS 
+SELECT user_id, COUNT(*) as actions 
+FROM user_actions 
+GROUP BY user_id;
+
+-- Stage and commit analysis
+CALL dolt_add('user_metrics');
+CALL dolt_commit('-m', 'Add user behavior analysis');
+` + "```" + `
+
+## Integration with External Tools
+
+### Database Clients
+Most MySQL clients work with Dolt:
+- MySQL Workbench
+- phpMyAdmin  
+- DataGrip
+- DBeaver
+
+### Backup and Sync
+` + "```bash" + `
+# Push to remote
+dolt push origin main
+
+# Pull changes
+dolt pull origin main
+
+# Clone for backup
+dolt clone <remote-url> backup-location
+` + "```" + `
+
+This guide enables agents to leverage Dolt's unique version control capabilities while maintaining data integrity and following collaborative development practices.`
 )
 
 // GetDocTableName returns the name of the dolt table containing documents such as the license and readme

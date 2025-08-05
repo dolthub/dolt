@@ -300,7 +300,7 @@ assert_valid_repository () {
   # Check that AGENT.md document was created
   run dolt docs print AGENT.md
   [ "$status" -eq 0 ]
-  [[ "$output" =~ "This directory contains a Dolt database" ]] || false
+  [[ "$output" =~ "# AGENT.md - Dolt Database Operations Guide" ]] || false
 
   # Verify it's in the docs table
   run dolt sql -q "SELECT doc_name FROM dolt_docs WHERE doc_name = 'AGENT.md'" -r csv
@@ -339,7 +339,7 @@ assert_valid_repository () {
   # Check that AGENT.md document was still created
   run dolt docs print AGENT.md
   [ "$status" -eq 0 ]
-  [[ "$output" =~ "This directory contains a Dolt database" ]] || false
+  [[ "$output" =~ "# AGENT.md - Dolt Database Operations Guide" ]] || false
 
   # Verify it's in the docs table
   run dolt sql -q "SELECT doc_name FROM dolt_docs WHERE doc_name = 'AGENT.md'" -r csv
