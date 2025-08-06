@@ -30,6 +30,7 @@ type MergeStats struct {
 	Modifications        int
 	DataConflicts        int
 	SchemaConflicts      int
+	RootObjectConflicts  int
 	ConstraintViolations int
 }
 
@@ -38,7 +39,7 @@ func (ms *MergeStats) HasArtifacts() bool {
 }
 
 func (ms *MergeStats) HasConflicts() bool {
-	return ms.HasDataConflicts() || ms.HasSchemaConflicts()
+	return ms.HasDataConflicts() || ms.HasSchemaConflicts() || ms.HasRootObjectConflicts()
 }
 
 func (ms *MergeStats) HasDataConflicts() bool {
@@ -47,6 +48,10 @@ func (ms *MergeStats) HasDataConflicts() bool {
 
 func (ms *MergeStats) HasSchemaConflicts() bool {
 	return ms.SchemaConflicts > 0
+}
+
+func (ms *MergeStats) HasRootObjectConflicts() bool {
+	return ms.RootObjectConflicts > 0
 }
 
 func (ms *MergeStats) HasConstraintViolations() bool {
