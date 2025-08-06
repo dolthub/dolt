@@ -155,7 +155,7 @@ func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		}
 		if upToDate {
 			if !apr.Contains(cli.SilentFlag) {
-				cli.Println("\nAlready up to date.")
+				cli.Println("\nEverything up-to-date")
 			}
 			return
 		}
