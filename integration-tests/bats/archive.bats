@@ -28,7 +28,17 @@ teardown() {
   run dolt archive
   [ "$status" -eq 0 ]
 
+
+  echo "--- TMP output for CI debugging ---"
+  echo "$output"
+  echo "--- END TMP output for CI debugging ---"
+
   lines="$(echo "$output" | grep -ci 'Not enough chunks to build archive.*skipping')"
+
+  echo "--- TMP output for CI debugging ---"
+  echo "lines: $lines"
+  echo "--- END TMP output for CI debugging ---"
+
   [ "$lines" -eq "2" ]
 }
 
