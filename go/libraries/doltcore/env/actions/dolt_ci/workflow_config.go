@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"io"
 
 	"gopkg.in/yaml.v3"
@@ -99,9 +100,11 @@ func ValidateWorkflowConfig(workflow *WorkflowConfig) error {
 			_, ok := branches[branch.Value]
 			if ok {
 				return fmt.Errorf("invalid config: on push branch duplicated: %s", branch.Value)
-			} else {
-				branches[branch.Value] = true
 			}
+			if !ref.IsValidBranchName(branch.Value) {
+				return fmt.Errorf("invalid branch name: %s", branch.Value)
+			}
+			branches[branch.Value] = true
 		}
 	}
 
@@ -111,9 +114,11 @@ func ValidateWorkflowConfig(workflow *WorkflowConfig) error {
 			_, ok := branches[branch.Value]
 			if ok {
 				return fmt.Errorf("invalid config: on pull request branch duplicated: %s", branch.Value)
-			} else {
-				branches[branch.Value] = true
 			}
+			if !ref.IsValidBranchName(branch.Value) {
+				return fmt.Errorf("invalid branch name: %s", branch.Value)
+			}
+			branches[branch.Value] = true
 		}
 
 		activities := make(map[string]bool)

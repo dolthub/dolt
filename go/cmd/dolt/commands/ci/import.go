@@ -33,7 +33,13 @@ import (
 
 var importDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Import a Dolt continuous integration workflow file into the database",
-	LongDesc:  "Import a Dolt continuous integration workflow file into the database and create a Dolt commit",
+	LongDesc: "Import a Dolt continuous integration workflow file into the database and create a Dolt commit" +
+		"\nWorkflow YAML Specification:\n\n\t  name: <workflow-name>\n\n\t  on:\n\t    push:\n\t      " +
+		"branches: [<branch-name>, ...]\n\t    pull_request:\n\t      branches: [<branch-name>, ...]\n\t      " +
+		"activities: [opened, closed, reopened, synchronized]\n\t    workflow_dispatch: {}\n\n\t  jobs:\n\t    " +
+		"- name: <job-name>\n\t      steps:\n\t        - name: <step-name>\n\t          " +
+		"saved_query_name: <query-name>\n\t          saved_query_statement: <optional-sql-statement>\n\t          " +
+		"expected_columns: <optional-expected-columns>\n\t          expected_rows: <optional-expected-rows>",
 	Synopsis: []string{
 		"{{.LessThan}}file{{.GreaterThan}}",
 	},
