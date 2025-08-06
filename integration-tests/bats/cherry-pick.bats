@@ -616,18 +616,27 @@ teardown() {
     [[ $output =~ "error: cannot merge because table test has different primary keys" ]] || false
 }
 
-@test "cherry-pick: author preserved during cherry-pick" {
+@test "cherry-pick: author and timestamp preserved during cherry-pick" {
     dolt checkout branch1
     dolt sql -q "INSERT INTO test VALUES (99, 'auth')"
     dolt add .
     dolt commit --author="Original Author <original@example.com>" -m "commit with specific author"
     COMMIT_HASH=$(get_head_commit)
     
+    # Get the original timestamp
+    run dolt sql -q "SELECT date FROM dolt_log WHERE commit_hash = '$COMMIT_HASH'" -r csv
+    [ $status -eq 0 ]
+    ORIGINAL_TIMESTAMP=$(echo "$output" | tail -n 1 | cut -d',' -f1)
+    
     run dolt log -n 1
     [ $status -eq 0 ]
     [[ "$output" =~ "Original Author <original@example.com>" ]] || false
     
     dolt checkout main
+    
+    # Wait a moment to ensure different timestamp if bug exists
+    sleep 2
+    
     run dolt cherry-pick $COMMIT_HASH
     [ $status -eq 0 ]
     
@@ -635,10 +644,14 @@ teardown() {
     [ $status -eq 0 ]
     [[ "$output" =~ "Original Author <original@example.com>" ]] || false
     
-    # Verify dolt_log table also shows correct author
-    run dolt sql -q "SELECT committer, email FROM dolt_log WHERE message = 'commit with specific author'" -r csv
+    # Verify dolt_log table shows correct author and preserved timestamp
+    run dolt sql -q "SELECT committer, email, date FROM dolt_log WHERE message = 'commit with specific author'" -r csv
     [ $status -eq 0 ]
     [[ "$output" =~ "Original Author,original@example.com" ]] || false
+    
+    # Extract and verify timestamp is preserved
+    CHERRY_PICK_TIMESTAMP=$(echo "$output" | tail -n 1 | cut -d',' -f3)
+    [[ "$ORIGINAL_TIMESTAMP" == "$CHERRY_PICK_TIMESTAMP" ]] || false
 }
 
 @test "cherry-pick: multiple authors preserved in sequence with merge workflow" {
