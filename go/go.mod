@@ -60,8 +60,9 @@ require (
 	github.com/dolthub/aws-sdk-go-ini-parser v0.0.0-20250305001723-2821c37f6c12
 	github.com/dolthub/eventsapi_schema v0.0.0-20250725194025-a087efa1ee55
 	github.com/dolthub/flatbuffers/v23 v23.3.3-dh.2
-	github.com/dolthub/go-mysql-server v0.20.1-0.20250805190315-b5e26987dc7e
+	github.com/dolthub/go-mysql-server v0.20.1-0.20250806172436-b49d8f7ea6f5
 	github.com/dolthub/gozstd v0.0.0-20240423170813-23a2903bca63
+	github.com/edsrzf/mmap-go v1.2.0
 	github.com/esote/minmaxheap v1.0.0
 	github.com/goccy/go-json v0.10.2
 	github.com/google/btree v1.1.2
@@ -133,7 +134,6 @@ require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/dolthub/go-icu-regex v0.0.0-20250327004329-6799764f2dad // indirect
 	github.com/dolthub/jsonpath v0.0.2-0.20240227200619-19675ab05c71 // indirect
-	github.com/edsrzf/mmap-go v1.2.0 // indirect
 	github.com/envoyproxy/go-control-plane/envoy v1.32.4 // indirect
 	github.com/envoyproxy/protoc-gen-validate v1.2.1 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
