@@ -109,7 +109,7 @@ func main() {
 				d.PanicIfError(err)
 			}()
 			open = func() (chunks.ChunkStore, error) {
-				return nbs.NewLocalStore(context.Background(), types.Format_Default.VersionString(), dir, bufSize, nbs.NewUnlimitedMemQuotaProvider())
+				return nbs.NewLocalStore(context.Background(), types.Format_Default.VersionString(), dir, bufSize, nbs.NewUnlimitedMemQuotaProvider(), false)
 			}
 			reset = func() {
 				err := file.RemoveAll(dir)
@@ -164,7 +164,7 @@ func main() {
 	} else {
 		if *useNBS != "" {
 			open = func() (chunks.ChunkStore, error) {
-				return nbs.NewLocalStore(context.Background(), types.Format_Default.VersionString(), *useNBS, bufSize, nbs.NewUnlimitedMemQuotaProvider())
+				return nbs.NewLocalStore(context.Background(), types.Format_Default.VersionString(), *useNBS, bufSize, nbs.NewUnlimitedMemQuotaProvider(), false)
 			}
 		} else if *useAWS != "" {
 			cfg, err := config.LoadDefaultConfig(context.Background(), config.WithRegion("us-west-2"))

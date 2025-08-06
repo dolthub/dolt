@@ -51,5 +51,6 @@ const (
 	EnvGCSafepointControllerChoice = "DOLT_GC_SAFEPOINT_CONTROLLER_CHOICE"
 
 	// Used for tests. If set, Dolt will error if it would rebuild a table's row data.
-	EnvAssertNoTableRewrite = "DOLT_TEST_ASSERT_NO_TABLE_REWRITE"
+	EnvAssertNoTableRewrite         = "DOLT_TEST_ASSERT_NO_TABLE_REWRITE"
+	EnvAssertNoInMemoryArchiveIndex = "DOLT_TEST_ASSERT_NO_IN_MEMORY_ARCHIVE_INDEX"
 )

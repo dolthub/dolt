@@ -89,7 +89,7 @@ func TestArchiveSingleZStdChunk(t *testing.T) {
 	aIdx, err := newArchiveReader(context.Background(), tra, fileSize, &Stats{})
 	assert.NoError(t, err)
 
-	assert.Equal(t, []uint64{23}, aIdx.prefixes)
+	assert.Equal(t, uint64(23), aIdx.indexReader.getPrefix(0))
 	assert.True(t, aIdx.has(oneHash))
 
 	dict, data, err := aIdx.getRaw(context.Background(), oneHash, &Stats{})
@@ -141,7 +141,7 @@ func TestArchiveSingleSnappyChunk(t *testing.T) {
 	aIdx, err := newArchiveReader(context.Background(), tra, fileSize, &Stats{})
 	assert.NoError(t, err)
 
-	assert.Equal(t, []uint64{23}, aIdx.prefixes)
+	assert.Equal(t, uint64(23), aIdx.indexReader.getPrefix(0))
 	assert.True(t, aIdx.has(oneHash))
 
 	dict, data, err := aIdx.getRaw(context.Background(), oneHash, &Stats{})
@@ -208,7 +208,10 @@ func TestArchiverMultipleChunksMultipleDictionaries(t *testing.T) {
 	tra := tableReaderAtAdapter{readerAt}
 	aIdx, err := newArchiveReader(context.Background(), tra, fileSize, &Stats{})
 	assert.NoError(t, err)
-	assert.Equal(t, []uint64{21, 42, 42, 42, 42, 81, 88}, aIdx.prefixes)
+	expectedPrefixes := []uint64{21, 42, 42, 42, 42, 81, 88}
+	for i, expected := range expectedPrefixes {
+		assert.Equal(t, expected, aIdx.indexReader.getPrefix(uint32(i)))
+	}
 
 	assert.True(t, aIdx.has(h1))
 	assert.True(t, aIdx.has(h2))

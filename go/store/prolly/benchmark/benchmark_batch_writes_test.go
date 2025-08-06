@@ -87,7 +87,7 @@ func BenchmarkImportDolt(b *testing.B) {
 		path, err := os.MkdirTemp("", "*")
 		require.NoError(b, err)
 
-		cs, err := nbs.NewLocalStore(ctx, nbf.VersionString(), path, memtable, quota)
+		cs, err := nbs.NewLocalStore(ctx, nbf.VersionString(), path, memtable, quota, false)
 		require.NoError(b, err)
 
 		desc := val.NewTupleDescriptor(val.Type{Enc: val.Uint64Enc})
