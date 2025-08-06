@@ -717,26 +717,32 @@ func handleMergeErr(sqlCtx *sql.Context, queryist cli.Queryist, mergeErr error, 
 	return 0
 }
 
+// everythingUpToDate checks if the merge operation returned the "Everything up-to-date" message. There are two forms
+// of the row we need to parse. `dolt_merge` returns a 4 columns row, with the hash as the first column. `dolt_pull`
+// returns a 3 columns row, without the first column. In both cases, the message is in the 4th column for, and should be
+// "Everything up-to-date".
 func everythingUpToDate(row sql.Row) (bool, error) {
 	if row == nil {
 		return false, fmt.Errorf("Runtime error: nil row returned from merge operation")
 	}
 
-	// We don't currently define these in a readily accessible way, so we'll just hard-code the column indexes.
-	// Confident we'll never change these.
-	hashColumn := 0
-	msgColumn := 3
+	if len(row) != 3 && len(row) != 4 {
+		return false, fmt.Errorf("Runtime error: everythingUpToDate unexpects 3 or 4 column row. Received: %d", len(row))
+	}
 
-	if hash, ok := row[hashColumn].(string); ok {
-		if msg, ok := row[msgColumn].(string); ok {
-			if hash == "" && msg == doltdb.ErrUpToDate.Error() { // "Everything up-to-date" message.
-				return true, nil
-			}
-		} else {
-			return false, fmt.Errorf("Runtime error: merge operation returned unexpected message column type: %v", row[msgColumn])
+	// We don't currently define column indexes in a readily accessible way, so we'll just hard-code the column indexes.
+	// Confident we'll never change these.
+	msgColumn := 3
+	if len(row) == 3 {
+		msgColumn = 2
+	}
+
+	if msg, ok := row[msgColumn].(string); ok {
+		if msg == doltdb.ErrUpToDate.Error() { // "Everything up-to-date" message.
+			return true, nil
 		}
 	} else {
-		return false, fmt.Errorf("Runtime error: merge operation returned unexpected hash column type: %v", row[hashColumn])
+		return false, fmt.Errorf("Runtime error: merge operation returned unexpected message column type: %v", row[msgColumn])
 	}
 
 	return false, nil

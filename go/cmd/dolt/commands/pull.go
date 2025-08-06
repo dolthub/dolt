@@ -135,23 +135,37 @@ func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, d
 			errChan <- err
 			return
 		}
-		// if merge is called with '--no-commit', we need to commit the sql transaction or the staged changes will be lost
-		_, _, _, err = queryist.Query(sqlCtx, "COMMIT")
-		if err != nil {
-			errChan <- err
-			return
-		}
 		rows, err := sql.RowIterToRows(sqlCtx, rowIter)
 		if err != nil {
 			errChan <- err
 			return
 		}
+
 		if len(rows) != 1 {
 			err = fmt.Errorf("Runtime error: merge operation returned unexpected number of rows: %d", len(rows))
 			errChan <- err
 			return
 		}
 		row := rows[0]
+
+		upToDate, err := everythingUpToDate(row)
+		if err != nil {
+			errChan <- err
+			return
+		}
+		if upToDate {
+			if !apr.Contains(cli.SilentFlag) {
+				cli.Println("\nAlready up to date.")
+			}
+			return
+		}
+
+		// if merge is called with '--no-commit', we need to commit the sql transaction or the staged changes will be lost
+		_, _, _, err = queryist.Query(sqlCtx, "COMMIT")
+		if err != nil {
+			errChan <- err
+			return
+		}
 
 		remoteHash, remoteRef, err := getRemoteHashForPull(apr, sqlCtx, queryist)
 		if err != nil {
