@@ -480,7 +480,17 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 		if err != nil {
 			return nil, false, err
 		} else if !ok {
-			return nil, false, nil
+			// If we can't find a normal table, then we'll check for a root object
+			rootObjectTableName := doltdb.TableName{Name: baseTableName, Schema: db.schemaName}
+			rootObject, ok, err := root.GetConflictRootObject(ctx, rootObjectTableName)
+			if !ok || err != nil {
+				return nil, false, err
+			}
+			dt, err := dtables.NewConflictRootObjectTable(ctx, rootObject, root, dtables.RootSetter(db))
+			if err != nil {
+				return nil, false, err
+			}
+			return dt, true, nil
 		}
 		dt, err := dtables.NewConflictsTable(ctx, tname, srcTable, root, dtables.RootSetter(db))
 		if err != nil {

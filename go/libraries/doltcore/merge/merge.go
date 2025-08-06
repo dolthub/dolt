@@ -108,7 +108,7 @@ func (r Result) HasMergeArtifacts() bool {
 func (r Result) CountOfTablesWithDataConflicts() int {
 	count := 0
 	for _, mergeStats := range r.Stats {
-		if mergeStats.HasDataConflicts() {
+		if mergeStats.HasDataConflicts() || mergeStats.HasRootObjectConflicts() {
 			count++
 		}
 	}
@@ -318,7 +318,7 @@ func MergeRoots(
 			continue
 		} else if mergedTable.rootObj != nil {
 			tblToStats[tblName] = stats
-			if stats.Operation != TableUnmodified {
+			if stats.Operation != TableUnmodified || stats.RootObjectConflicts > 0 {
 				mergedRoot, err = mergedRoot.PutRootObject(ctx, tblName, mergedTable.rootObj)
 				if err != nil {
 					return nil, err
@@ -409,8 +409,8 @@ func MergeRoots(
 		return nil, err
 	}
 
-	mergedHasConflicts := checkForConflicts(tblToStats)
-	if !conflictStash.Empty() && mergedHasConflicts {
+	mergedHasTableConflicts := checkForTableConflicts(tblToStats)
+	if !conflictStash.Empty() && mergedHasTableConflicts {
 		return nil, ErrCantOverwriteConflicts
 	} else if !conflictStash.Empty() {
 		mergedRoot, err = applyConflictStash(ctx, conflictStash.Stash, mergedRoot)
@@ -464,10 +464,10 @@ func mergeCVsWithStash(ctx context.Context, root doltdb.RootValue, stash *violat
 	return updatedRoot, nil
 }
 
-// checks if a conflict occurred during the merge
-func checkForConflicts(tblToStats map[doltdb.TableName]*MergeStats) bool {
+// Checks if a table conflict occurred during the merge
+func checkForTableConflicts(tblToStats map[doltdb.TableName]*MergeStats) bool {
 	for _, stat := range tblToStats {
-		if stat.HasConflicts() {
+		if stat.HasConflicts() && !stat.HasRootObjectConflicts() {
 			return true
 		}
 	}

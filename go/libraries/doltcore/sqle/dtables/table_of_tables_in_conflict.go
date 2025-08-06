@@ -145,6 +145,17 @@ func (ct *TableOfTablesInConflict) Partitions(ctx *sql.Context) (sql.PartitionIt
 			partitions = append(partitions, &tableInConflict{name: tblName.Name, size: n})
 		}
 	}
+	rootObjects, err := root.GetConflictRootObjects(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, rootObject := range rootObjects {
+		count, err := rootObject.DiffCount(ctx)
+		if err != nil {
+			return nil, err
+		}
+		partitions = append(partitions, &tableInConflict{name: rootObject.Name().String(), size: uint64(count)})
+	}
 
 	return &tablesInConflict{partitions: partitions}, nil
 }
