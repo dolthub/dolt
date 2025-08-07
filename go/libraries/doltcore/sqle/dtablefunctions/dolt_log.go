@@ -61,8 +61,8 @@ type LogTableFunction struct {
 var logTableSchema = sql.Schema{
 	&sql.Column{Name: "commit_hash", Type: types.Text},
 	&sql.Column{Name: "committer", Type: types.Text}, // Legacy: shows author name for backwards compatibility
-	&sql.Column{Name: "email", Type: types.Text}, // Legacy: shows author email for backwards compatibility
-	&sql.Column{Name: "date", Type: types.Datetime}, // Legacy: shows author date for backwards compatibility
+	&sql.Column{Name: "email", Type: types.Text},     // Legacy: shows author email for backwards compatibility
+	&sql.Column{Name: "date", Type: types.Datetime},  // Legacy: shows author date for backwards compatibility
 	&sql.Column{Name: "message", Type: types.Text},
 	&sql.Column{Name: "commit_order", Type: types.Uint64},
 	// New columns for separate author/committer info
@@ -788,7 +788,7 @@ func (itr *logTableFunctionRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 
 	// Create timestamp from committer timestamp (stored in meta.Timestamp)
 	committerTime := time.Unix(0, int64(meta.Timestamp)*int64(time.Millisecond))
-	
+
 	// Determine committer info (default to author if committer fields are empty)
 	committerName := meta.CommitterName
 	if committerName == "" {
@@ -798,21 +798,21 @@ func (itr *logTableFunctionRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 	if committerEmail == "" {
 		committerEmail = meta.Email // Default to author
 	}
-	
+
 	row := sql.NewRow(
-		commitHash.String(),  // commit_hash
-		meta.Name,            // committer (legacy: shows author name for backwards compatibility)
-		meta.Email,           // email (legacy: shows author email for backwards compatibility) 
-		meta.Time(),          // date (legacy: shows author date for backwards compatibility)
-		meta.Description,     // message
-		height,               // commit_order
+		commitHash.String(), // commit_hash
+		meta.Name,           // committer (legacy: shows author name for backwards compatibility)
+		meta.Email,          // email (legacy: shows author email for backwards compatibility)
+		meta.Time(),         // date (legacy: shows author date for backwards compatibility)
+		meta.Description,    // message
+		height,              // commit_order
 		// New author/committer columns
-		meta.Name,            // author (from legacy Name field)
-		meta.Email,           // author_email (from legacy Email field)
-		meta.Time(),          // author_date (from UserTimestamp)
-		committerName,        // committer_name
-		committerEmail,       // committer_email
-		committerTime,        // committer_date (from Timestamp)
+		meta.Name,      // author (from legacy Name field)
+		meta.Email,     // author_email (from legacy Email field)
+		meta.Time(),    // author_date (from UserTimestamp)
+		committerName,  // committer_name
+		committerEmail, // committer_email
+		committerTime,  // committer_date (from Timestamp)
 	)
 
 	if itr.showParents {

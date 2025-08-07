@@ -200,7 +200,7 @@ func commit_flatbuffer(vaddr hash.Hash, opts CommitOptions, heights []uint64, pa
 	serial.CommitAddTimestampMillis(builder, opts.Meta.Timestamp)
 	serial.CommitAddUserTimestampMillis(builder, opts.Meta.UserTimestamp)
 	serial.CommitAddSignature(builder, sigoff)
-	
+
 	// Add committer fields (only when different from author)
 	if opts.Meta.CommitterName != "" {
 		serial.CommitAddCommitterName(builder, committerNameOff)
@@ -602,17 +602,17 @@ func GetCommitMeta(ctx context.Context, cv types.Value) (*CommitMeta, error) {
 		}
 		ret := &CommitMeta{}
 		// Primary fields (author info stored in legacy fields)
-		ret.Name = string(cmsg.Name()) // Author name
+		ret.Name = string(cmsg.Name())   // Author name
 		ret.Email = string(cmsg.Email()) // Author email
 		ret.Description = string(cmsg.Description())
-		ret.Timestamp = cmsg.TimestampMillis() // Committer timestamp
+		ret.Timestamp = cmsg.TimestampMillis()         // Committer timestamp
 		ret.UserTimestamp = cmsg.UserTimestampMillis() // Author timestamp
 		ret.Signature = string(cmsg.Signature())
-		
+
 		// Committer fields (only populated if different from author)
 		ret.CommitterName = string(cmsg.CommitterName())   // Empty if same as author
 		ret.CommitterEmail = string(cmsg.CommitterEmail()) // Empty if same as author
-		
+
 		return ret, nil
 	}
 	c, ok := cv.(types.Struct)
