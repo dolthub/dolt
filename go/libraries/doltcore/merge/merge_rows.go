@@ -215,7 +215,7 @@ func (rm *RootMerger) MergeTable(
 
 	// short-circuit here if we can
 	finished, finishedRootObj, stats, err := rm.MaybeShortCircuit(ctx, tm, mergeOpts)
-	if finished != nil || stats != nil || err != nil {
+	if finished != nil || finishedRootObj != nil || stats != nil || err != nil {
 		return &MergedResult{table: finished, rootObj: finishedRootObj}, stats, err
 	}
 
@@ -431,14 +431,18 @@ func (rm *RootMerger) MaybeShortCircuit(ctx context.Context, tm *TableMerger, op
 			childHash = leftHash
 		}
 		if childHash != baseHash {
-			schemasEqual, err := doltdb.SchemaHashesEqual(ctx, childTable, tm.ancTbl)
-			if err != nil {
-				return nil, nil, nil, err
-			}
-			if schemasEqual || areRootObjs {
-				return nil, nil, nil, ErrTableDeletedAndModified
+			if areRootObjs {
+				return nil, nil, nil, nil
 			} else {
-				return nil, nil, nil, ErrTableDeletedAndSchemaModified
+				schemasEqual, err := doltdb.SchemaHashesEqual(ctx, childTable, tm.ancTbl)
+				if err != nil {
+					return nil, nil, nil, err
+				}
+				if schemasEqual {
+					return nil, nil, nil, ErrTableDeletedAndModified
+				} else {
+					return nil, nil, nil, ErrTableDeletedAndSchemaModified
+				}
 			}
 		}
 		// fast-forward
