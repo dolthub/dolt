@@ -28,4 +28,5 @@ var DoltTableFunctions = []sql.TableFunction{
 	&SchemaDiffTableFunction{},
 	&ReflogTableFunction{},
 	&QueryDiffTableFunction{},
+	&CiRunTableFunction{},
 }
