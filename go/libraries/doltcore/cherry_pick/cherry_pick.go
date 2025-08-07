@@ -159,7 +159,7 @@ func CreateCommitStagedPropsFromCherryPickOptions(ctx *sql.Context, options Cher
 	}
 
 	commitProps := actions.CommitStagedProps{
-		Date:  ctx.QueryTime(),
+		Date:  originalMeta.Time(),
 		Name:  originalMeta.Name,
 		Email: originalMeta.Email,
 	}
