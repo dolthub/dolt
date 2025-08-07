@@ -53,14 +53,19 @@ var AuthorDate = time.Now
 var CustomAuthorDate bool
 var AuthorLoc = time.Local
 
+var CommitterName string
+var CommitterEmail string
+
 // CommitMeta contains all the metadata that is associated with a commit within a data repo.
 type CommitMeta struct {
-	Name          string
-	Email         string
-	Description   string
-	Signature     string
-	Timestamp     uint64
-	UserTimestamp int64
+	Name           string
+	Email          string
+	Description    string
+	Signature      string
+	Timestamp      uint64
+	UserTimestamp  int64
+	CommitterName  string
+	CommitterEmail string
 }
 
 // NewCommitMeta creates a CommitMeta instance from a name, email, and description and uses the current time for the
@@ -96,19 +101,38 @@ func init() {
 			CustomAuthorDate = true
 		}
 	}
+
+	committerName := os.Getenv(dconfig.EnvDoltCommitterName)
+	if committerName != "" {
+		CommitterName = committerName
+	}
+
+	committerEmail := os.Getenv(dconfig.EnvDoltCommitterEmail)
+	if committerEmail != "" {
+		CommitterEmail = committerEmail
+	}
 }
 
 // NewCommitMetaWithUserTS creates a user metadata
 func NewCommitMetaWithUserTS(name, email, desc string, userTS time.Time) (*CommitMeta, error) {
-	n := strings.TrimSpace(name)
-	e := strings.TrimSpace(email)
+	return NewCommitMetaWithAuthorCommitter(name, email, desc, userTS, "", "", nil)
+}
+
+// NewCommitMetaWithAuthorCommitter creates commit metadata with separate author and committer information
+// If committer info is empty, defaults to author info. Maintains backwards compatibility.
+func NewCommitMetaWithAuthorCommitter(authorName, authorEmail, desc string, ats time.Time, committerName, committerEmail string, cts *time.Time) (*CommitMeta, error) {
+	an := strings.TrimSpace(authorName)
+	ae := strings.TrimSpace(authorEmail)
 	d := strings.TrimSpace(desc)
 
-	if n == "" {
+	cn := strings.TrimSpace(committerName)
+	ce := strings.TrimSpace(committerEmail)
+
+	if an == "" {
 		return nil, ErrNameNotConfigured
 	}
 
-	if e == "" {
+	if ae == "" {
 		return nil, ErrEmailNotConfigured
 	}
 
@@ -116,10 +140,21 @@ func NewCommitMetaWithUserTS(name, email, desc string, userTS time.Time) (*Commi
 		return nil, ErrEmptyCommitMessage
 	}
 
-	committerDateMillis := uint64(CommitterDate().UnixMilli())
-	authorDateMillis := userTS.UnixMilli()
+	if cn == "" {
+		cn = an
+	}
+	if ce == "" {
+		ce = ae
+	}
 
-	return &CommitMeta{n, e, d, "", committerDateMillis, authorDateMillis}, nil
+	committerDateMillis := uint64(CommitterDate().UnixMilli())
+	if cts != nil { // env var was set
+		committerDateMillis = uint64(cts.UnixMilli())
+	}
+
+	authorDateMillis := ats.UnixMilli()
+
+	return &CommitMeta{an, ae, d, "", committerDateMillis, authorDateMillis, cn, ce}, nil
 }
 
 // Time returns the time at which the commit occurred
@@ -127,12 +162,24 @@ func (cm *CommitMeta) Time() time.Time {
 	return time.UnixMilli(cm.UserTimestamp)
 }
 
-// FormatTS takes the internal timestamp and turns it into a human readable string in the time.RubyDate format
+// CommitterTime returns the time at which the commit was created
+// This does not preserve timezone information, and returns the time in the system's local timezone
+func (cm *CommitMeta) CommitterTime() time.Time {
+	return time.UnixMilli(int64(cm.Timestamp))
+}
+
+// FormatTS takes the internal timestamp and turns it into a human-readable string in the time.RubyDate format
 // which looks like: "Mon Jan 02 15:04:05 -0700 2006"
 //
-// We round this to the nearest second, which is what MySQL timestamp does by default.
+// We round this to the nearest second, which is what MySQL timestamp does by default. This returns the author timestamp
+// in the standard Git log format.
 func (cm *CommitMeta) FormatTS() string {
 	return cm.Time().In(CommitLoc).Round(time.Second).Format(time.RubyDate)
+}
+
+// FormatCommitterTS returns the committer timestamp in the standard Git log format.
+func (cm *CommitMeta) FormatCommitterTS() string {
+	return cm.CommitterTime().In(CommitLoc).Round(time.Second).Format(time.RubyDate)
 }
 
 // String returns the human readable string representation of the commit data

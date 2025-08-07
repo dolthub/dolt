@@ -34,15 +34,19 @@ const CommitVerificationFailedPrefix = "commit verification failed:"
 var ErrCommitVerificationFailed = goerrors.NewKind(CommitVerificationFailedPrefix + " %s")
 
 type CommitStagedProps struct {
-	Message          string
-	Date             time.Time
-	AllowEmpty       bool
-	SkipEmpty        bool
-	Amend            bool
-	Force            bool
-	Name             string
-	Email            string
+	Message    		 string
+	Date       		 time.Time
+	AllowEmpty 		 bool
+	SkipEmpty  		 bool
+	Amend      		 bool
+	Force      		 bool
+	Name       		 string
+	Email      		 string
 	SkipVerification bool
+
+	CommitterDate  *time.Time
+	CommitterName  string
+	CommitterEmail string
 }
 
 const (
@@ -161,7 +165,7 @@ func GetCommitStaged(
 		}
 	}
 
-	meta, err := datas.NewCommitMetaWithUserTS(props.Name, props.Email, props.Message, props.Date)
+	meta, err := datas.NewCommitMetaWithAuthorCommitter(props.Name, props.Email, props.Message, props.Date, props.CommitterName, props.CommitterEmail, props.CommitterDate)
 	if err != nil {
 		return nil, err
 	}
