@@ -18,8 +18,9 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"io"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 
 	"gopkg.in/yaml.v3"
 )
