@@ -186,8 +186,9 @@ func performCommit(ctx context.Context, commandStr string, args []string, cliCtx
 	return 0, false
 }
 
-// constructParametrizedDoltCommitQuery generates the sql query necessary to call the DOLT_COMMIT() stored procedure with placeholders
-// for arg input. Also returns a list of the inputs in the order in which they appear in the query.
+// constructParametrizedDoltCommitQuery generates the SQL query to call the DOLT_COMMIT() stored procedure
+// with placeholders for arg input. Also returns the parameter values in the order they appear in the query.
+// The --author flag is only included when explicitly provided by the caller.
 func constructParametrizedDoltCommitQuery(msg string, apr *argparser.ArgParseResults, cliCtx cli.CliContext) (string, []interface{}, error) {
 	var params []interface{}
 	var param bool
@@ -235,20 +236,13 @@ func constructParametrizedDoltCommitQuery(msg string, apr *argparser.ArgParseRes
 		writeToBuffer("-f")
 	}
 
-	writeToBuffer("--author")
-	param = true
-	writeToBuffer("?")
-	var author string
 	if apr.Contains(cli.AuthorParam) {
-		author, _ = apr.GetValue(cli.AuthorParam)
-	} else {
-		name, email, err := env.GetNameAndEmail(cliCtx.Config())
-		if err != nil {
-			return "", nil, err
-		}
-		author = name + " <" + email + ">"
+		writeToBuffer("--author")
+		param = true
+		writeToBuffer("?")
+		author, _ := apr.GetValue(cli.AuthorParam)
+		params = append(params, author)
 	}
-	params = append(params, author)
 
 	if apr.Contains(cli.AllFlag) {
 		writeToBuffer("-a")
@@ -291,7 +285,7 @@ func handleCommitErr(sqlCtx *sql.Context, queryist cli.Queryist, err error, usag
 		return 0
 	}
 
-	if err == datas.ErrNameNotConfigured {
+	if datas.ErrNameNotConfigured.Is(err) {
 		bdr := errhand.BuildDError("Could not determine %s.", config.UserNameKey)
 		bdr.AddDetails("Log into DoltHub: dolt login")
 		bdr.AddDetails("OR add name to config: dolt config [--global|--local] --add %[1]s \"FIRST LAST\"", config.UserNameKey)
@@ -299,7 +293,7 @@ func handleCommitErr(sqlCtx *sql.Context, queryist cli.Queryist, err error, usag
 		return HandleVErrAndExitCode(bdr.Build(), usage)
 	}
 
-	if err == datas.ErrEmailNotConfigured {
+	if datas.ErrEmailNotConfigured.Is(err) {
 		bdr := errhand.BuildDError("Could not determine %s.", config.UserEmailKey)
 		bdr.AddDetails("Log into DoltHub: dolt login")
 		bdr.AddDetails("OR add email to config: dolt config [--global|--local] --add %[1]s \"EMAIL_ADDRESS\"", config.UserEmailKey)

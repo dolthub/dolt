@@ -503,14 +503,11 @@ func (d *DoltSession) CommitTransaction(ctx *sql.Context, tx sql.Transaction) (e
 
 		dbName := ctx.GetCurrentDatabase()
 		var pendingCommit *doltdb.PendingCommit
-		pendingCommit, err = d.PendingCommitAllStaged(ctx, dbName, dirtyBranchState, actions.CommitStagedProps{
-			Message:    message,
-			Date:       ctx.QueryTime(),
-			AllowEmpty: false,
-			Force:      false,
-			Name:       d.Username(),
-			Email:      d.Email(),
-		})
+		commitStagedProps, err := d.NewCommitStagedProps(ctx, message)
+		if err != nil {
+			return err
+		}
+		pendingCommit, err = d.PendingCommitAllStaged(ctx, dbName, dirtyBranchState, commitStagedProps)
 		if err != nil {
 			return err
 		}
@@ -1508,6 +1505,43 @@ func (d *DoltSession) Username() string {
 
 func (d *DoltSession) Email() string {
 	return d.email
+}
+
+// NewCommitStagedProps creates an [actions.CommitStagedProps] using session variables for author and committer
+// identity.
+//
+// Identity is resolved in the following order:
+//  1. Session variables ([DoltAuthorName], [DoltCommitterName], etc.), seeded from the dolt config at session
+//     creation and optionally overridden per-connection by InitCommitIdentitySessionConfig.
+//  2. The MySQL client identity from [sql.Client], used when the session has no dolt config set.
+func (d *DoltSession) NewCommitStagedProps(ctx *sql.Context, message string) (actions.CommitStagedProps, error) {
+	authorName, authorEmail, err := CommitIdentity(ctx, DoltAuthorName, DoltAuthorEmail)
+	if err != nil {
+		return actions.CommitStagedProps{}, err
+	}
+	authorDate, err := CommitDate(ctx, DoltAuthorDate)
+	if err != nil {
+		return actions.CommitStagedProps{}, err
+	}
+
+	committerName, committerEmail, err := CommitIdentity(ctx, DoltCommitterName, DoltCommitterEmail)
+	if err != nil {
+		return actions.CommitStagedProps{}, err
+	}
+	committerDate, err := CommitDate(ctx, DoltCommitterDate)
+	if err != nil {
+		return actions.CommitStagedProps{}, err
+	}
+
+	return actions.CommitStagedProps{
+		Message:        message,
+		Date:           authorDate,
+		Name:           authorName,
+		Email:          authorEmail,
+		CommitterDate:  committerDate,
+		CommitterName:  committerName,
+		CommitterEmail: committerEmail,
+	}, nil
 }
 
 // setDbSessionVars updates the three session vars that track the value of the session root hashes

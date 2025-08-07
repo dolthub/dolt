@@ -16,6 +16,7 @@ package engine
 
 import (
 	"context"
+	"fmt"
 	"maps"
 	"os"
 	"strconv"
@@ -593,6 +594,46 @@ func doltSessionFactory(
 
 		return doltSession, nil
 	}
+}
+
+var ErrFailedToInitCommitIdentity = fmt.Errorf("failed to initialize commit identity session variables from environment")
+
+// InitCommitIdentitySessionConfig sends a single SET statement to initialize all commit identity session variables
+// (DOLT_AUTHOR_NAME, DOLT_AUTHOR_EMAIL, DOLT_AUTHOR_DATE, DOLT_COMMITTER_NAME, DOLT_COMMITTER_EMAIL,
+// DOLT_COMMITTER_DATE) from the corresponding environment variables. Must be called after [sql.SessionCommandBegin].
+// The loaded values become the highest-priority identity source in [dsess.DoltSession.NewCommitStagedProps].
+func InitCommitIdentitySessionConfig(queryist cli.Queryist, sqlCtx *sql.Context) error {
+	envVarToSessionVar := []struct{ environmentConfigVar, sessionConfigVar string }{
+		{dconfig.EnvDoltAuthorName, dsess.DoltAuthorName},
+		{dconfig.EnvDoltAuthorEmail, dsess.DoltAuthorEmail},
+		{dconfig.EnvDoltAuthorDate, dsess.DoltAuthorDate},
+		{dconfig.EnvDoltCommitterName, dsess.DoltCommitterName},
+		{dconfig.EnvDoltCommitterEmail, dsess.DoltCommitterEmail},
+		{dconfig.EnvDoltCommitterDate, dsess.DoltCommitterDate},
+	}
+	var sb strings.Builder
+	for _, pair := range envVarToSessionVar {
+		if val := os.Getenv(pair.environmentConfigVar); val != "" {
+			if sb.Len() == 0 {
+				sb.WriteString("SET ")
+			} else {
+				sb.WriteString(", ")
+			}
+			_, err := fmt.Fprintf(&sb, "@@SESSION.%s = %q", pair.sessionConfigVar, val)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	if sb.Len() == 0 {
+		return nil
+	}
+	query := sb.String()
+	_, _, _, err := queryist.Query(sqlCtx, query)
+	if err != nil {
+		return fmt.Errorf("%w: %v", ErrFailedToInitCommitIdentity, err)
+	}
+	return nil
 }
 
 type ConfigOption func(*SqlEngineConfig)

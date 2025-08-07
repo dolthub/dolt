@@ -811,10 +811,17 @@ func (tx *DoltTransaction) ClearSavepoint(name string) bool {
 
 // WorkingSetMeta returns the metadata to use for a commit of this transaction
 func (tx DoltTransaction) WorkingSetMeta(ctx *sql.Context) *datas.WorkingSetMeta {
-	sess := DSessFromSess(ctx.Session)
+	name, email, err := CommitIdentity(ctx, DoltCommitterName, DoltCommitterEmail)
+	if err != nil {
+		ctx.Session.Warn(&sql.Warning{
+			Level:   "Warning",
+			Code:    mysql.ERUnknownSystemVariable,
+			Message: err.Error(),
+		})
+	}
 	return &datas.WorkingSetMeta{
-		Name:        sess.Username(),
-		Email:       sess.Email(),
+		Name:        name,
+		Email:       email,
 		Timestamp:   uint64(time.Now().Unix()),
 		Description: "sql transaction",
 	}

@@ -18,7 +18,6 @@ import (
 	"fmt"
 	"io"
 	"strings"
-	"time"
 
 	gms "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
@@ -33,9 +32,11 @@ const CommitVerificationFailedPrefix = "commit verification failed:"
 
 var ErrCommitVerificationFailed = goerrors.NewKind(CommitVerificationFailedPrefix + " %s")
 
+// CommitStagedProps contains the parameters for a staged commit operation.
 type CommitStagedProps struct {
-	Message          string
-	Date             time.Time
+	Message string
+	// Date is the author date. Use [datas.CommitDateAt] for an explicit date or [datas.CommitDateNow] to resolve at commit time.
+	Date             datas.CommitDate
 	AllowEmpty       bool
 	SkipEmpty        bool
 	Amend            bool
@@ -43,6 +44,11 @@ type CommitStagedProps struct {
 	Name             string
 	Email            string
 	SkipVerification bool
+
+	// CommitterDate is the committer date. Use [datas.CommitDateAt] for an explicit date or [datas.CommitDateNow] to resolve at commit time.
+	CommitterDate  datas.CommitDate
+	CommitterName  string
+	CommitterEmail string
 }
 
 const (
@@ -70,6 +76,19 @@ func getCommitRunTestGroups() []string {
 		return groups
 	}
 	return nil
+}
+
+// NewCommitStagedProps creates a new CommitStagedProps with the given author information. Committer fields are
+// automatically populated with the author information.
+func NewCommitStagedProps(name, email string, date datas.CommitDate, message string) CommitStagedProps {
+	return CommitStagedProps{
+		Message:        message,
+		Date:           date,
+		Name:           name,
+		Email:          email,
+		CommitterName:  name,
+		CommitterEmail: email,
+	}
 }
 
 // GetCommitStaged returns a new pending commit with the roots and commit properties given.
@@ -181,12 +200,14 @@ func GetCommitStaged(
 		}
 	}
 
-	meta, err := datas.NewCommitMetaWithUserTS(props.Name, props.Email, props.Message, props.Date)
+	author := datas.CommitIdentity{Name: props.Name, Email: props.Email, Date: props.Date}
+	committer := datas.CommitIdentity{Name: props.CommitterName, Email: props.CommitterEmail, Date: props.CommitterDate}
+	commitMeta, err := datas.NewCommitMetaWithAuthorAndCommitter(author, committer, props.Message)
 	if err != nil {
 		return nil, err
 	}
 
-	return db.NewPendingCommit(ctx, roots, mergeParents, props.Amend, meta)
+	return db.NewPendingCommit(ctx, roots, mergeParents, props.Amend, commitMeta)
 }
 
 // runCommitVerification runs the commit verification tests for the given test groups.

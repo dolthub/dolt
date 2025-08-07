@@ -22,6 +22,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/store/datas"
 )
 
 // Per-DB system variables
@@ -71,6 +72,15 @@ const (
 	DoltStatsGCEnabled   = "dolt_stats_gc_enabled"
 
 	DoltAutoGCEnabled = "dolt_auto_gc_enabled"
+
+	DoltLogCommitterOnly = "dolt_log_committer_only"
+
+	DoltAuthorName     = "dolt_author_name"
+	DoltAuthorEmail    = "dolt_author_email"
+	DoltAuthorDate     = "dolt_author_date"
+	DoltCommitterName  = "dolt_committer_name"
+	DoltCommitterEmail = "dolt_committer_email"
+	DoltCommitterDate  = "dolt_committer_date"
 )
 
 const URLTemplateDatabasePlaceholder = "{database}"
@@ -212,3 +222,57 @@ const (
 	SysVarFalse = int8(0)
 	SysVarTrue  = int8(1)
 )
+
+// CommitIdentity reads the name and email session variables for a single author or committer,
+// falling back to the MySQL client user and address when the variables are unset. Unknown system
+// variables are treated as unset rather than errors, for compatibility with older Dolt servers.
+func CommitIdentity(ctx *sql.Context, nameVar, emailVar string) (string, string, error) {
+	name, err := systemVarString(ctx, nameVar)
+	if sql.ErrUnknownSystemVariable.Is(err) {
+		err = nil
+	}
+	if err != nil {
+		return "", "", err
+	}
+	if name == "" {
+		name = ctx.Client().User
+	}
+
+	email, err := systemVarString(ctx, emailVar)
+	if sql.ErrUnknownSystemVariable.Is(err) {
+		err = nil
+	}
+	if err != nil {
+		return "", "", err
+	}
+	if email == "" {
+		email = fmt.Sprintf("%s@%s", ctx.Client().User, ctx.Client().Address)
+	}
+
+	return name, email, nil
+}
+
+// CommitDate reads the date session variable for a single author or committer,
+// returning CommitDateNow when the variable is unset or empty. Unknown system variables
+// are treated as unset rather than errors, for compatibility with older Dolt servers.
+func CommitDate(ctx *sql.Context, dateVar string) (datas.CommitDate, error) {
+	strVal, err := systemVarString(ctx, dateVar)
+	if sql.ErrUnknownSystemVariable.Is(err) {
+		return datas.CommitDateNow(), nil
+	}
+	if err != nil || strVal == "" {
+		return datas.CommitDateNow(), err
+	}
+	return datas.NewCommitDate(strVal)
+}
+
+// systemVarString returns the string value of the named system variable, returning an empty string
+// when the variable is unset.
+func systemVarString(ctx *sql.Context, varName string) (string, error) {
+	val, err := ctx.GetSessionVariable(ctx, varName)
+	if err != nil {
+		return "", err
+	}
+	strVal, _ := val.(string)
+	return strVal, nil
+}

@@ -33,6 +33,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
@@ -455,14 +456,16 @@ func executeNoFFMerge(
 		return ws.WithStagedRoot(roots.Staged), nil, nil
 	}
 
-	pendingCommit, err := dSess.NewPendingCommit(ctx, dbName, roots, actions.CommitStagedProps{
-		Message:          msg,
-		Date:             spec.Date,
-		Force:            spec.Force,
-		Name:             spec.Name,
-		Email:            spec.Email,
-		SkipVerification: skipVerification,
-	})
+	commitStagedProps, err := dsess.CommitStagedPropsFromDoltSess(ctx, dSess, msg)
+	if err != nil {
+		return nil, nil, err
+	}
+	commitStagedProps.Name = spec.Name
+	commitStagedProps.Email = spec.Email
+	commitStagedProps.Date = datas.CommitDateAt(spec.Date)
+	commitStagedProps.Force = spec.Force
+	pendingCommit, err := dSess.NewPendingCommit(ctx, dbName, roots, commitStagedProps)
+	commitStagedProps.SkipVerification = skipVerification
 	if err != nil {
 		if actions.ErrCommitVerificationFailed.Is(err) {
 			return ws, nil, err
@@ -535,18 +538,15 @@ func createMergeSpec(ctx *sql.Context, sess *dsess.DoltSession, dbName string, a
 }
 
 func getNameAndEmail(ctx *sql.Context, apr *argparser.ArgParseResults) (string, string, error) {
-	var err error
-	var name, email string
 	if authorStr, ok := apr.GetValue(cli.AuthorParam); ok {
-		name, email, err = cli.ParseAuthor(authorStr)
-		if err != nil {
-			return "", "", err
-		}
-	} else {
-		name = ctx.Client().User
-		email = fmt.Sprintf("%s@%s", ctx.Client().User, ctx.Client().Address)
+		return cli.ParseAuthor(authorStr)
 	}
-	return name, email, nil
+	dSess := dsess.DSessFromSess(ctx.Session)
+	props, err := dsess.CommitStagedPropsFromDoltSess(ctx, dSess, "")
+	if err != nil {
+		return "", "", err
+	}
+	return props.Name, props.Email, nil
 }
 
 func mergeRootToWorking(
