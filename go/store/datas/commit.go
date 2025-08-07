@@ -180,6 +180,10 @@ func commit_flatbuffer(vaddr hash.Hash, opts CommitOptions, heights []uint64, pa
 		sigoff = builder.CreateString(opts.Meta.Signature)
 	}
 
+	// Prepare committer field offsets (only creates offsets for non-empty fields)
+	committerNameOff := opts.Meta.CommitterName.PrepareOffset(builder)
+	committerEmailOff := opts.Meta.CommitterEmail.PrepareOffset(builder)
+
 	serial.CommitStart(builder)
 	serial.CommitAddRoot(builder, vaddroff)
 	serial.CommitAddHeight(builder, maxheight+1)
@@ -191,6 +195,10 @@ func commit_flatbuffer(vaddr hash.Hash, opts CommitOptions, heights []uint64, pa
 	serial.CommitAddTimestampMillis(builder, opts.Meta.Timestamp)
 	serial.CommitAddUserTimestampMillis(builder, opts.Meta.UserTimestamp)
 	serial.CommitAddSignature(builder, sigoff)
+
+	// Serialize optional committer fields only if they contain data (backwards compatible)
+	opts.Meta.CommitterName.SerializeOptional(builder, committerNameOff, serial.CommitAddCommitterName)
+	opts.Meta.CommitterEmail.SerializeOptional(builder, committerEmailOff, serial.CommitAddCommitterEmail)
 
 	bytes := serial.FinishMessage(builder, serial.CommitEnd(builder), []byte(serial.CommitFileID))
 	return bytes, maxheight + 1
@@ -584,12 +592,18 @@ func GetCommitMeta(ctx context.Context, cv types.Value) (*CommitMeta, error) {
 			return nil, err
 		}
 		ret := &CommitMeta{}
-		ret.Name = string(cmsg.Name())
-		ret.Email = string(cmsg.Email())
+		// Primary fields (author info stored in legacy fields)
+		ret.Name = string(cmsg.Name())   // Author name
+		ret.Email = string(cmsg.Email()) // Author email
 		ret.Description = string(cmsg.Description())
-		ret.Timestamp = cmsg.TimestampMillis()
-		ret.UserTimestamp = cmsg.UserTimestampMillis()
+		ret.Timestamp = cmsg.TimestampMillis()         // Committer timestamp
+		ret.UserTimestamp = cmsg.UserTimestampMillis() // Author timestamp
 		ret.Signature = string(cmsg.Signature())
+
+		// Committer fields (only populated if different from author)
+		ret.CommitterName = OptionalSerializedField(cmsg.CommitterName())   // Empty if same as author
+		ret.CommitterEmail = OptionalSerializedField(cmsg.CommitterEmail()) // Empty if same as author
+
 		return ret, nil
 	}
 	c, ok := cv.(types.Struct)

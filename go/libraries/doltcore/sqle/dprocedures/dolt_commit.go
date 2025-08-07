@@ -124,6 +124,17 @@ func doDoltCommit(ctx *sql.Context, args []string) (string, bool, error) {
 		email = fmt.Sprintf("%s@%s", ctx.Client().User, ctx.Client().Address)
 	}
 
+	// Parse committer information if provided
+	var committerName, committerEmail string
+	var hasCommitterInfo bool
+	if committerStr, ok := apr.GetValue(cli.CommitterParam); ok {
+		committerName, committerEmail, err = cli.ParseAuthor(committerStr) // reuse ParseAuthor for committer
+		if err != nil {
+			return "", false, err
+		}
+		hasCommitterInfo = true
+	}
+
 	amend := apr.Contains(cli.AmendFlag)
 
 	msg, msgOk := apr.GetValue(cli.MessageArg)
@@ -171,6 +182,21 @@ func doDoltCommit(ctx *sql.Context, args []string) (string, bool, error) {
 		Force:      apr.Contains(cli.ForceFlag),
 		Name:       name,
 		Email:      email,
+	}
+
+	// Set committer information if provided
+	if hasCommitterInfo {
+		csp.CommitterName = committerName
+		csp.CommitterEmail = committerEmail
+	}
+
+	// Set committer date if provided
+	if committerDateStr, ok := apr.GetValue(cli.CommitterDateParam); ok {
+		committerDate, err := dconfig.ParseDate(committerDateStr)
+		if err != nil {
+			return "", false, err
+		}
+		csp.CommitterDate = committerDate
 	}
 
 	shouldSign, err := dsess.GetBooleanSystemVar(ctx, "gpgsign")
