@@ -102,7 +102,7 @@ func (cmd LsCmd) Exec(ctx context.Context, commandStr string, args []string, dEn
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
-	rows, err := GetRowsForSql(queryist, sqlCtx, query)
+	rows, err := cli.GetRowsForSql(queryist, sqlCtx, query)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
@@ -168,7 +168,7 @@ func printUserTables(tableNames []string, apr *argparser.ArgParseResults, queryi
 		label = "working set"
 	} else {
 		query := fmt.Sprintf("select hashof('%s')", apr.Arg(0))
-		row, err := GetRowsForSql(queryist, sqlCtx, query)
+		row, err := cli.GetRowsForSql(queryist, sqlCtx, query)
 		if err != nil {
 			return err
 		}
@@ -197,7 +197,7 @@ func printUserTables(tableNames []string, apr *argparser.ArgParseResults, queryi
 
 func printTableVerbose(table string, queryist cli.Queryist, sqlCtx *sql.Context) error {
 	query := fmt.Sprintf("select count(*) from `%s`", table)
-	row, err := GetRowsForSql(queryist, sqlCtx, query)
+	row, err := cli.GetRowsForSql(queryist, sqlCtx, query)
 	if err != nil {
 		return err
 	}

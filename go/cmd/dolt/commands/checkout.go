@@ -145,7 +145,7 @@ func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []strin
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	rows, err := GetRowsForSql(queryEngine, sqlCtx, sqlQuery)
+	rows, err := cli.GetRowsForSql(queryEngine, sqlCtx, sqlQuery)
 
 	if err != nil {
 		// In fringe cases the server can't start because the default branch doesn't exist, `dolt checkout <existing branch>`

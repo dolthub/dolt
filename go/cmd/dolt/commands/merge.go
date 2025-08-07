@@ -410,7 +410,7 @@ func printMergeStats(fastForward bool,
 // calculateMergeConflicts calculates the count of conflicts that occurred during the merge. Returns a map of table name to MergeStats,
 // a bool indicating whether there were any conflicts, and a bool indicating whether calculation was successful.
 func calculateMergeConflicts(queryist cli.Queryist, sqlCtx *sql.Context, mergeStats map[string]*merge.MergeStats) (map[string]*merge.MergeStats, bool, error) {
-	dataConflicts, err := GetRowsForSql(queryist, sqlCtx, "SELECT `table`, num_conflicts FROM dolt_conflicts")
+	dataConflicts, err := cli.GetRowsForSql(queryist, sqlCtx, "SELECT `table`, num_conflicts FROM dolt_conflicts")
 	if err != nil {
 		return nil, false, err
 	}
@@ -429,7 +429,7 @@ func calculateMergeConflicts(queryist cli.Queryist, sqlCtx *sql.Context, mergeSt
 		}
 	}
 
-	schemaConflicts, err := GetRowsForSql(queryist, sqlCtx, "SELECT table_name FROM dolt_schema_conflicts")
+	schemaConflicts, err := cli.GetRowsForSql(queryist, sqlCtx, "SELECT table_name FROM dolt_schema_conflicts")
 	if err != nil {
 		return nil, false, err
 	}
@@ -442,7 +442,7 @@ func calculateMergeConflicts(queryist cli.Queryist, sqlCtx *sql.Context, mergeSt
 		}
 	}
 
-	constraintViolations, err := GetRowsForSql(queryist, sqlCtx, "SELECT `table`, num_violations FROM dolt_constraint_violations")
+	constraintViolations, err := cli.GetRowsForSql(queryist, sqlCtx, "SELECT `table`, num_violations FROM dolt_constraint_violations")
 	if err != nil {
 		return nil, false, err
 	}
@@ -674,7 +674,7 @@ func fillStringWithChar(ch rune, strLen int) string {
 }
 
 func handleMergeErr(sqlCtx *sql.Context, queryist cli.Queryist, mergeErr error, hasConflicts, hasConstraintViolations bool, usage cli.UsagePrinter) int {
-	unmergedTables, err := GetRowsForSql(queryist, sqlCtx, "select unmerged_tables from dolt_merge_status")
+	unmergedTables, err := cli.GetRowsForSql(queryist, sqlCtx, "select unmerged_tables from dolt_merge_status")
 	if err != nil {
 		cli.PrintErrln(err.Error())
 		return 1

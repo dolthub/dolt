@@ -288,7 +288,7 @@ func writeConflictResults(
 func getMergeStatus(queryist cli.Queryist, sqlCtx *sql.Context) (mergeStatus, error) {
 	ms := mergeStatus{}
 	q := "select * from dolt_merge_status;"
-	rows, err := commands.GetRowsForSql(queryist, sqlCtx, q)
+	rows, err := cli.GetRowsForSql(queryist, sqlCtx, q)
 	if err != nil {
 		return ms, err
 	}
@@ -315,7 +315,7 @@ func getMergeStatus(queryist cli.Queryist, sqlCtx *sql.Context) (mergeStatus, er
 
 func getSchemaConflictsExist(queryist cli.Queryist, sqlCtx *sql.Context) (bool, error) {
 	q := "select * from dolt_schema_conflicts limit 1;"
-	rows, err := commands.GetRowsForSql(queryist, sqlCtx, q)
+	rows, err := cli.GetRowsForSql(queryist, sqlCtx, q)
 	if err != nil {
 		return false, err
 	}
@@ -332,7 +332,7 @@ func getTableDataConflictsExist(queryist cli.Queryist, sqlCtx *sql.Context, tabl
 	if err != nil {
 		return false, err
 	}
-	rows, err := commands.GetRowsForSql(queryist, sqlCtx, q)
+	rows, err := cli.GetRowsForSql(queryist, sqlCtx, q)
 	if err != nil {
 		return false, err
 	}

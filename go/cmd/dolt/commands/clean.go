@@ -116,7 +116,7 @@ func (cmd CleanCmd) Exec(ctx context.Context, commandStr string, args []string, 
 		}
 	}
 
-	_, err = GetRowsForSql(queryist, sqlCtx, query)
+	_, err = cli.GetRowsForSql(queryist, sqlCtx, query)
 	if err != nil {
 		cli.Println(err.Error())
 		return 1

@@ -148,7 +148,7 @@ func runCIQuery(queryist cli.Queryist, sqlCtx *sql.Context, step dolt_ci.Step, q
 		return nil, fmt.Errorf("Could not find saved query: %s", step.SavedQueryName.Value)
 	}
 
-	rows, err := commands.GetRowsForSql(queryist, sqlCtx, query)
+	rows, err := cli.GetRowsForSql(queryist, sqlCtx, query)
 	if err != nil {
 		statementErr := fmt.Sprintf("Ran query: %s", query)
 		queryErr := fmt.Sprintf("Query error: %s", err.Error())

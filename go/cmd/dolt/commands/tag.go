@@ -209,7 +209,7 @@ func verboseTagPrint(tag tagInfo) {
 }
 
 func getTagInfos(queryist cli.Queryist, sqlCtx *sql.Context) ([]tagInfo, error) {
-	rows, err := GetRowsForSql(queryist, sqlCtx, "SELECT * FROM dolt_tags")
+	rows, err := cli.GetRowsForSql(queryist, sqlCtx, "SELECT * FROM dolt_tags")
 	if err != nil {
 		return nil, err
 	}
