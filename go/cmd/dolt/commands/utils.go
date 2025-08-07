@@ -26,19 +26,21 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/sirupsen/logrus"
+
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
 	"github.com/dolthub/vitess/go/mysql"
 	"github.com/fatih/color"
 	"github.com/gocraft/dbr/v2"
 	"github.com/gocraft/dbr/v2/dialect"
-	"github.com/sirupsen/logrus"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
@@ -711,12 +713,22 @@ func getCommitInfoWithOptions(queryist cli.Queryist, sqlCtx *sql.Context, ref st
 		return nil, fmt.Errorf("error getting hash of HEAD: %v", err)
 	}
 
+	authorColumnsSupport, err := cli.HasSystemVariable(queryist, sqlCtx, dsess.DoltLogCommitterOnly)
+	if err != nil {
+		return nil, fmt.Errorf("error checking for author column support: %v", err)
+	}
+	if authorColumnsSupport {
+		_ = sqlCtx.Session.SetSessionVariable(sqlCtx, dsess.DoltLogCommitterOnly, int8(0))
+	}
+
+	authorColOffset := 0
 	var q string
 	if opts.showSignature {
 		q, err = dbr.InterpolateForDialect("select * from dolt_log(?, '--parents', '--decorate=full', '--show-signature')", []interface{}{ref}, dialect.MySQL)
 		if err != nil {
 			return nil, fmt.Errorf("error interpolating query: %v", err)
 		}
+		authorColOffset++
 	} else {
 		q, err = dbr.InterpolateForDialect("select * from dolt_log(?, '--parents', '--decorate=full')", []interface{}{ref}, dialect.MySQL)
 		if err != nil {
@@ -733,15 +745,31 @@ func getCommitInfoWithOptions(queryist cli.Queryist, sqlCtx *sql.Context, ref st
 		return nil, nil
 	}
 
+	// row: 0-5 committer columns, 6 parents, 7 refs, 8 signature (opt), then author columns at the end to be backward
+	// compatible with old client sys commands fixed indices.
 	row := rows[0]
-	commitHash := row[0].(string)
-	name := row[1].(string)
-	email := row[2].(string)
-	timestamp, err := getTimestampColAsUint64(row[3])
-	if err != nil {
-		return nil, fmt.Errorf("error parsing timestamp '%s': %v", row[3], err)
+	commitHashStr, ok := row[0].(string)
+	if !ok {
+		return nil, fmt.Errorf("unexpected type for commit hash: %T", row[0])
 	}
-	message := row[4].(string)
+
+	committerName, ok := row[1].(string)
+	if !ok {
+		return nil, fmt.Errorf("unexpected type for committer name: %T", row[1])
+	}
+	committerEmail, ok := row[2].(string)
+	if !ok {
+		return nil, fmt.Errorf("unexpected type for committer email: %T", row[2])
+	}
+	committerTs, err := getTimestampColAsUint64(row[3])
+	if err != nil {
+		return nil, fmt.Errorf("error parsing committer timestamp '%v': %w", row[3], err)
+	}
+
+	message, ok := row[4].(string)
+	if !ok {
+		return nil, fmt.Errorf("unexpected type for commit message: %T", row[4])
+	}
 
 	var commitOrder uint64
 	switch v := row[5].(type) {
@@ -757,52 +785,73 @@ func getCommitInfoWithOptions(queryist cli.Queryist, sqlCtx *sql.Context, ref st
 		return nil, fmt.Errorf("unexpected type for commit_order: %T", v)
 	}
 
-	parent := row[6].(string)
-	height := commitOrder
-
-	isHead := commitHash == hashOfHead
+	parentHashStrs := []string{}
+	if parentStr, ok := row[6].(string); ok && parentStr != "" {
+		parentHashStrs = strings.Split(parentStr, ", ")
+	}
 
 	var signature string
 	if opts.showSignature {
-		// Signature is always the last column when present
-		signature = row[len(row)-1].(string)
+		signature = row[8].(string)
 	}
 
-	localBranchesForHash, err := getBranchesForHash(queryist, sqlCtx, commitHash, true)
-	if err != nil {
-		return nil, fmt.Errorf("error getting branches for hash '%s': %v", commitHash, err)
-	}
-	remoteBranchesForHash, err := getBranchesForHash(queryist, sqlCtx, commitHash, false)
-	if err != nil {
-		return nil, fmt.Errorf("error getting remote branches for hash '%s': %v", commitHash, err)
-	}
-	tagsForHash, err := getTagsForHash(queryist, sqlCtx, commitHash)
-	if err != nil {
-		return nil, fmt.Errorf("error getting tags for hash '%s': %v", commitHash, err)
-	}
-
-	ci := &CommitInfo{
-		commitMeta: &datas.CommitMeta{
-			Name:          name,
-			Email:         email,
-			Timestamp:     timestamp,
+	var commitMeta *datas.CommitMeta
+	if authorColumnsSupport {
+		authorName, ok := row[8+authorColOffset].(string)
+		if !ok {
+			return nil, fmt.Errorf("unexpected type for author name: %T", row[8+authorColOffset])
+		}
+		authorEmail, ok := row[9+authorColOffset].(string)
+		if !ok {
+			return nil, fmt.Errorf("unexpected type for author email: %T", row[9+authorColOffset])
+		}
+		authorTs, err := getTimestampColAsUint64(row[10+authorColOffset])
+		if err != nil {
+			return nil, fmt.Errorf("error parsing author timestamp '%v': %w", row[10+authorColOffset], err)
+		}
+		commitMeta = &datas.CommitMeta{
+			Name:           authorName,
+			Email:          authorEmail,
+			Description:    message,
+			Signature:      signature,
+			Timestamp:      committerTs,
+			UserTimestamp:  int64(authorTs),
+			CommitterName:  committerName,
+			CommitterEmail: committerEmail,
+		}
+	} else { // old dolt_log placed author info in committer columns
+		commitMeta = &datas.CommitMeta{
+			Name:          committerName,
+			Email:         committerEmail,
 			Description:   message,
-			UserTimestamp: int64(timestamp),
 			Signature:     signature,
-		},
-		commitHash:        commitHash,
-		height:            height,
-		isHead:            isHead,
-		localBranchNames:  localBranchesForHash,
-		remoteBranchNames: remoteBranchesForHash,
-		tagNames:          tagsForHash,
+			UserTimestamp: int64(committerTs),
+		}
 	}
 
-	if parent != "" {
-		ci.parentHashes = strings.Split(parent, ", ")
+	localBranches, err := getBranchesForHash(queryist, sqlCtx, commitHashStr, true)
+	if err != nil {
+		return nil, fmt.Errorf("error getting branches for hash '%s': %v", commitHashStr, err)
+	}
+	remoteBranches, err := getBranchesForHash(queryist, sqlCtx, commitHashStr, false)
+	if err != nil {
+		return nil, fmt.Errorf("error getting remote branches for hash '%s': %v", commitHashStr, err)
+	}
+	tags, err := getTagsForHash(queryist, sqlCtx, commitHashStr)
+	if err != nil {
+		return nil, fmt.Errorf("error getting tags for hash '%s': %v", commitHashStr, err)
 	}
 
-	return ci, nil
+	return &CommitInfo{
+		commitMeta:        commitMeta,
+		commitHash:        commitHashStr,
+		height:            commitOrder,
+		isHead:            commitHashStr == hashOfHead,
+		parentHashes:      parentHashStrs,
+		localBranchNames:  localBranches,
+		remoteBranchNames: remoteBranches,
+		tagNames:          tags,
+	}, nil
 }
 
 func getBranchesForHash(queryist cli.Queryist, sqlCtx *sql.Context, targetHash string, getLocalBranches bool) ([]string, error) {

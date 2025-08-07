@@ -71,6 +71,8 @@ const (
 	DoltStatsGCEnabled   = "dolt_stats_gc_enabled"
 
 	DoltAutoGCEnabled = "dolt_auto_gc_enabled"
+
+	DoltLogCommitterOnly = "dolt_log_committer_only"
 )
 
 const URLTemplateDatabasePlaceholder = "{database}"

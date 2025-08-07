@@ -748,9 +748,12 @@ func BasicSelectTests() []SelectTest {
 					headCommitHash,
 					"billy bob",
 					"bigbillieb@fake.horse",
-					time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC).In(LoadedLocalLocation()),
+					time.Date(1970, 1, 1, 1, 0, 0, 0, time.UTC).In(LoadedLocalLocation()),
 					"Initialize data repository",
-					uint64(1), // commit_order for the initial commit
+					uint64(1),
+					"billy bob",
+					"bigbillieb@fake.horse",
+					time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC).In(LoadedLocalLocation()),
 				},
 			},
 			ExpectedSqlSchema: sql.Schema{
@@ -760,6 +763,9 @@ func BasicSelectTests() []SelectTest {
 				&sql.Column{Name: "date", Type: gmstypes.Datetime3},
 				&sql.Column{Name: "message", Type: gmstypes.Text},
 				&sql.Column{Name: "commit_order", Type: gmstypes.Uint64},
+				&sql.Column{Name: "author", Type: gmstypes.Text},
+				&sql.Column{Name: "author_email", Type: gmstypes.Text},
+				&sql.Column{Name: "author_date", Type: gmstypes.Datetime},
 			},
 		},
 		{
@@ -779,7 +785,7 @@ func BasicSelectTests() []SelectTest {
 					env.DefaultInitBranch,
 					headCommitHash,
 					"billy bob", "bigbillieb@fake.horse",
-					time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC).In(LoadedLocalLocation()),
+					time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC).In(LoadedLocalLocation()), // Author time (branches table uses meta.Time())
 					"Initialize data repository",
 					"",
 					"",
