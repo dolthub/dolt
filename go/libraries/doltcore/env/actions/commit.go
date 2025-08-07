@@ -19,6 +19,8 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/store/datas"
@@ -26,13 +28,18 @@ import (
 
 type CommitStagedProps struct {
 	Message    string
-	Date       time.Time
+	Date       time.Time // Author date
 	AllowEmpty bool
 	SkipEmpty  bool
 	Amend      bool
 	Force      bool
-	Name       string
-	Email      string
+	Name       string // Author name
+	Email      string // Author email
+
+	// Optional committer fields (when empty, defaults to author info)
+	CommitterName  string    // When empty, uses Name
+	CommitterEmail string    // When empty, uses Email
+	CommitterDate  time.Time // When zero, uses current time
 }
 
 // GetCommitStaged returns a new pending commit with the roots and commit properties given.
@@ -107,7 +114,21 @@ func GetCommitStaged(
 		}
 	}
 
-	meta, err := datas.NewCommitMetaWithUserTS(props.Name, props.Email, props.Message, props.Date)
+	var meta *datas.CommitMeta
+
+	// Check if committer info is provided (author/committer separation)
+	if props.CommitterName != "" || props.CommitterEmail != "" || !props.CommitterDate.IsZero() {
+		logrus.Infof("GetCommitStaged: using author/committer separation")
+		meta, err = datas.NewCommitMetaWithAuthorCommitter(
+			props.Name, props.Email, // author
+			props.CommitterName, props.CommitterEmail, // committer
+			props.Message,
+			props.Date, props.CommitterDate) // author date, committer date
+	} else {
+		logrus.Infof("GetCommitStaged: using legacy commit metadata (author only)")
+		meta, err = datas.NewCommitMetaWithUserTS(props.Name, props.Email, props.Message, props.Date)
+	}
+
 	if err != nil {
 		return nil, err
 	}
