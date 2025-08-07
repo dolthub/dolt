@@ -33,6 +33,10 @@ type CommitStagedProps struct {
 	Force      bool
 	Name       string
 	Email      string
+
+	CommitterDate  *time.Time
+	CommitterName  string
+	CommitterEmail string
 }
 
 // GetCommitStaged returns a new pending commit with the roots and commit properties given.
@@ -107,7 +111,7 @@ func GetCommitStaged(
 		}
 	}
 
-	meta, err := datas.NewCommitMetaWithUserTS(props.Name, props.Email, props.Message, props.Date)
+	meta, err := datas.NewCommitMetaWithAuthorCommitter(props.Name, props.Email, props.Message, props.Date, props.CommitterName, props.CommitterEmail, props.CommitterDate)
 	if err != nil {
 		return nil, err
 	}

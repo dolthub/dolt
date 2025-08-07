@@ -113,7 +113,7 @@ func doDoltCommit(ctx *sql.Context, args []string) (string, bool, error) {
 
 	var name, email string
 	if authorStr, ok := apr.GetValue(cli.AuthorParam); ok {
-		name, email, err = cli.ParseAuthor(authorStr)
+		name, email, err = cli.ParseContributor(authorStr, "author")
 		if err != nil {
 			return "", false, err
 		}
@@ -162,15 +162,28 @@ func doDoltCommit(ctx *sql.Context, args []string) (string, bool, error) {
 		}
 	}
 
+	committerName := datas.CommitterName
+	if committerName == "" {
+		committerName = name
+	}
+	committerEmail := datas.CommitterEmail
+	if committerEmail == "" {
+		committerEmail = email
+	}
+
+	cts := datas.CommitterDate()
 	csp := actions.CommitStagedProps{
-		Message:    msg,
-		Date:       t,
-		AllowEmpty: apr.Contains(cli.AllowEmptyFlag),
-		SkipEmpty:  apr.Contains(cli.SkipEmptyFlag),
-		Amend:      amend,
-		Force:      apr.Contains(cli.ForceFlag),
-		Name:       name,
-		Email:      email,
+		Message:        msg,
+		Date:           t,
+		AllowEmpty:     apr.Contains(cli.AllowEmptyFlag),
+		SkipEmpty:      apr.Contains(cli.SkipEmptyFlag),
+		Amend:          amend,
+		Force:          apr.Contains(cli.ForceFlag),
+		Name:           name,
+		Email:          email,
+		CommitterName:  committerName,
+		CommitterEmail: committerEmail,
+		CommitterDate:  &cts,
 	}
 
 	shouldSign, err := dsess.GetBooleanSystemVar(ctx, "gpgsign")
