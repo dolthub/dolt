@@ -56,6 +56,33 @@ call dolt_commit('-am', 'add some vals');
     [[ "$output" =~ "10" ]] || false
 }
 
+# Asserts we can use dolt_checkout() to check out a new branch that was pushed to a running
+# sql-server, and that the branch has a valid, writeable working set.
+@test "sql-server-remotesrv: can checkout a new branch pushed to a sql-server remote" {
+    mkdir -p db/remote
+    cd db/remote
+    dolt init
+    dolt sql-server --remotesapi-port 50051 &
+    srv_pid=$!
+    cd ../..
+
+    # By cloning here, we have a near-at-hand way to wait for the server to be ready.
+    dolt clone http://localhost:50051/remote cloned_remote
+    cd cloned_remote
+
+    dolt checkout -b new_branch
+    dolt push origin new_branch
+
+    # Check out the new branch and do a test write
+    cd ../db/remote
+    run dolt sql -q "
+CALL dolt_checkout('new_branch');
+CREATE TABLE t123 (pk int primary key);
+SELECT 'abcdefg';"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "abcdefg" ]] || false
+}
+
 @test "sql-server-remotesrv: can access a created database from sql-server with --remotesapi-port" {
     mkdir -p db/remote
     cd db/remote
@@ -451,7 +478,6 @@ call dolt_commit('-am', 'add one val');"
     ! [[ "$output" =~ "zeek" ]] || false
 }
 
-
 @test "sql-server-remotesrv: push to remotesapi port as super user non-fast-forward" {
     mkdir remote
     cd remote
@@ -695,4 +721,3 @@ GRANT CLONE_ADMIN ON *.* TO clone_admin_user@'localhost';
     [[ "$output" =~ "new_branch" ]] || false
     [[ "$output" =~ "main" ]] || false
 }
-
