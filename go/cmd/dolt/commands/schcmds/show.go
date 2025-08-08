@@ -120,7 +120,7 @@ func printSchemas(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env
 		// show usage and error out if there aren't any
 		if len(tables) == 0 {
 			var err error
-			tables, err = root.GetTableNames(ctx, doltdb.DefaultSchemaName)
+			tables, err = root.GetTableNames(ctx, doltdb.DefaultSchemaName, true)
 
 			if err != nil {
 				return errhand.BuildDError("unable to get table names.").AddCause(err).Build()

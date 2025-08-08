@@ -319,7 +319,7 @@ func resolveNomsConflicts(ctx *sql.Context, opts editor.Options, tbl *doltdb.Tab
 }
 
 func validateConstraintViolations(ctx *sql.Context, before, after doltdb.RootValue, table doltdb.TableName) error {
-	tables, err := after.GetTableNames(ctx, table.Schema)
+	tables, err := after.GetTableNames(ctx, table.Schema, true)
 	if err != nil {
 		return err
 	}

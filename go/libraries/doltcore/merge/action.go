@@ -184,7 +184,7 @@ func AbortMerge(ctx *sql.Context, workingSet *doltdb.WorkingSet, roots doltdb.Ro
 	}
 
 	preMergeWorkingRoot := workingSet.MergeState().PreMergeWorkingRoot()
-	preMergeWorkingTables, err := preMergeWorkingRoot.GetTableNames(ctx, doltdb.DefaultSchemaName)
+	preMergeWorkingTables, err := preMergeWorkingRoot.GetTableNames(ctx, doltdb.DefaultSchemaName, true)
 	if err != nil {
 		return nil, err
 	}

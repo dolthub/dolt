@@ -48,7 +48,7 @@ func GetGeneratedSystemTables(ctx context.Context, root doltdb.RootValue) ([]dol
 	}
 
 	for _, schema := range schemas {
-		tableNames, err := root.GetTableNames(ctx, schema.Name)
+		tableNames, err := root.GetTableNames(ctx, schema.Name, false)
 		if err != nil {
 			return nil, err
 		}

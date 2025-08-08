@@ -375,12 +375,12 @@ func migrateRoot(ctx context.Context, menv Environment, oldParent, oldRoot, newP
 
 // renames also get returned here
 func getRemovedTableNames(ctx context.Context, prev, curr doltdb.RootValue) ([]string, error) {
-	prevNames, err := prev.GetTableNames(ctx, doltdb.DefaultSchemaName)
+	prevNames, err := prev.GetTableNames(ctx, doltdb.DefaultSchemaName, true)
 	if err != nil {
 		return nil, err
 	}
 	tblNameSet := set.NewStrSet(prevNames)
-	currNames, err := curr.GetTableNames(ctx, doltdb.DefaultSchemaName)
+	currNames, err := curr.GetTableNames(ctx, doltdb.DefaultSchemaName, true)
 	if err != nil {
 		return nil, err
 	}

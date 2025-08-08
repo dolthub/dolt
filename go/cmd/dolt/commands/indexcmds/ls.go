@@ -72,7 +72,7 @@ func (cmd LsCmd) Exec(ctx context.Context, commandStr string, args []string, dEn
 
 	var tableNames []string
 	if apr.NArg() == 0 {
-		tableNames, err = working.GetTableNames(ctx, doltdb.DefaultSchemaName)
+		tableNames, err = working.GetTableNames(ctx, doltdb.DefaultSchemaName, true)
 		if err != nil {
 			return HandleErr(errhand.BuildDError("Unable to get tables.").AddCause(err).Build(), nil)
 		}
