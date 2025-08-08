@@ -588,7 +588,7 @@ func getCreateTableStatements(ctx *sql.Context, sqlEngine *engine.SqlEngine, dEn
 		return "", err
 	}
 
-	tables, err := root.GetTableNames(ctx, doltdb.DefaultSchemaName)
+	tables, err := root.GetTableNames(ctx, doltdb.DefaultSchemaName, true)
 	for _, table := range tables {
 		_, iter, _, err := sqlEngine.Query(ctx, fmt.Sprintf("SHOW CREATE TABLE %s", sql.QuoteIdentifier(table)))
 		if err != nil {

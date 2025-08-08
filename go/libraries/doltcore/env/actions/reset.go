@@ -277,7 +277,7 @@ func CleanUntracked(ctx *sql.Context, roots doltdb.Roots, tables []string, dryru
 
 	var err error
 	if len(tables) == 0 {
-		tables, err = roots.Working.GetTableNames(ctx, doltdb.DefaultSchemaName)
+		tables, err = roots.Working.GetTableNames(ctx, doltdb.DefaultSchemaName, true)
 		if err != nil {
 			return doltdb.Roots{}, nil
 		}

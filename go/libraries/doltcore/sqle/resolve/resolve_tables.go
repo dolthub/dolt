@@ -64,7 +64,7 @@ func TablesOnSearchPath(ctx *sql.Context, root doltdb.RootValue) ([]doltdb.Table
 
 	var tableNames []doltdb.TableName
 	for _, schemaName := range schemasToSearch {
-		names, err := root.GetTableNames(ctx, schemaName)
+		names, err := root.GetTableNames(ctx, schemaName, true)
 		if err != nil {
 			return nil, err
 		}
@@ -86,7 +86,7 @@ func TableNameWithSearchPath(
 	}
 
 	for _, schemaName := range schemasToSearch {
-		tablesInSchema, err := root.GetTableNames(ctx, schemaName)
+		tablesInSchema, err := root.GetTableNames(ctx, schemaName, true)
 		if err != nil {
 			return doltdb.TableName{}, false, err
 		}

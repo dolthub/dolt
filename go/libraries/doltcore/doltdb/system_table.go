@@ -99,7 +99,7 @@ func IsNonAlterableSystemTable(name TableName) bool {
 
 // GetNonSystemTableNames gets non-system table names
 func GetNonSystemTableNames(ctx context.Context, root RootValue) ([]string, error) {
-	tn, err := root.GetTableNames(ctx, DefaultSchemaName)
+	tn, err := root.GetTableNames(ctx, DefaultSchemaName, true)
 	if err != nil {
 		return nil, err
 	}

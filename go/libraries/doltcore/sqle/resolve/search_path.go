@@ -97,7 +97,7 @@ func IsDoltgresSystemTable(ctx *sql.Context, tableName doltdb.TableName, root do
 			return true, nil
 		}
 
-		tablesInSchema, err := root.GetTableNames(ctx, schemaName)
+		tablesInSchema, err := root.GetTableNames(ctx, schemaName, true)
 		if err != nil {
 			return false, err
 		}

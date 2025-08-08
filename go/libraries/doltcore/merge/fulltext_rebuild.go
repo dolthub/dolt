@@ -39,7 +39,7 @@ type rebuildableFulltextTable struct {
 // roots (ours and theirs), or had parents that were modified by both roots.
 func rebuildFullTextIndexes(ctx *sql.Context, mergedRoot, ourRoot, theirRoot doltdb.RootValue, visitedTables map[string]struct{}) (doltdb.RootValue, error) {
 	// Grab a list of all tables on the root
-	allTableNames, err := mergedRoot.GetTableNames(ctx, doltdb.DefaultSchemaName)
+	allTableNames, err := mergedRoot.GetTableNames(ctx, doltdb.DefaultSchemaName, false)
 	if err != nil {
 		return nil, err
 	}

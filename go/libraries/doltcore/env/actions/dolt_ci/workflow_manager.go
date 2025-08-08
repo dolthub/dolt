@@ -531,7 +531,7 @@ func (d *doltWorkflowManager) validateWorkflowTables(ctx *sql.Context) error {
 
 	root := roots.Working
 
-	tables, err := root.GetTableNames(ctx, doltdb.DefaultSchemaName)
+	tables, err := root.GetTableNames(ctx, doltdb.DefaultSchemaName, true)
 	if err != nil {
 		return err
 	}

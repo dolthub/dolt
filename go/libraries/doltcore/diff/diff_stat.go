@@ -71,6 +71,18 @@ func Stat(ctx context.Context, ch chan DiffStatProgress, from, to durable.Index,
 
 // StatForTableDelta pushes diff stat progress messages for the table delta given to the channel given
 func StatForTableDelta(ctx context.Context, ch chan DiffStatProgress, td TableDelta) error {
+	// Check for root objects first, as they're handled differently
+	if td.FromRootObject != nil && td.ToRootObject != nil {
+		ch <- DiffStatProgress{Changes: 1}
+		return nil
+	} else if td.FromRootObject == nil && td.ToRootObject != nil {
+		ch <- DiffStatProgress{Adds: 1}
+		return nil
+	} else if td.FromRootObject != nil && td.ToRootObject == nil {
+		ch <- DiffStatProgress{Removes: 1}
+		return nil
+	}
+
 	fromSch, toSch, err := td.GetSchemas(ctx)
 	if err != nil {
 		return errhand.BuildDError("cannot retrieve schema for table %s", td.ToName).AddCause(err).Build()

@@ -996,7 +996,7 @@ func (db Database) GetTableNamesAsOf(ctx *sql.Context, time interface{}) ([]stri
 
 	showSystemTables := showSystemTablesVar.(int8) == 1
 
-	tblNames, err := db.getAllTableNames(ctx, root, showSystemTables)
+	tblNames, err := db.getAllTableNames(ctx, root, showSystemTables, true)
 	if err != nil {
 		return nil, err
 	}
@@ -1146,7 +1146,7 @@ func (db Database) tableInsensitive(ctx *sql.Context, root doltdb.RootValue, tab
 		}
 	}
 
-	tableNames, err := db.getAllTableNames(ctx, root, false)
+	tableNames, err := db.getAllTableNames(ctx, root, false, false)
 	if err != nil {
 		return doltdb.TableName{}, nil, false, err
 	}
@@ -1209,7 +1209,11 @@ func (db Database) GetTableNames(ctx *sql.Context) ([]string, error) {
 	}
 
 	showSystemTables := showSystemTablesVar.(int8) == 1
-	tblNames, err := db.GetAllTableNames(ctx, showSystemTables)
+	root, err := db.GetRoot(ctx)
+	if err != nil {
+		return nil, err
+	}
+	tblNames, err := db.getAllTableNames(ctx, root, showSystemTables, false)
 	if err != nil {
 		return nil, err
 	}
@@ -1234,10 +1238,10 @@ func (db Database) GetAllTableNames(ctx *sql.Context, showSystemTables bool) ([]
 		return nil, err
 	}
 
-	return db.getAllTableNames(ctx, root, showSystemTables)
+	return db.getAllTableNames(ctx, root, showSystemTables, true)
 }
 
-func (db Database) getAllTableNames(ctx *sql.Context, root doltdb.RootValue, includeGeneratedSystemTables bool) ([]string, error) {
+func (db Database) getAllTableNames(ctx *sql.Context, root doltdb.RootValue, includeGeneratedSystemTables bool, includeRootObjects bool) ([]string, error) {
 	var err error
 	var result []string
 	// If we are in a schema-enabled session and the schema name is not set, we need to union all table names in all
@@ -1251,7 +1255,7 @@ func (db Database) getAllTableNames(ctx *sql.Context, root doltdb.RootValue, inc
 		//  tables first
 		result = doltdb.FlattenTableNames(names)
 	} else {
-		result, err = root.GetTableNames(ctx, db.schemaName)
+		result, err = root.GetTableNames(ctx, db.schemaName, includeRootObjects)
 		if err != nil {
 			return nil, err
 		}

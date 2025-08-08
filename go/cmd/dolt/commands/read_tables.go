@@ -144,7 +144,7 @@ func (cmd ReadTablesCmd) Exec(ctx context.Context, commandStr string, args []str
 	}
 
 	if len(tblNames) == 0 {
-		tblNames, err = srcRoot.GetTableNames(ctx, doltdb.DefaultSchemaName)
+		tblNames, err = srcRoot.GetTableNames(ctx, doltdb.DefaultSchemaName, true)
 
 		if err != nil {
 			return BuildVerrAndExit("Unable to read tables.", err)
