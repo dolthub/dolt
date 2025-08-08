@@ -21,6 +21,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dolthub/flatbuffers/v23/go"
 	"github.com/sirupsen/logrus"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
@@ -54,6 +55,39 @@ var AuthorDate = time.Now
 var CustomAuthorDate bool
 var AuthorLoc = time.Local
 
+// OptionalSerializedField represents a field that should only be serialized when non-empty.
+// This provides backwards compatibility by allowing old Dolt versions to read commits
+// that don't use new optional fields, while rejecting commits that do use them.
+type OptionalSerializedField string
+
+// PrepareOffset creates a flatbuffer offset for the field if non-empty, returns 0 if empty.
+func (o OptionalSerializedField) PrepareOffset(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
+	if string(o) == "" {
+		return 0 // Don't serialize empty fields - maintains backwards compatibility
+	}
+	return builder.CreateString(string(o))
+}
+
+// SerializeOptional conditionally serializes the field only when it contains data.
+func (o OptionalSerializedField) SerializeOptional(builder *flatbuffers.Builder, offset flatbuffers.UOffsetT, addFunc func(*flatbuffers.Builder, flatbuffers.UOffsetT)) {
+	if offset != 0 {
+		addFunc(builder, offset)
+	}
+}
+
+// String returns the underlying string value.
+func (o OptionalSerializedField) String() string {
+	return string(o)
+}
+
+// ValueOrDefault returns the field value, or the fallback if empty.
+func (o OptionalSerializedField) ValueOrDefault(fallback string) string {
+	if string(o) == "" {
+		return fallback
+	}
+	return string(o)
+}
+
 // CommitMeta contains all the metadata that is associated with a commit within a data repo.
 type CommitMeta struct {
 	Name          string // Author name
@@ -64,8 +98,8 @@ type CommitMeta struct {
 	Signature     string
 
 	// New fields for committer info (when different from author)
-	CommitterName  string // When empty, defaults to Name (author)
-	CommitterEmail string // When empty, defaults to Email (author)
+	CommitterName  OptionalSerializedField // When empty, defaults to Name (author)
+	CommitterEmail OptionalSerializedField // When empty, defaults to Email (author)
 }
 
 // NewCommitMeta creates a CommitMeta instance from a name, email, and description and uses the current time for the
@@ -137,8 +171,8 @@ func NewCommitMetaWithUserTS(name, email, desc string, userTS time.Time) (*Commi
 		Signature:     "",
 
 		// For legacy commits, committer fields are empty (defaults to author)
-		CommitterName:  "", // Empty means use author name
-		CommitterEmail: "", // Empty means use author email
+		CommitterName:  OptionalSerializedField(""), // Empty means use author name
+		CommitterEmail: OptionalSerializedField(""), // Empty means use author email
 	}, nil
 }
 
@@ -197,8 +231,8 @@ func NewCommitMetaWithAuthorCommitter(authorName, authorEmail, committerName, co
 		Signature:     "",
 
 		// Committer fields (only needed when different from author)
-		CommitterName:  cn,
-		CommitterEmail: ce,
+		CommitterName:  OptionalSerializedField(cn),
+		CommitterEmail: OptionalSerializedField(ce),
 	}, nil
 }
 
@@ -265,8 +299,8 @@ func CommitMetaFromNomsSt(st types.Struct) (*CommitMeta, error) {
 		Signature:     string(signature.(types.String)),
 
 		// For legacy commits, committer fields are empty (defaults to author)
-		CommitterName:  "",
-		CommitterEmail: "",
+		CommitterName:  OptionalSerializedField(""),
+		CommitterEmail: OptionalSerializedField(""),
 	}, nil
 }
 

@@ -790,14 +790,8 @@ func (itr *logTableFunctionRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 	committerTime := time.Unix(0, int64(meta.Timestamp)*int64(time.Millisecond))
 
 	// Determine committer info (default to author if committer fields are empty)
-	committerName := meta.CommitterName
-	if committerName == "" {
-		committerName = meta.Name // Default to author
-	}
-	committerEmail := meta.CommitterEmail
-	if committerEmail == "" {
-		committerEmail = meta.Email // Default to author
-	}
+	committerName := meta.CommitterName.ValueOrDefault(meta.Name)
+	committerEmail := meta.CommitterEmail.ValueOrDefault(meta.Email)
 
 	row := sql.NewRow(
 		commitHash.String(), // commit_hash
