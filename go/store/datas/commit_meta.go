@@ -60,19 +60,13 @@ var AuthorLoc = time.Local
 // that don't use new optional fields, while rejecting commits that do use them.
 type OptionalSerializedField string
 
-// PrepareOffset creates a flatbuffer offset for the field if non-empty, returns 0 if empty.
-func (o OptionalSerializedField) PrepareOffset(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
-	if string(o) == "" {
-		return 0 // Don't serialize empty fields - maintains backwards compatibility
-	}
-	return builder.CreateString(string(o))
-}
-
 // SerializeOptional conditionally serializes the field only when it contains data.
-func (o OptionalSerializedField) SerializeOptional(builder *flatbuffers.Builder, offset flatbuffers.UOffsetT, addFunc func(*flatbuffers.Builder, flatbuffers.UOffsetT)) {
-	if offset != 0 {
-		addFunc(builder, offset)
+func (o OptionalSerializedField) SerializeOptional(builder *flatbuffers.Builder, addFunc func(*flatbuffers.Builder, flatbuffers.UOffsetT)) {
+	if string(o) == "" {
+		return // Don't serialize empty fields - maintains backwards compatibility
 	}
+	offset := builder.CreateString(string(o))
+	addFunc(builder, offset)
 }
 
 // String returns the underlying string value.
@@ -97,9 +91,8 @@ type CommitMeta struct {
 	UserTimestamp int64 // Author timestamp
 	Signature     string
 
-	// New fields for committer info (when different from author)
-	CommitterName  OptionalSerializedField // When empty, defaults to Name (author)
-	CommitterEmail OptionalSerializedField // When empty, defaults to Email (author)
+	CommitterName  OptionalSerializedField
+	CommitterEmail OptionalSerializedField
 }
 
 // NewCommitMeta creates a CommitMeta instance from a name, email, and description and uses the current time for the
@@ -139,8 +132,6 @@ func init() {
 
 // NewCommitMetaWithUserTS creates a user metadata
 func NewCommitMetaWithUserTS(name, email, desc string, userTS time.Time) (*CommitMeta, error) {
-	logrus.Infof("NewCommitMetaWithUserTS: name=%s, email=%s, userTS=%v", name, email, userTS)
-
 	n := strings.TrimSpace(name)
 	e := strings.TrimSpace(email)
 	d := strings.TrimSpace(desc)
@@ -160,27 +151,21 @@ func NewCommitMetaWithUserTS(name, email, desc string, userTS time.Time) (*Commi
 	committerDateMillis := uint64(CommitterDate().UnixMilli())
 	authorDateMillis := userTS.UnixMilli()
 
-	logrus.Infof("CommitMeta created: name=%s (author), timestamp=%d (committer), userTimestamp=%d (author)", n, committerDateMillis, authorDateMillis)
-
 	return &CommitMeta{
-		Name:          n,                   // Author name
-		Email:         e,                   // Author email
-		Timestamp:     committerDateMillis, // Committer timestamp (defaults to current time)
+		Name:          n,
+		Email:         e,
+		Timestamp:     committerDateMillis,
 		Description:   d,
-		UserTimestamp: authorDateMillis, // Author timestamp
+		UserTimestamp: authorDateMillis,
 		Signature:     "",
-
-		// For legacy commits, committer fields are empty (defaults to author)
-		CommitterName:  OptionalSerializedField(""), // Empty means use author name
-		CommitterEmail: OptionalSerializedField(""), // Empty means use author email
+		CommitterName:  OptionalSerializedField(""),
+		CommitterEmail: OptionalSerializedField(""),
 	}, nil
 }
 
 // NewCommitMetaWithAuthorCommitter creates commit metadata with separate author and committer information
 // If committer info is empty, defaults to author info. Maintains backwards compatibility.
 func NewCommitMetaWithAuthorCommitter(authorName, authorEmail, committerName, committerEmail, desc string, authorTS, committerTS time.Time) (*CommitMeta, error) {
-	logrus.Infof("NewCommitMetaWithAuthorCommitter: authorName=%s, authorEmail=%s, committerName=%s, committerEmail=%s",
-		authorName, authorEmail, committerName, committerEmail)
 
 	an := strings.TrimSpace(authorName)
 	ae := strings.TrimSpace(authorEmail)
@@ -218,19 +203,13 @@ func NewCommitMetaWithAuthorCommitter(authorName, authorEmail, committerName, co
 
 	authorDateMillis := authorTS.UnixMilli()
 
-	logrus.Infof("CommitMeta with author/committer: author=%s (%d), committer=%s (%d)",
-		an, authorDateMillis, cn, committerDateMillis)
-
-	// Create CommitMeta using existing fields for author, new fields for committer
 	return &CommitMeta{
-		Name:          an,                  // Author name
-		Email:         ae,                  // Author email
-		Timestamp:     committerDateMillis, // Committer timestamp
+		Name:          an,
+		Email:         ae,
+		Timestamp:     committerDateMillis,
 		Description:   d,
-		UserTimestamp: authorDateMillis, // Author timestamp
+		UserTimestamp: authorDateMillis,
 		Signature:     "",
-
-		// Committer fields (only needed when different from author)
 		CommitterName:  OptionalSerializedField(cn),
 		CommitterEmail: OptionalSerializedField(ce),
 	}, nil
@@ -291,23 +270,18 @@ func CommitMetaFromNomsSt(st types.Struct) (*CommitMeta, error) {
 	email := string(e.(types.String))
 
 	return &CommitMeta{
-		Name:          name,  // Author name
-		Email:         email, // Author email
+		Name:          name,
+		Email:         email,
 		Timestamp:     uint64(ts.(types.Uint)),
 		Description:   string(d.(types.String)),
 		UserTimestamp: int64(userTS.(types.Int)),
 		Signature:     string(signature.(types.String)),
-
-		// For legacy commits, committer fields are empty (defaults to author)
 		CommitterName:  OptionalSerializedField(""),
 		CommitterEmail: OptionalSerializedField(""),
 	}, nil
 }
 
 func (cm *CommitMeta) toNomsStruct(nbf *types.NomsBinFormat) (types.Struct, error) {
-	logrus.Infof("toNomsStruct: converting CommitMeta to types.Struct - name=%s, email=%s, timestamp=%d, userTimestamp=%d",
-		cm.Name, cm.Email, cm.Timestamp, cm.UserTimestamp)
-
 	metadata := types.StructData{
 		commitMetaNameKey:      types.String(cm.Name),
 		commitMetaEmailKey:     types.String(cm.Email),
