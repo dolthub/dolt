@@ -51,24 +51,23 @@ fi
 
 # collect custom sysbench scripts
 cp ./sysbench-lua-scripts/*.lua "$WORKING_DIR"
+
+# grab testing SSL pems
+cp ../../libraries/doltcore/servercfg/testdata/chain* "$WORKING_DIR"
+
 cd "$WORKING_DIR"
 
 # make a sql-server config file
 cat <<YAML > dolt-config.yaml
-log_level: "info"
-
-behavior:
-  read_only: false
-  autocommit: true
+log_level: info
 
 listener:
-  host: "0.0.0.0"
+  host: 127.0.0.1
   port: $PORT
-  max_connections: 128
-  read_timeout_millis: 28800000
-  write_timeout_millis: 28800000
+  tls_key: "./chain_key.pem"
+  tls_cert: "./chain_cert.pem"
+  require_secure_transport: true
 
-data_dir: .
 YAML
 
 # start a server
@@ -91,7 +90,7 @@ echo "benchmark $SYSBENCH_TEST bootstrapping at $WORKING_DIR"
 sleep 1
 sysbench \
   --db-driver="mysql" \
-  --mysql-host="0.0.0.0" \
+  --mysql-host="127.0.0.1" \
   --mysql-port="$PORT" \
   --mysql-user="$USER" \
   --mysql-password="$PASS" \
@@ -115,7 +114,7 @@ echo "benchmark $SYSBENCH_TEST starting at $WORKING_DIR"
 
 sysbench \
   --db-driver="mysql" \
-  --mysql-host="0.0.0.0" \
+  --mysql-host="127.0.0.1" \
   --mysql-port="$PORT" \
   --mysql-user="$USER" \
   --mysql-password="$PASS" \

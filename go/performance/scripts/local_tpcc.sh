@@ -46,22 +46,23 @@ fi
 
 # collect custom sysbench scripts
 cp ./sysbench-tpcc/*.lua "$WORKING_DIR"
+
+# grab testing SSL pems
+cp ../../libraries/doltcore/servercfg/testdata/chain* "$WORKING_DIR"
+
 cd "$WORKING_DIR"
 
 # make a sql-server config file
 cat <<YAML > dolt-config.yaml
-log_level: "debug"
-
-behavior:
-  read_only: false
-  autocommit: true
+log_level: info
 
 listener:
-  host: "0.0.0.0"
+  host: 127.0.0.1
   port: $PORT
-  max_connections: 128
-  read_timeout_millis: 28800000
-  write_timeout_millis: 28800000
+  tls_key: "./chain_key.pem"
+  tls_cert: "./chain_cert.pem"
+  require_secure_transport: true
+
 YAML
 
 # start a server
@@ -80,7 +81,19 @@ echo "benchmark TPC-C bootstrapping at $WORKING_DIR"
 
 sleep 1
 
-./tpcc.lua --db-driver="mysql" --mysql-db="sbtest" --mysql-host="0.0.0.0" --mysql-port="$PORT" --mysql-user="$USER" --mysql-password="$PASS" --time=10 --report_interval=1 --threads=2 --tables=1 --scale=1 --trx_level="RR" prepare
+./tpcc.lua \
+  --db-driver="mysql" \
+  --mysql-db="sbtest" \
+  --mysql-host="127.0.0.1" \
+  --mysql-port="$PORT" \
+  --mysql-user="$USER" \
+  --mysql-password="$PASS" \
+  --time=10 \
+  --report_interval=1 \
+  --threads=2 \
+  --tables=1 \
+  --scale=1 \
+  --trx_level="RR" prepare
 
 # restart server to isolate bench run
 kill -15 "$SERVER_PID"
@@ -97,7 +110,19 @@ sleep 1
 # run benchmark
 echo "benchmark $SYSBENCH_TEST starting at $WORKING_DIR"
 
-./tpcc.lua --db-driver="mysql" --mysql-db="sbtest" --mysql-host="0.0.0.0" --mysql-port="$PORT" --mysql-user="$USER" --mysql-password="$PASS" --time=10 --report_interval=1 --threads=2 --tables=1 --scale=1 --trx_level="RR" run
+./tpcc.lua \
+  --db-driver="mysql" \
+  --mysql-db="sbtest" \
+  --mysql-host="127.0.0.1" \
+  --mysql-port="$PORT" \
+  --mysql-user="$USER" \
+  --mysql-password="$PASS" \
+  --time=10 \
+  --report_interval=1 \
+  --threads=2 \
+  --tables=1 \
+  --scale=1 \
+  --trx_level="RR" run
 
 echo "benchmark TPC-C complete at $WORKING_DIR"
 echo "DOLT_DEFAULT_BIN_FORMAT='$DOLT_DEFAULT_BIN_FORMAT'"
