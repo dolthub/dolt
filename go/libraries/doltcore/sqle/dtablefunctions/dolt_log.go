@@ -17,7 +17,6 @@ package dtablefunctions
 import (
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
@@ -30,6 +29,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/libraries/utils/gpg"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -52,22 +52,6 @@ type LogTableFunction struct {
 	minParents      int
 	showParents     bool
 	showSignature   bool
-}
-
-var logTableSchema = sql.Schema{
-	&sql.Column{Name: "commit_hash", Type: types.Text},
-	&sql.Column{Name: "committer", Type: types.Text}, // Legacy: shows author name for backwards compatibility
-	&sql.Column{Name: "email", Type: types.Text},     // Legacy: shows author email for backwards compatibility
-	&sql.Column{Name: "date", Type: types.Datetime},  // Legacy: shows author date for backwards compatibility
-	&sql.Column{Name: "message", Type: types.Text},
-	&sql.Column{Name: "commit_order", Type: types.Uint64},
-	// New columns for separate author/committer info
-	&sql.Column{Name: "author", Type: types.Text},
-	&sql.Column{Name: "author_email", Type: types.Text},
-	&sql.Column{Name: "author_date", Type: types.Datetime},
-	&sql.Column{Name: "committer_name", Type: types.Text},
-	&sql.Column{Name: "committer_email", Type: types.Text},
-	&sql.Column{Name: "committer_date", Type: types.Datetime},
 }
 
 // NewInstance creates a new instance of TableFunction interface
@@ -176,7 +160,7 @@ func (ltf *LogTableFunction) getOptionsString() string {
 
 // Schema implements the sql.Node interface.
 func (ltf *LogTableFunction) Schema() sql.Schema {
-	logSchema := logTableSchema
+	logSchema := dtables.GetLogTableSchema("", "")
 
 	if ltf.showParents {
 		logSchema = append(logSchema, &sql.Column{Name: "parents", Type: types.Text})
@@ -791,28 +775,7 @@ func (itr *logTableFunctionRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 		}
 	}
 
-	// Create timestamp from committer timestamp (stored in meta.Timestamp)
-	committerTime := time.Unix(0, int64(meta.Timestamp)*int64(time.Millisecond))
-
-	// Determine committer info (default to author if committer fields are empty)
-	committerName := meta.CommitterName.ValueOrDefault(meta.Name)
-	committerEmail := meta.CommitterEmail.ValueOrDefault(meta.Email)
-
-	row := sql.NewRow(
-		commitHash.String(), // commit_hash
-		meta.Name,           // committer (legacy: shows author name for backwards compatibility)
-		meta.Email,          // email (legacy: shows author email for backwards compatibility)
-		meta.Time(),         // date (legacy: shows author date for backwards compatibility)
-		meta.Description,    // message
-		height,              // commit_order
-		// New author/committer columns
-		meta.Name,      // author (from legacy Name field)
-		meta.Email,     // author_email (from legacy Email field)
-		meta.Time(),    // author_date (from UserTimestamp)
-		committerName,  // committer_name
-		committerEmail, // committer_email
-		committerTime,  // committer_date (from Timestamp)
-	)
+	row := dtables.BuildLogRow(commitHash, meta, height)
 
 	if itr.showParents {
 		prStr, err := getParentsString(ctx, commit)
