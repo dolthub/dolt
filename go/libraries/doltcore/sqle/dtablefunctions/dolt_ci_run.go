@@ -16,13 +16,15 @@ package dtablefunctions
 
 import (
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions/dolt_ci"
-	"github.com/dolthub/dolt/go/store/val"
+	"io"
+	"strings"
+
 	gms "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
-	"io"
-	"strings"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions/dolt_ci"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 var _ sql.TableFunction = (*CiRunTableFunction)(nil)
