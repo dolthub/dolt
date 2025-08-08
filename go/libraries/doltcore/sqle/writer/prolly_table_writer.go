@@ -93,6 +93,7 @@ func getSecondaryProllyIndexWriters(ctx context.Context, t *doltdb.Table, schSta
 			keyBld:        val.NewTupleBuilder(keyDesc, idxMap.NodeStore()),
 			pkMap:         def.PkMapping,
 			pkBld:         val.NewTupleBuilder(schState.PkKeyDesc, idxMap.NodeStore()),
+			key:           make(sql.Row, keyDesc.Count()),
 		}
 	}
 
