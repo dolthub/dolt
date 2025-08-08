@@ -17,7 +17,6 @@ package dtablefunctions
 import (
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
@@ -29,6 +28,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/libraries/utils/gpg"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -193,6 +193,7 @@ var logTableSchema = sql.Schema{
 // NewInstance creates a new instance of TableFunction interface
 func (ltf *LogTableFunction) NewInstance(ctx *sql.Context, db sql.Database, expressions []sql.Expression) (sql.Node, error) {
 	newInstance := &LogTableFunction{
+		ctx:      ctx,
 		database: db,
 	}
 
@@ -816,28 +817,7 @@ func (itr *logTableFunctionRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 		}
 	}
 
-	// Create timestamp from committer timestamp (stored in meta.Timestamp)
-	committerTime := time.Unix(0, int64(meta.Timestamp)*int64(time.Millisecond))
-
-	// Determine committer info (default to author if committer fields are empty)
-	committerName := meta.CommitterName.ValueOrDefault(meta.Name)
-	committerEmail := meta.CommitterEmail.ValueOrDefault(meta.Email)
-
-	row := sql.NewRow(
-		commitHash.String(), // commit_hash
-		meta.Name,           // committer (legacy: shows author name for backwards compatibility)
-		meta.Email,          // email (legacy: shows author email for backwards compatibility)
-		meta.Time(),         // date (legacy: shows author date for backwards compatibility)
-		meta.Description,    // message
-		height,              // commit_order
-		// New author/committer columns
-		meta.Name,      // author (from legacy Name field)
-		meta.Email,     // author_email (from legacy Email field)
-		meta.Time(),    // author_date (from UserTimestamp)
-		committerName,  // committer_name
-		committerEmail, // committer_email
-		committerTime,  // committer_date (from Timestamp)
-	)
+	row := dtables.BuildLogRow(commitHash, meta, height)
 
 	if itr.showParents {
 		prStr, err := getParentsString(ctx, commit)
