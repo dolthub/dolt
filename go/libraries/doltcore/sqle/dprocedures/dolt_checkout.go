@@ -490,6 +490,8 @@ func checkoutNewBranch(
 }
 
 // checkoutExistingBranch updates the active branch reference to point to an already existing branch.
+// If the existing branch does not have a valid working set initialized yet, a
+// doltdb.ErrWorkingSetNotFound error is returned.
 func checkoutExistingBranch(
 	ctx *sql.Context,
 	dbName string,
@@ -510,6 +512,15 @@ func checkoutExistingBranch(
 	if apr.Contains(cli.MoveFlag) {
 		return doGlobalCheckout(ctx, branchName, apr.Contains(cli.ForceFlag), false)
 	} else {
+		// Ensure that the working set is available
+		ddb, ok := dSess.GetDoltDB(ctx, dbName)
+		if !ok {
+			return fmt.Errorf("could not load database %s", dbName)
+		}
+		if _, err = ddb.ResolveWorkingSet(ctx, wsRef); err != nil {
+			return err
+		}
+
 		err = dSess.SwitchWorkingSet(ctx, dbName, wsRef)
 		if err != nil {
 			return err
