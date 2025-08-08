@@ -44,6 +44,7 @@ type CiRunTableFunction struct {
 var ciRunTableSchema = sql.Schema{
 	&sql.Column{Name: "job_name", Type: types.Text},
 	&sql.Column{Name: "step_name", Type: types.Text},
+	&sql.Column{Name: "query", Type: types.Text},
 	&sql.Column{Name: "status", Type: types.Text},
 	&sql.Column{Name: "error", Type: types.Text},
 }
@@ -75,11 +76,8 @@ func (crtf *CiRunTableFunction) WithCatalog(c sql.Catalog) (sql.TableFunction, e
 	if err != nil {
 		return nil, err
 	}
-	crtf.workflowName = workflow
+	newInstance.workflowName = workflow
 
-	if err := newInstance.validateWorkflowName(); err != nil {
-		return nil, err
-	}
 	if err := newInstance.assertWorkflowJobsAndSteps(); err != nil {
 		return nil, err
 	}
@@ -87,7 +85,7 @@ func (crtf *CiRunTableFunction) WithCatalog(c sql.Catalog) (sql.TableFunction, e
 }
 
 type ciStep struct {
-	stepName, jobName, errStr string
+	stepName, jobName, queryStatement, errStr string
 }
 
 func (crtf *CiRunTableFunction) validateWorkflowName() error {
@@ -120,7 +118,8 @@ func (crtf *CiRunTableFunction) getJobs() ([]dolt_ci.WorkflowJob, error) {
 		}
 
 		var job dolt_ci.WorkflowJob
-		job.Id = row[0].(*dolt_ci.WorkflowJobId) //TODO THIS IS ALMOST CERTAINLY GOING TO BREAK
+		jobId := dolt_ci.WorkflowJobId(row[0].(string))
+		job.Id = &jobId
 		job.Name = row[1].(string)
 
 		jobs = append(jobs, job)
@@ -129,32 +128,55 @@ func (crtf *CiRunTableFunction) getJobs() ([]dolt_ci.WorkflowJob, error) {
 	return jobs, nil
 }
 
-func (crtf *CiRunTableFunction) getSavedQueryData(stepId string) (savedQueryId string, savedQueryName string, stepExpectType int32, err error) {
+func (crtf *CiRunTableFunction) getSavedQueryData(stepId string) (savedQueryId string, savedQueryStatement string, stepExpectType int32, ciErr string, err error) {
 	qry := fmt.Sprintf("SELECT id, saved_query_name, expected_results_type FROM dolt_ci_workflow_saved_query_steps WHERE workflow_step_id_fk = '%s'", stepId)
 	_, iter, _, err := crtf.engine.Query(crtf.ctx, qry)
 	if err != nil {
-		return "", "", 0, err
+		return "", "", 0, "", err
 	}
 
 	queryIdName, err := iter.Next(crtf.ctx)
 	if err != nil {
-		return "", "", 0, fmt.Errorf("ci tables are malformed") //TODO BETTER ERROR MESSAGE PROBS
+		return "", "", 0, "", fmt.Errorf("ci tables are malformed")
 	}
 	savedQueryId = queryIdName[0].(string)
-	savedQueryName = queryIdName[1].(string)
+	savedQueryName := queryIdName[1].(string)
 	stepExpectType = queryIdName[2].(int32)
-	return savedQueryId, savedQueryName, stepExpectType, nil
+
+	qry = fmt.Sprintf("SELECT query FROM dolt_query_catalog WHERE id = '%s'", savedQueryName)
+	_, iter, _, err = crtf.engine.Query(crtf.ctx, qry)
+	if err != nil {
+		return "", "", 0, "", err
+	}
+
+	queryRow, err := iter.Next(crtf.ctx)
+	if err == io.EOF {
+		ciErr = fmt.Sprintf("saved query does not exist: %s", savedQueryName)
+		return savedQueryId, "", stepExpectType, ciErr, nil
+	} else if err != nil {
+		return "", "", 0, "", err
+	}
+
+	savedQueryStatement, err = getStringColAsString(crtf.ctx, queryRow[0])
+	if err != nil {
+		return "", "", 0, "", err
+	}
+
+	return savedQueryId, savedQueryStatement, stepExpectType, ciErr, nil
 }
 
 func (crtf *CiRunTableFunction) assertWorkflowJobsAndSteps() error {
+	if err := crtf.validateWorkflowName(); err != nil {
+		return err
+	}
+
 	jobs, err := crtf.getJobs()
 	if err != nil {
 		return err
 	}
 
 	for _, job := range jobs {
-		//Get steps from dolt_ci_workflow_steps
-		qry := fmt.Sprintf("SELECT * FROM dolt_ci_workflow_steps WHERE workflow_job_id_fk = '%s' ORDER BY step_order ASC", job.Id)
+		qry := fmt.Sprintf("SELECT * FROM dolt_ci_workflow_steps WHERE workflow_job_id_fk = '%s' ORDER BY step_order ASC", *job.Id)
 		_, stepIter, _, err := crtf.engine.Query(crtf.ctx, qry)
 		if err != nil {
 			return err
@@ -168,37 +190,28 @@ func (crtf *CiRunTableFunction) assertWorkflowJobsAndSteps() error {
 				return err
 			}
 
-			savedQueryId, savedQueryName, stepExpectType, err := crtf.getSavedQueryData(row[0].(string))
-
-			qry = fmt.Sprintf("SELECT query FROM dolt_query_catalog WHERE id = '%s'", savedQueryName)
-			_, iter, _, err := crtf.engine.Query(crtf.ctx, qry)
+			// Get the sql statement and id of the saved query. We use ciErr to denote CI failures that should be
+			// displayed to the user, and err for internal dolt problems that should halt the process.
+			savedQueryId, savedQueryStatement, stepExpectType, ciErr, err := crtf.getSavedQueryData(row[0].(string))
 			if err != nil {
 				return err
 			}
 
-			var errStr string
-			queryRow, err := iter.Next(crtf.ctx)
-			if err != nil {
-				errStr = fmt.Sprintf("saved query does not exist: %s", savedQueryName)
-			}
-
-			if errStr == "" {
-				qry, err = getStringColAsString(crtf.ctx, queryRow[0])
+			if ciErr == "" {
+				qry, err = getStringColAsString(crtf.ctx, savedQueryStatement)
 				if err != nil {
 					return err
 				}
-				_, iter, _, err = crtf.engine.Query(crtf.ctx, qry)
+				_, iter, _, err := crtf.engine.Query(crtf.ctx, qry)
 				if err != nil {
-					errStr = fmt.Sprintf("query error: %s", err.Error())
+					ciErr = fmt.Sprintf("query error: %s", err.Error())
+				} else if stepExpectType == 1 {
+					ciErr = crtf.assertQuery(iter, savedQueryId)
 				}
 			}
-			if errStr == "" && stepExpectType == 1 {
-				errStr = crtf.assertQuery(iter, savedQueryId)
-			}
 
-			crtf.savedQueryResults = append(crtf.savedQueryResults, ciStep{row[1].(string), job.Name, errStr})
+			crtf.savedQueryResults = append(crtf.savedQueryResults, ciStep{row[1].(string), job.Name, savedQueryStatement, ciErr})
 		}
-
 	}
 	return nil
 }
@@ -215,12 +228,12 @@ func (crtf *CiRunTableFunction) assertQuery(resultIter sql.RowIter, savedQueryId
 	if err != nil {
 		return "error: malformed CI tables, could not get expected row and column counts"
 	}
-	colType := row[0].(int64)
-	rowType := row[1].(int64)
+	colType := dolt_ci.WorkflowSavedQueryExpectedRowColumnComparisonType(row[0].(int32))
+	rowType := dolt_ci.WorkflowSavedQueryExpectedRowColumnComparisonType(row[1].(int32))
 	colCount := row[2].(int64)
 	rowCount := row[3].(int64)
 
-	var actualRows, actualColumns int32
+	var actualRows, actualColumns int64
 	for {
 		row, err = resultIter.Next(crtf.ctx)
 		if err == io.EOF {
@@ -230,7 +243,7 @@ func (crtf *CiRunTableFunction) assertQuery(resultIter sql.RowIter, savedQueryId
 		}
 
 		actualRows++
-		actualColumns = int32(len(row))
+		actualColumns = int64(len(row))
 	}
 	var errs []string
 	var colErr, rowErr error
@@ -344,10 +357,13 @@ func (crtf *CiRunTableFunction) RowIter(ctx *sql.Context, _ sql.Row) (sql.RowIte
 
 	for _, step := range crtf.savedQueryResults {
 		status := "PASS"
+		var row sql.Row
 		if step.errStr != "" {
 			status = "FAIL"
+			row = sql.NewRow(step.jobName, step.stepName, step.queryStatement, status, step.errStr)
+		} else {
+			row = sql.NewRow(step.jobName, step.stepName, "", status, step.errStr)
 		}
-		row := sql.NewRow(step.jobName, step.stepName, status, step.errStr)
 		rows = append(rows, row)
 	}
 
