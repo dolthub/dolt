@@ -180,9 +180,13 @@ func commit_flatbuffer(vaddr hash.Hash, opts CommitOptions, heights []uint64, pa
 		sigoff = builder.CreateString(opts.Meta.Signature)
 	}
 
-	// Prepare committer field offsets (only creates offsets for non-empty fields)
-	committerNameOff := opts.Meta.CommitterName.PrepareOffset(builder)
-	committerEmailOff := opts.Meta.CommitterEmail.PrepareOffset(builder)
+	var committerNameOff, committerEmailOff flatbuffers.UOffsetT
+	if opts.Meta.CommitterName != nil {
+		committerNameOff = builder.CreateString(*opts.Meta.CommitterName)
+	}
+	if opts.Meta.CommitterEmail != nil {
+		committerEmailOff = builder.CreateString(*opts.Meta.CommitterEmail)
+	}
 
 	serial.CommitStart(builder)
 	serial.CommitAddRoot(builder, vaddroff)
@@ -195,10 +199,12 @@ func commit_flatbuffer(vaddr hash.Hash, opts CommitOptions, heights []uint64, pa
 	serial.CommitAddTimestampMillis(builder, opts.Meta.Timestamp)
 	serial.CommitAddUserTimestampMillis(builder, opts.Meta.UserTimestamp)
 	serial.CommitAddSignature(builder, sigoff)
-
-	// Serialize optional committer fields only if they contain data (backwards compatible)
-	opts.Meta.CommitterName.SerializeOptional(builder, committerNameOff, serial.CommitAddCommitterName)
-	opts.Meta.CommitterEmail.SerializeOptional(builder, committerEmailOff, serial.CommitAddCommitterEmail)
+	if committerNameOff != 0 {
+		serial.CommitAddCommitterName(builder, committerNameOff)
+	}
+	if committerEmailOff != 0 {
+		serial.CommitAddCommitterEmail(builder, committerEmailOff)
+	}
 
 	bytes := serial.FinishMessage(builder, serial.CommitEnd(builder), []byte(serial.CommitFileID))
 	return bytes, maxheight + 1
@@ -592,17 +598,16 @@ func GetCommitMeta(ctx context.Context, cv types.Value) (*CommitMeta, error) {
 			return nil, err
 		}
 		ret := &CommitMeta{}
-		// Primary fields (author info stored in legacy fields)
-		ret.Name = string(cmsg.Name())   // Author name
-		ret.Email = string(cmsg.Email()) // Author email
+		ret.Name = string(cmsg.Name())
+		ret.Email = string(cmsg.Email())
 		ret.Description = string(cmsg.Description())
-		ret.Timestamp = cmsg.TimestampMillis()         // Committer timestamp
-		ret.UserTimestamp = cmsg.UserTimestampMillis() // Author timestamp
+		ret.Timestamp = cmsg.TimestampMillis()
+		ret.UserTimestamp = cmsg.UserTimestampMillis()
 		ret.Signature = string(cmsg.Signature())
-
-		// Committer fields (only populated if different from author)
-		ret.CommitterName = OptionalSerializedField(cmsg.CommitterName())   // Empty if same as author
-		ret.CommitterEmail = OptionalSerializedField(cmsg.CommitterEmail()) // Empty if same as author
+		committerName := string(cmsg.CommitterName())
+		committerEmail := string(cmsg.CommitterEmail())
+		ret.CommitterName = &committerName
+		ret.CommitterEmail = &committerEmail
 
 		return ret, nil
 	}

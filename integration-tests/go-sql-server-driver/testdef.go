@@ -248,6 +248,7 @@ func MakeServer(t *testing.T, dc driver.DoltCmdable, s *driver.Server, resources
 		driver.WithEnvs(append([]string{
 			"DOLT_CONTEXT_VALIDATION_ENABLED=true",
 			"DOLT_ENABLE_DYNAMIC_ASSERTS=true",
+			"DOLT_LOG_COMPACT_SCHEMA=1",
 		}, s.Envs...)...),
 		driver.WithName(s.Name),
 	}
