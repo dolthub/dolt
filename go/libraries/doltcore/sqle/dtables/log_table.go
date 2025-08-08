@@ -118,7 +118,7 @@ var logTableSchemaAuthorColumns = sql.Schema{
 
 func getLogTableSchema(tableName, dbName string) sql.Schema {
 	var baseSchema sql.Schema
-	
+
 	if useCompactSchema() {
 		baseSchema = make(sql.Schema, len(logTableSchemaCompact))
 		copy(baseSchema, logTableSchemaCompact)
@@ -127,7 +127,7 @@ func getLogTableSchema(tableName, dbName string) sql.Schema {
 		copy(baseSchema, logTableSchemaCommitterColumns)
 		baseSchema = append(baseSchema, logTableSchemaAuthorColumns...)
 	}
-	
+
 	// Update source and database info for system table
 	for _, col := range baseSchema {
 		col.Source = tableName
@@ -136,7 +136,7 @@ func getLogTableSchema(tableName, dbName string) sql.Schema {
 			col.PrimaryKey = true
 		}
 	}
-	
+
 	return baseSchema
 }
 
@@ -159,9 +159,9 @@ func buildLogTableRow(commitHash hash.Hash, meta *datas.CommitMeta, height uint6
 		time.Unix(0, int64(meta.Timestamp)*int64(time.Millisecond)), // Committer timestamp
 		meta.Description,
 		height,
-		meta.Name,    // Author name
-		meta.Email,   // Author email
-		meta.Time(),  // Author timestamp
+		meta.Name,   // Author name
+		meta.Email,  // Author email
+		meta.Time(), // Author timestamp
 	)
 }
 

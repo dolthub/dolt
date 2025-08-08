@@ -199,7 +199,7 @@ func getLogSchema() sql.Schema {
 		copy(schema, logSchemaCompact)
 		return schema
 	}
-	
+
 	schema := make(sql.Schema, len(logSchemaCommitterColumns))
 	copy(schema, logSchemaCommitterColumns)
 	return append(schema, logSchemaAuthorColumns...)
@@ -216,7 +216,7 @@ func buildLogRow(commitHash hash.Hash, meta *datas.CommitMeta, height uint64) sq
 			height,
 		)
 	}
-	
+
 	return sql.NewRow(
 		commitHash.String(),
 		meta.CommitterName.ValueOrDefault(meta.Name),
@@ -224,9 +224,9 @@ func buildLogRow(commitHash hash.Hash, meta *datas.CommitMeta, height uint64) sq
 		time.Unix(0, int64(meta.Timestamp)*int64(time.Millisecond)), // Committer timestamp
 		meta.Description,
 		height,
-		meta.Name,    // Author name
-		meta.Email,   // Author email
-		meta.Time(),  // Author timestamp
+		meta.Name,   // Author name
+		meta.Email,  // Author email
+		meta.Time(), // Author timestamp
 	)
 }
 
