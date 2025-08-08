@@ -171,7 +171,7 @@ func updateConfigQueryStatements(config *dolt_ci.WorkflowConfig, savedQueries ma
 
 func getSavedQueries(sqlCtx *sql.Context, queryist cli.Queryist) (map[string]string, error) {
 	savedQueries := make(map[string]string)
-	resetFunc, err := commands.SetSystemVar(queryist, sqlCtx, true)
+	resetFunc, err := cli.SetSystemVar(queryist, sqlCtx, true)
 	if err != nil {
 		return nil, err
 	}

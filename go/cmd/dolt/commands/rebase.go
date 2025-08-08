@@ -98,7 +98,7 @@ func (cmd RebaseCmd) Exec(ctx context.Context, commandStr string, args []string,
 
 	// Set @@dolt_allow_commit_conflicts in case there are data conflicts that need to be resolved by the caller.
 	// Without this, the conflicts can't be committed to the branch working set, and the caller can't access them.
-	if _, err = GetRowsForSql(queryist, sqlCtx, "set @@dolt_allow_commit_conflicts=1;"); err != nil {
+	if _, err = cli.GetRowsForSql(queryist, sqlCtx, "set @@dolt_allow_commit_conflicts=1;"); err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
@@ -112,7 +112,7 @@ func (cmd RebaseCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	rows, err := GetRowsForSql(queryist, sqlCtx, query)
+	rows, err := cli.GetRowsForSql(queryist, sqlCtx, query)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
@@ -146,7 +146,7 @@ func (cmd RebaseCmd) Exec(ctx context.Context, commandStr string, args []string,
 
 	// if all uncommented lines are deleted in the editor, abort the rebase
 	if rebasePlan == nil || rebasePlan.Steps == nil || len(rebasePlan.Steps) == 0 {
-		rows, err := GetRowsForSql(queryist, sqlCtx, "CALL DOLT_REBASE('--abort');")
+		rows, err := cli.GetRowsForSql(queryist, sqlCtx, "CALL DOLT_REBASE('--abort');")
 		if err != nil {
 			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 		}
@@ -169,7 +169,7 @@ func (cmd RebaseCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	rows, err = GetRowsForSql(queryist, sqlCtx, "CALL DOLT_REBASE('--continue');")
+	rows, err = cli.GetRowsForSql(queryist, sqlCtx, "CALL DOLT_REBASE('--continue');")
 	if err != nil {
 		// If the error is a data conflict, don't abort the rebase, but let the caller resolve the conflicts
 		if dprocedures.ErrRebaseDataConflict.Is(err) || strings.Contains(err.Error(), dprocedures.ErrRebaseDataConflict.Message[:40]) {
@@ -244,7 +244,7 @@ func getRebasePlan(cliCtx cli.CliContext, sqlCtx *sql.Context, queryist cli.Quer
 func buildInitialRebaseMsg(sqlCtx *sql.Context, queryist cli.Queryist, rebaseBranch, currentBranch string) (string, error) {
 	var buffer bytes.Buffer
 
-	rows, err := GetRowsForSql(queryist, sqlCtx, "SELECT action, commit_hash, commit_message FROM dolt_rebase ORDER BY rebase_order")
+	rows, err := cli.GetRowsForSql(queryist, sqlCtx, "SELECT action, commit_hash, commit_message FROM dolt_rebase ORDER BY rebase_order")
 	if err != nil {
 		return "", err
 	}
@@ -337,13 +337,13 @@ func parseRebaseMessage(rebaseMsg string) (*rebase.RebasePlan, error) {
 // insertRebasePlanIntoDoltRebaseTable inserts the rebase plan into the dolt_rebase table by re-building the dolt_rebase
 // table from scratch.
 func insertRebasePlanIntoDoltRebaseTable(plan *rebase.RebasePlan, sqlCtx *sql.Context, queryist cli.Queryist) error {
-	_, err := GetRowsForSql(queryist, sqlCtx, "TRUNCATE TABLE dolt_rebase")
+	_, err := cli.GetRowsForSql(queryist, sqlCtx, "TRUNCATE TABLE dolt_rebase")
 	if err != nil {
 		return err
 	}
 
 	for i, step := range plan.Steps {
-		_, err := GetRowsForSql(queryist, sqlCtx, fmt.Sprintf("INSERT INTO dolt_rebase VALUES (%d, '%s', '%s', '%s')", i+1, step.Action, step.CommitHash, step.CommitMsg))
+		_, err := cli.GetRowsForSql(queryist, sqlCtx, fmt.Sprintf("INSERT INTO dolt_rebase VALUES (%d, '%s', '%s', '%s')", i+1, step.Action, step.CommitHash, step.CommitMsg))
 		if err != nil {
 			return err
 		}

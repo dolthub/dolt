@@ -208,7 +208,7 @@ func (cmd DiffCmd) Exec(ctx context.Context, commandStr string, args []string, _
 		defer closeFunc()
 	}
 
-	updateSystemVar, err := SetSystemVar(queryist, sqlCtx, apr.Contains(cli.SystemFlag))
+	updateSystemVar, err := cli.SetSystemVar(queryist, sqlCtx, apr.Contains(cli.SystemFlag))
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
@@ -382,7 +382,7 @@ func getTableNamesAtRef(queryist cli.Queryist, sqlCtx *sql.Context, ref string) 
 	if err != nil {
 		return nil, fmt.Errorf("error interpolating query: %w", err)
 	}
-	rows, err := GetRowsForSql(queryist, sqlCtx, q)
+	rows, err := cli.GetRowsForSql(queryist, sqlCtx, q)
 	if err != nil {
 		return nil, err
 	}
@@ -415,7 +415,7 @@ func getTableNamesAtRef(queryist cli.Queryist, sqlCtx *sql.Context, ref string) 
 		if err != nil {
 			return nil, fmt.Errorf("error interpolating query: %w", err)
 		}
-		result, err := GetRowsForSql(queryist, sqlCtx, interpolatedQuery)
+		result, err := cli.GetRowsForSql(queryist, sqlCtx, interpolatedQuery)
 		if err != nil {
 			return nil, fmt.Errorf("error getting system table %s: %w", sysTable, err)
 		}
@@ -546,7 +546,7 @@ func getCommonAncestor(queryist cli.Queryist, sqlCtx *sql.Context, c1, c2 string
 	if err != nil {
 		return "", fmt.Errorf("error interpolating query: %w", err)
 	}
-	rows, err := GetRowsForSql(queryist, sqlCtx, q)
+	rows, err := cli.GetRowsForSql(queryist, sqlCtx, q)
 	if err != nil {
 		return "", err
 	}
@@ -675,7 +675,7 @@ func getSchemaDiffSummariesBetweenRefs(queryist cli.Queryist, sqlCtx *sql.Contex
 	if err != nil {
 		return nil, fmt.Errorf("error: unable to interpolate query: %w", err)
 	}
-	schemaDiffRows, err := GetRowsForSql(queryist, sqlCtx, q)
+	schemaDiffRows, err := cli.GetRowsForSql(queryist, sqlCtx, q)
 	if err != nil {
 		return nil, fmt.Errorf("error: unable to get schema diff from %s to %s: %w", fromRef, toRef, err)
 	}
@@ -714,7 +714,7 @@ func getSchemaDiffSummariesBetweenRefs(queryist cli.Queryist, sqlCtx *sql.Contex
 		if err != nil {
 			return nil, fmt.Errorf("error: unable to interpolate dolt_patch query: %w", err)
 		}
-		patchRows, err := GetRowsForSql(queryist, sqlCtx, q)
+		patchRows, err := cli.GetRowsForSql(queryist, sqlCtx, q)
 		if err != nil {
 			return nil, fmt.Errorf("error: unable to get dolt_patch rows from %s to %s: %w", fromRef, toRef, err)
 		}
@@ -741,7 +741,7 @@ func getSchemaDiffSummariesBetweenRefs(queryist cli.Queryist, sqlCtx *sql.Contex
 
 func getDiffSummariesBetweenRefs(queryist cli.Queryist, sqlCtx *sql.Context, fromRef, toRef string) ([]diff.TableDeltaSummary, error) {
 	q, err := dbr.InterpolateForDialect("select * from dolt_diff_summary(?, ?)", []interface{}{fromRef, toRef}, dialect.MySQL)
-	dataDiffRows, err := GetRowsForSql(queryist, sqlCtx, q)
+	dataDiffRows, err := cli.GetRowsForSql(queryist, sqlCtx, q)
 	if err != nil {
 		return nil, fmt.Errorf("error: unable to get diff summary from %s to %s: %w", fromRef, toRef, err)
 	}
@@ -907,7 +907,7 @@ func getTableSchemaAtRef(queryist cli.Queryist, sqlCtx *sql.Context, tableName s
 	if err != nil {
 		return sch, createStmt, fmt.Errorf("error interpolating query: %w", err)
 	}
-	rows, err = GetRowsForSql(queryist, sqlCtx, interpolatedQuery)
+	rows, err = cli.GetRowsForSql(queryist, sqlCtx, interpolatedQuery)
 	if err != nil {
 		return sch, createStmt, fmt.Errorf("error: unable to get create table statement for table '%s': %w", tableName, err)
 	}
@@ -952,7 +952,7 @@ func getDatabaseSchemaAtRef(queryist cli.Queryist, sqlCtx *sql.Context, tableNam
 	if err != nil {
 		return "", fmt.Errorf("error interpolating query: %w", err)
 	}
-	rows, err = GetRowsForSql(queryist, sqlCtx, interpolatedQuery)
+	rows, err = cli.GetRowsForSql(queryist, sqlCtx, interpolatedQuery)
 	if err != nil {
 		return "", fmt.Errorf("error: unable to get create database statement for database '%s': %w", tableName, err)
 	}
@@ -1047,7 +1047,7 @@ func getTableDiffStats(queryist cli.Queryist, sqlCtx *sql.Context, tableName, fr
 	if err != nil {
 		return nil, fmt.Errorf("error interpolating query: %w", err)
 	}
-	rows, err := GetRowsForSql(queryist, sqlCtx, q)
+	rows, err := cli.GetRowsForSql(queryist, sqlCtx, q)
 	if err != nil {
 		return nil, fmt.Errorf("error running diff stats query: %w", err)
 	}

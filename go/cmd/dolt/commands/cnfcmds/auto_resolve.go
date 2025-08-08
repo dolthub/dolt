@@ -23,7 +23,6 @@ import (
 	"github.com/gocraft/dbr/v2/dialect"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
-	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 )
 
 type AutoResolveStrategy int
@@ -53,7 +52,7 @@ func AutoResolveTables(queryist cli.Queryist, sqlCtx *sql.Context, strategy Auto
 		if err != nil {
 			return fmt.Errorf("error interpolating resolve conflicts query for table %s: %w", tableName, err)
 		}
-		_, err = commands.GetRowsForSql(queryist, sqlCtx, q)
+		_, err = cli.GetRowsForSql(queryist, sqlCtx, q)
 		if err != nil {
 			return fmt.Errorf("error resolving conflicts for table %s: %w", tableName, err)
 		}

@@ -87,7 +87,7 @@ func (cmd MergeBaseCmd) Exec(ctx context.Context, commandStr string, args []stri
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	row, err := GetRowsForSql(queryist, sqlCtx, interpolatedQuery)
+	row, err := cli.GetRowsForSql(queryist, sqlCtx, interpolatedQuery)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}

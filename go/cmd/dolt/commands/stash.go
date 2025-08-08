@@ -229,7 +229,7 @@ func getStashesSQL(sqlCtx *sql.Context, queryist cli.Queryist, limit int) ([]*do
 	}
 
 	qry := fmt.Sprintf("select stash_id, branch, hash, commit_message from dolt_stashes where name = '%s' order by stash_id ASC %s;", doltdb.DoltCliRef, limitStr)
-	rows, err := GetRowsForSql(queryist, sqlCtx, qry)
+	rows, err := cli.GetRowsForSql(queryist, sqlCtx, qry)
 	if err != nil {
 		return nil, err
 	}

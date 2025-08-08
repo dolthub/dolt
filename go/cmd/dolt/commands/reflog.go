@@ -95,7 +95,7 @@ func (cmd ReflogCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	rows, err := GetRowsForSql(queryist, sqlCtx, query)
+	rows, err := cli.GetRowsForSql(queryist, sqlCtx, query)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
@@ -138,7 +138,7 @@ func printReflog(rows []sql.Row, queryist cli.Queryist, sqlCtx *sql.Context) int
 
 	// Get the hash of HEAD for the `HEAD ->` decoration
 	headHash := ""
-	res, err := GetRowsForSql(queryist, sqlCtx, "SELECT hashof('HEAD')")
+	res, err := cli.GetRowsForSql(queryist, sqlCtx, "SELECT hashof('HEAD')")
 	if err == nil {
 		// still print the reflog even if we can't get the hash
 		headHash = res[0][0].(string)

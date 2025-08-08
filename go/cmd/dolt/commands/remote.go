@@ -232,7 +232,7 @@ func callSQLRemoteAdd(sqlCtx *sql.Context, queryist cli.Queryist, remoteName, re
 		return err
 	}
 
-	_, err = GetRowsForSql(queryist, sqlCtx, qry)
+	_, err = cli.GetRowsForSql(queryist, sqlCtx, qry)
 	return err
 }
 
@@ -243,7 +243,7 @@ func callSQLRemoteRemove(sqlCtxe *sql.Context, queryist cli.Queryist, remoteName
 		return err
 	}
 
-	_, err = GetRowsForSql(queryist, sqlCtxe, qry)
+	_, err = cli.GetRowsForSql(queryist, sqlCtxe, qry)
 	return err
 }
 
@@ -255,7 +255,7 @@ type remote struct {
 
 func getRemotesSQL(sqlCtx *sql.Context, queryist cli.Queryist) ([]remote, error) {
 	qry := "select name,url,params from dolt_remotes"
-	rows, err := GetRowsForSql(queryist, sqlCtx, qry)
+	rows, err := cli.GetRowsForSql(queryist, sqlCtx, qry)
 	if err != nil {
 		return nil, err
 	}
