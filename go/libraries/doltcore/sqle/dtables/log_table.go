@@ -17,14 +17,18 @@ package dtables
 import (
 	"context"
 	"fmt"
+	"os"
+	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions/commitwalk"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
+	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly"
 )
@@ -84,16 +88,85 @@ func (dt *LogTable) String() string {
 	return dt.tableName
 }
 
+func UseCompactSchema() bool {
+	return os.Getenv(dconfig.EnvDoltLogCompactSchema) != ""
+}
+
+// BuildLogRow creates a row with values based on whether we're using compact schema
+func BuildLogRow(commitHash hash.Hash, meta *datas.CommitMeta, height uint64) sql.Row {
+	// Base row data (same for both schemas)
+	values := []interface{}{
+		commitHash.String(),
+		datas.ValueOrDefault(meta.CommitterName, meta.Name),
+		datas.ValueOrDefault(meta.CommitterEmail, meta.Email),
+		time.Unix(0, int64(meta.Timestamp)*int64(time.Millisecond)), // Committer timestamp
+		meta.Description,
+		height,
+	}
+	
+	// Add author columns for extended schema
+	if !UseCompactSchema() {
+		values = append(values,
+			meta.Name,    // Author name
+			meta.Email,   // Author email
+			meta.Time(),  // Author timestamp
+		)
+	}
+	
+	return sql.NewRow(values...)
+}
+
+var LogSchemaCompact = sql.Schema{
+	&sql.Column{Name: "commit_hash", Type: types.Text},
+	&sql.Column{Name: "committer", Type: types.Text},
+	&sql.Column{Name: "email", Type: types.Text},
+	&sql.Column{Name: "date", Type: types.Datetime},
+	&sql.Column{Name: "message", Type: types.Text},
+	&sql.Column{Name: "commit_order", Type: types.Uint64},
+}
+
+var LogSchemaCommitterColumns = sql.Schema{
+	&sql.Column{Name: "commit_hash", Type: types.Text},
+	&sql.Column{Name: "committer", Type: types.Text},
+	&sql.Column{Name: "committer_email", Type: types.Text},
+	&sql.Column{Name: "committer_date", Type: types.Datetime},
+	&sql.Column{Name: "message", Type: types.Text},
+	&sql.Column{Name: "commit_order", Type: types.Uint64},
+}
+
+var LogSchemaAuthorColumns = sql.Schema{
+	&sql.Column{Name: "author", Type: types.Text},
+	&sql.Column{Name: "author_email", Type: types.Text},
+	&sql.Column{Name: "author_date", Type: types.Datetime},
+}
+
+func GetLogTableSchema(tableName, dbName string) sql.Schema {
+	var baseSchema sql.Schema
+	
+	if UseCompactSchema() {
+		baseSchema = make(sql.Schema, len(LogSchemaCompact))
+		copy(baseSchema, LogSchemaCompact)
+	} else {
+		baseSchema = make(sql.Schema, len(LogSchemaCommitterColumns))
+		copy(baseSchema, LogSchemaCommitterColumns)
+		baseSchema = append(baseSchema, LogSchemaAuthorColumns...)
+	}
+	
+	// Update source and database info for system table
+	for _, col := range baseSchema {
+		col.Source = tableName
+		col.DatabaseSource = dbName
+		if col.Name == "commit_hash" {
+			col.PrimaryKey = true
+		}
+	}
+	
+	return baseSchema
+}
+
 // Schema is a sql.Table interface function that gets the sql.Schema of the log system table.
 func (dt *LogTable) Schema() sql.Schema {
-	return []*sql.Column{
-		{Name: "commit_hash", Type: types.Text, Source: dt.tableName, PrimaryKey: true, DatabaseSource: dt.dbName},
-		{Name: "committer", Type: types.Text, Source: dt.tableName, PrimaryKey: false, DatabaseSource: dt.dbName},
-		{Name: "email", Type: types.Text, Source: dt.tableName, PrimaryKey: false, DatabaseSource: dt.dbName},
-		{Name: "date", Type: types.Datetime, Source: dt.tableName, PrimaryKey: false, DatabaseSource: dt.dbName},
-		{Name: "message", Type: types.Text, Source: dt.tableName, PrimaryKey: false, DatabaseSource: dt.dbName},
-		{Name: "commit_order", Type: types.Uint64, Source: dt.tableName, PrimaryKey: false, DatabaseSource: dt.dbName},
-	}
+	return GetLogTableSchema(dt.tableName, dt.dbName)
 }
 
 // Collation implements the sql.Table interface.
@@ -114,7 +187,7 @@ func (dt *LogTable) PartitionRows(ctx *sql.Context, p sql.Partition) (sql.RowIte
 		if err != nil {
 			return nil, err
 		}
-		return sql.RowsToRowIter(sql.NewRow(p.Hash().String(), p.Meta().Name, p.Meta().Email, p.Meta().Time(), p.Meta().Description, height)), nil
+		return sql.RowsToRowIter(BuildLogRow(p.Hash(), p.Meta(), height)), nil
 	default:
 		return NewLogItr(ctx, dt.ddb, dt.head)
 	}
@@ -260,7 +333,7 @@ func (itr *LogItr) Next(ctx *sql.Context) (sql.Row, error) {
 		}
 	}
 
-	return sql.NewRow(h.String(), meta.Name, meta.Email, meta.Time(), meta.Description, height), nil
+	return BuildLogRow(h, meta, height), nil
 }
 
 // Close closes the iterator.

@@ -118,14 +118,12 @@ func GetCommitStaged(
 
 	// Check if committer info is provided (author/committer separation)
 	if props.CommitterName != "" || props.CommitterEmail != "" || !props.CommitterDate.IsZero() {
-		logrus.Infof("GetCommitStaged: using author/committer separation")
 		meta, err = datas.NewCommitMetaWithAuthorCommitter(
 			props.Name, props.Email, // author
 			props.CommitterName, props.CommitterEmail, // committer
 			props.Message,
 			props.Date, props.CommitterDate) // author date, committer date
 	} else {
-		logrus.Infof("GetCommitStaged: using legacy commit metadata (author only)")
 		meta, err = datas.NewCommitMetaWithUserTS(props.Name, props.Email, props.Message, props.Date)
 	}
 
