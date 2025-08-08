@@ -23,12 +23,17 @@ table Commit {
 
   parent_closure:[ubyte];
 
+  // Legacy fields (author info for backwards compatibility)
   name:string (required);
   email:string (required);
   description:string (required);
-  timestamp_millis:uint64;
-  user_timestamp_millis:int64;
+  timestamp_millis:uint64; // committer timestamp for backwards compatibility
+  user_timestamp_millis:int64; // author timestamp for backwards compatibility
   signature:string;
+  
+  // New optional committer fields (author info stored in legacy fields)
+  committer_name:string;
+  committer_email:string;
 }
 
 // KEEP THIS IN SYNC WITH fileidentifiers.go

@@ -192,6 +192,9 @@ func commit_flatbuffer(vaddr hash.Hash, opts CommitOptions, heights []uint64, pa
 	serial.CommitAddUserTimestampMillis(builder, opts.Meta.UserTimestamp)
 	serial.CommitAddSignature(builder, sigoff)
 
+	opts.Meta.CommitterName.SerializeOptional(builder, serial.CommitAddCommitterName)
+	opts.Meta.CommitterEmail.SerializeOptional(builder, serial.CommitAddCommitterEmail)
+
 	bytes := serial.FinishMessage(builder, serial.CommitEnd(builder), []byte(serial.CommitFileID))
 	return bytes, maxheight + 1
 }
@@ -590,6 +593,9 @@ func GetCommitMeta(ctx context.Context, cv types.Value) (*CommitMeta, error) {
 		ret.Timestamp = cmsg.TimestampMillis()
 		ret.UserTimestamp = cmsg.UserTimestampMillis()
 		ret.Signature = string(cmsg.Signature())
+		ret.CommitterName = OptionalSerializedField(cmsg.CommitterName())
+		ret.CommitterEmail = OptionalSerializedField(cmsg.CommitterEmail())
+
 		return ret, nil
 	}
 	c, ok := cv.(types.Struct)
