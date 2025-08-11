@@ -158,10 +158,26 @@ func CreateCommitStagedPropsFromCherryPickOptions(ctx *sql.Context, options Cher
 		return nil, err
 	}
 
+	// In cherry-pick, preserve author info but use current user as committer
+	// Try to get committer from dolt config first, fall back to SQL client
+	doltSession := dsess.DSessFromSess(ctx.Session)
+	committerName := doltSession.Username()
+	committerEmail := doltSession.Email()
+	
+	// If config not available, fall back to SQL client info
+	if committerName == "" {
+		committerName = ctx.Client().User
+	}
+	if committerEmail == "" {
+		committerEmail = fmt.Sprintf("%s@%s", ctx.Client().User, ctx.Client().Address)
+	}
+
 	commitProps := actions.CommitStagedProps{
-		Date:  originalMeta.Time(),
-		Name:  originalMeta.Name,
-		Email: originalMeta.Email,
+		Date:           originalMeta.Time(),
+		Name:           originalMeta.Name,
+		Email:          originalMeta.Email,
+		CommitterName:  committerName,
+		CommitterEmail: committerEmail,
 	}
 
 	if options.CommitMessage != "" {
