@@ -31,6 +31,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/doltcore/rebase"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 )
@@ -760,7 +761,27 @@ func commitManuallyStagedChangesForStep(ctx *sql.Context, step rebase.RebasePlan
 	options, err := createCherryPickOptionsForRebaseStep(ctx, &step, workingSet.RebaseState().CommitBecomesEmptyHandling(),
 		workingSet.RebaseState().EmptyCommitHandling())
 
-	commitProps, err := cherry_pick.CreateCommitStagedPropsFromCherryPickOptions(ctx, *options)
+	doltDB, ok := doltSession.GetDoltDB(ctx, ctx.GetCurrentDatabase())
+	if !ok {
+		return fmt.Errorf("failed to get doltDB")
+	}
+
+	dbData, ok := doltSession.GetDbData(ctx, ctx.GetCurrentDatabase())
+	if !ok {
+		return fmt.Errorf("failed to get dbData")
+	}
+
+	headRef, err := dbData.Rsr.CWBHeadRef(ctx)
+	if err != nil {
+		return err
+	}
+
+	originalCommit, err := dfunctions.ResolveRefSpec(ctx, headRef, doltDB, step.CommitHash)
+	if err != nil {
+		return err
+	}
+
+	commitProps, err := cherry_pick.CreateCommitStagedPropsFromCherryPickOptions(ctx, *options, originalCommit)
 	if err != nil {
 		return err
 	}

@@ -133,7 +133,7 @@ func (sm *StorageMetadata) RevertMap() map[hash.Hash]hash.Hash {
 
 // GetStorageMetadata returns metadata about the local filesystem storage for a single database. The path given must be
 // the path to DB directory - ie, containing the .dolt directory.
-func GetStorageMetadata(ctx context.Context, path string, stats *Stats) (StorageMetadata, error) {
+func GetStorageMetadata(ctx context.Context, path string, stats *Stats, mmapArchiveIndexes bool) (StorageMetadata, error) {
 	err := validateDir(path)
 	if err != nil {
 		return StorageMetadata{}, err
@@ -156,7 +156,7 @@ func GetStorageMetadata(ctx context.Context, path string, stats *Stats) (Storage
 	// for each table in the manifest, get the table spec
 	for i := 0; i < manifest.NumTableSpecs(); i++ {
 		tableSpecInfo := manifest.GetTableSpecInfo(i)
-		artifact, err := buildArtifact(ctx, tableSpecInfo, newGen, stats)
+		artifact, err := buildArtifact(ctx, tableSpecInfo, newGen, stats, mmapArchiveIndexes)
 		if err != nil {
 			return StorageMetadata{}, err
 		}
@@ -183,7 +183,7 @@ func GetStorageMetadata(ctx context.Context, path string, stats *Stats) (Storage
 	for i := 0; i < manifest.NumTableSpecs(); i++ {
 		tableSpecInfo := manifest.GetTableSpecInfo(i)
 
-		artifact, err := buildArtifact(ctx, tableSpecInfo, oldgen, stats)
+		artifact, err := buildArtifact(ctx, tableSpecInfo, oldgen, stats, mmapArchiveIndexes)
 		if err != nil {
 			return StorageMetadata{}, err
 		}
@@ -193,7 +193,7 @@ func GetStorageMetadata(ctx context.Context, path string, stats *Stats) (Storage
 	return StorageMetadata{path, artifacts}, nil
 }
 
-func buildArtifact(ctx context.Context, info TableSpecInfo, genPath string, stats *Stats) (StorageArtifact, error) {
+func buildArtifact(ctx context.Context, info TableSpecInfo, genPath string, stats *Stats, mmapArchiveIndexes bool) (StorageArtifact, error) {
 	tfName := info.GetName()
 
 	archive := false
@@ -226,7 +226,7 @@ func buildArtifact(ctx context.Context, info TableSpecInfo, genPath string, stat
 			tblMetadata: tblMeta,
 		}, nil
 	} else {
-		fra, err := newFileReaderAt(fullPath)
+		fra, err := newFileReaderAt(fullPath, mmapArchiveIndexes)
 		if err != nil {
 			return StorageArtifact{}, err
 		}

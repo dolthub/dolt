@@ -38,7 +38,7 @@ func makeTestChunkJournal(t *testing.T) *ChunkJournal {
 	m, err := newJournalManifest(ctx, dir)
 	require.NoError(t, err)
 	q := NewUnlimitedMemQuotaProvider()
-	p := newFSTablePersister(dir, q)
+	p := newFSTablePersister(dir, q, false)
 	nbf := types.Format_Default.VersionString()
 	j, err := newChunkJournal(ctx, nbf, dir, m, p.(*fsTablePersister))
 	require.NoError(t, err)
@@ -51,7 +51,7 @@ func TestChunkJournalBlockStoreSuite(t *testing.T) {
 	fn := func(ctx context.Context, dir string) (*NomsBlockStore, error) {
 		q := NewUnlimitedMemQuotaProvider()
 		nbf := types.Format_Default.VersionString()
-		return NewLocalJournalingStore(ctx, nbf, dir, q)
+		return NewLocalJournalingStore(ctx, nbf, dir, q, false)
 	}
 	suite.Run(t, &BlockStoreSuite{
 		factory:        fn,

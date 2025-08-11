@@ -49,7 +49,7 @@ func TestLocalStoreSuite(t *testing.T) {
 	fn := func(ctx context.Context, dir string) (*NomsBlockStore, error) {
 		nbf := constants.FormatDefaultString
 		qp := NewUnlimitedMemQuotaProvider()
-		return NewLocalStore(ctx, nbf, dir, testMemTableSize, qp)
+		return NewLocalStore(ctx, nbf, dir, testMemTableSize, qp, false)
 	}
 	suite.Run(t, &BlockStoreSuite{factory: fn})
 }
@@ -102,7 +102,7 @@ func (suite *BlockStoreSuite) TearDownTest() {
 
 func (suite *BlockStoreSuite) TestChunkStoreMissingDir() {
 	newDir := filepath.Join(suite.dir, "does-not-exist")
-	_, err := NewLocalStore(context.Background(), constants.FormatDefaultString, newDir, testMemTableSize, NewUnlimitedMemQuotaProvider())
+	_, err := NewLocalStore(context.Background(), constants.FormatDefaultString, newDir, testMemTableSize, NewUnlimitedMemQuotaProvider(), false)
 	suite.Error(err)
 }
 
@@ -112,7 +112,7 @@ func (suite *BlockStoreSuite) TestChunkStoreNotDir() {
 	suite.NoError(err)
 	defer f.Close()
 
-	_, err = NewLocalStore(context.Background(), constants.FormatDefaultString, existingFile, testMemTableSize, NewUnlimitedMemQuotaProvider())
+	_, err = NewLocalStore(context.Background(), constants.FormatDefaultString, existingFile, testMemTableSize, NewUnlimitedMemQuotaProvider(), false)
 	suite.Error(err)
 }
 

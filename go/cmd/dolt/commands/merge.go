@@ -410,7 +410,7 @@ func printMergeStats(fastForward bool,
 // calculateMergeConflicts calculates the count of conflicts that occurred during the merge. Returns a map of table name to MergeStats,
 // a bool indicating whether there were any conflicts, and a bool indicating whether calculation was successful.
 func calculateMergeConflicts(queryist cli.Queryist, sqlCtx *sql.Context, mergeStats map[string]*merge.MergeStats) (map[string]*merge.MergeStats, bool, error) {
-	dataConflicts, err := GetRowsForSql(queryist, sqlCtx, "SELECT `table`, num_conflicts FROM dolt_conflicts")
+	dataConflicts, err := cli.GetRowsForSql(queryist, sqlCtx, "SELECT `table`, num_conflicts FROM dolt_conflicts")
 	if err != nil {
 		return nil, false, err
 	}
@@ -429,7 +429,7 @@ func calculateMergeConflicts(queryist cli.Queryist, sqlCtx *sql.Context, mergeSt
 		}
 	}
 
-	schemaConflicts, err := GetRowsForSql(queryist, sqlCtx, "SELECT table_name FROM dolt_schema_conflicts")
+	schemaConflicts, err := cli.GetRowsForSql(queryist, sqlCtx, "SELECT table_name FROM dolt_schema_conflicts")
 	if err != nil {
 		return nil, false, err
 	}
@@ -442,7 +442,7 @@ func calculateMergeConflicts(queryist cli.Queryist, sqlCtx *sql.Context, mergeSt
 		}
 	}
 
-	constraintViolations, err := GetRowsForSql(queryist, sqlCtx, "SELECT `table`, num_violations FROM dolt_constraint_violations")
+	constraintViolations, err := cli.GetRowsForSql(queryist, sqlCtx, "SELECT `table`, num_violations FROM dolt_constraint_violations")
 	if err != nil {
 		return nil, false, err
 	}
@@ -558,7 +558,7 @@ func printConflictsAndViolations(tblToStats map[string]*merge.MergeStats) (confl
 	for tblName, stats := range tblToStats {
 		if stats.HasArtifacts() {
 			cli.Println("Auto-merging", tblName)
-			if stats.HasDataConflicts() {
+			if stats.HasDataConflicts() || stats.HasRootObjectConflicts() {
 				cli.Println("CONFLICT (content): Merge conflict in", tblName)
 				hasConflicts = true
 			}
@@ -674,7 +674,7 @@ func fillStringWithChar(ch rune, strLen int) string {
 }
 
 func handleMergeErr(sqlCtx *sql.Context, queryist cli.Queryist, mergeErr error, hasConflicts, hasConstraintViolations bool, usage cli.UsagePrinter) int {
-	unmergedTables, err := GetRowsForSql(queryist, sqlCtx, "select unmerged_tables from dolt_merge_status")
+	unmergedTables, err := cli.GetRowsForSql(queryist, sqlCtx, "select unmerged_tables from dolt_merge_status")
 	if err != nil {
 		cli.PrintErrln(err.Error())
 		return 1
@@ -717,26 +717,32 @@ func handleMergeErr(sqlCtx *sql.Context, queryist cli.Queryist, mergeErr error, 
 	return 0
 }
 
+// everythingUpToDate checks if the merge operation returned the "Everything up-to-date" message. There are two forms
+// of the row we need to parse. `dolt_merge` returns a 4 columns row, with the hash as the first column. `dolt_pull`
+// returns a 3 columns row, without the first column. In both cases, the message is in the 4th column for, and should be
+// "Everything up-to-date".
 func everythingUpToDate(row sql.Row) (bool, error) {
 	if row == nil {
 		return false, fmt.Errorf("Runtime error: nil row returned from merge operation")
 	}
 
-	// We don't currently define these in a readily accessible way, so we'll just hard-code the column indexes.
-	// Confident we'll never change these.
-	hashColumn := 0
-	msgColumn := 3
+	if len(row) != 3 && len(row) != 4 {
+		return false, fmt.Errorf("Runtime error: everythingUpToDate unexpects 3 or 4 column row. Received: %d", len(row))
+	}
 
-	if hash, ok := row[hashColumn].(string); ok {
-		if msg, ok := row[msgColumn].(string); ok {
-			if hash == "" && msg == doltdb.ErrUpToDate.Error() { // "Everything up-to-date" message.
-				return true, nil
-			}
-		} else {
-			return false, fmt.Errorf("Runtime error: merge operation returned unexpected message column type: %v", row[msgColumn])
+	// We don't currently define column indexes in a readily accessible way, so we'll just hard-code the column indexes.
+	// Confident we'll never change these.
+	msgColumn := 3
+	if len(row) == 3 {
+		msgColumn = 2
+	}
+
+	if msg, ok := row[msgColumn].(string); ok {
+		if msg == doltdb.ErrUpToDate.Error() { // "Everything up-to-date" message.
+			return true, nil
 		}
 	} else {
-		return false, fmt.Errorf("Runtime error: merge operation returned unexpected hash column type: %v", row[hashColumn])
+		return false, fmt.Errorf("Runtime error: merge operation returned unexpected message column type: %v", row[msgColumn])
 	}
 
 	return false, nil

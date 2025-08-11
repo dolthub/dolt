@@ -156,6 +156,41 @@ EOF
     [ "$status" -eq 1 ]
 }
 
+@test "ci: import command will error on invalid branches" {
+    cat > workflow.yaml <<EOF
+name: my_workflow
+on:
+  push:
+    branches:
+      - ..invalid
+jobs:
+  - name: test job
+    steps:
+      - name: test step
+        saved_query_name: test query
+EOF
+    cat > workflow2.yaml <<EOF
+name: workflow
+on:
+  push:
+    branches:
+      - "*"
+jobs:
+  - name: test job
+    steps:
+      - name: test step
+        saved_query_name: test query
+EOF
+
+    dolt ci init
+    run dolt ci import workflow.yaml
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "invalid branch name: ..invalid" ]] || false
+    run dolt ci import workflow2.yaml
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "invalid branch name: *" ]] || false
+}
+
 @test "ci: import command will update existing workflow" {
     cat > workflow_1.yaml <<EOF
 name: workflow_1

@@ -61,7 +61,7 @@ func (s *violationStash) Empty() bool {
 }
 
 func stashConflicts(ctx context.Context, root doltdb.RootValue) (doltdb.RootValue, *conflictStash, error) {
-	names, err := root.GetTableNames(ctx, doltdb.DefaultSchemaName)
+	names, err := root.GetTableNames(ctx, doltdb.DefaultSchemaName, true)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -92,7 +92,7 @@ func stashConflicts(ctx context.Context, root doltdb.RootValue) (doltdb.RootValu
 }
 
 func stashViolations(ctx context.Context, root doltdb.RootValue) (doltdb.RootValue, *violationStash, error) {
-	names, err := root.GetTableNames(ctx, doltdb.DefaultSchemaName)
+	names, err := root.GetTableNames(ctx, doltdb.DefaultSchemaName, true)
 	if err != nil {
 		return nil, nil, err
 	}

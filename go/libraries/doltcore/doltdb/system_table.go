@@ -99,7 +99,7 @@ func IsNonAlterableSystemTable(name TableName) bool {
 
 // GetNonSystemTableNames gets non-system table names
 func GetNonSystemTableNames(ctx context.Context, root RootValue) ([]string, error) {
-	tn, err := root.GetTableNames(ctx, DefaultSchemaName)
+	tn, err := root.GetTableNames(ctx, DefaultSchemaName, true)
 	if err != nil {
 		return nil, err
 	}
@@ -533,6 +533,28 @@ SELECT * FROM dolt_ignore;
 - Complex data transformations
 - Examining system tables (dolt_log, dolt_status, etc.)
 - When already in an active SQL session
+
+## Schema Design Recommendations
+
+### Use UUID Keys Instead of Auto-Increment
+
+For Dolt's version control features, use UUID primary keys instead of auto-increment:
+
+` + "```sql" + `
+-- Recommended
+CREATE TABLE users (
+    id varchar(36) default(uuid()) primary key,
+    name varchar(255)
+);
+
+-- Avoid auto-increment with Dolt
+-- id int auto_increment primary key
+` + "```" + `
+
+**Benefits:**
+- Prevents merge conflicts across branches and database clones
+- Automatic generation with ` + "`default(uuid())`" + `
+- Works seamlessly in distributed environments
 
 ## Best Practices for Agents
 

@@ -62,7 +62,7 @@ func (cache *LocalCSCache) Get(ctx context.Context, repopath, nbfVerStr string) 
 		return nil, err
 	}
 
-	newCS, err := nbs.NewLocalStore(ctx, nbfVerStr, path, defaultMemTableSize, nbs.NewUnlimitedMemQuotaProvider())
+	newCS, err := nbs.NewLocalStore(ctx, nbfVerStr, path, defaultMemTableSize, nbs.NewUnlimitedMemQuotaProvider(), false)
 	if err != nil {
 		return nil, err
 	}

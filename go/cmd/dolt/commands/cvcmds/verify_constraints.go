@@ -79,7 +79,7 @@ func (cmd VerifyConstraintsCmd) Exec(ctx context.Context, commandStr string, arg
 	}
 	tableNames := apr.Args
 	if len(tableNames) == 0 {
-		tableNames, err = working.GetTableNames(ctx, doltdb.DefaultSchemaName)
+		tableNames, err = working.GetTableNames(ctx, doltdb.DefaultSchemaName, true)
 		if err != nil {
 			return commands.HandleVErrAndExitCode(errhand.BuildDError("Unable to read table names.").AddCause(err).Build(), nil)
 		}

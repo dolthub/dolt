@@ -364,7 +364,7 @@ func executeSavedQuery(ctx *sql.Context, qryist cli.Queryist, savedQueryName str
 	buffer.WriteString("SELECT query FROM dolt_query_catalog where id = ?")
 	searchQuery, err := dbr.InterpolateForDialect(buffer.String(), []interface{}{savedQueryName}, dialect.MySQL)
 
-	rows, err := GetRowsForSql(qryist, ctx, searchQuery)
+	rows, err := cli.GetRowsForSql(qryist, ctx, searchQuery)
 	if err != nil {
 		return sqlHandleVErrAndExitCode(qryist, errhand.VerboseErrorFromError(err), usage)
 	} else if len(rows) == 0 {
@@ -417,7 +417,7 @@ func SaveQuery(ctx *sql.Context, qryist cli.Queryist, apr *argparser.ArgParseRes
 	}
 
 	order := int32(1)
-	rows, err := GetRowsForSql(qryist, ctx, "SELECT MAX(display_order) FROM dolt_query_catalog")
+	rows, err := cli.GetRowsForSql(qryist, ctx, "SELECT MAX(display_order) FROM dolt_query_catalog")
 	if err != nil {
 		return sqlHandleVErrAndExitCode(qryist, errhand.VerboseErrorFromError(err), usage)
 	}
@@ -438,7 +438,7 @@ func SaveQuery(ctx *sql.Context, qryist cli.Queryist, apr *argparser.ArgParseRes
 		return sqlHandleVErrAndExitCode(qryist, errhand.VerboseErrorFromError(err), usage)
 	}
 
-	_, err = GetRowsForSql(qryist, ctx, insertQuery)
+	_, err = cli.GetRowsForSql(qryist, ctx, insertQuery)
 
 	return sqlHandleVErrAndExitCode(qryist, errhand.VerboseErrorFromError(err), usage)
 }

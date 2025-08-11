@@ -295,7 +295,7 @@ func TestLDNoms(t *testing.T) {
 
 		assert.NoError(t, err)
 
-		names, err := root.GetTableNames(context.Background(), DefaultSchemaName)
+		names, err := root.GetTableNames(context.Background(), DefaultSchemaName, true)
 		assert.NoError(t, err)
 		if len(names) != 0 {
 			t.Fatal("There should be no tables in empty db")

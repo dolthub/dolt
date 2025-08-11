@@ -324,19 +324,6 @@ func newLateBindingEngine(
 	return lateBinder, nil
 }
 
-func GetRowsForSql(queryist cli.Queryist, sqlCtx *sql.Context, query string) ([]sql.Row, error) {
-	_, rowIter, _, err := queryist.Query(sqlCtx, query)
-	if err != nil {
-		return nil, err
-	}
-	rows, err := sql.RowIterToRows(sqlCtx, rowIter)
-	if err != nil {
-		return nil, err
-	}
-
-	return rows, nil
-}
-
 // InterpolateAndRunQuery interpolates a query, executes it, and returns the result rows.
 // Since this method does not return a schema, this method should be used only for fire-and-forget types of queries.
 func InterpolateAndRunQuery(queryist cli.Queryist, sqlCtx *sql.Context, queryTemplate string, params ...interface{}) ([]sql.Row, error) {
@@ -344,7 +331,7 @@ func InterpolateAndRunQuery(queryist cli.Queryist, sqlCtx *sql.Context, queryTem
 	if err != nil {
 		return nil, fmt.Errorf("error interpolating query: %w", err)
 	}
-	return GetRowsForSql(queryist, sqlCtx, query)
+	return cli.GetRowsForSql(queryist, sqlCtx, query)
 }
 
 // GetTinyIntColAsBool returns the value of a tinyint column as a bool
@@ -360,20 +347,6 @@ func GetTinyIntColAsBool(col interface{}) (bool, error) {
 		return v == "1", nil
 	default:
 		return false, fmt.Errorf("unexpected type %T, was expecting bool, int, or string", v)
-	}
-}
-
-// GetInt8ColAsBool returns the value of an int8 column as a bool
-// This is necessary because Queryist may return an int8 column as a bool (when using SQLEngine)
-// or as a string (when using ConnectionQueryist).
-func GetInt8ColAsBool(col interface{}) (bool, error) {
-	switch v := col.(type) {
-	case int8:
-		return v != 0, nil
-	case string:
-		return v != "0", nil
-	default:
-		return false, fmt.Errorf("unexpected type %T, was expecting int8", v)
 	}
 }
 
@@ -458,7 +431,7 @@ func getStrBoolColAsBool(col interface{}) (bool, error) {
 
 func getActiveBranchName(sqlCtx *sql.Context, queryEngine cli.Queryist) (string, error) {
 	query := "SELECT active_branch()"
-	rows, err := GetRowsForSql(queryEngine, sqlCtx, query)
+	rows, err := cli.GetRowsForSql(queryEngine, sqlCtx, query)
 	if err != nil {
 		return "", err
 	}
@@ -571,7 +544,7 @@ func GetDoltStatus(queryist cli.Queryist, sqlCtx *sql.Context) (stagedChangedTab
 	}
 
 	var statusRows []sql.Row
-	statusRows, err = GetRowsForSql(queryist, sqlCtx, "select table_name,staged from dolt_status;")
+	statusRows, err = cli.GetRowsForSql(queryist, sqlCtx, "select table_name,staged from dolt_status;")
 	if err != nil {
 		return stagedChangedTables, unstagedChangedTables, fmt.Errorf("error: failed to get dolt status: %w", err)
 	}
@@ -729,7 +702,7 @@ func getCommitInfoWithOptions(queryist cli.Queryist, sqlCtx *sql.Context, ref st
 		}
 	}
 
-	rows, err := GetRowsForSql(queryist, sqlCtx, q)
+	rows, err := cli.GetRowsForSql(queryist, sqlCtx, q)
 	if err != nil {
 		return nil, fmt.Errorf("error getting logs for ref '%s': %v", ref, err)
 	}
@@ -821,7 +794,7 @@ func getBranchesForHash(queryist cli.Queryist, sqlCtx *sql.Context, targetHash s
 	if err != nil {
 		return nil, err
 	}
-	rows, err := GetRowsForSql(queryist, sqlCtx, q)
+	rows, err := cli.GetRowsForSql(queryist, sqlCtx, q)
 	if err != nil {
 		return nil, err
 	}
@@ -839,7 +812,7 @@ func getTagsForHash(queryist cli.Queryist, sqlCtx *sql.Context, targetHash strin
 	if err != nil {
 		return nil, err
 	}
-	rows, err := GetRowsForSql(queryist, sqlCtx, q)
+	rows, err := cli.GetRowsForSql(queryist, sqlCtx, q)
 	if err != nil {
 		return nil, err
 	}
@@ -873,7 +846,7 @@ func getHashOf(queryist cli.Queryist, sqlCtx *sql.Context, ref string) (string, 
 	if err != nil {
 		return "", fmt.Errorf("error interpolating hashof query: %v", err)
 	}
-	rows, err := GetRowsForSql(queryist, sqlCtx, q)
+	rows, err := cli.GetRowsForSql(queryist, sqlCtx, q)
 	if err != nil {
 		return "", fmt.Errorf("error getting hash of ref '%s': %v", ref, err)
 	}
@@ -1036,35 +1009,4 @@ func execEditor(initialMsg string, suffix string, cliCtx cli.CliContext) (edited
 	}
 
 	return editedMsg, nil
-}
-
-// SetSystemVar sets the @@dolt_show_system_tables variable if necessary, and returns a function
-// resetting the variable for after the commands completion, if necessary.
-func SetSystemVar(queryist cli.Queryist, sqlCtx *sql.Context, newVal bool) (func() error, error) {
-	_, rowIter, _, err := queryist.Query(sqlCtx, "SHOW VARIABLES WHERE VARIABLE_NAME='dolt_show_system_tables'")
-	if err != nil {
-		return nil, err
-	}
-
-	row, err := sql.RowIterToRows(sqlCtx, rowIter)
-	if err != nil {
-		return nil, err
-	}
-	prevVal, err := GetInt8ColAsBool(row[0][1])
-	if err != nil {
-		return nil, err
-	}
-
-	var update func() error
-	if newVal != prevVal {
-		query := fmt.Sprintf("SET @@dolt_show_system_tables = %t", newVal)
-		_, _, _, err = queryist.Query(sqlCtx, query)
-		update = func() error {
-			query := fmt.Sprintf("SET @@dolt_show_system_tables = %t", prevVal)
-			_, _, _, err := queryist.Query(sqlCtx, query)
-			return err
-		}
-	}
-
-	return update, err
 }

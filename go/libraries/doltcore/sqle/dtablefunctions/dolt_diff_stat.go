@@ -385,6 +385,11 @@ func getDiffStatNodeFromDelta(ctx *sql.Context, delta diff.TableDelta, fromRoot,
 			return diffStatNode{}, false, err
 		}
 		oldColLen = len(fromSch.GetAllCols().GetColumns())
+	} else {
+		_, fromTableExists, err = fromRoot.GetRootObject(ctx, tableName)
+		if err != nil {
+			return diffStatNode{}, false, err
+		}
 	}
 
 	toTable, _, toTableExists, err := doltdb.GetTableInsensitive(ctx, toRoot, tableName)
@@ -398,6 +403,11 @@ func getDiffStatNodeFromDelta(ctx *sql.Context, delta diff.TableDelta, fromRoot,
 			return diffStatNode{}, false, err
 		}
 		newColLen = len(toSch.GetAllCols().GetColumns())
+	} else {
+		_, toTableExists, err = toRoot.GetRootObject(ctx, tableName)
+		if err != nil {
+			return diffStatNode{}, false, err
+		}
 	}
 
 	if !fromTableExists && !toTableExists {
@@ -405,7 +415,7 @@ func getDiffStatNodeFromDelta(ctx *sql.Context, delta diff.TableDelta, fromRoot,
 	}
 
 	// no diff from tableDelta
-	if delta.FromTable == nil && delta.ToTable == nil {
+	if delta.FromTable == nil && delta.ToTable == nil && delta.FromRootObject == nil && delta.ToRootObject == nil {
 		return diffStatNode{}, false, nil
 	}
 

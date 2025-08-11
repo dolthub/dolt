@@ -595,7 +595,7 @@ func gatherAllChunks(ctx context.Context, cs chunkSource, idx tableIndex, stats 
 }
 
 func verifyAllChunks(ctx context.Context, idx tableIndex, archiveFile string, progress chan interface{}, stats *Stats) error {
-	fra, err := newFileReaderAt(archiveFile)
+	fra, err := newFileReaderAt(archiveFile, false)
 	if err != nil {
 		return err
 	}

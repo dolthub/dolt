@@ -45,7 +45,7 @@ type nomsDsTestSuite struct {
 func (s *nomsDsTestSuite) TestEmptyNomsDs() {
 	dir := s.DBDir
 
-	cs, err := nbs.NewLocalStore(context.Background(), types.Format_Default.VersionString(), dir, clienttest.DefaultMemTableSize, nbs.NewUnlimitedMemQuotaProvider())
+	cs, err := nbs.NewLocalStore(context.Background(), types.Format_Default.VersionString(), dir, clienttest.DefaultMemTableSize, nbs.NewUnlimitedMemQuotaProvider(), false)
 	s.NoError(err)
 	ds := datas.NewDatabase(cs)
 
@@ -59,7 +59,7 @@ func (s *nomsDsTestSuite) TestEmptyNomsDs() {
 func (s *nomsDsTestSuite) TestNomsDs() {
 	dir := s.DBDir
 
-	cs, err := nbs.NewLocalStore(context.Background(), types.Format_Default.VersionString(), dir, clienttest.DefaultMemTableSize, nbs.NewUnlimitedMemQuotaProvider())
+	cs, err := nbs.NewLocalStore(context.Background(), types.Format_Default.VersionString(), dir, clienttest.DefaultMemTableSize, nbs.NewUnlimitedMemQuotaProvider(), false)
 
 	var golden1, golden2 string
 	switch types.Format_Default {

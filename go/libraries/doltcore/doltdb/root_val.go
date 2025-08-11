@@ -70,6 +70,10 @@ type RootValue interface {
 	GetCollation(ctx context.Context) (schema.Collation, error)
 	// GetRootObject will retrieve a root object by its case-sensitive name.
 	GetRootObject(ctx context.Context, objName TableName) (RootObject, bool, error)
+	// GetConflictRootObject will retrieve a conflict root object by its case-sensitive name.
+	GetConflictRootObject(ctx context.Context, tName TableName) (ConflictRootObject, bool, error)
+	// GetConflictRootObjects retrieves all conflict root objects.
+	GetConflictRootObjects(ctx context.Context) ([]ConflictRootObject, error)
 	// GetDatabaseSchemas returns all schemas. These differ from a table's schema.
 	GetDatabaseSchemas(ctx context.Context) ([]schema.DatabaseSchema, error)
 	// GetFeatureVersion returns the feature version of this root, if one is written
@@ -84,7 +88,7 @@ type RootValue interface {
 	// GetTableSchemaHash returns the hash of the given table's schema.
 	GetTableSchemaHash(ctx context.Context, tName TableName) (hash.Hash, error)
 	// GetTableNames retrieves the lists of all tables and root objects for a RootValue.
-	GetTableNames(ctx context.Context, schemaName string) ([]string, error)
+	GetTableNames(ctx context.Context, schemaName string, includeRootObjects bool) ([]string, error)
 	// HasTable returns whether the root has a table with the given case-sensitive name. This will also return true if a
 	// root object matches the table name, as they occupy the same namespace.
 	HasTable(ctx context.Context, tName TableName) (bool, error)
@@ -306,6 +310,16 @@ func (root *rootValue) SetCollation(ctx context.Context, collation schema.Collat
 // GetRootObject is only used by Doltgres.
 func (root *rootValue) GetRootObject(ctx context.Context, tName TableName) (RootObject, bool, error) {
 	return nil, false, nil
+}
+
+// GetConflictRootObject is only used by Doltgres.
+func (root *rootValue) GetConflictRootObject(ctx context.Context, tName TableName) (ConflictRootObject, bool, error) {
+	return nil, false, nil
+}
+
+// GetConflictRootObjects is only used by Doltgres.
+func (root *rootValue) GetConflictRootObjects(ctx context.Context) ([]ConflictRootObject, error) {
+	return nil, nil
 }
 
 func (root *rootValue) GetTableSchemaHash(ctx context.Context, tName TableName) (hash.Hash, error) {
@@ -610,7 +624,7 @@ func GetTableByColTag(ctx context.Context, root RootValue, tag uint64) (tbl *Tab
 }
 
 // GetTableNames retrieves the lists of all tables for a RootValue
-func (root *rootValue) GetTableNames(ctx context.Context, schemaName string) ([]string, error) {
+func (root *rootValue) GetTableNames(ctx context.Context, schemaName string, _ bool) ([]string, error) {
 	tableMap, err := root.getTableMap(ctx, schemaName)
 	if err != nil {
 		return nil, err
@@ -1257,7 +1271,7 @@ func UnionTableNames(ctx context.Context, roots ...RootValue) ([]TableName, erro
 		}
 
 		for _, schemaName := range schemaNames {
-			rootTblNames, err := root.GetTableNames(ctx, schemaName)
+			rootTblNames, err := root.GetTableNames(ctx, schemaName, true)
 			if err != nil {
 				return nil, err
 			}

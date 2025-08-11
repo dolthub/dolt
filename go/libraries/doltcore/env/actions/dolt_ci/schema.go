@@ -20,7 +20,6 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
-	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 )
 
@@ -69,12 +68,12 @@ func HasDoltCITables(queryist cli.Queryist, sqlCtx *sql.Context) (bool, error) {
 
 	for _, tableName := range tableNames {
 		query := fmt.Sprintf("SHOW TABLES LIKE '%s';", tableName.Name)
-		resetFunc, err := commands.SetSystemVar(queryist, sqlCtx, true)
+		resetFunc, err := cli.SetSystemVar(queryist, sqlCtx, true)
 		if err != nil {
 			return false, err
 		}
 
-		rows, err := commands.GetRowsForSql(queryist, sqlCtx, query)
+		rows, err := cli.GetRowsForSql(queryist, sqlCtx, query)
 		if err != nil {
 			return false, err
 		}
@@ -108,14 +107,14 @@ func commitCIDestroy(queryist cli.Queryist, sqlCtx *sql.Context, tableNames []do
 	// are staged before parent tables
 	for i := len(tableNames) - 1; i >= 0; i-- {
 		tn := tableNames[i]
-		_, err := commands.GetRowsForSql(queryist, sqlCtx, fmt.Sprintf("CALL DOLT_ADD('%s');", tn.Name))
+		_, err := cli.GetRowsForSql(queryist, sqlCtx, fmt.Sprintf("CALL DOLT_ADD('%s');", tn.Name))
 		if err != nil {
 			return err
 		}
 	}
 
 	query := fmt.Sprintf("CALL DOLT_COMMIT('-m', 'Successfully destroyed Dolt CI', '--author', '%s <%s>');", name, email)
-	_, err := commands.GetRowsForSql(queryist, sqlCtx, query)
+	_, err := cli.GetRowsForSql(queryist, sqlCtx, query)
 	return err
 }
 
@@ -125,14 +124,14 @@ func commitCIInit(sqlCtx *sql.Context, queryist cli.Queryist, tableNames []doltd
 	for i := len(tableNames) - 1; i >= 0; i-- {
 		tn := tableNames[i]
 		query := fmt.Sprintf("CALL DOLT_ADD('%s');", tn.Name)
-		_, err := commands.GetRowsForSql(queryist, sqlCtx, query)
+		_, err := cli.GetRowsForSql(queryist, sqlCtx, query)
 		if err != nil {
 			return err
 		}
 	}
 
 	query := fmt.Sprintf("CALL DOLT_COMMIT('-m', 'Successfully initialized Dolt CI', '--author', '%s <%s>');", name, email)
-	_, err := commands.GetRowsForSql(queryist, sqlCtx, query)
+	_, err := cli.GetRowsForSql(queryist, sqlCtx, query)
 	return err
 }
 
@@ -147,7 +146,7 @@ func DestroyDoltCITables(queryist cli.Queryist, sqlCtx *sql.Context, name, email
 	ciTables := ExpectedDoltCITablesOrdered.ActiveTableNames()
 	for _, tableName := range ciTables {
 		query := fmt.Sprintf("DROP TABLE IF EXISTS %s", tableName.Name)
-		_, err := commands.GetRowsForSql(queryist, sqlCtx, query)
+		_, err := cli.GetRowsForSql(queryist, sqlCtx, query)
 		if err != nil {
 			return err
 		}
@@ -179,7 +178,7 @@ func CreateDoltCITables(queryist cli.Queryist, sqlCtx *sql.Context, name, email 
 	}
 
 	for _, query := range orderedCreateTableQueries {
-		_, err = commands.GetRowsForSql(queryist, sqlCtx, query)
+		_, err = cli.GetRowsForSql(queryist, sqlCtx, query)
 		if err != nil {
 			return err
 		}

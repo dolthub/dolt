@@ -117,7 +117,7 @@ func (cmd LogCmd) logWithLoggerFunc(ctx context.Context, commandStr string, args
 	if err != nil {
 		return handleErrAndExit(err)
 	}
-	logRows, err := GetRowsForSql(queryist, sqlCtx, query)
+	logRows, err := cli.GetRowsForSql(queryist, sqlCtx, query)
 	if err != nil {
 		return handleErrAndExit(err)
 	}
@@ -140,7 +140,7 @@ func collectRevisions(apr *argparser.ArgParseResults, queryist cli.Queryist, sql
 				tablesIndex++
 				revisions[arg] = true
 			} else {
-				_, err := GetRowsForSql(queryist, sqlCtx, "select hashof('"+arg+"')")
+				_, err := cli.GetRowsForSql(queryist, sqlCtx, "select hashof('"+arg+"')")
 
 				// Once we get a non-revision argument, we treat the remaining args as tables
 				if _, ok := revisions[arg]; ok || err != nil {
@@ -288,7 +288,7 @@ func getExistingTables(revisions []string, queryist cli.Queryist, sqlCtx *sql.Co
 	}
 
 	for _, rev := range revisions {
-		rows, err := GetRowsForSql(queryist, sqlCtx, "show tables as of '"+rev+"'")
+		rows, err := cli.GetRowsForSql(queryist, sqlCtx, "show tables as of '"+rev+"'")
 		if err != nil {
 			return nil, err
 		}
