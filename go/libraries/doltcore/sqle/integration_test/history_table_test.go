@@ -25,16 +25,12 @@ import (
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	cmd "github.com/dolthub/dolt/go/cmd/dolt/commands"
-	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 )
 
 func TestHistoryTable(t *testing.T) {
-	os.Setenv(dconfig.EnvDoltLogCompactSchema, "1")
-	defer os.Unsetenv(dconfig.EnvDoltLogCompactSchema)
-	
 	SkipByDefaultInCI(t)
 	ctx := context.Background()
 	dEnv := setupHistoryTests(t)
