@@ -800,7 +800,7 @@ func (itr *logTableFunctionRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 			if err != nil {
 				return nil, err
 			}
-			row = append(row, out)
+			row = append(row, string(out))
 		} else {
 			row = append(row, "")
 		}
