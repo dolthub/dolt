@@ -785,13 +785,13 @@ func (itr *logTableFunctionRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 		if err != nil {
 			return nil, err
 		}
-		row = row.Append(sql.NewRow(prStr))
+		row = append(row, prStr)
 	}
 
 	if shouldDecorateWithRefs(itr.decoration) {
 		branchNames := itr.cHashToRefs[commitHash]
 		isHead := itr.headHash == commitHash
-		row = row.Append(sql.NewRow(getRefsString(branchNames, isHead)))
+		row = append(row, getRefsString(branchNames, isHead))
 	}
 
 	if itr.showSignature {
@@ -800,10 +800,9 @@ func (itr *logTableFunctionRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 			if err != nil {
 				return nil, err
 			}
-
-			row = row.Append(sql.NewRow(string(out)))
+			row = append(row, out)
 		} else {
-			row = row.Append(sql.NewRow(""))
+			row = append(row, "")
 		}
 	}
 
