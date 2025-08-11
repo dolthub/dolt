@@ -60,7 +60,7 @@ require (
 	github.com/dolthub/aws-sdk-go-ini-parser v0.0.0-20250305001723-2821c37f6c12
 	github.com/dolthub/eventsapi_schema v0.0.0-20250725194025-a087efa1ee55
 	github.com/dolthub/flatbuffers/v23 v23.3.3-dh.2
-	github.com/dolthub/go-mysql-server v0.20.1-0.20250811061414-a2ed59d23655
+	github.com/dolthub/go-mysql-server v0.20.1-0.20250811200525-c27a5b0e56ba
 	github.com/dolthub/gozstd v0.0.0-20240423170813-23a2903bca63
 	github.com/edsrzf/mmap-go v1.2.0
 	github.com/esote/minmaxheap v1.0.0
