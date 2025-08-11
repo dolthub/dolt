@@ -709,6 +709,14 @@ func getCommitInfoWithOptions(queryist cli.Queryist, sqlCtx *sql.Context, ref st
 		return nil, fmt.Errorf("error getting hash of HEAD: %v", err)
 	}
 
+	origCompactSchema := os.Getenv(dconfig.EnvDoltLogCompactSchema)
+	os.Unsetenv(dconfig.EnvDoltLogCompactSchema)
+	defer func() {
+		if origCompactSchema != "" {
+			os.Setenv(dconfig.EnvDoltLogCompactSchema, origCompactSchema)
+		}
+	}()
+	
 	var q string
 	if opts.showSignature {
 		q, err = dbr.InterpolateForDialect("select * from dolt_log(?, '--parents', '--decorate=full', '--show-signature')", []interface{}{ref}, dialect.MySQL)
@@ -735,9 +743,9 @@ func getCommitInfoWithOptions(queryist cli.Queryist, sqlCtx *sql.Context, ref st
 	commitHash := row[0].(string)
 	name := row[1].(string)
 	email := row[2].(string)
-	timestamp, err := getTimestampColAsUint64(row[3])
+	timestamp, err := getTimestampColAsUint64(row[8])
 	if err != nil {
-		return nil, fmt.Errorf("error parsing timestamp '%s': %v", row[3], err)
+		return nil, fmt.Errorf("error parsing author timestamp '%s': %v", row[8], err)
 	}
 	message := row[4].(string)
 
