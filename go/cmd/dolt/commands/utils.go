@@ -60,6 +60,7 @@ type CommitInfo struct {
 	localBranchNames  []string
 	remoteBranchNames []string
 	tagNames          []string
+	verifiedSignature string
 }
 
 var fwtStageName = "fwt"
@@ -628,8 +629,8 @@ func PrintCommitInfo(pager *outputpager.Pager, minParents int, showParents, show
 		}
 	}
 
-	if showSignatures && len(comm.commitMeta.Signature) > 0 {
-		signatureLines := strings.Split(comm.commitMeta.Signature, "\n")
+	if showSignatures && len(comm.verifiedSignature) > 0 {
+		signatureLines := strings.Split(comm.verifiedSignature, "\n")
 		for _, line := range signatureLines {
 			pager.Writer.Write([]byte("\n"))
 			pager.Writer.Write([]byte(color.CyanString(line)))
@@ -709,15 +710,27 @@ func getCommitInfoWithOptions(queryist cli.Queryist, sqlCtx *sql.Context, ref st
 		return nil, fmt.Errorf("error getting hash of HEAD: %v", err)
 	}
 
-	origCompactSchema := os.Getenv(dconfig.EnvDoltLogCompactSchema)
+	// Use SQL-based approach for both CLI and server modes
+	return getCommitInfoSQL(queryist, sqlCtx, ref, opts, hashOfHead)
+}
+
+
+// getCommitInfoSQL gets commit info using SQL queries, always using extended schema
+func getCommitInfoSQL(queryist cli.Queryist, sqlCtx *sql.Context, ref string, opts commitInfoOptions, hashOfHead string) (*CommitInfo, error) {
+	// Use dolt_log() function with flags to get signature support, but force extended schema
+	originalCompactSetting := os.Getenv(dconfig.EnvDoltLogCompactSchema)
+	
+	// Temporarily unset the compact schema to force extended schema
 	os.Unsetenv(dconfig.EnvDoltLogCompactSchema)
 	defer func() {
-		if origCompactSchema != "" {
-			os.Setenv(dconfig.EnvDoltLogCompactSchema, origCompactSchema)
+		// Restore original setting
+		if originalCompactSetting != "" {
+			os.Setenv(dconfig.EnvDoltLogCompactSchema, originalCompactSetting)
 		}
 	}()
 	
 	var q string
+	var err error
 	if opts.showSignature {
 		q, err = dbr.InterpolateForDialect("select * from dolt_log(?, '--parents', '--decorate=full', '--show-signature')", []interface{}{ref}, dialect.MySQL)
 		if err != nil {
@@ -734,6 +747,7 @@ func getCommitInfoWithOptions(queryist cli.Queryist, sqlCtx *sql.Context, ref st
 	if err != nil {
 		return nil, fmt.Errorf("error getting logs for ref '%s': %v", ref, err)
 	}
+	
 	if len(rows) == 0 {
 		// No commit with this hash exists
 		return nil, nil
@@ -741,36 +755,39 @@ func getCommitInfoWithOptions(queryist cli.Queryist, sqlCtx *sql.Context, ref st
 
 	row := rows[0]
 	commitHash := row[0].(string)
-	name := row[1].(string)
-	email := row[2].(string)
-	timestamp, err := getTimestampColAsUint64(row[8])
-	if err != nil {
-		return nil, fmt.Errorf("error parsing author timestamp '%s': %v", row[8], err)
-	}
+	committerName := row[1].(string)
+	committerEmail := row[2].(string)
+	committerDate := row[3].(time.Time)
 	message := row[4].(string)
-
-	var commitOrder uint64
-	switch v := row[5].(type) {
-	case uint64:
-		commitOrder = v
-	case string:
-		var err error
-		commitOrder, err = strconv.ParseUint(v, 10, 64)
-		if err != nil {
-			return nil, fmt.Errorf("error parsing commit_order '%s': %v", v, err)
-		}
-	default:
-		return nil, fmt.Errorf("unexpected type for commit_order: %T", v)
+	
+	commitOrder, err := getUint64ColAsUint64(row[5])
+	if err != nil {
+		return nil, fmt.Errorf("error parsing commit_order: %v", err)
+	}
+	
+	// Extended schema has author columns at positions 6, 7, 8
+	author := row[6].(string)
+	authorEmail := row[7].(string)
+	authorDate := row[8].(time.Time)
+	
+	// Parse parent hashes from parents column (next available column)
+	columnIndex := 9 // Next column after author_date
+	parent := ""
+	if len(row) > columnIndex && row[columnIndex] != nil {
+		parent = row[columnIndex].(string)
+		columnIndex++
+	}
+	var parentHashes []string
+	if parent != "" {
+		parentHashes = strings.Split(parent, ", ")
 	}
 
-	parent := row[6].(string)
 	height := commitOrder
-
 	isHead := commitHash == hashOfHead
 
 	var signature string
 	if opts.showSignature {
-		// Signature is always the last column when present
+		// Skip any refs column if present and get signature from last column
 		signature = row[len(row)-1].(string)
 	}
 
@@ -789,23 +806,23 @@ func getCommitInfoWithOptions(queryist cli.Queryist, sqlCtx *sql.Context, ref st
 
 	ci := &CommitInfo{
 		commitMeta: &datas.CommitMeta{
-			Name:          name,
-			Email:         email,
-			Timestamp:     timestamp,
-			Description:   message,
-			UserTimestamp: int64(timestamp),
-			Signature:     signature,
+			Name:           author,
+			Email:          authorEmail,
+			Timestamp:      uint64(committerDate.Unix()),
+			CommitterName:  &committerName,
+			CommitterEmail: &committerEmail,
+			Description:    message,
+			UserTimestamp:  authorDate.Unix(),
+			Signature:      signature,
 		},
 		commitHash:        commitHash,
 		height:            height,
 		isHead:            isHead,
+		parentHashes:      parentHashes,
 		localBranchNames:  localBranchesForHash,
 		remoteBranchNames: remoteBranchesForHash,
 		tagNames:          tagsForHash,
-	}
-
-	if parent != "" {
-		ci.parentHashes = strings.Split(parent, ", ")
+		verifiedSignature: signature,
 	}
 
 	return ci, nil
