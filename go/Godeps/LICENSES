@@ -204,7 +204,7 @@
    See the License for the specific language governing permissions and
    limitations under the License.
 
-= LICENSE 75cd5500580317e758b5e984e017524dc961140e4889f7d427f85e41 =
+= LICENSE 016034de96ff5d7b9f39bb1d8cf83ceac69cbd5814bb82f7fc1d648c =
 ================================================================================
 
 ================================================================================
@@ -10577,35 +10577,6 @@ Copyright (c) 2016 Felix Geisendörfer (felix@debuggable.com)
    limitations under the License.
 
 = LICENSE 75cd5500580317e758b5e984e017524dc961140e4889f7d427f85e41 =
-================================================================================
-
-================================================================================
-= github.com/go-kit/kit licensed under: =
-
-The MIT License (MIT)
-
-Copyright (c) 2015 Peter Bourgon
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-
-
-= LICENSE 517fd017ba968d4bdbe3905b55314df7ea5e83d9d7422365dcee5566 =
 ================================================================================
 
 ================================================================================
