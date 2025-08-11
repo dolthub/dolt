@@ -116,6 +116,8 @@ func verifyContents(t *testing.T, bytes []byte) {
 }
 
 func (suite *TableSinkSuite) TestWriteAndFlush() {
+
+	// NM4 - do this.
 	sink := suite.sinkFactory()
 	err := writeToSink(sink)
 	require.NoError(suite.t, err)

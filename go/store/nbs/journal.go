@@ -514,7 +514,7 @@ func (c journalConjoiner) conjoinRequired(ts tableSet) bool {
 	return c.child.conjoinRequired(ts)
 }
 
-func (c journalConjoiner) chooseConjoinees(upstream []tableSpec) (conjoinees, keepers []tableSpec, err error) {
+func (c journalConjoiner) chooseConjoinees(ts tableSet, upstream []tableSpec) (conjoinees, keepers []tableSpec, err error) {
 	var stash tableSpec // don't conjoin journal
 	pruned := make([]tableSpec, 0, len(upstream))
 	for _, ts := range upstream {
@@ -524,11 +524,11 @@ func (c journalConjoiner) chooseConjoinees(upstream []tableSpec) (conjoinees, ke
 			pruned = append(pruned, ts)
 		}
 	}
-	conjoinees, keepers, err = c.child.chooseConjoinees(pruned)
+	conjoinees, keepers, err = c.child.chooseConjoinees(ts, pruned)
 	if err != nil {
 		return nil, nil, err
 	}
-	if !hash.Hash(stash.name).IsEmpty() {
+	if !stash.name.IsEmpty() {
 		keepers = append(keepers, stash)
 	}
 	return
