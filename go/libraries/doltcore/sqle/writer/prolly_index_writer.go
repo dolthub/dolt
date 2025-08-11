@@ -100,6 +100,7 @@ type prollyIndexWriter struct {
 	valBld *val.TupleBuilder
 	valMap val.OrdinalMapping
 
+	// buffer to reduce memory allocations
 	key sql.Row
 }
 
@@ -289,7 +290,7 @@ type prollySecondaryIndexWriter struct {
 	pkMap val.OrdinalMapping
 	// pkBld builds key tuples for primary key index
 	pkBld *val.TupleBuilder
-
+	// buffer to reduce memory allocations
 	key sql.Row
 }
 
