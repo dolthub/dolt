@@ -58,10 +58,6 @@ type lookupJoinKvIter struct {
 	returnedARow bool
 }
 
-func (l *lookupJoinKvIter) Close(_ *sql.Context) error {
-	return nil
-}
-
 var _ sql.RowIter = (*lookupJoinKvIter)(nil)
 
 func newLookupKvIter(
@@ -180,6 +176,10 @@ func (l *lookupJoinKvIter) Next(ctx *sql.Context) (sql.Row, error) {
 		l.returnedARow = true
 		return ret, nil
 	}
+}
+
+func (l *lookupJoinKvIter) Close(ctx *sql.Context) error {
+	return l.joiner.Close(ctx)
 }
 
 // lookupMapping is responsible for generating keys for lookups into

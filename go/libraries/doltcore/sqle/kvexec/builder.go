@@ -145,6 +145,8 @@ type prollyToSqlJoiner struct {
 	desc        []kvDesc
 	ordMappings []int
 	outCnt      int
+
+	rowBuffer *sql.RowBuffer
 }
 
 type kvDesc struct {
@@ -236,6 +238,7 @@ func newRowJoiner(schemas []schema.Schema, splits []int, projections []uint64, n
 		ordMappings: allMap[numPhysicalColumns:],
 		ns:          ns,
 		outCnt:      len(projections),
+		rowBuffer:   sql.RowBufPool.Get().(*sql.RowBuffer),
 	}
 }
 
@@ -243,7 +246,7 @@ func (m *prollyToSqlJoiner) buildRow(ctx context.Context, tuples ...val.Tuple) (
 	if len(tuples) != 2*len(m.desc) {
 		panic("invalid KV count for prollyToSqlJoiner")
 	}
-	row := make(sql.Row, m.outCnt)
+	row := m.rowBuffer.Get(m.outCnt)
 	split := 0
 	var err error
 	var tup val.Tuple
@@ -274,6 +277,12 @@ func (m *prollyToSqlJoiner) buildRow(ctx context.Context, tuples ...val.Tuple) (
 		}
 	}
 	return row, nil
+}
+
+func (m *prollyToSqlJoiner) Close(ctx *sql.Context) error {
+	m.rowBuffer.Reset()
+	sql.RowBufPool.Put(m.rowBuffer)
+	return nil
 }
 
 func getPhysicalColCount(schemas []schema.Schema, splits []int, projections []uint64) int {

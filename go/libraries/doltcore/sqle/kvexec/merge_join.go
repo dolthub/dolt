@@ -98,8 +98,8 @@ type mergeJoinKvIter struct {
 
 var _ sql.RowIter = (*mergeJoinKvIter)(nil)
 
-func (l *mergeJoinKvIter) Close(_ *sql.Context) error {
-	return nil
+func (l *mergeJoinKvIter) Close(ctx *sql.Context) error {
+	return l.joiner.Close(ctx)
 }
 
 func (l *mergeJoinKvIter) Next(ctx *sql.Context) (sql.Row, error) {
