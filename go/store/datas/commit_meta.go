@@ -198,9 +198,17 @@ func (cm *CommitMeta) toNomsStruct(nbf *types.NomsBinFormat) (types.Struct, erro
 	return types.NewStruct(nbf, commitMetaStName, metadata)
 }
 
-// Time returns the time at which the commit occurred
+// Time returns the time at which the commit was authored
 func (cm *CommitMeta) Time() time.Time {
 	return time.UnixMilli(cm.UserTimestamp)
+}
+
+// CommitterTime returns the time at which the commit was committed, or author time if no committer time is set
+func (cm *CommitMeta) CommitterTime() time.Time {
+	if cm.Timestamp != 0 {
+		return time.UnixMilli(int64(cm.Timestamp))
+	}
+	return cm.Time()
 }
 
 // FormatTS takes the internal timestamp and turns it into a human readable string in the time.RubyDate format
