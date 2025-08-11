@@ -16,9 +16,7 @@ package dtablefunctions
 
 import (
 	"fmt"
-	"os"
 	"strings"
-	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
@@ -26,22 +24,17 @@ import (
 	"gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
-	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions/commitwalk"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/libraries/utils/gpg"
-	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
 const logTableDefaultRowCount = 10
-
-func useCompactSchema() bool {
-	return os.Getenv(dconfig.EnvDoltLogCompactSchema) != ""
-}
 
 var _ sql.TableFunction = (*LogTableFunction)(nil)
 var _ sql.ExecSourceRel = (*LogTableFunction)(nil)
@@ -63,30 +56,6 @@ type LogTableFunction struct {
 
 	// argumentExprs stores the original expressions for deferred parsing
 	argumentExprs []sql.Expression
-}
-
-var logSchemaCompact = sql.Schema{
-	&sql.Column{Name: "commit_hash", Type: types.Text},
-	&sql.Column{Name: "committer", Type: types.Text},
-	&sql.Column{Name: "email", Type: types.Text},
-	&sql.Column{Name: "date", Type: types.Datetime},
-	&sql.Column{Name: "message", Type: types.Text},
-	&sql.Column{Name: "commit_order", Type: types.Uint64},
-}
-
-var logSchemaCommitterColumns = sql.Schema{
-	&sql.Column{Name: "commit_hash", Type: types.Text},
-	&sql.Column{Name: "committer", Type: types.Text},
-	&sql.Column{Name: "committer_email", Type: types.Text},
-	&sql.Column{Name: "committer_date", Type: types.Datetime},
-	&sql.Column{Name: "message", Type: types.Text},
-	&sql.Column{Name: "commit_order", Type: types.Uint64},
-}
-
-var logSchemaAuthorColumns = sql.Schema{
-	&sql.Column{Name: "author", Type: types.Text},
-	&sql.Column{Name: "author_email", Type: types.Text},
-	&sql.Column{Name: "author_date", Type: types.Datetime},
 }
 
 // NewInstance creates a new instance of TableFunction interface
@@ -193,46 +162,9 @@ func (ltf *LogTableFunction) getOptionsString() string {
 	return strings.Join(options, ", ")
 }
 
-func getLogSchema() sql.Schema {
-	if useCompactSchema() {
-		schema := make(sql.Schema, len(logSchemaCompact))
-		copy(schema, logSchemaCompact)
-		return schema
-	}
-	
-	schema := make(sql.Schema, len(logSchemaCommitterColumns))
-	copy(schema, logSchemaCommitterColumns)
-	return append(schema, logSchemaAuthorColumns...)
-}
-
-func buildLogRow(commitHash hash.Hash, meta *datas.CommitMeta, height uint64) sql.Row {
-	if useCompactSchema() {
-		return sql.NewRow(
-			commitHash.String(),
-			meta.CommitterName.ValueOrDefault(meta.Name),
-			meta.CommitterEmail.ValueOrDefault(meta.Email),
-			time.Unix(0, int64(meta.Timestamp)*int64(time.Millisecond)), // Committer timestamp
-			meta.Description,
-			height,
-		)
-	}
-	
-	return sql.NewRow(
-		commitHash.String(),
-		meta.CommitterName.ValueOrDefault(meta.Name),
-		meta.CommitterEmail.ValueOrDefault(meta.Email),
-		time.Unix(0, int64(meta.Timestamp)*int64(time.Millisecond)), // Committer timestamp
-		meta.Description,
-		height,
-		meta.Name,    // Author name
-		meta.Email,   // Author email
-		meta.Time(),  // Author timestamp
-	)
-}
-
 // Schema implements the sql.Node interface.
 func (ltf *LogTableFunction) Schema() sql.Schema {
-	logSchema := getLogSchema()
+	logSchema := dtables.GetLogTableSchema("", "")
 
 	if ltf.showParents {
 		logSchema = append(logSchema, &sql.Column{Name: "parents", Type: types.Text})
@@ -838,7 +770,7 @@ func (itr *logTableFunctionRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 		return nil, err
 	}
 
-	row := buildLogRow(commitHash, meta, height)
+	row := dtables.BuildLogRow(commitHash, meta, height)
 
 	if itr.showParents {
 		prStr, err := getParentsString(ctx, commit)

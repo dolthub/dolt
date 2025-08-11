@@ -21,7 +21,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dolthub/flatbuffers/v23/go"
 	"github.com/sirupsen/logrus"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
@@ -55,31 +54,16 @@ var AuthorDate = time.Now
 var CustomAuthorDate bool
 var AuthorLoc = time.Local
 
-// OptionalSerializedField represents a field that should only be serialized when non-empty.
-// This provides backwards compatibility by allowing old Dolt versions to read commits
-// that don't use new optional fields, while rejecting commits that do use them.
-type OptionalSerializedField string
-
-// SerializeOptional conditionally serializes the field only when it contains data.
-func (o OptionalSerializedField) SerializeOptional(builder *flatbuffers.Builder, addFunc func(*flatbuffers.Builder, flatbuffers.UOffsetT)) {
-	if string(o) == "" {
-		return // Don't serialize empty fields - maintains backwards compatibility
-	}
-	offset := builder.CreateString(string(o))
-	addFunc(builder, offset)
-}
-
-// String returns the underlying string value.
-func (o OptionalSerializedField) String() string {
-	return string(o)
-}
-
-// ValueOrDefault returns the field value, or the fallback if empty.
-func (o OptionalSerializedField) ValueOrDefault(fallback string) string {
-	if string(o) == "" {
+// ValueOrDefault returns the pointer value, or the fallback if nil or empty (for strings)
+func ValueOrDefault[T comparable](value *T, fallback T) T {
+	if value == nil {
 		return fallback
 	}
-	return string(o)
+	var zero T
+	if *value == zero {
+		return fallback
+	}
+	return *value
 }
 
 // CommitMeta contains all the metadata that is associated with a commit within a data repo.
@@ -91,8 +75,8 @@ type CommitMeta struct {
 	UserTimestamp int64 // Author timestamp
 	Signature     string
 
-	CommitterName  OptionalSerializedField
-	CommitterEmail OptionalSerializedField
+	CommitterName  *string
+	CommitterEmail *string
 }
 
 // NewCommitMeta creates a CommitMeta instance from a name, email, and description and uses the current time for the
@@ -158,8 +142,8 @@ func NewCommitMetaWithUserTS(name, email, desc string, userTS time.Time) (*Commi
 		Description:   d,
 		UserTimestamp: authorDateMillis,
 		Signature:     "",
-		CommitterName:  OptionalSerializedField(""),
-		CommitterEmail: OptionalSerializedField(""),
+		CommitterName:  nil,
+		CommitterEmail: nil,
 	}, nil
 }
 
@@ -210,8 +194,8 @@ func NewCommitMetaWithAuthorCommitter(authorName, authorEmail, committerName, co
 		Description:   d,
 		UserTimestamp: authorDateMillis,
 		Signature:     "",
-		CommitterName:  OptionalSerializedField(cn),
-		CommitterEmail: OptionalSerializedField(ce),
+		CommitterName:  &cn,
+		CommitterEmail: &ce,
 	}, nil
 }
 
@@ -276,8 +260,8 @@ func CommitMetaFromNomsSt(st types.Struct) (*CommitMeta, error) {
 		Description:   string(d.(types.String)),
 		UserTimestamp: int64(userTS.(types.Int)),
 		Signature:     string(signature.(types.String)),
-		CommitterName:  OptionalSerializedField(""),
-		CommitterEmail: OptionalSerializedField(""),
+		CommitterName:  nil,
+		CommitterEmail: nil,
 	}, nil
 }
 

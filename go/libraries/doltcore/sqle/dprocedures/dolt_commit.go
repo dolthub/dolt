@@ -126,13 +126,11 @@ func doDoltCommit(ctx *sql.Context, args []string) (string, bool, error) {
 
 	// Parse committer information if provided
 	var committerName, committerEmail string
-	var hasCommitterInfo bool
 	if committerStr, ok := apr.GetValue(cli.CommitterParam); ok {
 		committerName, committerEmail, err = cli.ParseAuthor(committerStr) // reuse ParseAuthor for committer
 		if err != nil {
 			return "", false, err
 		}
-		hasCommitterInfo = true
 	}
 
 	amend := apr.Contains(cli.AmendFlag)
@@ -185,7 +183,7 @@ func doDoltCommit(ctx *sql.Context, args []string) (string, bool, error) {
 	}
 
 	// Set committer information if provided
-	if hasCommitterInfo {
+	if committerName != "" || committerEmail != "" {
 		csp.CommitterName = committerName
 		csp.CommitterEmail = committerEmail
 	}
