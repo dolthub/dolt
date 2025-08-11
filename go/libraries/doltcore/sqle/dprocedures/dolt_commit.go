@@ -113,7 +113,7 @@ func doDoltCommit(ctx *sql.Context, args []string) (string, bool, error) {
 
 	var name, email string
 	if authorStr, ok := apr.GetValue(cli.AuthorParam); ok {
-		name, email, err = cli.ParseAuthor(authorStr)
+		name, email, err = cli.ParsePerson(authorStr, "author")
 		if err != nil {
 			return "", false, err
 		}
@@ -127,7 +127,7 @@ func doDoltCommit(ctx *sql.Context, args []string) (string, bool, error) {
 	// Parse committer information if provided
 	var committerName, committerEmail string
 	if committerStr, ok := apr.GetValue(cli.CommitterParam); ok {
-		committerName, committerEmail, err = cli.ParseAuthor(committerStr) // reuse ParseAuthor for committer
+		committerName, committerEmail, err = cli.ParsePerson(committerStr, "committer")
 		if err != nil {
 			return "", false, err
 		}

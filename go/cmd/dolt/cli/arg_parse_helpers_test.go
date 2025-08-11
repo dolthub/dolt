@@ -56,31 +56,32 @@ func TestParseDate(t *testing.T) {
 	}
 }
 
-func TestParseAuthor(t *testing.T) {
+func TestParsePerson(t *testing.T) {
 	tests := []struct {
-		authorStr string
+		personStr string
+		personType string
 		expName   string
 		expEmail  string
 		expErr    bool
 	}{
-		{"Hi <hi@hi.com>", "Hi", "hi@hi.com", false},
-		{"John Doe <hi@hi.com>", "John Doe", "hi@hi.com", false},
-		{"John Doe <hi@hi.com", "John Doe", "hi@hi.com", false},
-		{"John Doe", "", "", true},
-		{"<hi@hi.com>", "", "", true},
-		{"", "", "", true},
-		{"John Doe hi@hi.com", "", "", true},
+		{"Hi <hi@hi.com>", "author", "Hi", "hi@hi.com", false},
+		{"John Doe <hi@hi.com>", "author", "John Doe", "hi@hi.com", false},
+		{"John Doe <hi@hi.com", "committer", "John Doe", "hi@hi.com", false},
+		{"John Doe", "author", "", "", true},
+		{"<hi@hi.com>", "committer", "", "", true},
+		{"", "author", "", "", true},
+		{"John Doe hi@hi.com", "committer", "", "", true},
 	}
 
 	for _, test := range tests {
-		t.Run(test.authorStr, func(t *testing.T) {
-			author, email, err := ParseAuthor(test.authorStr)
+		t.Run(test.personStr+"_"+test.personType, func(t *testing.T) {
+			name, email, err := ParsePerson(test.personStr, test.personType)
 
 			if test.expErr {
 				assert.Error(t, err)
 			} else {
 				require.NoError(t, err)
-				assert.Equal(t, author, test.expName)
+				assert.Equal(t, name, test.expName)
 				assert.Equal(t, email, test.expEmail)
 			}
 		})

@@ -27,17 +27,18 @@ import (
 const VerboseFlag = "verbose"
 
 // Parses the author flag for the commit method.
-func ParseAuthor(authorStr string) (string, string, error) {
-	if len(authorStr) == 0 {
-		return "", "", errors.New("Option 'author' requires a value")
+// ParsePerson parses a person string in 'Name <email@example.com>' format
+func ParsePerson(personStr string, personType string) (string, string, error) {
+	if len(personStr) == 0 {
+		return "", "", fmt.Errorf("Option '%s' requires a value", personType)
 	}
 
 	reg := regexp.MustCompile("(?m)([^)]+) \\<([^)]+)") // Regex matches Name <email
-	matches := reg.FindStringSubmatch(authorStr)        // This function places the original string at the beginning of matches
+	matches := reg.FindStringSubmatch(personStr)        // This function places the original string at the beginning of matches
 
 	// If name and email are provided
 	if len(matches) != 3 {
-		return "", "", errors.New("Author not formatted correctly. Use 'Name <author@example.com>' format")
+		return "", "", fmt.Errorf("%s not formatted correctly. Use 'Name <%s@example.com>' format", strings.Title(personType), personType)
 	}
 
 	name := matches[1]
@@ -45,6 +46,7 @@ func ParseAuthor(authorStr string) (string, string, error) {
 
 	return name, email, nil
 }
+
 
 const (
 	SyncBackupId        = "sync"
