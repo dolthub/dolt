@@ -20,7 +20,10 @@ teardown() {
     teardown_common
 }
 
-
+# For reasons unknown, lambda fails on this test about 10% of the time. It seems to be something having to do with
+# the IO subsystem of lambda. The output of the `dolt archive` command is truncated occasionally. Doesn't ever happen
+# on regular hosts.
+# bats test_tags=no_lambda
 @test "archive: too few chunks" {
   dolt sql -q "$(update_statement)"
   dolt gc
