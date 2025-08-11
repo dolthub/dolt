@@ -625,7 +625,7 @@ func (fc *fakeConjoiner) conjoinRequired(ts tableSet) bool {
 	return true
 }
 
-func (fc *fakeConjoiner) chooseConjoinees(specs []tableSpec) (conjoinees, keepers []tableSpec, err error) {
+func (fc *fakeConjoiner) chooseConjoinees(ts tableSet, specs []tableSpec) (conjoinees, keepers []tableSpec, err error) {
 	d.PanicIfTrue(len(fc.canned) == 0)
 	cur := fc.canned[0]
 	fc.canned = fc.canned[1:]
