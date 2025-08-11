@@ -17,6 +17,7 @@ package dtablefunctions
 import (
 	"fmt"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions/dolt_ci"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/val"
 	gms "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
@@ -24,6 +25,12 @@ import (
 	"io"
 	"strings"
 )
+
+const ciDefaultTableLength = 5
+
+type ciStep struct {
+	stepName, jobName, queryStatement, errStr string
+}
 
 var _ sql.TableFunction = (*CiRunTableFunction)(nil)
 var _ sql.CatalogTableFunction = (*CiRunTableFunction)(nil)
@@ -84,18 +91,16 @@ func (crtf *CiRunTableFunction) WithCatalog(c sql.Catalog) (sql.TableFunction, e
 	return &newInstance, nil
 }
 
-type ciStep struct {
-	stepName, jobName, queryStatement, errStr string
-}
-
 func (crtf *CiRunTableFunction) validateWorkflowName() error {
 	qry := fmt.Sprintf("SELECT * FROM dolt_ci_workflows where name = '%s'", crtf.workflowName)
 	_, iter, _, err := crtf.engine.Query(crtf.ctx, qry)
 	if err != nil {
 		return err
 	}
-	if _, err = iter.Next(crtf.ctx); err != nil {
+	if _, err = iter.Next(crtf.ctx); err == io.EOF {
 		return fmt.Errorf("could not find workflow with name: %s", crtf.workflowName)
+	} else if err != nil {
+		return err
 	}
 
 	return nil
@@ -341,7 +346,7 @@ func (crtf *CiRunTableFunction) IsReadOnly() bool {
 }
 
 // String implements the Stringer interface
-func (crtf *CiRunTableFunction) String() string { //TODO THIS DOESN'T SEEM VERY SMART
+func (crtf *CiRunTableFunction) String() string {
 	return fmt.Sprintf("DOLT_CI_RUN('%s')", crtf.argument.String())
 }
 
@@ -372,13 +377,18 @@ func (crtf *CiRunTableFunction) RowIter(ctx *sql.Context, _ sql.Row) (sql.RowIte
 }
 
 // DataLength estimates total data size for query planning.
-func (crtf *CiRunTableFunction) DataLength(ctx *sql.Context) (uint64, error) { //TODO FIX THIS
-	return 50, nil
+func (crtf *CiRunTableFunction) DataLength(ctx *sql.Context) (uint64, error) {
+	numBytesPerRow := schema.SchemaAvgLength(crtf.Schema())
+	numRows, _, err := crtf.RowCount(ctx)
+	if err != nil {
+		return 0, err
+	}
+	return numBytesPerRow * numRows, nil
 }
 
 // RowCount returns estimated row count for query planning.
-func (crtf *CiRunTableFunction) RowCount(_ *sql.Context) (uint64, bool, error) { //TODO FIX THIS
-	return 1, true, nil
+func (crtf *CiRunTableFunction) RowCount(_ *sql.Context) (uint64, bool, error) {
+	return ciDefaultTableLength, false, nil
 }
 
 // The dolt_query_catalog system table returns *val.TextStorage types under certain situations,
