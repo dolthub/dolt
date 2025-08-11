@@ -113,27 +113,53 @@ func TestSchemaOverridesWithAdaptiveEncoding(t *testing.T) {
 
 // Convenience test for debugging a single query. Unskip and set to the desired query.
 func TestSingleScript(t *testing.T) {
-	//t.Skip()
+	t.Skip()
 	var scripts = []queries.ScriptTest{
 		{
-			Name: "test",
+			Name: "Database syntax properly handles inter-CALL communication",
 			SetUpScript: []string{
-				"create table mytable (i bigint primary key, s varchar(20) comment 'column s' NOT NULL)",
-				"insert into mytable values (1, 'first row'), (2, 'second row'), (3, 'third row')",
-				"create unique index mytable_s on mytable (s)",
-				"create index mytable_i_s on mytable (i,s)",
-				"create index `idx_si` on mytable (`s`,`i`)",
-				"CREATE TABLE `keyless` (`c0` bigint, `c1` bigint )",
-				"insert into keyless values (0,0), (1,1), (1,1), (2,2)",
+				`CREATE PROCEDURE p1()
+BEGIN
+	DECLARE str VARCHAR(20);
+   CALL p2(str);
+	SET str = CONCAT('a', str);
+   SELECT str;
+END`,
+				`CREATE PROCEDURE p2(OUT param VARCHAR(20))
+BEGIN
+	SET param = 'b';
+END`,
+				"CALL DOLT_ADD('-A');",
+				"CALL DOLT_COMMIT('-m', 'First procedures');",
+				"CALL DOLT_BRANCH('p12');",
+				"DROP PROCEDURE p1;",
+				"DROP PROCEDURE p2;",
+				`CREATE PROCEDURE p1()
+BEGIN
+	DECLARE str VARCHAR(20);
+    CALL p2(str);
+	SET str = CONCAT('c', str);
+   SELECT str;
+END`,
+				`CREATE PROCEDURE p2(OUT param VARCHAR(20))
+BEGIN
+	SET param = 'd';
+END`,
+				"CALL DOLT_ADD('-A');",
+				"CALL DOLT_COMMIT('-m', 'Second procedures');",
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query: "SELECT * FROM keyless JOIN myTable where c0 = i",
-					Expected: []sql.Row{
-						{1, 1, 1, "first row"},
-						{1, 1, 1, "first row"},
-						{2, 2, 2, "second row"},
-					},
+					Query:    "CALL p1();",
+					Expected: []sql.Row{{"cd"}},
+				},
+				{
+					Query:    "CALL `mydb/main`.p1();",
+					Expected: []sql.Row{{"cd"}},
+				},
+				{
+					Query:    "CALL `mydb/p12`.p1();",
+					Expected: []sql.Row{{"ab"}},
 				},
 			},
 		},
@@ -147,8 +173,8 @@ func TestSingleScript(t *testing.T) {
 		if err != nil {
 			panic(err)
 		}
-		//engine.EngineAnalyzer().Debug = true
-		//engine.EngineAnalyzer().Verbose = true
+		// engine.EngineAnalyzer().Debug = true
+		// engine.EngineAnalyzer().Verbose = true
 
 		enginetest.TestScriptWithEngine(t, engine, harness, script)
 	}
