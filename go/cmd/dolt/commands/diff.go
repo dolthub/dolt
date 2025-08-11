@@ -1688,12 +1688,20 @@ func getColumnNames(fromTableInfo, toTableInfo *diff.TableInfo) (colNames []stri
 	var cols []string
 	if fromSch != nil {
 		fromSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+			// Skip virtual generated columns
+			if col.Virtual {
+				return false, nil
+			}
 			cols = append(cols, fmt.Sprintf("from_%s", col.Name))
 			return false, nil
 		})
 	}
 	if toSch != nil {
 		toSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+			// Skip virtual generated columns
+			if col.Virtual {
+				return false, nil
+			}
 			cols = append(cols, fmt.Sprintf("to_%s", col.Name))
 			return false, nil
 		})
