@@ -40,6 +40,12 @@ jobs:
 
         for (( i=0; i<${#file_arr[@]}; i++ ))
         do
+          # Skip binlog tests as they run in a separate CI job
+          if [[ "${file_arr[$i]}" == *binlogreplication* ]]; then
+            echo "Skipping binlog package: ${file_arr[$i]} (runs in separate CI)"
+            continue
+          fi
+          
           echo "Testing Package: ${file_arr[$i]}"
           if [ "$MATRIX_OS" == 'ubuntu-22.04' ]
           then
