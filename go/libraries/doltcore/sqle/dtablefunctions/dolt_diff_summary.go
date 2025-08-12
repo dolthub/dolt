@@ -25,6 +25,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
@@ -287,9 +288,23 @@ func (ds *DiffSummaryTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.
 		return deltas[i].ToName.Less(deltas[j].ToName)
 	})
 
+	ignorePatterns, err := getIgnorePatternsFromContext(ctx, ds.database)
+	if err != nil {
+		return nil, err
+	}
+
 	// If tableNameExpr defined, return a single table diff summary result
 	if ds.tableNameExpr != nil {
 		delta := findMatchingDelta(deltas, tableName)
+
+		if shouldIgnoreDelta(delta, ignorePatterns) {
+			return NewDiffSummaryTableFunctionRowIter([]*diff.TableDeltaSummary{}), nil
+		}
+
+		// Check if the specific table is a system table
+		if shouldFilterSystemTable(delta) {
+			return NewDiffSummaryTableFunctionRowIter([]*diff.TableDeltaSummary{}), nil
+		}
 
 		summ, err := getSummaryForDelta(ctx, delta, sqledb, fromDetails, toDetails, true)
 		if err != nil {
@@ -306,6 +321,15 @@ func (ds *DiffSummaryTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.
 
 	var diffSummaries []*diff.TableDeltaSummary
 	for _, delta := range deltas {
+		if shouldIgnoreDelta(delta, ignorePatterns) {
+			continue
+		}
+
+		// Filter out system tables (tables starting with "dolt_")
+		if shouldFilterSystemTable(delta) {
+			continue
+		}
+
 		summ, err := getSummaryForDelta(ctx, delta, sqledb, fromDetails, toDetails, false)
 		if err != nil {
 			return nil, err
@@ -437,4 +461,73 @@ func getRowFromSummary(ds *diff.TableDeltaSummary) sql.Row {
 		ds.DataChange,             // data_change
 		ds.SchemaChange,           // schema_change
 	}
+}
+
+// getIgnorePatternsFromContext retrieves ignore patterns from the dolt_ignore table.
+// This uses the same approach as the doltdb package's GetIgnoredTablePatterns function
+// but adapted to work within the table function context.
+func getIgnorePatternsFromContext(ctx *sql.Context, database sql.Database) (doltdb.IgnorePatterns, error) {
+	_, ok := database.(dsess.SqlDatabase)
+	if !ok {
+		return nil, fmt.Errorf("unexpected database type: %T", database)
+	}
+
+	sess := dsess.DSessFromSess(ctx.Session)
+	dbName := database.Name()
+
+	// Get the current working set root
+	workingRoot, _, _, err := sess.ResolveRootForRef(ctx, dbName, doltdb.Working)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create roots object for ignore pattern lookup
+	roots := doltdb.Roots{Working: workingRoot}
+	schemas := []string{""} // Default schema
+
+	ignorePatternMap, err := doltdb.GetIgnoredTablePatterns(ctx, roots, schemas)
+	if err != nil {
+		return nil, err
+	}
+
+	// Return patterns for default schema
+	return ignorePatternMap[""], nil
+}
+
+// shouldIgnoreDelta determines if a table delta should be ignored based on dolt_ignore patterns.
+// This follows the same logic as the dolt diff command: only "added" or "dropped" tables
+// can be ignored, not modified/renamed tables.
+func shouldIgnoreDelta(delta diff.TableDelta, ignorePatterns doltdb.IgnorePatterns) bool {
+	// Handle "added" tables (FromName is empty)
+	if delta.FromName.Name == "" {
+		ignoreResult, err := ignorePatterns.IsTableNameIgnored(delta.ToName)
+		if err != nil {
+			return false // On error, don't ignore
+		}
+		return ignoreResult == doltdb.Ignore
+	}
+
+	// Handle "dropped" tables (ToName is empty)
+	if delta.ToName.Name == "" {
+		ignoreResult, err := ignorePatterns.IsTableNameIgnored(delta.FromName)
+		if err != nil {
+			return false // On error, don't ignore
+		}
+		return ignoreResult == doltdb.Ignore
+	}
+
+	// For modified/renamed tables, don't ignore (consistent with dolt diff behavior)
+	return false
+}
+
+// shouldFilterSystemTable determines if a table delta should be filtered out because it's a system table.
+func shouldFilterSystemTable(delta diff.TableDelta) bool {
+	// Check if either the from or to table name starts with "dolt_"
+	if delta.FromName.Name != "" && strings.HasPrefix(delta.FromName.Name, "dolt_") {
+		return true
+	}
+	if delta.ToName.Name != "" && strings.HasPrefix(delta.ToName.Name, "dolt_") {
+		return true
+	}
+	return false
 }

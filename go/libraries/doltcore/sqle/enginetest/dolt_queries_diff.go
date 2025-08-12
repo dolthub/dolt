@@ -6762,4 +6762,108 @@ var QueryDiffTableScriptTests = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "dolt_diff_summary respects dolt_ignore: basic ignore functionality",
+		SetUpScript: []string{
+			"CREATE TABLE ignored_table (pk int primary key, c1 int);",
+			"CREATE TABLE not_ignored_table (pk int primary key, c1 int);",
+			"CALL DOLT_ADD('.')",
+			"CALL DOLT_COMMIT('-m', 'add tables');",
+			"INSERT INTO dolt_ignore VALUES ('ignored_table', true);",
+			"CREATE TABLE ignored_table2 (pk int primary key, c2 int);",
+			"CREATE TABLE not_ignored_table2 (pk int primary key, c2 int);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT COUNT(*) FROM dolt_diff_summary('HEAD', 'WORKING');",
+				Expected: []sql.Row{{1}}, // only not_ignored_table2 should appear
+			},
+			{
+				Query:    "SELECT to_table_name FROM dolt_diff_summary('HEAD', 'WORKING');",
+				Expected: []sql.Row{{"not_ignored_table2"}},
+			},
+		},
+	},
+	{
+		Name: "dolt_diff_summary respects dolt_ignore: wildcard patterns",
+		SetUpScript: []string{
+			"CALL DOLT_COMMIT('-m', 'initial');",
+			"INSERT INTO dolt_ignore VALUES ('temp_*', true);",
+			"CREATE TABLE temp_table1 (pk int primary key);",
+			"CREATE TABLE temp_table2 (pk int primary key);",
+			"CREATE TABLE regular_table (pk int primary key);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT COUNT(*) FROM dolt_diff_summary('HEAD', 'WORKING');",
+				Expected: []sql.Row{{1}}, // only regular_table should appear
+			},
+			{
+				Query:    "SELECT to_table_name FROM dolt_diff_summary('HEAD', 'WORKING');",
+				Expected: []sql.Row{{"regular_table"}},
+			},
+		},
+	},
+	{
+		Name: "dolt_diff_summary respects dolt_ignore: mixed ignore/don't ignore patterns",
+		SetUpScript: []string{
+			"CALL DOLT_COMMIT('-m', 'initial');",
+			"INSERT INTO dolt_ignore VALUES ('temp_*', true);",
+			"INSERT INTO dolt_ignore VALUES ('temp_important', false);", // don't ignore this one
+			"CREATE TABLE temp_table1 (pk int primary key);",
+			"CREATE TABLE temp_important (pk int primary key);",
+			"CREATE TABLE regular_table (pk int primary key);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT COUNT(*) FROM dolt_diff_summary('HEAD', 'WORKING');",
+				Expected: []sql.Row{{2}}, // temp_important and regular_table should appear
+			},
+			{
+				Query:    "SELECT to_table_name FROM dolt_diff_summary('HEAD', 'WORKING') ORDER BY to_table_name;",
+				Expected: []sql.Row{{"regular_table"}, {"temp_important"}},
+			},
+		},
+	},
+	{
+		Name: "dolt_diff_summary respects dolt_ignore: specific table query",
+		SetUpScript: []string{
+			"CALL DOLT_COMMIT('-m', 'initial');",
+			"INSERT INTO dolt_ignore VALUES ('ignored_table', true);",
+			"CREATE TABLE ignored_table (pk int primary key);",
+			"CREATE TABLE not_ignored_table (pk int primary key);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT COUNT(*) FROM dolt_diff_summary('HEAD', 'WORKING', 'ignored_table');",
+				Expected: []sql.Row{{0}}, // specific query for ignored table returns empty
+			},
+			{
+				Query:    "SELECT COUNT(*) FROM dolt_diff_summary('HEAD', 'WORKING', 'not_ignored_table');",
+				Expected: []sql.Row{{1}}, // specific query for non-ignored table works
+			},
+		},
+	},
+	{
+		Name: "dolt_diff_summary respects dolt_ignore: dropped tables",
+		SetUpScript: []string{
+			"CREATE TABLE will_be_ignored (pk int primary key);",
+			"CREATE TABLE will_not_be_ignored (pk int primary key);",
+			"CALL DOLT_ADD('.')",
+			"CALL DOLT_COMMIT('-m', 'add tables');",
+			"INSERT INTO dolt_ignore VALUES ('will_be_ignored', true);",
+			"DROP TABLE will_be_ignored;",
+			"DROP TABLE will_not_be_ignored;",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT COUNT(*) FROM dolt_diff_summary('HEAD', 'WORKING');",
+				Expected: []sql.Row{{1}}, // only will_not_be_ignored should appear as dropped
+			},
+			{
+				Query:    "SELECT from_table_name, diff_type FROM dolt_diff_summary('HEAD', 'WORKING');",
+				Expected: []sql.Row{{"will_not_be_ignored", "dropped"}},
+			},
+		},
+	},
 }
