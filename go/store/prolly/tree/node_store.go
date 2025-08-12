@@ -95,7 +95,7 @@ func (ns *nodeStore) Read(ctx context.Context, ref hash.Hash) (Node, error) {
 	if ok {
 		return n, nil
 	}
-
+	// NM4 - wtf.
 	c, err := ns.store.Get(ctx, ref)
 	if err != nil {
 		return Node{}, err
