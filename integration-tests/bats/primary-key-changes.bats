@@ -548,19 +548,19 @@ SQL
     dolt diff
     run dolt diff test
     # Assert schema diff shows both PK orderings somewhere in the output (regex matches, no order dependency)
-    [[ "$output" =~ 'PRIMARY KEY (\`pk\`,\`val\`)' ]] || { echo "$output"; false; }
-    [[ "$output" =~ 'PRIMARY KEY (\`val\`,\`pk\`)' ]] || { echo "$output"; false; }
+    [[ "$output" == *"PRIMARY KEY (\`pk\`,\`val\`)"* ]] || false
+    [[ "$output" == *"PRIMARY KEY (\`val\`,\`pk\`)"* ]] || false
     # And assert we have both added and removed PK lines present
-    [[ "$output" =~ '-  PRIMARY KEY \(' ]] || { echo "$output"; false; }
-    [[ "$output" =~ '\+  PRIMARY KEY \(' ]] || { echo "$output"; false; }
+    [[ "$output" == *"-  PRIMARY KEY ("* ]] || false
+    [[ "$output" == *"+  PRIMARY KEY ("* ]] || false
 
     dolt sql -q "INSERT INTO t VALUES (1,1)"
     dolt commit -am "insert"
 
-    # Row-level diff should be skipped due to PK order difference
+    # Row-level diff should succeed even if PK order differs
     run dolt diff --data test
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Primary key sets differ between revisions for table 't', skipping data diff" ]] || false
+    [[ ! "$output" =~ "Primary key sets differ between revisions for table 't'" ]] || false
 
     run dolt merge test -m "merge other"
     [ "$status" -eq 1 ]
