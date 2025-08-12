@@ -18,7 +18,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
@@ -98,7 +97,7 @@ func BuildLogRow(commitHash hash.Hash, meta *datas.CommitMeta, height uint64) sq
 		commitHash.String(),
 		datas.ValueOrDefault(meta.CommitterName, meta.Name),
 		datas.ValueOrDefault(meta.CommitterEmail, meta.Email),
-		time.Unix(0, int64(meta.Timestamp)*int64(time.Millisecond)),
+		meta.CommitterTime(),
 		meta.Description,
 		height,
 	}

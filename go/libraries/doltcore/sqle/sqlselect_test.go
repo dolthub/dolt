@@ -16,7 +16,6 @@ package sqle
 
 import (
 	"context"
-	"os"
 	"testing"
 	"time"
 
@@ -25,7 +24,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
@@ -1265,9 +1263,6 @@ var JoinTests = []SelectTest{
 }
 
 func TestSelect(t *testing.T) {
-	os.Setenv(dconfig.EnvDoltLogCompactSchema, "1")
-	defer os.Unsetenv(dconfig.EnvDoltLogCompactSchema)
-	
 	for _, test := range BasicSelectTests() {
 		t.Run(test.Name, func(t *testing.T) {
 			testSelectQuery(t, test)

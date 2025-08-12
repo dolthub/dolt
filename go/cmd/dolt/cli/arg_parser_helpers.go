@@ -45,7 +45,6 @@ func ParsePerson(personStr string, personType string) (string, string, error) {
 	return name, email, nil
 }
 
-
 const (
 	SyncBackupId        = "sync"
 	SyncBackupUrlId     = "sync-url"

@@ -44,6 +44,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/libraries/utils/gpg"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/util/outputpager"
 )
@@ -756,6 +757,26 @@ func getCommitInfoWithOptions(queryist cli.Queryist, sqlCtx *sql.Context, ref st
 	tagsForHash, err := getTagsForHash(queryist, sqlCtx, commitHashStr)
 	if err != nil {
 		return nil, fmt.Errorf("error getting tags for hash '%s': %v", commitHashStr, err)
+	}
+
+	// Handle signature verification if requested
+	if opts.showSignature && len(meta.Signature) > 0 {
+		// Verify the signature and append verification result
+		out, err := gpg.Verify(sqlCtx, []byte(meta.Signature))
+		if err == nil {
+			// Create new meta with verification result appended
+			verifiedSig := meta.Signature + "\n" + string(out)
+			meta = &datas.CommitMeta{
+				Name:           meta.Name,
+				Email:          meta.Email,
+				Timestamp:      meta.Timestamp,
+				Description:    meta.Description,
+				UserTimestamp:  meta.UserTimestamp,
+				Signature:      verifiedSig,
+				CommitterName:  meta.CommitterName,
+				CommitterEmail: meta.CommitterEmail,
+			}
+		}
 	}
 
 	ci := &CommitInfo{
