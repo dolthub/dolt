@@ -113,6 +113,7 @@ type sourceWithSize struct {
 type compactionPlan struct {
 	sources             chunkSourcesByDescendingDataSize
 	name                hash.Hash
+	suffix              string
 	mergedIndex         []byte
 	chunkCount          uint32
 	totalCompressedData uint64 // This is currently only used for stats and logging. Ignoring for archives. NM4.

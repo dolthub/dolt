@@ -201,12 +201,16 @@ func (aw *archiveWriter) stageSnappyChunk(hash hash.Hash, dataId uint32) error {
 }
 
 func (aw *archiveWriter) indexFinalize(originTableFile hash.Hash) error {
+	/**** NM4
 	err := aw.finalizeByteSpans()
 	if err != nil {
 		return err
 	}
+	*/
+	// NM4 - let me test, but definitely wrong.
+	aw.workflowStage = stageIndex
 
-	err = aw.writeIndex()
+	err := aw.writeIndex()
 	if err != nil {
 		return err
 	}
@@ -825,10 +829,8 @@ func (*archiveConjoiner) conjoinIndexes(sources []sourceWithSize) (compactionPla
 	writer := NewBlockBufferByteSink(fourMb)
 	aw := newArchiveWriterWithSink(writer)
 
-	// NM4 - not sure about this, but should let me test.....
-	aw.workflowStage = stageFooter
-
 	currentDataOffset := uint64(0)
+	chunkCounter := uint32(0)
 
 	for _, src := range sources {
 		reader := src.source
@@ -838,6 +840,8 @@ func (*archiveConjoiner) conjoinIndexes(sources []sourceWithSize) (compactionPla
 		}
 
 		footer := arcSrc.aRdr.footer
+
+		chunkCounter += footer.chunkCount
 
 		// Map byte span IDs from this reader to the combined archive
 		spanIdOffset := uint32(len(aw.stagedBytes))
@@ -875,14 +879,14 @@ func (*archiveConjoiner) conjoinIndexes(sources []sourceWithSize) (compactionPla
 				dictionary: adjustedDictId,
 				data:       adjustedDataId,
 			})
-
-			currentDataOffset += src.dataLen
 		}
+		currentDataOffset += src.dataLen
 	}
 
 	// NM4 - maybe need the bytes written.... Allow me to test.....
 	aw.bytesWritten = currentDataOffset
 
+	// NM4 - indexFinalize currently altered to get through steel thread.
 	err := aw.indexFinalize(hash.Hash{})
 	if err != nil {
 		return compactionPlan{}, fmt.Errorf("failed to finalize archive: %w", err)
@@ -903,7 +907,8 @@ func (*archiveConjoiner) conjoinIndexes(sources []sourceWithSize) (compactionPla
 	return compactionPlan{
 		sources:     chunkSourcesByDescendingDataSize{sources},
 		name:        name,
+		suffix:      ArchiveFileSuffix,
 		mergedIndex: bs,
-		chunkCount:  uint32(len(sources)),
+		chunkCount:  chunkCounter,
 	}, nil
 }
