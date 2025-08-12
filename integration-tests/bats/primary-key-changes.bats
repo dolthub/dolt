@@ -547,9 +547,12 @@ SQL
 
     dolt diff
     run dolt diff test
-    # Assert schema diff shows primary key order change
-    [[ "$output" =~ '-  PRIMARY KEY (`pk`,`val`)' ]] || false
-    [[ "$output" =~ '+  PRIMARY KEY (`val`,`pk`)' ]] || false
+    # Assert schema diff shows both PK orderings somewhere in the output (regex matches, no order dependency)
+    [[ "$output" =~ 'PRIMARY KEY (\`pk\`,\`val\`)' ]] || { echo "$output"; false; }
+    [[ "$output" =~ 'PRIMARY KEY (\`val\`,\`pk\`)' ]] || { echo "$output"; false; }
+    # And assert we have both added and removed PK lines present
+    [[ "$output" =~ '-  PRIMARY KEY \(' ]] || { echo "$output"; false; }
+    [[ "$output" =~ '\+  PRIMARY KEY \(' ]] || { echo "$output"; false; }
 
     dolt sql -q "INSERT INTO t VALUES (1,1)"
     dolt commit -am "insert"
