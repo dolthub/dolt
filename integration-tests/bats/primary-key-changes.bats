@@ -547,12 +547,17 @@ SQL
 
     dolt diff
     run dolt diff test
-    # TODO: dolt doesn't correctly store primary key order, we can't check this
-#    [[ "$output" =~ '<    PRIMARY KEY (val, pk)' ]] || false
-#    [[ "$output" =~ '>    PRIMARY KEY (pk, val)' ]] || false
+    # Assert schema diff shows primary key order change
+    [[ "$output" =~ '-  PRIMARY KEY (`pk`,`val`)' ]] || false
+    [[ "$output" =~ '+  PRIMARY KEY (`val`,`pk`)' ]] || false
 
     dolt sql -q "INSERT INTO t VALUES (1,1)"
     dolt commit -am "insert"
+
+    # Row-level diff should be skipped due to PK order difference
+    run dolt diff --data test
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Primary key sets differ between revisions for table 't', skipping data diff" ]] || false
 
     run dolt merge test -m "merge other"
     [ "$status" -eq 1 ]
@@ -562,7 +567,6 @@ SQL
     [ "$status" -eq 1 ]
     [[ "$output" =~ 'error: cannot merge because table t has different primary keys' ]] || false
 
-    skip "Dolt doesn't correctly store primary key order if it doesn't match the column order"
 }
 
 @test "primary-key-changes: correct diff is returned even with a new added column" {
