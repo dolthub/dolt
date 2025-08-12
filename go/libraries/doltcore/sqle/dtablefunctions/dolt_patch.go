@@ -749,7 +749,8 @@ func (itr *patchTableFunctionRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 				itr.toRef,                         // to_commit_hash
 				itr.currentPatch.tblName.String(), // table_name
 			}
-			return r.Append(row), nil
+			r = append(r, row...)
+			return r, nil
 		}
 	}
 }
