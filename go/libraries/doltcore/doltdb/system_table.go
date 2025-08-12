@@ -360,13 +360,14 @@ jobs:
 - ` + "`expected_columns`" + `: Optional column count validation
 
 **Trigger Options:**
+Only full branch names are supported for branch filters; wildcards are not allowed.
 ` + "```yaml" + `
 on:
   push:
     branches:
       - master
       - main
-      - feature/*
+      - develop
 ` + "```" + `
 
 ### Advanced CI Examples
@@ -376,7 +377,7 @@ on:
 name: schema validation
 on:
   push:
-    branches: ["*"]
+    branches: ["master", "main"]
 jobs:
   - name: table structure
     steps:
