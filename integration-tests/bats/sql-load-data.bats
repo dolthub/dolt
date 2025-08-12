@@ -444,8 +444,9 @@ SQL
     [ $status -eq 0 ]
     [[ $output =~ "0,0,0" ]] || false
 
+    # Use \N to represent NULL in MySQL LOAD DATA semantics
     cat <<CSV > in.csv
-1,NULL,1
+1,\N,1
 CSV
 
     run dolt sql <<SQL
@@ -478,7 +479,7 @@ SQL
     [[ $output =~ "0,0,0" ]] || false
 
     cat <<CSV > in.csv
-1,NULL,1
+1,\N,1
 CSV
 
     dolt sql <<SQL
@@ -490,7 +491,7 @@ SQL
     run dolt sql -r csv -q "select * from t"
     [ $status -eq 0 ]
     [[ $output =~ "0,0,0" ]] || false
-    skip "Column defaults not applied on load data"
+    # With MySQL semantics, \N maps to NULL, and default is applied to c1 (default 1)
     ! [[ $output =~ "1,NULL,1" ]] || false
     [[ $output =~ "1,1,1" ]] || false
 }
