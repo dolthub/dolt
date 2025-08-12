@@ -2088,7 +2088,6 @@ SQL
 }
 
 @test "foreign-keys: alter table add constraint with foreign key check is off" {
-    skip "Add foreign key constraint statement is ignored instead of failing"
     run dolt sql  <<SQL
 set foreign_key_checks = off;
 CREATE DATABASE public;
@@ -2099,7 +2098,8 @@ ALTER TABLE public.states ADD CONSTRAINT states_pkey PRIMARY KEY (state_id);
 ALTER TABLE public.cities ADD CONSTRAINT foreign_key1 FOREIGN KEY (state) REFERENCES public.states(state);
 SQL
     [ $status -eq 1 ]
-    [[ $output =~ "missing index for constraint" ]] || false
+    # When foreign_key_checks is off, index requirement is still enforced at DDL time
+    [[ $output =~ "missing index for foreign key" ]] || false
 
     run dolt sql -q "SHOW CREATE TABLE public.cities"
     [[ $output =~ "PRIMARY KEY (\`pk\`)" ]] || false
