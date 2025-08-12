@@ -16,16 +16,18 @@ package dtablefunctions
 
 import (
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions/dolt_ci"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/store/val"
+	"io"
+	"strings"
+
 	gms "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/sqltypes"
 	"github.com/dolthub/vitess/go/vt/sqlparser"
-	"io"
-	"strings"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions/dolt_ci"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 const ciRunDefaultRowCount = 10
