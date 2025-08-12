@@ -92,24 +92,23 @@ func UseCompactSchema() bool {
 	return os.Getenv(dconfig.EnvDoltLogCompactSchema) != ""
 }
 
-// BuildLogRow creates a row with values based on whether we're using compact schema
+// BuildLogRow creates a row with schema-appropriate columns
 func BuildLogRow(commitHash hash.Hash, meta *datas.CommitMeta, height uint64) sql.Row {
-	// Base row data (same for both schemas)
 	values := []interface{}{
 		commitHash.String(),
 		datas.ValueOrDefault(meta.CommitterName, meta.Name),
 		datas.ValueOrDefault(meta.CommitterEmail, meta.Email),
-		time.Unix(0, int64(meta.Timestamp)*int64(time.Millisecond)), // Committer timestamp
+		time.Unix(0, int64(meta.Timestamp)*int64(time.Millisecond)),
 		meta.Description,
 		height,
 	}
 	
-	// Add author columns for extended schema
+	// Extended schema includes separate author columns
 	if !UseCompactSchema() {
 		values = append(values,
-			meta.Name,    // Author name
-			meta.Email,   // Author email
-			meta.Time(),  // Author timestamp
+			meta.Name,
+			meta.Email,
+			meta.Time(),
 		)
 	}
 	

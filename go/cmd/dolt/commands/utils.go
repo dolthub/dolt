@@ -689,94 +689,78 @@ func getCommitInfoWithOptions(queryist cli.Queryist, sqlCtx *sql.Context, ref st
 		return nil, fmt.Errorf("error getting hash of HEAD: %v", err)
 	}
 
-	origCompactSchema := os.Getenv(dconfig.EnvDoltLogCompactSchema)
-	os.Unsetenv(dconfig.EnvDoltLogCompactSchema)
-	defer func() {
-		if origCompactSchema != "" {
-			os.Setenv(dconfig.EnvDoltLogCompactSchema, origCompactSchema)
-		}
-	}()
-	
-	var q string
-	if opts.showSignature {
-		q, err = dbr.InterpolateForDialect("select * from dolt_log(?, '--parents', '--decorate=full', '--show-signature')", []interface{}{ref}, dialect.MySQL)
-		if err != nil {
-			return nil, fmt.Errorf("error interpolating query: %v", err)
-		}
-	} else {
-		q, err = dbr.InterpolateForDialect("select * from dolt_log(?, '--parents', '--decorate=full')", []interface{}{ref}, dialect.MySQL)
-		if err != nil {
-			return nil, fmt.Errorf("error interpolating query: %v", err)
-		}
+	// Access commit object directly to avoid dolt_log schema compatibility issues
+	sess := dsess.DSessFromSess(sqlCtx.Session)
+	dbData, ok := sess.GetDoltDB(sqlCtx, sess.GetCurrentDatabase())
+	if !ok {
+		return nil, fmt.Errorf("could not get dolt database")
 	}
 
-	rows, err := cli.GetRowsForSql(queryist, sqlCtx, q)
+	cs, err := doltdb.NewCommitSpec(ref)
 	if err != nil {
-		return nil, fmt.Errorf("error getting logs for ref '%s': %v", ref, err)
+		return nil, fmt.Errorf("invalid commit spec '%s': %v", ref, err)
 	}
-	if len(rows) == 0 {
-		// No commit with this hash exists
+
+	headRef, err := sess.CWBHeadRef(sqlCtx, sess.GetCurrentDatabase())
+	if err != nil {
+		return nil, fmt.Errorf("could not get head ref: %v", err)
+	}
+
+	optCmt, err := dbData.Resolve(sqlCtx, cs, headRef)
+	if err != nil {
+		return nil, fmt.Errorf("could not resolve commit '%s': %v", ref, err)
+	}
+
+	commit, ok := optCmt.ToCommit()
+	if !ok {
 		return nil, nil
 	}
 
-	row := rows[0]
-	commitHash := row[0].(string)
-	name := row[1].(string)
-	email := row[2].(string)
-	timestamp, err := getTimestampColAsUint64(row[8])
+	meta, err := commit.GetCommitMeta(sqlCtx)
 	if err != nil {
-		return nil, fmt.Errorf("error parsing author timestamp '%s': %v", row[8], err)
+		return nil, fmt.Errorf("could not get commit metadata: %v", err)
 	}
-	message := row[4].(string)
 
-	var commitOrder uint64
-	switch v := row[5].(type) {
-	case uint64:
-		commitOrder = v
-	case string:
-		var err error
-		commitOrder, err = strconv.ParseUint(v, 10, 64)
-		if err != nil {
-			return nil, fmt.Errorf("error parsing commit_order '%s': %v", v, err)
+	commitHash, err := commit.HashOf()
+	if err != nil {
+		return nil, fmt.Errorf("could not get commit hash: %v", err)
+	}
+
+	height, err := commit.Height()
+	if err != nil {
+		return nil, fmt.Errorf("could not get commit height: %v", err)
+	}
+
+	commitHashStr := commitHash.String()
+	isHead := commitHashStr == hashOfHead
+
+	// Build parent hash list for --parents flag support
+	parent := ""
+	parentHashes, err := commit.ParentHashes(sqlCtx)
+	if err == nil && len(parentHashes) > 0 {
+		parentStrs := make([]string, len(parentHashes))
+		for i, ph := range parentHashes {
+			parentStrs[i] = ph.String()
 		}
-	default:
-		return nil, fmt.Errorf("unexpected type for commit_order: %T", v)
+		parent = strings.Join(parentStrs, ", ")
 	}
 
-	parent := row[6].(string)
-	height := commitOrder
-
-	isHead := commitHash == hashOfHead
-
-	var signature string
-	if opts.showSignature {
-		// Signature is always the last column when present
-		signature = row[len(row)-1].(string)
-	}
-
-	localBranchesForHash, err := getBranchesForHash(queryist, sqlCtx, commitHash, true)
+	localBranchesForHash, err := getBranchesForHash(queryist, sqlCtx, commitHashStr, true)
 	if err != nil {
-		return nil, fmt.Errorf("error getting branches for hash '%s': %v", commitHash, err)
+		return nil, fmt.Errorf("error getting branches for hash '%s': %v", commitHashStr, err)
 	}
-	remoteBranchesForHash, err := getBranchesForHash(queryist, sqlCtx, commitHash, false)
+	remoteBranchesForHash, err := getBranchesForHash(queryist, sqlCtx, commitHashStr, false)
 	if err != nil {
-		return nil, fmt.Errorf("error getting remote branches for hash '%s': %v", commitHash, err)
+		return nil, fmt.Errorf("error getting remote branches for hash '%s': %v", commitHashStr, err)
 	}
-	tagsForHash, err := getTagsForHash(queryist, sqlCtx, commitHash)
+	tagsForHash, err := getTagsForHash(queryist, sqlCtx, commitHashStr)
 	if err != nil {
-		return nil, fmt.Errorf("error getting tags for hash '%s': %v", commitHash, err)
+		return nil, fmt.Errorf("error getting tags for hash '%s': %v", commitHashStr, err)
 	}
 
 	ci := &CommitInfo{
-		commitMeta: &datas.CommitMeta{
-			Name:          name,
-			Email:         email,
-			Timestamp:     timestamp,
-			Description:   message,
-			UserTimestamp: int64(timestamp),
-			Signature:     signature,
-		},
-		commitHash:        commitHash,
+		commitMeta:        meta,
+		commitHash:        commitHashStr,
 		height:            height,
 		isHead:            isHead,
 		localBranchNames:  localBranchesForHash,
