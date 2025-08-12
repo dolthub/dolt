@@ -1574,6 +1574,7 @@ type doltAlterableTableInterface interface {
 	sql.PrimaryKeyAlterableTable
 	sql.ProjectedTable
 	sql.CollationAlterableTable
+	sql.CommentAlterableTable
 	fulltext.IndexAlterableTable
 }
 
@@ -3130,20 +3131,7 @@ func (t *WritableDoltTable) updateFromRoot(ctx *sql.Context, root doltdb.RootVal
 }
 
 func (t *AlterableDoltTable) CreateCheck(ctx *sql.Context, check *sql.CheckDefinition) error {
-	if err := dsess.CheckAccessForDb(ctx, t.db, branch_control.Permissions_Write); err != nil {
-		return err
-	}
-	root, err := t.getRoot(ctx)
-	if err != nil {
-		return err
-	}
-
-	updatedTable, _, err := root.GetTable(ctx, t.TableName())
-	if err != nil {
-		return err
-	}
-
-	sch, err := updatedTable.GetSchema(ctx)
+	root, sch, err := t.getWritableSchema(ctx)
 	if err != nil {
 		return err
 	}
@@ -3162,44 +3150,11 @@ func (t *AlterableDoltTable) CreateCheck(ctx *sql.Context, check *sql.CheckDefin
 		return err
 	}
 
-	table, err := t.DoltTable.DoltTable(ctx)
-	if err != nil {
-		return err
-	}
-
-	newTable, err := table.UpdateSchema(ctx, sch)
-	if err != nil {
-		return err
-	}
-
-	newRoot, err := root.PutTable(ctx, t.TableName(), newTable)
-	if err != nil {
-		return err
-	}
-
-	err = t.setRoot(ctx, newRoot)
-	if err != nil {
-		return err
-	}
-
-	return t.updateFromRoot(ctx, newRoot)
+	return t.updateSchema(ctx, root, sch)
 }
 
 func (t *AlterableDoltTable) DropCheck(ctx *sql.Context, chName string) error {
-	if err := dsess.CheckAccessForDb(ctx, t.db, branch_control.Permissions_Write); err != nil {
-		return err
-	}
-	root, err := t.getRoot(ctx)
-	if err != nil {
-		return err
-	}
-
-	updatedTable, _, err := root.GetTable(ctx, t.TableName())
-	if err != nil {
-		return err
-	}
-
-	sch, err := updatedTable.GetSchema(ctx)
+	root, sch, err := t.getWritableSchema(ctx)
 	if err != nil {
 		return err
 	}
@@ -3209,27 +3164,7 @@ func (t *AlterableDoltTable) DropCheck(ctx *sql.Context, chName string) error {
 		return err
 	}
 
-	table, err := t.DoltTable.DoltTable(ctx)
-	if err != nil {
-		return err
-	}
-
-	newTable, err := table.UpdateSchema(ctx, sch)
-	if err != nil {
-		return err
-	}
-
-	newRoot, err := root.PutTable(ctx, t.TableName(), newTable)
-	if err != nil {
-		return err
-	}
-
-	err = t.setRoot(ctx, newRoot)
-	if err != nil {
-		return err
-	}
-
-	return t.updateFromRoot(ctx, newRoot)
+	return t.updateSchema(ctx, root, sch)
 }
 
 func (t *AlterableDoltTable) ModifyStoredCollation(ctx *sql.Context, collation sql.CollationID) error {
@@ -3237,24 +3172,47 @@ func (t *AlterableDoltTable) ModifyStoredCollation(ctx *sql.Context, collation s
 }
 
 func (t *AlterableDoltTable) ModifyDefaultCollation(ctx *sql.Context, collation sql.CollationID) error {
-	if err := dsess.CheckAccessForDb(ctx, t.db, branch_control.Permissions_Write); err != nil {
-		return err
-	}
-	root, err := t.getRoot(ctx)
-	if err != nil {
-		return err
-	}
-	currentTable, _, err := root.GetTable(ctx, t.TableName())
-	if err != nil {
-		return err
-	}
-	sch, err := currentTable.GetSchema(ctx)
+	root, sch, err := t.getWritableSchema(ctx)
 	if err != nil {
 		return err
 	}
 
 	sch.SetCollation(schema.Collation(collation))
 
+	return t.updateSchema(ctx, root, sch)
+}
+
+func (t *AlterableDoltTable) ModifyComment(ctx *sql.Context, comment string) error {
+	root, sch, err := t.getWritableSchema(ctx)
+	if err != nil {
+		return err
+	}
+
+	sch.SetComment(comment)
+
+	return t.updateSchema(ctx, root, sch)
+}
+
+func (t *AlterableDoltTable) getWritableSchema(ctx *sql.Context) (doltdb.RootValue, schema.Schema, error) {
+	if err := dsess.CheckAccessForDb(ctx, t.db, branch_control.Permissions_Write); err != nil {
+		return nil, nil, err
+	}
+	root, err := t.getRoot(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	currentTable, _, err := root.GetTable(ctx, t.TableName())
+	if err != nil {
+		return nil, nil, err
+	}
+	sch, err := currentTable.GetSchema(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	return root, sch, nil
+}
+
+func (t *AlterableDoltTable) updateSchema(ctx *sql.Context, root doltdb.RootValue, sch schema.Schema) error {
 	table, err := t.DoltTable.DoltTable(ctx)
 	if err != nil {
 		return err
