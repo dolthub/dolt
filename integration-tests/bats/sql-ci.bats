@@ -138,7 +138,8 @@ EOF
 @test "sql-ci: ci run fails on invalid workflow name" {
     dolt ci init
     run dolt sql -q "select * from dolt_ci_run('invalid')"
-    [[ "$output" =~ "could not find workflow with name: invalid" ]] || false
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "could not find workflow with name: 'invalid'" ]] || false
 }
 
 @test "sql-ci: ci run fails on invalid query name" {
