@@ -22,11 +22,13 @@ import (
 	gms "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
+	"github.com/dolthub/vitess/go/sqltypes"
+	"github.com/dolthub/vitess/go/vt/sqlparser"
 	"io"
 	"strings"
 )
 
-const ciDefaultTableLength = 5
+const ciRunDefaultRowCount = 10
 
 type ciStep struct {
 	stepName, jobName, queryStatement, errStr string
@@ -38,13 +40,12 @@ var _ sql.ExecSourceRel = (*CiRunTableFunction)(nil)
 var _ sql.AuthorizationCheckerNode = (*CiRunTableFunction)(nil)
 
 type CiRunTableFunction struct {
-	ctx      *sql.Context
-	catalog  sql.Catalog
-	database sql.Database
-	argument sql.Expression
-	engine   *gms.Engine
-
-	workflowName      string
+	ctx               *sql.Context
+	catalog           sql.Catalog
+	database          sql.Database
+	argument          sql.Expression
+	engine            *gms.Engine
+	workflowMap       map[string]sqlparser.Expr
 	savedQueryResults []ciStep
 }
 
@@ -79,11 +80,10 @@ func (crtf *CiRunTableFunction) WithCatalog(c sql.Catalog) (sql.TableFunction, e
 	}
 	newInstance.engine = gms.NewDefault(pro)
 
-	workflow, err := expressionToString(crtf.ctx, crtf.argument)
-	if err != nil {
-		return nil, err
-	}
-	newInstance.workflowName = workflow
+	// sql.Expression.String() will add single quotes that break queries so we need to modify the string.
+	workflowName := strings.ReplaceAll(crtf.argument.String(), "'", "")
+	newInstance.workflowMap = make(map[string]sqlparser.Expr)
+	newInstance.workflowMap["v1"] = mustBuildBindVariable(workflowName)
 
 	if err := newInstance.assertWorkflowJobsAndSteps(); err != nil {
 		return nil, err
@@ -91,25 +91,40 @@ func (crtf *CiRunTableFunction) WithCatalog(c sql.Catalog) (sql.TableFunction, e
 	return &newInstance, nil
 }
 
+func mustBuildBindVariable(v interface{}) sqlparser.Expr {
+	bv, err := sqltypes.BuildBindVariable(v)
+	if err != nil {
+		panic(err)
+	}
+	value, err := sqltypes.BindVariableToValue(bv)
+	if err != nil {
+		panic(err)
+	}
+	ret, err := sqlparser.ExprFromValue(value)
+	if err != nil {
+		panic(err)
+	}
+	return ret
+}
+
 func (crtf *CiRunTableFunction) validateWorkflowName() error {
-	qry := fmt.Sprintf("SELECT * FROM dolt_ci_workflows where name = '%s'", crtf.workflowName)
-	_, iter, _, err := crtf.engine.Query(crtf.ctx, qry)
+	qry := fmt.Sprintf("SELECT * FROM dolt_ci_workflows where name = ?")
+	_, iter, _, err := crtf.engine.QueryWithBindings(crtf.ctx, qry, nil, crtf.workflowMap, nil)
 	if err != nil {
 		return err
 	}
 	if _, err = iter.Next(crtf.ctx); err == io.EOF {
-		return fmt.Errorf("could not find workflow with name: %s", crtf.workflowName)
+		return fmt.Errorf("could not find workflow with name: %s", crtf.argument.String())
 	} else if err != nil {
 		return err
 	}
-
 	return nil
 }
 
 func (crtf *CiRunTableFunction) getJobs() ([]dolt_ci.WorkflowJob, error) {
 	var jobs []dolt_ci.WorkflowJob
-	qry := fmt.Sprintf("SELECT * FROM dolt_ci_workflow_jobs where workflow_name_fk = '%s'", crtf.workflowName)
-	_, iter, _, err := crtf.engine.Query(crtf.ctx, qry)
+	qry := fmt.Sprintf("SELECT * FROM dolt_ci_workflow_jobs where workflow_name_fk = ?")
+	_, iter, _, err := crtf.engine.QueryWithBindings(crtf.ctx, qry, nil, crtf.workflowMap, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -181,7 +196,8 @@ func (crtf *CiRunTableFunction) assertWorkflowJobsAndSteps() error {
 	}
 
 	for _, job := range jobs {
-		qry := fmt.Sprintf("SELECT * FROM dolt_ci_workflow_steps WHERE workflow_job_id_fk = '%s' ORDER BY step_order ASC", *job.Id)
+
+		qry := fmt.Sprintf("SELECT id, name FROM dolt_ci_workflow_steps WHERE workflow_job_id_fk = '%s' ORDER BY step_order ASC", *job.Id)
 		_, stepIter, _, err := crtf.engine.Query(crtf.ctx, qry)
 		if err != nil {
 			return err
@@ -195,30 +211,47 @@ func (crtf *CiRunTableFunction) assertWorkflowJobsAndSteps() error {
 				return err
 			}
 
-			// Get the sql statement and id of the saved query. We use ciErr to denote CI failures that should be
-			// displayed to the user, and err for internal dolt problems that should halt the process.
-			savedQueryId, savedQueryStatement, stepExpectType, ciErr, err := crtf.getSavedQueryData(row[0].(string))
+			// We currently only support saved query steps. Once we add more we will want to select 'step_type' in the above query
+			// and add unique logic for each step type. For now, we always call the below function.
+			res, err := crtf.resolveSavedQueryStep(row)
 			if err != nil {
 				return err
 			}
-
-			if ciErr == "" {
-				qry, err = getStringColAsString(crtf.ctx, savedQueryStatement)
-				if err != nil {
-					return err
-				}
-				_, iter, _, err := crtf.engine.Query(crtf.ctx, qry)
-				if err != nil {
-					ciErr = fmt.Sprintf("query error: %s", err.Error())
-				} else if stepExpectType == 1 {
-					ciErr = crtf.assertQuery(iter, savedQueryId)
-				}
-			}
-
-			crtf.savedQueryResults = append(crtf.savedQueryResults, ciStep{row[1].(string), job.Name, savedQueryStatement, ciErr})
+			res.jobName = job.Name
+			crtf.savedQueryResults = append(crtf.savedQueryResults, res)
 		}
 	}
 	return nil
+}
+
+func (crtf *CiRunTableFunction) resolveSavedQueryStep(row sql.Row) (ciStep, error) {
+	var res ciStep
+
+	savedQueryId, savedQueryStatement, shouldCheckAssertion, ciErr, err := crtf.getSavedQueryData(row[0].(string))
+	if err != nil {
+		return res, err
+	}
+
+	if ciErr == "" {
+		qry, err := getStringColAsString(crtf.ctx, savedQueryStatement)
+		if err != nil {
+			return res, err
+		}
+		_, iter, _, err := crtf.engine.Query(crtf.ctx, qry)
+		if err != nil {
+			ciErr = fmt.Sprintf("query error: %s", err.Error())
+		} else if shouldCheckAssertion == 1 {
+			ciErr = crtf.assertQuery(iter, savedQueryId)
+		}
+	}
+
+	res.stepName = row[1].(string)
+	if ciErr != "" { // We don't bother storing the saved query value if the CI step passed
+		res.queryStatement = savedQueryStatement
+	}
+	res.errStr = ciErr
+
+	return res, nil
 }
 
 func (crtf *CiRunTableFunction) assertQuery(resultIter sql.RowIter, savedQueryId string) string {
@@ -269,7 +302,6 @@ func (crtf *CiRunTableFunction) assertQuery(resultIter sql.RowIter, savedQueryId
 	if len(errs) > 0 {
 		return strings.Join(errs, "\n")
 	}
-
 	return ""
 }
 
@@ -357,7 +389,6 @@ func (crtf *CiRunTableFunction) Name() string {
 
 // RowIter implements the sql.Node interface
 func (crtf *CiRunTableFunction) RowIter(ctx *sql.Context, _ sql.Row) (sql.RowIter, error) {
-	// Evaluate the argument to get the string value
 	var rows []sql.Row
 
 	for _, step := range crtf.savedQueryResults {
@@ -372,7 +403,6 @@ func (crtf *CiRunTableFunction) RowIter(ctx *sql.Context, _ sql.Row) (sql.RowIte
 		rows = append(rows, row)
 	}
 
-	// Create a single row with the argument value in the "hello" column
 	return sql.RowsToRowIter(rows...), nil
 }
 
@@ -388,7 +418,7 @@ func (crtf *CiRunTableFunction) DataLength(ctx *sql.Context) (uint64, error) {
 
 // RowCount returns estimated row count for query planning.
 func (crtf *CiRunTableFunction) RowCount(_ *sql.Context) (uint64, bool, error) {
-	return ciDefaultTableLength, false, nil
+	return ciRunDefaultRowCount, false, nil
 }
 
 // The dolt_query_catalog system table returns *val.TextStorage types under certain situations,
