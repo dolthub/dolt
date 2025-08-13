@@ -3130,6 +3130,7 @@ func (t *WritableDoltTable) updateFromRoot(ctx *sql.Context, root doltdb.RootVal
 	return nil
 }
 
+// CreateCheck implements sql.CheckAlterableTable
 func (t *AlterableDoltTable) CreateCheck(ctx *sql.Context, check *sql.CheckDefinition) error {
 	root, sch, err := t.getWritableSchema(ctx)
 	if err != nil {
@@ -3150,9 +3151,10 @@ func (t *AlterableDoltTable) CreateCheck(ctx *sql.Context, check *sql.CheckDefin
 		return err
 	}
 
-	return t.updateSchema(ctx, root, sch)
+	return t.updateFromSchema(ctx, root, sch)
 }
 
+// DropCheck implements sql.CheckAlterableTable
 func (t *AlterableDoltTable) DropCheck(ctx *sql.Context, chName string) error {
 	root, sch, err := t.getWritableSchema(ctx)
 	if err != nil {
@@ -3164,13 +3166,15 @@ func (t *AlterableDoltTable) DropCheck(ctx *sql.Context, chName string) error {
 		return err
 	}
 
-	return t.updateSchema(ctx, root, sch)
+	return t.updateFromSchema(ctx, root, sch)
 }
 
+// ModifyStoredCollation implements sql.CollationAlterableTable
 func (t *AlterableDoltTable) ModifyStoredCollation(ctx *sql.Context, collation sql.CollationID) error {
 	return fmt.Errorf("converting the collations of columns is not yet supported")
 }
 
+// ModifyDefaultCollation implements sql.CollationAlterableTable
 func (t *AlterableDoltTable) ModifyDefaultCollation(ctx *sql.Context, collation sql.CollationID) error {
 	root, sch, err := t.getWritableSchema(ctx)
 	if err != nil {
@@ -3179,9 +3183,10 @@ func (t *AlterableDoltTable) ModifyDefaultCollation(ctx *sql.Context, collation 
 
 	sch.SetCollation(schema.Collation(collation))
 
-	return t.updateSchema(ctx, root, sch)
+	return t.updateFromSchema(ctx, root, sch)
 }
 
+// ModifyComment implements sql.CommentAlterableTable
 func (t *AlterableDoltTable) ModifyComment(ctx *sql.Context, comment string) error {
 	root, sch, err := t.getWritableSchema(ctx)
 	if err != nil {
@@ -3190,9 +3195,10 @@ func (t *AlterableDoltTable) ModifyComment(ctx *sql.Context, comment string) err
 
 	sch.SetComment(comment)
 
-	return t.updateSchema(ctx, root, sch)
+	return t.updateFromSchema(ctx, root, sch)
 }
 
+// getWritableSchema checks for write permissions and gets the root and table schema
 func (t *AlterableDoltTable) getWritableSchema(ctx *sql.Context) (doltdb.RootValue, schema.Schema, error) {
 	if err := dsess.CheckAccessForDb(ctx, t.db, branch_control.Permissions_Write); err != nil {
 		return nil, nil, err
@@ -3212,7 +3218,8 @@ func (t *AlterableDoltTable) getWritableSchema(ctx *sql.Context) (doltdb.RootVal
 	return root, sch, nil
 }
 
-func (t *AlterableDoltTable) updateSchema(ctx *sql.Context, root doltdb.RootValue, sch schema.Schema) error {
+// updateFromSchema takes a schema and makes updates to the table and root
+func (t *AlterableDoltTable) updateFromSchema(ctx *sql.Context, root doltdb.RootValue, sch schema.Schema) error {
 	table, err := t.DoltTable.DoltTable(ctx)
 	if err != nil {
 		return err
