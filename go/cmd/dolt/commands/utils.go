@@ -44,7 +44,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
-	"github.com/dolthub/dolt/go/libraries/utils/gpg"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/util/outputpager"
 )
@@ -691,98 +690,119 @@ func getCommitInfoWithOptions(queryist cli.Queryist, sqlCtx *sql.Context, ref st
 		return nil, fmt.Errorf("error getting hash of HEAD: %v", err)
 	}
 
-	// Access commit object directly
-	sess := dsess.DSessFromSess(sqlCtx.Session)
-	dbData, ok := sess.GetDoltDB(sqlCtx, sess.GetCurrentDatabase())
-	if !ok {
-		return nil, fmt.Errorf("could not get dolt database")
+	// Use SQL-based approach for both CLI and server modes
+	return getCommitInfoSQL(queryist, sqlCtx, ref, opts, hashOfHead)
+}
+
+
+// getCommitInfoSQL gets commit info using SQL queries, always using extended schema
+func getCommitInfoSQL(queryist cli.Queryist, sqlCtx *sql.Context, ref string, opts commitInfoOptions, hashOfHead string) (*CommitInfo, error) {
+	// Use dolt_log() function with flags to get signature support, but force extended schema
+	originalCompactSetting := os.Getenv(dconfig.EnvDoltLogCompactSchema)
+	
+	// Temporarily unset the compact schema to force extended schema
+	os.Unsetenv(dconfig.EnvDoltLogCompactSchema)
+	defer func() {
+		// Restore original setting
+		if originalCompactSetting != "" {
+			os.Setenv(dconfig.EnvDoltLogCompactSchema, originalCompactSetting)
+		}
+	}()
+	
+	var q string
+	var err error
+	if opts.showSignature {
+		q, err = dbr.InterpolateForDialect("select * from dolt_log(?, '--parents', '--decorate=full', '--show-signature')", []interface{}{ref}, dialect.MySQL)
+		if err != nil {
+			return nil, fmt.Errorf("error interpolating query: %v", err)
+		}
+	} else {
+		q, err = dbr.InterpolateForDialect("select * from dolt_log(?, '--parents', '--decorate=full')", []interface{}{ref}, dialect.MySQL)
+		if err != nil {
+			return nil, fmt.Errorf("error interpolating query: %v", err)
+		}
 	}
 
-	cs, err := doltdb.NewCommitSpec(ref)
+	rows, err := cli.GetRowsForSql(queryist, sqlCtx, q)
 	if err != nil {
-		return nil, fmt.Errorf("invalid commit spec '%s': %v", ref, err)
+		return nil, fmt.Errorf("error getting logs for ref '%s': %v", ref, err)
 	}
-
-	headRef, err := sess.CWBHeadRef(sqlCtx, sess.GetCurrentDatabase())
-	if err != nil {
-		return nil, fmt.Errorf("could not get head ref: %v", err)
-	}
-
-	optCmt, err := dbData.Resolve(sqlCtx, cs, headRef)
-	if err != nil {
-		return nil, fmt.Errorf("could not resolve commit '%s': %v", ref, err)
-	}
-
-	commit, ok := optCmt.ToCommit()
-	if !ok {
+	
+	if len(rows) == 0 {
+		// No commit with this hash exists
 		return nil, nil
 	}
 
-	meta, err := commit.GetCommitMeta(sqlCtx)
+	row := rows[0]
+	commitHash := row[0].(string)
+	committerName := row[1].(string)
+	committerEmail := row[2].(string)
+	committerDate := row[3].(time.Time)
+	message := row[4].(string)
+	
+	commitOrder, err := getUint64ColAsUint64(row[5])
 	if err != nil {
-		return nil, fmt.Errorf("could not get commit metadata: %v", err)
+		return nil, fmt.Errorf("error parsing commit_order: %v", err)
 	}
-
-	commitHash, err := commit.HashOf()
-	if err != nil {
-		return nil, fmt.Errorf("could not get commit hash: %v", err)
-	}
-
-	height, err := commit.Height()
-	if err != nil {
-		return nil, fmt.Errorf("could not get commit height: %v", err)
-	}
-
-	commitHashStr := commitHash.String()
-	isHead := commitHashStr == hashOfHead
-
-	// Build parent hash list
+	
+	// Extended schema has author columns at positions 6, 7, 8
+	author := row[6].(string)
+	authorEmail := row[7].(string)
+	authorDate := row[8].(time.Time)
+	
+	// Parse parent hashes from parents column (next available column)
+	columnIndex := 9 // Next column after author_date
 	parent := ""
-	parentHashes, err := commit.ParentHashes(sqlCtx)
-	if err == nil && len(parentHashes) > 0 {
-		parentStrs := make([]string, len(parentHashes))
-		for i, ph := range parentHashes {
-			parentStrs[i] = ph.String()
-		}
-		parent = strings.Join(parentStrs, ", ")
+	if len(row) > columnIndex && row[columnIndex] != nil {
+		parent = row[columnIndex].(string)
+		columnIndex++
+	}
+	var parentHashes []string
+	if parent != "" {
+		parentHashes = strings.Split(parent, ", ")
 	}
 
-	localBranchesForHash, err := getBranchesForHash(queryist, sqlCtx, commitHashStr, true)
-	if err != nil {
-		return nil, fmt.Errorf("error getting branches for hash '%s': %v", commitHashStr, err)
-	}
-	remoteBranchesForHash, err := getBranchesForHash(queryist, sqlCtx, commitHashStr, false)
-	if err != nil {
-		return nil, fmt.Errorf("error getting remote branches for hash '%s': %v", commitHashStr, err)
-	}
-	tagsForHash, err := getTagsForHash(queryist, sqlCtx, commitHashStr)
-	if err != nil {
-		return nil, fmt.Errorf("error getting tags for hash '%s': %v", commitHashStr, err)
-	}
+	height := commitOrder
+	isHead := commitHash == hashOfHead
 
-	var verifiedSignature string
+	var signature string
 	if opts.showSignature {
-		if len(meta.Signature) > 0 {
-			out, err := gpg.Verify(sqlCtx, []byte(meta.Signature))
-			if err == nil {
-				verifiedSignature = string(out)
-			}
-		}
+		// Skip any refs column if present and get signature from last column
+		signature = row[len(row)-1].(string)
+	}
+
+	localBranchesForHash, err := getBranchesForHash(queryist, sqlCtx, commitHash, true)
+	if err != nil {
+		return nil, fmt.Errorf("error getting branches for hash '%s': %v", commitHash, err)
+	}
+	remoteBranchesForHash, err := getBranchesForHash(queryist, sqlCtx, commitHash, false)
+	if err != nil {
+		return nil, fmt.Errorf("error getting remote branches for hash '%s': %v", commitHash, err)
+	}
+	tagsForHash, err := getTagsForHash(queryist, sqlCtx, commitHash)
+	if err != nil {
+		return nil, fmt.Errorf("error getting tags for hash '%s': %v", commitHash, err)
 	}
 
 	ci := &CommitInfo{
-		commitMeta:        meta,
-		commitHash:        commitHashStr,
+		commitMeta: &datas.CommitMeta{
+			Name:           author,
+			Email:          authorEmail,
+			Timestamp:      uint64(committerDate.Unix()),
+			CommitterName:  &committerName,
+			CommitterEmail: &committerEmail,
+			Description:    message,
+			UserTimestamp:  authorDate.Unix(),
+			Signature:      signature,
+		},
+		commitHash:        commitHash,
 		height:            height,
 		isHead:            isHead,
+		parentHashes:      parentHashes,
 		localBranchNames:  localBranchesForHash,
 		remoteBranchNames: remoteBranchesForHash,
 		tagNames:          tagsForHash,
-		verifiedSignature: verifiedSignature,
-	}
-
-	if parent != "" {
-		ci.parentHashes = strings.Split(parent, ", ")
+		verifiedSignature: signature,
 	}
 
 	return ci, nil
