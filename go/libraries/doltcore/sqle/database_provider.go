@@ -1627,6 +1627,7 @@ func revisionDbForTag(ctx context.Context, srcDb Database, revSpec string, reque
 		rsr:           srcDb.DbData().Rsr,
 		editOpts:      srcDb.editOpts,
 		revision:      revSpec,
+		revName:       baseName + dsess.DbRevisionDelimiter + revSpec,
 		revType:       dsess.RevisionTypeTag,
 	}}, nil
 }
@@ -1670,6 +1671,7 @@ func revisionDbForCommit(ctx context.Context, srcDb Database, revSpec string, re
 		rsr:           srcDb.DbData().Rsr,
 		editOpts:      srcDb.editOpts,
 		revision:      revSpec,
+		revName:       baseName + dsess.DbRevisionDelimiter + revSpec,
 		revType:       dsess.RevisionTypeCommit,
 	}}, nil
 }
