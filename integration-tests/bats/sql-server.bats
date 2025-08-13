@@ -340,6 +340,23 @@ EOF
     [[ "$output" =~ "read only mode" ]] || false
 }
 
+@test "sql-server: @@port reflects configured listener port" {
+    skiponwindows "Missing dependencies"
+
+    cd repo1
+
+    start_sql_server
+
+    # Verify that @@port matches the dynamically selected $PORT
+    run dolt sql -q "SELECT @@port;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ " $PORT " ]] || false
+
+    run dolt sql -q "SELECT @@global.port;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ " $PORT " ]] || false
+}
+
 @test "sql-server: inspect sql-server using CLI" {
     skiponwindows "Missing dependencies"
 
