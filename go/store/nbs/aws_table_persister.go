@@ -239,6 +239,7 @@ func (s3p awsTablePersister) ConjoinAll(ctx context.Context, sources chunkSource
 	if plan.chunkCount == 0 {
 		return emptyChunkSource{}, nil, nil
 	}
+
 	t1 := time.Now()
 	err = s3p.executeCompactionPlan(ctx, plan, plan.name.String()+plan.suffix)
 
