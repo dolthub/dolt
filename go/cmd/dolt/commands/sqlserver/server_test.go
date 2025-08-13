@@ -16,6 +16,7 @@ package sqlserver
 
 import (
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -523,8 +524,9 @@ func TestPortSystemVariable(t *testing.T) {
         assert.NoError(t, dEnv.DoltDB(ctx).Close())
     }()
 
-    // Pick a port unlikely to be in use in CI
-    const listenPort = 15510
+    // Pick an ephemeral free port for this test
+    listenPort, err := findEmptyPort()
+    require.NoError(t, err)
     serverConfig := DefaultCommandLineServerConfig().WithPort(listenPort)
     sc := svcs.NewController()
     defer sc.Stop()
@@ -561,6 +563,16 @@ func TestPortSystemVariable(t *testing.T) {
     require.NoError(t, err)
     require.Len(t, globalPortVal, 1)
     assert.Equal(t, listenPort, globalPortVal[0].Value)
+}
+
+// findEmptyPort finds an available TCP port by asking the OS for an ephemeral port
+func findEmptyPort() (int, error) {
+    l, err := net.Listen("tcp", ":0")
+    if err != nil {
+        return -1, err
+    }
+    defer l.Close()
+    return l.Addr().(*net.TCPAddr).Port, nil
 }
 
 func TestReadOnlyEnforcement(t *testing.T) {
