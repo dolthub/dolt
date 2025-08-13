@@ -16,6 +16,7 @@ package sqlserver
 
 import (
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -512,6 +513,66 @@ listener:
 	require.NoError(t, err)
 	require.Len(t, readOnlyValue, 1)
 	assert.Equal(t, 1, readOnlyValue[0].Value)
+}
+
+func TestPortSystemVariable(t *testing.T) {
+	ctx := context.Background()
+
+	dEnv, err := sqle.CreateEnvWithSeedData()
+	require.NoError(t, err)
+	defer func() {
+		assert.NoError(t, dEnv.DoltDB(ctx).Close())
+	}()
+
+	// Pick an ephemeral free port for this test
+	listenPort, err := findEmptyPort()
+	require.NoError(t, err)
+	serverConfig := DefaultCommandLineServerConfig().WithPort(listenPort)
+	sc := svcs.NewController()
+	defer sc.Stop()
+	go func() {
+		_, _ = Serve(context.Background(), &Config{
+			Version:      "0.0.0",
+			ServerConfig: serverConfig,
+			Controller:   sc,
+			DoltEnv:      dEnv,
+		})
+	}()
+	err = sc.WaitForStart()
+	require.NoError(t, err)
+
+	conn, err := dbr.Open("mysql", servercfg.ConnectionString(serverConfig, "dolt"), nil)
+	require.NoError(t, err)
+	defer conn.Close()
+	sess := conn.NewSession(nil)
+
+	// Verify @@port
+	var portVal []struct {
+		Value int `db:"@@port"`
+	}
+	_, err = sess.SelectBySql("SELECT @@port").LoadContext(ctx, &portVal)
+	require.NoError(t, err)
+	require.Len(t, portVal, 1)
+	assert.Equal(t, listenPort, portVal[0].Value)
+
+	// Verify @@global.port
+	var globalPortVal []struct {
+		Value int `db:"@@global.port"`
+	}
+	_, err = sess.SelectBySql("SELECT @@global.port").LoadContext(ctx, &globalPortVal)
+	require.NoError(t, err)
+	require.Len(t, globalPortVal, 1)
+	assert.Equal(t, listenPort, globalPortVal[0].Value)
+}
+
+// findEmptyPort finds an available TCP port by asking the OS for an ephemeral port
+func findEmptyPort() (int, error) {
+	l, err := net.Listen("tcp", ":0")
+	if err != nil {
+		return -1, err
+	}
+	defer l.Close()
+	return l.Addr().(*net.TCPAddr).Port, nil
 }
 
 func TestReadOnlyEnforcement(t *testing.T) {

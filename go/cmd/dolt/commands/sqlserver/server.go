@@ -230,6 +230,17 @@ func ConfigureServices(
 	}
 	controller.Register(LoadServerConfig)
 
+	// Ensure @@port reflects the configured server port instead of the MySQL default (3306)
+	SetPortSystemVariable := &svcs.AnonService{
+		InitF: func(context.Context) error {
+			if err := sql.SystemVariables.AssignValues(map[string]interface{}{"port": cfg.ServerConfig.Port()}); err != nil {
+				logrus.Warnf("unable to set @@port system variable: %v", err)
+			}
+			return nil
+		},
+	}
+	controller.Register(SetPortSystemVariable)
+
 	// Create SQL Engine with users
 	var config *engine.SqlEngineConfig
 	InitSqlEngineConfig := &svcs.AnonService{
