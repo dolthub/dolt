@@ -231,13 +231,15 @@ func buildArtifact(ctx context.Context, info TableSpecInfo, genPath string, stat
 			return StorageArtifact{}, err
 		}
 
-		arcMetadata, err := newArchiveMetadata(ctx, fra, uint64(fra.sz), stats)
+		id := hash.Parse(tfName)
+
+		arcMetadata, err := newArchiveMetadata(ctx, fra, id, uint64(fra.sz), stats)
 		if err != nil {
 			return StorageArtifact{}, err
 		}
 
 		return StorageArtifact{
-			id:          hash.Parse(tfName),
+			id:          id,
 			path:        fullPath,
 			storageType: TypeArchive,
 			arcMetadata: arcMetadata,

@@ -24,6 +24,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -600,7 +601,13 @@ func verifyAllChunks(ctx context.Context, idx tableIndex, archiveFile string, pr
 		return err
 	}
 
-	index, err := newArchiveReader(ctx, fra, uint64(fra.sz), stats)
+	id := strings.TrimSuffix(filepath.Base(archiveFile), ArchiveFileSuffix)
+	name, ok := hash.MaybeParse(id)
+	if !ok {
+		return fmt.Errorf("invalid archive file path: %s", archiveFile)
+	}
+
+	index, err := newArchiveReader(ctx, fra, name, uint64(fra.sz), stats)
 	if err != nil {
 		return err
 	}
