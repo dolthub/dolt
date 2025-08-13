@@ -136,12 +136,12 @@ func NewCommitMetaWithUserTS(name, email, desc string, userTS time.Time) (*Commi
 	authorDateMillis := userTS.UnixMilli()
 
 	return &CommitMeta{
-		Name:          n,
-		Email:         e,
-		Timestamp:     committerDateMillis,
-		Description:   d,
-		UserTimestamp: authorDateMillis,
-		Signature:     "",
+		Name:           n,
+		Email:          e,
+		Timestamp:      committerDateMillis,
+		Description:    d,
+		UserTimestamp:  authorDateMillis,
+		Signature:      "",
 		CommitterName:  nil,
 		CommitterEmail: nil,
 	}, nil
@@ -188,12 +188,12 @@ func NewCommitMetaWithAuthorCommitter(authorName, authorEmail, committerName, co
 	authorDateMillis := authorTS.UnixMilli()
 
 	return &CommitMeta{
-		Name:          an,
-		Email:         ae,
-		Timestamp:     committerDateMillis,
-		Description:   d,
-		UserTimestamp: authorDateMillis,
-		Signature:     "",
+		Name:           an,
+		Email:          ae,
+		Timestamp:      committerDateMillis,
+		Description:    d,
+		UserTimestamp:  authorDateMillis,
+		Signature:      "",
 		CommitterName:  &cn,
 		CommitterEmail: &ce,
 	}, nil
@@ -254,12 +254,12 @@ func CommitMetaFromNomsSt(st types.Struct) (*CommitMeta, error) {
 	email := string(e.(types.String))
 
 	return &CommitMeta{
-		Name:          name,
-		Email:         email,
-		Timestamp:     uint64(ts.(types.Uint)),
-		Description:   string(d.(types.String)),
-		UserTimestamp: int64(userTS.(types.Int)),
-		Signature:     string(signature.(types.String)),
+		Name:           name,
+		Email:          email,
+		Timestamp:      uint64(ts.(types.Uint)),
+		Description:    string(d.(types.String)),
+		UserTimestamp:  int64(userTS.(types.Int)),
+		Signature:      string(signature.(types.String)),
 		CommitterName:  nil,
 		CommitterEmail: nil,
 	}, nil
