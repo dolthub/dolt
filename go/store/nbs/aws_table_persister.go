@@ -249,9 +249,15 @@ func (s3p awsTablePersister) ConjoinAll(ctx context.Context, sources chunkSource
 
 	verbose.Logger(ctx).Sugar().Debugf("Compacted table of %d Kb in %s", plan.totalCompressedData/1024, time.Since(t1))
 
-	tra := &s3TableReaderAt{&s3ObjectReader{s3: s3p.s3, bucket: s3p.bucket, readRl: s3p.rl, ns: s3p.ns}, plan.name.String() + plan.suffix}
-	cs, err := newReaderFromIndexData(ctx, s3p.q, plan.mergedIndex, plan.name, tra, s3BlockSize)
-	return cs, func() {}, err
+	rdr := &s3ObjectReader{s3: s3p.s3, bucket: s3p.bucket, readRl: s3p.rl, ns: s3p.ns}
+	if plan.suffix == ArchiveFileSuffix {
+		cs, err := newAWSArchiveChunkSource(ctx, rdr, s3p.limits, plan.name.String()+plan.suffix, plan.chunkCount, s3p.q, stats)
+		return cs, func() {}, err
+	} else {
+		tra := &s3TableReaderAt{rdr, plan.name.String()}
+		cs, err := newReaderFromIndexData(ctx, s3p.q, plan.mergedIndex, plan.name, tra, s3BlockSize)
+		return cs, func() {}, err
+	}
 }
 
 func (s3p awsTablePersister) executeCompactionPlan(ctx context.Context, plan compactionPlan, key string) error {
