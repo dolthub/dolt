@@ -113,8 +113,8 @@ func (f archiveFooter) metadataSpan() byteSpan {
 	return byteSpan{offset: f.fileSize - f.actualFooterSize() - uint64(f.metadataSize), length: uint64(f.metadataSize)}
 }
 
-func newArchiveMetadata(ctx context.Context, reader tableReaderAt, fileSize uint64, stats *Stats) (*ArchiveMetadata, error) {
-	aRdr, err := newArchiveReader(ctx, reader, fileSize, stats)
+func newArchiveMetadata(ctx context.Context, reader tableReaderAt, name hash.Hash, fileSize uint64, stats *Stats) (*ArchiveMetadata, error) {
+	aRdr, err := newArchiveReader(ctx, reader, name, fileSize, stats)
 	if err != nil {
 		return nil, err
 	}
@@ -180,12 +180,12 @@ func newArchiveMetadata(ctx context.Context, reader tableReaderAt, fileSize uint
 	}, nil
 }
 
-func newArchiveReaderFromFooter(ctx context.Context, reader tableReaderAt, fileSz uint64, footer []byte, stats *Stats) (archiveReader, error) {
+func newArchiveReaderFromFooter(ctx context.Context, reader tableReaderAt, name hash.Hash, fileSz uint64, footer []byte, stats *Stats) (archiveReader, error) {
 	if uint64(len(footer)) != archiveFooterSize {
 		return archiveReader{}, errors.New("runtime error: invalid footer.")
 	}
 
-	ftr, err := buildFooter(fileSz, footer)
+	ftr, err := buildFooter(name, fileSz, footer)
 	if err != nil {
 		return archiveReader{}, err
 	}
@@ -193,8 +193,8 @@ func newArchiveReaderFromFooter(ctx context.Context, reader tableReaderAt, fileS
 	return buildArchiveReader(ctx, reader, ftr, stats)
 }
 
-func newArchiveReader(ctx context.Context, reader tableReaderAt, fileSize uint64, stats *Stats) (archiveReader, error) {
-	footer, err := loadFooter(ctx, reader, fileSize, stats)
+func newArchiveReader(ctx context.Context, reader tableReaderAt, name hash.Hash, fileSize uint64, stats *Stats) (archiveReader, error) {
+	footer, err := loadFooter(ctx, reader, name, fileSize, stats)
 	if err != nil {
 		return archiveReader{}, fmt.Errorf("Failed to loadFooter: %w", err)
 	}
@@ -355,17 +355,17 @@ func newSectionReader(ctx context.Context, rd ReaderAtWithStats, off, len int64,
 	return io.NewSectionReader(readerAtWithStatsBridge{rd, ctx, stats}, off, len)
 }
 
-func loadFooter(ctx context.Context, reader ReaderAtWithStats, fileSize uint64, stats *Stats) (f archiveFooter, err error) {
+func loadFooter(ctx context.Context, reader ReaderAtWithStats, name hash.Hash, fileSize uint64, stats *Stats) (f archiveFooter, err error) {
 	section := newSectionReader(ctx, reader, int64(fileSize-archiveFooterSize), int64(archiveFooterSize), stats)
 	buf := make([]byte, archiveFooterSize)
 	_, err = io.ReadFull(section, buf)
 	if err != nil {
 		return
 	}
-	return buildFooter(fileSize, buf)
+	return buildFooter(name, fileSize, buf)
 }
 
-func buildFooter(fileSize uint64, buf []byte) (f archiveFooter, err error) {
+func buildFooter(name hash.Hash, fileSize uint64, buf []byte) (f archiveFooter, err error) {
 	f.formatVersion = buf[afrVersionOffset]
 	f.fileSignature = string(buf[afrSigOffset:])
 	// Verify File Signature
@@ -404,14 +404,7 @@ func buildFooter(fileSize uint64, buf []byte) (f archiveFooter, err error) {
 	f.metaCheckSum = sha512Sum(buf[afrMetaChkSumOffset : afrMetaChkSumOffset+sha512.Size])
 	f.fileSize = fileSize
 
-	// calculate the hash of the footer. We don't currently verify that this is what was used to load the content.
-	sha := sha512.New()
-	if smallFooter {
-		buf = buf[4:]
-	}
-
-	sha.Write(buf)
-	f.hash = hash.New(sha.Sum(nil)[:hash.ByteLen])
+	f.hash = name
 
 	return
 }
