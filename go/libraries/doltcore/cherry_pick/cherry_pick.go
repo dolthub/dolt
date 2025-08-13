@@ -163,7 +163,7 @@ func CreateCommitStagedPropsFromCherryPickOptions(ctx *sql.Context, options Cher
 	doltSession := dsess.DSessFromSess(ctx.Session)
 	committerName := doltSession.Username()
 	committerEmail := doltSession.Email()
-	
+
 	// If config not available, fall back to SQL client info
 	if committerName == "" {
 		committerName = ctx.Client().User
