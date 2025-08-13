@@ -71,6 +71,7 @@ type Database struct {
 	gs            dsess.GlobalStateImpl
 	editOpts      editor.Options
 	revision      string
+	revName       string
 	revType       dsess.RevisionType
 }
 
@@ -125,6 +126,7 @@ func (r ReadOnlyDatabase) WithBranchRevision(requestedName string, branchSpec ds
 func (db Database) WithBranchRevision(requestedName string, branchSpec dsess.SessionDatabaseBranchSpec) (dsess.SqlDatabase, error) {
 	db.rsr, db.rsw = branchSpec.RepoState, branchSpec.RepoState
 	db.revision = branchSpec.Branch
+	db.revName = db.baseName + dsess.DbRevisionDelimiter + branchSpec.Branch
 	db.revType = dsess.RevisionTypeBranch
 	db.requestedName = requestedName
 
@@ -174,6 +176,7 @@ func NewDatabase(ctx context.Context, name string, dbData env.DbData[context.Con
 
 	return Database{
 		baseName:      name,
+		revName:       name,
 		requestedName: name,
 		ddb:           dbData.Ddb,
 		rsr:           forwardCtxDbData{dbData.Rsr},
@@ -228,6 +231,8 @@ func (db Database) AliasedName() string {
 // RevisionQualifiedName returns the name of this database including its revision qualifier, if any. This method should
 // be used whenever accessing internal state of a database and its tables.
 func (db Database) RevisionQualifiedName() string {
+	return db.revName
+
 	if db.revision == "" {
 		return db.baseName
 	}
