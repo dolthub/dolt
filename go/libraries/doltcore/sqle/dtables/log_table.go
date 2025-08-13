@@ -99,7 +99,7 @@ func BuildLogRow(commitHash hash.Hash, meta *datas.CommitMeta, height uint64) sq
 	} else {
 		timestamp = meta.CommitterTime()
 	}
-	
+
 	values := []interface{}{
 		commitHash.String(),
 		datas.ValueOrDefault(meta.CommitterName, meta.Name),
@@ -108,7 +108,7 @@ func BuildLogRow(commitHash hash.Hash, meta *datas.CommitMeta, height uint64) sq
 		meta.Description,
 		height,
 	}
-	
+
 	if !UseCompactSchema() {
 		values = append(values,
 			meta.Name,
@@ -116,7 +116,7 @@ func BuildLogRow(commitHash hash.Hash, meta *datas.CommitMeta, height uint64) sq
 			meta.Time(),
 		)
 	}
-	
+
 	return sql.NewRow(values...)
 }
 
@@ -146,7 +146,7 @@ var LogSchemaAuthorColumns = sql.Schema{
 
 func GetLogTableSchema(tableName, dbName string) sql.Schema {
 	var baseSchema sql.Schema
-	
+
 	if UseCompactSchema() {
 		baseSchema = make(sql.Schema, len(LogSchemaCompact))
 		copy(baseSchema, LogSchemaCompact)
@@ -155,7 +155,7 @@ func GetLogTableSchema(tableName, dbName string) sql.Schema {
 		copy(baseSchema, LogSchemaCommitterColumns)
 		baseSchema = append(baseSchema, LogSchemaAuthorColumns...)
 	}
-	
+
 	for _, col := range baseSchema {
 		col.Source = tableName
 		col.DatabaseSource = dbName
@@ -163,7 +163,7 @@ func GetLogTableSchema(tableName, dbName string) sql.Schema {
 			col.PrimaryKey = true
 		}
 	}
-	
+
 	return baseSchema
 }
 
