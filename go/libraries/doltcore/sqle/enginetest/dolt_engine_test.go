@@ -2153,3 +2153,9 @@ func TestDoltQueryCatalogSystemTable(t *testing.T) {
 	defer harness.Close()
 	RunDoltQueryCatalogTests(t, harness)
 }
+
+func TestDoltTestsSystemTable(t *testing.T) {
+	harness := newDoltEnginetestHarness(t)
+	defer harness.Close()
+	RunDoltTestsTableTests(t, harness)
+}
