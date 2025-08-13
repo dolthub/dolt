@@ -54,6 +54,18 @@ var AuthorDate = time.Now
 var CustomAuthorDate bool
 var AuthorLoc = time.Local
 
+// ValueOrDefault returns the pointer value, or the fallback if nil or empty (for strings)
+func ValueOrDefault[T comparable](value *T, fallback T) T {
+	if value == nil {
+		return fallback
+	}
+	var zero T
+	if *value == zero {
+		return fallback
+	}
+	return *value
+}
+
 // CommitMeta contains all the metadata that is associated with a commit within a data repo.
 type CommitMeta struct {
 	Name          string
@@ -62,6 +74,9 @@ type CommitMeta struct {
 	Signature     string
 	Timestamp     uint64
 	UserTimestamp int64
+
+	CommitterName *string
+	CommitterEmail *string
 }
 
 // NewCommitMeta creates a CommitMeta instance from a name, email, and description and uses the current time for the
@@ -120,7 +135,50 @@ func NewCommitMetaWithUserTS(name, email, desc string, userTS time.Time) (*Commi
 	committerDateMillis := uint64(CommitterDate().UnixMilli())
 	authorDateMillis := userTS.UnixMilli()
 
-	return &CommitMeta{n, e, d, "", committerDateMillis, authorDateMillis}, nil
+	return &CommitMeta{n, e, d, "", committerDateMillis, authorDateMillis, nil, nil}, nil
+}
+
+// NewCommitMetaWithAuthorCommitter creates commit metadata with separate author and committer information
+// If committer info is empty, defaults to author info. Maintains backwards compatibility.
+func NewCommitMetaWithAuthorCommitter(authorName, authorEmail, committerName, committerEmail, desc string, authorTS, committerTS time.Time) (*CommitMeta, error) {
+
+	an := strings.TrimSpace(authorName)
+	ae := strings.TrimSpace(authorEmail)
+	cn := strings.TrimSpace(committerName)
+	ce := strings.TrimSpace(committerEmail)
+	d := strings.TrimSpace(desc)
+
+	if an == "" {
+		return nil, ErrNameNotConfigured
+	}
+
+	if ae == "" {
+		return nil, ErrEmailNotConfigured
+	}
+
+	if d == "" {
+		return nil, ErrEmptyCommitMessage
+	}
+
+	// Default committer to author if not provided
+	if cn == "" {
+		cn = an
+	}
+	if ce == "" {
+		ce = ae
+	}
+
+	// Use current time for committer if not provided
+	var committerDateMillis uint64
+	if committerTS.IsZero() {
+		committerDateMillis = uint64(CommitterDate().UnixMilli())
+	} else {
+		committerDateMillis = uint64(committerTS.UnixMilli())
+	}
+
+	authorDateMillis := authorTS.UnixMilli()
+
+	return &CommitMeta{n, e, d, "", committerDateMillis, authorDateMillis, &cn, &ce}, nil
 }
 
 func getRequiredFromSt(st types.Struct, k string) (types.Value, error) {
@@ -181,6 +239,8 @@ func CommitMetaFromNomsSt(st types.Struct) (*CommitMeta, error) {
 		Signature:     string(signature.(types.String)),
 		Timestamp:     uint64(ts.(types.Uint)),
 		UserTimestamp: int64(userTS.(types.Int)),
+		CommitterName: nil,
+		CommitterEmail: nil,
 	}, nil
 }
 
