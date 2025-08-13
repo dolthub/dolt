@@ -515,52 +515,52 @@ listener:
 }
 
 func TestPortSystemVariable(t *testing.T) {
-    ctx := context.Background()
+	ctx := context.Background()
 
-    dEnv, err := sqle.CreateEnvWithSeedData()
-    require.NoError(t, err)
-    defer func() {
-        assert.NoError(t, dEnv.DoltDB(ctx).Close())
-    }()
+	dEnv, err := sqle.CreateEnvWithSeedData()
+	require.NoError(t, err)
+	defer func() {
+		assert.NoError(t, dEnv.DoltDB(ctx).Close())
+	}()
 
-    // Pick a port unlikely to be in use in CI
-    const listenPort = 15510
-    serverConfig := DefaultCommandLineServerConfig().WithPort(listenPort)
-    sc := svcs.NewController()
-    defer sc.Stop()
-    go func() {
-        _, _ = Serve(context.Background(), &Config{
-            Version:      "0.0.0",
-            ServerConfig: serverConfig,
-            Controller:   sc,
-            DoltEnv:      dEnv,
-        })
-    }()
-    err = sc.WaitForStart()
-    require.NoError(t, err)
+	// Pick a port unlikely to be in use in CI
+	const listenPort = 15510
+	serverConfig := DefaultCommandLineServerConfig().WithPort(listenPort)
+	sc := svcs.NewController()
+	defer sc.Stop()
+	go func() {
+		_, _ = Serve(context.Background(), &Config{
+			Version:      "0.0.0",
+			ServerConfig: serverConfig,
+			Controller:   sc,
+			DoltEnv:      dEnv,
+		})
+	}()
+	err = sc.WaitForStart()
+	require.NoError(t, err)
 
-    conn, err := dbr.Open("mysql", servercfg.ConnectionString(serverConfig, "dolt"), nil)
-    require.NoError(t, err)
-    defer conn.Close()
-    sess := conn.NewSession(nil)
+	conn, err := dbr.Open("mysql", servercfg.ConnectionString(serverConfig, "dolt"), nil)
+	require.NoError(t, err)
+	defer conn.Close()
+	sess := conn.NewSession(nil)
 
-    // Verify @@port
-    var portVal []struct {
-        Value int `db:"@@port"`
-    }
-    _, err = sess.SelectBySql("SELECT @@port").LoadContext(ctx, &portVal)
-    require.NoError(t, err)
-    require.Len(t, portVal, 1)
-    assert.Equal(t, listenPort, portVal[0].Value)
+	// Verify @@port
+	var portVal []struct {
+		Value int `db:"@@port"`
+	}
+	_, err = sess.SelectBySql("SELECT @@port").LoadContext(ctx, &portVal)
+	require.NoError(t, err)
+	require.Len(t, portVal, 1)
+	assert.Equal(t, listenPort, portVal[0].Value)
 
-    // Verify @@global.port
-    var globalPortVal []struct {
-        Value int `db:"@@global.port"`
-    }
-    _, err = sess.SelectBySql("SELECT @@global.port").LoadContext(ctx, &globalPortVal)
-    require.NoError(t, err)
-    require.Len(t, globalPortVal, 1)
-    assert.Equal(t, listenPort, globalPortVal[0].Value)
+	// Verify @@global.port
+	var globalPortVal []struct {
+		Value int `db:"@@global.port"`
+	}
+	_, err = sess.SelectBySql("SELECT @@global.port").LoadContext(ctx, &globalPortVal)
+	require.NoError(t, err)
+	require.Len(t, globalPortVal, 1)
+	assert.Equal(t, listenPort, globalPortVal[0].Value)
 }
 
 func TestReadOnlyEnforcement(t *testing.T) {
