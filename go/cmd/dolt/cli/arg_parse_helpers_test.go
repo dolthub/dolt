@@ -58,11 +58,11 @@ func TestParseDate(t *testing.T) {
 
 func TestParsePerson(t *testing.T) {
 	tests := []struct {
-		personStr string
+		personStr  string
 		personType string
-		expName   string
-		expEmail  string
-		expErr    bool
+		expName    string
+		expEmail   string
+		expErr     bool
 	}{
 		{"Hi <hi@hi.com>", "author", "Hi", "hi@hi.com", false},
 		{"John Doe <hi@hi.com>", "author", "John Doe", "hi@hi.com", false},

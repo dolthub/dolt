@@ -1357,7 +1357,7 @@ func testSelectQuery(t *testing.T, test SelectTest) {
 
 	cleanup := installTestCommitClock()
 	defer cleanup()
-	
+
 	os.Setenv(dconfig.EnvDoltLogCompactSchema, "1")
 	defer os.Unsetenv(dconfig.EnvDoltLogCompactSchema)
 
