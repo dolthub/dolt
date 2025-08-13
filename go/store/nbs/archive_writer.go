@@ -322,21 +322,20 @@ func (aw *archiveWriter) writeIndex() error {
 
 	indexSize := aw.bytesWritten - indexStart
 
+	// Suffixes output. This data is used to create the name for this archive.
 	aw.output.ResetHasher()
-
-	// Suffixes
 	for _, scr := range aw.stagedChunks {
 		_, err := aw.output.Write(scr.hash.Suffix())
 		if err != nil {
 			return err
 		}
-		indexSize += hash.SuffixLen
-		aw.bytesWritten += hash.SuffixLen
 	}
+	dataWritten := uint64(len(aw.stagedBytes)) * hash.SuffixLen
+	indexSize += dataWritten
+	aw.bytesWritten += dataWritten
+	aw.suffixCheckSum = sha512Sum(aw.output.GetSum())
 
 	aw.indexLen = indexSize
-	// NM4 - aw.indexCheckSum = sha512Sum(aw.output.GetSum())
-	aw.suffixCheckSum = sha512Sum(aw.output.GetSum())
 	aw.output.ResetHasher()
 	aw.workflowStage = stageMetadata
 
