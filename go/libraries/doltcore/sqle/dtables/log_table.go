@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
@@ -91,18 +92,23 @@ func UseCompactSchema() bool {
 	return os.Getenv(dconfig.EnvDoltLogCompactSchema) != ""
 }
 
-// BuildLogRow creates a row with schema-appropriate columns
 func BuildLogRow(commitHash hash.Hash, meta *datas.CommitMeta, height uint64) sql.Row {
+	var timestamp time.Time
+	if UseCompactSchema() {
+		timestamp = meta.Time()
+	} else {
+		timestamp = meta.CommitterTime()
+	}
+	
 	values := []interface{}{
 		commitHash.String(),
 		datas.ValueOrDefault(meta.CommitterName, meta.Name),
 		datas.ValueOrDefault(meta.CommitterEmail, meta.Email),
-		meta.CommitterTime(),
+		timestamp,
 		meta.Description,
 		height,
 	}
 	
-	// Extended schema includes separate author columns
 	if !UseCompactSchema() {
 		values = append(values,
 			meta.Name,
@@ -150,7 +156,6 @@ func GetLogTableSchema(tableName, dbName string) sql.Schema {
 		baseSchema = append(baseSchema, LogSchemaAuthorColumns...)
 	}
 	
-	// Update source and database info for system table
 	for _, col := range baseSchema {
 		col.Source = tableName
 		col.DatabaseSource = dbName

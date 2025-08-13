@@ -17,6 +17,7 @@ package integration_test
 import (
 	"context"
 	"fmt"
+	"os"
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"

@@ -58,6 +58,7 @@ type CommitInfo struct {
 	localBranchNames  []string
 	remoteBranchNames []string
 	tagNames          []string
+	verifiedSignature string
 }
 
 var fwtStageName = "fwt"
@@ -609,8 +610,8 @@ func PrintCommitInfo(pager *outputpager.Pager, minParents int, showParents, show
 		}
 	}
 
-	if showSignatures && len(comm.commitMeta.Signature) > 0 {
-		signatureLines := strings.Split(comm.commitMeta.Signature, "\n")
+	if showSignatures && len(comm.verifiedSignature) > 0 {
+		signatureLines := strings.Split(comm.verifiedSignature, "\n")
 		for _, line := range signatureLines {
 			pager.Writer.Write([]byte("\n"))
 			pager.Writer.Write([]byte(color.CyanString(line)))
@@ -690,7 +691,7 @@ func getCommitInfoWithOptions(queryist cli.Queryist, sqlCtx *sql.Context, ref st
 		return nil, fmt.Errorf("error getting hash of HEAD: %v", err)
 	}
 
-	// Access commit object directly to avoid dolt_log schema compatibility issues
+	// Access commit object directly
 	sess := dsess.DSessFromSess(sqlCtx.Session)
 	dbData, ok := sess.GetDoltDB(sqlCtx, sess.GetCurrentDatabase())
 	if !ok {
@@ -735,7 +736,7 @@ func getCommitInfoWithOptions(queryist cli.Queryist, sqlCtx *sql.Context, ref st
 	commitHashStr := commitHash.String()
 	isHead := commitHashStr == hashOfHead
 
-	// Build parent hash list for --parents flag support
+	// Build parent hash list
 	parent := ""
 	parentHashes, err := commit.ParentHashes(sqlCtx)
 	if err == nil && len(parentHashes) > 0 {
@@ -759,22 +760,12 @@ func getCommitInfoWithOptions(queryist cli.Queryist, sqlCtx *sql.Context, ref st
 		return nil, fmt.Errorf("error getting tags for hash '%s': %v", commitHashStr, err)
 	}
 
-	// Handle signature verification if requested
-	if opts.showSignature && len(meta.Signature) > 0 {
-		// Verify the signature and append verification result
-		out, err := gpg.Verify(sqlCtx, []byte(meta.Signature))
-		if err == nil {
-			// Create new meta with verification result appended
-			verifiedSig := meta.Signature + "\n" + string(out)
-			meta = &datas.CommitMeta{
-				Name:           meta.Name,
-				Email:          meta.Email,
-				Timestamp:      meta.Timestamp,
-				Description:    meta.Description,
-				UserTimestamp:  meta.UserTimestamp,
-				Signature:      verifiedSig,
-				CommitterName:  meta.CommitterName,
-				CommitterEmail: meta.CommitterEmail,
+	var verifiedSignature string
+	if opts.showSignature {
+		if len(meta.Signature) > 0 {
+			out, err := gpg.Verify(sqlCtx, []byte(meta.Signature))
+			if err == nil {
+				verifiedSignature = string(out)
 			}
 		}
 	}
@@ -787,6 +778,7 @@ func getCommitInfoWithOptions(queryist cli.Queryist, sqlCtx *sql.Context, ref st
 		localBranchNames:  localBranchesForHash,
 		remoteBranchNames: remoteBranchesForHash,
 		tagNames:          tagsForHash,
+		verifiedSignature: verifiedSignature,
 	}
 
 	if parent != "" {

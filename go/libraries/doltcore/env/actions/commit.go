@@ -112,7 +112,6 @@ func GetCommitStaged(
 
 	var meta *datas.CommitMeta
 
-	// Use separate author/committer if provided, otherwise author-only metadata
 	if props.CommitterName != "" || props.CommitterEmail != "" || !props.CommitterDate.IsZero() {
 		meta, err = datas.NewCommitMetaWithAuthorCommitter(
 			props.Name, props.Email,
