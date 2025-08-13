@@ -570,8 +570,10 @@ type doltIndex struct {
 	tblName string
 	dbName  string
 
-	columns      []schema.Column
-	colExprTypes []sql.ColumnExpressionType
+	columns         []schema.Column
+	colExprTypes    []sql.ColumnExpressionType
+	colExprNames    []string
+	unqColExprNames []string
 
 	indexSch schema.Schema
 	tableSch schema.Schema
@@ -988,11 +990,24 @@ func (di *doltIndex) Database() string {
 
 // Expressions implements sql.Index
 func (di *doltIndex) Expressions() []string {
-	strs := make([]string, len(di.columns))
-	for i, col := range di.columns {
-		strs[i] = di.tblName + "." + col.Name
+	if di.colExprNames == nil {
+		di.colExprNames = make([]string, len(di.columns))
+		for i, col := range di.columns {
+			di.colExprNames[i] = di.tblName + "." + col.Name
+		}
 	}
-	return strs
+	return di.colExprNames
+}
+
+// UnqualifiedExpressions implements sql.Index
+func (di *doltIndex) UnqualifiedExpressions() []string {
+	if di.unqColExprNames == nil {
+		di.unqColExprNames = make([]string, len(di.columns))
+		for i, col := range di.columns {
+			di.unqColExprNames[i] = col.Name
+		}
+	}
+	return di.unqColExprNames
 }
 
 // ExtendedExpressions implements sql.ExtendedIndex
