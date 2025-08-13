@@ -524,23 +524,22 @@ func TestPortSystemVariable(t *testing.T) {
 		assert.NoError(t, dEnv.DoltDB(ctx).Close())
 	}()
 
-
-    // Pick an ephemeral free port for this test
-    listenPort, err := findEmptyPort()
-    require.NoError(t, err)
-    serverConfig := DefaultCommandLineServerConfig().WithPort(listenPort)
-    sc := svcs.NewController()
-    defer sc.Stop()
-    go func() {
-        _, _ = Serve(context.Background(), &Config{
-            Version:      "0.0.0",
-            ServerConfig: serverConfig,
-            Controller:   sc,
-            DoltEnv:      dEnv,
-        })
-    }()
-    err = sc.WaitForStart()
-    require.NoError(t, err)
+	// Pick an ephemeral free port for this test
+	listenPort, err := findEmptyPort()
+	require.NoError(t, err)
+	serverConfig := DefaultCommandLineServerConfig().WithPort(listenPort)
+	sc := svcs.NewController()
+	defer sc.Stop()
+	go func() {
+		_, _ = Serve(context.Background(), &Config{
+			Version:      "0.0.0",
+			ServerConfig: serverConfig,
+			Controller:   sc,
+			DoltEnv:      dEnv,
+		})
+	}()
+	err = sc.WaitForStart()
+	require.NoError(t, err)
 
 	conn, err := dbr.Open("mysql", servercfg.ConnectionString(serverConfig, "dolt"), nil)
 	require.NoError(t, err)
@@ -568,12 +567,12 @@ func TestPortSystemVariable(t *testing.T) {
 
 // findEmptyPort finds an available TCP port by asking the OS for an ephemeral port
 func findEmptyPort() (int, error) {
-    l, err := net.Listen("tcp", ":0")
-    if err != nil {
-        return -1, err
-    }
-    defer l.Close()
-    return l.Addr().(*net.TCPAddr).Port, nil
+	l, err := net.Listen("tcp", ":0")
+	if err != nil {
+		return -1, err
+	}
+	defer l.Close()
+	return l.Addr().(*net.TCPAddr).Port, nil
 }
 
 func TestReadOnlyEnforcement(t *testing.T) {
