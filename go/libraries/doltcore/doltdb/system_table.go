@@ -122,6 +122,7 @@ var getWriteableSystemTables = func() []string {
 		IgnoreTableName,
 		GetRebaseTableName(),
 		GetQueryCatalogTableName(),
+		GetTestsTableName(),
 
 		// TODO: find way to make these writable by the dolt process
 		// TODO: but not by user
@@ -880,6 +881,10 @@ var GetStashesTableName = func() string {
 
 var GetQueryCatalogTableName = func() string { return DoltQueryCatalogTableName }
 
+var GetTestsTableName = func() string {
+	return TestsTableName
+}
+
 const (
 	// LogTableName is the log system table name
 	LogTableName = "dolt_log"
@@ -934,6 +939,9 @@ const (
 
 	// StashesTableName is the stashes system table name
 	StashesTableName = "dolt_stashes"
+
+	// TestsTableName is the tests system table name
+	TestsTableName = "dolt_tests"
 )
 
 // DoltGeneratedTableNames is a list of all the generated dolt system tables that are not specific to a user table.

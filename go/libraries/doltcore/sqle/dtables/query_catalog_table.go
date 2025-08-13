@@ -38,11 +38,11 @@ type QueryCatalogTable struct {
 	backingTable VersionableTable
 }
 
-func (i *QueryCatalogTable) Name() string {
+func (qt *QueryCatalogTable) Name() string {
 	return doltdb.DoltQueryCatalogTableName
 }
 
-func (i *QueryCatalogTable) String() string {
+func (qt *QueryCatalogTable) String() string {
 	return doltdb.DoltQueryCatalogTableName
 }
 
@@ -58,28 +58,28 @@ func doltQueryCatalogSchema() sql.Schema {
 
 var GetDoltQueryCatalogSchema = doltQueryCatalogSchema
 
-func (i *QueryCatalogTable) Schema() sql.Schema {
+func (qt *QueryCatalogTable) Schema() sql.Schema {
 	return GetDoltQueryCatalogSchema()
 }
 
-func (i *QueryCatalogTable) Collation() sql.CollationID {
+func (qt *QueryCatalogTable) Collation() sql.CollationID {
 	return sql.Collation_Default
 }
 
-func (i *QueryCatalogTable) Partitions(context *sql.Context) (sql.PartitionIter, error) {
-	if i.backingTable == nil {
+func (qt *QueryCatalogTable) Partitions(context *sql.Context) (sql.PartitionIter, error) {
+	if qt.backingTable == nil {
 		// no backing table; return an empty iter.
 		return index.SinglePartitionIterFromNomsMap(nil), nil
 	}
-	return i.backingTable.Partitions(context)
+	return qt.backingTable.Partitions(context)
 }
 
-func (i *QueryCatalogTable) PartitionRows(context *sql.Context, partition sql.Partition) (sql.RowIter, error) {
-	if i.backingTable == nil {
+func (qt *QueryCatalogTable) PartitionRows(context *sql.Context, partition sql.Partition) (sql.RowIter, error) {
+	if qt.backingTable == nil {
 		// no backing table; return an empty iter.
 		return sql.RowsToRowIter(), nil
 	}
-	return i.backingTable.PartitionRows(context, partition)
+	return qt.backingTable.PartitionRows(context, partition)
 }
 
 // NewQueryCatalogTable creates a QueryCatalogTable
