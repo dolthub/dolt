@@ -112,7 +112,7 @@ func newArchiveWriter(tmpDir string) (*archiveWriter, error) {
 	}, nil
 }
 
-// newArchiveWriter - Create an *archiveWriter with the given output ByteSync. This is used for testing.
+// newArchiveWriter - Create an *archiveWriter with the given output ByteSync.
 func newArchiveWriterWithSink(bs ByteSink) *archiveWriter {
 	hbMd5 := NewMD5HashingByteSink(bs)
 	hbSha := NewSHA512HashingByteSink(hbMd5)
@@ -880,18 +880,16 @@ func (*archiveConjoiner) conjoinIndexes(sources []sourceWithSize) (compactionPla
 		return compactionPlan{}, fmt.Errorf("failed to get name of conjoined archive: %w", err)
 	}
 
-	bs := make([]byte, 0, writer.pos)
-	buf := bytes.NewBuffer(bs)
-	err = writer.Flush(buf)
-	if err != nil {
+	buf := bytes.NewBuffer(make([]byte, 0, writer.pos))
+	if err := writer.Flush(buf); err != nil {
 		return compactionPlan{}, fmt.Errorf("failed to build index buffer while conjoining archives: %w", err)
 	}
-
+	
 	return compactionPlan{
 		sources:     chunkSourcesByDescendingDataSize{sources},
 		name:        name,
 		suffix:      ArchiveFileSuffix,
-		mergedIndex: bs,
+		mergedIndex: buf.Bytes(),
 		chunkCount:  chunkCounter,
 	}, nil
 }
