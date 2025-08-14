@@ -103,9 +103,19 @@ type IndexDifference struct {
 // It returns matched and unmatched Indexes as a slice of IndexDifferences.
 func DiffSchIndexes(fromSch, toSch schema.Schema) (diffs []IndexDifference) {
 	_ = fromSch.Indexes().Iter(func(fromIdx schema.Index) (stop bool, err error) {
-		toIdx, ok := toSch.Indexes().GetIndexByTags(fromIdx.IndexedColumnTags()...)
+		// Get all indexes that match the column tags, then find exact match
+		candidateIndexes := toSch.Indexes().GetIndexesByTags(fromIdx.IndexedColumnTags()...)
+		var toIdx schema.Index
 
-		if !ok {
+		// Find exact match by comparing all properties
+		for _, candidate := range candidateIndexes {
+			if fromIdx.Equals(candidate) {
+				toIdx = candidate
+				break
+			}
+		}
+
+		if toIdx == nil {
 			diffs = append(diffs, IndexDifference{
 				DiffType: SchDiffRemoved,
 				From:     fromIdx,
@@ -113,16 +123,11 @@ func DiffSchIndexes(fromSch, toSch schema.Schema) (diffs []IndexDifference) {
 			return false, nil
 		}
 
-		d := IndexDifference{
-			DiffType: SchDiffModified,
+		diffs = append(diffs, IndexDifference{
+			DiffType: SchDiffNone, // They are equal since we found exact match
 			From:     fromIdx,
 			To:       toIdx,
-		}
-
-		if fromIdx.Equals(toIdx) {
-			d.DiffType = SchDiffNone
-		}
-		diffs = append(diffs, d)
+		})
 
 		return false, nil
 	})

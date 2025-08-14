@@ -145,6 +145,7 @@ func generateNonCreateNonDropTableSqlSchemaDiff(td diff.TableDelta, toSchemas ma
 	for _, idxDiff := range diff.DiffSchIndexes(fromSch, toSch) {
 		switch idxDiff.DiffType {
 		case diff.SchDiffNone:
+			// Skip generating DDL for unchanged indexes
 		case diff.SchDiffAdded:
 			ddlStatements = append(ddlStatements, AlterTableAddIndexStmt(td.ToName.Name, idxDiff.To))
 		case diff.SchDiffRemoved:
@@ -366,13 +367,25 @@ func AlterTableAddIndexStmt(tableName string, idx schema.Index) string {
 	var b strings.Builder
 	b.WriteString("ALTER TABLE ")
 	b.WriteString(QuoteIdentifier(tableName))
-	b.WriteString(" ADD INDEX ")
-	b.WriteString(QuoteIdentifier(idx.Name()))
-	var cols []string
-	for _, cn := range idx.ColumnNames() {
-		cols = append(cols, QuoteIdentifier(cn))
+	b.WriteString(" ADD ")
+
+	// Generate correct index type based on index properties
+	switch {
+	case idx.IsUnique():
+		b.WriteString("UNIQUE INDEX ")
+	case idx.IsSpatial():
+		b.WriteString("SPATIAL INDEX ")
+	case idx.IsFullText():
+		b.WriteString("FULLTEXT INDEX ")
+	case idx.IsVector():
+		b.WriteString("VECTOR INDEX ")
+	default:
+		b.WriteString("INDEX ")
 	}
-	b.WriteString("(" + strings.Join(cols, ",") + ");")
+
+	b.WriteString(QuoteIdentifier(idx.Name()))
+	b.WriteString("(" + strings.Join(sql.QuoteIdentifiers(idx.ColumnNames()), ",") + ")")
+	b.WriteRune(';')
 	return b.String()
 }
 

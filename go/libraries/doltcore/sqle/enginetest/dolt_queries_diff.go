@@ -3918,6 +3918,59 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "dolt_patch index diff regression - dolt#9677",
+		SetUpScript: []string{
+			"-- https://github.com/dolthub/dolt/issues/9677",
+			"CREATE TABLE other_table (id int unsigned NOT NULL AUTO_INCREMENT, PRIMARY KEY (id))",
+			"CALL dolt_add('.')",
+			"CALL dolt_commit('-m', 'initial commit')",
+
+			"-- Create old branch with bigint column",
+			"CALL dolt_checkout('-b', 'old')",
+			"CREATE TABLE table_name (id INT unsigned NOT NULL AUTO_INCREMENT, field_name INT UNSIGNED NOT NULL, field_change_sign bigint DEFAULT NULL, PRIMARY KEY (id), UNIQUE KEY field_name_UNIQUE (field_name), KEY fk_field_name_idx (field_name), CONSTRAINT fk_field_name FOREIGN KEY (field_name) REFERENCES other_table (id))",
+			"CALL dolt_add('.')",
+			"CALL dolt_commit('-m', 'table with bigint column')",
+
+			"-- Create new branch with bigint unsigned column - only difference",
+			"CALL dolt_checkout('main')",
+			"CALL dolt_checkout('-b', 'new')",
+			"CREATE TABLE table_name (id INT unsigned NOT NULL AUTO_INCREMENT, field_name INT UNSIGNED NOT NULL, field_change_sign bigint unsigned DEFAULT NULL, PRIMARY KEY (id), UNIQUE KEY field_name_UNIQUE (field_name), KEY fk_field_name_idx (field_name), CONSTRAINT fk_field_name FOREIGN KEY (field_name) REFERENCES other_table (id))",
+			"CALL dolt_add('.')",
+			"CALL dolt_commit('-m', 'table with bigint unsigned column')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				// Customer's first command: with table specified - should only show column change, not index changes
+				Query: "SELECT statement FROM dolt_patch('old', 'new', 'table_name') WHERE diff_type = 'schema' ORDER BY statement_order",
+				Expected: []sql.Row{
+					{"ALTER TABLE `table_name` DROP `field_change_sign`;"},
+					{"ALTER TABLE `table_name` ADD `field_change_sign` bigint unsigned DEFAULT NULL;"},
+					// The following lines should NOT appear (this test will fail initially, showing the bug):
+					// {"ALTER TABLE `table_name` DROP INDEX `fk_field_name_idx`;"},
+					// {"ALTER TABLE `table_name` ADD INDEX `field_name_UNIQUE`(`field_name`);"},
+					// {"ALTER TABLE `table_name` ADD INDEX `fk_field_name_idx`(`field_name`);"},
+				},
+			},
+			{
+				// Customer's second command: without table specified - should only show column change
+				Query: "SELECT statement FROM dolt_patch('old', 'new') WHERE diff_type = 'schema' ORDER BY statement_order",
+				Expected: []sql.Row{
+					{"ALTER TABLE `table_name` DROP `field_change_sign`;"},
+					{"ALTER TABLE `table_name` ADD `field_change_sign` bigint unsigned DEFAULT NULL;"},
+					// The following lines should NOT appear (this test will fail initially, showing the bug):
+					// {"ALTER TABLE `table_name` DROP INDEX `fk_field_name_idx`;"},
+					// {"ALTER TABLE `table_name` ADD INDEX `field_name_UNIQUE`(`field_name`);"},
+					// {"ALTER TABLE `table_name` ADD INDEX `fk_field_name_idx`(`field_name`);"},
+				},
+			},
+			{
+				// Verify that the indexes are indeed identical on both branches
+				Query: "SELECT COUNT(*) FROM (SELECT index_name, non_unique, column_name FROM INFORMATION_SCHEMA.STATISTICS WHERE table_name = 'table_name' AND table_schema = 'mydb' ORDER BY index_name, seq_in_index) as old_indexes",
+				Expected: []sql.Row{{3}}, // PRIMARY, field_name_UNIQUE, fk_field_name_idx
+			},
+		},
+	},
 }
 
 var UnscopedDiffSystemTableScriptTests = []queries.ScriptTest{
