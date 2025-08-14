@@ -43,6 +43,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+    "github.com/sirupsen/logrus"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
@@ -710,34 +711,34 @@ func getCommitInfoWithOptions(queryist cli.Queryist, sqlCtx *sql.Context, ref st
 		return nil, fmt.Errorf("error getting hash of HEAD: %v", err)
 	}
 
-	return getCommitInfoSQL(queryist, sqlCtx, ref, opts, hashOfHead)
+    return getCommitInfoSQL(queryist, sqlCtx, ref, opts, hashOfHead)
 }
 
 // getCommitInfoSQL gets commit info using SQL queries, always using extended schema
 func getCommitInfoSQL(queryist cli.Queryist, sqlCtx *sql.Context, ref string, opts commitInfoOptions, hashOfHead string) (*CommitInfo, error) {
-	// Force extended schema to get author columns, regardless of environment variable
-	originalCompactSetting := os.Getenv(dconfig.EnvDoltLogCompactSchema)
-	os.Unsetenv(dconfig.EnvDoltLogCompactSchema)
-	defer func() {
-		if originalCompactSetting != "" {
-			os.Setenv(dconfig.EnvDoltLogCompactSchema, originalCompactSetting)
-		}
-	}()
+    // Use session system variable to force extended schema for CLI query
+    _, err := cli.GetRowsForSql(queryist, sqlCtx, "SET @saved_compact = dolt_log_compact_schema;")
+    if err != nil {
+        logrus.Infof("failed to save dolt_log_compact_schema: %v", err)
+    }
+    _, err = cli.GetRowsForSql(queryist, sqlCtx, "SET dolt_log_compact_schema = 0;")
+    if err != nil {
+        logrus.Infof("failed to set dolt_log_compact_schema = 0: %v", err)
+    }
 
-	var q string
-	var err error
-	if opts.showSignature {
-		q, err = dbr.InterpolateForDialect("select * from dolt_log(?, '--parents', '--decorate=full', '--show-signature')", []interface{}{ref}, dialect.MySQL)
-	} else {
-		q, err = dbr.InterpolateForDialect("select * from dolt_log(?, '--parents', '--decorate=full')", []interface{}{ref}, dialect.MySQL)
-	}
-	if err != nil {
-		return nil, fmt.Errorf("error interpolating query: %v", err)
-	}
+    var q string
+    if opts.showSignature {
+        q, err = dbr.InterpolateForDialect("select * from dolt_log(?, '--parents', '--decorate=full', '--show-signature')", []interface{}{ref}, dialect.MySQL)
+    } else {
+        q, err = dbr.InterpolateForDialect("select * from dolt_log(?, '--parents', '--decorate=full')", []interface{}{ref}, dialect.MySQL)
+    }
+    if err != nil {
+        return nil, fmt.Errorf("error interpolating query: %v", err)
+    }
 
-	rows, err := cli.GetRowsForSql(queryist, sqlCtx, q)
+    rows, err := cli.GetRowsForSql(queryist, sqlCtx, q)
 	if err != nil {
-		return nil, fmt.Errorf("error getting logs for ref '%s': %v", ref, err)
+        return nil, fmt.Errorf("error getting logs for ref '%s': %v", ref, err)
 	}
 	if len(rows) == 0 {
 		return nil, nil
@@ -773,7 +774,7 @@ func getCommitInfoSQL(queryist cli.Queryist, sqlCtx *sql.Context, ref string, op
 		}
 	}
 
-	var signature string
+    var signature string
 	if opts.showSignature {
 		signature = row[len(row)-1].(string)
 	}
@@ -792,7 +793,10 @@ func getCommitInfoSQL(queryist cli.Queryist, sqlCtx *sql.Context, ref string, op
 		return nil, fmt.Errorf("error getting tags for hash '%s': %v", commitHash, err)
 	}
 
-	return &CommitInfo{
+    // Restore prior setting after query
+    _, _ = cli.GetRowsForSql(queryist, sqlCtx, "SET dolt_log_compact_schema = @saved_compact;")
+
+    return &CommitInfo{
 		commitMeta: &datas.CommitMeta{
 			Name:           authorName,
 			Email:          authorEmail,
