@@ -160,7 +160,7 @@ func (ltf *LogTableFunction) getOptionsString() string {
 
 // Schema implements the sql.Node interface.
 func (ltf *LogTableFunction) Schema() sql.Schema {
-	logSchema := dtables.GetLogTableSchema("", "")
+    logSchema := dtables.GetLogTableSchema(ltf.ctx, "", "")
 
 	if ltf.showParents {
 		logSchema = append(logSchema, &sql.Column{Name: "parents", Type: types.Text})
@@ -775,7 +775,7 @@ func (itr *logTableFunctionRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 		}
 	}
 
-	row := dtables.BuildLogRow(commitHash, meta, height)
+    row := dtables.BuildLogRow(ctx, commitHash, meta, height)
 
 	if itr.showParents {
 		prStr, err := getParentsString(ctx, commit)
