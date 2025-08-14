@@ -357,22 +357,6 @@ func ConfigureServices(
 	}
 	controller.Register(CloseClientConnectionsOnShutdown)
 
-	// Persist any system variables that have a non-deterministic default value (i.e. @@server_uuid)
-	// We only do this on sql-server startup initially since we want to keep the persisted server_uuid
-	// in the configuration files for a sql-server, and not global for the whole host.
-	PersistNondeterministicSystemVarDefaults := &svcs.AnonService{
-		InitF: func(ctx context.Context) error {
-			err := dsess.PersistSystemVarDefaults(cfg.DoltEnv)
-			if err != nil {
-				logrus.Errorf("unable to persist system variable defaults: %v", err)
-			}
-			// Always return nil, because we don't want an invalid config value to prevent
-			// the server from starting up.
-			return nil
-		},
-	}
-	controller.Register(PersistNondeterministicSystemVarDefaults)
-
 	InitStatsController := &svcs.AnonService{
 		InitF: func(ctx context.Context) error {
 			return sqlEngine.InitStats(ctx)
@@ -807,6 +791,22 @@ func ConfigureServices(
 		},
 	}
 	controller.Register(InitSQLServer)
+
+	// Persist any system variables that have a non-deterministic default value (i.e. @@server_uuid)
+	// We only do this on sql-server startup initially since we want to keep the persisted server_uuid
+	// in the configuration files for a sql-server, and not global for the whole host.
+	PersistNondeterministicSystemVarDefaults := &svcs.AnonService{
+		InitF: func(ctx context.Context) error {
+			err := dsess.PersistSystemVarDefaults(cfg.DoltEnv)
+			if err != nil {
+				logrus.Errorf("unable to persist system variable defaults: %v", err)
+			}
+			// Always return nil, because we don't want an invalid config value to prevent
+			// the server from starting up.
+			return nil
+		},
+	}
+	controller.Register(PersistNondeterministicSystemVarDefaults)
 
 	// Automatically restart binlog replication if replication was enabled when the server was last shut down
 	AutoStartBinlogReplica := &svcs.AnonService{
