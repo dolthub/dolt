@@ -639,7 +639,7 @@ teardown() {
     [[ "$output" =~ "Original Author <original@example.com>" ]] || false
     
     # Verify dolt_log table shows correct author and preserved timestamp (use extended schema to see author info)
-    run env DOLT_LOG_COMPACT_SCHEMA= dolt sql -q "SELECT author, author_email, author_date FROM dolt_log WHERE message = 'commit with specific author'" -r csv
+    run dolt sql -q "SET dolt_log_compact_schema = 0; SELECT author, author_email, author_date FROM dolt_log WHERE message = 'commit with specific author'" -r csv
     [ $status -eq 0 ]
     [[ "$output" =~ "Original Author,original@example.com" ]] || false
     [[ "$output" =~ "2023-09-26 01:23:45" ]] || false
@@ -700,7 +700,7 @@ teardown() {
     [[ "$output" =~ "Integration Manager <integration@company.com>" ]] || false
     
     # Verify dolt_log table shows all authors correctly in commit order (including merge workflow) (use extended schema to see author info)
-    run env DOLT_LOG_COMPACT_SCHEMA= dolt sql -q "SELECT author, author_email, message FROM dolt_log WHERE author IN ('Alice Developer', 'Bob Engineer', 'Carol Architect', 'Integration Manager') OR message LIKE 'Merge%' ORDER BY commit_order" -r csv
+    run dolt sql -q "SET dolt_log_compact_schema = 0; SELECT author, author_email, message FROM dolt_log WHERE author IN ('Alice Developer', 'Bob Engineer', 'Carol Architect', 'Integration Manager') OR message LIKE 'Merge%' ORDER BY commit_order" -r csv
     [ $status -eq 0 ]
     [[ "$output" =~ "Alice Developer,alice@company.com" ]] || false
     [[ "$output" =~ "Bob Engineer,bob@company.com" ]] || false

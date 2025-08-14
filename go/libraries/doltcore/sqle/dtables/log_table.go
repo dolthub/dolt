@@ -15,18 +15,17 @@
 package dtables
 
 import (
-	"context"
-	"fmt"
-	"os"
-	"time"
+    "context"
+    "fmt"
+    "time"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+    "github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions/commitwalk"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+    "github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -43,6 +42,7 @@ type LogTable struct {
 	head              *doltdb.Commit
 	headHash          hash.Hash
 	headCommitClosure *prolly.CommitClosure
+    ctx               *sql.Context // session context used for sysvar lookup
 }
 
 var _ sql.Table = (*LogTable)(nil)
@@ -50,8 +50,8 @@ var _ sql.StatisticsTable = (*LogTable)(nil)
 var _ sql.IndexAddressable = (*LogTable)(nil)
 
 // NewLogTable creates a LogTable
-func NewLogTable(_ *sql.Context, dbName, tableName string, ddb *doltdb.DoltDB, head *doltdb.Commit) sql.Table {
-	return &LogTable{dbName: dbName, tableName: tableName, ddb: ddb, head: head}
+func NewLogTable(ctx *sql.Context, dbName, tableName string, ddb *doltdb.DoltDB, head *doltdb.Commit) sql.Table {
+    return &LogTable{dbName: dbName, tableName: tableName, ddb: ddb, head: head, ctx: ctx}
 }
 
 // DataLength implements sql.StatisticsTable
@@ -88,14 +88,21 @@ func (dt *LogTable) String() string {
 	return dt.tableName
 }
 
-func UseCompactSchema() bool {
-	return os.Getenv(dconfig.EnvDoltLogCompactSchema) != ""
+func UseCompactSchema(ctx *sql.Context) bool {
+    if ctx != nil {
+        if compactVal, err := ctx.GetSessionVariable(ctx, dsess.DoltLogCompactSchema); err == nil {
+            if i8, ok := compactVal.(int8); ok {
+                return i8 == dsess.SysVarTrue
+            }
+        }
+    }
+    return false
 }
 
-func BuildLogRow(commitHash hash.Hash, meta *datas.CommitMeta, height uint64) sql.Row {
+func BuildLogRow(ctx *sql.Context, commitHash hash.Hash, meta *datas.CommitMeta, height uint64) sql.Row {
 	var timestamp time.Time
-	if UseCompactSchema() {
-		timestamp = meta.Time()
+    if UseCompactSchema(ctx) {
+        timestamp = meta.Time()
 	} else {
 		timestamp = meta.CommitterTime()
 	}
@@ -109,7 +116,7 @@ func BuildLogRow(commitHash hash.Hash, meta *datas.CommitMeta, height uint64) sq
 		height,
 	}
 
-	if !UseCompactSchema() {
+    if !UseCompactSchema(ctx) {
 		values = append(values,
 			meta.Name,
 			meta.Email,
@@ -144,10 +151,10 @@ var LogSchemaAuthorColumns = sql.Schema{
 	&sql.Column{Name: "author_date", Type: types.Datetime},
 }
 
-func GetLogTableSchema(tableName, dbName string) sql.Schema {
+func GetLogTableSchema(ctx *sql.Context, tableName, dbName string) sql.Schema {
 	var baseSchema sql.Schema
 
-	if UseCompactSchema() {
+    if UseCompactSchema(ctx) {
 		baseSchema = make(sql.Schema, len(LogSchemaCompact))
 		copy(baseSchema, LogSchemaCompact)
 	} else {
@@ -169,7 +176,7 @@ func GetLogTableSchema(tableName, dbName string) sql.Schema {
 
 // Schema is a sql.Table interface function that gets the sql.Schema of the log system table.
 func (dt *LogTable) Schema() sql.Schema {
-	return GetLogTableSchema(dt.tableName, dt.dbName)
+    return GetLogTableSchema(dt.ctx, dt.tableName, dt.dbName)
 }
 
 // Collation implements the sql.Table interface.
@@ -190,7 +197,7 @@ func (dt *LogTable) PartitionRows(ctx *sql.Context, p sql.Partition) (sql.RowIte
 		if err != nil {
 			return nil, err
 		}
-		return sql.RowsToRowIter(BuildLogRow(p.Hash(), p.Meta(), height)), nil
+        return sql.RowsToRowIter(BuildLogRow(ctx, p.Hash(), p.Meta(), height)), nil
 	default:
 		return NewLogItr(ctx, dt.ddb, dt.head)
 	}
@@ -332,7 +339,7 @@ func (itr *LogItr) Next(ctx *sql.Context) (sql.Row, error) {
 		return nil, err
 	}
 
-	return BuildLogRow(h, meta, height), nil
+    return BuildLogRow(ctx, h, meta, height), nil
 }
 
 // Close closes the iterator.
