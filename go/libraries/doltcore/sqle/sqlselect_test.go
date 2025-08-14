@@ -16,7 +16,6 @@ package sqle
 
 import (
 	"context"
-	"os"
 	"testing"
 	"time"
 
@@ -25,7 +24,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
@@ -1357,8 +1355,6 @@ func testSelectQuery(t *testing.T, test SelectTest) {
 
 	cleanup := installTestCommitClock()
 	defer cleanup()
-
-    
 
 	ctx := context.Background()
 	dEnv, err := CreateTestDatabase()
