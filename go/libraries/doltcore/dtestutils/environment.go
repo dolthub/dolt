@@ -36,8 +36,7 @@ const (
 // function should generally be preferred over this method, especially when working
 // with tests using multiple databases within a MultiRepoEnv.
 func CreateTestEnv() *env.DoltEnv {
-	os.Setenv(dconfig.EnvDoltLogCompactSchema, "1")
-	return CreateTestEnvWithName("test")
+    return CreateTestEnvWithName("test")
 }
 
 // CreateTestEnvForLocalFilesystem creates a new DoltEnv for testing, using a local FS, instead of an in-memory

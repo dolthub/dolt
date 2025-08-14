@@ -8,7 +8,6 @@ fi
 
 export DOLT_CONTEXT_VALIDATION_ENABLED=true
 export DOLT_ENABLE_DYNAMIC_ASSERTS=true
-export DOLT_LOG_COMPACT_SCHEMA=1
 
 nativebatsdir() { echo `nativepath $BATS_TEST_DIRNAME/$1`; }
 batshelper() { echo `nativebatsdir helper/$1`; }
@@ -103,6 +102,7 @@ skip_nbf_dolt() {
 setup_common() {
     setup_no_dolt_init
     dolt init
+    dolt sql -q "SET PERSIST dolt_log_compact_schema = 1;"
     setup_remote_server
 }
 

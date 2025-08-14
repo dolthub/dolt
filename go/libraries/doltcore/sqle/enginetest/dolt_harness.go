@@ -421,7 +421,10 @@ func (d *DoltHarness) NewContextWithClient(client sql.Client) *sql.Context {
 
 func (d *DoltHarness) NewSession() *sql.Context {
 	d.session = d.newSessionWithClient(sql.Client{Address: "localhost", User: "root"})
-	return d.NewContext()
+	ctx := d.NewContext()
+	// Default compact dolt_log schema for enginetest sessions
+	_ = ctx.Session.SetSessionVariable(ctx, dsess.DoltLogCompactSchema, int8(1))
+	return ctx
 }
 
 func (d *DoltHarness) newSessionWithClient(client sql.Client) *dsess.DoltSession {
