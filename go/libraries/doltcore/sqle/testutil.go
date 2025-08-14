@@ -150,14 +150,14 @@ func NewTestEngine(dEnv *env.DoltEnv, ctx context.Context, db dsess.SqlDatabase)
 
 	config, _ := dEnv.Config.GetConfig(env.GlobalConfig)
 	sqlCtx := NewTestSQLCtxWithProvider(ctx, pro, config, nil, gcSafepointController)
-    sqlCtx.SetCurrentDatabase(db.Name())
+	sqlCtx.SetCurrentDatabase(db.Name())
 
-    // Default test sessions to compact dolt_log schema for backward compatibility
-    if err := sqlCtx.Session.SetSessionVariable(sqlCtx, dsess.DoltLogCompactSchema, int8(1)); err != nil {
-        return nil, nil, err
-    }
+	// Default test sessions to compact dolt_log schema for backward compatibility
+	if err := sqlCtx.Session.SetSessionVariable(sqlCtx, dsess.DoltLogCompactSchema, int8(1)); err != nil {
+		return nil, nil, err
+	}
 
-    return engine, sqlCtx, nil
+	return engine, sqlCtx, nil
 }
 
 // ExecuteSelect executes the select statement given and returns the resulting rows, or an error if one is encountered.
