@@ -16,11 +16,12 @@ package binlogreplication
 
 import (
 	"fmt"
-	"github.com/dolthub/go-mysql-server/sql"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/Shopify/toxiproxy/v2"
 	toxiproxyclient "github.com/Shopify/toxiproxy/v2/client"
