@@ -16,6 +16,7 @@ package binlogreplication
 
 import (
 	"fmt"
+	"github.com/dolthub/go-mysql-server/sql"
 	"strconv"
 	"strings"
 	"testing"
@@ -145,7 +146,10 @@ func (h *harness) showReplicaStatus() map[string]interface{} {
 }
 
 func (h *harness) configureToxiProxy() {
-	toxiproxyPort := findFreePort()
+	toxiproxyPort, err := sql.GetEmptyPort()
+	if err != nil {
+		panic(fmt.Sprintf("unable to find available TCP port: %v", err.Error()))
+	}
 
 	metrics := toxiproxy.NewMetricsContainer(prometheus.NewRegistry())
 	toxiproxyServer := toxiproxy.NewServer(metrics, zerolog.Nop())
@@ -157,8 +161,10 @@ func (h *harness) configureToxiProxy() {
 
 	h.toxiClient = toxiproxyclient.NewClient(fmt.Sprintf("localhost:%d", toxiproxyPort))
 
-	h.proxyPort = findFreePort()
-	var err error
+	h.proxyPort, err = sql.GetEmptyPort()
+	if err != nil {
+		panic(fmt.Sprintf("unable to find available TCP port: %v", err.Error()))
+	}
 	h.mysqlProxy, err = h.toxiClient.CreateProxy("mysql",
 		fmt.Sprintf("localhost:%d", h.proxyPort), // downstream
 		fmt.Sprintf("localhost:%d", h.mySqlPort)) // upstream

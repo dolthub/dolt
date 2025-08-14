@@ -18,8 +18,8 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"github.com/dolthub/go-mysql-server/sql"
 	"io"
-	"net"
 	"os"
 	"os/exec"
 	"os/user"
@@ -926,26 +926,6 @@ func sanitizeCreateTableString(statement string) string {
 	return regex.ReplaceAllString(statement, " ")
 }
 
-// findFreePort returns an available port that can be used for a server. If any errors are
-// encountered, this function will panic and fail the current test.
-func findFreePort() int {
-	listener, err := net.Listen("tcp", ":0")
-	if err != nil {
-		panic(fmt.Sprintf("unable to find available TCP port: %v", err.Error()))
-	}
-	freePort := listener.Addr().(*net.TCPAddr).Port
-	err = listener.Close()
-	if err != nil {
-		panic(fmt.Sprintf("unable to find available TCP port: %v", err.Error()))
-	}
-
-	if freePort < 0 {
-		panic(fmt.Sprintf("unable to find available TCP port; found port %v", freePort))
-	}
-
-	return freePort
-}
-
 // startMySqlServer configures a starts a fresh MySQL server instance and returns the port it is running on,
 // and the os.Process handle. If unable to start up the MySQL server, an error is returned.
 func (h *harness) startMySqlServer() (int, *os.Process, error) {
@@ -956,7 +936,10 @@ func (h *harness) startMySqlServer() (int, *os.Process, error) {
 		return -1, nil, err
 	}
 
-	h.mySqlPort = findFreePort()
+	h.mySqlPort, err = sql.GetEmptyPort()
+	if err != nil {
+		panic(fmt.Sprintf("unable to find available TCP port: %v", err.Error()))
+	}
 
 	// Log the mysqld version
 	versionCmd := exec.CommandContext(commandCtx, "mysqld", "--version")
@@ -1076,7 +1059,10 @@ func (h *harness) startDoltSqlServer(doltPersistentSystemVars map[string]string)
 	// If we already assigned a port, re-use it. This is useful when testing restarting a primary, since
 	// we want the primary to come back up on the same port, so the replica can reconnect.
 	if h.doltPort < 1 {
-		h.doltPort = findFreePort()
+		h.doltPort, err = sql.GetEmptyPort()
+		if err != nil {
+			panic(fmt.Sprintf("unable to find available TCP port: %v", err.Error()))
+		}
 	}
 	h.t.Logf("Starting Dolt sql-server on port: %d, with data dir %s\n", h.doltPort, dir)
 
