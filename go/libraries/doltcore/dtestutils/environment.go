@@ -15,15 +15,15 @@
 package dtestutils
 
 import (
-    "context"
-    "os"
-    "path/filepath"
+	"context"
+	"os"
+	"path/filepath"
 
-    "github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-    "github.com/dolthub/dolt/go/libraries/doltcore/env"
-    "github.com/dolthub/dolt/go/libraries/utils/config"
-    "github.com/dolthub/dolt/go/libraries/utils/filesys"
-    "github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/utils/config"
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 const (
@@ -35,7 +35,7 @@ const (
 // function should generally be preferred over this method, especially when working
 // with tests using multiple databases within a MultiRepoEnv.
 func CreateTestEnv() *env.DoltEnv {
-    return CreateTestEnvWithName("test")
+	return CreateTestEnvWithName("test")
 }
 
 // CreateTestEnvForLocalFilesystem creates a new DoltEnv for testing, using a local FS, instead of an in-memory
