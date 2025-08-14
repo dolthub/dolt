@@ -15,27 +15,25 @@
 package sqle
 
 import (
-	"context"
-	"os"
-	"testing"
-	"time"
+    "context"
+    "testing"
+    "time"
 
-	"github.com/dolthub/go-mysql-server/sql"
-	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+    "github.com/dolthub/go-mysql-server/sql"
+    gmstypes "github.com/dolthub/go-mysql-server/sql/types"
+    "github.com/stretchr/testify/assert"
+    "github.com/stretchr/testify/require"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
-	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
-	"github.com/dolthub/dolt/go/libraries/doltcore/row"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
-	"github.com/dolthub/dolt/go/store/datas"
-	"github.com/dolthub/dolt/go/store/types"
+    "github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+    "github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
+    "github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
+    "github.com/dolthub/dolt/go/libraries/doltcore/env"
+    "github.com/dolthub/dolt/go/libraries/doltcore/ref"
+    "github.com/dolthub/dolt/go/libraries/doltcore/row"
+    "github.com/dolthub/dolt/go/libraries/doltcore/schema"
+    "github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
+    "github.com/dolthub/dolt/go/store/datas"
+    "github.com/dolthub/dolt/go/store/types"
 )
 
 // Set to the name of a single test to run just that test, useful for debugging
