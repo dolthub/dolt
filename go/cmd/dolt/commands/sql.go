@@ -841,7 +841,9 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 				sqlStmt, err := sqlparser.Parse(query)
 				// silently skip empty statements
 				if err == nil || err == sqlparser.ErrEmpty {
-					sqlSch, rowIter, _, err := processParsedQuery(sqlCtx, query, qryist, sqlStmt)
+					var sqlSch sql.Schema
+					var rowIter sql.RowIter
+					sqlSch, rowIter, _, err = processParsedQuery(sqlCtx, query, qryist, sqlStmt)
 					if err != nil {
 						verr := formatQueryError("", err)
 						shell.Println(verr.Verbose())
@@ -851,6 +853,10 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 							err = engine.PrettyPrintResultsExtended(sqlCtx, closureFormat, sqlSch, rowIter, pagerEnabled, toggleWarnings, true, binaryAsHex)
 						default:
 							err = engine.PrettyPrintResults(sqlCtx, closureFormat, sqlSch, rowIter, pagerEnabled, toggleWarnings, true, binaryAsHex)
+						}
+						if err != nil {
+							verr := formatQueryError("", err)
+							shell.Println(verr.Verbose())
 						}
 					} else {
 						if _, isUseStmt := sqlStmt.(*sqlparser.Use); isUseStmt {
