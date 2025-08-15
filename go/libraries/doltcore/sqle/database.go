@@ -633,9 +633,13 @@ func (db Database) getTableInsensitiveWithRoot(ctx *sql.Context, head *doltdb.Co
 				}
 			}
 
-            // Decide compactness based on session variable only
+            // Decide compactness:
+            // - Force compact when resolving under DoltgreSQL system table context
+            // - Otherwise, honor the session variable
             useCompact := false
-            if v, err := ctx.GetSessionVariable(ctx, dsess.DoltLogCompactSchema); err == nil {
+            if isDoltgresSystemTable {
+                useCompact = true
+            } else if v, err := ctx.GetSessionVariable(ctx, dsess.DoltLogCompactSchema); err == nil {
                 if i8, ok := v.(int8); ok && i8 == dsess.SysVarTrue {
                     useCompact = true
                 }
