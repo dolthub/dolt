@@ -286,13 +286,6 @@ var DoltSystemVariables = []sql.SystemVariable{
 		Default: int8(1),
 	},
 	&sql.MysqlSystemVariable{
-		Name:    dsess.DoltLogCompactSchema,
-		Dynamic: true,
-		Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Both),
-		Type:    types.NewSystemBoolType(dsess.DoltLogCompactSchema),
-		Default: int8(0),
-	},
-	&sql.MysqlSystemVariable{
 		Name:    dsess.AllowCICreation,
 		Dynamic: true,
 		Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Session),
@@ -561,13 +554,13 @@ func AddDoltSystemVariables() {
 			Type:    types.NewSystemBoolType(dsess.AllowCICreation),
 			Default: int8(0),
 		},
-		&sql.MysqlSystemVariable{
-			Name:    dsess.DoltLogCompactSchema,
-			Dynamic: true,
-			Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Both),
-			Type:    types.NewSystemBoolType(dsess.DoltLogCompactSchema),
-			Default: int8(0),
-		},
+			&sql.MysqlSystemVariable{
+				Name:    dsess.DoltLogCompactSchema,
+				Dynamic: true,
+				Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Both),
+				Type:    types.NewSystemBoolType(dsess.DoltLogCompactSchema),
+				Default: int8(0),
+			},
 	})
 	sql.SystemVariables.AddSystemVariables(DoltSystemVariables)
 }

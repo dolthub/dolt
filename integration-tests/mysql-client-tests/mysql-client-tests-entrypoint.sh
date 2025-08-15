@@ -6,6 +6,9 @@ dolt config --global --add metrics.host localhost
 dolt config --global --add user.name mysql-test-runner
 dolt config --global --add user.email mysql-test-runner@liquidata.co
 
+# Ensure compact dolt_log schema by default for server sessions in this container lifecycle
+dolt sql -q "SET @@GLOBAL.dolt_log_compact_schema = 1;"
+
 echo "Running mysql-client-tests:"
 bats /build/bin/bats/mysql-client-tests.bats
 
