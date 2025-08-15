@@ -17,8 +17,10 @@ package nbs
 import (
 	"context"
 	"encoding/binary"
+	"fmt"
 	"io"
 	"path/filepath"
+	"strings"
 
 	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
@@ -42,7 +44,7 @@ func newArchiveChunkSource(ctx context.Context, dir string, h hash.Hash, chunkCo
 		return archiveChunkSource{}, err
 	}
 
-	aRdr, err := newArchiveReader(ctx, fra, uint64(fra.sz), stats)
+	aRdr, err := newArchiveReader(ctx, fra, h, uint64(fra.sz), stats)
 	if err != nil {
 		return archiveChunkSource{}, err
 	}
@@ -64,7 +66,13 @@ func newAWSArchiveChunkSource(ctx context.Context,
 		return emptyChunkSource{}, err
 	}
 
-	aRdr, err := newArchiveReaderFromFooter(ctx, &s3TableReaderAt{s3, name}, sz, footer, stats)
+	id := strings.TrimSuffix(filepath.Base(name), ArchiveFileSuffix)
+	hashId, ok := hash.MaybeParse(id)
+	if !ok {
+		return emptyChunkSource{}, fmt.Errorf("invalid archive file path: %s", name)
+	}
+
+	aRdr, err := newArchiveReaderFromFooter(ctx, &s3TableReaderAt{s3, name}, hashId, sz, footer, stats)
 	if err != nil {
 		return emptyChunkSource{}, err
 	}

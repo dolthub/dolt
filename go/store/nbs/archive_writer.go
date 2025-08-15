@@ -16,20 +16,25 @@ package nbs
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha512"
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"sort"
+	"time"
 
+	"github.com/dolthub/dolt/go/cmd/dolt/doltversion"
 	"github.com/dolthub/gozstd"
 
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 )
+
 
 type stagedByteSpanSlice []byteSpan
 
@@ -55,21 +60,20 @@ type archiveWriter struct {
 	md5Summer *HashingByteSink
 	// SHA512 is calculated on chunks of the output stream, so will be reset at appropriate times. This
 	// sinker is what archive code writes to, and it wraps the MD5 sink.
-	output           *HashingByteSink
-	bytesWritten     uint64
-	stagedBytes      stagedByteSpanSlice
-	stagedChunks     stagedChunkRefSlice
-	seenChunks       hash.HashSet
-	indexLen         uint64
-	metadataLen      uint32
-	dataCheckSum     sha512Sum
-	indexCheckSum    sha512Sum
-	metadataCheckSum sha512Sum
-	footerCheckSum   sha512Sum
-	fullMD5          md5Sum
-	workflowStage    stage
-	finalPath        string
-	chunkDataLength  uint64
+	output       *HashingByteSink
+	bytesWritten uint64
+	stagedBytes  stagedByteSpanSlice
+	stagedChunks stagedChunkRefSlice
+	// seenChunks is used when building archives chunk-by-chunk, to ensure that we do not write the same chunk multiple
+	// times. It is not used for any other purpose, and there are cases where we bypass checking it (e.g. conjoining archives).
+	seenChunks      hash.HashSet
+	indexLen        uint64
+	metadataLen     uint32
+	suffixCheckSum  sha512Sum
+	fullMD5         md5Sum
+	workflowStage   stage
+	finalPath       string
+	chunkDataLength uint64
 }
 
 /*
@@ -109,7 +113,7 @@ func newArchiveWriter(tmpDir string) (*archiveWriter, error) {
 	}, nil
 }
 
-// newArchiveWriter - Create an *archiveWriter with the given output ByteSync. This is used for testing.
+// newArchiveWriter - Create an *archiveWriter with the given output ByteSync.
 func newArchiveWriterWithSink(bs ByteSink) *archiveWriter {
 	hbMd5 := NewMD5HashingByteSink(bs)
 	hbSha := NewSHA512HashingByteSink(hbMd5)
@@ -193,6 +197,33 @@ func (aw *archiveWriter) stageSnappyChunk(hash hash.Hash, dataId uint32) error {
 	return nil
 }
 
+func (aw *archiveWriter) indexFinalize(originTableFile hash.Hash) error {
+	err := aw.writeIndex()
+	if err != nil {
+		return err
+	}
+
+	meta := map[string]string{
+		amdkDoltVersion:    doltversion.Version,
+		amdkConversionTime: time.Now().UTC().Format(time.RFC3339),
+	}
+	if !originTableFile.IsEmpty() {
+		meta[amdkOriginTableFile] = originTableFile.String()
+	}
+
+	jsonData, err := json.Marshal(meta)
+	if err != nil {
+		return err
+	}
+
+	err = aw.writeMetadata(jsonData)
+	if err != nil {
+		return err
+	}
+
+	return aw.writeFooter()
+}
+
 func (scrs stagedChunkRefSlice) Len() int {
 	return len(scrs)
 }
@@ -211,7 +242,6 @@ func (aw *archiveWriter) finalizeByteSpans() error {
 	}
 
 	// Get the checksum for the data written so far
-	aw.dataCheckSum = sha512Sum(aw.output.GetSum())
 	aw.output.ResetHasher()
 	aw.chunkDataLength = aw.md5Summer.Size()
 	aw.workflowStage = stageIndex
@@ -279,18 +309,20 @@ func (aw *archiveWriter) writeIndex() error {
 
 	indexSize := aw.bytesWritten - indexStart
 
-	// Suffixes
+	// Suffixes output. This data is used to create the name for this archive.
+	aw.output.ResetHasher()
 	for _, scr := range aw.stagedChunks {
 		_, err := aw.output.Write(scr.hash.Suffix())
 		if err != nil {
 			return err
 		}
-		indexSize += hash.SuffixLen
-		aw.bytesWritten += hash.SuffixLen
 	}
+	dataWritten := uint64(len(aw.stagedBytes)) * hash.SuffixLen
+	indexSize += dataWritten
+	aw.bytesWritten += dataWritten
+	aw.suffixCheckSum = sha512Sum(aw.output.GetSum())
 
 	aw.indexLen = indexSize
-	aw.indexCheckSum = sha512Sum(aw.output.GetSum())
 	aw.output.ResetHasher()
 	aw.workflowStage = stageMetadata
 
@@ -316,7 +348,6 @@ func (aw *archiveWriter) writeMetadata(data []byte) error {
 	}
 	aw.bytesWritten += uint64(written)
 	aw.metadataLen = uint32(written)
-	aw.metadataCheckSum = sha512Sum(aw.output.GetSum())
 	aw.output.ResetHasher()
 	aw.workflowStage = stageFooter
 
@@ -354,7 +385,7 @@ func (aw *archiveWriter) writeFooter() error {
 		return err
 	}
 
-	err = aw.writeCheckSums()
+	err = aw.writeEmptyCheckSums()
 	if err != nil {
 		return err
 	}
@@ -374,35 +405,22 @@ func (aw *archiveWriter) writeFooter() error {
 	aw.bytesWritten += archiveFileSigSize
 	aw.workflowStage = stageFlush
 
-	aw.footerCheckSum = sha512Sum(aw.output.GetSum())
-	aw.output.ResetHasher()
-
 	aw.fullMD5 = md5Sum(aw.md5Summer.GetSum())
 
 	return nil
 }
 
-func (aw *archiveWriter) writeCheckSums() error {
-	err := aw.writeSha512(aw.dataCheckSum)
+// writeEmptyCheckSums writes 3 empty sha512 checksum of all zeros to the archive output. This is a hold over from previous
+// versions of the archive format that had checksums for data, index, and metadata. It's easier to keep the data empty
+// data in the index than implement a new format version. We've never used these checksums for anything.
+func (aw *archiveWriter) writeEmptyCheckSums() error {
+	var zeros [(3 * sha512.Size)]byte
+	written, err := aw.output.Write(zeros[:])
 	if err != nil {
 		return err
 	}
 
-	err = aw.writeSha512(aw.indexCheckSum)
-	if err != nil {
-		return err
-	}
-
-	return aw.writeSha512(aw.metadataCheckSum)
-}
-
-func (aw *archiveWriter) writeSha512(sha sha512Sum) error {
-	_, err := aw.output.Write(sha[:])
-	if err != nil {
-		return err
-	}
-
-	aw.bytesWritten += sha512.Size
+	aw.bytesWritten += uint64(written)
 	return nil
 }
 
@@ -458,7 +476,7 @@ func (aw *archiveWriter) getName() (hash.Hash, error) {
 		return hash.Hash{}, fmt.Errorf("Runtime error: getName called out of order")
 	}
 
-	return hash.New(aw.footerCheckSum[:hash.ByteLen]), nil
+	return hash.New(aw.suffixCheckSum[:hash.ByteLen]), nil
 }
 
 // genFileName generates the file name for the archive. The path argument is the directory where the file should be written.
@@ -539,9 +557,13 @@ func (asw *ArchiveStreamWriter) Finish() (uint32, string, error) {
 		}
 	}
 
-	// This will perform all the steps to construct an archive file - starting with the finalization of byte spans.
+	// This will perform all the steps to construct an archive file.
 	// All writeByteSpan calls and stage* calls must be completed before this.
-	err := indexFinalize(asw.writer, hash.Hash{})
+	err := asw.writer.finalizeByteSpans()
+	if err != nil {
+		return 0, "", err
+	}
+	err = asw.writer.indexFinalize(hash.Hash{})
 	if err != nil {
 		return 0, "", err
 	}
@@ -707,4 +729,175 @@ func (asw *ArchiveStreamWriter) convertSnappyAndStage(cc CompressedChunk) (uint3
 	bytesWritten := uint32(len(compressedData))
 
 	return bytesWritten, asw.writer.stageZStdChunk(h, dictId, dataId)
+}
+
+// conjoinAll combines two or more archiveReader instances into a single archive.
+// This method takes a slice of archiveReader instances and merges their contents
+// into the current archiveWriter.
+//
+// This method finalizes the index and footer. Effectively completes the in memory archive writing
+// process, but does not write it to disk.
+func (aw *archiveWriter) conjoinAll(ctx context.Context, readers []archiveReader) error {
+	if len(readers) < 2 {
+		return fmt.Errorf("conjoinAll requires at least 2 archive readers, got %d", len(readers))
+	}
+
+	stats := &Stats{}
+
+	for _, reader := range readers {
+		currentByteOffset := aw.bytesWritten
+
+		// Write the entire data section for the current reader.
+		dataSpan := reader.footer.dataSpan()
+		sectionReader := newSectionReader(ctx, reader.reader, int64(dataSpan.offset), int64(dataSpan.length), stats)
+
+		written, err := io.Copy(aw.output, sectionReader)
+		if err != nil {
+			return fmt.Errorf("failed to copy data from archive: %w", err)
+		}
+		aw.bytesWritten += uint64(written)
+
+		// Map byte span IDs from this reader to the combined archive
+		spanIdOffset := uint32(len(aw.stagedBytes))
+		for i := uint32(1); i <= reader.footer.byteSpanCount; i++ {
+			span := reader.getByteSpanByID(i)
+			adjustedSpan := byteSpan{
+				offset: span.offset + currentByteOffset,
+				length: span.length,
+			}
+			aw.stagedBytes = append(aw.stagedBytes, adjustedSpan)
+		}
+
+		for i := 0; i < int(reader.footer.chunkCount); i++ {
+			dictId, dataId := reader.getChunkRef(i)
+
+			// Reconstruct the hash from prefix and suffix
+			prefix := reader.indexReader.getPrefix(uint32(i))
+			suffix := reader.indexReader.getSuffix(uint32(i))
+			chunkHash := reconstructHashFromPrefixAndSuffix(prefix, suffix)
+
+			// Add to seen chunks and staged chunks. Note that we allow duplicates here, whereas we quietly skip
+			// duplicates when doing a chunk-by-chunk build of an archive.
+			aw.seenChunks.Insert(chunkHash)
+
+			// Adjust byte span IDs for the combined archive
+			adjustedDictId := dictId
+			adjustedDataId := dataId
+			if dictId != 0 {
+				adjustedDictId = dictId + spanIdOffset
+			}
+			adjustedDataId = dataId + spanIdOffset
+
+			aw.stagedChunks = append(aw.stagedChunks, stagedChunkRef{
+				hash:       chunkHash,
+				dictionary: adjustedDictId,
+				data:       adjustedDataId,
+			})
+		}
+	}
+
+	err := aw.finalizeByteSpans()
+	if err != nil {
+		return err
+	}
+	err = aw.indexFinalize(hash.Hash{})
+	if err != nil {
+		return fmt.Errorf("failed to finalize archive: %w", err)
+	}
+
+	return nil
+}
+
+func planArchiveConjoin(sources []sourceWithSize) (compactionPlan, error) {
+	if len(sources) < 2 {
+		return compactionPlan{}, fmt.Errorf("conjoinIndexes requires at least 2 archive readers, got %d", len(sources))
+	}
+
+	writer := NewBlockBufferByteSink(fourMb)
+	aw := newArchiveWriterWithSink(writer)
+
+	currentDataOffset := uint64(0)
+	chunkCounter := uint32(0)
+
+	for _, src := range sources {
+		reader := src.source
+		arcSrc, ok := reader.(archiveChunkSource)
+		if !ok {
+			return compactionPlan{}, fmt.Errorf("runtime error: source %T is not an archiveChunkSource", reader)
+		}
+
+		footer := arcSrc.aRdr.footer
+
+		chunkCounter += footer.chunkCount
+
+		// Map byte span IDs from this reader to the combined archive
+		spanIdOffset := uint32(len(aw.stagedBytes))
+		for i := uint32(1); i <= footer.byteSpanCount; i++ {
+			span := arcSrc.aRdr.getByteSpanByID(i)
+			adjustedSpan := byteSpan{
+				offset: span.offset + currentDataOffset,
+				length: span.length,
+			}
+			aw.stagedBytes = append(aw.stagedBytes, adjustedSpan)
+		}
+
+		for i := 0; i < int(footer.chunkCount); i++ {
+			dictId, dataId := arcSrc.aRdr.getChunkRef(i)
+
+			prefix := arcSrc.aRdr.indexReader.getPrefix(uint32(i))
+			suffix := arcSrc.aRdr.indexReader.getSuffix(uint32(i))
+			chunkHash := reconstructHashFromPrefixAndSuffix(prefix, suffix)
+
+			// Add to seen chunks and staged chunks. Note that we allow duplicates here, whereas we quietly skip
+			// duplicates when doing a chunk-by-chunk build of an archive.
+			aw.seenChunks.Insert(chunkHash)
+
+			// Adjust byte span IDs for the combined archive
+			adjustedDictId := dictId
+			adjustedDataId := dataId
+			if dictId != 0 {
+				adjustedDictId = dictId + spanIdOffset
+			}
+			adjustedDataId = dataId + spanIdOffset
+
+			aw.stagedChunks = append(aw.stagedChunks, stagedChunkRef{
+				hash:       chunkHash,
+				dictionary: adjustedDictId,
+				data:       adjustedDataId,
+			})
+		}
+		currentDataOffset += src.dataLen
+	}
+
+	aw.bytesWritten = currentDataOffset
+
+	// The conjoin process is a little different than the normal archive writing process. We manually stick everything
+	// into the writer, and then finalize the index and footer at the end. The datablocks will be written in separately
+	// after we have created the index and footer.
+	//
+	// So we set the workflow stage to stageIndex because we skipped the byte span insertion stage.
+	aw.workflowStage = stageIndex
+
+	err := aw.indexFinalize(hash.Hash{})
+	if err != nil {
+		return compactionPlan{}, fmt.Errorf("failed to finalize archive: %w", err)
+	}
+
+	name, err := aw.getName()
+	if err != nil {
+		return compactionPlan{}, fmt.Errorf("failed to get name of conjoined archive: %w", err)
+	}
+
+	buf := bytes.NewBuffer(make([]byte, 0, writer.pos))
+	if err := writer.Flush(buf); err != nil {
+		return compactionPlan{}, fmt.Errorf("failed to build index buffer while conjoining archives: %w", err)
+	}
+
+	return compactionPlan{
+		sources:     chunkSourcesByDescendingDataSize{sources},
+		name:        name,
+		suffix:      ArchiveFileSuffix,
+		mergedIndex: buf.Bytes(),
+		chunkCount:  chunkCounter,
+	}, nil
 }
