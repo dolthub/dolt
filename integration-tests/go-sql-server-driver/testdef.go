@@ -379,10 +379,10 @@ func (test Test) Run(t *testing.T) {
 				require.NoError(t, err)
 				defer conn.Close()
 
-                // Default compact schema for this connection (session var)
-                {
+                // Default compact schema for this connection when running server-engine tests
+                if os.Getenv("SERVER_ENGINE_TEST") == "true" {
                     ctx, c := context.WithTimeout(context.Background(), timeout)
-                    _, _ = conn.ExecContext(ctx, "SET dolt_log_compact_schema = 1;")
+                    _, _ = conn.ExecContext(ctx, "SET @@GLOBAL.dolt_log_compact_schema = 1;")
                     c()
                 }
 
@@ -400,10 +400,10 @@ func (test Test) Run(t *testing.T) {
 				require.NoError(t, err)
 				defer conn.Close()
 
-                // Default compact schema for this connection (session var)
-                {
+                // Default compact schema for this connection when running server-engine tests
+                if os.Getenv("SERVER_ENGINE_TEST") == "true" {
                     ctx, c := context.WithTimeout(context.Background(), timeout)
-                    _, _ = conn.ExecContext(ctx, "SET dolt_log_compact_schema = 1;")
+                    _, _ = conn.ExecContext(ctx, "SET @@GLOBAL.dolt_log_compact_schema = 1;")
                     c()
                 }
 
