@@ -618,8 +618,8 @@ func (db Database) getTableInsensitiveWithRoot(ctx *sql.Context, head *doltdb.Co
 	var dt sql.Table
 	found := false
 	tname := doltdb.TableName{Name: lwrName, Schema: db.schemaName}
-	switch lwrName {
-	case doltdb.GetLogTableName(), doltdb.LogTableName:
+    switch lwrName {
+    case doltdb.GetLogTableName(), doltdb.LogTableName:
 		isDoltgresSystemTable, err := resolve.IsDoltgresSystemTable(ctx, tname, root)
 		if err != nil {
 			return nil, false, err
@@ -633,8 +633,30 @@ func (db Database) getTableInsensitiveWithRoot(ctx *sql.Context, head *doltdb.Co
 				}
 			}
 
-			dt, found = dtables.NewLogTable(ctx, db.Name(), lwrName, db.ddb, head), true
+            // Decide compactness based on session variable only
+            useCompact := false
+            if v, err := ctx.GetSessionVariable(ctx, dsess.DoltLogCompactSchema); err == nil {
+                if i8, ok := v.(int8); ok && i8 == dsess.SysVarTrue {
+                    useCompact = true
+                }
+            }
+            dt, found = dtables.NewLogTable(ctx, db.Name(), lwrName, db.ddb, head, useCompact), true
 		}
+    case doltdb.LogTableNameCompact:
+        isDoltgresSystemTable, err := resolve.IsDoltgresSystemTable(ctx, tname, root)
+        if err != nil {
+            return nil, false, err
+        }
+        if !resolve.UseSearchPath || isDoltgresSystemTable {
+            if head == nil {
+                var err error
+                head, err = ds.GetHeadCommit(ctx, db.RevisionQualifiedName())
+                if err != nil {
+                    return nil, false, err
+                }
+            }
+            dt, found = dtables.NewLogTable(ctx, db.Name(), lwrName, db.ddb, head, true), true
+        }
 	case doltdb.DiffTableName, doltdb.GetDiffTableName():
 		isDoltgresSystemTable, err := resolve.IsDoltgresSystemTable(ctx, tname, root)
 		if err != nil {
