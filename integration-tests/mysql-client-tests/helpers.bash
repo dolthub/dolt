@@ -14,13 +14,14 @@ setup_dolt_repo() {
     PORT=$( definePORT )
     USER="dolt"
     dolt sql -q "CREATE USER dolt@'%'; GRANT ALL ON *.* TO dolt@'%';"
+    
+    # Start server with compact dolt_log schema for compatibility with test expectations
+    dolt sql -q "SET PERSIST dolt_log_compact_schema = 1;"
+    dolt sql -q "SET GLOBAL dolt_log_compact_schema = 1;"
     dolt sql-server --host 0.0.0.0 --port=$PORT --loglevel=trace &
     SERVER_PID=$!
     # Give the server a chance to start
     sleep 1
-
-  # Ensure compact dolt_log schema for server sessions used by client tests
-  dolt --host 0.0.0.0 --port=$PORT -u $USER sql -q "SET @@GLOBAL.dolt_log_compact_schema = 1;" >/dev/null 2>&1 || true
 
     export MYSQL_PWD=""
 }
