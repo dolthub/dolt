@@ -6635,7 +6635,7 @@ var QueryDiffTableScriptTests = []queries.ScriptTest{
 			"CREATE TABLE not_ignored_table (pk int primary key, c1 int);",
 			"CALL DOLT_ADD('.')",
 			"CALL DOLT_COMMIT('-m', 'add tables');",
-			"INSERT INTO dolt_ignore VALUES ('ignored_table', true);",
+			"INSERT INTO dolt_ignore VALUES ('ignored_table2', true);",
 			"CREATE TABLE ignored_table2 (pk int primary key, c2 int);",
 			"CREATE TABLE not_ignored_table2 (pk int primary key, c2 int);",
 		},
@@ -6653,6 +6653,8 @@ var QueryDiffTableScriptTests = []queries.ScriptTest{
 	{
 		Name: "dolt_diff_summary respects dolt_ignore: wildcard patterns",
 		SetUpScript: []string{
+			"CREATE TABLE initial_table (pk int primary key);",
+			"CALL DOLT_ADD('.');",
 			"CALL DOLT_COMMIT('-m', 'initial');",
 			"INSERT INTO dolt_ignore VALUES ('temp_*', true);",
 			"CREATE TABLE temp_table1 (pk int primary key);",
@@ -6673,6 +6675,8 @@ var QueryDiffTableScriptTests = []queries.ScriptTest{
 	{
 		Name: "dolt_diff_summary respects dolt_ignore: mixed ignore/don't ignore patterns",
 		SetUpScript: []string{
+			"CREATE TABLE initial_table (pk int primary key);",
+			"CALL DOLT_ADD('.');",
 			"CALL DOLT_COMMIT('-m', 'initial');",
 			"INSERT INTO dolt_ignore VALUES ('temp_*', true);",
 			"INSERT INTO dolt_ignore VALUES ('temp_important', false);", // don't ignore this one
@@ -6694,6 +6698,8 @@ var QueryDiffTableScriptTests = []queries.ScriptTest{
 	{
 		Name: "dolt_diff_summary respects dolt_ignore: specific table query",
 		SetUpScript: []string{
+			"CREATE TABLE initial_table (pk int primary key);",
+			"CALL DOLT_ADD('.');",
 			"CALL DOLT_COMMIT('-m', 'initial');",
 			"INSERT INTO dolt_ignore VALUES ('ignored_table', true);",
 			"CREATE TABLE ignored_table (pk int primary key);",
