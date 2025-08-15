@@ -36,14 +36,14 @@ const logsDefaultRowCount = 100
 
 // LogTable is a sql.Table implementation that implements a system table which shows the dolt commit log
 type LogTable struct {
-	dbName            string
-	tableName         string
-	ddb               *doltdb.DoltDB
-	head              *doltdb.Commit
-	headHash          hash.Hash
-	headCommitClosure *prolly.CommitClosure
-    ctx               *sql.Context // session context used for sysvar lookup
-    useCompactOverride bool        // forces compact schema/rows regardless of session var when true
+	dbName             string
+	tableName          string
+	ddb                *doltdb.DoltDB
+	head               *doltdb.Commit
+	headHash           hash.Hash
+	headCommitClosure  *prolly.CommitClosure
+	ctx                *sql.Context // session context used for sysvar lookup
+	useCompactOverride bool         // forces compact schema/rows regardless of session var when true
 }
 
 var _ sql.Table = (*LogTable)(nil)
@@ -52,7 +52,7 @@ var _ sql.IndexAddressable = (*LogTable)(nil)
 
 // NewLogTable creates a LogTable
 func NewLogTable(ctx *sql.Context, dbName, tableName string, ddb *doltdb.DoltDB, head *doltdb.Commit, useCompactOverride bool) sql.Table {
-    return &LogTable{dbName: dbName, tableName: tableName, ddb: ddb, head: head, ctx: ctx, useCompactOverride: useCompactOverride}
+	return &LogTable{dbName: dbName, tableName: tableName, ddb: ddb, head: head, ctx: ctx, useCompactOverride: useCompactOverride}
 }
 
 // DataLength implements sql.StatisticsTable
@@ -90,21 +90,21 @@ func (dt *LogTable) String() string {
 }
 
 func UseCompactSchema(ctx *sql.Context) bool {
-    if ctx == nil {
-        return false
-    }
-    val, err := dsess.GetBooleanSystemVar(ctx, dsess.DoltLogCompactSchema)
-    if err != nil {
-        return false
-    }
-    return val
+	if ctx == nil {
+		return false
+	}
+	val, err := dsess.GetBooleanSystemVar(ctx, dsess.DoltLogCompactSchema)
+	if err != nil {
+		return false
+	}
+	return val
 }
 
 // BuildLogRowWithOverride builds a row using compact if forceCompact is true, otherwise uses session var.
 func BuildLogRowWithOverride(ctx *sql.Context, commitHash hash.Hash, meta *datas.CommitMeta, height uint64, useCompactOverride bool) sql.Row {
-    useCompact := useCompactOverride || UseCompactSchema(ctx)
+	useCompact := useCompactOverride || UseCompactSchema(ctx)
 	var timestamp time.Time
-    if useCompact {
+	if useCompact {
 		timestamp = meta.Time()
 	} else {
 		timestamp = meta.CommitterTime()
@@ -119,7 +119,7 @@ func BuildLogRowWithOverride(ctx *sql.Context, commitHash hash.Hash, meta *datas
 		height,
 	}
 
-    if !useCompact {
+	if !useCompact {
 		values = append(values,
 			meta.Name,
 			meta.Email,
@@ -132,7 +132,7 @@ func BuildLogRowWithOverride(ctx *sql.Context, commitHash hash.Hash, meta *datas
 
 // BuildLogRow builds a row using only the session var to determine compactness (no override).
 func BuildLogRow(ctx *sql.Context, commitHash hash.Hash, meta *datas.CommitMeta, height uint64) sql.Row {
-    return BuildLogRowWithOverride(ctx, commitHash, meta, height, false)
+	return BuildLogRowWithOverride(ctx, commitHash, meta, height, false)
 }
 
 var LogSchemaCompact = sql.Schema{
@@ -184,24 +184,24 @@ func GetLogTableSchema(ctx *sql.Context, tableName, dbName string) sql.Schema {
 
 // GetLogTableSchemaWithOverride returns the schema using compact if useCompactOverride is true, otherwise uses session var.
 func GetLogTableSchemaWithOverride(ctx *sql.Context, tableName, dbName string, useCompactOverride bool) sql.Schema {
-    if useCompactOverride {
-        baseSchema := make(sql.Schema, len(LogSchemaCompact))
-        copy(baseSchema, LogSchemaCompact)
-        for _, col := range baseSchema {
-            col.Source = tableName
-            col.DatabaseSource = dbName
-            if col.Name == "commit_hash" {
-                col.PrimaryKey = true
-            }
-        }
-        return baseSchema
-    }
-    return GetLogTableSchema(ctx, tableName, dbName)
+	if useCompactOverride {
+		baseSchema := make(sql.Schema, len(LogSchemaCompact))
+		copy(baseSchema, LogSchemaCompact)
+		for _, col := range baseSchema {
+			col.Source = tableName
+			col.DatabaseSource = dbName
+			if col.Name == "commit_hash" {
+				col.PrimaryKey = true
+			}
+		}
+		return baseSchema
+	}
+	return GetLogTableSchema(ctx, tableName, dbName)
 }
 
 // Schema is a sql.Table interface function that gets the sql.Schema of the log system table.
 func (dt *LogTable) Schema() sql.Schema {
-    return GetLogTableSchemaWithOverride(dt.ctx, dt.tableName, dt.dbName, dt.useCompactOverride)
+	return GetLogTableSchemaWithOverride(dt.ctx, dt.tableName, dt.dbName, dt.useCompactOverride)
 }
 
 // Collation implements the sql.Table interface.
@@ -222,9 +222,9 @@ func (dt *LogTable) PartitionRows(ctx *sql.Context, p sql.Partition) (sql.RowIte
 		if err != nil {
 			return nil, err
 		}
-        return sql.RowsToRowIter(BuildLogRowWithOverride(ctx, p.Hash(), p.Meta(), height, dt.useCompactOverride)), nil
+		return sql.RowsToRowIter(BuildLogRowWithOverride(ctx, p.Hash(), p.Meta(), height, dt.useCompactOverride)), nil
 	default:
-        return NewLogItr(ctx, dt.ddb, dt.head, dt.useCompactOverride)
+		return NewLogItr(ctx, dt.ddb, dt.head, dt.useCompactOverride)
 	}
 }
 
@@ -322,8 +322,8 @@ func (dt *LogTable) HeadHash() (hash.Hash, error) {
 
 // LogItr is a sql.RowItr implementation which iterates over each commit as if it's a row in the table.
 type LogItr struct {
-    child              doltdb.CommitItr[*sql.Context]
-    useCompactOverride bool
+	child              doltdb.CommitItr[*sql.Context]
+	useCompactOverride bool
 }
 
 // NewLogItr creates a LogItr from the current environment.
@@ -338,7 +338,7 @@ func NewLogItr(ctx *sql.Context, ddb *doltdb.DoltDB, head *doltdb.Commit, useCom
 		return nil, err
 	}
 
-    return &LogItr{child: child, useCompactOverride: useCompactOverride}, nil
+	return &LogItr{child: child, useCompactOverride: useCompactOverride}, nil
 }
 
 // Next retrieves the next row. It will return io.EOF if it's the last row.
@@ -365,7 +365,7 @@ func (itr *LogItr) Next(ctx *sql.Context) (sql.Row, error) {
 		return nil, err
 	}
 
-    return BuildLogRowWithOverride(ctx, h, meta, height, itr.useCompactOverride), nil
+	return BuildLogRowWithOverride(ctx, h, meta, height, itr.useCompactOverride), nil
 }
 
 // Close closes the iterator.
