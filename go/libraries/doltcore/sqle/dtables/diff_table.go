@@ -957,14 +957,14 @@ func expandFromToSchemas(fromSch, toSch schema.Schema) (newFromSch, newToSch sch
 	if fromSch == nil && toSch == nil {
 		return nil, nil, errors.New("non-nil argument required to CalculateDiffSchema")
 	} else if fromSch == nil {
-		fromClmCol = toSch.GetAllCols()
-		toClmCol = toSch.GetAllCols()
+		fromClmCol = filterVirtualColumns(toSch.GetAllCols())
+		toClmCol = filterVirtualColumns(toSch.GetAllCols())
 	} else if toSch == nil {
-		toClmCol = fromSch.GetAllCols()
-		fromClmCol = fromSch.GetAllCols()
+		toClmCol = filterVirtualColumns(fromSch.GetAllCols())
+		fromClmCol = filterVirtualColumns(fromSch.GetAllCols())
 	} else {
-		fromClmCol = fromSch.GetAllCols()
-		toClmCol = toSch.GetAllCols()
+		fromClmCol = filterVirtualColumns(fromSch.GetAllCols())
+		toClmCol = filterVirtualColumns(toSch.GetAllCols())
 	}
 
 	fromClmCol = fromClmCol.Append(
@@ -980,6 +980,18 @@ func expandFromToSchemas(fromSch, toSch schema.Schema) (newFromSch, newToSch sch
 	return
 }
 
+// filterVirtualColumns returns a new ColCollection with virtual generated columns removed
+func filterVirtualColumns(cols *schema.ColCollection) *schema.ColCollection {
+	var filteredCols []schema.Column
+	cols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+		if !col.Virtual {
+			filteredCols = append(filteredCols, col)
+		}
+		return false, nil
+	})
+	return schema.NewColCollection(filteredCols...)
+}
+
 // CalculateDiffSchema returns the schema for the dolt_diff table based on the schemas from the from and to tables.
 // Either may be nil, in which case the nil argument will use the schema of the non-nil argument
 func CalculateDiffSchema(fromSch, toSch schema.Schema) (schema.Schema, error) {
@@ -988,15 +1000,19 @@ func CalculateDiffSchema(fromSch, toSch schema.Schema) (schema.Schema, error) {
 		return nil, err
 	}
 
-	cols := make([]schema.Column, toSch.GetAllCols().Size()+fromSch.GetAllCols().Size()+1)
+	var cols []schema.Column
 
 	i := 0
 	err = toSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+		// Skip virtual generated columns
+		if col.Virtual {
+			return false, nil
+		}
 		toCol, err := schema.NewColumnWithTypeInfo(diff.ToColNamer(col.Name), uint64(i), col.TypeInfo, false, col.Default, false, col.Comment)
 		if err != nil {
 			return true, err
 		}
-		cols[i] = toCol
+		cols = append(cols, toCol)
 		i++
 		return false, nil
 	})
@@ -1004,22 +1020,24 @@ func CalculateDiffSchema(fromSch, toSch schema.Schema) (schema.Schema, error) {
 		return nil, err
 	}
 
-	j := toSch.GetAllCols().Size()
 	err = fromSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		fromCol, err := schema.NewColumnWithTypeInfo(diff.FromColNamer(col.Name), uint64(j), col.TypeInfo, false, col.Default, false, col.Comment)
+		// Skip virtual generated columns
+		if col.Virtual {
+			return false, nil
+		}
+		fromCol, err := schema.NewColumnWithTypeInfo(diff.FromColNamer(col.Name), uint64(i), col.TypeInfo, false, col.Default, false, col.Comment)
 		if err != nil {
 			return true, err
 		}
-		cols[j] = fromCol
-
-		j++
+		cols = append(cols, fromCol)
+		i++
 		return false, nil
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	cols[len(cols)-1] = schema.NewColumn(diffTypeColName, schema.DiffTypeTag, types.StringKind, false)
+	cols = append(cols, schema.NewColumn(diffTypeColName, schema.DiffTypeTag, types.StringKind, false))
 
 	return schema.UnkeyedSchemaFromCols(schema.NewColCollection(cols...)), nil
 }
