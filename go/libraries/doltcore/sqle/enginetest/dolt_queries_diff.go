@@ -3940,21 +3940,21 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 			"CALL dolt_commit('-m', 'table with bigint unsigned column')",
 		},
 		Assertions: []queries.ScriptTestAssertion{
-            {
-                Query: "SELECT statement FROM dolt_patch('old', 'new', 'table_name') WHERE diff_type = 'schema' ORDER BY statement_order",
-                Expected: []sql.Row{
-                    {"ALTER TABLE `table_name` MODIFY COLUMN `field_change_sign` bigint unsigned DEFAULT NULL;"},
-                },
-            },
-            {
-                Query: "SELECT statement FROM dolt_patch('old', 'new') WHERE diff_type = 'schema' ORDER BY statement_order",
-                Expected: []sql.Row{
-                    {"ALTER TABLE `table_name` MODIFY COLUMN `field_change_sign` bigint unsigned DEFAULT NULL;"},
-                },
-            },
+			{
+				Query: "SELECT statement FROM dolt_patch('old', 'new', 'table_name') WHERE diff_type = 'schema' ORDER BY statement_order",
+				Expected: []sql.Row{
+					{"ALTER TABLE `table_name` MODIFY COLUMN `field_change_sign` bigint unsigned DEFAULT NULL;"},
+				},
+			},
+			{
+				Query: "SELECT statement FROM dolt_patch('old', 'new') WHERE diff_type = 'schema' ORDER BY statement_order",
+				Expected: []sql.Row{
+					{"ALTER TABLE `table_name` MODIFY COLUMN `field_change_sign` bigint unsigned DEFAULT NULL;"},
+				},
+			},
 			{
 				// Verify that the indexes are indeed identical on both branches
-				Query: "SELECT COUNT(*) FROM (SELECT index_name, non_unique, column_name FROM INFORMATION_SCHEMA.STATISTICS WHERE table_name = 'table_name' AND table_schema = 'mydb' ORDER BY index_name, seq_in_index) as old_indexes",
+				Query:    "SELECT COUNT(*) FROM (SELECT index_name, non_unique, column_name FROM INFORMATION_SCHEMA.STATISTICS WHERE table_name = 'table_name' AND table_schema = 'mydb' ORDER BY index_name, seq_in_index) as old_indexes",
 				Expected: []sql.Row{{3}}, // PRIMARY, field_name_UNIQUE, fk_field_name_idx
 			},
 		},

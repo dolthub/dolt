@@ -111,7 +111,7 @@ func generateNonCreateNonDropTableSqlSchemaDiff(td diff.TableDelta, toSchemas ma
 	}
 
 	colDiffs, unionTags := diff.DiffSchColumns(fromSch, toSch)
-	
+
 	// Build maps to detect same-name column changes (DROP+ADD -> MODIFY)
 	addedByName := make(map[string]*schema.Column)
 	removedByName := make(map[string]*schema.Column)
@@ -123,7 +123,7 @@ func generateNonCreateNonDropTableSqlSchemaDiff(td diff.TableDelta, toSchemas ma
 			removedByName[cd.Old.Name] = cd.Old
 		}
 	}
-	
+
 	processedNames := make(map[string]bool)
 	for _, tag := range unionTags {
 		cd := colDiffs[tag]
