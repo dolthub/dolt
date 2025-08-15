@@ -173,6 +173,8 @@ func (ix *indexImpl) DeepEquals(other Index) bool {
 
 	return ix.IsUnique() == other.IsUnique() &&
 		ix.IsSpatial() == other.IsSpatial() &&
+		ix.IsFullText() == other.IsFullText() &&
+		ix.IsVector() == other.IsVector() &&
 		compareUint16Slices(ix.PrefixLengths(), other.PrefixLengths()) &&
 		ix.Comment() == other.Comment() &&
 		ix.Name() == other.Name()

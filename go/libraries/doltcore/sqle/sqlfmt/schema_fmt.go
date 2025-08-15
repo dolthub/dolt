@@ -110,89 +110,58 @@ func generateNonCreateNonDropTableSqlSchemaDiff(td diff.TableDelta, toSchemas ma
 		return ddlStatements, nil
 	}
 
-    colDiffs, unionTags := diff.DiffSchColumns(fromSch, toSch)
-
-    // Build name-based maps of added and removed columns to enable coalescing DROP+ADD -> MODIFY for same-name columns
-    addedByName := make(map[string]*schema.Column)
-    removedByName := make(map[string]*schema.Column)
-    for _, tag := range unionTags {
-        cd := colDiffs[tag]
-        switch cd.DiffType {
-        case diff.SchDiffAdded:
-            if cd.New != nil {
-                addedByName[cd.New.Name] = cd.New
-            }
-        case diff.SchDiffRemoved:
-            if cd.Old != nil {
-                removedByName[cd.Old.Name] = cd.Old
-            }
-        }
-    }
-
-    // Determine which names can be safely coalesced
-    coalesceNames := make(map[string]*schema.Column) // value is the new column definition to use for MODIFY
-    for name, newCol := range addedByName {
-        if oldCol, ok := removedByName[name]; ok {
-            // Only coalesce when PK membership does not change
-            if oldCol.IsPartOfPK == newCol.IsPartOfPK {
-                coalesceNames[name] = newCol
-            }
-        }
-    }
-
-    // Track which coalesced names have already emitted a MODIFY
-    emittedModify := make(map[string]bool)
-
-    for _, tag := range unionTags {
-        cd := colDiffs[tag]
-        switch cd.DiffType {
-        case diff.SchDiffNone:
-            // no-op
-        case diff.SchDiffAdded:
-            // If this add is paired with a drop of the same name, emit a single MODIFY instead
-            if cd.New != nil {
-                if _, shouldCoalesce := coalesceNames[cd.New.Name]; shouldCoalesce {
-                    if !emittedModify[cd.New.Name] {
-                        ddlStatements = append(ddlStatements, AlterTableModifyColStmt(td.ToName.Name,
-                            GenerateCreateTableColumnDefinition(*cd.New, sql.CollationID(td.ToSch.GetCollation()))))
-                        emittedModify[cd.New.Name] = true
-                    }
-                    // skip emitting ADD
-                    continue
-                }
-            }
-            ddlStatements = append(ddlStatements, AlterTableAddColStmt(td.ToName.Name, GenerateCreateTableColumnDefinition(*cd.New, sql.CollationID(td.ToSch.GetCollation()))))
-        case diff.SchDiffRemoved:
-            // If this drop is paired with an add of the same name, emit a single MODIFY instead
-            if cd.Old != nil {
-                if _, shouldCoalesce := coalesceNames[cd.Old.Name]; shouldCoalesce {
-                    if !emittedModify[cd.Old.Name] {
-                        // Use the "new" column definition for the MODIFY statement
-                        newCol := coalesceNames[cd.Old.Name]
-                        ddlStatements = append(ddlStatements, AlterTableModifyColStmt(td.ToName.Name,
-                            GenerateCreateTableColumnDefinition(*newCol, sql.CollationID(td.ToSch.GetCollation()))))
-                        emittedModify[cd.Old.Name] = true
-                    }
-                    // skip emitting DROP
-                    continue
-                }
-            }
-            ddlStatements = append(ddlStatements, AlterTableDropColStmt(td.ToName.Name, cd.Old.Name))
-        case diff.SchDiffModified:
-            // Ignore any primary key set changes here
-            if cd.Old.IsPartOfPK != cd.New.IsPartOfPK {
-                continue
-            }
-            if cd.Old.Name != cd.New.Name {
-                ddlStatements = append(ddlStatements, AlterTableRenameColStmt(td.ToName.Name, cd.Old.Name, cd.New.Name))
-            }
-            // Only emit MODIFY when properties beyond the name actually change
-            if columnDefinitionChangedExceptName(*cd.Old, *cd.New) {
-                ddlStatements = append(ddlStatements, AlterTableModifyColStmt(td.ToName.Name,
-                    GenerateCreateTableColumnDefinition(*cd.New, sql.CollationID(td.ToSch.GetCollation()))))
-            }
-        }
-    }
+	colDiffs, unionTags := diff.DiffSchColumns(fromSch, toSch)
+	
+	// Build maps to detect same-name column changes (DROP+ADD -> MODIFY)
+	addedByName := make(map[string]*schema.Column)
+	removedByName := make(map[string]*schema.Column)
+	for _, tag := range unionTags {
+		cd := colDiffs[tag]
+		if cd.DiffType == diff.SchDiffAdded && cd.New != nil {
+			addedByName[cd.New.Name] = cd.New
+		} else if cd.DiffType == diff.SchDiffRemoved && cd.Old != nil {
+			removedByName[cd.Old.Name] = cd.Old
+		}
+	}
+	
+	processedNames := make(map[string]bool)
+	for _, tag := range unionTags {
+		cd := colDiffs[tag]
+		switch cd.DiffType {
+		case diff.SchDiffNone:
+		case diff.SchDiffAdded:
+			// Convert DROP+ADD of same name to MODIFY if PK membership unchanged
+			if cd.New != nil && removedByName[cd.New.Name] != nil && !processedNames[cd.New.Name] {
+				if removedByName[cd.New.Name].IsPartOfPK == cd.New.IsPartOfPK {
+					ddlStatements = append(ddlStatements, AlterTableModifyColStmt(td.ToName.Name,
+						GenerateCreateTableColumnDefinition(*cd.New, sql.CollationID(td.ToSch.GetCollation()))))
+					processedNames[cd.New.Name] = true
+					continue
+				}
+			}
+			ddlStatements = append(ddlStatements, AlterTableAddColStmt(td.ToName.Name, GenerateCreateTableColumnDefinition(*cd.New, sql.CollationID(td.ToSch.GetCollation()))))
+		case diff.SchDiffRemoved:
+			// Skip DROP if it pairs with ADD of same name (handled above)
+			if cd.Old != nil && addedByName[cd.Old.Name] != nil && !processedNames[cd.Old.Name] {
+				if cd.Old.IsPartOfPK == addedByName[cd.Old.Name].IsPartOfPK {
+					continue
+				}
+			}
+			ddlStatements = append(ddlStatements, AlterTableDropColStmt(td.ToName.Name, cd.Old.Name))
+		case diff.SchDiffModified:
+			// Ignore any primary key set changes here
+			if cd.Old.IsPartOfPK != cd.New.IsPartOfPK {
+				continue
+			}
+			if cd.Old.Name != cd.New.Name {
+				ddlStatements = append(ddlStatements, AlterTableRenameColStmt(td.ToName.Name, cd.Old.Name, cd.New.Name))
+			}
+			if !cd.Old.TypeInfo.Equals(cd.New.TypeInfo) {
+				ddlStatements = append(ddlStatements, AlterTableModifyColStmt(td.ToName.Name,
+					GenerateCreateTableColumnDefinition(*cd.New, sql.CollationID(td.ToSch.GetCollation()))))
+			}
+		}
+	}
 
 	// Print changes between a primary key set change. It contains an ALTER TABLE DROP and an ALTER TABLE ADD
 	if !schema.ColCollsAreEqual(fromSch.GetPKCols(), toSch.GetPKCols()) {
@@ -205,7 +174,6 @@ func generateNonCreateNonDropTableSqlSchemaDiff(td diff.TableDelta, toSchemas ma
 	for _, idxDiff := range diff.DiffSchIndexes(fromSch, toSch) {
 		switch idxDiff.DiffType {
 		case diff.SchDiffNone:
-			// Skip generating DDL for unchanged indexes
 		case diff.SchDiffAdded:
 			ddlStatements = append(ddlStatements, AlterTableAddIndexStmt(td.ToName.Name, idxDiff.To))
 		case diff.SchDiffRemoved:
@@ -327,34 +295,6 @@ func GenerateCreateTableCheckConstraintClause(check schema.Check) string {
 	return sql.GenerateCreateTableCheckConstraintClause(check.Name(), check.Expression(), check.Enforced())
 }
 
-// columnDefinitionChangedExceptName returns true if any property other than the name differs
-// between the two given columns. This intentionally mirrors the attributes we render in
-// GenerateCreateTableColumnDefinition, without re-checking tags or PK membership here.
-func columnDefinitionChangedExceptName(oldCol schema.Column, newCol schema.Column) bool {
-    if !oldCol.TypeInfo.Equals(newCol.TypeInfo) {
-        return true
-    }
-    if oldCol.Comment != newCol.Comment {
-        return true
-    }
-    if oldCol.IsNullable() != newCol.IsNullable() {
-        return true
-    }
-    if oldCol.AutoIncrement != newCol.AutoIncrement {
-        return true
-    }
-    if oldCol.Default != newCol.Default {
-        return true
-    }
-    if oldCol.Generated != newCol.Generated {
-        return true
-    }
-    if oldCol.OnUpdate != newCol.OnUpdate {
-        return true
-    }
-    return false
-}
-
 func DropTableStmt(tableName string) string {
 	var b strings.Builder
 	b.WriteString("DROP TABLE ")
@@ -455,25 +395,13 @@ func AlterTableAddIndexStmt(tableName string, idx schema.Index) string {
 	var b strings.Builder
 	b.WriteString("ALTER TABLE ")
 	b.WriteString(QuoteIdentifier(tableName))
-	b.WriteString(" ADD ")
-
-	// Generate correct index type based on index properties
-	switch {
-	case idx.IsUnique():
-		b.WriteString("UNIQUE INDEX ")
-	case idx.IsSpatial():
-		b.WriteString("SPATIAL INDEX ")
-	case idx.IsFullText():
-		b.WriteString("FULLTEXT INDEX ")
-	case idx.IsVector():
-		b.WriteString("VECTOR INDEX ")
-	default:
-		b.WriteString("INDEX ")
-	}
-
+	b.WriteString(" ADD INDEX ")
 	b.WriteString(QuoteIdentifier(idx.Name()))
-	b.WriteString("(" + strings.Join(sql.QuoteIdentifiers(idx.ColumnNames()), ",") + ")")
-	b.WriteRune(';')
+	var cols []string
+	for _, cn := range idx.ColumnNames() {
+		cols = append(cols, QuoteIdentifier(cn))
+	}
+	b.WriteString("(" + strings.Join(cols, ",") + ");")
 	return b.String()
 }
 

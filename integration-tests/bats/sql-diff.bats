@@ -927,3 +927,4 @@ ALTER TABLE \`table_name\` MODIFY COLUMN \`field_change_sign\` bigint unsigned D
     [[ ! "$output" =~ "DROP INDEX" ]] || false
     [[ ! "$output" =~ "ADD INDEX" ]] || false
 }
+
