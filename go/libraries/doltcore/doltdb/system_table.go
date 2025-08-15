@@ -943,7 +943,6 @@ const (
 // in the `dolt.` schema, e.g. `dolt.branches`
 var DoltGeneratedTableNames = []string{
 	LogTableName,
-    LogTableNameCompact,
 	DiffTableName,
 	ColumnDiffTableName,
 	TableOfTablesInConflictName,
