@@ -78,8 +78,8 @@ func newHarness(t *testing.T) *harness {
 // to be set on a Dolt replica before replication is turned on.
 var doltReplicaSystemVars = map[string]string{
 	"server_id": "42",
-    // Ensure legacy dolt_log schema for binlog assertions that reference `date`
-    "dolt_log_compact_schema": "1",
+	// Ensure legacy dolt_log schema for binlog assertions that reference `date`
+	"dolt_log_compact_schema": "1",
 }
 
 func TestMain(m *testing.M) {
