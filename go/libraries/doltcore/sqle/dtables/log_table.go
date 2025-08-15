@@ -90,14 +90,14 @@ func (dt *LogTable) String() string {
 }
 
 func UseCompactSchema(ctx *sql.Context) bool {
-	if ctx != nil {
-		if compactVal, err := ctx.GetSessionVariable(ctx, dsess.DoltLogCompactSchema); err == nil {
-			if i8, ok := compactVal.(int8); ok {
-				return i8 == dsess.SysVarTrue
-			}
-		}
-	}
-	return false
+    if ctx == nil {
+        return false
+    }
+    val, err := dsess.GetBooleanSystemVar(ctx, dsess.DoltLogCompactSchema)
+    if err != nil {
+        return false
+    }
+    return val
 }
 
 // BuildLogRowWithOverride builds a row using compact if forceCompact is true, otherwise uses session var.
