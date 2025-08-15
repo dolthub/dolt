@@ -857,8 +857,7 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 							cli.Println("Database Changed")
 						}
 					}
-				}
-				if err != nil {
+				} else {
 					shell.Println(color.RedString(err.Error()))
 				}
 			}
