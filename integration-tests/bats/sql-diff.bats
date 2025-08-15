@@ -915,7 +915,7 @@ EOF
     run dolt sql --result-format csv -q "SELECT statement FROM dolt_patch('old', 'new', 'table_name') WHERE diff_type = 'schema' ORDER BY statement_order"
     [ "$status" -eq 0 ]
     [[ "$output" == "statement
-ALTER TABLE \`table_name\` MODIFY COLUMN \`field_change_sign\` bigint unsigned DEFAULT NULL;" ]]
+ALTER TABLE \`table_name\` MODIFY COLUMN \`field_change_sign\` bigint unsigned DEFAULT NULL;" ]] || false
     [[ ! "$output" =~ "DROP INDEX" ]] || false
     [[ ! "$output" =~ "ADD INDEX" ]] || false
 
@@ -923,7 +923,7 @@ ALTER TABLE \`table_name\` MODIFY COLUMN \`field_change_sign\` bigint unsigned D
     run dolt sql --result-format csv -q "SELECT statement FROM dolt_patch('old', 'new') WHERE diff_type = 'schema' ORDER BY statement_order"
     [ "$status" -eq 0 ]
     [[ "$output" == "statement
-ALTER TABLE \`table_name\` MODIFY COLUMN \`field_change_sign\` bigint unsigned DEFAULT NULL;" ]]
+ALTER TABLE \`table_name\` MODIFY COLUMN \`field_change_sign\` bigint unsigned DEFAULT NULL;" ]] || false
     [[ ! "$output" =~ "DROP INDEX" ]] || false
     [[ ! "$output" =~ "ADD INDEX" ]] || false
 }
