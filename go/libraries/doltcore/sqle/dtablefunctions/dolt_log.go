@@ -29,6 +29,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/libraries/utils/gpg"
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -55,15 +56,6 @@ type LogTableFunction struct {
 
 	// argumentExprs stores the original expressions for deferred parsing
 	argumentExprs []sql.Expression
-}
-
-var logTableSchema = sql.Schema{
-	&sql.Column{Name: "commit_hash", Type: types.Text},
-	&sql.Column{Name: "committer", Type: types.Text},
-	&sql.Column{Name: "email", Type: types.Text},
-	&sql.Column{Name: "date", Type: types.Datetime},
-	&sql.Column{Name: "message", Type: types.Text},
-	&sql.Column{Name: "commit_order", Type: types.Uint64},
 }
 
 // NewInstance creates a new instance of TableFunction interface
@@ -172,7 +164,7 @@ func (ltf *LogTableFunction) getOptionsString() string {
 
 // Schema implements the sql.Node interface.
 func (ltf *LogTableFunction) Schema() sql.Schema {
-	logSchema := logTableSchema
+	logSchema := dtables.GetLogTableSchema(ltf.ctx, "", "")
 
 	if ltf.showParents {
 		logSchema = append(logSchema, &sql.Column{Name: "parents", Type: types.Text})
@@ -778,7 +770,7 @@ func (itr *logTableFunctionRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 		return nil, err
 	}
 
-	row := sql.NewRow(commitHash.String(), meta.Name, meta.Email, meta.Time(), meta.Description, height)
+	row := dtables.BuildLogRow(ctx, commitHash, meta, height)
 
 	if itr.showParents {
 		prStr, err := getParentsString(ctx, commit)

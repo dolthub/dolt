@@ -564,7 +564,33 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 				}
 			}
 
-			dt, found = dtables.NewLogTable(ctx, db.Name(), lwrName, db.ddb, head), true
+			// Decide compactness:
+			// - Force compact when resolving under DoltgreSQL system table context
+			// - Otherwise, honor the session variable
+			useCompact := false
+			if isDoltgresSystemTable {
+				useCompact = true
+			} else if v, err := ctx.GetSessionVariable(ctx, dsess.DoltLogCompactSchema); err == nil {
+				if i8, ok := v.(int8); ok && i8 == dsess.SysVarTrue {
+					useCompact = true
+				}
+			}
+			dt, found = dtables.NewLogTable(ctx, db.Name(), lwrName, db.ddb, head, useCompact), true
+		}
+	case doltdb.LogTableNameCompact:
+		isDoltgresSystemTable, err := resolve.IsDoltgresSystemTable(ctx, tname, root)
+		if err != nil {
+			return nil, false, err
+		}
+		if !resolve.UseSearchPath || isDoltgresSystemTable {
+			if head == nil {
+				var err error
+				head, err = ds.GetHeadCommit(ctx, db.RevisionQualifiedName())
+				if err != nil {
+					return nil, false, err
+				}
+			}
+			dt, found = dtables.NewLogTable(ctx, db.Name(), lwrName, db.ddb, head, true), true
 		}
 	case doltdb.DiffTableName, doltdb.GetDiffTableName():
 		isDoltgresSystemTable, err := resolve.IsDoltgresSystemTable(ctx, tname, root)

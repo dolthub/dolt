@@ -113,7 +113,7 @@ func doDoltCommit(ctx *sql.Context, args []string) (string, bool, error) {
 
 	var name, email string
 	if authorStr, ok := apr.GetValue(cli.AuthorParam); ok {
-		name, email, err = cli.ParseAuthor(authorStr)
+		name, email, err = cli.ParsePerson(authorStr, "author")
 		if err != nil {
 			return "", false, err
 		}
@@ -122,6 +122,15 @@ func doDoltCommit(ctx *sql.Context, args []string) (string, bool, error) {
 		// We won't have an email address for the SQL user though, so instead use the MySQL user@address notation.
 		name = ctx.Client().User
 		email = fmt.Sprintf("%s@%s", ctx.Client().User, ctx.Client().Address)
+	}
+
+	// Parse committer information if provided
+	var committerName, committerEmail string
+	if committerStr, ok := apr.GetValue(cli.CommitterParam); ok {
+		committerName, committerEmail, err = cli.ParsePerson(committerStr, "committer")
+		if err != nil {
+			return "", false, err
+		}
 	}
 
 	amend := apr.Contains(cli.AmendFlag)
@@ -171,6 +180,21 @@ func doDoltCommit(ctx *sql.Context, args []string) (string, bool, error) {
 		Force:      apr.Contains(cli.ForceFlag),
 		Name:       name,
 		Email:      email,
+	}
+
+	// Set committer information if provided
+	if committerName != "" || committerEmail != "" {
+		csp.CommitterName = committerName
+		csp.CommitterEmail = committerEmail
+	}
+
+	// Set committer date if provided
+	if committerDateStr, ok := apr.GetValue(cli.CommitterDateParam); ok {
+		committerDate, err := dconfig.ParseDate(committerDateStr)
+		if err != nil {
+			return "", false, err
+		}
+		csp.CommitterDate = committerDate
 	}
 
 	shouldSign, err := dsess.GetBooleanSystemVar(ctx, "gpgsign")
