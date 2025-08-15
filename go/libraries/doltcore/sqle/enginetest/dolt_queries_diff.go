@@ -1609,16 +1609,24 @@ on a.to_pk = b.to_pk;`,
 				},
 			},
 			{
-				Query: "select to_i, to_jk, from_i, from_jk from dolt_diff_t;",
+				Query: "select to_i, to_j, to_k, to_l, from_i, from_j, from_k, from_l from dolt_diff_t;",
 				Expected: []sql.Row{
-					{1, nil, nil, nil},
+					{1, 2, 3, 4, nil, nil, nil, nil},
 				},
 			},
 			{
-				Query: "select to_i, to_jk, from_i, from_jk from dolt_diff('HEAD', 'WORKING', 't');",
+				Query: "select to_i, to_j, to_k, to_l, from_i, from_j, from_k, from_l from dolt_diff('HEAD', 'WORKING', 't');",
 				Expected: []sql.Row{
-					{1, nil, nil, nil},
+					{1, 2, 3, 4, nil, nil, nil, nil},
 				},
+			},
+			{
+				Query:          "select to_jk from dolt_diff_t;",
+				ExpectedErrStr: "column \"to_jk\" could not be found in any table in scope",
+			},
+			{
+				Query:          "select from_jk from dolt_diff('HEAD', 'WORKING', 't');",
+				ExpectedErrStr: "column \"from_jk\" could not be found in any table in scope",
 			},
 		},
 	},
