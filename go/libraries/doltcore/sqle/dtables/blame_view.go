@@ -49,12 +49,12 @@ const (
 				    %s  -- pksSelectExpression
 				    sd.to_commit as commit,
 				    sd.to_commit_date as commit_date,
-				    dl.committer,
-				    dl.email,
+                    dl.committer,
+                    dl.email,
 				    dl.message
 				FROM
 				    sorted_diffs_by_pk as sd,
-				    dolt_log as dl
+                    dolt_log_compact as dl
 				WHERE
 				    dl.commit_hash = sd.to_commit
 				    and sd.row_num = 1

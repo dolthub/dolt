@@ -55,9 +55,6 @@ start_sql_server() {
     SERVER_PID=$!
     wait_for_connection $PORT 8500
 
-    # Set global default for compact schema for all subsequent connections in tests
-    user=${SQL_USER:-root}
-    run dolt -u $user -p "$DOLT_REMOTE_PASSWORD" --host localhost --no-tls --port $PORT --use-db "$DEFAULT_DB" sql -q "SET @@GLOBAL.dolt_log_compact_schema = 1;"
 }
 
 # like start_sql_server, but the second argument is a string with all
