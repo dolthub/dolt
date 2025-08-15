@@ -1073,16 +1073,6 @@ func LoadClusterTLSConfig(cfg servercfg.ClusterConfig) (*tls.Config, error) {
 	}, nil
 }
 
-func portInUse(hostPort string) bool {
-	timeout := time.Second
-	conn, _ := net.DialTimeout("tcp", hostPort, timeout)
-	if conn != nil {
-		defer conn.Close()
-		return true
-	}
-	return false
-}
-
 func newSessionBuilder(se *engine.SqlEngine, config servercfg.ServerConfig) server.SessionBuilder {
 	userToSessionVars := make(map[string]map[string]interface{})
 	userVars := config.UserVars()
@@ -1164,7 +1154,7 @@ func handleProtocolAndAddress(serverConfig servercfg.ServerConfig) (server.Confi
 
 	portAsString := strconv.Itoa(serverConfig.Port())
 	hostPort := net.JoinHostPort(serverConfig.Host(), portAsString)
-	if portInUse(hostPort) {
+	if server.PortInUse(hostPort) {
 		portInUseError := fmt.Errorf("Port %s already in use.", portAsString)
 		return server.Config{}, portInUseError
 	}

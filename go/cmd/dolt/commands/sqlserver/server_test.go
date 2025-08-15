@@ -16,7 +16,6 @@ package sqlserver
 
 import (
 	"fmt"
-	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -24,6 +23,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/dolthub/go-mysql-server/sql"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/gocraft/dbr/v2"
 	"github.com/stretchr/testify/assert"
@@ -525,7 +525,7 @@ func TestPortSystemVariable(t *testing.T) {
 	}()
 
 	// Pick an ephemeral free port for this test
-	listenPort, err := findEmptyPort()
+	listenPort, err := sql.GetEmptyPort()
 	require.NoError(t, err)
 	serverConfig := DefaultCommandLineServerConfig().WithPort(listenPort)
 	sc := svcs.NewController()
@@ -563,16 +563,6 @@ func TestPortSystemVariable(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, globalPortVal, 1)
 	assert.Equal(t, listenPort, globalPortVal[0].Value)
-}
-
-// findEmptyPort finds an available TCP port by asking the OS for an ephemeral port
-func findEmptyPort() (int, error) {
-	l, err := net.Listen("tcp", ":0")
-	if err != nil {
-		return -1, err
-	}
-	defer l.Close()
-	return l.Addr().(*net.TCPAddr).Port, nil
 }
 
 func TestReadOnlyEnforcement(t *testing.T) {
