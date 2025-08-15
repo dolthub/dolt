@@ -294,6 +294,7 @@ func (l *mergeJoinKvIter) buildResultRow(ctx *sql.Context, leftKey, leftVal, rig
 			return nil, false, err
 		}
 		if !sql.IsTrue(res) {
+			l.joiner.rowBuffer.Erase(l.joiner.outCnt)
 			return nil, false, nil
 		}
 	}
@@ -304,6 +305,7 @@ func (l *mergeJoinKvIter) buildResultRow(ctx *sql.Context, leftKey, leftVal, rig
 			return nil, false, err
 		}
 		if !sql.IsTrue(res) {
+			l.joiner.rowBuffer.Erase(l.joiner.outCnt)
 			return nil, false, nil
 		}
 	}
@@ -316,8 +318,10 @@ func (l *mergeJoinKvIter) buildResultRow(ctx *sql.Context, leftKey, leftVal, rig
 		}
 		if res == nil && l.excludeNulls {
 			// override default left join behavior
+			l.joiner.rowBuffer.Erase(l.joiner.outCnt)
 			return nil, false, nil
 		} else if !sql.IsTrue(res) && !rightKeyNil {
+			l.joiner.rowBuffer.Erase(l.joiner.outCnt)
 			return nil, false, nil
 		}
 	}
@@ -343,9 +347,11 @@ func (l *mergeJoinKvIter) exhaustLeftReturn(ctx *sql.Context) (sql.Row, error) {
 		if err != nil {
 			return nil, err
 		}
-		if ok {
-			return ret, nil
+		if !ok {
+			l.joiner.rowBuffer.Erase(l.joiner.outCnt)
+			continue
 		}
+		return ret, nil
 	}
 }
 

@@ -146,6 +146,7 @@ func (l *lookupJoinKvIter) Next(ctx *sql.Context) (sql.Row, error) {
 			}
 
 			if !sql.IsTrue(res) {
+				l.joiner.rowBuffer.Erase(l.joiner.outCnt)
 				continue
 			}
 
@@ -157,6 +158,7 @@ func (l *lookupJoinKvIter) Next(ctx *sql.Context) (sql.Row, error) {
 			}
 
 			if !sql.IsTrue(res) {
+				l.joiner.rowBuffer.Erase(l.joiner.outCnt)
 				continue
 			}
 		}
@@ -167,9 +169,11 @@ func (l *lookupJoinKvIter) Next(ctx *sql.Context) (sql.Row, error) {
 			}
 			if res == nil && l.excludeNulls {
 				// override default left join behavior
+				l.joiner.rowBuffer.Erase(l.joiner.outCnt)
 				l.dstKey = nil
 				continue
 			} else if !sql.IsTrue(res) && dstKey != nil {
+				l.joiner.rowBuffer.Erase(l.joiner.outCnt)
 				continue
 			}
 		}
