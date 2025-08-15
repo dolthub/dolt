@@ -38,7 +38,6 @@ teardown() {
         skip "shell on server returns Empty Set instead of OkResult"
     fi
     run $BATS_TEST_DIRNAME/sql-shell-error.expect
-    echo "$output"
     [ "$status" -eq 0 ]
 }
 
