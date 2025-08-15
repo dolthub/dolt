@@ -19,6 +19,9 @@ setup_dolt_repo() {
     # Give the server a chance to start
     sleep 1
 
+  # Ensure compact dolt_log schema for server sessions used by client tests
+  dolt --host 0.0.0.0 --port=$PORT -u $USER sql -q "SET @@GLOBAL.dolt_log_compact_schema = 1;" >/dev/null 2>&1 || true
+
     export MYSQL_PWD=""
 }
 

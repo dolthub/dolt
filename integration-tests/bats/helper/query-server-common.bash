@@ -54,10 +54,16 @@ start_sql_server() {
     echo db:$DEFAULT_DB logFile:$logFile PORT:$PORT CWD:$PWD
     SERVER_PID=$!
     wait_for_connection $PORT 8500
+    conn_status=$?
+    if [ $conn_status -ne 0 ]; then
+      return $conn_status
+    fi
 
     # Default compact dolt_log schema for server-mode bats runs
     user=${SQL_USER:-root}
-    run dolt -u $user -p "$DOLT_REMOTE_PASSWORD" --host localhost --no-tls --port $PORT --use-db "$DEFAULT_DB" sql -q "SET @@GLOBAL.dolt_log_compact_schema = 1;"
+    # Intentionally do not use `run` here so the function exit status remains success
+    dolt -u $user -p "$DOLT_REMOTE_PASSWORD" --host localhost --no-tls --port $PORT --use-db "$DEFAULT_DB" sql -q "SET @@GLOBAL.dolt_log_compact_schema = 1;" >/dev/null 2>&1 || true
+    return 0
 }
 
 # like start_sql_server, but the second argument is a string with all
