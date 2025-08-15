@@ -464,8 +464,6 @@ func getRowFromSummary(ds *diff.TableDeltaSummary) sql.Row {
 }
 
 // getIgnorePatternsFromContext retrieves ignore patterns from the dolt_ignore table.
-// This uses the same approach as the doltdb package's GetIgnoredTablePatterns function
-// but adapted to work within the table function context.
 func getIgnorePatternsFromContext(ctx *sql.Context, database sql.Database) (doltdb.IgnorePatterns, error) {
 	_, ok := database.(dsess.SqlDatabase)
 	if !ok {
