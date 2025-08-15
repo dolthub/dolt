@@ -914,16 +914,16 @@ EOF
     # Test customer's first command: with table specified - should only show a single MODIFY
     run dolt sql --result-format csv -q "SELECT statement FROM dolt_patch('old', 'new', 'table_name') WHERE diff_type = 'schema' ORDER BY statement_order"
     [ "$status" -eq 0 ]
-    expected_output="statement
-ALTER TABLE \`table_name\` MODIFY COLUMN \`field_change_sign\` bigint unsigned DEFAULT NULL;"
-    [ "$output" = "$expected_output" ]
+    [[ "$output" == "statement
+ALTER TABLE \`table_name\` MODIFY COLUMN \`field_change_sign\` bigint unsigned DEFAULT NULL;" ]]
     [[ ! "$output" =~ "DROP INDEX" ]] || false
     [[ ! "$output" =~ "ADD INDEX" ]] || false
 
     # Test customer's second command: without table specified - should only show a single MODIFY
     run dolt sql --result-format csv -q "SELECT statement FROM dolt_patch('old', 'new') WHERE diff_type = 'schema' ORDER BY statement_order"
     [ "$status" -eq 0 ]
-    [ "$output" = "$expected_output" ]
+    [[ "$output" == "statement
+ALTER TABLE \`table_name\` MODIFY COLUMN \`field_change_sign\` bigint unsigned DEFAULT NULL;" ]]
     [[ ! "$output" =~ "DROP INDEX" ]] || false
     [[ ! "$output" =~ "ADD INDEX" ]] || false
 }

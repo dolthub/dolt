@@ -3941,14 +3941,12 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
             {
-                // Customer's first command: with table specified - should only show column change, not index changes
                 Query: "SELECT statement FROM dolt_patch('old', 'new', 'table_name') WHERE diff_type = 'schema' ORDER BY statement_order",
                 Expected: []sql.Row{
                     {"ALTER TABLE `table_name` MODIFY COLUMN `field_change_sign` bigint unsigned DEFAULT NULL;"},
                 },
             },
             {
-                // Customer's second command: without table specified - should only show column change
                 Query: "SELECT statement FROM dolt_patch('old', 'new') WHERE diff_type = 'schema' ORDER BY statement_order",
                 Expected: []sql.Row{
                     {"ALTER TABLE `table_name` MODIFY COLUMN `field_change_sign` bigint unsigned DEFAULT NULL;"},
