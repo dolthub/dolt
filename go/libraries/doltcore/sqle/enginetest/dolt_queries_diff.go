@@ -3940,30 +3940,20 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 			"CALL dolt_commit('-m', 'table with bigint unsigned column')",
 		},
 		Assertions: []queries.ScriptTestAssertion{
-			{
-				// Customer's first command: with table specified - should only show column change, not index changes
-				Query: "SELECT statement FROM dolt_patch('old', 'new', 'table_name') WHERE diff_type = 'schema' ORDER BY statement_order",
-				Expected: []sql.Row{
-					{"ALTER TABLE `table_name` DROP `field_change_sign`;"},
-					{"ALTER TABLE `table_name` ADD `field_change_sign` bigint unsigned DEFAULT NULL;"},
-					// The following lines should NOT appear (this test will fail initially, showing the bug):
-					// {"ALTER TABLE `table_name` DROP INDEX `fk_field_name_idx`;"},
-					// {"ALTER TABLE `table_name` ADD INDEX `field_name_UNIQUE`(`field_name`);"},
-					// {"ALTER TABLE `table_name` ADD INDEX `fk_field_name_idx`(`field_name`);"},
-				},
-			},
-			{
-				// Customer's second command: without table specified - should only show column change
-				Query: "SELECT statement FROM dolt_patch('old', 'new') WHERE diff_type = 'schema' ORDER BY statement_order",
-				Expected: []sql.Row{
-					{"ALTER TABLE `table_name` DROP `field_change_sign`;"},
-					{"ALTER TABLE `table_name` ADD `field_change_sign` bigint unsigned DEFAULT NULL;"},
-					// The following lines should NOT appear (this test will fail initially, showing the bug):
-					// {"ALTER TABLE `table_name` DROP INDEX `fk_field_name_idx`;"},
-					// {"ALTER TABLE `table_name` ADD INDEX `field_name_UNIQUE`(`field_name`);"},
-					// {"ALTER TABLE `table_name` ADD INDEX `fk_field_name_idx`(`field_name`);"},
-				},
-			},
+            {
+                // Customer's first command: with table specified - should only show column change, not index changes
+                Query: "SELECT statement FROM dolt_patch('old', 'new', 'table_name') WHERE diff_type = 'schema' ORDER BY statement_order",
+                Expected: []sql.Row{
+                    {"ALTER TABLE `table_name` MODIFY COLUMN `field_change_sign` bigint unsigned DEFAULT NULL;"},
+                },
+            },
+            {
+                // Customer's second command: without table specified - should only show column change
+                Query: "SELECT statement FROM dolt_patch('old', 'new') WHERE diff_type = 'schema' ORDER BY statement_order",
+                Expected: []sql.Row{
+                    {"ALTER TABLE `table_name` MODIFY COLUMN `field_change_sign` bigint unsigned DEFAULT NULL;"},
+                },
+            },
 			{
 				// Verify that the indexes are indeed identical on both branches
 				Query: "SELECT COUNT(*) FROM (SELECT index_name, non_unique, column_name FROM INFORMATION_SCHEMA.STATISTICS WHERE table_name = 'table_name' AND table_schema = 'mydb' ORDER BY index_name, seq_in_index) as old_indexes",
