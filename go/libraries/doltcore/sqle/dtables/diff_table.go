@@ -685,7 +685,33 @@ func (dp DiffPartition) Key() []byte {
 }
 
 func (dp DiffPartition) GetRowIter(ctx *sql.Context, ddb *doltdb.DoltDB, joiner *rowconv.Joiner) (sql.RowIter, error) {
-	return newProllyDiffIter(ctx, dp, dp.fromSch, dp.toSch, dp.ranges)
+	// Filter virtual columns from schemas to match the filtered schema used in CalculateDiffSchema
+	filteredFromSch := dp.fromSch
+	filteredToSch := dp.toSch
+
+	if filteredFromSch != nil {
+		var filteredFromCols []schema.Column
+		filteredFromSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+			if !col.Virtual {
+				filteredFromCols = append(filteredFromCols, col)
+			}
+			return false, nil
+		})
+		filteredFromSch = schema.MustSchemaFromCols(schema.NewColCollection(filteredFromCols...))
+	}
+
+	if filteredToSch != nil {
+		var filteredToCols []schema.Column
+		filteredToSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+			if !col.Virtual {
+				filteredToCols = append(filteredToCols, col)
+			}
+			return false, nil
+		})
+		filteredToSch = schema.MustSchemaFromCols(schema.NewColCollection(filteredToCols...))
+	}
+
+	return newProllyDiffIter(ctx, dp, filteredFromSch, filteredToSch, dp.ranges)
 }
 
 // isDiffablePartition checks if the commit pair for this partition is "diffable".
@@ -940,6 +966,8 @@ func GetDiffTableSchemaAndJoiner(format *types.NomsBinFormat, fromSch, toSch sch
 		}
 
 		diffTableSchema = j.GetSchema()
+
+		// Add the diff_type column to the schema
 		fullDiffCols := diffTableSchema.GetAllCols()
 		fullDiffCols = fullDiffCols.Append(
 			schema.NewColumn(diffTypeColName, schema.DiffTypeTag, types.StringKind, false),
@@ -957,14 +985,14 @@ func expandFromToSchemas(fromSch, toSch schema.Schema) (newFromSch, newToSch sch
 	if fromSch == nil && toSch == nil {
 		return nil, nil, errors.New("non-nil argument required to CalculateDiffSchema")
 	} else if fromSch == nil {
-		fromClmCol = filterVirtualColumns(toSch.GetAllCols())
-		toClmCol = filterVirtualColumns(toSch.GetAllCols())
+		fromClmCol = toSch.GetAllCols()
+		toClmCol = toSch.GetAllCols()
 	} else if toSch == nil {
-		toClmCol = filterVirtualColumns(fromSch.GetAllCols())
-		fromClmCol = filterVirtualColumns(fromSch.GetAllCols())
+		toClmCol = fromSch.GetAllCols()
+		fromClmCol = fromSch.GetAllCols()
 	} else {
-		fromClmCol = filterVirtualColumns(fromSch.GetAllCols())
-		toClmCol = filterVirtualColumns(toSch.GetAllCols())
+		fromClmCol = fromSch.GetAllCols()
+		toClmCol = toSch.GetAllCols()
 	}
 
 	fromClmCol = fromClmCol.Append(
@@ -980,21 +1008,13 @@ func expandFromToSchemas(fromSch, toSch schema.Schema) (newFromSch, newToSch sch
 	return
 }
 
-// filterVirtualColumns returns a new ColCollection with virtual generated columns removed
-func filterVirtualColumns(cols *schema.ColCollection) *schema.ColCollection {
-	var filteredCols []schema.Column
-	cols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		if !col.Virtual {
-			filteredCols = append(filteredCols, col)
-		}
-		return false, nil
-	})
-	return schema.NewColCollection(filteredCols...)
-}
-
 // CalculateDiffSchema returns the schema for the dolt_diff table based on the schemas from the from and to tables.
 // Either may be nil, in which case the nil argument will use the schema of the non-nil argument
 func CalculateDiffSchema(fromSch, toSch schema.Schema) (schema.Schema, error) {
+	// Save original schemas before expansion to check for virtual columns
+	origFromSch := fromSch
+	origToSch := toSch
+
 	fromSch, toSch, err := expandFromToSchemas(fromSch, toSch)
 	if err != nil {
 		return nil, err
@@ -1004,10 +1024,29 @@ func CalculateDiffSchema(fromSch, toSch schema.Schema) (schema.Schema, error) {
 
 	i := 0
 	err = toSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		// Skip virtual generated columns
-		if col.Virtual {
-			return false, nil
+		// Skip virtual generated columns, but not the special commit columns
+		if col.Virtual && col.Name != "commit" && col.Name != "commit_date" {
+			// Check if this was virtual in the original schema
+			if origToSch != nil {
+				wasVirtual := false
+				origToSch.GetAllCols().Iter(func(t uint64, c schema.Column) (stop bool, err error) {
+					if c.Name == col.Name && c.Virtual {
+						wasVirtual = true
+						return true, nil
+					}
+					return false, nil
+				})
+				if wasVirtual {
+					return false, nil // Skip virtual columns
+				}
+			} else {
+				// If origToSch is nil, check if this column came from copying
+				// (happens when fromSch is nil and toSch is copied to fromSch)
+				// In this case, virtual columns should still be skipped
+				return false, nil
+			}
 		}
+
 		toCol, err := schema.NewColumnWithTypeInfo(diff.ToColNamer(col.Name), uint64(i), col.TypeInfo, false, col.Default, false, col.Comment)
 		if err != nil {
 			return true, err
@@ -1021,10 +1060,40 @@ func CalculateDiffSchema(fromSch, toSch schema.Schema) (schema.Schema, error) {
 	}
 
 	err = fromSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		// Skip virtual generated columns
-		if col.Virtual {
-			return false, nil
+		// Skip virtual generated columns, but not the special commit columns
+		if col.Virtual && col.Name != "commit" && col.Name != "commit_date" {
+			// Check if this was virtual in the original schema
+			if origFromSch != nil {
+				wasVirtual := false
+				origFromSch.GetAllCols().Iter(func(t uint64, c schema.Column) (stop bool, err error) {
+					if c.Name == col.Name && c.Virtual {
+						wasVirtual = true
+						return true, nil
+					}
+					return false, nil
+				})
+				if wasVirtual {
+					return false, nil // Skip virtual columns
+				}
+			} else {
+				// If origFromSch is nil, this column came from toSch copying
+				// Check if it was virtual in the original toSch
+				if origToSch != nil {
+					wasVirtual := false
+					origToSch.GetAllCols().Iter(func(t uint64, c schema.Column) (stop bool, err error) {
+						if c.Name == col.Name && c.Virtual {
+							wasVirtual = true
+							return true, nil
+						}
+						return false, nil
+					})
+					if wasVirtual {
+						return false, nil // Skip virtual columns
+					}
+				}
+			}
 		}
+
 		fromCol, err := schema.NewColumnWithTypeInfo(diff.FromColNamer(col.Name), uint64(i), col.TypeInfo, false, col.Default, false, col.Comment)
 		if err != nil {
 			return true, err
