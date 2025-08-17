@@ -32,6 +32,16 @@ teardown() {
 }
 
 # bats test_tags=no_lambda
+@test "sql-shell: Query errors are printed in interactive shell" {
+    skiponwindows "Need to install expect and make this script work on windows."
+    if [ "$SQL_ENGINE" = "remote-engine" ]; then
+        skip "shell on server returns Empty Set instead of OkResult"
+    fi
+    run $BATS_TEST_DIRNAME/sql-shell-error.expect
+    [ "$status" -eq 0 ]
+}
+
+# bats test_tags=no_lambda
 @test "sql-shell: database changed is printed in interactive shell" {
     skiponwindows "Need to install expect and make this script work on windows."
     if [ "$SQL_ENGINE" = "remote-engine" ]; then
