@@ -232,11 +232,6 @@ func (db Database) AliasedName() string {
 // be used whenever accessing internal state of a database and its tables.
 func (db Database) RevisionQualifiedName() string {
 	return db.revName
-
-	if db.revision == "" {
-		return db.baseName
-	}
-	return db.baseName + dsess.DbRevisionDelimiter + db.revision
 }
 
 func (db Database) RequestedName() string {
