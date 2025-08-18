@@ -32,7 +32,6 @@ import (
 	"github.com/fatih/color"
 	"github.com/gocraft/dbr/v2"
 	"github.com/gocraft/dbr/v2/dialect"
-	"github.com/sirupsen/logrus"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
@@ -716,16 +715,11 @@ func getCommitInfoWithOptions(queryist cli.Queryist, sqlCtx *sql.Context, ref st
 // getCommitInfoSQL gets commit info using SQL queries, always using extended schema
 func getCommitInfoSQL(queryist cli.Queryist, sqlCtx *sql.Context, ref string, opts commitInfoOptions, hashOfHead string) (*CommitInfo, error) {
 	// Use session system variable to force extended schema for CLI query
-	_, err := cli.GetRowsForSql(queryist, sqlCtx, "SET @saved_compact = dolt_log_compact_schema;")
-	if err != nil {
-		logrus.Infof("failed to save dolt_log_compact_schema: %v", err)
-	}
-	_, err = cli.GetRowsForSql(queryist, sqlCtx, "SET dolt_log_compact_schema = 0;")
-	if err != nil {
-		logrus.Infof("failed to set dolt_log_compact_schema = 0: %v", err)
-	}
+	_, _ = cli.GetRowsForSql(queryist, sqlCtx, "SET @saved_compact = @@"+dsess.DoltLogCompactSchema+";")
+	_, _ = cli.GetRowsForSql(queryist, sqlCtx, "SET "+dsess.DoltLogCompactSchema+" = 0;")
 
 	var q string
+	var err error
 	if opts.showSignature {
 		q, err = dbr.InterpolateForDialect("select * from dolt_log(?, '--parents', '--decorate=full', '--show-signature')", []interface{}{ref}, dialect.MySQL)
 	} else {

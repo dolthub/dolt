@@ -243,14 +243,14 @@ func MakeServer(t *testing.T, dc driver.DoltCmdable, s *driver.Server, resources
 	for i := range args {
 		args[i] = resources.ApplyTemplate(s.Args[i])
 	}
-    opts := []driver.SqlServerOpt{
-        driver.WithArgs(args...),
-        driver.WithEnvs(append([]string{
-            "DOLT_CONTEXT_VALIDATION_ENABLED=true",
-            "DOLT_ENABLE_DYNAMIC_ASSERTS=true",
-        }, s.Envs...)...),
-        driver.WithName(s.Name),
-    }
+	opts := []driver.SqlServerOpt{
+		driver.WithArgs(args...),
+		driver.WithEnvs(append([]string{
+			"DOLT_CONTEXT_VALIDATION_ENABLED=true",
+			"DOLT_ENABLE_DYNAMIC_ASSERTS=true",
+		}, s.Envs...)...),
+		driver.WithName(s.Name),
+	}
 	if s.Port != 0 {
 		t.Fatal("cannot specify s.Port on these tests; please use {{get_port ...}} and dynamic_port: to specify a dynamic port.")
 	}
@@ -375,18 +375,18 @@ func (test Test) Run(t *testing.T) {
 				require.NoError(t, err)
 				defer db.Close()
 
-                conn, err := db.Conn(context.Background())
+				conn, err := db.Conn(context.Background())
 				require.NoError(t, err)
 				defer conn.Close()
 
-                // Ensure compact dolt_log schema for server-driver integration tests
-                {
-                    ctx, cancel := context.WithTimeout(context.Background(), timeout)
-                    _, _ = conn.ExecContext(ctx, "SET @@GLOBAL.dolt_log_compact_schema = 1;")
-                    cancel()
-                }
+				// Ensure compact dolt_log schema for server-driver integration tests
+				{
+					ctx, cancel := context.WithTimeout(context.Background(), timeout)
+					_, _ = conn.ExecContext(ctx, "SET @@GLOBAL.dolt_log_compact_schema = 1;")
+					cancel()
+				}
 
-                for _, q := range c.Queries {
+				for _, q := range c.Queries {
 					RunQueryAttempt(t, conn, q, &ports)
 				}
 			})
@@ -396,18 +396,18 @@ func (test Test) Run(t *testing.T) {
 				require.NoError(t, err)
 				defer db.Close()
 
-                conn, err := db.Conn(context.Background())
+				conn, err := db.Conn(context.Background())
 				require.NoError(t, err)
 				defer conn.Close()
 
-                // Ensure compact dolt_log schema for server-driver integration tests
-                {
-                    ctx, cancel := context.WithTimeout(context.Background(), timeout)
-                    _, _ = conn.ExecContext(ctx, "SET @@GLOBAL.dolt_log_compact_schema = 1;")
-                    cancel()
-                }
+				// Ensure compact dolt_log schema for server-driver integration tests
+				{
+					ctx, cancel := context.WithTimeout(context.Background(), timeout)
+					_, _ = conn.ExecContext(ctx, "SET @@GLOBAL.dolt_log_compact_schema = 1;")
+					cancel()
+				}
 
-                for _, q := range c.Queries {
+				for _, q := range c.Queries {
 					RunQuery(t, conn, q, &ports)
 				}
 			}()
