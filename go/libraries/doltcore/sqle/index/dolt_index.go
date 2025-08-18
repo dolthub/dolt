@@ -999,17 +999,6 @@ func (di *doltIndex) Expressions() []string {
 	return di.colExprNames
 }
 
-// UnqualifiedExpressions implements sql.Index
-func (di *doltIndex) UnqualifiedExpressions() []string {
-	if di.unqColExprNames == nil {
-		di.unqColExprNames = make([]string, len(di.columns))
-		for i, col := range di.columns {
-			di.unqColExprNames[i] = col.Name
-		}
-	}
-	return di.unqColExprNames
-}
-
 // ExtendedExpressions implements sql.ExtendedIndex
 func (di *doltIndex) ExtendedExpressions() []string {
 	pkCols := di.indexSch.GetPKCols()
