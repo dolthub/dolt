@@ -75,7 +75,7 @@ type CommitMeta struct {
 	Timestamp     uint64
 	UserTimestamp int64
 
-	CommitterName *string
+	CommitterName  *string
 	CommitterEmail *string
 }
 
