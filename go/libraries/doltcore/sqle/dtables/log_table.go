@@ -17,7 +17,6 @@ package dtables
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
@@ -103,39 +102,30 @@ func UseCompactSchema(ctx *sql.Context) bool {
 // BuildLogRowWithOverride builds a row using compact if forceCompact is true, otherwise uses session var.
 func BuildLogRowWithOverride(ctx *sql.Context, commitHash hash.Hash, meta *datas.CommitMeta, height uint64, useCompactOverride bool) sql.Row {
 	useCompact := useCompactOverride || UseCompactSchema(ctx)
-
-	if !useCompactOverride {
-		// For non-forced compact tables, always use extended schema (9 columns)
-		// Extended schema: commit_hash, committer, committer_email, committer_date, message, commit_order, author, author_email, author_date
-		values := []interface{}{
-			commitHash.String(),
-			datas.ValueOrDefault(meta.CommitterName, meta.Name), // committer
-			datas.ValueOrDefault(meta.CommitterEmail, meta.Email), // committer_email
-			meta.CommitterTime(), // committer_date
-			meta.Description,
-			height,
-			meta.Name,   // author (always actual author)
-			meta.Email,  // author_email (always actual author email)
-			meta.Time(), // author_date (always actual author date)
-		}
-		return sql.NewRow(values...)
-	} else {
-		// Forced compact schema (6 columns)
-		// Compact schema: commit_hash, committer, email, date, message, commit_order
-		var timestamp time.Time
-		if useCompact {
-			timestamp = meta.Time()
-		} else {
-			timestamp = meta.CommitterTime()
-		}
-
+	
+	if useCompact {
+		// Compact schema (6 columns)
 		values := []interface{}{
 			commitHash.String(),
 			datas.ValueOrDefault(meta.CommitterName, meta.Name),
 			datas.ValueOrDefault(meta.CommitterEmail, meta.Email),
-			timestamp,
+			meta.Time(),
 			meta.Description,
 			height,
+		}
+		return sql.NewRow(values...)
+	} else {
+		// Extended schema (9 columns)
+		values := []interface{}{
+			commitHash.String(),
+			datas.ValueOrDefault(meta.CommitterName, meta.Name),
+			datas.ValueOrDefault(meta.CommitterEmail, meta.Email),
+			meta.CommitterTime(),
+			meta.Description,
+			height,
+			meta.Name,
+			meta.Email,
+			meta.Time(),
 		}
 		return sql.NewRow(values...)
 	}
@@ -195,7 +185,11 @@ func GetLogTableSchema(ctx *sql.Context, tableName, dbName string) sql.Schema {
 
 // Schema is a sql.Table interface function that gets the sql.Schema of the log system table.
 func (dt *LogTable) Schema() sql.Schema {
-	if dt.useCompactOverride {
+	// Check if compact schema should be used
+	useCompact := dt.useCompactOverride || UseCompactSchema(dt.ctx)
+	
+	if useCompact {
+		// Compact schema
 		baseSchema := make(sql.Schema, len(LogSchemaCompact))
 		copy(baseSchema, LogSchemaCompact)
 		for _, col := range baseSchema {
@@ -208,6 +202,7 @@ func (dt *LogTable) Schema() sql.Schema {
 		return baseSchema
 	}
 	
+	// Extended schema (default)
 	baseSchema := make(sql.Schema, len(LogSchemaCommitterColumns))
 	copy(baseSchema, LogSchemaCommitterColumns)
 	baseSchema = append(baseSchema, LogSchemaAuthorColumns...)
