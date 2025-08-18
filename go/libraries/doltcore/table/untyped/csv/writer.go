@@ -130,18 +130,17 @@ func toCsvString(ctx *sql.Context, colType sql.Type, val interface{}) (string, e
 		return "", nil
 	}
 
-	// Normalize to the column's canonical value (e.g., BIT []byte -> uint64)
-	norm, _, err := colType.Convert(ctx, val)
-	if err != nil {
-		return "", err
-	}
-
-	// For BIT, emit base-10 int, instead of bytes
+	// For BIT types, handle potential type mismatches from UNION operations
 	if _, ok := colType.(types.BitType); ok {
+		// Normalize to the column's canonical value (e.g., int64 -> uint64)
+		norm, _, err := colType.Convert(ctx, val)
+		if err != nil {
+			return "", err
+		}
 		return strconv.FormatUint(norm.(uint64), 10), nil
 	}
 
-	return sqlutil.SqlColToStr(ctx, colType, norm)
+	return sqlutil.SqlColToStr(ctx, colType, val)
 }
 
 func (csvw *CSVWriter) processRowWithSchema(r sql.Row, ctx *sql.Context) ([]*string, error) {
