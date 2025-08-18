@@ -379,10 +379,9 @@ func (test Test) Run(t *testing.T) {
 				require.NoError(t, err)
 				defer conn.Close()
 
-				// Ensure compact dolt_log schema for server-driver integration tests
 				{
 					ctx, cancel := context.WithTimeout(context.Background(), timeout)
-					_, _ = conn.ExecContext(ctx, "SET @@GLOBAL.dolt_log_compact_schema = 1;")
+					_, _ = conn.ExecContext(ctx, "SET @@SESSION.dolt_log_compact_schema = 1;")
 					cancel()
 				}
 
@@ -400,10 +399,9 @@ func (test Test) Run(t *testing.T) {
 				require.NoError(t, err)
 				defer conn.Close()
 
-				// Ensure compact dolt_log schema for server-driver integration tests
 				{
 					ctx, cancel := context.WithTimeout(context.Background(), timeout)
-					_, _ = conn.ExecContext(ctx, "SET @@GLOBAL.dolt_log_compact_schema = 1;")
+					_, _ = conn.ExecContext(ctx, "SET @@SESSION.dolt_log_compact_schema = 1;")
 					cancel()
 				}
 

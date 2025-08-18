@@ -36,7 +36,7 @@ func ParsePerson(personStr, personType string) (string, string, error) {
 	matches := reg.FindStringSubmatch(personStr)
 
 	if len(matches) != 3 {
-		return "", "", fmt.Errorf("%s not formatted correctly. Use 'Name <%s@example.com>' format", strings.ToUpper(personType[:1])+personType[1:], personType)
+		return "", "", fmt.Errorf("%s not formatted correctly. Use 'Name <%s@example.com>' format", personType, personType)
 	}
 
 	name := matches[1]

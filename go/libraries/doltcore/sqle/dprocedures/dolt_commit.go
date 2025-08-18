@@ -18,6 +18,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
@@ -182,18 +183,20 @@ func doDoltCommit(ctx *sql.Context, args []string) (string, bool, error) {
 		Email:      email,
 	}
 
-	// Set committer information if provided
-	if committerName != "" || committerEmail != "" {
-		csp.CommitterName = committerName
-		csp.CommitterEmail = committerEmail
-	}
-
-	// Set committer date if provided
+	// Parse committer date if provided
+	var committerDate time.Time
 	if committerDateStr, ok := apr.GetValue(cli.CommitterDateParam); ok {
-		committerDate, err := dconfig.ParseDate(committerDateStr)
+		var err error
+		committerDate, err = dconfig.ParseDate(committerDateStr)
 		if err != nil {
 			return "", false, err
 		}
+	}
+
+	// Set committer information if any committer parameter provided
+	if committerName != "" || committerEmail != "" || !committerDate.IsZero() {
+		csp.CommitterName = committerName
+		csp.CommitterEmail = committerEmail
 		csp.CommitterDate = committerDate
 	}
 

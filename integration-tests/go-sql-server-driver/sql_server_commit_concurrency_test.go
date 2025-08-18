@@ -66,6 +66,9 @@ func testSQLTransactionWithAmendCommit(t *testing.T) {
 		db.Close()
 	})
 
+	_, err = db.ExecContext(ctx, "SET @@GLOBAL.dolt_log_compact_schema = 1;")
+	require.NoError(t, err)
+
 	_, err = db.ExecContext(ctx, `
 CREATE TABLE test_table (
   id INT AUTO_INCREMENT PRIMARY KEY,
@@ -152,6 +155,9 @@ func testSQLRacingAmend(t *testing.T) {
 	t.Cleanup(func() {
 		db.Close()
 	})
+
+	_, err = db.ExecContext(ctx, "SET @@GLOBAL.dolt_log_compact_schema = 1;")
+	require.NoError(t, err)
 
 	_, err = db.ExecContext(ctx, `
 	CREATE TABLE test_table (
