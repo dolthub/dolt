@@ -103,31 +103,42 @@ func UseCompactSchema(ctx *sql.Context) bool {
 // BuildLogRowWithOverride builds a row using compact if forceCompact is true, otherwise uses session var.
 func BuildLogRowWithOverride(ctx *sql.Context, commitHash hash.Hash, meta *datas.CommitMeta, height uint64, useCompactOverride bool) sql.Row {
 	useCompact := useCompactOverride || UseCompactSchema(ctx)
-	var timestamp time.Time
-	if useCompact {
-		timestamp = meta.Time()
+
+	if !useCompactOverride {
+		// For non-forced compact tables, always use extended schema (9 columns)
+		// Extended schema: commit_hash, committer, committer_email, committer_date, message, commit_order, author, author_email, author_date
+		values := []interface{}{
+			commitHash.String(),
+			datas.ValueOrDefault(meta.CommitterName, meta.Name), // committer
+			datas.ValueOrDefault(meta.CommitterEmail, meta.Email), // committer_email
+			meta.CommitterTime(), // committer_date
+			meta.Description,
+			height,
+			meta.Name,   // author (always actual author)
+			meta.Email,  // author_email (always actual author email)
+			meta.Time(), // author_date (always actual author date)
+		}
+		return sql.NewRow(values...)
 	} else {
-		timestamp = meta.CommitterTime()
-	}
+		// Forced compact schema (6 columns)
+		// Compact schema: commit_hash, committer, email, date, message, commit_order
+		var timestamp time.Time
+		if useCompact {
+			timestamp = meta.Time()
+		} else {
+			timestamp = meta.CommitterTime()
+		}
 
-	values := []interface{}{
-		commitHash.String(),
-		datas.ValueOrDefault(meta.CommitterName, meta.Name),
-		datas.ValueOrDefault(meta.CommitterEmail, meta.Email),
-		timestamp,
-		meta.Description,
-		height,
+		values := []interface{}{
+			commitHash.String(),
+			datas.ValueOrDefault(meta.CommitterName, meta.Name),
+			datas.ValueOrDefault(meta.CommitterEmail, meta.Email),
+			timestamp,
+			meta.Description,
+			height,
+		}
+		return sql.NewRow(values...)
 	}
-
-	if !useCompact {
-		values = append(values,
-			meta.Name,
-			meta.Email,
-			meta.Time(),
-		)
-	}
-
-	return sql.NewRow(values...)
 }
 
 // BuildLogRow builds a row using only the session var to determine compactness (no override).
@@ -182,26 +193,34 @@ func GetLogTableSchema(ctx *sql.Context, tableName, dbName string) sql.Schema {
 	return baseSchema
 }
 
-// GetLogTableSchemaWithOverride returns the schema using compact if useCompactOverride is true, otherwise uses session var.
-func GetLogTableSchemaWithOverride(ctx *sql.Context, tableName, dbName string, useCompactOverride bool) sql.Schema {
-	if useCompactOverride {
+// Schema is a sql.Table interface function that gets the sql.Schema of the log system table.
+func (dt *LogTable) Schema() sql.Schema {
+	if dt.useCompactOverride {
 		baseSchema := make(sql.Schema, len(LogSchemaCompact))
 		copy(baseSchema, LogSchemaCompact)
 		for _, col := range baseSchema {
-			col.Source = tableName
-			col.DatabaseSource = dbName
+			col.Source = dt.tableName
+			col.DatabaseSource = dt.dbName
 			if col.Name == "commit_hash" {
 				col.PrimaryKey = true
 			}
 		}
 		return baseSchema
 	}
-	return GetLogTableSchema(ctx, tableName, dbName)
-}
-
-// Schema is a sql.Table interface function that gets the sql.Schema of the log system table.
-func (dt *LogTable) Schema() sql.Schema {
-	return GetLogTableSchemaWithOverride(dt.ctx, dt.tableName, dt.dbName, dt.useCompactOverride)
+	
+	baseSchema := make(sql.Schema, len(LogSchemaCommitterColumns))
+	copy(baseSchema, LogSchemaCommitterColumns)
+	baseSchema = append(baseSchema, LogSchemaAuthorColumns...)
+	
+	for _, col := range baseSchema {
+		col.Source = dt.tableName
+		col.DatabaseSource = dt.dbName
+		if col.Name == "commit_hash" {
+			col.PrimaryKey = true
+		}
+	}
+	
+	return baseSchema
 }
 
 // Collation implements the sql.Table interface.

@@ -27,7 +27,7 @@ import (
 const VerboseFlag = "verbose"
 
 // ParsePerson parses author/committer strings in 'Name <email@example.com>' format
-func ParsePerson(personStr string, personType string) (string, string, error) {
+func ParsePerson(personStr, personType string) (string, string, error) {
 	if len(personStr) == 0 {
 		return "", "", fmt.Errorf("Option '%s' requires a value", personType)
 	}
@@ -36,7 +36,7 @@ func ParsePerson(personStr string, personType string) (string, string, error) {
 	matches := reg.FindStringSubmatch(personStr)
 
 	if len(matches) != 3 {
-		return "", "", fmt.Errorf("%s not formatted correctly. Use 'Name <%s@example.com>' format", strings.Title(personType), personType)
+		return "", "", fmt.Errorf("%s not formatted correctly. Use 'Name <%s@example.com>' format", strings.ToUpper(personType[:1])+personType[1:], personType)
 	}
 
 	name := matches[1]
