@@ -113,53 +113,37 @@ func TestSchemaOverridesWithAdaptiveEncoding(t *testing.T) {
 
 // Convenience test for debugging a single query. Unskip and set to the desired query.
 func TestSingleScript(t *testing.T) {
-	t.Skip()
+	//t.Skip()
 	var scripts = []queries.ScriptTest{
 		{
-			Name: "Database syntax properly handles inter-CALL communication",
+			Name: "set op schema merge",
 			SetUpScript: []string{
-				`CREATE PROCEDURE p1()
-BEGIN
-	DECLARE str VARCHAR(20);
-   CALL p2(str);
-	SET str = CONCAT('a', str);
-   SELECT str;
-END`,
-				`CREATE PROCEDURE p2(OUT param VARCHAR(20))
-BEGIN
-	SET param = 'b';
-END`,
-				"CALL DOLT_ADD('-A');",
-				"CALL DOLT_COMMIT('-m', 'First procedures');",
-				"CALL DOLT_BRANCH('p12');",
-				"DROP PROCEDURE p1;",
-				"DROP PROCEDURE p2;",
-				`CREATE PROCEDURE p1()
-BEGIN
-	DECLARE str VARCHAR(20);
-    CALL p2(str);
-	SET str = CONCAT('c', str);
-   SELECT str;
-END`,
-				`CREATE PROCEDURE p2(OUT param VARCHAR(20))
-BEGIN
-	SET param = 'd';
-END`,
-				"CALL DOLT_ADD('-A');",
-				"CALL DOLT_COMMIT('-m', 'Second procedures');",
+				"create table `left` (i int primary key, j mediumint, k varchar(20));",
+				"create table `right` (i int primary key, j bigint, k text);",
+				"insert into `left` values (1,2, 'a')",
+				"insert into `right` values (3,4, 'b')",
+
+				"create table t1 (i int);",
+				"insert into t1 values (1), (2), (3);",
+				"create table t2 (i int);",
+				"insert into t2 values (1), (3);",
+				"create table t3 (j int);",
+				"insert into t3 values (1), (3);",
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query:    "CALL p1();",
-					Expected: []sql.Row{{"cd"}},
-				},
-				{
-					Query:    "CALL `mydb/main`.p1();",
-					Expected: []sql.Row{{"cd"}},
-				},
-				{
-					Query:    "CALL `mydb/p12`.p1();",
-					Expected: []sql.Row{{"ab"}},
+					Query: "table t1 union table t2 order by i;",
+					ExpectedColumns: sql.Schema{
+						{
+							Name: "i",
+							Type: gmstypes.Int32,
+						},
+					},
+					Expected: []sql.Row{
+						{1},
+						{2},
+						{3},
+					},
 				},
 			},
 		},
