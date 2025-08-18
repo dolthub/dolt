@@ -23,6 +23,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/dolthub/go-mysql-server/sql"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/gocraft/dbr/v2"
 	"github.com/stretchr/testify/assert"
@@ -512,6 +513,56 @@ listener:
 	require.NoError(t, err)
 	require.Len(t, readOnlyValue, 1)
 	assert.Equal(t, 1, readOnlyValue[0].Value)
+}
+
+func TestPortSystemVariable(t *testing.T) {
+	ctx := context.Background()
+
+	dEnv, err := sqle.CreateEnvWithSeedData()
+	require.NoError(t, err)
+	defer func() {
+		assert.NoError(t, dEnv.DoltDB(ctx).Close())
+	}()
+
+	// Pick an ephemeral free port for this test
+	listenPort, err := sql.GetEmptyPort()
+	require.NoError(t, err)
+	serverConfig := DefaultCommandLineServerConfig().WithPort(listenPort)
+	sc := svcs.NewController()
+	defer sc.Stop()
+	go func() {
+		_, _ = Serve(context.Background(), &Config{
+			Version:      "0.0.0",
+			ServerConfig: serverConfig,
+			Controller:   sc,
+			DoltEnv:      dEnv,
+		})
+	}()
+	err = sc.WaitForStart()
+	require.NoError(t, err)
+
+	conn, err := dbr.Open("mysql", servercfg.ConnectionString(serverConfig, "dolt"), nil)
+	require.NoError(t, err)
+	defer conn.Close()
+	sess := conn.NewSession(nil)
+
+	// Verify @@port
+	var portVal []struct {
+		Value int `db:"@@port"`
+	}
+	_, err = sess.SelectBySql("SELECT @@port").LoadContext(ctx, &portVal)
+	require.NoError(t, err)
+	require.Len(t, portVal, 1)
+	assert.Equal(t, listenPort, portVal[0].Value)
+
+	// Verify @@global.port
+	var globalPortVal []struct {
+		Value int `db:"@@global.port"`
+	}
+	_, err = sess.SelectBySql("SELECT @@global.port").LoadContext(ctx, &globalPortVal)
+	require.NoError(t, err)
+	require.Len(t, globalPortVal, 1)
+	assert.Equal(t, listenPort, globalPortVal[0].Value)
 }
 
 func TestReadOnlyEnforcement(t *testing.T) {

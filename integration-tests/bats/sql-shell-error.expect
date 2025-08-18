@@ -1,0 +1,17 @@
+#!/usr/bin/expect
+
+set timeout 5
+set env(NO_COLOR) 1
+
+source  "$env(BATS_CWD)/helper/common_expect_functions.tcl"
+
+spawn dolt sql
+
+expect_with_defaults                                                    {dolt-repo-[0-9]+/main\*> }   { send "SELECT DOES_NOT_EXIST();\r" }
+
+expect_with_defaults_2 "function: 'does_not_exist' not found\r" {dolt-repo-[0-9]+/main\*> } { send "SELECT JSON_PRETTY(\"INVALID\");\r" }
+
+expect_with_defaults_2 "Invalid JSON text in argument 1 to function json_pretty: \"INVALID\"\r" {dolt-repo-[0-9]+/main\*> }  { send "quit\r" }
+
+expect eof
+exit
