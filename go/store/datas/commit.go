@@ -604,10 +604,16 @@ func GetCommitMeta(ctx context.Context, cv types.Value) (*CommitMeta, error) {
 		ret.Timestamp = cmsg.TimestampMillis()
 		ret.UserTimestamp = cmsg.UserTimestampMillis()
 		ret.Signature = string(cmsg.Signature())
-		committerName := string(cmsg.CommitterName())
-		committerEmail := string(cmsg.CommitterEmail())
-		ret.CommitterName = &committerName
-		ret.CommitterEmail = &committerEmail
+		
+		// Only set committer fields if they exist in the flatbuffer
+		if cnBytes := cmsg.CommitterName(); cnBytes != nil {
+			committerName := string(cnBytes)
+			ret.CommitterName = &committerName
+		}
+		if ceBytes := cmsg.CommitterEmail(); ceBytes != nil {
+			committerEmail := string(ceBytes)
+			ret.CommitterEmail = &committerEmail
+		}
 
 		return ret, nil
 	}
