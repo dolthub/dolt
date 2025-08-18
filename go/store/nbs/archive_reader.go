@@ -576,22 +576,6 @@ func (ar archiveReader) getMetadata(ctx context.Context, stats *Stats) ([]byte, 
 	return ar.readByteSpan(ctx, ar.footer.metadataSpan(), stats)
 }
 
-// verifyDataCheckSum verifies the checksum of the data section of the archive. Note - this requires a fully read of
-// the data section, which could be sizable.
-func (ar archiveReader) verifyDataCheckSum(ctx context.Context, stats *Stats) error {
-	return verifyCheckSum(ctx, ar.reader, ar.footer.dataSpan(), ar.footer.dataCheckSum, stats)
-}
-
-// verifyIndexCheckSum verifies the checksum of the index section of the archive.
-func (ar archiveReader) verifyIndexCheckSum(ctx context.Context, stats *Stats) error {
-	return verifyCheckSum(ctx, ar.reader, ar.footer.totalIndexSpan(), ar.footer.indexCheckSum, stats)
-}
-
-// verifyMetaCheckSum verifies the checksum of the metadata section of the archive.
-func (ar archiveReader) verifyMetaCheckSum(ctx context.Context, stats *Stats) error {
-	return verifyCheckSum(ctx, ar.reader, ar.footer.metadataSpan(), ar.footer.metaCheckSum, stats)
-}
-
 func (ar archiveReader) iterate(ctx context.Context, cb func(chunks.Chunk) error, stats *Stats) error {
 	for i := uint32(0); i < ar.footer.chunkCount; i++ {
 		var hasBytes [hash.ByteLen]byte

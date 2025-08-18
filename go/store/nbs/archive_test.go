@@ -492,54 +492,6 @@ func TestArchiveChunkCorruption(t *testing.T) {
 	assert.Nil(t, data)
 }
 
-// Varlidate that the SHA512 checksums in the footer checkout, and fail when they are corrupted.
-func TestArchiveCheckSumValidations(t *testing.T) {
-	writer := NewFixedBufferByteSink(make([]byte, 1024))
-	aw := newArchiveWriterWithSink(writer)
-
-	testBlob := []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
-	_, _ = aw.writeByteSpan(testBlob)
-
-	h := hashWithPrefix(t, 23)
-	_ = aw.stageZStdChunk(h, 0, 1)
-	err := aw.finalizeByteSpans()
-	assert.NoError(t, err)
-	err = aw.writeIndex()
-	assert.NoError(t, err)
-	err = aw.writeMetadata([]byte("All work and no play"))
-	assert.NoError(t, err)
-	err = aw.writeFooter()
-	assert.NoError(t, err)
-
-	theBytes := writer.buff[:writer.pos]
-	fileSize := uint64(len(theBytes))
-	readerAt := bytes.NewReader(theBytes)
-	tra := tableReaderAtAdapter{readerAt}
-	rdr, err := newArchiveReader(context.Background(), tra, defaultId, fileSize, &Stats{})
-	assert.NoError(t, err)
-
-	err = rdr.verifyDataCheckSum(context.Background(), &Stats{})
-	assert.NoError(t, err)
-	err = rdr.verifyIndexCheckSum(context.Background(), &Stats{})
-	assert.NoError(t, err)
-	err = rdr.verifyMetaCheckSum(context.Background(), &Stats{})
-	assert.NoError(t, err)
-
-	theBytes[5] = theBytes[5] + 1
-	err = rdr.verifyDataCheckSum(context.Background(), &Stats{})
-	assert.ErrorContains(t, err, "checksum mismatch")
-
-	offset := rdr.footer.totalIndexSpan().offset + 2
-	theBytes[offset] = theBytes[offset] + 1
-	err = rdr.verifyIndexCheckSum(context.Background(), &Stats{})
-	assert.ErrorContains(t, err, "checksum mismatch")
-
-	offset = rdr.footer.metadataSpan().offset + 2
-	theBytes[offset] = theBytes[offset] + 1
-	err = rdr.verifyMetaCheckSum(context.Background(), &Stats{})
-	assert.ErrorContains(t, err, "checksum mismatch")
-}
-
 func TestProllyBinSearchUneven(t *testing.T) {
 	// We construct a prefix list which is not well distributed to ensure that the search still works, even if not
 	// optimal.
