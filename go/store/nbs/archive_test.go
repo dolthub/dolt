@@ -759,7 +759,7 @@ func TestArchiveConjoinAll(t *testing.T) {
 	readerAt := bytes.NewReader(theBytes)
 	tra := tableReaderAtAdapter{readerAt}
 
-	combinedReader, err := newArchiveReader(context.Background(), tra, fileSize, &Stats{})
+	combinedReader, err := newArchiveReader(context.Background(), tra, defaultId, fileSize, &Stats{})
 	assert.NoError(t, err)
 
 	// Verify combined reader contains all chunks
@@ -814,7 +814,7 @@ func TestArchiveConjoinAllDuplicateChunk(t *testing.T) {
 	readerAt := bytes.NewReader(theBytes)
 	tra := tableReaderAtAdapter{readerAt}
 
-	combinedReader, err := newArchiveReader(context.Background(), tra, fileSize, &Stats{})
+	combinedReader, err := newArchiveReader(context.Background(), tra, defaultId, fileSize, &Stats{})
 	assert.NoError(t, err)
 
 	// Check chunk counts - should have 8 chunks total (4 from archive1 + 4 from archive2)
@@ -892,7 +892,7 @@ func TestArchiveConjoinAllMixedCompression(t *testing.T) {
 	readerAt := bytes.NewReader(theBytes)
 	tra := tableReaderAtAdapter{readerAt}
 
-	combinedReader, err := newArchiveReader(context.Background(), tra, fileSize, &Stats{})
+	combinedReader, err := newArchiveReader(context.Background(), tra, defaultId, fileSize, &Stats{})
 	assert.NoError(t, err)
 
 	// Verify all chunks can be read from the combined archive
@@ -999,7 +999,7 @@ func TestArchiveConjoinAllComprehensive(t *testing.T) {
 	readerAt1 := bytes.NewReader(bytes1)
 	tra1 := tableReaderAtAdapter{readerAt1}
 
-	combinedReader1, err := newArchiveReader(context.Background(), tra1, fileSize1, &Stats{})
+	combinedReader1, err := newArchiveReader(context.Background(), tra1, defaultId, fileSize1, &Stats{})
 	assert.NoError(t, err)
 
 	// Create additional readers for second conjoin
@@ -1061,7 +1061,7 @@ func TestArchiveConjoinAllComprehensive(t *testing.T) {
 	readerAt2 := bytes.NewReader(bytes2)
 	tra2 := tableReaderAtAdapter{readerAt2}
 
-	finalCombinedReader, err := newArchiveReader(context.Background(), tra2, fileSize2, &Stats{})
+	finalCombinedReader, err := newArchiveReader(context.Background(), tra2, defaultId, fileSize2, &Stats{})
 	assert.NoError(t, err)
 
 	// Verify all expected chunks can be read from the final combined archive
@@ -1333,7 +1333,7 @@ func createTestArchiveWithHashes(t *testing.T, chunkData [][]byte, hashes []hash
 	fileSize := uint64(len(theBytes))
 	readerAt := bytes.NewReader(theBytes)
 	tra := tableReaderAtAdapter{readerAt}
-	archiveReader, err := newArchiveReader(context.Background(), tra, fileSize, &Stats{})
+	archiveReader, err := newArchiveReader(context.Background(), tra, defaultId, fileSize, &Stats{})
 	assert.NoError(t, err)
 	return archiveReader, hashes
 }
