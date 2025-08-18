@@ -570,10 +570,9 @@ type doltIndex struct {
 	tblName string
 	dbName  string
 
-	columns         []schema.Column
-	colExprTypes    []sql.ColumnExpressionType
-	colExprNames    []string
-	unqColExprNames []string
+	columns      []schema.Column
+	colExprTypes []sql.ColumnExpressionType
+	colExprNames []string
 
 	indexSch schema.Schema
 	tableSch schema.Schema
