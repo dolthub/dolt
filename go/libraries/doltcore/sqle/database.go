@@ -636,21 +636,6 @@ func (db Database) getTableInsensitiveWithRoot(ctx *sql.Context, head *doltdb.Co
 			useCompactOverride := isDoltgresSystemTable && resolve.UseSearchPath
 			dt, found = dtables.NewLogTable(ctx, db.Name(), lwrName, db.ddb, head, useCompactOverride), true
 		}
-	case doltdb.LogTableNameCompact:
-		isDoltgresSystemTable, err := resolve.IsDoltgresSystemTable(ctx, tname, root)
-		if err != nil {
-			return nil, false, err
-		}
-		if !resolve.UseSearchPath || isDoltgresSystemTable {
-			if head == nil {
-				var err error
-				head, err = ds.GetHeadCommit(ctx, db.RevisionQualifiedName())
-				if err != nil {
-					return nil, false, err
-				}
-			}
-			dt, found = dtables.NewLogTable(ctx, db.Name(), lwrName, db.ddb, head, true), true
-		}
 	case doltdb.DiffTableName, doltdb.GetDiffTableName():
 		isDoltgresSystemTable, err := resolve.IsDoltgresSystemTable(ctx, tname, root)
 		if err != nil {

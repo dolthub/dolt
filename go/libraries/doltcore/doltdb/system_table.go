@@ -405,8 +405,6 @@ var GetBranchActivityTableName = func() string {
 const (
 	// LogTableName is the log system table name
 	LogTableName = "dolt_log"
-	// LogTableNameCompact is the compact log system table name
-	LogTableNameCompact = "dolt_log_compact"
 
 	// DiffTableName is the name of the table with a map of commits to tables changed
 	DiffTableName = "dolt_diff"
