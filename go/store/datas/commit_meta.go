@@ -252,14 +252,16 @@ func CommitMetaFromNomsSt(st types.Struct) (*CommitMeta, error) {
 
 	name := string(n.(types.String))
 	email := string(e.(types.String))
+	description := string(d.(types.String))
+	sig := string(signature.(types.String))
 
 	return &CommitMeta{
 		Name:           name,
 		Email:          email,
 		Timestamp:      uint64(ts.(types.Uint)),
-		Description:    string(d.(types.String)),
+		Description:    description,
 		UserTimestamp:  int64(userTS.(types.Int)),
-		Signature:      string(signature.(types.String)),
+		Signature:      sig,
 		CommitterName:  nil,
 		CommitterEmail: nil,
 	}, nil

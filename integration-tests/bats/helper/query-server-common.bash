@@ -59,7 +59,6 @@ start_sql_server() {
       return $conn_status
     fi
 
-    # Default compact dolt_log schema for server-mode bats runs
     user=${SQL_USER:-root}
     # Intentionally do not use `run` here so the function exit status remains success
     dolt -u $user -p "$DOLT_REMOTE_PASSWORD" --host localhost --no-tls --port $PORT --use-db "$DEFAULT_DB" sql -q "SET @@GLOBAL.dolt_log_compact_schema = 1;" >/dev/null 2>&1 || true
