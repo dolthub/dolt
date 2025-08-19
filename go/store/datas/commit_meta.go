@@ -178,7 +178,15 @@ func NewCommitMetaWithAuthorCommitter(authorName, authorEmail, committerName, co
 
 	authorDateMillis := authorTS.UnixMilli()
 
-	return &CommitMeta{n, e, d, "", committerDateMillis, authorDateMillis, &cn, &ce}, nil
+	var cnptr, ceptr *string
+	if cn != an {
+		cnptr = &cn
+	}
+	if ce != ae {
+		ceptr = &ce
+	}
+
+	return &CommitMeta{n, e, d, "", committerDateMillis, authorDateMillis, &cnptr, &ceptr}, nil
 }
 
 func getRequiredFromSt(st types.Struct, k string) (types.Value, error) {
@@ -259,11 +267,16 @@ func (cm *CommitMeta) toNomsStruct(nbf *types.NomsBinFormat) (types.Struct, erro
 }
 
 // Time returns the time at which the commit was authored
+// NOTE: Unlike Git, this returns the time in the system's local timezone rather than
+// preserving the original timezone when the commit was made. This maintains backwards
+// compatibility but differs from Git's behavior of timezone preservation.
 func (cm *CommitMeta) Time() time.Time {
 	return time.UnixMilli(cm.UserTimestamp)
 }
 
-// CommitterTime returns the time at which the commit was committed, or author time if no committer time is set
+// CommitterTime returns the committer timestamp or author time if not set
+// NOTE: Like Time(), this returns the time in system local timezone rather than
+// preserving the original timezone when the commit was made.
 func (cm *CommitMeta) CommitterTime() time.Time {
 	if cm.Timestamp != 0 {
 		return time.UnixMilli(int64(cm.Timestamp))

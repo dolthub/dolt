@@ -60,7 +60,7 @@ start_sql_server() {
     fi
 
     user=${SQL_USER:-root}
-    # Intentionally do not use `run` here so the function exit status remains success
+    # Don't fail server startup if session variable setting fails
     dolt -u $user -p "$DOLT_REMOTE_PASSWORD" --host localhost --no-tls --port $PORT --use-db "$DEFAULT_DB" sql -q "SET @@GLOBAL.dolt_log_compact_schema = 1;" >/dev/null 2>&1 || true
     return 0
 }
