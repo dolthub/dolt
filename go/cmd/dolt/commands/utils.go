@@ -712,13 +712,12 @@ func getCommitInfoWithOptions(queryist cli.Queryist, sqlCtx *sql.Context, ref st
 	return getCommitInfoSQL(queryist, sqlCtx, ref, opts, hashOfHead)
 }
 
-// getCommitInfoSQL gets commit info using SQL queries, always using extended schema
+// getCommitInfoSQL retrieves commit information using SQL queries with extended schema.
 func getCommitInfoSQL(queryist cli.Queryist, sqlCtx *sql.Context, ref string, opts commitInfoOptions, hashOfHead string) (*CommitInfo, error) {
-	// Save current session variable and force extended schema for CLI query
+	// CLI needs author info from extended schema, but shouldn't change user's session
 	_, _ = cli.GetRowsForSql(queryist, sqlCtx, "SET @saved_compact = @@"+dsess.DoltLogCompactSchema+";")
 	_, _ = cli.GetRowsForSql(queryist, sqlCtx, "SET "+dsess.DoltLogCompactSchema+" = 0;")
 	
-	// Ensure we restore the session variable on exit
 	defer func() {
 		_, _ = cli.GetRowsForSql(queryist, sqlCtx, "SET "+dsess.DoltLogCompactSchema+" = @saved_compact;")
 	}()
