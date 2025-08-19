@@ -227,7 +227,9 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		return HandleVErrAndExitCode(errhand.BuildDError("cannot use both --%s and --%s", binaryAsHexFlag, skipBinaryAsHexFlag).Build(), usage)
 	}
 
-	queryist, err := cliCtx.QueryEngine(ctx)
+	queryist, err := cliCtx.QueryEngine(ctx, func(config *cli.LateBindQueryistConfig) {
+		config.EnableAutoGC = true
+	})
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
@@ -618,6 +620,11 @@ func execBatchMode(ctx *sql.Context, qryist cli.Queryist, input io.Reader, conti
 	scanner := NewStreamScanner(input)
 	var query string
 	for scanner.Scan() {
+		// The session we get is wrapped in a command begin/end block.
+		// By ending the command and starting a new one, Auto GC is able
+		// to form safe points if/when it is enabled.
+		sql.SessionCommandEnd(ctx.Session)
+		sql.SessionCommandBegin(ctx.Session)
 		if fileReadProg != nil {
 			updateFileReadProgressOutput()
 			fileReadProg.setReadBytes(int64(len(scanner.Bytes())))
@@ -763,6 +770,12 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 	lastSqlCmd := ""
 
 	shell.Uninterpreted(func(c *ishell.Context) {
+		// The session we get is wrapped in a command begin/end block.
+		// By ending the command and starting a new one, Auto GC is able
+		// to form safe points if/when it is enabled.
+		sql.SessionCommandEnd(sqlCtx.Session)
+		sql.SessionCommandBegin(sqlCtx.Session)
+
 		query := c.Args[0]
 		query = strings.TrimSpace(query)
 		if len(query) == 0 {
