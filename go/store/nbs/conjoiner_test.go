@@ -409,3 +409,94 @@ func (u updatePreemptManifest) Update(ctx context.Context, lastLock hash.Hash, n
 	}
 	return u.manifest.Update(ctx, lastLock, newContents, stats, writeHook)
 }
+
+func TestInlineConjoinerChooseConjoinees(t *testing.T) {
+	t.Run("ChooseTwoSmallestTablesOnly", func(t *testing.T) {
+		conjoiner := inlineConjoiner{maxTables: 5}
+
+		// Create 10 table specs with sizes 10, 11, 12, ..., 19
+		tables := make([]tableSpec, 10)
+		for i := 0; i < 10; i++ {
+			tables[i] = tableSpec{
+				name:       hash.Of([]byte{byte(i)}),
+				chunkCount: uint32(10 + i), // sizes 10, 11, 12, ..., 19
+			}
+		}
+
+		conjoinees, keepers, err := conjoiner.chooseConjoinees(tables)
+		require.NoError(t, err)
+		assert.Equal(t, len(tables), len(conjoinees)+len(keepers), "All tables must be accounted for in conjoinees and keepers")
+
+		// should stop when we have fewer than maxTables OR when conjoined would exceed smallest unconjoined
+		// With sequential sizes 10,11,12,...19, conjoining 10+11=21 would exceed 12, so should stop at 2 tables conjoined
+		assert.Equal(t, 2, len(conjoinees), "Should conjoin exactly 2 tables (10+11) since 21 > 12")
+		assert.Equal(t, 8, len(keepers), "Should keep remaining 8 tables")
+		tablesAfterConjoin := len(keepers) + 1 // keepers + 1 conjoined table
+		assert.Equal(t, 9, tablesAfterConjoin, "Should have 9 tables after conjoin (8 keepers + 1 conjoined)")
+
+		// Verify the two smallest tables are conjoined
+		expectedConjoinees := []uint32{10, 11}
+		actualConjoinees := make([]uint32, len(conjoinees))
+		for i, c := range conjoinees {
+			actualConjoinees[i] = c.chunkCount
+		}
+		assert.ElementsMatch(t, expectedConjoinees, actualConjoinees, "Should conjoin the two smallest tables")
+	})
+
+	t.Run("StopWhenConjoinedWouldExceedSmallestUnconjoined", func(t *testing.T) {
+		conjoiner := inlineConjoiner{maxTables: 2}
+
+		// Tables: [5, 7, 20, 25, 30]
+		// Result: conjoin [5,7], keep [20,25,30]
+		tables := []tableSpec{
+			{name: hash.Of([]byte("a")), chunkCount: 5},  // smallest
+			{name: hash.Of([]byte("b")), chunkCount: 7},  // second smallest
+			{name: hash.Of([]byte("c")), chunkCount: 20}, // third - adding this would make 32 > 25
+			{name: hash.Of([]byte("d")), chunkCount: 25}, // fourth - this stops us from taking 20
+			{name: hash.Of([]byte("e")), chunkCount: 30}, // largest
+		}
+
+		conjoinees, keepers, err := conjoiner.chooseConjoinees(tables)
+		require.NoError(t, err)
+		assert.Equal(t, 2, len(conjoinees), "Should conjoin only 2 tables (5+7=12) since adding 20 would make 32 > 25")
+		assert.Equal(t, 3, len(keepers), "Should keep 3 tables [20,25,30]")
+
+		expectedConjoinees := []uint32{5, 7}
+		actualConjoinees := make([]uint32, len(conjoinees))
+		for i, c := range conjoinees {
+			actualConjoinees[i] = c.chunkCount
+		}
+		assert.ElementsMatch(t, expectedConjoinees, actualConjoinees, "Should conjoin only [5,7]")
+	})
+
+	t.Run("MaxTablesRespectedWhenFilesAreSmall", func(t *testing.T) {
+		conjoiner := inlineConjoiner{maxTables: 3}
+
+		// Exponentially increasing sizes ensure that we never exceed the next size. This ensures we stop when we
+		// are below maxTables, not when we exceed the next file size.
+		tables := []tableSpec{
+			{name: hash.Of([]byte("a")), chunkCount: 1},
+			{name: hash.Of([]byte("b")), chunkCount: 2},
+			{name: hash.Of([]byte("c")), chunkCount: 4},
+			{name: hash.Of([]byte("d")), chunkCount: 8},
+			{name: hash.Of([]byte("e")), chunkCount: 16},
+			{name: hash.Of([]byte("f")), chunkCount: 32},
+		}
+
+		conjoinees, keepers, err := conjoiner.chooseConjoinees(tables)
+		require.NoError(t, err)
+		assert.Equal(t, len(tables), len(conjoinees)+len(keepers), "All tables must be accounted for in conjoinees and keepers")
+
+		tablesAfterConjoin := len(keepers) + 1
+		// With maxTables=3, we expect to conjoin the first 5 tables (1+2+4+8+16=31) and keep the last one (32)
+		assert.Equal(t, 2, tablesAfterConjoin, "Should have exactly 1 table after conjoining to get below maxTables=2")
+		assert.Equal(t, 5, len(conjoinees), "Should conjoin at 5 tables")
+
+		expectedConjoinees := []uint32{1, 2, 4, 8, 16}
+		actualConjoinees := make([]uint32, len(conjoinees))
+		for i, c := range conjoinees {
+			actualConjoinees[i] = c.chunkCount
+		}
+		assert.ElementsMatch(t, expectedConjoinees, actualConjoinees, "Should conjoin only [1,2,4,8,16]")
+	})
+}

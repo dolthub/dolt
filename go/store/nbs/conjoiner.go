@@ -50,9 +50,16 @@ func (c inlineConjoiner) conjoinRequired(ts tableSet) bool {
 	return ts.Size() > c.maxTables && len(ts.upstream) >= 2
 }
 
-// chooseConjoinees implements conjoinStrategy. Current approach is to choose the smallest N tables which,
-// when removed and replaced with the conjoinment, will leave the conjoinment as the smallest table.
-// We also keep taking table files until we get below maxTables.
+// chooseConjoinees picks tables to conjoin. There are two primary things to balance here. First, we want to
+// change as few tables as possible. Second, we want to normalize table sizes so we don't have any outliers.
+//
+// Strategy is to take the smallest tables, and conjoin them until we have: Fewer than |maxTables| tables left OR the
+// size of the final conjoined table would exceed the size of the smallest unconjoined table.
+//
+// It is easily possible that conjoining the two smallest tables will result in a table that is larger than the third,
+// and in that case we stop and conjoin only those two tables. The idea being that we want to improve the situation
+// to some degree, but we don't want to perform a longer conjoin process than necessary (remember this can happen during
+// a push to dolthub).
 func (c inlineConjoiner) chooseConjoinees(upstream []tableSpec) (conjoinees, keepers []tableSpec, err error) {
 	sorted := make([]tableSpec, len(upstream))
 	copy(sorted, upstream)
