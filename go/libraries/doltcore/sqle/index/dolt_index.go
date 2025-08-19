@@ -570,7 +570,9 @@ type doltIndex struct {
 	tblName string
 	dbName  string
 
-	columns []schema.Column
+	columns      []schema.Column
+	colExprTypes []sql.ColumnExpressionType
+	colExprNames []string
 
 	indexSch schema.Schema
 	tableSch schema.Schema
@@ -656,14 +658,16 @@ func (di *doltIndex) CanSupportOrderBy(expr sql.Expression) bool {
 
 // ColumnExpressionTypes implements the interface sql.Index.
 func (di *doltIndex) ColumnExpressionTypes() []sql.ColumnExpressionType {
-	cets := make([]sql.ColumnExpressionType, len(di.columns))
-	for i, col := range di.columns {
-		cets[i] = sql.ColumnExpressionType{
-			Expression: di.tblName + "." + col.Name,
-			Type:       col.TypeInfo.ToSqlType(),
+	if di.colExprTypes == nil {
+		di.colExprTypes = make([]sql.ColumnExpressionType, len(di.columns))
+		for i, col := range di.columns {
+			di.colExprTypes[i] = sql.ColumnExpressionType{
+				Expression: di.tblName + "." + col.Name,
+				Type:       col.TypeInfo.ToSqlType(),
+			}
 		}
 	}
-	return cets
+	return di.colExprTypes
 }
 
 // ExtendedColumnExpressionTypes implements the interface sql.ExtendedIndex.
@@ -985,11 +989,13 @@ func (di *doltIndex) Database() string {
 
 // Expressions implements sql.Index
 func (di *doltIndex) Expressions() []string {
-	strs := make([]string, len(di.columns))
-	for i, col := range di.columns {
-		strs[i] = di.tblName + "." + col.Name
+	if di.colExprNames == nil {
+		di.colExprNames = make([]string, len(di.columns))
+		for i, col := range di.columns {
+			di.colExprNames[i] = di.tblName + "." + col.Name
+		}
 	}
-	return strs
+	return di.colExprNames
 }
 
 // ExtendedExpressions implements sql.ExtendedIndex
