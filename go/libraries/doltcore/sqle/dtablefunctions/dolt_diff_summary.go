@@ -301,8 +301,8 @@ func (ds *DiffSummaryTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.
 			return NewDiffSummaryTableFunctionRowIter([]*diff.TableDeltaSummary{}), nil
 		}
 
-		// Check if the specific table is a system table
-		if shouldFilterSystemTable(delta) {
+		// Filter out dolt_ignore table itself to match dolt diff behavior
+		if shouldFilterDoltIgnoreTable(delta) {
 			return NewDiffSummaryTableFunctionRowIter([]*diff.TableDeltaSummary{}), nil
 		}
 
@@ -325,8 +325,8 @@ func (ds *DiffSummaryTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.
 			continue
 		}
 
-		// Filter out system tables (tables starting with "dolt_")
-		if shouldFilterSystemTable(delta) {
+		// Filter out dolt_ignore table itself to match dolt diff behavior
+		if shouldFilterDoltIgnoreTable(delta) {
 			continue
 		}
 
@@ -518,14 +518,7 @@ func shouldIgnoreDelta(delta diff.TableDelta, ignorePatterns doltdb.IgnorePatter
 	return false
 }
 
-// shouldFilterSystemTable determines if a table delta should be filtered out because it's a system table.
-func shouldFilterSystemTable(delta diff.TableDelta) bool {
-	// Check if either the from or to table name starts with "dolt_"
-	if delta.FromName.Name != "" && strings.HasPrefix(delta.FromName.Name, "dolt_") {
-		return true
-	}
-	if delta.ToName.Name != "" && strings.HasPrefix(delta.ToName.Name, "dolt_") {
-		return true
-	}
-	return false
+// shouldFilterDoltIgnoreTable filters out the dolt_ignore table itself to match dolt diff behavior.
+func shouldFilterDoltIgnoreTable(delta diff.TableDelta) bool {
+	return delta.FromName.Name == "dolt_ignore" || delta.ToName.Name == "dolt_ignore"
 }
