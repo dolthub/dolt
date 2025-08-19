@@ -2157,7 +2157,7 @@ SQL
     [[ "$output" =~ " 5 " ]] || false
     [[ "$output" =~ " 0 " ]] || false
     [[ ! "$output" =~ " 4 " ]] || false
-    run dolt sql -r csv -q "select max(pk),c2 from one_pk group by c1"
+    run dolt sql -r csv -q "select max(pk),c2 from one_pk group by c2"
     [ $status -eq 0 ]
     [[ "$output" =~ "5,0" ]] || false
     [[ "$output" =~ "1,10" ]] || false
