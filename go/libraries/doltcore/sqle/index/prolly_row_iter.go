@@ -35,6 +35,8 @@ type prollyRowIter struct {
 	// ordProj is a concatenated list of output ordinals for |keyProj| and |valProj|
 	ordProj []int
 	rowLen  int
+
+	rows []sql.Row
 }
 
 var _ sql.RowIter = prollyRowIter{}
@@ -172,8 +174,8 @@ func (it prollyRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	row := make(sql.Row, it.rowLen)
+	row := sql.GetRow(it.rowLen)
+	it.rows = append(it.rows, row)
 	for i, idx := range it.keyProj {
 		outputIdx := it.ordProj[i]
 		row[outputIdx], err = tree.GetField(ctx, it.keyDesc, idx, key, it.ns)
@@ -192,6 +194,7 @@ func (it prollyRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 }
 
 func (it prollyRowIter) Close(ctx *sql.Context) error {
+	sql.PutRows(it.rows)
 	return nil
 }
 
@@ -206,6 +209,8 @@ type prollyKeylessIter struct {
 
 	curr sql.Row
 	card uint64
+
+	rows []sql.Row
 }
 
 var _ sql.RowIter = &prollyKeylessIter{}
@@ -231,7 +236,8 @@ func (it *prollyKeylessIter) nextTuple(ctx *sql.Context) error {
 	}
 
 	it.card = val.ReadKeylessCardinality(value)
-	it.curr = make(sql.Row, it.rowLen)
+	it.curr = sql.GetRow(it.rowLen)
+	it.rows = append(it.rows, it.curr)
 
 	for i, idx := range it.valProj {
 		outputIdx := it.ordProj[i]
@@ -244,5 +250,6 @@ func (it *prollyKeylessIter) nextTuple(ctx *sql.Context) error {
 }
 
 func (it *prollyKeylessIter) Close(ctx *sql.Context) error {
+	sql.PutRows(it.rows)
 	return nil
 }
