@@ -126,13 +126,9 @@ func (csvw *CSVWriter) WriteSqlRow(ctx *sql.Context, r sql.Row) error {
 }
 
 func toCsvString(ctx *sql.Context, colType sql.Type, val interface{}) (string, error) {
-	if val == nil {
-		return "", nil
-	}
-
-	// For BIT types, handle potential type mismatches from UNION operations
+	// For BIT, emit base-10 int, instead of bytes
 	if _, ok := colType.(types.BitType); ok {
-		// Normalize to the column's canonical value (e.g., int64 -> uint64)
+		// Normalize to handle UNION type generalization (e.g., int64 -> uint64)
 		norm, _, err := colType.Convert(ctx, val)
 		if err != nil {
 			return "", err
