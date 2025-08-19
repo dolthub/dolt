@@ -227,27 +227,27 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		return HandleVErrAndExitCode(errhand.BuildDError("cannot use both --%s and --%s", binaryAsHexFlag, skipBinaryAsHexFlag).Build(), usage)
 	}
 
-	queryist, sqlCtx, err := cliCtx.QueryEngine(ctx)
+	queryist, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
 	if query, queryOK := apr.GetValue(QueryFlag); queryOK {
 		if apr.Contains(saveFlag) {
-			return SaveQuery(sqlCtx, queryist, apr, query, format, usage, binaryAsHex)
+			return SaveQuery(queryist.Context, queryist.Queryist, apr, query, format, usage, binaryAsHex)
 		}
-		return queryMode(sqlCtx, queryist, apr, query, format, usage, binaryAsHex)
+		return queryMode(queryist.Context, queryist.Queryist, apr, query, format, usage, binaryAsHex)
 	} else if savedQueryName, exOk := apr.GetValue(executeFlag); exOk {
-		return executeSavedQuery(sqlCtx, queryist, savedQueryName, format, usage, binaryAsHex)
+		return executeSavedQuery(queryist.Context, queryist.Queryist, savedQueryName, format, usage, binaryAsHex)
 	} else if apr.Contains(listSavedFlag) {
-		return listSavedQueries(sqlCtx, queryist, format, usage)
+		return listSavedQueries(queryist.Context, queryist.Queryist, format, usage)
 	} else {
 		// Run in either batch mode for piped input, or shell mode for interactive
 		isTty := false
 		fi, err := os.Stdin.Stat()
 		if err != nil {
 			if !osutil.IsWindows {
-				return sqlHandleVErrAndExitCode(queryist, errhand.BuildDError("Couldn't stat STDIN. This is a bug.").Build(), usage)
+				return sqlHandleVErrAndExitCode(queryist.Queryist, errhand.BuildDError("Couldn't stat STDIN. This is a bug.").Build(), usage)
 			}
 		} else {
 			isTty = fi.Mode()&os.ModeCharDevice != 0
@@ -260,11 +260,11 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 			isTty = false
 			input, err = os.OpenFile(fileInput, os.O_RDONLY, os.ModePerm)
 			if err != nil {
-				return sqlHandleVErrAndExitCode(queryist, errhand.BuildDError("couldn't open file %s", fileInput).Build(), usage)
+				return sqlHandleVErrAndExitCode(queryist.Queryist, errhand.BuildDError("couldn't open file %s", fileInput).Build(), usage)
 			}
 			info, err := os.Stat(fileInput)
 			if err != nil {
-				return sqlHandleVErrAndExitCode(queryist, errhand.BuildDError("couldn't get file size %s", fileInput).Build(), usage)
+				return sqlHandleVErrAndExitCode(queryist.Queryist, errhand.BuildDError("couldn't get file size %s", fileInput).Build(), usage)
 			}
 
 			input = transform.NewReader(input, textunicode.BOMOverride(transform.Nop))
@@ -277,15 +277,15 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		if isTty {
 			// In shell mode, default to hex format unless explicitly disabled
 			shellBinaryAsHex := !apr.Contains(skipBinaryAsHexFlag)
-			err := execShell(sqlCtx, queryist, format, cliCtx, shellBinaryAsHex)
+			err := execShell(queryist.Context, queryist.Queryist, format, cliCtx, shellBinaryAsHex)
 			if err != nil {
-				return sqlHandleVErrAndExitCode(queryist, errhand.VerboseErrorFromError(err), usage)
+				return sqlHandleVErrAndExitCode(queryist.Queryist, errhand.VerboseErrorFromError(err), usage)
 			}
 		} else {
 			input = transform.NewReader(input, textunicode.BOMOverride(transform.Nop))
-			err := execBatchMode(sqlCtx, queryist, input, continueOnError, format, binaryAsHex)
+			err := execBatchMode(queryist.Context, queryist.Queryist, input, continueOnError, format, binaryAsHex)
 			if err != nil {
-				return sqlHandleVErrAndExitCode(queryist, errhand.VerboseErrorFromError(err), usage)
+				return sqlHandleVErrAndExitCode(queryist.Queryist, errhand.VerboseErrorFromError(err), usage)
 			}
 		}
 	}

@@ -96,7 +96,7 @@ func (cmd ResetCmd) Exec(ctx context.Context, commandStr string, args []string, 
 		return status
 	}
 
-	queryist, sqlCtx, err := cliCtx.QueryEngine(ctx)
+	queryist, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
 		cli.Println(err.Error())
 		return 1
@@ -113,12 +113,12 @@ func (cmd ResetCmd) Exec(ctx context.Context, commandStr string, args []string, 
 
 	// process query through prepared statement to prevent sql injection
 	query, err := constructInterpolatedDoltResetQuery(apr)
-	_, _, _, err = queryist.Query(sqlCtx, query)
+	_, _, _, err = queryist.Queryist.Query(queryist.Context, query)
 	if err != nil {
 		return handleResetError(err, usage)
 	}
 
-	printNotStaged(sqlCtx, queryist)
+	printNotStaged(queryist.Context, queryist.Queryist)
 
 	return 0
 }

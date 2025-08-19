@@ -76,7 +76,7 @@ func (cmd CleanCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	help, _ := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, cleanDocContent, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
-	queryist, sqlCtx, err := cliCtx.QueryEngine(ctx)
+	queryist, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
 		cli.Println(err.Error())
 		return 1
@@ -113,7 +113,7 @@ func (cmd CleanCmd) Exec(ctx context.Context, commandStr string, args []string, 
 		}
 	}
 
-	_, err = cli.GetRowsForSql(queryist, sqlCtx, query)
+	_, err = cli.GetRowsForSql(queryist.Queryist, queryist.Context, query)
 	if err != nil {
 		cli.Println(err.Error())
 		return 1

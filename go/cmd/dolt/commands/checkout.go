@@ -25,7 +25,6 @@ import (
 	"github.com/gocraft/dbr/v2/dialect"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
-	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -96,21 +95,18 @@ func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []strin
 		return status
 	}
 
-	queryEngine, sqlCtx, err := cliCtx.QueryEngine(ctx)
+	queryist, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
-	if false { // XXX: Find a way for Checkout to know if this is within another session...
+	if queryist.IsFirstUse && queryist.IsRemote {
 		// We only check for this case when checkout is the first command in a session. The reason for this is that checkout
 		// when connected to a remote server will not work as it won't set the branch. But when operating within the context
 		// of another session, specifically a \checkout in a dolt sql session, this makes sense. Since no closeFunc would be
 		// returned, we don't need to check for this case.
-		_, ok := queryEngine.(*engine.SqlEngine)
-		if !ok {
-			msg := fmt.Sprintf(cli.RemoteUnsupportedMsg, commandStr)
-			cli.Println(msg)
-			return 1
-		}
+		msg := fmt.Sprintf(cli.RemoteUnsupportedMsg, commandStr)
+		cli.Println(msg)
+		return 1
 	}
 
 	// Argument validation in the CLI is strictly nice to have. The stored procedure will do the same, but the errors
@@ -143,7 +139,7 @@ func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []strin
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	rows, err := cli.GetRowsForSql(queryEngine, sqlCtx, sqlQuery)
+	rows, err := cli.GetRowsForSql(queryist.Queryist, queryist.Context, sqlQuery)
 
 	if err != nil {
 		// In fringe cases the server can't start because the default branch doesn't exist, `dolt checkout <existing branch>`
@@ -170,7 +166,7 @@ func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []strin
 		return HandleVErrAndExitCode(errhand.BuildDError("no 'message' field in response from %s", sqlQuery).Build(), usage)
 	}
 
-	message, ok, err := sql.Unwrap[string](sqlCtx, rows[0][1])
+	message, ok, err := sql.Unwrap[string](queryist.Context, rows[0][1])
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}

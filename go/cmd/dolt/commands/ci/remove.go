@@ -81,12 +81,12 @@ func (cmd RemoveCmd) Exec(ctx context.Context, commandStr string, args []string,
 
 	workflowName := apr.Arg(0)
 
-	queryist, sqlCtx, err := cliCtx.QueryEngine(ctx)
+	queryist, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	hasTables, err := dolt_ci.HasDoltCITables(queryist, sqlCtx)
+	hasTables, err := dolt_ci.HasDoltCITables(queryist.Queryist, queryist.Context)
 	if err != nil {
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
@@ -98,9 +98,9 @@ func (cmd RemoveCmd) Exec(ctx context.Context, commandStr string, args []string,
 	if err != nil {
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
-	wm := dolt_ci.NewWorkflowManager(user, email, queryist.Query)
+	wm := dolt_ci.NewWorkflowManager(user, email, queryist.Queryist.Query)
 
-	err = wm.RemoveWorkflow(sqlCtx, workflowName)
+	err = wm.RemoveWorkflow(queryist.Context, workflowName)
 	if err != nil {
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}

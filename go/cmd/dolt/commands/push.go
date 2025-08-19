@@ -89,7 +89,7 @@ func (cmd PushCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, pushDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
-	queryist, sqlCtx, err := cliCtx.QueryEngine(ctx)
+	queryist, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
@@ -102,13 +102,13 @@ func (cmd PushCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	errChan := make(chan error)
 	go func() {
 		defer close(errChan)
-		_, rowIter, _, err := queryist.Query(sqlCtx, query)
+		_, rowIter, _, err := queryist.Queryist.Query(queryist.Context, query)
 		if err != nil {
 			errChan <- err
 			return
 		}
 
-		sqlRows, err := sql.RowIterToRows(sqlCtx, rowIter)
+		sqlRows, err := sql.RowIterToRows(queryist.Context, rowIter)
 		if err != nil {
 			errChan <- err
 			return

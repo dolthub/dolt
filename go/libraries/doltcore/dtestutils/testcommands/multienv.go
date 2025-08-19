@@ -174,11 +174,11 @@ func (mr *MultiRepoTestSetup) CheckoutBranch(dbName, branchName string) {
 		mr.Errhand(err)
 	}
 	defer cliCtx.Close()
-	_, sqlCtx, err := cliCtx.QueryEngine(context.Background())
+	queryist, err := cliCtx.QueryEngine(context.Background())
 	if err != nil {
 		mr.Errhand(err)
 	}
-	err = dprocedures.MoveWorkingSetToBranch(sqlCtx, branchName, false, false)
+	err = dprocedures.MoveWorkingSetToBranch(queryist.Context, branchName, false, false)
 	if err != nil {
 		mr.Errhand(err)
 	}

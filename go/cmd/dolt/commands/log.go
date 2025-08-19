@@ -105,21 +105,21 @@ func (cmd LogCmd) logWithLoggerFunc(ctx context.Context, commandStr string, args
 		return status
 	}
 
-	queryist, sqlCtx, err := cliCtx.QueryEngine(ctx)
+	queryist, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
 		return handleErrAndExit(err)
 	}
 
-	query, err := constructInterpolatedDoltLogQuery(apr, queryist, sqlCtx)
+	query, err := constructInterpolatedDoltLogQuery(apr, queryist.Queryist, queryist.Context)
 	if err != nil {
 		return handleErrAndExit(err)
 	}
-	logRows, err := cli.GetRowsForSql(queryist, sqlCtx, query)
+	logRows, err := cli.GetRowsForSql(queryist.Queryist, queryist.Context, query)
 	if err != nil {
 		return handleErrAndExit(err)
 	}
 
-	return handleErrAndExit(logCommits(apr, logRows, queryist, sqlCtx))
+	return handleErrAndExit(logCommits(apr, logRows, queryist.Queryist, queryist.Context))
 }
 
 func collectRevisions(apr *argparser.ArgParseResults, queryist cli.Queryist, sqlCtx *sql.Context) ([]string, int, error) {

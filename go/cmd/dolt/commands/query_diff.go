@@ -80,7 +80,7 @@ func (q QueryDiff) Exec(ctx context.Context, commandStr string, args []string, d
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	queryist, sqlCtx, err := cliCtx.QueryEngine(ctx)
+	queryist, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
@@ -91,7 +91,7 @@ func (q QueryDiff) Exec(ctx context.Context, commandStr string, args []string, d
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
-	schema, rowIter, _, err := queryist.Query(sqlCtx, query)
+	schema, rowIter, _, err := queryist.Queryist.Query(queryist.Context, query)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
@@ -101,14 +101,14 @@ func (q QueryDiff) Exec(ctx context.Context, commandStr string, args []string, d
 	defer wr.Close(ctx)
 
 	for {
-		row, rerr := rowIter.Next(sqlCtx)
+		row, rerr := rowIter.Next(queryist.Context)
 		if rerr == io.EOF {
 			break
 		}
 		if rerr != nil {
 			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(rerr), usage)
 		}
-		if werr := wr.WriteSqlRow(sqlCtx, row); werr != nil {
+		if werr := wr.WriteSqlRow(queryist.Context, row); werr != nil {
 			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(werr), usage)
 		}
 	}

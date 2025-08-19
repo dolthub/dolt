@@ -115,7 +115,7 @@ func (cmd RemoteCmd) Exec(ctx context.Context, commandStr string, args []string,
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, remoteDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
-	queryist, sqlCtx, err := cliCtx.QueryEngine(ctx)
+	queryist, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
@@ -123,11 +123,11 @@ func (cmd RemoteCmd) Exec(ctx context.Context, commandStr string, args []string,
 	var verr errhand.VerboseError
 	switch {
 	case apr.NArg() == 0:
-		verr = printRemotes(sqlCtx, queryist, apr)
+		verr = printRemotes(queryist.Context, queryist.Queryist, apr)
 	case apr.Arg(0) == addRemoteId:
-		verr = addRemote(sqlCtx, queryist, dEnv, apr)
+		verr = addRemote(queryist.Context, queryist.Queryist, dEnv, apr)
 	case apr.Arg(0) == removeRemoteId, apr.Arg(0) == removeRemoteShortId:
-		verr = removeRemote(sqlCtx, queryist, apr)
+		verr = removeRemote(queryist.Context, queryist.Queryist, apr)
 	default:
 		verr = errhand.BuildDError("").SetPrintUsage().Build()
 	}

@@ -88,18 +88,18 @@ func (cmd RebaseCmd) Exec(ctx context.Context, commandStr string, args []string,
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, rebaseDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
-	queryist, sqlCtx, err := cliCtx.QueryEngine(ctx)
+	queryist, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
 	// Set @@dolt_allow_commit_conflicts in case there are data conflicts that need to be resolved by the caller.
 	// Without this, the conflicts can't be committed to the branch working set, and the caller can't access them.
-	if _, err = cli.GetRowsForSql(queryist, sqlCtx, "set @@dolt_allow_commit_conflicts=1;"); err != nil {
+	if _, err = cli.GetRowsForSql(queryist.Queryist, queryist.Context, "set @@dolt_allow_commit_conflicts=1;"); err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	branchName, err := getActiveBranchName(sqlCtx, queryist)
+	branchName, err := getActiveBranchName(queryist.Context, queryist.Queryist)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
@@ -109,7 +109,7 @@ func (cmd RebaseCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	rows, err := cli.GetRowsForSql(queryist, sqlCtx, query)
+	rows, err := cli.GetRowsForSql(queryist.Queryist, queryist.Context, query)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
@@ -128,22 +128,22 @@ func (cmd RebaseCmd) Exec(ctx context.Context, commandStr string, args []string,
 	if strings.Contains(message, dprocedures.SuccessfulRebaseMessage) ||
 		strings.Contains(message, dprocedures.RebaseAbortedMessage) {
 		cli.Println(message)
-		if err = syncCliBranchToSqlSessionBranch(sqlCtx, dEnv); err != nil {
+		if err = syncCliBranchToSqlSessionBranch(queryist.Context, dEnv); err != nil {
 			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 		}
 		return 0
 	}
 
-	rebasePlan, err := getRebasePlan(cliCtx, sqlCtx, queryist, apr.Arg(0), branchName)
+	rebasePlan, err := getRebasePlan(cliCtx, queryist.Context, queryist.Queryist, apr.Arg(0), branchName)
 	if err != nil {
 		// attempt to abort the rebase
-		_, _, _, _ = queryist.Query(sqlCtx, "CALL DOLT_REBASE('--abort');")
+		_, _, _, _ = queryist.Queryist.Query(queryist.Context, "CALL DOLT_REBASE('--abort');")
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
 	// if all uncommented lines are deleted in the editor, abort the rebase
 	if rebasePlan == nil || rebasePlan.Steps == nil || len(rebasePlan.Steps) == 0 {
-		rows, err := cli.GetRowsForSql(queryist, sqlCtx, "CALL DOLT_REBASE('--abort');")
+		rows, err := cli.GetRowsForSql(queryist.Queryist, queryist.Context, "CALL DOLT_REBASE('--abort');")
 		if err != nil {
 			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 		}
@@ -159,23 +159,23 @@ func (cmd RebaseCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return 0
 	}
 
-	err = insertRebasePlanIntoDoltRebaseTable(rebasePlan, sqlCtx, queryist)
+	err = insertRebasePlanIntoDoltRebaseTable(rebasePlan, queryist.Context, queryist.Queryist)
 	if err != nil {
 		// attempt to abort the rebase
-		_, _, _, _ = queryist.Query(sqlCtx, "CALL DOLT_REBASE('--abort');")
+		_, _, _, _ = queryist.Queryist.Query(queryist.Context, "CALL DOLT_REBASE('--abort');")
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	rows, err = cli.GetRowsForSql(queryist, sqlCtx, "CALL DOLT_REBASE('--continue');")
+	rows, err = cli.GetRowsForSql(queryist.Queryist, queryist.Context, "CALL DOLT_REBASE('--continue');")
 	if err != nil {
 		// If the error is a data conflict, don't abort the rebase, but let the caller resolve the conflicts
 		if dprocedures.ErrRebaseDataConflict.Is(err) || strings.Contains(err.Error(), dprocedures.ErrRebaseDataConflict.Message[:40]) {
-			if checkoutErr := syncCliBranchToSqlSessionBranch(sqlCtx, dEnv); checkoutErr != nil {
+			if checkoutErr := syncCliBranchToSqlSessionBranch(queryist.Context, dEnv); checkoutErr != nil {
 				return HandleVErrAndExitCode(errhand.VerboseErrorFromError(checkoutErr), usage)
 			}
 		} else {
-			_, _, _, _ = queryist.Query(sqlCtx, "CALL DOLT_REBASE('--abort');")
-			if checkoutErr := syncCliBranchToSqlSessionBranch(sqlCtx, dEnv); checkoutErr != nil {
+			_, _, _, _ = queryist.Queryist.Query(queryist.Context, "CALL DOLT_REBASE('--abort');")
+			if checkoutErr := syncCliBranchToSqlSessionBranch(queryist.Context, dEnv); checkoutErr != nil {
 				return HandleVErrAndExitCode(errhand.VerboseErrorFromError(checkoutErr), usage)
 			}
 		}
@@ -184,15 +184,15 @@ func (cmd RebaseCmd) Exec(ctx context.Context, commandStr string, args []string,
 
 	status, err = getInt64ColAsInt64(rows[0][0])
 	if err != nil {
-		_, _, _, _ = queryist.Query(sqlCtx, "CALL DOLT_REBASE('--abort');")
-		if err = syncCliBranchToSqlSessionBranch(sqlCtx, dEnv); err != nil {
+		_, _, _, _ = queryist.Queryist.Query(queryist.Context, "CALL DOLT_REBASE('--abort');")
+		if err = syncCliBranchToSqlSessionBranch(queryist.Context, dEnv); err != nil {
 			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 		}
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 	if status == 1 {
-		_, _, _, _ = queryist.Query(sqlCtx, "CALL DOLT_REBASE('--abort');")
-		if err = syncCliBranchToSqlSessionBranch(sqlCtx, dEnv); err != nil {
+		_, _, _, _ = queryist.Queryist.Query(queryist.Context, "CALL DOLT_REBASE('--abort');")
+		if err = syncCliBranchToSqlSessionBranch(queryist.Context, dEnv); err != nil {
 			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 		}
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(errors.New("error: "+rows[0][1].(string))), usage)

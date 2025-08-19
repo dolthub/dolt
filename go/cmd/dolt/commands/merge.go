@@ -29,7 +29,6 @@ import (
 	"github.com/gocraft/dbr/v2/dialect"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
-	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -99,12 +98,12 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 		return status
 	}
 
-	queryist, sqlCtx, err := cliCtx.QueryEngine(ctx)
+	queryist, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
 		cli.Println(err.Error())
 		return 1
 	}
-	if _, ok := queryist.(*engine.SqlEngine); !ok {
+	if queryist.IsRemote {
 		msg := fmt.Sprintf(cli.RemoteUnsupportedMsg, commandStr)
 		cli.Println(msg)
 		return 1
@@ -116,14 +115,14 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	}
 
 	// allows merges that create conflicts to stick
-	_, _, _, err = queryist.Query(sqlCtx, "set @@dolt_force_transaction_commit = 1")
+	_, _, _, err = queryist.Queryist.Query(queryist.Context, "set @@dolt_force_transaction_commit = 1")
 	if err != nil {
 		cli.Println(err.Error())
 		return 1
 	}
 
 	if apr.Contains(cli.NoJsonMergeFlag) {
-		_, _, _, err = queryist.Query(sqlCtx, "set @@dolt_dont_merge_json = 1")
+		_, _, _, err = queryist.Queryist.Query(queryist.Context, "set @@dolt_dont_merge_json = 1")
 		if err != nil {
 			cli.Println(err.Error())
 			return 1
@@ -135,12 +134,12 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 		cli.Println(err.Error())
 		return 1
 	}
-	_, rowIter, _, err := queryist.Query(sqlCtx, query)
+	_, rowIter, _, err := queryist.Queryist.Query(queryist.Context, query)
 	if err != nil {
 		cli.Println(err.Error())
 		return 1
 	}
-	rows, err := sql.RowIterToRows(sqlCtx, rowIter)
+	rows, err := sql.RowIterToRows(queryist.Context, rowIter)
 	if err != nil {
 		cli.Println(err.Error())
 		return 0
@@ -163,7 +162,7 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	}
 
 	// if merge is called with '--no-commit', we need to commit the sql transaction or the staged changes will be lost
-	_, _, _, err = queryist.Query(sqlCtx, "COMMIT")
+	_, _, _, err = queryist.Queryist.Query(queryist.Context, "COMMIT")
 	if err != nil {
 		cli.Println(err.Error())
 		return 1
@@ -171,12 +170,12 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 
 	if !apr.Contains(cli.AbortParam) {
 		//todo: refs with the `remotes/` prefix will fail to get a hash
-		headHash, headHashErr := getHashOf(queryist, sqlCtx, "HEAD")
+		headHash, headHashErr := getHashOf(queryist.Queryist, queryist.Context, "HEAD")
 		if headHashErr != nil {
 			cli.Println("merge finished, but failed to get hash of HEAD ref")
 			cli.Println(headHashErr.Error())
 		}
-		mergeHash, mergeHashErr := getHashOf(queryist, sqlCtx, apr.Arg(0))
+		mergeHash, mergeHashErr := getHashOf(queryist.Queryist, queryist.Context, apr.Arg(0))
 		if mergeHashErr != nil {
 			cli.Println("merge finished, but failed to get hash of merge ref")
 			cli.Println(mergeHashErr.Error())
@@ -185,9 +184,9 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 		fastFwd := getFastforward(mergeResultRow, dprocedures.MergeProcFFIndex)
 
 		if apr.Contains(cli.NoCommitFlag) {
-			return printMergeStats(fastFwd, apr, queryist, sqlCtx, usage, headHash, mergeHash, "HEAD", "STAGED")
+			return printMergeStats(fastFwd, apr, queryist.Queryist, queryist.Context, usage, headHash, mergeHash, "HEAD", "STAGED")
 		}
-		return printMergeStats(fastFwd, apr, queryist, sqlCtx, usage, headHash, mergeHash, "HEAD^1", "HEAD")
+		return printMergeStats(fastFwd, apr, queryist.Queryist, queryist.Context, usage, headHash, mergeHash, "HEAD^1", "HEAD")
 	}
 
 	return 0

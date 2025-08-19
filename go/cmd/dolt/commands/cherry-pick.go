@@ -84,25 +84,25 @@ func (cmd CherryPickCmd) Exec(ctx context.Context, commandStr string, args []str
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, cherryPickDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
-	queryist, sqlCtx, err := cliCtx.QueryEngine(ctx)
+	queryist, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
 	// dolt_cherry_pick performs this check as well. Check performed early here to short circuit the operation.
-	err = branch_control.CheckAccess(sqlCtx, branch_control.Permissions_Write)
+	err = branch_control.CheckAccess(queryist.Context, branch_control.Permissions_Write)
 	if err != nil {
 		cli.Println(err.Error())
 		return 1
 	}
 
 	if apr.Contains(cli.AbortParam) {
-		err = cherryPickAbort(queryist, sqlCtx)
+		err = cherryPickAbort(queryist.Queryist, queryist.Context)
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
 	if apr.Contains(cli.NoJsonMergeFlag) {
-		_, _, _, err = queryist.Query(sqlCtx, "set @@session.dolt_dont_merge_json = 1")
+		_, _, _, err = queryist.Queryist.Query(queryist.Context, "set @@session.dolt_dont_merge_json = 1")
 		if err != nil {
 			cli.Println(err.Error())
 			return 1
@@ -117,7 +117,7 @@ func (cmd CherryPickCmd) Exec(ctx context.Context, commandStr string, args []str
 		return HandleVErrAndExitCode(errhand.BuildDError("cherry-picking multiple commits is not supported yet").SetPrintUsage().Build(), usage)
 	}
 
-	err = cherryPick(queryist, sqlCtx, apr, args)
+	err = cherryPick(queryist.Queryist, queryist.Context, apr, args)
 	return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 }
 

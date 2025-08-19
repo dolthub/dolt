@@ -111,7 +111,7 @@ func (cmd BranchCmd) Exec(ctx context.Context, commandStr string, args []string,
 	}
 
 	errorBuilder := errhand.BuildDError("error: failed to create query engine")
-	queryEngine, sqlCtx, err := cliCtx.QueryEngine(ctx)
+	queryist, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
 		return HandleVErrAndExitCode(errorBuilder.AddCause(err).Build(), nil)
 	}
@@ -123,25 +123,25 @@ func (cmd BranchCmd) Exec(ctx context.Context, commandStr string, args []string,
 
 	switch {
 	case apr.Contains(cli.MoveFlag):
-		return moveBranch(sqlCtx, queryEngine, apr, args, usage)
+		return moveBranch(queryist.Context, queryist.Queryist, apr, args, usage)
 	case apr.Contains(cli.CopyFlag):
-		return copyBranch(sqlCtx, queryEngine, apr, args, usage)
+		return copyBranch(queryist.Context, queryist.Queryist, apr, args, usage)
 	case apr.Contains(cli.DeleteFlag):
-		return deleteBranches(sqlCtx, queryEngine, apr, args, usage)
+		return deleteBranches(queryist.Context, queryist.Queryist, apr, args, usage)
 	case apr.Contains(cli.DeleteForceFlag):
-		return deleteBranches(sqlCtx, queryEngine, apr, args, usage)
+		return deleteBranches(queryist.Context, queryist.Queryist, apr, args, usage)
 	case apr.Contains(cli.ListFlag):
-		return printBranches(sqlCtx, queryEngine, apr, usage)
+		return printBranches(queryist.Context, queryist.Queryist, apr, usage)
 	case apr.Contains(showCurrentFlag):
-		return printCurrentBranch(sqlCtx, queryEngine)
+		return printCurrentBranch(queryist.Context, queryist.Queryist)
 	case apr.Contains(datasetsFlag):
-		return printAllDatasets(sqlCtx, dEnv)
+		return printAllDatasets(queryist.Context, dEnv)
 	case apr.ContainsAny(cli.SetUpstreamToFlag, cli.TrackFlag):
-		return updateUpstream(sqlCtx, queryEngine, apr, args)
+		return updateUpstream(queryist.Context, queryist.Queryist, apr, args)
 	case apr.NArg() > 0:
-		return createBranch(sqlCtx, queryEngine, apr, args, usage)
+		return createBranch(queryist.Context, queryist.Queryist, apr, args, usage)
 	default:
-		return printBranches(sqlCtx, queryEngine, apr, usage)
+		return printBranches(queryist.Context, queryist.Queryist, apr, usage)
 	}
 }
 

@@ -74,7 +74,7 @@ func (cmd DestroyCmd) Exec(ctx context.Context, commandStr string, args []string
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, destroyDocs, ap))
 	cli.ParseArgsOrDie(ap, args, help)
 
-	queryist, sqlCtx, err := cliCtx.QueryEngine(ctx)
+	queryist, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
@@ -84,6 +84,6 @@ func (cmd DestroyCmd) Exec(ctx context.Context, commandStr string, args []string
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	err = dolt_ci.DestroyDoltCITables(queryist, sqlCtx, name, email)
+	err = dolt_ci.DestroyDoltCITables(queryist.Queryist, queryist.Context, name, email)
 	return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 }

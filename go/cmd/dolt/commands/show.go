@@ -24,7 +24,6 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
-	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -119,7 +118,7 @@ func (cmd ShowCmd) Exec(ctx context.Context, commandStr string, args []string, d
 
 	opts.diffDisplaySettings = parseDiffDisplaySettings(apr)
 
-	queryist, sqlCtx, err := cliCtx.QueryEngine(ctx)
+	queryist, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
@@ -132,7 +131,7 @@ func (cmd ShowCmd) Exec(ctx context.Context, commandStr string, args []string, d
 			!strings.EqualFold(specRef, "STAGED") {
 			// Call "dolt_hashof" to resolve the ref to a hash. the --no-pretty flag gets around the commit requirement, but
 			// requires the full object name so it will match the hashRegex and never hit this code block.
-			h, err2 := getHashOf(queryist, sqlCtx, specRef)
+			h, err2 := getHashOf(queryist.Queryist, queryist.Context, specRef)
 			if err2 != nil {
 				cli.PrintErrln(fmt.Sprintf("branch not found: %s", specRef))
 				return 1
@@ -162,13 +161,12 @@ func (cmd ShowCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		}
 
 		// use dEnv instead of the SQL engine
-		_, ok := queryist.(*engine.SqlEngine)
-		if !ok {
+		if queryist.IsRemote {
 			cli.PrintErrln("`dolt show --no-pretty` or `dolt show (BRANCHNAME)` only supported in local mode.")
 			return 1
 		}
 
-		if !opts.pretty && !dEnv.DoltDB(sqlCtx).Format().UsesFlatbuffers() {
+		if !opts.pretty && !dEnv.DoltDB(queryist.Context).Format().UsesFlatbuffers() {
 			cli.PrintErrln("`dolt show --no-pretty` or `dolt show (BRANCHNAME)` is not supported when using old LD_1 storage format.")
 			return 1
 		}
@@ -177,7 +175,7 @@ func (cmd ShowCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	for _, specRef := range resolvedRefs {
 		// If --no-pretty was supplied, always display the raw contents of the referenced object.
 		if !opts.pretty {
-			err := printRawValue(sqlCtx, dEnv, specRef)
+			err := printRawValue(queryist.Context, dEnv, specRef)
 			if err != nil {
 				return handleErrAndExit(err)
 			}
@@ -187,11 +185,10 @@ func (cmd ShowCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		// If the argument is a commit, display it in the "pretty" format.
 		// But if it's a hash, we don't know whether it's a commit until we query the engine. If a non-commit was specified
 		// by the user, we are forced to display the raw contents of the object - which required a dEnv
-		commitInfo, err := getCommitSpecPretty(queryist, sqlCtx, specRef)
+		commitInfo, err := getCommitSpecPretty(queryist.Queryist, queryist.Context, specRef)
 		if commitInfo == nil {
 			// Hash is not a commit
-			_, ok := queryist.(*engine.SqlEngine)
-			if !ok {
+			if queryist.IsRemote {
 				cli.PrintErrln("`dolt show (NON_COMMIT_HASH)` only supported in local mode.")
 				return 1
 			}
@@ -199,12 +196,12 @@ func (cmd ShowCmd) Exec(ctx context.Context, commandStr string, args []string, d
 				cli.PrintErrln("`dolt show (NON_COMMIT_HASH)` requires a local environment. Not intended for common use.")
 				return 1
 			}
-			if !dEnv.DoltDB(sqlCtx).Format().UsesFlatbuffers() {
+			if !dEnv.DoltDB(queryist.Context).Format().UsesFlatbuffers() {
 				cli.PrintErrln("`dolt show (NON_COMMIT_HASH)` is not supported when using old LD_1 storage format.")
 				return 1
 			}
 
-			value, err := getValueFromRefSpec(sqlCtx, dEnv, specRef)
+			value, err := getValueFromRefSpec(queryist.Context, dEnv, specRef)
 			if err != nil {
 				err = fmt.Errorf("error resolving spec ref '%s': %w", specRef, err)
 				if err != nil {
@@ -215,7 +212,7 @@ func (cmd ShowCmd) Exec(ctx context.Context, commandStr string, args []string, d
 			continue
 		} else {
 			// Hash is a commit
-			err = fetchAndPrintCommit(queryist, sqlCtx, opts, commitInfo)
+			err = fetchAndPrintCommit(queryist.Queryist, queryist.Context, opts, commitInfo)
 			if err != nil {
 				return handleErrAndExit(err)
 			}

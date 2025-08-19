@@ -30,7 +30,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/fatih/color"
 	"github.com/pkg/profile"
 	"github.com/tidwall/gjson"
@@ -665,16 +664,15 @@ If you're interested in running this command against a remote host, hit us up on
 	isValidRepositoryRequired := subcommandName != "init" && subcommandName != "sql" && subcommandName != "sql-server" && subcommandName != "sql-client"
 
 	if noValidRepository && isValidRepositoryRequired {
-		return func(ctx context.Context) (cli.Queryist, *sql.Context, func(), error) {
-			err := errors.New("The current directory is not a valid dolt repository.")
+		return func(ctx context.Context) (res cli.LateBindQueryistResult, err error) {
+			err = errors.New("The current directory is not a valid dolt repository.")
 			if errors.Is(rootEnv.DBLoadError, nbs.ErrUnsupportedTableFileFormat) {
 				// This is fairly targeted and specific to allow for better error messaging. We should consider
 				// breaking this out into its own function if we add more conditions.
 
 				err = errors.New("The data in this database is in an unsupported format. Please upgrade to the latest version of Dolt.")
 			}
-
-			return nil, nil, nil, err
+			return res, err
 		}, nil
 	}
 

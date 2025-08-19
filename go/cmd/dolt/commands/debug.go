@@ -136,14 +136,17 @@ func (cmd DebugCmd) Exec(ctx context.Context, commandStr string, args []string, 
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	queryist, sqlCtx, err := cliCtx.QueryEngine(ctx)
+	queryist, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	sqlEng, ok := queryist.(*engine.SqlEngine)
+	if queryist.IsRemote {
+		return sqlHandleVErrAndExitCode(queryist.Queryist, errhand.BuildDError("cannot run debug mode on a pre-existing server").Build(), usage)
+	}
+	sqlEng, ok := queryist.Queryist.(*engine.SqlEngine)
 	if !ok {
-		return sqlHandleVErrAndExitCode(queryist, errhand.BuildDError("cannot run debug mode on a pre-existing server").Build(), usage)
+		return sqlHandleVErrAndExitCode(queryist.Queryist, errhand.BuildDError("unexpected program state: Queryist is not a *SqlEngine, but is also not remote").Build(), usage)
 	}
 
 	_, continueOnError := apr.GetValue(continueFlag)
@@ -151,12 +154,12 @@ func (cmd DebugCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	if !outputDirSpecified {
 		outDir, err = os.MkdirTemp("", "dolt-debug-*")
 		if err != nil {
-			return sqlHandleVErrAndExitCode(queryist, errhand.BuildDError("couldn't create tempdir %s", err.Error()).Build(), usage)
+			return sqlHandleVErrAndExitCode(queryist.Queryist, errhand.BuildDError("couldn't create tempdir %s", err.Error()).Build(), usage)
 		}
 	} else {
 		err := os.Mkdir(outDir, os.ModePerm)
 		if err != nil {
-			return sqlHandleVErrAndExitCode(queryist, errhand.BuildDError("failed to create output directory %s", err.Error()).Build(), usage)
+			return sqlHandleVErrAndExitCode(queryist.Queryist, errhand.BuildDError("failed to create output directory %s", err.Error()).Build(), usage)
 		}
 	}
 
@@ -196,11 +199,11 @@ func (cmd DebugCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	} else if fileInput, ok := apr.GetValue(fileInputFlag); ok {
 		input, err = os.OpenFile(fileInput, os.O_RDONLY, os.ModePerm)
 		if err != nil {
-			return sqlHandleVErrAndExitCode(queryist, errhand.BuildDError("couldn't open file %s", fileInput).Build(), usage)
+			return sqlHandleVErrAndExitCode(queryist.Queryist, errhand.BuildDError("couldn't open file %s", fileInput).Build(), usage)
 		}
 		info, err := os.Stat(fileInput)
 		if err != nil {
-			return sqlHandleVErrAndExitCode(queryist, errhand.BuildDError("couldn't get file size %s", fileInput).Build(), usage)
+			return sqlHandleVErrAndExitCode(queryist.Queryist, errhand.BuildDError("couldn't get file size %s", fileInput).Build(), usage)
 		}
 
 		input = transform.NewReader(input, textunicode.BOMOverride(transform.Nop))
@@ -212,29 +215,29 @@ func (cmd DebugCmd) Exec(ctx context.Context, commandStr string, args []string, 
 
 	queryFile, err := os.Create(filepath.Join(outDir, "input.sql"))
 	if err != nil {
-		return sqlHandleVErrAndExitCode(queryist, errhand.BuildDError("couldn't create file %s", err.Error()).Build(), usage)
+		return sqlHandleVErrAndExitCode(queryist.Queryist, errhand.BuildDError("couldn't create file %s", err.Error()).Build(), usage)
 	}
 	defer queryFile.Close()
 
 	input = bufio.NewReader(transform.NewReader(input, textunicode.BOMOverride(transform.Nop)))
 	_, err = io.Copy(queryFile, input)
 	if err != nil {
-		return sqlHandleVErrAndExitCode(queryist, errhand.BuildDError("couldn't copy input sql %s", err.Error()).Build(), usage)
+		return sqlHandleVErrAndExitCode(queryist.Queryist, errhand.BuildDError("couldn't copy input sql %s", err.Error()).Build(), usage)
 	}
 	_, err = queryFile.Seek(0, 0)
 	if err != nil {
-		return sqlHandleVErrAndExitCode(queryist, errhand.BuildDError("seek input sql %s", err.Error()).Build(), usage)
+		return sqlHandleVErrAndExitCode(queryist.Queryist, errhand.BuildDError("seek input sql %s", err.Error()).Build(), usage)
 	}
 
-	err = debugAnalyze(sqlCtx, outDir, sqlEng, queryFile)
+	err = debugAnalyze(queryist.Context, outDir, sqlEng, queryFile)
 	if err != nil {
-		return sqlHandleVErrAndExitCode(queryist, errhand.VerboseErrorFromError(err), usage)
+		return sqlHandleVErrAndExitCode(queryist.Queryist, errhand.VerboseErrorFromError(err), usage)
 	}
 
 	debugFile, err := os.Create(filepath.Join(outDir, "exec.txt"))
 	if err != nil {
 		if err != nil {
-			return sqlHandleVErrAndExitCode(queryist, errhand.VerboseErrorFromError(err), usage)
+			return sqlHandleVErrAndExitCode(queryist.Queryist, errhand.VerboseErrorFromError(err), usage)
 		}
 	}
 	defer debugFile.Close()
@@ -259,7 +262,7 @@ func (cmd DebugCmd) Exec(ctx context.Context, commandStr string, args []string, 
 			case <-wait:
 				done = true
 			default:
-				execDebugMode(sqlCtx, sqlEng, queryFile, continueOnError, format)
+				execDebugMode(queryist.Context, sqlEng, queryFile, continueOnError, format)
 			}
 		}
 	}()
@@ -284,7 +287,7 @@ func (cmd DebugCmd) Exec(ctx context.Context, commandStr string, args []string, 
 			case <-wait:
 				done = true
 			default:
-				execDebugMode(sqlCtx, sqlEng, queryFile, continueOnError, format)
+				execDebugMode(queryist.Context, sqlEng, queryFile, continueOnError, format)
 			}
 		}
 	}()
@@ -309,7 +312,7 @@ func (cmd DebugCmd) Exec(ctx context.Context, commandStr string, args []string, 
 			case <-wait:
 				done = true
 			default:
-				execDebugMode(sqlCtx, sqlEng, queryFile, continueOnError, format)
+				execDebugMode(queryist.Context, sqlEng, queryFile, continueOnError, format)
 			}
 		}
 	}()

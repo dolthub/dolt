@@ -246,7 +246,7 @@ func newLateBindingEngine(
 		Autocommit:         true,
 	}
 
-	var lateBinder cli.LateBindQueryist = func(ctx context.Context) (cli.Queryist, *sql.Context, func(), error) {
+	var lateBinder cli.LateBindQueryist = func(ctx context.Context) (res cli.LateBindQueryistResult, err error) {
 		// We've deferred loading the database as long as we can.
 		// If we're binding the Queryist, that means that engine is actually
 		// going to be used.
@@ -258,19 +258,19 @@ func newLateBindingEngine(
 			config,
 		)
 		if err != nil {
-			return nil, nil, nil, err
+			return res, err
 		}
 
 		if err := se.InitStats(ctx); err != nil {
 			se.Close()
-			return nil, nil, nil, err
+			return res, err
 		}
 
 		rawDb := se.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb
 		salt, err := mysql.NewSalt()
 		if err != nil {
 			se.Close()
-			return nil, nil, nil, err
+			return res, err
 		}
 
 		var dbUser string
@@ -286,7 +286,7 @@ func newLateBindingEngine(
 			err := passwordValidate(rawDb, salt, dbUser, authResponse)
 			if err != nil {
 				se.Close()
-				return nil, nil, nil, err
+				return res, err
 			}
 
 		} else {
@@ -300,7 +300,7 @@ func newLateBindingEngine(
 		sqlCtx, err := se.NewDefaultContext(ctx)
 		if err != nil {
 			se.Close()
-			return nil, nil, nil, err
+			return res, err
 		}
 		// Whether we're running in shell mode or some other mode, sql commands from the command line always have a current
 		// database set when you begin using them.
@@ -318,7 +318,10 @@ func newLateBindingEngine(
 
 		// Set client to specified user
 		sqlCtx.Session.SetClient(sql.Client{User: dbUser, Address: config.ServerHost, Capabilities: 0})
-		return se, sqlCtx, close, nil
+		res.Queryist = se
+		res.Context = sqlCtx
+		res.Closer = close
+		return res, nil
 	}
 
 	return lateBinder, nil

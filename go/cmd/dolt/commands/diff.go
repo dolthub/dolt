@@ -200,22 +200,22 @@ func (cmd DiffCmd) Exec(ctx context.Context, commandStr string, args []string, _
 		return HandleVErrAndExitCode(verr, usage)
 	}
 
-	queryist, sqlCtx, err := cliCtx.QueryEngine(ctx)
+	queryist, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	updateSystemVar, err := cli.SetSystemVar(queryist, sqlCtx, apr.Contains(cli.SystemFlag))
+	updateSystemVar, err := cli.SetSystemVar(queryist.Queryist, queryist.Context, apr.Contains(cli.SystemFlag))
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	dArgs, err := parseDiffArgs(queryist, sqlCtx, apr)
+	dArgs, err := parseDiffArgs(queryist.Queryist, queryist.Context, apr)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	verr = diffUserTables(queryist, sqlCtx, dArgs)
+	verr = diffUserTables(queryist.Queryist, queryist.Context, dArgs)
 	if verr != nil {
 		return HandleVErrAndExitCode(verr, usage)
 	}

@@ -100,7 +100,7 @@ func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		return HandleVErrAndExitCode(bdr.Build(), usage)
 	}
 
-	queryist, sqlCtx, err := cliCtx.QueryEngine(ctx)
+	queryist, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
 		cli.Println(err.Error())
 		return 1
@@ -115,24 +115,24 @@ func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	go func() {
 		defer close(errChan)
 		// allows pulls (merges) that create conflicts to stick
-		_, _, _, err = queryist.Query(sqlCtx, "set @@dolt_force_transaction_commit = 1")
+		_, _, _, err = queryist.Queryist.Query(queryist.Context, "set @@dolt_force_transaction_commit = 1")
 		if err != nil {
 			errChan <- err
 			return
 		}
 		// save current head for diff summaries after pull
-		headHash, err := getHashOf(queryist, sqlCtx, "HEAD")
+		headHash, err := getHashOf(queryist.Queryist, queryist.Context, "HEAD")
 		if err != nil {
 			cli.Println("failed to get hash of HEAD, pull not started")
 			errChan <- err
 		}
 
-		_, rowIter, _, err := queryist.Query(sqlCtx, query)
+		_, rowIter, _, err := queryist.Queryist.Query(queryist.Context, query)
 		if err != nil {
 			errChan <- err
 			return
 		}
-		rows, err := sql.RowIterToRows(sqlCtx, rowIter)
+		rows, err := sql.RowIterToRows(queryist.Context, rowIter)
 		if err != nil {
 			errChan <- err
 			return
@@ -158,13 +158,13 @@ func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		}
 
 		// if merge is called with '--no-commit', we need to commit the sql transaction or the staged changes will be lost
-		_, _, _, err = queryist.Query(sqlCtx, "COMMIT")
+		_, _, _, err = queryist.Queryist.Query(queryist.Context, "COMMIT")
 		if err != nil {
 			errChan <- err
 			return
 		}
 
-		remoteHash, remoteRef, err := getRemoteHashForPull(apr, sqlCtx, queryist)
+		remoteHash, remoteRef, err := getRemoteHashForPull(apr, queryist.Context, queryist.Queryist)
 		if err != nil {
 			cli.Println("pull finished, but failed to get hash of remote ref")
 			cli.Println(err.Error())
@@ -174,7 +174,7 @@ func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, d
 			if remoteHash != "" && headHash != "" {
 				cli.Println("Updating", headHash+".."+remoteHash)
 			}
-			commit, err := getCommitInfo(queryist, sqlCtx, "HEAD")
+			commit, err := getCommitInfo(queryist.Queryist, queryist.Context, "HEAD")
 			if err != nil {
 				cli.Println("pull finished, but failed to get commit info")
 				cli.Println(err.Error())
@@ -193,9 +193,9 @@ func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, d
 
 			var success int
 			if apr.Contains(cli.NoCommitFlag) {
-				success = printMergeStats(fastFwd, apr, queryist, sqlCtx, usage, headHash, remoteHash, "HEAD", "STAGED")
+				success = printMergeStats(fastFwd, apr, queryist.Queryist, queryist.Context, usage, headHash, remoteHash, "HEAD", "STAGED")
 			} else {
-				success = printMergeStats(fastFwd, apr, queryist, sqlCtx, usage, headHash, remoteHash, "HEAD", remoteRef)
+				success = printMergeStats(fastFwd, apr, queryist.Queryist, queryist.Context, usage, headHash, remoteHash, "HEAD", remoteRef)
 			}
 			if success == 1 {
 				errChan <- errors.New(" ") //return a non-nil error for the correct exit code but no further messages to print
