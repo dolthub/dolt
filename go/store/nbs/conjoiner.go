@@ -24,6 +24,7 @@ package nbs
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sort"
 	"time"
 
@@ -61,6 +62,11 @@ func (c inlineConjoiner) conjoinRequired(ts tableSet) bool {
 // to some degree, but we don't want to perform a longer conjoin process than necessary (remember this can happen during
 // a push to dolthub).
 func (c inlineConjoiner) chooseConjoinees(upstream []tableSpec) (conjoinees, keepers []tableSpec, err error) {
+	if len(upstream) < 2 {
+		// Need at least 2 tables to conjoin
+		return nil, upstream, fmt.Errorf("runtime error: cannot conjoin fewer than 2 tables, got %d", len(upstream))
+	}
+
 	sorted := make([]tableSpec, len(upstream))
 	copy(sorted, upstream)
 
@@ -68,18 +74,32 @@ func (c inlineConjoiner) chooseConjoinees(upstream []tableSpec) (conjoinees, kee
 		return sorted[i].chunkCount < sorted[j].chunkCount
 	})
 
+	// We'll always at least conjoin the first two tables, so we start with them
 	i := 2
 	sum := sorted[0].chunkCount + sorted[1].chunkCount
 	for i < len(sorted) {
-		next := sorted[i].chunkCount
-		if sum <= next {
-			if c.maxTables == 0 || len(sorted)-i < c.maxTables {
+		// Check maxTables constraint first: after conjoining, we'd have (len(sorted)-i)+1 total tables
+		tablesAfterConjoining := (len(sorted) - i) + 1
+		if c.maxTables > 0 && tablesAfterConjoining < c.maxTables {
+			break
+		}
+
+		nextTable := sorted[i].chunkCount
+
+		// Check if adding this table would make the conjoined sum exceed the next unconjoined table
+		if i+1 < len(sorted) {
+			potentialSum := sum + nextTable
+			nextUnconjoinedTable := sorted[i+1].chunkCount
+			if potentialSum > nextUnconjoinedTable {
 				break
 			}
 		}
-		sum += next
+
+		// Add the next table to the conjoin set
+		sum += nextTable
 		i++
 	}
+
 	return sorted[:i], sorted[i:], nil
 }
 
