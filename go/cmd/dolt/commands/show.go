@@ -119,12 +119,9 @@ func (cmd ShowCmd) Exec(ctx context.Context, commandStr string, args []string, d
 
 	opts.diffDisplaySettings = parseDiffDisplaySettings(apr)
 
-	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
+	queryist, sqlCtx, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-	}
-	if closeFunc != nil {
-		defer closeFunc()
 	}
 
 	resolvedRefs := make([]string, 0, len(opts.specRefs))

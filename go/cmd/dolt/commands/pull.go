@@ -100,13 +100,10 @@ func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		return HandleVErrAndExitCode(bdr.Build(), usage)
 	}
 
-	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
+	queryist, sqlCtx, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
 		cli.Println(err.Error())
 		return 1
-	}
-	if closeFunc != nil {
-		defer closeFunc()
 	}
 
 	query, err := constructInterpolatedDoltPullQuery(apr)

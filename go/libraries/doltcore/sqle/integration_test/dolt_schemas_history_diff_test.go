@@ -247,6 +247,7 @@ func setupDoltSchemasHistoryTests(t *testing.T) *env.DoltEnv {
 	ctx := context.Background()
 	cliCtx, verr := cmd.NewArgFreeCliContext(ctx, dEnv, dEnv.FS)
 	require.NoError(t, verr)
+	defer cliCtx.Close()
 
 	for _, c := range setupDoltSchemasCommon {
 		exitCode := c.cmd.Exec(ctx, c.cmd.Name(), c.args, dEnv, cliCtx)
@@ -274,6 +275,7 @@ func setupDoltSchemasDiffTests(t *testing.T) *env.DoltEnv {
 	ctx := context.Background()
 	cliCtx, verr := cmd.NewArgFreeCliContext(ctx, dEnv, dEnv.FS)
 	require.NoError(t, verr)
+	defer cliCtx.Close()
 
 	for _, c := range setupDoltSchemasDiffCommon {
 		exitCode := c.cmd.Exec(ctx, c.cmd.Name(), c.args, dEnv, cliCtx)
@@ -287,6 +289,7 @@ func testDoltSchemasHistoryTable(t *testing.T, test doltSchemasTableTest, dEnv *
 	ctx := context.Background()
 	cliCtx, verr := cmd.NewArgFreeCliContext(ctx, dEnv, dEnv.FS)
 	require.NoError(t, verr)
+	defer cliCtx.Close()
 
 	for _, c := range test.setup {
 		exitCode := c.cmd.Exec(ctx, c.cmd.Name(), c.args, dEnv, cliCtx)
@@ -315,6 +318,7 @@ func testDoltSchemasDiffTable(t *testing.T, test doltSchemasTableTest, dEnv *env
 	ctx := context.Background()
 	cliCtx, verr := cmd.NewArgFreeCliContext(ctx, dEnv, dEnv.FS)
 	require.NoError(t, verr)
+	defer cliCtx.Close()
 
 	for _, c := range test.setup {
 		exitCode := c.cmd.Exec(ctx, c.cmd.Name(), c.args, dEnv, cliCtx)
@@ -436,6 +440,7 @@ func setupDoltProceduresDiffTests(t *testing.T) *env.DoltEnv {
 	ctx := context.Background()
 	cliCtx, verr := cmd.NewArgFreeCliContext(ctx, dEnv, dEnv.FS)
 	require.NoError(t, verr)
+	defer cliCtx.Close()
 
 	for _, c := range setupDoltProceduresDiffCommon {
 		exitCode := c.cmd.Exec(ctx, c.cmd.Name(), c.args, dEnv, cliCtx)
@@ -449,6 +454,7 @@ func testDoltProceduresDiffTable(t *testing.T, test doltProceduresTableTest, dEn
 	ctx := context.Background()
 	cliCtx, verr := cmd.NewArgFreeCliContext(ctx, dEnv, dEnv.FS)
 	require.NoError(t, verr)
+	defer cliCtx.Close()
 
 	for _, c := range test.setup {
 		exitCode := c.cmd.Exec(ctx, c.cmd.Name(), c.args, dEnv, cliCtx)

@@ -96,13 +96,10 @@ func (cmd ResetCmd) Exec(ctx context.Context, commandStr string, args []string, 
 		return status
 	}
 
-	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
+	queryist, sqlCtx, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
 		cli.Println(err.Error())
 		return 1
-	}
-	if closeFunc != nil {
-		defer closeFunc()
 	}
 
 	if apr.ContainsAll(HardResetParam, SoftResetParam) {

@@ -99,19 +99,15 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 		return status
 	}
 
-	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
+	queryist, sqlCtx, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
 		cli.Println(err.Error())
 		return 1
 	}
-	if closeFunc != nil {
-		defer closeFunc()
-
-		if _, ok := queryist.(*engine.SqlEngine); !ok {
-			msg := fmt.Sprintf(cli.RemoteUnsupportedMsg, commandStr)
-			cli.Println(msg)
-			return 1
-		}
+	if _, ok := queryist.(*engine.SqlEngine); !ok {
+		msg := fmt.Sprintf(cli.RemoteUnsupportedMsg, commandStr)
+		cli.Println(msg)
+		return 1
 	}
 
 	ok := validateDoltMergeArgs(apr, usage, cliCtx)

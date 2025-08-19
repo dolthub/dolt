@@ -24,24 +24,37 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 )
 
 var tableName = "people"
 
+func NewArgFreeCliContextForTest(ctx context.Context, t *testing.T, dEnv *env.DoltEnv) cli.CliContext {
+	cliCtx, err := NewArgFreeCliContext(ctx, dEnv, dEnv.FS)
+	require.NoError(t, err)
+	t.Cleanup(cliCtx.Close)
+	return cliCtx
+}
+
+func DEnvWithSeedDataForTest(ctx context.Context, t *testing.T) *env.DoltEnv {
+	dEnv, err := sqle.CreateEnvWithSeedData()
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		dEnv.DoltDB(ctx).Close()
+	})
+	return dEnv
+}
+
 // Smoke test: Console opens and exits
 func TestSqlConsole(t *testing.T) {
 	t.Run("SQL console opens and exits", func(t *testing.T) {
-		ctx := context.TODO()
-
-		dEnv, err := sqle.CreateEnvWithSeedData()
-		require.NoError(t, err)
-		defer dEnv.DoltDB(ctx).Close()
-
-		cliCtx, err := NewArgFreeCliContext(ctx, dEnv, dEnv.FS)
-		require.NoError(t, err)
+		ctx := t.Context()
+		dEnv := DEnvWithSeedDataForTest(ctx, t)
+		cliCtx := NewArgFreeCliContextForTest(ctx, t, dEnv)
 
 		args := []string{}
 		commandStr := "dolt sql"
@@ -67,14 +80,9 @@ func TestSqlBatchMode(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.query, func(t *testing.T) {
-			ctx := context.TODO()
-
-			dEnv, err := sqle.CreateEnvWithSeedData()
-			require.NoError(t, err)
-			defer dEnv.DoltDB(ctx).Close()
-
-			cliCtx, err := NewArgFreeCliContext(ctx, dEnv, dEnv.FS)
-			require.NoError(t, err)
+			ctx := t.Context()
+			dEnv := DEnvWithSeedDataForTest(ctx, t)
+			cliCtx := NewArgFreeCliContextForTest(ctx, t, dEnv)
 
 			args := []string{"-b", "-q", test.query}
 
@@ -111,13 +119,9 @@ func TestSqlSelect(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.query, func(t *testing.T) {
-			ctx := context.TODO()
-			dEnv, err := sqle.CreateEnvWithSeedData()
-			require.NoError(t, err)
-			defer dEnv.DoltDB(ctx).Close()
-
-			cliCtx, err := NewArgFreeCliContext(ctx, dEnv, dEnv.FS)
-			require.NoError(t, err)
+			ctx := t.Context()
+			dEnv := DEnvWithSeedDataForTest(ctx, t)
+			cliCtx := NewArgFreeCliContextForTest(ctx, t, dEnv)
 
 			args := []string{"-q", test.query}
 
@@ -141,13 +145,9 @@ func TestSqlShow(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.query, func(t *testing.T) {
-			ctx := context.TODO()
-			dEnv, err := sqle.CreateEnvWithSeedData()
-			require.NoError(t, err)
-			defer dEnv.DoltDB(ctx).Close()
-
-			cliCtx, err := NewArgFreeCliContext(ctx, dEnv, dEnv.FS)
-			require.NoError(t, err)
+			ctx := t.Context()
+			dEnv := DEnvWithSeedDataForTest(ctx, t)
+			cliCtx := NewArgFreeCliContextForTest(ctx, t, dEnv)
 
 			args := []string{"-q", test.query}
 
@@ -175,18 +175,19 @@ func TestCreateTable(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.query, func(t *testing.T) {
-			ctx := context.TODO()
+			ctx := t.Context()
 
 			dEnv := dtestutils.CreateTestEnv()
-			defer dEnv.DoltDB(ctx).Close()
+			t.Cleanup(func() {
+				dEnv.DoltDB(ctx).Close()
+			})
 			working, err := dEnv.WorkingRoot(context.Background())
 			assert.Nil(t, err, "Unexpected error")
 			has, err := working.HasTable(context.Background(), doltdb.TableName{Name: tableName})
 			assert.NoError(t, err)
 			assert.False(t, has, "table exists before creating it")
 
-			cliCtx, err := NewArgFreeCliContext(ctx, dEnv, dEnv.FS)
-			require.NoError(t, err)
+			cliCtx := NewArgFreeCliContextForTest(ctx, t, dEnv)
 
 			args := []string{"-q", test.query}
 			commandStr := "dolt sql"
@@ -224,13 +225,9 @@ func TestShowTables(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.query, func(t *testing.T) {
-			ctx := context.TODO()
-			dEnv, err := sqle.CreateEnvWithSeedData()
-			require.NoError(t, err)
-			defer dEnv.DoltDB(ctx).Close()
-
-			cliCtx, err := NewArgFreeCliContext(ctx, dEnv, dEnv.FS)
-			require.NoError(t, err)
+			ctx := t.Context()
+			dEnv := DEnvWithSeedDataForTest(ctx, t)
+			cliCtx := NewArgFreeCliContextForTest(ctx, t, dEnv)
 
 			args := []string{"-q", test.query}
 			commandStr := "dolt sql"
@@ -259,14 +256,9 @@ func TestAlterTable(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.query, func(t *testing.T) {
-			ctx := context.TODO()
-
-			dEnv, err := sqle.CreateEnvWithSeedData()
-			require.NoError(t, err)
-			defer dEnv.DoltDB(ctx).Close()
-
-			cliCtx, err := NewArgFreeCliContext(ctx, dEnv, dEnv.FS)
-			require.NoError(t, err)
+			ctx := t.Context()
+			dEnv := DEnvWithSeedDataForTest(ctx, t)
+			cliCtx := NewArgFreeCliContextForTest(ctx, t, dEnv)
 
 			args := []string{"-q", test.query}
 			commandStr := "dolt sql"
@@ -291,13 +283,9 @@ func TestDropTable(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.query, func(t *testing.T) {
-			ctx := context.TODO()
-			dEnv, err := sqle.CreateEnvWithSeedData()
-			require.NoError(t, err)
-			defer dEnv.DoltDB(ctx).Close()
-
-			cliCtx, err := NewArgFreeCliContext(ctx, dEnv, dEnv.FS)
-			require.NoError(t, err)
+			ctx := t.Context()
+			dEnv := DEnvWithSeedDataForTest(ctx, t)
+			cliCtx := NewArgFreeCliContextForTest(ctx, t, dEnv)
 
 			args := []string{"-q", test.query}
 			commandStr := "dolt sql"
@@ -415,13 +403,9 @@ func TestInsert(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			ctx := context.Background()
-			dEnv, err := sqle.CreateEnvWithSeedData()
-			require.NoError(t, err)
-			defer dEnv.DoltDB(ctx).Close()
-
-			cliCtx, err := NewArgFreeCliContext(ctx, dEnv, dEnv.FS)
-			require.NoError(t, err)
+			ctx := t.Context()
+			dEnv := DEnvWithSeedDataForTest(ctx, t)
+			cliCtx := NewArgFreeCliContextForTest(ctx, t, dEnv)
 
 			args := []string{"-q", test.query}
 
@@ -499,13 +483,9 @@ func TestUpdate(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.query, func(t *testing.T) {
-			ctx := context.Background()
-			dEnv, err := sqle.CreateEnvWithSeedData()
-			require.NoError(t, err)
-			defer dEnv.DoltDB(ctx).Close()
-
-			cliCtx, err := NewArgFreeCliContext(ctx, dEnv, dEnv.FS)
-			require.NoError(t, err)
+			ctx := t.Context()
+			dEnv := DEnvWithSeedDataForTest(ctx, t)
+			cliCtx := NewArgFreeCliContextForTest(ctx, t, dEnv)
 
 			args := []string{"-q", test.query}
 
@@ -577,13 +557,9 @@ func TestDelete(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.query, func(t *testing.T) {
-			ctx := context.Background()
-			dEnv, err := sqle.CreateEnvWithSeedData()
-			require.NoError(t, err)
-			defer dEnv.DoltDB(ctx).Close()
-
-			cliCtx, err := NewArgFreeCliContext(ctx, dEnv, dEnv.FS)
-			require.NoError(t, err)
+			ctx := t.Context()
+			dEnv := DEnvWithSeedDataForTest(ctx, t)
+			cliCtx := NewArgFreeCliContextForTest(ctx, t, dEnv)
 
 			args := []string{"-q", test.query}
 

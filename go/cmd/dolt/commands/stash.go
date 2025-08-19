@@ -101,13 +101,10 @@ func (cmd StashCmd) Exec(ctx context.Context, commandStr string, args []string, 
 		subcommand = strings.ToLower(apr.Arg(0))
 	}
 
-	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
+	queryist, sqlCtx, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
 		cli.PrintErrln(errhand.VerboseErrorFromError(err))
 		return 1
-	}
-	if closeFunc != nil {
-		defer closeFunc()
 	}
 
 	idx := 0
@@ -193,12 +190,9 @@ func stashRemove(queryist cli.Queryist, sqlCtx *sql.Context, cliCtx cli.CliConte
 }
 
 func stashList(ctx context.Context, cliCtx cli.CliContext) error {
-	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
+	queryist, sqlCtx, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
 		return err
-	}
-	if closeFunc != nil {
-		defer closeFunc()
 	}
 
 	stashes, err := getStashesSQL(sqlCtx, queryist, 0)

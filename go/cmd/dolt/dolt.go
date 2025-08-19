@@ -531,6 +531,9 @@ or check the docs for questions about usage.`)
 
 	ctx, stop := context.WithCancel(ctx)
 	res := doltCommand.Exec(ctx, "dolt", cfg.remainingArgs, dEnv, cliCtx)
+	if cliCtx != nil {
+		cliCtx.Close()
+	}
 	stop()
 
 	if err = dbfactory.CloseAllLocalDatabases(); err != nil {

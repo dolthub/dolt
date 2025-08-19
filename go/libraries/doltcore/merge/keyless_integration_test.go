@@ -116,6 +116,7 @@ func TestKeylessMerge(t *testing.T) {
 			require.NoError(t, err)
 			cliCtx, err := cmd.NewArgFreeCliContext(ctx, dEnv, dEnv.FS)
 			require.NoError(t, err)
+			defer cliCtx.Close()
 
 			for _, c := range test.setup {
 				exitCode := c.cmd.Exec(ctx, c.cmd.Name(), c.args, dEnv, cliCtx)
@@ -251,6 +252,7 @@ func TestKeylessMergeConflicts(t *testing.T) {
 		require.NoError(t, err)
 		cliCtx, err := cmd.NewArgFreeCliContext(ctx, dEnv, dEnv.FS)
 		require.NoError(t, err)
+		defer cliCtx.Close()
 
 		for _, c := range cc {
 			exitCode := c.cmd.Exec(ctx, c.cmd.Name(), c.args, dEnv, cliCtx)
@@ -284,6 +286,7 @@ func TestKeylessMergeConflicts(t *testing.T) {
 			setupTest(t, ctx, dEnv, test.setup)
 			cliCtx, verr := cmd.NewArgFreeCliContext(ctx, dEnv, dEnv.FS)
 			require.NoError(t, verr)
+			defer cliCtx.Close()
 
 			resolve := cnfcmds.ResolveCmd{}
 			args := []string{"--ours", tblName}
@@ -304,6 +307,7 @@ func TestKeylessMergeConflicts(t *testing.T) {
 			setupTest(t, ctx, dEnv, test.setup)
 			cliCtx, verr := cmd.NewArgFreeCliContext(ctx, dEnv, dEnv.FS)
 			require.NoError(t, verr)
+			defer cliCtx.Close()
 
 			resolve := cnfcmds.ResolveCmd{}
 			args := []string{"--theirs", tblName}

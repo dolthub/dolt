@@ -120,10 +120,7 @@ func (s SlashHelp) Exec(ctx context.Context, _ string, args []string, _ *env.Dol
 		return 0
 	}
 
-	qryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
-	if closeFunc != nil {
-		defer closeFunc()
-	}
+	qryist, sqlCtx, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
 		cli.Println(fmt.Sprintf("error getting query engine: %s", err))
 		return 1

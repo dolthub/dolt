@@ -96,13 +96,11 @@ func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []strin
 		return status
 	}
 
-	queryEngine, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
+	queryEngine, sqlCtx, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
-	if closeFunc != nil {
-		defer closeFunc()
-
+	if false { // XXX: Find a way for Checkout to know if this is within another session...
 		// We only check for this case when checkout is the first command in a session. The reason for this is that checkout
 		// when connected to a remote server will not work as it won't set the branch. But when operating within the context
 		// of another session, specifically a \checkout in a dolt sql session, this makes sense. Since no closeFunc would be

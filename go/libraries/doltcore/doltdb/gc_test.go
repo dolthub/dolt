@@ -119,12 +119,17 @@ var gcSetupCommon = []testCommand{
 }
 
 func testGarbageCollection(t *testing.T, test gcTest) {
-	ctx := context.Background()
+	ctx := t.Context()
 	dEnv := dtestutils.CreateTestEnv()
-	defer dEnv.DoltDB(ctx).Close()
+	t.Cleanup(func() {
+		dEnv.DoltDB(ctx).Close()
+	})
 
 	cliCtx, verr := commands.NewArgFreeCliContext(ctx, dEnv, dEnv.FS)
 	require.NoError(t, verr)
+	t.Cleanup(func() {
+		cliCtx.Close()
+	})
 
 	for _, c := range gcSetupCommon {
 		exitCode := c.cmd.Exec(ctx, c.cmd.Name(), c.args, dEnv, cliCtx)

@@ -200,12 +200,9 @@ func (cmd DiffCmd) Exec(ctx context.Context, commandStr string, args []string, _
 		return HandleVErrAndExitCode(verr, usage)
 	}
 
-	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
+	queryist, sqlCtx, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-	}
-	if closeFunc != nil {
-		defer closeFunc()
 	}
 
 	updateSystemVar, err := cli.SetSystemVar(queryist, sqlCtx, apr.Contains(cli.SystemFlag))

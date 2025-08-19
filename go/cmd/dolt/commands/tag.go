@@ -87,12 +87,9 @@ func (cmd TagCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, tagDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
-	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
+	queryist, sqlCtx, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
 		return handleStatusVErr(err)
-	}
-	if closeFunc != nil {
-		defer closeFunc()
 	}
 
 	// list tags

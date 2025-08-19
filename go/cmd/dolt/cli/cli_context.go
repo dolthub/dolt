@@ -42,7 +42,11 @@ type CliContext interface {
 	GlobalArgs() *argparser.ArgParseResults
 	WorkingDir() filesys.Filesys
 	Config() *env.DoltCliConfig
-	QueryEngine(ctx context.Context) (Queryist, *sql.Context, func(), error)
+	QueryEngine(ctx context.Context) (Queryist, *sql.Context, error)
+	// Release resources associated with the CliContext, including
+	// any QueryEngines which were provisioned over the lifetime
+	// of the CliContext.
+	Close()
 }
 
 // NewCliContext creates a new CliContext instance. Arguments must not be nil.
@@ -62,6 +66,7 @@ func NewCliContext(args *argparser.ArgParseResults, config *env.DoltCliConfig, c
 type QueryistContext struct {
 	sqlCtx *sql.Context
 	qryist *Queryist
+	close  func()
 }
 
 // LateBindCliContext is a struct that implements CliContext. Its primary purpose is to wrap the global arguments and
@@ -84,20 +89,27 @@ func (lbc LateBindCliContext) GlobalArgs() *argparser.ArgParseResults {
 // QueryEngine returns a Queryist, a sql.Context, a closer function, and an error. It ensures that only one call to the
 // LateBindQueryist is made, and caches the result. Note that if this is called twice, the closer function returns will
 // be nil, callers should check if is nil.
-func (lbc LateBindCliContext) QueryEngine(ctx context.Context) (Queryist, *sql.Context, func(), error) {
+func (lbc LateBindCliContext) QueryEngine(ctx context.Context) (Queryist, *sql.Context, error) {
 	if lbc.activeContext != nil && lbc.activeContext.qryist != nil && lbc.activeContext.sqlCtx != nil {
-		return *lbc.activeContext.qryist, lbc.activeContext.sqlCtx, nil, nil
+		return *lbc.activeContext.qryist, lbc.activeContext.sqlCtx, nil
 	}
 
 	qryist, sqlCtx, closer, err := lbc.bind(ctx)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, err
 	}
 
 	lbc.activeContext.qryist = &qryist
 	lbc.activeContext.sqlCtx = sqlCtx
+	lbc.activeContext.close = closer
 
-	return qryist, sqlCtx, closer, nil
+	return qryist, sqlCtx, nil
+}
+
+func (lbc LateBindCliContext) Close() {
+	if lbc.activeContext != nil && lbc.activeContext.close != nil {
+		lbc.activeContext.close()
+	}
 }
 
 func (lbc LateBindCliContext) WorkingDir() filesys.Filesys {

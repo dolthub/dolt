@@ -121,13 +121,10 @@ func (cmd AddCmd) Exec(ctx context.Context, commandStr string, args []string, _ 
 		return status
 	}
 
-	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
+	queryist, sqlCtx, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
 		cli.PrintErrln(errhand.VerboseErrorFromError(err))
 		return 1
-	}
-	if closeFunc != nil {
-		defer closeFunc()
 	}
 
 	// Allow staging tables with merge conflicts.

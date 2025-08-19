@@ -74,12 +74,9 @@ func (cmd DestroyCmd) Exec(ctx context.Context, commandStr string, args []string
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, destroyDocs, ap))
 	cli.ParseArgsOrDie(ap, args, help)
 
-	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
+	queryist, sqlCtx, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-	}
-	if closeFunc != nil {
-		defer closeFunc()
 	}
 
 	name, email, err := env.GetNameAndEmail(cliCtx.Config())

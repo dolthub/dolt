@@ -112,13 +112,10 @@ func performCommit(ctx context.Context, commandStr string, args []string, cliCtx
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage), false
 	}
 
-	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
+	queryist, sqlCtx, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
 		cli.Println(err.Error())
 		return 1, false
-	}
-	if closeFunc != nil {
-		defer closeFunc()
 	}
 
 	// TODO: This is not a nice solution. Currently, the cliCtx parameter's sqlCtx that we get from QueryEngine() is never refreshed.

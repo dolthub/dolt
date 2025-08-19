@@ -111,12 +111,9 @@ func (cmd StatusCmd) Exec(ctx context.Context, commandStr string, args []string,
 	showIgnoredTables := apr.Contains(cli.ShowIgnoredFlag)
 
 	// configure SQL engine
-	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
+	queryist, sqlCtx, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
 		return handleStatusVErr(err)
-	}
-	if closeFunc != nil {
-		defer closeFunc()
 	}
 
 	// get status information from the database

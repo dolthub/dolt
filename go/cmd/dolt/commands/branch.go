@@ -111,13 +111,9 @@ func (cmd BranchCmd) Exec(ctx context.Context, commandStr string, args []string,
 	}
 
 	errorBuilder := errhand.BuildDError("error: failed to create query engine")
-	queryEngine, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
+	queryEngine, sqlCtx, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
 		return HandleVErrAndExitCode(errorBuilder.AddCause(err).Build(), nil)
-	}
-
-	if closeFunc != nil {
-		defer closeFunc()
 	}
 
 	if len(apr.ContainsMany(cli.MoveFlag, cli.CopyFlag, cli.DeleteFlag, cli.DeleteForceFlag, cli.ListFlag, showCurrentFlag)) > 1 {

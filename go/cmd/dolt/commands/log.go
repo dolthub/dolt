@@ -105,12 +105,9 @@ func (cmd LogCmd) logWithLoggerFunc(ctx context.Context, commandStr string, args
 		return status
 	}
 
-	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
+	queryist, sqlCtx, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
 		return handleErrAndExit(err)
-	}
-	if closeFunc != nil {
-		defer closeFunc()
 	}
 
 	query, err := constructInterpolatedDoltLogQuery(apr, queryist, sqlCtx)

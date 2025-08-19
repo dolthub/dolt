@@ -15,7 +15,6 @@
 package doltdb_test
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -107,10 +106,16 @@ func TestForeignKeyErrors(t *testing.T) {
 			`CONSTRAINT child_fk FOREIGN KEY (v1) REFERENCES test(v1));`}},
 	}
 
-	ctx := context.Background()
+	ctx := t.Context()
 	dEnv := dtestutils.CreateTestEnv()
+	t.Cleanup(func() {
+		dEnv.DoltDB(ctx).Close()
+	})
 	cliCtx, err := commands.NewArgFreeCliContext(ctx, dEnv, dEnv.FS)
 	require.NoError(t, err)
+	t.Cleanup(func() {
+		cliCtx.Close()
+	})
 
 	for _, c := range cmds {
 		exitCode := c.cmd.Exec(ctx, c.cmd.Name(), c.args, dEnv, cliCtx)
@@ -151,11 +156,17 @@ var fkSetupCommon = []testCommand{
 }
 
 func testForeignKeys(t *testing.T, test foreignKeyTest) {
-	ctx := context.Background()
+	ctx := t.Context()
 	dEnv := dtestutils.CreateTestEnv()
+	t.Cleanup(func() {
+		dEnv.DoltDB(ctx).Close()
+	})
 
 	cliCtx, verr := commands.NewArgFreeCliContext(ctx, dEnv, dEnv.FS)
 	require.NoError(t, verr)
+	t.Cleanup(func() {
+		cliCtx.Close()
+	})
 
 	for _, c := range fkSetupCommon {
 		exitCode := c.cmd.Exec(ctx, c.cmd.Name(), c.args, dEnv, cliCtx)

@@ -74,12 +74,9 @@ func (cmd MergeBaseCmd) Exec(ctx context.Context, commandStr string, args []stri
 		return HandleVErrAndExitCode(verr, usage)
 	}
 
-	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
+	queryist, sqlCtx, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-	}
-	if closeFunc != nil {
-		defer closeFunc()
 	}
 
 	interpolatedQuery, err := dbr.InterpolateForDialect("SELECT DOLT_MERGE_BASE(?, ?)", []interface{}{apr.Arg(0), apr.Arg(1)}, dialect.MySQL)

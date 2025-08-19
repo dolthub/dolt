@@ -175,14 +175,14 @@ func readTestData(file string) string {
 }
 
 func populateRepo(dEnv *env.DoltEnv, insertData string) {
+	ctx := context.Background()
+	cliCtx, err := commands.NewArgFreeCliContext(ctx, dEnv, dEnv.FS)
+	if err != nil {
+		panic(err)
+	}
+	defer cliCtx.Close()
 	execSql := func(dEnv *env.DoltEnv, q string) int {
-		ctx := context.Background()
 		args := []string{"-r", "null", "-q", q}
-		cliCtx, err := commands.NewArgFreeCliContext(ctx, dEnv, dEnv.FS)
-		if err != nil {
-			panic(err)
-		}
-
 		return commands.SqlCmd{}.Exec(ctx, "sql", args, dEnv, cliCtx)
 	}
 	execSql(dEnv, createTable)

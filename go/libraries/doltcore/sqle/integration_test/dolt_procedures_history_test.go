@@ -161,6 +161,7 @@ func setupDoltProceduresHistoryTests(t *testing.T) *env.DoltEnv {
 	ctx := context.Background()
 	cliCtx, verr := cmd.NewArgFreeCliContext(ctx, dEnv, dEnv.FS)
 	require.NoError(t, verr)
+	defer cliCtx.Close()
 
 	for _, c := range setupDoltProceduresCommon {
 		exitCode := c.cmd.Exec(ctx, c.cmd.Name(), c.args, dEnv, cliCtx)
@@ -187,6 +188,7 @@ func testDoltProceduresHistoryTable(t *testing.T, test doltProceduresTableTest, 
 	ctx := context.Background()
 	cliCtx, verr := cmd.NewArgFreeCliContext(ctx, dEnv, dEnv.FS)
 	require.NoError(t, verr)
+	defer cliCtx.Close()
 
 	for _, c := range test.setup {
 		exitCode := c.cmd.Exec(ctx, c.cmd.Name(), c.args, dEnv, cliCtx)
