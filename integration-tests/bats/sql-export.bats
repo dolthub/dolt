@@ -101,3 +101,11 @@ teardown() {
     [ "$status" -eq 1 ]
     [[ "$output" =~ "Result consisted of more than one row" ]] || false
 }
+
+@test "sql-export: bit union csv output regression test for dolt#9641" {
+    dolt sql -q "CREATE TABLE collection (id INT, archived BIT(1));"
+    dolt sql -q "INSERT INTO collection VALUES (1, b'0'), (2, b'0');"
+    run dolt sql --result-format=csv -q "SELECT * FROM (SELECT archived FROM collection WHERE archived = FALSE UNION ALL SELECT NULL AS archived FROM collection WHERE id = 1) AS dummy_alias;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "archived" ]] || false
+}
