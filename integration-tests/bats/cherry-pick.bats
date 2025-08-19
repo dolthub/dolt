@@ -638,7 +638,7 @@ teardown() {
     [ $status -eq 0 ]
     [[ "$output" =~ "Original Author <original@example.com>" ]] || false
     
-    # Verify dolt_log table shows correct author and preserved timestamp (use extended schema to see author info)
+    # Extended schema needed to verify author fields separately from committer
     run dolt sql -q "SET dolt_log_compact_schema = 0; SELECT author, author_email, author_date FROM dolt_log WHERE message = 'commit with specific author'" -r csv
     [ $status -eq 0 ]
     [[ "$output" =~ "Original Author,original@example.com" ]] || false
@@ -699,7 +699,7 @@ teardown() {
     [[ "$output" =~ "Carol Architect <carol@company.com>" ]] || false
     [[ "$output" =~ "Integration Manager <integration@company.com>" ]] || false
     
-    # Verify dolt_log table shows all authors correctly in commit order (including merge workflow) (use extended schema to see author info)
+    # Extended schema needed to distinguish between authors in complex merge workflows
     run dolt sql -q "SET dolt_log_compact_schema = 0; SELECT author, author_email, message FROM dolt_log WHERE author IN ('Alice Developer', 'Bob Engineer', 'Carol Architect', 'Integration Manager') OR message LIKE 'Merge%' ORDER BY commit_order" -r csv
     [ $status -eq 0 ]
     [[ "$output" =~ "Alice Developer,alice@company.com" ]] || false

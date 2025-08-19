@@ -142,8 +142,8 @@ func NewCommitMetaWithUserTS(name, email, desc string, userTS time.Time) (*Commi
 		Description:    d,
 		UserTimestamp:  authorDateMillis,
 		Signature:      "",
-		CommitterName:  nil,
-		CommitterEmail: nil,
+		CommitterName:  nil,  // Same as author, no need to store separately
+		CommitterEmail: nil,  // Same as author, no need to store separately
 	}, nil
 }
 
@@ -169,7 +169,7 @@ func NewCommitMetaWithAuthorCommitter(authorName, authorEmail, committerName, co
 		return nil, ErrEmptyCommitMessage
 	}
 
-	// Default committer to author if not provided
+	// Default committer to author to avoid breaking previous versions with extra metadata
 	if cn == "" {
 		cn = an
 	}
@@ -177,7 +177,7 @@ func NewCommitMetaWithAuthorCommitter(authorName, authorEmail, committerName, co
 		ce = ae
 	}
 
-	// Use current time for committer if not provided
+	// Committer timestamp defaults to current time to match Git behavior
 	var committerDateMillis uint64
 	if committerTS.IsZero() {
 		committerDateMillis = uint64(CommitterDate().UnixMilli())
@@ -187,6 +187,15 @@ func NewCommitMetaWithAuthorCommitter(authorName, authorEmail, committerName, co
 
 	authorDateMillis := authorTS.UnixMilli()
 
+	// Only store committer info if it's different from author info
+	var committerNamePtr, committerEmailPtr *string
+	if cn != an {
+		committerNamePtr = &cn
+	}
+	if ce != ae {
+		committerEmailPtr = &ce
+	}
+
 	return &CommitMeta{
 		Name:           an,
 		Email:          ae,
@@ -194,8 +203,8 @@ func NewCommitMetaWithAuthorCommitter(authorName, authorEmail, committerName, co
 		Description:    d,
 		UserTimestamp:  authorDateMillis,
 		Signature:      "",
-		CommitterName:  &cn,
-		CommitterEmail: &ce,
+		CommitterName:  committerNamePtr,
+		CommitterEmail: committerEmailPtr,
 	}, nil
 }
 
@@ -262,8 +271,8 @@ func CommitMetaFromNomsSt(st types.Struct) (*CommitMeta, error) {
 		Description:    description,
 		UserTimestamp:  int64(userTS.(types.Int)),
 		Signature:      sig,
-		CommitterName:  nil,
-		CommitterEmail: nil,
+		CommitterName:  nil,  // Old commits don't have separate committer info
+		CommitterEmail: nil,  // Old commits don't have separate committer info
 	}, nil
 }
 
@@ -282,11 +291,16 @@ func (cm *CommitMeta) toNomsStruct(nbf *types.NomsBinFormat) (types.Struct, erro
 }
 
 // Time returns the time at which the commit was authored
+// NOTE: Unlike Git, this returns the time in the system's local timezone rather than
+// preserving the original timezone when the commit was made. This maintains backwards
+// compatibility but differs from Git's behavior of timezone preservation.
 func (cm *CommitMeta) Time() time.Time {
 	return time.UnixMilli(cm.UserTimestamp)
 }
 
-// CommitterTime returns the time at which the commit was committed, or author time if no committer time is set
+// CommitterTime returns the committer timestamp or author time if not set
+// NOTE: Like Time(), this returns the time in system local timezone rather than
+// preserving the original timezone when the commit was made, for backwards compatibility.
 func (cm *CommitMeta) CommitterTime() time.Time {
 	if cm.Timestamp != 0 {
 		return time.UnixMilli(int64(cm.Timestamp))

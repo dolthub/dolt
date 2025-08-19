@@ -883,6 +883,12 @@ var GetQueryCatalogTableName = func() string { return DoltQueryCatalogTableName 
 const (
 	// LogTableName is the log system table name
 	LogTableName = "dolt_log"
+	
+	// LogTableFullName is the full log system table name (contains committer and author metadata)
+	LogTableFullName = "dolt_log_full"
+	
+	// LogTableCompactName is the compact log system table name (contains committer metadata only)
+	LogTableCompactName = "dolt_log_compact"
 
 	// DiffTableName is the name of the table with a map of commits to tables changed
 	DiffTableName = "dolt_diff"
