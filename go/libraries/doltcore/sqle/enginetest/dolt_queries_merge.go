@@ -361,7 +361,8 @@ var MergeScripts = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "CALL DOLT_MERGE no-ff correctly works with autocommit off",
+		Name:    "CALL DOLT_MERGE no-ff correctly works with autocommit off",
+		Dialect: "mysql",
 		SetUpScript: []string{
 			"CREATE TABLE test (pk int primary key)",
 			"call DOLT_ADD('.')",
@@ -404,7 +405,8 @@ var MergeScripts = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "CALL DOLT_MERGE no-ff correctly works with autocommit off, no checkout",
+		Name:    "CALL DOLT_MERGE no-ff correctly works with autocommit off, no checkout",
+		Dialect: "mysql",
 		SetUpScript: []string{
 			"CREATE TABLE test (pk int primary key)",
 			"call DOLT_ADD('.')",
@@ -450,7 +452,8 @@ var MergeScripts = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "CALL DOLT_MERGE without conflicts correctly works with autocommit off with commit flag",
+		Name:    "CALL DOLT_MERGE without conflicts correctly works with autocommit off with commit flag",
+		Dialect: "mysql",
 		SetUpScript: []string{
 			"CREATE TABLE test (pk int primary key)",
 			"CALL DOLT_ADD('.')",
@@ -490,7 +493,8 @@ var MergeScripts = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "CALL DOLT_MERGE without conflicts correctly works with autocommit off and no commit flag",
+		Name:    "CALL DOLT_MERGE without conflicts correctly works with autocommit off and no commit flag",
+		Dialect: "mysql",
 		SetUpScript: []string{
 			"CREATE TABLE test (pk int primary key)",
 			"CALL DOLT_ADD('.')",
@@ -539,7 +543,8 @@ var MergeScripts = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "CALL DOLT_MERGE with conflicts can be correctly resolved when autocommit is off",
+		Name:    "CALL DOLT_MERGE with conflicts can be correctly resolved when autocommit is off",
+		Dialect: "mysql",
 		SetUpScript: []string{
 			"CREATE TABLE test (pk int primary key, val int)",
 			"call DOLT_ADD('.')",
@@ -639,7 +644,8 @@ var MergeScripts = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "CALL DOLT_MERGE with non-conflicting schema changes can be correctly resolved when autocommit is off",
+		Name:    "CALL DOLT_MERGE with non-conflicting schema changes can be correctly resolved when autocommit is off",
+		Dialect: "mysql",
 		SetUpScript: []string{
 			"CREATE TABLE test (pk int primary key, val int, val2 int)",
 			"call DOLT_ADD('.')",
@@ -753,7 +759,8 @@ var MergeScripts = []queries.ScriptTest{
 		//       merged, and resolving the schema changes, but not completing the data merge will likely
 		//       give customers unexpected results.
 		//       https://github.com/dolthub/dolt/issues/6616
-		Name: "CALL DOLT_MERGE with schema conflicts can be correctly resolved using dolt_conflicts_resolve when autocommit is off",
+		Name:    "CALL DOLT_MERGE with schema conflicts can be correctly resolved using dolt_conflicts_resolve when autocommit is off",
+		Dialect: "mysql",
 		SetUpScript: []string{
 			"CREATE TABLE test (pk int primary key, val int)",
 			"call DOLT_ADD('.')",
@@ -1034,7 +1041,8 @@ var MergeScripts = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "CALL DOLT_MERGE no-ff",
+		Name:    "CALL DOLT_MERGE no-ff",
+		Dialect: "mysql",
 		SetUpScript: []string{
 			"CREATE TABLE test (pk int primary key)",
 			"CALL DOLT_ADD('.')",
@@ -1076,7 +1084,8 @@ var MergeScripts = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "CALL DOLT_MERGE with no conflicts works",
+		Name:    "CALL DOLT_MERGE with no conflicts works",
+		Dialect: "mysql",
 		SetUpScript: []string{
 			"CREATE TABLE test (pk int primary key)",
 			"CALL DOLT_ADD('.')",
@@ -1115,7 +1124,8 @@ var MergeScripts = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "CALL DOLT_MERGE with no conflicts works, no checkout",
+		Name:    "CALL DOLT_MERGE with no conflicts works, no checkout",
+		Dialect: "mysql",
 		SetUpScript: []string{
 			"CREATE TABLE test (pk int primary key)",
 			"CALL DOLT_ADD('.')",
@@ -1171,7 +1181,8 @@ var MergeScripts = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "CALL DOLT_MERGE with no conflicts works with no-commit flag",
+		Name:    "CALL DOLT_MERGE with no conflicts works with no-commit flag",
+		Dialect: "mysql",
 		SetUpScript: []string{
 			"CREATE TABLE test (pk int primary key)",
 			"CALL DOLT_ADD('.')",
