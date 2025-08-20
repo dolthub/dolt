@@ -38,24 +38,24 @@ import (
 type archiveReader struct {
 	reader      tableReaderAt
 	indexReader archiveIndexReader // Memory-mapped or fallback index reader
-	footer      archiveFooter
 	dictCache   *lru.TwoQueueCache[uint32, *DecompBundle]
+	footer      archiveFooter
 }
 
 type suffix [hash.SuffixLen]byte
 
 type archiveFooter struct {
+	fileSignature string
 	indexSize     uint64
+	fileSize      uint64
 	byteSpanCount uint32
 	chunkCount    uint32
 	metadataSize  uint32
 	dataCheckSum  sha512Sum
 	indexCheckSum sha512Sum
 	metaCheckSum  sha512Sum
-	formatVersion byte
-	fileSignature string
-	fileSize      uint64 // Not actually part of the footer, but necessary for calculating offsets.
 	hash          hash.Hash
+	formatVersion byte
 }
 
 // actualFooterSize returns the footer size, in bytes for a specific archive. Due to the evolution of the archive format,
@@ -485,7 +485,7 @@ func (ar archiveReader) getAsToChunker(ctx context.Context, h hash.Hash, stats *
 		return nil, errors.New("runtime error: unable to get archived chunk. dictionary is nil")
 	}
 
-	return ArchiveToChunker{h, dict, data}, nil
+	return ArchiveToChunker{dict, data, h}, nil
 }
 
 func (ar archiveReader) count() uint32 {

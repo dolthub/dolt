@@ -159,25 +159,21 @@ func deleteJournalAndIndexFiles(ctx context.Context, path string) (err error) {
 }
 
 type journalWriter struct {
-	buf []byte
-
-	journal *os.File
-	// off indicates the last position that has been written to the journal buffer
-	off     int64
-	indexed int64
-	path    string
-	uncmpSz uint64
-
-	unsyncd     uint64
-	currentRoot hash.Hash
-
 	ranges      rangeIndex
-	index       *os.File
+	journal     *os.File
 	indexWriter *bufio.Writer
-	batchCrc    uint32
+	index       *os.File
+	path        string
+	buf         []byte
+	indexed     int64
+	unsyncd     uint64
+	uncmpSz     uint64
+	// off indicates the last position that has been written to the journal buffer
+	off         int64
 	maxNovel    int
-
-	lock sync.RWMutex
+	lock        sync.RWMutex
+	batchCrc    uint32
+	currentRoot hash.Hash
 }
 
 var _ io.Closer = &journalWriter{}

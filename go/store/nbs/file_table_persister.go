@@ -44,16 +44,11 @@ import (
 const tempTablePrefix = "nbs_table_"
 
 func newFSTablePersister(dir string, q MemoryQuotaProvider, mmapArchiveIndexes bool) tablePersister {
-	return &fsTablePersister{dir, q, mmapArchiveIndexes, sync.Mutex{}, nil, make(map[string]struct{})}
+	return &fsTablePersister{q, nil, make(map[string]struct{}), dir, sync.Mutex{}, mmapArchiveIndexes}
 }
 
 type fsTablePersister struct {
-	dir                string
-	q                  MemoryQuotaProvider
-	mmapArchiveIndexes bool
-
-	// Protects the following two maps.
-	removeMu sync.Mutex
+	q MemoryQuotaProvider
 	// While we are running PruneTableFiles, any newly created table files are
 	// added to this map. The file delete loop will never delete anything which
 	// appears in this map. Files should be added to this map before they are
@@ -65,6 +60,10 @@ type fsTablePersister struct {
 	// remove the entry from this map when we are done processing the temp file
 	// or else this map will grow without bound.
 	curTmps map[string]struct{}
+	dir     string
+	// Protects the following two maps.
+	removeMu           sync.Mutex
+	mmapArchiveIndexes bool
 }
 
 var _ tablePersister = &fsTablePersister{}

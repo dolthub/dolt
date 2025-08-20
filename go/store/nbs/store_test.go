@@ -439,12 +439,12 @@ func TestNBSUpdateManifestWithAppendixOptions(t *testing.T) {
 	appendixUpdates, appendixIds := persistTableFileSources(t, p, 4)
 
 	tests := []struct {
+		expectedError                 error
 		description                   string
-		option                        ManifestAppendixOption
 		appendixSpecIds               []hash.Hash
+		option                        ManifestAppendixOption
 		expectedNumberOfSpecs         int
 		expectedNumberOfAppendixSpecs int
-		expectedError                 error
 	}{
 		{
 			description:     "should error on unsupported appendix option",

@@ -77,11 +77,11 @@ var ErrDuplicateChunkWritten = errors.New("duplicate chunks written")
 // CmpChunkTableWriter writes CompressedChunks to a table file
 type CmpChunkTableWriter struct {
 	sink                  *HashingByteSink
-	chunkDataLength       uint64
-	totalUncompressedData uint64
-	prefixes              prefixIndexSlice
 	blockAddr             *hash.Hash
 	path                  string
+	prefixes              prefixIndexSlice
+	chunkDataLength       uint64
+	totalUncompressedData uint64
 }
 
 var _ GenericTableWriter = (*CmpChunkTableWriter)(nil)

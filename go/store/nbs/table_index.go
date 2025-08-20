@@ -196,28 +196,24 @@ func readTableIndexByCopy(ctx context.Context, rd io.ReadSeeker, q MemoryQuotaPr
 }
 
 type onHeapTableIndex struct {
+	q      MemoryQuotaProvider
+	refCnt *int32
 	// prefixTuples is a packed array of 12 byte tuples:
 	// (8 byte addr prefix, 4 byte uint32 ordinal)
 	// it is sorted by addr prefix, the ordinal value
 	// can be used to lookup offset and addr suffix
 	prefixTuples []byte
-
 	// the offsets arrays contains packed uint64s
 	offsets1 []byte
 	offsets2 []byte
-
 	// suffixes is a array of 12 byte addr suffixes
 	suffixes []byte
-
 	// footer contains in the table file footer
 	footer []byte
 
-	q      MemoryQuotaProvider
-	refCnt *int32
-
-	count          uint32
 	tableFileSz    uint64
 	uncompressedSz uint64
+	count          uint32
 }
 
 var _ tableIndex = &onHeapTableIndex{}

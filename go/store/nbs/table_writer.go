@@ -37,14 +37,13 @@ import (
 
 // tableWriter encodes a collection of byte stream chunks into a nbs table. NOT goroutine safe.
 type tableWriter struct {
+	blockHash             gohash.Hash
+	snapper               snappyEncoder
 	buff                  []byte
+	prefixes              prefixIndexSlice
 	pos                   uint64
 	totalCompressedData   uint64
 	totalUncompressedData uint64
-	prefixes              prefixIndexSlice
-	blockHash             gohash.Hash
-
-	snapper snappyEncoder
 }
 
 type snappyEncoder interface {

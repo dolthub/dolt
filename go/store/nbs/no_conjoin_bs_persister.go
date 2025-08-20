@@ -30,8 +30,8 @@ import (
 
 type noConjoinBlobstorePersister struct {
 	bs        blobstore.Blobstore
-	blockSize uint64
 	q         MemoryQuotaProvider
+	blockSize uint64
 }
 
 var _ tablePersister = &noConjoinBlobstorePersister{}
@@ -59,7 +59,7 @@ func (bsp *noConjoinBlobstorePersister) Persist(ctx context.Context, mt *memTabl
 		return nil, gcBehavior_Continue, err
 	}
 
-	rdr := &bsTableReaderAt{name, bsp.bs}
+	rdr := &bsTableReaderAt{key: name, bs: bsp.bs}
 	src, err := newReaderFromIndexData(ctx, bsp.q, data, address, rdr, bsp.blockSize)
 	if err != nil {
 		return nil, gcBehavior_Continue, err

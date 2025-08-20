@@ -66,10 +66,10 @@ func TestBlobstoreSuite(t *testing.T) {
 
 type BlockStoreSuite struct {
 	suite.Suite
-	dir        string
 	store      *NomsBlockStore
 	factory    nbsFactory
 	putCountFn func() int
+	dir        string
 
 	// if true, skip interloper tests
 	skipInterloper bool

@@ -63,14 +63,15 @@ type DynamoDBAPIV2 interface {
 
 // dynamoManifest assumes the existence of a DynamoDB table whose primary partition key is in String format and named `db`.
 type dynamoManifest struct {
-	table, db string
-	ddbsvc    DynamoDBAPIV2
+	ddbsvc DynamoDBAPIV2
+	table  string
+	db     string
 }
 
 func newDynamoManifest(table, namespace string, ddb DynamoDBAPIV2) manifest {
 	d.PanicIfTrue(table == "")
 	d.PanicIfTrue(namespace == "")
-	return dynamoManifest{table, namespace, ddb}
+	return dynamoManifest{ddbsvc: ddb, table: table, db: namespace}
 }
 
 func (dm dynamoManifest) Name() string {
