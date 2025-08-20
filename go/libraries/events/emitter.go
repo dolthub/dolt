@@ -156,10 +156,7 @@ func (em *GrpcEmitter) LogEventsRequest(ctx context.Context, req *eventsapi.LogE
 // SendLogEventsRequest sends a request using the grpc client
 func (em *GrpcEmitter) sendLogEventsRequest(ctx context.Context, req *eventsapi.LogEventsRequest) error {
 	_, err := em.client.LogEvents(ctx, req)
-	if err != nil {
-		return err
-	}
-	return nil
+	return err
 }
 
 // FileEmitter saves event requests to files
