@@ -40,21 +40,16 @@ var _ sql.ExecSourceRel = (*LogTableFunction)(nil)
 var _ sql.AuthorizationCheckerNode = (*LogTableFunction)(nil)
 
 type LogTableFunction struct {
-	ctx *sql.Context
-
+	database        sql.Database
+	ctx             *sql.Context
+	decoration      string
 	revisionStrs    []string
 	notRevisionStrs []string
 	tableNames      []string
-
-	minParents    int
-	showParents   bool
-	showSignature bool
-	decoration    string
-
-	database sql.Database
-
-	// argumentExprs stores the original expressions for deferred parsing
-	argumentExprs []sql.Expression
+	argumentExprs   []sql.Expression
+	minParents      int
+	showParents     bool
+	showSignature   bool
 }
 
 var logTableSchema = sql.Schema{
@@ -614,13 +609,12 @@ var _ sql.RowIter = (*logTableFunctionRowIter)(nil)
 // logTableFunctionRowIter is a sql.RowIter implementation which iterates over each commit as if it's a row in the table.
 type logTableFunctionRowIter struct {
 	child         doltdb.CommitItr[*sql.Context]
+	cHashToRefs   map[hash.Hash][]string
+	decoration    string
+	tableNames    []string
+	headHash      hash.Hash
 	showParents   bool
 	showSignature bool
-	decoration    string
-	cHashToRefs   map[hash.Hash][]string
-	headHash      hash.Hash
-
-	tableNames []string
 }
 
 // NewLogTableFunctionRowIter creates iterator for single commit history traversal.
