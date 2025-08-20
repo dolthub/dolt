@@ -56,7 +56,7 @@ func (f ProximityFlusher) ApplyMutationsWithSerializer(
 	keyDesc := mutableMap.keyDesc
 	valDesc := mutableMap.valDesc
 	ns := mutableMap.NodeStore()
-	convert := func(ctx context.Context, bytes []byte) []float64 {
+	convert := func(ctx context.Context, bytes []byte) []float32 {
 		h, _ := keyDesc.GetJSONAddr(0, bytes)
 		doc := tree.NewJSONDoc(h, ns)
 		jsonWrapper, err := doc.ToIndexedJSONDocument(ctx)
@@ -161,7 +161,7 @@ func (f ProximityFlusher) visitNode(
 	ns tree.NodeStore,
 	node tree.Node,
 	edits []VectorIndexKV,
-	convert func(context.Context, []byte) []float64,
+	convert func(context.Context, []byte) []float32,
 	distanceType vector.DistanceType,
 	keyDesc val.TupleDesc,
 	valDesc val.TupleDesc,

@@ -35,7 +35,7 @@ type ProximityMap[K, V ~[]byte, O Ordering[K]] struct {
 	NodeStore    NodeStore
 	DistanceType vector.DistanceType
 	Order        O
-	Convert      func(context.Context, []byte) []float64
+	Convert      func(context.Context, []byte) []float32
 	Root         Node
 }
 
@@ -270,7 +270,7 @@ func getJsonValueFromHash(ctx context.Context, ns NodeStore, h hash.Hash) (inter
 	return NewJSONDoc(h, ns).ToIndexedJSONDocument(ctx)
 }
 
-func getVectorFromHash(ctx context.Context, ns NodeStore, h hash.Hash) ([]float64, error) {
+func getVectorFromHash(ctx context.Context, ns NodeStore, h hash.Hash) ([]float32, error) {
 	otherValue, err := getJsonValueFromHash(ctx, ns, h)
 	if err != nil {
 		return nil, err
