@@ -26,19 +26,19 @@ import (
 )
 
 type lookupResult struct {
-	idx uint64
-	r   sql.Row
 	err error
+	r   sql.Row
+	idx uint64
 }
 
 // toLookup represents an table lookup that should be performed by one of the global asyncLookups instance's worker routines
 type toLookup struct {
-	idx        uint64
-	t          types.Tuple
+	ctx        context.Context
 	tupleToRow func(context.Context, types.Tuple) (sql.Row, error)
 	resBuf     *async.RingBuffer
+	t          types.Tuple
+	idx        uint64
 	epoch      int
-	ctx        context.Context
 }
 
 // asyncLookups is a pool of worker routines reading from a channel doing table lookups
