@@ -38,10 +38,10 @@ func newByteSliceReadCloser(data []byte) *byteSliceReadCloser {
 
 // InMemoryBlobstore provides an in memory implementation of the Blobstore interface
 type InMemoryBlobstore struct {
-	path     string
-	mutex    sync.RWMutex
 	blobs    map[string][]byte
 	versions map[string]string
+	path     string
+	mutex    sync.RWMutex
 }
 
 var _ Blobstore = &InMemoryBlobstore{}

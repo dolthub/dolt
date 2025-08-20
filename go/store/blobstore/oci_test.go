@@ -30,8 +30,8 @@ import (
 )
 
 type testUploadPart struct {
-	b  []byte
 	cp objectstorage.CommitMultipartUploadPartDetails
+	b  []byte
 }
 
 type uploadCollector struct {

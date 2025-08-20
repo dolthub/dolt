@@ -33,8 +33,8 @@ const (
 type OSSBlobstore struct {
 	bucket        *oss.Bucket
 	bucketName    string
-	enableVersion bool
 	prefix        string
+	enableVersion bool
 }
 
 var _ Blobstore = &OSSBlobstore{}
