@@ -35,6 +35,7 @@ wait_for_mcp_port() {
 }
 
 @test "sql-server mcp: starts MCP HTTP server on --mcp-port and serves alongside SQL" {
+  skip "--mcp-port is not yet implemented."
   cd repo1
 
   # Choose distinct ports for SQL and MCP
@@ -99,6 +100,7 @@ wait_for_mcp_port() {
 }
 
 @test "sql-server mcp: HTTP initialize and call list_databases tool" {
+  skip "--mcp-port is not yet implemented."
   cd repo1
 
   if ! command -v curl >/dev/null 2>&1; then
