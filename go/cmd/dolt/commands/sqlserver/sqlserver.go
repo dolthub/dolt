@@ -277,11 +277,26 @@ func StartServer(ctx context.Context, versionStr, commandStr string, args []stri
         mcpPortPtr = &mcpPort
     }
 
-    // If MCP is enabled and no explicit root host override exists, set root host to 127.0.0.1
-    // so the MCP can authenticate as root over TCP.
+    // Validate MCP port range and conflicts
+    if mcpPortPtr != nil {
+        if *mcpPortPtr <= 0 || *mcpPortPtr > 65535 {
+            return fmt.Errorf("invalid value for --%s '%d'", mcpPortFlag, *mcpPortPtr)
+        }
+        // Disallow MCP and SQL server using the same port
+        if serverConfig.Port() == *mcpPortPtr {
+            return fmt.Errorf("--%s must differ from --%s (both set to %d)", mcpPortFlag, portFlag, *mcpPortPtr)
+        }
+    }
+
+    // If MCP is enabled and no explicit root host override exists, set DOLT_ROOT_HOST dynamically
+    // to the SQL listener host, defaulting to 127.0.0.1 when unspecified or unspecified wildcard.
     if mcpPortPtr != nil {
         if _, ok := os.LookupEnv(dconfig.EnvDoltRootHost); !ok {
-            _ = os.Setenv(dconfig.EnvDoltRootHost, "127.0.0.1")
+            hostForRoot := serverConfig.Host()
+            if hostForRoot == "" || hostForRoot == "0.0.0.0" || hostForRoot == "::" {
+                hostForRoot = "127.0.0.1"
+            }
+            _ = os.Setenv(dconfig.EnvDoltRootHost, hostForRoot)
         }
     }
 

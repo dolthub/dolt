@@ -906,8 +906,8 @@ func ConfigureServices(
                 dbConf := mcpdb.Config{
                     Host:         "127.0.0.1",
 					Port:         cfg.ServerConfig.Port(),
-					User:         servercfg.DefaultUser, // root
-					Password:     os.Getenv(dconfig.EnvDoltRootPassword),
+                    User:         servercfg.DefaultUser, // root
+                    Password:     os.Getenv(dconfig.EnvDoltRootPassword),
 					DatabaseName: "",
 				}
 
