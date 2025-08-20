@@ -34,6 +34,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/expranalysis"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
@@ -75,6 +76,7 @@ type DoltSession struct {
 var _ sql.Session = (*DoltSession)(nil)
 var _ sql.PersistableSession = (*DoltSession)(nil)
 var _ sql.TransactionSession = (*DoltSession)(nil)
+var _ expranalysis.Session = (*DoltSession)(nil)
 var _ branch_control.ContextConvertible = (*DoltSession)(nil)
 
 // DefaultSession creates a DoltSession with default values
@@ -132,6 +134,17 @@ func NewDoltSession(
 // Provider returns the RevisionDatabaseProvider for this session.
 func (d *DoltSession) Provider() DoltDatabaseProvider {
 	return d.provider
+}
+
+// GenericProvider returns the sql.MutableDatabaseProvider for this session. This allows access to the provider without
+// incurring import cycles in some cases.
+func (d *DoltSession) GenericProvider() sql.MutableDatabaseProvider {
+	return d.provider
+}
+
+// HasDoltgresObjects returns whether the session has Doltgres objects.
+func (d *DoltSession) HasDoltgresObjects() bool {
+	return d.DoltgresSessObj != nil
 }
 
 // StatsProvider returns the sql.StatsProvider for this session.

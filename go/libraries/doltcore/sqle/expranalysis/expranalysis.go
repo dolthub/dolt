@@ -84,6 +84,12 @@ func stripTableNamesFromExpression(expr sql.Expression, quoted bool) sql.Express
 	return e
 }
 
+// Session is a way to access the Dolt session without import cycles.
+type Session interface {
+	GenericProvider() sql.MutableDatabaseProvider
+	HasDoltgresObjects() bool
+}
+
 func parseCreateTable(ctx *sql.Context, tableName string, sch schema.Schema) (*plan.CreateTable, error) {
 	createTable, err := sqlfmt.GenerateCreateTableStatement(tableName, sch, nil, nil)
 	if err != nil {
@@ -92,16 +98,26 @@ func parseCreateTable(ctx *sql.Context, tableName string, sch schema.Schema) (*p
 
 	query := createTable
 
-	mockDatabase := memory.NewDatabase("mydb")
-	mockProvider := memory.NewDBProvider(mockDatabase)
-	catalog := analyzer.NewCatalog(mockProvider)
-	catalog.AuthHandler = sql.NoopAuthorizationHandler{}
+	// Dolt creates a new provider (is that necessary?), while Doltgres must use the existing provider, so we split the
+	// logic here depending on whether this is Dolt or Doltgres.
+	var b *planbuilder.Builder
+	sess, ok := ctx.Session.(Session)
+	if ok && sess.HasDoltgresObjects() {
+		catalog := analyzer.NewCatalog(sess.GenericProvider())
+		catalog.AuthHandler = sql.NoopAuthorizationHandler{}
+		b = planbuilder.New(ctx, catalog, nil, nil)
+	} else {
+		mockDatabase := memory.NewDatabase("mydb")
+		mockProvider := memory.NewDBProvider(mockDatabase)
+		catalog := analyzer.NewCatalog(mockProvider)
+		catalog.AuthHandler = sql.NoopAuthorizationHandler{}
+		// We need a new context for this operation
+		parseCtx := sql.NewEmptyContext()
+		parseCtx.SetCurrentDatabase("mydb")
 
-	// We need a new context for this operation
-	parseCtx := sql.NewEmptyContext()
-	parseCtx.SetCurrentDatabase("mydb")
+		b = planbuilder.New(ctx, catalog, nil, nil)
+	}
 
-	b := planbuilder.New(parseCtx, catalog, nil, nil)
 	pseudoAnalyzedQuery, _, _, _, err := b.Parse(query, nil, false)
 	if err != nil {
 		return nil, err

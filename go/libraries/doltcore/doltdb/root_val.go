@@ -87,6 +87,8 @@ type RootValue interface {
 	GetTableHash(ctx context.Context, tName TableName) (hash.Hash, bool, error)
 	// GetTableSchemaHash returns the hash of the given table's schema.
 	GetTableSchemaHash(ctx context.Context, tName TableName) (hash.Hash, error)
+	// GetTableNames retrieves the names of all tables and root objects for a RootValue across all schemas.
+	GetAllTableNames(ctx context.Context, includeRootObjects bool) ([]TableName, error)
 	// GetTableNames retrieves the lists of all tables and root objects for a RootValue.
 	GetTableNames(ctx context.Context, schemaName string, includeRootObjects bool) ([]string, error)
 	// HasTable returns whether the root has a table with the given case-sensitive name. This will also return true if a
@@ -621,6 +623,22 @@ func GetTableByColTag(ctx context.Context, root RootValue, tag uint64) (tbl *Tab
 	}
 
 	return tbl, name, found, nil
+}
+
+// GetTableNames retrieves the lists of all tables for a RootValue
+func (root *rootValue) GetAllTableNames(ctx context.Context, _ bool) ([]TableName, error) {
+	names, err := root.GetTableNames(ctx, DefaultSchemaName, false)
+	if err != nil {
+		return nil, err
+	}
+	tblNames := make([]TableName, len(names))
+	for i, name := range names {
+		tblNames[i] = TableName{
+			Name:   name,
+			Schema: DefaultSchemaName,
+		}
+	}
+	return tblNames, nil
 }
 
 // GetTableNames retrieves the lists of all tables for a RootValue
