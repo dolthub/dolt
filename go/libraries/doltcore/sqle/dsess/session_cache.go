@@ -68,8 +68,8 @@ type revisionDbCacheKey struct {
 }
 
 type sessionVarCacheKey struct {
-	root doltdb.DataCacheKey
 	head string
+	root doltdb.DataCacheKey
 }
 
 const maxCachedKeys = 64
@@ -347,8 +347,8 @@ func (c *SessionCache) GetCachedViewDefinition(key doltdb.DataCacheKey, viewName
 }
 
 type TableSchemaKey struct {
-	key    doltdb.DataCacheKey
 	schema string
+	key    doltdb.DataCacheKey
 }
 
 // CacheTriggers caches all views in a database for the cache key given

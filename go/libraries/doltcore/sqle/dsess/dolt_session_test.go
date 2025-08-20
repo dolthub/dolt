@@ -51,8 +51,8 @@ func TestNewPersistedSystemVariables(t *testing.T) {
 
 func TestValidatePeristableSystemVar(t *testing.T) {
 	tests := []struct {
-		Name string
 		Err  *errors.Kind
+		Name string
 	}{
 		{
 			Name: "max_connections",
@@ -82,10 +82,10 @@ func TestValidatePeristableSystemVar(t *testing.T) {
 
 func TestSetPersistedValue(t *testing.T) {
 	tests := []struct {
-		Name        string
 		Value       interface{}
 		ExpectedRes interface{}
 		Err         *errors.Kind
+		Name        string
 	}{
 		{
 			Name:  "int",
@@ -174,9 +174,9 @@ func TestSetPersistedValue(t *testing.T) {
 
 func TestGetPersistedValue(t *testing.T) {
 	tests := []struct {
+		ExpectedRes interface{}
 		Name        string
 		Value       string
-		ExpectedRes interface{}
 		Err         bool
 	}{
 		{
