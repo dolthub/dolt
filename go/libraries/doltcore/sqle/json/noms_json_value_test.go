@@ -32,8 +32,8 @@ import (
 
 func TestJSONValueMarshallingRoundTrip(t *testing.T) {
 	tests := []struct {
-		name string
 		doc  gmstypes.JSONDocument
+		name string
 	}{
 		{
 			name: "smoke",
