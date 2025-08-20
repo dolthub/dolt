@@ -394,7 +394,7 @@ var MergeScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{5}}, // includes the merge commit created by no-ff and setup commits
 			},
 			{
-				Query:    "select message from dolt_log order by date DESC LIMIT 1;",
+				Query:    "SET dolt_log_compact_schema = 0; select message from dolt_log order by author_date DESC LIMIT 1;",
 				Expected: []sql.Row{{"this is a no-ff"}}, // includes the merge commit created by no-ff
 			},
 			{
@@ -437,7 +437,7 @@ var MergeScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{5}}, // includes the merge commit created by no-ff and setup commits
 			},
 			{
-				Query:    "select message from dolt_log order by date DESC LIMIT 1;",
+				Query:    "SET dolt_log_compact_schema = 0; select message from dolt_log order by author_date DESC LIMIT 1;",
 				Expected: []sql.Row{{"this is a no-ff"}}, // includes the merge commit created by no-ff
 			},
 			{
@@ -482,7 +482,7 @@ var MergeScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{6}},
 			},
 			{
-				Query:    "select message from dolt_log where date > '2022-08-08' order by date DESC LIMIT 1;",
+				Query:    "SET dolt_log_compact_schema = 0; select message from dolt_log where author_date > '2022-08-08' order by author_date DESC LIMIT 1;",
 				Expected: []sql.Row{{"this is a merge"}},
 			},
 		},
@@ -522,7 +522,7 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				// careful to filter out the initial commit, which will be later than the ones above
-				Query:    "select message from dolt_log where date < '2022-08-08' order by date DESC LIMIT 1;",
+				Query:    "SET dolt_log_compact_schema = 0; select message from dolt_log where author_date < '2022-08-08' order by author_date DESC LIMIT 1;",
 				Expected: []sql.Row{{"add some more values"}},
 			},
 			{
@@ -585,7 +585,7 @@ var MergeScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{4}},
 			},
 			{
-				Query:    "select message from dolt_log where date < '2022-08-08' order by date DESC LIMIT 1;",
+				Query:    "SET dolt_log_compact_schema = 0; select message from dolt_log where author_date < '2022-08-08' order by author_date DESC LIMIT 1;",
 				Expected: []sql.Row{{"update a value"}},
 			},
 			{
@@ -690,7 +690,7 @@ var MergeScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{4}},
 			},
 			{
-				Query:    "select message from dolt_log where date < '2022-08-08' order by date DESC LIMIT 1;",
+				Query:    "SET dolt_log_compact_schema = 0; select message from dolt_log where author_date < '2022-08-08' order by author_date DESC LIMIT 1;",
 				Expected: []sql.Row{{"update a value"}},
 			},
 			{
@@ -785,7 +785,7 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Skip:     true,
-				Query:    "select message from dolt_log where date < '2022-08-08' order by date DESC LIMIT 1;",
+				Query:    "SET dolt_log_compact_schema = 0; select message from dolt_log where author_date < '2022-08-08' order by author_date DESC LIMIT 1;",
 				Expected: []sql.Row{{"update val col"}},
 			},
 			{
@@ -1059,7 +1059,7 @@ var MergeScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{5}}, // includes the merge commit created by no-ff and setup commits
 			},
 			{
-				Query:    "select message from dolt_log order by date DESC LIMIT 1;",
+				Query:    "SET dolt_log_compact_schema = 0; select message from dolt_log order by author_date DESC LIMIT 1;",
 				Expected: []sql.Row{{"this is a no-ff"}}, // includes the merge commit created by no-ff
 			},
 			{
@@ -1101,7 +1101,7 @@ var MergeScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{6}}, // includes the merge commit and a new commit created by successful merge
 			},
 			{
-				Query:    "select message from dolt_log where date > '2022-08-08' order by date DESC LIMIT 1;",
+				Query:    "SET dolt_log_compact_schema = 0; select message from dolt_log where author_date > '2022-08-08' order by author_date DESC LIMIT 1;",
 				Expected: []sql.Row{{"this is a merge"}},
 			},
 		},
@@ -1140,7 +1140,7 @@ var MergeScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{6}}, // includes the merge commit and a new commit created by successful merge
 			},
 			{
-				Query:    "select message from dolt_log where date > '2022-08-08' order by date DESC LIMIT 1;",
+				Query:    "SET dolt_log_compact_schema = 0; select message from dolt_log where author_date > '2022-08-08' order by author_date DESC LIMIT 1;",
 				Expected: []sql.Row{{"this is a merge"}},
 			},
 			{
@@ -1190,7 +1190,7 @@ var MergeScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{4}},
 			},
 			{
-				Query:    "select message from dolt_log where date < '2022-08-08' order by date DESC LIMIT 1;",
+				Query:    "SET dolt_log_compact_schema = 0; select message from dolt_log where author_date < '2022-08-08' order by author_date DESC LIMIT 1;",
 				Expected: []sql.Row{{"add some more values"}},
 			},
 			{

@@ -37,9 +37,9 @@ const logsDefaultRowCount = 100
 type LogSchemaType int
 
 const (
-	LogSchemaTypeAuto LogSchemaType = iota // Use session variable
-	LogSchemaTypeCompact                   // Force compact schema
-	LogSchemaTypeFull                      // Force full/extended schema
+	LogSchemaTypeAuto    LogSchemaType = iota // Use session variable
+	LogSchemaTypeCompact                      // Force compact schema
+	LogSchemaTypeFull                         // Force full/extended schema
 )
 
 // LogTable is a sql.Table implementation that implements a system table which shows the dolt commit log
@@ -50,8 +50,8 @@ type LogTable struct {
 	head              *doltdb.Commit
 	headHash          hash.Hash
 	headCommitClosure *prolly.CommitClosure
-	ctx               *sql.Context   // session context used for sysvar lookup
-	schemaType        LogSchemaType  // determines which schema to use
+	ctx               *sql.Context  // session context used for sysvar lookup
+	schemaType        LogSchemaType // determines which schema to use
 }
 
 var _ sql.Table = (*LogTable)(nil)
@@ -114,14 +114,14 @@ func buildCompactRow(commitHash hash.Hash, meta *datas.CommitMeta, height uint64
 func buildFullRow(commitHash hash.Hash, meta *datas.CommitMeta, height uint64) sql.Row {
 	values := []interface{}{
 		commitHash.String(),
-		datas.ValueOrDefault(meta.CommitterName, meta.Name),     // committer
-		datas.ValueOrDefault(meta.CommitterEmail, meta.Email),  // committer_email
-		meta.CommitterTime(),                                   // committer_date
-		meta.Description,                                       // message
-		height,                                                 // commit_order
-		meta.Name,                                             // author
-		meta.Email,                                            // author_email  
-		meta.Time(),                                           // author_date
+		datas.ValueOrDefault(meta.CommitterName, meta.Name),   // committer
+		datas.ValueOrDefault(meta.CommitterEmail, meta.Email), // committer_email
+		meta.CommitterTime(), // committer_date
+		meta.Description,     // message
+		height,               // commit_order
+		meta.Name,            // author
+		meta.Email,           // author_email
+		meta.Time(),          // author_date
 	}
 	return sql.NewRow(values...)
 }
@@ -200,7 +200,7 @@ func GetLogTableSchema(ctx *sql.Context, tableName, dbName string) sql.Schema {
 // Schema is a sql.Table interface function that gets the sql.Schema of the log system table.
 func (dt *LogTable) Schema() sql.Schema {
 	var baseSchema sql.Schema
-	
+
 	switch dt.schemaType {
 	case LogSchemaTypeCompact:
 		baseSchema = make(sql.Schema, len(LogSchemaCompact))
@@ -212,7 +212,7 @@ func (dt *LogTable) Schema() sql.Schema {
 	case LogSchemaTypeAuto:
 		return GetLogTableSchema(dt.ctx, dt.tableName, dt.dbName)
 	}
-	
+
 	// Set metadata for forced schemas
 	for _, col := range baseSchema {
 		col.Source = dt.tableName

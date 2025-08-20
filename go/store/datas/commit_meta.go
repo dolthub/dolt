@@ -142,8 +142,8 @@ func NewCommitMetaWithUserTS(name, email, desc string, userTS time.Time) (*Commi
 		Description:    d,
 		UserTimestamp:  authorDateMillis,
 		Signature:      "",
-		CommitterName:  nil,  // Same as author, no need to store separately
-		CommitterEmail: nil,  // Same as author, no need to store separately
+		CommitterName:  nil, // Same as author, no need to store separately
+		CommitterEmail: nil, // Same as author, no need to store separately
 	}, nil
 }
 
@@ -271,8 +271,8 @@ func CommitMetaFromNomsSt(st types.Struct) (*CommitMeta, error) {
 		Description:    description,
 		UserTimestamp:  int64(userTS.(types.Int)),
 		Signature:      sig,
-		CommitterName:  nil,  // Old commits don't have separate committer info
-		CommitterEmail: nil,  // Old commits don't have separate committer info
+		CommitterName:  nil, // Old commits don't have separate committer info
+		CommitterEmail: nil, // Old commits don't have separate committer info
 	}, nil
 }
 
