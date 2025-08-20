@@ -31,13 +31,11 @@ import (
 var _ sql.RowIter = (*keylessRowIter)(nil)
 
 type keylessRowIter struct {
-	keyedIter *index.DoltMapIter
-
+	keyedIter   *index.DoltMapIter
+	lastRead    sql.Row
 	cardIdx     int
 	nonCardCols int
-
-	lastRead sql.Row
-	lastCard uint64
+	lastCard    uint64
 }
 
 func (k *keylessRowIter) Next(ctx *sql.Context) (sql.Row, error) {
