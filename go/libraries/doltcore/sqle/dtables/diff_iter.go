@@ -218,7 +218,7 @@ type prollyDiffIter struct {
 	from   prolly.Map
 	to     prolly.Map
 	ranges []prolly.Range
-	
+
 	keyless bool
 }
 

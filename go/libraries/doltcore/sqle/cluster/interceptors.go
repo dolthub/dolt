@@ -194,7 +194,7 @@ func (ci *clientinterceptor) Options() []grpc.DialOption {
 type serverinterceptor struct {
 	keyProvider jwtauth.KeyProvider
 	jwtExpected jwt.Expected
-	
+
 	lgr        *logrus.Entry
 	roleSetter func(role string, epoch int)
 	role       Role

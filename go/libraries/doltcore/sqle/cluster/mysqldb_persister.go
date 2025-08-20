@@ -40,7 +40,7 @@ type replicatingMySQLDbPersister struct {
 	base     MySQLDbPersister
 	current  []byte
 	replicas []*mysqlDbReplica
-	
+
 	mu      sync.Mutex
 	version uint32
 }
