@@ -192,6 +192,10 @@ func (rs *RemoteChunkStore) GetDownloadLocations(ctx context.Context, req *remot
 
 		var ranges []*remotesapi.RangeChunk
 		for h, r := range hashToRange {
+			if r.DictLength != 0 {
+				return nil, status.Error(codes.Aborted, "upgrade your dolt client; it is too old to read these files")
+			}
+
 			hCpy := h
 			ranges = append(ranges, &remotesapi.RangeChunk{Hash: hCpy[:], Offset: r.Offset, Length: r.Length})
 		}
