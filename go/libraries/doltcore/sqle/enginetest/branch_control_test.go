@@ -39,12 +39,12 @@ type BranchControlTest struct {
 
 // BranchControlTestAssertion is within a BranchControlTest to assert functionality.
 type BranchControlTestAssertion struct {
+	ExpectedErr    *errors.Kind
 	User           string
 	Host           string
 	Query          string
-	Expected       []sql.Row
-	ExpectedErr    *errors.Kind
 	ExpectedErrStr string
+	Expected       []sql.Row
 }
 
 // BranchControlBlockTest are tests for quickly verifying that a command is blocked before the appropriate entry is
@@ -52,11 +52,11 @@ type BranchControlTestAssertion struct {
 // therefore any set up here is essentially appended to `TestUserSetUpScripts`. In addition, the test user is
 // `testuser`@`localhost`.
 type BranchControlBlockTest struct {
-	Name        string
-	SetUpScript []string
-	Query       string
 	ExpectedErr *errors.Kind
+	Name        string
+	Query       string
 	SkipMessage string
+	SetUpScript []string
 }
 
 // TestUserSetUpScripts creates a user named "testuser@localhost", and grants them privileges on all databases and

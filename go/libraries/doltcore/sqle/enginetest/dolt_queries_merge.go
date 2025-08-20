@@ -31,22 +31,22 @@ import (
 )
 
 type MergeScriptTest struct {
-	// Name of the script test
-	Name string
-	// The sql statements to generate the ancestor commit
-	AncSetUpScript []string
-	// The sql statements to generate the right commit
-	RightSetUpScript []string
-	// The sql statements to generate the left commit
-	LeftSetUpScript []string
-	// The set of assertions to make after setup, in order
-	Assertions []queries.ScriptTestAssertion
-	// For tests that make a single assertion, Query can be set for the single assertion
-	Query string
-	// For tests that make a single assertion, Expected can be set for the single assertion
-	Expected []sql.Row
 	// For tests that make a single assertion, ExpectedErr can be set for the expected error
 	ExpectedErr *errors.Kind
+	// Name of the script test
+	Name string
+	// For tests that make a single assertion, Query can be set for the single assertion
+	Query string
+	// The sql statements to generate the ancestor commit
+	AncSetUpScript []string
+	// The sql statements to generate the left commit
+	LeftSetUpScript []string
+	// The sql statements to generate the right commit
+	RightSetUpScript []string
+	// The set of assertions to make after setup, in order
+	Assertions []queries.ScriptTestAssertion
+	// For tests that make a single assertion, Expected can be set for the single assertion
+	Expected []sql.Row
 	// SkipPrepared is true when we skip a test for prepared statements only
 	SkipPrepared bool
 }
