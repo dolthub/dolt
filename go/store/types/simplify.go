@@ -151,7 +151,7 @@ func cloneTypeTreeAndReplaceNamedStructs(t *Type, namedStructs map[string]struct
 			for i, et := range t.Desc.(CompoundDesc).ElemTypes {
 				elemTypes[i] = rec(et)
 			}
-			return newType(CompoundDesc{kind, elemTypes})
+			return newType(CompoundDesc{kind: kind, ElemTypes: elemTypes})
 		case StructKind:
 			desc := t.Desc.(StructDesc)
 			name := desc.Name
@@ -170,7 +170,7 @@ func cloneTypeTreeAndReplaceNamedStructs(t *Type, namedStructs map[string]struct
 
 			fields := make(structTypeFields, len(desc.fields))
 			for i, f := range desc.fields {
-				fields[i] = StructField{f.Name, rec(f.Type), f.Optional}
+				fields[i] = StructField{rec(f.Type), f.Name, f.Optional}
 			}
 			newStruct := newType(StructDesc{name, fields})
 			if name == "" {
@@ -236,7 +236,7 @@ func foldUnions(t *Type, seenStructs typeset, intersectStructs bool) (*Type, err
 				ts.add(t)
 			}
 			if len(ts) == 0 {
-				t.Desc = CompoundDesc{UnionKind, nil}
+				t.Desc = CompoundDesc{kind: UnionKind, ElemTypes: nil}
 				return t, nil
 			}
 			return foldUnionImpl(ts, seenStructs, intersectStructs)
@@ -250,8 +250,8 @@ func foldUnions(t *Type, seenStructs typeset, intersectStructs bool) (*Type, err
 
 func foldUnionImpl(ts typeset, seenStructs typeset, intersectStructs bool) (*Type, error) {
 	type how struct {
-		k NomsKind
 		n string
+		k NomsKind
 	}
 	out := make(typeSlice, 0, len(ts))
 	groups := map[how]typeset{}
@@ -315,7 +315,7 @@ func foldUnionImpl(ts typeset, seenStructs typeset, intersectStructs bool) (*Typ
 
 	sort.Sort(out)
 
-	return newType(CompoundDesc{UnionKind, out}), nil
+	return newType(CompoundDesc{kind: UnionKind, ElemTypes: out}), nil
 }
 
 func foldCompoundTypesForUnion(k NomsKind, ts, seenStructs typeset, intersectStructs bool) (*Type, error) {
@@ -391,9 +391,9 @@ func simplifyStructFields(in []structTypeFields, seenStructs typeset, intersectS
 
 	// If intersectStructs is true we need to pick the more restrictive version (n: T over n?: T).
 	type fieldTypeInfo struct {
-		anyNonOptional bool
-		count          int
 		ts             typeSlice
+		count          int
+		anyNonOptional bool
 	}
 	allFields := map[string]fieldTypeInfo{}
 

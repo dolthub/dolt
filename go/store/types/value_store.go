@@ -70,17 +70,16 @@ type ValueReadWriter interface {
 // - v can be correctly serialized and its Ref taken
 type ValueStore struct {
 	cs                  chunks.ChunkStore
-	validateContentAddr bool
 	decodedChunks       *sizecache.SizeCache
 	nbf                 *NomsBinFormat
+	gcCond              *sync.Cond
+	gcNewAddrs          hash.HashSet
+	gcState             gcState
+	gcOut               int
 	versOnce            sync.Once
+	gcMu                sync.Mutex
+	validateContentAddr bool
 	skipWriteCaching    bool
-
-	gcMu       sync.Mutex
-	gcCond     *sync.Cond
-	gcState    gcState
-	gcOut      int
-	gcNewAddrs hash.HashSet
 }
 
 type gcState int

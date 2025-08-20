@@ -26,8 +26,8 @@ import (
 
 // GeomColl is a Noms Value wrapper around a string.
 type GeomColl struct {
-	SRID       uint32
 	Geometries []Value
+	SRID       uint32
 }
 
 // Value interface

@@ -72,8 +72,8 @@ func (p PrimitiveDesc) isSimplifiedInner() bool {
 // CompoundDesc describes a List, Map, Set, Ref, or Union type.
 // ElemTypes indicates what type or types are in the container indicated by kind, e.g. Map key and value or Set element.
 type CompoundDesc struct {
-	kind      NomsKind
 	ElemTypes typeSlice
+	kind      NomsKind
 }
 
 func (c CompoundDesc) Kind() NomsKind {

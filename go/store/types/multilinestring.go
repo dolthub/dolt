@@ -26,8 +26,8 @@ import (
 
 // MultiLineString is a Noms Value wrapper around a string.
 type MultiLineString struct {
-	SRID  uint32
 	Lines []LineString
+	SRID  uint32
 }
 
 // Value interface

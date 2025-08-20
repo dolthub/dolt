@@ -22,11 +22,11 @@ import (
 
 // KVPCollection is a collection of sorted KVPs
 type KVPCollection struct {
+	vr        types.ValueReader
+	slices    []types.KVPSlice
 	buffSize  int
 	numSlices int
 	totalSize int64
-	slices    []types.KVPSlice
-	vr        types.ValueReader
 }
 
 // NewKVPCollection creates a new KVPCollection from a sorted KVPSlice
@@ -39,7 +39,7 @@ func newKVPColl(vr types.ValueReader, maxSize, numSlices int, totalSize int64, s
 		panic("invalid params")
 	}
 
-	return &KVPCollection{maxSize, numSlices, totalSize, slices, vr}
+	return &KVPCollection{vr, slices, maxSize, numSlices, totalSize}
 }
 
 // Size returns the total number of elements in the collection
