@@ -37,9 +37,9 @@ const logsDefaultRowCount = 100
 type LogSchemaType int
 
 const (
-	LogSchemaTypeAuto LogSchemaType = iota // Use session variable
-	LogSchemaTypeCompact                   // Force compact schema
-	LogSchemaTypeFull                      // Force full/extended schema
+	LogSchemaTypeAuto LogSchemaType = iota
+	LogSchemaTypeCompact
+	LogSchemaTypeFull
 )
 
 // LogTable is a sql.Table implementation that implements a system table which shows the dolt commit log
@@ -114,14 +114,14 @@ func buildCompactRow(commitHash hash.Hash, meta *datas.CommitMeta, height uint64
 func buildFullRow(commitHash hash.Hash, meta *datas.CommitMeta, height uint64) sql.Row {
 	values := []interface{}{
 		commitHash.String(),
-		datas.ValueOrDefault(meta.CommitterName, meta.Name),     // committer
-		datas.ValueOrDefault(meta.CommitterEmail, meta.Email),  // committer_email
-		meta.CommitterTime(),                                   // committer_date
-		meta.Description,                                       // message
-		height,                                                 // commit_order
-		meta.Name,                                             // author
-		meta.Email,                                            // author_email
-		meta.Time(),                                           // author_date
+		datas.ValueOrDefault(meta.CommitterName, meta.Name),
+		datas.ValueOrDefault(meta.CommitterEmail, meta.Email),
+		meta.CommitterTime(),
+		meta.Description,
+		height,
+		meta.Name,
+		meta.Email,
+		meta.Time(),
 	}
 	return sql.NewRow(values...)
 }
