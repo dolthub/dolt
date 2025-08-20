@@ -22,14 +22,6 @@ import (
 )
 
 type ReplicaStatus struct {
-	// The name of the database this replica status represents.
-	Database string
-	// The role this server is currently running as. "primary" or "standby".
-	Role string
-	// The epoch of this server's current role.
-	Epoch int
-	// The standby remote that this replica status represents.
-	Remote string
 	// The current replication lag. NULL when we are a standby.
 	ReplicationLag *time.Duration
 	// As a standby, the last time we received a root update.
@@ -38,6 +30,14 @@ type ReplicaStatus struct {
 	// A string describing the last encountered error.  NULL when we are a
 	// standby. NULL when our last replication attempt succeeded.
 	CurrentError *string
+	// The name of the database this replica status represents.
+	Database string
+	// The role this server is currently running as. "primary" or "standby".
+	Role string
+	// The standby remote that this replica status represents.
+	Remote string
+	// The epoch of this server's current role.
+	Epoch int
 }
 
 type ClusterStatusProvider interface {
