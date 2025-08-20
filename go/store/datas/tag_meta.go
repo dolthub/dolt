@@ -41,8 +41,8 @@ var TagLoc = CommitLoc
 type TagMeta struct {
 	Name          string
 	Email         string
-	Timestamp     uint64
 	Description   string
+	Timestamp     uint64
 	UserTimestamp int64
 }
 
@@ -61,7 +61,7 @@ func NewTagMetaWithUserTS(name, email, desc string, userTS time.Time) *TagMeta {
 	ms := uint64(TagNowFunc().UnixMilli())
 	userMS := userTS.UnixMilli()
 
-	return &TagMeta{n, e, ms, d, userMS}
+	return &TagMeta{n, e, d, ms, userMS}
 }
 
 func tagMetaFromNomsSt(st types.Struct) (*TagMeta, error) {
@@ -98,11 +98,11 @@ func tagMetaFromNomsSt(st types.Struct) (*TagMeta, error) {
 	}
 
 	return &TagMeta{
-		string(n.(types.String)),
-		string(e.(types.String)),
-		uint64(ts.(types.Uint)),
-		string(d.(types.String)),
-		int64(userTS.(types.Int)),
+		Name:          string(n.(types.String)),
+		Email:         string(e.(types.String)),
+		Description:   string(d.(types.String)),
+		Timestamp:     uint64(ts.(types.Uint)),
+		UserTimestamp: int64(userTS.(types.Int)),
 	}, nil
 }
 

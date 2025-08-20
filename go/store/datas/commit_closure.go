@@ -215,8 +215,8 @@ func (i *parentsClosureIterator) Next(ctx context.Context) bool {
 
 type fbParentsClosureIterator struct {
 	i    prolly.CommitClosureIter
-	curr prolly.CommitClosureKey
 	err  error
+	curr prolly.CommitClosureKey
 }
 
 func (i *fbParentsClosureIterator) Err() error {

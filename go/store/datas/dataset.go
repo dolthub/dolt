@@ -155,19 +155,19 @@ func validateDatasetIdComponent(refname string) (int, error) {
 
 type WorkingSetHead struct {
 	Meta        *WorkingSetMeta
-	WorkingAddr hash.Hash
 	StagedAddr  *hash.Hash
 	MergeState  *MergeState
 	RebaseState *RebaseState
+	WorkingAddr hash.Hash
 }
 
 type RebaseState struct {
 	preRebaseWorkingAddr       *hash.Hash
 	ontoCommitAddr             *hash.Hash
 	branch                     string
+	lastAttemptedStep          float32
 	commitBecomesEmptyHandling uint8
 	emptyCommitHandling        uint8
-	lastAttemptedStep          float32
 	rebasingStarted            bool
 }
 
@@ -209,12 +209,11 @@ func (rs *RebaseState) EmptyCommitHandling(_ context.Context) uint8 {
 type MergeState struct {
 	preMergeWorkingAddr *hash.Hash
 	fromCommitAddr      *hash.Hash
+	nomsMergeStateRef   *types.Ref
+	nomsMergeState      *types.Struct
 	fromCommitSpec      string
 	unmergableTables    []string
 	isCherryPick        bool
-
-	nomsMergeStateRef *types.Ref
-	nomsMergeState    *types.Struct
 }
 
 func (ms *MergeState) loadIfNeeded(ctx context.Context, vr types.ValueReader) error {
@@ -597,9 +596,9 @@ func (s tupleHead) value() types.Value {
 // Dataset is a named value within a Database. Different head values may be stored in a dataset. Most commonly, this is
 // a commit, but other values are also supported in some cases.
 type Dataset struct {
+	head dsHead
 	db   *database
 	id   string
-	head dsHead
 }
 
 // LoadRootNomsValueFromRootIshAddr returns the types.Value encoded root value
@@ -684,7 +683,7 @@ func newDataset(ctx context.Context, db *database, id string, head types.Value, 
 	if err != nil {
 		return Dataset{}, err
 	}
-	return Dataset{db, id, h}, nil
+	return Dataset{h, db, id}, nil
 }
 
 // Database returns the Database object in which this Dataset is stored.

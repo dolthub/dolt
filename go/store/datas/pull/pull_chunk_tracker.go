@@ -28,9 +28,8 @@ type HasManyer interface {
 }
 
 type TrackerConfig struct {
-	BatchSize int
-
 	HasManyer HasManyer
+	BatchSize int
 }
 
 const hasManyThreadCount = 3
@@ -291,8 +290,8 @@ type trackerHasManyResp struct {
 // If |ok| is |false|, then the Tracker is closing because every absent address
 // has been delivered.
 type trackerGetAbsentReq struct {
-	hs    hash.HashSet
 	err   error
-	ok    bool
+	hs    hash.HashSet
 	ready chan struct{}
+	ok    bool
 }
