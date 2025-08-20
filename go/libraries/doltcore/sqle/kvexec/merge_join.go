@@ -52,16 +52,13 @@ func newMergeKvIter(
 }
 
 type mergeJoinKvIter struct {
-	leftIter prolly.MapIter
-	leftKey  val.Tuple
-	leftVal  val.Tuple
+	leftFilter  sql.Expression
+	rightFilter sql.Expression
+	leftIter    prolly.MapIter
+	rightIter   prolly.MapIter
 
-	rightIter prolly.MapIter
-	rightKey  val.Tuple
-	rightVal  val.Tuple
-
-	lrCmp func(val.Tuple, val.Tuple, val.Tuple, val.Tuple) int
-	llCmp func(val.Tuple, val.Tuple, val.Tuple, val.Tuple) int
+	// projections
+	joiner *prollyToSqlJoiner
 
 	// Non-covering secondary index reads are faster separated
 	// from the initial mapIter, because we avoid unnecessary
@@ -71,20 +68,20 @@ type mergeJoinKvIter struct {
 	leftNorm  coveringNormalizer
 	rightNorm coveringNormalizer
 
+	lrCmp func(val.Tuple, val.Tuple, val.Tuple, val.Tuple) int
+	llCmp func(val.Tuple, val.Tuple, val.Tuple, val.Tuple) int
+
+	lookaheadBuf [][]byte
+	joinFilters  []sql.Expression
+
+	leftKey      val.Tuple
+	leftVal      val.Tuple
+	rightKey     val.Tuple
+	rightVal     val.Tuple
 	nextRightKey val.Tuple
 	nextRightVal val.Tuple
 
-	lookaheadBuf [][]byte
-	matchPos     int
-
-	// projections
-	joiner *prollyToSqlJoiner
-
-	// todo: we want to build KV-side static expression implementations
-	// so that we can execute filters more efficiently
-	joinFilters []sql.Expression
-	leftFilter  sql.Expression
-	rightFilter sql.Expression
+	matchPos int
 
 	// LEFT_JOIN impl details
 	excludeNulls bool

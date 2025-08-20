@@ -34,8 +34,8 @@ import (
 func TestCountAgg(t *testing.T) {
 	tests := []struct {
 		name      string
-		setup     []string
 		query     string
+		setup     []string
 		doRowexec bool
 	}{
 		{
