@@ -45,11 +45,11 @@ type test struct {
 }
 
 type updateTest struct {
-	name           string
 	row            row.Row
 	sch            schema.Schema
-	expectedOutput string
 	collDiff       *set.StrSet
+	name           string
+	expectedOutput string
 }
 
 func TestTableDropStmt(t *testing.T) {
