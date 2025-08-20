@@ -29,26 +29,16 @@ import (
 // InitialDbState is the initial state of a database, as returned by SessionDatabase.InitialDBState. It is used to
 // establish the in memory state of the session for every new transaction.
 type InitialDbState struct {
-	Db sql.Database
-	// WorkingSet is the working set for this database. May be nil for databases tied to a detached root value, in which
-	// case HeadCommit must be set
+	DbData     env.DbData[*sql.Context]
+	Db         sql.Database
+	HeadRoot   doltdb.RootValue
+	Err        error
 	WorkingSet *doltdb.WorkingSet
-	// The head commit for this database. May be nil for databases tied to a detached root value, in which case
-	// RootValue must be set.
 	HeadCommit *doltdb.Commit
-	// HeadRoot is the root value for databases without a HeadCommit. Nil for databases with a HeadCommit.
-	HeadRoot doltdb.RootValue
-	ReadOnly bool
-	DbData   env.DbData[*sql.Context]
-	Remotes  *concurrentmap.Map[string, env.Remote]
-	Branches *concurrentmap.Map[string, env.BranchConfig]
-	Backups  *concurrentmap.Map[string, env.Remote]
-
-	// If err is set, this InitialDbState is partially invalid, but may be
-	// usable to initialize a database at a revision specifier, for
-	// example. Adding this InitialDbState to a session will return this
-	// error.
-	Err error
+	Remotes    *concurrentmap.Map[string, env.Remote]
+	Branches   *concurrentmap.Map[string, env.BranchConfig]
+	Backups    *concurrentmap.Map[string, env.Remote]
+	ReadOnly   bool
 }
 
 // SessionDatabase is a database that can be managed by a dsess.Session. It has methods to return its initial state in
@@ -60,27 +50,13 @@ type SessionDatabase interface {
 
 // DatabaseSessionState is the set of all information for a given database in this session.
 type DatabaseSessionState struct {
-	// dbName is the name of the database this state applies to. This is always the base name of the database, without
-	// a revision qualifier.
-	dbName string
-	// checkedOutRevSpec is the revision of the database when referred to by its base name. Changes only when a
-	// `dolt_checkout` occurs.
+	globalState       globalstate.GlobalState
+	Err               error
+	heads             map[string]*branchState
+	headCache         map[string]*SessionCache
+	dbName            string
 	checkedOutRevSpec string
-	// heads records the in-memory DB state for every branch head accessed by the session
-	heads map[string]*branchState
-	// headCache records the session-caches for every branch head accessed by the session
-	// This is managed separately from the branch states themselves because it persists across transactions (which is
-	// safe because it's keyed by immutable hashes)
-	headCache map[string]*SessionCache
-	// globalState is the global state of this session (shared by all sessions for a particular db)
-	globalState globalstate.GlobalState
-	// tmpFileDir is the directory to use for temporary files for this database
-	tmpFileDir string
-
-	// Same as InitialDbState.Err, this signifies that this
-	// DatabaseSessionState is invalid. LookupDbState returning a
-	// DatabaseSessionState with Err != nil will return that err.
-	Err error
+	tmpFileDir        string
 }
 
 func newEmptyDatabaseSessionState() *DatabaseSessionState {
@@ -102,28 +78,16 @@ type SessionState interface {
 
 // branchState records all the in-memory session state for a particular branch head
 type branchState struct {
-	// dbState is the parent database state for this branch head state
-	dbState *DatabaseSessionState
-	// head is the name of the branch head for this state
-	head string
-	// revisionType is the type of revision this branchState tracks
-	revisionType RevisionType
-	// headCommit is the head commit for this database. May be nil for databases tied to a detached root value, in which
-	// case headRoot must be set.
-	headCommit *doltdb.Commit
-	// HeadRoot is the root value for databases without a headCommit. Nil for databases with a headCommit.
-	headRoot doltdb.RootValue
-	// workingSet is the working set for this database. May be nil for databases tied to a detached root value, in which
-	// case headCommit must be set
-	workingSet *doltdb.WorkingSet
-	// dbData is an accessor for the underlying doltDb
-	dbData env.DbData[*sql.Context]
-	// writeSession is this head's write session
+	dbData       env.DbData[*sql.Context]
+	headRoot     doltdb.RootValue
 	writeSession WriteSession
-	// readOnly is true if this database is read only
-	readOnly bool
-	// dirty is true if this branch state has uncommitted changes
-	dirty bool
+	dbState      *DatabaseSessionState
+	headCommit   *doltdb.Commit
+	workingSet   *doltdb.WorkingSet
+	head         string
+	revisionType RevisionType
+	readOnly     bool
+	dirty        bool
 }
 
 // NewEmptyBranchState creates a new branch state for the given head name with the head provided, adds it to the db
