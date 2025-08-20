@@ -457,21 +457,21 @@ type coveringNormalizer func(val.Tuple) (val.Tuple, val.Tuple, error)
 // mergeState aggregates the information needed to build one side of a
 // merge join iterator.
 type mergeState struct {
-	// idxMap is the secondary index being read
-	idxMap prolly.Map
 	// iter is the index merge iterator
 	iter prolly.MapIter
 	// schemas for primary and secondary index.
 	// if the index is covering these are the same
 	priSch schema.Schema
 	idxSch schema.Schema
-	// tags are the output projection/ordering
-	tags []uint64
 	// filter is a relation-specific filter (usually nil)
 	filter sql.Expression
 	// norm is not nil when a non-covering index
 	// needs a callback into the primary index
 	norm coveringNormalizer
+	// idxMap is the secondary index being read
+	idxMap prolly.Map
+	// tags are the output projection/ordering
+	tags []uint64
 }
 
 func getMergeKv(ctx *sql.Context, n sql.Node) (mergeState, error) {

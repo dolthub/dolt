@@ -61,9 +61,9 @@ func newCountAggregationKvIter(srcIter prolly.MapIter, sch schema.Schema, e sql.
 
 type countAggKvIter struct {
 	srcIter  prolly.MapIter
+	idx      int
 	nullable bool
 	isKeyRef bool
-	idx      int
 	done     bool
 }
 
