@@ -145,7 +145,7 @@ func NewProximityMap(ns tree.NodeStore, node tree.Node, keyDesc val.TupleDesc, v
 		NodeStore:    ns,
 		Order:        keyDesc,
 		DistanceType: distanceType,
-		Convert: func(ctx context.Context, bytes []byte) []float64 {
+		Convert: func(ctx context.Context, bytes []byte) []float32 {
 			h, _ := keyDesc.GetJSONAddr(0, bytes)
 			doc := tree.NewJSONDoc(h, ns)
 			jsonWrapper, err := doc.ToIndexedJSONDocument(ctx)
@@ -509,7 +509,7 @@ func (b *ProximityMapBuilder) getNextPathSegmentCandidates(ctx context.Context, 
 }
 
 // getClosestVector iterates over a range of candidate vectors to determine which one is the closest to the target.
-func (b *ProximityMapBuilder) getClosestVector(ctx context.Context, targetVector []float64, nextCandidate func() (candidate hash.Hash, err error, valid bool)) (hash.Hash, error) {
+func (b *ProximityMapBuilder) getClosestVector(ctx context.Context, targetVector []float32, nextCandidate func() (candidate hash.Hash, err error, valid bool)) (hash.Hash, error) {
 	// First call to nextCandidate is guaranteed to be valid because there's at least one vector in the set.
 	// (non-root nodes inherit the first vector from their parent)
 	candidateVectorHash, err, _ := nextCandidate()
@@ -597,7 +597,7 @@ func getJsonValueFromHash(ctx context.Context, ns tree.NodeStore, h hash.Hash) (
 	return tree.NewJSONDoc(h, ns).ToIndexedJSONDocument(ctx)
 }
 
-func getVectorFromHash(ctx context.Context, ns tree.NodeStore, h hash.Hash) ([]float64, error) {
+func getVectorFromHash(ctx context.Context, ns tree.NodeStore, h hash.Hash) ([]float32, error) {
 	otherValue, err := getJsonValueFromHash(ctx, ns, h)
 	if err != nil {
 		return nil, err

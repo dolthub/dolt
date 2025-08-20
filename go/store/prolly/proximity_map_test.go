@@ -148,7 +148,7 @@ func validateHistoryIndependence(t *testing.T, ctx context.Context, ns tree.Node
 	require.Equal(t, other.HashOf(), m.HashOf())
 }
 
-func vectorFromKey(t *testing.T, ctx context.Context, ns tree.NodeStore, keyDesc val.TupleDesc, key []byte) []float64 {
+func vectorFromKey(t *testing.T, ctx context.Context, ns tree.NodeStore, keyDesc val.TupleDesc, key []byte) []float32 {
 	vectorHash, _ := keyDesc.GetJSONAddr(0, key)
 	jsonWrapper, err := getJsonValueFromHash(ctx, ns, vectorHash)
 	require.NoError(t, err)
@@ -168,7 +168,7 @@ func validateProximityMapNode(t *testing.T, ctx context.Context, ns tree.NodeSto
 		return
 	}
 	// Get the vector in each key
-	vectors := make([][]float64, nd.Count())
+	vectors := make([][]float32, nd.Count())
 	for vectorIdx := 0; vectorIdx < nd.Count(); vectorIdx++ {
 		vectorKey := nd.GetKey(vectorIdx)
 		vectors[vectorIdx] = vectorFromKey(t, ctx, ns, keyDesc, vectorKey)
