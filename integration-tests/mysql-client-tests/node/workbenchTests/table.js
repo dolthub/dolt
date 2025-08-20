@@ -75,7 +75,7 @@ export const tableTests = [
     table_name, index_name, comment, non_unique, GROUP_CONCAT(column_name ORDER BY seq_in_index) AS COLUMNS 
   FROM information_schema.statistics 
   WHERE table_schema=:tableSchema AND table_name=:tableName AND index_name!="PRIMARY" 
-  GROUP BY index_name;`,
+  GROUP BY index_name, comment, non_unique;`,
     p: { tableSchema: `${dbName}/main`, tableName: "test" },
     res: [
       {
