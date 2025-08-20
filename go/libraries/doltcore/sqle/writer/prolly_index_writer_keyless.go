@@ -184,17 +184,16 @@ func (e secondaryUniqueKeyError) Error() string {
 }
 
 type prollyKeylessSecondaryWriter struct {
-	name          string
 	mut           *prolly.MutableMap
+	keyBld        *val.TupleBuilder
+	prefixBld     *val.TupleBuilder
+	hashBld       *val.TupleBuilder
+	name          string
 	primary       prollyKeylessWriter
+	prefixLengths []uint16
+	keyMap        val.OrdinalMapping
 	unique        bool
 	spatial       bool
-	prefixLengths []uint16
-
-	keyBld    *val.TupleBuilder
-	prefixBld *val.TupleBuilder
-	hashBld   *val.TupleBuilder
-	keyMap    val.OrdinalMapping
 }
 
 var _ indexWriter = prollyKeylessSecondaryWriter{}
