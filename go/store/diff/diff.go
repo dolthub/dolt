@@ -39,10 +39,6 @@ type (
 
 // Difference represents a "diff" between two Noms graphs.
 type Difference struct {
-	// Path to the Value that has changed
-	Path types.Path
-	// ChangeType indicates the type of diff: modified, added, deleted
-	ChangeType types.DiffChangeType
 	// OldValue is Value before the change, can be nil if Value was added
 	OldValue types.Value
 	// NewValue is Value after the change, can be nil if Value was removed
@@ -52,6 +48,10 @@ type Difference struct {
 	NewKeyValue types.Value
 	// KeyValue holds the key associated with a changed map value
 	KeyValue types.Value
+	// Path to the Value that has changed
+	Path types.Path
+	// ChangeType indicates the type of diff: modified, added, deleted
+	ChangeType types.DiffChangeType
 }
 
 func (dif Difference) IsEmpty() bool {
@@ -62,15 +62,11 @@ type ShouldDescFunc func(v1, v2 types.Value) bool
 
 // differ is used internally to hold information necessary for diffing two graphs.
 type differ struct {
-	// Channel used to send Difference objects back to caller
-	diffChan chan<- Difference
-	// Use LeftRight diff as opposed to TopDown
-	leftRight bool
-
+	diffChan      chan<- Difference
 	shouldDescend ShouldDescFunc
-
-	eg         *errgroup.Group
-	asyncPanic *atomic.Value
+	eg            *errgroup.Group
+	asyncPanic    *atomic.Value
+	leftRight     bool
 }
 
 // Diff traverses two graphs simultaneously looking for differences. It returns
