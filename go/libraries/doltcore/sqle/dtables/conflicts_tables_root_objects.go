@@ -38,11 +38,11 @@ func NewConflictRootObjectTable(ctx *sql.Context, rootObject doltdb.ConflictRoot
 // ConflictRootObjectTable is a sql.Table implementation that provides access to the conflicts that exist on a root
 // object.
 type ConflictRootObjectTable struct {
-	tableName  doltdb.TableName
-	sqlSch     sql.Schema
 	root       doltdb.RootValue
 	rootObject doltdb.ConflictRootObject
 	rs         RootSetter
+	tableName  doltdb.TableName
+	sqlSch     sql.Schema
 }
 
 var _ sql.Table = ConflictRootObjectTable{}

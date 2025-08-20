@@ -32,10 +32,10 @@ const statusDefaultRowCount = 10
 
 // StatusTable is a sql.Table implementation that implements a system table which shows the dolt branches
 type StatusTable struct {
-	tableName     string
+	rootsProvider env.RootsProvider[*sql.Context]
 	ddb           *doltdb.DoltDB
 	workingSet    *doltdb.WorkingSet
-	rootsProvider env.RootsProvider[*sql.Context]
+	tableName     string
 }
 
 var _ sql.StatisticsTable = (*StatusTable)(nil)
@@ -106,8 +106,8 @@ type StatusItr struct {
 
 type statusTableRow struct {
 	tableName string
-	isStaged  bool
 	status    string
+	isStaged  bool
 }
 
 func containsTableName(name string, names []doltdb.TableName) bool {

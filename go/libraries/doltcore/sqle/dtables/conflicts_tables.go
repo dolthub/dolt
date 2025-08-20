@@ -74,12 +74,12 @@ var _ sql.DeletableTable = ConflictsTable{}
 
 // ConflictsTable is a sql.Table implementation that provides access to the conflicts that exist for a user table
 type ConflictsTable struct {
-	tblName doltdb.TableName
-	sqlSch  sql.PrimaryKeySchema
 	root    doltdb.RootValue
+	rs      RootSetter
 	tbl     *doltdb.Table
 	rd      *merge.ConflictReader
-	rs      RootSetter
+	tblName doltdb.TableName
+	sqlSch  sql.PrimaryKeySchema
 }
 
 type RootSetter interface {

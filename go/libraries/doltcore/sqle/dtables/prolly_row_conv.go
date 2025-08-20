@@ -31,13 +31,14 @@ import (
 type ProllyRowConverter struct {
 	inSchema         schema.Schema
 	outSchema        schema.Schema
-	keyProj, valProj val.OrdinalMapping
+	ns               tree.NodeStore
+	warnFn           rowconv.WarnFunction
 	keyDesc          val.TupleDesc
 	valDesc          val.TupleDesc
+	keyProj          val.OrdinalMapping
+	valProj          val.OrdinalMapping
 	pkTargetTypes    []sql.Type
 	nonPkTargetTypes []sql.Type
-	warnFn           rowconv.WarnFunction
-	ns               tree.NodeStore
 }
 
 func NewProllyRowConverter(inSch, outSch schema.Schema, warnFn rowconv.WarnFunction, ns tree.NodeStore) (ProllyRowConverter, error) {

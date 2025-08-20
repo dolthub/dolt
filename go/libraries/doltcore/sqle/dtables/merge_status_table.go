@@ -84,12 +84,12 @@ func NewMergeStatusTable(dbName, tableName string) sql.Table {
 
 // MergeStatusIter is a sql.RowItr implementation which iterates over each commit as if it's a row in the table.
 type MergeStatusIter struct {
-	idx            int
-	isMerging      bool
 	sourceCommit   *string
 	source         *string
 	target         *string
 	unmergedTables *string
+	idx            int
+	isMerging      bool
 }
 
 func newMergeStatusItr(ctx context.Context, ws *doltdb.WorkingSet) (*MergeStatusIter, error) {
