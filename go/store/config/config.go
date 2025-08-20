@@ -41,8 +41,8 @@ type Config struct {
 
 // Configuration for a specific database
 type DbConfig struct {
-	Url     string
 	Options map[string]string
+	Url     string
 }
 
 // Global AWS Config
@@ -149,7 +149,7 @@ func qualifyPaths(configPath string, c *Config) (*Config, error) {
 	qc := *c
 	qc.File = file
 	for k, r := range c.Db {
-		qc.Db[k] = DbConfig{absDbSpec(dir, r.Url), r.Options}
+		qc.Db[k] = DbConfig{Url: absDbSpec(dir, r.Url), Options: r.Options}
 	}
 	return &qc, nil
 }
