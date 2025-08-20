@@ -19,7 +19,6 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
-    "os/exec"
 	"net"
 	"net/http"
 	"os"
@@ -68,6 +67,7 @@ import (
     mcpdb "github.com/dolthub/dolt-mcp/mcp/pkg/db"
     "github.com/dolthub/dolt-mcp/mcp/pkg/toolsets"
     "go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
 )
 
 const (
@@ -876,11 +876,13 @@ func ConfigureServices(
 	controller.Register(RunSQLServer)
 
 	// Optionally start an MCP HTTP server bound to 0.0.0.0 on the given port and connected as root to this sql-server
-	if cfg.MCPPort != nil && *cfg.MCPPort > 0 {
-		type mcpService struct {
-			state svcs.ServiceState
-		}
-		var mcpSrv mcpService
+    if cfg.MCPPort != nil && *cfg.MCPPort > 0 {
+        type mcpService struct {
+            state  svcs.ServiceState
+            cancel context.CancelFunc
+            group  *errgroup.Group
+        }
+        var mcpSrv mcpService
 
 		StartMCP := &svcs.AnonService{
 			InitF: func(ctx context.Context) error {
@@ -894,7 +896,7 @@ func ConfigureServices(
 				mcpSrv.state.Swap(svcs.ServiceState_Init)
 				return nil
 			},
-			RunF: func(ctx context.Context) {
+            RunF: func(ctx context.Context) {
 				if !mcpSrv.state.CompareAndSwap(svcs.ServiceState_Init, svcs.ServiceState_Run) {
 					return
 				}
@@ -909,26 +911,38 @@ func ConfigureServices(
 					DatabaseName: "",
 				}
 
-				srv, err := pkgmcp.NewMCPHTTPServer(
+                srv, err := pkgmcp.NewMCPHTTPServer(
 					logger,
 					dbConf,
 					*cfg.MCPPort,
 					toolsets.WithToolSet(&toolsets.PrimitiveToolSetV1{}),
 				)
 				if err != nil {
-					// Fallback to external binary if available
-					bin := "dolt-mcp-server"
-                    args := []string{"--http", "--mcp-port", strconv.Itoa(*cfg.MCPPort), "--dolt-host", "127.0.0.1", "--dolt-port", strconv.Itoa(cfg.ServerConfig.Port()), "--dolt-user", servercfg.DefaultUser}
-					cmd := exec.CommandContext(ctx, bin, args...)
-					cmd.Stdout = os.Stderr
-					cmd.Stderr = os.Stderr
-					cmd.Env = os.Environ()
-					_ = cmd.Start()
+                    logrus.Errorf("failed to start Dolt MCP HTTP server: %v", err)
 					return
 				}
 
-				go srv.ListenAndServe(ctx)
+                // Run MCP server within errgroup to coordinate shutdown
+                runCtx, cancel := context.WithCancel(ctx)
+                mcpSrv.cancel = cancel
+                g, gctx := errgroup.WithContext(runCtx)
+                g.Go(func() error {
+                    srv.ListenAndServe(gctx)
+                    return nil
+                })
+                mcpSrv.group = g
 			},
+            StopF: func() error {
+                // Trigger graceful shutdown via context cancellation
+                if mcpSrv.cancel != nil {
+                    mcpSrv.cancel()
+                }
+                if mcpSrv.group != nil {
+                    _ = mcpSrv.group.Wait()
+                }
+                mcpSrv.state.Swap(svcs.ServiceState_Stopped)
+                return nil
+            },
 		}
 		controller.Register(StartMCP)
 	}
