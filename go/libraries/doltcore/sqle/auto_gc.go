@@ -46,15 +46,13 @@ import (
 // database as wanting a GC.
 
 type AutoGCController struct {
-	workCh chan autoGCWork
-	lgr    *logrus.Logger
-
-	mu      sync.Mutex
-	hooks   map[string]*autoGCCommitHook
-	ctxF    func(context.Context) (*sql.Context, error)
-	threads *sql.BackgroundThreads
-
+	workCh   chan autoGCWork
+	lgr      *logrus.Logger
+	hooks    map[string]*autoGCCommitHook
+	ctxF     func(context.Context) (*sql.Context, error)
+	threads  *sql.BackgroundThreads
 	arcLevel chunks.GCArchiveLevel
+	mu       sync.Mutex
 }
 
 func NewAutoGCController(arcLevel chunks.GCArchiveLevel, lgr *logrus.Logger) *AutoGCController {
@@ -206,8 +204,7 @@ type gcWorkReport struct {
 // The doltdb.CommitHook which watches for database changes and
 // requests dolt_gcs.
 type autoGCCommitHook struct {
-	c    *AutoGCController
-	name string
+	c *AutoGCController
 	// When |done| is closed, there is no GC currently running or
 	// pending for this database. If it is open, then there is a
 	// pending request for GC or a GC is currently running. Once
@@ -231,7 +228,6 @@ type autoGCCommitHook struct {
 	lastGcWorkReport *gcWorkReport
 
 	db *doltdb.DoltDB
-
 	// Closed when the thread should shutdown because the database
 	// is being removed.
 	stopCh chan struct{}
@@ -239,7 +235,9 @@ type autoGCCommitHook struct {
 	// thread that the sizes may have changed and it can check for
 	// the GC condition.
 	tickCh chan struct{}
-	wg     sync.WaitGroup
+	name   string
+
+	wg sync.WaitGroup
 }
 
 // During engine initialization, called on the original set of

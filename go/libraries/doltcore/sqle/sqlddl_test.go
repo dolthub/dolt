@@ -296,8 +296,8 @@ func TestDropTable(t *testing.T) {
 	tests := []struct {
 		name        string
 		query       string
-		tableNames  []string
 		expectedErr string
+		tableNames  []string
 	}{
 		{
 			name:       "drop table",
@@ -368,11 +368,11 @@ func TestDropTable(t *testing.T) {
 
 func TestAddColumn(t *testing.T) {
 	tests := []struct {
+		expectedSchema schema.Schema
 		name           string
 		query          string
-		expectedSchema schema.Schema
-		expectedRows   []row.Row
 		expectedErr    string
+		expectedRows   []row.Row
 	}{
 		{
 			name:  "alter add string column no default",
@@ -566,11 +566,11 @@ func TestAddColumn(t *testing.T) {
 
 func TestRenameColumn(t *testing.T) {
 	tests := []struct {
+		expectedSchema schema.Schema
 		name           string
 		query          string
-		expectedSchema schema.Schema
-		expectedRows   []row.Row
 		expectedErr    string
+		expectedRows   []row.Row
 	}{
 		{
 			name:  "alter rename column with column and as keywords",
@@ -688,13 +688,13 @@ func TestRenameColumn(t *testing.T) {
 
 func TestRenameTableStatements(t *testing.T) {
 	tests := []struct {
+		expectedSchema schema.Schema
 		name           string
 		query          string
 		oldTableName   string
 		newTableName   string
-		expectedSchema schema.Schema
-		expectedRows   []row.Row
 		expectedErr    string
+		expectedRows   []row.Row
 	}{
 		{
 			name:           "alter rename table",

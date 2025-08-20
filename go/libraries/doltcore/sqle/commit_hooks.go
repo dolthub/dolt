@@ -30,9 +30,9 @@ import (
 )
 
 type PushOnWriteHook struct {
+	out    io.Writer
 	destDB *doltdb.DoltDB
 	tmpDir string
-	out    io.Writer
 }
 
 var _ doltdb.CommitHook = (*PushOnWriteHook)(nil)
@@ -149,8 +149,8 @@ func (ah *AsyncPushOnWriteHook) SetLogger(ctx context.Context, wr io.Writer) err
 }
 
 type LogHook struct {
-	msg []byte
 	out io.Writer
+	msg []byte
 }
 
 var _ doltdb.CommitHook = (*LogHook)(nil)

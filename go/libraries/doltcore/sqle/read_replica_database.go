@@ -35,11 +35,11 @@ import (
 )
 
 type ReadReplicaDatabase struct {
-	Database
 	remote  env.Remote
 	srcDB   *doltdb.DoltDB
-	tmpDir  string
 	limiter *limiter
+	tmpDir  string
+	Database
 }
 
 var _ dsess.SqlDatabase = ReadReplicaDatabase{}
@@ -572,8 +572,8 @@ func newLimiter() *limiter {
 
 // *limiter allows a caller to limit performing concurrent work for a given string key.
 type limiter struct {
-	mu      sync.Mutex
 	running map[string]*blocked
+	mu      sync.Mutex
 }
 
 // |Run| invokes |f|, returning its result. It does not allow two |f|s

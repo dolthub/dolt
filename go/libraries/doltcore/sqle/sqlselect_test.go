@@ -44,21 +44,21 @@ const skipBrokenSelect = true
 
 // Structure for a test of a select query
 type SelectTest struct {
+	// The schema of the result of the query, nil if an error is expected
+	ExpectedSchema schema.Schema
+	// Setup logic to run before executing this test, after initial tables have been created and populated
+	AdditionalSetup SetupFn
 	// The name of this test. Names should be unique and descriptive.
 	Name string
 	// The query to run, excluding an ending semicolon
 	Query string
-	// The schema of the result of the query, nil if an error is expected
-	ExpectedSchema schema.Schema
+	// An expected error string
+	ExpectedErr string
 	// The schema of the result of the query, nil if an error is expected. Mutually exclusive with ExpectedSchema. Use if
 	// the schema is difficult to specify with dolt schemas.
 	ExpectedSqlSchema sql.Schema
 	// The rows this query should return, nil if an error is expected
 	ExpectedRows []sql.Row
-	// An expected error string
-	ExpectedErr string
-	// Setup logic to run before executing this test, after initial tables have been created and populated
-	AdditionalSetup SetupFn
 	// Whether to skip this test on SqlEngine (go-mysql-server) execution.
 	// Over time, this should become false for every query.
 	SkipOnSqlEngine bool
