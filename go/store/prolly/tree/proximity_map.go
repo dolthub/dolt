@@ -32,11 +32,11 @@ type KeyValueDistanceFn[K, V ~[]byte] func(key K, value V, distance float64) err
 // ProximityMap is a static Prolly Tree where the position of a key in the tree is based on proximity, as opposed to a traditional ordering.
 // O provides the ordering only within a node.
 type ProximityMap[K, V ~[]byte, O Ordering[K]] struct {
-	Root         Node
 	NodeStore    NodeStore
 	DistanceType vector.DistanceType
-	Convert      func(context.Context, []byte) []float64
 	Order        O
+	Convert      func(context.Context, []byte) []float64
+	Root         Node
 }
 
 func (t ProximityMap[K, V, O]) GetRoot() Node {

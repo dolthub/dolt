@@ -332,10 +332,11 @@ func MergeArtifactMaps(ctx context.Context, left, right, base ArtifactMap, cb tr
 }
 
 type ArtifactsEditor struct {
-	mut          MutableMap
-	srcKeyDesc   val.TupleDesc
-	artKB, artVB *val.TupleBuilder
-	pool         pool.BuffPool
+	mut        MutableMap
+	pool       pool.BuffPool
+	artKB      *val.TupleBuilder
+	artVB      *val.TupleBuilder
+	srcKeyDesc val.TupleDesc
 }
 
 // BuildArtifactKey builds a val.Tuple to be used to look up a value in this ArtifactsEditor. The key is composed
@@ -559,11 +560,12 @@ type ArtifactIter interface {
 
 // ArtifactIter iterates artifacts as a decoded artifact struct.
 type artifactIterImpl struct {
-	itr          MapIter
-	artKD, artVD val.TupleDesc
-	tb           *val.TupleBuilder
-	pool         pool.BuffPool
-	numPks       int
+	itr    MapIter
+	pool   pool.BuffPool
+	tb     *val.TupleBuilder
+	artKD  val.TupleDesc
+	artVD  val.TupleDesc
+	numPks int
 }
 
 var _ ArtifactIter = artifactIterImpl{}
@@ -600,16 +602,11 @@ func (itr artifactIterImpl) getSrcKeyFromArtKey(k val.Tuple) (val.Tuple, error) 
 
 // Artifact is a struct representing an artifact in the artifacts table
 type Artifact struct {
-	// ArtKey is the key of the artifact itself
-	ArtKey val.Tuple
-	// SourceKey is the key of the source row that the artifact references
-	SourceKey val.Tuple
-	// TheirRootIsh is the working set hash or commit hash of the right in the merge
+	ArtKey        val.Tuple
+	SourceKey     val.Tuple
+	Metadata      []byte
 	SourceRootish hash.Hash
-	// ArtType is the type of the artifact
-	ArtType ArtifactType
-	// Metadata is the encoded json metadata
-	Metadata []byte
+	ArtType       ArtifactType
 }
 
 func mergeArtifactsDescriptorsFromSource(srcKd val.TupleDesc) (kd, vd val.TupleDesc) {

@@ -54,11 +54,11 @@ func (c nodeCache) purge() {
 }
 
 type centry struct {
-	a    hash.Hash
-	n    Node
-	i    int
 	prev *centry
 	next *centry
+	n    Node
+	i    int
+	a    hash.Hash
 }
 
 type stripe struct {
