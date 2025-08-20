@@ -286,16 +286,6 @@ func testConjoin(t *testing.T, factory func(t *testing.T) tablePersister) {
 		{"log, max 3", 5, []uint32{1, 2}, []uint32{1, 2, 4, 8, 16, 32, 64}, []uint32{1, 2, 12, 16, 32, 64}},
 		{"almost log, max 3", 3, []uint32{9, 10, 11, 12}, []uint32{9, 10, 11, 12, 2, 3, 4, 8, 16, 32, 64}, []uint32{4, 5, 8, 9, 10, 11, 12, 16, 32, 64}},
 	}
-	/*
-			{"uniform", 3, []uint32{1, 1, 1, 1, 1}, []uint32{1, 1, 1, 2}},
-		{"one outlier", 3, []uint32{1, 1, 1, 1, 5}, []uint32{1, 1, 2, 5}},
-		{"all", 2, []uint32{5, 5, 5}, []uint32{15}},
-		{"first two", 4, []uint32{5, 6, 10, 11, 35, 64}, []uint32{10, 11, 11, 35, 64}},
-		{"log, max 5", 5, []uint32{1, 2, 4, 8, 16, 32, 64}, []uint32{15, 16, 32, 64}},
-		{"log, max 3", 3, []uint32{1, 2, 4, 8, 16, 32, 64}, []uint32{63, 64}},
-		{"almost log", 3, []uint32{2, 3, 4, 8, 16, 32, 64}, []uint32{4, 5, 8, 16, 32, 64}},
-
-	*/
 
 	t.Run("SuccessAppendix", func(t *testing.T) {
 		// Compact some tables, no one interrupts
