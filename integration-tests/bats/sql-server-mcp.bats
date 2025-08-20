@@ -35,7 +35,6 @@ wait_for_mcp_port() {
 }
 
 @test "sql-server mcp: starts MCP HTTP server on --mcp-port and serves alongside SQL" {
-  skip "--mcp-port is not yet implemented."
   cd repo1
 
   # Choose distinct ports for SQL and MCP
@@ -100,7 +99,6 @@ wait_for_mcp_port() {
 }
 
 @test "sql-server mcp: HTTP initialize and call list_databases tool" {
-  skip "--mcp-port is not yet implemented."
   cd repo1
 
   if ! command -v curl >/dev/null 2>&1; then
@@ -112,19 +110,45 @@ wait_for_mcp_port() {
   # Start server with MCP enabled
   start_sql_server_with_args --host 0.0.0.0 --mcp-port="$MCP_PORT"
 
-  # Prepare NDJSON stream: initialize then call list_databases
-  NDJSON_FILE=$BATS_TMPDIR/mcp_ndjson_$$.txt
-  OUT_FILE=$BATS_TMPDIR/mcp_out_$$.txt
-  cat > "$NDJSON_FILE" <<'EOF'
-{"jsonrpc":"2.0","id":"1","method":"initialize","params":{"clientInfo":{"name":"bats","version":"0.0.0"},"capabilities":{}}}
-{"jsonrpc":"2.0","id":"2","method":"tools/call","params":{"name":"list_databases","arguments":{}}}
-EOF
-
-  # Send stream to MCP server
-  run bash -c "curl -sS -N -H 'Content-Type: application/x-ndjson' --data-binary @'$NDJSON_FILE' http://127.0.0.1:${MCP_PORT}/mcp > '$OUT_FILE'"
+  # Wait for MCP port to accept connections
+  run wait_for_mcp_port "$MCP_PORT" 8500
   [ $status -eq 0 ]
 
+  # Initialize session
+  INIT_FILE=$BATS_TMPDIR/mcp_init_$$.json
+  OUT_INIT=$BATS_TMPDIR/mcp_out_init_$$.json
+  cat > "$INIT_FILE" <<'EOF'
+{"jsonrpc":"2.0","id":"1","method":"initialize","params":{"clientInfo":{"name":"bats","version":"0.0.0"},"capabilities":{}}}
+EOF
+  run bash -c "curl -sS -D $BATS_TMPDIR/mcp_headers_$$.txt -H 'Content-Type: application/json' --data-binary @'$INIT_FILE' http://127.0.0.1:${MCP_PORT}/ > '$OUT_INIT'"
+  [ $status -eq 0 ]
+
+  cat "$OUT_INIT"
+
+  # Extract session id from response headers
+  SESSION=$(grep -i '^Mcp-Session-Id:' $BATS_TMPDIR/mcp_headers_$$.txt | awk -F': ' '{print $2}' | tr -d '\r')
+  [ -n "$SESSION" ]
+
+  # # Extract session id from response
+  # SESSION=$(grep -o '"sessionId"\s*:\s*"[^"]\+"' "$OUT_INIT" | sed -E 's/.*"sessionId"\s*:\s*"([^"]+)".*/\1/')
+  # if [ -z "$SESSION" ]; then
+  #   # Some implementations may use 'session' instead
+  #   SESSION=$(grep -o '"session"\s*:\s*"[^"]\+"' "$OUT_INIT" | sed -E 's/.*"session"\s*:\s*"([^"]+)".*/\1/')
+  # fi
+  # [ -n "$SESSION" ]
+
+  # Call list_databases with session header
+  CALL_FILE=$BATS_TMPDIR/mcp_call_$$.json
+  OUT_CALL=$BATS_TMPDIR/mcp_out_call_$$.json
+  cat > "$CALL_FILE" <<'EOF'
+{"jsonrpc":"2.0","id":"2","method":"tools/call","params":{"name":"list_databases","arguments":{}}}
+EOF
+  run bash -c "curl -sS -H 'Content-Type: application/json' -H 'Mcp-Session-Id: '$SESSION --data-binary @'$CALL_FILE' http://127.0.0.1:${MCP_PORT}/ > '$OUT_CALL'"
+  [ $status -eq 0 ]
+
+  cat "$OUT_CALL"
+
   # Expect known databases in response payload (markdown or text content)
-  run grep -E "information_schema|mysql|repo1" "$OUT_FILE"
+  run grep -E "information_schema|mysql|repo1" "$OUT_CALL"
   [ $status -eq 0 ]
 }

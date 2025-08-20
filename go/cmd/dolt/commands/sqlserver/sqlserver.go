@@ -28,7 +28,8 @@ import (
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+    "github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
+    "github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/servercfg"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
@@ -55,7 +56,8 @@ const (
 	remotesapiPortFlag          = "remotesapi-port"
 	remotesapiReadOnlyFlag      = "remotesapi-readonly"
 	goldenMysqlConn             = "golden"
-	eventSchedulerStatus        = "event-scheduler"
+    eventSchedulerStatus        = "event-scheduler"
+    mcpPortFlag                 = "mcp-port"
 )
 
 func indentLines(s string) string {
@@ -193,8 +195,10 @@ func (cmd SqlServerCmd) ArgParserWithName(name string) *argparser.ArgParser {
 	ap.SupportsOptionalString(socketFlag, "", "socket file", "Path for the unix socket file. Defaults to '/tmp/mysql.sock'.")
 	ap.SupportsUint(remotesapiPortFlag, "", "remotesapi port", "Sets the port for a server which can expose the databases in this sql-server over remotesapi, so that clients can clone or pull from this server.")
 	ap.SupportsFlag(remotesapiReadOnlyFlag, "", "Disable writes to the sql-server via the push operations. SQL writes are unaffected by this setting.")
-	ap.SupportsString(goldenMysqlConn, "", "mysql connection string", "Provides a connection string to a MySQL instance to be used to validate query results")
-	ap.SupportsString(eventSchedulerStatus, "", "status", "Determines whether the Event Scheduler is enabled and running on the server. It has one of the following values: 'ON', 'OFF' or 'DISABLED'.")
+    ap.SupportsString(goldenMysqlConn, "", "mysql connection string", "Provides a connection string to a MySQL instance to be used to validate query results")
+    ap.SupportsString(eventSchedulerStatus, "", "status", "Determines whether the Event Scheduler is enabled and running on the server. It has one of the following values: 'ON', 'OFF' or 'DISABLED'.")
+    // Start an MCP HTTP server connected to this sql-server on the given port
+    ap.SupportsUint(mcpPortFlag, "", "port", "If provided, runs a Dolt MCP HTTP server on this port alongside the sql-server.")
 	return ap
 }
 
@@ -260,11 +264,26 @@ func validateSqlServerArgs(apr *argparser.ArgParseResults) error {
 func StartServer(ctx context.Context, versionStr, commandStr string, args []string, dEnv *env.DoltEnv, cwd filesys.Filesys, controller *svcs.Controller) error {
 	ap := SqlServerCmd{}.ArgParser()
 	help, _ := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, sqlServerDocs, ap))
-	apr := cli.ParseArgsOrDie(ap, args, help)
+    apr := cli.ParseArgsOrDie(ap, args, help)
 	serverConfig, err := ServerConfigFromArgs(apr, dEnv, cwd)
 	if err != nil {
 		return err
 	}
+
+    // Optional MCP HTTP port
+    var mcpPortPtr *int
+    if mp, ok := apr.GetInt(mcpPortFlag); ok {
+        mcpPort := mp
+        mcpPortPtr = &mcpPort
+    }
+
+    // If MCP is enabled and no explicit root host override exists, set root host to 127.0.0.1
+    // so the MCP can authenticate as root over TCP.
+    if mcpPortPtr != nil {
+        if _, ok := os.LookupEnv(dconfig.EnvDoltRootHost); !ok {
+            _ = os.Setenv(dconfig.EnvDoltRootHost, "127.0.0.1")
+        }
+    }
 
 	err = generateYamlConfigIfNone(ap, help, args, dEnv, serverConfig)
 	if err != nil {
@@ -279,12 +298,13 @@ func StartServer(ctx context.Context, versionStr, commandStr string, args []stri
 	cli.Printf("Starting server with Config %v\n", servercfg.ConfigInfo(serverConfig))
 
 	skipRootUserInitialization := apr.Contains(skipRootUserInitialization)
-	startError, closeError := Serve(ctx, &Config{
+    startError, closeError := Serve(ctx, &Config{
 		Version:          versionStr,
 		ServerConfig:     serverConfig,
 		Controller:       controller,
 		DoltEnv:          dEnv,
 		SkipRootUserInit: skipRootUserInitialization,
+        MCPPort:          mcpPortPtr,
 	})
 	if startError != nil {
 		return startError

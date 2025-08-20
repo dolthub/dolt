@@ -19,6 +19,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+    "os/exec"
 	"net"
 	"net/http"
 	"os"
@@ -61,6 +62,12 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/svcs"
 	"github.com/dolthub/dolt/go/store/chunks"
 	eventsapi "github.com/dolthub/eventsapi_schema/dolt/services/eventsapi/v1alpha1"
+    
+    // dolt-mcp library
+    pkgmcp "github.com/dolthub/dolt-mcp/mcp/pkg"
+    mcpdb "github.com/dolthub/dolt-mcp/mcp/pkg/db"
+    "github.com/dolthub/dolt-mcp/mcp/pkg/toolsets"
+    "go.uber.org/zap"
 )
 
 const (
@@ -84,6 +91,7 @@ type Config struct {
 	Version                 string
 	Controller              *svcs.Controller
 	ProtocolListenerFactory server.ProtocolListenerFunc
+    MCPPort                 *int
 }
 
 // Serve starts a MySQL-compatible server. Returns any errors that were encountered.
@@ -866,6 +874,64 @@ func ConfigureServices(
 		},
 	}
 	controller.Register(RunSQLServer)
+
+	// Optionally start an MCP HTTP server bound to 0.0.0.0 on the given port and connected as root to this sql-server
+	if cfg.MCPPort != nil && *cfg.MCPPort > 0 {
+		type mcpService struct {
+			state svcs.ServiceState
+		}
+		var mcpSrv mcpService
+
+		StartMCP := &svcs.AnonService{
+			InitF: func(ctx context.Context) error {
+				// Verify port availability early
+				addr := net.JoinHostPort("0.0.0.0", strconv.Itoa(*cfg.MCPPort))
+				l, err := net.Listen("tcp", addr)
+				if err != nil {
+					return fmt.Errorf("MCP port %d already in use: %v", *cfg.MCPPort, err)
+				}
+				_ = l.Close()
+				mcpSrv.state.Swap(svcs.ServiceState_Init)
+				return nil
+			},
+			RunF: func(ctx context.Context) {
+				if !mcpSrv.state.CompareAndSwap(svcs.ServiceState_Init, svcs.ServiceState_Run) {
+					return
+				}
+
+				// Build and run Dolt MCP server using dolt-mcp library
+				logger, _ := zap.NewProduction()
+                dbConf := mcpdb.Config{
+                    Host:         "127.0.0.1",
+					Port:         cfg.ServerConfig.Port(),
+					User:         servercfg.DefaultUser, // root
+					Password:     os.Getenv(dconfig.EnvDoltRootPassword),
+					DatabaseName: "",
+				}
+
+				srv, err := pkgmcp.NewMCPHTTPServer(
+					logger,
+					dbConf,
+					*cfg.MCPPort,
+					toolsets.WithToolSet(&toolsets.PrimitiveToolSetV1{}),
+				)
+				if err != nil {
+					// Fallback to external binary if available
+					bin := "dolt-mcp-server"
+                    args := []string{"--http", "--mcp-port", strconv.Itoa(*cfg.MCPPort), "--dolt-host", "127.0.0.1", "--dolt-port", strconv.Itoa(cfg.ServerConfig.Port()), "--dolt-user", servercfg.DefaultUser}
+					cmd := exec.CommandContext(ctx, bin, args...)
+					cmd.Stdout = os.Stderr
+					cmd.Stderr = os.Stderr
+					cmd.Env = os.Environ()
+					_ = cmd.Start()
+					return
+				}
+
+				go srv.ListenAndServe(ctx)
+			},
+		}
+		controller.Register(StartMCP)
+	}
 }
 
 // heartbeatService is a service that sends a heartbeat event to the metrics server once a day
