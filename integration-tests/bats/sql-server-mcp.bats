@@ -123,19 +123,9 @@ EOF
   run bash -c "curl -sS -D $BATS_TMPDIR/mcp_headers_$$.txt -H 'Content-Type: application/json' --data-binary @'$INIT_FILE' http://127.0.0.1:${MCP_PORT}/ > '$OUT_INIT'"
   [ $status -eq 0 ]
 
-  cat "$OUT_INIT"
-
   # Extract session id from response headers
   SESSION=$(grep -i '^Mcp-Session-Id:' $BATS_TMPDIR/mcp_headers_$$.txt | awk -F': ' '{print $2}' | tr -d '\r')
   [ -n "$SESSION" ]
-
-  # # Extract session id from response
-  # SESSION=$(grep -o '"sessionId"\s*:\s*"[^"]\+"' "$OUT_INIT" | sed -E 's/.*"sessionId"\s*:\s*"([^"]+)".*/\1/')
-  # if [ -z "$SESSION" ]; then
-  #   # Some implementations may use 'session' instead
-  #   SESSION=$(grep -o '"session"\s*:\s*"[^"]\+"' "$OUT_INIT" | sed -E 's/.*"session"\s*:\s*"([^"]+)".*/\1/')
-  # fi
-  # [ -n "$SESSION" ]
 
   # Call list_databases with session header
   CALL_FILE=$BATS_TMPDIR/mcp_call_$$.json
@@ -145,8 +135,6 @@ EOF
 EOF
   run bash -c "curl -sS -H 'Content-Type: application/json' -H 'Mcp-Session-Id: '$SESSION --data-binary @'$CALL_FILE' http://127.0.0.1:${MCP_PORT}/ > '$OUT_CALL'"
   [ $status -eq 0 ]
-
-  cat "$OUT_CALL"
 
   # Expect known databases in response payload (markdown or text content)
   run grep -E "information_schema|mysql|repo1" "$OUT_CALL"
