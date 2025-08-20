@@ -564,8 +564,28 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 				}
 			}
 
-			dt, found = dtables.NewLogTable(ctx, db.Name(), lwrName, db.ddb, head), true
+			schemaType := dtables.LogSchemaTypeAuto
+			if isDoltgresSystemTable && resolve.UseSearchPath {
+				schemaType = dtables.LogSchemaTypeCompact
+			}
+			dt, found = dtables.NewLogTable(ctx, db.Name(), lwrName, db.ddb, head, schemaType), true
 		}
+	case doltdb.LogTableFullName:
+		fallthrough
+	case doltdb.LogTableCompactName:
+		// Internal log tables with fixed schemas for system views (e.g., dolt_blame)
+		if head == nil {
+			var err error
+			head, err = ds.GetHeadCommit(ctx, db.RevisionQualifiedName())
+			if err != nil {
+				return nil, false, err
+			}
+		}
+		schemaType := dtables.LogSchemaTypeFull
+		if lwrName == doltdb.LogTableCompactName {
+			schemaType = dtables.LogSchemaTypeCompact
+		}
+		dt, found = dtables.NewLogTable(ctx, db.Name(), lwrName, db.ddb, head, schemaType), true
 	case doltdb.DiffTableName, doltdb.GetDiffTableName():
 		isDoltgresSystemTable, err := resolve.IsDoltgresSystemTable(ctx, tname, root)
 		if err != nil {

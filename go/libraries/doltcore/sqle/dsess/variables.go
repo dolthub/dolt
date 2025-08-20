@@ -69,6 +69,9 @@ const (
 	DoltStatsGCEnabled   = "dolt_stats_gc_enabled"
 
 	DoltAutoGCEnabled = "dolt_auto_gc_enabled"
+
+	// Controls whether dolt_log uses compact (legacy) schema (1) or extended schema (0)
+	DoltLogCompactSchema = "dolt_log_compact_schema"
 )
 
 const URLTemplateDatabasePlaceholder = "{database}"

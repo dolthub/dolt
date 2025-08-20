@@ -101,6 +101,8 @@ skip_nbf_dolt() {
 setup_common() {
     setup_no_dolt_init
     dolt init
+    # Bats tests expect compact schema for backward compatibility
+    dolt sql -q "SET PERSIST dolt_log_compact_schema = 1;"
     setup_remote_server
 }
 
