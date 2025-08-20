@@ -418,10 +418,10 @@ func isEmptyValue(v reflect.Value) bool {
 }
 
 type field struct {
-	name      string
 	encoder   encoderFunc
-	index     []int
 	nomsType  *types.Type
+	name      string
+	index     []int
 	omitEmpty bool
 }
 
@@ -432,8 +432,8 @@ func (fs fieldSlice) Swap(i, j int)      { fs[i], fs[j] = fs[j], fs[i] }
 func (fs fieldSlice) Less(i, j int) bool { return fs[i].name < fs[j].name }
 
 type encoderCacheT struct {
-	sync.RWMutex
 	m map[reflect.Type]encoderFunc
+	sync.RWMutex
 }
 
 var encoderCache = &encoderCacheT{}
