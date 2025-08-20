@@ -76,8 +76,8 @@ var ErrServerPerformedGC = errors.New("this connection was established when this
 type killConnectionsSafepointController struct {
 	callCtx     *sql.Context
 	doltDB      *doltdb.DoltDB
-	origEpoch   int
 	statsDoneCh chan struct{}
+	origEpoch   int
 }
 
 func (sc killConnectionsSafepointController) BeginGC(ctx context.Context, keeper func(hash.Hash) bool) error {
@@ -168,13 +168,12 @@ func (sc killConnectionsSafepointController) CancelSafepoint() {
 
 type sessionAwareSafepointController struct {
 	controller  *gcctx.GCSafepointController
-	dbname      string
 	callSession *dsess.DoltSession
-	origEpoch   int
 	doltDB      *doltdb.DoltDB
-
-	waiter *gcctx.GCSafepointWaiter
-	keeper func(hash.Hash) bool
+	waiter      *gcctx.GCSafepointWaiter
+	keeper      func(hash.Hash) bool
+	dbname      string
+	origEpoch   int
 }
 
 func (sc *sessionAwareSafepointController) visit(ctx context.Context, sess gcctx.GCRootsProvider) error {
