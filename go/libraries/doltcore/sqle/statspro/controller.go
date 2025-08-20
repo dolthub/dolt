@@ -65,48 +65,46 @@ func (k tableIndexesKey) String() string {
 }
 
 type StatsController struct {
-	logger         *logrus.Logger
-	pro            *sqle.DoltDatabaseProvider
-	bgThreads      *sql.BackgroundThreads
 	statsBackingDb filesys.Filesys
-	hdpEnv         *env.DoltEnv
+	kv             StatsKv
+	pro            *sqle.DoltDatabaseProvider
+	rateLimiter    *simpleRateLimiter
 
-	dbFs map[string]filesys.Filesys
+	closed          chan struct{}
+	workerDoneCh    chan struct{}
+	activeCtxCancel context.CancelFunc
 
 	// ctxGen lets us fetch the most recent working root
-	ctxGen ctxFactory
+	ctxGen    ctxFactory
+	logger    *logrus.Logger
+	bgThreads *sql.BackgroundThreads
+	hdpEnv    *env.DoltEnv
+	dbFs      map[string]filesys.Filesys
 
-	rateLimiter *simpleRateLimiter
-
-	activeCtxCancel context.CancelFunc
-	workerDoneCh    chan struct{}
-	listeners       []listener
-
-	gcInterval time.Duration
-	memOnly    bool
-	enableGc   bool
-	doGc       bool
-	Debug      bool
-	closed     chan struct{}
-
-	// kv is a content-addressed cache of histogram objects:
-	// buckets, first bounds, and schema-specific statistic
-	// templates.
-	kv StatsKv
 	// Stats tracks table statistics accessible to sessions.
 	Stats *rootStats
-	// mu protects all shared object access
-	mu sync.Mutex
+
+	listeners  []listener
+	gcInterval time.Duration
+
 	// genCnt is used to atomically swap Stats, same behavior
 	// as last-writer wins
 	genCnt atomic.Uint64
 	gcCnt  int
+
+	// mu protects all shared object access
+	mu       sync.Mutex
+	doGc     bool
+	enableGc bool
+	memOnly  bool
+
+	Debug bool
 }
 
 type rootStats struct {
-	hash            uint64
 	hashes          map[tableIndexesKey]hash.Hash
 	stats           map[tableIndexesKey][]*stats.Statistic
+	hash            uint64
 	DbCnt           int `json:"dbCnt"`
 	BucketWrites    int `json:"bucketWrites"`
 	TablesProcessed int `json:"tablesProcessed"`

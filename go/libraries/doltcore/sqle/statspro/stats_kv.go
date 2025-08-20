@@ -66,16 +66,12 @@ func NewMemStats() *memStats {
 }
 
 type memStats struct {
-	mu    sync.Mutex
-	gcGen uint64
-
 	buckets   map[bucketKey]*stats.Bucket
 	templates map[templateCacheKey]stats.Statistic
 	bounds    map[bucketKey]sql.Row
-
-	// gcFlusher tracks state require to lazily swap from
-	// a *memStats to *prollyStats
 	gcFlusher map[*val.TupleBuilder][]bucketKey
+	gcGen     uint64
+	mu        sync.Mutex
 }
 
 func (m *memStats) StorageCnt(context.Context) (int, error) {
@@ -208,12 +204,13 @@ func NewProllyStats(ctx context.Context, destDb dsess.SqlDatabase) (*prollyStats
 }
 
 type prollyStats struct {
-	mu     sync.Mutex
 	destDb dsess.SqlDatabase
-	kb, vb *val.TupleBuilder
+	kb     *val.TupleBuilder
+	vb     *val.TupleBuilder
 	m      *prolly.MutableMap
 	newM   *prolly.MutableMap
 	mem    *memStats
+	mu     sync.Mutex
 }
 
 func (p *prollyStats) Len() int {

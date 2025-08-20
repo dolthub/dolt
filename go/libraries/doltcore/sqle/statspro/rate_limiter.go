@@ -23,9 +23,9 @@ import (
 )
 
 type simpleRateLimiter struct {
-	mu      sync.Mutex
 	ticker  *time.Ticker
 	stopCh  chan struct{}
+	mu      sync.Mutex
 	stopped bool
 }
 
