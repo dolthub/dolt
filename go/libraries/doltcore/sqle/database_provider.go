@@ -51,7 +51,7 @@ import (
 type DoltDatabaseProvider struct {
 	fs           filesys.Filesys
 	remoteDialer dbfactory.GRPCDialProvider // TODO: why isn't this a method defined on the remote object
-	
+
 	// dbLocations maps a database name to its file system root
 	dbLocations            map[string]filesys.Filesys
 	databases              map[string]dsess.SqlDatabase

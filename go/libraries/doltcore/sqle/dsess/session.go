@@ -72,7 +72,7 @@ type DoltSession struct {
 	gcSafepointController *gcctx.GCSafepointController
 
 	writeSessProv WriteSessFunc
-	
+
 	email    string
 	username string
 	notices  []any // This is used by Doltgres to store notices. This is not used by Dolt.

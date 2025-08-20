@@ -85,7 +85,7 @@ var _ dtables.VersionableTable = (*DoltTable)(nil)
 type DoltTable struct {
 	db           dsess.SqlDatabase
 	lockedToRoot doltdb.RootValue
-	
+
 	// overriddenSchema is set when the @@dolt_override_schema system var is in use
 	overriddenSchema schema.Schema
 	sch              schema.Schema
