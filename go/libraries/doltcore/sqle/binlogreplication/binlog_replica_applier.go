@@ -57,17 +57,17 @@ const (
 // This type is NOT used concurrently – there is currently only one single applier process running to process binlog
 // events, so the state in this type is NOT protected with a mutex.
 type binlogReplicaApplier struct {
+	currentGtid               mysql.GTID
 	format                    *mysql.BinlogFormat
 	tableMapsById             map[uint64]*mysql.TableMap
 	stopReplicationChan       chan struct{}
-	currentGtid               mysql.GTID
-	replicationSourceUuid     string
-	currentPosition           *mysql.Position // successfully executed GTIDs
+	currentPosition           *mysql.Position
 	filters                   *filterConfiguration
-	running                   atomic.Bool
-	handlerWg                 sync.WaitGroup
 	engine                    *gms.Engine
 	dbsWithUncommittedChanges map[string]struct{}
+	replicationSourceUuid     string
+	handlerWg                 sync.WaitGroup
+	running                   atomic.Bool
 }
 
 func newBinlogReplicaApplier(filters *filterConfiguration) *binlogReplicaApplier {
