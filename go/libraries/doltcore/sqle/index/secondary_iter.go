@@ -49,9 +49,9 @@ func (i *strictLookupIter) Next(_ context.Context) (k, v val.Tuple, err error) {
 }
 
 type covStrictSecondaryLookupGen struct {
+	index      *doltIndex
 	m          prolly.Map
 	prefixDesc val.TupleDesc
-	index      *doltIndex
 }
 
 var _ SecondaryLookupIterGen = (*covStrictSecondaryLookupGen)(nil)
@@ -95,12 +95,12 @@ func (c *covStrictSecondaryLookupGen) New(ctx context.Context, k val.Tuple) (pro
 }
 
 type nonCovStrictSecondaryLookupGen struct {
+	sch        schema.Schema
+	pkBld      *val.TupleBuilder
 	pri        prolly.Map
 	sec        prolly.Map
 	prefixDesc val.TupleDesc
-	sch        schema.Schema
 	pkMap      val.OrdinalMapping
-	pkBld      *val.TupleBuilder
 }
 
 func (c *nonCovStrictSecondaryLookupGen) InputKeyDesc() val.TupleDesc {
@@ -276,12 +276,12 @@ func (c *nonCovLaxSecondaryLookupGen) New(ctx context.Context, k val.Tuple) (pro
 }
 
 type keylessSecondaryLookupGen struct {
+	sch        schema.Schema
+	pkBld      *val.TupleBuilder
 	pri        prolly.Map
 	sec        prolly.Map
-	sch        schema.Schema
 	prefixDesc val.TupleDesc
 	pkMap      val.OrdinalMapping
-	pkBld      *val.TupleBuilder
 }
 
 func (c *keylessSecondaryLookupGen) InputKeyDesc() val.TupleDesc {
@@ -332,15 +332,14 @@ func (c *keylessSecondaryLookupGen) New(ctx context.Context, k val.Tuple) (proll
 }
 
 type keylessLookupIter struct {
-	pri     prolly.Map
-	secIter prolly.MapIter
-
+	pkBld      *val.TupleBuilder
+	pri        prolly.Map
+	secIter    prolly.MapIter
 	prefixDesc val.TupleDesc
 	pkMap      val.OrdinalMapping
-	pkBld      *val.TupleBuilder
-
-	card uint64
-	k, v val.Tuple
+	k          val.Tuple
+	v          val.Tuple
+	card       uint64
 }
 
 func (i *keylessLookupIter) Next(ctx context.Context) (k, v val.Tuple, err error) {
