@@ -717,7 +717,7 @@ func getCommitInfoSQL(queryist cli.Queryist, sqlCtx *sql.Context, ref string, op
 	// CLI needs author info from extended schema, but shouldn't change user's session
 	_, _ = cli.GetRowsForSql(queryist, sqlCtx, "SET @saved_compact = @@"+dsess.DoltLogCompactSchema+";")
 	_, _ = cli.GetRowsForSql(queryist, sqlCtx, "SET "+dsess.DoltLogCompactSchema+" = 0;")
-	
+
 	defer func() {
 		_, _ = cli.GetRowsForSql(queryist, sqlCtx, "SET "+dsess.DoltLogCompactSchema+" = @saved_compact;")
 	}()
