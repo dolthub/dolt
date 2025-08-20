@@ -66,6 +66,10 @@ func (c inlineConjoiner) chooseConjoinees(upstream []tableSpec) (conjoinees, kee
 		// Need at least 2 tables to conjoin
 		return nil, upstream, fmt.Errorf("runtime error: cannot conjoin fewer than 2 tables, got %d", len(upstream))
 	}
+	if c.maxTables < 2 {
+		// If maxTables is 0, we don't conjoin at all
+		return nil, upstream, fmt.Errorf("runtime error: cannot conjoin with maxTables set to %d", c.maxTables)
+	}
 
 	sorted := make([]tableSpec, len(upstream))
 	copy(sorted, upstream)
@@ -80,7 +84,7 @@ func (c inlineConjoiner) chooseConjoinees(upstream []tableSpec) (conjoinees, kee
 	for i < len(sorted) {
 		// Check maxTables constraint first: after conjoining, we'd have (len(sorted)-i)+1 total tables
 		tablesAfterConjoining := (len(sorted) - i) + 1
-		if c.maxTables > 0 && tablesAfterConjoining < c.maxTables {
+		if tablesAfterConjoining < c.maxTables {
 			break
 		}
 
