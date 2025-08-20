@@ -254,7 +254,6 @@ func constructParametrizedDoltCommitQuery(msg string, apr *argparser.ArgParseRes
 	}
 	params = append(params, author)
 
-
 	if apr.Contains(cli.CommitterParam) {
 		writeToBuffer("--committer")
 		param = true
