@@ -31,13 +31,13 @@ func (s remotesrvStoreCache) Get(ctx context.Context, path, nbfVerStr string) (r
 	if err != nil {
 		return nil, err
 	}
-	return remotesrvStore{rss, path, s.controller}, nil
+	return remotesrvStore{RemoteSrvStore: rss, path: path, controller: s.controller}, nil
 }
 
 type remotesrvStore struct {
 	remotesrv.RemoteSrvStore
-	path       string
 	controller *Controller
+	path       string
 }
 
 func (rss remotesrvStore) Commit(ctx context.Context, current, last hash.Hash) (bool, error) {
