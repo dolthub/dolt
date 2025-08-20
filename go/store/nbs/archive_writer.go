@@ -55,24 +55,24 @@ const (
 )
 
 type archiveWriter struct {
-	// MD5 is calculated on the entire output, so this hash sink wraps actual ByteSink.
-	md5Summer *HashingByteSink
 	// SHA512 is calculated on chunks of the output stream, so will be reset at appropriate times. This
 	// sinker is what archive code writes to, and it wraps the MD5 sink.
-	output       *HashingByteSink
-	bytesWritten uint64
-	stagedBytes  stagedByteSpanSlice
-	stagedChunks stagedChunkRefSlice
+	output           *HashingByteSink
 	// seenChunks is used when building archives chunk-by-chunk, to ensure that we do not write the same chunk multiple
 	// times. It is not used for any other purpose, and there are cases where we bypass checking it (e.g. conjoining archives).
-	seenChunks      hash.HashSet
-	indexLen        uint64
-	metadataLen     uint32
-	suffixCheckSum  sha512Sum
-	fullMD5         md5Sum
-	workflowStage   stage
-	finalPath       string
-	chunkDataLength uint64
+	seenChunks       hash.HashSet
+	// MD5 is calculated on the entire output, so this hash sink wraps actual ByteSink.
+	md5Summer        *HashingByteSink
+	finalPath        string
+	stagedBytes      stagedByteSpanSlice
+	stagedChunks     stagedChunkRefSlice
+	workflowStage    stage
+	bytesWritten     uint64
+	indexLen         uint64
+	chunkDataLength  uint64
+	metadataLen      uint32
+	suffixCheckSum   sha512Sum
+	fullMD5          md5Sum
 }
 
 /*
@@ -496,15 +496,14 @@ func (aw *archiveWriter) getChunkDataLength() (uint64, error) {
 }
 
 type ArchiveStreamWriter struct {
-	writer     *archiveWriter
-	dictMap    map[*DecompBundle]uint32
-	chunkCount int32
-
+	writer  *archiveWriter
+	dictMap map[*DecompBundle]uint32
 	// snappyQueue is a queue of CompressedChunk that have been written, but not flushed to the archive.
 	// These are kept in memory until we have enough to create a compression dictionary for them (and subsequent
 	// snappy chunks). When this value is nil, the snappyDict must be set (they are exclusive)
 	snappyQueue *[]CompressedChunk
 	snappyDict  *DecompBundle
+	chunkCount  int32
 }
 
 func NewArchiveStreamWriter(tmpDir string) (*ArchiveStreamWriter, error) {

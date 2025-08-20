@@ -36,8 +36,8 @@ const (
 
 type blobstorePersister struct {
 	bs        blobstore.Blobstore
-	blockSize uint64
 	q         MemoryQuotaProvider
+	blockSize uint64
 }
 
 var _ tablePersister = &blobstorePersister{}
@@ -79,7 +79,7 @@ func (bsp *blobstorePersister) Persist(ctx context.Context, mt *memTable, haver 
 	if _, err = bsp.bs.Concatenate(ctx, name, []string{name + tableRecordsExt, name + tableTailExt}); err != nil {
 		return emptyChunkSource{}, gcBehavior_Continue, err
 	}
-	rdr := &bsTableReaderAt{name, bsp.bs}
+	rdr := &bsTableReaderAt{key: name, bs: bsp.bs}
 	src, err := newReaderFromIndexData(ctx, bsp.q, data, address, rdr, bsp.blockSize)
 	if err != nil {
 		return emptyChunkSource{}, gcBehavior_Continue, err
@@ -247,8 +247,8 @@ func (bsp *blobstorePersister) CopyTableFile(ctx context.Context, r io.Reader, n
 }
 
 type bsTableReaderAt struct {
-	key string
 	bs  blobstore.Blobstore
+	key string
 }
 
 func (bsTRA *bsTableReaderAt) Close() error {
@@ -315,7 +315,7 @@ func newBSChunkSource(ctx context.Context, bs blobstore.Blobstore, name hash.Has
 		return nil, errors.New("unexpected chunk count")
 	}
 
-	tr, err := newTableReader(index, &bsTableReaderAt{name.String(), bs}, s3BlockSize)
+	tr, err := newTableReader(index, &bsTableReaderAt{key: name.String(), bs: bs}, s3BlockSize)
 	if err != nil {
 		_ = index.Close()
 		return nil, err

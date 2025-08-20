@@ -119,16 +119,16 @@ func TestTruncate(t *testing.T) {
 // buffer and wrap around into the iteration range, that iteration stops early and an error is returned.
 func TestIterationConflict(t *testing.T) {
 	buffer := newReflogRingBuffer(5)
-	buffer.Push(reflogRootHashEntry{"aaaa", time.Now()})
-	buffer.Push(reflogRootHashEntry{"bbbb", time.Now()})
-	buffer.Push(reflogRootHashEntry{"cccc", time.Now()})
-	buffer.Push(reflogRootHashEntry{"dddd", time.Now()})
-	buffer.Push(reflogRootHashEntry{"eeee", time.Now()})
+	buffer.Push(reflogRootHashEntry{root: "aaaa", timestamp: time.Now()})
+	buffer.Push(reflogRootHashEntry{root: "bbbb", timestamp: time.Now()})
+	buffer.Push(reflogRootHashEntry{root: "cccc", timestamp: time.Now()})
+	buffer.Push(reflogRootHashEntry{root: "dddd", timestamp: time.Now()})
+	buffer.Push(reflogRootHashEntry{root: "eeee", timestamp: time.Now()})
 
 	iterationCount := 0
 	err := buffer.Iterate(func(item reflogRootHashEntry) error {
 		for i := 0; i < 100; i++ {
-			buffer.Push(reflogRootHashEntry{fmt.Sprintf("i-%d", i), time.Now()})
+			buffer.Push(reflogRootHashEntry{root: fmt.Sprintf("i-%d", i), timestamp: time.Now()})
 		}
 		iterationCount++
 		return nil

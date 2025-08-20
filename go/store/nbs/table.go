@@ -182,9 +182,9 @@ func (hs getRecordByPrefix) Less(i, j int) bool { return hs[i].prefix < hs[j].pr
 func (hs getRecordByPrefix) Swap(i, j int)      { hs[i], hs[j] = hs[j], hs[i] }
 
 type extractRecord struct {
-	a    hash.Hash
-	data []byte
 	err  error
+	data []byte
+	a    hash.Hash
 }
 
 // Returned by read methods that take a |keeperF|, this lets a
