@@ -38,16 +38,15 @@ var binlogDirectory = filepath.Join(".dolt", "binlog")
 // rotating the log files, listing the available log files, purging old log files, and keeping track of what GTIDs
 // are available in the log files.
 type logManager struct {
-	binlogFormat    mysql.BinlogFormat
-	binlogEventMeta mysql.BinlogEventMetadata
-
+	fs                    filesys.Filesys
+	availableGtids        mysql.GTIDSet
 	mu                    *sync.Mutex
 	currentBinlogFile     *os.File
 	currentBinlogFileName string
-	currentPosition       int
-	fs                    filesys.Filesys
 	binlogDirectory       string
-	availableGtids        mysql.GTIDSet
+	binlogFormat          mysql.BinlogFormat
+	currentPosition       int
+	binlogEventMeta       mysql.BinlogEventMetadata
 }
 
 // NewLogManager creates a new logManager instance where binlog files are stored in the .dolt/binlog directory

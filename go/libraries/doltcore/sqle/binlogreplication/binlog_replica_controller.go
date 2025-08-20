@@ -56,17 +56,13 @@ var ErrReplicationStopped = fmt.Errorf("replication stop requested")
 // This type is used concurrently – multiple sessions on the DB can call this interface concurrently,
 // so all state that the controller tracks MUST be protected with a mutex.
 type doltBinlogReplicaController struct {
-	status  binlogreplication.ReplicaStatus
-	filters *filterConfiguration
-	applier *binlogReplicaApplier
-	ctx     *sql.Context
-
-	// statusMutex blocks concurrent access to the ReplicaStatus struct
-	statusMutex *sync.Mutex
-
-	// operationMutex blocks concurrent access to the START/STOP/RESET REPLICA operations
+	filters        *filterConfiguration
+	applier        *binlogReplicaApplier
+	ctx            *sql.Context
+	statusMutex    *sync.Mutex
 	operationMutex *sync.Mutex
 	engine         *sqle.Engine
+	status         binlogreplication.ReplicaStatus
 }
 
 var _ binlogreplication.BinlogReplicaController = (*doltBinlogReplicaController)(nil)

@@ -34,8 +34,8 @@ import (
 type binlogStreamer struct {
 	quitChan       chan struct{}
 	ticker         *time.Ticker
-	skippingGtids  bool
 	currentLogFile *os.File
+	skippingGtids  bool
 }
 
 // NewBinlogStreamer creates a new binlogStreamer instance.
@@ -171,10 +171,10 @@ func (streamer *binlogStreamer) streamNextEvents(_ *sql.Context, conn *mysql.Con
 // and implements the doltdb.DatabaseUpdateListener interface to receive notifications of database
 // changes that need to be turned into binlog events and then sent to connected replicas.
 type binlogStreamerManager struct {
-	streamers      []*binlogStreamer
-	streamersMutex sync.Mutex
 	quitChan       chan struct{}
 	logManager     *logManager
+	streamers      []*binlogStreamer
+	streamersMutex sync.Mutex
 }
 
 // NewBinlogStreamerManager creates a new binlogStreamerManager instance.
