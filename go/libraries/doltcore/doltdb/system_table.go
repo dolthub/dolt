@@ -405,10 +405,10 @@ var GetBranchActivityTableName = func() string {
 const (
 	// LogTableName is the log system table name
 	LogTableName = "dolt_log"
-	
+
 	// LogTableFullName is the full log system table name (contains committer and author metadata)
 	LogTableFullName = "dolt_log_full"
-	
+
 	// LogTableCompactName is the compact log system table name (contains committer metadata only)
 	LogTableCompactName = "dolt_log_compact"
 
