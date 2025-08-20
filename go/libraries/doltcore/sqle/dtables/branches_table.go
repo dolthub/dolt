@@ -211,7 +211,7 @@ func (itr *BranchItr) Next(ctx *sql.Context) (sql.Row, error) {
 
 	remoteBranches := itr.table.remote
 	if remoteBranches {
-		return sql.NewRow(name, h.String(), meta.Name, meta.Email, meta.CommitterTime(), meta.Description), nil
+		return sql.NewRow(name, h.String(), meta.Name, meta.Email, meta.Time(), meta.Description), nil
 	} else {
 		branches, err := itr.table.db.DbData().Rsr.GetBranches()
 
@@ -226,7 +226,7 @@ func (itr *BranchItr) Next(ctx *sql.Context) (sql.Row, error) {
 			remoteName = branch.Remote
 			branchName = branch.Merge.Ref.GetPath()
 		}
-		return sql.NewRow(name, h.String(), meta.Name, meta.Email, meta.CommitterTime(), meta.Description, remoteName, branchName, dirty), nil
+		return sql.NewRow(name, h.String(), meta.Name, meta.Email, meta.Time(), meta.Description, remoteName, branchName, dirty), nil
 	}
 }
 

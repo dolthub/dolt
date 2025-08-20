@@ -750,7 +750,7 @@ func BasicSelectTests() []SelectTest {
 					headCommitHash,
 					"billy bob",
 					"bigbillieb@fake.horse",
-					time.Date(1970, 1, 1, 1, 0, 0, 0, time.UTC).In(LoadedLocalLocation()),
+					time.Date(1970, 1, 1, 1, 0, 0, 0, time.UTC).In(LoadedLocalLocation()), // Committer time is 1 hour after author time
 					"Initialize data repository",
 					uint64(1), // commit_order for the initial commit
 				},
@@ -781,7 +781,7 @@ func BasicSelectTests() []SelectTest {
 					env.DefaultInitBranch,
 					headCommitHash,
 					"billy bob", "bigbillieb@fake.horse",
-					time.Date(1970, 1, 1, 1, 0, 0, 0, time.UTC).In(LoadedLocalLocation()),
+					time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC).In(LoadedLocalLocation()), // Author time (branches table uses meta.Time())
 					"Initialize data repository",
 					"",
 					"",
