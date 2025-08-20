@@ -937,11 +937,12 @@ func ConfigureServices(
                 if mcpSrv.cancel != nil {
                     mcpSrv.cancel()
                 }
+				var err error
                 if mcpSrv.group != nil {
-                    _ = mcpSrv.group.Wait()
+					err = mcpSrv.group.Wait()
                 }
                 mcpSrv.state.Swap(svcs.ServiceState_Stopped)
-                return nil
+                return err 
             },
 		}
 		controller.Register(StartMCP)
