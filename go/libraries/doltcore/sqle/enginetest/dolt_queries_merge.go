@@ -368,6 +368,7 @@ var MergeScripts = []queries.ScriptTest{
 			"call DOLT_ADD('.')",
 			"INSERT INTO test VALUES (0),(1),(2);",
 			"SET autocommit = 0",
+			"SET dolt_log_compact_schema = 0",
 			"CALL DOLT_COMMIT('-a', '-m', 'Step 1', '--date', '2022-08-06T12:00:00');",
 			"CALL DOLT_CHECKOUT('-b', 'feature-branch')",
 			"INSERT INTO test VALUES (3);",
@@ -394,7 +395,7 @@ var MergeScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{5}}, // includes the merge commit created by no-ff and setup commits
 			},
 			{
-				Query:    "SET dolt_log_compact_schema = 0; select message from dolt_log order by author_date DESC LIMIT 1;",
+				Query:    "select message from dolt_log order by author_date DESC LIMIT 1;",
 				Expected: []sql.Row{{"this is a no-ff"}}, // includes the merge commit created by no-ff
 			},
 			{
@@ -410,6 +411,7 @@ var MergeScripts = []queries.ScriptTest{
 			"call DOLT_ADD('.')",
 			"INSERT INTO test VALUES (0),(1),(2);",
 			"SET autocommit = 0",
+			"SET dolt_log_compact_schema = 0",
 			"CALL DOLT_COMMIT('-a', '-m', 'Step 1', '--date', '2022-08-06T12:00:00');",
 			"CALL DOLT_BRANCH('feature-branch')",
 			"USE `mydb/feature-branch`",
@@ -437,7 +439,7 @@ var MergeScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{5}}, // includes the merge commit created by no-ff and setup commits
 			},
 			{
-				Query:    "SET dolt_log_compact_schema = 0; select message from dolt_log order by author_date DESC LIMIT 1;",
+				Query:    "select message from dolt_log order by author_date DESC LIMIT 1;",
 				Expected: []sql.Row{{"this is a no-ff"}}, // includes the merge commit created by no-ff
 			},
 			{
@@ -455,6 +457,7 @@ var MergeScripts = []queries.ScriptTest{
 			"CALL DOLT_ADD('.')",
 			"INSERT INTO test VALUES (0),(1),(2);",
 			"SET autocommit = 0",
+			"SET dolt_log_compact_schema = 0",
 			"CALL DOLT_COMMIT('-a', '-m', 'Step 1', '--date', '2022-08-06T12:00:01');",
 			"CALL DOLT_CHECKOUT('-b', 'feature-branch')",
 			"INSERT INTO test VALUES (3);",
@@ -482,7 +485,7 @@ var MergeScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{6}},
 			},
 			{
-				Query:    "SET dolt_log_compact_schema = 0; select message from dolt_log where author_date > '2022-08-08' order by author_date DESC LIMIT 1;",
+				Query:    "select message from dolt_log where author_date > '2022-08-08' order by author_date DESC LIMIT 1;",
 				Expected: []sql.Row{{"this is a merge"}},
 			},
 		},
@@ -494,6 +497,7 @@ var MergeScripts = []queries.ScriptTest{
 			"CALL DOLT_ADD('.')",
 			"INSERT INTO test VALUES (0),(1),(2);",
 			"SET autocommit = 0",
+			"SET dolt_log_compact_schema = 0",
 			"CALL DOLT_COMMIT('-a', '-m', 'Step 1', '--date', '2022-08-06T12:00:01');",
 			"CALL DOLT_CHECKOUT('-b', 'feature-branch')",
 			"INSERT INTO test VALUES (3);",
@@ -522,7 +526,7 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				// careful to filter out the initial commit, which will be later than the ones above
-				Query:    "SET dolt_log_compact_schema = 0; select message from dolt_log where author_date < '2022-08-08' order by author_date DESC LIMIT 1;",
+				Query:    "select message from dolt_log where author_date < '2022-08-08' order by author_date DESC LIMIT 1;",
 				Expected: []sql.Row{{"add some more values"}},
 			},
 			{
@@ -542,6 +546,7 @@ var MergeScripts = []queries.ScriptTest{
 			"call DOLT_ADD('.')",
 			"INSERT INTO test VALUES (0, 0)",
 			"SET autocommit = 0",
+			"SET dolt_log_compact_schema = 0",
 			"CALL DOLT_COMMIT('-a', '-m', 'Step 1', '--date', '2022-08-06T12:00:01');",
 			"CALL DOLT_CHECKOUT('-b', 'feature-branch')",
 			"INSERT INTO test VALUES (1, 1);",
@@ -585,7 +590,7 @@ var MergeScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{4}},
 			},
 			{
-				Query:    "SET dolt_log_compact_schema = 0; select message from dolt_log where author_date < '2022-08-08' order by author_date DESC LIMIT 1;",
+				Query:    "select message from dolt_log where author_date < '2022-08-08' order by author_date DESC LIMIT 1;",
 				Expected: []sql.Row{{"update a value"}},
 			},
 			{
@@ -641,6 +646,7 @@ var MergeScripts = []queries.ScriptTest{
 			"call DOLT_ADD('.')",
 			"INSERT INTO test VALUES (0, 0, 0)",
 			"SET autocommit = 0",
+			"SET dolt_log_compact_schema = 0",
 			"CALL DOLT_COMMIT('-a', '-m', 'Step 1', '--date', '2022-08-06T12:00:01');",
 			"CALL DOLT_CHECKOUT('-b', 'feature-branch')",
 			"ALTER TABLE test DROP COLUMN val2;",
@@ -690,7 +696,7 @@ var MergeScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{4}},
 			},
 			{
-				Query:    "SET dolt_log_compact_schema = 0; select message from dolt_log where author_date < '2022-08-08' order by author_date DESC LIMIT 1;",
+				Query:    "select message from dolt_log where author_date < '2022-08-08' order by author_date DESC LIMIT 1;",
 				Expected: []sql.Row{{"update a value"}},
 			},
 			{
@@ -754,6 +760,7 @@ var MergeScripts = []queries.ScriptTest{
 			"call DOLT_ADD('.')",
 			"INSERT INTO test VALUES (0, 0)",
 			"SET autocommit = 0",
+			"SET dolt_log_compact_schema = 0",
 			"CALL DOLT_COMMIT('-a', '-m', 'Step 1', '--date', '2022-08-06T12:00:01');",
 			"CALL DOLT_CHECKOUT('-b', 'feature-branch')",
 			"ALTER TABLE test MODIFY val bigint;",
@@ -785,7 +792,7 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Skip:     true,
-				Query:    "SET dolt_log_compact_schema = 0; select message from dolt_log where author_date < '2022-08-08' order by author_date DESC LIMIT 1;",
+				Query:    "select message from dolt_log where author_date < '2022-08-08' order by author_date DESC LIMIT 1;",
 				Expected: []sql.Row{{"update val col"}},
 			},
 			{
@@ -1033,6 +1040,7 @@ var MergeScripts = []queries.ScriptTest{
 			"CREATE TABLE test (pk int primary key)",
 			"CALL DOLT_ADD('.')",
 			"INSERT INTO test VALUES (0),(1),(2);",
+			"SET dolt_log_compact_schema = 0",
 			"CALL DOLT_COMMIT('-a', '-m', 'Step 1');",
 			"CALL DOLT_CHECKOUT('-b', 'feature-branch')",
 			"INSERT INTO test VALUES (3);",
@@ -1059,7 +1067,7 @@ var MergeScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{5}}, // includes the merge commit created by no-ff and setup commits
 			},
 			{
-				Query:    "SET dolt_log_compact_schema = 0; select message from dolt_log order by author_date DESC LIMIT 1;",
+				Query:    "select message from dolt_log order by author_date DESC LIMIT 1;",
 				Expected: []sql.Row{{"this is a no-ff"}}, // includes the merge commit created by no-ff
 			},
 			{
@@ -1074,6 +1082,7 @@ var MergeScripts = []queries.ScriptTest{
 			"CREATE TABLE test (pk int primary key)",
 			"CALL DOLT_ADD('.')",
 			"INSERT INTO test VALUES (0),(1),(2);",
+			"SET dolt_log_compact_schema = 0",
 			"CALL DOLT_COMMIT('-a', '-m', 'Step 1', '--date', '2022-08-06T12:00:00');",
 			"CALL DOLT_CHECKOUT('-b', 'feature-branch')",
 			"INSERT INTO test VALUES (3);",
@@ -1101,7 +1110,7 @@ var MergeScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{6}}, // includes the merge commit and a new commit created by successful merge
 			},
 			{
-				Query:    "SET dolt_log_compact_schema = 0; select message from dolt_log where author_date > '2022-08-08' order by author_date DESC LIMIT 1;",
+				Query:    "select message from dolt_log where author_date > '2022-08-08' order by author_date DESC LIMIT 1;",
 				Expected: []sql.Row{{"this is a merge"}},
 			},
 		},
@@ -1112,6 +1121,7 @@ var MergeScripts = []queries.ScriptTest{
 			"CREATE TABLE test (pk int primary key)",
 			"CALL DOLT_ADD('.')",
 			"INSERT INTO test VALUES (0),(1),(2);",
+			"SET dolt_log_compact_schema = 0",
 			"CALL DOLT_COMMIT('-a', '-m', 'Step 1', '--date', '2022-08-06T12:00:00');",
 			"CALL dolt_branch('feature-branch')",
 			"use `mydb/feature-branch`",
@@ -1140,7 +1150,7 @@ var MergeScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{6}}, // includes the merge commit and a new commit created by successful merge
 			},
 			{
-				Query:    "SET dolt_log_compact_schema = 0; select message from dolt_log where author_date > '2022-08-08' order by author_date DESC LIMIT 1;",
+				Query:    "select message from dolt_log where author_date > '2022-08-08' order by author_date DESC LIMIT 1;",
 				Expected: []sql.Row{{"this is a merge"}},
 			},
 			{
@@ -1167,6 +1177,7 @@ var MergeScripts = []queries.ScriptTest{
 			"CREATE TABLE test (pk int primary key)",
 			"CALL DOLT_ADD('.')",
 			"INSERT INTO test VALUES (0),(1),(2);",
+			"SET dolt_log_compact_schema = 0",
 			"CALL DOLT_COMMIT('-a', '-m', 'Step 1', '--date', '2022-08-06T12:00:00');",
 			"CALL DOLT_CHECKOUT('-b', 'feature-branch')",
 			"INSERT INTO test VALUES (3);",
@@ -1190,7 +1201,7 @@ var MergeScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{4}},
 			},
 			{
-				Query:    "SET dolt_log_compact_schema = 0; select message from dolt_log where author_date < '2022-08-08' order by author_date DESC LIMIT 1;",
+				Query:    "select message from dolt_log where author_date < '2022-08-08' order by author_date DESC LIMIT 1;",
 				Expected: []sql.Row{{"add some more values"}},
 			},
 			{
