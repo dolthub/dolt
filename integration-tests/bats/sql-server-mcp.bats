@@ -9,6 +9,95 @@ make_repo() {
   cd ..
 }
 
+# Upcoming: --mcp-user and --mcp-database
+
+@test "sql-server mcp: --mcp-database connects to specified database" {
+  skip "--mcp-database not yet implemented"
+  cd repo1
+
+  # Create target database before starting server
+  dolt sql -q "CREATE DATABASE mcpdb"
+
+  MCP_PORT=$( definePORT )
+  start_sql_server_with_args --host 0.0.0.0 --mcp-port "$MCP_PORT" --mcp-database mcpdb
+  run wait_for_mcp_port "$MCP_PORT" 8500
+  [ $status -eq 0 ]
+
+  # initialize and list via MCP
+  INIT_FILE=$BATS_TMPDIR/mcp_init_md_$$.json
+  OUT_INIT=$BATS_TMPDIR/mcp_out_init_md_$$.json
+  echo '{"jsonrpc":"2.0","id":"1","method":"initialize","params":{"clientInfo":{"name":"bats","version":"0.0.0"},"capabilities":{}}}' > "$INIT_FILE"
+  run bash -c "curl -sS -D $BATS_TMPDIR/mcp_headers_md_$$.txt -H 'Content-Type: application/json' --data-binary @'$INIT_FILE' http://127.0.0.1:${MCP_PORT}/ > '$OUT_INIT'"
+  [ $status -eq 0 ]
+  SESSION=$(grep -i '^Mcp-Session-Id:' $BATS_TMPDIR/mcp_headers_md_$$.txt | awk -F': ' '{print $2}' | tr -d '\r')
+  [ -n "$SESSION" ]
+
+  CALL_FILE=$BATS_TMPDIR/mcp_call_md_$$.json
+  OUT_CALL=$BATS_TMPDIR/mcp_out_call_md_$$.json
+  echo '{"jsonrpc":"2.0","id":"2","method":"tools/call","params":{"name":"list_databases","arguments":{}}}' > "$CALL_FILE"
+  run bash -c "curl -sS -H 'Content-Type: application/json' -H 'Mcp-Session-Id: '$SESSION --data-binary @'$CALL_FILE' http://127.0.0.1:${MCP_PORT}/ > '$OUT_CALL'"
+  [ $status -eq 0 ]
+  run grep -E "mcpdb" "$OUT_CALL"
+  [ $status -eq 0 ]
+}
+
+@test "sql-server mcp: --mcp-user authenticates as specified sql user" {
+  skip "--mcp-user not yet implemented"
+  cd repo1
+
+  # Create a sql user with no password and read privileges
+  dolt sql -q "CREATE USER mcpuser@'%'"
+  dolt sql -q "GRANT SELECT ON *.* TO mcpuser@'%'"
+
+  MCP_PORT=$( definePORT )
+  start_sql_server_with_args --host 0.0.0.0 --mcp-port "$MCP_PORT" --mcp-user mcpuser
+  run wait_for_mcp_port "$MCP_PORT" 8500
+  [ $status -eq 0 ]
+
+  # initialize and list via MCP
+  INIT_FILE=$BATS_TMPDIR/mcp_init_mu_$$.json
+  OUT_INIT=$BATS_TMPDIR/mcp_out_init_mu_$$.json
+  echo '{"jsonrpc":"2.0","id":"1","method":"initialize","params":{"clientInfo":{"name":"bats","version":"0.0.0"},"capabilities":{}}}' > "$INIT_FILE"
+  run bash -c "curl -sS -D $BATS_TMPDIR/mcp_headers_mu_$$.txt -H 'Content-Type: application/json' --data-binary @'$INIT_FILE' http://127.0.0.1:${MCP_PORT}/ > '$OUT_INIT'"
+  [ $status -eq 0 ]
+  SESSION=$(grep -i '^Mcp-Session-Id:' $BATS_TMPDIR/mcp_headers_mu_$$.txt | awk -F': ' '{print $2}' | tr -d '\r')
+  [ -n "$SESSION" ]
+
+  CALL_FILE=$BATS_TMPDIR/mcp_call_mu_$$.json
+  OUT_CALL=$BATS_TMPDIR/mcp_out_call_mu_$$.json
+  echo '{"jsonrpc":"2.0","id":"2","method":"tools/call","params":{"name":"list_databases","arguments":{}}}' > "$CALL_FILE"
+  run bash -c "curl -sS -H 'Content-Type: application/json' -H 'Mcp-Session-Id: '$SESSION --data-binary @'$CALL_FILE' http://127.0.0.1:${MCP_PORT}/ > '$OUT_CALL'"
+  [ $status -eq 0 ]
+}
+
+@test "sql-server mcp: --mcp-user with --mcp-database works together" {
+  skip "--mcp-user/--mcp-database not yet implemented"
+  cd repo1
+
+  dolt sql -q "CREATE DATABASE mcpdb2"
+  dolt sql -q "CREATE USER mcpuser2@'%'"
+  dolt sql -q "GRANT ALL ON mcpdb2.* TO mcpuser2@'%'"
+
+  MCP_PORT=$( definePORT )
+  start_sql_server_with_args --host 0.0.0.0 --mcp-port "$MCP_PORT" --mcp-user mcpuser2 --mcp-database mcpdb2
+  run wait_for_mcp_port "$MCP_PORT" 8500
+  [ $status -eq 0 ]
+
+  INIT_FILE=$BATS_TMPDIR/mcp_init_mudb_$$.json
+  OUT_INIT=$BATS_TMPDIR/mcp_out_init_mudb_$$.json
+  echo '{"jsonrpc":"2.0","id":"1","method":"initialize","params":{"clientInfo":{"name":"bats","version":"0.0.0"},"capabilities":{}}}' > "$INIT_FILE"
+  run bash -c "curl -sS -D $BATS_TMPDIR/mcp_headers_mudb_$$.txt -H 'Content-Type: application/json' --data-binary @'$INIT_FILE' http://127.0.0.1:${MCP_PORT}/ > '$OUT_INIT'"
+  [ $status -eq 0 ]
+  SESSION=$(grep -i '^Mcp-Session-Id:' $BATS_TMPDIR/mcp_headers_mudb_$$.txt | awk -F': ' '{print $2}' | tr -d '\r')
+  [ -n "$SESSION" ]
+  CALL_FILE=$BATS_TMPDIR/mcp_call_mudb_$$.json
+  OUT_CALL=$BATS_TMPDIR/mcp_out_call_mudb_$$.json
+  echo '{"jsonrpc":"2.0","id":"2","method":"tools/call","params":{"name":"list_databases","arguments":{}}}' > "$CALL_FILE"
+  run bash -c "curl -sS -H 'Content-Type: application/json' -H 'Mcp-Session-Id: '$SESSION --data-binary @'$CALL_FILE' http://127.0.0.1:${MCP_PORT}/ > '$OUT_CALL'"
+  [ $status -eq 0 ]
+  run grep -E "mcpdb2" "$OUT_CALL"
+  [ $status -eq 0 ]
+}
 setup() {
   skiponwindows "tests are flaky on Windows"
   setup_no_dolt_init
