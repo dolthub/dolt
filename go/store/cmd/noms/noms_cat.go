@@ -80,8 +80,8 @@ func setupCatFlags() *flag.FlagSet {
 }
 
 type footer struct {
-	chunkCnt   uint32
 	uncompSize uint64
+	chunkCnt   uint32
 	magicMatch bool
 }
 
