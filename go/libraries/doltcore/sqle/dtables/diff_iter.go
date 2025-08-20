@@ -48,8 +48,8 @@ type ldDiffRowItr struct {
 var _ sql.RowIter = &ldDiffRowItr{}
 
 type commitInfo struct {
-	name    types.String
 	date    *types.Timestamp
+	name    types.String
 	nameTag uint64
 	dateTag uint64
 }
@@ -85,8 +85,8 @@ func newLdDiffIter(ctx *sql.Context, ddb *doltdb.DoltDB, joiner *rowconv.Joiner,
 	toDateCol, _ := sch.GetAllCols().GetByName(toCommitDate)
 	fromDateCol, _ := sch.GetAllCols().GetByName(fromCommitDate)
 
-	fromCmInfo := commitInfo{types.String(dp.fromName), dp.fromDate, fromCol.Tag, fromDateCol.Tag}
-	toCmInfo := commitInfo{types.String(dp.toName), dp.toDate, toCol.Tag, toDateCol.Tag}
+	fromCmInfo := commitInfo{name: types.String(dp.fromName), date: dp.fromDate, nameTag: fromCol.Tag, dateTag: fromDateCol.Tag}
+	toCmInfo := commitInfo{name: types.String(dp.toName), date: dp.toDate, nameTag: toCol.Tag, dateTag: toDateCol.Tag}
 
 	rd := diff.NewRowDiffer(ctx, ddb.Format(), fromSch, toSch, 1024)
 	// TODO (dhruv) don't cast to noms map
@@ -196,24 +196,30 @@ func (itr *ldDiffRowItr) Close(*sql.Context) (err error) {
 }
 
 type commitInfo2 struct {
-	name string
 	ts   *time.Time
+	name string
 }
 
 type prollyDiffIter struct {
-	from, to                   prolly.Map
-	fromSch, toSch             schema.Schema
-	targetFromSch, targetToSch schema.Schema
-	fromConverter, toConverter ProllyRowConverter
-	keyless                    bool
-	ranges                     []prolly.Range
+	fromConverter ProllyRowConverter
+	toConverter   ProllyRowConverter
+	fromCm        commitInfo2
+	toCm          commitInfo2
 
-	fromCm commitInfo2
-	toCm   commitInfo2
+	fromSch       schema.Schema
+	toSch         schema.Schema
+	targetFromSch schema.Schema
+	targetToSch   schema.Schema
 
 	rows    chan sql.Row
 	errChan chan error
 	cancel  context.CancelFunc
+
+	from   prolly.Map
+	to     prolly.Map
+	ranges []prolly.Range
+	
+	keyless bool
 }
 
 var _ sql.RowIter = prollyDiffIter{}

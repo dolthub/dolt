@@ -33,9 +33,9 @@ const commitsDefaultRowCount = 10
 // CommitsTable is a sql.Table that implements a system table which
 // shows the combined commit log for all branches in the repo.
 type CommitsTable struct {
+	ddb       *doltdb.DoltDB
 	dbName    string
 	tableName string
-	ddb       *doltdb.DoltDB
 }
 
 var _ sql.Table = (*CommitsTable)(nil)

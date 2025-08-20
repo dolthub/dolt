@@ -30,9 +30,9 @@ const commitAncestorsDefaultRowCount = 100
 // CommitAncestorsTable is a sql.Table that implements a system table which
 // shows (commit, parent_commit) relationships for all commits in the repo.
 type CommitAncestorsTable struct {
+	ddb       *doltdb.DoltDB
 	dbName    string
 	tableName string
-	ddb       *doltdb.DoltDB
 }
 
 var _ sql.Table = (*CommitAncestorsTable)(nil)

@@ -52,39 +52,27 @@ import (
 const stagedColumnIdx = 1
 
 type WorkspaceTable struct {
-	userTblName doltdb.TableName
-	ws          *doltdb.WorkingSet
-	head        doltdb.RootValue
-
-	sqlSchema     sql.Schema // This is the full schema for the dolt_workspace_* table
+	head          doltdb.RootValue
+	headSchema    schema.Schema
+	ws            *doltdb.WorkingSet
 	stagedDeltas  *diff.TableDelta
 	workingDeltas *diff.TableDelta
-
-	// headSchema is the schema of the table that is being modified.
-	headSchema schema.Schema
-
-	// modifiable is true if the schemas before and after the update are identical. Used to reject updates that would
-	// be impossible to perform - such as only stage one row when the entire schema of the table is being modified.
-	modifiable bool
+	userTblName   doltdb.TableName
+	sqlSchema     sql.Schema
+	modifiable    bool
 }
 
 type WorkspaceTableModifier struct {
+	head               doltdb.RootValue
+	headSch            schema.Schema
+	ws                 *doltdb.WorkingSet
+	tableWriter        *dsess.TableWriter
+	sessionWriter      *dsess.WriteSession
+	err                *error
 	tableName          doltdb.TableName
 	workspaceTableName string
-	ws                 *doltdb.WorkingSet
-	head               doltdb.RootValue
-
-	headSch   schema.Schema
-	schemaLen int
-
-	// tableWriter and sessionWriter are only set during StatementBegin
-	tableWriter   *dsess.TableWriter
-	sessionWriter *dsess.WriteSession
-
-	// modifiable carried through from the main table.
-	modifiable bool
-
-	err *error
+	schemaLen          int
+	modifiable         bool
 }
 
 type WorkspaceTableUpdater struct {
@@ -554,13 +542,13 @@ func (w *WorkspacePartitionItr) Next(_ *sql.Context) (sql.Partition, error) {
 }
 
 type WorkspacePartition struct {
-	name       string
-	base       *doltdb.Table
 	baseSch    schema.Schema
-	working    *doltdb.Table
 	workingSch schema.Schema
-	staging    *doltdb.Table
 	stagingSch schema.Schema
+	base       *doltdb.Table
+	working    *doltdb.Table
+	staging    *doltdb.Table
+	name       string
 }
 
 var _ sql.Partition = (*WorkspacePartition)(nil)
@@ -627,21 +615,18 @@ func (wt *WorkspaceTable) PartitionRows(ctx *sql.Context, part sql.Partition) (s
 
 // workspaceDiffIter enables the iteration over the diff information between the HEAD, STAGING, and WORKING roots.
 type workspaceDiffIter struct {
-	base    prolly.Map
-	working prolly.Map
-	staging prolly.Map
-
 	baseConverter    ProllyRowConverter
 	workingConverter ProllyRowConverter
 	stagingConverter ProllyRowConverter
-
-	tgtBaseSch    schema.Schema
-	tgtWorkingSch schema.Schema
-	tgtStagingSch schema.Schema
-
-	rows    chan sql.Row
-	errChan chan error
-	cancel  func()
+	tgtBaseSch       schema.Schema
+	tgtWorkingSch    schema.Schema
+	tgtStagingSch    schema.Schema
+	rows             chan sql.Row
+	errChan          chan error
+	cancel           func()
+	base             prolly.Map
+	working          prolly.Map
+	staging          prolly.Map
 }
 
 func (itr workspaceDiffIter) Next(ctx *sql.Context) (sql.Row, error) {

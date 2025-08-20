@@ -46,12 +46,12 @@ var filterColumnNameSet = set.NewStrSet([]string{commitHashCol})
 // UnscopedDiffTable is a sql.Table implementation of a system table that shows which tables have
 // changed in each commit, across all branches.
 type UnscopedDiffTable struct {
-	dbName           string
-	tableName        string
 	ddb              *doltdb.DoltDB
 	head             *doltdb.Commit
-	partitionFilters []sql.Expression
 	commitCheck      doltdb.CommitFilter[*sql.Context]
+	dbName           string
+	tableName        string
+	partitionFilters []sql.Expression
 }
 
 var _ sql.Table = (*UnscopedDiffTable)(nil)
@@ -219,10 +219,10 @@ func (dt *UnscopedDiffTable) newWorkingSetRowItr(ctx *sql.Context) (sql.RowIter,
 var _ sql.RowIter = &doltDiffWorkingSetRowItr{}
 
 type doltDiffWorkingSetRowItr struct {
-	stagedIndex         int
-	unstagedIndex       int
 	stagedTableDeltas   []diff.TableDelta
 	unstagedTableDeltas []diff.TableDelta
+	stagedIndex         int
+	unstagedIndex       int
 }
 
 func (d *doltDiffWorkingSetRowItr) Next(ctx *sql.Context) (sql.Row, error) {
@@ -281,14 +281,14 @@ func (d doltDiffPartition) Key() []byte {
 
 // doltDiffCommitHistoryRowItr is a sql.RowItr implementation which iterates over each commit as if it's a row in the table.
 type doltDiffCommitHistoryRowItr struct {
+	child           doltdb.CommitItr[*sql.Context]
 	ctx             *sql.Context
 	ddb             *doltdb.DoltDB
-	child           doltdb.CommitItr[*sql.Context]
-	commits         []*doltdb.Commit
 	meta            *datas.CommitMeta
-	hash            hash.Hash
+	commits         []*doltdb.Commit
 	tableChanges    []diff.TableDeltaSummary
 	tableChangesIdx int
+	hash            hash.Hash
 }
 
 // newCommitHistoryRowItr creates a doltDiffCommitHistoryRowItr from a CommitItr.
