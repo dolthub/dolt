@@ -271,27 +271,26 @@ func (m prollyIndexWriter) uniqueKeyError(ctx context.Context, keyStr string, ke
 }
 
 type prollySecondaryIndexWriter struct {
-	name          string
-	mut           prolly.MutableMapInterface
-	unique        bool
-	prefixLengths []uint16
-
-	// number of indexed cols
-	idxCols int
-
-	// keyMap is a mapping from sql.Row fields to
-	// key fields of this secondary index
-	keyMap val.OrdinalMapping
+	mut prolly.MutableMapInterface
+	// pkBld builds key tuples for primary key index
+	pkBld *val.TupleBuilder
 	// keyBld builds key tuples for the secondary index
 	keyBld *val.TupleBuilder
+
+	name          string
+	prefixLengths []uint16
 
 	// pkMap is a mapping from secondary index keys to
 	// primary key clustered index keys
 	pkMap val.OrdinalMapping
-	// pkBld builds key tuples for primary key index
-	pkBld *val.TupleBuilder
+	// keyMap is a mapping from sql.Row fields to
+	// key fields of this secondary index
+	keyMap val.OrdinalMapping
 	// buffer to reduce memory allocations
 	key sql.Row
+	// number of indexed cols
+	idxCols int
+	unique  bool
 }
 
 var _ indexWriter = prollySecondaryIndexWriter{}
