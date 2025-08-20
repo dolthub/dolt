@@ -23,16 +23,15 @@ import (
 
 // KVPCollItr is a KVPIterator implementation for iterating over a KVPCollection
 type KVPCollItr struct {
-	coll       *KVPCollection
-	done       bool
-	slIdx      int
-	idx        int
-	currSl     types.KVPSlice
-	currSlSize int
 	currKey    types.LesserValuable
 	vr         types.ValueReader
-
-	read int64
+	coll       *KVPCollection
+	currSl     types.KVPSlice
+	slIdx      int
+	idx        int
+	currSlSize int
+	read       int64
+	done       bool
 }
 
 // NewItr creates a new KVPCollItr from a KVPCollection

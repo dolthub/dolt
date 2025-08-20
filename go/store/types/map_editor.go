@@ -61,12 +61,12 @@ type EditAccumulator interface {
 // MapEditor allows for efficient editing of Map-typed prolly trees.
 type MapEditor struct {
 	m        Map
-	numEdits int64
 	acc      EditAccumulator
+	numEdits int64
 }
 
 func NewMapEditor(m Map) *MapEditor {
-	return &MapEditor{m, 0, CreateEditAccForMapEdits(m.valueReadWriter())}
+	return &MapEditor{m, CreateEditAccForMapEdits(m.valueReadWriter()), 0}
 }
 
 // Map applies all edits and returns a newly updated Map

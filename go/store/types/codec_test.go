@@ -74,8 +74,8 @@ func TestUnrolledDecode(t *testing.T) {
 }
 
 type ve struct {
-	val      uint64
 	encoding []byte
+	val      uint64
 }
 
 func initToDecode(b *testing.B, numItems int) []ve {
@@ -102,7 +102,7 @@ func initToDecode(b *testing.B, numItems int) []ve {
 		size := binary.PutUvarint(buf, val)
 		require.Equal(b, desiredSize, size, "%d. min: %x, val: %x, expected_size: %d, size: %d", i, min, val, desiredSize, size)
 
-		toDecode[i] = ve{val, buf}
+		toDecode[i] = ve{val: val, encoding: buf}
 	}
 
 	return toDecode

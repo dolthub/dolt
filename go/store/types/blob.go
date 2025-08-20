@@ -175,7 +175,7 @@ func (b Blob) ReadAt(ctx context.Context, p []byte, off int64) (n int, err error
 }
 
 func (b Blob) Reader(ctx context.Context) *BlobReader {
-	return &BlobReader{b, 0, ctx}
+	return &BlobReader{b, ctx, 0}
 }
 
 func (b Blob) Copy(ctx context.Context, w io.Writer) (int64, error) {
@@ -306,8 +306,8 @@ func (b Blob) Kind() NomsKind {
 
 type BlobReader struct {
 	b   Blob
-	pos int64
 	ctx context.Context
+	pos int64
 }
 
 func (cbr *BlobReader) Read(p []byte) (n int, err error) {

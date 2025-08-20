@@ -93,8 +93,8 @@ func newOrderedTestSequence(items []interface{}) *testOrderedSequence {
 }
 
 type orderedSequenceTestCase struct {
-	value        Int
 	expectedVals []Int
+	value        Int
 }
 
 func newOrderedSequenceTestCase(val int, expectedValues ...int) orderedSequenceTestCase {

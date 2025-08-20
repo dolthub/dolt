@@ -139,9 +139,9 @@ func (m Map) RangeIterator(ctx context.Context, startIdx, endIdx uint64) (MapTup
 
 // LimitingMapIterator iterates |iter| only returning up to |limit| results.
 type LimitingMapIterator struct {
+	iter  MapIterator
 	limit uint64
 	cnt   uint64
-	iter  MapIterator
 }
 
 var _ MapIterator = (*LimitingMapIterator)(nil)

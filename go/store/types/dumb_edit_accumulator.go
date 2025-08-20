@@ -23,10 +23,10 @@ import (
 // implementations to be put into other packages. It is fine for small edits, and tests, but edits.AsyncSortedEdits
 // performs much better for large amounts of data
 type DumbEditAccumulator struct {
+	vr         ValueReader
+	edits      KVPSlice
 	pos        int
 	reachedEOF bool
-	edits      KVPSlice
-	vr         ValueReader
 }
 
 // NewDumbEditAccumulator is a factory method for creation of DumbEditAccumulators
