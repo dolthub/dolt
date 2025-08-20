@@ -367,17 +367,17 @@ func (dpdp *DoltProceduresDiffPartition) GetRowIter(ctx *sql.Context) (sql.RowIt
 
 // doltProceduresDiffPartitionRowIter implements a row iterator for a single diff partition
 type doltProceduresDiffPartitionRowIter struct {
-	ctx       *sql.Context
-	toTable   *doltdb.Table
-	fromTable *doltdb.Table
-	toName    string
-	fromName  string
-	toDate    *types.Timestamp
-	fromDate  *types.Timestamp
 	toRoot    doltdb.RootValue
 	fromRoot  doltdb.RootValue
-	db        Database
+	toTable   *doltdb.Table
+	fromTable *doltdb.Table
+	ctx       *sql.Context
+	toDate    *types.Timestamp
+	fromDate  *types.Timestamp
+	toName    string
+	fromName  string
 	rows      []sql.Row
+	db        Database
 	idx       int
 	done      bool
 }

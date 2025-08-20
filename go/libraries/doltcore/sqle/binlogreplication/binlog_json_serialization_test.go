@@ -140,8 +140,8 @@ func TestJsonSerialization_VitessRoundTrip(t *testing.T) {
 		name           string
 		json           string
 		expected       string
-		expectedTypeId byte
 		expectedErr    string
+		expectedTypeId byte
 	}{
 		// Literals
 		{
