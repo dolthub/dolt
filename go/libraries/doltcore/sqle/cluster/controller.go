@@ -80,43 +80,47 @@ type databaseDropReplication struct {
 type SqlContextFactory func(ctx context.Context) (*sql.Context, error)
 
 type Controller struct {
+	grpcCreds     credentials.PerRPCCredentials
 	cfg           servercfg.ClusterConfig
 	persistentCfg config.ReadWriteConfig
-	role          Role
-	epoch         int
+
+	remoteSrvDBCache     remotesrv.DBCache
+	branchControlFilesys filesys.Filesys
+
 	systemVars    sqlvars
-	mu            sync.Mutex
-	commithooks   []*commithook
-	sinterceptor  serverinterceptor
-	cinterceptor  clientinterceptor
-	lgr           *logrus.Logger
+	sqlCtxFactory SqlContextFactory
 
-	standbyCallback IsStandbyCallback
-	iterSessions    IterSessions
-	killQuery       func(uint32)
-	killConnection  func(uint32) error
+	outstandingDropDatabases map[string]*databaseDropReplication
+	jwks                     *jwtauth.MultiJWKS
+	tlsCfg                   *tls.Config
+	standbyCallback          IsStandbyCallback
+	iterSessions             IterSessions
+	killQuery                func(uint32)
+	killConnection           func(uint32) error
+	dropDatabase             func(*sql.Context, string) error
 
-	jwks      *jwtauth.MultiJWKS
-	tlsCfg    *tls.Config
-	grpcCreds credentials.PerRPCCredentials
-	pub       ed25519.PublicKey
-	priv      ed25519.PrivateKey
-
-	replicationClients []*replicationServiceClient
+	role Role
 
 	mysqlDb          *mysql_db.MySQLDb
 	mysqlDbPersister *replicatingMySQLDbPersister
-	mysqlDbReplicas  []*mysqlDbReplica
 
 	branchControlController *branch_control.Controller
-	branchControlFilesys    filesys.Filesys
 	bcReplication           *branchControlReplication
 
-	dropDatabase             func(*sql.Context, string) error
-	outstandingDropDatabases map[string]*databaseDropReplication
-	remoteSrvDBCache         remotesrv.DBCache
+	lgr *logrus.Logger
 
-	sqlCtxFactory SqlContextFactory
+	replicationClients []*replicationServiceClient
+	mysqlDbReplicas    []*mysqlDbReplica
+	commithooks        []*commithook
+
+	priv ed25519.PrivateKey
+	pub  ed25519.PublicKey
+
+	sinterceptor serverinterceptor
+	cinterceptor clientinterceptor
+
+	epoch int
+	mu    sync.Mutex
 }
 
 type sqlvars interface {
@@ -549,28 +553,14 @@ func applyBootstrapClusterConfig(lgr *logrus.Logger, cfg servercfg.ClusterConfig
 }
 
 type roleTransitionOptions struct {
-	// If true, all standby replicas must be caught up in order to
-	// transition from primary to standby.
-	graceful bool
-
-	// If non-zero and |graceful| is true, will allow a transition from
-	// primary to standby to succeed only if this many standby replicas
-	// are known to be caught up at the finalization of the replication
-	// hooks.
+	saveConnID          *int
 	minCaughtUpStandbys int
-
-	// If non-nil, this connection will be saved if and when the connection
-	// process needs to terminate existing connections.
-	saveConnID *int
+	graceful            bool
 }
 
 type roleTransitionResult struct {
-	// true if the role changed as a result of this call.
-	changedRole bool
-
-	// filled in with graceful transition results if this was a graceful
-	// transition and it was successful.
 	gracefulTransitionResults []graceTransitionResult
+	changedRole               bool
 }
 
 func (c *Controller) setRoleAndEpoch(role string, epoch int, opts roleTransitionOptions) (roleTransitionResult, error) {
@@ -583,22 +573,22 @@ func (c *Controller) setRoleAndEpoch(role string, epoch int, opts roleTransition
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if epoch == c.epoch && role == string(c.role) {
-		return roleTransitionResult{false, nil}, nil
+		return roleTransitionResult{changedRole: false, gracefulTransitionResults: nil}, nil
 	}
 
 	if role != string(RolePrimary) && role != string(RoleStandby) && role != string(RoleDetectedBrokenConfig) {
-		return roleTransitionResult{false, nil}, fmt.Errorf("error assuming role '%s'; valid roles are 'primary' and 'standby'", role)
+		return roleTransitionResult{changedRole: false, gracefulTransitionResults: nil}, fmt.Errorf("error assuming role '%s'; valid roles are 'primary' and 'standby'", role)
 	}
 
 	if epoch < c.epoch {
-		return roleTransitionResult{false, nil}, fmt.Errorf("error assuming role '%s' at epoch %d; already at epoch %d", role, epoch, c.epoch)
+		return roleTransitionResult{changedRole: false, gracefulTransitionResults: nil}, fmt.Errorf("error assuming role '%s' at epoch %d; already at epoch %d", role, epoch, c.epoch)
 	}
 	if epoch == c.epoch {
 		// This is allowed for non-graceful transitions to 'standby', which only occur from interceptors and
 		// other signals that the cluster is misconfigured.
 		isallowed := !graceful && (role == string(RoleStandby) || role == string(RoleDetectedBrokenConfig))
 		if !isallowed {
-			return roleTransitionResult{false, nil}, fmt.Errorf("error assuming role '%s' at epoch %d; already at epoch %d with different role, '%s'", role, epoch, c.epoch, c.role)
+			return roleTransitionResult{changedRole: false, gracefulTransitionResults: nil}, fmt.Errorf("error assuming role '%s' at epoch %d; already at epoch %d with different role, '%s'", role, epoch, c.epoch, c.role)
 		}
 	}
 
@@ -618,7 +608,7 @@ func (c *Controller) setRoleAndEpoch(role string, epoch int, opts roleTransition
 				if err != nil {
 					c.setProviderIsStandby(c.role != RolePrimary)
 					c.killRunningQueries(saveConnID)
-					return roleTransitionResult{false, nil}, err
+					return roleTransitionResult{changedRole: false, gracefulTransitionResults: nil}, err
 				}
 			} else {
 				c.immediateTransitionToStandby()
@@ -792,10 +782,10 @@ func (c *Controller) RegisterGrpcServices(ctxFactory func(context.Context) (*sql
 const waitForHooksToReplicateTimeout = 10 * time.Second
 
 type graceTransitionResult struct {
-	caughtUp  bool
 	database  string
 	remote    string
 	remoteUrl string
+	caughtUp  bool
 }
 
 // The order of operations is:
@@ -1216,11 +1206,11 @@ func (c *Controller) standbyRemotesJWKS() *jwtauth.MultiJWKS {
 }
 
 type replicationServiceClient struct {
+	client replicationapi.ReplicationServiceClient
+	closer func() error
 	remote string
 	url    string
 	tls    bool
-	client replicationapi.ReplicationServiceClient
-	closer func() error
 }
 
 func (c *Controller) replicationServiceDialOptions() []grpc.DialOption {

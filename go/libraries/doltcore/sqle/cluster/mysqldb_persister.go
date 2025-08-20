@@ -37,36 +37,29 @@ type MySQLDbPersister interface {
 }
 
 type replicatingMySQLDbPersister struct {
-	base MySQLDbPersister
-
+	base     MySQLDbPersister
 	current  []byte
-	version  uint32
 	replicas []*mysqlDbReplica
-
-	mu sync.Mutex
+	
+	mu      sync.Mutex
+	version uint32
 }
 
 type mysqlDbReplica struct {
-	shutdown bool
-	role     Role
-
-	contents []byte
-	version  uint32
-
-	replicatedVersion uint32
-	backoff           backoff.BackOff
-	nextAttempt       time.Time
-
-	client *replicationServiceClient
-	lgr    *logrus.Entry
-
-	waitNotify func()
-
+	nextAttempt             time.Time
+	backoff                 backoff.BackOff
+	waitNotify              func()
+	client                  *replicationServiceClient
+	lgr                     *logrus.Entry
+	cond                    *sync.Cond
+	role                    Role
+	contents                []byte
 	progressNotifier        ProgressNotifier
+	mu                      sync.Mutex
+	version                 uint32
+	replicatedVersion       uint32
+	shutdown                bool
 	fastFailReplicationWait bool
-
-	mu   sync.Mutex
-	cond *sync.Cond
 }
 
 func (r *mysqlDbReplica) UpdateMySQLDb(ctx context.Context, contents []byte, version uint32) func(context.Context) error {
