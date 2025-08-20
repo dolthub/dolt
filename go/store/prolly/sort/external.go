@@ -35,13 +35,13 @@ import (
 // parameter limits the number of files spilled to disk at any given time.
 // The maximum memory used will be |fileMax| * |batchSize|.
 type tupleSorter struct {
+	tmpProv   tempfiles.TempFileProvider
 	keyCmp    func(val.Tuple, val.Tuple) bool
-	files     [][]keyIterable
 	inProg    *keyMem
+	files     [][]keyIterable
 	fileMax   int
 	fileCnt   int
 	batchSize int
-	tmpProv   tempfiles.TempFileProvider
 }
 
 func NewTupleSorter(batchSize, fileMax int, keyCmp func(val.Tuple, val.Tuple) bool, tmpProv tempfiles.TempFileProvider) *tupleSorter {
@@ -390,8 +390,8 @@ func newMergeFileReader(ctx context.Context, iter KeyIter) (*mergeFileReader, er
 }
 
 type mergeQueue struct {
-	files  []*mergeFileReader
 	keyCmp func(val.Tuple, val.Tuple) bool
+	files  []*mergeFileReader
 }
 
 func (mq mergeQueue) Len() int { return len(mq.files) }

@@ -54,8 +54,8 @@ func NewVectorIndexSerializer(pool pool.BuffPool, logChunkSize uint8, distanceTy
 
 type VectorIndexSerializer struct {
 	pool         pool.BuffPool
-	logChunkSize uint8
 	distanceType vector.DistanceType
+	logChunkSize uint8
 }
 
 var _ Serializer = VectorIndexSerializer{}

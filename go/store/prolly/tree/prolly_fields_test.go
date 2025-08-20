@@ -33,8 +33,8 @@ import (
 )
 
 type prollyFieldTest struct {
-	name  string
 	value interface{}
+	name  string
 	typ   val.Type
 }
 
@@ -290,8 +290,8 @@ func dateFromTime(t time.Time) time.Time {
 //	Initially, Geometries were stored in line, but now they are stored out of band as BLOBs.
 func TestGeometryEncoding(t *testing.T) {
 	tests := []struct {
-		name  string
 		value interface{}
+		name  string
 	}{
 		{
 			name:  "point",

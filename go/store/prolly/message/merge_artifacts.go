@@ -49,8 +49,8 @@ func NewMergeArtifactSerializer(keyDesc val.TupleDesc, pool pool.BuffPool) Merge
 }
 
 type MergeArtifactSerializer struct {
-	keyDesc val.TupleDesc
 	pool    pool.BuffPool
+	keyDesc val.TupleDesc
 }
 
 var _ Serializer = MergeArtifactSerializer{}

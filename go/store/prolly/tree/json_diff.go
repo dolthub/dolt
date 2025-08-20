@@ -30,22 +30,25 @@ type IJsonDiffer interface {
 }
 
 type JsonDiff struct {
-	Key      []byte
-	From, To sql.JSONWrapper
-	Type     DiffType
+	From sql.JSONWrapper
+	To   sql.JSONWrapper
+	Key  []byte
+	Type DiffType
 }
 
 type jsonKeyPair struct {
-	key   string
 	value interface{}
+	key   string
 }
 
 // JsonDiffer computes the diff between two JSON objects.
 type JsonDiffer struct {
-	root                           []byte
-	currentFromPair, currentToPair *jsonKeyPair
-	from, to                       types.JSONIter
-	subDiffer                      *JsonDiffer
+	currentFromPair *jsonKeyPair
+	currentToPair   *jsonKeyPair
+	subDiffer       *JsonDiffer
+	root            []byte
+	from            types.JSONIter
+	to              types.JSONIter
 }
 
 var _ IJsonDiffer = &JsonDiffer{}

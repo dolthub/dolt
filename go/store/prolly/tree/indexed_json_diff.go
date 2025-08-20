@@ -23,10 +23,12 @@ import (
 )
 
 type IndexedJsonDiffer struct {
-	differ                             Differ[jsonLocationKey, *jsonLocationOrdering]
-	currentFromCursor, currentToCursor *JsonCursor
-	from, to                           IndexedJsonDocument
-	started                            bool
+	from              IndexedJsonDocument
+	to                IndexedJsonDocument
+	currentFromCursor *JsonCursor
+	currentToCursor   *JsonCursor
+	differ            Differ[jsonLocationKey, *jsonLocationOrdering]
+	started           bool
 }
 
 var _ IJsonDiffer = &IndexedJsonDiffer{}

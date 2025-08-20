@@ -31,10 +31,10 @@ import (
 
 // cursor explores a tree of Nodes.
 type cursor struct {
+	nrw    NodeStore
+	parent *cursor
 	nd     Node
 	idx    int
-	parent *cursor
-	nrw    NodeStore
 }
 
 type SearchFn func(ctx context.Context, nd Node) (idx int)

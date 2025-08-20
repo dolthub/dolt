@@ -34,22 +34,20 @@ const (
 // the maximum number of pending writes is exceeded.
 
 type GenericMutableMap[MapType MapInterface, TreeMap tree.MapInterface[val.Tuple, val.Tuple, val.TupleDesc]] struct {
+	flusher MutableMapFlusher[MapType, TreeMap]
 	// tuples contains the primary Prolly Tree and skip.List for this map.
 	tuples tree.MutableMap[val.Tuple, val.Tuple, val.TupleDesc, TreeMap]
-
 	// stash, if not nil, contains a previous checkpoint of this map.
 	// stashes are created when a MutableMap has been check-pointed, but
 	// the number of in-memory pending writes exceeds, maxPending.
 	// In this case we stash a copy MutableMap containing the checkpoint,
 	// flush the pending writes and continue accumulating
 	stash *tree.MutableMap[val.Tuple, val.Tuple, val.TupleDesc, TreeMap]
-
 	// keyDesc and valDesc are tuples descriptors for the map.
-	keyDesc, valDesc val.TupleDesc
-
+	keyDesc val.TupleDesc
+	valDesc val.TupleDesc
 	// buffer size
 	maxPending int
-	flusher    MutableMapFlusher[MapType, TreeMap]
 }
 
 type MutableMap = GenericMutableMap[Map, tree.StaticMap[val.Tuple, val.Tuple, val.TupleDesc]]

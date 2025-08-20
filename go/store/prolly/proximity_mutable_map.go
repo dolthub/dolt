@@ -32,8 +32,8 @@ import (
 type ProximityMutableMap = GenericMutableMap[ProximityMap, tree.ProximityMap[val.Tuple, val.Tuple, val.TupleDesc]]
 
 type ProximityFlusher struct {
-	logChunkSize uint8
 	distanceType vector.DistanceType
+	logChunkSize uint8
 }
 
 var _ MutableMapFlusher[ProximityMap, tree.ProximityMap[val.Tuple, val.Tuple, val.TupleDesc]] = ProximityFlusher{}

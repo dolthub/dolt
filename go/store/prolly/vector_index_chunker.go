@@ -28,13 +28,13 @@ import (
 // for every key-value pair for a given level of a ProximityMap, and provides the path of keys to reach
 // that pair from the root. It uses this iterator to build each of the ProximityMap nodes for that level.
 type vectorIndexChunker struct {
-	pathMap          *MutableMap
 	pathMapIter      MapIter
-	lastPathSegment  hash.Hash
+	pathMap          *MutableMap
+	childChunker     *vectorIndexChunker
 	lastKey          []byte
 	lastValue        []byte
 	lastSubtreeCount uint64
-	childChunker     *vectorIndexChunker
+	lastPathSegment  hash.Hash
 	atEnd            bool
 }
 
