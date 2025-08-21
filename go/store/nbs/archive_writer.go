@@ -385,7 +385,7 @@ func (aw *archiveWriter) writeFooter() error {
 		return err
 	}
 
-	err = aw.writeCheckSums()
+	err = aw.writeEmptyCheckSums()
 	if err != nil {
 		return err
 	}
@@ -410,10 +410,10 @@ func (aw *archiveWriter) writeFooter() error {
 	return nil
 }
 
-// writeCheckSums writes 3 empty sha512 checksum of all zeros to the archive output. This is a hold over from previous
+// writeEmptyCheckSums writes 3 empty sha512 checksum of all zeros to the archive output. This is a hold over from previous
 // versions of the archive format that had checksums for data, index, and metadata. It's easier to keep the data empty
 // data in the index than implement a new format version. We've never used these checksums for anything.
-func (aw *archiveWriter) writeCheckSums() error {
+func (aw *archiveWriter) writeEmptyCheckSums() error {
 	var zeros [(3 * sha512.Size)]byte
 	written, err := aw.output.Write(zeros[:])
 	if err != nil {
