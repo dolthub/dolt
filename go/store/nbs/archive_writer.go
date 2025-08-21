@@ -27,9 +27,9 @@ import (
 	"sort"
 	"time"
 
-	"github.com/dolthub/dolt/go/cmd/dolt/doltversion"
 	"github.com/dolthub/gozstd"
 
+	"github.com/dolthub/dolt/go/cmd/dolt/doltversion"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 )
