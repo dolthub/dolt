@@ -321,6 +321,7 @@ func newLateBindingEngine(
 		res.Queryist = se
 		res.Context = sqlCtx
 		res.Closer = close
+		res.IsRemote = false
 		return res, nil
 	}
 

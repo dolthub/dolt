@@ -99,11 +99,10 @@ func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []strin
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
-	if queryist.IsFirstUse && queryist.IsRemote {
+	if queryist.IsFirstResult && queryist.IsRemote {
 		// We only check for this case when checkout is the first command in a session. The reason for this is that checkout
 		// when connected to a remote server will not work as it won't set the branch. But when operating within the context
-		// of another session, specifically a \checkout in a dolt sql session, this makes sense. Since no closeFunc would be
-		// returned, we don't need to check for this case.
+		// of another session, specifically a \checkout in a dolt sql session, this makes sense.
 		msg := fmt.Sprintf(cli.RemoteUnsupportedMsg, commandStr)
 		cli.Println(msg)
 		return 1

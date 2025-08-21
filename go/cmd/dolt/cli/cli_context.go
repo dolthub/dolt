@@ -37,7 +37,8 @@ type LateBindQueryistResult struct {
 // is appropriate for the call to commence. Output is a LateBindQueryistResult, which includes a Queryist, a sql.Context, and
 // a closer function. It can also result in an error.
 //
-// The closer function is called when the Queryist is no longer needed, potentially in a defer right after getting it.
+// The Closer function should be called when the Queryist is no longer needed. If the result is cached and returned to
+// multiple callers, it should be called after the cached result itself is no longer needed.
 //
 // A LateBindqueryistResult includes enough information for a caller to know if it is connecting to a remote Dolt instance
 // or if it running the SqlEngine locally in-process. The CliContext uses this, in addition to its own local state, to
@@ -97,10 +98,13 @@ type LateBindCliContext struct {
 }
 
 type QueryEngineResult struct {
-	Queryist   Queryist
-	Context    *sql.Context
-	IsFirstUse bool
-	IsRemote   bool
+	Queryist Queryist
+	Context  *sql.Context
+	// |true| if this is the first time the CliContext is returning a QueryEngineResult.
+	// Otherwise it will be |false|, which means this CliContext has already been used
+	// to retrieve a Queryist, and the Queryist coming back is the cached result.
+	IsFirstResult bool
+	IsRemote      bool
 }
 
 // GlobalArgs returns the arguments passed before the subcommand.
@@ -116,6 +120,8 @@ func (lbc LateBindCliContext) QueryEngine(ctx context.Context) (res QueryEngineR
 		res.Queryist = *lbc.activeContext.qryist
 		res.Context = lbc.activeContext.sqlCtx
 		res.IsRemote = lbc.activeContext.isRemote
+		// Returning a cached result.
+		res.IsFirstResult = false
 		return res, nil
 	}
 
@@ -132,7 +138,7 @@ func (lbc LateBindCliContext) QueryEngine(ctx context.Context) (res QueryEngineR
 	res.Queryist = bindRes.Queryist
 	res.Context = bindRes.Context
 	res.IsRemote = bindRes.IsRemote
-	res.IsFirstUse = true
+	res.IsFirstResult = true
 	return res, nil
 }
 

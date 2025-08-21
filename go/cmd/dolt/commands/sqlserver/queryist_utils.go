@@ -74,7 +74,7 @@ func BuildConnectionStringQueryist(ctx context.Context, cwdFS filesys.Filesys, c
 		res.Queryist = queryist
 		res.Context = sqlCtx
 		res.Closer = func() {
-			conn.Conn(ctx)
+			conn.Close()
 		}
 		res.IsRemote = true
 		return res, nil
