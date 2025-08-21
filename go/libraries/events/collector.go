@@ -21,6 +21,7 @@ import (
 
 	"github.com/cenkalti/backoff/v4"
 	"github.com/denisbrodbeck/machineid"
+	"github.com/sirupsen/logrus"
 
 	eventsapi "github.com/dolthub/eventsapi_schema/dolt/services/eventsapi/v1alpha1"
 )
@@ -181,6 +182,18 @@ func (s *sendingThread) run() {
 				return
 			}
 			s.unsent = append(s.unsent, batch...)
+
+			// Events use a best-effort delivery strategy – if we can't deliver events fast
+			// enough, we drop the oldest events and keep the most recent events. This can
+			// happen if network connectivity is interrupted, or if events come in too fast.
+			// If we don't drop events, then they can queue up unbounded in |s.unsent| and
+			// also cause GRPC to hold onto large buffers and eventually run out of memory.
+			if len(s.unsent) > maxBatchedEvents {
+				logrus.Warnf("too many events (%d) queued for LogEvents GRPC request; truncating to %d",
+					len(s.unsent), maxBatchedEvents)
+				s.unsent = s.unsent[len(s.unsent)-maxBatchedEvents:]
+			}
+
 			if s.emitter != nil {
 				if timer != nil && !timer.Stop() {
 					<-timer.C
