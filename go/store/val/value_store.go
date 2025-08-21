@@ -37,9 +37,9 @@ type ValueStore interface {
 // ImmutableValue represents a content-addressed value stored in a ValueStore.
 // The contents are loaded lazily and stored in |Buf|
 type ImmutableValue struct {
-	Addr hash.Hash
-	Buf  []byte
 	vs   ValueStore
+	Buf  []byte
+	Addr hash.Hash
 }
 
 func NewImmutableValue(addr hash.Hash, vs ValueStore) ImmutableValue {
@@ -63,10 +63,8 @@ func (t *ImmutableValue) GetBytes(ctx context.Context) ([]byte, error) {
 
 type TextStorage struct {
 	ImmutableValue
+	ctx           context.Context
 	maxByteLength int64
-	// ctx is a context that can be used in driver.Value
-	// Storing a context in a struct is bad practice, so this field should not be used for any other purpose.
-	ctx context.Context
 }
 
 var _ sql.StringWrapper = &TextStorage{}
@@ -137,10 +135,8 @@ func (t *TextStorage) Value() (driver.Value, error) {
 
 type ByteArray struct {
 	ImmutableValue
+	ctx           context.Context
 	maxByteLength int64
-	// ctx is a context that can be used in driver.Value
-	// Storing a context in a struct is bad practice, so this field should not be used for any other purpose.
-	ctx context.Context
 }
 
 var _ sql.BytesWrapper = &ByteArray{}

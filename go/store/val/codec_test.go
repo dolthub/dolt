@@ -26,9 +26,10 @@ import (
 
 func TestCompare(t *testing.T) {
 	tests := []struct {
-		typ  Type
-		l, r []byte
-		cmp  int
+		l   []byte
+		r   []byte
+		cmp int
+		typ Type
 	}{
 		// int
 		{
