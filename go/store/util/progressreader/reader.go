@@ -32,14 +32,14 @@ import (
 type Callback func(seen uint64)
 
 func New(inner io.Reader, cb Callback) io.Reader {
-	return &reader{inner, uint64(0), time.Time{}, cb}
+	return &reader{time.Time{}, inner, cb, uint64(0)}
 }
 
 type reader struct {
-	inner    io.Reader
-	seen     uint64
 	lastTime time.Time
+	inner    io.Reader
 	cb       Callback
+	seen     uint64
 }
 
 func (r *reader) Read(p []byte) (n int, err error) {
