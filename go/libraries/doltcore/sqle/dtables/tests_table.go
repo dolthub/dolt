@@ -50,7 +50,9 @@ func doltTestsSchema() sql.Schema {
 		{Name: "test_group", Type: sqlTypes.Text, Source: doltdb.TestsTableName, PrimaryKey: true},
 		{Name: "test_name", Type: sqlTypes.Text, Source: doltdb.TestsTableName, PrimaryKey: true},
 		{Name: "test_query", Type: sqlTypes.Text, Source: doltdb.TestsTableName, PrimaryKey: false, Nullable: false},
-		{Name: "test_assertion", Type: sqlTypes.Text, Source: doltdb.TestsTableName, PrimaryKey: false, Nullable: false},
+		{Name: "assertion_type", Type: sqlTypes.Text, Source: doltdb.TestsTableName, PrimaryKey: false, Nullable: false},
+		{Name: "assertion_comparator", Type: sqlTypes.Text, Source: doltdb.TestsTableName, PrimaryKey: false, Nullable: false},
+		{Name: "assertion_value", Type: sqlTypes.Text, Source: doltdb.TestsTableName, PrimaryKey: false, Nullable: false},
 	}
 }
 
