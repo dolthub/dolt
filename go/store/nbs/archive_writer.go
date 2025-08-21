@@ -64,17 +64,14 @@ type archiveWriter struct {
 	stagedChunks stagedChunkRefSlice
 	// seenChunks is used when building archives chunk-by-chunk, to ensure that we do not write the same chunk multiple
 	// times. It is not used for any other purpose, and there are cases where we bypass checking it (e.g. conjoining archives).
-	seenChunks       hash.HashSet
-	indexLen         uint64
-	metadataLen      uint32
-	dataCheckSum     sha512Sum
-	indexCheckSum    sha512Sum
-	metadataCheckSum sha512Sum
-	footerCheckSum   sha512Sum
-	fullMD5          md5Sum
-	workflowStage    stage
-	finalPath        string
-	chunkDataLength  uint64
+	seenChunks      hash.HashSet
+	indexLen        uint64
+	metadataLen     uint32
+	suffixCheckSum  sha512Sum
+	fullMD5         md5Sum
+	workflowStage   stage
+	finalPath       string
+	chunkDataLength uint64
 }
 
 /*
@@ -247,9 +244,6 @@ func (aw *archiveWriter) finalizeByteSpans() error {
 		return fmt.Errorf("Runtime error: finalizeByteSpans called out of order")
 	}
 
-	// Get the checksum for the data written so far
-	aw.dataCheckSum = sha512Sum(aw.output.GetSum())
-	aw.output.ResetHasher()
 	aw.chunkDataLength = aw.md5Summer.Size()
 	aw.workflowStage = stageIndex
 
@@ -316,18 +310,20 @@ func (aw *archiveWriter) writeIndex() error {
 
 	indexSize := aw.bytesWritten - indexStart
 
-	// Suffixes
+	// Suffixes output. This data is used to create the name for this archive.
+	aw.output.ResetHasher()
 	for _, scr := range aw.stagedChunks {
 		_, err := aw.output.Write(scr.hash.Suffix())
 		if err != nil {
 			return err
 		}
-		indexSize += hash.SuffixLen
-		aw.bytesWritten += hash.SuffixLen
 	}
+	dataWritten := uint64(len(aw.stagedChunks)) * hash.SuffixLen
+	indexSize += dataWritten
+	aw.bytesWritten += dataWritten
+	aw.suffixCheckSum = sha512Sum(aw.output.GetSum())
 
 	aw.indexLen = indexSize
-	aw.indexCheckSum = sha512Sum(aw.output.GetSum())
 	aw.output.ResetHasher()
 	aw.workflowStage = stageMetadata
 
@@ -353,8 +349,6 @@ func (aw *archiveWriter) writeMetadata(data []byte) error {
 	}
 	aw.bytesWritten += uint64(written)
 	aw.metadataLen = uint32(written)
-	aw.metadataCheckSum = sha512Sum(aw.output.GetSum())
-	aw.output.ResetHasher()
 	aw.workflowStage = stageFooter
 
 	return nil
@@ -411,35 +405,22 @@ func (aw *archiveWriter) writeFooter() error {
 	aw.bytesWritten += archiveFileSigSize
 	aw.workflowStage = stageFlush
 
-	aw.footerCheckSum = sha512Sum(aw.output.GetSum())
-	aw.output.ResetHasher()
-
 	aw.fullMD5 = md5Sum(aw.md5Summer.GetSum())
 
 	return nil
 }
 
+// writeCheckSums writes 3 empty sha512 checksum of all zeros to the archive output. This is a hold over from previous
+// versions of the archive format that had checksums for data, index, and metadata. It's easier to keep the data empty
+// data in the index than implement a new format version. We've never used these checksums for anything.
 func (aw *archiveWriter) writeCheckSums() error {
-	err := aw.writeSha512(aw.dataCheckSum)
+	var zeros [(3 * sha512.Size)]byte
+	written, err := aw.output.Write(zeros[:])
 	if err != nil {
 		return err
 	}
 
-	err = aw.writeSha512(aw.indexCheckSum)
-	if err != nil {
-		return err
-	}
-
-	return aw.writeSha512(aw.metadataCheckSum)
-}
-
-func (aw *archiveWriter) writeSha512(sha sha512Sum) error {
-	_, err := aw.output.Write(sha[:])
-	if err != nil {
-		return err
-	}
-
-	aw.bytesWritten += sha512.Size
+	aw.bytesWritten += uint64(written)
 	return nil
 }
 
@@ -495,7 +476,7 @@ func (aw *archiveWriter) getName() (hash.Hash, error) {
 		return hash.Hash{}, fmt.Errorf("Runtime error: getName called out of order")
 	}
 
-	return hash.New(aw.footerCheckSum[:hash.ByteLen]), nil
+	return hash.New(aw.suffixCheckSum[:hash.ByteLen]), nil
 }
 
 // genFileName generates the file name for the archive. The path argument is the directory where the file should be written.
