@@ -84,10 +84,9 @@ func stripTableNamesFromExpression(expr sql.Expression, quoted bool) sql.Express
 	return e
 }
 
-// Session is a way to access the Dolt session without import cycles.
-type Session interface {
+// SessionDbProvider is a way to access the Dolt database provider without import cycles.
+type SessionDbProvider interface {
 	GenericProvider() sql.MutableDatabaseProvider
-	HasDoltgresObjects() bool
 }
 
 func parseCreateTable(ctx *sql.Context, tableName string, sch schema.Schema) (*plan.CreateTable, error) {
@@ -98,11 +97,12 @@ func parseCreateTable(ctx *sql.Context, tableName string, sch schema.Schema) (*p
 
 	query := createTable
 
-	// Dolt creates a new provider (is that necessary?), while Doltgres must use the existing provider, so we split the
-	// logic here depending on whether this is Dolt or Doltgres.
+	// Doltgres must use the existing provider due to custom functions, so we split the logic here depending on whether
+	// this is being called from a query context (which will have a valid Dolt session) or some other context (which
+	// will need to construct a new provider).
 	var b *planbuilder.Builder
-	sess, ok := ctx.Session.(Session)
-	if ok && sess.HasDoltgresObjects() {
+	sess, ok := ctx.Session.(SessionDbProvider)
+	if ok {
 		catalog := analyzer.NewCatalog(sess.GenericProvider())
 		catalog.AuthHandler = sql.NoopAuthorizationHandler{}
 		b = planbuilder.New(ctx, catalog, nil, nil)
