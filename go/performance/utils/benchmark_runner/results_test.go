@@ -320,6 +320,48 @@ func TestFromOutputResults(t *testing.T) {
 				LatencySumMS:             10000.87,
 			},
 		},
+		{
+			description: "should parse with config provided",
+			output:      []byte(sampleOutput1),
+			config: &sysbenchRunnerConfigImpl{
+				RuntimeOS:     testOS,
+				RuntimeGoArch: testGoArch,
+			},
+			serverConfig: &doltServerConfigImpl{
+				Version:        testServerVersion,
+				ServerExec:     "test-exec",
+				ConfigFilePath: "config.yaml",
+			},
+			test: &sysbenchTestImpl{
+				Name:   testTestName,
+				Params: params,
+			},
+			expectedResult: &Result{
+				Id:                       testId,
+				SuiteId:                  testSuiteId,
+				RuntimeOS:                testOS,
+				RuntimeGoArch:            testGoArch,
+				ServerName:               string(Dolt),
+				ServerParams:             strings.Join(append(defaultDoltServerParams, fmt.Sprintf("%s=%s", configFlag, "config.yaml")), " "),
+				ServerVersion:            testServerVersion,
+				TestName:                 testTestName,
+				TestParams:               testTestParams,
+				SqlReadQueries:           9464,
+				SqlWriteQueries:          0,
+				SqlOtherQueries:          1352,
+				SqlTotalQueries:          10816,
+				SqlTotalQueriesPerSecond: 1081.14,
+				TransactionsTotal:        676,
+				TransactionsPerSecond:    67.57,
+				TotalTimeSeconds:         10.0030,
+				TotalNumberOfEvents:      676,
+				LatencyMinMS:             12.26,
+				LatencyAvgMS:             14.79,
+				LatencyMaxMS:             26.08,
+				LatencyPercentile:        17.01,
+				LatencySumMS:             10000.87,
+			},
+		},
 	}
 
 	for _, test := range tests {
