@@ -116,14 +116,16 @@ func (sc *doltServerConfigImpl) GetServerExec() string {
 func (sc *doltServerConfigImpl) GetServerArgs() ([]string, error) {
 	params := make([]string, 0)
 	params = append(params, defaultDoltServerParams...)
-	params = append(params, fmt.Sprintf("%s=%s", configFlag, sc.ConfigFilePath))
-
-	//if sc.Host != "" {
-	//	params = append(params, fmt.Sprintf("%s=%s", hostFlag, sc.Host))
-	//}
-	//if sc.Port != 0 {
-	//	params = append(params, fmt.Sprintf("%s=%d", portFlag, sc.Port))
-	//}
+	if sc.ConfigFilePath != "" {
+		params = append(params, fmt.Sprintf("%s=%s", configFlag, sc.ConfigFilePath))
+	} else {
+		if sc.Host != "" {
+			params = append(params, fmt.Sprintf("%s=%s", hostFlag, sc.Host))
+		}
+		if sc.Port != 0 {
+			params = append(params, fmt.Sprintf("%s=%d", portFlag, sc.Port))
+		}
+	}
 
 	params = append(params, sc.ServerArgs...)
 	return params, nil
@@ -158,9 +160,6 @@ func (sc *doltServerConfigImpl) Validate() error {
 		if sc.ServerProfile != CpuServerProfile {
 			return fmt.Errorf("unsupported server profile: %s", sc.ServerProfile)
 		}
-	}
-	if sc.ConfigFilePath == "" {
-		return getMustSupplyError("config file path")
 	}
 	return CheckExec(sc.ServerExec, "server exec")
 }
