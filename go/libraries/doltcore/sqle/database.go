@@ -828,6 +828,17 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 			versionableTable := backingTable.(dtables.VersionableTable)
 			dt, found = dtables.NewQueryCatalogTable(ctx, versionableTable), true
 		}
+	case doltdb.GetTestsTableName():
+		backingTable, _, err := db.getTable(ctx, root, doltdb.GetTestsTableName())
+		if err != nil {
+			return nil, false, err
+		}
+		if backingTable == nil {
+			dt, found = dtables.NewEmptyTestsTable(ctx), true
+		} else {
+			versionableTable := backingTable.(dtables.VersionableTable)
+			dt, found = dtables.NewTestsTable(ctx, versionableTable), true
+		}
 	}
 
 	if found {

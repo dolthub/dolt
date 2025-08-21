@@ -38,11 +38,11 @@ type QueryCatalogTable struct {
 	backingTable VersionableTable
 }
 
-func (i *QueryCatalogTable) Name() string {
+func (qct *QueryCatalogTable) Name() string {
 	return doltdb.DoltQueryCatalogTableName
 }
 
-func (i *QueryCatalogTable) String() string {
+func (qct *QueryCatalogTable) String() string {
 	return doltdb.DoltQueryCatalogTableName
 }
 
@@ -58,28 +58,28 @@ func doltQueryCatalogSchema() sql.Schema {
 
 var GetDoltQueryCatalogSchema = doltQueryCatalogSchema
 
-func (i *QueryCatalogTable) Schema() sql.Schema {
+func (qct *QueryCatalogTable) Schema() sql.Schema {
 	return GetDoltQueryCatalogSchema()
 }
 
-func (i *QueryCatalogTable) Collation() sql.CollationID {
+func (qct *QueryCatalogTable) Collation() sql.CollationID {
 	return sql.Collation_Default
 }
 
-func (i *QueryCatalogTable) Partitions(context *sql.Context) (sql.PartitionIter, error) {
-	if i.backingTable == nil {
+func (qct *QueryCatalogTable) Partitions(context *sql.Context) (sql.PartitionIter, error) {
+	if qct.backingTable == nil {
 		// no backing table; return an empty iter.
 		return index.SinglePartitionIterFromNomsMap(nil), nil
 	}
-	return i.backingTable.Partitions(context)
+	return qct.backingTable.Partitions(context)
 }
 
-func (i *QueryCatalogTable) PartitionRows(context *sql.Context, partition sql.Partition) (sql.RowIter, error) {
-	if i.backingTable == nil {
+func (qct *QueryCatalogTable) PartitionRows(context *sql.Context, partition sql.Partition) (sql.RowIter, error) {
+	if qct.backingTable == nil {
 		// no backing table; return an empty iter.
 		return sql.RowsToRowIter(), nil
 	}
-	return i.backingTable.PartitionRows(context, partition)
+	return qct.backingTable.PartitionRows(context, partition)
 }
 
 // NewQueryCatalogTable creates a QueryCatalogTable
@@ -92,47 +92,47 @@ func NewEmptyQueryCatalogTable(_ *sql.Context) sql.Table {
 	return &QueryCatalogTable{}
 }
 
-func (qt *QueryCatalogTable) Replacer(_ *sql.Context) sql.RowReplacer {
-	return newQueryCatalogWriter(qt)
+func (qct *QueryCatalogTable) Replacer(_ *sql.Context) sql.RowReplacer {
+	return newQueryCatalogWriter(qct)
 }
 
 // Updater returns a RowUpdater for this table. The RowUpdater will have Update called once for each row to be
 // updated, followed by a call to Close() when all rows have been processed.
-func (qt *QueryCatalogTable) Updater(_ *sql.Context) sql.RowUpdater {
-	return newQueryCatalogWriter(qt)
+func (qct *QueryCatalogTable) Updater(_ *sql.Context) sql.RowUpdater {
+	return newQueryCatalogWriter(qct)
 }
 
 // Inserter returns an Inserter for this table. The Inserter will get one call to Insert() for each row to be
 // inserted, and will end with a call to Close() to finalize the insert operation.
-func (qt *QueryCatalogTable) Inserter(*sql.Context) sql.RowInserter {
-	return newQueryCatalogWriter(qt)
+func (qct *QueryCatalogTable) Inserter(*sql.Context) sql.RowInserter {
+	return newQueryCatalogWriter(qct)
 }
 
 // Deleter returns a RowDeleter for this table. The RowDeleter will get one call to Delete for each row to be deleted,
 // and will end with a call to Close() to finalize the delete operation.
-func (qt *QueryCatalogTable) Deleter(*sql.Context) sql.RowDeleter {
-	return newQueryCatalogWriter(qt)
+func (qct *QueryCatalogTable) Deleter(*sql.Context) sql.RowDeleter {
+	return newQueryCatalogWriter(qct)
 }
 
-func (qt *QueryCatalogTable) LockedToRoot(ctx *sql.Context, root doltdb.RootValue) (sql.IndexAddressableTable, error) {
-	if qt.backingTable == nil {
-		return qt, nil
+func (qct *QueryCatalogTable) LockedToRoot(ctx *sql.Context, root doltdb.RootValue) (sql.IndexAddressableTable, error) {
+	if qct.backingTable == nil {
+		return qct, nil
 	}
-	return qt.backingTable.LockedToRoot(ctx, root)
+	return qct.backingTable.LockedToRoot(ctx, root)
 }
 
 // IndexedAccess implements IndexAddressableTable, but QueryCatalogTable has no indexes.
 // Thus, this should never be called.
-func (qt *QueryCatalogTable) IndexedAccess(ctx *sql.Context, lookup sql.IndexLookup) sql.IndexedTable {
+func (qct *QueryCatalogTable) IndexedAccess(ctx *sql.Context, lookup sql.IndexLookup) sql.IndexedTable {
 	panic("Unreachable")
 }
 
 // GetIndexes implements IndexAddressableTable, but QueryCatalogTable has no indexes.
-func (qt *QueryCatalogTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
+func (qct *QueryCatalogTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 	return nil, nil
 }
 
-func (qt *QueryCatalogTable) PreciseMatch() bool {
+func (qct *QueryCatalogTable) PreciseMatch() bool {
 	return true
 }
 
@@ -142,14 +142,14 @@ var _ sql.RowInserter = (*queryCatalogWriter)(nil)
 var _ sql.RowDeleter = (*queryCatalogWriter)(nil)
 
 type queryCatalogWriter struct {
-	qt                      *QueryCatalogTable
+	qct                     *QueryCatalogTable
 	errDuringStatementBegin error
 	prevHash                *hash.Hash
 	tableWriter             dsess.TableWriter
 }
 
-func newQueryCatalogWriter(qt *QueryCatalogTable) *queryCatalogWriter {
-	return &queryCatalogWriter{qt, nil, nil, nil}
+func newQueryCatalogWriter(qct *QueryCatalogTable) *queryCatalogWriter {
+	return &queryCatalogWriter{qct, nil, nil, nil}
 }
 
 // Insert inserts the row given, returning an error if it cannot. Insert will be called once for each row to process
@@ -184,7 +184,7 @@ func (qw *queryCatalogWriter) Delete(ctx *sql.Context, r sql.Row) error {
 // in some way that it may be returned to in the case of an error.
 func (qw *queryCatalogWriter) StatementBegin(ctx *sql.Context) {
 	name := getDoltQueryCatalogTableName()
-	prevHash, tableWriter, err := createWriteableSystemTable(ctx, name, qw.qt.Schema())
+	prevHash, tableWriter, err := createWriteableSystemTable(ctx, name, qw.qct.Schema())
 	if err != nil {
 		qw.errDuringStatementBegin = err
 		return
