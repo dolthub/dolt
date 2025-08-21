@@ -142,7 +142,7 @@ var _ sql.RowInserter = (*queryCatalogWriter)(nil)
 var _ sql.RowDeleter = (*queryCatalogWriter)(nil)
 
 type queryCatalogWriter struct {
-	qct                      *QueryCatalogTable
+	qct                     *QueryCatalogTable
 	errDuringStatementBegin error
 	prevHash                *hash.Hash
 	tableWriter             dsess.TableWriter
