@@ -237,23 +237,6 @@ func (ftp *fsTablePersister) persistTable(ctx context.Context, name hash.Hash, d
 }
 
 func (ftp *fsTablePersister) ConjoinAll(ctx context.Context, sources chunkSources, stats *Stats) (chunkSource, cleanupFunc, error) {
-	// Check if all sources are archive chunk sources - if so, use archive-specific conjoin logic
-	archiveReaders := make([]archiveReader, 0, len(sources))
-	allArchives := true
-	for _, src := range sources {
-		if acs, ok := src.(archiveChunkSource); ok {
-			archiveReaders = append(archiveReaders, acs.aRdr)
-		} else {
-			allArchives = false
-			break
-		}
-	}
-
-	// NM4 - This should probably be ripped out now.
-	if allArchives && len(archiveReaders) >= 2 {
-		return ftp.conjoinArchives(ctx, archiveReaders, stats)
-	}
-
 	plan, err := planRangeCopyConjoin(sources, stats)
 	if err != nil {
 		return emptyChunkSource{}, nil, err
@@ -329,7 +312,7 @@ func (ftp *fsTablePersister) ConjoinAll(ctx context.Context, sources chunkSource
 		return nil, nil, err
 	}
 
-	path := filepath.Join(ftp.dir, plan.name.String())
+	path := filepath.Join(ftp.dir, plan.name.String()+plan.suffix)
 	ftp.removeMu.Lock()
 	if ftp.toKeep != nil {
 		ftp.toKeep[filepath.Clean(path)] = struct{}{}
@@ -339,7 +322,6 @@ func (ftp *fsTablePersister) ConjoinAll(ctx context.Context, sources chunkSource
 		return nil, nil, err
 	}
 	ftp.removeMu.Unlock()
-
 	cs, err := ftp.Open(ctx, plan.name, plan.chunkCount, stats)
 	if err != nil {
 		return nil, nil, err
@@ -349,52 +331,6 @@ func (ftp *fsTablePersister) ConjoinAll(ctx context.Context, sources chunkSource
 			file.Remove(filepath.Join(ftp.dir, s.hash().String()))
 		}
 	}, nil
-}
-
-// conjoinArchives conjoins multiple archive chunk sources into a single archive file
-func (ftp *fsTablePersister) conjoinArchives(ctx context.Context, readers []archiveReader, stats *Stats) (chunkSource, cleanupFunc, error) {
-	// Create a new archive writer to combine the archives
-	aw, err := newArchiveWriter("")
-	if err != nil {
-		return emptyChunkSource{}, func() {}, fmt.Errorf("failed to create archive writer: %w", err)
-	}
-
-	// Use the archive writer's conjoinAll method to combine the archives
-	err = aw.conjoinAll(ctx, readers)
-	if err != nil {
-		return emptyChunkSource{}, func() {}, err
-	}
-
-	// Generate the final path and flush the archive to disk
-	finalPath, err := aw.genFileName(ftp.dir)
-	if err != nil {
-		return emptyChunkSource{}, func() {}, err
-	}
-
-	err = aw.flushToFile(finalPath)
-	if err != nil {
-		return emptyChunkSource{}, func() {}, err
-	}
-
-	// Get the archive name and chunk count
-	name, err := aw.getName()
-	if err != nil {
-		return emptyChunkSource{}, func() {}, err
-	}
-
-	// Count total chunks from all readers
-	var totalChunks uint32
-	for _, reader := range readers {
-		totalChunks += reader.footer.chunkCount
-	}
-
-	// Open the newly created archive as a chunk source
-	cs, err := ftp.Open(ctx, name, totalChunks, stats)
-	if err != nil {
-		return emptyChunkSource{}, func() {}, err
-	}
-
-	return cs, func() {}, nil
 }
 
 func (ftp *fsTablePersister) PruneTableFiles(ctx context.Context, keeper func() []hash.Hash, mtime time.Time) error {

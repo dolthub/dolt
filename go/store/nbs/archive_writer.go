@@ -733,73 +733,54 @@ func (asw *ArchiveStreamWriter) convertSnappyAndStage(cc CompressedChunk) (uint3
 //
 // This method finalizes the index and footer. Effectively completes the in memory archive writing
 // process, but does not write it to disk.
-func (aw *archiveWriter) conjoinAll(ctx context.Context, readers []archiveReader) error {
-	if len(readers) < 2 {
-		return fmt.Errorf("conjoinAll requires at least 2 archive readers, got %d", len(readers))
+func (aw *archiveWriter) conjoinAll(ctx context.Context, sources []chunkSource) error {
+	if len(sources) < 2 {
+		return fmt.Errorf("conjoinAll requires at least 2 archive readers, got %d", len(sources))
+	}
+
+	srcCnts := make([]sourceWithSize, 0, len(sources))
+	for _, src := range sources {
+		cnt, err := src.count()
+		if err != nil {
+			return fmt.Errorf("failed to count chunks in source %T: %w", src, err)
+		}
+		srcCnts = append(srcCnts, sourceWithSize{src, uint64(cnt)})
+	}
+
+	// similar to cloud conjoin, we build the index first. It could come after in this case.
+	thePlan, err := planArchiveConjoin(srcCnts)
+	if err != nil {
+		return fmt.Errorf("failed to plan archive conjoin: %w", err)
 	}
 
 	stats := &Stats{}
 
-	for _, reader := range readers {
-		currentByteOffset := aw.bytesWritten
+	// Now that we have the plan, we slam all datablocks into the output stream then write the index last.
+	for _, src := range sources {
+		aSrc, ok := src.(archiveChunkSource)
+		if !ok {
+			return fmt.Errorf("runtime error: source %T is not an archiveChunkSource", src)
+		}
 
 		// Write the entire data section for the current reader.
-		dataSpan := reader.footer.dataSpan()
-		sectionReader := newSectionReader(ctx, reader.reader, int64(dataSpan.offset), int64(dataSpan.length), stats)
+		dataSpan := aSrc.aRdr.footer.dataSpan()
+		sectionReader := newSectionReader(ctx, aSrc.aRdr.reader, int64(dataSpan.offset), int64(dataSpan.length), stats)
 
 		written, err := io.Copy(aw.output, sectionReader)
 		if err != nil {
 			return fmt.Errorf("failed to copy data from archive: %w", err)
 		}
 		aw.bytesWritten += uint64(written)
-
-		// Map byte span IDs from this reader to the combined archive
-		spanIdOffset := uint32(len(aw.stagedBytes))
-		for i := uint32(1); i <= reader.footer.byteSpanCount; i++ {
-			span := reader.getByteSpanByID(i)
-			adjustedSpan := byteSpan{
-				offset: span.offset + currentByteOffset,
-				length: span.length,
-			}
-			aw.stagedBytes = append(aw.stagedBytes, adjustedSpan)
-		}
-
-		for i := 0; i < int(reader.footer.chunkCount); i++ {
-			dictId, dataId := reader.getChunkRef(i)
-
-			// Reconstruct the hash from prefix and suffix
-			prefix := reader.indexReader.getPrefix(uint32(i))
-			suffix := reader.indexReader.getSuffix(uint32(i))
-			chunkHash := reconstructHashFromPrefixAndSuffix(prefix, suffix)
-
-			// Add to seen chunks and staged chunks. Note that we allow duplicates here, whereas we quietly skip
-			// duplicates when doing a chunk-by-chunk build of an archive.
-			aw.seenChunks.Insert(chunkHash)
-
-			// Adjust byte span IDs for the combined archive
-			adjustedDictId := dictId
-			adjustedDataId := dataId
-			if dictId != 0 {
-				adjustedDictId = dictId + spanIdOffset
-			}
-			adjustedDataId = dataId + spanIdOffset
-
-			aw.stagedChunks = append(aw.stagedChunks, stagedChunkRef{
-				hash:       chunkHash,
-				dictionary: adjustedDictId,
-				data:       adjustedDataId,
-			})
-		}
 	}
 
-	err := aw.finalizeByteSpans()
+	// Now that we have all the data written, we can write out the index.
+	written, err := aw.output.Write(thePlan.mergedIndex)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to write index to archive: %w", err)
 	}
-	err = aw.indexFinalize(hash.Hash{})
-	if err != nil {
-		return fmt.Errorf("failed to finalize archive: %w", err)
-	}
+
+	aw.bytesWritten += uint64(written)
+	aw.workflowStage = stageDone
 
 	return nil
 }

@@ -751,7 +751,7 @@ func TestArchiveConjoinAll(t *testing.T) {
 	awCombined := newArchiveWriterWithSink(writerCombined)
 
 	readers := []archiveReader{archiveReader1, archiveReader2}
-	err := awCombined.conjoinAll(context.Background(), readers)
+	err := awCombined.conjoinAll(context.Background(), readersToSource(readers))
 	assert.NoError(t, err)
 
 	theBytes := writerCombined.buff[:writerCombined.pos]
@@ -806,7 +806,7 @@ func TestArchiveConjoinAllDuplicateChunk(t *testing.T) {
 	awCombined := newArchiveWriterWithSink(writerCombined)
 
 	readers := []archiveReader{archiveReader1, archiveReader2}
-	err := awCombined.conjoinAll(context.Background(), readers)
+	err := awCombined.conjoinAll(context.Background(), readersToSource(readers))
 	assert.NoError(t, err)
 
 	theBytes := writerCombined.buff[:writerCombined.pos]
@@ -884,7 +884,7 @@ func TestArchiveConjoinAllMixedCompression(t *testing.T) {
 	awCombined := newArchiveWriterWithSink(writerCombined)
 
 	readers := []archiveReader{archiveReader1, archiveReader2}
-	err := awCombined.conjoinAll(context.Background(), readers)
+	err := awCombined.conjoinAll(context.Background(), readersToSource(readers))
 	assert.NoError(t, err)
 
 	theBytes := writerCombined.buff[:writerCombined.pos]
@@ -990,7 +990,7 @@ func TestArchiveConjoinAllComprehensive(t *testing.T) {
 	writer1 := NewFixedBufferByteSink(make([]byte, 65536))
 	aw1 := newArchiveWriterWithSink(writer1)
 
-	err := aw1.conjoinAll(context.Background(), readers)
+	err := aw1.conjoinAll(context.Background(), readersToSource(readers))
 	assert.NoError(t, err)
 
 	// Create first combined reader
@@ -1052,7 +1052,7 @@ func TestArchiveConjoinAllComprehensive(t *testing.T) {
 	writer2 := NewFixedBufferByteSink(make([]byte, 131072))
 	aw2 := newArchiveWriterWithSink(writer2)
 
-	err = aw2.conjoinAll(context.Background(), allReadersForSecondConjoin)
+	err = aw2.conjoinAll(context.Background(), readersToSource(allReadersForSecondConjoin))
 	assert.NoError(t, err)
 
 	// Create final combined reader
@@ -1361,4 +1361,13 @@ func createMixedCompressionArchive(t *testing.T, chunkData [][]byte, useSnappy m
 		hashes = append(hashes, hashWithPrefix(t, prefix))
 	}
 	return createTestArchiveWithHashes(t, chunkData, hashes, useSnappy, metadata)
+}
+
+func readersToSource(readers []archiveReader) []chunkSource {
+	sources := make([]chunkSource, 0, len(readers))
+	for _, r := range readers {
+		ar := archiveChunkSource{file: "", aRdr: r}
+		sources = append(sources, ar)
+	}
+	return sources
 }
