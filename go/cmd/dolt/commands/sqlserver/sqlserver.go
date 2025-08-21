@@ -58,6 +58,7 @@ const (
 	goldenMysqlConn             = "golden"
     eventSchedulerStatus        = "event-scheduler"
     mcpPortFlag                 = "mcp-port"
+    mcpUserFlag                 = "mcp-user"
 )
 
 func indentLines(s string) string {
@@ -199,6 +200,8 @@ func (cmd SqlServerCmd) ArgParserWithName(name string) *argparser.ArgParser {
     ap.SupportsString(eventSchedulerStatus, "", "status", "Determines whether the Event Scheduler is enabled and running on the server. It has one of the following values: 'ON', 'OFF' or 'DISABLED'.")
     // Start an MCP HTTP server connected to this sql-server on the given port
     ap.SupportsUint(mcpPortFlag, "", "port", "If provided, runs a Dolt MCP HTTP server on this port alongside the sql-server.")
+    // Optional: SQL user for MCP to authenticate as (defaults to root)
+    ap.SupportsString(mcpUserFlag, "", "user", "Optional SQL user for MCP to connect as. Defaults to 'root'.")
 	return ap
 }
 
@@ -277,6 +280,13 @@ func StartServer(ctx context.Context, versionStr, commandStr string, args []stri
         mcpPortPtr = &mcpPort
     }
 
+    // Optional MCP SQL user
+    var mcpUserPtr *string
+    if mu, ok := apr.GetValue(mcpUserFlag); ok {
+        user := mu
+        mcpUserPtr = &user
+    }
+
     // Validate MCP port range and conflicts
     if mcpPortPtr != nil {
         if *mcpPortPtr <= 0 || *mcpPortPtr > 65535 {
@@ -320,6 +330,7 @@ func StartServer(ctx context.Context, versionStr, commandStr string, args []stri
 		DoltEnv:          dEnv,
 		SkipRootUserInit: skipRootUserInitialization,
         MCPPort:          mcpPortPtr,
+        MCPUser:          mcpUserPtr,
 	})
 	if startError != nil {
 		return startError

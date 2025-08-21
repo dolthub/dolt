@@ -92,6 +92,7 @@ type Config struct {
 	Controller              *svcs.Controller
 	ProtocolListenerFactory server.ProtocolListenerFunc
     MCPPort                 *int
+    MCPUser                 *string
 }
 
 // Serve starts a MySQL-compatible server. Returns any errors that were encountered.
@@ -903,11 +904,15 @@ func ConfigureServices(
 
 				// Build and run Dolt MCP server using dolt-mcp library
 				logger, _ := zap.NewProduction()
-                dbConf := mcpdb.Config{
-                    Host:         "127.0.0.1",
+				mcpUser := servercfg.DefaultUser
+				if cfg.MCPUser != nil && *cfg.MCPUser != "" {
+					mcpUser = *cfg.MCPUser
+				}
+				dbConf := mcpdb.Config{
+					Host:         "127.0.0.1",
 					Port:         cfg.ServerConfig.Port(),
-                    User:         servercfg.DefaultUser, // root
-                    Password:     os.Getenv(dconfig.EnvDoltRootPassword),
+					User:         mcpUser,
+					Password:     os.Getenv(dconfig.EnvDoltRootPassword),
 					DatabaseName: "",
 				}
 
