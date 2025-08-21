@@ -16,7 +16,6 @@ package nbs
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -27,13 +26,11 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
-	"time"
 
 	"github.com/dolthub/gozstd"
 	lru "github.com/hashicorp/golang-lru/v2"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/dolthub/dolt/go/cmd/dolt/doltversion"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -337,42 +334,10 @@ func convertTableFileToArchive(
 	return arcW.finalPath, name, chunkCount, err
 }
 
-func indexFinalize(arcW *archiveWriter, originTableFile hash.Hash) error {
-	err := arcW.finalizeByteSpans()
-	if err != nil {
-		return err
-	}
-
-	err = arcW.writeIndex()
-	if err != nil {
-		return err
-	}
-
-	meta := map[string]string{
-		amdkDoltVersion:    doltversion.Version,
-		amdkConversionTime: time.Now().UTC().Format(time.RFC3339),
-	}
-	if !originTableFile.IsEmpty() {
-		meta[amdkOriginTableFile] = originTableFile.String()
-	}
-
-	jsonData, err := json.Marshal(meta)
-	if err != nil {
-		return err
-	}
-
-	err = arcW.writeMetadata(jsonData)
-	if err != nil {
-		return err
-	}
-
-	return arcW.writeFooter()
-}
-
 // indexAndFinalizeArchive writes the index, metadata, and footer to the archive file. It also flushes the archive writer
 // to the directory provided. The name is calculated from the footer, and can be obtained by calling getName on the archive.
 func indexFinalizeFlushArchive(arcW *archiveWriter, archivePath string, originTableFile hash.Hash) error {
-	err := indexFinalize(arcW, originTableFile)
+	err := arcW.indexFinalize(originTableFile)
 	if err != nil {
 		return err
 	}

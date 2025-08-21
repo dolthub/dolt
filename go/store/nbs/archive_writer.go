@@ -18,13 +18,16 @@ import (
 	"bytes"
 	"crypto/sha512"
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"sort"
+	"time"
 
+	"github.com/dolthub/dolt/go/cmd/dolt/doltversion"
 	"github.com/dolthub/gozstd"
 
 	"github.com/dolthub/dolt/go/store/chunks"
@@ -55,10 +58,12 @@ type archiveWriter struct {
 	md5Summer *HashingByteSink
 	// SHA512 is calculated on chunks of the output stream, so will be reset at appropriate times. This
 	// sinker is what archive code writes to, and it wraps the MD5 sink.
-	output           *HashingByteSink
-	bytesWritten     uint64
-	stagedBytes      stagedByteSpanSlice
-	stagedChunks     stagedChunkRefSlice
+	output       *HashingByteSink
+	bytesWritten uint64
+	stagedBytes  stagedByteSpanSlice
+	stagedChunks stagedChunkRefSlice
+	// seenChunks is used when building archives chunk-by-chunk, to ensure that we do not write the same chunk multiple
+	// times. It is not used for any other purpose, and there are cases where we bypass checking it (e.g. conjoining archives).
 	seenChunks       hash.HashSet
 	indexLen         uint64
 	metadataLen      uint32
@@ -191,6 +196,38 @@ func (aw *archiveWriter) stageSnappyChunk(hash hash.Hash, dataId uint32) error {
 	aw.seenChunks.Insert(hash)
 	aw.stagedChunks = append(aw.stagedChunks, stagedChunkRef{hash, 0, dataId})
 	return nil
+}
+
+func (aw *archiveWriter) indexFinalize(originTableFile hash.Hash) error {
+	err := aw.finalizeByteSpans()
+	if err != nil {
+		return err
+	}
+
+	err = aw.writeIndex()
+	if err != nil {
+		return err
+	}
+
+	meta := map[string]string{
+		amdkDoltVersion:    doltversion.Version,
+		amdkConversionTime: time.Now().UTC().Format(time.RFC3339),
+	}
+	if !originTableFile.IsEmpty() {
+		meta[amdkOriginTableFile] = originTableFile.String()
+	}
+
+	jsonData, err := json.Marshal(meta)
+	if err != nil {
+		return err
+	}
+
+	err = aw.writeMetadata(jsonData)
+	if err != nil {
+		return err
+	}
+
+	return aw.writeFooter()
 }
 
 func (scrs stagedChunkRefSlice) Len() int {
@@ -541,7 +578,7 @@ func (asw *ArchiveStreamWriter) Finish() (uint32, string, error) {
 
 	// This will perform all the steps to construct an archive file - starting with the finalization of byte spans.
 	// All writeByteSpan calls and stage* calls must be completed before this.
-	err := indexFinalize(asw.writer, hash.Hash{})
+	err := asw.writer.indexFinalize(hash.Hash{})
 	if err != nil {
 		return 0, "", err
 	}
