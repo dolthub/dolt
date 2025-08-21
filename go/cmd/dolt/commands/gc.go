@@ -98,12 +98,9 @@ func (cmd GarbageCollectionCmd) Exec(ctx context.Context, commandStr string, arg
 		return HandleVErrAndExitCode(errhand.BuildDError("Invalid Argument: --shallow is not compatible with --full").SetPrintUsage().Build(), usage)
 	}
 
-	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
+	queryist, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-	}
-	if closeFunc != nil {
-		defer closeFunc()
 	}
 
 	query, err := cmd.constructDoltGCQuery(apr)
@@ -111,7 +108,7 @@ func (cmd GarbageCollectionCmd) Exec(ctx context.Context, commandStr string, arg
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	_, _, _, err = queryist.Query(sqlCtx, query)
+	_, _, _, err = queryist.Queryist.Query(queryist.Context, query)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}

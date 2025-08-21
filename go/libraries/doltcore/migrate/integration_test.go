@@ -172,6 +172,7 @@ func setupMigrationTest(t *testing.T, ctx context.Context, test migrationTest) *
 	}
 	cliCtx, err := commands.NewArgFreeCliContext(ctx, dEnv, dEnv.FS)
 	require.NoError(t, err)
+	defer cliCtx.Close()
 
 	cmd := commands.SqlCmd{}
 	for _, query := range test.setup {

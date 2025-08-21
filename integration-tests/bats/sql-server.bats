@@ -197,7 +197,7 @@ EOF
     [ "$status" -eq 1 ]
     run grep 'Error authenticating user' log.txt
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 2 ]
+    [ "${#lines[@]}" -eq 1 ]
 }
 
 @test "sql-server: Database specific system variables should be loaded" {

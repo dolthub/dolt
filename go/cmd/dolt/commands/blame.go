@@ -102,19 +102,16 @@ func (cmd BlameCmd) Exec(ctx context.Context, commandStr string, args []string, 
 		return 1
 	}
 
-	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
+	queryist, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
 		iohelp.WriteLine(cli.CliOut, err.Error())
 		return 1
-	}
-	if closeFunc != nil {
-		defer closeFunc()
 	}
 
 	var schema sql.Schema
 	var ri sql.RowIter
 	if apr.NArg() == 1 {
-		schema, ri, _, err = queryist.Query(sqlCtx, fmt.Sprintf(blameQueryTemplate, apr.Arg(0), "HEAD"))
+		schema, ri, _, err = queryist.Queryist.Query(queryist.Context, fmt.Sprintf(blameQueryTemplate, apr.Arg(0), "HEAD"))
 	} else {
 		// validate input
 		ref := apr.Arg(0)
@@ -123,14 +120,14 @@ func (cmd BlameCmd) Exec(ctx context.Context, commandStr string, args []string, 
 			return 1
 		}
 
-		schema, ri, _, err = queryist.Query(sqlCtx, fmt.Sprintf(blameQueryTemplate, apr.Arg(1), apr.Arg(0)))
+		schema, ri, _, err = queryist.Queryist.Query(queryist.Context, fmt.Sprintf(blameQueryTemplate, apr.Arg(1), apr.Arg(0)))
 	}
 	if err != nil {
 		iohelp.WriteLine(cli.CliOut, err.Error())
 		return 1
 	}
 
-	err = engine.PrettyPrintResults(sqlCtx, engine.FormatTabular, schema, ri, false, false, true, false)
+	err = engine.PrettyPrintResults(queryist.Context, engine.FormatTabular, schema, ri, false, false, true, false)
 	if err != nil {
 		iohelp.WriteLine(cli.CliOut, err.Error())
 		return 1

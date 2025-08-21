@@ -129,6 +129,7 @@ func testJsonValue(t *testing.T, test jsonValueTest, setupCommon []testCommand) 
 	dEnv := dtestutils.CreateTestEnv()
 	cliCtx, verr := cmd.NewArgFreeCliContext(ctx, dEnv, dEnv.FS)
 	require.NoError(t, verr)
+	defer cliCtx.Close()
 
 	setup := append(setupCommon, test.setup...)
 	for _, c := range setup {

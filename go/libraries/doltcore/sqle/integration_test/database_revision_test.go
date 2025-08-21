@@ -152,7 +152,10 @@ func TestDbRevision(t *testing.T) {
 			dEnv := dtestutils.CreateTestEnv()
 			defer dEnv.DoltDB(ctx).Close()
 
-			cliCtx, _ := cmd.NewArgFreeCliContext(ctx, dEnv, dEnv.FS)
+			var err error
+			cliCtx, err := cmd.NewArgFreeCliContext(ctx, dEnv, dEnv.FS)
+			require.NoError(t, err)
+			defer cliCtx.Close()
 
 			setup := append(setupCommon, test.setup...)
 			for _, c := range setup {

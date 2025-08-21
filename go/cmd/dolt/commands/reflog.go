@@ -82,12 +82,9 @@ func (cmd ReflogCmd) Exec(ctx context.Context, commandStr string, args []string,
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, reflogDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
-	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
+	queryist, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-	}
-	if closeFunc != nil {
-		defer closeFunc()
 	}
 
 	query, err := constructInterpolatedDoltReflogQuery(apr)
@@ -95,12 +92,12 @@ func (cmd ReflogCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	rows, err := cli.GetRowsForSql(queryist, sqlCtx, query)
+	rows, err := cli.GetRowsForSql(queryist.Queryist, queryist.Context, query)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	return printReflog(rows, queryist, sqlCtx)
+	return printReflog(rows, queryist.Queryist, queryist.Context)
 }
 
 // constructInterpolatedDoltReflogQuery generates the sql query necessary to call the DOLT_REFLOG() function.

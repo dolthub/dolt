@@ -120,16 +120,13 @@ func (s SlashHelp) Exec(ctx context.Context, _ string, args []string, _ *env.Dol
 		return 0
 	}
 
-	qryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
-	if closeFunc != nil {
-		defer closeFunc()
-	}
+	queryist, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
 		cli.Println(fmt.Sprintf("error getting query engine: %s", err))
 		return 1
 	}
 
-	prompt := generateHelpPrompt(sqlCtx, qryist)
+	prompt := generateHelpPrompt(queryist.Context, queryist.Queryist)
 
 	cli.Println("Dolt SQL Shell Help")
 	cli.Printf("Default behavior is to interpret SQL statements.     (e.g. '%sselect * from my_table;')\n", prompt)

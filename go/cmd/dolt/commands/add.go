@@ -121,24 +121,21 @@ func (cmd AddCmd) Exec(ctx context.Context, commandStr string, args []string, _ 
 		return status
 	}
 
-	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
+	queryist, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
 		cli.PrintErrln(errhand.VerboseErrorFromError(err))
 		return 1
 	}
-	if closeFunc != nil {
-		defer closeFunc()
-	}
 
 	// Allow staging tables with merge conflicts.
-	_, _, _, err = queryist.Query(sqlCtx, "set @@dolt_force_transaction_commit=1;")
+	_, _, _, err = queryist.Queryist.Query(queryist.Context, "set @@dolt_force_transaction_commit=1;")
 	if err != nil {
 		cli.PrintErrln(errhand.VerboseErrorFromError(err))
 		return 1
 	}
 
 	if apr.Contains(cli.PatchFlag) {
-		return patchWorkflow(sqlCtx, queryist, apr.Args)
+		return patchWorkflow(queryist.Context, queryist.Queryist, apr.Args)
 	} else {
 		for _, tableName := range apr.Args {
 			if tableName != "." && !doltdb.IsValidTableName(tableName) {
@@ -146,13 +143,13 @@ func (cmd AddCmd) Exec(ctx context.Context, commandStr string, args []string, _ 
 			}
 		}
 
-		_, rowIter, _, err := queryist.Query(sqlCtx, generateAddSql(apr))
+		_, rowIter, _, err := queryist.Queryist.Query(queryist.Context, generateAddSql(apr))
 		if err != nil {
 			cli.PrintErrln(errhand.VerboseErrorFromError(err))
 			return 1
 		}
 
-		_, err = sql.RowIterToRows(sqlCtx, rowIter)
+		_, err = sql.RowIterToRows(queryist.Context, rowIter)
 		if err != nil {
 			cli.PrintErrln(errhand.VerboseErrorFromError(err))
 			return 1

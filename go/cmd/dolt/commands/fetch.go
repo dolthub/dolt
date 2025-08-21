@@ -80,13 +80,10 @@ func (cmd FetchCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, fetchDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
-	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
+	queryist, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
 		cli.PrintErrln(err)
 		return 1
-	}
-	if closeFunc != nil {
-		defer closeFunc()
 	}
 
 	query, err := constructInterpolatedDoltFetchQuery(apr)
@@ -97,7 +94,7 @@ func (cmd FetchCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	errChan := make(chan error)
 	go func() {
 		defer close(errChan)
-		_, _, _, err = queryist.Query(sqlCtx, query)
+		_, _, _, err = queryist.Queryist.Query(queryist.Context, query)
 		if err != nil {
 			errChan <- err
 			return

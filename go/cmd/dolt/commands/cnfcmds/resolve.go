@@ -95,17 +95,14 @@ func (cmd ResolveCmd) Exec(ctx context.Context, commandStr string, args []string
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, resDocumentation, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
-	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
+	queryist, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-	}
-	if closeFunc != nil {
-		defer closeFunc()
 	}
 
 	var verr errhand.VerboseError
 	if apr.ContainsAny(autoResolverParams...) {
-		verr = autoResolve(queryist, sqlCtx, apr)
+		verr = autoResolve(queryist.Queryist, queryist.Context, apr)
 	} else {
 		verr = errhand.BuildDError("--ours or --theirs must be supplied").SetPrintUsage().Build()
 	}
