@@ -42,7 +42,7 @@ var tpccLuaScripts = os.Getenv("BENCHMARK_RUNNER_TPCC_LUA_SCRIPTS")
 
 func TestRunner(t *testing.T) {
 	if runTests == "" {
-		//t.Skip()
+		t.Skip()
 	}
 	dir := t.TempDir()
 	log.Println(dir)
