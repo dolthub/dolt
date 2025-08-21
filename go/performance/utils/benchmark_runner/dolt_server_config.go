@@ -36,6 +36,9 @@ type doltServerConfigImpl struct {
 	// Version is the server version
 	Version string
 
+	// ConfigFilePath is the path to a dolt config file
+	ConfigFilePath string
+
 	// ResultsFormat is the format the results should be written in
 	ResultsFormat string
 
@@ -57,18 +60,19 @@ type doltServerConfigImpl struct {
 
 var _ ProfilingServerConfig = &doltServerConfigImpl{}
 
-func NewDoltServerConfig(version, serverExec, serverUser, host, resultsFormat, profilePath string, serverProfile ServerProfile, port int, serverArgs []string) *doltServerConfigImpl {
+func NewDoltServerConfig(version, serverExec, serverUser, host, resultsFormat, configFilePath, profilePath string, serverProfile ServerProfile, port int, serverArgs []string) *doltServerConfigImpl {
 	return &doltServerConfigImpl{
-		Id:            uuid.New().String(),
-		Host:          host,
-		Port:          port,
-		Version:       version,
-		ResultsFormat: resultsFormat,
-		ServerExec:    serverExec,
-		ServerUser:    serverUser,
-		ServerArgs:    serverArgs,
-		ServerProfile: serverProfile,
-		ProfilePath:   profilePath,
+		Id:             uuid.New().String(),
+		Host:           host,
+		Port:           port,
+		Version:        version,
+		ConfigFilePath: configFilePath,
+		ResultsFormat:  resultsFormat,
+		ServerExec:     serverExec,
+		ServerUser:     serverUser,
+		ServerArgs:     serverArgs,
+		ServerProfile:  serverProfile,
+		ProfilePath:    profilePath,
 	}
 }
 
@@ -112,12 +116,15 @@ func (sc *doltServerConfigImpl) GetServerExec() string {
 func (sc *doltServerConfigImpl) GetServerArgs() ([]string, error) {
 	params := make([]string, 0)
 	params = append(params, defaultDoltServerParams...)
-	if sc.Host != "" {
-		params = append(params, fmt.Sprintf("%s=%s", hostFlag, sc.Host))
-	}
-	if sc.Port != 0 {
-		params = append(params, fmt.Sprintf("%s=%d", portFlag, sc.Port))
-	}
+	params = append(params, fmt.Sprintf("%s=%s", configFlag, sc.ConfigFilePath))
+
+	//if sc.Host != "" {
+	//	params = append(params, fmt.Sprintf("%s=%s", hostFlag, sc.Host))
+	//}
+	//if sc.Port != 0 {
+	//	params = append(params, fmt.Sprintf("%s=%d", portFlag, sc.Port))
+	//}
+
 	params = append(params, sc.ServerArgs...)
 	return params, nil
 }
@@ -151,6 +158,9 @@ func (sc *doltServerConfigImpl) Validate() error {
 		if sc.ServerProfile != CpuServerProfile {
 			return fmt.Errorf("unsupported server profile: %s", sc.ServerProfile)
 		}
+	}
+	if sc.ConfigFilePath == "" {
+		return getMustSupplyError("config file path")
 	}
 	return CheckExec(sc.ServerExec, "server exec")
 }

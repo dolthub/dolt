@@ -2,7 +2,7 @@
 set -e
 set -o pipefail
 
-SYSBENCH_TEST="oltp_point_select"
+SYSBENCH_TEST="groupby_scan"
 WORKING_DIR=`mktemp -d`
 PPROF=0
 PORT=3366
@@ -67,6 +67,10 @@ listener:
   tls_key: "./chain_key.pem"
   tls_cert: "./chain_cert.pem"
   require_secure_transport: true
+
+system_variables: {
+  sql_mode: ""
+}
 
 YAML
 
