@@ -98,7 +98,7 @@ func (differ *JsonDiffer) Next(ctx context.Context) (diff JsonDiff, err error) {
 			if err != nil {
 				return JsonDiff{}, err
 			}
-			differ.currentFromPair = &jsonKeyPair{key, value}
+			differ.currentFromPair = &jsonKeyPair{key: key, value: value}
 		}
 
 		if differ.currentToPair == nil && differ.to.HasNext() {
@@ -106,7 +106,7 @@ func (differ *JsonDiffer) Next(ctx context.Context) (diff JsonDiff, err error) {
 			if err != nil {
 				return JsonDiff{}, err
 			}
-			differ.currentToPair = &jsonKeyPair{key, value}
+			differ.currentToPair = &jsonKeyPair{key: key, value: value}
 		}
 
 		if differ.currentFromPair == nil && differ.currentToPair == nil {
