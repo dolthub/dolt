@@ -197,12 +197,7 @@ func (aw *archiveWriter) stageSnappyChunk(hash hash.Hash, dataId uint32) error {
 }
 
 func (aw *archiveWriter) indexFinalize(originTableFile hash.Hash) error {
-	err := aw.finalizeByteSpans()
-	if err != nil {
-		return err
-	}
-
-	err = aw.writeIndex()
+	err := aw.writeIndex()
 	if err != nil {
 		return err
 	}
@@ -872,7 +867,7 @@ func planArchiveConjoin(sources []sourceWithSize) (compactionPlan, error) {
 
 	aw.bytesWritten = currentDataOffset
 
-	// The conjoin process is a little different than the normal archive writing process. We manually stick everything
+	// The conjoin process is a little different from the normal archive writing process. We manually stick everything
 	// into the writer, and then finalize the index and footer at the end. The datablocks will be written in separately
 	// after we have created the index and footer.
 	//
