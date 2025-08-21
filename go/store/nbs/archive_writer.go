@@ -800,3 +800,98 @@ func (aw *archiveWriter) conjoinAll(ctx context.Context, readers []archiveReader
 
 	return nil
 }
+
+type archiveConjoiner struct {
+}
+
+func (*archiveConjoiner) conjoinIndexes(sources []sourceWithSize) (compactionPlan, error) {
+	if len(sources) < 2 {
+		return compactionPlan{}, fmt.Errorf("conjoinIndexes requires at least 2 archive readers, got %d", len(sources))
+	}
+
+	writer := NewBlockBufferByteSink(fourMb)
+	aw := newArchiveWriterWithSink(writer)
+
+	currentDataOffset := uint64(0)
+	chunkCounter := uint32(0)
+
+	for _, src := range sources {
+		reader := src.source
+		arcSrc, ok := reader.(archiveChunkSource)
+		if !ok {
+			panic("source is not an archiveChunkSource")
+		}
+
+		footer := arcSrc.aRdr.footer
+
+		chunkCounter += footer.chunkCount
+
+		// Map byte span IDs from this reader to the combined archive
+		spanIdOffset := uint32(len(aw.stagedBytes))
+		for i := uint32(1); i <= footer.byteSpanCount; i++ {
+			span := arcSrc.aRdr.getByteSpanByID(i)
+			adjustedSpan := byteSpan{
+				offset: span.offset + currentDataOffset,
+				length: span.length,
+			}
+			aw.stagedBytes = append(aw.stagedBytes, adjustedSpan)
+		}
+
+		for i := 0; i < int(footer.chunkCount); i++ {
+			dictId, dataId := arcSrc.aRdr.getChunkRef(i)
+
+			// Reconstruct the hash from prefix and suffix
+			prefix := arcSrc.aRdr.indexReader.getPrefix(uint32(i))
+			suffix := arcSrc.aRdr.indexReader.getSuffix(uint32(i))
+			chunkHash := reconstructHashFromPrefixAndSuffix(prefix, suffix)
+
+			// Add to seen chunks and staged chunks. Note that we allow duplicates here, whereas we quietly skip
+			// duplicates when doing a chunk-by-chunk build of an archive.
+			aw.seenChunks.Insert(chunkHash)
+
+			// Adjust byte span IDs for the combined archive
+			adjustedDictId := dictId
+			adjustedDataId := dataId
+			if dictId != 0 {
+				adjustedDictId = dictId + spanIdOffset
+			}
+			adjustedDataId = dataId + spanIdOffset
+
+			aw.stagedChunks = append(aw.stagedChunks, stagedChunkRef{
+				hash:       chunkHash,
+				dictionary: adjustedDictId,
+				data:       adjustedDataId,
+			})
+		}
+		currentDataOffset += src.dataLen
+	}
+
+	// NM4 - maybe need the bytes written.... Allow me to test.....
+	aw.bytesWritten = currentDataOffset
+
+	// NM4 - indexFinalize currently altered to get through steel thread.
+	err := aw.indexFinalize(hash.Hash{})
+	if err != nil {
+		return compactionPlan{}, fmt.Errorf("failed to finalize archive: %w", err)
+	}
+
+	name, err := aw.getName()
+	if err != nil {
+		return compactionPlan{}, fmt.Errorf("failed to get name of conjoined archive: %w", err)
+	}
+
+	bs := make([]byte, 0, writer.pos)
+	buf := bytes.NewBuffer(bs)
+	err = writer.Flush(buf)
+	if err != nil {
+		return compactionPlan{}, fmt.Errorf("failed to build index buffer while conjoining archives: %w", err)
+	}
+
+	return compactionPlan{
+		sources:     chunkSourcesByDescendingDataSize{sources},
+		name:        name,
+		suffix:      ArchiveFileSuffix,
+		mergedIndex: bs,
+		chunkCount:  chunkCounter,
+	}, nil
+}

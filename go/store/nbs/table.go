@@ -243,7 +243,7 @@ type chunkSource interface {
 	// hash returns the hash address of this chunkSource.
 	hash() hash.Hash
 
-	// suffix returns the file suffix of this chunkSource. File name can be produces with `cs.hash().String() + cs.suffix()`
+	// suffix returns the file suffix of this chunkSource. File name can be produced with `cs.hash().String() + cs.suffix()`
 	suffix() string
 
 	// opens a Reader to the first byte of the chunkData segment of this table.

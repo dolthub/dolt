@@ -16,12 +16,12 @@ package main
 
 import (
 	"context"
+	sqldriver "database/sql/driver"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
-	sqldriver "database/sql/driver"
 
 	"github.com/stretchr/testify/require"
 
@@ -46,7 +46,7 @@ func TestGCConjoinsOldgen(t *testing.T) {
 	require.NoError(t, err)
 
 	server := MakeServer(t, repo, &driver.Server{
-		Args: []string{"--port", `{{get_port "server"}}`},
+		Args:        []string{"--port", `{{get_port "server"}}`},
 		DynamicPort: "server",
 	}, &ports)
 	server.DBName = "concurrent_gc_test"
@@ -75,8 +75,8 @@ func TestGCConjoinsOldgen(t *testing.T) {
 	// too many table files in the old gen.
 	for i := 0; i < 512; i++ {
 		var vals []string
-		for j := i*1024; j < (i+1)*1024; j++ {
-			vals = append(vals, "(" + strconv.Itoa(j) + ",0)")
+		for j := i * 1024; j < (i+1)*1024; j++ {
+			vals = append(vals, "("+strconv.Itoa(j)+",0)")
 		}
 		func() {
 			conn, err := db.Conn(ctx)
@@ -87,11 +87,11 @@ func TestGCConjoinsOldgen(t *testing.T) {
 				})
 			}()
 
-			_, err = conn.ExecContext(ctx, "insert into vals values " + strings.Join(vals, ","))
+			_, err = conn.ExecContext(ctx, "insert into vals values "+strings.Join(vals, ","))
 			require.NoError(t, err)
-			_, err = conn.ExecContext(ctx, "call dolt_commit('-am', 'insert from " + strconv.Itoa(i*1024) + "')")
+			_, err = conn.ExecContext(ctx, "call dolt_commit('-am', 'insert from "+strconv.Itoa(i*1024)+"')")
 			require.NoError(t, err)
-			_, err = conn.ExecContext(ctx, "call dolt_gc()")
+			_, err = conn.ExecContext(ctx, "call dolt_gc('--archive-level','1')")
 			require.NoError(t, err)
 		}()
 	}

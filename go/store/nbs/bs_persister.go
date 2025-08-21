@@ -94,12 +94,14 @@ func (bsp *blobstorePersister) ConjoinAll(ctx context.Context, sources chunkSour
 		sized = append(sized, sourceWithSize{src, src.currentSize()})
 	}
 
-	plan, err := planConjoin(sized, stats)
+	// NM4 - error out when we run into archives here.....
+
+	plan, err := planTableConjoin(sized, stats)
 	if err != nil {
 		return nil, nil, err
 	}
-	address := nameFromSuffixes(plan.suffixes())
-	name := address.String()
+
+	name := plan.name.String()
 
 	// conjoin must contiguously append the chunk records of |sources|, but the raw content
 	// of each source contains a chunk index in the tail. Blobstore does not expose a range
@@ -128,7 +130,7 @@ func (bsp *blobstorePersister) ConjoinAll(ctx context.Context, sources chunkSour
 		return emptyChunkSource{}, nil, err
 	}
 
-	cs, err := newBSChunkSource(ctx, bsp.bs, address, plan.chunkCount, bsp.q, stats)
+	cs, err := newBSChunkSource(ctx, bsp.bs, plan.name, plan.chunkCount, bsp.q, stats)
 	return cs, func() {}, err
 }
 

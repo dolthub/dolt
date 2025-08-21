@@ -249,6 +249,7 @@ func (ftp *fsTablePersister) ConjoinAll(ctx context.Context, sources chunkSource
 		}
 	}
 
+	// NM4 - This should probably be ripped out now.
 	if allArchives && len(archiveReaders) >= 2 {
 		return ftp.conjoinArchives(ctx, archiveReaders, stats)
 	}
@@ -262,7 +263,6 @@ func (ftp *fsTablePersister) ConjoinAll(ctx context.Context, sources chunkSource
 		return emptyChunkSource{}, func() {}, nil
 	}
 
-	name := nameFromSuffixes(plan.suffixes())
 	tempName, f, err := func() (tempName string, cleanup func(), ferr error) {
 		ftp.removeMu.Lock()
 		var temp *os.File
@@ -329,7 +329,7 @@ func (ftp *fsTablePersister) ConjoinAll(ctx context.Context, sources chunkSource
 		return nil, nil, err
 	}
 
-	path := filepath.Join(ftp.dir, name.String())
+	path := filepath.Join(ftp.dir, plan.name.String())
 	ftp.removeMu.Lock()
 	if ftp.toKeep != nil {
 		ftp.toKeep[filepath.Clean(path)] = struct{}{}
@@ -340,7 +340,7 @@ func (ftp *fsTablePersister) ConjoinAll(ctx context.Context, sources chunkSource
 	}
 	ftp.removeMu.Unlock()
 
-	cs, err := ftp.Open(ctx, name, plan.chunkCount, stats)
+	cs, err := ftp.Open(ctx, plan.name, plan.chunkCount, stats)
 	if err != nil {
 		return nil, nil, err
 	}
