@@ -277,22 +277,25 @@ func CleanUntracked(ctx *sql.Context, roots doltdb.Roots, tables []string, dryru
 
 	var err error
 	if len(tables) == 0 {
-		tables, err = roots.Working.GetTableNames(ctx, doltdb.DefaultSchemaName, true)
+		allTableNames, err := roots.Working.GetAllTableNames(ctx, true)
 		if err != nil {
 			return doltdb.Roots{}, nil
 		}
-	}
-
-	for i := range tables {
-		name := tables[i]
-		resolvedName, tblExists, err := resolve.TableName(ctx, roots.Working, name)
-		if err != nil {
-			return doltdb.Roots{}, err
+		for _, tableName := range allTableNames {
+			untrackedTables[tableName] = struct{}{}
 		}
-		if !tblExists {
-			return doltdb.Roots{}, fmt.Errorf("%w: '%s'", doltdb.ErrTableNotFound, name)
+	} else {
+		for i := range tables {
+			name := tables[i]
+			resolvedName, tblExists, err := resolve.TableName(ctx, roots.Working, name)
+			if err != nil {
+				return doltdb.Roots{}, err
+			}
+			if !tblExists {
+				return doltdb.Roots{}, fmt.Errorf("%w: '%s'", doltdb.ErrTableNotFound, name)
+			}
+			untrackedTables[resolvedName] = struct{}{}
 		}
-		untrackedTables[resolvedName] = struct{}{}
 	}
 
 	// untracked tables = working tables - staged tables
