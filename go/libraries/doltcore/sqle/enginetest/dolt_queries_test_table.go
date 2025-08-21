@@ -25,14 +25,14 @@ var DoltTestTableScripts = []queries.ScriptTest{
 		Name: "can insert into dolt tests",
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query: "INSERT INTO dolt_tests VALUES ('validate tables', 'no tables', 'show tables;', 'expected_rows', '==', '0')",
+				Query: "INSERT INTO dolt_tests VALUES ('no tables', 'validate tables' , 'show tables;', 'expected_rows', '==', '0')",
 			},
 		},
 	},
 	{
 		Name: "can drop dolt tests table, cannot drop twice",
 		SetUpScript: []string{
-			"INSERT INTO dolt_tests VALUES ('validate tables', 'no tables', 'show tables;', 'expected_rows', '==', '0')",
+			"INSERT INTO dolt_tests VALUES ('no tables', 'validate tables', 'show tables;', 'expected_rows', '==', '0')",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -61,24 +61,24 @@ var DoltTestTableScripts = []queries.ScriptTest{
 	{
 		Name: "select from dolt_tests tables",
 		SetUpScript: []string{
-			"INSERT INTO dolt_tests VALUES ('validate tables', 'one table', 'show tables;', 'expected_rows', '==', '1');",
-			"INSERT INTO dolt_tests VALUES ('validate tables', 'numbers table exists', 'show tables like ''numbers''', 'expected_rows', '==', '1')",
-			"INSERT INTO dolt_tests VALUES ('numbers table validation', 'numbers schema', 'describe numbers', 'expected_rows', '==', '1')",
+			"INSERT INTO dolt_tests VALUES ('one table', 'validate tables', 'show tables;', 'expected_rows', '==', '1');",
+			"INSERT INTO dolt_tests VALUES ('numbers table exists', 'validate tables', 'show tables like ''numbers''', 'expected_rows', '==', '1')",
+			"INSERT INTO dolt_tests VALUES ('numbers schema', 'numbers table validation', 'describe numbers', 'expected_rows', '==', '1')",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "SELECT * FROM dolt_tests;",
 				Expected: []sql.Row{
-					{"validate tables", "one table", "show tables;", "expected_rows", "==", "1"},
-					{"validate tables", "numbers table exists", "show tables like 'numbers'", "expected_rows", "==", "1"},
-					{"numbers table validation", "numbers schema", "describe numbers", "expected_rows", "==", "1"},
+					{"one table", "validate tables", "show tables;", "expected_rows", "==", "1"},
+					{"numbers table exists", "validate tables", "show tables like 'numbers'", "expected_rows", "==", "1"},
+					{"numbers schema", "numbers table validation", "describe numbers", "expected_rows", "==", "1"},
 				},
 			},
 			{
 				Query: "SELECT * FROM dolt_tests where test_group = 'validate tables'",
 				Expected: []sql.Row{
-					{"validate tables", "one table", "show tables;", "expected_rows", "==", "1"},
-					{"validate tables", "numbers table exists", "show tables like 'numbers'", "expected_rows", "==", "1"},
+					{"one table", "validate tables", "show tables;", "expected_rows", "==", "1"},
+					{"numbers table exists", "validate tables", "show tables like 'numbers'", "expected_rows", "==", "1"},
 				},
 			},
 		},
@@ -86,16 +86,16 @@ var DoltTestTableScripts = []queries.ScriptTest{
 	{
 		Name: "can replace row in dolt_tests table",
 		SetUpScript: []string{
-			"INSERT INTO dolt_tests VALUES ('validate tables', 'one table', 'show tables;', 'expected_rows', '==', '1')",
-			"INSERT INTO dolt_tests VALUES ('validate tables', 'numbers table exists', 'show tables like ''numbers'';', 'expected_rows', '==', '1')",
-			"REPLACE INTO dolt_tests VALUES ('validate tables', 'numbers table exists', 'show tables like ''numbers'';', 'expected_rows', '==', '1')",
+			"INSERT INTO dolt_tests VALUES ('one table', 'validate tables', 'show tables;', 'expected_rows', '==', '1')",
+			"INSERT INTO dolt_tests VALUES ('numbers table exists', 'validate tables', 'show tables like ''numbers'';', 'expected_rows', '==', '1')",
+			"REPLACE INTO dolt_tests VALUES ('numbers table exists', 'validate tables', 'show tables like ''numbers'';', 'expected_rows', '==', '1')",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "SELECT * FROM dolt_tests",
 				Expected: []sql.Row{
-					{"validate tables", "numbers table exists", "show tables like 'numbers';", "expected_rows", "==", "1"},
-					{"validate tables", "one table", "show tables;", "expected_rows", "==", "1"},
+					{"numbers table exists", "validate tables", "show tables like 'numbers';", "expected_rows", "==", "1"},
+					{"one table", "validate tables", "show tables;", "expected_rows", "==", "1"},
 				},
 			},
 		},
@@ -103,9 +103,9 @@ var DoltTestTableScripts = []queries.ScriptTest{
 	{
 		Name: "can use 'as of' on dolt_tests table",
 		SetUpScript: []string{
-			"INSERT INTO dolt_tests VALUES ('validate tables', 'one table', 'show tables;', 'expected_rows', '==', '1')",
+			"INSERT INTO dolt_tests VALUES ('one table', 'validate tables', 'show tables;', 'expected_rows', '==', '1')",
 			"CALL DOLT_COMMIT('-A','-m', 'first commit')",
-			"INSERT INTO dolt_tests VALUES ('validate tables', 'numbers table exists', 'show tables like ''numbers'';', 'expected_rows', '==', '1')",
+			"INSERT INTO dolt_tests VALUES ('numbers table exists', 'validate tables', 'show tables like ''numbers'';', 'expected_rows', '==', '1')",
 			"CALL DOLT_COMMIT('-A', '-m', 'second commit')",
 		},
 		Assertions: []queries.ScriptTestAssertion{
@@ -116,14 +116,14 @@ var DoltTestTableScripts = []queries.ScriptTest{
 			{
 				Query: "SELECT * FROM dolt_tests as of 'HEAD~1'",
 				Expected: []sql.Row{
-					{"validate tables", "one table", "show tables;", "expected_rows", "==", "1"},
+					{"one table", "validate tables", "show tables;", "expected_rows", "==", "1"},
 				},
 			},
 			{
 				Query: "SELECT * FROM dolt_tests as of 'HEAD'",
 				Expected: []sql.Row{
-					{"validate tables", "one table", "show tables;", "expected_rows", "==", "1"},
-					{"validate tables", "numbers table exists", "show tables like 'numbers';", "expected_rows", "==", "1"},
+					{"one table", "validate tables", "show tables;", "expected_rows", "==", "1"},
+					{"numbers table exists", "validate tables", "show tables like 'numbers';", "expected_rows", "==", "1"},
 				},
 			},
 		},
