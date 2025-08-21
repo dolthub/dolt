@@ -129,7 +129,7 @@ func (s *stripe) insert(addr hash.Hash, node Node) {
 	defer s.mu.Unlock()
 
 	if e, ok := s.chunks[addr]; !ok {
-		e = &centry{addr, node, 0, nil, nil}
+		e = &centry{nil, nil, node, 0, addr}
 		e.next = e
 		e.prev = e
 		s.moveToFront(e)
