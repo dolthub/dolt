@@ -46,6 +46,7 @@ const (
 	UuidTypeIdentifier               Identifier = "uuid"
 	VarBinaryTypeIdentifier          Identifier = "varbinary"
 	VarStringTypeIdentifier          Identifier = "varstring"
+	VectorTypeIdentifier             Identifier = "vector"
 	YearTypeIdentifier               Identifier = "year"
 	GeometryTypeIdentifier           Identifier = "geometry"
 	PointTypeIdentifier              Identifier = "point"
@@ -273,6 +274,12 @@ func FromSqlType(sqlType sql.Type) (TypeInfo, error) {
 			return nil, fmt.Errorf(`expected "SetTypeIdentifier" from SQL basetype "Set"`)
 		}
 		return &setType{setSQLType}, nil
+	case sqltypes.Vector:
+		vectorSQLType, ok := sqlType.(gmstypes.VectorType)
+		if !ok {
+			return nil, fmt.Errorf(`expected "VectorTypeIdentifier" from SQL basetype "Vector"`)
+		}
+		return &vectorType{vectorSQLType}, nil
 	default:
 		return nil, fmt.Errorf(`no type info can be created from SQL base type "%v"`, sqlType.String())
 	}
