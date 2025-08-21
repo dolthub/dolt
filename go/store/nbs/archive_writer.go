@@ -558,9 +558,13 @@ func (asw *ArchiveStreamWriter) Finish() (uint32, string, error) {
 		}
 	}
 
-	// This will perform all the steps to construct an archive file - starting with the finalization of byte spans.
+	// This will perform all the steps to construct an archive file.
 	// All writeByteSpan calls and stage* calls must be completed before this.
-	err := asw.writer.indexFinalize(hash.Hash{})
+	err := asw.writer.finalizeByteSpans()
+	if err != nil {
+		return 0, "", err
+	}
+	err = asw.writer.indexFinalize(hash.Hash{})
 	if err != nil {
 		return 0, "", err
 	}
@@ -793,7 +797,11 @@ func (aw *archiveWriter) conjoinAll(ctx context.Context, readers []archiveReader
 		}
 	}
 
-	err := aw.indexFinalize(hash.Hash{})
+	err := aw.finalizeByteSpans()
+	if err != nil {
+		return err
+	}
+	err = aw.indexFinalize(hash.Hash{})
 	if err != nil {
 		return fmt.Errorf("failed to finalize archive: %w", err)
 	}
@@ -801,10 +809,7 @@ func (aw *archiveWriter) conjoinAll(ctx context.Context, readers []archiveReader
 	return nil
 }
 
-type archiveConjoiner struct {
-}
-
-func (*archiveConjoiner) conjoinIndexes(sources []sourceWithSize) (compactionPlan, error) {
+func planArchiveConjoin(sources []sourceWithSize) (compactionPlan, error) {
 	if len(sources) < 2 {
 		return compactionPlan{}, fmt.Errorf("conjoinIndexes requires at least 2 archive readers, got %d", len(sources))
 	}
@@ -819,7 +824,7 @@ func (*archiveConjoiner) conjoinIndexes(sources []sourceWithSize) (compactionPla
 		reader := src.source
 		arcSrc, ok := reader.(archiveChunkSource)
 		if !ok {
-			panic("source is not an archiveChunkSource")
+			return compactionPlan{}, fmt.Errorf("runtime error: source %T is not an archiveChunkSource", reader)
 		}
 
 		footer := arcSrc.aRdr.footer
@@ -840,7 +845,6 @@ func (*archiveConjoiner) conjoinIndexes(sources []sourceWithSize) (compactionPla
 		for i := 0; i < int(footer.chunkCount); i++ {
 			dictId, dataId := arcSrc.aRdr.getChunkRef(i)
 
-			// Reconstruct the hash from prefix and suffix
 			prefix := arcSrc.aRdr.indexReader.getPrefix(uint32(i))
 			suffix := arcSrc.aRdr.indexReader.getSuffix(uint32(i))
 			chunkHash := reconstructHashFromPrefixAndSuffix(prefix, suffix)
@@ -866,10 +870,15 @@ func (*archiveConjoiner) conjoinIndexes(sources []sourceWithSize) (compactionPla
 		currentDataOffset += src.dataLen
 	}
 
-	// NM4 - maybe need the bytes written.... Allow me to test.....
 	aw.bytesWritten = currentDataOffset
 
-	// NM4 - indexFinalize currently altered to get through steel thread.
+	// The conjoin process is a little different than the normal archive writing process. We manually stick everything
+	// into the writer, and then finalize the index and footer at the end. The datablocks will be written in separately
+	// after we have created the index and footer.
+	//
+	// So we set the workflow stage to stageIndex because we skipped the byte span insertion stage.
+	aw.workflowStage = stageIndex
+
 	err := aw.indexFinalize(hash.Hash{})
 	if err != nil {
 		return compactionPlan{}, fmt.Errorf("failed to finalize archive: %w", err)
@@ -884,7 +893,7 @@ func (*archiveConjoiner) conjoinIndexes(sources []sourceWithSize) (compactionPla
 	if err := writer.Flush(buf); err != nil {
 		return compactionPlan{}, fmt.Errorf("failed to build index buffer while conjoining archives: %w", err)
 	}
-	
+
 	return compactionPlan{
 		sources:     chunkSourcesByDescendingDataSize{sources},
 		name:        name,

@@ -171,11 +171,6 @@ func calcChunkRangeSize(index tableIndex) uint64 {
 	return index.tableFileSize() - indexSize(index.chunkCount()) - footerSize
 }
 
-func planArchiveConjoin(sources []sourceWithSize) (plan compactionPlan, err error) {
-	ac := archiveConjoiner{}
-	return ac.conjoinIndexes(sources)
-}
-
 func planTableConjoin(sources []sourceWithSize, stats *Stats) (plan compactionPlan, err error) {
 	// place largest chunk sources at the beginning of the conjoin
 	plan.sources = chunkSourcesByDescendingDataSize{sws: sources}

@@ -242,12 +242,11 @@ func (s3p awsTablePersister) ConjoinAll(ctx context.Context, sources chunkSource
 
 	t1 := time.Now()
 	err = s3p.executeCompactionPlan(ctx, plan, plan.name.String()+plan.suffix)
-
 	if err != nil {
 		return nil, nil, err
 	}
-
-	verbose.Logger(ctx).Sugar().Debugf("Compacted table of %d Kb in %s", plan.totalCompressedData/1024, time.Since(t1))
+	
+	verbose.Logger(ctx).Sugar().Debugf("Conjoined storage of %d chunks in %s", plan.chunkCount, time.Since(t1))
 
 	rdr := &s3ObjectReader{s3: s3p.s3, bucket: s3p.bucket, readRl: s3p.rl, ns: s3p.ns}
 	if plan.suffix == ArchiveFileSuffix {
