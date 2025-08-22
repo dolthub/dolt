@@ -304,11 +304,11 @@ func TestOrderedSequenceDiffWithMetaNodeGap(t *testing.T) {
 		}()
 
 		expected := []ValueChanged{
-			{DiffChangeAdded, Float(3), nil, nil},
-			{DiffChangeAdded, Float(4), nil, nil},
+			{Float(3), nil, nil, DiffChangeAdded},
+			{Float(4), nil, nil, DiffChangeAdded},
 			{},
-			{DiffChangeRemoved, Float(3), nil, nil},
-			{DiffChangeRemoved, Float(4), nil, nil},
+			{Float(3), nil, nil, DiffChangeRemoved},
+			{Float(4), nil, nil, DiffChangeRemoved},
 		}
 
 		i := 0
