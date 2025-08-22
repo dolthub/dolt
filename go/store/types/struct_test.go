@@ -105,17 +105,17 @@ func TestGenericStructSet(t *testing.T) {
 	s4, err := s.Set("b", Float(42))
 	require.NoError(t, err)
 	assert.True(mustType(MakeStructType("S3",
-		StructField{PrimitiveTypeMap[FloatKind],"b",  false},
-		StructField{PrimitiveTypeMap[StringKind],"o",  false},
+		StructField{PrimitiveTypeMap[FloatKind], "b",  false},
+		StructField{PrimitiveTypeMap[StringKind], "o",  false},
 	)).Equals(mustType(TypeOf(s4))))
 
 	// Adds a new field
 	s5, err := s.Set("x", Float(42))
 	require.NoError(t, err)
 	assert.True(mustType(MakeStructType("S3",
-		StructField{PrimitiveTypeMap[BoolKind],"b", false},
-		StructField{PrimitiveTypeMap[StringKind],"o", false},
-		StructField{PrimitiveTypeMap[FloatKind],"x", false},
+		StructField{PrimitiveTypeMap[BoolKind], "b", false},
+		StructField{PrimitiveTypeMap[StringKind], "o", false},
+		StructField{PrimitiveTypeMap[FloatKind], "x", false},
 	)).Equals(mustType(TypeOf(s5))))
 
 	// Subtype is not equal.
