@@ -271,6 +271,9 @@ EOF
   # --mcp-password without --mcp-port should fail
   run dolt sql-server --host 0.0.0.0 --port="$SQL_PORT" --socket "dolt.$SQL_PORT.sock" --mcp-password secret
   [ $status -ne 0 ]
+  # --mcp-database without --mcp-port should fail
+  run dolt sql-server --host 0.0.0.0 --port="$SQL_PORT" --socket "dolt.$SQL_PORT.sock" --mcp-database somedb
+  [ $status -ne 0 ]
 }
 
 @test "sql-server mcp: works when DOLT_ROOT_PASSWORD is set" {
