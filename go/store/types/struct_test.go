@@ -105,17 +105,17 @@ func TestGenericStructSet(t *testing.T) {
 	s4, err := s.Set("b", Float(42))
 	require.NoError(t, err)
 	assert.True(mustType(MakeStructType("S3",
-		StructField{"b", PrimitiveTypeMap[FloatKind], false},
-		StructField{"o", PrimitiveTypeMap[StringKind], false},
+		StructField{PrimitiveTypeMap[FloatKind],"b",  false},
+		StructField{PrimitiveTypeMap[StringKind],"o",  false},
 	)).Equals(mustType(TypeOf(s4))))
 
 	// Adds a new field
 	s5, err := s.Set("x", Float(42))
 	require.NoError(t, err)
 	assert.True(mustType(MakeStructType("S3",
-		StructField{"b", PrimitiveTypeMap[BoolKind], false},
-		StructField{"o", PrimitiveTypeMap[StringKind], false},
-		StructField{"x", PrimitiveTypeMap[FloatKind], false},
+		StructField{PrimitiveTypeMap[BoolKind],"b", false},
+		StructField{PrimitiveTypeMap[StringKind],"o", false},
+		StructField{PrimitiveTypeMap[FloatKind],"x", false},
 	)).Equals(mustType(TypeOf(s5))))
 
 	// Subtype is not equal.
@@ -198,7 +198,7 @@ func TestStructDiff(t *testing.T) {
 	}
 
 	vc := func(ct DiffChangeType, fieldName string, oldV, newV Value) ValueChanged {
-		return ValueChanged{ct, String(fieldName), oldV, newV}
+		return ValueChanged{String(fieldName), oldV, newV, ct}
 	}
 
 	s1, err := NewStruct(vs.Format(), "", StructData{"a": Bool(true), "b": String("hi"), "c": Float(4)})
