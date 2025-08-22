@@ -69,12 +69,12 @@ Footer:
        is that we load the larger footer for all versions, but ignore the first 4 bytes for versions 1 and 2.
 
    CheckSums:
-   +----------------------------+-------------------+----------------------+
-   | (64) Sha512 ByteSpan 1 - N | (64) Sha512 Index | (64) Sha512 Metadata |
-   +----------------------------+-------------------+----------------------+
-   - The Sha512 checksums of the ByteSpans, Index, and Metadata. Currently unused, but may be used in the future. Leaves
-     the opening to verify integrity manually at least, but could be used in the future to allow to break the file into
-     parts, and ensure we can verify the integrity of each part.
+   +------------------+
+   | (192) DEAD SPACE |
+   +------------------+
+   - The Sha512 checksums of the ByteSpans, Index, and Metadata were in initial design, but were never used. The ability
+     to calculate was thrown out to support archive conjoins, and leaving the 192 bytes in the foorer allows us to avoid
+     a format bump.
 
 Index:
    The Index is a concatenation of 4 sections, all of which are stored in raw form on disk.
@@ -131,6 +131,7 @@ Index:
 
      - Each Hash Suffix is the last 12 bytes of a Chunk in this Table.
      - Hash Suffix M must correspond to Prefix M and Chunk Record M
+     - The ID, or name, of the artifact is calculated using the truncated Sha512 (first 20 bytes) of the Suffix data.
 
 Metadata:
    The Metadata section is intended to be used for additional information about the Archive. This may include the version

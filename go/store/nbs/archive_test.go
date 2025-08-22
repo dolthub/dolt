@@ -37,9 +37,11 @@ import (
 // we'll use this one.
 var defaultDict []byte
 var defaultCDict *gozstd.CDict
+var defaultId hash.Hash
 
 func init() {
 	defaultDict, defaultCDict = generateTerribleDefaultDictionary()
+	defaultId = hash.Of(defaultDict[:hash.ByteLen])
 }
 
 func TestArchiveSingleZStdChunk(t *testing.T) {
@@ -86,7 +88,7 @@ func TestArchiveSingleZStdChunk(t *testing.T) {
 	readerAt := bytes.NewReader(theBytes)
 	tra := tableReaderAtAdapter{readerAt}
 
-	aIdx, err := newArchiveReader(context.Background(), tra, fileSize, &Stats{})
+	aIdx, err := newArchiveReader(context.Background(), tra, defaultId, fileSize, &Stats{})
 	assert.NoError(t, err)
 
 	assert.Equal(t, uint64(23), aIdx.indexReader.getPrefix(0))
@@ -138,7 +140,7 @@ func TestArchiveSingleSnappyChunk(t *testing.T) {
 	readerAt := bytes.NewReader(theBytes)
 	tra := tableReaderAtAdapter{readerAt}
 
-	aIdx, err := newArchiveReader(context.Background(), tra, fileSize, &Stats{})
+	aIdx, err := newArchiveReader(context.Background(), tra, defaultId, fileSize, &Stats{})
 	assert.NoError(t, err)
 
 	assert.Equal(t, uint64(23), aIdx.indexReader.getPrefix(0))
@@ -206,7 +208,7 @@ func TestArchiverMultipleChunksMultipleDictionaries(t *testing.T) {
 	fileSize := uint64(len(theBytes))
 	readerAt := bytes.NewReader(theBytes)
 	tra := tableReaderAtAdapter{readerAt}
-	aIdx, err := newArchiveReader(context.Background(), tra, fileSize, &Stats{})
+	aIdx, err := newArchiveReader(context.Background(), tra, defaultId, fileSize, &Stats{})
 	assert.NoError(t, err)
 	expectedPrefixes := []uint64{21, 42, 42, 42, 42, 81, 88}
 	for i, expected := range expectedPrefixes {
@@ -297,7 +299,7 @@ func TestArchiveDictDecompression(t *testing.T) {
 	fileSize := uint64(len(theBytes))
 	readerAt := bytes.NewReader(theBytes)
 	tra := tableReaderAtAdapter{readerAt}
-	aIdx, err := newArchiveReader(context.Background(), tra, fileSize, &Stats{})
+	aIdx, err := newArchiveReader(context.Background(), tra, defaultId, fileSize, &Stats{})
 	assert.NoError(t, err)
 
 	c := context.Background()
@@ -340,7 +342,7 @@ func TestArchiveSnappyDecompression(t *testing.T) {
 	fileSize := uint64(len(theBytes))
 	readerAt := bytes.NewReader(theBytes)
 	tra := tableReaderAtAdapter{readerAt}
-	aIdx, err := newArchiveReader(context.Background(), tra, fileSize, &Stats{})
+	aIdx, err := newArchiveReader(context.Background(), tra, defaultId, fileSize, &Stats{})
 	assert.NoError(t, err)
 
 	c := context.Background()
@@ -415,7 +417,7 @@ func TestArchiveMixedTypesToChunkers(t *testing.T) {
 	fileSize := uint64(len(theBytes))
 	readerAt := bytes.NewReader(theBytes)
 	tra := tableReaderAtAdapter{readerAt}
-	aIdx, err := newArchiveReader(context.Background(), tra, fileSize, &Stats{})
+	aIdx, err := newArchiveReader(context.Background(), tra, defaultId, fileSize, &Stats{})
 	assert.NoError(t, err)
 
 	c := context.Background()
@@ -449,7 +451,7 @@ func TestMetadata(t *testing.T) {
 	fileSize := uint64(len(theBytes))
 	readerAt := bytes.NewReader(theBytes)
 	tra := tableReaderAtAdapter{readerAt}
-	rdr, err := newArchiveReader(context.Background(), tra, fileSize, &Stats{})
+	rdr, err := newArchiveReader(context.Background(), tra, defaultId, fileSize, &Stats{})
 	assert.NoError(t, err)
 
 	md, err := rdr.getMetadata(context.Background(), &Stats{})
@@ -479,7 +481,7 @@ func TestArchiveChunkCorruption(t *testing.T) {
 	fileSize := uint64(len(theBytes))
 	readerAt := bytes.NewReader(theBytes)
 	tra := tableReaderAtAdapter{readerAt}
-	idx, err := newArchiveReader(context.Background(), tra, fileSize, &Stats{})
+	idx, err := newArchiveReader(context.Background(), tra, defaultId, fileSize, &Stats{})
 	assert.NoError(t, err)
 
 	// Corrupt the data
@@ -488,54 +490,6 @@ func TestArchiveChunkCorruption(t *testing.T) {
 	data, err := idx.get(context.Background(), h, &Stats{})
 	assert.ErrorContains(t, err, "cannot decompress invalid src")
 	assert.Nil(t, data)
-}
-
-// Varlidate that the SHA512 checksums in the footer checkout, and fail when they are corrupted.
-func TestArchiveCheckSumValidations(t *testing.T) {
-	writer := NewFixedBufferByteSink(make([]byte, 1024))
-	aw := newArchiveWriterWithSink(writer)
-
-	testBlob := []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
-	_, _ = aw.writeByteSpan(testBlob)
-
-	h := hashWithPrefix(t, 23)
-	_ = aw.stageZStdChunk(h, 0, 1)
-	err := aw.finalizeByteSpans()
-	assert.NoError(t, err)
-	err = aw.writeIndex()
-	assert.NoError(t, err)
-	err = aw.writeMetadata([]byte("All work and no play"))
-	assert.NoError(t, err)
-	err = aw.writeFooter()
-	assert.NoError(t, err)
-
-	theBytes := writer.buff[:writer.pos]
-	fileSize := uint64(len(theBytes))
-	readerAt := bytes.NewReader(theBytes)
-	tra := tableReaderAtAdapter{readerAt}
-	rdr, err := newArchiveReader(context.Background(), tra, fileSize, &Stats{})
-	assert.NoError(t, err)
-
-	err = rdr.verifyDataCheckSum(context.Background(), &Stats{})
-	assert.NoError(t, err)
-	err = rdr.verifyIndexCheckSum(context.Background(), &Stats{})
-	assert.NoError(t, err)
-	err = rdr.verifyMetaCheckSum(context.Background(), &Stats{})
-	assert.NoError(t, err)
-
-	theBytes[5] = theBytes[5] + 1
-	err = rdr.verifyDataCheckSum(context.Background(), &Stats{})
-	assert.ErrorContains(t, err, "checksum mismatch")
-
-	offset := rdr.footer.totalIndexSpan().offset + 2
-	theBytes[offset] = theBytes[offset] + 1
-	err = rdr.verifyIndexCheckSum(context.Background(), &Stats{})
-	assert.ErrorContains(t, err, "checksum mismatch")
-
-	offset = rdr.footer.metadataSpan().offset + 2
-	theBytes[offset] = theBytes[offset] + 1
-	err = rdr.verifyMetaCheckSum(context.Background(), &Stats{})
-	assert.ErrorContains(t, err, "checksum mismatch")
 }
 
 func TestProllyBinSearchUneven(t *testing.T) {
@@ -659,7 +613,7 @@ func TestFooterVersionAndSignature(t *testing.T) {
 	fileSize := uint64(len(theBytes))
 	readerAt := bytes.NewReader(theBytes)
 	tra := tableReaderAtAdapter{readerAt}
-	rdr, err := newArchiveReader(context.Background(), tra, fileSize, &Stats{})
+	rdr, err := newArchiveReader(context.Background(), tra, defaultId, fileSize, &Stats{})
 	assert.NoError(t, err)
 
 	assert.Equal(t, archiveFormatVersionMax, rdr.footer.formatVersion)
@@ -669,7 +623,7 @@ func TestFooterVersionAndSignature(t *testing.T) {
 	theBytes[fileSize-archiveFooterSize+afrVersionOffset] = 23
 	readerAt = bytes.NewReader(theBytes)
 	tra = tableReaderAtAdapter{readerAt}
-	_, err = newArchiveReader(context.Background(), tra, fileSize, &Stats{})
+	_, err = newArchiveReader(context.Background(), tra, defaultId, fileSize, &Stats{})
 	assert.ErrorContains(t, err, "invalid format version")
 
 	// Corrupt the signature, but first restore the version.
@@ -677,7 +631,7 @@ func TestFooterVersionAndSignature(t *testing.T) {
 	theBytes[fileSize-archiveFooterSize+afrSigOffset+2] = 'X'
 	readerAt = bytes.NewReader(theBytes)
 	tra = tableReaderAtAdapter{readerAt}
-	_, err = newArchiveReader(context.Background(), tra, fileSize, &Stats{})
+	_, err = newArchiveReader(context.Background(), tra, defaultId, fileSize, &Stats{})
 	assert.ErrorContains(t, err, "invalid file signature")
 }
 
