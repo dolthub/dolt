@@ -28,7 +28,8 @@ import (
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+    "github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
+    "github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/servercfg"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
@@ -55,7 +56,11 @@ const (
 	remotesapiPortFlag          = "remotesapi-port"
 	remotesapiReadOnlyFlag      = "remotesapi-readonly"
 	goldenMysqlConn             = "golden"
-	eventSchedulerStatus        = "event-scheduler"
+    eventSchedulerStatus        = "event-scheduler"
+    mcpPortFlag                 = "mcp-port"
+    mcpUserFlag                 = "mcp-user"
+    mcpPasswordFlag             = "mcp-password"
+    mcpDatabaseFlag             = "mcp-database"
 )
 
 func indentLines(s string) string {
@@ -193,8 +198,14 @@ func (cmd SqlServerCmd) ArgParserWithName(name string) *argparser.ArgParser {
 	ap.SupportsOptionalString(socketFlag, "", "socket file", "Path for the unix socket file. Defaults to '/tmp/mysql.sock'.")
 	ap.SupportsUint(remotesapiPortFlag, "", "remotesapi port", "Sets the port for a server which can expose the databases in this sql-server over remotesapi, so that clients can clone or pull from this server.")
 	ap.SupportsFlag(remotesapiReadOnlyFlag, "", "Disable writes to the sql-server via the push operations. SQL writes are unaffected by this setting.")
-	ap.SupportsString(goldenMysqlConn, "", "mysql connection string", "Provides a connection string to a MySQL instance to be used to validate query results")
-	ap.SupportsString(eventSchedulerStatus, "", "status", "Determines whether the Event Scheduler is enabled and running on the server. It has one of the following values: 'ON', 'OFF' or 'DISABLED'.")
+    ap.SupportsString(goldenMysqlConn, "", "mysql connection string", "Provides a connection string to a MySQL instance to be used to validate query results")
+    ap.SupportsString(eventSchedulerStatus, "", "status", "Determines whether the Event Scheduler is enabled and running on the server. It has one of the following values: 'ON', 'OFF' or 'DISABLED'.")
+    // Start an MCP HTTP server connected to this sql-server on the given port
+    ap.SupportsUint(mcpPortFlag, "", "port", "If provided, runs a Dolt MCP HTTP server on this port alongside the sql-server.")
+    // MCP SQL credentials (user required when MCP enabled; password optional)
+    ap.SupportsString(mcpUserFlag, "", "user", "SQL user for MCP to connect as (required when --mcp-port is set).")
+    ap.SupportsString(mcpPasswordFlag, "", "password", "Optional SQL password for MCP to connect with (requires --mcp-user). Defaults to env DOLT_ROOT_PASSWORD if unset.")
+    ap.SupportsString(mcpDatabaseFlag, "", "database", "Optional SQL database name MCP should connect to (requires --mcp-port and --mcp-user).")
 	return ap
 }
 
@@ -260,11 +271,84 @@ func validateSqlServerArgs(apr *argparser.ArgParseResults) error {
 func StartServer(ctx context.Context, versionStr, commandStr string, args []string, dEnv *env.DoltEnv, cwd filesys.Filesys, controller *svcs.Controller) error {
 	ap := SqlServerCmd{}.ArgParser()
 	help, _ := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, sqlServerDocs, ap))
-	apr := cli.ParseArgsOrDie(ap, args, help)
+    apr := cli.ParseArgsOrDie(ap, args, help)
 	serverConfig, err := ServerConfigFromArgs(apr, dEnv, cwd)
 	if err != nil {
 		return err
 	}
+
+    // Optional MCP HTTP port
+    var mcpPortPtr *int
+    if mp, ok := apr.GetInt(mcpPortFlag); ok {
+        mcpPort := mp
+        mcpPortPtr = &mcpPort
+    }
+
+    // Optional MCP SQL user
+    var mcpUserPtr *string
+    if mu, ok := apr.GetValue(mcpUserFlag); ok {
+        user := mu
+        mcpUserPtr = &user
+    }
+    // Optional MCP SQL password
+    var mcpPasswordPtr *string
+    if mpw, ok := apr.GetValue(mcpPasswordFlag); ok {
+        pw := mpw
+        mcpPasswordPtr = &pw
+    }
+    // Optional MCP SQL database
+    var mcpDatabasePtr *string
+    if mdb, ok := apr.GetValue(mcpDatabaseFlag); ok {
+        db := mdb
+        mcpDatabasePtr = &db
+    }
+
+    // Validate MCP args coherence and port range/conflicts
+    if mcpPortPtr != nil {
+        // --mcp-user is REQUIRED when --mcp-port is provided
+        if mcpUserPtr == nil || *mcpUserPtr == "" {
+            return fmt.Errorf("--%s is required when --%s is specified", mcpUserFlag, mcpPortFlag)
+        }
+        if *mcpPortPtr <= 0 || *mcpPortPtr > 65535 {
+            return fmt.Errorf("invalid value for --%s '%d'", mcpPortFlag, *mcpPortPtr)
+        }
+        // Disallow MCP and SQL server using the same port
+        if serverConfig.Port() == *mcpPortPtr {
+            return fmt.Errorf("--%s must differ from --%s (both set to %d)", mcpPortFlag, portFlag, *mcpPortPtr)
+        }
+    }
+    // If any MCP-related arg is supplied without --mcp-port, error
+    if mcpPortPtr == nil {
+        if mcpUserPtr != nil && *mcpUserPtr != "" {
+            return fmt.Errorf("--%s requires --%s to be set", mcpUserFlag, mcpPortFlag)
+        }
+        if mcpPasswordPtr != nil && *mcpPasswordPtr != "" {
+            return fmt.Errorf("--%s requires --%s to be set", mcpPasswordFlag, mcpPortFlag)
+        }
+        if mcpDatabasePtr != nil && *mcpDatabasePtr != "" {
+            return fmt.Errorf("--%s requires --%s to be set", mcpDatabaseFlag, mcpPortFlag)
+        }
+    }
+    // If password is provided, user must be provided
+    if (mcpPasswordPtr != nil && *mcpPasswordPtr != "") && (mcpUserPtr == nil || *mcpUserPtr == "") {
+        return fmt.Errorf("--%s requires --%s to be set", mcpPasswordFlag, mcpUserFlag)
+    }
+    // If database is provided, user must be provided
+    if (mcpDatabasePtr != nil && *mcpDatabasePtr != "") && (mcpUserPtr == nil || *mcpUserPtr == "") {
+        return fmt.Errorf("--%s requires --%s to be set", mcpDatabaseFlag, mcpUserFlag)
+    }
+
+    // If MCP is enabled and no explicit root host override exists, set DOLT_ROOT_HOST dynamically
+    // to the SQL listener host, defaulting to 127.0.0.1 when unspecified or unspecified wildcard.
+    if mcpPortPtr != nil {
+        if _, ok := os.LookupEnv(dconfig.EnvDoltRootHost); !ok {
+            hostForRoot := serverConfig.Host()
+            if hostForRoot == "" || hostForRoot == "0.0.0.0" || hostForRoot == "::" {
+                hostForRoot = "127.0.0.1"
+            }
+            _ = os.Setenv(dconfig.EnvDoltRootHost, hostForRoot)
+        }
+    }
 
 	err = generateYamlConfigIfNone(ap, help, args, dEnv, serverConfig)
 	if err != nil {
@@ -279,12 +363,16 @@ func StartServer(ctx context.Context, versionStr, commandStr string, args []stri
 	cli.Printf("Starting server with Config %v\n", servercfg.ConfigInfo(serverConfig))
 
 	skipRootUserInitialization := apr.Contains(skipRootUserInitialization)
-	startError, closeError := Serve(ctx, &Config{
+    startError, closeError := Serve(ctx, &Config{
 		Version:          versionStr,
 		ServerConfig:     serverConfig,
 		Controller:       controller,
 		DoltEnv:          dEnv,
 		SkipRootUserInit: skipRootUserInitialization,
+        MCPPort:          mcpPortPtr,
+        MCPUser:          mcpUserPtr,
+        MCPPassword:      mcpPasswordPtr,
+        MCPDatabase:      mcpDatabasePtr,
 	})
 	if startError != nil {
 		return startError

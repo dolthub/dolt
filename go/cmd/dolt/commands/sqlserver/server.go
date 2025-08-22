@@ -61,6 +61,14 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/svcs"
 	"github.com/dolthub/dolt/go/store/chunks"
 	eventsapi "github.com/dolthub/eventsapi_schema/dolt/services/eventsapi/v1alpha1"
+
+	// dolt-mcp library
+	pkgmcp "github.com/dolthub/dolt-mcp/mcp/pkg"
+	mcpdb "github.com/dolthub/dolt-mcp/mcp/pkg/db"
+	"github.com/dolthub/dolt-mcp/mcp/pkg/toolsets"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"golang.org/x/sync/errgroup"
 )
 
 const (
@@ -84,6 +92,10 @@ type Config struct {
 	Version                 string
 	Controller              *svcs.Controller
 	ProtocolListenerFactory server.ProtocolListenerFunc
+	MCPPort                 *int
+	MCPUser                 *string
+    MCPPassword             *string
+    MCPDatabase             *string
 }
 
 // Serve starts a MySQL-compatible server. Returns any errors that were encountered.
@@ -866,6 +878,158 @@ func ConfigureServices(
 		},
 	}
 	controller.Register(RunSQLServer)
+
+	// Optionally start an MCP HTTP server bound to 0.0.0.0 on the given port and connected as root to this sql-server
+	if cfg.MCPPort != nil && *cfg.MCPPort > 0 {
+		type mcpService struct {
+			state  svcs.ServiceState
+			cancel context.CancelFunc
+			group  *errgroup.Group
+		}
+		var mcpSrv mcpService
+
+		StartMCP := &svcs.AnonService{
+			InitF: func(ctx context.Context) error {
+				// Verify port availability early
+				addr := net.JoinHostPort("0.0.0.0", strconv.Itoa(*cfg.MCPPort))
+				l, err := net.Listen("tcp", addr)
+				if err != nil {
+					return fmt.Errorf("MCP port %d already in use: %v", *cfg.MCPPort, err)
+				}
+				_ = l.Close()
+				mcpSrv.state.Swap(svcs.ServiceState_Init)
+				return nil
+			},
+			RunF: func(ctx context.Context) {
+				if !mcpSrv.state.CompareAndSwap(svcs.ServiceState_Init, svcs.ServiceState_Run) {
+					return
+				}
+
+				// Build and run Dolt MCP server using dolt-mcp library
+				logger := newZapFromLogrusWithPrefix(lgr, "[dolt-mcp] ")
+
+				if cfg.MCPUser == nil {
+					logger.Error("MCP user not defined")
+					return
+				}
+
+				if *cfg.MCPUser == "" {
+					logger.Error("MCP user not defined")
+					return
+				}
+
+                // Use password from --mcp-password if provided; otherwise empty
+                password := ""
+                if cfg.MCPPassword != nil {
+                    password = *cfg.MCPPassword
+                }
+                dbName := ""
+                if cfg.MCPDatabase != nil {
+                    dbName = *cfg.MCPDatabase
+                }
+                dbConf := mcpdb.Config{
+                    Host:         "127.0.0.1",
+                    Port:         cfg.ServerConfig.Port(),
+                    User:         *cfg.MCPUser,
+                    Password:     password,
+                    DatabaseName: dbName,
+                }
+
+				srv, err := pkgmcp.NewMCPHTTPServer(
+					logger,
+					dbConf,
+					*cfg.MCPPort,
+					toolsets.WithToolSet(&toolsets.PrimitiveToolSetV1{}),
+				)
+				if err != nil {
+					logrus.Errorf("failed to start Dolt MCP HTTP server: %v", err)
+					return
+				}
+
+				// Run MCP server within errgroup to coordinate shutdown
+				runCtx, cancel := context.WithCancel(ctx)
+				mcpSrv.cancel = cancel
+				g, gctx := errgroup.WithContext(runCtx)
+				g.Go(func() error {
+					srv.ListenAndServe(gctx)
+					return nil
+				})
+				mcpSrv.group = g
+			},
+			StopF: func() error {
+				// Trigger graceful shutdown via context cancellation
+				if mcpSrv.cancel != nil {
+					mcpSrv.cancel()
+				}
+				var err error
+				if mcpSrv.group != nil {
+					err = mcpSrv.group.Wait()
+				}
+				mcpSrv.state.Swap(svcs.ServiceState_Stopped)
+				return err
+			},
+		}
+		controller.Register(StartMCP)
+	}
+}
+
+// logrusZapCore implements a zapcore.Core that forwards entries to a logrus.Logger
+type logrusZapCore struct {
+    l       *logrus.Logger
+    prefix  string
+}
+
+func (c *logrusZapCore) With(fields []zapcore.Field) zapcore.Core {
+    // zap will call Write with fields; we don't need to carry state here
+    return c
+}
+
+func (c *logrusZapCore) Enabled(lvl zapcore.Level) bool {
+    // Respect logrus current level
+    return zapToLogrusLevel(lvl) >= c.l.GetLevel()
+}
+
+func (c *logrusZapCore) Check(ent zapcore.Entry, ce *zapcore.CheckedEntry) *zapcore.CheckedEntry {
+    if c.Enabled(ent.Level) {
+        return ce.AddCore(ent, c)
+    }
+    return ce
+}
+
+func (c *logrusZapCore) Write(ent zapcore.Entry, fields []zapcore.Field) error {
+    enc := zapcore.NewMapObjectEncoder()
+    for _, f := range fields {
+        f.AddTo(enc)
+    }
+    // Build fields map
+    lf := logrus.Fields(enc.Fields)
+    msg := c.prefix + ent.Message
+    c.l.WithFields(lf).Log(zapToLogrusLevel(ent.Level), msg)
+    return nil
+}
+
+func (c *logrusZapCore) Sync() error { return nil }
+
+func zapToLogrusLevel(l zapcore.Level) logrus.Level {
+    switch l {
+    case zapcore.DebugLevel:
+        return logrus.DebugLevel
+    case zapcore.InfoLevel:
+        return logrus.InfoLevel
+    case zapcore.WarnLevel:
+        return logrus.WarnLevel
+    case zapcore.ErrorLevel:
+        return logrus.ErrorLevel
+    case zapcore.DPanicLevel, zapcore.PanicLevel, zapcore.FatalLevel:
+        return logrus.FatalLevel
+    default:
+        return logrus.InfoLevel
+    }
+}
+
+func newZapFromLogrusWithPrefix(l *logrus.Logger, prefix string) *zap.Logger {
+    core := &logrusZapCore{l: l, prefix: prefix}
+    return zap.New(core, zap.AddCallerSkip(1))
 }
 
 // heartbeatService is a service that sends a heartbeat event to the metrics server once a day
