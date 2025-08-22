@@ -67,6 +67,7 @@ import (
 	mcpdb "github.com/dolthub/dolt-mcp/mcp/pkg/db"
 	"github.com/dolthub/dolt-mcp/mcp/pkg/toolsets"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -905,7 +906,7 @@ func ConfigureServices(
 				}
 
 				// Build and run Dolt MCP server using dolt-mcp library
-				logger, _ := zap.NewProduction()
+				logger := newZapFromLogrusWithPrefix(lgr, "[dolt-mcp] ")
 
 				if cfg.MCPUser == nil {
 					logger.Error("MCP user not defined")
@@ -970,6 +971,65 @@ func ConfigureServices(
 		}
 		controller.Register(StartMCP)
 	}
+}
+
+// logrusZapCore implements a zapcore.Core that forwards entries to a logrus.Logger
+type logrusZapCore struct {
+    l       *logrus.Logger
+    prefix  string
+}
+
+func (c *logrusZapCore) With(fields []zapcore.Field) zapcore.Core {
+    // zap will call Write with fields; we don't need to carry state here
+    return c
+}
+
+func (c *logrusZapCore) Enabled(lvl zapcore.Level) bool {
+    // Respect logrus current level
+    return zapToLogrusLevel(lvl) >= c.l.GetLevel()
+}
+
+func (c *logrusZapCore) Check(ent zapcore.Entry, ce *zapcore.CheckedEntry) *zapcore.CheckedEntry {
+    if c.Enabled(ent.Level) {
+        return ce.AddCore(ent, c)
+    }
+    return ce
+}
+
+func (c *logrusZapCore) Write(ent zapcore.Entry, fields []zapcore.Field) error {
+    enc := zapcore.NewMapObjectEncoder()
+    for _, f := range fields {
+        f.AddTo(enc)
+    }
+    // Build fields map
+    lf := logrus.Fields(enc.Fields)
+    msg := c.prefix + ent.Message
+    c.l.WithFields(lf).Log(zapToLogrusLevel(ent.Level), msg)
+    return nil
+}
+
+func (c *logrusZapCore) Sync() error { return nil }
+
+func zapToLogrusLevel(l zapcore.Level) logrus.Level {
+    switch l {
+    case zapcore.DebugLevel:
+        return logrus.DebugLevel
+    case zapcore.InfoLevel:
+        return logrus.InfoLevel
+    case zapcore.WarnLevel:
+        return logrus.WarnLevel
+    case zapcore.ErrorLevel:
+        return logrus.ErrorLevel
+    case zapcore.DPanicLevel, zapcore.PanicLevel, zapcore.FatalLevel:
+        return logrus.FatalLevel
+    default:
+        return logrus.InfoLevel
+    }
+}
+
+func newZapFromLogrusWithPrefix(l *logrus.Logger, prefix string) *zap.Logger {
+    core := &logrusZapCore{l: l, prefix: prefix}
+    return zap.New(core, zap.AddCallerSkip(1))
 }
 
 // heartbeatService is a service that sends a heartbeat event to the metrics server once a day
