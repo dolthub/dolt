@@ -287,14 +287,24 @@ func StartServer(ctx context.Context, versionStr, commandStr string, args []stri
         mcpUserPtr = &user
     }
 
-    // Validate MCP port range and conflicts
+    // Validate MCP args coherence and port range/conflicts
     if mcpPortPtr != nil {
+        // --mcp-user is REQUIRED when --mcp-port is provided
+        if mcpUserPtr == nil || *mcpUserPtr == "" {
+            return fmt.Errorf("--%s is required when --%s is specified", mcpUserFlag, mcpPortFlag)
+        }
         if *mcpPortPtr <= 0 || *mcpPortPtr > 65535 {
             return fmt.Errorf("invalid value for --%s '%d'", mcpPortFlag, *mcpPortPtr)
         }
         // Disallow MCP and SQL server using the same port
         if serverConfig.Port() == *mcpPortPtr {
             return fmt.Errorf("--%s must differ from --%s (both set to %d)", mcpPortFlag, portFlag, *mcpPortPtr)
+        }
+    }
+    // If any MCP-related arg is supplied without --mcp-port, error
+    if mcpPortPtr == nil {
+        if mcpUserPtr != nil && *mcpUserPtr != "" {
+            return fmt.Errorf("--%s requires --%s to be set", mcpUserFlag, mcpPortFlag)
         }
     }
 

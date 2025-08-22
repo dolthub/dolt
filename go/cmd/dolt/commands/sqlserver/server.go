@@ -61,12 +61,12 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/svcs"
 	"github.com/dolthub/dolt/go/store/chunks"
 	eventsapi "github.com/dolthub/eventsapi_schema/dolt/services/eventsapi/v1alpha1"
-    
-    // dolt-mcp library
-    pkgmcp "github.com/dolthub/dolt-mcp/mcp/pkg"
-    mcpdb "github.com/dolthub/dolt-mcp/mcp/pkg/db"
-    "github.com/dolthub/dolt-mcp/mcp/pkg/toolsets"
-    "go.uber.org/zap"
+
+	// dolt-mcp library
+	pkgmcp "github.com/dolthub/dolt-mcp/mcp/pkg"
+	mcpdb "github.com/dolthub/dolt-mcp/mcp/pkg/db"
+	"github.com/dolthub/dolt-mcp/mcp/pkg/toolsets"
+	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -91,8 +91,8 @@ type Config struct {
 	Version                 string
 	Controller              *svcs.Controller
 	ProtocolListenerFactory server.ProtocolListenerFunc
-    MCPPort                 *int
-    MCPUser                 *string
+	MCPPort                 *int
+	MCPUser                 *string
 }
 
 // Serve starts a MySQL-compatible server. Returns any errors that were encountered.
@@ -877,13 +877,13 @@ func ConfigureServices(
 	controller.Register(RunSQLServer)
 
 	// Optionally start an MCP HTTP server bound to 0.0.0.0 on the given port and connected as root to this sql-server
-    if cfg.MCPPort != nil && *cfg.MCPPort > 0 {
-        type mcpService struct {
-            state  svcs.ServiceState
-            cancel context.CancelFunc
-            group  *errgroup.Group
-        }
-        var mcpSrv mcpService
+	if cfg.MCPPort != nil && *cfg.MCPPort > 0 {
+		type mcpService struct {
+			state  svcs.ServiceState
+			cancel context.CancelFunc
+			group  *errgroup.Group
+		}
+		var mcpSrv mcpService
 
 		StartMCP := &svcs.AnonService{
 			InitF: func(ctx context.Context) error {
@@ -897,58 +897,65 @@ func ConfigureServices(
 				mcpSrv.state.Swap(svcs.ServiceState_Init)
 				return nil
 			},
-            RunF: func(ctx context.Context) {
+			RunF: func(ctx context.Context) {
 				if !mcpSrv.state.CompareAndSwap(svcs.ServiceState_Init, svcs.ServiceState_Run) {
 					return
 				}
 
 				// Build and run Dolt MCP server using dolt-mcp library
 				logger, _ := zap.NewProduction()
-				mcpUser := servercfg.DefaultUser
-				if cfg.MCPUser != nil && *cfg.MCPUser != "" {
-					mcpUser = *cfg.MCPUser
+
+				if cfg.MCPUser == nil {
+					logger.Error("MCP user not defined")
+					return
 				}
+
+				if *cfg.MCPUser == "" {
+					logger.Error("MCP user not defined")
+					return
+				}
+
 				dbConf := mcpdb.Config{
 					Host:         "127.0.0.1",
 					Port:         cfg.ServerConfig.Port(),
-					User:         mcpUser,
+					User:         *cfg.MCPUser,
 					Password:     os.Getenv(dconfig.EnvDoltRootPassword),
 					DatabaseName: "",
 				}
 
-                srv, err := pkgmcp.NewMCPHTTPServer(
+				srv, err := pkgmcp.NewMCPHTTPServer(
 					logger,
 					dbConf,
 					*cfg.MCPPort,
 					toolsets.WithToolSet(&toolsets.PrimitiveToolSetV1{}),
 				)
 				if err != nil {
-                    logrus.Errorf("failed to start Dolt MCP HTTP server: %v", err)
+					logrus.Errorf("failed to start Dolt MCP HTTP server: %v", err)
 					return
 				}
 
-                // Run MCP server within errgroup to coordinate shutdown
-                runCtx, cancel := context.WithCancel(ctx)
-                mcpSrv.cancel = cancel
-                g, gctx := errgroup.WithContext(runCtx)
-                g.Go(func() error {
-                    srv.ListenAndServe(gctx)
-                    return nil
-                })
-                mcpSrv.group = g
+				// Run MCP server within errgroup to coordinate shutdown
+				runCtx, cancel := context.WithCancel(ctx)
+				mcpSrv.cancel = cancel
+				g, gctx := errgroup.WithContext(runCtx)
+				g.Go(func() error {
+					srv.ListenAndServe(gctx)
+					return nil
+				})
+				mcpSrv.group = g
 			},
-            StopF: func() error {
-                // Trigger graceful shutdown via context cancellation
-                if mcpSrv.cancel != nil {
-                    mcpSrv.cancel()
-                }
+			StopF: func() error {
+				// Trigger graceful shutdown via context cancellation
+				if mcpSrv.cancel != nil {
+					mcpSrv.cancel()
+				}
 				var err error
-                if mcpSrv.group != nil {
+				if mcpSrv.group != nil {
 					err = mcpSrv.group.Wait()
-                }
-                mcpSrv.state.Swap(svcs.ServiceState_Stopped)
-                return err 
-            },
+				}
+				mcpSrv.state.Swap(svcs.ServiceState_Stopped)
+				return err
+			},
 		}
 		controller.Register(StartMCP)
 	}

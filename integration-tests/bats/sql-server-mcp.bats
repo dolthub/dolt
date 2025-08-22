@@ -133,7 +133,7 @@ wait_for_mcp_port() {
   MCP_PORT=$( definePORT )
 
   # Start the sql-server with MCP enabled
-  start_sql_server_with_args --host 0.0.0.0 --mcp-port="$MCP_PORT"
+  start_sql_server_with_args --host 0.0.0.0 --mcp-port="$MCP_PORT" --mcp-user root
 
   # Verify SQL server accepts connections on $PORT
   run dolt sql -q "SELECT 1;"
@@ -180,9 +180,9 @@ wait_for_mcp_port() {
 
   # Attempt to start sql-server with occupied MCP port should fail
   if [ "$IS_WINDOWS" == true ]; then
-    run dolt sql-server --host 0.0.0.0 --port="$SQL_PORT" --mcp-port="$MCP_PORT"
+    run dolt sql-server --host 0.0.0.0 --port="$SQL_PORT" --mcp-port="$MCP_PORT" --mcp-user root
   else
-    run dolt sql-server --host 0.0.0.0 --port="$SQL_PORT" --socket "dolt.$SQL_PORT.sock" --mcp-port="$MCP_PORT"
+    run dolt sql-server --host 0.0.0.0 --port="$SQL_PORT" --socket "dolt.$SQL_PORT.sock" --mcp-port="$MCP_PORT" --mcp-user root
   fi
   [ $status -ne 0 ]
 
@@ -200,7 +200,7 @@ wait_for_mcp_port() {
   MCP_PORT=$( definePORT )
 
   # Start server with MCP enabled
-  start_sql_server_with_args --host 0.0.0.0 --mcp-port="$MCP_PORT"
+  start_sql_server_with_args --host 0.0.0.0 --mcp-port="$MCP_PORT" --mcp-user root
 
   # Wait for MCP port to accept connections
   run wait_for_mcp_port "$MCP_PORT" 8500
@@ -238,19 +238,19 @@ EOF
 
   # mcp-port = 0
   SQL_PORT=$( definePORT )
-  run dolt sql-server --host 0.0.0.0 --port="$SQL_PORT" --socket "dolt.$SQL_PORT.sock" --mcp-port 0
+  run dolt sql-server --host 0.0.0.0 --port="$SQL_PORT" --socket "dolt.$SQL_PORT.sock" --mcp-port 0 --mcp-user root
   [ $status -ne 0 ]
 
   # mcp-port > 65535
   SQL_PORT=$( definePORT )
-  run dolt sql-server --host 0.0.0.0 --port="$SQL_PORT" --socket "dolt.$SQL_PORT.sock" --mcp-port 70000
+  run dolt sql-server --host 0.0.0.0 --port="$SQL_PORT" --socket "dolt.$SQL_PORT.sock" --mcp-port 70000 --mcp-user root
   [ $status -ne 0 ]
 }
 
 @test "sql-server mcp: --mcp-port identical to --port fails startup" {
   cd repo1
   PORT=$( definePORT )
-  run dolt sql-server --host 0.0.0.0 --port="$PORT" --socket "dolt.$PORT.sock" --mcp-port "$PORT"
+  run dolt sql-server --host 0.0.0.0 --port="$PORT" --socket "dolt.$PORT.sock" --mcp-port "$PORT" --mcp-user root
   [ $status -ne 0 ]
 }
 
@@ -258,7 +258,15 @@ EOF
   cd repo1
   SQL_PORT=$( definePORT )
   # Provide duplicate mcp-port flags; expect failure
-  run dolt sql-server --host 0.0.0.0 --port="$SQL_PORT" --socket "dolt.$SQL_PORT.sock" --mcp-port 45001 --mcp-port 45002
+  run dolt sql-server --host 0.0.0.0 --port="$SQL_PORT" --socket "dolt.$SQL_PORT.sock" --mcp-port 45001 --mcp-user root --mcp-port 45002 --mcp-user root
+  [ $status -ne 0 ]
+}
+
+@test "sql-server mcp: any MCP arg without --mcp-port errors" {
+  cd repo1
+  SQL_PORT=$( definePORT )
+  # --mcp-user without --mcp-port should fail
+  run dolt sql-server --host 0.0.0.0 --port="$SQL_PORT" --socket "dolt.$SQL_PORT.sock" --mcp-user root
   [ $status -ne 0 ]
 }
 
@@ -269,7 +277,7 @@ EOF
   export DOLT_ROOT_PASSWORD="testpass123"
   # # Ensure fresh privileges so root is initialized with the password
   # rm -rf .doltcfg 2>/dev/null || true
-  start_sql_server_with_args --host 0.0.0.0 --mcp-port="$MCP_PORT"
+  start_sql_server_with_args --host 0.0.0.0 --mcp-port="$MCP_PORT" --mcp-user root
   run wait_for_mcp_port "$MCP_PORT" 8500
   [ $status -eq 0 ]
 
@@ -303,9 +311,9 @@ EOF
   MCP_PORT=$( definePORT )
   # Start server without creating root user
   if [ "$IS_WINDOWS" == true ]; then
-    run dolt sql-server --skip-root-user-initialization --host 0.0.0.0 --mcp-port "$MCP_PORT"
+    run dolt sql-server --skip-root-user-initialization --host 0.0.0.0 --mcp-port "$MCP_PORT" --mcp-user root
   else
-    run dolt sql-server --skip-root-user-initialization --host 0.0.0.0 --mcp-port "$MCP_PORT" --socket "dolt.$(definePORT).sock"
+    run dolt sql-server --skip-root-user-initialization --host 0.0.0.0 --mcp-port "$MCP_PORT" --socket "dolt.$(definePORT).sock" --mcp-user root
   fi
   [ $status -ne 0 ]
 }
@@ -313,13 +321,13 @@ EOF
 @test "sql-server mcp: restart with same --mcp-port succeeds after stop" {
   cd repo1
   MCP_PORT=$( definePORT )
-  start_sql_server_with_args --host 0.0.0.0 --mcp-port "$MCP_PORT"
+  start_sql_server_with_args --host 0.0.0.0 --mcp-port "$MCP_PORT" --mcp-user root
   run wait_for_mcp_port "$MCP_PORT" 8500
   [ $status -eq 0 ]
   stop_sql_server 1
 
   # Immediate restart on same MCP port
-  start_sql_server_with_args --host 0.0.0.0 --mcp-port "$MCP_PORT"
+  start_sql_server_with_args --host 0.0.0.0 --mcp-port "$MCP_PORT" --mcp-user root
   run wait_for_mcp_port "$MCP_PORT" 8500
   [ $status -eq 0 ]
 
@@ -343,7 +351,7 @@ EOF
 @test "sql-server mcp: forceful termination closes servers cleanly; restart works" {
   cd repo1
   MCP_PORT=$( definePORT )
-  start_sql_server_with_args --host 0.0.0.0 --mcp-port "$MCP_PORT"
+  start_sql_server_with_args --host 0.0.0.0 --mcp-port "$MCP_PORT" --mcp-user root
   run wait_for_mcp_port "$MCP_PORT" 8500
   [ $status -eq 0 ]
 
@@ -353,7 +361,7 @@ EOF
   sleep 1
 
   # Restart with same MCP port
-  start_sql_server_with_args --host 0.0.0.0 --mcp-port "$MCP_PORT"
+  start_sql_server_with_args --host 0.0.0.0 --mcp-port "$MCP_PORT" --mcp-user root
   run wait_for_mcp_port "$MCP_PORT" 8500
   [ $status -eq 0 ]
 
