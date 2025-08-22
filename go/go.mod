@@ -58,6 +58,7 @@ require (
 	github.com/cespare/xxhash/v2 v2.3.0
 	github.com/creasty/defaults v1.6.0
 	github.com/dolthub/aws-sdk-go-ini-parser v0.0.0-20250305001723-2821c37f6c12
+	github.com/dolthub/dolt-mcp v0.1.2-0.20250822143810-f6ee72f1ad19
 	github.com/dolthub/eventsapi_schema v0.0.0-20250725194025-a087efa1ee55
 	github.com/dolthub/flatbuffers/v23 v23.3.3-dh.2
 	github.com/dolthub/go-mysql-server v0.20.1-0.20250819180839-f9276850cef1
@@ -132,7 +133,6 @@ require (
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cncf/xds/go v0.0.0-20250501225837-2ac532fd4443 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
-	github.com/dolthub/dolt-mcp v0.1.1 // indirect
 	github.com/dolthub/go-icu-regex v0.0.0-20250327004329-6799764f2dad // indirect
 	github.com/dolthub/jsonpath v0.0.2-0.20240227200619-19675ab05c71 // indirect
 	github.com/envoyproxy/go-control-plane/envoy v1.32.4 // indirect
@@ -186,7 +186,6 @@ require (
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.61.0 // indirect
 	go.opentelemetry.io/otel/metric v1.36.0 // indirect
 	go.opentelemetry.io/otel/sdk/metric v1.36.0 // indirect
-	go.uber.org/atomic v1.7.0 // indirect
 	go.uber.org/multierr v1.10.0 // indirect
 	golang.org/x/exp v0.0.0-20230522175609-2e198f4a06a1 // indirect
 	golang.org/x/image v0.18.0 // indirect
