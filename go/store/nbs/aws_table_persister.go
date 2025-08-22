@@ -245,7 +245,7 @@ func (s3p awsTablePersister) ConjoinAll(ctx context.Context, sources chunkSource
 	if err != nil {
 		return nil, nil, err
 	}
-	
+
 	verbose.Logger(ctx).Sugar().Debugf("Conjoined storage of %d chunks in %s", plan.chunkCount, time.Since(t1))
 
 	rdr := &s3ObjectReader{s3: s3p.s3, bucket: s3p.bucket, readRl: s3p.rl, ns: s3p.ns}
