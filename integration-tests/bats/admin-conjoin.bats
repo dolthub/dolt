@@ -18,10 +18,20 @@ count_oldgen_files() {
     find .dolt/noms/oldgen -type f -name "????????????????????????????????" 2>/dev/null | grep -v LOCK | grep -v manifest | wc -l | tr -d ' '
 }
 
-# Helper function to get storage file IDs from oldgen
-get_oldgen_storage_ids() {
+# Helper function to get table file IDs from oldgen
+get_oldgen_table_ids() {
     find .dolt/noms/oldgen -type f -name "????????????????????????????????" 2>/dev/null | grep -v LOCK | grep -v manifest | xargs -I {} basename {}
 }
+# Helper function to get archive file IDs from oldgen
+get_oldgen_archive_ids() {
+  find .dolt/noms/oldgen -type f -name "????????????????????????????????.darc" 2>/dev/null \
+    | grep -v LOCK \
+    | grep -v manifest \
+    | xargs -I {} basename {} \
+    | sed 's/\.darc$//'
+}
+
+
 
 # Helper function to extract chunk count from fsck output
 get_chunk_count() {
@@ -64,8 +74,7 @@ get_chunk_count() {
     dolt sql -q "$(mutations_and_gc_statement)"
     dolt sql -q "$(mutations_and_gc_statement)"
     
-    storage_ids=($(get_oldgen_storage_ids))
-
+    storage_ids=($(get_oldgen_table_ids))
     [ "${#storage_ids[@]}" -eq 3 ]
     
     id1="${storage_ids[0]}"
@@ -84,7 +93,7 @@ get_chunk_count() {
     chunks_after=$(get_chunk_count "$output")
     [[ "$chunks_before" -eq "$chunks_after" ]] || false
 
-    storage_ids=($(get_oldgen_storage_ids))
+    storage_ids=($(get_oldgen_table_ids))
     [ "${#storage_ids[@]}" -eq 2 ]
 }
 
@@ -96,7 +105,7 @@ get_chunk_count() {
     dolt sql -q "$(mutations_and_gc_statement)"
     dolt sql -q "$(mutations_and_gc_statement)"
 
-    storage_ids=($(get_oldgen_storage_ids))
+    storage_ids=($(get_oldgen_table_ids))
     [ "${#storage_ids[@]}" -eq 5 ]
 
     run dolt fsck
@@ -112,7 +121,7 @@ get_chunk_count() {
     chunks_after=$(get_chunk_count "$output")
     [[ "$chunks_before" -eq "$chunks_after" ]] || false
 
-    storage_ids=($(get_oldgen_storage_ids))
+    storage_ids=($(get_oldgen_table_ids))
     [ "${#storage_ids[@]}" -eq 1 ]
 }
 
@@ -121,13 +130,13 @@ get_chunk_count() {
     dolt sql -q "$(mutations_and_gc_statement)"
     dolt sql -q "$(mutations_and_gc_statement)"
     
-    storage_ids=($(get_oldgen_storage_ids))
+    storage_ids=($(get_oldgen_table_ids))
     [ "${#storage_ids[@]}" -eq 3 ]
     
     dolt archive --purge
 
     # Get archive file IDs - these should be .darc files in oldgen
-    archive_ids=($(find .dolt/noms/oldgen -type f -name "*.darc" 2>/dev/null | xargs -I {} basename {} .darc))
+    archive_ids=($(get_oldgen_archive_ids))
     [ "${#archive_ids[@]}" -eq 3 ]
     
     # Record chunk count before conjoin
@@ -146,4 +155,48 @@ get_chunk_count() {
     [ "$status" -eq 0 ]
     chunks_after=$(get_chunk_count "$output")
     [[ "$chunks_before" -eq "$chunks_after" ]] || false
+
+    # There should only be two archive files now.
+    archive_ids=($(get_oldgen_archive_ids))
+    [ "${#archive_ids[@]}" -eq 2 ]
+}
+
+@test "admin-conjoin: test conjoin with mixed file types" {
+  dolt sql -q "$(mutations_and_gc_statement)"
+  dolt sql -q "$(mutations_and_gc_statement)"
+  dolt sql -q "$(mutations_and_gc_statement)"
+
+  dolt archive --purge
+
+  # Table files, not archives.
+  dolt sql -q "$(mutations_and_gc_statement)"
+  dolt sql -q "$(mutations_and_gc_statement)"
+  dolt sql -q "$(mutations_and_gc_statement)"
+
+  # sanity check that we have three table files and three archive files
+  table_ids=($(get_oldgen_table_ids))
+  [ "${#table_ids[@]}" -eq 3 ]
+  archive_ids=($(get_oldgen_archive_ids))
+  [ "${#archive_ids[@]}" -eq 3 ]
+
+  # Record chunk count before conjoin
+  run dolt fsck
+  [ "$status" -eq 0 ]
+  chunks_before=$(get_chunk_count "$output")
+
+  run dolt admin conjoin --all
+  [ "$status" -eq 0 ]
+
+  # Verify data integrity after conjoin
+  run dolt fsck
+  [ "$status" -eq 0 ]
+  chunks_after=$(get_chunk_count "$output")
+  [[ "$chunks_before" -eq "$chunks_after" ]] || false
+
+  # There should be no tables files left in oldgen
+  storage_ids=($(get_oldgen_table_ids))
+  [ "${#storage_ids[@]}" -eq 0 ]
+  # There should be one archive file left in oldgen
+  archive_ids=($(get_oldgen_archive_ids))
+  [ "${#archive_ids[@]}" -eq 1 ]
 }

@@ -43,6 +43,8 @@ type fileTableReader struct {
 	h hash.Hash
 }
 
+var _ chunkSource = &fileTableReader{}
+
 const (
 	fileBlockSize = 1 << 12
 )

@@ -785,6 +785,12 @@ func (aw *archiveWriter) conjoinAll(ctx context.Context, sources []chunkSource) 
 	return nil
 }
 
+type tableChunkRecord struct {
+	offset uint64
+	length uint32
+	hash   hash.Hash
+}
+
 func planArchiveConjoin(sources []sourceWithSize) (compactionPlan, error) {
 	if len(sources) < 2 {
 		return compactionPlan{}, fmt.Errorf("conjoinIndexes requires at least 2 archive readers, got %d", len(sources))
@@ -800,48 +806,90 @@ func planArchiveConjoin(sources []sourceWithSize) (compactionPlan, error) {
 		reader := src.source
 		arcSrc, ok := reader.(archiveChunkSource)
 		if !ok {
-			return compactionPlan{}, fmt.Errorf("runtime error: source %T is not an archiveChunkSource", reader)
-		}
-
-		footer := arcSrc.aRdr.footer
-
-		chunkCounter += footer.chunkCount
-
-		// Map byte span IDs from this reader to the combined archive
-		spanIdOffset := uint32(len(aw.stagedBytes))
-		for i := uint32(1); i <= footer.byteSpanCount; i++ {
-			span := arcSrc.aRdr.getByteSpanByID(i)
-			adjustedSpan := byteSpan{
-				offset: span.offset + currentDataOffset,
-				length: span.length,
+			// *nbs.fileTableReader  when testing locally. Gonna need to test this on cloud conjoin. NM4
+			tblSrc, ok := reader.(*fileTableReader)
+			if !ok {
+				return compactionPlan{}, fmt.Errorf("runtime error: source %T is not an archiveChunkSource or fileTableReader", reader)
 			}
-			aw.stagedBytes = append(aw.stagedBytes, adjustedSpan)
-		}
 
-		for i := 0; i < int(footer.chunkCount); i++ {
-			dictId, dataId := arcSrc.aRdr.getChunkRef(i)
-
-			prefix := arcSrc.aRdr.indexReader.getPrefix(uint32(i))
-			suffix := arcSrc.aRdr.indexReader.getSuffix(uint32(i))
-			chunkHash := reconstructHashFromPrefixAndSuffix(prefix, suffix)
-
-			// Add to seen chunks and staged chunks. Note that we allow duplicates here, whereas we quietly skip
-			// duplicates when doing a chunk-by-chunk build of an archive.
-			aw.seenChunks.Insert(chunkHash)
-
-			// Adjust byte span IDs for the combined archive
-			adjustedDictId := dictId
-			adjustedDataId := dataId
-			if dictId != 0 {
-				adjustedDictId = dictId + spanIdOffset
+			index, err := tblSrc.index()
+			if err != nil {
+				return compactionPlan{}, err
 			}
-			adjustedDataId = dataId + spanIdOffset
+			chunks := index.chunkCount()
+			chunkCounter += chunks
 
-			aw.stagedChunks = append(aw.stagedChunks, stagedChunkRef{
-				hash:       chunkHash,
-				dictionary: adjustedDictId,
-				data:       adjustedDataId,
+			chunkRecs := make([]tableChunkRecord, 0, chunks)
+			for i := uint32(0); i < chunks; i++ {
+				var h hash.Hash
+				ie, err := index.indexEntry(i, &h)
+				if err != nil {
+					return compactionPlan{}, fmt.Errorf("failure to retrieve indexEntry(%d): %w", i, err)
+				}
+				chunkRecs = append(chunkRecs, tableChunkRecord{
+					offset: ie.Offset(),
+					length: ie.Length(),
+					hash:   h,
+				})
+			}
+			sort.Slice(chunkRecs, func(i, j int) bool {
+				return chunkRecs[i].offset < chunkRecs[j].offset
 			})
+
+			for _, rec := range chunkRecs {
+				adjustedSpan := byteSpan{
+					offset: rec.offset + currentDataOffset,
+					length: uint64(rec.length),
+				}
+				aw.stagedBytes = append(aw.stagedBytes, adjustedSpan)
+
+				aw.stagedChunks = append(aw.stagedChunks, stagedChunkRef{
+					hash:       rec.hash,
+					dictionary: 0,
+					data:       uint32(len(aw.stagedBytes)),
+				})
+			}
+		} else {
+			footer := arcSrc.aRdr.footer
+			chunkCounter += footer.chunkCount
+
+			// Map byte span IDs from this reader to the combined archive
+			spanIdOffset := uint32(len(aw.stagedBytes))
+
+			for i := uint32(1); i <= footer.byteSpanCount; i++ {
+				span := arcSrc.aRdr.getByteSpanByID(i)
+				adjustedSpan := byteSpan{
+					offset: span.offset + currentDataOffset,
+					length: span.length,
+				}
+				aw.stagedBytes = append(aw.stagedBytes, adjustedSpan)
+			}
+
+			for i := 0; i < int(footer.chunkCount); i++ {
+				dictId, dataId := arcSrc.aRdr.getChunkRef(i)
+
+				prefix := arcSrc.aRdr.indexReader.getPrefix(uint32(i))
+				suffix := arcSrc.aRdr.indexReader.getSuffix(uint32(i))
+				chunkHash := reconstructHashFromPrefixAndSuffix(prefix, suffix)
+
+				// Add to seen chunks and staged chunks. Note that we allow duplicates here, whereas we quietly skip
+				// duplicates when doing a chunk-by-chunk build of an archive.
+				aw.seenChunks.Insert(chunkHash)
+
+				// Adjust byte span IDs for the combined archive
+				adjustedDictId := dictId
+				adjustedDataId := dataId
+				if dictId != 0 {
+					adjustedDictId = dictId + spanIdOffset
+				}
+				adjustedDataId = dataId + spanIdOffset
+
+				aw.stagedChunks = append(aw.stagedChunks, stagedChunkRef{
+					hash:       chunkHash,
+					dictionary: adjustedDictId,
+					data:       adjustedDataId,
+				})
+			}
 		}
 		currentDataOffset += src.dataLen
 	}
