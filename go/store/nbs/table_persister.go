@@ -133,10 +133,9 @@ func planRangeCopyConjoin(sources chunkSources, stats *Stats) (compactionPlan, e
 	for _, src := range sources {
 		aSrc, ok := src.(archiveChunkSource)
 		if !ok {
-			if mode == conjoinModeArchive {
-				return compactionPlan{}, errors.New("cannot conjoin a mix of archive and non-archive chunk sources")
+			if mode == conjoinModeUnknown {
+				mode = conjoinModeTable
 			}
-			mode = conjoinModeTable
 
 			index, err := src.index()
 			if err != nil {
@@ -145,9 +144,7 @@ func planRangeCopyConjoin(sources chunkSources, stats *Stats) (compactionPlan, e
 			// Calculate the amount of chunk data in |src|
 			sized = append(sized, sourceWithSize{src, calcChunkRangeSize(index)})
 		} else {
-			if mode == conjoinModeTable {
-				return compactionPlan{}, errors.New("cannot conjoin a mix of archive and non-archive chunk sources")
-			}
+			// A single archive source forces the entire conjoin to be done as an archive conjoin.
 			mode = conjoinModeArchive
 
 			dataSpan := aSrc.aRdr.footer.dataSpan()

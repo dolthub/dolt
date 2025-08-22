@@ -328,7 +328,7 @@ func (ftp *fsTablePersister) ConjoinAll(ctx context.Context, sources chunkSource
 	}
 	return cs, func() {
 		for _, s := range sources {
-			file.Remove(filepath.Join(ftp.dir, s.hash().String()))
+			file.Remove(filepath.Join(ftp.dir, s.hash().String()+s.suffix()))
 		}
 	}, nil
 }
