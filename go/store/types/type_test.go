@@ -38,11 +38,11 @@ func TestTypes(t *testing.T) {
 	setType, err := MakeSetType(PrimitiveTypeMap[StringKind])
 	require.NoError(t, err)
 	mahType, err := MakeStructType("MahStruct",
-		StructField{"Field1", PrimitiveTypeMap[StringKind], false},
-		StructField{"Field2", PrimitiveTypeMap[BoolKind], false},
+		StructField{PrimitiveTypeMap[StringKind], "Field1", false},
+		StructField{PrimitiveTypeMap[BoolKind], "Field2", false},
 	)
 	require.NoError(t, err)
-	recType, err := MakeStructType("RecursiveStruct", StructField{"self", MakeCycleType("RecursiveStruct"), false})
+	recType, err := MakeStructType("RecursiveStruct", StructField{MakeCycleType("RecursiveStruct"), "self", false})
 	require.NoError(t, err)
 
 	mRef := mustRef(vs.WriteValue(context.Background(), mapType)).TargetHash()
@@ -79,8 +79,8 @@ func TestTypeRefDescribe(t *testing.T) {
 	assert.Equal("Set<String>", mustString(setType.Describe(context.Background())))
 
 	mahType, err := MakeStructType("MahStruct",
-		StructField{"Field1", PrimitiveTypeMap[StringKind], false},
-		StructField{"Field2", PrimitiveTypeMap[BoolKind], false},
+		StructField{PrimitiveTypeMap[StringKind], "Field1", false},
+		StructField{PrimitiveTypeMap[BoolKind], "Field2", false},
 	)
 	require.NoError(t, err)
 	assert.Equal("Struct MahStruct {\n  Field1: String,\n  Field2: Bool,\n}", mustString(mahType.Describe(context.Background())))
@@ -127,7 +127,7 @@ func TestVerifyStructFieldName(t *testing.T) {
 
 	assertInvalid := func(n string) {
 		assert.Panics(func() {
-			MakeStructType("S", StructField{n, PrimitiveTypeMap[StringKind], false})
+			MakeStructType("S", StructField{PrimitiveTypeMap[StringKind], n, false})
 		})
 	}
 	assertInvalid("")
@@ -141,7 +141,7 @@ func TestVerifyStructFieldName(t *testing.T) {
 	assertInvalid("💩")
 
 	assertValid := func(n string) {
-		MakeStructType("S", StructField{n, PrimitiveTypeMap[StringKind], false})
+		MakeStructType("S", StructField{PrimitiveTypeMap[StringKind], n, false})
 	}
 	assertValid("a")
 	assertValid("A")
@@ -231,13 +231,13 @@ func TestHasStructCycles(tt *testing.T) {
 	assert.False(HasStructCycles(mustType(MakeStructType("A"))))
 
 	assert.True(HasStructCycles(
-		mustType(MakeStructType("A", StructField{"a", mustType(MakeStructType("A")), false}))))
+		mustType(MakeStructType("A", StructField{mustType(MakeStructType("A")), "a", false}))))
 	assert.True(HasStructCycles(
-		mustType(MakeStructType("A", StructField{"a", MakeCycleType("A"), false}))))
+		mustType(MakeStructType("A", StructField{MakeCycleType("A"), "a", false}))))
 	assert.True(HasStructCycles(
-		mustType(MakeSetType(mustType(MakeStructType("A", StructField{"a", MakeCycleType("A"), false}))))))
+		mustType(MakeSetType(mustType(MakeStructType("A", StructField{MakeCycleType("A"), "a", false}))))))
 	assert.True(HasStructCycles(
-		mustType(MakeStructType("A", StructField{"a", mustType(MakeSetType(MakeCycleType("A"))), false}))))
+		mustType(MakeStructType("A", StructField{mustType(MakeSetType(MakeCycleType("A"))), "a", false}))))
 
 	assert.False(HasStructCycles(
 		mustType(MakeMapType(
@@ -255,13 +255,13 @@ func TestHasStructCycles(tt *testing.T) {
 	assert.False(HasStructCycles(
 		mustType(MakeStructType("",
 			StructField{
+				mustType(MakeStructType("", StructField{PrimitiveTypeMap[BoolKind], "b", false})),
 				"a",
-				mustType(MakeStructType("", StructField{"b", PrimitiveTypeMap[BoolKind], false})),
 				false,
 			},
 			StructField{
+				mustType(MakeStructType("", StructField{PrimitiveTypeMap[BoolKind], "b", false})),
 				"b",
-				mustType(MakeStructType("", StructField{"b", PrimitiveTypeMap[BoolKind], false})),
 				false},
 		))),
 	)
