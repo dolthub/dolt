@@ -2402,7 +2402,7 @@ func (nbs *NomsBlockStore) findTableSpec(storageId hash.Hash) (tableSpec, bool) 
 			return tableSpec{name: storageId, chunkCount: count}, true
 		}
 	}
-	
+
 	// Check if the storage ID corresponds to an archive file by attempting to open it
 	// The persister's Open method will check for both table files and archive files
 	ctx := context.Background()
@@ -2414,6 +2414,6 @@ func (nbs *NomsBlockStore) findTableSpec(storageId hash.Hash) (tableSpec, bool) 
 			return tableSpec{name: storageId, chunkCount: count}, true
 		}
 	}
-	
+
 	return tableSpec{name: storageId, chunkCount: 0}, false
 }
