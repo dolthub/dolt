@@ -140,12 +140,11 @@ func (p *proximityMapIter) Next(ctx context.Context) (k val.Tuple, v val.Tuple, 
 
 // NewProximityMap creates a new ProximityMap from a supplied root node.
 func NewProximityMap(ns tree.NodeStore, node tree.Node, keyDesc val.TupleDesc, valDesc val.TupleDesc, distanceType vector.DistanceType, logChunkSize uint8) ProximityMap {
-	tuples := tree.ProximityMap[val.Tuple, val.Tuple, val.TupleDesc]{
-		Root:         node,
-		NodeStore:    ns,
-		Order:        keyDesc,
-		DistanceType: distanceType,
-		Convert: func(ctx context.Context, bytes []byte) []float32 {
+	var convertFunc func(context.Context, []byte) []float32
+	switch keyDesc.Types[0].Enc {
+	case val.JSONAddrEnc:
+		// TODO: Handle context and errors here
+		convertFunc = func(ctx context.Context, bytes []byte) []float32 {
 			h, _ := keyDesc.GetJSONAddr(0, bytes)
 			doc := tree.NewJSONDoc(h, ns)
 			jsonWrapper, err := doc.ToIndexedJSONDocument(ctx)
@@ -157,7 +156,28 @@ func NewProximityMap(ns tree.NodeStore, node tree.Node, keyDesc val.TupleDesc, v
 				panic(err)
 			}
 			return floats
-		},
+		}
+	case val.BytesAdaptiveEnc:
+		convertFunc = func(ctx context.Context, bytes []byte) []float32 {
+			vec, _, err := keyDesc.GetBytesAdaptiveValue(0, ns, bytes)
+			if err != nil {
+				panic(err)
+			}
+			floats, err := sql.ConvertToVector(ctx, vec)
+			if err != nil {
+				panic(err)
+			}
+			return floats
+		}
+	default:
+		panic("unexpected encoding for vector index")
+	}
+	tuples := tree.ProximityMap[val.Tuple, val.Tuple, val.TupleDesc]{
+		Root:         node,
+		NodeStore:    ns,
+		Order:        keyDesc,
+		DistanceType: distanceType,
+		Convert:      convertFunc,
 	}
 	return ProximityMap{
 		tuples:       tuples,
