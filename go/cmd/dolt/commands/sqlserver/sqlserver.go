@@ -59,6 +59,7 @@ const (
     eventSchedulerStatus        = "event-scheduler"
     mcpPortFlag                 = "mcp-port"
     mcpUserFlag                 = "mcp-user"
+    mcpPasswordFlag             = "mcp-password"
 )
 
 func indentLines(s string) string {
@@ -200,8 +201,9 @@ func (cmd SqlServerCmd) ArgParserWithName(name string) *argparser.ArgParser {
     ap.SupportsString(eventSchedulerStatus, "", "status", "Determines whether the Event Scheduler is enabled and running on the server. It has one of the following values: 'ON', 'OFF' or 'DISABLED'.")
     // Start an MCP HTTP server connected to this sql-server on the given port
     ap.SupportsUint(mcpPortFlag, "", "port", "If provided, runs a Dolt MCP HTTP server on this port alongside the sql-server.")
-    // Optional: SQL user for MCP to authenticate as (defaults to root)
-    ap.SupportsString(mcpUserFlag, "", "user", "Optional SQL user for MCP to connect as. Defaults to 'root'.")
+    // MCP SQL credentials (user required when MCP enabled; password optional)
+    ap.SupportsString(mcpUserFlag, "", "user", "SQL user for MCP to connect as (required when --mcp-port is set).")
+    ap.SupportsString(mcpPasswordFlag, "", "password", "Optional SQL password for MCP to connect with (requires --mcp-user). Defaults to env DOLT_ROOT_PASSWORD if unset.")
 	return ap
 }
 
@@ -286,6 +288,12 @@ func StartServer(ctx context.Context, versionStr, commandStr string, args []stri
         user := mu
         mcpUserPtr = &user
     }
+    // Optional MCP SQL password
+    var mcpPasswordPtr *string
+    if mpw, ok := apr.GetValue(mcpPasswordFlag); ok {
+        pw := mpw
+        mcpPasswordPtr = &pw
+    }
 
     // Validate MCP args coherence and port range/conflicts
     if mcpPortPtr != nil {
@@ -306,6 +314,13 @@ func StartServer(ctx context.Context, versionStr, commandStr string, args []stri
         if mcpUserPtr != nil && *mcpUserPtr != "" {
             return fmt.Errorf("--%s requires --%s to be set", mcpUserFlag, mcpPortFlag)
         }
+        if mcpPasswordPtr != nil && *mcpPasswordPtr != "" {
+            return fmt.Errorf("--%s requires --%s to be set", mcpPasswordFlag, mcpPortFlag)
+        }
+    }
+    // If password is provided, user must be provided
+    if (mcpPasswordPtr != nil && *mcpPasswordPtr != "") && (mcpUserPtr == nil || *mcpUserPtr == "") {
+        return fmt.Errorf("--%s requires --%s to be set", mcpPasswordFlag, mcpUserFlag)
     }
 
     // If MCP is enabled and no explicit root host override exists, set DOLT_ROOT_HOST dynamically
@@ -341,6 +356,7 @@ func StartServer(ctx context.Context, versionStr, commandStr string, args []stri
 		SkipRootUserInit: skipRootUserInitialization,
         MCPPort:          mcpPortPtr,
         MCPUser:          mcpUserPtr,
+        MCPPassword:      mcpPasswordPtr,
 	})
 	if startError != nil {
 		return startError

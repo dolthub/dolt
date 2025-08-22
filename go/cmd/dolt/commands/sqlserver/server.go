@@ -93,6 +93,7 @@ type Config struct {
 	ProtocolListenerFactory server.ProtocolListenerFunc
 	MCPPort                 *int
 	MCPUser                 *string
+    MCPPassword             *string
 }
 
 // Serve starts a MySQL-compatible server. Returns any errors that were encountered.
@@ -915,13 +916,18 @@ func ConfigureServices(
 					return
 				}
 
-				dbConf := mcpdb.Config{
-					Host:         "127.0.0.1",
-					Port:         cfg.ServerConfig.Port(),
-					User:         *cfg.MCPUser,
-					Password:     os.Getenv(dconfig.EnvDoltRootPassword),
-					DatabaseName: "",
-				}
+                // Use password from --mcp-password if provided; otherwise empty
+                password := ""
+                if cfg.MCPPassword != nil {
+                    password = *cfg.MCPPassword
+                }
+                dbConf := mcpdb.Config{
+                    Host:         "127.0.0.1",
+                    Port:         cfg.ServerConfig.Port(),
+                    User:         *cfg.MCPUser,
+                    Password:     password,
+                    DatabaseName: "",
+                }
 
 				srv, err := pkgmcp.NewMCPHTTPServer(
 					logger,
