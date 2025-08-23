@@ -288,7 +288,7 @@ func TestTupleBuilderAdaptiveEncodings(t *testing.T) {
 			tup, err := tb.Build(testPool)
 			require.NoError(t, err)
 
-			adaptiveEncodingBytes, _, err := td.GetBytesAdaptiveValue(0, vs, tup)
+			adaptiveEncodingBytes, _, err := td.GetBytesAdaptiveValue(ctx, 0, vs, tup)
 			require.NoError(t, err)
 			require.Equal(t, shortByteArray, adaptiveEncodingBytes)
 		})
@@ -303,7 +303,7 @@ func TestTupleBuilderAdaptiveEncodings(t *testing.T) {
 			tup, err := tb.Build(testPool)
 			require.NoError(t, err)
 
-			adaptiveEncodingBytes, _, err := td.GetBytesAdaptiveValue(0, vs, tup)
+			adaptiveEncodingBytes, _, err := td.GetBytesAdaptiveValue(ctx, 0, vs, tup)
 			require.NoError(t, err)
 			adaptiveEncodingByteArray := adaptiveEncodingBytes.(*ByteArray)
 			outBytes, err := adaptiveEncodingByteArray.ToBytes(ctx)
@@ -336,7 +336,7 @@ func TestTupleBuilderAdaptiveEncodings(t *testing.T) {
 
 			{
 				// Check that first column is stored out-of-band
-				adaptiveEncodingBytes, _, err := td.GetBytesAdaptiveValue(0, vs, tup)
+				adaptiveEncodingBytes, _, err := td.GetBytesAdaptiveValue(ctx, 0, vs, tup)
 				require.NoError(t, err)
 				adaptiveEncodingByteArray := adaptiveEncodingBytes.(*ByteArray)
 				outBytes, err := adaptiveEncodingByteArray.ToBytes(ctx)
@@ -346,7 +346,7 @@ func TestTupleBuilderAdaptiveEncodings(t *testing.T) {
 
 			{
 				// Check that second column is stored inline
-				adaptiveEncodingBytes, _, err := td.GetBytesAdaptiveValue(1, vs, tup)
+				adaptiveEncodingBytes, _, err := td.GetBytesAdaptiveValue(ctx, 1, vs, tup)
 				require.NoError(t, err)
 				adaptiveEncodingByteArray := adaptiveEncodingBytes.([]byte)
 				require.Equal(t, mediumByteArray, adaptiveEncodingByteArray)
