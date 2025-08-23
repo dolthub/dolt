@@ -102,11 +102,15 @@ func (f ProximityFlusher) ApplyMutationsWithSerializer(
 	if err != nil {
 		return tree.ProximityMap[val.Tuple, val.Tuple, val.TupleDesc]{}, err
 	}
+	convertFunc, err := getConvertToVectorFunction(keyDesc, ns)
+	if err != nil {
+		return tree.ProximityMap[val.Tuple, val.Tuple, val.TupleDesc]{}, err
+	}
 	return tree.ProximityMap[val.Tuple, val.Tuple, val.TupleDesc]{
 		Root:         newRoot,
 		NodeStore:    ns,
 		DistanceType: distanceType,
-		Convert:      convert,
+		Convert:      convertFunc,
 		Order:        keyDesc,
 	}, nil
 }

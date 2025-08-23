@@ -16,6 +16,7 @@ package prolly
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"iter"
 
@@ -138,39 +139,36 @@ func (p *proximityMapIter) Next(ctx context.Context) (k val.Tuple, v val.Tuple, 
 	return
 }
 
-// NewProximityMap creates a new ProximityMap from a supplied root node.
-func NewProximityMap(ns tree.NodeStore, node tree.Node, keyDesc val.TupleDesc, valDesc val.TupleDesc, distanceType vector.DistanceType, logChunkSize uint8) ProximityMap {
-	var convertFunc func(context.Context, []byte) []float32
+func getConvertToVectorFunction(keyDesc val.TupleDesc, ns tree.NodeStore) (tree.ConvertToVectorFunction, error) {
 	switch keyDesc.Types[0].Enc {
 	case val.JSONAddrEnc:
-		// TODO: Handle context and errors here
-		convertFunc = func(ctx context.Context, bytes []byte) []float32 {
+		return func(ctx context.Context, bytes []byte) ([]float32, error) {
 			h, _ := keyDesc.GetJSONAddr(0, bytes)
 			doc := tree.NewJSONDoc(h, ns)
 			jsonWrapper, err := doc.ToIndexedJSONDocument(ctx)
 			if err != nil {
-				panic(err)
+				return nil, err
 			}
-			floats, err := sql.ConvertToVector(ctx, jsonWrapper)
-			if err != nil {
-				panic(err)
-			}
-			return floats
-		}
+			return sql.ConvertToVector(ctx, jsonWrapper)
+		}, nil
 	case val.BytesAdaptiveEnc:
-		convertFunc = func(ctx context.Context, bytes []byte) []float32 {
-			vec, _, err := keyDesc.GetBytesAdaptiveValue(0, ns, bytes)
+		return func(ctx context.Context, bytes []byte) ([]float32, error) {
+			vec, _, err := keyDesc.GetBytesAdaptiveValue(ctx, 0, ns, bytes)
 			if err != nil {
-				panic(err)
+				return nil, err
 			}
-			floats, err := sql.ConvertToVector(ctx, vec)
-			if err != nil {
-				panic(err)
-			}
-			return floats
-		}
+			return sql.ConvertToVector(ctx, vec)
+		}, nil
 	default:
-		panic("unexpected encoding for vector index")
+		return nil, fmt.Errorf("unexpected encoding for vector index: %v", keyDesc.Types[0].Enc)
+	}
+}
+
+// NewProximityMap creates a new ProximityMap from a supplied root node.
+func NewProximityMap(ns tree.NodeStore, node tree.Node, keyDesc val.TupleDesc, valDesc val.TupleDesc, distanceType vector.DistanceType, logChunkSize uint8) (ProximityMap, error) {
+	convertFunc, err := getConvertToVectorFunction(keyDesc, ns)
+	if err != nil {
+		return ProximityMap{}, err
 	}
 	tuples := tree.ProximityMap[val.Tuple, val.Tuple, val.TupleDesc]{
 		Root:         node,
@@ -184,7 +182,7 @@ func NewProximityMap(ns tree.NodeStore, node tree.Node, keyDesc val.TupleDesc, v
 		keyDesc:      keyDesc,
 		valDesc:      valDesc,
 		logChunkSize: logChunkSize,
-	}
+	}, nil
 }
 
 var proximitylevelMapKeyDesc = val.NewTupleDescriptor(
@@ -319,7 +317,7 @@ func (b *ProximityMapBuilder) makeRootNode(ctx context.Context, keys, values [][
 		return ProximityMap{}, err
 	}
 
-	return NewProximityMap(b.ns, rootNode, b.keyDesc, b.valDesc, b.distanceType, b.logChunkSize), nil
+	return NewProximityMap(b.ns, rootNode, b.keyDesc, b.valDesc, b.distanceType, b.logChunkSize)
 }
 
 // Flush finishes constructing a ProximityMap. Call this after all calls to Insert.

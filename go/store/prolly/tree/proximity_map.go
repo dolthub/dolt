@@ -29,13 +29,15 @@ import (
 
 type KeyValueDistanceFn[K, V ~[]byte] func(key K, value V, distance float64) error
 
+type ConvertToVectorFunction func(context.Context, []byte) ([]float32, error)
+
 // ProximityMap is a static Prolly Tree where the position of a key in the tree is based on proximity, as opposed to a traditional ordering.
 // O provides the ordering only within a node.
 type ProximityMap[K, V ~[]byte, O Ordering[K]] struct {
 	NodeStore    NodeStore
 	DistanceType vector.DistanceType
 	Order        O
-	Convert      func(context.Context, []byte) []float32
+	Convert      ConvertToVectorFunction
 	Root         Node
 }
 
@@ -94,7 +96,10 @@ func (t ProximityMap[K, V, O]) WalkNodes(ctx context.Context, cb NodeCb) error {
 func (t ProximityMap[K, V, O]) Get(ctx context.Context, query K, cb KeyValueFn[K, V]) (err error) {
 	nd := t.Root
 
-	queryVector := t.Convert(ctx, query)
+	queryVector, err := t.Convert(ctx, query)
+	if err != nil {
+		return err
+	}
 
 	// Find the child with the minimum distance.
 
@@ -105,7 +110,11 @@ func (t ProximityMap[K, V, O]) Get(ctx context.Context, query K, cb KeyValueFn[K
 
 		for i := 0; i < int(nd.count); i++ {
 			k := nd.GetKey(i)
-			newDistance, err := t.DistanceType.Eval(t.Convert(ctx, k), queryVector)
+			vec, err := t.Convert(ctx, k)
+			if err != nil {
+				return err
+			}
+			newDistance, err := t.DistanceType.Eval(vec, queryVector)
 			if err != nil {
 				return err
 			}
@@ -201,7 +210,11 @@ func (t ProximityMap[K, V, O]) GetClosest(ctx context.Context, query interface{}
 
 	for i := 0; i < int(t.Root.count); i++ {
 		k := t.Root.GetKey(i)
-		newDistance, err := t.DistanceType.Eval(t.Convert(ctx, k), queryVector)
+		vec, err := t.Convert(ctx, k)
+		if err != nil {
+			return err
+		}
+		newDistance, err := t.DistanceType.Eval(vec, queryVector)
 		if err != nil {
 			return err
 		}
@@ -222,7 +235,11 @@ func (t ProximityMap[K, V, O]) GetClosest(ctx context.Context, query interface{}
 			// TODO: We don't need to recompute the distance when visiting the same key as the parent.
 			for i := 0; i < int(node.count); i++ {
 				k := node.GetKey(i)
-				newDistance, err := t.DistanceType.Eval(t.Convert(ctx, k), queryVector)
+				vec, err := t.Convert(ctx, k)
+				if err != nil {
+					return err
+				}
+				newDistance, err := t.DistanceType.Eval(vec, queryVector)
 				if err != nil {
 					return err
 				}
