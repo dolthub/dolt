@@ -36,7 +36,6 @@ func AssertData(sqlCtx *sql.Context, assertion string, comparison string, value 
 	default:
 		return fmt.Sprintf("%s is not a valid assertion type", assertion), nil
 	}
-
 	return result, err
 }
 
@@ -48,15 +47,15 @@ func expectSingleValue(sqlCtx *sql.Context, comparison string, value string, que
 		return "", err
 	}
 
+	if len(row) != 1 {
+		return fmt.Sprintf("expected_single_value expects exactly one cell"), nil
+	}
+
 	_, err = (*queryResult).Next(sqlCtx)
 	if err == nil { //If multiple cells were given, we should error out
 		return fmt.Sprintf("expected_single_value expects exactly one cell"), nil
 	} else if err != io.EOF { // "True" error, so we should quit out
 		return "", err
-	}
-
-	if len(row) != 1 {
-		return fmt.Sprintf("expected_single_value expects exactly one cell"), nil
 	}
 
 	switch maybeActual := row[0].(type) {
@@ -65,14 +64,14 @@ func expectSingleValue(sqlCtx *sql.Context, comparison string, value string, que
 		if err != nil {
 			return fmt.Sprintf("Could not compare non integer value '%s', with %d", value, maybeActual), nil
 		}
-		actualInt := reflect.ValueOf(maybeActual).Int()
+		actualInt := reflect.ValueOf(expectedInt).Int()
 		return compareTestAssertion(comparison, expectedInt, actualInt, "single value"), nil
 	case uint, uint8, uint16, uint32, uint64:
 		expectedUint, err := strconv.ParseUint(value, 10, 64)
 		if err != nil {
 			return fmt.Sprintf("Could not compare non integer value '%s', with %d", value, maybeActual), nil
 		}
-		actualUint := row[0].(uint64)
+		actualUint := reflect.ValueOf(expectedUint).Uint()
 		return compareTestAssertion(comparison, expectedUint, actualUint, "single value"), nil
 	case float32, float64:
 		expectedFloat, err := strconv.ParseFloat(value, 64)
@@ -127,10 +126,8 @@ func expectColumns(sqlCtx *sql.Context, comparison string, value string, queryRe
 	row, err := (*queryResult).Next(sqlCtx)
 	if err != nil && err != io.EOF {
 		return "", err
-	} else if err == nil {
-		numColumns = len(row)
 	}
-
+	numColumns = len(row)
 	return compareTestAssertion(comparison, expectedColumns, numColumns, "column count"), nil
 }
 
@@ -161,36 +158,39 @@ func compareTestAssertion[T constraints.Ordered](comparison string, expectedValu
 			return fmt.Sprintf("Assertion failed: expected %s greater than or equal to %v, got %v", assertionType, expectedValue, realValue)
 		}
 	default:
-		return fmt.Sprintf("%s is not a valid assertion type", comparison)
+		return fmt.Sprintf("%s is not a valid comparison type", comparison)
 	}
 	return ""
 }
 
 func compareDates(comparison string, expectedValue, realValue time.Time, assertionType string) string {
+	expectedStr := expectedValue.Format(time.DateOnly)
+	realStr := realValue.Format(time.DateOnly)
+
 	switch comparison {
 	case "==":
 		if !expectedValue.Equal(realValue) {
-			return fmt.Sprintf("Assertion failed: expected %s equal to %s, got %s", assertionType, expectedValue, realValue)
+			return fmt.Sprintf("Assertion failed: expected %s equal to %s, got %s", assertionType, expectedStr, realStr)
 		}
 	case "!=":
 		if expectedValue.Equal(realValue) {
-			return fmt.Sprintf("Assertion failed: expected %s not equal to %s, got %s", assertionType, expectedValue, realValue)
+			return fmt.Sprintf("Assertion failed: expected %s not equal to %s, got %s", assertionType, expectedStr, realStr)
 		}
 	case "<":
 		if realValue.Equal(expectedValue) || realValue.After(expectedValue) {
-			return fmt.Sprintf("Assertion failed: expected %s less than %s, got %s", assertionType, expectedValue, realValue)
+			return fmt.Sprintf("Assertion failed: expected %s less than %s, got %s", assertionType, expectedStr, realStr)
 		}
 	case "<=":
 		if realValue.After(expectedValue) {
-			return fmt.Sprintf("Assertion failed: expected %s less than or equal to %s, got %s", assertionType, expectedValue, realValue)
+			return fmt.Sprintf("Assertion failed: expected %s less than or equal to %s, got %s", assertionType, expectedStr, realStr)
 		}
 	case ">":
 		if realValue.Before(expectedValue) || realValue.Equal(expectedValue) {
-			return fmt.Sprintf("Assertion failed: expected %s greater than %s, got %s", assertionType, expectedValue.Format(time.DateOnly), realValue.Format(time.DateOnly))
+			return fmt.Sprintf("Assertion failed: expected %s greater than %s, got %s", assertionType, expectedStr, realStr)
 		}
 	case ">=":
 		if realValue.Before(expectedValue) {
-			return fmt.Sprintf("Assertion failed: expected %s greater than or equal to %s, got %s", assertionType, expectedValue, realValue)
+			return fmt.Sprintf("Assertion failed: expected %s greater than or equal to %s, got %s", assertionType, expectedStr, realStr)
 		}
 	default:
 		return fmt.Sprintf("%s is not a valid assertion type", comparison)

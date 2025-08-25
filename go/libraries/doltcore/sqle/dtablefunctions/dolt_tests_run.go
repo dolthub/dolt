@@ -49,7 +49,6 @@ type TestsRunTableFunction struct {
 	database      sql.Database
 	argumentExprs []sql.Expression
 	engine        *gms.Engine
-	results       []testResult
 }
 
 var testRunTableSchema = sql.Schema{
@@ -111,7 +110,7 @@ func (trtf *TestsRunTableFunction) WithExpressions(expressions ...sql.Expression
 	for _, expr := range expressions {
 		if !expr.Resolved() {
 			return nil, ErrInvalidNonLiteralArgument.New(trtf.Name(), expr.String())
-		} //TODO Do we need to do this check? I don't really understand what this means.
+		}
 
 		// We don't allow functions as arguments to dolt_test_run
 		if _, ok := expr.(sql.FunctionExpression); ok {
@@ -183,17 +182,52 @@ func (trtf *TestsRunTableFunction) Name() string {
 
 // RowIter implements the sql.Node interface
 func (trtf *TestsRunTableFunction) RowIter(_ *sql.Context, _ sql.Row) (sql.RowIter, error) {
-	err := trtf.queryAndAssert()
-	if err != nil {
-		return nil, err
-	}
-
 	var rows []sql.Row
-	for _, result := range trtf.results {
-		newRow := sql.NewRow(result.testName, result.groupName, result.query, result.status, result.error)
-		rows = append(rows, newRow)
-	}
 
+	for _, expr := range trtf.argumentExprs {
+		toTest := strings.Trim(expr.String(), "'")
+		tableIter, err := trtf.getDoltTestsData(toTest)
+		if err != nil {
+			return nil, err
+		}
+
+		for {
+			row, err := tableIter.Next(trtf.ctx)
+			if err == io.EOF {
+				break
+			} else if err != nil {
+				return nil, err
+			}
+
+			testName, groupName, query, assertion, comparison, value, err := parseDoltTestsRow(trtf.ctx, row)
+			if err != nil {
+				return nil, err
+			}
+			failMsg, err := validateQuery(trtf.ctx, trtf.catalog, query)
+			if err != nil {
+				return nil, err
+			}
+
+			if failMsg == "" {
+				_, queryResult, _, err := trtf.engine.Query(trtf.ctx, query)
+				if err != nil {
+					failMsg = fmt.Sprintf("Query error: %s", err.Error())
+				} else {
+					failMsg, err = actions.AssertData(trtf.ctx, assertion, comparison, value, &queryResult)
+					if err != nil {
+						return nil, err
+					}
+				}
+			}
+
+			status := "PASS"
+			if failMsg != "" {
+				status = "FAIL"
+			}
+			newRow := sql.NewRow(testName, groupName, query, status, failMsg)
+			rows = append(rows, newRow)
+		}
+	}
 	return sql.RowsToRowIter(rows...), nil
 }
 
@@ -209,82 +243,6 @@ func (trtf *TestsRunTableFunction) DataLength(ctx *sql.Context) (uint64, error) 
 
 func (trtf *TestsRunTableFunction) RowCount(_ *sql.Context) (uint64, bool, error) {
 	return testsRunDefaultRowCount, false, nil
-}
-
-func (trtf *TestsRunTableFunction) queryAndAssert() error {
-	for _, expr := range trtf.argumentExprs {
-		toTest := strings.Trim(expr.String(), "'")
-		tableIter, err := trtf.getDoltTestsData(toTest)
-		if err != nil {
-			return err
-		}
-
-		for {
-			row, err := tableIter.Next(trtf.ctx)
-			if err == io.EOF {
-				break
-			} else if err != nil {
-				return err
-			}
-			var failMsg string
-
-			query, err := actions.GetStringColAsString(trtf.ctx, row[2])
-			if err != nil {
-				return err
-			}
-			assertion, err := actions.GetStringColAsString(trtf.ctx, row[3])
-			if err != nil {
-				return err
-			}
-			comparison, err := actions.GetStringColAsString(trtf.ctx, row[4])
-			if err != nil {
-				return err
-			}
-			value, err := actions.GetStringColAsString(trtf.ctx, row[5])
-			if err != nil {
-				return err
-			}
-
-			checkMultipleQueries := strings.Trim(strings.TrimSpace(query), ";")
-			if strings.Contains(checkMultipleQueries, ";") {
-				failMsg = fmt.Sprintf("Cannot execute multiple queries")
-			} else {
-				isWrite, err := IsWriteQuery(query, trtf.ctx, trtf.catalog)
-				if err != nil {
-					return err
-				}
-				if isWrite {
-					failMsg = "Cannot execute write queries"
-				} else {
-					_, queryResult, _, err := trtf.engine.Query(trtf.ctx, query)
-					if err != nil {
-						failMsg = fmt.Sprintf("Query error: %s", err.Error())
-					} else {
-						failMsg, err = actions.AssertData(trtf.ctx, assertion, comparison, value, &queryResult)
-						if err != nil {
-							return err
-						}
-					}
-				}
-			}
-
-			var result testResult
-			result.testName = row[0].(string)
-			result.groupName, err = actions.GetStringColAsString(trtf.ctx, row[1])
-			if err != nil {
-				return err
-			}
-			result.query = query
-			result.status = "PASS"
-			if failMsg != "" {
-				result.status = "FAIL"
-				result.error = failMsg
-			}
-			trtf.results = append(trtf.results, result)
-		}
-	}
-
-	return nil
 }
 
 func (trtf *TestsRunTableFunction) getDoltTestsData(toTest string) (sql.RowIter, error) {
@@ -323,7 +281,7 @@ func (trtf *TestsRunTableFunction) getDoltTestsData(toTest string) (sql.RowIter,
 		return iter, nil
 	}
 
-	// Otherwise we need avoid sql injection
+	// Otherwise we need to bind the query
 	testName := strings.Join(testData[1:], " ")
 	bv, err := sqltypes.BuildBindVariable(testName)
 	if err != nil {
@@ -361,6 +319,44 @@ func IsWriteQuery(query string, ctx *sql.Context, catalog sql.Catalog) (bool, er
 	if err != nil {
 		return false, err
 	}
-
 	return !node.IsReadOnly(), nil
+}
+
+func parseDoltTestsRow(ctx *sql.Context, row sql.Row) (testName, groupName, query, assertion, comparison, value string, err error) {
+	if testName, err = actions.GetStringColAsString(ctx, row[0]); err != nil {
+		return
+	}
+	if groupName, err = actions.GetStringColAsString(ctx, row[1]); err != nil {
+		return
+	}
+	if query, err = actions.GetStringColAsString(ctx, row[2]); err != nil {
+		return
+	}
+	if assertion, err = actions.GetStringColAsString(ctx, row[3]); err != nil {
+		return
+	}
+	if comparison, err = actions.GetStringColAsString(ctx, row[4]); err != nil {
+		return
+	}
+	if value, err = actions.GetStringColAsString(ctx, row[5]); err != nil {
+		return
+	}
+
+	return testName, groupName, query, assertion, comparison, value, nil
+}
+
+func validateQuery(ctx *sql.Context, catalog sql.Catalog, query string) (string, error) {
+	//We first check if the query contains multiple queries
+	if statements, err := sqlparser.SplitStatementToPieces(query); err != nil {
+		return "", err
+	} else if len(statements) > 1 {
+		return "Cannot execute multiple queries", nil
+	}
+
+	if isWrite, err := IsWriteQuery(query, ctx, catalog); err != nil {
+		return "", nil
+	} else if isWrite {
+		return "Cannot execute write queries", nil
+	}
+	return "", nil
 }
