@@ -28,7 +28,13 @@ func GetInt8ColAsBool(col interface{}) (bool, error) {
 	case int8:
 		return v != 0, nil
 	case string:
-		return v != "0", nil
+		if v == "ON" || v == "1" {
+			return true, nil
+		} else if v == "OFF" || v == "0" {
+			return false, nil
+		} else {
+			return false, fmt.Errorf("unexpected value for boolean var: %v", v)
+		}
 	default:
 		return false, fmt.Errorf("unexpected type %T, was expecting int8", v)
 	}
