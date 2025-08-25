@@ -57,6 +57,7 @@ func IsValidIdentifier(name string) bool {
 // Table is a struct which holds row data, as well as a reference to its schema.
 type Table struct {
 	table            durable.Table
+	tableData        durable.Index
 	overriddenSchema schema.Schema
 }
 
@@ -442,7 +443,14 @@ func (t *Table) GetNomsRowData(ctx context.Context) (types.Map, error) {
 
 // GetRowData retrieves the underlying map which is a map from a primary key to a list of field values.
 func (t *Table) GetRowData(ctx context.Context) (durable.Index, error) {
-	return t.table.GetTableRows(ctx)
+	if t.tableData == nil {
+		var err error
+		t.tableData, err = t.table.GetTableRows(ctx)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return t.tableData, nil
 }
 
 func (t *Table) GetRowDataWithDescriptors(ctx context.Context, kd, vd val.TupleDesc) (durable.Index, error) {
