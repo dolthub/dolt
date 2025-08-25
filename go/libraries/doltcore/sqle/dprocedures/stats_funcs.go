@@ -53,7 +53,7 @@ func statsFunc(fn func(ctx *sql.Context, args ...string) (interface{}, error)) f
 
 // StatsInfo gives a summary of the current coordinator stats.
 type StatsInfo struct {
-	Backing           string `json:"backing"`
+	Active            bool   `json:"active"`
 	DbCnt             int    `json:"dbCnt"`
 	StorageBucketCnt  int    `json:"storageBucketCnt"`
 	CachedBucketCnt   int    `json:"cachedBucketCnt"`
@@ -62,7 +62,7 @@ type StatsInfo struct {
 	StatCnt           int    `json:"statCnt"`
 	GcCnt             int    `json:"gcCnt,omitempty"`
 	GenCnt            int    `json:"genCnt,omitempty"`
-	Active            bool   `json:"active"`
+	Backing           string `json:"backing"`
 }
 
 // ToJson returns stats info as a json string. Use the |short|
