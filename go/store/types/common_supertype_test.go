@@ -153,8 +153,8 @@ func TestContainCommonSupertype(t *testing.T) {
 
 		// struct{b:Bool} & struct{b?:Bool} -> true
 		{
-			mustType(MakeStructType("", StructField{PrimitiveTypeMap[BoolKind],"b", false})),
-			mustType(MakeStructType("", StructField{PrimitiveTypeMap[BoolKind],"b", true})),
+			mustType(MakeStructType("", StructField{PrimitiveTypeMap[BoolKind], "b", false})),
+			mustType(MakeStructType("", StructField{PrimitiveTypeMap[BoolKind], "b", true})),
 			true,
 		},
 
@@ -174,9 +174,9 @@ func TestContainCommonSupertype(t *testing.T) {
 			)),
 			mustType(MakeStructType("",
 				StructField{mustType(MakeStructType("A",
-					StructField{ mustType(MakeStructType("",
-						StructField{MakeCycleType("A"),"a",false},
-					)), "a",false},
+					StructField{mustType(MakeStructType("",
+						StructField{MakeCycleType("A"), "a", false},
+					)), "a", false},
 				)), "a", false},
 			)),
 			true,

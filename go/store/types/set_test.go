@@ -1321,8 +1321,8 @@ func TestSetWithStructShouldHaveOptionalFields(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(
 		mustType(MakeSetType(mustType(MakeStructType("Foo",
-			StructField{PrimitiveTypeMap[FloatKind],"a", false},
-			StructField{PrimitiveTypeMap[StringKind],"b", true},
+			StructField{PrimitiveTypeMap[FloatKind], "a", false},
+			StructField{PrimitiveTypeMap[StringKind], "b", true},
 		),
 		))).Equals(mustType(TypeOf(list))))
 }

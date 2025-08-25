@@ -105,8 +105,8 @@ func TestGenericStructSet(t *testing.T) {
 	s4, err := s.Set("b", Float(42))
 	require.NoError(t, err)
 	assert.True(mustType(MakeStructType("S3",
-		StructField{PrimitiveTypeMap[FloatKind], "b",  false},
-		StructField{PrimitiveTypeMap[StringKind], "o",  false},
+		StructField{PrimitiveTypeMap[FloatKind], "b", false},
+		StructField{PrimitiveTypeMap[StringKind], "o", false},
 	)).Equals(mustType(TypeOf(s4))))
 
 	// Adds a new field
