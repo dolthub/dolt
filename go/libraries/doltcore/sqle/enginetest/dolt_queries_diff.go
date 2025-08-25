@@ -4004,7 +4004,7 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "dolt_patch: integer type chain widening generates MODIFY", 
+		Name: "dolt_patch: integer type chain widening generates MODIFY",
 		SetUpScript: []string{
 			"CREATE TABLE chain_test (id INT PRIMARY KEY, col1 TINYINT)",
 			"CALL dolt_add('.')",
@@ -4075,13 +4075,13 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 				},
 			},
 			{
-				Query: "SELECT COUNT(*) FROM dolt_patch('main', 'index_compat_after') WHERE diff_type = 'schema' AND statement LIKE '%INDEX%'",
+				Query:    "SELECT COUNT(*) FROM dolt_patch('main', 'index_compat_after') WHERE diff_type = 'schema' AND statement LIKE '%INDEX%'",
 				Expected: []sql.Row{{0}},
 			},
 		},
 	},
 	{
-		Name: "dolt_patch: incompatible type changes with indexes do not generate spurious index operations", 
+		Name: "dolt_patch: incompatible type changes with indexes do not generate spurious index operations",
 		SetUpScript: []string{
 			"CREATE TABLE idx_incompat_test (id INT PRIMARY KEY, col1 VARCHAR(50), KEY idx_col1 (col1))",
 			"CALL dolt_add('.')",
@@ -4102,7 +4102,7 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 				},
 			},
 			{
-				Query: "SELECT COUNT(*) FROM dolt_patch('main', 'incompat_index_branch') WHERE diff_type = 'schema' AND statement LIKE '%INDEX%'",
+				Query:    "SELECT COUNT(*) FROM dolt_patch('main', 'incompat_index_branch') WHERE diff_type = 'schema' AND statement LIKE '%INDEX%'",
 				Expected: []sql.Row{{1}},
 			},
 		},
@@ -4131,19 +4131,18 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 				},
 			},
 			{
-				Query: "SELECT statement FROM dolt_patch('main', 'customer_unsigned') WHERE diff_type = 'schema' ORDER BY statement_order", 
+				Query: "SELECT statement FROM dolt_patch('main', 'customer_unsigned') WHERE diff_type = 'schema' ORDER BY statement_order",
 				Expected: []sql.Row{
 					{"ALTER TABLE `table_name` DROP `field_change_sign`;"},
 					{"ALTER TABLE `table_name` ADD `field_change_sign` bigint unsigned DEFAULT NULL;"},
 				},
 			},
 			{
-				Query: "SELECT COUNT(*) FROM dolt_patch('main', 'customer_unsigned') WHERE diff_type = 'schema' AND statement LIKE '%INDEX%'",
+				Query:    "SELECT COUNT(*) FROM dolt_patch('main', 'customer_unsigned') WHERE diff_type = 'schema' AND statement LIKE '%INDEX%'",
 				Expected: []sql.Row{{0}},
 			},
 		},
 	},
-
 }
 
 var UnscopedDiffSystemTableScriptTests = []queries.ScriptTest{

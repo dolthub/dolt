@@ -107,20 +107,20 @@ func pairColumns(fromSch, toSch schema.Schema) (map[uint64]columnPair, []uint64)
 	// Try name-based pairing for remaining unmatched columns with compatible types
 	if len(unpairedFrom) > 0 && len(unpairedTo) > 0 {
 		checker := typecompatibility.NewTypeCompatabilityCheckerForStorageFormat(storetypes.Format_Default)
-		
+
 		for _, fromCol := range unpairedFrom {
 			for _, toCol := range unpairedTo {
 				if fromCol.Name == toCol.Name {
 					compatInfo := checker.IsTypeChangeCompatible(fromCol.TypeInfo, toCol.TypeInfo)
-					
+
 					if compatInfo.Compatible {
 						// Remove the unpaired entries
 						delete(colPairMap, fromCol.Tag)
 						delete(colPairMap, toCol.Tag)
-						
+
 						// Create a new paired entry using the fromCol tag (preserves original position)
 						colPairMap[fromCol.Tag] = columnPair{&fromCol, &toCol}
-						
+
 						// Remove the toCol tag from unionTags since we're using fromCol tag
 						for i, tag := range unionTags {
 							if tag == toCol.Tag {
