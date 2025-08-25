@@ -20,6 +20,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	gms "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/planbuilder"
 	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/sqltypes"
 	"github.com/dolthub/vitess/go/vt/sqlparser"
@@ -43,17 +44,17 @@ type testResult struct {
 }
 
 type TestsRunTableFunction struct {
-	ctx      *sql.Context
-	catalog  sql.Catalog
-	database sql.Database
-	argument sql.Expression
-	engine   *gms.Engine
-	results  []testResult
+	ctx           *sql.Context
+	catalog       sql.Catalog
+	database      sql.Database
+	argumentExprs []sql.Expression
+	engine        *gms.Engine
+	results       []testResult
 }
 
 var testRunTableSchema = sql.Schema{
-	&sql.Column{Name: "test_group_name", Type: types.Text},
 	&sql.Column{Name: "test_name", Type: types.Text},
+	&sql.Column{Name: "test_group_name", Type: types.Text},
 	&sql.Column{Name: "query", Type: types.Text},
 	&sql.Column{Name: "status", Type: types.Text},
 	&sql.Column{Name: "error", Type: types.Text},
@@ -81,92 +82,7 @@ func (trtf *TestsRunTableFunction) WithCatalog(c sql.Catalog) (sql.TableFunction
 	}
 	newInstance.engine = gms.NewDefault(pro)
 
-	err := newInstance.queryAndAssert()
-	if err != nil {
-		return nil, err
-	}
-
 	return &newInstance, nil
-}
-
-func (trtf *TestsRunTableFunction) queryAndAssert() error {
-	tableIter, err := trtf.getDoltTestsData()
-	if err != nil {
-		return err
-	}
-
-	for {
-		row, err := tableIter.Next(trtf.ctx)
-		if err == io.EOF {
-			break
-		} else if err != nil {
-			return err
-		}
-		var failMsg string
-
-		query, err := actions.GetStringColAsString(trtf.ctx, row[2])
-		if err != nil {
-			return err
-		}
-		assertion, err := actions.GetStringColAsString(trtf.ctx, row[3])
-		if err != nil {
-			return err
-		}
-
-		if !strings.Contains(strings.ToLower(query), "select") && !strings.Contains(strings.ToLower(query), "show") {
-			failMsg = "Cannot execute write queries"
-		} else {
-			_, queryResult, _, err := trtf.engine.Query(trtf.ctx, query)
-			if err != nil {
-				failMsg = fmt.Sprintf("Query error: %s", err.Error())
-			} else {
-				failMsg, err = actions.AssertData(trtf.ctx, assertion, &queryResult)
-				if err != nil {
-					return err
-				}
-			}
-		}
-
-		var result testResult
-		result.groupName = row[0].(string)
-		result.testName = row[1].(string)
-		result.query = query
-		result.status = "PASS"
-		if failMsg != "" {
-			result.status = "FAIL"
-			result.error = failMsg
-		}
-
-		trtf.results = append(trtf.results, result)
-	}
-	return nil
-}
-
-func (trtf *TestsRunTableFunction) getDoltTestsData() (sql.RowIter, error) {
-	testName := strings.ReplaceAll(trtf.argument.String(), "'", "")
-	bv, err := sqltypes.BuildBindVariable(testName)
-	if err != nil {
-		return nil, err
-	}
-	value, err := sqltypes.BindVariableToValue(bv)
-	if err != nil {
-		return nil, err
-	}
-	expr, err := sqlparser.ExprFromValue(value)
-	if err != nil {
-		return nil, err
-	}
-
-	bindingsMap := make(map[string]sqlparser.Expr)
-	bindingsMap["v1"] = expr
-
-	qry := fmt.Sprintf("SELECT * FROM dolt_tests WHERE test_group = ?")
-	_, iter, _, err := trtf.engine.QueryWithBindings(trtf.ctx, qry, nil, bindingsMap, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return iter, nil
 }
 
 // Database implements the sql.Databaser interface
@@ -183,28 +99,28 @@ func (trtf *TestsRunTableFunction) WithDatabase(database sql.Database) (sql.Node
 
 // Expressions implements the sql.Expressioner interface
 func (trtf *TestsRunTableFunction) Expressions() []sql.Expression {
-	return []sql.Expression{trtf.argument}
+	return trtf.argumentExprs
 }
 
 // WithExpressions implements the sql.Expressioner interface
-func (trtf *TestsRunTableFunction) WithExpressions(expression ...sql.Expression) (sql.Node, error) {
-	if len(expression) != 1 {
-		return nil, sql.ErrInvalidArgumentNumber.New(trtf.Name(), "1", len(expression))
+func (trtf *TestsRunTableFunction) WithExpressions(expressions ...sql.Expression) (sql.Node, error) {
+	if len(expressions) < 1 {
+		return nil, sql.ErrInvalidArgumentNumber.New(trtf.Name(), "1 or more", len(expressions))
 	}
 
-	for _, expr := range expression {
+	for _, expr := range expressions {
 		if !expr.Resolved() {
 			return nil, ErrInvalidNonLiteralArgument.New(trtf.Name(), expr.String())
-		}
+		} //TODO Do we need to do this check? I don't really understand what this means.
 
+		// We don't allow functions as arguments to dolt_test_run
 		if _, ok := expr.(sql.FunctionExpression); ok {
 			return nil, ErrInvalidNonLiteralArgument.New(trtf.Name(), expr.String())
 		}
 	}
 
 	newTrtf := *trtf
-	newTrtf.argument = expression[0]
-
+	newTrtf.argumentExprs = expressions
 	return &newTrtf, nil
 }
 
@@ -233,7 +149,12 @@ func (trtf *TestsRunTableFunction) Schema() sql.Schema {
 
 // Resolved implements the sql.Resolvable interface
 func (trtf *TestsRunTableFunction) Resolved() bool {
-	return trtf.argument.Resolved()
+	for _, expr := range trtf.argumentExprs {
+		if !expr.Resolved() {
+			return false
+		}
+	}
+	return true
 }
 
 func (trtf *TestsRunTableFunction) IsReadOnly() bool {
@@ -242,7 +163,17 @@ func (trtf *TestsRunTableFunction) IsReadOnly() bool {
 
 // String implements the Stringer interface
 func (trtf *TestsRunTableFunction) String() string {
-	return fmt.Sprintf("DOLT_TEST_RUN('%s')", trtf.argument.String())
+	return fmt.Sprintf("DOLT_TEST_RUN(%s)", trtf.getOptionsString())
+}
+
+// getOptionsString builds comma-separated argument list for display.
+func (trtf *TestsRunTableFunction) getOptionsString() string {
+	var options []string
+	for _, expr := range trtf.argumentExprs {
+		options = append(options, expr.String())
+	}
+
+	return strings.Join(options, ",")
 }
 
 // Name impelements the sql.TableFunction interface
@@ -252,13 +183,14 @@ func (trtf *TestsRunTableFunction) Name() string {
 
 // RowIter implements the sql.Node interface
 func (trtf *TestsRunTableFunction) RowIter(_ *sql.Context, _ sql.Row) (sql.RowIter, error) {
-	if len(trtf.results) == 0 {
-		return nil, fmt.Errorf("could not find tests for test group with name: %s", trtf.argument.String())
+	err := trtf.queryAndAssert()
+	if err != nil {
+		return nil, err
 	}
 
 	var rows []sql.Row
 	for _, result := range trtf.results {
-		newRow := sql.NewRow(result.groupName, result.testName, result.query, result.status, result.error)
+		newRow := sql.NewRow(result.testName, result.groupName, result.query, result.status, result.error)
 		rows = append(rows, newRow)
 	}
 
@@ -277,4 +209,158 @@ func (trtf *TestsRunTableFunction) DataLength(ctx *sql.Context) (uint64, error) 
 
 func (trtf *TestsRunTableFunction) RowCount(_ *sql.Context) (uint64, bool, error) {
 	return testsRunDefaultRowCount, false, nil
+}
+
+func (trtf *TestsRunTableFunction) queryAndAssert() error {
+	for _, expr := range trtf.argumentExprs {
+		toTest := strings.Trim(expr.String(), "'")
+		tableIter, err := trtf.getDoltTestsData(toTest)
+		if err != nil {
+			return err
+		}
+
+		for {
+			row, err := tableIter.Next(trtf.ctx)
+			if err == io.EOF {
+				break
+			} else if err != nil {
+				return err
+			}
+			var failMsg string
+
+			query, err := actions.GetStringColAsString(trtf.ctx, row[2])
+			if err != nil {
+				return err
+			}
+			assertion, err := actions.GetStringColAsString(trtf.ctx, row[3])
+			if err != nil {
+				return err
+			}
+			comparison, err := actions.GetStringColAsString(trtf.ctx, row[4])
+			if err != nil {
+				return err
+			}
+			value, err := actions.GetStringColAsString(trtf.ctx, row[5])
+			if err != nil {
+				return err
+			}
+
+			checkMultipleQueries := strings.Trim(strings.TrimSpace(query), ";")
+			if strings.Contains(checkMultipleQueries, ";") {
+				failMsg = fmt.Sprintf("Cannot execute multiple queries")
+			} else {
+				isWrite, err := IsWriteQuery(query, trtf.ctx, trtf.catalog)
+				if err != nil {
+					return err
+				}
+				if isWrite {
+					failMsg = "Cannot execute write queries"
+				} else {
+					_, queryResult, _, err := trtf.engine.Query(trtf.ctx, query)
+					if err != nil {
+						failMsg = fmt.Sprintf("Query error: %s", err.Error())
+					} else {
+						failMsg, err = actions.AssertData(trtf.ctx, assertion, comparison, value, &queryResult)
+						if err != nil {
+							return err
+						}
+					}
+				}
+			}
+
+			var result testResult
+			result.testName = row[0].(string)
+			result.groupName, err = actions.GetStringColAsString(trtf.ctx, row[1])
+			if err != nil {
+				return err
+			}
+			result.query = query
+			result.status = "PASS"
+			if failMsg != "" {
+				result.status = "FAIL"
+				result.error = failMsg
+			}
+			trtf.results = append(trtf.results, result)
+		}
+	}
+
+	return nil
+}
+
+func (trtf *TestsRunTableFunction) getDoltTestsData(toTest string) (sql.RowIter, error) {
+	testData := strings.Split(toTest, " ")
+	if len(testData) == 0 {
+		return nil, fmt.Errorf("invalid inputs")
+	}
+
+	var qry string
+	switch testData[0] {
+	case "*":
+		qry = "SELECT * FROM dolt_tests"
+		if len(testData) != 1 {
+			return nil, fmt.Errorf("invalid inputs to dolt_test_run: %s", toTest)
+		}
+	case "test":
+		if len(testData) < 2 {
+			return nil, fmt.Errorf("invalid inputs to dolt_test_run: %s", toTest)
+		}
+		qry = "SELECT * FROM dolt_tests WHERE test_name = ?"
+	case "group":
+		if len(testData) < 2 {
+			return nil, fmt.Errorf("invalid inputs to dolt_test_run: %s", toTest)
+		}
+		qry = "SELECT * FROM dolt_tests WHERE test_group = ?"
+	default:
+		return nil, fmt.Errorf("invalid input to dolt_test_run: %s", toTest)
+	}
+
+	// If we're using all tests, we can just query the table broadly
+	if testData[0] == "*" {
+		_, iter, _, err := trtf.engine.Query(trtf.ctx, qry)
+		if err != nil {
+			return nil, err
+		}
+		return iter, nil
+	}
+
+	// Otherwise we need avoid sql injection
+	testName := strings.Join(testData[1:], " ")
+	bv, err := sqltypes.BuildBindVariable(testName)
+	if err != nil {
+		return nil, err
+	}
+	value, err := sqltypes.BindVariableToValue(bv)
+	if err != nil {
+		return nil, err
+	}
+	expr, err := sqlparser.ExprFromValue(value)
+	if err != nil {
+		return nil, err
+	}
+
+	bindingsMap := make(map[string]sqlparser.Expr)
+	bindingsMap["v1"] = expr
+
+	_, iter, _, err := trtf.engine.QueryWithBindings(trtf.ctx, qry, nil, bindingsMap, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return iter, nil
+}
+
+func IsWriteQuery(query string, ctx *sql.Context, catalog sql.Catalog) (bool, error) {
+	builder := planbuilder.New(ctx, catalog, nil, nil)
+
+	parsed, _, _, err := sql.GlobalParser.Parse(ctx, query, false)
+	if err != nil {
+		return false, err
+	}
+
+	node, _, err := builder.BindOnly(parsed, query, nil)
+	if err != nil {
+		return false, err
+	}
+
+	return !node.IsReadOnly(), nil
 }

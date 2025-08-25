@@ -132,27 +132,124 @@ var DoltTestTableScripts = []queries.ScriptTest{
 
 var DoltTestRunFunctionScripts = []queries.ScriptTest{
 	{
-		Name: "Can run dolt unit tests on each assertion type",
+		Name: "No args into dolt test run",
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "SELECT * FROM dolt_test_run()",
+				ExpectedErrStr: "function 'dolt_test_run' expected 1 or more arguments, 0 received",
+			},
+		},
+	},
+	{
+		Name: "Invalid args into dolt test run",
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "SELECT * FROM dolt_test_run('invalid')",
+				ExpectedErrStr: "invalid input to dolt_test_run: invalid",
+			},
+		},
+	},
+	{
+		Name: "Valid and invalid arguments into dolt test run",
 		SetUpScript: []string{
-			"CREATE TABLE test (i int)",
-			"INSERT INTO test VALUES (1)",
-			"INSERT INTO dolt_tests VALUES ('row tests', 'should pass', 'show tables;', 'expected_rows == 1'), ('row tests', 'should fail', 'show tables;', 'expected_rows == 2')",
-			"INSERT INTO dolt_tests VALUES ('column tests', 'should pass', 'select * from test;', 'expected_columns == 1'), ('column tests', " +
-				"'should fail', 'select * from test;', 'expected_columns == 2')",
+			"INSERT INTO dolt_tests VALUES ('valid argument', 'argument tests', 'show tables;', 'expected_rows', '==', '0')",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query: "SELECT * FROM dolt_test_run('row tests')",
+				Query:          "SELECT * FROM dolt_test_run('test valid argument', 'invalid')",
+				ExpectedErrStr: "invalid input to dolt_test_run: invalid",
+			},
+		},
+	},
+	{
+		Name: "Can expect rows and columns",
+		SetUpScript: []string{
+			"INSERT INTO dolt_tests VALUES ('should pass rows', 'row tests', 'show tables;', 'expected_rows', '==', '0'), " +
+				"('should fail rows', 'row tests', 'show tables;', 'expected_rows', '!=', '0'), " +
+				"('should pass columns', 'column tests', 'show tables;', 'expected_columns', '==', '0'), " +
+				"('should fail columns', 'column tests', 'show tables;', 'expected_columns', '!=', '0')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT * FROM dolt_test_run('group row tests')",
 				Expected: []sql.Row{
-					{"row tests", "should fail", "show tables;", "FAIL", "Assertion failed: expected row count equal to 2, got 1"},
-					{"row tests", "should pass", "show tables;", "PASS", ""},
+					{"should fail rows", "row tests", "show tables;", "FAIL", "Assertion failed: expected row count not equal to 0, got 0"},
+					{"should pass rows", "row tests", "show tables;", "PASS", ""},
 				},
 			},
 			{
-				Query: "SELECT * FROM dolt_test_run('column tests')",
+				Query: "SELECT * FROM dolt_test_run('group column tests')",
 				Expected: []sql.Row{
-					{"column tests", "should fail", "select * from test;", "FAIL", "Assertion failed: expected column count equal to 2, got 1"},
-					{"column tests", "should pass", "select * from test;", "PASS", ""},
+					{"should fail columns", "column tests", "show tables;", "FAIL", "Assertion failed: expected column count not equal to 0, got 0"},
+					{"should pass columns", "column tests", "show tables;", "PASS", ""},
+				},
+			},
+		},
+	},
+	{
+		Name: "Can expect single integer",
+		SetUpScript: []string{
+			"CREATE TABLE test_table (number int)",
+			"INSERT INTO test_table VALUES (1)",
+			"INSERT INTO dolt_tests VALUES ('should fail', 'single value tests', 'select number from test_table;', 'expected_single_value', '!=','1'), " +
+				"('should pass', 'single value tests', 'select number from test_table;', 'expected_single_value', '==', '1')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT * FROM dolt_test_run('group single value tests')",
+				Expected: []sql.Row{
+					{"should fail", "single value tests", "select number from test_table;", "FAIL", "Assertion failed: expected single value not equal to 1, got 1"},
+					{"should pass", "single value tests", "select number from test_table;", "PASS", ""},
+				},
+			},
+		},
+	},
+	{
+		Name: "Can expect single string",
+		SetUpScript: []string{
+			"CREATE TABLE test_table (number text)",
+			"INSERT INTO test_table VALUES ('String')",
+			"INSERT INTO dolt_tests VALUES ('should pass', 'single value tests', 'select number from test_table;', 'expected_single_value', '==', 'String'), " +
+				"('should fail', 'single value tests', 'select number from test_table;', 'expected_single_value', '!=', 'String')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT * FROM dolt_test_run('group single value tests')",
+				Expected: []sql.Row{
+					{"should fail", "single value tests", "select number from test_table;", "FAIL", "Assertion failed: expected single value not equal to String, got String"},
+					{"should pass", "single value tests", "select number from test_table;", "PASS", ""},
+				},
+			},
+		},
+	},
+	{
+		Name: "Can expect single date",
+		SetUpScript: []string{
+			"CREATE TABLE test (d DATE)",
+			"INSERT INTO test VALUES ('2025-08-22')",
+			"INSERT INTO dolt_tests VALUES ('should pass', 'single value tests', 'select * from test;', 'expected_single_value', '<', '2025-08-23'), " +
+				"('should fail', 'single value tests', 'select * from test;', 'expected_single_value', '>', '2025-08-23')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT * FROM dolt_test_run('group single value tests')",
+				Expected: []sql.Row{
+					{"should pass", "single value tests", "select * from test;", "PASS", ""},
+					{"should fail", "single value tests", "select * from test;", "FAIL", "Assertion failed: expected single value greater than 2025-08-23, got 2025-08-22"},
+				},
+			},
+		},
+	},
+	{
+		Name: "Single value will not accept multiple values",
+		SetUpScript: []string{
+			"INSERT INTO dolt_tests VALUES ('should fail', '', 'select * from dolt_log;', 'expected_single_value', '==', '0')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT * FROM dolt_test_run('test should fail')",
+				Expected: []sql.Row{
+					{"should fail", "", "select * from dolt_log;", "FAIL", "expected_single_value expects exactly one cell"},
 				},
 			},
 		},
@@ -161,80 +258,78 @@ var DoltTestRunFunctionScripts = []queries.ScriptTest{
 		Name: "Can run dolt unit tests on each comparison type",
 		SetUpScript: []string{
 			"CREATE TABLE test (i int)",
-			"INSERT INTO dolt_tests VALUES ('comparison tests', 'equal to', 'show tables;', 'expected_rows == 1'), " +
-				"('comparison tests', 'not equal to', 'show tables;', 'expected_rows != 2'), " +
-				"('comparison tests', 'less than', 'show tables;', 'expected_rows < 2'), " +
-				"('comparison tests', 'less than or equal to', 'show tables;', 'expected_rows <= 1'), " +
-				"('comparison tests', 'greater than', 'show tables;', 'expected_rows > 0'), " +
-				"('comparison tests', 'greater than or equal to', 'show tables;','expected_rows >= 0')",
+			"INSERT INTO dolt_tests VALUES ('equal to', 'comparison tests', 'show tables;', 'expected_rows', '==', '1'), " +
+				"('not equal to', 'comparison tests', 'show tables;', 'expected_rows', '!=', '2'), " +
+				"('less than', 'comparison tests', 'show tables;', 'expected_rows', '<', '2'), " +
+				"('less than or equal to', 'comparison tests', 'show tables;', 'expected_rows', '<=', '1'), " +
+				"('greater than', 'comparison tests', 'show tables;', 'expected_rows', '>', '0'), " +
+				"('greater than or equal to', 'comparison tests', 'show tables;','expected_rows', '>=', '0')",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query: "SELECT * FROM dolt_test_run('comparison tests')",
+				Query: "SELECT * FROM dolt_test_run('group comparison tests')",
 				Expected: []sql.Row{
-					{"comparison tests", "equal to", "show tables;", "PASS", ""},
-					{"comparison tests", "greater than", "show tables;", "PASS", ""},
-					{"comparison tests", "greater than or equal to", "show tables;", "PASS", ""},
-					{"comparison tests", "less than", "show tables;", "PASS", ""},
-					{"comparison tests", "less than or equal to", "show tables;", "PASS", ""},
-					{"comparison tests", "not equal to", "show tables;", "PASS", ""},
+					{"equal to", "comparison tests", "show tables;", "PASS", ""},
+					{"greater than", "comparison tests", "show tables;", "PASS", ""},
+					{"greater than or equal to", "comparison tests", "show tables;", "PASS", ""},
+					{"less than", "comparison tests", "show tables;", "PASS", ""},
+					{"less than or equal to", "comparison tests", "show tables;", "PASS", ""},
+					{"not equal to", "comparison tests", "show tables;", "PASS", ""},
 				},
 			},
 		},
 	},
 	{
-		Name: "Bad queries fail gracefully when running dolt unit tests",
+		Name: "Can use wildcard, multiple arguments to run all dolt unit tests",
 		SetUpScript: []string{
-			"INSERT INTO dolt_tests VALUES ('bad query tests', 'bad query test', 'select * from invalid;', 'expected_rows == 0')",
+			"INSERT INTO dolt_tests VALUES ('grouped test', 'wildcard tests', 'show tables;', 'expected_rows', '==', '0'), " +
+				"('second grouped test', 'wildcard tests', 'show tables;', 'expected_rows', '==', '0'), " +
+				"('ungrouped test', '', 'show tables;', 'expected_rows', '==', '0')",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query: "SELECT * FROM dolt_test_run('bad query tests')",
+				Query: "SELECT * FROM dolt_test_run('*')",
 				Expected: []sql.Row{
-					{"bad query tests", "bad query test", "select * from invalid;", "FAIL", "Query error: table not found: invalid"},
+					{"grouped test", "wildcard tests", "show tables;", "PASS", ""},
+					{"second grouped test", "wildcard tests", "show tables;", "PASS", ""},
+					{"ungrouped test", "", "show tables;", "PASS", ""},
+				},
+			},
+			{
+				Query: "SELECT * FROM dolt_test_run('test ungrouped test', 'group wildcard tests')",
+				Expected: []sql.Row{
+					{"grouped test", "wildcard tests", "show tables;", "PASS", ""},
+					{"second grouped test", "wildcard tests", "show tables;", "PASS", ""},
+					{"ungrouped test", "", "show tables;", "PASS", ""},
 				},
 			},
 		},
 	},
 	{
-		Name: "Cannot use write queries when running dolt unit tests",
+		Name: "Can not run multiple queries in one test",
 		SetUpScript: []string{
-			"CREATE TABLE test (i int)",
-			"INSERT INTO dolt_tests VALUES ('write queries', 'insert query', 'insert into dolt_tests values (1);', 'expected_rows == 0'), " +
-				"('write queries', 'drop table query', 'drop table test;', 'expected_rows == 0')",
+			"INSERT INTO dolt_tests VALUES ('should fail', '', 'select * from dolt_log; show tables;', 'expected_orws', '==', '0')",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query: "SELECT * FROM dolt_test_run('write queries')",
+				Query: "SELECT * FROM dolt_test_run('test should fail')",
 				Expected: []sql.Row{
-					{"write queries", "drop table query", "drop table test;", "FAIL", "Cannot execute write queries"},
-					{"write queries", "insert query", "insert into dolt_tests values (1);", "FAIL", "Cannot execute write queries"},
+					{"should fail", "", "select * from dolt_log; show tables;", "FAIL", "Cannot execute multiple queries"},
 				},
 			},
 		},
 	},
 	{
-		Name: "Invalid assertions",
+		Name: "Can not test write queries",
 		SetUpScript: []string{
-			"INSERT INTO dolt_tests VALUES ('bad assertions', 'nonexistent assertion', 'show tables;', 'invalid == 0'), " +
-				"('bad assertions', 'bad assertion formatting', 'show tables;', 'expected_rows==0')",
+			"INSERT INTO dolt_tests VALUES ('should fail', '', 'create table test (i int)', 'expected_rows', '==', '1')",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query: "SELECT * FROM dolt_test_run('bad assertions')",
+				Query: "SELECT * FROM dolt_test_run('test should fail')",
 				Expected: []sql.Row{
-					{"bad assertions", "bad assertion formatting", "show tables;", "FAIL", "Unexpected assertion format"},
-					{"bad assertions", "nonexistent assertion", "show tables;", "FAIL", "'invalid' is not a valid assertion type"},
+					{"should fail", "", "create table test (i int)", "FAIL", "Cannot execute write queries"},
 				},
-			},
-		},
-	},
-	{
-		Name: "nonexistant test suite when running dolt unit tests",
-		Assertions: []queries.ScriptTestAssertion{
-			{
-				Query:          "SELECT * FROM dolt_test_run('invalid')",
-				ExpectedErrStr: "could not find tests for test group with name: 'invalid'",
 			},
 		},
 	},
