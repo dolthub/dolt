@@ -367,8 +367,8 @@ func TestReadTableFooter(t *testing.T) {
 
 // fakeChunk is chunk with a faked address
 type fakeChunk struct {
-	address hash.Hash
 	data    []byte
+	address hash.Hash
 }
 
 var fakeData = []byte("supercalifragilisticexpialidocious")

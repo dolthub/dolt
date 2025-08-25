@@ -21,15 +21,15 @@ import (
 // MutexMap holds a dynamic number of mutexes identified by keys. When a mutex is no longer needed, it's removed from
 // the map.
 type MutexMap struct {
-	mu           sync.Mutex // Access to the map itself must be synchronized.
 	keyedMutexes map[interface{}]*mapMutex
+	mu           sync.Mutex
 }
 
 type mapMutex struct {
 	key      interface{}
-	mu       sync.Mutex
 	parent   *MutexMap
 	refcount int
+	mu       sync.Mutex
 }
 
 func NewMutexMap() *MutexMap {

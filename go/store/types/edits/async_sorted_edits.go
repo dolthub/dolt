@@ -27,20 +27,17 @@ import (
 // send them in batches to be sorted.  Once all edits have been added the batches of edits can then
 // be merge sorted together.
 type AsyncSortedEdits struct {
+	vr              types.ValueReader
+	sortCtx         context.Context
+	sortWork        chan types.KVPSort
+	sortGroup       *errgroup.Group
+	sema            *semaphore.Weighted
+	accumulating    []types.KVP
+	sortedColls     []*KVPCollection
 	editsAdded      int
 	sliceSize       int
 	sortConcurrency int
 	closed          bool
-
-	vr types.ValueReader
-
-	accumulating []types.KVP
-	sortedColls  []*KVPCollection
-
-	sortWork  chan types.KVPSort
-	sortGroup *errgroup.Group
-	sortCtx   context.Context
-	sema      *semaphore.Weighted
 }
 
 // NewAsyncSortedEditsWithDefaults creates a new AsyncSortedEdit instance with default concurrency and buffer size values

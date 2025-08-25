@@ -45,8 +45,8 @@ type toUpload struct {
 type uploadFunc func(ctx context.Context, objectName, uploadID string, partNumber int, contentLength int64, reader io.Reader) (objectstorage.CommitMultipartUploadPartDetails, error)
 
 type tempLocalObject struct {
-	path string
 	f    *os.File
+	path string
 }
 
 var _ io.ReadCloser = &tempLocalObject{}

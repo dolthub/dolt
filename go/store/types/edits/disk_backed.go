@@ -24,19 +24,15 @@ var _ types.EditAccumulator = (*DiskBackedEditAcc)(nil)
 
 // DiskBackedEditAcc is an EditAccumulator implementation that flushes the edits to disk at regular intervals
 type DiskBackedEditAcc struct {
-	ctx context.Context
-	vrw types.ValueReadWriter
-
-	flusher *DiskEditFlusher
-
-	newEditAcc func() types.EditAccumulator
-	backing    types.EditAccumulator
-
+	ctx           context.Context
+	vrw           types.ValueReadWriter
+	backing       types.EditAccumulator
+	flusher       *DiskEditFlusher
+	newEditAcc    func() types.EditAccumulator
+	files         chan string
 	accumulated   int64
 	flushInterval int64
-
-	files      chan string
-	flushCount int
+	flushCount    int
 }
 
 // NewDiskBackedEditAcc returns a new DiskBackedEditAccumulator instance

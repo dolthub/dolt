@@ -278,12 +278,12 @@ func TestRecursiveStruct(t *testing.T) {
 	// }
 
 	a := mustType(MakeStructType("A",
-		StructField{"b", MakeCycleType("A"), false},
-		StructField{"c", mustType(MakeListType(MakeCycleType("A"))), false},
-		StructField{"d", mustType(MakeStructType("D",
-			StructField{"e", MakeCycleType("D"), false},
-			StructField{"f", MakeCycleType("A"), false},
-		)), false},
+		StructField{MakeCycleType("A"), "b", false},
+		StructField{mustType(MakeListType(MakeCycleType("A"))), "c", false},
+		StructField{mustType(MakeStructType("D",
+			StructField{MakeCycleType("D"), "e", false},
+			StructField{MakeCycleType("A"), "f", false},
+		)), "d", false},
 	))
 
 	assertWriteHRSEqual(t, `Struct A {
@@ -313,8 +313,8 @@ func TestUnresolvedRecursiveStruct(t *testing.T) {
 	//   b: Cycle<1> (unresolved)
 	// }
 	a := mustType(MakeStructType("A",
-		StructField{"a", MakeCycleType("A"), false},
-		StructField{"b", MakeCycleType("X"), false},
+		StructField{MakeCycleType("A"), "a", false},
+		StructField{MakeCycleType("X"), "b", false},
 	))
 
 	assertWriteHRSEqual(t, `Struct A {
@@ -380,8 +380,8 @@ func TestEncodedValueMaxLines(t *testing.T) {
 
 func TestWriteHumanReadableStructOptionalFields(t *testing.T) {
 	typ, err := MakeStructType("S1",
-		StructField{"a", PrimitiveTypeMap[BoolKind], false},
-		StructField{"b", PrimitiveTypeMap[BoolKind], true})
+		StructField{PrimitiveTypeMap[BoolKind], "a", false},
+		StructField{PrimitiveTypeMap[BoolKind], "b", true})
 	require.NoError(t, err)
 	assertWriteHRSEqual(t, "Struct S1 {\n  a: Bool,\n  b?: Bool,\n}", typ)
 }

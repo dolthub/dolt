@@ -147,15 +147,16 @@ func (s *specificFilesConjoiner) chooseConjoinees(specs []tableSpec) (conjoinees
 //
 // A conjoinOperation is created when a conjoinStrategy |conjoinRequired| returns true.
 type conjoinOperation struct {
-	// The computed things we conjoined in |conjoin|.
-	conjoinees []tableSpec
-	// The tableSpec for the conjoined file.
-	conjoined tableSpec
-
 	// Anything to run as cleanup after we complete successfully.
 	// This comes directly from persister.ConjoinAll, but needs to
 	// be run after the manifest update lands successfully.
 	cleanup cleanupFunc
+	// The computed things we conjoined in |conjoin|.
+	conjoinees []tableSpec
+	// Anything to run as cleanup after we complete successfully.
+	// This comes directly from persister.ConjoinAll, but needs to
+	// be run after the manifest update lands successfully.
+	conjoined tableSpec
 }
 
 // Compute what we will conjoin and prepare to do it. This should be

@@ -36,9 +36,9 @@ var jan11990 = time.Date(1990, 1, 1, 0, 0, 0, 0, time.UTC)
 
 func TestCompareNomsValues(t *testing.T) {
 	tests := []struct {
-		name string
 		v1   types.Value
 		v2   types.Value
+		name string
 		gt   bool
 		gte  bool
 		lt   bool
@@ -113,8 +113,8 @@ func assertOnUnexpectedErr(t *testing.T, expectErr bool, err error) {
 
 func TestCompareToNull(t *testing.T) {
 	tests := []struct {
-		name string
 		v    types.Value
+		name string
 		gt   bool
 		gte  bool
 		lt   bool

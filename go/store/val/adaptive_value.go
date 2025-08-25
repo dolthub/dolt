@@ -285,8 +285,8 @@ func (handler AdaptiveEncodingTypeHandler) FormatValue(val any) (string, error) 
 
 type ExtendedValueWrapper struct {
 	ImmutableValue
-	outOfBandLength int64
 	typeHandler     TupleTypeHandler
+	outOfBandLength int64
 }
 
 func (e *ExtendedValueWrapper) Unwrap(ctx context.Context) (result string, err error) {

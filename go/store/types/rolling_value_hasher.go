@@ -69,13 +69,14 @@ func TestWithSmallChunks(cb func()) {
 }
 
 type rollingValueHasher struct {
-	bw              binaryNomsWriter
 	bz              *buzhash.BuzHash
-	crossedBoundary bool
-	pattern, window uint32
-	salt            byte
 	sl              *sloppy.Sloppy
 	nbf             *NomsBinFormat
+	bw              binaryNomsWriter
+	pattern         uint32
+	window          uint32
+	crossedBoundary bool
+	salt            byte
 }
 
 func newRollingValueHasher(nbf *NomsBinFormat, salt byte) *rollingValueHasher {

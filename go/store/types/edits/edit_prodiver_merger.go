@@ -31,15 +31,14 @@ type entry struct {
 var _ types.EditProvider = (*EPMerger)(nil)
 
 type EPMerger struct {
-	ctx        context.Context
-	vr         types.ValueReader
-	reachedEOF bool
-	editsRead  int64
-
-	numEPs      int
-	epsWithData int
+	ctx         context.Context
+	vr          types.ValueReader
 	eps         []types.EditProvider
 	nextKVPS    []entry
+	editsRead   int64
+	numEPs      int
+	epsWithData int
+	reachedEOF  bool
 }
 
 // NewEPMerger takes a slice of TupleReaders, whose contents should be key sorted key value tuple

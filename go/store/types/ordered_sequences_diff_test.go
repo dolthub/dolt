@@ -39,14 +39,18 @@ type diffFn func(ctx context.Context, last orderedSequence, current orderedSeque
 
 type diffTestSuite struct {
 	suite.Suite
-	from1, to1, by1     int
-	from2, to2, by2     int
+	modified            ValueSlice
+	removed             ValueSlice
+	added               ValueSlice
+	by2                 int
+	to2                 int
+	from2               int
 	numAddsExpected     int
 	numRemovesExpected  int
 	numModifiedExpected int
-	added               ValueSlice
-	removed             ValueSlice
-	modified            ValueSlice
+	by1                 int
+	to1                 int
+	from1               int
 }
 
 func newDiffTestSuite(from1, to1, by1, from2, to2, by2, numAddsExpected, numRemovesExpected, numModifiedExpected int) *diffTestSuite {
@@ -300,11 +304,11 @@ func TestOrderedSequenceDiffWithMetaNodeGap(t *testing.T) {
 		}()
 
 		expected := []ValueChanged{
-			{DiffChangeAdded, Float(3), nil, nil},
-			{DiffChangeAdded, Float(4), nil, nil},
+			{Float(3), nil, nil, DiffChangeAdded},
+			{Float(4), nil, nil, DiffChangeAdded},
 			{},
-			{DiffChangeRemoved, Float(3), nil, nil},
-			{DiffChangeRemoved, Float(4), nil, nil},
+			{Float(3), nil, nil, DiffChangeRemoved},
+			{Float(4), nil, nil, DiffChangeRemoved},
 		}
 
 		i := 0

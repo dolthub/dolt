@@ -117,8 +117,8 @@ func TestLexFloat(t *testing.T) {
 
 func TestZValue(t *testing.T) {
 	tests := []struct {
-		p types.Point
 		e string
+		p types.Point
 	}{
 		{
 			p: types.Point{X: -5000, Y: -5000},

@@ -153,31 +153,31 @@ func TestContainCommonSupertype(t *testing.T) {
 
 		// struct{b:Bool} & struct{b?:Bool} -> true
 		{
-			mustType(MakeStructType("", StructField{"b", PrimitiveTypeMap[BoolKind], false})),
-			mustType(MakeStructType("", StructField{"b", PrimitiveTypeMap[BoolKind], true})),
+			mustType(MakeStructType("", StructField{PrimitiveTypeMap[BoolKind], "b", false})),
+			mustType(MakeStructType("", StructField{PrimitiveTypeMap[BoolKind], "b", true})),
 			true,
 		},
 
 		// struct{a?:Bool} & struct{b?:Bool} -> false
 		{
-			mustType(MakeStructType("", StructField{"a", PrimitiveTypeMap[BoolKind], true})),
-			mustType(MakeStructType("", StructField{"b", PrimitiveTypeMap[BoolKind], true})),
+			mustType(MakeStructType("", StructField{PrimitiveTypeMap[BoolKind], "a", true})),
+			mustType(MakeStructType("", StructField{PrimitiveTypeMap[BoolKind], "b", true})),
 			false,
 		},
 
 		// struct A {b: struct {a: Cycle<A>}} & struct {b: Struct A {b: struct {b: Cycle<A>}}} -> false
 		{
 			mustType(MakeStructType("A",
-				StructField{"a", mustType(MakeStructType("",
-					StructField{"a", MakeCycleType("A"), false},
-				)), false},
+				StructField{mustType(MakeStructType("",
+					StructField{MakeCycleType("A"), "a", false},
+				)), "a", false},
 			)),
 			mustType(MakeStructType("",
-				StructField{"a", mustType(MakeStructType("A",
-					StructField{"a", mustType(MakeStructType("",
-						StructField{"a", MakeCycleType("A"), false},
-					)), false},
-				)), false},
+				StructField{mustType(MakeStructType("A",
+					StructField{mustType(MakeStructType("",
+						StructField{MakeCycleType("A"), "a", false},
+					)), "a", false},
+				)), "a", false},
 			)),
 			true,
 		},

@@ -83,21 +83,20 @@ var _ dtables.VersionableTable = (*DoltTable)(nil)
 
 // DoltTable implements the sql.Table interface and gives access to dolt table rows and schema.
 type DoltTable struct {
-	tableName    string
-	sqlSch       sql.PrimaryKeySchema
 	db           dsess.SqlDatabase
 	lockedToRoot doltdb.RootValue
-	nbf          *types.NomsBinFormat
-	sch          schema.Schema
-	autoIncCol   schema.Column
-
-	projectedCols   []uint64
-	projectedSchema sql.Schema
-
-	opts editor.Options
 
 	// overriddenSchema is set when the @@dolt_override_schema system var is in use
 	overriddenSchema schema.Schema
+	sch              schema.Schema
+
+	nbf             *types.NomsBinFormat
+	tableName       string
+	autoIncCol      schema.Column
+	sqlSch          sql.PrimaryKeySchema
+	opts            editor.Options
+	projectedCols   []uint64
+	projectedSchema sql.Schema
 }
 
 func (t *DoltTable) TableName() doltdb.TableName {
@@ -650,9 +649,9 @@ func partitionRows(ctx *sql.Context, t *doltdb.Table, projCols []uint64, partiti
 
 // WritableDoltTable allows updating, deleting, and inserting new rows. It implements sql.UpdatableTable and friends.
 type WritableDoltTable struct {
-	*DoltTable
-	db                 Database
 	pinnedWriteSession dsess.WriteSession
+	*DoltTable
+	db Database
 }
 
 var _ doltTableInterface = (*WritableDoltTable)(nil)
@@ -1440,14 +1439,14 @@ var _ sql.PartitionIter = (*doltTablePartitionIter)(nil)
 
 // doltTablePartitionIter, an object that knows how to return the single partition exactly once.
 type doltTablePartitionIter struct {
-	i          int
-	mu         *sync.Mutex
 	rowData    durable.Index
+	mu         *sync.Mutex
 	partitions []doltTablePartition
+	i          int
 }
 
 func newDoltTablePartitionIter(rowData durable.Index, partitions ...doltTablePartition) *doltTablePartitionIter {
-	return &doltTablePartitionIter{0, &sync.Mutex{}, rowData, partitions}
+	return &doltTablePartitionIter{i: 0, mu: &sync.Mutex{}, rowData: rowData, partitions: partitions}
 }
 
 // Close is required by the sql.PartitionIter interface. Does nothing.
@@ -1475,10 +1474,9 @@ var _ sql.Partition = doltTablePartition{}
 const NoUpperBound = math.MaxUint64
 
 type doltTablePartition struct {
-	// half-open index range of partition: [start, end)
-	start, end uint64
-
 	rowData durable.Index
+	start   uint64
+	end     uint64
 }
 
 func partitionsFromRows(ctx context.Context, rows durable.Index) ([]doltTablePartition, error) {

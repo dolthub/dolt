@@ -30,8 +30,8 @@ import (
 )
 
 type archiveChunkSource struct {
-	file string // Only meaningful for local files.
 	aRdr archiveReader
+	file string
 }
 
 var _ chunkSource = &archiveChunkSource{}
@@ -48,7 +48,7 @@ func newArchiveChunkSource(ctx context.Context, dir string, h hash.Hash, chunkCo
 	if err != nil {
 		return archiveChunkSource{}, err
 	}
-	return archiveChunkSource{archiveFile, aRdr}, nil
+	return archiveChunkSource{aRdr, archiveFile}, nil
 }
 
 func newAWSArchiveChunkSource(ctx context.Context,
@@ -76,7 +76,7 @@ func newAWSArchiveChunkSource(ctx context.Context,
 	if err != nil {
 		return emptyChunkSource{}, err
 	}
-	return archiveChunkSource{"", aRdr}, nil
+	return archiveChunkSource{aRdr, ""}, nil
 }
 
 func (acs archiveChunkSource) has(h hash.Hash, keeper keeperF) (bool, gcBehavior, error) {
@@ -185,7 +185,7 @@ func (acs archiveChunkSource) clone() (chunkSource, error) {
 	if err != nil {
 		return nil, err
 	}
-	return archiveChunkSource{acs.file, reader}, nil
+	return archiveChunkSource{reader, acs.file}, nil
 }
 
 func (acs archiveChunkSource) getRecordRanges(_ context.Context, requests []getRecord, keeper keeperF) (map[hash.Hash]Range, gcBehavior, error) {

@@ -80,15 +80,18 @@ func newProllyConflictsTable(
 // ProllyConflictsTable is a sql.Table implementation that uses the merge
 // artifacts table to persist and read conflicts.
 type ProllyConflictsTable struct {
-	tblName                   doltdb.TableName
-	sqlSch                    sql.PrimaryKeySchema
-	baseSch, ourSch, theirSch schema.Schema
-	root                      doltdb.RootValue
-	tbl                       *doltdb.Table
-	rs                        RootSetter
-	artM                      prolly.ArtifactMap
-	sqlTable                  sql.UpdatableTable
-	versionMappings           *versionMappings
+	baseSch  schema.Schema
+	ourSch   schema.Schema
+	theirSch schema.Schema
+
+	rs              RootSetter
+	root            doltdb.RootValue
+	tbl             *doltdb.Table
+	sqlTable        sql.UpdatableTable
+	versionMappings *versionMappings
+	tblName         doltdb.TableName
+	artM            prolly.ArtifactMap
+	sqlSch          sql.PrimaryKeySchema
 }
 
 var _ sql.UpdatableTable = ProllyConflictsTable{}
@@ -127,20 +130,19 @@ func (ct ProllyConflictsTable) Deleter(ctx *sql.Context) sql.RowDeleter {
 }
 
 type prollyConflictRowIter struct {
-	itr     prolly.ConflictArtifactIter
-	tblName doltdb.TableName
-	vrw     types.ValueReadWriter
-	ns      tree.NodeStore
-	ourRows prolly.Map
-	keyless bool
-	ourSch  schema.Schema
-
-	cds     ConflictDescriptors
-	offsets ConflictOffsets
-
-	baseHash, theirHash hash.Hash
-	baseRows            prolly.Map
-	theirRows           prolly.Map
+	ourSch    schema.Schema
+	vrw       types.ValueReadWriter
+	ns        tree.NodeStore
+	tblName   doltdb.TableName
+	itr       prolly.ConflictArtifactIter
+	ourRows   prolly.Map
+	baseRows  prolly.Map
+	theirRows prolly.Map
+	cds       ConflictDescriptors
+	offsets   ConflictOffsets
+	baseHash  hash.Hash
+	theirHash hash.Hash
+	keyless   bool
 }
 
 // ConflictOffsets holds the offsets of the columns in a conflict row. The
@@ -420,9 +422,12 @@ func (itr *prollyConflictRowIter) putKeylessConflictRowVals(ctx *sql.Context, co
 }
 
 type ConflictVal struct {
-	Key, Base, Ours, Theirs val.Tuple
-	Hash                    hash.Hash
-	Id                      string
+	Id     string
+	Key    val.Tuple
+	Base   val.Tuple
+	Ours   val.Tuple
+	Theirs val.Tuple
+	Hash   hash.Hash
 }
 
 // GetConflictId gets the conflict ID, ensuring that it is unique by hashing both theirRootish and the key of the table.
@@ -593,12 +598,14 @@ func (cu *prollyConflictOurTableUpdater) Close(c *sql.Context) error {
 }
 
 type prollyConflictDeleter struct {
-	kd, vd         val.TupleDesc
-	kB, vB         *val.TupleBuilder
-	pool           pool.BuffPool
-	ed             *prolly.ArtifactsEditor
 	ct             ProllyConflictsTable
+	pool           pool.BuffPool
 	rs             RootSetter
+	kB             *val.TupleBuilder
+	vB             *val.TupleBuilder
+	ed             *prolly.ArtifactsEditor
+	kd             val.TupleDesc
+	vd             val.TupleDesc
 	ourDiffTypeIdx int
 	baseColSize    int
 	ourColSize     int

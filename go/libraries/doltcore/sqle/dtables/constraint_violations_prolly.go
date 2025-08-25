@@ -206,10 +206,11 @@ func (cvt *prollyConstraintViolationsTable) Deleter(context *sql.Context) sql.Ro
 }
 
 type prollyCVIter struct {
-	itr    prolly.ArtifactIter
-	sch    schema.Schema
-	kd, vd val.TupleDesc
-	ns     tree.NodeStore
+	itr prolly.ArtifactIter
+	sch schema.Schema
+	ns  tree.NodeStore
+	kd  val.TupleDesc
+	vd  val.TupleDesc
 }
 
 func (itr prollyCVIter) Next(ctx *sql.Context) (sql.Row, error) {
@@ -310,11 +311,11 @@ func (itr prollyCVIter) Next(ctx *sql.Context) (sql.Row, error) {
 }
 
 type prollyCVDeleter struct {
-	kd   val.TupleDesc
-	kb   *val.TupleBuilder
 	pool pool.BuffPool
+	kb   *val.TupleBuilder
 	ed   *prolly.ArtifactsEditor
 	cvt  *prollyConstraintViolationsTable
+	kd   val.TupleDesc
 }
 
 var _ sql.RowDeleter = (*prollyCVDeleter)(nil)

@@ -25,9 +25,9 @@ import (
 
 type novelNode struct {
 	node      Node
-	addr      hash.Hash
 	lastKey   Item
 	treeCount uint64
+	addr      hash.Hash
 }
 
 func writeNewNode[S message.Serializer](ctx context.Context, ns NodeStore, bld *nodeBuilder[S]) (novelNode, error) {
@@ -71,10 +71,12 @@ func newNodeBuilder[S message.Serializer](serializer S, level int) (nb *nodeBuil
 }
 
 type nodeBuilder[S message.Serializer] struct {
-	keys, values [][]byte
-	size, level  int
-	subtrees     subtreeCounts
-	serializer   S
+	serializer S
+	keys       [][]byte
+	values     [][]byte
+	subtrees   subtreeCounts
+	size       int
+	level      int
 }
 
 func (nb *nodeBuilder[S]) hasCapacity(key, value Item) bool {

@@ -69,9 +69,9 @@ const (
 )
 
 type TableFileEvent struct {
-	EventType  CloneTableFileEvent
 	TableFiles []chunks.TableFile
 	Stats      []iohelp.ReadStats
+	EventType  CloneTableFileEvent
 }
 
 // mapTableFiles returns the list of all fileIDs for the table files, and a map from fileID to chunks.TableFile

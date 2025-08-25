@@ -314,12 +314,12 @@ func commonPrefixCount(p1, p2 types.Path) int {
 }
 
 type stackElem struct {
-	path        types.Path
-	pathPart    types.PathPart // from parent Value to this Value
-	changeType  types.DiffChangeType
-	oldValue    types.Value // can be nil if newValue is not nil
-	newValue    types.Value // can be nil if oldValue is not nil
+	pathPart    types.PathPart
+	oldValue    types.Value
+	newValue    types.Value
 	newKeyValue types.Value
+	path        types.Path
+	changeType  types.DiffChangeType
 }
 
 // newestValue returns newValue if not nil, otherwise oldValue. This is useful

@@ -134,9 +134,9 @@ func (dsdt *doltSchemasDiffTable) PrimaryKeySchema() sql.PrimaryKeySchema {
 // DoltSchemasDiffPartitionItr iterates through commit history for schema diffs
 type DoltSchemasDiffPartitionItr struct {
 	cmItr                doltdb.CommitItr[*sql.Context]
-	db                   Database
-	head                 *doltdb.Commit
 	workingRoot          doltdb.RootValue
+	head                 *doltdb.Commit
+	db                   Database
 	workingPartitionDone bool
 }
 
@@ -367,17 +367,17 @@ func (dsdp *DoltSchemasDiffPartition) GetRowIter(ctx *sql.Context) (sql.RowIter,
 
 // doltSchemasDiffPartitionRowIter implements a row iterator for a single diff partition
 type doltSchemasDiffPartitionRowIter struct {
-	ctx       *sql.Context
-	toTable   *doltdb.Table
-	fromTable *doltdb.Table
-	toName    string
-	fromName  string
-	toDate    *types.Timestamp
-	fromDate  *types.Timestamp
 	toRoot    doltdb.RootValue
 	fromRoot  doltdb.RootValue
-	db        Database
+	toTable   *doltdb.Table
+	fromTable *doltdb.Table
+	ctx       *sql.Context
+	toDate    *types.Timestamp
+	fromDate  *types.Timestamp
+	toName    string
+	fromName  string
 	rows      []sql.Row
+	db        Database
 	idx       int
 	done      bool
 }

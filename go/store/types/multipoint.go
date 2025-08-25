@@ -26,8 +26,8 @@ import (
 
 // MultiPoint is a Noms Value wrapper around a string.
 type MultiPoint struct {
-	SRID   uint32
 	Points []Point
+	SRID   uint32
 }
 
 // Value interface

@@ -39,18 +39,15 @@ var resultBufferPool = &sync.Pool{
 }
 
 type indexLookupRowIterAdapter struct {
-	idx       DoltIndex
-	keyIter   nomsKeyIter
-	tableRows types.Map
-
+	idx        DoltIndex
+	keyIter    nomsKeyIter
+	tableRows  types.Map
 	lookupTags map[uint64]int
 	conv       *KVToSqlRowConverter
+	resultBuf  *async.RingBuffer
 	cancelF    func()
-
-	read  uint64
-	count uint64
-
-	resultBuf *async.RingBuffer
+	read       uint64
+	count      uint64
 }
 
 // NewIndexLookupRowIterAdapter returns a new indexLookupRowIterAdapter.

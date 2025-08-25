@@ -75,13 +75,13 @@ func writeChunksToMT(mt *memTable, chunks []chunks.Chunk) (string, []byte, error
 }
 
 type memTable struct {
-	chunks             map[hash.Hash][]byte
-	order              []hasRecord // Must maintain the invariant that these are sorted by rec.order
-	pendingRefs        []hasRecord
-	getChildAddrs      []chunks.GetAddrsCb
-	maxData, totalData uint64
-
-	snapper snappyEncoder
+	snapper       snappyEncoder
+	chunks        map[hash.Hash][]byte
+	order         []hasRecord // Must maintain the invariant that these are sorted by rec.order
+	pendingRefs   []hasRecord
+	getChildAddrs []chunks.GetAddrsCb
+	maxData       uint64
+	totalData     uint64
 }
 
 func newMemTable(memTableSize uint64) *memTable {

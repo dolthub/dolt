@@ -42,8 +42,8 @@ var _ sql.ReplaceableTable = (*BranchesTable)(nil)
 // BranchesTable is the system table that accesses branches
 type BranchesTable struct {
 	db        dsess.SqlDatabase
-	remote    bool
 	tableName string
+	remote    bool
 }
 
 // NewBranchesTable creates a BranchesTable
@@ -53,7 +53,7 @@ func NewBranchesTable(_ *sql.Context, db dsess.SqlDatabase, tableName string) sq
 
 // NewRemoteBranchesTable creates a BranchesTable with only remote refs
 func NewRemoteBranchesTable(_ *sql.Context, ddb dsess.SqlDatabase, tableName string) sql.Table {
-	return &BranchesTable{ddb, true, tableName}
+	return &BranchesTable{db: ddb, remote: true, tableName: tableName}
 }
 
 func (bt *BranchesTable) DataLength(ctx *sql.Context) (uint64, error) {

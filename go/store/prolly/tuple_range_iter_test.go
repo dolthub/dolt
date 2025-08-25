@@ -273,9 +273,9 @@ func TestMapIterRange(t *testing.T) {
 
 	tests := []struct {
 		name     string
+		logical  []int
 		rng      Range
 		physical [2]int
-		logical  []int
 	}{
 		// partial-key range scan
 		{

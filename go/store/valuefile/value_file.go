@@ -148,9 +148,9 @@ func write(wr io.Writer, h hash.Hash, store *FileValueStore) error {
 
 // ValueFile is the in memory representation of a value file.
 type ValueFile struct {
-	Values []types.Value
 	Ns     tree.NodeStore
 	Vrw    types.ValueReadWriter
+	Values []types.Value
 }
 
 // ReadValueFile reads from the provided file and returns the values stored in the file

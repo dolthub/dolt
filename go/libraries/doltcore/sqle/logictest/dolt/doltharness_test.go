@@ -41,8 +41,8 @@ func createTestEnvWithFS(fs filesys.Filesys, workingDir string) *env.DoltEnv {
 }
 
 type statementTest struct {
-	statement string
 	expErr    error
+	statement string
 }
 
 type queryTest struct {

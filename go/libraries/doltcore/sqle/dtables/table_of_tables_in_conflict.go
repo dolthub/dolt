@@ -28,9 +28,9 @@ var _ sql.Table = (*TableOfTablesInConflict)(nil)
 
 // TableOfTablesInConflict is a sql.Table implementation that implements a system table which shows the current conflicts
 type TableOfTablesInConflict struct {
+	ddb       *doltdb.DoltDB
 	dbName    string
 	tableName string
-	ddb       *doltdb.DoltDB
 }
 
 // NewTableOfTablesInConflict creates a TableOfTablesInConflict

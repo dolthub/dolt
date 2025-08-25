@@ -105,11 +105,11 @@ func GetHRSCommenters(typename string) []HRSCommenter {
 
 // Human Readable Serialization
 type hrsWriter struct {
-	ind         int
 	w           io.Writer
+	err         error
+	ind         int
 	lineLength  int
 	floatFormat byte
-	err         error
 }
 
 func (w *hrsWriter) maybeWriteIndentation() {

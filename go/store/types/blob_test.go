@@ -175,8 +175,8 @@ func (suite *blobTestSuite) TestRandomRead() {
 }
 
 type testReader struct {
-	readCount int
 	buf       *bytes.Buffer
+	readCount int
 }
 
 func (r *testReader) Read(p []byte) (n int, err error) {

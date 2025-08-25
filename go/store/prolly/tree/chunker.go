@@ -37,16 +37,14 @@ type Chunker interface {
 }
 
 type chunker[S message.Serializer] struct {
-	cur    *cursor
-	parent *chunker[S]
-	level  int
-	done   bool
-
 	splitter   nodeSplitter
-	builder    *nodeBuilder[S]
 	serializer S
-
-	ns NodeStore
+	ns         NodeStore
+	cur        *cursor
+	parent     *chunker[S]
+	builder    *nodeBuilder[S]
+	level      int
+	done       bool
 }
 
 var _ Chunker = &chunker[message.Serializer]{}

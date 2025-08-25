@@ -45,18 +45,17 @@ var _ sql.ExecSourceRel = (*DiffTableFunction)(nil)
 var _ sql.AuthorizationCheckerNode = (*DiffTableFunction)(nil)
 
 type DiffTableFunction struct {
-	ctx            *sql.Context
+	tableDelta     diff.TableDelta
 	fromCommitExpr sql.Expression
 	toCommitExpr   sql.Expression
 	dotCommitExpr  sql.Expression
 	tableNameExpr  sql.Expression
 	database       sql.Database
-	sqlSch         sql.Schema
+	ctx            *sql.Context
 	joiner         *rowconv.Joiner
-
-	tableDelta diff.TableDelta
-	fromDate   *types.Timestamp
-	toDate     *types.Timestamp
+	fromDate       *types.Timestamp
+	toDate         *types.Timestamp
+	sqlSch         sql.Schema
 }
 
 // NewInstance creates a new instance of TableFunction interface
@@ -214,8 +213,8 @@ func findMatchingDelta(deltas []diff.TableDelta, tableName string) diff.TableDel
 
 type refDetails struct {
 	root       doltdb.RootValue
-	hashStr    string
 	commitTime *types.Timestamp
+	hashStr    string
 }
 
 // loadDetailsForRef loads the root, hash, and timestamp for the specified from
@@ -233,13 +232,13 @@ func loadDetailsForRefs(ctx *sql.Context, fromRef, toRef, dotRef interface{}, db
 	if err != nil {
 		return nil, nil, err
 	}
-	fromDetails := &refDetails{fromRoot, fromHashStr, fromCommitTime}
+	fromDetails := &refDetails{root: fromRoot, hashStr: fromHashStr, commitTime: fromCommitTime}
 
 	toRoot, toCommitTime, toHashStr, err := sess.ResolveRootForRef(ctx, dbName, toCommitStr)
 	if err != nil {
 		return nil, nil, err
 	}
-	toDetails := &refDetails{toRoot, toHashStr, toCommitTime}
+	toDetails := &refDetails{root: toRoot, hashStr: toHashStr, commitTime: toCommitTime}
 
 	return fromDetails, toDetails, nil
 }
@@ -326,7 +325,7 @@ func resolveRoot(ctx *sql.Context, sess *dsess.DoltSession, dbName, hashStr stri
 		return nil, err
 	}
 
-	return &refDetails{root, hashStr, commitTime}, nil
+	return &refDetails{root: root, hashStr: hashStr, commitTime: commitTime}, nil
 }
 
 func resolveCommit(ctx *sql.Context, ddb *doltdb.DoltDB, headRef ref.DoltRef, cSpecStr string) (*doltdb.Commit, error) {

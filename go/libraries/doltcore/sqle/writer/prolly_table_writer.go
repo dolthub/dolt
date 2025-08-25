@@ -33,27 +33,21 @@ import (
 var sharePool = pool.NewBuffPool()
 
 type prollyTableWriter struct {
-	tableName doltdb.TableName
-	dbName    string
-
-	primary   indexWriter
-	secondary map[string]indexWriter
-
-	tbl    *doltdb.Table
-	sch    schema.Schema
-	sqlSch sql.Schema
-
-	aiCol                  schema.Column
+	sch                    schema.Schema
+	errEncountered         error
+	primary                indexWriter
+	flusher                dsess.WriteSessionFlusher
 	aiTracker              globalstate.AutoIncrementTracker
 	nextAutoIncrementValue map[string]uint64
+	tbl                    *doltdb.Table
+	secondary              map[string]indexWriter
+	setter                 dsess.SessionRootSetter
+	tableName              doltdb.TableName
+	dbName                 string
+	aiCol                  schema.Column
+	sqlSch                 sql.Schema
 	setAutoIncrement       bool
-
-	flusher dsess.WriteSessionFlusher
-	setter  dsess.SessionRootSetter
-
-	targetStaging bool
-
-	errEncountered error
+	targetStaging          bool
 }
 
 var _ dsess.TableWriter = &prollyTableWriter{}

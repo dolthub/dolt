@@ -31,9 +31,9 @@ var _ TupleWriter = (*TestTupleStream)(nil)
 
 type TestTupleStream struct {
 	mu     *sync.Mutex
-	closed bool
-	i      int
 	tuples []*Tuple
+	i      int
+	closed bool
 }
 
 func NewTestTupleStream(initialSize int) *TestTupleStream {

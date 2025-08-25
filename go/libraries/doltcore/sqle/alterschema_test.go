@@ -127,16 +127,16 @@ func TestAddColumnToTable(t *testing.T) {
 	require.NoError(t, err)
 
 	tests := []struct {
-		name           string
-		tag            uint64
-		newColName     string
-		colKind        types.NomsKind
-		nullable       Nullable
+		expectedSchema schema.Schema
 		defaultVal     *sql.ColumnDefaultValue
 		order          *sql.ColumnOrder
-		expectedSchema schema.Schema
-		expectedRows   []row.Row
+		name           string
+		newColName     string
 		expectedErr    string
+		expectedRows   []row.Row
+		tag            uint64
+		colKind        types.NomsKind
+		nullable       Nullable
 	}{
 		{
 			name:       "bool column no default",
@@ -307,10 +307,10 @@ func schemaNewColumnWithDefault(name string, tag uint64, kind types.NomsKind, pa
 
 func TestDropPks(t *testing.T) {
 	var dropTests = []struct {
-		name        string
-		setup       []string
 		expectedErr *errors.Kind
+		name        string
 		fkIdxName   string
+		setup       []string
 	}{
 		{
 			name: "no error on drop pk",
@@ -504,10 +504,10 @@ func TestNewPkOrdinals(t *testing.T) {
 	require.NoError(t, err)
 
 	tests := []struct {
-		name          string
 		newSch        schema.Schema
-		expPkOrdinals []int
 		err           error
+		name          string
+		expPkOrdinals []int
 	}{
 		{
 			name: "remove column",
@@ -661,12 +661,12 @@ func TestModifyColumn(t *testing.T) {
 	)
 
 	tests := []struct {
+		expectedSchema schema.Schema
+		order          *sql.ColumnOrder
 		name           string
+		expectedErr    string
 		existingColumn schema.Column
 		newColumn      schema.Column
-		order          *sql.ColumnOrder
-		expectedSchema schema.Schema
-		expectedErr    string
 	}{
 		{
 			name:           "column rename",

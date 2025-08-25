@@ -2065,8 +2065,8 @@ func TestMapWithStructShouldHaveOptionalFields(t *testing.T) {
 	assert.True(
 		mustType(MakeMapType(PrimitiveTypeMap[StringKind],
 			mustType(MakeStructType("Foo",
-				StructField{"a", PrimitiveTypeMap[FloatKind], false},
-				StructField{"b", PrimitiveTypeMap[StringKind], true},
+				StructField{PrimitiveTypeMap[FloatKind], "a", false},
+				StructField{PrimitiveTypeMap[StringKind], "b", true},
 			)),
 		)).Equals(mustType(TypeOf(list))))
 
@@ -2085,8 +2085,8 @@ func TestMapWithStructShouldHaveOptionalFields(t *testing.T) {
 	assert.True(
 		mustType(MakeMapType(
 			mustType(MakeStructType("Foo",
-				StructField{"a", PrimitiveTypeMap[FloatKind], false},
-				StructField{"b", PrimitiveTypeMap[StringKind], true},
+				StructField{PrimitiveTypeMap[FloatKind], "a", false},
+				StructField{PrimitiveTypeMap[StringKind], "b", true},
 			)),
 			PrimitiveTypeMap[StringKind],
 		)).Equals(mustType(TypeOf(list))))

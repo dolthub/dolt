@@ -48,9 +48,9 @@ const (
 )
 
 type DoltHarness struct {
-	Version string
 	engine  *sqle.Engine
 	sess    *dsess.DoltSession
+	Version string
 }
 
 func (h *DoltHarness) Close() {

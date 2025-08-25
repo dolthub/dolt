@@ -293,15 +293,15 @@ func iterAll(ctx context.Context, col Collection, f func(v Value, index uint64) 
 }
 
 type collTupleRangeIter struct {
+	nbf            *NomsBinFormat
 	leaves         []Collection
+	currLeafValues []Tuple
+	tupleBuffer    []Tuple
 	currLeaf       int
 	startIdx       uint64
 	endIdx         uint64
 	valsPerIdx     uint64
-	currLeafValues []Tuple
 	leafValPos     int
-	nbf            *NomsBinFormat
-	tupleBuffer    []Tuple
 }
 
 func (itr *collTupleRangeIter) Next() (Tuple, error) {

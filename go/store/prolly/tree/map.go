@@ -32,9 +32,9 @@ type KvIter[K, V ~[]byte] interface {
 
 // StaticMap is a static prolly Tree with ordered elements.
 type StaticMap[K, V ~[]byte, O Ordering[K]] struct {
-	Root      Node
 	NodeStore NodeStore
 	Order     O
+	Root      Node
 }
 
 type MapInterface[K, V ~[]byte, O Ordering[K]] interface {
@@ -611,16 +611,11 @@ func (it *OrderedTreeIter[K, V]) Iterate(ctx context.Context) (err error) {
 }
 
 type orderedLeafSpanIter[K, V ~[]byte] struct {
-	// in-progress node
-	nd Node
-	// current index,
-	curr int
-	// last index for |nd|
-	stop int
-	// remaining leaves
+	nd     Node
 	leaves []Node
-	// stop index in last leaf node
-	final int
+	curr   int
+	stop   int
+	final  int
 }
 
 func (s *orderedLeafSpanIter[K, V]) Next(ctx context.Context) (key K, value V, err error) {

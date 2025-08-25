@@ -236,8 +236,8 @@ func isConnReset(err error) bool {
 }
 
 type s3ReaderAtWithStats struct {
-	name string
 	rdr  *s3ObjectReader
+	name string
 }
 
 func (s s3ReaderAtWithStats) ReadAtWithStats(ctx context.Context, p []byte, off int64, stats *Stats) (n int, err error) {

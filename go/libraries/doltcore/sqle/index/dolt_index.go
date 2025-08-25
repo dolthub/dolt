@@ -460,13 +460,13 @@ func ConvertFullTextToSql(ctx context.Context, db, tbl string, sch schema.Schema
 }
 
 type durableIndexState struct {
-	key                   doltdb.DataCacheKey
 	Primary               durable.Index
 	Secondary             durable.Index
-	coversAllCols         uint32
 	cachedLookupTags      atomic.Value
 	cachedSqlRowConverter atomic.Value
 	cachedProjections     atomic.Value
+	coversAllCols         uint32
+	key                   doltdb.DataCacheKey
 }
 
 func (s *durableIndexState) coversAllColumns(i *doltIndex) bool {
@@ -566,43 +566,42 @@ func (i *cachedDurableIndexes) store(v *durableIndexState) {
 }
 
 type doltIndex struct {
+	ns          tree.NodeStore
+	vrw         types.ValueReadWriter
+	keyBld      *val.TupleBuilder
+	cache       cachedDurableIndexes
+	indexSch    schema.Schema
+	tableSch    schema.Schema
+	vectorProps schema.VectorProperties
+
 	id      string
-	tblName string
 	dbName  string
+	tblName string
+	comment string
+
+	fullTextProps schema.FullTextProperties
+	prefixLengths []uint16
 
 	columns      []schema.Column
 	colExprTypes []sql.ColumnExpressionType
 	colExprNames []string
 
-	indexSch schema.Schema
-	tableSch schema.Schema
-	unique   bool
-	spatial  bool
-	fulltext bool
-	vector   bool
-	isPk     bool
-	comment  string
-	order    sql.IndexOrder
-
+	order                         sql.IndexOrder
 	constrainedToLookupExpression bool
 
-	vrw    types.ValueReadWriter
-	ns     tree.NodeStore
-	keyBld *val.TupleBuilder
-
-	cache         cachedDurableIndexes
+	vector        bool
+	isPk          bool
 	doltBinFormat bool
-
-	prefixLengths []uint16
-	fullTextProps schema.FullTextProperties
-	vectorProps   schema.VectorProperties
+	unique        bool
+	spatial       bool
+	fulltext      bool
 }
 
 type LookupMeta struct {
-	Cols     sql.FastIntSet
 	Idx      sql.Index
-	Ordinals []int
 	Fds      *sql.FuncDepSet
+	Cols     sql.FastIntSet
+	Ordinals []int
 }
 
 func GetStrictLookups(schCols *schema.ColCollection, indexes []sql.Index) []LookupMeta {

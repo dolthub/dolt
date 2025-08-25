@@ -51,26 +51,31 @@ var ErrSessionNotPersistable = errors.New("session is not persistable")
 
 // DoltSession is the sql.Session implementation used by dolt. It is accessible through a *sql.Context instance
 type DoltSession struct {
-	sql.Session
-	DoltgresSessObj       any   // This is used by Doltgres to persist objects in the session. This is not used by Dolt.
-	notices               []any // This is used by Doltgres to store notices. This is not used by Dolt.
-	username              string
-	email                 string
-	dbStates              map[string]*DatabaseSessionState
-	dbCache               *DatabaseCache
-	provider              DoltDatabaseProvider
-	tempTables            map[string][]sql.Table
-	globalsConf           config.ReadWriteConfig
-	branchController      *branch_control.Controller
-	statsProv             sql.StatsProvider
-	mu                    *sync.Mutex
-	fs                    filesys.Filesys
-	writeSessProv         WriteSessFunc
-	gcSafepointController *gcctx.GCSafepointController
+	provider DoltDatabaseProvider
+
+	DoltgresSessObj any // This is used by Doltgres to persist objects in the session. This is not used by Dolt.
 
 	// If non-nil, this will be returned from ValidateSession.
 	// Used by sqle/cluster to put a session into a terminal err state.
 	validateErr error
+
+	fs filesys.Filesys
+	sql.Session
+	statsProv   sql.StatsProvider
+	globalsConf config.ReadWriteConfig
+
+	mu                    *sync.Mutex
+	branchController      *branch_control.Controller
+	dbCache               *DatabaseCache
+	dbStates              map[string]*DatabaseSessionState
+	tempTables            map[string][]sql.Table
+	gcSafepointController *gcctx.GCSafepointController
+
+	writeSessProv WriteSessFunc
+
+	email    string
+	username string
+	notices  []any // This is used by Doltgres to store notices. This is not used by Dolt.
 }
 
 var _ sql.Session = (*DoltSession)(nil)
