@@ -424,7 +424,9 @@ func (mp manualPart) readFull(ctx context.Context, buff []byte) error {
 
 // dividePlan assumes that plan.sources (which is of type chunkSourcesByDescendingDataSize) is correctly sorted by descending data size.
 //
-// NM4 - There is more to this interface. gDoc.
+// This function divides |plan.sources| into two groups: those with enough chunk data to use S3's UploadPartCopy API (copies) and those without (manuals).
+// The ordering of the parts is how we will upload them to S3, and the manual parts will be prefixed to the index, thus
+// keeping |plan.sources| in the correct order so the index is correct.
 func dividePlan(plan compactionPlan, minPartSize, maxPartSize uint64) (copies []copyPart, manuals []manualPart, buff []byte, err error) {
 	// NB: if maxPartSize < 2*minPartSize, splitting large copies apart isn't solvable. S3's limits are plenty far enough apart that this isn't a problem in production, but we could violate this in tests.
 	if maxPartSize < 2*minPartSize {

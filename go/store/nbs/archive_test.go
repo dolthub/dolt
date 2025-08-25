@@ -751,7 +751,7 @@ func TestArchiveConjoinAll(t *testing.T) {
 	awCombined := newArchiveWriterWithSink(writerCombined)
 
 	readers := []archiveReader{archiveReader1, archiveReader2}
-	err := awCombined.conjoinAll(context.Background(), readersToSource(readers))
+	err := awCombined.conjoinAll(context.Background(), readersToSource(readers), &Stats{})
 	assert.NoError(t, err)
 
 	theBytes := writerCombined.buff[:writerCombined.pos]
@@ -806,7 +806,7 @@ func TestArchiveConjoinAllDuplicateChunk(t *testing.T) {
 	awCombined := newArchiveWriterWithSink(writerCombined)
 
 	readers := []archiveReader{archiveReader1, archiveReader2}
-	err := awCombined.conjoinAll(context.Background(), readersToSource(readers))
+	err := awCombined.conjoinAll(context.Background(), readersToSource(readers), &Stats{})
 	assert.NoError(t, err)
 
 	theBytes := writerCombined.buff[:writerCombined.pos]
@@ -884,7 +884,7 @@ func TestArchiveConjoinAllMixedCompression(t *testing.T) {
 	awCombined := newArchiveWriterWithSink(writerCombined)
 
 	readers := []archiveReader{archiveReader1, archiveReader2}
-	err := awCombined.conjoinAll(context.Background(), readersToSource(readers))
+	err := awCombined.conjoinAll(context.Background(), readersToSource(readers), &Stats{})
 	assert.NoError(t, err)
 
 	theBytes := writerCombined.buff[:writerCombined.pos]
@@ -990,7 +990,7 @@ func TestArchiveConjoinAllComprehensive(t *testing.T) {
 	writer1 := NewFixedBufferByteSink(make([]byte, 65536))
 	aw1 := newArchiveWriterWithSink(writer1)
 
-	err := aw1.conjoinAll(context.Background(), readersToSource(readers))
+	err := aw1.conjoinAll(context.Background(), readersToSource(readers), &Stats{})
 	assert.NoError(t, err)
 
 	// Create first combined reader
@@ -1045,14 +1045,14 @@ func TestArchiveConjoinAllComprehensive(t *testing.T) {
 		allExpectedChunks = append(allExpectedChunks, archiveChunks...)
 		allExpectedHashes = append(allExpectedHashes, hashes...)
 	}
-
+	
 	// Second conjoin: combine the first result with additional readers
 	allReadersForSecondConjoin := append([]archiveReader{combinedReader1}, additionalReaders...)
 
 	writer2 := NewFixedBufferByteSink(make([]byte, 131072))
 	aw2 := newArchiveWriterWithSink(writer2)
 
-	err = aw2.conjoinAll(context.Background(), readersToSource(allReadersForSecondConjoin))
+	err = aw2.conjoinAll(context.Background(), readersToSource(allReadersForSecondConjoin), &Stats{})
 	assert.NoError(t, err)
 
 	// Create final combined reader

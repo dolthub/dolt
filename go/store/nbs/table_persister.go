@@ -116,7 +116,7 @@ type compactionPlan struct {
 	suffix              string
 	mergedIndex         []byte
 	chunkCount          uint32
-	totalCompressedData uint64 // This is currently only used for stats and logging. Ignoring for archives. NM4.
+	totalCompressedData uint64
 }
 
 const (
@@ -155,7 +155,7 @@ func planRangeCopyConjoin(sources chunkSources, stats *Stats) (compactionPlan, e
 
 	switch mode {
 	case conjoinModeArchive:
-		return planArchiveConjoin(sized)
+		return planArchiveConjoin(sized, stats)
 	case conjoinModeTable:
 		return planTableConjoin(sized, stats)
 	default:

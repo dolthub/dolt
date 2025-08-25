@@ -279,7 +279,7 @@ func (aw *archiveWriter) writeIndex() error {
 		}
 	}
 
-	// sort stagedChunks by hash.Prefix(). Note this isn't a perfect sort for hashes, we are just grouping them by prefix
+	// sort stagedChunks by hash. This is foundational to the archive format.
 	sort.Sort(aw.stagedChunks)
 
 	// We lay down the sorted chunk list in it's three forms.
@@ -304,8 +304,6 @@ func (aw *archiveWriter) writeIndex() error {
 		}
 	}
 
-	indexSize := aw.bytesWritten - indexStart
-
 	// Suffixes output. This data is used to create the name for this archive.
 	aw.output.ResetHasher()
 	for _, scr := range aw.stagedChunks {
@@ -315,11 +313,10 @@ func (aw *archiveWriter) writeIndex() error {
 		}
 	}
 	dataWritten := uint64(len(aw.stagedChunks)) * hash.SuffixLen
-	indexSize += dataWritten
 	aw.bytesWritten += dataWritten
+	aw.indexLen = aw.bytesWritten - indexStart
 	aw.suffixCheckSum = sha512Sum(aw.output.GetSum())
 
-	aw.indexLen = indexSize
 	aw.output.ResetHasher()
 	aw.workflowStage = stageMetadata
 
@@ -733,31 +730,31 @@ func (asw *ArchiveStreamWriter) convertSnappyAndStage(cc CompressedChunk) (uint3
 //
 // This method finalizes the index and footer. Effectively completes the in memory archive writing
 // process, but does not write it to disk.
-func (aw *archiveWriter) conjoinAll(ctx context.Context, sources []chunkSource) error {
+func (aw *archiveWriter) conjoinAll(ctx context.Context, sources []chunkSource, stats *Stats) error {
 	if len(sources) < 2 {
 		return fmt.Errorf("conjoinAll requires at least 2 archive readers, got %d", len(sources))
 	}
 
-	srcCnts := make([]sourceWithSize, 0, len(sources))
+	srcSz := make([]sourceWithSize, 0, len(sources))
 	for _, src := range sources {
-		cnt, err := src.count()
-		if err != nil {
-			return fmt.Errorf("failed to count chunks in source %T: %w", src, err)
+		aSrc, ok := src.(archiveChunkSource)
+		if !ok {
+			return fmt.Errorf("runtime error: source %T is not an archiveChunkSource", src)
 		}
-		srcCnts = append(srcCnts, sourceWithSize{src, uint64(cnt)})
+		dataSpan := aSrc.aRdr.footer.dataSpan()
+
+		srcSz = append(srcSz, sourceWithSize{src, dataSpan.length})
 	}
 
 	// similar to cloud conjoin, we build the index first. It could come after in this case.
-	thePlan, err := planArchiveConjoin(srcCnts)
+	thePlan, err := planArchiveConjoin(srcSz, stats)
 	if err != nil {
 		return fmt.Errorf("failed to plan archive conjoin: %w", err)
 	}
 
-	stats := &Stats{}
-
 	// Now that we have the plan, we slam all datablocks into the output stream then write the index last.
-	for _, src := range sources {
-		aSrc, ok := src.(archiveChunkSource)
+	for _, src := range thePlan.sources.sws {
+		aSrc, ok := src.source.(archiveChunkSource)
 		if !ok {
 			return fmt.Errorf("runtime error: source %T is not an archiveChunkSource", src)
 		}
@@ -791,10 +788,15 @@ type tableChunkRecord struct {
 	hash   hash.Hash
 }
 
-func planArchiveConjoin(sources []sourceWithSize) (compactionPlan, error) {
+func planArchiveConjoin(sources []sourceWithSize, stats *Stats) (compactionPlan, error) {
 	if len(sources) < 2 {
 		return compactionPlan{}, fmt.Errorf("conjoinIndexes requires at least 2 archive readers, got %d", len(sources))
 	}
+
+	// place largest chunk sources at the beginning of the conjoin
+	orderedSrcs := chunkSourcesByDescendingDataSize{sws: sources}
+	//	sort.Sort(orderedSrcs)
+	sources = nil
 
 	writer := NewBlockBufferByteSink(fourMb)
 	aw := newArchiveWriterWithSink(writer)
@@ -802,7 +804,7 @@ func planArchiveConjoin(sources []sourceWithSize) (compactionPlan, error) {
 	currentDataOffset := uint64(0)
 	chunkCounter := uint32(0)
 
-	for _, src := range sources {
+	for _, src := range orderedSrcs.sws {
 		reader := src.source
 		arcSrc, ok := reader.(archiveChunkSource)
 		if !ok {
@@ -816,11 +818,11 @@ func planArchiveConjoin(sources []sourceWithSize) (compactionPlan, error) {
 			if err != nil {
 				return compactionPlan{}, err
 			}
-			chunks := index.chunkCount()
-			chunkCounter += chunks
+			chks := index.chunkCount()
+			chunkCounter += chks
 
-			chunkRecs := make([]tableChunkRecord, 0, chunks)
-			for i := uint32(0); i < chunks; i++ {
+			chunkRecs := make([]tableChunkRecord, 0, chks)
+			for i := uint32(0); i < chks; i++ {
 				var h hash.Hash
 				ie, err := index.indexEntry(i, &h)
 				if err != nil {
@@ -895,6 +897,8 @@ func planArchiveConjoin(sources []sourceWithSize) (compactionPlan, error) {
 	}
 
 	aw.bytesWritten = currentDataOffset
+	// Preserve this for stat reporting as aw.bytesWritten will be updated as we write the index.
+	dataBlocksLen := currentDataOffset
 
 	// The conjoin process is a little different from the normal archive writing process. We manually stick everything
 	// into the writer, and then finalize the index and footer at the end. The datablocks will be written in separately
@@ -918,11 +922,14 @@ func planArchiveConjoin(sources []sourceWithSize) (compactionPlan, error) {
 		return compactionPlan{}, fmt.Errorf("failed to build index buffer while conjoining archives: %w", err)
 	}
 
+	stats.BytesPerConjoin.Sample(dataBlocksLen + uint64(len(buf.Bytes())))
+
 	return compactionPlan{
-		sources:     chunkSourcesByDescendingDataSize{sources},
-		name:        name,
-		suffix:      ArchiveFileSuffix,
-		mergedIndex: buf.Bytes(),
-		chunkCount:  chunkCounter,
+		sources:             orderedSrcs,
+		name:                name,
+		suffix:              ArchiveFileSuffix,
+		mergedIndex:         buf.Bytes(),
+		chunkCount:          chunkCounter,
+		totalCompressedData: dataBlocksLen,
 	}, nil
 }
