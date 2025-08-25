@@ -54,8 +54,8 @@ func TestSimplifyStructFields(t *testing.T) {
 		},
 	},
 		structTypeFields{
-			StructField{PrimitiveTypeMap[BoolKind],"a",  true},
-			StructField{PrimitiveTypeMap[BoolKind],"b",  true},
+			StructField{PrimitiveTypeMap[BoolKind], "a", true},
+			StructField{PrimitiveTypeMap[BoolKind], "b", true},
 		},
 	)
 
@@ -123,7 +123,7 @@ func TestSimplifyType(t *testing.T) {
 		test(
 			mustType(makeStructType("", structTypeFields{
 				StructField{PrimitiveTypeMap[BoolKind], "a", false},
-				StructField{mustType(makeUnionType(PrimitiveTypeMap[FloatKind], PrimitiveTypeMap[FloatKind])),"b",  false},
+				StructField{mustType(makeUnionType(PrimitiveTypeMap[FloatKind], PrimitiveTypeMap[FloatKind])), "b", false},
 			})),
 			mustType(makeStructType("", structTypeFields{
 				StructField{PrimitiveTypeMap[BoolKind], "a", false},
@@ -135,7 +135,7 @@ func TestSimplifyType(t *testing.T) {
 			StructField{PrimitiveTypeMap[BoolKind], "b", false},
 			StructField{
 				mustType(makeStructType("", structTypeFields{
-					StructField{PrimitiveTypeMap[StringKind],"c", false},
+					StructField{PrimitiveTypeMap[StringKind], "c", false},
 				})),
 				"s",
 				!intersectStructs,
@@ -154,8 +154,8 @@ func TestSimplifyType(t *testing.T) {
 				})),
 			)),
 			mustType(makeStructType("", structTypeFields{
-				StructField{ PrimitiveTypeMap[BoolKind], "a",!intersectStructs},
-				StructField{ PrimitiveTypeMap[BoolKind], "b",!intersectStructs},
+				StructField{PrimitiveTypeMap[BoolKind], "a", !intersectStructs},
+				StructField{PrimitiveTypeMap[BoolKind], "b", !intersectStructs},
 			})),
 		)
 
@@ -233,7 +233,7 @@ func TestSimplifyType(t *testing.T) {
 				StructField{mustType(makeUnionType(PrimitiveTypeMap[BoolKind], PrimitiveTypeMap[BoolKind], PrimitiveTypeMap[FloatKind])), "a", false},
 			})),
 			mustType(makeStructType("A", structTypeFields{
-				StructField{ mustType(makeUnionType(PrimitiveTypeMap[BoolKind], PrimitiveTypeMap[FloatKind])), "a",false},
+				StructField{mustType(makeUnionType(PrimitiveTypeMap[BoolKind], PrimitiveTypeMap[FloatKind])), "a", false},
 			})),
 		)
 

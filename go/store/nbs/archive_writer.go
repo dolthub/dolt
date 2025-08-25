@@ -57,22 +57,22 @@ const (
 type archiveWriter struct {
 	// SHA512 is calculated on chunks of the output stream, so will be reset at appropriate times. This
 	// sinker is what archive code writes to, and it wraps the MD5 sink.
-	output           *HashingByteSink
+	output *HashingByteSink
 	// seenChunks is used when building archives chunk-by-chunk, to ensure that we do not write the same chunk multiple
 	// times. It is not used for any other purpose, and there are cases where we bypass checking it (e.g. conjoining archives).
-	seenChunks       hash.HashSet
+	seenChunks hash.HashSet
 	// MD5 is calculated on the entire output, so this hash sink wraps actual ByteSink.
-	md5Summer        *HashingByteSink
-	finalPath        string
-	stagedBytes      stagedByteSpanSlice
-	stagedChunks     stagedChunkRefSlice
-	workflowStage    stage
-	bytesWritten     uint64
-	indexLen         uint64
-	chunkDataLength  uint64
-	metadataLen      uint32
-	suffixCheckSum   sha512Sum
-	fullMD5          md5Sum
+	md5Summer       *HashingByteSink
+	finalPath       string
+	stagedBytes     stagedByteSpanSlice
+	stagedChunks    stagedChunkRefSlice
+	workflowStage   stage
+	bytesWritten    uint64
+	indexLen        uint64
+	chunkDataLength uint64
+	metadataLen     uint32
+	suffixCheckSum  sha512Sum
+	fullMD5         md5Sum
 }
 
 /*

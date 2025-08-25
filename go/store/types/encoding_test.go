@@ -549,7 +549,7 @@ func TestWriteListOfStruct(t *testing.T) {
 func TestWriteListOfUnionWithType(t *testing.T) {
 	vrw := newTestValueStore()
 
-	structType, err := MakeStructType("S", StructField{PrimitiveTypeMap[FloatKind],"x", false})
+	structType, err := MakeStructType("S", StructField{PrimitiveTypeMap[FloatKind], "x", false})
 	require.NoError(t, err)
 
 	assertEncoding(t,
