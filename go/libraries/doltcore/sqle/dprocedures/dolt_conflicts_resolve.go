@@ -58,9 +58,9 @@ type DoltConflictsCatFunc struct {
 	children []sql.Expression
 }
 
-func getProllyRowMaps(ctx *sql.Context, vrw types.ValueReadWriter, ns tree.NodeStore, hash hash.Hash, tblName string) (prolly.Map, error) {
+func getProllyRowMaps(ctx *sql.Context, vrw types.ValueReadWriter, ns tree.NodeStore, hash hash.Hash, tblName doltdb.TableName) (prolly.Map, error) {
 	rootVal, err := doltdb.LoadRootValueFromRootIshAddr(ctx, vrw, ns, hash)
-	tbl, ok, err := rootVal.GetTable(ctx, doltdb.TableName{Name: tblName})
+	tbl, ok, err := rootVal.GetTable(ctx, tblName)
 	if err != nil {
 		return prolly.Map{}, err
 	}
@@ -80,7 +80,7 @@ func getProllyRowMaps(ctx *sql.Context, vrw types.ValueReadWriter, ns tree.NodeS
 	return pm, nil
 }
 
-func resolveProllyConflicts(ctx *sql.Context, tbl *doltdb.Table, tblName string, ourSch, sch schema.Schema) (*doltdb.Table, error) {
+func resolveProllyConflicts(ctx *sql.Context, tbl *doltdb.Table, tblName doltdb.TableName, ourSch, sch schema.Schema) (*doltdb.Table, error) {
 	var err error
 	artifactIdx, err := tbl.GetArtifacts(ctx)
 	if err != nil {
@@ -109,7 +109,7 @@ func resolveProllyConflicts(ctx *sql.Context, tbl *doltdb.Table, tblName string,
 	if err != nil {
 		return nil, err
 	}
-	mutIdxs, err := merge.GetMutableSecondaryIdxs(ctx, ourSch, sch, tblName, idxSet)
+	mutIdxs, err := merge.GetMutableSecondaryIdxs(ctx, ourSch, sch, tblName.Name, idxSet)
 	if err != nil {
 		return nil, err
 	}
@@ -441,7 +441,7 @@ func ResolveDataConflicts(ctx *sql.Context, dSess *dsess.DoltSession, root doltd
 
 		if !ours {
 			if tbl.Format() == types.Format_DOLT {
-				tbl, err = resolveProllyConflicts(ctx, tbl, tblName.Name, ourSch, sch)
+				tbl, err = resolveProllyConflicts(ctx, tbl, tblName, ourSch, sch)
 			} else {
 				state, _, err := dSess.LookupDbState(ctx, dbName)
 				if err != nil {
