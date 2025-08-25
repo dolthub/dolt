@@ -51,11 +51,11 @@ func TestMoveRemaining(t *testing.T) {
 	sl1 := types.KVPSlice{{Key: types.Uint(0), Val: types.NullValue}, {Key: types.Uint(1), Val: types.NullValue}}
 	sl2 := types.KVPSlice{{Key: types.Uint(2), Val: types.NullValue}, {}}
 	coll := &KVPCollection{
-		2,
-		2,
-		3,
-		[]types.KVPSlice{sl1, sl2[:1]},
-		vrw,
+		vr:        vrw,
+		slices:    []types.KVPSlice{sl1, sl2[:1]},
+		buffSize:  2,
+		numSlices: 2,
+		totalSize: 3,
 	}
 
 	builder := NewKVPCollBuilder(vrw, 2)
