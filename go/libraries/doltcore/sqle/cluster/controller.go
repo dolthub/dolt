@@ -48,12 +48,12 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/remotesrv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/servercfg"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/clusterdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/jwtauth"
@@ -931,11 +931,12 @@ func (c *Controller) immediateTransitionToStandby() error {
 func (c *Controller) transitionToPrimary(saveConnID int) error {
 	c.setProviderIsStandby(false)
 	c.killRunningQueries(saveConnID)
-    // When promoting to primary, the promoted server may have replicated
-    // table data that contains more advanced AUTO_INCREMENT sequence values
-    // than the locally cached tracker knows about. Refresh trackers so the
-    // next insert does not reuse an existing primary key.
-    c.refreshAutoIncrementTrackers()
+	// Promotion: ensure next AUTO_INCREMENT values do not reuse existing IDs.
+	// Refresh trackers for databases already loaded in this session so first
+	// writes on the new primary allocate IDs at or above current table maxima.
+	if err := c.refreshAutoIncrementTrackersForSessionDatabases(); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -953,68 +954,67 @@ func (c *Controller) killRunningQueries(saveConnID int) {
 	}
 }
 
-// refreshAutoIncrementTrackers reinitializes the AUTO_INCREMENT trackers for all
-// databases managed by this server from their current working sets. This is
-// important on failover to primary so that new inserts allocate IDs greater than
-// any existing values replicated from the old primary.
-func (c *Controller) refreshAutoIncrementTrackers() {
-    if c == nil || c.sqlCtxFactory == nil {
-        return
-    }
+// refreshAutoIncrementTrackersForSessionDatabases re-initializes AUTO_INCREMENT
+// trackers for databases already loaded in the current session by using their
+// working sets. This immediately aligns in-memory sequences with replicated
+// table metadata after a promotion so the first post-promotion inserts do not
+// reuse primary keys. This method only refreshes session-known databases; any
+// database not yet loaded is skipped here and its tracker initializes lazily on
+// first use. Only working sets are read; branches and remotes are not scanned
+// as part of this promotion path.
+func (c *Controller) refreshAutoIncrementTrackersForSessionDatabases() error {
+	if c == nil || c.sqlCtxFactory == nil {
+		return fmt.Errorf("cluster/controller: auto-inc refresh: missing sql context factory")
+	}
 
-    // Create a SQL context to access session and provider
-    sqlCtx, err := c.sqlCtxFactory(context.Background())
-    if err != nil {
-        c.lgr.Debugf("cluster/controller: auto-inc refresh: failed to create sql context: %v", err)
-        return
-    }
-    // Ensure proper session lifecycle for any storage-layer ops
-    defer sql.SessionEnd(sqlCtx.Session)
-    sql.SessionCommandBegin(sqlCtx.Session)
-    defer sql.SessionCommandEnd(sqlCtx.Session)
+	// Create a SQL context to access session and provider
+	sqlCtx, err := c.sqlCtxFactory(context.Background())
+	if err != nil {
+		return fmt.Errorf("cluster/controller: auto-inc refresh: create sql context: %w", err)
+	}
+	// Ensure proper session lifecycle for any storage-layer ops
+	defer sql.SessionEnd(sqlCtx.Session)
+	sql.SessionCommandBegin(sqlCtx.Session)
+	defer sql.SessionCommandEnd(sqlCtx.Session)
 
-    sess := dsess.DSessFromSess(sqlCtx.Session)
-    provider := sess.Provider()
+	sess := dsess.DSessFromSess(sqlCtx.Session)
+	provider := sess.Provider()
 
-    // Iterate versioned Dolt databases only
-    for _, db := range provider.DoltDatabases() {
-        name := db.Name()
-        if name == clusterdb.DoltClusterDbName { // skip cluster metadata DB
-            continue
-        }
+	for _, sdb := range provider.DoltDatabases() {
+		name := sdb.Name()
+		if name == clusterdb.DoltClusterDbName {
+			continue
+		}
 
-        // Only databases that expose GlobalState (e.g. regular Dolt databases)
-        // have auto-increment trackers to refresh.
-        gsp, ok := db.(globalstate.GlobalStateProvider)
-        if !ok {
-            continue
-        }
+		// Load DB and its AI tracker
+		db, err := provider.Database(sqlCtx, name)
+		if err != nil {
+			return fmt.Errorf("cluster/controller: auto-inc refresh: %s: provider db: %w", name, err)
+		}
+		gsp, ok := db.(globalstate.GlobalStateProvider)
+		if !ok {
+			// Non-versioned DBs don't participate in AUTO_INCREMENT global state
+			continue
+		}
+		ai, err := gsp.GetGlobalState().AutoIncrementTracker(sqlCtx)
+		if err != nil {
+			return fmt.Errorf("cluster/controller: auto-inc refresh: %s: tracker: %w", name, err)
+		}
 
-        gs := gsp.GetGlobalState()
-        ai, err := gs.AutoIncrementTracker(sqlCtx)
-        if err != nil {
-            c.lgr.Debugf("cluster/controller: auto-inc refresh: %s: cannot get tracker: %v", name, err)
-            continue
-        }
-
-        // Get the current working set for this database and re-init using it.
-        state, ok, err := sess.LookupDbState(sqlCtx, name)
-        if err != nil {
-            c.lgr.Debugf("cluster/controller: auto-inc refresh: %s: lookup state error: %v", name, err)
-            continue
-        }
-        if !ok || state.WorkingSet() == nil {
-            // Nothing loaded yet; skip. Tracker will be (re)initialized when the DB is used.
-            c.lgr.Debugf("cluster/controller: auto-inc refresh: %s: no working set found; skipping", name)
-            continue
-        }
-
-        ws := state.WorkingSet()
-        c.lgr.Debugf("cluster/controller: auto-inc refresh: %s: reinitializing from working set", name)
-        if err := ai.InitWithRoots(sqlCtx, ws); err != nil {
-            c.lgr.Debugf("cluster/controller: auto-inc refresh: %s: init error: %v", name, err)
-        }
-    }
+		// Get working set roots only
+		state, ok, err := sess.LookupDbState(sqlCtx, name)
+		if err != nil {
+			return fmt.Errorf("cluster/controller: auto-inc refresh: %s: lookup db state: %w", name, err)
+		}
+		if !ok || state.WorkingSet() == nil {
+			// Not loaded in session; defer to lazy initialization on first use
+			continue
+		}
+		if err := ai.InitWithRoots(sqlCtx, state.WorkingSet()); err != nil {
+			return fmt.Errorf("cluster/controller: auto-inc refresh: %s: init: %w", name, err)
+		}
+	}
+	return nil
 }
 
 // called with c.mu held
