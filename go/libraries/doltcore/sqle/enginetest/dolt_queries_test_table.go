@@ -252,8 +252,8 @@ var DoltTestRunFunctionScripts = []queries.ScriptTest{
 			{
 				Query: "SELECT * FROM dolt_test_run('group single value tests')",
 				Expected: []sql.Row{
+					{"should fail", "single value tests", "select * from test;", "FAIL", "Assertion failed: expected single value greater than 3.2, got 3.14159"},
 					{"should pass", "single value tests", "select * from test;", "PASS", ""},
-					{"should fail", "single value tests", "select * from test;", "FAIL", "assertion failed: expected single value greater than 3.2, got 3.14159"},
 				},
 			},
 		},

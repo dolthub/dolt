@@ -58,42 +58,47 @@ func expectSingleValue(sqlCtx *sql.Context, comparison string, value string, que
 		return "", err
 	}
 
-	switch maybeActual := row[0].(type) {
-	case int, int8, int16, int32, int64:
+	switch actualValue := row[0].(type) {
+	case int32:
 		expectedInt, err := strconv.ParseInt(value, 10, 64)
 		if err != nil {
-			return fmt.Sprintf("Could not compare non integer value '%s', with %d", value, maybeActual), nil
+			return fmt.Sprintf("Could not compare non integer value '%s', with %d", value, actualValue), nil
 		}
-		actualInt := reflect.ValueOf(expectedInt).Int()
+		actualInt := reflect.ValueOf(actualValue).Int()
 		return compareTestAssertion(comparison, expectedInt, actualInt, "single value"), nil
-	case uint, uint8, uint16, uint32, uint64:
+	case uint32:
 		expectedUint, err := strconv.ParseUint(value, 10, 64)
 		if err != nil {
-			return fmt.Sprintf("Could not compare non integer value '%s', with %d", value, maybeActual), nil
+			return fmt.Sprintf("Could not compare non integer value '%s', with %d", value, actualValue), nil
 		}
-		actualUint := reflect.ValueOf(expectedUint).Uint()
+		actualUint := reflect.ValueOf(actualValue).Uint()
 		return compareTestAssertion(comparison, expectedUint, actualUint, "single value"), nil
-	case float32, float64:
+	case float64:
 		expectedFloat, err := strconv.ParseFloat(value, 64)
 		if err != nil {
-			return fmt.Sprintf("Could not compare non float value '%s', with %f", value, maybeActual), nil
+			return fmt.Sprintf("Could not compare non float value '%s', with %f", value, actualValue), nil
 		}
-		actualFloat := row[0].(float64)
-		return compareTestAssertion(comparison, expectedFloat, actualFloat, "single value"), nil
+		return compareTestAssertion(comparison, expectedFloat, actualValue, "single value"), nil
+	case float32:
+		expectedFloat, err := strconv.ParseFloat(value, 32)
+		if err != nil {
+			return fmt.Sprintf("Could not compare non float value '%s', with %s", value, actualValue), nil
+		}
+		return compareTestAssertion(comparison, float32(expectedFloat), actualValue, "single value"), nil
 	case time.Time:
 		expectedTime, err := time.Parse(time.DateOnly, value)
 		if err != nil {
 			return fmt.Sprintf("%s does not appear to be a valid date", value), nil
 		}
-		return compareDates(comparison, expectedTime, maybeActual, "single value"), nil
+		return compareDates(comparison, expectedTime, actualValue, "single value"), nil
 	case *val.TextStorage, string:
-		actualString, err := GetStringColAsString(sqlCtx, maybeActual)
+		actualString, err := GetStringColAsString(sqlCtx, actualValue)
 		if err != nil {
 			return "", err
 		}
 		return compareTestAssertion(comparison, value, actualString, "single value"), nil
 	default:
-		return fmt.Sprintf("The type of %s is not supported. Open an issue at https://github.com/dolthub/dolt/issues to see it added", maybeActual), nil
+		return fmt.Sprintf("The type of %v is not supported. Open an issue at https://github.com/dolthub/dolt/issues to see it added", actualValue), nil
 	}
 }
 
