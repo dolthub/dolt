@@ -53,8 +53,8 @@ func statsFunc(fn func(ctx *sql.Context, args ...string) (interface{}, error)) f
 
 // StatsInfo gives a summary of the current coordinator stats.
 type StatsInfo struct {
-	Active            bool   `json:"active"`
 	DbCnt             int    `json:"dbCnt"`
+	Active            bool   `json:"active"`
 	StorageBucketCnt  int    `json:"storageBucketCnt"`
 	CachedBucketCnt   int    `json:"cachedBucketCnt"`
 	CachedBoundCnt    int    `json:"cachedBoundCnt"`
