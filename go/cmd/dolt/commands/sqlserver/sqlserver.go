@@ -56,6 +56,10 @@ const (
 	remotesapiReadOnlyFlag      = "remotesapi-readonly"
 	goldenMysqlConn             = "golden"
 	eventSchedulerStatus        = "event-scheduler"
+	mcpPortFlag                 = "mcp-port"
+	mcpUserFlag                 = "mcp-user"
+	mcpPasswordFlag             = "mcp-password"
+	mcpDatabaseFlag             = "mcp-database"
 )
 
 func indentLines(s string) string {
@@ -195,6 +199,12 @@ func (cmd SqlServerCmd) ArgParserWithName(name string) *argparser.ArgParser {
 	ap.SupportsFlag(remotesapiReadOnlyFlag, "", "Disable writes to the sql-server via the push operations. SQL writes are unaffected by this setting.")
 	ap.SupportsString(goldenMysqlConn, "", "mysql connection string", "Provides a connection string to a MySQL instance to be used to validate query results")
 	ap.SupportsString(eventSchedulerStatus, "", "status", "Determines whether the Event Scheduler is enabled and running on the server. It has one of the following values: 'ON', 'OFF' or 'DISABLED'.")
+	// Start an MCP HTTP server connected to this sql-server on the given port
+	ap.SupportsUint(mcpPortFlag, "", "port", "If provided, runs a Dolt MCP HTTP server on this port alongside the sql-server.")
+	// MCP SQL credentials (user required when MCP enabled; password optional)
+	ap.SupportsString(mcpUserFlag, "", "user", "SQL user for MCP to connect as (required when --mcp-port is set).")
+	ap.SupportsString(mcpPasswordFlag, "", "password", "Optional SQL password for MCP to connect with (requires --mcp-user). Defaults to env DOLT_ROOT_PASSWORD if unset.")
+	ap.SupportsString(mcpDatabaseFlag, "", "database", "Optional SQL database name MCP should connect to (requires --mcp-port and --mcp-user).")
 	return ap
 }
 
@@ -266,6 +276,37 @@ func StartServer(ctx context.Context, versionStr, commandStr string, args []stri
 		return err
 	}
 
+	// Optional MCP HTTP port
+	var mcpPortPtr *int
+	if mp, ok := apr.GetInt(mcpPortFlag); ok {
+		mcpPort := mp
+		mcpPortPtr = &mcpPort
+	}
+
+	// Optional MCP SQL user
+	var mcpUserPtr *string
+	if mu, ok := apr.GetValue(mcpUserFlag); ok {
+		user := mu
+		mcpUserPtr = &user
+	}
+	// Optional MCP SQL password
+	var mcpPasswordPtr *string
+	if mpw, ok := apr.GetValue(mcpPasswordFlag); ok {
+		pw := mpw
+		mcpPasswordPtr = &pw
+	}
+	// Optional MCP SQL database
+	var mcpDatabasePtr *string
+	if mdb, ok := apr.GetValue(mcpDatabaseFlag); ok {
+		db := mdb
+		mcpDatabasePtr = &db
+	}
+
+	// Validate and prepare MCP options in dedicated helper
+	if err := validateAndPrepareMCP(serverConfig, mcpPortPtr, mcpUserPtr, mcpPasswordPtr, mcpDatabasePtr); err != nil {
+		return err
+	}
+
 	err = generateYamlConfigIfNone(ap, help, args, dEnv, serverConfig)
 	if err != nil {
 		return err
@@ -279,12 +320,24 @@ func StartServer(ctx context.Context, versionStr, commandStr string, args []stri
 	cli.Printf("Starting server with Config %v\n", servercfg.ConfigInfo(serverConfig))
 
 	skipRootUserInitialization := apr.Contains(skipRootUserInitialization)
+	// Build MCP config if any MCP-related options are present
+	var mcpCfg *MCPConfig
+	if mcpPortPtr != nil || (mcpUserPtr != nil && *mcpUserPtr != "") || (mcpPasswordPtr != nil && *mcpPasswordPtr != "") || (mcpDatabasePtr != nil && *mcpDatabasePtr != "") {
+		mcpCfg = &MCPConfig{
+			Port:     mcpPortPtr,
+			User:     mcpUserPtr,
+			Password: mcpPasswordPtr,
+			Database: mcpDatabasePtr,
+		}
+	}
+
 	startError, closeError := Serve(ctx, &Config{
 		Version:          versionStr,
 		ServerConfig:     serverConfig,
 		Controller:       controller,
 		DoltEnv:          dEnv,
 		SkipRootUserInit: skipRootUserInitialization,
+		MCP:              mcpCfg,
 	})
 	if startError != nil {
 		return startError
