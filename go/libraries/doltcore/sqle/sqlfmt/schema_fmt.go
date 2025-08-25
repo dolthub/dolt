@@ -112,41 +112,13 @@ func generateNonCreateNonDropTableSqlSchemaDiff(td diff.TableDelta, toSchemas ma
 
 	colDiffs, unionTags := diff.DiffSchColumns(fromSch, toSch)
 	
-	// Build maps to detect same-name column changes (DROP+ADD -> MODIFY)
-	addedByName := make(map[string]*schema.Column)
-	removedByName := make(map[string]*schema.Column)
-	for _, tag := range unionTags {
-		cd := colDiffs[tag]
-		if cd.DiffType == diff.SchDiffAdded && cd.New != nil {
-			addedByName[cd.New.Name] = cd.New
-		} else if cd.DiffType == diff.SchDiffRemoved && cd.Old != nil {
-			removedByName[cd.Old.Name] = cd.Old
-		}
-	}
-	
-	processedNames := make(map[string]bool)
 	for _, tag := range unionTags {
 		cd := colDiffs[tag]
 		switch cd.DiffType {
 		case diff.SchDiffNone:
 		case diff.SchDiffAdded:
-			// Convert DROP+ADD of same name to MODIFY if PK membership unchanged
-			if cd.New != nil && removedByName[cd.New.Name] != nil && !processedNames[cd.New.Name] {
-				if removedByName[cd.New.Name].IsPartOfPK == cd.New.IsPartOfPK {
-					ddlStatements = append(ddlStatements, AlterTableModifyColStmt(td.ToName.Name,
-						GenerateCreateTableColumnDefinition(*cd.New, sql.CollationID(td.ToSch.GetCollation()))))
-					processedNames[cd.New.Name] = true
-					continue
-				}
-			}
 			ddlStatements = append(ddlStatements, AlterTableAddColStmt(td.ToName.Name, GenerateCreateTableColumnDefinition(*cd.New, sql.CollationID(td.ToSch.GetCollation()))))
 		case diff.SchDiffRemoved:
-			// Skip DROP if it pairs with ADD of same name (handled above)
-			if cd.Old != nil && addedByName[cd.Old.Name] != nil && !processedNames[cd.Old.Name] {
-				if cd.Old.IsPartOfPK == addedByName[cd.Old.Name].IsPartOfPK {
-					continue
-				}
-			}
 			ddlStatements = append(ddlStatements, AlterTableDropColStmt(td.ToName.Name, cd.Old.Name))
 		case diff.SchDiffModified:
 			// Ignore any primary key set changes here

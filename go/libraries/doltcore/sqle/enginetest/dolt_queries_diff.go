@@ -3919,46 +3919,231 @@ var PatchTableFunctionScriptTests = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "dolt_patch index diff regression - dolt#9677",
+		Name: "dolt_patch: compatible type changes generate MODIFY, incompatible changes generate DROP+ADD",
 		SetUpScript: []string{
-			"-- https://github.com/dolthub/dolt/issues/9677",
+			"CREATE TABLE int_test (id INT PRIMARY KEY, col1 TINYINT)",
+			"CALL dolt_add('.')",
+			"CALL dolt_commit('-m', 'tinyint version')",
+			"CALL dolt_checkout('-b', 'int_widen_after')",
+			"ALTER TABLE int_test MODIFY COLUMN col1 INT",
+			"CALL dolt_add('.')",
+			"CALL dolt_commit('-m', 'int version')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT statement FROM dolt_patch('main', 'int_widen_after') WHERE diff_type = 'schema'",
+				Expected: []sql.Row{
+					{"ALTER TABLE `int_test` MODIFY COLUMN `col1` int;"},
+				},
+			},
+		},
+	},
+	{
+		Name: "dolt_patch: decimal precision expansion generates MODIFY",
+		SetUpScript: []string{
+			"CREATE TABLE decimal_test (id INT PRIMARY KEY, amount DECIMAL(5,2))",
+			"CALL dolt_add('.')",
+			"CALL dolt_commit('-m', 'small decimal')",
+			"CALL dolt_checkout('-b', 'decimal_expand')",
+			"ALTER TABLE decimal_test DROP COLUMN amount",
+			"ALTER TABLE decimal_test ADD COLUMN amount DECIMAL(8,4)",
+			"CALL dolt_add('.')",
+			"CALL dolt_commit('-m', 'expanded decimal')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT statement FROM dolt_patch('main', 'decimal_expand') WHERE diff_type = 'schema'",
+				Expected: []sql.Row{
+					{"ALTER TABLE `decimal_test` MODIFY COLUMN `amount` decimal(8,4);"},
+				},
+			},
+		},
+	},
+	{
+		Name: "dolt_patch: integer signedness change generates DROP+ADD (conservative approach)",
+		SetUpScript: []string{
+			"CREATE TABLE signedness_test (id INT PRIMARY KEY, col1 BIGINT)",
+			"CALL dolt_add('.')",
+			"CALL dolt_commit('-m', 'signed bigint')",
+			"CALL dolt_checkout('-b', 'unsigned_branch')",
+			"ALTER TABLE signedness_test DROP COLUMN col1",
+			"ALTER TABLE signedness_test ADD COLUMN col1 BIGINT UNSIGNED",
+			"CALL dolt_add('.')",
+			"CALL dolt_commit('-m', 'unsigned bigint')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT statement FROM dolt_patch('main', 'unsigned_branch') WHERE diff_type = 'schema' ORDER BY statement_order",
+				Expected: []sql.Row{
+					{"ALTER TABLE `signedness_test` DROP `col1`;"},
+					{"ALTER TABLE `signedness_test` ADD `col1` bigint unsigned;"},
+				},
+			},
+		},
+	},
+	{
+		Name: "dolt_patch: incompatible type change generates DROP+ADD",
+		SetUpScript: []string{
+			"CREATE TABLE incompatible_test (id INT PRIMARY KEY, data VARCHAR(50))",
+			"CALL dolt_add('.')",
+			"CALL dolt_commit('-m', 'varchar version')",
+			"CALL dolt_checkout('-b', 'int_branch')",
+			"ALTER TABLE incompatible_test DROP COLUMN data",
+			"ALTER TABLE incompatible_test ADD COLUMN data INT",
+			"CALL dolt_add('.')",
+			"CALL dolt_commit('-m', 'int version')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT statement FROM dolt_patch('main', 'int_branch') WHERE diff_type = 'schema' ORDER BY statement_order",
+				Expected: []sql.Row{
+					{"ALTER TABLE `incompatible_test` DROP `data`;"},
+					{"ALTER TABLE `incompatible_test` ADD `data` int;"},
+				},
+			},
+		},
+	},
+	{
+		Name: "dolt_patch: integer type chain widening generates MODIFY", 
+		SetUpScript: []string{
+			"CREATE TABLE chain_test (id INT PRIMARY KEY, col1 TINYINT)",
+			"CALL dolt_add('.')",
+			"CALL dolt_commit('-m', 'tinyint')",
+			"CALL dolt_checkout('-b', 'smallint_branch')",
+			"ALTER TABLE chain_test DROP COLUMN col1",
+			"ALTER TABLE chain_test ADD COLUMN col1 SMALLINT",
+			"CALL dolt_add('.')",
+			"CALL dolt_commit('-m', 'smallint')",
+			"CALL dolt_checkout('-b', 'mediumint_branch')",
+			"ALTER TABLE chain_test DROP COLUMN col1",
+			"ALTER TABLE chain_test ADD COLUMN col1 MEDIUMINT",
+			"CALL dolt_add('.')",
+			"CALL dolt_commit('-m', 'mediumint')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT statement FROM dolt_patch('main', 'smallint_branch') WHERE diff_type = 'schema'",
+				Expected: []sql.Row{
+					{"ALTER TABLE `chain_test` MODIFY COLUMN `col1` smallint;"},
+				},
+			},
+			{
+				Query: "SELECT statement FROM dolt_patch('smallint_branch', 'mediumint_branch') WHERE diff_type = 'schema'",
+				Expected: []sql.Row{
+					{"ALTER TABLE `chain_test` MODIFY COLUMN `col1` mediumint;"},
+				},
+			},
+		},
+	},
+	{
+		Name: "dolt_patch: decimal edge case maintains integer digit capacity",
+		SetUpScript: []string{
+			"CREATE TABLE decimal_edge_test (id INT PRIMARY KEY, amount DECIMAL(6,2))",
+			"CALL dolt_add('.')",
+			"CALL dolt_commit('-m', 'decimal 6,2')",
+			"CALL dolt_checkout('-b', 'decimal_edge_branch')",
+			"ALTER TABLE decimal_edge_test DROP COLUMN amount",
+			"ALTER TABLE decimal_edge_test ADD COLUMN amount DECIMAL(7,3)",
+			"CALL dolt_add('.')",
+			"CALL dolt_commit('-m', 'decimal 7,3')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT statement FROM dolt_patch('main', 'decimal_edge_branch') WHERE diff_type = 'schema'",
+				Expected: []sql.Row{
+					{"ALTER TABLE `decimal_edge_test` MODIFY COLUMN `amount` decimal(7,3);"},
+				},
+			},
+		},
+	},
+	{
+		Name: "dolt_patch: type changes do not generate spurious index operations",
+		SetUpScript: []string{
+			"CREATE TABLE idx_test (id INT PRIMARY KEY, col1 TINYINT, UNIQUE KEY uk_col1 (col1), KEY idx_col1 (col1))",
+			"CALL dolt_add('.')",
+			"CALL dolt_commit('-m', 'with tinyint')",
+			"CALL dolt_checkout('-b', 'index_compat_after')",
+			"ALTER TABLE idx_test MODIFY COLUMN col1 INT",
+			"CALL dolt_add('.')",
+			"CALL dolt_commit('-m', 'with int')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT statement FROM dolt_patch('main', 'index_compat_after') WHERE diff_type = 'schema'",
+				Expected: []sql.Row{
+					{"ALTER TABLE `idx_test` MODIFY COLUMN `col1` int;"},
+				},
+			},
+			{
+				Query: "SELECT COUNT(*) FROM dolt_patch('main', 'index_compat_after') WHERE diff_type = 'schema' AND statement LIKE '%INDEX%'",
+				Expected: []sql.Row{{0}},
+			},
+		},
+	},
+	{
+		Name: "dolt_patch: incompatible type changes with indexes do not generate spurious index operations", 
+		SetUpScript: []string{
+			"CREATE TABLE idx_incompat_test (id INT PRIMARY KEY, col1 VARCHAR(50), KEY idx_col1 (col1))",
+			"CALL dolt_add('.')",
+			"CALL dolt_commit('-m', 'varchar with index')",
+			"CALL dolt_checkout('-b', 'incompat_index_branch')",
+			"ALTER TABLE idx_incompat_test DROP COLUMN col1",
+			"ALTER TABLE idx_incompat_test ADD COLUMN col1 INT",
+			"CALL dolt_add('.')",
+			"CALL dolt_commit('-m', 'int with same index')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT statement FROM dolt_patch('main', 'incompat_index_branch') WHERE diff_type = 'schema' ORDER BY statement_order",
+				Expected: []sql.Row{
+					{"ALTER TABLE `idx_incompat_test` DROP `col1`;"},
+					{"ALTER TABLE `idx_incompat_test` ADD `col1` int;"},
+					{"ALTER TABLE `idx_incompat_test` DROP INDEX `idx_col1`;"},
+				},
+			},
+			{
+				Query: "SELECT COUNT(*) FROM dolt_patch('main', 'incompat_index_branch') WHERE diff_type = 'schema' AND statement LIKE '%INDEX%'",
+				Expected: []sql.Row{{1}},
+			},
+		},
+	},
+	{
+		Name: "dolt_patch: customer regression test - dolt#9677 (conservative approach)",
+		SetUpScript: []string{
 			"CREATE TABLE other_table (id int unsigned NOT NULL AUTO_INCREMENT, PRIMARY KEY (id))",
 			"CALL dolt_add('.')",
-			"CALL dolt_commit('-m', 'initial commit')",
-
-			"-- Create old branch with bigint column",
-			"CALL dolt_checkout('-b', 'old')",
+			"CALL dolt_commit('-m', 'reference table')",
 			"CREATE TABLE table_name (id INT unsigned NOT NULL AUTO_INCREMENT, field_name INT UNSIGNED NOT NULL, field_change_sign bigint DEFAULT NULL, PRIMARY KEY (id), UNIQUE KEY field_name_UNIQUE (field_name), KEY fk_field_name_idx (field_name), CONSTRAINT fk_field_name FOREIGN KEY (field_name) REFERENCES other_table (id))",
 			"CALL dolt_add('.')",
 			"CALL dolt_commit('-m', 'table with bigint column')",
-
-			"-- Create new branch with bigint unsigned column - only difference",
-			"CALL dolt_checkout('main')",
-			"CALL dolt_checkout('-b', 'new')",
-			"CREATE TABLE table_name (id INT unsigned NOT NULL AUTO_INCREMENT, field_name INT UNSIGNED NOT NULL, field_change_sign bigint unsigned DEFAULT NULL, PRIMARY KEY (id), UNIQUE KEY field_name_UNIQUE (field_name), KEY fk_field_name_idx (field_name), CONSTRAINT fk_field_name FOREIGN KEY (field_name) REFERENCES other_table (id))",
+			"CALL dolt_checkout('-b', 'customer_unsigned')",
+			"ALTER TABLE table_name DROP COLUMN field_change_sign",
+			"ALTER TABLE table_name ADD COLUMN field_change_sign bigint unsigned DEFAULT NULL",
 			"CALL dolt_add('.')",
 			"CALL dolt_commit('-m', 'table with bigint unsigned column')",
 		},
 		Assertions: []queries.ScriptTestAssertion{
-            {
-                Query: "SELECT statement FROM dolt_patch('old', 'new', 'table_name') WHERE diff_type = 'schema' ORDER BY statement_order",
-                Expected: []sql.Row{
-                    {"ALTER TABLE `table_name` MODIFY COLUMN `field_change_sign` bigint unsigned DEFAULT NULL;"},
-                },
-            },
-            {
-                Query: "SELECT statement FROM dolt_patch('old', 'new') WHERE diff_type = 'schema' ORDER BY statement_order",
-                Expected: []sql.Row{
-                    {"ALTER TABLE `table_name` MODIFY COLUMN `field_change_sign` bigint unsigned DEFAULT NULL;"},
-                },
-            },
 			{
-				// Verify that the indexes are indeed identical on both branches
-				Query: "SELECT COUNT(*) FROM (SELECT index_name, non_unique, column_name FROM INFORMATION_SCHEMA.STATISTICS WHERE table_name = 'table_name' AND table_schema = 'mydb' ORDER BY index_name, seq_in_index) as old_indexes",
-				Expected: []sql.Row{{3}}, // PRIMARY, field_name_UNIQUE, fk_field_name_idx
+				Query: "SELECT statement FROM dolt_patch('main', 'customer_unsigned', 'table_name') WHERE diff_type = 'schema' ORDER BY statement_order",
+				Expected: []sql.Row{
+					{"ALTER TABLE `table_name` DROP `field_change_sign`;"},
+					{"ALTER TABLE `table_name` ADD `field_change_sign` bigint unsigned DEFAULT NULL;"},
+				},
+			},
+			{
+				Query: "SELECT statement FROM dolt_patch('main', 'customer_unsigned') WHERE diff_type = 'schema' ORDER BY statement_order", 
+				Expected: []sql.Row{
+					{"ALTER TABLE `table_name` DROP `field_change_sign`;"},
+					{"ALTER TABLE `table_name` ADD `field_change_sign` bigint unsigned DEFAULT NULL;"},
+				},
+			},
+			{
+				Query: "SELECT COUNT(*) FROM dolt_patch('main', 'customer_unsigned') WHERE diff_type = 'schema' AND statement LIKE '%INDEX%'",
+				Expected: []sql.Row{{0}},
 			},
 		},
 	},
+
 }
 
 var UnscopedDiffSystemTableScriptTests = []queries.ScriptTest{

@@ -102,6 +102,8 @@ func newDoltTypeCompatibilityChecker() TypeCompatibilityChecker {
 			stringTypeChangeHandler{},
 			enumTypeChangeHandler{},
 			setTypeChangeHandler{},
+			integerTypeChangeHandler{},
+			decimalTypeChangeHandler{},
 		},
 	}
 }
@@ -114,6 +116,7 @@ func (d doltTypeCompatibilityChecker) IsTypeChangeCompatible(from, to typeinfo.T
 	// If the types are exactly identical, then they are always compatible
 	fromSqlType := from.ToSqlType()
 	toSqlType := to.ToSqlType()
+	
 	if fromSqlType.Equals(toSqlType) {
 		res.Compatible = true
 		return res
@@ -135,7 +138,88 @@ func (d doltTypeCompatibilityChecker) IsTypeChangeCompatible(from, to typeinfo.T
 			}
 		}
 	}
+	return res
+}
 
+// integerTypeChangeHandler allows only integer widenings with same signedness.
+// Signedness changes are data-dependent and may cause conversion errors.
+type integerTypeChangeHandler struct{}
+
+var _ typeChangeHandler = (*integerTypeChangeHandler)(nil)
+
+func (i integerTypeChangeHandler) canHandle(fromSqlType, toSqlType sql.Type) bool {
+	return types.IsInteger(fromSqlType) && types.IsInteger(toSqlType)
+}
+
+func (i integerTypeChangeHandler) isCompatible(fromSqlType, toSqlType sql.Type) (res TypeChangeInfo) {
+	// Conservative rule: only allow widenings with same signedness
+	
+	fromSize := getIntegerSize(fromSqlType)
+	toSize := getIntegerSize(toSqlType)
+	fromUnsigned := sqltypes.IsUnsigned(fromSqlType.Type())
+	toUnsigned := sqltypes.IsUnsigned(toSqlType.Type())
+	
+	// Allow only size increases with same signedness
+	if toSize > fromSize && fromUnsigned == toUnsigned {
+		res.Compatible = true
+	}
+	
+	return res
+}
+
+// Integer size constants for type compatibility comparison
+const (
+	tinyIntSize   = 1 // 8-bit
+	smallIntSize  = 2 // 16-bit
+	mediumIntSize = 3 // 24-bit
+	intSize       = 4 // 32-bit
+	bigIntSize    = 5 // 64-bit
+)
+
+// getIntegerSize returns relative size ordering for integer types
+func getIntegerSize(t sql.Type) int {
+	switch t.Type() {
+	case sqltypes.Int8, sqltypes.Uint8:
+		return tinyIntSize
+	case sqltypes.Int16, sqltypes.Uint16:
+		return smallIntSize
+	case sqltypes.Int24, sqltypes.Uint24:
+		return mediumIntSize
+	case sqltypes.Int32, sqltypes.Uint32:
+		return intSize
+	case sqltypes.Int64, sqltypes.Uint64:
+		return bigIntSize
+	default:
+		return 0
+	}
+}
+
+
+
+// decimalTypeChangeHandler allows precision/scale expansion without data loss.
+type decimalTypeChangeHandler struct{}
+
+var _ typeChangeHandler = (*decimalTypeChangeHandler)(nil)
+
+func (dch decimalTypeChangeHandler) canHandle(fromSqlType, toSqlType sql.Type) bool {
+	return types.IsDecimal(fromSqlType) && types.IsDecimal(toSqlType)
+}
+
+func (dch decimalTypeChangeHandler) isCompatible(fromSqlType, toSqlType sql.Type) (res TypeChangeInfo) {
+	fromDec := fromSqlType.(sql.DecimalType)
+	toDec := toSqlType.(sql.DecimalType)
+
+	// Calculate integer digits (precision - scale) for both types
+	fromIntegerDigits := fromDec.Precision() - fromDec.Scale()
+	toIntegerDigits := toDec.Precision() - toDec.Scale()
+
+	// Allow only expansions: precision >=, scale >=, integer digits >=
+	if toDec.Precision() >= fromDec.Precision() && 
+	   toIntegerDigits >= fromIntegerDigits && 
+	   toDec.Scale() >= fromDec.Scale() {
+		res.Compatible = true
+		return res
+	}
 	return res
 }
 

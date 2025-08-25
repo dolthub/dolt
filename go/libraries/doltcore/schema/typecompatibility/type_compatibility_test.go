@@ -159,10 +159,10 @@ func TestDoltIsTypeChangeCompatible(t *testing.T) {
 			to:         typeinfo.Int64Type,
 			compatible: true,
 		}, {
-			name:       "int family: small to large type changes are incompatible",
+			name:       "int family: safe widenings with same signedness are compatible",
 			from:       typeinfo.Int8Type,
 			to:         typeinfo.Int16Type,
-			compatible: false,
+			compatible: true,
 		}, {
 			name:       "int family: large to small type changes are incompatible",
 			from:       typeinfo.Int64Type,

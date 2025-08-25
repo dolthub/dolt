@@ -19,6 +19,8 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typecompatibility"
+	storetypes "github.com/dolthub/dolt/go/store/types"
 )
 
 type SchemaChangeType int
@@ -45,6 +47,7 @@ type ColumnDifference struct {
 type columnPair [2]*schema.Column
 
 // DiffSchColumns compares two schemas by looking at columns with the same tag.
+// For unmatched columns, it also tries name-based matching with type compatibility.
 func DiffSchColumns(fromSch, toSch schema.Schema) (map[uint64]ColumnDifference, []uint64) {
 	colPairMap, unionTags := pairColumns(fromSch, toSch)
 
@@ -70,25 +73,67 @@ func pairColumns(fromSch, toSch schema.Schema) (map[uint64]columnPair, []uint64)
 	// collect the tag union of the two schemas, ordering fromSch before toSch
 	var unionTags []uint64
 	colPairMap := make(map[uint64]columnPair)
+	var unpairedFrom []schema.Column
 
 	_ = fromSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		colPairMap[tag] = columnPair{&col, nil}
 		unionTags = append(unionTags, tag)
+		unpairedFrom = append(unpairedFrom, col)
 
 		return false, nil
 	})
 
+	var unpairedTo []schema.Column
 	_ = toSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		if pair, ok := colPairMap[tag]; ok {
 			pair[1] = &col
 			colPairMap[tag] = pair
+			// Remove from unpaired list since it found a tag match
+			for i, fromCol := range unpairedFrom {
+				if fromCol.Tag == tag {
+					unpairedFrom = append(unpairedFrom[:i], unpairedFrom[i+1:]...)
+					break
+				}
+			}
 		} else {
 			colPairMap[tag] = columnPair{nil, &col}
 			unionTags = append(unionTags, tag)
+			unpairedTo = append(unpairedTo, col)
 		}
 
 		return false, nil
 	})
+
+	// Try name-based pairing for remaining unmatched columns with compatible types
+	if len(unpairedFrom) > 0 && len(unpairedTo) > 0 {
+		checker := typecompatibility.NewTypeCompatabilityCheckerForStorageFormat(storetypes.Format_Default)
+		
+		for _, fromCol := range unpairedFrom {
+			for _, toCol := range unpairedTo {
+				if fromCol.Name == toCol.Name {
+					compatInfo := checker.IsTypeChangeCompatible(fromCol.TypeInfo, toCol.TypeInfo)
+					
+					if compatInfo.Compatible {
+						// Remove the unpaired entries
+						delete(colPairMap, fromCol.Tag)
+						delete(colPairMap, toCol.Tag)
+						
+						// Create a new paired entry using the fromCol tag (preserves original position)
+						colPairMap[fromCol.Tag] = columnPair{&fromCol, &toCol}
+						
+						// Remove the toCol tag from unionTags since we're using fromCol tag
+						for i, tag := range unionTags {
+							if tag == toCol.Tag {
+								unionTags = append(unionTags[:i], unionTags[i+1:]...)
+								break
+							}
+						}
+						break
+					}
+				}
+			}
+		}
+	}
 
 	return colPairMap, unionTags
 }
@@ -103,7 +148,7 @@ type IndexDifference struct {
 // It returns matched and unmatched Indexes as a slice of IndexDifferences.
 func DiffSchIndexes(fromSch, toSch schema.Schema) (diffs []IndexDifference) {
 	_ = fromSch.Indexes().Iter(func(fromIdx schema.Index) (stop bool, err error) {
-		// Find exact matching index by comparing all properties
+		// Find matching index by comprehensive equality check
 		candidateIndexes := toSch.Indexes().GetIndexesByTags(fromIdx.IndexedColumnTags()...)
 		var toIdx schema.Index
 		for _, candidate := range candidateIndexes {
