@@ -241,6 +241,24 @@ var DoltTestRunFunctionScripts = []queries.ScriptTest{
 		},
 	},
 	{
+		Name: "Can expect single float",
+		SetUpScript: []string{
+			"CREATE TABLE test (a float)",
+			"INSERT INTO test VALUES (3.14159)",
+			"INSERT INTO dolt_tests VALUES ('should pass', 'single value tests', 'select * from test;', 'expected_single_value', '<', '3.2'), " +
+				"('should fail', 'single value tests', 'select * from test;', 'expected_single_value', '>', '3.2') ",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT * FROM dolt_test_run('group single value tests')",
+				Expected: []sql.Row{
+					{"should pass", "single value tests", "select * from test;", "PASS", ""},
+					{"should fail", "single value tests", "select * from test;", "FAIL", "assertion failed: expected single value greater than 3.2, got 3.14159"},
+				},
+			},
+		},
+	},
+	{
 		Name: "Single value will not accept multiple values",
 		SetUpScript: []string{
 			"INSERT INTO dolt_tests VALUES ('should fail', '', 'select * from dolt_log;', 'expected_single_value', '==', '0')",
