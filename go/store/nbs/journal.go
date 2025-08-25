@@ -528,7 +528,7 @@ func (c journalConjoiner) chooseConjoinees(upstream []tableSpec) (conjoinees, ke
 	if err != nil {
 		return nil, nil, err
 	}
-	if !hash.Hash(stash.name).IsEmpty() {
+	if !stash.name.IsEmpty() {
 		keepers = append(keepers, stash)
 	}
 	return

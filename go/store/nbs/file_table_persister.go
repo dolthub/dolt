@@ -246,7 +246,6 @@ func (ftp *fsTablePersister) ConjoinAll(ctx context.Context, sources chunkSource
 		return emptyChunkSource{}, func() {}, nil
 	}
 
-	name := nameFromSuffixes(plan.suffixes())
 	tempName, f, err := func() (tempName string, cleanup func(), ferr error) {
 		ftp.removeMu.Lock()
 		var temp *os.File
@@ -313,7 +312,7 @@ func (ftp *fsTablePersister) ConjoinAll(ctx context.Context, sources chunkSource
 		return nil, nil, err
 	}
 
-	path := filepath.Join(ftp.dir, name.String())
+	path := filepath.Join(ftp.dir, plan.name.String()+plan.suffix)
 	ftp.removeMu.Lock()
 	if ftp.toKeep != nil {
 		ftp.toKeep[filepath.Clean(path)] = struct{}{}
@@ -323,14 +322,13 @@ func (ftp *fsTablePersister) ConjoinAll(ctx context.Context, sources chunkSource
 		return nil, nil, err
 	}
 	ftp.removeMu.Unlock()
-
-	cs, err := ftp.Open(ctx, name, plan.chunkCount, stats)
+	cs, err := ftp.Open(ctx, plan.name, plan.chunkCount, stats)
 	if err != nil {
 		return nil, nil, err
 	}
 	return cs, func() {
 		for _, s := range sources {
-			file.Remove(filepath.Join(ftp.dir, s.hash().String()))
+			file.Remove(filepath.Join(ftp.dir, s.hash().String()+s.suffix()))
 		}
 	}, nil
 }
