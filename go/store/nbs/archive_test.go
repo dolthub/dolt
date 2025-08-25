@@ -1045,7 +1045,7 @@ func TestArchiveConjoinAllComprehensive(t *testing.T) {
 		allExpectedChunks = append(allExpectedChunks, archiveChunks...)
 		allExpectedHashes = append(allExpectedHashes, hashes...)
 	}
-	
+
 	// Second conjoin: combine the first result with additional readers
 	allReadersForSecondConjoin := append([]archiveReader{combinedReader1}, additionalReaders...)
 
