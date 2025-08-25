@@ -180,13 +180,14 @@ func (c *AutoGCController) newCommitHook(name string, db *doltdb.DoltDB) *autoGC
 	closed := make(chan *gcWorkReport)
 	close(closed)
 	ret := &autoGCCommitHook{
-		c:      c,
-		name:   name,
-		done:   closed,
-		next:   make(chan *gcWorkReport, 1),
-		db:     db,
-		tickCh: make(chan struct{}),
-		stopCh: make(chan struct{}),
+		c:         c,
+		name:      name,
+		done:      closed,
+		next:      make(chan *gcWorkReport, 1),
+		db:        db,
+		tickCh:    make(chan struct{}),
+		stopCh:    make(chan struct{}),
+		stoppedCh: make(chan struct{}),
 	}
 	c.hooks[name] = ret
 	if c.threads != nil {
@@ -235,6 +236,11 @@ type autoGCCommitHook struct {
 	// Closed when the thread should shutdown because the database
 	// is being removed.
 	stopCh chan struct{}
+	// Closed as the background processing thread shutsdown. The
+	// dattabase hook selects on this to avoid deadlocking if it
+	// is trying to send to the worker thread after it has been
+	// shutdown.
+	stoppedCh chan struct{}
 	// An optimistic send on this channel notifies the background
 	// thread that the sizes may have changed and it can check for
 	// the GC condition.
@@ -279,6 +285,8 @@ func (c *AutoGCController) InitDatabaseHook() InitDatabaseHook {
 func (h *autoGCCommitHook) Execute(ctx context.Context, _ datas.Dataset, _ *doltdb.DoltDB) (func(context.Context) error, error) {
 	select {
 	case h.tickCh <- struct{}{}:
+		return nil, nil
+	case <-h.stoppedCh:
 		return nil, nil
 	case <-ctx.Done():
 		return nil, context.Cause(ctx)
@@ -359,6 +367,7 @@ func (h *autoGCCommitHook) checkForGC(ctx context.Context) error {
 
 func (h *autoGCCommitHook) thread(ctx context.Context) {
 	defer h.wg.Done()
+	defer close(h.stoppedCh)
 	timer := time.NewTimer(checkInterval)
 	defer timer.Stop()
 	for {

@@ -100,6 +100,7 @@ const (
 	outputFlag            = "output"
 	binaryAsHexFlag       = "binary-as-hex"
 	skipBinaryAsHexFlag   = "skip-binary-as-hex"
+	disableAutoGCFlag     = "disable-auto-gc"
 	// TODO: Consider simplifying to use MySQL's skip pattern with single flag definition
 	// MySQL handles both --binary-as-hex and --skip-binary-as-hex with one option definition
 	// and uses disabled_my_option to distinguish between enable/disable
@@ -155,6 +156,7 @@ func (cmd SqlCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(binaryAsHexFlag, "", "Print binary data as hex. Enabled by default for interactive terminals.")
 	// TODO: MySQL uses a skip- pattern for negating flags and doesn't show them in help
 	ap.SupportsFlag(skipBinaryAsHexFlag, "", "Disable binary data as hex output.")
+	ap.SupportsFlag(disableAutoGCFlag, "", "Disable automatically running GC.")
 	return ap
 }
 
@@ -227,7 +229,13 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		return HandleVErrAndExitCode(errhand.BuildDError("cannot use both --%s and --%s", binaryAsHexFlag, skipBinaryAsHexFlag).Build(), usage)
 	}
 
-	queryist, err := cliCtx.QueryEngine(ctx)
+	enableAutoGC := true
+	if apr.Contains(disableAutoGCFlag) {
+		enableAutoGC = false
+	}
+	queryist, err := cliCtx.QueryEngine(ctx, func(config *cli.LateBindQueryistConfig) {
+		config.EnableAutoGC = enableAutoGC
+	})
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
@@ -618,6 +626,11 @@ func execBatchMode(ctx *sql.Context, qryist cli.Queryist, input io.Reader, conti
 	scanner := NewStreamScanner(input)
 	var query string
 	for scanner.Scan() {
+		// The session we get is wrapped in a command begin/end block.
+		// By ending the command and starting a new one, Auto GC is able
+		// to form safe points if/when it is enabled.
+		sql.SessionCommandEnd(ctx.Session)
+		sql.SessionCommandBegin(ctx.Session)
 		if fileReadProg != nil {
 			updateFileReadProgressOutput()
 			fileReadProg.setReadBytes(int64(len(scanner.Bytes())))
@@ -763,6 +776,12 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 	lastSqlCmd := ""
 
 	shell.Uninterpreted(func(c *ishell.Context) {
+		// The session we get is wrapped in a command begin/end block.
+		// By ending the command and starting a new one, Auto GC is able
+		// to form safe points if/when it is enabled.
+		sql.SessionCommandEnd(sqlCtx.Session)
+		sql.SessionCommandBegin(sqlCtx.Session)
+
 		query := c.Args[0]
 		query = strings.TrimSpace(query)
 		if len(query) == 0 {

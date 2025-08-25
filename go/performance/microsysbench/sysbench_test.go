@@ -22,6 +22,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/server"
@@ -48,11 +49,6 @@ const (
 )
 
 var dEnv *env.DoltEnv
-
-func init() {
-	dEnv = dtestutils.CreateTestEnv()
-	populateRepo(dEnv, readTestData(dataFile))
-}
 
 func BenchmarkOltpPointSelect(b *testing.B) {
 	benchmarkSysbenchQuery(b, func(int) string {
@@ -119,7 +115,13 @@ func BenchmarkSelectRandomRanges(b *testing.B) {
 	})
 }
 
+var initOnce sync.Once
+
 func benchmarkSysbenchQuery(b *testing.B, getQuery func(int) string) {
+	initOnce.Do(func() {
+		dEnv = dtestutils.CreateTestEnv()
+		populateRepo(dEnv, readTestData(dataFile))
+	})
 	ctx, eng := setupBenchmark(b, dEnv)
 	for i := 0; i < b.N; i++ {
 		schema, iter, _, err := eng.Query(ctx, getQuery(i))
