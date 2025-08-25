@@ -34,7 +34,7 @@ wait_for_mcp_port() {
   return 1
 }
 
-@test "sql-server mcp: --mcp-database connects to specified database" {
+@test "sql-server-mcp: --mcp-database connects to specified database" {
   cd repo1
 
   # Create target database before starting server
@@ -63,7 +63,7 @@ wait_for_mcp_port() {
   [ $status -eq 0 ]
 }
 
-@test "sql-server mcp: --mcp-user authenticates as specified sql user" {
+@test "sql-server-mcp: --mcp-user authenticates as specified sql user" {
     cd repo1
 
     # TODO: this is currently broken in bats for some reason,
@@ -93,7 +93,7 @@ wait_for_mcp_port() {
     [ $status -eq 0 ]
 }
 
-@test "sql-server mcp: starts MCP HTTP server on --mcp-port and serves alongside SQL" {
+@test "sql-server-mcp: starts MCP HTTP server on --mcp-port and serves alongside SQL" {
   cd repo1
 
   # Choose distinct ports for SQL and MCP
@@ -117,7 +117,7 @@ wait_for_mcp_port() {
   fi
 }
 
-@test "sql-server mcp: without --mcp-port, no MCP port is opened" {
+@test "sql-server-mcp: without --mcp-port, no MCP port is opened" {
   cd repo1
 
   # Pick a free port and ensure server doesn't bind it as MCP when not requested
@@ -135,7 +135,7 @@ wait_for_mcp_port() {
   [ $status -ne 0 ]
 }
 
-@test "sql-server mcp: HTTP initialize and call list_databases tool" {
+@test "sql-server-mcp: HTTP initialize and call list_databases tool" {
   cd repo1
 
   if ! command -v curl >/dev/null 2>&1; then
@@ -178,7 +178,7 @@ EOF
   [ $status -eq 0 ]
 }
 
-@test "sql-server mcp: invalid --mcp-port values (0 and >65535)" {
+@test "sql-server-mcp: invalid --mcp-port values (0 and >65535)" {
   cd repo1
 
   # mcp-port = 0
@@ -192,14 +192,14 @@ EOF
   [ $status -ne 0 ]
 }
 
-@test "sql-server mcp: --mcp-port identical to --port fails startup" {
+@test "sql-server-mcp: --mcp-port identical to --port fails startup" {
   cd repo1
   PORT=$( definePORT )
   run dolt sql-server --host 0.0.0.0 --port="$PORT" --socket "dolt.$PORT.sock" --mcp-port "$PORT" --mcp-user root
   [ $status -ne 0 ]
 }
 
-@test "sql-server mcp: multiple --mcp-port flags result in error" {
+@test "sql-server-mcp: multiple --mcp-port flags result in error" {
   cd repo1
   SQL_PORT=$( definePORT )
   # Provide duplicate mcp-port flags; expect failure
@@ -207,7 +207,7 @@ EOF
   [ $status -ne 0 ]
 }
 
-@test "sql-server mcp: any MCP arg without --mcp-port errors" {
+@test "sql-server-mcp: any MCP arg without --mcp-port errors" {
   cd repo1
   SQL_PORT=$( definePORT )
   # --mcp-user without --mcp-port should fail
@@ -221,7 +221,7 @@ EOF
   [ $status -ne 0 ]
 }
 
-@test "sql-server mcp: restart with same --mcp-port succeeds after stop" {
+@test "sql-server-mcp: restart with same --mcp-port succeeds after stop" {
   cd repo1
   MCP_PORT=$( definePORT )
   start_sql_server_with_args --host 0.0.0.0 --mcp-port "$MCP_PORT" --mcp-user root
@@ -251,7 +251,7 @@ EOF
   [ $status -eq 0 ]
 }
 
-@test "sql-server mcp: forceful termination closes servers cleanly; restart works" {
+@test "sql-server-mcp: forceful termination closes servers cleanly; restart works" {
   cd repo1
   MCP_PORT=$( definePORT )
   start_sql_server_with_args --host 0.0.0.0 --mcp-port "$MCP_PORT" --mcp-user root
