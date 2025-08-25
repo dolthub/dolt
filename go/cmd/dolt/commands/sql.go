@@ -100,6 +100,7 @@ const (
 	outputFlag            = "output"
 	binaryAsHexFlag       = "binary-as-hex"
 	skipBinaryAsHexFlag   = "skip-binary-as-hex"
+	disableAutoGCFlag     = "disable-auto-gc"
 	// TODO: Consider simplifying to use MySQL's skip pattern with single flag definition
 	// MySQL handles both --binary-as-hex and --skip-binary-as-hex with one option definition
 	// and uses disabled_my_option to distinguish between enable/disable
@@ -155,6 +156,7 @@ func (cmd SqlCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(binaryAsHexFlag, "", "Print binary data as hex. Enabled by default for interactive terminals.")
 	// TODO: MySQL uses a skip- pattern for negating flags and doesn't show them in help
 	ap.SupportsFlag(skipBinaryAsHexFlag, "", "Disable binary data as hex output.")
+	ap.SupportsFlag(disableAutoGCFlag, "", "Disable automatically running GC.")
 	return ap
 }
 
@@ -227,8 +229,12 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		return HandleVErrAndExitCode(errhand.BuildDError("cannot use both --%s and --%s", binaryAsHexFlag, skipBinaryAsHexFlag).Build(), usage)
 	}
 
+	enableAutoGC := true
+	if apr.Contains(disableAutoGCFlag) {
+		enableAutoGC = false
+	}
 	queryist, err := cliCtx.QueryEngine(ctx, func(config *cli.LateBindQueryistConfig) {
-		config.EnableAutoGC = true
+		config.EnableAutoGC = enableAutoGC
 	})
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
