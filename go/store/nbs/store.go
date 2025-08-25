@@ -65,7 +65,7 @@ const (
 	StorageVersion = "5"
 
 	defaultMemTableSize uint64 = (1 << 20) * 128 // 128MB
-	defaultMaxTables           = 256
+	defaultMaxTables           = 4               // NM4 - testing testing.
 
 	defaultManifestCacheSize = 1 << 23 // 8MB
 )
