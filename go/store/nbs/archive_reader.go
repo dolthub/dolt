@@ -35,10 +35,10 @@ import (
 
 // reconstructHashFromPrefixAndSuffix creates a hash from a prefix and suffix
 func reconstructHashFromPrefixAndSuffix(prefix uint64, suffix [hash.SuffixLen]byte) hash.Hash {
-	hashBytes := [hash.ByteLen]byte{}
-	binary.BigEndian.PutUint64(hashBytes[:hash.PrefixLen], prefix)
-	copy(hashBytes[hash.PrefixLen:], suffix[:])
-	return hash.New(hashBytes[:])
+	var h hash.Hash
+	binary.BigEndian.PutUint64(h[:hash.PrefixLen], prefix)
+	copy(h[hash.PrefixLen:], suffix[:])
+	return h
 }
 
 // archiveReader is a reader for the archive format. We use primitive type slices where possible. These are read directly
