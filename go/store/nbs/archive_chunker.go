@@ -99,3 +99,8 @@ func (a ArchiveToChunker) IsGhost() bool {
 	// archives are never ghosts. They are only instantiated when the chunk is found.
 	return false
 }
+
+// CompressedSize returns the size of the compressed chunk data, but does not include the size of the dictionary.
+func (a ArchiveToChunker) CompressedSize() uint32 {
+	return uint32(len(a.chunkData))
+}

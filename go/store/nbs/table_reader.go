@@ -42,6 +42,7 @@ type ToChunker interface {
 	Hash() hash.Hash
 	ToChunk() (chunks.Chunk, error)
 	IsEmpty() bool
+	CompressedSize() uint32
 	IsGhost() bool
 }
 
@@ -118,9 +119,9 @@ func (cmp CompressedChunk) IsGhost() bool {
 	return cmp.ghost
 }
 
-// CompressedSize returns the size of this CompressedChunk.
-func (cmp CompressedChunk) CompressedSize() int {
-	return len(cmp.CompressedData)
+// CompressedSize returns on disk size of the compressed chunk. Includes crc.
+func (cmp CompressedChunk) CompressedSize() uint32 {
+	return uint32(len(cmp.FullCompressedChunk))
 }
 
 var EmptyCompressedChunk CompressedChunk
