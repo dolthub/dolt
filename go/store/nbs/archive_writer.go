@@ -880,11 +880,10 @@ func planArchiveConjoin(sources []sourceWithSize, stats *Stats) (compactionPlan,
 
 				// Adjust byte span IDs for the combined archive
 				adjustedDictId := dictId
-				adjustedDataId := dataId
 				if dictId != 0 {
 					adjustedDictId = dictId + spanIdOffset
 				}
-				adjustedDataId = dataId + spanIdOffset
+				adjustedDataId := dataId + spanIdOffset
 
 				aw.stagedChunks = append(aw.stagedChunks, stagedChunkRef{
 					hash:       chunkHash,
