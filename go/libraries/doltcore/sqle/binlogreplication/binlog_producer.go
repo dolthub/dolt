@@ -101,6 +101,10 @@ func (b *binlogProducer) WorkingRootUpdated(ctx *sql.Context, databaseName strin
 		return nil
 	}
 
+	if isDatabaseFilteredOut(ctx, databaseName) {
+		return nil
+	}
+
 	var binlogEvents []mysql.BinlogEvent
 	tableDeltas, err := diff.GetTableDeltas(ctx, before, after)
 	if err != nil {
@@ -151,6 +155,10 @@ func (b *binlogProducer) DatabaseCreated(ctx *sql.Context, databaseName string) 
 	// TODO: All of these need to be sequentially processed by a single goroutine, so that we can ensure the GTID
 	//       assignment happens sequentially and safely. Also... if a database is created, we need to process that
 	//       update before any data updates to the database itself. Seems like that race could happen otherwise?
+
+	if isDatabaseFilteredOut(ctx, databaseName) {
+		return nil
+	}
 
 	var binlogEvents []mysql.BinlogEvent
 	binlogEvent, err := b.createGtidEvent(ctx)
@@ -563,6 +571,26 @@ func (b *binlogProducer) newDeleteRowsEvent(tableId uint64, rows mysql.Rows) mys
 // stream's log position.
 func (b *binlogProducer) newUpdateRowsEvent(tableId uint64, rows mysql.Rows) mysql.BinlogEvent {
 	return mysql.NewUpdateRowsEvent(*b.binlogFormat, b.binlogEventMeta, tableId, rows)
+}
+
+// isDatabaseFilteredOut returns true if |dbName| is listed in the @@binlog_ignore_dbs
+// system variable, meaning it should not be replicated.
+func isDatabaseFilteredOut(ctx *sql.Context, dbName string) bool {
+	varValue, err := ctx.GetSessionVariable(ctx, "binlog_ignore_dbs")
+	if err != nil {
+		logrus.Errorf("Unable to access @@binlog_ignore_dbs system variable: %v", err)
+		return false
+	}
+
+	if varString, isString := varValue.(string); isString {
+		for _, name := range strings.Split(varString, ",") {
+			if strings.EqualFold(name, dbName) {
+				return true
+			}
+		}
+	}
+
+	return false
 }
 
 // extractRowCountAndDiffType uses |sch| and |diff| to determine how many changed rows this

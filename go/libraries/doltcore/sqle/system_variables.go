@@ -111,6 +111,16 @@ var DoltSystemVariables = []sql.SystemVariable{
 		Type:              types.NewSystemBoolType(dsess.AsyncReplication),
 		Default:           int8(0),
 	},
+	&sql.MysqlSystemVariable{
+		// MySQL exposes this as the --replicate-ignore-db CLI parameter, but we don't want to
+		// expose all the MySQL replication settings through the CLI, so we use this sys var.
+		Name:              "binlog_ignore_dbs",
+		Scope:             sql.GetMysqlScope(sql.SystemVariableScope_Both),
+		Dynamic:           true,
+		SetVarHintApplies: false,
+		Type:              types.NewSystemStringType("binlog_ignore_dbs"),
+		Default:           "",
+	},
 	&sql.MysqlSystemVariable{ // If true, causes a Dolt commit to occur when you commit a transaction.
 		Name:              dsess.DoltCommitOnTransactionCommit,
 		Scope:             sql.GetMysqlScope(sql.SystemVariableScope_Both),
