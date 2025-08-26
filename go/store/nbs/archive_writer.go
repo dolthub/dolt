@@ -28,6 +28,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/dolthub/dolt/go/store/nbs"
 	"github.com/dolthub/gozstd"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/doltversion"
@@ -808,8 +809,8 @@ func planArchiveConjoin(sources []sourceWithSize, stats *Stats) (compactionPlan,
 		reader := src.source
 		arcSrc, ok := reader.(archiveChunkSource)
 		if !ok {
-			// *nbs.fileTableReader  when testing locally. Gonna need to test this on cloud conjoin. NM4
-			tblSrc, ok := reader.(*fileTableReader)
+			// When it's not an archive, we want to use the table index to extract chunk records one at a time.
+			tblSrc, ok := reader.(chunkSource)
 			if !ok {
 				return compactionPlan{}, fmt.Errorf("runtime error: source %T is not an archiveChunkSource or fileTableReader", reader)
 			}
