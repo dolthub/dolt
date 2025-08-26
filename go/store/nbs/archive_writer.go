@@ -27,7 +27,7 @@ import (
 	"path/filepath"
 	"sort"
 	"time"
-	
+
 	"github.com/dolthub/gozstd"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/doltversion"
