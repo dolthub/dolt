@@ -36,11 +36,11 @@ var _ sql.ExecSourceRel = (*TestsRunTableFunction)(nil)
 var _ sql.AuthorizationCheckerNode = (*TestsRunTableFunction)(nil)
 
 type testResult struct {
-	groupName string
 	testName  string
+	groupName string
 	query     string
 	status    string
-	error     string
+	message   string
 }
 
 type TestsRunTableFunction struct {
@@ -56,7 +56,7 @@ var testRunTableSchema = sql.Schema{
 	&sql.Column{Name: "test_group_name", Type: types.Text},
 	&sql.Column{Name: "query", Type: types.Text},
 	&sql.Column{Name: "status", Type: types.Text},
-	&sql.Column{Name: "error", Type: types.Text},
+	&sql.Column{Name: "message", Type: types.Text},
 }
 
 func (trtf *TestsRunTableFunction) NewInstance(ctx *sql.Context, database sql.Database, expressions []sql.Expression) (sql.Node, error) {
@@ -89,7 +89,7 @@ func (trtf *TestsRunTableFunction) Database() sql.Database {
 	return trtf.database
 }
 
-// WithDatabase impelement the sql.Databaser interface
+// WithDatabase implements the sql.Databaser interface
 func (trtf *TestsRunTableFunction) WithDatabase(database sql.Database) (sql.Node, error) {
 	ntf := *trtf
 	ntf.database = database
@@ -175,7 +175,7 @@ func (trtf *TestsRunTableFunction) getOptionsString() string {
 	return strings.Join(options, ",")
 }
 
-// Name impelements the sql.TableFunction interface
+// Name implements the sql.TableFunction interface
 func (trtf *TestsRunTableFunction) Name() string {
 	return "dolt_test_run"
 }
@@ -199,32 +199,12 @@ func (trtf *TestsRunTableFunction) RowIter(_ *sql.Context, _ sql.Row) (sql.RowIt
 				return nil, err
 			}
 
-			testName, groupName, query, assertion, comparison, value, err := parseDoltTestsRow(trtf.ctx, row)
-			if err != nil {
-				return nil, err
-			}
-			failMsg, err := validateQuery(trtf.ctx, trtf.catalog, query)
+			result, err := trtf.queryAndAssert(row)
 			if err != nil {
 				return nil, err
 			}
 
-			if failMsg == "" {
-				_, queryResult, _, err := trtf.engine.Query(trtf.ctx, query)
-				if err != nil {
-					failMsg = fmt.Sprintf("Query error: %s", err.Error())
-				} else {
-					failMsg, err = actions.AssertData(trtf.ctx, assertion, comparison, value, &queryResult)
-					if err != nil {
-						return nil, err
-					}
-				}
-			}
-
-			status := "PASS"
-			if failMsg != "" {
-				status = "FAIL"
-			}
-			newRow := sql.NewRow(testName, groupName, query, status, failMsg)
+			newRow := sql.NewRow(result.testName, result.groupName, result.query, result.status, result.message)
 			rows = append(rows, newRow)
 		}
 	}
@@ -243,6 +223,37 @@ func (trtf *TestsRunTableFunction) DataLength(ctx *sql.Context) (uint64, error) 
 
 func (trtf *TestsRunTableFunction) RowCount(_ *sql.Context) (uint64, bool, error) {
 	return testsRunDefaultRowCount, false, nil
+}
+
+func (trtf *TestsRunTableFunction) queryAndAssert(row sql.Row) (result testResult, err error) {
+	testName, groupName, query, assertion, comparison, value, err := parseDoltTestsRow(trtf.ctx, row)
+	if err != nil {
+		return
+	}
+	message, err := validateQuery(trtf.ctx, trtf.catalog, query)
+	if err != nil {
+		return
+	}
+
+	var testPassed bool
+	if message == "" {
+		_, queryResult, _, err := trtf.engine.Query(trtf.ctx, query)
+		if err != nil {
+			message = fmt.Sprintf("Query error: %s", err.Error())
+		} else {
+			testPassed, message, err = actions.AssertData(trtf.ctx, assertion, comparison, value, &queryResult)
+			if err != nil {
+				return testResult{}, err
+			}
+		}
+	}
+
+	status := "PASS"
+	if !testPassed {
+		status = "FAIL"
+	}
+	result = testResult{testName, groupName, query, status, message}
+	return result, nil
 }
 
 func (trtf *TestsRunTableFunction) getDoltTestsData(toTest string) (sql.RowIter, error) {
@@ -346,7 +357,7 @@ func parseDoltTestsRow(ctx *sql.Context, row sql.Row) (testName, groupName, quer
 }
 
 func validateQuery(ctx *sql.Context, catalog sql.Catalog, query string) (string, error) {
-	//We first check if the query contains multiple queries
+	// We first check if the query contains multiple sql statements
 	if statements, err := sqlparser.SplitStatementToPieces(query); err != nil {
 		return "", err
 	} else if len(statements) > 1 {
@@ -354,7 +365,7 @@ func validateQuery(ctx *sql.Context, catalog sql.Catalog, query string) (string,
 	}
 
 	if isWrite, err := IsWriteQuery(query, ctx, catalog); err != nil {
-		return "", nil
+		return "", err
 	} else if isWrite {
 		return "Cannot execute write queries", nil
 	}

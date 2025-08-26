@@ -20,26 +20,41 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	"golang.org/x/exp/constraints"
 	"io"
-	"reflect"
 	"strconv"
 	"time"
 )
 
-func AssertData(sqlCtx *sql.Context, assertion string, comparison string, value string, queryResult *sql.RowIter) (result string, err error) {
+const (
+	AssertionExpectedRows        = "expected_rows"
+	AssertionExpectedColumns     = "expected_columns"
+	AssertionExpectedSingleValue = "expected_single_value"
+)
+
+// AssertData parses an assertion, comparison, and value, then returns the status of the test.
+// Valid comparison are: "==", "!=", "<", ">", "<=", and ">=".
+// "message" is a string used to indicate test failures, and will not halt the overall process.
+// "err" indicates runtime failures and will stop dolt_test_run from proceeding.
+func AssertData(sqlCtx *sql.Context, assertion string, comparison string, value string, queryResult *sql.RowIter) (testPassed bool, message string, err error) {
 	switch assertion {
-	case "expected_rows":
-		result, err = expectRows(sqlCtx, comparison, value, queryResult)
-	case "expected_columns":
-		result, err = expectColumns(sqlCtx, comparison, value, queryResult)
-	case "expected_single_value":
-		result, err = expectSingleValue(sqlCtx, comparison, value, queryResult)
+	case AssertionExpectedRows:
+		message, err = expectRows(sqlCtx, comparison, value, queryResult)
+	case AssertionExpectedColumns:
+		message, err = expectColumns(sqlCtx, comparison, value, queryResult)
+	case AssertionExpectedSingleValue:
+		message, err = expectSingleValue(sqlCtx, comparison, value, queryResult)
 	default:
-		return fmt.Sprintf("%s is not a valid assertion type", assertion), nil
+		return false, fmt.Sprintf("%s is not a valid assertion type", assertion), nil
 	}
-	return result, err
+
+	if err != nil {
+		return false, "", err
+	} else if message != "" {
+		return false, message, nil
+	}
+	return true, "", nil
 }
 
-func expectSingleValue(sqlCtx *sql.Context, comparison string, value string, queryResult *sql.RowIter) (result string, err error) {
+func expectSingleValue(sqlCtx *sql.Context, comparison string, value string, queryResult *sql.RowIter) (message string, err error) {
 	row, err := (*queryResult).Next(sqlCtx)
 	if err == io.EOF {
 		return fmt.Sprintf("expected_single_value expects exactly one cell"), nil
@@ -52,6 +67,7 @@ func expectSingleValue(sqlCtx *sql.Context, comparison string, value string, que
 	}
 
 	_, err = (*queryResult).Next(sqlCtx)
+	(*queryResult).Close(sqlCtx)
 	if err == nil { //If multiple cells were given, we should error out
 		return fmt.Sprintf("expected_single_value expects exactly one cell"), nil
 	} else if err != io.EOF { // "True" error, so we should quit out
@@ -60,19 +76,17 @@ func expectSingleValue(sqlCtx *sql.Context, comparison string, value string, que
 
 	switch actualValue := row[0].(type) {
 	case int32:
-		expectedInt, err := strconv.ParseInt(value, 10, 64)
+		expectedInt, err := strconv.ParseInt(value, 10, 32)
 		if err != nil {
 			return fmt.Sprintf("Could not compare non integer value '%s', with %d", value, actualValue), nil
 		}
-		actualInt := reflect.ValueOf(actualValue).Int()
-		return compareTestAssertion(comparison, expectedInt, actualInt, "single value"), nil
+		return compareTestAssertion(comparison, int32(expectedInt), actualValue, "single value"), nil
 	case uint32:
-		expectedUint, err := strconv.ParseUint(value, 10, 64)
+		expectedUint, err := strconv.ParseUint(value, 10, 32)
 		if err != nil {
 			return fmt.Sprintf("Could not compare non integer value '%s', with %d", value, actualValue), nil
 		}
-		actualUint := reflect.ValueOf(actualValue).Uint()
-		return compareTestAssertion(comparison, expectedUint, actualUint, "single value"), nil
+		return compareTestAssertion(comparison, uint32(expectedUint), actualValue, "single value"), nil
 	case float64:
 		expectedFloat, err := strconv.ParseFloat(value, 64)
 		if err != nil {
@@ -86,11 +100,11 @@ func expectSingleValue(sqlCtx *sql.Context, comparison string, value string, que
 		}
 		return compareTestAssertion(comparison, float32(expectedFloat), actualValue, "single value"), nil
 	case time.Time:
-		expectedTime, err := time.Parse(time.DateOnly, value)
+		expectedTime, format, err := parseTestsDate(value)
 		if err != nil {
 			return fmt.Sprintf("%s does not appear to be a valid date", value), nil
 		}
-		return compareDates(comparison, expectedTime, actualValue, "single value"), nil
+		return compareDates(comparison, expectedTime, actualValue, format, "single value"), nil
 	case *val.TextStorage, string:
 		actualString, err := GetStringColAsString(sqlCtx, actualValue)
 		if err != nil {
@@ -102,7 +116,7 @@ func expectSingleValue(sqlCtx *sql.Context, comparison string, value string, que
 	}
 }
 
-func expectRows(sqlCtx *sql.Context, comparison string, value string, queryResult *sql.RowIter) (result string, err error) {
+func expectRows(sqlCtx *sql.Context, comparison string, value string, queryResult *sql.RowIter) (message string, err error) {
 	expectedRows, err := strconv.Atoi(value)
 	if err != nil {
 		return fmt.Sprintf("Received non integer value: %s", value), nil
@@ -121,7 +135,7 @@ func expectRows(sqlCtx *sql.Context, comparison string, value string, queryResul
 	return compareTestAssertion(comparison, expectedRows, numRows, "row count"), nil
 }
 
-func expectColumns(sqlCtx *sql.Context, comparison string, value string, queryResult *sql.RowIter) (result string, err error) {
+func expectColumns(sqlCtx *sql.Context, comparison string, value string, queryResult *sql.RowIter) (message string, err error) {
 	expectedColumns, err := strconv.Atoi(value)
 	if err != nil {
 		return fmt.Sprintf("Received non integer value: %s", value), nil
@@ -130,37 +144,42 @@ func expectColumns(sqlCtx *sql.Context, comparison string, value string, queryRe
 	var numColumns int
 	row, err := (*queryResult).Next(sqlCtx)
 	if err != nil && err != io.EOF {
+		(*queryResult).Close(sqlCtx)
 		return "", err
 	}
 	numColumns = len(row)
+	err = (*queryResult).Close(sqlCtx)
+	if err != nil {
+		return "", err
+	}
 	return compareTestAssertion(comparison, expectedColumns, numColumns, "column count"), nil
 }
 
-func compareTestAssertion[T constraints.Ordered](comparison string, expectedValue, realValue T, assertionType string) string {
+func compareTestAssertion[T constraints.Ordered](comparison string, expectedValue, actualValue T, assertionType string) string {
 	switch comparison {
 	case "==":
-		if realValue != expectedValue {
-			return fmt.Sprintf("Assertion failed: expected %s equal to %v, got %v", assertionType, expectedValue, realValue)
+		if actualValue != expectedValue {
+			return fmt.Sprintf("Assertion failed: expected %s equal to %v, got %v", assertionType, expectedValue, actualValue)
 		}
 	case "!=":
-		if realValue == expectedValue {
-			return fmt.Sprintf("Assertion failed: expected %s not equal to %v, got %v", assertionType, expectedValue, realValue)
+		if actualValue == expectedValue {
+			return fmt.Sprintf("Assertion failed: expected %s not equal to %v, got %v", assertionType, expectedValue, actualValue)
 		}
 	case "<":
-		if realValue >= expectedValue {
-			return fmt.Sprintf("Assertion failed: expected %s less than %v, got %v", assertionType, expectedValue, realValue)
+		if actualValue >= expectedValue {
+			return fmt.Sprintf("Assertion failed: expected %s less than %v, got %v", assertionType, expectedValue, actualValue)
 		}
 	case "<=":
-		if realValue > expectedValue {
-			return fmt.Sprintf("Assertion failed: expected %s less than or equal to %v, got %v", assertionType, expectedValue, realValue)
+		if actualValue > expectedValue {
+			return fmt.Sprintf("Assertion failed: expected %s less than or equal to %v, got %v", assertionType, expectedValue, actualValue)
 		}
 	case ">":
-		if realValue <= expectedValue {
-			return fmt.Sprintf("Assertion failed: expected %s greater than %v, got %v", assertionType, expectedValue, realValue)
+		if actualValue <= expectedValue {
+			return fmt.Sprintf("Assertion failed: expected %s greater than %v, got %v", assertionType, expectedValue, actualValue)
 		}
 	case ">=":
-		if realValue < expectedValue {
-			return fmt.Sprintf("Assertion failed: expected %s greater than or equal to %v, got %v", assertionType, expectedValue, realValue)
+		if actualValue < expectedValue {
+			return fmt.Sprintf("Assertion failed: expected %s greater than or equal to %v, got %v", assertionType, expectedValue, actualValue)
 		}
 	default:
 		return fmt.Sprintf("%s is not a valid comparison type", comparison)
@@ -168,10 +187,28 @@ func compareTestAssertion[T constraints.Ordered](comparison string, expectedValu
 	return ""
 }
 
-func compareDates(comparison string, expectedValue, realValue time.Time, assertionType string) string {
-	expectedStr := expectedValue.Format(time.DateOnly)
-	realStr := realValue.Format(time.DateOnly)
+// parseTestsDate is an internal function that parses the queried string according to allowed time formats for dolt_tests.
+// It returns the parsed time, the format that succeeded, and an error if applicable.
+func parseTestsDate(value string) (parsedTime time.Time, format string, err error) {
+	// List of valid formats
+	formats := []string{
+		time.DateOnly,
+		time.DateTime,
+	}
 
+	for _, format := range formats {
+		if parsedTime, parseErr := time.Parse(format, value); parseErr == nil {
+			return parsedTime, format, nil
+		} else {
+			err = parseErr
+		}
+	}
+	return time.Time{}, "", err
+}
+
+func compareDates(comparison string, expectedValue, realValue time.Time, format string, assertionType string) string {
+	expectedStr := expectedValue.Format(format)
+	realStr := realValue.Format(format)
 	switch comparison {
 	case "==":
 		if !expectedValue.Equal(realValue) {
