@@ -795,7 +795,7 @@ func planArchiveConjoin(sources []sourceWithSize, stats *Stats) (compactionPlan,
 
 	// place largest chunk sources at the beginning of the conjoin
 	orderedSrcs := chunkSourcesByDescendingDataSize{sws: sources}
-	//	sort.Sort(orderedSrcs)
+	sort.Sort(orderedSrcs)
 	sources = nil
 
 	writer := NewBlockBufferByteSink(fourMb)
@@ -809,12 +809,7 @@ func planArchiveConjoin(sources []sourceWithSize, stats *Stats) (compactionPlan,
 		arcSrc, ok := reader.(archiveChunkSource)
 		if !ok {
 			// When it's not an archive, we want to use the table index to extract chunk records one at a time.
-			tblSrc, ok := reader.(chunkSource)
-			if !ok {
-				return compactionPlan{}, fmt.Errorf("runtime error: source %T is not an archiveChunkSource or fileTableReader", reader)
-			}
-
-			index, err := tblSrc.index()
+			index, err := reader.index()
 			if err != nil {
 				return compactionPlan{}, err
 			}

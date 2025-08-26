@@ -50,7 +50,7 @@ func TestGCConjoinsOldgen(t *testing.T) {
 	for _, tc := range cases {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			// NOTE: avoid t.Parallel() here to keep dynamic ports simple.
+			t.Parallel()
 			var ports DynamicResources
 			ports.global = &GlobalPorts
 			ports.t = t
