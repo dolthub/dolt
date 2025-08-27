@@ -319,7 +319,6 @@ func StartServer(ctx context.Context, versionStr, commandStr string, args []stri
 
 	cli.Printf("Starting server with Config %v\n", servercfg.ConfigInfo(serverConfig))
 
-	skipRootUserInitialization := apr.Contains(skipRootUserInitialization)
 	// Build MCP config if any MCP-related options are present
 	var mcpCfg *MCPConfig
 	if mcpPortPtr != nil || (mcpUserPtr != nil && *mcpUserPtr != "") || (mcpPasswordPtr != nil && *mcpPasswordPtr != "") || (mcpDatabasePtr != nil && *mcpDatabasePtr != "") {
@@ -330,6 +329,8 @@ func StartServer(ctx context.Context, versionStr, commandStr string, args []stri
 			Database: mcpDatabasePtr,
 		}
 	}
+
+	skipRootUserInitialization := apr.Contains(skipRootUserInitialization)
 
 	startError, closeError := Serve(ctx, &Config{
 		Version:          versionStr,
