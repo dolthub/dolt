@@ -174,12 +174,12 @@ func (nd Node) loadSubtrees() (Node, error) {
 	return nd, err
 }
 
-func (nd Node) getSubtreeCount(i int) (uint64, error) {
+func (nd Node) GetSubtreeCount(i int) uint64 {
 	if nd.IsLeaf() {
-		return 1, nil
+		return 1
 	}
 	// this will panic unless subtrees were loaded.
-	return (*nd.subtrees)[i], nil
+	return (*nd.subtrees)[i]
 }
 
 // getAddress returns the |ith| address of this node.
