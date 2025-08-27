@@ -121,7 +121,7 @@ func TestDoltPagerEnvironmentVariable(t *testing.T) {
 	// Write multiple lines to test that head -n 2 truncates output
 	testLines := []string{
 		"line 1\n",
-		"line 2\n", 
+		"line 2\n",
 		"line 3\n",
 		"line 4\n",
 		"line 5\n",
