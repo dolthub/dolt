@@ -51,7 +51,8 @@ dolt_log_in_PST() {
 }
 
 setup_no_dolt_init() {
-    export PATH=$PATH:~/go/bin
+    # Ensure locally installed dolt (via `go install`) takes precedence
+    export PATH=~/go/bin:$PATH
     cd $BATS_TMPDIR
     
     # remove directory if exists

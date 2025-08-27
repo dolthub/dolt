@@ -84,6 +84,7 @@ type Config struct {
 	Version                 string
 	Controller              *svcs.Controller
 	ProtocolListenerFactory server.ProtocolListenerFunc
+	MCP                     *MCPConfig
 }
 
 // Serve starts a MySQL-compatible server. Returns any errors that were encountered.
@@ -866,6 +867,9 @@ func ConfigureServices(
 		},
 	}
 	controller.Register(RunSQLServer)
+
+	// Optionally start an MCP HTTP server
+	registerMCPService(controller, cfg, lgr)
 }
 
 // heartbeatService is a service that sends a heartbeat event to the metrics server once a day
