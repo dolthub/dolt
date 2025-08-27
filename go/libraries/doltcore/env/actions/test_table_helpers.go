@@ -16,13 +16,15 @@ package actions
 
 import (
 	"fmt"
-	"github.com/dolthub/dolt/go/store/val"
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/shopspring/decimal"
-	"golang.org/x/exp/constraints"
 	"io"
 	"strconv"
 	"time"
+
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/shopspring/decimal"
+	"golang.org/x/exp/constraints"
+
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 const (

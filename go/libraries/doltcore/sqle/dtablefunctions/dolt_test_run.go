@@ -16,8 +16,8 @@ package dtablefunctions
 
 import (
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"strings"
+
 	gms "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/planbuilder"
@@ -25,7 +25,9 @@ import (
 	"github.com/dolthub/vitess/go/vt/sqlparser"
 	"github.com/gocraft/dbr/v2"
 	"github.com/gocraft/dbr/v2/dialect"
-	"strings"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 )
 
 const testsRunDefaultRowCount = 10
