@@ -99,7 +99,7 @@ func expectSingleValue(sqlCtx *sql.Context, comparison string, value string, que
 	case float32:
 		expectedFloat, err := strconv.ParseFloat(value, 32)
 		if err != nil {
-			return fmt.Sprintf("Could not compare non float value '%s', with %s", value, actualValue), nil
+			return fmt.Sprintf("Could not compare non float value '%s', with %f", value, actualValue), nil
 		}
 		return compareTestAssertion(comparison, float32(expectedFloat), actualValue, AssertionExpectedSingleValue), nil
 	case decimal.Decimal:
