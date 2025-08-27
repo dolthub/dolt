@@ -122,6 +122,15 @@ func (r RemotesapiYAMLConfig) ReadOnly() bool {
 	return *r.ReadOnly_
 }
 
+// MCPServerYAMLConfig contains configuration for running an MCP HTTP server alongside sql-server
+type MCPServerYAMLConfig struct {
+	Port     *int    `yaml:"port,omitempty"`
+	User     *string `yaml:"user,omitempty"`
+	Password *string `yaml:"password,omitempty"`
+	Database *string `yaml:"database,omitempty"`
+}
+
+
 type UserSessionVars struct {
 	Name string                 `yaml:"name"`
 	Vars map[string]interface{} `yaml:"vars"`
@@ -140,6 +149,7 @@ type YAMLConfig struct {
 	DataDirStr        *string                `yaml:"data_dir,omitempty"`
 	CfgDirStr         *string                `yaml:"cfg_dir,omitempty"`
 	RemotesapiConfig  RemotesapiYAMLConfig   `yaml:"remotesapi,omitempty"`
+	MCPServer         *MCPServerYAMLConfig   `yaml:"mcp_server,omitempty"`
 	PrivilegeFile     *string                `yaml:"privilege_file,omitempty"`
 	BranchControlFile *string                `yaml:"branch_control_file,omitempty"`
 	// TODO: Rename to UserVars_
