@@ -36,3 +36,13 @@ export NO_COLOR=1
   [[ ! "$output" =~ "commit 17 abc" ]] || false
   [ "${#lines[@]}" -eq 3 ]
 }
+
+# bats test_tags=no_lambda
+@test "pager: gracefully exit when pager doesn't exist" {
+  skiponwindows "Need to install expect and make this script work on windows."
+  export DOLT_PAGER="foobar"
+
+  run expect $BATS_TEST_DIRNAME/pager.expect
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "warning: specified pager 'foobar' not found, falling back to less or more" ]] || false
+}

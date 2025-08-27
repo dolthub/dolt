@@ -68,15 +68,18 @@ func Start() *Pager {
 		parts := strings.Fields(doltPager)
 		pagerPath, err = exec.LookPath(parts[0])
 		if err != nil {
-			d.Chk.NoError(err)
-		}
-		if len(parts) > 1 {
-			cmd = exec.Command(pagerPath, parts[1:]...)
+			// If the specified pager is not found, print an error and fall back to less or more
+			fmt.Fprintf(os.Stderr, "warning: specified pager '%s' not found, falling back to less or more\n", parts[0])
 		} else {
-			cmd = exec.Command(pagerPath)
+			if len(parts) > 1 {
+				cmd = exec.Command(pagerPath, parts[1:]...)
+			} else {
+				cmd = exec.Command(pagerPath)
+			}
 		}
-	} else {
-		// Fall back to less or more if DOLT_PAGER is not set
+	}
+
+	if cmd == nil {
 		pagerPath, err = exec.LookPath("less")
 		if err != nil {
 			pagerPath, err = exec.LookPath("more")
