@@ -909,6 +909,12 @@ func TestVectorFunctions(t *testing.T) {
 	enginetest.TestVectorFunctions(t, harness)
 }
 
+func TestVectorType(t *testing.T) {
+	harness := newDoltHarness(t)
+	defer harness.Close()
+	enginetest.TestVectorType(t, harness)
+}
+
 func TestIndexPrefix(t *testing.T) {
 	skipOldFormat(t)
 	harness := newDoltHarness(t)
