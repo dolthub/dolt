@@ -22,9 +22,9 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/planbuilder"
 	"github.com/dolthub/go-mysql-server/sql/types"
-	"github.com/dolthub/vitess/go/sqltypes"
 	"github.com/dolthub/vitess/go/vt/sqlparser"
-	"io"
+	"github.com/gocraft/dbr/v2"
+	"github.com/gocraft/dbr/v2/dialect"
 	"strings"
 )
 
@@ -103,10 +103,6 @@ func (trtf *TestsRunTableFunction) Expressions() []sql.Expression {
 
 // WithExpressions implements the sql.Expressioner interface
 func (trtf *TestsRunTableFunction) WithExpressions(expressions ...sql.Expression) (sql.Node, error) {
-	if len(expressions) < 1 {
-		return nil, sql.ErrInvalidArgumentNumber.New(trtf.Name(), "1 or more", len(expressions))
-	}
-
 	for _, expr := range expressions {
 		if !expr.Resolved() {
 			return nil, ErrInvalidNonLiteralArgument.New(trtf.Name(), expr.String())
@@ -162,17 +158,16 @@ func (trtf *TestsRunTableFunction) IsReadOnly() bool {
 
 // String implements the Stringer interface
 func (trtf *TestsRunTableFunction) String() string {
-	return fmt.Sprintf("DOLT_TEST_RUN(%s)", trtf.getOptionsString())
+	return fmt.Sprintf("DOLT_TEST_RUN(%s)", strings.Join(trtf.getOptionsString(), ","))
 }
 
 // getOptionsString builds comma-separated argument list for display.
-func (trtf *TestsRunTableFunction) getOptionsString() string {
+func (trtf *TestsRunTableFunction) getOptionsString() []string {
 	var options []string
 	for _, expr := range trtf.argumentExprs {
 		options = append(options, expr.String())
 	}
-
-	return strings.Join(options, ",")
+	return options
 }
 
 // Name implements the sql.TableFunction interface
@@ -182,33 +177,29 @@ func (trtf *TestsRunTableFunction) Name() string {
 
 // RowIter implements the sql.Node interface
 func (trtf *TestsRunTableFunction) RowIter(_ *sql.Context, _ sql.Row) (sql.RowIter, error) {
-	var rows []sql.Row
+	args := trtf.getOptionsString()
+	if len(args) == 0 { // We treat no arguments as a wildcard
+		args = append(args, "*")
+	}
 
-	for _, expr := range trtf.argumentExprs {
-		toTest := strings.Trim(expr.String(), "'")
-		tableIter, err := trtf.getDoltTestsData(toTest)
+	var resultRows []sql.Row
+	for _, arg := range args {
+		testRows, err := trtf.getDoltTestsData(strings.Trim(arg, "'"))
 		if err != nil {
 			return nil, err
 		}
 
-		for {
-			row, err := tableIter.Next(trtf.ctx)
-			if err == io.EOF {
-				break
-			} else if err != nil {
-				return nil, err
-			}
-
+		for _, row := range *testRows {
 			result, err := trtf.queryAndAssert(row)
 			if err != nil {
 				return nil, err
 			}
 
-			newRow := sql.NewRow(result.testName, result.groupName, result.query, result.status, result.message)
-			rows = append(rows, newRow)
+			resultRow := sql.NewRow(result.testName, result.groupName, result.query, result.status, result.message)
+			resultRows = append(resultRows, resultRow)
 		}
 	}
-	return sql.RowsToRowIter(rows...), nil
+	return sql.RowsToRowIter(resultRows...), nil
 }
 
 // DataLength estimates total data size for query planning.
@@ -231,8 +222,8 @@ func (trtf *TestsRunTableFunction) queryAndAssert(row sql.Row) (result testResul
 		return
 	}
 	message, err := validateQuery(trtf.ctx, trtf.catalog, query)
-	if err != nil {
-		return
+	if err != nil && message == "" {
+		message = fmt.Sprintf("query error: %s", err.Error())
 	}
 
 	var testPassed bool
@@ -256,66 +247,41 @@ func (trtf *TestsRunTableFunction) queryAndAssert(row sql.Row) (result testResul
 	return result, nil
 }
 
-func (trtf *TestsRunTableFunction) getDoltTestsData(toTest string) (sql.RowIter, error) {
-	testData := strings.Split(toTest, " ")
-	if len(testData) == 0 {
-		return nil, fmt.Errorf("invalid inputs")
-	}
+func (trtf *TestsRunTableFunction) getDoltTestsData(arg string) (*[]sql.Row, error) {
+	var queries []string
 
-	var qry string
-	switch testData[0] {
-	case "*":
-		qry = "SELECT * FROM dolt_tests"
-		if len(testData) != 1 {
-			return nil, fmt.Errorf("invalid inputs to dolt_test_run: %s", toTest)
+	if arg == "*" {
+		queries = []string{
+			"SELECT * FROM dolt_tests",
 		}
-	case "test":
-		if len(testData) < 2 {
-			return nil, fmt.Errorf("invalid inputs to dolt_test_run: %s", toTest)
-		}
-		qry = "SELECT * FROM dolt_tests WHERE test_name = ?"
-	case "group":
-		if len(testData) < 2 {
-			return nil, fmt.Errorf("invalid inputs to dolt_test_run: %s", toTest)
-		}
-		qry = "SELECT * FROM dolt_tests WHERE test_group = ?"
-	default:
-		return nil, fmt.Errorf("invalid input to dolt_test_run: %s", toTest)
-	}
-
-	// If we're using all tests, we can just query the table broadly
-	if testData[0] == "*" {
-		_, iter, _, err := trtf.engine.Query(trtf.ctx, qry)
+	} else {
+		getIndividual, err := dbr.InterpolateForDialect("SELECT * FROM dolt_tests WHERE test_name = ?", []interface{}{arg}, dialect.MySQL)
 		if err != nil {
 			return nil, err
 		}
-		return iter, nil
+		getGroup, err := dbr.InterpolateForDialect("SELECT * FROM dolt_tests WHERE test_group = ?", []interface{}{arg}, dialect.MySQL)
+		if err != nil {
+			return nil, err
+		}
+		queries = []string{
+			getIndividual, getGroup,
+		}
 	}
 
-	// Otherwise we need to bind the query
-	testName := strings.Join(testData[1:], " ")
-	bv, err := sqltypes.BuildBindVariable(testName)
-	if err != nil {
-		return nil, err
+	for _, query := range queries {
+		_, iter, _, err := trtf.engine.Query(trtf.ctx, query)
+		if err != nil {
+			return nil, err
+		}
+		rows, err := sql.RowIterToRows(trtf.ctx, iter)
+		if err != nil {
+			return nil, err
+		}
+		if len(rows) > 0 {
+			return &rows, nil
+		}
 	}
-	value, err := sqltypes.BindVariableToValue(bv)
-	if err != nil {
-		return nil, err
-	}
-	expr, err := sqlparser.ExprFromValue(value)
-	if err != nil {
-		return nil, err
-	}
-
-	bindingsMap := make(map[string]sqlparser.Expr)
-	bindingsMap["v1"] = expr
-
-	_, iter, _, err := trtf.engine.QueryWithBindings(trtf.ctx, qry, nil, bindingsMap, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return iter, nil
+	return nil, fmt.Errorf("could not find tests for argument: %s", arg)
 }
 
 func IsWriteQuery(query string, ctx *sql.Context, catalog sql.Catalog) (bool, error) {
@@ -360,8 +326,8 @@ func validateQuery(ctx *sql.Context, catalog sql.Catalog, query string) (string,
 	// We first check if the query contains multiple sql statements
 	if statements, err := sqlparser.SplitStatementToPieces(query); err != nil {
 		return "", err
-	} else if len(statements) > 1 {
-		return "Cannot execute multiple queries", nil
+	} else if len(statements) != 1 {
+		return "Can only run exactly one query", nil
 	}
 
 	if isWrite, err := IsWriteQuery(query, ctx, catalog); err != nil {
