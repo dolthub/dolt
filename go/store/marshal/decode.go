@@ -143,7 +143,7 @@ func (e *InvalidUnmarshalError) Error() string {
 // for a value of a specific Go type.
 type UnmarshalTypeMismatchError struct {
 	Value   types.Value
-	Type    reflect.Type
+	Type    reflect.Type // type of Go value it could not be assigned to
 	nbf     *types.NomsBinFormat
 	details string
 }

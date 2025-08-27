@@ -62,10 +62,12 @@ type ShouldDescFunc func(v1, v2 types.Value) bool
 
 // differ is used internally to hold information necessary for diffing two graphs.
 type differ struct {
+	// Channel used to send Difference objects back to caller
 	diffChan      chan<- Difference
 	shouldDescend ShouldDescFunc
 	eg            *errgroup.Group
 	asyncPanic    *atomic.Value
+	// Use LeftRight diff as opposed to TopDown
 	leftRight     bool
 }
 

@@ -256,11 +256,14 @@ const (
 
 // ThreeWayDiff is a generic object for encoding a three way diff.
 type ThreeWayDiff struct {
+	// a partial set of tuple values are set
+	// depending on the diffOp
 	Key    val.Tuple
 	Base   val.Tuple
 	Left   val.Tuple
 	Right  val.Tuple
 	Merged val.Tuple
+	// Op indicates the type of diff
 	Op     DiffOp
 }
 

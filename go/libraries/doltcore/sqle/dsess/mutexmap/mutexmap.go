@@ -22,7 +22,7 @@ import (
 // the map.
 type MutexMap struct {
 	keyedMutexes map[interface{}]*mapMutex
-	mu           sync.Mutex
+	mu           sync.Mutex // Access to the map itself must be synchronized.
 }
 
 type mapMutex struct {

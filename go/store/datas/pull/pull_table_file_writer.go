@@ -71,6 +71,9 @@ type PullTableFileWriterConfig struct {
 	GetAddrs             chunks.GetAddrsCurry
 	TempDir              string
 	ConcurrentUploads    int
+	// The approximate file size at which we will cut a file so
+	// that we start uploading it and we start writing later
+	// chunks to a new file. In bytes.
 	TargetFileSize       uint64
 	MaximumBufferedFiles int
 }

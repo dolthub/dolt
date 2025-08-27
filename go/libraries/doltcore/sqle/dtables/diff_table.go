@@ -58,7 +58,10 @@ var _ sql.StatisticsTable = (*DiffTable)(nil)
 
 type DiffTable struct {
 	workingRoot       doltdb.RootValue
+	// from and to need to be mapped to this schema
 	targetSch         schema.Schema
+	// the schema for the diff table itself. Once from and to are converted to
+	// targetSch, the commit names and dates are inserted.
 	diffTableSch      schema.Schema
 	ddb               *doltdb.DoltDB
 	head              *doltdb.Commit

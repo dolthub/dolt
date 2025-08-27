@@ -611,10 +611,15 @@ func (it *OrderedTreeIter[K, V]) Iterate(ctx context.Context) (err error) {
 }
 
 type orderedLeafSpanIter[K, V ~[]byte] struct {
+	// in-progress node
 	nd     Node
+	// remaining leaves
 	leaves []Node
+	// current index,
 	curr   int
+	// last index for |nd|
 	stop   int
+	// stop index in last leaf node
 	final  int
 }
 

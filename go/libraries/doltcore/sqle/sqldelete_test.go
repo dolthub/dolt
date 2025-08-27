@@ -31,12 +31,19 @@ const singleDeleteQueryTest = "" //"Natural join with join clause"
 
 // Structure for a test of a delete query
 type DeleteTest struct {
+	// The schema of the result of the query, nil if an error is expected
 	ExpectedSchema  schema.Schema
+	// Setup logic to run before executing this test, after initial tables have been created and populated
 	AdditionalSetup SetupFn
+	// The name of this test. Names should be unique and descriptive.
 	Name            string
+	// The delete query to run
 	DeleteQuery     string
+	// The select query to run to verify the results
 	SelectQuery     string
+	// An expected error string
 	ExpectedErr     string
+	// The rows this query should return, nil if an error is expected
 	ExpectedRows    []sql.Row
 }
 

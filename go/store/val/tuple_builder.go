@@ -68,9 +68,9 @@ type TupleBuilder struct {
 	fields            [][]byte
 	buf               []byte
 	pos               int64
-	tupleLengthTarget int64
-	outOfBandSize     int64
-	inlineSize        int64
+	tupleLengthTarget int64 // The max tuple length before the tuple builder attempts to store values out-of-band.
+	outOfBandSize     int64 // The size of the tuple if every adaptive value is stored out-of-band
+	inlineSize        int64 // The size of the tuple if every adaptive value is inlined
 }
 
 func NewTupleBuilder(desc TupleDesc, vs ValueStore) *TupleBuilder {

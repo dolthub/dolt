@@ -69,6 +69,8 @@ type memStats struct {
 	buckets   map[bucketKey]*stats.Bucket
 	templates map[templateCacheKey]stats.Statistic
 	bounds    map[bucketKey]sql.Row
+	// gcFlusher tracks state require to lazily swap from
+	// a *memStats to *prollyStats
 	gcFlusher map[*val.TupleBuilder][]bucketKey
 	gcGen     uint64
 	mu        sync.Mutex

@@ -55,6 +55,7 @@ func NewDecompBundle(compressedDict []byte) (*DecompBundle, error) {
 
 type ArchiveToChunker struct {
 	dict      *DecompBundle
+	// The chunk data in it's compressed form, using the dict
 	chunkData []byte
 	h         hash.Hash
 }

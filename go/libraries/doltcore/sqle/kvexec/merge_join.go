@@ -72,6 +72,8 @@ type mergeJoinKvIter struct {
 	llCmp func(val.Tuple, val.Tuple, val.Tuple, val.Tuple) int
 
 	lookaheadBuf [][]byte
+	// TODO: we want to build KV-side static expression implementations
+	//   so that we can execute filters more efficiently
 	joinFilters  []sql.Expression
 
 	leftKey      val.Tuple

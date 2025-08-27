@@ -81,7 +81,7 @@ type RangeField struct {
 
 type Bound struct {
 	Value     []byte
-	Binding   bool
+	Binding   bool // positive or negative infinity
 	Inclusive bool
 }
 

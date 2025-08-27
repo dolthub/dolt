@@ -63,6 +63,8 @@ func (t *ImmutableValue) GetBytes(ctx context.Context) ([]byte, error) {
 
 type TextStorage struct {
 	ImmutableValue
+	// ctx is a context that can be used in driver.Value
+	// Storing a context in a struct is bad practice, so this field should not be used for any other purpose.
 	ctx           context.Context
 	maxByteLength int64
 }
@@ -135,6 +137,8 @@ func (t *TextStorage) Value() (driver.Value, error) {
 
 type ByteArray struct {
 	ImmutableValue
+	// ctx is a context that can be used in driver.Value
+	// Storing a context in a struct is bad practice, so this field should not be used for any other purpose.
 	ctx           context.Context
 	maxByteLength int64
 }

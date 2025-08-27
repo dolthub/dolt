@@ -55,7 +55,7 @@ type suffix [hash.SuffixLen]byte
 type archiveFooter struct {
 	fileSignature string
 	indexSize     uint64
-	fileSize      uint64
+	fileSize      uint64 // Not actually part of the footer, but necessary for calculating offsets.
 	byteSpanCount uint32
 	chunkCount    uint32
 	metadataSize  uint32
