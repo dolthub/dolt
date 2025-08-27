@@ -27,6 +27,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"strings"
 	"sync"
 	"syscall"
 
@@ -63,11 +64,17 @@ func Start() *Pager {
 
 	// Check for DOLT_PAGER environment variable first
 	if doltPager := os.Getenv("DOLT_PAGER"); doltPager != "" {
-		pagerPath, err = exec.LookPath(doltPager)
+		// Split DOLT_PAGER into command and arguments
+		parts := strings.Fields(doltPager)
+		pagerPath, err = exec.LookPath(parts[0])
 		if err != nil {
 			d.Chk.NoError(err)
 		}
-		cmd = exec.Command(pagerPath)
+		if len(parts) > 1 {
+			cmd = exec.Command(pagerPath, parts[1:]...)
+		} else {
+			cmd = exec.Command(pagerPath)
+		}
 	} else {
 		// Fall back to less or more if DOLT_PAGER is not set
 		pagerPath, err = exec.LookPath("less")
