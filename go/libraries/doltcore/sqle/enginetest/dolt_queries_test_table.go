@@ -148,6 +148,22 @@ var DoltTestRunFunctionScripts = []queries.ScriptTest{
 		},
 	},
 	{
+		Name: "Delimiter is option for dolt_test_run",
+		SetUpScript: []string{
+			"INSERT INTO dolt_tests VALUES ('should pass', 'delimiter tests', 'show tables', 'expected_rows', '==', '0'), " +
+				"('should also pass', 'delimiter tests', 'show tables;', 'expected_rows', '==', '0')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT * FROM dolt_test_run('delimiter tests')",
+				Expected: []sql.Row{
+					{"should also pass", "delimiter tests", "show tables;", "PASS", ""},
+					{"should pass", "delimiter tests", "show tables", "PASS", ""},
+				},
+			},
+		},
+	},
+	{
 		Name: "Simple row and column tests",
 		SetUpScript: []string{
 			"INSERT INTO dolt_tests VALUES ('should pass rows', 'row tests', 'select * from dolt_branches;', 'expected_rows', '!=', '4'), " +
@@ -253,6 +269,26 @@ var DoltTestRunFunctionScripts = []queries.ScriptTest{
 				Expected: []sql.Row{
 					{"should fail", "single value tests", "select * from test;", "FAIL", "Assertion failed: expected_single_value greater than 3.2, got 3.14159"},
 					{"should pass", "single value tests", "select * from test;", "PASS", ""},
+				},
+			},
+		},
+	},
+	{
+		Name: "Can expect single decimal",
+		SetUpScript: []string{
+			"CREATE TABLE decimals (d DECIMAL(10,2))",
+			"INSERT INTO decimals VALUES (10.4)",
+			"INSERT INTO dolt_tests VALUES ('should pass', 'decimal tests', 'select * from decimals;', 'expected_single_value', '<', '10.5'), " +
+				"('should fail', 'decimal tests', 'select * from decimals;', 'expected_single_value', '>', '10.5'), " +
+				"('can compare to integer', 'decimal tests', 'select * from decimals;', 'expected_single_value', '>', '10')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT * FROM dolt_test_run('decimal tests')",
+				Expected: []sql.Row{
+					{"can compare to integer", "decimal tests", "select * from decimals;", "PASS", ""},
+					{"should fail", "decimal tests", "select * from decimals;", "FAIL", "Assertion failed: expected_single_value greater than 10.5, got 10.4"},
+					{"should pass", "decimal tests", "select * from decimals;", "PASS", ""},
 				},
 			},
 		},

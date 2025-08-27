@@ -161,7 +161,7 @@ func (trtf *TestsRunTableFunction) String() string {
 	return fmt.Sprintf("DOLT_TEST_RUN(%s)", strings.Join(trtf.getOptionsString(), ","))
 }
 
-// getOptionsString builds comma-separated argument list for display.
+// getOptionsString builds a slice of the arguments passed into dolt_test_run
 func (trtf *TestsRunTableFunction) getOptionsString() []string {
 	var options []string
 	for _, expr := range trtf.argumentExprs {
