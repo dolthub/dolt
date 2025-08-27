@@ -191,8 +191,7 @@ func TestWriteImmutableTree(t *testing.T) {
 				root, err = root.loadSubtrees()
 				require.NoError(t, err)
 				for i := range expSubtrees {
-					sc, err := root.getSubtreeCount(i)
-					require.NoError(t, err)
+					sc := root.GetSubtreeCount(i)
 					assert.Equal(t, expSubtrees[i], sc)
 				}
 			}

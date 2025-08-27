@@ -114,7 +114,7 @@ func newCursorAtOrdinal(ctx context.Context, ns NodeStore, nd Node, ord uint64) 
 		nd, _ = nd.loadSubtrees()
 
 		for idx = 0; idx < nd.Count(); idx++ {
-			cnt, _ := nd.getSubtreeCount(idx)
+			cnt := nd.GetSubtreeCount(idx)
 			card := int64(cnt)
 			if (distance - card) < 0 {
 				break
@@ -150,10 +150,7 @@ func getOrdinalOfCursor(curr *cursor) (ord uint64, err error) {
 		}
 
 		for idx := curr.idx - 1; idx >= 0; idx-- {
-			cnt, err := curr.nd.getSubtreeCount(idx)
-			if err != nil {
-				return 0, err
-			}
+			cnt := curr.nd.GetSubtreeCount(idx)
 			ord += cnt
 		}
 	}
@@ -294,10 +291,7 @@ func recursiveFetchLeafNodeSpan(ctx context.Context, ns NodeStore, nodes []Node,
 		}
 
 		for i := 0; i < nd.Count(); i++ {
-			card, err := nd.getSubtreeCount(i)
-			if err != nil {
-				return nil, 0, err
-			}
+			card := nd.GetSubtreeCount(i)
 
 			if acc == 0 && card < start {
 				start -= card
@@ -392,7 +386,7 @@ func (cur *cursor) currentSubtreeSize() (uint64, error) {
 	if err != nil {
 		return 0, err
 	}
-	return cur.nd.getSubtreeCount(cur.idx)
+	return cur.nd.GetSubtreeCount(cur.idx), nil
 }
 
 func (cur *cursor) firstKey() Item {
