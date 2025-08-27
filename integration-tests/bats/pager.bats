@@ -15,7 +15,9 @@ teardown() {
 
 export NO_COLOR=1
 
+# bats test_tags=no_lambda
 @test "pager: dolt log with pager" {
+  skiponwindows "Need to install expect and make this script work on windows."
   # We use `expect` because we need TTY simulation to get the pager to kick in
   export DOLT_PAGER="tail -n 2"
   run expect $BATS_TEST_DIRNAME/pager.expect
