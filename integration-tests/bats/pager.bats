@@ -15,7 +15,7 @@ teardown() {
 
 export NO_COLOR=1
 
-@test "dolt log with pager" {
+@test "pager: dolt log with pager" {
   # We use `expect` because we need TTY simulation to get the pager to kick in
   export DOLT_PAGER="tail -n 2"
   run expect $BATS_TEST_DIRNAME/pager.expect
