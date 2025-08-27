@@ -57,23 +57,33 @@ func Start() *Pager {
 		}
 	}
 
-	var lessPath string
+	var pagerPath string
 	var err error
 	var cmd *exec.Cmd
 
-	lessPath, err = exec.LookPath("less")
-	if err != nil {
-		lessPath, err = exec.LookPath("more")
-		d.Chk.NoError(err)
-		cmd = exec.Command(lessPath)
+	// Check for DOLT_PAGER environment variable first
+	if doltPager := os.Getenv("DOLT_PAGER"); doltPager != "" {
+		pagerPath, err = exec.LookPath(doltPager)
+		if err != nil {
+			d.Chk.NoError(err)
+		}
+		cmd = exec.Command(pagerPath)
 	} else {
-		d.Chk.NoError(err)
-		// -F ... Quit if entire file fits on first screen.
-		// -S ... Chop (truncate) long lines rather than wrapping.
-		// -R ... Output "raw" control characters.
-		// -X ... Don't use termcap init/deinit strings.
-		// -d ... Don't complain about dumb terminals.
-		cmd = exec.Command(lessPath, "-FSRXd")
+		// Fall back to less or more if DOLT_PAGER is not set
+		pagerPath, err = exec.LookPath("less")
+		if err != nil {
+			pagerPath, err = exec.LookPath("more")
+			d.Chk.NoError(err)
+			cmd = exec.Command(pagerPath)
+		} else {
+			d.Chk.NoError(err)
+			// -F ... Quit if entire file fits on first screen.
+			// -S ... Chop (truncate) long lines rather than wrapping.
+			// -R ... Output "raw" control characters.
+			// -X ... Don't use termcap init/deinit strings.
+			// -d ... Don't complain about dumb terminals.
+			cmd = exec.Command(pagerPath, "-FSRXd")
+		}
 	}
 
 	stdin, stdout, err := os.Pipe()
