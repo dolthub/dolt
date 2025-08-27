@@ -290,7 +290,7 @@ func insertNode[K ~[]byte, S message.Serializer, O Ordering[K]](ctx context.Cont
 			}
 		}
 	} else {
-		nd, err = nd.loadSubtrees()
+		nd, err = nd.LoadSubtrees()
 		if err != nil {
 			return err
 		}

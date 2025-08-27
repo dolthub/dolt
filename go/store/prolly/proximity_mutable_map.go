@@ -96,13 +96,13 @@ func (f ProximityFlusher) ApplyMutationsWithSerializer(
 		// The root node has changed, or there may be a new level to the tree. We need to rebuild the tree.
 		newRoot, _, err = f.rebuildNode(ctx, ns, root, edits, distanceType, keyDesc, valDesc, maxEditLevel)
 	} else {
-		newRoot, _, err = f.visitNode(ctx, serializer, ns, root, edits, convert, distanceType, keyDesc, valDesc)
+		root, err = root.LoadSubtrees()
+		if err != nil {
+			return tree.ProximityMap[val.Tuple, val.Tuple, val.TupleDesc]{}, err
+		}
+		newRoot, _, err = f.visitNode(ctx, serializer, ns, root, edits, convertFunc, distanceType, keyDesc, valDesc)
 
 	}
-	if err != nil {
-		return tree.ProximityMap[val.Tuple, val.Tuple, val.TupleDesc]{}, err
-	}
-	convertFunc, err := getConvertToVectorFunction(keyDesc, ns)
 	if err != nil {
 		return tree.ProximityMap[val.Tuple, val.Tuple, val.TupleDesc]{}, err
 	}
@@ -219,6 +219,8 @@ func (f ProximityFlusher) visitNode(
 			if len(childEditList.edits) == 0 {
 				// No edits affected this node, leave it as is.
 				values = append(values, childValue)
+				childSubtrees := node.GetSubtreeCount(i)
+				nodeSubtrees = append(nodeSubtrees, uint64(childSubtrees))
 			} else {
 				childNodeAddress := hash.New(childValue)
 				childNode, err := ns.Read(ctx, childNodeAddress)
@@ -230,6 +232,10 @@ func (f ProximityFlusher) visitNode(
 				if childEditList.mustRebuild {
 					newChildNode, childSubtrees, err = f.rebuildNode(ctx, ns, childNode, childEditList.edits, distanceType, keyDesc, valDesc, uint8(childNode.Level()))
 				} else {
+					childNode, err = childNode.LoadSubtrees()
+					if err != nil {
+						return tree.Node{}, 0, err
+					}
 					newChildNode, childSubtrees, err = f.visitNode(ctx, serializer, ns, childNode, childEditList.edits, convert, distanceType, keyDesc, valDesc)
 				}
 

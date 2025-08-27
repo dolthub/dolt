@@ -111,7 +111,7 @@ func newCursorAtOrdinal(ctx context.Context, ns NodeStore, nd Node, ord uint64) 
 		if nd.IsLeaf() {
 			return int(distance)
 		}
-		nd, _ = nd.loadSubtrees()
+		nd, _ = nd.LoadSubtrees()
 
 		for idx = 0; idx < nd.Count(); idx++ {
 			cnt := nd.GetSubtreeCount(idx)
@@ -144,7 +144,7 @@ func getOrdinalOfCursor(curr *cursor) (ord uint64, err error) {
 			return 0, fmt.Errorf("found invalid parent cursor behind node start")
 		}
 
-		curr.nd, err = curr.nd.loadSubtrees()
+		curr.nd, err = curr.nd.LoadSubtrees()
 		if err != nil {
 			return 0, err
 		}
@@ -286,7 +286,7 @@ func recursiveFetchLeafNodeSpan(ctx context.Context, ns NodeStore, nodes []Node,
 
 	var err error
 	for _, nd := range nodes {
-		if nd, err = nd.loadSubtrees(); err != nil {
+		if nd, err = nd.LoadSubtrees(); err != nil {
 			return nil, 0, err
 		}
 
@@ -382,7 +382,7 @@ func (cur *cursor) currentSubtreeSize() (uint64, error) {
 		return 1, nil
 	}
 	var err error
-	cur.nd, err = cur.nd.loadSubtrees()
+	cur.nd, err = cur.nd.LoadSubtrees()
 	if err != nil {
 		return 0, err
 	}

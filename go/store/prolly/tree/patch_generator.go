@@ -418,7 +418,7 @@ func (td *PatchGenerator[K, O]) split(ctx context.Context) (patch Patch, diffTyp
 		if err != nil {
 			return Patch{}, NoDiff, err
 		}
-		toChild, err = toChild.loadSubtrees()
+		toChild, err = toChild.LoadSubtrees()
 		if err != nil {
 			return Patch{}, NoDiff, err
 		}

@@ -81,7 +81,7 @@ func histLevelCount(t *testing.T, nodes []Node) int {
 		case 0:
 			cnt += n.Count()
 		default:
-			n, err := n.loadSubtrees()
+			n, err := n.LoadSubtrees()
 			require.NoError(t, err)
 			for i := 0; i < n.Count(); i++ {
 				subCnt := n.GetSubtreeCount(i)
