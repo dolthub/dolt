@@ -35,7 +35,6 @@ wait_for_mcp_port() {
 }
 
 @test "sql-server-mcp-config: starts MCP via config file mcp_server" {
-  # skip "MCP YAML config (mcp_server) not implemented yet"
   cd repo1
 
   SQL_PORT=$( definePORT )
@@ -66,7 +65,6 @@ EOF2
 }
 
 @test "sql-server-mcp-config: mcp_server.database selects DB for MCP connection" {
-  # skip "MCP YAML config (mcp_server) not implemented yet"
   cd repo1
 
   dolt sql -q "CREATE DATABASE mcpdb"
@@ -117,7 +115,6 @@ EOF2
 }
 
 @test "sql-server-mcp-config: missing mcp_server.user with mcp_server.port fails" {
-  # skip "MCP YAML config (mcp_server) not implemented yet"
   cd repo1
 
   SQL_PORT=$( definePORT )
@@ -142,7 +139,6 @@ EOF2
 }
 
 @test "sql-server-mcp-config: CLI flags override config mcp_server" {
-  # skip "MCP YAML config (mcp_server) not implemented yet"
   cd repo1
 
   SQL_PORT=$( definePORT )
