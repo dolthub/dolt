@@ -264,7 +264,7 @@ type ThreeWayDiff struct {
 	Right  val.Tuple
 	Merged val.Tuple
 	// Op indicates the type of diff
-	Op     DiffOp
+	Op DiffOp
 }
 
 func (d *ThreeWayDiffer[K, O]) newLeftEdit(key, left Item, typ DiffType) ThreeWayDiff {

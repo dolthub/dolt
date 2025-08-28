@@ -67,10 +67,10 @@ type PullTableFileWriter struct {
 }
 
 type PullTableFileWriterConfig struct {
-	DestStore            DestTableFileStore
-	GetAddrs             chunks.GetAddrsCurry
-	TempDir              string
-	ConcurrentUploads    int
+	DestStore         DestTableFileStore
+	GetAddrs          chunks.GetAddrsCurry
+	TempDir           string
+	ConcurrentUploads int
 	// The approximate file size at which we will cut a file so
 	// that we start uploading it and we start writing later
 	// chunks to a new file. In bytes.

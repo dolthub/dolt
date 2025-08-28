@@ -193,8 +193,8 @@ type lookupMapping struct {
 	srcVd      val.TupleDesc
 	srcMapping val.OrdinalMapping
 	// litTuple are the statically provided literal expressions in the key expression
-	litTuple   val.Tuple
-	split      int
+	litTuple val.Tuple
+	split    int
 }
 
 func newLookupKeyMapping(ctx context.Context, sourceSch schema.Schema, tgtKeyDesc val.TupleDesc, keyExprs []sql.Expression, typs []sql.ColumnExpressionType, ns tree.NodeStore) (*lookupMapping, error) {

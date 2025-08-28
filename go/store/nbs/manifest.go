@@ -119,11 +119,11 @@ type manifestContents struct {
 	// managed with nbs.UpdateManifestWithAppendix, however generation and removal of the actual table files
 	// the appendix |tableSpecs| reference is done manually. All appendix |tableSpecs| will be prepended to the
 	// manifest.specs across manifest updates.
-	appendix     []tableSpec
-	specs        []tableSpec
-	lock         hash.Hash
-	root         hash.Hash
-	gcGen        hash.Hash
+	appendix []tableSpec
+	specs    []tableSpec
+	lock     hash.Hash
+	root     hash.Hash
+	gcGen    hash.Hash
 }
 
 // GetVersion returns the noms binary format of the manifest

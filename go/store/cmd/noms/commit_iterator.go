@@ -105,8 +105,8 @@ func (iter *CommitIterator) Next(ctx context.Context) (LogNode, bool) {
 
 type LogNode struct {
 	commit           types.Value // commit that needs to be printed
-	newCols          []int // col to start using '\' in graph
-	foldedCols       []int // cols with common ancestors, that will get folded together
+	newCols          []int       // col to start using '\' in graph
+	foldedCols       []int       // cols with common ancestors, that will get folded together
 	height           uint64
 	startingColCount int // how many branches are being tracked when this commit is printed
 	endingColCount   int // home many branches will be tracked when next commit is printed

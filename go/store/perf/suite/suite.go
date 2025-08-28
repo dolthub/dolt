@@ -135,18 +135,18 @@ var (
 // PerfSuite is the core of the perf testing suite. See package documentation for details.
 type PerfSuite struct {
 	// W is the io.Writer to write test output, which only outputs if the verbose flag is set.
-	W            io.Writer
+	W io.Writer
 	// Database is a Noms database that tests can use for reading and writing.
 	// State is persisted across a single Run of a suite.
-	Database     datas.Database
+	Database datas.Database
 	// T is the testing.T instance set when the suite is passed into Run.
-	T            *testing.T
-	VS           *types.ValueStore
+	T  *testing.T
+	VS *types.ValueStore
 	// AtticLabs is the path to the attic-labs directory (e.g. /path/to/go/src/github.com/attic-labs).
-	AtticLabs    string
+	AtticLabs string
 	// Testdata is the path to the testdata directory - typically /path/to/go/src/github.com/attic-labs,
 	// but it can be overridden with the -perf.testdata flag.
-	Testdata     string
+	Testdata string
 	// DatabaseSpec is the Noms spec of Database (typically a localhost URL).
 	DatabaseSpec string
 	datasetID    string

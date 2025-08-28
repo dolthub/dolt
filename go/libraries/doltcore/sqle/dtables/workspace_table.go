@@ -52,7 +52,7 @@ import (
 const stagedColumnIdx = 1
 
 type WorkspaceTable struct {
-	head          doltdb.RootValue
+	head doltdb.RootValue
 	// headSchema is the schema of the table that is being modified.
 	headSchema    schema.Schema
 	ws            *doltdb.WorkingSet
@@ -62,13 +62,13 @@ type WorkspaceTable struct {
 	sqlSchema     sql.Schema // This is the full schema for the dolt_workspace_* table
 	// modifiable is true if the schemas before and after the update are identical. Used to reject updates that would
 	// be impossible to perform - such as only stage one row when the entire schema of the table is being modified.
-	modifiable    bool
+	modifiable bool
 }
 
 type WorkspaceTableModifier struct {
-	head               doltdb.RootValue
-	headSch            schema.Schema
-	ws                 *doltdb.WorkingSet
+	head    doltdb.RootValue
+	headSch schema.Schema
+	ws      *doltdb.WorkingSet
 	// tableWriter and sessionWriter are only set during StatementBegin
 	tableWriter        *dsess.TableWriter
 	sessionWriter      *dsess.WriteSession
@@ -77,7 +77,7 @@ type WorkspaceTableModifier struct {
 	workspaceTableName string
 	schemaLen          int
 	// modifiable carried through from the main table.
-	modifiable         bool
+	modifiable bool
 }
 
 type WorkspaceTableUpdater struct {

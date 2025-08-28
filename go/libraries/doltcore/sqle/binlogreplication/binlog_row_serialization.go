@@ -29,16 +29,16 @@ import (
 // the data for a row, so that callers can ask for the next column information and get the right descriptor, tuple,
 // and tuple index to use to load that column's data.
 type rowSerializationIter struct {
-	sch       schema.Schema // The schema representing the row being serialized
+	sch schema.Schema // The schema representing the row being serialized
 
 	keyDesc   val.TupleDesc // The descriptor for the key tuple
 	valueDesc val.TupleDesc // The descriptor for the value tuple
-	key       val.Tuple // The key tuple for the row being serialized
-	value     val.Tuple // The value tuple for the row being serialized
+	key       val.Tuple     // The key tuple for the row being serialized
+	value     val.Tuple     // The value tuple for the row being serialized
 
-	colIdx    int // The position in the schema for the current column
-	keyIdx    int // The last index in the key tuple used for a column
-	valueIdx  int // The last index in the value tuple used for a column
+	colIdx   int // The position in the schema for the current column
+	keyIdx   int // The last index in the key tuple used for a column
+	valueIdx int // The last index in the value tuple used for a column
 }
 
 // newRowSerializationIter creates a new rowSerializationIter for the specified |schema| and row data from the

@@ -44,15 +44,15 @@ type Node struct {
 	subtrees *subtreeCounts
 	// msg is the underlying buffer for the Node
 	// encoded as a Flatbuffers message.
-	msg      serial.Message
+	msg serial.Message
 	// keys and values cache offset metadata
 	// to accelerate Item lookups into msg.
-	keys     message.ItemAccess
-	values   message.ItemAccess
+	keys   message.ItemAccess
+	values message.ItemAccess
 	// count is the Item pair count.
-	count    uint16
+	count uint16
 	// level is 0-indexed tree height.
-	level    uint16
+	level uint16
 }
 
 type AddressCb func(ctx context.Context, addr hash.Hash) error

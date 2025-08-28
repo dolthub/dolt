@@ -74,7 +74,7 @@ type mergeJoinKvIter struct {
 	lookaheadBuf [][]byte
 	// TODO: we want to build KV-side static expression implementations
 	//   so that we can execute filters more efficiently
-	joinFilters  []sql.Expression
+	joinFilters []sql.Expression
 
 	leftKey      val.Tuple
 	leftVal      val.Tuple

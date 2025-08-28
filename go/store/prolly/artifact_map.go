@@ -603,15 +603,15 @@ func (itr artifactIterImpl) getSrcKeyFromArtKey(k val.Tuple) (val.Tuple, error) 
 // Artifact is a struct representing an artifact in the artifacts table
 type Artifact struct {
 	// ArtKey is the key of the artifact itself
-	ArtKey        val.Tuple
+	ArtKey val.Tuple
 	// SourceKey is the key of the source row that the artifact references
-	SourceKey     val.Tuple
+	SourceKey val.Tuple
 	// Metadata is the encoded json metadata
-	Metadata      []byte
+	Metadata []byte
 	// SourceRootish is the working set hash or commit hash of the right in the merge
 	SourceRootish hash.Hash
 	// ArtType is the type of the artifact
-	ArtType       ArtifactType
+	ArtType ArtifactType
 }
 
 func mergeArtifactsDescriptorsFromSource(srcKd val.TupleDesc) (kd, vd val.TupleDesc) {

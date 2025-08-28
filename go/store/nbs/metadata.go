@@ -76,12 +76,12 @@ type StorageArtifact struct {
 	// tblMetadata is additional metadata for table files. it is only set for storageType == TypeNoms.
 	tblMetadata *TableFileMetadata
 	// path to the storage artifact.
-	path        string
+	path string
 	// storageType is the type of the storage artifact.
 	storageType TableFileFormat
 	// ID of the storage artifact. This is uses in the manifest to identify the artifact, but it is not the file name.
 	// as archives has a suffix.
-	id          hash.Hash
+	id hash.Hash
 }
 
 func (sa StorageArtifact) SummaryString() string {

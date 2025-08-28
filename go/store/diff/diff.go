@@ -68,7 +68,7 @@ type differ struct {
 	eg            *errgroup.Group
 	asyncPanic    *atomic.Value
 	// Use LeftRight diff as opposed to TopDown
-	leftRight     bool
+	leftRight bool
 }
 
 // Diff traverses two graphs simultaneously looking for differences. It returns
