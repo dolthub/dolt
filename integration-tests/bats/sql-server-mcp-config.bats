@@ -136,6 +136,9 @@ EOF2
     run env PORT=$SQL_PORT dolt sql-server --config ./config.yml --socket "dolt.$SQL_PORT.sock"
   fi
   [ $status -ne 0 ]
+  # Verify error message surfaced to the user
+  log_output_has "--mcp-user is required when --mcp-port is specified"
+
 }
 
 @test "sql-server-mcp-config: CLI flags override config mcp_server" {
