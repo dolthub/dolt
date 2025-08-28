@@ -305,45 +305,19 @@ func StartServer(ctx context.Context, versionStr, commandStr string, args []stri
 	// Validate and prepare MCP options in dedicated helper
 	// Fill MCP options from YAML config (if present) for any unset CLI values.
 	// CLI always has precedence over config file.
-	switch cfg := serverConfig.(type) {
-	case servercfg.YAMLConfig:
-		if cfg.MCPServer != nil {
-			if mcpPortPtr == nil && cfg.MCPServer.Port != nil {
-				m := *cfg.MCPServer.Port
-				mcpPortPtr = &m
-			}
-			if mcpUserPtr == nil && cfg.MCPServer.User != nil {
-				u := *cfg.MCPServer.User
-				mcpUserPtr = &u
-			}
-			if mcpPasswordPtr == nil && cfg.MCPServer.Password != nil {
-				p := *cfg.MCPServer.Password
-				mcpPasswordPtr = &p
-			}
-			if mcpDatabasePtr == nil && cfg.MCPServer.Database != nil {
-				d := *cfg.MCPServer.Database
-				mcpDatabasePtr = &d
-			}
-		}
-	case *servercfg.YAMLConfig:
-		if cfg != nil && cfg.MCPServer != nil {
-			if mcpPortPtr == nil && cfg.MCPServer.Port != nil {
-				m := *cfg.MCPServer.Port
-				mcpPortPtr = &m
-			}
-			if mcpUserPtr == nil && cfg.MCPServer.User != nil {
-				u := *cfg.MCPServer.User
-				mcpUserPtr = &u
-			}
-			if mcpPasswordPtr == nil && cfg.MCPServer.Password != nil {
-				p := *cfg.MCPServer.Password
-				mcpPasswordPtr = &p
-			}
-			if mcpDatabasePtr == nil && cfg.MCPServer.Database != nil {
-				d := *cfg.MCPServer.Database
-				mcpDatabasePtr = &d
-			}
-		}
+
+	// Prefer CLI values; fall back to ServerConfig interface (e.g., YAML config)
+	if mcpPortPtr == nil {
+		mcpPortPtr = serverConfig.MCPPort()
+	}
+	if mcpUserPtr == nil {
+		mcpUserPtr = serverConfig.MCPUser()
+	}
+	if mcpPasswordPtr == nil {
+		mcpPasswordPtr = serverConfig.MCPPassword()
+	}
+	if mcpDatabasePtr == nil {
+		mcpDatabasePtr = serverConfig.MCPDatabase()
 	}
 	if err := validateAndPrepareMCP(serverConfig, mcpPortPtr, mcpUserPtr, mcpPasswordPtr, mcpDatabasePtr); err != nil {
 		return err

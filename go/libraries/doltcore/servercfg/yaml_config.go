@@ -130,7 +130,6 @@ type MCPServerYAMLConfig struct {
 	Database *string `yaml:"database,omitempty"`
 }
 
-
 type UserSessionVars struct {
 	Name string                 `yaml:"name"`
 	Vars map[string]interface{} `yaml:"vars"`
@@ -751,6 +750,38 @@ func (cfg YAMLConfig) RemotesapiPort() *int {
 
 func (cfg YAMLConfig) RemotesapiReadOnly() *bool {
 	return cfg.RemotesapiConfig.ReadOnly_
+}
+
+// MCPPort returns the configured MCP HTTP port, if any.
+func (cfg YAMLConfig) MCPPort() *int {
+	if cfg.MCPServer == nil {
+		return nil
+	}
+	return cfg.MCPServer.Port
+}
+
+// MCPUser returns the configured MCP SQL user, if any.
+func (cfg YAMLConfig) MCPUser() *string {
+	if cfg.MCPServer == nil {
+		return nil
+	}
+	return cfg.MCPServer.User
+}
+
+// MCPPassword returns the configured MCP SQL password, if any.
+func (cfg YAMLConfig) MCPPassword() *string {
+	if cfg.MCPServer == nil {
+		return nil
+	}
+	return cfg.MCPServer.Password
+}
+
+// MCPDatabase returns the configured MCP SQL database, if any.
+func (cfg YAMLConfig) MCPDatabase() *string {
+	if cfg.MCPServer == nil {
+		return nil
+	}
+	return cfg.MCPServer.Database
 }
 
 // PrivilegeFilePath returns the path to the file which contains all needed privilege information in the form of a

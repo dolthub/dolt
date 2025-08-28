@@ -63,6 +63,18 @@ type commandLineServerConfig struct {
 
 var _ servercfg.ServerConfig = (*commandLineServerConfig)(nil)
 
+// MCPPort returns nil for command-line config, which does not persist MCP settings.
+func (cfg *commandLineServerConfig) MCPPort() *int { return nil }
+
+// MCPUser returns nil for command-line config.
+func (cfg *commandLineServerConfig) MCPUser() *string { return nil }
+
+// MCPPassword returns nil for command-line config.
+func (cfg *commandLineServerConfig) MCPPassword() *string { return nil }
+
+// MCPDatabase returns nil for command-line config.
+func (cfg *commandLineServerConfig) MCPDatabase() *string { return nil }
+
 // DefaultCommandLineServerConfig creates a `*ServerConfig` that has all of the options set to their default values.
 func DefaultCommandLineServerConfig() *commandLineServerConfig {
 	return &commandLineServerConfig{
