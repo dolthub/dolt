@@ -33,18 +33,18 @@ import (
 )
 
 type sizeCacheEntry struct {
-	size     uint64
-	lruEntry *list.Element
 	value    interface{}
+	lruEntry *list.Element
+	size     uint64
 }
 
 type SizeCache struct {
+	cache     map[interface{}]sizeCacheEntry
+	expireCb  func(elm interface{})
+	lru       list.List
 	totalSize uint64
 	maxSize   uint64
 	mu        sync.Mutex
-	lru       list.List
-	cache     map[interface{}]sizeCacheEntry
-	expireCb  func(elm interface{})
 }
 
 type ExpireCallback func(key interface{})

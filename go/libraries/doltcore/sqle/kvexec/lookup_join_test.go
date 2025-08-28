@@ -34,8 +34,8 @@ import (
 func TestLookupJoin(t *testing.T) {
 	tests := []struct {
 		name      string
-		setup     []string
 		join      string
+		setup     []string
 		doRowexec bool
 	}{
 		{

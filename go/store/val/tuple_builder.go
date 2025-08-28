@@ -63,6 +63,7 @@ func (om OrdinalMapping) IsIdentityMapping() bool {
 var defaultTupleLengthTarget int64 = (1 << 11)
 
 type TupleBuilder struct {
+	vs                ValueStore
 	Desc              TupleDesc
 	fields            [][]byte
 	buf               []byte
@@ -70,7 +71,6 @@ type TupleBuilder struct {
 	tupleLengthTarget int64 // The max tuple length before the tuple builder attempts to store values out-of-band.
 	outOfBandSize     int64 // The size of the tuple if every adaptive value is stored out-of-band
 	inlineSize        int64 // The size of the tuple if every adaptive value is inlined
-	vs                ValueStore
 }
 
 func NewTupleBuilder(desc TupleDesc, vs ValueStore) *TupleBuilder {

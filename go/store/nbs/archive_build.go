@@ -439,8 +439,8 @@ func compressChunksInParallel(
 	stats *Stats,
 ) (uint32, error) {
 	type compressedChunk struct {
-		h    hash.Hash
 		data []byte
+		h    hash.Hash
 	}
 
 	const workerCount = 32

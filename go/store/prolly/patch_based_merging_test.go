@@ -123,12 +123,13 @@ func remove[T interface{}](key T) mutation[T] {
 // expectedPatch is a description of a patch returned by the patch generator. It's used in tests to describe expected
 // output.
 type expectedPatch[T interface{}] struct {
-	startKey, endKey T
-	noStartKey       bool
-	level            int
-	subtreeCount     uint64
-	toValue          T
-	isRemoval        bool
+	startKey     T
+	endKey       T
+	toValue      T
+	level        int
+	subtreeCount uint64
+	noStartKey   bool
+	isRemoval    bool
 }
 
 func pointUpdate[T interface{}](key, value T) expectedPatch[T] {

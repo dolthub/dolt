@@ -25,10 +25,10 @@ import (
 )
 
 type nomsFkIndexer struct {
-	writer  *nomsTableWriter
-	idxName string
 	idxSch  schema.Schema
+	writer  *nomsTableWriter
 	nrr     *noms.ReadRange
+	idxName string
 }
 
 var _ sql.Table = (*nomsFkIndexer)(nil)

@@ -226,8 +226,8 @@ func (itr *rangePartitionIter) nextNomsPartition() (sql.Partition, error) {
 
 type rangePartition struct {
 	nomsRange   *noms.ReadRange
-	prollyRange prolly.Range
 	key         []byte
+	prollyRange prolly.Range
 	isReverse   bool
 }
 
@@ -423,18 +423,17 @@ var _ IndexScanBuilder = (*nonCoveringIndexImplBuilder)(nil)
 // baseIndexImplBuilder is a common lookup builder for prolly covering and
 // non covering index lookups.
 type baseIndexImplBuilder struct {
-	key doltdb.DataCacheKey
-
-	idx         *doltIndex
-	sch         sql.PrimaryKeySchema
-	projections []uint64
-
-	isProximity        bool
-	sec                prolly.Map
-	proximitySecondary prolly.ProximityMap
-	secKd, secVd       val.TupleDesc
-	prefDesc           val.TupleDesc
 	ns                 tree.NodeStore
+	idx                *doltIndex
+	sec                prolly.Map
+	secKd              val.TupleDesc
+	secVd              val.TupleDesc
+	prefDesc           val.TupleDesc
+	sch                sql.PrimaryKeySchema
+	projections        []uint64
+	proximitySecondary prolly.ProximityMap
+	key                doltdb.DataCacheKey
+	isProximity        bool
 }
 
 func (ib *baseIndexImplBuilder) Key() doltdb.DataCacheKey {
@@ -546,8 +545,8 @@ func NewSequenceRangeIter(ctx context.Context, irIter IndexRangeIterable, ranges
 type sequenceRangeIter struct {
 	cur             prolly.MapIter
 	irIter          IndexRangeIterable
-	reverse         bool
 	remainingRanges []prolly.Range
+	reverse         bool
 }
 
 var _ prolly.MapIter = (*sequenceRangeIter)(nil)
@@ -653,9 +652,9 @@ type nonCoveringIndexImplBuilder struct {
 
 type nonCoveringMapIter struct {
 	indexIter prolly.MapIter
+	pkBld     *val.TupleBuilder
 	primary   prolly.Map
 	pkMap     val.OrdinalMapping
-	pkBld     *val.TupleBuilder
 }
 
 var _ prolly.MapIter = (*nonCoveringMapIter)(nil)
@@ -797,11 +796,12 @@ func (ib *keylessIndexImplBuilder) NewRangeMapIter(ctx context.Context, r prolly
 
 type keylessMapIter struct {
 	indexIter prolly.MapIter
-	clustered prolly.Map
+
 	// clusteredMap transforms secondary index keys
 	// into clustered index keys
 	clusteredMap val.OrdinalMapping
 	clusteredBld *val.TupleBuilder
+	clustered    prolly.Map
 }
 
 var _ prolly.MapIter = (*keylessMapIter)(nil)
@@ -917,9 +917,9 @@ const (
 
 // columnBounds are used to compare a given value in the noms row iterator.
 type columnBounds struct {
-	boundsCase
 	lowerbound types.Value
 	upperbound types.Value
+	boundsCase
 }
 
 // nomsRangeCheck is used to compare a tuple against a set of comparisons in the noms row iterator.

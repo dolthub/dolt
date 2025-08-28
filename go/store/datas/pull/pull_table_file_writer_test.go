@@ -343,10 +343,10 @@ func TestPullTableFileWriter(t *testing.T) {
 }
 
 type noopTableFileDestStore struct {
-	writeDelay  time.Duration
-	writeCalled atomic.Uint32
-	addCalled   int
 	manifest    map[string]int
+	writeDelay  time.Duration
+	addCalled   int
+	writeCalled atomic.Uint32
 }
 
 func (s *noopTableFileDestStore) WriteTableFile(ctx context.Context, id string, numChunks int, contentHash []byte, getRd func() (io.ReadCloser, uint64, error)) error {

@@ -131,9 +131,9 @@ const (
 )
 
 type fileManifest struct {
+	lock *fslock.Lock
 	dir  string
 	mode updateMode
-	lock *fslock.Lock
 }
 
 // Returns nil if path does not exist

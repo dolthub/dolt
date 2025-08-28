@@ -62,16 +62,16 @@ var ErrSystemTableAlter = errors.NewKind("Cannot alter table %s: system tables c
 
 // Database implements sql.Database for a dolt DB.
 type Database struct {
-	baseName      string
-	requestedName string
-	schemaName    string
-	ddb           *doltdb.DoltDB
 	rsr           env.RepoStateReader[*sql.Context]
 	rsw           env.RepoStateWriter
 	gs            dsess.GlobalStateImpl
-	editOpts      editor.Options
+	ddb           *doltdb.DoltDB
+	baseName      string
+	requestedName string
+	schemaName    string
 	revision      string
 	revName       string
+	editOpts      editor.Options
 	revType       dsess.RevisionType
 }
 

@@ -65,11 +65,11 @@ var _ S3APIV2 = (*s3.Client)(nil)
 
 type awsTablePersister struct {
 	s3     S3APIV2
-	bucket string
-	rl     chan struct{}
-	limits awsLimits
-	ns     string
 	q      MemoryQuotaProvider
+	rl     chan struct{}
+	bucket string
+	ns     string
+	limits awsLimits
 }
 
 var _ tablePersister = awsTablePersister{}
@@ -124,8 +124,8 @@ func (s3p awsTablePersister) AccessMode() chunks.ExclusiveAccessMode {
 }
 
 type s3UploadedPart struct {
-	idx  int32
 	etag string
+	idx  int32
 }
 
 func (s3p awsTablePersister) key(k string) string {
@@ -330,7 +330,7 @@ func (s3p awsTablePersister) assembleTable(ctx context.Context, plan compactionP
 		}
 		// Try to send along part info. In the case that the upload was aborted, reading from done allows this worker to exit correctly.
 		select {
-		case sent <- s3UploadedPart{partNum, etag}:
+		case sent <- s3UploadedPart{etag, partNum}:
 		case <-done:
 			return
 		}

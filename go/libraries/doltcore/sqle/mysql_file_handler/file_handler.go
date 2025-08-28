@@ -30,9 +30,9 @@ import (
 var PermsFileMode os.FileMode = 0600
 
 type Persister struct {
+	fileMutex      *sync.Mutex
 	privsFilePath  string
 	doltCfgDirPath string
-	fileMutex      *sync.Mutex
 }
 
 var _ mysql_db.MySQLDbPersistence = &Persister{}

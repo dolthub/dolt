@@ -33,12 +33,12 @@ const logsDefaultRowCount = 100
 
 // LogTable is a sql.Table implementation that implements a system table which shows the dolt commit log
 type LogTable struct {
-	dbName            string
-	tableName         string
 	ddb               *doltdb.DoltDB
 	head              *doltdb.Commit
-	headHash          hash.Hash
 	headCommitClosure *prolly.CommitClosure
+	dbName            string
+	tableName         string
+	headHash          hash.Hash
 }
 
 var _ sql.Table = (*LogTable)(nil)

@@ -64,18 +64,19 @@ type hashValueBytesFn func(item sequenceItem, sp sequenceSplitter) error
 type makeChunkFn func(ctx context.Context, level uint64, values []sequenceItem) (Collection, orderedKey, uint64, error)
 
 type sequenceChunker struct {
-	cur                        *sequenceCursor
-	level                      uint64
-	vrw                        ValueReadWriter
-	parent                     *sequenceChunker
-	current                    []sequenceItem
-	makeChunk, parentMakeChunk makeChunkFn
-	isLeaf                     bool
-	hashValueBytes             hashValueBytesFn
-	newCh                      newSplitterFn
-	sp                         sequenceSplitter
-	done                       bool
-	unwrittenCol               Collection
+	sp              sequenceSplitter
+	unwrittenCol    Collection
+	parentMakeChunk makeChunkFn
+	makeChunk       makeChunkFn
+	vrw             ValueReadWriter
+	hashValueBytes  hashValueBytesFn
+	newCh           newSplitterFn
+	cur             *sequenceCursor
+	parent          *sequenceChunker
+	current         []sequenceItem
+	level           uint64
+	isLeaf          bool
+	done            bool
 }
 
 func newEmptySequenceChunker(ctx context.Context, vrw ValueReadWriter, makeChunk, parentMakeChunk makeChunkFn, newCh newSplitterFn, hashValueBytes hashValueBytesFn) (*sequenceChunker, error) {

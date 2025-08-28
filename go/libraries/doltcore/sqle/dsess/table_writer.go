@@ -67,25 +67,25 @@ type WriteSessionFlusher interface {
 // is the same.
 type WriterState struct {
 	DoltSchema schema.Schema
+	AutoIncCol schema.Column
 	PkKeyDesc  val.TupleDesc
 	PkValDesc  val.TupleDesc
 	PkSchema   sql.PrimaryKeySchema
-	PriIndex   IndexState
 	SecIndexes []IndexState
-	AutoIncCol schema.Column
+	PriIndex   IndexState
 }
 
 // IndexState caches objects required for writing specific indexes.
 // The objects are valid as long as the index's schema is the same.
 type IndexState struct {
-	Name          string
 	Schema        schema.Schema
+	Name          string
 	ValMapping    val.OrdinalMapping
 	KeyMapping    val.OrdinalMapping
 	PkMapping     val.OrdinalMapping
+	PrefixLengths []uint16
+	Count         int
 	IsFullText    bool
 	IsUnique      bool
 	IsSpatial     bool
-	PrefixLengths []uint16
-	Count         int
 }

@@ -49,24 +49,23 @@ import (
 )
 
 type DoltDatabaseProvider struct {
-	// dbLocations maps a database name to its file system root
-	dbLocations        map[string]filesys.Filesys
-	databases          map[string]dsess.SqlDatabase
-	functions          map[string]sql.Function
-	tableFunctions     map[string]sql.TableFunction
-	externalProcedures sql.ExternalStoredProcedureRegistry
-	InitDatabaseHooks  []InitDatabaseHook
-	DropDatabaseHooks  []DropDatabaseHook
-	mu                 *sync.RWMutex
+	fs           filesys.Filesys
+	remoteDialer dbfactory.GRPCDialProvider // TODO: why isn't this a method defined on the remote object
 
+	// dbLocations maps a database name to its file system root
+	dbLocations            map[string]filesys.Filesys
+	databases              map[string]dsess.SqlDatabase
+	functions              map[string]sql.Function
+	tableFunctions         map[string]sql.TableFunction
+	externalProcedures     sql.ExternalStoredProcedureRegistry
+	isStandby              *bool
+	mu                     *sync.RWMutex
 	droppedDatabaseManager *droppedDatabaseManager
 
-	defaultBranch string
-	fs            filesys.Filesys
-	remoteDialer  dbfactory.GRPCDialProvider // TODO: why isn't this a method defined on the remote object
-
-	dbFactoryUrl string
-	isStandby    *bool
+	defaultBranch     string
+	dbFactoryUrl      string
+	DropDatabaseHooks []DropDatabaseHook
+	InitDatabaseHooks []InitDatabaseHook
 }
 
 var _ sql.DatabaseProvider = (*DoltDatabaseProvider)(nil)

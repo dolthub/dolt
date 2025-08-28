@@ -29,8 +29,8 @@ func TestGetIndexKeyMapping(t *testing.T) {
 		Name    string
 		AllCols []schema.Column
 		IdxCols []string
-		Split   int
 		Mapping val.OrdinalMapping
+		Split   int
 	}{
 		{
 			Name: "basic",

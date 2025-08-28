@@ -100,40 +100,38 @@ type CompressedChunkStoreForGC interface {
 }
 
 type NomsBlockStore struct {
+	tables      tableSet
 	manifestMgr manifestManager
 	persister   tablePersister
-	conjoiner   conjoinStrategy
 
-	mu       sync.RWMutex // protects the following state
-	memtable *memTable
-	tables   tableSet
-	upstream manifestContents
-
+	conjoiner     conjoinStrategy
 	conjoinOp     *conjoinOperation
 	conjoinOpCond *sync.Cond
 
+	stats    *Stats
+	memtable *memTable
 	// Guarded by |mu|. Notified on gcInProgress and gcOutstandingReads changes.
 	// Used to implement |waitForGC|.
-	gcCond *sync.Cond
-	// |true| after BeginGC is called, and false once the corresponding EndGC call returns.
-	gcInProgress bool
+	gcCond   *sync.Cond
+	hasCache *lru.TwoQueueCache[hash.Hash, struct{}]
+	logger   *logrus.Entry
+
+	// keeperFunc is set when |gcInProgress| and appends to the GC sweep queue
+	// or blocks on GC finalize
+	keeperFunc func(hash.Hash) bool
+	upstream   manifestContents
+	putCount   uint64
+	memtableSz uint64
+
 	// When unlocked read operations are occurring against the
 	// block store, and they started when |gcInProgress == true|,
 	// this variable is incremented. EndGC will not return until
 	// no outstanding reads are in progress.
 	gcOutstandingReads int
-	// keeperFunc is set when |gcInProgress| and appends to the GC sweep queue
-	// or blocks on GC finalize
-	keeperFunc func(hash.Hash) bool
+	mu                 sync.RWMutex // protects the current nbs state
 
-	memtableSz uint64
-	putCount   uint64
-
-	logger *logrus.Entry
-
-	hasCache *lru.TwoQueueCache[hash.Hash, struct{}]
-
-	stats *Stats
+	// |true| after BeginGC is called, and false once the corresponding EndGC call returns.
+	gcInProgress bool
 }
 
 func (nbs *NomsBlockStore) PersistGhostHashes(ctx context.Context, refs hash.HashSet) error {
@@ -151,8 +149,8 @@ const hasCacheSize = 100000
 
 type Range struct {
 	Offset     uint64
-	Length     uint32
 	DictOffset uint64
+	Length     uint32
 	DictLength uint32
 }
 
@@ -573,11 +571,11 @@ func NewAWSStore(ctx context.Context, nbfVerStr string, table, ns, bucket string
 	readRateLimiter := make(chan struct{}, 32)
 	p := &awsTablePersister{
 		s3,
-		bucket,
-		readRateLimiter,
-		awsLimits{defaultS3PartSize, minS3PartSize, maxS3PartSize},
-		ns,
 		q,
+		readRateLimiter,
+		bucket,
+		ns,
+		awsLimits{defaultS3PartSize, minS3PartSize, maxS3PartSize},
 	}
 	mm := makeManifestManager(newDynamoManifest(table, ns, ddb))
 	return newNomsBlockStore(ctx, nbfVerStr, mm, p, q, inlineConjoiner{defaultMaxTables}, memTableSize)
@@ -609,7 +607,7 @@ func NewBSStore(ctx context.Context, nbfVerStr string, bs blobstore.Blobstore, m
 
 	mm := makeManifestManager(blobstoreManifest{bs})
 
-	p := &blobstorePersister{bs, s3BlockSize, q}
+	p := &blobstorePersister{bs, q, s3BlockSize}
 	return newNomsBlockStore(ctx, nbfVerStr, mm, p, q, inlineConjoiner{defaultMaxTables}, memTableSize)
 }
 
@@ -619,7 +617,7 @@ func NewNoConjoinBSStore(ctx context.Context, nbfVerStr string, bs blobstore.Blo
 
 	mm := makeManifestManager(blobstoreManifest{bs})
 
-	p := &noConjoinBlobstorePersister{bs, s3BlockSize, q}
+	p := &noConjoinBlobstorePersister{bs, q, s3BlockSize}
 	return newNomsBlockStore(ctx, nbfVerStr, mm, p, q, noopConjoiner{}, memTableSize)
 }
 

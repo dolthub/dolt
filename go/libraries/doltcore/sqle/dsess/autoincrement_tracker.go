@@ -48,22 +48,20 @@ var (
 )
 
 type AutoIncrementTracker struct {
-	dbName    string
+	initErr   error
 	sequences *sync.Map // map[string]uint64
 	mm        *mutexmap.MutexMap
-	lockMode  LockMode
-
 	// AutoIncrementTracker is lazily initialized by loading
 	// tracker state for every given |root|.  On first access, we
 	// block on initialization being completed and we terminally
 	// return |initErr| if there was any error initializing.
-	init    chan struct{}
-	initErr error
-
+	init chan struct{}
 	// To clean up effectively we need to stop all access to
 	// storage. As part of that, we have the possibility to cancel
 	// async initialization and block on the process completing.
 	cancelInit chan struct{}
+	dbName     string
+	lockMode   LockMode
 }
 
 var _ globalstate.AutoIncrementTracker = &AutoIncrementTracker{}

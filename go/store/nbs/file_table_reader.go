@@ -113,7 +113,7 @@ func newFileReaderAt(path string, mmapArchiveIndexes bool) (*fileReaderAt, error
 	}
 	cnt := new(int32)
 	*cnt = 1
-	return &fileReaderAt{f, path, fi.Size(), cnt, mmapArchiveIndexes}, nil
+	return &fileReaderAt{f, cnt, path, fi.Size(), mmapArchiveIndexes}, nil
 }
 
 func nomsFileTableReader(ctx context.Context, path string, h hash.Hash, chunkCount uint32, q MemoryQuotaProvider) (cs chunkSource, err error) {
@@ -191,11 +191,11 @@ func (ftr *fileTableReader) clone() (chunkSource, error) {
 }
 
 type fileReaderAt struct {
-	f    *os.File
-	path string
-	sz   int64
+	f *os.File
 	// refcnt, clone() increments and Close() decrements. The *os.File is closed when it reaches 0.
 	cnt         *int32
+	path        string
+	sz          int64
 	mmapIndexes bool // If possible, the file reader will mmap the file for reading index data.
 }
 
@@ -206,11 +206,11 @@ func (fra *fileReaderAt) clone() (tableReaderAt, error) {
 		return newFileReaderAt(fra.path, fra.mmapIndexes)
 	}
 	return &fileReaderAt{
-		fra.f,
-		fra.path,
-		fra.sz,
-		fra.cnt,
-		fra.mmapIndexes,
+		f:           fra.f,
+		path:        fra.path,
+		sz:          fra.sz,
+		cnt:         fra.cnt,
+		mmapIndexes: fra.mmapIndexes,
 	}, nil
 }
 

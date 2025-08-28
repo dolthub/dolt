@@ -76,12 +76,12 @@ func printUsage(w io.Writer) {
 	bw := bufio.NewWriter(w)
 	data := struct {
 		ProgName  string
-		Commands  []*Command
 		UsageLine string
+		Commands  []*Command
 	}{
-		progName,
-		commands,
-		usageLine,
+		ProgName:  progName,
+		UsageLine: usageLine,
+		Commands:  commands,
 	}
 	tmpl(bw, usageTemplate, data)
 	bw.Flush()
@@ -109,11 +109,11 @@ func Help(args []string) {
 	for _, cmd := range commands {
 		if cmd.Name() == arg {
 			data := struct {
-				ProgName string
 				Cmd      *Command
+				ProgName string
 			}{
-				progName,
-				cmd,
+				Cmd:      cmd,
+				ProgName: progName,
 			}
 			tmpl(os.Stdout, helpTemplate, data)
 			flags := cmd.Flags()

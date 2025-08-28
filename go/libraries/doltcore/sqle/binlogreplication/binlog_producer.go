@@ -49,14 +49,11 @@ var BinlogBranch = "main"
 // connected replicas, without actually writing them to a real binlog file on disk.
 type binlogProducer struct {
 	binlogFormat    *mysql.BinlogFormat
+	mu              *sync.Mutex
+	gtidPosition    *mysql.Position
+	logManager      *logManager
+	gtidSequence    int64
 	binlogEventMeta mysql.BinlogEventMetadata
-
-	mu *sync.Mutex
-
-	gtidPosition *mysql.Position
-	gtidSequence int64
-
-	logManager *logManager
 }
 
 var _ doltdb.DatabaseUpdateListener = (*binlogProducer)(nil)

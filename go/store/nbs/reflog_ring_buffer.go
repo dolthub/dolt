@@ -29,8 +29,8 @@ var errUnsafeIteration = errors.New(
 // reflogRootHashEntry is a data container for a root hash update that was recorded to the chunk journal. It contains
 // the root and the time at which it was written.
 type reflogRootHashEntry struct {
-	root      string
 	timestamp time.Time
+	root      string
 }
 
 // reflogRingBuffer is a fixed size circular buffer that allows the most recent N entries to be iterated over (where
@@ -39,8 +39,8 @@ type reflogRootHashEntry struct {
 // updated. Internally, it allocates a slice that is twice as large as the requested size, so that less locking
 // is needed when iterating over entries to read them.
 type reflogRingBuffer struct {
-	items         []reflogRootHashEntry
 	mu            *sync.Mutex
+	items         []reflogRootHashEntry
 	requestedSize int
 	totalSize     int
 	insertIndex   int

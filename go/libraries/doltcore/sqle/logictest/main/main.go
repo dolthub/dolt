@@ -125,11 +125,11 @@ type TestResultArray struct {
 type DoltResultRecord struct {
 	Version      string `json:"version"`
 	TestFile     string `json:"test_file"`
-	LineNum      int    `json:"line_num"`
 	Query        string `json:"query_string"`
-	Duration     int64  `json:"duration"`
 	Result       string `json:"result"`
 	ErrorMessage string `json:"error_message,omitempty"`
+	LineNum      int    `json:"line_num"`
+	Duration     int64  `json:"duration"`
 }
 
 // fromResultCsvHeaders returns supported csv headers for a Result

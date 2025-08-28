@@ -38,17 +38,17 @@ func newManifestCache(maxSize uint64) *manifestCache {
 }
 
 type manifestCacheEntry struct {
+	t        time.Time
 	lruEntry *list.Element
 	contents manifestContents
-	t        time.Time
 }
 
 type manifestCache struct {
+	mu        *sync.Mutex
+	cache     map[string]manifestCacheEntry
+	lru       list.List
 	totalSize uint64
 	maxSize   uint64
-	mu        *sync.Mutex
-	lru       list.List
-	cache     map[string]manifestCacheEntry
 }
 
 // Get() checks the searches the cache for an entry. If it exists, it moves it's

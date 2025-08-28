@@ -57,14 +57,14 @@ func newMetaTuple(ref Ref, key orderedKey, numLeaves uint64) (metaTuple, error) 
 
 	offsets[metaTuplePartNumLeaves] = w.offset
 	w.writeCount(numLeaves)
-	return metaTuple{w.data(), offsets, ref.format()}, nil
+	return metaTuple{ref.format(), w.data(), offsets}, nil
 }
 
 // metaTuple is a node in a Prolly Tree, consisting of data in the node (either tree leaves or other metaSequences), and a Value annotation for exploring the tree (e.g. the largest item if this an ordered sequence).
 type metaTuple struct {
+	nbf     *NomsBinFormat
 	buff    []byte
 	offsets [metaTuplePartNumLeaves + 1]uint32
-	nbf     *NomsBinFormat
 }
 
 const (
@@ -117,14 +117,14 @@ func (mt metaTuple) writeTo(w nomsWriter, nbf *NomsBinFormat) error {
 // orderedKey is a key in a Prolly Tree level, which is a metaTuple in a metaSequence, or a value in a leaf sequence.
 // |v| may be nil or |h| may be empty, but not both.
 type orderedKey struct {
-	isOrderedByValue bool
 	v                Value
 	h                hash.Hash
+	isOrderedByValue bool
 }
 
 func newOrderedKey(v Value, nbf *NomsBinFormat) (orderedKey, error) {
 	if isKindOrderedByValue(v.Kind()) {
-		return orderedKey{true, v, hash.Hash{}}, nil
+		return orderedKey{v, hash.Hash{}, true}, nil
 	}
 	h, err := v.Hash(nbf)
 
@@ -132,11 +132,11 @@ func newOrderedKey(v Value, nbf *NomsBinFormat) (orderedKey, error) {
 		return orderedKey{}, err
 	}
 
-	return orderedKey{false, v, h}, nil
+	return orderedKey{v, h, false}, nil
 }
 
 func orderedKeyFromHash(h hash.Hash) orderedKey {
-	return orderedKey{false, nil, h}
+	return orderedKey{nil, h, false}
 }
 
 func orderedKeyFromInt(n int, nbf *NomsBinFormat) (orderedKey, error) {
@@ -332,7 +332,7 @@ func (ms metaSequence) readTuple(dec *valueDecoder) (metaTuple, error) {
 	offsets[metaTuplePartNumLeaves] = dec.offset
 	dec.skipCount()
 	end := dec.offset
-	return metaTuple{dec.byteSlice(start, end), offsets, ms.format()}, nil
+	return metaTuple{ms.format(), dec.byteSlice(start, end), offsets}, nil
 }
 
 func (ms metaSequence) getRefAt(dec *valueDecoder, idx int) (Ref, error) {
@@ -450,7 +450,7 @@ func (ms metaSequence) getCompositeChildSequence(ctx context.Context, start uint
 	level := ms.treeLevel()
 	d.PanicIfFalse(level > 0)
 	if length == 0 {
-		return emptySequence{level - 1, ms.format()}, nil
+		return emptySequence{ms.format(), level - 1}, nil
 	}
 
 	output, err := ms.getChildren(ctx, start, start+length)
@@ -570,8 +570,8 @@ func metaHashValueBytes(item sequenceItem, sp sequenceSplitter) error {
 }
 
 type emptySequence struct {
-	level uint64
 	nbf   *NomsBinFormat
+	level uint64
 }
 
 func (es emptySequence) getItem(idx int) (sequenceItem, error) {
@@ -630,7 +630,7 @@ func (es emptySequence) getCompositeChildSequence(ctx context.Context, start uin
 	d.PanicIfFalse(es.level > 0)
 	d.PanicIfFalse(start == 0)
 	d.PanicIfFalse(length == 0)
-	return emptySequence{es.level - 1, es.format()}, nil
+	return emptySequence{es.format(), es.level - 1}, nil
 }
 
 func (es emptySequence) treeLevel() uint64 {

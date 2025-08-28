@@ -58,9 +58,9 @@ func TestRangeSearch(t *testing.T) {
 
 	tests := []struct {
 		name      string
+		logical   []int
 		testRange Range
-		physical  [2]int // physical range scan
-		logical   []int  // logical range scan
+		physical  [2]int
 	}{
 		{
 			name: "unbound range",

@@ -27,15 +27,13 @@ import (
 
 // CommitOptions is used to pass options into Commit.
 type CommitOptions struct {
+	Meta *CommitMeta
 	// Parents, if provided, is the parent commits of the commit we are
 	// creating. If it is empty, the existing dataset head will be the only
 	// parent.
 	Parents []hash.Hash
-
 	// Amend flag indicates that the commit being build it to amend an existing commit. Generally we add the branch HEAD
 	// as a parent, in addition to the parent set provided here. When we amend, we want to strictly use the commits
 	// provided in |Parents|, and no others.
 	Amend bool
-
-	Meta *CommitMeta
 }

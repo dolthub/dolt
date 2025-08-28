@@ -117,15 +117,12 @@ type SpecOptions struct {
 	// Authorization token for requests. For example, if the database is HTTP
 	// this will used for an `Authorization: Bearer ${authorization}` header.
 	Authorization string
-
 	// Region that should be used when creating the aws session
 	AWSRegion string
-
-	// The type of credentials that should be used when creating the aws session
-	AWSCredSource AWSCredentialSource
-
 	// Credential file to use when using auto or file credentials
 	AWSCredFile string
+	// The type of credentials that should be used when creating the aws session
+	AWSCredSource AWSCredentialSource
 }
 
 func (so *SpecOptions) AwsRegionOrDefault() string {
@@ -153,23 +150,19 @@ func (so *SpecOptions) AwsCredFileOrDefault() string {
 // its database instance so it therefore does not reflect new commits in
 // the db, by (legacy) design.
 type Spec struct {
-	// Protocol is one of "mem", "aws", "gs", "nbs"
-	Protocol string
-
-	// DatabaseName is the name of the Spec's database, which is the string after
-	// "protocol:". specs include their leading "//" characters.
-	DatabaseName string
-
-	// Options are the SpecOptions that the Spec was constructed with.
-	Options SpecOptions
-
-	// Path is nil unless the spec was created with ForPath.
-	Path AbsolutePath
-
 	// db is lazily created, so it needs to be a pointer to a Database.
 	db  *datas.Database
 	vrw *types.ValueReadWriter
 	ns  *tree.NodeStore
+	// Options are the SpecOptions that the Spec was constructed with.
+	Options SpecOptions
+	// Protocol is one of "mem", "aws", "gs", "nbs"
+	Protocol string
+	// DatabaseName is the name of the Spec's database, which is the string after
+	// "protocol:". specs include their leading "//" characters.
+	DatabaseName string
+	// Path is nil unless the spec was created with ForPath.
+	Path AbsolutePath
 }
 
 func newSpec(dbSpec string, opts SpecOptions) (Spec, error) {

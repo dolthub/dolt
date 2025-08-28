@@ -22,10 +22,11 @@ import (
 
 // An alternate implementation of CommitMetaGenerator, which only produces hashes which begin with "d0lt" or similar.
 type funHashCommitMetaGenerator struct {
-	name, email string
-	timestamp   time.Time
-	attempt     int
-	regex       *regexp.Regexp
+	timestamp time.Time
+	regex     *regexp.Regexp
+	name      string
+	email     string
+	attempt   int
 }
 
 func MakeFunCommitMetaGenerator(name, email string, timestamp time.Time) CommitMetaGenerator {

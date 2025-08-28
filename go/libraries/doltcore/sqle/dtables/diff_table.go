@@ -57,28 +57,21 @@ var _ sql.IndexAddressable = (*DiffTable)(nil)
 var _ sql.StatisticsTable = (*DiffTable)(nil)
 
 type DiffTable struct {
-	tableName   doltdb.TableName
-	ddb         *doltdb.DoltDB
 	workingRoot doltdb.RootValue
-	head        *doltdb.Commit
-
-	headHash          hash.Hash
-	headCommitClosure *prolly.CommitClosure
-
 	// from and to need to be mapped to this schema
 	targetSch schema.Schema
-
 	// the schema for the diff table itself. Once from and to are converted to
 	// targetSch, the commit names and dates are inserted.
-	diffTableSch schema.Schema
-
-	sqlSch           sql.PrimaryKeySchema
-	partitionFilters []sql.Expression
-
-	table *doltdb.Table
-
-	// noms only
-	joiner *rowconv.Joiner
+	diffTableSch      schema.Schema
+	ddb               *doltdb.DoltDB
+	head              *doltdb.Commit
+	headCommitClosure *prolly.CommitClosure
+	table             *doltdb.Table
+	joiner            *rowconv.Joiner
+	tableName         doltdb.TableName
+	sqlSch            sql.PrimaryKeySchema
+	partitionFilters  []sql.Expression
+	headHash          hash.Hash
 }
 
 var PrimaryKeyChangeWarning = "cannot render full diff between commits %s and %s due to primary key set change"
@@ -196,7 +189,7 @@ func (dt *DiffTable) PartitionRanges(ctx *sql.Context, ranges []prolly.Range) (s
 	}
 
 	cmHashToTblInfo := make(map[hash.Hash]TblInfoAtCommit)
-	cmHashToTblInfo[cmHash] = TblInfoAtCommit{"WORKING", nil, table, wrTblHash}
+	cmHashToTblInfo[cmHash] = TblInfoAtCommit{name: "WORKING", tbl: table, tblHash: wrTblHash}
 
 	err = cmItr.Reset(ctx)
 	if err != nil {
@@ -322,7 +315,7 @@ func (dt *DiffTable) fromCommitLookupPartitions(ctx *sql.Context, hashes []hash.
 			if err != nil {
 				return nil, err
 			}
-			toCmInfo := TblInfoAtCommit{"WORKING", nil, tbl, wrTblHash}
+			toCmInfo := TblInfoAtCommit{name: "WORKING", tbl: tbl, tblHash: wrTblHash}
 			cmHashToTblInfo[hs] = toCmInfo
 			parentHashes = append(parentHashes, hs)
 			pCommits = append(pCommits, dt.head)
@@ -513,7 +506,7 @@ func (dt *DiffTable) toCommitLookupPartitions(ctx *sql.Context, hashes []hash.Ha
 				return nil, err
 			}
 
-			toCmInfo = TblInfoAtCommit{"WORKING", nil, t, wrTblHash}
+			toCmInfo = TblInfoAtCommit{name: "WORKING", tbl: t, tblHash: wrTblHash}
 			cmHashToTblInfo[hs] = toCmInfo
 			parentHashes = append(parentHashes, hs)
 			pCommits = append(pCommits, dt.head)
@@ -633,15 +626,15 @@ func tableData(ctx *sql.Context, tbl *doltdb.Table, ddb *doltdb.DoltDB) (durable
 }
 
 type TblInfoAtCommit struct {
-	name    string
 	date    *types.Timestamp
 	tbl     *doltdb.Table
+	name    string
 	tblHash hash.Hash
 }
 
 func NewTblInfoAtCommit(name string, date *types.Timestamp, tbl *doltdb.Table, tblHash hash.Hash) TblInfoAtCommit {
 	return TblInfoAtCommit{
-		name, date, tbl, tblHash,
+		name: name, date: date, tbl: tbl, tblHash: tblHash,
 	}
 }
 
@@ -773,14 +766,14 @@ var _ sql.PartitionIter = &DiffPartitions{}
 
 // DiffPartitions a collection of partitions. Implements PartitionItr
 type DiffPartitions struct {
-	tblName         doltdb.TableName
 	cmItr           doltdb.CommitItr[*sql.Context]
-	cmHashToTblInfo map[hash.Hash]TblInfoAtCommit
-	selectFunc      partitionSelectFunc
 	toSch           schema.Schema
 	fromSch         schema.Schema
-	stopNext        bool
+	cmHashToTblInfo map[hash.Hash]TblInfoAtCommit
+	selectFunc      partitionSelectFunc
+	tblName         doltdb.TableName
 	ranges          []prolly.Range
+	stopNext        bool
 }
 
 // processCommit is called in a commit iteration loop. Adds partitions when it finds a commit and its parent that have
@@ -826,7 +819,7 @@ func (dps *DiffPartitions) processCommit(ctx *sql.Context, cmHash hash.Hash, cm 
 		}
 	}
 
-	newInfo := TblInfoAtCommit{cmHashStr, &ts, tbl, tblHash}
+	newInfo := TblInfoAtCommit{name: cmHashStr, date: &ts, tbl: tbl, tblHash: tblHash}
 	parentHashes, err := cm.ParentHashes(ctx)
 
 	if err != nil {

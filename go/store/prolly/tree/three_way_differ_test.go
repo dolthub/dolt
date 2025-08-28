@@ -29,9 +29,11 @@ import (
 )
 
 type testDiff struct {
-	op      DiffOp
-	k       int
-	l, r, m []int
+	l  []int
+	r  []int
+	m  []int
+	k  int
+	op DiffOp
 }
 
 func (d testDiff) String() string {
