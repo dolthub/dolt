@@ -39,7 +39,7 @@ type indexRec struct {
 	// that |payload| indexes. end points to a root hash
 	// record in the journal containing |lastRoot|.
 	// we expect a sequence of index records to cover
-	// contiguous regions of the journal file.tart uint64
+	// contiguous regions of the journal file.
 	start uint64
 	end   uint64
 	// index record length

@@ -61,7 +61,7 @@ type fsTablePersister struct {
 	// or else this map will grow without bound.
 	curTmps map[string]struct{}
 	dir     string
-	// Protects the following two maps.
+	// Protects the toKeep and curTmps maps.
 	removeMu           sync.Mutex
 	mmapArchiveIndexes bool
 }

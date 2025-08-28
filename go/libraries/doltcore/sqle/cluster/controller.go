@@ -553,13 +553,24 @@ func applyBootstrapClusterConfig(lgr *logrus.Logger, cfg servercfg.ClusterConfig
 }
 
 type roleTransitionOptions struct {
+	// If non-nil, this connection will be saved if and when the connection
+	// process needs to terminate existing connections.
 	saveConnID          *int
+	// If non-zero and |graceful| is true, will allow a transition from
+	// primary to standby to succeed only if this many standby replicas
+	// are known to be caught up at the finalization of the replication
+	// hooks.
 	minCaughtUpStandbys int
+	// If true, all standby replicas must be caught up in order to
+	// transition from primary to standby.
 	graceful            bool
 }
 
 type roleTransitionResult struct {
+	// filled in with graceful transition results if this was a graceful
+	// transition and it was successful.
 	gracefulTransitionResults []graceTransitionResult
+	// true if the role changed as a result of this call.
 	changedRole               bool
 }
 

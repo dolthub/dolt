@@ -128,7 +128,7 @@ type NomsBlockStore struct {
 	// this variable is incremented. EndGC will not return until
 	// no outstanding reads are in progress.
 	gcOutstandingReads int
-	mu                 sync.RWMutex // protects the following state
+	mu                 sync.RWMutex // protects the current nbs state
 
 	// |true| after BeginGC is called, and false once the corresponding EndGC call returns.
 	gcInProgress bool

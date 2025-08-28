@@ -153,9 +153,7 @@ type conjoinOperation struct {
 	cleanup cleanupFunc
 	// The computed things we conjoined in |conjoin|.
 	conjoinees []tableSpec
-	// Anything to run as cleanup after we complete successfully.
-	// This comes directly from persister.ConjoinAll, but needs to
-	// be run after the manifest update lands successfully.
+	// The tableSpec for the conjoined file.
 	conjoined tableSpec
 }
 

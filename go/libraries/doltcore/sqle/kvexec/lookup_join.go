@@ -192,6 +192,7 @@ type lookupMapping struct {
 	srcKd      val.TupleDesc
 	srcVd      val.TupleDesc
 	srcMapping val.OrdinalMapping
+	// litTuple are the statically provided literal expressions in the key expression
 	litTuple   val.Tuple
 	split      int
 }

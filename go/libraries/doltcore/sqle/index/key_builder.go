@@ -94,6 +94,7 @@ type SecondaryKeyBuilder struct {
 
 	// mapping defines how to map fields from the source table's schema to this index's tuple layout
 	mapping            val.OrdinalMapping
+	 // virtualExpressions holds the expressions for virtual columns in the index, nil for non-virtual indexes
 	virtualExpressions []sql.Expression
 
 	// split marks the index in the secondary index's key tuple that splits the main table's
