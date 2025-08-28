@@ -94,15 +94,22 @@ func (bsp *blobstorePersister) ConjoinAll(ctx context.Context, sources chunkSour
 		sized = append(sized, sourceWithSize{src, src.currentSize()})
 	}
 
-	// Currently, archive tables are not supported in blobstorePersister.
+	archiveFound := false
 	for _, s := range sized {
 		_, ok := s.source.(archiveChunkSource)
 		if ok {
-			return nil, nil, errors.New("archive tables not supported in blobstorePersister")
+			archiveFound = true
+			break
 		}
 	}
 
-	plan, err := planTableConjoin(sized, stats)
+	var plan compactionPlan
+	var err error
+	if archiveFound {
+		plan, err = planArchiveConjoin(sized, stats)
+	} else {
+		plan, err = planTableConjoin(sized, stats)
+	}
 	if err != nil {
 		return nil, nil, err
 	}
