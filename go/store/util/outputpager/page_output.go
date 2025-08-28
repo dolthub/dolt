@@ -27,6 +27,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"strings"
 	"sync"
 	"syscall"
 
@@ -57,23 +58,42 @@ func Start() *Pager {
 		}
 	}
 
-	var lessPath string
+	var pagerPath string
 	var err error
 	var cmd *exec.Cmd
 
-	lessPath, err = exec.LookPath("less")
-	if err != nil {
-		lessPath, err = exec.LookPath("more")
-		d.Chk.NoError(err)
-		cmd = exec.Command(lessPath)
-	} else {
-		d.Chk.NoError(err)
-		// -F ... Quit if entire file fits on first screen.
-		// -S ... Chop (truncate) long lines rather than wrapping.
-		// -R ... Output "raw" control characters.
-		// -X ... Don't use termcap init/deinit strings.
-		// -d ... Don't complain about dumb terminals.
-		cmd = exec.Command(lessPath, "-FSRXd")
+	// Check for DOLT_PAGER environment variable first
+	if doltPager := os.Getenv("DOLT_PAGER"); doltPager != "" {
+		// Split DOLT_PAGER into command and arguments
+		parts := strings.Fields(doltPager)
+		pagerPath, err = exec.LookPath(parts[0])
+		if err != nil {
+			// If the specified pager is not found, print an error and fall back to less or more
+			fmt.Fprintf(os.Stderr, "warning: specified pager '%s' not found, falling back to less or more\n", parts[0])
+		} else {
+			if len(parts) > 1 {
+				cmd = exec.Command(pagerPath, parts[1:]...)
+			} else {
+				cmd = exec.Command(pagerPath)
+			}
+		}
+	}
+
+	if cmd == nil {
+		pagerPath, err = exec.LookPath("less")
+		if err != nil {
+			pagerPath, err = exec.LookPath("more")
+			d.Chk.NoError(err)
+			cmd = exec.Command(pagerPath)
+		} else {
+			d.Chk.NoError(err)
+			// -F ... Quit if entire file fits on first screen.
+			// -S ... Chop (truncate) long lines rather than wrapping.
+			// -R ... Output "raw" control characters.
+			// -X ... Don't use termcap init/deinit strings.
+			// -d ... Don't complain about dumb terminals.
+			cmd = exec.Command(pagerPath, "-FSRXd")
+		}
 	}
 
 	stdin, stdout, err := os.Pipe()
