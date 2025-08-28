@@ -61,7 +61,7 @@ require (
 	github.com/dolthub/dolt-mcp v0.2.1-0.20250827202412-9d0f6e658fba
 	github.com/dolthub/eventsapi_schema v0.0.0-20250725194025-a087efa1ee55
 	github.com/dolthub/flatbuffers/v23 v23.3.3-dh.2
-	github.com/dolthub/go-mysql-server v0.20.1-0.20250828011112-53ac7a889365
+	github.com/dolthub/go-mysql-server v0.20.1-0.20250828210121-0308d9f48fa9
 	github.com/dolthub/gozstd v0.0.0-20240423170813-23a2903bca63
 	github.com/edsrzf/mmap-go v1.2.0
 	github.com/esote/minmaxheap v1.0.0
