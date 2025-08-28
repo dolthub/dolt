@@ -537,7 +537,11 @@ func (td TupleDesc) GetBytesAddr(i int, tup Tuple) (hash.Hash, bool) {
 // GetBytesAdaptiveValue returns either a []byte or a BytesWrapper, but Go doesn't allow us to use a single type for that.
 func (td TupleDesc) GetBytesAdaptiveValue(ctx context.Context, i int, vs ValueStore, tup Tuple) (interface{}, bool, error) {
 	td.expectEncoding(i, BytesAdaptiveEnc)
-	adaptiveValue := AdaptiveValue(td.GetField(i, tup))
+	return GetBytesAdaptiveValue(ctx, vs, td.GetField(i, tup))
+}
+
+func GetBytesAdaptiveValue(ctx context.Context, vs ValueStore, val []byte) (interface{}, bool, error) {
+	adaptiveValue := AdaptiveValue(val)
 	if len(adaptiveValue) == 0 {
 		return nil, false, nil
 	}

@@ -15,6 +15,7 @@
 package prolly
 
 import (
+	"bytes"
 	"context"
 	"io"
 
@@ -34,7 +35,7 @@ type vectorIndexChunker struct {
 	lastKey          []byte
 	lastValue        []byte
 	lastSubtreeCount uint64
-	lastPathSegment  hash.Hash
+	lastPathSegment  []byte
 	atEnd            bool
 }
 
@@ -56,9 +57,8 @@ func newVectorIndexChunker(ctx context.Context, pathMap *MutableMap, childChunke
 	if err != nil {
 		return nil, err
 	}
-	path, _ := pathMap.keyDesc.GetBytes(0, firstKey)
-	lastPathSegment := hash.New(path[len(path)-20:])
-	originalKey, _ := pathMap.keyDesc.GetBytes(1, firstKey)
+	lastPathSegment, _ := pathMap.keyDesc.GetBytes(pathMap.keyDesc.Count()-2, firstKey)
+	originalKey, _ := pathMap.keyDesc.GetBytes(pathMap.keyDesc.Count()-1, firstKey)
 	return &vectorIndexChunker{
 		pathMap:         pathMap,
 		pathMapIter:     pathMapIter,
@@ -70,14 +70,14 @@ func newVectorIndexChunker(ctx context.Context, pathMap *MutableMap, childChunke
 	}, nil
 }
 
-func (c *vectorIndexChunker) Next(ctx context.Context, ns tree.NodeStore, serializer message.VectorIndexSerializer, parentPathSegment hash.Hash, level, depth int, originalKeyDesc val.TupleDesc) (tree.Node, uint64, hash.Hash, error) {
+func (c *vectorIndexChunker) Next(ctx context.Context, ns tree.NodeStore, serializer message.VectorIndexSerializer, parentPathSegment []byte, level, depth int, originalKeyDesc val.TupleDesc) (tree.Node, uint64, hash.Hash, error) {
 	var indexMapKeys [][]byte
 	var indexMapValues [][]byte
 	var indexMapSubtrees []uint64
 	subtreeSum := uint64(0)
 
 	for {
-		if c.atEnd || c.lastPathSegment != parentPathSegment {
+		if c.atEnd || !bytes.Equal(c.lastPathSegment, parentPathSegment) {
 			msg := serializer.Serialize(indexMapKeys, indexMapValues, indexMapSubtrees, level)
 			node, _, err := tree.NodeFromBytes(msg)
 			if err != nil {
@@ -86,9 +86,8 @@ func (c *vectorIndexChunker) Next(ctx context.Context, ns tree.NodeStore, serial
 			nodeHash, err := ns.Write(ctx, node)
 			return node, subtreeSum, nodeHash, err
 		}
-		vectorHash, _ := originalKeyDesc.GetJSONAddr(0, c.lastKey)
 		if c.childChunker != nil {
-			_, childCount, nodeHash, err := c.childChunker.Next(ctx, ns, serializer, vectorHash, level-1, depth+1, originalKeyDesc)
+			_, childCount, nodeHash, err := c.childChunker.Next(ctx, ns, serializer, c.lastKey, level-1, depth+1, originalKeyDesc)
 			if err != nil {
 				return tree.Node{}, 0, hash.Hash{}, err
 			}
@@ -107,9 +106,8 @@ func (c *vectorIndexChunker) Next(ctx context.Context, ns tree.NodeStore, serial
 		} else if err != nil {
 			return tree.Node{}, 0, hash.Hash{}, err
 		} else {
-			lastPath, _ := c.pathMap.keyDesc.GetBytes(0, nextKey)
-			c.lastPathSegment = hash.New(lastPath[len(lastPath)-20:])
-			c.lastKey, _ = c.pathMap.keyDesc.GetBytes(1, nextKey)
+			c.lastPathSegment, _ = c.pathMap.keyDesc.GetBytes(c.pathMap.keyDesc.Count()-2, nextKey)
+			c.lastKey, _ = c.pathMap.keyDesc.GetBytes(c.pathMap.keyDesc.Count()-1, nextKey)
 			c.lastValue = nextValue
 		}
 	}
