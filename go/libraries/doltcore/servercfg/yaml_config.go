@@ -409,7 +409,7 @@ func (cfg YAMLConfig) withPlaceholdersFilledIn() YAMLConfig {
 	// MCP server placeholders: show keys and example values in generated config
 	if withPlaceholders.MCPServer == nil {
 		withPlaceholders.MCPServer = &MCPServerYAMLConfig{
-			Port:     ptr(8080),
+			Port:     ptr(7007),
 			User:     ptr("root"),
 			Password: ptr(""),
 			Database: ptr(""),
