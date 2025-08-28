@@ -70,6 +70,7 @@ const (
 	DefaultBranchControlFilePath     = "branch_control.db"
 	DefaultMetricsHost               = ""
 	DefaultMetricsPort               = -1
+	DefaultMCPPort                   = 7007
 	DefaultAllowCleartextPasswords   = false
 	DefaultMySQLUnixSocketFilePath   = "/tmp/mysql.sock"
 	DefaultMaxLoggedQueryLen         = 0

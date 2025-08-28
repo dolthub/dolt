@@ -755,7 +755,8 @@ func (cfg YAMLConfig) RemotesapiReadOnly() *bool {
 // MCPPort returns the configured MCP HTTP port, if any.
 func (cfg YAMLConfig) MCPPort() *int {
 	if cfg.MCPServer == nil {
-		return nil
+		port := DefaultMCPPort
+		return &port
 	}
 	return cfg.MCPServer.Port
 }
@@ -763,7 +764,8 @@ func (cfg YAMLConfig) MCPPort() *int {
 // MCPUser returns the configured MCP SQL user, if any.
 func (cfg YAMLConfig) MCPUser() *string {
 	if cfg.MCPServer == nil {
-		return nil
+		user := DefaultUser
+		return &user
 	}
 	return cfg.MCPServer.User
 }
