@@ -406,6 +406,15 @@ func (cfg YAMLConfig) withPlaceholdersFilledIn() YAMLConfig {
 		withPlaceholders.RemotesapiConfig.ReadOnly_ = ptr(false)
 	}
 
+	// MCP server placeholders: show keys and example values in generated config
+	if withPlaceholders.MCPServer == nil {
+		withPlaceholders.MCPServer = &MCPServerYAMLConfig{
+			Port:     ptr(8080),
+			User:     ptr("root"),
+			Password: ptr(""),
+			Database: ptr(""),
+		}
+	}
 	if withPlaceholders.ClusterCfg == nil {
 		withPlaceholders.ClusterCfg = &ClusterYAMLConfig{
 			StandbyRemotes_: []StandbyRemoteYAMLConfig{
