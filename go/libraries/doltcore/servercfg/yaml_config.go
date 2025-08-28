@@ -408,8 +408,8 @@ func (cfg YAMLConfig) withPlaceholdersFilledIn() YAMLConfig {
 	// MCP server placeholders: show keys and example values in generated config
 	if withPlaceholders.MCPServer == nil {
 		withPlaceholders.MCPServer = &MCPServerYAMLConfig{
-			Port:     ptr(7007),
-			User:     ptr("root"),
+			Port:     ptr(DefaultMCPPort),
+			User:     ptr(DefaultUser),
 			Password: ptr(""),
 			Database: ptr(""),
 		}
@@ -755,8 +755,7 @@ func (cfg YAMLConfig) RemotesapiReadOnly() *bool {
 // MCPPort returns the configured MCP HTTP port, if any.
 func (cfg YAMLConfig) MCPPort() *int {
 	if cfg.MCPServer == nil {
-		port := DefaultMCPPort
-		return &port
+		return ptr(DefaultMCPPort)
 	}
 	return cfg.MCPServer.Port
 }
@@ -764,8 +763,7 @@ func (cfg YAMLConfig) MCPPort() *int {
 // MCPUser returns the configured MCP SQL user, if any.
 func (cfg YAMLConfig) MCPUser() *string {
 	if cfg.MCPServer == nil {
-		user := DefaultUser
-		return &user
+		return ptr(DefaultUser)
 	}
 	return cfg.MCPServer.User
 }
