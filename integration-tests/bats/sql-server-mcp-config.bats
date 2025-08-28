@@ -94,7 +94,7 @@ EOF2
   [ $status -eq 0 ]
 
   # Optionally initialize and call a primitive tool endpoint via HTTP
-  if command -v curl >/dev/null 2>&1; then
+  if [ "$IS_WINDOWS" != true ]; then
     INIT_FILE=$BATS_TMPDIR/mcp_init_cfgdb_$$.json
     OUT_INIT=$BATS_TMPDIR/mcp_out_init_cfgdb_$$.json
     echo '{"jsonrpc":"2.0","id":"1","method":"initialize","params":{"clientInfo":{"name":"bats","version":"0.0.0"},"capabilities":{}}}' > "$INIT_FILE"
