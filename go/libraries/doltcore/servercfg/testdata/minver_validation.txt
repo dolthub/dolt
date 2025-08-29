@@ -38,7 +38,7 @@ CfgDirStr *string 0.0.0 cfg_dir,omitempty
 RemotesapiConfig servercfg.RemotesapiYAMLConfig 0.0.0 remotesapi,omitempty
 -Port_ *int 0.0.0 port,omitempty
 -ReadOnly_ *bool 1.30.5 read_only,omitempty
-MCPServer *servercfg.MCPServerYAMLConfig TBD mcp_server,omitempty
+MCPServer *servercfg.MCPServerYAMLConfig 1.58.7 mcp_server,omitempty
 -Port *int 0.0.0 port,omitempty
 -User *string 0.0.0 user,omitempty
 -Password *string 0.0.0 password,omitempty

@@ -148,7 +148,7 @@ type YAMLConfig struct {
 	DataDirStr        *string                `yaml:"data_dir,omitempty"`
 	CfgDirStr         *string                `yaml:"cfg_dir,omitempty"`
 	RemotesapiConfig  RemotesapiYAMLConfig   `yaml:"remotesapi,omitempty"`
-	MCPServer         *MCPServerYAMLConfig   `yaml:"mcp_server,omitempty" minver:"TBD"`
+	MCPServer         *MCPServerYAMLConfig   `yaml:"mcp_server,omitempty" minver:"1.58.7"`
 	PrivilegeFile     *string                `yaml:"privilege_file,omitempty"`
 	BranchControlFile *string                `yaml:"branch_control_file,omitempty"`
 	// TODO: Rename to UserVars_
