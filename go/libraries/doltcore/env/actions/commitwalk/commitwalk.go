@@ -130,15 +130,11 @@ func (q *q) SetInvisible(ctx context.Context, ddb *doltdb.DoltDB, id hash.Hash) 
 }
 
 func load(ctx context.Context, ddb *doltdb.DoltDB, h hash.Hash) (*doltdb.OptionalCommit, error) {
-	cs, err := doltdb.NewCommitSpec(h.String())
+	oc, err := ddb.ResolveHash(ctx, h)
 	if err != nil {
 		return nil, err
 	}
-	c, err := ddb.Resolve(ctx, cs, nil)
-	if err != nil {
-		return nil, err
-	}
-	return c, nil
+	return oc, nil
 }
 
 func (q *q) Get(ctx context.Context, ddb *doltdb.DoltDB, id hash.Hash) (*c, error) {

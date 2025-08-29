@@ -25,7 +25,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sync"
 
 	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/store/chunks"
@@ -39,10 +38,6 @@ type database struct {
 	*types.ValueStore
 	rt rootTracker
 	ns tree.NodeStore
-
-	mu       sync.RWMutex
-	rootHash hash.Hash
-	dsMap    DatasetsMap
 }
 
 const (
@@ -164,26 +159,20 @@ func (db *database) Datasets(ctx context.Context) (DatasetsMap, error) {
 		return nil, err
 	}
 
-	if db.rootHash.IsEmpty() || !db.rootHash.Equal(rootHash) {
-		db.mu.Lock()
-		if db.Format().UsesFlatbuffers() {
-			rm, err := db.loadDatasetsRefmap(ctx, rootHash)
-			if err != nil {
-				return nil, err
-			}
-			db.dsMap = refmapDatasetsMap{rm}
-		} else {
-			m, err := db.loadDatasetsNomsMap(ctx, rootHash)
-			if err != nil {
-				return nil, err
-			}
-			db.dsMap = nomsDatasetsMap{m}
+	if db.Format().UsesFlatbuffers() {
+		rm, err := db.loadDatasetsRefmap(ctx, rootHash)
+		if err != nil {
+			return nil, err
 		}
-		db.rootHash = rootHash
-		db.mu.Unlock()
+		return refmapDatasetsMap{rm}, nil
 	}
 
-	return db.dsMap, nil
+	m, err := db.loadDatasetsNomsMap(ctx, rootHash)
+	if err != nil {
+		return nil, err
+	}
+
+	return nomsDatasetsMap{m}, nil
 }
 
 var ErrInvalidDatasetID = errors.New("Invalid dataset ID")
