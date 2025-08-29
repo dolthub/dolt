@@ -343,7 +343,7 @@ func validateQuery(ctx *sql.Context, catalog sql.Catalog, query string) (string,
 		return "Cannot execute write queries", nil
 	}
 
-	if strings.Contains(query, "dolt_test_run(") {
+	if strings.Contains(strings.ToLower(query), "dolt_test_run(") {
 		return "Cannot call dolt_test_run in dolt_tests", nil
 	}
 	return "", nil

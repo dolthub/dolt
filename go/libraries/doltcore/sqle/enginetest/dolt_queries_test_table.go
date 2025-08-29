@@ -310,17 +310,19 @@ var DoltTestRunFunctionScripts = []queries.ScriptTest{
 	{
 		Name: "Can handle null values correctly",
 		SetUpScript: []string{
-			"CREATE TABLE numbers (i int, t text)",
-			"INSERT INTO numbers VALUES (NULL, NULL)",
+			"CREATE TABLE numbers (i int, t text, j int)",
+			"INSERT INTO numbers VALUES (NULL, NULL, 4)",
 			"INSERT INTO dolt_tests (test_name, test_query, assertion_type, assertion_comparator) VALUES " +
 				"('simple null int equality', 'SELECT i FROM numbers', 'expected_single_value', '=='), " +
 				"('simple null string equality', 'SELECT t FROM numbers', 'expected_single_value', '=='), " +
-				"('simple null inequality', 'SELECT i FROM numbers', 'expected_single_value', '!=')",
+				"('simple null inequality', 'SELECT i FROM numbers', 'expected_single_value', '!='), " +
+				"('expect null, get not null', 'SELECT j FROM numbers', 'expected_single_value', '==')",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "SELECT * FROM dolt_test_run('*')",
 				Expected: []sql.Row{
+					{"expect null, get not null", "", "SELECT j FROM numbers", "FAIL", "Assertion failed: expected_single_value equal to NULL, got 4"},
 					{"simple null inequality", "", "SELECT i FROM numbers", "FAIL", "Assertion failed: expected_single_value not equal to NULL, got NULL"},
 					{"simple null int equality", "", "SELECT i FROM numbers", "PASS", ""},
 					{"simple null string equality", "", "SELECT t FROM numbers", "PASS", ""},

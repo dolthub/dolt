@@ -86,43 +86,43 @@ func expectSingleValue(sqlCtx *sql.Context, comparison string, value *string, qu
 	case int32:
 		expectedInt, err := strconv.ParseInt(*value, 10, 64)
 		if err != nil {
-			return fmt.Sprintf("Could not compare non integer value '%s', with %d", value, actualValue), nil
+			return fmt.Sprintf("Could not compare non integer value '%s', with %d", *value, actualValue), nil
 		}
 		return compareTestAssertion(comparison, int32(expectedInt), actualValue, AssertionExpectedSingleValue), nil
 	case int64:
 		expectedInt, err := strconv.ParseInt(*value, 10, 64)
 		if err != nil {
-			return fmt.Sprintf("Could not compare non integer value '%s', with %d", value, actualValue), nil
+			return fmt.Sprintf("Could not compare non integer value '%s', with %d", *value, actualValue), nil
 		}
 		return compareTestAssertion(comparison, expectedInt, actualValue, AssertionExpectedSingleValue), nil
 	case uint32:
 		expectedUint, err := strconv.ParseUint(*value, 10, 32)
 		if err != nil {
-			return fmt.Sprintf("Could not compare non integer value '%s', with %d", value, actualValue), nil
+			return fmt.Sprintf("Could not compare non integer value '%s', with %d", *value, actualValue), nil
 		}
 		return compareTestAssertion(comparison, uint32(expectedUint), actualValue, AssertionExpectedSingleValue), nil
 	case float64:
 		expectedFloat, err := strconv.ParseFloat(*value, 64)
 		if err != nil {
-			return fmt.Sprintf("Could not compare non float value '%s', with %f", value, actualValue), nil
+			return fmt.Sprintf("Could not compare non float value '%s', with %f", *value, actualValue), nil
 		}
 		return compareTestAssertion(comparison, expectedFloat, actualValue, AssertionExpectedSingleValue), nil
 	case float32:
 		expectedFloat, err := strconv.ParseFloat(*value, 32)
 		if err != nil {
-			return fmt.Sprintf("Could not compare non float value '%s', with %f", value, actualValue), nil
+			return fmt.Sprintf("Could not compare non float value '%s', with %f", *value, actualValue), nil
 		}
 		return compareTestAssertion(comparison, float32(expectedFloat), actualValue, AssertionExpectedSingleValue), nil
 	case decimal.Decimal:
 		expectedDecimal, err := decimal.NewFromString(*value)
 		if err != nil {
-			return fmt.Sprintf("Could not compare non decimal value '%s', with %s", value, actualValue), nil
+			return fmt.Sprintf("Could not compare non decimal value '%s', with %s", *value, actualValue), nil
 		}
 		return compareDecimals(comparison, expectedDecimal, actualValue, AssertionExpectedSingleValue), nil
 	case time.Time:
 		expectedTime, format, err := parseTestsDate(*value)
 		if err != nil {
-			return fmt.Sprintf("%s does not appear to be a valid date", value), nil
+			return fmt.Sprintf("%s does not appear to be a valid date", *value), nil
 		}
 		return compareDates(comparison, expectedTime, actualValue, format, AssertionExpectedSingleValue), nil
 	case *val.TextStorage, string:
@@ -270,7 +270,7 @@ func compareDates(comparison string, expectedValue, realValue time.Time, format 
 			return fmt.Sprintf("Assertion failed: %s greater than or equal to %s, got %s", assertionType, expectedStr, realStr)
 		}
 	default:
-		return fmt.Sprintf("%s is not a valid assertion type", comparison)
+		return fmt.Sprintf("%s is not a valid comparison type", comparison)
 	}
 	return ""
 }
@@ -305,7 +305,7 @@ func compareDecimals(comparison string, expectedValue, realValue decimal.Decimal
 			return fmt.Sprintf("Assertion failed: %s greater than or equal to %v, got %v", assertionType, expectedValue, realValue)
 		}
 	default:
-		return fmt.Sprintf("%s is not a valid assertion type", comparison)
+		return fmt.Sprintf("%s is not a valid comparison type", comparison)
 	}
 	return ""
 }
@@ -324,7 +324,7 @@ func compareNullValue(comparison string, actualValue interface{}, assertionType 
 			return fmt.Sprintf("Assertion failed: %s not equal to NULL, got NULL", assertionType)
 		}
 	default:
-		return fmt.Sprintf("%s is not a valid assertion type", comparison)
+		return fmt.Sprintf("%s is not a valid comparison for NULL values", comparison)
 	}
 	return ""
 }
