@@ -698,7 +698,7 @@ func (itr *logTableFunctionRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 			return nil, err
 		}
 		ok := false
-		commit, ok = optCmt.ToCommit() // TODO: unnecessary? the matchFn already does this
+		commit, ok = optCmt.ToCommit()
 		if !ok {
 			return nil, doltdb.ErrGhostCommitEncountered
 		}

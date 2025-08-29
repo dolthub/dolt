@@ -28,8 +28,10 @@ import (
 
 // CommitItr is an interface for iterating over a set of unique commits
 type CommitItr[C Context] interface {
-	// Next returns the hash of the next commit, and a pointer to that commit.  Implementations of Next must handle
-	// making sure the list of commits returned are unique.  When complete Next will return hash.Hash{}, nil, io.EOF
+	// Next returns the next commit's hash, pointer, metadata, and height.
+	// Implementations of Next must handle making sure the list of commits returned are unique.
+	// When complete Next will return hash.Hash{}, nil, nil, 0, io.EOF
+	// Note: Some implementations may always return nil for the metadata and height return values.
 	Next(ctx C) (hash.Hash, *OptionalCommit, *datas.CommitMeta, uint64, error)
 
 	// Reset the commit iterator back to the start
@@ -88,8 +90,10 @@ func (cmItr *commitItr[C]) Reset(ctx context.Context) error {
 	return nil
 }
 
-// Next returns the hash of the next commit, and a pointer to that commit.  It handles making sure the list of commits
-// returned are unique.  When complete Next will return hash.Hash{}, nil, io.EOF
+// Next returns the hash of the next commit, and a pointer to that commit.
+// It handles making sure the list of commits returned are unique.
+// When complete Next will return hash.Hash{}, nil, nil, 0, io.EOF.
+// Note: This implementation always returns nil for the metadata and height return values.
 func (cmItr *commitItr[C]) Next(ctx C) (hash.Hash, *OptionalCommit, *datas.CommitMeta, uint64, error) {
 	for cmItr.curr == nil {
 		if cmItr.currentRoot >= len(cmItr.rootCommits) {
@@ -216,6 +220,8 @@ type CommitSliceIter[C Context] struct {
 
 var _ CommitItr[context.Context] = (*CommitSliceIter[context.Context])(nil)
 
+// Next implements the CommitItr interface.
+// Note: This implementation always returns nil for the metadata and height return values.
 func (i *CommitSliceIter[C]) Next(ctx C) (hash.Hash, *OptionalCommit, *datas.CommitMeta, uint64, error) {
 	if i.i >= len(i.h) {
 		return hash.Hash{}, nil, nil, 0, io.EOF
@@ -231,7 +237,7 @@ func (i *CommitSliceIter[C]) Reset(ctx context.Context) error {
 }
 
 func NewOneCommitIter[C Context](cm *Commit, h hash.Hash, meta *datas.CommitMeta) *OneCommitIter[C] {
-	return &OneCommitIter[C]{cm: &OptionalCommit{cm, h}, h: h}
+	return &OneCommitIter[C]{cm: &OptionalCommit{cm, h}, h: h, m: meta}
 }
 
 type OneCommitIter[C Context] struct {
@@ -243,13 +249,14 @@ type OneCommitIter[C Context] struct {
 
 var _ CommitItr[context.Context] = (*OneCommitIter[context.Context])(nil)
 
+// Next implements the CommitItr interface.
+// Note: This implementation always returns nil for the metadata and height return values.
 func (i *OneCommitIter[C]) Next(_ C) (hash.Hash, *OptionalCommit, *datas.CommitMeta, uint64, error) {
 	if i.done {
 		return hash.Hash{}, nil, nil, 0, io.EOF
 	}
 	i.done = true
-	return i.h, i.cm, nil, 0, nil
-
+	return i.h, i.cm, i.m, 0, nil
 }
 
 func (i *OneCommitIter[C]) Reset(_ context.Context) error {

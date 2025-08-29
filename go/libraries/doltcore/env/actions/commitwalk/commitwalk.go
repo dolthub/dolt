@@ -149,7 +149,6 @@ func (q *q) Get(ctx context.Context, ddb *doltdb.DoltDB, id hash.Hash) (*c, erro
 
 	commit, ok := optCmt.ToCommit()
 	if !ok {
-		// TODO: add this to loaded?
 		return &c{ddb: ddb, commit: optCmt, hash: id}, nil
 	}
 
