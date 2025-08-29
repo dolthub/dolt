@@ -148,7 +148,7 @@ var DoltTestRunFunctionScripts = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "Delimiter is option for dolt_test_run",
+		Name: "Delimiter is optional for dolt_test_run",
 		SetUpScript: []string{
 			"INSERT INTO dolt_tests VALUES ('should pass', 'delimiter tests', 'show tables', 'expected_rows', '==', '0'), " +
 				"('should also pass', 'delimiter tests', 'show tables;', 'expected_rows', '==', '0')",
@@ -159,6 +159,20 @@ var DoltTestRunFunctionScripts = []queries.ScriptTest{
 				Expected: []sql.Row{
 					{"should also pass", "delimiter tests", "show tables;", "PASS", ""},
 					{"should pass", "delimiter tests", "show tables", "PASS", ""},
+				},
+			},
+		},
+	},
+	{
+		Name: "Null test group functions correctly",
+		SetUpScript: []string{
+			"INSERT INTO dolt_tests VALUES ('should pass', NULL, 'select * from dolt_log;', 'expected_rows', '>=', '1')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT * FROM dolt_test_run('should pass')",
+				Expected: []sql.Row{
+					{"should pass", "", "select * from dolt_log;", "PASS", ""},
 				},
 			},
 		},
@@ -289,6 +303,26 @@ var DoltTestRunFunctionScripts = []queries.ScriptTest{
 					{"can compare to integer", "decimal tests", "select * from decimals;", "PASS", ""},
 					{"should fail", "decimal tests", "select * from decimals;", "FAIL", "Assertion failed: expected_single_value greater than 10.5, got 10.4"},
 					{"should pass", "decimal tests", "select * from decimals;", "PASS", ""},
+				},
+			},
+		},
+	},
+	{
+		Name: "Can handle null values correctly",
+		SetUpScript: []string{
+			"CREATE TABLE numbers (i int, t text)",
+			"INSERT INTO numbers VALUES (NULL, NULL)",
+			"INSERT INTO dolt_tests VALUES ('simple null int equality', '', 'SELECT i FROM numbers', 'expected_single_value', '==', 'NULL'), " +
+				"('simple null string equality', '', 'SELECT t FROM numbers', 'expected_single_value', '==', 'NULL'), " +
+				"('simple null inequality', '', 'SELECT i FROM numbers', 'expected_single_value', '!=', 'null')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT * FROM dolt_test_run('*')",
+				Expected: []sql.Row{
+					{"simple null inequality", "", "SELECT i FROM numbers", "FAIL", "Assertion failed: expected_single_value not equal to NULL, got NULL"},
+					{"simple null int equality", "", "SELECT i FROM numbers", "PASS", ""},
+					{"simple null string equality", "", "SELECT t FROM numbers", "PASS", ""},
 				},
 			},
 		},

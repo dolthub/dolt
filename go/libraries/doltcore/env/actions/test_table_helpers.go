@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"io"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -70,7 +71,6 @@ func expectSingleValue(sqlCtx *sql.Context, comparison string, value string, que
 	if len(row) != 1 {
 		return fmt.Sprintf("expected_single_value expects exactly one cell. Received multiple columns"), nil
 	}
-
 	_, err = (*queryResult).Next(sqlCtx)
 	(*queryResult).Close(sqlCtx)
 	if err == nil { //If multiple rows were given, we should error out
@@ -81,11 +81,17 @@ func expectSingleValue(sqlCtx *sql.Context, comparison string, value string, que
 
 	switch actualValue := row[0].(type) {
 	case int32:
-		expectedInt, err := strconv.ParseInt(value, 10, 32)
+		expectedInt, err := strconv.ParseInt(value, 10, 64)
 		if err != nil {
 			return fmt.Sprintf("Could not compare non integer value '%s', with %d", value, actualValue), nil
 		}
 		return compareTestAssertion(comparison, int32(expectedInt), actualValue, AssertionExpectedSingleValue), nil
+	case int64:
+		expectedInt, err := strconv.ParseInt(value, 10, 64)
+		if err != nil {
+			return fmt.Sprintf("Could not compare non integer value '%s', with %d", value, actualValue), nil
+		}
+		return compareTestAssertion(comparison, expectedInt, actualValue, AssertionExpectedSingleValue), nil
 	case uint32:
 		expectedUint, err := strconv.ParseUint(value, 10, 32)
 		if err != nil {
@@ -123,7 +129,11 @@ func expectSingleValue(sqlCtx *sql.Context, comparison string, value string, que
 		}
 		return compareTestAssertion(comparison, value, actualString, AssertionExpectedSingleValue), nil
 	default:
-		return fmt.Sprintf("The type of %v is not supported. Open an issue at https://github.com/dolthub/dolt/issues to see it added", actualValue), nil
+		if actualValue == nil {
+			return compareNilValue(comparison, value, AssertionExpectedSingleValue), nil
+		} else {
+			return fmt.Sprintf("The type of %v is not supported. Open an issue at https://github.com/dolthub/dolt/issues to see it added", actualValue), nil
+		}
 	}
 }
 
@@ -295,6 +305,23 @@ func compareDecimals(comparison string, expectedValue, realValue decimal.Decimal
 	return ""
 }
 
+// compareDecimals is a function used for comparing decimals.
+// It takes in a comparison string from one of: "==", "!="
+// It returns a string. The string is empty if the assertion passed, or has a message explaining the failure otherwise
+func compareNilValue(comparison string, expectedValue, assertionType string) string {
+	switch comparison {
+	case "==":
+		if strings.ToLower(expectedValue) != "null" {
+			return fmt.Sprintf("Assertion failed: %s equal to %s, got NULL", assertionType, expectedValue)
+		}
+	case "!=":
+		if strings.ToLower(expectedValue) == "null" {
+			return fmt.Sprintf("Assertion failed: %s not equal to %s, got NULL", assertionType, strings.ToUpper(expectedValue))
+		}
+	}
+	return ""
+}
+
 // GetStringColAsString is a function that returns a text column as a string.
 // This is necessary as the dolt_tests system table returns *val.TextStorage types under certain situations,
 // so we use a special parser to get the correct string values
@@ -303,6 +330,8 @@ func GetStringColAsString(sqlCtx *sql.Context, tableValue interface{}) (string, 
 		return ts.Unwrap(sqlCtx)
 	} else if str, ok := tableValue.(string); ok {
 		return str, nil
+	} else if tableValue == nil {
+		return "", nil
 	} else {
 		return "", fmt.Errorf("unexpected type %T, was expecting string", tableValue)
 	}
