@@ -70,6 +70,7 @@ const (
 	DefaultBranchControlFilePath     = "branch_control.db"
 	DefaultMetricsHost               = ""
 	DefaultMetricsPort               = -1
+	DefaultMCPPort                   = 7007
 	DefaultAllowCleartextPasswords   = false
 	DefaultMySQLUnixSocketFilePath   = "/tmp/mysql.sock"
 	DefaultMaxLoggedQueryLen         = 0
@@ -214,6 +215,14 @@ type ServerConfig interface {
 	RemotesapiPort() *int
 	// RemotesapiReadOnly is true if the remotesapi interface should be read only.
 	RemotesapiReadOnly() *bool
+	// MCPPort returns the port for the MCP HTTP server if configured.
+	MCPPort() *int
+	// MCPUser returns the SQL user MCP should connect as if configured.
+	MCPUser() *string
+	// MCPPassword returns the SQL password MCP should use if configured.
+	MCPPassword() *string
+	// MCPDatabase returns the SQL database name MCP should connect to if configured.
+	MCPDatabase() *string
 	// ClusterConfig is the configuration for clustering in this sql-server.
 	ClusterConfig() ClusterConfig
 	// EventSchedulerStatus is the configuration for enabling or disabling the event scheduler in this server.

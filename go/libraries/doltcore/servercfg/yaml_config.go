@@ -122,6 +122,14 @@ func (r RemotesapiYAMLConfig) ReadOnly() bool {
 	return *r.ReadOnly_
 }
 
+// MCPServerYAMLConfig contains configuration for running an MCP HTTP server alongside sql-server
+type MCPServerYAMLConfig struct {
+	Port     *int    `yaml:"port,omitempty"`
+	User     *string `yaml:"user,omitempty"`
+	Password *string `yaml:"password,omitempty"`
+	Database *string `yaml:"database,omitempty"`
+}
+
 type UserSessionVars struct {
 	Name string                 `yaml:"name"`
 	Vars map[string]interface{} `yaml:"vars"`
@@ -140,6 +148,7 @@ type YAMLConfig struct {
 	DataDirStr        *string                `yaml:"data_dir,omitempty"`
 	CfgDirStr         *string                `yaml:"cfg_dir,omitempty"`
 	RemotesapiConfig  RemotesapiYAMLConfig   `yaml:"remotesapi,omitempty"`
+	MCPServer         *MCPServerYAMLConfig   `yaml:"mcp_server,omitempty" minver:"TBD"`
 	PrivilegeFile     *string                `yaml:"privilege_file,omitempty"`
 	BranchControlFile *string                `yaml:"branch_control_file,omitempty"`
 	// TODO: Rename to UserVars_
@@ -396,6 +405,15 @@ func (cfg YAMLConfig) withPlaceholdersFilledIn() YAMLConfig {
 		withPlaceholders.RemotesapiConfig.ReadOnly_ = ptr(false)
 	}
 
+	// MCP server placeholders: show keys and example values in generated config
+	if withPlaceholders.MCPServer == nil {
+		withPlaceholders.MCPServer = &MCPServerYAMLConfig{
+			Port:     ptr(DefaultMCPPort),
+			User:     ptr(DefaultUser),
+			Password: ptr(""),
+			Database: ptr(""),
+		}
+	}
 	if withPlaceholders.ClusterCfg == nil {
 		withPlaceholders.ClusterCfg = &ClusterYAMLConfig{
 			StandbyRemotes_: []StandbyRemoteYAMLConfig{
@@ -732,6 +750,38 @@ func (cfg YAMLConfig) RemotesapiPort() *int {
 
 func (cfg YAMLConfig) RemotesapiReadOnly() *bool {
 	return cfg.RemotesapiConfig.ReadOnly_
+}
+
+// MCPPort returns the configured MCP HTTP port, if any.
+func (cfg YAMLConfig) MCPPort() *int {
+	if cfg.MCPServer == nil {
+		return nil
+	}
+	return cfg.MCPServer.Port
+}
+
+// MCPUser returns the configured MCP SQL user, if any.
+func (cfg YAMLConfig) MCPUser() *string {
+	if cfg.MCPServer == nil {
+		return nil
+	}
+	return cfg.MCPServer.User
+}
+
+// MCPPassword returns the configured MCP SQL password, if any.
+func (cfg YAMLConfig) MCPPassword() *string {
+	if cfg.MCPServer == nil {
+		return nil
+	}
+	return cfg.MCPServer.Password
+}
+
+// MCPDatabase returns the configured MCP SQL database, if any.
+func (cfg YAMLConfig) MCPDatabase() *string {
+	if cfg.MCPServer == nil {
+		return nil
+	}
+	return cfg.MCPServer.Database
 }
 
 // PrivilegeFilePath returns the path to the file which contains all needed privilege information in the form of a

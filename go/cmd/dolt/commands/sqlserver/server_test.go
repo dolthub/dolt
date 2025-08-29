@@ -665,6 +665,12 @@ listener:
   # port: 8000
   # read_only: false
 
+# mcp_server:
+  # port: 7007
+  # user: root
+  # password: ""
+  # database: ""
+
 # privilege_file: ` + privilegeFilePath +
 		`
 

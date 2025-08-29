@@ -303,6 +303,22 @@ func StartServer(ctx context.Context, versionStr, commandStr string, args []stri
 	}
 
 	// Validate and prepare MCP options in dedicated helper
+	// Fill MCP options from YAML config (if present) for any unset CLI values.
+	// CLI always has precedence over config file.
+
+	// Prefer CLI values; fall back to ServerConfig interface (e.g., YAML config)
+	if mcpPortPtr == nil {
+		mcpPortPtr = serverConfig.MCPPort()
+	}
+	if mcpUserPtr == nil {
+		mcpUserPtr = serverConfig.MCPUser()
+	}
+	if mcpPasswordPtr == nil {
+		mcpPasswordPtr = serverConfig.MCPPassword()
+	}
+	if mcpDatabasePtr == nil {
+		mcpDatabasePtr = serverConfig.MCPDatabase()
+	}
 	if err := validateAndPrepareMCP(serverConfig, mcpPortPtr, mcpUserPtr, mcpPasswordPtr, mcpDatabasePtr); err != nil {
 		return err
 	}
