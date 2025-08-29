@@ -29,17 +29,17 @@ import (
 var globalCommitCache = make(map[hash.Hash]*loadedCommit)
 
 type loadedCommit struct {
-	ddb       *doltdb.DoltDB
-	commit    *doltdb.OptionalCommit
-	meta      *datas.CommitMeta
-	hash      hash.Hash
-	height    uint64
+	ddb    *doltdb.DoltDB
+	commit *doltdb.OptionalCommit
+	meta   *datas.CommitMeta
+	hash   hash.Hash
+	height uint64
 }
 
 type c struct {
 	loadedCommit *loadedCommit
-	invisible bool
-	queued    bool
+	invisible    bool
+	queued       bool
 }
 
 type q struct {
