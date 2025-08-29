@@ -20,7 +20,7 @@ import (
 	"io"
 	"testing"
 
-		"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
