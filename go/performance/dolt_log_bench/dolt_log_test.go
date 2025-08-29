@@ -20,8 +20,7 @@ import (
 	"io"
 	"testing"
 
-	"github.com/dolthub/go-mysql-server/server"
-	"github.com/dolthub/go-mysql-server/sql"
+		"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
@@ -78,20 +77,12 @@ func BenchmarkDoltLog(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		schema, iter, _, err := eng.Query(ctx, "select * from dolt_log()")
+		_, iter, _, err := eng.Query(ctx, "select * from dolt_log()")
 		require.NoError(b, err)
-		bi := 0
-		buf := sql.NewByteBuffer(16000)
 		for {
-			bi++
-			row, err := iter.Next(ctx)
+			_, err := iter.Next(ctx)
 			if err != nil {
 				break
-			}
-			outputRow, err := server.RowToSQL(ctx, schema, row, nil, buf)
-			_ = outputRow
-			if bi%128 == 0 {
-				buf.Reset()
 			}
 		}
 		require.Error(b, io.EOF)
