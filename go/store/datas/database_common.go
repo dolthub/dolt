@@ -40,7 +40,7 @@ type database struct {
 	ns tree.NodeStore
 
 	rootHash hash.Hash
-	dsMap DatasetsMap
+	dsMap    DatasetsMap
 }
 
 const (
