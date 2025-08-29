@@ -27,7 +27,6 @@ import (
 	"fmt"
 	"sync"
 
-
 	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -41,7 +40,7 @@ type database struct {
 	rt rootTracker
 	ns tree.NodeStore
 
-	mu sync.RWMutex
+	mu       sync.RWMutex
 	rootHash hash.Hash
 	dsMap    DatasetsMap
 }
