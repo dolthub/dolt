@@ -25,14 +25,19 @@ import (
 )
 
 // TODO: just load the entire commit graph on start up?
-var globalCommitCache = make(map[hash.Hash]*c)
+// TODO: also no way this is safe for concurrent use
+var globalCommitCache = make(map[hash.Hash]*loadedCommit)
 
-type c struct {
+type loadedCommit struct {
 	ddb       *doltdb.DoltDB
 	commit    *doltdb.OptionalCommit
 	meta      *datas.CommitMeta
 	hash      hash.Hash
 	height    uint64
+}
+
+type c struct {
+	loadedCommit *loadedCommit
 	invisible bool
 	queued    bool
 }
@@ -72,23 +77,25 @@ func (q *q) Swap(i, j int) {
 // the commit with the newer timestamp is "less". Finally if both commits are ghost commits, we don't really have enough
 // information to compare on, so we just compare the hashes to ensure that the results are stable.
 func (q *q) Less(i, j int) bool {
-	_, okI := q.pending[i].commit.ToCommit()
-	_, okJ := q.pending[i].commit.ToCommit()
+	cI := q.pending[i].loadedCommit
+	cJ := q.pending[j].loadedCommit
+	_, okI := cI.commit.ToCommit()
+	_, okJ := cJ.commit.ToCommit()
 
 	if !okI && okJ {
 		return true
 	} else if okI && !okJ {
 		return false
 	} else if !okI && !okJ {
-		return q.pending[i].hash.String() < q.pending[j].hash.String()
+		return cI.hash.String() < cJ.hash.String()
 	}
 
-	if q.pending[i].height > q.pending[j].height {
+	if cI.height > cJ.height {
 		return true
 	}
 
-	if q.pending[i].height == q.pending[j].height {
-		return q.pending[i].meta.UserTimestamp > q.pending[j].meta.UserTimestamp
+	if cI.height == cJ.height {
+		return cI.meta.UserTimestamp > cJ.meta.UserTimestamp
 	}
 	return false
 }
@@ -107,7 +114,7 @@ func (q *q) AddPendingIfUnseen(ctx context.Context, ddb *doltdb.DoltDB, id hash.
 		return err
 	}
 	if !c.queued {
-		q.loaded[id] = struct{}{}
+		c.queued = true
 		heap.Push(q, c)
 		if !c.invisible {
 			q.numVisiblePending++
@@ -143,8 +150,8 @@ func load(ctx context.Context, ddb *doltdb.DoltDB, h hash.Hash) (*doltdb.Optiona
 }
 
 func (q *q) Get(ctx context.Context, ddb *doltdb.DoltDB, id hash.Hash) (*c, error) {
-	if l, ok := globalCommitCache[id]; ok {
-		return l, nil
+	if cachedCommit, ok := globalCommitCache[id]; ok {
+		return &c{loadedCommit: cachedCommit}, nil
 	}
 
 	optCmt, err := load(ctx, ddb, id)
@@ -154,21 +161,34 @@ func (q *q) Get(ctx context.Context, ddb *doltdb.DoltDB, id hash.Hash) (*c, erro
 
 	commit, ok := optCmt.ToCommit()
 	if !ok {
-		return &c{ddb: ddb, commit: optCmt, hash: id}, nil
+		lc := &loadedCommit{
+			ddb:    ddb,
+			commit: optCmt,
+			hash:   id,
+		}
+		globalCommitCache[id] = lc
+		return &c{loadedCommit: lc}, nil
 	}
 
 	h, err := commit.Height()
 	if err != nil {
 		return nil, err
 	}
+
 	meta, err := commit.GetCommitMeta(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	c := &c{ddb: ddb, commit: &doltdb.OptionalCommit{Commit: commit, Addr: id}, meta: meta, height: h, hash: id}
-	globalCommitCache[id] = c
-	return c, nil
+	lc := &loadedCommit{
+		ddb:    ddb,
+		commit: &doltdb.OptionalCommit{Commit: commit, Addr: id},
+		meta:   meta,
+		height: h,
+		hash:   id,
+	}
+	globalCommitCache[id] = lc
+	return &c{loadedCommit: lc}, nil
 }
 
 func newQueue() *q {
@@ -240,10 +260,11 @@ func newCommiterator[C doltdb.Context](ctx context.Context, ddb *doltdb.DoltDB, 
 func (iter *commiterator[C]) Next(ctx C) (hash.Hash, *doltdb.OptionalCommit, *datas.CommitMeta, uint64, error) {
 	if iter.q.NumVisiblePending() > 0 {
 		nextC := iter.q.PopPending()
+		nextCommit := nextC.loadedCommit
 
 		var err error
-		parents := []hash.Hash{}
-		commit, ok := nextC.commit.ToCommit()
+		var parents []hash.Hash
+		commit, ok := nextCommit.commit.ToCommit()
 		if ok {
 			parents, err = commit.ParentHashes(ctx)
 			if err != nil {
@@ -252,14 +273,14 @@ func (iter *commiterator[C]) Next(ctx C) (hash.Hash, *doltdb.OptionalCommit, *da
 		}
 
 		for _, parentID := range parents {
-			if err := iter.q.AddPendingIfUnseen(ctx, nextC.ddb, parentID); err != nil {
+			if err := iter.q.AddPendingIfUnseen(ctx, nextCommit.ddb, parentID); err != nil {
 				return hash.Hash{}, nil, nil, 0, err
 			}
 		}
 
 		matches := true
 		if iter.matchFn != nil {
-			matches, err = iter.matchFn(nextC.commit)
+			matches, err = iter.matchFn(nextCommit.commit)
 
 			if err != nil {
 				return hash.Hash{}, nil, nil, 0, err
@@ -267,7 +288,7 @@ func (iter *commiterator[C]) Next(ctx C) (hash.Hash, *doltdb.OptionalCommit, *da
 		}
 
 		if matches {
-			return nextC.hash, &doltdb.OptionalCommit{Commit: commit, Addr: nextC.hash}, nextC.meta, nextC.height, nil
+			return nextCommit.hash, &doltdb.OptionalCommit{Commit: commit, Addr: nextCommit.hash}, nextCommit.meta, nextCommit.height, nil
 		}
 
 		return iter.Next(ctx)
@@ -351,10 +372,11 @@ func newDotDotCommiterator[C doltdb.Context](ctx context.Context, includedDdb *d
 func (i *dotDotCommiterator[C]) Next(ctx C) (hash.Hash, *doltdb.OptionalCommit, *datas.CommitMeta, uint64, error) {
 	if i.q.NumVisiblePending() > 0 {
 		nextC := i.q.PopPending()
+		nextCommit := nextC.loadedCommit
 
-		commit, ok := nextC.commit.ToCommit()
+		commit, ok := nextCommit.commit.ToCommit()
 		if !ok {
-			return nextC.hash, nextC.commit, nextC.meta, nextC.height, nil
+			return nextCommit.hash, nextCommit.commit, nextCommit.meta, nextCommit.height, nil
 		}
 
 		parents, err := commit.ParentHashes(ctx)
@@ -364,18 +386,18 @@ func (i *dotDotCommiterator[C]) Next(ctx C) (hash.Hash, *doltdb.OptionalCommit, 
 
 		for _, parentID := range parents {
 			if nextC.invisible {
-				if err := i.q.SetInvisible(ctx, nextC.ddb, parentID); err != nil {
+				if err := i.q.SetInvisible(ctx, nextCommit.ddb, parentID); err != nil {
 					return hash.Hash{}, nil, nil, 0, err
 				}
 			}
-			if err := i.q.AddPendingIfUnseen(ctx, nextC.ddb, parentID); err != nil {
+			if err := i.q.AddPendingIfUnseen(ctx, nextCommit.ddb, parentID); err != nil {
 				return hash.Hash{}, nil, nil, 0, err
 			}
 		}
 
 		matches := true
 		if i.matchFn != nil {
-			matches, err = i.matchFn(nextC.commit)
+			matches, err = i.matchFn(nextCommit.commit)
 			if err != nil {
 				return hash.Hash{}, nil, nil, 0, err
 			}
@@ -383,7 +405,7 @@ func (i *dotDotCommiterator[C]) Next(ctx C) (hash.Hash, *doltdb.OptionalCommit, 
 
 		// If not invisible, return commit. Otherwise, get next commit
 		if !nextC.invisible && matches {
-			return nextC.hash, nextC.commit, nextC.meta, nextC.height, nil
+			return nextCommit.hash, nextCommit.commit, nextCommit.meta, nextCommit.height, nil
 		}
 		return i.Next(ctx)
 	}
