@@ -38,6 +38,9 @@ type database struct {
 	*types.ValueStore
 	rt rootTracker
 	ns tree.NodeStore
+
+	rootHash hash.Hash
+	dsMap DatasetsMap
 }
 
 const (
@@ -159,20 +162,24 @@ func (db *database) Datasets(ctx context.Context) (DatasetsMap, error) {
 		return nil, err
 	}
 
-	if db.Format().UsesFlatbuffers() {
-		rm, err := db.loadDatasetsRefmap(ctx, rootHash)
-		if err != nil {
-			return nil, err
+	if db.rootHash.IsEmpty() || !db.rootHash.Equal(rootHash) {
+		if db.Format().UsesFlatbuffers() {
+			rm, err := db.loadDatasetsRefmap(ctx, rootHash)
+			if err != nil {
+				return nil, err
+			}
+			db.dsMap = refmapDatasetsMap{rm}
+		} else {
+			m, err := db.loadDatasetsNomsMap(ctx, rootHash)
+			if err != nil {
+				return nil, err
+			}
+			db.dsMap = nomsDatasetsMap{m}
 		}
-		return refmapDatasetsMap{rm}, nil
+		db.rootHash = rootHash
 	}
 
-	m, err := db.loadDatasetsNomsMap(ctx, rootHash)
-	if err != nil {
-		return nil, err
-	}
-
-	return nomsDatasetsMap{m}, nil
+	return db.dsMap, nil
 }
 
 var ErrInvalidDatasetID = errors.New("Invalid dataset ID")

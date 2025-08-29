@@ -235,7 +235,7 @@ func NewLogItr(ctx *sql.Context, ddb *doltdb.DoltDB, head *doltdb.Commit) (*LogI
 // Next retrieves the next row. It will return io.EOF if it's the last row.
 // After retrieving the last row, Close will be automatically closed.
 func (itr *LogItr) Next(ctx *sql.Context) (sql.Row, error) {
-	h, optCmt, err := itr.child.Next(ctx)
+	h, optCmt, meta, height, err := itr.child.Next(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -246,14 +246,18 @@ func (itr *LogItr) Next(ctx *sql.Context) (sql.Row, error) {
 		return nil, doltdb.ErrGhostCommitRuntimeFailure
 	}
 
-	meta, err := cm.GetCommitMeta(ctx)
-	if err != nil {
-		return nil, err
+	if meta == nil {
+		meta, err = cm.GetCommitMeta(ctx)
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	height, err := cm.Height()
-	if err != nil {
-		return nil, err
+	if height == 0 {
+		height, err = cm.Height()
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return sql.NewRow(h.String(), meta.Name, meta.Email, meta.Time(), meta.Description, height), nil

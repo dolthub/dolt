@@ -24,6 +24,9 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
+// TODO: just load the entire commit graph on start up?
+var globalCommitCache = make(map[hash.Hash]*c)
+
 type c struct {
 	ddb       *doltdb.DoltDB
 	commit    *doltdb.OptionalCommit
@@ -37,7 +40,7 @@ type c struct {
 type q struct {
 	pending           []*c
 	numVisiblePending int
-	loaded            map[hash.Hash]*c
+	loaded            map[hash.Hash]struct{}
 }
 
 func (q *q) NumVisiblePending() int {
@@ -104,7 +107,7 @@ func (q *q) AddPendingIfUnseen(ctx context.Context, ddb *doltdb.DoltDB, id hash.
 		return err
 	}
 	if !c.queued {
-		c.queued = true
+		q.loaded[id] = struct{}{}
 		heap.Push(q, c)
 		if !c.invisible {
 			q.numVisiblePending++
@@ -140,7 +143,7 @@ func load(ctx context.Context, ddb *doltdb.DoltDB, h hash.Hash) (*doltdb.Optiona
 }
 
 func (q *q) Get(ctx context.Context, ddb *doltdb.DoltDB, id hash.Hash) (*c, error) {
-	if l, ok := q.loaded[id]; ok {
+	if l, ok := globalCommitCache[id]; ok {
 		return l, nil
 	}
 
@@ -164,12 +167,12 @@ func (q *q) Get(ctx context.Context, ddb *doltdb.DoltDB, id hash.Hash) (*c, erro
 	}
 
 	c := &c{ddb: ddb, commit: &doltdb.OptionalCommit{Commit: commit, Addr: id}, meta: meta, height: h, hash: id}
-	q.loaded[id] = c
+	globalCommitCache[id] = c
 	return c, nil
 }
 
 func newQueue() *q {
-	return &q{loaded: make(map[hash.Hash]*c)}
+	return &q{loaded: make(map[hash.Hash]struct{})}
 }
 
 // GetDotDotRevisions returns the commits reachable from commit at hashes
@@ -190,7 +193,7 @@ func GetDotDotRevisions(ctx context.Context, includedDB *doltdb.DoltDB, included
 
 	var commitList []*doltdb.OptionalCommit
 	for num < 0 || len(commitList) < num {
-		_, commit, err := itr.Next(ctx)
+		_, commit, _, _, err := itr.Next(ctx)
 		if err == io.EOF {
 			break
 		} else if err != nil {
@@ -234,7 +237,7 @@ func newCommiterator[C doltdb.Context](ctx context.Context, ddb *doltdb.DoltDB, 
 }
 
 // Next implements doltdb.CommitItr
-func (iter *commiterator[C]) Next(ctx C) (hash.Hash, *doltdb.OptionalCommit, error) {
+func (iter *commiterator[C]) Next(ctx C) (hash.Hash, *doltdb.OptionalCommit, *datas.CommitMeta, uint64, error) {
 	if iter.q.NumVisiblePending() > 0 {
 		nextC := iter.q.PopPending()
 
@@ -244,13 +247,13 @@ func (iter *commiterator[C]) Next(ctx C) (hash.Hash, *doltdb.OptionalCommit, err
 		if ok {
 			parents, err = commit.ParentHashes(ctx)
 			if err != nil {
-				return hash.Hash{}, nil, err
+				return hash.Hash{}, nil, nil, 0, err
 			}
 		}
 
 		for _, parentID := range parents {
 			if err := iter.q.AddPendingIfUnseen(ctx, nextC.ddb, parentID); err != nil {
-				return hash.Hash{}, nil, err
+				return hash.Hash{}, nil, nil, 0, err
 			}
 		}
 
@@ -259,18 +262,18 @@ func (iter *commiterator[C]) Next(ctx C) (hash.Hash, *doltdb.OptionalCommit, err
 			matches, err = iter.matchFn(nextC.commit)
 
 			if err != nil {
-				return hash.Hash{}, nil, err
+				return hash.Hash{}, nil, nil, 0, err
 			}
 		}
 
 		if matches {
-			return nextC.hash, &doltdb.OptionalCommit{Commit: commit, Addr: nextC.hash}, nil
+			return nextC.hash, &doltdb.OptionalCommit{Commit: commit, Addr: nextC.hash}, nextC.meta, nextC.height, nil
 		}
 
 		return iter.Next(ctx)
 	}
 
-	return hash.Hash{}, nil, io.EOF
+	return hash.Hash{}, nil, nil, 0, io.EOF
 }
 
 // Reset implements doltdb.CommitItr
@@ -301,7 +304,7 @@ func GetTopNTopoOrderedCommitsMatching(ctx context.Context, ddb *doltdb.DoltDB, 
 
 	var commitList []*doltdb.Commit
 	for n < 0 || len(commitList) < n {
-		_, optCmt, err := itr.Next(ctx)
+		_, optCmt, _, _, err := itr.Next(ctx)
 		if err == io.EOF {
 			break
 		} else if err != nil {
@@ -345,28 +348,28 @@ func newDotDotCommiterator[C doltdb.Context](ctx context.Context, includedDdb *d
 }
 
 // Next implements doltdb.CommitItr
-func (i *dotDotCommiterator[C]) Next(ctx C) (hash.Hash, *doltdb.OptionalCommit, error) {
+func (i *dotDotCommiterator[C]) Next(ctx C) (hash.Hash, *doltdb.OptionalCommit, *datas.CommitMeta, uint64, error) {
 	if i.q.NumVisiblePending() > 0 {
 		nextC := i.q.PopPending()
 
 		commit, ok := nextC.commit.ToCommit()
 		if !ok {
-			return nextC.hash, nextC.commit, nil
+			return nextC.hash, nextC.commit, nextC.meta, nextC.height, nil
 		}
 
 		parents, err := commit.ParentHashes(ctx)
 		if err != nil {
-			return hash.Hash{}, nil, err
+			return hash.Hash{}, nil, nil, 0, err
 		}
 
 		for _, parentID := range parents {
 			if nextC.invisible {
 				if err := i.q.SetInvisible(ctx, nextC.ddb, parentID); err != nil {
-					return hash.Hash{}, nil, err
+					return hash.Hash{}, nil, nil, 0, err
 				}
 			}
 			if err := i.q.AddPendingIfUnseen(ctx, nextC.ddb, parentID); err != nil {
-				return hash.Hash{}, nil, err
+				return hash.Hash{}, nil, nil, 0, err
 			}
 		}
 
@@ -374,18 +377,18 @@ func (i *dotDotCommiterator[C]) Next(ctx C) (hash.Hash, *doltdb.OptionalCommit, 
 		if i.matchFn != nil {
 			matches, err = i.matchFn(nextC.commit)
 			if err != nil {
-				return hash.Hash{}, nil, err
+				return hash.Hash{}, nil, nil, 0, err
 			}
 		}
 
-		// If not invisible, return commit. Otherwise get next commit
+		// If not invisible, return commit. Otherwise, get next commit
 		if !nextC.invisible && matches {
-			return nextC.hash, nextC.commit, nil
+			return nextC.hash, nextC.commit, nextC.meta, nextC.height, nil
 		}
 		return i.Next(ctx)
 	}
 
-	return hash.Hash{}, nil, io.EOF
+	return hash.Hash{}, nil, nil, 0, io.EOF
 }
 
 // Reset implements doltdb.CommitItr

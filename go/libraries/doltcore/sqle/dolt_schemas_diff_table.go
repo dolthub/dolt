@@ -146,7 +146,7 @@ var _ sql.PartitionIter = (*DoltSchemasDiffPartitionItr)(nil)
 func (dsdp *DoltSchemasDiffPartitionItr) Next(ctx *sql.Context) (sql.Partition, error) {
 	// First iterate through commit history, then add working partition as the final step
 	for {
-		cmHash, optCmt, err := dsdp.cmItr.Next(ctx)
+		cmHash, optCmt, _, _, err := dsdp.cmItr.Next(ctx)
 		if err == io.EOF {
 			// Finished with commit history, now add working partition if not done
 			if !dsdp.workingPartitionDone {

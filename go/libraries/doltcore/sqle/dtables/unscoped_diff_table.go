@@ -338,7 +338,7 @@ func (itr *doltDiffCommitHistoryRowItr) Next(ctx *sql.Context) (sql.Row, error) 
 			}
 			itr.commits = nil
 		} else if itr.child != nil {
-			_, optCmt, err := itr.child.Next(ctx)
+			_, optCmt, _, _, err := itr.child.Next(ctx)
 			if err != nil {
 				return nil, err
 			}
@@ -347,6 +347,7 @@ func (itr *doltDiffCommitHistoryRowItr) Next(ctx *sql.Context) (sql.Row, error) 
 				return nil, io.EOF
 			}
 
+			// TODO: we already have meta and height
 			err = itr.loadTableChanges(ctx, commit)
 			if err == doltdb.ErrGhostCommitEncountered {
 				// When showing the diff table in a shallow clone, we show as much of the dolt_history_{table} as we can,

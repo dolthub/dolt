@@ -183,7 +183,7 @@ func (dt *DiffTable) PartitionRanges(ctx *sql.Context, ranges []prolly.Range) (s
 		return nil, err
 	}
 
-	cmHash, _, err := cmItr.Next(ctx)
+	cmHash, _, _, _, err := cmItr.Next(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -424,7 +424,7 @@ func (dt *DiffTable) scanHeightForChild(ctx *sql.Context, parent hash.Hash, heig
 func (dt *DiffTable) reverseIterForChild(ctx *sql.Context, parent hash.Hash) (*doltdb.Commit, hash.Hash, error) {
 	iter := doltdb.CommitItrForRoots[*sql.Context](dt.ddb, dt.head)
 	for {
-		childHs, optCmt, err := iter.Next(ctx)
+		childHs, optCmt, _, _, err := iter.Next(ctx)
 		if errors.Is(err, io.EOF) {
 			return nil, hash.Hash{}, nil
 		} else if err != nil {
@@ -839,7 +839,7 @@ func (dps *DiffPartitions) Next(ctx *sql.Context) (sql.Partition, error) {
 	}
 
 	for {
-		cmHash, optCmt, err := dps.cmItr.Next(ctx)
+		cmHash, optCmt, _, _, err := dps.cmItr.Next(ctx)
 		if err != nil {
 			return nil, err
 		}
