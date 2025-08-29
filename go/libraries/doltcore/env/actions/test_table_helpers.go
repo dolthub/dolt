@@ -310,7 +310,7 @@ func compareDecimals(comparison string, expectedValue, realValue decimal.Decimal
 	return ""
 }
 
-// compareNullValue is a function used for comparing decimals.
+// compareNullValue is a function used for comparing a null value.
 // It takes in a comparison string from one of: "==", "!="
 // It returns a string. The string is empty if the assertion passed, or has a message explaining the failure otherwise
 func compareNullValue(comparison string, actualValue interface{}, assertionType string) string {
