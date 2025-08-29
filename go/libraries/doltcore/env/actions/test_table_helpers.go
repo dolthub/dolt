@@ -130,7 +130,7 @@ func expectSingleValue(sqlCtx *sql.Context, comparison string, value *string, qu
 		if err != nil {
 			return "", err
 		}
-		return compareTestAssertion(comparison, *value, actualString, AssertionExpectedSingleValue), nil
+		return compareTestAssertion(comparison, *value, *actualString, AssertionExpectedSingleValue), nil
 	default:
 		return fmt.Sprintf("The type of %v is not supported. Open an issue at https://github.com/dolthub/dolt/issues to see it added", actualValue), nil
 	}
@@ -142,7 +142,7 @@ func expectRows(sqlCtx *sql.Context, comparison string, value *string, queryResu
 	}
 	expectedRows, err := strconv.Atoi(*value)
 	if err != nil {
-		return fmt.Sprintf("cannot run assertion on non integer value: %s", value), nil
+		return fmt.Sprintf("cannot run assertion on non integer value: %s", *value), nil
 	}
 
 	var numRows int
@@ -164,7 +164,7 @@ func expectColumns(sqlCtx *sql.Context, comparison string, value *string, queryR
 	}
 	expectedColumns, err := strconv.Atoi(*value)
 	if err != nil {
-		return fmt.Sprintf("cannot run assertion on non integer value: %s", value), nil
+		return fmt.Sprintf("cannot run assertion on non integer value: %s", *value), nil
 	}
 
 	var numColumns int

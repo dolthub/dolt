@@ -245,7 +245,12 @@ func (trtf *TestsRunTableFunction) queryAndAssert(row sql.Row) (result testResul
 	if !testPassed {
 		status = "FAIL"
 	}
-	result = testResult{*testName, *groupName, *query, status, message}
+
+	var groupString string
+	if groupName != nil {
+		groupString = *groupName
+	}
+	result = testResult{*testName, groupString, *query, status, message}
 	return result, nil
 }
 

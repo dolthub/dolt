@@ -312,9 +312,10 @@ var DoltTestRunFunctionScripts = []queries.ScriptTest{
 		SetUpScript: []string{
 			"CREATE TABLE numbers (i int, t text)",
 			"INSERT INTO numbers VALUES (NULL, NULL)",
-			"INSERT INTO dolt_tests VALUES ('simple null int equality', '', 'SELECT i FROM numbers', 'expected_single_value', '==', 'NULL'), " +
-				"('simple null string equality', '', 'SELECT t FROM numbers', 'expected_single_value', '==', 'NULL'), " +
-				"('simple null inequality', '', 'SELECT i FROM numbers', 'expected_single_value', '!=', 'null')",
+			"INSERT INTO dolt_tests (test_name, test_query, assertion_type, assertion_comparator) VALUES " +
+				"('simple null int equality', 'SELECT i FROM numbers', 'expected_single_value', '=='), " +
+				"('simple null string equality', 'SELECT t FROM numbers', 'expected_single_value', '=='), " +
+				"('simple null inequality', 'SELECT i FROM numbers', 'expected_single_value', '!=')",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
