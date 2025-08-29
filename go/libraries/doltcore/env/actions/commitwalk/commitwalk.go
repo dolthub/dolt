@@ -243,23 +243,16 @@ func newCommiterator[C doltdb.Context](ctx context.Context, ddb *doltdb.DoltDB, 
 func (iter *commiterator[C]) Next(ctx C) (hash.Hash, *doltdb.OptionalCommit, *datas.CommitMeta, uint64, error) {
 	if iter.q.NumVisiblePending() > 0 {
 		nextC := iter.q.PopPending()
-
-		var err error
-		var parents []hash.Hash
 		commit, ok := nextC.commit.ToCommit()
 		if ok {
-			parents, err = commit.ParentHashes(ctx)
-			if err != nil {
-				return hash.Hash{}, nil, nil, 0, err
+			for _, parentCommit := range commit.DatasParents() {
+				if err := iter.q.AddPendingIfUnseen(ctx, nextC.ddb, parentCommit.Addr()); err != nil {
+					return hash.Hash{}, nil, nil, 0, err
+				}
 			}
 		}
 
-		for _, parentID := range parents {
-			if err := iter.q.AddPendingIfUnseen(ctx, nextC.ddb, parentID); err != nil {
-				return hash.Hash{}, nil, nil, 0, err
-			}
-		}
-
+		var err error
 		matches := true
 		if iter.matchFn != nil {
 			matches, err = iter.matchFn(nextC.commit)
