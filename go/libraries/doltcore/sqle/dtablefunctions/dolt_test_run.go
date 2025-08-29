@@ -223,18 +223,18 @@ func (trtf *TestsRunTableFunction) queryAndAssert(row sql.Row) (result testResul
 	if err != nil {
 		return
 	}
-	message, err := validateQuery(trtf.ctx, trtf.catalog, query)
+	message, err := validateQuery(trtf.ctx, trtf.catalog, *query)
 	if err != nil && message == "" {
 		message = fmt.Sprintf("query error: %s", err.Error())
 	}
 
 	var testPassed bool
 	if message == "" {
-		_, queryResult, _, err := trtf.engine.Query(trtf.ctx, query)
+		_, queryResult, _, err := trtf.engine.Query(trtf.ctx, *query)
 		if err != nil {
 			message = fmt.Sprintf("Query error: %s", err.Error())
 		} else {
-			testPassed, message, err = actions.AssertData(trtf.ctx, assertion, comparison, value, &queryResult)
+			testPassed, message, err = actions.AssertData(trtf.ctx, *assertion, *comparison, value, &queryResult)
 			if err != nil {
 				return testResult{}, err
 			}
@@ -245,7 +245,12 @@ func (trtf *TestsRunTableFunction) queryAndAssert(row sql.Row) (result testResul
 	if !testPassed {
 		status = "FAIL"
 	}
-	result = testResult{testName, groupName, query, status, message}
+
+	var groupString string
+	if groupName != nil {
+		groupString = *groupName
+	}
+	result = testResult{*testName, groupString, *query, status, message}
 	return result, nil
 }
 
@@ -301,7 +306,7 @@ func IsWriteQuery(query string, ctx *sql.Context, catalog sql.Catalog) (bool, er
 	return !node.IsReadOnly(), nil
 }
 
-func parseDoltTestsRow(ctx *sql.Context, row sql.Row) (testName, groupName, query, assertion, comparison, value string, err error) {
+func parseDoltTestsRow(ctx *sql.Context, row sql.Row) (testName, groupName, query, assertion, comparison, value *string, err error) {
 	if testName, err = actions.GetStringColAsString(ctx, row[0]); err != nil {
 		return
 	}
@@ -336,6 +341,10 @@ func validateQuery(ctx *sql.Context, catalog sql.Catalog, query string) (string,
 		return "", err
 	} else if isWrite {
 		return "Cannot execute write queries", nil
+	}
+
+	if strings.Contains(strings.ToLower(query), "dolt_test_run(") {
+		return "Cannot call dolt_test_run in dolt_tests", nil
 	}
 	return "", nil
 }
