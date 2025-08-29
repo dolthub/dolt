@@ -890,3 +890,47 @@ EOF
     [ "$status" -eq 1 ]
     [[ "$output" =~ "invalid output format: sql. SQL format diffs only rendered for schema or data changes" ]] || false
 }
+
+@test "sql-diff: dolt_patch index diff regression - dolt#9677 (conservative type compatibility)" {
+    # https://github.com/dolthub/dolt/issues/9677
+    # Customer reported spurious index operations when only column signedness changed.
+    # Conservative approach: signedness changes are incompatible (generates DROP+ADD) but no spurious index operations.
+    # Create reference table for foreign key
+    dolt sql -q "CREATE TABLE other_table (id int unsigned NOT NULL AUTO_INCREMENT, PRIMARY KEY (id))"
+    dolt add .
+    dolt commit -m "initial commit"
+
+    # Create old branch with bigint column
+    dolt checkout -b old
+    dolt sql -q "CREATE TABLE table_name (id INT unsigned NOT NULL AUTO_INCREMENT, field_name INT UNSIGNED NOT NULL, field_change_sign bigint DEFAULT NULL, PRIMARY KEY (id), UNIQUE KEY field_name_UNIQUE (field_name), KEY fk_field_name_idx (field_name), CONSTRAINT fk_field_name FOREIGN KEY (field_name) REFERENCES other_table (id))"
+    dolt add .
+    dolt commit -m "table with bigint column"
+
+    # Create new branch with bigint unsigned column - only difference
+    dolt checkout main
+    dolt checkout -b new
+    dolt sql -q "CREATE TABLE table_name (id INT unsigned NOT NULL AUTO_INCREMENT, field_name INT UNSIGNED NOT NULL, field_change_sign bigint unsigned DEFAULT NULL, PRIMARY KEY (id), UNIQUE KEY field_name_UNIQUE (field_name), KEY fk_field_name_idx (field_name), CONSTRAINT fk_field_name FOREIGN KEY (field_name) REFERENCES other_table (id))"
+    dolt add .
+    dolt commit -m "table with bigint unsigned column"
+
+    # Test customer's first command: with table specified - conservative approach generates DROP+ADD
+    run dolt sql --result-format csv -q "SELECT statement FROM dolt_patch('old', 'new', 'table_name') WHERE diff_type = 'schema' ORDER BY statement_order"
+    [ "$status" -eq 0 ]
+    [[ "$output" == "statement
+ALTER TABLE \`table_name\` DROP \`field_change_sign\`;
+ALTER TABLE \`table_name\` ADD \`field_change_sign\` bigint unsigned DEFAULT NULL;" ]] || false
+    [[ ! "$output" =~ "DROP INDEX" ]] || false
+    [[ ! "$output" =~ "ADD INDEX" ]] || false
+
+    # Test customer's second command: without table specified - conservative approach generates DROP+ADD  
+    run dolt sql --result-format csv -q "SELECT statement FROM dolt_patch('old', 'new') WHERE diff_type = 'schema' ORDER BY statement_order"
+    [ "$status" -eq 0 ]
+    [[ "$output" == "statement
+ALTER TABLE \`table_name\` DROP \`field_change_sign\`;
+ALTER TABLE \`table_name\` ADD \`field_change_sign\` bigint unsigned DEFAULT NULL;" ]] || false
+    [[ ! "$output" =~ "DROP INDEX" ]] || false
+    [[ ! "$output" =~ "ADD INDEX" ]] || false
+}
+
+
+
