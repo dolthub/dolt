@@ -87,6 +87,8 @@ type DoltDB struct {
 	// parent directory as the database name. For non-filesystem based databases, the database name will not
 	// currently be populated.
 	databaseName string
+
+	commitCache map[hash.Hash]*OptionalCommit
 }
 
 // DoltDBFromCS creates a DoltDB from a noms chunks.ChunkStore
@@ -476,19 +478,27 @@ func (ddb *DoltDB) Resolve(ctx context.Context, cs *CommitSpec, cwb ref.DoltRef)
 
 // ResolveHash takes a hash and returns an OptionalCommit directly.
 // This assumes no ancestor spec resolution and no current working branch (cwb) needed.
-func (ddb *DoltDB) ResolveHash(ctx context.Context, hash hash.Hash) (*OptionalCommit, error) {
-	commitValue, err := datas.LoadCommitAddr(ctx, ddb.vrw, hash)
+func (ddb *DoltDB) ResolveHash(ctx context.Context, h hash.Hash) (*OptionalCommit, error) {
+	if ddb.commitCache == nil {
+		ddb.commitCache = make(map[hash.Hash]*OptionalCommit)
+	}
+	if oc, ok := ddb.commitCache[h]; ok {
+		return oc, nil
+	}
+	commitValue, err := datas.LoadCommitAddr(ctx, ddb.vrw, h)
 	if err != nil {
 		return nil, err
 	}
-	if commitValue.IsGhost() {
-		return &OptionalCommit{nil, hash}, nil
+	oc := &OptionalCommit{Addr: h}
+	if !commitValue.IsGhost() {
+		commit, err := NewCommit(ctx, ddb.vrw, ddb.ns, commitValue)
+		if err != nil {
+			return nil, err
+		}
+		oc.Commit = commit
 	}
-	commit, err := NewCommit(ctx, ddb.vrw, ddb.ns, commitValue)
-	if err != nil {
-		return nil, err
-	}
-	return &OptionalCommit{commit, hash}, nil
+	ddb.commitCache[h] = oc
+	return oc, nil
 }
 
 // BootstrapShallowResolve is a special case of Resolve that is used to resolve a commit prior to pulling it's history
