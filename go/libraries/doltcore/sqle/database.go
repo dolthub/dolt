@@ -919,7 +919,7 @@ func resolveAsOfTime(ctx *sql.Context, ddb *doltdb.DoltDB, head ref.DoltRef, asO
 	}
 
 	for {
-		_, optCmt, err := cmItr.Next(ctx)
+		_, optCmt, meta, _, err := cmItr.Next(ctx)
 		if err == io.EOF {
 			break
 		} else if err != nil {
@@ -930,9 +930,11 @@ func resolveAsOfTime(ctx *sql.Context, ddb *doltdb.DoltDB, head ref.DoltRef, asO
 			return nil, nil, doltdb.ErrGhostCommitEncountered
 		}
 
-		meta, err := curr.GetCommitMeta(ctx)
-		if err != nil {
-			return nil, nil, err
+		if meta == nil {
+			meta, err = curr.GetCommitMeta(ctx)
+			if err != nil {
+				return nil, nil, err
+			}
 		}
 
 		if meta.Time().Equal(asOf) || meta.Time().Before(asOf) {

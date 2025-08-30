@@ -456,7 +456,7 @@ type commitPartitioner struct {
 
 // Next returns the next partition and nil, io.EOF when complete
 func (cp commitPartitioner) Next(ctx *sql.Context) (sql.Partition, error) {
-	h, optCmt, err := cp.cmItr.Next(ctx)
+	h, optCmt, _, _, err := cp.cmItr.Next(ctx)
 	if err != nil {
 		return nil, err
 	}

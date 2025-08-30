@@ -337,7 +337,7 @@ func (itr *doltColDiffCommitHistoryRowItr) Next(ctx *sql.Context) (sql.Row, erro
 			}
 			itr.commits = nil
 		} else if itr.child != nil {
-			_, optCmt, err := itr.child.Next(ctx)
+			_, optCmt, _, _, err := itr.child.Next(ctx)
 			if err != nil {
 				return nil, err
 			}

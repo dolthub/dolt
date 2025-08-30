@@ -474,6 +474,23 @@ func (ddb *DoltDB) Resolve(ctx context.Context, cs *CommitSpec, cwb ref.DoltRef)
 	return commit.GetAncestor(ctx, cs.aSpec)
 }
 
+// ResolveHash takes a hash and returns an OptionalCommit directly.
+// This assumes no ancestor spec resolution and no current working branch (cwb) needed.
+func (ddb *DoltDB) ResolveHash(ctx context.Context, hash hash.Hash) (*OptionalCommit, error) {
+	commitValue, err := datas.LoadCommitAddr(ctx, ddb.vrw, hash)
+	if err != nil {
+		return nil, err
+	}
+	if commitValue.IsGhost() {
+		return &OptionalCommit{nil, hash}, nil
+	}
+	commit, err := NewCommit(ctx, ddb.vrw, ddb.ns, commitValue)
+	if err != nil {
+		return nil, err
+	}
+	return &OptionalCommit{commit, hash}, nil
+}
+
 // BootstrapShallowResolve is a special case of Resolve that is used to resolve a commit prior to pulling it's history
 // in a shallow clone. In general, application code should call Resolve and get an OptionalCommit. This is a special case
 // where we need to get the head commit for the commit closure used to determine what commits should skipped.

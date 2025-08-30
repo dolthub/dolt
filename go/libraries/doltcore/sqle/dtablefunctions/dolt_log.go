@@ -30,6 +30,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/utils/gpg"
+	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
@@ -688,9 +689,11 @@ func (itr *logTableFunctionRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 	var commitHash hash.Hash
 	var commit *doltdb.Commit
 	var optCmt *doltdb.OptionalCommit
+	var meta *datas.CommitMeta
+	var height uint64
 	var err error
 	for {
-		commitHash, optCmt, err = itr.child.Next(ctx)
+		commitHash, optCmt, meta, height, err = itr.child.Next(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -762,14 +765,19 @@ func (itr *logTableFunctionRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 		}
 	}
 
-	meta, err := commit.GetCommitMeta(ctx)
-	if err != nil {
-		return nil, err
+	if meta == nil {
+		meta, err = commit.GetCommitMeta(ctx)
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	height, err := commit.Height()
-	if err != nil {
-		return nil, err
+	// TODO: will retrieve height again if it's 0
+	if height == 0 {
+		height, err = commit.Height()
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	row := sql.NewRow(commitHash.String(), meta.Name, meta.Email, meta.Time(), meta.Description, height)
