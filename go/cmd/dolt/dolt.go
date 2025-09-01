@@ -664,7 +664,7 @@ If you're interested in running this command against a remote host, hit us up on
 	isValidRepositoryRequired := subcommandName != "init" && subcommandName != "sql" && subcommandName != "sql-server" && subcommandName != "sql-client"
 
 	if noValidRepository && isValidRepositoryRequired {
-		return func(ctx context.Context) (res cli.LateBindQueryistResult, err error) {
+		return func(ctx context.Context, opts ...cli.LateBindQueryistOption) (res cli.LateBindQueryistResult, err error) {
 			err = errors.New("The current directory is not a valid dolt repository.")
 			if errors.Is(rootEnv.DBLoadError, nbs.ErrUnsupportedTableFileFormat) {
 				// This is fairly targeted and specific to allow for better error messaging. We should consider

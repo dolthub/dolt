@@ -33,6 +33,12 @@ type LateBindQueryistResult struct {
 	Closer   func()
 }
 
+type LateBindQueryistConfig struct {
+	EnableAutoGC bool
+}
+
+type LateBindQueryistOption func(*LateBindQueryistConfig)
+
 // LateBindQueryist is a function that will be called the first time Queryist is needed for use. Input is a context which
 // is appropriate for the call to commence. Output is a LateBindQueryistResult, which includes a Queryist, a sql.Context, and
 // a closer function. It can also result in an error.
@@ -48,7 +54,7 @@ type LateBindQueryistResult struct {
 // This state is useful for determining whether a command making use of the CliContext is being run within the context of
 // another command. This is particularly interesting when running a \checkout in a dolt sql session. It makes sense to do
 // so in the context of `dolt sql`, but not in the context of `dolt checkout` when connected to a remote server.
-type LateBindQueryist func(ctx context.Context) (LateBindQueryistResult, error)
+type LateBindQueryist func(ctx context.Context, opts ...LateBindQueryistOption) (LateBindQueryistResult, error)
 
 // CliContexct is used to pass top level command information down to subcommands.
 type CliContext interface {
@@ -56,7 +62,7 @@ type CliContext interface {
 	GlobalArgs() *argparser.ArgParseResults
 	WorkingDir() filesys.Filesys
 	Config() *env.DoltCliConfig
-	QueryEngine(ctx context.Context) (QueryEngineResult, error)
+	QueryEngine(ctx context.Context, opts ...LateBindQueryistOption) (QueryEngineResult, error)
 	// Release resources associated with the CliContext, including
 	// any QueryEngines which were provisioned over the lifetime
 	// of the CliContext.
@@ -115,7 +121,7 @@ func (lbc LateBindCliContext) GlobalArgs() *argparser.ArgParseResults {
 // QueryEngine returns a Queryist, a sql.Context, a closer function, and an error. It ensures that only one call to the
 // LateBindQueryist is made, and caches the result. Note that if this is called twice, the closer function returns will
 // be nil, callers should check if is nil.
-func (lbc LateBindCliContext) QueryEngine(ctx context.Context) (res QueryEngineResult, err error) {
+func (lbc LateBindCliContext) QueryEngine(ctx context.Context, opts ...LateBindQueryistOption) (res QueryEngineResult, err error) {
 	if lbc.activeContext != nil && lbc.activeContext.qryist != nil && lbc.activeContext.sqlCtx != nil {
 		res.Queryist = *lbc.activeContext.qryist
 		res.Context = lbc.activeContext.sqlCtx
@@ -125,7 +131,7 @@ func (lbc LateBindCliContext) QueryEngine(ctx context.Context) (res QueryEngineR
 		return res, nil
 	}
 
-	bindRes, err := lbc.bind(ctx)
+	bindRes, err := lbc.bind(ctx, opts...)
 	if err != nil {
 		return res, err
 	}

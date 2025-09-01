@@ -87,6 +87,8 @@ type SqlEngineConfig struct {
 	EventSchedulerStatus       eventscheduler.SchedulerStatus
 }
 
+type SqlEngineConfigOption func(*SqlEngineConfig)
+
 // NewSqlEngine returns a SqlEngine
 func NewSqlEngine(
 	ctx context.Context,
