@@ -237,7 +237,7 @@ type autoGCCommitHook struct {
 	// is being removed.
 	stopCh chan struct{}
 	// Closed as the background processing thread shutsdown. The
-	// dattabase hook selects on this to avoid deadlocking if it
+	// database hook selects on this to avoid deadlocking if it
 	// is trying to send to the worker thread after it has been
 	// shutdown.
 	stoppedCh chan struct{}
