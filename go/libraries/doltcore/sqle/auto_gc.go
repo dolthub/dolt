@@ -236,7 +236,7 @@ type autoGCCommitHook struct {
 	// Closed when the thread should shutdown because the database
 	// is being removed.
 	stopCh chan struct{}
-	// Closed as the background processing thread shutsdown. The
+	// Closed as the background processing thread shuts down. The
 	// database hook selects on this to avoid deadlocking if it
 	// is trying to send to the worker thread after it has been
 	// shutdown.
