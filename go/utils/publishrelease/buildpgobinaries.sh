@@ -9,14 +9,16 @@ cd $script_dir/../..
 [ ! -z "$GO_BUILD_VERSION" ] || (echo "Must supply GO_BUILD_VERSION"; exit 1)
 [ ! -z "$PROFILE" ] || (echo "Must supply PROFILE"; exit 1)
 
-docker run --rm -v `pwd`:/src -v "$PROFILE":/cpu.pprof golang:"$GO_BUILD_VERSION"-bookworm /bin/bash -c '
+docker run --rm -v `pwd`:/src -v "$PROFILE":/cpu.pprof golang:"$GO_BUILD_VERSION"-trixie /bin/bash -c '
 set -e
 set -o pipefail
-apt-get update && apt-get install -y p7zip-full pigz curl xz-utils mingw-w64 clang-15
+apt-get update && apt-get install -y p7zip-full pigz curl xz-utils mingw-w64 clang-19
 
 cd /
-curl -o optcross.tar.xz https://dolthub-tools.s3.us-west-2.amazonaws.com/optcross/"$(uname -m)"-linux_20250327_0.0.3.tar.xz
+curl -o optcross.tar.xz https://dolthub-tools.s3.us-west-2.amazonaws.com/optcross/"$(uname -m)"-linux_20250327_0.0.3_trixie.tar.xz
 tar Jxf optcross.tar.xz
+curl -o icustatic.tar.xz https://dolthub-tools.s3.us-west-2.amazonaws.com/icustatic/20250327_0.0.3_trixie.tar.xz
+tar Jxf icustatic.tar.xz
 export PATH=/opt/cross/bin:"$PATH"
 
 cd /src
@@ -27,15 +29,22 @@ OS_ARCH_TUPLES="darwin-amd64 darwin-arm64 windows-amd64 linux-amd64 linux-arm64"
 declare -A platform_cc
 platform_cc["linux-arm64"]="aarch64-linux-musl-gcc"
 platform_cc["linux-amd64"]="x86_64-linux-musl-gcc"
-platform_cc["darwin-arm64"]="clang-15 --target=aarch64-darwin --sysroot=/opt/cross/darwin-sysroot -mmacosx-version-min=12.0"
-platform_cc["darwin-amd64"]="clang-15 --target=x86_64-darwin --sysroot=/opt/cross/darwin-sysroot -mmacosx-version-min=12.0"
+platform_cc["darwin-arm64"]="clang-19 --target=aarch64-darwin --sysroot=/opt/cross/darwin-sysroot -mmacosx-version-min=12.0"
+platform_cc["darwin-amd64"]="clang-19 --target=x86_64-darwin --sysroot=/opt/cross/darwin-sysroot -mmacosx-version-min=12.0"
 platform_cc["windows-amd64"]="x86_64-w64-mingw32-gcc"
+
+declare -A platform_cxx
+platform_cxx["linux-arm64"]="aarch64-linux-musl-g++"
+platform_cxx["linux-amd64"]="x86_64-linux-musl-g++"
+platform_cxx["darwin-arm64"]="clang++-19 --target=aarch64-darwin --sysroot=/opt/cross/darwin-sysroot -mmacosx-version-min=12.0"
+platform_cxx["darwin-amd64"]="clang++-19 --target=x86_64-darwin --sysroot=/opt/cross/darwin-sysroot -mmacosx-version-min=12.0"
+platform_cxx["windows-amd64"]="x86_64-w64-mingw32-g++"
 
 declare -A platform_as
 platform_as["linux-arm64"]="aarch64-linux-musl-as"
 platform_as["linux-amd64"]="x86_64-linux-musl-as"
-platform_as["darwin-arm64"]="clang-15 --target=aarch64-darwin --sysroot=/opt/cross/darwin-sysroot -mmacosx-version-min=12.0"
-platform_as["darwin-amd64"]="clang-15 --target=x86_64-darwin --sysroot=/opt/cross/darwin-sysroot -mmacosx-version-min=12.0"
+platform_as["darwin-arm64"]="clang-19 --target=aarch64-darwin --sysroot=/opt/cross/darwin-sysroot -mmacosx-version-min=12.0"
+platform_as["darwin-amd64"]="clang-19 --target=x86_64-darwin --sysroot=/opt/cross/darwin-sysroot -mmacosx-version-min=12.0"
 platform_as["windows-amd64"]="x86_64-w64-mingw32-as"
 
 # Note: the extldflags below for the MacOS builds specify an SDK version of 14.4
@@ -53,7 +62,7 @@ platform_cgo_ldflags["linux-arm64"]="-static -s"
 platform_cgo_ldflags["linux-amd64"]="-static -s"
 platform_cgo_ldflags["darwin-arm64"]=""
 platform_cgo_ldflags["darwin-amd64"]=""
-platform_cgo_ldflags["windows-amd64"]=""
+platform_cgo_ldflags["windows-amd64"]="-static-libgcc -static-libstdc++"
 
 for tuple in $OS_ARCH_TUPLES; do
   os=`echo $tuple | sed 's/-.*//'`
@@ -71,6 +80,7 @@ for tuple in $OS_ARCH_TUPLES; do
       GOOS="$os" \
       GOARCH="$arch" \
       CC="${platform_cc[${tuple}]}" \
+      CXX="${platform_cxx[${tuple}]}" \
       AS="${platform_as[${tuple}]}" \
       CGO_LDFLAGS="${platform_cgo_ldflags[${tuple}]}" \
       go build \
