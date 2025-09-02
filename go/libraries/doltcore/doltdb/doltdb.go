@@ -27,9 +27,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	lru "github.com/hashicorp/golang-lru/v2"
-
 	"github.com/dolthub/go-mysql-server/sql"
+	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/sirupsen/logrus"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
