@@ -88,7 +88,8 @@ type DoltDB struct {
 	// currently be populated.
 	databaseName string
 
-	commitCache map[hash.Hash]*OptionalCommit
+	// TODO: use mutex instead?
+	commitCache sync.Map // map[hash.Hash]*OptionalCommit
 }
 
 // DoltDBFromCS creates a DoltDB from a noms chunks.ChunkStore
@@ -479,11 +480,8 @@ func (ddb *DoltDB) Resolve(ctx context.Context, cs *CommitSpec, cwb ref.DoltRef)
 // ResolveHash takes a hash and returns an OptionalCommit directly.
 // This assumes no ancestor spec resolution and no current working branch (cwb) needed.
 func (ddb *DoltDB) ResolveHash(ctx context.Context, h hash.Hash) (*OptionalCommit, error) {
-	if ddb.commitCache == nil {
-		ddb.commitCache = make(map[hash.Hash]*OptionalCommit)
-	}
-	if oc, ok := ddb.commitCache[h]; ok {
-		return oc, nil
+	if oc, ok := ddb.commitCache.Load(h); ok {
+		return oc.(*OptionalCommit), nil
 	}
 	commitValue, err := datas.LoadCommitAddr(ctx, ddb.vrw, h)
 	if err != nil {
@@ -497,7 +495,7 @@ func (ddb *DoltDB) ResolveHash(ctx context.Context, h hash.Hash) (*OptionalCommi
 		}
 		oc.Commit = commit
 	}
-	ddb.commitCache[h] = oc
+	ddb.commitCache.Store(h, oc)
 	return oc, nil
 }
 
