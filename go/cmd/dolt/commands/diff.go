@@ -371,6 +371,7 @@ func parseDiffTableSetSql(queryist cli.Queryist, sqlCtx *sql.Context, datasets *
 var doltSystemTables = []string{
 	"dolt_procedures",
 	"dolt_schemas",
+	"dolt_tests",
 }
 
 func getTableNamesAtRef(queryist cli.Queryist, sqlCtx *sql.Context, ref string) (map[string]bool, error) {
