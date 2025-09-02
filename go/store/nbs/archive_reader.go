@@ -77,8 +77,7 @@ func (f archiveFooter) actualFooterSize() uint64 {
 	return archiveFooterSize
 }
 
-// dataSpan returns the span of the data section of the archive. This is not generally used directly since we usually
-// read individual spans for each chunk.
+// dataSpan returns the span of the data section of the archive. This is used during conjoin.
 func (f archiveFooter) dataSpan() byteSpan {
 	return byteSpan{offset: 0, length: f.fileSize - f.actualFooterSize() - uint64(f.metadataSize) - uint64(f.indexSize)}
 }

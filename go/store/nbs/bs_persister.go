@@ -114,7 +114,7 @@ func (bsp *blobstorePersister) ConjoinAll(ctx context.Context, sources chunkSour
 		return nil, nil, err
 	}
 
-	name := plan.name.String()
+	name := plan.name.String() + plan.suffix
 
 	// conjoin must contiguously append the chunk records of |sources|, but the raw content
 	// of each source contains a chunk index in the tail. Blobstore does not expose a range
@@ -214,7 +214,7 @@ func (bsp *blobstorePersister) CopyTableFile(ctx context.Context, r io.Reader, n
 		return fmt.Errorf("table file size %d too small for chunk count %d", fileSz, chunkCount)
 	}
 
-	off := int64(tableTailOffset(fileSz, chunkCount))
+	off := int64(tableTailOffset(fileSz, chunkCount)) // NM4 - this is very table specific
 	lr := io.LimitReader(r, off)
 
 	// check if we can Put concurrently
@@ -224,7 +224,7 @@ func (bsp *blobstorePersister) CopyTableFile(ctx context.Context, r io.Reader, n
 		if _, err := bsp.bs.Put(ctx, name+tableRecordsExt, off, lr); err != nil {
 			return err
 		}
-		if _, err := bsp.bs.Put(ctx, name+tableTailExt, int64(fileSz), r); err != nil {
+		if _, err := bsp.bs.Put(ctx, name+tableTailExt, int64(fileSz-uint64(off)), r); err != nil { // NM4 - not sure about this but seems like we should only write what remains.
 			return err
 		}
 	} else {
