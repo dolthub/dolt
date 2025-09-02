@@ -277,11 +277,11 @@ The dolt_test system table provides a powerful way to create and run unit tests 
 
 #### Creating Tests
 
-Tests are created by inserting rows into the dolt_tests system table:
+Tests are created by inserting rows into the ` + "`dolt_tests`" + ` system table:
 
 ` + "```sql" + `
 -- Create a simple test
-INSERT INTO dolt_tests VALUES (
+INSERT INTO ` + "`dolt_tests`" + ` VALUES (
     'test_user_count', 
     'validation', 
     'SELECT COUNT(*) as user_count FROM users;', 
@@ -291,7 +291,7 @@ INSERT INTO dolt_tests VALUES (
 );
 
 -- Create a test with expected result
-INSERT INTO dolt_tests VALUES (
+INSERT INTO ` + "`dolt_tests`" + ` VALUES (
     'test_valid_emails', 
     'validation', 
     'SELECT COUNT(*) FROM users WHERE email NOT LIKE "%@%";', 
@@ -301,7 +301,7 @@ INSERT INTO dolt_tests VALUES (
 );
 
 -- Create a schema validation test
-INSERT INTO dolt_tests VALUES (
+INSERT INTO ` + "`dolt_tests`" + ` VALUES (
     'test_users_schema', 
     'schema', 
     'DESCRIBE users;', 
@@ -317,7 +317,7 @@ Each test row contains:
 - test_name: Unique identifier for the test
 - test_group: Optional grouping for tests (e.g., 'validation', 'schema', 'integration')
 - test_query: SQL query to execute
-- assertion_type: Type of assertion ('expected_rows', 'expected_columns', 'expected_single_value', etc.)
+- assertion_type: Type of assertion ('expected_rows', 'expected_columns', 'expected_single_value')
 - assertion_comparator: Comparison operator ('==', '>', '<', '>=', '<=', '!=')
 - assertion_value: Expected value for comparison
 
@@ -331,7 +331,7 @@ SELECT * FROM dolt_test_run();
 SELECT * FROM dolt_test_run('test_user_count');
 
 -- Run tests with filtering
-SELECT * FROM dolt_test_run() WHERE test_name LIKE 'test_user%';
+SELECT * FROM dolt_test_run() WHERE test_name LIKE 'test_user%' AND status != 'PASS';
 ` + "```" + `
 
 #### Test Result Interpretation
@@ -347,7 +347,7 @@ The dolt_test_run() function returns:
 
 ` + "```sql" + `
 -- Test data integrity
-INSERT INTO dolt_tests VALUES (
+INSERT INTO ` + "`dolt_tests`" + ` VALUES (
     'test_no_orphaned_orders', 
     'integrity', 
     'SELECT COUNT(*) FROM orders o LEFT JOIN users u ON o.user_id = u.id WHERE u.id IS NULL;', 
@@ -357,7 +357,7 @@ INSERT INTO dolt_tests VALUES (
 );
 
 -- Test business rules
-INSERT INTO dolt_tests VALUES (
+INSERT INTO ` + "`dolt_tests`" + ` VALUES (
     'test_positive_prices', 
     'business_rules', 
     'SELECT COUNT(*) FROM products WHERE price <= 0;', 
@@ -367,7 +367,7 @@ INSERT INTO dolt_tests VALUES (
 );
 
 -- Test complex relationships
-INSERT INTO dolt_tests VALUES (
+INSERT INTO ` + "`dolt_tests`" + ` VALUES (
     'test_order_totals', 
     'integrity', 
     'SELECT COUNT(*) FROM orders o JOIN order_items oi ON o.id = oi.order_id GROUP BY o.id HAVING SUM(oi.quantity * oi.price) != o.total;', 
@@ -625,8 +625,8 @@ dolt checkout -b migration/update-schema
 dolt sql -q "ALTER TABLE users ADD COLUMN email VARCHAR(255);"
 
 # Create validation tests
-dolt sql -q "INSERT INTO dolt_tests VALUES ('test_users_schema', 'schema', 'DESCRIBE users;', 'row_count', '>=', '6');"
-dolt sql -q "INSERT INTO dolt_tests VALUES ('test_email_column', 'schema', 'SELECT COUNT(*) FROM users WHERE email IS NULL;', 'row_count', '>=', '0');"
+dolt sql -q "INSERT INTO ` + "`dolt_tests`" + ` VALUES ('test_users_schema', 'schema', 'DESCRIBE users;', 'row_count', '>=', '6');"
+dolt sql -q "INSERT INTO ` + "`dolt_tests`" + ` VALUES ('test_email_column', 'schema', 'SELECT COUNT(*) FROM users WHERE email IS NULL;', 'row_count', '>=', '0');"
 
 # Run tests to validate changes
 dolt sql -q "SELECT * FROM dolt_test_run();"
@@ -652,8 +652,8 @@ dolt sql -q "CREATE TABLE user_metrics AS
             GROUP BY user_id;"
 
 # Create tests to validate analysis
-dolt sql -q "INSERT INTO dolt_tests VALUES ('test_metrics_created', 'analysis', 'SELECT COUNT(*) FROM user_metrics;', 'row_count', '>', '0');"
-dolt sql -q "INSERT INTO dolt_tests VALUES ('test_metrics_integrity', 'integrity', 'SELECT COUNT(*) FROM user_metrics um LEFT JOIN users u ON um.user_id = u.id WHERE u.id IS NULL;', 'row_count', '==', '0');"
+dolt sql -q "INSERT INTO ` + "`dolt_tests`" + ` VALUES ('test_metrics_created', 'analysis', 'SELECT COUNT(*) FROM user_metrics;', 'row_count', '>', '0');"
+dolt sql -q "INSERT INTO ` + "`dolt_tests`" + ` VALUES ('test_metrics_integrity', 'integrity', 'SELECT COUNT(*) FROM user_metrics um LEFT JOIN users u ON um.user_id = u.id WHERE u.id IS NULL;', 'row_count', '==', '0');"
 
 # Run tests to validate analysis
 dolt sql -q "SELECT * FROM dolt_test_run();"
