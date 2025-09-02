@@ -234,7 +234,7 @@ func NewProximityMapBuilder(ctx context.Context, ns tree.NodeStore, distanceType
 //
 // Step 2: Create `pathMaps`, a list of maps, each corresponding to a different level of the ProximityMap
 //
-//	The pathMap at depth `i` has the schema (vectorAddrs[1]...vectorAddr[i], keyBytes) -> value
+//	The pathMap at depth `i` has the schema (vectorAddrs[0], ..., vectorAddr[i], keyBytes) -> value
 //	and contains a row for every vector whose maximum depth is i.
 //	- vectorAddrs: the path of vectors visited when walking from the root to the maximum depth where the vector appears.
 //	- keyBytes: a bytestring containing the bytes of the ProximityMap key (which includes the vector)
@@ -414,6 +414,8 @@ func (b *ProximityMapBuilder) makePathMaps(ctx context.Context, mutableLevelMap 
 		// Compute the path that this row will have in the vector index, starting at the root.
 		// A key-value pair at depth D will have a path D prior keys.
 		// This path is computed in steps, by performing a lookup in each of the prior pathMaps.
+		// Each iteration sets another column in |keyTupleBuilder|, then does a prefix lookup in the next pathMap
+		// with all currently set columns.
 		for pathDepth := 0; pathDepth < depth; pathDepth++ {
 			lookupLevel := int(maxLevel) - pathDepth
 			pathMap := pathMaps[lookupLevel]
