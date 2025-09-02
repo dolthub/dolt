@@ -317,7 +317,7 @@ Each test row contains:
 - test_name: Unique identifier for the test
 - test_group: Optional grouping for tests (e.g., 'validation', 'schema', 'integration')
 - test_query: SQL query to execute
-- assertion_type: Type of assertion ('row_count', 'column_count', 'value', etc.)
+- assertion_type: Type of assertion ('expected_rows', 'expected_columns', 'expected_single_value', etc.)
 - assertion_comparator: Comparison operator ('==', '>', '<', '>=', '<=', '!=')
 - assertion_value: Expected value for comparison
 
