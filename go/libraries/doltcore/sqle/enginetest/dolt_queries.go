@@ -5025,7 +5025,7 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{{"Initialize data repository"}, {"create table"}},
 			},
 		},
-	},}
+	}}
 
 var BranchStatusTableFunctionScriptTests = []queries.ScriptTest{
 	{
