@@ -1686,7 +1686,7 @@ func (nbs *NomsBlockStore) WriteTableFile(ctx context.Context, fileName string, 
 	valctx.ValidateContext(ctx)
 	tfp, ok := nbs.persister.(tableFilePersister)
 	if !ok {
-		return errors.New("Not implemented")
+		return errors.New("runtime error: table file persister required for WriteTableFile")
 	}
 
 	r, sz, err := getRd()
