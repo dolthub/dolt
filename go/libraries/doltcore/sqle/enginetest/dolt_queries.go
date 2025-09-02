@@ -4992,7 +4992,40 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 			},
 		},
 	},
-}
+	{
+		// https://github.com/dolthub/dolt/issues/9762
+		Name: "dolt_log function in detached head state",
+		SetUpScript: []string{
+			"CREATE TABLE test_table (id INT PRIMARY KEY, name VARCHAR(50));",
+			"CALL dolt_commit('-Am', 'create table');",
+			"CALL dolt_tag('mytag');",
+			"INSERT INTO test_table VALUES (1, 'test');",
+			"CALL dolt_commit('-Am', 'add data');",
+			"CALL dolt_tag('v2');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "USE mydb/mytag;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT COUNT(*) FROM dolt_log('mytag');",
+				Expected: []sql.Row{{2}},
+			},
+			{
+				Query:    "USE mydb/v2;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT COUNT(*) FROM dolt_log('v2');",
+				Expected: []sql.Row{{3}},
+			},
+			{
+				Query:    "SELECT message FROM dolt_log('mytag') ORDER BY commit_order;",
+				Expected: []sql.Row{{"Initialize data repository"}, {"create table"}},
+			},
+		},
+	},}
 
 var BranchStatusTableFunctionScriptTests = []queries.ScriptTest{
 	{
