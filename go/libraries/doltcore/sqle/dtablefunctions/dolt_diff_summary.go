@@ -465,25 +465,14 @@ func getRowFromSummary(ds *diff.TableDeltaSummary) sql.Row {
 
 // getIgnorePatternsFromContext retrieves ignore patterns from the dolt_ignore table.
 func getIgnorePatternsFromContext(ctx *sql.Context, database sql.Database) (doltdb.IgnorePatterns, error) {
-	_, ok := database.(dsess.SqlDatabase)
-	if !ok {
-		return nil, fmt.Errorf("unexpected database type: %T", database)
-	}
-
 	sess := dsess.DSessFromSess(ctx.Session)
 	dbName := database.Name()
-
-	// Get the current working set root
-	workingRoot, _, _, err := sess.ResolveRootForRef(ctx, dbName, doltdb.Working)
-	if err != nil {
-		return nil, err
+	roots, ok := sess.GetRoots(ctx, dbName)
+	if !ok {
+		return nil, fmt.Errorf("Could not load database %s", dbName)
 	}
 
-	// Create roots object for ignore pattern lookup
-	roots := doltdb.Roots{Working: workingRoot}
-	schemas := []string{""} // Default schema
-
-	ignorePatternMap, err := doltdb.GetIgnoredTablePatterns(ctx, roots, schemas)
+	ignorePatternMap, err := doltdb.GetIgnoredTablePatterns(ctx, roots, []string{""})
 	if err != nil {
 		return nil, err
 	}
@@ -496,8 +485,7 @@ func getIgnorePatternsFromContext(ctx *sql.Context, database sql.Database) (dolt
 // This follows the same logic as the dolt diff command: only "added" or "dropped" tables
 // can be ignored, not modified/renamed tables.
 func shouldIgnoreDelta(delta diff.TableDelta, ignorePatterns doltdb.IgnorePatterns) bool {
-	// Handle "added" tables (FromName is empty)
-	if delta.FromName.Name == "" {
+	if delta.IsAdd() {
 		ignoreResult, err := ignorePatterns.IsTableNameIgnored(delta.ToName)
 		if err != nil {
 			return false // On error, don't ignore
@@ -505,8 +493,7 @@ func shouldIgnoreDelta(delta diff.TableDelta, ignorePatterns doltdb.IgnorePatter
 		return ignoreResult == doltdb.Ignore
 	}
 
-	// Handle "dropped" tables (ToName is empty)
-	if delta.ToName.Name == "" {
+	if delta.IsDrop() {
 		ignoreResult, err := ignorePatterns.IsTableNameIgnored(delta.FromName)
 		if err != nil {
 			return false // On error, don't ignore
@@ -520,5 +507,5 @@ func shouldIgnoreDelta(delta diff.TableDelta, ignorePatterns doltdb.IgnorePatter
 
 // shouldFilterDoltIgnoreTable filters out the dolt_ignore table itself to match dolt diff behavior.
 func shouldFilterDoltIgnoreTable(delta diff.TableDelta) bool {
-	return delta.FromName.Name == "dolt_ignore" || delta.ToName.Name == "dolt_ignore"
+	return delta.FromName.Name == doltdb.IgnoreTableName || delta.ToName.Name == doltdb.IgnoreTableName
 }
