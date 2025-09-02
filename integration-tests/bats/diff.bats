@@ -2207,3 +2207,43 @@ EOF
      run $BATS_TEST_DIRNAME/diff-system.expect
      [ "$status" -eq 0 ]
 }
+@test "diff: dolt_tests system table changes should show in dolt diff and dolt status" {
+    # Create a test in dolt_tests system table
+    dolt sql -q "INSERT INTO dolt_tests VALUES ('test1', 'description', 'SELECT 1', 'expected_rows', '==', '1')"
+    
+    # Check that the change shows up in dolt status
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "dolt_tests" ]] || false
+    
+    # Check that the change shows up in dolt diff with --system flag
+    run dolt diff --system
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "dolt_tests" ]] || false
+    
+    # Issue: dolt_tests system table modifications do not appear in dolt diff output without --system flag
+    skip "Issue: dolt_tests system table modifications do not appear in dolt diff output without --system flag"
+    
+    # Check that the change shows up in dolt diff without --system flag
+    run dolt diff
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "dolt_tests" ]] || false
+    
+    # Commit the change
+    dolt add .
+    dolt commit -m "Added test to dolt_tests"
+    
+    # Modify the test
+    dolt sql -q "UPDATE dolt_tests SET test_group = 'updated description' WHERE test_name = 'test1'"
+    
+    # Check that the modification shows up in dolt status
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "dolt_tests" ]] || false
+    
+    # Check that the modification shows up in dolt diff without --system flag
+    run dolt diff
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "dolt_tests" ]] || false
+    [[ "$output" =~ "updated description" ]] || false
+}
