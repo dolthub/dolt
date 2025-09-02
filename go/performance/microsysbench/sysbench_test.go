@@ -25,7 +25,6 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/dolthub/go-mysql-server/server"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/require"
 
@@ -124,21 +123,23 @@ func benchmarkSysbenchQuery(b *testing.B, getQuery func(int) string) {
 	})
 	ctx, eng := setupBenchmark(b, dEnv)
 	for i := 0; i < b.N; i++ {
-		schema, iter, _, err := eng.Query(ctx, getQuery(i))
+		_, iter, _, err := eng.Query(ctx, getQuery(i))
 		require.NoError(b, err)
-		i := 0
-		buf := sql.NewByteBuffer(16000)
+		//schema, iter, _, err := eng.Query(ctx, getQuery(i))
+		//i := 0
+		//buf := sql.NewByteBuffer(16000)
 		for {
-			i++
-			row, err := iter.Next(ctx)
+			//i++
+			//row, err := iter.Next(ctx)
+			_, err = iter.Next(ctx)
 			if err != nil {
 				break
 			}
-			outputRow, err := server.RowToSQL(ctx, schema, row, nil, buf)
-			_ = outputRow
-			if i%128 == 0 {
-				buf.Reset()
-			}
+			//outputRow, err := server.RowToSQL(ctx, schema, row, nil, buf)
+			//_ = outputRow
+			//if i%128 == 0 {
+			//	buf.Reset()
+			//}
 		}
 		require.Error(b, io.EOF)
 		err = iter.Close(ctx)
