@@ -88,8 +88,8 @@ type DoltDB struct {
 	// currently be populated.
 	databaseName string
 
-	// TODO: use mutex instead?
-	commitCache sync.Map // map[hash.Hash]*OptionalCommit
+	mu          sync.Mutex // this is to guard the commitCache
+	commitCache map[hash.Hash]*OptionalCommit
 }
 
 // DoltDBFromCS creates a DoltDB from a noms chunks.ChunkStore
@@ -98,7 +98,13 @@ func DoltDBFromCS(cs chunks.ChunkStore, databaseName string) *DoltDB {
 	ns := tree.NewNodeStore(cs)
 	db := datas.NewTypesDatabase(vrw, ns)
 
-	ret := &DoltDB{db: hooksDatabase{Database: db}, vrw: vrw, ns: ns, databaseName: databaseName}
+	ret := &DoltDB{
+		db:           hooksDatabase{Database: db},
+		vrw:          vrw,
+		ns:           ns,
+		databaseName: databaseName,
+		commitCache:  make(map[hash.Hash]*OptionalCommit),
+	}
 	ret.db.db = ret
 	return ret
 }
@@ -157,7 +163,13 @@ func LoadDoltDBWithParams(ctx context.Context, nbf *types.NomsBinFormat, urlStr 
 		return nil, err
 	}
 
-	ret := &DoltDB{db: hooksDatabase{Database: db}, vrw: vrw, ns: ns, databaseName: name}
+	ret := &DoltDB{
+		db:           hooksDatabase{Database: db},
+		vrw:          vrw,
+		ns:           ns,
+		databaseName: name,
+		commitCache:  make(map[hash.Hash]*OptionalCommit),
+	}
 	ret.db.db = ret
 	return ret, nil
 }
@@ -480,8 +492,10 @@ func (ddb *DoltDB) Resolve(ctx context.Context, cs *CommitSpec, cwb ref.DoltRef)
 // ResolveHash takes a hash and returns an OptionalCommit directly.
 // This assumes no ancestor spec resolution and no current working branch (cwb) needed.
 func (ddb *DoltDB) ResolveHash(ctx context.Context, h hash.Hash) (*OptionalCommit, error) {
-	if oc, ok := ddb.commitCache.Load(h); ok {
-		return oc.(*OptionalCommit), nil
+	ddb.mu.Lock()
+	defer ddb.mu.Unlock()
+	if oc, ok := ddb.commitCache[h]; ok {
+		return oc, nil
 	}
 	commitValue, err := datas.LoadCommitAddr(ctx, ddb.vrw, h)
 	if err != nil {
@@ -495,7 +509,7 @@ func (ddb *DoltDB) ResolveHash(ctx context.Context, h hash.Hash) (*OptionalCommi
 		}
 		oc.Commit = commit
 	}
-	ddb.commitCache.Store(h, oc)
+	ddb.commitCache[h] = oc
 	return oc, nil
 }
 
