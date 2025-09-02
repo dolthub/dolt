@@ -273,11 +273,11 @@ mysql -h 127.0.0.1 -P 3306 -u root -D <database-name>
 
 ### Unit Testing with dolt_test
 
-The `dolt_test` system table provides a powerful way to create and run unit tests for your database. This is the preferred method for testing data integrity, business rules, and schema validation.
+The dolt_test system table provides a powerful way to create and run unit tests for your database. This is the preferred method for testing data integrity, business rules, and schema validation.
 
 #### Creating Tests
 
-Tests are created by inserting rows into the `dolt_tests` system table:
+Tests are created by inserting rows into the dolt_tests system table:
 
 ` + "```sql" + `
 -- Create a simple test
@@ -314,12 +314,12 @@ INSERT INTO dolt_tests VALUES (
 #### Test Structure
 
 Each test row contains:
-- ` + "`test_name`" + `: Unique identifier for the test
-- ` + "`test_group`" + `: Optional grouping for tests (e.g., 'validation', 'schema', 'integration')
-- ` + "`test_query`" + `: SQL query to execute
-- ` + "`assertion_type`" + `: Type of assertion ('row_count', 'column_count', 'value', etc.)
-- ` + "`assertion_comparator`" + `: Comparison operator ('==', '>', '<', '>=', '<=', '!=')
-- ` + "`assertion_value`" + `: Expected value for comparison
+- test_name: Unique identifier for the test
+- test_group: Optional grouping for tests (e.g., 'validation', 'schema', 'integration')
+- test_query: SQL query to execute
+- assertion_type: Type of assertion ('row_count', 'column_count', 'value', etc.)
+- assertion_comparator: Comparison operator ('==', '>', '<', '>=', '<=', '!=')
+- assertion_value: Expected value for comparison
 
 #### Running Tests
 
@@ -336,12 +336,12 @@ SELECT * FROM dolt_test_run() WHERE test_name LIKE 'test_user%';
 
 #### Test Result Interpretation
 
-The `dolt_test_run()` function returns:
-- ` + "`test_name`" + `: Name of the test
-- ` + "`status`" + `: PASS, FAIL, or ERROR
-- ` + "`actual_result`" + `: Actual query result
-- ` + "`expected_result`" + `: Expected result
-- ` + "`message`" + `: Additional details
+The dolt_test_run() function returns:
+- test_name: Name of the test
+- status: PASS, FAIL, or ERROR
+- actual_result: Actual query result
+- expected_result: Expected result
+- message: Additional details
 
 #### Advanced Testing Examples
 
@@ -551,7 +551,7 @@ CREATE TABLE users (
 
 **Benefits:**
 - Prevents merge conflicts across branches and database clones
-- Automatic generation with ` + "`default(uuid())`" + `
+- Automatic generation with default(uuid())
 - Works seamlessly in distributed environments
 
 ## Best Practices for Agents
