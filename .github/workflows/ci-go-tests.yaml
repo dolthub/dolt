@@ -45,8 +45,9 @@ jobs:
         pacboy: icu:p toolchain:p pkg-config:p
     - name: Test All
       working-directory: ./go
+      shell: ${{ "$MATRIX_OS" == 'windows-latest' && 'msys2 {0}' || 'bash' }}
       run: |
-        files=$(go list ./...)
+        files=$($GO list ./...)
         SAVEIFS=$IFS
         IFS=$'\n'
         file_arr=($files)
@@ -64,15 +65,12 @@ jobs:
           if [ "$MATRIX_OS" == 'ubuntu-22.04' ]
           then
             if [[ "${file_arr[$i]}" != *enginetest* ]]; then
-              go test -vet=off -timeout 45m -race "${file_arr[$i]}"
+              $GO test -vet=off -timeout 45m -race "${file_arr[$i]}"
             else
               echo "skipping enginetests for -race"
             fi
-          elif [ "$MATRIX_OS" == 'windows-latest' ]
-          then
-            msys2 -c 'go.exe test -vet=off -timeout 45m '"${file_arr[$i]}"
           else
-            go test -vet=off -timeout 45m "${file_arr[$i]}"
+            $GO test -vet=off -timeout 45m "${file_arr[$i]}"
           fi
           succeeded=$(echo "$?")
           if [ "$succeeded" -ne 0 ]; then
@@ -82,6 +80,7 @@ jobs:
         done
       env:
         MATRIX_OS: ${{ matrix.os }}
+	GO: ${{ "$MATRIX_OS" == 'windows-latest' && 'go.exe' || 'go' }}
   noracetest:
     name: Go tests - no race
     defaults:
@@ -115,13 +114,10 @@ jobs:
         pacboy: icu:p toolchain:p pkg-config:p
     - name: Test All
       working-directory: ./go
+      shell: ${{ "$MATRIX_OS" == 'windows-latest' && 'msys2 {0}' || 'bash' }}
       run: |
-        if [ "$MATRIX_OS" == 'windows-latest' ]
-        then
-          msys2 -c 'go.exe test -vet=off -timeout 30m ./libraries/doltcore/sqle/integration_test'
-        else
-          go test -vet=off -timeout 30m ./libraries/doltcore/sqle/integration_test
-        fi
+        $GO test -vet=off -timeout 30m ./libraries/doltcore/sqle/integration_test
       env:
         MATRIX_OS: ${{ matrix.os }}
+	GO: ${{ "$MATRIX_OS" == 'windows-latest' && 'go.exe' || 'go' }}
         DOLT_TEST_RUN_NON_RACE_TESTS: "true"
