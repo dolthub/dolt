@@ -254,5 +254,10 @@ func initTestMigrationDB(ctx context.Context) (*doltdb.DoltDB, error) {
 	if err != nil {
 		return nil, err
 	}
-	return doltdb.DoltDBFromCS(cs, ""), nil
+
+	ddb, err := doltdb.DoltDBFromCS(cs, "")
+	if err != nil {
+		return nil, err
+	}
+	return ddb, nil
 }

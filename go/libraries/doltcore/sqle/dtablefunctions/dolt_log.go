@@ -459,7 +459,10 @@ func (ltf *LogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter
 
 	dbName := sess.Session.GetCurrentDatabase()
 	headRef, err := sess.CWBHeadRef(ctx, dbName)
-	if err != nil {
+	if err == doltdb.ErrOperationNotSupportedInDetachedHead {
+		// In detached HEAD state, we can still resolve commits without a branch ref
+		headRef = nil
+	} else if err != nil {
 		return nil, err
 	}
 

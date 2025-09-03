@@ -52,11 +52,14 @@ func NewMemoryDbData(ctx context.Context, cfg config.ReadableConfig) (DbData[con
 func NewMemoryDoltDB(ctx context.Context, initBranch string) (*doltdb.DoltDB, error) {
 	ts := &chunks.TestStorage{}
 	cs := ts.NewViewWithDefaultFormat()
-	ddb := doltdb.DoltDBFromCS(cs, "")
+	ddb, err := doltdb.DoltDBFromCS(cs, "")
+	if err != nil {
+		return nil, err
+	}
 
 	m := "memory"
 	branchRef := ref.NewBranchRef(initBranch)
-	err := ddb.WriteEmptyRepoWithCommitTimeAndDefaultBranch(ctx, m, m, datas.CommitterDate(), branchRef)
+	err = ddb.WriteEmptyRepoWithCommitTimeAndDefaultBranch(ctx, m, m, datas.CommitterDate(), branchRef)
 	if err != nil {
 		return nil, err
 	}
