@@ -282,15 +282,3 @@ func (t ProximityMap[K, V, O]) IterAll(ctx context.Context) (*OrderedTreeIter[K,
 
 	return &OrderedTreeIter[K, V]{curr: c, stop: stop, step: c.advance}, nil
 }
-
-func getJsonValueFromHash(ctx context.Context, ns NodeStore, h hash.Hash) (interface{}, error) {
-	return NewJSONDoc(h, ns).ToIndexedJSONDocument(ctx)
-}
-
-func getVectorFromHash(ctx context.Context, ns NodeStore, h hash.Hash) ([]float32, error) {
-	otherValue, err := getJsonValueFromHash(ctx, ns, h)
-	if err != nil {
-		return nil, err
-	}
-	return sql.ConvertToVector(ctx, otherValue)
-}
