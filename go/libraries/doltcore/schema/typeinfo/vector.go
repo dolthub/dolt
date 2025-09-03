@@ -44,24 +44,6 @@ type vectorType struct {
 
 var _ TypeInfo = (*vectorType)(nil)
 
-func CreateVectorTypeFromParams(params map[string]string) (TypeInfo, error) {
-	var length int64
-	var err error
-	if lengthStr, ok := params[vectorTypeParam_Length]; ok {
-		length, err = strconv.ParseInt(lengthStr, 10, 64)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		return nil, fmt.Errorf(`create vector type info is missing param "%v"`, vectorTypeParam_Length)
-	}
-	sqlType, err := gmstypes.CreateVectorType(int(length))
-	if err != nil {
-		return nil, err
-	}
-	return &vectorType{sqlType}, nil
-}
-
 // ConvertNomsValueToValue implements TypeInfo interface.
 func (ti *vectorType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
 	if val, ok := v.(types.Blob); ok {
@@ -125,6 +107,7 @@ func (ti *vectorType) FormatValue(v types.Value) (*string, error) {
 		if err != nil {
 			return nil, err
 		}
+		// This is safe (See https://go101.org/article/unsafe.html)
 		return (*string)(unsafe.Pointer(&resStr)), nil
 	}
 	if _, ok := v.(types.Null); ok || v == nil {
