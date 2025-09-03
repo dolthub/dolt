@@ -46,6 +46,7 @@ var _ sql.AuthorizationCheckerNode = (*DiffTableFunction)(nil)
 
 type DiffTableFunction struct {
 	tableDelta     diff.TableDelta
+	skinnyExpr     sql.Expression
 	fromCommitExpr sql.Expression
 	toCommitExpr   sql.Expression
 	dotCommitExpr  sql.Expression
@@ -100,20 +101,23 @@ func (dtf *DiffTableFunction) WithDatabase(database sql.Database) (sql.Node, err
 
 // Expressions implements the sql.Expressioner interface
 func (dtf *DiffTableFunction) Expressions() []sql.Expression {
+	exprs := []sql.Expression{}
+	if dtf.skinnyExpr != nil {
+		exprs = append(exprs, dtf.skinnyExpr)
+	}
+
 	if dtf.dotCommitExpr != nil {
-		return []sql.Expression{
-			dtf.dotCommitExpr, dtf.tableNameExpr,
-		}
+		exprs = append(exprs, dtf.dotCommitExpr, dtf.tableNameExpr)
+	} else {
+		exprs = append(exprs, dtf.fromCommitExpr, dtf.toCommitExpr, dtf.tableNameExpr)
 	}
-	return []sql.Expression{
-		dtf.fromCommitExpr, dtf.toCommitExpr, dtf.tableNameExpr,
-	}
+	return exprs
 }
 
 // WithExpressions implements the sql.Expressioner interface
 func (dtf *DiffTableFunction) WithExpressions(expression ...sql.Expression) (sql.Node, error) {
 	if len(expression) < 2 {
-		return nil, sql.ErrInvalidArgumentNumber.New(dtf.Name(), "2 to 3", len(expression))
+		return nil, sql.ErrInvalidArgumentNumber.New(dtf.Name(), "2 to 4", len(expression))
 	}
 
 	// TODO: For now, we will only support literal / fully-resolved arguments to the
@@ -130,6 +134,12 @@ func (dtf *DiffTableFunction) WithExpressions(expression ...sql.Expression) (sql
 	}
 
 	newDtf := *dtf
+
+	if len(expression) > 0 && expression[0].String() == "'--skinny'" {
+		newDtf.skinnyExpr = expression[0]
+		expression = expression[1:] // Remove the skinny parameter from the slice
+	}
+
 	if strings.Contains(expression[0].String(), "..") {
 		if len(expression) != 2 {
 			return nil, sql.ErrInvalidArgumentNumber.New(fmt.Sprintf("%v with .. or ...", newDtf.Name()), 2, len(expression))
@@ -559,10 +569,15 @@ func (dtf *DiffTableFunction) Schema() sql.Schema {
 
 // Resolved implements the sql.Resolvable interface
 func (dtf *DiffTableFunction) Resolved() bool {
-	if dtf.dotCommitExpr != nil {
-		return dtf.tableNameExpr.Resolved() && dtf.dotCommitExpr.Resolved()
+	resolved := true
+	if dtf.skinnyExpr != nil {
+		resolved = resolved && dtf.skinnyExpr.Resolved()
 	}
-	return dtf.tableNameExpr.Resolved() && dtf.fromCommitExpr.Resolved() && dtf.toCommitExpr.Resolved()
+
+	if dtf.dotCommitExpr != nil {
+		return resolved && dtf.tableNameExpr.Resolved() && dtf.dotCommitExpr.Resolved()
+	}
+	return resolved && dtf.tableNameExpr.Resolved() && dtf.fromCommitExpr.Resolved() && dtf.toCommitExpr.Resolved()
 }
 
 func (dtf *DiffTableFunction) IsReadOnly() bool {
@@ -571,15 +586,18 @@ func (dtf *DiffTableFunction) IsReadOnly() bool {
 
 // String implements the Stringer interface
 func (dtf *DiffTableFunction) String() string {
-	if dtf.dotCommitExpr != nil {
-		return fmt.Sprintf("DOLT_DIFF(%s, %s)",
-			dtf.dotCommitExpr.String(),
-			dtf.tableNameExpr.String())
+	args := []string{}
+	if dtf.skinnyExpr != nil {
+		args = append(args, dtf.skinnyExpr.String())
 	}
-	return fmt.Sprintf("DOLT_DIFF(%s, %s, %s)",
-		dtf.fromCommitExpr.String(),
-		dtf.toCommitExpr.String(),
-		dtf.tableNameExpr.String())
+
+	if dtf.dotCommitExpr != nil {
+		args = append(args, dtf.dotCommitExpr.String(), dtf.tableNameExpr.String())
+	} else {
+		args = append(args, dtf.fromCommitExpr.String(), dtf.toCommitExpr.String(), dtf.tableNameExpr.String())
+	}
+
+	return fmt.Sprintf("DOLT_DIFF(%s)", strings.Join(args, ", "))
 }
 
 // Name implements the sql.TableFunction interface
