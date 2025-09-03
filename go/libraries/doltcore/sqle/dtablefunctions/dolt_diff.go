@@ -115,15 +115,13 @@ func (dtf *DiffTableFunction) Expressions() []sql.Expression {
 }
 
 // WithExpressions implements the sql.Expressioner interface
-func (dtf *DiffTableFunction) WithExpressions(expression ...sql.Expression) (sql.Node, error) {
-	if len(expression) < 2 {
-		return nil, sql.ErrInvalidArgumentNumber.New(dtf.Name(), "2 to 4", len(expression))
-	}
-
+func (dtf *DiffTableFunction) WithExpressions(expressions ...sql.Expression) (sql.Node, error) {
+	newDtf := *dtf
+	var filteredExprs []sql.Expression
 	// TODO: For now, we will only support literal / fully-resolved arguments to the
 	//       DiffTableFunction to avoid issues where the schema is needed in the analyzer
 	//       before the arguments could be resolved.
-	for _, expr := range expression {
+	for _, expr := range expressions {
 		if !expr.Resolved() {
 			return nil, ErrInvalidNonLiteralArgument.New(dtf.Name(), expr.String())
 		}
@@ -131,28 +129,32 @@ func (dtf *DiffTableFunction) WithExpressions(expression ...sql.Expression) (sql
 		if _, ok := expr.(sql.FunctionExpression); ok {
 			return nil, ErrInvalidNonLiteralArgument.New(dtf.Name(), expr.String())
 		}
-	}
 
-	newDtf := *dtf
-
-	if len(expression) > 0 && expression[0].String() == "'--skinny'" {
-		newDtf.skinnyExpr = expression[0]
-		expression = expression[1:] // Remove the skinny parameter from the slice
-	}
-
-	if strings.Contains(expression[0].String(), "..") {
-		if len(expression) != 2 {
-			return nil, sql.ErrInvalidArgumentNumber.New(fmt.Sprintf("%v with .. or ...", newDtf.Name()), 2, len(expression))
+		switch expr.String() {
+		case "'--skinny'", "'-sk'":
+			newDtf.skinnyExpr = expr
+		default:
+			filteredExprs = append(filteredExprs, expr)
 		}
-		newDtf.dotCommitExpr = expression[0]
-		newDtf.tableNameExpr = expression[1]
+	}
+
+	if len(filteredExprs) < 2 {
+		return nil, sql.ErrInvalidArgumentNumber.New(dtf.Name(), "2 to 3", len(filteredExprs))
+	}
+
+	if strings.Contains(filteredExprs[0].String(), "..") {
+		if len(filteredExprs) != 2 {
+			return nil, sql.ErrInvalidArgumentNumber.New(fmt.Sprintf("%v with .. or ...", newDtf.Name()), 2, len(filteredExprs))
+		}
+		newDtf.dotCommitExpr = filteredExprs[0]
+		newDtf.tableNameExpr = filteredExprs[1]
 	} else {
-		if len(expression) != 3 {
-			return nil, sql.ErrInvalidArgumentNumber.New(newDtf.Name(), 3, len(expression))
+		if len(filteredExprs) != 3 {
+			return nil, sql.ErrInvalidArgumentNumber.New(newDtf.Name(), 3, len(filteredExprs))
 		}
-		newDtf.fromCommitExpr = expression[0]
-		newDtf.toCommitExpr = expression[1]
-		newDtf.tableNameExpr = expression[2]
+		newDtf.fromCommitExpr = filteredExprs[0]
+		newDtf.toCommitExpr = filteredExprs[1]
+		newDtf.tableNameExpr = filteredExprs[2]
 	}
 
 	fromCommitVal, toCommitVal, dotCommitVal, tableName, err := newDtf.evaluateArguments()
@@ -571,7 +573,7 @@ func (dtf *DiffTableFunction) Schema() sql.Schema {
 func (dtf *DiffTableFunction) Resolved() bool {
 	resolved := true
 	if dtf.skinnyExpr != nil {
-		resolved = resolved && dtf.skinnyExpr.Resolved()
+		resolved = dtf.skinnyExpr.Resolved()
 	}
 
 	if dtf.dotCommitExpr != nil {
