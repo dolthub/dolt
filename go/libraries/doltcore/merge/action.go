@@ -169,43 +169,28 @@ func AbortMerge(ctx *sql.Context, workingSet *doltdb.WorkingSet, roots doltdb.Ro
 		return nil, fmt.Errorf("there is no merge to abort")
 	}
 
-	tbls, err := doltdb.UnionTableNames(ctx, roots.Working, roots.Staged, roots.Head)
-	if err != nil {
-		return nil, err
-	}
-	tbls, err = doltdb.ExcludeIgnoredTables(ctx, roots, tbls)
-	if err != nil {
-		return nil, err
-	}
-
-	roots, err = actions.MoveTablesFromHeadToWorking(ctx, roots, tbls)
-	if err != nil {
-		return nil, err
-	}
-
 	preMergeWorkingRoot := workingSet.MergeState().PreMergeWorkingRoot()
 	preMergeWorkingTables, err := preMergeWorkingRoot.GetTableNames(ctx, doltdb.DefaultSchemaName, true)
 	if err != nil {
 		return nil, err
 	}
-	nonIgnoredTables, err := doltdb.ExcludeIgnoredTables(ctx, roots, doltdb.ToTableNames(preMergeWorkingTables, doltdb.DefaultSchemaName))
+
+	// Revert the working set back to the pre-merge working root
+	workingSet = workingSet.WithStagedRoot(roots.Head).WithWorkingRoot(preMergeWorkingRoot).WithStagedRoot(roots.Head)
+	workingSet = workingSet.ClearMerge()
+
+	// Carry over any ignored tables (which could have been manually modified by a user while a merge was halted)
+	ignoredTables, err := doltdb.IdentifyIgnoredTables(ctx, roots, doltdb.ToTableNames(preMergeWorkingTables, doltdb.DefaultSchemaName))
 	if err != nil {
 		return nil, err
 	}
-	someTablesAreIgnored := len(nonIgnoredTables) != len(preMergeWorkingTables)
-
-	if someTablesAreIgnored {
-		newWorking, err := actions.MoveTablesBetweenRoots(ctx, nonIgnoredTables, preMergeWorkingRoot, roots.Working)
+	if len(ignoredTables) > 0 {
+		newWorking, err := actions.MoveTablesBetweenRoots(ctx, ignoredTables, roots.Working, preMergeWorkingRoot)
 		if err != nil {
 			return nil, err
 		}
 		workingSet = workingSet.WithWorkingRoot(newWorking)
-	} else {
-		workingSet = workingSet.WithWorkingRoot(preMergeWorkingRoot)
 	}
-	// Unstage everything by making Staged match Head
-	workingSet = workingSet.WithStagedRoot(roots.Head)
-	workingSet = workingSet.ClearMerge()
 
 	return workingSet, nil
 }
