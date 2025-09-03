@@ -178,8 +178,6 @@ const (
 	ReadmeDoc = "README.md"
 	// AgentDoc is the key for accessing the agent documentation within the docs table
 	AgentDoc = "AGENT.md"
-
-
 )
 
 // GetDocTableName returns the name of the dolt table containing documents such as the license and readme
