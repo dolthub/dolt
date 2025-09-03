@@ -36,8 +36,8 @@ platform_cc["windows-amd64"]="x86_64-w64-mingw32-gcc"
 declare -A platform_cxx
 platform_cxx["linux-arm64"]="aarch64-linux-musl-g++"
 platform_cxx["linux-amd64"]="x86_64-linux-musl-g++"
-platform_cxx["darwin-arm64"]="clang++-19 --target=aarch64-darwin --sysroot=/opt/cross/darwin-sysroot -mmacosx-version-min=12.0"
-platform_cxx["darwin-amd64"]="clang++-19 --target=x86_64-darwin --sysroot=/opt/cross/darwin-sysroot -mmacosx-version-min=12.0"
+platform_cxx["darwin-arm64"]="clang++-19 --target=aarch64-darwin --sysroot=/opt/cross/darwin-sysroot -mmacosx-version-min=12.0 --stdlib=libc++"
+platform_cxx["darwin-amd64"]="clang++-19 --target=x86_64-darwin --sysroot=/opt/cross/darwin-sysroot -mmacosx-version-min=12.0 --stdlib=libc++"
 platform_cxx["windows-amd64"]="x86_64-w64-mingw32-g++"
 
 declare -A platform_as
@@ -86,6 +86,7 @@ for tuple in $OS_ARCH_TUPLES; do
       go build \
         -pgo=/cpu.pprof \
         -ldflags="${platform_go_ldflags[${tuple}]}" \
+        -tags icu_static \
         -trimpath \
         -o "$o/bin/$obin" "./cmd/$bin/"
   done
