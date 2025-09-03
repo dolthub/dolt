@@ -30,14 +30,14 @@ jobs:
         go-version-file: go/go.mod
       id: go
     - name: Install ICU4C (MacOS)
-      if: ${{ matrix.platform == 'macos-latest' }}
+      if: ${{ matrix.os == 'macos-latest' }}
       run: |
         dir=$(brew --cellar icu4c)
         dir="$dir"/$(ls "$dir")
         echo CGO_CPPFLAGS=-I$dir/include >> $GITHUB_ENV
         echo CGO_LDFLAGS=-L$dir/lib >> $GITHUB_ENV
     - name: Install ICU4C (Windows)
-      if: ${{ matrix.platform == 'windows-latest' }}
+      if: ${{ matrix.os == 'windows-latest' }}
       uses: msys2/setup-msys2@v2
       with:
         path-type: inherit
@@ -100,14 +100,14 @@ jobs:
         go-version-file: go/go.mod
       id: go
     - name: Install ICU4C (MacOS)
-      if: ${{ matrix.platform == 'macos-latest' }}
+      if: ${{ matrix.os == 'macos-latest' }}
       run: |
         dir=$(brew --cellar icu4c)
         dir="$dir"/$(ls "$dir")
         echo CGO_CPPFLAGS=-I$dir/include >> $GITHUB_ENV
         echo CGO_LDFLAGS=-L$dir/lib >> $GITHUB_ENV
     - name: Install ICU4C (Windows)
-      if: ${{ matrix.platform == 'windows-latest' }}
+      if: ${{ matrix.os == 'windows-latest' }}
       uses: msys2/setup-msys2@v2
       with:
         path-type: inherit
