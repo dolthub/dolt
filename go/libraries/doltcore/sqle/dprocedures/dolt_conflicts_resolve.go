@@ -408,67 +408,88 @@ func ResolveSchemaConflicts(ctx *sql.Context, ddb *doltdb.DoltDB, ws *doltdb.Wor
 	return ws.WithWorkingRoot(root).WithUnmergableTables(unmerged).WithMergedTables(merged), nil
 }
 
+func ResolveDataConflictsForTable(ctx *sql.Context, root doltdb.RootValue, tblName doltdb.TableName, ours bool, getEditorOpts func() (editor.Options, error)) (doltdb.RootValue, bool, error) {
+	tbl, ok, err := root.GetTable(ctx, tblName)
+	if err != nil {
+		return nil, false, err
+	}
+	if !ok {
+		return nil, false, doltdb.ErrTableNotFound
+	}
+
+	if has, err := tbl.HasConflicts(ctx); err != nil {
+		return nil, false, err
+	} else if !has {
+		return nil, false, nil
+	}
+
+	sch, err := tbl.GetSchema(ctx)
+	if err != nil {
+		return nil, false, err
+	}
+	_, ourSch, theirSch, err := tbl.GetConflictSchemas(ctx, tblName)
+	if err != nil {
+		return nil, false, err
+	}
+
+	if ours && !schema.ColCollsAreEqual(sch.GetAllCols(), ourSch.GetAllCols()) {
+		return nil, false, ErrConfSchIncompatible
+	} else if !ours && !schema.ColCollsAreEqual(sch.GetAllCols(), theirSch.GetAllCols()) {
+		return nil, false, ErrConfSchIncompatible
+	}
+
+	if !ours {
+		if tbl.Format() == types.Format_DOLT {
+			tbl, err = resolveProllyConflicts(ctx, tbl, tblName, ourSch, sch)
+		} else {
+			opts, err := getEditorOpts()
+			if err != nil {
+				return nil, false, err
+			}
+			tbl, err = resolveNomsConflicts(ctx, opts, tbl, tblName.Name, sch)
+		}
+		if err != nil {
+			return nil, false, err
+		}
+	}
+
+	newRoot, err := clearTableAndUpdateRoot(ctx, root, tbl, tblName)
+	if err != nil {
+		return nil, false, err
+	}
+
+	err = validateConstraintViolations(ctx, root, newRoot, tblName)
+	if err != nil {
+		return nil, false, err
+	}
+
+	return newRoot, true, nil
+}
+
 func ResolveDataConflicts(ctx *sql.Context, dSess *dsess.DoltSession, root doltdb.RootValue, dbName string, ours bool, tblNames []doltdb.TableName) error {
+	var err error
+	var hasConflicts bool
+
+	getEditorOpts := func() (editor.Options, error) {
+		state, _, err := dSess.LookupDbState(ctx, dbName)
+		if err != nil {
+			return editor.Options{}, err
+		}
+		var opts editor.Options
+		if ws := state.WriteSession(); ws != nil {
+			opts = ws.GetOptions()
+		}
+		return opts, nil
+	}
+
 	for _, tblName := range tblNames {
-		tbl, ok, err := root.GetTable(ctx, tblName)
+		root, hasConflicts, err = ResolveDataConflictsForTable(ctx, root, tblName, ours, getEditorOpts)
 		if err != nil {
 			return err
 		}
-		if !ok {
-			return doltdb.ErrTableNotFound
-		}
-
-		if has, err := tbl.HasConflicts(ctx); err != nil {
-			return err
-		} else if !has {
+		if !hasConflicts {
 			continue
 		}
-
-		sch, err := tbl.GetSchema(ctx)
-		if err != nil {
-			return err
-		}
-		_, ourSch, theirSch, err := tbl.GetConflictSchemas(ctx, tblName)
-		if err != nil {
-			return err
-		}
-
-		if ours && !schema.ColCollsAreEqual(sch.GetAllCols(), ourSch.GetAllCols()) {
-			return ErrConfSchIncompatible
-		} else if !ours && !schema.ColCollsAreEqual(sch.GetAllCols(), theirSch.GetAllCols()) {
-			return ErrConfSchIncompatible
-		}
-
-		if !ours {
-			if tbl.Format() == types.Format_DOLT {
-				tbl, err = resolveProllyConflicts(ctx, tbl, tblName, ourSch, sch)
-			} else {
-				state, _, err := dSess.LookupDbState(ctx, dbName)
-				if err != nil {
-					return err
-				}
-				var opts editor.Options
-				if ws := state.WriteSession(); ws != nil {
-					opts = ws.GetOptions()
-				}
-				tbl, err = resolveNomsConflicts(ctx, opts, tbl, tblName.Name, sch)
-			}
-			if err != nil {
-				return err
-			}
-		}
-
-		newRoot, err := clearTableAndUpdateRoot(ctx, root, tbl, tblName)
-		if err != nil {
-			return err
-		}
-
-		err = validateConstraintViolations(ctx, root, newRoot, tblName)
-		if err != nil {
-			return err
-		}
-
-		root = newRoot
 	}
 	return dSess.SetWorkingRoot(ctx, dbName, root)
 }
