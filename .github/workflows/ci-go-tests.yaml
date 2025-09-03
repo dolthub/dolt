@@ -29,6 +29,20 @@ jobs:
       with:
         go-version-file: go/go.mod
       id: go
+    - name: Install ICU4C (MacOS)
+      if: ${{ matrix.platform == 'macos-latest' }}
+      run: |
+        dir=$(brew --cellar icu4c)
+        dir="$dir"/$(ls "$dir")
+        echo CGO_CPPFLAGS=-I$dir/include >> $GITHUB_ENV
+        echo CGO_LDFLAGS=-L$dir/lib >> $GITHUB_ENV
+    - name: Install ICU4C (Windows)
+      if: ${{ matrix.platform == 'windows-latest' }}
+      uses: msys2/setup-msys2@v2
+      with:
+        path-type: inherit
+        msystem: UCRT64
+        pacboy: icu:p toolchain:p pkg-config:p
     - name: Test All
       working-directory: ./go
       run: |
@@ -37,7 +51,7 @@ jobs:
         IFS=$'\n'
         file_arr=($files)
         IFS=$SAVEIFS
-
+        
         for (( i=0; i<${#file_arr[@]}; i++ ))
         do
           # Skip binlog tests as they run in a separate CI job
@@ -54,6 +68,9 @@ jobs:
             else
               echo "skipping enginetests for -race"
             fi
+          elif [ "$MATRIX_OS" == 'windows-latest' ]
+          then
+            msys2 -c 'go.exe test -vet=off -timeout 45m '"${file_arr[$i]}"
           else
             go test -vet=off -timeout 45m "${file_arr[$i]}"
           fi
@@ -82,10 +99,29 @@ jobs:
       with:
         go-version-file: go/go.mod
       id: go
+    - name: Install ICU4C (MacOS)
+      if: ${{ matrix.platform == 'macos-latest' }}
+      run: |
+        dir=$(brew --cellar icu4c)
+        dir="$dir"/$(ls "$dir")
+        echo CGO_CPPFLAGS=-I$dir/include >> $GITHUB_ENV
+        echo CGO_LDFLAGS=-L$dir/lib >> $GITHUB_ENV
+    - name: Install ICU4C (Windows)
+      if: ${{ matrix.platform == 'windows-latest' }}
+      uses: msys2/setup-msys2@v2
+      with:
+        path-type: inherit
+        msystem: UCRT64
+        pacboy: icu:p toolchain:p pkg-config:p
     - name: Test All
       working-directory: ./go
       run: |
-        go test -vet=off -timeout 30m ./libraries/doltcore/sqle/integration_test
+        if [ "$MATRIX_OS" == 'windows-latest' ]
+        then
+          msys2 -c 'go.exe test -vet=off -timeout 30m ./libraries/doltcore/sqle/integration_test'
+        else
+          go test -vet=off -timeout 30m ./libraries/doltcore/sqle/integration_test
+        fi
       env:
         MATRIX_OS: ${{ matrix.os }}
         DOLT_TEST_RUN_NON_RACE_TESTS: "true"
