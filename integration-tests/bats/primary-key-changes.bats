@@ -547,12 +547,20 @@ SQL
 
     dolt diff
     run dolt diff test
-    # TODO: dolt doesn't correctly store primary key order, we can't check this
-#    [[ "$output" =~ '<    PRIMARY KEY (val, pk)' ]] || false
-#    [[ "$output" =~ '>    PRIMARY KEY (pk, val)' ]] || false
+    # Assert schema diff shows both PK orderings somewhere in the output (regex matches, no order dependency)
+    [[ "$output" == *"PRIMARY KEY (\`pk\`,\`val\`)"* ]] || false
+    [[ "$output" == *"PRIMARY KEY (\`val\`,\`pk\`)"* ]] || false
+    # And assert we have both added and removed PK lines present
+    [[ "$output" == *"-  PRIMARY KEY ("* ]] || false
+    [[ "$output" == *"+  PRIMARY KEY ("* ]] || false
 
     dolt sql -q "INSERT INTO t VALUES (1,1)"
     dolt commit -am "insert"
+
+    # Row-level diff should succeed even if PK order differs
+    run dolt diff --data test
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "Primary key sets differ between revisions for table 't'" ]] || false
 
     run dolt merge test -m "merge other"
     [ "$status" -eq 1 ]
@@ -562,13 +570,12 @@ SQL
     [ "$status" -eq 1 ]
     [[ "$output" =~ 'error: cannot merge because table t has different primary keys' ]] || false
 
-    skip "Dolt doesn't correctly store primary key order if it doesn't match the column order"
 }
 
 @test "primary-key-changes: correct diff is returned even with a new added column" {
-    skip "TODO implement PK ordering for SHOW CREATE TABLE"
 
     dolt sql -q "CREATE table t (pk int, val int, primary key (pk, val))"
+    dolt add .
     dolt commit -am "cm1"
 
     dolt checkout -b test

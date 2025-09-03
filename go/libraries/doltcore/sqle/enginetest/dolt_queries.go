@@ -1439,6 +1439,26 @@ var DoltScripts = []queries.ScriptTest{
 		},
 	},
 	{
+		// Regression test for a customer-reported issue where the length of the
+		// information_schema.triggers.name column was too short for a long trigger name.
+		Name: "join dolt_schemas on information_schema.triggers for a trigger with a long name",
+		SetUpScript: []string{
+			`CREATE TABLE example_table (id INT AUTO_INCREMENT PRIMARY KEY, value VARCHAR(50));`,
+			`CREATE TRIGGER this_is_a_trigger_name_that_is_exactly_sixty_five_characters_long
+					BEFORE INSERT ON example_table
+					FOR EACH ROW BEGIN SET NEW.value = UPPER(NEW.value); END;`,
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: `SELECT t.trigger_name, length(s.fragment)
+							FROM information_schema.triggers t
+							JOIN dolt_schemas s ON s.type = 'trigger' AND s.name = t.TRIGGER_NAME
+							WHERE t.EVENT_OBJECT_TABLE IN ('example_table');`,
+				Expected: []sql.Row{{"this_is_a_trigger_name_that_is_exactly_sixty_five_characters_long", 178}},
+			},
+		},
+	},
+	{
 		Name: "test hashof",
 		SetUpScript: []string{
 			"CREATE TABLE hashof_test (pk int primary key, c1 int)",
@@ -4969,6 +4989,40 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{
 					{1}, // feature and main commits should have same order
 				},
+			},
+		},
+	},
+	{
+		// https://github.com/dolthub/dolt/issues/9762
+		Name: "dolt_log function in detached head state",
+		SetUpScript: []string{
+			"CREATE TABLE test_table (id INT PRIMARY KEY, name VARCHAR(50));",
+			"CALL dolt_commit('-Am', 'create table');",
+			"CALL dolt_tag('mytag');",
+			"INSERT INTO test_table VALUES (1, 'test');",
+			"CALL dolt_commit('-Am', 'add data');",
+			"CALL dolt_tag('v2');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "USE mydb/mytag;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT COUNT(*) FROM dolt_log('mytag');",
+				Expected: []sql.Row{{2}},
+			},
+			{
+				Query:    "USE mydb/v2;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT COUNT(*) FROM dolt_log('v2');",
+				Expected: []sql.Row{{3}},
+			},
+			{
+				Query:    "SELECT message FROM dolt_log('mytag') ORDER BY commit_order;",
+				Expected: []sql.Row{{"Initialize data repository"}, {"create table"}},
 			},
 		},
 	},

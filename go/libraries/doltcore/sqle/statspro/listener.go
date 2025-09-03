@@ -68,8 +68,8 @@ func (sc *StatsController) newThreadCtx(ctx context.Context) (context.Context, c
 }
 
 type listener struct {
-	target listenerEvent
 	c      chan listenerEvent
+	target listenerEvent
 }
 
 func (sc *StatsController) addListener(e listenerEvent) (chan listenerEvent, error) {

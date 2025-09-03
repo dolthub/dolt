@@ -44,20 +44,19 @@ type AutoIncrementGetter interface {
 // editor after every SQL statement is incorrect and will return incorrect results. The single reliable exception is an
 // unbroken chain of INSERT statements, where we have taken pains to batch writes to speed things up.
 type nomsTableWriter struct {
-	tableName   string
-	dbName      string
 	sch         schema.Schema
-	sqlSch      sql.Schema
 	vrw         types.ValueReadWriter
-	kvToSQLRow  *index.KVToSqlRowConverter
 	tableEditor editor.TableEditor
 	flusher     dsess.WriteSessionFlusher
+	autoInc     globalstate.AutoIncrementTracker
 
-	autoInc                globalstate.AutoIncrementTracker
+	errEncountered         error
+	kvToSQLRow             *index.KVToSqlRowConverter
 	nextAutoIncrementValue map[string]uint64
-
-	setter         dsess.SessionRootSetter
-	errEncountered error
+	setter                 dsess.SessionRootSetter
+	tableName              string
+	dbName                 string
+	sqlSch                 sql.Schema
 }
 
 func (te *nomsTableWriter) PreciseMatch() bool {

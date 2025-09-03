@@ -460,13 +460,13 @@ func ConvertFullTextToSql(ctx context.Context, db, tbl string, sch schema.Schema
 }
 
 type durableIndexState struct {
-	key                   doltdb.DataCacheKey
 	Primary               durable.Index
 	Secondary             durable.Index
-	coversAllCols         uint32
 	cachedLookupTags      atomic.Value
 	cachedSqlRowConverter atomic.Value
 	cachedProjections     atomic.Value
+	coversAllCols         uint32
+	key                   doltdb.DataCacheKey
 }
 
 func (s *durableIndexState) coversAllColumns(i *doltIndex) bool {
@@ -566,41 +566,42 @@ func (i *cachedDurableIndexes) store(v *durableIndexState) {
 }
 
 type doltIndex struct {
+	ns          tree.NodeStore
+	vrw         types.ValueReadWriter
+	keyBld      *val.TupleBuilder
+	cache       cachedDurableIndexes
+	indexSch    schema.Schema
+	tableSch    schema.Schema
+	vectorProps schema.VectorProperties
+
 	id      string
-	tblName string
 	dbName  string
+	tblName string
+	comment string
 
-	columns []schema.Column
+	fullTextProps schema.FullTextProperties
+	prefixLengths []uint16
 
-	indexSch schema.Schema
-	tableSch schema.Schema
-	unique   bool
-	spatial  bool
-	fulltext bool
-	vector   bool
-	isPk     bool
-	comment  string
-	order    sql.IndexOrder
+	columns      []schema.Column
+	colExprTypes []sql.ColumnExpressionType
+	colExprNames []string
 
+	order                         sql.IndexOrder
 	constrainedToLookupExpression bool
 
-	vrw    types.ValueReadWriter
-	ns     tree.NodeStore
-	keyBld *val.TupleBuilder
-
-	cache         cachedDurableIndexes
+	vector        bool
+	isPk          bool
 	doltBinFormat bool
-
-	prefixLengths []uint16
-	fullTextProps schema.FullTextProperties
-	vectorProps   schema.VectorProperties
+	unique        bool
+	spatial       bool
+	fulltext      bool
 }
 
 type LookupMeta struct {
-	Cols     sql.FastIntSet
 	Idx      sql.Index
-	Ordinals []int
 	Fds      *sql.FuncDepSet
+	Cols     sql.FastIntSet
+	Ordinals []int
 }
 
 func GetStrictLookups(schCols *schema.ColCollection, indexes []sql.Index) []LookupMeta {
@@ -656,14 +657,16 @@ func (di *doltIndex) CanSupportOrderBy(expr sql.Expression) bool {
 
 // ColumnExpressionTypes implements the interface sql.Index.
 func (di *doltIndex) ColumnExpressionTypes() []sql.ColumnExpressionType {
-	cets := make([]sql.ColumnExpressionType, len(di.columns))
-	for i, col := range di.columns {
-		cets[i] = sql.ColumnExpressionType{
-			Expression: di.tblName + "." + col.Name,
-			Type:       col.TypeInfo.ToSqlType(),
+	if di.colExprTypes == nil {
+		di.colExprTypes = make([]sql.ColumnExpressionType, len(di.columns))
+		for i, col := range di.columns {
+			di.colExprTypes[i] = sql.ColumnExpressionType{
+				Expression: di.tblName + "." + col.Name,
+				Type:       col.TypeInfo.ToSqlType(),
+			}
 		}
 	}
-	return cets
+	return di.colExprTypes
 }
 
 // ExtendedColumnExpressionTypes implements the interface sql.ExtendedIndex.
@@ -985,11 +988,13 @@ func (di *doltIndex) Database() string {
 
 // Expressions implements sql.Index
 func (di *doltIndex) Expressions() []string {
-	strs := make([]string, len(di.columns))
-	for i, col := range di.columns {
-		strs[i] = di.tblName + "." + col.Name
+	if di.colExprNames == nil {
+		di.colExprNames = make([]string, len(di.columns))
+		for i, col := range di.columns {
+			di.colExprNames[i] = di.tblName + "." + col.Name
+		}
 	}
-	return strs
+	return di.colExprNames
 }
 
 // ExtendedExpressions implements sql.ExtendedIndex

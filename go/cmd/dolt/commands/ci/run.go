@@ -79,15 +79,12 @@ func (cmd RunCmd) Exec(ctx context.Context, commandStr string, args []string, _ 
 	}
 	workflowName := args[0]
 
-	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
+	queryist, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
-	if closeFunc != nil {
-		defer closeFunc()
-	}
 
-	hasTables, err := dolt_ci.HasDoltCITables(queryist, sqlCtx)
+	hasTables, err := dolt_ci.HasDoltCITables(queryist.Queryist, queryist.Context)
 	if err != nil {
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
@@ -101,19 +98,19 @@ func (cmd RunCmd) Exec(ctx context.Context, commandStr string, args []string, _ 
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	wm := dolt_ci.NewWorkflowManager(name, email, queryist.Query)
+	wm := dolt_ci.NewWorkflowManager(name, email, queryist.Queryist.Query)
 
-	config, err := wm.GetWorkflowConfig(sqlCtx, workflowName)
+	config, err := wm.GetWorkflowConfig(queryist.Context, workflowName)
 	if err != nil {
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	savedQueries, err := getSavedQueries(sqlCtx, queryist)
+	savedQueries, err := getSavedQueries(queryist.Context, queryist.Queryist)
 	if err != nil {
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 	cli.Println(color.CyanString("Running workflow: %s", workflowName))
-	queryAndPrint(sqlCtx, queryist, config, savedQueries)
+	queryAndPrint(queryist.Context, queryist.Queryist, config, savedQueries)
 
 	return 0
 }

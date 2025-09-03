@@ -132,8 +132,8 @@ func (tda *typeDescriptionAssertion) getExpectedValue() interface{} {
 }
 
 type typeDescription struct {
-	TypeDefinition string
 	Assertions     [2]typeDescriptionAssertion
+	TypeDefinition string
 }
 
 func (td *typeDescription) ColumnName() string {

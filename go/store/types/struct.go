@@ -478,7 +478,7 @@ func (s Struct) Diff(ctx context.Context, last Struct, changes chan<- ValueChang
 			}
 
 			if !v1.Equals(v2) {
-				change = ValueChanged{DiffChangeModified, String(fn1), v2, v1}
+				change = ValueChanged{String(fn1), v2, v1, DiffChangeModified}
 			}
 			i1++
 			i2++
@@ -490,7 +490,7 @@ func (s Struct) Diff(ctx context.Context, last Struct, changes chan<- ValueChang
 				return err
 			}
 
-			change = ValueChanged{DiffChangeAdded, String(fn1), nil, v1}
+			change = ValueChanged{String(fn1), nil, v1, DiffChangeAdded}
 			i1++
 			fn1 = ""
 		} else {
@@ -500,7 +500,7 @@ func (s Struct) Diff(ctx context.Context, last Struct, changes chan<- ValueChang
 				return err
 			}
 
-			change = ValueChanged{DiffChangeRemoved, String(fn2), v2, nil}
+			change = ValueChanged{String(fn2), v2, nil, DiffChangeRemoved}
 			i2++
 			fn2 = ""
 		}
@@ -523,7 +523,7 @@ func (s Struct) Diff(ctx context.Context, last Struct, changes chan<- ValueChang
 			return err
 		}
 
-		if err := sendChange(ctx, changes, ValueChanged{DiffChangeAdded, String(fn1), nil, v1}); err != nil {
+		if err := sendChange(ctx, changes, ValueChanged{String(fn1), nil, v1, DiffChangeAdded}); err != nil {
 			return err
 		}
 	}
@@ -539,7 +539,7 @@ func (s Struct) Diff(ctx context.Context, last Struct, changes chan<- ValueChang
 			return err
 		}
 
-		if err := sendChange(ctx, changes, ValueChanged{DiffChangeRemoved, String(fn2), v2, nil}); err != nil {
+		if err := sendChange(ctx, changes, ValueChanged{String(fn2), v2, nil, DiffChangeRemoved}); err != nil {
 			return err
 		}
 	}

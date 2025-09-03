@@ -18,7 +18,6 @@ import (
 	"context"
 	"testing"
 
-	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -72,7 +71,9 @@ func TestInit(t *testing.T) {
 			gCfg, _ := dEnv.Config.GetConfig(env.GlobalConfig)
 			gCfg.SetStrings(test.GlobalConfig)
 			apr := argparser.ArgParseResults{}
-			latebind := func(ctx context.Context) (cli.Queryist, *sql.Context, func(), error) { return nil, nil, func() {}, nil }
+			latebind := func(ctx context.Context, opts ...cli.LateBindQueryistOption) (res cli.LateBindQueryistResult, err error) {
+				return res, nil
+			}
 			cliCtx, _ := cli.NewCliContext(&apr, dEnv.Config, dEnv.FS, latebind)
 
 			result := InitCmd{}.Exec(ctx, "dolt init", test.Args, dEnv, cliCtx)

@@ -126,19 +126,17 @@ func (csvw *CSVWriter) WriteSqlRow(ctx *sql.Context, r sql.Row) error {
 }
 
 func toCsvString(ctx *sql.Context, colType sql.Type, val interface{}) (string, error) {
-	var v string
-	// Due to BIT's unique output, we special-case writing the integer specifically for CSV
+	// For BIT, emit base-10 int, instead of bytes
 	if _, ok := colType.(types.BitType); ok {
-		v = strconv.FormatUint(val.(uint64), 10)
-	} else {
-		var err error
-		v, err = sqlutil.SqlColToStr(ctx, colType, val)
+		// Normalize to handle UNION type generalization (e.g., int64 -> uint64)
+		norm, _, err := colType.Convert(ctx, val)
 		if err != nil {
 			return "", err
 		}
+		return strconv.FormatUint(norm.(uint64), 10), nil
 	}
 
-	return v, nil
+	return sqlutil.SqlColToStr(ctx, colType, val)
 }
 
 func (csvw *CSVWriter) processRowWithSchema(r sql.Row, ctx *sql.Context) ([]*string, error) {

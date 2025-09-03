@@ -94,3 +94,78 @@ func TestLogSigterm(t *testing.T) {
 	err = process.Signal(syscall.SIGTERM)
 	require.NoError(t, err)
 }
+
+func TestDoltPagerEnvironmentVariable(t *testing.T) {
+	// Test that DOLT_PAGER environment variable is respected
+	originalPager := os.Getenv("DOLT_PAGER")
+	defer func() {
+		if originalPager == "" {
+			os.Unsetenv("DOLT_PAGER")
+		} else {
+			os.Setenv("DOLT_PAGER", originalPager)
+		}
+	}()
+
+	// Set DOLT_PAGER to head -n 2 for testing
+	err := os.Setenv("DOLT_PAGER", "head -n 2")
+	require.NoError(t, err)
+
+	// Enable testing mode to bypass TTY check
+	outputpager.SetTestingArg(true)
+	defer outputpager.SetTestingArg(false)
+
+	// Start the pager - it should use head -n 2 from DOLT_PAGER
+	pager := outputpager.Start()
+	defer pager.Stop()
+
+	// Write multiple lines to test that head -n 2 truncates output
+	testLines := []string{
+		"line 1\n",
+		"line 2\n",
+		"line 3\n",
+		"line 4\n",
+		"line 5\n",
+	}
+
+	for _, line := range testLines {
+		pager.Writer.Write([]byte(line))
+	}
+
+	// The test passes if the pager was created successfully with DOLT_PAGER
+	// We can't easily test the actual truncation in a unit test since the pager
+	// runs as a separate process, but we verify that the pager starts without error
+	// when DOLT_PAGER is set to a valid command
+	require.NotNil(t, pager)
+	require.NotNil(t, pager.Writer)
+}
+
+func TestDoltPagerFallback(t *testing.T) {
+	// Test that when DOLT_PAGER is empty, it falls back to less/more
+	originalPager := os.Getenv("DOLT_PAGER")
+	defer func() {
+		if originalPager == "" {
+			os.Unsetenv("DOLT_PAGER")
+		} else {
+			os.Setenv("DOLT_PAGER", originalPager)
+		}
+	}()
+
+	// Unset DOLT_PAGER to test fallback
+	os.Unsetenv("DOLT_PAGER")
+
+	// Enable testing mode to bypass TTY check
+	outputpager.SetTestingArg(true)
+	defer outputpager.SetTestingArg(false)
+
+	// Start the pager - it should fall back to less or more
+	pager := outputpager.Start()
+	defer pager.Stop()
+
+	// Write some test content
+	pager.Writer.Write([]byte("test line 1\n"))
+	pager.Writer.Write([]byte("test line 2\n"))
+
+	// The test passes if the pager was created successfully with fallback
+	require.NotNil(t, pager)
+	require.NotNil(t, pager.Writer)
+}

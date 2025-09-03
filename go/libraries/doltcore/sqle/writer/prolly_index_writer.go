@@ -49,6 +49,7 @@ func getPrimaryProllyWriter(ctx context.Context, t *doltdb.Table, schState *dses
 		keyMap: schState.PriIndex.KeyMapping,
 		valBld: val.NewTupleBuilder(valDesc, m.NodeStore()),
 		valMap: schState.PriIndex.ValMapping,
+		key:    make(sql.Row, keyDesc.Count()),
 	}, nil
 }
 
@@ -98,6 +99,9 @@ type prollyIndexWriter struct {
 
 	valBld *val.TupleBuilder
 	valMap val.OrdinalMapping
+
+	// buffer to reduce memory allocations
+	key sql.Row
 }
 
 var _ indexWriter = prollyIndexWriter{}
@@ -132,12 +136,11 @@ func (m prollyIndexWriter) ValidateKeyViolations(ctx context.Context, sqlRow sql
 	if err != nil {
 		return err
 	} else if ok {
-		remappedSqlRow := make(sql.Row, len(sqlRow))
 		for to := range m.keyMap {
 			from := m.keyMap.MapOrdinal(to)
-			remappedSqlRow[to] = sqlRow[from]
+			m.key[to] = sqlRow[from]
 		}
-		keyStr := FormatKeyForUniqKeyErr(ctx, k, m.keyBld.Desc, remappedSqlRow)
+		keyStr := FormatKeyForUniqKeyErr(ctx, k, m.keyBld.Desc, m.key)
 		return m.uniqueKeyError(ctx, keyStr, k, true)
 	}
 	return nil
@@ -197,12 +200,11 @@ func (m prollyIndexWriter) Update(ctx context.Context, oldRow sql.Row, newRow sq
 	if err != nil {
 		return err
 	} else if ok {
-		remappedSqlRow := make(sql.Row, len(newRow))
 		for to := range m.keyMap {
 			from := m.keyMap.MapOrdinal(to)
-			remappedSqlRow[to] = newRow[from]
+			m.key[to] = newRow[from]
 		}
-		keyStr := FormatKeyForUniqKeyErr(ctx, newKey, m.keyBld.Desc, remappedSqlRow)
+		keyStr := FormatKeyForUniqKeyErr(ctx, newKey, m.keyBld.Desc, m.key)
 		return m.uniqueKeyError(ctx, keyStr, newKey, true)
 	}
 
@@ -269,25 +271,26 @@ func (m prollyIndexWriter) uniqueKeyError(ctx context.Context, keyStr string, ke
 }
 
 type prollySecondaryIndexWriter struct {
-	name          string
-	mut           prolly.MutableMapInterface
-	unique        bool
-	prefixLengths []uint16
-
-	// number of indexed cols
-	idxCols int
-
-	// keyMap is a mapping from sql.Row fields to
-	// key fields of this secondary index
-	keyMap val.OrdinalMapping
+	mut prolly.MutableMapInterface
+	// pkBld builds key tuples for primary key index
+	pkBld *val.TupleBuilder
 	// keyBld builds key tuples for the secondary index
 	keyBld *val.TupleBuilder
+
+	name          string
+	prefixLengths []uint16
 
 	// pkMap is a mapping from secondary index keys to
 	// primary key clustered index keys
 	pkMap val.OrdinalMapping
-	// pkBld builds key tuples for primary key index
-	pkBld *val.TupleBuilder
+	// keyMap is a mapping from sql.Row fields to
+	// key fields of this secondary index
+	keyMap val.OrdinalMapping
+	// buffer to reduce memory allocations
+	key sql.Row
+	// number of indexed cols
+	idxCols int
+	unique  bool
 }
 
 var _ indexWriter = prollySecondaryIndexWriter{}
@@ -380,13 +383,12 @@ func (m prollySecondaryIndexWriter) checkForUniqueKeyErr(ctx context.Context, sq
 		return err
 	}
 
-	remappedSqlRow := make(sql.Row, m.idxCols)
 	for to := range m.keyMap[:m.idxCols] {
 		from := m.keyMap.MapOrdinal(to)
-		remappedSqlRow[to], _ = m.trimKeyPart(ctx, to, sqlRow[from])
+		m.key[to], _ = m.trimKeyPart(ctx, to, sqlRow[from])
 	}
 	return secondaryUniqueKeyError{
-		keyStr:      FormatKeyForUniqKeyErr(ctx, key, desc, remappedSqlRow),
+		keyStr:      FormatKeyForUniqKeyErr(ctx, key, desc, m.key),
 		existingKey: existingPK,
 	}
 }

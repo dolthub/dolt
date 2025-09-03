@@ -698,13 +698,13 @@ func getDiffQuerySqlSchemaAndProjections(diffTableSch sql.Schema, columns []stri
 var _ sql.RowIter = (*patchTableFunctionRowIter)(nil)
 
 type patchTableFunctionRowIter struct {
+	currentPatch   *patchNode
+	currentRowIter *sql.RowIter
+	fromRef        string
+	toRef          string
 	patches        []*patchNode
 	patchIdx       int
 	statementIdx   int
-	fromRef        string
-	toRef          string
-	currentPatch   *patchNode
-	currentRowIter *sql.RowIter
 }
 
 // newPatchTableFunctionRowIter iterates over each patch nodes given returning
@@ -749,7 +749,8 @@ func (itr *patchTableFunctionRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 				itr.toRef,                         // to_commit_hash
 				itr.currentPatch.tblName.String(), // table_name
 			}
-			return r.Append(row), nil
+			r = append(r, row...)
+			return r, nil
 		}
 	}
 }

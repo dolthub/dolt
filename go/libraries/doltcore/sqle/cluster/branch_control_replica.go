@@ -30,36 +30,28 @@ import (
 )
 
 type branchControlReplication struct {
-	current  []byte
-	version  uint32
-	replicas []*branchControlReplica
-
 	bcController *branch_control.Controller
-
-	mu sync.Mutex
+	current      []byte
+	replicas     []*branchControlReplica
+	mu           sync.Mutex
+	version      uint32
 }
 
 type branchControlReplica struct {
-	shutdown bool
-	role     Role
-
-	contents          []byte
-	version           uint32
-	replicatedVersion uint32
-
-	backoff     backoff.BackOff
-	nextAttempt time.Time
-
-	client *replicationServiceClient
-	lgr    *logrus.Entry
-
-	waitNotify func()
-
+	nextAttempt             time.Time
+	backoff                 backoff.BackOff
+	waitNotify              func()
+	client                  *replicationServiceClient
+	lgr                     *logrus.Entry
+	cond                    *sync.Cond
+	role                    Role
+	contents                []byte
 	progressNotifier        ProgressNotifier
+	mu                      sync.Mutex
+	version                 uint32
+	replicatedVersion       uint32
+	shutdown                bool
 	fastFailReplicationWait bool
-
-	mu   sync.Mutex
-	cond *sync.Cond
 }
 
 func (r *branchControlReplica) UpdateContents(contents []byte, version uint32) func(context.Context) error {

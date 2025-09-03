@@ -35,11 +35,11 @@ import (
 )
 
 type ReadReplicaDatabase struct {
-	Database
 	remote  env.Remote
 	srcDB   *doltdb.DoltDB
-	tmpDir  string
 	limiter *limiter
+	tmpDir  string
+	Database
 }
 
 var _ dsess.SqlDatabase = ReadReplicaDatabase{}
@@ -89,6 +89,7 @@ func NewReadReplicaDatabase(ctx context.Context, db Database, remoteName string,
 func (rrd ReadReplicaDatabase) WithBranchRevision(requestedName string, branchSpec dsess.SessionDatabaseBranchSpec) (dsess.SqlDatabase, error) {
 	rrd.rsr, rrd.rsw = branchSpec.RepoState, branchSpec.RepoState
 	rrd.revision = branchSpec.Branch
+	rrd.revName = rrd.baseName + dsess.DbRevisionDelimiter + branchSpec.Branch
 	rrd.revType = dsess.RevisionTypeBranch
 	rrd.requestedName = requestedName
 
@@ -571,8 +572,8 @@ func newLimiter() *limiter {
 
 // *limiter allows a caller to limit performing concurrent work for a given string key.
 type limiter struct {
-	mu      sync.Mutex
 	running map[string]*blocked
+	mu      sync.Mutex
 }
 
 // |Run| invokes |f|, returning its result. It does not allow two |f|s

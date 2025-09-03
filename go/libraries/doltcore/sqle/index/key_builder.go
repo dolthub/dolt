@@ -87,16 +87,19 @@ type SecondaryKeyBuilder struct {
 	sch schema.Schema
 	// indexDef holds the definition of the secondary index
 	indexDef schema.Index
+
+	pool      pool.BuffPool
+	nodeStore tree.NodeStore
+	builder   *val.TupleBuilder
+
 	// mapping defines how to map fields from the source table's schema to this index's tuple layout
 	mapping val.OrdinalMapping
 	// virtualExpressions holds the expressions for virtual columns in the index, nil for non-virtual indexes
 	virtualExpressions []sql.Expression
+
 	// split marks the index in the secondary index's key tuple that splits the main table's
 	// key fields from the main table's value fields.
-	split     int
-	builder   *val.TupleBuilder
-	pool      pool.BuffPool
-	nodeStore tree.NodeStore
+	split int
 }
 
 // SecondaryKeyFromRow builds a secondary index key from a clustered index row.
@@ -207,9 +210,9 @@ func NewClusteredKeyBuilder(def schema.Index, sch schema.Schema, keyDesc val.Tup
 }
 
 type ClusteredKeyBuilder struct {
-	mapping val.OrdinalMapping
-	builder *val.TupleBuilder
 	pool    pool.BuffPool
+	builder *val.TupleBuilder
+	mapping val.OrdinalMapping
 }
 
 // ClusteredKeyFromIndexKey builds a clustered index key from a secondary index key.

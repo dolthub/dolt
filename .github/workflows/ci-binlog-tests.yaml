@@ -1,0 +1,58 @@
+name: Test Binlog
+
+on:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'go/**'
+  workflow_dispatch:
+
+concurrency:
+  group: ci-binlog-tests-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  binlog-test:
+    name: Binlog tests
+    defaults:
+      run:
+        shell: bash
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04]
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up Go 1.x
+      uses: actions/setup-go@v5
+      with:
+        go-version-file: go/go.mod
+      id: go
+    - name: Test Binlog
+      working-directory: ./go
+      run: |
+        # Test binlog packages
+        go test -vet=off -timeout 60m ./libraries/doltcore/sqle/binlogreplication/...
+      env:
+        MATRIX_OS: ${{ matrix.os }}
+  binlog-race-test:
+    name: Binlog tests - race
+    defaults:
+      run:
+        shell: bash
+    runs-on: ubuntu-22.04
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up Go 1.x
+      uses: actions/setup-go@v5
+      with:
+        go-version-file: go/go.mod
+      id: go
+    - name: Test Binlog with Race
+      working-directory: ./go
+      run: |
+        # Test binlog packages with race detector
+        go test -vet=off -timeout 60m -race ./libraries/doltcore/sqle/binlogreplication/...
+      env:
+        MATRIX_OS: ubuntu-22.04

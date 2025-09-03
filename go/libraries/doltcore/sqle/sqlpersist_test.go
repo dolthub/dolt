@@ -30,22 +30,22 @@ import (
 
 // Structure for a test of a insert query
 type PersistTest struct {
+	// The schema of the result of the query, nil if an error is expected
+	ExpectedSchema schema.Schema
+	// The rows this query should return, nil if an error is expected
+	ExpectedConfig map[string]string
+	// Setup logic to run before executing this test, after initial tables have been created and populated
+	AdditionalSetup SetupFn
 	// The name of this test. Names should be unique and descriptive.
 	Name string
 	// The insert query to run
 	PersistQuery string
 	// The insert query to run
 	SelectQuery string
-	// The schema of the result of the query, nil if an error is expected
-	ExpectedSchema schema.Schema
-	// The rows this query should return, nil if an error is expected
-	ExpectedRows []sql.Row
-	// The rows this query should return, nil if an error is expected
-	ExpectedConfig map[string]string
 	// An expected error string
 	ExpectedErr string
-	// Setup logic to run before executing this test, after initial tables have been created and populated
-	AdditionalSetup SetupFn
+	// The rows this query should return, nil if an error is expected
+	ExpectedRows []sql.Row
 }
 
 const maxConnTag = 0

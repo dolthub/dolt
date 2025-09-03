@@ -33,27 +33,23 @@ import (
 // Like journalRec, its serialization format uses uint8 tag prefixes
 // to identify fields and allow for format evolution.
 type indexRec struct {
-	// index record length
-	length uint32
-
-	// root hash of commit when this index record was written
-	lastRoot hash.Hash
-
+	// encoded chunk index
+	payload []byte
 	// file offsets for the region of the journal file
 	// that |payload| indexes. end points to a root hash
 	// record in the journal containing |lastRoot|.
 	// we expect a sequence of index records to cover
 	// contiguous regions of the journal file.
-	start, end uint64
-
-	// index record kind
-	kind indexRecKind
-
-	// encoded chunk index
-	payload []byte
-
+	start uint64
+	end   uint64
+	// index record length
+	length uint32
 	// index record crc32 checksum
 	checksum uint32
+	// root hash of commit when this index record was written
+	lastRoot hash.Hash
+	// index record kind
+	kind indexRecKind
 }
 
 type indexRecKind uint8

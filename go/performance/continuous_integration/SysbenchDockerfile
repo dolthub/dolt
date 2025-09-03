@@ -20,7 +20,7 @@ RUN \
 
 RUN wget \
     -O sqlite.tar.gz \
-    https://www.sqlite.org/src/tarball/sqlite.tar.gz?r=release \
+    https://dolthub-tools.s3.us-west-2.amazonaws.com/sqlite-3.50.4.tar.gz \
   && tar xvfz sqlite.tar.gz \
    # Configure and make SQLite3 binary
   && ./sqlite/configure --prefix=/usr \

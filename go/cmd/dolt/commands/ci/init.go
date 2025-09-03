@@ -72,15 +72,12 @@ func (cmd InitCmd) Exec(ctx context.Context, commandStr string, args []string, _
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, initDocs, ap))
 	cli.ParseArgsOrDie(ap, args, help)
 
-	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
+	queryist, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
-	if closeFunc != nil {
-		defer closeFunc()
-	}
 
-	hasTables, err := dolt_ci.HasDoltCITables(queryist, sqlCtx)
+	hasTables, err := dolt_ci.HasDoltCITables(queryist.Queryist, queryist.Context)
 	if err != nil {
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
@@ -93,6 +90,6 @@ func (cmd InitCmd) Exec(ctx context.Context, commandStr string, args []string, _
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	err = dolt_ci.CreateDoltCITables(queryist, sqlCtx, name, email)
+	err = dolt_ci.CreateDoltCITables(queryist.Queryist, queryist.Context, name, email)
 	return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 }

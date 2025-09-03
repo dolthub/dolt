@@ -122,9 +122,11 @@ type itemProvider interface {
 }
 
 type gaussianItems struct {
-	keyMean, keyStd float64
-	valMean, valStd float64
-	r               *rand.Rand
+	r       *rand.Rand
+	keyMean float64
+	keyStd  float64
+	valMean float64
+	valStd  float64
 }
 
 func (g gaussianItems) Next() (key, value Item) {

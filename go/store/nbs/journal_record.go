@@ -48,12 +48,12 @@ import (
 // to be extracted from the journalRec using only the record length and payload
 // offset. See recLookup for more detail.
 type journalRec struct {
-	length    uint32
-	kind      journalRecKind
-	address   hash.Hash
-	payload   []byte
 	timestamp time.Time
+	payload   []byte
+	length    uint32
 	checksum  uint32
+	address   hash.Hash
+	kind      journalRecKind
 }
 
 // payloadOffset returns the journalOffset of the payload within the record

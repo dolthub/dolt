@@ -28,9 +28,11 @@ import (
 
 // CommitItr is an interface for iterating over a set of unique commits
 type CommitItr[C Context] interface {
-	// Next returns the hash of the next commit, and a pointer to that commit.  Implementations of Next must handle
-	// making sure the list of commits returned are unique.  When complete Next will return hash.Hash{}, nil, io.EOF
-	Next(ctx C) (hash.Hash, *OptionalCommit, error)
+	// Next returns the next commit's hash, pointer, metadata, and height.
+	// Implementations of Next must handle making sure the list of commits returned are unique.
+	// When complete Next will return hash.Hash{}, nil, nil, 0, io.EOF
+	// Note: Some implementations may always return nil for the metadata and height return values.
+	Next(ctx C) (hash.Hash, *OptionalCommit, *datas.CommitMeta, uint64, error)
 
 	// Reset the commit iterator back to the start
 	Reset(ctx context.Context) error
@@ -88,25 +90,27 @@ func (cmItr *commitItr[C]) Reset(ctx context.Context) error {
 	return nil
 }
 
-// Next returns the hash of the next commit, and a pointer to that commit.  It handles making sure the list of commits
-// returned are unique.  When complete Next will return hash.Hash{}, nil, io.EOF
-func (cmItr *commitItr[C]) Next(ctx C) (hash.Hash, *OptionalCommit, error) {
+// Next returns the hash of the next commit, and a pointer to that commit.
+// It handles making sure the list of commits returned are unique.
+// When complete Next will return hash.Hash{}, nil, nil, 0, io.EOF.
+// Note: This implementation always returns nil for the metadata and height return values.
+func (cmItr *commitItr[C]) Next(ctx C) (hash.Hash, *OptionalCommit, *datas.CommitMeta, uint64, error) {
 	for cmItr.curr == nil {
 		if cmItr.currentRoot >= len(cmItr.rootCommits) {
-			return hash.Hash{}, nil, io.EOF
+			return hash.Hash{}, nil, nil, 0, io.EOF
 		}
 
 		cm := cmItr.rootCommits[cmItr.currentRoot]
 		h, err := cm.HashOf()
 
 		if err != nil {
-			return hash.Hash{}, nil, err
+			return hash.Hash{}, nil, nil, 0, err
 		}
 
 		if !cmItr.added[h] {
 			cmItr.added[h] = true
 			cmItr.curr = cm
-			return h, &OptionalCommit{cmItr.curr, h}, nil
+			return h, &OptionalCommit{cmItr.curr, h}, nil, 0, nil
 		}
 
 		cmItr.currentRoot++
@@ -115,7 +119,7 @@ func (cmItr *commitItr[C]) Next(ctx C) (hash.Hash, *OptionalCommit, error) {
 	parents, err := cmItr.curr.ParentHashes(ctx)
 
 	if err != nil {
-		return hash.Hash{}, nil, err
+		return hash.Hash{}, nil, nil, 0, err
 	}
 
 	for _, h := range parents {
@@ -137,13 +141,13 @@ func (cmItr *commitItr[C]) Next(ctx C) (hash.Hash, *OptionalCommit, error) {
 	cmItr.unprocessed = cmItr.unprocessed[:numUnprocessed-1]
 	cmItr.curr, err = HashToCommit(ctx, cmItr.ddb.ValueReadWriter(), cmItr.ddb.ns, next)
 	if err != nil && err != ErrGhostCommitEncountered {
-		return hash.Hash{}, nil, err
+		return hash.Hash{}, nil, nil, 0, err
 	}
 	if err == ErrGhostCommitEncountered {
 		cmItr.curr = nil
 	}
 
-	return next, &OptionalCommit{cmItr.curr, next}, nil
+	return next, &OptionalCommit{cmItr.curr, next}, nil, 0, nil
 }
 
 func HashToCommit(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeStore, h hash.Hash) (*Commit, error) {
@@ -183,19 +187,18 @@ func NewFilteringCommitItr[C Context](itr CommitItr[C], filter CommitFilter[C]) 
 
 // Next returns the hash of the next commit, and a pointer to that commit.  Implementations of Next must handle
 // making sure the list of commits returned are unique.  When complete Next will return hash.Hash{}, nil, io.EOF
-func (itr FilteringCommitItr[C]) Next(ctx C) (hash.Hash, *OptionalCommit, error) {
+func (itr FilteringCommitItr[C]) Next(ctx C) (hash.Hash, *OptionalCommit, *datas.CommitMeta, uint64, error) {
 	// iteration will terminate on io.EOF or a commit that is !filteredOut
 	for {
-		h, cm, err := itr.itr.Next(ctx)
-
+		h, cm, meta, height, err := itr.itr.Next(ctx)
 		if err != nil {
-			return hash.Hash{}, nil, err
+			return hash.Hash{}, nil, nil, 0, err
 		}
 
 		if filterOut, err := itr.filter(ctx, h, cm); err != nil {
-			return hash.Hash{}, nil, err
+			return hash.Hash{}, nil, nil, 0, err
 		} else if !filterOut {
-			return h, cm, nil
+			return h, cm, meta, height, nil
 		}
 	}
 }
@@ -217,12 +220,14 @@ type CommitSliceIter[C Context] struct {
 
 var _ CommitItr[context.Context] = (*CommitSliceIter[context.Context])(nil)
 
-func (i *CommitSliceIter[C]) Next(ctx C) (hash.Hash, *OptionalCommit, error) {
+// Next implements the CommitItr interface.
+// Note: This implementation always returns nil for the metadata and height return values.
+func (i *CommitSliceIter[C]) Next(ctx C) (hash.Hash, *OptionalCommit, *datas.CommitMeta, uint64, error) {
 	if i.i >= len(i.h) {
-		return hash.Hash{}, nil, io.EOF
+		return hash.Hash{}, nil, nil, 0, io.EOF
 	}
 	i.i++
-	return i.h[i.i-1], &OptionalCommit{i.cm[i.i-1], i.h[i.i-1]}, nil
+	return i.h[i.i-1], &OptionalCommit{i.cm[i.i-1], i.h[i.i-1]}, nil, 0, nil
 
 }
 
@@ -232,7 +237,7 @@ func (i *CommitSliceIter[C]) Reset(ctx context.Context) error {
 }
 
 func NewOneCommitIter[C Context](cm *Commit, h hash.Hash, meta *datas.CommitMeta) *OneCommitIter[C] {
-	return &OneCommitIter[C]{cm: &OptionalCommit{cm, h}, h: h}
+	return &OneCommitIter[C]{cm: &OptionalCommit{cm, h}, h: h, m: meta}
 }
 
 type OneCommitIter[C Context] struct {
@@ -244,13 +249,14 @@ type OneCommitIter[C Context] struct {
 
 var _ CommitItr[context.Context] = (*OneCommitIter[context.Context])(nil)
 
-func (i *OneCommitIter[C]) Next(_ C) (hash.Hash, *OptionalCommit, error) {
+// Next implements the CommitItr interface.
+// Note: This implementation always returns nil for the metadata and height return values.
+func (i *OneCommitIter[C]) Next(_ C) (hash.Hash, *OptionalCommit, *datas.CommitMeta, uint64, error) {
 	if i.done {
-		return hash.Hash{}, nil, io.EOF
+		return hash.Hash{}, nil, nil, 0, io.EOF
 	}
 	i.done = true
-	return i.h, i.cm, nil
-
+	return i.h, i.cm, i.m, 0, nil
 }
 
 func (i *OneCommitIter[C]) Reset(_ context.Context) error {

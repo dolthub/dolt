@@ -188,15 +188,16 @@ func testConjoin(t *testing.T, factory func(t *testing.T) tablePersister) {
 
 	tc := []struct {
 		name        string
+		maxTables   int
 		precompact  []uint32
 		postcompact []uint32
 	}{
-		{"uniform", []uint32{1, 1, 1, 1, 1}, []uint32{5}},
-		{"all but last", []uint32{1, 1, 1, 1, 5}, []uint32{4, 5}},
-		{"all", []uint32{5, 5, 5}, []uint32{15}},
-		{"first four", []uint32{5, 6, 10, 11, 35, 64}, []uint32{32, 35, 64}},
-		{"log, first two", []uint32{1, 2, 4, 8, 16, 32, 64}, []uint32{3, 4, 8, 16, 32, 64}},
-		{"log, all", []uint32{2, 3, 4, 8, 16, 32, 64}, []uint32{129}},
+		{"uniform", 3, []uint32{1, 1, 1, 1, 1}, []uint32{5}},
+		{"all but last", 3, []uint32{1, 1, 1, 1, 5}, []uint32{4, 5}},
+		{"all", 2, []uint32{5, 5, 5}, []uint32{15}},
+		{"first four", 4, []uint32{5, 6, 10, 11, 35, 64}, []uint32{32, 35, 64}},
+		{"log, until max", 3, []uint32{1, 2, 4, 8, 16, 32, 64}, []uint32{31, 32, 64}},
+		{"log, all", 2, []uint32{2, 3, 4, 8, 16, 32, 64}, []uint32{129}},
 	}
 
 	startLock, startRoot := computeAddr([]byte("lock")), hash.Of([]byte("root"))
@@ -206,7 +207,7 @@ func testConjoin(t *testing.T, factory func(t *testing.T) tablePersister) {
 			t.Run(c.name, func(t *testing.T) {
 				fm, p, upstream := setup(startLock, startRoot, c.precompact)
 
-				_, _, err := conjoin(context.Background(), inlineConjoiner{}, upstream, fm, p, stats)
+				_, _, err := conjoin(context.Background(), inlineConjoiner{c.maxTables}, upstream, fm, p, stats)
 				require.NoError(t, err)
 				exists, newUpstream, err := fm.ParseIfExists(context.Background(), stats, nil)
 				require.NoError(t, err)
@@ -227,7 +228,7 @@ func testConjoin(t *testing.T, factory func(t *testing.T) tablePersister) {
 					specs := append([]tableSpec{}, upstream.specs...)
 					fm.set(constants.FormatLD1String, computeAddr([]byte("lock2")), startRoot, append(specs, newTable), nil)
 				}}
-				_, _, err := conjoin(context.Background(), inlineConjoiner{}, upstream, u, p, stats)
+				_, _, err := conjoin(context.Background(), inlineConjoiner{c.maxTables}, upstream, u, p, stats)
 				require.NoError(t, err)
 				exists, newUpstream, err := fm.ParseIfExists(context.Background(), stats, nil)
 				require.NoError(t, err)
@@ -247,7 +248,7 @@ func testConjoin(t *testing.T, factory func(t *testing.T) tablePersister) {
 				u := updatePreemptManifest{fm, func() {
 					fm.set(constants.FormatLD1String, computeAddr([]byte("lock2")), startRoot, upstream.specs[1:], nil)
 				}}
-				_, _, err := conjoin(context.Background(), inlineConjoiner{}, upstream, u, p, stats)
+				_, _, err := conjoin(context.Background(), inlineConjoiner{c.maxTables}, upstream, u, p, stats)
 				require.NoError(t, err)
 				exists, newUpstream, err := fm.ParseIfExists(context.Background(), stats, nil)
 				require.NoError(t, err)
@@ -271,16 +272,17 @@ func testConjoin(t *testing.T, factory func(t *testing.T) tablePersister) {
 
 	tca := []struct {
 		name        string
+		maxTables   int
 		appendix    []uint32
 		precompact  []uint32
 		postcompact []uint32
 	}{
-		{"uniform", []uint32{1}, []uint32{1, 1, 1, 1, 1}, []uint32{1, 4}},
-		{"all but last", []uint32{2}, []uint32{2, 1, 1, 1, 1, 5}, []uint32{2, 4, 5}},
-		{"all", []uint32{1, 2, 3}, []uint32{1, 2, 3, 5, 5, 5}, []uint32{1, 2, 3, 15}},
-		{"first four", []uint32{8, 9, 10}, []uint32{8, 9, 10, 5, 6, 10, 11, 35, 64}, []uint32{8, 9, 10, 32, 35, 64}},
-		{"log, first two", nil, []uint32{1, 2, 4, 8, 16, 32, 64}, []uint32{3, 4, 8, 16, 32, 64}},
-		{"log, all", []uint32{9, 10, 11, 12}, []uint32{9, 10, 11, 12, 2, 3, 4, 8, 16, 32, 64}, []uint32{9, 10, 11, 12, 129}},
+		{"uniform", 3, []uint32{1}, []uint32{1, 1, 1, 1, 1}, []uint32{1, 4}},
+		{"all but last", 3, []uint32{2}, []uint32{2, 1, 1, 1, 1, 5}, []uint32{2, 4, 5}},
+		{"all", 2, []uint32{1, 2, 3}, []uint32{1, 2, 3, 5, 5, 5}, []uint32{1, 2, 3, 15}},
+		{"first four", 4, []uint32{8, 9, 10}, []uint32{8, 9, 10, 5, 6, 10, 11, 35, 64}, []uint32{8, 9, 10, 32, 35, 64}},
+		{"log, until max", 3, nil, []uint32{1, 2, 4, 8, 16, 32, 64}, []uint32{31, 32, 64}},
+		{"log, all", 2, []uint32{9, 10, 11, 12}, []uint32{9, 10, 11, 12, 2, 3, 4, 8, 16, 32, 64}, []uint32{9, 10, 11, 12, 129}},
 	}
 
 	t.Run("SuccessAppendix", func(t *testing.T) {
@@ -289,7 +291,7 @@ func testConjoin(t *testing.T, factory func(t *testing.T) tablePersister) {
 			t.Run(c.name, func(t *testing.T) {
 				fm, p, upstream := setupAppendix(startLock, startRoot, c.precompact, c.appendix)
 
-				_, _, err := conjoin(context.Background(), inlineConjoiner{}, upstream, fm, p, stats)
+				_, _, err := conjoin(context.Background(), inlineConjoiner{c.maxTables}, upstream, fm, p, stats)
 				require.NoError(t, err)
 				exists, newUpstream, err := fm.ParseIfExists(context.Background(), stats, nil)
 				require.NoError(t, err)
@@ -313,7 +315,7 @@ func testConjoin(t *testing.T, factory func(t *testing.T) tablePersister) {
 					fm.set(constants.FormatLD1String, computeAddr([]byte("lock2")), startRoot, append(specs, newTable), upstream.appendix)
 				}}
 
-				_, _, err := conjoin(context.Background(), inlineConjoiner{}, upstream, u, p, stats)
+				_, _, err := conjoin(context.Background(), inlineConjoiner{c.maxTables}, upstream, u, p, stats)
 				require.NoError(t, err)
 				exists, newUpstream, err := fm.ParseIfExists(context.Background(), stats, nil)
 				require.NoError(t, err)
@@ -338,7 +340,7 @@ func testConjoin(t *testing.T, factory func(t *testing.T) tablePersister) {
 					fm.set(constants.FormatLD1String, computeAddr([]byte("lock2")), startRoot, append(specs, upstream.specs...), append(app, newTable))
 				}}
 
-				_, _, err := conjoin(context.Background(), inlineConjoiner{}, upstream, u, p, stats)
+				_, _, err := conjoin(context.Background(), inlineConjoiner{c.maxTables}, upstream, u, p, stats)
 				require.NoError(t, err)
 				exists, newUpstream, err := fm.ParseIfExists(context.Background(), stats, nil)
 				require.NoError(t, err)
@@ -362,7 +364,7 @@ func testConjoin(t *testing.T, factory func(t *testing.T) tablePersister) {
 				u := updatePreemptManifest{fm, func() {
 					fm.set(constants.FormatLD1String, computeAddr([]byte("lock2")), startRoot, upstream.specs[len(c.appendix)+1:], upstream.appendix[:])
 				}}
-				_, _, err := conjoin(context.Background(), inlineConjoiner{}, upstream, u, p, stats)
+				_, _, err := conjoin(context.Background(), inlineConjoiner{c.maxTables}, upstream, u, p, stats)
 				require.NoError(t, err)
 				exists, newUpstream, err := fm.ParseIfExists(context.Background(), stats, nil)
 				require.NoError(t, err)
@@ -386,7 +388,7 @@ func testConjoin(t *testing.T, factory func(t *testing.T) tablePersister) {
 					fm.set(constants.FormatLD1String, computeAddr([]byte("lock2")), startRoot, specs, append([]tableSpec{}, newTable))
 				}}
 
-				_, _, err := conjoin(context.Background(), inlineConjoiner{}, upstream, u, p, stats)
+				_, _, err := conjoin(context.Background(), inlineConjoiner{c.maxTables}, upstream, u, p, stats)
 				require.NoError(t, err)
 				exists, newUpstream, err := fm.ParseIfExists(context.Background(), stats, nil)
 				require.NoError(t, err)

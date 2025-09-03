@@ -42,20 +42,18 @@ type ToChunker interface {
 	Hash() hash.Hash
 	ToChunk() (chunks.Chunk, error)
 	IsEmpty() bool
+	CompressedSize() uint32
 	IsGhost() bool
 }
 
 // CompressedChunk represents a chunk of data in a table file which is still compressed via snappy.
 type CompressedChunk struct {
-	// H is the hash of the chunk
-	H hash.Hash
-
 	// FullCompressedChunk is the entirety of the compressed chunk data including the crc
 	FullCompressedChunk []byte
-
 	// CompressedData is just the snappy encoded byte buffer that stores the chunk data
 	CompressedData []byte
-
+	// H is the hash of the chunk
+	H hash.Hash
 	// true if the chunk is a ghost chunk.
 	ghost bool
 }
@@ -118,9 +116,9 @@ func (cmp CompressedChunk) IsGhost() bool {
 	return cmp.ghost
 }
 
-// CompressedSize returns the size of this CompressedChunk.
-func (cmp CompressedChunk) CompressedSize() int {
-	return len(cmp.CompressedData)
+// CompressedSize returns on disk size of the compressed chunk. Includes crc.
+func (cmp CompressedChunk) CompressedSize() uint32 {
+	return uint32(len(cmp.FullCompressedChunk))
 }
 
 var EmptyCompressedChunk CompressedChunk
@@ -168,9 +166,9 @@ type tableReaderAt interface {
 // to tolerate up to |blockSize| overhead each time we read a chunk, if it helps us group
 // more chunks together into a single read request to backing storage.
 type tableReader struct {
-	prefixes  []uint64
 	idx       tableIndex
 	r         tableReaderAt
+	prefixes  []uint64
 	blockSize uint64
 }
 

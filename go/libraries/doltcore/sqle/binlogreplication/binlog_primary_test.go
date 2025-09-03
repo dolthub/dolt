@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -1019,6 +1020,50 @@ func TestBinlogPrimary_Reset(t *testing.T) {
 	h.primaryDatabase.MustExec("call dolt_reset('--hard', @ThreeRowsCommit);")
 	h.waitForReplicaToCatchUp()
 	h.requireReplicaResults("select * from db01.t;", [][]any{{"01", "1"}, {"02", "2"}, {"03", "3"}})
+}
+
+// TestBinlogPrimary_replicationIgnoreDbs asserts that the @@replication_ignore_dbs system variable
+// causes any listed databases to be ignored and not included in replication events.
+func TestBinlogPrimary_replicationIgnoreDbs(t *testing.T) {
+	h := newHarness(t)
+	h.startSqlServersWithDoltSystemVars(doltReplicationPrimarySystemVars)
+	h.setupForDoltToMySqlReplication()
+	h.startReplicationAndCreateTestDb(h.doltPort)
+
+	// Set the primary to not replicate db123, then create test data
+	h.primaryDatabase.MustExec("SET @@SESSION.binlog_ignore_dbs='db123';")
+	h.primaryDatabase.MustExec("CREATE DATABASE db123;")
+	h.primaryDatabase.MustExec("USE db123;")
+	h.primaryDatabase.MustExec("CREATE TABLE t123 (pk INT PRIMARY KEY);")
+
+	// Assert that the replica does NOT have the db123 database
+	h.waitForReplicaToCatchUp()
+	replicaDatabases := mustListDatabases(t, h.replicaDatabase)
+	require.False(t, slices.Contains(replicaDatabases, "db123"))
+
+	// Set the primary to not replicate db123 or db234, then create test data
+	h.primaryDatabase.MustExec("SET @@SESSION.binlog_ignore_dbs='db123,db234';")
+	h.primaryDatabase.MustExec("CREATE DATABASE db234;")
+	h.primaryDatabase.MustExec("USE db234;")
+	h.primaryDatabase.MustExec("CREATE TABLE t234 (pk INT PRIMARY KEY);")
+
+	// Assert that the replica does NOT have the db123 or db234 databases
+	h.waitForReplicaToCatchUp()
+	replicaDatabases = mustListDatabases(t, h.replicaDatabase)
+	require.False(t, slices.Contains(replicaDatabases, "db123"))
+	require.False(t, slices.Contains(replicaDatabases, "db234"))
+
+	// Create db345 and assert that it is replicated
+	h.primaryDatabase.MustExec("CREATE DATABASE db345;")
+	h.primaryDatabase.MustExec("USE db345;")
+	h.primaryDatabase.MustExec("CREATE TABLE t345 (pk INT PRIMARY KEY);")
+	h.primaryDatabase.MustExec("INSERT INTO t345 VALUES (42);")
+
+	h.waitForReplicaToCatchUp()
+	replicaDatabases = mustListDatabases(t, h.replicaDatabase)
+	require.True(t, slices.Contains(replicaDatabases, "db345"))
+
+	requireResults(t, h.replicaDatabase, "SELECT * from db345.t345;", [][]any{{"42"}})
 }
 
 func (h *harness) setupForDoltToMySqlReplication() {

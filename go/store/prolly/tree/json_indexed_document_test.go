@@ -73,8 +73,8 @@ var jsonPathTypeNames = []string{
 }
 
 type chunkBoundary struct {
-	chunkId  int
 	path     string
+	chunkId  int
 	pathType jsonPathType
 }
 

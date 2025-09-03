@@ -28,9 +28,9 @@ func NewKeylessCardedMapIter(iter prolly.MapIter) prolly.MapIter {
 // keylessCardedMapIter duplicates keyless rows using the cardinality column
 type keylessCardedMapIter struct {
 	iter prolly.MapIter
-	card uint64
 	key  val.Tuple
 	val  val.Tuple
+	card uint64
 }
 
 var _ prolly.MapIter = (*keylessCardedMapIter)(nil)

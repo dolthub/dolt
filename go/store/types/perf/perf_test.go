@@ -38,8 +38,8 @@ import (
 )
 
 type perfSuite struct {
-	suite.PerfSuite
 	r *rand.Rand
+	suite.PerfSuite
 }
 
 func (s *perfSuite) SetupSuite() {

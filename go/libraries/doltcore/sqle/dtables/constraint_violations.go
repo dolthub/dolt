@@ -64,12 +64,12 @@ func newNomsCVTable(ctx *sql.Context, tblName doltdb.TableName, root doltdb.Root
 // constraintViolationsTable is a sql.Table implementation that provides access to the constraint violations that exist
 // for a user table for the old format.
 type constraintViolationsTable struct {
-	tblName doltdb.TableName
+	rs      RootSetter
 	root    doltdb.RootValue
 	cvSch   schema.Schema
-	sqlSch  sql.PrimaryKeySchema
 	tbl     *doltdb.Table
-	rs      RootSetter
+	tblName doltdb.TableName
+	sqlSch  sql.PrimaryKeySchema
 }
 
 var _ sql.Table = (*constraintViolationsTable)(nil)

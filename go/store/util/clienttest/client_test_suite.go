@@ -40,12 +40,12 @@ const DefaultMemTableSize = 8 * (1 << 20) // 8MB
 
 type ClientTestSuite struct {
 	suite.Suite
+	out        *os.File
+	err        *os.File
 	TempDir    string
 	DBDir      string
 	DBDir2     string
 	ExitStatus int
-	out        *os.File
-	err        *os.File
 }
 
 type ExitError struct {

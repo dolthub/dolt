@@ -91,21 +91,31 @@ func TestEventsCollectorEmitting(t *testing.T) {
 		NumLeft int
 	}{
 		{
+			// failingEmitter will return an error any time LogEvents is called, so no events
+			// will be processed. Because the collector drops old events when they can't be sent,
+			// we expect the number of events to be the max batch size.
 			"Failing",
 			failingEmitter{},
-			32*maxBatchedEvents - 1,
+			maxBatchedEvents,
 		},
 		{
+			// Similar to failingEmitter above, a nil emitter will not process any events, so
+			// the collector will drop the oldest events and just keep the most recent events.
 			"Nil",
 			nil,
-			32*maxBatchedEvents - 1,
+			maxBatchedEvents,
 		},
 		{
+			// NullEmitter returns nil for any call to LogEvent, so the number of events left
+			// unsent in the collector is zero.
 			"Null",
 			NullEmitter{},
 			0,
 		},
 		{
+			// contextAwareEmitter returns an error when LogEvents is called after the collector
+			// has been stopped. This causes the last incomplete batch (maxBatchedEvents -1) of
+			// events to be left unsent in the collector.
 			"ContextAware",
 			contextAwareEmitter{},
 			maxBatchedEvents - 1,

@@ -430,6 +430,34 @@ call dolt_commit('-am', 'add one val');"
     [[ "$output" =~ "dave" ]] || false
 }
 
+# Assert that when a new branch that has been pushed to a running SQL server through the RemotesAPI,
+# it will have its working set properly initialized so that it can be written to during a write
+# operation that references the branch as a branch-revision database.
+@test "sql-server-remotesrv: can write to a branch rev db for a new branch pushed to a sql-server remote" {
+    mkdir -p db/remote
+    cd db/remote
+    dolt init
+    dolt sql-server --remotesapi-port 50051 --loglevel DEBUG &
+    srv_pid=$!
+    cd ../..
+
+    # By cloning here, we have a near-at-hand way to wait for the server to be ready.
+    dolt clone http://localhost:50051/remote cloned_remote
+    cd cloned_remote
+
+    # create a new branch in the clone and push it to the running sql-server
+    dolt checkout -b new_branch
+    dolt push origin new_branch
+
+    # Check out the new branch, do a test write, and commit
+    cd ../db/remote
+    dolt sql -q "CREATE TABLE \`remote/new_branch\`.t123 (pk int primary key);"
+    run dolt sql -q "SELECT * FROM \`remote/new_branch\`.dolt_status;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "t123       | 0      | new table" ]] || false
+    dolt sql -q "CALL dolt_checkout('new_branch'); CALL dolt_commit('-Am', 'add table t123');"
+}
+
 @test "sql-server-remotesrv: push to dirty workspace as super user" {
     mkdir remote
     cd remote

@@ -53,6 +53,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/clusterdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/jwtauth"
@@ -79,43 +80,47 @@ type databaseDropReplication struct {
 type SqlContextFactory func(ctx context.Context) (*sql.Context, error)
 
 type Controller struct {
+	grpcCreds     credentials.PerRPCCredentials
 	cfg           servercfg.ClusterConfig
 	persistentCfg config.ReadWriteConfig
-	role          Role
-	epoch         int
+
+	remoteSrvDBCache     remotesrv.DBCache
+	branchControlFilesys filesys.Filesys
+
 	systemVars    sqlvars
-	mu            sync.Mutex
-	commithooks   []*commithook
-	sinterceptor  serverinterceptor
-	cinterceptor  clientinterceptor
-	lgr           *logrus.Logger
+	sqlCtxFactory SqlContextFactory
 
-	standbyCallback IsStandbyCallback
-	iterSessions    IterSessions
-	killQuery       func(uint32)
-	killConnection  func(uint32) error
+	outstandingDropDatabases map[string]*databaseDropReplication
+	jwks                     *jwtauth.MultiJWKS
+	tlsCfg                   *tls.Config
+	standbyCallback          IsStandbyCallback
+	iterSessions             IterSessions
+	killQuery                func(uint32)
+	killConnection           func(uint32) error
+	dropDatabase             func(*sql.Context, string) error
 
-	jwks      *jwtauth.MultiJWKS
-	tlsCfg    *tls.Config
-	grpcCreds credentials.PerRPCCredentials
-	pub       ed25519.PublicKey
-	priv      ed25519.PrivateKey
-
-	replicationClients []*replicationServiceClient
+	role Role
 
 	mysqlDb          *mysql_db.MySQLDb
 	mysqlDbPersister *replicatingMySQLDbPersister
-	mysqlDbReplicas  []*mysqlDbReplica
 
 	branchControlController *branch_control.Controller
-	branchControlFilesys    filesys.Filesys
 	bcReplication           *branchControlReplication
 
-	dropDatabase             func(*sql.Context, string) error
-	outstandingDropDatabases map[string]*databaseDropReplication
-	remoteSrvDBCache         remotesrv.DBCache
+	lgr *logrus.Logger
 
-	sqlCtxFactory SqlContextFactory
+	replicationClients []*replicationServiceClient
+	mysqlDbReplicas    []*mysqlDbReplica
+	commithooks        []*commithook
+
+	priv ed25519.PrivateKey
+	pub  ed25519.PublicKey
+
+	sinterceptor serverinterceptor
+	cinterceptor clientinterceptor
+
+	epoch int
+	mu    sync.Mutex
 }
 
 type sqlvars interface {
@@ -548,28 +553,25 @@ func applyBootstrapClusterConfig(lgr *logrus.Logger, cfg servercfg.ClusterConfig
 }
 
 type roleTransitionOptions struct {
-	// If true, all standby replicas must be caught up in order to
-	// transition from primary to standby.
-	graceful bool
-
+	// If non-nil, this connection will be saved if and when the connection
+	// process needs to terminate existing connections.
+	saveConnID *int
 	// If non-zero and |graceful| is true, will allow a transition from
 	// primary to standby to succeed only if this many standby replicas
 	// are known to be caught up at the finalization of the replication
 	// hooks.
 	minCaughtUpStandbys int
-
-	// If non-nil, this connection will be saved if and when the connection
-	// process needs to terminate existing connections.
-	saveConnID *int
+	// If true, all standby replicas must be caught up in order to
+	// transition from primary to standby.
+	graceful bool
 }
 
 type roleTransitionResult struct {
-	// true if the role changed as a result of this call.
-	changedRole bool
-
 	// filled in with graceful transition results if this was a graceful
 	// transition and it was successful.
 	gracefulTransitionResults []graceTransitionResult
+	// true if the role changed as a result of this call.
+	changedRole bool
 }
 
 func (c *Controller) setRoleAndEpoch(role string, epoch int, opts roleTransitionOptions) (roleTransitionResult, error) {
@@ -582,22 +584,22 @@ func (c *Controller) setRoleAndEpoch(role string, epoch int, opts roleTransition
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if epoch == c.epoch && role == string(c.role) {
-		return roleTransitionResult{false, nil}, nil
+		return roleTransitionResult{changedRole: false, gracefulTransitionResults: nil}, nil
 	}
 
 	if role != string(RolePrimary) && role != string(RoleStandby) && role != string(RoleDetectedBrokenConfig) {
-		return roleTransitionResult{false, nil}, fmt.Errorf("error assuming role '%s'; valid roles are 'primary' and 'standby'", role)
+		return roleTransitionResult{changedRole: false, gracefulTransitionResults: nil}, fmt.Errorf("error assuming role '%s'; valid roles are 'primary' and 'standby'", role)
 	}
 
 	if epoch < c.epoch {
-		return roleTransitionResult{false, nil}, fmt.Errorf("error assuming role '%s' at epoch %d; already at epoch %d", role, epoch, c.epoch)
+		return roleTransitionResult{changedRole: false, gracefulTransitionResults: nil}, fmt.Errorf("error assuming role '%s' at epoch %d; already at epoch %d", role, epoch, c.epoch)
 	}
 	if epoch == c.epoch {
 		// This is allowed for non-graceful transitions to 'standby', which only occur from interceptors and
 		// other signals that the cluster is misconfigured.
 		isallowed := !graceful && (role == string(RoleStandby) || role == string(RoleDetectedBrokenConfig))
 		if !isallowed {
-			return roleTransitionResult{false, nil}, fmt.Errorf("error assuming role '%s' at epoch %d; already at epoch %d with different role, '%s'", role, epoch, c.epoch, c.role)
+			return roleTransitionResult{changedRole: false, gracefulTransitionResults: nil}, fmt.Errorf("error assuming role '%s' at epoch %d; already at epoch %d with different role, '%s'", role, epoch, c.epoch, c.role)
 		}
 	}
 
@@ -617,7 +619,7 @@ func (c *Controller) setRoleAndEpoch(role string, epoch int, opts roleTransition
 				if err != nil {
 					c.setProviderIsStandby(c.role != RolePrimary)
 					c.killRunningQueries(saveConnID)
-					return roleTransitionResult{false, nil}, err
+					return roleTransitionResult{changedRole: false, gracefulTransitionResults: nil}, err
 				}
 			} else {
 				c.immediateTransitionToStandby()
@@ -791,10 +793,10 @@ func (c *Controller) RegisterGrpcServices(ctxFactory func(context.Context) (*sql
 const waitForHooksToReplicateTimeout = 10 * time.Second
 
 type graceTransitionResult struct {
-	caughtUp  bool
 	database  string
 	remote    string
 	remoteUrl string
+	caughtUp  bool
 }
 
 // The order of operations is:
@@ -930,6 +932,12 @@ func (c *Controller) immediateTransitionToStandby() error {
 func (c *Controller) transitionToPrimary(saveConnID int) error {
 	c.setProviderIsStandby(false)
 	c.killRunningQueries(saveConnID)
+	// Promotion: ensure next AUTO_INCREMENT values do not reuse existing IDs.
+	// Refresh trackers for databases already loaded in this session so first
+	// writes on the new primary allocate IDs at or above current table maxima.
+	if err := c.refreshAutoIncrementTrackersForSessionDatabases(); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -945,6 +953,69 @@ func (c *Controller) killRunningQueries(saveConnID int) {
 			return
 		})
 	}
+}
+
+// refreshAutoIncrementTrackersForSessionDatabases re-initializes AUTO_INCREMENT
+// trackers for databases already loaded in the current session by using their
+// working sets. This immediately aligns in-memory sequences with replicated
+// table metadata after a promotion so the first post-promotion inserts do not
+// reuse primary keys. This method only refreshes session-known databases; any
+// database not yet loaded is skipped here and its tracker initializes lazily on
+// first use. Only working sets are read; branches and remotes are not scanned
+// as part of this promotion path.
+func (c *Controller) refreshAutoIncrementTrackersForSessionDatabases() error {
+	if c == nil || c.sqlCtxFactory == nil {
+		return fmt.Errorf("cluster/controller: auto-inc refresh: missing sql context factory")
+	}
+
+	// Create a SQL context to access session and provider
+	sqlCtx, err := c.sqlCtxFactory(context.Background())
+	if err != nil {
+		return fmt.Errorf("cluster/controller: auto-inc refresh: create sql context: %w", err)
+	}
+	// Ensure proper session lifecycle for any storage-layer ops
+	defer sql.SessionEnd(sqlCtx.Session)
+	sql.SessionCommandBegin(sqlCtx.Session)
+	defer sql.SessionCommandEnd(sqlCtx.Session)
+
+	sess := dsess.DSessFromSess(sqlCtx.Session)
+	provider := sess.Provider()
+
+	for _, sdb := range provider.DoltDatabases() {
+		name := sdb.Name()
+		if name == clusterdb.DoltClusterDbName {
+			continue
+		}
+
+		// Load DB and its AI tracker
+		db, err := provider.Database(sqlCtx, name)
+		if err != nil {
+			return fmt.Errorf("cluster/controller: auto-inc refresh: %s: provider db: %w", name, err)
+		}
+		gsp, ok := db.(globalstate.GlobalStateProvider)
+		if !ok {
+			// Non-versioned DBs don't participate in AUTO_INCREMENT global state
+			continue
+		}
+		ai, err := gsp.GetGlobalState().AutoIncrementTracker(sqlCtx)
+		if err != nil {
+			return fmt.Errorf("cluster/controller: auto-inc refresh: %s: tracker: %w", name, err)
+		}
+
+		// Get working set roots only
+		state, ok, err := sess.LookupDbState(sqlCtx, name)
+		if err != nil {
+			return fmt.Errorf("cluster/controller: auto-inc refresh: %s: lookup db state: %w", name, err)
+		}
+		if !ok || state.WorkingSet() == nil {
+			// Not loaded in session; defer to lazy initialization on first use
+			continue
+		}
+		if err := ai.InitWithRoots(sqlCtx, state.WorkingSet()); err != nil {
+			return fmt.Errorf("cluster/controller: auto-inc refresh: %s: init: %w", name, err)
+		}
+	}
+	return nil
 }
 
 // called with c.mu held
@@ -1146,11 +1217,11 @@ func (c *Controller) standbyRemotesJWKS() *jwtauth.MultiJWKS {
 }
 
 type replicationServiceClient struct {
+	client replicationapi.ReplicationServiceClient
+	closer func() error
 	remote string
 	url    string
 	tls    bool
-	client replicationapi.ReplicationServiceClient
-	closer func() error
 }
 
 func (c *Controller) replicationServiceDialOptions() []grpc.DialOption {

@@ -24,6 +24,7 @@ package nbs
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sort"
 	"time"
 
@@ -54,6 +55,9 @@ func (c inlineConjoiner) conjoinRequired(ts tableSet) bool {
 // when removed and replaced with the conjoinment, will leave the conjoinment as the smallest table.
 // We also keep taking table files until we get below maxTables.
 func (c inlineConjoiner) chooseConjoinees(upstream []tableSpec) (conjoinees, keepers []tableSpec, err error) {
+	if c.maxTables < 2 {
+		return nil, upstream, fmt.Errorf("runtime error: cannot conjoin with maxTables set to %d", c.maxTables)
+	}
 	sorted := make([]tableSpec, len(upstream))
 	copy(sorted, upstream)
 
@@ -66,7 +70,7 @@ func (c inlineConjoiner) chooseConjoinees(upstream []tableSpec) (conjoinees, kee
 	for i < len(sorted) {
 		next := sorted[i].chunkCount
 		if sum <= next {
-			if c.maxTables == 0 || len(sorted)-i < c.maxTables {
+			if len(sorted)-i < c.maxTables {
 				break
 			}
 		}
@@ -143,15 +147,14 @@ func (s *specificFilesConjoiner) chooseConjoinees(specs []tableSpec) (conjoinees
 //
 // A conjoinOperation is created when a conjoinStrategy |conjoinRequired| returns true.
 type conjoinOperation struct {
-	// The computed things we conjoined in |conjoin|.
-	conjoinees []tableSpec
-	// The tableSpec for the conjoined file.
-	conjoined tableSpec
-
 	// Anything to run as cleanup after we complete successfully.
 	// This comes directly from persister.ConjoinAll, but needs to
 	// be run after the manifest update lands successfully.
 	cleanup cleanupFunc
+	// The computed things we conjoined in |conjoin|.
+	conjoinees []tableSpec
+	// The tableSpec for the conjoined file.
+	conjoined tableSpec
 }
 
 // Compute what we will conjoin and prepare to do it. This should be

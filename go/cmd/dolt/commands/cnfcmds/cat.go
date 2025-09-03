@@ -101,12 +101,9 @@ func (cmd CatCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		return 1
 	}
 
-	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
+	queryist, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-	}
-	if closeFunc != nil {
-		defer closeFunc()
 	}
 
 	tblNames := args
@@ -116,7 +113,7 @@ func (cmd CatCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		return 1
 	}
 
-	if err := printConflicts(queryist, sqlCtx, tblNames); err != nil {
+	if err := printConflicts(queryist.Queryist, queryist.Context, tblNames); err != nil {
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 	return 0

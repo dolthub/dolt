@@ -2066,3 +2066,23 @@ func RunDoltQueryCatalogTests(t *testing.T, harness DoltEnginetestHarness) {
 		})
 	}
 }
+
+func RunDoltTestsTableTests(t *testing.T, harness DoltEnginetestHarness) {
+	dtables.DoltCommand = doltcmd.DoltCommand
+
+	for _, script := range DoltTestTableScripts {
+		t.Run(script.Name, func(t *testing.T) {
+			harness = harness.NewHarness(t)
+			defer harness.Close()
+			enginetest.TestScript(t, harness, script)
+		})
+	}
+
+	for _, script := range DoltTestRunFunctionScripts {
+		t.Run(script.Name, func(t *testing.T) {
+			harness = harness.NewHarness(t)
+			defer harness.Close()
+			enginetest.TestScript(t, harness, script)
+		})
+	}
+}

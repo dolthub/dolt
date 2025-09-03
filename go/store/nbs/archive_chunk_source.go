@@ -17,8 +17,10 @@ package nbs
 import (
 	"context"
 	"encoding/binary"
+	"fmt"
 	"io"
 	"path/filepath"
+	"strings"
 
 	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
@@ -28,8 +30,8 @@ import (
 )
 
 type archiveChunkSource struct {
-	file string // Only meaningful for local files.
 	aRdr archiveReader
+	file string
 }
 
 var _ chunkSource = &archiveChunkSource{}
@@ -42,11 +44,11 @@ func newArchiveChunkSource(ctx context.Context, dir string, h hash.Hash, chunkCo
 		return archiveChunkSource{}, err
 	}
 
-	aRdr, err := newArchiveReader(ctx, fra, uint64(fra.sz), stats)
+	aRdr, err := newArchiveReader(ctx, fra, h, uint64(fra.sz), stats)
 	if err != nil {
 		return archiveChunkSource{}, err
 	}
-	return archiveChunkSource{archiveFile, aRdr}, nil
+	return archiveChunkSource{aRdr, archiveFile}, nil
 }
 
 func newAWSArchiveChunkSource(ctx context.Context,
@@ -64,11 +66,17 @@ func newAWSArchiveChunkSource(ctx context.Context,
 		return emptyChunkSource{}, err
 	}
 
-	aRdr, err := newArchiveReaderFromFooter(ctx, &s3TableReaderAt{s3, name}, sz, footer, stats)
+	id := strings.TrimSuffix(filepath.Base(name), ArchiveFileSuffix)
+	hashId, ok := hash.MaybeParse(id)
+	if !ok {
+		return emptyChunkSource{}, fmt.Errorf("invalid archive file path: %s", name)
+	}
+
+	aRdr, err := newArchiveReaderFromFooter(ctx, &s3TableReaderAt{s3, name}, hashId, sz, footer, stats)
 	if err != nil {
 		return emptyChunkSource{}, err
 	}
-	return archiveChunkSource{"", aRdr}, nil
+	return archiveChunkSource{aRdr, ""}, nil
 }
 
 func (acs archiveChunkSource) has(h hash.Hash, keeper keeperF) (bool, gcBehavior, error) {
@@ -177,7 +185,7 @@ func (acs archiveChunkSource) clone() (chunkSource, error) {
 	if err != nil {
 		return nil, err
 	}
-	return archiveChunkSource{acs.file, reader}, nil
+	return archiveChunkSource{reader, acs.file}, nil
 }
 
 func (acs archiveChunkSource) getRecordRanges(_ context.Context, requests []getRecord, keeper keeperF) (map[hash.Hash]Range, gcBehavior, error) {

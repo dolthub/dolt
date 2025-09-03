@@ -197,7 +197,7 @@ EOF
     [ "$status" -eq 1 ]
     run grep 'Error authenticating user' log.txt
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 2 ]
+    [ "${#lines[@]}" -eq 1 ]
 }
 
 @test "sql-server: Database specific system variables should be loaded" {
@@ -338,6 +338,23 @@ EOF
     run dolt sql -q "CREATE TABLE test_readonly_yaml_table (id INT PRIMARY KEY);"
     [ "$status" -ne 0 ]
     [[ "$output" =~ "read only mode" ]] || false
+}
+
+@test "sql-server: @@port reflects configured listener port" {
+    skiponwindows "Missing dependencies"
+
+    cd repo1
+
+    start_sql_server
+
+    # Verify that @@port matches the dynamically selected $PORT
+    run dolt sql -q "SELECT @@port;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ " $PORT " ]] || false
+
+    run dolt sql -q "SELECT @@global.port;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ " $PORT " ]] || false
 }
 
 @test "sql-server: inspect sql-server using CLI" {

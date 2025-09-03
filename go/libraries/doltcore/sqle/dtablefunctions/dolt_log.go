@@ -30,6 +30,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/utils/gpg"
+	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
@@ -40,21 +41,16 @@ var _ sql.ExecSourceRel = (*LogTableFunction)(nil)
 var _ sql.AuthorizationCheckerNode = (*LogTableFunction)(nil)
 
 type LogTableFunction struct {
-	ctx *sql.Context
-
+	database        sql.Database
+	ctx             *sql.Context
+	decoration      string
 	revisionStrs    []string
 	notRevisionStrs []string
 	tableNames      []string
-
-	minParents    int
-	showParents   bool
-	showSignature bool
-	decoration    string
-
-	database sql.Database
-
-	// argumentExprs stores the original expressions for deferred parsing
-	argumentExprs []sql.Expression
+	argumentExprs   []sql.Expression
+	minParents      int
+	showParents     bool
+	showSignature   bool
 }
 
 var logTableSchema = sql.Schema{
@@ -463,7 +459,10 @@ func (ltf *LogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter
 
 	dbName := sess.Session.GetCurrentDatabase()
 	headRef, err := sess.CWBHeadRef(ctx, dbName)
-	if err != nil {
+	if err == doltdb.ErrOperationNotSupportedInDetachedHead {
+		// In detached HEAD state, we can still resolve commits without a branch ref
+		headRef = nil
+	} else if err != nil {
 		return nil, err
 	}
 
@@ -614,13 +613,12 @@ var _ sql.RowIter = (*logTableFunctionRowIter)(nil)
 // logTableFunctionRowIter is a sql.RowIter implementation which iterates over each commit as if it's a row in the table.
 type logTableFunctionRowIter struct {
 	child         doltdb.CommitItr[*sql.Context]
+	cHashToRefs   map[hash.Hash][]string
+	decoration    string
+	tableNames    []string
+	headHash      hash.Hash
 	showParents   bool
 	showSignature bool
-	decoration    string
-	cHashToRefs   map[hash.Hash][]string
-	headHash      hash.Hash
-
-	tableNames []string
 }
 
 // NewLogTableFunctionRowIter creates iterator for single commit history traversal.
@@ -694,9 +692,11 @@ func (itr *logTableFunctionRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 	var commitHash hash.Hash
 	var commit *doltdb.Commit
 	var optCmt *doltdb.OptionalCommit
+	var meta *datas.CommitMeta
+	var height uint64
 	var err error
 	for {
-		commitHash, optCmt, err = itr.child.Next(ctx)
+		commitHash, optCmt, meta, height, err = itr.child.Next(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -768,14 +768,19 @@ func (itr *logTableFunctionRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 		}
 	}
 
-	meta, err := commit.GetCommitMeta(ctx)
-	if err != nil {
-		return nil, err
+	if meta == nil {
+		meta, err = commit.GetCommitMeta(ctx)
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	height, err := commit.Height()
-	if err != nil {
-		return nil, err
+	// TODO: will retrieve height again if it's 0
+	if height == 0 {
+		height, err = commit.Height()
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	row := sql.NewRow(commitHash.String(), meta.Name, meta.Email, meta.Time(), meta.Description, height)
@@ -785,13 +790,13 @@ func (itr *logTableFunctionRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 		if err != nil {
 			return nil, err
 		}
-		row = row.Append(sql.NewRow(prStr))
+		row = append(row, prStr)
 	}
 
 	if shouldDecorateWithRefs(itr.decoration) {
 		branchNames := itr.cHashToRefs[commitHash]
 		isHead := itr.headHash == commitHash
-		row = row.Append(sql.NewRow(getRefsString(branchNames, isHead)))
+		row = append(row, getRefsString(branchNames, isHead))
 	}
 
 	if itr.showSignature {
@@ -800,10 +805,9 @@ func (itr *logTableFunctionRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 			if err != nil {
 				return nil, err
 			}
-
-			row = row.Append(sql.NewRow(string(out)))
+			row = append(row, string(out))
 		} else {
-			row = row.Append(sql.NewRow(""))
+			row = append(row, "")
 		}
 	}
 

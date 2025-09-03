@@ -2028,3 +2028,74 @@ tests:
     - on: server1
       queries:
         - exec: "set foreign_key_checks=0"
+
+- name: auto_increment maintained across failover
+  multi_repos:
+  - name: server1
+    with_files:
+    - name: server.yaml
+      contents: |
+        log_level: trace
+        listener:
+          host: 0.0.0.0
+          port: {{get_port "server1"}}
+        cluster:
+          standby_remotes:
+          - name: standby
+            remote_url_template: http://localhost:{{get_port "server2_cluster"}}/{database}
+          bootstrap_role: primary
+          bootstrap_epoch: 1
+          remotesapi:
+            port: {{get_port "server1_cluster"}}
+    server:
+      args: ["--config", "server.yaml"]
+      dynamic_port: server1
+  - name: server2
+    with_files:
+    - name: server.yaml
+      contents: |
+        log_level: trace
+        listener:
+          host: 0.0.0.0
+          port: {{get_port "server2"}}
+        cluster:
+          standby_remotes:
+          - name: standby
+            remote_url_template: http://localhost:{{get_port "server1_cluster"}}/{database}
+          bootstrap_role: standby
+          bootstrap_epoch: 1
+          remotesapi:
+            port: {{get_port "server2_cluster"}}
+    server:
+      args: ["--config", "server.yaml"]
+      dynamic_port: server2
+  connections:
+  - on: server1
+    queries:
+    - exec: 'CREATE DATABASE repo1'
+    - exec: 'USE repo1'
+    - exec: 'SET @@GLOBAL.dolt_cluster_ack_writes_timeout_secs = 10'
+    - exec: 'CREATE TABLE t (id INT AUTO_INCREMENT PRIMARY KEY, v INT)'
+    - exec: 'INSERT INTO t(v) VALUES (0),(0),(0),(0),(0)'
+  - on: server2
+    queries:
+    - exec: 'USE repo1'
+    - query: 'SELECT * FROM t ORDER BY id'
+      result:
+        columns: ['id', 'v']
+        rows: [['1','0'], ['2','0'], ['3','0'], ['4','0'], ['5','0']]
+      retry_attempts: 100
+  - on: server1
+    queries:
+    - exec: "CALL dolt_assume_cluster_role('standby', 2)"
+  - on: server2
+    queries:
+    - exec: "CALL dolt_assume_cluster_role('primary', 2)"
+  - on: server2
+    queries:
+    - exec: 'USE repo1'
+    - exec: 'INSERT INTO t(v) VALUES (1)'
+    - query: 'SELECT * FROM t ORDER BY id'
+      result:
+        columns: ['id', 'v']
+        rows: [['1','0'], ['2','0'], ['3','0'], ['4','0'], ['5','0'], ['6','1']]

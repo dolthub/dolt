@@ -76,15 +76,12 @@ func (cmd ListCmd) Exec(ctx context.Context, commandStr string, args []string, _
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, listDocs, ap))
 	cli.ParseArgsOrDie(ap, args, help)
 
-	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
+	queryist, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
-	if closeFunc != nil {
-		defer closeFunc()
-	}
 
-	hasTables, err := dolt_ci.HasDoltCITables(queryist, sqlCtx)
+	hasTables, err := dolt_ci.HasDoltCITables(queryist.Queryist, queryist.Context)
 	if err != nil {
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
@@ -96,9 +93,9 @@ func (cmd ListCmd) Exec(ctx context.Context, commandStr string, args []string, _
 	if err != nil {
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
-	wm := dolt_ci.NewWorkflowManager(user, email, queryist.Query)
+	wm := dolt_ci.NewWorkflowManager(user, email, queryist.Queryist.Query)
 
-	workflows, err := wm.ListWorkflows(sqlCtx)
+	workflows, err := wm.ListWorkflows(queryist.Context)
 	if err != nil {
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}

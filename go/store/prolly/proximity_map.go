@@ -229,14 +229,14 @@ func NewProximityMapBuilder(ctx context.Context, ns tree.NodeStore, distanceType
 // won't be needed once we finish building the ProximityMap. This could potentially be avoided by creating a
 // separate in-memory NodeStore for these values.
 type ProximityMapBuilder struct {
-	ns                    tree.NodeStore
 	vectorIndexSerializer message.VectorIndexSerializer
+	ns                    tree.NodeStore
 	distanceType          vector.DistanceType
-	keyDesc, valDesc      val.TupleDesc
+	levelMap              *MutableMap
+	keyDesc               val.TupleDesc
+	valDesc               val.TupleDesc
 	logChunkSize          uint8
-
-	maxLevel uint8
-	levelMap *MutableMap
+	maxLevel              uint8
 }
 
 // Insert adds a new key-value pair to the ProximityMap under construction.

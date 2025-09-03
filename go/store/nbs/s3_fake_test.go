@@ -58,14 +58,13 @@ func makeFakeS3(t *testing.T) *fakeS3 {
 }
 
 type fakeS3 struct {
-	assert *assert.Assertions
-
-	mu                sync.Mutex
+	assert            *assert.Assertions
 	data              map[string][]byte
-	inProgressCounter int
 	inProgress        map[string]fakeS3Multipart // Key -> {UploadId, Etags...}
 	parts             map[string][]byte          // ETag -> data
+	inProgressCounter int
 	getCount          int
+	mu                sync.Mutex
 }
 
 type fakeS3Multipart struct {

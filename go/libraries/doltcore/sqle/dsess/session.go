@@ -34,6 +34,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/expranalysis"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
@@ -50,31 +51,37 @@ var ErrSessionNotPersistable = errors.New("session is not persistable")
 
 // DoltSession is the sql.Session implementation used by dolt. It is accessible through a *sql.Context instance
 type DoltSession struct {
-	sql.Session
-	DoltgresSessObj       any   // This is used by Doltgres to persist objects in the session. This is not used by Dolt.
-	notices               []any // This is used by Doltgres to store notices. This is not used by Dolt.
-	username              string
-	email                 string
-	dbStates              map[string]*DatabaseSessionState
-	dbCache               *DatabaseCache
-	provider              DoltDatabaseProvider
-	tempTables            map[string][]sql.Table
-	globalsConf           config.ReadWriteConfig
-	branchController      *branch_control.Controller
-	statsProv             sql.StatsProvider
-	mu                    *sync.Mutex
-	fs                    filesys.Filesys
-	writeSessProv         WriteSessFunc
-	gcSafepointController *gcctx.GCSafepointController
+	provider DoltDatabaseProvider
+
+	DoltgresSessObj any // This is used by Doltgres to persist objects in the session. This is not used by Dolt.
 
 	// If non-nil, this will be returned from ValidateSession.
 	// Used by sqle/cluster to put a session into a terminal err state.
 	validateErr error
+
+	fs filesys.Filesys
+	sql.Session
+	statsProv   sql.StatsProvider
+	globalsConf config.ReadWriteConfig
+
+	mu                    *sync.Mutex
+	branchController      *branch_control.Controller
+	dbCache               *DatabaseCache
+	dbStates              map[string]*DatabaseSessionState
+	tempTables            map[string][]sql.Table
+	gcSafepointController *gcctx.GCSafepointController
+
+	writeSessProv WriteSessFunc
+
+	email    string
+	username string
+	notices  []any // This is used by Doltgres to store notices. This is not used by Dolt.
 }
 
 var _ sql.Session = (*DoltSession)(nil)
 var _ sql.PersistableSession = (*DoltSession)(nil)
 var _ sql.TransactionSession = (*DoltSession)(nil)
+var _ expranalysis.SessionDbProvider = (*DoltSession)(nil)
 var _ branch_control.ContextConvertible = (*DoltSession)(nil)
 
 // DefaultSession creates a DoltSession with default values
@@ -131,6 +138,12 @@ func NewDoltSession(
 
 // Provider returns the RevisionDatabaseProvider for this session.
 func (d *DoltSession) Provider() DoltDatabaseProvider {
+	return d.provider
+}
+
+// GenericProvider returns the sql.MutableDatabaseProvider for this session. This allows access to the provider without
+// incurring import cycles in some cases.
+func (d *DoltSession) GenericProvider() sql.MutableDatabaseProvider {
 	return d.provider
 }
 
@@ -1411,25 +1424,36 @@ func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 
 	if dbState.Err != nil {
 		sessionState.Err = dbState.Err
-	} else if dbState.WorkingSet != nil {
-		branchState.workingSet = dbState.WorkingSet
-
-		// TODO: this is pretty clunky, there is a silly dependency between InitialDbState and globalstate.StateProvider
-		//  that's hard to express with the current types
-		stateProvider, ok := db.(globalstate.GlobalStateProvider)
-		if !ok {
-			return fmt.Errorf("database does not contain global state store")
+	} else {
+		// If the dbState doesn't have a working set yet, try to
+		// initialize one – this will only initialize a working set
+		// if the database is a branch revision database.
+		if dbState.WorkingSet == nil {
+			if err := initializeBranchWorkingSet(ctx, db, &dbState); err != nil {
+				return err
+			}
 		}
-		sessionState.globalState = stateProvider.GetGlobalState()
 
-		tracker, err := sessionState.globalState.AutoIncrementTracker(ctx)
-		if err != nil {
-			return err
+		if dbState.WorkingSet != nil {
+			branchState.workingSet = dbState.WorkingSet
+
+			// TODO: this is pretty clunky, there is a silly dependency between InitialDbState and globalstate.StateProvider
+			//  that's hard to express with the current types
+			stateProvider, ok := db.(globalstate.GlobalStateProvider)
+			if !ok {
+				return fmt.Errorf("database does not contain global state store")
+			}
+			sessionState.globalState = stateProvider.GetGlobalState()
+
+			tracker, err := sessionState.globalState.AutoIncrementTracker(ctx)
+			if err != nil {
+				return err
+			}
+			branchState.writeSession = d.writeSessProv(nbf, branchState.WorkingSet(), tracker, editOpts)
 		}
-		branchState.writeSession = d.writeSessProv(nbf, branchState.WorkingSet(), tracker, editOpts)
 	}
 
-	// WorkingSet is nil in the case of a read only, detached head DB
+	// WorkingSet is nil in the case of a read-only, detached head DB
 	if dbState.HeadCommit != nil {
 		headRoot, err := dbState.HeadCommit.GetRootValue(ctx)
 		if err != nil {
@@ -1745,6 +1769,41 @@ func (d *DoltSession) Validate() {
 // sql engine through here.
 func (d *DoltSession) GCSafepointController() *gcctx.GCSafepointController {
 	return d.gcSafepointController
+}
+
+// initializeBranchWorkingSet checks if |db| is a branch revision database, and if |dbState|
+// does not have a working set yet, then a new, empty working set is created and set in |dbState|.
+// If |db| is NOT a branch revision database, or |dbState| already has a working set, then this
+// function will not do anything.
+func initializeBranchWorkingSet(ctx *sql.Context, db SqlDatabase, dbState *InitialDbState) error {
+	revisionDb, isRevisionDb := db.(RevisionDatabase)
+	if !isRevisionDb || revisionDb.RevisionType() != RevisionTypeBranch || dbState.WorkingSet != nil {
+		return nil
+	}
+
+	branchRef := ref.NewBranchRef(revisionDb.Revision())
+	wsRef, err := ref.WorkingSetRefForHead(branchRef)
+	if err != nil {
+		return err
+	}
+
+	commit, err := dbState.DbData.Ddb.ResolveCommitRef(ctx, branchRef)
+	if err != nil {
+		return err
+	}
+
+	headRoot, err := commit.GetRootValue(ctx)
+	if err != nil {
+		return err
+	}
+
+	dbState.WorkingSet = doltdb.EmptyWorkingSet(wsRef).
+		WithWorkingRoot(headRoot).WithStagedRoot(headRoot)
+
+	ctx.GetLogger().Warnf("initializing empty working set for branch %s", revisionDb.Revision())
+
+	return dbState.DbData.Ddb.UpdateWorkingSet(ctx, wsRef, dbState.WorkingSet,
+		hash.Hash{}, doltdb.TodoWorkingSetMeta(), nil)
 }
 
 // validatePersistedSysVar checks whether a system variable exists and is dynamic

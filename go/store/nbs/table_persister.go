@@ -112,29 +112,55 @@ type sourceWithSize struct {
 
 type compactionPlan struct {
 	sources             chunkSourcesByDescendingDataSize
+	name                hash.Hash
+	suffix              string
 	mergedIndex         []byte
 	chunkCount          uint32
 	totalCompressedData uint64
 }
 
-func (cp compactionPlan) suffixes() []byte {
-	suffixesStart := uint64(cp.chunkCount) * (prefixTupleSize + lengthSize)
-	return cp.mergedIndex[suffixesStart : suffixesStart+uint64(cp.chunkCount)*hash.SuffixLen]
-}
+const (
+	conjoinModeUnknown = iota
+	conjoinModeTable
+	conjoinModeArchive
+)
 
 // planRangeCopyConjoin computes a conjoin plan for tablePersisters that can conjoin
 // chunkSources using range copies (copy only chunk records, not chunk indexes).
 func planRangeCopyConjoin(sources chunkSources, stats *Stats) (compactionPlan, error) {
+	mode := conjoinModeUnknown
 	var sized []sourceWithSize
 	for _, src := range sources {
-		index, err := src.index()
-		if err != nil {
-			return compactionPlan{}, err
+		aSrc, ok := src.(archiveChunkSource)
+		if !ok {
+			if mode == conjoinModeUnknown {
+				mode = conjoinModeTable
+			}
+
+			index, err := src.index()
+			if err != nil {
+				return compactionPlan{}, err
+			}
+			// Calculate the amount of chunk data in |src|
+			sized = append(sized, sourceWithSize{src, calcChunkRangeSize(index)})
+		} else {
+			// A single archive source forces the entire conjoin to be done as an archive conjoin.
+			mode = conjoinModeArchive
+
+			dataSpan := aSrc.aRdr.footer.dataSpan()
+			dataLen := dataSpan.length - dataSpan.offset
+			sized = append(sized, sourceWithSize{src, dataLen})
 		}
-		// Calculate the amount of chunk data in |src|
-		sized = append(sized, sourceWithSize{src, calcChunkRangeSize(index)})
 	}
-	return planConjoin(sized, stats)
+
+	switch mode {
+	case conjoinModeArchive:
+		return planArchiveConjoin(sized, stats)
+	case conjoinModeTable:
+		return planTableConjoin(sized, stats)
+	default:
+		return compactionPlan{}, errors.New("runtime error: unknown conjoin mode")
+	}
 }
 
 // calcChunkRangeSize computes the size of the chunk records for a table file.
@@ -142,7 +168,7 @@ func calcChunkRangeSize(index tableIndex) uint64 {
 	return index.tableFileSize() - indexSize(index.chunkCount()) - footerSize
 }
 
-func planConjoin(sources []sourceWithSize, stats *Stats) (plan compactionPlan, err error) {
+func planTableConjoin(sources []sourceWithSize, stats *Stats) (plan compactionPlan, err error) {
 	// place largest chunk sources at the beginning of the conjoin
 	plan.sources = chunkSourcesByDescendingDataSize{sws: sources}
 	sort.Sort(plan.sources)
@@ -250,7 +276,11 @@ func planConjoin(sources []sourceWithSize, stats *Stats) (plan compactionPlan, e
 
 	writeFooter(plan.mergedIndex[uint64(len(plan.mergedIndex))-footerSize:], plan.chunkCount, totalUncompressedData)
 
-	stats.BytesPerConjoin.Sample(uint64(plan.totalCompressedData) + uint64(len(plan.mergedIndex)))
+	suffixesStart := uint64(plan.chunkCount) * (prefixTupleSize + lengthSize)
+	suffixBytes := plan.mergedIndex[suffixesStart : suffixesStart+uint64(plan.chunkCount)*hash.SuffixLen]
+	plan.name = nameFromSuffixes(suffixBytes)
+
+	stats.BytesPerConjoin.Sample(plan.totalCompressedData + uint64(len(plan.mergedIndex)))
 	return plan, nil
 }
 

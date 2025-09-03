@@ -28,8 +28,8 @@ import (
 // TableOfTablesWithViolations is a sql.Table implementation that implements a system table which shows the
 // tables that contain constraint violations.
 type TableOfTablesWithViolations struct {
-	tableName string
 	root      doltdb.RootValue
+	tableName string
 }
 
 var _ sql.Table = (*TableOfTablesWithViolations)(nil)
@@ -99,8 +99,8 @@ func (totwv *TableOfTablesWithViolations) PartitionRows(ctx *sql.Context, part s
 
 // tableOfTablesPartitionIter is the partition iterator for TableOfTablesWithViolations.
 type tableOfTablesPartitionIter struct {
-	idx      int
 	tblNames []tableOfTablesPartition
+	idx      int
 }
 
 var _ sql.PartitionIter = (*tableOfTablesPartitionIter)(nil)

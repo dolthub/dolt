@@ -83,21 +83,20 @@ var _ dtables.VersionableTable = (*DoltTable)(nil)
 
 // DoltTable implements the sql.Table interface and gives access to dolt table rows and schema.
 type DoltTable struct {
-	tableName    string
-	sqlSch       sql.PrimaryKeySchema
 	db           dsess.SqlDatabase
 	lockedToRoot doltdb.RootValue
-	nbf          *types.NomsBinFormat
-	sch          schema.Schema
-	autoIncCol   schema.Column
-
-	projectedCols   []uint64
-	projectedSchema sql.Schema
-
-	opts editor.Options
 
 	// overriddenSchema is set when the @@dolt_override_schema system var is in use
 	overriddenSchema schema.Schema
+	sch              schema.Schema
+
+	nbf             *types.NomsBinFormat
+	tableName       string
+	autoIncCol      schema.Column
+	sqlSch          sql.PrimaryKeySchema
+	opts            editor.Options
+	projectedCols   []uint64
+	projectedSchema sql.Schema
 }
 
 func (t *DoltTable) TableName() doltdb.TableName {
@@ -650,9 +649,9 @@ func partitionRows(ctx *sql.Context, t *doltdb.Table, projCols []uint64, partiti
 
 // WritableDoltTable allows updating, deleting, and inserting new rows. It implements sql.UpdatableTable and friends.
 type WritableDoltTable struct {
-	*DoltTable
-	db                 Database
 	pinnedWriteSession dsess.WriteSession
+	*DoltTable
+	db Database
 }
 
 var _ doltTableInterface = (*WritableDoltTable)(nil)
@@ -1440,14 +1439,14 @@ var _ sql.PartitionIter = (*doltTablePartitionIter)(nil)
 
 // doltTablePartitionIter, an object that knows how to return the single partition exactly once.
 type doltTablePartitionIter struct {
-	i          int
-	mu         *sync.Mutex
 	rowData    durable.Index
+	mu         *sync.Mutex
 	partitions []doltTablePartition
+	i          int
 }
 
 func newDoltTablePartitionIter(rowData durable.Index, partitions ...doltTablePartition) *doltTablePartitionIter {
-	return &doltTablePartitionIter{0, &sync.Mutex{}, rowData, partitions}
+	return &doltTablePartitionIter{i: 0, mu: &sync.Mutex{}, rowData: rowData, partitions: partitions}
 }
 
 // Close is required by the sql.PartitionIter interface. Does nothing.
@@ -1475,10 +1474,9 @@ var _ sql.Partition = doltTablePartition{}
 const NoUpperBound = math.MaxUint64
 
 type doltTablePartition struct {
-	// half-open index range of partition: [start, end)
-	start, end uint64
-
 	rowData durable.Index
+	start   uint64
+	end     uint64
 }
 
 func partitionsFromRows(ctx context.Context, rows durable.Index) ([]doltTablePartition, error) {
@@ -1574,6 +1572,7 @@ type doltAlterableTableInterface interface {
 	sql.PrimaryKeyAlterableTable
 	sql.ProjectedTable
 	sql.CollationAlterableTable
+	sql.CommentAlterableTable
 	fulltext.IndexAlterableTable
 }
 
@@ -3129,21 +3128,9 @@ func (t *WritableDoltTable) updateFromRoot(ctx *sql.Context, root doltdb.RootVal
 	return nil
 }
 
+// CreateCheck implements sql.CheckAlterableTable
 func (t *AlterableDoltTable) CreateCheck(ctx *sql.Context, check *sql.CheckDefinition) error {
-	if err := dsess.CheckAccessForDb(ctx, t.db, branch_control.Permissions_Write); err != nil {
-		return err
-	}
-	root, err := t.getRoot(ctx)
-	if err != nil {
-		return err
-	}
-
-	updatedTable, _, err := root.GetTable(ctx, t.TableName())
-	if err != nil {
-		return err
-	}
-
-	sch, err := updatedTable.GetSchema(ctx)
+	root, sch, err := t.getWritableSchema(ctx)
 	if err != nil {
 		return err
 	}
@@ -3162,44 +3149,12 @@ func (t *AlterableDoltTable) CreateCheck(ctx *sql.Context, check *sql.CheckDefin
 		return err
 	}
 
-	table, err := t.DoltTable.DoltTable(ctx)
-	if err != nil {
-		return err
-	}
-
-	newTable, err := table.UpdateSchema(ctx, sch)
-	if err != nil {
-		return err
-	}
-
-	newRoot, err := root.PutTable(ctx, t.TableName(), newTable)
-	if err != nil {
-		return err
-	}
-
-	err = t.setRoot(ctx, newRoot)
-	if err != nil {
-		return err
-	}
-
-	return t.updateFromRoot(ctx, newRoot)
+	return t.updateFromSchema(ctx, root, sch)
 }
 
+// DropCheck implements sql.CheckAlterableTable
 func (t *AlterableDoltTable) DropCheck(ctx *sql.Context, chName string) error {
-	if err := dsess.CheckAccessForDb(ctx, t.db, branch_control.Permissions_Write); err != nil {
-		return err
-	}
-	root, err := t.getRoot(ctx)
-	if err != nil {
-		return err
-	}
-
-	updatedTable, _, err := root.GetTable(ctx, t.TableName())
-	if err != nil {
-		return err
-	}
-
-	sch, err := updatedTable.GetSchema(ctx)
+	root, sch, err := t.getWritableSchema(ctx)
 	if err != nil {
 		return err
 	}
@@ -3209,52 +3164,60 @@ func (t *AlterableDoltTable) DropCheck(ctx *sql.Context, chName string) error {
 		return err
 	}
 
-	table, err := t.DoltTable.DoltTable(ctx)
-	if err != nil {
-		return err
-	}
-
-	newTable, err := table.UpdateSchema(ctx, sch)
-	if err != nil {
-		return err
-	}
-
-	newRoot, err := root.PutTable(ctx, t.TableName(), newTable)
-	if err != nil {
-		return err
-	}
-
-	err = t.setRoot(ctx, newRoot)
-	if err != nil {
-		return err
-	}
-
-	return t.updateFromRoot(ctx, newRoot)
+	return t.updateFromSchema(ctx, root, sch)
 }
 
+// ModifyStoredCollation implements sql.CollationAlterableTable
 func (t *AlterableDoltTable) ModifyStoredCollation(ctx *sql.Context, collation sql.CollationID) error {
 	return fmt.Errorf("converting the collations of columns is not yet supported")
 }
 
+// ModifyDefaultCollation implements sql.CollationAlterableTable
 func (t *AlterableDoltTable) ModifyDefaultCollation(ctx *sql.Context, collation sql.CollationID) error {
-	if err := dsess.CheckAccessForDb(ctx, t.db, branch_control.Permissions_Write); err != nil {
-		return err
-	}
-	root, err := t.getRoot(ctx)
-	if err != nil {
-		return err
-	}
-	currentTable, _, err := root.GetTable(ctx, t.TableName())
-	if err != nil {
-		return err
-	}
-	sch, err := currentTable.GetSchema(ctx)
+	root, sch, err := t.getWritableSchema(ctx)
 	if err != nil {
 		return err
 	}
 
 	sch.SetCollation(schema.Collation(collation))
 
+	return t.updateFromSchema(ctx, root, sch)
+}
+
+// ModifyComment implements sql.CommentAlterableTable
+func (t *AlterableDoltTable) ModifyComment(ctx *sql.Context, comment string) error {
+	root, sch, err := t.getWritableSchema(ctx)
+	if err != nil {
+		return err
+	}
+
+	sch.SetComment(comment)
+
+	return t.updateFromSchema(ctx, root, sch)
+}
+
+// getWritableSchema checks for write permissions and gets the root and table schema
+func (t *AlterableDoltTable) getWritableSchema(ctx *sql.Context) (doltdb.RootValue, schema.Schema, error) {
+	if err := dsess.CheckAccessForDb(ctx, t.db, branch_control.Permissions_Write); err != nil {
+		return nil, nil, err
+	}
+	root, err := t.getRoot(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	currentTable, _, err := root.GetTable(ctx, t.TableName())
+	if err != nil {
+		return nil, nil, err
+	}
+	sch, err := currentTable.GetSchema(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	return root, sch, nil
+}
+
+// updateFromSchema takes a schema and makes updates to the table and root
+func (t *AlterableDoltTable) updateFromSchema(ctx *sql.Context, root doltdb.RootValue, sch schema.Schema) error {
 	table, err := t.DoltTable.DoltTable(ctx)
 	if err != nil {
 		return err

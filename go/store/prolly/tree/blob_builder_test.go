@@ -33,10 +33,10 @@ import (
 
 func TestWriteImmutableTree(t *testing.T) {
 	tests := []struct {
-		inputSize int
-		chunkSize int
 		execErr   error
 		initErr   error
+		inputSize int
+		chunkSize int
 		checkSum  bool
 	}{
 		{

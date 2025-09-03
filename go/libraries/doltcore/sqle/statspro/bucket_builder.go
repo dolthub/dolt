@@ -81,16 +81,14 @@ func newBucketBuilder(qual sql.StatQualifier, prefixLen int, tupleDesc val.Tuple
 // collect statistics for a single histogram bucket. DistinctCount is fuzzy,
 // we might double count a key that crosses bucket boundaries.
 type bucketBuilder struct {
-	qual      sql.StatQualifier
-	tupleDesc val.TupleDesc
-	prefixLen int
-
-	count    int
-	distinct int
-	nulls    int
-	mcvs     *mcvHeap
-
+	mcvs       *mcvHeap
+	qual       sql.StatQualifier
+	tupleDesc  val.TupleDesc
 	currentKey val.Tuple
+	prefixLen  int
+	count      int
+	distinct   int
+	nulls      int
 	currentCnt int
 }
 

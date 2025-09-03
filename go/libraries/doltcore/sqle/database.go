@@ -62,15 +62,16 @@ var ErrSystemTableAlter = errors.NewKind("Cannot alter table %s: system tables c
 
 // Database implements sql.Database for a dolt DB.
 type Database struct {
-	baseName      string
-	requestedName string
-	schemaName    string
-	ddb           *doltdb.DoltDB
 	rsr           env.RepoStateReader[*sql.Context]
 	rsw           env.RepoStateWriter
 	gs            dsess.GlobalStateImpl
-	editOpts      editor.Options
+	ddb           *doltdb.DoltDB
+	baseName      string
+	requestedName string
+	schemaName    string
 	revision      string
+	revName       string
+	editOpts      editor.Options
 	revType       dsess.RevisionType
 }
 
@@ -125,6 +126,7 @@ func (r ReadOnlyDatabase) WithBranchRevision(requestedName string, branchSpec ds
 func (db Database) WithBranchRevision(requestedName string, branchSpec dsess.SessionDatabaseBranchSpec) (dsess.SqlDatabase, error) {
 	db.rsr, db.rsw = branchSpec.RepoState, branchSpec.RepoState
 	db.revision = branchSpec.Branch
+	db.revName = db.baseName + dsess.DbRevisionDelimiter + branchSpec.Branch
 	db.revType = dsess.RevisionTypeBranch
 	db.requestedName = requestedName
 
@@ -174,6 +176,7 @@ func NewDatabase(ctx context.Context, name string, dbData env.DbData[context.Con
 
 	return Database{
 		baseName:      name,
+		revName:       name,
 		requestedName: name,
 		ddb:           dbData.Ddb,
 		rsr:           forwardCtxDbData{dbData.Rsr},
@@ -228,10 +231,7 @@ func (db Database) AliasedName() string {
 // RevisionQualifiedName returns the name of this database including its revision qualifier, if any. This method should
 // be used whenever accessing internal state of a database and its tables.
 func (db Database) RevisionQualifiedName() string {
-	if db.revision == "" {
-		return db.baseName
-	}
-	return db.baseName + dsess.DbRevisionDelimiter + db.revision
+	return db.revName
 }
 
 func (db Database) RequestedName() string {
@@ -828,6 +828,17 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 			versionableTable := backingTable.(dtables.VersionableTable)
 			dt, found = dtables.NewQueryCatalogTable(ctx, versionableTable), true
 		}
+	case doltdb.GetTestsTableName():
+		backingTable, _, err := db.getTable(ctx, root, doltdb.GetTestsTableName())
+		if err != nil {
+			return nil, false, err
+		}
+		if backingTable == nil {
+			dt, found = dtables.NewEmptyTestsTable(ctx), true
+		} else {
+			versionableTable := backingTable.(dtables.VersionableTable)
+			dt, found = dtables.NewTestsTable(ctx, versionableTable), true
+		}
 	}
 
 	if found {
@@ -908,7 +919,7 @@ func resolveAsOfTime(ctx *sql.Context, ddb *doltdb.DoltDB, head ref.DoltRef, asO
 	}
 
 	for {
-		_, optCmt, err := cmItr.Next(ctx)
+		_, optCmt, meta, _, err := cmItr.Next(ctx)
 		if err == io.EOF {
 			break
 		} else if err != nil {
@@ -919,9 +930,11 @@ func resolveAsOfTime(ctx *sql.Context, ddb *doltdb.DoltDB, head ref.DoltRef, asO
 			return nil, nil, doltdb.ErrGhostCommitEncountered
 		}
 
-		meta, err := curr.GetCommitMeta(ctx)
-		if err != nil {
-			return nil, nil, err
+		if meta == nil {
+			meta, err = curr.GetCommitMeta(ctx)
+			if err != nil {
+				return nil, nil, err
+			}
 		}
 
 		if meta.Time().Equal(asOf) || meta.Time().Before(asOf) {

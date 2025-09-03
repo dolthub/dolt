@@ -101,13 +101,10 @@ func (cmd StashCmd) Exec(ctx context.Context, commandStr string, args []string, 
 		subcommand = strings.ToLower(apr.Arg(0))
 	}
 
-	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
+	queryist, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
 		cli.PrintErrln(errhand.VerboseErrorFromError(err))
 		return 1
-	}
-	if closeFunc != nil {
-		defer closeFunc()
 	}
 
 	idx := 0
@@ -121,13 +118,13 @@ func (cmd StashCmd) Exec(ctx context.Context, commandStr string, args []string, 
 
 	switch subcommand {
 	case PushCmdRef:
-		err = stashPush(queryist, sqlCtx, apr, subcommand)
+		err = stashPush(queryist.Queryist, queryist.Context, apr, subcommand)
 	case PopCmdRef, DropCmdRef:
-		err = stashRemove(queryist, sqlCtx, cliCtx, apr, subcommand, idx)
+		err = stashRemove(queryist.Queryist, queryist.Context, cliCtx, apr, subcommand, idx)
 	case ListCmdRef:
 		err = stashList(ctx, cliCtx)
 	case ClearCmdRef:
-		err = stashClear(queryist, sqlCtx, apr, subcommand)
+		err = stashClear(queryist.Queryist, queryist.Context, apr, subcommand)
 	default:
 		err = fmt.Errorf("unknown stash subcommand %s", subcommand)
 	}
@@ -193,15 +190,12 @@ func stashRemove(queryist cli.Queryist, sqlCtx *sql.Context, cliCtx cli.CliConte
 }
 
 func stashList(ctx context.Context, cliCtx cli.CliContext) error {
-	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
+	queryist, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
 		return err
 	}
-	if closeFunc != nil {
-		defer closeFunc()
-	}
 
-	stashes, err := getStashesSQL(sqlCtx, queryist, 0)
+	stashes, err := getStashesSQL(queryist.Context, queryist.Queryist, 0)
 	if err != nil {
 		return err
 	}

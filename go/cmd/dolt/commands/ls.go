@@ -85,12 +85,9 @@ func (cmd LsCmd) Exec(ctx context.Context, commandStr string, args []string, dEn
 		return HandleVErrAndExitCode(verr, usage)
 	}
 
-	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
+	queryist, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-	}
-	if closeFunc != nil {
-		defer closeFunc()
 	}
 
 	query, err := constructInterpolatedDoltLsQuery(apr)
@@ -98,15 +95,15 @@ func (cmd LsCmd) Exec(ctx context.Context, commandStr string, args []string, dEn
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	_, _, _, err = queryist.Query(sqlCtx, "set @@dolt_show_system_tables = 1")
+	_, _, _, err = queryist.Queryist.Query(queryist.Context, "set @@dolt_show_system_tables = 1")
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
-	rows, err := cli.GetRowsForSql(queryist, sqlCtx, query)
+	rows, err := cli.GetRowsForSql(queryist.Queryist, queryist.Context, query)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
-	_, _, _, err = queryist.Query(sqlCtx, "set @@dolt_show_system_tables = 0")
+	_, _, _, err = queryist.Queryist.Query(queryist.Context, "set @@dolt_show_system_tables = 0")
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
@@ -123,7 +120,7 @@ func (cmd LsCmd) Exec(ctx context.Context, commandStr string, args []string, dEn
 	}
 
 	if apr.Contains(cli.AllFlag) {
-		err = printUserTables(userTables, apr, queryist, sqlCtx)
+		err = printUserTables(userTables, apr, queryist.Queryist, queryist.Context)
 		if err != nil {
 			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 		}
@@ -137,7 +134,7 @@ func (cmd LsCmd) Exec(ctx context.Context, commandStr string, args []string, dEn
 			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 		}
 	} else {
-		err = printUserTables(userTables, apr, queryist, sqlCtx)
+		err = printUserTables(userTables, apr, queryist.Queryist, queryist.Context)
 		if err != nil {
 			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 		}

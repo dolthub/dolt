@@ -83,10 +83,10 @@ var mergeStateTemplate = types.MakeStructTemplate(mergeStateName, []string{merge
 
 type WorkingSetSpec struct {
 	Meta        *WorkingSetMeta
-	WorkingRoot types.Ref
-	StagedRoot  types.Ref
 	MergeState  *MergeState
 	RebaseState *RebaseState
+	WorkingRoot types.Ref
+	StagedRoot  types.Ref
 }
 
 // newWorkingSet creates a new working set object.

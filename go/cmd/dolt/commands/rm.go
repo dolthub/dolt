@@ -74,12 +74,9 @@ func (cmd RmCmd) Exec(ctx context.Context, commandStr string, args []string, _ *
 	}
 
 	errorBuilder := errhand.BuildDError("error: failed to create query engine")
-	queryEngine, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
+	queryist, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
 		return HandleVErrAndExitCode(errorBuilder.AddCause(err).Build(), nil)
-	}
-	if closeFunc != nil {
-		defer closeFunc()
 	}
 
 	interpolatedQuery, err := generateRmSql(args)
@@ -87,12 +84,12 @@ func (cmd RmCmd) Exec(ctx context.Context, commandStr string, args []string, _ *
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), nil)
 	}
 
-	_, rowIter, _, err := queryEngine.Query(sqlCtx, interpolatedQuery)
+	_, rowIter, _, err := queryist.Queryist.Query(queryist.Context, interpolatedQuery)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), nil)
 	}
 
-	_, err = sql.RowIterToRows(sqlCtx, rowIter)
+	_, err = sql.RowIterToRows(queryist.Context, rowIter)
 	if err != nil {
 		cli.PrintErrln(errhand.VerboseErrorFromError(err))
 		return 1

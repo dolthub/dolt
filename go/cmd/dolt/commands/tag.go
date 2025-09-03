@@ -87,28 +87,25 @@ func (cmd TagCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, tagDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
-	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
+	queryist, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
 		return handleStatusVErr(err)
-	}
-	if closeFunc != nil {
-		defer closeFunc()
 	}
 
 	// list tags
 	if len(apr.Args) == 0 {
-		err = listTags(queryist, sqlCtx, apr)
+		err = listTags(queryist.Queryist, queryist.Context, apr)
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
 	// delete tag
 	if apr.Contains(cli.DeleteFlag) {
-		err = deleteTags(queryist, sqlCtx, apr)
+		err = deleteTags(queryist.Queryist, queryist.Context, apr)
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
 	// create tag
-	err = createTag(queryist, sqlCtx, apr)
+	err = createTag(queryist.Queryist, queryist.Context, apr)
 	return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 }
 

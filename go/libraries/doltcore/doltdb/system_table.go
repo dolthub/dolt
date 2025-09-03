@@ -122,6 +122,7 @@ var getWriteableSystemTables = func() []string {
 		IgnoreTableName,
 		GetRebaseTableName(),
 		GetQueryCatalogTableName(),
+		GetTestsTableName(),
 
 		// TODO: find way to make these writable by the dolt process
 		// TODO: but not by user
@@ -268,14 +269,124 @@ mysql -h 127.0.0.1 -P 3306 -u root
 mysql -h 127.0.0.1 -P 3306 -u root -D <database-name>
 ` + "```" + `
 
-## Dolt CI Testing
+## Dolt Testing with dolt_test System Table
 
-### Prerequisites
+### Unit Testing with dolt_test
+
+The dolt_test system table provides a powerful way to create and run unit tests for your database. This is the preferred method for testing data integrity, business rules, and schema validation.
+
+#### Creating Tests
+
+Tests are created by inserting rows into the ` + "`dolt_tests`" + ` system table:
+
+` + "```sql" + `
+-- Create a simple test
+INSERT INTO ` + "`dolt_tests`" + ` VALUES (
+    'test_user_count', 
+    'validation', 
+    'SELECT COUNT(*) as user_count FROM users;', 
+    'row_count',
+    '>',
+    '0'
+);
+
+-- Create a test with expected result
+INSERT INTO ` + "`dolt_tests`" + ` VALUES (
+    'test_valid_emails', 
+    'validation', 
+    'SELECT COUNT(*) FROM users WHERE email NOT LIKE "%@%";', 
+    'row_count',
+    '==',
+    '0'
+);
+
+-- Create a schema validation test
+INSERT INTO ` + "`dolt_tests`" + ` VALUES (
+    'test_users_schema', 
+    'schema', 
+    'DESCRIBE users;', 
+    'row_count',
+    '>=',
+    '5'
+);
+` + "```" + `
+
+#### Test Structure
+
+Each test row contains:
+- test_name: Unique identifier for the test
+- test_group: Optional grouping for tests (e.g., 'validation', 'schema', 'integration')
+- test_query: SQL query to execute
+- assertion_type: Type of assertion ('expected_rows', 'expected_columns', 'expected_single_value')
+- assertion_comparator: Comparison operator ('==', '>', '<', '>=', '<=', '!=')
+- assertion_value: Expected value for comparison
+
+#### Running Tests
+
+` + "```sql" + `
+-- Run all tests
+SELECT * FROM dolt_test_run();
+
+-- Run specific test
+SELECT * FROM dolt_test_run('test_user_count');
+
+-- Run tests with filtering
+SELECT * FROM dolt_test_run() WHERE test_name LIKE 'test_user%' AND status != 'PASS';
+` + "```" + `
+
+#### Test Result Interpretation
+
+The dolt_test_run() function returns:
+- test_name: Name of the test
+- status: PASS, FAIL, or ERROR
+- actual_result: Actual query result
+- expected_result: Expected result
+- message: Additional details
+
+#### Advanced Testing Examples
+
+` + "```sql" + `
+-- Test data integrity
+INSERT INTO ` + "`dolt_tests`" + ` VALUES (
+    'test_no_orphaned_orders', 
+    'integrity', 
+    'SELECT COUNT(*) FROM orders o LEFT JOIN users u ON o.user_id = u.id WHERE u.id IS NULL;', 
+    'row_count',
+    '==',
+    '0'
+);
+
+-- Test business rules
+INSERT INTO ` + "`dolt_tests`" + ` VALUES (
+    'test_positive_prices', 
+    'business_rules', 
+    'SELECT COUNT(*) FROM products WHERE price <= 0;', 
+    'row_count',
+    '==',
+    '0'
+);
+
+-- Test complex relationships
+INSERT INTO ` + "`dolt_tests`" + ` VALUES (
+    'test_order_totals', 
+    'integrity', 
+    'SELECT COUNT(*) FROM orders o JOIN order_items oi ON o.id = oi.order_id GROUP BY o.id HAVING SUM(oi.quantity * oi.price) != o.total;', 
+    'row_count',
+    '==',
+    '0'
+);
+` + "```" + `
+
+### Dolt CI for DoltHub Integration
+
+Dolt CI is specifically designed for running tests on DoltHub when pull requests are created. Use this only for tests you want to run automatically on DoltHub.
+
+#### Prerequisites for DoltHub CI
 - Requires Dolt v1.43.14 or later
 - Must initialize CI capabilities: ` + "`dolt ci init`" + `
 - Workflows defined in YAML files
 
-### Available CI Commands
+#### Available CI Commands
 ` + "```bash" + `
 # Initialize CI capabilities
 dolt ci init
@@ -289,35 +400,16 @@ dolt ci view <workflow-name>
 # View specific job in workflow
 dolt ci view <workflow-name> <job-name>
 
-# Run workflow locally
+# Run workflow locally (for testing before DoltHub)
 dolt ci run <workflow-name>
 ` + "```" + `
 
-### Creating CI Workflows
+#### Creating CI Workflows for DoltHub
 
-#### 1. Create Saved Queries First
-Before creating workflows, save your validation queries:
-
-` + "```bash" + `
-# Save queries using CLI
-dolt sql --save "show_tables" -q "SHOW TABLES;"
-dolt sql --save "user_count_check" -q "SELECT COUNT(*) as user_count FROM users;"
-dolt sql --save "valid_emails" -q "SELECT COUNT(*) FROM users WHERE email NOT LIKE '%@%';"
-` + "```" + `
-
-Or insert directly into the query catalog:
-` + "```sql" + `
-INSERT INTO dolt_query_catalog VALUES 
-('show_tables', 1, 'show_tables', 'SHOW TABLES;', 'Table existence check'),
-('user_count_check', 2, 'user_count_check', 'SELECT COUNT(*) as user_count FROM users;', 'User count validation'),
-('valid_emails', 3, 'valid_emails', 'SELECT COUNT(*) FROM users WHERE email NOT LIKE "%@%";', 'Email format check');
-` + "```" + `
-
-#### 2. Create Workflow YAML File
-Create a workflow file (e.g., ` + "`data-validation.yaml`" + `) in your current directory:
+Create workflow files that will run on DoltHub when pull requests are opened:
 
 ` + "```yaml" + `
-name: data validation workflow
+name: doltHub validation workflow
 on:
   push:
     branches:
@@ -342,123 +434,29 @@ jobs:
         expected_rows: "== 0"  # No invalid emails
 ` + "```" + `
 
-#### 3. Workflow Structure Reference
+### Best Practices for Testing
 
-**Required Fields:**
-- ` + "`name`" + `: Unique workflow identifier
-- ` + "`on`" + `: Trigger configuration (currently only ` + "`push`" + ` supported)
-- ` + "`jobs`" + `: Array of job definitions
+1. **Use dolt_test for Unit Testing**
+   - Create tests for data validation
+   - Test business rules and constraints
+   - Validate schema changes
+   - Run tests frequently during development
 
-**Job Structure:**
-- ` + "`name`" + `: Job identifier
-- ` + "`steps`" + `: Array of step definitions
+2. **Use Dolt CI for DoltHub Integration**
+   - Only for tests that should run on pull requests
+   - Focus on integration and deployment validation
+   - Test against production-like data
 
-**Step Structure:**
-- ` + "`name`" + `: Step description
-- ` + "`saved_query_name`" + `: Reference to saved query
-- ` + "`expected_rows`" + `: Optional row count validation (operators: ` + "`==`, `>`, `<`, `>=`, `<=`" + `)
-- ` + "`expected_columns`" + `: Optional column count validation
-
-**Trigger Options:**
-` + "```yaml" + `
-on:
-  push:
-    branches:
-      - master
-      - main
-      - feature/*
-` + "```" + `
-
-### Advanced CI Examples
-
-#### Schema Validation Workflow
-` + "```yaml" + `
-name: schema validation
-on:
-  push:
-    branches: ["*"]
-jobs:
-  - name: table structure
-    steps:
-      - name: users table has required columns
-        saved_query_name: describe_users
-        expected_rows: "== 5"
-      
-      - name: products table exists
-        saved_query_name: check_products_table
-        expected_rows: "> 0"
-` + "```" + `
-
-#### Data Quality Workflow
-` + "```yaml" + `
-name: data quality checks
-on:
-  push:
-    branches:
-      - production
-jobs:
-  - name: referential integrity
-    steps:
-      - name: no orphaned orders
-        saved_query_name: orphaned_orders_check
-        expected_rows: "== 0"
-      
-      - name: valid price ranges
-        saved_query_name: price_validation
-        expected_rows: "== 0"
-  
-  - name: business rules
-    steps:
-      - name: active users have orders
-        saved_query_name: active_users_orders
-        expected_rows: "> 0"
-` + "```" + `
-
-### Managing Saved Queries for CI
-
-` + "```bash" + `
-# List all saved queries
-dolt sql --list-saved
-# or
-dolt sql -l
-` + "```" + `
-
-` + "```sql" + `
--- View saved queries via SQL
-SELECT * FROM dolt_query_catalog;
-
--- Create queries by inserting into catalog
-INSERT INTO dolt_query_catalog VALUES 
-('table_row_counts', 4, 'table_row_counts', 
- 'SELECT table_name, table_rows FROM information_schema.tables WHERE table_schema = database();', 
- 'Count rows in all tables');
-
--- Delete saved query
-DELETE FROM dolt_query_catalog WHERE id = 'old_query_name';
-` + "```" + `
-
-### Best Practices for CI
-
-1. **Create Comprehensive Validation Queries**
+3. **Create Comprehensive Test Suites**
    - Test data integrity constraints
    - Validate business rules
    - Check schema requirements
    - Verify data relationships
 
-2. **Use Descriptive Names**
-   - Clear workflow names
-   - Meaningful job descriptions
-   - Descriptive step names
-
-3. **Test Locally First**
-   ` + "```bash" + `
-   dolt ci run <workflow-name>
-   ` + "```" + `
-
-4. **Version Control Your Workflows**
-   - Commit workflow files to repository
-   - Track changes to CI configuration
-   - Use branches for CI development
+4. **Version Control Your Tests**
+   - Commit test definitions to repository
+   - Track changes to test configuration
+   - Use branches for test development
 
 ## System Tables for Version Control
 
@@ -553,7 +551,7 @@ CREATE TABLE users (
 
 **Benefits:**
 - Prevents merge conflicts across branches and database clones
-- Automatic generation with ` + "`default(uuid())`" + `
+- Automatic generation with default(uuid())
 - Works seamlessly in distributed environments
 
 ## Best Practices for Agents
@@ -598,8 +596,8 @@ SELECT * FROM dolt_diff_users;
 SELECT * FROM dolt_schema_diff;
 ` + "```" + `
 
-### 4. Use CI for Data Validation
-Create workflows to validate:
+### 4. Use dolt_test for Data Validation
+Create tests to validate:
 - Data integrity after changes
 - Schema compatibility
 - Business rule compliance
@@ -626,14 +624,12 @@ dolt checkout -b migration/update-schema
 # Apply schema changes via SQL
 dolt sql -q "ALTER TABLE users ADD COLUMN email VARCHAR(255);"
 
-# Create CI validation query
-dolt sql --save "schema_check" -q "DESCRIBE users;"
+# Create validation tests
+dolt sql -q "INSERT INTO ` + "`dolt_tests`" + ` VALUES ('test_users_schema', 'schema', 'DESCRIBE users;', 'row_count', '>=', '6');"
+dolt sql -q "INSERT INTO ` + "`dolt_tests`" + ` VALUES ('test_email_column', 'schema', 'SELECT COUNT(*) FROM users WHERE email IS NULL;', 'row_count', '>=', '0');"
 
-# Define a CI workflow
-dolt ci import schema-validation.yaml
-
-# Test with CI
-dolt ci run schema-validation
+# Run tests to validate changes
+dolt sql -q "SELECT * FROM dolt_test_run();"
 
 # Stage and commit
 dolt add .
@@ -654,6 +650,13 @@ dolt sql -q "CREATE TABLE user_metrics AS
             SELECT user_id, COUNT(*) as actions 
             FROM user_actions 
             GROUP BY user_id;"
+
+# Create tests to validate analysis
+dolt sql -q "INSERT INTO ` + "`dolt_tests`" + ` VALUES ('test_metrics_created', 'analysis', 'SELECT COUNT(*) FROM user_metrics;', 'row_count', '>', '0');"
+dolt sql -q "INSERT INTO ` + "`dolt_tests`" + ` VALUES ('test_metrics_integrity', 'integrity', 'SELECT COUNT(*) FROM user_metrics um LEFT JOIN users u ON um.user_id = u.id WHERE u.id IS NULL;', 'row_count', '==', '0');"
+
+# Run tests to validate analysis
+dolt sql -q "SELECT * FROM dolt_test_run();"
 
 # Stage and commit using CLI
 dolt add user_metrics
@@ -879,6 +882,10 @@ var GetStashesTableName = func() string {
 
 var GetQueryCatalogTableName = func() string { return DoltQueryCatalogTableName }
 
+var GetTestsTableName = func() string {
+	return TestsTableName
+}
+
 const (
 	// LogTableName is the log system table name
 	LogTableName = "dolt_log"
@@ -933,6 +940,9 @@ const (
 
 	// StashesTableName is the stashes system table name
 	StashesTableName = "dolt_stashes"
+
+	// TestsTableName is the tests system table name
+	TestsTableName = "dolt_tests"
 )
 
 // DoltGeneratedTableNames is a list of all the generated dolt system tables that are not specific to a user table.

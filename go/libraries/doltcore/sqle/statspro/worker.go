@@ -574,8 +574,8 @@ func GetLatestTable(ctx *sql.Context, tableName string, sqlDb sql.Database) (*sq
 }
 
 type templateCacheKey struct {
-	h       hash.Hash
 	idxName string
+	h       hash.Hash
 }
 
 func (k templateCacheKey) String() string {

@@ -120,7 +120,7 @@ func makeCompoundType(kind NomsKind, elemTypes ...*Type) (*Type, error) {
 		}
 	}
 
-	return newType(CompoundDesc{kind, elemTypes}), nil
+	return newType(CompoundDesc{elemTypes, kind}), nil
 }
 
 func makeUnionType(elemTypes ...*Type) (*Type, error) {
@@ -153,7 +153,7 @@ func MakeStructTypeFromFields(name string, fields FieldMap) (*Type, error) {
 	fs := make(structTypeFields, len(fields))
 	i := 0
 	for k, v := range fields {
-		fs[i] = StructField{k, v, false}
+		fs[i] = StructField{v, k, false}
 		i++
 	}
 	sort.Sort(fs)
@@ -168,8 +168,8 @@ func MakeStructTypeFromFields(name string, fields FieldMap) (*Type, error) {
 
 // StructField describes a field in a struct type.
 type StructField struct {
-	Name     string
 	Type     *Type
+	Name     string
 	Optional bool
 }
 

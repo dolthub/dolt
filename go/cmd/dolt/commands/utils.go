@@ -18,6 +18,7 @@ import (
 	"context"
 	"crypto/sha1"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"path/filepath"
@@ -31,6 +32,7 @@ import (
 	"github.com/fatih/color"
 	"github.com/gocraft/dbr/v2"
 	"github.com/gocraft/dbr/v2/dialect"
+	"github.com/sirupsen/logrus"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
@@ -39,11 +41,13 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/util/outputpager"
 )
@@ -246,11 +250,24 @@ func newLateBindingEngine(
 		Autocommit:         true,
 	}
 
-	var lateBinder cli.LateBindQueryist = func(ctx context.Context) (cli.Queryist, *sql.Context, func(), error) {
+	var lateBinder cli.LateBindQueryist = func(ctx context.Context, opts ...cli.LateBindQueryistOption) (res cli.LateBindQueryistResult, err error) {
 		// We've deferred loading the database as long as we can.
 		// If we're binding the Queryist, that means that engine is actually
 		// going to be used.
 		mrEnv.ReloadDBs(ctx)
+
+		queryistConfig := &cli.LateBindQueryistConfig{}
+		for _, opt := range opts {
+			opt(queryistConfig)
+		}
+
+		if queryistConfig.EnableAutoGC {
+			// We use a null logger here, as we do not want `dolt sql` output
+			// to include auto-gc log lines.
+			nullLgr := logrus.New()
+			nullLgr.SetOutput(io.Discard)
+			config.AutoGCController = sqle.NewAutoGCController(chunks.NoArchive, nullLgr)
+		}
 
 		se, err := engine.NewSqlEngine(
 			ctx,
@@ -258,19 +275,19 @@ func newLateBindingEngine(
 			config,
 		)
 		if err != nil {
-			return nil, nil, nil, err
+			return res, err
 		}
 
 		if err := se.InitStats(ctx); err != nil {
 			se.Close()
-			return nil, nil, nil, err
+			return res, err
 		}
 
 		rawDb := se.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb
 		salt, err := mysql.NewSalt()
 		if err != nil {
 			se.Close()
-			return nil, nil, nil, err
+			return res, err
 		}
 
 		var dbUser string
@@ -286,7 +303,7 @@ func newLateBindingEngine(
 			err := passwordValidate(rawDb, salt, dbUser, authResponse)
 			if err != nil {
 				se.Close()
-				return nil, nil, nil, err
+				return res, err
 			}
 
 		} else {
@@ -300,7 +317,7 @@ func newLateBindingEngine(
 		sqlCtx, err := se.NewDefaultContext(ctx)
 		if err != nil {
 			se.Close()
-			return nil, nil, nil, err
+			return res, err
 		}
 		// Whether we're running in shell mode or some other mode, sql commands from the command line always have a current
 		// database set when you begin using them.
@@ -318,7 +335,11 @@ func newLateBindingEngine(
 
 		// Set client to specified user
 		sqlCtx.Session.SetClient(sql.Client{User: dbUser, Address: config.ServerHost, Capabilities: 0})
-		return se, sqlCtx, close, nil
+		res.Queryist = se
+		res.Context = sqlCtx
+		res.Closer = close
+		res.IsRemote = false
+		return res, nil
 	}
 
 	return lateBinder, nil

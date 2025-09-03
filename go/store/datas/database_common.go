@@ -106,7 +106,7 @@ func (db *database) loadDatasetsNomsMap(ctx context.Context, rootHash hash.Hash)
 }
 
 func (db *database) loadDatasetsRefmap(ctx context.Context, rootHash hash.Hash) (prolly.AddressMap, error) {
-	if rootHash == (hash.Hash{}) {
+	if rootHash.IsEmpty() {
 		return prolly.NewEmptyAddressMap(db.ns)
 	}
 
@@ -151,7 +151,7 @@ func (m nomsDatasetsMap) IterAll(ctx context.Context, cb func(string, hash.Hash)
 }
 
 // Datasets returns the Map of Datasets in the current root. If you intend to edit the map and commit changes back,
-// then you should fetch the current root, then call DatasetsInRoot with that hash. Otherwise another writer could
+// then you should fetch the current root, then call DatasetsInRoot with that hash. Otherwise, another writer could
 // change the root value between when you get the root hash and call this method.
 func (db *database) Datasets(ctx context.Context) (DatasetsMap, error) {
 	rootHash, err := db.rt.Root(ctx)
