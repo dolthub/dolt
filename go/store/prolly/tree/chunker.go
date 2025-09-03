@@ -290,15 +290,12 @@ func insertNode[K ~[]byte, S message.Serializer, O Ordering[K]](ctx context.Cont
 			}
 		}
 	} else {
-		nd, err = nd.loadSubtrees()
+		nd, err = nd.LoadSubtrees()
 		if err != nil {
 			return err
 		}
 		for i := 0; i < nd.Count(); i++ {
-			subtreeCount, err := nd.getSubtreeCount(i)
-			if err != nil {
-				return err
-			}
+			subtreeCount := nd.GetSubtreeCount(i)
 			err = insertNode[K, S, O](ctx, tc, nil, K(nd.GetKey(i)), nd.getAddress(i), subtreeCount, level-1, order)
 			if err != nil {
 				return err
