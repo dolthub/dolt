@@ -467,9 +467,6 @@ func ResolveDataConflictsForTable(ctx *sql.Context, root doltdb.RootValue, tblNa
 }
 
 func ResolveDataConflicts(ctx *sql.Context, dSess *dsess.DoltSession, root doltdb.RootValue, dbName string, ours bool, tblNames []doltdb.TableName) error {
-	var err error
-	var hasConflicts bool
-
 	getEditorOpts := func() (editor.Options, error) {
 		state, _, err := dSess.LookupDbState(ctx, dbName)
 		if err != nil {
@@ -483,13 +480,14 @@ func ResolveDataConflicts(ctx *sql.Context, dSess *dsess.DoltSession, root doltd
 	}
 
 	for _, tblName := range tblNames {
-		root, hasConflicts, err = ResolveDataConflictsForTable(ctx, root, tblName, ours, getEditorOpts)
+		newRoot, hasConflicts, err := ResolveDataConflictsForTable(ctx, root, tblName, ours, getEditorOpts)
 		if err != nil {
 			return err
 		}
 		if !hasConflicts {
 			continue
 		}
+		root = newRoot
 	}
 	return dSess.SetWorkingRoot(ctx, dbName, root)
 }
@@ -534,9 +532,6 @@ func DoDoltConflictsResolve(ctx *sql.Context, args []string) (int, error) {
 
 	if len(strTableNames) == 1 && strTableNames[0] == "." {
 		all := actions.GetAllTableNames(ctx, ws.WorkingRoot())
-		if err != nil {
-			return 1, nil
-		}
 		tableNames = all
 	} else {
 		for _, tblName := range strTableNames {
