@@ -134,30 +134,25 @@ var (
 
 // PerfSuite is the core of the perf testing suite. See package documentation for details.
 type PerfSuite struct {
-	// T is the testing.T instance set when the suite is passed into Run.
-	T *testing.T
-
 	// W is the io.Writer to write test output, which only outputs if the verbose flag is set.
 	W io.Writer
-
+	// Database is a Noms database that tests can use for reading and writing.
+	// State is persisted across a single Run of a suite.
+	Database datas.Database
+	// T is the testing.T instance set when the suite is passed into Run.
+	T  *testing.T
+	VS *types.ValueStore
 	// AtticLabs is the path to the attic-labs directory (e.g. /path/to/go/src/github.com/attic-labs).
 	AtticLabs string
-
-	// Testdata is the path to the testdata directory - typically /path/to/go/src/github.com/attic-labs, but it can be overridden with the -perf.testdata flag.
+	// Testdata is the path to the testdata directory - typically /path/to/go/src/github.com/attic-labs,
+	// but it can be overridden with the -perf.testdata flag.
 	Testdata string
-
-	// Database is a Noms database that tests can use for reading and writing. State is persisted across a single Run of a suite.
-	Database datas.Database
-
-	VS *types.ValueStore
-
 	// DatabaseSpec is the Noms spec of Database (typically a localhost URL).
 	DatabaseSpec string
-
-	tempFiles []*os.File
-	tempDirs  []string
-	paused    time.Duration
-	datasetID string
+	datasetID    string
+	tempFiles    []*os.File
+	tempDirs     []string
+	paused       time.Duration
 }
 
 // SetupRepSuite has a SetupRep method, which runs every repetition of the test, i.e. -perf.repeat times in total.
@@ -177,9 +172,9 @@ type perfSuiteT interface {
 type environment struct {
 	DiskUsages map[string]disk.UsageStat
 	Cpus       map[int]cpu.InfoStat
-	Mem        mem.VirtualMemoryStat
-	Host       host.InfoStat
 	Partitions map[string]disk.PartitionStat
+	Host       host.InfoStat
+	Mem        mem.VirtualMemoryStat
 }
 
 type timeInfo struct {

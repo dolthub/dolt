@@ -62,16 +62,16 @@ var ErrSystemTableAlter = errors.NewKind("Cannot alter table %s: system tables c
 
 // Database implements sql.Database for a dolt DB.
 type Database struct {
-	baseName      string
-	requestedName string
-	schemaName    string
-	ddb           *doltdb.DoltDB
 	rsr           env.RepoStateReader[*sql.Context]
 	rsw           env.RepoStateWriter
 	gs            dsess.GlobalStateImpl
-	editOpts      editor.Options
+	ddb           *doltdb.DoltDB
+	baseName      string
+	requestedName string
+	schemaName    string
 	revision      string
 	revName       string
+	editOpts      editor.Options
 	revType       dsess.RevisionType
 }
 
@@ -919,7 +919,7 @@ func resolveAsOfTime(ctx *sql.Context, ddb *doltdb.DoltDB, head ref.DoltRef, asO
 	}
 
 	for {
-		_, optCmt, err := cmItr.Next(ctx)
+		_, optCmt, meta, _, err := cmItr.Next(ctx)
 		if err == io.EOF {
 			break
 		} else if err != nil {
@@ -930,9 +930,11 @@ func resolveAsOfTime(ctx *sql.Context, ddb *doltdb.DoltDB, head ref.DoltRef, asO
 			return nil, nil, doltdb.ErrGhostCommitEncountered
 		}
 
-		meta, err := curr.GetCommitMeta(ctx)
-		if err != nil {
-			return nil, nil, err
+		if meta == nil {
+			meta, err = curr.GetCommitMeta(ctx)
+			if err != nil {
+				return nil, nil, err
+			}
 		}
 
 		if meta.Time().Equal(asOf) || meta.Time().Before(asOf) {

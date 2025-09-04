@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/sirupsen/logrus"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
@@ -49,18 +50,19 @@ func init() {
 	types.CreateEditAccForMapEdits = edits.NewAsyncSortedEditsWithDefaults
 }
 
-// WORKING and STAGED identifiers refer to the working and staged roots in special circumstances where
-// we expect to resolve a commit spec, but need working or staged
 const (
+	// Working and Staged identifiers refer to the working and staged roots in special circumstances where
+	// we expect to resolve a commit spec, but need working or staged
 	Working = "WORKING"
 	Staged  = "STAGED"
-)
 
-const (
 	CreationBranch = "create"
 
 	// 1GB.
 	defaultTargetFileSize = 1 << 30
+
+	// Keep most recent 10000 materialized commits
+	commitCacheSize = 10000
 )
 
 var ErrMissingDoltDataDir = errors.New("missing dolt data directory")
@@ -87,17 +89,29 @@ type DoltDB struct {
 	// parent directory as the database name. For non-filesystem based databases, the database name will not
 	// currently be populated.
 	databaseName string
+
+	// Keep a LRU Cache of materialized commits to speed up future commit resolutions
+	commitCache *lru.Cache[hash.Hash, *OptionalCommit]
 }
 
 // DoltDBFromCS creates a DoltDB from a noms chunks.ChunkStore
-func DoltDBFromCS(cs chunks.ChunkStore, databaseName string) *DoltDB {
+func DoltDBFromCS(cs chunks.ChunkStore, databaseName string) (*DoltDB, error) {
 	vrw := types.NewValueStore(cs)
 	ns := tree.NewNodeStore(cs)
 	db := datas.NewTypesDatabase(vrw, ns)
-
-	ret := &DoltDB{db: hooksDatabase{Database: db}, vrw: vrw, ns: ns, databaseName: databaseName}
+	commitCache, err := lru.New[hash.Hash, *OptionalCommit](commitCacheSize)
+	if err != nil {
+		return nil, err
+	}
+	ret := &DoltDB{
+		db:           hooksDatabase{Database: db},
+		vrw:          vrw,
+		ns:           ns,
+		databaseName: databaseName,
+		commitCache:  commitCache,
+	}
 	ret.db.db = ret
-	return ret
+	return ret, nil
 }
 
 // GetDatabaseName returns the name of the database.
@@ -154,7 +168,18 @@ func LoadDoltDBWithParams(ctx context.Context, nbf *types.NomsBinFormat, urlStr 
 		return nil, err
 	}
 
-	ret := &DoltDB{db: hooksDatabase{Database: db}, vrw: vrw, ns: ns, databaseName: name}
+	commitCache, err := lru.New[hash.Hash, *OptionalCommit](commitCacheSize)
+	if err != nil {
+		return nil, err
+	}
+
+	ret := &DoltDB{
+		db:           hooksDatabase{Database: db},
+		vrw:          vrw,
+		ns:           ns,
+		databaseName: name,
+		commitCache:  commitCache,
+	}
 	ret.db.db = ret
 	return ret, nil
 }
@@ -472,6 +497,28 @@ func (ddb *DoltDB) Resolve(ctx context.Context, cs *CommitSpec, cwb ref.DoltRef)
 	}
 
 	return commit.GetAncestor(ctx, cs.aSpec)
+}
+
+// ResolveHash takes a hash and returns an OptionalCommit directly.
+// This assumes no ancestor spec resolution and no current working branch (cwb) needed.
+func (ddb *DoltDB) ResolveHash(ctx context.Context, h hash.Hash) (*OptionalCommit, error) {
+	if oc, ok := ddb.commitCache.Get(h); ok {
+		return oc, nil
+	}
+	commitValue, err := datas.LoadCommitAddr(ctx, ddb.vrw, h)
+	if err != nil {
+		return nil, err
+	}
+	oc := &OptionalCommit{Addr: h}
+	if !commitValue.IsGhost() {
+		commit, err := NewCommit(ctx, ddb.vrw, ddb.ns, commitValue)
+		if err != nil {
+			return nil, err
+		}
+		oc.Commit = commit
+	}
+	ddb.commitCache.Add(h, oc)
+	return oc, nil
 }
 
 // BootstrapShallowResolve is a special case of Resolve that is used to resolve a commit prior to pulling it's history

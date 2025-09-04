@@ -16,6 +16,7 @@ package nbs
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha512"
 	"encoding/binary"
 	"encoding/json"
@@ -54,24 +55,24 @@ const (
 )
 
 type archiveWriter struct {
-	// MD5 is calculated on the entire output, so this hash sink wraps actual ByteSink.
-	md5Summer *HashingByteSink
 	// SHA512 is calculated on chunks of the output stream, so will be reset at appropriate times. This
 	// sinker is what archive code writes to, and it wraps the MD5 sink.
-	output       *HashingByteSink
-	bytesWritten uint64
-	stagedBytes  stagedByteSpanSlice
-	stagedChunks stagedChunkRefSlice
+	output *HashingByteSink
 	// seenChunks is used when building archives chunk-by-chunk, to ensure that we do not write the same chunk multiple
 	// times. It is not used for any other purpose, and there are cases where we bypass checking it (e.g. conjoining archives).
-	seenChunks      hash.HashSet
+	seenChunks hash.HashSet
+	// MD5 is calculated on the entire output, so this hash sink wraps actual ByteSink.
+	md5Summer       *HashingByteSink
+	finalPath       string
+	stagedBytes     stagedByteSpanSlice
+	stagedChunks    stagedChunkRefSlice
+	workflowStage   stage
+	bytesWritten    uint64
 	indexLen        uint64
+	chunkDataLength uint64
 	metadataLen     uint32
 	suffixCheckSum  sha512Sum
 	fullMD5         md5Sum
-	workflowStage   stage
-	finalPath       string
-	chunkDataLength uint64
 }
 
 /*
@@ -111,7 +112,7 @@ func newArchiveWriter(tmpDir string) (*archiveWriter, error) {
 	}, nil
 }
 
-// newArchiveWriter - Create an *archiveWriter with the given output ByteSync. This is used for testing.
+// newArchiveWriter - Create an *archiveWriter with the given output ByteSync.
 func newArchiveWriterWithSink(bs ByteSink) *archiveWriter {
 	hbMd5 := NewMD5HashingByteSink(bs)
 	hbSha := NewSHA512HashingByteSink(hbMd5)
@@ -196,12 +197,7 @@ func (aw *archiveWriter) stageSnappyChunk(hash hash.Hash, dataId uint32) error {
 }
 
 func (aw *archiveWriter) indexFinalize(originTableFile hash.Hash) error {
-	err := aw.finalizeByteSpans()
-	if err != nil {
-		return err
-	}
-
-	err = aw.writeIndex()
+	err := aw.writeIndex()
 	if err != nil {
 		return err
 	}
@@ -283,7 +279,7 @@ func (aw *archiveWriter) writeIndex() error {
 		}
 	}
 
-	// sort stagedChunks by hash.Prefix(). Note this isn't a perfect sort for hashes, we are just grouping them by prefix
+	// sort stagedChunks by hash. This is foundational to the archive format.
 	sort.Sort(aw.stagedChunks)
 
 	// We lay down the sorted chunk list in it's three forms.
@@ -308,8 +304,6 @@ func (aw *archiveWriter) writeIndex() error {
 		}
 	}
 
-	indexSize := aw.bytesWritten - indexStart
-
 	// Suffixes output. This data is used to create the name for this archive.
 	aw.output.ResetHasher()
 	for _, scr := range aw.stagedChunks {
@@ -319,11 +313,10 @@ func (aw *archiveWriter) writeIndex() error {
 		}
 	}
 	dataWritten := uint64(len(aw.stagedChunks)) * hash.SuffixLen
-	indexSize += dataWritten
 	aw.bytesWritten += dataWritten
+	aw.indexLen = aw.bytesWritten - indexStart
 	aw.suffixCheckSum = sha512Sum(aw.output.GetSum())
 
-	aw.indexLen = indexSize
 	aw.output.ResetHasher()
 	aw.workflowStage = stageMetadata
 
@@ -503,15 +496,14 @@ func (aw *archiveWriter) getChunkDataLength() (uint64, error) {
 }
 
 type ArchiveStreamWriter struct {
-	writer     *archiveWriter
-	dictMap    map[*DecompBundle]uint32
-	chunkCount int32
-
+	writer  *archiveWriter
+	dictMap map[*DecompBundle]uint32
 	// snappyQueue is a queue of CompressedChunk that have been written, but not flushed to the archive.
 	// These are kept in memory until we have enough to create a compression dictionary for them (and subsequent
 	// snappy chunks). When this value is nil, the snappyDict must be set (they are exclusive)
 	snappyQueue *[]CompressedChunk
 	snappyDict  *DecompBundle
+	chunkCount  int32
 }
 
 func NewArchiveStreamWriter(tmpDir string) (*ArchiveStreamWriter, error) {
@@ -557,9 +549,13 @@ func (asw *ArchiveStreamWriter) Finish() (uint32, string, error) {
 		}
 	}
 
-	// This will perform all the steps to construct an archive file - starting with the finalization of byte spans.
+	// This will perform all the steps to construct an archive file.
 	// All writeByteSpan calls and stage* calls must be completed before this.
-	err := asw.writer.indexFinalize(hash.Hash{})
+	err := asw.writer.finalizeByteSpans()
+	if err != nil {
+		return 0, "", err
+	}
+	err = asw.writer.indexFinalize(hash.Hash{})
 	if err != nil {
 		return 0, "", err
 	}
@@ -725,4 +721,208 @@ func (asw *ArchiveStreamWriter) convertSnappyAndStage(cc CompressedChunk) (uint3
 	bytesWritten := uint32(len(compressedData))
 
 	return bytesWritten, asw.writer.stageZStdChunk(h, dictId, dataId)
+}
+
+// conjoinAll combines two or more archiveReader instances into a single archive.
+// This method takes a slice of archiveReader instances and merges their contents
+// into the current archiveWriter.
+//
+// This method finalizes the index and footer. Effectively completes the in memory archive writing
+// process, but does not write it to disk.
+func (aw *archiveWriter) conjoinAll(ctx context.Context, sources []chunkSource, stats *Stats) error {
+	if len(sources) < 2 {
+		return fmt.Errorf("conjoinAll requires at least 2 archive readers, got %d", len(sources))
+	}
+
+	srcSz := make([]sourceWithSize, 0, len(sources))
+	for _, src := range sources {
+		aSrc, ok := src.(archiveChunkSource)
+		if !ok {
+			return fmt.Errorf("runtime error: source %T is not an archiveChunkSource", src)
+		}
+		dataSpan := aSrc.aRdr.footer.dataSpan()
+
+		srcSz = append(srcSz, sourceWithSize{src, dataSpan.length})
+	}
+
+	// similar to cloud conjoin, we build the index first. It could come after in this case.
+	thePlan, err := planArchiveConjoin(srcSz, stats)
+	if err != nil {
+		return fmt.Errorf("failed to plan archive conjoin: %w", err)
+	}
+
+	// Now that we have the plan, we slam all datablocks into the output stream then write the index last.
+	for _, src := range thePlan.sources.sws {
+		aSrc, ok := src.source.(archiveChunkSource)
+		if !ok {
+			return fmt.Errorf("runtime error: source %T is not an archiveChunkSource", src)
+		}
+
+		// Write the entire data section for the current reader.
+		dataSpan := aSrc.aRdr.footer.dataSpan()
+		sectionReader := newSectionReader(ctx, aSrc.aRdr.reader, int64(dataSpan.offset), int64(dataSpan.length), stats)
+
+		written, err := io.Copy(aw.output, sectionReader)
+		if err != nil {
+			return fmt.Errorf("failed to copy data from archive: %w", err)
+		}
+		aw.bytesWritten += uint64(written)
+	}
+
+	// Now that we have all the data written, we can write out the index.
+	written, err := aw.output.Write(thePlan.mergedIndex)
+	if err != nil {
+		return fmt.Errorf("failed to write index to archive: %w", err)
+	}
+
+	aw.bytesWritten += uint64(written)
+	aw.workflowStage = stageDone
+
+	return nil
+}
+
+type tableChunkRecord struct {
+	offset uint64
+	length uint32
+	hash   hash.Hash
+}
+
+func planArchiveConjoin(sources []sourceWithSize, stats *Stats) (compactionPlan, error) {
+	if len(sources) < 2 {
+		return compactionPlan{}, fmt.Errorf("conjoinIndexes requires at least 2 archive readers, got %d", len(sources))
+	}
+
+	// place largest chunk sources at the beginning of the conjoin
+	orderedSrcs := chunkSourcesByDescendingDataSize{sws: sources}
+	sort.Sort(orderedSrcs)
+	sources = nil
+
+	writer := NewBlockBufferByteSink(fourMb)
+	aw := newArchiveWriterWithSink(writer)
+
+	currentDataOffset := uint64(0)
+	chunkCounter := uint32(0)
+
+	for _, src := range orderedSrcs.sws {
+		reader := src.source
+		arcSrc, ok := reader.(archiveChunkSource)
+		if !ok {
+			// When it's not an archive, we want to use the table index to extract chunk records one at a time.
+			index, err := reader.index()
+			if err != nil {
+				return compactionPlan{}, err
+			}
+			chks := index.chunkCount()
+			chunkCounter += chks
+
+			chunkRecs := make([]tableChunkRecord, 0, chks)
+			for i := uint32(0); i < chks; i++ {
+				var h hash.Hash
+				ie, err := index.indexEntry(i, &h)
+				if err != nil {
+					return compactionPlan{}, fmt.Errorf("failure to retrieve indexEntry(%d): %w", i, err)
+				}
+				chunkRecs = append(chunkRecs, tableChunkRecord{
+					offset: ie.Offset(),
+					length: ie.Length(),
+					hash:   h,
+				})
+			}
+			sort.Slice(chunkRecs, func(i, j int) bool {
+				return chunkRecs[i].offset < chunkRecs[j].offset
+			})
+
+			for _, rec := range chunkRecs {
+				adjustedSpan := byteSpan{
+					offset: rec.offset + currentDataOffset,
+					length: uint64(rec.length),
+				}
+				aw.stagedBytes = append(aw.stagedBytes, adjustedSpan)
+
+				aw.stagedChunks = append(aw.stagedChunks, stagedChunkRef{
+					hash:       rec.hash,
+					dictionary: 0,
+					data:       uint32(len(aw.stagedBytes)),
+				})
+			}
+		} else {
+			footer := arcSrc.aRdr.footer
+			chunkCounter += footer.chunkCount
+
+			// Map byte span IDs from this reader to the combined archive
+			spanIdOffset := uint32(len(aw.stagedBytes))
+
+			for i := uint32(1); i <= footer.byteSpanCount; i++ {
+				span := arcSrc.aRdr.getByteSpanByID(i)
+				adjustedSpan := byteSpan{
+					offset: span.offset + currentDataOffset,
+					length: span.length,
+				}
+				aw.stagedBytes = append(aw.stagedBytes, adjustedSpan)
+			}
+
+			for i := 0; i < int(footer.chunkCount); i++ {
+				dictId, dataId := arcSrc.aRdr.getChunkRef(i)
+
+				prefix := arcSrc.aRdr.indexReader.getPrefix(uint32(i))
+				suffix := arcSrc.aRdr.indexReader.getSuffix(uint32(i))
+				chunkHash := reconstructHashFromPrefixAndSuffix(prefix, suffix)
+
+				// Add to seen chunks and staged chunks. Note that we allow duplicates here, whereas we quietly skip
+				// duplicates when doing a chunk-by-chunk build of an archive.
+				aw.seenChunks.Insert(chunkHash)
+
+				// Adjust byte span IDs for the combined archive
+				adjustedDictId := dictId
+				if dictId != 0 {
+					adjustedDictId = dictId + spanIdOffset
+				}
+				adjustedDataId := dataId + spanIdOffset
+
+				aw.stagedChunks = append(aw.stagedChunks, stagedChunkRef{
+					hash:       chunkHash,
+					dictionary: adjustedDictId,
+					data:       adjustedDataId,
+				})
+			}
+		}
+		currentDataOffset += src.dataLen
+	}
+
+	aw.bytesWritten = currentDataOffset
+	// Preserve this for stat reporting as aw.bytesWritten will be updated as we write the index.
+	dataBlocksLen := currentDataOffset
+
+	// The conjoin process is a little different from the normal archive writing process. We manually stick everything
+	// into the writer, and then finalize the index and footer at the end. The datablocks will be written in separately
+	// after we have created the index and footer.
+	//
+	// So we set the workflow stage to stageIndex because we skipped the byte span insertion stage.
+	aw.workflowStage = stageIndex
+
+	err := aw.indexFinalize(hash.Hash{})
+	if err != nil {
+		return compactionPlan{}, fmt.Errorf("failed to finalize archive: %w", err)
+	}
+
+	name, err := aw.getName()
+	if err != nil {
+		return compactionPlan{}, fmt.Errorf("failed to get name of conjoined archive: %w", err)
+	}
+
+	buf := bytes.NewBuffer(make([]byte, 0, writer.pos))
+	if err := writer.Flush(buf); err != nil {
+		return compactionPlan{}, fmt.Errorf("failed to build index buffer while conjoining archives: %w", err)
+	}
+
+	stats.BytesPerConjoin.Sample(dataBlocksLen + uint64(len(buf.Bytes())))
+
+	return compactionPlan{
+		sources:             orderedSrcs,
+		name:                name,
+		suffix:              ArchiveFileSuffix,
+		mergedIndex:         buf.Bytes(),
+		chunkCount:          chunkCounter,
+		totalCompressedData: dataBlocksLen,
+	}, nil
 }

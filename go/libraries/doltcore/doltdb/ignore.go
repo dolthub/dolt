@@ -174,6 +174,35 @@ func ExcludeIgnoredTables(ctx context.Context, roots Roots, tables []TableName) 
 	return filteredTables, nil
 }
 
+// IdentifyIgnoredTables takes a list of table names and identifies any tables that are ignored, by evaluating the
+// table names against the patterns in the dolt_ignore table from the working set.
+func IdentifyIgnoredTables(ctx context.Context, roots Roots, tables []TableName) (ignoredTables []TableName, err error) {
+	schemas := GetUniqueSchemaNamesFromTableNames(tables)
+	ignorePatternMap, err := GetIgnoredTablePatterns(ctx, roots, schemas)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, tbl := range tables {
+		ignorePatterns := ignorePatternMap[tbl.Schema]
+		ignored, err := ignorePatterns.IsTableNameIgnored(tbl)
+		if err != nil {
+			return nil, err
+		}
+		if conflict := AsDoltIgnoreInConflict(err); conflict != nil {
+			// no-op
+		} else if ignored == DontIgnore {
+			// no-op
+		} else if ignored == Ignore {
+			ignoredTables = append(ignoredTables, tbl)
+		} else {
+			return nil, fmt.Errorf("IsTableNameIgnored returned ErrorOccurred but no error!")
+		}
+	}
+
+	return ignoredTables, nil
+}
+
 // compilePattern takes a dolt_ignore pattern and generate a Regexp that matches against the same table names as the pattern.
 func compilePattern(pattern string) (*regexp.Regexp, error) {
 	pattern = "^" + regexp.QuoteMeta(pattern) + "$"

@@ -337,7 +337,11 @@ func convertTableFileToArchive(
 // indexAndFinalizeArchive writes the index, metadata, and footer to the archive file. It also flushes the archive writer
 // to the directory provided. The name is calculated from the footer, and can be obtained by calling getName on the archive.
 func indexFinalizeFlushArchive(arcW *archiveWriter, archivePath string, originTableFile hash.Hash) error {
-	err := arcW.indexFinalize(originTableFile)
+	err := arcW.finalizeByteSpans()
+	if err != nil {
+		return err
+	}
+	err = arcW.indexFinalize(originTableFile)
 	if err != nil {
 		return err
 	}
@@ -435,8 +439,8 @@ func compressChunksInParallel(
 	stats *Stats,
 ) (uint32, error) {
 	type compressedChunk struct {
-		h    hash.Hash
 		data []byte
+		h    hash.Hash
 	}
 
 	const workerCount = 32

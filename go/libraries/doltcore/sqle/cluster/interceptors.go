@@ -73,10 +73,10 @@ func isLikelyServerResponse(err error) bool {
 // immediately transition to standby and to stop replicating to the standby.
 type clientinterceptor struct {
 	lgr        *logrus.Entry
+	roleSetter func(role string, epoch int)
 	role       Role
 	epoch      int
 	mu         sync.Mutex
-	roleSetter func(role string, epoch int)
 }
 
 func (ci *clientinterceptor) setRole(role Role, epoch int) {
@@ -192,14 +192,14 @@ func (ci *clientinterceptor) Options() []grpc.DialOption {
 // some jwt.Expected. Incoming requests must have a valid, unexpired, signed
 // JWT, signed by a key accessible in the KeyProvider.
 type serverinterceptor struct {
+	keyProvider jwtauth.KeyProvider
+	jwtExpected jwt.Expected
+
 	lgr        *logrus.Entry
+	roleSetter func(role string, epoch int)
 	role       Role
 	epoch      int
 	mu         sync.Mutex
-	roleSetter func(role string, epoch int)
-
-	keyProvider jwtauth.KeyProvider
-	jwtExpected jwt.Expected
 }
 
 func (si *serverinterceptor) Stream() grpc.StreamServerInterceptor {

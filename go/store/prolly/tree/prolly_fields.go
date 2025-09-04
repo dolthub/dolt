@@ -137,7 +137,7 @@ func GetField(ctx context.Context, td val.TupleDesc, i int, tup val.Tuple, ns No
 			v = val.NewTextStorage(ctx, h, ns)
 		}
 	case val.BytesAdaptiveEnc:
-		v, ok, err = td.GetBytesAdaptiveValue(i, ns, tup)
+		v, ok, err = td.GetBytesAdaptiveValue(ctx, i, ns, tup)
 	case val.StringAdaptiveEnc:
 		v, ok, err = td.GetStringAdaptiveValue(i, ns, tup)
 	case val.CommitAddrEnc:

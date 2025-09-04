@@ -36,26 +36,22 @@ type SeekFn func(key []byte) (advance bool)
 
 // List is an in-memory skip-list.
 type List struct {
+	// keyOrder determines the ordering of items
+	keyOrder KeyOrder
 	// nodes contains all skipNode's in the List.
 	// skipNode's are assigned ascending id's and
 	// are stored in the order they were created,
 	// i.e. skipNode.id stores its index in |nodes|
 	nodes []skipNode
-
+	// seed is hash salt
+	seed maphash.Seed
 	// count stores the current number of items in
 	// the list (updates are not made in-place)
 	count uint32
-
 	// checkpoint stores the nodeId of the last
 	// checkpoint made. All nodes created after this
 	// point will be discarded on a Revert()
 	checkpoint nodeId
-
-	// keyOrder determines the ordering of items
-	keyOrder KeyOrder
-
-	// seed is hash salt
-	seed maphash.Seed
 }
 
 type nodeId uint32

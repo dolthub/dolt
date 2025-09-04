@@ -250,7 +250,7 @@ func historicalFuzzyMatching(ctx context.Context, heads hash.HashSet, groupings 
 		return err
 	}
 	for {
-		h, _, err := iterator.Next(ctx)
+		h, _, _, _, err := iterator.Next(ctx)
 		if err != nil {
 			if err == io.EOF {
 				break

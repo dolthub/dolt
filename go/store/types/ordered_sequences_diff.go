@@ -36,8 +36,10 @@ const (
 )
 
 type ValueChanged struct {
-	ChangeType              DiffChangeType
-	Key, OldValue, NewValue Value
+	Key        Value
+	OldValue   Value
+	NewValue   Value
+	ChangeType DiffChangeType
 }
 
 func sendChange(ctx context.Context, changes chan<- ValueChanged, change ValueChanged) error {
@@ -116,7 +118,7 @@ VALIDRANGES:
 						return err
 					}
 
-					if err := sendChange(ctx, changes, ValueChanged{DiffChangeAdded, currentKey.v, nil, mv}); err != nil {
+					if err := sendChange(ctx, changes, ValueChanged{currentKey.v, nil, mv, DiffChangeAdded}); err != nil {
 						return err
 					}
 				}
@@ -153,7 +155,7 @@ VALIDRANGES:
 						return err
 					}
 
-					if err := sendChange(ctx, changes, ValueChanged{DiffChangeRemoved, lastKey.v, mv, nil}); err != nil {
+					if err := sendChange(ctx, changes, ValueChanged{lastKey.v, mv, nil, DiffChangeRemoved}); err != nil {
 						return err
 					}
 
@@ -172,7 +174,7 @@ VALIDRANGES:
 						return err
 					}
 
-					if err := sendChange(ctx, changes, ValueChanged{DiffChangeModified, lastKey.v, lmv, cmv}); err != nil {
+					if err := sendChange(ctx, changes, ValueChanged{lastKey.v, lmv, cmv, DiffChangeModified}); err != nil {
 						return err
 					}
 
@@ -211,7 +213,7 @@ VALIDRANGES:
 				return err
 			}
 
-			if err := sendChange(ctx, changes, ValueChanged{DiffChangeRemoved, lastKey.v, mv, nil}); err != nil {
+			if err := sendChange(ctx, changes, ValueChanged{lastKey.v, mv, nil, DiffChangeRemoved}); err != nil {
 				return err
 			}
 		}
@@ -243,7 +245,7 @@ VALIDRANGES:
 				return err
 			}
 
-			if err := sendChange(ctx, changes, ValueChanged{DiffChangeAdded, currKey.v, nil, mv}); err != nil {
+			if err := sendChange(ctx, changes, ValueChanged{currKey.v, nil, mv, DiffChangeAdded}); err != nil {
 				return err
 			}
 		}

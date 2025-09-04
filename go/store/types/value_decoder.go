@@ -61,8 +61,8 @@ type CodecReader interface {
 var _ CodecReader = (*valueDecoder)(nil)
 
 type valueDecoder struct {
-	typedBinaryNomsReader
 	vrw ValueReadWriter
+	typedBinaryNomsReader
 }
 
 // typedBinaryNomsReader provides some functionality for reading and skipping types that is shared by both valueDecoder and refWalker.
@@ -73,11 +73,11 @@ type typedBinaryNomsReader struct {
 
 func newValueDecoder(buff []byte, vrw ValueReadWriter) valueDecoder {
 	nr := binaryNomsReader{buff, 0}
-	return valueDecoder{typedBinaryNomsReader{nr, false}, vrw}
+	return valueDecoder{vrw, typedBinaryNomsReader{nr, false}}
 }
 
 func newValueDecoderWithValidation(nr binaryNomsReader, vrw ValueReadWriter) valueDecoder {
-	return valueDecoder{typedBinaryNomsReader{nr, true}, vrw}
+	return valueDecoder{vrw, typedBinaryNomsReader{nr, true}}
 }
 
 func (r *valueDecoder) ReadBlob() (Blob, error) {

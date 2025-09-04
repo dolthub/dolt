@@ -33,29 +33,37 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
+// reconstructHashFromPrefixAndSuffix creates a hash from a prefix and suffix
+func reconstructHashFromPrefixAndSuffix(prefix uint64, suffix [hash.SuffixLen]byte) hash.Hash {
+	var h hash.Hash
+	binary.BigEndian.PutUint64(h[:hash.PrefixLen], prefix)
+	copy(h[hash.PrefixLen:], suffix[:])
+	return h
+}
+
 // archiveReader is a reader for the archive format. We use primitive type slices where possible. These are read directly
 // from disk into memory for speed. The downside is complexity on the read path, but it's all constant time.
 type archiveReader struct {
 	reader      tableReaderAt
 	indexReader archiveIndexReader // Memory-mapped or fallback index reader
-	footer      archiveFooter
 	dictCache   *lru.TwoQueueCache[uint32, *DecompBundle]
+	footer      archiveFooter
 }
 
 type suffix [hash.SuffixLen]byte
 
 type archiveFooter struct {
+	fileSignature string
 	indexSize     uint64
+	fileSize      uint64 // Not actually part of the footer, but necessary for calculating offsets.
 	byteSpanCount uint32
 	chunkCount    uint32
 	metadataSize  uint32
 	dataCheckSum  sha512Sum
 	indexCheckSum sha512Sum
 	metaCheckSum  sha512Sum
-	formatVersion byte
-	fileSignature string
-	fileSize      uint64 // Not actually part of the footer, but necessary for calculating offsets.
 	hash          hash.Hash
+	formatVersion byte
 }
 
 // actualFooterSize returns the footer size, in bytes for a specific archive. Due to the evolution of the archive format,
@@ -485,7 +493,7 @@ func (ar archiveReader) getAsToChunker(ctx context.Context, h hash.Hash, stats *
 		return nil, errors.New("runtime error: unable to get archived chunk. dictionary is nil")
 	}
 
-	return ArchiveToChunker{h, dict, data}, nil
+	return ArchiveToChunker{dict, data, h}, nil
 }
 
 func (ar archiveReader) count() uint32 {
@@ -578,12 +586,9 @@ func (ar archiveReader) getMetadata(ctx context.Context, stats *Stats) ([]byte, 
 
 func (ar archiveReader) iterate(ctx context.Context, cb func(chunks.Chunk) error, stats *Stats) error {
 	for i := uint32(0); i < ar.footer.chunkCount; i++ {
-		var hasBytes [hash.ByteLen]byte
-
-		binary.BigEndian.PutUint64(hasBytes[:uint64Size], ar.indexReader.getPrefix(i))
-		suf := ar.indexReader.getSuffix(i)
-		copy(hasBytes[hash.ByteLen-hash.SuffixLen:], suf[:])
-		h := hash.New(hasBytes[:])
+		prefix := ar.indexReader.getPrefix(i)
+		suffix := ar.indexReader.getSuffix(i)
+		h := reconstructHashFromPrefixAndSuffix(prefix, suffix)
 
 		data, err := ar.get(ctx, h, stats)
 		if err != nil {

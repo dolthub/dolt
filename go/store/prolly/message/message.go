@@ -118,6 +118,8 @@ func GetSubtrees(msg serial.Message) ([]uint64, error) {
 	switch id {
 	case serial.ProllyTreeNodeFileID:
 		return getProllyMapSubtrees(msg)
+	case serial.VectorIndexNodeFileID:
+		return getVectorIndexSubtrees(msg)
 	case serial.AddressMapFileID:
 		return getAddressMapSubtrees(msg)
 	case serial.MergeArtifactsFileID:

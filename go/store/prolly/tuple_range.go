@@ -80,9 +80,9 @@ type RangeField struct {
 }
 
 type Bound struct {
+	Value     []byte
 	Binding   bool // positive or negative infinity
 	Inclusive bool
-	Value     []byte
 }
 
 // aboveStart is used to find the start of the

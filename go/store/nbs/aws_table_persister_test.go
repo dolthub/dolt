@@ -217,7 +217,7 @@ func TestAWSTablePersisterDividePlan(t *testing.T) {
 	}()
 	plan, err := planRangeCopyConjoin(sources, &Stats{})
 	require.NoError(t, err)
-	copies, manuals, _, err := dividePlan(context.Background(), plan, minPartSize, maxPartSize)
+	copies, manuals, _, err := dividePlan(plan, minPartSize, maxPartSize)
 	require.NoError(t, err)
 
 	perTableDataSize := map[string]int64{}
@@ -276,12 +276,12 @@ func TestAWSTablePersisterConjoinAll(t *testing.T) {
 
 	newPersister := func(s3svc S3APIV2) awsTablePersister {
 		return awsTablePersister{
-			s3svc,
-			"bucket",
-			rl,
-			awsLimits{targetPartSize, minPartSize, maxPartSize},
-			"",
-			&UnlimitedQuotaProvider{},
+			s3:     s3svc,
+			q:      &UnlimitedQuotaProvider{},
+			rl:     rl,
+			bucket: "bucket",
+			ns:     "",
+			limits: awsLimits{targetPartSize, minPartSize, maxPartSize},
 		}
 	}
 

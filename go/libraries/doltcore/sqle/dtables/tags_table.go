@@ -32,8 +32,8 @@ var _ sql.StatisticsTable = (*TagsTable)(nil)
 
 // TagsTable is a sql.Table implementation that implements a system table which shows the dolt tags
 type TagsTable struct {
-	tableName string
 	ddb       *doltdb.DoltDB
+	tableName string
 }
 
 // NewTagsTable creates a TagsTable

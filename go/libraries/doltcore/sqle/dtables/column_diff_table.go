@@ -40,12 +40,12 @@ const columnDiffDefaultRowCount = 100
 // ColumnDiffTable is a sql.Table implementation of a system table that shows which tables and columns have
 // changed in each commit, across all branches.
 type ColumnDiffTable struct {
-	dbName           string
-	tableName        string
 	ddb              *doltdb.DoltDB
 	head             *doltdb.Commit
-	partitionFilters []sql.Expression
 	commitCheck      doltdb.CommitFilter[*sql.Context]
+	dbName           string
+	tableName        string
+	partitionFilters []sql.Expression
 }
 
 var _ sql.Table = (*ColumnDiffTable)(nil)
@@ -166,16 +166,16 @@ func (dt *ColumnDiffTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLo
 
 type doltColDiffWorkingSetRowItr struct {
 	ddb                 *doltdb.DoltDB
-	stagedIndex         int
-	unstagedIndex       int
-	colIndex            int
+	currentTableDelta   *diff.TableDelta
+	tableName           doltdb.TableName
 	changeSet           string
 	stagedTableDeltas   []diff.TableDelta
 	unstagedTableDeltas []diff.TableDelta
-	currentTableDelta   *diff.TableDelta
-	tableName           doltdb.TableName
 	colNames            []string
 	diffTypes           []string
+	stagedIndex         int
+	unstagedIndex       int
+	colIndex            int
 }
 
 func (dt *ColumnDiffTable) newWorkingSetRowItr(ctx *sql.Context) (sql.RowIter, error) {
@@ -276,15 +276,15 @@ func (d *doltColDiffWorkingSetRowItr) Close(c *sql.Context) error {
 
 // doltColDiffCommitHistoryRowItr is a sql.RowItr implementation which iterates over each commit as if it's a row in the table.
 type doltColDiffCommitHistoryRowItr struct {
+	child           doltdb.CommitItr[*sql.Context]
 	ctx             *sql.Context
 	ddb             *doltdb.DoltDB
-	child           doltdb.CommitItr[*sql.Context]
-	commits         []*doltdb.Commit
 	meta            *datas.CommitMeta
-	hash            hash.Hash
+	commits         []*doltdb.Commit
 	tableChanges    []tableColChange
 	tableChangesIdx int
 	colIdx          int
+	hash            hash.Hash
 }
 
 // newCommitHistoryRowItr creates a doltDiffCommitHistoryRowItr from a CommitItr.
@@ -337,7 +337,7 @@ func (itr *doltColDiffCommitHistoryRowItr) Next(ctx *sql.Context) (sql.Row, erro
 			}
 			itr.commits = nil
 		} else if itr.child != nil {
-			_, optCmt, err := itr.child.Next(ctx)
+			_, optCmt, _, _, err := itr.child.Next(ctx)
 			if err != nil {
 				return nil, err
 			}

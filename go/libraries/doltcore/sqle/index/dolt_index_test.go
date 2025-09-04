@@ -1100,8 +1100,8 @@ func (t NoCacheTableable) DataCacheKey(ctx *sql.Context) (doltdb.DataCacheKey, b
 }
 
 type rowSlice struct {
-	rows    []sql.Row
 	sortErr error
+	rows    []sql.Row
 }
 
 func (r *rowSlice) setSortErr(err error) {

@@ -57,10 +57,10 @@ func TestMcvHeap(t *testing.T) {
 
 func TestBucketBuilder(t *testing.T) {
 	tests := []struct {
-		name    string
-		keys    []sql.Row
-		keyDesc val.TupleDesc
 		bucket  *stats.Bucket
+		name    string
+		keyDesc val.TupleDesc
+		keys    []sql.Row
 	}{
 		{
 			name:    "ints",

@@ -163,12 +163,12 @@ type readable interface {
 }
 
 type tempTblFile struct {
-	id          string
 	read        readable
+	id          string
+	contentHash []byte
 	numChunks   int
 	chunksLen   uint64
 	contentLen  uint64
-	contentHash []byte
 }
 
 type countingReader struct {
@@ -262,17 +262,14 @@ func emitStats(s *stats, ch chan Stats) (cancel func()) {
 }
 
 type stats struct {
-	sendBytesPerSec uint64
-
-	totalSourceChunks        uint64
-	fetchedSourceChunks      uint64
-	fetchedSourceBytes       uint64
-	fetchedSourceBytesPerSec uint64
-
+	wrStatsGetter             func() PullTableFileWriterStats
+	sendBytesPerSec           uint64
+	totalSourceChunks         uint64
+	fetchedSourceChunks       uint64
+	fetchedSourceBytes        uint64
+	fetchedSourceBytesPerSec  uint64
 	sendBytesPerSecF          float64
 	fetchedSourceBytesPerSecF float64
-
-	wrStatsGetter func() PullTableFileWriterStats
 }
 
 type Stats struct {

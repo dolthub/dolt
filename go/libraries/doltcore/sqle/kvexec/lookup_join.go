@@ -32,13 +32,15 @@ import (
 )
 
 type lookupJoinKvIter struct {
-	srcIter prolly.MapIter
-	srcKey  val.Tuple
-	srcVal  val.Tuple
+	// TODO: we want to build KV-side static expression implementations
+	// so that we can execute filters more efficiently
+	srcFilter  sql.Expression
+	dstFilter  sql.Expression
+	joinFilter sql.Expression
 
-	dstIterGen index.SecondaryLookupIterGen
+	srcIter    prolly.MapIter
 	dstIter    prolly.MapIter
-	dstKey     val.Tuple
+	dstIterGen index.SecondaryLookupIterGen
 
 	// keyTupleMapper inputs (srcKey, srcVal) to create a dstKey
 	keyTupleMapper *lookupMapping
@@ -46,15 +48,13 @@ type lookupJoinKvIter struct {
 	// projections
 	joiner *prollyToSqlJoiner
 
-	// todo: we want to build KV-side static expression implementations
-	// so that we can execute filters more efficiently
-	srcFilter  sql.Expression
-	dstFilter  sql.Expression
-	joinFilter sql.Expression
+	dstKey val.Tuple
+	srcKey val.Tuple
+	srcVal val.Tuple
 
 	// LEFT_JOIN impl details
-	excludeNulls bool
 	isLeftJoin   bool
+	excludeNulls bool
 	returnedARow bool
 }
 
@@ -185,19 +185,16 @@ func (l *lookupJoinKvIter) Next(ctx *sql.Context) (sql.Row, error) {
 // lookupMapping is responsible for generating keys for lookups into
 // the destination iterator.
 type lookupMapping struct {
-	split      int
+	ns         tree.NodeStore
+	pool       pool.BuffPool
+	targetKb   *val.TupleBuilder
+	litKd      val.TupleDesc
+	srcKd      val.TupleDesc
+	srcVd      val.TupleDesc
 	srcMapping val.OrdinalMapping
-
 	// litTuple are the statically provided literal expressions in the key expression
 	litTuple val.Tuple
-
-	litKd    val.TupleDesc
-	srcKd    val.TupleDesc
-	srcVd    val.TupleDesc
-	targetKb *val.TupleBuilder
-
-	ns   tree.NodeStore
-	pool pool.BuffPool
+	split    int
 }
 
 func newLookupKeyMapping(ctx context.Context, sourceSch schema.Schema, tgtKeyDesc val.TupleDesc, keyExprs []sql.Expression, typs []sql.ColumnExpressionType, ns tree.NodeStore) (*lookupMapping, error) {

@@ -111,6 +111,8 @@ func EncodingFromQueryType(typ query.Type) serial.Encoding {
 			return serial.EncodingStringAdaptive
 		}
 		return serial.EncodingStringAddr
+	case query.Type_VECTOR:
+		return serial.EncodingBytesAdaptive
 	default:
 		panic(fmt.Sprintf("unknown encoding %v", typ))
 	}

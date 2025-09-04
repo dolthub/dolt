@@ -38,20 +38,21 @@ var ErrExactlyOneFromCommit = errors.New("dolt_commit_diff_* tables must be filt
 var ErrInvalidCommitDiffTableArgs = errors.New("commit_diff_<table> requires one 'to_commit' and one 'from_commit'")
 
 type CommitDiffTable struct {
-	tableName   doltdb.TableName
-	dbName      string
-	ddb         *doltdb.DoltDB
-	table       *doltdb.Table
-	joiner      *rowconv.Joiner
-	sqlSch      sql.PrimaryKeySchema
-	workingRoot doltdb.RootValue
-	stagedRoot  doltdb.RootValue
+	workingRoot       doltdb.RootValue
+	stagedRoot        doltdb.RootValue
+	requiredFilterErr error
+	ddb               *doltdb.DoltDB
+	table             *doltdb.Table
+	joiner            *rowconv.Joiner
+	tableName         doltdb.TableName
+	targetSchema      schema.Schema
+
 	// toCommit and fromCommit are set via the
 	// sql.IndexAddressable interface
-	toCommit          string
-	fromCommit        string
-	requiredFilterErr error
-	targetSchema      schema.Schema
+	toCommit   string
+	fromCommit string
+	dbName     string
+	sqlSch     sql.PrimaryKeySchema
 }
 
 var _ sql.Table = (*CommitDiffTable)(nil)
@@ -243,9 +244,9 @@ func (dt *CommitDiffTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLo
 }
 
 type SliceOfPartitionsItr struct {
+	mu         *sync.Mutex
 	partitions []sql.Partition
 	i          int
-	mu         *sync.Mutex
 }
 
 func NewSliceOfPartitionsItr(partitions []sql.Partition) *SliceOfPartitionsItr {

@@ -42,21 +42,21 @@ import (
 )
 
 type harness struct {
-	t                  *testing.T
-	mySqlPort          int
-	doltPort           int
+	doltLogFile        *os.File
+	mysqlProxy         *toxiproxyclient.Proxy
+	toxiClient         *toxiproxyclient.Client
 	primaryDatabase    *sqlx.DB
 	replicaDatabase    *sqlx.DB
 	mySqlProcess       *os.Process
 	doltProcess        *os.Process
-	doltLogFilePath    string
+	mysqlLogFile       *os.File
+	t                  *testing.T
 	oldDoltLogFilePath string
 	mysqlLogFilePath   string
-	doltLogFile        *os.File
-	mysqlLogFile       *os.File
+	doltLogFilePath    string
 	testDir            string
-	toxiClient         *toxiproxyclient.Client
-	mysqlProxy         *toxiproxyclient.Proxy
+	doltPort           int
+	mySqlPort          int
 	proxyPort          int
 }
 

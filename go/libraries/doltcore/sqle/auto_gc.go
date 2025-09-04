@@ -46,15 +46,13 @@ import (
 // database as wanting a GC.
 
 type AutoGCController struct {
-	workCh chan autoGCWork
-	lgr    *logrus.Logger
-
-	mu      sync.Mutex
-	hooks   map[string]*autoGCCommitHook
-	ctxF    func(context.Context) (*sql.Context, error)
-	threads *sql.BackgroundThreads
-
+	workCh   chan autoGCWork
+	lgr      *logrus.Logger
+	hooks    map[string]*autoGCCommitHook
+	ctxF     func(context.Context) (*sql.Context, error)
+	threads  *sql.BackgroundThreads
 	arcLevel chunks.GCArchiveLevel
+	mu       sync.Mutex
 }
 
 func NewAutoGCController(arcLevel chunks.GCArchiveLevel, lgr *logrus.Logger) *AutoGCController {
@@ -180,13 +178,14 @@ func (c *AutoGCController) newCommitHook(name string, db *doltdb.DoltDB) *autoGC
 	closed := make(chan *gcWorkReport)
 	close(closed)
 	ret := &autoGCCommitHook{
-		c:      c,
-		name:   name,
-		done:   closed,
-		next:   make(chan *gcWorkReport, 1),
-		db:     db,
-		tickCh: make(chan struct{}),
-		stopCh: make(chan struct{}),
+		c:         c,
+		name:      name,
+		done:      closed,
+		next:      make(chan *gcWorkReport, 1),
+		db:        db,
+		tickCh:    make(chan struct{}),
+		stopCh:    make(chan struct{}),
+		stoppedCh: make(chan struct{}),
 	}
 	c.hooks[name] = ret
 	if c.threads != nil {
@@ -206,8 +205,7 @@ type gcWorkReport struct {
 // The doltdb.CommitHook which watches for database changes and
 // requests dolt_gcs.
 type autoGCCommitHook struct {
-	c    *AutoGCController
-	name string
+	c *AutoGCController
 	// When |done| is closed, there is no GC currently running or
 	// pending for this database. If it is open, then there is a
 	// pending request for GC or a GC is currently running. Once
@@ -231,15 +229,21 @@ type autoGCCommitHook struct {
 	lastGcWorkReport *gcWorkReport
 
 	db *doltdb.DoltDB
-
 	// Closed when the thread should shutdown because the database
 	// is being removed.
 	stopCh chan struct{}
+	// Closed as the background processing thread shuts down. The
+	// database hook selects on this to avoid deadlocking if it
+	// is trying to send to the worker thread after it has been
+	// shutdown.
+	stoppedCh chan struct{}
 	// An optimistic send on this channel notifies the background
 	// thread that the sizes may have changed and it can check for
 	// the GC condition.
 	tickCh chan struct{}
-	wg     sync.WaitGroup
+	name   string
+
+	wg sync.WaitGroup
 }
 
 // During engine initialization, called on the original set of
@@ -279,6 +283,8 @@ func (c *AutoGCController) InitDatabaseHook() InitDatabaseHook {
 func (h *autoGCCommitHook) Execute(ctx context.Context, _ datas.Dataset, _ *doltdb.DoltDB) (func(context.Context) error, error) {
 	select {
 	case h.tickCh <- struct{}{}:
+		return nil, nil
+	case <-h.stoppedCh:
 		return nil, nil
 	case <-ctx.Done():
 		return nil, context.Cause(ctx)
@@ -359,6 +365,7 @@ func (h *autoGCCommitHook) checkForGC(ctx context.Context) error {
 
 func (h *autoGCCommitHook) thread(ctx context.Context) {
 	defer h.wg.Done()
+	defer close(h.stoppedCh)
 	timer := time.NewTimer(checkInterval)
 	defer timer.Stop()
 	for {

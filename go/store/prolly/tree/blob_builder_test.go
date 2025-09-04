@@ -33,10 +33,10 @@ import (
 
 func TestWriteImmutableTree(t *testing.T) {
 	tests := []struct {
-		inputSize int
-		chunkSize int
 		execErr   error
 		initErr   error
+		inputSize int
+		chunkSize int
 		checkSum  bool
 	}{
 		{
@@ -188,11 +188,10 @@ func TestWriteImmutableTree(t *testing.T) {
 			assert.Equal(t, tt.inputSize, byteCnt)
 			assert.Equal(t, expUnfilled, unfilledCnt)
 			if expLevel > 0 {
-				root, err = root.loadSubtrees()
+				root, err = root.LoadSubtrees()
 				require.NoError(t, err)
 				for i := range expSubtrees {
-					sc, err := root.getSubtreeCount(i)
-					require.NoError(t, err)
+					sc := root.GetSubtreeCount(i)
 					assert.Equal(t, expSubtrees[i], sc)
 				}
 			}

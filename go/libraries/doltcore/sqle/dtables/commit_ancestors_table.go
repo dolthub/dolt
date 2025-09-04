@@ -30,9 +30,9 @@ const commitAncestorsDefaultRowCount = 100
 // CommitAncestorsTable is a sql.Table that implements a system table which
 // shows (commit, parent_commit) relationships for all commits in the repo.
 type CommitAncestorsTable struct {
+	ddb       *doltdb.DoltDB
 	dbName    string
 	tableName string
-	ddb       *doltdb.DoltDB
 }
 
 var _ sql.Table = (*CommitAncestorsTable)(nil)
@@ -159,7 +159,7 @@ func NewCommitAncestorsRowItr(sqlCtx *sql.Context, ddb *doltdb.DoltDB) (*CommitA
 // After retrieving the last row, Close will be automatically closed.
 func (itr *CommitAncestorsRowItr) Next(ctx *sql.Context) (sql.Row, error) {
 	if len(itr.cache) == 0 {
-		ch, optCmt, err := itr.itr.Next(ctx)
+		ch, optCmt, _, _, err := itr.itr.Next(ctx)
 		if err != nil {
 			// When complete itr.Next will return io.EOF
 			return nil, err

@@ -30,8 +30,8 @@ const (
 
 // LineString is a Noms Value wrapper around a string.
 type LineString struct {
-	SRID   uint32
 	Points []Point
+	SRID   uint32
 }
 
 // Value interface

@@ -49,14 +49,11 @@ var BinlogBranch = "main"
 // connected replicas, without actually writing them to a real binlog file on disk.
 type binlogProducer struct {
 	binlogFormat    *mysql.BinlogFormat
+	mu              *sync.Mutex
+	gtidPosition    *mysql.Position
+	logManager      *logManager
+	gtidSequence    int64
 	binlogEventMeta mysql.BinlogEventMetadata
-
-	mu *sync.Mutex
-
-	gtidPosition *mysql.Position
-	gtidSequence int64
-
-	logManager *logManager
 }
 
 var _ doltdb.DatabaseUpdateListener = (*binlogProducer)(nil)
@@ -98,6 +95,10 @@ func (b *binlogProducer) LogManager(logManager *logManager) {
 func (b *binlogProducer) WorkingRootUpdated(ctx *sql.Context, databaseName string, branchName string, before doltdb.RootValue, after doltdb.RootValue) error {
 	// We only support updates to a single branch for binlog events, so ignore all other updates
 	if branchName != BinlogBranch {
+		return nil
+	}
+
+	if isDatabaseFilteredOut(ctx, databaseName) {
 		return nil
 	}
 
@@ -151,6 +152,10 @@ func (b *binlogProducer) DatabaseCreated(ctx *sql.Context, databaseName string) 
 	// TODO: All of these need to be sequentially processed by a single goroutine, so that we can ensure the GTID
 	//       assignment happens sequentially and safely. Also... if a database is created, we need to process that
 	//       update before any data updates to the database itself. Seems like that race could happen otherwise?
+
+	if isDatabaseFilteredOut(ctx, databaseName) {
+		return nil
+	}
 
 	var binlogEvents []mysql.BinlogEvent
 	binlogEvent, err := b.createGtidEvent(ctx)
@@ -563,6 +568,26 @@ func (b *binlogProducer) newDeleteRowsEvent(tableId uint64, rows mysql.Rows) mys
 // stream's log position.
 func (b *binlogProducer) newUpdateRowsEvent(tableId uint64, rows mysql.Rows) mysql.BinlogEvent {
 	return mysql.NewUpdateRowsEvent(*b.binlogFormat, b.binlogEventMeta, tableId, rows)
+}
+
+// isDatabaseFilteredOut returns true if |dbName| is listed in the @@binlog_ignore_dbs
+// system variable, meaning it should not be replicated.
+func isDatabaseFilteredOut(ctx *sql.Context, dbName string) bool {
+	varValue, err := ctx.GetSessionVariable(ctx, "binlog_ignore_dbs")
+	if err != nil {
+		logrus.Errorf("Unable to access @@binlog_ignore_dbs system variable: %v", err)
+		return false
+	}
+
+	if varString, isString := varValue.(string); isString {
+		for _, name := range strings.Split(varString, ",") {
+			if strings.EqualFold(name, dbName) {
+				return true
+			}
+		}
+	}
+
+	return false
 }
 
 // extractRowCountAndDiffType uses |sch| and |diff| to determine how many changed rows this

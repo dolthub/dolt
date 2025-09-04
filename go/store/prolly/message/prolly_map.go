@@ -45,8 +45,8 @@ func NewProllyMapSerializer(valueDesc val.TupleDesc, pool pool.BuffPool) ProllyM
 }
 
 type ProllyMapSerializer struct {
-	valDesc val.TupleDesc
 	pool    pool.BuffPool
+	valDesc val.TupleDesc
 }
 
 var _ Serializer = ProllyMapSerializer{}

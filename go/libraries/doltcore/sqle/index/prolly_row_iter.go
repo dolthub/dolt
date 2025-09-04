@@ -196,16 +196,14 @@ func (it prollyRowIter) Close(ctx *sql.Context) error {
 }
 
 type prollyKeylessIter struct {
-	iter prolly.MapIter
-	ns   tree.NodeStore
-
+	iter    prolly.MapIter
+	ns      tree.NodeStore
 	valDesc val.TupleDesc
 	valProj []int
 	ordProj []int
+	curr    sql.Row
 	rowLen  int
-
-	curr sql.Row
-	card uint64
+	card    uint64
 }
 
 var _ sql.RowIter = &prollyKeylessIter{}

@@ -18,6 +18,7 @@ import (
 	"context"
 	"crypto/sha1"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"path/filepath"
@@ -31,6 +32,7 @@ import (
 	"github.com/fatih/color"
 	"github.com/gocraft/dbr/v2"
 	"github.com/gocraft/dbr/v2/dialect"
+	"github.com/sirupsen/logrus"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
@@ -39,11 +41,13 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/util/outputpager"
 )
@@ -246,11 +250,24 @@ func newLateBindingEngine(
 		Autocommit:         true,
 	}
 
-	var lateBinder cli.LateBindQueryist = func(ctx context.Context) (res cli.LateBindQueryistResult, err error) {
+	var lateBinder cli.LateBindQueryist = func(ctx context.Context, opts ...cli.LateBindQueryistOption) (res cli.LateBindQueryistResult, err error) {
 		// We've deferred loading the database as long as we can.
 		// If we're binding the Queryist, that means that engine is actually
 		// going to be used.
 		mrEnv.ReloadDBs(ctx)
+
+		queryistConfig := &cli.LateBindQueryistConfig{}
+		for _, opt := range opts {
+			opt(queryistConfig)
+		}
+
+		if queryistConfig.EnableAutoGC {
+			// We use a null logger here, as we do not want `dolt sql` output
+			// to include auto-gc log lines.
+			nullLgr := logrus.New()
+			nullLgr.SetOutput(io.Discard)
+			config.AutoGCController = sqle.NewAutoGCController(chunks.NoArchive, nullLgr)
+		}
 
 		se, err := engine.NewSqlEngine(
 			ctx,

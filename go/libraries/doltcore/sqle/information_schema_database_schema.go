@@ -23,9 +23,9 @@ import (
 
 // informationSchemaDatabaseSchema is a DatabaseSchema implementation that provides access to the INFORMATION_SCHEMA tables. This is relevant only for Doltgres.
 type informationSchemaDatabaseSchema struct {
+	tables     map[string]sql.Table
 	name       string
 	schemaName string
-	tables     map[string]sql.Table
 }
 
 var _ sql.DatabaseSchema = (*informationSchemaDatabaseSchema)(nil)

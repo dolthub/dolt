@@ -1,0 +1,4 @@
+#!/usr/bin/expect
+
+spawn -noecho dolt log --oneline
+expect eof

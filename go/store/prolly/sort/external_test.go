@@ -332,10 +332,10 @@ func TestFileE2E(t *testing.T) {
 	// we have to spill to disk and compact several times
 	tests := []struct {
 		name      string
+		td        val.TupleDesc
 		rows      int
 		batchSize int
 		fileMax   int
-		td        val.TupleDesc
 	}{
 		{
 			name: "uint32",

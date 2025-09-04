@@ -115,15 +115,15 @@ func (sink *FixedBufferByteSink) Reader() (io.ReadCloser, error) {
 // BlockBufferByteSink allocates blocks of data with a given block size to store the bytes written to the sink. New
 // blocks are allocated as needed in order to handle all the data of the Write calls.
 type BlockBufferByteSink struct {
+	blocks    [][]byte
 	blockSize int
 	pos       uint64
-	blocks    [][]byte
 }
 
 // NewBlockBufferByteSink creates a BlockBufferByteSink with the provided block size.
 func NewBlockBufferByteSink(blockSize int) *BlockBufferByteSink {
 	block := make([]byte, 0, blockSize)
-	return &BlockBufferByteSink{blockSize, 0, [][]byte{block}}
+	return &BlockBufferByteSink{pos: 0, blockSize: blockSize, blocks: [][]byte{block}}
 }
 
 // Write writes a byte array to the sink.
@@ -172,16 +172,14 @@ func (sink *BlockBufferByteSink) Reader() (io.ReadCloser, error) {
 // BufferedFileByteSink is a ByteSink implementation that buffers some amount of data before it passes it
 // to a background writing thread to be flushed to a file.
 type BufferedFileByteSink struct {
+	wr           io.WriteCloser
+	writeCh      chan []byte
+	ae           *atomicerr.AtomicError
+	wg           *sync.WaitGroup
+	path         string
+	currentBlock []byte
 	blockSize    int
 	pos          uint64
-	currentBlock []byte
-
-	writeCh chan []byte
-	ae      *atomicerr.AtomicError
-	wg      *sync.WaitGroup
-
-	wr   io.WriteCloser
-	path string
 }
 
 // NewBufferedFileByteSink creates a BufferedFileByteSink

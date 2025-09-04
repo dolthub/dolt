@@ -37,16 +37,14 @@ type Chunker interface {
 }
 
 type chunker[S message.Serializer] struct {
-	cur    *cursor
-	parent *chunker[S]
-	level  int
-	done   bool
-
 	splitter   nodeSplitter
-	builder    *nodeBuilder[S]
 	serializer S
-
-	ns NodeStore
+	ns         NodeStore
+	cur        *cursor
+	parent     *chunker[S]
+	builder    *nodeBuilder[S]
+	level      int
+	done       bool
 }
 
 var _ Chunker = &chunker[message.Serializer]{}
@@ -292,15 +290,12 @@ func insertNode[K ~[]byte, S message.Serializer, O Ordering[K]](ctx context.Cont
 			}
 		}
 	} else {
-		nd, err = nd.loadSubtrees()
+		nd, err = nd.LoadSubtrees()
 		if err != nil {
 			return err
 		}
 		for i := 0; i < nd.Count(); i++ {
-			subtreeCount, err := nd.getSubtreeCount(i)
-			if err != nil {
-				return err
-			}
+			subtreeCount := nd.GetSubtreeCount(i)
 			err = insertNode[K, S, O](ctx, tc, nil, K(nd.GetKey(i)), nd.getAddress(i), subtreeCount, level-1, order)
 			if err != nil {
 				return err

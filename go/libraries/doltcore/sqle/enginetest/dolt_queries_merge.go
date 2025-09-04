@@ -31,22 +31,22 @@ import (
 )
 
 type MergeScriptTest struct {
-	// Name of the script test
-	Name string
-	// The sql statements to generate the ancestor commit
-	AncSetUpScript []string
-	// The sql statements to generate the right commit
-	RightSetUpScript []string
-	// The sql statements to generate the left commit
-	LeftSetUpScript []string
-	// The set of assertions to make after setup, in order
-	Assertions []queries.ScriptTestAssertion
-	// For tests that make a single assertion, Query can be set for the single assertion
-	Query string
-	// For tests that make a single assertion, Expected can be set for the single assertion
-	Expected []sql.Row
 	// For tests that make a single assertion, ExpectedErr can be set for the expected error
 	ExpectedErr *errors.Kind
+	// Name of the script test
+	Name string
+	// For tests that make a single assertion, Query can be set for the single assertion
+	Query string
+	// The sql statements to generate the ancestor commit
+	AncSetUpScript []string
+	// The sql statements to generate the left commit
+	LeftSetUpScript []string
+	// The sql statements to generate the right commit
+	RightSetUpScript []string
+	// The set of assertions to make after setup, in order
+	Assertions []queries.ScriptTestAssertion
+	// For tests that make a single assertion, Expected can be set for the single assertion
+	Expected []sql.Row
 	// SkipPrepared is true when we skip a test for prepared statements only
 	SkipPrepared bool
 }
@@ -129,7 +129,6 @@ var MergeScripts = []queries.ScriptTest{
 			},
 		},
 	},
-
 	{
 		// When there is a constraint violation for duplicate copies of a row in a keyless table, each row
 		// will violate constraint in exactly the same way. Currently, the dolt_constraint_violations_<table>
@@ -1388,6 +1387,90 @@ var MergeScripts = []queries.ScriptTest{
 			{
 				Query:    "select * from dolt_status;",
 				Expected: []sql.Row{},
+			},
+		},
+	},
+	{
+		// Customer issue repro: when a merge halts from a conflict, if there was a table rename
+		// it was preventing users from being able to abort the merge.
+		Name: "Abort merge with table rename and conflict",
+		SetUpScript: []string{
+			"SET @@autocommit=0;",
+
+			// Create tables on main
+			"CREATE TABLE conflict_table (pk int primary key, c1 varchar(100));",
+			"CREATE TABLE table1 (pk int primary key, c1 varchar(100));",
+			"CALL dolt_commit('-Am', 'creating tables on main');",
+			"CALL dolt_branch('branch1');",
+
+			"INSERT INTO conflict_table VALUES (1, 'one');",
+			"CALL dolt_commit('-Am', 'adding another table on main');",
+
+			// Rename a table on branch1 and create a conflict to halt the merge
+			"CALL dolt_checkout('branch1');",
+			"INSERT INTO conflict_table VALUES (1, 'uno');",
+			"INSERT INTO table1 VALUES (1, 'one');",
+			"RENAME TABLE table1 to table2;",
+			"CALL dolt_commit('-Am', 'renaming table on branch1');",
+			"CALL dolt_checkout('main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL dolt_merge('branch1');",
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+			},
+			{
+				Query:    "CALL dolt_merge('--abort');",
+				Expected: []sql.Row{{"", 0, 0, "merge aborted"}},
+			},
+		},
+	},
+	{
+		// dolt_ignore does not work properly in Doltgres yet, so marking the dialect
+		// as mysql so that it skips this test.
+		Dialect: "mysql",
+		Name:    "Abort merge with table rename and conflict (with ignored table)",
+		SetUpScript: []string{
+			"SET @@autocommit=0;",
+
+			// Set up an ignored table
+			"INSERT INTO dolt_ignore VALUES ('ignore_me', true);",
+			"CREATE TABLE ignore_me (pk int primary key, c1 varchar(100));",
+			"INSERT INTO ignore_me VALUES (1, 'uno');",
+
+			// Create tables on main
+			"CREATE TABLE conflict_table (pk int primary key, c1 varchar(100));",
+			"CREATE TABLE table1 (pk int primary key, c1 varchar(100));",
+			"CALL dolt_commit('-Am', 'creating tables on main');",
+			"CALL dolt_branch('branch1');",
+
+			"INSERT INTO conflict_table VALUES (1, 'one');",
+			"CALL dolt_commit('-Am', 'adding another table on main');",
+
+			// Rename a table on branch1 and create a conflict to halt the merge
+			"CALL dolt_checkout('branch1');",
+			"INSERT INTO conflict_table VALUES (1, 'uno');",
+			"INSERT INTO table1 VALUES (1, 'one');",
+			"RENAME TABLE table1 to table2;",
+			"CALL dolt_commit('-Am', 'renaming table on branch1');",
+			"CALL dolt_checkout('main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL dolt_merge('branch1');",
+				Expected: []sql.Row{{"", 0, 1, "conflicts found"}},
+			},
+			{
+				Query:    "INSERT INTO ignore_me VALUES (2, 'duex');",
+				Expected: []sql.Row{{types.NewOkResult(1)}},
+			},
+			{
+				Query:    "CALL dolt_merge('--abort');",
+				Expected: []sql.Row{{"", 0, 0, "merge aborted"}},
+			},
+			{
+				Query:    "SELECT * FROM ignore_me;",
+				Expected: []sql.Row{{1, "uno"}, {2, "duex"}},
 			},
 		},
 	},
