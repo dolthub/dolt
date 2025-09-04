@@ -81,7 +81,7 @@ jobs:
         done
       env:
         MATRIX_OS: ${{ matrix.os }}
-	GO: ${{ "$MATRIX_OS" == 'windows-latest' && 'go.exe' || 'go' }}
+        GO: ${{ "$MATRIX_OS" == 'windows-latest' && 'go.exe' || 'go' }}
   noracetest:
     name: Go tests - no race
     defaults:
@@ -120,5 +120,5 @@ jobs:
         $GO test -vet=off -timeout 30m ./libraries/doltcore/sqle/integration_test
       env:
         MATRIX_OS: ${{ matrix.os }}
-	GO: ${{ "$MATRIX_OS" == 'windows-latest' && 'go.exe' || 'go' }}
+        GO: ${{ "$MATRIX_OS" == 'windows-latest' && 'go.exe' || 'go' }}
         DOLT_TEST_RUN_NON_RACE_TESTS: "true"
