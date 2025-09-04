@@ -140,8 +140,8 @@ jobs:
           pacboy: icu:p toolchain:p pkg-config:p
       - name: Install Dolt
         working-directory: ./go
-	shell: msys2 {0}
-	run: |
+        shell: msys2 {0}
+        run: |
           go.exe build -mod=readonly -o ../.ci_bin/dolt ./cmd/dolt/.
           go.exe build -mod=readonly -o ../.ci_bin/remotesrv ./utils/remotesrv/.
           go.exe build -mod=readonly -o ../.ci_bin/noms ./store/cmd/noms/.
