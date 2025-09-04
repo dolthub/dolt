@@ -75,6 +75,10 @@ jobs:
       - name: Install Dolt
         working-directory: ./go
         run: |
+          icu4c_dir=$(brew --cellar icu4c)
+          icu4c_dir="$dir"/$(ls "$icu4c_dir")
+          export CGO_CPPFLAGS=-I$icu4c_dir/include
+          export CGO_LDFLAGS=-L$icu4c_dir/lib
           go build -mod=readonly -o ../.ci_bin/dolt ./cmd/dolt/.
           go build -mod=readonly -o ../.ci_bin/remotesrv ./utils/remotesrv/.
           go build -mod=readonly -o ../.ci_bin/noms ./store/cmd/noms/.

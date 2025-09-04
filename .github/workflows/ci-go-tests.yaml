@@ -5,6 +5,7 @@ on:
     branches: [ main ]
     paths:
       - 'go/**'
+      - '.github/workflows/ci-go-tests.yaml'
   workflow_dispatch:
 
 concurrency:
@@ -29,15 +30,63 @@ jobs:
       with:
         go-version-file: go/go.mod
       id: go
-    - name: Test All
+    - name: Install ICU4C (MacOS)
+      if: ${{ matrix.os == 'macos-latest' }}
+      run: |
+        dir=$(brew --cellar icu4c)
+        dir="$dir"/$(ls "$dir")
+        echo CGO_CPPFLAGS=-I$dir/include >> $GITHUB_ENV
+        echo CGO_LDFLAGS=-L$dir/lib >> $GITHUB_ENV
+    - name: Install ICU4C (Windows)
+      id: msys2
+      if: ${{ matrix.os == 'windows-latest' }}
+      uses: msys2/setup-msys2@v2
+      with:
+        path-type: inherit
+        msystem: UCRT64
+        pacboy: icu:p toolchain:p pkg-config:p
+    - name: Test All (Windows)
       working-directory: ./go
+      if: ${{ matrix.os == 'windows-latest' }}
       run: |
         files=$(go list ./...)
         SAVEIFS=$IFS
         IFS=$'\n'
         file_arr=($files)
         IFS=$SAVEIFS
-
+        
+        for (( i=0; i<${#file_arr[@]}; i++ ))
+        do
+          # Skip binlog tests as they run in a separate CI job
+          if [[ "${file_arr[$i]}" == *binlogreplication* ]]; then
+            echo "Skipping binlog package: ${file_arr[$i]} (runs in separate CI)"
+            continue
+          fi
+          
+          echo "Testing Package: ${file_arr[$i]}"
+          "$MSYS2_LOCATION"/msys2.exe -c 'go.exe test -c -vet=off -o gotest.exe '"${file_arr[$i]}"
+          ./gotest.exe -test.timeout 45m
+          rm gotest.exe
+          succeeded=$(echo "$?")
+          if [ "$succeeded" -ne 0 ]; then
+            echo "Testing failed in package ${file_arr[$i]}"
+            exit 1;
+          fi
+        done
+      env:
+        MATRIX_OS: ${{ matrix.os }}
+        SYSTEMROOT: C:\Windows
+        MSYS2_LOCATION: ${{ steps.msys2.outputs.msys2-location }}
+    - name: Test All (*nix)
+      working-directory: ./go
+      if: ${{ matrix.os != 'windows-latest' }}
+      run: |
+        files=$(go list ./...)
+        SAVEIFS=$IFS
+        IFS=$'\n'
+        file_arr=($files)
+        IFS=$SAVEIFS
+        
         for (( i=0; i<${#file_arr[@]}; i++ ))
         do
           # Skip binlog tests as they run in a separate CI job
@@ -82,8 +131,32 @@ jobs:
       with:
         go-version-file: go/go.mod
       id: go
-    - name: Test All
+    - name: Install ICU4C (MacOS)
+      if: ${{ matrix.os == 'macos-latest' }}
+      run: |
+        dir=$(brew --cellar icu4c)
+        dir="$dir"/$(ls "$dir")
+        echo CGO_CPPFLAGS=-I$dir/include >> $GITHUB_ENV
+        echo CGO_LDFLAGS=-L$dir/lib >> $GITHUB_ENV
+    - name: Install ICU4C (Windows)
+      if: ${{ matrix.os == 'windows-latest' }}
+      uses: msys2/setup-msys2@v2
+      with:
+        path-type: inherit
+        msystem: UCRT64
+        pacboy: icu:p toolchain:p pkg-config:p
+    - name: Test All (Windows)
       working-directory: ./go
+      shell: msys2 {0}
+      if: ${{ matrix.os == 'windows-latest' }}
+      run: |
+        go.exe test -vet=off -timeout 30m ./libraries/doltcore/sqle/integration_test
+      env:
+        MATRIX_OS: ${{ matrix.os }}
+        DOLT_TEST_RUN_NON_RACE_TESTS: "true"
+    - name: Test All (*nix)
+      working-directory: ./go
+      if: ${{ matrix.os != 'windows-latest' }}
       run: |
         go test -vet=off -timeout 30m ./libraries/doltcore/sqle/integration_test
       env:
