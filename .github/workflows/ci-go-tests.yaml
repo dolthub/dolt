@@ -46,7 +46,7 @@ jobs:
         pacboy: icu:p toolchain:p pkg-config:p
     - name: Test All
       working-directory: ./go
-      shell: ${{ "$MATRIX_OS" == 'windows-latest' && 'msys2 {0}' || 'bash' }}
+      shell: ${{ matrix.os == 'windows-latest' && 'msys2 {0}' || 'bash' }}
       run: |
         files=$($GO list ./...)
         SAVEIFS=$IFS
@@ -81,7 +81,7 @@ jobs:
         done
       env:
         MATRIX_OS: ${{ matrix.os }}
-        GO: ${{ "$MATRIX_OS" == 'windows-latest' && 'go.exe' || 'go' }}
+        GO: ${{ matrix.os == 'windows-latest' && 'go.exe' || 'go' }}
   noracetest:
     name: Go tests - no race
     defaults:
