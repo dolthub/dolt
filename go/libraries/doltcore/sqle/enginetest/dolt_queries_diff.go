@@ -15,6 +15,7 @@
 package enginetest
 
 import (
+	"fmt"
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/sql"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
@@ -818,7 +819,117 @@ var Dolt1DiffSystemTableScripts = []queries.ScriptTest{
 	},
 }
 
+func countDataColsAssertions(viewName, diffSelectStar string, expected int64) []queries.ScriptTestAssertion {
+	return []queries.ScriptTestAssertion{
+		{Query: fmt.Sprintf("DROP VIEW IF EXISTS %s;", viewName)},
+		{Query: fmt.Sprintf("CREATE VIEW %s AS %s;", viewName, diffSelectStar)},
+		{
+			Query: fmt.Sprintf(`
+					SELECT COUNT(DISTINCT REPLACE(REPLACE(column_name,'to_',''),'from_',''))
+					FROM information_schema.columns
+					WHERE table_schema = DATABASE()
+					AND table_name = '%s'
+					AND column_name NOT IN ('to_commit','from_commit','to_commit_date','from_commit_date','diff_type')`, viewName),
+			Expected: []sql.Row{{expected}},
+		},
+		{Query: fmt.Sprintf("DROP VIEW %s;", viewName)},
+	}
+}
+
 var DiffTableFunctionScriptTests = []queries.ScriptTest{
+	{
+		Name: "dolt_diff: SELECT * skinny schema visibility",
+		SetUpScript: []string{
+			"CREATE TABLE t (" +
+				"pk BIGINT NOT NULL COMMENT 'tag:0'," +
+				"c1 BIGINT COMMENT 'tag:1'," +
+				"c2 BIGINT COMMENT 'tag:2'," +
+				"c3 BIGINT COMMENT 'tag:3'," +
+				"c4 BIGINT COMMENT 'tag:4'," +
+				"c5 BIGINT COMMENT 'tag:5'," +
+				"PRIMARY KEY (pk)" +
+				");",
+			"call dolt_add('.')",
+			"set @C0 = '';",
+			"call dolt_commit_hash_out(@C0, '-m', 'Created table t');",
+			"INSERT INTO t VALUES (0,1,2,3,4,5), (1,1,2,3,4,5);",
+			"call dolt_add('.')",
+			"set @C1 = '';",
+			"call dolt_commit_hash_out(@C1, '-m', 'Added initial data');",
+
+			"UPDATE t SET c1=100, c3=300 WHERE pk=0;",
+			"UPDATE t SET c2=200 WHERE pk=1;",
+			"call dolt_add('.')",
+			"set @C2 = '';",
+			"call dolt_commit_hash_out(@C2, '-m', 'Updated some columns');",
+
+			"ALTER TABLE t ADD COLUMN c6 BIGINT;",
+			"UPDATE t SET c6=600 WHERE pk=0;",
+			"call dolt_add('.')",
+			"set @C3 = '';",
+			"call dolt_commit_hash_out(@C3, '-m', 'Added new column and updated it');",
+
+			"DELETE FROM t WHERE pk=1;",
+			"call dolt_add('.')",
+			"set @C4 = '';",
+			"call dolt_commit_hash_out(@C4, '-m', 'Deleted a row');",
+		},
+		Assertions: func() []queries.ScriptTestAssertion {
+			asserts := []queries.ScriptTestAssertion{
+				{
+					Query: "SELECT d.to_pk, d.to_c1, d.to_c2, d.to_c3, d.to_c4, d.to_c5, d.from_pk, d.from_c1, d.from_c2, d.from_c3, d.from_c4, d.from_c5, d.diff_type " +
+						"FROM (SELECT * FROM dolt_diff('--skinny', @C0, @C1, 't')) d " +
+						"ORDER BY COALESCE(d.to_pk, d.from_pk)",
+					Expected: []sql.Row{
+						{int64(0), int64(1), int64(2), int64(3), int64(4), int64(5), interface{}(nil), interface{}(nil), interface{}(nil), interface{}(nil), interface{}(nil), interface{}(nil), "added"},
+						{int64(1), int64(1), int64(2), int64(3), int64(4), int64(5), interface{}(nil), interface{}(nil), interface{}(nil), interface{}(nil), interface{}(nil), interface{}(nil), "added"},
+					},
+				},
+				{
+					Query: "SELECT d.to_pk, d.to_c1, d.to_c2, d.to_c3, d.from_pk, d.from_c1, d.from_c2, d.from_c3, d.diff_type " +
+						"FROM (SELECT * FROM dolt_diff(@C1, @C2, 't')) d " +
+						"ORDER BY COALESCE(d.to_pk, d.from_pk)",
+					Expected: []sql.Row{
+						{int64(0), int64(100), int64(2), int64(300), int64(0), int64(1), int64(2), int64(3), "modified"},
+						{int64(1), int64(1), int64(200), int64(3), int64(1), int64(1), int64(2), int64(3), "modified"},
+					},
+				},
+				{
+					Query: "SELECT d.to_pk, d.to_c1, d.to_c2, d.to_c3, d.diff_type " +
+						"FROM (SELECT * FROM dolt_diff('--skinny', @C1, @C2, 't')) d " +
+						"ORDER BY d.to_pk",
+					Expected: []sql.Row{
+						{int64(0), int64(100), int64(2), int64(300), "modified"},
+						{int64(1), int64(1), int64(200), int64(3), "modified"},
+					},
+				},
+				{
+					Query: "SELECT d.to_pk, d.to_c6, d.diff_type " +
+						"FROM (SELECT * FROM dolt_diff('--skinny', @C2, @C3, 't')) d",
+					Expected: []sql.Row{
+						{int64(0), int64(600), "modified"},
+					},
+				},
+				{
+					Query: "SELECT d.from_pk, d.from_c1, d.from_c2, d.from_c3, d.from_c4, d.from_c5, d.from_c6, d.diff_type " +
+						"FROM (SELECT * FROM dolt_diff('--skinny', @C3, @C4, 't')) d",
+					Expected: []sql.Row{
+						{int64(1), int64(1), int64(200), int64(3), int64(4), int64(5), nil, "removed"},
+					},
+				},
+			}
+			asserts = append(asserts, countDataColsAssertions("v_all_01", "SELECT * FROM dolt_diff(@C0, @C1, 't')", 6)...)
+			asserts = append(asserts, countDataColsAssertions("v_skinny_01", "SELECT * FROM dolt_diff('--skinny', @C0, @C1, 't')", 6)...)
+			asserts = append(asserts, countDataColsAssertions("v_all_12", "SELECT * FROM dolt_diff(@C1, @C2, 't')", 6)...)
+			asserts = append(asserts, countDataColsAssertions("v_skinny_12", "SELECT * FROM dolt_diff('--skinny', @C1, @C2, 't')", 4)...)
+			asserts = append(asserts, countDataColsAssertions("v_all_23", "SELECT * FROM dolt_diff(@C2, @C3, 't')", 7)...)
+			asserts = append(asserts, countDataColsAssertions("v_skinny_23", "SELECT * FROM dolt_diff('--skinny', @C2, @C3, 't')", 2)...)
+			asserts = append(asserts, countDataColsAssertions("v_all_34", "SELECT * FROM dolt_diff(@C3, @C4, 't')", 7)...)
+			asserts = append(asserts, countDataColsAssertions("v_skinny_34", "SELECT * FROM dolt_diff('--skinny', @C3, @C4, 't')", 7)...)
+
+			return asserts
+		}(),
+	},
 	{
 		Name: "invalid arguments",
 		SetUpScript: []string{

@@ -1,5 +1,6 @@
 #!/usr/bin/env bats
 load $BATS_TEST_DIRNAME/helper/common.bash
+load $BATS_TEST_DIRNAME/helper/sql-diff.bash
 
 setup() {
     setup_common
@@ -907,88 +908,31 @@ SQL
     dolt add test
     dolt commit -m "Added initial data"
 
-    # Make some changes to test skinny filtering
+    compare_dolt_diff "HEAD~1" "HEAD" "test"
+
     dolt sql -q "UPDATE test SET c1=100, c3=300 WHERE pk=0"
     dolt sql -q "UPDATE test SET c2=200 WHERE pk=1"
     dolt add test
     dolt commit -m "Updated some columns"
 
-    # Get CLI skinny diff output
-    run dolt diff --skinny HEAD~1
-    [ "$status" -eq 0 ]
-    cli_output="$output"
+    compare_dolt_diff "HEAD~1" "HEAD" "test"
 
-    # Get SQL table function skinny diff output
-    run dolt sql -q "SELECT * FROM dolt_diff('--skinny', 'HEAD~1', 'HEAD', 'test')"
-    [ "$status" -eq 0 ]
-    sql_output="$output"
-
-    # Both should show only the changed columns (pk, c1, c2, c3) and not unchanged columns (c4, c5)
-    [[ "$cli_output" =~ 'pk' ]] || false
-    [[ "$cli_output" =~ 'c1' ]] || false
-    [[ "$cli_output" =~ 'c2' ]] || false
-    [[ "$cli_output" =~ 'c3' ]] || false
-    [[ ! "$cli_output" =~ 'c4' ]] || false
-    [[ ! "$cli_output" =~ 'c5' ]] || false
-
-    [[ "$sql_output" =~ 'pk' ]] || false
-    [[ "$sql_output" =~ 'c1' ]] || false
-    [[ "$sql_output" =~ 'c2' ]] || false
-    [[ "$sql_output" =~ 'c3' ]] || false
-    [[ ! "$sql_output" =~ 'c4' ]] || false
-    [[ ! "$sql_output" =~ 'c5' ]] || false
-
-    # Test with schema changes
     dolt sql -q "ALTER TABLE test ADD COLUMN c6 BIGINT"
     dolt sql -q "UPDATE test SET c6=600 WHERE pk=0"
     dolt add test
     dolt commit -m "Added new column and updated it"
 
-    # Get CLI skinny diff output with schema changes
-    run dolt diff --skinny HEAD~1
-    [ "$status" -eq 0 ]
-    cli_output="$output"
+    compare_dolt_diff "HEAD~1" "HEAD" "test"
 
-    # Get SQL table function skinny diff output with schema changes
-    run dolt sql -q "SELECT * FROM dolt_diff('--skinny', 'HEAD~1', 'HEAD', 'test')"
-    [ "$status" -eq 0 ]
-    sql_output="$output"
-
-    # Both should show the new column c6 and any other changed columns
-    [[ "$cli_output" =~ 'pk' ]] || false
-    [[ "$cli_output" =~ 'c6' ]] || false
-    [[ "$sql_output" =~ 'pk' ]] || false
-    [[ "$sql_output" =~ 'c6' ]] || false
-
-    # Test with row deletion
     dolt sql -q "DELETE FROM test WHERE pk=1"
     dolt add test
     dolt commit -m "Deleted a row"
 
-    # Get CLI skinny diff output with row deletion
-    run dolt diff --skinny HEAD~1
+    compare_dolt_diff "HEAD~1" "HEAD" "test"
+
+    run dolt sql -q "SELECT * FROM dolt_diff('-sk', 'HEAD~1', 'HEAD', 'test')"
     [ "$status" -eq 0 ]
-    cli_output="$output"
 
-    # Get SQL table function skinny diff output with row deletion
-    run dolt sql -q "SELECT * FROM dolt_diff('--skinny', 'HEAD~1', 'HEAD', 'test')"
-    [ "$status" -eq 0 ]
-    sql_output="$output"
-
-    # Both should show all columns for deleted rows
-    [[ "$cli_output" =~ 'pk' ]] || false
-    [[ "$cli_output" =~ 'c1' ]] || false
-    [[ "$cli_output" =~ 'c2' ]] || false
-    [[ "$cli_output" =~ 'c3' ]] || false
-    [[ "$cli_output" =~ 'c4' ]] || false
-    [[ "$cli_output" =~ 'c5' ]] || false
-    [[ "$cli_output" =~ 'c6' ]] || false
-
-    [[ "$sql_output" =~ 'pk' ]] || false
-    [[ "$sql_output" =~ 'c1' ]] || false
-    [[ "$sql_output" =~ 'c2' ]] || false
-    [[ "$sql_output" =~ 'c3' ]] || false
-    [[ "$sql_output" =~ 'c4' ]] || false
-    [[ "$sql_output" =~ 'c5' ]] || false
-    [[ "$sql_output" =~ 'c6' ]] || false
+    run dolt sql -q "SELECT * FROM dolt_diff('-err', 'HEAD~1', 'HEAD', 'test')"
+    [ "$status" -eq 1 ]
 }

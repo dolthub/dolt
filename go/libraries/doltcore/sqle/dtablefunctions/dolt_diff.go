@@ -16,6 +16,8 @@ package dtablefunctions
 
 import (
 	"fmt"
+	table2 "github.com/dolthub/dolt/go/libraries/doltcore/table"
+	"io"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -435,6 +437,114 @@ func (dtf *DiffTableFunction) evaluateArguments() (interface{}, interface{}, int
 	return fromCommitVal, toCommitVal, nil, tableName, nil
 }
 
+// FilterDeltaSchemaToSkinnyCols creates a filtered version of the table delta that omits columns which are identical
+// in type and value across all rows in both schemas, except for primary key columns which are always included. Also
+// updates dtf.tableDelta with the filtered result.
+func (dtf *DiffTableFunction) FilterDeltaSchemaToSkinnyCols(ctx *sql.Context, delta diff.TableDelta) (diff.TableDelta, error) {
+	if delta.FromTable == nil || delta.ToTable == nil {
+		return delta, nil
+	}
+
+	// potential cols for omission:
+	fromEqualColsIndices := map[string]int{}
+	toEqualColsIndices := map[string]int{}
+	for fromI, fromCol := range delta.FromSch.GetAllCols().GetColumns() {
+		col, ok := delta.ToSch.GetAllCols().GetByName(fromCol.Name)
+		if !ok { // column was dropped
+			continue
+		}
+
+		if fromCol.TypeInfo.Equals(col.TypeInfo) {
+			fromEqualColsIndices[fromCol.Name] = fromI
+			toEqualColsIndices[col.Name] = delta.ToSch.GetAllCols().IndexOf(col.Name)
+		}
+	}
+
+	fromRowData, err := delta.FromTable.GetRowData(ctx)
+	if err != nil {
+		return diff.TableDelta{}, err
+	}
+
+	toRowData, err := delta.ToTable.GetRowData(ctx)
+	if err != nil {
+		return diff.TableDelta{}, err
+	}
+
+	fromIter, err := table2.NewTableIterator(ctx, delta.FromSch, fromRowData)
+	if err != nil {
+		return diff.TableDelta{}, err
+	}
+	defer fromIter.Close(ctx)
+
+	toIter, err := table2.NewTableIterator(ctx, delta.ToSch, toRowData)
+	if err != nil {
+		return diff.TableDelta{}, err
+	}
+	defer toIter.Close(ctx)
+
+	for {
+		fromRow, fromErr := fromIter.Next(ctx)
+		toRow, toErr := toIter.Next(ctx)
+
+		if fromErr == io.EOF && toErr == io.EOF {
+			break
+		}
+
+		if fromErr != nil && fromErr != io.EOF {
+			return diff.TableDelta{}, fromErr
+		}
+
+		if toErr != nil && toErr != io.EOF {
+			return diff.TableDelta{}, toErr
+		}
+
+		// xor: if only one is nil, then all cols are diffs
+		if (fromRow == nil) != (toRow == nil) {
+			fromEqualColsIndices = map[string]int{}
+			toEqualColsIndices = map[string]int{}
+			break
+		}
+
+		if fromRow == nil && toRow == nil {
+			continue
+		}
+
+		for colName, fromI := range fromEqualColsIndices {
+			toI := toEqualColsIndices[colName]
+			fromVal := fromRow[fromI]
+			toVal := toRow[toI]
+
+			if fromVal != toVal {
+				// rm from the diff cols, since we found a diff
+				delete(fromEqualColsIndices, colName)
+				delete(toEqualColsIndices, colName)
+			}
+		}
+	}
+
+	var fromSkinnyCols []schema.Column
+	for _, col := range delta.FromSch.GetAllCols().GetColumns() {
+		_, ok := fromEqualColsIndices[col.Name]
+		if col.IsPartOfPK || !ok {
+			fromSkinnyCols = append(fromSkinnyCols, col)
+		}
+	}
+
+	var toSkinnyCols []schema.Column
+	for _, col := range delta.ToSch.GetAllCols().GetColumns() {
+		_, ok := toEqualColsIndices[col.Name]
+		if col.IsPartOfPK || !ok {
+			toSkinnyCols = append(toSkinnyCols, col)
+		}
+	}
+
+	skinnyDelta := delta
+	skinnyDelta.FromSch = schema.MustSchemaFromCols(schema.NewColCollection(fromSkinnyCols...))
+	skinnyDelta.ToSch = schema.MustSchemaFromCols(schema.NewColCollection(toSkinnyCols...))
+	dtf.tableDelta = skinnyDelta
+	return skinnyDelta, nil
+}
+
 func (dtf *DiffTableFunction) generateSchema(ctx *sql.Context, fromCommitVal, toCommitVal, dotCommitVal interface{}, tableName string) error {
 	if !dtf.Resolved() {
 		return nil
@@ -450,27 +560,26 @@ func (dtf *DiffTableFunction) generateSchema(ctx *sql.Context, fromCommitVal, to
 		return err
 	}
 
+	if dtf.skinnyExpr != nil {
+		delta, err = dtf.FilterDeltaSchemaToSkinnyCols(ctx, delta)
+		if err != nil {
+			return err
+		}
+	}
+
 	fromTable, fromTableExists := delta.FromTable, delta.FromTable != nil
 	toTable, toTableExists := delta.ToTable, delta.ToTable != nil
 
-	if !toTableExists && !fromTableExists {
+	var format *types.NomsBinFormat
+	if toTableExists {
+		format = toTable.Format()
+	} else if fromTableExists {
+		format = fromTable.Format()
+	} else {
 		return sql.ErrTableNotFound.New(tableName)
 	}
 
-	var toSchema, fromSchema schema.Schema
-	var format *types.NomsBinFormat
-
-	if fromTableExists {
-		fromSchema = delta.FromSch
-		format = fromTable.Format()
-	}
-
-	if toTableExists {
-		toSchema = delta.ToSch
-		format = toTable.Format()
-	}
-
-	diffTableSch, j, err := dtables.GetDiffTableSchemaAndJoiner(format, fromSchema, toSchema)
+	diffTableSch, j, err := dtables.GetDiffTableSchemaAndJoiner(format, delta.FromSch, delta.ToSch)
 	if err != nil {
 		return err
 	}
