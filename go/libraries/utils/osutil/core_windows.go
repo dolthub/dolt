@@ -20,6 +20,7 @@ package osutil
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 
 	"golang.org/x/sys/windows"
 )
@@ -30,9 +31,17 @@ const (
 )
 
 var (
-	SystemVolume   = filepath.VolumeName(os.Getenv("SYSTEMROOT"))
-	FileSystemRoot = SystemVolume + PathDelimiter
+	SystemVolume string
+	FileSystemRoot string
 )
+
+func init() {
+	SystemVolume = filepath.VolumeName(os.Getenv("SYSTEMROOT"))
+	if runtime.GOOS == "windows" && SystemVolume == "" {
+		SystemVolume = "C:"
+	}
+	FileSystemRoot = SystemVolume + PathDelimiter
+}
 
 // PathToNative will convert a Unix path into the Windows-native variant (only if running on a Windows machine)
 func PathToNative(p string) string {
