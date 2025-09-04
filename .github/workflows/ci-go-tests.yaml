@@ -5,6 +5,7 @@ on:
     branches: [ main ]
     paths:
       - 'go/**'
+      - '.github/workflows/ci-go-tests.yaml'
   workflow_dispatch:
 
 concurrency:
