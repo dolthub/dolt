@@ -38,6 +38,7 @@ jobs:
         echo CGO_CPPFLAGS=-I$dir/include >> $GITHUB_ENV
         echo CGO_LDFLAGS=-L$dir/lib >> $GITHUB_ENV
     - name: Install ICU4C (Windows)
+      id: msys2
       if: ${{ matrix.os == 'windows-latest' }}
       uses: msys2/setup-msys2@v2
       with:
