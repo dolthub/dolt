@@ -64,7 +64,7 @@ jobs:
           fi
           
           echo "Testing Package: ${file_arr[$i]}"
-          "$MSYS2_LOCATION"/bin/msys2.exe -c 'go.exe test -c -vet=off -o gotest.exe '"${file_arr[$i]}"
+          "$MSYS2_LOCATION"/msys2.exe -c 'go.exe test -c -vet=off -o gotest.exe '"${file_arr[$i]}"
           ./gotest.exe -test.timeout 45m
           rm gotest.exe
           succeeded=$(echo "$?")
