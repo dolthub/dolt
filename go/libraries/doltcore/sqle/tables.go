@@ -85,6 +85,8 @@ var _ dtables.VersionableTable = (*DoltTable)(nil)
 type DoltTable struct {
 	db           dsess.SqlDatabase
 	lockedToRoot doltdb.RootValue
+	cachedRoot   doltdb.RootValue
+	cachedTable  *doltdb.Table
 
 	// overriddenSchema is set when the @@dolt_override_schema system var is in use
 	overriddenSchema schema.Schema
@@ -315,19 +317,22 @@ func (t *DoltTable) DoltTable(ctx *sql.Context) (*doltdb.Table, error) {
 		return nil, err
 	}
 
-	table, ok, err := root.GetTable(ctx, t.TableName())
-	if err != nil {
-		return nil, err
-	}
-	if !ok {
-		return nil, sql.ErrTableNotFound.New(t.tableName)
+	if root != t.cachedRoot {
+		table, ok, err := root.GetTable(ctx, t.TableName())
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			return nil, sql.ErrTableNotFound.New(t.tableName)
+		}
+		if t.overriddenSchema != nil {
+			table.OverrideSchema(t.overriddenSchema)
+		}
+		t.cachedRoot = root
+		t.cachedTable = table
 	}
 
-	if t.overriddenSchema != nil {
-		table.OverrideSchema(t.overriddenSchema)
-	}
-
-	return table, nil
+	return t.cachedTable, nil
 }
 
 // DataCacheKey returns an opaque key that can be compared for equality to see if this
