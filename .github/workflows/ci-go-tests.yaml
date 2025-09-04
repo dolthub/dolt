@@ -82,6 +82,7 @@ jobs:
         done
       env:
         MATRIX_OS: ${{ matrix.os }}
+        SYSTEMROOT: C:\Windows
     - name: Test All (*nix)
       working-directory: ./go
       if: ${{ matrix.os != 'windows-latest' }}
