@@ -201,3 +201,5 @@ require (
 )
 
 go 1.24.6
+
+replace github.com/dolthub/go-mysql-server => ../../go-mysql-server

@@ -1504,6 +1504,66 @@ var DoltScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		// https://github.com/dolthub/dolt/issues/9794
+		Name: "UPDATE with TRIM function on TEXT column",
+		SetUpScript: []string{
+			"create table my_table (txt text);",
+			"insert into my_table values('foobar');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:            "update my_table set txt = trim(txt);",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "select txt from my_table;",
+				Expected: []sql.Row{{"foobar"}},
+			},
+		},
+	},
+	{
+		// https://github.com/dolthub/dolt/issues/9794
+		Name: "String functions with TextStorage (comprehensive test)",
+		SetUpScript: []string{
+			"create table test_strings (id int primary key, content text);",
+			"insert into test_strings values (1, '  Hello World  '), (2, 'Test String'), (3, 'LOWERCASE');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select id, trim(content) from test_strings order by id;",
+				Expected: []sql.Row{{1, "Hello World"}, {2, "Test String"}, {3, "LOWERCASE"}},
+			},
+			{
+				Query:    "select id, upper(content) from test_strings order by id;",
+				Expected: []sql.Row{{1, "  HELLO WORLD  "}, {2, "TEST STRING"}, {3, "LOWERCASE"}},
+			},
+			{
+				Query:    "select id, lower(content) from test_strings order by id;",
+				Expected: []sql.Row{{1, "  hello world  "}, {2, "test string"}, {3, "lowercase"}},
+			},
+			{
+				Query:    "select id, reverse(content) from test_strings order by id;",
+				Expected: []sql.Row{{1, "  dlroW olleH  "}, {2, "gnirtS tseT"}, {3, "ESACREWOL"}},
+			},
+			{
+				Query:    "select id, substring(content, 1, 5) from test_strings order by id;",
+				Expected: []sql.Row{{1, "  Hel"}, {2, "Test "}, {3, "LOWER"}},
+			},
+			{
+				Query:    "select id, length(content) from test_strings order by id;",
+				Expected: []sql.Row{{1, 15}, {2, 11}, {3, 9}},
+			},
+			{
+				Query:            "update test_strings set content = concat(trim(content), '!');",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "select id, content from test_strings order by id;",
+				Expected: []sql.Row{{1, "Hello World!"}, {2, "Test String!"}, {3, "LOWERCASE!"}},
+			},
+		},
+	},
 }
 
 func makeLargeInsert(sz int) string {
