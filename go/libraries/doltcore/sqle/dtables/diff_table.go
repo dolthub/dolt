@@ -917,6 +917,11 @@ func GetDiffTableSchemaAndJoiner(format *types.NomsBinFormat, fromSch, toSch sch
 			return nil, nil, err
 		}
 	} else {
+		fromSch, toSch, err = expandFromToSchemas(fromSch, toSch)
+		if err != nil {
+			return nil, nil, err
+		}
+
 		j, err = rowconv.NewJoiner(
 			[]rowconv.NamedSchema{{Name: diff.To, Sch: toSch}, {Name: diff.From, Sch: fromSch}},
 			map[string]rowconv.ColNamingFunc{
