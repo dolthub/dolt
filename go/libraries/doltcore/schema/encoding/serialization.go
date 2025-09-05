@@ -688,7 +688,7 @@ func sqlTypeString(t typeinfo.TypeInfo) string {
 	}
 
 	// Extended types are string serializable, so we'll just prepend a tag
-	if extendedType, ok := typ.(sqltypes.ExtendedType); ok {
+	if extendedType, ok := typ.(sql.ExtendedType); ok {
 		serializedType, err := sqltypes.SerializeTypeToString(extendedType)
 		if err != nil {
 			panic(err)

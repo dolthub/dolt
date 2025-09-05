@@ -31,7 +31,7 @@ const (
 // extendedType is a type that refers to an ExtendedType in GMS. These are only supported in the new format, and have many
 // more limitations than traditional types (for now).
 type extendedType struct {
-	sqlExtendedType gmstypes.ExtendedType
+	sqlExtendedType sql.ExtendedType
 }
 
 var _ TypeInfo = (*extendedType)(nil)
@@ -49,7 +49,7 @@ func CreateExtendedTypeFromParams(params map[string]string) (TypeInfo, error) {
 }
 
 // CreateExtendedTypeFromSqlType creates a TypeInfo from the given extended type.
-func CreateExtendedTypeFromSqlType(typ gmstypes.ExtendedType) TypeInfo {
+func CreateExtendedTypeFromSqlType(typ sql.ExtendedType) TypeInfo {
 	return &extendedType{typ}
 }
 
@@ -110,7 +110,7 @@ func (ti *extendedType) NomsKind() types.NomsKind {
 
 // Promote implements the TypeInfo interface.
 func (ti *extendedType) Promote() TypeInfo {
-	return &extendedType{ti.sqlExtendedType.Promote().(gmstypes.ExtendedType)}
+	return &extendedType{ti.sqlExtendedType.Promote().(sql.ExtendedType)}
 }
 
 // String implements the TypeInfo interface.
