@@ -935,4 +935,10 @@ SQL
 
     run dolt sql -q "SELECT * FROM dolt_diff('-err', 'HEAD~1', 'HEAD', 'test')"
     [ "$status" -eq 1 ]
+
+    run dolt sql -q "SELECT * FROM dolt_diff('-sk', '--skinny', 'HEAD~1', 'HEAD', 'test')"
+    [ "$status" -eq 1 ]
+
+    run dolt sql -q "SELECT * FROM dolt_diff('HEAD~1', 'HEAD', 'test', '-sk')"
+    [ "$status" -eq 1 ]
 }

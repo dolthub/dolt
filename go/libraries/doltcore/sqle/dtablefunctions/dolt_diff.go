@@ -17,6 +17,7 @@ package dtablefunctions
 import (
 	"fmt"
 	table2 "github.com/dolthub/dolt/go/libraries/doltcore/table"
+	"github.com/dolthub/go-mysql-server/sql/expression"
 	"io"
 	"strings"
 
@@ -119,11 +120,11 @@ func (dtf *DiffTableFunction) Expressions() []sql.Expression {
 // WithExpressions implements the sql.Expressioner interface
 func (dtf *DiffTableFunction) WithExpressions(expressions ...sql.Expression) (sql.Node, error) {
 	newDtf := *dtf
-	var filteredExprs []sql.Expression
+	newDtf.skinnyExpr = nil // analyzer may call multiple times
 	// TODO: For now, we will only support literal / fully-resolved arguments to the
 	//       DiffTableFunction to avoid issues where the schema is needed in the analyzer
 	//       before the arguments could be resolved.
-	for _, expr := range expressions {
+	for i, expr := range expressions {
 		if !expr.Resolved() {
 			return nil, ErrInvalidNonLiteralArgument.New(dtf.Name(), expr.String())
 		}
@@ -132,31 +133,45 @@ func (dtf *DiffTableFunction) WithExpressions(expressions ...sql.Expression) (sq
 			return nil, ErrInvalidNonLiteralArgument.New(dtf.Name(), expr.String())
 		}
 
-		switch expr.String() {
-		case "'--skinny'", "'-sk'":
-			newDtf.skinnyExpr = expr
-		default:
-			filteredExprs = append(filteredExprs, expr)
+		// only support --skinny for now as a special flag, this should suffice until other flags are needed
+		if lit, ok := expr.(*expression.Literal); ok {
+			if s, ok := lit.Value().(string); ok {
+				flag := strings.ToLower(strings.TrimSpace(s))
+				if flag == "--skinny" || flag == "-sk" {
+					if i != 0 {
+						return nil, sql.ErrInvalidArgumentDetails.New(dtf.Name(), "%s must be the first argument", expr.String())
+					}
+					if newDtf.skinnyExpr != nil {
+						return nil, sql.ErrInvalidArgumentDetails.New(dtf.Name(), "duplicate %s", expr.String())
+					}
+					newDtf.skinnyExpr = expr
+					continue
+				}
+			}
 		}
 	}
 
-	if len(filteredExprs) < 2 {
-		return nil, sql.ErrInvalidArgumentNumber.New(dtf.Name(), "2 to 3", len(filteredExprs))
+	if newDtf.skinnyExpr != nil {
+		expressions = expressions[1:]
 	}
 
-	if strings.Contains(filteredExprs[0].String(), "..") {
-		if len(filteredExprs) != 2 {
-			return nil, sql.ErrInvalidArgumentNumber.New(fmt.Sprintf("%v with .. or ...", newDtf.Name()), 2, len(filteredExprs))
+	if len(expressions) < 2 {
+		return nil, sql.ErrInvalidArgumentNumber.New(dtf.Name(), "2 to 3", len(expressions))
+	}
+
+	if strings.Contains(expressions[0].String(), "..") {
+		if len(expressions) != 2 {
+			return nil, sql.ErrInvalidArgumentNumber.New(fmt.Sprintf("%v with .. or ...", newDtf.Name()), 2, len(expressions))
 		}
-		newDtf.dotCommitExpr = filteredExprs[0]
-		newDtf.tableNameExpr = filteredExprs[1]
+		newDtf.dotCommitExpr = expressions[0]
+		newDtf.tableNameExpr = expressions[1]
 	} else {
-		if len(filteredExprs) != 3 {
-			return nil, sql.ErrInvalidArgumentNumber.New(newDtf.Name(), 3, len(filteredExprs))
+		if len(expressions) != 3 {
+			return nil, sql.ErrInvalidArgumentNumber.New(newDtf.Name(), 3, len(expressions))
 		}
-		newDtf.fromCommitExpr = filteredExprs[0]
-		newDtf.toCommitExpr = filteredExprs[1]
-		newDtf.tableNameExpr = filteredExprs[2]
+		newDtf.fromCommitExpr = expressions[0]
+		newDtf.toCommitExpr = expressions[1]
+		newDtf.tableNameExpr = expressions[2]
 	}
 
 	fromCommitVal, toCommitVal, dotCommitVal, tableName, err := newDtf.evaluateArguments()

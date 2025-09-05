@@ -19,6 +19,7 @@ import (
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/sql"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
+	"strings"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtablefunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
@@ -819,20 +820,31 @@ var Dolt1DiffSystemTableScripts = []queries.ScriptTest{
 	},
 }
 
-func countDataColsAssertions(viewName, diffSelectStar string, expected int64) []queries.ScriptTestAssertion {
+// assertDoltDiffColumnCount returns assertions that verify a dolt_diff view
+// has the expected number of distinct data columns (excluding commit metadata).
+func assertDoltDiffColumnCount(view, selectStmt string, expected int64) []queries.ScriptTestAssertion {
+	excluded := []string{
+		"'to_commit'",
+		"'from_commit'",
+		"'to_commit_date'",
+		"'from_commit_date'",
+		"'diff_type'",
+	}
+
+	query := fmt.Sprintf(`
+		SELECT COUNT(DISTINCT REPLACE(REPLACE(column_name, 'to_', ''), 'from_', ''))
+		FROM information_schema.columns
+		WHERE table_schema = DATABASE()
+		  AND table_name = '%s'
+		  AND column_name NOT IN (%s)`,
+		view, strings.Join(excluded, ", "),
+	)
+
 	return []queries.ScriptTestAssertion{
-		{Query: fmt.Sprintf("DROP VIEW IF EXISTS %s;", viewName)},
-		{Query: fmt.Sprintf("CREATE VIEW %s AS %s;", viewName, diffSelectStar)},
-		{
-			Query: fmt.Sprintf(`
-					SELECT COUNT(DISTINCT REPLACE(REPLACE(column_name,'to_',''),'from_',''))
-					FROM information_schema.columns
-					WHERE table_schema = DATABASE()
-					AND table_name = '%s'
-					AND column_name NOT IN ('to_commit','from_commit','to_commit_date','from_commit_date','diff_type')`, viewName),
-			Expected: []sql.Row{{expected}},
-		},
-		{Query: fmt.Sprintf("DROP VIEW %s;", viewName)},
+		{Query: fmt.Sprintf("DROP VIEW IF EXISTS %s;", view)},
+		{Query: fmt.Sprintf("CREATE VIEW %s AS %s;", view, selectStmt)},
+		{Query: query, Expected: []sql.Row{{expected}}},
+		{Query: fmt.Sprintf("DROP VIEW %s;", view)},
 	}
 }
 
@@ -918,14 +930,14 @@ var DiffTableFunctionScriptTests = []queries.ScriptTest{
 					},
 				},
 			}
-			asserts = append(asserts, countDataColsAssertions("v_all_01", "SELECT * FROM dolt_diff(@C0, @C1, 't')", 6)...)
-			asserts = append(asserts, countDataColsAssertions("v_skinny_01", "SELECT * FROM dolt_diff('--skinny', @C0, @C1, 't')", 6)...)
-			asserts = append(asserts, countDataColsAssertions("v_all_12", "SELECT * FROM dolt_diff(@C1, @C2, 't')", 6)...)
-			asserts = append(asserts, countDataColsAssertions("v_skinny_12", "SELECT * FROM dolt_diff('--skinny', @C1, @C2, 't')", 4)...)
-			asserts = append(asserts, countDataColsAssertions("v_all_23", "SELECT * FROM dolt_diff(@C2, @C3, 't')", 7)...)
-			asserts = append(asserts, countDataColsAssertions("v_skinny_23", "SELECT * FROM dolt_diff('--skinny', @C2, @C3, 't')", 2)...)
-			asserts = append(asserts, countDataColsAssertions("v_all_34", "SELECT * FROM dolt_diff(@C3, @C4, 't')", 7)...)
-			asserts = append(asserts, countDataColsAssertions("v_skinny_34", "SELECT * FROM dolt_diff('--skinny', @C3, @C4, 't')", 7)...)
+			asserts = append(asserts, assertDoltDiffColumnCount("v_all_01", "SELECT * FROM dolt_diff(@C0, @C1, 't')", 6)...)
+			asserts = append(asserts, assertDoltDiffColumnCount("v_skinny_01", "SELECT * FROM dolt_diff('--skinny', @C0, @C1, 't')", 6)...)
+			asserts = append(asserts, assertDoltDiffColumnCount("v_all_12", "SELECT * FROM dolt_diff(@C1, @C2, 't')", 6)...)
+			asserts = append(asserts, assertDoltDiffColumnCount("v_skinny_12", "SELECT * FROM dolt_diff('--skinny', @C1, @C2, 't')", 4)...)
+			asserts = append(asserts, assertDoltDiffColumnCount("v_all_23", "SELECT * FROM dolt_diff(@C2, @C3, 't')", 7)...)
+			asserts = append(asserts, assertDoltDiffColumnCount("v_skinny_23", "SELECT * FROM dolt_diff('--skinny', @C2, @C3, 't')", 2)...)
+			asserts = append(asserts, assertDoltDiffColumnCount("v_all_34", "SELECT * FROM dolt_diff(@C3, @C4, 't')", 7)...)
+			asserts = append(asserts, assertDoltDiffColumnCount("v_skinny_34", "SELECT * FROM dolt_diff('--skinny', @C3, @C4, 't')", 7)...)
 
 			return asserts
 		}(),
