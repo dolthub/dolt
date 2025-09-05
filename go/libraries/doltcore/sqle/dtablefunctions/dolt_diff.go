@@ -16,12 +16,11 @@ package dtablefunctions
 
 import (
 	"fmt"
-	table2 "github.com/dolthub/dolt/go/libraries/doltcore/table"
-	"github.com/dolthub/go-mysql-server/sql/expression"
 	"io"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/expression"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"gopkg.in/src-d/go-errors.v1"
 
@@ -35,6 +34,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/resolve"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
+	table2 "github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
