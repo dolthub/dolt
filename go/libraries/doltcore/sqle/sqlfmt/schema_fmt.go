@@ -111,6 +111,7 @@ func generateNonCreateNonDropTableSqlSchemaDiff(td diff.TableDelta, toSchemas ma
 	}
 
 	colDiffs, unionTags := diff.DiffSchColumns(fromSch, toSch)
+
 	for _, tag := range unionTags {
 		cd := colDiffs[tag]
 		switch cd.DiffType {
