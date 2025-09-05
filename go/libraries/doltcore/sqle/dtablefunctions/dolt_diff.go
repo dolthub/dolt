@@ -16,9 +16,11 @@ package dtablefunctions
 
 import (
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/expression"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 	"gopkg.in/src-d/go-errors.v1"
 
@@ -32,6 +34,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/resolve"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
+	table2 "github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -46,6 +49,7 @@ var _ sql.AuthorizationCheckerNode = (*DiffTableFunction)(nil)
 
 type DiffTableFunction struct {
 	tableDelta     diff.TableDelta
+	skinnyExpr     sql.Expression
 	fromCommitExpr sql.Expression
 	toCommitExpr   sql.Expression
 	dotCommitExpr  sql.Expression
@@ -100,26 +104,27 @@ func (dtf *DiffTableFunction) WithDatabase(database sql.Database) (sql.Node, err
 
 // Expressions implements the sql.Expressioner interface
 func (dtf *DiffTableFunction) Expressions() []sql.Expression {
+	exprs := []sql.Expression{}
+	if dtf.skinnyExpr != nil {
+		exprs = append(exprs, dtf.skinnyExpr)
+	}
+
 	if dtf.dotCommitExpr != nil {
-		return []sql.Expression{
-			dtf.dotCommitExpr, dtf.tableNameExpr,
-		}
+		exprs = append(exprs, dtf.dotCommitExpr, dtf.tableNameExpr)
+	} else {
+		exprs = append(exprs, dtf.fromCommitExpr, dtf.toCommitExpr, dtf.tableNameExpr)
 	}
-	return []sql.Expression{
-		dtf.fromCommitExpr, dtf.toCommitExpr, dtf.tableNameExpr,
-	}
+	return exprs
 }
 
 // WithExpressions implements the sql.Expressioner interface
-func (dtf *DiffTableFunction) WithExpressions(expression ...sql.Expression) (sql.Node, error) {
-	if len(expression) < 2 {
-		return nil, sql.ErrInvalidArgumentNumber.New(dtf.Name(), "2 to 3", len(expression))
-	}
-
+func (dtf *DiffTableFunction) WithExpressions(expressions ...sql.Expression) (sql.Node, error) {
+	newDtf := *dtf
+	newDtf.skinnyExpr = nil // analyzer may call multiple times
 	// TODO: For now, we will only support literal / fully-resolved arguments to the
 	//       DiffTableFunction to avoid issues where the schema is needed in the analyzer
 	//       before the arguments could be resolved.
-	for _, expr := range expression {
+	for i, expr := range expressions {
 		if !expr.Resolved() {
 			return nil, ErrInvalidNonLiteralArgument.New(dtf.Name(), expr.String())
 		}
@@ -127,22 +132,46 @@ func (dtf *DiffTableFunction) WithExpressions(expression ...sql.Expression) (sql
 		if _, ok := expr.(sql.FunctionExpression); ok {
 			return nil, ErrInvalidNonLiteralArgument.New(dtf.Name(), expr.String())
 		}
+
+		// only support --skinny for now as a special flag, this should suffice until other flags are needed
+		if lit, ok := expr.(*expression.Literal); ok {
+			if s, ok := lit.Value().(string); ok {
+				flag := strings.ToLower(strings.TrimSpace(s))
+				if flag == "--skinny" || flag == "-sk" {
+					if i != 0 {
+						return nil, sql.ErrInvalidArgumentDetails.New(dtf.Name(), "%s must be the first argument", expr.String())
+					}
+					if newDtf.skinnyExpr != nil {
+						return nil, sql.ErrInvalidArgumentDetails.New(dtf.Name(), "duplicate %s", expr.String())
+					}
+					newDtf.skinnyExpr = expr
+					continue
+				}
+			}
+		}
 	}
 
-	newDtf := *dtf
-	if strings.Contains(expression[0].String(), "..") {
-		if len(expression) != 2 {
-			return nil, sql.ErrInvalidArgumentNumber.New(fmt.Sprintf("%v with .. or ...", newDtf.Name()), 2, len(expression))
+	if newDtf.skinnyExpr != nil {
+		expressions = expressions[1:]
+	}
+
+	if len(expressions) < 2 {
+		return nil, sql.ErrInvalidArgumentNumber.New(dtf.Name(), "2 to 3", len(expressions))
+	}
+
+	if strings.Contains(expressions[0].String(), "..") {
+		if len(expressions) != 2 {
+			return nil, sql.ErrInvalidArgumentNumber.New(fmt.Sprintf("%v with .. or ...", newDtf.Name()), 2, len(expressions))
 		}
-		newDtf.dotCommitExpr = expression[0]
-		newDtf.tableNameExpr = expression[1]
+		newDtf.dotCommitExpr = expressions[0]
+		newDtf.tableNameExpr = expressions[1]
 	} else {
-		if len(expression) != 3 {
-			return nil, sql.ErrInvalidArgumentNumber.New(newDtf.Name(), 3, len(expression))
+		if len(expressions) != 3 {
+			return nil, sql.ErrInvalidArgumentNumber.New(newDtf.Name(), 3, len(expressions))
 		}
-		newDtf.fromCommitExpr = expression[0]
-		newDtf.toCommitExpr = expression[1]
-		newDtf.tableNameExpr = expression[2]
+		newDtf.fromCommitExpr = expressions[0]
+		newDtf.toCommitExpr = expressions[1]
+		newDtf.tableNameExpr = expressions[2]
 	}
 
 	fromCommitVal, toCommitVal, dotCommitVal, tableName, err := newDtf.evaluateArguments()
@@ -423,6 +452,114 @@ func (dtf *DiffTableFunction) evaluateArguments() (interface{}, interface{}, int
 	return fromCommitVal, toCommitVal, nil, tableName, nil
 }
 
+// FilterDeltaSchemaToSkinnyCols creates a filtered version of the table delta that omits columns which are identical
+// in type and value across all rows in both schemas, except for primary key columns which are always included. Also
+// updates dtf.tableDelta with the filtered result.
+func (dtf *DiffTableFunction) FilterDeltaSchemaToSkinnyCols(ctx *sql.Context, delta diff.TableDelta) (diff.TableDelta, error) {
+	if delta.FromTable == nil || delta.ToTable == nil {
+		return delta, nil
+	}
+
+	// potential cols for omission:
+	fromEqualColsIndices := map[string]int{}
+	toEqualColsIndices := map[string]int{}
+	for fromI, fromCol := range delta.FromSch.GetAllCols().GetColumns() {
+		col, ok := delta.ToSch.GetAllCols().GetByName(fromCol.Name)
+		if !ok { // column was dropped
+			continue
+		}
+
+		if fromCol.TypeInfo.Equals(col.TypeInfo) {
+			fromEqualColsIndices[fromCol.Name] = fromI
+			toEqualColsIndices[col.Name] = delta.ToSch.GetAllCols().IndexOf(col.Name)
+		}
+	}
+
+	fromRowData, err := delta.FromTable.GetRowData(ctx)
+	if err != nil {
+		return diff.TableDelta{}, err
+	}
+
+	toRowData, err := delta.ToTable.GetRowData(ctx)
+	if err != nil {
+		return diff.TableDelta{}, err
+	}
+
+	fromIter, err := table2.NewTableIterator(ctx, delta.FromSch, fromRowData)
+	if err != nil {
+		return diff.TableDelta{}, err
+	}
+	defer fromIter.Close(ctx)
+
+	toIter, err := table2.NewTableIterator(ctx, delta.ToSch, toRowData)
+	if err != nil {
+		return diff.TableDelta{}, err
+	}
+	defer toIter.Close(ctx)
+
+	for {
+		fromRow, fromErr := fromIter.Next(ctx)
+		toRow, toErr := toIter.Next(ctx)
+
+		if fromErr == io.EOF && toErr == io.EOF {
+			break
+		}
+
+		if fromErr != nil && fromErr != io.EOF {
+			return diff.TableDelta{}, fromErr
+		}
+
+		if toErr != nil && toErr != io.EOF {
+			return diff.TableDelta{}, toErr
+		}
+
+		// xor: if only one is nil, then all cols are diffs
+		if (fromRow == nil) != (toRow == nil) {
+			fromEqualColsIndices = map[string]int{}
+			toEqualColsIndices = map[string]int{}
+			break
+		}
+
+		if fromRow == nil && toRow == nil {
+			continue
+		}
+
+		for colName, fromI := range fromEqualColsIndices {
+			toI := toEqualColsIndices[colName]
+			fromVal := fromRow[fromI]
+			toVal := toRow[toI]
+
+			if fromVal != toVal {
+				// rm from the diff cols, since we found a diff
+				delete(fromEqualColsIndices, colName)
+				delete(toEqualColsIndices, colName)
+			}
+		}
+	}
+
+	var fromSkinnyCols []schema.Column
+	for _, col := range delta.FromSch.GetAllCols().GetColumns() {
+		_, ok := fromEqualColsIndices[col.Name]
+		if col.IsPartOfPK || !ok {
+			fromSkinnyCols = append(fromSkinnyCols, col)
+		}
+	}
+
+	var toSkinnyCols []schema.Column
+	for _, col := range delta.ToSch.GetAllCols().GetColumns() {
+		_, ok := toEqualColsIndices[col.Name]
+		if col.IsPartOfPK || !ok {
+			toSkinnyCols = append(toSkinnyCols, col)
+		}
+	}
+
+	skinnyDelta := delta
+	skinnyDelta.FromSch = schema.MustSchemaFromCols(schema.NewColCollection(fromSkinnyCols...))
+	skinnyDelta.ToSch = schema.MustSchemaFromCols(schema.NewColCollection(toSkinnyCols...))
+	dtf.tableDelta = skinnyDelta
+	return skinnyDelta, nil
+}
+
 func (dtf *DiffTableFunction) generateSchema(ctx *sql.Context, fromCommitVal, toCommitVal, dotCommitVal interface{}, tableName string) error {
 	if !dtf.Resolved() {
 		return nil
@@ -438,27 +575,26 @@ func (dtf *DiffTableFunction) generateSchema(ctx *sql.Context, fromCommitVal, to
 		return err
 	}
 
+	if dtf.skinnyExpr != nil {
+		delta, err = dtf.FilterDeltaSchemaToSkinnyCols(ctx, delta)
+		if err != nil {
+			return err
+		}
+	}
+
 	fromTable, fromTableExists := delta.FromTable, delta.FromTable != nil
 	toTable, toTableExists := delta.ToTable, delta.ToTable != nil
 
-	if !toTableExists && !fromTableExists {
+	var format *types.NomsBinFormat
+	if toTableExists {
+		format = toTable.Format()
+	} else if fromTableExists {
+		format = fromTable.Format()
+	} else {
 		return sql.ErrTableNotFound.New(tableName)
 	}
 
-	var toSchema, fromSchema schema.Schema
-	var format *types.NomsBinFormat
-
-	if fromTableExists {
-		fromSchema = delta.FromSch
-		format = fromTable.Format()
-	}
-
-	if toTableExists {
-		toSchema = delta.ToSch
-		format = toTable.Format()
-	}
-
-	diffTableSch, j, err := dtables.GetDiffTableSchemaAndJoiner(format, fromSchema, toSchema)
+	diffTableSch, j, err := dtables.GetDiffTableSchemaAndJoiner(format, delta.FromSch, delta.ToSch)
 	if err != nil {
 		return err
 	}
@@ -559,10 +695,15 @@ func (dtf *DiffTableFunction) Schema() sql.Schema {
 
 // Resolved implements the sql.Resolvable interface
 func (dtf *DiffTableFunction) Resolved() bool {
-	if dtf.dotCommitExpr != nil {
-		return dtf.tableNameExpr.Resolved() && dtf.dotCommitExpr.Resolved()
+	resolved := true
+	if dtf.skinnyExpr != nil {
+		resolved = dtf.skinnyExpr.Resolved()
 	}
-	return dtf.tableNameExpr.Resolved() && dtf.fromCommitExpr.Resolved() && dtf.toCommitExpr.Resolved()
+
+	if dtf.dotCommitExpr != nil {
+		return resolved && dtf.tableNameExpr.Resolved() && dtf.dotCommitExpr.Resolved()
+	}
+	return resolved && dtf.tableNameExpr.Resolved() && dtf.fromCommitExpr.Resolved() && dtf.toCommitExpr.Resolved()
 }
 
 func (dtf *DiffTableFunction) IsReadOnly() bool {
@@ -571,15 +712,18 @@ func (dtf *DiffTableFunction) IsReadOnly() bool {
 
 // String implements the Stringer interface
 func (dtf *DiffTableFunction) String() string {
-	if dtf.dotCommitExpr != nil {
-		return fmt.Sprintf("DOLT_DIFF(%s, %s)",
-			dtf.dotCommitExpr.String(),
-			dtf.tableNameExpr.String())
+	args := []string{}
+	if dtf.skinnyExpr != nil {
+		args = append(args, dtf.skinnyExpr.String())
 	}
-	return fmt.Sprintf("DOLT_DIFF(%s, %s, %s)",
-		dtf.fromCommitExpr.String(),
-		dtf.toCommitExpr.String(),
-		dtf.tableNameExpr.String())
+
+	if dtf.dotCommitExpr != nil {
+		args = append(args, dtf.dotCommitExpr.String(), dtf.tableNameExpr.String())
+	} else {
+		args = append(args, dtf.fromCommitExpr.String(), dtf.toCommitExpr.String(), dtf.tableNameExpr.String())
+	}
+
+	return fmt.Sprintf("DOLT_DIFF(%s)", strings.Join(args, ", "))
 }
 
 // Name implements the sql.TableFunction interface
