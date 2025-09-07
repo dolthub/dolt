@@ -5,7 +5,7 @@ skiponwindows() { :; }
 IS_WINDOWS=${IS_WINDOWS:-false}
 WINDOWS_BASE_DIR=${WINDOWS_BASE_DIR:-/mnt/c}
 
-if [ -d "$WINDOWS_BASE_DIR"/Windows/System32 ]  || [ "$IS_WINDOWS" == true ]; then
+if [ ! -d "$WINDOWS_BASE_DIR"/Windows/System32 ]  || [ "$IS_WINDOWS" == true ]; then
     IS_WINDOWS=true
     if [ ! -d "$WINDOWS_BASE_DIR"/batstmp ]; then
         mkdir "$WINDOWS_BASE_DIR"/batstmp

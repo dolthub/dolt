@@ -16,7 +16,7 @@ package dtablefunctions
 
 import (
 	"fmt"
-	table2 "github.com/dolthub/dolt/go/libraries/doltcore/table"
+	dolttable "github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/go-mysql-server/sql/expression"
 	"io"
 	"strings"
@@ -452,26 +452,24 @@ func (dtf *DiffTableFunction) evaluateArguments() (interface{}, interface{}, int
 	return fromCommitVal, toCommitVal, nil, tableName, nil
 }
 
-// FilterDeltaSchemaToSkinnyCols creates a filtered version of the table delta that omits columns which are identical
+// filterDeltaSchemaToSkinnyCols creates a filtered version of the table delta that omits columns which are identical
 // in type and value across all rows in both schemas, except for primary key columns which are always included. Also
 // updates dtf.tableDelta with the filtered result.
-func (dtf *DiffTableFunction) FilterDeltaSchemaToSkinnyCols(ctx *sql.Context, delta diff.TableDelta) (diff.TableDelta, error) {
+func (dtf *DiffTableFunction) filterDeltaSchemaToSkinnyCols(ctx *sql.Context, delta *diff.TableDelta) (diff.TableDelta, error) {
 	if delta.FromTable == nil || delta.ToTable == nil {
-		return delta, nil
+		return *delta, nil
 	}
 
-	// potential cols for omission:
-	fromEqualColsIndices := map[string]int{}
-	toEqualColsIndices := map[string]int{}
-	for fromI, fromCol := range delta.FromSch.GetAllCols().GetColumns() {
+	// potential cols for omission
+	equalDiffColsIndices := map[string][2]int{}
+	for fi, fromCol := range delta.FromSch.GetAllCols().GetColumns() {
 		col, ok := delta.ToSch.GetAllCols().GetByName(fromCol.Name)
 		if !ok { // column was dropped
 			continue
 		}
 
 		if fromCol.TypeInfo.Equals(col.TypeInfo) {
-			fromEqualColsIndices[fromCol.Name] = fromI
-			toEqualColsIndices[col.Name] = delta.ToSch.GetAllCols().IndexOf(col.Name)
+			equalDiffColsIndices[fromCol.Name] = [2]int{fi, delta.ToSch.GetAllCols().IndexOf(col.Name)}
 		}
 	}
 
@@ -485,19 +483,19 @@ func (dtf *DiffTableFunction) FilterDeltaSchemaToSkinnyCols(ctx *sql.Context, de
 		return diff.TableDelta{}, err
 	}
 
-	fromIter, err := table2.NewTableIterator(ctx, delta.FromSch, fromRowData)
+	fromIter, err := dolttable.NewTableIterator(ctx, delta.FromSch, fromRowData)
 	if err != nil {
 		return diff.TableDelta{}, err
 	}
 	defer fromIter.Close(ctx)
 
-	toIter, err := table2.NewTableIterator(ctx, delta.ToSch, toRowData)
+	toIter, err := dolttable.NewTableIterator(ctx, delta.ToSch, toRowData)
 	if err != nil {
 		return diff.TableDelta{}, err
 	}
 	defer toIter.Close(ctx)
 
-	for {
+	for len(equalDiffColsIndices) > 0 {
 		fromRow, fromErr := fromIter.Next(ctx)
 		toRow, toErr := toIter.Next(ctx)
 
@@ -515,8 +513,7 @@ func (dtf *DiffTableFunction) FilterDeltaSchemaToSkinnyCols(ctx *sql.Context, de
 
 		// xor: if only one is nil, then all cols are diffs
 		if (fromRow == nil) != (toRow == nil) {
-			fromEqualColsIndices = map[string]int{}
-			toEqualColsIndices = map[string]int{}
+			equalDiffColsIndices = map[string][2]int{}
 			break
 		}
 
@@ -524,40 +521,39 @@ func (dtf *DiffTableFunction) FilterDeltaSchemaToSkinnyCols(ctx *sql.Context, de
 			continue
 		}
 
-		for colName, fromI := range fromEqualColsIndices {
-			toI := toEqualColsIndices[colName]
-			fromVal := fromRow[fromI]
-			toVal := toRow[toI]
-
-			if fromVal != toVal {
+		for colName, idx := range equalDiffColsIndices {
+			const (
+				from = 0
+				to   = 1
+			)
+			if fromRow[idx[from]] != toRow[idx[to]] {
 				// rm from the diff cols, since we found a diff
-				delete(fromEqualColsIndices, colName)
-				delete(toEqualColsIndices, colName)
+				delete(equalDiffColsIndices, colName)
 			}
 		}
 	}
 
-	var fromSkinnyCols []schema.Column
+	var fromSkCols []schema.Column
 	for _, col := range delta.FromSch.GetAllCols().GetColumns() {
-		_, ok := fromEqualColsIndices[col.Name]
+		_, ok := equalDiffColsIndices[col.Name]
 		if col.IsPartOfPK || !ok {
-			fromSkinnyCols = append(fromSkinnyCols, col)
+			fromSkCols = append(fromSkCols, col)
 		}
 	}
 
-	var toSkinnyCols []schema.Column
+	var toSkCols []schema.Column
 	for _, col := range delta.ToSch.GetAllCols().GetColumns() {
-		_, ok := toEqualColsIndices[col.Name]
+		_, ok := equalDiffColsIndices[col.Name]
 		if col.IsPartOfPK || !ok {
-			toSkinnyCols = append(toSkinnyCols, col)
+			toSkCols = append(toSkCols, col)
 		}
 	}
 
-	skinnyDelta := delta
-	skinnyDelta.FromSch = schema.MustSchemaFromCols(schema.NewColCollection(fromSkinnyCols...))
-	skinnyDelta.ToSch = schema.MustSchemaFromCols(schema.NewColCollection(toSkinnyCols...))
-	dtf.tableDelta = skinnyDelta
-	return skinnyDelta, nil
+	skDelta := *delta
+	skDelta.FromSch = schema.MustSchemaFromCols(schema.NewColCollection(fromSkCols...))
+	skDelta.ToSch = schema.MustSchemaFromCols(schema.NewColCollection(toSkCols...))
+	dtf.tableDelta = skDelta
+	return skDelta, nil
 }
 
 func (dtf *DiffTableFunction) generateSchema(ctx *sql.Context, fromCommitVal, toCommitVal, dotCommitVal interface{}, tableName string) error {
@@ -576,7 +572,7 @@ func (dtf *DiffTableFunction) generateSchema(ctx *sql.Context, fromCommitVal, to
 	}
 
 	if dtf.skinnyExpr != nil {
-		delta, err = dtf.FilterDeltaSchemaToSkinnyCols(ctx, delta)
+		delta, err = dtf.filterDeltaSchemaToSkinnyCols(ctx, &delta)
 		if err != nil {
 			return err
 		}

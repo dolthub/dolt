@@ -308,6 +308,18 @@ func CreateLogArgParser(isTableFunction bool) *argparser.ArgParser {
 	return ap
 }
 
+const (
+	SkinnyFlag      = "skinny"
+	IncludeColsFlag = "include-cols"
+)
+
+func CreateDiffArgParser() *argparser.ArgParser {
+	ap := argparser.NewArgParserWithVariableArgs("DOLT_DIFF()")
+	ap.SupportsFlag(SkinnyFlag, "sk", "Shows only primary key columns and any columns with data changes.")
+	ap.SupportsString(IncludeColsFlag, "", "columns", "Comma-separated list of columns to include in the diff output.")
+	return ap
+}
+
 func CreateGCArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithMaxArgs("gc", 0)
 	ap.SupportsFlag(ShallowFlag, "s", "perform a fast, but incomplete garbage collection pass")
