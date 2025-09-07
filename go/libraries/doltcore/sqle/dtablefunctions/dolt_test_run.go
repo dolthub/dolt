@@ -46,7 +46,6 @@ type testResult struct {
 }
 
 type TestsRunTableFunction struct {
-	ctx           *sql.Context
 	catalog       sql.Catalog
 	database      sql.Database
 	argumentExprs []sql.Expression
@@ -61,9 +60,8 @@ var testRunTableSchema = sql.Schema{
 	&sql.Column{Name: "message", Type: types.Text},
 }
 
-func (trtf *TestsRunTableFunction) NewInstance(ctx *sql.Context, database sql.Database, expressions []sql.Expression) (sql.Node, error) {
+func (trtf *TestsRunTableFunction) NewInstance(_ *sql.Context, database sql.Database, expressions []sql.Expression) (sql.Node, error) {
 	newInstance := &TestsRunTableFunction{
-		ctx:      ctx,
 		database: database,
 	}
 	node, err := newInstance.WithExpressions(expressions...)
@@ -178,7 +176,7 @@ func (trtf *TestsRunTableFunction) Name() string {
 }
 
 // RowIter implements the sql.Node interface
-func (trtf *TestsRunTableFunction) RowIter(_ *sql.Context, _ sql.Row) (sql.RowIter, error) {
+func (trtf *TestsRunTableFunction) RowIter(ctx *sql.Context, _ sql.Row) (sql.RowIter, error) {
 	args := trtf.getOptionsString()
 	if len(args) == 0 { // We treat no arguments as a wildcard
 		args = append(args, "*")
@@ -186,13 +184,22 @@ func (trtf *TestsRunTableFunction) RowIter(_ *sql.Context, _ sql.Row) (sql.RowIt
 
 	var resultRows []sql.Row
 	for _, arg := range args {
-		testRows, err := trtf.getDoltTestsData(strings.Trim(arg, "'"))
+		testRows, err := func() (*[]sql.Row, error) {
+			ctx, cancel := ctx.NewSubContext()
+			defer cancel()
+
+			return trtf.getDoltTestsData(ctx, strings.Trim(arg, "'"))
+		}()
 		if err != nil {
 			return nil, err
 		}
 
 		for _, row := range *testRows {
-			result, err := trtf.queryAndAssert(row)
+			result, err := func() (testResult, error) {
+				ctx, cancel := ctx.NewSubContext()
+				defer cancel()
+				return trtf.queryAndAssert(ctx, row)
+			}()
 			if err != nil {
 				return nil, err
 			}
@@ -218,23 +225,29 @@ func (trtf *TestsRunTableFunction) RowCount(_ *sql.Context) (uint64, bool, error
 	return testsRunDefaultRowCount, false, nil
 }
 
-func (trtf *TestsRunTableFunction) queryAndAssert(row sql.Row) (result testResult, err error) {
-	testName, groupName, query, assertion, comparison, value, err := parseDoltTestsRow(trtf.ctx, row)
+func (trtf *TestsRunTableFunction) queryAndAssert(ctx *sql.Context, row sql.Row) (result testResult, err error) {
+	testName, groupName, query, assertion, comparison, value, err := parseDoltTestsRow(ctx, row)
 	if err != nil {
 		return
 	}
-	message, err := validateQuery(trtf.ctx, trtf.catalog, *query)
+
+	message, err := validateQuery(ctx, trtf.catalog, *query)
 	if err != nil && message == "" {
 		message = fmt.Sprintf("query error: %s", err.Error())
 	}
 
 	var testPassed bool
 	if message == "" {
-		_, queryResult, _, err := trtf.engine.Query(trtf.ctx, *query)
+		queryResult, err := func() (sql.RowIter, error) {
+			ctx, cancel := ctx.NewSubContext()
+			defer cancel()
+			_, queryResult, _, err := trtf.engine.Query(ctx, *query)
+			return queryResult, err
+		}()
 		if err != nil {
 			message = fmt.Sprintf("Query error: %s", err.Error())
 		} else {
-			testPassed, message, err = actions.AssertData(trtf.ctx, *assertion, *comparison, value, &queryResult)
+			testPassed, message, err = actions.AssertData(ctx, *assertion, *comparison, value, &queryResult)
 			if err != nil {
 				return testResult{}, err
 			}
@@ -254,7 +267,7 @@ func (trtf *TestsRunTableFunction) queryAndAssert(row sql.Row) (result testResul
 	return result, nil
 }
 
-func (trtf *TestsRunTableFunction) getDoltTestsData(arg string) (*[]sql.Row, error) {
+func (trtf *TestsRunTableFunction) getDoltTestsData(ctx *sql.Context, arg string) (*[]sql.Row, error) {
 	var queries []string
 
 	if arg == "*" {
@@ -276,11 +289,17 @@ func (trtf *TestsRunTableFunction) getDoltTestsData(arg string) (*[]sql.Row, err
 	}
 
 	for _, query := range queries {
-		_, iter, _, err := trtf.engine.Query(trtf.ctx, query)
+		iter, err := func() (sql.RowIter, error) {
+			ctx, cancel := ctx.NewSubContext()
+			defer cancel()
+			_, iter, _, err := trtf.engine.Query(ctx, query)
+			return iter, err
+		}()
 		if err != nil {
 			return nil, err
 		}
-		rows, err := sql.RowIterToRows(trtf.ctx, iter)
+
+		rows, err := sql.RowIterToRows(ctx, iter)
 		if err != nil {
 			return nil, err
 		}
