@@ -86,54 +86,54 @@ _compare_counts_or_err() {
 
 # ---- main entrypoint ----
 
-# Compare CLI diff with SQL dolt_diff (both normal and skinny)
-# Usage: compare_dolt_diff from_commit to_commit table_name
+# Compare CLI diff with SQL dolt_diff
+# Usage: compare_dolt_diff [all dolt diff args...]
 compare_dolt_diff() {
-    local from_commit="$1"
-    local to_commit="$2"
-    local table_name="$3"
+    local args=("$@")  # all arguments
 
-    # --- normal mode ---
-    local cli_normal_output sql_normal_output cli_status sql_status
-    cli_normal_output=$(dolt diff "$from_commit" "$to_commit" "$table_name" 2>&1); cli_status=$?
-    sql_normal_output=$(dolt sql -q "SELECT * FROM dolt_diff('$from_commit', '$to_commit', '$table_name')" 2>&1); sql_status=$?
+    # --- normal diff ---
+    local cli_output sql_output cli_status sql_status
+    cli_output=$(dolt diff "${args[@]}" 2>&1)
+    cli_status=$?
 
-    echo "$cli_normal_output"
-    echo "$sql_normal_output"
+    # Build SQL argument list safely
+    local sql_args=""
+    for arg in "${args[@]}"; do
+        if [ -z "$sql_args" ]; then
+            sql_args="'$arg'"
+        else
+            sql_args+=", '$arg'"
+        fi
+    done
+    sql_output=$(dolt sql -q "SELECT * FROM dolt_diff($sql_args)" 2>&1)
+    sql_status=$?
 
-    if [ $cli_status -ne 0 ]; then echo "CLI diff failed"; echo "$cli_normal_output"; return 1; fi
-    if [ $sql_status -ne 0 ]; then echo "SQL dolt_diff failed"; echo "$sql_normal_output"; return 1; fi
+    # normally prints in bats using `run`, so no debug blocks here
+    echo "$cli_output"
+    echo "$sql_output"
 
-    local normal_cli_changes normal_sql_rows
-    normal_cli_changes=$(_cli_change_count "$cli_normal_output")
-    normal_sql_rows=$(_sql_row_count "$sql_normal_output")
-    _compare_counts_or_err "Normal diff" "$cli_normal_output" "$sql_normal_output" "$normal_cli_changes" "$normal_sql_rows" || return 1
+    if [ $cli_status -ne 0 ]; then
+        echo "CLI diff failed"
+        _dbg "$cli_output"
+        return 1
+    fi
+    if [ $sql_status -ne 0 ]; then
+        echo "SQL dolt_diff failed"
+        _dbg "$sql_output"
+        return 1
+    fi
 
-    local normal_cli_cols normal_sql_cols
-    normal_cli_cols=$(_cli_header_cols "$cli_normal_output")
-    normal_sql_cols=$(_sql_data_header_cols "$sql_normal_output")
-    _compare_sets_or_err "Normal diff" "$normal_cli_cols" "$normal_sql_cols" "$cli_normal_output" "$sql_normal_output" || return 1
+    # Compare counts
+    local cli_changes sql_rows
+    cli_changes=$(_cli_change_count "$cli_output")
+    sql_rows=$(_sql_row_count "$sql_output")
+    _compare_counts_or_err "Diff" "$cli_output" "$sql_output" "$cli_changes" "$sql_rows" || return 1
 
-    # --- skinny mode ---
-    local cli_skinny_output sql_skinny_output
-    cli_skinny_output=$(dolt diff --skinny "$from_commit" "$to_commit" "$table_name" 2>&1); cli_status=$?
-    sql_skinny_output=$(dolt sql -q "SELECT * FROM dolt_diff('--skinny', '$from_commit', '$to_commit', '$table_name')" 2>&1); sql_status=$?
-
-    echo "$cli_skinny_output"
-    echo "$sql_skinny_output"
-
-    if [ $cli_status -ne 0 ]; then echo "CLI skinny diff failed"; echo "$cli_skinny_output"; return 1; fi
-    if [ $sql_status -ne 0 ]; then echo "SQL skinny dolt_diff failed"; echo "$sql_skinny_output"; return 1; fi
-
-    local skinny_cli_changes skinny_sql_rows
-    skinny_cli_changes=$(_cli_change_count "$cli_skinny_output")
-    skinny_sql_rows=$(_sql_row_count "$sql_skinny_output")
-    _compare_counts_or_err "Skinny diff" "$cli_skinny_output" "$sql_skinny_output" "$skinny_cli_changes" "$skinny_sql_rows" || return 1
-
-    local skinny_cli_cols skinny_sql_cols
-    skinny_cli_cols=$(_cli_header_cols "$cli_skinny_output")
-    skinny_sql_cols=$(_sql_data_header_cols "$sql_skinny_output")
-    _compare_sets_or_err "Skinny diff" "$skinny_cli_cols" "$skinny_sql_cols" "$cli_skinny_output" "$sql_skinny_output" || return 1
+    # Compare columns
+    local cli_cols sql_cols
+    cli_cols=$(_cli_header_cols "$cli_output")
+    sql_cols=$(_sql_data_header_cols "$sql_output")
+    _compare_sets_or_err "Diff" "$cli_cols" "$sql_cols" "$cli_output" "$sql_output" || return 1
 
     return 0
 }

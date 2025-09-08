@@ -852,15 +852,15 @@ var DiffTableFunctionScriptTests = []queries.ScriptTest{
 	{
 		Name: "dolt_diff: SELECT * skinny schema visibility",
 		SetUpScript: []string{
-			"CREATE TABLE t (" +
-				"pk BIGINT NOT NULL COMMENT 'tag:0'," +
-				"c1 BIGINT COMMENT 'tag:1'," +
-				"c2 BIGINT COMMENT 'tag:2'," +
-				"c3 BIGINT COMMENT 'tag:3'," +
-				"c4 BIGINT COMMENT 'tag:4'," +
-				"c5 BIGINT COMMENT 'tag:5'," +
-				"PRIMARY KEY (pk)" +
-				");",
+			`CREATE TABLE t (
+				pk BIGINT NOT NULL COMMENT 'tag:0',
+				c1 BIGINT COMMENT 'tag:1',
+				c2 BIGINT COMMENT 'tag:2',
+				c3 BIGINT COMMENT 'tag:3',
+				c4 BIGINT COMMENT 'tag:4',
+				c5 BIGINT COMMENT 'tag:5',
+				PRIMARY KEY (pk)
+			);`,
 			"call dolt_add('.')",
 			"set @C0 = '';",
 			"call dolt_commit_hash_out(@C0, '-m', 'Created table t');",
@@ -923,6 +923,13 @@ var DiffTableFunctionScriptTests = []queries.ScriptTest{
 					},
 				},
 				{
+					Query: "SELECT d.to_pk, d.to_c1, d.to_c2, d.to_c6, d.diff_type " +
+						"FROM (SELECT * FROM dolt_diff('--skinny', '--include-cols=c1,c2', @C2, @C3, 't')) d",
+					Expected: []sql.Row{
+						{int64(0), int64(100), int64(2), int64(600), "modified"},
+					},
+				},
+				{
 					Query: "SELECT d.from_pk, d.from_c1, d.from_c2, d.from_c3, d.from_c4, d.from_c5, d.from_c6, d.diff_type " +
 						"FROM (SELECT * FROM dolt_diff('--skinny', @C3, @C4, 't')) d",
 					Expected: []sql.Row{
@@ -936,6 +943,9 @@ var DiffTableFunctionScriptTests = []queries.ScriptTest{
 			asserts = append(asserts, assertDoltDiffColumnCount("v_skinny_12", "SELECT * FROM dolt_diff('--skinny', @C1, @C2, 't')", 4)...)
 			asserts = append(asserts, assertDoltDiffColumnCount("v_all_23", "SELECT * FROM dolt_diff(@C2, @C3, 't')", 7)...)
 			asserts = append(asserts, assertDoltDiffColumnCount("v_skinny_23", "SELECT * FROM dolt_diff('--skinny', @C2, @C3, 't')", 2)...)
+			asserts = append(asserts, assertDoltDiffColumnCount("v_skinny_23", "SELECT * FROM dolt_diff(@C2, @C3, 't', '--skinny')", 2)...)
+			asserts = append(asserts, assertDoltDiffColumnCount("v_skinny_23", "SELECT * FROM dolt_diff('--skinny', '--include-cols=c1,c2', @C2, @C3, 't')", 4)...)
+			asserts = append(asserts, assertDoltDiffColumnCount("v_skinny_23", "SELECT * FROM dolt_diff('--skinny', '--include-cols=c1,c2,c6', @C2, @C3, 't')", 4)...)
 			asserts = append(asserts, assertDoltDiffColumnCount("v_all_34", "SELECT * FROM dolt_diff(@C3, @C4, 't')", 7)...)
 			asserts = append(asserts, assertDoltDiffColumnCount("v_skinny_34", "SELECT * FROM dolt_diff('--skinny', @C3, @C4, 't')", 7)...)
 

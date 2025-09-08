@@ -308,15 +308,26 @@ func CreateLogArgParser(isTableFunction bool) *argparser.ArgParser {
 	return ap
 }
 
-const (
-	SkinnyFlag      = "skinny"
-	IncludeColsFlag = "include-cols"
-)
-
-func CreateDiffArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParserWithVariableArgs("DOLT_DIFF()")
+func CreateDiffArgParser(isTableFunction bool) *argparser.ArgParser {
+	ap := argparser.NewArgParserWithVariableArgs("diff")
 	ap.SupportsFlag(SkinnyFlag, "sk", "Shows only primary key columns and any columns with data changes.")
-	ap.SupportsString(IncludeColsFlag, "", "columns", "Comma-separated list of columns to include in the diff output.")
+	ap.SupportsStringList(IncludeCols, "ic", "columns", "A list of columns to include in the diff.")
+	if !isTableFunction { // TODO: support for table function
+		ap.SupportsFlag(DataFlag, "d", "Show only the data changes, do not show the schema changes (Both shown by default).")
+		ap.SupportsFlag(SchemaFlag, "s", "Show only the schema changes, do not show the data changes (Both shown by default).")
+		ap.SupportsFlag(StatFlag, "", "Show stats of data changes")
+		ap.SupportsFlag(SummaryFlag, "", "Show summary of data and schema changes")
+		ap.SupportsString(FormatFlag, "r", "result output format", "How to format diff output. Valid values are tabular, sql, json. Defaults to tabular.")
+		ap.SupportsString(WhereParam, "", "column", "filters columns based on values in the diff.  See {{.EmphasisLeft}}dolt diff --help{{.EmphasisRight}} for details.")
+		ap.SupportsInt(LimitParam, "", "record_count", "limits to the first N diffs.")
+		ap.SupportsFlag(StagedFlag, "", "Show only the staged data changes.")
+		ap.SupportsFlag(CachedFlag, "c", "Synonym for --staged")
+		ap.SupportsFlag(MergeBase, "", "Uses merge base of the first commit and second commit (or HEAD if not supplied) as the first commit")
+		ap.SupportsString(DiffMode, "", "diff mode", "Determines how to display modified rows with tabular output. Valid values are row, line, in-place, context. Defaults to context.")
+		ap.SupportsFlag(ReverseFlag, "R", "Reverses the direction of the diff.")
+		ap.SupportsFlag(NameOnlyFlag, "", "Only shows table names.")
+		ap.SupportsFlag(SystemFlag, "", "Show system tables in addition to user tables")
+	}
 	return ap
 }
 

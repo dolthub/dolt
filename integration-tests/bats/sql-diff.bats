@@ -909,6 +909,9 @@ SQL
     dolt commit -m "Added initial data"
 
     compare_dolt_diff "HEAD~1" "HEAD" "test"
+    compare_dolt_diff "-sk" "HEAD~1" "HEAD" "test"
+    compare_dolt_diff "--skinny" "HEAD~1" "HEAD" "test"
+    compare_dolt_diff "HEAD~1" "HEAD" "-sk" "test"
 
     dolt sql -q "UPDATE test SET c1=100, c3=300 WHERE pk=0"
     dolt sql -q "UPDATE test SET c2=200 WHERE pk=1"
@@ -916,6 +919,8 @@ SQL
     dolt commit -m "Updated some columns"
 
     compare_dolt_diff "HEAD~1" "HEAD" "test"
+    compare_dolt_diff "--skinny" "HEAD~1" "HEAD" "test"
+    compare_dolt_diff "HEAD~1" "HEAD" "test" "--skinny"
 
     dolt sql -q "ALTER TABLE test ADD COLUMN c6 BIGINT"
     dolt sql -q "UPDATE test SET c6=600 WHERE pk=0"
@@ -923,22 +928,23 @@ SQL
     dolt commit -m "Added new column and updated it"
 
     compare_dolt_diff "HEAD~1" "HEAD" "test"
+    compare_dolt_diff "--skinny" "HEAD~1" "HEAD" "test"
+    compare_dolt_diff "--skinny" "--include-cols=c1,c2" "HEAD~1" "HEAD" "test"
+    compare_dolt_diff "--skinny" "HEAD~2" "HEAD" "test" "--include-cols" "c1" "c2"
+    compare_dolt_diff "--skinny" "--include-cols=c1,c2" "HEAD~2" "HEAD" "test"
 
     dolt sql -q "DELETE FROM test WHERE pk=1"
     dolt add test
     dolt commit -m "Deleted a row"
 
     compare_dolt_diff "HEAD~1" "HEAD" "test"
-
-    run dolt sql -q "SELECT * FROM dolt_diff('-sk', 'HEAD~1', 'HEAD', 'test')"
-    [ "$status" -eq 0 ]
+    compare_dolt_diff "--skinny" "HEAD~1" "HEAD" "test"
 
     run dolt sql -q "SELECT * FROM dolt_diff('-err', 'HEAD~1', 'HEAD', 'test')"
+    [[ "$output" =~ "unknown option \`err" ]] || false
     [ "$status" -eq 1 ]
 
     run dolt sql -q "SELECT * FROM dolt_diff('-sk', '--skinny', 'HEAD~1', 'HEAD', 'test')"
-    [ "$status" -eq 1 ]
-
-    run dolt sql -q "SELECT * FROM dolt_diff('HEAD~1', 'HEAD', 'test', '-sk')"
+    [[ "$output" =~ "multiple values provided for \`skinny" ]]
     [ "$status" -eq 1 ]
 }

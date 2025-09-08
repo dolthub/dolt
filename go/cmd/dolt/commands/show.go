@@ -83,17 +83,17 @@ func (cmd ShowCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(cli.NoPrettyFlag, "", "Show the object without making it pretty.")
 
 	// Flags inherited from Diff
-	ap.SupportsFlag(DataFlag, "d", "Show only the data changes, do not show the schema changes (Both shown by default).")
-	ap.SupportsFlag(SchemaFlag, "s", "Show only the schema changes, do not show the data changes (Both shown by default).")
-	ap.SupportsFlag(StatFlag, "", "Show stats of data changes")
-	ap.SupportsFlag(SummaryFlag, "", "Show summary of data and schema changes")
+	ap.SupportsFlag(cli.DataFlag, "d", "Show only the data changes, do not show the schema changes (Both shown by default).")
+	ap.SupportsFlag(cli.SchemaFlag, "s", "Show only the schema changes, do not show the data changes (Both shown by default).")
+	ap.SupportsFlag(cli.StatFlag, "", "Show stats of data changes")
+	ap.SupportsFlag(cli.SummaryFlag, "", "Show summary of data and schema changes")
 	ap.SupportsString(FormatFlag, "r", "result output format", "How to format diff output. Valid values are tabular, sql, json. Defaults to tabular.")
-	ap.SupportsString(whereParam, "", "column", "filters columns based on values in the diff.  See {{.EmphasisLeft}}dolt diff --help{{.EmphasisRight}} for details.")
-	ap.SupportsInt(limitParam, "", "record_count", "limits to the first N diffs.")
+	ap.SupportsString(cli.WhereParam, "", "column", "filters columns based on values in the diff.  See {{.EmphasisLeft}}dolt diff --help{{.EmphasisRight}} for details.")
+	ap.SupportsInt(cli.LimitParam, "", "record_count", "limits to the first N diffs.")
 	ap.SupportsFlag(cli.CachedFlag, "c", "Show only the staged data changes.")
-	ap.SupportsFlag(SkinnyFlag, "sk", "Shows only primary key columns and any columns with data changes.")
-	ap.SupportsFlag(MergeBase, "", "Uses merge base of the first commit and second commit (or HEAD if not supplied) as the first commit")
-	ap.SupportsString(DiffMode, "", "diff mode", "Determines how to display modified rows with tabular output. Valid values are row, line, in-place, context. Defaults to context.")
+	ap.SupportsFlag(cli.SkinnyFlag, "sk", "Shows only primary key columns and any columns with data changes.")
+	ap.SupportsFlag(cli.MergeBase, "", "Uses merge base of the first commit and second commit (or HEAD if not supplied) as the first commit")
+	ap.SupportsString(cli.DiffMode, "", "diff mode", "Determines how to display modified rows with tabular output. Valid values are row, line, in-place, context. Defaults to context.")
 	return ap
 }
 
@@ -275,8 +275,8 @@ func getValueFromRefSpec(ctx context.Context, dEnv *env.DoltEnv, specRef string)
 }
 
 func (cmd ShowCmd) validateArgs(apr *argparser.ArgParseResults) errhand.VerboseError {
-	if apr.Contains(StatFlag) || apr.Contains(SummaryFlag) {
-		if apr.Contains(SchemaFlag) || apr.Contains(DataFlag) {
+	if apr.Contains(cli.StatFlag) || apr.Contains(cli.SummaryFlag) {
+		if apr.Contains(cli.SchemaFlag) || apr.Contains(cli.DataFlag) {
 			return errhand.BuildDError("invalid Arguments: --stat and --summary cannot be combined with --schema or --data").Build()
 		}
 	}

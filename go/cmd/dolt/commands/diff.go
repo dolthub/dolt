@@ -60,18 +60,6 @@ const (
 	TabularDiffOutput diffOutput = 1
 	SQLDiffOutput     diffOutput = 2
 	JsonDiffOutput    diffOutput = 3
-
-	DataFlag     = "data"
-	SchemaFlag   = "schema"
-	NameOnlyFlag = "name-only"
-	StatFlag     = "stat"
-	SummaryFlag  = "summary"
-	whereParam   = "where"
-	limitParam   = "limit"
-	SkinnyFlag   = "skinny"
-	MergeBase    = "merge-base"
-	DiffMode     = "diff-mode"
-	ReverseFlag  = "reverse"
 )
 
 var diffDocs = cli.CommandDocumentationContent{
@@ -107,12 +95,13 @@ The {{.EmphasisLeft}}--diff-mode{{.EmphasisRight}} argument controls how modifie
 }
 
 type diffDisplaySettings struct {
-	diffParts  diffPart
-	diffOutput diffOutput
-	diffMode   diff.Mode
-	limit      int
-	where      string
-	skinny     bool
+	diffParts   diffPart
+	diffOutput  diffOutput
+	diffMode    diff.Mode
+	limit       int
+	where       string
+	skinny      bool
+	includeCols []string
 }
 
 type diffDatasets struct {
@@ -164,23 +153,7 @@ func (cmd DiffCmd) Docs() *cli.CommandDocumentation {
 }
 
 func (cmd DiffCmd) ArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParserWithVariableArgs(cmd.Name())
-	ap.SupportsFlag(DataFlag, "d", "Show only the data changes, do not show the schema changes (Both shown by default).")
-	ap.SupportsFlag(SchemaFlag, "s", "Show only the schema changes, do not show the data changes (Both shown by default).")
-	ap.SupportsFlag(StatFlag, "", "Show stats of data changes")
-	ap.SupportsFlag(SummaryFlag, "", "Show summary of data and schema changes")
-	ap.SupportsString(FormatFlag, "r", "result output format", "How to format diff output. Valid values are tabular, sql, json. Defaults to tabular.")
-	ap.SupportsString(whereParam, "", "column", "filters columns based on values in the diff.  See {{.EmphasisLeft}}dolt diff --help{{.EmphasisRight}} for details.")
-	ap.SupportsInt(limitParam, "", "record_count", "limits to the first N diffs.")
-	ap.SupportsFlag(cli.StagedFlag, "", "Show only the staged data changes.")
-	ap.SupportsFlag(cli.CachedFlag, "c", "Synonym for --staged")
-	ap.SupportsFlag(SkinnyFlag, "sk", "Shows only primary key columns and any columns with data changes.")
-	ap.SupportsFlag(MergeBase, "", "Uses merge base of the first commit and second commit (or HEAD if not supplied) as the first commit")
-	ap.SupportsString(DiffMode, "", "diff mode", "Determines how to display modified rows with tabular output. Valid values are row, line, in-place, context. Defaults to context.")
-	ap.SupportsFlag(ReverseFlag, "R", "Reverses the direction of the diff.")
-	ap.SupportsFlag(NameOnlyFlag, "", "Only shows table names.")
-	ap.SupportsFlag(cli.SystemFlag, "", "Show system tables in addition to user tables")
-	return ap
+	return cli.CreateDiffArgParser(false)
 }
 
 func (cmd DiffCmd) RequiresRepo() bool {
@@ -228,14 +201,14 @@ func (cmd DiffCmd) Exec(ctx context.Context, commandStr string, args []string, _
 }
 
 func (cmd DiffCmd) validateArgs(apr *argparser.ArgParseResults) errhand.VerboseError {
-	if apr.Contains(StatFlag) || apr.Contains(SummaryFlag) {
-		if apr.Contains(SchemaFlag) || apr.Contains(DataFlag) {
+	if apr.Contains(cli.StatFlag) || apr.Contains(cli.SummaryFlag) {
+		if apr.Contains(cli.SchemaFlag) || apr.Contains(cli.DataFlag) {
 			return errhand.BuildDError("invalid Arguments: --stat and --summary cannot be combined with --schema or --data").Build()
 		}
 	}
 
-	if apr.Contains(NameOnlyFlag) {
-		if apr.Contains(SchemaFlag) || apr.Contains(DataFlag) || apr.Contains(StatFlag) || apr.Contains(SummaryFlag) {
+	if apr.Contains(cli.NameOnlyFlag) {
+		if apr.Contains(cli.SchemaFlag) || apr.Contains(cli.DataFlag) || apr.Contains(cli.StatFlag) || apr.Contains(cli.SummaryFlag) {
 			return errhand.BuildDError("invalid Arguments: --name-only cannot be combined with --schema, --data, --stat, or --summary").Build()
 		}
 	}
@@ -254,25 +227,29 @@ func parseDiffDisplaySettings(apr *argparser.ArgParseResults) *diffDisplaySettin
 	displaySettings := &diffDisplaySettings{}
 
 	displaySettings.diffParts = SchemaAndDataDiff
-	if apr.Contains(DataFlag) && !apr.Contains(SchemaFlag) {
+	if apr.Contains(cli.DataFlag) && !apr.Contains(cli.SchemaFlag) {
 		displaySettings.diffParts = DataOnlyDiff
-	} else if apr.Contains(SchemaFlag) && !apr.Contains(DataFlag) {
+	} else if apr.Contains(cli.SchemaFlag) && !apr.Contains(cli.DataFlag) {
 		displaySettings.diffParts = SchemaOnlyDiff
-	} else if apr.Contains(StatFlag) {
+	} else if apr.Contains(cli.StatFlag) {
 		displaySettings.diffParts = Stat
-	} else if apr.Contains(SummaryFlag) {
+	} else if apr.Contains(cli.SummaryFlag) {
 		displaySettings.diffParts = Summary
-	} else if apr.Contains(NameOnlyFlag) {
+	} else if apr.Contains(cli.NameOnlyFlag) {
 		displaySettings.diffParts = NameOnlyDiff
 	}
 
-	displaySettings.skinny = apr.Contains(SkinnyFlag)
+	displaySettings.skinny = apr.Contains(cli.SkinnyFlag)
+
+	if cols, ok := apr.GetValueList(cli.IncludeCols); ok {
+		displaySettings.includeCols = cols
+	}
 
 	f := apr.GetValueOrDefault(FormatFlag, "tabular")
 	switch strings.ToLower(f) {
 	case "tabular":
 		displaySettings.diffOutput = TabularDiffOutput
-		switch strings.ToLower(apr.GetValueOrDefault(DiffMode, "context")) {
+		switch strings.ToLower(apr.GetValueOrDefault(cli.DiffMode, "context")) {
 		case "row":
 			displaySettings.diffMode = diff.ModeRow
 		case "line":
@@ -288,8 +265,8 @@ func parseDiffDisplaySettings(apr *argparser.ArgParseResults) *diffDisplaySettin
 		displaySettings.diffOutput = JsonDiffOutput
 	}
 
-	displaySettings.limit, _ = apr.GetInt(limitParam)
-	displaySettings.where = apr.GetValueOrDefault(whereParam, "")
+	displaySettings.limit, _ = apr.GetInt(cli.LimitParam)
+	displaySettings.where = apr.GetValueOrDefault(cli.WhereParam, "")
 
 	return displaySettings
 }
@@ -301,12 +278,12 @@ func parseDiffArgs(queryist cli.Queryist, sqlCtx *sql.Context, apr *argparser.Ar
 
 	staged := apr.Contains(cli.StagedFlag) || apr.Contains(cli.CachedFlag)
 
-	tableNames, err := dArgs.applyDiffRoots(queryist, sqlCtx, apr.Args, staged, apr.Contains(MergeBase))
+	tableNames, err := dArgs.applyDiffRoots(queryist, sqlCtx, apr.Args, staged, apr.Contains(cli.MergeBase))
 	if err != nil {
 		return nil, err
 	}
 
-	if apr.Contains(ReverseFlag) {
+	if apr.Contains(cli.ReverseFlag) {
 		dArgs.diffDatasets = &diffDatasets{
 			fromRef: dArgs.toRef,
 			toRef:   dArgs.fromRef,
@@ -1556,7 +1533,9 @@ func diffRows(
 		if err != nil {
 			return errhand.BuildDError("Error running diff query:\n%s", interpolatedQuery).AddCause(err).Build()
 		}
-
+		for _, col := range dArgs.includeCols {
+			modifiedColNames[col] = true // ensure included columns are always present
+		}
 		// instantiate a new schema that only contains the columns with changes
 		var filteredUnionSch sql.Schema
 		for _, s := range unionSch {
