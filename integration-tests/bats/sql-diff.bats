@@ -945,6 +945,6 @@ SQL
     [ "$status" -eq 1 ]
 
     run dolt sql -q "SELECT * FROM dolt_diff('-sk', '--skinny', 'HEAD~1', 'HEAD', 'test')"
-    [[ "$output" =~ "multiple values provided for \`skinny" ]]
+    [[ "$output" =~ "multiple values provided for \`skinny" ]] || false
     [ "$status" -eq 1 ]
 }

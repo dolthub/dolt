@@ -122,7 +122,7 @@ func (dtf *DiffTableFunction) WithExpressions(expressions ...sql.Expression) (sq
 	// TODO: For now, we will only support literal / fully-resolved arguments to the
 	//       DiffTableFunction to avoid issues where the schema is needed in the analyzer
 	//       before the arguments could be resolved.
-	var literalArgs []string
+	var exprStrs []string
 	strToExpr := map[string]sql.Expression{}
 	for _, expr := range expressions {
 		if !expr.Resolved() {
@@ -133,14 +133,14 @@ func (dtf *DiffTableFunction) WithExpressions(expressions ...sql.Expression) (sq
 			return nil, ErrInvalidNonLiteralArgument.New(dtf.Name(), expr.String())
 		}
 		strVal := expr.String()
-		if lit, ok := expr.(*expression.Literal); ok { // we only support literals for parsing
+		if lit, ok := expr.(*expression.Literal); ok { // rm quotes from string literals
 			strVal = fmt.Sprintf("%v", lit.Value())
-			literalArgs = append(literalArgs, strVal)
 		}
+		exprStrs = append(exprStrs, strVal) // args extracted from apr later to filter out options
 		strToExpr[strVal] = expr
 	}
 
-	apr, err := cli.CreateDiffArgParser(true).Parse(literalArgs)
+	apr, err := cli.CreateDiffArgParser(true).Parse(exprStrs)
 	if err != nil {
 		return nil, err
 	}
