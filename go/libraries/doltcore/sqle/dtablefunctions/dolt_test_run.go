@@ -16,6 +16,7 @@ package dtablefunctions
 
 import (
 	"fmt"
+	"io"
 	"strings"
 
 	gms "github.com/dolthub/go-mysql-server"
@@ -191,7 +192,7 @@ func (trtf *TestsRunTableFunction) RowIter(_ *sql.Context, _ sql.Row) (sql.RowIt
 			return nil, err
 		}
 
-		for _, row := range *testRows {
+		for _, row := range testRows {
 			result, err := trtf.queryAndAssert(row)
 			if err != nil {
 				return nil, err
@@ -254,7 +255,7 @@ func (trtf *TestsRunTableFunction) queryAndAssert(row sql.Row) (result testResul
 	return result, nil
 }
 
-func (trtf *TestsRunTableFunction) getDoltTestsData(arg string) (*[]sql.Row, error) {
+func (trtf *TestsRunTableFunction) getDoltTestsData(arg string) ([]sql.Row, error) {
 	var queries []string
 
 	if arg == "*" {
@@ -280,12 +281,21 @@ func (trtf *TestsRunTableFunction) getDoltTestsData(arg string) (*[]sql.Row, err
 		if err != nil {
 			return nil, err
 		}
-		rows, err := sql.RowIterToRows(trtf.ctx, iter)
-		if err != nil {
-			return nil, err
+		// Calling iter.Close(ctx) will cause TrackedRowIter to cancel the context, causing problems when running with
+		// dolt sql-server. Since we only support `SELECT...` queries anyway, it's not necessary to Close() the iter.
+		var rows []sql.Row
+		for {
+			row, rErr := iter.Next(trtf.ctx)
+			if rErr == io.EOF {
+				break
+			}
+			if rErr != nil {
+				return nil, rErr
+			}
+			rows = append(rows, row)
 		}
 		if len(rows) > 0 {
-			return &rows, nil
+			return rows, nil
 		}
 	}
 	return nil, fmt.Errorf("could not find tests for argument: %s", arg)
