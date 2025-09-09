@@ -1,5 +1,6 @@
 #!/usr/bin/env bats
 load $BATS_TEST_DIRNAME/helper/common.bash
+load $BATS_TEST_DIRNAME/helper/sql-diff.bash
 
 setup() {
     setup_common
@@ -889,4 +890,61 @@ EOF
     run dolt diff --stat -r sql
     [ "$status" -eq 1 ]
     [[ "$output" =~ "invalid output format: sql. SQL format diffs only rendered for schema or data changes" ]] || false
+}
+
+@test "sql-diff: skinny flag comparison between CLI and SQL table function" {
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
+    dolt table import -u test `batshelper 1pk5col-ints.csv`
+    dolt add test
+    dolt commit -m "Added initial data"
+
+    compare_dolt_diff "HEAD~1" "HEAD" "test"
+    compare_dolt_diff "-sk" "HEAD~1" "HEAD" "test"
+    compare_dolt_diff "--skinny" "HEAD~1" "HEAD" "test"
+    compare_dolt_diff "HEAD~1" "HEAD" "-sk" "test"
+
+    dolt sql -q "UPDATE test SET c1=100, c3=300 WHERE pk=0"
+    dolt sql -q "UPDATE test SET c2=200 WHERE pk=1"
+    dolt add test
+    dolt commit -m "Updated some columns"
+
+    compare_dolt_diff "HEAD~1" "HEAD" "test"
+    compare_dolt_diff "--skinny" "HEAD~1" "HEAD" "test"
+    compare_dolt_diff "HEAD~1" "HEAD" "test" "--skinny"
+
+    dolt sql -q "ALTER TABLE test ADD COLUMN c6 BIGINT"
+    dolt sql -q "UPDATE test SET c6=600 WHERE pk=0"
+    dolt add test
+    dolt commit -m "Added new column and updated it"
+
+    compare_dolt_diff "HEAD~1" "HEAD" "test"
+    compare_dolt_diff "--skinny" "HEAD~1" "HEAD" "test"
+    compare_dolt_diff "--skinny" "--include-cols=c1,c2" "HEAD~1" "HEAD" "test"
+    compare_dolt_diff "--skinny" "HEAD~2" "HEAD" "test" "--include-cols" "c1" "c2"
+    compare_dolt_diff "--skinny" "--include-cols=c1,c2" "HEAD~2" "HEAD" "test"
+
+    dolt sql -q "DELETE FROM test WHERE pk=1"
+    dolt add test
+    dolt commit -m "Deleted a row"
+
+    compare_dolt_diff "HEAD~1" "HEAD" "test"
+    compare_dolt_diff "--skinny" "HEAD~1" "HEAD" "test"
+
+    run dolt sql -q "SELECT * FROM dolt_diff('-err', 'HEAD~1', 'HEAD', 'test')"
+    [[ "$output" =~ "unknown option \`err" ]] || false
+    [ "$status" -eq 1 ]
+
+    run dolt sql -q "SELECT * FROM dolt_diff('-sk', '--skinny', 'HEAD~1', 'HEAD', 'test')"
+    [[ "$output" =~ "multiple values provided for \`skinny" ]] || false
+    [ "$status" -eq 1 ]
 }
