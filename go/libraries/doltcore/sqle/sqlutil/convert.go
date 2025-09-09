@@ -178,3 +178,63 @@ func ToDoltCol(tag uint64, col *sql.Column) (schema.Column, error) {
 
 	return c, nil
 }
+
+// ToForeignKeyConstraint converts |fk| to a sql.ForeignKeyConstraint, using the name of the database
+// (|dbName|), as well as the schema from the parent and child tables in the FK relationship (|childSch|
+// and |parentSch|).
+func ToForeignKeyConstraint(fk doltdb.ForeignKey, dbName string, childSch, parentSch schema.Schema) (cst sql.ForeignKeyConstraint, err error) {
+	cst = sql.ForeignKeyConstraint{
+		Name:           fk.Name,
+		Database:       dbName,
+		SchemaName:     fk.TableName.Schema,
+		Table:          fk.TableName.Name,
+		Columns:        make([]string, len(fk.TableColumns)),
+		ParentDatabase: dbName,
+		ParentSchema:   fk.ReferencedTableName.Schema,
+		ParentTable:    fk.ReferencedTableName.Name,
+		ParentColumns:  make([]string, len(fk.ReferencedTableColumns)),
+		OnUpdate:       ToReferentialAction(fk.OnUpdate),
+		OnDelete:       ToReferentialAction(fk.OnDelete),
+		IsResolved:     fk.IsResolved(),
+	}
+
+	for i, tag := range fk.TableColumns {
+		c, ok := childSch.GetAllCols().GetByTag(tag)
+		if !ok {
+			return cst, fmt.Errorf("cannot find column for tag %d "+
+				"in table %s used in foreign key %s", tag, fk.TableName, fk.Name)
+		}
+		cst.Columns[i] = c.Name
+	}
+
+	for i, tag := range fk.ReferencedTableColumns {
+		c, ok := parentSch.GetAllCols().GetByTag(tag)
+		if !ok {
+			return cst, fmt.Errorf("cannot find column for tag %d "+
+				"in table %s used in foreign key %s", tag, fk.ReferencedTableName, fk.Name)
+		}
+		cst.ParentColumns[i] = c.Name
+	}
+
+	return cst, nil
+}
+
+// ToReferentialAction converts |opt| into a sql.ForeignKeyReferentialAction.
+func ToReferentialAction(opt doltdb.ForeignKeyReferentialAction) sql.ForeignKeyReferentialAction {
+	switch opt {
+	case doltdb.ForeignKeyReferentialAction_DefaultAction:
+		return sql.ForeignKeyReferentialAction_DefaultAction
+	case doltdb.ForeignKeyReferentialAction_Cascade:
+		return sql.ForeignKeyReferentialAction_Cascade
+	case doltdb.ForeignKeyReferentialAction_NoAction:
+		return sql.ForeignKeyReferentialAction_NoAction
+	case doltdb.ForeignKeyReferentialAction_Restrict:
+		return sql.ForeignKeyReferentialAction_Restrict
+	case doltdb.ForeignKeyReferentialAction_SetNull:
+		return sql.ForeignKeyReferentialAction_SetNull
+	case doltdb.ForeignKeyReferentialAction_SetDefault:
+		return sql.ForeignKeyReferentialAction_SetDefault
+	default:
+		panic(fmt.Sprintf("Unhandled foreign key referential action %v", opt))
+	}
+}

@@ -2734,6 +2734,161 @@ var BrokenHistorySystemTableScriptTests = []queries.ScriptTest{
 	},
 }
 
+var BranchesSystemTableTests = []queries.ScriptTest{
+	{
+		Name: "dolt_branches basic usage",
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT name, latest_committer, latest_commit_message FROM dolt_branches;",
+				Expected: []sql.Row{{"main", "root", "checkpoint enginetest database mydb"}},
+			},
+			{
+				Query:    "CALL dolt_branch('branch1');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "CALL dolt_commit('--allow-empty', '-m', 'empty commit');",
+				Expected: []sql.Row{{doltCommit}},
+			},
+			{
+				Query: "SELECT name, latest_committer, latest_commit_message FROM dolt_branches ORDER by name;",
+				Expected: []sql.Row{
+					{"branch1", "root", "checkpoint enginetest database mydb"},
+					{"main", "root", "empty commit"},
+				},
+			},
+		},
+	},
+	{
+		// https://github.com/dolthub/dolt/issues/9712
+		Name: "User-created FKs to dolt_branches system table",
+		SetUpScript: []string{
+			"CALL dolt_branch('branch1');",
+			"CREATE TABLE ext_branch_metadata(branch_name varchar(300) primary key, owner varchar(255), CONSTRAINT fk_branch_metadata_branch FOREIGN KEY (branch_name) REFERENCES dolt_branches(name));",
+			"INSERT INTO ext_branch_metadata VALUES ('branch1', 'Jason');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT * FROM ext_branch_metadata;",
+				Expected: []sql.Row{{"branch1", "Jason"}},
+			},
+			{
+				Query:       "INSERT INTO ext_branch_metadata VALUES ('not-a-branch', 'Foo');",
+				ExpectedErr: sql.ErrForeignKeyChildViolation,
+			},
+			{
+				Query:    "SELECT * FROM ext_branch_metadata;",
+				Expected: []sql.Row{{"branch1", "Jason"}},
+			},
+		},
+	},
+	{
+		Name: "indexes cannot be created on dolt_branches",
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "CREATE INDEX idx_dolt_branches_latest_committer ON dolt_branches(latest_commit_date);",
+				ExpectedErrStr: "the table is not indexable",
+			},
+		},
+	},
+	{
+		Name: "dolt_branches.name index",
+		SetUpScript: []string{
+			"CALL dolt_branch('branch1');",
+			"CALL dolt_branch('branch2');",
+			"CALL dolt_branch('branch3');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:           "SELECT name, latest_committer, latest_committer_email FROM dolt_branches where name = 'branch1';",
+				Expected:        []sql.Row{{"branch1", "root", "root@localhost"}},
+				ExpectedIndexes: []string{"dolt_branches_name_idx"},
+			},
+			{
+				Query: "SELECT name, latest_committer, latest_committer_email FROM dolt_branches where name > 'branch1';",
+				Expected: []sql.Row{
+					{"branch2", "root", "root@localhost"},
+					{"branch3", "root", "root@localhost"},
+					{"main", "root", "root@localhost"},
+				},
+				ExpectedIndexes: []string{"dolt_branches_name_idx"},
+			},
+			{
+				Query: "SELECT name, latest_committer, latest_committer_email FROM dolt_branches where name >= 'branch2';",
+				Expected: []sql.Row{
+					{"branch2", "root", "root@localhost"},
+					{"branch3", "root", "root@localhost"},
+					{"main", "root", "root@localhost"},
+				},
+				ExpectedIndexes: []string{"dolt_branches_name_idx"},
+			},
+			{
+				Query: "SELECT name, latest_committer, latest_committer_email FROM dolt_branches where name < 'branch2';",
+				Expected: []sql.Row{
+					{"branch1", "root", "root@localhost"},
+				},
+				ExpectedIndexes: []string{"dolt_branches_name_idx"},
+			},
+			{
+				Query: "SELECT name, latest_committer, latest_committer_email FROM dolt_branches where name <= 'branch2';",
+				Expected: []sql.Row{
+					{"branch1", "root", "root@localhost"},
+					{"branch2", "root", "root@localhost"},
+				},
+				ExpectedIndexes: []string{"dolt_branches_name_idx"},
+			},
+			{
+				Query: "SELECT name, latest_committer, latest_committer_email FROM dolt_branches where name <= 'branch3' and name > 'branch1';",
+				Expected: []sql.Row{
+					{"branch2", "root", "root@localhost"},
+					{"branch3", "root", "root@localhost"},
+				},
+				ExpectedIndexes: []string{"dolt_branches_name_idx"},
+			},
+			{
+				Query: "SELECT name, latest_committer, latest_committer_email FROM dolt_branches where name <= 'branch2' and name >= 'branch2';",
+				Expected: []sql.Row{
+					{"branch2", "root", "root@localhost"},
+				},
+				ExpectedIndexes: []string{"dolt_branches_name_idx"},
+			},
+			{
+				Query:           "SELECT name, latest_committer, latest_committer_email FROM dolt_branches where name < 'branch3' and name > 'branch2';",
+				Expected:        []sql.Row{},
+				ExpectedIndexes: []string{"dolt_branches_name_idx"},
+			},
+			{
+				Query: "SELECT name, latest_committer, latest_committer_email FROM dolt_branches where name > 'branch2';",
+				Expected: []sql.Row{
+					{"branch3", "root", "root@localhost"},
+					{"main", "root", "root@localhost"},
+				},
+				ExpectedIndexes: []string{"dolt_branches_name_idx"},
+			},
+			{
+				Query: "SELECT name, latest_committer, latest_committer_email FROM dolt_branches where name <= 'branch3' and name > 'branch1' and name > 'branch2';",
+				Expected: []sql.Row{
+					{"branch3", "root", "root@localhost"},
+				},
+				ExpectedIndexes: []string{"dolt_branches_name_idx"},
+			},
+			{
+				Query:           "SELECT name, latest_committer, latest_committer_email FROM dolt_branches where name <= 'branch1' and name > 'branch3';",
+				Expected:        []sql.Row{},
+				ExpectedIndexes: []string{"dolt_branches_name_idx"},
+			},
+			{
+				Query: "SELECT name, latest_committer, latest_committer_email FROM dolt_branches where name <= 'branch1' or name > 'branch3';",
+				Expected: []sql.Row{
+					{"branch1", "root", "root@localhost"},
+					{"main", "root", "root@localhost"},
+				},
+				ExpectedIndexes: []string{"dolt_branches_name_idx"},
+			},
+		},
+	},
+}
+
 var DoltCheckoutScripts = []queries.ScriptTest{
 	{
 		Name: "dolt_checkout changes working set",
