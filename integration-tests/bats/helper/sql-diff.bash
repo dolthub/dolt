@@ -113,12 +113,10 @@ compare_dolt_diff() {
     echo "$sql_output"
 
     if [ $cli_status -ne 0 ]; then
-        echo "CLI diff failed"
         _dbg "$cli_output"
         return 1
     fi
     if [ $sql_status -ne 0 ]; then
-        echo "SQL dolt_diff failed"
         _dbg "$sql_output"
         return 1
     fi

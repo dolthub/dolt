@@ -145,9 +145,11 @@ func (dtf *DiffTableFunction) WithExpressions(expressions ...sql.Expression) (sq
 		return nil, err
 	}
 
-	newDtf.showSkinny = newDtf.showSkinny || apr.Contains(cli.SkinnyFlag)
+	if apr.Contains(cli.SkinnyFlag) {
+		newDtf.showSkinny = true
+	}
 
-	if cols, ok := apr.GetValueList(cli.IncludeCols); newDtf.includeCols == nil && ok {
+	if cols, ok := apr.GetValueList(cli.IncludeCols); ok {
 		newDtf.includeCols = make(map[string]struct{})
 		for _, col := range cols {
 			newDtf.includeCols[col] = struct{}{}
