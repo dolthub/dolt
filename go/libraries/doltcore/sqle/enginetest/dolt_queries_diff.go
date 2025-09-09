@@ -16,10 +16,11 @@ package enginetest
 
 import (
 	"fmt"
+	"strings"
+
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/sql"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
-	"strings"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtablefunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
