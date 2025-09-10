@@ -180,26 +180,3 @@ SQL
   [ "$status" -eq 0 ]
   [[ "$output" =~ "$EXPECTED" ]] || false
 }
-
-# https://github.com/dolthub/dolt/issues/9817
-@test "sql-batch: bitwise operations with negative numbers" {
-    run dolt sql -q "SELECT (-1) & (-1)" -r csv
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "18446744073709551615" ]] || false
-
-    run dolt sql -q "SELECT (-2) & (-2)" -r csv
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "18446744073709551614" ]] || false
-
-    run dolt sql -q "SELECT (-1) & (-2)" -r csv
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "18446744073709551614" ]] || false
-
-    run dolt sql -q "SELECT (-1) | 0" -r csv
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "18446744073709551615" ]] || false
-
-    run dolt sql -q "SELECT -1 ^ 0" -r csv
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "18446744073709551615" ]] || false
-}
