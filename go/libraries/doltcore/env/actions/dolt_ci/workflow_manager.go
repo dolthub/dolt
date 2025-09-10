@@ -2101,6 +2101,8 @@ func (d *doltWorkflowManager) getWorkflowConfig(ctx *sql.Context, workflowName s
                 step := Step{
                     Name: newScalarDoubleQuotedYamlNode(stp.Name),
                 }
+                var groupNodes []yaml.Node
+                var testNodes []yaml.Node
                 if dtsID != nil {
                     groups, err := d.listDoltTestGroupsByDoltTestStepId(ctx, *dtsID)
                     if err != nil {
@@ -2110,20 +2112,17 @@ func (d *doltWorkflowManager) getWorkflowConfig(ctx *sql.Context, workflowName s
                     if err != nil {
                         return nil, err
                     }
-                    var groupNodes []yaml.Node
-                    var testNodes []yaml.Node
                     for _, g := range groups {
                         groupNodes = append(groupNodes, newScalarDoubleQuotedYamlNode(g))
                     }
                     for _, t := range tests {
                         testNodes = append(testNodes, newScalarDoubleQuotedYamlNode(t))
                     }
-                    if len(groupNodes) > 0 || len(testNodes) > 0 {
-                        step.DoltTest = &DoltTest{
-                            Groups: groupNodes,
-                            Tests:  testNodes,
-                        }
-                    }
+                }
+                // Ensure DoltTest pointer is always set for dolt_test steps, even with no selectors
+                step.DoltTest = &DoltTest{
+                    Groups: groupNodes,
+                    Tests:  testNodes,
                 }
                 steps = append(steps, step)
             }

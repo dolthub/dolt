@@ -654,6 +654,31 @@ EOF
     [[ "$output" =~ "Could not find saved query: invalid query" ]] || false
 }
 
+@test "ci: dolt_test step with no selectors fails and does not run tests" {
+    cat > workflow.yaml <<EOF
+name: dt_no_selectors
+on:
+  push: {}
+jobs:
+  - name: run dolt tests
+    steps:
+      - name: run none
+        dolt_test: {}
+EOF
+    dolt ci init
+    # Insert a failing test that should NOT be selected when no selectors are provided
+    dolt sql -q "INSERT INTO dolt_tests VALUES ('should-not-run', 'smoke', 'show tables;', 'expected_rows', '==', '1')"
+    dolt ci import ./workflow.yaml
+    run dolt ci run "dt_no_selectors"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Running workflow: dt_no_selectors" ]] || false
+    [[ "$output" =~ "Running job: run dolt tests" ]] || false
+    [[ "$output" =~ "Step: run none - FAIL" ]] || false
+    [[ "$output" =~ "has no tests or groups; use tests: ['*'] or groups: ['*'] to run all" ]] || false
+    # Ensure the specific test did not run
+    ! [[ "$output" =~ "should-not-run" ]] || false
+}
+
 @test "ci: dolt_test step runs wildcard and passes" {
     cat > workflow.yaml <<EOF
 name: dt_workflow
@@ -663,7 +688,8 @@ jobs:
   - name: run dolt tests
     steps:
       - name: run all tests
-        dolt_test: {}
+        dolt_test:
+          tests: ["*"]
 EOF
     dolt ci init
     # Insert a passing test: expect no user tables initially

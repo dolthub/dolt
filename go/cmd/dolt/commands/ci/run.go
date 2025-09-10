@@ -217,21 +217,27 @@ func assertQueries(rows []sql.Row, expectedRowsAndComparison string, expectedCol
 // runDoltTests constructs and executes a dolt_test_run() query for the provided step.
 // It returns a slice of failure descriptions (empty if all passed) or an error for execution failures.
 func runDoltTests(queryist cli.Queryist, sqlCtx *sql.Context, step dolt_ci.Step) ([]string, error) {
-    selectors := make([]string, 0)
+    // Collect explicit selectors; do not treat empty as wildcard
+    tests := make([]string, 0)
+    groups := make([]string, 0)
     if step.DoltTest != nil {
-        for _, t := range step.DoltTest.Tests {
-            if t.Value != "" {
-                selectors = append(selectors, t.Value)
-            }
-        }
-        for _, g := range step.DoltTest.Groups {
-            if g.Value != "" {
-                selectors = append(selectors, g.Value)
-            }
-        }
+        for _, t := range step.DoltTest.Tests { if t.Value != "" { tests = append(tests, t.Value) } }
+        for _, g := range step.DoltTest.Groups { if g.Value != "" { groups = append(groups, g.Value) } }
     }
-    if len(selectors) == 0 {
-        selectors = append(selectors, "*")
+
+    // Wildcard only if tests == ["*"] or groups == ["*"]
+    useWildcard := (len(tests) == 1 && tests[0] == "*") || (len(groups) == 1 && groups[0] == "*")
+
+    var selectors []string
+    if useWildcard {
+        selectors = []string{"*"}
+    } else {
+        if len(tests) == 0 && len(groups) == 0 {
+            return nil, fmt.Errorf("dolt_test step '%s' has no tests or groups; use tests: ['*'] or groups: ['*'] to run all", step.Name.Value)
+        }
+        // union
+        selectors = append(selectors, tests...)
+        selectors = append(selectors, groups...)
     }
 
     // Build: SELECT * FROM dolt_test_run('a', 'b', ...)
