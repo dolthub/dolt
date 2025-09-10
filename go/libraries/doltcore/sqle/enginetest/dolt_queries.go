@@ -6571,6 +6571,33 @@ var DoltAutoIncrementTests = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		// https://github.com/dolthub/dolt/issues/9817
+		Name:        "Bitwise operations with negative numbers",
+		SetUpScript: []string{},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT (-1) & (-1)",
+				Expected: []sql.Row{{uint64(18446744073709551615)}},
+			},
+			{
+				Query:    "SELECT (-2) & (-2)",
+				Expected: []sql.Row{{uint64(18446744073709551614)}},
+			},
+			{
+				Query:    "SELECT (-1) & (-2)",
+				Expected: []sql.Row{{uint64(18446744073709551614)}},
+			},
+			{
+				Query:    "SELECT (-1) | 0",
+				Expected: []sql.Row{{uint64(18446744073709551615)}},
+			},
+			{
+				Query:    "SELECT -1 ^ 0",
+				Expected: []sql.Row{{uint64(18446744073709551615)}},
+			},
+		},
+	},
 }
 
 var DoltCherryPickTests = []queries.ScriptTest{
@@ -8358,3 +8385,4 @@ end;
 		},
 	},
 }
+
