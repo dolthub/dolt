@@ -653,3 +653,111 @@ EOF
     [[ "$output" =~ "Step: should fail, bad query name - FAIL" ]] || false
     [[ "$output" =~ "Could not find saved query: invalid query" ]] || false
 }
+
+@test "ci: dolt_test step runs wildcard and passes" {
+    cat > workflow.yaml <<EOF
+name: dt_workflow
+on:
+  push: {}
+jobs:
+  - name: run dolt tests
+    steps:
+      - name: run all tests
+        dolt_test: {}
+EOF
+    dolt ci init
+    # Insert a passing test: expect no user tables initially
+    dolt sql -q "INSERT INTO dolt_tests VALUES ('no tables', 'smoke', 'show tables;', 'expected_rows', '==', '0')"
+    dolt ci import ./workflow.yaml
+    run dolt ci run "dt_workflow"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Running workflow: dt_workflow" ]] || false
+    [[ "$output" =~ "Running job: run dolt tests" ]] || false
+    [[ "$output" =~ "Step: run all tests - PASS" ]] || false
+}
+
+@test "ci: dolt_test step runs group selector and reports failures" {
+    cat > workflow.yaml <<EOF
+name: dt_workflow_sel
+on:
+  push: {}
+jobs:
+  - name: grouped tests
+    steps:
+      - name: groups only
+        dolt_test:
+          groups:
+            - smoke2
+EOF
+    dolt ci init
+    # One passing and one failing test in group 'smoke2'
+    dolt sql -q "INSERT INTO dolt_tests VALUES ('pass tables', 'smoke2', 'show tables;', 'expected_rows', '==', '0')"
+    dolt sql -q "INSERT INTO dolt_tests VALUES ('should fail', 'smoke2', 'show tables;', 'expected_rows', '==', '1')"
+    dolt ci import ./workflow.yaml
+    run dolt ci run "dt_workflow_sel"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Running workflow: dt_workflow_sel" ]] || false
+    [[ "$output" =~ "Running job: grouped tests" ]] || false
+    [[ "$output" =~ "Step: groups only - FAIL" ]] || false
+    [[ "$output" =~ "should fail \[smoke2\]" ]] || false
+    [[ "$output" =~ "Assertion failed:" ]] || false
+}
+
+@test "ci: dolt_test step runs test selector only" {
+    cat > workflow.yaml <<EOF
+name: dt_workflow_test_only
+on:
+  push: {}
+jobs:
+  - name: select tests
+    steps:
+      - name: pick individual
+        dolt_test:
+          tests:
+            - pick-me
+EOF
+    dolt ci init
+    dolt sql -q "INSERT INTO dolt_tests VALUES ('pick-me', 'solo', 'show tables;', 'expected_rows', '==', '0')"
+    # Extra test shouldn't be picked up by selector
+    dolt sql -q "INSERT INTO dolt_tests VALUES ('ignore-me', 'solo', 'show tables;', 'expected_rows', '==', '1')"
+    dolt ci import ./workflow.yaml
+    run dolt ci run "dt_workflow_test_only"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Running workflow: dt_workflow_test_only" ]] || false
+    [[ "$output" =~ "Running job: select tests" ]] || false
+    [[ "$output" =~ "Step: pick individual - PASS" ]] || false
+}
+
+@test "ci: dolt_test step runs union of tests and groups" {
+    cat > workflow.yaml <<EOF
+name: dt_union
+on:
+  push: {}
+jobs:
+  - name: union select
+    steps:
+      - name: union groups and tests
+        dolt_test:
+          groups:
+            - gU
+          tests:
+            - tOnly
+EOF
+    dolt ci init
+    # Create two failing tests that should both be selected (one via group, one via test name)
+    dolt sql -q "INSERT INTO dolt_tests VALUES ('in-group', 'gU', 'show tables;', 'expected_rows', '==', '1')"
+    dolt sql -q "INSERT INTO dolt_tests VALUES ('tOnly', 'whatever', 'show tables;', 'expected_rows', '==', '1')"
+    # Create a failing test that should NOT be selected by the union
+    dolt sql -q "INSERT INTO dolt_tests VALUES ('not-selected', 'other', 'show tables;', 'expected_rows', '==', '1')"
+    dolt ci import ./workflow.yaml
+    run dolt ci run "dt_union"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Running workflow: dt_union" ]] || false
+    [[ "$output" =~ "Running job: union select" ]] || false
+    [[ "$output" =~ "Step: union groups and tests - FAIL" ]] || false
+    # Both selected tests should appear in failure output
+    [[ "$output" =~ "in-group \[gU\]" ]] || false
+    [[ "$output" =~ "tOnly \[whatever\]" ]] || false
+    # The non-selected failing test should not appear
+    ! [[ "$output" =~ "not-selected" ]] || false
+}

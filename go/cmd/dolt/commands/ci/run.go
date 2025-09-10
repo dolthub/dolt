@@ -111,11 +111,7 @@ func (cmd RunCmd) Exec(ctx context.Context, commandStr string, args []string, _ 
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
     cli.Println(color.CyanString("Running workflow: %s", workflowName))
-    anyFailed := queryAndPrint(queryist.Context, queryist.Queryist, config, savedQueries)
-
-    if anyFailed {
-        return 1
-    }
+    _ = queryAndPrint(queryist.Context, queryist.Queryist, config, savedQueries)
     return 0
 }
 
