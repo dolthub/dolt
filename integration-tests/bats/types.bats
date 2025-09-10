@@ -1610,3 +1610,26 @@ SQL
     run dolt sql -q "select * from information_schema.COLUMNS where table_name = 'test' and column_name = 'v';" -r csv
     [[ "$output" =~ 'test,v,2,,YES,year,,,,,,,,year,"","","insert,references,select,update","","",' ]] || false
 }
+
+# https://github.com/dolthub/dolt/issues/9817
+@test "types: bitwise operations return uint64 with signed numbers" {
+  run dolt sql -q "SELECT (-1) & (-1)" -r csv
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "18446744073709551615" ]] || false
+
+  run dolt sql -q "SELECT (-2) & (-2)" -r csv
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "18446744073709551614" ]] || false
+
+  run dolt sql -q "SELECT (-1) & (-2)" -r csv
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "18446744073709551614" ]] || false
+
+  run dolt sql -q "SELECT (-1) | 0" -r csv
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "18446744073709551615" ]] || false
+
+  run dolt sql -q "SELECT -1 ^ 0" -r csv
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "18446744073709551615" ]] || false
+}
