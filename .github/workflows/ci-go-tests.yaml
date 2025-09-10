@@ -64,9 +64,8 @@ jobs:
           fi
           
           echo "Testing Package: ${file_arr[$i]}"
-          "$MSYS2_LOCATION"/msys2.exe -c 'go.exe test -c -vet=off -o gotest.exe '"${file_arr[$i]}"
-          ./gotest.exe -test.timeout 45m
-          rm gotest.exe
+          ls "$MSYS2_LOCATION"
+          "$MSYS2_LOCATION"/mingw64.exe -c 'go test -vet=off -timeout 45m '"${file_arr[$i]}"
           succeeded=$(echo "$?")
           if [ "$succeeded" -ne 0 ]; then
             echo "Testing failed in package ${file_arr[$i]}"
