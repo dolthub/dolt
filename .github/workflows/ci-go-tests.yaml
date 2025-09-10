@@ -55,10 +55,10 @@ jobs:
         file_arr=($files)
         IFS=$SAVEIFS
         set -x
-        ls "$MSYS2_LOCATION"/ucrt64/bin
-        ls "$MSYS2_LOCATION"/ucrt64/lib
+        ls $(cygpath -u "$MSYS2_LOCATION"/ucrt64/bin)
+        ls $(cygpath -u "$MSYS2_LOCATION"/ucrt64/lib)
         echo "$PATH"
-        export PATH="$MSYS2_LOCATION"/ucrt64/bin:"$PATH"
+        export PATH=$(cygpath -u "$MSYS2_LOCATION"/ucrt64/bin):"$PATH"
         
         for (( i=0; i<${#file_arr[@]}; i++ ))
         do
