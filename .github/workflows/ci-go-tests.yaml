@@ -45,50 +45,17 @@ jobs:
         path-type: inherit
         msystem: UCRT64
         pacboy: icu:p toolchain:p pkg-config:p
-    - name: Test All (Windows)
+    - name: Test All
       working-directory: ./go
-      if: ${{ matrix.os == 'windows-latest' }}
       run: |
         files=$(go list ./...)
         SAVEIFS=$IFS
         IFS=$'\n'
         file_arr=($files)
         IFS=$SAVEIFS
-        set -x
-        ls $(cygpath -u "$MSYS2_LOCATION"/ucrt64/bin)
-        ls $(cygpath -u "$MSYS2_LOCATION"/ucrt64/lib)
-        echo "$PATH"
-        export PATH=$(cygpath -u "$MSYS2_LOCATION"/ucrt64/bin):"$PATH"
-        
-        for (( i=0; i<${#file_arr[@]}; i++ ))
-        do
-          # Skip binlog tests as they run in a separate CI job
-          if [[ "${file_arr[$i]}" == *binlogreplication* ]]; then
-            echo "Skipping binlog package: ${file_arr[$i]} (runs in separate CI)"
-            continue
-          fi
-          
-          echo "Testing Package: ${file_arr[$i]}"
-          go test -vet=off -timeout 45m "${file_arr[$i]}"
-          succeeded=$(echo "$?")
-          if [ "$succeeded" -ne 0 ]; then
-            echo "Testing failed in package ${file_arr[$i]}"
-            exit 1;
-          fi
-        done
-      env:
-        MATRIX_OS: ${{ matrix.os }}
-        SYSTEMROOT: C:\Windows
-        MSYS2_LOCATION: ${{ steps.msys2.outputs.msys2-location }}
-    - name: Test All (*nix)
-      working-directory: ./go
-      if: ${{ matrix.os != 'windows-latest' }}
-      run: |
-        files=$(go list ./...)
-        SAVEIFS=$IFS
-        IFS=$'\n'
-        file_arr=($files)
-        IFS=$SAVEIFS
+        if [ "$MATRIX_OS" == 'windows-latest' ]; then
+          export PATH=$(cygpath -u "$MSYS2_LOCATION"/ucrt64/bin):"$PATH"
+        fi
         
         for (( i=0; i<${#file_arr[@]}; i++ ))
         do
@@ -117,6 +84,7 @@ jobs:
         done
       env:
         MATRIX_OS: ${{ matrix.os }}
+        MSYS2_LOCATION: ${{ steps.msys2.outputs.msys2-location }}
   noracetest:
     name: Go tests - no race
     defaults:
@@ -148,20 +116,14 @@ jobs:
         path-type: inherit
         msystem: UCRT64
         pacboy: icu:p toolchain:p pkg-config:p
-    - name: Test All (Windows)
+    - name: Test All
       working-directory: ./go
-      shell: msys2 {0}
-      if: ${{ matrix.os == 'windows-latest' }}
       run: |
-        go.exe test -vet=off -timeout 30m ./libraries/doltcore/sqle/integration_test
-      env:
-        MATRIX_OS: ${{ matrix.os }}
-        DOLT_TEST_RUN_NON_RACE_TESTS: "true"
-    - name: Test All (*nix)
-      working-directory: ./go
-      if: ${{ matrix.os != 'windows-latest' }}
-      run: |
+        if [ "$MATRIX_OS" == 'windows-latest' ]; then
+          export PATH=$(cygpath -u "$MSYS2_LOCATION"/ucrt64/bin):"$PATH"
+        fi
         go test -vet=off -timeout 30m ./libraries/doltcore/sqle/integration_test
       env:
         MATRIX_OS: ${{ matrix.os }}
         DOLT_TEST_RUN_NON_RACE_TESTS: "true"
+        MSYS2_LOCATION: ${{ steps.msys2.outputs.msys2-location }}
