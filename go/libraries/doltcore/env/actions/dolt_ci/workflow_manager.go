@@ -1563,6 +1563,56 @@ func (d *doltWorkflowManager) writeWorkflowSavedQueryStepExpectedRowColumnResult
 	return WorkflowSavedQueryExpectedRowColumnResultId(resultID), nil
 }
 
+// dolt_test step writers
+func (d *doltWorkflowManager) writeWorkflowDoltTestStepRow(ctx *sql.Context, stepID WorkflowStepId) (WorkflowDoltTestStepId, error) {
+    id := uuid.NewString()
+    query := fmt.Sprintf("insert into %s (`%s`, `%s`) values ('%s', '%s');",
+        doltdb.WorkflowDoltTestStepsTableName,
+        doltdb.WorkflowDoltTestStepsIdPkColName,
+        doltdb.WorkflowDoltTestStepsWorkflowStepIdFkColName,
+        id,
+        stepID,
+    )
+    if err := d.sqlWriteQuery(ctx, query); err != nil {
+        return "", err
+    }
+    return WorkflowDoltTestStepId(id), nil
+}
+
+func (d *doltWorkflowManager) writeWorkflowDoltTestStepGroupRow(ctx *sql.Context, doltTestStepID WorkflowDoltTestStepId, groupName string) (WorkflowDoltTestStepGroupId, error) {
+    id := uuid.NewString()
+    query := fmt.Sprintf("insert into %s (`%s`, `%s`, `%s`) values ('%s', '%s', '%s');",
+        doltdb.WorkflowDoltTestStepGroupsTableName,
+        doltdb.WorkflowDoltTestStepGroupsIdPkColName,
+        doltdb.WorkflowDoltTestStepGroupsWorkflowDoltTestStepIdFkColName,
+        doltdb.WorkflowDoltTestStepGroupsGroupNameColName,
+        id,
+        doltTestStepID,
+        groupName,
+    )
+    if err := d.sqlWriteQuery(ctx, query); err != nil {
+        return "", err
+    }
+    return WorkflowDoltTestStepGroupId(id), nil
+}
+
+func (d *doltWorkflowManager) writeWorkflowDoltTestStepTestRow(ctx *sql.Context, doltTestStepID WorkflowDoltTestStepId, testName string) (WorkflowDoltTestStepTestId, error) {
+    id := uuid.NewString()
+    query := fmt.Sprintf("insert into %s (`%s`, `%s`, `%s`) values ('%s', '%s', '%s');",
+        doltdb.WorkflowDoltTestStepTestsTableName,
+        doltdb.WorkflowDoltTestStepTestsIdPkColName,
+        doltdb.WorkflowDoltTestStepTestsWorkflowDoltTestStepIdFkColName,
+        doltdb.WorkflowDoltTestStepTestsTestNameColName,
+        id,
+        doltTestStepID,
+        testName,
+    )
+    if err := d.sqlWriteQuery(ctx, query); err != nil {
+        return "", err
+    }
+    return WorkflowDoltTestStepTestId(id), nil
+}
+
 func (d *doltWorkflowManager) toSavedQueryExpectedResultString(comparisonType WorkflowSavedQueryExpectedRowColumnComparisonType, count int64) (string, error) {
 	var compareStr string
 	switch comparisonType {
@@ -1695,22 +1745,46 @@ func (d *doltWorkflowManager) createWorkflow(ctx *sql.Context, config *WorkflowC
 			// insert into step
 			order := idx + 1
 
-			var stepType WorkflowStepType
-			if step.SavedQueryName.Value != "" {
-				stepType = WorkflowStepTypeSavedQuery
-			}
+                var stepType WorkflowStepType
+                if step.SavedQueryName.Value != "" {
+                    stepType = WorkflowStepTypeSavedQuery
+                } else if step.DoltTest != nil {
+                    stepType = WorkflowStepTypeDoltTest
+                }
 
 			stepID, err := d.writeWorkflowStepRow(ctx, jobID, step.Name.Value, order, stepType)
 			if err != nil {
 				return err
 			}
 
-			// insert into saved query steps
-			if stepType == WorkflowStepTypeSavedQuery {
+                // insert into saved query steps
+                if stepType == WorkflowStepTypeSavedQuery {
 				resultType := WorkflowSavedQueryExpectedResultsTypeUnspecified
 				if step.ExpectedColumns.Value != "" || step.ExpectedRows.Value != "" {
 					resultType = WorkflowSavedQueryExpectedResultsTypeRowColumnCount
-				}
+                } else if stepType == WorkflowStepTypeDoltTest {
+                    // create dolt_test step row
+                    doltTestStepID, err := d.writeWorkflowDoltTestStepRow(ctx, stepID)
+                    if err != nil {
+                        return err
+                    }
+                    // groups
+                    for _, g := range step.DoltTest.Groups {
+                        if g.Value != "" {
+                            if _, err := d.writeWorkflowDoltTestStepGroupRow(ctx, doltTestStepID, g.Value); err != nil {
+                                return err
+                            }
+                        }
+                    }
+                    // tests
+                    for _, t := range step.DoltTest.Tests {
+                        if t.Value != "" {
+                            if _, err := d.writeWorkflowDoltTestStepTestRow(ctx, doltTestStepID, t.Value); err != nil {
+                                return err
+                            }
+                        }
+                    }
+                }
 
 				savedQueryStepID, err := d.writeWorkflowSavedQueryStepRow(ctx, stepID, step.SavedQueryName.Value, resultType)
 				if err != nil {

@@ -122,13 +122,12 @@ func queryAndPrint(sqlCtx *sql.Context, queryist cli.Queryist, config *dolt_ci.W
 		for _, step := range job.Steps {
 			cli.Printf("Step: %s - ", step.Name.Value)
 
-			// We break up the query running and assertions into two steps.
-			// If either fails, we'll set error and let the user know that the step failed, then give an error message
-			query := savedQueries[step.SavedQueryName.Value]
-			rows, err := runCIQuery(queryist, sqlCtx, step, query)
-			if err == nil {
-				err = assertQueries(rows, step.ExpectedRows.Value, step.ExpectedColumns.Value, query)
-			}
+            // Saved query step
+            query := savedQueries[step.SavedQueryName.Value]
+            rows, err := runCIQuery(queryist, sqlCtx, step, query)
+            if err == nil {
+                err = assertQueries(rows, step.ExpectedRows.Value, step.ExpectedColumns.Value, query)
+            }
 
 			if err != nil {
 				cli.Println("FAIL")
