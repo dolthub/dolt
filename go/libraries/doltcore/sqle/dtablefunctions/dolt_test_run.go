@@ -224,6 +224,7 @@ func (trtf *TestsRunTableFunction) queryAndAssert(row sql.Row) (result testResul
 	if err != nil {
 		return
 	}
+
 	message, err := validateQuery(trtf.ctx, trtf.catalog, *query)
 	if err != nil && message == "" {
 		message = fmt.Sprintf("query error: %s", err.Error())
@@ -235,7 +236,7 @@ func (trtf *TestsRunTableFunction) queryAndAssert(row sql.Row) (result testResul
 		if err != nil {
 			message = fmt.Sprintf("Query error: %s", err.Error())
 		} else {
-			testPassed, message, err = actions.AssertData(trtf.ctx, *assertion, *comparison, value, &queryResult)
+			testPassed, message, err = actions.AssertData(trtf.ctx, *assertion, *comparison, value, queryResult)
 			if err != nil {
 				return testResult{}, err
 			}
