@@ -219,7 +219,7 @@ func (p *PatchTableFunction) IndexedAccess(ctx *sql.Context, lookup sql.IndexLoo
 
 func (p *PatchTableFunction) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 	return []sql.Index{
-		index.MockIndex(p.database.Name(), p.Name(), diffTypeColumnName, types.StringKind, false),
+		index.MockIndex(diffTypeColumnName, p.database.Name(), p.Name(), diffTypeColumnName, types.StringKind, false),
 	}, nil
 }
 

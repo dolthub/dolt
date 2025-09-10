@@ -68,6 +68,26 @@ type DoltIndex interface {
 	lookupTags(s *durableIndexState) map[uint64]int
 }
 
+func NewBranchNameIndex(i *doltIndex) *BranchNameIndex {
+	return &BranchNameIndex{doltIndex: i}
+}
+
+type BranchNameIndex struct {
+	*doltIndex
+}
+
+func (bni *BranchNameIndex) ExtendedExpressions() []string {
+	// The MockIndex used by the branch name virtual index doesn't set an index schema, so
+	// we can't use the implementation of ExtendedExpressions from doltIndex.
+	return bni.Expressions()
+}
+
+func (bni *BranchNameIndex) ExtendedColumnExpressionTypes() []sql.ColumnExpressionType {
+	// The MockIndex used by the branch name virtual index doesn't set an index schema, so
+	// we can't use the implementation of ExtendedColumnExpressionTypes from doltIndex.
+	return bni.ColumnExpressionTypes()
+}
+
 func NewCommitIndex(i *doltIndex) *CommitIndex {
 	return &CommitIndex{doltIndex: i}
 }
@@ -229,9 +249,9 @@ func DoltToFromCommitIndexes(tbl string, sch schema.Schema) (indexes []sql.Index
 
 // MockIndex returns a sql.Index that is not backed by an actual datastore. It's useful for system tables and
 // system table functions provide indexes but produce their rows at execution time based on the provided `IndexLookup`
-func MockIndex(dbName, tableName, columnName string, columnType types.NomsKind, unique bool) (index *doltIndex) {
+func MockIndex(indexId, dbName, tableName, columnName string, columnType types.NomsKind, unique bool) (index *doltIndex) {
 	return &doltIndex{
-		id:      columnName,
+		id:      indexId,
 		tblName: tableName,
 		dbName:  dbName,
 		columns: []schema.Column{
@@ -254,7 +274,7 @@ func DoltCommitIndexes(dbName, tab string, db *doltdb.DoltDB, unique bool) (inde
 	}
 
 	return []sql.Index{
-		NewCommitIndex(MockIndex(dbName, tab, CommitHashIndexId, types.StringKind, unique)),
+		NewCommitIndex(MockIndex(CommitHashIndexId, dbName, tab, CommitHashIndexId, types.StringKind, unique)),
 	}, nil
 }
 

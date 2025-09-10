@@ -1130,6 +1130,26 @@ func RunHistorySystemTableTestsPrepared(t *testing.T, harness DoltEnginetestHarn
 	}
 }
 
+func RunDoltBranchesSystemTableTests(t *testing.T, harness DoltEnginetestHarness) {
+	for _, test := range BranchesSystemTableTests {
+		harness = harness.NewHarness(t)
+		harness.Setup(setup.MydbData)
+		t.Run(test.Name, func(t *testing.T) {
+			enginetest.TestScript(t, harness, test)
+		})
+	}
+}
+
+func RunDoltBranchesSystemTableTestsPrepared(t *testing.T, harness DoltEnginetestHarness) {
+	for _, test := range BranchesSystemTableTests {
+		harness = harness.NewHarness(t)
+		harness.Setup(setup.MydbData)
+		t.Run(test.Name, func(t *testing.T) {
+			enginetest.TestScriptPrepared(t, harness, test)
+		})
+	}
+}
+
 func RunUnscopedDiffSystemTableTests(t *testing.T, h DoltEnginetestHarness) {
 	for _, test := range UnscopedDiffSystemTableScriptTests {
 		t.Run(test.Name, func(t *testing.T) {

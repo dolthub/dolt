@@ -1510,6 +1510,16 @@ func TestBrokenHistorySystemTablePrepared(t *testing.T) {
 	}
 }
 
+func TestDoltBranchesSystemTable(t *testing.T) {
+	h := newDoltEnginetestHarness(t)
+	RunDoltBranchesSystemTableTests(t, h)
+}
+
+func TestDoltBranchesSystemTablePrepared(t *testing.T) {
+	h := newDoltEnginetestHarness(t)
+	RunDoltBranchesSystemTableTestsPrepared(t, h)
+}
+
 func TestUnscopedDiffSystemTable(t *testing.T) {
 	h := newDoltEnginetestHarness(t)
 	RunUnscopedDiffSystemTableTests(t, h)
