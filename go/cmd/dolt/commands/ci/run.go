@@ -34,7 +34,7 @@ import (
 
 var runDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Run a Dolt CI workflow",
-	LongDesc:  "Run a Dolt CI workflow by executing all saved queries and validating their results",
+    LongDesc:  "Run a Dolt CI workflow by executing saved queries and dolt tests, validating their results",
 	Synopsis: []string{
 		"{{.LessThan}}workflow name{{.GreaterThan}}",
 	},

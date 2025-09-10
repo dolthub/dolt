@@ -1576,41 +1576,70 @@ func (d *doltWorkflowManager) updateExistingWorkflow(ctx *sql.Context, config *W
 		}
 	}
 
-	// create all jobs that do not yet exist
-	for _, job := range configJobs {
-		jobID, err := d.writeWorkflowJobRow(ctx, WorkflowName(config.Name.Value), job.Name.Value)
-		if err != nil {
-			return err
-		}
-		for idx, step := range job.Steps {
-			stepID, err := d.writeWorkflowStepRow(ctx, jobID, step.Name.Value, idx+1, WorkflowStepTypeSavedQuery)
-			if err != nil {
-				return err
-			}
+    // create all jobs that do not yet exist
+    for _, job := range configJobs {
+        jobID, err := d.writeWorkflowJobRow(ctx, WorkflowName(config.Name.Value), job.Name.Value)
+        if err != nil {
+            return err
+        }
+        for idx, step := range job.Steps {
+            // Determine step type
+            var stepType WorkflowStepType
+            if step.SavedQueryName.Value != "" {
+                stepType = WorkflowStepTypeSavedQuery
+            } else if step.DoltTest != nil {
+                stepType = WorkflowStepTypeDoltTest
+            }
 
-			savedQueryStepID, err := d.writeWorkflowSavedQueryStepRow(ctx, stepID, step.SavedQueryName.Value, WorkflowSavedQueryExpectedResultsTypeRowColumnCount)
-			if err != nil {
-				return err
-			}
+            stepID, err := d.writeWorkflowStepRow(ctx, jobID, step.Name.Value, idx+1, stepType)
+            if err != nil {
+                return err
+            }
 
-			expectedColumnComparisonType, expectedColumnCount, err := ParseSavedQueryExpectedResultString(step.ExpectedColumns.Value)
-			if err != nil {
-				return err
-			}
+            if stepType == WorkflowStepTypeSavedQuery {
+                // Saved query step details
+                resultType := WorkflowSavedQueryExpectedResultsTypeUnspecified
+                if step.ExpectedColumns.Value != "" || step.ExpectedRows.Value != "" {
+                    resultType = WorkflowSavedQueryExpectedResultsTypeRowColumnCount
+                }
+                savedQueryStepID, err := d.writeWorkflowSavedQueryStepRow(ctx, stepID, step.SavedQueryName.Value, resultType)
+                if err != nil {
+                    return err
+                }
+                if resultType == WorkflowSavedQueryExpectedResultsTypeRowColumnCount {
+                    expectedColumnComparisonType, expectedColumnCount, err := ParseSavedQueryExpectedResultString(step.ExpectedColumns.Value)
+                    if err != nil {
+                        return err
+                    }
+                    expectedRowComparisonType, expectedRowCount, err := ParseSavedQueryExpectedResultString(step.ExpectedRows.Value)
+                    if err != nil {
+                        return err
+                    }
+                    if _, err = d.writeWorkflowSavedQueryStepExpectedRowColumnResultRow(ctx, savedQueryStepID, expectedColumnComparisonType, expectedRowComparisonType, expectedColumnCount, expectedRowCount); err != nil {
+                        return err
+                    }
+                }
+            } else if stepType == WorkflowStepTypeDoltTest {
+                // Dolt test step details
+                dtsID, err := d.writeWorkflowDoltTestStepRow(ctx, stepID)
+                if err != nil {
+                    return err
+                }
+                for _, g := range step.DoltTest.Groups {
+                    if g.Value != "" {
+                        if _, err = d.writeWorkflowDoltTestStepGroupRow(ctx, dtsID, g.Value); err != nil { return err }
+                    }
+                }
+                for _, t := range step.DoltTest.Tests {
+                    if t.Value != "" {
+                        if _, err = d.writeWorkflowDoltTestStepTestRow(ctx, dtsID, t.Value); err != nil { return err }
+                    }
+                }
+            }
+        }
 
-			expectedRowComparisonType, expectedRowCount, err := ParseSavedQueryExpectedResultString(step.ExpectedRows.Value)
-			if err != nil {
-				return err
-			}
-
-			_, err = d.writeWorkflowSavedQueryStepExpectedRowColumnResultRow(ctx, savedQueryStepID, expectedColumnComparisonType, expectedRowComparisonType, expectedColumnCount, expectedRowCount)
-			if err != nil {
-				return err
-			}
-		}
-
-		delete(configJobs, job.Name.Value)
-	}
+        delete(configJobs, job.Name.Value)
+    }
 
 	return nil
 }

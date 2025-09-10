@@ -139,19 +139,22 @@ func updateConfigQueryStatements(config *dolt_ci.WorkflowConfig, savedQueries ma
 	for i, job := range config.Jobs {
 		for j := range job.Steps {
 			step := job.Steps[j]
-			if name := savedQueries[step.SavedQueryName.Value]; name != "" {
-				config.Jobs[i].Steps[j].SavedQueryStatement = yaml.Node{
-					Kind:  yaml.ScalarNode,
-					Style: yaml.DoubleQuotedStyle,
-					Value: name,
-				}
-			} else {
-				config.Jobs[i].Steps[j].SavedQueryStatement = yaml.Node{
-					Kind:  yaml.ScalarNode,
-					Style: yaml.DoubleQuotedStyle,
-					Value: "saved query not found",
-				}
-			}
+            // Only populate SavedQueryStatement for steps that specify a saved query.
+            if step.SavedQueryName.Value != "" {
+                if name := savedQueries[step.SavedQueryName.Value]; name != "" {
+                    config.Jobs[i].Steps[j].SavedQueryStatement = yaml.Node{
+                        Kind:  yaml.ScalarNode,
+                        Style: yaml.DoubleQuotedStyle,
+                        Value: name,
+                    }
+                } else {
+                    config.Jobs[i].Steps[j].SavedQueryStatement = yaml.Node{
+                        Kind:  yaml.ScalarNode,
+                        Style: yaml.DoubleQuotedStyle,
+                        Value: "saved query not found",
+                    }
+                }
+            }
 		}
 
 		if job.Name.Value == jobName {
