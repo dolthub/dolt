@@ -88,3 +88,19 @@ const (
 	UpperCaseAllFlag     = "ALL"
 	UserFlag             = "user"
 )
+
+// Flags used by `dolt diff` command and `dolt_diff()` table function.
+const (
+	SkinnyFlag   = "skinny"
+	IncludeCols  = "include-cols"
+	DataFlag     = "data"
+	SchemaFlag   = "schema"
+	NameOnlyFlag = "name-only"
+	SummaryFlag  = "summary"
+	WhereParam   = "where"
+	LimitParam   = "limit"
+	MergeBase    = "merge-base"
+	DiffMode     = "diff-mode"
+	ReverseFlag  = "reverse"
+	FormatFlag   = "result-format"
+)

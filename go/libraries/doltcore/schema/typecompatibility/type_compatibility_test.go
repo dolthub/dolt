@@ -367,7 +367,7 @@ func mustCreateType(sqlType sql.Type) typeinfo.TypeInfo {
 // extendedType is a no-op implementation of gmstypes.ExtendedType, used for testing type compatibility with extended types.
 type extendedType struct{}
 
-var _ gmstypes.ExtendedType = extendedType{}
+var _ sql.ExtendedType = extendedType{}
 
 func (e extendedType) CollationCoercibility(ctx *sql.Context) (collation sql.CollationID, coercibility byte) {
 	panic("unimplemented")
@@ -381,7 +381,7 @@ func (e extendedType) Convert(ctx context.Context, i interface{}) (interface{}, 
 	panic("unimplemented")
 }
 
-func (e extendedType) ConvertToType(ctx *sql.Context, typ gmstypes.ExtendedType, val any) (any, error) {
+func (e extendedType) ConvertToType(ctx *sql.Context, typ sql.ExtendedType, val any) (any, error) {
 	panic("unimplemented")
 }
 
@@ -433,6 +433,6 @@ func (e extendedType) FormatValue(val any) (string, error) {
 	panic("unimplemented")
 }
 
-func (e extendedType) MaxSerializedWidth() gmstypes.ExtendedTypeSerializedWidth {
+func (e extendedType) MaxSerializedWidth() sql.ExtendedTypeSerializedWidth {
 	panic("unimplemented")
 }

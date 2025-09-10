@@ -18,7 +18,6 @@ import (
 	"fmt"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/vt/proto/query"
 
 	"github.com/dolthub/dolt/go/gen/fb/serial"
@@ -26,11 +25,11 @@ import (
 
 // EncodingFromSqlType returns a serial.Encoding for a sql.Type.
 func EncodingFromSqlType(typ sql.Type) serial.Encoding {
-	if extendedType, ok := typ.(types.ExtendedType); ok {
+	if extendedType, ok := typ.(sql.ExtendedType); ok {
 		switch extendedType.MaxSerializedWidth() {
-		case types.ExtendedTypeSerializedWidth_64K:
+		case sql.ExtendedTypeSerializedWidth_64K:
 			return serial.EncodingExtended
-		case types.ExtendedTypeSerializedWidth_Unbounded:
+		case sql.ExtendedTypeSerializedWidth_Unbounded:
 			// Always uses adaptive encoding for extended types, regardless of the setting of UseAdaptiveEncoding below.
 			return serial.EncodingExtendedAdaptive
 		default:
@@ -112,6 +111,8 @@ func EncodingFromQueryType(typ query.Type) serial.Encoding {
 			return serial.EncodingStringAdaptive
 		}
 		return serial.EncodingStringAddr
+	case query.Type_VECTOR:
+		return serial.EncodingBytesAdaptive
 	default:
 		panic(fmt.Sprintf("unknown encoding %v", typ))
 	}

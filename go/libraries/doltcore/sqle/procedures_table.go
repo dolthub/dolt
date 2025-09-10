@@ -337,7 +337,7 @@ func DoltProceduresGetAll(ctx *sql.Context, db Database, procedureName string) (
 	if procedureName == "" {
 		lookup, err = sql.NewMySQLIndexBuilder(idx).IsNotNull(ctx, nameExpr).Build(ctx)
 	} else {
-		lookup, err = sql.NewMySQLIndexBuilder(idx).Equals(ctx, nameExpr, procedureName).Build(ctx)
+		lookup, err = sql.NewMySQLIndexBuilder(idx).Equals(ctx, nameExpr, gmstypes.Text, procedureName).Build(ctx)
 	}
 	if err != nil {
 		return nil, err
@@ -471,7 +471,9 @@ func DoltProceduresGetDetails(ctx *sql.Context, tbl *WritableDoltTable, name str
 		return sql.StoredProcedureDetails{}, false, fmt.Errorf("could not find primary key index on system table `%s`", doltdb.ProceduresTableName)
 	}
 
-	indexLookup, err := sql.NewMySQLIndexBuilder(fragNameIndex).Equals(ctx, fragNameIndex.Expressions()[0], name).Build(ctx)
+	indexLookup, err := sql.NewMySQLIndexBuilder(fragNameIndex).
+		Equals(ctx, fragNameIndex.Expressions()[0], gmstypes.Text, name).
+		Build(ctx)
 	if err != nil {
 		return sql.StoredProcedureDetails{}, false, err
 	}

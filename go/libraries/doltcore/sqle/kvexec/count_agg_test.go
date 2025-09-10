@@ -67,6 +67,7 @@ func TestCountAgg(t *testing.T) {
 			name: "reject multi parameter",
 			setup: []string{
 				"create table xy (x int primary key, y int, key y_idx(y))",
+				"SET SESSION sql_mode = REPLACE(@@SESSION.sql_mode, 'ONLY_FULL_GROUP_BY', '');",
 			},
 			query:     "select count(y), x from xy",
 			doRowexec: false,
@@ -84,7 +85,7 @@ func TestCountAgg(t *testing.T) {
 			setup: []string{
 				"create table xy (x int primary key, y int, key y_idx(y))",
 			},
-			query:     "select count(y+1), x from xy",
+			query:     "select count(y+1) from xy",
 			doRowexec: false,
 		},
 	}

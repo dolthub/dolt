@@ -476,7 +476,7 @@ func (si *schemaImpl) getKeyColumnsDescriptor(vs val.ValueStore, convertAddressC
 		var handler val.TupleTypeHandler
 
 		_, contentHashedField := contentHashedFields[tag]
-		extendedType, isExtendedType := sqlType.(gmstypes.ExtendedType)
+		extendedType, isExtendedType := sqlType.(sql.ExtendedType)
 
 		if isExtendedType {
 			encoding := EncodingFromSqlType(sqlType)
@@ -573,7 +573,7 @@ func (si *schemaImpl) GetValueDescriptor(vs val.ValueStore) val.TupleDesc {
 			collations = append(collations, sql.Collation_Unspecified)
 		}
 
-		if extendedType, ok := sqlType.(gmstypes.ExtendedType); ok {
+		if extendedType, ok := sqlType.(sql.ExtendedType); ok {
 			switch encoding {
 			case serial.EncodingExtendedAddr:
 				handlers = append(handlers, val.NewExtendedAddressTypeHandler(vs, extendedType))
