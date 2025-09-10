@@ -55,8 +55,9 @@ jobs:
         file_arr=($files)
         IFS=$SAVEIFS
         set -x
-        ls "$MSYS2_LOCATION"
-        "$MSYS2_LOCATION"/mingw64.exe -h
+        ls "$MSYS2_LOCATION"/ucrt64
+        ls "$MSYS2_LOCATION"/usr/bin
+        "$MSYS2_LOCATION"/ucrt64.exe --help
         
         for (( i=0; i<${#file_arr[@]}; i++ ))
         do
