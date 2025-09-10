@@ -252,6 +252,27 @@ func (d *doltWorkflowManager) deleteFromSavedQueryStepExpectedRowColumnResultsTa
 	return fmt.Sprintf("delete from %s where `%s` = '%s';", doltdb.WorkflowSavedQueryStepExpectedRowColumnResultsTableName, doltdb.WorkflowSavedQueryStepExpectedRowColumnResultsSavedQueryStepIdFkColName, savedQueryStepID)
 }
 
+// dolt_test delete helpers
+func (d *doltWorkflowManager) deleteFromDoltTestStepGroupsByNameQuery(dtsID, name string) string {
+    return fmt.Sprintf("delete from %s where `%s` = '%s' and `%s` = '%s';",
+        doltdb.WorkflowDoltTestStepGroupsTableName,
+        doltdb.WorkflowDoltTestStepGroupsWorkflowDoltTestStepIdFkColName,
+        dtsID,
+        doltdb.WorkflowDoltTestStepGroupsGroupNameColName,
+        name,
+    )
+}
+
+func (d *doltWorkflowManager) deleteFromDoltTestStepTestsByNameQuery(dtsID, name string) string {
+    return fmt.Sprintf("delete from %s where `%s` = '%s' and `%s` = '%s';",
+        doltdb.WorkflowDoltTestStepTestsTableName,
+        doltdb.WorkflowDoltTestStepTestsWorkflowDoltTestStepIdFkColName,
+        dtsID,
+        doltdb.WorkflowDoltTestStepTestsTestNameColName,
+        name,
+    )
+}
+
 func (d *doltWorkflowManager) newWorkflow(cvs columnValues) (*Workflow, error) {
 	wf := &Workflow{}
 
@@ -853,6 +874,62 @@ func (d *doltWorkflowManager) retrieveWorkflowEventTriggers(ctx *sql.Context, qu
 	return workflowEventTriggers, nil
 }
 
+// dolt_test retrieval helpers
+func (d *doltWorkflowManager) getDoltTestStepIdByWorkflowStepId(ctx *sql.Context, stepID WorkflowStepId) (*WorkflowDoltTestStepId, error) {
+    query := d.selectDoltTestStepByWorkflowStepIdQuery(string(stepID))
+    var foundId *WorkflowDoltTestStepId
+    cb := func(cbCtx *sql.Context, cvs columnValues) error {
+        for _, cv := range cvs {
+            if cv != nil && cv.ColumnName == doltdb.WorkflowDoltTestStepsIdPkColName {
+                id := WorkflowDoltTestStepId(cv.Value)
+                foundId = &id
+                break
+            }
+        }
+        return nil
+    }
+    if err := d.sqlReadQuery(ctx, query, cb); err != nil {
+        return nil, err
+    }
+    return foundId, nil
+}
+
+func (d *doltWorkflowManager) listDoltTestGroupsByDoltTestStepId(ctx *sql.Context, dtsID WorkflowDoltTestStepId) ([]string, error) {
+    query := d.selectDoltTestStepGroupsByDoltTestStepIdQuery(string(dtsID))
+    var groups []string
+    cb := func(cbCtx *sql.Context, cvs columnValues) error {
+        for _, cv := range cvs {
+            if cv != nil && cv.ColumnName == doltdb.WorkflowDoltTestStepGroupsGroupNameColName {
+                groups = append(groups, cv.Value)
+                break
+            }
+        }
+        return nil
+    }
+    if err := d.sqlReadQuery(ctx, query, cb); err != nil {
+        return nil, err
+    }
+    return groups, nil
+}
+
+func (d *doltWorkflowManager) listDoltTestTestsByDoltTestStepId(ctx *sql.Context, dtsID WorkflowDoltTestStepId) ([]string, error) {
+    query := d.selectDoltTestStepTestsByDoltTestStepIdQuery(string(dtsID))
+    var tests []string
+    cb := func(cbCtx *sql.Context, cvs columnValues) error {
+        for _, cv := range cvs {
+            if cv != nil && cv.ColumnName == doltdb.WorkflowDoltTestStepTestsTestNameColName {
+                tests = append(tests, cv.Value)
+                break
+            }
+        }
+        return nil
+    }
+    if err := d.sqlReadQuery(ctx, query, cb); err != nil {
+        return nil, err
+    }
+    return tests, nil
+}
+
 func (d *doltWorkflowManager) retrieveWorkflowEvents(ctx *sql.Context, query string) ([]*WorkflowEvent, error) {
 	workflowEvents := make([]*WorkflowEvent, 0)
 
@@ -1311,7 +1388,18 @@ func (d *doltWorkflowManager) updateExistingWorkflow(ctx *sql.Context, config *W
 						}
 					}
 
-					if configStep.SavedQueryName.Value != "" {
+                // If step types differ between existing and desired, delete and recreate later
+                desiredIsSaved := configStep.SavedQueryName.Value != ""
+                desiredIsDoltTest := configStep.DoltTest != nil
+                if (step.StepType == WorkflowStepTypeSavedQuery && desiredIsDoltTest) || (step.StepType == WorkflowStepTypeDoltTest && desiredIsSaved) {
+                    if err = d.deleteWorkflowStep(ctx, *step.Id); err != nil {
+                        return err
+                    }
+                    // keep configSteps entry so it will be created in the missing-steps pass
+                    continue
+                }
+
+                if desiredIsSaved {
 						savedQueryStep, err := d.getWorkflowSavedQueryStepByStepId(ctx, *step.Id)
 						if err != nil {
 							return err
@@ -1366,10 +1454,72 @@ func (d *doltWorkflowManager) updateExistingWorkflow(ctx *sql.Context, config *W
 									err = d.updateWorkflowSavedQueryStepsExpectedRowColumnResultsRow(ctx, *result.Id, newExpectedColumnComparisonType, newExpectedRowComparisonType, newExpectedColumnCount, newExpectedRowCount)
 									if err != nil {
 										return err
-									}
+                        }
 								}
-							}
+                    }
 						}
+                } else if desiredIsDoltTest {
+                    // Update dolt_test groups/tests by diff
+                    doltStepID, err := d.getDoltTestStepIdByWorkflowStepId(ctx, *step.Id)
+                    if err != nil {
+                        return err
+                    }
+                    // If missing dolt_test step record, create it
+                    if doltStepID == nil {
+                        id, err := d.writeWorkflowDoltTestStepRow(ctx, *step.Id)
+                        if err != nil {
+                            return err
+                        }
+                        doltStepID = &id
+                    }
+
+                    existingGroups, err := d.listDoltTestGroupsByDoltTestStepId(ctx, *doltStepID)
+                    if err != nil {
+                        return err
+                    }
+                    existingTests, err := d.listDoltTestTestsByDoltTestStepId(ctx, *doltStepID)
+                    if err != nil {
+                        return err
+                    }
+                    eg := map[string]struct{}{}
+                    et := map[string]struct{}{}
+                    for _, g := range existingGroups { eg[g] = struct{}{} }
+                    for _, t := range existingTests { et[t] = struct{}{} }
+
+                    // Build desired sets
+                    dg := map[string]struct{}{}
+                    dt := map[string]struct{}{}
+                    if configStep.DoltTest != nil {
+                        for _, g := range configStep.DoltTest.Groups { if g.Value != "" { dg[g.Value] = struct{}{} } }
+                        for _, t := range configStep.DoltTest.Tests { if t.Value != "" { dt[t.Value] = struct{}{} } }
+                    }
+
+                    // Delete groups not desired
+                    for g := range eg {
+                        if _, ok := dg[g]; !ok {
+                            if err = d.sqlWriteQuery(ctx, d.deleteFromDoltTestStepGroupsByNameQuery(string(*doltStepID), g)); err != nil { return err }
+                        }
+                    }
+                    // Add missing groups
+                    for g := range dg {
+                        if _, ok := eg[g]; !ok {
+                            if _, err = d.writeWorkflowDoltTestStepGroupRow(ctx, *doltStepID, g); err != nil { return err }
+                        }
+                    }
+
+                    // Delete tests not desired
+                    for t := range et {
+                        if _, ok := dt[t]; !ok {
+                            if err = d.sqlWriteQuery(ctx, d.deleteFromDoltTestStepTestsByNameQuery(string(*doltStepID), t)); err != nil { return err }
+                        }
+                    }
+                    // Add missing tests
+                    for t := range dt {
+                        if _, ok := et[t]; !ok {
+                            if _, err = d.writeWorkflowDoltTestStepTestRow(ctx, *doltStepID, t); err != nil { return err }
+                        }
+                    }
+                }
 					}
 
 					delete(configSteps, step.Name)
@@ -1377,41 +1527,50 @@ func (d *doltWorkflowManager) updateExistingWorkflow(ctx *sql.Context, config *W
 				}
 			}
 
-			for _, step := range configSteps {
-				orderIdx, ok := orderedSteps[step.Name.Value]
-				if !ok {
-					return errors.New("failed to get step order")
-				}
-
-				stepOrder := orderIdx + 1
-				stepID, err := d.writeWorkflowStepRow(ctx, *job.Id, step.Name.Value, stepOrder, WorkflowStepTypeSavedQuery)
-				if err != nil {
-					return err
-				}
-
-				savedQueryStepID, err := d.writeWorkflowSavedQueryStepRow(ctx, stepID, step.SavedQueryName.Value, WorkflowSavedQueryExpectedResultsTypeRowColumnCount)
-				if err != nil {
-					return err
-				}
-
-				expectedColumnComparisonType, expectedColumnCount, err := ParseSavedQueryExpectedResultString(step.ExpectedColumns.Value)
-				if err != nil {
-					return err
-				}
-
-				expectedRowComparisonType, expectedRowCount, err := ParseSavedQueryExpectedResultString(step.ExpectedRows.Value)
-				if err != nil {
-					return err
-				}
-
-				_, err = d.writeWorkflowSavedQueryStepExpectedRowColumnResultRow(ctx, savedQueryStepID, expectedColumnComparisonType, expectedRowComparisonType, expectedColumnCount, expectedRowCount)
-				if err != nil {
-					return err
-				}
-
-				delete(configSteps, step.Name.Value)
-				delete(orderedSteps, step.Name.Value)
-			}
+                // Create any remaining steps absent in the job
+                for name, cfgStep := range configSteps {
+                    orderIdx, ok := orderedSteps[name]
+                    if !ok {
+                        return errors.New("failed to get step order")
+                    }
+                    stepOrder := orderIdx + 1
+                    if cfgStep.SavedQueryName.Value != "" {
+                        // Saved query step creation
+                        stepID, err := d.writeWorkflowStepRow(ctx, *job.Id, cfgStep.Name.Value, stepOrder, WorkflowStepTypeSavedQuery)
+                        if err != nil { return err }
+                        resultType := WorkflowSavedQueryExpectedResultsTypeUnspecified
+                        if cfgStep.ExpectedColumns.Value != "" || cfgStep.ExpectedRows.Value != "" {
+                            resultType = WorkflowSavedQueryExpectedResultsTypeRowColumnCount
+                        }
+                        savedQueryStepID, err := d.writeWorkflowSavedQueryStepRow(ctx, stepID, cfgStep.SavedQueryName.Value, resultType)
+                        if err != nil { return err }
+                        if resultType == WorkflowSavedQueryExpectedResultsTypeRowColumnCount {
+                            ecct, ecc, err := ParseSavedQueryExpectedResultString(cfgStep.ExpectedColumns.Value)
+                            if err != nil { return err }
+                            erct, erc, err := ParseSavedQueryExpectedResultString(cfgStep.ExpectedRows.Value)
+                            if err != nil { return err }
+                            if _, err = d.writeWorkflowSavedQueryStepExpectedRowColumnResultRow(ctx, savedQueryStepID, ecct, erct, ecc, erc); err != nil { return err }
+                        }
+                    } else if cfgStep.DoltTest != nil {
+                        // Dolt test step creation
+                        stepID, err := d.writeWorkflowStepRow(ctx, *job.Id, cfgStep.Name.Value, stepOrder, WorkflowStepTypeDoltTest)
+                        if err != nil { return err }
+                        dtsID, err := d.writeWorkflowDoltTestStepRow(ctx, stepID)
+                        if err != nil { return err }
+                        for _, g := range cfgStep.DoltTest.Groups {
+                            if g.Value != "" {
+                                if _, err = d.writeWorkflowDoltTestStepGroupRow(ctx, dtsID, g.Value); err != nil { return err }
+                            }
+                        }
+                        for _, t := range cfgStep.DoltTest.Tests {
+                            if t.Value != "" {
+                                if _, err = d.writeWorkflowDoltTestStepTestRow(ctx, dtsID, t.Value); err != nil { return err }
+                            }
+                        }
+                    }
+                    delete(configSteps, name)
+                    delete(orderedSteps, name)
+                }
 
 			delete(configJobs, job.Name)
 		}
@@ -1782,58 +1941,54 @@ func (d *doltWorkflowManager) createWorkflow(ctx *sql.Context, config *WorkflowC
 				return err
 			}
 
-                // insert into saved query steps
-                if stepType == WorkflowStepTypeSavedQuery {
-				resultType := WorkflowSavedQueryExpectedResultsTypeUnspecified
-				if step.ExpectedColumns.Value != "" || step.ExpectedRows.Value != "" {
-					resultType = WorkflowSavedQueryExpectedResultsTypeRowColumnCount
-                } else if stepType == WorkflowStepTypeDoltTest {
-                    // create dolt_test step row
-                    doltTestStepID, err := d.writeWorkflowDoltTestStepRow(ctx, stepID)
-                    if err != nil {
-                        return err
-                    }
-                    // groups
-                    for _, g := range step.DoltTest.Groups {
-                        if g.Value != "" {
-                            if _, err := d.writeWorkflowDoltTestStepGroupRow(ctx, doltTestStepID, g.Value); err != nil {
-                                return err
-                            }
-                        }
-                    }
-                    // tests
-                    for _, t := range step.DoltTest.Tests {
-                        if t.Value != "" {
-                            if _, err := d.writeWorkflowDoltTestStepTestRow(ctx, doltTestStepID, t.Value); err != nil {
-                                return err
-                            }
-                        }
-                    }
-                }
-
-				savedQueryStepID, err := d.writeWorkflowSavedQueryStepRow(ctx, stepID, step.SavedQueryName.Value, resultType)
-				if err != nil {
-					return err
-				}
-
-				if resultType == WorkflowSavedQueryExpectedResultsTypeRowColumnCount {
-					// insert into expected results
-					expectedColumnComparisonType, expectedColumnCount, err := ParseSavedQueryExpectedResultString(step.ExpectedColumns.Value)
+		        // insert step details based on type
+		        if stepType == WorkflowStepTypeSavedQuery {
+					resultType := WorkflowSavedQueryExpectedResultsTypeUnspecified
+					if step.ExpectedColumns.Value != "" || step.ExpectedRows.Value != "" {
+						resultType = WorkflowSavedQueryExpectedResultsTypeRowColumnCount
+					}
+					savedQueryStepID, err := d.writeWorkflowSavedQueryStepRow(ctx, stepID, step.SavedQueryName.Value, resultType)
 					if err != nil {
 						return err
 					}
-
-					expectedRowComparisonType, expectedRowCount, err := ParseSavedQueryExpectedResultString(step.ExpectedRows.Value)
-					if err != nil {
-						return err
+					if resultType == WorkflowSavedQueryExpectedResultsTypeRowColumnCount {
+						// insert into expected results
+						expectedColumnComparisonType, expectedColumnCount, err := ParseSavedQueryExpectedResultString(step.ExpectedColumns.Value)
+						if err != nil {
+							return err
+						}
+						expectedRowComparisonType, expectedRowCount, err := ParseSavedQueryExpectedResultString(step.ExpectedRows.Value)
+						if err != nil {
+							return err
+						}
+						_, err = d.writeWorkflowSavedQueryStepExpectedRowColumnResultRow(ctx, savedQueryStepID, expectedColumnComparisonType, expectedRowComparisonType, expectedColumnCount, expectedRowCount)
+						if err != nil {
+							return err
+						}
 					}
-
-					_, err = d.writeWorkflowSavedQueryStepExpectedRowColumnResultRow(ctx, savedQueryStepID, expectedColumnComparisonType, expectedRowComparisonType, expectedColumnCount, expectedRowCount)
-					if err != nil {
-						return err
-					}
-				}
-			}
+		        } else if stepType == WorkflowStepTypeDoltTest {
+		            // create dolt_test step row
+		            doltTestStepID, err := d.writeWorkflowDoltTestStepRow(ctx, stepID)
+		            if err != nil {
+		                return err
+		            }
+		            // groups
+		            for _, g := range step.DoltTest.Groups {
+		                if g.Value != "" {
+		                    if _, err := d.writeWorkflowDoltTestStepGroupRow(ctx, doltTestStepID, g.Value); err != nil {
+		                        return err
+		                    }
+		                }
+		            }
+		            // tests
+		            for _, t := range step.DoltTest.Tests {
+		                if t.Value != "" {
+		                    if _, err := d.writeWorkflowDoltTestStepTestRow(ctx, doltTestStepID, t.Value); err != nil {
+		                        return err
+		                    }
+		                }
+		            }
+		        }
 		}
 	}
 	return nil
@@ -1929,8 +2084,8 @@ func (d *doltWorkflowManager) getWorkflowConfig(ctx *sql.Context, workflowName s
 			return stps[i].StepOrder < stps[j].StepOrder
 		})
 
-		for _, stp := range stps {
-			if stp.StepType == WorkflowStepTypeSavedQuery {
+        for _, stp := range stps {
+            if stp.StepType == WorkflowStepTypeSavedQuery {
 				savedQueryStep, err := d.getWorkflowSavedQueryStepByStepId(ctx, *stp.Id)
 				if err != nil {
 					return nil, err
@@ -1964,8 +2119,42 @@ func (d *doltWorkflowManager) getWorkflowConfig(ctx *sql.Context, workflowName s
 					}
 				}
 
-				steps = append(steps, step)
-			}
+                steps = append(steps, step)
+            } else if stp.StepType == WorkflowStepTypeDoltTest {
+                // read dolt_test step
+                dtsID, err := d.getDoltTestStepIdByWorkflowStepId(ctx, *stp.Id)
+                if err != nil {
+                    return nil, err
+                }
+                step := Step{
+                    Name: newScalarDoubleQuotedYamlNode(stp.Name),
+                }
+                if dtsID != nil {
+                    groups, err := d.listDoltTestGroupsByDoltTestStepId(ctx, *dtsID)
+                    if err != nil {
+                        return nil, err
+                    }
+                    tests, err := d.listDoltTestTestsByDoltTestStepId(ctx, *dtsID)
+                    if err != nil {
+                        return nil, err
+                    }
+                    var groupNodes []yaml.Node
+                    var testNodes []yaml.Node
+                    for _, g := range groups {
+                        groupNodes = append(groupNodes, newScalarDoubleQuotedYamlNode(g))
+                    }
+                    for _, t := range tests {
+                        testNodes = append(testNodes, newScalarDoubleQuotedYamlNode(t))
+                    }
+                    if len(groupNodes) > 0 || len(testNodes) > 0 {
+                        step.DoltTest = &DoltTest{
+                            Groups: groupNodes,
+                            Tests:  testNodes,
+                        }
+                    }
+                }
+                steps = append(steps, step)
+            }
 		}
 
 		job := Job{
