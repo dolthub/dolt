@@ -183,6 +183,31 @@ func (d *doltWorkflowManager) deleteFromWorkflowsTableByWorkflowNameQuery(workfl
 	return fmt.Sprintf("delete from %s where `%s` = '%s';", doltdb.WorkflowsTableName, doltdb.WorkflowsNameColName, workflowName)
 }
 
+// dolt_test step selects
+func (d *doltWorkflowManager) selectDoltTestStepByWorkflowStepIdQuery(stepID string) string {
+    return fmt.Sprintf("select * from %s where `%s` = '%s' limit 1;",
+        doltdb.WorkflowDoltTestStepsTableName,
+        doltdb.WorkflowDoltTestStepsWorkflowStepIdFkColName,
+        stepID,
+    )
+}
+
+func (d *doltWorkflowManager) selectDoltTestStepGroupsByDoltTestStepIdQuery(dtsID string) string {
+    return fmt.Sprintf("select * from %s where `%s` = '%s';",
+        doltdb.WorkflowDoltTestStepGroupsTableName,
+        doltdb.WorkflowDoltTestStepGroupsWorkflowDoltTestStepIdFkColName,
+        dtsID,
+    )
+}
+
+func (d *doltWorkflowManager) selectDoltTestStepTestsByDoltTestStepIdQuery(dtsID string) string {
+    return fmt.Sprintf("select * from %s where `%s` = '%s';",
+        doltdb.WorkflowDoltTestStepTestsTableName,
+        doltdb.WorkflowDoltTestStepTestsWorkflowDoltTestStepIdFkColName,
+        dtsID,
+    )
+}
+
 func (d *doltWorkflowManager) deleteFromWorkflowEventsTableByWorkflowNameQuery(workflowName string) string {
 	return fmt.Sprintf("delete from %s where `%s` = '%s';", doltdb.WorkflowEventsTableName, doltdb.WorkflowEventsWorkflowNameFkColName, workflowName)
 }
