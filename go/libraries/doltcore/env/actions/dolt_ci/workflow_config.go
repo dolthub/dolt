@@ -31,11 +31,18 @@ type Step struct {
 	SavedQueryStatement yaml.Node `yaml:"saved_query_statement"`
 	ExpectedColumns     yaml.Node `yaml:"expected_columns,omitempty"`
 	ExpectedRows        yaml.Node `yaml:"expected_rows,omitempty"`
+	DoltTest            *DoltTest `yaml:"dolt_test,omitempty"`
 }
 
 type Job struct {
 	Name  yaml.Node `yaml:"name"`
 	Steps []Step    `yaml:"steps"`
+}
+
+// DoltTest defines selectors for dolt_test_run
+type DoltTest struct {
+	Tests  []yaml.Node `yaml:"tests"`
+	Groups []yaml.Node `yaml:"groups"`
 }
 
 type Push struct {
@@ -163,8 +170,14 @@ func ValidateWorkflowConfig(workflow *WorkflowConfig) error {
 			} else {
 				steps[step.Name.Value] = true
 			}
-			if step.SavedQueryName.Value == "" {
-				return fmt.Errorf("invalid config: step %s is missing saved_query_name", step.Name.Value)
+
+			isSavedQuery := step.SavedQueryName.Value != ""
+			isDoltTest := step.DoltTest != nil
+			if !isSavedQuery && !isDoltTest {
+				return fmt.Errorf("invalid config: step %s must specify saved_query_name or dolt_test", step.Name.Value)
+			}
+			if isSavedQuery && isDoltTest {
+				return fmt.Errorf("invalid config: step %s cannot specify both saved_query_name and dolt_test", step.Name.Value)
 			}
 		}
 	}
