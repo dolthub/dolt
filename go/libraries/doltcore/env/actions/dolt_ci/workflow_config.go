@@ -96,6 +96,21 @@ func (s *Steps) UnmarshalYAML(value *yaml.Node) error {
             }
         }
 
+        if isSavedQuery && isDoltTest {
+            // Try to extract a name for a clearer error
+            var stepName string
+            for i := 0; i+1 < len(item.Content); i += 2 {
+                if item.Content[i].Value == "name" {
+                    stepName = item.Content[i+1].Value
+                    break
+                }
+            }
+            if stepName == "" {
+                return fmt.Errorf("invalid config: step defines both saved query fields and groups/tests")
+            }
+            return fmt.Errorf("invalid config: step '%s' defines both saved query fields and groups/tests", stepName)
+        }
+
         switch {
         case isSavedQuery:
             var sq SavedQueryStep
@@ -261,7 +276,7 @@ func ValidateWorkflowConfig(workflow *WorkflowConfig) error {
             }
             steps[stepName] = true
 
-            // Validate by concrete type
+            // Validate by concrete type (and ensure exactly one supported type)
             switch st := step.(type) {
             case *SavedQueryStep:
                 if st.SavedQueryName.Value == "" {
@@ -272,7 +287,7 @@ func ValidateWorkflowConfig(workflow *WorkflowConfig) error {
                     return fmt.Errorf("invalid config: dolt test step %s requires at least one group or test", stepName)
                 }
             default:
-                return fmt.Errorf("invalid config: unknown or unsupported step type for step: %s", stepName)
+                return fmt.Errorf("invalid config: unknown or unsupported step type for step: %s (must be exactly one of saved_query or dolt_test)", stepName)
             }
         }
 	}
