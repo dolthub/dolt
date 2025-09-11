@@ -143,7 +143,7 @@ create_default_database_from_env() {
     password=$(get_env_var "PASSWORD")
 
     if [ -n "$database" ]; then
-        mysql_note "Creating database ${database}"
+        mysql_note "Creating database '${database}'"
         local db_output
         if ! db_output=$(dolt sql -q "CREATE DATABASE IF NOT EXISTS \`$database\`;" 2>&1); then
             mysql_error "Failed to create database '$database'. Error: $db_output"
@@ -167,20 +167,22 @@ EOF
     fi
 
     if [ -n "$user" ]; then
-        mysql_note "Creating user ${user}"
-        if ! dolt sql -q "CREATE USER IF NOT EXISTS '$user'@'%' IDENTIFIED BY '$password';" 2>&1; then
+        # Use the same host as the root user for consistency
+        local user_host="${DOLT_ROOT_HOST:-localhost}"
+        mysql_note "Creating user '${user}'"
+        if ! dolt sql -q "CREATE USER IF NOT EXISTS '$user'@'$user_host' IDENTIFIED BY '$password';" >/dev/null 2>&1; then
             mysql_error "Failed to create user '$user'. Check if user already exists or if there are permission issues."
         fi
 
         # Grant basic server access
-        mysql_note "Granting server access to user ${user}"
-        if ! dolt sql -q "GRANT USAGE ON *.* TO '$user'@'%';" 2>&1; then
+        mysql_note "Granting server access to user '${user}'"
+        if ! dolt sql -q "GRANT USAGE ON *.* TO '$user'@'$user_host';" >/dev/null 2>&1; then
             mysql_error "Failed to grant server access to user '$user'"
         fi
 
         if [ -n "$database" ]; then
-            mysql_note "Giving user ${user} access to schema ${database}"
-            if ! dolt sql -q "GRANT ALL ON \`$database\`.* TO '$user'@'%';" 2>&1; then
+            mysql_note "Giving user '${user}' access to schema '${database}'"
+            if ! dolt sql -q "GRANT ALL ON \`$database\`.* TO '$user'@'$user_host';" >/dev/null 2>&1; then
                 mysql_error "Failed to grant permissions to user '$user' on database '$database'"
             fi
         fi
@@ -193,7 +195,7 @@ _main() {
 
     local dolt_version
     dolt_version=$(dolt version | grep 'dolt version' | cut -f3 -d " ")
-    mysql_note "Entrypoint script for Dolt Server $dolt_version starting."
+    mysql_note "Entrypoint script for Dolt Server $dolt_version starting..."
 
     declare -g CONFIG_PROVIDED
 
@@ -211,9 +213,6 @@ _main() {
     # TODO: add support for MYSQL_ROOT_HOST and MYSQL_ROOT_PASSWORD
     # Note: User creation will happen after server starts to avoid conflicts with default users
 
-    # If DOLT_DATABASE or MYSQL_DATABASE has been specified, create the database if it does not exist
-    create_default_database_from_env
-
     if [[ ! -f $INIT_COMPLETED ]]; then
         # run any file provided in /docker-entrypoint-initdb.d directory before the server starts
         if ls /docker-entrypoint-initdb.d/* >/dev/null 2>&1; then
@@ -222,34 +221,52 @@ _main() {
         touch $INIT_COMPLETED
     fi
 
-    # Start the server in the background to create users
-    mysql_note "Starting Dolt server in background for user creation"
-    dolt sql-server --host=0.0.0.0 --port=3306 "$@" &
+    # Start server in background for user setup
+    mysql_note "Starting Dolt server in background..."
+    dolt sql-server --host=0.0.0.0 --port=3306 "$@" > /tmp/server.log 2>&1 &
     local server_pid=$!
     
     # Wait for server to be ready
-    sleep 3
+    local max_attempts=30
+    local attempt=0
+    while [ $attempt -lt $max_attempts ]; do
+        if dolt sql -q "SELECT 1;" >/dev/null 2>&1; then
+            mysql_note "Server initialization complete!"
+            break
+        fi
+        sleep 1
+        attempt=$((attempt + 1))
+    done
+    
+    if [ $attempt -eq $max_attempts ]; then
+        mysql_error "Server failed to start within 30 seconds"
+    fi
     
     # Create root user with the specified host (defaults to localhost if not specified)
     local root_host="${DOLT_ROOT_HOST:-localhost}"
     mysql_note "Ensuring root@${root_host} superuser exists with password"
     
-    # Remove existing root users to avoid conflicts
-    mysql_note "Cleaning up existing root users"
-    dolt sql -q "DROP USER IF EXISTS 'root'@'localhost'; DROP USER IF EXISTS 'root'@'%';" 2>&1 || mysql_warn "Could not clean up existing root users"
+    # Ensure root user exists with correct password and permissions
+    mysql_note "Configuring root@${root_host} user"
+    dolt sql -q "CREATE USER IF NOT EXISTS 'root'@'${root_host}' IDENTIFIED BY '${DOLT_ROOT_PASSWORD}'; ALTER USER 'root'@'${root_host}' IDENTIFIED BY '${DOLT_ROOT_PASSWORD}'; GRANT ALL ON *.* TO 'root'@'${root_host}' WITH GRANT OPTION;" >/dev/null 2>&1 || mysql_error "Failed to configure root@${root_host} user. Check logs for details."
     
-    # Create the new root user
-    dolt sql -q "CREATE USER 'root'@'${root_host}' IDENTIFIED BY '${DOLT_ROOT_PASSWORD}'; GRANT ALL ON *.* TO 'root'@'${root_host}' WITH GRANT OPTION;" 2>&1 || mysql_error "Failed to create root@${root_host} user. Check logs for details."
+    # If DOLT_DATABASE or MYSQL_DATABASE has been specified, create the database if it does not exist
+    create_default_database_from_env
     
     # Show what users exist for debugging
     mysql_note "Current users in the system:"
-    dolt sql -q "SELECT User, Host FROM mysql.user;" 2>&1 || mysql_warn "Could not list users"
+    dolt sql -q "SELECT User, Host FROM mysql.user;" 2>&1 | grep -v "^$" || mysql_warn "Could not list users"
     
-    # Stop the background server
+    # This contains the server "ready for connections" message which tests use to detect server is ready
+    # We only show the logs at this stage since the users are available now for testing
+    mysql_note "Reattaching to server process..."
+    cat /tmp/server.log
+
+    # Kill the background process and restart in foreground to show live output
     kill $server_pid 2>/dev/null || true
     wait $server_pid 2>/dev/null || true
-
-    # switch this process over to executing dolt sql-server
+    
+    # Start server in foreground to show live output
     exec dolt sql-server --host=0.0.0.0 --port=3306 "$@"
 }
 
