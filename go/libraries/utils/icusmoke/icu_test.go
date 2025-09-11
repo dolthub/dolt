@@ -1,4 +1,4 @@
-// Copyright 2024 Dolthub, Inc.
+// Copyright 2025 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,8 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package doltversion
+package icu
 
-const (
-	Version = "1.59.7"
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
+
+func TestICUSmokeTest(t *testing.T) {
+	var str UCharStr
+	str.SetString("abc")
+	var err UErrorCode
+	re := Uregex_open(&str, 0, &err)
+	assert.NotNil(t, re)
+	assert.Equal(t, UErrorCode(0), err)
+}
