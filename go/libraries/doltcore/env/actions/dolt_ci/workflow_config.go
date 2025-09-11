@@ -52,6 +52,19 @@ var _ Step = (*SavedQueryStep)(nil)
 // GetName implements Step.
 func (s *SavedQueryStep) GetName() string { return s.Name.Value }
 
+// DoltTestStep represents a step that runs Dolt tests, either by groups or by
+// explicit test names. At least one of groups or tests must be provided.
+type DoltTestStep struct {
+    Name       yaml.Node   `yaml:"name"`
+    TestGroups []yaml.Node `yaml:"groups,omitempty"`
+    Tests      []yaml.Node `yaml:"tests,omitempty"`
+}
+
+var _ Step = (*DoltTestStep)(nil)
+
+// GetName implements Step.
+func (s *DoltTestStep) GetName() string { return s.Name.Value }
+
 // UnmarshalYAML implements yaml.Unmarshaler for Steps. It inspects each item in the
 // sequence and constructs the appropriate concrete Step type.
 func (s *Steps) UnmarshalYAML(value *yaml.Node) error {
@@ -72,11 +85,14 @@ func (s *Steps) UnmarshalYAML(value *yaml.Node) error {
 
         // Discover the concrete step type by inspecting keys
         isSavedQuery := false
+        isDoltTest := false
         for i := 0; i+1 < len(item.Content); i += 2 {
             key := item.Content[i]
             switch key.Value {
             case "saved_query_name", "saved_query_statement", "expected_rows", "expected_columns":
                 isSavedQuery = true
+            case "groups", "tests":
+                isDoltTest = true
             }
         }
 
@@ -87,8 +103,14 @@ func (s *Steps) UnmarshalYAML(value *yaml.Node) error {
                 return err
             }
             result = append(result, &sq)
+        case isDoltTest:
+            var dt DoltTestStep
+            if err := item.Decode(&dt); err != nil {
+                return err
+            }
+            result = append(result, &dt)
         default:
-            return fmt.Errorf("unknown step type; keys must include saved_query_* or a supported discriminator")
+            return fmt.Errorf("unknown step type; keys must include saved_query_* or groups/tests")
         }
     }
 
@@ -244,6 +266,10 @@ func ValidateWorkflowConfig(workflow *WorkflowConfig) error {
             case *SavedQueryStep:
                 if st.SavedQueryName.Value == "" {
                     return fmt.Errorf("invalid config: step %s is missing saved_query_name", stepName)
+                }
+            case *DoltTestStep:
+                if len(st.TestGroups) == 0 && len(st.Tests) == 0 {
+                    return fmt.Errorf("invalid config: dolt test step %s requires at least one group or test", stepName)
                 }
             default:
                 return fmt.Errorf("invalid config: unknown or unsupported step type for step: %s", stepName)
