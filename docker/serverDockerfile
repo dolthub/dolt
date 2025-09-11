@@ -7,20 +7,27 @@ RUN apt update -y && \
     apt install -y \
         curl \
         tini \
-        ca-certificates && \
+        ca-certificates \
+        mysql-client && \
     apt clean && \
     rm -rf /var/lib/apt/lists/*
 
 # we install dolt with the install.sh script, which will determine the platform/arch of the container
 # and install the proper dolt binary
-RUN bash -c 'curl -L https://github.com/dolthub/dolt/releases/download/v${DOLT_VERSION}/install.sh | bash'
+# Handle "latest" by fetching the actual latest version
+RUN if [ "$DOLT_VERSION" = "latest" ]; then \
+        DOLT_VERSION=$(curl -s https://api.github.com/repos/dolthub/dolt/releases/latest | grep '"tag_name"' | cut -d'"' -f4 | sed 's/^v//'); \
+    fi && \
+    curl -L https://github.com/dolthub/dolt/releases/download/v${DOLT_VERSION}/install.sh | bash
 RUN /usr/local/bin/dolt version
 
 RUN mkdir /docker-entrypoint-initdb.d
+RUN mkdir -p /var/lib/dolt
 VOLUME /var/lib/dolt
 
 COPY docker/docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+RUN chmod 755 /var/lib/dolt
 
 EXPOSE 3306 33060
 WORKDIR /var/lib/dolt
