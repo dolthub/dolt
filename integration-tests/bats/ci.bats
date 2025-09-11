@@ -431,6 +431,67 @@ EOF
     [[ ${output} == *"steps:"* ]] || false
 }
 
+@test "ci: export includes DoltTest steps (groups and tests)" {
+    cat > workflow.yaml <<EOF
+name: wf_export_dolt_test
+on:
+  push: {}
+jobs:
+  - name: run tests
+    steps:
+      - name: run all group a
+        dolt_test_groups:
+          - group_a
+      - name: run tests t1 and t2
+        dolt_test_tests:
+          - t1
+          - t2
+EOF
+
+    dolt ci init
+    dolt ci import ./workflow.yaml
+
+    run dolt ci export "wf_export_dolt_test"
+    [ "$status" -eq 0 ]
+    run cat wf_export_dolt_test.yaml
+    [ "$status" -eq 0 ]
+    # Ensure the YAML contains the DoltTest steps and fields
+    [[ "$output" =~ "name: \"wf_export_dolt_test\"" ]] || false
+    [[ "$output" =~ "dolt_test_groups:" ]] || false
+    [[ "$output" =~ "- \"group_a\"" ]] || false
+    [[ "$output" =~ "dolt_test_tests:" ]] || false
+    [[ "$output" =~ "- \"t1\"" ]] || false
+    [[ "$output" =~ "- \"t2\"" ]] || false
+}
+
+@test "ci: export includes mixed SavedQuery and DoltTest steps" {
+    cat > workflow.yaml <<EOF
+name: wf_export_mixed
+on:
+  push: {}
+jobs:
+  - name: validate and test
+    steps:
+      - name: ensure tables listed
+        saved_query_name: get tables
+      - name: run group b
+        dolt_test_groups:
+          - group_b
+EOF
+
+    dolt ci init
+    dolt ci import ./workflow.yaml
+
+    run dolt ci export "wf_export_mixed"
+    [ "$status" -eq 0 ]
+    run cat wf_export_mixed.yaml
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "name: \"wf_export_mixed\"" ]] || false
+    [[ "$output" =~ "saved_query_name: \"get tables\"" ]] || false
+    [[ "$output" =~ "dolt_test_groups:" ]] || false
+    [[ "$output" =~ "- \"group_b\"" ]] || false
+}
+
 @test "ci: export errors on invalid workflow" {
     dolt ci init
     run dolt ci export invalid
