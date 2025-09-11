@@ -1920,12 +1920,22 @@ func (d *doltWorkflowManager) createWorkflow(ctx *sql.Context, config *WorkflowC
 				return err
 			}
 
-            // insert into saved query steps
+            // insert into saved query or dolt test sub-tables
             if stepType == WorkflowStepTypeSavedQuery {
                 sq := step.(*SavedQueryStep)
-				resultType := WorkflowSavedQueryExpectedResultsTypeUnspecified
+                resultType := WorkflowSavedQueryExpectedResultsTypeUnspecified
                 if sq.ExpectedColumns.Value != "" || sq.ExpectedRows.Value != "" {
-					resultType = WorkflowSavedQueryExpectedResultsTypeRowColumnCount
+                    resultType = WorkflowSavedQueryExpectedResultsTypeRowColumnCount
+                }
+                savedQueryStepID, err := d.writeWorkflowSavedQueryStepRow(ctx, stepID, sq.SavedQueryName.Value, resultType)
+                if err != nil { return err }
+                if resultType == WorkflowSavedQueryExpectedResultsTypeRowColumnCount {
+                    expectedColumnComparisonType, expectedColumnCount, err := ParseSavedQueryExpectedResultString(sq.ExpectedColumns.Value)
+                    if err != nil { return err }
+                    expectedRowComparisonType, expectedRowCount, err := ParseSavedQueryExpectedResultString(sq.ExpectedRows.Value)
+                    if err != nil { return err }
+                    if _, err := d.writeWorkflowSavedQueryStepExpectedRowColumnResultRow(ctx, savedQueryStepID, expectedColumnComparisonType, expectedRowComparisonType, expectedColumnCount, expectedRowCount); err != nil { return err }
+                }
             } else if stepType == WorkflowStepTypeDoltTest {
                 dt := step.(*DoltTestStep)
                 dtID, err := d.writeWorkflowDoltTestStepRow(ctx, stepID)
@@ -1933,30 +1943,6 @@ func (d *doltWorkflowManager) createWorkflow(ctx *sql.Context, config *WorkflowC
                 for _, g := range dt.TestGroups { if _, err := d.writeWorkflowDoltTestStepGroupRow(ctx, dtID, g.Value); err != nil { return err } }
                 for _, t := range dt.Tests { if _, err := d.writeWorkflowDoltTestStepTestRow(ctx, dtID, t.Value); err != nil { return err } }
             }
-
-                savedQueryStepID, err := d.writeWorkflowSavedQueryStepRow(ctx, stepID, sq.SavedQueryName.Value, resultType)
-				if err != nil {
-					return err
-				}
-
-				if resultType == WorkflowSavedQueryExpectedResultsTypeRowColumnCount {
-					// insert into expected results
-                    expectedColumnComparisonType, expectedColumnCount, err := ParseSavedQueryExpectedResultString(sq.ExpectedColumns.Value)
-					if err != nil {
-						return err
-					}
-
-                    expectedRowComparisonType, expectedRowCount, err := ParseSavedQueryExpectedResultString(sq.ExpectedRows.Value)
-					if err != nil {
-						return err
-					}
-
-					_, err = d.writeWorkflowSavedQueryStepExpectedRowColumnResultRow(ctx, savedQueryStepID, expectedColumnComparisonType, expectedRowComparisonType, expectedColumnCount, expectedRowCount)
-					if err != nil {
-						return err
-					}
-				}
-			}
 		}
 	}
 	return nil
