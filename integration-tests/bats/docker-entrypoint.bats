@@ -6,7 +6,7 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 # docker/serverDockerfile in the repo root. They follow existing integration test conventions.
 
 setup() {
-#  skiponwindows
+  skiponwindows
   
   setup_no_dolt_init
   
