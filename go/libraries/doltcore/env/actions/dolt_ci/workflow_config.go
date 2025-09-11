@@ -56,8 +56,8 @@ func (s *SavedQueryStep) GetName() string { return s.Name.Value }
 // explicit test names. At least one of groups or tests must be provided.
 type DoltTestStep struct {
     Name       yaml.Node   `yaml:"name"`
-    TestGroups []yaml.Node `yaml:"groups,omitempty"`
-    Tests      []yaml.Node `yaml:"tests,omitempty"`
+    TestGroups []yaml.Node `yaml:"dolt_test_groups,omitempty"`
+    Tests      []yaml.Node `yaml:"dolt_test_tests,omitempty"`
 }
 
 var _ Step = (*DoltTestStep)(nil)
@@ -91,7 +91,7 @@ func (s *Steps) UnmarshalYAML(value *yaml.Node) error {
             switch key.Value {
             case "saved_query_name", "saved_query_statement", "expected_rows", "expected_columns":
                 isSavedQuery = true
-            case "groups", "tests":
+            case "dolt_test_groups", "dolt_test_tests":
                 isDoltTest = true
             }
         }
@@ -106,9 +106,9 @@ func (s *Steps) UnmarshalYAML(value *yaml.Node) error {
                 }
             }
             if stepName == "" {
-                return fmt.Errorf("invalid config: step defines both saved query fields and groups/tests")
+                return fmt.Errorf("invalid config: step defines both saved_query_* fields and dolt_test_* fields")
             }
-            return fmt.Errorf("invalid config: step '%s' defines both saved query fields and groups/tests", stepName)
+            return fmt.Errorf("invalid config: step '%s' defines both saved_query_* fields and dolt_test_* fields", stepName)
         }
 
         switch {
@@ -125,7 +125,7 @@ func (s *Steps) UnmarshalYAML(value *yaml.Node) error {
             }
             result = append(result, &dt)
         default:
-            return fmt.Errorf("unknown step type; keys must include saved_query_* or groups/tests")
+            return fmt.Errorf("unknown step type; keys must include saved_query_* or dolt_test_*")
         }
     }
 
