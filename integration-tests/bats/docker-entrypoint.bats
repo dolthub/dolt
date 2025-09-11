@@ -39,6 +39,9 @@ run_container() {
   docker run -d --name "$name" "$@" "$TEST_IMAGE" >/dev/null
   wait_for_log "$name" "Server ready. Accepting connections." 15
   
+  # Wait for user setup to complete (if users are being created)
+  wait_for_log "$name" "Reattaching to server process" 10 || true
+  
   # Verify container is running
   run docker ps --filter "name=$name" --format "{{.Names}}"
   [ $status -eq 0 ]
@@ -54,6 +57,9 @@ run_container_with_port() {
   port="$1"; shift
   docker run -d --name "$name" -p "$port:3306" "$@" "$TEST_IMAGE" >/dev/null
   wait_for_log "$name" "Server ready. Accepting connections." 15
+  
+  # Wait for user setup to complete (if users are being created)
+  wait_for_log "$name" "Reattaching to server process" 10 || true
   
   # Verify container is running
   run docker ps --filter "name=$name" --format "{{.Names}}"
