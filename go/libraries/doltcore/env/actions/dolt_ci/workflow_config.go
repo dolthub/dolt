@@ -58,6 +58,9 @@ type DoltTestStep struct {
     Name       yaml.Node   `yaml:"name"`
     TestGroups []yaml.Node `yaml:"dolt_test_groups,omitempty"`
     Tests      []yaml.Node `yaml:"dolt_test_tests,omitempty"`
+    // DoltTestStatements is populated by the `dolt ci view` command to show the
+    // underlying queries associated with the tests selected by this step.
+    DoltTestStatements []yaml.Node `yaml:"dolt_test_statements,omitempty"`
 }
 
 var _ Step = (*DoltTestStep)(nil)
