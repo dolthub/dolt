@@ -43,6 +43,9 @@ run_container() {
   run docker ps --filter "name=$name" --format "{{.Names}}"
   [ $status -eq 0 ]
   [[ "$output" =~ ^"$name"$ ]] || false
+  
+  # Verify server is actually ready for queries
+  wait_for_server_ready "$name"
 }
 
 # Helper to run a container with port mapping and wait for server to be ready
@@ -56,6 +59,24 @@ run_container_with_port() {
   run docker ps --filter "name=$name" --format "{{.Names}}"
   [ $status -eq 0 ]
   [[ "$output" =~ ^"$name"$ ]] || false
+  
+  # Verify server is actually ready for queries
+  wait_for_server_ready "$name"
+}
+
+# Helper to wait for server to be ready for queries (following Dolt patterns)
+wait_for_server_ready() {
+  name="$1"
+  timeout_ms=8500  # Match standard Dolt timeout
+  end_time=$((SECONDS+($timeout_ms/1000)))
+  
+  while [ $SECONDS -lt $end_time ]; do
+    if docker exec "$name" dolt sql -q "SELECT 1;" >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 1
+  done
+  return 1
 }
 
 # Helper to wait for a log line to appear
@@ -66,6 +87,8 @@ wait_for_log() {
   i=0
   while [ $i -lt $timeout ]; do
     if docker logs "$name" 2>&1 | grep -q "$pattern"; then
+      # Additional wait to ensure setup is complete
+      sleep 1
       return 0
     fi
     sleep 1
