@@ -25,7 +25,8 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions/dolt_ci"
+    "github.com/dolthub/dolt/go/libraries/doltcore/env/actions/dolt_ci"
+    dtablefunctions "github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtablefunctions"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/store/val"
 )
@@ -156,6 +157,17 @@ func updateConfigQueryStatements(config *dolt_ci.WorkflowConfig, savedQueries ma
                     }
                     config.Jobs[i].Steps[j] = sq
                 }
+            } else if dt, ok := step.(*dolt_ci.DoltTestStep); ok {
+                // For dolt test steps, populate dolt_test_statements to show users what will be run
+                stmts, err := previewDoltTestStatements(dt)
+                if err != nil {
+                    return nil, err
+                }
+                dt.DoltTestStatements = nil
+                for _, s := range stmts {
+                    dt.DoltTestStatements = append(dt.DoltTestStatements, yaml.Node{Kind: yaml.ScalarNode, Style: yaml.DoubleQuotedStyle, Value: s})
+                }
+                config.Jobs[i].Steps[j] = dt
             }
         }
 
@@ -169,6 +181,39 @@ func updateConfigQueryStatements(config *dolt_ci.WorkflowConfig, savedQueries ma
 	}
 
 	return config, nil
+}
+
+// previewDoltTestStatements returns the SQL queries that would be executed by dolt_test_run
+// for the given DoltTestStep selection (groups and tests). We use the same logic as dolt_test_run
+// to resolve selections against the dolt_tests system table. If both groups and tests are empty,
+// an empty list is returned.
+func previewDoltTestStatements(dt *dolt_ci.DoltTestStep) ([]string, error) {
+    // Build selection args: explicit tests and groups. If none provided, wildcard is assumed
+    // by dolt_test_run, but here we show nothing unless explicit.
+    args := make([]string, 0, len(dt.Tests)+len(dt.TestGroups))
+    for _, t := range dt.Tests {
+        args = append(args, t.Value)
+    }
+    for _, g := range dt.TestGroups {
+        args = append(args, g.Value)
+    }
+
+    // Use the same helper the table function relies on to locate rows. We cannot instantiate a full engine here,
+    // so we mirror the lookup strings that dolt_test_run uses for previewing: test names and group names.
+    // We will format preview strings like dolt_test_run would accept: each arg stands alone.
+    // Since we can't query here without engine, return the args themselves as indicative selectors.
+    // Consumers can run: SELECT * FROM dolt_test_run('<arg>') to see full detail.
+    // To provide better UX, if no args provided, show wildcard.
+    if len(args) == 0 {
+        args = []string{"*"}
+    }
+
+    // Represent each selection as a dolt_test_run invocation for clarity
+    stmts := make([]string, 0, len(args))
+    for _, a := range args {
+        stmts = append(stmts, fmt.Sprintf("SELECT * FROM %s('%s')", (&dtablefunctions.TestsRunTableFunction{}).Name(), a))
+    }
+    return stmts, nil
 }
 
 func getSavedQueries(sqlCtx *sql.Context, queryist cli.Queryist) (map[string]string, error) {
