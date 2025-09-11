@@ -91,6 +91,7 @@ func main() {
 	PrintGoLicense(out, root)
 	PrintMuslLicense(out)
 	PrintMimallocLicense(out)
+	PrintICU4CLicense(out)
 
 	sort.Strings(mods)
 	var l string
@@ -135,6 +136,13 @@ func PrintMuslLicense(out io.Writer) {
 	fmt.Fprintf(out, "\n================================================================================\n")
 	fmt.Fprintf(out, "= Some copies of Dolt include portions of musl, statically linked, licensed under: =\n\n")
 	PrintLicense(out, "utils/3pdeps/MUSL_COPYRIGHT")
+	fmt.Fprintf(out, "================================================================================\n")
+}
+
+func PrintICU4CLicense(out io.Writer) {
+	fmt.Fprintf(out, "\n================================================================================\n")
+	fmt.Fprintf(out, "= Some copies of Dolt include portions of ICU4C, statically linked, licensed under: =\n\n")
+	PrintLicense(out, "utils/3pdeps/ICU4C_LICENSE")
 	fmt.Fprintf(out, "================================================================================\n")
 }
 
