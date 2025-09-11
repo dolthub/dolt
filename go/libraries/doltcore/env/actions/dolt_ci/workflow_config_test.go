@@ -90,8 +90,10 @@ jobs:
 	require.Equal(t, wf.On.PullRequest.Activities[1].Value, synchronized)
 	require.Equal(t, len(wf.Jobs), 1)
 	require.Equal(t, wf.Jobs[0].Name.Value, jobName)
-	require.Equal(t, len(wf.Jobs[0].Steps), 1)
-	require.Equal(t, wf.Jobs[0].Steps[0].Name.Value, stepName)
+    require.Equal(t, len(wf.Jobs[0].Steps), 1)
+    sq, ok := wf.Jobs[0].Steps[0].(*SavedQueryStep)
+    require.True(t, ok)
+    require.Equal(t, sq.Name.Value, stepName)
 
 	// todo: check expected stuff
 }

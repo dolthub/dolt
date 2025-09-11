@@ -120,14 +120,20 @@ func queryAndPrint(sqlCtx *sql.Context, queryist cli.Queryist, config *dolt_ci.W
 	for _, job := range config.Jobs {
 		cli.Println(color.GreenString("Running job: %s", job.Name.Value))
 		for _, step := range job.Steps {
-			cli.Printf("Step: %s - ", step.Name.Value)
+            cli.Printf("Step: %s - ", step.GetName())
 
 			// We break up the query running and assertions into two steps.
 			// If either fails, we'll set error and let the user know that the step failed, then give an error message
-			query := savedQueries[step.SavedQueryName.Value]
-			rows, err := runCIQuery(queryist, sqlCtx, step, query)
+            sq, ok := step.(*dolt_ci.SavedQueryStep)
+            if !ok {
+                cli.Println("FAIL")
+                cli.Println(color.RedString("unsupported step type"))
+                continue
+            }
+            query := savedQueries[sq.SavedQueryName.Value]
+            rows, err := runCIQuery(queryist, sqlCtx, sq, query)
 			if err == nil {
-				err = assertQueries(rows, step.ExpectedRows.Value, step.ExpectedColumns.Value, query)
+                err = assertQueries(rows, sq.ExpectedRows.Value, sq.ExpectedColumns.Value, query)
 			}
 
 			if err != nil {
@@ -140,7 +146,7 @@ func queryAndPrint(sqlCtx *sql.Context, queryist cli.Queryist, config *dolt_ci.W
 	}
 }
 
-func runCIQuery(queryist cli.Queryist, sqlCtx *sql.Context, step dolt_ci.Step, query string) ([]sql.Row, error) {
+func runCIQuery(queryist cli.Queryist, sqlCtx *sql.Context, step *dolt_ci.SavedQueryStep, query string) ([]sql.Row, error) {
 	if query == "" {
 		return nil, fmt.Errorf("Could not find saved query: %s", step.SavedQueryName.Value)
 	}

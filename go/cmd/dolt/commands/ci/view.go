@@ -137,25 +137,30 @@ func printWorkflowConfig(toPrint interface{}) error {
 
 func updateConfigQueryStatements(config *dolt_ci.WorkflowConfig, savedQueries map[string]string, jobName string) (interface{}, error) {
 	for i, job := range config.Jobs {
-		for j := range job.Steps {
-			step := job.Steps[j]
-			if name := savedQueries[step.SavedQueryName.Value]; name != "" {
-				config.Jobs[i].Steps[j].SavedQueryStatement = yaml.Node{
-					Kind:  yaml.ScalarNode,
-					Style: yaml.DoubleQuotedStyle,
-					Value: name,
-				}
-			} else {
-				config.Jobs[i].Steps[j].SavedQueryStatement = yaml.Node{
-					Kind:  yaml.ScalarNode,
-					Style: yaml.DoubleQuotedStyle,
-					Value: "saved query not found",
-				}
-			}
-		}
+        for j := range job.Steps {
+            step := job.Steps[j]
+            if sq, ok := step.(*dolt_ci.SavedQueryStep); ok {
+                if name := savedQueries[sq.SavedQueryName.Value]; name != "" {
+                    // Replace the element in-place with updated statement
+                    sq.SavedQueryStatement = yaml.Node{
+                        Kind:  yaml.ScalarNode,
+                        Style: yaml.DoubleQuotedStyle,
+                        Value: name,
+                    }
+                    config.Jobs[i].Steps[j] = sq
+                } else {
+                    sq.SavedQueryStatement = yaml.Node{
+                        Kind:  yaml.ScalarNode,
+                        Style: yaml.DoubleQuotedStyle,
+                        Value: "saved query not found",
+                    }
+                    config.Jobs[i].Steps[j] = sq
+                }
+            }
+        }
 
-		if job.Name.Value == jobName {
-			return job, nil
+        if job.Name.Value == jobName {
+            return job, nil
 		}
 	}
 
