@@ -26,6 +26,7 @@ type WorkflowStepType int
 const (
 	WorkflowStepTypeUnspecified WorkflowStepType = iota
 	WorkflowStepTypeSavedQuery
+    WorkflowStepTypeDoltTest
 )
 
 type WorkflowStepId string
@@ -45,6 +46,8 @@ func ToWorkflowStepType(t int) (WorkflowStepType, error) {
 	switch t {
 	case int(WorkflowStepTypeSavedQuery):
 		return WorkflowStepTypeSavedQuery, nil
+    case int(WorkflowStepTypeDoltTest):
+        return WorkflowStepTypeDoltTest, nil
 	default:
 		return WorkflowStepTypeUnspecified, ErrUnknownWorkflowStepType
 	}
