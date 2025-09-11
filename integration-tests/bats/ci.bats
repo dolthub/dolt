@@ -602,6 +602,78 @@ EOF
     [[ "$output" =~ "saved_query_statement: \"saved query not found\"" ]] || false
 }
 
+@test "ci: dolt ci view shows DoltTest steps (wildcard and tests)" {
+    cat > workflow.yaml <<EOF
+name: wf_view_dolt_test
+on:
+  push: {}
+jobs:
+  - name: run tests
+    steps:
+      - name: run all (wildcard)
+        dolt_test_groups:
+          - "*"
+      - name: run specific tests
+        dolt_test_tests:
+          - test_a
+          - test_b
+EOF
+
+    dolt ci init
+    dolt ci import ./workflow.yaml
+
+    dolt ci view "wf_view_dolt_test"
+
+    run dolt ci view "wf_view_dolt_test"
+    [ "$status" -eq 0 ]
+
+    [[ "$output" =~ "name: \"wf_view_dolt_test\"" ]] || false
+    # Groups wildcard step appears
+    [[ "$output" =~ "dolt_test_groups:" ]] || false
+    [[ "$output" =~ "- \"*\"" ]] || false
+    # Tests step appears
+    [[ "$output" =~ "dolt_test_tests:" ]] || false
+    [[ "$output" =~ "- \"test_a\"" ]] || false
+    [[ "$output" =~ "- \"test_b\"" ]] || false
+    # Preview statements present
+    [[ "$output" =~ "SELECT * FROM dolt_test_run('*')" ]] || false
+    [[ "$output" =~ "SELECT * FROM dolt_test_run('test_a')" ]] || false
+    [[ "$output" =~ "SELECT * FROM dolt_test_run('test_b')" ]] || false
+}
+
+@test "ci: dolt ci view shows DoltTest steps (groups and tests)" {
+    cat > workflow.yaml <<EOF
+name: wf_view_groups_and_tests
+on:
+  push: {}
+jobs:
+  - name: run selected
+    steps:
+      - name: selected in groups
+        dolt_test_groups:
+          - g1
+          - g2
+        dolt_test_tests:
+          - t1
+EOF
+
+    dolt ci init
+    dolt ci import ./workflow.yaml
+
+    run dolt ci view "wf_view_groups_and_tests"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "name: \"wf_view_groups_and_tests\"" ]] || false
+    [[ "$output" =~ "dolt_test_groups:" ]] || false
+    [[ "$output" =~ "- \"g1\"" ]] || false
+    [[ "$output" =~ "- \"g2\"" ]] || false
+    [[ "$output" =~ "dolt_test_tests:" ]] || false
+    [[ "$output" =~ "- \"t1\"" ]] || false
+    # Preview includes a statement per selector
+    [[ "$output" =~ "SELECT * FROM dolt_test_run('g1')" ]] || false
+    [[ "$output" =~ "SELECT * FROM dolt_test_run('g2')" ]] || false
+    [[ "$output" =~ "SELECT * FROM dolt_test_run('t1')" ]] || false
+}
+
 @test "ci: can use --job with dolt ci view to filter workflow" {
     cat > workflow_1.yaml <<EOF
 name: workflow_1
