@@ -95,3 +95,58 @@ jobs:
 
 	// todo: check expected stuff
 }
+
+func TestValidateWorkflowConfig_RejectsBothSavedQueryAndDoltTestInOneStep(t *testing.T) {
+    yml := `name: wf
+on:
+  push:
+    branches: [main]
+jobs:
+  - name: job
+    steps:
+      - name: step-1
+        saved_query_name: my_query
+        dolt_test:
+          groups: [g1]
+`
+    wf, err := ParseWorkflowConfig(strings.NewReader(yml))
+    require.NoError(t, err)
+    err = ValidateWorkflowConfig(wf)
+    require.Error(t, err)
+    require.Contains(t, err.Error(), "cannot specify both saved_query_name and dolt_test")
+}
+
+func TestValidateWorkflowConfig_AllowsSavedQueryOnly(t *testing.T) {
+    yml := `name: wf
+on:
+  push:
+    branches: [main]
+jobs:
+  - name: job
+    steps:
+      - name: step-1
+        saved_query_name: my_query
+`
+    wf, err := ParseWorkflowConfig(strings.NewReader(yml))
+    require.NoError(t, err)
+    err = ValidateWorkflowConfig(wf)
+    require.NoError(t, err)
+}
+
+func TestValidateWorkflowConfig_AllowsDoltTestOnly(t *testing.T) {
+    yml := `name: wf
+on:
+  push:
+    branches: [main]
+jobs:
+  - name: job
+    steps:
+      - name: step-1
+        dolt_test:
+          tests: [t1, t2]
+`
+    wf, err := ParseWorkflowConfig(strings.NewReader(yml))
+    require.NoError(t, err)
+    err = ValidateWorkflowConfig(wf)
+    require.NoError(t, err)
+}

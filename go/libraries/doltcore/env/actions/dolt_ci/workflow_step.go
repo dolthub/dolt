@@ -1,7 +1,4 @@
 // Copyright 2024 Dolthub, Inc.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
 //     http://www.apache.org/licenses/LICENSE-2.0
@@ -26,6 +23,8 @@ type WorkflowStepType int
 const (
 	WorkflowStepTypeUnspecified WorkflowStepType = iota
 	WorkflowStepTypeSavedQuery
+	// WorkflowStepTypeDoltTest represents running dolt_test_run selectors
+	WorkflowStepTypeDoltTest
 )
 
 type WorkflowStepId string
@@ -40,12 +39,16 @@ type WorkflowStep struct {
 	UpdatedAt       time.Time        `db:"updated_at"`
 }
 
-// ToWorkflowStepType converst an int to a valid WorkflowStepType
+// ToWorkflowStepType converts an int to a valid WorkflowStepType
 func ToWorkflowStepType(t int) (WorkflowStepType, error) {
-	switch t {
-	case int(WorkflowStepTypeSavedQuery):
-		return WorkflowStepTypeSavedQuery, nil
-	default:
-		return WorkflowStepTypeUnspecified, ErrUnknownWorkflowStepType
-	}
+    switch t {
+    case int(WorkflowStepTypeSavedQuery):
+        return WorkflowStepTypeSavedQuery, nil
+    case int(WorkflowStepTypeDoltTest):
+        return WorkflowStepTypeDoltTest, nil
+    default:
+        return WorkflowStepTypeUnspecified, ErrUnknownWorkflowStepType
+    }
 }
+
+

@@ -15,25 +15,26 @@
 package ci
 
 import (
-	"context"
-	"errors"
-	"fmt"
-	"strings"
+    "context"
+    "errors"
+    "fmt"
+    "strings"
 
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/fatih/color"
+    "github.com/dolthub/go-mysql-server/sql"
+    "github.com/fatih/color"
 
-	"github.com/dolthub/dolt/go/cmd/dolt/cli"
-	"github.com/dolthub/dolt/go/cmd/dolt/commands"
-	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions/dolt_ci"
-	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+    "github.com/dolthub/dolt/go/cmd/dolt/cli"
+    "github.com/dolthub/dolt/go/cmd/dolt/commands"
+    "github.com/dolthub/dolt/go/cmd/dolt/errhand"
+    "github.com/dolthub/dolt/go/libraries/doltcore/env"
+    "github.com/dolthub/dolt/go/libraries/doltcore/env/actions/dolt_ci"
+    "github.com/dolthub/dolt/go/libraries/utils/argparser"
+    "github.com/dolthub/dolt/go/store/val"
 )
 
 var runDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Run a Dolt CI workflow",
-	LongDesc:  "Run a Dolt CI workflow by executing all saved queries and validating their results",
+    LongDesc:  "Run a Dolt CI workflow by executing saved queries and dolt tests, validating their results",
 	Synopsis: []string{
 		"{{.LessThan}}workflow name{{.GreaterThan}}",
 	},
@@ -109,35 +110,56 @@ func (cmd RunCmd) Exec(ctx context.Context, commandStr string, args []string, _ 
 	if err != nil {
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
-	cli.Println(color.CyanString("Running workflow: %s", workflowName))
-	queryAndPrint(queryist.Context, queryist.Queryist, config, savedQueries)
-
-	return 0
+    cli.Println(color.CyanString("Running workflow: %s", workflowName))
+    _ = queryAndPrint(queryist.Context, queryist.Queryist, config, savedQueries)
+    return 0
 }
 
 // queryAndPrint iterates through the jobs and steps for the given config, then runs each saved query and given assertion
-func queryAndPrint(sqlCtx *sql.Context, queryist cli.Queryist, config *dolt_ci.WorkflowConfig, savedQueries map[string]string) {
-	for _, job := range config.Jobs {
-		cli.Println(color.GreenString("Running job: %s", job.Name.Value))
-		for _, step := range job.Steps {
-			cli.Printf("Step: %s - ", step.Name.Value)
+func queryAndPrint(sqlCtx *sql.Context, queryist cli.Queryist, config *dolt_ci.WorkflowConfig, savedQueries map[string]string) (anyFailed bool) {
+    for _, job := range config.Jobs {
+        cli.Println(color.GreenString("Running job: %s", job.Name.Value))
+        for _, step := range job.Steps {
+            cli.Printf("Step: %s - ", step.Name.Value)
 
-			// We break up the query running and assertions into two steps.
-			// If either fails, we'll set error and let the user know that the step failed, then give an error message
-			query := savedQueries[step.SavedQueryName.Value]
-			rows, err := runCIQuery(queryist, sqlCtx, step, query)
-			if err == nil {
-				err = assertQueries(rows, step.ExpectedRows.Value, step.ExpectedColumns.Value, query)
-			}
+            // Branch by step type
+            if step.DoltTest != nil {
+                failures, err := runDoltTests(queryist, sqlCtx, step)
+                if err != nil {
+                    cli.Println("FAIL")
+                    cli.Println(color.RedString("%s", err))
+                    anyFailed = true
+                    continue
+                }
+                if len(failures) > 0 {
+                    cli.Println("FAIL")
+                    for _, f := range failures {
+                        cli.Println(color.RedString(f))
+                    }
+                    anyFailed = true
+                } else {
+                    cli.Println("PASS")
+                }
+                continue
+            }
 
-			if err != nil {
-				cli.Println("FAIL")
-				cli.Println(color.RedString("%s", err))
-			} else {
-				cli.Println("PASS")
-			}
-		}
-	}
+            // Saved query step
+            query := savedQueries[step.SavedQueryName.Value]
+            rows, err := runCIQuery(queryist, sqlCtx, step, query)
+            if err == nil {
+                err = assertQueries(rows, step.ExpectedRows.Value, step.ExpectedColumns.Value, query)
+            }
+
+            if err != nil {
+                cli.Println("FAIL")
+                cli.Println(color.RedString("%s", err))
+                anyFailed = true
+            } else {
+                cli.Println("PASS")
+            }
+        }
+    }
+    return anyFailed
 }
 
 func runCIQuery(queryist cli.Queryist, sqlCtx *sql.Context, step dolt_ci.Step, query string) ([]sql.Row, error) {
@@ -190,4 +212,87 @@ func assertQueries(rows []sql.Row, expectedRowsAndComparison string, expectedCol
 		return errors.New(strings.Join(errs, "\n"))
 	}
 	return nil
+}
+
+// runDoltTests constructs and executes a dolt_test_run() query for the provided step.
+// It returns a slice of failure descriptions (empty if all passed) or an error for execution failures.
+func runDoltTests(queryist cli.Queryist, sqlCtx *sql.Context, step dolt_ci.Step) ([]string, error) {
+    // Collect explicit selectors; do not treat empty as wildcard
+    tests := make([]string, 0)
+    groups := make([]string, 0)
+    if step.DoltTest != nil {
+        for _, t := range step.DoltTest.Tests { if t.Value != "" { tests = append(tests, t.Value) } }
+        for _, g := range step.DoltTest.Groups { if g.Value != "" { groups = append(groups, g.Value) } }
+    }
+
+    // Wildcard only if tests == ["*"] or groups == ["*"]
+    useWildcard := (len(tests) == 1 && tests[0] == "*") || (len(groups) == 1 && groups[0] == "*")
+
+    var selectors []string
+    if useWildcard {
+        selectors = []string{"*"}
+    } else {
+        if len(tests) == 0 && len(groups) == 0 {
+            return nil, fmt.Errorf("dolt_test step '%s' has no tests or groups; use tests: ['*'] or groups: ['*'] to run all", step.Name.Value)
+        }
+        // union
+        selectors = append(selectors, tests...)
+        selectors = append(selectors, groups...)
+    }
+
+    // Build: SELECT * FROM dolt_test_run('a', 'b', ...)
+    quoted := make([]string, 0, len(selectors))
+    for _, s := range selectors {
+        quoted = append(quoted, quoteSQLString(s))
+    }
+    query := fmt.Sprintf("SELECT * FROM dolt_test_run(%s)", strings.Join(quoted, ", "))
+
+    rows, err := cli.GetRowsForSql(queryist, sqlCtx, query)
+    if err != nil {
+        statementErr := fmt.Sprintf("Ran query: %s", query)
+        queryErr := fmt.Sprintf("Query error: %s", err.Error())
+        return nil, errors.New(strings.Join([]string{statementErr, queryErr}, "\n"))
+    }
+
+    // Columns: test_name, test_group_name, query, status, message
+    var failures []string
+    for _, r := range rows {
+        status, _ := getStringColAsString(sqlCtx, r[3])
+        if status != "PASS" {
+            testName, _ := getStringColAsString(sqlCtx, r[0])
+            groupName, _ := getStringColAsString(sqlCtx, r[1])
+            message, _ := getStringColAsString(sqlCtx, r[4])
+            if groupName != "" {
+                failures = append(failures, fmt.Sprintf("%s [%s]: %s", testName, groupName, message))
+            } else {
+                failures = append(failures, fmt.Sprintf("%s: %s", testName, message))
+            }
+        }
+    }
+
+    return failures, nil
+}
+
+func quoteSQLString(s string) string {
+    // Escape single quotes using standard SQL doubling
+    esc := strings.ReplaceAll(s, "'", "''")
+    return "'" + esc + "'"
+}
+
+// getStringColAsString returns a text/val.TextStorage column as a Go string
+func getStringColAsString(sqlCtx *sql.Context, v interface{}) (string, error) {
+    if ts, ok := v.(*val.TextStorage); ok {
+        s, err := ts.Unwrap(sqlCtx)
+        if err != nil {
+            return "", err
+        }
+        return s, nil
+    }
+    if s, ok := v.(string); ok {
+        return s, nil
+    }
+    if v == nil {
+        return "", nil
+    }
+    return fmt.Sprint(v), nil
 }

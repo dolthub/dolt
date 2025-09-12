@@ -52,10 +52,17 @@ Workflow YAML Specification:
     - name: <job-name>
       steps:
         - name: <step-name>
+          # Option A: Saved Query
           saved_query_name: <query-name>
           saved_query_statement: <optional-sql-statement>
           expected_columns: <optional-expected-columns>
-          expected_rows: <optional-expected-rows>`,
+          expected_rows: <optional-expected-rows>
+
+          # Option B: Dolt Tests (mutually exclusive with saved_query_name)
+          # dolt_test:
+          #   groups: [group-a, group-b]
+          #   tests: [test-1, test-2]
+          `,
 	Synopsis: []string{
 		"{{.LessThan}}file{{.GreaterThan}}",
 	},

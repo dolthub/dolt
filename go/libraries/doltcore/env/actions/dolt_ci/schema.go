@@ -54,6 +54,10 @@ var ExpectedDoltCITablesOrdered = WrappedTableNameSlice{
 	{TableName: doltdb.TableName{Name: doltdb.WorkflowJobsTableName}},
 	{TableName: doltdb.TableName{Name: doltdb.WorkflowStepsTableName}},
 	{TableName: doltdb.TableName{Name: doltdb.WorkflowSavedQueryStepsTableName}},
+ 	// New dolt_test step tables
+ 	{TableName: doltdb.TableName{Name: doltdb.WorkflowDoltTestStepsTableName}},
+ 	{TableName: doltdb.TableName{Name: doltdb.WorkflowDoltTestStepGroupsTableName}},
+ 	{TableName: doltdb.TableName{Name: doltdb.WorkflowDoltTestStepTestsTableName}},
 	{TableName: doltdb.TableName{Name: doltdb.WorkflowSavedQueryStepExpectedRowColumnResultsTableName}},
 }
 
@@ -167,6 +171,9 @@ func CreateDoltCITables(queryist cli.Queryist, sqlCtx *sql.Context, name, email 
 		createWorkflowEventTriggerBranchesTableQuery(),
 		createWorkflowJobsTableQuery(),
 		createWorkflowStepsTableQuery(),
+		createWorkflowDoltTestStepsTableQuery(),
+		createWorkflowDoltTestStepGroupsTableQuery(),
+		createWorkflowDoltTestStepTestsTableQuery(),
 		createWorkflowSavedQueryStepsTableQuery(),
 		createWorkflowSavedQueryStepExpectedRowColumnResultsTableQuery(),
 		deleteAllFromWorkflowsTableQuery(), // as last step run delete to create resolve all indexes/fks
@@ -226,4 +233,17 @@ func createWorkflowSavedQueryStepExpectedRowColumnResultsTableQuery() string {
 
 func deleteAllFromWorkflowsTableQuery() string {
 	return fmt.Sprintf("delete from %s;", doltdb.WorkflowsTableName)
+}
+
+
+func createWorkflowDoltTestStepsTableQuery() string {
+	return fmt.Sprintf("create table %s (`%s` varchar(36) primary key, `%s` varchar(36) not null, foreign key (`%s`) references %s (`%s`) on delete cascade);", doltdb.WorkflowDoltTestStepsTableName, doltdb.WorkflowDoltTestStepsIdPkColName, doltdb.WorkflowDoltTestStepsWorkflowStepIdFkColName, doltdb.WorkflowDoltTestStepsWorkflowStepIdFkColName, doltdb.WorkflowStepsTableName, doltdb.WorkflowStepsIdPkColName)
+}
+
+func createWorkflowDoltTestStepGroupsTableQuery() string {
+	return fmt.Sprintf("create table %s (`%s` varchar(36) primary key, `%s` varchar(2048) collate utf8mb4_0900_ai_ci not null, `%s` varchar(36) not null, foreign key (`%s`) references %s (`%s`) on delete cascade);", doltdb.WorkflowDoltTestStepGroupsTableName, doltdb.WorkflowDoltTestStepGroupsIdPkColName, doltdb.WorkflowDoltTestStepGroupsGroupNameColName, doltdb.WorkflowDoltTestStepGroupsWorkflowDoltTestStepIdFkColName, doltdb.WorkflowDoltTestStepGroupsWorkflowDoltTestStepIdFkColName, doltdb.WorkflowDoltTestStepsTableName, doltdb.WorkflowDoltTestStepsIdPkColName)
+}
+
+func createWorkflowDoltTestStepTestsTableQuery() string {
+	return fmt.Sprintf("create table %s (`%s` varchar(36) primary key, `%s` varchar(2048) collate utf8mb4_0900_ai_ci not null, `%s` varchar(36) not null, foreign key (`%s`) references %s (`%s`) on delete cascade);", doltdb.WorkflowDoltTestStepTestsTableName, doltdb.WorkflowDoltTestStepTestsIdPkColName, doltdb.WorkflowDoltTestStepTestsTestNameColName, doltdb.WorkflowDoltTestStepTestsWorkflowDoltTestStepIdFkColName, doltdb.WorkflowDoltTestStepTestsWorkflowDoltTestStepIdFkColName, doltdb.WorkflowDoltTestStepsTableName, doltdb.WorkflowDoltTestStepsIdPkColName)
 }

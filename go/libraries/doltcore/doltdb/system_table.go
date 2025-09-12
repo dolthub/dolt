@@ -134,6 +134,10 @@ var getWriteableSystemTables = func() []string {
 		WorkflowEventsTableName,
 		WorkflowEventTriggersTableName,
 		WorkflowEventTriggerBranchesTableName,
+		// New CI tables for dolt_test steps
+		WorkflowDoltTestStepsTableName,
+		WorkflowDoltTestStepGroupsTableName,
+		WorkflowDoltTestStepTestsTableName,
 		WorkflowJobsTableName,
 		WorkflowStepsTableName,
 		WorkflowSavedQueryStepsTableName,
@@ -615,4 +619,21 @@ const (
 const (
 	HelpTableName    = "dolt_help"
 	BackupsTableName = "dolt_backups"
+)
+
+// New CI tables supporting dolt_test workflow steps
+const (
+    WorkflowDoltTestStepsTableName = "dolt_ci_workflow_dolt_test_steps"
+    WorkflowDoltTestStepsIdPkColName = "id"
+    WorkflowDoltTestStepsWorkflowStepIdFkColName = "workflow_step_id_fk"
+
+    WorkflowDoltTestStepGroupsTableName = "dolt_ci_workflow_dolt_test_step_groups"
+    WorkflowDoltTestStepGroupsIdPkColName = "id"
+    WorkflowDoltTestStepGroupsWorkflowDoltTestStepIdFkColName = "workflow_dolt_test_step_id_fk"
+    WorkflowDoltTestStepGroupsGroupNameColName = "group_name"
+
+    WorkflowDoltTestStepTestsTableName = "dolt_ci_workflow_dolt_test_step_tests"
+    WorkflowDoltTestStepTestsIdPkColName = "id"
+    WorkflowDoltTestStepTestsWorkflowDoltTestStepIdFkColName = "workflow_dolt_test_step_id_fk"
+    WorkflowDoltTestStepTestsTestNameColName = "test_name"
 )
