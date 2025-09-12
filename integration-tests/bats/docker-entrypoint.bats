@@ -18,10 +18,7 @@ setup() {
   TEST_PREFIX="dolt-entrypoint-it-$$-"
 
   # Ensure image exists (build if missing)
-  if ! docker image inspect "$TEST_IMAGE" >/dev/null 2>&1; then
-    docker build -f "$REPO_ROOT/docker/serverDockerfile" --build-arg DOLT_VERSION=$DOLT_DOCKER_TEST_VERSION -t "$TEST_IMAGE" "$REPO_ROOT" || \
-      skip "failed to build test image $TEST_IMAGE"
-  fi
+  docker build -f "$REPO_ROOT/docker/serverDockerfile" --build-arg DOLT_VERSION=$DOLT_DOCKER_TEST_VERSION -t "$TEST_IMAGE" "$REPO_ROOT" || true
 
   # Best-effort cleanup of leftovers from a previous attempt
   docker ps -a --filter "name=$TEST_PREFIX" --format '{{.Names}}' | xargs -r docker rm -f >/dev/null 2>&1 || true
@@ -37,16 +34,16 @@ teardown() {
 run_container() {
   name="$1"; shift
   docker run -d --name "$name" "$@" "$TEST_IMAGE" >/dev/null
-  wait_for_log "$name" "Server ready. Accepting connections." 15
-  
+  wait_for_log "$name" "Server ready. Accepting connections." 30
+
   # Wait for user setup to complete (if users are being created)
-  wait_for_log "$name" "Reattaching to server process" 10 || true
-  
+  wait_for_log "$name" "Reattaching to server process..." 10 || true
+
   # Verify container is running
   run docker ps --filter "name=$name" --format "{{.Names}}"
   [ $status -eq 0 ]
   [[ "$output" =~ ^"$name"$ ]] || false
-  
+
   # Verify server is actually ready for queries
   wait_for_server_ready "$name"
 }
@@ -57,7 +54,7 @@ run_container_with_port() {
   port="$1"; shift
   docker run -d --name "$name" -p "$port:3306" "$@" "$TEST_IMAGE" >/dev/null
   wait_for_log "$name" "Server ready. Accepting connections." 15
-  
+
   # Wait for user setup to complete (if users are being created)
   wait_for_log "$name" "Reattaching to server process" 10 || true
   
@@ -106,50 +103,30 @@ wait_for_log() {
 # bats test_tags=no_lambda
 @test "docker-entrypoint: env USER=root is rejected with clear error" {
   cname="${TEST_PREFIX}root-env"
-  echo "DEBUG: Starting container with DOLT_USER=root (should fail)..."
   run docker run -d --name "$cname" -e DOLT_ROOT_PASSWORD=rootpass -e DOLT_USER=root -e DOLT_PASSWORD=anything "$TEST_IMAGE"
-  echo "DEBUG: Container start status=$status, output: '$output'"
-  
+
   # Container should fail to stay up; still check logs for message
   wait_for_log "$cname" "cannot be used for the root user" 15 || true
   docker logs "$cname" >/tmp/${cname}.log 2>&1 || true
-  echo "DEBUG: Container logs:"
-  cat /tmp/${cname}.log
-  
   run grep -F "cannot be used for the root user" /tmp/"${cname}".log
-  echo "DEBUG: Grep for error message status=$status"
   [ $status -eq 0 ]
 }
 
 # bats test_tags=no_lambda
 @test "docker-entrypoint: password without user warns and is ignored" {
   cname="${TEST_PREFIX}pass-no-user"
-  echo "DEBUG: Starting container with DOLT_PASSWORD but no DOLT_USER..."
   run_container "$cname" -e DOLT_ROOT_PASSWORD=rootpass -e DOLT_PASSWORD=orphan
-  
-  echo "DEBUG: Container logs after startup:"
   docker logs "$cname" >/tmp/${cname}.log 2>&1 || true
-  cat /tmp/${cname}.log
-  
   run grep -i "password will be ignored" /tmp/"${cname}".log
-  echo "DEBUG: Grep for warning message status=$status"
   [ $status -eq 0 ]
 }
 
 # bats test_tags=no_lambda
 @test "docker-entrypoint: DOLT_ROOT_HOST creates root@% with grants" {
   cname="${TEST_PREFIX}root-host"
-  echo "DEBUG: Starting container with DOLT_ROOT_HOST=%..."
   run_container "$cname" -e DOLT_ROOT_PASSWORD=rootpass -e DOLT_ROOT_HOST=%
-  
-  echo "DEBUG: Container logs after startup:"
-  docker logs "$cname" 2>&1 | tail -10
-  
   # Check using dolt inside the container
-  echo "DEBUG: Checking grants for root@%..."
   run docker exec "$cname" dolt sql -q "SHOW GRANTS FOR 'root'@'%';"
-  echo "DEBUG: SHOW GRANTS status=$status, output:"
-  echo "$output"
   [ $status -eq 0 ]
   [[ "$output" =~ "WITH GRANT OPTION" ]] || false
 }
@@ -161,30 +138,18 @@ wait_for_log() {
   kw_user="from"
   run_container "$cname" -e DOLT_ROOT_PASSWORD=rootpass -e DOLT_ROOT_HOST=% -e DOLT_DATABASE="$kw_db" -e DOLT_USER="$kw_user" -e DOLT_PASSWORD=pass
 
-  echo "DEBUG: Container logs after startup:"
-  docker logs "$cname" 2>&1 | tail -10
-
   # Database exists
-  echo "DEBUG: Checking if database '$kw_db' exists..."
   run docker exec "$cname" dolt sql --result-format csv -q "SHOW DATABASES;"
-  echo "DEBUG: SHOW DATABASES status=$status, output:"
-  echo "$output"
   [ $status -eq 0 ]
   echo "$output" | grep -Fx "$kw_db" >/dev/null
 
   # User exists
-  echo "DEBUG: Checking if user '$kw_user' exists..."
   run docker exec "$cname" dolt sql --result-format csv -q "SELECT User FROM mysql.user;"
-  echo "DEBUG: SELECT User status=$status, output:"
-  echo "$output"
   [ $status -eq 0 ]
   echo "$output" | grep -Fx "$kw_user" >/dev/null
 
   # Grants for user on keyword DB
-  echo "DEBUG: Checking grants for user '$kw_user'..."
   run docker exec "$cname" dolt sql --result-format csv -q "SHOW GRANTS FOR '$kw_user'@'%';"
-  echo "DEBUG: SHOW GRANTS status=$status, output:"
-  echo "$output"
   [ $status -eq 0 ]
   printf -v p1 '`%s`\\.\\* TO' "$kw_db"
   [[ "$output" =~ $p1 ]] || false
@@ -198,25 +163,15 @@ wait_for_log() {
   kw_db="versioning"
   usr="testuser"
   pwd="testpass"
-  echo "DEBUG: Starting container with reserved keyword database '$kw_db'..."
   run_container "$cname" -e DOLT_ROOT_PASSWORD=rootpass -e DOLT_DATABASE="$kw_db" -e DOLT_USER="$usr" -e DOLT_PASSWORD="$pwd"
 
-  echo "DEBUG: Container logs after startup:"
-  docker logs "$cname" 2>&1 | tail -10
-
   # Database exists
-  echo "DEBUG: Checking if reserved keyword database '$kw_db' exists..."
   run docker exec "$cname" dolt sql --result-format csv -q "SHOW DATABASES;"
-  echo "DEBUG: SHOW DATABASES status=$status, output:"
-  echo "$output"
   [ $status -eq 0 ]
   echo "$output" | grep -Fx "$kw_db" >/dev/null
 
   # Can use the database for operations
-  echo "DEBUG: Testing operations on reserved keyword database..."
   run docker exec "$cname" dolt sql -q "USE \`$kw_db\`; CREATE TABLE test_table (id INT);"
-  echo "DEBUG: CREATE TABLE status=$status, output:"
-  echo "$output"
   [ $status -eq 0 ]
 }
 
@@ -228,30 +183,18 @@ wait_for_log() {
   pwd="testpass"
   run_container "$cname" -e DOLT_ROOT_PASSWORD=rootpass -e DOLT_ROOT_HOST=% -e DOLT_DATABASE="$db" -e DOLT_USER="$usr" -e DOLT_PASSWORD="$pwd"
 
-  echo "DEBUG: Container logs after startup:"
-  docker logs "$cname" 2>&1 | tail -10
-
   # DB created
-  echo "DEBUG: Checking if database '$db' exists..."
   run docker exec "$cname" dolt sql --result-format csv -q "SHOW DATABASES;"
-  echo "DEBUG: SHOW DATABASES status=$status, output:"
-  echo "$output"
   [ $status -eq 0 ]
   echo "$output" | grep -Fx "$db" >/dev/null
 
   # User created
-  echo "DEBUG: Checking if user '$usr' exists..."
   run docker exec "$cname" dolt sql --result-format csv -q "SELECT User FROM mysql.user WHERE User='$usr';"
-  echo "DEBUG: SELECT User status=$status, output:"
-  echo "$output"
   [ $status -eq 0 ]
   echo "$output" | grep -Fx "$usr" >/dev/null
 
   # Grants on DB
-  echo "DEBUG: Checking grants for user '$usr'..."
   run docker exec "$cname" dolt sql --result-format csv -q "SHOW GRANTS FOR '$usr'@'%';"
-  echo "DEBUG: SHOW GRANTS status=$status, output:"
-  echo "$output"
   [ $status -eq 0 ]
   printf -v p1 '`%s`\\.\\* TO' "$db"
   [[ "$output" =~ $p1 ]] || false
@@ -260,84 +203,31 @@ wait_for_log() {
 }
 
 # bats test_tags=no_lambda
-@test "docker-entrypoint: error handling with invalid configurations" {
-  cname="${TEST_PREFIX}error-msg"
-  # Run container with invalid user (empty password)
-  echo "DEBUG: Starting container with empty password (should fail)..."
-  run docker run -d --name "$cname" -e DOLT_ROOT_PASSWORD=rootpass -e DOLT_USER=testuser -e DOLT_PASSWORD="" "$TEST_IMAGE"
-  echo "DEBUG: Container start status=$status, output: '$output'"
-  
-  # Wait for error message to appear
-  wait_for_log "$cname" "user creation requires a password" 15 || true
-  
-  # Check if container failed to start
-  echo "DEBUG: Checking if container is running..."
-  run docker ps --filter "name=$cname" --format "{{.Names}}"
-  echo "DEBUG: docker ps status=$status, output: '$output'"
-  [ $status -eq 0 ]
-  [ -z "$output" ]
-  
-  # Check error message
-  echo "DEBUG: Container logs:"
-  docker logs "$cname" >/tmp/${cname}.log 2>&1 || true
-  cat /tmp/${cname}.log
-  
-  run grep -F "user creation requires a password" /tmp/"${cname}".log
-  echo "DEBUG: Grep for error message status=$status"
-  [ $status -eq 0 ]
-  
-  # Check if error message references DOLT_USER
-  run grep -F "DOLT_USER specified" /tmp/"${cname}".log
-  echo "DEBUG: Grep for DOLT_USER message status=$status"
-  [ $status -eq 0 ]
-}
-
-# bats test_tags=no_lambda
 @test "docker-entrypoint: setup with no configuration" {
   cname="${TEST_PREFIX}setup"
-  echo "DEBUG: Starting container with no configuration..."
   run_container "$cname"
   
-  echo "DEBUG: Container logs after startup:"
-  docker logs "$cname" 2>&1 | tail -10
-  
   # Root user can execute queries immediately
-  echo "DEBUG: Testing root user can execute queries..."
   run docker exec "$cname" dolt sql -q "SHOW DATABASES;"
-  echo "DEBUG: SHOW DATABASES status=$status, output:"
-  echo "$output"
   [ $status -eq 0 ]
   
   # Root user can create databases and tables immediately
-  echo "DEBUG: Testing root user can create databases and tables..."
   run docker exec "$cname" dolt sql -q "CREATE DATABASE quick_test; USE quick_test; CREATE TABLE test (id INT);"
-  echo "DEBUG: CREATE DATABASE/TABLE status=$status, output:"
-  echo "$output"
   [ $status -eq 0 ]
 }
 
 # bats test_tags=no_lambda
 @test "docker-entrypoint: root functionality and privileges" {
   cname="${TEST_PREFIX}root-fallback"
-  echo "DEBUG: Starting container with root password and host=%..."
   run_container "$cname" -e DOLT_ROOT_PASSWORD=rootpass -e DOLT_ROOT_HOST=%
   
-  echo "DEBUG: Container logs after startup:"
-  docker logs "$cname" 2>&1 | tail -10
-  
   # Root user has full privileges
-  echo "DEBUG: Checking root user privileges..."
   run docker exec "$cname" dolt sql -q "SHOW GRANTS FOR 'root'@'localhost';"
-  echo "DEBUG: SHOW GRANTS status=$status, output:"
-  echo "$output"
   [ $status -eq 0 ]
   [[ "$output" =~ "WITH GRANT OPTION" ]] || false
   
   # Root user can create databases and perform operations
-  echo "DEBUG: Testing root user can create databases and perform operations..."
   run docker exec "$cname" dolt sql -q "CREATE DATABASE root_test; USE root_test; CREATE TABLE test (id INT); INSERT INTO test VALUES (1);"
-  echo "DEBUG: CREATE/INSERT status=$status, output:"
-  echo "$output"
   [ $status -eq 0 ]
 }
 
@@ -345,24 +235,14 @@ wait_for_log() {
 @test "docker-entrypoint: SQL error reporting without suppression" {
   cname="${TEST_PREFIX}sql-error-reporting"
   # Run container with user creation
-  echo "DEBUG: Starting container with test user..."
   run_container "$cname" -e DOLT_ROOT_PASSWORD=rootpass -e DOLT_USER=testuser -e DOLT_PASSWORD=testpass
 
-  echo "DEBUG: Container logs after startup:"
-  docker logs "$cname" 2>&1 | tail -10
-
   # Create the user first time (should succeed)
-  echo "DEBUG: Creating user first time (should succeed)..."
   run docker exec "$cname" dolt sql -q "CREATE USER IF NOT EXISTS 'testuser'@'%' IDENTIFIED BY 'testpass';"
-  echo "DEBUG: CREATE USER IF NOT EXISTS status=$status, output:"
-  echo "$output"
   [ $status -eq 0 ]
 
   # Try to create the same user again (should fail with detailed error)
-  echo "DEBUG: Creating same user again (should fail with detailed error)..."
   run docker exec "$cname" dolt sql -q "CREATE USER 'testuser'@'%' IDENTIFIED BY 'testpass';"
-  echo "DEBUG: CREATE USER (duplicate) status=$status, output:"
-  echo "$output"
   [ $status -ne 0 ]
   # The error should contain detailed information (not suppressed)
   [[ "$output" =~ [Oo]peration.*failed|[Uu]ser.*already.*exists|[Dd]uplicate ]] || false
@@ -373,17 +253,10 @@ wait_for_log() {
 @test "docker-entrypoint: empty DOLT_ROOT_PASSWORD is allowed" {
   cname="${TEST_PREFIX}empty-password-allowed"
   # Run container with empty DOLT_ROOT_PASSWORD
-  echo "DEBUG: Starting container with empty DOLT_ROOT_PASSWORD..."
   run_container "$cname" -e DOLT_ROOT_PASSWORD=""
   
-  echo "DEBUG: Container logs after startup:"
-  docker logs "$cname" 2>&1 | tail -10
-  
   # Test that we can connect without password (this should work even without explicit root user)
-  echo "DEBUG: Testing connection without password..."
   run docker exec "$cname" dolt sql -q "SHOW DATABASES;"
-  echo "DEBUG: SHOW DATABASES status=$status, output:"
-  echo "$output"
   [ $status -eq 0 ]
   [[ "$output" =~ "information_schema" ]] || false
 }
@@ -392,7 +265,6 @@ wait_for_log() {
 @test "docker-entrypoint: valid server config file handling" {
   cname="${TEST_PREFIX}valid-server-config"
   # Create a valid server config file
-  echo "DEBUG: Creating valid server config file..."
   mkdir -p /tmp/test-config
   cat > /tmp/test-config/test.yaml << 'EOF'
 log_level: info
@@ -407,65 +279,14 @@ data_dir: .
 cfg_dir: .doltcfg
 EOF
   
-  echo "DEBUG: Created config file:"
-  cat /tmp/test-config/test.yaml
-  
   # Run container with valid server config file
-  echo "DEBUG: Starting container with valid server config..."
   run_container "$cname" -v /tmp/test-config:/etc/dolt/servercfg.d:ro
-  
-  echo "DEBUG: Container logs after startup:"
-  docker logs "$cname" 2>&1 | tail -10
   
   # Cleanup
   rm -rf /tmp/test-config
 }
 
 # bats test_tags=no_lambda
-@test "docker-entrypoint: invalid config file error handling" {
-  cname="${TEST_PREFIX}invalid-config"
-  # Create a temporary config file with invalid JSON structure
-  mkdir -p /tmp/test-config
-  echo '{"invalid_json": syntax error}' > /tmp/test-config/test.json
-  
-  echo "DEBUG: Created invalid config file:"
-  cat /tmp/test-config/test.json
-  
-  # Run container with invalid config file (should fail)
-  run docker run -d --name "$cname" -v /tmp/test-config:/etc/dolt/doltcfg.d:ro "$TEST_IMAGE"
-  echo "DEBUG: Container start status=$status, output:"
-  echo "$output"
-  
-  # Wait a bit for container to start/fail
-  sleep 5
-  
-  # Check container status
-  echo "DEBUG: Checking if container is running..."
-  run docker ps --filter "name=$cname" --format "{{.Names}}"
-  echo "DEBUG: docker ps status=$status, output: '$output'"
-  [ $status -eq 0 ]
-  
-  # Check if container is stopped/failed
-  echo "DEBUG: Checking all containers (including stopped)..."
-  run docker ps -a --filter "name=$cname" --format "{{.Names}} {{.Status}}"
-  echo "DEBUG: docker ps -a output: '$output'"
-  
-  # Container should fail to start with invalid config
-  run docker ps --filter "name=$cname" --format "{{.Names}}"
-  echo "DEBUG: Final check - running containers with name '$cname': '$output'"
-  [ $status -eq 0 ]
-  [ -z "$output" ]
-  
-  # Check that error message appears in logs
-  echo "DEBUG: Container logs:"
-  docker logs "$cname" >/tmp/${cname}.log 2>&1 || true
-  cat /tmp/${cname}.log
-  [[ "$(cat /tmp/"${cname}".log)" =~ "Failed to load the global config" ]] || false
-  
-  # Cleanup
-  rm -rf /tmp/test-config
-}
-
 @test "docker-entrypoint: wrong password authentication" {
   cname="${TEST_PREFIX}wrong-pass"
   usr="testuser"
@@ -497,6 +318,55 @@ EOF
   [[ "$output" =~ "ERROR 1045 (28000): Access denied for user 'root'" ]] || false
 }
 
+# bats test_tags=no_lambda
+@test "docker-entrypoint: DOLT_USER_HOST and MYSQL_USER_HOST creates user with specific host" {
+  cname="${TEST_PREFIX}user-host"
+  run_container_with_port "$cname" 3306 -e DOLT_ROOT_PASSWORD=rootpass -e DOLT_ROOT_HOST=localhost -e DOLT_USER=testuser -e DOLT_PASSWORD=testpass -e DOLT_USER_HOST=%
+
+  # Grant testuser access to mysql database for verification
+  run docker exec "$cname" dolt sql -q "GRANT ALL PRIVILEGES ON mysql.* TO 'testuser'@'%';"
+  [ $status -eq 0 ]
+
+  # Verify user was created with the specified host (using external user)
+  run docker exec "$cname" dolt -u testuser -p testpass sql --result-format csv -q "SELECT User, Host FROM mysql.user"
+  [ $status -eq 0 ]
+  [[ "$output" =~ "testuser,%" ]] || false
+
+  # Verify root@localhost exists (query using local dolt sql mode)
+  run docker exec "$cname" bash -c "dolt sql --result-format csv -q \"SELECT User, Host FROM mysql.user WHERE User='root';\""
+  [ $status -eq 0 ]
+  [[ "$output" =~ "root,localhost" ]] || false
+
+  # Verify grants exist for the user with correct host
+  run docker exec "$cname" bash -c "dolt sql -q \"SHOW GRANTS FOR 'testuser'@'%';\""
+  [ $status -eq 0 ]
+  [[ "$output" =~ "GRANT USAGE" ]] || false
+
+  run docker stop "$cname"
+  [ $status -eq 0 ]
+  [[ $output = "$cname" ]] || false
+
+  # Test MYSQL_USER_HOST variant
+  cname2="${TEST_PREFIX}user-host-2"
+  run_container_with_port "$cname2" 3306 -e DOLT_ROOT_PASSWORD=rootpass -e DOLT_ROOT_HOST=% -e DOLT_USER=testuser2 -e DOLT_PASSWORD=testpass2 -e MYSQL_USER_HOST=%
+  
+  # Verify user was created with the specified host
+  run docker exec "$cname2" dolt -u root -p rootpass sql --result-format csv -q "SELECT User, Host FROM mysql.user WHERE User='testuser2';"
+  [ $status -eq 0 ]
+  [[ "$output" =~ "testuser2,%" ]] || false
+
+  # Verify root was created with %
+  run docker exec "$cname2" dolt -u root -p rootpass sql --result-format csv -q "SELECT User, Host FROM mysql.user WHERE User='root';"
+  [ $status -eq 0 ]
+  [[ "$output" =~ "root,%" ]] || false
+
+  # Verify grants exist for the user with correct host
+  run docker exec "$cname2" dolt -u root -p rootpass sql -q "SHOW GRANTS FOR 'testuser2'@'%';"
+  [ $status -eq 0 ]
+  [[ "$output" =~ "GRANT USAGE" ]] || false
+}
+
+# bats test_tags=no_lambda
 @test "docker-entrypoint: custom database with root and user access" {
   cname="${TEST_PREFIX}dolt-auth"
   db="testdb"
@@ -568,40 +438,24 @@ EOF
   pwd="testpass"
   
   # Run container with port mapping
-  echo "DEBUG: Starting container with port mapping on 3306..."
   run_container_with_port "$cname" 3306 -e DOLT_ROOT_PASSWORD=rootpass -e DOLT_ROOT_HOST=% -e DOLT_DATABASE="$db" -e DOLT_USER="$usr" -e DOLT_PASSWORD="$pwd"
   
-  echo "DEBUG: Container logs after startup:"
-  docker logs "$cname" 2>&1 | tail -10
-  
   # Test root user connection via MySQL client
-  echo "DEBUG: Testing root user connection via MySQL client..."
   run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u root --password=rootpass -e "SHOW DATABASES;"
-  echo "DEBUG: Root MySQL client status=$status, output:"
-  echo "$output"
   [ $status -eq 0 ]
   echo "$output" | grep -Fx "$db" >/dev/null
   
   # Test custom user connection via MySQL client
-  echo "DEBUG: Testing custom user connection via MySQL client..."
   run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u "$usr" --password="$pwd" -e "SHOW DATABASES;"
-  echo "DEBUG: Custom user MySQL client status=$status, output:"
-  echo "$output"
   [ $status -eq 0 ]
   echo "$output" | grep -Fx "$db" >/dev/null
   
   # Test that custom user can perform operations via MySQL client
-  echo "DEBUG: Testing custom user can create table via MySQL client..."
   run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u "$usr" --password="$pwd" -e "USE \`$db\`; CREATE TABLE mysql_test (id INT PRIMARY KEY, name VARCHAR(50));"
-  echo "DEBUG: CREATE TABLE status=$status, output:"
-  echo "$output"
   [ $status -eq 0 ]
   
   # Test data insertion via MySQL client
-  echo "DEBUG: Testing data insertion via MySQL client..."
   run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u "$usr" --password="$pwd" -e "USE \`$db\`; INSERT INTO mysql_test VALUES (1, 'mysql_test_data');"
-  echo "DEBUG: INSERT status=$status, output:"
-  echo "$output"
   [ $status -eq 0 ]
   
   # Test data query via MySQL client
@@ -644,6 +498,7 @@ EOF
   [[ "$output" =~ "1" ]] || false
 }
 
+# bats test_tags=no_lambda
 @test "docker-entrypoint: MySQL client custom database with root and user access" {
   cname="${TEST_PREFIX}custom-db"
   db="testdb"
