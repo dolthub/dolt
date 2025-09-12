@@ -256,9 +256,7 @@ _main() {
     # Show what users exist for debugging
     mysql_note "Current users in the system:"
     dolt sql -q "SELECT User, Host FROM mysql.user;" 2>&1 | grep -v "^$" || mysql_warn "Could not list users"
-    
-    # This contains the server "ready for connections" message which tests use to detect server is ready
-    # We only show the logs at this stage since the users are available now for testing
+
     mysql_note "Reattaching to server process..."
     cat /tmp/server.log
 
