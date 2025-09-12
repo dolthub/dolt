@@ -30,8 +30,8 @@ func EncodingFromSqlType(typ sql.Type) serial.Encoding {
 		case sql.ExtendedTypeSerializedWidth_64K:
 			return serial.EncodingExtended
 		case sql.ExtendedTypeSerializedWidth_Unbounded:
-			// Always uses adaptive encoding for extended types, regardless of the setting of UseAdaptiveEncoding below.
-			return serial.EncodingExtendedAdaptive
+			// TODO: should use serial.EncodingExtendedAdaptive, but it's currently broken
+			return serial.EncodingExtendedAddr
 		default:
 			panic(fmt.Errorf("unknown serialization width"))
 		}
