@@ -191,6 +191,109 @@ EOF
     [[ "$output" =~ "invalid branch name: *" ]] || false
 }
 
+@test "ci: import supports DoltTest steps (tests wildcard and specific)" {
+    cat > workflow.yaml <<EOF
+name: wf_dolt_test_only
+on:
+  push: {}
+jobs:
+  - name: run tests
+    steps:
+      - name: run all tests (wildcard groups)
+        dolt_test_groups:
+          - "*"
+      - name: run specific tests
+        dolt_test_tests:
+          - test_a
+          - test_b
+EOF
+
+    dolt ci init
+    run dolt ci import ./workflow.yaml
+    [ "$status" -eq 0 ]
+    run dolt ci ls
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "wf_dolt_test_only" ]] || false
+
+    # Verify DoltTest rows inserted
+    run dolt sql -q "select group_name from dolt_ci_workflow_dolt_test_step_groups where group_name='*';"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "*" ]] || false
+
+    dolt sql -q "select test_name from dolt_ci_workflow_dolt_test_step_tests where test_name in ('test_a','test_b');"
+    run dolt sql -q "select test_name from dolt_ci_workflow_dolt_test_step_tests where test_name in ('test_a','test_b');"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "test_a" ]] || false
+    [[ "$output" =~ "test_b" ]] || false
+}
+
+@test "ci: import supports mixed SavedQuery and DoltTest steps" {
+    cat > workflow.yaml <<EOF
+name: wf_mixed
+on:
+  push: {}
+jobs:
+  - name: validate and test
+    steps:
+      - name: ensure tables listed
+        saved_query_name: get tables
+      - name: run groups a and b
+        dolt_test_groups:
+          - group_a
+          - group_b
+EOF
+
+    dolt ci init
+    run dolt ci import ./workflow.yaml
+    [ "$status" -eq 0 ]
+    run dolt ci ls
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "wf_mixed" ]] || false
+
+    # Verify saved query step and dolt test group rows exist
+    run dolt sql -q "select saved_query_name from dolt_ci_workflow_saved_query_steps where saved_query_name='get tables';"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "get tables" ]] || false
+
+    run dolt sql -q "select group_name from dolt_ci_workflow_dolt_test_step_groups where group_name in ('group_a','group_b');"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "group_a" ]] || false
+    [[ "$output" =~ "group_b" ]] || false
+}
+
+@test "ci: import supports DoltTest steps with both groups and tests" {
+    cat > workflow.yaml <<EOF
+name: wf_dolt_test_groups_and_tests
+on:
+  push: {}
+jobs:
+  - name: run selected tests in groups
+    steps:
+      - name: selected tests in selected groups
+        dolt_test_groups:
+          - g1
+          - g2
+        dolt_test_tests:
+          - t1
+EOF
+
+    dolt ci init
+    run dolt ci import ./workflow.yaml
+    [ "$status" -eq 0 ]
+    run dolt ci ls
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "wf_dolt_test_groups_and_tests" ]] || false
+
+    run dolt sql -q "select group_name from dolt_ci_workflow_dolt_test_step_groups where group_name in ('g1','g2');"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "g1" ]] || false
+    [[ "$output" =~ "g2" ]] || false
+
+    run dolt sql -q "select test_name from dolt_ci_workflow_dolt_test_step_tests where test_name='t1';"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "t1" ]] || false
+}
+
 @test "ci: import command will update existing workflow" {
     cat > workflow_1.yaml <<EOF
 name: workflow_1
@@ -328,6 +431,67 @@ EOF
     [[ ${output} == *"steps:"* ]] || false
 }
 
+@test "ci: export includes DoltTest steps (groups and tests)" {
+    cat > workflow.yaml <<EOF
+name: wf_export_dolt_test
+on:
+  push: {}
+jobs:
+  - name: run tests
+    steps:
+      - name: run all group a
+        dolt_test_groups:
+          - group_a
+      - name: run tests t1 and t2
+        dolt_test_tests:
+          - t1
+          - t2
+EOF
+
+    dolt ci init
+    dolt ci import ./workflow.yaml
+
+    run dolt ci export "wf_export_dolt_test"
+    [ "$status" -eq 0 ]
+    run cat wf_export_dolt_test.yaml
+    [ "$status" -eq 0 ]
+    # Ensure the YAML contains the DoltTest steps and fields
+    [[ "$output" =~ "name: \"wf_export_dolt_test\"" ]] || false
+    [[ "$output" =~ "dolt_test_groups:" ]] || false
+    [[ "$output" =~ "- \"group_a\"" ]] || false
+    [[ "$output" =~ "dolt_test_tests:" ]] || false
+    [[ "$output" =~ "- \"t1\"" ]] || false
+    [[ "$output" =~ "- \"t2\"" ]] || false
+}
+
+@test "ci: export includes mixed SavedQuery and DoltTest steps" {
+    cat > workflow.yaml <<EOF
+name: wf_export_mixed
+on:
+  push: {}
+jobs:
+  - name: validate and test
+    steps:
+      - name: ensure tables listed
+        saved_query_name: get tables
+      - name: run group b
+        dolt_test_groups:
+          - group_b
+EOF
+
+    dolt ci init
+    dolt ci import ./workflow.yaml
+
+    run dolt ci export "wf_export_mixed"
+    [ "$status" -eq 0 ]
+    run cat wf_export_mixed.yaml
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "name: \"wf_export_mixed\"" ]] || false
+    [[ "$output" =~ "saved_query_name: \"get tables\"" ]] || false
+    [[ "$output" =~ "dolt_test_groups:" ]] || false
+    [[ "$output" =~ "- \"group_b\"" ]] || false
+}
+
 @test "ci: export errors on invalid workflow" {
     dolt ci init
     run dolt ci export invalid
@@ -436,6 +600,78 @@ EOF
     run dolt ci view "workflow_1"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "saved_query_statement: \"saved query not found\"" ]] || false
+}
+
+@test "ci: dolt ci view shows DoltTest steps (wildcard and tests)" {
+    cat > workflow.yaml <<EOF
+name: wf_view_dolt_test
+on:
+  push: {}
+jobs:
+  - name: run tests
+    steps:
+      - name: run all (wildcard)
+        dolt_test_groups:
+          - "*"
+      - name: run specific tests
+        dolt_test_tests:
+          - test_a
+          - test_b
+EOF
+
+    dolt ci init
+    dolt ci import ./workflow.yaml
+
+    dolt ci view "wf_view_dolt_test"
+
+    run dolt ci view "wf_view_dolt_test"
+    [ "$status" -eq 0 ]
+
+    [[ "$output" =~ "name: \"wf_view_dolt_test\"" ]] || false
+    # Groups wildcard step appears
+    [[ "$output" =~ "dolt_test_groups:" ]] || false
+    [[ "$output" =~ "- \"*\"" ]] || false
+    # Tests step appears
+    [[ "$output" =~ "dolt_test_tests:" ]] || false
+    [[ "$output" =~ "- \"test_a\"" ]] || false
+    [[ "$output" =~ "- \"test_b\"" ]] || false
+    # Preview statements present
+    [[ "$output" =~ "SELECT * FROM dolt_test_run('*')" ]] || false
+    [[ "$output" =~ "SELECT * FROM dolt_test_run('test_a')" ]] || false
+    [[ "$output" =~ "SELECT * FROM dolt_test_run('test_b')" ]] || false
+}
+
+@test "ci: dolt ci view shows DoltTest steps (groups and tests)" {
+    cat > workflow.yaml <<EOF
+name: wf_view_groups_and_tests
+on:
+  push: {}
+jobs:
+  - name: run selected
+    steps:
+      - name: selected in groups
+        dolt_test_groups:
+          - g1
+          - g2
+        dolt_test_tests:
+          - t1
+EOF
+
+    dolt ci init
+    dolt ci import ./workflow.yaml
+
+    run dolt ci view "wf_view_groups_and_tests"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "name: \"wf_view_groups_and_tests\"" ]] || false
+    [[ "$output" =~ "dolt_test_groups:" ]] || false
+    [[ "$output" =~ "- \"g1\"" ]] || false
+    [[ "$output" =~ "- \"g2\"" ]] || false
+    [[ "$output" =~ "dolt_test_tests:" ]] || false
+    [[ "$output" =~ "- \"t1\"" ]] || false
+    # Preview includes a statement per selector
+    [[ "$output" =~ "SELECT * FROM dolt_test_run('g1')" ]] || false
+    [[ "$output" =~ "SELECT * FROM dolt_test_run('g2')" ]] || false
+    [[ "$output" =~ "SELECT * FROM dolt_test_run('t1')" ]] || false
 }
 
 @test "ci: can use --job with dolt ci view to filter workflow" {
@@ -652,4 +888,165 @@ EOF
     [[ "$output" =~ "Running workflow: workflow" ]] || false
     [[ "$output" =~ "Step: should fail, bad query name - FAIL" ]] || false
     [[ "$output" =~ "Could not find saved query: invalid query" ]] || false
+}
+
+@test "ci: ci run executes DoltTest steps (wildcard groups)" {
+    # define tests that should pass
+    dolt sql -q "insert into dolt_tests (test_name, test_group, test_query, assertion_type, assertion_comparator, assertion_value) values ('test_a', null, 'select 1', 'expected_rows', '==', '1');"
+    dolt sql -q "insert into dolt_tests (test_name, test_group, test_query, assertion_type, assertion_comparator, assertion_value) values ('test_b', null, 'select 1', 'expected_columns', '==', '1');"
+
+    cat > workflow.yaml <<EOF
+name: wf_run_dolt_wildcard
+on:
+  push: {}
+jobs:
+  - name: run all tests
+    steps:
+      - name: run tests wildcard
+        dolt_test_groups:
+          - "*"
+EOF
+
+    dolt ci init
+    dolt ci import ./workflow.yaml
+    run dolt ci run "wf_run_dolt_wildcard"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Running workflow: wf_run_dolt_wildcard" ]] || false
+    [[ "$output" =~ "Step: run tests wildcard - PASS" ]] || false
+}
+
+@test "ci: ci run executes DoltTest steps (tests only)" {
+    dolt sql -q "insert into dolt_tests values ('t_only_a', null, 'select 1', 'expected_rows', '==', '1');"
+    dolt sql -q "insert into dolt_tests values ('t_only_b', null, 'select 1', 'expected_columns', '==', '1');"
+
+    cat > workflow.yaml <<EOF
+name: wf_run_dolt_tests_only
+on:
+  push: {}
+jobs:
+  - name: run named tests
+    steps:
+      - name: run t_only_a and t_only_b
+        dolt_test_tests:
+          - t_only_a
+          - t_only_b
+EOF
+
+    dolt ci init
+    dolt ci import ./workflow.yaml
+    run dolt ci run "wf_run_dolt_tests_only"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Step: run t_only_a and t_only_b - PASS" ]] || false
+}
+
+@test "ci: ci run executes DoltTest steps (groups only)" {
+    dolt sql -q "insert into dolt_tests values ('g1_t1', 'g1', 'select 1', 'expected_rows', '==', '1');"
+    dolt sql -q "insert into dolt_tests values ('g2_t1', 'g2', 'select 1', 'expected_columns', '==', '1');"
+
+    cat > workflow.yaml <<EOF
+name: wf_run_dolt_groups_only
+on:
+  push: {}
+jobs:
+  - name: run groups
+    steps:
+      - name: run groups g1 and g2
+        dolt_test_groups:
+          - g1
+          - g2
+EOF
+
+    dolt ci init
+    dolt ci import ./workflow.yaml
+    run dolt ci run "wf_run_dolt_groups_only"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Step: run groups g1 and g2 - PASS" ]] || false
+}
+
+@test "ci: ci run executes DoltTest steps (groups and tests)" {
+    dolt sql -q "insert into dolt_tests values ('sel_t1', 'ga', 'select 1', 'expected_rows', '==', '1');"
+
+    cat > workflow.yaml <<EOF
+name: wf_run_dolt_groups_and_tests
+on:
+  push: {}
+jobs:
+  - name: run selected
+    steps:
+      - name: run t1 in ga
+        dolt_test_groups:
+          - ga
+        dolt_test_tests:
+          - sel_t1
+EOF
+
+    dolt ci init
+    dolt ci import ./workflow.yaml
+    run dolt ci run "wf_run_dolt_groups_and_tests"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Step: run t1 in ga - PASS" ]] || false
+}
+
+@test "ci: ci run fails when DoltTest has failing test" {
+    dolt sql -q "insert into dolt_tests values ('t_fail', null, 'select 1', 'expected_rows', '==', '2');"
+
+    cat > workflow.yaml <<EOF
+name: wf_run_dolt_fail
+on:
+  push: {}
+jobs:
+  - name: failing tests
+    steps:
+      - name: run failing test
+        dolt_test_tests:
+          - t_fail
+EOF
+
+    dolt ci init
+    dolt ci import ./workflow.yaml
+    dolt ci run "wf_run_dolt_fail"
+    run dolt ci run "wf_run_dolt_fail"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Step: run failing test - FAIL" ]] || false
+}
+
+@test "ci: ci run errors when DoltTest references unknown test or group" {
+    dolt sql -q "insert into dolt_tests values ('t_known', 'gg', 'select 1', 'expected_rows', '==', '1');"
+
+    # Unknown test
+    cat > workflow_test.yaml <<EOF
+name: wf_run_dolt_unknown_test
+on:
+  push: {}
+jobs:
+  - name: unknown test
+    steps:
+      - name: run unknown test
+        dolt_test_tests:
+          - doesnt_exist
+EOF
+    dolt ci init
+    dolt ci import ./workflow_test.yaml
+    run dolt ci run "wf_run_dolt_unknown_test"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Step: run unknown test - FAIL" ]] || false
+    [[ "$output" =~ "could not find tests for argument: doesnt_exist" ]] || false
+
+    # Unknown group
+    cat > workflow_group.yaml <<EOF
+name: wf_run_dolt_unknown_group
+on:
+  push: {}
+jobs:
+  - name: unknown group
+    steps:
+      - name: run unknown group
+        dolt_test_groups:
+          - missing_group
+EOF
+    dolt ci import ./workflow_group.yaml
+    run dolt ci run "wf_run_dolt_unknown_group"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Step: run unknown group - FAIL" ]] || false
+    [[ "$output" =~ "could not find tests for argument: missing_group" ]] || false
 }

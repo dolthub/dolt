@@ -55,6 +55,9 @@ var ExpectedDoltCITablesOrdered = WrappedTableNameSlice{
 	{TableName: doltdb.TableName{Name: doltdb.WorkflowStepsTableName}},
 	{TableName: doltdb.TableName{Name: doltdb.WorkflowSavedQueryStepsTableName}},
 	{TableName: doltdb.TableName{Name: doltdb.WorkflowSavedQueryStepExpectedRowColumnResultsTableName}},
+	{TableName: doltdb.TableName{Name: doltdb.WorkflowDoltTestStepsTableName}},
+	{TableName: doltdb.TableName{Name: doltdb.WorkflowDoltTestStepGroupsTableName}},
+	{TableName: doltdb.TableName{Name: doltdb.WorkflowDoltTestStepTestsTableName}},
 }
 
 type queryFunc func(sqlCtx *sql.Context, query string) (sql.Schema, sql.RowIter, *sql.QueryFlags, error)
@@ -169,6 +172,9 @@ func CreateDoltCITables(queryist cli.Queryist, sqlCtx *sql.Context, name, email 
 		createWorkflowStepsTableQuery(),
 		createWorkflowSavedQueryStepsTableQuery(),
 		createWorkflowSavedQueryStepExpectedRowColumnResultsTableQuery(),
+		createWorkflowDoltTestStepsTableQuery(),
+		createWorkflowDoltTestStepGroupsTableQuery(),
+		createWorkflowDoltTestStepTestsTableQuery(),
 		deleteAllFromWorkflowsTableQuery(), // as last step run delete to create resolve all indexes/fks
 	}
 
@@ -222,6 +228,18 @@ func createWorkflowSavedQueryStepsTableQuery() string {
 
 func createWorkflowSavedQueryStepExpectedRowColumnResultsTableQuery() string {
 	return fmt.Sprintf("create table %s (`%s` varchar(36) primary key,`%s` int not null, `%s` int not null,`%s` bigint not null,`%s` bigint not null,`%s` datetime(6) not null,`%s` datetime(6) not null,`%s` varchar(36) not null, foreign key (`%s`) references %s (`%s`) on delete cascade);", doltdb.WorkflowSavedQueryStepExpectedRowColumnResultsTableName, doltdb.WorkflowSavedQueryStepExpectedRowColumnResultsIdPkColName, doltdb.WorkflowSavedQueryStepExpectedRowColumnResultsExpectedColumnCountComparisonTypeColName, doltdb.WorkflowSavedQueryStepExpectedRowColumnResultsExpectedRowCountComparisonTypeColName, doltdb.WorkflowSavedQueryStepExpectedRowColumnResultsExpectedColumnCountColName, doltdb.WorkflowSavedQueryStepExpectedRowColumnResultsExpectedRowCountColName, doltdb.WorkflowSavedQueryStepExpectedRowColumnResultsCreatedAtColName, doltdb.WorkflowSavedQueryStepExpectedRowColumnResultsUpdatedAtColName, doltdb.WorkflowSavedQueryStepExpectedRowColumnResultsSavedQueryStepIdFkColName, doltdb.WorkflowSavedQueryStepExpectedRowColumnResultsSavedQueryStepIdFkColName, doltdb.WorkflowSavedQueryStepsTableName, doltdb.WorkflowSavedQueryStepsIdPkColName)
+}
+
+func createWorkflowDoltTestStepsTableQuery() string {
+	return fmt.Sprintf("create table %s (`%s` varchar(36) primary key, `%s` varchar(36) not null, foreign key (`%s`) references %s (`%s`) on delete cascade);", doltdb.WorkflowDoltTestStepsTableName, doltdb.WorkflowDoltTestStepsIdPkColName, doltdb.WorkflowDoltTestStepsWorkflowStepIdFkColName, doltdb.WorkflowDoltTestStepsWorkflowStepIdFkColName, doltdb.WorkflowStepsTableName, doltdb.WorkflowStepsIdPkColName)
+}
+
+func createWorkflowDoltTestStepGroupsTableQuery() string {
+	return fmt.Sprintf("create table %s (`%s` varchar(36) primary key, `%s` varchar(2048) collate utf8mb4_0900_ai_ci not null, `%s` varchar(36) not null, foreign key (`%s`) references %s (`%s`) on delete cascade);", doltdb.WorkflowDoltTestStepGroupsTableName, doltdb.WorkflowDoltTestStepGroupsIdPkColName, doltdb.WorkflowDoltTestStepGroupsGroupNameColName, doltdb.WorkflowDoltTestStepGroupsWorkflowDoltTestStepIdFkColName, doltdb.WorkflowDoltTestStepGroupsWorkflowDoltTestStepIdFkColName, doltdb.WorkflowDoltTestStepsTableName, doltdb.WorkflowDoltTestStepsIdPkColName)
+}
+
+func createWorkflowDoltTestStepTestsTableQuery() string {
+	return fmt.Sprintf("create table %s (`%s` varchar(36) primary key, `%s` varchar(2048) collate utf8mb4_0900_ai_ci not null, `%s` varchar(36) not null, foreign key (`%s`) references %s (`%s`) on delete cascade);", doltdb.WorkflowDoltTestStepTestsTableName, doltdb.WorkflowDoltTestStepTestsIdPkColName, doltdb.WorkflowDoltTestStepTestsTestNameColName, doltdb.WorkflowDoltTestStepTestsWorkflowDoltTestStepIdFkColName, doltdb.WorkflowDoltTestStepTestsWorkflowDoltTestStepIdFkColName, doltdb.WorkflowDoltTestStepsTableName, doltdb.WorkflowDoltTestStepsIdPkColName)
 }
 
 func deleteAllFromWorkflowsTableQuery() string {
