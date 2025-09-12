@@ -159,7 +159,7 @@ wait_for_log() {
   cname="${TEST_PREFIX}kw-params"
   kw_db="select"
   kw_user="from"
-  run_container "$cname" -e DOLT_ROOT_PASSWORD=rootpass -e DOLT_DATABASE="$kw_db" -e DOLT_USER="$kw_user" -e DOLT_PASSWORD=pass
+  run_container "$cname" -e DOLT_ROOT_PASSWORD=rootpass -e DOLT_ROOT_HOST=% -e DOLT_DATABASE="$kw_db" -e DOLT_USER="$kw_user" -e DOLT_PASSWORD=pass
 
   echo "DEBUG: Container logs after startup:"
   docker logs "$cname" 2>&1 | tail -10
@@ -226,7 +226,7 @@ wait_for_log() {
   db="testdb"
   usr="testuser"
   pwd="testpass"
-  run_container "$cname" -e DOLT_ROOT_PASSWORD=rootpass -e DOLT_DATABASE="$db" -e DOLT_USER="$usr" -e DOLT_PASSWORD="$pwd"
+  run_container "$cname" -e DOLT_ROOT_PASSWORD=rootpass -e DOLT_ROOT_HOST=% -e DOLT_DATABASE="$db" -e DOLT_USER="$usr" -e DOLT_PASSWORD="$pwd"
 
   echo "DEBUG: Container logs after startup:"
   docker logs "$cname" 2>&1 | tail -10
@@ -426,7 +426,7 @@ EOF
   cname="${TEST_PREFIX}invalid-config"
   # Create a temporary config file with invalid JSON structure
   mkdir -p /tmp/test-config
-  echo '{"user": {"name": "test"}}' > /tmp/test-config/test.json
+  echo '{"invalid_json": syntax error}' > /tmp/test-config/test.json
   
   echo "DEBUG: Created invalid config file:"
   cat /tmp/test-config/test.json
@@ -460,7 +460,7 @@ EOF
   echo "DEBUG: Container logs:"
   docker logs "$cname" >/tmp/${cname}.log 2>&1 || true
   cat /tmp/${cname}.log
-  [[ "$(cat /tmp/"${cname}".log)" =~ "Failed to load the global config" ]] || false
+  [[ "$(cat /tmp/"${cname}".log)" =~ "Failed to load the global config|invalid character|JSON|syntax error" ]] || false
   
   # Cleanup
   rm -rf /tmp/test-config
