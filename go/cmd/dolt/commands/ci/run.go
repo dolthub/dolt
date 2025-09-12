@@ -118,8 +118,10 @@ func (cmd RunCmd) Exec(ctx context.Context, commandStr string, args []string, _ 
 
 // queryAndPrint iterates through the jobs and steps for the given config, then runs each saved query and given assertion
 func queryAndPrint(sqlCtx *sql.Context, queryist cli.Queryist, config *dolt_ci.WorkflowConfig, savedQueries map[string]string) {
-	for _, job := range config.Jobs {
-		cli.Println(color.GreenString("Running job: %s", job.Name.Value))
+    for _, job := range config.Jobs {
+        cli.Println(color.GreenString("Running job: %s", job.Name.Value))
+
+        jobFailures := make([]string, 0)
         for _, step := range job.Steps {
             // For DoltTest steps we print a header and list individual tests before summary
             _, isDoltTest := step.(*dolt_ci.DoltTestStep)
@@ -150,19 +152,23 @@ func queryAndPrint(sqlCtx *sql.Context, queryist cli.Queryist, config *dolt_ci.W
                     cli.Println(details)
                 }
                 if err != nil {
-                    cli.Println(color.RedString("Result: FAIL"))
-                    cli.Println(color.RedString("%s", err))
-                } else {
-                    cli.Println(color.GreenString("Result: PASS"))
+                    jobFailures = append(jobFailures, fmt.Sprintf("step '%s': %s", step.GetName(), err.Error()))
                 }
             } else {
                 if err != nil {
                     cli.Println("FAIL")
                     cli.Println(color.RedString("%s", err))
+                    jobFailures = append(jobFailures, fmt.Sprintf("step '%s': %s", step.GetName(), err.Error()))
                 } else {
                     cli.Println("PASS")
                 }
             }
+        }
+        if len(jobFailures) > 0 {
+            cli.Println(color.RedString("Result: FAIL"))
+            cli.Println(color.RedString("%s", strings.Join(jobFailures, "; ")))
+        } else {
+            cli.Println(color.GreenString("Result: PASS"))
         }
 	}
 }
