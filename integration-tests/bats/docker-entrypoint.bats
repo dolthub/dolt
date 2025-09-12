@@ -460,7 +460,7 @@ EOF
   echo "DEBUG: Container logs:"
   docker logs "$cname" >/tmp/${cname}.log 2>&1 || true
   cat /tmp/${cname}.log
-  [[ "$(cat /tmp/"${cname}".log)" =~ "Failed to load the global config|invalid character|JSON|syntax error" ]] || false
+  [[ "$(cat /tmp/"${cname}".log)" =~ "Failed to load the global config" ]] || false
   
   # Cleanup
   rm -rf /tmp/test-config
