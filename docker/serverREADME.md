@@ -85,6 +85,19 @@ To see all supported options for `dolt sql-server`, you can run the image with `
 $ docker run dolthub/dolt-sql-server:latest --help
 ```
 
+## Building the image
+
+To build this image from source, use the `serverDockerfile`:
+
+```shell
+# Build with the latest Dolt version (automatically fetches the latest release)
+$ docker build -f docker/serverDockerfile --build-arg DOLT_VERSION=latest -t dolt-sql-server:latest .
+
+# Build with a specific Dolt version
+$ docker build -f docker/serverDockerfile --build-arg DOLT_VERSION=1.59.7 -t dolt-sql-server:latest .
+# Note: To run the local build replace `dolthub/dolt-sql-server:latest` with `dolt-sql-server:latest`
+```
+
 ### Connect to the server in the container from the host system
 
 From the host system, to connect to a server running in a container, we need to map a port on the host system to the port our sql-server is running on in the container.
@@ -141,10 +154,11 @@ $ docker run -p 3307:3306 -v /Users/jennifer/docker/databases/:/var/lib/dolt/ do
 
 The Dolt SQL Server image supports the following environment variables:
 
-- `DOLT_ROOT_PASSWORD`: Sets the password for the root user
-- `DOLT_ROOT_HOST`: Specifies a host for the root user (default: localhost)
+- `DOLT_ROOT_PASSWORD`: Sets the password for root (default: empty)
+- `DOLT_ROOT_HOST`: Specifies a host for the root (default: localhost)
 - `DOLT_DATABASE` / `MYSQL_DATABASE`: Creates a database with this name if it doesn't exist
 - `DOLT_USER` / `MYSQL_USER`: Creates a user with this name if it doesn't exist
 - `DOLT_PASSWORD` / `MYSQL_PASSWORD`: Sets the password for the user specified in `DOLT_USER`/`MYSQL_USER`
+- `DOLT_USER_HOST` / `MYSQL_USER_HOST`: Specifies a host for the custom user (default: falls back to `DOLT_ROOT_HOST`, then localhost)
 
 The user will be granted all privileges on the database specified by `DOLT_DATABASE`/`MYSQL_DATABASE` if provided.
