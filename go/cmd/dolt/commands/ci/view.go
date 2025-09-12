@@ -188,14 +188,23 @@ func updateConfigQueryStatements(config *dolt_ci.WorkflowConfig, savedQueries ma
 // to resolve selections against the dolt_tests system table. If both groups and tests are empty,
 // an empty list is returned.
 func previewDoltTestStatements(dt *dolt_ci.DoltTestStep) ([]string, error) {
-    // Build selection args: explicit tests and groups. If none provided, wildcard is assumed
-    // by dolt_test_run, but here we show nothing unless explicit.
+    // Build selection args: normalize wildcards so that presence of '*' in a field ignores other entries
+    // If none provided, we'll show wildcard as a preview.
     args := make([]string, 0, len(dt.Tests)+len(dt.TestGroups))
-    for _, t := range dt.Tests {
-        args = append(args, t.Value)
-    }
-    for _, g := range dt.TestGroups {
-        args = append(args, g.Value)
+    hasStarTests := false
+    for _, t := range dt.Tests { if t.Value == "*" { hasStarTests = true; break } }
+    hasStarGroups := false
+    for _, g := range dt.TestGroups { if g.Value == "*" { hasStarGroups = true; break } }
+
+    if hasStarTests || hasStarGroups {
+        // Any wildcard implies full run; de-duplicate to a single wildcard preview
+        args = []string{"*"}
+    } else {
+        for _, t := range dt.Tests { args = append(args, t.Value) }
+        for _, g := range dt.TestGroups { args = append(args, g.Value) }
+        if len(args) == 0 {
+            args = []string{"*"}
+        }
     }
 
     // Use the same helper the table function relies on to locate rows. We cannot instantiate a full engine here,
@@ -204,14 +213,7 @@ func previewDoltTestStatements(dt *dolt_ci.DoltTestStep) ([]string, error) {
     // Since we can't query here without engine, return the args themselves as indicative selectors.
     // Consumers can run: SELECT * FROM dolt_test_run('<arg>') to see full detail.
     // To provide better UX, if no args provided, show wildcard.
-    if len(args) == 0 {
-        args = []string{"*"}
-    }
-
-    // If both tests and groups contain only wildcard, de-duplicate to a single run
-    if len(dt.Tests) == 1 && dt.Tests[0].Value == "*" && len(dt.TestGroups) == 1 && dt.TestGroups[0].Value == "*" {
-        args = []string{"*"}
-    }
+    // args already normalized above
 
     // Represent each selection as a dolt_test_run invocation for clarity
     stmts := make([]string, 0, len(args))
