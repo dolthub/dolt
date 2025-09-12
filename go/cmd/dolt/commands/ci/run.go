@@ -231,8 +231,8 @@ func runDoltTestStep(sqlCtx *sql.Context, queryist cli.Queryist, dt *dolt_ci.Dol
         return cli.GetRowsForSql(queryist, sqlCtx, q)
     }
 
-    // Case 1: wildcard or no explicit args → run all tests (de-duplicated)
-    if testsWildcard || groupsWildcard || (!testsProvided && !groupsProvided) {
+    // Case 1: no explicit args → run all tests
+    if !testsProvided && !groupsProvided {
         rows, err := cli.GetRowsForSql(queryist, sqlCtx, "SELECT * FROM dolt_test_run()")
         if err != nil { return "", err }
         details, failures, err := formatDoltTestRows(sqlCtx, rows)
@@ -291,28 +291,47 @@ func runDoltTestStep(sqlCtx *sql.Context, queryist cli.Queryist, dt *dolt_ci.Dol
         return details, nil
     }
 
-    // both provided: for each group, require that each named test exists in that group
+    // both provided
     var allRows []sql.Row
-    for _, g := range dt.TestGroups {
-        rows, err := fetch(g.Value)
-        if err != nil { return "", err }
-        if len(rows) == 0 { return "", fmt.Errorf("group '%s' not found", g.Value) }
-        groupTests := make(map[string]bool)
-        for _, r := range rows {
-            tName, err := getStringFromCol(sqlCtx, r[0])
+    if testsWildcard && !groupsWildcard {
+        // Run all tests for the specified groups (intersection of all tests with group selector)
+        for _, g := range dt.TestGroups {
+            rows, err := fetch(g.Value)
             if err != nil { return "", err }
-            groupTests[tName] = true
+            if len(rows) == 0 { return "", fmt.Errorf("group '%s' not found", g.Value) }
+            allRows = append(allRows, rows...)
         }
+    } else if groupsWildcard && !testsWildcard {
+        // Run only the specified test names (across all groups)
         for _, t := range dt.Tests {
-            if !groupTests[t.Value] {
-                return "", fmt.Errorf("test '%s' not found in group '%s'", t.Value, g.Value)
-            }
-        }
-        for _, r := range rows {
-            tName, err := getStringFromCol(sqlCtx, r[0])
+            rows, err := fetch(t.Value)
             if err != nil { return "", err }
+            if len(rows) == 0 { return "", fmt.Errorf("test '%s' not found", t.Value) }
+            allRows = append(allRows, rows...)
+        }
+    } else {
+        // Neither is wildcard: for each group, run only the specified tests present in that group
+        for _, g := range dt.TestGroups {
+            rows, err := fetch(g.Value)
+            if err != nil { return "", err }
+            if len(rows) == 0 { return "", fmt.Errorf("group '%s' not found", g.Value) }
+            groupTests := make(map[string]bool)
+            for _, r := range rows {
+                tName, err := getStringFromCol(sqlCtx, r[0])
+                if err != nil { return "", err }
+                groupTests[tName] = true
+            }
             for _, t := range dt.Tests {
-                if tName == t.Value { allRows = append(allRows, r) }
+                if !groupTests[t.Value] {
+                    return "", fmt.Errorf("test '%s' not found in group '%s'", t.Value, g.Value)
+                }
+            }
+            for _, r := range rows {
+                tName, err := getStringFromCol(sqlCtx, r[0])
+                if err != nil { return "", err }
+                for _, t := range dt.Tests {
+                    if tName == t.Value { allRows = append(allRows, r) }
+                }
             }
         }
     }

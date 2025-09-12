@@ -196,15 +196,35 @@ func previewDoltTestStatements(dt *dolt_ci.DoltTestStep) ([]string, error) {
     hasStarGroups := false
     for _, g := range dt.TestGroups { if g.Value == "*" { hasStarGroups = true; break } }
 
-    if hasStarTests || hasStarGroups {
-        // Any wildcard implies full run; de-duplicate to a single wildcard preview
-        args = []string{"*"}
-    } else {
+    testsProvided := len(dt.Tests) > 0
+    groupsProvided := len(dt.TestGroups) > 0
+
+    switch {
+    case testsProvided && groupsProvided:
+        // If tests is wildcard and groups are specific → preview groups
+        if hasStarTests && !hasStarGroups {
+            for _, g := range dt.TestGroups { args = append(args, g.Value) }
+            break
+        }
+        // If groups is wildcard and tests are specific → preview tests
+        if hasStarGroups && !hasStarTests {
+            for _, t := range dt.Tests { args = append(args, t.Value) }
+            break
+        }
+        // Both wildcard (should be invalid by validation), but fall back to single wildcard
+        if hasStarTests && hasStarGroups {
+            args = []string{"*"}
+            break
+        }
+        // Neither wildcard → preview both sets
         for _, t := range dt.Tests { args = append(args, t.Value) }
         for _, g := range dt.TestGroups { args = append(args, g.Value) }
-        if len(args) == 0 {
-            args = []string{"*"}
-        }
+    case testsProvided:
+        if hasStarTests { args = []string{"*"} } else { for _, t := range dt.Tests { args = append(args, t.Value) } }
+    case groupsProvided:
+        if hasStarGroups { args = []string{"*"} } else { for _, g := range dt.TestGroups { args = append(args, g.Value) } }
+    default:
+        args = []string{"*"}
     }
 
     // Use the same helper the table function relies on to locate rows. We cannot instantiate a full engine here,
