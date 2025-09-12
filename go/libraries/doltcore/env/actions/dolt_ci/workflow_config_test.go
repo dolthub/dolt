@@ -90,22 +90,22 @@ jobs:
 	require.Equal(t, wf.On.PullRequest.Activities[1].Value, synchronized)
 	require.Equal(t, len(wf.Jobs), 1)
 	require.Equal(t, wf.Jobs[0].Name.Value, jobName)
-    require.Equal(t, len(wf.Jobs[0].Steps), 1)
-    sq, ok := wf.Jobs[0].Steps[0].(*SavedQueryStep)
-    require.True(t, ok)
-    require.Equal(t, sq.Name.Value, stepName)
+	require.Equal(t, len(wf.Jobs[0].Steps), 1)
+	sq, ok := wf.Jobs[0].Steps[0].(*SavedQueryStep)
+	require.True(t, ok)
+	require.Equal(t, sq.Name.Value, stepName)
 
-    // validate config passes for saved_query only
-    err = ValidateWorkflowConfig(wf)
-    require.NoError(t, err)
+	// validate config passes for saved_query only
+	err = ValidateWorkflowConfig(wf)
+	require.NoError(t, err)
 }
 
 func TestParseWorkflowWithDoltTestStep(t *testing.T) {
-    workflowName := "workflow with dolt test"
-    jobName := "test job"
-    stepName := "run dolt tests"
+	workflowName := "workflow with dolt test"
+	jobName := "test job"
+	stepName := "run dolt tests"
 
-    ymlTemplate := `name: %s
+	ymlTemplate := `name: %s
 on:
   workflow_dispatch: {}
 
@@ -118,36 +118,36 @@ jobs:
           - group_b
 `
 
-    yml := fmt.Sprintf(ymlTemplate, workflowName, jobName, stepName)
+	yml := fmt.Sprintf(ymlTemplate, workflowName, jobName, stepName)
 
-    wf, err := ParseWorkflowConfig(strings.NewReader(yml))
-    require.NoError(t, err)
-    require.NotNil(t, wf)
+	wf, err := ParseWorkflowConfig(strings.NewReader(yml))
+	require.NoError(t, err)
+	require.NotNil(t, wf)
 
-    require.Equal(t, workflowName, wf.Name.Value)
-    require.Equal(t, 1, len(wf.Jobs))
-    require.Equal(t, jobName, wf.Jobs[0].Name.Value)
-    require.Equal(t, 1, len(wf.Jobs[0].Steps))
+	require.Equal(t, workflowName, wf.Name.Value)
+	require.Equal(t, 1, len(wf.Jobs))
+	require.Equal(t, jobName, wf.Jobs[0].Name.Value)
+	require.Equal(t, 1, len(wf.Jobs[0].Steps))
 
-    dt, ok := wf.Jobs[0].Steps[0].(*DoltTestStep)
-    require.True(t, ok)
-    require.Equal(t, stepName, dt.Name.Value)
-    require.Equal(t, 2, len(dt.TestGroups))
-    require.Equal(t, "group_a", dt.TestGroups[0].Value)
-    require.Equal(t, "group_b", dt.TestGroups[1].Value)
+	dt, ok := wf.Jobs[0].Steps[0].(*DoltTestStep)
+	require.True(t, ok)
+	require.Equal(t, stepName, dt.Name.Value)
+	require.Equal(t, 2, len(dt.TestGroups))
+	require.Equal(t, "group_a", dt.TestGroups[0].Value)
+	require.Equal(t, "group_b", dt.TestGroups[1].Value)
 
-    // validate config passes for dolt_test step
-    err = ValidateWorkflowConfig(wf)
-    require.NoError(t, err)
+	// validate config passes for dolt_test step
+	err = ValidateWorkflowConfig(wf)
+	require.NoError(t, err)
 }
 
 func TestParseWorkflowWithAmbiguousStepReturnsError(t *testing.T) {
-    workflowName := "ambiguous workflow"
-    jobName := "job"
-    stepName := "ambiguous step"
+	workflowName := "ambiguous workflow"
+	jobName := "job"
+	stepName := "ambiguous step"
 
-    // This step contains both saved_query_* and dolt_test_* keys
-    ymlTemplate := `name: %s
+	// This step contains both saved_query_* and dolt_test_* keys
+	ymlTemplate := `name: %s
 on:
   workflow_dispatch: {}
 
@@ -160,19 +160,19 @@ jobs:
           - group_a
 `
 
-    yml := fmt.Sprintf(ymlTemplate, workflowName, jobName, stepName)
+	yml := fmt.Sprintf(ymlTemplate, workflowName, jobName, stepName)
 
-    _, err := ParseWorkflowConfig(strings.NewReader(yml))
-    require.Error(t, err)
-    require.Contains(t, err.Error(), "defines both saved_query_* fields and dolt_test_* fields")
+	_, err := ParseWorkflowConfig(strings.NewReader(yml))
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "defines both saved_query_* fields and dolt_test_* fields")
 }
 
 func TestParseWorkflowWithDoltTestTestsOnly(t *testing.T) {
-    workflowName := "workflow with dolt test tests only"
-    jobName := "test job"
-    stepName := "run dolt tests list"
+	workflowName := "workflow with dolt test tests only"
+	jobName := "test job"
+	stepName := "run dolt tests list"
 
-    ymlTemplate := `name: %s
+	ymlTemplate := `name: %s
 on:
   workflow_dispatch: {}
 
@@ -185,36 +185,36 @@ jobs:
           - test_b
 `
 
-    yml := fmt.Sprintf(ymlTemplate, workflowName, jobName, stepName)
+	yml := fmt.Sprintf(ymlTemplate, workflowName, jobName, stepName)
 
-    wf, err := ParseWorkflowConfig(strings.NewReader(yml))
-    require.NoError(t, err)
-    require.NotNil(t, wf)
+	wf, err := ParseWorkflowConfig(strings.NewReader(yml))
+	require.NoError(t, err)
+	require.NotNil(t, wf)
 
-    require.Equal(t, workflowName, wf.Name.Value)
-    require.Equal(t, 1, len(wf.Jobs))
-    require.Equal(t, jobName, wf.Jobs[0].Name.Value)
-    require.Equal(t, 1, len(wf.Jobs[0].Steps))
+	require.Equal(t, workflowName, wf.Name.Value)
+	require.Equal(t, 1, len(wf.Jobs))
+	require.Equal(t, jobName, wf.Jobs[0].Name.Value)
+	require.Equal(t, 1, len(wf.Jobs[0].Steps))
 
-    dt, ok := wf.Jobs[0].Steps[0].(*DoltTestStep)
-    require.True(t, ok)
-    require.Equal(t, stepName, dt.Name.Value)
-    require.Equal(t, 2, len(dt.Tests))
-    require.Equal(t, "test_a", dt.Tests[0].Value)
-    require.Equal(t, "test_b", dt.Tests[1].Value)
-    require.Equal(t, 0, len(dt.TestGroups))
+	dt, ok := wf.Jobs[0].Steps[0].(*DoltTestStep)
+	require.True(t, ok)
+	require.Equal(t, stepName, dt.Name.Value)
+	require.Equal(t, 2, len(dt.Tests))
+	require.Equal(t, "test_a", dt.Tests[0].Value)
+	require.Equal(t, "test_b", dt.Tests[1].Value)
+	require.Equal(t, 0, len(dt.TestGroups))
 
-    // validate config passes
-    err = ValidateWorkflowConfig(wf)
-    require.NoError(t, err)
+	// validate config passes
+	err = ValidateWorkflowConfig(wf)
+	require.NoError(t, err)
 }
 
 func TestParseWorkflowWithDoltTestGroupsAndTests(t *testing.T) {
-    workflowName := "workflow with dolt test groups and tests"
-    jobName := "test job"
-    stepName := "run dolt groups and tests"
+	workflowName := "workflow with dolt test groups and tests"
+	jobName := "test job"
+	stepName := "run dolt groups and tests"
 
-    ymlTemplate := `name: %s
+	ymlTemplate := `name: %s
 on:
   workflow_dispatch: {}
 
@@ -229,21 +229,21 @@ jobs:
           - test_c
 `
 
-    yml := fmt.Sprintf(ymlTemplate, workflowName, jobName, stepName)
+	yml := fmt.Sprintf(ymlTemplate, workflowName, jobName, stepName)
 
-    wf, err := ParseWorkflowConfig(strings.NewReader(yml))
-    require.NoError(t, err)
-    require.NotNil(t, wf)
+	wf, err := ParseWorkflowConfig(strings.NewReader(yml))
+	require.NoError(t, err)
+	require.NotNil(t, wf)
 
-    dt, ok := wf.Jobs[0].Steps[0].(*DoltTestStep)
-    require.True(t, ok)
-    require.Equal(t, 2, len(dt.TestGroups))
-    require.Equal(t, 1, len(dt.Tests))
-    require.Equal(t, "group_a", dt.TestGroups[0].Value)
-    require.Equal(t, "group_b", dt.TestGroups[1].Value)
-    require.Equal(t, "test_c", dt.Tests[0].Value)
+	dt, ok := wf.Jobs[0].Steps[0].(*DoltTestStep)
+	require.True(t, ok)
+	require.Equal(t, 2, len(dt.TestGroups))
+	require.Equal(t, 1, len(dt.Tests))
+	require.Equal(t, "group_a", dt.TestGroups[0].Value)
+	require.Equal(t, "group_b", dt.TestGroups[1].Value)
+	require.Equal(t, "test_c", dt.Tests[0].Value)
 
-    // validate config passes
-    err = ValidateWorkflowConfig(wf)
-    require.NoError(t, err)
+	// validate config passes
+	err = ValidateWorkflowConfig(wf)
+	require.NoError(t, err)
 }

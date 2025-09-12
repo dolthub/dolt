@@ -608,28 +608,28 @@ const (
 	WorkflowDoltTestStepsWorkflowStepIdFkColName = "workflow_step_id_fk"
 
 	// WorkflowDoltTestStepGroupsTableName is the name of the workflow dolt test step groups table
-	WorkflowDoltTestStepGroupsTableName                       = "dolt_ci_workflow_dolt_test_step_groups"
+	WorkflowDoltTestStepGroupsTableName = "dolt_ci_workflow_dolt_test_step_groups"
 
 	// WorkflowDoltTestStepGroupsIdPKColName is the name of the id column on the workflow dolt tests step groups table
-	WorkflowDoltTestStepGroupsIdPkColName                     = "id"
+	WorkflowDoltTestStepGroupsIdPkColName = "id"
 
 	// WorkflowDoltTestStepGroupsWorkflowDoltTestStepIdFkColName is the name of the workflow dolt test step id foreign key column on the workflow dolt test step groups table
 	WorkflowDoltTestStepGroupsWorkflowDoltTestStepIdFkColName = "workflow_dolt_test_step_id_fk"
 
 	// WorkflowDoltTestStepGroupsGroupNameColName is the name of the dolt test group name on the workflow dolt test step groups table
-	WorkflowDoltTestStepGroupsGroupNameColName                = "group_name"
+	WorkflowDoltTestStepGroupsGroupNameColName = "group_name"
 
 	// WorkflowDoltTestStepTestsTableName is the name of the workflow dolt test step tests table
-	WorkflowDoltTestStepTestsTableName                       = "dolt_ci_workflow_dolt_test_step_tests"
+	WorkflowDoltTestStepTestsTableName = "dolt_ci_workflow_dolt_test_step_tests"
 
 	// WorkflowDoltTestStepTestsIdPKColName is the name of the id column on the workflow dolt tests step tests table
-	WorkflowDoltTestStepTestsIdPkColName                     = "id"
+	WorkflowDoltTestStepTestsIdPkColName = "id"
 
 	// WorkflowDoltTestStepTestsWorkflowDoltTestStepIdFkColName is the name of the workflow dolt test step id foreign key column on the workflow dolt test step tests table
 	WorkflowDoltTestStepTestsWorkflowDoltTestStepIdFkColName = "workflow_dolt_test_step_id_fk"
 
 	// WorkflowDoltTestStepTestsTestNameColName is the name of the dolt test test name on the workflow dolt test step tests table
-	WorkflowDoltTestStepTestsTestNameColName                 = "test_name"
+	WorkflowDoltTestStepTestsTestNameColName = "test_name"
 )
 
 const (

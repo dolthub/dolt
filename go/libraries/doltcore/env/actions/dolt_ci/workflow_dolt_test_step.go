@@ -20,6 +20,6 @@ type WorkflowDoltTestStepId string
 // WorkflowDoltTestStep models a row in workflow_dolt_test_steps, which attaches
 // a Dolt Test step to a generic workflow step.
 type WorkflowDoltTestStep struct {
-	Id                   *WorkflowDoltTestStepId `db:"id"`
-	WorkflowStepIdFK     *WorkflowStepId         `db:"workflow_step_id_fk"`
+	Id               *WorkflowDoltTestStepId `db:"id"`
+	WorkflowStepIdFK *WorkflowStepId         `db:"workflow_step_id_fk"`
 }

@@ -29,8 +29,8 @@ import (
 // It intentionally exposes only the step name to keep the interface generic.
 // Step-type–specific fields should be accessed via type assertions.
 type Step interface {
-    // GetName returns the string value of the step name.
-    GetName() string
+	// GetName returns the string value of the step name.
+	GetName() string
 }
 
 // Steps is a slice of Step that implements YAML marshal/unmarshal to support
@@ -40,11 +40,11 @@ type Steps []Step
 // SavedQueryStep represents a step that executes a saved query and (optionally)
 // validates expected row / column counts.
 type SavedQueryStep struct {
-    Name                yaml.Node `yaml:"name"`
-    SavedQueryName      yaml.Node `yaml:"saved_query_name"`
-    SavedQueryStatement yaml.Node `yaml:"saved_query_statement"`
-    ExpectedColumns     yaml.Node `yaml:"expected_columns,omitempty"`
-    ExpectedRows        yaml.Node `yaml:"expected_rows,omitempty"`
+	Name                yaml.Node `yaml:"name"`
+	SavedQueryName      yaml.Node `yaml:"saved_query_name"`
+	SavedQueryStatement yaml.Node `yaml:"saved_query_statement"`
+	ExpectedColumns     yaml.Node `yaml:"expected_columns,omitempty"`
+	ExpectedRows        yaml.Node `yaml:"expected_rows,omitempty"`
 }
 
 var _ Step = (*SavedQueryStep)(nil)
@@ -55,12 +55,12 @@ func (s *SavedQueryStep) GetName() string { return s.Name.Value }
 // DoltTestStep represents a step that runs Dolt tests, either by groups or by
 // explicit test names. At least one of groups or tests must be provided.
 type DoltTestStep struct {
-    Name       yaml.Node   `yaml:"name"`
-    TestGroups []yaml.Node `yaml:"dolt_test_groups,omitempty"`
-    Tests      []yaml.Node `yaml:"dolt_test_tests,omitempty"`
-    // DoltTestStatements is populated by the `dolt ci view` command to show the
-    // underlying queries associated with the tests selected by this step.
-    DoltTestStatements []yaml.Node `yaml:"dolt_test_statements,omitempty"`
+	Name       yaml.Node   `yaml:"name"`
+	TestGroups []yaml.Node `yaml:"dolt_test_groups,omitempty"`
+	Tests      []yaml.Node `yaml:"dolt_test_tests,omitempty"`
+	// DoltTestStatements is populated by the `dolt ci view` command to show the
+	// underlying queries associated with the tests selected by this step.
+	DoltTestStatements []yaml.Node `yaml:"dolt_test_statements,omitempty"`
 }
 
 var _ Step = (*DoltTestStep)(nil)
@@ -71,84 +71,84 @@ func (s *DoltTestStep) GetName() string { return s.Name.Value }
 // UnmarshalYAML implements yaml.Unmarshaler for Steps. It inspects each item in the
 // sequence and constructs the appropriate concrete Step type.
 func (s *Steps) UnmarshalYAML(value *yaml.Node) error {
-    if value == nil {
-        *s = nil
-        return nil
-    }
-    if value.Kind != yaml.SequenceNode {
-        return fmt.Errorf("steps must be a YAML sequence")
-    }
+	if value == nil {
+		*s = nil
+		return nil
+	}
+	if value.Kind != yaml.SequenceNode {
+		return fmt.Errorf("steps must be a YAML sequence")
+	}
 
-    result := make([]Step, 0, len(value.Content))
+	result := make([]Step, 0, len(value.Content))
 
-    for _, item := range value.Content {
-        if item.Kind != yaml.MappingNode {
-            return fmt.Errorf("each step must be a YAML mapping")
-        }
+	for _, item := range value.Content {
+		if item.Kind != yaml.MappingNode {
+			return fmt.Errorf("each step must be a YAML mapping")
+		}
 
-        // Discover the concrete step type by inspecting keys
-        isSavedQuery := false
-        isDoltTest := false
-        for i := 0; i+1 < len(item.Content); i += 2 {
-            key := item.Content[i]
-            switch key.Value {
-            case "saved_query_name", "saved_query_statement", "expected_rows", "expected_columns":
-                isSavedQuery = true
-            case "dolt_test_groups", "dolt_test_tests":
-                isDoltTest = true
-            }
-        }
+		// Discover the concrete step type by inspecting keys
+		isSavedQuery := false
+		isDoltTest := false
+		for i := 0; i+1 < len(item.Content); i += 2 {
+			key := item.Content[i]
+			switch key.Value {
+			case "saved_query_name", "saved_query_statement", "expected_rows", "expected_columns":
+				isSavedQuery = true
+			case "dolt_test_groups", "dolt_test_tests":
+				isDoltTest = true
+			}
+		}
 
-        if isSavedQuery && isDoltTest {
-            // Try to extract a name for a clearer error
-            var stepName string
-            for i := 0; i+1 < len(item.Content); i += 2 {
-                if item.Content[i].Value == "name" {
-                    stepName = item.Content[i+1].Value
-                    break
-                }
-            }
-            if stepName == "" {
-                return fmt.Errorf("invalid config: step defines both saved_query_* fields and dolt_test_* fields")
-            }
-            return fmt.Errorf("invalid config: step '%s' defines both saved_query_* fields and dolt_test_* fields", stepName)
-        }
+		if isSavedQuery && isDoltTest {
+			// Try to extract a name for a clearer error
+			var stepName string
+			for i := 0; i+1 < len(item.Content); i += 2 {
+				if item.Content[i].Value == "name" {
+					stepName = item.Content[i+1].Value
+					break
+				}
+			}
+			if stepName == "" {
+				return fmt.Errorf("invalid config: step defines both saved_query_* fields and dolt_test_* fields")
+			}
+			return fmt.Errorf("invalid config: step '%s' defines both saved_query_* fields and dolt_test_* fields", stepName)
+		}
 
-        switch {
-        case isSavedQuery:
-            var sq SavedQueryStep
-            if err := item.Decode(&sq); err != nil {
-                return err
-            }
-            result = append(result, &sq)
-        case isDoltTest:
-            var dt DoltTestStep
-            if err := item.Decode(&dt); err != nil {
-                return err
-            }
-            result = append(result, &dt)
-        default:
-            return fmt.Errorf("unknown step type; keys must include saved_query_* or dolt_test_*")
-        }
-    }
+		switch {
+		case isSavedQuery:
+			var sq SavedQueryStep
+			if err := item.Decode(&sq); err != nil {
+				return err
+			}
+			result = append(result, &sq)
+		case isDoltTest:
+			var dt DoltTestStep
+			if err := item.Decode(&dt); err != nil {
+				return err
+			}
+			result = append(result, &dt)
+		default:
+			return fmt.Errorf("unknown step type; keys must include saved_query_* or dolt_test_*")
+		}
+	}
 
-    *s = result
-    return nil
+	*s = result
+	return nil
 }
 
 // MarshalYAML implements yaml.Marshaler for Steps by returning the underlying
 // slice so the YAML library can marshal each element by its concrete type.
 func (s Steps) MarshalYAML() (interface{}, error) {
-    out := make([]interface{}, len(s))
-    for i, st := range s {
-        out[i] = st
-    }
-    return out, nil
+	out := make([]interface{}, len(s))
+	for i, st := range s {
+		out[i] = st
+	}
+	return out, nil
 }
 
 type Job struct {
 	Name  yaml.Node `yaml:"name"`
-    Steps Steps     `yaml:"steps"`
+	Steps Steps     `yaml:"steps"`
 }
 
 type Push struct {
@@ -171,7 +171,7 @@ type On struct {
 type WorkflowConfig struct {
 	Name yaml.Node `yaml:"name"`
 	On   On        `yaml:"on"`
-    Jobs []Job     `yaml:"jobs"`
+	Jobs []Job     `yaml:"jobs"`
 }
 
 func ParseWorkflowConfig(r io.Reader) (workflow *WorkflowConfig, err error) {
@@ -251,14 +251,14 @@ func ValidateWorkflowConfig(workflow *WorkflowConfig) error {
 	}
 
 	jobs := make(map[string]bool)
-    steps := make(map[string]bool)
+	steps := make(map[string]bool)
 
 	if len(workflow.Jobs) == 0 {
 		return fmt.Errorf("invalid config: no jobs defined for workflow: %s", workflow.Name.Value)
 	}
 
-    for _, job := range workflow.Jobs {
-        if len(job.Steps) == 0 {
+	for _, job := range workflow.Jobs {
+		if len(job.Steps) == 0 {
 			return fmt.Errorf("invalid config: no steps defined for job: %s", job.Name.Value)
 		}
 
@@ -269,34 +269,34 @@ func ValidateWorkflowConfig(workflow *WorkflowConfig) error {
 			jobs[job.Name.Value] = true
 		}
 
-        for _, step := range job.Steps {
-            stepName := step.GetName()
-            if stepName == "" {
-                return fmt.Errorf("invalid config: step name is missing in job: %s", job.Name.Value)
-            }
-            if _, ok := steps[stepName]; ok {
-                return fmt.Errorf("invalid config: step duplicated: %s", stepName)
-            }
-            steps[stepName] = true
+		for _, step := range job.Steps {
+			stepName := step.GetName()
+			if stepName == "" {
+				return fmt.Errorf("invalid config: step name is missing in job: %s", job.Name.Value)
+			}
+			if _, ok := steps[stepName]; ok {
+				return fmt.Errorf("invalid config: step duplicated: %s", stepName)
+			}
+			steps[stepName] = true
 
-            // Validate by concrete type (and ensure exactly one supported type)
-            switch st := step.(type) {
-            case *SavedQueryStep:
-                if st.SavedQueryName.Value == "" {
-                    return fmt.Errorf("invalid config: step %s is missing saved_query_name", stepName)
-                }
-            case *DoltTestStep:
-                if len(st.TestGroups) == 0 && len(st.Tests) == 0 {
-                    return fmt.Errorf("invalid config: dolt test step %s requires at least one group or test", stepName)
-                }
-                // Disallow redundant wildcard in both groups and tests, which would double-run the same full set
-                if len(st.TestGroups) == 1 && st.TestGroups[0].Value == "*" && len(st.Tests) == 1 && st.Tests[0].Value == "*" {
-                    return fmt.Errorf("invalid config: dolt test step %s specifies wildcard for both dolt_test_groups and dolt_test_tests; specify a wildcard in only one field", stepName)
-                }
-            default:
-                return fmt.Errorf("invalid config: unknown or unsupported step type for step: %s (must be exactly one of saved_query or dolt_test)", stepName)
-            }
-        }
+			// Validate by concrete type (and ensure exactly one supported type)
+			switch st := step.(type) {
+			case *SavedQueryStep:
+				if st.SavedQueryName.Value == "" {
+					return fmt.Errorf("invalid config: step %s is missing saved_query_name", stepName)
+				}
+			case *DoltTestStep:
+				if len(st.TestGroups) == 0 && len(st.Tests) == 0 {
+					return fmt.Errorf("invalid config: dolt test step %s requires at least one group or test", stepName)
+				}
+				// Disallow redundant wildcard in both groups and tests, which would double-run the same full set
+				if len(st.TestGroups) == 1 && st.TestGroups[0].Value == "*" && len(st.Tests) == 1 && st.Tests[0].Value == "*" {
+					return fmt.Errorf("invalid config: dolt test step %s specifies wildcard for both dolt_test_groups and dolt_test_tests; specify a wildcard in only one field", stepName)
+				}
+			default:
+				return fmt.Errorf("invalid config: unknown or unsupported step type for step: %s (must be exactly one of saved_query or dolt_test)", stepName)
+			}
+		}
 	}
 
 	return nil
