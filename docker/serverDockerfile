@@ -15,7 +15,12 @@ RUN apt update -y && \
 # and install the proper dolt binary
 # Handle "latest" by fetching the actual latest version
 RUN if [ "$DOLT_VERSION" = "latest" ]; then \
-        DOLT_VERSION=$(curl -s https://api.github.com/repos/dolthub/dolt/releases/latest | grep '"tag_name"' | cut -d'"' -f4 | sed 's/^v//'); \
+        LATEST_RELEASE=$(curl -s https://api.github.com/repos/dolthub/dolt/releases/latest) && \
+        echo "Latest release data: $LATEST_RELEASE" && \
+        DOLT_VERSION=$(echo "$LATEST_RELEASE" | grep '"tag_name"' | cut -d'"' -f4 | sed 's/^v//') && \
+        echo "Resolved version: $DOLT_VERSION"; \
+    else \
+        echo "Using specified version: $DOLT_VERSION"; \
     fi && \
     curl -L https://github.com/dolthub/dolt/releases/download/v${DOLT_VERSION}/install.sh | bash
 RUN /usr/local/bin/dolt version

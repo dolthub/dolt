@@ -167,8 +167,10 @@ EOF
     fi
 
     if [ -n "$user" ]; then
-        # Use the same host as the root user for consistency
-        local user_host="${DOLT_ROOT_HOST:-localhost}"
+        # Get user host from DOLT_USER_HOST/MYSQL_USER_HOST, fall back to DOLT_ROOT_HOST, then localhost
+        local user_host
+        user_host=$(get_env_var "USER_HOST")
+        user_host="${user_host:-${DOLT_ROOT_HOST:-localhost}}"
         mysql_note "Creating user '${user}'"
         if ! dolt sql -q "CREATE USER IF NOT EXISTS '$user'@'$user_host' IDENTIFIED BY '$password';" >/dev/null 2>&1; then
             mysql_error "Failed to create user '$user'. Check if user already exists or if there are permission issues."
