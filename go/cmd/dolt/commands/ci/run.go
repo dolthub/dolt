@@ -231,7 +231,7 @@ func runDoltTestStep(sqlCtx *sql.Context, queryist cli.Queryist, dt *dolt_ci.Dol
         return cli.GetRowsForSql(queryist, sqlCtx, q)
     }
 
-    // Case 1: wildcard or no explicit args → run all tests
+    // Case 1: wildcard or no explicit args → run all tests (de-duplicated)
     if testsWildcard || groupsWildcard || (!testsProvided && !groupsProvided) {
         rows, err := cli.GetRowsForSql(queryist, sqlCtx, "SELECT * FROM dolt_test_run()")
         if err != nil { return "", err }

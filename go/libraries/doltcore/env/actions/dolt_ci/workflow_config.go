@@ -289,6 +289,10 @@ func ValidateWorkflowConfig(workflow *WorkflowConfig) error {
                 if len(st.TestGroups) == 0 && len(st.Tests) == 0 {
                     return fmt.Errorf("invalid config: dolt test step %s requires at least one group or test", stepName)
                 }
+                // Disallow redundant wildcard in both groups and tests, which would double-run the same full set
+                if len(st.TestGroups) == 1 && st.TestGroups[0].Value == "*" && len(st.Tests) == 1 && st.Tests[0].Value == "*" {
+                    return fmt.Errorf("invalid config: dolt test step %s specifies wildcard for both dolt_test_groups and dolt_test_tests; specify a wildcard in only one field", stepName)
+                }
             default:
                 return fmt.Errorf("invalid config: unknown or unsupported step type for step: %s (must be exactly one of saved_query or dolt_test)", stepName)
             }

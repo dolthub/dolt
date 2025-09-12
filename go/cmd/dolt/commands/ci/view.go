@@ -208,6 +208,11 @@ func previewDoltTestStatements(dt *dolt_ci.DoltTestStep) ([]string, error) {
         args = []string{"*"}
     }
 
+    // If both tests and groups contain only wildcard, de-duplicate to a single run
+    if len(dt.Tests) == 1 && dt.Tests[0].Value == "*" && len(dt.TestGroups) == 1 && dt.TestGroups[0].Value == "*" {
+        args = []string{"*"}
+    }
+
     // Represent each selection as a dolt_test_run invocation for clarity
     stmts := make([]string, 0, len(args))
     for _, a := range args {
