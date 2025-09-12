@@ -242,6 +242,17 @@ func runDoltTestStep(sqlCtx *sql.Context, queryist cli.Queryist, dt *dolt_ci.Dol
     }
 
     if testsProvided && !groupsProvided {
+        // normalize tests: if any wildcard present, treat as wildcard only
+        hasStar := false
+        for _, t := range dt.Tests { if t.Value == "*" { hasStar = true; break } }
+        if hasStar {
+            rows, err := cli.GetRowsForSql(queryist, sqlCtx, "SELECT * FROM dolt_test_run()")
+            if err != nil { return "", err }
+            details, failures, err := formatDoltTestRows(sqlCtx, rows)
+            if err != nil { return "", err }
+            if len(failures) > 0 { return details, errors.New(strings.Join(failures, "; ")) }
+            return details, nil
+        }
         allRows := make([]sql.Row, 0)
         for _, t := range dt.Tests {
             rows, err := fetch(t.Value)
@@ -256,6 +267,17 @@ func runDoltTestStep(sqlCtx *sql.Context, queryist cli.Queryist, dt *dolt_ci.Dol
     }
 
     if groupsProvided && !testsProvided {
+        // normalize groups: if any wildcard present, treat as wildcard only
+        hasStar := false
+        for _, g := range dt.TestGroups { if g.Value == "*" { hasStar = true; break } }
+        if hasStar {
+            rows, err := cli.GetRowsForSql(queryist, sqlCtx, "SELECT * FROM dolt_test_run()")
+            if err != nil { return "", err }
+            details, failures, err := formatDoltTestRows(sqlCtx, rows)
+            if err != nil { return "", err }
+            if len(failures) > 0 { return details, errors.New(strings.Join(failures, "; ")) }
+            return details, nil
+        }
         allRows := make([]sql.Row, 0)
         for _, g := range dt.TestGroups {
             rows, err := fetch(g.Value)

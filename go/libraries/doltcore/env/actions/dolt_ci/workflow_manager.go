@@ -1418,26 +1418,29 @@ func (d *doltWorkflowManager) updateExistingWorkflow(ctx *sql.Context, config *W
                             if err != nil {
                                 return err
                             }
-                            // write groups
-                            for _, g := range dt.TestGroups {
-                                if _, err := d.writeWorkflowDoltTestStepGroupRow(ctx, newDoltTestStepID, g.Value); err != nil {
-                                    return err
-                                }
-                            }
-                            // write tests
-                            for _, t := range dt.Tests {
-                                if _, err := d.writeWorkflowDoltTestStepTestRow(ctx, newDoltTestStepID, t.Value); err != nil {
-                                    return err
-                                }
-                            }
+                            // normalize and write groups
+                            desiredGroups := make(map[string]struct{})
+                            hasStarGroup := false
+                            for _, g := range dt.TestGroups { if g.Value == "*" { hasStarGroup = true; break } }
+                            if hasStarGroup { desiredGroups["*"] = struct{}{} } else { for _, g := range dt.TestGroups { desiredGroups[g.Value] = struct{}{} } }
+                            for g := range desiredGroups { if _, err := d.writeWorkflowDoltTestStepGroupRow(ctx, newDoltTestStepID, g); err != nil { return err } }
+                            // normalize and write tests
+                            desiredTests := make(map[string]struct{})
+                            hasStarTest := false
+                            for _, t := range dt.Tests { if t.Value == "*" { hasStarTest = true; break } }
+                            if hasStarTest { desiredTests["*"] = struct{}{} } else { for _, t := range dt.Tests { desiredTests[t.Value] = struct{}{} } }
+                            for t := range desiredTests { if _, err := d.writeWorkflowDoltTestStepTestRow(ctx, newDoltTestStepID, t); err != nil { return err } }
                         } else {
                             // reconcile groups
                             existingGroups, err := d.listWorkflowDoltTestStepGroupsByDoltTestStepId(ctx, *doltTestStep.Id)
                             if err != nil {
                                 return err
                             }
+                            // normalize desired groups
                             cfgGroups := map[string]struct{}{}
-                            for _, g := range dt.TestGroups { cfgGroups[g.Value] = struct{}{} }
+                            hasStarGroup := false
+                            for _, g := range dt.TestGroups { if g.Value == "*" { hasStarGroup = true; break } }
+                            if hasStarGroup { cfgGroups["*"] = struct{}{} } else { for _, g := range dt.TestGroups { cfgGroups[g.Value] = struct{}{} } }
                             // delete removed groups
                             for _, eg := range existingGroups {
                                 if _, ok := cfgGroups[eg.GroupName]; !ok {
@@ -1461,7 +1464,9 @@ func (d *doltWorkflowManager) updateExistingWorkflow(ctx *sql.Context, config *W
                                 return err
                             }
                             cfgTests := map[string]struct{}{}
-                            for _, t := range dt.Tests { cfgTests[t.Value] = struct{}{} }
+                            hasStarTest := false
+                            for _, t := range dt.Tests { if t.Value == "*" { hasStarTest = true; break } }
+                            if hasStarTest { cfgTests["*"] = struct{}{} } else { for _, t := range dt.Tests { cfgTests[t.Value] = struct{}{} } }
                             for _, et := range existingTests {
                                 if _, ok := cfgTests[et.TestName]; !ok {
                                     if err := d.sqlWriteQuery(ctx, fmt.Sprintf("delete from %s where `%s` = '%s';", doltdb.WorkflowDoltTestStepTestsTableName, doltdb.WorkflowDoltTestStepTestsIdPkColName, *et.Id)); err != nil {
@@ -1940,8 +1945,22 @@ func (d *doltWorkflowManager) createWorkflow(ctx *sql.Context, config *WorkflowC
                 dt := step.(*DoltTestStep)
                 dtID, err := d.writeWorkflowDoltTestStepRow(ctx, stepID)
                 if err != nil { return err }
-                for _, g := range dt.TestGroups { if _, err := d.writeWorkflowDoltTestStepGroupRow(ctx, dtID, g.Value); err != nil { return err } }
-                for _, t := range dt.Tests { if _, err := d.writeWorkflowDoltTestStepTestRow(ctx, dtID, t.Value); err != nil { return err } }
+                // normalize and write groups
+                hasStarGroup := false
+                for _, g := range dt.TestGroups { if g.Value == "*" { hasStarGroup = true; break } }
+                if hasStarGroup {
+                    if _, err := d.writeWorkflowDoltTestStepGroupRow(ctx, dtID, "*"); err != nil { return err }
+                } else {
+                    for _, g := range dt.TestGroups { if _, err := d.writeWorkflowDoltTestStepGroupRow(ctx, dtID, g.Value); err != nil { return err } }
+                }
+                // normalize and write tests
+                hasStarTest := false
+                for _, t := range dt.Tests { if t.Value == "*" { hasStarTest = true; break } }
+                if hasStarTest {
+                    if _, err := d.writeWorkflowDoltTestStepTestRow(ctx, dtID, "*"); err != nil { return err }
+                } else {
+                    for _, t := range dt.Tests { if _, err := d.writeWorkflowDoltTestStepTestRow(ctx, dtID, t.Value); err != nil { return err } }
+                }
             }
 		}
 	}
