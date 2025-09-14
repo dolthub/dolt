@@ -25,6 +25,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/val"
 )
@@ -175,6 +176,20 @@ func (w *prollyTableWriter) Delete(ctx *sql.Context, sqlRow sql.Row) (err error)
 	}
 	if err := w.primary.Delete(ctx, sqlRow); err != nil {
 		return err
+	}
+	return nil
+}
+
+func (w *prollyTableWriter) VisitGCRoots(ctx context.Context, roots func(hash.Hash) bool) error {
+	err := w.primary.VisitGCRoots(ctx, roots)
+	if err != nil {
+		return err
+	}
+	for _, writer := range w.secondary {
+		err = writer.VisitGCRoots(ctx, roots)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
