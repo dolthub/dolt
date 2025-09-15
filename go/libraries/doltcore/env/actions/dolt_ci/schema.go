@@ -55,9 +55,9 @@ var ExpectedDoltCITablesOrdered = WrappedTableNameSlice{
 	{TableName: doltdb.TableName{Name: doltdb.WorkflowStepsTableName}},
 	{TableName: doltdb.TableName{Name: doltdb.WorkflowSavedQueryStepsTableName}},
 	{TableName: doltdb.TableName{Name: doltdb.WorkflowSavedQueryStepExpectedRowColumnResultsTableName}},
- 	{TableName: doltdb.TableName{Name: doltdb.WorkflowDoltTestStepsTableName}},
- 	{TableName: doltdb.TableName{Name: doltdb.WorkflowDoltTestStepGroupsTableName}},
- 	{TableName: doltdb.TableName{Name: doltdb.WorkflowDoltTestStepTestsTableName}},
+	{TableName: doltdb.TableName{Name: doltdb.WorkflowDoltTestStepsTableName}},
+	{TableName: doltdb.TableName{Name: doltdb.WorkflowDoltTestStepGroupsTableName}},
+	{TableName: doltdb.TableName{Name: doltdb.WorkflowDoltTestStepTestsTableName}},
 }
 
 type queryFunc func(sqlCtx *sql.Context, query string) (sql.Schema, sql.RowIter, *sql.QueryFlags, error)

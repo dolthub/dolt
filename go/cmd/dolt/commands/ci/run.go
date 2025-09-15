@@ -29,7 +29,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions/dolt_ci"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-    "github.com/dolthub/dolt/go/store/val"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 var runDocs = cli.CommandDocumentationContent{
@@ -118,58 +118,58 @@ func (cmd RunCmd) Exec(ctx context.Context, commandStr string, args []string, _ 
 
 // queryAndPrint iterates through the jobs and steps for the given config, then runs each saved query and given assertion
 func queryAndPrint(sqlCtx *sql.Context, queryist cli.Queryist, config *dolt_ci.WorkflowConfig, savedQueries map[string]string) {
-    for _, job := range config.Jobs {
-        cli.Println(color.GreenString("Running job: %s", job.Name.Value))
+	for _, job := range config.Jobs {
+		cli.Println(color.GreenString("Running job: %s", job.Name.Value))
 
-        jobFailures := make([]string, 0)
-        for _, step := range job.Steps {
-            // For DoltTest steps we print a header and list individual tests before summary
-            _, isDoltTest := step.(*dolt_ci.DoltTestStep)
-            if isDoltTest {
-                cli.Println(fmt.Sprintf("Step: %s", step.GetName()))
-            } else {
-                cli.Printf("Step: %s - ", step.GetName())
-            }
+		jobFailures := make([]string, 0)
+		for _, step := range job.Steps {
+			// For DoltTest steps we print a header and list individual tests before summary
+			_, isDoltTest := step.(*dolt_ci.DoltTestStep)
+			if isDoltTest {
+				cli.Println(fmt.Sprintf("Step: %s", step.GetName()))
+			} else {
+				cli.Printf("Step: %s - ", step.GetName())
+			}
 
-            var err error
-            var details string
-            if sq, ok := step.(*dolt_ci.SavedQueryStep); ok {
-                query := savedQueries[sq.SavedQueryName.Value]
-                rows, qErr := runCIQuery(queryist, sqlCtx, sq, query)
-                if qErr == nil {
-                    err = assertQueries(rows, sq.ExpectedRows.Value, sq.ExpectedColumns.Value, query)
-                } else {
-                    err = qErr
-                }
-            } else if dt, ok := step.(*dolt_ci.DoltTestStep); ok {
-                details, err = runDoltTestStep(sqlCtx, queryist, dt)
-            } else {
-                err = fmt.Errorf("unsupported step type")
-            }
+			var err error
+			var details string
+			if sq, ok := step.(*dolt_ci.SavedQueryStep); ok {
+				query := savedQueries[sq.SavedQueryName.Value]
+				rows, qErr := runCIQuery(queryist, sqlCtx, sq, query)
+				if qErr == nil {
+					err = assertQueries(rows, sq.ExpectedRows.Value, sq.ExpectedColumns.Value, query)
+				} else {
+					err = qErr
+				}
+			} else if dt, ok := step.(*dolt_ci.DoltTestStep); ok {
+				details, err = runDoltTestStep(sqlCtx, queryist, dt)
+			} else {
+				err = fmt.Errorf("unsupported step type")
+			}
 
-            if isDoltTest {
-                if details != "" {
-                    cli.Println(details)
-                }
-                if err != nil {
-                    jobFailures = append(jobFailures, fmt.Sprintf("step '%s': %s", step.GetName(), err.Error()))
-                }
-            } else {
-                if err != nil {
-                    cli.Println("FAIL")
-                    cli.Println(color.RedString("%s", err))
-                    jobFailures = append(jobFailures, fmt.Sprintf("step '%s': %s", step.GetName(), err.Error()))
-                } else {
-                    cli.Println("PASS")
-                }
-            }
-        }
-        if len(jobFailures) > 0 {
-            cli.Println(color.RedString("Result: FAIL"))
-            cli.Println(color.RedString("%s", strings.Join(jobFailures, "; ")))
-        } else {
-            cli.Println(color.GreenString("Result: PASS"))
-        }
+			if isDoltTest {
+				if details != "" {
+					cli.Println(details)
+				}
+				if err != nil {
+					jobFailures = append(jobFailures, fmt.Sprintf("step '%s': %s", step.GetName(), err.Error()))
+				}
+			} else {
+				if err != nil {
+					cli.Println("FAIL")
+					cli.Println(color.RedString("%s", err))
+					jobFailures = append(jobFailures, fmt.Sprintf("step '%s': %s", step.GetName(), err.Error()))
+				} else {
+					cli.Println("PASS")
+				}
+			}
+		}
+		if len(jobFailures) > 0 {
+			cli.Println(color.RedString("Result: FAIL"))
+			cli.Println(color.RedString("%s", strings.Join(jobFailures, "; ")))
+		} else {
+			cli.Println(color.GreenString("Result: PASS"))
+		}
 	}
 }
 
@@ -227,165 +227,241 @@ func assertQueries(rows []sql.Row, expectedRowsAndComparison string, expectedCol
 
 // runDoltTestStep evaluates a Dolt Test step per selection rules and requires all selected tests to PASS
 func runDoltTestStep(sqlCtx *sql.Context, queryist cli.Queryist, dt *dolt_ci.DoltTestStep) (string, error) {
-    testsProvided := len(dt.Tests) > 0
-    groupsProvided := len(dt.TestGroups) > 0
-    testsWildcard := testsProvided && len(dt.Tests) == 1 && strings.TrimSpace(dt.Tests[0].Value) == "*"
-    groupsWildcard := groupsProvided && len(dt.TestGroups) == 1 && strings.TrimSpace(dt.TestGroups[0].Value) == "*"
+	testsProvided := len(dt.Tests) > 0
+	groupsProvided := len(dt.TestGroups) > 0
+	testsWildcard := testsProvided && len(dt.Tests) == 1 && strings.TrimSpace(dt.Tests[0].Value) == "*"
+	groupsWildcard := groupsProvided && len(dt.TestGroups) == 1 && strings.TrimSpace(dt.TestGroups[0].Value) == "*"
 
-    fetch := func(selector string) ([]sql.Row, error) {
-        q := fmt.Sprintf("SELECT * FROM dolt_test_run('%s')", strings.ReplaceAll(selector, "'", "''"))
-        return cli.GetRowsForSql(queryist, sqlCtx, q)
-    }
+	fetch := func(selector string) ([]sql.Row, error) {
+		q := fmt.Sprintf("SELECT * FROM dolt_test_run('%s')", strings.ReplaceAll(selector, "'", "''"))
+		return cli.GetRowsForSql(queryist, sqlCtx, q)
+	}
 
-    // Case 1: no explicit args → run all tests
-    if !testsProvided && !groupsProvided {
-        rows, err := cli.GetRowsForSql(queryist, sqlCtx, "SELECT * FROM dolt_test_run()")
-        if err != nil { return "", err }
-        details, failures, err := formatDoltTestRows(sqlCtx, rows)
-        if err != nil { return "", err }
-        if len(failures) > 0 { return details, errors.New(strings.Join(failures, "; ")) }
-        return details, nil
-    }
+	// Case 1: no explicit args → run all tests
+	if !testsProvided && !groupsProvided {
+		rows, err := cli.GetRowsForSql(queryist, sqlCtx, "SELECT * FROM dolt_test_run()")
+		if err != nil {
+			return "", err
+		}
+		details, failures, err := formatDoltTestRows(sqlCtx, rows)
+		if err != nil {
+			return "", err
+		}
+		if len(failures) > 0 {
+			return details, errors.New(strings.Join(failures, "; "))
+		}
+		return details, nil
+	}
 
-    if testsProvided && !groupsProvided {
-        // normalize tests: if any wildcard present, treat as wildcard only
-        hasStar := false
-        for _, t := range dt.Tests { if t.Value == "*" { hasStar = true; break } }
-        if hasStar {
-            rows, err := cli.GetRowsForSql(queryist, sqlCtx, "SELECT * FROM dolt_test_run()")
-            if err != nil { return "", err }
-            details, failures, err := formatDoltTestRows(sqlCtx, rows)
-            if err != nil { return "", err }
-            if len(failures) > 0 { return details, errors.New(strings.Join(failures, "; ")) }
-            return details, nil
-        }
-        allRows := make([]sql.Row, 0)
-        for _, t := range dt.Tests {
-            rows, err := fetch(t.Value)
-            if err != nil { return "", err }
-            if len(rows) == 0 { return "", fmt.Errorf("test '%s' not found", t.Value) }
-            allRows = append(allRows, rows...)
-        }
-        details, failures, err := formatDoltTestRows(sqlCtx, allRows)
-        if err != nil { return "", err }
-        if len(failures) > 0 { return details, errors.New(strings.Join(failures, "; ")) }
-        return details, nil
-    }
+	if testsProvided && !groupsProvided {
+		// normalize tests: if any wildcard present, treat as wildcard only
+		hasStar := false
+		for _, t := range dt.Tests {
+			if t.Value == "*" {
+				hasStar = true
+				break
+			}
+		}
+		if hasStar {
+			rows, err := cli.GetRowsForSql(queryist, sqlCtx, "SELECT * FROM dolt_test_run()")
+			if err != nil {
+				return "", err
+			}
+			details, failures, err := formatDoltTestRows(sqlCtx, rows)
+			if err != nil {
+				return "", err
+			}
+			if len(failures) > 0 {
+				return details, errors.New(strings.Join(failures, "; "))
+			}
+			return details, nil
+		}
+		allRows := make([]sql.Row, 0)
+		for _, t := range dt.Tests {
+			rows, err := fetch(t.Value)
+			if err != nil {
+				return "", err
+			}
+			if len(rows) == 0 {
+				return "", fmt.Errorf("test '%s' not found", t.Value)
+			}
+			allRows = append(allRows, rows...)
+		}
+		details, failures, err := formatDoltTestRows(sqlCtx, allRows)
+		if err != nil {
+			return "", err
+		}
+		if len(failures) > 0 {
+			return details, errors.New(strings.Join(failures, "; "))
+		}
+		return details, nil
+	}
 
-    if groupsProvided && !testsProvided {
-        // normalize groups: if any wildcard present, treat as wildcard only
-        hasStar := false
-        for _, g := range dt.TestGroups { if g.Value == "*" { hasStar = true; break } }
-        if hasStar {
-            rows, err := cli.GetRowsForSql(queryist, sqlCtx, "SELECT * FROM dolt_test_run()")
-            if err != nil { return "", err }
-            details, failures, err := formatDoltTestRows(sqlCtx, rows)
-            if err != nil { return "", err }
-            if len(failures) > 0 { return details, errors.New(strings.Join(failures, "; ")) }
-            return details, nil
-        }
-        allRows := make([]sql.Row, 0)
-        for _, g := range dt.TestGroups {
-            rows, err := fetch(g.Value)
-            if err != nil { return "", err }
-            if len(rows) == 0 { return "", fmt.Errorf("group '%s' not found", g.Value) }
-            allRows = append(allRows, rows...)
-        }
-        details, failures, err := formatDoltTestRows(sqlCtx, allRows)
-        if err != nil { return "", err }
-        if len(failures) > 0 { return details, errors.New(strings.Join(failures, "; ")) }
-        return details, nil
-    }
+	if groupsProvided && !testsProvided {
+		// normalize groups: if any wildcard present, treat as wildcard only
+		hasStar := false
+		for _, g := range dt.TestGroups {
+			if g.Value == "*" {
+				hasStar = true
+				break
+			}
+		}
+		if hasStar {
+			rows, err := cli.GetRowsForSql(queryist, sqlCtx, "SELECT * FROM dolt_test_run()")
+			if err != nil {
+				return "", err
+			}
+			details, failures, err := formatDoltTestRows(sqlCtx, rows)
+			if err != nil {
+				return "", err
+			}
+			if len(failures) > 0 {
+				return details, errors.New(strings.Join(failures, "; "))
+			}
+			return details, nil
+		}
+		allRows := make([]sql.Row, 0)
+		for _, g := range dt.TestGroups {
+			rows, err := fetch(g.Value)
+			if err != nil {
+				return "", err
+			}
+			if len(rows) == 0 {
+				return "", fmt.Errorf("group '%s' not found", g.Value)
+			}
+			allRows = append(allRows, rows...)
+		}
+		details, failures, err := formatDoltTestRows(sqlCtx, allRows)
+		if err != nil {
+			return "", err
+		}
+		if len(failures) > 0 {
+			return details, errors.New(strings.Join(failures, "; "))
+		}
+		return details, nil
+	}
 
-    // both provided
-    var allRows []sql.Row
-    if testsWildcard && !groupsWildcard {
-        // Run all tests for the specified groups (intersection of all tests with group selector)
-        for _, g := range dt.TestGroups {
-            rows, err := fetch(g.Value)
-            if err != nil { return "", err }
-            if len(rows) == 0 { return "", fmt.Errorf("group '%s' not found", g.Value) }
-            allRows = append(allRows, rows...)
-        }
-    } else if groupsWildcard && !testsWildcard {
-        // Run only the specified test names (across all groups)
-        for _, t := range dt.Tests {
-            rows, err := fetch(t.Value)
-            if err != nil { return "", err }
-            if len(rows) == 0 { return "", fmt.Errorf("test '%s' not found", t.Value) }
-            allRows = append(allRows, rows...)
-        }
-    } else {
-        // Neither is wildcard: for each group, run only the specified tests present in that group
-        for _, g := range dt.TestGroups {
-            rows, err := fetch(g.Value)
-            if err != nil { return "", err }
-            if len(rows) == 0 { return "", fmt.Errorf("group '%s' not found", g.Value) }
-            groupTests := make(map[string]bool)
-            for _, r := range rows {
-                tName, err := getStringFromCol(sqlCtx, r[0])
-                if err != nil { return "", err }
-                groupTests[tName] = true
-            }
-            for _, t := range dt.Tests {
-                if !groupTests[t.Value] {
-                    return "", fmt.Errorf("test '%s' not found in group '%s'", t.Value, g.Value)
-                }
-            }
-            for _, r := range rows {
-                tName, err := getStringFromCol(sqlCtx, r[0])
-                if err != nil { return "", err }
-                for _, t := range dt.Tests {
-                    if tName == t.Value { allRows = append(allRows, r) }
-                }
-            }
-        }
-    }
-    details, failures, err := formatDoltTestRows(sqlCtx, allRows)
-    if err != nil { return "", err }
-    if len(failures) > 0 { return details, errors.New(strings.Join(failures, "; ")) }
-    return details, nil
+	// both provided
+	var allRows []sql.Row
+	if testsWildcard && !groupsWildcard {
+		// Run all tests for the specified groups (intersection of all tests with group selector)
+		for _, g := range dt.TestGroups {
+			rows, err := fetch(g.Value)
+			if err != nil {
+				return "", err
+			}
+			if len(rows) == 0 {
+				return "", fmt.Errorf("group '%s' not found", g.Value)
+			}
+			allRows = append(allRows, rows...)
+		}
+	} else if groupsWildcard && !testsWildcard {
+		// Run only the specified test names (across all groups)
+		for _, t := range dt.Tests {
+			rows, err := fetch(t.Value)
+			if err != nil {
+				return "", err
+			}
+			if len(rows) == 0 {
+				return "", fmt.Errorf("test '%s' not found", t.Value)
+			}
+			allRows = append(allRows, rows...)
+		}
+	} else {
+		// Neither is wildcard: for each group, run only the specified tests present in that group
+		for _, g := range dt.TestGroups {
+			rows, err := fetch(g.Value)
+			if err != nil {
+				return "", err
+			}
+			if len(rows) == 0 {
+				return "", fmt.Errorf("group '%s' not found", g.Value)
+			}
+			groupTests := make(map[string]bool)
+			for _, r := range rows {
+				tName, err := getStringFromCol(sqlCtx, r[0])
+				if err != nil {
+					return "", err
+				}
+				groupTests[tName] = true
+			}
+			for _, t := range dt.Tests {
+				if !groupTests[t.Value] {
+					return "", fmt.Errorf("test '%s' not found in group '%s'", t.Value, g.Value)
+				}
+			}
+			for _, r := range rows {
+				tName, err := getStringFromCol(sqlCtx, r[0])
+				if err != nil {
+					return "", err
+				}
+				for _, t := range dt.Tests {
+					if tName == t.Value {
+						allRows = append(allRows, r)
+					}
+				}
+			}
+		}
+	}
+	details, failures, err := formatDoltTestRows(sqlCtx, allRows)
+	if err != nil {
+		return "", err
+	}
+	if len(failures) > 0 {
+		return details, errors.New(strings.Join(failures, "; "))
+	}
+	return details, nil
 }
 
 // formatDoltTestRows returns a formatted summary of all tests and a list of failure messages
 func formatDoltTestRows(sqlCtx *sql.Context, rows []sql.Row) (string, []string, error) {
-    lines := make([]string, 0, len(rows)+1)
-    failures := make([]string, 0)
-    for _, row := range rows {
-        tName, err := getStringFromCol(sqlCtx, row[0])
-        if err != nil { return "", nil, err }
-        gName, err := getStringFromCol(sqlCtx, row[1])
-        if err != nil { return "", nil, err }
-        status, err := getStringFromCol(sqlCtx, row[3])
-        if err != nil { return "", nil, err }
-        message, err := getStringFromCol(sqlCtx, row[4])
-        if err != nil { return "", nil, err }
-        statusUpper := strings.ToUpper(status)
-        statusColored := statusUpper
-        if statusUpper == "PASS" {
-            statusColored = color.GreenString(statusUpper)
-        } else if statusUpper == "FAIL" {
-            statusColored = color.RedString(statusUpper)
-        }
-        line := fmt.Sprintf("  - test: %s (group: %s) - %s", tName, gName, statusColored)
-        if statusUpper != "PASS" {
-            if message == "" { message = "failed" }
-            line = line + fmt.Sprintf(": %s", message)
-            failures = append(failures, fmt.Sprintf("%s: %s", tName, message))
-        }
-        lines = append(lines, line)
-    }
-    return strings.Join(lines, "\n"), failures, nil
+	lines := make([]string, 0, len(rows)+1)
+	failures := make([]string, 0)
+	for _, row := range rows {
+		tName, err := getStringFromCol(sqlCtx, row[0])
+		if err != nil {
+			return "", nil, err
+		}
+		gName, err := getStringFromCol(sqlCtx, row[1])
+		if err != nil {
+			return "", nil, err
+		}
+		status, err := getStringFromCol(sqlCtx, row[3])
+		if err != nil {
+			return "", nil, err
+		}
+		message, err := getStringFromCol(sqlCtx, row[4])
+		if err != nil {
+			return "", nil, err
+		}
+		statusUpper := strings.ToUpper(status)
+		statusColored := statusUpper
+		if statusUpper == "PASS" {
+			statusColored = color.GreenString(statusUpper)
+		} else if statusUpper == "FAIL" {
+			statusColored = color.RedString(statusUpper)
+		}
+		line := fmt.Sprintf("  - test: %s (group: %s) - %s", tName, gName, statusColored)
+		if statusUpper != "PASS" {
+			if message == "" {
+				message = "failed"
+			}
+			line = line + fmt.Sprintf(": %s", message)
+			failures = append(failures, fmt.Sprintf("%s: %s", tName, message))
+		}
+		lines = append(lines, line)
+	}
+	return strings.Join(lines, "\n"), failures, nil
 }
 
 func getStringFromCol(sqlCtx *sql.Context, v interface{}) (string, error) {
-    if ts, ok := v.(*val.TextStorage); ok {
-        return ts.Unwrap(sqlCtx)
-    } else if s, ok := v.(string); ok {
-        return s, nil
-    } else if v == nil {
-        return "", nil
-    } else {
-        return "", fmt.Errorf("unexpected type %T, expected string", v)
-    }
+	if ts, ok := v.(*val.TextStorage); ok {
+		return ts.Unwrap(sqlCtx)
+	} else if s, ok := v.(string); ok {
+		return s, nil
+	} else if v == nil {
+		return "", nil
+	} else {
+		return "", fmt.Errorf("unexpected type %T, expected string", v)
+	}
 }

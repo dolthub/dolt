@@ -25,8 +25,8 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-    "github.com/dolthub/dolt/go/libraries/doltcore/env/actions/dolt_ci"
-    dtablefunctions "github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtablefunctions"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions/dolt_ci"
+	dtablefunctions "github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtablefunctions"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/store/val"
 )
@@ -138,41 +138,41 @@ func printWorkflowConfig(toPrint interface{}) error {
 
 func updateConfigQueryStatements(config *dolt_ci.WorkflowConfig, savedQueries map[string]string, jobName string) (interface{}, error) {
 	for i, job := range config.Jobs {
-        for j := range job.Steps {
-            step := job.Steps[j]
-            if sq, ok := step.(*dolt_ci.SavedQueryStep); ok {
-                if name := savedQueries[sq.SavedQueryName.Value]; name != "" {
-                    // Replace the element in-place with updated statement
-                    sq.SavedQueryStatement = yaml.Node{
-                        Kind:  yaml.ScalarNode,
-                        Style: yaml.DoubleQuotedStyle,
-                        Value: name,
-                    }
-                    config.Jobs[i].Steps[j] = sq
-                } else {
-                    sq.SavedQueryStatement = yaml.Node{
-                        Kind:  yaml.ScalarNode,
-                        Style: yaml.DoubleQuotedStyle,
-                        Value: "saved query not found",
-                    }
-                    config.Jobs[i].Steps[j] = sq
-                }
-            } else if dt, ok := step.(*dolt_ci.DoltTestStep); ok {
-                // For dolt test steps, populate dolt_test_statements to show users what will be run
-                stmts, err := previewDoltTestStatements(dt)
-                if err != nil {
-                    return nil, err
-                }
-                dt.DoltTestStatements = nil
-                for _, s := range stmts {
-                    dt.DoltTestStatements = append(dt.DoltTestStatements, yaml.Node{Kind: yaml.ScalarNode, Style: yaml.DoubleQuotedStyle, Value: s})
-                }
-                config.Jobs[i].Steps[j] = dt
-            }
-        }
+		for j := range job.Steps {
+			step := job.Steps[j]
+			if sq, ok := step.(*dolt_ci.SavedQueryStep); ok {
+				if name := savedQueries[sq.SavedQueryName.Value]; name != "" {
+					// Replace the element in-place with updated statement
+					sq.SavedQueryStatement = yaml.Node{
+						Kind:  yaml.ScalarNode,
+						Style: yaml.DoubleQuotedStyle,
+						Value: name,
+					}
+					config.Jobs[i].Steps[j] = sq
+				} else {
+					sq.SavedQueryStatement = yaml.Node{
+						Kind:  yaml.ScalarNode,
+						Style: yaml.DoubleQuotedStyle,
+						Value: "saved query not found",
+					}
+					config.Jobs[i].Steps[j] = sq
+				}
+			} else if dt, ok := step.(*dolt_ci.DoltTestStep); ok {
+				// For dolt test steps, populate dolt_test_statements to show users what will be run
+				stmts, err := previewDoltTestStatements(dt)
+				if err != nil {
+					return nil, err
+				}
+				dt.DoltTestStatements = nil
+				for _, s := range stmts {
+					dt.DoltTestStatements = append(dt.DoltTestStatements, yaml.Node{Kind: yaml.ScalarNode, Style: yaml.DoubleQuotedStyle, Value: s})
+				}
+				config.Jobs[i].Steps[j] = dt
+			}
+		}
 
-        if job.Name.Value == jobName {
-            return job, nil
+		if job.Name.Value == jobName {
+			return job, nil
 		}
 	}
 
@@ -188,59 +188,89 @@ func updateConfigQueryStatements(config *dolt_ci.WorkflowConfig, savedQueries ma
 // to resolve selections against the dolt_tests system table. If both groups and tests are empty,
 // an empty list is returned.
 func previewDoltTestStatements(dt *dolt_ci.DoltTestStep) ([]string, error) {
-    // Build selection args: normalize wildcards so that presence of '*' in a field ignores other entries
-    // If none provided, we'll show wildcard as a preview.
-    args := make([]string, 0, len(dt.Tests)+len(dt.TestGroups))
-    hasStarTests := false
-    for _, t := range dt.Tests { if t.Value == "*" { hasStarTests = true; break } }
-    hasStarGroups := false
-    for _, g := range dt.TestGroups { if g.Value == "*" { hasStarGroups = true; break } }
+	// Build selection args: normalize wildcards so that presence of '*' in a field ignores other entries
+	// If none provided, we'll show wildcard as a preview.
+	args := make([]string, 0, len(dt.Tests)+len(dt.TestGroups))
+	hasStarTests := false
+	for _, t := range dt.Tests {
+		if t.Value == "*" {
+			hasStarTests = true
+			break
+		}
+	}
+	hasStarGroups := false
+	for _, g := range dt.TestGroups {
+		if g.Value == "*" {
+			hasStarGroups = true
+			break
+		}
+	}
 
-    testsProvided := len(dt.Tests) > 0
-    groupsProvided := len(dt.TestGroups) > 0
+	testsProvided := len(dt.Tests) > 0
+	groupsProvided := len(dt.TestGroups) > 0
 
-    switch {
-    case testsProvided && groupsProvided:
-        // If tests is wildcard and groups are specific → preview groups
-        if hasStarTests && !hasStarGroups {
-            for _, g := range dt.TestGroups { args = append(args, g.Value) }
-            break
-        }
-        // If groups is wildcard and tests are specific → preview tests
-        if hasStarGroups && !hasStarTests {
-            for _, t := range dt.Tests { args = append(args, t.Value) }
-            break
-        }
-        // Both wildcard (should be invalid by validation), but fall back to single wildcard
-        if hasStarTests && hasStarGroups {
-            args = []string{"*"}
-            break
-        }
-        // Neither wildcard → preview both sets
-        for _, t := range dt.Tests { args = append(args, t.Value) }
-        for _, g := range dt.TestGroups { args = append(args, g.Value) }
-    case testsProvided:
-        if hasStarTests { args = []string{"*"} } else { for _, t := range dt.Tests { args = append(args, t.Value) } }
-    case groupsProvided:
-        if hasStarGroups { args = []string{"*"} } else { for _, g := range dt.TestGroups { args = append(args, g.Value) } }
-    default:
-        args = []string{"*"}
-    }
+	switch {
+	case testsProvided && groupsProvided:
+		// If tests is wildcard and groups are specific → preview groups
+		if hasStarTests && !hasStarGroups {
+			for _, g := range dt.TestGroups {
+				args = append(args, g.Value)
+			}
+			break
+		}
+		// If groups is wildcard and tests are specific → preview tests
+		if hasStarGroups && !hasStarTests {
+			for _, t := range dt.Tests {
+				args = append(args, t.Value)
+			}
+			break
+		}
+		// Both wildcard (should be invalid by validation), but fall back to single wildcard
+		if hasStarTests && hasStarGroups {
+			args = []string{"*"}
+			break
+		}
+		// Neither wildcard → preview both sets
+		for _, t := range dt.Tests {
+			args = append(args, t.Value)
+		}
+		for _, g := range dt.TestGroups {
+			args = append(args, g.Value)
+		}
+	case testsProvided:
+		if hasStarTests {
+			args = []string{"*"}
+		} else {
+			for _, t := range dt.Tests {
+				args = append(args, t.Value)
+			}
+		}
+	case groupsProvided:
+		if hasStarGroups {
+			args = []string{"*"}
+		} else {
+			for _, g := range dt.TestGroups {
+				args = append(args, g.Value)
+			}
+		}
+	default:
+		args = []string{"*"}
+	}
 
-    // Use the same helper the table function relies on to locate rows. We cannot instantiate a full engine here,
-    // so we mirror the lookup strings that dolt_test_run uses for previewing: test names and group names.
-    // We will format preview strings like dolt_test_run would accept: each arg stands alone.
-    // Since we can't query here without engine, return the args themselves as indicative selectors.
-    // Consumers can run: SELECT * FROM dolt_test_run('<arg>') to see full detail.
-    // To provide better UX, if no args provided, show wildcard.
-    // args already normalized above
+	// Use the same helper the table function relies on to locate rows. We cannot instantiate a full engine here,
+	// so we mirror the lookup strings that dolt_test_run uses for previewing: test names and group names.
+	// We will format preview strings like dolt_test_run would accept: each arg stands alone.
+	// Since we can't query here without engine, return the args themselves as indicative selectors.
+	// Consumers can run: SELECT * FROM dolt_test_run('<arg>') to see full detail.
+	// To provide better UX, if no args provided, show wildcard.
+	// args already normalized above
 
-    // Represent each selection as a dolt_test_run invocation for clarity
-    stmts := make([]string, 0, len(args))
-    for _, a := range args {
-        stmts = append(stmts, fmt.Sprintf("SELECT * FROM %s('%s')", (&dtablefunctions.TestsRunTableFunction{}).Name(), a))
-    }
-    return stmts, nil
+	// Represent each selection as a dolt_test_run invocation for clarity
+	stmts := make([]string, 0, len(args))
+	for _, a := range args {
+		stmts = append(stmts, fmt.Sprintf("SELECT * FROM %s('%s')", (&dtablefunctions.TestsRunTableFunction{}).Name(), a))
+	}
+	return stmts, nil
 }
 
 func getSavedQueries(sqlCtx *sql.Context, queryist cli.Queryist) (map[string]string, error) {
