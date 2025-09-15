@@ -562,6 +562,7 @@ EOF
   [ "$db_count" -eq 2 ] || false
 }
 
+# bats test_tags=no_lambda
 @test "docker-entrypoint: docker-entrypoint-initdb.d script execution" {
   cname="${TEST_PREFIX}initdb-scripts"
   
