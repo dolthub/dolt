@@ -98,6 +98,20 @@ $ docker build -f docker/serverDockerfile --build-arg DOLT_VERSION=1.59.7 -t dol
 # Note: To run the local build replace `dolthub/dolt-sql-server:latest` with `dolt-sql-server:latest`
 ```
 
+## Building from Source
+
+To build from your local source code instead of downloading a pre-built binary:
+
+```shell
+# Build from local source code (requires workspace directory with source dependencies, e.g., dolt_workspace/)
+$ docker build -f dolt/docker/serverDockerfile --build-arg DOLT_VERSION=source -t dolt-sql-server:source .
+# Note: This should contain dolt/ at the minimum, any other repos need to be
+# added to COPY.
+
+# Run the source-built image
+$ docker run -e DOLT_ROOT_PASSWORD=secret2 -e DOLT_ROOT_HOST=% -p 3307:3306 dolt-sql-server:source
+```
+
 ### Connect to the server in the container from the host system
 
 From the host system, to connect to a server running in a container, we need to map a port on the host system to the port our sql-server is running on in the container.

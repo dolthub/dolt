@@ -11,25 +11,36 @@ RUN apt update -y && \
     apt clean && \
     rm -rf /var/lib/apt/lists/*
 
-# we install dolt with the install.sh script, which will determine the platform/arch of the container
-# and install the proper dolt binary
-# Handle "latest" by fetching the actual latest version
-RUN if [ "$DOLT_VERSION" = "latest" ]; then \
-        LATEST_RELEASE=$(curl -s https://api.github.com/repos/dolthub/dolt/releases/latest) && \
-        echo "Latest release data: $LATEST_RELEASE" && \
-        DOLT_VERSION=$(echo "$LATEST_RELEASE" | grep '"tag_name"' | cut -d'"' -f4 | sed 's/^v//') && \
-        echo "Resolved version: $DOLT_VERSION"; \
+COPY *dolt /tmp/dolt
+
+# Either build from source or download based on DOLT_VERSION
+RUN if [ "$DOLT_VERSION" = "source" ]; then \
+        apt update -y && apt install -y golang-1.22 git build-essential && \
+        export PATH="/usr/lib/go-1.22/bin:$PATH" && \
+        cd /tmp/dolt/go && go build -o /usr/local/bin/dolt ./cmd/dolt && \
+        chmod +x /usr/local/bin/dolt; \
     else \
-        echo "Using specified version: $DOLT_VERSION"; \
+        if [ "$DOLT_VERSION" = "latest" ]; then \
+            LATEST_RELEASE=$(curl -s https://api.github.com/repos/dolthub/dolt/releases/latest) && \
+            echo "Latest release data: $LATEST_RELEASE" && \
+            DOLT_VERSION=$(echo "$LATEST_RELEASE" | grep '"tag_name"' | cut -d'"' -f4 | sed 's/^v//') && \
+            echo "Resolved version: $DOLT_VERSION"; \
+        else \
+            echo "Using specified version: $DOLT_VERSION"; \
+        fi && \
+        curl -L https://github.com/dolthub/dolt/releases/download/v${DOLT_VERSION}/install.sh | bash; \
     fi && \
-    curl -L https://github.com/dolthub/dolt/releases/download/v${DOLT_VERSION}/install.sh | bash
+    rm -rf /tmp/dolt
+
 RUN /usr/local/bin/dolt version
 
 RUN mkdir /docker-entrypoint-initdb.d
 RUN mkdir -p /var/lib/dolt
 VOLUME /var/lib/dolt
 
-COPY docker/docker-entrypoint.sh /usr/local/bin/
+COPY *docker/*docker-entrypoint.sh /usr/local/bin/
+COPY *dolt/*docker/*docker-entrypoint.sh /usr/local/bin/
+
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 RUN chmod 755 /var/lib/dolt
 

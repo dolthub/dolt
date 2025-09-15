@@ -9,16 +9,21 @@ setup() {
   setup_no_dolt_init
   
   # Compute repo root from integration-tests/bats directory
-  REPO_ROOT=$(cd "$BATS_TEST_DIRNAME/../.." && pwd)
+  REPO_ROOT=$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)
   export REPO_ROOT
 
-  # Image and container naming
-  DOLT_DOCKER_TEST_VERSION=${DOLT_DOCKER_TEST_VERSION:-latest}
+  # Image and container naming - use source for all tests
+  DOLT_DOCKER_TEST_VERSION=${DOLT_DOCKER_TEST_VERSION:-source}
   TEST_IMAGE="dolt-entrypoint-it:${DOLT_DOCKER_TEST_VERSION}"
   TEST_PREFIX="dolt-entrypoint-it-$$-"
 
-  # Ensure image exists (build if missing)
-  docker build -f "$REPO_ROOT/docker/serverDockerfile" --build-arg DOLT_VERSION=$DOLT_DOCKER_TEST_VERSION -t "$TEST_IMAGE" "$REPO_ROOT" || true
+  # Build from source only once per test run (check if image already exists)
+  if ! docker image inspect "$TEST_IMAGE" >/dev/null 2>&1; then
+    echo "Building Dolt from source for integration tests..."
+    docker build -f "$REPO_ROOT/doltx``/docker/serverDockerfile" --build-arg DOLT_VERSION=$DOLT_DOCKER_TEST_VERSION -t "$TEST_IMAGE" "$REPO_ROOT"
+  else
+    echo "Using existing source-built image: $TEST_IMAGE"
+  fi
 
   # Best-effort cleanup of leftovers from a previous attempt
   docker ps -a --filter "name=$TEST_PREFIX" --format '{{.Names}}' | xargs -r docker rm -f >/dev/null 2>&1 || true
@@ -608,4 +613,38 @@ EOF
 
   # Cleanup temp directory
   rm -rf "$temp_dir"
+}
+
+# bats test_tags=no_lambda
+@test "docker-entrypoint: CREATE SCHEMA without database name" { # DBeaver creates schemas (databases) without specifying a database name
+  cname="${TEST_PREFIX}create-schema"
+  usr="testuser"
+  pwd="testpass"
+  
+  # Run container with custom user but no specific database
+  run_container_with_port "$cname" 3306 \
+    -e DOLT_ROOT_PASSWORD=rootpass \
+    -e DOLT_ROOT_HOST=% \
+    -e DOLT_USER="$usr" \
+    -e DOLT_PASSWORD="$pwd"
+
+  # Test that user can create a schema without specifying a database name (DBeaver style)
+  run docker exec "$cname" dolt -u "root" -p "rootpass" sql -q "CREATE SCHEMA dbeaver_test;"
+  [ $status -eq 0 ]
+
+  # Verify the schema was created
+  run docker exec "$cname" dolt -u "root" -p "rootpass" sql -q "SHOW DATABASES;"
+  [ $status -eq 0 ]
+  [[ "$output" =~ "dbeaver_test" ]] || false
+
+  # Test table creation
+  run docker exec "$cname" dolt -u "root" -p "rootpass" sql -q "USE dbeaver_test; CREATE TABLE test_table (id INT PRIMARY KEY, name VARCHAR(50));"
+  [ $status -eq 0 ]
+
+  run docker exec "$cname" dolt -u "root" -p "rootpass" sql -q "USE dbeaver_test; INSERT INTO test_table VALUES (1, 'test data');"
+  [ $status -eq 0 ]
+
+  run docker exec "$cname" dolt -u "root" -p "rootpass" sql -q "USE dbeaver_test; SELECT * FROM test_table;"
+  [ $status -eq 0 ]
+  [[ "$output" =~ "test data" ]] || false
 }
