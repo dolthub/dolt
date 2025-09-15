@@ -235,8 +235,8 @@ func (cmd ArchiveInspectCmd) Exec(ctx context.Context, commandStr string, args [
 			return 1
 		}
 		
-		cli.Printf("Prefix: %d\n", details["prefix"])
-		cli.Printf("Suffix: %x\n", details["suffix"])
+		cli.Printf("Prefix: 0x%x\n", details["prefix"])
+		cli.Printf("Suffix: 0x%x\n", details["suffix"])
 		cli.Printf("Dictionary ID: %d\n", details["dictionaryID"])
 		cli.Printf("Data ID: %d\n", details["dataID"])
 		
