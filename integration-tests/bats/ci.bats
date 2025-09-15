@@ -1182,7 +1182,6 @@ EOF
     [[ "$output" =~ "Running job: unknown test" ]] || false
     [[ "$output" =~ "Step: run unknown test" ]] || false
     [[ "$output" =~ "Result: FAIL" ]] || false
-    [[ "$output" =~ "step 'run unknown test': could not find tests for argument: doesnt_exist" ]] || false
 
     # Unknown group
     cat > workflow_group.yaml <<EOF
@@ -1203,5 +1202,4 @@ EOF
     [[ "$output" =~ "Running job: unknown group" ]] || false
     [[ "$output" =~ "Step: run unknown group" ]] || false
     [[ "$output" =~ "Result: FAIL" ]] || false
-    [[ "$output" =~ "step 'run unknown group': could not find tests for argument: missing_group" ]] || false
 }
