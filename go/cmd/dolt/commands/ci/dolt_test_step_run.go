@@ -170,7 +170,7 @@ func summarizeDoltTestRows(sqlCtx *sql.Context, rows []sql.Row) (string, error) 
 		return "", err
 	}
 	if len(failures) > 0 {
-		return details, fmt.Errorf(strings.Join(failures, "; "))
+		return details, fmt.Errorf("%s", strings.Join(failures, "; "))
 	}
 	return details, nil
 }
