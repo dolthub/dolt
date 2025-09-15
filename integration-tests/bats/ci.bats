@@ -191,8 +191,8 @@ EOF
     [[ "$output" =~ "invalid branch name: *" ]] || false
 }
 
-# # Edge case: reject DoltTest step that uses wildcard in both fields
-# @test "ci: import rejects DoltTest with wildcard in both groups and tests" {
+# # Edge case: reject dolt test step that uses wildcard in both fields
+# @test "ci: import rejects dolt test with wildcard in both groups and tests" {
 #     cat > workflow.yaml <<EOF
 # name: wf_invalid_both_wildcards
 # on:
@@ -288,7 +288,7 @@ EOF
 # }
 
 # # Edge case: export includes normalized wildcard persistence (only '*')
-# @test "ci: export normalizes wildcard persistence for DoltTest steps" {
+# @test "ci: export normalizes wildcard persistence for dolt test steps" {
 #     cat > workflow.yaml <<EOF
 # name: wf_export_normalize
 # on:
@@ -317,7 +317,7 @@ EOF
 #     ! [[ "$output" =~ "- \"tx\"" ]] || false
 # }
 
-@test "ci: import supports DoltTest steps (tests wildcard and specific)" {
+@test "ci: import supports dolt test steps (tests wildcard and specific)" {
     cat > workflow.yaml <<EOF
 name: wf_dolt_test_only
 on:
@@ -341,7 +341,7 @@ EOF
     [ "$status" -eq 0 ]
     [[ "$output" =~ "wf_dolt_test_only" ]] || false
 
-    # Verify DoltTest rows inserted
+    # Verify dolt test rows inserted
     run dolt sql -q "select group_name from dolt_ci_workflow_dolt_test_step_groups where group_name='*';"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "*" ]] || false
@@ -353,7 +353,7 @@ EOF
     [[ "$output" =~ "test_b" ]] || false
 }
 
-@test "ci: import supports mixed SavedQuery and DoltTest steps" {
+@test "ci: import supports mixed SavedQuery and dolt test steps" {
     cat > workflow.yaml <<EOF
 name: wf_mixed
 on:
@@ -387,7 +387,7 @@ EOF
     [[ "$output" =~ "group_b" ]] || false
 }
 
-@test "ci: import supports DoltTest steps with both groups and tests" {
+@test "ci: import supports dolt test steps with both groups and tests" {
     cat > workflow.yaml <<EOF
 name: wf_dolt_test_groups_and_tests
 on:
@@ -557,7 +557,7 @@ EOF
     [[ ${output} == *"steps:"* ]] || false
 }
 
-@test "ci: export includes DoltTest steps (groups and tests)" {
+@test "ci: export includes dolt test steps (groups and tests)" {
     cat > workflow.yaml <<EOF
 name: wf_export_dolt_test
 on:
@@ -581,7 +581,7 @@ EOF
     [ "$status" -eq 0 ]
     run cat wf_export_dolt_test.yaml
     [ "$status" -eq 0 ]
-    # Ensure the YAML contains the DoltTest steps and fields
+    # Ensure the YAML contains the dolt test steps and fields
     [[ "$output" =~ "name: \"wf_export_dolt_test\"" ]] || false
     [[ "$output" =~ "dolt_test_groups:" ]] || false
     [[ "$output" =~ "- \"group_a\"" ]] || false
@@ -590,7 +590,7 @@ EOF
     [[ "$output" =~ "- \"t2\"" ]] || false
 }
 
-@test "ci: export includes mixed SavedQuery and DoltTest steps" {
+@test "ci: export includes mixed SavedQuery and dolt test steps" {
     cat > workflow.yaml <<EOF
 name: wf_export_mixed
 on:
@@ -728,7 +728,7 @@ EOF
     [[ "$output" =~ "saved_query_statement: \"saved query not found\"" ]] || false
 }
 
-@test "ci: dolt ci view shows DoltTest steps (wildcard and tests)" {
+@test "ci: dolt ci view shows dolt test steps (wildcard and tests)" {
     cat > workflow.yaml <<EOF
 name: wf_view_dolt_test
 on:
@@ -767,7 +767,7 @@ EOF
     [[ "$output" =~ "SELECT * FROM dolt_test_run('test_b')" ]] || false
 }
 
-@test "ci: dolt ci view shows DoltTest steps (groups and tests)" {
+@test "ci: dolt ci view shows dolt test steps (groups and tests)" {
     cat > workflow.yaml <<EOF
 name: wf_view_groups_and_tests
 on:
@@ -1016,7 +1016,7 @@ EOF
     [[ "$output" =~ "Could not find saved query: invalid query" ]] || false
 }
 
-@test "ci: ci run executes DoltTest steps (wildcard groups)" {
+@test "ci: ci run executes dolt test steps (wildcard groups)" {
     # define tests that should pass
     dolt sql -q "insert into dolt_tests (test_name, test_group, test_query, assertion_type, assertion_comparator, assertion_value) values ('test_a', null, 'select 1', 'expected_rows', '==', '1');"
     dolt sql -q "insert into dolt_tests (test_name, test_group, test_query, assertion_type, assertion_comparator, assertion_value) values ('test_b', null, 'select 1', 'expected_columns', '==', '1');"
@@ -1045,7 +1045,7 @@ EOF
     [[ "$output" =~ "Result: PASS" ]] || false
 }
 
-@test "ci: ci run executes DoltTest steps (tests only)" {
+@test "ci: ci run executes dolt test steps (tests only)" {
     dolt sql -q "insert into dolt_tests values ('t_only_a', null, 'select 1', 'expected_rows', '==', '1');"
     dolt sql -q "insert into dolt_tests values ('t_only_b', null, 'select 1', 'expected_columns', '==', '1');"
 
@@ -1074,7 +1074,7 @@ EOF
     [[ "$output" =~ "Result: PASS" ]] || false
 }
 
-@test "ci: ci run executes DoltTest steps (groups only)" {
+@test "ci: ci run executes dolt test steps (groups only)" {
     dolt sql -q "insert into dolt_tests values ('g1_t1', 'g1', 'select 1', 'expected_rows', '==', '1');"
     dolt sql -q "insert into dolt_tests values ('g2_t1', 'g2', 'select 1', 'expected_columns', '==', '1');"
 
@@ -1104,7 +1104,7 @@ EOF
     [[ "$output" =~ "Result: PASS" ]] || false
 }
 
-@test "ci: ci run executes DoltTest steps (groups and tests)" {
+@test "ci: ci run executes dolt test steps (groups and tests)" {
     dolt sql -q "insert into dolt_tests values ('sel_t1', 'ga', 'select 1', 'expected_rows', '==', '1');"
 
     cat > workflow.yaml <<EOF
@@ -1132,7 +1132,7 @@ EOF
     [[ "$output" =~ "Result: PASS" ]] || false
 }
 
-@test "ci: ci run fails when DoltTest has failing test" {
+@test "ci: ci run fails when dolt test has failing test" {
     dolt sql -q "insert into dolt_tests values ('t_fail', null, 'select 1', 'expected_rows', '==', '2');"
 
     cat > workflow.yaml <<EOF
@@ -1159,7 +1159,7 @@ EOF
     [[ "$output" =~ "step 'run failing test': t_fail: Assertion failed: expected_rows equal to 2, got 1" ]] || false
 }
 
-@test "ci: ci run errors when DoltTest references unknown test or group" {
+@test "ci: ci run errors when dolt test references unknown test or group" {
     dolt sql -q "insert into dolt_tests values ('t_known', 'gg', 'select 1', 'expected_rows', '==', '1');"
 
     # Unknown test
