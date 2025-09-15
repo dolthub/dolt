@@ -9,8 +9,8 @@ setup() {
   setup_no_dolt_init
   
   # Compute repo root from integration-tests/bats directory
-  REPO_ROOT=$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)
-  export REPO_ROOT
+  WORKSPACE_ROOT=$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)
+  export WORKSPACE_ROOT
 
   # Image and container naming - use source for all tests
   DOLT_DOCKER_TEST_VERSION=${DOLT_DOCKER_TEST_VERSION:-source}
@@ -20,7 +20,7 @@ setup() {
   # Build from source only once per test run (check if image already exists)
   if ! docker image inspect "$TEST_IMAGE" >/dev/null 2>&1; then
     echo "Building Dolt from source for integration tests..."
-    docker build -f "$REPO_ROOT/doltx``/docker/serverDockerfile" --build-arg DOLT_VERSION=$DOLT_DOCKER_TEST_VERSION -t "$TEST_IMAGE" "$REPO_ROOT"
+    docker build -f "$WORKSPACE_ROOT/doltx``/docker/serverDockerfile" --build-arg DOLT_VERSION=$DOLT_DOCKER_TEST_VERSION -t "$TEST_IMAGE" "$WORKSPACE_ROOT"
   else
     echo "Using existing source-built image: $TEST_IMAGE"
   fi
