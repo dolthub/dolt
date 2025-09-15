@@ -146,22 +146,22 @@ func queryAndPrint(sqlCtx *sql.Context, queryist cli.Queryist, config *dolt_ci.W
 				err = fmt.Errorf("unsupported step type")
 			}
 
-			if isDoltTest {
-				if details != "" {
-					cli.Println(details)
-				}
-				if err != nil {
-					jobFailures = append(jobFailures, fmt.Sprintf("step '%s': %s", step.GetName(), err.Error()))
-				}
-			} else {
-				if err != nil {
-					cli.Println("FAIL")
-					cli.Println(color.RedString("%s", err))
-					jobFailures = append(jobFailures, fmt.Sprintf("step '%s': %s", step.GetName(), err.Error()))
-				} else {
-					cli.Println("PASS")
-				}
-			}
+            // Print test details for DoltTest steps; they do not emit PASS/FAIL inline
+            if isDoltTest && details != "" {
+                cli.Println(details)
+            }
+
+            // Unified failure handling
+            if err != nil {
+                if !isDoltTest {
+                    cli.Println("FAIL")
+                    cli.Println(color.RedString("%s", err))
+                }
+                jobFailures = append(jobFailures, fmt.Sprintf("step '%s': %s", step.GetName(), err.Error()))
+            } else if !isDoltTest {
+                // Non-test steps print PASS inline when there is no error
+                cli.Println("PASS")
+            }
 		}
 		if len(jobFailures) > 0 {
 			cli.Println(color.RedString("Result: FAIL"))
