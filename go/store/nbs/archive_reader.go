@@ -427,12 +427,6 @@ func (ar archiveReader) search(hash hash.Hash) int {
 		return -1
 	}
 
-	// roll backwards to find the first instance if there are multiple with the same prefix, and the search didn't find
-	// the first.
-	for possibleMatch > 0 && ar.indexReader.getPrefix(uint32(possibleMatch-1)) == prefix {
-		possibleMatch--
-	}
-
 	for idx := uint32(possibleMatch); idx < ar.footer.chunkCount && ar.indexReader.getPrefix(idx) == prefix; idx++ {
 		if ar.indexReader.getSuffix(idx) == suffix(targetSfx) {
 			return int(idx)
