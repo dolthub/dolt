@@ -616,7 +616,8 @@ EOF
 }
 
 # bats test_tags=no_lambda
-@test "docker-entrypoint: CREATE SCHEMA without database name" { # DBeaver creates schemas (databases) without specifying a database name
+@test "docker-entrypoint: CREATE SCHEMA without database name" {
+  # DBeaver creates schemas (databases) without specifying a database name
   cname="${TEST_PREFIX}create-schema"
   usr="testuser"
   pwd="testpass"
