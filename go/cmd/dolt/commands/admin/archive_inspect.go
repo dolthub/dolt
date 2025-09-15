@@ -24,6 +24,7 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/nbs"
 )
 
@@ -50,6 +51,7 @@ func (cmd ArchiveInspectCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithMaxArgs(cmd.Name(), 1)
 	ap.SupportsString("archive-path", "", "archive_path", "Full path to the archive file (.darc) to inspect")
 	ap.SupportsFlag("mmap", "", "Enable memory-mapped index reading for better performance")
+	ap.SupportsString("object-id", "", "object_id", "Base32-encoded 20-byte object ID to inspect within the archive")
 	return ap
 }
 
@@ -131,6 +133,45 @@ func (cmd ArchiveInspectCmd) Exec(ctx context.Context, commandStr string, args [
 				// If not JSON, just print raw bytes
 				cli.Printf("  %s\n", string(metadataBytes))
 			}
+		}
+	}
+
+	// Handle object-id inspection if provided
+	if objectIdStr, ok := apr.GetValue("object-id"); ok {
+		cli.Println()
+		cli.Println("Object inspection:")
+		
+		// Parse the hash
+		objectHash, hashOk := hash.MaybeParse(objectIdStr)
+		if !hashOk {
+			cli.PrintErrln("Error: Invalid object ID format. Expected 32-character base32 encoded hash.")
+			return 1
+		}
+		
+		// Look up the object in the archive
+		chunkInfo, err := inspector.GetChunkInfo(ctx, objectHash)
+		if err != nil {
+			cli.PrintErrln("Error inspecting object:", err.Error())
+			return 1
+		}
+		
+		if chunkInfo == nil {
+			cli.Printf("Object %s not found in archive\n", objectIdStr)
+		} else {
+			cli.Printf("Object ID: %s\n", objectIdStr)
+			cli.Printf("Compression type: %s\n", chunkInfo.CompressionType)
+			cli.Printf("Dictionary byte span ID: %d\n", chunkInfo.DictionaryID)
+			cli.Printf("Data byte span ID: %d\n", chunkInfo.DataID)
+			
+			if chunkInfo.DictionaryByteSpan.Length > 0 {
+				cli.Printf("Dictionary byte span: offset=%d, length=%d\n", 
+					chunkInfo.DictionaryByteSpan.Offset, chunkInfo.DictionaryByteSpan.Length)
+			} else {
+				cli.Println("Dictionary byte span: none (empty)")
+			}
+			
+			cli.Printf("Data byte span: offset=%d, length=%d\n", 
+				chunkInfo.DataByteSpan.Offset, chunkInfo.DataByteSpan.Length)
 		}
 	}
 

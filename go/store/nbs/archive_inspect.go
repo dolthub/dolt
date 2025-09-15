@@ -20,6 +20,21 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
+// ByteSpanInfo provides information about a byte span in the archive
+type ByteSpanInfo struct {
+	Offset uint64
+	Length uint64
+}
+
+// ChunkInfo contains information about a chunk within the archive
+type ChunkInfo struct {
+	CompressionType      string
+	DictionaryID         uint32
+	DataID               uint32
+	DictionaryByteSpan   ByteSpanInfo
+	DataByteSpan         ByteSpanInfo
+}
+
 // ArchiveInspector provides a way to inspect archive files from outside the nbs package
 type ArchiveInspector struct {
 	reader archiveReader
@@ -94,4 +109,50 @@ func (ai *ArchiveInspector) ByteSpanCount() uint32 {
 func (ai *ArchiveInspector) GetMetadata(ctx context.Context) ([]byte, error) {
 	stats := &Stats{}
 	return ai.reader.getMetadata(ctx, stats)
+}
+
+// GetChunkInfo looks up information about a specific chunk in the archive
+func (ai *ArchiveInspector) GetChunkInfo(ctx context.Context, h hash.Hash) (*ChunkInfo, error) {
+	// Search for the chunk
+	idx := ai.reader.search(h)
+	if idx < 0 {
+		return nil, nil // Chunk not found
+	}
+	
+	// Get the chunk reference (dictionary ID and data ID)
+	dictID, dataID := ai.reader.getChunkRef(idx)
+	
+	// Get the byte span information
+	dictByteSpan := ai.reader.getByteSpanByID(dictID)
+	dataByteSpan := ai.reader.getByteSpanByID(dataID)
+	
+	// Determine compression type based on dictionary ID and archive version
+	compressionType := "unknown"
+	formatVersion := ai.reader.footer.formatVersion
+	
+	if dictID == 0 {
+		// Dictionary ID 0 means no dictionary
+		if formatVersion == 1 {
+			compressionType = "zstd (no dictionary)"
+		} else if formatVersion >= 2 {
+			compressionType = "snappy"
+		}
+	} else {
+		// Dictionary ID > 0 means zstd with dictionary
+		compressionType = "zstd (with dictionary)"
+	}
+	
+	return &ChunkInfo{
+		CompressionType: compressionType,
+		DictionaryID:    dictID,
+		DataID:          dataID,
+		DictionaryByteSpan: ByteSpanInfo{
+			Offset: dictByteSpan.offset,
+			Length: dictByteSpan.length,
+		},
+		DataByteSpan: ByteSpanInfo{
+			Offset: dataByteSpan.offset,
+			Length: dataByteSpan.length,
+		},
+	}, nil
 }
