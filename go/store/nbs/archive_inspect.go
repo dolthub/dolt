@@ -16,6 +16,7 @@ package nbs
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -28,11 +29,11 @@ type ByteSpanInfo struct {
 
 // ChunkInfo contains information about a chunk within the archive
 type ChunkInfo struct {
-	CompressionType      string
-	DictionaryID         uint32
-	DataID               uint32
-	DictionaryByteSpan   ByteSpanInfo
-	DataByteSpan         ByteSpanInfo
+	CompressionType    string
+	DictionaryID       uint32
+	DataID             uint32
+	DictionaryByteSpan ByteSpanInfo
+	DataByteSpan       ByteSpanInfo
 }
 
 // ArchiveInspector provides a way to inspect archive files from outside the nbs package
@@ -55,7 +56,7 @@ func NewArchiveInspectorFromFileWithMmap(ctx context.Context, archivePath string
 	// Use a dummy hash since we're just inspecting
 	dummyHash := hash.Hash{}
 	stats := &Stats{}
-	
+
 	archiveReader, err := newArchiveReader(ctx, fra, dummyHash, uint64(fra.sz), stats)
 	if err != nil {
 		fra.Close()
@@ -111,6 +112,58 @@ func (ai *ArchiveInspector) GetMetadata(ctx context.Context) ([]byte, error) {
 	return ai.reader.getMetadata(ctx, stats)
 }
 
+// SearchChunk exposes the underlying search method for debugging
+func (ai *ArchiveInspector) SearchChunk(h hash.Hash) int {
+	return ai.reader.search(h)
+}
+
+// SearchChunkDebug exposes detailed search information for debugging
+func (ai *ArchiveInspector) SearchChunkDebug(h hash.Hash) map[string]interface{} {
+	prefix := h.Prefix()
+	possibleMatch := ai.reader.indexReader.searchPrefix(prefix)
+	targetSfx := h.Suffix()
+	
+	debug := map[string]interface{}{
+		"hash":           h.String(),
+		"prefix":         prefix,
+		"suffix":         targetSfx,
+		"possibleMatch":  possibleMatch,
+		"chunkCount":     ai.reader.footer.chunkCount,
+		"indexReaderType": fmt.Sprintf("%T", ai.reader.indexReader),
+	}
+	
+	// Check if possibleMatch is in valid range
+	if possibleMatch < 0 || uint32(possibleMatch) >= ai.reader.footer.chunkCount {
+		debug["validRange"] = false
+		debug["finalResult"] = -1
+		return debug
+	}
+	
+	debug["validRange"] = true
+	
+	// Check prefix matches in the range
+	matches := []map[string]interface{}{}
+	for idx := uint32(possibleMatch); idx < ai.reader.footer.chunkCount && ai.reader.indexReader.getPrefix(idx) == prefix; idx++ {
+		suffixAtIdx := ai.reader.indexReader.getSuffix(idx)
+		match := map[string]interface{}{
+			"index":        idx,
+			"suffixAtIdx":  []byte(suffixAtIdx[:]),
+			"suffixMatch":  suffixAtIdx == suffix(targetSfx),
+		}
+		matches = append(matches, match)
+		
+		if suffixAtIdx == suffix(targetSfx) {
+			debug["finalResult"] = int(idx)
+			debug["matches"] = matches
+			return debug
+		}
+	}
+	
+	debug["matches"] = matches
+	debug["finalResult"] = -1
+	return debug
+}
+
 // GetChunkInfo looks up information about a specific chunk in the archive
 func (ai *ArchiveInspector) GetChunkInfo(ctx context.Context, h hash.Hash) (*ChunkInfo, error) {
 	// Search for the chunk
@@ -118,18 +171,18 @@ func (ai *ArchiveInspector) GetChunkInfo(ctx context.Context, h hash.Hash) (*Chu
 	if idx < 0 {
 		return nil, nil // Chunk not found
 	}
-	
+
 	// Get the chunk reference (dictionary ID and data ID)
 	dictID, dataID := ai.reader.getChunkRef(idx)
-	
+
 	// Get the byte span information
 	dictByteSpan := ai.reader.getByteSpanByID(dictID)
 	dataByteSpan := ai.reader.getByteSpanByID(dataID)
-	
+
 	// Determine compression type based on dictionary ID and archive version
 	compressionType := "unknown"
 	formatVersion := ai.reader.footer.formatVersion
-	
+
 	if dictID == 0 {
 		// Dictionary ID 0 means no dictionary
 		if formatVersion == 1 {
@@ -141,7 +194,7 @@ func (ai *ArchiveInspector) GetChunkInfo(ctx context.Context, h hash.Hash) (*Chu
 		// Dictionary ID > 0 means zstd with dictionary
 		compressionType = "zstd (with dictionary)"
 	}
-	
+
 	return &ChunkInfo{
 		CompressionType: compressionType,
 		DictionaryID:    dictID,

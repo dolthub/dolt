@@ -52,6 +52,7 @@ func (cmd ArchiveInspectCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsString("archive-path", "", "archive_path", "Full path to the archive file (.darc) to inspect")
 	ap.SupportsFlag("mmap", "", "Enable memory-mapped index reading for better performance")
 	ap.SupportsString("object-id", "", "object_id", "Base32-encoded 20-byte object ID to inspect within the archive")
+	ap.SupportsFlag("debug", "", "Show detailed debug information for object-id search")
 	return ap
 }
 
@@ -146,6 +147,37 @@ func (cmd ArchiveInspectCmd) Exec(ctx context.Context, commandStr string, args [
 		if !hashOk {
 			cli.PrintErrln("Error: Invalid object ID format. Expected 32-character base32 encoded hash.")
 			return 1
+		}
+		
+		// Check for debug flag
+		showDebug := apr.Contains("debug")
+		
+		if showDebug {
+			cli.Println("Debug information:")
+			debugInfo := inspector.SearchChunkDebug(objectHash)
+			
+			// Print debug information
+			cli.Printf("Hash: %s\n", debugInfo["hash"])
+			cli.Printf("Prefix: %d\n", debugInfo["prefix"])
+			cli.Printf("Suffix: %x\n", debugInfo["suffix"])
+			cli.Printf("Index reader type: %s\n", debugInfo["indexReaderType"])
+			cli.Printf("Chunk count: %d\n", debugInfo["chunkCount"])
+			cli.Printf("Possible match index: %d\n", debugInfo["possibleMatch"])
+			cli.Printf("Valid range: %t\n", debugInfo["validRange"])
+			cli.Printf("Final search result: %d\n", debugInfo["finalResult"])
+			
+			if matches, ok := debugInfo["matches"].([]map[string]interface{}); ok {
+				cli.Printf("Prefix matches found: %d\n", len(matches))
+				for i, match := range matches {
+					cli.Printf("  Match %d: index=%d, suffixMatch=%t, suffix=%x\n", 
+						i, match["index"], match["suffixMatch"], match["suffixAtIdx"])
+				}
+			}
+			cli.Println()
+		} else {
+			// Simple search result
+			searchResult := inspector.SearchChunk(objectHash)
+			cli.Printf("Search result index: %d\n", searchResult)
 		}
 		
 		// Look up the object in the archive
