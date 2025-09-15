@@ -38,11 +38,11 @@ type MmapData struct {
 
 var mmapAlignment = int64(os.Getpagesize())
 
-func (m MmapData) GetUint64(offset int64) uint64 {
+func (m MmapData) GetUint64(offset uint64) uint64 {
 	return binary.BigEndian.Uint64(m.data[offset : offset+uint64Size])
 }
 
-func (m MmapData) GetUint32(offset int64) uint32 {
+func (m MmapData) GetUint32(offset uint64) uint32 {
 	return binary.BigEndian.Uint32(m.data[offset : offset+uint32Size])
 }
 
