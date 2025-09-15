@@ -2792,6 +2792,35 @@ var BranchesSystemTableTests = []queries.ScriptTest{
 		},
 	},
 	{
+		Name: "foreign keys referencing dolt_branches cannot use referential actions",
+		SetUpScript: []string{
+			"CREATE TABLE ext_branch_metadata(branch_name varchar(300) primary key, owner varchar(255));",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "ALTER TABLE ext_branch_metadata ADD CONSTRAINT fk123 FOREIGN KEY (branch_name) REFERENCES dolt_branches(name) ON DELETE CASCADE;",
+				ExpectedErrStr: "foreign keys referencing Dolt system tables do not support referential actions",
+			},
+			{
+				Query:          "ALTER TABLE ext_branch_metadata ADD CONSTRAINT fk123 FOREIGN KEY (branch_name) REFERENCES dolt_branches(name) ON UPDATE CASCADE;",
+				ExpectedErrStr: "foreign keys referencing Dolt system tables do not support referential actions",
+			},
+			{
+				Query:          "ALTER TABLE ext_branch_metadata ADD CONSTRAINT fk123 FOREIGN KEY (branch_name) REFERENCES dolt_branches(name) ON DELETE RESTRICT;",
+				ExpectedErrStr: "foreign keys referencing Dolt system tables do not support referential actions",
+			},
+			{
+				Query:          "ALTER TABLE ext_branch_metadata ADD CONSTRAINT fk123 FOREIGN KEY (branch_name) REFERENCES dolt_branches(name) ON UPDATE RESTRICT;",
+				ExpectedErrStr: "foreign keys referencing Dolt system tables do not support referential actions",
+			},
+			{
+				// Explicitly using "NO ACTION" is allowed
+				Query:    "ALTER TABLE ext_branch_metadata ADD CONSTRAINT fk123 FOREIGN KEY (branch_name) REFERENCES dolt_branches(name) ON DELETE NO ACTION ON UPDATE NO ACTION;",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+		},
+	},
+	{
 		Name: "dolt_branches.name index",
 		SetUpScript: []string{
 			"CALL dolt_branch('branch1');",
