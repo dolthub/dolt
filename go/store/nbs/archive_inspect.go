@@ -213,6 +213,43 @@ func (ai *ArchiveInspector) GetIndexReaderDetails(idx uint32) map[string]interfa
 		}
 	}
 	
+	// For mmap reader, expose similar details using reflection-like approach
+	if mmap, ok := ai.reader.indexReader.(interface {
+		getNumChunks() uint32
+		// Add methods to access internal fields for debugging
+	}); ok {
+		// Try to access internal fields by type assertion to the concrete type
+		if mmapReader, isMmap := ai.reader.indexReader.(*mmapIndexReader); isMmap {
+			details["mmapIndexSize"] = mmapReader.indexSize
+			details["mmapByteSpanCount"] = mmapReader.byteSpanCount
+			details["mmapChunkCount"] = mmapReader.chunkCount
+			details["spanIndexOffset"] = mmapReader.spanIndexOffset
+			details["prefixesOffset"] = mmapReader.prefixesOffset
+			details["chunkRefsOffset"] = mmapReader.chunkRefsOffset
+			details["suffixesOffset"] = mmapReader.suffixesOffset
+			
+			// Calculate expected suffix position in mmap
+			expectedSuffixStart := int64(idx) * hash.SuffixLen
+			actualSuffixOffset := mmapReader.suffixesOffset + expectedSuffixStart
+			details["expectedSuffixStart"] = expectedSuffixStart
+			details["expectedSuffixEnd"] = expectedSuffixStart + hash.SuffixLen
+			details["actualSuffixOffset"] = actualSuffixOffset
+			
+			// Try to read raw bytes around the suffix position
+			if mmapReader.data != nil {
+				rawBytes := make([]byte, hash.SuffixLen)
+				_, err := mmapReader.data.ReadAt(rawBytes, actualSuffixOffset)
+				if err == nil {
+					details["rawSuffixBytes"] = rawBytes
+				} else {
+					details["rawSuffixBytesError"] = err.Error()
+				}
+			}
+		} else {
+			details["chunkCount"] = mmap.getNumChunks()
+		}
+	}
+	
 	return details
 }
 

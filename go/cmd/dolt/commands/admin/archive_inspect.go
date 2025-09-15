@@ -255,6 +255,28 @@ func (cmd ArchiveInspectCmd) Exec(ctx context.Context, commandStr string, args [
 				cli.Printf("Raw suffix bytes: %x\n", rawBytes)
 			}
 		}
+		
+		// Show mmap specific details if available
+		if mmapIndexSize, ok := details["mmapIndexSize"]; ok {
+			cli.Println()
+			cli.Println("Memory-mapped reader details:")
+			cli.Printf("Mmap index size: %d\n", mmapIndexSize)
+			cli.Printf("Mmap byte span count: %d\n", details["mmapByteSpanCount"])
+			cli.Printf("Mmap chunk count: %d\n", details["mmapChunkCount"])
+			cli.Printf("Span index offset: %d\n", details["spanIndexOffset"])
+			cli.Printf("Prefixes offset: %d\n", details["prefixesOffset"])
+			cli.Printf("Chunk refs offset: %d\n", details["chunkRefsOffset"])
+			cli.Printf("Suffixes offset: %d\n", details["suffixesOffset"])
+			cli.Printf("Expected suffix start: %d\n", details["expectedSuffixStart"])
+			cli.Printf("Expected suffix end: %d\n", details["expectedSuffixEnd"])
+			cli.Printf("Actual suffix offset: %d\n", details["actualSuffixOffset"])
+			if rawBytes, ok := details["rawSuffixBytes"]; ok {
+				cli.Printf("Raw suffix bytes: %x\n", rawBytes)
+			}
+			if err, ok := details["rawSuffixBytesError"]; ok {
+				cli.Printf("Raw suffix bytes error: %s\n", err)
+			}
+		}
 	}
 
 	return 0
