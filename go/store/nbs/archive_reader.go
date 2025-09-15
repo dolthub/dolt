@@ -326,7 +326,7 @@ func (f *inMemoryArchiveIndexReader) getSuffix(idx uint32) suffix {
 	if idx >= uint32(len(f.suffixes)/hash.SuffixLen) {
 		return suffix{}
 	}
-	start := idx * hash.SuffixLen
+	start := uint64(idx) * hash.SuffixLen
 	return suffix(f.suffixes[start : start+hash.SuffixLen])
 }
 
