@@ -164,6 +164,58 @@ func (ai *ArchiveInspector) SearchChunkDebug(h hash.Hash) map[string]interface{}
 	return debug
 }
 
+// GetIndexReaderDetails exposes internal index reader state for debugging
+func (ai *ArchiveInspector) GetIndexReaderDetails(idx uint32) map[string]interface{} {
+	details := map[string]interface{}{
+		"indexReaderType": fmt.Sprintf("%T", ai.reader.indexReader),
+		"requestedIndex":  idx,
+		"chunkCount":      ai.reader.footer.chunkCount,
+		"byteSpanCount":   ai.reader.footer.byteSpanCount,
+	}
+	
+	if idx >= ai.reader.footer.chunkCount {
+		details["error"] = "index out of range"
+		return details
+	}
+	
+	// Get prefix and suffix
+	prefix := ai.reader.indexReader.getPrefix(idx)
+	suffix := ai.reader.indexReader.getSuffix(idx)
+	
+	details["prefix"] = prefix
+	details["suffix"] = []byte(suffix[:])
+	
+	// Get chunk references
+	dictID, dataID := ai.reader.indexReader.getChunkRef(idx)
+	details["dictionaryID"] = dictID
+	details["dataID"] = dataID
+	
+	// For in-memory reader, expose the raw array details
+	if inMem, ok := ai.reader.indexReader.(*inMemoryArchiveIndexReader); ok {
+		details["prefixArrayLength"] = len(inMem.prefixes)
+		details["suffixArrayLength"] = len(inMem.suffixes)
+		details["chunkRefArrayLength"] = len(inMem.chunkRefs)
+		details["spanIndexArrayLength"] = len(inMem.spanIndex)
+		
+		// Calculate expected suffix position
+		expectedSuffixStart := idx * hash.SuffixLen
+		details["expectedSuffixStart"] = expectedSuffixStart
+		details["expectedSuffixEnd"] = expectedSuffixStart + hash.SuffixLen
+		details["suffixArrayBounds"] = expectedSuffixStart + hash.SuffixLen <= uint32(len(inMem.suffixes))
+		
+		// Show raw bytes around the suffix position for debugging
+		if expectedSuffixStart < uint32(len(inMem.suffixes)) {
+			end := expectedSuffixStart + hash.SuffixLen
+			if end > uint32(len(inMem.suffixes)) {
+				end = uint32(len(inMem.suffixes))
+			}
+			details["rawSuffixBytes"] = inMem.suffixes[expectedSuffixStart:end]
+		}
+	}
+	
+	return details
+}
+
 // GetChunkInfo looks up information about a specific chunk in the archive
 func (ai *ArchiveInspector) GetChunkInfo(ctx context.Context, h hash.Hash) (*ChunkInfo, error) {
 	// Search for the chunk

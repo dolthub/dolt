@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -53,6 +54,7 @@ func (cmd ArchiveInspectCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsFlag("mmap", "", "Enable memory-mapped index reading for better performance")
 	ap.SupportsString("object-id", "", "object_id", "Base32-encoded 20-byte object ID to inspect within the archive")
 	ap.SupportsFlag("debug", "", "Show detailed debug information for object-id search")
+	ap.SupportsString("inspect-index", "", "index", "Inspect raw index reader data at specific index position")
 	return ap
 }
 
@@ -204,6 +206,54 @@ func (cmd ArchiveInspectCmd) Exec(ctx context.Context, commandStr string, args [
 			
 			cli.Printf("Data byte span: offset=%d, length=%d\n", 
 				chunkInfo.DataByteSpan.Offset, chunkInfo.DataByteSpan.Length)
+		}
+	}
+
+	// Handle inspect-index if provided
+	if indexStr, ok := apr.GetValue("inspect-index"); ok {
+		cli.Println()
+		cli.Println("Index inspection:")
+		
+		// Parse the index
+		indexVal, err := strconv.ParseUint(indexStr, 10, 32)
+		if err != nil {
+			cli.PrintErrln("Error: Invalid index format. Expected unsigned integer.")
+			return 1
+		}
+		
+		idx := uint32(indexVal)
+		details := inspector.GetIndexReaderDetails(idx)
+		
+		// Print all details
+		cli.Printf("Index: %d\n", details["requestedIndex"])
+		cli.Printf("Index reader type: %s\n", details["indexReaderType"])
+		cli.Printf("Chunk count: %d\n", details["chunkCount"])
+		cli.Printf("Byte span count: %d\n", details["byteSpanCount"])
+		
+		if errorMsg, hasError := details["error"]; hasError {
+			cli.Printf("Error: %s\n", errorMsg)
+			return 1
+		}
+		
+		cli.Printf("Prefix: %d\n", details["prefix"])
+		cli.Printf("Suffix: %x\n", details["suffix"])
+		cli.Printf("Dictionary ID: %d\n", details["dictionaryID"])
+		cli.Printf("Data ID: %d\n", details["dataID"])
+		
+		// Show in-memory specific details if available
+		if prefixLen, ok := details["prefixArrayLength"]; ok {
+			cli.Println()
+			cli.Println("In-memory reader details:")
+			cli.Printf("Prefix array length: %d\n", prefixLen)
+			cli.Printf("Suffix array length: %d\n", details["suffixArrayLength"])
+			cli.Printf("Chunk ref array length: %d\n", details["chunkRefArrayLength"])
+			cli.Printf("Span index array length: %d\n", details["spanIndexArrayLength"])
+			cli.Printf("Expected suffix start: %d\n", details["expectedSuffixStart"])
+			cli.Printf("Expected suffix end: %d\n", details["expectedSuffixEnd"])
+			cli.Printf("Suffix array bounds valid: %t\n", details["suffixArrayBounds"])
+			if rawBytes, ok := details["rawSuffixBytes"]; ok {
+				cli.Printf("Raw suffix bytes: %x\n", rawBytes)
+			}
 		}
 	}
 
