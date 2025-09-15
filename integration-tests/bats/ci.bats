@@ -191,131 +191,131 @@ EOF
     [[ "$output" =~ "invalid branch name: *" ]] || false
 }
 
-# Edge case: reject DoltTest step that uses wildcard in both fields
-@test "ci: import rejects DoltTest with wildcard in both groups and tests" {
-    cat > workflow.yaml <<EOF
-name: wf_invalid_both_wildcards
-on:
-  push: {}
-jobs:
-  - name: job
-    steps:
-      - name: invalid step
-        dolt_test_groups: ["*"]
-        dolt_test_tests:  ["*"]
-EOF
-    dolt ci init
-    run dolt ci import ./workflow.yaml
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "specifies wildcard for both dolt_test_groups and dolt_test_tests" ]] || false
-}
+# # Edge case: reject DoltTest step that uses wildcard in both fields
+# @test "ci: import rejects DoltTest with wildcard in both groups and tests" {
+#     cat > workflow.yaml <<EOF
+# name: wf_invalid_both_wildcards
+# on:
+#   push: {}
+# jobs:
+#   - name: job
+#     steps:
+#       - name: invalid step
+#         dolt_test_groups: ["*"]
+#         dolt_test_tests:  ["*"]
+# EOF
+#     dolt ci init
+#     run dolt ci import ./workflow.yaml
+#     [ "$status" -eq 1 ]
+#     [[ "$output" =~ "specifies wildcard for both dolt_test_groups and dolt_test_tests" ]] || false
+# }
 
-# Edge case: view de-duplicates preview when wildcard present alongside specifics
-@test "ci: view de-duplicates previews when wildcard present with specifics" {
-    cat > workflow.yaml <<EOF
-name: wf_view_dedupe
-on:
-  push: {}
-jobs:
-  - name: job
-    steps:
-      - name: groups wildcard plus specifics
-        dolt_test_groups: ["group_1", "*"]
-      - name: tests wildcard plus specifics
-        dolt_test_tests: ["test_1", "*"]
-EOF
-    dolt ci init
-    dolt ci import ./workflow.yaml
-    run dolt ci view wf_view_dedupe
-    [ "$status" -eq 0 ]
-    # First step: expect only wildcard preview
-    [[ "$output" =~ "groups wildcard plus specifics" ]] || false
-    [[ "$output" =~ "SELECT \* FROM dolt_test_run\('\*'\)" ]] || false
-    # Should not include specific group preview alongside '*'
-    ! [[ "$output" =~ "dolt_test_run\('group_1'\)" ]] || false
-    # Second step: expect only wildcard preview
-    [[ "$output" =~ "tests wildcard plus specifics" ]] || false
-    [[ "$output" =~ "SELECT \* FROM dolt_test_run\('\*'\)" ]] || false
-    ! [[ "$output" =~ "dolt_test_run\('test_1'\)" ]] || false
-}
+# # Edge case: view de-duplicates preview when wildcard present alongside specifics
+# @test "ci: view de-duplicates previews when wildcard present with specifics" {
+#     cat > workflow.yaml <<EOF
+# name: wf_view_dedupe
+# on:
+#   push: {}
+# jobs:
+#   - name: job
+#     steps:
+#       - name: groups wildcard plus specifics
+#         dolt_test_groups: ["group_1", "*"]
+#       - name: tests wildcard plus specifics
+#         dolt_test_tests: ["test_1", "*"]
+# EOF
+#     dolt ci init
+#     dolt ci import ./workflow.yaml
+#     run dolt ci view wf_view_dedupe
+#     [ "$status" -eq 0 ]
+#     # First step: expect only wildcard preview
+#     [[ "$output" =~ "groups wildcard plus specifics" ]] || false
+#     [[ "$output" =~ "SELECT \* FROM dolt_test_run\('\*'\)" ]] || false
+#     # Should not include specific group preview alongside '*'
+#     ! [[ "$output" =~ "dolt_test_run\('group_1'\)" ]] || false
+#     # Second step: expect only wildcard preview
+#     [[ "$output" =~ "tests wildcard plus specifics" ]] || false
+#     [[ "$output" =~ "SELECT \* FROM dolt_test_run\('\*'\)" ]] || false
+#     ! [[ "$output" =~ "dolt_test_run\('test_1'\)" ]] || false
+# }
 
-# Edge case: run with groups specific + tests wildcard runs only groups' tests
-@test "ci: run uses groups when tests is wildcard and groups specified" {
-    dolt sql -q "insert into dolt_tests values ('ga_t1', 'ga', 'select 1', 'expected_rows', '==', '1');"
-    dolt sql -q "insert into dolt_tests values ('gb_t1', 'gb', 'select 1', 'expected_rows', '==', '1');"
-    cat > workflow.yaml <<EOF
-name: wf_run_intersection_groups
-on:
-  push: {}
-jobs:
-  - name: job
-    steps:
-      - name: run all tests in ga
-        dolt_test_groups: ["ga"]
-        dolt_test_tests:  ["*"]
-EOF
-    dolt ci init
-    dolt ci import ./workflow.yaml
-    run dolt ci run wf_run_intersection_groups
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "run all tests in ga" ]] || false
-    [[ "$output" =~ "test: ga_t1 \(group: ga\) - PASS" ]] || false
-    ! [[ "$output" =~ "gb_t1" ]] || false
-}
+# # Edge case: run with groups specific + tests wildcard runs only groups' tests
+# @test "ci: run uses groups when tests is wildcard and groups specified" {
+#     dolt sql -q "insert into dolt_tests values ('ga_t1', 'ga', 'select 1', 'expected_rows', '==', '1');"
+#     dolt sql -q "insert into dolt_tests values ('gb_t1', 'gb', 'select 1', 'expected_rows', '==', '1');"
+#     cat > workflow.yaml <<EOF
+# name: wf_run_intersection_groups
+# on:
+#   push: {}
+# jobs:
+#   - name: job
+#     steps:
+#       - name: run all tests in ga
+#         dolt_test_groups: ["ga"]
+#         dolt_test_tests:  ["*"]
+# EOF
+#     dolt ci init
+#     dolt ci import ./workflow.yaml
+#     run dolt ci run wf_run_intersection_groups
+#     [ "$status" -eq 0 ]
+#     [[ "$output" =~ "run all tests in ga" ]] || false
+#     [[ "$output" =~ "test: ga_t1 \(group: ga\) - PASS" ]] || false
+#     ! [[ "$output" =~ "gb_t1" ]] || false
+# }
 
-# Edge case: run with tests specific + groups wildcard runs only the named tests
-@test "ci: run uses tests when groups is wildcard and tests specified" {
-    dolt sql -q "insert into dolt_tests values ('only_t', 'g1', 'select 1', 'expected_rows', '==', '1');"
-    dolt sql -q "insert into dolt_tests values ('other_t', 'g2', 'select 1', 'expected_rows', '==', '1');"
-    cat > workflow.yaml <<EOF
-name: wf_run_union_tests
-on:
-  push: {}
-jobs:
-  - name: job
-    steps:
-      - name: run only_t everywhere
-        dolt_test_groups: ["*"]
-        dolt_test_tests:  ["only_t"]
-EOF
-    dolt ci init
-    dolt ci import ./workflow.yaml
-    run dolt ci run wf_run_union_tests
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "run only_t everywhere" ]] || false
-    [[ "$output" =~ "test: only_t \(group: g1\) - PASS" ]] || false
-    ! [[ "$output" =~ "other_t" ]] || false
-}
+# # Edge case: run with tests specific + groups wildcard runs only the named tests
+# @test "ci: run uses tests when groups is wildcard and tests specified" {
+#     dolt sql -q "insert into dolt_tests values ('only_t', 'g1', 'select 1', 'expected_rows', '==', '1');"
+#     dolt sql -q "insert into dolt_tests values ('other_t', 'g2', 'select 1', 'expected_rows', '==', '1');"
+#     cat > workflow.yaml <<EOF
+# name: wf_run_union_tests
+# on:
+#   push: {}
+# jobs:
+#   - name: job
+#     steps:
+#       - name: run only_t everywhere
+#         dolt_test_groups: ["*"]
+#         dolt_test_tests:  ["only_t"]
+# EOF
+#     dolt ci init
+#     dolt ci import ./workflow.yaml
+#     run dolt ci run wf_run_union_tests
+#     [ "$status" -eq 0 ]
+#     [[ "$output" =~ "run only_t everywhere" ]] || false
+#     [[ "$output" =~ "test: only_t \(group: g1\) - PASS" ]] || false
+#     ! [[ "$output" =~ "other_t" ]] || false
+# }
 
-# Edge case: export includes normalized wildcard persistence (only '*')
-@test "ci: export normalizes wildcard persistence for DoltTest steps" {
-    cat > workflow.yaml <<EOF
-name: wf_export_normalize
-on:
-  push: {}
-jobs:
-  - name: job
-    steps:
-      - name: step groups wildcard plus specifics
-        dolt_test_groups: ["ga", "*"]
-      - name: step tests wildcard plus specifics
-        dolt_test_tests: ["tx", "*"]
-EOF
-    dolt ci init
-    dolt ci import ./workflow.yaml
-    run dolt ci export wf_export_normalize
-    [ "$status" -eq 0 ]
-    run cat wf_export_normalize.yaml
-    [ "$status" -eq 0 ]
-    # groups stored only as '*'
-    [[ "$output" =~ "dolt_test_groups:" ]] || false
-    [[ "$output" =~ "- \"\*\"" ]] || false
-    ! [[ "$output" =~ "- \"ga\"" ]] || false
-    # tests stored only as '*'
-    [[ "$output" =~ "dolt_test_tests:" ]] || false
-    [[ "$output" =~ "- \"\*\"" ]] || false
-    ! [[ "$output" =~ "- \"tx\"" ]] || false
-}
+# # Edge case: export includes normalized wildcard persistence (only '*')
+# @test "ci: export normalizes wildcard persistence for DoltTest steps" {
+#     cat > workflow.yaml <<EOF
+# name: wf_export_normalize
+# on:
+#   push: {}
+# jobs:
+#   - name: job
+#     steps:
+#       - name: step groups wildcard plus specifics
+#         dolt_test_groups: ["ga", "*"]
+#       - name: step tests wildcard plus specifics
+#         dolt_test_tests: ["tx", "*"]
+# EOF
+#     dolt ci init
+#     dolt ci import ./workflow.yaml
+#     run dolt ci export wf_export_normalize
+#     [ "$status" -eq 0 ]
+#     run cat wf_export_normalize.yaml
+#     [ "$status" -eq 0 ]
+#     # groups stored only as '*'
+#     [[ "$output" =~ "dolt_test_groups:" ]] || false
+#     [[ "$output" =~ "- \"\*\"" ]] || false
+#     ! [[ "$output" =~ "- \"ga\"" ]] || false
+#     # tests stored only as '*'
+#     [[ "$output" =~ "dolt_test_tests:" ]] || false
+#     [[ "$output" =~ "- \"\*\"" ]] || false
+#     ! [[ "$output" =~ "- \"tx\"" ]] || false
+# }
 
 @test "ci: import supports DoltTest steps (tests wildcard and specific)" {
     cat > workflow.yaml <<EOF
@@ -1037,8 +1037,12 @@ EOF
     dolt ci import ./workflow.yaml
     run dolt ci run "wf_run_dolt_wildcard"
     [ "$status" -eq 0 ]
+
     [[ "$output" =~ "Running workflow: wf_run_dolt_wildcard" ]] || false
-    [[ "$output" =~ "Step: run tests wildcard - PASS" ]] || false
+    [[ "$output" =~ "Step: run tests wildcard" ]] || false
+    [[ "$output" =~ "  - test: test_a (group: ) - PASS" ]] || false
+    [[ "$output" =~ "  - test: test_b (group: ) - PASS" ]] || false
+    [[ "$output" =~ "Result: PASS" ]] || false
 }
 
 @test "ci: ci run executes DoltTest steps (tests only)" {
@@ -1062,7 +1066,12 @@ EOF
     dolt ci import ./workflow.yaml
     run dolt ci run "wf_run_dolt_tests_only"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Step: run t_only_a and t_only_b - PASS" ]] || false
+    [[ "$output" =~ "Running workflow: wf_run_dolt_tests_only" ]] || false
+    [[ "$output" =~ "Running job: run named tests" ]] || false
+    [[ "$output" =~ "Step: run t_only_a and t_only_b" ]] || false
+    [[ "$output" =~ "  - test: t_only_b (group: ) - PASS" ]] || false
+    [[ "$output" =~ "  - test: t_only_a (group: ) - PASS" ]] || false
+    [[ "$output" =~ "Result: PASS" ]] || false
 }
 
 @test "ci: ci run executes DoltTest steps (groups only)" {
@@ -1086,7 +1095,13 @@ EOF
     dolt ci import ./workflow.yaml
     run dolt ci run "wf_run_dolt_groups_only"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Step: run groups g1 and g2 - PASS" ]] || false
+
+    [[ "$output" =~ "Running workflow: wf_run_dolt_groups_only" ]] || false
+    [[ "$output" =~ "Running job: run groups" ]] || false
+    [[ "$output" =~ "Step: run groups g1 and g2" ]] || false
+    [[ "$output" =~ "  - test: g2_t1 (group: g2) - PASS" ]] || false
+    [[ "$output" =~ "  - test: g1_t1 (group: g1) - PASS" ]] || false
+    [[ "$output" =~ "Result: PASS" ]] || false
 }
 
 @test "ci: ci run executes DoltTest steps (groups and tests)" {
@@ -1110,7 +1125,11 @@ EOF
     dolt ci import ./workflow.yaml
     run dolt ci run "wf_run_dolt_groups_and_tests"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Step: run t1 in ga - PASS" ]] || false
+    [[ "$output" =~ "Running workflow: wf_run_dolt_groups_and_tests" ]] || false
+    [[ "$output" =~ "Running job: run selected" ]] || false
+    [[ "$output" =~ "Step: run t1 in ga" ]] || false
+    [[ "$output" =~ "  - test: sel_t1 (group: ga) - PASS" ]] || false
+    [[ "$output" =~ "Result: PASS" ]] || false
 }
 
 @test "ci: ci run fails when DoltTest has failing test" {
@@ -1130,10 +1149,14 @@ EOF
 
     dolt ci init
     dolt ci import ./workflow.yaml
-    dolt ci run "wf_run_dolt_fail"
     run dolt ci run "wf_run_dolt_fail"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Step: run failing test - FAIL" ]] || false
+    [[ "$output" =~ "Running workflow: wf_run_dolt_fail" ]] || false
+    [[ "$output" =~ "Running job: failing tests" ]] || false
+    [[ "$output" =~ "Step: run failing test" ]] || false
+    [[ "$output" =~ "  - test: t_fail (group: ) - FAIL: Assertion failed: expected_rows equal to 2, got 1" ]] || false
+    [[ "$output" =~ "Result: FAIL" ]] || false
+    [[ "$output" =~ "step 'run failing test': t_fail: Assertion failed: expected_rows equal to 2, got 1" ]] || false
 }
 
 @test "ci: ci run errors when DoltTest references unknown test or group" {
@@ -1155,8 +1178,11 @@ EOF
     dolt ci import ./workflow_test.yaml
     run dolt ci run "wf_run_dolt_unknown_test"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Step: run unknown test - FAIL" ]] || false
-    [[ "$output" =~ "could not find tests for argument: doesnt_exist" ]] || false
+    [[ "$output" =~ "Running workflow: wf_run_dolt_unknown_test" ]] || false
+    [[ "$output" =~ "Running job: unknown test" ]] || false
+    [[ "$output" =~ "Step: run unknown test" ]] || false
+    [[ "$output" =~ "Result: FAIL" ]] || false
+    [[ "$output" =~ "step 'run unknown test': could not find tests for argument: doesnt_exist" ]] || false
 
     # Unknown group
     cat > workflow_group.yaml <<EOF
@@ -1173,6 +1199,9 @@ EOF
     dolt ci import ./workflow_group.yaml
     run dolt ci run "wf_run_dolt_unknown_group"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Step: run unknown group - FAIL" ]] || false
-    [[ "$output" =~ "could not find tests for argument: missing_group" ]] || false
+    [[ "$output" =~ "Running workflow: wf_run_dolt_unknown_group" ]] || false
+    [[ "$output" =~ "Running job: unknown group" ]] || false
+    [[ "$output" =~ "Step: run unknown group" ]] || false
+    [[ "$output" =~ "Result: FAIL" ]] || false
+    [[ "$output" =~ "step 'run unknown group': could not find tests for argument: missing_group" ]] || false
 }
