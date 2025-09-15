@@ -261,9 +261,8 @@ func (cmd ArchiveInspectCmd) Exec(ctx context.Context, commandStr string, args [
 		}
 		
 		// Show mmap specific details
-		if mmapIndexSize, ok := details["mmapIndexSize"]; ok {
+		if _, ok := details["mmapIndexSize"]; ok {
 			cli.Printf("Storage type: Memory-mapped file\n")
-			cli.Printf("Index size: %d\n", mmapIndexSize)
 			cli.Printf("Span index offset: %d\n", details["spanIndexOffset"])
 			cli.Printf("Prefixes offset: %d\n", details["prefixesOffset"])
 			cli.Printf("Chunk refs offset: %d\n", details["chunkRefsOffset"])
