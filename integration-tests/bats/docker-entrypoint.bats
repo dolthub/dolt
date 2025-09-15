@@ -561,3 +561,50 @@ EOF
   db_count=$(echo "$output" | grep -c "testdb\|information_schema" || true)
   [ "$db_count" -eq 2 ] || false
 }
+
+@test "docker-entrypoint: docker-entrypoint-initdb.d script execution" {
+  cname="${TEST_PREFIX}initdb-scripts"
+  
+  # Create temporary directory for init scripts
+  local temp_dir="/tmp/initdb-test-$$"
+  mkdir -p "$temp_dir"
+  
+  # Create various types of init scripts
+  cat > "$temp_dir/01-create-table.sql" << 'EOF'
+CREATE DATABASE IF NOT EXISTS testinit;
+USE testinit;
+CREATE TABLE init_test (id INT, message VARCHAR(100));
+INSERT INTO init_test VALUES (1, 'SQL script executed');
+EOF
+
+  cat > "$temp_dir/02-bash-script.sh" << 'EOF'
+#!/bin/bash
+echo "Bash script executed"
+dolt sql -q "USE testinit; INSERT INTO init_test VALUES (2, 'Bash script executed');"
+EOF
+  chmod +x "$temp_dir/02-bash-script.sh"
+
+  cat > "$temp_dir/03-data.sql" << 'EOF'
+USE testinit;
+INSERT INTO init_test VALUES (3, 'Compressed SQL executed');
+EOF
+  gzip "$temp_dir/03-data.sql"
+
+  # Run container with init scripts mounted
+  run_container_with_port "$cname" 3306 -e DOLT_ROOT_PASSWORD=rootpass -e DOLT_ROOT_HOST=% -v "$temp_dir:/docker-entrypoint-initdb.d"
+
+  # Verify init scripts were executed
+  run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u root --password=rootpass -e "USE testinit; SELECT * FROM init_test ORDER BY id;"
+  [ $status -eq 0 ]
+  [[ "$output" =~ "SQL script executed" ]] || false
+  [[ "$output" =~ "Bash script executed" ]] || false
+  [[ "$output" =~ "Compressed SQL executed" ]] || false
+
+  # Verify database was created
+  run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u root --password=rootpass -e "SHOW DATABASES;"
+  [ $status -eq 0 ]
+  [[ "$output" =~ "testinit" ]] || false
+
+  # Cleanup temp directory
+  rm -rf "$temp_dir"
+}

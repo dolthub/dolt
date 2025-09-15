@@ -150,6 +150,8 @@ on the host system, it can also be mounted to this default location.
 $ docker run -p 3307:3306 -v /Users/jennifer/docker/databases/:/var/lib/dolt/ dolthub/dolt-sql-server:latest
 ```
 
+If the run command errors out during the entrypoint process, you'll have to remove the created container from the last run.
+
 ## Environment Variables
 
 The Dolt SQL Server image supports the following environment variables:

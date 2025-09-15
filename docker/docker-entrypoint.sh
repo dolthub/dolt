@@ -3,11 +3,17 @@ set -eo pipefail
 
 # logging functions
 mysql_log() {
-	local type="$1"; shift
-	# accept argument string or stdin
-	local text="$*"; if [ "$#" -eq 0 ]; then text="$(cat)"; fi
-	local dt; dt="$(date --rfc-3339=seconds)"
-	printf '%s [%s] [Entrypoint]: %s\n' "$dt" "$type" "$text"
+  local type="$1"; shift
+  local text="$*"; if [ "$#" -eq 0 ]; then text="$(cat)"; fi
+  local dt; dt="$(date --rfc-3339=seconds)"
+  local color_reset="\033[0m"
+  local color
+  case "$type" in
+  Warn) color="\033[1;33m" ;;  # yellow
+  ERROR) color="\033[1;31m" ;; # red
+  *) color="" ;;
+  esac
+  printf '%b%s [%s] [Entrypoint]: %s%b\n' "$color" "$dt" "$type" "$text" "$color_reset"
 }
 mysql_note() {
 	mysql_log Note "$@"
@@ -17,6 +23,7 @@ mysql_warn() {
 }
 mysql_error() {
 	mysql_log ERROR "$@" >&2
+  mysql_note "Remove this container with 'docker rm -f <container_name>' before retrying"
 	exit 1
 }
 docker_process_sql() {
@@ -160,7 +167,7 @@ EOF
     fi
 
     if [ -n "$user" ] && [ -z "$password" ]; then
-        mysql_error "$(get_env_var_name "USER") specified, but missing $(get_env_var_name "PASSWORD"); user creation requires a password"
+        mysql_error "$(get_env_var_name "USER") specified, but missing $(get_env_var_name "PASSWORD"); user creation requires a password."
     elif [ -z "$user" ] && [ -n "$password" ]; then
         mysql_warn "$(get_env_var_name "PASSWORD") specified, but missing $(get_env_var_name "USER"); password will be ignored"
         return
@@ -219,6 +226,8 @@ _main() {
         # run any file provided in /docker-entrypoint-initdb.d directory before the server starts
         if ls /docker-entrypoint-initdb.d/* >/dev/null 2>&1; then
             docker_process_init_files /docker-entrypoint-initdb.d/*
+        else
+          mysql_warn "No files found in /docker-entrypoint-initdb.d/ to process"
         fi
         touch $INIT_COMPLETED
     fi
@@ -250,7 +259,7 @@ _main() {
     
     # Ensure root user exists with correct password and permissions
     mysql_note "Configuring root@${root_host} user"
-    dolt sql -q "CREATE USER IF NOT EXISTS 'root'@'${root_host}' IDENTIFIED BY '${DOLT_ROOT_PASSWORD}'; ALTER USER 'root'@'${root_host}' IDENTIFIED BY '${DOLT_ROOT_PASSWORD}'; GRANT ALL ON *.* TO 'root'@'${root_host}' WITH GRANT OPTION;" >/dev/null 2>&1 || mysql_error "Failed to configure root@${root_host} user. Check logs for details."
+    dolt sql -q "CREATE USER IF NOT EXISTS 'root'@'${root_host}' IDENTIFIED BY '${DOLT_ROOT_PASSWORD}'; ALTER USER 'root'@'${root_host}' IDENTIFIED BY '${DOLT_ROOT_PASSWORD}'; GRANT ALL ON *.* TO 'root'@'${root_host}' WITH GRANT OPTION;" >/dev/null 2>&1 || mysql_error "Failed to configure root@${root_host} user."
     
     # If DOLT_DATABASE or MYSQL_DATABASE has been specified, create the database if it does not exist
     create_default_database_from_env
