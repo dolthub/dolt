@@ -240,42 +240,45 @@ func (cmd ArchiveInspectCmd) Exec(ctx context.Context, commandStr string, args [
 		cli.Printf("Dictionary ID: %d\n", details["dictionaryID"])
 		cli.Printf("Data ID: %d\n", details["dataID"])
 		
-		// Show in-memory specific details if available
+		// Show implementation-specific details
+		cli.Println()
+		cli.Println("Implementation details:")
+		
+		// Show common calculation details first
+		if expectedStart, ok := details["expectedSuffixStart"]; ok {
+			cli.Printf("Expected suffix start: %d\n", expectedStart)
+			cli.Printf("Expected suffix end: %d\n", details["expectedSuffixEnd"])
+		}
+		
+		// Show in-memory specific details
 		if prefixLen, ok := details["prefixArrayLength"]; ok {
-			cli.Println()
-			cli.Println("In-memory reader details:")
+			cli.Printf("Storage type: In-memory arrays\n")
 			cli.Printf("Prefix array length: %d\n", prefixLen)
 			cli.Printf("Suffix array length: %d\n", details["suffixArrayLength"])
 			cli.Printf("Chunk ref array length: %d\n", details["chunkRefArrayLength"])
 			cli.Printf("Span index array length: %d\n", details["spanIndexArrayLength"])
-			cli.Printf("Expected suffix start: %d\n", details["expectedSuffixStart"])
-			cli.Printf("Expected suffix end: %d\n", details["expectedSuffixEnd"])
 			cli.Printf("Suffix array bounds valid: %t\n", details["suffixArrayBounds"])
-			if rawBytes, ok := details["rawSuffixBytes"]; ok {
-				cli.Printf("Raw suffix bytes: %x\n", rawBytes)
-			}
 		}
 		
-		// Show mmap specific details if available
+		// Show mmap specific details
 		if mmapIndexSize, ok := details["mmapIndexSize"]; ok {
-			cli.Println()
-			cli.Println("Memory-mapped reader details:")
-			cli.Printf("Mmap index size: %d\n", mmapIndexSize)
-			cli.Printf("Mmap byte span count: %d\n", details["mmapByteSpanCount"])
-			cli.Printf("Mmap chunk count: %d\n", details["mmapChunkCount"])
+			cli.Printf("Storage type: Memory-mapped file\n")
+			cli.Printf("Index size: %d\n", mmapIndexSize)
 			cli.Printf("Span index offset: %d\n", details["spanIndexOffset"])
 			cli.Printf("Prefixes offset: %d\n", details["prefixesOffset"])
 			cli.Printf("Chunk refs offset: %d\n", details["chunkRefsOffset"])
 			cli.Printf("Suffixes offset: %d\n", details["suffixesOffset"])
-			cli.Printf("Expected suffix start: %d\n", details["expectedSuffixStart"])
-			cli.Printf("Expected suffix end: %d\n", details["expectedSuffixEnd"])
-			cli.Printf("Actual suffix offset: %d\n", details["actualSuffixOffset"])
-			if rawBytes, ok := details["rawSuffixBytes"]; ok {
-				cli.Printf("Raw suffix bytes: %x\n", rawBytes)
+			if actualOffset, ok := details["actualSuffixOffset"]; ok {
+				cli.Printf("Actual suffix file offset: %d\n", actualOffset)
 			}
-			if err, ok := details["rawSuffixBytesError"]; ok {
-				cli.Printf("Raw suffix bytes error: %s\n", err)
-			}
+		}
+		
+		// Show raw suffix bytes for both implementations
+		if rawBytes, ok := details["rawSuffixBytes"]; ok {
+			cli.Printf("Raw suffix bytes: %x\n", rawBytes)
+		}
+		if err, ok := details["rawSuffixBytesError"]; ok {
+			cli.Printf("Raw suffix bytes error: %s\n", err)
 		}
 	}
 
