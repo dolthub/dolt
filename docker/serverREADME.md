@@ -89,12 +89,16 @@ $ docker run dolthub/dolt-sql-server:latest --help
 
 To build this image from source, use the `serverDockerfile`:
 
+*WARNING* When building from source you cannot have any other folders that start with dolt in the same directory as
+your workspace folder. This is because we use a wildcard to conditionally copy the dolt source folder into 
+the image. Other folders starting with dolt could cause the build to fail.
+
 ```shell
 # Build with the latest Dolt version (automatically fetches the latest release)
 $ docker build -f docker/serverDockerfile --build-arg DOLT_VERSION=latest -t dolt-sql-server:latest .
 
 # Build with a specific Dolt version
-$ docker build -f docker/serverDockerfile --build-arg DOLT_VERSION=1.59.7 -t dolt-sql-server:latest .
+$ docker build -f docker/serverDockerfile --build-arg DOLT_VERSION=1.59.7 -t dolt-sql-server:1.59.7 .
 # Note: To run the local build replace `dolthub/dolt-sql-server:latest` with `dolt-sql-server:latest`
 ```
 
@@ -108,7 +112,6 @@ $ docker build -f dolt/docker/serverDockerfile --build-arg DOLT_VERSION=source -
 # Note: This should contain dolt/ at the minimum, any other repos need to be
 # added via COPY in serverDockerfile.
 
-# Run the source-built image
 $ docker run -e DOLT_ROOT_PASSWORD=secret2 -e DOLT_ROOT_HOST=% -p 3307:3306 dolt-sql-server:source
 ```
 
