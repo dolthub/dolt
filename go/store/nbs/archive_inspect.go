@@ -1,4 +1,4 @@
-// Copyright 2024 Dolthub, Inc.
+// Copyright 2025 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -67,7 +67,7 @@ type IndexReaderDetails struct {
 	Suffix          []byte
 	DictionaryID    uint32
 	DataID          uint32
-	
+
 	// In-memory reader specific fields
 	PrefixArrayLength    int
 	SuffixArrayLength    int
@@ -77,17 +77,17 @@ type IndexReaderDetails struct {
 	ExpectedSuffixEnd    uint32
 	SuffixArrayBounds    bool
 	RawSuffixBytes       []byte
-	
+
 	// Memory-mapped reader specific fields
-	MmapIndexSize         uint64
-	MmapByteSpanCount     uint32
-	MmapChunkCount        uint32
-	SpanIndexOffset       uint64
-	PrefixesOffset        uint64
-	ChunkRefsOffset       uint64
-	SuffixesOffset        uint64
-	ActualSuffixOffset    uint64
-	RawSuffixBytesError   string
+	MmapIndexSize       uint64
+	MmapByteSpanCount   uint32
+	MmapChunkCount      uint32
+	SpanIndexOffset     uint64
+	PrefixesOffset      uint64
+	ChunkRefsOffset     uint64
+	SuffixesOffset      uint64
+	ActualSuffixOffset  uint64
+	RawSuffixBytesError string
 }
 
 // ArchiveInspector provides a way to inspect archive files from outside the nbs package. Intended for debugging and inspection,
