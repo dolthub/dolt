@@ -51,9 +51,8 @@ func (cmd ArchiveInspectCmd) Docs() *cli.CommandDocumentation {
 func (cmd ArchiveInspectCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithMaxArgs(cmd.Name(), 1)
 	ap.SupportsString("archive-path", "", "archive_path", "Full path to the archive file (.darc) to inspect")
-	ap.SupportsFlag("mmap", "", "Enable memory-mapped index reading for better performance")
+	ap.SupportsFlag("mmap", "", "Enable memory-mapped index reading. Default is to load index into memory.")
 	ap.SupportsString("object-id", "", "object_id", "Base32-encoded 20-byte object ID to inspect within the archive")
-	ap.SupportsFlag("debug", "", "Show detailed debug information for object-id search")
 	ap.SupportsString("inspect-index", "", "index", "Inspect raw index reader data at specific index position")
 	return ap
 }
@@ -106,19 +105,19 @@ func (cmd ArchiveInspectCmd) Exec(ctx context.Context, commandStr string, args [
 	cli.Println("Archive file:", absPath)
 	cli.Println("Archive loaded successfully!")
 	cli.Println()
-	
+
 	// Basic file information
 	cli.Printf("File size: %d bytes\n", inspector.FileSize())
 	cli.Printf("Format version: %d\n", inspector.FormatVersion())
 	cli.Printf("File signature: %s\n", inspector.FileSignature())
 	cli.Println()
-	
+
 	// Archive structure information
 	cli.Printf("Chunk count: %d\n", inspector.ChunkCount())
 	cli.Printf("Byte span count: %d\n", inspector.ByteSpanCount())
 	cli.Printf("Index size: %d bytes\n", inspector.IndexSize())
 	cli.Printf("Metadata size: %d bytes\n", inspector.MetadataSize())
-	
+
 	// Display metadata if present
 	if inspector.MetadataSize() > 0 {
 		cli.Println()
@@ -143,52 +142,43 @@ func (cmd ArchiveInspectCmd) Exec(ctx context.Context, commandStr string, args [
 	if objectIdStr, ok := apr.GetValue("object-id"); ok {
 		cli.Println()
 		cli.Println("Object inspection:")
-		
+
 		// Parse the hash
 		objectHash, hashOk := hash.MaybeParse(objectIdStr)
 		if !hashOk {
 			cli.PrintErrln("Error: Invalid object ID format. Expected 32-character base32 encoded hash.")
 			return 1
 		}
-		
-		// Check for debug flag
-		showDebug := apr.Contains("debug")
-		
-		if showDebug {
-			cli.Println("Debug information:")
-			debugInfo := inspector.SearchChunkDebug(objectHash)
-			
-			// Print debug information
-			cli.Printf("Hash: %s\n", debugInfo["hash"])
-			cli.Printf("Prefix: %d\n", debugInfo["prefix"])
-			cli.Printf("Suffix: %x\n", debugInfo["suffix"])
-			cli.Printf("Index reader type: %s\n", debugInfo["indexReaderType"])
-			cli.Printf("Chunk count: %d\n", debugInfo["chunkCount"])
-			cli.Printf("Possible match index: %d\n", debugInfo["possibleMatch"])
-			cli.Printf("Valid range: %t\n", debugInfo["validRange"])
-			cli.Printf("Final search result: %d\n", debugInfo["finalResult"])
-			
-			if matches, ok := debugInfo["matches"].([]map[string]interface{}); ok {
-				cli.Printf("Prefix matches found: %d\n", len(matches))
-				for i, match := range matches {
-					cli.Printf("  Match %d: index=%d, suffixMatch=%t, suffix=%x\n", 
-						i, match["index"], match["suffixMatch"], match["suffixAtIdx"])
-				}
+
+		cli.Println("Debug information:")
+		debugInfo := inspector.SearchChunkDebug(objectHash)
+
+		// Print debug information
+		cli.Printf("Hash: %s\n", debugInfo["hash"])
+		cli.Printf("Prefix: %d\n", debugInfo["prefix"])
+		cli.Printf("Suffix: %x\n", debugInfo["suffix"])
+		cli.Printf("Index reader type: %s\n", debugInfo["indexReaderType"])
+		cli.Printf("Chunk count: %d\n", debugInfo["chunkCount"])
+		cli.Printf("Possible match index: %d\n", debugInfo["possibleMatch"])
+		cli.Printf("Valid range: %t\n", debugInfo["validRange"])
+		cli.Printf("Final search result: %d\n", debugInfo["finalResult"])
+
+		if matches, ok := debugInfo["matches"].([]map[string]interface{}); ok {
+			cli.Printf("Prefix matches found: %d\n", len(matches))
+			for i, match := range matches {
+				cli.Printf("  Match %d: index=%d, suffixMatch=%t, suffix=%x\n",
+					i, match["index"], match["suffixMatch"], match["suffixAtIdx"])
 			}
-			cli.Println()
-		} else {
-			// Simple search result
-			searchResult := inspector.SearchChunk(objectHash)
-			cli.Printf("Search result index: %d\n", searchResult)
 		}
-		
+		cli.Println()
+
 		// Look up the object in the archive
 		chunkInfo, err := inspector.GetChunkInfo(ctx, objectHash)
 		if err != nil {
 			cli.PrintErrln("Error inspecting object:", err.Error())
 			return 1
 		}
-		
+
 		if chunkInfo == nil {
 			cli.Printf("Object %s not found in archive\n", objectIdStr)
 		} else {
@@ -196,15 +186,15 @@ func (cmd ArchiveInspectCmd) Exec(ctx context.Context, commandStr string, args [
 			cli.Printf("Compression type: %s\n", chunkInfo.CompressionType)
 			cli.Printf("Dictionary byte span ID: %d\n", chunkInfo.DictionaryID)
 			cli.Printf("Data byte span ID: %d\n", chunkInfo.DataID)
-			
+
 			if chunkInfo.DictionaryByteSpan.Length > 0 {
-				cli.Printf("Dictionary byte span: offset=%d, length=%d\n", 
+				cli.Printf("Dictionary byte span: offset=%d, length=%d\n",
 					chunkInfo.DictionaryByteSpan.Offset, chunkInfo.DictionaryByteSpan.Length)
 			} else {
 				cli.Println("Dictionary byte span: none (empty)")
 			}
-			
-			cli.Printf("Data byte span: offset=%d, length=%d\n", 
+
+			cli.Printf("Data byte span: offset=%d, length=%d\n",
 				chunkInfo.DataByteSpan.Offset, chunkInfo.DataByteSpan.Length)
 		}
 	}
@@ -213,43 +203,43 @@ func (cmd ArchiveInspectCmd) Exec(ctx context.Context, commandStr string, args [
 	if indexStr, ok := apr.GetValue("inspect-index"); ok {
 		cli.Println()
 		cli.Println("Index inspection:")
-		
+
 		// Parse the index
 		indexVal, err := strconv.ParseUint(indexStr, 10, 32)
 		if err != nil {
 			cli.PrintErrln("Error: Invalid index format. Expected unsigned integer.")
 			return 1
 		}
-		
+
 		idx := uint32(indexVal)
 		details := inspector.GetIndexReaderDetails(idx)
-		
+
 		// Print all details
 		cli.Printf("Index: %d\n", details["requestedIndex"])
 		cli.Printf("Index reader type: %s\n", details["indexReaderType"])
 		cli.Printf("Chunk count: %d\n", details["chunkCount"])
 		cli.Printf("Byte span count: %d\n", details["byteSpanCount"])
-		
+
 		if errorMsg, hasError := details["error"]; hasError {
 			cli.Printf("Error: %s\n", errorMsg)
 			return 1
 		}
-		
+
 		cli.Printf("Prefix: 0x%x\n", details["prefix"])
 		cli.Printf("Suffix: 0x%x\n", details["suffix"])
 		cli.Printf("Dictionary ID: %d\n", details["dictionaryID"])
 		cli.Printf("Data ID: %d\n", details["dataID"])
-		
+
 		// Show implementation-specific details
 		cli.Println()
 		cli.Println("Implementation details:")
-		
+
 		// Show common calculation details first
 		if expectedStart, ok := details["expectedSuffixStart"]; ok {
 			cli.Printf("Expected suffix start: %d\n", expectedStart)
 			cli.Printf("Expected suffix end: %d\n", details["expectedSuffixEnd"])
 		}
-		
+
 		// Show in-memory specific details
 		if prefixLen, ok := details["prefixArrayLength"]; ok {
 			cli.Printf("Storage type: In-memory arrays\n")
@@ -259,7 +249,7 @@ func (cmd ArchiveInspectCmd) Exec(ctx context.Context, commandStr string, args [
 			cli.Printf("Span index array length: %d\n", details["spanIndexArrayLength"])
 			cli.Printf("Suffix array bounds valid: %t\n", details["suffixArrayBounds"])
 		}
-		
+
 		// Show mmap specific details
 		if _, ok := details["mmapIndexSize"]; ok {
 			cli.Printf("Storage type: Memory-mapped file\n")
@@ -271,7 +261,7 @@ func (cmd ArchiveInspectCmd) Exec(ctx context.Context, commandStr string, args [
 				cli.Printf("Actual suffix file offset: %d\n", actualOffset)
 			}
 		}
-		
+
 		// Show raw suffix bytes for both implementations
 		if rawBytes, ok := details["rawSuffixBytes"]; ok {
 			cli.Printf("Raw suffix bytes: %x\n", rawBytes)
