@@ -101,18 +101,12 @@ func (cmd ArchiveInspectCmd) Exec(ctx context.Context, commandStr string, args [
 	}
 	defer inspector.Close()
 
-	// Display basic archive information
 	cli.Println("Archive file:", absPath)
-	cli.Println("Archive loaded successfully!")
-	cli.Println()
-
-	// Basic file information
 	cli.Printf("File size: %d bytes\n", inspector.FileSize())
 	cli.Printf("Format version: %d\n", inspector.FormatVersion())
 	cli.Printf("File signature: %s\n", inspector.FileSignature())
 	cli.Println()
 
-	// Archive structure information
 	cli.Printf("Chunk count: %d\n", inspector.ChunkCount())
 	cli.Printf("Byte span count: %d\n", inspector.ByteSpanCount())
 	cli.Printf("Index size: %d bytes\n", inspector.IndexSize())
@@ -136,6 +130,8 @@ func (cmd ArchiveInspectCmd) Exec(ctx context.Context, commandStr string, args [
 				cli.Printf("  %s\n", string(metadataBytes))
 			}
 		}
+	} else {
+		cli.Println("Metadata: none")
 	}
 
 	// Handle object-id inspection if provided
@@ -150,10 +146,8 @@ func (cmd ArchiveInspectCmd) Exec(ctx context.Context, commandStr string, args [
 			return 1
 		}
 
-		cli.Println("Debug information:")
 		debugInfo := inspector.SearchChunkDebug(objectHash)
 
-		// Print debug information
 		cli.Printf("Hash: %s\n", debugInfo["hash"])
 		cli.Printf("Prefix: %d\n", debugInfo["prefix"])
 		cli.Printf("Suffix: %x\n", debugInfo["suffix"])
