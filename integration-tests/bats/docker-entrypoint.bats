@@ -586,6 +586,7 @@ EOF
   [[ "$output" =~ "test data" ]] || false
 }
 
+# bats test_tags=no_lambda
 @test "docker-entrypoint: latest binary build from dolt directory" {
   cname="${TEST_PREFIX}latest-docker"
   
@@ -610,6 +611,7 @@ EOF
   docker rmi "$LATEST_IMAGE" >/dev/null 2>&1 || true
 }
 
+# bats test_tags=no_lambda
 @test "docker-entrypoint: specific version binary build from dolt directory" {
   cname="${TEST_PREFIX}specific-version"
   
