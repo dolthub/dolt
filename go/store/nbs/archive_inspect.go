@@ -229,7 +229,7 @@ func (ai *ArchiveInspector) GetIndexReaderDetails(idx uint32) map[string]interfa
 			details["suffixesOffset"] = mmapReader.suffixesOffset
 			
 			// Calculate expected suffix position in mmap
-			expectedSuffixStart := int64(idx) * hash.SuffixLen
+			expectedSuffixStart := uint64(idx) * hash.SuffixLen
 			actualSuffixOffset := mmapReader.suffixesOffset + expectedSuffixStart
 			details["expectedSuffixStart"] = expectedSuffixStart
 			details["expectedSuffixEnd"] = expectedSuffixStart + hash.SuffixLen
@@ -238,7 +238,7 @@ func (ai *ArchiveInspector) GetIndexReaderDetails(idx uint32) map[string]interfa
 			// Try to read raw bytes around the suffix position
 			if mmapReader.data != nil {
 				rawBytes := make([]byte, hash.SuffixLen)
-				_, err := mmapReader.data.ReadAt(rawBytes, actualSuffixOffset)
+				_, err := mmapReader.data.ReadAt(rawBytes, int64(actualSuffixOffset))
 				if err == nil {
 					details["rawSuffixBytes"] = rawBytes
 				} else {
