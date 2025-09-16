@@ -8,16 +8,15 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 setup() {
   setup_no_dolt_init
   
-  # Compute repo root from integration-tests/bats directory
+  # Compute workspace root from integration-tests/bats directory
   WORKSPACE_ROOT=$(cd "$BATS_TEST_DIRNAME/../../.." && pwd)
   export WORKSPACE_ROOT
 
-  # Image and container naming - use source for all tests
   DOLT_DOCKER_TEST_VERSION=${DOLT_DOCKER_TEST_VERSION:-source}
   TEST_IMAGE="dolt-entrypoint-it:${DOLT_DOCKER_TEST_VERSION}"
   TEST_PREFIX="dolt-entrypoint-it-$$-"
 
-  # Build from source only once per test run (check if image already exists)
+  # Build from source only once per test run, check img already exists
   if ! docker image inspect "$TEST_IMAGE" >/dev/null 2>&1; then
     echo "Building Dolt from source for integration tests..."
     docker build -f "$WORKSPACE_ROOT/dolt``/docker/serverDockerfile" --build-arg DOLT_VERSION=$DOLT_DOCKER_TEST_VERSION -t "$TEST_IMAGE" "$WORKSPACE_ROOT"
@@ -25,12 +24,10 @@ setup() {
     echo "Using existing source-built image: $TEST_IMAGE"
   fi
 
-  # Best-effort cleanup of leftovers from a previous attempt
   docker ps -a --filter "name=$TEST_PREFIX" --format '{{.Names}}' | xargs -r docker rm -f >/dev/null 2>&1 || true
 }
 
 teardown() {
-  # Cleanup any containers for this test run
   docker ps -a --filter "name=$TEST_PREFIX" --format '{{.Names}}' | xargs -r docker rm -f >/dev/null 2>&1 || true
   teardown_common
 }
@@ -39,17 +36,15 @@ teardown() {
 run_container() {
   name="$1"; shift
   docker run -d --name "$name" "$@" "$TEST_IMAGE" >/dev/null
-  wait_for_log "$name" "Server ready. Accepting connections." 30
+  wait_for_log "$name" "Server ready. Accepting connections."
 
-  # Wait for user setup to complete (if users are being created)
-  wait_for_log "$name" "Reattaching to server process..." 10 || true
+  wait_for_log "$name" "Reattaching to server process..." || true
 
   # Verify container is running
   run docker ps --filter "name=$name" --format "{{.Names}}"
   [ $status -eq 0 ]
   [[ "$output" =~ ^"$name"$ ]] || false
 
-  # Verify server is actually ready for queries
   wait_for_server_ready "$name"
 }
 
@@ -58,17 +53,15 @@ run_container_with_port() {
   name="$1"; shift
   port="$1"; shift
   docker run -d --name "$name" -p "$port:3306" "$@" "$TEST_IMAGE" >/dev/null
-  wait_for_log "$name" "Server ready. Accepting connections." 15
+  wait_for_log "$name" "Server ready. Accepting connections."
 
-  # Wait for user setup to complete (if users are being created)
-  wait_for_log "$name" "Reattaching to server process" 10 || true
+  wait_for_log "$name" "Reattaching to server process" || true
   
   # Verify container is running
   run docker ps --filter "name=$name" --format "{{.Names}}"
   [ $status -eq 0 ]
   [[ "$output" =~ ^"$name"$ ]] || false
   
-  # Verify server is actually ready for queries
   wait_for_server_ready "$name"
 }
 
@@ -110,8 +103,7 @@ wait_for_log() {
   cname="${TEST_PREFIX}root-env"
   run docker run -d --name "$cname" -e DOLT_ROOT_PASSWORD=rootpass -e DOLT_USER=root -e DOLT_PASSWORD=anything "$TEST_IMAGE"
 
-  # Container should fail to stay up; still check logs for message
-  wait_for_log "$cname" "cannot be used for the root user" 15 || true
+  wait_for_log "$cname" "cannot be used for the root user" || true
   docker logs "$cname" >/tmp/${cname}.log 2>&1 || true
   run grep -F "cannot be used for the root user" /tmp/"${cname}".log
   [ $status -eq 0 ]
@@ -130,7 +122,7 @@ wait_for_log() {
 @test "docker-entrypoint: DOLT_ROOT_HOST creates root@% with grants" {
   cname="${TEST_PREFIX}root-host"
   run_container "$cname" -e DOLT_ROOT_PASSWORD=rootpass -e DOLT_ROOT_HOST=%
-  # Check using dolt inside the container
+
   run docker exec "$cname" dolt sql -q "SHOW GRANTS FOR 'root'@'%';"
   [ $status -eq 0 ]
   [[ "$output" =~ "WITH GRANT OPTION" ]] || false
@@ -143,17 +135,14 @@ wait_for_log() {
   kw_user="from"
   run_container "$cname" -e DOLT_ROOT_PASSWORD=rootpass -e DOLT_ROOT_HOST=% -e DOLT_DATABASE="$kw_db" -e DOLT_USER="$kw_user" -e DOLT_PASSWORD=pass
 
-  # Database exists
   run docker exec "$cname" dolt sql --result-format csv -q "SHOW DATABASES;"
   [ $status -eq 0 ]
   echo "$output" | grep -Fx "$kw_db" >/dev/null
 
-  # User exists
   run docker exec "$cname" dolt sql --result-format csv -q "SELECT User FROM mysql.user;"
   [ $status -eq 0 ]
   echo "$output" | grep -Fx "$kw_user" >/dev/null
 
-  # Grants for user on keyword DB
   run docker exec "$cname" dolt sql --result-format csv -q "SHOW GRANTS FOR '$kw_user'@'%';"
   [ $status -eq 0 ]
   printf -v p1 '`%s`\\.\\* TO' "$kw_db"
@@ -170,7 +159,6 @@ wait_for_log() {
   pwd="testpass"
   run_container "$cname" -e DOLT_ROOT_PASSWORD=rootpass -e DOLT_DATABASE="$kw_db" -e DOLT_USER="$usr" -e DOLT_PASSWORD="$pwd"
 
-  # Database exists
   run docker exec "$cname" dolt sql --result-format csv -q "SHOW DATABASES;"
   [ $status -eq 0 ]
   echo "$output" | grep -Fx "$kw_db" >/dev/null
@@ -188,17 +176,14 @@ wait_for_log() {
   pwd="testpass"
   run_container "$cname" -e DOLT_ROOT_PASSWORD=rootpass -e DOLT_ROOT_HOST=% -e DOLT_DATABASE="$db" -e DOLT_USER="$usr" -e DOLT_PASSWORD="$pwd"
 
-  # DB created
   run docker exec "$cname" dolt sql --result-format csv -q "SHOW DATABASES;"
   [ $status -eq 0 ]
   echo "$output" | grep -Fx "$db" >/dev/null
 
-  # User created
   run docker exec "$cname" dolt sql --result-format csv -q "SELECT User FROM mysql.user WHERE User='$usr';"
   [ $status -eq 0 ]
   echo "$output" | grep -Fx "$usr" >/dev/null
 
-  # Grants on DB
   run docker exec "$cname" dolt sql --result-format csv -q "SHOW GRANTS FOR '$usr'@'%';"
   [ $status -eq 0 ]
   printf -v p1 '`%s`\\.\\* TO' "$db"
@@ -239,7 +224,6 @@ wait_for_log() {
 # bats test_tags=no_lambda
 @test "docker-entrypoint: SQL error reporting without suppression" {
   cname="${TEST_PREFIX}sql-error-reporting"
-  # Run container with user creation
   run_container "$cname" -e DOLT_ROOT_PASSWORD=rootpass -e DOLT_USER=testuser -e DOLT_PASSWORD=testpass
 
   # Create the user first time (should succeed)
@@ -257,11 +241,13 @@ wait_for_log() {
 # bats test_tags=no_lambda
 @test "docker-entrypoint: empty DOLT_ROOT_PASSWORD is allowed" {
   cname="${TEST_PREFIX}empty-password-allowed"
-  # Run container with empty DOLT_ROOT_PASSWORD
-  run_container "$cname" -e DOLT_ROOT_PASSWORD=""
+  run_container "$cname" -e DOLT_ROOT_PASSWORD="" -e DOLT_ROOT_HOST=%
   
-  # Test that we can connect without password (this should work even without explicit root user)
   run docker exec "$cname" dolt sql -q "SHOW DATABASES;"
+  [ $status -eq 0 ]
+  [[ "$output" =~ "information_schema" ]] || false
+
+  run docker exec "$cname" dolt -u root -p "" sql -q "SHOW DATABASES;"
   [ $status -eq 0 ]
   [[ "$output" =~ "information_schema" ]] || false
 }
@@ -269,7 +255,6 @@ wait_for_log() {
 # bats test_tags=no_lambda
 @test "docker-entrypoint: valid server config file handling" {
   cname="${TEST_PREFIX}valid-server-config"
-  # Create a valid server config file
   mkdir -p /tmp/test-config
   cat > /tmp/test-config/test.yaml << 'EOF'
 log_level: info
@@ -284,10 +269,8 @@ data_dir: .
 cfg_dir: .doltcfg
 EOF
   
-  # Run container with valid server config file
   run_container "$cname" -v /tmp/test-config:/etc/dolt/servercfg.d:ro
   
-  # Cleanup
   rm -rf /tmp/test-config
 }
 
@@ -304,12 +287,10 @@ EOF
     -e DOLT_USER="$usr" \
     -e DOLT_PASSWORD="$pwd"
 
-  # Test wrong password fails with Dolt client
   run docker exec "$cname" dolt -u "$usr" -p "wrongpass" sql -q "SHOW DATABASES;"
   [ $status -ne 0 ]
   [[ "$output" =~ "Error 1045 (28000): Access denied for user 'testuser'" ]] || false
 
-  # Test wrong password fails with MySQL client
   run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u "$usr" --password="wrongpass" -e "SHOW DATABASES;"
   [ $status -ne 0 ]
   [[ "$output" =~ "ERROR 1045 (28000): Access denied for user 'testuser'" ]] || false
@@ -328,21 +309,17 @@ EOF
   cname="${TEST_PREFIX}user-host"
   run_container_with_port "$cname" 3306 -e DOLT_ROOT_PASSWORD=rootpass -e DOLT_ROOT_HOST=localhost -e DOLT_USER=testuser -e DOLT_PASSWORD=testpass -e DOLT_USER_HOST=%
 
-  # Grant testuser access to mysql database for verification
   run docker exec "$cname" dolt sql -q "GRANT ALL PRIVILEGES ON mysql.* TO 'testuser'@'%';"
   [ $status -eq 0 ]
 
-  # Verify user was created with the specified host (using external user)
   run docker exec "$cname" dolt -u testuser -p testpass sql --result-format csv -q "SELECT User, Host FROM mysql.user"
   [ $status -eq 0 ]
   [[ "$output" =~ "testuser,%" ]] || false
 
-  # Verify root@localhost exists (query using local dolt sql mode)
   run docker exec "$cname" bash -c "dolt sql --result-format csv -q \"SELECT User, Host FROM mysql.user WHERE User='root';\""
   [ $status -eq 0 ]
   [[ "$output" =~ "root,localhost" ]] || false
 
-  # Verify grants exist for the user with correct host
   run docker exec "$cname" bash -c "dolt sql -q \"SHOW GRANTS FOR 'testuser'@'%';\""
   [ $status -eq 0 ]
   [[ "$output" =~ "GRANT USAGE" ]] || false
@@ -355,17 +332,14 @@ EOF
   cname2="${TEST_PREFIX}user-host-2"
   run_container_with_port "$cname2" 3306 -e DOLT_ROOT_PASSWORD=rootpass -e DOLT_ROOT_HOST=% -e DOLT_USER=testuser2 -e DOLT_PASSWORD=testpass2 -e MYSQL_USER_HOST=%
   
-  # Verify user was created with the specified host
   run docker exec "$cname2" dolt -u root -p rootpass sql --result-format csv -q "SELECT User, Host FROM mysql.user WHERE User='testuser2';"
   [ $status -eq 0 ]
   [[ "$output" =~ "testuser2,%" ]] || false
 
-  # Verify root was created with %
   run docker exec "$cname2" dolt -u root -p rootpass sql --result-format csv -q "SELECT User, Host FROM mysql.user WHERE User='root';"
   [ $status -eq 0 ]
   [[ "$output" =~ "root,%" ]] || false
 
-  # Verify grants exist for the user with correct host
   run docker exec "$cname2" dolt -u root -p rootpass sql -q "SHOW GRANTS FOR 'testuser2'@'%';"
   [ $status -eq 0 ]
   [[ "$output" =~ "GRANT USAGE" ]] || false
@@ -378,7 +352,6 @@ EOF
   usr="testuser"
   pwd="testpass"
   
-  # Run container with custom database and user
   run_container_with_port "$cname" 3306 \
     -e DOLT_ROOT_PASSWORD=rootpass \
     -e DOLT_ROOT_HOST=% \
@@ -386,33 +359,26 @@ EOF
     -e DOLT_USER="$usr" \
     -e DOLT_PASSWORD="$pwd"
 
-  # Test that root user can access the custom database using dolt client
   run docker exec "$cname" dolt -u root -p rootpass sql -q "SHOW DATABASES;"
   [ $status -eq 0 ]
   [[ "$output" =~ "$db" ]] || false
 
-  # Test that root user can create tables in the custom database
   run docker exec "$cname" dolt -u root -p rootpass sql -q "USE \`$db\`; CREATE TABLE root_table (id INT PRIMARY KEY, data VARCHAR(100));"
   [ $status -eq 0 ]
   
-  # Test that root user can insert data
   run docker exec "$cname" dolt -u root -p rootpass sql -q "USE \`$db\`; INSERT INTO root_table VALUES (1, 'root data');"
   [ $status -eq 0 ]
   
-  # Test that custom user can access the custom database using dolt client
   run docker exec "$cname" dolt -u "$usr" -p "$pwd" sql -q "SHOW DATABASES;"
   [ $status -eq 0 ]
   [[ "$output" =~ "$db" ]] || false
 
-  # Test that custom user can create tables in the custom database
   run docker exec "$cname" dolt -u "$usr" -p "$pwd" sql -q "USE \`$db\`; CREATE TABLE user_table (id INT PRIMARY KEY, data VARCHAR(100));"
   [ $status -eq 0 ]
   
-  # Test that custom user can insert data
   run docker exec "$cname" dolt -u "$usr" -p "$pwd" sql -q "USE \`$db\`; INSERT INTO user_table VALUES (1, 'user data');"
   [ $status -eq 0 ]
   
-  # Test that custom user can query data
   run docker exec "$cname" dolt -u "$usr" -p "$pwd" sql -q "USE \`$db\`; SELECT * FROM user_table;"
   [ $status -eq 0 ]
   [[ "$output" =~ "user data" ]] || false
@@ -442,28 +408,22 @@ EOF
   usr="testuser"
   pwd="testpass"
   
-  # Run container with port mapping
   run_container_with_port "$cname" 3306 -e DOLT_ROOT_PASSWORD=rootpass -e DOLT_ROOT_HOST=% -e DOLT_DATABASE="$db" -e DOLT_USER="$usr" -e DOLT_PASSWORD="$pwd"
   
-  # Test root user connection via MySQL client
   run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u root --password=rootpass -e "SHOW DATABASES;"
   [ $status -eq 0 ]
   echo "$output" | grep -Fx "$db" >/dev/null
   
-  # Test custom user connection via MySQL client
   run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u "$usr" --password="$pwd" -e "SHOW DATABASES;"
   [ $status -eq 0 ]
   echo "$output" | grep -Fx "$db" >/dev/null
   
-  # Test that custom user can perform operations via MySQL client
   run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u "$usr" --password="$pwd" -e "USE \`$db\`; CREATE TABLE mysql_test (id INT PRIMARY KEY, name VARCHAR(50));"
   [ $status -eq 0 ]
   
-  # Test data insertion via MySQL client
   run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u "$usr" --password="$pwd" -e "USE \`$db\`; INSERT INTO mysql_test VALUES (1, 'mysql_test_data');"
   [ $status -eq 0 ]
   
-  # Test data query via MySQL client
   run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u "$usr" --password="$pwd" -e "USE \`$db\`; SELECT * FROM mysql_test;"
   [ $status -eq 0 ]
   [[ "$output" =~ "mysql_test_data" ]] || false
@@ -476,28 +436,22 @@ EOF
   kw_user="from"
   pwd="testpass"
   
-  # Run container with port mapping
   run_container_with_port "$cname" 3306 -e DOLT_ROOT_PASSWORD=rootpass -e DOLT_ROOT_HOST=% -e DOLT_DATABASE="$kw_db" -e DOLT_USER="$kw_user" -e DOLT_PASSWORD="$pwd"
   
-  # Test root user can see the reserved keyword database
   run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u root --password=rootpass -e "SHOW DATABASES;"
   [ $status -eq 0 ]
   echo "$output" | grep -Fx "$kw_db" >/dev/null
   
-  # Test custom user with reserved keyword name can connect
   run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u "$kw_user" --password="$pwd" -e "SHOW DATABASES;"
   [ $status -eq 0 ]
   echo "$output" | grep -Fx "$kw_db" >/dev/null
   
-  # Test operations with reserved keyword database name
   run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u "$kw_user" --password="$pwd" -e "USE \`$kw_db\`; CREATE TABLE test_table (id INT);"
   [ $status -eq 0 ]
   
-  # Test data operations
   run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u "$kw_user" --password="$pwd" -e "USE \`$kw_db\`; INSERT INTO test_table VALUES (1);"
   [ $status -eq 0 ]
   
-  # Test query
   run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u "$kw_user" --password="$pwd" -e "USE \`$kw_db\`; SELECT * FROM test_table;"
   [ $status -eq 0 ]
   [[ "$output" =~ "1" ]] || false
@@ -510,7 +464,6 @@ EOF
   usr="testuser"
   pwd="testpass"
 
-  # Run container with custom database and user
   run_container_with_port "$cname" 3306 \
     -e DOLT_ROOT_PASSWORD=rootpass \
     -e DOLT_ROOT_HOST=% \
@@ -518,33 +471,26 @@ EOF
     -e DOLT_USER="$usr" \
     -e DOLT_PASSWORD="$pwd"
 
-  # Test that root user can access the custom database using external MySQL client
   run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u root --password=rootpass -e "SHOW DATABASES;"
   [ $status -eq 0 ]
   [[ "$output" =~ "$db" ]] || false
 
-  # Test that root user can create tables in the custom database
   run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u root --password=rootpass -e "USE \`$db\`; CREATE TABLE root_table (id INT PRIMARY KEY, data VARCHAR(100));"
   [ $status -eq 0 ]
 
-  # Test that root user can insert data
   run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u root --password=rootpass -e "USE \`$db\`; INSERT INTO root_table VALUES (1, 'root data');"
   [ $status -eq 0 ]
 
-  # Test that custom user can access the custom database using external MySQL client
   run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u "$usr" --password="$pwd" -e "SHOW DATABASES;"
   [ $status -eq 0 ]
   [[ "$output" =~ "$db" ]] || false
 
-  # Test that custom user can create tables in the custom database
   run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u "$usr" --password="$pwd" -e "USE \`$db\`; CREATE TABLE user_table (id INT PRIMARY KEY, data VARCHAR(100));"
   [ $status -eq 0 ]
 
-  # Test that custom user can insert data
   run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u "$usr" --password="$pwd" -e "USE \`$db\`; INSERT INTO user_table VALUES (1, 'user data');"
   [ $status -eq 0 ]
 
-  # Test that custom user can query data
   run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u "$usr" --password="$pwd" -e "USE \`$db\`; SELECT * FROM user_table;"
   [ $status -eq 0 ]
   [[ "$output" =~ "user data" ]] || false
@@ -571,11 +517,9 @@ EOF
 @test "docker-entrypoint: docker-entrypoint-initdb.d script execution" {
   cname="${TEST_PREFIX}initdb-scripts"
   
-  # Create temporary directory for init scripts
   local temp_dir="/tmp/initdb-test-$$"
   mkdir -p "$temp_dir"
   
-  # Create various types of init scripts
   cat > "$temp_dir/01-create-table.sql" << 'EOF'
 CREATE DATABASE IF NOT EXISTS testinit;
 USE testinit;
@@ -596,22 +540,18 @@ INSERT INTO init_test VALUES (3, 'Compressed SQL executed');
 EOF
   gzip "$temp_dir/03-data.sql"
 
-  # Run container with init scripts mounted
   run_container_with_port "$cname" 3306 -e DOLT_ROOT_PASSWORD=rootpass -e DOLT_ROOT_HOST=% -v "$temp_dir:/docker-entrypoint-initdb.d"
 
-  # Verify init scripts were executed
+  run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u root --password=rootpass -e "SHOW DATABASES;"
+  [ $status -eq 0 ]
+  [[ "$output" =~ "testinit" ]] || false
+
   run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u root --password=rootpass -e "USE testinit; SELECT * FROM init_test ORDER BY id;"
   [ $status -eq 0 ]
   [[ "$output" =~ "SQL script executed" ]] || false
   [[ "$output" =~ "Bash script executed" ]] || false
   [[ "$output" =~ "Compressed SQL executed" ]] || false
 
-  # Verify database was created
-  run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u root --password=rootpass -e "SHOW DATABASES;"
-  [ $status -eq 0 ]
-  [[ "$output" =~ "testinit" ]] || false
-
-  # Cleanup temp directory
   rm -rf "$temp_dir"
 }
 
@@ -622,23 +562,19 @@ EOF
   usr="testuser"
   pwd="testpass"
   
-  # Run container with custom user but no specific database
   run_container_with_port "$cname" 3306 \
     -e DOLT_ROOT_PASSWORD=rootpass \
     -e DOLT_ROOT_HOST=% \
     -e DOLT_USER="$usr" \
     -e DOLT_PASSWORD="$pwd"
 
-  # Test that user can create a schema without specifying a database name (DBeaver style)
   run docker exec "$cname" dolt -u "root" -p "rootpass" sql -q "CREATE SCHEMA dbeaver_test;"
   [ $status -eq 0 ]
 
-  # Verify the schema was created
   run docker exec "$cname" dolt -u "root" -p "rootpass" sql -q "SHOW DATABASES;"
   [ $status -eq 0 ]
   [[ "$output" =~ "dbeaver_test" ]] || false
 
-  # Test table creation
   run docker exec "$cname" dolt -u "root" -p "rootpass" sql -q "USE dbeaver_test; CREATE TABLE test_table (id INT PRIMARY KEY, name VARCHAR(50));"
   [ $status -eq 0 ]
 
@@ -659,8 +595,8 @@ EOF
   docker build -f docker/serverDockerfile --build-arg DOLT_VERSION=latest -t "$LATEST_IMAGE" .
   
   docker run -d --name "$cname" -e DOLT_ROOT_PASSWORD=rootpass -e DOLT_ROOT_HOST=% "$LATEST_IMAGE" >/dev/null
-  wait_for_log "$cname" "Server ready. Accepting connections." 30 || true
-  wait_for_log "$cname" "Reattaching to server process..." 10 || true
+  wait_for_log "$cname" "Server ready. Accepting connections." || true
+  wait_for_log "$cname" "Reattaching to server process..." || true
   
   run docker exec "$cname" dolt version
   [ $status -eq 0 ]
@@ -684,8 +620,8 @@ EOF
   docker build -f docker/serverDockerfile --build-arg DOLT_VERSION="$SPECIFIC_VERSION" -t "$SPECIFIC_IMAGE" .
   
   docker run -d --name "$cname" -e DOLT_ROOT_PASSWORD=rootpass -e DOLT_ROOT_HOST=% "$SPECIFIC_IMAGE" >/dev/null
-  wait_for_log "$cname" "Server ready. Accepting connections." 30
-  wait_for_log "$cname" "Reattaching to server process..." 10 || true
+  wait_for_log "$cname" "Server ready. Accepting connections."
+  wait_for_log "$cname" "Reattaching to server process..." || true
   
   run docker exec "$cname" dolt version
   [ $status -eq 0 ]
