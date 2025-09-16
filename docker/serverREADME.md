@@ -106,7 +106,7 @@ To build from your local source code instead of downloading a pre-built binary:
 # Build from local source code (requires workspace directory with source dependencies, e.g., dolt_workspace/)
 $ docker build -f dolt/docker/serverDockerfile --build-arg DOLT_VERSION=source -t dolt-sql-server:source .
 # Note: This should contain dolt/ at the minimum, any other repos need to be
-# added to COPY.
+# added via COPY in serverDockerfile.
 
 # Run the source-built image
 $ docker run -e DOLT_ROOT_PASSWORD=secret2 -e DOLT_ROOT_HOST=% -p 3307:3306 dolt-sql-server:source
