@@ -650,7 +650,7 @@ EOF
   [[ "$output" =~ "test data" ]] || false
 }
 
-@test "docker-entrypoint: latest binary build from docker directory" {
+@test "docker-entrypoint: latest binary build from dolt directory" {
   cname="${TEST_PREFIX}latest-docker"
   
   LATEST_IMAGE="dolt-entrypoint-latest:test"
@@ -674,7 +674,7 @@ EOF
   docker rmi "$LATEST_IMAGE" >/dev/null 2>&1 || true
 }
 
-@test "docker-entrypoint: specific version binary build from docker directory" {
+@test "docker-entrypoint: specific version binary build from dolt directory" {
   cname="${TEST_PREFIX}specific-version"
   
   SPECIFIC_IMAGE="dolt-entrypoint-specific:test"
@@ -691,11 +691,9 @@ EOF
   [ $status -eq 0 ]
   
   INSTALLED_VERSION=$(docker exec "$cname" dolt version | grep -o '[0-9]\+\.[0-9]\+\.[0-9]\+' | head -1)
-  echo "Expected version: $SPECIFIC_VERSION"
-  echo "Installed version: $INSTALLED_VERSION"
   [ "$INSTALLED_VERSION" = "$SPECIFIC_VERSION" ]
   
-  run docker exec "$cname" dolt -u "root" -p "rootpass" sql -q "SHOW DATABASES;"
+  run docker exec "$cname" dolt sql -q "SHOW DATABASES;"
   [ $status -eq 0 ]
   
   docker rmi "$SPECIFIC_IMAGE" >/dev/null 2>&1 || true
