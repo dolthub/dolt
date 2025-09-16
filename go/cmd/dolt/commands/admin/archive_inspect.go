@@ -45,12 +45,26 @@ func (cmd ArchiveInspectCmd) RequiresRepo() bool {
 }
 
 func (cmd ArchiveInspectCmd) Docs() *cli.CommandDocumentation {
-	return nil
+	return &cli.CommandDocumentation{
+		ShortDesc: "Inspect a Dolt archive (.darc) file and display information about it",
+		LongDesc: `Inspects a Dolt archive (.darc) file and displays detailed information about its structure, contents, and metadata.
+
+Archive files are compressed collections of chunks used by Dolt for storage. This command provides debugging and inspection capabilities for these files.
+
+This command takes a path to an archive file, and ignores any database information that would otherwise be provided. To skip wasting time, run this command outside of a Dolt repository.'
+
+Basic usage displays archive metadata, structure information, and statistics. Advanced usage allows inspection of specific chunks by object ID or raw index positions.`,
+		Synopsis: []string{
+			"[--mmap] <archive-path>",
+			"[--mmap] --object-id <hash> <archive-path>",
+			"[--mmap] --inspect-index <index> <archive-path>",
+		},
+	}
 }
 
 func (cmd ArchiveInspectCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithMaxArgs(cmd.Name(), 1)
-	ap.SupportsString("archive-path", "", "archive_path", "Full path to the archive file (.darc) to inspect")
+	ap.SupportsString("archive-path", "", "archive_path", "Path to the archive file (.darc) to inspect")
 	ap.SupportsFlag("mmap", "", "Enable memory-mapped index reading. Default is to load index into memory.")
 	ap.SupportsString("object-id", "", "object_id", "Base32-encoded 20-byte object ID to inspect within the archive")
 	ap.SupportsString("inspect-index", "", "index", "Inspect raw index reader data at specific index position")
