@@ -20,7 +20,7 @@ setup() {
   # Build from source only once per test run (check if image already exists)
   if ! docker image inspect "$TEST_IMAGE" >/dev/null 2>&1; then
     echo "Building Dolt from source for integration tests..."
-    docker build -f "$WORKSPACE_ROOT/doltx``/docker/serverDockerfile" --build-arg DOLT_VERSION=$DOLT_DOCKER_TEST_VERSION -t "$TEST_IMAGE" "$WORKSPACE_ROOT"
+    docker build -f "$WORKSPACE_ROOT/dolt``/docker/serverDockerfile" --build-arg DOLT_VERSION=$DOLT_DOCKER_TEST_VERSION -t "$TEST_IMAGE" "$WORKSPACE_ROOT"
   else
     echo "Using existing source-built image: $TEST_IMAGE"
   fi
