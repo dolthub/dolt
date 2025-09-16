@@ -649,3 +649,54 @@ EOF
   [ $status -eq 0 ]
   [[ "$output" =~ "test data" ]] || false
 }
+
+@test "docker-entrypoint: latest binary build from docker directory" {
+  cname="${TEST_PREFIX}latest-docker"
+  
+  LATEST_IMAGE="dolt-entrypoint-latest:test"
+  EXPECTED_VERSION=$(curl -s https://api.github.com/repos/dolthub/dolt/releases/latest | grep '"tag_name"' | cut -d'"' -f4 | sed 's/^v//')
+  cd "$WORKSPACE_ROOT/dolt"
+  docker build -f docker/serverDockerfile --build-arg DOLT_VERSION=latest -t "$LATEST_IMAGE" .
+  
+  docker run -d --name "$cname" -e DOLT_ROOT_PASSWORD=rootpass -e DOLT_ROOT_HOST=% "$LATEST_IMAGE" >/dev/null
+  wait_for_log "$cname" "Server ready. Accepting connections." 30 || true
+  wait_for_log "$cname" "Reattaching to server process..." 10 || true
+  
+  run docker exec "$cname" dolt version
+  [ $status -eq 0 ]
+  
+  INSTALLED_VERSION=$(docker exec "$cname" dolt version | grep -o '[0-9]\+\.[0-9]\+\.[0-9]\+' | head -1)
+  [ "$INSTALLED_VERSION" = "$EXPECTED_VERSION" ]
+
+  run docker exec "$cname" dolt -u "root" -p "rootpass" sql -q "SHOW DATABASES;"
+  [ $status -eq 0 ]
+  
+  docker rmi "$LATEST_IMAGE" >/dev/null 2>&1 || true
+}
+
+@test "docker-entrypoint: specific version binary build from docker directory" {
+  cname="${TEST_PREFIX}specific-version"
+  
+  SPECIFIC_IMAGE="dolt-entrypoint-specific:test"
+  SPECIFIC_VERSION="1.34.0"
+  echo "Building Dolt from docker directory with specific version: $SPECIFIC_VERSION"
+  cd "$WORKSPACE_ROOT/dolt"
+  docker build -f docker/serverDockerfile --build-arg DOLT_VERSION="$SPECIFIC_VERSION" -t "$SPECIFIC_IMAGE" .
+  
+  docker run -d --name "$cname" -e DOLT_ROOT_PASSWORD=rootpass -e DOLT_ROOT_HOST=% "$SPECIFIC_IMAGE" >/dev/null
+  wait_for_log "$cname" "Server ready. Accepting connections." 30
+  wait_for_log "$cname" "Reattaching to server process..." 10 || true
+  
+  run docker exec "$cname" dolt version
+  [ $status -eq 0 ]
+  
+  INSTALLED_VERSION=$(docker exec "$cname" dolt version | grep -o '[0-9]\+\.[0-9]\+\.[0-9]\+' | head -1)
+  echo "Expected version: $SPECIFIC_VERSION"
+  echo "Installed version: $INSTALLED_VERSION"
+  [ "$INSTALLED_VERSION" = "$SPECIFIC_VERSION" ]
+  
+  run docker exec "$cname" dolt -u "root" -p "rootpass" sql -q "SHOW DATABASES;"
+  [ $status -eq 0 ]
+  
+  docker rmi "$SPECIFIC_IMAGE" >/dev/null 2>&1 || true
+}
