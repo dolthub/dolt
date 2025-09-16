@@ -36,14 +36,64 @@ type ChunkInfo struct {
 	DataByteSpan       ByteSpanInfo
 }
 
-// ArchiveInspector provides a way to inspect archive files from outside the nbs package
-type ArchiveInspector struct {
-	reader archiveReader
+// SearchDebugInfo contains detailed information about a chunk search operation
+type SearchDebugInfo struct {
+	Hash            string
+	Prefix          uint64
+	Suffix          []byte
+	PossibleMatch   int32
+	ChunkCount      uint32
+	IndexReaderType string
+	ValidRange      bool
+	FinalResult     int
+	Matches         []PrefixMatch
 }
 
-// NewArchiveInspectorFromFile creates an ArchiveInspector from a file path with mmap enabled by default
-func NewArchiveInspectorFromFile(ctx context.Context, archivePath string) (*ArchiveInspector, error) {
-	return NewArchiveInspectorFromFileWithMmap(ctx, archivePath, true)
+// PrefixMatch contains information about a chunk that matches the search prefix
+type PrefixMatch struct {
+	Index       uint32
+	SuffixAtIdx []byte
+	SuffixMatch bool
+}
+
+// IndexReaderDetails contains detailed information about index reader state
+type IndexReaderDetails struct {
+	IndexReaderType string
+	RequestedIndex  uint32
+	ChunkCount      uint32
+	ByteSpanCount   uint32
+	Error           string
+	Prefix          uint64
+	Suffix          []byte
+	DictionaryID    uint32
+	DataID          uint32
+	
+	// In-memory reader specific fields
+	PrefixArrayLength    int
+	SuffixArrayLength    int
+	ChunkRefArrayLength  int
+	SpanIndexArrayLength int
+	ExpectedSuffixStart  uint32
+	ExpectedSuffixEnd    uint32
+	SuffixArrayBounds    bool
+	RawSuffixBytes       []byte
+	
+	// Memory-mapped reader specific fields
+	MmapIndexSize         uint64
+	MmapByteSpanCount     uint32
+	MmapChunkCount        uint32
+	SpanIndexOffset       uint64
+	PrefixesOffset        uint64
+	ChunkRefsOffset       uint64
+	SuffixesOffset        uint64
+	ActualSuffixOffset    uint64
+	RawSuffixBytesError   string
+}
+
+// ArchiveInspector provides a way to inspect archive files from outside the nbs package. Intended for debugging and inspection,
+// currently only used by the `dolt admin archive-inspect` command.
+type ArchiveInspector struct {
+	reader archiveReader
 }
 
 // NewArchiveInspectorFromFileWithMmap creates an ArchiveInspector from a file path with configurable mmap
@@ -53,7 +103,7 @@ func NewArchiveInspectorFromFileWithMmap(ctx context.Context, archivePath string
 		return nil, err
 	}
 
-	// Use a dummy hash since we're just inspecting
+	// Use a dummy hash since it's not needed when we have the file reader already.
 	dummyHash := hash.Hash{}
 	stats := &Stats{}
 
@@ -118,138 +168,130 @@ func (ai *ArchiveInspector) SearchChunk(h hash.Hash) int {
 }
 
 // SearchChunkDebug exposes detailed search information for debugging
-func (ai *ArchiveInspector) SearchChunkDebug(h hash.Hash) map[string]interface{} {
+func (ai *ArchiveInspector) SearchChunkDebug(h hash.Hash) *SearchDebugInfo {
 	prefix := h.Prefix()
 	possibleMatch := ai.reader.indexReader.searchPrefix(prefix)
 	targetSfx := h.Suffix()
-	
-	debug := map[string]interface{}{
-		"hash":           h.String(),
-		"prefix":         prefix,
-		"suffix":         targetSfx,
-		"possibleMatch":  possibleMatch,
-		"chunkCount":     ai.reader.footer.chunkCount,
-		"indexReaderType": fmt.Sprintf("%T", ai.reader.indexReader),
+
+	debug := &SearchDebugInfo{
+		Hash:            h.String(),
+		Prefix:          prefix,
+		Suffix:          targetSfx,
+		PossibleMatch:   possibleMatch,
+		ChunkCount:      ai.reader.footer.chunkCount,
+		IndexReaderType: fmt.Sprintf("%T", ai.reader.indexReader),
 	}
-	
+
 	// Check if possibleMatch is in valid range
 	if possibleMatch < 0 || uint32(possibleMatch) >= ai.reader.footer.chunkCount {
-		debug["validRange"] = false
-		debug["finalResult"] = -1
+		debug.ValidRange = false
+		debug.FinalResult = -1
 		return debug
 	}
-	
-	debug["validRange"] = true
-	
+
+	debug.ValidRange = true
+
 	// Check prefix matches in the range
-	matches := []map[string]interface{}{}
+	matches := []PrefixMatch{}
 	for idx := uint32(possibleMatch); idx < ai.reader.footer.chunkCount && ai.reader.indexReader.getPrefix(idx) == prefix; idx++ {
 		suffixAtIdx := ai.reader.indexReader.getSuffix(idx)
-		match := map[string]interface{}{
-			"index":        idx,
-			"suffixAtIdx":  []byte(suffixAtIdx[:]),
-			"suffixMatch":  suffixAtIdx == suffix(targetSfx),
+		match := PrefixMatch{
+			Index:       idx,
+			SuffixAtIdx: suffixAtIdx[:],
+			SuffixMatch: suffixAtIdx == suffix(targetSfx),
 		}
 		matches = append(matches, match)
-		
+
 		if suffixAtIdx == suffix(targetSfx) {
-			debug["finalResult"] = int(idx)
-			debug["matches"] = matches
+			debug.FinalResult = int(idx)
+			debug.Matches = matches
 			return debug
 		}
 	}
-	
-	debug["matches"] = matches
-	debug["finalResult"] = -1
+
+	debug.Matches = matches
+	debug.FinalResult = -1
 	return debug
 }
 
 // GetIndexReaderDetails exposes internal index reader state for debugging
-func (ai *ArchiveInspector) GetIndexReaderDetails(idx uint32) map[string]interface{} {
-	details := map[string]interface{}{
-		"indexReaderType": fmt.Sprintf("%T", ai.reader.indexReader),
-		"requestedIndex":  idx,
-		"chunkCount":      ai.reader.footer.chunkCount,
-		"byteSpanCount":   ai.reader.footer.byteSpanCount,
+func (ai *ArchiveInspector) GetIndexReaderDetails(idx uint32) *IndexReaderDetails {
+	details := &IndexReaderDetails{
+		IndexReaderType: fmt.Sprintf("%T", ai.reader.indexReader),
+		RequestedIndex:  idx,
+		ChunkCount:      ai.reader.footer.chunkCount,
+		ByteSpanCount:   ai.reader.footer.byteSpanCount,
 	}
-	
+
 	if idx >= ai.reader.footer.chunkCount {
-		details["error"] = "index out of range"
+		details.Error = "index out of range"
 		return details
 	}
-	
+
 	// Get prefix and suffix
 	prefix := ai.reader.indexReader.getPrefix(idx)
 	suffix := ai.reader.indexReader.getSuffix(idx)
-	
-	details["prefix"] = prefix
-	details["suffix"] = []byte(suffix[:])
-	
+
+	details.Prefix = prefix
+	details.Suffix = suffix[:]
+
 	// Get chunk references
 	dictID, dataID := ai.reader.indexReader.getChunkRef(idx)
-	details["dictionaryID"] = dictID
-	details["dataID"] = dataID
-	
+	details.DictionaryID = dictID
+	details.DataID = dataID
+
 	// For in-memory reader, expose the raw array details
 	if inMem, ok := ai.reader.indexReader.(*inMemoryArchiveIndexReader); ok {
-		details["prefixArrayLength"] = len(inMem.prefixes)
-		details["suffixArrayLength"] = len(inMem.suffixes)
-		details["chunkRefArrayLength"] = len(inMem.chunkRefs)
-		details["spanIndexArrayLength"] = len(inMem.spanIndex)
-		
+		details.PrefixArrayLength = len(inMem.prefixes)
+		details.SuffixArrayLength = len(inMem.suffixes)
+		details.ChunkRefArrayLength = len(inMem.chunkRefs)
+		details.SpanIndexArrayLength = len(inMem.spanIndex)
+
 		// Calculate expected suffix position
 		expectedSuffixStart := idx * hash.SuffixLen
-		details["expectedSuffixStart"] = expectedSuffixStart
-		details["expectedSuffixEnd"] = expectedSuffixStart + hash.SuffixLen
-		details["suffixArrayBounds"] = expectedSuffixStart + hash.SuffixLen <= uint32(len(inMem.suffixes))
-		
+		details.ExpectedSuffixStart = expectedSuffixStart
+		details.ExpectedSuffixEnd = expectedSuffixStart + hash.SuffixLen
+		details.SuffixArrayBounds = expectedSuffixStart+hash.SuffixLen <= uint32(len(inMem.suffixes))
+
 		// Show raw bytes around the suffix position for debugging
 		if expectedSuffixStart < uint32(len(inMem.suffixes)) {
 			end := expectedSuffixStart + hash.SuffixLen
 			if end > uint32(len(inMem.suffixes)) {
 				end = uint32(len(inMem.suffixes))
 			}
-			details["rawSuffixBytes"] = inMem.suffixes[expectedSuffixStart:end]
+			details.RawSuffixBytes = inMem.suffixes[expectedSuffixStart:end]
 		}
 	}
-	
-	// For mmap reader, expose similar details using reflection-like approach
-	if mmap, ok := ai.reader.indexReader.(interface {
-		getNumChunks() uint32
-		// Add methods to access internal fields for debugging
-	}); ok {
-		// Try to access internal fields by type assertion to the concrete type
-		if mmapReader, isMmap := ai.reader.indexReader.(*mmapIndexReader); isMmap {
-			details["mmapIndexSize"] = mmapReader.indexSize
-			details["mmapByteSpanCount"] = mmapReader.byteSpanCount
-			details["mmapChunkCount"] = mmapReader.chunkCount
-			details["spanIndexOffset"] = mmapReader.spanIndexOffset
-			details["prefixesOffset"] = mmapReader.prefixesOffset
-			details["chunkRefsOffset"] = mmapReader.chunkRefsOffset
-			details["suffixesOffset"] = mmapReader.suffixesOffset
-			
-			// Calculate expected suffix position in mmap
-			expectedSuffixStart := uint64(idx) * hash.SuffixLen
-			actualSuffixOffset := mmapReader.suffixesOffset + expectedSuffixStart
-			details["expectedSuffixStart"] = expectedSuffixStart
-			details["expectedSuffixEnd"] = expectedSuffixStart + hash.SuffixLen
-			details["actualSuffixOffset"] = actualSuffixOffset
-			
-			// Try to read raw bytes around the suffix position
-			if mmapReader.data != nil {
-				rawBytes := make([]byte, hash.SuffixLen)
-				_, err := mmapReader.data.ReadAt(rawBytes, int64(actualSuffixOffset))
-				if err == nil {
-					details["rawSuffixBytes"] = rawBytes
-				} else {
-					details["rawSuffixBytesError"] = err.Error()
-				}
+
+	// For mmap reader, expose similar details
+	if mmapReader, isMmap := ai.reader.indexReader.(*mmapIndexReader); isMmap {
+		details.MmapIndexSize = mmapReader.indexSize
+		details.MmapByteSpanCount = mmapReader.byteSpanCount
+		details.MmapChunkCount = mmapReader.chunkCount
+		details.SpanIndexOffset = mmapReader.spanIndexOffset
+		details.PrefixesOffset = mmapReader.prefixesOffset
+		details.ChunkRefsOffset = mmapReader.chunkRefsOffset
+		details.SuffixesOffset = mmapReader.suffixesOffset
+
+		// Calculate expected suffix position in mmap
+		expectedSuffixStart := uint64(idx) * hash.SuffixLen
+		actualSuffixOffset := mmapReader.suffixesOffset + expectedSuffixStart
+		details.ExpectedSuffixStart = uint32(expectedSuffixStart)
+		details.ExpectedSuffixEnd = uint32(expectedSuffixStart + hash.SuffixLen)
+		details.ActualSuffixOffset = actualSuffixOffset
+
+		// Try to read raw bytes around the suffix position
+		if mmapReader.data != nil {
+			rawBytes := make([]byte, hash.SuffixLen)
+			_, err := mmapReader.data.ReadAt(rawBytes, int64(actualSuffixOffset))
+			if err == nil {
+				details.RawSuffixBytes = rawBytes
+			} else {
+				details.RawSuffixBytesError = err.Error()
 			}
-		} else {
-			details["chunkCount"] = mmap.getNumChunks()
 		}
 	}
-	
+
 	return details
 }
 

@@ -148,21 +148,19 @@ func (cmd ArchiveInspectCmd) Exec(ctx context.Context, commandStr string, args [
 
 		debugInfo := inspector.SearchChunkDebug(objectHash)
 
-		cli.Printf("Hash: %s\n", debugInfo["hash"])
-		cli.Printf("Prefix: %d\n", debugInfo["prefix"])
-		cli.Printf("Suffix: %x\n", debugInfo["suffix"])
-		cli.Printf("Index reader type: %s\n", debugInfo["indexReaderType"])
-		cli.Printf("Chunk count: %d\n", debugInfo["chunkCount"])
-		cli.Printf("Possible match index: %d\n", debugInfo["possibleMatch"])
-		cli.Printf("Valid range: %t\n", debugInfo["validRange"])
-		cli.Printf("Final search result: %d\n", debugInfo["finalResult"])
+		cli.Printf("Hash: %s\n", debugInfo.Hash)
+		cli.Printf("Prefix: %d\n", debugInfo.Prefix)
+		cli.Printf("Suffix: %x\n", debugInfo.Suffix)
+		cli.Printf("Index reader type: %s\n", debugInfo.IndexReaderType)
+		cli.Printf("Chunk count: %d\n", debugInfo.ChunkCount)
+		cli.Printf("Possible match index: %d\n", debugInfo.PossibleMatch)
+		cli.Printf("Valid range: %t\n", debugInfo.ValidRange)
+		cli.Printf("Final search result: %d\n", debugInfo.FinalResult)
 
-		if matches, ok := debugInfo["matches"].([]map[string]interface{}); ok {
-			cli.Printf("Prefix matches found: %d\n", len(matches))
-			for i, match := range matches {
-				cli.Printf("  Match %d: index=%d, suffixMatch=%t, suffix=%x\n",
-					i, match["index"], match["suffixMatch"], match["suffixAtIdx"])
-			}
+		cli.Printf("Prefix matches found: %d\n", len(debugInfo.Matches))
+		for i, match := range debugInfo.Matches {
+			cli.Printf("  Match %d: index=%d, suffixMatch=%t, suffix=%x\n",
+				i, match.Index, match.SuffixMatch, match.SuffixAtIdx)
 		}
 		cli.Println()
 
@@ -209,59 +207,57 @@ func (cmd ArchiveInspectCmd) Exec(ctx context.Context, commandStr string, args [
 		details := inspector.GetIndexReaderDetails(idx)
 
 		// Print all details
-		cli.Printf("Index: %d\n", details["requestedIndex"])
-		cli.Printf("Index reader type: %s\n", details["indexReaderType"])
-		cli.Printf("Chunk count: %d\n", details["chunkCount"])
-		cli.Printf("Byte span count: %d\n", details["byteSpanCount"])
+		cli.Printf("Index: %d\n", details.RequestedIndex)
+		cli.Printf("Index reader type: %s\n", details.IndexReaderType)
+		cli.Printf("Chunk count: %d\n", details.ChunkCount)
+		cli.Printf("Byte span count: %d\n", details.ByteSpanCount)
 
-		if errorMsg, hasError := details["error"]; hasError {
-			cli.Printf("Error: %s\n", errorMsg)
+		if details.Error != "" {
+			cli.Printf("Error: %s\n", details.Error)
 			return 1
 		}
 
-		cli.Printf("Prefix: 0x%x\n", details["prefix"])
-		cli.Printf("Suffix: 0x%x\n", details["suffix"])
-		cli.Printf("Dictionary ID: %d\n", details["dictionaryID"])
-		cli.Printf("Data ID: %d\n", details["dataID"])
+		cli.Printf("Prefix: 0x%x\n", details.Prefix)
+		cli.Printf("Suffix: 0x%x\n", details.Suffix)
+		cli.Printf("Dictionary ID: %d\n", details.DictionaryID)
+		cli.Printf("Data ID: %d\n", details.DataID)
 
 		// Show implementation-specific details
 		cli.Println()
 		cli.Println("Implementation details:")
 
 		// Show common calculation details first
-		if expectedStart, ok := details["expectedSuffixStart"]; ok {
-			cli.Printf("Expected suffix start: %d\n", expectedStart)
-			cli.Printf("Expected suffix end: %d\n", details["expectedSuffixEnd"])
+		if details.ExpectedSuffixStart != 0 || details.ExpectedSuffixEnd != 0 {
+			cli.Printf("Expected suffix start: %d\n", details.ExpectedSuffixStart)
+			cli.Printf("Expected suffix end: %d\n", details.ExpectedSuffixEnd)
 		}
 
 		// Show in-memory specific details
-		if prefixLen, ok := details["prefixArrayLength"]; ok {
+		if details.PrefixArrayLength > 0 {
 			cli.Printf("Storage type: In-memory arrays\n")
-			cli.Printf("Prefix array length: %d\n", prefixLen)
-			cli.Printf("Suffix array length: %d\n", details["suffixArrayLength"])
-			cli.Printf("Chunk ref array length: %d\n", details["chunkRefArrayLength"])
-			cli.Printf("Span index array length: %d\n", details["spanIndexArrayLength"])
-			cli.Printf("Suffix array bounds valid: %t\n", details["suffixArrayBounds"])
+			cli.Printf("Prefix array length: %d\n", details.PrefixArrayLength)
+			cli.Printf("Suffix array length: %d\n", details.SuffixArrayLength)
+			cli.Printf("Chunk ref array length: %d\n", details.ChunkRefArrayLength)
+			cli.Printf("Span index array length: %d\n", details.SpanIndexArrayLength)
+			cli.Printf("Suffix array bounds valid: %t\n", details.SuffixArrayBounds)
 		}
 
 		// Show mmap specific details
-		if _, ok := details["mmapIndexSize"]; ok {
+		if details.MmapIndexSize > 0 {
 			cli.Printf("Storage type: Memory-mapped file\n")
-			cli.Printf("Span index offset: %d\n", details["spanIndexOffset"])
-			cli.Printf("Prefixes offset: %d\n", details["prefixesOffset"])
-			cli.Printf("Chunk refs offset: %d\n", details["chunkRefsOffset"])
-			cli.Printf("Suffixes offset: %d\n", details["suffixesOffset"])
-			if actualOffset, ok := details["actualSuffixOffset"]; ok {
-				cli.Printf("Actual suffix file offset: %d\n", actualOffset)
-			}
+			cli.Printf("Span index offset: %d\n", details.SpanIndexOffset)
+			cli.Printf("Prefixes offset: %d\n", details.PrefixesOffset)
+			cli.Printf("Chunk refs offset: %d\n", details.ChunkRefsOffset)
+			cli.Printf("Suffixes offset: %d\n", details.SuffixesOffset)
+			cli.Printf("Actual suffix file offset: %d\n", details.ActualSuffixOffset)
 		}
 
 		// Show raw suffix bytes for both implementations
-		if rawBytes, ok := details["rawSuffixBytes"]; ok {
-			cli.Printf("Raw suffix bytes: %x\n", rawBytes)
+		if len(details.RawSuffixBytes) > 0 {
+			cli.Printf("Raw suffix bytes: %x\n", details.RawSuffixBytes)
 		}
-		if err, ok := details["rawSuffixBytesError"]; ok {
-			cli.Printf("Raw suffix bytes error: %s\n", err)
+		if details.RawSuffixBytesError != "" {
+			cli.Printf("Raw suffix bytes error: %s\n", details.RawSuffixBytesError)
 		}
 	}
 
