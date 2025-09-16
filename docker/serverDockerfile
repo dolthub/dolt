@@ -30,13 +30,14 @@ RUN if [ "$DOLT_VERSION" = "source" ]; then \
 
 FROM base AS download-binary
 ARG DOLT_VERSION
-RUN if [ "$DOLT_VERSION" != "source" ]; then \
-        [ "$DOLT_VERSION" = "latest" ] && \
-            # Fetch latest version number from GitHub API
-            DOLT_VERSION=$(curl -s https://api.github.com/repos/dolthub/dolt/releases/latest \
-                | grep '"tag_name"' \
-                | cut -d'"' -f4 \
-                | sed 's/^v//') && \
+RUN if [ "$DOLT_VERSION" = "latest" ]; then \
+        # Fetch latest version number from GitHub API
+        DOLT_VERSION=$(curl -s https://api.github.com/repos/dolthub/dolt/releases/latest \
+            | grep '"tag_name"' \
+            | cut -d'"' -f4 \
+            | sed 's/^v//'); \
+    fi && \
+    if [ "$DOLT_VERSION" != "source" ]; then \
         curl -L "https://github.com/dolthub/dolt/releases/download/v${DOLT_VERSION}/install.sh" | bash; \
     fi
 
