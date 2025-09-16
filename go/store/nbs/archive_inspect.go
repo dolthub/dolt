@@ -297,20 +297,17 @@ func (ai *ArchiveInspector) GetIndexReaderDetails(idx uint32) *IndexReaderDetail
 
 // GetChunkInfo looks up information about a specific chunk in the archive
 func (ai *ArchiveInspector) GetChunkInfo(ctx context.Context, h hash.Hash) (*ChunkInfo, error) {
-	// Search for the chunk
 	idx := ai.reader.search(h)
 	if idx < 0 {
-		return nil, nil // Chunk not found
+		return nil, fmt.Errorf("chunk %s not found", h.String())
 	}
 
 	// Get the chunk reference (dictionary ID and data ID)
 	dictID, dataID := ai.reader.getChunkRef(idx)
 
-	// Get the byte span information
 	dictByteSpan := ai.reader.getByteSpanByID(dictID)
 	dataByteSpan := ai.reader.getByteSpanByID(dataID)
 
-	// Determine compression type based on dictionary ID and archive version
 	compressionType := "unknown"
 	formatVersion := ai.reader.footer.formatVersion
 

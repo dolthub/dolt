@@ -72,28 +72,21 @@ func (cmd ArchiveInspectCmd) Exec(ctx context.Context, commandStr string, args [
 		return 1
 	}
 
-	// Check if file exists
 	if _, err := os.Stat(archivePath); os.IsNotExist(err) {
 		cli.PrintErrln("Error: Archive file does not exist:", archivePath)
 		return 1
 	}
-
-	// Check if file has .darc extension
 	if !strings.HasSuffix(strings.ToLower(archivePath), nbs.ArchiveFileSuffix) {
 		cli.PrintErrln("Warning: File does not have .darc extension")
 	}
 
-	// Make path absolute
 	absPath, err := filepath.Abs(archivePath)
 	if err != nil {
 		cli.PrintErrln("Error getting absolute path:", err.Error())
 		return 1
 	}
 
-	// Check for mmap flag
 	enableMmap := apr.Contains("mmap")
-
-	// Create archive inspector
 	inspector, err := nbs.NewArchiveInspectorFromFileWithMmap(ctx, absPath, enableMmap)
 	if err != nil {
 		cli.PrintErrln("Error opening archive file:", err.Error())
@@ -126,7 +119,7 @@ func (cmd ArchiveInspectCmd) Exec(ctx context.Context, commandStr string, args [
 				prettyJSON, _ := json.MarshalIndent(metadataObj, "  ", "  ")
 				cli.Printf("  %s\n", string(prettyJSON))
 			} else {
-				// If not JSON, just print raw bytes
+				// If not JSON, just print as ascii. To date we don't have any non-JSON metadata.
 				cli.Printf("  %s\n", string(metadataBytes))
 			}
 		}
@@ -134,12 +127,10 @@ func (cmd ArchiveInspectCmd) Exec(ctx context.Context, commandStr string, args [
 		cli.Println("Metadata: none")
 	}
 
-	// Handle object-id inspection if provided
 	if objectIdStr, ok := apr.GetValue("object-id"); ok {
 		cli.Println()
 		cli.Println("Object inspection:")
 
-		// Parse the hash
 		objectHash, hashOk := hash.MaybeParse(objectIdStr)
 		if !hashOk {
 			cli.PrintErrln("Error: Invalid object ID format. Expected 32-character base32 encoded hash.")
