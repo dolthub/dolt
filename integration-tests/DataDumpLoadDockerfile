@@ -11,6 +11,7 @@ RUN apt update -y && \
     apt update -y && \
     apt install -y \
         build-essential \
+        libicu-dev \
         git \
         mysql-client \
         mysql-server \
