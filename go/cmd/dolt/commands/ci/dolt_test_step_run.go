@@ -102,7 +102,7 @@ func nodesToValues(nodes []yaml.Node) []string {
 // collectRowsForSelectors fetches rows for each selector using dolt_test_run('<selector>').
 // kind should be "test" or "group" to produce specific error messages if an empty result is somehow returned without error.
 func collectRowsForSelectors(sqlCtx *sql.Context, queryist cli.Queryist, kind string, selectors []string) ([]sql.Row, error) {
-	allRows := make([]sql.Row, 0)
+    var allRows []sql.Row
 	for _, sel := range selectors {
 		rows, err := fetchDoltTestRunRows(sqlCtx, queryist, sel)
 		if err != nil {
@@ -189,7 +189,7 @@ func getAllDoltTestRunRows(sqlCtx *sql.Context, queryist cli.Queryist) ([]sql.Ro
 // formatDoltTestRows returns a formatted summary of all tests and a list of failure messages
 func formatDoltTestRows(sqlCtx *sql.Context, rows []sql.Row) (string, []string, error) {
     lines := make([]string, 0, len(rows)*2)
-	failures := make([]string, 0)
+    var failures []string
 	for _, row := range rows {
 		tName, err := getStringColAsString(sqlCtx, row[0])
 		if err != nil {
