@@ -19,10 +19,22 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 
 	"gopkg.in/yaml.v3"
+)
+
+const (
+	nameStepKey                = "name"
+	savedQueryNameStepKey      = "saved_query_name"
+	savedQueryStatementStepKey = "saved_query_statement"
+	expectedRowsStepKey        = "expected_rows"
+	expectedColumnsStepKey     = "expected_columns"
+	doltTestGroupsStepKey      = "dolt_test_groups"
+	doltTestTestsStepKey       = "dolt_test_tests"
+	doltTestStatementsStepKey  = "dolt_test_statements"
 )
 
 // Step is the interface implemented by all workflow step types.
@@ -37,6 +49,17 @@ type Step interface {
 // polymorphic step decoding/encoding.
 type Steps []Step
 
+var allowedStepKeysLowered = map[string]bool{
+	nameStepKey:                true,
+	savedQueryNameStepKey:      true,
+	savedQueryStatementStepKey: true,
+	expectedRowsStepKey:        true,
+	expectedColumnsStepKey:     true,
+	doltTestGroupsStepKey:      true,
+	doltTestTestsStepKey:       true,
+	doltTestStatementsStepKey:  true,
+}
+
 // SavedQueryStep represents a step that executes a saved query and (optionally)
 // validates expected row / column counts.
 type SavedQueryStep struct {
@@ -49,7 +72,6 @@ type SavedQueryStep struct {
 
 var _ Step = (*SavedQueryStep)(nil)
 
-// GetName implements Step.
 func (s *SavedQueryStep) GetName() string { return s.Name.Value }
 
 // DoltTestStep represents a step that runs Dolt tests, either by groups or by
@@ -58,6 +80,7 @@ type DoltTestStep struct {
 	Name       yaml.Node   `yaml:"name"`
 	TestGroups []yaml.Node `yaml:"dolt_test_groups,omitempty"`
 	Tests      []yaml.Node `yaml:"dolt_test_tests,omitempty"`
+
 	// DoltTestStatements is populated by the `dolt ci view` command to show the
 	// underlying queries associated with the tests selected by this step.
 	DoltTestStatements []yaml.Node `yaml:"dolt_test_statements,omitempty"`
@@ -65,11 +88,8 @@ type DoltTestStep struct {
 
 var _ Step = (*DoltTestStep)(nil)
 
-// GetName implements Step.
 func (s *DoltTestStep) GetName() string { return s.Name.Value }
 
-// UnmarshalYAML implements yaml.Unmarshaler for Steps. It inspects each item in the
-// sequence and constructs the appropriate concrete Step type.
 func (s *Steps) UnmarshalYAML(value *yaml.Node) error {
 	if value == nil {
 		*s = nil
@@ -86,15 +106,15 @@ func (s *Steps) UnmarshalYAML(value *yaml.Node) error {
 			return fmt.Errorf("each step must be a YAML mapping")
 		}
 
-        // Discover the concrete step type by inspecting keys.
-        // yaml.v3 represents a mapping node's Content as alternating key/value nodes:
-        // [key0, value0, key1, value1, ...]. Keys are at even indices; the corresponding
-        // value is at i+1. We increment i by 2 to visit only keys here.
+		// Discover the concrete step type by inspecting keys.
+		// yaml.v3 represents a mapping node's Content as alternating key/value nodes:
+		// [key0, value0, key1, value1, ...]. Keys are at even indices; the corresponding
+		// value is at i+1. We increment i by 2 to visit only keys here.
 		isSavedQuery := false
 		isDoltTest := false
 		for i := 0; i+1 < len(item.Content); i += 2 {
 			key := item.Content[i]
-			switch key.Value {
+			switch strings.ToLower(key.Value) {
 			case "saved_query_name", "saved_query_statement", "expected_rows", "expected_columns":
 				isSavedQuery = true
 			case "dolt_test_groups", "dolt_test_tests":
@@ -102,20 +122,39 @@ func (s *Steps) UnmarshalYAML(value *yaml.Node) error {
 			}
 		}
 
-        if isSavedQuery && isDoltTest {
-			// Try to extract a name for a clearer error
-			var stepName string
-            // Scan keys again (even indices). The value for a key is at i+1.
-            for i := 0; i+1 < len(item.Content); i += 2 {
-				if item.Content[i].Value == "name" {
-					stepName = item.Content[i+1].Value
-					break
-				}
+		// Try to extract a name for a clearer error message
+		// and use later on
+		var stepName string
+		for i := 0; i+1 < len(item.Content); i += 2 {
+			key := item.Content[i]
+			if strings.ToLower(key.Value) == "name" {
+				stepName = item.Content[i+1].Value
+				break
 			}
+		}
+
+		if isSavedQuery && isDoltTest {
 			if stepName == "" {
 				return fmt.Errorf("invalid config: step defines both saved_query_* fields and dolt_test_* fields")
 			}
 			return fmt.Errorf("invalid config: step '%s' defines both saved_query_* fields and dolt_test_* fields", stepName)
+		}
+
+		// Validate keys regardless of detected type to catch typos like
+		// "expected_colums". Keys are validated case-insensitively by
+		// lowercasing before comparison.
+
+		// Validate all mapping keys (case-insensitive)
+		for i := 0; i+1 < len(item.Content); i += 2 {
+			keyNode := item.Content[i]
+			key := keyNode.Value
+			if allowedStepKeysLowered[strings.ToLower(key)] {
+				continue
+			}
+			if stepName == "" {
+				return fmt.Errorf("invalid config: unknown field %q", key)
+			}
+			return fmt.Errorf("invalid config: unknown field %q in step %q", key, stepName)
 		}
 
 		switch {
