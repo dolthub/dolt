@@ -50,7 +50,7 @@ const (
 				    sd.to_commit as commit,
 				    sd.to_commit_date as commit_date,
 				    dl.committer,
-				    dl.author_email as email,
+				    dl.email,
 				    dl.message
 				FROM
 				    sorted_diffs_by_pk as sd,
