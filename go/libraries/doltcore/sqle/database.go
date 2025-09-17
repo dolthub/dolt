@@ -633,25 +633,26 @@ func (db Database) getTableInsensitiveWithRoot(ctx *sql.Context, head *doltdb.Co
 				}
 			}
 
+			var schType *dtables.LogSchemaType
 			if isDoltgresSystemTable && resolve.UseSearchPath {
-				schType = dtables.LogSchemaCommitterOnly
+				*schType = dtables.LogSchemaCommitterOnly
 			}
-			dt, found = dtables.NewLogTable(db.Name(), lwrName, db.ddb, head, ctx, nil), true
+			dt, found = dtables.NewLogTable(db.Name(), lwrName, db.ddb, head, ctx, schType), true
 		}
-	case doltdb.LogTableCommitterOnly:
-		// Internal log tables with fixed schemas for system views (e.g., dolt_blame)
-		if head == nil {
-			var err error
-			head, err = ds.GetHeadCommit(ctx, db.RevisionQualifiedName())
-			if err != nil {
-				return nil, false, err
-			}
-		}
-		schType := dtables.LogSchema
-		if lwrName == doltdb.LogTableCommitterOnly {
-			schType = dtables.LogSchemaCommitterOnly
-		}
-		dt, found = dtables.NewLogTable(db.Name(), lwrName, db.ddb, head, ctx, schType), true
+	//case doltdb.LogTableCommitterOnly:
+	//	// Internal log tables with fixed schemas for system views (e.g., dolt_blame)
+	//	if head == nil {
+	//		var err error
+	//		head, err = ds.GetHeadCommit(ctx, db.RevisionQualifiedName())
+	//		if err != nil {
+	//			return nil, false, err
+	//		}
+	//	}
+	//	schType := dtables.LogSchema
+	//	if lwrName == doltdb.LogTableCommitterOnly {
+	//		schType = dtables.LogSchemaCommitterOnly
+	//	}
+	//	dt, found = dtables.NewLogTable(db.Name(), lwrName, db.ddb, head, ctx, &schType), true
 	case doltdb.DiffTableName, doltdb.GetDiffTableName():
 		isDoltgresSystemTable, err := resolve.IsDoltgresSystemTable(ctx, tname, root)
 		if err != nil {

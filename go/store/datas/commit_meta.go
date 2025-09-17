@@ -140,7 +140,7 @@ func NewCommitMetaWithUserTS(name, email, desc string, userTS time.Time) (*Commi
 
 // NewCommitMetaWithAuthorCommitter creates commit metadata with separate author and committer information
 // If committer info is empty, defaults to author info. Maintains backwards compatibility.
-func NewCommitMetaWithAuthorCommitter(authorName, authorEmail, committerName, committerEmail, desc string, ats, cts time.Time) (*CommitMeta, error) {
+func NewCommitMetaWithAuthorCommitter(authorName, authorEmail, desc string, ats time.Time, committerName, committerEmail string, cts time.Time) (*CommitMeta, error) {
 
 	an := strings.TrimSpace(authorName)
 	ae := strings.TrimSpace(authorEmail)
