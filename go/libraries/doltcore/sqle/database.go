@@ -564,15 +564,12 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 				}
 			}
 
-			schType := dtables.LogSchemaTypeAuto
 			if isDoltgresSystemTable && resolve.UseSearchPath {
-				schType = dtables.LogSchemaTypeCompact
+				schType = dtables.LogSchemaCommitterOnly
 			}
-			dt, found = dtables.NewLogTable(db.Name(), lwrName, db.ddb, head, ctx, schType), true
+			dt, found = dtables.NewLogTable(db.Name(), lwrName, db.ddb, head, ctx, nil), true
 		}
-	case doltdb.LogTableFullName:
-		fallthrough
-	case doltdb.LogTableCompactName:
+	case doltdb.LogTableCommitterOnly:
 		// Internal log tables with fixed schemas for system views (e.g., dolt_blame)
 		if head == nil {
 			var err error
@@ -581,9 +578,9 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 				return nil, false, err
 			}
 		}
-		schType := dtables.LogSchemaTypeFull
-		if lwrName == doltdb.LogTableCompactName {
-			schType = dtables.LogSchemaTypeCompact
+		schType := dtables.LogSchema
+		if lwrName == doltdb.LogTableCommitterOnly {
+			schType = dtables.LogSchemaCommitterOnly
 		}
 		dt, found = dtables.NewLogTable(db.Name(), lwrName, db.ddb, head, ctx, schType), true
 	case doltdb.DiffTableName, doltdb.GetDiffTableName():

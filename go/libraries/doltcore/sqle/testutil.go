@@ -153,7 +153,7 @@ func NewTestEngine(dEnv *env.DoltEnv, ctx context.Context, db dsess.SqlDatabase)
 	sqlCtx.SetCurrentDatabase(db.Name())
 
 	// Default test sessions to compact dolt_log schema for backward compatibility
-	if err := sqlCtx.Session.SetSessionVariable(sqlCtx, dsess.DoltLogCompactSchema, int8(1)); err != nil {
+	if err := sqlCtx.Session.SetSessionVariable(sqlCtx, dsess.DoltLogCommitterOnly, int8(1)); err != nil {
 		return nil, nil, err
 	}
 
