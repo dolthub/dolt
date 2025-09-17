@@ -114,11 +114,14 @@ func (s *Steps) UnmarshalYAML(value *yaml.Node) error {
 		isDoltTest := false
 		for i := 0; i+1 < len(item.Content); i += 2 {
 			key := item.Content[i]
-			switch strings.ToLower(key.Value) {
-			case "saved_query_name", "saved_query_statement", "expected_rows", "expected_columns":
+			loweredKey := strings.ToLower(key.Value)
+			switch loweredKey {
+			case savedQueryNameStepKey, savedQueryStatementStepKey, expectedRowsStepKey, expectedColumnsStepKey:
 				isSavedQuery = true
-			case "dolt_test_groups", "dolt_test_tests":
+			case doltTestGroupsStepKey, doltTestTestsStepKey:
 				isDoltTest = true
+
+				// ignore all other non workflow-step type keys
 			}
 		}
 
