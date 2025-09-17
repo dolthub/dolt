@@ -951,7 +951,7 @@ EOF
     dolt ci import ./workflow.yaml
     dolt sql --save "main" -q "select * from dolt_commits;"
     run dolt ci run "workflow"
-    [ "$status" -eq 0 ]
+    [ "$status" -eq 1 ]
     [[ "$output" =~ "Running workflow: workflow" ]] || false
     [[ "$output" =~ "Step: expect rows - FAIL" ]] || false
     [[ "$output" =~ "Ran query: select * from dolt_commits;" ]] || false
@@ -978,7 +978,7 @@ EOF
     dolt sql --save "invalid table" -q "select * from invalid;"
     dolt sql -q "drop table invalid;"
     run dolt ci run "workflow"
-    [ "$status" -eq 0 ]
+    [ "$status" -eq 1 ]
     [[ "$output" =~ "Running workflow: workflow" ]] || false
     [[ "$output" =~ "Step: should fail, bad table name - FAIL" ]] || false
     [[ "$output" =~ "Ran query: select * from invalid" ]] || false
@@ -1010,7 +1010,7 @@ EOF
     dolt ci init
     dolt ci import workflow.yaml
     run dolt ci run "workflow"
-    [ "$status" -eq 0 ]
+    [ "$status" -eq 1 ]
     [[ "$output" =~ "Running workflow: workflow" ]] || false
     [[ "$output" =~ "Step: should fail, bad query name - FAIL" ]] || false
     [[ "$output" =~ "Could not find saved query: invalid query" ]] || false
@@ -1150,7 +1150,7 @@ EOF
     dolt ci init
     dolt ci import ./workflow.yaml
     run dolt ci run "wf_run_dolt_fail"
-    [ "$status" -eq 0 ]
+    [ "$status" -eq 1 ]
     [[ "$output" =~ "Running workflow: wf_run_dolt_fail" ]] || false
     [[ "$output" =~ "Running job: failing tests" ]] || false
     [[ "$output" =~ "Step: run failing test" ]] || false
@@ -1177,7 +1177,7 @@ EOF
     dolt ci init
     dolt ci import ./workflow_test.yaml
     run dolt ci run "wf_run_dolt_unknown_test"
-    [ "$status" -eq 0 ]
+    [ "$status" -eq 1 ]
     [[ "$output" =~ "Running workflow: wf_run_dolt_unknown_test" ]] || false
     [[ "$output" =~ "Running job: unknown test" ]] || false
     [[ "$output" =~ "Step: run unknown test" ]] || false
@@ -1197,7 +1197,7 @@ jobs:
 EOF
     dolt ci import ./workflow_group.yaml
     run dolt ci run "wf_run_dolt_unknown_group"
-    [ "$status" -eq 0 ]
+    [ "$status" -eq 1 ]
     [[ "$output" =~ "Running workflow: wf_run_dolt_unknown_group" ]] || false
     [[ "$output" =~ "Running job: unknown group" ]] || false
     [[ "$output" =~ "Step: run unknown group" ]] || false

@@ -109,14 +109,19 @@ func (cmd RunCmd) Exec(ctx context.Context, commandStr string, args []string, _ 
 	if err != nil {
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
-	cli.Println(color.CyanString("Running workflow: %s", workflowName))
-	queryAndPrint(queryist.Context, queryist.Queryist, config, savedQueries)
+    cli.Println(color.CyanString("Running workflow: %s", workflowName))
+    failed := queryAndPrint(queryist.Context, queryist.Queryist, config, savedQueries)
 
-	return 0
+    if failed {
+        return 1
+    }
+    return 0
 }
 
 // queryAndPrint iterates through the jobs and steps for the given config, then runs each saved query and given assertion
-func queryAndPrint(sqlCtx *sql.Context, queryist cli.Queryist, config *dolt_ci.WorkflowConfig, savedQueries map[string]string) {
+func queryAndPrint(sqlCtx *sql.Context, queryist cli.Queryist, config *dolt_ci.WorkflowConfig, savedQueries map[string]string) bool {
+    // returns true if any job had failures
+    overallFailed := false
 	for _, job := range config.Jobs {
 		cli.Println(color.GreenString("Running job: %s", job.Name.Value))
 
@@ -163,13 +168,15 @@ func queryAndPrint(sqlCtx *sql.Context, queryist cli.Queryist, config *dolt_ci.W
 				cli.Println("PASS")
 			}
 		}
-		if len(jobFailures) > 0 {
+        if len(jobFailures) > 0 {
 			cli.Println(color.RedString("Result: FAIL"))
 			cli.Println(color.RedString("%s", strings.Join(jobFailures, "; ")))
+            overallFailed = true
 		} else {
 			cli.Println(color.GreenString("Result: PASS"))
 		}
 	}
+    return overallFailed
 }
 
 func runCIQuery(queryist cli.Queryist, sqlCtx *sql.Context, step *dolt_ci.SavedQueryStep, query string) ([]sql.Row, error) {
