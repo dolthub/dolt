@@ -55,13 +55,14 @@ teardown() {
 }
 
 @test "admin-archive-inspect: object-id inspection with existing hash" {
-    # Use the hash we know exists at index 0
+    # Use the hash we know exists at index 42
     run dolt admin archive-inspect --object-id "4pguchpitq1bsb09ogaivmcstgsnbd3k" "$ARCHIVE_PATH"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Object inspection:" ]] || false
     [[ "$output" =~ "Hash: 4pguchpitq1bsb09ogaivmcstgsnbd3k" ]] || false
     [[ "$output" =~ "Prefix: 0x2661e64732ee82be" ]] || false
     [[ "$output" =~ "Suffix: 0x2c09c4152fd99cec3975b474" ]] || false
+    [[ "$output" =~ "Possible match index: 42" ]] || false
     [[ "$output" =~ "Compression type: zstd (with dictionary" ]] || false
     [[ "$output" =~ "Dictionary byte span ID: 1" ]] || false
     [[ "$output" =~ "Data byte span ID: 70" ]] || false
