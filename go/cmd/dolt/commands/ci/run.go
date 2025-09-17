@@ -109,49 +109,49 @@ func (cmd RunCmd) Exec(ctx context.Context, commandStr string, args []string, _ 
 	if err != nil {
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
-    cli.Println(color.CyanString("Running workflow: %s", workflowName))
-    failed := queryAndPrint(queryist.Context, queryist.Queryist, config, savedQueries)
+	cli.Println(color.CyanString("Running workflow: %s", workflowName))
+	failed := queryAndPrint(queryist.Context, queryist.Queryist, config, savedQueries)
 
-    if failed {
-        return 1
-    }
-    return 0
+	if failed {
+		return 1
+	}
+	return 0
 }
 
 // queryAndPrint iterates through the jobs and steps for the given config, then runs each saved query and given assertion
 func queryAndPrint(sqlCtx *sql.Context, queryist cli.Queryist, config *dolt_ci.WorkflowConfig, savedQueries map[string]string) bool {
-    // returns true if any job had failures
-    overallFailed := false
+	// returns true if any job had failures
+	overallFailed := false
 	for _, job := range config.Jobs {
-        cli.Println(color.CyanString("Running job: %s", job.Name.Value))
+		cli.Println(color.CyanString("Running job: %s", job.Name.Value))
 
 		jobFailures := make([]string, 0)
 		for _, step := range job.Steps {
-            // Print a step header; details will follow on subsequent lines
-            _, isDoltTest := step.(*dolt_ci.DoltTestStep)
-            _, isSavedQuery := step.(*dolt_ci.SavedQueryStep)
-            cli.Println(color.CyanString("  Step: %s", step.GetName()))
+			// Print a step header; details will follow on subsequent lines
+			_, isDoltTest := step.(*dolt_ci.DoltTestStep)
+			_, isSavedQuery := step.(*dolt_ci.SavedQueryStep)
+			cli.Println(color.CyanString("  Step: %s", step.GetName()))
 
 			var err error
 			var details string
-            if sq, ok := step.(*dolt_ci.SavedQueryStep); ok {
-                query := savedQueries[sq.SavedQueryName.Value]
-                rows, qErr := runCIQuery(queryist, sqlCtx, sq, query)
-                if qErr == nil {
-                    err = assertQueries(rows, sq.ExpectedRows.Value, sq.ExpectedColumns.Value, query)
-                } else {
-                    err = qErr
-                }
-                details = formatSavedQueryDetails(sq.SavedQueryName.Value, query, err)
+			if sq, ok := step.(*dolt_ci.SavedQueryStep); ok {
+				query := savedQueries[sq.SavedQueryName.Value]
+				rows, qErr := runCIQuery(queryist, sqlCtx, sq, query)
+				if qErr == nil {
+					err = assertQueries(rows, sq.ExpectedRows.Value, sq.ExpectedColumns.Value, query)
+				} else {
+					err = qErr
+				}
+				details = formatSavedQueryDetails(sq.SavedQueryName.Value, query, err)
 			} else if dt, ok := step.(*dolt_ci.DoltTestStep); ok {
 				details, err = runDoltTestStep(sqlCtx, queryist, dt)
 			} else {
 				err = fmt.Errorf("unsupported step type")
 			}
 
-            // Print details for DoltTest and SavedQuery steps; they do not emit PASS/FAIL inline
-            if (isDoltTest || isSavedQuery) && details != "" {
-                cli.Println(indentLines(details, "  "))
+			// Print details for DoltTest and SavedQuery steps; they do not emit PASS/FAIL inline
+			if (isDoltTest || isSavedQuery) && details != "" {
+				cli.Println(indentLines(details, "  "))
 			}
 
 			// Unified failure handling
@@ -159,67 +159,67 @@ func queryAndPrint(sqlCtx *sql.Context, queryist cli.Queryist, config *dolt_ci.W
 				jobFailures = append(jobFailures, fmt.Sprintf("step '%s': %s", step.GetName(), err.Error()))
 			}
 		}
-        if len(jobFailures) > 0 {
-            cli.Println(color.CyanString("Result of '%s':", job.Name.Value) + " " + color.RedString("FAIL"))
-            overallFailed = true
+		if len(jobFailures) > 0 {
+			cli.Println(color.CyanString("Result of '%s':", job.Name.Value) + " " + color.RedString("FAIL"))
+			overallFailed = true
 		} else {
-            cli.Println(color.CyanString("Result of '%s':", job.Name.Value) + " " + color.GreenString("PASS"))
+			cli.Println(color.CyanString("Result of '%s':", job.Name.Value) + " " + color.GreenString("PASS"))
 		}
 	}
-    return overallFailed
+	return overallFailed
 }
 
 // indentLines prefixes every line in s with the given prefix.
 func indentLines(s, prefix string) string {
-    if s == "" {
-        return s
-    }
-    parts := strings.Split(s, "\n")
-    for i := range parts {
-        parts[i] = prefix + parts[i]
-    }
-    return strings.Join(parts, "\n")
+	if s == "" {
+		return s
+	}
+	parts := strings.Split(s, "\n")
+	for i := range parts {
+		parts[i] = prefix + parts[i]
+	}
+	return strings.Join(parts, "\n")
 }
 
 // formatSavedQueryDetails returns indented detail lines for SavedQuery steps to match DoltTest formatting.
 // It always prints the query line if available, and on error it prints additional error/info lines excluding
 // any redundant "Ran query:" prefix since the query line is already shown.
 func formatSavedQueryDetails(savedQueryName, query string, err error) string {
-    // First line always shows the saved query name and status
-    status := "PASS"
-    if err != nil {
-        status = "FAIL"
-    }
-    statusColored := status
-    if status == "PASS" {
-        statusColored = color.GreenString(status)
-    } else {
-        statusColored = color.RedString(status)
-    }
+	// First line always shows the saved query name and status
+	status := "PASS"
+	if err != nil {
+		status = "FAIL"
+	}
+	statusColored := status
+	if status == "PASS" {
+		statusColored = color.GreenString(status)
+	} else {
+		statusColored = color.RedString(status)
+	}
 
-    lines := []string{fmt.Sprintf("  - %s - %s", savedQueryName, statusColored)}
+	lines := []string{fmt.Sprintf("  - %s - %s", savedQueryName, statusColored)}
 
-    // Only include query and error details on failure
-    if err != nil {
-        if strings.TrimSpace(query) != "" {
-            lines = append(lines, fmt.Sprintf("    - query: %s", query))
-        }
-        // Summarize error by removing any redundant 'Ran query:' line
-        var parts []string
-        for _, l := range strings.Split(err.Error(), "\n") {
-            if strings.HasPrefix(l, "Ran query: ") {
-                continue
-            }
-            trimmed := strings.TrimSpace(l)
-            if trimmed != "" {
-                parts = append(parts, trimmed)
-            }
-        }
-        if len(parts) > 0 {
-            lines = append(lines, fmt.Sprintf("    - error: %s", color.RedString(strings.Join(parts, "; "))))
-        }
-    }
-    return strings.Join(lines, "\n")
+	// Only include query and error details on failure
+	if err != nil {
+		if strings.TrimSpace(query) != "" {
+			lines = append(lines, fmt.Sprintf("    - query: %s", query))
+		}
+		// Summarize error by removing any redundant 'Ran query:' line
+		var parts []string
+		for _, l := range strings.Split(err.Error(), "\n") {
+			if strings.HasPrefix(l, "Ran query: ") {
+				continue
+			}
+			trimmed := strings.TrimSpace(l)
+			if trimmed != "" {
+				parts = append(parts, trimmed)
+			}
+		}
+		if len(parts) > 0 {
+			lines = append(lines, fmt.Sprintf("    - error: %s", color.RedString(strings.Join(parts, "; "))))
+		}
+	}
+	return strings.Join(lines, "\n")
 }
 
 func runCIQuery(queryist cli.Queryist, sqlCtx *sql.Context, step *dolt_ci.SavedQueryStep, query string) ([]sql.Row, error) {

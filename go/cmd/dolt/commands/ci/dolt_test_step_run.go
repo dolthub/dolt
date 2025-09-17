@@ -102,7 +102,7 @@ func nodesToValues(nodes []yaml.Node) []string {
 // collectRowsForSelectors fetches rows for each selector using dolt_test_run('<selector>').
 // kind should be "test" or "group" to produce specific error messages if an empty result is somehow returned without error.
 func collectRowsForSelectors(sqlCtx *sql.Context, queryist cli.Queryist, kind string, selectors []string) ([]sql.Row, error) {
-    var allRows []sql.Row
+	var allRows []sql.Row
 	for _, sel := range selectors {
 		rows, err := fetchDoltTestRunRows(sqlCtx, queryist, sel)
 		if err != nil {
@@ -188,8 +188,8 @@ func getAllDoltTestRunRows(sqlCtx *sql.Context, queryist cli.Queryist) ([]sql.Ro
 
 // formatDoltTestRows returns a formatted summary of all tests and a list of failure messages
 func formatDoltTestRows(sqlCtx *sql.Context, rows []sql.Row) (string, []string, error) {
-    lines := make([]string, 0, len(rows)*2)
-    var failures []string
+	lines := make([]string, 0, len(rows)*2)
+	var failures []string
 	for _, row := range rows {
 		tName, err := getStringColAsString(sqlCtx, row[0])
 		if err != nil {
@@ -207,26 +207,26 @@ func formatDoltTestRows(sqlCtx *sql.Context, rows []sql.Row) (string, []string, 
 		if err != nil {
 			return "", nil, err
 		}
-        statusUpper := strings.ToUpper(status)
-        var statusColored string
-        switch statusUpper {
-        case "PASS":
-            statusColored = color.GreenString(statusUpper)
-        case "FAIL":
-            statusColored = color.RedString(statusUpper)
-        default:
-            return "", nil, fmt.Errorf("unknown dolt test status %q for test %s (group %s)", statusUpper, tName, gName)
-        }
-        baseLine := fmt.Sprintf("  - test: %s (group: %s) - %s", tName, gName, statusColored)
-        lines = append(lines, baseLine)
-        if statusUpper != "PASS" {
-            if message == "" {
-                message = "failed"
-            }
-            // add separate error line, with error message colored red
-            lines = append(lines, fmt.Sprintf("    - error: %s", color.RedString(message)))
-            failures = append(failures, fmt.Sprintf("%s: %s", tName, message))
-        }
+		statusUpper := strings.ToUpper(status)
+		var statusColored string
+		switch statusUpper {
+		case "PASS":
+			statusColored = color.GreenString(statusUpper)
+		case "FAIL":
+			statusColored = color.RedString(statusUpper)
+		default:
+			return "", nil, fmt.Errorf("unknown dolt test status %q for test %s (group %s)", statusUpper, tName, gName)
+		}
+		baseLine := fmt.Sprintf("  - test: %s (group: %s) - %s", tName, gName, statusColored)
+		lines = append(lines, baseLine)
+		if statusUpper != "PASS" {
+			if message == "" {
+				message = "failed"
+			}
+			// add separate error line, with error message colored red
+			lines = append(lines, fmt.Sprintf("    - error: %s", color.RedString(message)))
+			failures = append(failures, fmt.Sprintf("%s: %s", tName, message))
+		}
 	}
 	return strings.Join(lines, "\n"), failures, nil
 }
