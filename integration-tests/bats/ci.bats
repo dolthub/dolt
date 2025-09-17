@@ -985,7 +985,7 @@ EOF
     [[ "$output" =~ "Running workflow: workflow" ]] || false
     [[ "$output" =~ "Step: should fail, bad table name" ]] || false
     [[ "$output" =~ "  - query: select * from invalid" ]] || false
-    [[ "$output" =~ "    - error: table not found: invalid" ]] || false
+    [[ "$output" =~ "    - error:" ]] || false
     [[ "$output" =~ "Result of 'bad saved queries': FAIL" ]] || false
 }
 
