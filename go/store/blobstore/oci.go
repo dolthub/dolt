@@ -118,7 +118,7 @@ func (bs *OCIBlobstore) Exists(ctx context.Context, key string) (bool, error) {
 }
 
 // Get retrieves an io.reader for the portion of a blob specified by br along with its version
-func (bs *OCIBlobstore) Get(ctx context.Context, key string, br BlobRange) (io.ReadCloser, string, error) {
+func (bs *OCIBlobstore) Get(ctx context.Context, key string, br BlobRange) (io.ReadCloser, uint64, string, error) {
 	absKey := path.Join(bs.prefix, key)
 	req := objectstorage.GetObjectRequest{
 		NamespaceName: &bs.namespace,
@@ -136,19 +136,32 @@ func (bs *OCIBlobstore) Get(ctx context.Context, key string, br BlobRange) (io.R
 		if serr, ok := common.IsServiceError(err); ok {
 			// handle not found code
 			if serr.GetHTTPStatusCode() == 404 {
-				return nil, "", NotFound{"oci://" + path.Join(bs.bucketName, absKey)}
+				return nil, 0, "", NotFound{"oci://" + path.Join(bs.bucketName, absKey)}
 			}
 		}
-		return nil, "", err
+		return nil, 0, "", err
+	}
+
+	var size uint64
+	// Try to get total size from Content-Range header first (for range requests)
+	if res.RawResponse != nil && res.RawResponse.Header != nil {
+		contentRange := res.RawResponse.Header.Get("Content-Range")
+		if contentRange != "" {
+			size = parseContentRangeSize(contentRange)
+		}
+	}
+	// Fall back to Content-Length if no Content-Range (full object request)
+	if size == 0 && res.ContentLength != nil {
+		size = uint64(*res.ContentLength)
 	}
 
 	// handle negative offset and positive length
 	if br.offset < 0 && br.length > 0 {
 		lr := io.LimitReader(res.Content, br.length)
-		return io.NopCloser(lr), fmtstr(res.ETag), nil
+		return io.NopCloser(lr), size, fmtstr(res.ETag), nil
 	}
 
-	return res.Content, fmtstr(res.ETag), nil
+	return res.Content, size, fmtstr(res.ETag), nil
 }
 
 // Put sets the blob and the version for a key
