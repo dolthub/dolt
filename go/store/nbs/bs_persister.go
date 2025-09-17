@@ -18,7 +18,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"time"
 
@@ -191,8 +190,11 @@ func (bsp *blobstorePersister) Open(ctx context.Context, name hash.Hash, chunkCo
 	}
 
 	if errors.Is(err, ErrTableFileNotFound) || errors.Is(err, blobstore.NotFound{}) {
-		// See if there is a darc file.
-
+		source, err := newBSArchiveChunkSource(ctx, bsp.bs, name, stats)
+		if err != nil {
+			return nil, err
+		}
+		return source, nil
 	}
 
 	return nil, err
@@ -218,23 +220,19 @@ func (bsp *blobstorePersister) Path() string {
 	return ""
 }
 
-func (bsp *blobstorePersister) CopyTableFile(ctx context.Context, r io.Reader, name string, fileSz uint64, chunkCount uint32) error {
-	// sanity check file size
-	if fileSz < indexSize(chunkCount)+footerSize {
-		return fmt.Errorf("table file size %d too small for chunk count %d", fileSz, chunkCount)
-	}
+func (bsp *blobstorePersister) CopyTableFile(ctx context.Context, r io.Reader, name string, fileSz uint64, splitOffset uint64) error {
+	lr := io.LimitReader(r, int64(splitOffset))
 
-	off := int64(tableTailOffset(fileSz, chunkCount)) // NM4 - this is very table specific
-	lr := io.LimitReader(r, off)
+	indexLen := int64(fileSz - splitOffset)
 
 	// check if we can Put concurrently
 	rr, ok := r.(io.ReaderAt)
 	if !ok {
 		// sequentially write chunk records then tail
-		if _, err := bsp.bs.Put(ctx, name+tableRecordsExt, off, lr); err != nil {
+		if _, err := bsp.bs.Put(ctx, name+tableRecordsExt, int64(splitOffset), lr); err != nil {
 			return err
 		}
-		if _, err := bsp.bs.Put(ctx, name+tableTailExt, int64(fileSz-uint64(off)), r); err != nil { // NM4 - not sure about this but seems like we should only write what remains.
+		if _, err := bsp.bs.Put(ctx, name+tableTailExt, indexLen, r); err != nil {
 			return err
 		}
 	} else {
@@ -242,15 +240,12 @@ func (bsp *blobstorePersister) CopyTableFile(ctx context.Context, r io.Reader, n
 		// see BufferedFileByteSink in byte_sink.go
 		eg, ectx := errgroup.WithContext(ctx)
 		eg.Go(func() error {
-			buf := make([]byte, indexSize(chunkCount)+footerSize)
-			if _, err := rr.ReadAt(buf, off); err != nil {
-				return err
-			}
-			_, err := bsp.bs.Put(ectx, name+tableTailExt, int64(len(buf)), bytes.NewBuffer(buf))
+			srdr := io.NewSectionReader(rr, int64(splitOffset), indexLen)
+			_, err := bsp.bs.Put(ectx, name+tableTailExt, indexLen, srdr)
 			return err
 		})
 		eg.Go(func() error {
-			_, err := bsp.bs.Put(ectx, name+tableRecordsExt, off, lr)
+			_, err := bsp.bs.Put(ectx, name+tableRecordsExt, int64(splitOffset), lr)
 			return err
 		})
 		if err := eg.Wait(); err != nil {

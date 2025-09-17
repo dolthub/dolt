@@ -192,7 +192,7 @@ func newArchiveReaderFromFooter(ctx context.Context, reader tableReaderAt, name 
 		return archiveReader{}, errors.New("runtime error: invalid footer.")
 	}
 
-	ftr, err := buildFooter(name, fileSz, footer)
+	ftr, err := buildArchiveFooter(name, fileSz, footer)
 	if err != nil {
 		return archiveReader{}, err
 	}
@@ -369,10 +369,10 @@ func loadFooter(ctx context.Context, reader ReaderAtWithStats, name hash.Hash, f
 	if err != nil {
 		return
 	}
-	return buildFooter(name, fileSize, buf)
+	return buildArchiveFooter(name, fileSize, buf)
 }
 
-func buildFooter(name hash.Hash, fileSize uint64, buf []byte) (f archiveFooter, err error) {
+func buildArchiveFooter(name hash.Hash, fileSize uint64, buf []byte) (f archiveFooter, err error) {
 	f.formatVersion = buf[afrVersionOffset]
 	f.fileSignature = string(buf[afrSigOffset:])
 	// Verify File Signature

@@ -74,8 +74,10 @@ type tablePersister interface {
 type tableFilePersister interface {
 	tablePersister
 
-	// CopyTableFile copies the table file with the given fileId from the reader to the TableFileStore.
-	CopyTableFile(ctx context.Context, r io.Reader, fileId string, fileSz uint64, chunkCount uint32) error
+	// CopyTableFile copies the table file with the given fileId from the reader to the TableFileStore. |splitOffset| is
+	// the offset in bytes within the file where the file is split between data and the index. This is only used for the
+	// blob store persister.
+	CopyTableFile(ctx context.Context, r io.Reader, fileId string, fileSz uint64, splitOffset uint64) error
 
 	// Path returns the file system path. Use CopyTableFile instead of Path to
 	// copy a file to the TableFileStore. Path cannot be removed because it's used
