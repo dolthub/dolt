@@ -270,7 +270,7 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 		// Default compact dolt_log schema for in-process enginetest sessions
 		{
 			ctx := enginetest.NewContext(d)
-			_ = ctx.Session.SetSessionVariable(ctx, dsess.DoltLogCompactSchema, int8(1))
+			_ = ctx.Session.SetSessionVariable(ctx, dsess.DoltLogCommitterOnly, int8(1))
 		}
 
 		e, err := enginetest.NewEngine(t, d, d.provider, d.setupData, d.statsPro)
@@ -302,7 +302,7 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 			require.NoError(t, err)
 			{
 				ctx := enginetest.NewContext(d)
-				_ = ctx.Session.SetSessionVariable(ctx, dsess.DoltLogCompactSchema, int8(1))
+				_ = ctx.Session.SetSessionVariable(ctx, dsess.DoltLogCommitterOnly, int8(1))
 			}
 		}
 
@@ -428,7 +428,7 @@ func (d *DoltHarness) NewContextWithClient(client sql.Client) *sql.Context {
 func (d *DoltHarness) NewSession() *sql.Context {
 	d.session = d.newSessionWithClient(sql.Client{Address: "localhost", User: "root"})
 	ctx := d.NewContext()
-	_ = ctx.Session.SetSessionVariable(ctx, dsess.DoltLogCompactSchema, int8(1))
+	_ = ctx.Session.SetSessionVariable(ctx, dsess.DoltLogCommitterOnly, int8(1))
 	return ctx
 }
 
