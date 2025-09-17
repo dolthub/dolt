@@ -120,7 +120,11 @@ func containsTableName(name string, names []doltdb.TableName) bool {
 }
 
 func newStatusItr(ctx *sql.Context, st *StatusTable) (*StatusItr, error) {
+	// If no roots provider was set, then there is no status to report
 	rp := st.rootsProvider
+	if rp == nil {
+		return &StatusItr{rows: nil}, nil
+	}
 
 	roots, err := rp.GetRoots(ctx)
 	if err != nil {
