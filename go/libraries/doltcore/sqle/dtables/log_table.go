@@ -50,8 +50,8 @@ type LogTable struct {
 	dbName            string
 	tableName         string
 	headHash          hash.Hash
-	ctx				  *sql.Context
-	schType			  LogSchemaType
+	ctx               *sql.Context
+	schType           LogSchemaType
 }
 
 var _ sql.Table = (*LogTable)(nil)
@@ -59,7 +59,7 @@ var _ sql.StatisticsTable = (*LogTable)(nil)
 var _ sql.IndexAddressable = (*LogTable)(nil)
 
 // NewLogTable creates a LogTable
-func NewLogTable(_ *sql.Context, dbName, tableName string, ddb *doltdb.DoltDB, head *doltdb.Commit, ctx *sql.Context, schType LogSchemaType) sql.Table {
+func NewLogTable(dbName string, tableName string, ddb *doltdb.DoltDB, head *doltdb.Commit, ctx *sql.Context, schType LogSchemaType) sql.Table {
 	return &LogTable{dbName: dbName, tableName: tableName, ddb: ddb, head: head, ctx: ctx, schType: schType}
 }
 
@@ -341,8 +341,8 @@ func (dt *LogTable) HeadHash() (hash.Hash, error) {
 
 // LogItr is a sql.RowItr implementation which iterates over each commit as if it's a row in the table.
 type LogItr struct {
-	child      doltdb.CommitItr[*sql.Context]
-	schType	   LogSchemaType
+	child   doltdb.CommitItr[*sql.Context]
+	schType LogSchemaType
 }
 
 // NewLogItr creates a LogItr from the current environment.
@@ -363,7 +363,7 @@ func NewLogItr(ctx *sql.Context, ddb *doltdb.DoltDB, head *doltdb.Commit, schTyp
 // Next retrieves the next row. It will return io.EOF if it's the last row.
 // After retrieving the last row, Close will be automatically closed.
 func (itr *LogItr) Next(ctx *sql.Context) (sql.Row, error) {
-	h, optCmt, err := itr.child.Next(ctx)
+	h, optCmt, meta, height, err := itr.child.Next(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -374,14 +374,18 @@ func (itr *LogItr) Next(ctx *sql.Context) (sql.Row, error) {
 		return nil, doltdb.ErrGhostCommitRuntimeFailure
 	}
 
-	meta, err := cm.GetCommitMeta(ctx)
-	if err != nil {
-		return nil, err
+	if meta == nil {
+		meta, err = cm.GetCommitMeta(ctx)
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	height, err := cm.Height()
-	if err != nil {
-		return nil, err
+	if height == 0 {
+		height, err = cm.Height()
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return BuildLogRowWithSchemaType(ctx, h, meta, height, itr.schType), nil

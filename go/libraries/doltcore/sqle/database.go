@@ -633,11 +633,11 @@ func (db Database) getTableInsensitiveWithRoot(ctx *sql.Context, head *doltdb.Co
 				}
 			}
 
-			schemaType := dtables.LogSchemaTypeAuto
+			schType := dtables.LogSchemaTypeAuto
 			if isDoltgresSystemTable && resolve.UseSearchPath {
-				schemaType = dtables.LogSchemaTypeCompact
+				schType = dtables.LogSchemaTypeCompact
 			}
-			dt, found = dtables.NewLogTable(ctx, db.Name(), lwrName, db.ddb, head, schemaType), true
+			dt, found = dtables.NewLogTable(db.Name(), lwrName, db.ddb, head, ctx, schType), true
 		}
 	case doltdb.LogTableFullName:
 		fallthrough
@@ -650,11 +650,11 @@ func (db Database) getTableInsensitiveWithRoot(ctx *sql.Context, head *doltdb.Co
 				return nil, false, err
 			}
 		}
-		schemaType := dtables.LogSchemaTypeFull
+		schType := dtables.LogSchemaTypeFull
 		if lwrName == doltdb.LogTableCompactName {
-			schemaType = dtables.LogSchemaTypeCompact
+			schType = dtables.LogSchemaTypeCompact
 		}
-		dt, found = dtables.NewLogTable(ctx, db.Name(), lwrName, db.ddb, head, schemaType), true
+		dt, found = dtables.NewLogTable(db.Name(), lwrName, db.ddb, head, ctx, schType), true
 	case doltdb.DiffTableName, doltdb.GetDiffTableName():
 		isDoltgresSystemTable, err := resolve.IsDoltgresSystemTable(ctx, tname, root)
 		if err != nil {
