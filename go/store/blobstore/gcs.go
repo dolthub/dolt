@@ -73,7 +73,7 @@ func (bs *GCSBlobstore) Exists(ctx context.Context, key string) (bool, error) {
 
 // Get retrieves an io.reader for the portion of a blob specified by br along with
 // its version
-func (bs *GCSBlobstore) Get(ctx context.Context, key string, br BlobRange) (io.ReadCloser, string, error) {
+func (bs *GCSBlobstore) Get(ctx context.Context, key string, br BlobRange) (io.ReadCloser, uint64, string, error) {
 	absKey := path.Join(bs.prefix, key)
 	oh := bs.bucket.Object(absKey)
 	var reader *storage.Reader
@@ -89,15 +89,16 @@ func (bs *GCSBlobstore) Get(ctx context.Context, key string, br BlobRange) (io.R
 	}
 
 	if err == storage.ErrObjectNotExist {
-		return nil, "", NotFound{"gs://" + path.Join(bs.bucketName, absKey)}
+		return nil, 0, "", NotFound{"gs://" + path.Join(bs.bucketName, absKey)}
 	} else if err != nil {
-		return nil, "", err
+		return nil, 0, "", err
 	}
 
 	attrs := reader.Attrs
 	generation := attrs.Generation
+	size := uint64(attrs.Size)
 
-	return reader, fmtGeneration(generation), nil
+	return reader, size, fmtGeneration(generation), nil
 }
 
 func writeObj(writer *storage.Writer, reader io.Reader) (string, error) {
