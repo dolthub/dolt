@@ -92,7 +92,7 @@ func resolveDoltTestRows(sqlCtx *sql.Context, queryist cli.Queryist, dt *dolt_ci
 }
 
 func nodesToValues(nodes []yaml.Node) []string {
-	vals := make([]string, 0, len(nodes))
+	var vals []string
 	for _, n := range nodes {
 		vals = append(vals, n.Value)
 	}
@@ -188,7 +188,7 @@ func getAllDoltTestRunRows(sqlCtx *sql.Context, queryist cli.Queryist) ([]sql.Ro
 
 // formatDoltTestRows returns a formatted summary of all tests and a list of failure messages
 func formatDoltTestRows(sqlCtx *sql.Context, rows []sql.Row) (string, []string, error) {
-	lines := make([]string, 0, len(rows)*2)
+	var lines []string
 	var failures []string
 	for _, row := range rows {
 		tName, err := getStringColAsString(sqlCtx, row[0])
