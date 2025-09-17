@@ -146,7 +146,7 @@ func queryAndPrint(sqlCtx *sql.Context, queryist cli.Queryist, config *dolt_ci.W
 			} else if dt, ok := step.(*dolt_ci.DoltTestStep); ok {
 				details, err = runDoltTestStep(sqlCtx, queryist, dt)
 			} else {
-				err = fmt.Errorf("unsupported step type")
+				panic("unsupported step type")
 			}
 
 			// Print details for DoltTest and SavedQuery steps; they do not emit PASS/FAIL inline
