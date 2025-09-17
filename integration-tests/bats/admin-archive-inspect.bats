@@ -58,11 +58,6 @@ teardown() {
     # Use the hash we know exists at index 0
     run dolt admin archive-inspect --object-id "4pguchpitq1bsb09ogaivmcstgsnbd3k" "$ARCHIVE_PATH"
     [ "$status" -eq 0 ]
-
-    echo "------------------"
-    echo "$output"
-    echo "------------------"
-
     [[ "$output" =~ "Object inspection:" ]] || false
     [[ "$output" =~ "Hash: 4pguchpitq1bsb09ogaivmcstgsnbd3k" ]] || false
     [[ "$output" =~ "Prefix: 0x2661e64732ee82be" ]] || false
