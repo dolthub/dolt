@@ -866,7 +866,8 @@ EOF
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Running workflow: workflow" ]] || false
     [[ "$output" =~ "Running job: verify initial commits" ]] || false
-    [[ "$output" =~ "Step: verify initial commits - PASS" ]] || false
+    [[ "$output" =~ "Step: verify initial commits" ]] || false
+    [[ "$output" =~ "  - check dolt commit - PASS" ]] || false
 }
 
 @test "ci: ci run with expected columns" {
@@ -888,7 +889,8 @@ EOF
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Running workflow: workflow" ]] || false
     [[ "$output" =~ "Running job: verify dolt commit" ]] || false
-    [[ "$output" =~ "Step: verify dolt commit - PASS" ]] || false
+    [[ "$output" =~ "Step: verify dolt commit" ]] || false
+    [[ "$output" =~ "  - check dolt commit - PASS" ]] || false
 }
 
 @test "ci: each assertion type can be used" {
@@ -924,12 +926,13 @@ EOF
     run dolt ci run "workflow"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Running workflow: workflow" ]] || false
-    [[ "$output" =~ "Step: equals comp - PASS" ]] || false
-    [[ "$output" =~ "Step: not equals comp - PASS" ]] || false
-    [[ "$output" =~ "Step: greater than comp - PASS" ]] || false
-    [[ "$output" =~ "Step: greater or equal than comp - PASS" ]] || false
-    [[ "$output" =~ "Step: less than comp - PASS" ]] || false
-    [[ "$output" =~ "Step: less or equal than comp - PASS" ]] || false
+    [[ "$output" =~ "Step: equals comp" ]] || false
+    [[ "$output" =~ "Step: not equals comp" ]] || false
+    [[ "$output" =~ "Step: greater than comp" ]] || false
+    [[ "$output" =~ "Step: greater or equal than comp" ]] || false
+    [[ "$output" =~ "Step: less than comp" ]] || false
+    [[ "$output" =~ "Step: less or equal than comp" ]] || false
+    [[ "$output" =~ "  - main - PASS" ]] || false
 }
 
 @test "ci: saved queries fail with ci run" {
@@ -953,12 +956,12 @@ EOF
     run dolt ci run "workflow"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "Running workflow: workflow" ]] || false
-    [[ "$output" =~ "Step: expect rows - FAIL" ]] || false
-    [[ "$output" =~ "Ran query: select * from dolt_commits;" ]] || false
-    [[ "$output" =~ "Assertion failed: expected row count 2, got 3" ]] || false
-    [[ "$output" =~ "Step: expect columns - FAIL" ]] || false
-    [[ "$output" =~ "Ran query: select * from dolt_commits;" ]] || false
-    [[ "$output" =~ "Assertion failed: expected column count less than 5, got 5" ]] || false
+    [[ "$output" =~ "Step: expect rows" ]] || false
+    [[ "$output" =~ "  - query: select * from dolt_commits;" ]] || false
+    [[ "$output" =~ "    - error: Assertion failed: expected row count 2, got 3" ]] || false
+    [[ "$output" =~ "Step: expect columns" ]] || false
+    [[ "$output" =~ "  - query: select * from dolt_commits;" ]] || false
+    [[ "$output" =~ "    - error: Assertion failed: expected column count less than 5, got 5" ]] || false
 }
 
 @test "ci: ci run fails on bad query" {
@@ -980,9 +983,9 @@ EOF
     run dolt ci run "workflow"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "Running workflow: workflow" ]] || false
-    [[ "$output" =~ "Step: should fail, bad table name - FAIL" ]] || false
-    [[ "$output" =~ "Ran query: select * from invalid" ]] || false
-    [[ "$output" =~ "Query error" ]] || false
+    [[ "$output" =~ "Step: should fail, bad table name" ]] || false
+    [[ "$output" =~ "  - query: select * from invalid" ]] || false
+    [[ "$output" =~ "    - error: Query error" ]] || false
     [[ "$output" =~ "table not found: invalid" ]] || false
 }
 
@@ -1012,8 +1015,8 @@ EOF
     run dolt ci run "workflow"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "Running workflow: workflow" ]] || false
-    [[ "$output" =~ "Step: should fail, bad query name - FAIL" ]] || false
-    [[ "$output" =~ "Could not find saved query: invalid query" ]] || false
+    [[ "$output" =~ "Step: should fail, bad query name" ]] || false
+    [[ "$output" =~ "    - error: Could not find saved query: invalid query" ]] || false
 }
 
 @test "ci: ci run executes dolt test steps (wildcard groups)" {
@@ -1042,7 +1045,7 @@ EOF
     [[ "$output" =~ "Step: run tests wildcard" ]] || false
     [[ "$output" =~ "  - test: test_a (group: ) - PASS" ]] || false
     [[ "$output" =~ "  - test: test_b (group: ) - PASS" ]] || false
-    [[ "$output" =~ "Result: PASS" ]] || false
+    [[ "$output" =~ "Result of 'run all tests': PASS" ]] || false
 }
 
 @test "ci: ci run executes dolt test steps (tests only)" {
@@ -1071,7 +1074,7 @@ EOF
     [[ "$output" =~ "Step: run t_only_a and t_only_b" ]] || false
     [[ "$output" =~ "  - test: t_only_b (group: ) - PASS" ]] || false
     [[ "$output" =~ "  - test: t_only_a (group: ) - PASS" ]] || false
-    [[ "$output" =~ "Result: PASS" ]] || false
+    [[ "$output" =~ "Result of 'run named tests': PASS" ]] || false
 }
 
 @test "ci: ci run executes dolt test steps (groups only)" {
@@ -1101,7 +1104,7 @@ EOF
     [[ "$output" =~ "Step: run groups g1 and g2" ]] || false
     [[ "$output" =~ "  - test: g2_t1 (group: g2) - PASS" ]] || false
     [[ "$output" =~ "  - test: g1_t1 (group: g1) - PASS" ]] || false
-    [[ "$output" =~ "Result: PASS" ]] || false
+    [[ "$output" =~ "Result of 'run groups': PASS" ]] || false
 }
 
 @test "ci: ci run executes dolt test steps (groups and tests)" {
@@ -1129,7 +1132,7 @@ EOF
     [[ "$output" =~ "Running job: run selected" ]] || false
     [[ "$output" =~ "Step: run t1 in ga" ]] || false
     [[ "$output" =~ "  - test: sel_t1 (group: ga) - PASS" ]] || false
-    [[ "$output" =~ "Result: PASS" ]] || false
+    [[ "$output" =~ "Result of 'run selected': PASS" ]] || false
 }
 
 @test "ci: ci run fails when dolt test has failing test" {
@@ -1154,9 +1157,9 @@ EOF
     [[ "$output" =~ "Running workflow: wf_run_dolt_fail" ]] || false
     [[ "$output" =~ "Running job: failing tests" ]] || false
     [[ "$output" =~ "Step: run failing test" ]] || false
-    [[ "$output" =~ "  - test: t_fail (group: ) - FAIL: Assertion failed: expected_rows equal to 2, got 1" ]] || false
-    [[ "$output" =~ "Result: FAIL" ]] || false
-    [[ "$output" =~ "step 'run failing test': t_fail: Assertion failed: expected_rows equal to 2, got 1" ]] || false
+    [[ "$output" =~ "  - test: t_fail (group: ) - FAIL" ]] || false
+    [[ "$output" =~ "    - error: Assertion failed: expected_rows equal to 2, got 1" ]] || false
+    [[ "$output" =~ "Result of 'failing tests': FAIL" ]] || false
 }
 
 @test "ci: ci run errors when dolt test references unknown test or group" {
@@ -1181,7 +1184,7 @@ EOF
     [[ "$output" =~ "Running workflow: wf_run_dolt_unknown_test" ]] || false
     [[ "$output" =~ "Running job: unknown test" ]] || false
     [[ "$output" =~ "Step: run unknown test" ]] || false
-    [[ "$output" =~ "Result: FAIL" ]] || false
+    [[ "$output" =~ "Result of 'unknown test': FAIL" ]] || false
 
     # Unknown group
     cat > workflow_group.yaml <<EOF
@@ -1201,5 +1204,5 @@ EOF
     [[ "$output" =~ "Running workflow: wf_run_dolt_unknown_group" ]] || false
     [[ "$output" =~ "Running job: unknown group" ]] || false
     [[ "$output" =~ "Step: run unknown group" ]] || false
-    [[ "$output" =~ "Result: FAIL" ]] || false
+    [[ "$output" =~ "Result of 'unknown group': FAIL" ]] || false
 }
