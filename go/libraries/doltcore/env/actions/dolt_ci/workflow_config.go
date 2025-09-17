@@ -86,7 +86,10 @@ func (s *Steps) UnmarshalYAML(value *yaml.Node) error {
 			return fmt.Errorf("each step must be a YAML mapping")
 		}
 
-		// Discover the concrete step type by inspecting keys
+        // Discover the concrete step type by inspecting keys.
+        // yaml.v3 represents a mapping node's Content as alternating key/value nodes:
+        // [key0, value0, key1, value1, ...]. Keys are at even indices; the corresponding
+        // value is at i+1. We increment i by 2 to visit only keys here.
 		isSavedQuery := false
 		isDoltTest := false
 		for i := 0; i+1 < len(item.Content); i += 2 {
@@ -99,10 +102,11 @@ func (s *Steps) UnmarshalYAML(value *yaml.Node) error {
 			}
 		}
 
-		if isSavedQuery && isDoltTest {
+        if isSavedQuery && isDoltTest {
 			// Try to extract a name for a clearer error
 			var stepName string
-			for i := 0; i+1 < len(item.Content); i += 2 {
+            // Scan keys again (even indices). The value for a key is at i+1.
+            for i := 0; i+1 < len(item.Content); i += 2 {
 				if item.Content[i].Value == "name" {
 					stepName = item.Content[i+1].Value
 					break
