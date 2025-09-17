@@ -67,6 +67,6 @@ COPY dolt*/docker*/docker-entrypoint*.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 VOLUME /var/lib/dolt
-EXPOSE 3306 33060
+EXPOSE 3306 33060 7007
 WORKDIR /var/lib/dolt
 ENTRYPOINT ["tini", "--", "docker-entrypoint.sh"]
