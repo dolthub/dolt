@@ -208,11 +208,14 @@ func formatDoltTestRows(sqlCtx *sql.Context, rows []sql.Row) (string, []string, 
 			return "", nil, err
 		}
         statusUpper := strings.ToUpper(status)
-        statusColored := statusUpper
-        if statusUpper == "PASS" {
+        var statusColored string
+        switch statusUpper {
+        case "PASS":
             statusColored = color.GreenString(statusUpper)
-        } else if statusUpper == "FAIL" {
+        case "FAIL":
             statusColored = color.RedString(statusUpper)
+        default:
+            return "", nil, fmt.Errorf("unknown dolt test status %q for test %s (group %s)", statusUpper, tName, gName)
         }
         baseLine := fmt.Sprintf("  - test: %s (group: %s) - %s", tName, gName, statusColored)
         lines = append(lines, baseLine)
