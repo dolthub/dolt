@@ -371,12 +371,12 @@ func (w *PullTableFileWriter) uploadTempTableFile(ctx context.Context, tmpTblFil
 
 		if uploaded != 0 {
 			// A retry. We treat it as if what was already uploaded was rebuffered.
-			atomic.AddUint64(&w.bufferedSendBytes, uint64(uploaded))
+			atomic.AddUint64(&w.bufferedSendBytes, uploaded)
 			uploaded = 0
 		}
 
 		fWithStats := countingReader{countingReader{rc, &uploaded}, &w.finishedSendBytes}
 
-		return fWithStats, uint64(fileSize), nil
+		return fWithStats, fileSize, nil
 	})
 }

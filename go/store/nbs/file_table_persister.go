@@ -114,7 +114,7 @@ func (ftp *fsTablePersister) Path() string {
 	return ftp.dir
 }
 
-func (ftp *fsTablePersister) CopyTableFile(ctx context.Context, r io.Reader, fileId string, fileSz uint64, chunkCount uint32) error {
+func (ftp *fsTablePersister) CopyTableFile(_ context.Context, r io.Reader, fileId string, _ uint64, _ uint64) error {
 	tn, f, err := func() (n string, cleanup func(), err error) {
 		ftp.removeMu.Lock()
 		var temp *os.File
