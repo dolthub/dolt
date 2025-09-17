@@ -985,8 +985,8 @@ EOF
     [[ "$output" =~ "Running workflow: workflow" ]] || false
     [[ "$output" =~ "Step: should fail, bad table name" ]] || false
     [[ "$output" =~ "  - query: select * from invalid" ]] || false
-    [[ "$output" =~ "    - error: Query error" ]] || false
-    [[ "$output" =~ "table not found: invalid" ]] || false
+    [[ "$output" =~ "    - error: table not found: invalid" ]] || false
+    [[ "$output" =~ "Result of 'bad saved queries': FAIL" ]] || false
 }
 
 @test "ci: ci run fails on invalid workflow name" {

@@ -230,7 +230,7 @@ func runCIQuery(queryist cli.Queryist, sqlCtx *sql.Context, step *dolt_ci.SavedQ
 
 	rows, err := cli.GetRowsForSql(queryist, sqlCtx, query)
 	if err != nil {
-		return nil, fmt.Errorf("Query error: %s", err.Error())
+		return nil, err
 	}
 
 	return rows, nil
