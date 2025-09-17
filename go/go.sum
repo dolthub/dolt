@@ -203,8 +203,8 @@ github.com/denisenkom/go-mssqldb v0.10.0 h1:QykgLZBorFE95+gO3u9esLd0BmbvpWp0/waN
 github.com/denisenkom/go-mssqldb v0.10.0/go.mod h1:xbL0rPBG9cCiLr28tMa8zpbdarY27NDyej4t/EjAShU=
 github.com/dolthub/aws-sdk-go-ini-parser v0.0.0-20250305001723-2821c37f6c12 h1:IdqX7J8vi/Kn3T3Ee0VzqnLqwFmgA2hr8WZETPcQjfM=
 github.com/dolthub/aws-sdk-go-ini-parser v0.0.0-20250305001723-2821c37f6c12/go.mod h1:rN7X8BHwkjPcfMQQ2QTAq/xM3leUSGLfb+1Js7Y6TVo=
-github.com/dolthub/dolt-mcp v0.2.1-0.20250827202412-9d0f6e658fba h1:+W6kMwq76k8uym/9dkMy3OockE0yxONdGGA2mrbFvBg=
-github.com/dolthub/dolt-mcp v0.2.1-0.20250827202412-9d0f6e658fba/go.mod h1:bw/9fg2/fHI/QnSNL24HaL8+K2ybO/Hoy+ETUWwnZ6A=
+github.com/dolthub/dolt-mcp v0.2.2-0.20250917171427-13e4520d1c36 h1:1OJhO12aBkZG7WQzAbu1WKCLSPT4AeoSEYeRwCirIi4=
+github.com/dolthub/dolt-mcp v0.2.2-0.20250917171427-13e4520d1c36/go.mod h1:S8OtLV2B//aelmZlGnFO44q4YH+Tyfl7jQ9djb4gPJE=
 github.com/dolthub/eventsapi_schema v0.0.0-20250915094920-eadfd39051ca h1:BGFz/0OlKIuC6qHIZQbvPapFvdAJkeEyGXWVgL5clmE=
 github.com/dolthub/eventsapi_schema v0.0.0-20250915094920-eadfd39051ca/go.mod h1:CoDLfgPqHyBtth0Cp+fi/CmC4R81zJNX4wPjShdZ+Bw=
 github.com/dolthub/flatbuffers/v23 v23.3.3-dh.2 h1:u3PMzfF8RkKd3lB9pZ2bfn0qEG+1Gms9599cr0REMww=
