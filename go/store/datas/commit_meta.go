@@ -186,7 +186,7 @@ func NewCommitMetaWithAuthorCommitter(authorName, authorEmail, committerName, co
 		ceptr = &ce
 	}
 
-	return &CommitMeta{n, e, d, "", committerDateMillis, authorDateMillis, &cnptr, &ceptr}, nil
+	return &CommitMeta{an, ae, d, "", committerDateMillis, authorDateMillis, cnptr, ceptr}, nil
 }
 
 func getRequiredFromSt(st types.Struct, k string) (types.Value, error) {
@@ -241,13 +241,13 @@ func CommitMetaFromNomsSt(st types.Struct) (*CommitMeta, error) {
 	}
 
 	return &CommitMeta{
-		Name:          string(n.(types.String)),
-		Email:         string(e.(types.String)),
-		Description:   string(d.(types.String)),
-		Signature:     string(signature.(types.String)),
-		Timestamp:     uint64(ts.(types.Uint)),
-		UserTimestamp: int64(userTS.(types.Int)),
-		CommitterName: nil,
+		Name:           string(n.(types.String)),
+		Email:          string(e.(types.String)),
+		Description:    string(d.(types.String)),
+		Signature:      string(signature.(types.String)),
+		Timestamp:      uint64(ts.(types.Uint)),
+		UserTimestamp:  int64(userTS.(types.Int)),
+		CommitterName:  nil,
 		CommitterEmail: nil,
 	}, nil
 }
