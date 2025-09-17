@@ -97,12 +97,7 @@ func (bsp *noConjoinBlobstorePersister) Path() string {
 	return ""
 }
 
-func (bsp *noConjoinBlobstorePersister) CopyTableFile(ctx context.Context, r io.Reader, name string, fileSz uint64, chunkCount uint32) error {
-	// sanity check file size
-	if fileSz < indexSize(chunkCount)+footerSize {
-		return fmt.Errorf("table file size %d too small for chunk count %d", fileSz, chunkCount)
-	}
-
+func (bsp *noConjoinBlobstorePersister) CopyTableFile(ctx context.Context, r io.Reader, name string, fileSz uint64, _ uint64) error {
 	_, err := bsp.bs.Put(ctx, name, int64(fileSz), r)
 	return err
 }

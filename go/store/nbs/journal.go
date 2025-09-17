@@ -320,11 +320,11 @@ func (j *ChunkJournal) Path() string {
 	return filepath.Dir(j.path)
 }
 
-func (j *ChunkJournal) CopyTableFile(ctx context.Context, r io.Reader, fileId string, fileSz uint64, chunkCount uint32) error {
+func (j *ChunkJournal) CopyTableFile(ctx context.Context, r io.Reader, fileId string, fileSz uint64, splitOffset uint64) error {
 	if j.backing.readOnly() {
 		return errReadOnlyManifest
 	}
-	return j.persister.CopyTableFile(ctx, r, fileId, fileSz, chunkCount)
+	return j.persister.CopyTableFile(ctx, r, fileId, fileSz, splitOffset)
 }
 
 // Name implements manifest.
