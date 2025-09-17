@@ -160,7 +160,7 @@ func (bsp *blobstorePersister) getRecordsSubObject(ctx context.Context, cs chunk
 	l := int64(off)
 	rng := blobstore.NewBlobRange(0, l)
 
-	rdr, _, err := bsp.bs.Get(ctx, cs.hash().String(), rng)
+	rdr, _, _, err := bsp.bs.Get(ctx, cs.hash().String(), rng)
 	if err != nil {
 		return "", err
 	}
@@ -260,14 +260,14 @@ func (bsTRA *bsTableReaderAt) clone() (tableReaderAt, error) {
 }
 
 func (bsTRA *bsTableReaderAt) Reader(ctx context.Context) (io.ReadCloser, error) {
-	rc, _, err := bsTRA.bs.Get(ctx, bsTRA.key, blobstore.AllRange)
+	rc, _, _, err := bsTRA.bs.Get(ctx, bsTRA.key, blobstore.AllRange)
 	return rc, err
 }
 
 // ReadAtWithStats is the bsTableReaderAt implementation of the tableReaderAt interface
 func (bsTRA *bsTableReaderAt) ReadAtWithStats(ctx context.Context, p []byte, off int64, stats *Stats) (int, error) {
 	br := blobstore.NewBlobRange(off, int64(len(p)))
-	rc, _, err := bsTRA.bs.Get(ctx, bsTRA.key, br)
+	rc, _, _, err := bsTRA.bs.Get(ctx, bsTRA.key, br)
 
 	if err != nil {
 		return 0, err
@@ -294,7 +294,7 @@ func (bsTRA *bsTableReaderAt) ReadAtWithStats(ctx context.Context, p []byte, off
 
 func newBSChunkSource(ctx context.Context, bs blobstore.Blobstore, name hash.Hash, chunkCount uint32, q MemoryQuotaProvider, stats *Stats) (cs chunkSource, err error) {
 	index, err := loadTableIndex(ctx, stats, chunkCount, q, func(p []byte) error {
-		rc, _, err := bs.Get(ctx, name.String(), blobstore.NewBlobRange(-int64(len(p)), 0))
+		rc, _, _, err := bs.Get(ctx, name.String(), blobstore.NewBlobRange(-int64(len(p)), 0))
 		if err != nil {
 			return err
 		}
