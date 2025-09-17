@@ -160,7 +160,11 @@ func (ltf *LogTableFunction) getOptionsString() string {
 
 // Schema implements the sql.Node interface.
 func (ltf *LogTableFunction) Schema() sql.Schema {
-	logSchema := dtables.GetLogTableSchema(ltf.ctx, "", "")
+	schType := dtables.LogSchema
+	if showCommitterOnly, _ := dsess.GetBooleanSystemVar(ltf.ctx, dsess.DoltLogCommitterOnly); showCommitterOnly {
+		schType = dtables.LogSchemaCommitterOnly
+	}
+	logSchema := dtables.GetLogTableSchemaWithType(&schType)
 
 	if ltf.showParents {
 		logSchema = append(logSchema, &sql.Column{Name: "parents", Type: types.Text})
