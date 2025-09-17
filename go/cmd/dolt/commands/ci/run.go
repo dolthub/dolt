@@ -182,39 +182,40 @@ func indentLines(s, prefix string) string {
 }
 
 // formatSavedQueryDetails returns indented detail lines for SavedQuery steps to match DoltTest formatting.
-// It always prints the query line if available, and on error it prints additional error/info lines excluding
-// any redundant "Ran query:" prefix since the query line is already shown.
+// On failure, the query string is shown separately, so error messages should not redundantly include
+// a "Ran query:" prefix.
 func formatSavedQueryDetails(savedQueryName, query string, err error) string {
 	// First line always shows the saved query name and status
 	status := "PASS"
 	if err != nil {
 		status = "FAIL"
 	}
-	statusColored := status
-	if status == "PASS" {
-		statusColored = color.GreenString(status)
-	} else {
-		statusColored = color.RedString(status)
-	}
+    var statusColored string
+    switch status {
+    case "PASS":
+        statusColored = color.GreenString(status)
+    case "FAIL":
+        statusColored = color.RedString(status)
+    default:
+        // Leave unknown statuses uncolored; easy to extend later
+        statusColored = status
+    }
 
 	lines := []string{fmt.Sprintf("  - %s - %s", savedQueryName, statusColored)}
 
-	// Only include query and error details on failure
+    // Only include query and error details on failure
 	if err != nil {
 		if strings.TrimSpace(query) != "" {
 			lines = append(lines, fmt.Sprintf("    - query: %s", query))
 		}
-		// Summarize error by removing any redundant 'Ran query:' line
-		var parts []string
-		for _, l := range strings.Split(err.Error(), "\n") {
-			if strings.HasPrefix(l, "Ran query: ") {
-				continue
-			}
-			trimmed := strings.TrimSpace(l)
-			if trimmed != "" {
-				parts = append(parts, trimmed)
-			}
-		}
+        // Summarize error lines
+        var parts []string
+        for _, l := range strings.Split(err.Error(), "\n") {
+            trimmed := strings.TrimSpace(l)
+            if trimmed != "" {
+                parts = append(parts, trimmed)
+            }
+        }
 		if len(parts) > 0 {
 			lines = append(lines, fmt.Sprintf("    - error: %s", color.RedString(strings.Join(parts, "; "))))
 		}
@@ -227,14 +228,10 @@ func runCIQuery(queryist cli.Queryist, sqlCtx *sql.Context, step *dolt_ci.SavedQ
 		return nil, fmt.Errorf("Could not find saved query: %s", step.SavedQueryName.Value)
 	}
 
-	rows, err := cli.GetRowsForSql(queryist, sqlCtx, query)
-	if err != nil {
-		statementErr := fmt.Sprintf("Ran query: %s", query)
-		queryErr := fmt.Sprintf("Query error: %s", err.Error())
-		err = errors.New(strings.Join([]string{statementErr, queryErr}, "\n"))
-
-		return nil, err
-	}
+    rows, err := cli.GetRowsForSql(queryist, sqlCtx, query)
+    if err != nil {
+        return nil, fmt.Errorf("Query error: %s", err.Error())
+    }
 
 	return rows, nil
 }
@@ -266,10 +263,8 @@ func assertQueries(rows []sql.Row, expectedRowsAndComparison string, expectedCol
 		}
 	}
 
-	if len(errs) > 0 {
-		statementErr := fmt.Sprintf("Ran query: %s", query)
-		errs := append([]string{statementErr}, errs...)
-		return errors.New(strings.Join(errs, "\n"))
-	}
+    if len(errs) > 0 {
+        return errors.New(strings.Join(errs, "\n"))
+    }
 	return nil
 }
