@@ -15,11 +15,11 @@
 package ci
 
 import (
-    "fmt"
-    "strings"
+	"fmt"
+	"strings"
 
-    "github.com/dolthub/dolt/go/libraries/doltcore/env/actions/dolt_ci"
-    dtablefunctions "github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtablefunctions"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions/dolt_ci"
+	dtablefunctions "github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtablefunctions"
 )
 
 // previewDoltTestStatements returns the SQL queries that would be executed by dolt_test_run
@@ -73,12 +73,12 @@ func buildPreviewSelectors(dt *dolt_ci.DoltTestStep) []string {
 // (e.g., `dolt ci view`) and are not executed. We intentionally return the final
 // interpolated strings to make the preview easy to read.
 func makePreviewStatements(selectors []string) []string {
-    fn := (&dtablefunctions.TestsRunTableFunction{}).Name()
-    stmts := make([]string, 0, len(selectors))
-    for _, s := range selectors {
-        // Escape single quotes for display; this is a preview string, not executed SQL.
-        esc := strings.ReplaceAll(s, "'", "''")
-        stmts = append(stmts, fmt.Sprintf("SELECT * FROM %s('%s')", fn, esc))
-    }
-    return stmts
+	fn := (&dtablefunctions.TestsRunTableFunction{}).Name()
+	stmts := make([]string, 0, len(selectors))
+	for _, s := range selectors {
+		// Escape single quotes for display; this is a preview string, not executed SQL.
+		esc := strings.ReplaceAll(s, "'", "''")
+		stmts = append(stmts, fmt.Sprintf("SELECT * FROM %s('%s')", fn, esc))
+	}
+	return stmts
 }
