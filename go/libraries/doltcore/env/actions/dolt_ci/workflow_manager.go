@@ -15,21 +15,21 @@
 package dolt_ci
 
 import (
-    "errors"
-    "fmt"
-    "sort"
-    "strconv"
-    "strings"
-    "time"
+	"errors"
+	"fmt"
+	"sort"
+	"strconv"
+	"strings"
+	"time"
 
-    "github.com/dolthub/go-mysql-server/sql"
-    "github.com/google/uuid"
-    "github.com/gocraft/dbr/v2"
-    "github.com/gocraft/dbr/v2/dialect"
-    "gopkg.in/yaml.v3"
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/gocraft/dbr/v2"
+	"github.com/gocraft/dbr/v2/dialect"
+	"github.com/google/uuid"
+	"gopkg.in/yaml.v3"
 
-    "github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-    "github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
 
 const (
@@ -54,11 +54,11 @@ type WorkflowManager interface {
 // and panics if interpolation fails. These query templates are constant for valid inputs,
 // so an interpolation error indicates a developer bug.
 func mustInterpolate(tmpl string, args ...interface{}) string {
-    q, err := dbr.InterpolateForDialect(tmpl, args, dialect.MySQL)
-    if err != nil {
-        panic(fmt.Errorf("interpolation failed for query %q with args %v: %w", tmpl, args, err))
-    }
-    return q
+	q, err := dbr.InterpolateForDialect(tmpl, args, dialect.MySQL)
+	if err != nil {
+		panic(fmt.Errorf("interpolation failed for query %q with args %v: %w", tmpl, args, err))
+	}
+	return q
 }
 
 type doltWorkflowManager struct {
@@ -80,233 +80,233 @@ func NewWorkflowManager(commiterName, commiterEmail string, queryFunc queryFunc)
 // selects
 
 func (d *doltWorkflowManager) selectAllFromWorkflowsTableQuery() string {
-    return fmt.Sprintf("select * from %s;", doltdb.WorkflowsTableName)
+	return fmt.Sprintf("select * from %s;", doltdb.WorkflowsTableName)
 }
 
 func (d *doltWorkflowManager) selectOneFromWorkflowsTableQuery(workflowName string) string {
-    tmpl := fmt.Sprintf("select * from %s where name = ? limit 1;", doltdb.WorkflowsTableName)
-    return mustInterpolate(tmpl, workflowName)
+	tmpl := fmt.Sprintf("select * from %s where name = ? limit 1;", doltdb.WorkflowsTableName)
+	return mustInterpolate(tmpl, workflowName)
 }
 
 func (d *doltWorkflowManager) selectAllFromWorkflowEventsTableByWorkflowNameQuery(workflowName string) string {
-    tmpl := fmt.Sprintf("select * from %s where `%s` = ?;", doltdb.WorkflowEventsTableName, doltdb.WorkflowEventsWorkflowNameFkColName)
-    return mustInterpolate(tmpl, workflowName)
+	tmpl := fmt.Sprintf("select * from %s where `%s` = ?;", doltdb.WorkflowEventsTableName, doltdb.WorkflowEventsWorkflowNameFkColName)
+	return mustInterpolate(tmpl, workflowName)
 }
 
 func (d *doltWorkflowManager) selectAllFromWorkflowEventsTableByWorkflowNameWhereEventTypeIsPullRequestQuery(workflowName string) string {
-    tmpl := fmt.Sprintf("select * from %s where `%s` = ? and `%s` = %d;", doltdb.WorkflowEventsTableName, doltdb.WorkflowEventsWorkflowNameFkColName, doltdb.WorkflowEventsEventTypeColName, WorkflowEventTypePullRequest)
-    return mustInterpolate(tmpl, workflowName)
+	tmpl := fmt.Sprintf("select * from %s where `%s` = ? and `%s` = %d;", doltdb.WorkflowEventsTableName, doltdb.WorkflowEventsWorkflowNameFkColName, doltdb.WorkflowEventsEventTypeColName, WorkflowEventTypePullRequest)
+	return mustInterpolate(tmpl, workflowName)
 }
 
 func (d *doltWorkflowManager) selectAllFromWorkflowEventsTableByWorkflowNameWhereEventTypeIsPushQuery(workflowName string) string {
-    tmpl := fmt.Sprintf("select * from %s where `%s` = ? and `%s` = %d;", doltdb.WorkflowEventsTableName, doltdb.WorkflowEventsWorkflowNameFkColName, doltdb.WorkflowEventsEventTypeColName, WorkflowEventTypePush)
-    return mustInterpolate(tmpl, workflowName)
+	tmpl := fmt.Sprintf("select * from %s where `%s` = ? and `%s` = %d;", doltdb.WorkflowEventsTableName, doltdb.WorkflowEventsWorkflowNameFkColName, doltdb.WorkflowEventsEventTypeColName, WorkflowEventTypePush)
+	return mustInterpolate(tmpl, workflowName)
 }
 
 func (d *doltWorkflowManager) selectAllFromWorkflowJobsTableByWorkflowNameQuery(workflowName string) string {
-    tmpl := fmt.Sprintf("select * from %s where `%s` = ?;", doltdb.WorkflowJobsTableName, doltdb.WorkflowJobsWorkflowNameFkColName)
-    return mustInterpolate(tmpl, workflowName)
+	tmpl := fmt.Sprintf("select * from %s where `%s` = ?;", doltdb.WorkflowJobsTableName, doltdb.WorkflowJobsWorkflowNameFkColName)
+	return mustInterpolate(tmpl, workflowName)
 }
 
 func (d *doltWorkflowManager) selectAllFromSavedQueryStepExpectedRowColumnResultsTableBySavedQueryStepIdQuery(savedQueryStepID string) string {
-    tmpl := fmt.Sprintf("select * from %s where `%s` = ? limit 1;", doltdb.WorkflowSavedQueryStepExpectedRowColumnResultsTableName, doltdb.WorkflowSavedQueryStepExpectedRowColumnResultsSavedQueryStepIdFkColName)
-    return mustInterpolate(tmpl, savedQueryStepID)
+	tmpl := fmt.Sprintf("select * from %s where `%s` = ? limit 1;", doltdb.WorkflowSavedQueryStepExpectedRowColumnResultsTableName, doltdb.WorkflowSavedQueryStepExpectedRowColumnResultsSavedQueryStepIdFkColName)
+	return mustInterpolate(tmpl, savedQueryStepID)
 }
 
 func (d *doltWorkflowManager) selectAllFromSavedQueryStepsTableByWorkflowStepIdQuery(stepID string) string {
-    tmpl := fmt.Sprintf("select * from %s where `%s` = ? limit 1;", doltdb.WorkflowSavedQueryStepsTableName, doltdb.WorkflowSavedQueryStepsWorkflowStepIdFkColName)
-    return mustInterpolate(tmpl, stepID)
+	tmpl := fmt.Sprintf("select * from %s where `%s` = ? limit 1;", doltdb.WorkflowSavedQueryStepsTableName, doltdb.WorkflowSavedQueryStepsWorkflowStepIdFkColName)
+	return mustInterpolate(tmpl, stepID)
 }
 
 func (d *doltWorkflowManager) selectAllFromWorkflowStepsTableByWorkflowJobIdQuery(jobID string) string {
-    tmpl := fmt.Sprintf("select * from %s where `%s` = ?", doltdb.WorkflowStepsTableName, doltdb.WorkflowStepsWorkflowJobIdFkColName)
-    return mustInterpolate(tmpl, jobID)
+	tmpl := fmt.Sprintf("select * from %s where `%s` = ?", doltdb.WorkflowStepsTableName, doltdb.WorkflowStepsWorkflowJobIdFkColName)
+	return mustInterpolate(tmpl, jobID)
 }
 
 func (d *doltWorkflowManager) selectAllFromWorkflowEventTriggersTableByWorkflowEventIdQuery(eventID string) string {
-    tmpl := fmt.Sprintf("select * from %s where `%s` = ?;", doltdb.WorkflowEventTriggersTableName, doltdb.WorkflowEventTriggersWorkflowEventsIdFkColName)
-    return mustInterpolate(tmpl, eventID)
+	tmpl := fmt.Sprintf("select * from %s where `%s` = ?;", doltdb.WorkflowEventTriggersTableName, doltdb.WorkflowEventTriggersWorkflowEventsIdFkColName)
+	return mustInterpolate(tmpl, eventID)
 }
 
 func (d *doltWorkflowManager) selectAllFromWorkflowEventTriggersTableByWorkflowEventIdWhereEventTriggerTypeIsBranchesQuery(eventID string) string {
-    tmpl := fmt.Sprintf("select * from %s where `%s` = ? and `%s` = %d;", doltdb.WorkflowEventTriggersTableName, doltdb.WorkflowEventTriggersWorkflowEventsIdFkColName, doltdb.WorkflowEventTriggersEventTriggerTypeColName, WorkflowEventTriggerTypeBranches)
-    return mustInterpolate(tmpl, eventID)
+	tmpl := fmt.Sprintf("select * from %s where `%s` = ? and `%s` = %d;", doltdb.WorkflowEventTriggersTableName, doltdb.WorkflowEventTriggersWorkflowEventsIdFkColName, doltdb.WorkflowEventTriggersEventTriggerTypeColName, WorkflowEventTriggerTypeBranches)
+	return mustInterpolate(tmpl, eventID)
 }
 
 func (d *doltWorkflowManager) selectAllFromWorkflowEventTriggersTableByWorkflowEventIdWhereEventTriggerTypeIsActivityQuery(eventID string) string {
-    tmpl := fmt.Sprintf("select * from %s where `%s` = ? and `%s` in (%d, %d, %d, %d);", doltdb.WorkflowEventTriggersTableName, doltdb.WorkflowEventTriggersWorkflowEventsIdFkColName, doltdb.WorkflowEventTriggersEventTriggerTypeColName, WorkflowEventTriggerTypeActivityOpened, WorkflowEventTriggerTypeActivityClosed, WorkflowEventTriggerTypeActivityReopened, WorkflowEventTriggerTypeActivitySynchronized)
-    return mustInterpolate(tmpl, eventID)
+	tmpl := fmt.Sprintf("select * from %s where `%s` = ? and `%s` in (%d, %d, %d, %d);", doltdb.WorkflowEventTriggersTableName, doltdb.WorkflowEventTriggersWorkflowEventsIdFkColName, doltdb.WorkflowEventTriggersEventTriggerTypeColName, WorkflowEventTriggerTypeActivityOpened, WorkflowEventTriggerTypeActivityClosed, WorkflowEventTriggerTypeActivityReopened, WorkflowEventTriggerTypeActivitySynchronized)
+	return mustInterpolate(tmpl, eventID)
 }
 
 func (d *doltWorkflowManager) selectAllFromWorkflowEventTriggerBranchesTableByEventTriggerIdQuery(triggerID string) string {
-    tmpl := fmt.Sprintf("select * from %s where `%s` = ?;", doltdb.WorkflowEventTriggerBranchesTableName, doltdb.WorkflowEventTriggerBranchesWorkflowEventTriggersIdFkColName)
-    return mustInterpolate(tmpl, triggerID)
+	tmpl := fmt.Sprintf("select * from %s where `%s` = ?;", doltdb.WorkflowEventTriggerBranchesTableName, doltdb.WorkflowEventTriggerBranchesWorkflowEventTriggersIdFkColName)
+	return mustInterpolate(tmpl, triggerID)
 }
 
 // inserts
 
 func (d *doltWorkflowManager) insertIntoWorkflowsTableQuery(workflowName string) (string, string) {
-    tmpl := fmt.Sprintf("insert into %s (`%s`, `%s`, `%s`) values (?, now(), now());", doltdb.WorkflowsTableName, doltdb.WorkflowsNameColName, doltdb.WorkflowsCreatedAtColName, doltdb.WorkflowsUpdatedAtColName)
-    return workflowName, mustInterpolate(tmpl, workflowName)
+	tmpl := fmt.Sprintf("insert into %s (`%s`, `%s`, `%s`) values (?, now(), now());", doltdb.WorkflowsTableName, doltdb.WorkflowsNameColName, doltdb.WorkflowsCreatedAtColName, doltdb.WorkflowsUpdatedAtColName)
+	return workflowName, mustInterpolate(tmpl, workflowName)
 }
 
 func (d *doltWorkflowManager) insertIntoWorkflowEventsTableQuery(workflowName string, eventType int) (string, string) {
-    eventID := uuid.NewString()
-    tmpl := fmt.Sprintf("insert into %s (`%s`, `%s`, `%s`) values (?, ?, ?);", doltdb.WorkflowEventsTableName, doltdb.WorkflowEventsIdPkColName, doltdb.WorkflowEventsWorkflowNameFkColName, doltdb.WorkflowEventsEventTypeColName)
-    return eventID, mustInterpolate(tmpl, eventID, workflowName, eventType)
+	eventID := uuid.NewString()
+	tmpl := fmt.Sprintf("insert into %s (`%s`, `%s`, `%s`) values (?, ?, ?);", doltdb.WorkflowEventsTableName, doltdb.WorkflowEventsIdPkColName, doltdb.WorkflowEventsWorkflowNameFkColName, doltdb.WorkflowEventsEventTypeColName)
+	return eventID, mustInterpolate(tmpl, eventID, workflowName, eventType)
 }
 
 func (d *doltWorkflowManager) insertIntoWorkflowEventTriggersTableQuery(eventID string, triggerType int) (string, string) {
-    triggerID := uuid.NewString()
-    tmpl := fmt.Sprintf("insert into %s (`%s`, `%s`, `%s`) values (?, ?, ?);", doltdb.WorkflowEventTriggersTableName, doltdb.WorkflowEventTriggersIdPkColName, doltdb.WorkflowEventTriggersWorkflowEventsIdFkColName, doltdb.WorkflowEventTriggersEventTriggerTypeColName)
-    return triggerID, mustInterpolate(tmpl, triggerID, eventID, triggerType)
+	triggerID := uuid.NewString()
+	tmpl := fmt.Sprintf("insert into %s (`%s`, `%s`, `%s`) values (?, ?, ?);", doltdb.WorkflowEventTriggersTableName, doltdb.WorkflowEventTriggersIdPkColName, doltdb.WorkflowEventTriggersWorkflowEventsIdFkColName, doltdb.WorkflowEventTriggersEventTriggerTypeColName)
+	return triggerID, mustInterpolate(tmpl, triggerID, eventID, triggerType)
 }
 
 func (d *doltWorkflowManager) insertIntoWorkflowEventTriggerBranchesTableQuery(triggerID, branch string) (string, string) {
-    branchID := uuid.NewString()
-    tmpl := fmt.Sprintf("insert into %s (`%s`, `%s`, `%s`) values (?, ?, ?);", doltdb.WorkflowEventTriggerBranchesTableName, doltdb.WorkflowEventTriggerBranchesIdPkColName, doltdb.WorkflowEventTriggerBranchesWorkflowEventTriggersIdFkColName, doltdb.WorkflowEventTriggerBranchesBranchColName)
-    return branchID, mustInterpolate(tmpl, branchID, triggerID, branch)
+	branchID := uuid.NewString()
+	tmpl := fmt.Sprintf("insert into %s (`%s`, `%s`, `%s`) values (?, ?, ?);", doltdb.WorkflowEventTriggerBranchesTableName, doltdb.WorkflowEventTriggerBranchesIdPkColName, doltdb.WorkflowEventTriggerBranchesWorkflowEventTriggersIdFkColName, doltdb.WorkflowEventTriggerBranchesBranchColName)
+	return branchID, mustInterpolate(tmpl, branchID, triggerID, branch)
 }
 
 func (d *doltWorkflowManager) insertIntoWorkflowJobsTableQuery(jobName, workflowName string) (string, string) {
-    jobID := uuid.NewString()
-    tmpl := fmt.Sprintf("insert into %s (`%s`, `%s`, `%s`, `%s`, `%s`) values (?, ?, ?, now(), now());", doltdb.WorkflowJobsTableName, doltdb.WorkflowJobsIdPkColName, doltdb.WorkflowJobsNameColName, doltdb.WorkflowJobsWorkflowNameFkColName, doltdb.WorkflowJobsCreatedAtColName, doltdb.WorkflowJobsUpdatedAtColName)
-    return jobID, mustInterpolate(tmpl, jobID, jobName, workflowName)
+	jobID := uuid.NewString()
+	tmpl := fmt.Sprintf("insert into %s (`%s`, `%s`, `%s`, `%s`, `%s`) values (?, ?, ?, now(), now());", doltdb.WorkflowJobsTableName, doltdb.WorkflowJobsIdPkColName, doltdb.WorkflowJobsNameColName, doltdb.WorkflowJobsWorkflowNameFkColName, doltdb.WorkflowJobsCreatedAtColName, doltdb.WorkflowJobsUpdatedAtColName)
+	return jobID, mustInterpolate(tmpl, jobID, jobName, workflowName)
 }
 
 func (d *doltWorkflowManager) insertIntoWorkflowStepsTableQuery(stepName, jobID string, stepOrder, stepType int) (string, string) {
-    stepID := uuid.NewString()
-    tmpl := fmt.Sprintf("insert into %s (`%s`, `%s`, `%s`, `%s`, `%s`, `%s`, `%s`) values (?, ?, ?, ?, ?, now(), now());", doltdb.WorkflowStepsTableName, doltdb.WorkflowStepsIdPkColName, doltdb.WorkflowStepsNameColName, doltdb.WorkflowStepsWorkflowJobIdFkColName, doltdb.WorkflowStepsStepOrderColName, doltdb.WorkflowStepsStepTypeColName, doltdb.WorkflowStepsCreatedAtColName, doltdb.WorkflowStepsUpdatedAtColName)
-    return stepID, mustInterpolate(tmpl, stepID, stepName, jobID, stepOrder, stepType)
+	stepID := uuid.NewString()
+	tmpl := fmt.Sprintf("insert into %s (`%s`, `%s`, `%s`, `%s`, `%s`, `%s`, `%s`) values (?, ?, ?, ?, ?, now(), now());", doltdb.WorkflowStepsTableName, doltdb.WorkflowStepsIdPkColName, doltdb.WorkflowStepsNameColName, doltdb.WorkflowStepsWorkflowJobIdFkColName, doltdb.WorkflowStepsStepOrderColName, doltdb.WorkflowStepsStepTypeColName, doltdb.WorkflowStepsCreatedAtColName, doltdb.WorkflowStepsUpdatedAtColName)
+	return stepID, mustInterpolate(tmpl, stepID, stepName, jobID, stepOrder, stepType)
 }
 
 func (d *doltWorkflowManager) insertIntoWorkflowDoltTestStepsTableQuery(stepID string) (string, string) {
-    dtID := uuid.NewString()
-    tmpl := fmt.Sprintf("insert into %s (`%s`, `%s`) values (?, ?);", doltdb.WorkflowDoltTestStepsTableName, doltdb.WorkflowDoltTestStepsIdPkColName, doltdb.WorkflowDoltTestStepsWorkflowStepIdFkColName)
-    return dtID, mustInterpolate(tmpl, dtID, stepID)
+	dtID := uuid.NewString()
+	tmpl := fmt.Sprintf("insert into %s (`%s`, `%s`) values (?, ?);", doltdb.WorkflowDoltTestStepsTableName, doltdb.WorkflowDoltTestStepsIdPkColName, doltdb.WorkflowDoltTestStepsWorkflowStepIdFkColName)
+	return dtID, mustInterpolate(tmpl, dtID, stepID)
 }
 
 func (d *doltWorkflowManager) insertIntoWorkflowDoltTestStepGroupsTableQuery(doltTestStepID, groupName string) (string, string) {
-    groupID := uuid.NewString()
-    tmpl := fmt.Sprintf("insert into %s (`%s`, `%s`, `%s`) values (?, ?, ?);", doltdb.WorkflowDoltTestStepGroupsTableName, doltdb.WorkflowDoltTestStepGroupsIdPkColName, doltdb.WorkflowDoltTestStepGroupsGroupNameColName, doltdb.WorkflowDoltTestStepGroupsWorkflowDoltTestStepIdFkColName)
-    return groupID, mustInterpolate(tmpl, groupID, groupName, doltTestStepID)
+	groupID := uuid.NewString()
+	tmpl := fmt.Sprintf("insert into %s (`%s`, `%s`, `%s`) values (?, ?, ?);", doltdb.WorkflowDoltTestStepGroupsTableName, doltdb.WorkflowDoltTestStepGroupsIdPkColName, doltdb.WorkflowDoltTestStepGroupsGroupNameColName, doltdb.WorkflowDoltTestStepGroupsWorkflowDoltTestStepIdFkColName)
+	return groupID, mustInterpolate(tmpl, groupID, groupName, doltTestStepID)
 }
 
 func (d *doltWorkflowManager) insertIntoWorkflowDoltTestStepTestsTableQuery(doltTestStepID, testName string) (string, string) {
-    testID := uuid.NewString()
-    tmpl := fmt.Sprintf("insert into %s (`%s`, `%s`, `%s`) values (?, ?, ?);", doltdb.WorkflowDoltTestStepTestsTableName, doltdb.WorkflowDoltTestStepTestsIdPkColName, doltdb.WorkflowDoltTestStepTestsTestNameColName, doltdb.WorkflowDoltTestStepTestsWorkflowDoltTestStepIdFkColName)
-    return testID, mustInterpolate(tmpl, testID, testName, doltTestStepID)
+	testID := uuid.NewString()
+	tmpl := fmt.Sprintf("insert into %s (`%s`, `%s`, `%s`) values (?, ?, ?);", doltdb.WorkflowDoltTestStepTestsTableName, doltdb.WorkflowDoltTestStepTestsIdPkColName, doltdb.WorkflowDoltTestStepTestsTestNameColName, doltdb.WorkflowDoltTestStepTestsWorkflowDoltTestStepIdFkColName)
+	return testID, mustInterpolate(tmpl, testID, testName, doltTestStepID)
 }
 
 func (d *doltWorkflowManager) insertIntoWorkflowSavedQueryStepsTableQuery(savedQueryName, stepID string, expectedResultsType int) (string, string) {
-    savedQueryStepID := uuid.NewString()
-    tmpl := fmt.Sprintf("insert into %s (`%s`, `%s`, `%s`, `%s`) values (?, ?, ?, ?);", doltdb.WorkflowSavedQueryStepsTableName, doltdb.WorkflowSavedQueryStepsIdPkColName, doltdb.WorkflowSavedQueryStepsWorkflowStepIdFkColName, doltdb.WorkflowSavedQueryStepsSavedQueryNameColName, doltdb.WorkflowSavedQueryStepsExpectedResultsTypeColName)
-    return savedQueryStepID, mustInterpolate(tmpl, savedQueryStepID, stepID, savedQueryName, expectedResultsType)
+	savedQueryStepID := uuid.NewString()
+	tmpl := fmt.Sprintf("insert into %s (`%s`, `%s`, `%s`, `%s`) values (?, ?, ?, ?);", doltdb.WorkflowSavedQueryStepsTableName, doltdb.WorkflowSavedQueryStepsIdPkColName, doltdb.WorkflowSavedQueryStepsWorkflowStepIdFkColName, doltdb.WorkflowSavedQueryStepsSavedQueryNameColName, doltdb.WorkflowSavedQueryStepsExpectedResultsTypeColName)
+	return savedQueryStepID, mustInterpolate(tmpl, savedQueryStepID, stepID, savedQueryName, expectedResultsType)
 }
 
 func (d *doltWorkflowManager) insertIntoWorkflowSavedQueryStepExpectedRowColumnResultsTableQuery(savedQueryStepID string, expectedColumnComparisonType, expectedRowComparisonType int, expectedColumnCount, expectedRowCount int64) (string, string) {
-    expectedResultID := uuid.NewString()
-    tmpl := fmt.Sprintf("insert into %s (`%s`, `%s`, `%s`,`%s`, `%s`, `%s`, `%s`, `%s`) values (?, ?, ?, ?, ?, ?, now(), now());", doltdb.WorkflowSavedQueryStepExpectedRowColumnResultsTableName, doltdb.WorkflowSavedQueryStepExpectedRowColumnResultsIdPkColName, doltdb.WorkflowSavedQueryStepExpectedRowColumnResultsSavedQueryStepIdFkColName, doltdb.WorkflowSavedQueryStepExpectedRowColumnResultsExpectedColumnCountComparisonTypeColName, doltdb.WorkflowSavedQueryStepExpectedRowColumnResultsExpectedRowCountComparisonTypeColName, doltdb.WorkflowSavedQueryStepExpectedRowColumnResultsExpectedColumnCountColName, doltdb.WorkflowSavedQueryStepExpectedRowColumnResultsExpectedRowCountColName, doltdb.WorkflowSavedQueryStepExpectedRowColumnResultsCreatedAtColName, doltdb.WorkflowSavedQueryStepExpectedRowColumnResultsUpdatedAtColName)
-    return expectedResultID, mustInterpolate(tmpl, expectedResultID, savedQueryStepID, expectedColumnComparisonType, expectedRowComparisonType, expectedColumnCount, expectedRowCount)
+	expectedResultID := uuid.NewString()
+	tmpl := fmt.Sprintf("insert into %s (`%s`, `%s`, `%s`,`%s`, `%s`, `%s`, `%s`, `%s`) values (?, ?, ?, ?, ?, ?, now(), now());", doltdb.WorkflowSavedQueryStepExpectedRowColumnResultsTableName, doltdb.WorkflowSavedQueryStepExpectedRowColumnResultsIdPkColName, doltdb.WorkflowSavedQueryStepExpectedRowColumnResultsSavedQueryStepIdFkColName, doltdb.WorkflowSavedQueryStepExpectedRowColumnResultsExpectedColumnCountComparisonTypeColName, doltdb.WorkflowSavedQueryStepExpectedRowColumnResultsExpectedRowCountComparisonTypeColName, doltdb.WorkflowSavedQueryStepExpectedRowColumnResultsExpectedColumnCountColName, doltdb.WorkflowSavedQueryStepExpectedRowColumnResultsExpectedRowCountColName, doltdb.WorkflowSavedQueryStepExpectedRowColumnResultsCreatedAtColName, doltdb.WorkflowSavedQueryStepExpectedRowColumnResultsUpdatedAtColName)
+	return expectedResultID, mustInterpolate(tmpl, expectedResultID, savedQueryStepID, expectedColumnComparisonType, expectedRowComparisonType, expectedColumnCount, expectedRowCount)
 }
 
 // updates
 
 func (d *doltWorkflowManager) updateWorkflowJobsTableQuery(jobID, jobName string) string {
-    tmpl := fmt.Sprintf("update %s set `%s` = ?, `%s` = now(), where `%s` = ?;", doltdb.WorkflowJobsTableName, doltdb.WorkflowJobsNameColName, doltdb.WorkflowJobsUpdatedAtColName, doltdb.WorkflowJobsIdPkColName)
-    return mustInterpolate(tmpl, jobName, jobID)
+	tmpl := fmt.Sprintf("update %s set `%s` = ?, `%s` = now(), where `%s` = ?;", doltdb.WorkflowJobsTableName, doltdb.WorkflowJobsNameColName, doltdb.WorkflowJobsUpdatedAtColName, doltdb.WorkflowJobsIdPkColName)
+	return mustInterpolate(tmpl, jobName, jobID)
 }
 
 func (d *doltWorkflowManager) updateWorkflowStepsTableQuery(stepID string, stepOrder int) string {
-    tmpl := fmt.Sprintf("update %s set `%s` = ?, `%s` = now(), where `%s` = ?;", doltdb.WorkflowStepsTableName, doltdb.WorkflowStepsStepOrderColName, doltdb.WorkflowStepsUpdatedAtColName, doltdb.WorkflowStepsIdPkColName)
-    return mustInterpolate(tmpl, stepOrder, stepID)
+	tmpl := fmt.Sprintf("update %s set `%s` = ?, `%s` = now(), where `%s` = ?;", doltdb.WorkflowStepsTableName, doltdb.WorkflowStepsStepOrderColName, doltdb.WorkflowStepsUpdatedAtColName, doltdb.WorkflowStepsIdPkColName)
+	return mustInterpolate(tmpl, stepOrder, stepID)
 }
 
 func (d *doltWorkflowManager) updateWorkflowSavedQueryStepsTableQuery(savedQueryStepID, savedQueryName string, expectedResultsType int) string {
-    tmpl := fmt.Sprintf("update %s set `%s` = ?, `%s` = ? where `%s` = ?;", doltdb.WorkflowSavedQueryStepsTableName, doltdb.WorkflowSavedQueryStepsSavedQueryNameColName, doltdb.WorkflowSavedQueryStepsExpectedResultsTypeColName, doltdb.WorkflowSavedQueryStepsIdPkColName)
-    return mustInterpolate(tmpl, savedQueryName, expectedResultsType, savedQueryStepID)
+	tmpl := fmt.Sprintf("update %s set `%s` = ?, `%s` = ? where `%s` = ?;", doltdb.WorkflowSavedQueryStepsTableName, doltdb.WorkflowSavedQueryStepsSavedQueryNameColName, doltdb.WorkflowSavedQueryStepsExpectedResultsTypeColName, doltdb.WorkflowSavedQueryStepsIdPkColName)
+	return mustInterpolate(tmpl, savedQueryName, expectedResultsType, savedQueryStepID)
 }
 
 func (d *doltWorkflowManager) updateWorkflowSavedQueryStepsExpectedRowColumnResultsTableQuery(expectedResultID string, expectedColumnComparisonType, expectedRowComparisonType int, expectedColumnCount, expectedRowCount int64) string {
-    tmpl := fmt.Sprintf("update %s set `%s` = ?, `%s` = ?, `%s` = ?, `%s` = ?, `%s` = now() where `%s` = ?;", doltdb.WorkflowSavedQueryStepExpectedRowColumnResultsTableName, doltdb.WorkflowSavedQueryStepExpectedRowColumnResultsExpectedColumnCountComparisonTypeColName, doltdb.WorkflowSavedQueryStepExpectedRowColumnResultsExpectedRowCountComparisonTypeColName, doltdb.WorkflowSavedQueryStepExpectedRowColumnResultsExpectedColumnCountColName, doltdb.WorkflowSavedQueryStepExpectedRowColumnResultsExpectedRowCountColName, doltdb.WorkflowSavedQueryStepExpectedRowColumnResultsUpdatedAtColName, doltdb.WorkflowSavedQueryStepExpectedRowColumnResultsIdPkColName)
-    return mustInterpolate(tmpl, expectedColumnComparisonType, expectedRowComparisonType, expectedColumnCount, expectedRowCount, expectedResultID)
+	tmpl := fmt.Sprintf("update %s set `%s` = ?, `%s` = ?, `%s` = ?, `%s` = ?, `%s` = now() where `%s` = ?;", doltdb.WorkflowSavedQueryStepExpectedRowColumnResultsTableName, doltdb.WorkflowSavedQueryStepExpectedRowColumnResultsExpectedColumnCountComparisonTypeColName, doltdb.WorkflowSavedQueryStepExpectedRowColumnResultsExpectedRowCountComparisonTypeColName, doltdb.WorkflowSavedQueryStepExpectedRowColumnResultsExpectedColumnCountColName, doltdb.WorkflowSavedQueryStepExpectedRowColumnResultsExpectedRowCountColName, doltdb.WorkflowSavedQueryStepExpectedRowColumnResultsUpdatedAtColName, doltdb.WorkflowSavedQueryStepExpectedRowColumnResultsIdPkColName)
+	return mustInterpolate(tmpl, expectedColumnComparisonType, expectedRowComparisonType, expectedColumnCount, expectedRowCount, expectedResultID)
 }
 
 // deletes
 
 func (d *doltWorkflowManager) deleteFromWorkflowsTableByWorkflowNameQuery(workflowName string) string {
-    tmpl := fmt.Sprintf("delete from %s where `%s` = ?;", doltdb.WorkflowsTableName, doltdb.WorkflowsNameColName)
-    return mustInterpolate(tmpl, workflowName)
+	tmpl := fmt.Sprintf("delete from %s where `%s` = ?;", doltdb.WorkflowsTableName, doltdb.WorkflowsNameColName)
+	return mustInterpolate(tmpl, workflowName)
 }
 
 func (d *doltWorkflowManager) deleteFromWorkflowEventsTableByWorkflowNameQuery(workflowName string) string {
-    tmpl := fmt.Sprintf("delete from %s where `%s` = ?;", doltdb.WorkflowEventsTableName, doltdb.WorkflowEventsWorkflowNameFkColName)
-    return mustInterpolate(tmpl, workflowName)
+	tmpl := fmt.Sprintf("delete from %s where `%s` = ?;", doltdb.WorkflowEventsTableName, doltdb.WorkflowEventsWorkflowNameFkColName)
+	return mustInterpolate(tmpl, workflowName)
 }
 
 func (d *doltWorkflowManager) deleteFromWorkflowEventsTableByWorkflowEventIdQuery(eventId string) string {
-    tmpl := fmt.Sprintf("delete from %s where `%s` = ?;", doltdb.WorkflowEventsTableName, doltdb.WorkflowEventsIdPkColName)
-    return mustInterpolate(tmpl, eventId)
+	tmpl := fmt.Sprintf("delete from %s where `%s` = ?;", doltdb.WorkflowEventsTableName, doltdb.WorkflowEventsIdPkColName)
+	return mustInterpolate(tmpl, eventId)
 }
 
 func (d *doltWorkflowManager) deleteFromWorkflowEventsTableByWorkflowNameQueryWhereWorkflowEventTypeIsPush(workflowName string) string {
-    tmpl := fmt.Sprintf("delete from %s where `%s` = ? and `%s` = %d;", doltdb.WorkflowEventsTableName, doltdb.WorkflowEventsWorkflowNameFkColName, doltdb.WorkflowEventsEventTypeColName, WorkflowEventTypePush)
-    return mustInterpolate(tmpl, workflowName)
+	tmpl := fmt.Sprintf("delete from %s where `%s` = ? and `%s` = %d;", doltdb.WorkflowEventsTableName, doltdb.WorkflowEventsWorkflowNameFkColName, doltdb.WorkflowEventsEventTypeColName, WorkflowEventTypePush)
+	return mustInterpolate(tmpl, workflowName)
 }
 
 func (d *doltWorkflowManager) deleteFromWorkflowEventsTableByWorkflowNameQueryWhereWorkflowEventTypeIsPullRequest(workflowName string) string {
-    tmpl := fmt.Sprintf("delete from %s where `%s` = ? and `%s` = %d;", doltdb.WorkflowEventsTableName, doltdb.WorkflowEventsWorkflowNameFkColName, doltdb.WorkflowEventsEventTypeColName, WorkflowEventTypePullRequest)
-    return mustInterpolate(tmpl, workflowName)
+	tmpl := fmt.Sprintf("delete from %s where `%s` = ? and `%s` = %d;", doltdb.WorkflowEventsTableName, doltdb.WorkflowEventsWorkflowNameFkColName, doltdb.WorkflowEventsEventTypeColName, WorkflowEventTypePullRequest)
+	return mustInterpolate(tmpl, workflowName)
 }
 
 func (d *doltWorkflowManager) deleteFromWorkflowEventsTableByWorkflowNameQueryWhereWorkflowEventTypeIsWorkflowDispatch(workflowName string) string {
-    tmpl := fmt.Sprintf("delete from %s where `%s` = ? and `%s` = %d;", doltdb.WorkflowEventsTableName, doltdb.WorkflowEventsWorkflowNameFkColName, doltdb.WorkflowEventsEventTypeColName, WorkflowEventTypeWorkflowDispatch)
-    return mustInterpolate(tmpl, workflowName)
+	tmpl := fmt.Sprintf("delete from %s where `%s` = ? and `%s` = %d;", doltdb.WorkflowEventsTableName, doltdb.WorkflowEventsWorkflowNameFkColName, doltdb.WorkflowEventsEventTypeColName, WorkflowEventTypeWorkflowDispatch)
+	return mustInterpolate(tmpl, workflowName)
 }
 
 func (d *doltWorkflowManager) deleteFromWorkflowEventTriggersTableByWorkflowEventTriggerIdQuery(triggerID string) string {
-    tmpl := fmt.Sprintf("delete from %s where `%s` = ?;", doltdb.WorkflowEventTriggersTableName, doltdb.WorkflowEventTriggersIdPkColName)
-    return mustInterpolate(tmpl, triggerID)
+	tmpl := fmt.Sprintf("delete from %s where `%s` = ?;", doltdb.WorkflowEventTriggersTableName, doltdb.WorkflowEventTriggersIdPkColName)
+	return mustInterpolate(tmpl, triggerID)
 }
 
 func (d *doltWorkflowManager) deleteFromWorkflowEventTriggerBranchesTableByEventTriggerBranchIdQuery(branchID string) string {
-    tmpl := fmt.Sprintf("delete from %s where `%s` = ?;", doltdb.WorkflowEventTriggerBranchesTableName, doltdb.WorkflowEventTriggerBranchesIdPkColName)
-    return mustInterpolate(tmpl, branchID)
+	tmpl := fmt.Sprintf("delete from %s where `%s` = ?;", doltdb.WorkflowEventTriggerBranchesTableName, doltdb.WorkflowEventTriggerBranchesIdPkColName)
+	return mustInterpolate(tmpl, branchID)
 }
 
 func (d *doltWorkflowManager) deleteFromWorkflowJobsTableByWorkflowJobIdQuery(jobID string) string {
-    tmpl := fmt.Sprintf("delete from %s where `%s` = ?;", doltdb.WorkflowJobsTableName, doltdb.WorkflowJobsIdPkColName)
-    return mustInterpolate(tmpl, jobID)
+	tmpl := fmt.Sprintf("delete from %s where `%s` = ?;", doltdb.WorkflowJobsTableName, doltdb.WorkflowJobsIdPkColName)
+	return mustInterpolate(tmpl, jobID)
 }
 
 func (d *doltWorkflowManager) deleteFromWorkflowStepsTableByWorkflowStepIdQuery(stepID string) string {
-    tmpl := fmt.Sprintf("delete from %s where `%s` = ?;", doltdb.WorkflowStepsTableName, doltdb.WorkflowStepsIdPkColName)
-    return mustInterpolate(tmpl, stepID)
+	tmpl := fmt.Sprintf("delete from %s where `%s` = ?;", doltdb.WorkflowStepsTableName, doltdb.WorkflowStepsIdPkColName)
+	return mustInterpolate(tmpl, stepID)
 }
 
 func (d *doltWorkflowManager) deleteFromSavedQueryStepsTableByWorkflowStepIdQuery(savedQueryStepID string) string {
-    tmpl := fmt.Sprintf("delete from %s where `%s` = ?;", doltdb.WorkflowSavedQueryStepsTableName, doltdb.WorkflowSavedQueryStepsIdPkColName)
-    return mustInterpolate(tmpl, savedQueryStepID)
+	tmpl := fmt.Sprintf("delete from %s where `%s` = ?;", doltdb.WorkflowSavedQueryStepsTableName, doltdb.WorkflowSavedQueryStepsIdPkColName)
+	return mustInterpolate(tmpl, savedQueryStepID)
 }
 
 func (d *doltWorkflowManager) deleteFromDoltTestStepsTableByWorkflowDoltTestStepIdQuery(doltTestStepID string) string {
-    tmpl := fmt.Sprintf("delete from %s where `%s` = ?;", doltdb.WorkflowDoltTestStepsTableName, doltdb.WorkflowDoltTestStepsIdPkColName)
-    return mustInterpolate(tmpl, doltTestStepID)
+	tmpl := fmt.Sprintf("delete from %s where `%s` = ?;", doltdb.WorkflowDoltTestStepsTableName, doltdb.WorkflowDoltTestStepsIdPkColName)
+	return mustInterpolate(tmpl, doltTestStepID)
 }
 
 func (d *doltWorkflowManager) deleteFromDoltTestStepGroupsTableByWorkflowDoltTestStepIdQuery(doltTestStepID string) string {
-    tmpl := fmt.Sprintf("delete from %s where `%s` = ?;", doltdb.WorkflowDoltTestStepGroupsTableName, doltdb.WorkflowDoltTestStepGroupsWorkflowDoltTestStepIdFkColName)
-    return mustInterpolate(tmpl, doltTestStepID)
+	tmpl := fmt.Sprintf("delete from %s where `%s` = ?;", doltdb.WorkflowDoltTestStepGroupsTableName, doltdb.WorkflowDoltTestStepGroupsWorkflowDoltTestStepIdFkColName)
+	return mustInterpolate(tmpl, doltTestStepID)
 }
 
 func (d *doltWorkflowManager) deleteFromDoltTestStepTestsTableByWorkflowDoltTestStepIdQuery(doltTestStepID string) string {
-    tmpl := fmt.Sprintf("delete from %s where `%s` = ?;", doltdb.WorkflowDoltTestStepTestsTableName, doltdb.WorkflowDoltTestStepTestsWorkflowDoltTestStepIdFkColName)
-    return mustInterpolate(tmpl, doltTestStepID)
+	tmpl := fmt.Sprintf("delete from %s where `%s` = ?;", doltdb.WorkflowDoltTestStepTestsTableName, doltdb.WorkflowDoltTestStepTestsWorkflowDoltTestStepIdFkColName)
+	return mustInterpolate(tmpl, doltTestStepID)
 }
 
 func (d *doltWorkflowManager) deleteFromSavedQueryStepExpectedRowColumnResultsTableBySavedQueryStepIdQuery(savedQueryStepID string) string {
-    tmpl := fmt.Sprintf("delete from %s where `%s` = ?;", doltdb.WorkflowSavedQueryStepExpectedRowColumnResultsTableName, doltdb.WorkflowSavedQueryStepExpectedRowColumnResultsSavedQueryStepIdFkColName)
-    return mustInterpolate(tmpl, savedQueryStepID)
+	tmpl := fmt.Sprintf("delete from %s where `%s` = ?;", doltdb.WorkflowSavedQueryStepExpectedRowColumnResultsTableName, doltdb.WorkflowSavedQueryStepExpectedRowColumnResultsSavedQueryStepIdFkColName)
+	return mustInterpolate(tmpl, savedQueryStepID)
 }
 
 func (d *doltWorkflowManager) newWorkflow(cvs columnValues) (*Workflow, error) {
