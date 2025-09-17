@@ -13,7 +13,7 @@ require (
 	github.com/dolthub/fslock v0.0.3
 	github.com/dolthub/ishell v0.0.0-20240701202509-2b217167d718
 	github.com/dolthub/sqllogictest/go v0.0.0-20201107003712-816f3ae12d81
-	github.com/dolthub/vitess v0.0.0-20250902225707-0159e964d73d
+	github.com/dolthub/vitess v0.0.0-20250915221346-753c44800850
 	github.com/dustin/go-humanize v1.0.1
 	github.com/fatih/color v1.13.0
 	github.com/flynn-archive/go-shlex v0.0.0-20150515145356-3f9db97f8568
@@ -61,7 +61,7 @@ require (
 	github.com/dolthub/dolt-mcp v0.2.1-0.20250827202412-9d0f6e658fba
 	github.com/dolthub/eventsapi_schema v0.0.0-20250725194025-a087efa1ee55
 	github.com/dolthub/flatbuffers/v23 v23.3.3-dh.2
-	github.com/dolthub/go-mysql-server v0.20.1-0.20250912224150-1b9f80d3de10
+	github.com/dolthub/go-mysql-server v0.20.1-0.20250916233117-f32003dd5145
 	github.com/dolthub/gozstd v0.0.0-20240423170813-23a2903bca63
 	github.com/edsrzf/mmap-go v1.2.0
 	github.com/esote/minmaxheap v1.0.0
@@ -134,7 +134,7 @@ require (
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cncf/xds/go v0.0.0-20250501225837-2ac532fd4443 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
-	github.com/dolthub/go-icu-regex v0.0.0-20250820171420-f2b78f56ce9f // indirect
+	github.com/dolthub/go-icu-regex v0.0.0-20250916051405-78a38d478790 // indirect
 	github.com/dolthub/jsonpath v0.0.2-0.20240227200619-19675ab05c71 // indirect
 	github.com/envoyproxy/go-control-plane/envoy v1.32.4 // indirect
 	github.com/envoyproxy/protoc-gen-validate v1.2.1 // indirect
