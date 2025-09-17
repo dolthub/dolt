@@ -143,7 +143,7 @@ func (bsp *blobstorePersister) ConjoinAll(ctx context.Context, sources chunkSour
 		return emptyChunkSource{}, nil, err
 	}
 
-	cs, err := newBSChunkSource(ctx, bsp.bs, plan.name, plan.chunkCount, bsp.q, stats)
+	cs, err := newBSTableChunkSource(ctx, bsp.bs, plan.name, plan.chunkCount, bsp.q, stats)
 	return cs, func() {}, err
 }
 
@@ -185,7 +185,17 @@ func (bsp *blobstorePersister) getRecordsSubObject(ctx context.Context, cs chunk
 
 // Open a table named |name|, containing |chunkCount| chunks.
 func (bsp *blobstorePersister) Open(ctx context.Context, name hash.Hash, chunkCount uint32, stats *Stats) (chunkSource, error) {
-	return newBSChunkSource(ctx, bsp.bs, name, chunkCount, bsp.q, stats)
+	cs, err := newBSTableChunkSource(ctx, bsp.bs, name, chunkCount, bsp.q, stats)
+	if err == nil {
+		return cs, nil
+	}
+
+	if errors.Is(err, ErrTableFileNotFound) || errors.Is(err, blobstore.NotFound{}) {
+		// See if there is a darc file.
+
+	}
+
+	return nil, err
 }
 
 func (bsp *blobstorePersister) Exists(ctx context.Context, name string, chunkCount uint32, stats *Stats) (bool, error) {
@@ -299,7 +309,27 @@ func (bsTRA *bsTableReaderAt) ReadAtWithStats(ctx context.Context, p []byte, off
 	return totalRead, nil
 }
 
-func newBSChunkSource(ctx context.Context, bs blobstore.Blobstore, name hash.Hash, chunkCount uint32, q MemoryQuotaProvider, stats *Stats) (cs chunkSource, err error) {
+func newBSArchiveChunkSource(ctx context.Context, bs blobstore.Blobstore, name hash.Hash, stats *Stats) (cs chunkSource, err error) {
+	rc, sz, _, err := bs.Get(ctx, name.String(), blobstore.NewBlobRange(-int64(archiveFooterSize), 0))
+	if err != nil {
+		return nil, err
+	}
+	defer rc.Close()
+
+	footer := make([]byte, archiveFooterSize)
+	_, err = io.ReadFull(rc, footer)
+	if err != nil {
+		return nil, err
+	}
+
+	aRdr, err := newArchiveReaderFromFooter(ctx, &bsTableReaderAt{key: name.String(), bs: bs}, name, sz, footer, stats)
+	if err != nil {
+		return emptyChunkSource{}, err
+	}
+	return archiveChunkSource{aRdr, ""}, nil
+}
+
+func newBSTableChunkSource(ctx context.Context, bs blobstore.Blobstore, name hash.Hash, chunkCount uint32, q MemoryQuotaProvider, stats *Stats) (cs chunkSource, err error) {
 	index, err := loadTableIndex(ctx, stats, chunkCount, q, func(p []byte) error {
 		rc, _, _, err := bs.Get(ctx, name.String(), blobstore.NewBlobRange(-int64(len(p)), 0))
 		if err != nil {

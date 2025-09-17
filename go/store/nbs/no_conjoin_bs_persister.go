@@ -74,7 +74,7 @@ func (bsp *noConjoinBlobstorePersister) ConjoinAll(ctx context.Context, sources 
 
 // Open a table named |name|, containing |chunkCount| chunks.
 func (bsp *noConjoinBlobstorePersister) Open(ctx context.Context, name hash.Hash, chunkCount uint32, stats *Stats) (chunkSource, error) {
-	return newBSChunkSource(ctx, bsp.bs, name, chunkCount, bsp.q, stats)
+	return newBSTableChunkSource(ctx, bsp.bs, name, chunkCount, bsp.q, stats)
 }
 
 func (bsp *noConjoinBlobstorePersister) Exists(ctx context.Context, name string, chunkCount uint32, stats *Stats) (bool, error) {
