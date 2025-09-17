@@ -140,13 +140,14 @@ func NewCommitMetaWithUserTS(name, email, desc string, userTS time.Time) (*Commi
 
 // NewCommitMetaWithAuthorCommitter creates commit metadata with separate author and committer information
 // If committer info is empty, defaults to author info. Maintains backwards compatibility.
-func NewCommitMetaWithAuthorCommitter(authorName, authorEmail, committerName, committerEmail, desc string, authorTS, committerTS time.Time) (*CommitMeta, error) {
+func NewCommitMetaWithAuthorCommitter(authorName, authorEmail, committerName, committerEmail, desc string, ats, cts time.Time) (*CommitMeta, error) {
 
 	an := strings.TrimSpace(authorName)
 	ae := strings.TrimSpace(authorEmail)
+	d := strings.TrimSpace(desc)
+
 	cn := strings.TrimSpace(committerName)
 	ce := strings.TrimSpace(committerEmail)
-	d := strings.TrimSpace(desc)
 
 	if an == "" {
 		return nil, ErrNameNotConfigured
@@ -160,7 +161,6 @@ func NewCommitMetaWithAuthorCommitter(authorName, authorEmail, committerName, co
 		return nil, ErrEmptyCommitMessage
 	}
 
-	// Default committer to author if not provided
 	if cn == "" {
 		cn = an
 	}
@@ -168,15 +168,8 @@ func NewCommitMetaWithAuthorCommitter(authorName, authorEmail, committerName, co
 		ce = ae
 	}
 
-	// Use current time for committer if not provided
-	var committerDateMillis uint64
-	if committerTS.IsZero() {
-		committerDateMillis = uint64(CommitterDate().UnixMilli())
-	} else {
-		committerDateMillis = uint64(committerTS.UnixMilli())
-	}
-
-	authorDateMillis := authorTS.UnixMilli()
+	committerDateMillis := uint64(CommitterDate().UnixMilli())
+	authorDateMillis := ats.UnixMilli()
 
 	var cnptr, ceptr *string
 	if cn != an {
@@ -267,21 +260,15 @@ func (cm *CommitMeta) toNomsStruct(nbf *types.NomsBinFormat) (types.Struct, erro
 }
 
 // Time returns the time at which the commit was authored
-// NOTE: Unlike Git, this returns the time in the system's local timezone rather than
-// preserving the original timezone when the commit was made. This maintains backwards
-// compatibility but differs from Git's behavior of timezone preservation.
+// This does not preserve timezone information, and returns the time in the system's local timezone
 func (cm *CommitMeta) Time() time.Time {
 	return time.UnixMilli(cm.UserTimestamp)
 }
 
-// CommitterTime returns the committer timestamp or author time if not set
-// NOTE: Like Time(), this returns the time in system local timezone rather than
-// preserving the original timezone when the commit was made.
+// CommitterTime returns the time at which the commit was created
+// This does not preserve timezone information, and returns the time in the system's local timezone
 func (cm *CommitMeta) CommitterTime() time.Time {
-	if cm.Timestamp != 0 {
-		return time.UnixMilli(int64(cm.Timestamp))
-	}
-	return cm.Time()
+	return time.UnixMilli(int64(cm.Timestamp))
 }
 
 // FormatTS takes the internal timestamp and turns it into a human readable string in the time.RubyDate format
