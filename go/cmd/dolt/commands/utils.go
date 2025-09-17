@@ -18,6 +18,7 @@ import (
 	"context"
 	"crypto/sha1"
 	"fmt"
+	"github.com/sirupsen/logrus"
 	"io"
 	"net"
 	"os"
