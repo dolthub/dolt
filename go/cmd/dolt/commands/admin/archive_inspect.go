@@ -154,8 +154,8 @@ func (cmd ArchiveInspectCmd) Exec(ctx context.Context, commandStr string, args [
 		debugInfo := inspector.SearchChunkDebug(objectHash)
 
 		cli.Printf("Hash: %s\n", debugInfo.Hash)
-		cli.Printf("Prefix: %d\n", debugInfo.Prefix)
-		cli.Printf("Suffix: %x\n", debugInfo.Suffix)
+		cli.Printf("Prefix: 0x%x\n", debugInfo.Prefix)
+		cli.Printf("Suffix: 0x%x\n", debugInfo.Suffix)
 		cli.Printf("Index reader type: %s\n", debugInfo.IndexReaderType)
 		cli.Printf("Chunk count: %d\n", debugInfo.ChunkCount)
 		cli.Printf("Possible match index: %d\n", debugInfo.PossibleMatch)
@@ -164,7 +164,7 @@ func (cmd ArchiveInspectCmd) Exec(ctx context.Context, commandStr string, args [
 
 		cli.Printf("Prefix matches found: %d\n", len(debugInfo.Matches))
 		for i, match := range debugInfo.Matches {
-			cli.Printf("  Match %d: index=%d, suffixMatch=%t, suffix=%x\n",
+			cli.Printf("  Match %d: index=%d, suffixMatch=%t, suffix=0x%x\n",
 				i, match.Index, match.SuffixMatch, match.SuffixAtIdx)
 		}
 		cli.Println()
@@ -179,7 +179,6 @@ func (cmd ArchiveInspectCmd) Exec(ctx context.Context, commandStr string, args [
 		if chunkInfo == nil {
 			cli.Printf("Object %s not found in archive\n", objectIdStr)
 		} else {
-			cli.Printf("Object ID: %s\n", objectIdStr)
 			cli.Printf("Compression type: %s\n", chunkInfo.CompressionType)
 			cli.Printf("Dictionary byte span ID: %d\n", chunkInfo.DictionaryID)
 			cli.Printf("Data byte span ID: %d\n", chunkInfo.DataID)
@@ -222,6 +221,7 @@ func (cmd ArchiveInspectCmd) Exec(ctx context.Context, commandStr string, args [
 			return 1
 		}
 
+		cli.Printf("Hash: %s\n", details.Hash)
 		cli.Printf("Prefix: 0x%x\n", details.Prefix)
 		cli.Printf("Suffix: 0x%x\n", details.Suffix)
 		cli.Printf("Dictionary ID: %d\n", details.DictionaryID)

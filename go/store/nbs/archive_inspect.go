@@ -16,6 +16,7 @@ package nbs
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
 
 	"github.com/dolthub/dolt/go/store/hash"
@@ -63,6 +64,7 @@ type IndexReaderDetails struct {
 	ChunkCount      uint32
 	ByteSpanCount   uint32
 	Error           string
+	Hash            string
 	Prefix          uint64
 	Suffix          []byte
 	DictionaryID    uint32
@@ -234,6 +236,13 @@ func (ai *ArchiveInspector) GetIndexReaderDetails(idx uint32) *IndexReaderDetail
 
 	details.Prefix = prefix
 	details.Suffix = suffix[:]
+
+	// Construct the full hash from prefix and suffix
+	hashBytes := make([]byte, hash.ByteLen)
+	binary.BigEndian.PutUint64(hashBytes[:hash.PrefixLen], prefix)
+	copy(hashBytes[hash.PrefixLen:], suffix[:])
+	reconstructedHash := hash.New(hashBytes)
+	details.Hash = reconstructedHash.String()
 
 	// Get chunk references
 	dictID, dataID := ai.reader.indexReader.getChunkRef(idx)
