@@ -183,7 +183,6 @@ func doDoltCommit(ctx *sql.Context, args []string) (string, bool, error) {
 		Email:      email,
 	}
 
-	// Parse committer date if provided
 	var committerDate time.Time
 	if committerDateStr, ok := apr.GetValue(cli.CommitterDateParam); ok {
 		var err error
@@ -193,7 +192,6 @@ func doDoltCommit(ctx *sql.Context, args []string) (string, bool, error) {
 		}
 	}
 
-	// Set committer information if any committer parameter provided
 	if committerName != "" || committerEmail != "" || !committerDate.IsZero() {
 		csp.CommitterName = committerName
 		csp.CommitterEmail = committerEmail

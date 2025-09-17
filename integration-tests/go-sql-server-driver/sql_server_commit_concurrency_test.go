@@ -66,7 +66,7 @@ func testSQLTransactionWithAmendCommit(t *testing.T) {
 		db.Close()
 	})
 
-	_, err = db.ExecContext(ctx, "SET @@GLOBAL.dolt_log_compact_schema = 1;")
+	_, err = db.ExecContext(ctx, "SET @@GLOBAL.dolt_log_committer_only = 1;")
 	require.NoError(t, err)
 
 	_, err = db.ExecContext(ctx, `
@@ -156,7 +156,7 @@ func testSQLRacingAmend(t *testing.T) {
 		db.Close()
 	})
 
-	_, err = db.ExecContext(ctx, "SET @@GLOBAL.dolt_log_compact_schema = 1;")
+	_, err = db.ExecContext(ctx, "SET @@GLOBAL.dolt_log_committer_only = 1;")
 	require.NoError(t, err)
 
 	_, err = db.ExecContext(ctx, `

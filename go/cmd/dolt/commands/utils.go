@@ -60,7 +60,6 @@ type CommitInfo struct {
 	localBranchNames  []string
 	remoteBranchNames []string
 	tagNames          []string
-	verifiedSignature string
 }
 
 var fwtStageName = "fwt"
@@ -629,8 +628,8 @@ func PrintCommitInfo(pager *outputpager.Pager, minParents int, showParents, show
 		}
 	}
 
-	if showSignatures && len(comm.verifiedSignature) > 0 {
-		signatureLines := strings.Split(comm.verifiedSignature, "\n")
+	if showSignatures && len(comm.commitMeta.Signature) > 0 {
+		signatureLines := strings.Split(comm.commitMeta.Signature, "\n")
 		for _, line := range signatureLines {
 			pager.Writer.Write([]byte("\n"))
 			pager.Writer.Write([]byte(color.CyanString(line)))
@@ -716,11 +715,11 @@ func getCommitInfoWithOptions(queryist cli.Queryist, sqlCtx *sql.Context, ref st
 // getCommitInfoSQL retrieves commit information using SQL queries with extended schema.
 func getCommitInfoSQL(queryist cli.Queryist, sqlCtx *sql.Context, ref string, opts commitInfoOptions, hashOfHead string) (*CommitInfo, error) {
 	// CLI needs author info from extended schema, but shouldn't change user's session
-	_, _ = cli.GetRowsForSql(queryist, sqlCtx, "SET @saved_compact = @@"+dsess.DoltLogCompactSchema+";")
-	_, _ = cli.GetRowsForSql(queryist, sqlCtx, "SET "+dsess.DoltLogCompactSchema+" = 0;")
+	_, _ = cli.GetRowsForSql(queryist, sqlCtx, "SET @saved_compact = @@"+dsess.DoltLogCommitterOnly+";")
+	_, _ = cli.GetRowsForSql(queryist, sqlCtx, "SET "+dsess.DoltLogCommitterOnly+" = 0;")
 
 	defer func() {
-		_, _ = cli.GetRowsForSql(queryist, sqlCtx, "SET "+dsess.DoltLogCompactSchema+" = @saved_compact;")
+		_, _ = cli.GetRowsForSql(queryist, sqlCtx, "SET "+dsess.DoltLogCommitterOnly+" = @saved_compact;")
 	}()
 
 	var q string
@@ -792,7 +791,7 @@ func getCommitInfoSQL(queryist cli.Queryist, sqlCtx *sql.Context, ref string, op
 	}
 
 	// Restore prior setting after query
-	_, _ = cli.GetRowsForSql(queryist, sqlCtx, "SET dolt_log_compact_schema = @saved_compact;")
+	_, _ = cli.GetRowsForSql(queryist, sqlCtx, "SET dolt_log_committer_only = @saved_compact;")
 
 	return &CommitInfo{
 		commitMeta: &datas.CommitMeta{
@@ -812,7 +811,6 @@ func getCommitInfoSQL(queryist cli.Queryist, sqlCtx *sql.Context, ref string, op
 		localBranchNames:  localBranches,
 		remoteBranchNames: remoteBranches,
 		tagNames:          tags,
-		verifiedSignature: signature,
 	}, nil
 }
 

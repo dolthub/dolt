@@ -54,7 +54,7 @@ const (
 				    dl.message
 				FROM
 				    sorted_diffs_by_pk as sd,
-				    dolt_log_full as dl
+				    dolt_log as dl
 				WHERE
 				    dl.commit_hash = sd.to_commit
 				    and sd.row_num = 1

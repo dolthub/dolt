@@ -29,7 +29,7 @@ const VerboseFlag = "verbose"
 // ParsePerson parses author/committer strings in 'Name <email@example.com>' format
 func ParsePerson(personStr, personType string) (string, string, error) {
 	if len(personStr) == 0 {
-		return "", "", fmt.Errorf("Option '%s' requires a value", personType)
+		return "", "", fmt.Errorf("option '%s' requires a value", personType)
 	}
 
 	reg := regexp.MustCompile("(?m)([^)]+) \\<([^)]+)")
