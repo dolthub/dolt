@@ -42,10 +42,10 @@ type mmapIndexReader struct {
 	chunkCount    uint32
 
 	// Byte offsets within the mapped region for each section
-	spanIndexOffset int64
-	prefixesOffset  int64
-	chunkRefsOffset int64
-	suffixesOffset  int64
+	spanIndexOffset uint64
+	prefixesOffset  uint64
+	chunkRefsOffset uint64
+	suffixesOffset  uint64
 }
 
 // newMmapIndexReader creates a new memory-mapped index reader.
@@ -54,10 +54,10 @@ func newMmapIndexReader(fileHandle *os.File, footer archiveFooter) (*mmapIndexRe
 	indexSpan := footer.totalIndexSpan()
 
 	// Calculate section offsets within the mapped region
-	spanIndexOffset := int64(0)
-	prefixesOffset := spanIndexOffset + int64(footer.byteSpanCount)*int64(uint64Size)
-	chunkRefsOffset := prefixesOffset + int64(footer.chunkCount)*int64(uint64Size)
-	suffixesOffset := chunkRefsOffset + int64(footer.chunkCount)*2*int64(uint32Size)
+	spanIndexOffset := uint64(0)
+	prefixesOffset := spanIndexOffset + uint64(footer.byteSpanCount)*uint64(uint64Size)
+	chunkRefsOffset := prefixesOffset + uint64(footer.chunkCount)*uint64(uint64Size)
+	suffixesOffset := chunkRefsOffset + uint64(footer.chunkCount)*2*uint64(uint32Size)
 
 	// Memory map the entire index section
 	mappedData, err := file.Mmap(fileHandle, int64(indexSpan.offset), int(indexSpan.length))
@@ -90,7 +90,7 @@ func (m *mmapIndexReader) getSpanIndex(idx uint32) uint64 {
 		return 0
 	}
 
-	offset := m.spanIndexOffset + int64(idx-1)*int64(uint64Size)
+	offset := m.spanIndexOffset + uint64(idx-1)*uint64(uint64Size)
 	return m.data.GetUint64(offset)
 }
 
@@ -99,7 +99,7 @@ func (m *mmapIndexReader) getPrefix(idx uint32) uint64 {
 	if idx >= m.chunkCount {
 		return 0
 	}
-	offset := m.prefixesOffset + int64(idx)*int64(uint64Size)
+	offset := m.prefixesOffset + uint64(idx)*uint64(uint64Size)
 	return m.data.GetUint64(offset)
 }
 
@@ -147,9 +147,9 @@ func (m *mmapIndexReader) getChunkRef(idx uint32) (dict, data uint32) {
 	}
 
 	// Chunk refs are stored as pairs of uint32s
-	offset := m.chunkRefsOffset + int64(idx)*2*int64(uint32Size)
+	offset := m.chunkRefsOffset + uint64(idx)*2*uint64(uint32Size)
 	dict = m.data.GetUint32(offset)
-	data = m.data.GetUint32(offset + int64(uint32Size))
+	data = m.data.GetUint32(offset + uint32Size)
 	return
 }
 
@@ -159,8 +159,8 @@ func (m *mmapIndexReader) getSuffix(idx uint32) (suf suffix) {
 		return suffix{}
 	}
 
-	start := m.suffixesOffset + int64(idx)*hash.SuffixLen
-	_, _ = m.data.ReadAt(suf[:], start)
+	start := m.suffixesOffset + uint64(idx)*hash.SuffixLen
+	_, _ = m.data.ReadAt(suf[:], int64(start))
 	return
 }
 

@@ -111,6 +111,7 @@ jobs:
         echo CGO_LDFLAGS=-L$dir/lib >> $GITHUB_ENV
     - name: Install ICU4C (Windows)
       if: ${{ matrix.os == 'windows-latest' }}
+      id: msys2
       uses: msys2/setup-msys2@v2
       with:
         path-type: inherit

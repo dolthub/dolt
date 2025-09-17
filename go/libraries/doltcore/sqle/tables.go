@@ -2658,6 +2658,22 @@ func (t *WritableDoltTable) createForeignKey(
 				return doltdb.ForeignKey{}, err
 			}
 		} else {
+			// FKs referencing system tables, like dolt_branches, that are not backed by a real
+			// Dolt table, do not currently allow non-default referential actions. Other system
+			// tables, like the dolt_ci_ system tables, are backed by dolt tables and rely on
+			// referential actions to work properly.
+			if !strings.HasPrefix(strings.ToLower(sqlFk.ParentTable), "dolt_ci_") {
+				if sqlFk.OnDelete != sql.ForeignKeyReferentialAction_NoAction &&
+					sqlFk.OnDelete != sql.ForeignKeyReferentialAction_DefaultAction {
+					return doltdb.ForeignKey{}, fmt.Errorf(
+						"foreign keys referencing Dolt system tables do not support referential actions")
+				} else if sqlFk.OnUpdate != sql.ForeignKeyReferentialAction_NoAction &&
+					sqlFk.OnUpdate != sql.ForeignKeyReferentialAction_DefaultAction {
+					return doltdb.ForeignKey{}, fmt.Errorf(
+						"foreign keys referencing Dolt system tables do not support referential actions")
+				}
+			}
+
 			sqlRefTbl, ok, err := t.db.GetTableInsensitive(ctx, sqlFk.ParentTable)
 			if err != nil {
 				return doltdb.ForeignKey{}, err
