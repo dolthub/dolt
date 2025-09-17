@@ -23,15 +23,14 @@ table Commit {
 
   parent_closure:[ubyte];
 
-  // Legacy fields (author info for backwards compatibility)
   name:string (required);
   email:string (required);
   description:string (required);
-  timestamp_millis:uint64; // committer timestamp for backwards compatibility
-  user_timestamp_millis:int64; // author timestamp for backwards compatibility
+  timestamp_millis:uint64;
+  user_timestamp_millis:int64;
   signature:string;
   
-  // New optional committer fields (author info stored in legacy fields)
+  // Optional committer fields
   committer_name:string;
   committer_email:string;
 }
