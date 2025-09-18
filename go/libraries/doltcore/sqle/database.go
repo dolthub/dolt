@@ -677,7 +677,8 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 		}
 		if !resolve.UseSearchPath || isDoltgresSystemTable {
 			sess := dsess.DSessFromSess(ctx.Session)
-			adapter := dsess.NewSessionStateAdapter(
+			var rootsProvider env.RootsProvider[*sql.Context]
+			rootsProvider = dsess.NewSessionStateAdapter(
 				sess, db.RevisionQualifiedName(),
 				concurrentmap.New[string, env.Remote](),
 				concurrentmap.New[string, env.BranchConfig](),
@@ -687,7 +688,46 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 				return nil, false, err
 			}
 
-			dt, found = dtables.NewStatusTable(ctx, lwrName, db.ddb, ws, adapter), true
+			asOf, ok := asOf.(string)
+			if !ok {
+				return nil, false, fmt.Errorf(
+					"unexpected type for asOf param: %T", asOf)
+			}
+
+			// If |asOf| is set, then we need to get the correct roots for the
+			// status table to use. We skip the special revision spec, HEAD,
+			// because it represents the current branch.
+			if asOf != "" && !strings.EqualFold(asOf, "HEAD") {
+				// If |asOf| is a branch name, then grab the working set for that
+				// branch and use its data.
+				ddb, ok := ds.GetDoltDB(ctx, ctx.GetCurrentDatabase())
+				if !ok {
+					return nil, false, fmt.Errorf(
+						"unable to get DoltDB for database %s", ctx.GetCurrentDatabase())
+				}
+
+				_, hasBranch, err := ddb.HasBranch(ctx, asOf)
+				if err != nil {
+					return nil, false, err
+				}
+				if hasBranch {
+					branchRoots, err := getRootsForBranch(ctx, ddb, asOf)
+					if err != nil {
+						return nil, false, err
+					}
+					rootsProvider = &staticRootsProvider{
+						roots: branchRoots,
+					}
+				} else {
+					// If this isn't a branch, then it's a tag or a commit, or a
+					// commit spec. In all of these cases, dolt_status will have
+					// no data, because there is no valid head/working/staged roots,
+					// so we provide a nil rootsProvider
+					rootsProvider = nil
+				}
+			}
+
+			dt, found = dtables.NewStatusTable(ctx, lwrName, db.ddb, ws, rootsProvider), true
 		}
 	case doltdb.MergeStatusTableName, doltdb.GetMergeStatusTableName():
 		isDoltgresSystemTable, err := resolve.IsDoltgresSystemTable(ctx, tname, root)
@@ -864,6 +904,48 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 	// schema commit that contains it and return an empty table if so.
 	return resolveOverriddenNonexistentTable(ctx, tblName, db)
 }
+
+// getRootsForBranch uses the specified |ddb| to look up a branch named |branch|, and return the
+// Roots for it. If there is no branch named |branch|, then an error is returned.
+func getRootsForBranch(ctx *sql.Context, ddb *doltdb.DoltDB, branch string) (doltdb.Roots, error) {
+	branchHeadRef := ref.NewBranchRef(branch)
+	wsRef, err := ref.WorkingSetRefForHead(branchHeadRef)
+	if err != nil {
+		return doltdb.Roots{}, err
+	}
+	branchWorkingSet, err := ddb.ResolveWorkingSet(ctx, wsRef)
+	if err != nil {
+		return doltdb.Roots{}, err
+	}
+
+	commit, err := ddb.ResolveCommitRef(ctx, branchHeadRef)
+	if err != nil {
+		return doltdb.Roots{}, err
+	}
+	headRoot, err := commit.GetRootValue(ctx)
+	if err != nil {
+		return doltdb.Roots{}, err
+	}
+
+	return doltdb.Roots{
+		Head:    headRoot,
+		Working: branchWorkingSet.WorkingRoot(),
+		Staged:  branchWorkingSet.StagedRoot(),
+	}, nil
+}
+
+// staticRootsProvider is an implementation of env.RootsProvider that simply returns
+// the static Roots that it holds whenever GetRoots() is called.
+type staticRootsProvider struct {
+	roots doltdb.Roots
+}
+
+// GetRoots implements env.RootsProvider
+func (srp *staticRootsProvider) GetRoots(ctx *sql.Context) (doltdb.Roots, error) {
+	return srp.roots, nil
+}
+
+var _ env.RootsProvider[*sql.Context] = (*staticRootsProvider)(nil)
 
 // workingSetStagedRoot returns the staged root for the current session in the database
 // named |dbName|. If a working set is not available (e.g. if a commit or tag is checked
