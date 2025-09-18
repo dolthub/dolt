@@ -162,8 +162,8 @@ func (cmd ArchiveCmd) Exec(ctx context.Context, commandStr string, args []string
 }
 
 func handleProgress(ctx context.Context, wg *sync.WaitGroup, progress chan interface{}) {
+	wg.Add(1)
 	go func() {
-		wg.Add(1)
 		defer wg.Done()
 
 		rotation := 0
