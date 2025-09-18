@@ -633,11 +633,7 @@ func (db Database) getTableInsensitiveWithRoot(ctx *sql.Context, head *doltdb.Co
 				}
 			}
 
-			var schType *dtables.LogSchemaType
-			if isDoltgresSystemTable && resolve.UseSearchPath {
-				*schType = dtables.LogSchemaCommitterOnly
-			}
-			dt, found = dtables.NewLogTable(db.Name(), lwrName, db.ddb, head, ctx, schType), true
+			dt, found = dtables.NewLogTable(db.Name(), lwrName, db.ddb, head, ctx, new(dtables.LogSchemaType)), true
 		}
 	//case doltdb.LogTableCommitterOnly:
 	//	// Internal log tables with fixed schemas for system views (e.g., dolt_blame)
