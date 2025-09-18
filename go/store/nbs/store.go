@@ -1579,7 +1579,7 @@ func (nbs *NomsBlockStore) Sources(ctx context.Context) (hash.Hash, []chunks.Tab
 	if err != nil {
 		return hash.Hash{}, nil, nil, err
 	}
-	
+
 	appendixTableFiles, err := getTableFiles(css, contents, contents.NumAppendixSpecs(), func(mc manifestContents, idx int) tableSpec {
 		return mc.getAppendixSpec(idx)
 	})
@@ -1688,15 +1688,15 @@ func (nbs *NomsBlockStore) Path() (string, bool) {
 	return "", false
 }
 
-// WriteTableFile will read a table file from the provided reader and write it to the TableFileStore - NM4 rename to WriteStorageFile ???
-func (nbs *NomsBlockStore) WriteTableFile(ctx context.Context, fileName string, numChunks int, contentHash []byte, getRd chunks.ReaderCallBack) error {
+// WriteTableFile will read a table file from the provided reader and write it to the TableFileStore
+func (nbs *NomsBlockStore) WriteTableFile(ctx context.Context, fileName string, splitOffset uint64, _ int, _ []byte, getRd func() (io.ReadCloser, uint64, error)) error {
 	valctx.ValidateContext(ctx)
 	tfp, ok := nbs.persister.(tableFilePersister)
 	if !ok {
 		return errors.New("runtime error: table file persister required for WriteTableFile")
 	}
 
-	r, sz, splitOffset, err := getRd()
+	r, sz, err := getRd()
 	if err != nil {
 		return err
 	}
