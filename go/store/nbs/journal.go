@@ -320,11 +320,13 @@ func (j *ChunkJournal) Path() string {
 	return filepath.Dir(j.path)
 }
 
-func (j *ChunkJournal) CopyTableFile(ctx context.Context, r io.Reader, fileId string, fileSz uint64, splitOffset uint64) error {
+func (j *ChunkJournal) CopyTableFile(ctx context.Context, r io.Reader, fileId string, _ uint64, _ uint64) error {
 	if j.backing.readOnly() {
 		return errReadOnlyManifest
 	}
-	return j.persister.CopyTableFile(ctx, r, fileId, fileSz, splitOffset)
+	// we are always using an fsTablePersister, and know that implementation ignores the fileSz and splitOffset.
+	// Should this ever change in the future, those parameters should be passed through.
+	return j.persister.CopyTableFile(ctx, r, fileId, 0, 0)
 }
 
 // Name implements manifest.

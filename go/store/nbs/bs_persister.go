@@ -189,7 +189,7 @@ func (bsp *blobstorePersister) Open(ctx context.Context, name hash.Hash, chunkCo
 		return cs, nil
 	}
 
-	if errors.Is(err, ErrTableFileNotFound) || errors.Is(err, blobstore.NotFound{}) {
+	if blobstore.IsNotFoundError(err) {
 		source, err := newBSArchiveChunkSource(ctx, bsp.bs, name, stats)
 		if err != nil {
 			return nil, err
@@ -200,7 +200,7 @@ func (bsp *blobstorePersister) Open(ctx context.Context, name hash.Hash, chunkCo
 	return nil, err
 }
 
-func (bsp *blobstorePersister) Exists(ctx context.Context, name string, chunkCount uint32, stats *Stats) (bool, error) {
+func (bsp *blobstorePersister) Exists(ctx context.Context, name string, _ uint32, _ *Stats) (bool, error) {
 	return bsp.bs.Exists(ctx, name)
 }
 
@@ -305,7 +305,7 @@ func (bsTRA *bsTableReaderAt) ReadAtWithStats(ctx context.Context, p []byte, off
 }
 
 func newBSArchiveChunkSource(ctx context.Context, bs blobstore.Blobstore, name hash.Hash, stats *Stats) (cs chunkSource, err error) {
-	rc, sz, _, err := bs.Get(ctx, name.String(), blobstore.NewBlobRange(-int64(archiveFooterSize), 0))
+	rc, sz, _, err := bs.Get(ctx, name.String()+ArchiveFileSuffix, blobstore.NewBlobRange(-int64(archiveFooterSize), 0))
 	if err != nil {
 		return nil, err
 	}
@@ -317,7 +317,7 @@ func newBSArchiveChunkSource(ctx context.Context, bs blobstore.Blobstore, name h
 		return nil, err
 	}
 
-	aRdr, err := newArchiveReaderFromFooter(ctx, &bsTableReaderAt{key: name.String(), bs: bs}, name, sz, footer, stats)
+	aRdr, err := newArchiveReaderFromFooter(ctx, &bsTableReaderAt{key: name.String() + ArchiveFileSuffix, bs: bs}, name, sz, footer, stats)
 	if err != nil {
 		return emptyChunkSource{}, err
 	}

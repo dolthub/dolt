@@ -140,13 +140,22 @@ func (fh filehandler) ServeHTTP(respWr http.ResponseWriter, req *http.Request) {
 			respWr.WriteHeader(http.StatusBadRequest)
 			return
 		}
-		num_chunks, err := strconv.Atoi(ncs)
+		numChunks, err := strconv.Atoi(ncs)
 		if err != nil {
 			logger = logger.WithField("status", http.StatusBadRequest)
 			logger.WithError(err).Warn("bad request: num_chunks parameter did not parse")
 			respWr.WriteHeader(http.StatusBadRequest)
 			return
 		}
+
+		splitOffset, err := strconv.ParseUint(q.Get("split_offset"), 10, 64)
+		if err != nil {
+			logger = logger.WithField("status", http.StatusBadRequest)
+			logger.WithError(err).Warn("bad request: split_offset parameter did not parse")
+			respWr.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
 		cls := q.Get("content_length")
 		if cls == "" {
 			logger = logger.WithField("status", http.StatusBadRequest)
@@ -154,7 +163,7 @@ func (fh filehandler) ServeHTTP(respWr http.ResponseWriter, req *http.Request) {
 			respWr.WriteHeader(http.StatusBadRequest)
 			return
 		}
-		content_length, err := strconv.Atoi(cls)
+		contentLength, err := strconv.Atoi(cls)
 		if err != nil {
 			logger = logger.WithField("status", http.StatusBadRequest)
 			logger.WithError(err).Warn("bad request: content_length parameter did not parse")
@@ -168,7 +177,7 @@ func (fh filehandler) ServeHTTP(respWr http.ResponseWriter, req *http.Request) {
 			respWr.WriteHeader(http.StatusBadRequest)
 			return
 		}
-		content_hash, err := base64.RawURLEncoding.DecodeString(chs)
+		contentHash, err := base64.RawURLEncoding.DecodeString(chs)
 		if err != nil {
 			logger = logger.WithField("status", http.StatusBadRequest)
 			logger.WithError(err).Warn("bad request: content_hash parameter did not parse")
@@ -176,7 +185,7 @@ func (fh filehandler) ServeHTTP(respWr http.ResponseWriter, req *http.Request) {
 			return
 		}
 
-		logger, statusCode = writeTableFile(req.Context(), logger, fh.dbCache, filepath, file, num_chunks, content_hash, uint64(content_length), req.Body)
+		logger, statusCode = writeTableFile(req.Context(), logger, fh.dbCache, filepath, file, splitOffset, numChunks, contentHash, uint64(contentLength), req.Body)
 	}
 
 	if statusCode != -1 {
@@ -286,7 +295,7 @@ func (u *uploadreader) Close() error {
 	return nil
 }
 
-func writeTableFile(ctx context.Context, logger *logrus.Entry, dbCache DBCache, path, fileId string, numChunks int, contentHash []byte, contentLength uint64, body io.ReadCloser) (*logrus.Entry, int) {
+func writeTableFile(ctx context.Context, logger *logrus.Entry, dbCache DBCache, path, fileId string, splitOffset uint64, numChunks int, contentHash []byte, contentLength uint64, body io.ReadCloser) (*logrus.Entry, int) {
 	if !validateFileName(fileId) {
 		logger = logger.WithField("status", http.StatusBadRequest)
 		logger.Warnf("%s is not a valid hash", fileId)
@@ -300,7 +309,7 @@ func writeTableFile(ctx context.Context, logger *logrus.Entry, dbCache DBCache, 
 		return logger, http.StatusInternalServerError
 	}
 
-	err = cs.WriteTableFile(ctx, fileId, numChunks, contentHash, func() (io.ReadCloser, uint64, error) {
+	err = cs.WriteTableFile(ctx, fileId, splitOffset, numChunks, contentHash, func() (io.ReadCloser, uint64, error) {
 		reader := body
 		size := contentLength
 		return &uploadreader{
