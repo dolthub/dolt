@@ -9,7 +9,7 @@ RUN apt-get update -y && \
 
 
 # We use bookworm since the icu dependency ver. between the base and golang images is the same
-FROM golang:1.24-bookworm AS build-from-source
+FROM golang:1.25-bookworm AS build-from-source
 ENV DEBIAN_FRONTEND=noninteractive
 ARG DOLT_VERSION
 
