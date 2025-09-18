@@ -37,7 +37,7 @@ func DoltPreparedScripts(t *testing.T, harness enginetest.Harness) {
 			Expected: []sql.Row{{types.NewOkResult(0)}},
 		},
 		{
-			Query: "SELECT table_name FROM information_schema.columns WHERE table_name = ? group by table_name ORDER BY ORDINAL_POSITION",
+			Query: "SELECT table_name FROM information_schema.columns WHERE table_name = ? group by table_name",
 			Bindings: map[string]sqlparser.Expr{
 				"v1": sqlparser.NewStrVal([]byte("dolt_history_mytable")),
 			},
