@@ -70,6 +70,22 @@ teardown() {
     [[ "$output" =~ "Data byte span: offset=20850, length=43" ]] || false
 }
 
+@test "admin-archive-inspect: object-id inspection with existing hash with mmap" {
+  # Use the hash we know exists at index 42
+  run dolt admin archive-inspect --mmap --object-id "4pguchpitq1bsb09ogaivmcstgsnbd3k" "$ARCHIVE_PATH"
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "Object inspection:" ]] || false
+  [[ "$output" =~ "Hash: 4pguchpitq1bsb09ogaivmcstgsnbd3k" ]] || false
+  [[ "$output" =~ "Prefix: 0x2661e64732ee82be" ]] || false
+  [[ "$output" =~ "Suffix: 0x2c09c4152fd99cec3975b474" ]] || false
+  [[ "$output" =~ "Possible match index: 42" ]] || false
+  [[ "$output" =~ "Compression type: zstd (with dictionary" ]] || false
+  [[ "$output" =~ "Dictionary byte span ID: 1" ]] || false
+  [[ "$output" =~ "Data byte span ID: 70" ]] || false
+  [[ "$output" =~ "Dictionary byte span: offset=0, length=296" ]] || false
+  [[ "$output" =~ "Data byte span: offset=20850, length=43" ]] || false
+}
+
 @test "admin-archive-inspect: inspect-index with invalid index" {
     run dolt admin archive-inspect --inspect-index "invalid" "$ARCHIVE_PATH"
     [ "$status" -eq 1 ]
@@ -87,6 +103,19 @@ teardown() {
     [[ "$output" =~ "Hash: 03fe1b95i4bqpetk2klb46devv1saqmd" ]] || false
     [[ "$output" =~ "Prefix: 0xdee0ad259117ac" ]] || false
     [[ "$output" =~ "Suffix: 0xbbb4152ab219aeffc3c56acd" ]] || false
+}
+
+@test "admin-archive-inspect: inspect-index with valid index and mmap" {
+  run dolt admin archive-inspect --mmap --inspect-index "0" "$ARCHIVE_PATH"
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "Index inspection:" ]] || false
+  [[ "$output" =~ "Index: 0" ]] || false
+  [[ "$output" =~ "Index reader type: *nbs.mmapIndexReader" ]] || false
+  [[ "$output" =~ "Chunk count: 230" ]] || false
+  [[ "$output" =~ "Byte span count: 231" ]] || false
+  [[ "$output" =~ "Hash: 03fe1b95i4bqpetk2klb46devv1saqmd" ]] || false
+  [[ "$output" =~ "Prefix: 0xdee0ad259117ac" ]] || false
+  [[ "$output" =~ "Suffix: 0xbbb4152ab219aeffc3c56acd" ]] || false
 }
 
 @test "admin-archive-inspect: inspect-index with out of range index" {
