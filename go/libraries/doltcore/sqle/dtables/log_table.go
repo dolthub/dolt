@@ -97,44 +97,30 @@ func (dt *LogTable) String() string {
 	return dt.tableName
 }
 
-// buildLogCommitterOnlyRow builds a committer-only row with the commit hash, description, and height
-func buildLogCommitterOnlyRow(commitHash hash.Hash, meta *datas.CommitMeta, height uint64) sql.Row {
-	values := []interface{}{
-		commitHash.String(),
-		datas.ValueOrDefault(meta.CommitterName, meta.Name),
-		datas.ValueOrDefault(meta.CommitterEmail, meta.Email),
-		meta.CommitterTime(),
-		meta.Description,
-		height,
-	}
-	return sql.NewRow(values...)
-}
-
-// buildLogRow builds a log row with the commit hash, description, height, committer, and author
-func buildLogRow(commitHash hash.Hash, meta *datas.CommitMeta, height uint64) sql.Row {
-	values := []interface{}{
-		commitHash.String(),
-		datas.ValueOrDefault(meta.CommitterName, meta.Name),
-		datas.ValueOrDefault(meta.CommitterEmail, meta.Email),
-		meta.CommitterTime(),
-		meta.Description,
-		height,
-		meta.Name,
-		meta.Email,
-		meta.Time(),
-	}
-	return sql.NewRow(values...)
-}
-
 // BuildLogRowWithSchemaType builds a row based on the specified schema type
 func BuildLogRowWithSchemaType(commitHash hash.Hash, meta *datas.CommitMeta, height uint64, schType *LogSchemaType) sql.Row {
 	switch *schType {
 	case LogSchemaCommitterOnly:
-		return buildLogCommitterOnlyRow(commitHash, meta, height)
+		return sql.NewRow(
+			commitHash.String(),
+			datas.ValueOrDefault(meta.CommitterName, meta.Name),
+			datas.ValueOrDefault(meta.CommitterEmail, meta.Email),
+			meta.CommitterTime(),
+			meta.Description,
+			height)
 	case LogSchema:
 		fallthrough
 	default:
-		return buildLogRow(commitHash, meta, height)
+		return sql.NewRow(
+			commitHash.String(),
+			datas.ValueOrDefault(meta.CommitterName, meta.Name),
+			datas.ValueOrDefault(meta.CommitterEmail, meta.Email),
+			meta.CommitterTime(),
+			meta.Description,
+			height,
+			meta.Name,
+			meta.Email,
+			meta.Time())
 	}
 }
 
@@ -149,7 +135,7 @@ func BuildLogRow(ctx *sql.Context, commitHash hash.Hash, meta *datas.CommitMeta,
 
 // LogSchemaCommitterColumns To maintain compatibility with existing views, these columns names remain unchanged.
 var LogSchemaCommitterColumns = sql.Schema{
-	&sql.Column{Name: "commit_hash", Type: types.Text},
+	&sql.Column{Name: "commit_hash", Type: types.Text, PrimaryKey: true},
 	&sql.Column{Name: "committer", Type: types.Text},
 	&sql.Column{Name: "email", Type: types.Text},
 	&sql.Column{Name: "date", Type: types.Datetime},
@@ -168,6 +154,7 @@ var LogSchemaAuthorColumns = sql.Schema{
 func GetLogTableSchemaWithType(schType *LogSchemaType) sql.Schema {
 	cols := make(sql.Schema, 0, len(LogSchemaCommitterColumns))
 	cols = append(cols, LogSchemaCommitterColumns...)
+	// set pk on commit_hash
 	switch *schType {
 	case LogSchemaCommitterOnly:
 		return cols
@@ -188,7 +175,12 @@ func (dt *LogTable) Schema() sql.Schema {
 	if useCommitterOnly, _ := dsess.GetBooleanSystemVar(dt.ctx, dsess.DoltLogCommitterOnly); useCommitterOnly {
 		*dt.schType = LogSchemaCommitterOnly
 	}
-	return GetLogTableSchemaWithType(dt.schType)
+	sch := GetLogTableSchemaWithType(dt.schType)
+	for _, col := range sch {
+		col.Source = dt.tableName
+		col.DatabaseSource = dt.dbName
+	}
+	return sch
 }
 
 // Collation implements the sql.Table interface.
