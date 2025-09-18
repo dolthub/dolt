@@ -323,7 +323,7 @@ func (f *inMemoryArchiveIndexReader) getChunkRef(idx uint32) (dict, data uint32)
 }
 
 func (f *inMemoryArchiveIndexReader) getSuffix(idx uint32) suffix {
-	if idx >= uint32(len(f.suffixes)/hash.SuffixLen) {
+	if idx >= f.getNumChunks() {
 		return suffix{}
 	}
 	start := uint64(idx) * hash.SuffixLen

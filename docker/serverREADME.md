@@ -85,6 +85,36 @@ To see all supported options for `dolt sql-server`, you can run the image with `
 $ docker run dolthub/dolt-sql-server:latest --help
 ```
 
+## Building the image
+
+To build this image from source, use the `serverDockerfile`:
+
+*WARNING* When building from source you cannot have any other folders that start with dolt in the same directory as
+your workspace folder. This is because we use a wildcard to conditionally copy the dolt source folder into 
+the image. Other folders starting with dolt could cause the build to fail.
+
+```shell
+# Build with the latest Dolt version (automatically fetches the latest release)
+$ docker build -f docker/serverDockerfile --build-arg DOLT_VERSION=latest -t dolt-sql-server:latest .
+
+# Build with a specific Dolt version
+$ docker build -f docker/serverDockerfile --build-arg DOLT_VERSION=1.59.7 -t dolt-sql-server:1.59.7 .
+# Note: To run the local build replace `dolthub/dolt-sql-server:latest` with `dolt-sql-server:latest`
+```
+
+## Building from Source
+
+To build from your local source code instead of downloading a pre-built binary:
+
+```shell
+# Build from local source code (requires workspace directory with source dependencies, e.g., dolt_workspace/)
+$ docker build -f dolt/docker/serverDockerfile --build-arg DOLT_VERSION=source -t dolt-sql-server:source .
+# Note: This should contain dolt/ at the minimum, any other repos need to be
+# added via COPY in serverDockerfile.
+
+$ docker run -e DOLT_ROOT_PASSWORD=secret2 -e DOLT_ROOT_HOST=% -p 3307:3306 dolt-sql-server:source
+```
+
 ### Connect to the server in the container from the host system
 
 From the host system, to connect to a server running in a container, we need to map a port on the host system to the port our sql-server is running on in the container.
@@ -137,14 +167,17 @@ on the host system, it can also be mounted to this default location.
 $ docker run -p 3307:3306 -v /Users/jennifer/docker/databases/:/var/lib/dolt/ dolthub/dolt-sql-server:latest
 ```
 
+If the run command errors out during the entrypoint process, you'll have to remove the created container from the last run.
+
 ## Environment Variables
 
 The Dolt SQL Server image supports the following environment variables:
 
-- `DOLT_ROOT_PASSWORD`: Sets the password for the root user
-- `DOLT_ROOT_HOST`: Specifies a host for the root user (default: localhost)
+- `DOLT_ROOT_PASSWORD`: Sets the password for root (default: empty)
+- `DOLT_ROOT_HOST`: Specifies a host for the root (default: localhost)
 - `DOLT_DATABASE` / `MYSQL_DATABASE`: Creates a database with this name if it doesn't exist
 - `DOLT_USER` / `MYSQL_USER`: Creates a user with this name if it doesn't exist
 - `DOLT_PASSWORD` / `MYSQL_PASSWORD`: Sets the password for the user specified in `DOLT_USER`/`MYSQL_USER`
+- `DOLT_USER_HOST` / `MYSQL_USER_HOST`: Specifies a host for the custom user (default: falls back to `DOLT_ROOT_HOST`, then localhost)
 
 The user will be granted all privileges on the database specified by `DOLT_DATABASE`/`MYSQL_DATABASE` if provided.
