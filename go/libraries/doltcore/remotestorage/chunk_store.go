@@ -913,6 +913,7 @@ func (dcs *DoltChunkStore) uploadChunks(ctx context.Context, hashToChunk map[has
 		chnks = append(chnks, ch)
 	}
 
+	hashToSplitOffset := make(map[hash.Hash]uint64)
 	hashToCount := make(map[hash.Hash]int)
 	hashToData := make(map[hash.Hash][]byte)
 	hashToContentHash := make(map[hash.Hash][]byte)
@@ -926,6 +927,7 @@ func (dcs *DoltChunkStore) uploadChunks(ctx context.Context, hashToChunk map[has
 		}
 
 		h := hash.Parse(name)
+		hashToSplitOffset[h] = uint64(len(data))
 		hashToData[h] = data
 		hashToCount[h] = len(chnks)
 
@@ -936,7 +938,7 @@ func (dcs *DoltChunkStore) uploadChunks(ctx context.Context, hashToChunk map[has
 	for h, contentHash := range hashToContentHash {
 		// Tables created on this path are always starting from memory tables and ending up as noms table files.
 		// As a result, the suffix is always empty.
-		err := dcs.uploadTableFileWithRetries(ctx, h, "", uint64(hashToCount[h]), contentHash, func() (io.ReadCloser, uint64, error) {
+		err := dcs.uploadTableFileWithRetries(ctx, h, "", hashToSplitOffset[h], uint64(hashToCount[h]), contentHash, func() (io.ReadCloser, uint64, error) {
 			data := hashToData[h]
 			return io.NopCloser(bytes.NewReader(data)), uint64(len(data)), nil
 		})
@@ -948,7 +950,9 @@ func (dcs *DoltChunkStore) uploadChunks(ctx context.Context, hashToChunk map[has
 	return hashToCount, nil
 }
 
-func (dcs *DoltChunkStore) uploadTableFileWithRetries(ctx context.Context, tableFileId hash.Hash, suffix string, numChunks uint64, tableFileContentHash []byte, getContent func() (io.ReadCloser, uint64, error)) error {
+// NM4 - This method is called from two paths. One is the WriteTableFile function, which works with noms tables and archives,
+// and the other is the uploadChunks function, which works with noms chunks and chunk tables.
+func (dcs *DoltChunkStore) uploadTableFileWithRetries(ctx context.Context, tableFileId hash.Hash, suffix string, _ uint64, numChunks uint64, tableFileContentHash []byte, getContent func() (io.ReadCloser, uint64, error)) error {
 	op := func() error {
 		body, contentLength, err := getContent()
 		if err != nil {
@@ -961,6 +965,7 @@ func (dcs *DoltChunkStore) uploadTableFileWithRetries(ctx context.Context, table
 			ContentHash:   tableFileContentHash,
 			NumChunks:     numChunks,
 			Suffix:        suffix,
+			// NM4 - SplitOffset: splitOffset,
 		}
 
 		dcs.logf("getting upload location for file %s", tableFileId.String())
@@ -1064,7 +1069,7 @@ func (dcs *DoltChunkStore) SupportedOperations() chunks.TableFileStoreOps {
 }
 
 // WriteTableFile reads a table file from the provided reader and writes it to the chunk store.
-func (dcs *DoltChunkStore) WriteTableFile(ctx context.Context, fileId string, numChunks int, contentHash []byte, getRd func() (io.ReadCloser, uint64, error)) error {
+func (dcs *DoltChunkStore) WriteTableFile(ctx context.Context, fileId string, splitOffset uint64, numChunks int, contentHash []byte, getRd func() (io.ReadCloser, uint64, error)) error {
 	suffix := ""
 	if strings.HasSuffix(fileId, nbs.ArchiveFileSuffix) {
 		suffix = nbs.ArchiveFileSuffix
@@ -1072,7 +1077,7 @@ func (dcs *DoltChunkStore) WriteTableFile(ctx context.Context, fileId string, nu
 	}
 
 	fileIdBytes := hash.Parse(fileId)
-	return dcs.uploadTableFileWithRetries(ctx, fileIdBytes, suffix, uint64(numChunks), contentHash, getRd)
+	return dcs.uploadTableFileWithRetries(ctx, fileIdBytes, suffix, splitOffset, uint64(numChunks), contentHash, getRd)
 }
 
 // AddTableFilesToManifest adds table files to the manifest

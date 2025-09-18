@@ -138,7 +138,10 @@ func clone(ctx context.Context, srcTS, sinkTS chunks.TableFileStore, sinkCS chun
 				}
 
 				report(TableFileEvent{EventType: DownloadStart, TableFiles: []chunks.TableFile{tblFile}})
-				err = sinkTS.WriteTableFile(ctx, tblFile.FileID()+tblFile.LocationSuffix(), tblFile.NumChunks(), nil, func() (io.ReadCloser, uint64, error) {
+
+				// NM4 - Getting this is going to require updating chunkstore.proto - the alternative would be to hijack the numChunk as the splitOffset.
+				// I hate that so much, but we have
+				err = sinkTS.WriteTableFile(ctx, tblFile.FileID()+tblFile.LocationSuffix(), 0 /* NM4 */, tblFile.NumChunks(), nil, func() (io.ReadCloser, uint64, error) {
 					rd, contentLength, err := tblFile.Open(ctx)
 					if err != nil {
 						return nil, 0, err
