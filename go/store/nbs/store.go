@@ -1689,14 +1689,14 @@ func (nbs *NomsBlockStore) Path() (string, bool) {
 }
 
 // WriteTableFile will read a table file from the provided reader and write it to the TableFileStore - NM4 rename to WriteStorageFile ???
-func (nbs *NomsBlockStore) WriteTableFile(ctx context.Context, fileName string, numChunks int, contentHash []byte, getRd chunks.ReaderCallBack) error {
+func (nbs *NomsBlockStore) WriteTableFile(ctx context.Context, fileName string, splitOffset uint64, numChunks int, contentHash []byte, getRd func() (io.ReadCloser, uint64, error)) error {
 	valctx.ValidateContext(ctx)
 	tfp, ok := nbs.persister.(tableFilePersister)
 	if !ok {
 		return errors.New("runtime error: table file persister required for WriteTableFile")
 	}
 
-	r, sz, splitOffset, err := getRd()
+	r, sz, err := getRd()
 	if err != nil {
 		return err
 	}

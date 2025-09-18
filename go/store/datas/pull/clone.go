@@ -138,7 +138,8 @@ func clone(ctx context.Context, srcTS, sinkTS chunks.TableFileStore, sinkCS chun
 				}
 
 				report(TableFileEvent{EventType: DownloadStart, TableFiles: []chunks.TableFile{tblFile}})
-				err = sinkTS.WriteTableFile(ctx, tblFile.FileID()+tblFile.LocationSuffix(), tblFile.NumChunks(), nil, func() (io.ReadCloser, uint64, error) {
+				
+				err = sinkTS.WriteTableFile(ctx, tblFile.FileID()+tblFile.LocationSuffix(), tblFile.SplitOffset(), tblFile.NumChunks(), nil, func() (io.ReadCloser, uint64, error) {
 					rd, contentLength, err := tblFile.Open(ctx)
 					if err != nil {
 						return nil, 0, err
