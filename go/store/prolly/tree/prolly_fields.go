@@ -360,11 +360,30 @@ func PutField(ctx context.Context, ns NodeStore, tb *val.TupleBuilder, i int, v 
 			}
 		}
 	case val.ExtendedAdaptiveEnc:
-		b, err := tb.Desc.Handlers[i].SerializeValue(ctx, v)
-		if err != nil {
-			return err
+		switch value := v.(type) {
+		case *val.ExtendedValueWrapper:
+			if value.IsExactLength() {
+				tb.PutAdaptiveExtendedFromOutline(i, value)
+			} else {
+				valueBytes, err := value.GetBytes(ctx)
+				if err != nil {
+					return err
+				}
+				err = tb.PutAdaptiveBytesFromInline(ctx, i, valueBytes)
+				if err != nil {
+					return err
+				}
+			}
+		default:
+			valueBytes, err := tb.Desc.Handlers[i].SerializeValue(ctx, v)
+			if err != nil {
+				return err
+			}
+			err = tb.PutAdaptiveValue(ctx, ns, i, valueBytes)
+			if err != nil {
+				return err
+			}
 		}
-		tb.PutRaw(i, b)
 	default:
 		panic(fmt.Sprintf("unknown encoding %v %v", enc, v))
 	}
