@@ -117,6 +117,8 @@ teardown() {
     run dolt branch -a
     [ "$status" -eq 0 ]
     [[ "$output" =~ "newbranch" ]] || false
+
+    dolt checkout --track origin/newbranch
 }
 
 @test "replication: push branch delete" {
