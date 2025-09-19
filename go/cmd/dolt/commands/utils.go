@@ -18,7 +18,6 @@ import (
 	"context"
 	"crypto/sha1"
 	"fmt"
-	"github.com/sirupsen/logrus"
 	"io"
 	"net"
 	"os"
@@ -27,8 +26,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtablefunctions"
+	"github.com/sirupsen/logrus"
+
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/expression"
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
+	"github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/mysql"
 	"github.com/fatih/color"
 	"github.com/gocraft/dbr/v2"
@@ -709,39 +713,51 @@ func getCommitInfoWithOptions(queryist cli.Queryist, sqlCtx *sql.Context, ref st
 		return nil, fmt.Errorf("error getting hash of HEAD: %v", err)
 	}
 
-	return getCommitInfoSQL(queryist, sqlCtx, ref, opts, hashOfHead)
-}
+	dbName := sqlCtx.GetCurrentDatabase()
+	if dbName == "" {
+		return nil, fmt.Errorf("no current database set")
+	}
 
-// getCommitInfoSQL retrieves commit information using SQL queries with extended schema.
-func getCommitInfoSQL(queryist cli.Queryist, sqlCtx *sql.Context, ref string, opts commitInfoOptions, hashOfHead string) (*CommitInfo, error) {
-	// CLI needs author info from extended schema, but shouldn't change user's session
-	_, _ = cli.GetRowsForSql(queryist, sqlCtx, "SET @saved_compact = @@"+dsess.DoltLogCommitterOnly+";")
-	_, _ = cli.GetRowsForSql(queryist, sqlCtx, "SET "+dsess.DoltLogCommitterOnly+" = 0;")
+	sess := dsess.DSessFromSess(sqlCtx.Session)
+	provider := sess.Provider()
+	database, err := provider.Database(sqlCtx, dbName)
+	if err != nil {
+		return nil, fmt.Errorf("error getting database '%s': %v", dbName, err)
+	}
 
-	defer func() {
-		_, _ = cli.GetRowsForSql(queryist, sqlCtx, "SET "+dsess.DoltLogCommitterOnly+" = @saved_compact;")
-	}()
-
-	var q string
-	var err error
+	var expressions []sql.Expression
+	expressions = append(expressions, expression.NewLiteral(ref, types.Text))
+	expressions = append(expressions, expression.NewLiteral("--parents", types.Text))
+	expressions = append(expressions, expression.NewLiteral("--decorate=full", types.Text))
 	if opts.showSignature {
-		q, err = dbr.InterpolateForDialect("select * from dolt_log(?, '--parents', '--decorate=full', '--show-signature')", []interface{}{ref}, dialect.MySQL)
-	} else {
-		q, err = dbr.InterpolateForDialect("select * from dolt_log(?, '--parents', '--decorate=full')", []interface{}{ref}, dialect.MySQL)
-	}
-	if err != nil {
-		return nil, fmt.Errorf("error interpolating query: %v", err)
+		expressions = append(expressions, expression.NewLiteral("--show-signature", types.Text))
 	}
 
-	rows, err := cli.GetRowsForSql(queryist, sqlCtx, q)
+	ltf := &dtablefunctions.LogTableFunction{}
+	node, err := ltf.NewInstance(sqlCtx, database, expressions)
 	if err != nil {
-		return nil, fmt.Errorf("error getting logs for ref '%s': %v", ref, err)
-	}
-	if len(rows) == 0 {
-		return nil, nil
+		return nil, fmt.Errorf("error creating LogTableFunction instance: %v", err)
 	}
 
-	row := rows[0]
+	ltf = node.(*dtablefunctions.LogTableFunction)
+	ltf = ltf.WithShowCommitterOnly(true)
+
+	rowIter, err := ltf.RowIter(sqlCtx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("error getting row iterator for ref '%s': %v", ref, err)
+	}
+	defer func(rowIter sql.RowIter, context *sql.Context) {
+		_ = rowIter.Close(context)
+	}(rowIter, sqlCtx)
+
+	row, err := rowIter.Next(sqlCtx)
+	if err != nil {
+		if err == io.EOF {
+			return nil, nil // No commits found
+		}
+		return nil, fmt.Errorf("error reading commit data for ref '%s': %v", ref, err)
+	}
+
 	commitHash := row[0].(string)
 	committerName := row[1].(string)
 	committerEmail := row[2].(string)
@@ -749,24 +765,16 @@ func getCommitInfoSQL(queryist cli.Queryist, sqlCtx *sql.Context, ref string, op
 	if err != nil {
 		return nil, fmt.Errorf("error parsing committer timestamp: %v", err)
 	}
+
 	message := row[4].(string)
 	commitOrder, err := getUint64ColAsUint64(row[5])
 	if err != nil {
 		return nil, fmt.Errorf("error parsing commit_order: %v", err)
 	}
 
-	// Extended schema has author columns at positions 6, 7, 8
-	authorName := row[6].(string)
-	authorEmail := row[7].(string)
-	authorTimestamp, err := getTimestampColAsUint64(row[8])
-	if err != nil {
-		return nil, fmt.Errorf("error parsing author timestamp: %v", err)
-	}
-
-	// Parse parent hashes from parents column
 	var parentHashes []string
-	if len(row) > 9 && row[9] != nil {
-		if parent := row[9].(string); parent != "" {
+	if len(row) > 6 && row[6] != nil {
+		if parent := row[6].(string); parent != "" {
 			parentHashes = strings.Split(parent, ", ")
 		}
 	}
@@ -776,7 +784,6 @@ func getCommitInfoSQL(queryist cli.Queryist, sqlCtx *sql.Context, ref string, op
 		signature = row[len(row)-1].(string)
 	}
 
-	// Get branch and tag info
 	localBranches, err := getBranchesForHash(queryist, sqlCtx, commitHash, true)
 	if err != nil {
 		return nil, fmt.Errorf("error getting branches for hash '%s': %v", commitHash, err)
@@ -790,18 +797,15 @@ func getCommitInfoSQL(queryist cli.Queryist, sqlCtx *sql.Context, ref string, op
 		return nil, fmt.Errorf("error getting tags for hash '%s': %v", commitHash, err)
 	}
 
-	// Restore prior setting after query
-	_, _ = cli.GetRowsForSql(queryist, sqlCtx, "SET dolt_log_committer_only = @saved_compact;")
-
 	return &CommitInfo{
 		commitMeta: &datas.CommitMeta{
-			Name:           authorName,
-			Email:          authorEmail,
+			Name:           committerName,
+			Email:          committerEmail,
 			Timestamp:      committerTimestamp,
 			CommitterName:  &committerName,
 			CommitterEmail: &committerEmail,
 			Description:    message,
-			UserTimestamp:  int64(authorTimestamp),
+			UserTimestamp:  int64(committerTimestamp),
 			Signature:      signature,
 		},
 		commitHash:        commitHash,
