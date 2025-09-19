@@ -92,6 +92,34 @@ teardown() {
     [[ "$output" =~ "t1" ]] || false
 }
 
+@test "replication: push new branch create" {
+    cd repo1
+    dolt config --local --add sqlserver.global.dolt_replicate_to_remote backup1
+
+    dolt sql -q "create table t1 (a int primary key)"
+    dolt add .
+    dolt commit -am "cm"
+
+    cd ..
+    run dolt clone file://./bac1 repo2
+    [ "$status" -eq 0 ]
+
+    cd repo2
+    run dolt ls
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
+    [[ "$output" =~ "t1" ]] || false
+
+    cd ../repo1
+    dolt branch newbranch
+
+    cd ../repo2
+    dolt pull
+    run dolt branch
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "newbranch" ]] || false
+}
+
 @test "replication: push branch delete" {
     cd repo1
     dolt push remote1 feature
