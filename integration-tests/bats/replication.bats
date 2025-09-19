@@ -1,5 +1,6 @@
 #!/usr/bin/env bats
 load $BATS_TEST_DIRNAME/helper/common.bash
+load $BATS_TEST_DIRNAME/helper/query-server-common.bash
 
 setup() {
     setup_common
@@ -119,6 +120,28 @@ teardown() {
     [[ "$output" =~ "newbranch" ]] || false
 
     dolt checkout --track origin/newbranch
+
+    # Now create a branch with dolt sql
+    cd ../repo1
+    dolt sql -q "call dolt_branch('newbranch2')"
+
+    cd ../repo2
+    dolt pull origin
+    run dolt branch -a
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "newbranch2" ]] || false
+
+    # Finally, with a running sql server
+    cd ../repo1
+    start_sql_server
+    dolt sql -q "call dolt_branch('newbranch3')"
+    stop_sql_server
+    
+    cd ../repo2
+    dolt pull origin
+    run dolt branch -a
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "newbranch3" ]] || false
 }
 
 @test "replication: push branch delete" {
