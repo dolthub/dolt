@@ -111,7 +111,7 @@ func (s3p awsTablePersister) Exists(ctx context.Context, name string, _ uint32, 
 	return s3or.objectExistsInChunkSource(ctx, name, stats)
 }
 
-func (s3p awsTablePersister) CopyTableFile(ctx context.Context, r io.Reader, fileId string, fileSz uint64, chunkCount uint32) error {
+func (s3p awsTablePersister) CopyTableFile(ctx context.Context, r io.Reader, fileId string, fileSz uint64, _ uint64) error {
 	return s3p.multipartUpload(ctx, r, fileSz, fileId)
 }
 
