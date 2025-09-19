@@ -1,4 +1,4 @@
-// Copyright 2024 Dolthub, Inc.
+// Copyright 2025 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,8 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package doltversion
+package dolt_ci
 
-const (
-	Version = "1.59.12"
-)
+// WorkflowDoltTestStepId is the ID type for workflow_dolt_test_steps rows.
+type WorkflowDoltTestStepId string
+
+// WorkflowDoltTestStep models a row in workflow_dolt_test_steps, which attaches
+// a Dolt Test step to a generic workflow step.
+type WorkflowDoltTestStep struct {
+	Id               *WorkflowDoltTestStepId `db:"id"`
+	WorkflowStepIdFK *WorkflowStepId         `db:"workflow_step_id_fk"`
+}

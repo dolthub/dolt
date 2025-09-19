@@ -199,8 +199,8 @@ func main() {
 
 	var wg sync.WaitGroup
 	for i := 0; i < config.threads; i++ {
+		wg.Add(1)
 		go func() {
-			wg.Add(1)
 			defer wg.Done()
 			worker(jobs, results, ctx, config)
 		}()
