@@ -861,6 +861,7 @@ type TableFileDetails struct {
 	ContentHash   []byte                 `protobuf:"bytes,3,opt,name=content_hash,json=contentHash,proto3" json:"content_hash,omitempty"`
 	NumChunks     uint64                 `protobuf:"varint,4,opt,name=num_chunks,json=numChunks,proto3" json:"num_chunks,omitempty"`
 	Suffix        string                 `protobuf:"bytes,5,opt,name=suffix,proto3" json:"suffix,omitempty"`
+	SplitOffset   uint64                 `protobuf:"varint,6,opt,name=split_offset,json=splitOffset,proto3" json:"split_offset,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -928,6 +929,13 @@ func (x *TableFileDetails) GetSuffix() string {
 		return x.Suffix
 	}
 	return ""
+}
+
+func (x *TableFileDetails) GetSplitOffset() uint64 {
+	if x != nil {
+		return x.SplitOffset
+	}
+	return 0
 }
 
 type GetUploadLocsRequest struct {
@@ -2196,14 +2204,15 @@ const file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDesc = "" +
 	"\x17GetDownloadLocsResponse\x12B\n" +
 	"\x04locs\x18\x01 \x03(\v2..dolt.services.remotesapi.v1alpha1.DownloadLocR\x04locs\x12\x1d\n" +
 	"\n" +
-	"repo_token\x18\x02 \x01(\tR\trepoToken\"\xa3\x01\n" +
+	"repo_token\x18\x02 \x01(\tR\trepoToken\"\xc6\x01\n" +
 	"\x10TableFileDetails\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\fR\x02id\x12%\n" +
 	"\x0econtent_length\x18\x02 \x01(\x04R\rcontentLength\x12!\n" +
 	"\fcontent_hash\x18\x03 \x01(\fR\vcontentHash\x12\x1d\n" +
 	"\n" +
 	"num_chunks\x18\x04 \x01(\x04R\tnumChunks\x12\x16\n" +
-	"\x06suffix\x18\x05 \x01(\tR\x06suffix\"\xa9\x02\n" +
+	"\x06suffix\x18\x05 \x01(\tR\x06suffix\x12!\n" +
+	"\fsplit_offset\x18\x06 \x01(\x04R\vsplitOffset\"\xa9\x02\n" +
 	"\x14GetUploadLocsRequest\x12B\n" +
 	"\arepo_id\x18\x01 \x01(\v2).dolt.services.remotesapi.v1alpha1.RepoIdR\x06repoId\x12.\n" +
 	"\x11table_file_hashes\x18\x02 \x03(\fB\x02\x18\x01R\x0ftableFileHashes\x12a\n" +
