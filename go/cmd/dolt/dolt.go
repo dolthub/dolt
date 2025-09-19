@@ -67,6 +67,7 @@ import (
 )
 
 var dumpDocsCommand = &commands.DumpDocsCmd{}
+
 var dumpZshCommand = &commands.GenZshCompCmd{}
 
 var commandsWithoutCliCtx = []cli.Command{
