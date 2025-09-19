@@ -225,7 +225,7 @@ func (d *DynamicResources) GetOrAllocateTempDir(name string) string {
 
 func (d *DynamicResources) ApplyTemplate(s string) string {
 	tmpl, err := template.New("sql").Funcs(map[string]any{
-		"get_port": d.GetOrAllocatePort,
+		"get_port":    d.GetOrAllocatePort,
 		"get_tempdir": d.GetOrAllocateTempDir,
 	}).Parse(s)
 	require.NoError(d.t, err)
@@ -379,6 +379,12 @@ func (test Test) Run(t *testing.T) {
 				require.NoError(t, err)
 				defer conn.Close()
 
+				{
+					ctx, cancel := context.WithTimeout(context.Background(), timeout)
+					_, _ = conn.ExecContext(ctx, "SET @@SESSION.dolt_log_committer_only = 1;")
+					cancel()
+				}
+
 				for _, q := range c.Queries {
 					RunQueryAttempt(t, conn, q, &ports)
 				}
@@ -392,6 +398,12 @@ func (test Test) Run(t *testing.T) {
 				conn, err := db.Conn(context.Background())
 				require.NoError(t, err)
 				defer conn.Close()
+
+				{
+					ctx, cancel := context.WithTimeout(context.Background(), timeout)
+					_, _ = conn.ExecContext(ctx, "SET @@SESSION.dolt_log_committer_only = 1;")
+					cancel()
+				}
 
 				for _, q := range c.Queries {
 					RunQuery(t, conn, q, &ports)

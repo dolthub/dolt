@@ -25,13 +25,18 @@ import (
 
 type CommitStagedProps struct {
 	Message    string
-	Date       time.Time
 	AllowEmpty bool
 	SkipEmpty  bool
 	Amend      bool
 	Force      bool
+	Date       time.Time
 	Name       string
 	Email      string
+
+	CommitterDate time.Time
+	// Default to author metadata when not set, excluding date
+	CommitterName  string
+	CommitterEmail string
 }
 
 // GetCommitStaged returns a new pending commit with the roots and commit properties given.
@@ -105,7 +110,14 @@ func GetCommitStaged(
 		}
 	}
 
-	meta, err := datas.NewCommitMetaWithUserTS(props.Name, props.Email, props.Message, props.Date)
+	var meta *datas.CommitMeta
+
+	if props.CommitterName != "" || props.CommitterEmail != "" || !props.CommitterDate.IsZero() {
+		meta, err = datas.NewCommitMetaWithAuthorCommitter(props.Name, props.Email, props.Message, props.Date, props.CommitterName, props.CommitterEmail, datas.CommitterDate())
+	} else {
+		meta, err = datas.NewCommitMetaWithUserTS(props.Name, props.Email, props.Message, props.Date)
+	}
+
 	if err != nil {
 		return nil, err
 	}

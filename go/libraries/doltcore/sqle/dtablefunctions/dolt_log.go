@@ -29,6 +29,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/libraries/utils/gpg"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -41,25 +42,17 @@ var _ sql.ExecSourceRel = (*LogTableFunction)(nil)
 var _ sql.AuthorizationCheckerNode = (*LogTableFunction)(nil)
 
 type LogTableFunction struct {
-	database        sql.Database
-	ctx             *sql.Context
-	decoration      string
-	revisionStrs    []string
-	notRevisionStrs []string
-	tableNames      []string
-	argumentExprs   []sql.Expression
-	minParents      int
-	showParents     bool
-	showSignature   bool
-}
-
-var logTableSchema = sql.Schema{
-	&sql.Column{Name: "commit_hash", Type: types.Text},
-	&sql.Column{Name: "committer", Type: types.Text},
-	&sql.Column{Name: "email", Type: types.Text},
-	&sql.Column{Name: "date", Type: types.Datetime},
-	&sql.Column{Name: "message", Type: types.Text},
-	&sql.Column{Name: "commit_order", Type: types.Uint64},
+	database          sql.Database
+	ctx               *sql.Context
+	decoration        string
+	revisionStrs      []string
+	notRevisionStrs   []string
+	tableNames        []string
+	argumentExprs     []sql.Expression
+	minParents        int
+	showParents       bool
+	showSignature     bool
+	showCommitterOnly *bool
 }
 
 // NewInstance creates a new instance of TableFunction interface
@@ -168,7 +161,15 @@ func (ltf *LogTableFunction) getOptionsString() string {
 
 // Schema implements the sql.Node interface.
 func (ltf *LogTableFunction) Schema() sql.Schema {
-	logSchema := logTableSchema
+	schType := dtables.LogSchema
+	if ltf.showCommitterOnly == nil {
+		systemFlagCommitterOnly, _ := dsess.GetBooleanSystemVar(ltf.ctx, dsess.DoltLogCommitterOnly)
+		ltf.showCommitterOnly = &systemFlagCommitterOnly
+	}
+	if *ltf.showCommitterOnly {
+		schType = dtables.LogSchemaCommitterOnly
+	}
+	logSchema := dtables.GetLogTableSchemaWithType(&schType)
 
 	if ltf.showParents {
 		logSchema = append(logSchema, &sql.Column{Name: "parents", Type: types.Text})
@@ -312,6 +313,13 @@ func (ltf *LogTableFunction) WithExpressions(exprs ...sql.Expression) (sql.Node,
 	newLtf.notRevisionStrs = nil
 
 	return &newLtf, nil
+}
+
+// WithShowCommitterOnly sets the showCommitterOnly field and returns a new LogTableFunction instance
+func (ltf *LogTableFunction) WithShowCommitterOnly(showCommitterOnly bool) *LogTableFunction {
+	newLtf := *ltf
+	newLtf.showCommitterOnly = &showCommitterOnly
+	return &newLtf
 }
 
 // deferExpressions stores the input expressions for later evaluation during execution.
@@ -783,7 +791,7 @@ func (itr *logTableFunctionRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 		}
 	}
 
-	row := sql.NewRow(commitHash.String(), meta.Name, meta.Email, meta.Time(), meta.Description, height)
+	row := dtables.BuildLogRow(ctx, commitHash, meta, height)
 
 	if itr.showParents {
 		prStr, err := getParentsString(ctx, commit)
