@@ -954,7 +954,7 @@ func (dcs *DoltChunkStore) uploadChunks(ctx context.Context, hashToChunk map[has
 
 // NM4 - This method is called from two paths. One is the WriteTableFile function, which works with noms tables and archives,
 // and the other is the uploadChunks function, which works with noms chunks and chunk tables.
-func (dcs *DoltChunkStore) uploadTableFileWithRetries(ctx context.Context, tableFileId hash.Hash, suffix string, _ uint64, numChunks uint64, tableFileContentHash []byte, getContent func() (io.ReadCloser, uint64, error)) error {
+func (dcs *DoltChunkStore) uploadTableFileWithRetries(ctx context.Context, tableFileId hash.Hash, suffix string, splitOffset uint64, numChunks uint64, tableFileContentHash []byte, getContent func() (io.ReadCloser, uint64, error)) error {
 	op := func() error {
 		body, contentLength, err := getContent()
 		if err != nil {
@@ -967,7 +967,7 @@ func (dcs *DoltChunkStore) uploadTableFileWithRetries(ctx context.Context, table
 			ContentHash:   tableFileContentHash,
 			NumChunks:     numChunks,
 			Suffix:        suffix,
-			// NM4 - SplitOffset: splitOffset,
+			SplitOffset:   splitOffset,
 		}
 
 		dcs.logf("getting upload location for file %s", tableFileId.String())
