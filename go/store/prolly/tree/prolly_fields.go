@@ -361,15 +361,6 @@ func PutField(ctx context.Context, ns NodeStore, tb *val.TupleBuilder, i int, v 
 		}
 	case val.ExtendedAdaptiveEnc:
 		switch value := v.(type) {
-		case string:
-			valueBytes, err := tb.Desc.Handlers[i].SerializeValue(ctx, v)
-			if err != nil {
-				return err
-			}
-			err = tb.PutAdaptiveValue(ctx, ns, i, valueBytes)
-			if err != nil {
-				return err
-			}
 		case *val.ExtendedValueWrapper:
 			if value.IsExactLength() {
 				tb.PutAdaptiveExtendedFromOutline(i, value)
@@ -382,6 +373,15 @@ func PutField(ctx context.Context, ns NodeStore, tb *val.TupleBuilder, i int, v 
 				if err != nil {
 					return err
 				}
+			}
+		default:
+			valueBytes, err := tb.Desc.Handlers[i].SerializeValue(ctx, v)
+			if err != nil {
+				return err
+			}
+			err = tb.PutAdaptiveValue(ctx, ns, i, valueBytes)
+			if err != nil {
+				return err
 			}
 		}
 	default:
