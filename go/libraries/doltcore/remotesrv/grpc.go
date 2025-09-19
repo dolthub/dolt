@@ -425,7 +425,7 @@ func (rs *RemoteChunkStore) getUploadUrl(md metadata.MD, repoPath string, tfd *r
 	fileID := hash.New(tfd.Id).String() + tfd.Suffix
 	params := url.Values{}
 	params.Add("num_chunks", strconv.Itoa(int(tfd.NumChunks)))
-	// NM4.	params.Add("split_offset", strconv.Itoa(int(tfd.SplitOffset)))
+	params.Add("split_offset", strconv.Itoa(int(tfd.SplitOffset)))
 	params.Add("content_length", strconv.Itoa(int(tfd.ContentLength)))
 	params.Add("content_hash", base64.RawURLEncoding.EncodeToString(tfd.ContentHash))
 	return &url.URL{
