@@ -58,7 +58,6 @@ teardown() {
 }
 
 @test "replication: push on cli commit" {
-
     cd repo1
     dolt config --local --add sqlserver.global.dolt_replicate_to_remote backup1
     dolt sql -q "create table t1 (a int primary key)"
@@ -114,8 +113,8 @@ teardown() {
     dolt branch newbranch
 
     cd ../repo2
-    dolt pull
-    run dolt branch
+    dolt pull origin
+    run dolt branch -a
     [ "$status" -eq 0 ]
     [[ "$output" =~ "newbranch" ]] || false
 }
