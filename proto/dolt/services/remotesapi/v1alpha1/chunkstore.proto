@@ -137,13 +137,13 @@ message GetDownloadLocsResponse {
   string repo_token = 2;
 }
 
-// NM4 - probably need to add the splitOffset.
 message TableFileDetails {
   bytes id = 1;
   uint64 content_length = 2;
   bytes content_hash = 3;
   uint64 num_chunks = 4;
   string suffix = 5;
+  uint64 split_offset = 6;
 }
 
 message GetUploadLocsRequest {
