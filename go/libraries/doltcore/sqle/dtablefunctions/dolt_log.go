@@ -42,16 +42,17 @@ var _ sql.ExecSourceRel = (*LogTableFunction)(nil)
 var _ sql.AuthorizationCheckerNode = (*LogTableFunction)(nil)
 
 type LogTableFunction struct {
-	database        sql.Database
-	ctx             *sql.Context
-	decoration      string
-	revisionStrs    []string
-	notRevisionStrs []string
-	tableNames      []string
-	argumentExprs   []sql.Expression
-	minParents      int
-	showParents     bool
-	showSignature   bool
+	database          sql.Database
+	ctx               *sql.Context
+	decoration        string
+	revisionStrs      []string
+	notRevisionStrs   []string
+	tableNames        []string
+	argumentExprs     []sql.Expression
+	minParents        int
+	showParents       bool
+	showSignature     bool
+	showCommitterOnly *bool
 }
 
 // NewInstance creates a new instance of TableFunction interface
@@ -161,7 +162,11 @@ func (ltf *LogTableFunction) getOptionsString() string {
 // Schema implements the sql.Node interface.
 func (ltf *LogTableFunction) Schema() sql.Schema {
 	schType := dtables.LogSchema
-	if showCommitterOnly, _ := dsess.GetBooleanSystemVar(ltf.ctx, dsess.DoltLogCommitterOnly); showCommitterOnly {
+	if ltf.showCommitterOnly == nil {
+		systemFlagCommitterOnly, _ := dsess.GetBooleanSystemVar(ltf.ctx, dsess.DoltLogCommitterOnly)
+		ltf.showCommitterOnly = &systemFlagCommitterOnly
+	}
+	if *ltf.showCommitterOnly {
 		schType = dtables.LogSchemaCommitterOnly
 	}
 	logSchema := dtables.GetLogTableSchemaWithType(&schType)
@@ -308,6 +313,13 @@ func (ltf *LogTableFunction) WithExpressions(exprs ...sql.Expression) (sql.Node,
 	newLtf.notRevisionStrs = nil
 
 	return &newLtf, nil
+}
+
+// WithShowCommitterOnly sets the showCommitterOnly field and returns a new LogTableFunction instance
+func (ltf *LogTableFunction) WithShowCommitterOnly(showCommitterOnly bool) *LogTableFunction {
+	newLtf := *ltf
+	newLtf.showCommitterOnly = &showCommitterOnly
+	return &newLtf
 }
 
 // deferExpressions stores the input expressions for later evaluation during execution.
