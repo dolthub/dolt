@@ -1,5 +1,6 @@
 #!/usr/bin/env bats
 load $BATS_TEST_DIRNAME/helper/common.bash
+load $BATS_TEST_DIRNAME/helper/query-server-common.bash
 
 setup() {
     setup_common
@@ -58,7 +59,6 @@ teardown() {
 }
 
 @test "replication: push on cli commit" {
-
     cd repo1
     dolt config --local --add sqlserver.global.dolt_replicate_to_remote backup1
     dolt sql -q "create table t1 (a int primary key)"
@@ -90,6 +90,58 @@ teardown() {
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 2 ]
     [[ "$output" =~ "t1" ]] || false
+}
+
+@test "replication: push new branch create" {
+    cd repo1
+    dolt config --local --add sqlserver.global.dolt_replicate_to_remote backup1
+
+    dolt sql -q "create table t1 (a int primary key)"
+    dolt add .
+    dolt commit -am "cm"
+
+    cd ..
+    run dolt clone file://./bac1 repo2
+    [ "$status" -eq 0 ]
+
+    cd repo2
+    run dolt ls
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
+    [[ "$output" =~ "t1" ]] || false
+
+    cd ../repo1
+    dolt branch newbranch
+
+    cd ../repo2
+    dolt pull origin
+    run dolt branch -a
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "newbranch" ]] || false
+
+    dolt checkout --track origin/newbranch
+
+    # Now create a branch with dolt sql
+    cd ../repo1
+    dolt sql -q "call dolt_branch('newbranch2')"
+
+    cd ../repo2
+    dolt pull origin
+    run dolt branch -a
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "newbranch2" ]] || false
+
+    # Finally, with a running sql server
+    cd ../repo1
+    start_sql_server
+    dolt sql -q "call dolt_branch('newbranch3')"
+    stop_sql_server
+    
+    cd ../repo2
+    dolt pull origin
+    run dolt branch -a
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "newbranch3" ]] || false
 }
 
 @test "replication: push branch delete" {
