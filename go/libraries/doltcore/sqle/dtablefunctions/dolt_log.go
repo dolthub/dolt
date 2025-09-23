@@ -26,6 +26,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions/commitwalk"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
@@ -497,7 +498,7 @@ func (ltf *LogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter
 		return commit.NumParents() >= ltf.minParents, nil
 	}
 
-	cHashToRefs, err := getCommitHashToRefs(ctx, sqledb.DbData().Ddb, ltf.decoration)
+	cHashToRefs, err := GetCommitHashToRefs(ctx, sqledb.DbData().Ddb, ltf.decoration)
 	if err != nil {
 		return nil, err
 	}
@@ -592,7 +593,48 @@ func (ltf *LogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter
 }
 
 // getCommitHashToRefs builds map of commit hashes to branch/tag names for decoration.
-func getCommitHashToRefs(ctx *sql.Context, ddb *doltdb.DoltDB, decoration string) (map[hash.Hash][]string, error) {
+// ResolveCommitForRef resolves a commit reference using the same logic as LogTableFunction.
+// This is a public method that can be used by other packages to resolve commits consistently.
+func ResolveCommitForRef(ctx *sql.Context, database sql.Database, commitRef string) (*doltdb.Commit, error) {
+	sqledb, ok := database.(dsess.SqlDatabase)
+	if !ok {
+		return nil, fmt.Errorf("database is not a Dolt database: %T", database)
+	}
+
+	cs, err := doltdb.NewCommitSpec(commitRef)
+	if err != nil {
+		return nil, fmt.Errorf("error creating commit spec for '%s': %v", commitRef, err)
+	}
+
+	// Get head reference like LogTableFunction does - handle detached HEAD case
+	var headRef ref.DoltRef
+	if doltSess, ok := ctx.Session.(*dsess.DoltSession); ok {
+		dbName := ctx.GetCurrentDatabase()
+		headRef, err = doltSess.CWBHeadRef(ctx, dbName)
+		if err == doltdb.ErrOperationNotSupportedInDetachedHead {
+			// In detached HEAD state, we can still resolve commits without a branch ref
+			headRef = nil
+		} else if err != nil {
+			return nil, fmt.Errorf("error getting head ref: %v", err)
+		}
+	}
+
+	optCmt, err := sqledb.DbData().Ddb.Resolve(ctx, cs, headRef)
+	if err != nil {
+		return nil, fmt.Errorf("error resolving commit '%s': %v", commitRef, err)
+	}
+
+	commit, ok := optCmt.ToCommit()
+	if !ok {
+		return nil, fmt.Errorf("no commit found for ref '%s'", commitRef)
+	}
+
+	return commit, nil
+}
+
+// GetCommitHashToRefs builds map of commit hashes to branch/tag names for decoration.
+// This is a public method that can be used by other packages.
+func GetCommitHashToRefs(ctx *sql.Context, ddb *doltdb.DoltDB, decoration string) (map[hash.Hash][]string, error) {
 	cHashToRefs := map[hash.Hash][]string{}
 
 	// Get all branches
@@ -676,6 +718,12 @@ func (ltf *LogTableFunction) NewLogTableFunctionRowIter(ctx *sql.Context, ddb *d
 		headHash:      h,
 		tableNames:    tableNames,
 	}, nil
+}
+
+func (ltf *LogTableFunction) WithShowCommitterOnly(showCommitterOnly bool) (sql.Node, error) {
+	newLtf := *ltf
+	newLtf.showCommitterOnly = &showCommitterOnly
+	return &newLtf, nil
 }
 
 // NewDotDotLogTableFunctionRowIter creates iterator for range queries with inclusion/exclusion commits.
