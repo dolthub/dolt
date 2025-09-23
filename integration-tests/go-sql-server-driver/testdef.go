@@ -28,7 +28,7 @@ import (
 	driver "github.com/dolthub/dolt/go/libraries/doltcore/dtestutils/sql_server_driver"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	yaml "gopkg.in/yaml.v3"
+	"gopkg.in/yaml.v3"
 )
 
 var GlobalPorts GlobalDynamicResources
@@ -379,12 +379,6 @@ func (test Test) Run(t *testing.T) {
 				require.NoError(t, err)
 				defer conn.Close()
 
-				{
-					ctx, cancel := context.WithTimeout(context.Background(), timeout)
-					_, _ = conn.ExecContext(ctx, "SET @@SESSION.dolt_log_committer_only = 1;")
-					cancel()
-				}
-
 				for _, q := range c.Queries {
 					RunQueryAttempt(t, conn, q, &ports)
 				}
@@ -398,12 +392,6 @@ func (test Test) Run(t *testing.T) {
 				conn, err := db.Conn(context.Background())
 				require.NoError(t, err)
 				defer conn.Close()
-
-				{
-					ctx, cancel := context.WithTimeout(context.Background(), timeout)
-					_, _ = conn.ExecContext(ctx, "SET @@SESSION.dolt_log_committer_only = 1;")
-					cancel()
-				}
 
 				for _, q := range c.Queries {
 					RunQuery(t, conn, q, &ports)

@@ -707,6 +707,7 @@ func getCommitInfo(queryist cli.Queryist, sqlCtx *sql.Context, ref string) (*Com
 	return getCommitInfoWithOptions(queryist, sqlCtx, ref, commitInfoOptions{})
 }
 
+// getCommitInfoWithOptions returns the commit info for the given ref, with options.
 func getCommitInfoWithOptions(queryist cli.Queryist, sqlCtx *sql.Context, ref string, opts commitInfoOptions) (*CommitInfo, error) {
 	hashOfHead, err := getHashOf(queryist, sqlCtx, "HEAD")
 	if err != nil {
@@ -740,7 +741,7 @@ func getCommitInfoWithOptions(queryist cli.Queryist, sqlCtx *sql.Context, ref st
 	}
 
 	ltf = node.(*dtablefunctions.LogTableFunction)
-	ltf = ltf.WithShowCommitterOnly(true)
+	ltf = ltf.WithShowCommitterOnly(false)
 
 	rowIter, err := ltf.RowIter(sqlCtx, nil)
 	if err != nil {
@@ -772,9 +773,16 @@ func getCommitInfoWithOptions(queryist cli.Queryist, sqlCtx *sql.Context, ref st
 		return nil, fmt.Errorf("error parsing commit_order: %v", err)
 	}
 
+	authorName := row[6].(string)
+	authorEmail := row[7].(string)
+	authorTimestamp, err := getTimestampColAsUint64(row[8])
+	if err != nil {
+		return nil, fmt.Errorf("error parsing author timestamp: %v", err)
+	}
+
 	var parentHashes []string
-	if len(row) > 6 && row[6] != nil {
-		if parent := row[6].(string); parent != "" {
+	if len(row) > 9 && row[9] != nil {
+		if parent := row[9].(string); parent != "" {
 			parentHashes = strings.Split(parent, ", ")
 		}
 	}
@@ -799,14 +807,14 @@ func getCommitInfoWithOptions(queryist cli.Queryist, sqlCtx *sql.Context, ref st
 
 	return &CommitInfo{
 		commitMeta: &datas.CommitMeta{
-			Name:           committerName,
-			Email:          committerEmail,
-			Timestamp:      committerTimestamp,
+			Name:           authorName,
+			Email:          authorEmail,
+			UserTimestamp:  int64(authorTimestamp),
+			Description:    message,
+			Signature:      signature,
 			CommitterName:  &committerName,
 			CommitterEmail: &committerEmail,
-			Description:    message,
-			UserTimestamp:  int64(committerTimestamp),
-			Signature:      signature,
+			Timestamp:      committerTimestamp,
 		},
 		commitHash:        commitHash,
 		height:            commitOrder,

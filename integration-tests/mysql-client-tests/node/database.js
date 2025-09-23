@@ -4,9 +4,6 @@ export class Database {
   constructor(config) {
     this.connection = mysql.createConnection(config);
     this.connection.connect();
-    this.connection.query("SET @@SESSION.dolt_log_committer_only = 1;", (err) => {
-      if (err) console.warn("Failed to set dolt_log_committer_only:", err.message);
-    });
   }
 
   query(sql, args) {
