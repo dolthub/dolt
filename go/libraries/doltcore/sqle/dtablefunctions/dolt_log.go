@@ -315,13 +315,6 @@ func (ltf *LogTableFunction) WithExpressions(exprs ...sql.Expression) (sql.Node,
 	return &newLtf, nil
 }
 
-// WithShowCommitterOnly sets the showCommitterOnly field and returns a new LogTableFunction instance
-func (ltf *LogTableFunction) WithShowCommitterOnly(showCommitterOnly bool) *LogTableFunction {
-	newLtf := *ltf
-	newLtf.showCommitterOnly = &showCommitterOnly
-	return &newLtf
-}
-
 // deferExpressions stores the input expressions for later evaluation during execution.
 // This table function violates SQL analyzer principles by evaluating expressions
 // during analysis. This is necessary because the schema changes based on what
