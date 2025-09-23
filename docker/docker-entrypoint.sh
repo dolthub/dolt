@@ -23,7 +23,11 @@ mysql_warn() {
 }
 mysql_error() {
 	mysql_log ERROR "$@" >&2
-  mysql_note "Remove this container with 'docker rm -f <container_name>' before retrying"
+    if [ -f "/tmp/server.log" ]; then
+        mysql_note "Server log:"
+        cat /tmp/server.log >&2
+    fi
+    mysql_note "Remove this container with 'docker rm -f <container_name>' before retrying"
 	exit 1
 }
 docker_process_sql() {
@@ -236,34 +240,48 @@ _main() {
     mysql_note "Starting Dolt server in background..."
     dolt sql-server --host=0.0.0.0 --port=3306 "$@" > /tmp/server.log 2>&1 &
     local server_pid=$!
-    
-    # Wait for server to be ready
+
+    # Wait for server to be ready and all required capabilities to be functional
     local max_attempts=30
     local attempt=0
+    local last_error=""
     while [ $attempt -lt $max_attempts ]; do
-        if dolt sql -q "SELECT 1;" >/dev/null 2>&1; then
+        # Connectivity
+        local basic_output
+        if ! basic_output=$(dolt sql -q "SELECT 1;" 2>&1); then
+            last_error="Basic connectivity failed: $basic_output"
+        # MySQL system tables are accessible
+        elif ! mysql_output=$(dolt sql -q "SELECT COUNT(*) FROM mysql.user;" 2>&1); then
+            last_error="MySQL system tables not accessible: $mysql_output"
+        # Database creation capability
+        elif ! db_test_output=$(dolt sql -q "CREATE DATABASE IF NOT EXISTS __health_check_db__; DROP DATABASE __health_check_db__;" 2>&1); then
+            last_error="Database creation/deletion not working: $db_test_output"
+        # User privilege queries work
+        elif ! priv_output=$(dolt sql -q "SELECT COUNT(*) FROM mysql.db;" 2>&1); then
+            last_error="Privilege tables not accessible: $priv_output"
+        else
             mysql_note "Server initialization complete!"
             break
         fi
         sleep 1
         attempt=$((attempt + 1))
     done
-    
+
     if [ $attempt -eq $max_attempts ]; then
-        mysql_error "Server failed to start within 30 seconds"
+        mysql_error "Server failed to be ready within 30 seconds. Last error: $last_error"
     fi
-    
+
     # Create root user with the specified host (defaults to localhost if not specified)
     local root_host="${DOLT_ROOT_HOST:-localhost}"
     mysql_note "Ensuring root@${root_host} superuser exists with password"
-    
+
     # Ensure root user exists with correct password and permissions
     mysql_note "Configuring root@${root_host} user"
     dolt sql -q "CREATE USER IF NOT EXISTS 'root'@'${root_host}' IDENTIFIED BY '${DOLT_ROOT_PASSWORD}'; ALTER USER 'root'@'${root_host}' IDENTIFIED BY '${DOLT_ROOT_PASSWORD}'; GRANT ALL ON *.* TO 'root'@'${root_host}' WITH GRANT OPTION;" >/dev/null 2>&1 || mysql_error "Failed to configure root@${root_host} user."
-    
+
     # If DOLT_DATABASE or MYSQL_DATABASE has been specified, create the database if it does not exist
     create_default_database_from_env
-    
+
     # Show what users exist for debugging
     mysql_note "Current users in the system:"
     dolt sql -q "SELECT User, Host FROM mysql.user;" 2>&1 | grep -v "^$" || mysql_warn "Could not list users"
@@ -274,7 +292,7 @@ _main() {
     # Kill the background process and restart in foreground to show live output
     kill $server_pid 2>/dev/null || true
     wait $server_pid 2>/dev/null || true
-    
+
     # Start server in foreground to show live output
     exec dolt sql-server --host=0.0.0.0 --port=3306 "$@"
 }
