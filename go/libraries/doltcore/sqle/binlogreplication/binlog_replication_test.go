@@ -77,8 +77,7 @@ func newHarness(t *testing.T) *harness {
 // doltReplicaSystemVars are the common system variables that need
 // to be set on a Dolt replica before replication is turned on.
 var doltReplicaSystemVars = map[string]string{
-	"server_id":               "42",
-	"dolt_log_committer_only": "1",
+	"server_id": "42",
 }
 
 func TestMain(m *testing.M) {
