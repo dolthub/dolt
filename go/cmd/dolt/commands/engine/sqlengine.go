@@ -38,7 +38,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/servercfg"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
-	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	dblr "github.com/dolthub/dolt/go/libraries/doltcore/sqle/binlogreplication"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/cluster"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dprocedures"
@@ -54,7 +53,7 @@ import (
 
 // SqlEngine packages up the context necessary to run sql queries against dsqle.
 type SqlEngine struct {
-	provider       *dsqle.DoltDatabaseProvider
+	provider       *sqle.DoltDatabaseProvider
 	ContextFactory sql.ContextFactory
 	dsessFactory   sessionFactory
 	engine         *gms.Engine
@@ -82,7 +81,7 @@ type SqlEngineConfig struct {
 	JwksConfig                 []servercfg.JwksConfig
 	SystemVariables            SystemVariables
 	ClusterController          *cluster.Controller
-	AutoGCController           *dsqle.AutoGCController
+	AutoGCController           *sqle.AutoGCController
 	BinlogReplicaController    binlogreplication.BinlogReplicaController
 	EventSchedulerStatus       eventscheduler.SchedulerStatus
 }
@@ -122,7 +121,7 @@ func NewSqlEngine(
 
 	bThreads := sql.NewBackgroundThreads()
 	var runAsyncThreads sqle.RunAsyncThreads
-	dbs, runAsyncThreads, err = dsqle.ApplyReplicationConfig(ctx, mrEnv, cli.CliOut, dbs...)
+	dbs, runAsyncThreads, err = sqle.ApplyReplicationConfig(ctx, mrEnv, cli.CliOut, dbs...)
 	if err != nil {
 		return nil, err
 	}
@@ -161,7 +160,7 @@ func NewSqlEngine(
 	}
 
 	b := env.GetDefaultInitBranch(mrEnv.Config())
-	pro, err := dsqle.NewDoltDatabaseProviderWithDatabases(b, mrEnv.FileSystem(), all, locations)
+	pro, err := sqle.NewDoltDatabaseProviderWithDatabases(b, mrEnv.FileSystem(), all, locations)
 	if err != nil {
 		return nil, err
 	}
@@ -474,7 +473,7 @@ func configureBinlogPrimaryController(engine *gms.Engine) error {
 
 // configureEventScheduler configures the event scheduler with the |engine| for executing events, a |sessFactory|
 // for creating sessions, and a DoltDatabaseProvider, |pro|.
-func configureEventScheduler(config *SqlEngineConfig, engine *gms.Engine, ctxFactory sql.ContextFactory, sessFactory sessionFactory, pro *dsqle.DoltDatabaseProvider) error {
+func configureEventScheduler(config *SqlEngineConfig, engine *gms.Engine, ctxFactory sql.ContextFactory, sessFactory sessionFactory, pro *sqle.DoltDatabaseProvider) error {
 	// getCtxFunc is used to create new session with a new context for event scheduler.
 	getCtxFunc := func() (*sql.Context, error) {
 		sess, err := sessFactory(sql.NewBaseSession(), pro)
@@ -513,7 +512,7 @@ func sqlContextFactory(ctx context.Context, opts ...sql.ContextOption) *sql.Cont
 }
 
 // doltSessionFactory returns a sessionFactory that creates a new DoltSession
-func doltSessionFactory(pro *dsqle.DoltDatabaseProvider, statsPro sql.StatsProvider, config config.ReadWriteConfig, bc *branch_control.Controller, gcSafepointController *gcctx.GCSafepointController, autocommit bool) sessionFactory {
+func doltSessionFactory(pro *sqle.DoltDatabaseProvider, statsPro sql.StatsProvider, config config.ReadWriteConfig, bc *branch_control.Controller, gcSafepointController *gcctx.GCSafepointController, autocommit bool) sessionFactory {
 	return func(mysqlSess *sql.BaseSession, provider sql.DatabaseProvider) (*dsess.DoltSession, error) {
 		doltSession, err := dsess.NewDoltSession(mysqlSess, pro, config, bc, statsPro, writer.NewWriteSession, gcSafepointController)
 		if err != nil {
