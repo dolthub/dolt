@@ -719,9 +719,12 @@ func getCommitInfoWithOptions(queryist cli.Queryist, sqlCtx *sql.Context, ref st
 		return nil, fmt.Errorf("no current database set")
 	}
 
-	sess := dsess.DSessFromSess(sqlCtx.Session)
-	provider := sess.Provider()
-	database, err := provider.Database(sqlCtx, dbName)
+	// Get the database directly from the queryist's engine instead of through the session
+	sqlEngine, ok := queryist.(*engine.SqlEngine)
+	if !ok {
+		return nil, fmt.Errorf("queryist is not a SqlEngine, cannot access database catalog")
+	}
+	database, err := sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.Database(sqlCtx, dbName)
 	if err != nil {
 		return nil, fmt.Errorf("error getting database '%s': %v", dbName, err)
 	}
