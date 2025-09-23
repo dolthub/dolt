@@ -42,6 +42,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
@@ -705,7 +706,7 @@ func getCommitInfo(queryist cli.Queryist, sqlCtx *sql.Context, ref string) (*Com
 }
 
 // getCommitInfoWithOptions returns the commit info for the given ref, with options.
-func getCommitInfoWithOptions(queryist cli.Queryist, sqlCtx *sql.Context, ref string, opts commitInfoOptions) (*CommitInfo, error) {
+func getCommitInfoWithOptions(queryist cli.Queryist, sqlCtx *sql.Context, commitRef string, opts commitInfoOptions) (*CommitInfo, error) {
 	hashOfHead, err := getHashOf(queryist, sqlCtx, "HEAD")
 	if err != nil {
 		return nil, fmt.Errorf("error getting hash of HEAD: %v", err)
@@ -727,20 +728,40 @@ func getCommitInfoWithOptions(queryist cli.Queryist, sqlCtx *sql.Context, ref st
 		return nil, fmt.Errorf("error getting database '%s': %v", dbName, err)
 	}
 
-	// Cast to DoltDatabase to access Dolt-specific functionality
-	doltDB, ok := database.(*sqle.Database)
-	if !ok {
+	var sqledb dsess.SqlDatabase
+	if db, ok := database.(dsess.SqlDatabase); ok {
+		sqledb = db
+	} else if unwrapper, ok := database.(interface{ Unwrap() sql.Database }); ok {
+		if unwrapped := unwrapper.Unwrap(); unwrapped != nil {
+			if db, ok := unwrapped.(dsess.SqlDatabase); ok {
+				sqledb = db
+			}
+		}
+	}
+
+	if sqledb == nil {
 		return nil, fmt.Errorf("database is not a Dolt database: %T", database)
 	}
 
-	cs, err := doltdb.NewCommitSpec(ref)
+	cs, err := doltdb.NewCommitSpec(commitRef)
 	if err != nil {
-		return nil, fmt.Errorf("error creating commit spec for '%s': %v", ref, err)
+		return nil, fmt.Errorf("error creating commit spec for '%s': %v", commitRef, err)
 	}
 
-	optCmt, err := doltDB.DbData().Ddb.Resolve(sqlCtx, cs, nil)
+	var headRef ref.DoltRef
+	if doltSess, ok := sqlCtx.Session.(*dsess.DoltSession); ok {
+		headRef, err = doltSess.CWBHeadRef(sqlCtx, dbName)
+		if err == doltdb.ErrOperationNotSupportedInDetachedHead {
+			// In detached HEAD state, we can still resolve commits without a branch ref
+			headRef = nil
+		} else if err != nil {
+			return nil, fmt.Errorf("error getting head ref: %v", err)
+		}
+	}
+
+	optCmt, err := sqledb.DbData().Ddb.Resolve(sqlCtx, cs, headRef)
 	if err != nil {
-		return nil, fmt.Errorf("error resolving commit '%s': %v", ref, err)
+		return nil, fmt.Errorf("error resolving commit '%s': %v", commitRef, err)
 	}
 
 	commit, ok := optCmt.ToCommit()
