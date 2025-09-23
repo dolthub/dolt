@@ -154,7 +154,6 @@ var LogSchemaAuthorColumns = sql.Schema{
 func GetLogTableSchemaWithType(schType *LogSchemaType) sql.Schema {
 	cols := make(sql.Schema, 0, len(LogSchemaCommitterColumns))
 	cols = append(cols, LogSchemaCommitterColumns...)
-	// set pk on commit_hash
 	switch *schType {
 	case LogSchemaCommitterOnly:
 		return cols

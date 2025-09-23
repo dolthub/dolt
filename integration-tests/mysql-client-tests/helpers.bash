@@ -14,7 +14,6 @@ setup_dolt_repo() {
     PORT=$( definePORT )
     USER="dolt"
     dolt sql -q "CREATE USER dolt@'%'; GRANT ALL ON *.* TO dolt@'%';"
-    dolt sql -q "SET PERSIST dolt_log_committer_only = 1;"
     dolt sql-server --host 0.0.0.0 --port=$PORT --loglevel=trace &
     SERVER_PID=$!
     # Give the server a chance to start

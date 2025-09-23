@@ -639,7 +639,7 @@ teardown() {
     [[ "$output" =~ "Original Author <original@example.com>" ]] || false
     
     # Extended schema needed to verify author fields separately from committer
-    run dolt sql -q "SET dolt_log_committer_only = 0; SELECT author, author_email, author_date FROM dolt_log WHERE message = 'commit with specific author'" -r csv
+    run dolt sql -q "SELECT author, author_email, author_date FROM dolt_log WHERE message = 'commit with specific author'" -r csv
     [ $status -eq 0 ]
     [[ "$output" =~ "Original Author,original@example.com" ]] || false
     [[ "$output" =~ "2023-09-26 01:23:45" ]] || false
@@ -699,7 +699,7 @@ teardown() {
     [[ "$output" =~ "Carol Architect <carol@company.com>" ]] || false
     [[ "$output" =~ "Integration Manager <integration@company.com>" ]] || false
     
-    run dolt sql -q "SET dolt_log_committer_only = 0; SELECT author, author_email, message FROM dolt_log WHERE author IN ('Alice Developer', 'Bob Engineer', 'Carol Architect', 'Integration Manager') OR message LIKE 'Merge%' ORDER BY commit_order" -r csv
+    run dolt sql -q "SELECT author, author_email, message FROM dolt_log WHERE author IN ('Alice Developer', 'Bob Engineer', 'Carol Architect', 'Integration Manager') OR message LIKE 'Merge%' ORDER BY commit_order" -r csv
     [ $status -eq 0 ]
     [[ "$output" =~ "Alice Developer,alice@company.com" ]] || false
     [[ "$output" =~ "Bob Engineer,bob@company.com" ]] || false
