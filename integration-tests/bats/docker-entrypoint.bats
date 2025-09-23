@@ -636,3 +636,47 @@ EOF
   
   docker rmi "$SPECIFIC_IMAGE" >/dev/null 2>&1 || true
 }
+
+# bats test_tags=no_lambda
+@test "docker-entrypoint: multiple server start/stop cycles to confirm no timing issues" {
+  cname="${TEST_PREFIX}multi-restart"
+  db="testdb"
+  usr="testuser"
+  pwd="testpass"
+  
+  # Test multiple start/stop cycles to verify health check robustness
+  for cycle in {1..20}; do
+    echo "# Starting server cycle $cycle" >&3
+    
+    # Start container with user and database configuration
+    run_container_with_port "$cname-$cycle" 3306 \
+      -e DOLT_ROOT_PASSWORD=rootpass \
+      -e DOLT_ROOT_HOST=% \
+      -e DOLT_DATABASE="$db" \
+      -e DOLT_USER="$usr" \
+      -e DOLT_PASSWORD="$pwd"
+    
+    echo "# Server cycle $cycle completed successfully" >&3
+    
+    # Verify no errors in container logs
+    run docker logs "$cname-$cycle" 2>&1
+    [ $status -eq 0 ]
+    # Should not contain ERROR messages (but allow warnings)
+    ! echo "$output" | grep -i "ERROR" >/dev/null || false
+    # Should contain success indicators
+    [[ "$output" =~ "Server initialization complete" ]] || false
+    [[ "$output" =~ "Server ready. Accepting connections" ]] || false
+    
+    # Stop the container
+    run docker stop "$cname-$cycle"
+    [ $status -eq 0 ]
+    
+    # Clean up for next cycle
+    run docker rm "$cname-$cycle"
+    [ $status -eq 0 ]
+    
+    echo "# Server cycle $cycle stopped and cleaned up" >&3
+  done
+  
+  echo "# All $cycle server start/stop cycles completed successfully" >&3
+}
