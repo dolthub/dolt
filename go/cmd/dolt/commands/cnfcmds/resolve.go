@@ -31,9 +31,9 @@ import (
 var resDocumentation = cli.CommandDocumentationContent{
 	ShortDesc: "Automatically resolves all conflicts taking either ours or theirs for the given tables",
 	LongDesc: `
-	When a merge finds conflicting changes, it documents them in the dolt_conflicts table. A conflict is between two versions: ours (the rows at the destination branch head) and theirs (the rows at the source branch head).
+When a merge finds conflicting changes, it documents them in the dolt_conflicts table. A conflict is between two versions: ours (the rows at the destination branch head) and theirs (the rows at the source branch head).
 
-	dolt conflicts resolve will automatically resolve the conflicts by taking either the ours or theirs versions for each row.
+dolt conflicts resolve will automatically resolve the conflicts by taking either the ours or theirs versions for each row.
 `,
 	Synopsis: []string{
 		`--ours|--theirs {{.LessThan}}table{{.GreaterThan}}...`,
@@ -97,6 +97,13 @@ func (cmd ResolveCmd) Exec(ctx context.Context, commandStr string, args []string
 
 	queryist, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
+		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	}
+
+	// Allow committing transactions that still have unresolved conflicts. This mirrors behavior in other
+	// commands (e.g. rebase) and prevents autocommit from rolling back when resolving one table at a time
+	// while other tables remain conflicted.
+	if _, err = cli.GetRowsForSql(queryist.Queryist, queryist.Context, "set @@dolt_allow_commit_conflicts=1;"); err != nil {
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 

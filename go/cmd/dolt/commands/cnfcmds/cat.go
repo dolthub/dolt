@@ -146,6 +146,11 @@ func printConflicts(queryist cli.Queryist, sqlCtx *sql.Context, tblNames []strin
 		}
 	}
 
+	// if there are no unmerged tables, return early
+	if len(mergeStatus.unmergedTables) == 0 {
+		return nil
+	}
+
 	// next print data conflicts
 	for _, tblName := range mergeStatus.unmergedTables {
 		shouldShowTable := isStringInArray(tblName, tblNames)
@@ -294,6 +299,11 @@ func getMergeStatus(queryist cli.Queryist, sqlCtx *sql.Context) (mergeStatus, er
 		return ms, errors.New("error: multiple rows in dolt_merge_status")
 	}
 
+	// No active merge; return default merge status (isMerging=false)
+	if len(rows) == 0 {
+		return ms, nil
+	}
+
 	row := rows[0]
 	ms.isMerging, err = commands.GetTinyIntColAsBool(row[0])
 	if err != nil {
@@ -304,7 +314,11 @@ func getMergeStatus(queryist cli.Queryist, sqlCtx *sql.Context) (mergeStatus, er
 		ms.sourceCommit = row[2].(string)
 		ms.target = row[3].(string)
 		unmergedTables := row[4].(string)
-		ms.unmergedTables = strings.Split(unmergedTables, ", ")
+		if unmergedTables == "" {
+			ms.unmergedTables = []string{}
+		} else {
+			ms.unmergedTables = strings.Split(unmergedTables, ", ")
+		}
 	}
 
 	return ms, nil
