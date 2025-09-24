@@ -237,7 +237,6 @@ teardown() {
     [[ $output =~ "main2" ]] || false
 
     run dolt conflicts cat .
-    echo "OUTPUT $output"
     [ $status -eq 0 ]
     [ "$output" = "" ]
     ! [[ "$output" =~ "i" ]] || false
