@@ -643,13 +643,10 @@ EOF
   db="testdb"
   usr="testuser"
   pwd="testpass"
-  
-  # Launch all 20 containers simultaneously to stress the system
-  local total_cycles=20
-  
-  echo "# Starting all $total_cycles containers simultaneously" >&3
-  
-  # Start all containers at the same time
+
+  # Start all containers at the same time, this stresses the system and causes timing issues if
+  # hardware resources are in use. The containers should still start correctly with the wait
+  # logic in place.
   local pids=()
   for cycle in {1..20}; do
     (
@@ -664,13 +661,11 @@ EOF
     pids+=($!)
   done
   
-  # Wait for all containers to start
   for pid in "${pids[@]}"; do
     wait $pid
   done
   
   # Wait for all servers to be ready
-  echo "# Waiting for all servers to be ready..." >&3
   for cycle in {1..20}; do
     wait_for_log "$cname-$cycle" "Server ready. Accepting connections." 30
     wait_for_log "$cname-$cycle" "Reattaching to server process" 15 || true
@@ -687,19 +682,16 @@ EOF
     [[ "$output" =~ "Server ready. Accepting connections" ]] || false
   done
 
-  # Stop all containers simultaneously
   local stop_pids=()
   for cycle in {1..20}; do
     docker stop "$cname-$cycle" >/dev/null &
     stop_pids+=($!)
   done
   
-  # Wait for all stops to complete
   for pid in "${stop_pids[@]}"; do
     wait $pid
   done
   
-  # Clean up all containers
   for cycle in {1..20}; do
     docker rm "$cname-$cycle" >/dev/null
   done

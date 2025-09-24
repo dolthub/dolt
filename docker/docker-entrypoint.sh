@@ -231,7 +231,7 @@ EOF
 }
 
 wait_for_dolt_server() {
-  local timeout="${DOLT_WAIT_TIMEOUT:-300}" # default 5 minutes
+  local timeout="${DOLT_SERVER_TIMEOUT:-300}" # default 5 minutes
   local start_time now output
 
   wait_for_check() {
@@ -241,7 +241,7 @@ wait_for_dolt_server() {
     start_time=$(date +%s)
     while true; do
       if output=$(dolt sql -q "$query" 2>&1); then
-        mysql_note "  $description is ready"
+        mysql_note "...$description is ready"
         return 0
       fi
 
@@ -250,13 +250,13 @@ wait_for_dolt_server() {
       if [ "$timeout" -ne 0 ]; then
         now=$(date +%s)
         if [ $((now - start_time)) -ge "$timeout" ]; then
-          mysql_error "Timed out after ${timeout}s waiting for $description. Last error: $output"
+          mysql_error "Timed out after ${timeout}s waiting for $description: $output"
         fi
       fi
     done
   }
 
-  wait_for_check "server connectivity" "SELECT 1;"
+  wait_for_check "basic server connection" "SELECT 1;"
   wait_for_check "mysql.user table" "SELECT COUNT(*) FROM mysql.user;"
   wait_for_check "database operations" "CREATE DATABASE IF NOT EXISTS __health_check_db__; DROP DATABASE __health_check_db__;"
   wait_for_check "privilege queries" "SELECT COUNT(*) FROM mysql.db;"
