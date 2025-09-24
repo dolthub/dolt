@@ -38,13 +38,13 @@ docker_process_sql() {
 }
 
 # Helper function to execute SQL with error capture
-execute_sql_with_error_capture() {
+exec_mysql() {
   local sql_command="$1"
   local error_message="$2"
   local output
 
   if ! output=$(dolt sql -q "$sql_command" 2>&1); then
-    mysql_error "$error_message Error output: $output"
+    mysql_error "$error_message$output"
   fi
 }
 
@@ -217,17 +217,51 @@ EOF
     user_host=$(get_env_var "USER_HOST")
     user_host="${user_host:-${DOLT_ROOT_HOST:-localhost}}"
     mysql_note "Creating user '${user}'"
-    execute_sql_with_error_capture "CREATE USER IF NOT EXISTS '$user'@'$user_host' IDENTIFIED BY '$password';" "Failed to create user '$user'."
+    exec_mysql "CREATE USER IF NOT EXISTS '$user'@'$user_host' IDENTIFIED BY '$password';" "Failed to create user '$user': "
 
     # Grant basic server access
     mysql_note "Granting server access to user '${user}'"
-    execute_sql_with_error_capture "GRANT USAGE ON *.* TO '$user'@'$user_host';" "Failed to grant server access to user '$user'."
+    exec_mysql "GRANT USAGE ON *.* TO '$user'@'$user_host';" "Failed to grant server access to user '$user': "
 
     if [ -n "$database" ]; then
       mysql_note "Giving user '${user}' access to schema '${database}'"
-      execute_sql_with_error_capture "GRANT ALL ON \`$database\`.* TO '$user'@'$user_host';" "Failed to grant permissions to user '$user' on database '$database'."
+      exec_mysql "GRANT ALL ON \`$database\`.* TO '$user'@'$user_host';" "Failed to grant permissions to user '$user' on database '$database': "
     fi
   fi
+}
+
+wait_for_dolt_server() {
+  local timeout="${DOLT_WAIT_TIMEOUT:-300}" # default 5 minutes
+  local start_time now output
+
+  wait_for_check() {
+    local description="$1"
+    local query="$2"
+
+    start_time=$(date +%s)
+    while true; do
+      if output=$(dolt sql -q "$query" 2>&1); then
+        mysql_note "  $description is ready"
+        return 0
+      fi
+
+      sleep 1
+
+      if [ "$timeout" -ne 0 ]; then
+        now=$(date +%s)
+        if [ $((now - start_time)) -ge "$timeout" ]; then
+          mysql_error "Timed out after ${timeout}s waiting for $description. Last error: $output"
+        fi
+      fi
+    done
+  }
+
+  wait_for_check "server connectivity" "SELECT 1;"
+  wait_for_check "mysql.user table" "SELECT COUNT(*) FROM mysql.user;"
+  wait_for_check "database operations" "CREATE DATABASE IF NOT EXISTS __health_check_db__; DROP DATABASE __health_check_db__;"
+  wait_for_check "privilege queries" "SELECT COUNT(*) FROM mysql.db;"
+
+  mysql_note "Server initialization complete!"
 }
 
 _main() {
@@ -269,35 +303,8 @@ _main() {
   dolt sql-server --host=0.0.0.0 --port=3306 "$@" >/tmp/server.log 2>&1 &
   local server_pid=$!
 
-  # Wait for server to be ready and all required capabilities to be functional
-  local max_attempts=30
-  local attempt=0
-  local last_error=""
-  while [ $attempt -lt $max_attempts ]; do
-    # Connectivity
-    local basic_output
-    if ! basic_output=$(dolt sql -q "SELECT 1;" 2>&1); then
-      last_error="$basic_output"
-    # MySQL system tables are accessible
-    elif ! mysql_output=$(dolt sql -q "SELECT COUNT(*) FROM mysql.user;" 2>&1); then
-      last_error="$mysql_output"
-    # Database creation capability
-    elif ! db_test_output=$(dolt sql -q "CREATE DATABASE IF NOT EXISTS __health_check_db__; DROP DATABASE __health_check_db__;" 2>&1); then
-      last_error="$db_test_output"
-    # User privilege queries work
-    elif ! priv_output=$(dolt sql -q "SELECT COUNT(*) FROM mysql.db;" 2>&1); then
-      last_error="$priv_output"
-    else
-      mysql_note "Server initialization complete!"
-      break
-    fi
-    sleep 1
-    attempt=$((attempt + 1))
-  done
-
-  if [ $attempt -eq $max_attempts ]; then
-    mysql_error "Server failed to be ready within 30 seconds. Error: $last_error"
-  fi
+  # Wait for server to be ready for connections and user setup
+  wait_for_dolt_server
 
   # Create root user with the specified host (defaults to localhost if not specified)
   local root_host="${DOLT_ROOT_HOST:-localhost}"
@@ -305,7 +312,7 @@ _main() {
 
   # Ensure root user exists with correct password and permissions
   mysql_note "Configuring root@${root_host} user"
-  execute_sql_with_error_capture "CREATE USER IF NOT EXISTS 'root'@'${root_host}' IDENTIFIED BY '${DOLT_ROOT_PASSWORD}'; ALTER USER 'root'@'${root_host}' IDENTIFIED BY '${DOLT_ROOT_PASSWORD}'; GRANT ALL ON *.* TO 'root'@'${root_host}' WITH GRANT OPTION;" "Failed to configure root@${root_host} user."
+  exec_mysql "CREATE USER IF NOT EXISTS 'root'@'${root_host}' IDENTIFIED BY '${DOLT_ROOT_PASSWORD}'; ALTER USER 'root'@'${root_host}' IDENTIFIED BY '${DOLT_ROOT_PASSWORD}'; GRANT ALL ON *.* TO 'root'@'${root_host}' WITH GRANT OPTION;" "Failed to configure root@${root_host} user: "
 
   # If DOLT_DATABASE or MYSQL_DATABASE has been specified, create the database if it does not exist
   create_default_database_from_env
