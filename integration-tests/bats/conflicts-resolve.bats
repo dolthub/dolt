@@ -186,8 +186,16 @@ teardown() {
     [ $status -eq 1 ]
     [[ $output =~ "Automatic merge failed" ]] || false
 
+    run dolt conflicts cat .
+    [ $status -eq 0 ]
+    [[ "$output" =~ "i" ]] || false
+
     run dolt conflicts resolve --theirs .
     [ $status -eq 0 ]
+
+    run dolt conflicts cat .
+    [ $status -eq 0 ]
+    ! [[ "$output" =~ "i" ]] || false
 
     run dolt sql -q "select * from t"
     [ $status -eq 0 ]
@@ -212,6 +220,10 @@ teardown() {
     [ $status -eq 1 ]
     [[ $output =~ "Automatic merge failed" ]] || false
 
+    run dolt conflicts cat .
+    [ $status -eq 0 ]
+    [[ "$output" =~ "i" ]] || false
+
     run dolt conflicts resolve --theirs t
     [ $status -eq 0 ]
     run dolt sql -q "select * from t"
@@ -219,9 +231,16 @@ teardown() {
     [[ $output =~ "other" ]] || false
 
     run dolt conflicts resolve --ours t2
+    [ $status -eq 0 ]
     run dolt sql -q "select * from t2"
     [ $status -eq 0 ]
     [[ $output =~ "main2" ]] || false
+
+    run dolt conflicts cat .
+    echo "OUTPUT $output"
+    [ $status -eq 0 ]
+    [ "$output" = "" ]
+    ! [[ "$output" =~ "i" ]] || false
 }
 
 @test "conflicts-resolve: merge main into other, resolve with ours" {
