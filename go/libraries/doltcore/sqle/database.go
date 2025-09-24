@@ -564,7 +564,7 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 				}
 			}
 
-			dt, found = dtables.NewLogTable(ctx, db.Name(), lwrName, db.ddb, head), true
+			dt, found = dtables.NewLogTable(db.Name(), lwrName, db.ddb, head, ctx, new(dtables.LogSchemaType)), true
 		}
 	case doltdb.DiffTableName, doltdb.GetDiffTableName():
 		isDoltgresSystemTable, err := resolve.IsDoltgresSystemTable(ctx, tname, root)
