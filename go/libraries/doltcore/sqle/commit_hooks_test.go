@@ -351,9 +351,11 @@ func (c *countingCommitHook) HandleError(ctx context.Context, err error) error {
 	return nil
 }
 
+/*
 func (c *countingCommitHook) SetLogger(ctx context.Context, wr io.Writer) error {
 	return nil
 }
+*/
 
 func (c *countingCommitHook) ExecuteForWorkingSets() bool {
 	return false

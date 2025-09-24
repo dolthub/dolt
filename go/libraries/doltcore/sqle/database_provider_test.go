@@ -16,7 +16,6 @@ package sqle
 
 import (
 	"context"
-	"io"
 	"testing"
 
 	sqle "github.com/dolthub/go-mysql-server"
@@ -148,10 +147,6 @@ func (*snoopingCommitHook) Execute(ctx context.Context, ds datas.Dataset, db *do
 }
 
 func (*snoopingCommitHook) HandleError(ctx context.Context, err error) error {
-	return nil
-}
-
-func (*snoopingCommitHook) SetLogger(ctx context.Context, wr io.Writer) error {
 	return nil
 }
 

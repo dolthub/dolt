@@ -16,7 +16,6 @@ package doltdb
 
 import (
 	"context"
-	"io"
 	"sync"
 
 	"github.com/dolthub/dolt/go/store/datas"
@@ -37,8 +36,6 @@ type CommitHook interface {
 	Execute(ctx context.Context, ds datas.Dataset, db *DoltDB) (func(context.Context) error, error)
 	// HandleError is an bridge function to handle Execute errors
 	HandleError(ctx context.Context, err error) error
-	// SetLogger lets clients specify an output stream for HandleError
-	SetLogger(ctx context.Context, wr io.Writer) error
 	// ExecuteForWorkingSets returns whether or not the hook should be executed for working set updates
 	ExecuteForWorkingSets() bool
 }
@@ -54,13 +51,6 @@ type NotifyWaitFailedCommitHook interface {
 func (db hooksDatabase) SetCommitHooks(ctx context.Context, postHooks []CommitHook) hooksDatabase {
 	db.hooks = make([]CommitHook, len(postHooks))
 	copy(db.hooks, postHooks)
-	return db
-}
-
-func (db hooksDatabase) SetCommitHookLogger(ctx context.Context, wr io.Writer) hooksDatabase {
-	for _, h := range db.hooks {
-		h.SetLogger(ctx, wr)
-	}
 	return db
 }
 
