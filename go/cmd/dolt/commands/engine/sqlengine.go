@@ -148,11 +148,6 @@ func NewSqlEngine(
 	all := make([]dsess.SqlDatabase, len(dbs))
 	copy(all, dbs)
 
-	// this is overwritten only for server sessions
-	for _, db := range dbs {
-		db.DbData().Ddb.SetCommitHookLogger(ctx, cli.CliOut)
-	}
-
 	clusterDB := config.ClusterController.ClusterDatabase()
 	if clusterDB != nil {
 		all = append(all, clusterDB.(dsess.SqlDatabase))

@@ -18,7 +18,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -525,10 +524,6 @@ func (h *commithook) NotifyWaitFailed() {
 }
 
 func (h *commithook) HandleError(ctx context.Context, err error) error {
-	return nil
-}
-
-func (h *commithook) SetLogger(ctx context.Context, wr io.Writer) error {
 	return nil
 }
 

@@ -39,10 +39,11 @@ var _ doltdb.CommitHook = (*PushOnWriteHook)(nil)
 
 // NewPushOnWriteHook creates a ReplicateHook, parameterizaed by the backup database
 // and a local tempfile for pushing
-func NewPushOnWriteHook(destDB *doltdb.DoltDB, tmpDir string) *PushOnWriteHook {
+func NewPushOnWriteHook(destDB *doltdb.DoltDB, tmpDir string, logger io.Writer) *PushOnWriteHook {
 	return &PushOnWriteHook{
 		destDB: destDB,
 		tmpDir: tmpDir,
+		out:    logger,
 	}
 }
 
@@ -85,12 +86,6 @@ func (ph *PushOnWriteHook) HandleError(ctx context.Context, err error) error {
 
 func (*PushOnWriteHook) ExecuteForWorkingSets() bool {
 	return false
-}
-
-// SetLogger implements CommitHook
-func (ph *PushOnWriteHook) SetLogger(ctx context.Context, wr io.Writer) error {
-	ph.out = wr
-	return nil
 }
 
 type PushArg struct {
@@ -142,12 +137,6 @@ func (ah *AsyncPushOnWriteHook) HandleError(ctx context.Context, err error) erro
 	return nil
 }
 
-// SetLogger implements CommitHook
-func (ah *AsyncPushOnWriteHook) SetLogger(ctx context.Context, wr io.Writer) error {
-	ah.out = wr
-	return nil
-}
-
 type LogHook struct {
 	out io.Writer
 	msg []byte
@@ -156,8 +145,8 @@ type LogHook struct {
 var _ doltdb.CommitHook = (*LogHook)(nil)
 
 // NewLogHook is a noop that logs to a writer when invoked
-func NewLogHook(msg []byte) *LogHook {
-	return &LogHook{msg: msg}
+func NewLogHook(msg []byte, logger io.Writer) *LogHook {
+	return &LogHook{msg: msg, out: logger}
 }
 
 // Execute implements CommitHook, writes message to log channel
@@ -174,12 +163,6 @@ func (lh *LogHook) HandleError(ctx context.Context, err error) error {
 	if lh.out != nil {
 		lh.out.Write([]byte(err.Error()))
 	}
-	return nil
-}
-
-// SetLogger implements CommitHook
-func (lh *LogHook) SetLogger(ctx context.Context, wr io.Writer) error {
-	lh.out = wr
 	return nil
 }
 
