@@ -49,7 +49,14 @@ func NewPushOnWriteHook(destDB *doltdb.DoltDB, tmpDir string, logger io.Writer) 
 
 // Execute implements CommitHook, replicates head updates to the destDb field
 func (ph *PushOnWriteHook) Execute(ctx context.Context, ds datas.Dataset, db *doltdb.DoltDB) (func(context.Context) error, error) {
-	return nil, pushDataset(ctx, ph.destDB, db, ds, ph.tmpDir)
+	err := pushDataset(ctx, ph.destDB, db, ds, ph.tmpDir)
+
+	if ph.out != nil && err != nil {
+		// if we can't write to the output, there's not much we can do.
+		_, _ = ph.out.Write([]byte(fmt.Sprintf("error pushing: %+v", err)))
+	}
+
+	return nil, err
 }
 
 func pushDataset(ctx context.Context, destDB, srcDB *doltdb.DoltDB, ds datas.Dataset, tmpDir string) error {
@@ -71,17 +78,6 @@ func pushDataset(ctx context.Context, destDB, srcDB *doltdb.DoltDB, ds datas.Dat
 	}
 
 	return destDB.SetHead(ctx, rf, addr)
-}
-
-// HandleError implements CommitHook
-func (ph *PushOnWriteHook) HandleError(ctx context.Context, err error) error {
-	if ph.out != nil {
-		_, err := ph.out.Write([]byte(fmt.Sprintf("error pushing: %+v", err)))
-		if err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 func (*PushOnWriteHook) ExecuteForWorkingSets() bool {
@@ -126,15 +122,13 @@ func (ah *AsyncPushOnWriteHook) Execute(ctx context.Context, ds datas.Dataset, d
 	addr, _ := ds.MaybeHeadAddr()
 	// TODO: Unconditional push here seems dangerous.
 	ah.ch <- PushArg{ds: ds, db: db, hash: addr}
-	return nil, ctx.Err()
-}
 
-// HandleError implements CommitHook
-func (ah *AsyncPushOnWriteHook) HandleError(ctx context.Context, err error) error {
-	if ah.out != nil {
-		ah.out.Write([]byte(err.Error()))
+	err := ctx.Err()
+	if err != nil {
+		_, _ = ah.out.Write([]byte(err.Error()))
 	}
-	return nil
+
+	return nil, err
 }
 
 type LogHook struct {
@@ -152,18 +146,9 @@ func NewLogHook(msg []byte, logger io.Writer) *LogHook {
 // Execute implements CommitHook, writes message to log channel
 func (lh *LogHook) Execute(ctx context.Context, ds datas.Dataset, db *doltdb.DoltDB) (func(context.Context) error, error) {
 	if lh.out != nil {
-		_, err := lh.out.Write(lh.msg)
-		return nil, err
+		_, _ = lh.out.Write(lh.msg)
 	}
 	return nil, nil
-}
-
-// HandleError implements CommitHook
-func (lh *LogHook) HandleError(ctx context.Context, err error) error {
-	if lh.out != nil {
-		lh.out.Write([]byte(err.Error()))
-	}
-	return nil
 }
 
 func (*LogHook) ExecuteForWorkingSets() bool {

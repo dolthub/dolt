@@ -523,10 +523,6 @@ func (h *commithook) NotifyWaitFailed() {
 	h.fastFailReplicationWait = true
 }
 
-func (h *commithook) HandleError(ctx context.Context, err error) error {
-	return nil
-}
-
 func (h *commithook) ExecuteForWorkingSets() bool {
 	return true
 }
