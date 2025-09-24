@@ -665,7 +665,6 @@ EOF
   done
   
   # Wait for all containers to start
-  echo "# Waiting for all containers to start..." >&3
   for pid in "${pids[@]}"; do
     wait $pid
   done
@@ -676,9 +675,7 @@ EOF
     wait_for_log "$cname-$cycle" "Server ready. Accepting connections." 30
     wait_for_log "$cname-$cycle" "Reattaching to server process" 15 || true
   done
-  
-  echo "# All containers started, verifying logs..." >&3
-  
+
   # Verify no errors in any container logs
   for cycle in {1..20}; do
     run docker logs "$cname-$cycle" 2>&1
@@ -689,9 +686,7 @@ EOF
     [[ "$output" =~ "Server initialization complete" ]] || false
     [[ "$output" =~ "Server ready. Accepting connections" ]] || false
   done
-  
-  echo "# All logs verified, stopping all containers..." >&3
-  
+
   # Stop all containers simultaneously
   local stop_pids=()
   for cycle in {1..20}; do
@@ -708,6 +703,4 @@ EOF
   for cycle in {1..20}; do
     docker rm "$cname-$cycle" >/dev/null
   done
-  
-  echo "# All $total_cycles containers completed successfully" >&3
 }

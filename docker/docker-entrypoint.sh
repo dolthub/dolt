@@ -91,25 +91,23 @@ get_env_var_name() {
 
 # arg $1 is the directory to search in
 # arg $2 is the type file to search for
-# Returns the config file path via stdout, empty if none found
 get_config_file_path_if_exists() {
-  local config_dir="$1"
-  local file_type="$2"
-
-  if [ ! -d "$config_dir" ]; then
-    return
-  fi
-
-  mysql_note "Checking for config provided in $config_dir"
-  local number_of_files_found=$(find "$config_dir" -type f -name "*.$file_type" | wc -l)
-
-  if [ "$number_of_files_found" -gt 1 ]; then
-    mysql_warn "multiple config file found in $config_dir, using default config"
-    return
-  elif [ "$number_of_files_found" -eq 1 ]; then
-    local files_found=$(ls "$config_dir"/*"$file_type")
-    mysql_note "$files_found file is found"
-    echo "$files_found"
+  CONFIG_PROVIDED=
+  local CONFIG_DIR=$1
+  local FILE_TYPE=$2
+  if [ -d "$CONFIG_DIR" ]; then
+    mysql_note "Checking for config provided in $CONFIG_DIR"
+    local number_of_files_found=$(find "$CONFIG_DIR" -type f -name "*.$FILE_TYPE" | wc -l)
+    if [ "$number_of_files_found" -gt 1 ]; then
+      CONFIG_PROVIDED=
+      mysql_warn "multiple config file found in $CONFIG_DIR, using default config"
+    elif [ "$number_of_files_found" -eq 1 ]; then
+      local files_found=$(ls "$CONFIG_DIR"/*."$FILE_TYPE")
+      mysql_note "$files_found file is found"
+      CONFIG_PROVIDED=$files_found
+    else
+      CONFIG_PROVIDED=
+    fi
   fi
 }
 
@@ -172,12 +170,10 @@ docker_process_init_files() {
 # if there is config file provided through /etc/dolt/doltcfg.d,
 # we overwrite $HOME/.dolt/config_global.json file with this file.
 set_dolt_config_if_defined() {
-  local config_file
-  config_file=$(get_config_file_path_if_exists "$DOLT_CONFIG_DIR" "json")
-
-  if [ -n "$config_file" ]; then
-    if ! /bin/cp -rf "$config_file" "$HOME/$DOLT_ROOT_PATH/config_global.json" 2>&1; then
-      mysql_error "Failed to copy config file from '$config_file' to '$HOME/$DOLT_ROOT_PATH/config_global.json'. Check file permissions and paths."
+  get_config_file_path_if_exists "$DOLT_CONFIG_DIR" "json"
+  if [ ! -z "$CONFIG_PROVIDED" ]; then
+    if ! /bin/cp -rf "$CONFIG_PROVIDED" "$HOME/$DOLT_ROOT_PATH/config_global.json" 2>&1; then
+      mysql_error "Failed to copy config file from '$CONFIG_PROVIDED' to '$HOME/$DOLT_ROOT_PATH/config_global.json'. Check file permissions and paths."
     fi
   fi
 }
@@ -193,7 +189,10 @@ create_default_database_from_env() {
 
   if [ -n "$database" ]; then
     mysql_note "Creating database '${database}'"
-    execute_sql_with_error_capture "CREATE DATABASE IF NOT EXISTS \`$database\`;" "Failed to create database '$database'."
+    local db_output
+    if ! db_output=$(dolt sql -q "CREATE DATABASE IF NOT EXISTS \`$database\`;" 2>&1); then
+      mysql_error "Failed to create database '$database'. Error: $db_output"
+    fi
   fi
 
   if [ "$user" = 'root' ]; then
@@ -239,16 +238,17 @@ _main() {
   dolt_version=$(dolt version | grep 'dolt version' | cut -f3 -d " ")
   mysql_note "Entrypoint script for Dolt Server $dolt_version starting..."
 
+  declare -g CONFIG_PROVIDED
+
   # dolt config will be set if user provided a single json file in /etc/dolt/doltcfg.d directory.
   # It will overwrite config_global.json file in $HOME/.dolt
   set_dolt_config_if_defined
 
   # if there is a single yaml provided in /etc/dolt/servercfg.d directory,
   # it will be used to start the server with --config flag
-  local server_config_file
-  server_config_file=$(get_config_file_path_if_exists "$SERVER_CONFIG_DIR" "yaml")
-  if [ -n "$server_config_file" ]; then
-    set -- "$@" --config="$server_config_file"
+  get_config_file_path_if_exists "$SERVER_CONFIG_DIR" "yaml"
+  if [ ! -z "$CONFIG_PROVIDED" ]; then
+    set -- "$@" --config="$CONFIG_PROVIDED"
   fi
 
   # TODO: add support for MYSQL_ROOT_HOST and MYSQL_ROOT_PASSWORD
@@ -287,12 +287,8 @@ _main() {
     # User privilege queries work
     elif ! priv_output=$(dolt sql -q "SELECT COUNT(*) FROM mysql.db;" 2>&1); then
       last_error="$priv_output"
-    # Database access mode stability check
-    elif ! access_output=$(dolt sql -q "SHOW VARIABLES LIKE 'read_only';" 2>&1); then
-      last_error="$access_output"
     else
       mysql_note "Server initialization complete!"
-      sleep 1
       break
     fi
     sleep 1
