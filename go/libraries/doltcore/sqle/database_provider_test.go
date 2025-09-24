@@ -146,10 +146,6 @@ func (*snoopingCommitHook) Execute(ctx context.Context, ds datas.Dataset, db *do
 	return nil, nil
 }
 
-func (*snoopingCommitHook) HandleError(ctx context.Context, err error) error {
-	return nil
-}
-
 func (*snoopingCommitHook) ExecuteForWorkingSets() bool {
 	return true
 }

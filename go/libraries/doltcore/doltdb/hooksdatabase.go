@@ -32,10 +32,9 @@ type hooksDatabase struct {
 
 // CommitHook is an abstraction for executing arbitrary commands after atomic database commits
 type CommitHook interface {
-	// Execute is arbitrary read-only function whose arguments are new Dataset commit into a specific Database
+	// Execute is arbitrary read-only function whose arguments are new Dataset commit into a specific Database.
+	// NM4 - gDoc Update.
 	Execute(ctx context.Context, ds datas.Dataset, db *DoltDB) (func(context.Context) error, error)
-	// HandleError is an bridge function to handle Execute errors
-	HandleError(ctx context.Context, err error) error
 	// ExecuteForWorkingSets returns whether or not the hook should be executed for working set updates
 	ExecuteForWorkingSets() bool
 }
@@ -81,10 +80,9 @@ func (db hooksDatabase) ExecuteCommitHooks(ctx context.Context, ds datas.Dataset
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				f, err := hook.Execute(ctx, ds, db.db)
-				if err != nil {
-					hook.HandleError(ctx, err)
-				}
+				// The error is intentionally ignored here. Hooks are expected to log errors themselves. The interface returns
+				// the error primarily for testing purposes.
+				f, _ := hook.Execute(ctx, ds, db.db)
 				if rsc != nil {
 					rsc.Wait[i+ioff] = f
 					if nf, ok := hook.(NotifyWaitFailedCommitHook); ok {
