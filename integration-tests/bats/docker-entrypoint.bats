@@ -38,7 +38,7 @@ run_container() {
   docker run -d --name "$name" "$@" "$TEST_IMAGE" >/dev/null
   wait_for_log "$name" "Server ready. Accepting connections."
 
-  wait_for_log "$name" "Reattaching to server process..." || true
+  wait_for_log "$name" "Reattaching to server process..."
 
   # Verify container is running
   run docker ps --filter "name=$name" --format "{{.Names}}"
@@ -55,7 +55,7 @@ run_container_with_port() {
   docker run -d --name "$name" -p "$port:3306" "$@" "$TEST_IMAGE" >/dev/null
   wait_for_log "$name" "Server ready. Accepting connections."
 
-  wait_for_log "$name" "Reattaching to server process" || true
+  wait_for_log "$name" "Reattaching to server process"
   
   # Verify container is running
   run docker ps --filter "name=$name" --format "{{.Names}}"
@@ -103,8 +103,8 @@ wait_for_log() {
   cname="${TEST_PREFIX}root-env"
   run docker run -d --name "$cname" -e DOLT_ROOT_PASSWORD=rootpass -e DOLT_USER=root -e DOLT_PASSWORD=anything "$TEST_IMAGE"
 
-  wait_for_log "$cname" "cannot be used for the root user" || true
-  docker logs "$cname" >/tmp/${cname}.log 2>&1 || true
+  wait_for_log "$cname" "cannot be used for the root user"
+  docker logs "$cname" >/tmp/${cname}.log 2>&1
   run grep -F "cannot be used for the root user" /tmp/"${cname}".log
   [ $status -eq 0 ]
 }
@@ -113,7 +113,7 @@ wait_for_log() {
 @test "docker-entrypoint: password without user warns and is ignored" {
   cname="${TEST_PREFIX}pass-no-user"
   run_container "$cname" -e DOLT_ROOT_PASSWORD=rootpass -e DOLT_PASSWORD=orphan
-  docker logs "$cname" >/tmp/${cname}.log 2>&1 || true
+  docker logs "$cname" >/tmp/${cname}.log 2>&1
   run grep -i "password will be ignored" /tmp/"${cname}".log
   [ $status -eq 0 ]
 }
@@ -596,8 +596,8 @@ EOF
   docker build -f docker/serverDockerfile --build-arg DOLT_VERSION=latest -t "$LATEST_IMAGE" .
   
   docker run -d --name "$cname" -e DOLT_ROOT_PASSWORD=rootpass -e DOLT_ROOT_HOST=% "$LATEST_IMAGE" >/dev/null
-  wait_for_log "$cname" "Server ready. Accepting connections." || true
-  wait_for_log "$cname" "Reattaching to server process..." || true
+  wait_for_log "$cname" "Server ready. Accepting connections."
+  wait_for_log "$cname" "Reattaching to server process..."
   
   run docker exec "$cname" dolt version
   [ $status -eq 0 ]
@@ -623,7 +623,7 @@ EOF
   
   docker run -d --name "$cname" -e DOLT_ROOT_PASSWORD=rootpass -e DOLT_ROOT_HOST=% "$SPECIFIC_IMAGE" >/dev/null
   wait_for_log "$cname" "Server ready. Accepting connections."
-  wait_for_log "$cname" "Reattaching to server process..." || true
+  wait_for_log "$cname" "Reattaching to server process..."
   
   run docker exec "$cname" dolt version
   [ $status -eq 0 ]
@@ -668,7 +668,7 @@ EOF
   # Wait for all servers to be ready
   for cycle in {1..20}; do
     wait_for_log "$cname-$cycle" "Server ready. Accepting connections." 30
-    wait_for_log "$cname-$cycle" "Reattaching to server process" 15 || true
+    wait_for_log "$cname-$cycle" "Reattaching to server process" 15
   done
 
   # Verify no errors in any container logs
