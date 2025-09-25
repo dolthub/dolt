@@ -33,7 +33,11 @@ type hooksDatabase struct {
 // CommitHook is an abstraction for executing arbitrary commands after atomic database commits
 type CommitHook interface {
 	// Execute is arbitrary read-only function whose arguments are new Dataset commit into a specific Database.
-	// NM4 - gDoc Update.
+	// The returned values are a callback function and an error. The callback function is
+	// a Wait function which is optional. If returned, it will be registered with the ReplicationStatusController. If the
+	// hook implements NotifyWaitFailedCommitHook, it will be notified if the Wait function returns an error.
+	// The |Error| returned is actually ignored by the caller. It exists primarily for for unit testing. Any error which
+	// happens in a hook should be logged by the hook itself.
 	Execute(ctx context.Context, ds datas.Dataset, db *DoltDB) (func(context.Context) error, error)
 	// ExecuteForWorkingSets returns whether or not the hook should be executed for working set updates
 	ExecuteForWorkingSets() bool
@@ -80,7 +84,7 @@ func (db hooksDatabase) ExecuteCommitHooks(ctx context.Context, ds datas.Dataset
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				// The error is intentionally ignored here. Hooks are expected to log errors themselves. The interface returns
+				// The error returned is intentionally ignored here. Hooks are expected to log errors themselves. The interface returns
 				// the error primarily for testing purposes.
 				f, _ := hook.Execute(ctx, ds, db.db)
 				if rsc != nil {
@@ -98,6 +102,7 @@ func (db hooksDatabase) ExecuteCommitHooks(ctx context.Context, ds datas.Dataset
 	if rsc != nil {
 		j := ioff
 		for i := ioff; i < len(rsc.Wait); i++ {
+			// compact out any nil entries
 			if rsc.Wait[i] != nil {
 				rsc.Wait[j] = rsc.Wait[i]
 				rsc.NotifyWaitFailed[j] = rsc.NotifyWaitFailed[i]
