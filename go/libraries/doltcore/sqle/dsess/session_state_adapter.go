@@ -31,10 +31,10 @@ import (
 // from the session.
 type SessionStateAdapter struct {
 	session  *DoltSession
-	dbName   string
 	remotes  *concurrentmap.Map[string, env.Remote]
 	backups  *concurrentmap.Map[string, env.Remote]
 	branches *concurrentmap.Map[string, env.BranchConfig]
+	dbName   string
 }
 
 func (s SessionStateAdapter) SetCWBHeadRef(ctx context.Context, newRef ref.MarshalableRef) error {

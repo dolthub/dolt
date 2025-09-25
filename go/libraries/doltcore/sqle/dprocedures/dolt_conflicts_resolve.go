@@ -58,9 +58,9 @@ type DoltConflictsCatFunc struct {
 	children []sql.Expression
 }
 
-func getProllyRowMaps(ctx *sql.Context, vrw types.ValueReadWriter, ns tree.NodeStore, hash hash.Hash, tblName string) (prolly.Map, error) {
+func getProllyRowMaps(ctx *sql.Context, vrw types.ValueReadWriter, ns tree.NodeStore, hash hash.Hash, tblName doltdb.TableName) (prolly.Map, error) {
 	rootVal, err := doltdb.LoadRootValueFromRootIshAddr(ctx, vrw, ns, hash)
-	tbl, ok, err := rootVal.GetTable(ctx, doltdb.TableName{Name: tblName})
+	tbl, ok, err := rootVal.GetTable(ctx, tblName)
 	if err != nil {
 		return prolly.Map{}, err
 	}
@@ -80,7 +80,7 @@ func getProllyRowMaps(ctx *sql.Context, vrw types.ValueReadWriter, ns tree.NodeS
 	return pm, nil
 }
 
-func resolveProllyConflicts(ctx *sql.Context, tbl *doltdb.Table, tblName string, ourSch, sch schema.Schema) (*doltdb.Table, error) {
+func resolveProllyConflicts(ctx *sql.Context, tbl *doltdb.Table, tblName doltdb.TableName, ourSch, sch schema.Schema) (*doltdb.Table, error) {
 	var err error
 	artifactIdx, err := tbl.GetArtifacts(ctx)
 	if err != nil {
@@ -109,7 +109,7 @@ func resolveProllyConflicts(ctx *sql.Context, tbl *doltdb.Table, tblName string,
 	if err != nil {
 		return nil, err
 	}
-	mutIdxs, err := merge.GetMutableSecondaryIdxs(ctx, ourSch, sch, tblName, idxSet)
+	mutIdxs, err := merge.GetMutableSecondaryIdxs(ctx, ourSch, sch, tblName.Name, idxSet)
 	if err != nil {
 		return nil, err
 	}
@@ -408,66 +408,85 @@ func ResolveSchemaConflicts(ctx *sql.Context, ddb *doltdb.DoltDB, ws *doltdb.Wor
 	return ws.WithWorkingRoot(root).WithUnmergableTables(unmerged).WithMergedTables(merged), nil
 }
 
+func ResolveDataConflictsForTable(ctx *sql.Context, root doltdb.RootValue, tblName doltdb.TableName, ours bool, getEditorOpts func() (editor.Options, error)) (doltdb.RootValue, bool, error) {
+	tbl, ok, err := root.GetTable(ctx, tblName)
+	if err != nil {
+		return nil, false, err
+	}
+	if !ok {
+		return nil, false, doltdb.ErrTableNotFound
+	}
+
+	if has, err := tbl.HasConflicts(ctx); err != nil {
+		return nil, false, err
+	} else if !has {
+		return nil, false, nil
+	}
+
+	sch, err := tbl.GetSchema(ctx)
+	if err != nil {
+		return nil, false, err
+	}
+	_, ourSch, theirSch, err := tbl.GetConflictSchemas(ctx, tblName)
+	if err != nil {
+		return nil, false, err
+	}
+
+	if ours && !schema.ColCollsAreEqual(sch.GetAllCols(), ourSch.GetAllCols()) {
+		return nil, false, ErrConfSchIncompatible
+	} else if !ours && !schema.ColCollsAreEqual(sch.GetAllCols(), theirSch.GetAllCols()) {
+		return nil, false, ErrConfSchIncompatible
+	}
+
+	if !ours {
+		if tbl.Format() == types.Format_DOLT {
+			tbl, err = resolveProllyConflicts(ctx, tbl, tblName, ourSch, sch)
+		} else {
+			opts, err := getEditorOpts()
+			if err != nil {
+				return nil, false, err
+			}
+			tbl, err = resolveNomsConflicts(ctx, opts, tbl, tblName.Name, sch)
+		}
+		if err != nil {
+			return nil, false, err
+		}
+	}
+
+	newRoot, err := clearTableAndUpdateRoot(ctx, root, tbl, tblName)
+	if err != nil {
+		return nil, false, err
+	}
+
+	err = validateConstraintViolations(ctx, root, newRoot, tblName)
+	if err != nil {
+		return nil, false, err
+	}
+
+	return newRoot, true, nil
+}
+
 func ResolveDataConflicts(ctx *sql.Context, dSess *dsess.DoltSession, root doltdb.RootValue, dbName string, ours bool, tblNames []doltdb.TableName) error {
+	getEditorOpts := func() (editor.Options, error) {
+		state, _, err := dSess.LookupDbState(ctx, dbName)
+		if err != nil {
+			return editor.Options{}, err
+		}
+		var opts editor.Options
+		if ws := state.WriteSession(); ws != nil {
+			opts = ws.GetOptions()
+		}
+		return opts, nil
+	}
+
 	for _, tblName := range tblNames {
-		tbl, ok, err := root.GetTable(ctx, tblName)
+		newRoot, hasConflicts, err := ResolveDataConflictsForTable(ctx, root, tblName, ours, getEditorOpts)
 		if err != nil {
 			return err
 		}
-		if !ok {
-			return doltdb.ErrTableNotFound
-		}
-
-		if has, err := tbl.HasConflicts(ctx); err != nil {
-			return err
-		} else if !has {
+		if !hasConflicts {
 			continue
 		}
-
-		sch, err := tbl.GetSchema(ctx)
-		if err != nil {
-			return err
-		}
-		_, ourSch, theirSch, err := tbl.GetConflictSchemas(ctx, tblName)
-		if err != nil {
-			return err
-		}
-
-		if ours && !schema.ColCollsAreEqual(sch.GetAllCols(), ourSch.GetAllCols()) {
-			return ErrConfSchIncompatible
-		} else if !ours && !schema.ColCollsAreEqual(sch.GetAllCols(), theirSch.GetAllCols()) {
-			return ErrConfSchIncompatible
-		}
-
-		if !ours {
-			if tbl.Format() == types.Format_DOLT {
-				tbl, err = resolveProllyConflicts(ctx, tbl, tblName.Name, ourSch, sch)
-			} else {
-				state, _, err := dSess.LookupDbState(ctx, dbName)
-				if err != nil {
-					return err
-				}
-				var opts editor.Options
-				if ws := state.WriteSession(); ws != nil {
-					opts = ws.GetOptions()
-				}
-				tbl, err = resolveNomsConflicts(ctx, opts, tbl, tblName.Name, sch)
-			}
-			if err != nil {
-				return err
-			}
-		}
-
-		newRoot, err := clearTableAndUpdateRoot(ctx, root, tbl, tblName)
-		if err != nil {
-			return err
-		}
-
-		err = validateConstraintViolations(ctx, root, newRoot, tblName)
-		if err != nil {
-			return err
-		}
-
 		root = newRoot
 	}
 	return dSess.SetWorkingRoot(ctx, dbName, root)
@@ -513,9 +532,6 @@ func DoDoltConflictsResolve(ctx *sql.Context, args []string) (int, error) {
 
 	if len(strTableNames) == 1 && strTableNames[0] == "." {
 		all := actions.GetAllTableNames(ctx, ws.WorkingRoot())
-		if err != nil {
-			return 1, nil
-		}
 		tableNames = all
 	} else {
 		for _, tblName := range strTableNames {

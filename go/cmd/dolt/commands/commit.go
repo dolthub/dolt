@@ -112,23 +112,20 @@ func performCommit(ctx context.Context, commandStr string, args []string, cliCtx
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage), false
 	}
 
-	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
+	queryist, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
 		cli.Println(err.Error())
 		return 1, false
-	}
-	if closeFunc != nil {
-		defer closeFunc()
 	}
 
 	// TODO: This is not a nice solution. Currently, the cliCtx parameter's sqlCtx that we get from QueryEngine() is never refreshed.
 	// TODO: It would be ideal to have it generate/regenerate it's sqlCtx more often, as it likely has impacts beyond just the time.
 	if c, ok := ctx.(*sql.Context); ok {
-		sqlCtx.SetQueryTime(c.QueryTime())
+		queryist.Context.SetQueryTime(c.QueryTime())
 	}
 
 	// dolt_commit performs this check as well. This nips the problem in the bud early, but is not required.
-	err = branch_control.CheckAccess(sqlCtx, branch_control.Permissions_Write)
+	err = branch_control.CheckAccess(queryist.Context, branch_control.Permissions_Write)
 	if err != nil {
 		cli.Println(err.Error())
 		return 1, false
@@ -138,28 +135,28 @@ func performCommit(ctx context.Context, commandStr string, args []string, cliCtx
 	if !msgOk {
 		amendStr := ""
 		if apr.Contains(cli.AmendFlag) {
-			_, rowIter, _, err := queryist.Query(sqlCtx, "select message from dolt_log() limit 1")
+			_, rowIter, _, err := queryist.Queryist.Query(queryist.Context, "select message from dolt_log() limit 1")
 			if err != nil {
 				cli.Println(err.Error())
 				return 1, false
 			}
-			row, err := rowIter.Next(sqlCtx)
+			row, err := rowIter.Next(queryist.Context)
 			if err != nil {
 				cli.Println(err.Error())
 				return 1, false
 			}
 			amendStr = row[0].(string)
 		}
-		msg, err = getCommitMessageFromEditor(sqlCtx, queryist, "", amendStr, false, cliCtx)
+		msg, err = getCommitMessageFromEditor(queryist.Context, queryist.Queryist, "", amendStr, false, cliCtx)
 		if err != nil {
-			return handleCommitErr(sqlCtx, queryist, err, usage), false
+			return handleCommitErr(queryist.Context, queryist.Queryist, err, usage), false
 		}
 	}
 
 	// process query through prepared statement to prevent sql injection
 	query, params, err := constructParametrizedDoltCommitQuery(msg, apr, cliCtx)
 	if err != nil {
-		return handleCommitErr(sqlCtx, queryist, err, usage), false
+		return handleCommitErr(queryist.Context, queryist.Queryist, err, usage), false
 	}
 	interpolatedQuery, err := dbr.InterpolateForDialect(query, params, dialect.MySQL)
 	if err != nil {
@@ -167,11 +164,11 @@ func performCommit(ctx context.Context, commandStr string, args []string, cliCtx
 		return 1, false
 	}
 
-	_, rowIter, _, err := queryist.Query(sqlCtx, interpolatedQuery)
+	_, rowIter, _, err := queryist.Queryist.Query(queryist.Context, interpolatedQuery)
 	if err != nil {
-		return handleCommitErr(sqlCtx, queryist, err, usage), false
+		return handleCommitErr(queryist.Context, queryist.Queryist, err, usage), false
 	}
-	resultRow, err := sql.RowIterToRows(sqlCtx, rowIter)
+	resultRow, err := sql.RowIterToRows(queryist.Context, rowIter)
 	if err != nil {
 		cli.Println(err.Error())
 		return 1, false
@@ -180,7 +177,7 @@ func performCommit(ctx context.Context, commandStr string, args []string, cliCtx
 		return 0, true
 	}
 
-	commit, err := getCommitInfo(queryist, sqlCtx, "HEAD")
+	commit, err := getCommitInfo(queryist.Queryist, queryist.Context, "HEAD")
 	if cli.ExecuteWithStdioRestored != nil {
 		cli.ExecuteWithStdioRestored(func() {
 			pager := outputpager.Start()

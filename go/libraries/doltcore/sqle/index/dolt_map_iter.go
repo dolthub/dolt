@@ -29,8 +29,9 @@ import (
 // can be configured to only process a portion of the columns and map columns to desired output columns.
 type KVToSqlRowConverter struct {
 	nbf            *types.NomsBinFormat
-	cols           []schema.Column
 	tagToSqlColIdx map[uint64]int
+	cols           []schema.Column
+
 	// rowSize is the number of columns in the output row.  This may be bigger than the number of columns being converted,
 	// but not less.  When rowSize is bigger than the number of columns being processed that means that some of the columns
 	// in the output row will be filled with nils

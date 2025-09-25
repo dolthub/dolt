@@ -100,6 +100,7 @@ const (
 	outputFlag            = "output"
 	binaryAsHexFlag       = "binary-as-hex"
 	skipBinaryAsHexFlag   = "skip-binary-as-hex"
+	disableAutoGCFlag     = "disable-auto-gc"
 	// TODO: Consider simplifying to use MySQL's skip pattern with single flag definition
 	// MySQL handles both --binary-as-hex and --skip-binary-as-hex with one option definition
 	// and uses disabled_my_option to distinguish between enable/disable
@@ -155,6 +156,7 @@ func (cmd SqlCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(binaryAsHexFlag, "", "Print binary data as hex. Enabled by default for interactive terminals.")
 	// TODO: MySQL uses a skip- pattern for negating flags and doesn't show them in help
 	ap.SupportsFlag(skipBinaryAsHexFlag, "", "Disable binary data as hex output.")
+	ap.SupportsFlag(disableAutoGCFlag, "", "Disable automatically running GC.")
 	return ap
 }
 
@@ -227,30 +229,33 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		return HandleVErrAndExitCode(errhand.BuildDError("cannot use both --%s and --%s", binaryAsHexFlag, skipBinaryAsHexFlag).Build(), usage)
 	}
 
-	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
+	enableAutoGC := true
+	if apr.Contains(disableAutoGCFlag) {
+		enableAutoGC = false
+	}
+	queryist, err := cliCtx.QueryEngine(ctx, func(config *cli.LateBindQueryistConfig) {
+		config.EnableAutoGC = enableAutoGC
+	})
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-	}
-	if closeFunc != nil {
-		defer closeFunc()
 	}
 
 	if query, queryOK := apr.GetValue(QueryFlag); queryOK {
 		if apr.Contains(saveFlag) {
-			return SaveQuery(sqlCtx, queryist, apr, query, format, usage, binaryAsHex)
+			return SaveQuery(queryist.Context, queryist.Queryist, apr, query, format, usage, binaryAsHex)
 		}
-		return queryMode(sqlCtx, queryist, apr, query, format, usage, binaryAsHex)
+		return queryMode(queryist.Context, queryist.Queryist, apr, query, format, usage, binaryAsHex)
 	} else if savedQueryName, exOk := apr.GetValue(executeFlag); exOk {
-		return executeSavedQuery(sqlCtx, queryist, savedQueryName, format, usage, binaryAsHex)
+		return executeSavedQuery(queryist.Context, queryist.Queryist, savedQueryName, format, usage, binaryAsHex)
 	} else if apr.Contains(listSavedFlag) {
-		return listSavedQueries(sqlCtx, queryist, format, usage)
+		return listSavedQueries(queryist.Context, queryist.Queryist, format, usage)
 	} else {
 		// Run in either batch mode for piped input, or shell mode for interactive
 		isTty := false
 		fi, err := os.Stdin.Stat()
 		if err != nil {
 			if !osutil.IsWindows {
-				return sqlHandleVErrAndExitCode(queryist, errhand.BuildDError("Couldn't stat STDIN. This is a bug.").Build(), usage)
+				return sqlHandleVErrAndExitCode(queryist.Queryist, errhand.BuildDError("Couldn't stat STDIN. This is a bug.").Build(), usage)
 			}
 		} else {
 			isTty = fi.Mode()&os.ModeCharDevice != 0
@@ -263,11 +268,11 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 			isTty = false
 			input, err = os.OpenFile(fileInput, os.O_RDONLY, os.ModePerm)
 			if err != nil {
-				return sqlHandleVErrAndExitCode(queryist, errhand.BuildDError("couldn't open file %s", fileInput).Build(), usage)
+				return sqlHandleVErrAndExitCode(queryist.Queryist, errhand.BuildDError("couldn't open file %s", fileInput).Build(), usage)
 			}
 			info, err := os.Stat(fileInput)
 			if err != nil {
-				return sqlHandleVErrAndExitCode(queryist, errhand.BuildDError("couldn't get file size %s", fileInput).Build(), usage)
+				return sqlHandleVErrAndExitCode(queryist.Queryist, errhand.BuildDError("couldn't get file size %s", fileInput).Build(), usage)
 			}
 
 			input = transform.NewReader(input, textunicode.BOMOverride(transform.Nop))
@@ -280,15 +285,15 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		if isTty {
 			// In shell mode, default to hex format unless explicitly disabled
 			shellBinaryAsHex := !apr.Contains(skipBinaryAsHexFlag)
-			err := execShell(sqlCtx, queryist, format, cliCtx, shellBinaryAsHex)
+			err := execShell(queryist.Context, queryist.Queryist, format, cliCtx, shellBinaryAsHex)
 			if err != nil {
-				return sqlHandleVErrAndExitCode(queryist, errhand.VerboseErrorFromError(err), usage)
+				return sqlHandleVErrAndExitCode(queryist.Queryist, errhand.VerboseErrorFromError(err), usage)
 			}
 		} else {
 			input = transform.NewReader(input, textunicode.BOMOverride(transform.Nop))
-			err := execBatchMode(sqlCtx, queryist, input, continueOnError, format, binaryAsHex)
+			err := execBatchMode(queryist.Context, queryist.Queryist, input, continueOnError, format, binaryAsHex)
 			if err != nil {
-				return sqlHandleVErrAndExitCode(queryist, errhand.VerboseErrorFromError(err), usage)
+				return sqlHandleVErrAndExitCode(queryist.Queryist, errhand.VerboseErrorFromError(err), usage)
 			}
 		}
 	}
@@ -621,6 +626,11 @@ func execBatchMode(ctx *sql.Context, qryist cli.Queryist, input io.Reader, conti
 	scanner := NewStreamScanner(input)
 	var query string
 	for scanner.Scan() {
+		// The session we get is wrapped in a command begin/end block.
+		// By ending the command and starting a new one, Auto GC is able
+		// to form safe points if/when it is enabled.
+		sql.SessionCommandEnd(ctx.Session)
+		sql.SessionCommandBegin(ctx.Session)
 		if fileReadProg != nil {
 			updateFileReadProgressOutput()
 			fileReadProg.setReadBytes(int64(len(scanner.Bytes())))
@@ -766,6 +776,12 @@ func execShell(sqlCtx *sql.Context, qryist cli.Queryist, format engine.PrintResu
 	lastSqlCmd := ""
 
 	shell.Uninterpreted(func(c *ishell.Context) {
+		// The session we get is wrapped in a command begin/end block.
+		// By ending the command and starting a new one, Auto GC is able
+		// to form safe points if/when it is enabled.
+		sql.SessionCommandEnd(sqlCtx.Session)
+		sql.SessionCommandBegin(sqlCtx.Session)
+
 		query := c.Args[0]
 		query = strings.TrimSpace(query)
 		if len(query) == 0 {

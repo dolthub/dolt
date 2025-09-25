@@ -256,11 +256,15 @@ const (
 
 // ThreeWayDiff is a generic object for encoding a three way diff.
 type ThreeWayDiff struct {
-	// Op indicates the type of diff
-	Op DiffOp
 	// a partial set of tuple values are set
 	// depending on the diffOp
-	Key, Base, Left, Right, Merged val.Tuple
+	Key    val.Tuple
+	Base   val.Tuple
+	Left   val.Tuple
+	Right  val.Tuple
+	Merged val.Tuple
+	// Op indicates the type of diff
+	Op DiffOp
 }
 
 func (d *ThreeWayDiffer[K, O]) newLeftEdit(key, left Item, typ DiffType) ThreeWayDiff {

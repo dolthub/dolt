@@ -34,6 +34,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/expranalysis"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
@@ -50,31 +51,37 @@ var ErrSessionNotPersistable = errors.New("session is not persistable")
 
 // DoltSession is the sql.Session implementation used by dolt. It is accessible through a *sql.Context instance
 type DoltSession struct {
-	sql.Session
-	DoltgresSessObj       any   // This is used by Doltgres to persist objects in the session. This is not used by Dolt.
-	notices               []any // This is used by Doltgres to store notices. This is not used by Dolt.
-	username              string
-	email                 string
-	dbStates              map[string]*DatabaseSessionState
-	dbCache               *DatabaseCache
-	provider              DoltDatabaseProvider
-	tempTables            map[string][]sql.Table
-	globalsConf           config.ReadWriteConfig
-	branchController      *branch_control.Controller
-	statsProv             sql.StatsProvider
-	mu                    *sync.Mutex
-	fs                    filesys.Filesys
-	writeSessProv         WriteSessFunc
-	gcSafepointController *gcctx.GCSafepointController
+	provider DoltDatabaseProvider
+
+	DoltgresSessObj any // This is used by Doltgres to persist objects in the session. This is not used by Dolt.
 
 	// If non-nil, this will be returned from ValidateSession.
 	// Used by sqle/cluster to put a session into a terminal err state.
 	validateErr error
+
+	fs filesys.Filesys
+	sql.Session
+	statsProv   sql.StatsProvider
+	globalsConf config.ReadWriteConfig
+
+	mu                    *sync.Mutex
+	branchController      *branch_control.Controller
+	dbCache               *DatabaseCache
+	dbStates              map[string]*DatabaseSessionState
+	tempTables            map[string][]sql.Table
+	gcSafepointController *gcctx.GCSafepointController
+
+	writeSessProv WriteSessFunc
+
+	email    string
+	username string
+	notices  []any // This is used by Doltgres to store notices. This is not used by Dolt.
 }
 
 var _ sql.Session = (*DoltSession)(nil)
 var _ sql.PersistableSession = (*DoltSession)(nil)
 var _ sql.TransactionSession = (*DoltSession)(nil)
+var _ expranalysis.SessionDbProvider = (*DoltSession)(nil)
 var _ branch_control.ContextConvertible = (*DoltSession)(nil)
 
 // DefaultSession creates a DoltSession with default values
@@ -131,6 +138,12 @@ func NewDoltSession(
 
 // Provider returns the RevisionDatabaseProvider for this session.
 func (d *DoltSession) Provider() DoltDatabaseProvider {
+	return d.provider
+}
+
+// GenericProvider returns the sql.MutableDatabaseProvider for this session. This allows access to the provider without
+// incurring import cycles in some cases.
+func (d *DoltSession) GenericProvider() sql.MutableDatabaseProvider {
 	return d.provider
 }
 

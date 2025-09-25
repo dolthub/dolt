@@ -909,6 +909,12 @@ func TestVectorFunctions(t *testing.T) {
 	enginetest.TestVectorFunctions(t, harness)
 }
 
+func TestVectorType(t *testing.T) {
+	harness := newDoltHarness(t)
+	defer harness.Close()
+	enginetest.TestVectorType(t, harness)
+}
+
 func TestIndexPrefix(t *testing.T) {
 	skipOldFormat(t)
 	harness := newDoltHarness(t)
@@ -1502,6 +1508,16 @@ func TestBrokenHistorySystemTablePrepared(t *testing.T) {
 			enginetest.TestScriptPrepared(t, harness, test)
 		})
 	}
+}
+
+func TestDoltBranchesSystemTable(t *testing.T) {
+	h := newDoltEnginetestHarness(t)
+	RunDoltBranchesSystemTableTests(t, h)
+}
+
+func TestDoltBranchesSystemTablePrepared(t *testing.T) {
+	h := newDoltEnginetestHarness(t)
+	RunDoltBranchesSystemTableTestsPrepared(t, h)
 }
 
 func TestUnscopedDiffSystemTable(t *testing.T) {
@@ -2152,4 +2168,10 @@ func TestDoltQueryCatalogSystemTable(t *testing.T) {
 	harness := newDoltEnginetestHarness(t)
 	defer harness.Close()
 	RunDoltQueryCatalogTests(t, harness)
+}
+
+func TestDoltTestsSystemTable(t *testing.T) {
+	harness := newDoltEnginetestHarness(t)
+	defer harness.Close()
+	RunDoltTestsTableTests(t, harness)
 }

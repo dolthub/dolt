@@ -33,9 +33,9 @@ var _ sql.Table = (*SchemaConflictsTable)(nil)
 
 // SchemaConflictsTable is a sql.Table implementation that implements a system table which shows the current conflicts
 type SchemaConflictsTable struct {
+	ddb       *doltdb.DoltDB
 	dbName    string
 	tableName string
-	ddb       *doltdb.DoltDB
 }
 
 // NewSchemaConflictsTable creates a SchemaConflictsTable
@@ -135,10 +135,10 @@ func (sct *SchemaConflictsTable) PartitionRows(ctx *sql.Context, part sql.Partit
 }
 
 type schemaConflictsPartition struct {
-	tableName string
 	state     *doltdb.MergeState
 	head      *doltdb.Commit
 	ddb       *doltdb.DoltDB
+	tableName string
 }
 
 func (p schemaConflictsPartition) Key() []byte {
@@ -250,9 +250,9 @@ func getSchemaConflictDescription(ctx *sql.Context, table doltdb.TableName, base
 }
 
 type schemaConflictsIter struct {
-	conflicts   []schemaConflict
 	baseSchemas map[string]schema.Schema
 	baseCommit  *doltdb.Commit
+	conflicts   []schemaConflict
 }
 
 func (it *schemaConflictsIter) Next(ctx *sql.Context) (sql.Row, error) {

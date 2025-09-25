@@ -132,11 +132,12 @@ func (ps PatchBuffer) Close() error {
 
 // PatchGenerator takes two cursors and produces a set of Patches that describe the difference between them.
 type PatchGenerator[K ~[]byte, O Ordering[K]] struct {
-	previousKey        Item
-	from, to           *cursor
 	order              O
-	previousDiffType   DiffType
+	from               *cursor
+	to                 *cursor
+	previousKey        Item
 	previousPatchLevel int
+	previousDiffType   DiffType
 }
 
 func PatchGeneratorFromRoots[K ~[]byte, O Ordering[K]](ctx context.Context, fromNs, toNs NodeStore, from, to Node, order O) (PatchGenerator[K, O], error) {
@@ -417,7 +418,7 @@ func (td *PatchGenerator[K, O]) split(ctx context.Context) (patch Patch, diffTyp
 		if err != nil {
 			return Patch{}, NoDiff, err
 		}
-		toChild, err = toChild.loadSubtrees()
+		toChild, err = toChild.LoadSubtrees()
 		if err != nil {
 			return Patch{}, NoDiff, err
 		}

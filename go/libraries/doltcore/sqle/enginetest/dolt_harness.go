@@ -46,23 +46,23 @@ import (
 )
 
 type DoltHarness struct {
-	t                     *testing.T
 	provider              dsess.DoltDatabaseProvider
-	statsPro              *statspro.StatsController
+	engine                *gms.Engine
+	t                     *testing.T
 	multiRepoEnv          *env.MultiRepoEnv
 	session               *dsess.DoltSession
 	statsSession          *dsess.DoltSession
 	branchControl         *branch_control.Controller
 	gcSafepointController *gcctx.GCSafepointController
-	parallelism           int
-	skippedQueries        []string
-	setupData             []setup.SetupScript
-	resetData             []setup.SetupScript
-	engine                *gms.Engine
+	statsThreads          *sql.BackgroundThreads
+	statsPro              *statspro.StatsController
 	setupDbs              map[string]struct{}
+	resetData             []setup.SetupScript
+	setupData             []setup.SetupScript
+	skippedQueries        []string
+	parallelism           int
 	skipSetupCommit       bool
 	configureStats        bool
-	statsThreads          *sql.BackgroundThreads
 	useLocalFilesystem    bool
 	setupTestProcedures   bool
 }

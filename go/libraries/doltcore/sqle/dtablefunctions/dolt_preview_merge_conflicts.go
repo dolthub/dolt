@@ -43,16 +43,17 @@ var _ sql.ExecSourceRel = (*PreviewMergeConflictsTableFunction)(nil)
 var _ sql.AuthorizationCheckerNode = (*PreviewMergeConflictsTableFunction)(nil)
 
 type PreviewMergeConflictsTableFunction struct {
-	ctx             *sql.Context
+	rootInfo        rootInfo
 	leftBranchExpr  sql.Expression
 	rightBranchExpr sql.Expression
 	tableNameExpr   sql.Expression
 	database        sql.Database
-
-	rootInfo                  rootInfo
-	tblName                   doltdb.TableName
-	sqlSch                    sql.PrimaryKeySchema
-	baseSch, ourSch, theirSch schema.Schema
+	baseSch         schema.Schema
+	ourSch          schema.Schema
+	theirSch        schema.Schema
+	ctx             *sql.Context
+	tblName         doltdb.TableName
+	sqlSch          sql.PrimaryKeySchema
 }
 
 // NewInstance creates a new instance of TableFunction interface
@@ -580,20 +581,21 @@ func (pm *PreviewMergeConflictsTableFunction) evaluateArguments() (interface{}, 
 var _ sql.RowIter = &previewMergeConflictsTableFunctionRowIter{}
 
 type previewMergeConflictsTableFunctionRowIter struct {
-	itr     *tree.ThreeWayDiffer[val.Tuple, val.TupleDesc]
-	tblName doltdb.TableName
-	vrw     dtypes.ValueReadWriter
-	ns      tree.NodeStore
-	ourRows prolly.Map
-	keyless bool
-	ourSch  schema.Schema
-
-	cds     dtables.ConflictDescriptors
-	offsets dtables.ConflictOffsets
-
-	baseHash, theirHash       hash.Hash
-	baseRows, theirRows       prolly.Map
-	baseRootish, theirRootish hash.Hash
+	ourSch       schema.Schema
+	vrw          dtypes.ValueReadWriter
+	ns           tree.NodeStore
+	itr          *tree.ThreeWayDiffer[val.Tuple, val.TupleDesc]
+	tblName      doltdb.TableName
+	ourRows      prolly.Map
+	theirRows    prolly.Map
+	baseRows     prolly.Map
+	cds          dtables.ConflictDescriptors
+	offsets      dtables.ConflictOffsets
+	baseHash     hash.Hash
+	theirHash    hash.Hash
+	baseRootish  hash.Hash
+	theirRootish hash.Hash
+	keyless      bool
 }
 
 func (itr *previewMergeConflictsTableFunctionRowIter) Next(ctx *sql.Context) (sql.Row, error) {

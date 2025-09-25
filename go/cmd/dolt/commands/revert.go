@@ -86,13 +86,10 @@ func (cmd RevertCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return 1
 	}
 
-	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
+	queryist, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
 		cli.Println(err.Error())
 		return 1
-	}
-	if closeFunc != nil {
-		defer closeFunc()
 	}
 
 	var author string
@@ -124,18 +121,18 @@ func (cmd RevertCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return 1
 	}
 
-	_, rowIter, _, err := queryist.Query(sqlCtx, query)
+	_, rowIter, _, err := queryist.Queryist.Query(queryist.Context, query)
 	if err != nil {
 		cli.Printf("Failure to execute '%s': %s\n", query, err.Error())
 		return 1
 	}
-	_, err = sql.RowIterToRows(sqlCtx, rowIter)
+	_, err = sql.RowIterToRows(queryist.Context, rowIter)
 	if err != nil {
 		cli.Println(err.Error())
 		return 1
 	}
 
-	commit, err := getCommitInfo(queryist, sqlCtx, "HEAD")
+	commit, err := getCommitInfo(queryist.Queryist, queryist.Context, "HEAD")
 	if err != nil {
 		cli.Printf("Revert completed, but failure to get commit details occurred: %s\n", err.Error())
 		return 1

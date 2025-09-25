@@ -137,7 +137,7 @@ func GetField(ctx context.Context, td val.TupleDesc, i int, tup val.Tuple, ns No
 			v = val.NewTextStorage(ctx, h, ns)
 		}
 	case val.BytesAdaptiveEnc:
-		v, ok, err = td.GetBytesAdaptiveValue(i, ns, tup)
+		v, ok, err = td.GetBytesAdaptiveValue(ctx, i, ns, tup)
 	case val.StringAdaptiveEnc:
 		v, ok, err = td.GetStringAdaptiveValue(i, ns, tup)
 	case val.CommitAddrEnc:
@@ -360,11 +360,30 @@ func PutField(ctx context.Context, ns NodeStore, tb *val.TupleBuilder, i int, v 
 			}
 		}
 	case val.ExtendedAdaptiveEnc:
-		b, err := tb.Desc.Handlers[i].SerializeValue(ctx, v)
-		if err != nil {
-			return err
+		switch value := v.(type) {
+		case *val.ExtendedValueWrapper:
+			if value.IsExactLength() {
+				tb.PutAdaptiveExtendedFromOutline(i, value)
+			} else {
+				valueBytes, err := value.GetBytes(ctx)
+				if err != nil {
+					return err
+				}
+				err = tb.PutAdaptiveBytesFromInline(ctx, i, valueBytes)
+				if err != nil {
+					return err
+				}
+			}
+		default:
+			valueBytes, err := tb.Desc.Handlers[i].SerializeValue(ctx, v)
+			if err != nil {
+				return err
+			}
+			err = tb.PutAdaptiveValue(ctx, ns, i, valueBytes)
+			if err != nil {
+				return err
+			}
 		}
-		tb.PutRaw(i, b)
 	default:
 		panic(fmt.Sprintf("unknown encoding %v %v", enc, v))
 	}

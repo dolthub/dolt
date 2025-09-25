@@ -33,29 +33,37 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
+// reconstructHashFromPrefixAndSuffix creates a hash from a prefix and suffix
+func reconstructHashFromPrefixAndSuffix(prefix uint64, suffix [hash.SuffixLen]byte) hash.Hash {
+	var h hash.Hash
+	binary.BigEndian.PutUint64(h[:hash.PrefixLen], prefix)
+	copy(h[hash.PrefixLen:], suffix[:])
+	return h
+}
+
 // archiveReader is a reader for the archive format. We use primitive type slices where possible. These are read directly
 // from disk into memory for speed. The downside is complexity on the read path, but it's all constant time.
 type archiveReader struct {
 	reader      tableReaderAt
 	indexReader archiveIndexReader // Memory-mapped or fallback index reader
-	footer      archiveFooter
 	dictCache   *lru.TwoQueueCache[uint32, *DecompBundle]
+	footer      archiveFooter
 }
 
 type suffix [hash.SuffixLen]byte
 
 type archiveFooter struct {
+	fileSignature string
 	indexSize     uint64
+	fileSize      uint64 // Not actually part of the footer, but necessary for calculating offsets.
 	byteSpanCount uint32
 	chunkCount    uint32
 	metadataSize  uint32
 	dataCheckSum  sha512Sum
 	indexCheckSum sha512Sum
 	metaCheckSum  sha512Sum
-	formatVersion byte
-	fileSignature string
-	fileSize      uint64 // Not actually part of the footer, but necessary for calculating offsets.
 	hash          hash.Hash
+	formatVersion byte
 }
 
 // actualFooterSize returns the footer size, in bytes for a specific archive. Due to the evolution of the archive format,
@@ -113,8 +121,8 @@ func (f archiveFooter) metadataSpan() byteSpan {
 	return byteSpan{offset: f.fileSize - f.actualFooterSize() - uint64(f.metadataSize), length: uint64(f.metadataSize)}
 }
 
-func newArchiveMetadata(ctx context.Context, reader tableReaderAt, fileSize uint64, stats *Stats) (*ArchiveMetadata, error) {
-	aRdr, err := newArchiveReader(ctx, reader, fileSize, stats)
+func newArchiveMetadata(ctx context.Context, reader tableReaderAt, name hash.Hash, fileSize uint64, stats *Stats) (*ArchiveMetadata, error) {
+	aRdr, err := newArchiveReader(ctx, reader, name, fileSize, stats)
 	if err != nil {
 		return nil, err
 	}
@@ -180,12 +188,12 @@ func newArchiveMetadata(ctx context.Context, reader tableReaderAt, fileSize uint
 	}, nil
 }
 
-func newArchiveReaderFromFooter(ctx context.Context, reader tableReaderAt, fileSz uint64, footer []byte, stats *Stats) (archiveReader, error) {
+func newArchiveReaderFromFooter(ctx context.Context, reader tableReaderAt, name hash.Hash, fileSz uint64, footer []byte, stats *Stats) (archiveReader, error) {
 	if uint64(len(footer)) != archiveFooterSize {
 		return archiveReader{}, errors.New("runtime error: invalid footer.")
 	}
 
-	ftr, err := buildFooter(fileSz, footer)
+	ftr, err := buildFooter(name, fileSz, footer)
 	if err != nil {
 		return archiveReader{}, err
 	}
@@ -193,8 +201,8 @@ func newArchiveReaderFromFooter(ctx context.Context, reader tableReaderAt, fileS
 	return buildArchiveReader(ctx, reader, ftr, stats)
 }
 
-func newArchiveReader(ctx context.Context, reader tableReaderAt, fileSize uint64, stats *Stats) (archiveReader, error) {
-	footer, err := loadFooter(ctx, reader, fileSize, stats)
+func newArchiveReader(ctx context.Context, reader tableReaderAt, name hash.Hash, fileSize uint64, stats *Stats) (archiveReader, error) {
+	footer, err := loadFooter(ctx, reader, name, fileSize, stats)
 	if err != nil {
 		return archiveReader{}, fmt.Errorf("Failed to loadFooter: %w", err)
 	}
@@ -315,10 +323,10 @@ func (f *inMemoryArchiveIndexReader) getChunkRef(idx uint32) (dict, data uint32)
 }
 
 func (f *inMemoryArchiveIndexReader) getSuffix(idx uint32) suffix {
-	if idx >= uint32(len(f.suffixes)/hash.SuffixLen) {
+	if idx >= f.getNumChunks() {
 		return suffix{}
 	}
-	start := idx * hash.SuffixLen
+	start := uint64(idx) * hash.SuffixLen
 	return suffix(f.suffixes[start : start+hash.SuffixLen])
 }
 
@@ -355,17 +363,17 @@ func newSectionReader(ctx context.Context, rd ReaderAtWithStats, off, len int64,
 	return io.NewSectionReader(readerAtWithStatsBridge{rd, ctx, stats}, off, len)
 }
 
-func loadFooter(ctx context.Context, reader ReaderAtWithStats, fileSize uint64, stats *Stats) (f archiveFooter, err error) {
+func loadFooter(ctx context.Context, reader ReaderAtWithStats, name hash.Hash, fileSize uint64, stats *Stats) (f archiveFooter, err error) {
 	section := newSectionReader(ctx, reader, int64(fileSize-archiveFooterSize), int64(archiveFooterSize), stats)
 	buf := make([]byte, archiveFooterSize)
 	_, err = io.ReadFull(section, buf)
 	if err != nil {
 		return
 	}
-	return buildFooter(fileSize, buf)
+	return buildFooter(name, fileSize, buf)
 }
 
-func buildFooter(fileSize uint64, buf []byte) (f archiveFooter, err error) {
+func buildFooter(name hash.Hash, fileSize uint64, buf []byte) (f archiveFooter, err error) {
 	f.formatVersion = buf[afrVersionOffset]
 	f.fileSignature = string(buf[afrSigOffset:])
 	// Verify File Signature
@@ -404,14 +412,7 @@ func buildFooter(fileSize uint64, buf []byte) (f archiveFooter, err error) {
 	f.metaCheckSum = sha512Sum(buf[afrMetaChkSumOffset : afrMetaChkSumOffset+sha512.Size])
 	f.fileSize = fileSize
 
-	// calculate the hash of the footer. We don't currently verify that this is what was used to load the content.
-	sha := sha512.New()
-	if smallFooter {
-		buf = buf[4:]
-	}
-
-	sha.Write(buf)
-	f.hash = hash.New(sha.Sum(nil)[:hash.ByteLen])
+	f.hash = name
 
 	return
 }
@@ -492,7 +493,7 @@ func (ar archiveReader) getAsToChunker(ctx context.Context, h hash.Hash, stats *
 		return nil, errors.New("runtime error: unable to get archived chunk. dictionary is nil")
 	}
 
-	return ArchiveToChunker{h, dict, data}, nil
+	return ArchiveToChunker{dict, data, h}, nil
 }
 
 func (ar archiveReader) count() uint32 {
@@ -583,30 +584,11 @@ func (ar archiveReader) getMetadata(ctx context.Context, stats *Stats) ([]byte, 
 	return ar.readByteSpan(ctx, ar.footer.metadataSpan(), stats)
 }
 
-// verifyDataCheckSum verifies the checksum of the data section of the archive. Note - this requires a fully read of
-// the data section, which could be sizable.
-func (ar archiveReader) verifyDataCheckSum(ctx context.Context, stats *Stats) error {
-	return verifyCheckSum(ctx, ar.reader, ar.footer.dataSpan(), ar.footer.dataCheckSum, stats)
-}
-
-// verifyIndexCheckSum verifies the checksum of the index section of the archive.
-func (ar archiveReader) verifyIndexCheckSum(ctx context.Context, stats *Stats) error {
-	return verifyCheckSum(ctx, ar.reader, ar.footer.totalIndexSpan(), ar.footer.indexCheckSum, stats)
-}
-
-// verifyMetaCheckSum verifies the checksum of the metadata section of the archive.
-func (ar archiveReader) verifyMetaCheckSum(ctx context.Context, stats *Stats) error {
-	return verifyCheckSum(ctx, ar.reader, ar.footer.metadataSpan(), ar.footer.metaCheckSum, stats)
-}
-
 func (ar archiveReader) iterate(ctx context.Context, cb func(chunks.Chunk) error, stats *Stats) error {
 	for i := uint32(0); i < ar.footer.chunkCount; i++ {
-		var hasBytes [hash.ByteLen]byte
-
-		binary.BigEndian.PutUint64(hasBytes[:uint64Size], ar.indexReader.getPrefix(i))
-		suf := ar.indexReader.getSuffix(i)
-		copy(hasBytes[hash.ByteLen-hash.SuffixLen:], suf[:])
-		h := hash.New(hasBytes[:])
+		prefix := ar.indexReader.getPrefix(i)
+		suffix := ar.indexReader.getSuffix(i)
+		h := reconstructHashFromPrefixAndSuffix(prefix, suffix)
 
 		data, err := ar.get(ctx, h, stats)
 		if err != nil {

@@ -541,7 +541,7 @@ func interfaceValueAsSqlString(ctx *sql.Context, ti typeinfo.TypeInfo, value int
 		return singleQuote + str + singleQuote, nil
 	case typeinfo.DatetimeTypeIdentifier:
 		return singleQuote + str + singleQuote, nil
-	case typeinfo.InlineBlobTypeIdentifier, typeinfo.VarBinaryTypeIdentifier:
+	case typeinfo.InlineBlobTypeIdentifier, typeinfo.VarBinaryTypeIdentifier, typeinfo.VectorTypeIdentifier:
 		value, err := sql.UnwrapAny(ctx, value)
 		if err != nil {
 			return "", err

@@ -35,49 +35,48 @@ var _ doltdb.CommitHook = (*commithook)(nil)
 var _ doltdb.NotifyWaitFailedCommitHook = (*commithook)(nil)
 
 type commithook struct {
-	rootLgr              *logrus.Entry
-	lgr                  atomic.Value // *logrus.Entry
-	remotename           string
-	remoteurl            string
-	dbname               string
-	mu                   sync.Mutex
-	wg                   sync.WaitGroup
-	cond                 *sync.Cond
-	shutdown             atomic.Bool
-	nextHead             hash.Hash
-	lastPushedHead       hash.Hash
 	nextPushAttempt      time.Time
-	nextHeadIncomingTime time.Time
 	lastSuccess          time.Time
-	currentError         *string
-	cancelReplicate      func()
-	sqlCtxFactory        SqlContextFactory
+	nextHeadIncomingTime time.Time
+	lgr                  atomic.Value
 
-	// waitNotify is set by controller when it needs to track whether the
-	// commithooks are caught up with replicating to the standby.
-	waitNotify func()
-
-	// |mu| must be held for all accesses.
-	progressNotifier ProgressNotifier
-
-	// If this is true, the waitF returned by Execute() will fast fail if
-	// we are not already caught up, instead of blocking on a successCh
-	// actually indicated we are caught up. This is set to by a call to
-	// NotifyWaitFailed(), an optional interface on CommitHook.
-	fastFailReplicationWait bool
-
-	role Role
-
-	// The standby replica to which the new root gets replicated.
-	destDB *doltdb.DoltDB
+	currentError *string
+	cond         *sync.Cond
+	rootLgr      *logrus.Entry
 	// When we first start replicating to the destination, we lazily
 	// instantiate the remote and we do not treat failures as terminal.
 	destDBF func(context.Context) (*doltdb.DoltDB, error)
 	// This database, which we are replicating from. In our current
 	// configuration, it is local to this server process.
 	srcDB *doltdb.DoltDB
+	// The standby replica to which the new root gets replicated.
+	destDB *doltdb.DoltDB
 
-	tempDir string
+	sqlCtxFactory SqlContextFactory
+	// waitNotify is set by controller when it needs to track whether the
+	// commithooks are caught up with replicating to the standby.
+	waitNotify      func()
+	cancelReplicate func()
+
+	remotename string
+	tempDir    string
+	remoteurl  string
+	dbname     string
+	role       Role
+	// |mu| must be held for all accesses.
+	progressNotifier ProgressNotifier
+
+	wg             sync.WaitGroup
+	mu             sync.Mutex
+	shutdown       atomic.Bool
+	lastPushedHead hash.Hash
+	nextHead       hash.Hash
+
+	// If this is true, the waitF returned by Execute() will fast fail if
+	// we are not already caught up, instead of blocking on a successCh
+	// actually indicated we are caught up. This is set to by a call to
+	// NotifyWaitFailed(), an optional interface on CommitHook.
+	fastFailReplicationWait bool
 }
 
 var errDestDBRootHashMoved error = errors.New("cluster/commithook: standby replication: destination database root hash moved during our write, while it is assumed we are the only writer.")

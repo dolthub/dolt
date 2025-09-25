@@ -27,11 +27,11 @@ import (
 // DoltTable, but its RowIter function returns values that match a sql.Range, instead of all
 // rows. It's returned by the DoltTable.IndexedAccess function.
 type IndexedDoltTable struct {
+	idx index.DoltIndex
+	lb  index.IndexScanBuilder
 	*DoltTable
-	idx          index.DoltIndex
-	lb           index.IndexScanBuilder
-	isDoltFormat bool
 	mu           *sync.Mutex
+	isDoltFormat bool
 }
 
 func NewIndexedDoltTable(t *DoltTable, idx index.DoltIndex) *IndexedDoltTable {
@@ -123,11 +123,11 @@ func NewWritableIndexedDoltTable(t *WritableDoltTable, idx index.DoltIndex) *Wri
 }
 
 type WritableIndexedDoltTable struct {
+	idx index.DoltIndex
+	lb  index.IndexScanBuilder
 	*WritableDoltTable
-	idx          index.DoltIndex
-	isDoltFormat bool
-	lb           index.IndexScanBuilder
 	mu           *sync.Mutex
+	isDoltFormat bool
 }
 
 func (t *WritableIndexedDoltTable) Index() index.DoltIndex {

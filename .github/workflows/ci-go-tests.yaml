@@ -5,6 +5,7 @@ on:
     branches: [ main ]
     paths:
       - 'go/**'
+      - '.github/workflows/ci-go-tests.yaml'
   workflow_dispatch:
 
 concurrency:
@@ -29,6 +30,21 @@ jobs:
       with:
         go-version-file: go/go.mod
       id: go
+    - name: Install ICU4C (MacOS)
+      if: ${{ matrix.os == 'macos-latest' }}
+      run: |
+        dir=$(brew --cellar icu4c)
+        dir="$dir"/$(ls "$dir")
+        echo CGO_CPPFLAGS=-I$dir/include >> $GITHUB_ENV
+        echo CGO_LDFLAGS=-L$dir/lib >> $GITHUB_ENV
+    - name: Install ICU4C (Windows)
+      id: msys2
+      if: ${{ matrix.os == 'windows-latest' }}
+      uses: msys2/setup-msys2@v2
+      with:
+        path-type: inherit
+        msystem: UCRT64
+        pacboy: icu:p toolchain:p pkg-config:p
     - name: Test All
       working-directory: ./go
       run: |
@@ -37,7 +53,10 @@ jobs:
         IFS=$'\n'
         file_arr=($files)
         IFS=$SAVEIFS
-
+        if [ "$MATRIX_OS" == 'windows-latest' ]; then
+          export PATH=$(cygpath -u "$MSYS2_LOCATION"/ucrt64/bin):"$PATH"
+        fi
+        
         for (( i=0; i<${#file_arr[@]}; i++ ))
         do
           # Skip binlog tests as they run in a separate CI job
@@ -65,6 +84,7 @@ jobs:
         done
       env:
         MATRIX_OS: ${{ matrix.os }}
+        MSYS2_LOCATION: ${{ steps.msys2.outputs.msys2-location }}
   noracetest:
     name: Go tests - no race
     defaults:
@@ -82,10 +102,29 @@ jobs:
       with:
         go-version-file: go/go.mod
       id: go
+    - name: Install ICU4C (MacOS)
+      if: ${{ matrix.os == 'macos-latest' }}
+      run: |
+        dir=$(brew --cellar icu4c)
+        dir="$dir"/$(ls "$dir")
+        echo CGO_CPPFLAGS=-I$dir/include >> $GITHUB_ENV
+        echo CGO_LDFLAGS=-L$dir/lib >> $GITHUB_ENV
+    - name: Install ICU4C (Windows)
+      if: ${{ matrix.os == 'windows-latest' }}
+      id: msys2
+      uses: msys2/setup-msys2@v2
+      with:
+        path-type: inherit
+        msystem: UCRT64
+        pacboy: icu:p toolchain:p pkg-config:p
     - name: Test All
       working-directory: ./go
       run: |
+        if [ "$MATRIX_OS" == 'windows-latest' ]; then
+          export PATH=$(cygpath -u "$MSYS2_LOCATION"/ucrt64/bin):"$PATH"
+        fi
         go test -vet=off -timeout 30m ./libraries/doltcore/sqle/integration_test
       env:
         MATRIX_OS: ${{ matrix.os }}
         DOLT_TEST_RUN_NON_RACE_TESTS: "true"
+        MSYS2_LOCATION: ${{ steps.msys2.outputs.msys2-location }}

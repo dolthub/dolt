@@ -258,7 +258,7 @@ func (le *ListEditor) Splice(idx uint64, deleteCount uint64, vs ...Valuable) *Li
 		d.PanicIfTrue(sv == nil)
 	}
 
-	ne := &listEdit{idx, deleteCount, vs, nil}
+	ne := &listEdit{nil, vs, idx, deleteCount}
 
 	var last *listEdit
 	edit := le.edits
@@ -353,8 +353,8 @@ func (le *ListEditor) Get(ctx context.Context, idx uint64) (Valuable, error) {
 }
 
 type listEdit struct {
+	next     *listEdit
+	inserted []Valuable
 	idx      uint64
 	removed  uint64
-	inserted []Valuable
-	next     *listEdit
 }

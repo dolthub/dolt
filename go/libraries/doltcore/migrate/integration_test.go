@@ -172,6 +172,7 @@ func setupMigrationTest(t *testing.T, ctx context.Context, test migrationTest) *
 	}
 	cliCtx, err := commands.NewArgFreeCliContext(ctx, dEnv, dEnv.FS)
 	require.NoError(t, err)
+	defer cliCtx.Close()
 
 	cmd := commands.SqlCmd{}
 	for _, query := range test.setup {
@@ -253,5 +254,10 @@ func initTestMigrationDB(ctx context.Context) (*doltdb.DoltDB, error) {
 	if err != nil {
 		return nil, err
 	}
-	return doltdb.DoltDBFromCS(cs, ""), nil
+
+	ddb, err := doltdb.DoltDBFromCS(cs, "")
+	if err != nil {
+		return nil, err
+	}
+	return ddb, nil
 }

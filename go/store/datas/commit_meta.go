@@ -58,10 +58,10 @@ var AuthorLoc = time.Local
 type CommitMeta struct {
 	Name          string
 	Email         string
-	Timestamp     uint64
 	Description   string
-	UserTimestamp int64
 	Signature     string
+	Timestamp     uint64
+	UserTimestamp int64
 }
 
 // NewCommitMeta creates a CommitMeta instance from a name, email, and description and uses the current time for the
@@ -120,7 +120,7 @@ func NewCommitMetaWithUserTS(name, email, desc string, userTS time.Time) (*Commi
 	committerDateMillis := uint64(CommitterDate().UnixMilli())
 	authorDateMillis := userTS.UnixMilli()
 
-	return &CommitMeta{n, e, committerDateMillis, d, authorDateMillis, ""}, nil
+	return &CommitMeta{n, e, d, "", committerDateMillis, authorDateMillis}, nil
 }
 
 func getRequiredFromSt(st types.Struct, k string) (types.Value, error) {
@@ -175,12 +175,12 @@ func CommitMetaFromNomsSt(st types.Struct) (*CommitMeta, error) {
 	}
 
 	return &CommitMeta{
-		string(n.(types.String)),
-		string(e.(types.String)),
-		uint64(ts.(types.Uint)),
-		string(d.(types.String)),
-		int64(userTS.(types.Int)),
-		string(signature.(types.String)),
+		Name:          string(n.(types.String)),
+		Email:         string(e.(types.String)),
+		Description:   string(d.(types.String)),
+		Signature:     string(signature.(types.String)),
+		Timestamp:     uint64(ts.(types.Uint)),
+		UserTimestamp: int64(userTS.(types.Int)),
 	}, nil
 }
 

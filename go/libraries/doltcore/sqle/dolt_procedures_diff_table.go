@@ -134,9 +134,9 @@ func (dpdt *doltProceduresDiffTable) PrimaryKeySchema() sql.PrimaryKeySchema {
 // DoltProceduresDiffPartitionItr iterates through commit history for procedure diffs
 type DoltProceduresDiffPartitionItr struct {
 	cmItr                doltdb.CommitItr[*sql.Context]
-	db                   Database
-	head                 *doltdb.Commit
 	workingRoot          doltdb.RootValue
+	head                 *doltdb.Commit
+	db                   Database
 	workingPartitionDone bool
 }
 
@@ -146,7 +146,7 @@ var _ sql.PartitionIter = (*DoltProceduresDiffPartitionItr)(nil)
 func (dpdp *DoltProceduresDiffPartitionItr) Next(ctx *sql.Context) (sql.Partition, error) {
 	// First iterate through commit history, then add working partition as the final step
 	for {
-		cmHash, optCmt, err := dpdp.cmItr.Next(ctx)
+		cmHash, optCmt, _, _, err := dpdp.cmItr.Next(ctx)
 		if err == io.EOF {
 			// Finished with commit history, now add working partition if not done
 			if !dpdp.workingPartitionDone {
@@ -367,17 +367,17 @@ func (dpdp *DoltProceduresDiffPartition) GetRowIter(ctx *sql.Context) (sql.RowIt
 
 // doltProceduresDiffPartitionRowIter implements a row iterator for a single diff partition
 type doltProceduresDiffPartitionRowIter struct {
-	ctx       *sql.Context
-	toTable   *doltdb.Table
-	fromTable *doltdb.Table
-	toName    string
-	fromName  string
-	toDate    *types.Timestamp
-	fromDate  *types.Timestamp
 	toRoot    doltdb.RootValue
 	fromRoot  doltdb.RootValue
-	db        Database
+	toTable   *doltdb.Table
+	fromTable *doltdb.Table
+	ctx       *sql.Context
+	toDate    *types.Timestamp
+	fromDate  *types.Timestamp
+	toName    string
+	fromName  string
 	rows      []sql.Row
+	db        Database
 	idx       int
 	done      bool
 }

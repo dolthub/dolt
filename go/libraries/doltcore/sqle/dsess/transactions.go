@@ -87,15 +87,14 @@ type DoltTransaction struct {
 }
 
 type dbRoot struct {
+	db       *doltdb.DoltDB
 	dbName   string
 	rootHash hash.Hash
-	db       *doltdb.DoltDB
 }
 
 type savepoint struct {
-	name string
-	// from db name to the root value for that database.
 	roots map[string]doltdb.RootValue
+	name  string
 }
 
 func NewDoltTransaction(
@@ -759,7 +758,7 @@ func (tx *DoltTransaction) CreateSavepoint(name string, roots map[string]doltdb.
 	if existing >= 0 {
 		tx.savepoints = append(tx.savepoints[:existing], tx.savepoints[existing+1:]...)
 	}
-	tx.savepoints = append(tx.savepoints, savepoint{name, roots})
+	tx.savepoints = append(tx.savepoints, savepoint{name: name, roots: roots})
 }
 
 // findSavepoint returns the index of the savepoint with the name given, or -1 if it doesn't exist

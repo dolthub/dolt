@@ -18,6 +18,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
@@ -26,11 +27,18 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/fk"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/store/hash"
+	storetypes "github.com/dolthub/dolt/go/store/types"
 )
 
 const branchesDefaultRowCount = 10
+
+// doltBranchesIndexName is the name of the index on the dolt_branches system table that covers
+// the "name" field.
+const doltBranchesIndexName = "dolt_branches_name_idx"
 
 var _ sql.Table = (*BranchesTable)(nil)
 var _ sql.StatisticsTable = (*BranchesTable)(nil)
@@ -38,12 +46,153 @@ var _ sql.UpdatableTable = (*BranchesTable)(nil)
 var _ sql.DeletableTable = (*BranchesTable)(nil)
 var _ sql.InsertableTable = (*BranchesTable)(nil)
 var _ sql.ReplaceableTable = (*BranchesTable)(nil)
+var _ sql.ForeignKeyTable = (*BranchesTable)(nil)
+var _ sql.IndexedTable = (*BranchesTable)(nil)
 
 // BranchesTable is the system table that accesses branches
 type BranchesTable struct {
 	db        dsess.SqlDatabase
-	remote    bool
 	tableName string
+	remote    bool
+}
+
+// LookupPartitions implements sql.IndexedTable
+func (bt *BranchesTable) LookupPartitions(ctx *sql.Context, lookup sql.IndexLookup) (sql.PartitionIter, error) {
+	if lookup.Index.ID() == doltBranchesIndexName {
+		mysqlRanges, ok := lookup.Ranges.(sql.MySQLRangeCollection)
+		if !ok {
+			return nil, fmt.Errorf("unsupported range cut type: %T", lookup.Ranges)
+		}
+
+		var partitions []sql.Partition
+		for i := range mysqlRanges.ToRanges() {
+			mysqlRange := mysqlRanges.ToRanges()[i].(sql.MySQLRange)
+			rangeExpr := mysqlRange[0]
+
+			lowerBoundInclusive := false
+			noLowerBoundResults := false
+			var lowerBoundValue any
+			switch x := rangeExpr.LowerBound.(type) {
+			case sql.Above:
+				lowerBoundValue = x.Key
+			case sql.Below:
+				lowerBoundValue = x.Key
+				lowerBoundInclusive = true
+			case sql.BelowNull, sql.AboveNull:
+				// BelowNull and AboveNull for a lower bound means no lower bound
+				// They evaluate the same, since name is a PK and will never be NULL.
+				lowerBoundValue = ""
+			case sql.AboveAll:
+				noLowerBoundResults = true
+				lowerBoundValue = ""
+			default:
+				return nil, fmt.Errorf("unknown range cut type: %T", rangeExpr.LowerBound)
+			}
+
+			upperBoundInclusive := false
+			noUpperBoundResults := false
+			var upperBoundValue any
+			switch x := rangeExpr.UpperBound.(type) {
+			case sql.Above:
+				upperBoundValue = x.Key
+				upperBoundInclusive = true
+			case sql.Below:
+				upperBoundValue = x.Key
+			case sql.AboveAll:
+				noUpperBoundResults = true
+				upperBoundValue = ""
+			case sql.BelowNull, sql.AboveNull:
+				upperBoundValue = ""
+			default:
+				return nil, fmt.Errorf("unknown range cut type: %T", rangeExpr.UpperBound)
+			}
+
+			if noUpperBoundResults && noLowerBoundResults {
+				continue
+			}
+
+			partitions = append(partitions, &filteredPartition{
+				lowerBound:          lowerBoundValue.(string),
+				lowerBoundInclusive: lowerBoundInclusive,
+				upperBound:          upperBoundValue.(string),
+				upperBoundInclusive: upperBoundInclusive,
+			})
+		}
+		return NewSliceOfPartitionsItr(partitions), nil
+	}
+
+	return nil, fmt.Errorf("unsupported index: %s", lookup.Index.ID())
+}
+
+// IndexedAccess implements sql.IndexAddressable
+func (bt *BranchesTable) IndexedAccess(ctx *sql.Context, lookup sql.IndexLookup) sql.IndexedTable {
+	return bt
+}
+
+// GetIndexes implements sql.IndexAddressable
+func (bt *BranchesTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
+	return []sql.Index{
+		index.NewBranchNameIndex(
+			index.MockIndex(doltBranchesIndexName,
+				bt.db.Name(), bt.Name(), "name", storetypes.StringKind, true)),
+	}, nil
+}
+
+// PreciseMatch implements sql.IndexAddressable
+func (bt *BranchesTable) PreciseMatch() bool {
+	return false
+}
+
+// CreateIndexForForeignKey implements sql.ForeignKeyTable
+func (bt *BranchesTable) CreateIndexForForeignKey(ctx *sql.Context, indexDef sql.IndexDef) error {
+	return fmt.Errorf("creating indexes on dolt system tables is not supported")
+}
+
+// GetDeclaredForeignKeys implements sql.ForeignKeyTable
+func (bt *BranchesTable) GetDeclaredForeignKeys(ctx *sql.Context) ([]sql.ForeignKeyConstraint, error) {
+	// The dolt_branches system table does not declare any FKs
+	return nil, nil
+}
+
+// GetReferencedForeignKeys implements sql.ForeignKeyTable
+func (bt *BranchesTable) GetReferencedForeignKeys(ctx *sql.Context) ([]sql.ForeignKeyConstraint, error) {
+	databaseName := bt.db.Name()
+	doltSession := dsess.DSessFromSess(ctx.Session)
+	roots, ok := doltSession.GetRoots(ctx, databaseName)
+	if !ok {
+		return nil, fmt.Errorf("unable to get roots for database '%s'", databaseName)
+	}
+
+	pkSch := sql.NewPrimaryKeySchema(bt.Schema(), 0)
+	tableName := doltdb.TableName{Name: "dolt_branches"}
+	doltSchema, err := sqlutil.ToDoltSchema(ctx, roots.Working, tableName, pkSch, roots.Head, bt.Collation())
+	if err != nil {
+		return nil, err
+	}
+
+	return fk.GetReferencedForeignKeys(ctx, roots.Working, bt.db.Name(), tableName, doltSchema)
+}
+
+// AddForeignKey implements sql.ForeignKeyTable
+func (bt *BranchesTable) AddForeignKey(ctx *sql.Context, fk sql.ForeignKeyConstraint) error {
+	return fmt.Errorf("dolt system tables do not support adding foreign keys")
+}
+
+// DropForeignKey implements sql.ForeignKeyTable
+func (bt *BranchesTable) DropForeignKey(ctx *sql.Context, fkName string) error {
+	return fmt.Errorf("dolt system tables do not support dropping foreign keys")
+}
+
+// UpdateForeignKey implements sql.ForeignKeyTable
+func (bt *BranchesTable) UpdateForeignKey(ctx *sql.Context, fkName string, fk sql.ForeignKeyConstraint) error {
+	return fmt.Errorf("dolt_branches system table does not support updating foreign keys")
+}
+
+// GetForeignKeyEditor implements sql.ForeignKeyTable
+func (bt *BranchesTable) GetForeignKeyEditor(ctx *sql.Context) sql.ForeignKeyEditor {
+	return &systemTableForeignKeyEditor{
+		indexedTable: bt,
+	}
 }
 
 // NewBranchesTable creates a BranchesTable
@@ -53,7 +202,7 @@ func NewBranchesTable(_ *sql.Context, db dsess.SqlDatabase, tableName string) sq
 
 // NewRemoteBranchesTable creates a BranchesTable with only remote refs
 func NewRemoteBranchesTable(_ *sql.Context, ddb dsess.SqlDatabase, tableName string) sql.Table {
-	return &BranchesTable{ddb, true, tableName}
+	return &BranchesTable{db: ddb, remote: true, tableName: tableName}
 }
 
 func (bt *BranchesTable) DataLength(ctx *sql.Context) (uint64, error) {
@@ -109,6 +258,12 @@ func (bt *BranchesTable) Partitions(*sql.Context) (sql.PartitionIter, error) {
 
 // PartitionRows is a sql.Table interface function that gets a row iterator for a partition
 func (bt *BranchesTable) PartitionRows(sqlCtx *sql.Context, part sql.Partition) (sql.RowIter, error) {
+	if filteredPartition, ok := part.(*filteredPartition); ok {
+		return NewFilteredBranchItr(sqlCtx, bt,
+			filteredPartition.lowerBound, filteredPartition.lowerBoundInclusive,
+			filteredPartition.upperBound, filteredPartition.upperBoundInclusive)
+	}
+
 	return NewBranchItr(sqlCtx, bt)
 }
 
@@ -119,6 +274,32 @@ type BranchItr struct {
 	commits  []*doltdb.Commit
 	dirty    []bool
 	idx      int
+
+	// lowerBound is an optional filter to control the lowest (alphabetically) branch name
+	// returned by this iterator
+	lowerBound string
+	// lowerBoundInclusive controls whether |lowerBound| is inclusive or not.
+	lowerBoundInclusive bool
+	// upperBound is an optional filter to control the highest (alphabetically) branch name
+	// returned by this iterator
+	upperBound string
+	// upperBoundInclusive controls whether |upperBound| is inclusive or not.
+	upperBoundInclusive bool
+}
+
+// NewFilteredBranchItr creates a BranchItr that filters out branch names lower that
+// |lowerBound| and higher than |upperBound|.
+func NewFilteredBranchItr(ctx *sql.Context, table *BranchesTable, lowerBound string, lowerBoundInclusive bool, upperBound string, upperBoundInclusive bool) (*BranchItr, error) {
+	itr, err := NewBranchItr(ctx, table)
+	if err != nil {
+		return nil, err
+	}
+
+	itr.lowerBound = lowerBound
+	itr.lowerBoundInclusive = lowerBoundInclusive
+	itr.upperBound = upperBound
+	itr.upperBoundInclusive = upperBoundInclusive
+	return itr, nil
 }
 
 // NewBranchItr creates a BranchItr from the current environment.
@@ -184,50 +365,84 @@ func NewBranchItr(ctx *sql.Context, table *BranchesTable) (*BranchItr, error) {
 }
 
 // Next retrieves the next row. It will return io.EOF if it's the last row.
-// After retrieving the last row, Close will be automatically closed.
+// After retrieving the last row, Close will be automatically closed. If an upper
+// or lower bound has been configured, this function will filter out branch
+// names outside those bounds.
 func (itr *BranchItr) Next(ctx *sql.Context) (sql.Row, error) {
-	if itr.idx >= len(itr.commits) {
-		return nil, io.EOF
-	}
-
 	defer func() {
 		itr.idx++
 	}()
 
-	name := itr.branches[itr.idx]
-	cm := itr.commits[itr.idx]
-	dirty := itr.dirty[itr.idx]
-	meta, err := cm.GetCommitMeta(ctx)
+	for {
+		if itr.idx >= len(itr.commits) {
+			return nil, io.EOF
+		}
 
-	if err != nil {
-		return nil, err
-	}
+		name := itr.branches[itr.idx]
+		if itr.outOfLowerBound(name) || itr.outOfUpperBound(name) {
+			itr.idx++
+			continue
+		}
 
-	h, err := cm.HashOf()
-
-	if err != nil {
-		return nil, err
-	}
-
-	remoteBranches := itr.table.remote
-	if remoteBranches {
-		return sql.NewRow(name, h.String(), meta.Name, meta.Email, meta.Time(), meta.Description), nil
-	} else {
-		branches, err := itr.table.db.DbData().Rsr.GetBranches()
-
+		cm := itr.commits[itr.idx]
+		dirty := itr.dirty[itr.idx]
+		meta, err := cm.GetCommitMeta(ctx)
 		if err != nil {
 			return nil, err
 		}
 
-		remoteName := ""
-		branchName := ""
-		branch, ok := branches.Get(name)
-		if ok {
-			remoteName = branch.Remote
-			branchName = branch.Merge.Ref.GetPath()
+		h, err := cm.HashOf()
+		if err != nil {
+			return nil, err
 		}
-		return sql.NewRow(name, h.String(), meta.Name, meta.Email, meta.Time(), meta.Description, remoteName, branchName, dirty), nil
+
+		remoteBranches := itr.table.remote
+		if remoteBranches {
+			return sql.NewRow(name, h.String(), meta.Name, meta.Email, meta.Time(), meta.Description), nil
+		} else {
+			branches, err := itr.table.db.DbData().Rsr.GetBranches()
+			if err != nil {
+				return nil, err
+			}
+
+			remoteName := ""
+			branchName := ""
+			branch, ok := branches.Get(name)
+			if ok {
+				remoteName = branch.Remote
+				branchName = branch.Merge.Ref.GetPath()
+			}
+			return sql.NewRow(name, h.String(), meta.Name, meta.Email, meta.Time(), meta.Description, remoteName, branchName, dirty), nil
+		}
 	}
+}
+
+// outOfLowerBound returns true if |branchName| is below the lower bound configured in |itr|,
+// indicating that it should be filtered out and not returned.
+func (itr *BranchItr) outOfLowerBound(branchName string) bool {
+	if itr.lowerBound == "" {
+		return false
+	}
+
+	threshold := 1
+	if itr.lowerBoundInclusive {
+		threshold = 0
+	}
+	return strings.Compare(branchName, itr.lowerBound) < threshold
+}
+
+// outOfUpperBound returns true if |branchName| is above the upper bound configured in |itr|,
+// indicating that it should be filtered out and not returned.
+func (itr *BranchItr) outOfUpperBound(branchName string) bool {
+	if itr.upperBound == "" {
+		return false
+	}
+
+	threshold := -1
+	if itr.upperBoundInclusive {
+		threshold = 0
+	}
+	return strings.Compare(branchName, itr.upperBound) > threshold
 }
 
 // isDirty returns true if the working ref points to a dirty branch.
@@ -347,5 +562,22 @@ func (bWr branchWriter) StatementComplete(ctx *sql.Context) error {
 
 // Close finalizes the delete operation, persisting the result.
 func (bWr branchWriter) Close(*sql.Context) error {
+	return nil
+}
+
+// filteredPartition represents a partition of branch names that is filtered by a
+// lower bound and upper bound.
+type filteredPartition struct {
+	lowerBound          string
+	lowerBoundInclusive bool
+	upperBound          string
+	upperBoundInclusive bool
+}
+
+var _ sql.Partition = (*filteredPartition)(nil)
+
+// Key implements sql.Partition
+func (f filteredPartition) Key() []byte {
+	// Key is not used to identify the partition, so we return nil
 	return nil
 }

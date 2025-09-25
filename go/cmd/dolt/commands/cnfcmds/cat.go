@@ -101,12 +101,9 @@ func (cmd CatCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		return 1
 	}
 
-	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
+	queryist, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-	}
-	if closeFunc != nil {
-		defer closeFunc()
 	}
 
 	tblNames := args
@@ -116,7 +113,7 @@ func (cmd CatCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		return 1
 	}
 
-	if err := printConflicts(queryist, sqlCtx, tblNames); err != nil {
+	if err := printConflicts(queryist.Queryist, queryist.Context, tblNames); err != nil {
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 	return 0
@@ -147,6 +144,11 @@ func printConflicts(queryist cli.Queryist, sqlCtx *sql.Context, tblNames []strin
 				return fmt.Errorf("error: failed to print schema conflicts for table '%s': %w", table, err)
 			}
 		}
+	}
+
+	// if there are no unmerged tables, return early
+	if len(mergeStatus.unmergedTables) == 0 {
+		return nil
 	}
 
 	// next print data conflicts
@@ -297,6 +299,11 @@ func getMergeStatus(queryist cli.Queryist, sqlCtx *sql.Context) (mergeStatus, er
 		return ms, errors.New("error: multiple rows in dolt_merge_status")
 	}
 
+	// No active merge; return default merge status (isMerging=false)
+	if len(rows) == 0 {
+		return ms, nil
+	}
+
 	row := rows[0]
 	ms.isMerging, err = commands.GetTinyIntColAsBool(row[0])
 	if err != nil {
@@ -307,7 +314,11 @@ func getMergeStatus(queryist cli.Queryist, sqlCtx *sql.Context) (mergeStatus, er
 		ms.sourceCommit = row[2].(string)
 		ms.target = row[3].(string)
 		unmergedTables := row[4].(string)
-		ms.unmergedTables = strings.Split(unmergedTables, ", ")
+		if unmergedTables == "" {
+			ms.unmergedTables = []string{}
+		} else {
+			ms.unmergedTables = strings.Split(unmergedTables, ", ")
+		}
 	}
 
 	return ms, nil

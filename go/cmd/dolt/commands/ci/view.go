@@ -82,15 +82,12 @@ func (cmd ViewCmd) Exec(ctx context.Context, commandStr string, args []string, _
 	}
 	workflowName := args[0]
 
-	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
+	queryist, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
-	if closeFunc != nil {
-		defer closeFunc()
-	}
 
-	hasTables, err := dolt_ci.HasDoltCITables(queryist, sqlCtx)
+	hasTables, err := dolt_ci.HasDoltCITables(queryist.Queryist, queryist.Context)
 	if err != nil {
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
@@ -103,14 +100,14 @@ func (cmd ViewCmd) Exec(ctx context.Context, commandStr string, args []string, _
 	if err != nil {
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
-	wm := dolt_ci.NewWorkflowManager(name, email, queryist.Query)
+	wm := dolt_ci.NewWorkflowManager(name, email, queryist.Queryist.Query)
 
-	config, err := wm.GetWorkflowConfig(sqlCtx, workflowName)
+	config, err := wm.GetWorkflowConfig(queryist.Context, workflowName)
 	if err != nil {
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	savedQueries, err := getSavedQueries(sqlCtx, queryist)
+	savedQueries, err := getSavedQueries(queryist.Context, queryist.Queryist)
 	if err != nil {
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
@@ -142,18 +139,34 @@ func updateConfigQueryStatements(config *dolt_ci.WorkflowConfig, savedQueries ma
 	for i, job := range config.Jobs {
 		for j := range job.Steps {
 			step := job.Steps[j]
-			if name := savedQueries[step.SavedQueryName.Value]; name != "" {
-				config.Jobs[i].Steps[j].SavedQueryStatement = yaml.Node{
-					Kind:  yaml.ScalarNode,
-					Style: yaml.DoubleQuotedStyle,
-					Value: name,
+			if sq, ok := step.(*dolt_ci.SavedQueryStep); ok {
+				if name := savedQueries[sq.SavedQueryName.Value]; name != "" {
+					// Replace the element in-place with updated statement
+					sq.SavedQueryStatement = yaml.Node{
+						Kind:  yaml.ScalarNode,
+						Style: yaml.DoubleQuotedStyle,
+						Value: name,
+					}
+					config.Jobs[i].Steps[j] = sq
+				} else {
+					sq.SavedQueryStatement = yaml.Node{
+						Kind:  yaml.ScalarNode,
+						Style: yaml.DoubleQuotedStyle,
+						Value: "saved query not found",
+					}
+					config.Jobs[i].Steps[j] = sq
 				}
-			} else {
-				config.Jobs[i].Steps[j].SavedQueryStatement = yaml.Node{
-					Kind:  yaml.ScalarNode,
-					Style: yaml.DoubleQuotedStyle,
-					Value: "saved query not found",
+			} else if dt, ok := step.(*dolt_ci.DoltTestStep); ok {
+				// For dolt test steps, populate dolt_test_statements to show users what will be run
+				stmts, err := previewDoltTestStatements(dt)
+				if err != nil {
+					return nil, err
 				}
+				dt.DoltTestStatements = make([]yaml.Node, 0, len(stmts))
+				for _, s := range stmts {
+					dt.DoltTestStatements = append(dt.DoltTestStatements, yaml.Node{Kind: yaml.ScalarNode, Style: yaml.DoubleQuotedStyle, Value: s})
+				}
+				config.Jobs[i].Steps[j] = dt
 			}
 		}
 

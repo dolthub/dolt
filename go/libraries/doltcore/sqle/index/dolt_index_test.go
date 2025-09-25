@@ -1060,7 +1060,9 @@ func TestDoltIndexBetween(t *testing.T) {
 			exprs := idx.Expressions()
 			sqlIndex := sql.NewMySQLIndexBuilder(idx)
 			for i := range test.greaterThanOrEqual {
-				sqlIndex = sqlIndex.GreaterOrEqual(ctx, exprs[i], test.greaterThanOrEqual[i]).LessOrEqual(ctx, exprs[i], test.lessThanOrEqual[i])
+				sqlIndex = sqlIndex.
+					GreaterOrEqual(ctx, exprs[i], nil, test.greaterThanOrEqual[i]).
+					LessOrEqual(ctx, exprs[i], nil, test.lessThanOrEqual[i])
 			}
 			indexLookup, err := sqlIndex.Build(ctx)
 			require.NoError(t, err)
@@ -1100,8 +1102,8 @@ func (t NoCacheTableable) DataCacheKey(ctx *sql.Context) (doltdb.DataCacheKey, b
 }
 
 type rowSlice struct {
-	rows    []sql.Row
 	sortErr error
+	rows    []sql.Row
 }
 
 func (r *rowSlice) setSortErr(err error) {
@@ -1298,17 +1300,17 @@ func testDoltIndex(t *testing.T, ctx *sql.Context, root doltdb.RootValue, keys [
 	for i, key := range keys {
 		switch cmp {
 		case indexComp_Eq:
-			builder = builder.Equals(ctx, exprs[i], key)
+			builder = builder.Equals(ctx, exprs[i], nil, key)
 		case indexComp_NEq:
-			builder = builder.NotEquals(ctx, exprs[i], key)
+			builder = builder.NotEquals(ctx, exprs[i], nil, key)
 		case indexComp_Gt:
-			builder = builder.GreaterThan(ctx, exprs[i], key)
+			builder = builder.GreaterThan(ctx, exprs[i], nil, key)
 		case indexComp_GtE:
-			builder = builder.GreaterOrEqual(ctx, exprs[i], key)
+			builder = builder.GreaterOrEqual(ctx, exprs[i], nil, key)
 		case indexComp_Lt:
-			builder = builder.LessThan(ctx, exprs[i], key)
+			builder = builder.LessThan(ctx, exprs[i], nil, key)
 		case indexComp_LtE:
-			builder = builder.LessOrEqual(ctx, exprs[i], key)
+			builder = builder.LessOrEqual(ctx, exprs[i], nil, key)
 		default:
 			panic("should not be hit")
 		}

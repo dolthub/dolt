@@ -69,23 +69,25 @@ func (q *q) Swap(i, j int) {
 // the commit with the newer timestamp is "less". Finally if both commits are ghost commits, we don't really have enough
 // information to compare on, so we just compare the hashes to ensure that the results are stable.
 func (q *q) Less(i, j int) bool {
-	_, okI := q.pending[i].commit.ToCommit()
-	_, okJ := q.pending[i].commit.ToCommit()
+	cI := q.pending[i]
+	cJ := q.pending[j]
+	_, okI := cI.commit.ToCommit()
+	_, okJ := cJ.commit.ToCommit()
 
 	if !okI && okJ {
 		return true
 	} else if okI && !okJ {
 		return false
 	} else if !okI && !okJ {
-		return q.pending[i].hash.String() < q.pending[j].hash.String()
+		return cI.hash.String() < cJ.hash.String()
 	}
 
-	if q.pending[i].height > q.pending[j].height {
+	if cI.height > cJ.height {
 		return true
 	}
 
-	if q.pending[i].height == q.pending[j].height {
-		return q.pending[i].meta.UserTimestamp > q.pending[j].meta.UserTimestamp
+	if cI.height == cJ.height {
+		return cI.meta.UserTimestamp > cJ.meta.UserTimestamp
 	}
 	return false
 }
@@ -128,15 +130,11 @@ func (q *q) SetInvisible(ctx context.Context, ddb *doltdb.DoltDB, id hash.Hash) 
 }
 
 func load(ctx context.Context, ddb *doltdb.DoltDB, h hash.Hash) (*doltdb.OptionalCommit, error) {
-	cs, err := doltdb.NewCommitSpec(h.String())
+	oc, err := ddb.ResolveHash(ctx, h)
 	if err != nil {
 		return nil, err
 	}
-	c, err := ddb.Resolve(ctx, cs, nil)
-	if err != nil {
-		return nil, err
-	}
-	return c, nil
+	return oc, nil
 }
 
 func (q *q) Get(ctx context.Context, ddb *doltdb.DoltDB, id hash.Hash) (*c, error) {
@@ -158,14 +156,21 @@ func (q *q) Get(ctx context.Context, ddb *doltdb.DoltDB, id hash.Hash) (*c, erro
 	if err != nil {
 		return nil, err
 	}
+
 	meta, err := commit.GetCommitMeta(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	c := &c{ddb: ddb, commit: &doltdb.OptionalCommit{Commit: commit, Addr: id}, meta: meta, height: h, hash: id}
-	q.loaded[id] = c
-	return c, nil
+	lc := &c{
+		ddb:    ddb,
+		commit: &doltdb.OptionalCommit{Commit: commit, Addr: id},
+		meta:   meta,
+		height: h,
+		hash:   id,
+	}
+	q.loaded[id] = lc
+	return lc, nil
 }
 
 func newQueue() *q {
@@ -190,7 +195,7 @@ func GetDotDotRevisions(ctx context.Context, includedDB *doltdb.DoltDB, included
 
 	var commitList []*doltdb.OptionalCommit
 	for num < 0 || len(commitList) < num {
-		_, commit, err := itr.Next(ctx)
+		_, commit, _, _, err := itr.Next(ctx)
 		if err == io.EOF {
 			break
 		} else if err != nil {
@@ -234,43 +239,35 @@ func newCommiterator[C doltdb.Context](ctx context.Context, ddb *doltdb.DoltDB, 
 }
 
 // Next implements doltdb.CommitItr
-func (iter *commiterator[C]) Next(ctx C) (hash.Hash, *doltdb.OptionalCommit, error) {
+func (iter *commiterator[C]) Next(ctx C) (hash.Hash, *doltdb.OptionalCommit, *datas.CommitMeta, uint64, error) {
 	if iter.q.NumVisiblePending() > 0 {
 		nextC := iter.q.PopPending()
-
-		var err error
-		parents := []hash.Hash{}
 		commit, ok := nextC.commit.ToCommit()
 		if ok {
-			parents, err = commit.ParentHashes(ctx)
-			if err != nil {
-				return hash.Hash{}, nil, err
+			for _, parentCommit := range commit.DatasParents() {
+				if err := iter.q.AddPendingIfUnseen(ctx, nextC.ddb, parentCommit.Addr()); err != nil {
+					return hash.Hash{}, nil, nil, 0, err
+				}
 			}
 		}
 
-		for _, parentID := range parents {
-			if err := iter.q.AddPendingIfUnseen(ctx, nextC.ddb, parentID); err != nil {
-				return hash.Hash{}, nil, err
-			}
-		}
-
+		var err error
 		matches := true
 		if iter.matchFn != nil {
 			matches, err = iter.matchFn(nextC.commit)
-
 			if err != nil {
-				return hash.Hash{}, nil, err
+				return hash.Hash{}, nil, nil, 0, err
 			}
 		}
 
 		if matches {
-			return nextC.hash, &doltdb.OptionalCommit{Commit: commit, Addr: nextC.hash}, nil
+			return nextC.hash, &doltdb.OptionalCommit{Commit: commit, Addr: nextC.hash}, nextC.meta, nextC.height, nil
 		}
 
 		return iter.Next(ctx)
 	}
 
-	return hash.Hash{}, nil, io.EOF
+	return hash.Hash{}, nil, nil, 0, io.EOF
 }
 
 // Reset implements doltdb.CommitItr
@@ -301,7 +298,7 @@ func GetTopNTopoOrderedCommitsMatching(ctx context.Context, ddb *doltdb.DoltDB, 
 
 	var commitList []*doltdb.Commit
 	for n < 0 || len(commitList) < n {
-		_, optCmt, err := itr.Next(ctx)
+		_, optCmt, _, _, err := itr.Next(ctx)
 		if err == io.EOF {
 			break
 		} else if err != nil {
@@ -345,28 +342,28 @@ func newDotDotCommiterator[C doltdb.Context](ctx context.Context, includedDdb *d
 }
 
 // Next implements doltdb.CommitItr
-func (i *dotDotCommiterator[C]) Next(ctx C) (hash.Hash, *doltdb.OptionalCommit, error) {
+func (i *dotDotCommiterator[C]) Next(ctx C) (hash.Hash, *doltdb.OptionalCommit, *datas.CommitMeta, uint64, error) {
 	if i.q.NumVisiblePending() > 0 {
 		nextC := i.q.PopPending()
 
 		commit, ok := nextC.commit.ToCommit()
 		if !ok {
-			return nextC.hash, nextC.commit, nil
+			return nextC.hash, nextC.commit, nextC.meta, nextC.height, nil
 		}
 
 		parents, err := commit.ParentHashes(ctx)
 		if err != nil {
-			return hash.Hash{}, nil, err
+			return hash.Hash{}, nil, nil, 0, err
 		}
 
 		for _, parentID := range parents {
 			if nextC.invisible {
 				if err := i.q.SetInvisible(ctx, nextC.ddb, parentID); err != nil {
-					return hash.Hash{}, nil, err
+					return hash.Hash{}, nil, nil, 0, err
 				}
 			}
 			if err := i.q.AddPendingIfUnseen(ctx, nextC.ddb, parentID); err != nil {
-				return hash.Hash{}, nil, err
+				return hash.Hash{}, nil, nil, 0, err
 			}
 		}
 
@@ -374,18 +371,18 @@ func (i *dotDotCommiterator[C]) Next(ctx C) (hash.Hash, *doltdb.OptionalCommit, 
 		if i.matchFn != nil {
 			matches, err = i.matchFn(nextC.commit)
 			if err != nil {
-				return hash.Hash{}, nil, err
+				return hash.Hash{}, nil, nil, 0, err
 			}
 		}
 
-		// If not invisible, return commit. Otherwise get next commit
+		// If not invisible, return commit. Otherwise, get next commit
 		if !nextC.invisible && matches {
-			return nextC.hash, nextC.commit, nil
+			return nextC.hash, nextC.commit, nextC.meta, nextC.height, nil
 		}
 		return i.Next(ctx)
 	}
 
-	return hash.Hash{}, nil, io.EOF
+	return hash.Hash{}, nil, nil, 0, io.EOF
 }
 
 // Reset implements doltdb.CommitItr

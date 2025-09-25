@@ -35,20 +35,15 @@ type Command struct {
 	// Run runs the command.
 	// The args are the arguments after the command name.
 	Run func(ctx context.Context, args []string) int
-
+	// Flag is a set of flags specific to this command.
+	Flags func() *flag.FlagSet
 	// UsageLine is the one-line usage message.
 	// The first word in the line is taken to be the command name.
 	UsageLine string
-
 	// Short is the short description shown in the 'help' output.
 	Short string
-
 	// Long is the long message shown in the 'help <this-command>' output.
 	Long string
-
-	// Flag is a set of flags specific to this command.
-	Flags func() *flag.FlagSet
-
 	// Nargs is the minimum number of arguments expected after flags, specific to this command.
 	Nargs int
 }

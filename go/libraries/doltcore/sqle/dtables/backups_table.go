@@ -67,8 +67,8 @@ func (bt BackupsTable) PartitionRows(context *sql.Context, _ sql.Partition) (sql
 }
 
 type backupsItr struct {
-	names []string
 	urls  map[string]string
+	names []string
 	idx   int
 }
 

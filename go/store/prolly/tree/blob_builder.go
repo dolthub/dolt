@@ -63,16 +63,15 @@ type blobNodeWriter interface {
 type BlobBuilder struct {
 	ns        NodeStore
 	S         message.Serializer
-	chunkSize int
-	keys      [][]byte
 	wr        blobNodeWriter
 	lastN     Node
+	keys      [][]byte
+	buf       []byte
+	vals      [][]byte
+	subtrees  []uint64
+	chunkSize int
 	topLevel  int
-
-	levelCap int
-	buf      []byte
-	vals     [][]byte
-	subtrees []uint64
+	levelCap  int
 }
 
 func (b *BlobBuilder) SetNodeStore(ns NodeStore) {

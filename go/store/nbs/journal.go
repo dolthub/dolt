@@ -55,16 +55,14 @@ func init() {
 // It implements both manifest and tablePersister, durably writing
 // both memTable persists and manifest updates to a single file.
 type ChunkJournal struct {
-	wr   *journalWriter
-	path string
-
-	contents  manifestContents
+	wr        *journalWriter
 	backing   *journalManifest
 	persister *fsTablePersister
-
 	// reflogRingBuffer holds the most recent roots written to the chunk journal so that they can be
 	// quickly loaded for reflog queries without having to re-read the journal file from disk.
 	reflogRingBuffer *reflogRingBuffer
+	path             string
+	contents         manifestContents
 }
 
 var _ tablePersister = &ChunkJournal{}
@@ -528,7 +526,7 @@ func (c journalConjoiner) chooseConjoinees(upstream []tableSpec) (conjoinees, ke
 	if err != nil {
 		return nil, nil, err
 	}
-	if !hash.Hash(stash.name).IsEmpty() {
+	if !stash.name.IsEmpty() {
 		keepers = append(keepers, stash)
 	}
 	return
@@ -585,8 +583,8 @@ func newJournalManifest(ctx context.Context, dir string) (m *journalManifest, er
 }
 
 type journalManifest struct {
-	dir  string
 	lock *fslock.Lock
+	dir  string
 }
 
 func (jm *journalManifest) readOnly() bool {

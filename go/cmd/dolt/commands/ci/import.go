@@ -51,11 +51,17 @@ Workflow YAML Specification:
   jobs:
     - name: <job-name>
       steps:
+        # Saved query step
         - name: <step-name>
           saved_query_name: <query-name>
           saved_query_statement: <optional-sql-statement>
           expected_columns: <optional-expected-columns>
-          expected_rows: <optional-expected-rows>`,
+          expected_rows: <optional-expected-rows>
+
+        # Dolt test step
+        - name: <step-name>
+          dolt_test_groups: [<group-name>, ...]   # optional
+          dolt_test_tests:  [<test-name>,  ...]   # optional`,
 	Synopsis: []string{
 		"{{.LessThan}}file{{.GreaterThan}}",
 	},
@@ -113,15 +119,12 @@ func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
+	queryist, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
-	if closeFunc != nil {
-		defer closeFunc()
-	}
 
-	hasTables, err := dolt_ci.HasDoltCITables(queryist, sqlCtx)
+	hasTables, err := dolt_ci.HasDoltCITables(queryist.Queryist, queryist.Context)
 	if err != nil {
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
@@ -143,9 +146,9 @@ func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string,
 	if err != nil {
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
-	wm := dolt_ci.NewWorkflowManager(user, email, queryist.Query)
+	wm := dolt_ci.NewWorkflowManager(user, email, queryist.Queryist.Query)
 
-	err = wm.StoreAndCommit(sqlCtx, workflowConfig)
+	err = wm.StoreAndCommit(queryist.Context, workflowConfig)
 	if err != nil {
 		errorText := err.Error()
 		switch {

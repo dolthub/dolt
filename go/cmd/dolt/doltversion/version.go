@@ -12,9 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// dolt is the command line tool for working with Dolt databases.
 package doltversion
 
 const (
-	Version = "1.58.5"
+	Version = "1.59.12"
 )

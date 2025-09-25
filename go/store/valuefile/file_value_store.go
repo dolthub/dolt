@@ -31,14 +31,12 @@ var _ types.ValueReadWriter = (*FileValueStore)(nil)
 // FileValueStore implements a trivial in memory chunks.ChunkStore and types.ValueReadWriter in order to allow easy
 // serialization / deserialization of noms data to and from a file
 type FileValueStore struct {
-	nbf *types.NomsBinFormat
-
-	valLock *sync.Mutex
-	values  map[hash.Hash]types.Value
-
-	rootHash  hash.Hash
+	nbf       *types.NomsBinFormat
+	valLock   *sync.Mutex
+	values    map[hash.Hash]types.Value
 	chunkLock *sync.Mutex
 	chunks    map[hash.Hash][]byte
+	rootHash  hash.Hash
 }
 
 // NewFileValueStore creates a new FileValueStore

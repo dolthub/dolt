@@ -26,8 +26,8 @@ import (
 
 // MultiPolygon is a Noms Value wrapper around a string.
 type MultiPolygon struct {
-	SRID     uint32
 	Polygons []Polygon
+	SRID     uint32
 }
 
 // Value interface

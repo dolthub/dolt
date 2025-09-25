@@ -24,11 +24,11 @@ import (
 
 // CSMetrics contains the metrics aggregated by a CSMetricsWrapper
 type CSMetrics struct {
+	Delegate            interface{}
+	DelegateSummary     string
 	TotalChunkGets      int32
 	TotalChunkHasChecks int32
 	TotalChunkPuts      int32
-	Delegate            interface{}
-	DelegateSummary     string
 }
 
 // NewCSMetrics creates a CSMetrics instance
@@ -54,10 +54,10 @@ func (csm CSMetrics) String() string {
 
 // CSMetricWrapper is a ChunkStore implementation that wraps a ChunkStore, and collects metrics on the calls.
 type CSMetricWrapper struct {
+	cs                  ChunkStore
 	TotalChunkGets      int32
 	TotalChunkHasChecks int32
 	TotalChunkPuts      int32
-	cs                  ChunkStore
 }
 
 var _ ChunkStore = &CSMetricWrapper{}

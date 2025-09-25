@@ -19,6 +19,7 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 	"math"
 	"math/rand"
@@ -37,9 +38,11 @@ import (
 // we'll use this one.
 var defaultDict []byte
 var defaultCDict *gozstd.CDict
+var defaultId hash.Hash
 
 func init() {
 	defaultDict, defaultCDict = generateTerribleDefaultDictionary()
+	defaultId = hash.Of(defaultDict[:hash.ByteLen])
 }
 
 func TestArchiveSingleZStdChunk(t *testing.T) {
@@ -86,7 +89,7 @@ func TestArchiveSingleZStdChunk(t *testing.T) {
 	readerAt := bytes.NewReader(theBytes)
 	tra := tableReaderAtAdapter{readerAt}
 
-	aIdx, err := newArchiveReader(context.Background(), tra, fileSize, &Stats{})
+	aIdx, err := newArchiveReader(context.Background(), tra, defaultId, fileSize, &Stats{})
 	assert.NoError(t, err)
 
 	assert.Equal(t, uint64(23), aIdx.indexReader.getPrefix(0))
@@ -138,7 +141,7 @@ func TestArchiveSingleSnappyChunk(t *testing.T) {
 	readerAt := bytes.NewReader(theBytes)
 	tra := tableReaderAtAdapter{readerAt}
 
-	aIdx, err := newArchiveReader(context.Background(), tra, fileSize, &Stats{})
+	aIdx, err := newArchiveReader(context.Background(), tra, defaultId, fileSize, &Stats{})
 	assert.NoError(t, err)
 
 	assert.Equal(t, uint64(23), aIdx.indexReader.getPrefix(0))
@@ -206,7 +209,7 @@ func TestArchiverMultipleChunksMultipleDictionaries(t *testing.T) {
 	fileSize := uint64(len(theBytes))
 	readerAt := bytes.NewReader(theBytes)
 	tra := tableReaderAtAdapter{readerAt}
-	aIdx, err := newArchiveReader(context.Background(), tra, fileSize, &Stats{})
+	aIdx, err := newArchiveReader(context.Background(), tra, defaultId, fileSize, &Stats{})
 	assert.NoError(t, err)
 	expectedPrefixes := []uint64{21, 42, 42, 42, 42, 81, 88}
 	for i, expected := range expectedPrefixes {
@@ -297,7 +300,7 @@ func TestArchiveDictDecompression(t *testing.T) {
 	fileSize := uint64(len(theBytes))
 	readerAt := bytes.NewReader(theBytes)
 	tra := tableReaderAtAdapter{readerAt}
-	aIdx, err := newArchiveReader(context.Background(), tra, fileSize, &Stats{})
+	aIdx, err := newArchiveReader(context.Background(), tra, defaultId, fileSize, &Stats{})
 	assert.NoError(t, err)
 
 	c := context.Background()
@@ -340,7 +343,7 @@ func TestArchiveSnappyDecompression(t *testing.T) {
 	fileSize := uint64(len(theBytes))
 	readerAt := bytes.NewReader(theBytes)
 	tra := tableReaderAtAdapter{readerAt}
-	aIdx, err := newArchiveReader(context.Background(), tra, fileSize, &Stats{})
+	aIdx, err := newArchiveReader(context.Background(), tra, defaultId, fileSize, &Stats{})
 	assert.NoError(t, err)
 
 	c := context.Background()
@@ -415,7 +418,7 @@ func TestArchiveMixedTypesToChunkers(t *testing.T) {
 	fileSize := uint64(len(theBytes))
 	readerAt := bytes.NewReader(theBytes)
 	tra := tableReaderAtAdapter{readerAt}
-	aIdx, err := newArchiveReader(context.Background(), tra, fileSize, &Stats{})
+	aIdx, err := newArchiveReader(context.Background(), tra, defaultId, fileSize, &Stats{})
 	assert.NoError(t, err)
 
 	c := context.Background()
@@ -449,7 +452,7 @@ func TestMetadata(t *testing.T) {
 	fileSize := uint64(len(theBytes))
 	readerAt := bytes.NewReader(theBytes)
 	tra := tableReaderAtAdapter{readerAt}
-	rdr, err := newArchiveReader(context.Background(), tra, fileSize, &Stats{})
+	rdr, err := newArchiveReader(context.Background(), tra, defaultId, fileSize, &Stats{})
 	assert.NoError(t, err)
 
 	md, err := rdr.getMetadata(context.Background(), &Stats{})
@@ -479,7 +482,7 @@ func TestArchiveChunkCorruption(t *testing.T) {
 	fileSize := uint64(len(theBytes))
 	readerAt := bytes.NewReader(theBytes)
 	tra := tableReaderAtAdapter{readerAt}
-	idx, err := newArchiveReader(context.Background(), tra, fileSize, &Stats{})
+	idx, err := newArchiveReader(context.Background(), tra, defaultId, fileSize, &Stats{})
 	assert.NoError(t, err)
 
 	// Corrupt the data
@@ -488,54 +491,6 @@ func TestArchiveChunkCorruption(t *testing.T) {
 	data, err := idx.get(context.Background(), h, &Stats{})
 	assert.ErrorContains(t, err, "cannot decompress invalid src")
 	assert.Nil(t, data)
-}
-
-// Varlidate that the SHA512 checksums in the footer checkout, and fail when they are corrupted.
-func TestArchiveCheckSumValidations(t *testing.T) {
-	writer := NewFixedBufferByteSink(make([]byte, 1024))
-	aw := newArchiveWriterWithSink(writer)
-
-	testBlob := []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
-	_, _ = aw.writeByteSpan(testBlob)
-
-	h := hashWithPrefix(t, 23)
-	_ = aw.stageZStdChunk(h, 0, 1)
-	err := aw.finalizeByteSpans()
-	assert.NoError(t, err)
-	err = aw.writeIndex()
-	assert.NoError(t, err)
-	err = aw.writeMetadata([]byte("All work and no play"))
-	assert.NoError(t, err)
-	err = aw.writeFooter()
-	assert.NoError(t, err)
-
-	theBytes := writer.buff[:writer.pos]
-	fileSize := uint64(len(theBytes))
-	readerAt := bytes.NewReader(theBytes)
-	tra := tableReaderAtAdapter{readerAt}
-	rdr, err := newArchiveReader(context.Background(), tra, fileSize, &Stats{})
-	assert.NoError(t, err)
-
-	err = rdr.verifyDataCheckSum(context.Background(), &Stats{})
-	assert.NoError(t, err)
-	err = rdr.verifyIndexCheckSum(context.Background(), &Stats{})
-	assert.NoError(t, err)
-	err = rdr.verifyMetaCheckSum(context.Background(), &Stats{})
-	assert.NoError(t, err)
-
-	theBytes[5] = theBytes[5] + 1
-	err = rdr.verifyDataCheckSum(context.Background(), &Stats{})
-	assert.ErrorContains(t, err, "checksum mismatch")
-
-	offset := rdr.footer.totalIndexSpan().offset + 2
-	theBytes[offset] = theBytes[offset] + 1
-	err = rdr.verifyIndexCheckSum(context.Background(), &Stats{})
-	assert.ErrorContains(t, err, "checksum mismatch")
-
-	offset = rdr.footer.metadataSpan().offset + 2
-	theBytes[offset] = theBytes[offset] + 1
-	err = rdr.verifyMetaCheckSum(context.Background(), &Stats{})
-	assert.ErrorContains(t, err, "checksum mismatch")
 }
 
 func TestProllyBinSearchUneven(t *testing.T) {
@@ -659,7 +614,7 @@ func TestFooterVersionAndSignature(t *testing.T) {
 	fileSize := uint64(len(theBytes))
 	readerAt := bytes.NewReader(theBytes)
 	tra := tableReaderAtAdapter{readerAt}
-	rdr, err := newArchiveReader(context.Background(), tra, fileSize, &Stats{})
+	rdr, err := newArchiveReader(context.Background(), tra, defaultId, fileSize, &Stats{})
 	assert.NoError(t, err)
 
 	assert.Equal(t, archiveFormatVersionMax, rdr.footer.formatVersion)
@@ -669,7 +624,7 @@ func TestFooterVersionAndSignature(t *testing.T) {
 	theBytes[fileSize-archiveFooterSize+afrVersionOffset] = 23
 	readerAt = bytes.NewReader(theBytes)
 	tra = tableReaderAtAdapter{readerAt}
-	_, err = newArchiveReader(context.Background(), tra, fileSize, &Stats{})
+	_, err = newArchiveReader(context.Background(), tra, defaultId, fileSize, &Stats{})
 	assert.ErrorContains(t, err, "invalid format version")
 
 	// Corrupt the signature, but first restore the version.
@@ -677,7 +632,7 @@ func TestFooterVersionAndSignature(t *testing.T) {
 	theBytes[fileSize-archiveFooterSize+afrSigOffset+2] = 'X'
 	readerAt = bytes.NewReader(theBytes)
 	tra = tableReaderAtAdapter{readerAt}
-	_, err = newArchiveReader(context.Background(), tra, fileSize, &Stats{})
+	_, err = newArchiveReader(context.Background(), tra, defaultId, fileSize, &Stats{})
 	assert.ErrorContains(t, err, "invalid file signature")
 }
 
@@ -775,6 +730,386 @@ func TestArchiveChunkGroup(t *testing.T) {
 	assertFloatBetween(t, cg.totalRatioWDict, 0.80, 0.81)
 	assertIntBetween(t, cg.totalBytesSavedWDict, 9650, 9700)
 	assertIntBetween(t, cg.avgRawChunkSize, 990, 1010)
+}
+
+func TestArchiveConjoinAll(t *testing.T) {
+	chunks1 := [][]byte{
+		{10, 11, 12, 13, 14, 15, 16, 17, 18, 19},
+		{20, 21, 22, 23, 24, 25, 26, 27, 28, 29},
+	}
+	archiveReader1, hashes1 := createTestArchive(t, 42, chunks1, "archive1")
+
+	chunks2 := [][]byte{
+		{30, 31, 32, 33, 34, 35, 36, 37, 38, 39},
+		{40, 41, 42, 43, 44, 45, 46, 47, 48, 49},
+		{50, 51, 52, 53, 54, 55, 56, 57, 58, 59},
+		{60, 61, 62, 63, 64, 65, 66, 67, 68, 69},
+	}
+	archiveReader2, hashes2 := createTestArchive(t, 84, chunks2, "archive2")
+
+	writerCombined := NewFixedBufferByteSink(make([]byte, 8192))
+	awCombined := newArchiveWriterWithSink(writerCombined)
+
+	readers := []archiveReader{archiveReader1, archiveReader2}
+	err := awCombined.conjoinAll(context.Background(), readersToSource(readers), &Stats{})
+	assert.NoError(t, err)
+
+	theBytes := writerCombined.buff[:writerCombined.pos]
+	fileSize := uint64(len(theBytes))
+	readerAt := bytes.NewReader(theBytes)
+	tra := tableReaderAtAdapter{readerAt}
+
+	combinedReader, err := newArchiveReader(context.Background(), tra, defaultId, fileSize, &Stats{})
+	assert.NoError(t, err)
+
+	// Verify combined reader contains all chunks
+	ctx := context.Background()
+	stats := &Stats{}
+	for i, h := range hashes1 {
+		assert.True(t, combinedReader.has(h))
+		data, err := combinedReader.get(ctx, h, stats)
+		assert.NoError(t, err)
+		assert.Equal(t, chunks1[i], data)
+	}
+	for i, h := range hashes2 {
+		assert.True(t, combinedReader.has(h))
+		data, err := combinedReader.get(ctx, h, stats)
+		assert.NoError(t, err)
+		assert.Equal(t, chunks2[i], data)
+	}
+}
+
+func TestArchiveConjoinAllDuplicateChunk(t *testing.T) {
+	// Create shared chunk data that will be present in both archives
+	sharedChunk := []byte{100, 101, 102, 103, 104, 105, 106, 107, 108, 109}
+	sharedChunkHash := hash.Of(sharedChunk)
+
+	// Create first archive with unique chunk + shared chunk + more unique chunks
+	chunks1 := [][]byte{
+		{10, 11, 12, 13, 14, 15, 16, 17, 18, 19},
+		sharedChunk,
+		{50, 51, 52, 53, 54, 55, 56, 57, 58, 59},
+		{60, 61, 62, 63, 64, 65, 66, 67, 68, 69},
+	}
+	archiveReader1, hashes1 := createArchiveWithDuplicates(t, chunks1, map[int]hash.Hash{1: sharedChunkHash}, 42, "archive1")
+
+	// Create second archive with unique chunks + shared chunk + more unique chunks
+	chunks2 := [][]byte{
+		{20, 21, 22, 23, 24, 25, 26, 27, 28, 29},
+		{30, 31, 32, 33, 34, 35, 36, 37, 38, 39},
+		sharedChunk,
+		{40, 41, 42, 43, 44, 45, 46, 47, 48, 49},
+	}
+	archiveReader2, hashes2 := createArchiveWithDuplicates(t, chunks2, map[int]hash.Hash{2: sharedChunkHash}, 84, "archive2")
+
+	writerCombined := NewFixedBufferByteSink(make([]byte, 8192))
+	awCombined := newArchiveWriterWithSink(writerCombined)
+
+	readers := []archiveReader{archiveReader1, archiveReader2}
+	err := awCombined.conjoinAll(context.Background(), readersToSource(readers), &Stats{})
+	assert.NoError(t, err)
+
+	theBytes := writerCombined.buff[:writerCombined.pos]
+	fileSize := uint64(len(theBytes))
+	readerAt := bytes.NewReader(theBytes)
+	tra := tableReaderAtAdapter{readerAt}
+
+	combinedReader, err := newArchiveReader(context.Background(), tra, defaultId, fileSize, &Stats{})
+	assert.NoError(t, err)
+
+	// Check chunk counts - should have 8 chunks total (4 from archive1 + 4 from archive2)
+	// The duplicate chunk should appear twice in the index.
+	expectedChunkCount := len(chunks1) + len(chunks2)
+	actualChunkCount := int(combinedReader.footer.chunkCount)
+	assert.Equal(t, expectedChunkCount, actualChunkCount, "Combined archive should have correct number of unique chunks")
+
+	expectedByteSpanCount := 10 // 1 dict + 4 data from archive1, 1 dict + 4 data from archive2
+	actualByteSpanCount := int(combinedReader.footer.byteSpanCount)
+	assert.Equal(t, expectedByteSpanCount, actualByteSpanCount, "Combined archive should have correct number of byte spans")
+
+	// Verify combined reader contains all chunks (duplicates should be deduplicated)
+	ctx := context.Background()
+	stats := &Stats{}
+	for i, h := range hashes1 {
+		assert.True(t, combinedReader.has(h))
+		data, err := combinedReader.get(ctx, h, stats)
+		assert.NoError(t, err)
+		assert.Equal(t, chunks1[i], data)
+	}
+	for i, h := range hashes2 {
+		assert.True(t, combinedReader.has(h))
+		data, err := combinedReader.get(ctx, h, stats)
+		assert.NoError(t, err)
+		assert.Equal(t, chunks2[i], data)
+	}
+
+	sharedChunkCount := 0
+	otherChunksSeen := make(map[hash.Hash]bool)
+	err = combinedReader.iterate(ctx, func(c chunks.Chunk) error {
+		h := c.Hash()
+		if h == sharedChunkHash {
+			sharedChunkCount++
+		} else {
+			if _, seen := otherChunksSeen[h]; seen {
+				return fmt.Errorf("unexpected duplicate chunk %s", h)
+			}
+			otherChunksSeen[h] = true
+		}
+		return nil
+	}, &Stats{})
+	assert.Equal(t, 2, sharedChunkCount)
+	assert.NoError(t, err)
+}
+
+func TestArchiveConjoinAllMixedCompression(t *testing.T) {
+	// Create first archive with mixed zStd and Snappy compression
+	chunks1 := [][]byte{
+		{10, 11, 12, 13, 14, 15, 16, 17, 18, 19}, // zStd
+		{20, 21, 22, 23, 24, 25, 26, 27, 28, 29}, // Snappy
+		{30, 31, 32, 33, 34, 35, 36, 37, 38, 39}, // zStd
+	}
+	useSnappy1 := map[int]bool{1: true} // Only chunk at index 1 uses Snappy
+	archiveReader1, hashes1 := createMixedCompressionArchive(t, chunks1, useSnappy1, 42, "archive1")
+
+	// Create second archive with different mix of compression
+	chunks2 := [][]byte{
+		{40, 41, 42, 43, 44, 45, 46, 47, 48, 49}, // Snappy
+		{50, 51, 52, 53, 54, 55, 56, 57, 58, 59}, // zStd
+		{60, 61, 62, 63, 64, 65, 66, 67, 68, 69}, // Snappy
+	}
+	useSnappy2 := map[int]bool{0: true, 2: true} // Chunks at indices 0 and 2 use Snappy
+	archiveReader2, hashes2 := createMixedCompressionArchive(t, chunks2, useSnappy2, 84, "archive2")
+
+	writerCombined := NewFixedBufferByteSink(make([]byte, 8192))
+	awCombined := newArchiveWriterWithSink(writerCombined)
+
+	readers := []archiveReader{archiveReader1, archiveReader2}
+	err := awCombined.conjoinAll(context.Background(), readersToSource(readers), &Stats{})
+	assert.NoError(t, err)
+
+	theBytes := writerCombined.buff[:writerCombined.pos]
+	fileSize := uint64(len(theBytes))
+	readerAt := bytes.NewReader(theBytes)
+	tra := tableReaderAtAdapter{readerAt}
+
+	combinedReader, err := newArchiveReader(context.Background(), tra, defaultId, fileSize, &Stats{})
+	assert.NoError(t, err)
+
+	// Verify all chunks can be read from the combined archive
+	ctx := context.Background()
+	stats := &Stats{}
+
+	// Test chunks from first archive
+	for i, h := range hashes1 {
+		assert.True(t, combinedReader.has(h), "chunk %d from archive1 should be present", i)
+		data, err := combinedReader.get(ctx, h, stats)
+		assert.NoError(t, err)
+		assert.Equal(t, chunks1[i], data, "chunk %d from archive1 should have correct data", i)
+	}
+
+	// Test chunks from second archive
+	for i, h := range hashes2 {
+		assert.True(t, combinedReader.has(h), "chunk %d from archive2 should be present", i)
+		data, err := combinedReader.get(ctx, h, stats)
+		assert.NoError(t, err)
+		assert.Equal(t, chunks2[i], data, "chunk %d from archive2 should have correct data", i)
+	}
+
+	// Verify we have the expected number of chunks
+	expectedChunkCount := len(chunks1) + len(chunks2)
+	actualChunkCount := int(combinedReader.footer.chunkCount)
+	assert.Equal(t, expectedChunkCount, actualChunkCount, "Combined archive should have correct chunk count")
+}
+
+func TestArchiveConjoinAllComprehensive(t *testing.T) {
+	rand.Seed(42)
+
+	// Create shared chunks that will be duplicated across archives
+	sharedChunks := [][]byte{
+		generateRandomBytes(100, 50),  // 50 bytes - will be in multiple archives
+		generateRandomBytes(200, 100), // 100 bytes - will be in multiple archives
+		generateRandomBytes(300, 25),  // 25 bytes - will be in multiple archives
+	}
+
+	// Create shared hashes for these chunks
+	sharedHashes := []hash.Hash{
+		hashWithPrefix(t, 1000),
+		hashWithPrefix(t, 2000),
+		hashWithPrefix(t, 3000),
+	}
+
+	// Create 10 archive readers with mixed compression, chunk sizes, and duplicates
+	var readers []archiveReader
+	var allExpectedChunks [][]byte
+	var allExpectedHashes []hash.Hash
+
+	for i := 0; i < 10; i++ {
+		// Generate random chunk sizes between 10 and 250 bytes
+		chunkCount := 3 + rand.Intn(5) // 3-7 chunks per archive
+		archiveChunks := make([][]byte, 0, chunkCount)
+		archiveHashes := make([]hash.Hash, 0, chunkCount)
+		useSnappy := make(map[int]bool)
+
+		// Add 1-2 shared chunks to create duplicates
+		duplicateCount := 1 + rand.Intn(2) // 1-2 duplicates per archive
+		for j := 0; j < duplicateCount && j < len(sharedChunks); j++ {
+			archiveChunks = append(archiveChunks, sharedChunks[j])
+			archiveHashes = append(archiveHashes, sharedHashes[j])
+			// Some shared chunks should be Snappy compressed
+			if j%2 == 0 {
+				useSnappy[len(archiveChunks)-1] = true
+			}
+		}
+
+		// Add unique chunks with random sizes
+		for j := len(archiveChunks); j < chunkCount; j++ {
+			chunkSize := 10 + rand.Intn(241) // 10-250 bytes
+			seed := int64(i*1000 + j*100 + chunkSize)
+			chunkData := generateRandomBytes(seed, chunkSize)
+
+			archiveChunks = append(archiveChunks, chunkData)
+			archiveHashes = append(archiveHashes, hashWithPrefix(t, uint64(i*10000+j)))
+
+			// Randomly assign compression type (about 40% Snappy)
+			if rand.Float32() < 0.4 {
+				useSnappy[j] = true
+			}
+		}
+
+		// Create archive reader
+		metadata := fmt.Sprintf("archive_%d", i)
+		reader, hashes := createTestArchiveWithHashes(t, archiveChunks, archiveHashes, useSnappy, metadata)
+		readers = append(readers, reader)
+
+		// Track all expected chunks and hashes
+		allExpectedChunks = append(allExpectedChunks, archiveChunks...)
+		allExpectedHashes = append(allExpectedHashes, hashes...)
+	}
+
+	// First conjoin: combine all 10 readers
+	writer1 := NewFixedBufferByteSink(make([]byte, 65536))
+	aw1 := newArchiveWriterWithSink(writer1)
+
+	err := aw1.conjoinAll(context.Background(), readersToSource(readers), &Stats{})
+	assert.NoError(t, err)
+
+	// Create first combined reader
+	bytes1 := writer1.buff[:writer1.pos]
+	fileSize1 := uint64(len(bytes1))
+	readerAt1 := bytes.NewReader(bytes1)
+	tra1 := tableReaderAtAdapter{readerAt1}
+
+	combinedReader1, err := newArchiveReader(context.Background(), tra1, defaultId, fileSize1, &Stats{})
+	assert.NoError(t, err)
+
+	// Create additional readers for second conjoin
+	var additionalReaders []archiveReader
+
+	for i := 0; i < 3; i++ {
+		// Create chunks with some duplicates from the first conjoin
+		chunkCount := 4 + rand.Intn(4) // 4-7 chunks per additional archive
+		archiveChunks := make([][]byte, 0, chunkCount)
+		archiveHashes := make([]hash.Hash, 0, chunkCount)
+		useSnappy := make(map[int]bool)
+
+		// Add 1-2 chunks that duplicate existing ones
+		duplicateCount := 1 + rand.Intn(2)
+		for j := 0; j < duplicateCount && j < len(sharedChunks); j++ {
+			archiveChunks = append(archiveChunks, sharedChunks[j])
+			archiveHashes = append(archiveHashes, sharedHashes[j])
+			// Mix compression types for duplicates
+			if (i+j)%2 == 1 {
+				useSnappy[len(archiveChunks)-1] = true
+			}
+		}
+
+		for j := len(archiveChunks); j < chunkCount; j++ {
+			chunkSize := 15 + rand.Intn(236) // 15-250 bytes
+			seed := int64(i*2000 + j*200 + chunkSize + 50000)
+			chunkData := generateRandomBytes(seed, chunkSize)
+
+			archiveChunks = append(archiveChunks, chunkData)
+			archiveHashes = append(archiveHashes, hashWithPrefix(t, uint64(i*20000+j+50000)))
+
+			if rand.Float32() < 0.6 {
+				useSnappy[j] = true
+			}
+		}
+
+		// Create additional archive reader
+		metadata := fmt.Sprintf("additional_archive_%d", i)
+		reader, hashes := createTestArchiveWithHashes(t, archiveChunks, archiveHashes, useSnappy, metadata)
+		additionalReaders = append(additionalReaders, reader)
+
+		// Add to all expected chunks and hashes
+		allExpectedChunks = append(allExpectedChunks, archiveChunks...)
+		allExpectedHashes = append(allExpectedHashes, hashes...)
+	}
+
+	// Second conjoin: combine the first result with additional readers
+	allReadersForSecondConjoin := append([]archiveReader{combinedReader1}, additionalReaders...)
+
+	writer2 := NewFixedBufferByteSink(make([]byte, 131072))
+	aw2 := newArchiveWriterWithSink(writer2)
+
+	err = aw2.conjoinAll(context.Background(), readersToSource(allReadersForSecondConjoin), &Stats{})
+	assert.NoError(t, err)
+
+	// Create final combined reader
+	bytes2 := writer2.buff[:writer2.pos]
+	fileSize2 := uint64(len(bytes2))
+	readerAt2 := bytes.NewReader(bytes2)
+	tra2 := tableReaderAtAdapter{readerAt2}
+
+	finalCombinedReader, err := newArchiveReader(context.Background(), tra2, defaultId, fileSize2, &Stats{})
+	assert.NoError(t, err)
+
+	// Verify all expected chunks can be read from the final combined archive
+	ctx := context.Background()
+	stats := &Stats{}
+
+	// Test all chunks
+	for i, h := range allExpectedHashes {
+		assert.True(t, finalCombinedReader.has(h), "chunk %d should be present", i)
+		data, err := finalCombinedReader.get(ctx, h, stats)
+		assert.NoError(t, err)
+		assert.Equal(t, allExpectedChunks[i], data, "chunk %d should have correct data", i)
+	}
+
+	// Verify the final archive has all expected chunks (including duplicates)
+	// Note: duplicates are allowed, so we count all occurrences
+	actualChunkCount := int(finalCombinedReader.footer.chunkCount)
+	assert.Equal(t, len(allExpectedChunks), actualChunkCount, "Final combined archive should have correct chunk count including duplicates")
+
+	expectedChunkCount := len(allExpectedChunks)
+	assert.Equal(t, expectedChunkCount, actualChunkCount, "Should have exactly %d chunks", expectedChunkCount)
+	assert.Equal(t, expectedChunkCount, len(allExpectedHashes), "Should have exactly %d expected hashes", expectedChunkCount)
+
+	// Verify iteration - each chunk should be seen exactly once during iteration
+	// but duplicate chunks should appear multiple times based on their occurrence count
+	chunkOccurrences := make(map[hash.Hash]int)
+	for _, h := range allExpectedHashes {
+		chunkOccurrences[h]++
+	}
+
+	iterationCount := 0
+	seenChunks := make(map[hash.Hash]int)
+
+	err = finalCombinedReader.iterate(ctx, func(chunk chunks.Chunk) error {
+		iterationCount++
+		seenChunks[chunk.Hash()]++
+		return nil
+	}, stats)
+	assert.NoError(t, err)
+
+	assert.Equal(t, actualChunkCount, iterationCount, "Iteration should visit each chunk ref exactly once")
+
+	// Verify each unique chunk was seen the correct number of times
+	for expectedHash, expectedCount := range chunkOccurrences {
+		actualCount, found := seenChunks[expectedHash]
+		assert.True(t, found, "Chunk %s should be found during iteration", expectedHash)
+		assert.Equal(t, expectedCount, actualCount, "Chunk %s should appear %d times", expectedHash, expectedCount)
+	}
 }
 
 func assertFloatBetween(t *testing.T, actual, min, max float64) {
@@ -934,4 +1269,105 @@ func (tcs *testChunkSource) currentSize() uint64 {
 
 func (tcs *testChunkSource) iterateAllChunks(_ context.Context, _ func(chunks.Chunk), _ *Stats) error {
 	panic("never used")
+}
+
+// createTestArchive creates a test archive with the specified chunks and returns an archiveReader and the fake hashes
+// created for the chunks (in the same order).
+func createTestArchive(t *testing.T, prefix uint64, chunks [][]byte, metadata string) (archiveReader, []hash.Hash) {
+	// Generate hashes using the provided prefix
+	var hashes []hash.Hash
+	for range chunks {
+		hashes = append(hashes, hashWithPrefix(t, prefix))
+	}
+	return createTestArchiveWithHashes(t, chunks, hashes, nil, metadata)
+}
+
+// createTestArchiveWithHashes creates a test archive with specific hashes for each chunk
+// useSnappy specifies which chunks should use Snappy compression (others use zStd)
+func createTestArchiveWithHashes(t *testing.T, chunkData [][]byte, hashes []hash.Hash, useSnappy map[int]bool, metadata string) (archiveReader, []hash.Hash) {
+	require.Equal(t, len(chunkData), len(hashes), "chunkData and hashes must have same length")
+
+	writer := NewFixedBufferByteSink(make([]byte, 8192))
+	aw := newArchiveWriterWithSink(writer)
+
+	// Write dictionary for zStd chunks
+	dId, err := aw.writeByteSpan(defaultDict)
+	assert.NoError(t, err)
+
+	// Write chunks and stage them with appropriate compression
+	for i, data := range chunkData {
+		chunkHash := hashes[i]
+
+		if useSnappy[i] {
+			// Use Snappy compression
+			chk := chunks.NewChunkWithHash(chunkHash, data)
+			cmp := ChunkToCompressedChunk(chk)
+			chId, err := aw.writeByteSpan(cmp.FullCompressedChunk)
+			assert.NoError(t, err)
+
+			err = aw.stageSnappyChunk(chunkHash, chId)
+			assert.NoError(t, err)
+		} else {
+			// Use zStd compression with dictionary
+			compressedData := gozstd.CompressDict(nil, data, defaultCDict)
+			bsId, err := aw.writeByteSpan(compressedData)
+			assert.NoError(t, err)
+
+			err = aw.stageZStdChunk(chunkHash, dId, bsId)
+			assert.NoError(t, err)
+		}
+	}
+
+	// Finalize archive
+	err = aw.finalizeByteSpans()
+	assert.NoError(t, err)
+	err = aw.writeIndex()
+	assert.NoError(t, err)
+	err = aw.writeMetadata([]byte(metadata))
+	assert.NoError(t, err)
+	err = aw.writeFooter()
+	assert.NoError(t, err)
+
+	// Create reader
+	theBytes := writer.buff[:writer.pos]
+	fileSize := uint64(len(theBytes))
+	readerAt := bytes.NewReader(theBytes)
+	tra := tableReaderAtAdapter{readerAt}
+	archiveReader, err := newArchiveReader(context.Background(), tra, defaultId, fileSize, &Stats{})
+	assert.NoError(t, err)
+	return archiveReader, hashes
+}
+
+// createArchiveWithDuplicates creates an archive where some chunks use predefined hashes (for duplicates)
+// and others use random hashes with the given prefix
+func createArchiveWithDuplicates(t *testing.T, chunks [][]byte, duplicateHashes map[int]hash.Hash, prefix uint64, metadata string) (archiveReader, []hash.Hash) {
+	var hashes []hash.Hash
+	for i := range chunks {
+		if duplicateHash, exists := duplicateHashes[i]; exists {
+			hashes = append(hashes, duplicateHash)
+		} else {
+			hashes = append(hashes, hashWithPrefix(t, prefix))
+		}
+	}
+	return createTestArchiveWithHashes(t, chunks, hashes, nil, metadata)
+}
+
+// createMixedCompressionArchive creates an archive with mixed zStd and Snappy compression
+// useSnappy is a map of indices that should use Snappy compression (others use zStd)
+func createMixedCompressionArchive(t *testing.T, chunkData [][]byte, useSnappy map[int]bool, prefix uint64, metadata string) (archiveReader, []hash.Hash) {
+	// Generate hashes using the provided prefix
+	var hashes []hash.Hash
+	for range chunkData {
+		hashes = append(hashes, hashWithPrefix(t, prefix))
+	}
+	return createTestArchiveWithHashes(t, chunkData, hashes, useSnappy, metadata)
+}
+
+func readersToSource(readers []archiveReader) []chunkSource {
+	sources := make([]chunkSource, 0, len(readers))
+	for _, r := range readers {
+		ar := archiveChunkSource{file: "", aRdr: r}
+		sources = append(sources, ar)
+	}
+	return sources
 }

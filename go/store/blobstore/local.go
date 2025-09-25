@@ -35,8 +35,8 @@ const (
 )
 
 type localBlobRangeReadCloser struct {
-	br  BlobRange
 	rc  io.ReadCloser
+	br  BlobRange
 	pos int64
 }
 
@@ -124,7 +124,7 @@ func readCloserForFileRange(f *os.File, br BlobRange) (io.ReadCloser, error) {
 	}
 
 	if br.length != 0 {
-		return &localBlobRangeReadCloser{br, f, 0}, nil
+		return &localBlobRangeReadCloser{br: br, rc: f}, nil
 	}
 
 	return f, nil

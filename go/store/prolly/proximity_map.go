@@ -16,6 +16,7 @@ package prolly
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"iter"
 
@@ -138,33 +139,50 @@ func (p *proximityMapIter) Next(ctx context.Context) (k val.Tuple, v val.Tuple, 
 	return
 }
 
+func getConvertToVectorFunction(keyDesc val.TupleDesc, ns tree.NodeStore) (tree.ConvertToVectorFunction, error) {
+	switch keyDesc.Types[0].Enc {
+	case val.JSONAddrEnc:
+		return func(ctx context.Context, bytes []byte) ([]float32, error) {
+			h, _ := keyDesc.GetJSONAddr(0, bytes)
+			doc := tree.NewJSONDoc(h, ns)
+			jsonWrapper, err := doc.ToIndexedJSONDocument(ctx)
+			if err != nil {
+				return nil, err
+			}
+			return sql.ConvertToVector(ctx, jsonWrapper)
+		}, nil
+	case val.BytesAdaptiveEnc:
+		return func(ctx context.Context, bytes []byte) ([]float32, error) {
+			vec, _, err := keyDesc.GetBytesAdaptiveValue(ctx, 0, ns, bytes)
+			if err != nil {
+				return nil, err
+			}
+			return sql.ConvertToVector(ctx, vec)
+		}, nil
+	default:
+		return nil, fmt.Errorf("unexpected encoding for vector index: %v", keyDesc.Types[0].Enc)
+	}
+}
+
 // NewProximityMap creates a new ProximityMap from a supplied root node.
-func NewProximityMap(ns tree.NodeStore, node tree.Node, keyDesc val.TupleDesc, valDesc val.TupleDesc, distanceType vector.DistanceType, logChunkSize uint8) ProximityMap {
+func NewProximityMap(ns tree.NodeStore, node tree.Node, keyDesc val.TupleDesc, valDesc val.TupleDesc, distanceType vector.DistanceType, logChunkSize uint8) (ProximityMap, error) {
+	convertFunc, err := getConvertToVectorFunction(keyDesc, ns)
+	if err != nil {
+		return ProximityMap{}, err
+	}
 	tuples := tree.ProximityMap[val.Tuple, val.Tuple, val.TupleDesc]{
 		Root:         node,
 		NodeStore:    ns,
 		Order:        keyDesc,
 		DistanceType: distanceType,
-		Convert: func(ctx context.Context, bytes []byte) []float64 {
-			h, _ := keyDesc.GetJSONAddr(0, bytes)
-			doc := tree.NewJSONDoc(h, ns)
-			jsonWrapper, err := doc.ToIndexedJSONDocument(ctx)
-			if err != nil {
-				panic(err)
-			}
-			floats, err := sql.ConvertToVector(ctx, jsonWrapper)
-			if err != nil {
-				panic(err)
-			}
-			return floats
-		},
+		Convert:      convertFunc,
 	}
 	return ProximityMap{
 		tuples:       tuples,
 		keyDesc:      keyDesc,
 		valDesc:      valDesc,
 		logChunkSize: logChunkSize,
-	}
+	}, nil
 }
 
 var proximitylevelMapKeyDesc = val.NewTupleDescriptor(
@@ -180,6 +198,10 @@ func NewProximityMapBuilder(ctx context.Context, ns tree.NodeStore, distanceType
 		return ProximityMapBuilder{}, err
 	}
 	mutableLevelMap := newMutableMap(emptyLevelMap)
+	convertFunc, err := getConvertToVectorFunction(keyDesc, ns)
+	if err != nil {
+		return ProximityMapBuilder{}, err
+	}
 	return ProximityMapBuilder{
 		ns:                    ns,
 		vectorIndexSerializer: message.NewVectorIndexSerializer(ns.Pool(), logChunkSize, distanceType),
@@ -189,6 +211,7 @@ func NewProximityMapBuilder(ctx context.Context, ns tree.NodeStore, distanceType
 		logChunkSize:          logChunkSize,
 		maxLevel:              0,
 		levelMap:              mutableLevelMap,
+		convertFunc:           convertFunc,
 	}, nil
 }
 
@@ -211,7 +234,7 @@ func NewProximityMapBuilder(ctx context.Context, ns tree.NodeStore, distanceType
 //
 // Step 2: Create `pathMaps`, a list of maps, each corresponding to a different level of the ProximityMap
 //
-//	The pathMap at depth `i` has the schema (vectorAddrs[1]...vectorAddr[i], keyBytes) -> value
+//	The pathMap at depth `i` has the schema (vectorAddrs[0], ..., vectorAddr[i], keyBytes) -> value
 //	and contains a row for every vector whose maximum depth is i.
 //	- vectorAddrs: the path of vectors visited when walking from the root to the maximum depth where the vector appears.
 //	- keyBytes: a bytestring containing the bytes of the ProximityMap key (which includes the vector)
@@ -229,14 +252,15 @@ func NewProximityMapBuilder(ctx context.Context, ns tree.NodeStore, distanceType
 // won't be needed once we finish building the ProximityMap. This could potentially be avoided by creating a
 // separate in-memory NodeStore for these values.
 type ProximityMapBuilder struct {
-	ns                    tree.NodeStore
 	vectorIndexSerializer message.VectorIndexSerializer
+	ns                    tree.NodeStore
 	distanceType          vector.DistanceType
-	keyDesc, valDesc      val.TupleDesc
+	keyDesc               val.TupleDesc
+	valDesc               val.TupleDesc
 	logChunkSize          uint8
-
-	maxLevel uint8
-	levelMap *MutableMap
+	maxLevel              uint8
+	levelMap              *MutableMap
+	convertFunc           tree.ConvertToVectorFunction
 }
 
 // Insert adds a new key-value pair to the ProximityMap under construction.
@@ -299,7 +323,7 @@ func (b *ProximityMapBuilder) makeRootNode(ctx context.Context, keys, values [][
 		return ProximityMap{}, err
 	}
 
-	return NewProximityMap(b.ns, rootNode, b.keyDesc, b.valDesc, b.distanceType, b.logChunkSize), nil
+	return NewProximityMap(b.ns, rootNode, b.keyDesc, b.valDesc, b.distanceType, b.logChunkSize)
 }
 
 // Flush finishes constructing a ProximityMap. Call this after all calls to Insert.
@@ -371,7 +395,7 @@ func (b *ProximityMapBuilder) makePathMaps(ctx context.Context, mutableLevelMap 
 
 	// Create every val.TupleBuilder and MutableMap that we will need
 	// pathMaps[i] is the pathMap for level i (and depth maxLevel - i)
-	pathMaps, keyTupleBuilder, prefixTupleBuilder, err := b.createInitialPathMaps(ctx, maxLevel)
+	pathMaps, keyTupleBuilder, err := b.createInitialPathMaps(ctx, maxLevel)
 
 	// Next, visit each key-value pair in decreasing order of level / increasing order of depth.
 	// When visiting a pair from depth `i`, we use each of the previous `i` pathMaps to compute a path of `i` index keys.
@@ -382,55 +406,53 @@ func (b *ProximityMapBuilder) makePathMaps(ctx context.Context, mutableLevelMap 
 		depth := int(maxLevel - level)
 
 		// hashPath is a list of concatenated hashes, representing the sequence of closest vectors at each level of the tree.
-		var hashPath []byte
 		keyToInsert, _ := mutableLevelMap.keyDesc.GetBytes(1, levelMapKey)
-		vectorHashToInsert, _ := b.keyDesc.GetJSONAddr(0, keyToInsert)
-		vectorToInsert, err := getVectorFromHash(ctx, b.ns, vectorHashToInsert)
+		vectorToInsert, err := b.convertFunc(ctx, keyToInsert)
 		if err != nil {
 			return nil, err
 		}
 		// Compute the path that this row will have in the vector index, starting at the root.
 		// A key-value pair at depth D will have a path D prior keys.
 		// This path is computed in steps, by performing a lookup in each of the prior pathMaps.
+		// Each iteration sets another column in |keyTupleBuilder|, then does a prefix lookup in the next pathMap
+		// with all currently set columns.
 		for pathDepth := 0; pathDepth < depth; pathDepth++ {
 			lookupLevel := int(maxLevel) - pathDepth
 			pathMap := pathMaps[lookupLevel]
 
-			pathMapIter, err := b.getNextPathSegmentCandidates(ctx, pathMap, prefixTupleBuilder, hashPath)
+			pathMapIter, err := b.getNextPathSegmentCandidates(ctx, pathMap, keyTupleBuilder.Desc.PrefixDesc(pathDepth), keyTupleBuilder.BuildPrefixNoRecycle(b.ns.Pool(), pathDepth))
 			if err != nil {
 				return nil, err
 			}
 
 			// Create an iterator that yields every candidate vector
-			nextCandidate, stopIter := iter.Pull2(func(yield func(hash.Hash, error) bool) {
+			nextCandidate, stopIter := iter.Pull2(func(yield func([]byte, error) bool) {
 				for {
 					pathMapKey, _, err := pathMapIter.Next(ctx)
 					if err == io.EOF {
 						return
 					}
 					if err != nil {
-						yield(hash.Hash{}, err)
+						yield(nil, err)
 					}
-					originalKey, _ := pathMap.keyDesc.GetBytes(1, pathMapKey)
-					candidateVectorHash, _ := b.keyDesc.GetJSONAddr(0, originalKey)
-					yield(candidateVectorHash, nil)
+					originalKey, _ := pathMap.keyDesc.GetBytes(pathDepth, pathMapKey)
+					yield(originalKey, nil)
 				}
 			})
 			defer stopIter()
 
-			closestVectorHash, _ := b.getClosestVector(ctx, vectorToInsert, nextCandidate)
+			closestVectorEncoding, _, err := b.getClosestVector(ctx, vectorToInsert, nextCandidate)
+			if err != nil {
+				return nil, err
+			}
 
-			hashPath = append(hashPath, closestVectorHash[:]...)
+			keyTupleBuilder.PutByteString(pathDepth, closestVectorEncoding)
 		}
 
 		// Once we have the path for this key, we turn it into a tuple and add it to the next pathMap.
-		keyTupleBuilder.PutByteString(0, hashPath)
-		keyTupleBuilder.PutByteString(1, keyToInsert)
+		keyTupleBuilder.PutByteString(depth, keyToInsert)
 
-		keyTuple, err := keyTupleBuilder.Build(b.ns.Pool())
-		if err != nil {
-			return nil, err
-		}
+		keyTuple := keyTupleBuilder.BuildPrefixNoRecycle(b.ns.Pool(), depth+1)
 		err = pathMaps[level].Put(ctx, keyTuple, levelMapValue)
 		if err != nil {
 			return nil, err
@@ -441,14 +463,9 @@ func (b *ProximityMapBuilder) makePathMaps(ctx context.Context, mutableLevelMap 
 		childLevel := level - 1
 		if level > 0 {
 			for {
-				hashPath = append(hashPath, vectorHashToInsert[:]...)
-				keyTupleBuilder.PutByteString(0, hashPath)
-				keyTupleBuilder.PutByteString(1, keyToInsert)
-
-				childKeyTuple, err := keyTupleBuilder.Build(b.ns.Pool())
-				if err != nil {
-					return nil, err
-				}
+				depth++
+				keyTupleBuilder.PutByteString(depth, keyToInsert)
+				childKeyTuple := keyTupleBuilder.BuildPrefixNoRecycle(b.ns.Pool(), depth+1)
 				err = pathMaps[childLevel].Put(ctx, childKeyTuple, levelMapValue)
 				if err != nil {
 					return nil, err
@@ -472,79 +489,75 @@ func (b *ProximityMapBuilder) makePathMaps(ctx context.Context, mutableLevelMap 
 }
 
 // createInitialPathMaps creates a list of MutableMaps that will eventually store a single level of the to-be-built ProximityMap
-func (b *ProximityMapBuilder) createInitialPathMaps(ctx context.Context, maxLevel uint8) (pathMaps []*MutableMap, keyTupleBuilder, prefixTupleBuilder *val.TupleBuilder, err error) {
+func (b *ProximityMapBuilder) createInitialPathMaps(ctx context.Context, maxLevel uint8) (pathMaps []*MutableMap, keyTupleBuilder *val.TupleBuilder, err error) {
 	pathMaps = make([]*MutableMap, maxLevel+1)
 
-	pathMapKeyDescTypes := []val.Type{{Enc: val.ByteStringEnc, Nullable: false}, {Enc: val.ByteStringEnc, Nullable: false}}
-
-	pathMapKeyDesc := val.NewTupleDescriptor(pathMapKeyDescTypes...)
-
-	emptyPathMap, err := NewMapFromTuples(ctx, b.ns, pathMapKeyDesc, b.valDesc)
-
-	keyTupleBuilder = val.NewTupleBuilder(pathMapKeyDesc, b.ns)
-	prefixTupleBuilder = val.NewTupleBuilder(val.NewTupleDescriptor(pathMapKeyDescTypes[0]), b.ns)
-
-	for i := uint8(0); i <= maxLevel; i++ {
-
-		if err != nil {
-			return nil, nil, nil, err
-		}
-		pathMaps[i] = newMutableMap(emptyPathMap)
+	pathMapKeyDescTypes := make([]val.Type, maxLevel+1)
+	for i := range pathMapKeyDescTypes {
+		pathMapKeyDescTypes[i] = val.Type{Enc: val.ByteStringEnc, Nullable: false}
 	}
 
-	return pathMaps, keyTupleBuilder, prefixTupleBuilder, nil
+	for level := uint8(0); level <= maxLevel; level++ {
+		depth := maxLevel - level
+		pathMapKeyDesc := val.NewTupleDescriptor(pathMapKeyDescTypes[:depth+1]...)
+
+		emptyPathMap, err := NewMapFromTuples(ctx, b.ns, pathMapKeyDesc, b.valDesc)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		pathMaps[level] = newMutableMap(emptyPathMap)
+	}
+
+	keyTupleBuilder = val.NewTupleBuilder(val.NewTupleDescriptor(pathMapKeyDescTypes...), b.ns)
+
+	return pathMaps, keyTupleBuilder, nil
 }
 
 // getNextPathSegmentCandidates takes a list of keys, representing a path into the ProximityMap from the root.
 // It returns an iter over all possible keys that could be the next path segment.
-func (b *ProximityMapBuilder) getNextPathSegmentCandidates(ctx context.Context, pathMap *MutableMap, prefixTupleBuilder *val.TupleBuilder, currentPath []byte) (MapIter, error) {
-	prefixTupleBuilder.PutByteString(0, currentPath)
-	prefixTuple, err := prefixTupleBuilder.Build(b.ns.Pool())
-	if err != nil {
-		return nil, err
-	}
-
-	prefixRange := PrefixRange(ctx, prefixTuple, prefixTupleBuilder.Desc)
+func (b *ProximityMapBuilder) getNextPathSegmentCandidates(ctx context.Context, pathMap *MutableMap, prefixTupleDesc val.TupleDesc, prefixTuple val.Tuple) (MapIter, error) {
+	prefixRange := PrefixRange(ctx, prefixTuple, prefixTupleDesc)
 	return pathMap.IterRange(ctx, prefixRange)
 }
 
 // getClosestVector iterates over a range of candidate vectors to determine which one is the closest to the target.
-func (b *ProximityMapBuilder) getClosestVector(ctx context.Context, targetVector []float64, nextCandidate func() (candidate hash.Hash, err error, valid bool)) (hash.Hash, error) {
+func (b *ProximityMapBuilder) getClosestVector(ctx context.Context, targetVector []float32, nextCandidate func() (candidate []byte, err error, valid bool)) (closestVectorEncoding []byte, closestVector []float32, err error) {
 	// First call to nextCandidate is guaranteed to be valid because there's at least one vector in the set.
 	// (non-root nodes inherit the first vector from their parent)
-	candidateVectorHash, err, _ := nextCandidate()
+	closestVectorEncoding, err, _ = nextCandidate()
 	if err != nil {
-		return hash.Hash{}, err
+		return nil, nil, err
+	}
+	closestVector, err = b.convertFunc(ctx, closestVectorEncoding)
+	if err != nil {
+		return nil, nil, err
 	}
 
-	candidateVector, err := getVectorFromHash(ctx, b.ns, candidateVectorHash)
+	closestDistance, err := b.distanceType.Eval(targetVector, closestVector)
 	if err != nil {
-		return hash.Hash{}, err
-	}
-	closestVectorHash := candidateVectorHash
-	closestDistance, err := b.distanceType.Eval(targetVector, candidateVector)
-	if err != nil {
-		return hash.Hash{}, err
+		return nil, nil, err
 	}
 
 	for {
-		candidateVectorHash, err, valid := nextCandidate()
+		candidateVectorEncoding, err, valid := nextCandidate()
 		if err != nil {
-			return hash.Hash{}, err
+			return nil, nil, err
 		}
 		if !valid {
-			return closestVectorHash, nil
+			return closestVectorEncoding, closestVector, nil
 		}
-		candidateVector, err = getVectorFromHash(ctx, b.ns, candidateVectorHash)
+		candidateVector, err := b.convertFunc(ctx, candidateVectorEncoding)
 		if err != nil {
-			return hash.Hash{}, err
+			return nil, nil, err
 		}
 		candidateDistance, err := b.distanceType.Eval(targetVector, candidateVector)
 		if err != nil {
-			return hash.Hash{}, err
+			return nil, nil, err
 		}
 		if candidateDistance < closestDistance {
-			closestVectorHash = candidateVectorHash
+			closestVector = candidateVector
+			closestVectorEncoding = candidateVectorEncoding
 			closestDistance = candidateDistance
 		}
 	}
@@ -580,9 +593,8 @@ func (b *ProximityMapBuilder) makeProximityMapFromPathMaps(ctx context.Context, 
 		if err != nil {
 			return ProximityMap{}, err
 		}
-		originalKey, _ := rootPathMap.keyDesc.GetBytes(1, key)
-		path, _ := b.keyDesc.GetJSONAddr(0, originalKey)
-		_, nodeCount, nodeHash, err := chunker.Next(ctx, b.ns, b.vectorIndexSerializer, path, maxLevel-1, 1, b.keyDesc)
+		originalKey, _ := rootPathMap.keyDesc.GetBytes(0, key)
+		_, nodeCount, nodeHash, err := chunker.Next(ctx, b.ns, b.vectorIndexSerializer, originalKey, maxLevel-1, 1, b.keyDesc)
 		if err != nil {
 			return ProximityMap{}, err
 		}
@@ -591,16 +603,4 @@ func (b *ProximityMapBuilder) makeProximityMapFromPathMaps(ctx context.Context, 
 		topLevelSubtrees = append(topLevelSubtrees, nodeCount)
 	}
 	return b.makeRootNode(ctx, topLevelKeys, topLevelValues, topLevelSubtrees, maxLevel)
-}
-
-func getJsonValueFromHash(ctx context.Context, ns tree.NodeStore, h hash.Hash) (sql.JSONWrapper, error) {
-	return tree.NewJSONDoc(h, ns).ToIndexedJSONDocument(ctx)
-}
-
-func getVectorFromHash(ctx context.Context, ns tree.NodeStore, h hash.Hash) ([]float64, error) {
-	otherValue, err := getJsonValueFromHash(ctx, ns, h)
-	if err != nil {
-		return nil, err
-	}
-	return sql.ConvertToVector(ctx, otherValue)
 }

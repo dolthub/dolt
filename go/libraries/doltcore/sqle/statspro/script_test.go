@@ -34,8 +34,8 @@ type scriptTest struct {
 
 type assertion struct {
 	query string
-	res   []sql.Row
 	err   string
+	res   []sql.Row
 }
 
 func TestStatScripts(t *testing.T) {

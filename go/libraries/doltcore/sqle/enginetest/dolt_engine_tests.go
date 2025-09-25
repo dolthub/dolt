@@ -1130,6 +1130,26 @@ func RunHistorySystemTableTestsPrepared(t *testing.T, harness DoltEnginetestHarn
 	}
 }
 
+func RunDoltBranchesSystemTableTests(t *testing.T, harness DoltEnginetestHarness) {
+	for _, test := range BranchesSystemTableTests {
+		harness = harness.NewHarness(t)
+		harness.Setup(setup.MydbData)
+		t.Run(test.Name, func(t *testing.T) {
+			enginetest.TestScript(t, harness, test)
+		})
+	}
+}
+
+func RunDoltBranchesSystemTableTestsPrepared(t *testing.T, harness DoltEnginetestHarness) {
+	for _, test := range BranchesSystemTableTests {
+		harness = harness.NewHarness(t)
+		harness.Setup(setup.MydbData)
+		t.Run(test.Name, func(t *testing.T) {
+			enginetest.TestScriptPrepared(t, harness, test)
+		})
+	}
+}
+
 func RunUnscopedDiffSystemTableTests(t *testing.T, h DoltEnginetestHarness) {
 	for _, test := range UnscopedDiffSystemTableScriptTests {
 		t.Run(test.Name, func(t *testing.T) {
@@ -2059,6 +2079,26 @@ func RunDoltQueryCatalogTests(t *testing.T, harness DoltEnginetestHarness) {
 	dtables.DoltCommand = doltcmd.DoltCommand
 
 	for _, script := range DoltQueryCatalogScripts {
+		t.Run(script.Name, func(t *testing.T) {
+			harness = harness.NewHarness(t)
+			defer harness.Close()
+			enginetest.TestScript(t, harness, script)
+		})
+	}
+}
+
+func RunDoltTestsTableTests(t *testing.T, harness DoltEnginetestHarness) {
+	dtables.DoltCommand = doltcmd.DoltCommand
+
+	for _, script := range DoltTestTableScripts {
+		t.Run(script.Name, func(t *testing.T) {
+			harness = harness.NewHarness(t)
+			defer harness.Close()
+			enginetest.TestScript(t, harness, script)
+		})
+	}
+
+	for _, script := range DoltTestRunFunctionScripts {
 		t.Run(script.Name, func(t *testing.T) {
 			harness = harness.NewHarness(t)
 			defer harness.Close()

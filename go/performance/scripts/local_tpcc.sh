@@ -63,6 +63,10 @@ listener:
   tls_cert: "./chain_cert.pem"
   require_secure_transport: true
 
+system_variables: {
+  sql_mode: ""
+}
+
 YAML
 
 # start a server

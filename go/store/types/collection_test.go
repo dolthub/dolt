@@ -31,13 +31,13 @@ type collectionTestSuite struct {
 	suite.Suite
 	col                    Collection
 	expectType             *Type
+	validate               validateFn
+	prependOne             deltaFn
+	appendOne              deltaFn
 	expectLen              uint64
 	expectChunkCount       int
 	expectPrependChunkDiff int
 	expectAppendChunkDiff  int
-	validate               validateFn
-	prependOne             deltaFn
-	appendOne              deltaFn
 }
 
 type validateFn func(v2 Collection) bool

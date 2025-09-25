@@ -162,8 +162,8 @@ func (cmd ArchiveCmd) Exec(ctx context.Context, commandStr string, args []string
 }
 
 func handleProgress(ctx context.Context, wg *sync.WaitGroup, progress chan interface{}) {
+	wg.Add(1)
 	go func() {
-		wg.Add(1)
 		defer wg.Done()
 
 		rotation := 0
@@ -250,7 +250,7 @@ func historicalFuzzyMatching(ctx context.Context, heads hash.HashSet, groupings 
 		return err
 	}
 	for {
-		h, _, err := iterator.Next(ctx)
+		h, _, _, _, err := iterator.Next(ctx)
 		if err != nil {
 			if err == io.EOF {
 				break

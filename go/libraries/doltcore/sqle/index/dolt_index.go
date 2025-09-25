@@ -68,6 +68,26 @@ type DoltIndex interface {
 	lookupTags(s *durableIndexState) map[uint64]int
 }
 
+func NewBranchNameIndex(i *doltIndex) *BranchNameIndex {
+	return &BranchNameIndex{doltIndex: i}
+}
+
+type BranchNameIndex struct {
+	*doltIndex
+}
+
+func (bni *BranchNameIndex) ExtendedExpressions() []string {
+	// The MockIndex used by the branch name virtual index doesn't set an index schema, so
+	// we can't use the implementation of ExtendedExpressions from doltIndex.
+	return bni.Expressions()
+}
+
+func (bni *BranchNameIndex) ExtendedColumnExpressionTypes() []sql.ColumnExpressionType {
+	// The MockIndex used by the branch name virtual index doesn't set an index schema, so
+	// we can't use the implementation of ExtendedColumnExpressionTypes from doltIndex.
+	return bni.ColumnExpressionTypes()
+}
+
 func NewCommitIndex(i *doltIndex) *CommitIndex {
 	return &CommitIndex{doltIndex: i}
 }
@@ -229,9 +249,9 @@ func DoltToFromCommitIndexes(tbl string, sch schema.Schema) (indexes []sql.Index
 
 // MockIndex returns a sql.Index that is not backed by an actual datastore. It's useful for system tables and
 // system table functions provide indexes but produce their rows at execution time based on the provided `IndexLookup`
-func MockIndex(dbName, tableName, columnName string, columnType types.NomsKind, unique bool) (index *doltIndex) {
+func MockIndex(indexId, dbName, tableName, columnName string, columnType types.NomsKind, unique bool) (index *doltIndex) {
 	return &doltIndex{
-		id:      columnName,
+		id:      indexId,
 		tblName: tableName,
 		dbName:  dbName,
 		columns: []schema.Column{
@@ -254,7 +274,7 @@ func DoltCommitIndexes(dbName, tab string, db *doltdb.DoltDB, unique bool) (inde
 	}
 
 	return []sql.Index{
-		NewCommitIndex(MockIndex(dbName, tab, CommitHashIndexId, types.StringKind, unique)),
+		NewCommitIndex(MockIndex(CommitHashIndexId, dbName, tab, CommitHashIndexId, types.StringKind, unique)),
 	}, nil
 }
 
@@ -460,13 +480,13 @@ func ConvertFullTextToSql(ctx context.Context, db, tbl string, sch schema.Schema
 }
 
 type durableIndexState struct {
-	key                   doltdb.DataCacheKey
 	Primary               durable.Index
 	Secondary             durable.Index
-	coversAllCols         uint32
 	cachedLookupTags      atomic.Value
 	cachedSqlRowConverter atomic.Value
 	cachedProjections     atomic.Value
+	coversAllCols         uint32
+	key                   doltdb.DataCacheKey
 }
 
 func (s *durableIndexState) coversAllColumns(i *doltIndex) bool {
@@ -566,43 +586,42 @@ func (i *cachedDurableIndexes) store(v *durableIndexState) {
 }
 
 type doltIndex struct {
+	ns          tree.NodeStore
+	vrw         types.ValueReadWriter
+	keyBld      *val.TupleBuilder
+	cache       cachedDurableIndexes
+	indexSch    schema.Schema
+	tableSch    schema.Schema
+	vectorProps schema.VectorProperties
+
 	id      string
-	tblName string
 	dbName  string
+	tblName string
+	comment string
+
+	fullTextProps schema.FullTextProperties
+	prefixLengths []uint16
 
 	columns      []schema.Column
 	colExprTypes []sql.ColumnExpressionType
 	colExprNames []string
 
-	indexSch schema.Schema
-	tableSch schema.Schema
-	unique   bool
-	spatial  bool
-	fulltext bool
-	vector   bool
-	isPk     bool
-	comment  string
-	order    sql.IndexOrder
-
+	order                         sql.IndexOrder
 	constrainedToLookupExpression bool
 
-	vrw    types.ValueReadWriter
-	ns     tree.NodeStore
-	keyBld *val.TupleBuilder
-
-	cache         cachedDurableIndexes
+	vector        bool
+	isPk          bool
 	doltBinFormat bool
-
-	prefixLengths []uint16
-	fullTextProps schema.FullTextProperties
-	vectorProps   schema.VectorProperties
+	unique        bool
+	spatial       bool
+	fulltext      bool
 }
 
 type LookupMeta struct {
-	Cols     sql.FastIntSet
 	Idx      sql.Index
-	Ordinals []int
 	Fds      *sql.FuncDepSet
+	Cols     sql.FastIntSet
+	Ordinals []int
 }
 
 func GetStrictLookups(schCols *schema.ColCollection, indexes []sql.Index) []LookupMeta {

@@ -114,9 +114,9 @@ var tupItrPairPool = &sync.Pool{New: newTupleIteratorPair}
 
 type TupleIterator struct {
 	dec   *valueDecoder
+	nbf   *NomsBinFormat
 	count uint64
 	pos   uint64
-	nbf   *NomsBinFormat
 }
 
 func (itr *TupleIterator) Next() (uint64, Value, error) {
@@ -271,11 +271,10 @@ func walkTuple(nbf *NomsBinFormat, r *refWalker, cb RefCallback) error {
 // TupleFactory provides a more memory efficient mechanism for creating many tuples
 type TupleFactory struct {
 	nbf            *NomsBinFormat
+	buffer         []byte
 	biggestTuple   int
 	approxCapacity int
-
-	pos    int
-	buffer []byte
+	pos            int
 }
 
 // NewTupleFactory creates a new tuple factory. The approxCapacity argument is used to calculate how large the buffer allocations
@@ -441,7 +440,7 @@ func (t Tuple) PrefixEquals(ctx context.Context, other Tuple, prefixCount uint64
 	return true, nil
 }
 
-var tupleType = newType(CompoundDesc{UnionKind, nil})
+var tupleType = newType(CompoundDesc{kind: UnionKind})
 
 func (t Tuple) typeOf() (*Type, error) {
 	return tupleType, nil

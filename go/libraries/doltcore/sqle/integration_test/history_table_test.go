@@ -215,6 +215,7 @@ func setupHistoryTests(t *testing.T) *env.DoltEnv {
 	dEnv := dtestutils.CreateTestEnv()
 	cliCtx, verr := cmd.NewArgFreeCliContext(ctx, dEnv, dEnv.FS)
 	require.NoError(t, verr)
+	defer cliCtx.Close()
 
 	for _, c := range setupCommon {
 		exitCode := c.cmd.Exec(ctx, c.cmd.Name(), c.args, dEnv, cliCtx)
@@ -242,6 +243,7 @@ func testHistoryTable(t *testing.T, test historyTableTest, dEnv *env.DoltEnv) {
 	ctx := context.Background()
 	cliCtx, verr := cmd.NewArgFreeCliContext(ctx, dEnv, dEnv.FS)
 	require.NoError(t, verr)
+	defer cliCtx.Close()
 
 	for _, c := range test.setup {
 		exitCode := c.cmd.Exec(ctx, c.cmd.Name(), c.args, dEnv, cliCtx)

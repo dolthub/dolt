@@ -168,13 +168,17 @@ func (mr *MultiRepoTestSetup) NewBranch(ctx context.Context, dbName, branchName 
 
 func (mr *MultiRepoTestSetup) CheckoutBranch(dbName, branchName string) {
 	dEnv := mr.envs[dbName]
-	cliCtx, _ := cmd.NewArgFreeCliContext(context.Background(), dEnv, dEnv.FS)
-	_, sqlCtx, closeFunc, err := cliCtx.QueryEngine(context.Background())
+	var err error
+	cliCtx, err := cmd.NewArgFreeCliContext(context.Background(), dEnv, dEnv.FS)
 	if err != nil {
 		mr.Errhand(err)
 	}
-	defer closeFunc()
-	err = dprocedures.MoveWorkingSetToBranch(sqlCtx, branchName, false, false)
+	defer cliCtx.Close()
+	queryist, err := cliCtx.QueryEngine(context.Background())
+	if err != nil {
+		mr.Errhand(err)
+	}
+	err = dprocedures.MoveWorkingSetToBranch(queryist.Context, branchName, false, false)
 	if err != nil {
 		mr.Errhand(err)
 	}

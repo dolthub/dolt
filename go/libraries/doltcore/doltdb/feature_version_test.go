@@ -54,12 +54,17 @@ type fvCommand struct {
 	args args
 }
 
-func (cmd fvCommand) exec(ctx context.Context, dEnv *env.DoltEnv) int {
+func (cmd fvCommand) exec(ctx context.Context, t *testing.T, dEnv *env.DoltEnv) int {
 	// execute the command using |cmd.user|'s Feature Version
 	doltdb.DoltFeatureVersion = cmd.user.vers
 	defer func() { doltdb.DoltFeatureVersion = DoltFeatureVersionCopy }()
 
-	cliCtx, _ := commands.NewArgFreeCliContext(ctx, dEnv, dEnv.FS)
+	var err error
+	cliCtx, err := commands.NewArgFreeCliContext(ctx, dEnv, dEnv.FS)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		cliCtx.Close()
+	})
 
 	return cmd.cmd.Exec(ctx, cmd.cmd.Name(), cmd.args, dEnv, cliCtx)
 }
@@ -154,15 +159,17 @@ func TestFeatureVersion(t *testing.T) {
 
 			doltdb.DoltFeatureVersion = oldVersion
 			dEnv := dtestutils.CreateTestEnv()
-			defer dEnv.DoltDB(ctx).Close()
+			t.Cleanup(func() {
+				dEnv.DoltDB(ctx).Close()
+			})
 			doltdb.DoltFeatureVersion = DoltFeatureVersionCopy
 
 			for _, cmd := range test.setup {
-				code := cmd.exec(ctx, dEnv)
+				code := cmd.exec(ctx, t, dEnv)
 				require.Equal(t, 0, code)
 			}
 			for _, cmd := range test.errCmds {
-				code := cmd.exec(ctx, dEnv)
+				code := cmd.exec(ctx, t, dEnv)
 				require.NotEqual(t, 0, code)
 			}
 

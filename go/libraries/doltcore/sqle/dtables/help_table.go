@@ -119,8 +119,8 @@ func (ht *HelpTable) PartitionRows(_ *sql.Context, _ sql.Partition) (sql.RowIter
 }
 
 type HelpRowIter struct {
-	idx  int
 	rows []sql.Row
+	idx  int
 }
 
 func NewHelpRowIter() *HelpRowIter {

@@ -1,10 +1,10 @@
 module github.com/dolthub/dolt/integration-tests/go-sql-server-driver
 
-go 1.24.0
+go 1.25
 
 require (
 	github.com/dolthub/dolt/go v0.40.4
-	github.com/go-sql-driver/mysql v1.9.1
+	github.com/go-sql-driver/mysql v1.9.3
 	github.com/google/uuid v1.6.0
 	github.com/stretchr/testify v1.10.0
 	golang.org/x/sync v0.16.0

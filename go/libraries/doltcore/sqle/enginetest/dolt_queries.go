@@ -711,6 +711,55 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 // this slice into others with good names as it grows.
 var DoltScripts = []queries.ScriptTest{
 	{
+		// https://github.com/dolthub/dolt/issues/8283
+		Name: "dolt_status tests",
+		SetUpScript: []string{
+			"CALL DOLT_COMMIT('--allow-empty', '-m', 'empty commit');",
+			"SET @commit1 = HASHOF('HEAD');",
+			"CALL DOLT_TAG('tag1');",
+			"CALL DOLT_CHECKOUT('-b', 'branch1');",
+			"CREATE TABLE abc (pk int);",
+			"CALL DOLT_ADD('abc');",
+			"CALL DOLT_CHECKOUT('main');",
+			"CREATE TABLE t (pk int primary key, v varchar(100));",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT * FROM dolt_status;",
+				Expected: []sql.Row{{"t", false, "new table"}},
+			},
+			{
+				Query:    "SELECT * FROM `mydb/main`.dolt_status;",
+				Expected: []sql.Row{{"t", false, "new table"}},
+			},
+			{
+				Query:    "SELECT * FROM dolt_status AS OF 'tag1';",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT * FROM dolt_status AS OF @commit1;",
+				Expected: []sql.Row{},
+			},
+			{
+				// HEAD is a special revision spec
+				Query:    "SELECT * FROM dolt_status AS OF 'head';",
+				Expected: []sql.Row{{"t", false, "new table"}},
+			},
+			{
+				Query:    "SELECT * FROM dolt_status AS OF 'HEAD~1';",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT * FROM dolt_status AS OF 'branch1';",
+				Expected: []sql.Row{{"abc", true, "new table"}},
+			},
+			{
+				Query:    "SELECT * FROM `mydb/branch1`.dolt_status;",
+				Expected: []sql.Row{{"abc", true, "new table"}},
+			},
+		},
+	},
+	{
 		Name: "dolt_hashof_table tests",
 		SetUpScript: []string{
 			"CREATE TABLE t1 (pk int primary key);",
@@ -2729,6 +2778,190 @@ var BrokenHistorySystemTableScriptTests = []queries.ScriptTest{
 					{"checkpoint enginetest database mydb"},
 					{"Initialize data repository"},
 				},
+			},
+		},
+	},
+}
+
+var BranchesSystemTableTests = []queries.ScriptTest{
+	{
+		Name: "dolt_branches basic usage",
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT name, latest_committer, latest_commit_message FROM dolt_branches;",
+				Expected: []sql.Row{{"main", "root", "checkpoint enginetest database mydb"}},
+			},
+			{
+				Query:    "CALL dolt_branch('branch1');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "CALL dolt_commit('--allow-empty', '-m', 'empty commit');",
+				Expected: []sql.Row{{doltCommit}},
+			},
+			{
+				Query: "SELECT name, latest_committer, latest_commit_message FROM dolt_branches ORDER by name;",
+				Expected: []sql.Row{
+					{"branch1", "root", "checkpoint enginetest database mydb"},
+					{"main", "root", "empty commit"},
+				},
+			},
+		},
+	},
+	{
+		// https://github.com/dolthub/dolt/issues/9712
+		Name: "User-created FKs to dolt_branches system table",
+		SetUpScript: []string{
+			"CALL dolt_branch('branch1');",
+			"CREATE TABLE ext_branch_metadata(branch_name varchar(300) primary key, owner varchar(255), CONSTRAINT fk_branch_metadata_branch FOREIGN KEY (branch_name) REFERENCES dolt_branches(name));",
+			"INSERT INTO ext_branch_metadata VALUES ('branch1', 'Jason');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT * FROM ext_branch_metadata;",
+				Expected: []sql.Row{{"branch1", "Jason"}},
+			},
+			{
+				Query:       "INSERT INTO ext_branch_metadata VALUES ('not-a-branch', 'Foo');",
+				ExpectedErr: sql.ErrForeignKeyChildViolation,
+			},
+			{
+				Query:    "SELECT * FROM ext_branch_metadata;",
+				Expected: []sql.Row{{"branch1", "Jason"}},
+			},
+		},
+	},
+	{
+		Name: "indexes cannot be created on dolt_branches",
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "CREATE INDEX idx_dolt_branches_latest_committer ON dolt_branches(latest_commit_date);",
+				ExpectedErrStr: "the table is not indexable",
+			},
+		},
+	},
+	{
+		Name: "foreign keys referencing dolt_branches cannot use referential actions",
+		SetUpScript: []string{
+			"CREATE TABLE ext_branch_metadata(branch_name varchar(300) primary key, owner varchar(255));",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "ALTER TABLE ext_branch_metadata ADD CONSTRAINT fk123 FOREIGN KEY (branch_name) REFERENCES dolt_branches(name) ON DELETE CASCADE;",
+				ExpectedErrStr: "foreign keys referencing Dolt system tables do not support referential actions",
+			},
+			{
+				Query:          "ALTER TABLE ext_branch_metadata ADD CONSTRAINT fk123 FOREIGN KEY (branch_name) REFERENCES dolt_branches(name) ON UPDATE CASCADE;",
+				ExpectedErrStr: "foreign keys referencing Dolt system tables do not support referential actions",
+			},
+			{
+				Query:          "ALTER TABLE ext_branch_metadata ADD CONSTRAINT fk123 FOREIGN KEY (branch_name) REFERENCES dolt_branches(name) ON DELETE RESTRICT;",
+				ExpectedErrStr: "foreign keys referencing Dolt system tables do not support referential actions",
+			},
+			{
+				Query:          "ALTER TABLE ext_branch_metadata ADD CONSTRAINT fk123 FOREIGN KEY (branch_name) REFERENCES dolt_branches(name) ON UPDATE RESTRICT;",
+				ExpectedErrStr: "foreign keys referencing Dolt system tables do not support referential actions",
+			},
+			{
+				// Explicitly using "NO ACTION" is allowed
+				Query:    "ALTER TABLE ext_branch_metadata ADD CONSTRAINT fk123 FOREIGN KEY (branch_name) REFERENCES dolt_branches(name) ON DELETE NO ACTION ON UPDATE NO ACTION;",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+		},
+	},
+	{
+		Name: "dolt_branches.name index",
+		SetUpScript: []string{
+			"CALL dolt_branch('branch1');",
+			"CALL dolt_branch('branch2');",
+			"CALL dolt_branch('branch3');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:           "SELECT name, latest_committer, latest_committer_email FROM dolt_branches where name = 'branch1';",
+				Expected:        []sql.Row{{"branch1", "root", "root@localhost"}},
+				ExpectedIndexes: []string{"dolt_branches_name_idx"},
+			},
+			{
+				Query: "SELECT name, latest_committer, latest_committer_email FROM dolt_branches where name > 'branch1';",
+				Expected: []sql.Row{
+					{"branch2", "root", "root@localhost"},
+					{"branch3", "root", "root@localhost"},
+					{"main", "root", "root@localhost"},
+				},
+				ExpectedIndexes: []string{"dolt_branches_name_idx"},
+			},
+			{
+				Query: "SELECT name, latest_committer, latest_committer_email FROM dolt_branches where name >= 'branch2';",
+				Expected: []sql.Row{
+					{"branch2", "root", "root@localhost"},
+					{"branch3", "root", "root@localhost"},
+					{"main", "root", "root@localhost"},
+				},
+				ExpectedIndexes: []string{"dolt_branches_name_idx"},
+			},
+			{
+				Query: "SELECT name, latest_committer, latest_committer_email FROM dolt_branches where name < 'branch2';",
+				Expected: []sql.Row{
+					{"branch1", "root", "root@localhost"},
+				},
+				ExpectedIndexes: []string{"dolt_branches_name_idx"},
+			},
+			{
+				Query: "SELECT name, latest_committer, latest_committer_email FROM dolt_branches where name <= 'branch2';",
+				Expected: []sql.Row{
+					{"branch1", "root", "root@localhost"},
+					{"branch2", "root", "root@localhost"},
+				},
+				ExpectedIndexes: []string{"dolt_branches_name_idx"},
+			},
+			{
+				Query: "SELECT name, latest_committer, latest_committer_email FROM dolt_branches where name <= 'branch3' and name > 'branch1';",
+				Expected: []sql.Row{
+					{"branch2", "root", "root@localhost"},
+					{"branch3", "root", "root@localhost"},
+				},
+				ExpectedIndexes: []string{"dolt_branches_name_idx"},
+			},
+			{
+				Query: "SELECT name, latest_committer, latest_committer_email FROM dolt_branches where name <= 'branch2' and name >= 'branch2';",
+				Expected: []sql.Row{
+					{"branch2", "root", "root@localhost"},
+				},
+				ExpectedIndexes: []string{"dolt_branches_name_idx"},
+			},
+			{
+				Query:           "SELECT name, latest_committer, latest_committer_email FROM dolt_branches where name < 'branch3' and name > 'branch2';",
+				Expected:        []sql.Row{},
+				ExpectedIndexes: []string{"dolt_branches_name_idx"},
+			},
+			{
+				Query: "SELECT name, latest_committer, latest_committer_email FROM dolt_branches where name > 'branch2';",
+				Expected: []sql.Row{
+					{"branch3", "root", "root@localhost"},
+					{"main", "root", "root@localhost"},
+				},
+				ExpectedIndexes: []string{"dolt_branches_name_idx"},
+			},
+			{
+				Query: "SELECT name, latest_committer, latest_committer_email FROM dolt_branches where name <= 'branch3' and name > 'branch1' and name > 'branch2';",
+				Expected: []sql.Row{
+					{"branch3", "root", "root@localhost"},
+				},
+				ExpectedIndexes: []string{"dolt_branches_name_idx"},
+			},
+			{
+				Query:           "SELECT name, latest_committer, latest_committer_email FROM dolt_branches where name <= 'branch1' and name > 'branch3';",
+				Expected:        []sql.Row{},
+				ExpectedIndexes: []string{"dolt_branches_name_idx"},
+			},
+			{
+				Query: "SELECT name, latest_committer, latest_committer_email FROM dolt_branches where name <= 'branch1' or name > 'branch3';",
+				Expected: []sql.Row{
+					{"branch1", "root", "root@localhost"},
+					{"main", "root", "root@localhost"},
+				},
+				ExpectedIndexes: []string{"dolt_branches_name_idx"},
 			},
 		},
 	},
@@ -4989,6 +5222,40 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{
 					{1}, // feature and main commits should have same order
 				},
+			},
+		},
+	},
+	{
+		// https://github.com/dolthub/dolt/issues/9762
+		Name: "dolt_log function in detached head state",
+		SetUpScript: []string{
+			"CREATE TABLE test_table (id INT PRIMARY KEY, name VARCHAR(50));",
+			"CALL dolt_commit('-Am', 'create table');",
+			"CALL dolt_tag('mytag');",
+			"INSERT INTO test_table VALUES (1, 'test');",
+			"CALL dolt_commit('-Am', 'add data');",
+			"CALL dolt_tag('v2');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "USE mydb/mytag;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT COUNT(*) FROM dolt_log('mytag');",
+				Expected: []sql.Row{{2}},
+			},
+			{
+				Query:    "USE mydb/v2;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT COUNT(*) FROM dolt_log('v2');",
+				Expected: []sql.Row{{3}},
+			},
+			{
+				Query:    "SELECT message FROM dolt_log('mytag') ORDER BY commit_order;",
+				Expected: []sql.Row{{"Initialize data repository"}, {"create table"}},
 			},
 		},
 	},

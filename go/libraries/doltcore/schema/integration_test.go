@@ -178,6 +178,7 @@ func runTestSql(t *testing.T, ctx context.Context, setup []string) (*doltdb.Dolt
 	cmd := commands.SqlCmd{}
 	cliCtx, verr := commands.NewArgFreeCliContext(ctx, dEnv, dEnv.FS)
 	require.NoError(t, verr)
+	defer cliCtx.Close()
 
 	for _, query := range setup {
 		code := cmd.Exec(ctx, cmd.Name(), []string{"-q", query}, dEnv, cliCtx)

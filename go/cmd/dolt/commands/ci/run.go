@@ -79,15 +79,12 @@ func (cmd RunCmd) Exec(ctx context.Context, commandStr string, args []string, _ 
 	}
 	workflowName := args[0]
 
-	queryist, sqlCtx, closeFunc, err := cliCtx.QueryEngine(ctx)
+	queryist, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
-	if closeFunc != nil {
-		defer closeFunc()
-	}
 
-	hasTables, err := dolt_ci.HasDoltCITables(queryist, sqlCtx)
+	hasTables, err := dolt_ci.HasDoltCITables(queryist.Queryist, queryist.Context)
 	if err != nil {
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
@@ -101,59 +98,138 @@ func (cmd RunCmd) Exec(ctx context.Context, commandStr string, args []string, _ 
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	wm := dolt_ci.NewWorkflowManager(name, email, queryist.Query)
+	wm := dolt_ci.NewWorkflowManager(name, email, queryist.Queryist.Query)
 
-	config, err := wm.GetWorkflowConfig(sqlCtx, workflowName)
+	config, err := wm.GetWorkflowConfig(queryist.Context, workflowName)
 	if err != nil {
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	savedQueries, err := getSavedQueries(sqlCtx, queryist)
+	savedQueries, err := getSavedQueries(queryist.Context, queryist.Queryist)
 	if err != nil {
 		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 	cli.Println(color.CyanString("Running workflow: %s", workflowName))
-	queryAndPrint(sqlCtx, queryist, config, savedQueries)
+	failed := queryAndPrint(queryist.Context, queryist.Queryist, config, savedQueries)
 
+	if failed {
+		return 1
+	}
 	return 0
 }
 
 // queryAndPrint iterates through the jobs and steps for the given config, then runs each saved query and given assertion
-func queryAndPrint(sqlCtx *sql.Context, queryist cli.Queryist, config *dolt_ci.WorkflowConfig, savedQueries map[string]string) {
+func queryAndPrint(sqlCtx *sql.Context, queryist cli.Queryist, config *dolt_ci.WorkflowConfig, savedQueries map[string]string) bool {
+	// returns true if any job had failures
+	overallFailed := false
 	for _, job := range config.Jobs {
-		cli.Println(color.GreenString("Running job: %s", job.Name.Value))
-		for _, step := range job.Steps {
-			cli.Printf("Step: %s - ", step.Name.Value)
+		cli.Println(color.CyanString("Running job: %s", job.Name.Value))
 
-			// We break up the query running and assertions into two steps.
-			// If either fails, we'll set error and let the user know that the step failed, then give an error message
-			query := savedQueries[step.SavedQueryName.Value]
-			rows, err := runCIQuery(queryist, sqlCtx, step, query)
-			if err == nil {
-				err = assertQueries(rows, step.ExpectedRows.Value, step.ExpectedColumns.Value, query)
+		jobFailures := make([]string, 0)
+		for _, step := range job.Steps {
+			// Print a step header; details will follow on subsequent lines
+			_, isDoltTest := step.(*dolt_ci.DoltTestStep)
+			_, isSavedQuery := step.(*dolt_ci.SavedQueryStep)
+			cli.Println(color.CyanString("  Step: %s", step.GetName()))
+
+			var err error
+			var details string
+			if sq, ok := step.(*dolt_ci.SavedQueryStep); ok {
+				query := savedQueries[sq.SavedQueryName.Value]
+				rows, qErr := runCIQuery(queryist, sqlCtx, sq, query)
+				if qErr == nil {
+					err = assertQueries(rows, sq.ExpectedRows.Value, sq.ExpectedColumns.Value, query)
+				} else {
+					err = qErr
+				}
+				details = formatSavedQueryDetails(sq.SavedQueryName.Value, query, err)
+			} else if dt, ok := step.(*dolt_ci.DoltTestStep); ok {
+				details, err = runDoltTestStep(sqlCtx, queryist, dt)
+			} else {
+				panic("unsupported step type")
 			}
 
+			// Print details for DoltTest and SavedQuery steps; they do not emit PASS/FAIL inline
+			if (isDoltTest || isSavedQuery) && details != "" {
+				cli.Println(indentLines(details, "  "))
+			}
+
+			// Unified failure handling
 			if err != nil {
-				cli.Println("FAIL")
-				cli.Println(color.RedString("%s", err))
-			} else {
-				cli.Println("PASS")
+				jobFailures = append(jobFailures, fmt.Sprintf("step '%s': %s", step.GetName(), err.Error()))
 			}
 		}
+		if len(jobFailures) > 0 {
+			cli.Println(color.CyanString("Result of '%s':", job.Name.Value) + " " + color.RedString("FAIL"))
+			overallFailed = true
+		} else {
+			cli.Println(color.CyanString("Result of '%s':", job.Name.Value) + " " + color.GreenString("PASS"))
+		}
 	}
+	return overallFailed
 }
 
-func runCIQuery(queryist cli.Queryist, sqlCtx *sql.Context, step dolt_ci.Step, query string) ([]sql.Row, error) {
+// indentLines prefixes every line in s with the given prefix.
+func indentLines(s, prefix string) string {
+	if s == "" {
+		return s
+	}
+	parts := strings.Split(s, "\n")
+	for i := range parts {
+		parts[i] = prefix + parts[i]
+	}
+	return strings.Join(parts, "\n")
+}
+
+// formatSavedQueryDetails returns indented detail lines for SavedQuery steps to match DoltTest formatting.
+// On failure, the query string is shown separately, so error messages should not redundantly include
+// a "Ran query:" prefix.
+func formatSavedQueryDetails(savedQueryName, query string, err error) string {
+	// First line always shows the saved query name and status
+	status := "PASS"
+	if err != nil {
+		status = "FAIL"
+	}
+	var statusColored string
+	switch status {
+	case "PASS":
+		statusColored = color.GreenString(status)
+	case "FAIL":
+		statusColored = color.RedString(status)
+	default:
+		// Leave unknown statuses uncolored; easy to extend later
+		statusColored = status
+	}
+
+	lines := []string{fmt.Sprintf("  - %s - %s", savedQueryName, statusColored)}
+
+	// Only include query and error details on failure
+	if err != nil {
+		if strings.TrimSpace(query) != "" {
+			lines = append(lines, fmt.Sprintf("    - query: %s", query))
+		}
+		// Summarize error lines
+		var parts []string
+		for _, l := range strings.Split(err.Error(), "\n") {
+			trimmed := strings.TrimSpace(l)
+			if trimmed != "" {
+				parts = append(parts, trimmed)
+			}
+		}
+		if len(parts) > 0 {
+			lines = append(lines, fmt.Sprintf("    - error: %s", color.RedString(strings.Join(parts, "; "))))
+		}
+	}
+	return strings.Join(lines, "\n")
+}
+
+func runCIQuery(queryist cli.Queryist, sqlCtx *sql.Context, step *dolt_ci.SavedQueryStep, query string) ([]sql.Row, error) {
 	if query == "" {
 		return nil, fmt.Errorf("Could not find saved query: %s", step.SavedQueryName.Value)
 	}
 
 	rows, err := cli.GetRowsForSql(queryist, sqlCtx, query)
 	if err != nil {
-		statementErr := fmt.Sprintf("Ran query: %s", query)
-		queryErr := fmt.Sprintf("Query error: %s", err.Error())
-		err = errors.New(strings.Join([]string{statementErr, queryErr}, "\n"))
-
 		return nil, err
 	}
 
@@ -188,8 +264,6 @@ func assertQueries(rows []sql.Row, expectedRowsAndComparison string, expectedCol
 	}
 
 	if len(errs) > 0 {
-		statementErr := fmt.Sprintf("Ran query: %s", query)
-		errs := append([]string{statementErr}, errs...)
 		return errors.New(strings.Join(errs, "\n"))
 	}
 	return nil

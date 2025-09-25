@@ -39,9 +39,9 @@ import (
 // ChunkStore requires.
 type MemoryStorage struct {
 	data     map[hash.Hash]Chunk
-	rootHash hash.Hash
-	mu       sync.RWMutex
 	version  string
+	mu       sync.RWMutex
+	rootHash hash.Hash
 }
 
 // NewView vends a MemoryStoreView backed by this MemoryStorage. It's
@@ -136,16 +136,13 @@ func (ms *MemoryStorage) Update(current, last hash.Hash, novel map[hash.Hash]Chu
 type MemoryStoreView struct {
 	pending     map[hash.Hash]Chunk
 	pendingRefs hash.HashSet
+	gcCond      *sync.Cond
+	keeperFunc  func(hash.Hash) bool
+	storage     *MemoryStorage
+	version     string
+	mu          sync.RWMutex
 	rootHash    hash.Hash
-
-	mu         sync.RWMutex
-	isGC       bool
-	gcCond     *sync.Cond
-	keeperFunc func(hash.Hash) bool
-
-	version string
-
-	storage *MemoryStorage
+	isGC        bool
 }
 
 var _ ChunkStore = &MemoryStoreView{}

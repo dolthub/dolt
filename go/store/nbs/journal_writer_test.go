@@ -33,9 +33,9 @@ func TestJournalWriterReadWrite(t *testing.T) {
 	type opKind byte
 
 	type operation struct {
-		kind   opKind
 		buf    []byte
 		readAt int64
+		kind   opKind
 	}
 
 	const (
@@ -46,8 +46,8 @@ func TestJournalWriterReadWrite(t *testing.T) {
 
 	tests := []struct {
 		name string
-		size int
 		ops  []operation
+		size int
 	}{
 		{
 			name: "smoke test",

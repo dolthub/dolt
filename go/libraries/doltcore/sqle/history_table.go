@@ -58,13 +58,13 @@ var _ sql.PrimaryKeyTable = (*HistoryTable)(nil)
 
 // HistoryTable is a system table that shows the history of rows over time
 type HistoryTable struct {
-	doltTable                  *DoltTable
-	commitFilters              []sql.Expression
 	cmItr                      doltdb.CommitItr[*sql.Context]
+	doltTable                  *DoltTable
 	commitCheck                doltdb.CommitFilter[*sql.Context]
-	indexLookup                sql.IndexLookup
-	projectedCols              []uint64
 	conversionWarningsByColumn map[string]struct{}
+	indexLookup                sql.IndexLookup
+	commitFilters              []sql.Expression
+	projectedCols              []uint64
 }
 
 func (ht *HistoryTable) PrimaryKeySchema() sql.PrimaryKeySchema {
@@ -440,8 +440,8 @@ func (ht *HistoryTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql
 
 // commitPartition is a single commit
 type commitPartition struct {
-	h  hash.Hash
 	cm *doltdb.Commit
+	h  hash.Hash
 }
 
 // Key returns the hash of the commit for this partition which is used as the partition key
@@ -456,7 +456,7 @@ type commitPartitioner struct {
 
 // Next returns the next partition and nil, io.EOF when complete
 func (cp commitPartitioner) Next(ctx *sql.Context) (sql.Partition, error) {
-	h, optCmt, err := cp.cmItr.Next(ctx)
+	h, optCmt, _, _, err := cp.cmItr.Next(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -465,7 +465,7 @@ func (cp commitPartitioner) Next(ctx *sql.Context) (sql.Partition, error) {
 		return nil, io.EOF
 	}
 
-	return &commitPartition{h, cm}, nil
+	return &commitPartition{h: h, cm: cm}, nil
 }
 
 // Close closes the partitioner
