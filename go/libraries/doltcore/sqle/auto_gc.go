@@ -17,7 +17,6 @@ package sqle
 import (
 	"context"
 	"errors"
-	"io"
 	"sync"
 	"time"
 
@@ -301,14 +300,6 @@ func (h *autoGCCommitHook) requestGC(ctx context.Context) error {
 	case <-ctx.Done():
 		return context.Cause(ctx)
 	}
-}
-
-func (h *autoGCCommitHook) HandleError(ctx context.Context, err error) error {
-	return nil
-}
-
-func (h *autoGCCommitHook) SetLogger(ctx context.Context, wr io.Writer) error {
-	return nil
 }
 
 func (h *autoGCCommitHook) ExecuteForWorkingSets() bool {

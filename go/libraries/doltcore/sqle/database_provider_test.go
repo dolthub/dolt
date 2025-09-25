@@ -16,7 +16,6 @@ package sqle
 
 import (
 	"context"
-	"io"
 	"testing"
 
 	sqle "github.com/dolthub/go-mysql-server"
@@ -145,14 +144,6 @@ type snoopingCommitHook struct {
 
 func (*snoopingCommitHook) Execute(ctx context.Context, ds datas.Dataset, db *doltdb.DoltDB) (func(context.Context) error, error) {
 	return nil, nil
-}
-
-func (*snoopingCommitHook) HandleError(ctx context.Context, err error) error {
-	return nil
-}
-
-func (*snoopingCommitHook) SetLogger(ctx context.Context, wr io.Writer) error {
-	return nil
 }
 
 func (*snoopingCommitHook) ExecuteForWorkingSets() bool {

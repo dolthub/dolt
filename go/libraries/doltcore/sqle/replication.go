@@ -67,7 +67,7 @@ func getPushOnWriteHook(ctx context.Context, dEnv *env.DoltEnv, logger io.Writer
 		return hook, runThreads, nil
 	}
 
-	return NewPushOnWriteHook(ddb, tmpDir), nil, nil
+	return NewPushOnWriteHook(ddb, tmpDir, logger), nil, nil
 }
 
 type RunAsyncThreads func(*sql.BackgroundThreads, func(context.Context) (*sql.Context, error)) error
@@ -80,14 +80,11 @@ func GetCommitHooks(ctx context.Context, dEnv *env.DoltEnv, logger io.Writer) ([
 	if err != nil {
 		path, _ := dEnv.FS.Abs(".")
 		logrus.Errorf("error loading replication for database at %s, replication disabled: %v", path, err)
-		postCommitHooks = append(postCommitHooks, NewLogHook([]byte(err.Error()+"\n")))
+		postCommitHooks = append(postCommitHooks, NewLogHook([]byte(err.Error()+"\n"), logger))
 	} else if hook != nil {
 		postCommitHooks = append(postCommitHooks, hook)
 	}
 
-	for _, h := range postCommitHooks {
-		_ = h.SetLogger(ctx, logger)
-	}
 	return postCommitHooks, runThreads, nil
 }
 
