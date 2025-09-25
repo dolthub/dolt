@@ -37,8 +37,7 @@ run_container() {
   name="$1"; shift
   docker run -d --name "$name" "$@" "$TEST_IMAGE" >/dev/null
   wait_for_log "$name" "Server ready. Accepting connections."
-
-  wait_for_log "$name" "Reattaching to server process..."
+  wait_for_log "$name" "Server initialization complete!"
 
   # Verify container is running
   run docker ps --filter "name=$name" --format "{{.Names}}"
@@ -54,9 +53,8 @@ run_container_with_port() {
   port="$1"; shift
   docker run -d --name "$name" -p "$port:3306" "$@" "$TEST_IMAGE" >/dev/null
   wait_for_log "$name" "Server ready. Accepting connections."
+  wait_for_log "$name" "Server initialization complete!"
 
-  wait_for_log "$name" "Reattaching to server process"
-  
   # Verify container is running
   run docker ps --filter "name=$name" --format "{{.Names}}"
   [ $status -eq 0 ]
@@ -162,6 +160,9 @@ wait_for_log() {
   run docker exec "$cname" dolt sql --result-format csv -q "SHOW DATABASES;"
   [ $status -eq 0 ]
   echo "$output" | grep -Fx "$kw_db" >/dev/null
+
+  run docker exec "$cname" dolt sql --result-format csv -q "SHOW FULL TABLES FROM versioning;"
+
 
   # Can use the database for operations
   run docker exec "$cname" dolt sql -q "USE \`$kw_db\`; CREATE TABLE test_table (id INT);"
@@ -552,6 +553,8 @@ EOF
   [[ "$output" =~ "Bash script executed" ]] || false
   [[ "$output" =~ "Compressed SQL executed" ]] || false
 
+  docker logs "$cname"
+
   rm -rf "$temp_dir"
 }
 
@@ -597,7 +600,7 @@ EOF
   
   docker run -d --name "$cname" -e DOLT_ROOT_PASSWORD=rootpass -e DOLT_ROOT_HOST=% "$LATEST_IMAGE" >/dev/null
   wait_for_log "$cname" "Server ready. Accepting connections."
-  wait_for_log "$cname" "Reattaching to server process..."
+  wait_for_log "$name" "Server initialization complete!"
   
   run docker exec "$cname" dolt version
   [ $status -eq 0 ]
@@ -623,7 +626,7 @@ EOF
   
   docker run -d --name "$cname" -e DOLT_ROOT_PASSWORD=rootpass -e DOLT_ROOT_HOST=% "$SPECIFIC_IMAGE" >/dev/null
   wait_for_log "$cname" "Server ready. Accepting connections."
-  wait_for_log "$cname" "Reattaching to server process..."
+  wait_for_log "$name" "Server initialization complete!"
   
   run docker exec "$cname" dolt version
   [ $status -eq 0 ]
@@ -668,7 +671,7 @@ EOF
   # Wait for all servers to be ready
   for cycle in {1..20}; do
     wait_for_log "$cname-$cycle" "Server ready. Accepting connections." 30
-    wait_for_log "$cname-$cycle" "Reattaching to server process" 15
+    wait_for_log "$name" "Server initialization complete!" 15
   done
 
   # Verify no errors in any container logs
@@ -678,7 +681,7 @@ EOF
     # Should not contain ERROR messages (but allow warnings)
     ! echo "$output" | grep -i "ERROR" >/dev/null || false
     # Should contain success indicators
-    [[ "$output" =~ "Server initialization complete" ]] || false
+    [[ "$output" =~ "Server initialization complete!" ]] || false
     [[ "$output" =~ "Server ready. Accepting connections" ]] || false
   done
 
