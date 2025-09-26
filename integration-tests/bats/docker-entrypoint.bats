@@ -161,8 +161,10 @@ wait_for_log() {
   [ $status -eq 0 ]
   echo "$output" | grep -Fx "$kw_db" >/dev/null
 
+  # DBeaver checks tables without `` escaping
   run docker exec "$cname" dolt sql --result-format csv -q "SHOW FULL TABLES FROM versioning;"
-
+  [ $status -eq 0 ]
+  [[ "$output" =~ "Tables_in_versioning,Table_type" ]] || false
 
   # Can use the database for operations
   run docker exec "$cname" dolt sql -q "USE \`$kw_db\`; CREATE TABLE test_table (id INT);"
@@ -552,8 +554,6 @@ EOF
   [[ "$output" =~ "SQL script executed" ]] || false
   [[ "$output" =~ "Bash script executed" ]] || false
   [[ "$output" =~ "Compressed SQL executed" ]] || false
-
-  docker logs "$cname"
 
   rm -rf "$temp_dir"
 }
