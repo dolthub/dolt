@@ -610,7 +610,7 @@ EOF
 
   run docker exec "$cname" dolt -u "root" -p "rootpass" sql -q "SHOW DATABASES;"
   [ $status -eq 0 ]
-  
+
   docker rmi "$LATEST_IMAGE" >/dev/null 2>&1 || true
 }
 
@@ -636,66 +636,84 @@ EOF
   
   run docker exec "$cname" dolt sql -q "SHOW DATABASES;"
   [ $status -eq 0 ]
-  
+
   docker rmi "$SPECIFIC_IMAGE" >/dev/null 2>&1 || true
 }
 
 # bats test_tags=no_lambda
 @test "docker-entrypoint: multiple server start/stop cycles to confirm no timing issues" {
-  cname="${TEST_PREFIX}multi-restart"
+  cname="${TEST_PREFIX}multi"
   db="testdb"
   usr="testuser"
   pwd="testpass"
 
-  # Start all containers at the same time, this stresses the system and causes timing issues if
+  # Start all containers at sequentially, this stresses the system and causes timing issues if
   # hardware resources are in use. The containers should still start correctly with the wait
   # logic in place.
   local pids=()
-  for cycle in {1..20}; do
+  for cycle in {1..40}; do
+    db_name="${db}_${cycle}_$$"
+
     (
       docker run -d --name "$cname-$cycle" \
+        -v /var/lib/dolt \
         -e DOLT_ROOT_PASSWORD=rootpass \
         -e DOLT_ROOT_HOST=% \
-        -e DOLT_DATABASE="$db" \
+        -e DOLT_DATABASE="$db_name" \
         -e DOLT_USER="$usr" \
         -e DOLT_PASSWORD="$pwd" \
         "$TEST_IMAGE" >/dev/null 2>&1
     ) &
     pids+=($!)
   done
-  
+
   for pid in "${pids[@]}"; do
     wait $pid
   done
-  
+
   # Wait for all servers to be ready
-  for cycle in {1..20}; do
-    wait_for_log "$cname-$cycle" "Server ready. Accepting connections." 30
-    wait_for_log "$name" "Server initialization complete!" 15
+  for cycle in {1..40}; do
+    if ! wait_for_log "$cname-$cycle" "Server ready. Accepting connections." 30; then
+      docker logs "$cname-$cycle"
+      false
+    fi
+
+    if ! wait_for_log "$cname-$cycle" "Server initialization complete!" 15; then
+      docker logs "$cname-$cycle"
+      false
+    fi
   done
 
-  # Verify no errors in any container logs
-  for cycle in {1..20}; do
+  for cycle in {1..40}; do
     run docker logs "$cname-$cycle" 2>&1
     [ $status -eq 0 ]
-    # Should not contain ERROR messages (but allow warnings)
-    ! echo "$output" | grep -i "ERROR" >/dev/null || false
+    # Should not contain ERROR messages
+    if echo "$output" | grep -i "ERROR" >/dev/null; then
+      echo "$output"
+      false
+    fi
     # Should contain success indicators
-    [[ "$output" =~ "Server initialization complete!" ]] || false
-    [[ "$output" =~ "Server ready. Accepting connections" ]] || false
+    if ! [[ "$output" =~ "Server initialization complete!" ]]; then
+      echo "$output"
+      false
+    fi
+    if ! [[ "$output" =~ "Server ready. Accepting connections" ]]; then
+      echo "$output"
+      false
+    fi
   done
 
   local stop_pids=()
-  for cycle in {1..20}; do
+  for cycle in {1..40}; do
     docker stop "$cname-$cycle" >/dev/null &
     stop_pids+=($!)
   done
-  
+
   for pid in "${stop_pids[@]}"; do
     wait $pid
   done
-  
-  for cycle in {1..20}; do
+
+  for cycle in {1..40}; do
     docker rm "$cname-$cycle" >/dev/null
   done
 }

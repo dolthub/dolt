@@ -327,8 +327,33 @@ _main() {
   # if certain queries are ran before the root user is ready.
   DOLT_ROOT_HOST="${DOLT_ROOT_HOST:-localhost}"
   mysql_note "Configuring user 'root@${DOLT_ROOT_HOST}'..."
+  DOLT_SERVER_TIMEOUT="${DOLT_SERVER_TIMEOUT:-300}"
+  local START_TIME
+  START_TIME=$(date +%s)
+  local SERVER_PID
 
-  dolt sql-server --host=0.0.0.0 --port=3306 "$@" &
+  while true; do
+    dolt sql-server --host=0.0.0.0 --port=3306 "$@" &
+    SERVER_PID=$!
+
+    sleep 2
+
+    if kill -0 "$SERVER_PID" 2>/dev/null; then
+      break
+    else
+      wait "$SERVER_PID" 2>/dev/null || true
+      local NOW
+      NOW=$(date +%s)
+      local ELAPSED
+      ELAPSED=$((NOW - START_TIME))
+
+      if [ "$ELAPSED" -ge "$DOLT_SERVER_TIMEOUT" ]; then
+        mysql_error "Dolt server failed to start within $DOLT_SERVER_TIMEOUT seconds"
+      fi
+
+      mysql_warn "Dolt server failed to start, retrying..."
+    fi
+  done
 
   local SERVER_PID=$!
 
