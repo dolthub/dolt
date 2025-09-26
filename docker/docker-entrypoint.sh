@@ -355,8 +355,6 @@ _main() {
     fi
   done
 
-  local SERVER_PID=$!
-
   exec_mysql "SELECT 1 FROM mysql.user WHERE User='root' LIMIT 1;" "The root user did not initialize: "
 
   # Ran in a subshell to avoid exiting the main script, capture output and use fallback if query fails
