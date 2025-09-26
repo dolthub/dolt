@@ -58,8 +58,8 @@ const (
 
 	CreationBranch = "create"
 
-	// 1GB.
-	defaultTargetFileSize = 1 << 30
+	// 8GB.
+	defaultTargetFileSize = 1 << 33
 
 	// Keep most recent 10000 materialized commits
 	commitCacheSize = 10000
