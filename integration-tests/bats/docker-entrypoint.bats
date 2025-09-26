@@ -641,7 +641,7 @@ EOF
 }
 
 # bats test_tags=no_lambda
-@test "docker-entrypoint: multiple server start/stop cycles to confirm no timing issues" {
+@test "docker-entrypoint: multiple server startups at the same time to confirm no race conditions" {
   cname="${TEST_PREFIX}multi"
   db="testdb"
   usr="testuser"
@@ -711,9 +711,5 @@ EOF
 
   for pid in "${stop_pids[@]}"; do
     wait $pid
-  done
-
-  for cycle in {1..40}; do
-    docker rm "$cname-$cycle" >/dev/null
   done
 }
