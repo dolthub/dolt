@@ -349,7 +349,7 @@ type noopTableFileDestStore struct {
 	writeCalled atomic.Uint32
 }
 
-func (s *noopTableFileDestStore) WriteTableFile(ctx context.Context, id string, numChunks int, contentHash []byte, getRd func() (io.ReadCloser, uint64, error)) error {
+func (s *noopTableFileDestStore) WriteTableFile(ctx context.Context, id string, splitOffset uint64, numChunks int, contentHash []byte, getRd func() (io.ReadCloser, uint64, error)) error {
 	if s.writeDelay > 0 {
 		time.Sleep(s.writeDelay)
 	}
@@ -373,7 +373,7 @@ type testDataTableFileDestStore struct {
 	doneWriteTableFile chan struct{}
 }
 
-func (s *testDataTableFileDestStore) WriteTableFile(ctx context.Context, id string, numChunks int, contentHash []byte, getRd func() (io.ReadCloser, uint64, error)) error {
+func (s *testDataTableFileDestStore) WriteTableFile(ctx context.Context, id string, splitOffset uint64, numChunks int, contentHash []byte, getRd func() (io.ReadCloser, uint64, error)) error {
 	s.atWriteTableFile <- struct{}{}
 	<-s.doWriteTableFile
 	defer func() {
@@ -400,7 +400,7 @@ type errTableFileDestStore struct {
 	addCalled int
 }
 
-func (s *errTableFileDestStore) WriteTableFile(ctx context.Context, id string, numChunks int, contentHash []byte, getRd func() (io.ReadCloser, uint64, error)) error {
+func (s *errTableFileDestStore) WriteTableFile(ctx context.Context, id string, splitOffset uint64, numChunks int, contentHash []byte, getRd func() (io.ReadCloser, uint64, error)) error {
 	rd, _, _ := getRd()
 	if rd != nil {
 		rd.Close()
