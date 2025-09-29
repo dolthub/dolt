@@ -291,11 +291,26 @@ EOF
   fi
 }
 
+# is_port_open checks if a TCP port is open on a given host.
+# Arguments:
+#   $1 - Host (IP or hostname)
+#   $2 - Port number
+# Returns:
+#   0 if the port is open, non-zero otherwise.
 is_port_open() {
   local host="$1"
   local port="$2"
   timeout 1 bash -c "cat < /dev/null > /dev/tcp/$host/$port" &>/dev/null
+  return $?
 }
+
+# dolt_server_initializer starts the Dolt SQL server in the background and waits until it is ready to accept connections.
+# It manages the server process, restarts it if necessary, and checks for readiness by probing the configured port.
+# The function retries until the server is available or a timeout is reached, handling process management and logging.
+# Arguments:
+#   $@ - Additional arguments to pass to `dolt sql-server`
+# Returns:
+#   0 if the server starts successfully and is ready to accept connections; exits with error otherwise.
 
 dolt_server_initializer() {
   local timeout="${DOLT_SERVER_TIMEOUT:-300}"
@@ -303,6 +318,8 @@ dolt_server_initializer() {
   start_time=$(date +%s)
 
   SERVER_PID=-1
+
+  trap 'mysql_note "Caught Ctrl+C, shutting down Dolt server..."; [ $SERVER_PID -ne -1 ] && kill "$SERVER_PID"; exit 1' INT TERM
 
   while true; do
     if [ "$SERVER_PID" -eq -1 ] || ! kill -0 "$SERVER_PID" 2>/dev/null; then
@@ -330,7 +347,6 @@ dolt_server_initializer() {
     sleep 1
   done
 }
-
 
 # _main is the main entrypoint for the Dolt Docker container initialization.
 _main() {
