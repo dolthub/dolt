@@ -85,6 +85,7 @@ INIT_COMPLETED="$CONTAINER_DATA_DIR/.init_completed"
 DOLT_CONFIG_DIR="/etc/dolt/doltcfg.d"
 SERVER_CONFIG_DIR="/etc/dolt/servercfg.d"
 DOLT_ROOT_PATH="/.dolt"
+SERVER_PID=-1
 
 # check_for_dolt_binary verifies that the dolt binary is present and executable in the system PATH.
 # If not found or not executable, it logs an error and exits.
@@ -290,6 +291,47 @@ EOF
   fi
 }
 
+is_port_open() {
+  local host="$1"
+  local port="$2"
+  timeout 1 bash -c "cat < /dev/null > /dev/tcp/$host/$port" &>/dev/null
+}
+
+dolt_server_initializer() {
+  local timeout="${DOLT_SERVER_TIMEOUT:-300}"
+  local start_time
+  start_time=$(date +%s)
+
+  SERVER_PID=-1
+
+  while true; do
+    if [ "$SERVER_PID" -eq -1 ] || ! kill -0 "$SERVER_PID" 2>/dev/null; then
+      [ "$SERVER_PID" -ne -1 ] && wait "$SERVER_PID" 2>/dev/null || true
+      SERVER_PID=-1
+      dolt sql-server --host=0.0.0.0 --port=3306 "$@" &
+      SERVER_PID=$!
+    fi
+
+    if is_port_open "0.0.0.0" 3306; then
+      mysql_note "Dolt server started successfully (PID=$SERVER_PID)"
+      return 0
+    fi
+
+    local now elapsed
+    now=$(date +%s)
+    elapsed=$((now - start_time))
+    if [ "$elapsed" -ge "$timeout" ]; then
+      kill "$SERVER_PID" 2>/dev/null || true
+      wait "$SERVER_PID" 2>/dev/null || true
+      SERVER_PID=-1
+      mysql_error "Dolt server failed to start within $timeout seconds"
+    fi
+
+    sleep 1
+  done
+}
+
+
 # _main is the main entrypoint for the Dolt Docker container initialization.
 _main() {
   check_for_dolt_binary
@@ -333,28 +375,7 @@ _main() {
   local SERVER_PID
 
   # `dolt sql` can hold locks that prevent the server from starting during system hangs
-  while true; do
-    dolt sql-server --host=0.0.0.0 --port=3306 "$@" &
-    SERVER_PID=$!
-
-    sleep 2
-
-    if kill -0 "$SERVER_PID" 2>/dev/null; then
-      break
-    else
-      wait "$SERVER_PID" 2>/dev/null || true
-      local NOW
-      NOW=$(date +%s)
-      local ELAPSED
-      ELAPSED=$((NOW - START_TIME))
-
-      if [ "$ELAPSED" -ge "$DOLT_SERVER_TIMEOUT" ]; then
-        mysql_error "Dolt server failed to start within $DOLT_SERVER_TIMEOUT seconds"
-      fi
-
-      mysql_warn "Dolt server process exited prematurely; retrying..."
-    fi
-  done
+  dolt_server_initializer "$@"
 
   # Ran in a subshell to avoid exiting the main script, and so, we can use fallback below
   local has_correct_host
