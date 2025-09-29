@@ -385,10 +385,6 @@ _main() {
   # The user creation queries with `dolt sql` can interfere with this process so we run them after the server is started
   DOLT_ROOT_HOST="${DOLT_ROOT_HOST:-localhost}"
   mysql_note "Configuring user 'root@${DOLT_ROOT_HOST}'..."
-  DOLT_SERVER_TIMEOUT="${DOLT_SERVER_TIMEOUT:-300}"
-  local START_TIME
-  START_TIME=$(date +%s)
-  local SERVER_PID
 
   # `dolt sql` can hold locks that prevent the server from starting during system hangs
   dolt_server_initializer "$@"
