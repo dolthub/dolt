@@ -16,6 +16,10 @@ package remotestorage
 
 import (
 	"encoding/json"
+	"log"
+	"runtime"
+	"strings"
+	"time"
 
 	"google.golang.org/grpc/status"
 )
@@ -26,12 +30,39 @@ type RpcError struct {
 	rpc            string
 	host           string
 	req            interface{}
+	timestamp      time.Time
+	stackTrace     string
 }
 
 func NewRpcError(err error, rpc, host string, req interface{}) *RpcError {
 	st, _ := status.FromError(err)
+	
+	// Capture stack trace
+	buf := make([]byte, 1024*4)
+	n := runtime.Stack(buf, false)
+	stackLines := strings.Split(string(buf[:n]), "\n")
+	var stackTrace string
+	// Skip first few lines (runtime.Stack, NewRpcError)
+	if len(stackLines) > 4 {
+		stackTrace = strings.Join(stackLines[4:], "\n")
+	} else {
+		stackTrace = string(buf[:n])
+	}
 
-	return &RpcError{err.Error(), st, rpc, host, req}
+	rpcErr := &RpcError{err.Error(), st, rpc, host, req, time.Now(), stackTrace}
+	
+	// DEBUG: Log RPC error creation
+	log.Printf("DEBUG: Creating RpcError:")
+	log.Printf("  Error: %s", err.Error())
+	log.Printf("  RPC: %s", rpc)
+	log.Printf("  Host: %s", host)
+	log.Printf("  Timestamp: %s", rpcErr.timestamp.Format(time.RFC3339Nano))
+	if st != nil {
+		log.Printf("  GRPC Status Code: %s", st.Code().String())
+		log.Printf("  GRPC Status Message: %s", st.Message())
+	}
+	
+	return rpcErr
 }
 
 func (rpce *RpcError) Error() string {
@@ -44,7 +75,18 @@ func (rpce *RpcError) IsPermanent() bool {
 
 func (rpce *RpcError) FullDetails() string {
 	jsonStr, _ := GetJsonEncodedRequest(rpce)
-	return rpce.originalErrMsg + "\nhost:" + rpce.host + "\nrpc: " + rpce.rpc + "\nparams:" + jsonStr
+	details := rpce.originalErrMsg + "\nhost: " + rpce.host + "\nrpc: " + rpce.rpc + "\ntimestamp: " + rpce.timestamp.Format(time.RFC3339Nano) + "\nparams: " + jsonStr
+	
+	if rpce.status != nil {
+		details += "\ngrpc_status_code: " + rpce.status.Code().String()
+		details += "\ngrpc_status_message: " + rpce.status.Message()
+	}
+	
+	if rpce.stackTrace != "" {
+		details += "\nstack_trace:\n" + rpce.stackTrace
+	}
+	
+	return details
 }
 
 func IsChunkStoreRpcErr(err error) bool {

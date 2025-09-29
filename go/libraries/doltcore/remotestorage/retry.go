@@ -18,7 +18,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"log"
 	"net/http"
+	"runtime"
+	"strings"
 
 	"github.com/cenkalti/backoff/v4"
 	"google.golang.org/grpc/codes"
@@ -26,6 +30,18 @@ import (
 )
 
 var HttpError = errors.New("http")
+
+// getStackTrace returns a formatted stack trace
+func getStackTrace() string {
+	buf := make([]byte, 1024*4)
+	n := runtime.Stack(buf, false)
+	stackLines := strings.Split(string(buf[:n]), "\n")
+	// Skip first few lines (runtime.Stack, getStackTrace, processHttpResp)
+	if len(stackLines) > 6 {
+		return strings.Join(stackLines[6:], "\n")
+	}
+	return string(buf[:n])
+}
 
 // ProcessHttpResp converts an http.Response, and error into a RetriableCallState
 func processHttpResp(resp *http.Response, err error) error {
@@ -37,6 +53,38 @@ func processHttpResp(resp *http.Response, err error) error {
 		if resp.StatusCode/100 == 2 {
 			return nil
 		}
+
+		// DEBUG: Enhanced logging for HTTP errors
+		log.Printf("DEBUG: HTTP Error Details:")
+		log.Printf("  Status Code: %d", resp.StatusCode)
+		log.Printf("  Status: %s", resp.Status)
+		log.Printf("  URL: %s", resp.Request.URL.String())
+		log.Printf("  Method: %s", resp.Request.Method)
+		
+		// Log request headers
+		log.Printf("  Request Headers:")
+		for k, v := range resp.Request.Header {
+			log.Printf("    %s: %s", k, strings.Join(v, ", "))
+		}
+		
+		// Log response headers
+		log.Printf("  Response Headers:")
+		for k, v := range resp.Header {
+			log.Printf("    %s: %s", k, strings.Join(v, ", "))
+		}
+		
+		// Log response body (first 2KB)
+		if resp.Body != nil {
+			bodyBytes, readErr := io.ReadAll(io.LimitReader(resp.Body, 2048))
+			if readErr == nil && len(bodyBytes) > 0 {
+				log.Printf("  Response Body (first 2KB): %s", string(bodyBytes))
+			} else if readErr != nil {
+				log.Printf("  Error reading response body: %v", readErr)
+			}
+		}
+		
+		// Log stack trace to see where this error originated
+		log.Printf("  Stack Trace:\n%s", getStackTrace())
 
 		return fmt.Errorf("error: %w %d", HttpError, resp.StatusCode)
 	}

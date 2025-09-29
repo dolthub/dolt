@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"strings"
 	"sync"
 	"time"
@@ -28,6 +29,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
+	"github.com/dolthub/dolt/go/libraries/doltcore/remotestorage"
 	"github.com/dolthub/dolt/go/libraries/events"
 	"github.com/dolthub/dolt/go/libraries/utils/earl"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
@@ -250,6 +252,21 @@ func PushToRemoteBranch[C doltdb.Context](ctx C, rsr env.RepoStateReader[C], tem
 	case doltdb.ErrUpToDate, doltdb.ErrIsAhead, ErrCantFF, datas.ErrMergeNeeded, datas.ErrDirtyWorkspace, ErrShallowPushImpossible:
 		return err
 	default:
+		// DEBUG: Enhanced logging for unknown push errors
+		log.Printf("DEBUG: Unknown Push Error Details:")
+		log.Printf("  Error Type: %T", err)
+		log.Printf("  Error Message: %s", err.Error())
+		log.Printf("  Source Ref: %s", srcRef.String())
+		log.Printf("  Dest Ref: %s", destRef.String())
+		log.Printf("  Remote Ref: %s", remoteRef.String())
+		log.Printf("  Remote: %+v", remote)
+		log.Printf("  Mode: %+v", mode)
+		
+		// Check if it's a remotestorage.RpcError and log additional details
+		if rpcErr, ok := err.(*remotestorage.RpcError); ok {
+			log.Printf("  RPC Error Full Details: %s", rpcErr.FullDetails())
+		}
+		
 		return fmt.Errorf("%w; %s", ErrUnknownPushErr, err.Error())
 	}
 }

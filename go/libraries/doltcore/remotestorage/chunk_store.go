@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"net/http"
 	"net/url"
@@ -1037,6 +1038,17 @@ func HttpPostUpload(ctx context.Context, httpFetcher HTTPFetcher, post *remotesa
 	if len(contentHash) > 0 {
 		md5s := base64.StdEncoding.EncodeToString(contentHash)
 		req.Header.Set("Content-MD5", md5s)
+	}
+
+	// DEBUG: Log request details before making the request
+	log.Printf("DEBUG: Making HTTP Upload Request:")
+	log.Printf("  URL: %s", post.Url)
+	log.Printf("  Method: %s", req.Method)
+	log.Printf("  Content-Length: %d", contentLength)
+	log.Printf("  Content-Hash: %x", contentHash)
+	log.Printf("  Headers:")
+	for k, v := range req.Header {
+		log.Printf("    %s: %s", k, strings.Join(v, ", "))
 	}
 
 	resp, err := fetcher.Do(req.WithContext(ctx))
