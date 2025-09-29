@@ -322,9 +322,9 @@ _main() {
 
   create_database_from_env
 
-  mysql_note "Starting Dolt server..."
-  # Configure the root user first since the environment var initialization breaks
-  # if certain queries are ran before the root user is ready.
+  mysql_note "Starting Dolt server in the background..."
+  # Attempt to configure the root user directly through the sql-server using built-in environment variable support
+  # The user creation queries with `dolt sql` can interfere with this process so we run them after the server is started
   DOLT_ROOT_HOST="${DOLT_ROOT_HOST:-localhost}"
   mysql_note "Configuring user 'root@${DOLT_ROOT_HOST}'..."
   DOLT_SERVER_TIMEOUT="${DOLT_SERVER_TIMEOUT:-300}"
@@ -332,6 +332,7 @@ _main() {
   START_TIME=$(date +%s)
   local SERVER_PID
 
+  # `dolt sql` can hold locks that prevent the server from starting during system hangs
   while true; do
     dolt sql-server --host=0.0.0.0 --port=3306 "$@" &
     SERVER_PID=$!
@@ -351,19 +352,17 @@ _main() {
         mysql_error "Dolt server failed to start within $DOLT_SERVER_TIMEOUT seconds"
       fi
 
-      mysql_warn "Dolt server failed to start, retrying..."
+      mysql_warn "Dolt server process exited prematurely; retrying..."
     fi
   done
 
-  exec_mysql "SELECT 1 FROM mysql.user WHERE User='root' LIMIT 1;" "The root user did not initialize: "
-
-  # Ran in a subshell to avoid exiting the main script, capture output and use fallback if query fails
+  # Ran in a subshell to avoid exiting the main script, and so, we can use fallback below
   local has_correct_host
   has_correct_host=$(exec_mysql \
     "SELECT User, Host FROM mysql.user WHERE User='root' AND Host='${DOLT_ROOT_HOST}' LIMIT 1;" \
     "Could not check root host: " 1 | grep -c "$DOLT_ROOT_HOST" || true)
 
-  # docker-entrypoint-initdb.d scripts may conflict with environment variable initialization if they create users
+  # docker-entrypoint-initdb.d scripts and system hangs may conflict with sql-server root env vars support
   if [ "$has_correct_host" -eq 0 ]; then
     mysql_warn "Environment variables failed to initialize 'root@${DOLT_ROOT_HOST}'; docker-entrypoint-initdb.d scripts queries may have conflicted. Overriding root user..."
     exec_mysql "CREATE USER IF NOT EXISTS 'root'@'${DOLT_ROOT_HOST}' IDENTIFIED BY '${DOLT_ROOT_PASSWORD}';" "Could not create root user: " # override password
@@ -377,6 +376,7 @@ _main() {
 
   mysql_note "Server initialization complete!"
 
+  # No need to relaunch, we wait for the background server process to exit and can still see the logs
   wait "$SERVER_PID"
 }
 
