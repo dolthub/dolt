@@ -134,7 +134,8 @@ func TestPushOnWriteHook(t *testing.T) {
 	logger := &bytes.Buffer{}
 
 	// setup hook
-	hook := NewPushOnWriteHook(destDB, tmpDir, logger)
+	hook := NewPushOnWriteHook(tmpDir, logger)
+	hook.destDB = destDB
 	ddb.PrependCommitHooks(ctx, hook)
 
 	t.Run("replicate to remote", func(t *testing.T) {
@@ -216,7 +217,8 @@ func TestAsyncPushOnWrite(t *testing.T) {
 	t.Run("replicate to remote", func(t *testing.T) {
 		bThreads := sql.NewBackgroundThreads()
 		defer bThreads.Shutdown()
-		hook, runThreads := NewAsyncPushOnWriteHook(destDB, tmpDir, &buffer.Buffer{})
+		hook, runThreads := NewAsyncPushOnWriteHook(tmpDir, &buffer.Buffer{})
+		hook.destDb = destDB
 		require.NotNil(t, hook)
 		require.NotNil(t, runThreads)
 		runThreads(bThreads, func(ctx context.Context) (*sql.Context, error) {
@@ -289,7 +291,8 @@ func TestAsyncPushOnWrite(t *testing.T) {
 		destDB.PrependCommitHooks(context.Background(), counts)
 
 		bThreads := sql.NewBackgroundThreads()
-		hook, runThreads := NewAsyncPushOnWriteHook(destDB, tmpDir, &buffer.Buffer{})
+		hook, runThreads := NewAsyncPushOnWriteHook(tmpDir, &buffer.Buffer{})
+		hook.destDb = destDB
 		runThreads(bThreads, func(ctx context.Context) (*sql.Context, error) {
 			return sql.NewContext(ctx), nil
 		})

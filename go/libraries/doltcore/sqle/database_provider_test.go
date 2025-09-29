@@ -109,7 +109,7 @@ func TestDatabaseProvider(t *testing.T) {
 				require.Len(t, hooks, 2)
 				_, ok := hooks[0].(*snoopingCommitHook)
 				assert.True(t, ok, "expect hook to be snoopingCommitHook, it is %T", hooks[0])
-				_, ok = hooks[1].(*PushOnWriteHook)
+				_, ok = hooks[1].(*DynamicPushOnWriteHook)
 				assert.True(t, ok, "expect hook to be PushOnWriteHook, it is %T", hooks[1])
 			})
 			t.Run("AsyncPushOnWrite", func(t *testing.T) {
@@ -132,7 +132,7 @@ func TestDatabaseProvider(t *testing.T) {
 				require.Len(t, hooks, 2)
 				_, ok := hooks[0].(*snoopingCommitHook)
 				assert.True(t, ok, "expect hook to be snoopingCommitHook, it is %T", hooks[0])
-				_, ok = hooks[1].(*AsyncPushOnWriteHook)
+				_, ok = hooks[1].(*DynamicPushOnWriteHook)
 				assert.True(t, ok, "expect hook to be AsyncPushOnWriteHook, it is %T", hooks[1])
 			})
 		})
