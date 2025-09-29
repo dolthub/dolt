@@ -414,7 +414,7 @@ func (m *DynamicPushOnWriteHook) Execute(ctx context.Context, ds datas.Dataset, 
 		return nil, nil
 	}
 
-	logrus.Infof("replication hook invoked. pushing to '%s' (asyn=%t)", remoteName, async)
+	logrus.Debugf("replication hook invoked. pushing to '%s' (asyn=%t)", remoteName, async)
 	return hook.Execute(ctx, ds, db)
 }
 
