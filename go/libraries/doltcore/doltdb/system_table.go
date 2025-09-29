@@ -431,6 +431,8 @@ const (
 	// RebaseTableName is the rebase system table name.
 	RebaseTableName = "dolt_rebase"
 
+	ProxyTableName = "dolt_proxies"
+
 	// StatisticsTableName is the statistics system table name
 	StatisticsTableName = "dolt_statistics"
 

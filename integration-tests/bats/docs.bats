@@ -111,8 +111,8 @@ teardown() {
     [[ "$output" =~ "Invalid table name dolt_docs" ]] || false
 
     run dolt sql -q "CREATE TABLE dolt_docs (
-        doc_name varchar(1023) NOT NULL, 
-        doc_text longtext, 
+        doc_name varchar(1023) NOT NULL,
+        doc_text longtext,
         PRIMARY KEY (doc_name)
     );"
     [ "$status" -ne 0 ]
@@ -163,10 +163,10 @@ TXT
     rm -rf test-agent-init
     mkdir test-agent-init
     cd test-agent-init
-    
+
     # Initialize new repo
     dolt init
-    
+
     # Check that AGENT.md document exists
     run dolt docs print AGENT.md
     [ "$status" -eq 0 ]
@@ -176,17 +176,41 @@ TXT
     run dolt sql -q "SELECT doc_name FROM dolt_docs WHERE doc_name = 'AGENT.md'" -r csv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "AGENT.md" ]] || false
-    
+
     # CRITICAL: Verify there's no diff after init (clean working tree)
     run dolt diff
     [ "$status" -eq 0 ]
     [ "$output" = "" ] || false
-    
+
     # Also verify status shows clean working tree
     run dolt status
     [ "$status" -eq 0 ]
     [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
-    
+
+    # Clean up
+    cd ../dolt-repo-$$
+}
+
+@test "docs: AGENT works with AS OF" {
+    # Create a fresh repo to test init behavior
+    cd ..
+    rm -rf test-agent-init
+    mkdir test-agent-init
+    cd test-agent-init
+
+    # Initialize new repo
+    dolt init
+
+    # Check that AGENT.md document exists
+    run dolt docs print AGENT.md
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "# AGENT.md - Dolt Database Operations Guide" ]] || false
+
+    # Verify AGENT.md is in the docs table
+    run dolt sql -q "SELECT doc_name FROM dolt_docs WHERE doc_name = 'AGENT.md' AS OF 'HEAD'" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "AGENT.md" ]] || false
+
     # Clean up
     cd ../dolt-repo-$$
 }

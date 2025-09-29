@@ -892,6 +892,37 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 	}
 
 	// TODO: this should reuse the root, not lookup the db state again
+	// Handle proxied tables here?
+
+	// get table of proxies
+	proxyTable, _, err := db.getTable(ctx, root, doltdb.ProxyTableName)
+	if err != nil {
+		return nil, false, err
+	}
+	_ = proxyTable
+	if proxyTable != nil {
+		// check if there's an entry for this table. If so, resolve that reference.
+		// for now, assume that it resolves to "main"
+		proxyBranch := "main"
+		if db.revision == proxyBranch {
+			// TODO: Prevent an infinite loop if a branch references itself.
+			return nil, false, fmt.Errorf("infinite loop in proxy tables")
+		}
+		referencedBranch, err := RevisionDbForBranch(ctx, db, proxyBranch, db.requestedName)
+		if err != nil {
+			return nil, false, err
+		}
+
+		table, ok, err := referencedBranch.GetTableInsensitive(ctx, tblName)
+		if err != nil {
+			return nil, false, err
+		}
+		if !ok {
+			return nil, false, fmt.Errorf("table %s not found on proxy branch %s", tblName, proxyBranch)
+		}
+		return table, true, nil
+	}
+
 	table, found, err := db.getTable(ctx, root, tblName)
 	if err != nil {
 		return nil, false, err
@@ -1135,6 +1166,7 @@ func (db Database) getTable(ctx *sql.Context, root doltdb.RootValue, tableName s
 		return t, tblExists, nil
 	}
 
+	// Maybe here? But if it's in a different root we need to get the correct root.
 	tblName, tbl, tblExists, err := db.resolveUserTable(ctx, root, tableName)
 	if err != nil {
 		return nil, false, err
