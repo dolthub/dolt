@@ -27,47 +27,10 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 func getPushOnWriteHook(ctx context.Context, dEnv *env.DoltEnv, logger io.Writer) (doltdb.CommitHook, RunAsyncThreads, error) {
-	_, val, ok := sql.SystemVariables.GetGlobal(dsess.ReplicateToRemote)
-	if !ok {
-		return nil, nil, sql.ErrUnknownSystemVariable.New(dsess.ReplicateToRemote)
-	} else if val == "" {
-		return nil, nil, nil
-	}
-
-	remoteName, ok := val.(string)
-	if !ok {
-		return nil, nil, sql.ErrInvalidSystemVariableValue.New(val)
-	}
-
-	remotes, err := dEnv.GetRemotes()
-	if err != nil {
-		return nil, nil, err
-	}
-
-	rem, ok := remotes.Get(remoteName)
-	if !ok {
-		return nil, nil, fmt.Errorf("%w: '%s'", env.ErrRemoteNotFound, remoteName)
-	}
-
-	ddb, err := rem.GetRemoteDB(ctx, types.Format_Default, dEnv)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	tmpDir, err := dEnv.TempTableFilesDir()
-	if err != nil {
-		return nil, nil, err
-	}
-	if _, val, ok = sql.SystemVariables.GetGlobal(dsess.AsyncReplication); ok && val == dsess.SysVarTrue {
-		hook, runThreads := NewAsyncPushOnWriteHook(ddb, tmpDir, logger)
-		return hook, runThreads, nil
-	}
-
-	return NewPushOnWriteHook(ddb, tmpDir, logger), nil, nil
+	return NewDynamicPushOnWriteHook(ctx, dEnv, logger)
 }
 
 type RunAsyncThreads func(*sql.BackgroundThreads, func(context.Context) (*sql.Context, error)) error
