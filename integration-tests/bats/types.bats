@@ -541,7 +541,7 @@ pk,v
 4,-3.5953862697246314162905484746340871359614113505168999e+308
 DELIM
     run dolt table import -u test double.csv
-    [ "$status" -ne "0" ]
+    [ "$status" -eq "0" ]
 
     # check information_schema.COLUMNS table
     run dolt sql -q "select * from information_schema.COLUMNS where table_name = 'test' and column_name = 'v';" -r csv
