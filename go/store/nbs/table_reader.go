@@ -25,6 +25,7 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 	"sort"
 
@@ -68,7 +69,8 @@ func NewCompressedChunk(h hash.Hash, buff []byte) (CompressedChunk, error) {
 	compressedData := buff[:dataLen]
 
 	if chksum != crc(compressedData) {
-		return CompressedChunk{}, errors.New("checksum error")
+		verboseError := fmt.Sprintf("verbose checksum error: hash: %s, chksum: %d, crc(compressedData): %d, dataLen: %d", h.String(), chksum, crc(compressedData), dataLen)
+		return CompressedChunk{}, errors.New(verboseError)
 	}
 
 	return CompressedChunk{H: h, FullCompressedChunk: buff, CompressedData: compressedData}, nil
@@ -503,9 +505,9 @@ func (tr tableReader) getManyAtOffsetsWithReadFunc(
 	offsetRecords offsetRecSlice,
 	stats *Stats,
 	readAtOffsets func(
-		ctx context.Context,
-		rb readBatch,
-		stats *Stats) error,
+	ctx context.Context,
+	rb readBatch,
+	stats *Stats) error,
 ) error {
 	batches := toReadBatches(offsetRecords, tr.blockSize)
 	for i := range batches {

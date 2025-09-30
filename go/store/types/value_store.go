@@ -232,7 +232,6 @@ func (lvs *ValueStore) ReadManyValues(ctx context.Context, hashes hash.HashSlice
 		}
 
 		v, ferr := DecodeValue(*chunk, lvs)
-
 		if ferr != nil {
 			return nil, ferr
 		}
