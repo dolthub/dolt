@@ -173,12 +173,13 @@ func (l *lookupJoinKvIter) Next(ctx *sql.Context) (sql.Row, error) {
 				// override default left join behavior
 				l.dstKey = nil
 				continue
-			} else if !sql.IsTrue(res) && dstKey != nil {
+			}
+			if !sql.IsTrue(res) && dstKey != nil {
 				continue
 			}
 		}
 		l.returnedARow = true
-		return ret, nil
+		return ret.Copy(), nil
 	}
 }
 
