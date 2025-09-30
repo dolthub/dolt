@@ -135,7 +135,7 @@ func TestPushOnWriteHook(t *testing.T) {
 
 	// setup hook
 	hook := NewPushOnWriteHook(tmpDir, logger)
-	hook.destDB = destDB
+	hook.destDb = destDB
 	ddb.PrependCommitHooks(ctx, hook)
 
 	t.Run("replicate to remote", func(t *testing.T) {

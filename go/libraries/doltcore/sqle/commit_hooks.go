@@ -35,7 +35,7 @@ import (
 
 type PushOnWriteHook struct {
 	out    io.Writer
-	destDB *doltdb.DoltDB
+	destDb *doltdb.DoltDB
 	tmpDir string
 }
 
@@ -52,11 +52,13 @@ func NewPushOnWriteHook(tmpDir string, logger io.Writer) *PushOnWriteHook {
 
 // Execute implements CommitHook, replicates head updates to the destDb field
 func (ph *PushOnWriteHook) Execute(ctx context.Context, ds datas.Dataset, srcDb *doltdb.DoltDB) (func(context.Context) error, error) {
-	if ph.destDB == nil {
-		panic("NM4")
+	if ph.destDb == nil {
+		e := fmt.Errorf("PushOnWriteHook invoked with nil destDB")
+		logrus.Errorf("runtime error: %v", e)
+		return nil, e
 	}
 
-	err := pushDataset(ctx, ph.destDB, srcDb, ds, ph.tmpDir)
+	err := pushDataset(ctx, ph.destDb, srcDb, ds, ph.tmpDir)
 
 	if ph.out != nil && err != nil {
 		// if we can't write to the output, there's not much we can do.
@@ -130,7 +132,9 @@ func (*AsyncPushOnWriteHook) ExecuteForWorkingSets() bool {
 // Execute implements CommitHook, replicates head updates to the destDb field
 func (ah *AsyncPushOnWriteHook) Execute(ctx context.Context, ds datas.Dataset, srcDb *doltdb.DoltDB) (func(context.Context) error, error) {
 	if ah.destDb == nil {
-		panic("NM4")
+		e := fmt.Errorf("AsyncPushOnWriteHook invoked with nil destDB")
+		logrus.Errorf("runtime error: %v", e)
+		return nil, e
 	}
 
 	addr, _ := ds.MaybeHeadAddr()
@@ -307,7 +311,7 @@ func NewDynamicPushOnWriteHook(ctx context.Context, dEnv *env.DoltEnv, logger io
 		if err != nil {
 			return nil, nil, err
 		}
-		p.destDB = destDb
+		p.destDb = destDb
 		a.destDb = destDb
 	}
 
@@ -384,7 +388,7 @@ func (m *DynamicPushOnWriteHook) Execute(ctx context.Context, ds datas.Dataset, 
 			m.remote = ""
 			m.async = false
 			m.asyncHook.destDb = nil
-			m.syncHook.destDB = nil
+			m.syncHook.destDb = nil
 			return nil, nil
 		}
 
@@ -395,7 +399,7 @@ func (m *DynamicPushOnWriteHook) Execute(ctx context.Context, ds datas.Dataset, 
 			return nil, err
 		}
 
-		m.syncHook.destDB = destDb
+		m.syncHook.destDb = destDb
 		m.asyncHook.destDb = destDb
 
 		if async {
