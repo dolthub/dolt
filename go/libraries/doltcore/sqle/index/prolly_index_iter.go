@@ -293,6 +293,46 @@ func (p prollyCoveringIndexIter) Next(ctx *sql.Context) (sql.Row, error) {
 	return r, nil
 }
 
+func (p prollyCoveringIndexIter) Next2(ctx *sql.Context) (sql.Row2, error) {
+	k, v, err := p.indexIter.Next(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	row := make(sql.Row2, len(p.projections))
+	for i, idx := range p.keyMap {
+		outputIdx := p.ordMap[i]
+		typ, ok := val.EncToType[p.keyDesc.Types[idx].Enc]
+		if !ok {
+			panic(fmt.Sprintf("unmapped encoding type %v", p.keyDesc.Types[idx].Enc))
+		}
+		field := sql.Value{
+			Val: tree.GetField2(ctx, p.keyDesc, idx, k, p.ns),
+			Typ: typ,
+		}
+		row[outputIdx] = field
+	}
+
+	for i, idx := range p.valMap {
+		outputIdx := p.ordMap[len(p.keyMap)+i]
+		typ, ok := val.EncToType[p.valDesc.Types[idx].Enc]
+		if !ok {
+			panic(fmt.Sprintf("unmapped encoding type %v", p.valDesc.Types[idx].Enc))
+		}
+		field := sql.Value{
+			Val: tree.GetField2(ctx, p.valDesc, idx, v, p.ns),
+			Typ: typ,
+		}
+		row[outputIdx] = field
+	}
+
+	return row, nil
+}
+
+func (p prollyCoveringIndexIter) IsRowIter2(ctx *sql.Context) bool {
+	return true
+}
+
 func (p prollyCoveringIndexIter) writeRowFromTuples(ctx context.Context, key, value val.Tuple, r sql.Row) (err error) {
 	for i, idx := range p.keyMap {
 		outputIdx := p.ordMap[i]
