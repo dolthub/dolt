@@ -52,6 +52,11 @@ teardown() {
     java -cp $BATS_TEST_DIRNAME/java:$BATS_TEST_DIRNAME/java/mysql-connector-java-8.0.21.jar MySQLConnectorTest $USER $PORT $REPO_NAME
 }
 
+@test "mysql-connector-java client collations" {
+    javac $BATS_TEST_DIRNAME/java/MySQLConnectorTest_Collation.java
+    java -cp $BATS_TEST_DIRNAME/java:$BATS_TEST_DIRNAME/java/mysql-connector-java-8.0.21.jar MySQLConnectorTest_Collation $USER $PORT $REPO_NAME
+}
+
 @test "node mysql client" {
     node $BATS_TEST_DIRNAME/node/index.js $USER $PORT $REPO_NAME
     node $BATS_TEST_DIRNAME/node/knex.js $USER $PORT $REPO_NAME
