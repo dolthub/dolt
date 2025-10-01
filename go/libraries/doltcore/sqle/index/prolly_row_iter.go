@@ -15,12 +15,12 @@
 package index
 
 import (
-	"github.com/dolthub/go-mysql-server/sql"
-
+	"fmt"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
+	"github.com/dolthub/go-mysql-server/sql"
 )
 
 type prollyRowIter struct {
@@ -189,6 +189,43 @@ func (it prollyRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 		}
 	}
 	return row, nil
+}
+
+func (it prollyRowIter) Next2(ctx *sql.Context) (sql.Row2, error) {
+	key, value, err := it.iter.Next(ctx)
+	if err != nil {
+		return nil, err
+	}
+	row := make(sql.Row2, it.rowLen)
+	for i, idx := range it.keyProj {
+		outputIdx := it.ordProj[i]
+		typ, ok := val.EncToType[it.keyDesc.Types[idx].Enc]
+		if !ok {
+			panic(fmt.Sprintf("unmapped encoding type %v", it.keyDesc.Types[idx].Enc))
+		}
+		field := sql.Value{
+			Val: tree.GetField2(ctx, it.keyDesc, idx, key, it.ns),
+			Typ: typ,
+		}
+		row[outputIdx] = field
+	}
+	for i, idx := range it.valProj {
+		outputIdx := it.ordProj[len(it.keyProj)+i]
+		typ, ok := val.EncToType[it.valDesc.Types[idx].Enc]
+		if !ok {
+			panic(fmt.Sprintf("unmapped encoding type %v", it.valDesc.Types[idx].Enc))
+		}
+		field := sql.Value{
+			Val: tree.GetField2(ctx, it.valDesc, idx, value, it.ns),
+			Typ: typ,
+		}
+		row[outputIdx] = field
+	}
+	return row, nil
+}
+
+func (it prollyRowIter) IsRowIter2(ctx *sql.Context) bool {
+	return true
 }
 
 func (it prollyRowIter) Close(ctx *sql.Context) error {
