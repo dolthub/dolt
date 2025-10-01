@@ -37,8 +37,7 @@ run_container() {
   name="$1"; shift
   docker run -d --name "$name" "$@" "$TEST_IMAGE" >/dev/null
   wait_for_log "$name" "Server ready. Accepting connections."
-
-  wait_for_log "$name" "Reattaching to server process..." || true
+  wait_for_log "$name" "Server initialization complete!"
 
   # Verify container is running
   run docker ps --filter "name=$name" --format "{{.Names}}"
@@ -54,9 +53,8 @@ run_container_with_port() {
   port="$1"; shift
   docker run -d --name "$name" -p "$port:3306" "$@" "$TEST_IMAGE" >/dev/null
   wait_for_log "$name" "Server ready. Accepting connections."
+  wait_for_log "$name" "Server initialization complete!"
 
-  wait_for_log "$name" "Reattaching to server process" || true
-  
   # Verify container is running
   run docker ps --filter "name=$name" --format "{{.Names}}"
   [ $status -eq 0 ]
@@ -103,8 +101,8 @@ wait_for_log() {
   cname="${TEST_PREFIX}root-env"
   run docker run -d --name "$cname" -e DOLT_ROOT_PASSWORD=rootpass -e DOLT_USER=root -e DOLT_PASSWORD=anything "$TEST_IMAGE"
 
-  wait_for_log "$cname" "cannot be used for the root user" || true
-  docker logs "$cname" >/tmp/${cname}.log 2>&1 || true
+  wait_for_log "$cname" "cannot be used for the root user"
+  docker logs "$cname" >/tmp/${cname}.log 2>&1
   run grep -F "cannot be used for the root user" /tmp/"${cname}".log
   [ $status -eq 0 ]
 }
@@ -113,7 +111,7 @@ wait_for_log() {
 @test "docker-entrypoint: password without user warns and is ignored" {
   cname="${TEST_PREFIX}pass-no-user"
   run_container "$cname" -e DOLT_ROOT_PASSWORD=rootpass -e DOLT_PASSWORD=orphan
-  docker logs "$cname" >/tmp/${cname}.log 2>&1 || true
+  docker logs "$cname" >/tmp/${cname}.log 2>&1
   run grep -i "password will be ignored" /tmp/"${cname}".log
   [ $status -eq 0 ]
 }
@@ -162,6 +160,11 @@ wait_for_log() {
   run docker exec "$cname" dolt sql --result-format csv -q "SHOW DATABASES;"
   [ $status -eq 0 ]
   echo "$output" | grep -Fx "$kw_db" >/dev/null
+
+  # DBeaver checks tables without `` escaping
+  run docker exec "$cname" dolt sql --result-format csv -q "SHOW FULL TABLES FROM versioning;"
+  [ $status -eq 0 ]
+  [[ "$output" =~ "Tables_in_versioning,Table_type" ]] || false
 
   # Can use the database for operations
   run docker exec "$cname" dolt sql -q "USE \`$kw_db\`; CREATE TABLE test_table (id INT);"
@@ -596,8 +599,8 @@ EOF
   docker build -f docker/serverDockerfile --build-arg DOLT_VERSION=latest -t "$LATEST_IMAGE" .
   
   docker run -d --name "$cname" -e DOLT_ROOT_PASSWORD=rootpass -e DOLT_ROOT_HOST=% "$LATEST_IMAGE" >/dev/null
-  wait_for_log "$cname" "Server ready. Accepting connections." || true
-  wait_for_log "$cname" "Reattaching to server process..." || true
+  wait_for_log "$cname" "Server ready. Accepting connections."
+  wait_for_log "$name" "Server initialization complete!"
   
   run docker exec "$cname" dolt version
   [ $status -eq 0 ]
@@ -607,7 +610,7 @@ EOF
 
   run docker exec "$cname" dolt -u "root" -p "rootpass" sql -q "SHOW DATABASES;"
   [ $status -eq 0 ]
-  
+
   docker rmi "$LATEST_IMAGE" >/dev/null 2>&1 || true
 }
 
@@ -623,7 +626,7 @@ EOF
   
   docker run -d --name "$cname" -e DOLT_ROOT_PASSWORD=rootpass -e DOLT_ROOT_HOST=% "$SPECIFIC_IMAGE" >/dev/null
   wait_for_log "$cname" "Server ready. Accepting connections."
-  wait_for_log "$cname" "Reattaching to server process..." || true
+  wait_for_log "$name" "Server initialization complete!"
   
   run docker exec "$cname" dolt version
   [ $status -eq 0 ]
@@ -633,6 +636,80 @@ EOF
   
   run docker exec "$cname" dolt sql -q "SHOW DATABASES;"
   [ $status -eq 0 ]
-  
+
   docker rmi "$SPECIFIC_IMAGE" >/dev/null 2>&1 || true
+}
+
+# bats test_tags=no_lambda
+@test "docker-entrypoint: multiple server startups at the same time to confirm no race conditions" {
+  cname="${TEST_PREFIX}multi"
+  db="testdb"
+  usr="testuser"
+  pwd="testpass"
+
+  # Start all containers at sequentially, this stresses the system and causes timing issues if
+  # hardware resources are in use. The containers should still start correctly with the wait
+  # logic in place.
+  local pids=()
+  for cycle in {1..40}; do
+    db_name="${db}_${cycle}_$$"
+
+    (
+      docker run -d --name "$cname-$cycle" \
+        -v /var/lib/dolt \
+        -e DOLT_ROOT_PASSWORD=rootpass \
+        -e DOLT_ROOT_HOST=% \
+        -e DOLT_DATABASE="$db_name" \
+        -e DOLT_USER="$usr" \
+        -e DOLT_PASSWORD="$pwd" \
+        "$TEST_IMAGE" >/dev/null 2>&1
+    ) &
+    pids+=($!)
+  done
+
+  for pid in "${pids[@]}"; do
+    wait $pid
+  done
+
+  # Wait for all servers to be ready
+  for cycle in {1..40}; do
+    if ! wait_for_log "$cname-$cycle" "Server ready. Accepting connections." 30; then
+      docker logs "$cname-$cycle"
+      false
+    fi
+
+    if ! wait_for_log "$cname-$cycle" "Server initialization complete!" 15; then
+      docker logs "$cname-$cycle"
+      false
+    fi
+  done
+
+  for cycle in {1..40}; do
+    run docker logs "$cname-$cycle" 2>&1
+    [ $status -eq 0 ]
+    # Should not contain ERROR messages
+    if echo "$output" | grep -i "ERROR" >/dev/null; then
+      echo "$output"
+      false
+    fi
+    # Should contain success indicators
+    if ! [[ "$output" =~ "Server initialization complete!" ]]; then
+      echo "$output"
+      false
+    fi
+    if ! [[ "$output" =~ "Server ready. Accepting connections" ]]; then
+      echo "$output"
+      false
+    fi
+  done
+
+  local stop_pids=()
+  for cycle in {1..40}; do
+    docker stop "$cname-$cycle" >/dev/null &
+    stop_pids+=($!)
+  done
+
+  for pid in "${stop_pids[@]}"; do
+    wait $pid
+  done
 }

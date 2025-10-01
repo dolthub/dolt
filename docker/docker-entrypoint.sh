@@ -1,11 +1,19 @@
 #!/bin/bash
 set -eo pipefail
 
-# logging functions
+# mysql_log logs messages with a timestamp and optional color formatting.
+# Arguments:
+#   $1 - Log type (e.g., Note, Warn, ERROR)
+#   $@ - Log message (if empty, reads from stdin)
+# Output:
+#   Prints a formatted log line to stdout or stderr, with color for Warn and ERROR.
 mysql_log() {
-  local type="$1"; shift
-  local text="$*"; if [ "$#" -eq 0 ]; then text="$(cat)"; fi
-  local dt; dt="$(date --rfc-3339=seconds)"
+  local type="$1"
+  shift
+  local text="$*"
+  if [ "$#" -eq 0 ]; then text="$(cat)"; fi
+  local dt
+  dt="$(date --rfc-3339=seconds)"
   local color_reset="\033[0m"
   local color
   case "$type" in
@@ -15,19 +23,61 @@ mysql_log() {
   esac
   printf '%b%s [%s] [Entrypoint]: %s%b\n' "$color" "$dt" "$type" "$text" "$color_reset"
 }
+
+# mysql_note logs a message of type 'Note' using mysql_log.
 mysql_note() {
-	mysql_log Note "$@"
+  mysql_log Note "$@"
 }
+
+# mysql_warn logs a message of type 'Warn' using mysql_log and writes to stderr.
 mysql_warn() {
-	mysql_log Warn "$@" >&2
+  mysql_log Warn "$@" >&2
 }
+
+# mysql_error logs a message of type 'ERROR' using mysql_log, write to stderr, prints a container removal hint, and
+# exits with status 1.
 mysql_error() {
-	mysql_log ERROR "$@" >&2
+  mysql_log ERROR "$@" >&2
   mysql_note "Remove this container with 'docker rm -f <container_name>' before retrying"
-	exit 1
+  exit 1
 }
-docker_process_sql() {
-  dolt sql
+
+# exec_mysql executes a SQL query using Dolt, retrying until it succeeds or a timeout is reached.
+# On timeout, it prints the provided error message prefix followed by the command output.
+# Containers and system resources can hang during startup, so this function helps ensure
+# that the SQL command is executed successfully before proceeding.
+# Arguments:
+#   $1 - SQL command to execute
+#   $2 - Error message prefix to print on timeout
+#   $3 - (Optional) If set to 1, prints command output on success
+exec_mysql() {
+  local sql_command="$1"
+  local error_message="$2"
+  local show_output="${3:-0}"
+  local timeout="${DOLT_SERVER_TIMEOUT:-300}"
+  local start_time now output
+
+  start_time=$(date +%s)
+
+  while true; do
+    if output=$(dolt sql -q "$sql_command" 2>&1); then
+      [ "$show_output" -eq 1 ] && echo "$output"
+      return 0
+    fi
+
+    if echo "$output" | grep -qi "syntax error"; then
+      mysql_error "$error_message$output"
+    fi
+
+    if [ "$timeout" -ne 0 ]; then
+      now=$(date +%s)
+      if [ $((now - start_time)) -ge "$timeout" ]; then
+        mysql_error "$error_message$output"
+      fi
+    fi
+
+    sleep 1
+  done
 }
 
 CONTAINER_DATA_DIR="/var/lib/dolt"
@@ -35,248 +85,332 @@ INIT_COMPLETED="$CONTAINER_DATA_DIR/.init_completed"
 DOLT_CONFIG_DIR="/etc/dolt/doltcfg.d"
 SERVER_CONFIG_DIR="/etc/dolt/servercfg.d"
 DOLT_ROOT_PATH="/.dolt"
+SERVER_PID=-1
 
-check_for_dolt() {
-    local dolt_bin=$(which dolt)
-    if [ ! -x "$dolt_bin" ]; then
-        mysql_error "dolt binary executable not found"
-    fi
+# check_for_dolt_binary verifies that the dolt binary is present and executable in the system PATH.
+# If not found or not executable, it logs an error and exits.
+check_for_dolt_binary() {
+  local dolt_bin
+  dolt_bin=$(which dolt)
+  if [ ! -x "$dolt_bin" ]; then
+    mysql_error "dolt binary executable not found"
+  fi
 }
 
+# get_env_var returns the value of an environment variable, preferring DOLT_* over MYSQL_*.
+# Arguments:
+#   $1 - The base variable name (e.g., "USER" for MYSQL_USER or DOLT_USER)
+# Output:
+#   Prints the value of the first set variable, or an empty string if neither is set.
 get_env_var() {
-    local var_name="$1"
-    local mysql_var="MYSQL_${var_name}"
-    local dolt_var="DOLT_${var_name}"
+  local var_name="$1"
+  local dolt_var="DOLT_${var_name}"
+  local mysql_var="MYSQL_${var_name}"
 
-    if [ -n "${!mysql_var}" ]; then
-        echo "${!mysql_var}"
-    elif [ -n "${!dolt_var}" ]; then
-        echo "${!dolt_var}"
-    else
-        echo ""
-    fi
+  if [ -n "${!dolt_var}" ]; then
+    echo "${!dolt_var}"
+  elif [ -n "${!mysql_var}" ]; then
+    echo "${!mysql_var}"
+  else
+    echo ""
+  fi
 }
 
+# get_env_var_name returns the name of the environment variable that is set, preferring DOLT_* over MYSQL_*.
+# Arguments:
+#   $1 - The base variable name (e.g., "USER" for MYSQL_USER or DOLT_USER)
+# Output:
+#   Prints the name of the first set variable, or both names if neither is set.
 get_env_var_name() {
-    local var_name="$1"
-    local mysql_var="MYSQL_${var_name}"
-    local dolt_var="DOLT_${var_name}"
+  local var_name="$1"
+  local dolt_var="DOLT_${var_name}"
+  local mysql_var="MYSQL_${var_name}"
 
-    if [ -n "${!mysql_var}" ]; then
-        echo "MYSQL_${var_name}"
-    elif [ -n "${!dolt_var}" ]; then
-        echo "DOLT_${var_name}"
-    else
-        echo "MYSQL_${var_name}/DOLT_${var_name}"
-    fi
+  if [ -n "${!dolt_var}" ]; then
+    echo "DOLT_${var_name}"
+  elif [ -n "${!mysql_var}" ]; then
+    echo "MYSQL_${var_name}"
+  else
+    echo "MYSQL_${var_name}/DOLT_${var_name}"
+  fi
 }
 
-# arg $1 is the directory to search in
-# arg $2 is the type file to search for
+# get_config_file_path_if_exists checks for config files of a given type in a directory.
+# Arguments:
+#   $1 - Directory to search in
+#   $2 - File type/extension to search for (e.g., 'json', 'yaml')
+# Output:
+#   Sets CONFIG_PROVIDED to the path of the config file if exactly one is found, or empty otherwise.
+#   Logs a warning if multiple config files are found and uses the default config.
 get_config_file_path_if_exists() {
-    CONFIG_PROVIDED=
-    local CONFIG_DIR=$1
-    local FILE_TYPE=$2
-    if [ -d "$CONFIG_DIR" ]; then
-        mysql_note "Checking for config provided in $CONFIG_DIR"
-        local number_of_files_found=$(find "$CONFIG_DIR" -type f -name "*.$FILE_TYPE" | wc -l)
-        if [ "$number_of_files_found" -gt 1 ]; then
-            CONFIG_PROVIDED=
-            mysql_warn "multiple config file found in $CONFIG_DIR, using default config"
-        elif [ "$number_of_files_found" -eq 1 ]; then
-            local files_found=$(ls "$CONFIG_DIR"/*"$FILE_TYPE")
-            mysql_note "$files_found file is found"
-            CONFIG_PROVIDED=$files_found
-        else
-            CONFIG_PROVIDED=
-        fi
+  CONFIG_PROVIDED=
+  local CONFIG_DIR=$1
+  local FILE_TYPE=$2
+  if [ -d "$CONFIG_DIR" ]; then
+    mysql_note "Checking for config provided in $CONFIG_DIR"
+    local number_of_files_found
+    number_of_files_found=$(find "$CONFIG_DIR" -type f -name "*.$FILE_TYPE" | wc -l)
+    if [ "$number_of_files_found" -gt 1 ]; then
+      CONFIG_PROVIDED=
+      mysql_warn "Multiple config files found in $CONFIG_DIR, using default config"
+    elif [ "$number_of_files_found" -eq 1 ]; then
+      local files_found
+      files_found=$(ls "$CONFIG_DIR"/*."$FILE_TYPE")
+      mysql_note "$files_found file is found"
+      CONFIG_PROVIDED=$files_found
+    else
+      CONFIG_PROVIDED=
     fi
+  fi
 }
 
-# taken from https://github.com/docker-library/mysql/blob/master/8.0/docker-entrypoint.sh
-# this function will run files found in /docker-entrypoint-initdb.d directory BEFORE server is started
-# usage: docker_process_init_files [file [file [...]]]
-#    ie: docker_process_init_files /always-initdb.d/*
-# process initializer files, based on file extensions
+# docker_process_init_files Runs files found in /docker-entrypoint-initdb.d before the server is started.
+# Taken from https://github.com/docker-library/mysql/blob/master/8.0/docker-entrypoint.sh
+# Usage:
+#   docker_process_init_files [file [file ...]]
+#   e.g., docker_process_init_files /always-initdb.d/*
+# Processes initializer files based on file extensions.
 docker_process_init_files() {
-	mysql_note "Running init scripts"
-	local f
-	for f; do
-		case "$f" in
-			*.sh)
-				# https://github.com/docker-library/postgres/issues/450#issuecomment-393167936
-				# https://github.com/docker-library/postgres/pull/452
-			if [ -x "$f" ]; then
-				mysql_note "$0: running $f"
-				if ! "$f"; then
-					mysql_error "Failed to execute init script '$f'"
-				fi
-			else
-				mysql_note "$0: sourcing $f"
-				if ! . "$f"; then
-					mysql_error "Failed to source init script '$f'"
-				fi
-			fi
-				;;
-			*.sql)     mysql_note "$0: running $f"; docker_process_sql < "$f"; echo ;;
-			*.sql.bz2) mysql_note "$0: running $f"; bunzip2 -c "$f" | docker_process_sql; echo ;;
-			*.sql.gz)  mysql_note "$0: running $f"; gunzip -c "$f" | docker_process_sql; echo ;;
-			*.sql.xz)  mysql_note "$0: running $f"; xzcat "$f" | docker_process_sql; echo ;;
-			*.sql.zst) mysql_note "$0: running $f"; zstd -dc "$f" | docker_process_sql; echo ;;
-			*)         mysql_warn "$0: ignoring $f" ;;
-		esac
-		echo
-	done
-}
+  mysql_note "Running init script...s"
+  local f sql
 
-# if there is config file provided through /etc/dolt/doltcfg.d,
-# we overwrite $HOME/.dolt/config_global.json file with this file.
-set_dolt_config_if_defined() {
-    get_config_file_path_if_exists "$DOLT_CONFIG_DIR" "json"
-    if [ ! -z "$CONFIG_PROVIDED" ]; then
-        if ! /bin/cp -rf "$CONFIG_PROVIDED" "$HOME/$DOLT_ROOT_PATH/config_global.json" 2>&1; then
-            mysql_error "Failed to copy config file from '$CONFIG_PROVIDED' to '$HOME/$DOLT_ROOT_PATH/config_global.json'. Check file permissions and paths."
+  for f; do
+    case "$f" in
+    *.sh)
+      if [ -x "$f" ]; then
+        mysql_note "$0: running $f"
+        if ! "$f"; then
+          mysql_error "Failed to execute init script '$f'"
         fi
-    fi
+      else
+        mysql_note "$0: sourcing $f"
+        if ! . "$f"; then
+          mysql_error "Failed to source init script '$f'"
+        fi
+      fi
+      ;;
+    *.sql)
+      mysql_note "$0: running $f"
+      sql=$(cat "$f")
+      exec_mysql "$sql" "Failed to execute $f: "
+      ;;
+    *.sql.bz2)
+      mysql_note "$0: running $f"
+      sql=$(bunzip2 -c "$f")
+      exec_mysql "$sql" "Failed to execute $f: "
+      ;;
+    *.sql.gz)
+      mysql_note "$0: running $f"
+      sql=$(gunzip -c "$f")
+      exec_mysql "$sql" "Failed to execute $f: "
+      ;;
+    *.sql.xz)
+      mysql_note "$0: running $f"
+      sql=$(xzcat "$f")
+      exec_mysql "$sql" "Failed to execute $f: "
+      ;;
+    *.sql.zst)
+      mysql_note "$0: running $f"
+      sql=$(zstd -dc "$f")
+      exec_mysql "$sql" "Failed to execute $f: "
+      ;;
+    *)
+      mysql_warn "$0: ignoring $f"
+      ;;
+    esac
+    echo
+  done
 }
 
-create_default_database_from_env() {
-    local user
-    local password
-    local database
+# set_dolt_config_if_defined checks for a user-provided Dolt config file in $DOLT_CONFIG_DIR.
+# If a single JSON config file is found, it copies it to $HOME/$DOLT_ROOT_PATH/config_global.json,
+# overwriting the default config. Logs an error and exits if the copy fails.
+set_dolt_config_if_defined() {
+  get_config_file_path_if_exists "$DOLT_CONFIG_DIR" "json"
+  if [ ! -z "$CONFIG_PROVIDED" ]; then
+    if ! /bin/cp -rf "$CONFIG_PROVIDED" "$HOME/$DOLT_ROOT_PATH/config_global.json" 2>&1; then
+      mysql_error "Failed to copy config file from '$CONFIG_PROVIDED' to '$HOME/$DOLT_ROOT_PATH/config_global.json'. Check file permissions and paths."
+    fi
+  fi
+}
 
-    database=$(get_env_var "DATABASE")
-    user=$(get_env_var "USER")
-    password=$(get_env_var "PASSWORD")
+# create_database_from_env creates a database if the DATABASE environment variable is set.
+# It retrieves the database name from environment variables (preferring DOLT_DATABASE over MYSQL_DATABASE)
+# and attempts to create the database using exec_mysql.
+create_database_from_env() {
+  local database
+  database=$(get_env_var "DATABASE")
+
+  if [ -n "$database" ]; then
+    mysql_note "Creating database '${database}'"
+    exec_mysql "CREATE DATABASE IF NOT EXISTS \`$database\`;" "Failed to create database '$database': "
+  fi
+}
+
+# create_user_from_env creates a new database user from environment variables.
+# It prefers DOLT_USER/PASSWORD over MYSQL_USER/PASSWORD, and optionally grants access to a database.
+# Requires both USER and PASSWORD to be set; if only the password is set, it logs a warning and does nothing.
+# It does not allow creating a 'root' user via these environment variables.
+create_user_from_env() {
+  local user
+  local password
+  local database
+
+  user=$(get_env_var "USER")
+  password=$(get_env_var "PASSWORD")
+  database=$(get_env_var "DATABASE")
+
+  if [ "$user" = 'root' ]; then
+    mysql_error <<-EOF
+    $(get_env_var_name "USER")="root", $(get_env_var_name "USER") and $(get_env_var_name "PASSWORD") are for configuring the regular user and cannot be used for the root user.
+EOF
+  fi
+
+  if [ -n "$user" ] && [ -z "$password" ]; then
+    mysql_error "$(get_env_var_name "USER") specified, but missing $(get_env_var_name "PASSWORD"); user creation requires a password."
+  elif [ -z "$user" ] && [ -n "$password" ]; then
+    mysql_warn "$(get_env_var_name "PASSWORD") specified, but missing $(get_env_var_name "USER"); password will be ignored"
+    return
+  fi
+
+  if [ -n "$user" ]; then
+    local user_host
+    user_host=$(get_env_var "USER_HOST")
+    user_host="${user_host:-${DOLT_ROOT_HOST:-localhost}}"
+
+    mysql_note "Creating user '${user}@${user_host}'..."
+    exec_mysql "CREATE USER IF NOT EXISTS '$user'@'$user_host' IDENTIFIED BY '$password';" "Failed to create user '$user': "
+    exec_mysql "GRANT USAGE ON *.* TO '$user'@'$user_host';" "Failed to grant server access to user '$user': "
 
     if [ -n "$database" ]; then
-        mysql_note "Creating database '${database}'"
-        local db_output
-        if ! db_output=$(dolt sql -q "CREATE DATABASE IF NOT EXISTS \`$database\`;" 2>&1); then
-            mysql_error "Failed to create database '$database'. Error: $db_output"
-        fi
+      mysql_note "Giving user '${user}@${user_host}' access to schema '${database}'..."
+      exec_mysql "GRANT ALL ON \`$database\`.* TO '$user'@'$user_host';" "Failed to grant permissions to user '$user' on database '$database': "
     fi
 
-    if [ "$user" = 'root' ]; then
-        # TODO: add ALLOW_EMPTY_PASSWORD and RANDOM_ROOT_PASSWORD support
-mysql_error <<-EOF
-    $(get_env_var_name "USER")="root", $(get_env_var_name "USER") and $(get_env_var_name "PASSWORD") are for configuring a regular user and cannot be used for the root user
-        Remove $(get_env_var_name "USER")="root" and use the following to control the root user password:
-        - DOLT_ROOT_PASSWORD
-EOF
-    fi
-
-    if [ -n "$user" ] && [ -z "$password" ]; then
-        mysql_error "$(get_env_var_name "USER") specified, but missing $(get_env_var_name "PASSWORD"); user creation requires a password."
-    elif [ -z "$user" ] && [ -n "$password" ]; then
-        mysql_warn "$(get_env_var_name "PASSWORD") specified, but missing $(get_env_var_name "USER"); password will be ignored"
-        return
-    fi
-
-    if [ -n "$user" ]; then
-        # Get user host from DOLT_USER_HOST/MYSQL_USER_HOST, fall back to DOLT_ROOT_HOST, then localhost
-        local user_host
-        user_host=$(get_env_var "USER_HOST")
-        user_host="${user_host:-${DOLT_ROOT_HOST:-localhost}}"
-        mysql_note "Creating user '${user}'"
-        if ! dolt sql -q "CREATE USER IF NOT EXISTS '$user'@'$user_host' IDENTIFIED BY '$password';" >/dev/null 2>&1; then
-            mysql_error "Failed to create user '$user'. Check if user already exists or if there are permission issues."
-        fi
-
-        # Grant basic server access
-        mysql_note "Granting server access to user '${user}'"
-        if ! dolt sql -q "GRANT USAGE ON *.* TO '$user'@'$user_host';" >/dev/null 2>&1; then
-            mysql_error "Failed to grant server access to user '$user'"
-        fi
-
-        if [ -n "$database" ]; then
-            mysql_note "Giving user '${user}' access to schema '${database}'"
-            if ! dolt sql -q "GRANT ALL ON \`$database\`.* TO '$user'@'$user_host';" >/dev/null 2>&1; then
-                mysql_error "Failed to grant permissions to user '$user' on database '$database'"
-            fi
-        fi
-    fi
+    mysql_note "'${user}@${user_host}' user successfully created!"
+  fi
 }
 
+# is_port_open checks if a TCP port is open on a given host.
+# Arguments:
+#   $1 - Host (IP or hostname)
+#   $2 - Port number
+# Returns:
+#   0 if the port is open, non-zero otherwise.
+is_port_open() {
+  local host="$1"
+  local port="$2"
+  timeout 1 bash -c "cat < /dev/null > /dev/tcp/$host/$port" &>/dev/null
+  return $?
+}
+
+# dolt_server_initializer starts the Dolt SQL server in the background and waits until it is ready to accept connections.
+# It manages the server process, restarts it if necessary, and checks for readiness by probing the configured port.
+# The function retries until the server is available or a timeout is reached, handling process management and logging.
+# Arguments:
+#   $@ - Additional arguments to pass to `dolt sql-server`
+# Returns:
+#   0 if the server starts successfully and is ready to accept connections; exits with error otherwise.
+
+dolt_server_initializer() {
+  local timeout="${DOLT_SERVER_TIMEOUT:-300}"
+  local start_time
+  start_time=$(date +%s)
+
+  SERVER_PID=-1
+
+  trap 'mysql_note "Caught Ctrl+C, shutting down Dolt server..."; [ $SERVER_PID -ne -1 ] && kill "$SERVER_PID"; exit 1' INT TERM
+
+  while true; do
+    if [ "$SERVER_PID" -eq -1 ] || ! kill -0 "$SERVER_PID" 2>/dev/null; then
+      [ "$SERVER_PID" -ne -1 ] && wait "$SERVER_PID" 2>/dev/null || true
+      SERVER_PID=-1
+      dolt sql-server --host=0.0.0.0 --port=3306 "$@" &
+      SERVER_PID=$!
+    fi
+
+    if is_port_open "0.0.0.0" 3306; then
+      mysql_note "Dolt server started successfully (PID=$SERVER_PID)"
+      return 0
+    fi
+
+    local now elapsed
+    now=$(date +%s)
+    elapsed=$((now - start_time))
+    if [ "$elapsed" -ge "$timeout" ]; then
+      kill "$SERVER_PID" 2>/dev/null || true
+      wait "$SERVER_PID" 2>/dev/null || true
+      SERVER_PID=-1
+      mysql_error "Dolt server failed to start within $timeout seconds"
+    fi
+
+    sleep 1
+  done
+}
+
+# _main is the main entrypoint for the Dolt Docker container initialization.
 _main() {
-    # check for dolt binary executable
-    check_for_dolt
+  check_for_dolt_binary
 
-    local dolt_version
-    dolt_version=$(dolt version | grep 'dolt version' | cut -f3 -d " ")
-    mysql_note "Entrypoint script for Dolt Server $dolt_version starting..."
+  local dolt_version
+  dolt_version=$(dolt version | grep 'dolt version' | cut -f3 -d " ")
+  mysql_note "Entrypoint script for Dolt Server $dolt_version starting..."
 
-    declare -g CONFIG_PROVIDED
+  declare -g CONFIG_PROVIDED
 
-    # dolt config will be set if user provided a single json file in /etc/dolt/doltcfg.d directory.
-    # It will overwrite config_global.json file in $HOME/.dolt
-    set_dolt_config_if_defined
+  # dolt config will be set if user provided a single json file in /etc/dolt/doltcfg.d directory.
+  # It will overwrite config_global.json file in $HOME/.dolt
+  set_dolt_config_if_defined
 
-    # if there is a single yaml provided in /etc/dolt/servercfg.d directory,
-    # it will be used to start the server with --config flag
-    get_config_file_path_if_exists "$SERVER_CONFIG_DIR" "yaml"
-    if [ ! -z "$CONFIG_PROVIDED" ]; then
-        set -- "$@" --config="$CONFIG_PROVIDED"
+  # if there is a single yaml provided in /etc/dolt/servercfg.d directory,
+  # it will be used to start the server with --config flag
+  get_config_file_path_if_exists "$SERVER_CONFIG_DIR" "yaml"
+  if [ ! -z "$CONFIG_PROVIDED" ]; then
+    set -- "$@" --config="$CONFIG_PROVIDED"
+  fi
+
+  if [[ ! -f $INIT_COMPLETED ]]; then
+    if ls /docker-entrypoint-initdb.d/* >/dev/null 2>&1; then
+      docker_process_init_files /docker-entrypoint-initdb.d/*
+    else
+      mysql_warn "No files found in /docker-entrypoint-initdb.d/ to process"
     fi
+    touch "$INIT_COMPLETED"
+  fi
 
-    # TODO: add support for MYSQL_ROOT_HOST and MYSQL_ROOT_PASSWORD
-    # Note: User creation will happen after server starts to avoid conflicts with default users
+  create_database_from_env
 
-    if [[ ! -f $INIT_COMPLETED ]]; then
-        # run any file provided in /docker-entrypoint-initdb.d directory before the server starts
-        if ls /docker-entrypoint-initdb.d/* >/dev/null 2>&1; then
-            docker_process_init_files /docker-entrypoint-initdb.d/*
-        else
-          mysql_warn "No files found in /docker-entrypoint-initdb.d/ to process"
-        fi
-        touch $INIT_COMPLETED
-    fi
+  mysql_note "Starting Dolt server in the background..."
+  # Attempt to configure the root user directly through the sql-server using built-in environment variable support
+  # The user creation queries with `dolt sql` can interfere with this process so we run them after the server is started
+  DOLT_ROOT_HOST="${DOLT_ROOT_HOST:-localhost}"
+  mysql_note "Configuring user 'root@${DOLT_ROOT_HOST}'..."
 
-    # Start server in background for user setup
-    mysql_note "Starting Dolt server in background..."
-    dolt sql-server --host=0.0.0.0 --port=3306 "$@" > /tmp/server.log 2>&1 &
-    local server_pid=$!
-    
-    # Wait for server to be ready
-    local max_attempts=30
-    local attempt=0
-    while [ $attempt -lt $max_attempts ]; do
-        if dolt sql -q "SELECT 1;" >/dev/null 2>&1; then
-            mysql_note "Server initialization complete!"
-            break
-        fi
-        sleep 1
-        attempt=$((attempt + 1))
-    done
-    
-    if [ $attempt -eq $max_attempts ]; then
-        mysql_error "Server failed to start within 30 seconds"
-    fi
-    
-    # Create root user with the specified host (defaults to localhost if not specified)
-    local root_host="${DOLT_ROOT_HOST:-localhost}"
-    mysql_note "Ensuring root@${root_host} superuser exists with password"
-    
-    # Ensure root user exists with correct password and permissions
-    mysql_note "Configuring root@${root_host} user"
-    dolt sql -q "CREATE USER IF NOT EXISTS 'root'@'${root_host}' IDENTIFIED BY '${DOLT_ROOT_PASSWORD}'; ALTER USER 'root'@'${root_host}' IDENTIFIED BY '${DOLT_ROOT_PASSWORD}'; GRANT ALL ON *.* TO 'root'@'${root_host}' WITH GRANT OPTION;" >/dev/null 2>&1 || mysql_error "Failed to configure root@${root_host} user."
-    
-    # If DOLT_DATABASE or MYSQL_DATABASE has been specified, create the database if it does not exist
-    create_default_database_from_env
-    
-    # Show what users exist for debugging
-    mysql_note "Current users in the system:"
-    dolt sql -q "SELECT User, Host FROM mysql.user;" 2>&1 | grep -v "^$" || mysql_warn "Could not list users"
+  # `dolt sql` can hold locks that prevent the server from starting during system hangs
+  dolt_server_initializer "$@"
 
-    mysql_note "Reattaching to server process..."
-    cat /tmp/server.log
+  # Ran in a subshell to avoid exiting the main script, and so, we can use fallback below
+  local has_correct_host
+  has_correct_host=$(exec_mysql \
+    "SELECT User, Host FROM mysql.user WHERE User='root' AND Host='${DOLT_ROOT_HOST}' LIMIT 1;" \
+    "Could not check root host: " 1 | grep -c "$DOLT_ROOT_HOST" || true)
 
-    # Kill the background process and restart in foreground to show live output
-    kill $server_pid 2>/dev/null || true
-    wait $server_pid 2>/dev/null || true
-    
-    # Start server in foreground to show live output
-    exec dolt sql-server --host=0.0.0.0 --port=3306 "$@"
+  # docker-entrypoint-initdb.d scripts and system hangs may conflict with sql-server root env vars support
+  if [ "$has_correct_host" -eq 0 ]; then
+    mysql_warn "Environment variables failed to initialize 'root@${DOLT_ROOT_HOST}'; docker-entrypoint-initdb.d scripts queries may have conflicted. Overriding root user..."
+    exec_mysql "CREATE USER IF NOT EXISTS 'root'@'${DOLT_ROOT_HOST}' IDENTIFIED BY '${DOLT_ROOT_PASSWORD}';" "Could not create root user: " # override password
+    exec_mysql "GRANT ALL PRIVILEGES ON *.* TO 'root'@'${DOLT_ROOT_HOST}' WITH GRANT OPTION;" "Could not set root privileges: "
+  fi
+  mysql_note "'root@${DOLT_ROOT_HOST}' user successfully configured!"
+
+  create_user_from_env
+
+  exec_mysql "SELECT User, Host FROM mysql.user;" "Could not list users: " 1
+
+  mysql_note "Server initialization complete!"
+
+  # No need to relaunch, we wait for the background server process to exit and can still see the logs
+  wait "$SERVER_PID"
 }
 
 _main "$@"
