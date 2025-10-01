@@ -171,6 +171,13 @@ func GetField(ctx context.Context, td val.TupleDesc, i int, tup val.Tuple, ns No
 	return v, err
 }
 
+// GetField2 reads the value from the ith field of the Tuple as an interface{}.
+func GetField2(ctx context.Context, td val.TupleDesc, i int, tup val.Tuple, ns NodeStore) (b []byte) {
+	td.ExpectEncoding(i, td.Types[i].Enc)
+	b = td.GetField(i, tup)
+	return b
+}
+
 // Serialize writes an interface{} into the byte string representation used in val.Tuple, and returns the byte string,
 // and a boolean indicating success.
 func Serialize(ctx context.Context, ns NodeStore, t val.Type, v interface{}) (result []byte, err error) {
