@@ -239,6 +239,7 @@ type prollyKeylessIter struct {
 	valProj []int
 	ordProj []int
 	curr    sql.Row
+	curr2   sql.Row2
 	rowLen  int
 	card    uint64
 }
@@ -276,6 +277,40 @@ func (it *prollyKeylessIter) nextTuple(ctx *sql.Context) error {
 		}
 	}
 	return nil
+}
+
+func (it *prollyKeylessIter) Next2(ctx *sql.Context) (sql.Row2, error) {
+	if it.card == 0 {
+		_, value, err := it.iter.Next(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		it.card = val.ReadKeylessCardinality(value)
+		it.curr2 = make(sql.Row2, it.rowLen)
+		for i, idx := range it.valProj {
+			outputIdx := it.ordProj[i]
+			typ, ok := val.EncToType[it.valDesc.Types[idx].Enc]
+			if !ok {
+				panic(fmt.Sprintf("unmapped encoding type %v", it.valDesc.Types[idx].Enc))
+			}
+			field := sql.Value{
+				Val: tree.GetField2(ctx, it.valDesc, idx, value, it.ns),
+				Typ: typ,
+			}
+			it.curr2[outputIdx] = field
+		}
+
+		if err = it.nextTuple(ctx); err != nil {
+			return nil, err
+		}
+	}
+	it.card--
+	return it.curr2, nil
+}
+
+func (it *prollyKeylessIter) IsRowIter2(ctx *sql.Context) bool {
+	return true
 }
 
 func (it *prollyKeylessIter) Close(ctx *sql.Context) error {
