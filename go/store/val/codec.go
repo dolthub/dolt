@@ -24,10 +24,12 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/shopspring/decimal"
+
 	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/store/hash"
 
-	"github.com/shopspring/decimal"
+	querypb "github.com/dolthub/vitess/go/vt/proto/query"
 )
 
 type Type struct {
@@ -102,6 +104,21 @@ const (
 
 	sentinel Encoding = 127
 )
+
+var EncToType = map[Encoding]querypb.Type{
+	NullEnc:    querypb.Type_NULL_TYPE,
+	Int8Enc:    querypb.Type_INT8,
+	Uint8Enc:   querypb.Type_UINT8,
+	Int16Enc:   querypb.Type_INT16,
+	Uint16Enc:  querypb.Type_UINT16,
+	Int32Enc:   querypb.Type_INT32,
+	Uint32Enc:  querypb.Type_UINT32,
+	Int64Enc:   querypb.Type_INT64,
+	Uint64Enc:  querypb.Type_UINT64,
+	Float32Enc: querypb.Type_FLOAT32,
+	Float64Enc: querypb.Type_FLOAT64,
+	StringEnc:  querypb.Type_TEXT,
+}
 
 func IsAddrEncoding(enc Encoding) bool {
 	switch enc {
