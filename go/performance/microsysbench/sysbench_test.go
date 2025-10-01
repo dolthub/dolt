@@ -126,23 +126,36 @@ func benchmarkSysbenchQuery(b *testing.B, getQuery func(int) string) {
 	for i := 0; i < b.N; i++ {
 		schema, iter, _, err := eng.Query(ctx, getQuery(i))
 		require.NoError(b, err)
-		i := 0
-		buf := sql.NewByteBuffer(16000)
-		for {
-			i++
-			row, err := iter.Next(ctx)
-			if err != nil {
-				break
+		if ri2, ok := iter.(sql.RowIter2); ok && ri2.IsRowIter2(ctx) {
+			for {
+				row2, err := ri2.Next2(ctx)
+				if err != nil {
+					break
+				}
+				_ = row2
 			}
-			outputRow, err := server.RowToSQL(ctx, schema, row, nil, buf)
-			_ = outputRow
-			if i%128 == 0 {
-				buf.Reset()
+			require.Error(b, io.EOF)
+			err = ri2.Close(ctx)
+			require.NoError(b, err)
+		} else {
+			idx := 0
+			buf := sql.NewByteBuffer(16000)
+			for {
+				idx++
+				row, err := iter.Next(ctx)
+				if err != nil {
+					break
+				}
+				outputRow, err := server.RowToSQL(ctx, schema, row, nil, buf)
+				_ = outputRow
+				if idx%128 == 0 {
+					buf.Reset()
+				}
 			}
+			require.Error(b, io.EOF)
+			err = iter.Close(ctx)
+			require.NoError(b, err)
 		}
-		require.Error(b, io.EOF)
-		err = iter.Close(ctx)
-		require.NoError(b, err)
 	}
 	_ = eng.Close()
 	b.ReportAllocs()
