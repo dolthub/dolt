@@ -57,12 +57,16 @@ func BenchmarkOltpPointSelect(b *testing.B) {
 	})
 }
 
+// BenchmarkTableScan-14    	     589	   1992973 ns/op	 2948649 B/op	   62181 allocs/op
+// BenchmarkTableScan-14    	     900	   1132013 ns/op	 1842067 B/op	   12363 allocs/op
 func BenchmarkTableScan(b *testing.B) {
 	benchmarkSysbenchQuery(b, func(int) string {
 		return "SELECT * FROM sbtest1"
 	})
 }
 
+// BenchmarkOltpIndexScan-14    	     163	   7324405 ns/op	 2496428 B/op	   70452 allocs/op
+// BenchmarkOltpIndexScan-14    	     192	   6092641 ns/op	 1405302 B/op	   20691 allocs/op
 func BenchmarkOltpIndexScan(b *testing.B) {
 	benchmarkSysbenchQuery(b, func(int) string {
 		return "SELECT * FROM sbtest1 WHERE k > 0"
