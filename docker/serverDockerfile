@@ -45,16 +45,16 @@ RUN if [ "$DOLT_VERSION" = "latest" ]; then \
 FROM base AS runtime
 ARG DOLT_VERSION
 
-# Only one binary is possible due to DOLT_VERSION, so we optionally copy from either stage
-COPY --from=download-binary /usr/local/bin/dolt* /usr/local/bin/
-COPY --from=build-from-source /usr/local/bin/dolt* /usr/local/bin/
-
 # icu dependency for source builds
 RUN if [ "$DOLT_VERSION" = "source" ]; then \
         apt-get update -y && \
         apt-get install -y --no-install-recommends libicu-dev && \
         rm -rf /var/lib/apt/lists/*; \
     fi
+
+# Only one binary is possible due to DOLT_VERSION, so we optionally copy from either stage
+COPY --from=download-binary /usr/local/bin/dolt* /usr/local/bin/
+COPY --from=build-from-source /usr/local/bin/dolt* /usr/local/bin/
 
 RUN /usr/local/bin/dolt version
 
