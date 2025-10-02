@@ -1083,4 +1083,5 @@ SQL
   run dolt log -n 1
   [ "$status" -eq 0 ]
   [[ "$output" =~ "async push to backup1" ]] || false
+  [[ ! "$output" =~ "async push to remote1" ]] || false
 }
