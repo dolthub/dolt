@@ -1052,6 +1052,7 @@ SQL
   run dolt log -n 1
   [ "$status" -eq 0 ]
   [[ "$output" =~ "push one to remote1" ]] || false
+  [[ ! "$output" =~ "push one to backup1" ]] || false
 
   cd ../
   dolt clone file://./bac1 backup1_clone
