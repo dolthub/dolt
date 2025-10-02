@@ -17,8 +17,6 @@ package sqle
 import (
 	"bytes"
 	"context"
-	"errors"
-	"io"
 	"path/filepath"
 	"testing"
 	"time"
@@ -133,8 +131,11 @@ func TestPushOnWriteHook(t *testing.T) {
 		t.Error("Failed to commit")
 	}
 
+	logger := &bytes.Buffer{}
+
 	// setup hook
-	hook := NewPushOnWriteHook(destDB, tmpDir)
+	hook := NewPushOnWriteHook(tmpDir, logger)
+	hook.destDb = destDB
 	ddb.PrependCommitHooks(ctx, hook)
 
 	t.Run("replicate to remote", func(t *testing.T) {
@@ -157,30 +158,16 @@ func TestPushOnWriteHook(t *testing.T) {
 		destHash, _ := destCommit.HashOf()
 		assert.Equal(t, srcHash, destHash)
 	})
-
-	t.Run("replicate handle error logs to writer", func(t *testing.T) {
-		var buffer = &bytes.Buffer{}
-		err = hook.SetLogger(ctx, buffer)
-		assert.NoError(t, err)
-
-		msg := "prince charles is a vampire"
-		hook.HandleError(ctx, errors.New(msg))
-
-		assert.Contains(t, buffer.String(), msg)
-	})
 }
 
 func TestLogHook(t *testing.T) {
 	msg := []byte("hello")
-	var err error
 	t.Run("new log hook", func(t *testing.T) {
 		ctx := context.Background()
-		hook := NewLogHook(msg)
 		var buffer = &bytes.Buffer{}
-		err = hook.SetLogger(ctx, buffer)
-		assert.NoError(t, err)
+		hook := NewLogHook(msg, buffer)
 		hook.Execute(ctx, datas.Dataset{}, nil)
-		assert.Equal(t, buffer.Bytes(), msg)
+		assert.Equal(t, msg, buffer.Bytes())
 	})
 }
 
@@ -230,7 +217,8 @@ func TestAsyncPushOnWrite(t *testing.T) {
 	t.Run("replicate to remote", func(t *testing.T) {
 		bThreads := sql.NewBackgroundThreads()
 		defer bThreads.Shutdown()
-		hook, runThreads := NewAsyncPushOnWriteHook(destDB, tmpDir, &buffer.Buffer{})
+		hook, runThreads := NewAsyncPushOnWriteHook(tmpDir, &buffer.Buffer{})
+		hook.destDb = destDB
 		require.NotNil(t, hook)
 		require.NotNil(t, runThreads)
 		runThreads(bThreads, func(ctx context.Context) (*sql.Context, error) {
@@ -303,7 +291,8 @@ func TestAsyncPushOnWrite(t *testing.T) {
 		destDB.PrependCommitHooks(context.Background(), counts)
 
 		bThreads := sql.NewBackgroundThreads()
-		hook, runThreads := NewAsyncPushOnWriteHook(destDB, tmpDir, &buffer.Buffer{})
+		hook, runThreads := NewAsyncPushOnWriteHook(tmpDir, &buffer.Buffer{})
+		hook.destDb = destDB
 		runThreads(bThreads, func(ctx context.Context) (*sql.Context, error) {
 			return sql.NewContext(ctx), nil
 		})
@@ -345,14 +334,6 @@ type countingCommitHook struct {
 func (c *countingCommitHook) Execute(ctx context.Context, ds datas.Dataset, db *doltdb.DoltDB) (func(context.Context) error, error) {
 	c.counts[ds.ID()] += 1
 	return nil, nil
-}
-
-func (c *countingCommitHook) HandleError(ctx context.Context, err error) error {
-	return nil
-}
-
-func (c *countingCommitHook) SetLogger(ctx context.Context, wr io.Writer) error {
-	return nil
 }
 
 func (c *countingCommitHook) ExecuteForWorkingSets() bool {

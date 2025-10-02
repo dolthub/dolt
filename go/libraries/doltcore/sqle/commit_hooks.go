@@ -22,16 +22,20 @@ import (
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/sirupsen/logrus"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 type PushOnWriteHook struct {
 	out    io.Writer
-	destDB *doltdb.DoltDB
+	destDb *doltdb.DoltDB
 	tmpDir string
 }
 
@@ -39,16 +43,29 @@ var _ doltdb.CommitHook = (*PushOnWriteHook)(nil)
 
 // NewPushOnWriteHook creates a ReplicateHook, parameterizaed by the backup database
 // and a local tempfile for pushing
-func NewPushOnWriteHook(destDB *doltdb.DoltDB, tmpDir string) *PushOnWriteHook {
+func NewPushOnWriteHook(tmpDir string, logger io.Writer) *PushOnWriteHook {
 	return &PushOnWriteHook{
-		destDB: destDB,
 		tmpDir: tmpDir,
+		out:    logger,
 	}
 }
 
 // Execute implements CommitHook, replicates head updates to the destDb field
-func (ph *PushOnWriteHook) Execute(ctx context.Context, ds datas.Dataset, db *doltdb.DoltDB) (func(context.Context) error, error) {
-	return nil, pushDataset(ctx, ph.destDB, db, ds, ph.tmpDir)
+func (ph *PushOnWriteHook) Execute(ctx context.Context, ds datas.Dataset, srcDb *doltdb.DoltDB) (func(context.Context) error, error) {
+	if ph.destDb == nil {
+		e := fmt.Errorf("PushOnWriteHook invoked with nil destDB")
+		logrus.Errorf("runtime error: %v", e)
+		return nil, e
+	}
+
+	err := pushDataset(ctx, ph.destDb, srcDb, ds, ph.tmpDir)
+
+	if ph.out != nil && err != nil {
+		// if we can't write to the output, there's not much we can do.
+		_, _ = ph.out.Write([]byte(fmt.Sprintf("error pushing: %+v", err)))
+	}
+
+	return nil, err
 }
 
 func pushDataset(ctx context.Context, destDB, srcDB *doltdb.DoltDB, ds datas.Dataset, tmpDir string) error {
@@ -72,36 +89,22 @@ func pushDataset(ctx context.Context, destDB, srcDB *doltdb.DoltDB, ds datas.Dat
 	return destDB.SetHead(ctx, rf, addr)
 }
 
-// HandleError implements CommitHook
-func (ph *PushOnWriteHook) HandleError(ctx context.Context, err error) error {
-	if ph.out != nil {
-		_, err := ph.out.Write([]byte(fmt.Sprintf("error pushing: %+v", err)))
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func (*PushOnWriteHook) ExecuteForWorkingSets() bool {
 	return false
 }
 
-// SetLogger implements CommitHook
-func (ph *PushOnWriteHook) SetLogger(ctx context.Context, wr io.Writer) error {
-	ph.out = wr
-	return nil
-}
-
 type PushArg struct {
-	ds   datas.Dataset
-	db   *doltdb.DoltDB
-	hash hash.Hash
+	ds     datas.Dataset
+	srcDb  *doltdb.DoltDB
+	destDb *doltdb.DoltDB
+	hash   hash.Hash
 }
 
 type AsyncPushOnWriteHook struct {
 	out io.Writer
 	ch  chan PushArg
+
+	destDb *doltdb.DoltDB
 }
 
 const (
@@ -114,10 +117,10 @@ const (
 var _ doltdb.CommitHook = (*AsyncPushOnWriteHook)(nil)
 
 // NewAsyncPushOnWriteHook creates a AsyncReplicateHook
-func NewAsyncPushOnWriteHook(destDB *doltdb.DoltDB, tmpDir string, logger io.Writer) (*AsyncPushOnWriteHook, RunAsyncThreads) {
+func NewAsyncPushOnWriteHook(tmpDir string, logger io.Writer) (*AsyncPushOnWriteHook, RunAsyncThreads) {
 	ch := make(chan PushArg, asyncPushBufferSize)
 	runThreads := func(bThreads *sql.BackgroundThreads, ctxF func(context.Context) (*sql.Context, error)) error {
-		return RunAsyncReplicationThreads(bThreads, ctxF, ch, destDB, tmpDir, logger)
+		return RunAsyncReplicationThreads(bThreads, ctxF, ch, tmpDir, logger)
 	}
 	return &AsyncPushOnWriteHook{ch: ch}, runThreads
 }
@@ -127,25 +130,23 @@ func (*AsyncPushOnWriteHook) ExecuteForWorkingSets() bool {
 }
 
 // Execute implements CommitHook, replicates head updates to the destDb field
-func (ah *AsyncPushOnWriteHook) Execute(ctx context.Context, ds datas.Dataset, db *doltdb.DoltDB) (func(context.Context) error, error) {
+func (ah *AsyncPushOnWriteHook) Execute(ctx context.Context, ds datas.Dataset, srcDb *doltdb.DoltDB) (func(context.Context) error, error) {
+	if ah.destDb == nil {
+		e := fmt.Errorf("AsyncPushOnWriteHook invoked with nil destDB")
+		logrus.Errorf("runtime error: %v", e)
+		return nil, e
+	}
+
 	addr, _ := ds.MaybeHeadAddr()
 	// TODO: Unconditional push here seems dangerous.
-	ah.ch <- PushArg{ds: ds, db: db, hash: addr}
-	return nil, ctx.Err()
-}
+	ah.ch <- PushArg{ds: ds, srcDb: srcDb, destDb: ah.destDb, hash: addr}
 
-// HandleError implements CommitHook
-func (ah *AsyncPushOnWriteHook) HandleError(ctx context.Context, err error) error {
-	if ah.out != nil {
-		ah.out.Write([]byte(err.Error()))
+	err := ctx.Err()
+	if err != nil {
+		_, _ = ah.out.Write([]byte(err.Error()))
 	}
-	return nil
-}
 
-// SetLogger implements CommitHook
-func (ah *AsyncPushOnWriteHook) SetLogger(ctx context.Context, wr io.Writer) error {
-	ah.out = wr
-	return nil
+	return nil, err
 }
 
 type LogHook struct {
@@ -156,38 +157,23 @@ type LogHook struct {
 var _ doltdb.CommitHook = (*LogHook)(nil)
 
 // NewLogHook is a noop that logs to a writer when invoked
-func NewLogHook(msg []byte) *LogHook {
-	return &LogHook{msg: msg}
+func NewLogHook(msg []byte, logger io.Writer) *LogHook {
+	return &LogHook{msg: msg, out: logger}
 }
 
 // Execute implements CommitHook, writes message to log channel
 func (lh *LogHook) Execute(ctx context.Context, ds datas.Dataset, db *doltdb.DoltDB) (func(context.Context) error, error) {
 	if lh.out != nil {
-		_, err := lh.out.Write(lh.msg)
-		return nil, err
+		_, _ = lh.out.Write(lh.msg)
 	}
 	return nil, nil
-}
-
-// HandleError implements CommitHook
-func (lh *LogHook) HandleError(ctx context.Context, err error) error {
-	if lh.out != nil {
-		lh.out.Write([]byte(err.Error()))
-	}
-	return nil
-}
-
-// SetLogger implements CommitHook
-func (lh *LogHook) SetLogger(ctx context.Context, wr io.Writer) error {
-	lh.out = wr
-	return nil
 }
 
 func (*LogHook) ExecuteForWorkingSets() bool {
 	return false
 }
 
-func RunAsyncReplicationThreads(bThreads *sql.BackgroundThreads, ctxF func(context.Context) (*sql.Context, error), ch chan PushArg, destDB *doltdb.DoltDB, tmpDir string, logger io.Writer) error {
+func RunAsyncReplicationThreads(bThreads *sql.BackgroundThreads, ctxF func(context.Context) (*sql.Context, error), ch chan PushArg, tmpDir string, logger io.Writer) error {
 	mu := &sync.Mutex{}
 	var newHeads = make(map[string]PushArg, asyncPushBufferSize)
 
@@ -254,7 +240,7 @@ func RunAsyncReplicationThreads(bThreads *sql.BackgroundThreads, ctxF func(conte
 						defer sql.SessionEnd(sqlCtx.Session)
 						sql.SessionCommandBegin(sqlCtx.Session)
 						defer sql.SessionCommandEnd(sqlCtx.Session)
-						err := pushDataset(sqlCtx, destDB, newCm.db, newCm.ds, tmpDir)
+						err := pushDataset(sqlCtx, newCm.destDb, newCm.srcDb, newCm.ds, tmpDir)
 						if err != nil {
 							logger.Write([]byte("replication failed: " + err.Error()))
 						}
@@ -291,4 +277,166 @@ func RunAsyncReplicationThreads(bThreads *sql.BackgroundThreads, ctxF func(conte
 	}
 
 	return nil
+}
+
+// DynamicPushOnWriteHook is a CommitHook that conditionally invokes either a PushOnWriteHook or an AsyncPushOnWriteHook
+// based on the values of the `dolt_replicate_to_remote` and `dolt_async_replication` system variables. If
+// `dolt_replicate_to_remote`
+//
+// Each time the Execute method is invoked, the current values of the system variables are checked. If they differ from the
+// last invocation, the internal PushOnWriteHook or AsyncPushOnWriteHook is updated to reflect the new configuration.
+type DynamicPushOnWriteHook struct {
+	mu      sync.Mutex
+	dEnv    *env.DoltEnv
+	tempDir string
+	logger  io.Writer
+
+	// Values below protected with mu Mutex
+	remote string
+	async  bool
+	// Wrappers around the two hook types. We update the fields of these structs as needed based on the current config.
+	syncHook  PushOnWriteHook
+	asyncHook AsyncPushOnWriteHook
+}
+
+var _ doltdb.CommitHook = (*DynamicPushOnWriteHook)(nil)
+
+// NewDynamicPushOnWriteHook creates a DynamicPushOnWriteHook, parameterized by the environment and a logger. The configuration
+// options at this time can result in errors, for example if the provided remote does not exist. This is not the case
+// when the process is up and running. If bad configuration is detected at execution time, the error is logged and replication is skipped.
+func NewDynamicPushOnWriteHook(ctx context.Context, dEnv *env.DoltEnv, logger io.Writer) (*DynamicPushOnWriteHook, RunAsyncThreads, error) {
+	remote, async, err := getReplicationVals()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	tmpDir, err := dEnv.TempTableFilesDir()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	a, newThreads := NewAsyncPushOnWriteHook(tmpDir, logger)
+	p := NewPushOnWriteHook(tmpDir, logger)
+
+	if remote != "" {
+		destDb, err := getDestinationDb(ctx, dEnv, remote)
+		if err != nil {
+			return nil, nil, err
+		}
+		p.destDb = destDb
+		a.destDb = destDb
+	}
+
+	return &DynamicPushOnWriteHook{
+		dEnv:      dEnv,
+		tempDir:   tmpDir,
+		logger:    logger,
+		remote:    remote,
+		async:     async,
+		syncHook:  *p,
+		asyncHook: *a,
+	}, newThreads, nil
+}
+
+// getReplicationVals gets the current values of the `dolt_replicate_to_remote` and `dolt_async_replication` system
+// variables.
+func getReplicationVals() (string, bool, error) {
+	_, val, ok := sql.SystemVariables.GetGlobal(dsess.ReplicateToRemote)
+	if !ok {
+		return "", false, sql.ErrUnknownSystemVariable.New(dsess.ReplicateToRemote)
+	}
+	remoteName, ok := val.(string)
+	if !ok {
+		return "", false, sql.ErrInvalidSystemVariableValue.New(val)
+	}
+
+	async := false
+	if _, val, ok = sql.SystemVariables.GetGlobal(dsess.AsyncReplication); ok && val == dsess.SysVarTrue {
+		async = true
+	}
+
+	return remoteName, async, nil
+}
+
+// getDestinationDb gets the target doltdb for replication, based on a provided remote name.
+func getDestinationDb(ctx context.Context, dEnv *env.DoltEnv, remoteName string) (*doltdb.DoltDB, error) {
+	remotes, err := dEnv.GetRemotes()
+	if err != nil {
+		return nil, err
+	}
+
+	rem, ok := remotes.Get(remoteName)
+	if !ok {
+		return nil, fmt.Errorf("%w: '%s'", env.ErrRemoteNotFound, remoteName)
+	}
+
+	destDb, err := rem.GetRemoteDB(ctx, types.Format_Default, dEnv)
+	if err != nil {
+		return nil, err
+	}
+	return destDb, nil
+}
+
+func (m *DynamicPushOnWriteHook) Execute(ctx context.Context, ds datas.Dataset, db *doltdb.DoltDB) (func(context.Context) error, error) {
+	remoteName, async, err := getReplicationVals()
+
+	// We only need the lock if the remote configuration has changed.
+	hook, err := func() (doltdb.CommitHook, error) {
+		m.mu.Lock()
+		defer m.mu.Unlock()
+
+		if m.remote == remoteName && m.async == async {
+			// No change in config since last execution.
+			if m.remote == "" {
+				// replication disabled
+				return nil, nil
+			}
+
+			if async {
+				return &m.asyncHook, nil
+			}
+			return &m.syncHook, nil
+		}
+
+		if remoteName == "" {
+			// replication disabled
+			m.remote = ""
+			m.async = false
+			m.asyncHook.destDb = nil
+			m.syncHook.destDb = nil
+			return nil, nil
+		}
+
+		m.remote = remoteName
+
+		destDb, err := getDestinationDb(ctx, m.dEnv, m.remote)
+		if err != nil {
+			return nil, err
+		}
+
+		m.syncHook.destDb = destDb
+		m.asyncHook.destDb = destDb
+
+		if async {
+			return &m.asyncHook, nil
+		}
+		return &m.syncHook, nil
+	}()
+
+	if err != nil {
+		logrus.Warnf("replication hook failed: %v", err)
+		return nil, err
+	}
+
+	if hook == nil {
+		// replication disabled
+		return nil, nil
+	}
+
+	logrus.Debugf("replication hook invoked. pushing to '%s' (asyn=%t)", remoteName, async)
+	return hook.Execute(ctx, ds, db)
+}
+
+func (m *DynamicPushOnWriteHook) ExecuteForWorkingSets() bool {
+	return false
 }

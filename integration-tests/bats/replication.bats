@@ -22,6 +22,8 @@ teardown() {
     teardown_common
     rm -rf $TMPDIRS
     cd $BATS_TMPDIR
+
+    stop_sql_server
 }
 
 @test "replication: configuration errors" {
@@ -1028,4 +1030,59 @@ SQL
     run dolt sql -q "select * from foo" -r csv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "1,1" ]] || false 
+}
+
+@test "replication: sql-server remote replication config changes update in real time" {
+  # This test is a little different from others in this file. We configure branch
+  # replication to push to remote1 or backup1. Then we create a commit, and fetch from
+  # the appropriate replica to ensure the configuration was honored.
+
+  cd repo1
+  start_sql_server
+
+  dolt sql -q "set @@persist.dolt_replicate_to_remote = 'remote1'"
+  dolt commit --allow-empty -m "push one to remote1"
+
+  dolt sql -q "set @@persist.dolt_replicate_to_remote = 'backup1'"
+  dolt commit --allow-empty -m "push one to backup1"
+
+  cd ../
+  dolt clone file://./rem1 remote1_clone
+  cd remote1_clone
+  run dolt log -n 1
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "push one to remote1" ]] || false
+  [[ ! "$output" =~ "push one to backup1" ]] || false
+
+  cd ../
+  dolt clone file://./bac1 backup1_clone
+  cd backup1_clone
+  run dolt log -n 1
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "push one to backup1" ]] || false
+
+  # We can also update the `dolt_async_replication` setting and have it take effect without
+  # restarting the server. We don't have a great way to differentiate between async and sync
+  # but we'll at least turn it on to make sure it continues to replicate.
+  cd ../repo1
+  dolt sql -q "set @@persist.dolt_async_replication = 1"
+  dolt commit --allow-empty -m "async push to backup1"
+  sleep 5 # allow for async replication to complete
+
+  dolt sql -q "set @@persist.dolt_replicate_to_remote = 'remote1'"
+  dolt commit --allow-empty -m "async push to remote1"
+  sleep 5
+
+  cd ../remote1_clone
+  dolt pull
+  run dolt log -n 1
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "async push to remote1" ]] || false
+
+  cd ../backup1_clone
+  dolt pull
+  run dolt log -n 1
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "async push to backup1" ]] || false
+  [[ ! "$output" =~ "async push to remote1" ]] || false
 }
