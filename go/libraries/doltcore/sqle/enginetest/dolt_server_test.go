@@ -20,6 +20,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/require"
 
@@ -127,4 +128,38 @@ func TestDoltServerRunningUnixSocket(t *testing.T) {
 	tcpSc.Stop()
 	err = tcpSc.WaitForStop()
 	require.NoError(t, err)
+}
+
+func TestSingleScriptServer(t *testing.T) {
+	// t.Skip()
+
+	var scripts = []queries.ScriptTest{
+		{
+			// https://github.com/dolthub/dolt/issues/9865
+			Name: "Stored procedure containing a transaction does not return EOF",
+			SetUpScript: []string{
+				"CREATE DATABASE test_db",
+				"USE test_db",
+				"CREATE TABLE test_table (id INT PRIMARY KEY, name TEXT)",
+				`CREATE PROCEDURE my_procedure()
+BEGIN
+  START TRANSACTION;
+    INSERT INTO test_table VALUES (1, 'test');
+  COMMIT;
+END`,
+			},
+			Assertions: []queries.ScriptTestAssertion{
+				{
+					Query:    "CALL my_procedure()",
+					Expected: []sql.Row{},
+				},
+				{
+					Query:    "SELECT * FROM test_table",
+					Expected: []sql.Row{{1, "test"}},
+				},
+			},
+		},
+	}
+
+	testSerialSessionScriptTests(t, scripts)
 }

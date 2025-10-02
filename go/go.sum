@@ -215,6 +215,8 @@ github.com/dolthub/go-icu-regex v0.0.0-20250916051405-78a38d478790 h1:zxMsH7RLiG
 github.com/dolthub/go-icu-regex v0.0.0-20250916051405-78a38d478790/go.mod h1:F3cnm+vMRK1HaU6+rNqQrOCyR03HHhR1GWG2gnPOqaE=
 github.com/dolthub/go-mysql-server v0.20.1-0.20251001225617-2be75e45a2a1 h1:GE+5hm/8ea96277oysLFqaCsONRsbrXK964I5O0NJA4=
 github.com/dolthub/go-mysql-server v0.20.1-0.20251001225617-2be75e45a2a1/go.mod h1:EeYR0apo+8j2Dyxmn2ghkPlirO2S5mT1xHBrA+Efys8=
+github.com/dolthub/go-mysql-server v0.20.1-0.20251002175735-599752817105 h1:HUVqGfhnepfTU2shDIA4seI7OMexGcfomh+Ve9zxX0A=
+github.com/dolthub/go-mysql-server v0.20.1-0.20251002175735-599752817105/go.mod h1:EeYR0apo+8j2Dyxmn2ghkPlirO2S5mT1xHBrA+Efys8=
 github.com/dolthub/gozstd v0.0.0-20240423170813-23a2903bca63 h1:OAsXLAPL4du6tfbBgK0xXHZkOlos63RdKYS3Sgw/dfI=
 github.com/dolthub/gozstd v0.0.0-20240423170813-23a2903bca63/go.mod h1:lV7lUeuDhH5thVGDCKXbatwKy2KW80L4rMT46n+Y2/Q=
 github.com/dolthub/ishell v0.0.0-20240701202509-2b217167d718 h1:lT7hE5k+0nkBdj/1UOSFwjWpNxf+LCApbRHgnCA17XE=
