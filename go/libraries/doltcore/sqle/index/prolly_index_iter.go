@@ -395,6 +395,9 @@ type prollyKeylessIndexIter struct {
 	ordMap    val.OrdinalMapping
 	valueDesc val.TupleDesc
 	sqlSch    sql.Schema
+
+	card uint64
+	curr sql.Row2
 }
 
 var _ sql.RowIter = prollyKeylessIndexIter{}
@@ -528,6 +531,55 @@ func (p prollyKeylessIndexIter) keylessRowsFromValueTuple(ctx context.Context, n
 		rows[i] = rows[0].Copy()
 	}
 	return
+}
+
+func (p prollyKeylessIndexIter) Next2(ctx *sql.Context) (sql.Row2, error) {
+	if p.card == 0 {
+		idxKey, _, err := p.indexIter.Next(ctx)
+		if err != nil {
+			return nil, err
+		}
+		for to := range p.clusteredMap {
+			from := p.clusteredMap.MapOrdinal(to)
+			p.clusteredBld.PutRaw(to, idxKey.GetField(from))
+		}
+		pk, err := p.clusteredBld.Build(sharePool)
+		if err != nil {
+			return nil, err
+		}
+
+		var value val.Tuple
+		err = p.clustered.Get(ctx, pk, func(k, v val.Tuple) error {
+			value = v
+			return nil
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		p.card = val.ReadKeylessCardinality(value)
+		ns := p.clustered.NodeStore() // TODO: cache this?
+		p.curr = make(sql.Row2, len(p.valueMap))
+		for i, idx := range p.valueMap {
+			outputIdx := p.ordMap[i]
+			typ, ok := val.EncToType[p.valueDesc.Types[idx].Enc]
+			if !ok {
+				panic(fmt.Sprintf("unmapped encoding type %v", p.valueDesc.Types[idx].Enc))
+			}
+			field := sql.Value{
+				Val: tree.GetField2(ctx, p.valueDesc, idx, value, ns),
+				Typ: typ,
+			}
+			p.curr[outputIdx] = field
+		}
+	}
+
+	p.card--
+	return p.curr, nil
+}
+
+func (p prollyKeylessIndexIter) IsRowIter2(ctx *sql.Context) bool {
+	return true
 }
 
 func (p prollyKeylessIndexIter) Close(*sql.Context) error {
