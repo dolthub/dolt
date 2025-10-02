@@ -266,7 +266,7 @@ func newLateBindingEngine(
 			// to include auto-gc log lines.
 			nullLgr := logrus.New()
 			nullLgr.SetOutput(io.Discard)
-			config.AutoGCController = sqle.NewAutoGCController(chunks.NoArchive, nullLgr)
+			config.AutoGCController = sqle.NewAutoGCController(chunks.SimpleArchive, nullLgr)
 		}
 
 		se, err := engine.NewSqlEngine(
