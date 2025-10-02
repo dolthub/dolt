@@ -1611,6 +1611,47 @@ var DoltRebaseScriptTests = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "dolt_rebase: handles multi-line commit messages",
+		SetUpScript: []string{
+			`CALL dolt_commit('--allow-empty', '-m', 'empty commit 1');`,
+			`CALL dolt_commit('--allow-empty', '-m', 'empty 
+commit 
+2');`,
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT message FROM dolt_log LIMIT 1;",
+				Expected: []sql.Row{
+					{"empty \ncommit \n2"},
+				},
+			},
+			{
+				Query: "CALL dolt_rebase('-i', '--empty=keep', 'HEAD~1');",
+				Expected: []sql.Row{
+					{0, "interactive rebase started on branch dolt_rebase_main; adjust the rebase plan in the dolt_rebase table, then continue rebasing by calling dolt_rebase('--continue')"},
+				},
+			},
+			{
+				Query: "SELECT * from dolt_rebase;",
+				Expected: []sql.Row{
+					{"1", "pick", doltCommit, "empty \ncommit \n2"},
+				},
+			},
+			{
+				Query: "CALL dolt_rebase('--continue');",
+				Expected: []sql.Row{
+					{0, "Successfully rebased and updated refs/heads/main"},
+				},
+			},
+			{
+				Query: "SELECT message FROM dolt_log LIMIT 1;",
+				Expected: []sql.Row{
+					{"empty \ncommit \n2"},
+				},
+			},
+		},
+	},
 }
 
 var DoltRebaseMultiSessionScriptTests = []queries.ScriptTest{

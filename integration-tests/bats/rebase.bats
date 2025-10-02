@@ -21,9 +21,15 @@ teardown() {
     teardown_common
 }
 
+# sets up the EDITOR env var with a script that takes the input file from
+# the process invoking the editor and copies it to the editor-input.txt
+# file for tests to check, and then copies the file specifeid as an argument
+# to this function, as the output for the editor, sent back to the process
+# that invoked the editor.
 setupCustomEditorScript() {
     touch rebaseScript.sh
     echo "#!/bin/bash" >> rebaseScript.sh
+    echo "cp \$1 editor-input.txt" >> rebaseScript.sh
     if [ $# -eq 1 ]; then
       echo "mv $1 \$1" >> rebaseScript.sh
     fi
@@ -129,6 +135,33 @@ setupCustomEditorScript() {
     run dolt log
     [ "$status" -eq 0 ]
     [[ "$output" =~ "main commit 2" ]] || false
+}
+
+# bats test_tags=no_lambda
+# skip bats on lambda, since we don't have the pcre2grep utility there
+@test "rebase: multi-line commit messages" {
+    setupCustomEditorScript
+
+    # Create a multi-line commit message
+    dolt checkout b1
+    dolt commit --allow-empty -m "multi
+line
+commit
+message"
+
+    # Run rebase (with the default plan, custom editor makes no changes)
+    run dolt rebase --empty=keep -i main
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Successfully rebased and updated refs/heads/b1" ]] || false
+
+    # Assert that the newlines were removed in the rebase plan editor
+    grep "multi line commit message" editor-input.txt
+
+    # Assert that the commit log still shows the multi-line message
+    run dolt log -n1
+    [ "$status" -eq 0 ]
+    echo "$output" > tmp.out
+    pcre2grep -nM "multi\s*\R+\s*line\s*\R+\s*commit\s*\R+\s*message" tmp.out
 }
 
 @test "rebase: failed rebase will abort and clean up" {

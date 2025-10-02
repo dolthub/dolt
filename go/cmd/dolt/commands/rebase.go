@@ -266,6 +266,10 @@ func buildInitialRebaseMsg(sqlCtx *sql.Context, queryist cli.Queryist, rebaseBra
 		if !ok {
 			return "", fmt.Errorf("unexpected type for commit_message; expected string, found %T", commitMessage)
 		}
+
+		// Match Git's behavior and filter out newlines
+		commitMessage = strings.Replace(commitMessage, "\n", " ", -1)
+
 		buffer.WriteString(fmt.Sprintf("%s %s %s\n", action, commitHash, commitMessage))
 	}
 	buffer.WriteString("\n")
