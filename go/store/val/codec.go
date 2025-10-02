@@ -24,12 +24,11 @@ import (
 	"time"
 	"unsafe"
 
+	querypb "github.com/dolthub/vitess/go/vt/proto/query"
 	"github.com/shopspring/decimal"
 
 	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/store/hash"
-
-	querypb "github.com/dolthub/vitess/go/vt/proto/query"
 )
 
 type Type struct {
