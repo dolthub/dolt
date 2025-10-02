@@ -279,19 +279,31 @@ func RunAsyncReplicationThreads(bThreads *sql.BackgroundThreads, ctxF func(conte
 	return nil
 }
 
+// DynamicPushOnWriteHook is a CommitHook that conditionally invokes either a PushOnWriteHook or an AsyncPushOnWriteHook
+// based on the values of the `dolt_replicate_to_remote` and `dolt_async_replication` system variables. If
+// `dolt_replicate_to_remote`
+//
+// Each time the Execute method is invoked, the current values of the system variables are checked. If they differ from the
+// last invocation, the internal PushOnWriteHook or AsyncPushOnWriteHook is updated to reflect the new configuration.
 type DynamicPushOnWriteHook struct {
 	mu      sync.Mutex
 	dEnv    *env.DoltEnv
 	tempDir string
 	logger  io.Writer
 
-	// Values below protected with mu
-	remote    string
-	async     bool
+	// Values below protected with mu Mutex
+	remote string
+	async  bool
+	// Wrappers around the two hook types. We update the fields of these structs as needed based on the current config.
 	syncHook  PushOnWriteHook
 	asyncHook AsyncPushOnWriteHook
 }
 
+var _ doltdb.CommitHook = (*DynamicPushOnWriteHook)(nil)
+
+// NewDynamicPushOnWriteHook creates a DynamicPushOnWriteHook, parameterized by the environment and a logger. The configuration
+// options at this time can result in errors, for example if the provided remote does not exist. This is not the case
+// when the process is up and running. If bad configuration is detected at execution time, the error is logged and replication is skipped.
 func NewDynamicPushOnWriteHook(ctx context.Context, dEnv *env.DoltEnv, logger io.Writer) (*DynamicPushOnWriteHook, RunAsyncThreads, error) {
 	remote, async, err := getReplicationVals()
 	if err != nil {
@@ -326,6 +338,8 @@ func NewDynamicPushOnWriteHook(ctx context.Context, dEnv *env.DoltEnv, logger io
 	}, newThreads, nil
 }
 
+// getReplicationVals gets the current values of the `dolt_replicate_to_remote` and `dolt_async_replication` system
+// variables.
 func getReplicationVals() (string, bool, error) {
 	_, val, ok := sql.SystemVariables.GetGlobal(dsess.ReplicateToRemote)
 	if !ok {
@@ -344,6 +358,7 @@ func getReplicationVals() (string, bool, error) {
 	return remoteName, async, nil
 }
 
+// getDestinationDb gets the target doltdb for replication, based on a provided remote name.
 func getDestinationDb(ctx context.Context, dEnv *env.DoltEnv, remoteName string) (*doltdb.DoltDB, error) {
 	remotes, err := dEnv.GetRemotes()
 	if err != nil {
@@ -425,5 +440,3 @@ func (m *DynamicPushOnWriteHook) Execute(ctx context.Context, ds datas.Dataset, 
 func (m *DynamicPushOnWriteHook) ExecuteForWorkingSets() bool {
 	return false
 }
-
-var _ doltdb.CommitHook = (*DynamicPushOnWriteHook)(nil)
