@@ -302,10 +302,6 @@ func (it *prollyKeylessIter) Next2(ctx *sql.Context) (sql.Row2, error) {
 			}
 			it.curr2[outputIdx] = field
 		}
-
-		if err = it.nextTuple(ctx); err != nil {
-			return nil, err
-		}
 	}
 	it.card--
 	return it.curr2, nil
