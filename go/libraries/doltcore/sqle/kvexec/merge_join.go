@@ -316,12 +316,14 @@ func (l *mergeJoinKvIter) buildResultRow(ctx *sql.Context, leftKey, leftVal, rig
 		if res == nil && l.excludeNulls {
 			// override default left join behavior
 			return nil, false, nil
-		} else if !sql.IsTrue(res) && !rightKeyNil {
+		}
+		if !sql.IsTrue(res) && !rightKeyNil {
 			return nil, false, nil
 		}
 	}
 
-	return candidate, true, nil
+	// TODO: Deep copy the row
+	return candidate.Copy(), true, nil
 }
 
 func (l *mergeJoinKvIter) exhaustLeftReturn(ctx *sql.Context) (sql.Row, error) {
