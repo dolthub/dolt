@@ -180,6 +180,14 @@ func commit_flatbuffer(vaddr hash.Hash, opts CommitOptions, heights []uint64, pa
 		sigoff = builder.CreateString(opts.Meta.Signature)
 	}
 
+	var committerNameOff, committerEmailOff flatbuffers.UOffsetT
+	if opts.Meta.CommitterName != nil {
+		committerNameOff = builder.CreateString(*opts.Meta.CommitterName)
+	}
+	if opts.Meta.CommitterEmail != nil {
+		committerEmailOff = builder.CreateString(*opts.Meta.CommitterEmail)
+	}
+
 	serial.CommitStart(builder)
 	serial.CommitAddRoot(builder, vaddroff)
 	serial.CommitAddHeight(builder, maxheight+1)
@@ -191,6 +199,12 @@ func commit_flatbuffer(vaddr hash.Hash, opts CommitOptions, heights []uint64, pa
 	serial.CommitAddTimestampMillis(builder, opts.Meta.Timestamp)
 	serial.CommitAddUserTimestampMillis(builder, opts.Meta.UserTimestamp)
 	serial.CommitAddSignature(builder, sigoff)
+	if committerNameOff != 0 {
+		serial.CommitAddCommitterName(builder, committerNameOff)
+	}
+	if committerEmailOff != 0 {
+		serial.CommitAddCommitterEmail(builder, committerEmailOff)
+	}
 
 	bytes := serial.FinishMessage(builder, serial.CommitEnd(builder), []byte(serial.CommitFileID))
 	return bytes, maxheight + 1
@@ -590,6 +604,17 @@ func GetCommitMeta(ctx context.Context, cv types.Value) (*CommitMeta, error) {
 		ret.Timestamp = cmsg.TimestampMillis()
 		ret.UserTimestamp = cmsg.UserTimestampMillis()
 		ret.Signature = string(cmsg.Signature())
+
+		// Only set committer fields if they exist in the flatbuffer
+		if cnBytes := cmsg.CommitterName(); cnBytes != nil {
+			committerName := string(cnBytes)
+			ret.CommitterName = &committerName
+		}
+		if ceBytes := cmsg.CommitterEmail(); ceBytes != nil {
+			committerEmail := string(ceBytes)
+			ret.CommitterEmail = &committerEmail
+		}
+
 		return ret, nil
 	}
 	c, ok := cv.(types.Struct)

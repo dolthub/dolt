@@ -178,6 +178,9 @@ func performCommit(ctx context.Context, commandStr string, args []string, cliCtx
 	}
 
 	commit, err := getCommitInfo(queryist.Queryist, queryist.Context, "HEAD")
+	if err != nil {
+		return handleCommitErr(queryist.Context, queryist.Queryist, err, usage), false
+	}
 	if cli.ExecuteWithStdioRestored != nil {
 		cli.ExecuteWithStdioRestored(func() {
 			pager := outputpager.Start()
@@ -253,6 +256,22 @@ func constructParametrizedDoltCommitQuery(msg string, apr *argparser.ArgParseRes
 		author = name + " <" + email + ">"
 	}
 	params = append(params, author)
+
+	if apr.Contains(cli.CommitterParam) {
+		writeToBuffer("--committer")
+		param = true
+		writeToBuffer("?")
+		committer, _ := apr.GetValue(cli.CommitterParam)
+		params = append(params, committer)
+	}
+
+	if apr.Contains(cli.CommitterDateParam) {
+		writeToBuffer("--committer-date")
+		param = true
+		writeToBuffer("?")
+		committerDate, _ := apr.GetValue(cli.CommitterDateParam)
+		params = append(params, committerDate)
+	}
 
 	if apr.Contains(cli.AllFlag) {
 		writeToBuffer("-a")

@@ -61,7 +61,7 @@ export function branchesMatcher(rows, exp) {
 }
 
 export function logsMatcher(rows, exp) {
-  const exceptionKeys = ["commit_hash", "date", "parents", "commit_order"];
+  const exceptionKeys = ["commit_hash", "date", "parents", "commit_order", "author_date"];
 
   function getExceptionIsValid(row, key, expRow) {
     const val = row[key];
@@ -69,6 +69,8 @@ export function logsMatcher(rows, exp) {
       case "commit_hash":
         return commitHashIsValid(val);
       case "date":
+        return dateIsValid(val);
+      case "author_date":
         return dateIsValid(val);
       case "parents":
         return (
