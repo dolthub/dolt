@@ -121,7 +121,7 @@ func (p prollyIndexIter) Next(ctx *sql.Context) (sql.Row, error) {
 }
 
 func (p prollyIndexIter) Next2(ctx *sql.Context) (sql.Row2, error) {
-	panic("blah")
+	//panic("blah")
 	idxKey, _, err := p.indexIter.Next(ctx)
 	if err != nil {
 		return nil, err
@@ -295,7 +295,7 @@ func (p prollyCoveringIndexIter) Next(ctx *sql.Context) (sql.Row, error) {
 }
 
 func (p prollyCoveringIndexIter) Next2(ctx *sql.Context) (sql.Row2, error) {
-	panic("blah")
+	//panic("blah")
 	k, v, err := p.indexIter.Next(ctx)
 	if err != nil {
 		return nil, err
@@ -536,7 +536,7 @@ func (p prollyKeylessIndexIter) keylessRowsFromValueTuple(ctx context.Context, n
 }
 
 func (p prollyKeylessIndexIter) Next2(ctx *sql.Context) (sql.Row2, error) {
-	panic("blah")
+	//panic("blah")
 	if p.card == 0 {
 		idxKey, _, err := p.indexIter.Next(ctx)
 		if err != nil {

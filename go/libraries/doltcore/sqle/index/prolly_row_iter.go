@@ -194,7 +194,7 @@ func (it prollyRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 }
 
 func (it prollyRowIter) Next2(ctx *sql.Context) (sql.Row2, error) {
-	panic("blah")
+	//panic("blah")
 	key, value, err := it.iter.Next(ctx)
 	if err != nil {
 		return nil, err
@@ -283,7 +283,7 @@ func (it *prollyKeylessIter) nextTuple(ctx *sql.Context) error {
 }
 
 func (it *prollyKeylessIter) Next2(ctx *sql.Context) (sql.Row2, error) {
-	panic("blah")
+	//panic("blah")
 	if it.card == 0 {
 		_, value, err := it.iter.Next(ctx)
 		if err != nil {
