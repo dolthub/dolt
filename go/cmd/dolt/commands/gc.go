@@ -127,7 +127,7 @@ func (cmd GarbageCollectionCmd) constructDoltGCQuery(apr *argparser.ArgParseResu
 		extraFlag = "--full"
 	}
 
-	archiveLevel := chunks.NoArchive
+	archiveLevel := chunks.SimpleArchive
 	if apr.Contains(cli.ArchiveLevelParam) {
 		lvl, ok := apr.GetInt(cli.ArchiveLevelParam)
 		if !ok {
