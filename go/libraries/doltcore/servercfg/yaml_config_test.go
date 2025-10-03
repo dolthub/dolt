@@ -35,8 +35,8 @@ behavior:
     disable_client_multi_statements: false
     event_scheduler: ON
     auto_gc_behavior:
-        enable: false
-        archive_level: 0
+        enable: true
+        archive_level: 1
 
 listener:
     host: localhost

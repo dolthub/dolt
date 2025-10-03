@@ -283,7 +283,7 @@ var DoltSystemVariables = []sql.SystemVariable{
 		Dynamic: false,
 		Scope:   sql.GetMysqlScope(sql.SystemVariableScope_Global),
 		Type:    types.NewSystemBoolType(dsess.DoltAutoGCEnabled),
-		Default: int8(0),
+		Default: int8(1),
 	},
 	&sql.MysqlSystemVariable{
 		Name:    dsess.AllowCICreation,

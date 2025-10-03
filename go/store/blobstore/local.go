@@ -81,29 +81,30 @@ func (bs *LocalBlobstore) Path() string {
 
 // Get retrieves an io.reader for the portion of a blob specified by br along with
 // its version
-func (bs *LocalBlobstore) Get(ctx context.Context, key string, br BlobRange) (io.ReadCloser, string, error) {
+func (bs *LocalBlobstore) Get(ctx context.Context, key string, br BlobRange) (io.ReadCloser, uint64, string, error) {
 	path := filepath.Join(bs.RootDir, key) + bsExt
 	f, err := os.Open(path)
 
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, "", NotFound{key}
+			return nil, 0, "", NotFound{key}
 		}
-		return nil, "", err
+		return nil, 0, "", err
 	}
 
 	info, err := f.Stat()
 	if err != nil {
-		return nil, "", err
+		return nil, 0, "", err
 	}
 	ver := info.ModTime().String()
+	size := uint64(info.Size())
 
 	rc, err := readCloserForFileRange(f, br)
 	if err != nil {
 		_ = f.Close()
-		return nil, "", err
+		return nil, 0, "", err
 	}
-	return rc, ver, nil
+	return rc, size, ver, nil
 }
 
 func readCloserForFileRange(f *os.File, br BlobRange) (io.ReadCloser, error) {
@@ -188,7 +189,7 @@ func (bs *LocalBlobstore) CheckAndPut(ctx context.Context, expectedVersion, key 
 
 	defer lck.Unlock()
 
-	rc, ver, err := bs.Get(ctx, key, BlobRange{})
+	rc, _, ver, err := bs.Get(ctx, key, BlobRange{})
 
 	if err != nil {
 		if !IsNotFoundError(err) {

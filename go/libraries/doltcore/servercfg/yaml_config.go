@@ -1042,14 +1042,14 @@ type AutoGCBehaviorYAMLConfig struct {
 
 func (a *AutoGCBehaviorYAMLConfig) Enable() bool {
 	if a.Enable_ == nil {
-		return false
+		return true
 	}
 	return *a.Enable_
 }
 
 func (a *AutoGCBehaviorYAMLConfig) ArchiveLevel() int {
 	if a.ArchiveLevel_ == nil {
-		return 0
+		return 1
 	}
 	return *a.ArchiveLevel_
 }

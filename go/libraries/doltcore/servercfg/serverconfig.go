@@ -59,7 +59,7 @@ const (
 	DefaultLogLevel                  = LogLevel_Info
 	DefaultLogFormat                 = LogFormat_Text
 	DefaultAutoCommit                = true
-	DefaultAutoGCBehaviorEnable      = false
+	DefaultAutoGCBehaviorEnable      = true
 	DefaultDoltTransactionCommit     = false
 	DefaultMaxConnections            = 1000
 	DefaultMaxWaitConnections        = 50
@@ -75,7 +75,7 @@ const (
 	DefaultMySQLUnixSocketFilePath   = "/tmp/mysql.sock"
 	DefaultMaxLoggedQueryLen         = 0
 	DefaultEncodeLoggedQuery         = false
-	DefaultCompressionLevel          = 0
+	DefaultCompressionLevel          = 1
 )
 
 func ptr[T any](t T) *T {

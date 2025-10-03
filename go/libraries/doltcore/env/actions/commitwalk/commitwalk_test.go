@@ -64,7 +64,7 @@ func createUninitializedEnv() *env.DoltEnv {
 func TestGetDotDotRevisions(t *testing.T) {
 	ctx := context.Background()
 	dEnv := createUninitializedEnv()
-	err := dEnv.InitRepo(context.Background(), types.Format_Default, "Bill Billerson", "bill@billerson.com", env.DefaultInitBranch)
+	err := dEnv.InitRepo(context.Background(), types.Format_DOLT, "Bill Billerson", "bill@billerson.com", env.DefaultInitBranch)
 	require.NoError(t, err)
 
 	cs, err := doltdb.NewCommitSpec(env.DefaultInitBranch)

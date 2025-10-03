@@ -153,6 +153,10 @@ func (ai *ArchiveInspector) FileSize() uint64 {
 	return ai.reader.footer.fileSize
 }
 
+func (ai *ArchiveInspector) SplitOffset() uint64 {
+	return ai.reader.footer.dataSpan().length
+}
+
 // ByteSpanCount returns the number of byte spans in the archive
 func (ai *ArchiveInspector) ByteSpanCount() uint32 {
 	return ai.reader.footer.byteSpanCount
