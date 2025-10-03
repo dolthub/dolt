@@ -658,7 +658,7 @@ type WritableDoltTable struct {
 var _ doltTableInterface = (*WritableDoltTable)(nil)
 
 // WritableDoltTableWrapper is an interface that allows a table to be returned as an sql.Table, but actually be a wrapped
-// fake table. Specifically, databases.getTableInsensitive will returns an sql.Table, and there are cases where we
+// fake table. Specifically, databases.getTableInsensitiveWithRoot will returns an sql.Table, and there are cases where we
 // want to return a table that hasn't been materialized yet.
 type WritableDoltTableWrapper interface {
 	// Unwrap returns the underlying WritableDoltTable, nil returns are expected when the wrapped table hasn't been materialized

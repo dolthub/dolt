@@ -192,14 +192,10 @@ TXT
 }
 
 @test "docs: AGENT works with AS OF" {
-    # Create a fresh repo to test init behavior
-    cd ..
-    rm -rf test-agent-init
-    mkdir test-agent-init
-    cd test-agent-init
-
-    # Initialize new repo
-    dolt init
+    # Upload another doc so that the docs table exists.
+    dolt docs upload README.md README.md
+    dolt add .
+    dolt commit -m "create docs table"
 
     # Check that AGENT.md document exists
     run dolt docs print AGENT.md
@@ -207,7 +203,7 @@ TXT
     [[ "$output" =~ "# AGENT.md - Dolt Database Operations Guide" ]] || false
 
     # Verify AGENT.md is in the docs table
-    run dolt sql -q "SELECT doc_name FROM dolt_docs WHERE doc_name = 'AGENT.md' AS OF 'HEAD'" -r csv
+    run dolt sql -q "SELECT doc_name FROM dolt_docs AS OF 'HEAD' WHERE doc_name = 'AGENT.md'" -r csv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "AGENT.md" ]] || false
 

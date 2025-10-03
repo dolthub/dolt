@@ -15,8 +15,6 @@
 package dtables
 
 import (
-	"io"
-
 	"github.com/dolthub/go-mysql-server/sql"
 	sqlTypes "github.com/dolthub/go-mysql-server/sql/types"
 	"github.com/dolthub/vitess/go/sqltypes"
@@ -79,24 +77,19 @@ func (dt *DocsTable) LockedToRoot(ctx *sql.Context, root doltdb.RootValue) (sql.
 	if err != nil {
 		return nil, err
 	}
-	return NewDocsTable(ctx, backingTableLockedToRoot)
+	return &docsTableAsOf{backingTableLockedToRoot}, nil
 }
 
 func (dt *DocsTable) PartitionRows(ctx *sql.Context, partition sql.Partition) (sql.RowIter, error) {
-	var rowIter sql.RowIter
-	if dt.backingTable == nil {
-		// no backing table; empty iter.
-		rowIter = sql.RowsToRowIter()
-	} else {
-		var err error
-		rowIter, err = dt.backingTable.PartitionRows(ctx, partition)
-
-		if err != nil && err != io.EOF {
-			return nil, err
-		}
+	underlyingIter, err := dt.BackedSystemTable.PartitionRows(ctx, partition)
+	if err != nil {
+		return nil, err
 	}
+	return makeDoltDocRows(ctx, underlyingIter)
+}
 
-	rows, err := sql.RowIterToRows(ctx, rowIter)
+func makeDoltDocRows(ctx *sql.Context, underlyingIter sql.RowIter) (sql.RowIter, error) {
+	rows, err := sql.RowIterToRows(ctx, underlyingIter)
 
 	if err != nil {
 		return nil, err
@@ -122,9 +115,7 @@ func (dt *DocsTable) PartitionRows(ctx *sql.Context, partition sql.Partition) (s
 		})
 	}
 
-	rowIter = sql.RowsToRowIter(rows...)
-
-	return rowIter, nil
+	return sql.RowsToRowIter(rows...), nil
 }
 
 func getDoltDocsTableName() doltdb.TableName {
@@ -132,4 +123,16 @@ func getDoltDocsTableName() doltdb.TableName {
 		return doltdb.TableName{Schema: doltdb.DoltNamespace, Name: doltdb.GetDocTableName()}
 	}
 	return doltdb.TableName{Name: doltdb.GetDocTableName()}
+}
+
+type docsTableAsOf struct {
+	sql.IndexAddressableTable
+}
+
+func (dt *docsTableAsOf) PartitionRows(ctx *sql.Context, partition sql.Partition) (sql.RowIter, error) {
+	underlyingIter, err := dt.IndexAddressableTable.PartitionRows(ctx, partition)
+	if err != nil {
+		return nil, err
+	}
+	return makeDoltDocRows(ctx, underlyingIter)
 }

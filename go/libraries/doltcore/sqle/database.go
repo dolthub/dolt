@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"io"
 	"strings"
 	"time"
@@ -59,6 +60,7 @@ var ErrInvalidTableName = errors.NewKind("Invalid table name %s.")
 var ErrReservedTableName = errors.NewKind("Invalid table name %s. Table names beginning with `dolt_` are reserved for internal use")
 var ErrReservedDiffTableName = errors.NewKind("Invalid table name %s. Table names beginning with `__DATABASE__` are reserved for internal use")
 var ErrSystemTableAlter = errors.NewKind("Cannot alter table %s: system tables cannot be dropped or altered")
+var ErrRecursiveGlobalTable = errors.NewKind("Table name %s is a nested global table. This is not allowed")
 
 // Database implements sql.Database for a dolt DB.
 type Database struct {
@@ -268,6 +270,12 @@ func (db Database) GetGlobalState() globalstate.GlobalState {
 // GetTableInsensitive is used when resolving tables in queries. It returns a best-effort case-insensitive match for
 // the table name given.
 func (db Database) GetTableInsensitive(ctx *sql.Context, tblName string) (sql.Table, bool, error) {
+	return db.getTableInsensitive(ctx, tblName, false)
+}
+
+// GetTableInsensitive is used when resolving tables in queries. It returns a best-effort case-insensitive match for
+// the table name given.
+func (db Database) getTableInsensitive(ctx *sql.Context, tblName string, isGlobalTable bool) (sql.Table, bool, error) {
 	// We start by first checking whether the input table is a temporary table. Temporary tables with name `x` take
 	// priority over persisted tables of name `x`.
 	ds := dsess.DSessFromSess(ctx.Session)
@@ -280,11 +288,15 @@ func (db Database) GetTableInsensitive(ctx *sql.Context, tblName string) (sql.Ta
 		return nil, false, err
 	}
 
-	return db.getTableInsensitive(ctx, nil, ds, root, tblName, "")
+	return db.getTableInsensitiveWithRoot(ctx, nil, ds, root, tblName, "", isGlobalTable)
+}
+
+func (db Database) GetTableInsensitiveAsOf(ctx *sql.Context, tableName string, asOf interface{}) (sql.Table, bool, error) {
+	return db.getTableInsensitiveAsOf(ctx, tableName, asOf, false)
 }
 
 // GetTableInsensitiveAsOf implements sql.VersionedDatabase
-func (db Database) GetTableInsensitiveAsOf(ctx *sql.Context, tableName string, asOf interface{}) (sql.Table, bool, error) {
+func (db Database) getTableInsensitiveAsOf(ctx *sql.Context, tableName string, asOf interface{}, isGlobalTable bool) (sql.Table, bool, error) {
 	if asOf == nil {
 		return db.GetTableInsensitive(ctx, tableName)
 	}
@@ -297,7 +309,7 @@ func (db Database) GetTableInsensitiveAsOf(ctx *sql.Context, tableName string, a
 
 	sess := dsess.DSessFromSess(ctx.Session)
 
-	table, ok, err := db.getTableInsensitive(ctx, head, sess, root, tableName, asOf)
+	table, ok, err := db.getTableInsensitiveWithRoot(ctx, head, sess, root, tableName, asOf, isGlobalTable)
 	if err != nil {
 		return nil, false, err
 	}
@@ -307,7 +319,7 @@ func (db Database) GetTableInsensitiveAsOf(ctx *sql.Context, tableName string, a
 
 	if doltdb.IsReadOnlySystemTable(doltdb.TableName{Name: tableName, Schema: db.schemaName}) {
 		// currently, system tables do not need to be "locked to root"
-		//  see comment below in getTableInsensitive
+		//  see comment below in getTableInsensitiveWithRoot
 		return table, ok, nil
 	}
 
@@ -330,7 +342,7 @@ func (db Database) GetTableInsensitiveAsOf(ctx *sql.Context, tableName string, a
 	}
 }
 
-func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds *dsess.DoltSession, root doltdb.RootValue, tblName string, asOf interface{}) (sql.Table, bool, error) {
+func (db Database) getTableInsensitiveWithRoot(ctx *sql.Context, head *doltdb.Commit, ds *dsess.DoltSession, root doltdb.RootValue, tblName string, asOf interface{}, alreadyInGlobalTable bool) (sql.Table, bool, error) {
 	lwrName := strings.ToLower(tblName)
 
 	// TODO: these tables that cache a root value at construction time should not, they need to get it from the session
@@ -476,7 +488,7 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 			}
 		}
 
-		srcTable, ok, err := db.getTableInsensitive(ctx, head, ds, root, tname.Name, asOf)
+		srcTable, ok, err := db.getTableInsensitiveWithRoot(ctx, head, ds, root, tname.Name, asOf, false)
 		if err != nil {
 			return nil, false, err
 		} else if !ok {
@@ -868,6 +880,17 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 			versionableTable := backingTable.(dtables.VersionableTable)
 			dt, found = dtables.NewQueryCatalogTable(ctx, versionableTable), true
 		}
+	case doltdb.GlobalTablesTableName, doltdb.GetGlobalTablesTableName():
+		backingTable, _, err := db.getTable(ctx, root, doltdb.GlobalTablesTableName)
+		if err != nil {
+			return nil, false, err
+		}
+		if backingTable == nil {
+			dt, found = dtables.NewEmptyGlobalTablesTable(ctx), true
+		} else {
+			versionableTable := backingTable.(dtables.VersionableTable)
+			dt, found = dtables.NewGlobalTablesTable(ctx, versionableTable), true
+		}
 	case doltdb.GetTestsTableName():
 		backingTable, _, err := db.getTable(ctx, root, doltdb.GetTestsTableName())
 		if err != nil {
@@ -892,35 +915,13 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 	}
 
 	// TODO: this should reuse the root, not lookup the db state again
-	// Handle proxied tables here?
 
-	// get table of proxies
-	proxyTable, _, err := db.getTable(ctx, root, doltdb.ProxyTableName)
+	globalTable, exists, err := db.getGlobalTable(ctx, root, lwrName, alreadyInGlobalTable)
 	if err != nil {
 		return nil, false, err
 	}
-	_ = proxyTable
-	if proxyTable != nil {
-		// check if there's an entry for this table. If so, resolve that reference.
-		// for now, assume that it resolves to "main"
-		proxyBranch := "main"
-		if db.revision == proxyBranch {
-			// TODO: Prevent an infinite loop if a branch references itself.
-			return nil, false, fmt.Errorf("infinite loop in proxy tables")
-		}
-		referencedBranch, err := RevisionDbForBranch(ctx, db, proxyBranch, db.requestedName)
-		if err != nil {
-			return nil, false, err
-		}
-
-		table, ok, err := referencedBranch.GetTableInsensitive(ctx, tblName)
-		if err != nil {
-			return nil, false, err
-		}
-		if !ok {
-			return nil, false, fmt.Errorf("table %s not found on proxy branch %s", tblName, proxyBranch)
-		}
-		return table, true, nil
+	if exists {
+		return globalTable, true, nil
 	}
 
 	table, found, err := db.getTable(ctx, root, tblName)
@@ -934,6 +935,104 @@ func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, ds
 	// If the table wasn't found in the specified data root, check if there is an overridden
 	// schema commit that contains it and return an empty table if so.
 	return resolveOverriddenNonexistentTable(ctx, tblName, db)
+}
+
+// getGlobalTable checks whether the table name maps onto a table in another root via the dolt_global_tables system table
+func (db Database) getGlobalTable(ctx *sql.Context, root doltdb.RootValue, lwrName string, alreadyInGlobalTable bool) (sql.Table, bool, error) {
+	globalTablesTableName := doltdb.TableName{
+		Name:   doltdb.GetGlobalTablesTableName(),
+		Schema: db.schemaName,
+	}
+
+	globalsTable, globalsTableExists, err := root.GetTable(ctx, globalTablesTableName)
+	if err != nil {
+		return nil, false, err
+	}
+
+	if globalsTableExists {
+		// check if there's an entry for this table. If so, resolve that reference.
+		// for now, assume that it resolves to "main"
+
+		index, err := globalsTable.GetRowData(ctx)
+
+		if err != nil {
+			return nil, false, err
+		}
+		globalTablesSchema, err := globalsTable.GetSchema(ctx)
+		if err != nil {
+			return nil, false, err
+		}
+		m := durable.MapFromIndex(index)
+		keyDesc, valueDesc := globalTablesSchema.GetMapDescriptors(m.NodeStore())
+
+		globalTablesMap, err := m.IterAll(ctx)
+		if err != nil {
+			return nil, false, err
+		}
+		var globalTablesEntry doltdb.GlobalTablesEntry
+		for {
+			keyTuple, valueTuple, err := globalTablesMap.Next(ctx)
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				return nil, false, err
+			}
+
+			globalsEntryTableName, err := doltdb.GetGlobalTablesNameColumn(ctx, keyDesc, keyTuple)
+			if err != nil {
+				return nil, false, err
+			}
+
+			globalsEntryTableName = strings.ToLower(globalsEntryTableName)
+			matchesPattern, err := doltdb.MatchTablePattern(globalsEntryTableName, lwrName)
+			if err != nil {
+				return nil, false, err
+			}
+			if !matchesPattern {
+				continue
+			}
+
+			if alreadyInGlobalTable {
+				// Global tables cannot have multiple levels of dolt_global_table redirection
+				return nil, false, ErrRecursiveGlobalTable.New(lwrName)
+			}
+
+			globalTablesEntry = doltdb.GetGlobalTablesRef(ctx, valueDesc, valueTuple)
+			if globalTablesEntry.NewTableName == "" {
+				globalTablesEntry.NewTableName = lwrName
+			}
+
+			if globalTablesEntry.Db == "" {
+				globalTablesEntry.Db = db.requestedName
+			}
+
+			if globalTablesEntry.Ref == "" {
+				globalTablesEntry.Ref = db.revision
+			}
+
+			// First, treat the ref as a database revision (the 'rev' part of a `dbName/rev` database id.)
+			// This way, if the ref is a branch, we get the working set, not the head.
+			referencedBranch, err := RevisionDbForBranch(ctx, db, globalTablesEntry.Ref, globalTablesEntry.Db)
+			if err != nil {
+				return nil, false, err
+			}
+			table, ok, err := referencedBranch.(Database).getTableInsensitive(ctx, globalTablesEntry.NewTableName, true)
+			if sql.ErrDatabaseNotFound.Is(err) {
+				// If we couldn't resolve it as a database revision, treat it as a noms ref.
+				// This lets us resolve branch heads like 'heads/$branchName' or remotes refs like '$remote/$branchName'
+				table, ok, err = db.getTableInsensitiveAsOf(ctx, globalTablesEntry.NewTableName, globalTablesEntry.Ref, true)
+			}
+			if err != nil {
+				return nil, false, err
+			}
+			if !ok {
+				return nil, false, nil
+			}
+			return table, true, nil
+		}
+	}
+	return nil, false, nil
 }
 
 // getRootsForBranch uses the specified |ddb| to look up a branch named |branch|, and return the

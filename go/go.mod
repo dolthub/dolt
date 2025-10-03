@@ -13,7 +13,7 @@ require (
 	github.com/dolthub/fslock v0.0.3
 	github.com/dolthub/ishell v0.0.0-20240701202509-2b217167d718
 	github.com/dolthub/sqllogictest/go v0.0.0-20201107003712-816f3ae12d81
-	github.com/dolthub/vitess v0.0.0-20250924141028-c81f2df5db32
+	github.com/dolthub/vitess v0.0.0-20250930230441-70c2c6a98e33
 	github.com/dustin/go-humanize v1.0.1
 	github.com/fatih/color v1.13.0
 	github.com/flynn-archive/go-shlex v0.0.0-20150515145356-3f9db97f8568
@@ -199,7 +199,6 @@ require (
 	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
 )
 
-replace (
-	github.com/dolthub/go-mysql-server => ../../go-mysql-server
-)
-go 1.25
+replace github.com/dolthub/go-mysql-server => ../../go-mysql-server
+
+go 1.25.0
