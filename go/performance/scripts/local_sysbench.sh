@@ -123,8 +123,10 @@ sysbench \
   --mysql-user="$USER" \
   --mysql-password="$PASS" \
   --db-ps-mode=disable \
-  --time=30 \
-  --db-ps-mode=disable \
+  --time=120 \
+  --percentile=50 \
+  --rand-type=uniform \
+  --rand-seed=1 \
   "$SYSBENCH_TEST" run
 
 unset DOLT_ENABLE_CHUNK_JOURNAL
