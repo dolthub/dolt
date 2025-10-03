@@ -640,8 +640,8 @@ func TestGenerateYamlConfig(t *testing.T) {
   # dolt_transaction_commit: false
   # event_scheduler: "OFF"
   # auto_gc_behavior:
-    # enable: false
-    # archive_level: 0
+    # enable: true
+    # archive_level: 1
 
 listener:
   # host: localhost
