@@ -20,6 +20,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly/message"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
@@ -61,6 +62,14 @@ func (mut *GenericMutableMap[M, T]) MapInterface(ctx context.Context) (MapInterf
 // that the struct has been specialized with.
 func (mut *GenericMutableMap[M, T]) Map(ctx context.Context) (M, error) {
 	return mut.flusher.Map(ctx, mut)
+}
+
+func (mut *GenericMutableMap[M, T]) VisitGCRoots(ctx context.Context, roots func(hash.Hash) bool) error {
+	roots(mut.tuples.Static.GetRoot().HashOf())
+	if mut.stash != nil {
+		roots(mut.stash.Static.GetRoot().HashOf())
+	}
+	return nil
 }
 
 // newMutableMap returns a new MutableMap.

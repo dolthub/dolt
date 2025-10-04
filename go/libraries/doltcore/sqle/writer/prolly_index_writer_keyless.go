@@ -20,6 +20,7 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
@@ -48,6 +49,10 @@ func (k prollyKeylessWriter) Map(ctx context.Context) (prolly.MapInterface, erro
 // ValidateKeyViolations returns nil for keyless writers, because there are no keys, so violations are possible
 func (k prollyKeylessWriter) ValidateKeyViolations(ctx context.Context, sqlRow sql.Row) error {
 	return nil
+}
+
+func (k prollyKeylessWriter) VisitGCRoots(ctx context.Context, roots func(hash.Hash) bool) error {
+	return k.mut.VisitGCRoots(ctx, roots)
 }
 
 func (k prollyKeylessWriter) Insert(ctx context.Context, sqlRow sql.Row) error {
@@ -206,6 +211,11 @@ func (writer prollyKeylessSecondaryWriter) Name() string {
 // Map implements the interface indexWriter.
 func (writer prollyKeylessSecondaryWriter) Map(ctx context.Context) (prolly.MapInterface, error) {
 	return writer.mut.Map(ctx)
+}
+
+func (writer prollyKeylessSecondaryWriter) VisitGCRoots(ctx context.Context, roots func(hash.Hash) bool) error {
+	// TODO: writer.primary?
+	return writer.mut.VisitGCRoots(ctx, roots)
 }
 
 // ValidateKeyViolations implements the interface indexWriter.

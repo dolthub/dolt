@@ -847,6 +847,10 @@ func (d *DoltSession) VisitGCRoots(ctx context.Context, dbName string, keep func
 						panic("gc safepoint establishment found inconsistent state; process could not guarantee it would be able to keep a chunk if we continue")
 					}
 				}
+				err = head.writeSession.VisitGCRoots(ctx, keep)
+				if err != nil {
+					return err
+				}
 			}
 		}
 	}

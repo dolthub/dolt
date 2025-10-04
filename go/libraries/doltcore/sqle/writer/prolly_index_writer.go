@@ -25,6 +25,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
@@ -85,6 +86,7 @@ type indexWriter interface {
 	Discard(ctx context.Context) error
 	HasEdits(ctx context.Context) bool
 	IterRange(ctx context.Context, rng prolly.Range) (prolly.MapIter, error)
+	VisitGCRoots(ctx context.Context, roots func(hash.Hash) bool) error
 }
 
 type primaryIndexErrBuilder interface {
@@ -226,6 +228,10 @@ func (m prollyIndexWriter) Commit(ctx context.Context) error {
 	return m.mut.Checkpoint(ctx)
 }
 
+func (m prollyIndexWriter) VisitGCRoots(ctx context.Context, roots func(hash.Hash) bool) error {
+	return m.mut.VisitGCRoots(ctx, roots)
+}
+
 func (m prollyIndexWriter) Discard(ctx context.Context) error {
 	m.mut.Revert(ctx)
 	return nil
@@ -330,6 +336,10 @@ func (m prollySecondaryIndexWriter) keyFromRow(ctx context.Context, sqlRow sql.R
 		}
 	}
 	return m.keyBld.Build(sharePool)
+}
+
+func (m prollySecondaryIndexWriter) VisitGCRoots(ctx context.Context, roots func(hash.Hash) bool) error {
+	return m.mut.VisitGCRoots(ctx, roots)
 }
 
 func (m prollySecondaryIndexWriter) Insert(ctx context.Context, sqlRow sql.Row) error {
