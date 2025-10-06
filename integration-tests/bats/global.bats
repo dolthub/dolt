@@ -373,7 +373,7 @@ SQL
       ("global_table", "main", "invalid");
 SQL
 
-  run sql -q "select * from global_table;"
+  run dolt sql -q "select * from global_table;"
   [ "$status" -eq 1 ]
   echo "$output"
   [[ "$output" =~ "Invalid global table options" ]] || false
