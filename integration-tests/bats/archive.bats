@@ -16,6 +16,8 @@ teardown() {
         remotesrv_pid=""
     fi
 
+    stop_sql_server
+
     assert_feature_version
     teardown_common
 }
@@ -36,18 +38,19 @@ teardown() {
 }
 
 @test "archive: single archive oldgen" {
-  dolt sql -q "$(mutations_and_gc_statement)"
-  dolt archive
+  dolt sql -q "$(mutations_and_gc_statement 1)"
 
-  files=$(find . -name "*darc" | wc -l | sed 's/[ \t]//g')
+  find . -type f
+
+  files=$(find .dolt/noms/oldgen -name "*darc" | wc -l | sed 's/[ \t]//g')
   [ "$files" -eq "1" ]
 
   # Ensure updates continue to work.
   dolt sql -q "$(update_statement)"
 }
 
-@test "archive: single archive newgen" {
-  dolt sql -q "$(mutations_and_gc_statement)"
+@test "archive: single archive cloned in newgen" {
+  dolt sql -q "$(mutations_and_gc_statement 0)"
 
   mkdir remote
   dolt remote add origin file://remote
@@ -55,8 +58,6 @@ teardown() {
 
   dolt clone file://remote cloned
   cd cloned
-
-  dolt archive
 
   files=$(find . -name "*darc" | wc -l | sed 's/[ \t]//g')
   [ "$files" -eq "1" ]
@@ -67,7 +68,7 @@ teardown() {
 
 @test "archive: multi archive newgen then revert" {
   # Getting multiple table files in `newgen` is a little gross.
-  dolt sql -q "$(mutations_and_gc_statement)"
+  dolt sql -q "$(mutations_and_gc_statement 0)"
   mkdir remote
   dolt remote add origin file://remote
   dolt push origin main
@@ -79,7 +80,7 @@ teardown() {
   [ "$files" -eq "1" ]
 
   cd ..
-  dolt sql -q "$(mutations_and_gc_statement)"
+  dolt sql -q "$(mutations_and_gc_statement 0)"
   dolt push origin main
 
   cd cloned
@@ -96,13 +97,11 @@ teardown() {
 }
 
 @test "archive: multiple archives" {
-  dolt sql -q "$(mutations_and_gc_statement)"
-  dolt sql -q "$(mutations_and_gc_statement)"
-  dolt sql -q "$(mutations_and_gc_statement)"
+  dolt sql -q "$(mutations_and_gc_statement 1)"
+  dolt sql -q "$(mutations_and_gc_statement 1)"
+  dolt sql -q "$(mutations_and_gc_statement 1)"
 
-  dolt archive
-
-  files=$(find . -name "*darc" | wc -l | sed 's/[ \t]//g')
+  files=$(find .dolt/noms/oldgen -name "*darc" | wc -l | sed 's/[ \t]//g')
   [ "$files" -eq "3" ]
 
   # dolt log --stat will load every single chunk.
@@ -111,10 +110,10 @@ teardown() {
 }
 
 @test "archive: archive multiple times" {
-  dolt sql -q "$(mutations_and_gc_statement)"
+  dolt sql -q "$(mutations_and_gc_statement 0)"
   dolt archive
 
-  dolt sql -q "$(mutations_and_gc_statement)"
+  dolt sql -q "$(mutations_and_gc_statement 0)"
   dolt archive
 
   files=$(find . -name "*darc" | wc -l | sed 's/[ \t]//g')
@@ -122,7 +121,7 @@ teardown() {
 }
 
 @test "archive: archive --revert (fast)" {
-  dolt sql -q "$(mutations_and_gc_statement)"
+  dolt sql -q "$(mutations_and_gc_statement 0)"
   dolt archive
   dolt archive --revert
 
@@ -132,7 +131,7 @@ teardown() {
 }
 
 @test "archive: archive --revert (rebuild)" {
-  dolt sql -q "$(mutations_and_gc_statement)"
+  dolt sql -q "$(mutations_and_gc_statement 0)"
   dolt archive
   dolt archive --revert
 
@@ -142,7 +141,7 @@ teardown() {
 }
 
 @test "archive: archive --purge" {
-  dolt sql -q "$(mutations_and_gc_statement)"
+  dolt sql -q "$(mutations_and_gc_statement 0)"
 
   # find impl differences by platform makes this a pain.
   tablefile=$(find .dolt/noms/oldgen -type f -print | awk -F/ 'length($NF) == 32 && $NF ~ /^[a-v0-9]{32}$/')
@@ -238,34 +237,26 @@ teardown() {
     # Copy the archive test repo to remote directory
     cp -R $BATS_TEST_DIRNAME/archive-test-repos/base/* remote/.dolt
     cd remote
-
-    port=$( definePORT )
-
-    remotesrv --http-port $port --grpc-port $port --repo-mode &
-    remotesrv_pid=$!
-    [[ "$remotesrv_pid" -gt 0 ]] || false
+    PORT=$( definePORT )
+    start_sql_server_with_args_no_port # NM4 nah.
 
     cd ../cloned
-    dolt clone http://localhost:$port/test-org/test-repo repo1
+    dolt clone http://localhost:$PORT/remote repo1
     # Fetch when there are no changes.
     cd repo1
     dolt fetch
 
-    ## update the remote repo directly. Need to run the archive command when the server is stopped.
-    ## This will result in archived files on the remote, which we will need to read chunks from when we fetch.
+    ## This will result in new archived files on the remote, which we will need to read chunks from when we fetch.
     cd ../../remote
-    kill $remotesrv_pid
-    wait $remotesrv_pid || :
-    remotesrv_pid=""
-    dolt sql -q "$(mutations_and_gc_statement)"
-    dolt archive
-
-    remotesrv --http-port $port --grpc-port $port --repo-mode &
-    remotesrv_pid=$!
-    [[ "$remotesrv_pid" -gt 0 ]] || false
+    dolt remote sql -q "$(mutations_and_gc_statement 1)"
 
     cd ../cloned/repo1
-    dolt fetch
+    run dolt fetch
+
+    echo  "---------------------"
+    echo "$output"
+    echo  "---------------------"
+    [ "$status" -eq 0 ]
 
     run dolt status
     [ "$status" -eq 0 ]
