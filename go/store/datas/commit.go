@@ -28,6 +28,7 @@ import (
 	"fmt"
 
 	flatbuffers "github.com/dolthub/flatbuffers/v23/go"
+	"github.com/fatih/color"
 
 	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/store/chunks"
@@ -229,12 +230,14 @@ func newCommitForValue(ctx context.Context, cs chunks.ChunkStore, vrw types.Valu
 		if err != nil {
 			return nil, err
 		}
+		fmt.Fprintf(color.Output, "DUSTIN: newCommitForValue: UsesFlatbuffers: r.TargetHash(): %s\n", r.TargetHash().String())
 		bs, height := commit_flatbuffer(r.TargetHash(), opts, heights, parentClosureAddr)
 		v := types.SerialMessage(bs)
 		addr, err := v.Hash(vrw.Format())
 		if err != nil {
 			return nil, err
 		}
+		fmt.Fprintf(color.Output, "DUSTIN: newCommitForValue: UsesFlatbuffers: addr: %s\n", addr.String())
 		return &Commit{v, addr, height}, nil
 	}
 
@@ -276,6 +279,7 @@ func newCommitForValue(ctx context.Context, cs chunks.ChunkStore, vrw types.Valu
 	if err != nil {
 		return nil, err
 	}
+	fmt.Fprintf(color.Output, "DUSTIN: newCommitForValue: r.TargetHash(): %s\n", r.TargetHash().String())
 	return &Commit{cv, r.TargetHash(), r.Height()}, nil
 }
 
