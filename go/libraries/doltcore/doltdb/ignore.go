@@ -17,6 +17,7 @@ package doltdb
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/go-mysql-server/sql"
 	"io"
 	"regexp"
 	"strings"
@@ -212,6 +213,50 @@ func compilePattern(pattern string) (*regexp.Regexp, error) {
 	return regexp.Compile(pattern)
 }
 
+func patternContainsSpecialCharacters(pattern string) bool {
+	return strings.ContainsAny(pattern, "?*%")
+}
+
+// MatchTablePattern returns whether a table name matches a table name pattern
+func MatchTablePattern(pattern string, table string) (bool, error) {
+	re, err := compilePattern(pattern)
+	if err != nil {
+		return false, err
+	}
+	return re.MatchString(table), nil
+}
+
+// GetMatchingTables returns all tables that match a pattern
+func GetMatchingTables(ctx *sql.Context, root RootValue, schemaName string, pattern string) (results []string, err error) {
+	// If the pattern doesn't contain any special characters, look up that name.
+	if !patternContainsSpecialCharacters(pattern) {
+		_, exists, err := root.GetTable(ctx, TableName{Name: pattern, Schema: schemaName})
+		if err != nil {
+			return nil, err
+		}
+		if exists {
+			return []string{pattern}, nil
+		} else {
+			return nil, nil
+		}
+	}
+	tables, err := root.GetTableNames(ctx, schemaName, true)
+	if err != nil {
+		return nil, err
+	}
+	// Otherwise, iterate over each table on the branch to see if they match.
+	for _, tbl := range tables {
+		matches, err := MatchTablePattern(pattern, tbl)
+		if err != nil {
+			return nil, err
+		}
+		if matches {
+			results = append(results, tbl)
+		}
+	}
+	return results, nil
+}
+
 // getMoreSpecificPatterns takes a dolt_ignore pattern and generates a Regexp that matches against all patterns
 // that are "more specific" than it. (a pattern A is more specific than a pattern B if all names that match A also
 // match pattern B, but not vice versa.)
@@ -314,11 +359,11 @@ func (ip *IgnorePatterns) IsTableNameIgnored(tableName TableName) (IgnoreResult,
 	for _, patternIgnore := range *ip {
 		pattern := patternIgnore.Pattern
 		ignore := patternIgnore.Ignore
-		patternRegExp, err := compilePattern(pattern)
+		matchesPattern, err := MatchTablePattern(pattern, tableName.Name)
 		if err != nil {
 			return ErrorOccurred, err
 		}
-		if patternRegExp.MatchString(tableName.Name) {
+		if matchesPattern {
 			if ignore {
 				trueMatches = append(trueMatches, pattern)
 			} else {
