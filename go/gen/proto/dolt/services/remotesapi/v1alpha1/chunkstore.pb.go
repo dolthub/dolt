@@ -21,13 +21,12 @@
 package remotesapi
 
 import (
-	reflect "reflect"
-	sync "sync"
-	unsafe "unsafe"
-
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
+	reflect "reflect"
+	sync "sync"
+	unsafe "unsafe"
 )
 
 const (
@@ -1743,6 +1742,7 @@ type TableFileInfo struct {
 	Url            string                      `protobuf:"bytes,3,opt,name=url,proto3" json:"url,omitempty"`
 	RefreshAfter   *timestamppb.Timestamp      `protobuf:"bytes,4,opt,name=refresh_after,json=refreshAfter,proto3" json:"refresh_after,omitempty"`
 	RefreshRequest *RefreshTableFileUrlRequest `protobuf:"bytes,5,opt,name=refresh_request,json=refreshRequest,proto3" json:"refresh_request,omitempty"`
+	SplitOffset    uint64                      `protobuf:"varint,6,opt,name=split_offset,json=splitOffset,proto3" json:"split_offset,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -1810,6 +1810,13 @@ func (x *TableFileInfo) GetRefreshRequest() *RefreshTableFileUrlRequest {
 		return x.RefreshRequest
 	}
 	return nil
+}
+
+func (x *TableFileInfo) GetSplitOffset() uint64 {
+	if x != nil {
+		return x.SplitOffset
+	}
+	return 0
 }
 
 type RefreshTableFileUrlRequest struct {
@@ -2279,14 +2286,15 @@ const file_dolt_services_remotesapi_v1alpha1_chunkstore_proto_rawDesc = "" +
 	"\rappendix_only\x18\x02 \x01(\bB\x02\x18\x01R\fappendixOnly\x12\x1d\n" +
 	"\n" +
 	"repo_token\x18\x03 \x01(\tR\trepoToken\x12\x1b\n" +
-	"\trepo_path\x18\x04 \x01(\tR\brepoPath\"\x82\x02\n" +
+	"\trepo_path\x18\x04 \x01(\tR\brepoPath\"\xa5\x02\n" +
 	"\rTableFileInfo\x12\x17\n" +
 	"\afile_id\x18\x01 \x01(\tR\x06fileId\x12\x1d\n" +
 	"\n" +
 	"num_chunks\x18\x02 \x01(\rR\tnumChunks\x12\x10\n" +
 	"\x03url\x18\x03 \x01(\tR\x03url\x12?\n" +
 	"\rrefresh_after\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\frefreshAfter\x12f\n" +
-	"\x0frefresh_request\x18\x05 \x01(\v2=.dolt.services.remotesapi.v1alpha1.RefreshTableFileUrlRequestR\x0erefreshRequest\"\xb5\x01\n" +
+	"\x0frefresh_request\x18\x05 \x01(\v2=.dolt.services.remotesapi.v1alpha1.RefreshTableFileUrlRequestR\x0erefreshRequest\x12!\n" +
+	"\fsplit_offset\x18\x06 \x01(\x04R\vsplitOffset\"\xb5\x01\n" +
 	"\x1aRefreshTableFileUrlRequest\x12B\n" +
 	"\arepo_id\x18\x01 \x01(\v2).dolt.services.remotesapi.v1alpha1.RepoIdR\x06repoId\x12\x17\n" +
 	"\afile_id\x18\x02 \x01(\tR\x06fileId\x12\x1d\n" +
