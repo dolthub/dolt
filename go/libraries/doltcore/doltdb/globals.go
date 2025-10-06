@@ -17,10 +17,11 @@ package doltdb
 import (
 	"context"
 	"fmt"
+	"io"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
-	"io"
 )
 
 // GetGlobalTablesRef is a function that reads the "ref" column from dolt_global_tables. This is used to handle the Doltgres extended string type.
