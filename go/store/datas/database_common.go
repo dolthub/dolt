@@ -32,6 +32,7 @@ import (
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/fatih/color"
 )
 
 type database struct {
@@ -603,6 +604,7 @@ func (db *database) BuildNewCommit(ctx context.Context, ds Dataset, v types.Valu
 }
 
 func (db *database) Commit(ctx context.Context, ds Dataset, v types.Value, opts CommitOptions) (Dataset, error) {
+	fmt.Fprintf(color.Output, "DUSTIN: db.Commit: This is running!")
 	commit, err := db.BuildNewCommit(ctx, ds, v, opts)
 	if err != nil {
 		return Dataset{}, err
