@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/fatih/color"
 	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/sirupsen/logrus"
 
@@ -944,18 +945,30 @@ func (ddb *DoltDB) SetHead(ctx context.Context, ref ref.DoltRef, addr hash.Hash)
 // CommitWithParentSpecs commits the value hash given to the branch given, using the list of parent hashes given. Returns an
 // error if the value or any parents can't be resolved, or if anything goes wrong accessing the underlying storage.
 func (ddb *DoltDB) CommitWithParentSpecs(ctx context.Context, valHash hash.Hash, dref ref.DoltRef, parentCmSpecs []*CommitSpec, cm *datas.CommitMeta) (*Commit, error) {
+	fmt.Fprintf(color.Output, "DUSTIN: ddb: CommitWithParentSpecs: valHash: %s\n", valHash)
+	fmt.Fprintf(color.Output, "DUSTIN: ddb: CommitWithParentSpecs: dref: %s\n", dref)
+	fmt.Fprintf(color.Output, "DUSTIN: ddb: CommitWithParentSpecs: meta: %s\n", cm)
+
 	var parentCommits []*Commit
 	for _, parentCmSpec := range parentCmSpecs {
+		fmt.Fprintf(color.Output, "DUSTIN: ddb: CommitWithParentSpecs: resolving parentCmSpec: %+v\n", parentCmSpec)
 		cm, err := ddb.Resolve(ctx, parentCmSpec, nil)
 		if err != nil {
 			return nil, err
 		}
+		fmt.Fprintf(color.Output, "DUSTIN: ddb: CommitWithParentSpecs: resolved to cm: %+v\n", cm)
 
 		hardCommit, ok := cm.ToCommit()
 		if !ok {
 			return nil, ErrGhostCommitEncountered
 		}
 
+		hardHash, err := hardCommit.HashOf()
+		if err != nil {
+			return nil, err
+		}
+
+		fmt.Fprintf(color.Output, "DUSTIN: ddb: CommitWithParentSpecs: hardCommit.HashOf(): %+v\n", hardHash)
 		parentCommits = append(parentCommits, hardCommit)
 	}
 	return ddb.CommitWithParentCommits(ctx, valHash, dref, parentCommits, cm)
