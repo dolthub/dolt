@@ -1032,7 +1032,6 @@ func (ddb *DoltDB) CommitValue(ctx context.Context, dref ref.DoltRef, val types.
 		return nil, errors.New("Commit has no head but commit succeeded. This is a bug.")
 	}
 
-	fmt.Fprintf(color.Output, "DUSTIN: ddb: CommitValue: r: %+v\n", r)
 	dc, err := datas.LoadCommitRef(ctx, ddb.vrw, r)
 	if err != nil {
 		return nil, err
@@ -1042,7 +1041,8 @@ func (ddb *DoltDB) CommitValue(ctx context.Context, dref ref.DoltRef, val types.
 		return nil, ErrGhostCommitEncountered
 	}
 
-	fmt.Fprintf(color.Output, "DUSTIN: ddb: CommitValue: dc: %+v\n", dc)
+	hsh := dc.Addr()
+	fmt.Fprintf(color.Output, "DUSTIN: ddb: CommitValue: dc.Addr().String(): %+v\n", hsh)
 	return NewCommit(ctx, ddb.vrw, ddb.ns, dc)
 }
 
