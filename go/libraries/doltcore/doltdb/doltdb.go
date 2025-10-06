@@ -986,16 +986,12 @@ func (ddb *DoltDB) CommitWithParentCommits(ctx context.Context, valHash hash.Has
 	}
 
 	ds, err := ddb.db.GetDataset(ctx, dref.String())
-
 	if err != nil {
 		return nil, err
 	}
 
 	var parents []hash.Hash
 	headAddr, hasHead := ds.MaybeHeadAddr()
-	if err != nil {
-		return nil, err
-	}
 	if hasHead {
 		parents = append(parents, headAddr)
 	}
@@ -1015,6 +1011,9 @@ func (ddb *DoltDB) CommitWithParentCommits(ctx context.Context, valHash hash.Has
 }
 
 func (ddb *DoltDB) CommitValue(ctx context.Context, dref ref.DoltRef, val types.Value, commitOpts datas.CommitOptions) (*Commit, error) {
+	fmt.Fprintf(color.Output, "DUSTIN: ddb: CommitValue: val: %s\n", val)
+	fmt.Fprintf(color.Output, "DUSTIN: ddb: CommitValue: dref: %s\n", dref)
+	fmt.Fprintf(color.Output, "DUSTIN: ddb: CommitValue: commitOpts: %+v\n", commitOpts)
 	ds, err := ddb.db.GetDataset(ctx, dref.String())
 	if err != nil {
 		return nil, err
@@ -1033,6 +1032,7 @@ func (ddb *DoltDB) CommitValue(ctx context.Context, dref ref.DoltRef, val types.
 		return nil, errors.New("Commit has no head but commit succeeded. This is a bug.")
 	}
 
+	fmt.Fprintf(color.Output, "DUSTIN: ddb: CommitValue: r: %+v\n", r)
 	dc, err := datas.LoadCommitRef(ctx, ddb.vrw, r)
 	if err != nil {
 		return nil, err
@@ -1042,6 +1042,7 @@ func (ddb *DoltDB) CommitValue(ctx context.Context, dref ref.DoltRef, val types.
 		return nil, ErrGhostCommitEncountered
 	}
 
+	fmt.Fprintf(color.Output, "DUSTIN: ddb: CommitValue: dc: %+v\n", dc)
 	return NewCommit(ctx, ddb.vrw, ddb.ns, dc)
 }
 
