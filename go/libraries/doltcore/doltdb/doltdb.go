@@ -1011,7 +1011,7 @@ func (ddb *DoltDB) CommitWithParentCommits(ctx context.Context, valHash hash.Has
 }
 
 func (ddb *DoltDB) CommitValue(ctx context.Context, dref ref.DoltRef, val types.Value, commitOpts datas.CommitOptions) (*Commit, error) {
-	fmt.Fprintf(color.Output, "DUSTIN: ddb: CommitValue: val: %s\n", val)
+	fmt.Fprintf(color.Output, "DUSTIN: ddb: CommitValue: val: %+v\n", val)
 	fmt.Fprintf(color.Output, "DUSTIN: ddb: CommitValue: dref: %s\n", dref)
 	fmt.Fprintf(color.Output, "DUSTIN: ddb: CommitValue: commitOpts: %+v\n", commitOpts)
 	ds, err := ddb.db.GetDataset(ctx, dref.String())
