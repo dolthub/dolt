@@ -308,6 +308,24 @@ var DoltTestRunFunctionScripts = []queries.ScriptTest{
 		},
 	},
 	{
+		Name: "Can expect single boolean",
+		SetUpScript: []string{
+			"CREATE TABLE booleans (b BOOLEAN)",
+			"INSERT INTO booleans VALUES (true)",
+			"INSERT INTO dolt_tests VALUES ('should pass', 'boolean tests', 'select * from booleans;', 'expected_single_value', '==', 'true'), " +
+				"('should fail', 'boolean tests', 'select * from booleans;', 'expected_single_value', '==', 'false')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT * FROM dolt_test_run('boolean tests')",
+				Expected: []sql.Row{
+					{"should fail", "boolean tests", "select * from booleans;", "FAIL", "Assertion failed: expected_single_value equal to false, got true"},
+					{"should pass", "boolean tests", "select * from booleans;", "PASS", ""},
+				},
+			},
+		},
+	},
+	{
 		Name: "Can handle null values correctly",
 		SetUpScript: []string{
 			"CREATE TABLE numbers (i int, t text, j int)",
