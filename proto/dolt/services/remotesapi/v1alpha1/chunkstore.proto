@@ -268,6 +268,7 @@ message TableFileInfo {
   string url = 3;
   google.protobuf.Timestamp refresh_after = 4;
   RefreshTableFileUrlRequest refresh_request = 5;
+  uint64 split_offset = 6;
 }
 
 message RefreshTableFileUrlRequest {
