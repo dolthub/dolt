@@ -975,8 +975,9 @@ func (ddb *DoltDB) CommitWithParentSpecs(ctx context.Context, valHash hash.Hash,
 }
 
 func (ddb *DoltDB) CommitWithParentCommits(ctx context.Context, valHash hash.Hash, dref ref.DoltRef, parentCommits []*Commit, cm *datas.CommitMeta) (*Commit, error) {
+	fmt.Fprintf(color.Output, "DUSTIN: ddb: CommitWithParentCommits: valHash: %s\n", valHash)
+	fmt.Fprintf(color.Output, "DUSTIN: ddb: CommitWithParentCommits: dref: %s\n", dref)
 	val, err := ddb.vrw.ReadValue(ctx, valHash)
-
 	if err != nil {
 		return nil, err
 	}
@@ -985,14 +986,31 @@ func (ddb *DoltDB) CommitWithParentCommits(ctx context.Context, valHash hash.Has
 		return nil, errors.New("can't commit a value that is not a valid root value")
 	}
 
+	hsh, err := val.Hash(ddb.vrw.Format())
+	if err != nil {
+		return nil, err
+	}
+
+	fmt.Fprintf(color.Output, "DUSTIN: ddb: CommitWithParentCommits: val.Hash().String(): %s\n", hsh.String())
 	ds, err := ddb.db.GetDataset(ctx, dref.String())
 	if err != nil {
 		return nil, err
 	}
 
+	retrievedHeadRef, ok, err := ds.MaybeHeadRef()
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, errors.New("Commit has no head but commit succeeded. This is a bug.")
+	}
+
+	fmt.Fprintf(color.Output, "DUSTIN: ddb: CommitWithParentCommits: retrievedHeadRef.TargetHash().String(): %s\n", retrievedHeadRef.TargetHash().String())
+
 	var parents []hash.Hash
 	headAddr, hasHead := ds.MaybeHeadAddr()
 	if hasHead {
+		fmt.Fprintf(color.Output, "DUSTIN: ddb: CommitWithParentCommits: retrieved dataset: hasHead: %v\n", hasHead)
 		parents = append(parents, headAddr)
 	}
 
