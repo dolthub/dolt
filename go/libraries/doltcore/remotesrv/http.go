@@ -148,14 +148,6 @@ func (fh filehandler) ServeHTTP(respWr http.ResponseWriter, req *http.Request) {
 			return
 		}
 
-		splitOffset, err := strconv.ParseUint(q.Get("split_offset"), 10, 64)
-		if err != nil {
-			logger = logger.WithField("status", http.StatusBadRequest)
-			logger.WithError(err).Warn("bad request: split_offset parameter did not parse")
-			respWr.WriteHeader(http.StatusBadRequest)
-			return
-		}
-
 		cls := q.Get("content_length")
 		if cls == "" {
 			logger = logger.WithField("status", http.StatusBadRequest)
@@ -183,6 +175,19 @@ func (fh filehandler) ServeHTTP(respWr http.ResponseWriter, req *http.Request) {
 			logger.WithError(err).Warn("bad request: content_hash parameter did not parse")
 			respWr.WriteHeader(http.StatusBadRequest)
 			return
+		}
+
+		// splitOffset is not required to allow for backwards compatibility with older clients.
+		splitOffset := uint64(0)
+		splitQstr := q.Get("split_offset")
+		if splitQstr != "" {
+			splitOffset, err = strconv.ParseUint(splitQstr, 10, 64)
+			if err != nil {
+				logger = logger.WithField("status", http.StatusBadRequest)
+				logger.WithError(err).Warn("bad request: split_offset parameter did not parse")
+				respWr.WriteHeader(http.StatusBadRequest)
+				return
+			}
 		}
 
 		logger, statusCode = writeTableFile(req.Context(), logger, fh.dbCache, filepath, file, splitOffset, numChunks, contentHash, uint64(contentLength), req.Body)
