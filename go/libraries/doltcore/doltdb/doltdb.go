@@ -1019,6 +1019,15 @@ func (ddb *DoltDB) CommitValue(ctx context.Context, dref ref.DoltRef, val types.
 		return nil, err
 	}
 
+	ogHeadRef, ok, err := ds.MaybeHeadRef()
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, errors.New("Commit has no head but commit succeeded. This is a bug.")
+	}
+
+	fmt.Fprintf(color.Output, "DUSTIN: ddb: CommitValue: original dataset headRef: ogHeadRef.TargetHash().String(): %s\n", ogHeadRef.TargetHash().String())
 	ds, err = ddb.db.Commit(ctx, ds, val, commitOpts)
 	if err != nil {
 		return nil, err
@@ -1032,6 +1041,7 @@ func (ddb *DoltDB) CommitValue(ctx context.Context, dref ref.DoltRef, val types.
 		return nil, errors.New("Commit has no head but commit succeeded. This is a bug.")
 	}
 
+	fmt.Fprintf(color.Output, "DUSTIN: ddb: CommitValue: new dataset headRef: r.TargetHash().String(): %s\n", r.TargetHash().String())
 	dc, err := datas.LoadCommitRef(ctx, ddb.vrw, r)
 	if err != nil {
 		return nil, err
