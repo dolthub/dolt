@@ -52,16 +52,24 @@ UPDATE tbl SET guid = UUID() WHERE i >= @random_id LIMIT 1;"
 
 # A series of 10 update-and-commit-then-insert-and-commit pairs, followed by a dolt_gc call
 #
+# The optional argument is the archive level for the GC call (0 or 1). Default is 1.
+#
 # This is useful because we need at least 25 retained chunks to create an archive.
 mutations_and_gc_statement() {
-  query=`update_statement`
+  local level="${1:-1}"  # default to 1 if no arg
+  if [[ "$level" != "0" && "$level" != "1" ]]; then
+    echo "Error: archive-level must be 0 or 1"
+    return
+  fi
+
+  query=$(update_statement)
   for ((j=1; j<=9; j++))
   do
     query="$query $(insert_statement)"
     query="$query $(update_statement)"
   done
   query="$query $(insert_statement)"
-  query="$query call dolt_gc();"
+  query="$query call dolt_gc('--archive-level=$level');"
   echo "$query"
 }
 
