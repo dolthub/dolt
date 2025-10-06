@@ -218,6 +218,19 @@ const (
 )
 
 const (
+	// GlobalTablesTableName is the name of the query catalog table
+	GlobalTablesTableName = "dolt_global_tables"
+
+	GlobalTableTableNameCol = "table_name"
+
+	GlobalTablesRefCol = "target_ref"
+
+	GlobalTablesRefTableCol = "ref_table"
+
+	GlobalTablesOptionsCol = "options"
+)
+
+const (
 	// SchemasTableName is the name of the dolt schema fragment table
 	SchemasTableName = "dolt_schemas"
 	// SchemasTablesTypeCol is the name of the column that stores the type of a schema fragment  in the dolt_schemas table
@@ -377,6 +390,8 @@ var GetStashesTableName = func() string {
 }
 
 var GetQueryCatalogTableName = func() string { return DoltQueryCatalogTableName }
+
+var GetGlobalTablesTableName = func() string { return GlobalTablesTableName }
 
 var GetTestsTableName = func() string {
 	return TestsTableName
