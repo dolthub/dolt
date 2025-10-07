@@ -112,6 +112,11 @@ func (b *doltBenchmarkerImpl) Benchmark(ctx context.Context) (Results, error) {
 				return nil, err
 			}
 			results = append(results, res)
+
+			err = server.Stop()
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 
