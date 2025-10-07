@@ -1526,9 +1526,10 @@ func (nbs *NomsBlockStore) StatsSummary() string {
 
 // tableFile is our implementation of TableFile.
 type tableFile struct {
-	info   TableSpecInfo
-	open   func(ctx context.Context) (io.ReadCloser, uint64, error)
-	suffix string
+	info        TableSpecInfo
+	open        func(ctx context.Context) (io.ReadCloser, uint64, error)
+	suffix      string
+	splitOffset uint64
 }
 
 // LocationPrefix
@@ -1549,6 +1550,8 @@ func (tf tableFile) FileID() string {
 func (tf tableFile) NumChunks() int {
 	return int(tf.info.GetChunkCount())
 }
+
+func (tf tableFile) SplitOffset() uint64 { return tf.splitOffset }
 
 // Open returns an io.ReadCloser which can be used to read the bytes of a table file and the content length in bytes.
 func (tf tableFile) Open(ctx context.Context) (io.ReadCloser, uint64, error) {
@@ -1576,7 +1579,7 @@ func (nbs *NomsBlockStore) Sources(ctx context.Context) (hash.Hash, []chunks.Tab
 	if err != nil {
 		return hash.Hash{}, nil, nil, err
 	}
-
+	
 	appendixTableFiles, err := getTableFiles(css, contents, contents.NumAppendixSpecs(), func(mc manifestContents, idx int) tableSpec {
 		return mc.getAppendixSpec(idx)
 	})
@@ -1612,9 +1615,12 @@ func getTableFiles(css map[hash.Hash]chunkSource, contents manifestContents, num
 }
 
 func newTableFile(cs chunkSource, info tableSpec) tableFile {
-	s := ""
-	if _, ok := cs.(archiveChunkSource); ok {
-		s = ArchiveFileSuffix
+	sfx := ""
+	dataOffset := uint64(0)
+	if a, ok := cs.(archiveChunkSource); ok {
+		sfx = ArchiveFileSuffix
+		dataSpan := a.aRdr.footer.dataSpan()
+		dataOffset = dataSpan.length
 	}
 
 	return tableFile{
@@ -1626,7 +1632,8 @@ func newTableFile(cs chunkSource, info tableSpec) tableFile {
 			}
 			return r, s, nil
 		},
-		suffix: s,
+		suffix:      sfx,
+		splitOffset: dataOffset,
 	}
 }
 
