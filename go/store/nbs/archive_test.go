@@ -921,6 +921,58 @@ func TestArchiveConjoinAllMixedCompression(t *testing.T) {
 	assert.Equal(t, expectedChunkCount, actualChunkCount, "Combined archive should have correct chunk count")
 }
 
+func TestArchiveGetRecordRanges(t *testing.T) {
+	// This test created two archives, with one chunk in common. Then we call `getRecordRanges` on both, and verify
+	// that we only get one range returned, based on which archive we call first.
+
+	sharedChunk := []byte{100, 101, 102, 103, 104, 105, 106, 107, 108, 109}
+	sharedHash := hash.Of(sharedChunk)
+	chunks1 := [][]byte{
+		{10, 11, 12, 13, 14, 15, 16, 17, 18, 19},
+		sharedChunk,
+	}
+	firstHash := hash.Of(chunks1[0])
+	ar1, h1 := createTestArchiveWithHashes(t, chunks1, []hash.Hash{firstHash, sharedHash}, nil, "")
+	src1 := readersToSource([]archiveReader{ar1})[0]
+
+	chunks2 := [][]byte{
+		{20, 21, 22, 23, 24, 25, 26, 27, 28, 29},
+		sharedChunk,
+	}
+	firstHash = hash.Of(chunks2[0])
+	ar2, h2 := createTestArchiveWithHashes(t, chunks2, []hash.Hash{firstHash, sharedHash}, nil, "")
+	src2 := readersToSource([]archiveReader{ar2})[0]
+
+	records := make([]getRecord, 0, 3)
+	records = append(records, getRecord{a: &h1[0], prefix: h1[0].Prefix(), found: false})
+	records = append(records, getRecord{a: &h2[0], prefix: h2[0].Prefix(), found: false})
+	records = append(records, getRecord{a: &sharedHash, prefix: sharedHash.Prefix(), found: false})
+
+	rang1, _, err := src1.getRecordRanges(context.Background(), records, nil)
+	assert.NoError(t, err)
+	assert.Equal(t, 2, len(rang1))
+
+	rang2, _, err := src2.getRecordRanges(context.Background(), records, nil)
+	assert.NoError(t, err)
+	assert.Equal(t, 1, len(rang2))
+	_, ok := rang2[sharedHash]
+	assert.False(t, ok)
+
+	// reset records, and search in reverse order.
+	for i := range records {
+		records[i].found = false
+	}
+	rang1, _, err = src2.getRecordRanges(context.Background(), records, nil)
+	assert.NoError(t, err)
+	assert.Equal(t, 2, len(rang1))
+
+	rang2, _, err = src1.getRecordRanges(context.Background(), records, nil)
+	assert.NoError(t, err)
+	assert.Equal(t, 1, len(rang2))
+	_, ok = rang2[sharedHash]
+	assert.False(t, ok)
+}
+
 func TestArchiveConjoinAllComprehensive(t *testing.T) {
 	rand.Seed(42)
 
