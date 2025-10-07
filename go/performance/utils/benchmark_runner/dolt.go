@@ -117,6 +117,8 @@ func (b *doltBenchmarkerImpl) Benchmark(ctx context.Context) (Results, error) {
 			if err != nil {
 				return nil, err
 			}
+
+			os.RemoveAll(testRepo)
 		}
 	}
 
