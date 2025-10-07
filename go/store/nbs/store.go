@@ -1579,7 +1579,7 @@ func (nbs *NomsBlockStore) Sources(ctx context.Context) (hash.Hash, []chunks.Tab
 	if err != nil {
 		return hash.Hash{}, nil, nil, err
 	}
-	
+
 	appendixTableFiles, err := getTableFiles(css, contents, contents.NumAppendixSpecs(), func(mc manifestContents, idx int) tableSpec {
 		return mc.getAppendixSpec(idx)
 	})
