@@ -214,7 +214,6 @@ func (writer prollyKeylessSecondaryWriter) Map(ctx context.Context) (prolly.MapI
 }
 
 func (writer prollyKeylessSecondaryWriter) VisitGCRoots(ctx context.Context, roots func(hash.Hash) bool) error {
-	// TODO: writer.primary?
 	return writer.mut.VisitGCRoots(ctx, roots)
 }
 
