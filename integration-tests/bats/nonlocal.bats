@@ -186,7 +186,7 @@ SQL
   dolt checkout -b other
   dolt sql <<SQL
   INSERT INTO dolt_nonlocal_tables(table_name, target_ref, options) VALUES
-    ("global_*", "main", "immediate");
+    ("nonlocal_*", "main", "immediate");
 
   CALL DOLT_CHECKOUT('main');
 
