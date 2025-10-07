@@ -60,13 +60,13 @@ var ErrInvalidTableName = errors.NewKind("Invalid table name %s.")
 var ErrReservedTableName = errors.NewKind("Invalid table name %s. Table names beginning with `dolt_` are reserved for internal use")
 var ErrReservedDiffTableName = errors.NewKind("Invalid table name %s. Table names beginning with `__DATABASE__` are reserved for internal use")
 var ErrSystemTableAlter = errors.NewKind("Cannot alter table %s: system tables cannot be dropped or altered")
-var ErrInvalidGlobalsTableOptions = errors.NewKind("Invalid global table options %s: only valid value is 'immediate'.")
+var ErrInvalidNonlocalTableOptions = errors.NewKind("Invalid nonlocal table options %s: only valid value is 'immediate'.")
 
-type readGlobalTablesFlag bool
+type readNonlocalTablesFlag bool
 
 const (
-	readGlobalTables     readGlobalTablesFlag = true
-	dontReadGlobalTables readGlobalTablesFlag = false
+	doReadNonlocalTables   readNonlocalTablesFlag = true
+	dontReadNonlocalTables readNonlocalTablesFlag = false
 )
 
 // Database implements sql.Database for a dolt DB.
@@ -277,10 +277,10 @@ func (db Database) GetGlobalState() globalstate.GlobalState {
 // GetTableInsensitive is used when resolving tables in queries. It returns a best-effort case-insensitive match for
 // the table name given.
 func (db Database) GetTableInsensitive(ctx *sql.Context, tblName string) (sql.Table, bool, error) {
-	return db.getTableInsensitive(ctx, tblName, readGlobalTables)
+	return db.getTableInsensitive(ctx, tblName, doReadNonlocalTables)
 }
 
-func (db Database) getTableInsensitive(ctx *sql.Context, tblName string, readGlobalTables readGlobalTablesFlag) (sql.Table, bool, error) {
+func (db Database) getTableInsensitive(ctx *sql.Context, tblName string, readNonlocalTables readNonlocalTablesFlag) (sql.Table, bool, error) {
 	// We start by first checking whether the input table is a temporary table. Temporary tables with name `x` take
 	// priority over persisted tables of name `x`.
 	ds := dsess.DSessFromSess(ctx.Session)
@@ -293,7 +293,7 @@ func (db Database) getTableInsensitive(ctx *sql.Context, tblName string, readGlo
 		return nil, false, err
 	}
 
-	return db.getTableInsensitiveWithRoot(ctx, nil, ds, root, tblName, "", readGlobalTables)
+	return db.getTableInsensitiveWithRoot(ctx, nil, ds, root, tblName, "", readNonlocalTables)
 }
 
 func (db Database) GetTableInsensitiveAsOf(ctx *sql.Context, tableName string, asOf interface{}) (sql.Table, bool, error) {
@@ -301,7 +301,7 @@ func (db Database) GetTableInsensitiveAsOf(ctx *sql.Context, tableName string, a
 }
 
 // GetTableInsensitiveAsOf implements sql.VersionedDatabase
-func (db Database) getTableInsensitiveAsOf(ctx *sql.Context, tableName string, asOf interface{}, readGlobalTables readGlobalTablesFlag) (sql.Table, bool, error) {
+func (db Database) getTableInsensitiveAsOf(ctx *sql.Context, tableName string, asOf interface{}, readNonlocalTables readNonlocalTablesFlag) (sql.Table, bool, error) {
 	if asOf == nil {
 		return db.GetTableInsensitive(ctx, tableName)
 	}
@@ -314,7 +314,7 @@ func (db Database) getTableInsensitiveAsOf(ctx *sql.Context, tableName string, a
 
 	sess := dsess.DSessFromSess(ctx.Session)
 
-	table, ok, err := db.getTableInsensitiveWithRoot(ctx, head, sess, root, tableName, asOf, readGlobalTables)
+	table, ok, err := db.getTableInsensitiveWithRoot(ctx, head, sess, root, tableName, asOf, readNonlocalTables)
 	if err != nil {
 		return nil, false, err
 	}
@@ -347,16 +347,16 @@ func (db Database) getTableInsensitiveAsOf(ctx *sql.Context, tableName string, a
 	}
 }
 
-func (db Database) getTableInsensitiveWithRoot(ctx *sql.Context, head *doltdb.Commit, ds *dsess.DoltSession, root doltdb.RootValue, tblName string, asOf interface{}, readGlobalTables readGlobalTablesFlag) (sql.Table, bool, error) {
+func (db Database) getTableInsensitiveWithRoot(ctx *sql.Context, head *doltdb.Commit, ds *dsess.DoltSession, root doltdb.RootValue, tblName string, asOf interface{}, readNonlocalTables readNonlocalTablesFlag) (sql.Table, bool, error) {
 	lwrName := strings.ToLower(tblName)
 
-	if readGlobalTables {
-		globalTable, exists, err := db.getGlobalTable(ctx, root, lwrName)
+	if readNonlocalTables {
+		nonlocalTable, exists, err := db.getNonlocalTable(ctx, root, lwrName)
 		if err != nil {
 			return nil, false, err
 		}
 		if exists {
-			return globalTable, true, nil
+			return nonlocalTable, true, nil
 		}
 	}
 
@@ -503,7 +503,7 @@ func (db Database) getTableInsensitiveWithRoot(ctx *sql.Context, head *doltdb.Co
 			}
 		}
 
-		srcTable, ok, err := db.getTableInsensitiveWithRoot(ctx, head, ds, root, tname.Name, asOf, readGlobalTables)
+		srcTable, ok, err := db.getTableInsensitiveWithRoot(ctx, head, ds, root, tname.Name, asOf, readNonlocalTables)
 		if err != nil {
 			return nil, false, err
 		} else if !ok {
@@ -895,16 +895,16 @@ func (db Database) getTableInsensitiveWithRoot(ctx *sql.Context, head *doltdb.Co
 			versionableTable := backingTable.(dtables.VersionableTable)
 			dt, found = dtables.NewQueryCatalogTable(ctx, versionableTable), true
 		}
-	case doltdb.GlobalTablesTableName, doltdb.GetGlobalTablesTableName():
-		backingTable, _, err := db.getTable(ctx, root, doltdb.GlobalTablesTableName)
+	case doltdb.NonlocalTableName, doltdb.GetNonlocalTablesTableName():
+		backingTable, _, err := db.getTable(ctx, root, doltdb.NonlocalTableName)
 		if err != nil {
 			return nil, false, err
 		}
 		if backingTable == nil {
-			dt, found = dtables.NewEmptyGlobalTablesTable(ctx), true
+			dt, found = dtables.NewEmptyNonlocalTablesTable(ctx), true
 		} else {
 			versionableTable := backingTable.(dtables.VersionableTable)
-			dt, found = dtables.NewGlobalTablesTable(ctx, versionableTable), true
+			dt, found = dtables.NewNonlocallTablesTable(ctx, versionableTable), true
 		}
 	case doltdb.GetTestsTableName():
 		backingTable, _, err := db.getTable(ctx, root, doltdb.GetTestsTableName())
@@ -943,37 +943,37 @@ func (db Database) getTableInsensitiveWithRoot(ctx *sql.Context, head *doltdb.Co
 	return resolveOverriddenNonexistentTable(ctx, tblName, db)
 }
 
-// getGlobalTable checks whether the table name maps onto a table in another root via the dolt_global_tables system table
-func (db Database) getGlobalTable(ctx *sql.Context, root doltdb.RootValue, lwrName string) (sql.Table, bool, error) {
-	_, globalsTable, globalsTableExists, err := db.resolveUserTable(ctx, root, doltdb.GetGlobalTablesTableName())
+// getNonlocalTable checks whether the table name maps onto a table in another root via the dolt_nonlocal_tables system table
+func (db Database) getNonlocalTable(ctx *sql.Context, root doltdb.RootValue, lwrName string) (sql.Table, bool, error) {
+	_, nonlocalsTable, nonlocalsTableExists, err := db.resolveUserTable(ctx, root, doltdb.GetNonlocalTablesTableName())
 	if err != nil {
 		return nil, false, err
 	}
 
-	if !globalsTableExists {
+	if !nonlocalsTableExists {
 		return nil, false, nil
 	}
 
-	index, err := globalsTable.GetRowData(ctx)
+	index, err := nonlocalsTable.GetRowData(ctx)
 
 	if err != nil {
 		return nil, false, err
 	}
-	globalTablesSchema, err := globalsTable.GetSchema(ctx)
+	nonlocalTablesSchema, err := nonlocalsTable.GetSchema(ctx)
 	if err != nil {
 		return nil, false, err
 	}
 	m := durable.MapFromIndex(index)
-	keyDesc, valueDesc := globalTablesSchema.GetMapDescriptors(m.NodeStore())
+	keyDesc, valueDesc := nonlocalTablesSchema.GetMapDescriptors(m.NodeStore())
 
-	globalTablesMap, err := m.IterAll(ctx)
+	nonlocalTablesMap, err := m.IterAll(ctx)
 	if err != nil {
 		return nil, false, err
 	}
-	var globalTablesEntry doltdb.GlobalTablesEntry
+	var nonlocalTableEntry doltdb.NonlocalTableEntry
 	// check if there's an entry for this table. If so, resolve that reference.
 	for {
-		keyTuple, valueTuple, err := globalTablesMap.Next(ctx)
+		keyTuple, valueTuple, err := nonlocalTablesMap.Next(ctx)
 		if err == io.EOF {
 			break
 		}
@@ -981,7 +981,7 @@ func (db Database) getGlobalTable(ctx *sql.Context, root doltdb.RootValue, lwrNa
 			return nil, false, err
 		}
 
-		globalsEntryTableName, err := doltdb.GetGlobalTablesNameColumn(ctx, keyDesc, keyTuple)
+		globalsEntryTableName, err := doltdb.GetNonlocalTablesNameColumn(ctx, keyDesc, keyTuple)
 		if err != nil {
 			return nil, false, err
 		}
@@ -995,31 +995,31 @@ func (db Database) getGlobalTable(ctx *sql.Context, root doltdb.RootValue, lwrNa
 			continue
 		}
 
-		globalTablesEntry = doltdb.GetGlobalTablesRef(ctx, valueDesc, valueTuple)
-		if globalTablesEntry.NewTableName == "" {
-			globalTablesEntry.NewTableName = lwrName
+		nonlocalTableEntry = doltdb.GetNonlocalTablesRef(ctx, valueDesc, valueTuple)
+		if nonlocalTableEntry.NewTableName == "" {
+			nonlocalTableEntry.NewTableName = lwrName
 		}
 
-		if globalTablesEntry.Ref == "" {
-			globalTablesEntry.Ref = db.revision
+		if nonlocalTableEntry.Ref == "" {
+			nonlocalTableEntry.Ref = db.revision
 		}
 
-		if globalTablesEntry.Options != "immediate" {
-			return nil, false, ErrInvalidGlobalsTableOptions.New(globalTablesEntry.Options)
+		if nonlocalTableEntry.Options != "immediate" {
+			return nil, false, ErrInvalidNonlocalTableOptions.New(nonlocalTableEntry.Options)
 		}
 
 		// If the ref is a branch, we get the working set, not the head.
-		_, exists, err := isBranch(ctx, db, globalTablesEntry.Ref)
+		_, exists, err := isBranch(ctx, db, nonlocalTableEntry.Ref)
 		if exists {
-			referencedBranch, err := RevisionDbForBranch(ctx, db, globalTablesEntry.Ref, db.requestedName)
+			referencedBranch, err := RevisionDbForBranch(ctx, db, nonlocalTableEntry.Ref, db.requestedName)
 			if err != nil {
 				return nil, false, err
 			}
-			return referencedBranch.(Database).getTableInsensitive(ctx, globalTablesEntry.NewTableName, dontReadGlobalTables)
+			return referencedBranch.(Database).getTableInsensitive(ctx, nonlocalTableEntry.NewTableName, dontReadNonlocalTables)
 		} else {
 			// If we couldn't resolve it as a database revision, treat it as a noms ref.
 			// This lets us resolve branch heads like 'heads/$branchName' or remotes refs like '$remote/$branchName'
-			return db.getTableInsensitiveAsOf(ctx, globalTablesEntry.NewTableName, globalTablesEntry.Ref, false)
+			return db.getTableInsensitiveAsOf(ctx, nonlocalTableEntry.NewTableName, nonlocalTableEntry.Ref, false)
 		}
 	}
 

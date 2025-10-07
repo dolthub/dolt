@@ -218,16 +218,16 @@ const (
 )
 
 const (
-	// GlobalTablesTableName is the name of the query catalog table
-	GlobalTablesTableName = "dolt_global_tables"
+	// NonlocalTableName is the name of the query catalog table
+	NonlocalTableName = "dolt_nonlocal_tables"
 
-	GlobalTableTableNameCol = "table_name"
+	NonlocalTableTableNameCol = "table_name"
 
-	GlobalTablesRefCol = "target_ref"
+	NonlocalTableRefCol = "target_ref"
 
-	GlobalTablesRefTableCol = "ref_table"
+	NonlocalTablesRefTableCol = "ref_table"
 
-	GlobalTablesOptionsCol = "options"
+	NonlocalTablesOptionsCol = "options"
 )
 
 const (
@@ -391,7 +391,7 @@ var GetStashesTableName = func() string {
 
 var GetQueryCatalogTableName = func() string { return DoltQueryCatalogTableName }
 
-var GetGlobalTablesTableName = func() string { return GlobalTablesTableName }
+var GetNonlocalTablesTableName = func() string { return NonlocalTableName }
 
 var GetTestsTableName = func() string {
 	return TestsTableName

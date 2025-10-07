@@ -17,16 +17,19 @@ package doltdb
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
+	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
+	"io"
 )
 
-// GetGlobalTablesRef is a function that reads the "ref" column from dolt_global_tables. This is used to handle the Doltgres extended string type.
-var GetGlobalTablesRef = getGlobalTablesRef
+// GetNonlocalTablesRef is a function that reads the "ref" column from dolt_nonlocal_tables. This is used to handle the Doltgres extended string type.
+var GetNonlocalTablesRef = getNonlocalTablesRef
 
-// GetGlobalTablesNameColumn is a function that reads the "table_name" column from dolt_global_tables. This is used to handle the Doltgres extended string type.
-var GetGlobalTablesNameColumn = getGlobalTablesNameColumn
+// GetNonlocalTablesNameColumn is a function that reads the "table_name" column from dolt_nonlocal_tables. This is used to handle the Doltgres extended string type.
+var GetNonlocalTablesNameColumn = getNonlocalTablesNameColumn
 
-func getGlobalTablesNameColumn(_ context.Context, keyDesc val.TupleDesc, keyTuple val.Tuple) (string, error) {
+func getNonlocalTablesNameColumn(_ context.Context, keyDesc val.TupleDesc, keyTuple val.Tuple) (string, error) {
 	key, ok := keyDesc.GetString(0, keyTuple)
 	if !ok {
 		return "", fmt.Errorf("failed to read global table")
@@ -34,13 +37,13 @@ func getGlobalTablesNameColumn(_ context.Context, keyDesc val.TupleDesc, keyTupl
 	return key, nil
 }
 
-type GlobalTablesEntry struct {
+type NonlocalTableEntry struct {
 	Ref          string
 	NewTableName string
 	Options      string
 }
 
-func getGlobalTablesRef(_ context.Context, valDesc val.TupleDesc, valTuple val.Tuple) (result GlobalTablesEntry) {
+func getNonlocalTablesRef(_ context.Context, valDesc val.TupleDesc, valTuple val.Tuple) (result NonlocalTableEntry) {
 	result.Ref, _ = valDesc.GetString(0, valTuple)
 	result.NewTableName, _ = valDesc.GetString(1, valTuple)
 	result.Options, _ = valDesc.GetString(2, valTuple)
@@ -48,7 +51,7 @@ func getGlobalTablesRef(_ context.Context, valDesc val.TupleDesc, valTuple val.T
 }
 
 func GetGlobalTablePatterns(ctx context.Context, root RootValue, schema string, cb func(string)) error {
-	table_name := TableName{Name: GlobalTablesTableName, Schema: schema}
+	table_name := TableName{Name: NonlocalTableName, Schema: schema}
 	table, found, err := root.GetTable(ctx, table_name)
 	if err != nil {
 		return err
@@ -86,7 +89,7 @@ func GetGlobalTablePatterns(ctx context.Context, root RootValue, schema string, 
 			return err
 		}
 
-		globalTableName, err := GetGlobalTablesNameColumn(ctx, keyDesc, keyTuple)
+		globalTableName, err := GetNonlocalTablesNameColumn(ctx, keyDesc, keyTuple)
 		if err != nil {
 			return err
 		}
