@@ -218,6 +218,19 @@ const (
 )
 
 const (
+	// NonlocalTableName is the name of the query catalog table
+	NonlocalTableName = "dolt_nonlocal_tables"
+
+	NonlocalTableTableNameCol = "table_name"
+
+	NonlocalTableRefCol = "target_ref"
+
+	NonlocalTablesRefTableCol = "ref_table"
+
+	NonlocalTablesOptionsCol = "options"
+)
+
+const (
 	// SchemasTableName is the name of the dolt schema fragment table
 	SchemasTableName = "dolt_schemas"
 	// SchemasTablesTypeCol is the name of the column that stores the type of a schema fragment  in the dolt_schemas table
@@ -377,6 +390,8 @@ var GetStashesTableName = func() string {
 }
 
 var GetQueryCatalogTableName = func() string { return DoltQueryCatalogTableName }
+
+var GetNonlocalTablesTableName = func() string { return NonlocalTableName }
 
 var GetTestsTableName = func() string {
 	return TestsTableName
