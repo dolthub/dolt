@@ -112,13 +112,6 @@ func (b *doltBenchmarkerImpl) Benchmark(ctx context.Context) (Results, error) {
 				return nil, err
 			}
 			results = append(results, res)
-
-			err = server.Stop()
-			if err != nil {
-				return nil, err
-			}
-
-			os.RemoveAll(testRepo)
 		}
 	}
 
@@ -145,32 +138,6 @@ func InitDoltRepo(ctx context.Context, dir, serverExec, nomsBinFormat, dbName st
 		if err = os.Setenv(nbfEnvVar, nomsBinFormat); err != nil {
 			return "", err
 		}
-	}
-
-	// TODO: create config.yaml
-	// TODO: copy over TLS/SSL keys
-	configFile, err := os.Create("config.yaml")
-	if err != nil {
-		return "", err
-	}
-	defer configFile.Close()
-
-	_, err = configFile.WriteString(`
-log_level: info
-
-listener: 
-  host: 127.0.0.1
-  port: 3306
-  tls_key: "/Users/james/dolt_workspace/dolt/go/libraries/doltcore/servercfg/testdata/chain_key.pem"
-  tls_cert: "/Users/james/dolt_workspace/dolt/go/libraries/doltcore/servercfg/testdata/chain_cert.pem"
-  require_secure_transport: true
-
-system_variables: {
-  sql_mode: ""
-}
-`)
-	if err != nil {
-		return "", err
 	}
 
 	doltInit := ExecCommand(ctx, serverExec, doltInitCommand)
