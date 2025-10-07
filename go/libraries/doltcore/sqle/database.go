@@ -62,6 +62,13 @@ var ErrReservedDiffTableName = errors.NewKind("Invalid table name %s. Table name
 var ErrSystemTableAlter = errors.NewKind("Cannot alter table %s: system tables cannot be dropped or altered")
 var ErrInvalidGlobalsTableOptions = errors.NewKind("Invalid global table options %s: only valid value is 'immediate'.")
 
+type readGlobalTablesFlag bool
+
+const (
+	readGlobalTables     readGlobalTablesFlag = true
+	dontReadGlobalTables readGlobalTablesFlag = false
+)
+
 // Database implements sql.Database for a dolt DB.
 type Database struct {
 	rsr           env.RepoStateReader[*sql.Context]
@@ -270,10 +277,10 @@ func (db Database) GetGlobalState() globalstate.GlobalState {
 // GetTableInsensitive is used when resolving tables in queries. It returns a best-effort case-insensitive match for
 // the table name given.
 func (db Database) GetTableInsensitive(ctx *sql.Context, tblName string) (sql.Table, bool, error) {
-	return db.getTableInsensitive(ctx, tblName, true)
+	return db.getTableInsensitive(ctx, tblName, readGlobalTables)
 }
 
-func (db Database) getTableInsensitive(ctx *sql.Context, tblName string, readGlobalTables bool) (sql.Table, bool, error) {
+func (db Database) getTableInsensitive(ctx *sql.Context, tblName string, readGlobalTables readGlobalTablesFlag) (sql.Table, bool, error) {
 	// We start by first checking whether the input table is a temporary table. Temporary tables with name `x` take
 	// priority over persisted tables of name `x`.
 	ds := dsess.DSessFromSess(ctx.Session)
@@ -294,7 +301,7 @@ func (db Database) GetTableInsensitiveAsOf(ctx *sql.Context, tableName string, a
 }
 
 // GetTableInsensitiveAsOf implements sql.VersionedDatabase
-func (db Database) getTableInsensitiveAsOf(ctx *sql.Context, tableName string, asOf interface{}, readGlobalTables bool) (sql.Table, bool, error) {
+func (db Database) getTableInsensitiveAsOf(ctx *sql.Context, tableName string, asOf interface{}, readGlobalTables readGlobalTablesFlag) (sql.Table, bool, error) {
 	if asOf == nil {
 		return db.GetTableInsensitive(ctx, tableName)
 	}
@@ -340,7 +347,7 @@ func (db Database) getTableInsensitiveAsOf(ctx *sql.Context, tableName string, a
 	}
 }
 
-func (db Database) getTableInsensitiveWithRoot(ctx *sql.Context, head *doltdb.Commit, ds *dsess.DoltSession, root doltdb.RootValue, tblName string, asOf interface{}, readGlobalTables bool) (sql.Table, bool, error) {
+func (db Database) getTableInsensitiveWithRoot(ctx *sql.Context, head *doltdb.Commit, ds *dsess.DoltSession, root doltdb.RootValue, tblName string, asOf interface{}, readGlobalTables readGlobalTablesFlag) (sql.Table, bool, error) {
 	lwrName := strings.ToLower(tblName)
 
 	if readGlobalTables {
@@ -496,7 +503,7 @@ func (db Database) getTableInsensitiveWithRoot(ctx *sql.Context, head *doltdb.Co
 			}
 		}
 
-		srcTable, ok, err := db.getTableInsensitiveWithRoot(ctx, head, ds, root, tname.Name, asOf, true)
+		srcTable, ok, err := db.getTableInsensitiveWithRoot(ctx, head, ds, root, tname.Name, asOf, readGlobalTables)
 		if err != nil {
 			return nil, false, err
 		} else if !ok {
@@ -938,12 +945,7 @@ func (db Database) getTableInsensitiveWithRoot(ctx *sql.Context, head *doltdb.Co
 
 // getGlobalTable checks whether the table name maps onto a table in another root via the dolt_global_tables system table
 func (db Database) getGlobalTable(ctx *sql.Context, root doltdb.RootValue, lwrName string) (sql.Table, bool, error) {
-	globalTablesTableName := doltdb.TableName{
-		Name:   doltdb.GetGlobalTablesTableName(),
-		Schema: db.schemaName,
-	}
-
-	globalsTable, globalsTableExists, err := root.GetTable(ctx, globalTablesTableName)
+	_, globalsTable, globalsTableExists, err := db.resolveUserTable(ctx, root, doltdb.GetGlobalTablesTableName())
 	if err != nil {
 		return nil, false, err
 	}
@@ -1013,7 +1015,7 @@ func (db Database) getGlobalTable(ctx *sql.Context, root doltdb.RootValue, lwrNa
 			if err != nil {
 				return nil, false, err
 			}
-			return referencedBranch.(Database).getTableInsensitive(ctx, globalTablesEntry.NewTableName, false)
+			return referencedBranch.(Database).getTableInsensitive(ctx, globalTablesEntry.NewTableName, dontReadGlobalTables)
 		} else {
 			// If we couldn't resolve it as a database revision, treat it as a noms ref.
 			// This lets us resolve branch heads like 'heads/$branchName' or remotes refs like '$remote/$branchName'

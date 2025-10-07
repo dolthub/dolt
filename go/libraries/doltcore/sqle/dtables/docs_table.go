@@ -32,13 +32,13 @@ var _ sql.IndexAddressableTable = (*DocsTable)(nil)
 
 // DocsTable is the system table that stores Dolt docs, such as LICENSE and README.
 type DocsTable struct {
-	BackedSystemTable
+	UserSpaceSystemTable
 }
 
 // NewDocsTable creates a DocsTable
 func NewDocsTable(_ *sql.Context, backingTable VersionableTable) sql.Table {
 	return &DocsTable{
-		BackedSystemTable: BackedSystemTable{
+		UserSpaceSystemTable: UserSpaceSystemTable{
 			backingTable: backingTable,
 			tableName:    getDoltDocsTableName(),
 			schema:       GetDocsSchema(),
@@ -49,7 +49,7 @@ func NewDocsTable(_ *sql.Context, backingTable VersionableTable) sql.Table {
 // NewEmptyDocsTable creates a DocsTable
 func NewEmptyDocsTable(_ *sql.Context) sql.Table {
 	return &DocsTable{
-		BackedSystemTable: BackedSystemTable{
+		UserSpaceSystemTable: UserSpaceSystemTable{
 			tableName: getDoltDocsTableName(),
 			schema:    GetDocsSchema(),
 		},
@@ -81,7 +81,7 @@ func (dt *DocsTable) LockedToRoot(ctx *sql.Context, root doltdb.RootValue) (sql.
 }
 
 func (dt *DocsTable) PartitionRows(ctx *sql.Context, partition sql.Partition) (sql.RowIter, error) {
-	underlyingIter, err := dt.BackedSystemTable.PartitionRows(ctx, partition)
+	underlyingIter, err := dt.UserSpaceSystemTable.PartitionRows(ctx, partition)
 	if err != nil {
 		return nil, err
 	}

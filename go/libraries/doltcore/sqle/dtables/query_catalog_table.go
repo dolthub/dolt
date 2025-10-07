@@ -36,7 +36,7 @@ var GetDoltQueryCatalogSchema = doltQueryCatalogSchema
 
 // NewQueryCatalogTable creates a QueryCatalogTable
 func NewQueryCatalogTable(_ *sql.Context, backingTable VersionableTable) sql.Table {
-	return &BackedSystemTable{
+	return &UserSpaceSystemTable{
 		backingTable: backingTable,
 		tableName:    getDoltQueryCatalogTableName(),
 		schema:       GetDoltQueryCatalogSchema(),
@@ -45,7 +45,7 @@ func NewQueryCatalogTable(_ *sql.Context, backingTable VersionableTable) sql.Tab
 
 // NewEmptyQueryCatalogTable creates an empty QueryCatalogTable
 func NewEmptyQueryCatalogTable(_ *sql.Context) sql.Table {
-	return &BackedSystemTable{
+	return &UserSpaceSystemTable{
 		tableName: getDoltQueryCatalogTableName(),
 		schema:    GetDoltQueryCatalogSchema(),
 	}

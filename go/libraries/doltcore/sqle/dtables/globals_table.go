@@ -33,18 +33,18 @@ func doltGlobalTablesSchema() sql.Schema {
 
 var GetDoltGlobalTablesSchema = doltGlobalTablesSchema
 
-// NewGlobalTablesTable creates a
+// NewGlobalTablesTable creates a new dolt_table_aliases table
 func NewGlobalTablesTable(_ *sql.Context, backingTable VersionableTable) sql.Table {
-	return &BackedSystemTable{
+	return &UserSpaceSystemTable{
 		backingTable: backingTable,
 		tableName:    getDoltGlobalTablesName(),
 		schema:       GetDoltGlobalTablesSchema(),
 	}
 }
 
-// NewEmptyGlobalTablesTable creates an empty
+// NewEmptyGlobalTablesTable creates an empty dolt_table_aliases table
 func NewEmptyGlobalTablesTable(_ *sql.Context) sql.Table {
-	return &BackedSystemTable{
+	return &UserSpaceSystemTable{
 		tableName: getDoltGlobalTablesName(),
 		schema:    GetDoltGlobalTablesSchema(),
 	}

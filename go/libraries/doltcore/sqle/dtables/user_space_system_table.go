@@ -26,40 +26,40 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
-var _ sql.Table = (*BackedSystemTable)(nil)
-var _ sql.UpdatableTable = (*BackedSystemTable)(nil)
-var _ sql.DeletableTable = (*BackedSystemTable)(nil)
-var _ sql.InsertableTable = (*BackedSystemTable)(nil)
-var _ sql.ReplaceableTable = (*BackedSystemTable)(nil)
-var _ sql.IndexAddressableTable = (*BackedSystemTable)(nil)
+var _ sql.Table = (*UserSpaceSystemTable)(nil)
+var _ sql.UpdatableTable = (*UserSpaceSystemTable)(nil)
+var _ sql.DeletableTable = (*UserSpaceSystemTable)(nil)
+var _ sql.InsertableTable = (*UserSpaceSystemTable)(nil)
+var _ sql.ReplaceableTable = (*UserSpaceSystemTable)(nil)
+var _ sql.IndexAddressableTable = (*UserSpaceSystemTable)(nil)
 
-// A BackedSystemTable is a system table backed by a normal table in storage.
+// A UserSpaceSystemTable is a system table backed by a normal table in storage.
 // Like other system tables, it always exists. If the backing table doesn't exist, then reads return an empty table,
 // and writes will create the table.
-type BackedSystemTable struct {
+type UserSpaceSystemTable struct {
 	backingTable VersionableTable
 	tableName    doltdb.TableName
 	schema       sql.Schema
 }
 
-func (bst *BackedSystemTable) Name() string {
+func (bst *UserSpaceSystemTable) Name() string {
 	return bst.tableName.Name
 }
 
-func (bst *BackedSystemTable) String() string {
+func (bst *UserSpaceSystemTable) String() string {
 	return bst.tableName.Name
 }
 
-func (bst *BackedSystemTable) Schema() sql.Schema {
+func (bst *UserSpaceSystemTable) Schema() sql.Schema {
 	return bst.schema
 }
 
-func (bst *BackedSystemTable) Collation() sql.CollationID {
+func (bst *UserSpaceSystemTable) Collation() sql.CollationID {
 	return sql.Collation_Default
 }
 
 // Partitions is a sql.Table interface function that returns a partition of the data.
-func (bst *BackedSystemTable) Partitions(context *sql.Context) (sql.PartitionIter, error) {
+func (bst *UserSpaceSystemTable) Partitions(context *sql.Context) (sql.PartitionIter, error) {
 	if bst.backingTable == nil {
 		// no backing table; return an empty iter.
 		return index.SinglePartitionIterFromNomsMap(nil), nil
@@ -67,7 +67,7 @@ func (bst *BackedSystemTable) Partitions(context *sql.Context) (sql.PartitionIte
 	return bst.backingTable.Partitions(context)
 }
 
-func (bst *BackedSystemTable) PartitionRows(context *sql.Context, partition sql.Partition) (sql.RowIter, error) {
+func (bst *UserSpaceSystemTable) PartitionRows(context *sql.Context, partition sql.Partition) (sql.RowIter, error) {
 	if bst.backingTable == nil {
 		// no backing table; return an empty iter.
 		return sql.RowsToRowIter(), nil
@@ -78,47 +78,47 @@ func (bst *BackedSystemTable) PartitionRows(context *sql.Context, partition sql.
 
 // Replacer returns a RowReplacer for this table. The RowReplacer will have Insert and optionally Delete called once
 // for each row, followed by a call to Close() when all rows have been processed.
-func (bst *BackedSystemTable) Replacer(ctx *sql.Context) sql.RowReplacer {
+func (bst *UserSpaceSystemTable) Replacer(ctx *sql.Context) sql.RowReplacer {
 	return newBackedSystemTableWriter(bst)
 }
 
 // Updater returns a RowUpdater for this table. The RowUpdater will have Update called once for each row to be
 // updated, followed by a call to Close() when all rows have been processed.
-func (bst *BackedSystemTable) Updater(ctx *sql.Context) sql.RowUpdater {
+func (bst *UserSpaceSystemTable) Updater(ctx *sql.Context) sql.RowUpdater {
 	return newBackedSystemTableWriter(bst)
 }
 
 // Inserter returns an Inserter for this table. The Inserter will get one call to Insert() for each row to be
 // inserted, and will end with a call to Close() to finalize the insert operation.
-func (bst *BackedSystemTable) Inserter(*sql.Context) sql.RowInserter {
+func (bst *UserSpaceSystemTable) Inserter(*sql.Context) sql.RowInserter {
 	return newBackedSystemTableWriter(bst)
 }
 
 // Deleter returns a RowDeleter for this table. The RowDeleter will get one call to Delete for each row to be deleted,
 // and will end with a call to Close() to finalize the delete operation.
-func (bst *BackedSystemTable) Deleter(*sql.Context) sql.RowDeleter {
+func (bst *UserSpaceSystemTable) Deleter(*sql.Context) sql.RowDeleter {
 	return newBackedSystemTableWriter(bst)
 }
 
-func (bst *BackedSystemTable) LockedToRoot(ctx *sql.Context, root doltdb.RootValue) (sql.IndexAddressableTable, error) {
+func (bst *UserSpaceSystemTable) LockedToRoot(ctx *sql.Context, root doltdb.RootValue) (sql.IndexAddressableTable, error) {
 	if bst.backingTable == nil {
 		return bst, nil
 	}
 	return bst.backingTable.LockedToRoot(ctx, root)
 }
 
-// IndexedAccess implements IndexAddressableTable, but BackedSystemTable has no indexes.
+// IndexedAccess implements IndexAddressableTable, but UserSpaceSystemTable has no indexes.
 // Thus, this should never be called.
-func (bst *BackedSystemTable) IndexedAccess(ctx *sql.Context, lookup sql.IndexLookup) sql.IndexedTable {
+func (bst *UserSpaceSystemTable) IndexedAccess(ctx *sql.Context, lookup sql.IndexLookup) sql.IndexedTable {
 	panic("Unreachable")
 }
 
 // GetIndexes implements IndexAddressableTable, but IgnoreTables has no indexes.
-func (bst *BackedSystemTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
+func (bst *UserSpaceSystemTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 	return nil, nil
 }
 
-func (bst *BackedSystemTable) PreciseMatch() bool {
+func (bst *UserSpaceSystemTable) PreciseMatch() bool {
 	return true
 }
 
@@ -128,13 +128,13 @@ var _ sql.RowInserter = (*backedSystemTableWriter)(nil)
 var _ sql.RowDeleter = (*backedSystemTableWriter)(nil)
 
 type backedSystemTableWriter struct {
-	bst                     *BackedSystemTable
+	bst                     *UserSpaceSystemTable
 	errDuringStatementBegin error
 	prevHash                *hash.Hash
 	tableWriter             dsess.TableWriter
 }
 
-func newBackedSystemTableWriter(bst *BackedSystemTable) *backedSystemTableWriter {
+func newBackedSystemTableWriter(bst *UserSpaceSystemTable) *backedSystemTableWriter {
 	return &backedSystemTableWriter{bst, nil, nil, nil}
 }
 

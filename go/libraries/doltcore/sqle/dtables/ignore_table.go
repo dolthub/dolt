@@ -32,9 +32,9 @@ func doltIgnoreSchema() sql.Schema {
 // by Doltgres to update the dolt_ignore schema using Doltgres types.
 var GetDoltIgnoreSchema = doltIgnoreSchema
 
-// NewIgnoreTable creates an IgnoreTable
+// NewIgnoreTable creates a dolt_ignore table
 func NewIgnoreTable(_ *sql.Context, backingTable VersionableTable, schemaName string) sql.Table {
-	return &BackedSystemTable{
+	return &UserSpaceSystemTable{
 		backingTable: backingTable,
 		tableName: doltdb.TableName{
 			Name:   doltdb.IgnoreTableName,
@@ -44,9 +44,9 @@ func NewIgnoreTable(_ *sql.Context, backingTable VersionableTable, schemaName st
 	}
 }
 
-// NewEmptyIgnoreTable creates an IgnoreTable
+// NewEmptyIgnoreTable creates an empty dolt_ignore table
 func NewEmptyIgnoreTable(_ *sql.Context, schemaName string) sql.Table {
-	return &BackedSystemTable{
+	return &UserSpaceSystemTable{
 		tableName: doltdb.TableName{
 			Name:   doltdb.IgnoreTableName,
 			Schema: schemaName,
