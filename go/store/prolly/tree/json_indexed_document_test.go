@@ -359,6 +359,12 @@ func TestJsonCompare(t *testing.T) {
 	require.NoError(t, err)
 	largeDocTests := []typetests.JsonCompareTest{
 		{
+			Name:  "identical large objects are equal",
+			Left:  largeObject,
+			Right: largeObject,
+			Cmp:   0,
+		},
+		{
 			Name:  "large object < boolean",
 			Left:  largeObject,
 			Right: true,

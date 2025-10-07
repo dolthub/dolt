@@ -46,6 +46,7 @@ type IndexedJsonDocument struct {
 
 var _ types.JSONBytes = IndexedJsonDocument{}
 var _ types.MutableJSON = IndexedJsonDocument{}
+var _ types.ComparableJSON = IndexedJsonDocument{}
 var _ fmt.Stringer = IndexedJsonDocument{}
 var _ driver.Valuer = IndexedJsonDocument{}
 
@@ -742,5 +743,28 @@ func (i IndexedJsonDocument) Compare(ctx context.Context, other interface{}) (in
 			return 0, err
 		}
 		return types.CompareJSON(ctx, val, other)
+	}
+}
+
+func (i IndexedJsonDocument) JsonType(ctx context.Context) (string, error) {
+	typeCategory, err := i.getTypeCategory(ctx)
+	if err != nil {
+		return "", err
+	}
+	switch typeCategory {
+	case jsonTypeObject:
+		return "OBJECT", nil
+	case jsonTypeArray:
+		return "ARRAY", nil
+	case jsonTypeNull:
+		return "NULL", nil
+	case jsonTypeBoolean:
+		return "BOOLEAN", nil
+	case jsonTypeString:
+		return "STRING", nil
+	case jsonTypeNumber:
+		return "DOUBLE", nil
+	default:
+		return "", fmt.Errorf("unknown json type category %v", typeCategory)
 	}
 }
