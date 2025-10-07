@@ -15,9 +15,10 @@
 package doltdb
 
 import (
-	"github.com/dolthub/go-mysql-server/sql"
 	"regexp"
 	"strings"
+
+	"github.com/dolthub/go-mysql-server/sql"
 )
 
 // compilePattern takes a dolt_ignore pattern and generate a Regexp that matches against the same table names as the pattern.
