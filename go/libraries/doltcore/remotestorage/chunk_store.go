@@ -1195,6 +1195,10 @@ func (drtf DoltRemoteTableFile) NumChunks() int {
 	return int(drtf.info.NumChunks)
 }
 
+func (drtf DoltRemoteTableFile) SplitOffset() uint64 {
+	return drtf.info.SplitOffset
+}
+
 var ErrRemoteTableFileGet = errors.New("HTTP GET for remote table file failed")
 
 func sanitizeSignedUrl(url string) string {

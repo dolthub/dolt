@@ -38,6 +38,12 @@ type TableFile interface {
 	// NumChunks returns the number of chunks in a table file
 	NumChunks() int
 
+	// SplitOffset returns the split offset of the storage file. In table files, this is generally determine by calculating
+	// the index size based on the number of chunks, then subtracting that from the total file size. Archive files do not
+	// have a deterministic way to calculate the split offset, so we either need to be told the offset or read the footer
+	// of the file to determine the index size then calculate the split offset. Passing the offset around similfies that.
+	SplitOffset() uint64
+
 	// Open returns an io.ReadCloser which can be used to read the bytes of a
 	// table file. It also returns the content length of the table file.
 	Open(ctx context.Context) (io.ReadCloser, uint64, error)
