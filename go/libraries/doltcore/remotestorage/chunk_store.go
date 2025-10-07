@@ -750,6 +750,7 @@ func (dcs *DoltChunkStore) AccessMode() chunks.ExclusiveAccessMode {
 // Rebase brings this ChunkStore into sync with the persistent storage's
 // current root.
 func (dcs *DoltChunkStore) Rebase(ctx context.Context) error {
+	dcs.repoToken.Store(nil)
 	err := dcs.loadRoot(ctx)
 	if err != nil {
 		return err
@@ -856,6 +857,7 @@ func (dcs *DoltChunkStore) Commit(ctx context.Context, current, last hash.Hash) 
 			NbsVersion: nbs.StorageVersion,
 		},
 	}
+	dcs.repoToken.Store(nil)
 	resp, err = dcs.csClient.Commit(ctx, req)
 	if err != nil {
 		return false, NewRpcError(err, "Commit", dcs.host, req)
