@@ -87,16 +87,20 @@ func (acs archiveChunkSource) has(h hash.Hash, keeper keeperF) (bool, gcBehavior
 	return res, gcBehavior_Continue, nil
 }
 
-func (acs archiveChunkSource) hasMany(addrs []hasRecord, keeper keeperF) (bool, gcBehavior, error) {
+func (acs archiveChunkSource) hasMany(records []hasRecord, keeper keeperF) (bool, gcBehavior, error) {
 	// single threaded first pass.
 	foundAll := true
-	for i, addr := range addrs {
-		h := *addr.a
+	for i, req := range records {
+		if req.has {
+			continue
+		}
+
+		h := *req.a
 		if acs.aRdr.has(h) {
 			if keeper != nil && keeper(h) {
 				return false, gcBehavior_Block, nil
 			}
-			addrs[i].has = true
+			records[i].has = true
 		} else {
 			foundAll = false
 		}
@@ -115,10 +119,13 @@ func (acs archiveChunkSource) get(ctx context.Context, h hash.Hash, keeper keepe
 	return res, gcBehavior_Continue, nil
 }
 
-func (acs archiveChunkSource) getMany(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, *chunks.Chunk), keeper keeperF, stats *Stats) (bool, gcBehavior, error) {
+func (acs archiveChunkSource) getMany(ctx context.Context, eg *errgroup.Group, records []getRecord, found func(context.Context, *chunks.Chunk), keeper keeperF, stats *Stats) (bool, gcBehavior, error) {
 	// single threaded first pass.
 	foundAll := true
-	for i, req := range reqs {
+	for i, req := range records {
+		if req.found {
+			continue
+		}
 		h := *req.a
 		data, err := acs.aRdr.get(ctx, h, stats)
 		if err != nil {
@@ -132,7 +139,7 @@ func (acs archiveChunkSource) getMany(ctx context.Context, eg *errgroup.Group, r
 			}
 			chunk := chunks.NewChunk(data)
 			found(ctx, &chunk)
-			reqs[i].found = true
+			records[i].found = true
 		}
 	}
 	return !foundAll, gcBehavior_Continue, nil
@@ -188,15 +195,20 @@ func (acs archiveChunkSource) clone() (chunkSource, error) {
 	return archiveChunkSource{reader, acs.file}, nil
 }
 
-func (acs archiveChunkSource) getRecordRanges(_ context.Context, requests []getRecord, keeper keeperF) (map[hash.Hash]Range, gcBehavior, error) {
-	result := make(map[hash.Hash]Range, len(requests))
-	for _, req := range requests {
+func (acs archiveChunkSource) getRecordRanges(_ context.Context, records []getRecord, keeper keeperF) (map[hash.Hash]Range, gcBehavior, error) {
+	result := make(map[hash.Hash]Range, len(records))
+	for i, req := range records {
+		if req.found {
+			continue
+		}
 		hAddr := *req.a
 		idx := acs.aRdr.search(hAddr)
 		if idx < 0 {
 			// Chunk not found.
 			continue
 		}
+		records[i].found = true
+
 		if keeper != nil && keeper(hAddr) {
 			return nil, gcBehavior_Block, nil
 		}
