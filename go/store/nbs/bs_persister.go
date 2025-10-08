@@ -142,12 +142,18 @@ func (bsp *blobstorePersister) ConjoinAll(ctx context.Context, sources chunkSour
 		return emptyChunkSource{}, nil, err
 	}
 
-	cs, err := newBSTableChunkSource(ctx, bsp.bs, plan.name, plan.chunkCount, bsp.q, stats)
+	var cs chunkSource
+	if archiveFound {
+		cs, err = newBSArchiveChunkSource(ctx, bsp.bs, plan.name, stats)
+	} else {
+		cs, err = newBSTableChunkSource(ctx, bsp.bs, plan.name, plan.chunkCount, bsp.q, stats)
+	}
+
 	return cs, func() {}, err
 }
 
 func (bsp *blobstorePersister) getRecordsSubObject(ctx context.Context, cs chunkSource) (name string, err error) {
-	name = cs.hash().String() + tableRecordsExt
+	name = cs.hash().String() + cs.suffix() + tableRecordsExt
 	// first check if we created this sub-object on Persist()
 	ok, err := bsp.bs.Exists(ctx, name)
 	if err != nil {
