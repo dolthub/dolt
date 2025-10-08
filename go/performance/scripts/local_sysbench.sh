@@ -124,6 +124,7 @@ sysbench \
   --mysql-password="$PASS" \
   --db-ps-mode=disable \
   --time=120 \
+  --table-size=10000 \
   --percentile=50 \
   --rand-type=uniform \
   --rand-seed=1 \
