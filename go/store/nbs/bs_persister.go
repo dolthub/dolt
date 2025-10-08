@@ -164,9 +164,19 @@ func (bsp *blobstorePersister) getRecordsSubObject(ctx context.Context, cs chunk
 
 	// otherwise create the sub-object from |table|
 	// (requires a round-trip for remote blobstores)
+	if cs.suffix() == ArchiveFileSuffix {
+		err = bsp.hotCreateArchiveRecords(ctx, cs)
+	} else {
+		err = bsp.hotCreateTableRecords(ctx, cs)
+	}
+
+	return name, err
+}
+
+func (bsp *blobstorePersister) hotCreateTableRecords(ctx context.Context, cs chunkSource) error {
 	cnt, err := cs.count()
 	if err != nil {
-		return "", err
+		return err
 	}
 	off := tableTailOffset(cs.currentSize(), cnt)
 	l := int64(off)
@@ -174,7 +184,7 @@ func (bsp *blobstorePersister) getRecordsSubObject(ctx context.Context, cs chunk
 
 	rdr, _, _, err := bsp.bs.Get(ctx, cs.hash().String(), rng)
 	if err != nil {
-		return "", err
+		return err
 	}
 	defer func() {
 		if cerr := rdr.Close(); cerr != nil {
@@ -182,10 +192,28 @@ func (bsp *blobstorePersister) getRecordsSubObject(ctx context.Context, cs chunk
 		}
 	}()
 
-	if _, err = bsp.bs.Put(ctx, name, l, rdr); err != nil {
-		return "", err
+	_, err = bsp.bs.Put(ctx, cs.hash().String()+tableRecordsExt, l, rdr)
+	return err
+}
+
+func (bsp *blobstorePersister) hotCreateArchiveRecords(ctx context.Context, cs chunkSource) error {
+	arch, ok := cs.(archiveChunkSource)
+	if !ok {
+		return errors.New("runtime error: hotCreateArchiveRecords expected archiveChunkSource")
 	}
-	return name, nil
+
+	dataLen := int64(arch.aRdr.footer.dataSpan().length)
+	rng := blobstore.NewBlobRange(0, dataLen)
+
+	rdr, _, _, err := bsp.bs.Get(ctx, arch.hash().String()+ArchiveFileSuffix, rng)
+	if err != nil {
+		return err
+	}
+	defer rdr.Close()
+
+	key := arch.hash().String() + ArchiveFileSuffix + tableRecordsExt
+	_, err = bsp.bs.Put(ctx, key, dataLen, rdr)
+	return err
 }
 
 // Open a table named |name|, containing |chunkCount| chunks.
