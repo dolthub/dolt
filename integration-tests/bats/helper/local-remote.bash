@@ -143,6 +143,7 @@ SKIP_SERVER_TESTS=$(cat <<-EOM
 ~import-no-header-psv.bats~
 ~admin-conjoin.bats~
 ~admin-archive-inspect.bats~
+~nonlocal.bats~
 EOM
 )
 
