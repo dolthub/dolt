@@ -22,6 +22,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/expression"
 	"github.com/dolthub/go-mysql-server/sql/expression/function/aggregation"
 	"github.com/dolthub/go-mysql-server/sql/plan"
+	"github.com/fatih/color"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
@@ -39,6 +40,11 @@ type Builder struct{}
 var _ sql.NodeExecBuilder = (*Builder)(nil)
 
 func (b Builder) Build(ctx *sql.Context, n sql.Node, r sql.Row) (sql.RowIter, error) {
+	// Emit a trace-level log for KV exec builder decisions to aid debugging.
+	if ctx != nil && ctx.GetLogger() != nil {
+		ctx.GetLogger().Tracef("kvexec.Builder.Build: node=%T rowLen=%d", n, len(r))
+	}
+	fmt.Fprintf(color.Output, "kvexec.Builder.Build: node=%T rowLen=%d\n", n, len(r))
 
 	// TODO: join optimization limits should be relaxed:
 	//  - expression types supported
@@ -66,6 +72,24 @@ func (b Builder) Build(ctx *sql.Context, n sql.Node, r sql.Row) (sql.RowIter, er
 							split := len(srcTags)
 							projections := append(srcTags, dstTags...)
 							rowJoiner := newRowJoiner([]schema.Schema{srcSchema, dstIter.Schema()}, []int{split}, projections, dstIter.NodeStore())
+							if ctx != nil && ctx.GetLogger() != nil {
+								ctx.GetLogger().WithFields(map[string]interface{}{
+									"op":           "lookup_join",
+									"leftTags":     len(srcTags),
+									"rightTags":    len(dstTags),
+									"leftFilter":   srcFilter != nil,
+									"rightFilter":  dstFilter != nil,
+									"outer":        n.Op.IsLeftOuter(),
+									"excludeNulls": n.Op.IsExcludeNulls(),
+								}).Trace("kvexec choosing lookup join")
+							}
+							fmt.Fprintf(color.Output, "kvexec.Builder.Build: op=lookup_join\n")
+							fmt.Fprintf(color.Output, "kvexec.Builder.Build: leftTags=%d\n", len(srcTags))
+							fmt.Fprintf(color.Output, "kvexec.Builder.Build: rightTags=%d\n", len(dstTags))
+							fmt.Fprintf(color.Output, "kvexec.Builder.Build: leftFilter=%v\n", srcFilter != nil)
+							fmt.Fprintf(color.Output, "kvexec.Builder.Build: rightFilter=%v\n", dstFilter != nil)
+							fmt.Fprintf(color.Output, "kvexec.Builder.Build: outer=%v\n", n.Op.IsLeftOuter())
+							fmt.Fprintf(color.Output, "kvexec.Builder.Build: excludeNulls=%v\n", n.Op.IsExcludeNulls())
 							return newLookupKvIter(srcIter, dstIter, keyLookupMapper, rowJoiner, srcFilter, dstFilter, n.Filter, n.Op.IsLeftOuter(), n.Op.IsExcludeNulls())
 						}
 					}
@@ -86,6 +110,22 @@ func (b Builder) Build(ctx *sql.Context, n sql.Node, r sql.Row) (sql.RowIter, er
 						rowJoiner = newRowJoiner([]schema.Schema{leftState.priSch, rightState.priSch}, []int{split}, projections, leftState.idxMap.NodeStore())
 						if iter, err := newMergeKvIter(leftState, rightState, rowJoiner, lrCmp, llCmp, filters, n.Op.IsLeftOuter(), n.Op.IsExcludeNulls()); err == nil {
 							iter.isReversed = n.IsReversed
+							if ctx != nil && ctx.GetLogger() != nil {
+								ctx.GetLogger().WithFields(map[string]interface{}{
+									"op":           "merge_join",
+									"leftTags":     len(leftState.tags),
+									"rightTags":    len(rightState.tags),
+									"outer":        n.Op.IsLeftOuter(),
+									"excludeNulls": n.Op.IsExcludeNulls(),
+									"reversed":     n.IsReversed,
+								}).Trace("kvexec choosing merge join")
+							}
+							fmt.Fprintf(color.Output, "kvexec.Builder.Build: op=merge_join\n")
+							fmt.Fprintf(color.Output, "kvexec.Builder.Build: leftTags=%d\n", len(leftState.tags))
+							fmt.Fprintf(color.Output, "kvexec.Builder.Build: rightTags=%d\n", len(rightState.tags))
+							fmt.Fprintf(color.Output, "kvexec.Builder.Build: outer=%v\n", n.Op.IsLeftOuter())
+							fmt.Fprintf(color.Output, "kvexec.Builder.Build: excludeNulls=%v\n", n.Op.IsExcludeNulls())
+							fmt.Fprintf(color.Output, "kvexec.Builder.Build: reversed=%v\n", n.IsReversed)
 							return iter, nil
 						}
 					}

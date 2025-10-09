@@ -17,10 +17,14 @@ package kvexec
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
+	"runtime"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
+	"github.com/fatih/color"
+	"github.com/sirupsen/logrus"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/prolly"
@@ -101,8 +105,50 @@ func (l *mergeJoinKvIter) Close(_ *sql.Context) error {
 	return nil
 }
 
-func (l *mergeJoinKvIter) Next(ctx *sql.Context) (sql.Row, error) {
-	var err error
+func (l *mergeJoinKvIter) Next(ctx *sql.Context) (row sql.Row, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			entry := logrus.NewEntry(logrus.StandardLogger())
+			if ctx != nil && ctx.GetLogger() != nil {
+				entry = ctx.GetLogger()
+			}
+			fmt.Fprintf(color.Output, "mergeJoinKvIter.Next: leftKeyNil: %v\n", l.leftKey == nil)
+			fmt.Fprintf(color.Output, "mergeJoinKvIter.Next: rightKeyNil: %v\n", l.rightKey == nil)
+			fmt.Fprintf(color.Output, "mergeJoinKvIter.Next: nextRightKeyNil: %v\n", l.nextRightKey == nil)
+			fmt.Fprintf(color.Output, "mergeJoinKvIter.Next: lookaheadLen: %v\n", len(l.lookaheadBuf))
+			fmt.Fprintf(color.Output, "mergeJoinKvIter.Next: matchPos: %v\n", l.matchPos)
+			fmt.Fprintf(color.Output, "mergeJoinKvIter.Next: isLeftJoin: %v\n", l.isLeftJoin)
+			fmt.Fprintf(color.Output, "mergeJoinKvIter.Next: excludeNulls: %v\n", l.excludeNulls)
+			fmt.Fprintf(color.Output, "mergeJoinKvIter.Next: isReversed: %v\n", l.isReversed)
+			fmt.Fprintf(color.Output, "mergeJoinKvIter.Next: matchedLeft: %v\n", l.matchedLeft)
+			fmt.Fprintf(color.Output, "mergeJoinKvIter.Next: exhaustLeft: %v\n", l.exhaustLeft)
+			// Capture iterator state for debugging
+			fields := logrus.Fields{
+				"leftKeyNil":      l.leftKey == nil,
+				"rightKeyNil":     l.rightKey == nil,
+				"nextRightKeyNil": l.nextRightKey == nil,
+				"lookaheadLen":    len(l.lookaheadBuf),
+				"matchPos":        l.matchPos,
+				"isLeftJoin":      l.isLeftJoin,
+				"excludeNulls":    l.excludeNulls,
+				"isReversed":      l.isReversed,
+				"matchedLeft":     l.matchedLeft,
+				"exhaustLeft":     l.exhaustLeft,
+			}
+			if l.joiner != nil {
+				fields["kvSplitsLen"] = len(l.joiner.kvSplits)
+				fields["outCnt"] = l.joiner.outCnt
+				fmt.Fprintf(color.Output, "mergeJoinKvIter.Next: kvSplitsLen: %v\n", len(l.joiner.kvSplits))
+				fmt.Fprintf(color.Output, "mergeJoinKvIter.Next: outCnt: %v\n", l.joiner.outCnt)
+			}
+			buf := make([]byte, 64<<10)
+			n := runtime.Stack(buf, false)
+			entry.WithFields(fields).WithField("stack", string(buf[:n])).Errorf("kvexec merge_join panic: %v", r)
+				fmt.Fprintf(color.Output, "mergeJoinKvIter.Next: panic stack: %v\n", string(buf[:n]))
+			row = nil
+			err = fmt.Errorf("kvexec merge_join panic: %v", r)
+		}
+	}()
 	if l.leftKey == nil {
 		if err := l.initialize(ctx); err != nil {
 			if errors.Is(err, io.EOF) && l.isLeftJoin {
@@ -441,6 +487,24 @@ func mergeComparer(
 	// |projections| and idx are in terms of output projections,
 	// but we need tuple and position in terms of secondary index.
 	// Use tags for the mapping.
+	if lState.idxSch == nil || rState.idxSch == nil {
+		if sctx, ok := ctx.(*sql.Context); ok && sctx != nil && sctx.GetLogger() != nil {
+			sctx.GetLogger().WithFields(logrus.Fields{
+				"leftIdxSchNil":  lState.idxSch == nil,
+				"rightIdxSchNil": rState.idxSch == nil,
+				"lIdx":           lIdx,
+				"rIdx":           rIdx,
+			}).Warn("kvexec.merge_join: missing index schema for merge comparer")
+		} else {
+			logrus.WithFields(logrus.Fields{
+				"leftIdxSchNil":  lState.idxSch == nil,
+				"rightIdxSchNil": rState.idxSch == nil,
+				"lIdx":           lIdx,
+				"rIdx":           rIdx,
+			}).Warn("kvexec.merge_join: missing index schema for merge comparer")
+		}
+		return nil, nil, false
+	}
 	lKeyIdx, lKeyOk := lState.idxSch.GetPKCols().StoredIndexByTag(projections[lIdx])
 	lValIdx, lValOk := lState.idxSch.GetNonPKCols().StoredIndexByTag(projections[lIdx])
 	rKeyIdx, rKeyOk := rState.idxSch.GetPKCols().StoredIndexByTag(projections[rIdx])

@@ -128,6 +128,7 @@ func (sc *doltServerConfigImpl) GetServerArgs() ([]string, error) {
 	}
 
 	params = append(params, sc.ServerArgs...)
+	fmt.Println("DUSTIN: GetServerArgs:", params)
 	return params, nil
 }
 

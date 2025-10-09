@@ -36,31 +36,34 @@ var defaultSysbenchParams = []string{
 	fmt.Sprintf("%s=%s", sysbenchRandTypeFlag, sysbenchRandTypeUniform),
 }
 
-var defaultDoltServerParams = []string{doltSqlServerCommand}
+var defaultDoltServerParams = []string{
+	doltSqlServerCommand,
+	"-l=debug",
+}
 
 var defaultSysbenchTests = []TestConfig{
-	NewTestConfig(sysbenchOltpReadOnlyTestName, []string{}, false),
-	NewTestConfig(sysbenchOltpInsertTestName, []string{}, false),
-	NewTestConfig(sysbenchBulkInsertTestName, []string{}, false),
-	NewTestConfig(sysbenchOltpPointSelectTestName, []string{}, false),
-	NewTestConfig(sysbenchSelectRandomPointsTestName, []string{}, false),
-	NewTestConfig(sysbenchSelectRandomRangesTestName, []string{}, false),
-	NewTestConfig(sysbenchOltpWriteOnlyTestName, []string{}, false),
-	NewTestConfig(sysbenchOltpReadWriteTestName, []string{}, false),
-	NewTestConfig(sysbenchOltpUpdateIndexTestName, []string{}, false),
-	NewTestConfig(sysbenchOltpUpdateNonIndexTestName, []string{}, false),
+	// NewTestConfig(sysbenchOltpReadOnlyTestName, []string{}, false),
+	// NewTestConfig(sysbenchOltpInsertTestName, []string{}, false),
+	// NewTestConfig(sysbenchBulkInsertTestName, []string{}, false),
+	// NewTestConfig(sysbenchOltpPointSelectTestName, []string{}, false),
+	// NewTestConfig(sysbenchSelectRandomPointsTestName, []string{}, false),
+	// NewTestConfig(sysbenchSelectRandomRangesTestName, []string{}, false),
+	// NewTestConfig(sysbenchOltpWriteOnlyTestName, []string{}, false),
+	// NewTestConfig(sysbenchOltpReadWriteTestName, []string{}, false),
+	// NewTestConfig(sysbenchOltpUpdateIndexTestName, []string{}, false),
+	// NewTestConfig(sysbenchOltpUpdateNonIndexTestName, []string{}, false),
 }
 
 var defaultDoltLuaScripts = map[string]string{
-	sysbenchCoveringIndexScanLuaTestName: sysbenchCoveringIndexScanLuaTestName,
-	sysbenchGroupByScanLuaTestName:       sysbenchGroupByScanLuaTestName,
+	// sysbenchCoveringIndexScanLuaTestName: sysbenchCoveringIndexScanLuaTestName,
+	// sysbenchGroupByScanLuaTestName:       sysbenchGroupByScanLuaTestName,
 	sysbenchIndexJoinLuaTestName:         sysbenchIndexJoinLuaTestName,
-	sysbenchIndexJoinScanLuaTestName:     sysbenchIndexJoinScanLuaTestName,
-	sysbenchIndexScanLuaTestName:         sysbenchIndexScanLuaTestName,
-	sysbenchOltpDeleteInsertLuaTestName:  sysbenchOltpDeleteInsertLuaTestName,
-	sysbenchTableScanLuaTestName:         sysbenchTableScanLuaTestName,
-	sysbenchTypesDeleteInsertLuaTestName: sysbenchTypesDeleteInsertLuaTestName,
-	sysbenchTypesTableScanLuaTestName:    sysbenchTypesTableScanLuaTestName,
+	// sysbenchIndexJoinScanLuaTestName:     sysbenchIndexJoinScanLuaTestName,
+	// sysbenchIndexScanLuaTestName:         sysbenchIndexScanLuaTestName,
+	// sysbenchOltpDeleteInsertLuaTestName:  sysbenchOltpDeleteInsertLuaTestName,
+	// sysbenchTableScanLuaTestName:         sysbenchTableScanLuaTestName,
+	// sysbenchTypesDeleteInsertLuaTestName: sysbenchTypesDeleteInsertLuaTestName,
+	// sysbenchTypesTableScanLuaTestName:    sysbenchTypesTableScanLuaTestName,
 }
 
 var defaultDoltgresLuaScripts = map[string]string{

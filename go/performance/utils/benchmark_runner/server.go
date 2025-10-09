@@ -84,6 +84,7 @@ func (s *doltServerImpl) Start() error {
 
 	s.serverEg.Go(func() error {
 		if Debug {
+			fmt.Println("DUSTIN: starting server in debug mode with logs to stdout/err")
 			s.server.Stdout = os.Stdout
 			s.server.Stderr = os.Stderr
 		}
