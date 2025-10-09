@@ -18,7 +18,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"regexp"
 	"strings"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
@@ -203,43 +202,6 @@ func IdentifyIgnoredTables(ctx context.Context, roots Roots, tables []TableName)
 	return ignoredTables, nil
 }
 
-// compilePattern takes a dolt_ignore pattern and generate a Regexp that matches against the same table names as the pattern.
-func compilePattern(pattern string) (*regexp.Regexp, error) {
-	pattern = "^" + regexp.QuoteMeta(pattern) + "$"
-	pattern = strings.Replace(pattern, "\\?", ".", -1)
-	pattern = strings.Replace(pattern, "\\*", ".*", -1)
-	pattern = strings.Replace(pattern, "%", ".*", -1)
-	return regexp.Compile(pattern)
-}
-
-// getMoreSpecificPatterns takes a dolt_ignore pattern and generates a Regexp that matches against all patterns
-// that are "more specific" than it. (a pattern A is more specific than a pattern B if all names that match A also
-// match pattern B, but not vice versa.)
-func getMoreSpecificPatterns(lessSpecific string) (*regexp.Regexp, error) {
-	pattern := "^" + regexp.QuoteMeta(lessSpecific) + "$"
-	// A ? can expand to any character except for a * or %, since that also has special meaning in patterns.
-
-	pattern = strings.Replace(pattern, "\\?", "[^\\*%]", -1)
-	pattern = strings.Replace(pattern, "\\*", ".*", -1)
-	pattern = strings.Replace(pattern, "%", ".*", -1)
-	return regexp.Compile(pattern)
-}
-
-// normalizePattern generates an equivalent pattern, such that all equivalent patterns have the same normalized pattern.
-// It accomplishes this by replacing all * with %, and removing multiple adjacent %.
-// This will get a lot harder to implement once we support escaped characters in patterns.
-func normalizePattern(pattern string) string {
-	pattern = strings.Replace(pattern, "*", "%", -1)
-	for {
-		newPattern := strings.Replace(pattern, "%%", "%", -1)
-		if newPattern == pattern {
-			break
-		}
-		pattern = newPattern
-	}
-	return pattern
-}
-
 func resolveConflictingPatterns(trueMatches, falseMatches []string, tableName TableName) (IgnoreResult, error) {
 	trueMatchesToRemove := map[string]struct{}{}
 	falseMatchesToRemove := map[string]struct{}{}
@@ -314,11 +276,11 @@ func (ip *IgnorePatterns) IsTableNameIgnored(tableName TableName) (IgnoreResult,
 	for _, patternIgnore := range *ip {
 		pattern := patternIgnore.Pattern
 		ignore := patternIgnore.Ignore
-		patternRegExp, err := compilePattern(pattern)
+		matchesPattern, err := MatchTablePattern(pattern, tableName.Name)
 		if err != nil {
 			return ErrorOccurred, err
 		}
-		if patternRegExp.MatchString(tableName.Name) {
+		if matchesPattern {
 			if ignore {
 				trueMatches = append(trueMatches, pattern)
 			} else {
