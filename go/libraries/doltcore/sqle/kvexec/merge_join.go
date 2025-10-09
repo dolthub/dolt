@@ -16,11 +16,13 @@ package kvexec
 
 import (
 	"context"
+	"fmt"
 	"errors"
 	"io"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
+	"github.com/fatih/color"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/prolly"
@@ -437,6 +439,25 @@ func mergeComparer(
 	if lIdx == rIdx {
 		return nil, nil, false
 	}
+
+	if lState.idxSch == nil {
+		fmt.Fprintf(color.Output, "DUSTIN: lState.idxSch is nil\n")
+	}
+
+	pkCols := lState.idxSch.GetPKCols()
+	if pkCols != nil {
+		fmt.Fprintf(color.Output, "DUSTIN: pkCols: %+v\n", pkCols)
+	} else {
+		fmt.Fprintf(color.Output, "DUSTIN: projections are nil\n")
+	}
+
+	if len(projections) == 0 {
+		fmt.Fprintf(color.Output, "DUSTIN: projections are 0\n")
+	} else {
+		fmt.Fprintf(color.Output, "DUSTIN: projections:", len(projections))
+	}
+
+	fmt.Fprintf(color.Output, "DUSTIN: lIdx: %+v\n", lIdx)
 
 	// |projections| and idx are in terms of output projections,
 	// but we need tuple and position in terms of secondary index.
