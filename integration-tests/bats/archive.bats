@@ -26,7 +26,7 @@ teardown() {
 # bats test_tags=no_lambda
 @test "archive: too few chunks" {
   dolt sql -q "$(update_statement)"
-  dolt gc
+  dolt gc --archive-level 0
 
   run dolt archive
   [ "$status" -eq 0 ]
@@ -315,7 +315,7 @@ teardown() {
 
   # Push, and enable the archive streamer. In the future this will be the default.
   dolt remote add origin http://localhost:$port/test-org/test-repo
-  DOLT_ARCHIVE_PULL_STREAMER=1 dolt push origin main
+  dolt push origin main
 
   cd ..
 
@@ -327,7 +327,7 @@ teardown() {
 }
 
 @test "archive: large push remote without archive default produces no new archives" {
-    unset DOLT_ARCHIVE_PULL_STREAMER
+    export DOLT_ARCHIVE_PULL_STREAMER=0
 
     mkdir -p remote/.dolt
     cp -R $BATS_TEST_DIRNAME/archive-test-repos/base/* remote/.dolt
@@ -357,7 +357,7 @@ teardown() {
 }
 
 @test "archive: small push remote without archive default produces no new archives" {
-    unset DOLT_ARCHIVE_PULL_STREAMER
+    export DOLT_ARCHIVE_PULL_STREAMER=0
 
     mkdir -p remote/.dolt
     cp -R $BATS_TEST_DIRNAME/archive-test-repos/base/* remote/.dolt
@@ -387,7 +387,7 @@ teardown() {
 }
 
 @test "archive: large push remote with archive default produces new archive with converted snappy chunks" {
-    export DOLT_ARCHIVE_PULL_STREAMER=1
+    unset DOLT_ARCHIVE_PULL_STREAMER
 
     mkdir -p remote/.dolt
     cp -R $BATS_TEST_DIRNAME/archive-test-repos/base/* remote/.dolt
@@ -419,7 +419,7 @@ teardown() {
 }
 
 @test "archive: small push remote with archive default produces archive with snappy chunks" {
-    export DOLT_ARCHIVE_PULL_STREAMER=1
+    unset DOLT_ARCHIVE_PULL_STREAMER
 
     mkdir -p remote/.dolt
     cp -R $BATS_TEST_DIRNAME/archive-test-repos/base/* remote/.dolt
@@ -461,7 +461,7 @@ teardown() {
 
     cd ../
     dolt remote add r1 http://localhost:$port/test-org/test-repo
-    DOLT_ARCHIVE_PULL_STREAMER=1 dolt fetch r1
+    dolt fetch r1
 
     run dolt admin storage
     [ $status -eq 0 ]
@@ -479,7 +479,7 @@ teardown() {
 }
 
 @test "archive: fetch into empty database with archive disabled" {
-    unset DOLT_ARCHIVE_PULL_STREAMER
+    export DOLT_ARCHIVE_PULL_STREAMER=0
 
     mkdir -p remote/.dolt
     cp -R $BATS_TEST_DIRNAME/archive-test-repos/base/* remote/.dolt
