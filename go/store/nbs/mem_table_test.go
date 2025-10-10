@@ -64,20 +64,17 @@ func mustChunk(chunk chunks.Chunk, err error) chunks.Chunk {
 }
 
 func TestWriteChunks(t *testing.T) {
-	name, data, err := WriteChunks(testMDChunks)
-	if err != nil {
-		t.Error(err)
-	}
+	name, data, splitOffSet, err := WriteChunks(testMDChunks)
+	require.NoError(t, err)
+	// Size of written data is stable so long as we don't change testMDChunks
+	assert.Equal(t, uint64(845), splitOffSet)
+	assert.Equal(t, 1089, len(data))
 
 	dir, err := os.MkdirTemp("", "write_chunks_test")
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 
 	err = os.WriteFile(dir+name, data, os.ModePerm)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 }
 
 func TestMemTableAddHasGetChunk(t *testing.T) {
@@ -169,7 +166,7 @@ func TestMemTableWrite(t *testing.T) {
 	defer tr2.close()
 	assert.True(tr2.has(computeAddr(chunks[2]), nil))
 
-	_, data, count, _, err := mt.write(chunkReaderGroup{tr1, tr2}, nil, &Stats{})
+	_, data, _, count, _, err := mt.write(chunkReaderGroup{tr1, tr2}, nil, &Stats{})
 	require.NoError(t, err)
 	assert.Equal(uint32(1), count)
 

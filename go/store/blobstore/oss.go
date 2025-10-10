@@ -67,31 +67,36 @@ func (ob *OSSBlobstore) Exists(_ context.Context, key string) (bool, error) {
 	return ob.bucket.IsObjectExist(ob.absKey(key))
 }
 
-func (ob *OSSBlobstore) Get(ctx context.Context, key string, br BlobRange) (io.ReadCloser, string, error) {
+func (ob *OSSBlobstore) Get(ctx context.Context, key string, br BlobRange) (io.ReadCloser, uint64, string, error) {
 	absKey := ob.absKey(key)
 	meta, err := ob.bucket.GetObjectMeta(absKey)
 
 	if isNotFoundErr(err) {
-		return nil, "", NotFound{"oss://" + path.Join(ob.bucketName, absKey)}
+		return nil, 0, "", NotFound{"oss://" + path.Join(ob.bucketName, absKey)}
+	}
+
+	totalSize, err := strconv.ParseInt(meta.Get(oss.HTTPHeaderContentLength), 10, 64)
+	if err != nil {
+		return nil, 0, "", err
 	}
 
 	if br.isAllRange() {
 		reader, err := ob.bucket.GetObject(absKey)
 		if err != nil {
-			return nil, "", err
+			return nil, 0, "", err
 		}
-		return reader, ob.getVersion(meta), nil
+		return reader, uint64(totalSize), ob.getVersion(meta), nil
 	}
-	size, err := strconv.ParseInt(meta.Get(oss.HTTPHeaderContentLength), 10, 64)
+
+	posBr := br.positiveRange(totalSize)
+
+	var responseHeaders http.Header
+	reader, err := ob.bucket.GetObject(absKey, oss.Range(posBr.offset, posBr.offset+posBr.length-1), oss.GetResponseHeader(&responseHeaders))
 	if err != nil {
-		return nil, "", err
+		return nil, 0, "", err
 	}
-	posBr := br.positiveRange(size)
-	reader, err := ob.bucket.GetObject(absKey, oss.Range(posBr.offset, posBr.offset+posBr.length-1))
-	if err != nil {
-		return nil, "", err
-	}
-	return reader, ob.getVersion(meta), nil
+
+	return reader, uint64(totalSize), ob.getVersion(meta), nil
 }
 
 func (ob *OSSBlobstore) Put(ctx context.Context, key string, totalSize int64, reader io.Reader) (string, error) {

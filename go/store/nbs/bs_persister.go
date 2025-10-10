@@ -18,7 +18,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"time"
 
@@ -46,7 +45,7 @@ var _ tableFilePersister = &blobstorePersister{}
 // Persist makes the contents of mt durable. Chunks already present in
 // |haver| may be dropped in the process.
 func (bsp *blobstorePersister) Persist(ctx context.Context, mt *memTable, haver chunkReader, keeper keeperF, stats *Stats) (chunkSource, gcBehavior, error) {
-	address, data, chunkCount, gcb, err := mt.write(haver, keeper, stats)
+	address, data, splitOffset, chunkCount, gcb, err := mt.write(haver, keeper, stats)
 	if err != nil {
 		return emptyChunkSource{}, gcBehavior_Continue, err
 	}
@@ -59,7 +58,7 @@ func (bsp *blobstorePersister) Persist(ctx context.Context, mt *memTable, haver 
 	name := address.String()
 
 	// persist this table in two parts to facilitate later conjoins
-	records, tail := splitTableParts(data, chunkCount)
+	records, tail := data[:splitOffset], data[splitOffset:]
 
 	// first write table records and tail (index+footer) as separate blobs
 	eg, ectx := errgroup.WithContext(ctx)
@@ -94,20 +93,27 @@ func (bsp *blobstorePersister) ConjoinAll(ctx context.Context, sources chunkSour
 		sized = append(sized, sourceWithSize{src, src.currentSize()})
 	}
 
-	// Currently, archive tables are not supported in blobstorePersister.
+	archiveFound := false
 	for _, s := range sized {
 		_, ok := s.source.(archiveChunkSource)
 		if ok {
-			return nil, nil, errors.New("archive tables not supported in blobstorePersister")
+			archiveFound = true
+			break
 		}
 	}
 
-	plan, err := planTableConjoin(sized, stats)
+	var plan compactionPlan
+	var err error
+	if archiveFound {
+		plan, err = planArchiveConjoin(sized, stats)
+	} else {
+		plan, err = planTableConjoin(sized, stats)
+	}
 	if err != nil {
 		return nil, nil, err
 	}
 
-	name := plan.name.String()
+	name := plan.name.String() + plan.suffix
 
 	// conjoin must contiguously append the chunk records of |sources|, but the raw content
 	// of each source contains a chunk index in the tail. Blobstore does not expose a range
@@ -136,12 +142,18 @@ func (bsp *blobstorePersister) ConjoinAll(ctx context.Context, sources chunkSour
 		return emptyChunkSource{}, nil, err
 	}
 
-	cs, err := newBSChunkSource(ctx, bsp.bs, plan.name, plan.chunkCount, bsp.q, stats)
+	var cs chunkSource
+	if archiveFound {
+		cs, err = newBSArchiveChunkSource(ctx, bsp.bs, plan.name, stats)
+	} else {
+		cs, err = newBSTableChunkSource(ctx, bsp.bs, plan.name, plan.chunkCount, bsp.q, stats)
+	}
+
 	return cs, func() {}, err
 }
 
 func (bsp *blobstorePersister) getRecordsSubObject(ctx context.Context, cs chunkSource) (name string, err error) {
-	name = cs.hash().String() + tableRecordsExt
+	name = cs.hash().String() + cs.suffix() + tableRecordsExt
 	// first check if we created this sub-object on Persist()
 	ok, err := bsp.bs.Exists(ctx, name)
 	if err != nil {
@@ -152,17 +164,27 @@ func (bsp *blobstorePersister) getRecordsSubObject(ctx context.Context, cs chunk
 
 	// otherwise create the sub-object from |table|
 	// (requires a round-trip for remote blobstores)
+	if cs.suffix() == ArchiveFileSuffix {
+		err = bsp.hotCreateArchiveRecords(ctx, cs)
+	} else {
+		err = bsp.hotCreateTableRecords(ctx, cs)
+	}
+
+	return name, err
+}
+
+func (bsp *blobstorePersister) hotCreateTableRecords(ctx context.Context, cs chunkSource) error {
 	cnt, err := cs.count()
 	if err != nil {
-		return "", err
+		return err
 	}
 	off := tableTailOffset(cs.currentSize(), cnt)
 	l := int64(off)
 	rng := blobstore.NewBlobRange(0, l)
 
-	rdr, _, err := bsp.bs.Get(ctx, cs.hash().String(), rng)
+	rdr, _, _, err := bsp.bs.Get(ctx, cs.hash().String(), rng)
 	if err != nil {
-		return "", err
+		return err
 	}
 	defer func() {
 		if cerr := rdr.Close(); cerr != nil {
@@ -170,18 +192,49 @@ func (bsp *blobstorePersister) getRecordsSubObject(ctx context.Context, cs chunk
 		}
 	}()
 
-	if _, err = bsp.bs.Put(ctx, name, l, rdr); err != nil {
-		return "", err
+	_, err = bsp.bs.Put(ctx, cs.hash().String()+tableRecordsExt, l, rdr)
+	return err
+}
+
+func (bsp *blobstorePersister) hotCreateArchiveRecords(ctx context.Context, cs chunkSource) error {
+	arch, ok := cs.(archiveChunkSource)
+	if !ok {
+		return errors.New("runtime error: hotCreateArchiveRecords expected archiveChunkSource")
 	}
-	return name, nil
+
+	dataLen := int64(arch.aRdr.footer.dataSpan().length)
+	rng := blobstore.NewBlobRange(0, dataLen)
+
+	rdr, _, _, err := bsp.bs.Get(ctx, arch.hash().String()+ArchiveFileSuffix, rng)
+	if err != nil {
+		return err
+	}
+	defer rdr.Close()
+
+	key := arch.hash().String() + ArchiveFileSuffix + tableRecordsExt
+	_, err = bsp.bs.Put(ctx, key, dataLen, rdr)
+	return err
 }
 
 // Open a table named |name|, containing |chunkCount| chunks.
 func (bsp *blobstorePersister) Open(ctx context.Context, name hash.Hash, chunkCount uint32, stats *Stats) (chunkSource, error) {
-	return newBSChunkSource(ctx, bsp.bs, name, chunkCount, bsp.q, stats)
+	cs, err := newBSTableChunkSource(ctx, bsp.bs, name, chunkCount, bsp.q, stats)
+	if err == nil {
+		return cs, nil
+	}
+
+	if blobstore.IsNotFoundError(err) {
+		source, err := newBSArchiveChunkSource(ctx, bsp.bs, name, stats)
+		if err != nil {
+			return nil, err
+		}
+		return source, nil
+	}
+
+	return nil, err
 }
 
-func (bsp *blobstorePersister) Exists(ctx context.Context, name string, chunkCount uint32, stats *Stats) (bool, error) {
+func (bsp *blobstorePersister) Exists(ctx context.Context, name string, _ uint32, _ *Stats) (bool, error) {
 	return bsp.bs.Exists(ctx, name)
 }
 
@@ -201,49 +254,48 @@ func (bsp *blobstorePersister) Path() string {
 	return ""
 }
 
-func (bsp *blobstorePersister) CopyTableFile(ctx context.Context, r io.Reader, name string, fileSz uint64, chunkCount uint32) error {
-	// sanity check file size
-	if fileSz < indexSize(chunkCount)+footerSize {
-		return fmt.Errorf("table file size %d too small for chunk count %d", fileSz, chunkCount)
-	}
+func (bsp *blobstorePersister) CopyTableFile(ctx context.Context, r io.Reader, name string, fileSz uint64, splitOffset uint64) error {
+	if splitOffset > 0 {
+		lr := io.LimitReader(r, int64(splitOffset))
 
-	off := int64(tableTailOffset(fileSz, chunkCount))
-	lr := io.LimitReader(r, off)
+		indexLen := int64(fileSz - splitOffset)
 
-	// check if we can Put concurrently
-	rr, ok := r.(io.ReaderAt)
-	if !ok {
-		// sequentially write chunk records then tail
-		if _, err := bsp.bs.Put(ctx, name+tableRecordsExt, off, lr); err != nil {
-			return err
-		}
-		if _, err := bsp.bs.Put(ctx, name+tableTailExt, int64(fileSz), r); err != nil {
-			return err
-		}
-	} else {
-		// on the push path, we expect to Put concurrently
-		// see BufferedFileByteSink in byte_sink.go
-		eg, ectx := errgroup.WithContext(ctx)
-		eg.Go(func() error {
-			buf := make([]byte, indexSize(chunkCount)+footerSize)
-			if _, err := rr.ReadAt(buf, off); err != nil {
+		// check if we can Put concurrently
+		rr, ok := r.(io.ReaderAt)
+		if !ok {
+			// sequentially write chunk records then tail
+			if _, err := bsp.bs.Put(ctx, name+tableRecordsExt, int64(splitOffset), lr); err != nil {
 				return err
 			}
-			_, err := bsp.bs.Put(ectx, name+tableTailExt, int64(len(buf)), bytes.NewBuffer(buf))
-			return err
-		})
-		eg.Go(func() error {
-			_, err := bsp.bs.Put(ectx, name+tableRecordsExt, off, lr)
-			return err
-		})
-		if err := eg.Wait(); err != nil {
-			return err
+			if _, err := bsp.bs.Put(ctx, name+tableTailExt, indexLen, r); err != nil {
+				return err
+			}
+		} else {
+			// on the push path, we expect to Put concurrently
+			// see BufferedFileByteSink in byte_sink.go
+			eg, ectx := errgroup.WithContext(ctx)
+			eg.Go(func() error {
+				srdr := io.NewSectionReader(rr, int64(splitOffset), indexLen)
+				_, err := bsp.bs.Put(ectx, name+tableTailExt, indexLen, srdr)
+				return err
+			})
+			eg.Go(func() error {
+				_, err := bsp.bs.Put(ectx, name+tableRecordsExt, int64(splitOffset), lr)
+				return err
+			})
+			if err := eg.Wait(); err != nil {
+				return err
+			}
 		}
-	}
 
-	// finally concatenate into the complete table
-	_, err := bsp.bs.Concatenate(ctx, name, []string{name + tableRecordsExt, name + tableTailExt})
-	return err
+		// finally concatenate into the complete table
+		_, err := bsp.bs.Concatenate(ctx, name, []string{name + tableRecordsExt, name + tableTailExt})
+		return err
+	} else {
+		// no split offset, just copy the whole table. We will create the records object on demand if needed.
+		_, err := bsp.bs.Put(ctx, name, int64(fileSz), r)
+		return err
+	}
 }
 
 type bsTableReaderAt struct {
@@ -260,14 +312,14 @@ func (bsTRA *bsTableReaderAt) clone() (tableReaderAt, error) {
 }
 
 func (bsTRA *bsTableReaderAt) Reader(ctx context.Context) (io.ReadCloser, error) {
-	rc, _, err := bsTRA.bs.Get(ctx, bsTRA.key, blobstore.AllRange)
+	rc, _, _, err := bsTRA.bs.Get(ctx, bsTRA.key, blobstore.AllRange)
 	return rc, err
 }
 
 // ReadAtWithStats is the bsTableReaderAt implementation of the tableReaderAt interface
 func (bsTRA *bsTableReaderAt) ReadAtWithStats(ctx context.Context, p []byte, off int64, stats *Stats) (int, error) {
 	br := blobstore.NewBlobRange(off, int64(len(p)))
-	rc, _, err := bsTRA.bs.Get(ctx, bsTRA.key, br)
+	rc, _, _, err := bsTRA.bs.Get(ctx, bsTRA.key, br)
 
 	if err != nil {
 		return 0, err
@@ -292,9 +344,29 @@ func (bsTRA *bsTableReaderAt) ReadAtWithStats(ctx context.Context, p []byte, off
 	return totalRead, nil
 }
 
-func newBSChunkSource(ctx context.Context, bs blobstore.Blobstore, name hash.Hash, chunkCount uint32, q MemoryQuotaProvider, stats *Stats) (cs chunkSource, err error) {
+func newBSArchiveChunkSource(ctx context.Context, bs blobstore.Blobstore, name hash.Hash, stats *Stats) (cs chunkSource, err error) {
+	rc, sz, _, err := bs.Get(ctx, name.String()+ArchiveFileSuffix, blobstore.NewBlobRange(-int64(archiveFooterSize), 0))
+	if err != nil {
+		return nil, err
+	}
+	defer rc.Close()
+
+	footer := make([]byte, archiveFooterSize)
+	_, err = io.ReadFull(rc, footer)
+	if err != nil {
+		return nil, err
+	}
+
+	aRdr, err := newArchiveReaderFromFooter(ctx, &bsTableReaderAt{key: name.String() + ArchiveFileSuffix, bs: bs}, name, sz, footer, stats)
+	if err != nil {
+		return emptyChunkSource{}, err
+	}
+	return archiveChunkSource{aRdr, ""}, nil
+}
+
+func newBSTableChunkSource(ctx context.Context, bs blobstore.Blobstore, name hash.Hash, chunkCount uint32, q MemoryQuotaProvider, stats *Stats) (cs chunkSource, err error) {
 	index, err := loadTableIndex(ctx, stats, chunkCount, q, func(p []byte) error {
-		rc, _, err := bs.Get(ctx, name.String(), blobstore.NewBlobRange(-int64(len(p)), 0))
+		rc, _, _, err := bs.Get(ctx, name.String(), blobstore.NewBlobRange(-int64(len(p)), 0))
 		if err != nil {
 			return err
 		}
@@ -321,17 +393,6 @@ func newBSChunkSource(ctx context.Context, bs blobstore.Blobstore, name hash.Has
 		return nil, err
 	}
 	return &chunkSourceAdapter{tr, name}, nil
-}
-
-// splitTableParts separates a table into chunk records and meta data.
-//
-//	              +----------------------+-------+--------+
-//	table format: | Chunk Record 0 ... N | Index | Footer |
-//	              +----------------------+-------+--------+
-func splitTableParts(data []byte, count uint32) (records, tail []byte) {
-	o := tableTailOffset(uint64(len(data)), count)
-	records, tail = data[:o], data[o:]
-	return
 }
 
 func tableTailOffset(size uint64, count uint32) uint64 {

@@ -18,6 +18,8 @@ import (
 	"bytes"
 	"context"
 	"io"
+	"strconv"
+	"strings"
 )
 
 // Blobstore is an interface for storing and retrieving blobs of data by key
@@ -29,7 +31,7 @@ type Blobstore interface {
 	Exists(ctx context.Context, key string) (ok bool, err error)
 
 	// Get returns a byte range of from the blob keyed by |key|, and the latest store version.
-	Get(ctx context.Context, key string, br BlobRange) (rc io.ReadCloser, version string, err error)
+	Get(ctx context.Context, key string, br BlobRange) (rc io.ReadCloser, size uint64, version string, err error)
 
 	// Put creates a new blob from |reader| keyed by |key|, it returns the latest store version.
 	Put(ctx context.Context, key string, totalSize int64, reader io.Reader) (version string, err error)
@@ -44,7 +46,7 @@ type Blobstore interface {
 // GetBytes is a utility method calls bs.Get and handles reading the data from the returned
 // io.ReadCloser and closing it.
 func GetBytes(ctx context.Context, bs Blobstore, key string, br BlobRange) ([]byte, string, error) {
-	rc, ver, err := bs.Get(ctx, key, br)
+	rc, _, ver, err := bs.Get(ctx, key, br)
 
 	if err != nil || rc == nil {
 		return nil, ver, err
@@ -64,4 +66,23 @@ func GetBytes(ctx context.Context, bs Blobstore, key string, br BlobRange) ([]by
 func PutBytes(ctx context.Context, bs Blobstore, key string, data []byte) (string, error) {
 	reader := bytes.NewReader(data)
 	return bs.Put(ctx, key, int64(len(data)), reader)
+}
+
+// parseContentRangeSize extracts the total size from a Content-Range header.
+// Expected format: "bytes start-end/total" e.g., "bytes 0-1023/1234567"
+// Returns 0 if the header is malformed or not present.
+func parseContentRangeSize(contentRange string) uint64 {
+	if contentRange == "" {
+		return 0
+	}
+	i := strings.Index(contentRange, "/")
+	if i == -1 {
+		return 0
+	}
+	sizeStr := contentRange[i+1:]
+	size, err := strconv.ParseUint(sizeStr, 10, 64)
+	if err != nil {
+		return 0
+	}
+	return size
 }
