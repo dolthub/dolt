@@ -34,6 +34,8 @@ var (
 var defaultSysbenchParams = []string{
 	fmt.Sprintf("%s=%s", sysbenchDbPsModeFlag, sysbenchDbPsModeDisable),
 	fmt.Sprintf("%s=%s", sysbenchRandTypeFlag, sysbenchRandTypeUniform),
+	fmt.Sprintf("%s=disabled", sysbenchMysqlSSLFlag),
+	fmt.Sprintf("%s=on", sysbenchMysqlDebugFlag),
 }
 
 var defaultDoltServerParams = []string{doltSqlServerCommand}

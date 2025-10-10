@@ -54,6 +54,8 @@ const (
 	sysbenchMysqlPortFlag        = "--mysql-port"
 	sysbenchMysqlUserFlag        = "--mysql-user"
 	sysbenchMysqlPasswordFlag    = "--mysql-password"
+	sysbenchMysqlSSLFlag         = "--mysql-ssl"
+	sysbenchMysqlDebugFlag       = "--mysql-debug"
 	sysbenchPostgresDbDriver     = "pgsql"
 	sysbenchPostgresDbFlag       = "--pgsql-db"
 	sysbenchPostgresHostFlag     = "--pgsql-host"
