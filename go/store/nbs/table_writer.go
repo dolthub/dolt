@@ -123,6 +123,8 @@ func (tw *tableWriter) addChunk(h hash.Hash, data []byte) bool {
 	return true
 }
 
+// finish completed table, writing the index and footer. Returns the total length of the table file and the hash used
+// to identify the table.
 func (tw *tableWriter) finish() (tableFileLength uint64, blockAddr hash.Hash, err error) {
 	err = tw.writeIndex()
 

@@ -453,7 +453,7 @@ func testConcatenate(t *testing.T, bs Blobstore, cnt int) {
 	var off int64
 	for i := range blobs {
 		length := int64(len(blobs[i].data))
-		rdr, _, err := bs.Get(ctx, composite, BlobRange{
+		rdr, _, _, err := bs.Get(ctx, composite, BlobRange{
 			offset: off,
 			length: length,
 		})

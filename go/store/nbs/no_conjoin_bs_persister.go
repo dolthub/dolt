@@ -40,7 +40,7 @@ var _ tableFilePersister = &noConjoinBlobstorePersister{}
 // Persist makes the contents of mt durable. Chunks already present in
 // |haver| may be dropped in the process.
 func (bsp *noConjoinBlobstorePersister) Persist(ctx context.Context, mt *memTable, haver chunkReader, keeper keeperF, stats *Stats) (chunkSource, gcBehavior, error) {
-	address, data, chunkCount, gcb, err := mt.write(haver, keeper, stats)
+	address, data, _, chunkCount, gcb, err := mt.write(haver, keeper, stats)
 	if err != nil {
 		return emptyChunkSource{}, gcBehavior_Continue, err
 	} else if gcb != gcBehavior_Continue {
@@ -74,7 +74,7 @@ func (bsp *noConjoinBlobstorePersister) ConjoinAll(ctx context.Context, sources 
 
 // Open a table named |name|, containing |chunkCount| chunks.
 func (bsp *noConjoinBlobstorePersister) Open(ctx context.Context, name hash.Hash, chunkCount uint32, stats *Stats) (chunkSource, error) {
-	return newBSChunkSource(ctx, bsp.bs, name, chunkCount, bsp.q, stats)
+	return newBSTableChunkSource(ctx, bsp.bs, name, chunkCount, bsp.q, stats)
 }
 
 func (bsp *noConjoinBlobstorePersister) Exists(ctx context.Context, name string, chunkCount uint32, stats *Stats) (bool, error) {
@@ -97,12 +97,7 @@ func (bsp *noConjoinBlobstorePersister) Path() string {
 	return ""
 }
 
-func (bsp *noConjoinBlobstorePersister) CopyTableFile(ctx context.Context, r io.Reader, name string, fileSz uint64, chunkCount uint32) error {
-	// sanity check file size
-	if fileSz < indexSize(chunkCount)+footerSize {
-		return fmt.Errorf("table file size %d too small for chunk count %d", fileSz, chunkCount)
-	}
-
+func (bsp *noConjoinBlobstorePersister) CopyTableFile(ctx context.Context, r io.Reader, name string, fileSz uint64, _ uint64) error {
 	_, err := bsp.bs.Put(ctx, name, int64(fileSz), r)
 	return err
 }

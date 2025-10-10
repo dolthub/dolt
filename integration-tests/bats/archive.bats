@@ -26,7 +26,7 @@ teardown() {
 # bats test_tags=no_lambda
 @test "archive: too few chunks" {
   dolt sql -q "$(update_statement)"
-  dolt gc
+  dolt gc --archive-level 0
 
   run dolt archive
   [ "$status" -eq 0 ]
@@ -36,18 +36,19 @@ teardown() {
 }
 
 @test "archive: single archive oldgen" {
-  dolt sql -q "$(mutations_and_gc_statement)"
-  dolt archive
+  dolt sql -q "$(mutations_and_gc_statement 1)"
 
-  files=$(find . -name "*darc" | wc -l | sed 's/[ \t]//g')
+  find . -type f
+
+  files=$(find .dolt/noms/oldgen -name "*darc" | wc -l | sed 's/[ \t]//g')
   [ "$files" -eq "1" ]
 
   # Ensure updates continue to work.
   dolt sql -q "$(update_statement)"
 }
 
-@test "archive: single archive newgen" {
-  dolt sql -q "$(mutations_and_gc_statement)"
+@test "archive: single archive cloned in newgen" {
+  dolt sql -q "$(mutations_and_gc_statement 0)"
 
   mkdir remote
   dolt remote add origin file://remote
@@ -55,8 +56,6 @@ teardown() {
 
   dolt clone file://remote cloned
   cd cloned
-
-  dolt archive
 
   files=$(find . -name "*darc" | wc -l | sed 's/[ \t]//g')
   [ "$files" -eq "1" ]
@@ -67,7 +66,7 @@ teardown() {
 
 @test "archive: multi archive newgen then revert" {
   # Getting multiple table files in `newgen` is a little gross.
-  dolt sql -q "$(mutations_and_gc_statement)"
+  dolt sql -q "$(mutations_and_gc_statement 0)"
   mkdir remote
   dolt remote add origin file://remote
   dolt push origin main
@@ -79,7 +78,7 @@ teardown() {
   [ "$files" -eq "1" ]
 
   cd ..
-  dolt sql -q "$(mutations_and_gc_statement)"
+  dolt sql -q "$(mutations_and_gc_statement 0)"
   dolt push origin main
 
   cd cloned
@@ -96,13 +95,11 @@ teardown() {
 }
 
 @test "archive: multiple archives" {
-  dolt sql -q "$(mutations_and_gc_statement)"
-  dolt sql -q "$(mutations_and_gc_statement)"
-  dolt sql -q "$(mutations_and_gc_statement)"
+  dolt sql -q "$(mutations_and_gc_statement 1)"
+  dolt sql -q "$(mutations_and_gc_statement 1)"
+  dolt sql -q "$(mutations_and_gc_statement 1)"
 
-  dolt archive
-
-  files=$(find . -name "*darc" | wc -l | sed 's/[ \t]//g')
+  files=$(find .dolt/noms/oldgen -name "*darc" | wc -l | sed 's/[ \t]//g')
   [ "$files" -eq "3" ]
 
   # dolt log --stat will load every single chunk.
@@ -111,10 +108,10 @@ teardown() {
 }
 
 @test "archive: archive multiple times" {
-  dolt sql -q "$(mutations_and_gc_statement)"
+  dolt sql -q "$(mutations_and_gc_statement 0)"
   dolt archive
 
-  dolt sql -q "$(mutations_and_gc_statement)"
+  dolt sql -q "$(mutations_and_gc_statement 0)"
   dolt archive
 
   files=$(find . -name "*darc" | wc -l | sed 's/[ \t]//g')
@@ -122,7 +119,7 @@ teardown() {
 }
 
 @test "archive: archive --revert (fast)" {
-  dolt sql -q "$(mutations_and_gc_statement)"
+  dolt sql -q "$(mutations_and_gc_statement 0)"
   dolt archive
   dolt archive --revert
 
@@ -132,7 +129,7 @@ teardown() {
 }
 
 @test "archive: archive --revert (rebuild)" {
-  dolt sql -q "$(mutations_and_gc_statement)"
+  dolt sql -q "$(mutations_and_gc_statement 0)"
   dolt archive
   dolt archive --revert
 
@@ -142,7 +139,7 @@ teardown() {
 }
 
 @test "archive: archive --purge" {
-  dolt sql -q "$(mutations_and_gc_statement)"
+  dolt sql -q "$(mutations_and_gc_statement 0)"
 
   # find impl differences by platform makes this a pain.
   tablefile=$(find .dolt/noms/oldgen -type f -print | awk -F/ 'length($NF) == 32 && $NF ~ /^[a-v0-9]{32}$/')
@@ -318,7 +315,7 @@ teardown() {
 
   # Push, and enable the archive streamer. In the future this will be the default.
   dolt remote add origin http://localhost:$port/test-org/test-repo
-  DOLT_ARCHIVE_PULL_STREAMER=1 dolt push origin main
+  dolt push origin main
 
   cd ..
 
@@ -330,7 +327,7 @@ teardown() {
 }
 
 @test "archive: large push remote without archive default produces no new archives" {
-    unset DOLT_ARCHIVE_PULL_STREAMER
+    export DOLT_ARCHIVE_PULL_STREAMER=0
 
     mkdir -p remote/.dolt
     cp -R $BATS_TEST_DIRNAME/archive-test-repos/base/* remote/.dolt
@@ -360,7 +357,7 @@ teardown() {
 }
 
 @test "archive: small push remote without archive default produces no new archives" {
-    unset DOLT_ARCHIVE_PULL_STREAMER
+    export DOLT_ARCHIVE_PULL_STREAMER=0
 
     mkdir -p remote/.dolt
     cp -R $BATS_TEST_DIRNAME/archive-test-repos/base/* remote/.dolt
@@ -390,7 +387,7 @@ teardown() {
 }
 
 @test "archive: large push remote with archive default produces new archive with converted snappy chunks" {
-    export DOLT_ARCHIVE_PULL_STREAMER=1
+    unset DOLT_ARCHIVE_PULL_STREAMER
 
     mkdir -p remote/.dolt
     cp -R $BATS_TEST_DIRNAME/archive-test-repos/base/* remote/.dolt
@@ -422,7 +419,7 @@ teardown() {
 }
 
 @test "archive: small push remote with archive default produces archive with snappy chunks" {
-    export DOLT_ARCHIVE_PULL_STREAMER=1
+    unset DOLT_ARCHIVE_PULL_STREAMER
 
     mkdir -p remote/.dolt
     cp -R $BATS_TEST_DIRNAME/archive-test-repos/base/* remote/.dolt
@@ -464,7 +461,7 @@ teardown() {
 
     cd ../
     dolt remote add r1 http://localhost:$port/test-org/test-repo
-    DOLT_ARCHIVE_PULL_STREAMER=1 dolt fetch r1
+    dolt fetch r1
 
     run dolt admin storage
     [ $status -eq 0 ]
@@ -482,7 +479,7 @@ teardown() {
 }
 
 @test "archive: fetch into empty database with archive disabled" {
-    unset DOLT_ARCHIVE_PULL_STREAMER
+    export DOLT_ARCHIVE_PULL_STREAMER=0
 
     mkdir -p remote/.dolt
     cp -R $BATS_TEST_DIRNAME/archive-test-repos/base/* remote/.dolt

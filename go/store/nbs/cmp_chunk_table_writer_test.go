@@ -32,7 +32,7 @@ func TestCmpChunkTableWriter(t *testing.T) {
 	// Put some chunks in a table file and get the buffer back which contains the table file data
 	ctx := context.Background()
 
-	expectedId, buff, err := WriteChunks(testMDChunks)
+	expectedId, buff, _, err := WriteChunks(testMDChunks)
 	require.NoError(t, err)
 
 	// Setup a TableReader to read compressed chunks out of
