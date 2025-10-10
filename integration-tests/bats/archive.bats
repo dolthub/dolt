@@ -16,8 +16,6 @@ teardown() {
         remotesrv_pid=""
     fi
 
-    stop_sql_server
-
     assert_feature_version
     teardown_common
 }
@@ -237,26 +235,34 @@ teardown() {
     # Copy the archive test repo to remote directory
     cp -R $BATS_TEST_DIRNAME/archive-test-repos/base/* remote/.dolt
     cd remote
-    PORT=$( definePORT )
-    start_sql_server_with_args_no_port # NM4 nah.
+
+    port=$( definePORT )
+
+    remotesrv --http-port $port --grpc-port $port --repo-mode &
+    remotesrv_pid=$!
+    [[ "$remotesrv_pid" -gt 0 ]] || false
 
     cd ../cloned
-    dolt clone http://localhost:$PORT/remote repo1
+    dolt clone http://localhost:$port/test-org/test-repo repo1
     # Fetch when there are no changes.
     cd repo1
     dolt fetch
 
-    ## This will result in new archived files on the remote, which we will need to read chunks from when we fetch.
+    ## update the remote repo directly. Need to run the archive command when the server is stopped.
+    ## This will result in archived files on the remote, which we will need to read chunks from when we fetch.
     cd ../../remote
-    dolt remote sql -q "$(mutations_and_gc_statement 1)"
+    kill $remotesrv_pid
+    wait $remotesrv_pid || :
+    remotesrv_pid=""
+    dolt sql -q "$(mutations_and_gc_statement)"
+    dolt archive
+
+    remotesrv --http-port $port --grpc-port $port --repo-mode &
+    remotesrv_pid=$!
+    [[ "$remotesrv_pid" -gt 0 ]] || false
 
     cd ../cloned/repo1
-    run dolt fetch
-
-    echo  "---------------------"
-    echo "$output"
-    echo  "---------------------"
-    [ "$status" -eq 0 ]
+    dolt fetch
 
     run dolt status
     [ "$status" -eq 0 ]
