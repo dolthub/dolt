@@ -2,7 +2,7 @@
 set -e
 set -o pipefail
 
-SYSBENCH_TEST="oltp_point_select"
+SYSBENCH_TEST="index_scan"
 WORKING_DIR=`mktemp -d`
 PPROF=0
 PORT=3366
@@ -123,8 +123,11 @@ sysbench \
   --mysql-user="$USER" \
   --mysql-password="$PASS" \
   --db-ps-mode=disable \
-  --time=30 \
-  --db-ps-mode=disable \
+  --time=120 \
+  --table-size=10000 \
+  --percentile=50 \
+  --rand-type=uniform \
+  --rand-seed=1 \
   "$SYSBENCH_TEST" run
 
 unset DOLT_ENABLE_CHUNK_JOURNAL
