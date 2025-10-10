@@ -29,6 +29,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -1689,7 +1690,7 @@ func (nbs *NomsBlockStore) Path() (string, bool) {
 }
 
 // WriteTableFile will read a table file from the provided reader and write it to the TableFileStore
-func (nbs *NomsBlockStore) WriteTableFile(ctx context.Context, fileName string, splitOffset uint64, _ int, _ []byte, getRd func() (io.ReadCloser, uint64, error)) error {
+func (nbs *NomsBlockStore) WriteTableFile(ctx context.Context, fileName string, splitOffset uint64, numChunks int, _ []byte, getRd func() (io.ReadCloser, uint64, error)) error {
 	valctx.ValidateContext(ctx)
 	tfp, ok := nbs.persister.(tableFilePersister)
 	if !ok {
@@ -1701,6 +1702,12 @@ func (nbs *NomsBlockStore) WriteTableFile(ctx context.Context, fileName string, 
 		return err
 	}
 	defer r.Close()
+
+	if splitOffset == 0 && !strings.HasSuffix(fileName, ArchiveFileSuffix) {
+		splitOffset = tableTailOffset(sz, uint32(numChunks))
+	}
+
+	// CopyTableFile can cope with a 0 splitOffset.
 	return tfp.CopyTableFile(ctx, r, fileName, sz, splitOffset)
 }
 

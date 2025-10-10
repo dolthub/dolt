@@ -255,41 +255,47 @@ func (bsp *blobstorePersister) Path() string {
 }
 
 func (bsp *blobstorePersister) CopyTableFile(ctx context.Context, r io.Reader, name string, fileSz uint64, splitOffset uint64) error {
-	lr := io.LimitReader(r, int64(splitOffset))
+	if splitOffset > 0 {
+		lr := io.LimitReader(r, int64(splitOffset))
 
-	indexLen := int64(fileSz - splitOffset)
+		indexLen := int64(fileSz - splitOffset)
 
-	// check if we can Put concurrently
-	rr, ok := r.(io.ReaderAt)
-	if !ok {
-		// sequentially write chunk records then tail
-		if _, err := bsp.bs.Put(ctx, name+tableRecordsExt, int64(splitOffset), lr); err != nil {
-			return err
+		// check if we can Put concurrently
+		rr, ok := r.(io.ReaderAt)
+		if !ok {
+			// sequentially write chunk records then tail
+			if _, err := bsp.bs.Put(ctx, name+tableRecordsExt, int64(splitOffset), lr); err != nil {
+				return err
+			}
+			if _, err := bsp.bs.Put(ctx, name+tableTailExt, indexLen, r); err != nil {
+				return err
+			}
+		} else {
+			// on the push path, we expect to Put concurrently
+			// see BufferedFileByteSink in byte_sink.go
+			eg, ectx := errgroup.WithContext(ctx)
+			eg.Go(func() error {
+				srdr := io.NewSectionReader(rr, int64(splitOffset), indexLen)
+				_, err := bsp.bs.Put(ectx, name+tableTailExt, indexLen, srdr)
+				return err
+			})
+			eg.Go(func() error {
+				_, err := bsp.bs.Put(ectx, name+tableRecordsExt, int64(splitOffset), lr)
+				return err
+			})
+			if err := eg.Wait(); err != nil {
+				return err
+			}
 		}
-		if _, err := bsp.bs.Put(ctx, name+tableTailExt, indexLen, r); err != nil {
-			return err
-		}
+
+		// finally concatenate into the complete table
+		_, err := bsp.bs.Concatenate(ctx, name, []string{name + tableRecordsExt, name + tableTailExt})
+		return err
 	} else {
-		// on the push path, we expect to Put concurrently
-		// see BufferedFileByteSink in byte_sink.go
-		eg, ectx := errgroup.WithContext(ctx)
-		eg.Go(func() error {
-			srdr := io.NewSectionReader(rr, int64(splitOffset), indexLen)
-			_, err := bsp.bs.Put(ectx, name+tableTailExt, indexLen, srdr)
-			return err
-		})
-		eg.Go(func() error {
-			_, err := bsp.bs.Put(ectx, name+tableRecordsExt, int64(splitOffset), lr)
-			return err
-		})
-		if err := eg.Wait(); err != nil {
-			return err
-		}
+		// no split offset, just copy the whole table. We will create the records object on demand if needed.
+		_, err := bsp.bs.Put(ctx, name, int64(fileSz), r)
+		return err
 	}
-
-	// finally concatenate into the complete table
-	_, err := bsp.bs.Concatenate(ctx, name, []string{name + tableRecordsExt, name + tableTailExt})
-	return err
 }
 
 type bsTableReaderAt struct {
