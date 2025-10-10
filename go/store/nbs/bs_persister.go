@@ -45,7 +45,7 @@ var _ tableFilePersister = &blobstorePersister{}
 // Persist makes the contents of mt durable. Chunks already present in
 // |haver| may be dropped in the process.
 func (bsp *blobstorePersister) Persist(ctx context.Context, mt *memTable, haver chunkReader, keeper keeperF, stats *Stats) (chunkSource, gcBehavior, error) {
-	address, data, chunkCount, gcb, err := mt.write(haver, keeper, stats)
+	address, data, splitOffset, chunkCount, gcb, err := mt.write(haver, keeper, stats)
 	if err != nil {
 		return emptyChunkSource{}, gcBehavior_Continue, err
 	}
@@ -58,7 +58,7 @@ func (bsp *blobstorePersister) Persist(ctx context.Context, mt *memTable, haver 
 	name := address.String()
 
 	// persist this table in two parts to facilitate later conjoins
-	records, tail := splitTableParts(data, chunkCount)
+	records, tail := data[:splitOffset], data[splitOffset:]
 
 	// first write table records and tail (index+footer) as separate blobs
 	eg, ectx := errgroup.WithContext(ctx)
@@ -393,17 +393,6 @@ func newBSTableChunkSource(ctx context.Context, bs blobstore.Blobstore, name has
 		return nil, err
 	}
 	return &chunkSourceAdapter{tr, name}, nil
-}
-
-// splitTableParts separates a table into chunk records and meta data.
-//
-//	              +----------------------+-------+--------+
-//	table format: | Chunk Record 0 ... N | Index | Footer |
-//	              +----------------------+-------+--------+
-func splitTableParts(data []byte, count uint32) (records, tail []byte) {
-	o := tableTailOffset(uint64(len(data)), count)
-	records, tail = data[:o], data[o:]
-	return
 }
 
 func tableTailOffset(size uint64, count uint32) uint64 {

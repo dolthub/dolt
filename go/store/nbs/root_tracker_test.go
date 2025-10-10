@@ -510,7 +510,7 @@ func (ftp fakeTablePersister) Persist(ctx context.Context, mt *memTable, haver c
 		return emptyChunkSource{}, gcBehavior_Continue, nil
 	}
 
-	name, data, chunkCount, gcb, err := mt.write(haver, keeper, stats)
+	name, data, _, chunkCount, gcb, err := mt.write(haver, keeper, stats)
 	if err != nil {
 		return emptyChunkSource{}, gcBehavior_Continue, err
 	} else if gcb != gcBehavior_Continue {

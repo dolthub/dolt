@@ -922,14 +922,14 @@ func (dcs *DoltChunkStore) uploadChunks(ctx context.Context, hashToChunk map[has
 
 	// structuring so this can be done as multiple files in the future.
 	{
-		name, data, err := nbs.WriteChunks(chnks)
+		name, data, splitOffset, err := nbs.WriteChunks(chnks)
 
 		if err != nil {
 			return map[hash.Hash]int{}, err
 		}
 
 		h := hash.Parse(name)
-		hashToSplitOffset[h] = uint64(len(data))
+		hashToSplitOffset[h] = splitOffset
 		hashToData[h] = data
 		hashToCount[h] = len(chnks)
 
