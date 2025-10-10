@@ -16,6 +16,7 @@ package writer
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -29,6 +30,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -247,6 +249,10 @@ func (s *nomsWriteSession) getTableEditor(ctx context.Context, tableName string,
 	localTableEditor.tableEditor = tableEditor
 
 	return localTableEditor, nil
+}
+
+func (s *nomsWriteSession) VisitGCRoots(ctx context.Context, roots func(hash.Hash) bool) error {
+	return errors.New("unsupported session-aware GC use on __LD_1__ database.")
 }
 
 // setRoot is the inner implementation for SetWorkingRoot that does not acquire any locks

@@ -20,6 +20,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly/message"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
@@ -61,6 +62,22 @@ func (mut *GenericMutableMap[M, T]) MapInterface(ctx context.Context) (MapInterf
 // that the struct has been specialized with.
 func (mut *GenericMutableMap[M, T]) Map(ctx context.Context) (M, error) {
 	return mut.flusher.Map(ctx, mut)
+}
+
+func (mut *GenericMutableMap[M, T]) VisitGCRoots(ctx context.Context, roots func(hash.Hash) bool) error {
+	// flushPending in order to ensure that our tuples.Static root
+	// is a chunk which includes all of the reachable chunks for
+	// our edits, including chunked internal values like text,
+	// json and geometry.
+	err := mut.flushPending(ctx, true)
+	if err != nil {
+		return err
+	}
+	roots(mut.tuples.Static.GetRoot().HashOf())
+	if mut.stash != nil {
+		roots(mut.stash.Static.GetRoot().HashOf())
+	}
+	return nil
 }
 
 // newMutableMap returns a new MutableMap.
@@ -108,7 +125,7 @@ func (mut *GenericMutableMap[M, T]) Put(ctx context.Context, key, value val.Tupl
 		return err
 	}
 	if mut.tuples.Edits.Count() > mut.maxPending {
-		return mut.flushPending(ctx)
+		return mut.flushPending(ctx, false)
 	}
 	return nil
 }
@@ -158,14 +175,43 @@ func (mut *GenericMutableMap[M, T]) Revert(ctx context.Context) {
 	mut.tuples.Edits.Revert(ctx)
 }
 
-func (mut *GenericMutableMap[M, T]) flushPending(ctx context.Context) error {
+func (mut *GenericMutableMap[M, T]) flushPending(ctx context.Context, deep bool) error {
 	stash := mut.stash
 	// if our in-memory edit set contains a checkpoint, we
 	// must stash a copy of |mut.tuples| we can revert to.
 	if mut.tuples.Edits.HasCheckpoint() {
 		cp := mut.tuples.Copy()
 		cp.Edits.Revert(ctx)
-		stash = &cp
+		if deep {
+			// deep is used by online GC. In order to
+			// ensure that all internal chunk pointers in
+			// all reachable cached edits get visited by
+			// GC, we flush the checkpointed edits to
+			// storage as well.
+			//
+			// TODO: Because of the way apply mutations is
+			// currently coupled with GenericMutableMap,
+			// we construct this temporary generic mutable
+			// map to make the call we want to. This could
+			// be better if we could flush the map with a
+			// more straightforward call which passed
+			// along the dependencies.
+			tmpGMM := &GenericMutableMap[M, T]{
+				keyDesc:    mut.keyDesc,
+				valDesc:    mut.valDesc,
+				flusher:    mut.flusher,
+				tuples:     cp,
+				stash:      nil,
+				maxPending: mut.maxPending,
+			}
+			err := tmpGMM.flushPending(ctx, false)
+			if err != nil {
+				return err
+			}
+			stash = &tmpGMM.tuples
+		} else {
+			stash = &cp
+		}
 	}
 	serializer := mut.flusher.GetDefaultSerializer(ctx, mut)
 	sm, err := mut.flusher.ApplyMutationsWithSerializer(ctx, serializer, mut)

@@ -145,7 +145,7 @@ func testRevertAfterFlush(t *testing.T, scale int) {
 		// flush post-checkpoint edits halfway through
 		// this creates a stashed tree in |mut|
 		if i == len(post)/2 {
-			err = mut.flushPending(ctx)
+			err = mut.flushPending(ctx, false)
 			require.NoError(t, err)
 		}
 	}
