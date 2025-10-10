@@ -1,0 +1,5 @@
+cmake_minimum_required(VERSION 3.24)
+project(c_mysql_client_test C)
+find_package(unofficial-libmysql REQUIRED)
+add_executable("c-mysql-client-test" "mysql-connector-c-test.c")
+target_link_libraries("c-mysql-client-test" PRIVATE unofficial::libmysql::libmysql stdc++)
