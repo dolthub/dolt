@@ -45,7 +45,7 @@ type TableFile interface {
 	// Archive files do not have a deterministic way to calculate the split offset, so we either need to be told the
 	// offset or read the footer of the file to determine the index size then calculate the split offset.
 	//
-	// Passing the  offset around similfies this. It is meaningful for both current storage types, though we will probably
+	// Passing the  offset around simplifies this. It is meaningful for both current storage types, though we will probably
 	// keep the table file's chunk count method around for a while.
 	SplitOffset() uint64
 
