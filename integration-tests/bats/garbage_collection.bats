@@ -413,44 +413,28 @@ SQL
     # Create a lot of data on a new branch.
     dolt checkout -b to_keep
     dolt sql -q "CREATE TABLE vals (val LONGTEXT);"
-    str="hex(random_bytes(1024))"
-    str="$str,$str"
-    str="$str,$str"
-    str="$str,$str"
-    str="$str,$str"
-    str="$str,$str"
-    str="$str,$str"
-    str="$str,$str"
-    str="$str,$str"
-    str="$str,$str"
-    str="$str,$str"
-    dolt sql -q "INSERT INTO vals VALUES (concat($str));"
-    dolt sql -q "INSERT INTO vals VALUES (concat($str));"
-    dolt sql -q "INSERT INTO vals VALUES (concat($str));"
-    dolt sql -q "INSERT INTO vals VALUES (concat($str));"
 
+    # This creates a 2Mb string (1024 calls of random_bytes -> 1Mb, hex doubles).
+    # We don't reuse random_bytes because we want low compression of the.
+    str="hex(random_bytes(1024))"
+    for _ in {1..10}; do
+      str="$str,$str"
+    done
+    twoMb="concat($str)"
+
+    for _ in {1..4}; do
+      dolt sql -q "INSERT INTO vals VALUES ($twoMb);"
+    done
     dolt commit -Am 'create some data on a new commit.'
 
     # Create a lot of data on another new branch.
-    dolt checkout main
-    dolt checkout -b to_delete
+    dolt checkout -b to_delete main
     dolt sql -q "CREATE TABLE vals (val LONGTEXT);"
-    str="hex(random_bytes(1024))"
-    str="$str,$str"
-    str="$str,$str"
-    str="$str,$str"
-    str="$str,$str"
-    str="$str,$str"
-    str="$str,$str"
-    str="$str,$str"
-    str="$str,$str"
-    str="$str,$str"
-    str="$str,$str"
-    dolt sql -q "INSERT INTO vals VALUES (concat($str));"
-    dolt sql -q "INSERT INTO vals VALUES (concat($str));"
-    dolt sql -q "INSERT INTO vals VALUES (concat($str));"
-    dolt sql -q "INSERT INTO vals VALUES (concat($str));"
 
+    # Add 16Mb of uncompressed data.
+    for _ in {1..8}; do
+      dolt sql -q "INSERT INTO vals VALUES ($twoMb);"
+    done
     dolt commit -Am 'create some data on a new commit.'
 
     # GC it into the old gen.
