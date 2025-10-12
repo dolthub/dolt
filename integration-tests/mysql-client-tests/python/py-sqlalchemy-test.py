@@ -54,14 +54,14 @@ def main():
                     print(exp_results)
                     print("Received:")
                     print(results)
-                    exit(1)
+                    sys.exit(1)
             # You can't call fetchall on an insert
             # so we'll just ignore the exception
             except sqlalchemy.exc.ResourceClosedError:
                 pass
 
     con.close()
-    exit(0)
+    sys.exit(0)
 
 
 main()

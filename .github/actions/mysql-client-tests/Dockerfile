@@ -108,8 +108,17 @@ FROM php:8.3-bookworm AS runtime
 RUN apt-get update && apt-get install -y \
   default-libmysqlclient-dev \
   libmysqlcppconn-dev \
-  r-base \
+  libdbd-mysql-perl \
+  default-mysql-client \
+  postgresql \
+  postgresql-contrib \
+  postgresql-15-mysql-fdw \
+  r-base-core \
+  perl-base \
+  lsof \
+  bats \
   && rm -rf /var/lib/apt/lists/*
+# compiled, must come after above
 RUN R -e "install.packages(c('RMariaDB', 'RMySQL', 'DBI'), repos='https://cloud.r-project.org/')"
 
 COPY --from=dolt_build /build/bin/ /usr/local/bin/
@@ -125,6 +134,7 @@ COPY --from=node_clients_build /build/bin/ /build/bin/node/
 COPY --from=php_clients_build /build/bin/ /build/bin/php/
 COPY --from=ruby_clients_build /build/bin/ /build/bin/ruby/
 COPY dolt/integration-tests/mysql-client-tests/r/ /build/bin/r/
+COPY dolt/integration-tests/mysql-client-tests/perl/ /build/bin/perl/
 
 COPY --from=java_clients_build /build/jre/ /opt/jre/
 COPY --from=node_clients_build /usr/local/bin/node /usr/local/bin/node
@@ -136,3 +146,10 @@ COPY --from=ruby_clients_build /usr/local/bundle/ /usr/local/bundle/
 ENV PATH="/opt/jre/bin:/usr/local/bundle/bin:${PATH}"
 ENV GEM_HOME="/usr/local/bundle"
 ENV BUNDLE_APP_CONFIG="/usr/local/bundle"
+
+COPY dolt/integration-tests/mysql-client-tests/mysql-client-tests.bats /build/bin/
+COPY dolt/integration-tests/mysql-client-tests/helpers.bash /build/bin/
+COPY dolt/integration-tests/mysql-client-tests/mysql-client-tests-entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+ENTRYPOINT ["/entrypoint.sh"]

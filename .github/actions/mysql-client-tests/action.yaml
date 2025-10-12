@@ -2,4 +2,5 @@ name: 'Dolt MySQL client integration tests'
 description: 'Smoke tests for mysql client integrations'
 runs:
   using: 'docker'
-  image: '../../../integration-tests/MySQLDockerfile'
+  image: 'Dockerfile'
+  context: '../../../../'

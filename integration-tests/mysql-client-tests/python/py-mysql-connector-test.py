@@ -54,7 +54,7 @@ def main():
                 print(exp_results)
                 print("Received:")
                 print(results)
-                exit(1)
+                sys.exit(1)
         except mysql.connector.errors.InterfaceError:
 
             # This is a write query
@@ -64,7 +64,7 @@ def main():
 
     connection.close()
 
-    exit(0)
+    sys.exit(0)
 
 
 main()

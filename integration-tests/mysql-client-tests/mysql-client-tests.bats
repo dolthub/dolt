@@ -1,5 +1,5 @@
 #!/usr/bin/env bats
-load $BATS_TEST_DIRNAME/helpers.bash
+load /build/bin/helpers.bash
 
 # MySQL client tests are set up to test Dolt as a MySQL server and
 # standard MySQL Clients in a wide array of languages. I used BATS because
@@ -26,103 +26,72 @@ teardown() {
 }
 
 @test "go go-sql-drive/mysql test" {
-    (cd $BATS_TEST_DIRNAME/go; go build .)
-    $BATS_TEST_DIRNAME/go/go $USER $PORT $REPO_NAME
+    /build/bin/go/go-mysql-client-test $USER $PORT $REPO_NAME
 }
 
 @test "go go-mysql test" {
-    (cd $BATS_TEST_DIRNAME/go-mysql; go build .)
-    $BATS_TEST_DIRNAME/go-mysql/go $USER $PORT $REPO_NAME
+    /build/bin/go/go-sql-driver-test $USER $PORT $REPO_NAME
 }
 
 @test "python mysql.connector client" {
-    python3.9 $BATS_TEST_DIRNAME/python/mysql.connector-test.py $USER $PORT $REPO_NAME
+    /build/bin/python/py-mysql-connector-test $USER $PORT $REPO_NAME
 }
 
 @test "python pymysql client" {
-    python3.9 $BATS_TEST_DIRNAME/python/pymysql-test.py $USER $PORT $REPO_NAME
+    /build/bin/python/pymysql-test $USER $PORT $REPO_NAME
 }
 
 @test "python sqlachemy client" {
-    python3.9 $BATS_TEST_DIRNAME/python/sqlalchemy-test.py $USER $PORT $REPO_NAME
+    /build/bin/python/py-sqlalchemy-test $USER $PORT $REPO_NAME
 }
 
 @test "mysql-connector-java client" {
-    javac $BATS_TEST_DIRNAME/java/MySQLConnectorTest.java
-    java -cp $BATS_TEST_DIRNAME/java:$BATS_TEST_DIRNAME/java/mysql-connector-java-8.0.21.jar MySQLConnectorTest $USER $PORT $REPO_NAME
+    java -jar /build/bin/java/mysql-connector-test.jar $USER $PORT $REPO_NAME
 }
 
 @test "mysql-connector-java client collations" {
-    javac $BATS_TEST_DIRNAME/java/MySQLConnectorTest_Collation.java
-    java -cp $BATS_TEST_DIRNAME/java:$BATS_TEST_DIRNAME/java/mysql-connector-java-8.0.21.jar MySQLConnectorTest_Collation $USER $PORT $REPO_NAME
+    java -jar /build/bin/java/mysql-connector-test-collation.jar $USER $PORT $REPO_NAME
 }
 
 @test "node mysql client" {
-    node $BATS_TEST_DIRNAME/node/index.js $USER $PORT $REPO_NAME
-    node $BATS_TEST_DIRNAME/node/knex.js $USER $PORT $REPO_NAME
+    node /build/bin/node/index.js $USER $PORT $REPO_NAME
+    node /build/bin/node/knex.js $USER $PORT $REPO_NAME
 }
 
 @test "node mysql client, hosted workbench stability" {
-    node $BATS_TEST_DIRNAME/node/workbench.js $USER $PORT $REPO_NAME $BATS_TEST_DIRNAME/node/testdata
+    node /build/bin/node/workbench.js $USER $PORT $REPO_NAME /build/bin/node/testdata
 }
 
 @test "c mysql connector" {
-    (cd $BATS_TEST_DIRNAME/c; make clean; make)
-    $BATS_TEST_DIRNAME/c/mysql-connector-c-test $USER $PORT $REPO_NAME
+    /build/bin/c/c-mysql-client-test $USER $PORT $REPO_NAME
 }
 
 @test "cpp mysql connector" {
-    if [ -d $BATS_TEST_DIRNAME/cpp/_build ]
-    then
-        rm -rf $BATS_TEST_DIRNAME/cpp/_build/*
-    else
-        mkdir $BATS_TEST_DIRNAME/cpp/_build
-    fi
-    cd $BATS_TEST_DIRNAME/cpp/_build
-    if [[ `uname` = "Darwin" ]]; then
-        PATH=/usr/local/Cellar/mysql-client/8.0.21/bin/:"$PATH" cmake .. -DWITH_SSL=/usr/local/Cellar/openssl@1.1/1.1.1g/ -DWITH_JDBC=yes;
-    else
-        cmake ..
-    fi
-cmake ..
-    make -j 10
-    $BATS_TEST_DIRNAME/cpp/_build/test_mysql_connector_cxx $USER $PORT $REPO_NAME
-    cd -
+    /build/bin/cpp/cpp-mysql-connector-test $USER $PORT $REPO_NAME
 }
 
 @test "dotnet mysql connector" {
-    cd $BATS_TEST_DIRNAME/dotnet/MySqlConnector
-    # dotnet run uses output channel 3 which conflicts with bats so we pipe it to null
-    dotnet run -- $USER $PORT $REPO_NAME 3>&-
+    /build/bin/dotnet/dotnet-mysql-connector-test $USER $PORT $REPO_NAME
 }
 
 @test "dotnet mysql client" {
-    cd $BATS_TEST_DIRNAME/dotnet/MySqlClient
-    # dotnet run uses output channel 3 which conflicts with bats so we pipe it to null
-    dotnet run -- $USER $PORT $REPO_NAME 3>&-
+    /build/bin/dotnet/dotnet-mysql-client-test $USER $PORT $REPO_NAME
 }
 
 @test "perl DBD:mysql client" {
-    perl $BATS_TEST_DIRNAME/perl/dbd-mysql-test.pl $USER $PORT $REPO_NAME
+    perl /build/bin/perl/dbd-mysql-test.pl $USER $PORT $REPO_NAME
 }
 
 @test "ruby ruby/mysql test" {
-    ruby $BATS_TEST_DIRNAME/ruby/ruby-mysql-test.rb $USER $PORT $REPO_NAME
+    ruby /build/bin/ruby/ruby-mysql-test.rb $USER $PORT $REPO_NAME
 }
 
 @test "ruby mysql2 test" {
-    ruby $BATS_TEST_DIRNAME/ruby/mysql2-test.rb $USER $PORT $REPO_NAME
+    ruby /build/bin/ruby/mysql2-test.rb $USER $PORT $REPO_NAME
 }
 
 @test "elixir myxql test" {
-    cd $BATS_TEST_DIRNAME/elixir/
-    # install some mix dependencies
-    mix local.hex --force
-    mix local.rebar --force
-    mix deps.get
-
-    # run the test
-    mix run -e "IO.puts(SmokeTest.run())" $USER $PORT $REPO_NAME
+    /build/bin/elixir/elixir-mysql-client-test $USER $PORT $REPO_NAME
 }
 
 @test "mysqldump works" {
@@ -163,27 +132,22 @@ EOF" -m "postgres"
 }
 
 @test "R RMySQL client" {
-    Rscript $BATS_TEST_DIRNAME/r/rmysql-test.r $USER $PORT $REPO_NAME
+    Rscript /build/bin/r/rmysql-test.r $USER $PORT $REPO_NAME
 }
 
 @test "R RMariaDB client" {
-    skip "Error loading RMariaDB library"
-    # ex: https://github.com/dolthub/dolt/actions/runs/4428743682/jobs/7770282852
-    Rscript $BATS_TEST_DIRNAME/r/rmariadb-test.r $USER $PORT $REPO_NAME
+    Rscript /build/bin/r/rmariadb-test.r $USER $PORT $REPO_NAME
 }
 
 @test "rust mysql client" {
-    cd $BATS_TEST_DIRNAME/rust
-    ./target/debug/mysql_connector_test $USER $PORT $REPO_NAME
+    /build/bin/rust/rust-mysql-client-test $USER $PORT $REPO_NAME
 }
 
 @test "php mysqli mysql client" {
-    cd $BATS_TEST_DIRNAME/php
-    php mysqli_connector_test.php $USER $PORT $REPO_NAME
+    php /build/bin/php/mysqli_connector_test.php $USER $PORT $REPO_NAME
 }
 
 @test "php pdo mysql client" {
-    cd $BATS_TEST_DIRNAME/php
-    php pdo_connector_test.php $USER $PORT $REPO_NAME
+    php /build/bin/php/pdo_connector_test.php $USER $PORT $REPO_NAME
 }
 
