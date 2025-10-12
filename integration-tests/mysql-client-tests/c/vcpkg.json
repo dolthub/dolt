@@ -1,4 +1,0 @@
-{
-  "name": "mysql-client-test-c",
-  "dependencies": [ "libmysql" ]
-}

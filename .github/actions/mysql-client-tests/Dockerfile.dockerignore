@@ -1,0 +1,5 @@
+**/.git/
+**/.github/
+**/docker/
+**/images/
+**/node_modules/

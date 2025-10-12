@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <memory.h>
-#include <mysql/mysql.h>
+#include <mysql.h>
 
 #define QUERIES_SIZE 14
 

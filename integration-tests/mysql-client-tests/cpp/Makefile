@@ -1,14 +1,14 @@
-MYSQL_CONCPP_DIR = /usr/local/Cellar/mysql-connector-c++/8.0.21
-CPPFLAGS = -I $(MYSQL_CONCPP_DIR)/include -L $(MYSQL_CONCPP_DIR)/lib64
-LDLIBS = -lmysqlcppconn8
-CXX = clang++ -stdlib=libc++
-CXXFLAGS = -std=c++11
+CXX = g++
+CXXFLAGS = -I/usr/include/cppconn -std=c++11 -Wall -O2
+LDFLAGS = -lmysqlcppconn
+TARGET = /build/bin/cpp-mysql-connector-test
+SRCS = mysql-connector-cpp-test.cpp
 
-all: mysql-connector-cpp-test
+all: $(TARGET)
 
-mysql-connector-cpp-test: mysql-connector-cpp-test.cpp
-	$(CXX) $(CXXFLAGS) $(CPPFLAGS) -o $@ $^ $(LDLIBS)
+$(TARGET): $(SRCS)
+	@mkdir -p /build/bin
+	$(CXX) $(CXXFLAGS) -o $@ $^ $(LDFLAGS)
 
-.PHONY: clean
 clean:
-	rm -f mysql-connector-cpp-test
+	rm -f $(TARGET)

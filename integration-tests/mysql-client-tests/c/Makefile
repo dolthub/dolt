@@ -1,11 +1,18 @@
-CFLAGS := $(shell pkg-config --cflags mysqlclient)
-LDFLAGS := $(shell pkg-config --libs mysqlclient)
+CC = gcc
 
-all: mysql-connector-c-test
+CFLAGS = -I/usr/include/mysql -Wall -O2
 
-mysql-connector-c-test: mysql-connector-c-test.c
+LDFLAGS = -lmysqlclient
+
+TARGET = /build/bin/c-mysql-client-test
+
+SRCS = mysql-connector-c-test.c
+
+all: $(TARGET)
+
+$(TARGET): $(SRCS)
+	@mkdir -p /build/bin
 	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
 
-.PHONY: clean
 clean:
-	rm -f mysql-connector-c-test
+	rm -f /build/bin/c-mysql-client-test
