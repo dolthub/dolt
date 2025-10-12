@@ -39,17 +39,16 @@ WORKDIR /build/dotnet/MySqlConnector/
 RUN dotnet publish -c Release -o /build/bin
 
 FROM gcc:12.5-bookworm AS c_clients_build
-RUN apt-get update && apt-get install -y \
-  default-libmysqlclient-dev \
-  && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y default-libmysqlclient-dev libmariadb-dev && rm -rf /var/lib/apt/lists/*
 COPY dolt/integration-tests/mysql-client-tests/c/ /build/c/
 WORKDIR /build/c/
 RUN make
 
 FROM gcc:12.5-bookworm AS cpp_clients_build
-RUN apt-get update && apt-get install -y \
-  libmysqlcppconn-dev \
-  && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y libmysqlcppconn-dev wget && rm -rf /var/lib/apt/lists/*
+RUN wget https://dlm.mariadb.com/4464866/Connectors/cpp/connector-cpp-1.1.7/mariadb-connector-cpp_1.1.7-1+maria~bookworm_amd64.deb \
+  && dpkg -i mariadb-connector-cpp_1.1.7-1+maria~bookworm_amd64.deb || apt-get install -y -f \
+  && rm mariadb-connector-cpp_1.1.7-1+maria~bookworm_amd64.deb
 COPY dolt/integration-tests/mysql-client-tests/cpp/ /build/cpp/
 WORKDIR /build/cpp/
 RUN make
@@ -108,6 +107,7 @@ FROM php:8.3-bookworm AS runtime
 RUN apt-get update && apt-get install -y \
   default-libmysqlclient-dev \
   libmysqlcppconn-dev \
+  libmariadb3 \
   libdbd-mysql-perl \
   default-mysql-client \
   postgresql \
@@ -136,6 +136,8 @@ COPY --from=ruby_clients_build /build/bin/ /build/bin/ruby/
 COPY dolt/integration-tests/mysql-client-tests/r/ /build/bin/r/
 COPY dolt/integration-tests/mysql-client-tests/perl/ /build/bin/perl/
 
+COPY --from=cpp_clients_build /usr/lib/x86_64-linux-gnu/libmariadb* /usr/lib/x86_64-linux-gnu/
+COPY --from=cpp_clients_build /usr/include/mariadb/ /usr/include/mariadb/
 COPY --from=java_clients_build /build/jre/ /opt/jre/
 COPY --from=node_clients_build /usr/local/bin/node /usr/local/bin/node
 COPY --from=php_clients_build /usr/local/lib/php/extensions/ /usr/local/lib/php/extensions/

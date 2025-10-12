@@ -66,8 +66,16 @@ teardown() {
     /build/bin/c/c-mysql-client-test $USER $PORT $REPO_NAME
 }
 
+@test "c mariadb connector" {
+    /build/bin/c/c-mariadb-client-test $USER $PORT $REPO_NAME
+}
+
 @test "cpp mysql connector" {
     /build/bin/cpp/cpp-mysql-connector-test $USER $PORT $REPO_NAME
+}
+
+@test "cpp mariadb connector" {
+    /build/bin/cpp/cpp-mariadb-connector-test $USER $PORT $REPO_NAME
 }
 
 @test "dotnet mysql connector" {
