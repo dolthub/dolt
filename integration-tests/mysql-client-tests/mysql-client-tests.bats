@@ -25,16 +25,20 @@ teardown() {
     fi
 }
 
-@test "go go-sql-drive/mysql test" {
-    /build/bin/go/go-mysql-client-test $USER $PORT $REPO_NAME
+@test "go go-sql-driver/mysql" {
+    /build/bin/go/sql-driver-mysql-test $USER $PORT $REPO_NAME
 }
 
-@test "go go-mysql test" {
-    /build/bin/go/go-sql-driver-test $USER $PORT $REPO_NAME
+@test "go go-mysql" {
+    /build/bin/go/mysql-client-test $USER $PORT $REPO_NAME
 }
 
-@test "python mysql.connector client" {
-    /build/bin/python/py-mysql-connector-test $USER $PORT $REPO_NAME
+@test "python mysql.connector" {
+    /build/bin/python/mysql-connector-test $USER $PORT $REPO_NAME
+}
+
+@test "python mariadb connector" {
+  /build/bin/python/mariadb-connector-test $USER $PORT $REPO_NAME
 }
 
 @test "python pymysql client" {
@@ -42,15 +46,23 @@ teardown() {
 }
 
 @test "python sqlachemy client" {
-    /build/bin/python/py-sqlalchemy-test $USER $PORT $REPO_NAME
+    /build/bin/python/sqlalchemy-test $USER $PORT $REPO_NAME
 }
 
-@test "mysql-connector-java client" {
+@test "java mysql-connector-j" {
     java -jar /build/bin/java/mysql-connector-test.jar $USER $PORT $REPO_NAME
 }
 
-@test "mysql-connector-java client collations" {
+@test "java mysql-connector-j collation" {
     java -jar /build/bin/java/mysql-connector-test-collation.jar $USER $PORT $REPO_NAME
+}
+
+@test "java mariadb-java-client" {
+    java -jar /build/bin/java/mariadb-connector-test.jar $USER $PORT $REPO_NAME
+}
+
+@test "java r2dbc-mariadb connector" {
+    java -jar /build/bin/java/mariadb-R2DBC-test.jar $USER $PORT $REPO_NAME
 }
 
 @test "node mysql client" {
@@ -58,51 +70,63 @@ teardown() {
     node /build/bin/node/knex.js $USER $PORT $REPO_NAME
 }
 
+@test "node mariadb connector" {
+    node /build/bin/node/mariadb-connector.js $USER $PORT $REPO_NAME
+}
+
 @test "node mysql client, hosted workbench stability" {
     node /build/bin/node/workbench.js $USER $PORT $REPO_NAME /build/bin/node/testdata
 }
 
-@test "c mysql connector" {
-    /build/bin/c/c-mysql-client-test $USER $PORT $REPO_NAME
+@test "c mysql client" {
+    /build/bin/c/mysql-client-test $USER $PORT $REPO_NAME
 }
 
-@test "c mariadb connector" {
-    /build/bin/c/c-mariadb-client-test $USER $PORT $REPO_NAME
+@test "c mariadb client" {
+    /build/bin/c/mariadb-client-test $USER $PORT $REPO_NAME
 }
 
 @test "cpp mysql connector" {
-    /build/bin/cpp/cpp-mysql-connector-test $USER $PORT $REPO_NAME
+    /build/bin/cpp/mysql-connector-test $USER $PORT $REPO_NAME
 }
 
 @test "cpp mariadb connector" {
-    /build/bin/cpp/cpp-mariadb-connector-test $USER $PORT $REPO_NAME
+    /build/bin/cpp/mariadb-connector-test $USER $PORT $REPO_NAME
 }
 
 @test "dotnet mysql connector" {
-    /build/bin/dotnet/dotnet-mysql-connector-test $USER $PORT $REPO_NAME
+    /build/bin/dotnet/mysql-connector-test $USER $PORT $REPO_NAME
 }
 
 @test "dotnet mysql client" {
-    /build/bin/dotnet/dotnet-mysql-client-test $USER $PORT $REPO_NAME
+    /build/bin/dotnet/mysql-client-test $USER $PORT $REPO_NAME
 }
 
 @test "perl DBD:mysql client" {
     perl /build/bin/perl/dbd-mysql-test.pl $USER $PORT $REPO_NAME
 }
 
-@test "ruby ruby/mysql test" {
-    ruby /build/bin/ruby/ruby-mysql-test.rb $USER $PORT $REPO_NAME
+@test "perl DBD:MariaDB client" {
+    perl /build/bin/perl/dbd-mariadb-test.pl $USER $PORT $REPO_NAME
 }
 
-@test "ruby mysql2 test" {
+@test "ruby ruby/mysql client" {
+    ruby /build/bin/ruby/mysql-client-test.rb $USER $PORT $REPO_NAME
+}
+
+@test "ruby mysql2" {
     ruby /build/bin/ruby/mysql2-test.rb $USER $PORT $REPO_NAME
 }
 
-@test "elixir myxql test" {
-    /build/bin/elixir/elixir-mysql-client-test $USER $PORT $REPO_NAME
+@test "elixir myxql" {
+    /build/bin/elixir/myxql-driver-test $USER $PORT $REPO_NAME
 }
 
-@test "mysqldump works" {
+@test "elixir mysql-otp" {
+    /build/bin/elixir/mysql-otp-test $USER $PORT $REPO_NAME
+}
+
+@test "mysqldump" {
     mysqldump $REPO_NAME -P $PORT -h 0.0.0.0 -u $USER
 }
 

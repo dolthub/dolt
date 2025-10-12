@@ -68,7 +68,7 @@ int main(int argc, char **argv) {
       sql::Statement *stmt = con->createStatement();
 
       if ( is_update[i] ) {
-        int affected_rows = stmt->executeUpdate(queries[i]);
+        stmt->executeUpdate(queries[i]);
       } else {
         sql::ResultSet *res = stmt->executeQuery(queries[i]);
 

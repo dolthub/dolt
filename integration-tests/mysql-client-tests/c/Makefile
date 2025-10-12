@@ -6,11 +6,11 @@ CFLAGS_MARIADB = -I/usr/include/mariadb -Wall -O2
 LDFLAGS_MYSQL = -lmysqlclient
 LDFLAGS_MARIADB = -lmariadb
 
-TARGET_MYSQL = /build/bin/c-mysql-client-test
-TARGET_MARIADB = /build/bin/c-mariadb-client-test
+TARGET_MYSQL = /build/bin/mysql-client-test
+TARGET_MARIADB = /build/bin/mariadb-client-test
 
-SRCS_MYSQL = mysql-connector-c-test.c
-SRCS_MARIADB = mariadb-connector-c-test.c
+SRCS_MYSQL = mysql-connector-test.c
+SRCS_MARIADB = mariadb-connector-test.c
 
 all: $(TARGET_MYSQL) $(TARGET_MARIADB)
 

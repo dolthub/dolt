@@ -40,3 +40,4 @@ defmodule Simple.MixProject do
     ]
   end
 end
+

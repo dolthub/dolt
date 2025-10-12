@@ -17,11 +17,11 @@ RUN go build -tags icu_static -ldflags "$GO_LDFLAGS" -o /build/bin/dolt ./cmd/do
 FROM golang_cgo125 AS go_clients_build
 COPY dolt/integration-tests/mysql-client-tests/go /build/go/
 WORKDIR /build/go/
-RUN go build -ldflags "$GO_LDFLAGS" -o /build/bin/go-mysql-client-test
+RUN go build -ldflags "$GO_LDFLAGS" -o /build/bin/mysql-client-test
 
 COPY dolt/integration-tests/mysql-client-tests/go-mysql/ /build/go-mysql/
 WORKDIR /build/go-mysql/
-RUN go build -ldflags "$GO_LDFLAGS" -o /build/bin/go-sql-driver-test
+RUN go build -ldflags "$GO_LDFLAGS" -o /build/bin/sql-driver-mysql-test
 
 FROM rust:1.90-alpine3.22 AS rust_clients_build
 COPY dolt/integration-tests/mysql-client-tests/rust/ /build/rust/
@@ -37,8 +37,10 @@ RUN dotnet publish -c Release -o /build/bin
 COPY dolt/integration-tests/mysql-client-tests/dotnet/MySqlConnector/ /build/dotnet/MySqlConnector/
 WORKDIR /build/dotnet/MySqlConnector/
 RUN dotnet publish -c Release -o /build/bin
+# devart dotconnect reqs a license so we've skipped it here
 
 FROM gcc:12.5-bookworm AS c_clients_build
+# default-libmysqlclient-dev uses libmariadb under the hood but here we test both header interfaces
 RUN apt-get update && apt-get install -y default-libmysqlclient-dev libmariadb-dev && rm -rf /var/lib/apt/lists/*
 COPY dolt/integration-tests/mysql-client-tests/c/ /build/c/
 WORKDIR /build/c/
@@ -54,25 +56,34 @@ WORKDIR /build/cpp/
 RUN make
 
 FROM python:3.14-slim-bookworm AS python_clients_build
-RUN apt-get update && apt-get install -y binutils && rm -rf /var/lib/apt/lists/*
-RUN pip install --no-cache-dir mysql-connector-python==8.0.33 PyMySQL==1.0.2 sqlalchemy==1.4.46 pyinstaller
+RUN apt-get update && apt-get install -y binutils libmariadb-dev gcc && rm -rf /var/lib/apt/lists/*
+RUN pip install --no-cache-dir mysql-connector-python==8.0.33 PyMySQL==1.0.2 sqlalchemy==1.4.46 mariadb pyinstaller
 COPY dolt/integration-tests/mysql-client-tests/python/ /build/python/
 WORKDIR /build/python/
 RUN pyinstaller --onefile pymysql-test.py
-RUN pyinstaller --onefile --collect-all mysql.connector py-sqlalchemy-test.py
-RUN pyinstaller --onefile --collect-all mysql.connector py-mysql-connector-test.py
+RUN pyinstaller --onefile --collect-all mysql.connector sqlalchemy-test.py
+RUN pyinstaller --onefile --collect-all mysql.connector mysql-connector-test.py
+RUN pyinstaller --onefile mariadb-connector-test.py
 
 FROM elixir:1.18-slim AS elixir_clients_build
 RUN apt-get update && apt-get install -y ca-certificates xz-utils curl && rm -rf /var/lib/apt/lists/*
 RUN curl -sSL https://ziglang.org/download/0.14.1/zig-x86_64-linux-0.14.1.tar.xz | tar -xJ
 ENV PATH="/zig-x86_64-linux-0.14.1:${PATH}"
-COPY dolt/integration-tests/mysql-client-tests/elixir/mix.exs /build/elixir/
-WORKDIR /build/elixir/
+COPY dolt/integration-tests/mysql-client-tests/elixir/myxql/mix.exs /build/elixir/myxql/
+WORKDIR /build/elixir/myxql/
 RUN mix local.hex --force && mix local.rebar --force
 RUN mix deps.get
-COPY dolt/integration-tests/mysql-client-tests/elixir/ /build/elixir/
-RUN MIX_ENV=prod mix release
-RUN mkdir -p /build/bin && cp burrito_out/simple_linux /build/bin/elixir-mysql-client-test
+COPY dolt/integration-tests/mysql-client-tests/elixir/myxql/ /build/elixir/myxql/
+RUN MIX_ENV=prod mix release simple
+COPY dolt/integration-tests/mysql-client-tests/elixir/mysql/mix.exs /build/elixir/mysql/
+WORKDIR /build/elixir/mysql/
+RUN mix local.hex --force && mix local.rebar --force
+RUN mix deps.get
+COPY dolt/integration-tests/mysql-client-tests/elixir/mysql/ /build/elixir/mysql/
+RUN MIX_ENV=prod mix release mysql_otp
+RUN mkdir -p /build/bin && \
+    cp /build/elixir/myxql/burrito_out/simple_linux /build/bin/myxql-driver-test && \
+    cp /build/elixir/mysql/burrito_out/mysql_otp_linux /build/bin/mysql-otp-test
 
 FROM maven:3.9.11-amazoncorretto-21-debian-bookworm AS java_clients_build
 RUN apt-get update && apt-get install -y binutils && rm -rf /var/lib/apt/lists/*
@@ -92,9 +103,8 @@ WORKDIR /build/bin/
 RUN npm install --omit=dev
 COPY dolt/integration-tests/mysql-client-tests/node/ /build/bin/
 
-FROM php:8.3-bookworm AS php_clients_build
+FROM php:8.3-bookworm AS php_deps
 RUN docker-php-ext-install mysqli pdo_mysql
-COPY dolt/integration-tests/mysql-client-tests/php/ /build/bin/
 
 FROM ruby:3.4-bookworm AS ruby_clients_build
 RUN apt-get update && apt-get install -y default-libmysqlclient-dev && rm -rf /var/lib/apt/lists/*
@@ -103,23 +113,24 @@ WORKDIR /build/ruby/
 RUN bundle install
 COPY dolt/integration-tests/mysql-client-tests/ruby/ /build/bin/
 
+FROM debian:bookworm-slim AS r_deps
+RUN apt-get update && apt-get install -y r-base-core libmariadb-dev && rm -rf /var/lib/apt/lists/*
+WORKDIR /build/r/
+RUN R -e "install.packages('DBI', INSTALL_opts='--build', repos='https://cloud.r-project.org/')"
+RUN R -e "install.packages('RMySQL', INSTALL_opts='--build', repos='https://cloud.r-project.org/')"
+RUN R -e "install.packages('RMariaDB', INSTALL_opts='--build', repos='https://cloud.r-project.org/')"
+
 FROM php:8.3-bookworm AS runtime
 RUN apt-get update && apt-get install -y \
-  default-libmysqlclient-dev \
   libmysqlcppconn-dev \
-  libmariadb3 \
   libdbd-mysql-perl \
+  libdbd-mariadb-perl \
   default-mysql-client \
-  postgresql \
-  postgresql-contrib \
   postgresql-15-mysql-fdw \
   r-base-core \
-  perl-base \
   lsof \
   bats \
   && rm -rf /var/lib/apt/lists/*
-# compiled, must come after above
-RUN R -e "install.packages(c('RMariaDB', 'RMySQL', 'DBI'), repos='https://cloud.r-project.org/')"
 
 COPY --from=dolt_build /build/bin/ /usr/local/bin/
 COPY --from=go_clients_build /build/bin/ /build/bin/go/
@@ -131,7 +142,7 @@ COPY --from=python_clients_build /build/python/dist/ /build/bin/python/
 COPY --from=elixir_clients_build /build/bin/ /build/bin/elixir/
 COPY --from=java_clients_build /build/java/target/ /build/bin/java/
 COPY --from=node_clients_build /build/bin/ /build/bin/node/
-COPY --from=php_clients_build /build/bin/ /build/bin/php/
+COPY dolt/integration-tests/mysql-client-tests/php/ /build/bin/php/
 COPY --from=ruby_clients_build /build/bin/ /build/bin/ruby/
 COPY dolt/integration-tests/mysql-client-tests/r/ /build/bin/r/
 COPY dolt/integration-tests/mysql-client-tests/perl/ /build/bin/perl/
@@ -140,11 +151,13 @@ COPY --from=cpp_clients_build /usr/lib/x86_64-linux-gnu/libmariadb* /usr/lib/x86
 COPY --from=cpp_clients_build /usr/include/mariadb/ /usr/include/mariadb/
 COPY --from=java_clients_build /build/jre/ /opt/jre/
 COPY --from=node_clients_build /usr/local/bin/node /usr/local/bin/node
-COPY --from=php_clients_build /usr/local/lib/php/extensions/ /usr/local/lib/php/extensions/
-COPY --from=php_clients_build /usr/local/etc/php/conf.d/ /usr/local/etc/php/conf.d/
+COPY --from=php_deps /usr/local/lib/php/extensions/ /usr/local/lib/php/extensions/
+COPY --from=php_deps /usr/local/etc/php/conf.d/ /usr/local/etc/php/conf.d/
 COPY --from=ruby_clients_build /usr/local/bin/ruby /usr/local/bin/ruby
 COPY --from=ruby_clients_build /usr/local/lib/ /usr/local/lib/
 COPY --from=ruby_clients_build /usr/local/bundle/ /usr/local/bundle/
+COPY --from=r_deps /build/r/*.tar.gz /tmp/r-packages/
+RUN R CMD INSTALL /tmp/r-packages/*.tar.gz && rm -rf /tmp/r-packages/
 ENV PATH="/opt/jre/bin:/usr/local/bundle/bin:${PATH}"
 ENV GEM_HOME="/usr/local/bundle"
 ENV BUNDLE_APP_CONFIG="/usr/local/bundle"
