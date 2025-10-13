@@ -254,6 +254,7 @@ func NewCoveringIndexRowIterAdapter(ctx *sql.Context, idx DoltIndex, keyIter *no
 		}
 	}
 
+	// TAGS: Use of tags here is safe since it's constrained to a single table
 	for i, col := range cols {
 		_, partOfIndexKey := idxCols.GetByTag(col.Tag)
 		_, partOfTableKeys := tblPKCols.GetByTag(col.Tag)

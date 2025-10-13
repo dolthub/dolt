@@ -1888,23 +1888,6 @@ func (db Database) createDoltTable(ctx *sql.Context, tableName string, schemaNam
 		return sql.ErrTableAlreadyExists.New(tableName)
 	}
 
-	var conflictingTbls []string
-	_ = doltSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		_, oldTableName, exists, err := doltdb.GetTableByColTag(ctx, root, tag)
-		if err != nil {
-			return true, err
-		}
-		if exists && oldTableName.Name != tableName {
-			errStr := schema.NewErrTagPrevUsed(tag, col.Name, tableName, oldTableName.Name).Error()
-			conflictingTbls = append(conflictingTbls, errStr)
-		}
-		return false, nil
-	})
-
-	if len(conflictingTbls) > 0 {
-		return fmt.Errorf("%s", strings.Join(conflictingTbls, "\n"))
-	}
-
 	newRoot, err := doltdb.CreateEmptyTable(ctx, root, doltdb.TableName{Name: tableName, Schema: schemaName}, doltSch)
 	if err != nil {
 		return err

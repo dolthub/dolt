@@ -227,6 +227,7 @@ func GenerateCreateTableIndexDefinition(index schema.Index) (string, bool) {
 
 // GenerateCreateTableForeignKeyDefinition returns foreign key definition for CREATE TABLE statement with indentation of 2 spaces
 func GenerateCreateTableForeignKeyDefinition(fk doltdb.ForeignKey, sch, parentSch schema.Schema) string {
+	// TAGS: Use of tags here is within a single table, so is safe
 	var fkCols []string
 	if fk.IsResolved() {
 		for _, tag := range fk.TableColumns {
