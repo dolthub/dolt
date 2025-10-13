@@ -359,6 +359,7 @@ func schemasOverlap(from, to schema.Schema) bool {
 	fromColSet := set.NewUint64Set(fromCols.Tags)
 	toColSet := set.NewUint64Set(toCols.Tags)
 
+	// TAGS: We use tags here, but only over a single table
 	overlappingTags := fromColSet.Intersection(toColSet)
 	numOverlaps := overlappingTags.Size()
 	for _, tag := range overlappingTags.AsSlice() {

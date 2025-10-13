@@ -720,6 +720,7 @@ func mapColumns(ourCC, theirCC, ancCC *schema.ColCollection) (columnMappings, er
 	theirCC = schema.NewColCollection(theirCC.GetColumns()...)
 	theirTagsToCols := theirCC.TagToCol
 
+	// TAGS: Use of tags here is safe since it's constrained to a single table
 	columnMappings := make(columnMappings, 0)
 	_ = ourCC.Iter(func(tag uint64, ourCol schema.Column) (stop bool, err error) {
 		theirCol, foundTheirByTag := theirCC.GetByTag(ourCol.Tag)
