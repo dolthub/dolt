@@ -15,8 +15,6 @@
 package index
 
 import (
-	"fmt"
-
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -204,7 +202,7 @@ func (it prollyRowIter) Next2(ctx *sql.Context) (sql.Row2, error) {
 		outputIdx := it.ordProj[i]
 		typ, ok := val.EncToType[it.keyDesc.Types[idx].Enc]
 		if !ok {
-			panic(fmt.Sprintf("unmapped encoding type %v", it.keyDesc.Types[idx].Enc))
+			//panic(fmt.Sprintf("unmapped encoding type %v", it.keyDesc.Types[idx].Enc))
 		}
 		field := sql.Value{
 			Val: tree.GetField2(ctx, it.keyDesc, idx, key, it.ns),
@@ -216,7 +214,7 @@ func (it prollyRowIter) Next2(ctx *sql.Context) (sql.Row2, error) {
 		outputIdx := it.ordProj[len(it.keyProj)+i]
 		typ, ok := val.EncToType[it.valDesc.Types[idx].Enc]
 		if !ok {
-			panic(fmt.Sprintf("unmapped encoding type %v", it.valDesc.Types[idx].Enc))
+			//panic(fmt.Sprintf("unmapped encoding type %v", it.valDesc.Types[idx].Enc))
 		}
 		field := sql.Value{
 			Val: tree.GetField2(ctx, it.valDesc, idx, value, it.ns),
@@ -296,7 +294,7 @@ func (it *prollyKeylessIter) Next2(ctx *sql.Context) (sql.Row2, error) {
 			outputIdx := it.ordProj[i]
 			typ, ok := val.EncToType[it.valDesc.Types[idx].Enc]
 			if !ok {
-				panic(fmt.Sprintf("unmapped encoding type %v", it.valDesc.Types[idx].Enc))
+				//panic(fmt.Sprintf("unmapped encoding type %v", it.valDesc.Types[idx].Enc))
 			}
 			field := sql.Value{
 				Val: tree.GetField2(ctx, it.valDesc, idx, value, it.ns),

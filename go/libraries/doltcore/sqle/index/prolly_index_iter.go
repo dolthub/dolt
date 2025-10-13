@@ -16,7 +16,6 @@ package index
 
 import (
 	"context"
-	"fmt"
 	"io"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -142,7 +141,7 @@ func (p prollyIndexIter) Next2(ctx *sql.Context) (sql.Row2, error) {
 			outputIdx := p.ordMap[i]
 			typ, ok := val.EncToType[keyDesc.Types[idx].Enc]
 			if !ok {
-				panic(fmt.Sprintf("unmapped encoding type %v", keyDesc.Types[idx].Enc))
+				//panic(fmt.Sprintf("unmapped encoding type %v", keyDesc.Types[idx].Enc))
 			}
 			field := sql.Value{
 				Val: tree.GetField2(ctx, keyDesc, idx, key, p.primary.NodeStore()),
@@ -154,7 +153,7 @@ func (p prollyIndexIter) Next2(ctx *sql.Context) (sql.Row2, error) {
 			outputIdx := p.ordMap[len(p.keyMap)+i]
 			typ, ok := val.EncToType[valDesc.Types[idx].Enc]
 			if !ok {
-				panic(fmt.Sprintf("unmapped encoding type %v", valDesc.Types[idx].Enc))
+				//panic(fmt.Sprintf("unmapped encoding type %v", valDesc.Types[idx].Enc))
 			}
 			field := sql.Value{
 				Val: tree.GetField2(ctx, valDesc, idx, value, p.primary.NodeStore()),
@@ -306,7 +305,7 @@ func (p prollyCoveringIndexIter) Next2(ctx *sql.Context) (sql.Row2, error) {
 		outputIdx := p.ordMap[i]
 		typ, ok := val.EncToType[p.keyDesc.Types[idx].Enc]
 		if !ok {
-			panic(fmt.Sprintf("unmapped encoding type %v", p.keyDesc.Types[idx].Enc))
+			//panic(fmt.Sprintf("unmapped encoding type %v", p.keyDesc.Types[idx].Enc))
 		}
 		field := sql.Value{
 			Val: tree.GetField2(ctx, p.keyDesc, idx, k, p.ns),
@@ -319,7 +318,7 @@ func (p prollyCoveringIndexIter) Next2(ctx *sql.Context) (sql.Row2, error) {
 		outputIdx := p.ordMap[len(p.keyMap)+i]
 		typ, ok := val.EncToType[p.valDesc.Types[idx].Enc]
 		if !ok {
-			panic(fmt.Sprintf("unmapped encoding type %v", p.valDesc.Types[idx].Enc))
+			//panic(fmt.Sprintf("unmapped encoding type %v", p.valDesc.Types[idx].Enc))
 		}
 		field := sql.Value{
 			Val: tree.GetField2(ctx, p.valDesc, idx, v, p.ns),
@@ -567,7 +566,7 @@ func (p prollyKeylessIndexIter) Next2(ctx *sql.Context) (sql.Row2, error) {
 			outputIdx := p.ordMap[i]
 			typ, ok := val.EncToType[p.valueDesc.Types[idx].Enc]
 			if !ok {
-				panic(fmt.Sprintf("unmapped encoding type %v", p.valueDesc.Types[idx].Enc))
+				//panic(fmt.Sprintf("unmapped encoding type %v", p.valueDesc.Types[idx].Enc))
 			}
 			field := sql.Value{
 				Val: tree.GetField2(ctx, p.valueDesc, idx, value, ns),
