@@ -118,12 +118,12 @@ func TestSingleScript(t *testing.T) {
 		{
 			Name: "Database syntax properly handles inter-CALL communication",
 			SetUpScript: []string{
-				"create table t (i bigint primary key);",
-				"insert into t values (1), (2), (3), (4);",
+				"create table t (i int primary key, j int);",
+				"insert into t values (1, 1), (2, 2), (3, 3), (4, 4), (5, 5);",
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query:    "select * from t where i > 2;",
+					Query:    "select * from t where j > 2;",
 					Expected: []sql.Row{},
 				},
 			},
