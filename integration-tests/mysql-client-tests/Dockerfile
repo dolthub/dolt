@@ -6,8 +6,6 @@ RUN apk add --no-cache build-base
 
 FROM golang_cgo125 AS dolt_build
 COPY dolt/go/go.mod /build/dolt/go/
-COPY go-mysql-server*/ /build/go-mysql-server/
-COPY vitess*/ /build/vitess/
 WORKDIR /build/dolt/go/
 RUN go mod download
 RUN apk add --no-cache icu-dev icu-static
