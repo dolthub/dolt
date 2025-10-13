@@ -116,9 +116,9 @@ RUN docker-php-ext-install mysqli pdo_mysql
 FROM debian:bookworm-slim AS r_deps
 RUN apt-get update && apt-get install -y r-base-core libmariadb-dev && rm -rf /var/lib/apt/lists/*
 WORKDIR /build/r/
-RUN R -e "install.packages('DBI', INSTALL_opts='--build', repos='https://cloud.r-project.org/')"
-RUN R -e "install.packages('RMySQL', INSTALL_opts='--build', repos='https://cloud.r-project.org/')"
-RUN R -e "install.packages('RMariaDB', INSTALL_opts='--build', repos='https://cloud.r-project.org/')"
+RUN R -e "install.packages('DBI', INSTALL_opts='--build', repos='https://cloud.r-project.org/')" && \
+  R -e "install.packages('RMySQL', INSTALL_opts='--build', repos='https://cloud.r-project.org/')" && \
+  R -e "install.packages('RMariaDB', INSTALL_opts='--build', repos='https://cloud.r-project.org/')"
 
 FROM php:8.3-bookworm AS runtime
 RUN apt-get update && apt-get install -y \

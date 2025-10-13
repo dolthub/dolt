@@ -10,13 +10,12 @@ concurrency:
   group: ci-mysql-client-tests-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
-
 jobs:
   mysql_client_integrations_job:
     runs-on: ubuntu-22.04
     timeout-minutes: 45
     steps:
-      - name: Remove unused tools
+      - name: Clean up preinstalled .NET and agent tools
         run: |
           sudo rm -rf /usr/share/dotnet
           sudo rm -rf "$AGENT_TOOLSDIRECTORY"
