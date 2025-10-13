@@ -16,6 +16,7 @@ package index
 
 import (
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/vitess/go/sqltypes"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/prolly"
@@ -204,11 +205,7 @@ func (it prollyRowIter) Next2(ctx *sql.Context) (sql.Row2, error) {
 		if !ok {
 			//panic(fmt.Sprintf("unmapped encoding type %v", it.keyDesc.Types[idx].Enc))
 		}
-		field := sql.Value{
-			Val: tree.GetField2(ctx, it.keyDesc, idx, key, it.ns),
-			Typ: typ,
-		}
-		row[outputIdx] = field
+		row[outputIdx] = sqltypes.MakeTrusted(typ, tree.GetField2(ctx, it.keyDesc, idx, key, it.ns))
 	}
 	for i, idx := range it.valProj {
 		outputIdx := it.ordProj[len(it.keyProj)+i]
@@ -216,11 +213,7 @@ func (it prollyRowIter) Next2(ctx *sql.Context) (sql.Row2, error) {
 		if !ok {
 			//panic(fmt.Sprintf("unmapped encoding type %v", it.valDesc.Types[idx].Enc))
 		}
-		field := sql.Value{
-			Val: tree.GetField2(ctx, it.valDesc, idx, value, it.ns),
-			Typ: typ,
-		}
-		row[outputIdx] = field
+		row[outputIdx] = sqltypes.MakeTrusted(typ, tree.GetField2(ctx, it.valDesc, idx, value, it.ns))
 	}
 	return row, nil
 }
@@ -296,11 +289,7 @@ func (it *prollyKeylessIter) Next2(ctx *sql.Context) (sql.Row2, error) {
 			if !ok {
 				//panic(fmt.Sprintf("unmapped encoding type %v", it.valDesc.Types[idx].Enc))
 			}
-			field := sql.Value{
-				Val: tree.GetField2(ctx, it.valDesc, idx, value, it.ns),
-				Typ: typ,
-			}
-			it.curr2[outputIdx] = field
+			it.curr2[outputIdx] = sqltypes.MakeTrusted(typ, tree.GetField2(ctx, it.valDesc, idx, value, it.ns))
 		}
 	}
 	it.card--

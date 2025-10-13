@@ -16,6 +16,7 @@ package index
 
 import (
 	"context"
+	"github.com/dolthub/vitess/go/sqltypes"
 	"io"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -143,11 +144,7 @@ func (p prollyIndexIter) Next2(ctx *sql.Context) (sql.Row2, error) {
 			if !ok {
 				//panic(fmt.Sprintf("unmapped encoding type %v", keyDesc.Types[idx].Enc))
 			}
-			field := sql.Value{
-				Val: tree.GetField2(ctx, keyDesc, idx, key, p.primary.NodeStore()),
-				Typ: typ,
-			}
-			r[outputIdx] = field
+			r[outputIdx] = sqltypes.MakeTrusted(typ, tree.GetField2(ctx, keyDesc, idx, key, p.primary.NodeStore()))
 		}
 		for i, idx := range p.valMap {
 			outputIdx := p.ordMap[len(p.keyMap)+i]
@@ -155,11 +152,7 @@ func (p prollyIndexIter) Next2(ctx *sql.Context) (sql.Row2, error) {
 			if !ok {
 				//panic(fmt.Sprintf("unmapped encoding type %v", valDesc.Types[idx].Enc))
 			}
-			field := sql.Value{
-				Val: tree.GetField2(ctx, valDesc, idx, value, p.primary.NodeStore()),
-				Typ: typ,
-			}
-			r[outputIdx] = field
+			r[outputIdx] = sqltypes.MakeTrusted(typ, tree.GetField2(ctx, valDesc, idx, value, p.primary.NodeStore()))
 		}
 		return nil
 	})
@@ -307,11 +300,7 @@ func (p prollyCoveringIndexIter) Next2(ctx *sql.Context) (sql.Row2, error) {
 		if !ok {
 			//panic(fmt.Sprintf("unmapped encoding type %v", p.keyDesc.Types[idx].Enc))
 		}
-		field := sql.Value{
-			Val: tree.GetField2(ctx, p.keyDesc, idx, k, p.ns),
-			Typ: typ,
-		}
-		row[outputIdx] = field
+		row[outputIdx] = sqltypes.MakeTrusted(typ, tree.GetField2(ctx, p.keyDesc, idx, k, p.ns))
 	}
 
 	for i, idx := range p.valMap {
@@ -320,11 +309,7 @@ func (p prollyCoveringIndexIter) Next2(ctx *sql.Context) (sql.Row2, error) {
 		if !ok {
 			//panic(fmt.Sprintf("unmapped encoding type %v", p.valDesc.Types[idx].Enc))
 		}
-		field := sql.Value{
-			Val: tree.GetField2(ctx, p.valDesc, idx, v, p.ns),
-			Typ: typ,
-		}
-		row[outputIdx] = field
+		row[outputIdx] = sqltypes.MakeTrusted(typ, tree.GetField2(ctx, p.valDesc, idx, v, p.ns))
 	}
 
 	return row, nil
@@ -568,11 +553,7 @@ func (p prollyKeylessIndexIter) Next2(ctx *sql.Context) (sql.Row2, error) {
 			if !ok {
 				//panic(fmt.Sprintf("unmapped encoding type %v", p.valueDesc.Types[idx].Enc))
 			}
-			field := sql.Value{
-				Val: tree.GetField2(ctx, p.valueDesc, idx, value, ns),
-				Typ: typ,
-			}
-			p.curr[outputIdx] = field
+			p.curr[outputIdx] = sqltypes.MakeTrusted(typ, tree.GetField2(ctx, p.valueDesc, idx, value, ns))
 		}
 	}
 
