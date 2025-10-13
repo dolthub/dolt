@@ -15,19 +15,20 @@
 package sqlserver
 
 import (
-	"context"
-	"net"
-	"strconv"
+    "context"
+    "fmt"
+    "net"
+    "strconv"
 
-	"github.com/sirupsen/logrus"
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
-	"golang.org/x/sync/errgroup"
+    "github.com/sirupsen/logrus"
+    "go.uber.org/zap"
+    "go.uber.org/zap/zapcore"
+    "golang.org/x/sync/errgroup"
 
-	pkgmcp "github.com/dolthub/dolt-mcp/mcp/pkg"
-	mcpdb "github.com/dolthub/dolt-mcp/mcp/pkg/db"
-	"github.com/dolthub/dolt-mcp/mcp/pkg/toolsets"
-	"github.com/dolthub/dolt/go/libraries/utils/svcs"
+    pkgmcp "github.com/dolthub/dolt-mcp/mcp/pkg"
+    mcpdb "github.com/dolthub/dolt-mcp/mcp/pkg/db"
+    "github.com/dolthub/dolt-mcp/mcp/pkg/toolsets"
+    "github.com/dolthub/dolt/go/libraries/utils/svcs"
 )
 
 // MCPConfig encapsulates MCP-specific configuration for the sql-server
@@ -142,6 +143,12 @@ func mcpRun(cfg *Config, lgr *logrus.Logger, state *svcs.ServiceState, cancelPtr
 			Password:     password,
 			DatabaseName: dbName,
 		}
+
+        // Announce MCP startup using a concise config string similar to the main server
+        // HP is the MCP HTTP bind host:port; SQL_HP is the SQL server host:port used by MCP.
+        mcpBindHost := "0.0.0.0"
+        confInfo := fmt.Sprintf("HP=\"%s:%d\"|SQL_HP=\"%s:%d\"|U=\"%s\"|DB=\"%s\"", mcpBindHost, *cfg.MCP.Port, dbConf.Host, dbConf.Port, *cfg.MCP.User, dbName)
+        lgr.Infof("Starting Dolt MCP server with Config %s", confInfo)
 
 		srv, err := pkgmcp.NewMCPHTTPServer(
 			logger,

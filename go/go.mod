@@ -58,7 +58,7 @@ require (
 	github.com/cespare/xxhash/v2 v2.3.0
 	github.com/creasty/defaults v1.6.0
 	github.com/dolthub/aws-sdk-go-ini-parser v0.0.0-20250305001723-2821c37f6c12
-	github.com/dolthub/dolt-mcp v0.2.2-0.20250917171427-13e4520d1c36
+	github.com/dolthub/dolt-mcp v0.2.2
 	github.com/dolthub/eventsapi_schema v0.0.0-20250915094920-eadfd39051ca
 	github.com/dolthub/flatbuffers/v23 v23.3.3-dh.2
 	github.com/dolthub/go-mysql-server v0.20.1-0.20251010202444-31b74b212d80
