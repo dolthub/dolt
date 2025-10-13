@@ -10,15 +10,34 @@ concurrency:
   group: ci-mysql-client-tests-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
+
 jobs:
   mysql_client_integrations_job:
     runs-on: ubuntu-22.04
     timeout-minutes: 45
-    name: Run tests
     steps:
+      - name: Remove unused tools
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+      
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Copy go package
-        run: cp -r ./go ./integration-tests/go
-      - name: Test mysql client integrations
-        uses: ./.github/actions/mysql-client-tests
+        with:
+          path: dolt
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      
+      - name: Build MySQL test image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: dolt/integration-tests/mysql-client-tests/Dockerfile
+          tags: mysql-client-tests:latest
+          load: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Test MySQL client integrations
+        run: docker run --rm mysql-client-tests:latest

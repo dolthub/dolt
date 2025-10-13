@@ -172,7 +172,7 @@ EOF" -m "postgres"
 }
 
 @test "rust mysql client" {
-    /build/bin/rust/rust-mysql-client-test $USER $PORT $REPO_NAME
+    /build/bin/rust/mysql-client-test $USER $PORT $REPO_NAME
 }
 
 @test "php mysqli mysql client" {

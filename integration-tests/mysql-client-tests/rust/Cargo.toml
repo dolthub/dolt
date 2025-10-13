@@ -8,5 +8,5 @@ edition = "2018"
 mysql = "*"
 
 [[bin]]
-name = "rust-mysql-client-test"
+name = "mysql-client-test"
 path = "src/mysql_connector_test.rs"

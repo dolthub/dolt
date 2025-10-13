@@ -3,3 +3,6 @@
 **/docker/
 **/images/
 **/node_modules/
+**/*Dockerfile
+**/transactions/
+**/orm-tests/

@@ -103,15 +103,15 @@ WORKDIR /build/bin/
 RUN npm install --omit=dev
 COPY dolt/integration-tests/mysql-client-tests/node/ /build/bin/
 
-FROM php:8.3-bookworm AS php_deps
-RUN docker-php-ext-install mysqli pdo_mysql
-
 FROM ruby:3.4-bookworm AS ruby_clients_build
 RUN apt-get update && apt-get install -y default-libmysqlclient-dev && rm -rf /var/lib/apt/lists/*
 COPY dolt/integration-tests/mysql-client-tests/ruby/Gemfile /build/ruby/
 WORKDIR /build/ruby/
 RUN bundle install
 COPY dolt/integration-tests/mysql-client-tests/ruby/ /build/bin/
+
+FROM php:8.3-bookworm AS php_deps
+RUN docker-php-ext-install mysqli pdo_mysql
 
 FROM debian:bookworm-slim AS r_deps
 RUN apt-get update && apt-get install -y r-base-core libmariadb-dev && rm -rf /var/lib/apt/lists/*
@@ -132,21 +132,8 @@ RUN apt-get update && apt-get install -y \
   bats \
   && rm -rf /var/lib/apt/lists/*
 
+# Runtime
 COPY --from=dolt_build /build/bin/ /usr/local/bin/
-COPY --from=go_clients_build /build/bin/ /build/bin/go/
-COPY --from=rust_clients_build /build/bin/release/ /build/bin/rust/
-COPY --from=dotnet_clients_build /build/bin/ /build/bin/dotnet/
-COPY --from=c_clients_build /build/bin/ /build/bin/c/
-COPY --from=cpp_clients_build /build/bin/ /build/bin/cpp/
-COPY --from=python_clients_build /build/python/dist/ /build/bin/python/
-COPY --from=elixir_clients_build /build/bin/ /build/bin/elixir/
-COPY --from=java_clients_build /build/java/target/ /build/bin/java/
-COPY --from=node_clients_build /build/bin/ /build/bin/node/
-COPY dolt/integration-tests/mysql-client-tests/php/ /build/bin/php/
-COPY --from=ruby_clients_build /build/bin/ /build/bin/ruby/
-COPY dolt/integration-tests/mysql-client-tests/r/ /build/bin/r/
-COPY dolt/integration-tests/mysql-client-tests/perl/ /build/bin/perl/
-
 COPY --from=cpp_clients_build /usr/lib/x86_64-linux-gnu/libmariadb* /usr/lib/x86_64-linux-gnu/
 COPY --from=cpp_clients_build /usr/include/mariadb/ /usr/include/mariadb/
 COPY --from=java_clients_build /build/jre/ /opt/jre/
@@ -161,6 +148,21 @@ RUN R CMD INSTALL /tmp/r-packages/*.tar.gz && rm -rf /tmp/r-packages/
 ENV PATH="/opt/jre/bin:/usr/local/bundle/bin:${PATH}"
 ENV GEM_HOME="/usr/local/bundle"
 ENV BUNDLE_APP_CONFIG="/usr/local/bundle"
+
+# Binaries
+COPY --from=go_clients_build /build/bin/ /build/bin/go/
+COPY --from=rust_clients_build /build/bin/release/ /build/bin/rust/
+COPY --from=dotnet_clients_build /build/bin/ /build/bin/dotnet/
+COPY --from=c_clients_build /build/bin/ /build/bin/c/
+COPY --from=cpp_clients_build /build/bin/ /build/bin/cpp/
+COPY --from=python_clients_build /build/python/dist/ /build/bin/python/
+COPY --from=elixir_clients_build /build/bin/ /build/bin/elixir/
+COPY --from=java_clients_build /build/java/target/ /build/bin/java/
+COPY --from=node_clients_build /build/bin/ /build/bin/node/
+COPY dolt/integration-tests/mysql-client-tests/php/ /build/bin/php/
+COPY --from=ruby_clients_build /build/bin/ /build/bin/ruby/
+COPY dolt/integration-tests/mysql-client-tests/r/ /build/bin/r/
+COPY dolt/integration-tests/mysql-client-tests/perl/ /build/bin/perl/
 
 COPY dolt/integration-tests/mysql-client-tests/mysql-client-tests.bats /build/bin/
 COPY dolt/integration-tests/mysql-client-tests/helpers.bash /build/bin/
