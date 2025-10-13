@@ -116,6 +116,7 @@ var EncToType = map[Encoding]querypb.Type{
 	Uint64Enc:     querypb.Type_UINT64,
 	Float32Enc:    querypb.Type_FLOAT32,
 	Float64Enc:    querypb.Type_FLOAT64,
+	Bit64Enc:      querypb.Type_BLOB,
 	YearEnc:       querypb.Type_YEAR,
 	DateEnc:       querypb.Type_DATE,
 	TimeEnc:       querypb.Type_TIME,
@@ -126,6 +127,8 @@ var EncToType = map[Encoding]querypb.Type{
 	JSONEnc:       querypb.Type_JSON,
 	StringEnc:     querypb.Type_TEXT,
 	StringAddrEnc: querypb.Type_TEXT,
+	GeometryEnc:   querypb.Type_GEOMETRY,
+	GeomAddrEnc:   querypb.Type_GEOMETRY,
 }
 
 func IsAddrEncoding(enc Encoding) bool {
