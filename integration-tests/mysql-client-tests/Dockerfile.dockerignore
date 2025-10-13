@@ -6,3 +6,10 @@
 **/*Dockerfile
 **/transactions/
 **/orm-tests/
+**/out/
+**/bats/archive-test-repos/
+**/bats/performance-repo/
+**/bats/corrupt_dbs/
+**/integration-tests/data-dump-loading-tests/
+**/.dolt/
+**/.doltcfg/

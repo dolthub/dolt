@@ -86,6 +86,10 @@ teardown() {
     /build/bin/c/mariadb-client-test $USER $PORT $REPO_NAME
 }
 
+@test "c mariadb odbc connector" {
+    /build/bin/c/mariadb-odbc-test $USER $PORT $REPO_NAME
+}
+
 @test "cpp mysql connector" {
     /build/bin/cpp/mysql-connector-test $USER $PORT $REPO_NAME
 }
@@ -173,6 +177,10 @@ EOF" -m "postgres"
 
 @test "rust mysql client" {
     /build/bin/rust/mysql-client-test $USER $PORT $REPO_NAME
+}
+
+@test "swift perfect-mariadb client" {
+    /build/bin/swift/mariadb-swift-test $USER $PORT $REPO_NAME
 }
 
 @test "php mysqli mysql client" {

@@ -15,11 +15,14 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 45
     steps:
-      - name: Clean up preinstalled .NET and agent tools
-        run: |
-          sudo rm -rf /usr/share/dotnet
-          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
-      
+      - name: Maximize build space
+        uses: easimon/maximize-build-space@v10
+        with:
+          remove-dotnet: 'true'
+          remove-codeql: 'true'
+          remove-haskell: 'true'
+
+
       - name: Checkout
         uses: actions/checkout@v4
         with:
@@ -29,14 +32,14 @@ jobs:
         uses: docker/setup-buildx-action@v2
       
       - name: Build MySQL test image
-        uses: docker/build-push-action@v4
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: dolt/integration-tests/mysql-client-tests/Dockerfile
           tags: mysql-client-tests:latest
           load: true
           cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-to: type=gha,mode=min
 
       - name: Test MySQL client integrations
         run: docker run --rm mysql-client-tests:latest
