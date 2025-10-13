@@ -210,6 +210,7 @@ func (ixc *indexCollectionImpl) AddIndexByColTags(indexName string, tags []uint6
 		return nil, fmt.Errorf("tags %v do not exist on this table", tags)
 	}
 
+	// TAGS: Use of tags here is safe since it's constrained to a single table
 	for _, tag := range tags {
 		// we already validated the tag exists
 		c, _ := ixc.colColl.GetByTag(tag)

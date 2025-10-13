@@ -1553,6 +1553,104 @@ var DoltScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		// Assert that tables can have the same tag values without causing any problems.
+		Name: "Overlapping column tags – errors",
+		SetUpScript: []string{
+			"CREATE TABLE t2(pk int primary key, c1 int, c2 float);",
+			"INSERT INTO t2 VALUES (1, -1, 1.11), (2, -2, 2.22);",
+			"CALL dolt_update_column_tag('t2', 'pk', 1);",
+			"CALL dolt_update_column_tag('t2', 'c1', 2);",
+			"CALL dolt_update_column_tag('t2', 'c2', 3);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				// re-using the same column tag in a table is not allowed
+				Query:          "CALL dolt_update_column_tag('t2', 'c2', 2);",
+				ExpectedErrStr: "failed to update table schema: two different columns with the same tag",
+			},
+		},
+	},
+	{
+		// Assert that tables can have the same tag values without causing any problems.
+		Name: "Overlapping column tags – join",
+		SetUpScript: []string{
+			"CREATE TABLE t1(pk int primary key, c1 varchar(100), c2 int);",
+			"CREATE TABLE t2(pk int primary key, c1 int, c2 float);",
+			"INSERT INTO t1 VALUES (1, 'one', 1), (2, 'two', 2);",
+			"INSERT INTO t2 VALUES (1, -1, 1.11), (2, -2, 2.22);",
+
+			// reset column tags so that each table has the same tags
+			"CALL dolt_update_column_tag('t1', 'pk', 1);",
+			"CALL dolt_update_column_tag('t1', 'c1', 2);",
+			"CALL dolt_update_column_tag('t1', 'c2', 3);",
+			"CALL dolt_update_column_tag('t2', 'pk', 1);",
+			"CALL dolt_update_column_tag('t2', 'c1', 2);",
+			"CALL dolt_update_column_tag('t2', 'c2', 3);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				// Assert that we can pull out each column correctly, without confusing columns
+				Query: "SELECT t1.pk, t2.pk, t1.c1, t2.c1, t1.c2, t2.c2 from t1 join t2 on t1.pk = t2.pk;",
+				Expected: []sql.Row{
+					{1, 1, "one", -1, 1, 1.11},
+					{2, 2, "two", -2, 2, 2.22},
+				},
+			},
+			{
+				Query: "SELECT dt1.pk, dt2.pk, dt1.c1, dt2.c1, dt1.c2, dt2.c2 from (SELECT * FROM t1) dt1 join (SELECT * FROM t2) dt2 on dt1.pk = dt2.pk;",
+				Expected: []sql.Row{
+					{1, 1, "one", -1, 1, 1.11},
+					{2, 2, "two", -2, 2, 2.22},
+				},
+			},
+		},
+	},
+	{
+		// Assert that tables can have the same tag values without causing any problems.
+		Name: "Overlapping column tags – merge",
+		SetUpScript: []string{
+			"CREATE TABLE t1(pk int primary key, c1 varchar(100), c2 int);",
+			"CREATE TABLE t2(pk int primary key, c1 int, c2 float);",
+			"INSERT INTO t1 VALUES (1, 'one', 1), (2, 'two', 2);",
+			"INSERT INTO t2 VALUES (1, -1, 1.11), (2, -2, 2.22);",
+
+			// reset column tags so that each table has the same tags
+			"CALL dolt_update_column_tag('t1', 'pk', 1);",
+			"CALL dolt_update_column_tag('t1', 'c1', 2);",
+			"CALL dolt_update_column_tag('t1', 'c2', 3);",
+			"CALL dolt_update_column_tag('t2', 'pk', 1);",
+			"CALL dolt_update_column_tag('t2', 'c1', 2);",
+			"CALL dolt_update_column_tag('t2', 'c2', 3);",
+
+			"CALL dolt_commit('-Am', 'initial tables');",
+			"CALL dolt_branch('b1');",
+			"CALL dolt_commit('--allow-empty', '-m', 'empty commit');",
+
+			// Check out branch b1, make a change
+			"CALL dolt_checkout('b1');",
+			"UPDATE t1 SET c1 = 'UNO' where pk=1;",
+			"CALL dolt_commit('-Am', 'changes on b1');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL dolt_checkout('main');",
+				Expected: []sql.Row{{0, "Switched to branch 'main'"}},
+			},
+			{
+				Query:    "CALL dolt_merge('b1');",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				// Assert that we can pull out each column correctly, without confusing columns
+				Query: "SELECT t1.pk, t2.pk, t1.c1, t2.c1, t1.c2, t2.c2 from t1 join t2 on t1.pk = t2.pk;",
+				Expected: []sql.Row{
+					{1, 1, "UNO", -1, 1, 1.11},
+					{2, 2, "two", -2, 2, 2.22},
+				},
+			},
+		},
+	},
 }
 
 func makeLargeInsert(sz int) string {
