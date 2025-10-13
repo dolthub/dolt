@@ -43,9 +43,10 @@ type GenericTableWriter interface {
 	// AddChunk adds a chunk to the table file. The underlying implementation of ToChunker will probably be exploited
 	// by implementors of GenericTableWriter so that their bytes can be efficiently written to the table file.
 	//
-	// The number of bytes written to storage is returned. This could be 0 even on success if the writer decides
-	// to defer writing the chunks. In the event that AddChunk triggers a flush, the number of bytes written to storage
-	// will be returned.
+	// The approximate number of bytes to write to storage is returned. This may be slightly larger than the actual number of
+	// bytes written due to deferring of compression in the case of writing snappy compressed chunks to an archive writer.
+	// This value should only be used for getting an estimate of the number of bytes to write to storage, not for the
+	// precise number of bytes written. Definitely don't use this value for offsets or anything like that.
 	//
 	// If no error occurs, the number of bytes written to the store is returned.
 	AddChunk(ToChunker) (uint32, error)
