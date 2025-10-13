@@ -27,7 +27,12 @@ COPY dolt/integration-tests/mysql-client-tests/rust/ /build/rust/
 WORKDIR /build/rust/
 RUN cargo build --release --target-dir /build/bin/ # exe is in release/
 
-FROM mcr.microsoft.com/dotnet/sdk:9.0-bookworm-slim AS dotnet_clients_build
+FROM debian:bookworm-slim AS dotnet_clients_build
+RUN apt-get update && apt-get install -y wget gnupg ca-certificates && rm -rf /var/lib/apt/lists/*
+RUN wget https://packages.microsoft.com/config/debian/12/packages-microsoft-prod.deb -O packages-microsoft-prod.deb \
+    && dpkg -i packages-microsoft-prod.deb \
+    && rm packages-microsoft-prod.deb
+RUN apt-get update && apt-get install -y dotnet-sdk-9.0 && rm -rf /var/lib/apt/lists/*
 COPY dolt/integration-tests/mysql-client-tests/dotnet/MySqlClient/*.csproj /build/dotnet/MySqlClient/
 WORKDIR /build/dotnet/MySqlClient/
 RUN dotnet restore
@@ -41,9 +46,9 @@ COPY dolt/integration-tests/mysql-client-tests/dotnet/MySqlConnector/ /build/dot
 RUN dotnet publish -c Release -o /build/bin --no-restore
 # devart dotconnect reqs a license so we've skipped it here
 
-FROM gcc:12.5-bookworm AS c_clients_build
+FROM debian:bookworm-slim AS c_clients_build
 # default-libmysqlclient-dev uses libmariadb under the hood but here we test both header interfaces
-RUN apt-get update && apt-get install -y default-libmysqlclient-dev libmariadb-dev unixodbc-dev odbcinst wget && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y default-libmysqlclient-dev libmariadb-dev unixodbc-dev odbcinst wget gcc make && rm -rf /var/lib/apt/lists/*
 RUN wget --progress=dot:giga https://dlm.mariadb.com/4465891/Connectors/odbc/connector-odbc-3.2.7/mariadb-connector-odbc_3.2.7-1+maria~bookworm_amd64.deb \
     && dpkg -i mariadb-connector-odbc_3.2.7-1+maria~bookworm_amd64.deb || apt-get install -y -f \
     && rm mariadb-connector-odbc_3.2.7-1+maria~bookworm_amd64.deb \
@@ -56,8 +61,8 @@ COPY dolt/integration-tests/mysql-client-tests/c/ /build/c/
 WORKDIR /build/c/
 RUN make
 
-FROM gcc:12.5-bookworm AS cpp_clients_build
-RUN apt-get update && apt-get install -y libmysqlcppconn-dev wget && rm -rf /var/lib/apt/lists/*
+FROM debian:bookworm-slim AS cpp_clients_build
+RUN apt-get update && apt-get install -y libmysqlcppconn-dev wget g++ make && rm -rf /var/lib/apt/lists/*
 RUN wget --progress=dot:giga https://dlm.mariadb.com/4464866/Connectors/cpp/connector-cpp-1.1.7/mariadb-connector-cpp_1.1.7-1+maria~bookworm_amd64.deb \
   && dpkg -i mariadb-connector-cpp_1.1.7-1+maria~bookworm_amd64.deb || apt-get install -y -f \
   && rm mariadb-connector-cpp_1.1.7-1+maria~bookworm_amd64.deb
@@ -94,7 +99,7 @@ RUN mkdir -p /build/bin && \
     cp /build/elixir/myxql/burrito_out/simple_linux /build/bin/myxql-driver-test && \
     cp /build/elixir/mysql/burrito_out/mysql_otp_linux /build/bin/mysql-otp-test
 
-FROM maven:3.9.11-amazoncorretto-21-debian-bookworm AS java_clients_build
+FROM maven:3.8-openjdk-17-slim AS java_clients_build
 RUN apt-get update && apt-get install -y binutils && rm -rf /var/lib/apt/lists/*
 COPY dolt/integration-tests/mysql-client-tests/java/ /build/java/
 WORKDIR /build/java/
@@ -112,15 +117,12 @@ WORKDIR /build/bin/
 RUN npm install --omit=dev
 COPY dolt/integration-tests/mysql-client-tests/node/ /build/bin/
 
-FROM ruby:3.4-bookworm AS ruby_clients_build
-RUN apt-get update && apt-get install -y default-libmysqlclient-dev && rm -rf /var/lib/apt/lists/*
+FROM debian:bookworm-slim AS ruby_clients_build
+RUN apt-get update && apt-get install -y default-libmysqlclient-dev ruby3.1-dev bundler && rm -rf /var/lib/apt/lists/*
 COPY dolt/integration-tests/mysql-client-tests/ruby/Gemfile /build/ruby/
 WORKDIR /build/ruby/
 RUN bundle install
 COPY dolt/integration-tests/mysql-client-tests/ruby/ /build/bin/
-
-FROM php:8.3-bookworm AS php_deps
-RUN docker-php-ext-install mysqli pdo_mysql
 
 FROM swift:5.10-bookworm AS swift_clients_build
 RUN apt-get update && apt-get install -y libmariadb-dev pkg-config libstdc++-12-dev && rm -rf /var/lib/apt/lists/*
@@ -128,13 +130,6 @@ COPY dolt/integration-tests/mysql-client-tests/swift/ /build/swift/
 WORKDIR /build/swift/
 RUN swift build -c release --static-swift-stdlib
 RUN mkdir -p /build/bin && cp .build/release/MariaDBTest /build/bin/mariadb-swift-test
-
-FROM debian:bookworm-slim AS r_deps
-RUN apt-get update && apt-get install -y r-base-core libmariadb-dev && rm -rf /var/lib/apt/lists/*
-WORKDIR /build/r/
-RUN R -e "install.packages('DBI', INSTALL_opts='--build', repos='https://cloud.r-project.org/')" && \
-  R -e "install.packages('RMySQL', INSTALL_opts='--build', repos='https://cloud.r-project.org/')" && \
-  R -e "install.packages('RMariaDB', INSTALL_opts='--build', repos='https://cloud.r-project.org/')"
 
 FROM php:8.3-bookworm AS runtime
 RUN apt-get update && apt-get install -y \
@@ -160,8 +155,10 @@ COPY --from=ruby_clients_build /usr/local/bin/ruby /usr/local/bin/
 COPY --from=ruby_clients_build /usr/local/lib/ /usr/local/lib/
 COPY --from=ruby_clients_build /usr/local/bundle/ /usr/local/bundle/
 
-COPY --from=r_deps /build/r/*.tar.gz /tmp/r-packages/
-RUN R CMD INSTALL /tmp/r-packages/*.tar.gz && rm -rf /tmp/r-packages/
+RUN docker-php-ext-install mysqli pdo_mysql && \
+    R -e "install.packages('DBI', repos='https://cloud.r-project.org/')" && \
+    R -e "install.packages('RMySQL', repos='https://cloud.r-project.org/')" && \
+    R -e "install.packages('RMariaDB', repos='https://cloud.r-project.org/')"
 
 ENV PATH="/opt/jre/bin:${PATH}" GEM_HOME="/usr/local/bundle"
 RUN ldconfig

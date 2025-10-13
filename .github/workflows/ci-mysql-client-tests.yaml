@@ -22,7 +22,6 @@ jobs:
           remove-codeql: 'true'
           remove-haskell: 'true'
 
-
       - name: Checkout
         uses: actions/checkout@v4
         with:
