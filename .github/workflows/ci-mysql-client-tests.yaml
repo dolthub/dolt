@@ -20,7 +20,7 @@ jobs:
         with:
           path: dolt
 
-      - name: Free Disk Space
+      - name: Free disk space
         run: |
           NAME="DISK-CLEANUP"
           echo "[${NAME}] Starting background cleanup..."
