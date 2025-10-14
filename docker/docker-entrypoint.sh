@@ -369,15 +369,6 @@ _main() {
     set -- "$@" --config="$CONFIG_PROVIDED"
   fi
 
-  if [[ ! -f $INIT_COMPLETED ]]; then
-    if ls /docker-entrypoint-initdb.d/* >/dev/null 2>&1; then
-      docker_process_init_files /docker-entrypoint-initdb.d/*
-    else
-      mysql_warn "No files found in /docker-entrypoint-initdb.d/ to process"
-    fi
-    touch "$INIT_COMPLETED"
-  fi
-
   create_database_from_env
 
   mysql_note "Starting Dolt server in the background..."
@@ -401,11 +392,21 @@ _main() {
     exec_mysql "CREATE USER IF NOT EXISTS 'root'@'${DOLT_ROOT_HOST}' IDENTIFIED BY '${DOLT_ROOT_PASSWORD}';" "Could not create root user: " # override password
     exec_mysql "GRANT ALL PRIVILEGES ON *.* TO 'root'@'${DOLT_ROOT_HOST}' WITH GRANT OPTION;" "Could not set root privileges: "
   fi
+
   mysql_note "'root@${DOLT_ROOT_HOST}' user successfully configured!"
 
   create_user_from_env
 
   exec_mysql "SELECT User, Host FROM mysql.user;" "Could not list users: " 1
+
+  if [[ ! -f $INIT_COMPLETED ]]; then
+    if ls /docker-entrypoint-initdb.d/* >/dev/null 2>&1; then
+      docker_process_init_files /docker-entrypoint-initdb.d/*
+    else
+      mysql_warn "No files found in /docker-entrypoint-initdb.d/ to process"
+    fi
+    touch "$INIT_COMPLETED"
+  fi
 
   mysql_note "Server initialization complete!"
 

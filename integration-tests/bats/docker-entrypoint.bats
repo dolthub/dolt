@@ -29,7 +29,7 @@ setup() {
 
 teardown() {
   docker ps -a --filter "name=$TEST_PREFIX" --format '{{.Names}}' | xargs -r docker stop >/dev/null 2>&1 || true
-  #  docker ps -a --filter "name=$TEST_PREFIX" --format '{{.Names}}' | xargs -r docker rm -f >/dev/null 2>&1 || true
+  docker ps -a --filter "name=$TEST_PREFIX" --format '{{.Names}}' | xargs -r docker rm -f >/dev/null 2>&1 || true
   teardown_common
 }
 
@@ -544,7 +544,7 @@ INSERT INTO init_test VALUES (3, 'Compressed SQL executed');
 EOF
   gzip "$temp_dir/03-data.sql"
 
-  run_container_with_port "$cname" 3306 -e DOLT_ROOT_PASSWORD=rootpass -e DOLT_ROOT_HOST=% -e DOLT_TIMEOUT=3 -v "$temp_dir:/docker-entrypoint-initdb.d"
+  run_container_with_port "$cname" 3306 -e DOLT_ROOT_PASSWORD=rootpass -e DOLT_ROOT_HOST=% -v "$temp_dir:/docker-entrypoint-initdb.d"
 
   run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u root --password=rootpass -e "SHOW DATABASES;"
   [ $status -eq 0 ]
@@ -562,10 +562,10 @@ EOF
 # bats test_tags=no_lambda
 @test "docker-entrypoint: plain .sql file processing" {
   cname="${TEST_PREFIX}plain-sql"
-  
+
   local temp_dir="/tmp/plain-sql-test-$$"
   mkdir -p "$temp_dir"
-  
+
   cat > "$temp_dir/01-init.sql" << 'EOF'
 CREATE DATABASE IF NOT EXISTS plain_sql_db;
 USE plain_sql_db;
@@ -576,21 +576,21 @@ CREATE USER IF NOT EXISTS 'plainsqluser'@'%' IDENTIFIED BY 'plainsqlpass';
 GRANT ALL ON `plain_sql_db`.* TO 'plainsqluser'@'%';
 GRANT USAGE ON *.* TO 'plainsqluser'@'%';
 EOF
-  
+
   run_container_with_port "$cname" 3306 -e DOLT_ROOT_PASSWORD=rootpass -e DOLT_ROOT_HOST=% -v "$temp_dir:/docker-entrypoint-initdb.d"
-  
+
   run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u root --password=rootpass -e "SHOW DATABASES;"
   [ $status -eq 0 ]
   [[ "$output" =~ "plain_sql_db" ]] || false
-  
+
   run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u root --password=rootpass -e "USE plain_sql_db; SELECT COUNT(*) as count FROM users_table;"
   [ $status -eq 0 ]
   [[ "$output" =~ "2" ]] || false
-  
+
   run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u plainsqluser --password=plainsqlpass -e "USE plain_sql_db; SELECT * FROM users_table WHERE username='alice';"
   [ $status -eq 0 ]
   [[ "$output" =~ "alice@example.com" ]] || false
-  
+
   rm -rf "$temp_dir"
 }
 
@@ -601,10 +601,10 @@ EOF
   fi
 
   cname="${TEST_PREFIX}gzip-sql"
-  
+
   local temp_dir="/tmp/gzip-sql-test-$$"
   mkdir -p "$temp_dir"
-  
+
   cat > "$temp_dir/01-init.sql" << 'EOF'
 CREATE DATABASE IF NOT EXISTS gzip_sql_db;
 USE gzip_sql_db;
@@ -617,22 +617,22 @@ GRANT ALL ON `gzip_sql_db`.* TO 'gzipuser'@'%';
 GRANT USAGE ON *.* TO 'gzipuser'@'%';
 EOF
   gzip "$temp_dir/01-init.sql"
-  
+
   run_container_with_port "$cname" 3306 -e DOLT_ROOT_PASSWORD=rootpass -e DOLT_ROOT_HOST=% -v "$temp_dir:/docker-entrypoint-initdb.d"
-  
+
   run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u root --password=rootpass -e "SHOW DATABASES;"
   [ $status -eq 0 ]
   [[ "$output" =~ "gzip_sql_db" ]] || false
-  
+
   run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u root --password=rootpass -e "USE gzip_sql_db; SELECT COUNT(*) as count FROM products;"
   [ $status -eq 0 ]
   [[ "$output" =~ "3" ]] || false
-  
+
   run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u gzipuser --password=gzippass -e "USE gzip_sql_db; SELECT name FROM products WHERE price > 25.00;"
   [ $status -eq 0 ]
   [[ "$output" =~ "Gadget" ]] || false
   [[ "$output" =~ "Doohickey" ]] || false
-  
+
   rm -rf "$temp_dir"
 }
 
@@ -641,12 +641,12 @@ EOF
   if ! command -v bzip2 >/dev/null 2>&1; then
     skip "bzip2 not installed on host system"
   fi
-  
+
   cname="${TEST_PREFIX}bzip2-sql"
-  
+
   local temp_dir="/tmp/bzip2-sql-test-$$"
   mkdir -p "$temp_dir"
-  
+
   cat > "$temp_dir/01-init.sql" << 'EOF'
 CREATE DATABASE IF NOT EXISTS bzip2_sql_db;
 USE bzip2_sql_db;
@@ -659,13 +659,9 @@ GRANT ALL ON `bzip2_sql_db`.* TO 'bzip2user'@'%';
 GRANT USAGE ON *.* TO 'bzip2user'@'%';
 EOF
   bzip2 "$temp_dir/01-init.sql"
-  
+
   run_container_with_port "$cname" 3306 -e DOLT_ROOT_PASSWORD=rootpass -e DOLT_ROOT_HOST=% -v "$temp_dir:/docker-entrypoint-initdb.d"
-  
-  echo "=== Container logs for $cname ==="
-  docker logs "$cname" 2>&1 || true
-  echo "=== End of container logs ==="
-  
+
   run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u root --password=rootpass -e "SHOW DATABASES;"
   if [ $status -ne 0 ]; then
     echo "Failed to show databases. Output: $output"
@@ -673,7 +669,7 @@ EOF
     return 1
   fi
   [[ "$output" =~ "bzip2_sql_db" ]] || { echo "Database bzip2_sql_db not found in: $output"; docker logs "$cname" 2>&1; false; }
-  
+
   run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u root --password=rootpass -e "USE bzip2_sql_db; SELECT SUM(total) as total FROM orders;"
   if [ $status -ne 0 ]; then
     echo "Failed to query orders table. Output: $output"
@@ -681,14 +677,14 @@ EOF
     return 1
   fi
   [[ "$output" =~ "475.75" ]] || { echo "Expected sum 475.75 not found in: $output"; false; }
-  
+
   run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u bzip2user --password=bzip2pass -e "USE bzip2_sql_db; INSERT INTO orders VALUES (4, 'Alice Brown', 99.99, 'shipped');"
   if [ $status -ne 0 ]; then
     echo "Failed to insert as bzip2user. Output: $output"
     docker logs "$cname" 2>&1
     return 1
   fi
-  
+
   run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u bzip2user --password=bzip2pass -e "USE bzip2_sql_db; SELECT customer FROM orders WHERE status='completed';"
   if [ $status -ne 0 ]; then
     echo "Failed to select as bzip2user. Output: $output"
@@ -697,17 +693,17 @@ EOF
   fi
   [[ "$output" =~ "John Doe" ]] || { echo "Expected 'John Doe' not found in: $output"; false; }
   [[ "$output" =~ "Bob Johnson" ]] || { echo "Expected 'Bob Johnson' not found in: $output"; false; }
-  
+
   rm -rf "$temp_dir"
 }
 
 # bats test_tags=no_lambda
 @test "docker-entrypoint: .sql.xz xz compressed file processing" {
   cname="${TEST_PREFIX}xz-sql"
-  
+
   local temp_dir="/tmp/xz-sql-test-$$"
   mkdir -p "$temp_dir"
-  
+
   cat > "$temp_dir/01-init.sql" << 'EOF'
 CREATE DATABASE IF NOT EXISTS xz_sql_db;
 USE xz_sql_db;
@@ -721,25 +717,25 @@ GRANT ALL ON `xz_sql_db`.* TO 'xzuser'@'%';
 GRANT USAGE ON *.* TO 'xzuser'@'%';
 EOF
   xz "$temp_dir/01-init.sql"
-  
+
   run_container_with_port "$cname" 3306 -e DOLT_ROOT_PASSWORD=rootpass -e DOLT_ROOT_HOST=% -v "$temp_dir:/docker-entrypoint-initdb.d"
-  
+
   run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u root --password=rootpass -e "SHOW DATABASES;"
   [ $status -eq 0 ]
   [[ "$output" =~ "xz_sql_db" ]] || false
-  
+
   run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u root --password=rootpass -e "USE xz_sql_db; SELECT COUNT(*) as count FROM inventory;"
   [ $status -eq 0 ]
   [[ "$output" =~ "4" ]] || false
-  
+
   run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u xzuser --password=xzpass -e "USE xz_sql_db; UPDATE inventory SET quantity = 60 WHERE item_name='Laptop';"
   [ $status -eq 0 ]
-  
+
   run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u xzuser --password=xzpass -e "USE xz_sql_db; SELECT item_name, location FROM inventory WHERE location='Warehouse A';"
   [ $status -eq 0 ]
   [[ "$output" =~ "Laptop" ]] || false
   [[ "$output" =~ "Keyboard" ]] || false
-  
+
   rm -rf "$temp_dir"
 }
 
@@ -775,19 +771,19 @@ EOF
   run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u root --password=rootpass -e "SHOW DATABASES;"
   [ $status -eq 0 ]
   [[ "$output" =~ "zstd_sql_db" ]] || false
-  
+
   run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u root --password=rootpass -e "USE zstd_sql_db; SELECT COUNT(*) as count FROM employees;"
   [ $status -eq 0 ]
   [[ "$output" =~ "5" ]] || false
-  
+
   run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u zstduser --password=zstdpass -e "USE zstd_sql_db; SELECT name FROM employees WHERE department='Engineering' AND salary > 90000;"
   [ $status -eq 0 ]
   [[ "$output" =~ "Alice Johnson" ]] || false
-  
+
   run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u zstduser --password=zstdpass -e "USE zstd_sql_db; SELECT department, COUNT(*) as count FROM employees GROUP BY department ORDER BY count DESC;"
   [ $status -eq 0 ]
   [[ "$output" =~ "Engineering" ]] || false
-  
+
   rm -rf "$temp_dir"
 }
 
@@ -809,7 +805,7 @@ EOF
     echo "INSERT INTO bulk_data VALUES" >> "$temp_dir/01-large-part1.sql"
     start=$(( (batch - 1) * 200 + 1 ))
     end=$(( batch * 200 ))
-    
+
     for i in $(seq $start $end); do
       if [ $i -eq $end ]; then
         echo "  ($i, 'value_$i', 'This is metadata for row $i with some additional text to make it larger');" >> "$temp_dir/01-large-part1.sql"
@@ -828,7 +824,7 @@ EOF
     echo "INSERT INTO bulk_data VALUES" >> "$temp_dir/02-large-part2.sql"
     start=$(( 400 + (batch - 1) * 200 + 1 ))
     end=$(( 400 + batch * 200 ))
-    
+
     for i in $(seq $start $end); do
       if [ $i -eq $end ]; then
         echo "  ($i, 'value_$i', 'This is metadata for row $i with some additional text to make it larger');" >> "$temp_dir/02-large-part2.sql"
@@ -847,7 +843,7 @@ EOF
     echo "INSERT INTO bulk_data VALUES" >> "$temp_dir/03-large-part3.sql"
     start=$(( 800 + (batch - 1) * 200 + 1 ))
     end=$(( 800 + batch * 200 ))
-    
+
     for i in $(seq $start $end); do
       if [ $i -eq $end ]; then
         echo "  ($i, 'value_$i', 'This is metadata for row $i with some additional text to make it larger');" >> "$temp_dir/03-large-part3.sql"
@@ -863,7 +859,7 @@ EOF
   [ $status -eq 0 ]
   [[ "$output" =~ ^"$cname"$ ]] || false
 
-  wait_for_server_ready "$cname"
+  wait_for_log "$cname" "Server initialization complete!" 45;
 
   run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u root --password=rootpass -e "SHOW DATABASES;"
   [ $status -eq 0 ]
@@ -888,6 +884,39 @@ EOF
   run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u root --password=rootpass -e "USE large_test; SELECT * FROM bulk_data WHERE id = 1200;"
   [ $status -eq 0 ]
   [[ "$output" =~ "value_1200" ]] || { echo "Row 1200 (from file 3) not found: $output"; false; }
+
+  rm -rf "$temp_dir"
+}
+
+# bats test_tags=no_lambda
+@test "docker-entrypoint: GRANT privileges in init script does not require CREATE USER" {
+  # Customer error: "error on line 5 for query GRANT ALL PRIVILEGES ON *.* TO 'nautobot'@'%':
+  #                  You are not allowed to create a user with GRANT"
+
+  cname="${TEST_PREFIX}grant-init"
+
+  local temp_dir="/tmp/grant-init-test-$$"
+  mkdir -p "$temp_dir"
+
+  cat > "$temp_dir/01-correct-grants.sql" << 'EOF'
+CREATE DATABASE IF NOT EXISTS nautobot_db;
+GRANT ALL PRIVILEGES ON *.* TO 'nautobot'@'%';
+FLUSH PRIVILEGES;
+EOF
+
+  run_container_with_port "$cname" 3306 -e DOLT_ROOT_PASSWORD=rootpass -e DOLT_ROOT_HOST=% -e DOLT_USER=nautobot -e DOLT_PASSWORD=nautobotpass -v "$temp_dir:/docker-entrypoint-initdb.d"
+
+  run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u root --password=rootpass -e "SELECT User, Host FROM mysql.user WHERE User='nautobot';"
+  [ $status -eq 0 ]
+  [[ "$output" =~ "nautobot" ]] || false
+  [[ "$output" =~ "%" ]] || false
+
+  run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u nautobot --password=nautobotpass -e "SHOW DATABASES;"
+  [ $status -eq 0 ]
+  [[ "$output" =~ "nautobot_db" ]] || false
+
+  run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u nautobot --password=nautobotpass -e "CREATE DATABASE nautobot_test; USE nautobot_test; CREATE TABLE test (id INT);"
+  [ $status -eq 0 ]
 
   rm -rf "$temp_dir"
 }

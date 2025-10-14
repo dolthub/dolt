@@ -112,7 +112,7 @@ $ docker build -f dolt/docker/serverDockerfile --build-arg DOLT_VERSION=source -
 # Note: This should contain dolt/ at the minimum, any other repos need to be
 # added via COPY in serverDockerfile.
 
-$ docker run -e DOLT_ROOT_PASSWORD=secret2 -e DOLT_ROOT_HOST=% -p 3307:3306 dolt-sql-server:source
+$ docker run -p 3307:3306 -e DOLT_ROOT_PASSWORD=secret2 -e DOLT_ROOT_HOST=% dolt-sql-server:source
 ```
 
 ### Connect to the server in the container from the host system
