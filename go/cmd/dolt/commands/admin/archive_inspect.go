@@ -101,7 +101,7 @@ func (cmd ArchiveInspectCmd) Exec(ctx context.Context, commandStr string, args [
 	}
 
 	enableMmap := apr.Contains("mmap")
-	inspector, err := nbs.NewArchiveInspectorFromFileWithMmap(ctx, absPath, enableMmap)
+	inspector, err := nbs.NewArchiveInspectorFromFileWithMmap(ctx, absPath, nbs.NewUnlimitedMemQuotaProvider(), enableMmap)
 	if err != nil {
 		cli.PrintErrln("Error opening archive file:", err.Error())
 		return 1
