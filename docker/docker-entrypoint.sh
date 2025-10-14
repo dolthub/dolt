@@ -191,8 +191,7 @@ docker_process_init_files() {
       ;;
     *.sql)
       mysql_note "$0: running $f"
-      sql=$(cat "$f")
-      exec_mysql "$sql" "Failed to execute $f: "
+      dolt sql < "$f"
       ;;
     *.sql.bz2)
       mysql_note "$0: running $f"
