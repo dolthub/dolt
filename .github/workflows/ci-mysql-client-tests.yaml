@@ -15,22 +15,32 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 45
     steps:
-      - name: Free Disk Space
-        uses: jlumbroso/free-disk-space@main
-        with:
-          android: true
-          dotnet: true
-          haskell: true
-          large-packages: true
-
       - name: Checkout
         uses: actions/checkout@v4
         with:
           path: dolt
-      
+
+      - name: Free Disk Space
+        run: |
+          NAME="DISK-CLEANUP"
+          echo "[${NAME}] Starting background cleanup..."
+          [ -d "$AGENT_TOOLSDIRECTORY" ] && sudo rm -rf "$AGENT_TOOLSDIRECTORY" &
+          [ -d /usr/share/dotnet ] && sudo rm -rf /usr/share/dotnet &
+          [ -d /usr/local/lib/android ] && sudo rm -rf /usr/local/lib/android &
+          [ -d /opt/ghc ] && sudo rm -rf /opt/ghc &
+          [ -d /usr/local/share/boost ] && sudo rm -rf /usr/local/share/boost &
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
-      
+
+      - name: Cache Docker layers
+        uses: actions/cache@v3
+        with:
+          path: /mnt/.buildx-cache
+          key: ${{ runner.os }}-docker-${{ github.ref }}
+          restore-keys: |
+            ${{ runner.os }}-docker-
+
       - name: Build MySQL test image
         uses: docker/build-push-action@v6
         with:
@@ -38,7 +48,7 @@ jobs:
           file: dolt/integration-tests/mysql-client-tests/Dockerfile
           tags: mysql-client-tests:latest
           load: true
-          no-cache: true
-
+          cache-from: type=local,src=/mnt/.buildx-cache
+          cache-to: type=local,dest=/mnt/.buildx-cache
       - name: Test MySQL client integrations
         run: docker run --rm mysql-client-tests:latest
