@@ -42,6 +42,7 @@ import (
 	"github.com/oracle/oci-go-sdk/v65/objectstorage"
 
 	"github.com/dolthub/dolt/go/libraries/utils/awsrefreshcreds"
+	"github.com/dolthub/dolt/go/libraries/utils/earl"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/d"
@@ -330,7 +331,9 @@ func (sp Spec) NewChunkStore(ctx context.Context) chunks.ChunkStore {
 func parseAWSSpec(ctx context.Context, awsURL string, options SpecOptions) chunks.ChunkStore {
 	fmt.Println(awsURL, options)
 
-	u, _ := url.Parse(awsURL)
+	// earl has special handling for aws:// urls.
+	u, err := earl.Parse(awsURL)
+	d.PanicIfError(err)
 	parts := strings.SplitN(u.Hostname(), ":", 2) // [table] [, bucket]?
 	d.PanicIfFalse(len(parts) == 2)
 
