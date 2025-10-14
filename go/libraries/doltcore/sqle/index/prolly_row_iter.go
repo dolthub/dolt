@@ -193,27 +193,30 @@ func (it prollyRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 }
 
 func (it prollyRowIter) Next2(ctx *sql.Context) (sql.Row2, error) {
-	//panic("blah")
 	key, value, err := it.iter.Next(ctx)
 	if err != nil {
 		return nil, err
 	}
+
 	row := make(sql.Row2, it.rowLen)
 	for i, idx := range it.keyProj {
 		outputIdx := it.ordProj[i]
-		typ, ok := val.EncToType[it.keyDesc.Types[idx].Enc]
-		if !ok {
-			//panic(fmt.Sprintf("unmapped encoding type %v", it.keyDesc.Types[idx].Enc))
+		typ := val.EncToType[it.keyDesc.Types[idx].Enc]
+		field, err := tree.GetField2(ctx, it.keyDesc, idx, key, it.ns)
+		if err != nil {
+			return nil, err
 		}
-		row[outputIdx] = sqltypes.MakeTrusted(typ, tree.GetField2(ctx, it.keyDesc, idx, key, it.ns))
+		row[outputIdx] = sqltypes.MakeTrusted(typ, field)
 	}
+
 	for i, idx := range it.valProj {
 		outputIdx := it.ordProj[len(it.keyProj)+i]
-		typ, ok := val.EncToType[it.valDesc.Types[idx].Enc]
-		if !ok {
-			//panic(fmt.Sprintf("unmapped encoding type %v", it.valDesc.Types[idx].Enc))
+		typ := val.EncToType[it.valDesc.Types[idx].Enc]
+		field, err := tree.GetField2(ctx, it.valDesc, idx, value, it.ns)
+		if err != nil {
+			return nil, err
 		}
-		row[outputIdx] = sqltypes.MakeTrusted(typ, tree.GetField2(ctx, it.valDesc, idx, value, it.ns))
+		row[outputIdx] = sqltypes.MakeTrusted(typ, field)
 	}
 	return row, nil
 }
@@ -274,7 +277,6 @@ func (it *prollyKeylessIter) nextTuple(ctx *sql.Context) error {
 }
 
 func (it *prollyKeylessIter) Next2(ctx *sql.Context) (sql.Row2, error) {
-	//panic("blah")
 	if it.card == 0 {
 		_, value, err := it.iter.Next(ctx)
 		if err != nil {
@@ -285,11 +287,12 @@ func (it *prollyKeylessIter) Next2(ctx *sql.Context) (sql.Row2, error) {
 		it.curr2 = make(sql.Row2, it.rowLen)
 		for i, idx := range it.valProj {
 			outputIdx := it.ordProj[i]
-			typ, ok := val.EncToType[it.valDesc.Types[idx].Enc]
-			if !ok {
-				//panic(fmt.Sprintf("unmapped encoding type %v", it.valDesc.Types[idx].Enc))
+			typ := val.EncToType[it.valDesc.Types[idx].Enc]
+			field, err := tree.GetField2(ctx, it.valDesc, idx, value, it.ns)
+			if err != nil {
+				return nil, err
 			}
-			it.curr2[outputIdx] = sqltypes.MakeTrusted(typ, tree.GetField2(ctx, it.valDesc, idx, value, it.ns))
+			it.curr2[outputIdx] = sqltypes.MakeTrusted(typ, field)
 		}
 	}
 	it.card--
