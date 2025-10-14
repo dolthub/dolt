@@ -13,16 +13,26 @@ FROM golang:1.25-bookworm AS build-from-source
 ENV DEBIAN_FRONTEND=noninteractive
 ARG DOLT_VERSION
 
-# COPY doesn't support conditionals, so we rely on the path context to maybe have a dolt/ directory
-# to distinguish between source and binary builds using DOLT_VERSION=source too.
-COPY dolt*/ /tmp/dolt
+COPY dolt*/go*/go.mod* /tmp/dolt/go/
+WORKDIR /tmp/dolt/go/
 
 # Check for source to avoid unnecessary installation of build dependencies
 RUN if [ "$DOLT_VERSION" = "source" ]; then \
         cd /tmp/dolt/go || { echo "Make sure the `dolt/` directory exists in your workspace to build from source."; exit 1; }; \
         apt-get update -y && \
         apt-get install -y libicu-dev && \
-        rm -rf /var/lib/apt/lists/* && \
+        rm -rf /var/lib/apt/lists/*; \
+    fi
+
+RUN if [ "$DOLT_VERSION" = "source" ]; then \
+        go mod download; \
+    fi
+
+# COPY doesn't support conditionals, so we rely on the path context to maybe have a dolt/ directory
+# to distinguish between source and binary builds using DOLT_VERSION=source too.
+COPY dolt*/ /tmp/dolt/
+
+RUN if [ "$DOLT_VERSION" = "source" ]; then \
         go build -o /usr/local/bin/dolt ./cmd/dolt && \
         chmod +x /usr/local/bin/dolt; \
     fi
@@ -45,6 +55,8 @@ RUN if [ "$DOLT_VERSION" = "latest" ]; then \
 FROM base AS runtime
 ARG DOLT_VERSION
 
+RUN apt-get update -y && apt-get install -y --no-install-recommends bzip2 gzip xz-utils zstd \
+  && rm -rf /var/lib/apt/lists/*
 # icu dependency for source builds
 RUN if [ "$DOLT_VERSION" = "source" ]; then \
         apt-get update -y && \
