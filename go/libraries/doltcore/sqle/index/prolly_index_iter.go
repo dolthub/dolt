@@ -121,7 +121,6 @@ func (p prollyIndexIter) Next(ctx *sql.Context) (sql.Row, error) {
 }
 
 func (p prollyIndexIter) Next2(ctx *sql.Context) (sql.Row2, error) {
-	//panic("blah")
 	idxKey, _, err := p.indexIter.Next(ctx)
 	if err != nil {
 		return nil, err
@@ -140,19 +139,21 @@ func (p prollyIndexIter) Next2(ctx *sql.Context) (sql.Row2, error) {
 		keyDesc, valDesc := p.primary.Descriptors()
 		for i, idx := range p.keyMap {
 			outputIdx := p.ordMap[i]
-			typ, ok := val.EncToType[keyDesc.Types[idx].Enc]
-			if !ok {
-				//panic(fmt.Sprintf("unmapped encoding type %v", keyDesc.Types[idx].Enc))
+			typ := val.EncToType[keyDesc.Types[idx].Enc]
+			field, err := tree.GetField2(ctx, keyDesc, idx, key, p.primary.NodeStore())
+			if err != nil {
+				return err
 			}
-			r[outputIdx] = sqltypes.MakeTrusted(typ, tree.GetField2(ctx, keyDesc, idx, key, p.primary.NodeStore()))
+			r[outputIdx] = sqltypes.MakeTrusted(typ, field)
 		}
 		for i, idx := range p.valMap {
 			outputIdx := p.ordMap[len(p.keyMap)+i]
-			typ, ok := val.EncToType[valDesc.Types[idx].Enc]
-			if !ok {
-				//panic(fmt.Sprintf("unmapped encoding type %v", valDesc.Types[idx].Enc))
+			typ := val.EncToType[valDesc.Types[idx].Enc]
+			field, err := tree.GetField2(ctx, valDesc, idx, value, p.primary.NodeStore())
+			if err != nil {
+				return err
 			}
-			r[outputIdx] = sqltypes.MakeTrusted(typ, tree.GetField2(ctx, valDesc, idx, value, p.primary.NodeStore()))
+			r[outputIdx] = sqltypes.MakeTrusted(typ, field)
 		}
 		return nil
 	})
@@ -287,7 +288,6 @@ func (p prollyCoveringIndexIter) Next(ctx *sql.Context) (sql.Row, error) {
 }
 
 func (p prollyCoveringIndexIter) Next2(ctx *sql.Context) (sql.Row2, error) {
-	//panic("blah")
 	k, v, err := p.indexIter.Next(ctx)
 	if err != nil {
 		return nil, err
@@ -296,20 +296,22 @@ func (p prollyCoveringIndexIter) Next2(ctx *sql.Context) (sql.Row2, error) {
 	row := make(sql.Row2, len(p.projections))
 	for i, idx := range p.keyMap {
 		outputIdx := p.ordMap[i]
-		typ, ok := val.EncToType[p.keyDesc.Types[idx].Enc]
-		if !ok {
-			//panic(fmt.Sprintf("unmapped encoding type %v", p.keyDesc.Types[idx].Enc))
+		typ := val.EncToType[p.keyDesc.Types[idx].Enc]
+		field, err := tree.GetField2(ctx, p.keyDesc, idx, k, p.ns)
+		if err != nil {
+			return nil, err
 		}
-		row[outputIdx] = sqltypes.MakeTrusted(typ, tree.GetField2(ctx, p.keyDesc, idx, k, p.ns))
+		row[outputIdx] = sqltypes.MakeTrusted(typ, field)
 	}
 
 	for i, idx := range p.valMap {
 		outputIdx := p.ordMap[len(p.keyMap)+i]
-		typ, ok := val.EncToType[p.valDesc.Types[idx].Enc]
-		if !ok {
-			//panic(fmt.Sprintf("unmapped encoding type %v", p.valDesc.Types[idx].Enc))
+		typ := val.EncToType[p.valDesc.Types[idx].Enc]
+		field, err := tree.GetField2(ctx, p.valDesc, idx, v, p.ns)
+		if err != nil {
+			return nil, err
 		}
-		row[outputIdx] = sqltypes.MakeTrusted(typ, tree.GetField2(ctx, p.valDesc, idx, v, p.ns))
+		row[outputIdx] = sqltypes.MakeTrusted(typ, field)
 	}
 
 	return row, nil
@@ -520,7 +522,6 @@ func (p prollyKeylessIndexIter) keylessRowsFromValueTuple(ctx context.Context, n
 }
 
 func (p prollyKeylessIndexIter) Next2(ctx *sql.Context) (sql.Row2, error) {
-	//panic("blah")
 	if p.card == 0 {
 		idxKey, _, err := p.indexIter.Next(ctx)
 		if err != nil {
@@ -545,15 +546,16 @@ func (p prollyKeylessIndexIter) Next2(ctx *sql.Context) (sql.Row2, error) {
 		}
 
 		p.card = val.ReadKeylessCardinality(value)
-		ns := p.clustered.NodeStore() // TODO: cache this?
+		ns := p.clustered.NodeStore()
 		p.curr = make(sql.Row2, len(p.valueMap))
 		for i, idx := range p.valueMap {
 			outputIdx := p.ordMap[i]
-			typ, ok := val.EncToType[p.valueDesc.Types[idx].Enc]
-			if !ok {
-				//panic(fmt.Sprintf("unmapped encoding type %v", p.valueDesc.Types[idx].Enc))
+			typ := val.EncToType[p.valueDesc.Types[idx].Enc]
+			field, err := tree.GetField2(ctx, p.valueDesc, idx, value, ns)
+			if err != nil {
+				return nil, err
 			}
-			p.curr[outputIdx] = sqltypes.MakeTrusted(typ, tree.GetField2(ctx, p.valueDesc, idx, value, ns))
+			p.curr[outputIdx] = sqltypes.MakeTrusted(typ, field)
 		}
 	}
 
