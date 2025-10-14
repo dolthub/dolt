@@ -126,7 +126,7 @@ func TestSingleScript(t *testing.T) {
   PRIMARY KEY (oid),
   UNIQUE KEY u_nspname (nspname)
 ) ENGINE = InnoDB;`,
-`CREATE TABLE pg_class (
+				`CREATE TABLE pg_class (
   oid            INT UNSIGNED NOT NULL,        -- OID of the relation  
   relname        VARCHAR(254) NOT NULL,        -- name of relation  
   relnamespace   INT UNSIGNED NOT NULL,        -- namespace OID (references pg_namespace.oid)  
@@ -153,7 +153,7 @@ func TestSingleScript(t *testing.T) {
   INDEX idx_relname (relname),
   INDEX idx_relnamespace (relnamespace)
 ) ENGINE = InnoDB;`,
-`CREATE TABLE pg_attribute (
+				`CREATE TABLE pg_attribute (
   attrelid       INT UNSIGNED NOT NULL,        -- relation OID (references pg_class.oid)  
   attname        VARCHAR(254) NOT NULL,        -- attribute name  
   atttypid        INT UNSIGNED NOT NULL,        -- data type OID  
@@ -172,7 +172,7 @@ func TestSingleScript(t *testing.T) {
   INDEX idx_attrelid (attrelid),
   INDEX idx_attname (attname)
 ) ENGINE = InnoDB;`,
-`CREATE TABLE pg_constraint (
+				`CREATE TABLE pg_constraint (
   oid            INT UNSIGNED NOT NULL,         -- OID of the constraint  
   conname        VARCHAR(254) NOT NULL,         -- name of constraint  
   connamespace   INT UNSIGNED NOT NULL,         -- namespace OID  
@@ -203,7 +203,7 @@ func TestSingleScript(t *testing.T) {
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query:    `explain format=tree SELECT con.*, 
+					Query: `explain format=tree SELECT con.*, 
        cl.relname AS referenced_table_name, 
        att.attname AS referenced_column_name 
 FROM
@@ -249,7 +249,7 @@ FROM
 					},
 				},
 				{
-					Query:    `explain format=tree SELECT con.conname AS constraint_name, 
+					Query: `explain format=tree SELECT con.conname AS constraint_name, 
        con.nspname AS table_schema, 
        con.relname AS table_name, 
        att2.attname AS column_name, 
