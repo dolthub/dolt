@@ -15,12 +15,13 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 45
     steps:
-      - name: Maximize build space
-        uses: easimon/maximize-build-space@v10
+      - name: Free Disk Space
+        uses: jlumbroso/free-disk-space@main
         with:
-          remove-dotnet: 'true'
-          remove-codeql: 'true'
-          remove-haskell: 'true'
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
 
       - name: Checkout
         uses: actions/checkout@v4
@@ -37,8 +38,7 @@ jobs:
           file: dolt/integration-tests/mysql-client-tests/Dockerfile
           tags: mysql-client-tests:latest
           load: true
-          cache-from: type=gha
-          cache-to: type=gha,mode=min
+          no-cache: true
 
       - name: Test MySQL client integrations
         run: docker run --rm mysql-client-tests:latest

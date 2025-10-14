@@ -25,7 +25,7 @@ FROM rust:1.90-alpine3.22 AS rust_clients_build
 RUN apk add --no-cache musl-dev
 COPY dolt/integration-tests/mysql-client-tests/rust/ /build/rust/
 WORKDIR /build/rust/
-RUN cargo build --release --target-dir /build/bin/ # exe is in release/
+RUN cargo build --release --target-dir /build/bin/ && cargo clean # exe is in release/
 
 FROM debian:bookworm-slim AS dotnet_clients_build
 RUN apt-get update && apt-get install -y wget gnupg ca-certificates && rm -rf /var/lib/apt/lists/*
@@ -117,7 +117,7 @@ WORKDIR /build/bin/
 RUN npm install --omit=dev
 COPY dolt/integration-tests/mysql-client-tests/node/ /build/bin/
 
-FROM debian:bookworm-slim AS ruby_clients_build
+FROM ruby:3.4-bookworm AS ruby_clients_build
 RUN apt-get update && apt-get install -y default-libmysqlclient-dev ruby3.1-dev bundler && rm -rf /var/lib/apt/lists/*
 COPY dolt/integration-tests/mysql-client-tests/ruby/Gemfile /build/ruby/
 WORKDIR /build/ruby/
@@ -149,8 +149,6 @@ COPY --from=c_clients_build /usr/lib/x86_64-linux-gnu/ /usr/lib/x86_64-linux-gnu
 COPY --from=c_clients_build /etc/odbcinst.ini /etc/odbcinst.ini
 COPY --from=java_clients_build /build/jre/ /opt/jre/
 COPY --from=node_clients_build /usr/local/bin/node /usr/local/bin/
-COPY --from=php_deps /usr/local/lib/php/extensions/ /usr/local/lib/php/extensions/
-COPY --from=php_deps /usr/local/etc/php/conf.d/ /usr/local/etc/php/conf.d/
 COPY --from=ruby_clients_build /usr/local/bin/ruby /usr/local/bin/
 COPY --from=ruby_clients_build /usr/local/lib/ /usr/local/lib/
 COPY --from=ruby_clients_build /usr/local/bundle/ /usr/local/bundle/
