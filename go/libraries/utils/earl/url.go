@@ -80,20 +80,7 @@ func Parse(urlStr string) (*url.URL, error) {
 	return u, nil
 }
 
-func parse(urlStr string) (*url.URL, error) {
-	if strIdx := strings.Index(urlStr, ":///"); strIdx != -1 && osutil.StartsWithWindowsVolume(urlStr[strIdx+4:]) {
-		return &url.URL{
-			Scheme: urlStr[:strIdx],
-			Path:   urlStr[strIdx+4:],
-		}, nil
-	}
-	if strIdx := strings.Index(urlStr, "://"); strIdx != -1 && osutil.StartsWithWindowsVolume(urlStr[strIdx+3:]) {
-		return &url.URL{
-			Scheme: urlStr[:strIdx],
-			Path:   urlStr[strIdx+3:],
-		}, nil
-	}
-
+func ParseRawWithAWSSupport(urlStr string) (*url.URL, error) {
 	// XXX: This is a kludge to support AWS remote URLs. These URLs use a non-standard syntax to specify the s3 bucket and dynamodb table names, and they look like:
 	// aws://[s3_bucket_name:dynamodb_table_name]/path/to/files/in/s3/and/db/key/in/dynamo
 	//
@@ -133,7 +120,25 @@ func parse(urlStr string) (*url.URL, error) {
 		}
 		parsed.Host = returnedHost
 		return parsed, nil
-	} else if strings.Index(urlStr, "://") == -1 {
+	}
+	return url.Parse(urlStr)
+}
+
+func parse(urlStr string) (*url.URL, error) {
+	if strIdx := strings.Index(urlStr, ":///"); strIdx != -1 && osutil.StartsWithWindowsVolume(urlStr[strIdx+4:]) {
+		return &url.URL{
+			Scheme: urlStr[:strIdx],
+			Path:   urlStr[strIdx+4:],
+		}, nil
+	}
+	if strIdx := strings.Index(urlStr, "://"); strIdx != -1 && osutil.StartsWithWindowsVolume(urlStr[strIdx+3:]) {
+		return &url.URL{
+			Scheme: urlStr[:strIdx],
+			Path:   urlStr[strIdx+3:],
+		}, nil
+	}
+
+	if strings.Index(urlStr, "://") == -1 {
 		u, err := url.Parse("http://" + urlStr)
 
 		if err == nil && isValidHost(u.Host) {
@@ -144,7 +149,7 @@ func parse(urlStr string) (*url.URL, error) {
 		}
 	}
 
-	return url.Parse(urlStr)
+	return ParseRawWithAWSSupport(urlStr)
 }
 
 // FileUrlFromPath returns a url for the given path with the "file" scheme i.e. file://...

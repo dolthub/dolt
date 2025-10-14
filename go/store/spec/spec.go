@@ -332,7 +332,7 @@ func parseAWSSpec(ctx context.Context, awsURL string, options SpecOptions) chunk
 	fmt.Println(awsURL, options)
 
 	// earl has special handling for aws:// urls.
-	u, err := earl.Parse(awsURL)
+	u, err := earl.ParseRawWithAWSSupport(awsURL)
 	d.PanicIfError(err)
 	parts := strings.SplitN(u.Hostname(), ":", 2) // [table] [, bucket]?
 	d.PanicIfFalse(len(parts) == 2)
@@ -601,7 +601,7 @@ func parseDatabaseSpec(spec string) (protocol, name string, err error) {
 		protocol, name = parts[0], parts[1]
 
 	case "aws", "gs", "oci":
-		u, perr := url.Parse(spec)
+		u, perr := earl.ParseRawWithAWSSupport(spec)
 		if perr != nil {
 			err = perr
 		} else if u.Host == "" {
