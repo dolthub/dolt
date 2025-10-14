@@ -44,11 +44,11 @@ def main():
                 print(exp_results)
                 print("Received:")
                 print(results)
-                exit(1)
+                sys.exit(1)
 
     connection.close()
 
-    exit(0)
+    sys.exit(0)
 
 
 main()

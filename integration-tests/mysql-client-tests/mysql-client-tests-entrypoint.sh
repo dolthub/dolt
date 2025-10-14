@@ -7,4 +7,4 @@ dolt config --global --add user.name mysql-test-runner
 dolt config --global --add user.email mysql-test-runner@liquidata.co
 
 echo "Running mysql-client-tests:"
-bats /mysql-client-tests/mysql-client-tests.bats
+bats /build/bin/mysql-client-tests.bats
