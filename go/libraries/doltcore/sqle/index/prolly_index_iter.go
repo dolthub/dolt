@@ -16,6 +16,7 @@ package index
 
 import (
 	"context"
+	"github.com/dolthub/vitess/go/sqltypes"
 	"io"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -117,6 +118,53 @@ func (p prollyIndexIter) Next(ctx *sql.Context) (sql.Row, error) {
 		return nil, err
 	}
 	return r, nil
+}
+
+func (p prollyIndexIter) Next2(ctx *sql.Context) (sql.Row2, error) {
+	idxKey, _, err := p.indexIter.Next(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for to := range p.pkMap {
+		from := p.pkMap.MapOrdinal(to)
+		p.pkBld.PutRaw(to, idxKey.GetField(from))
+	}
+	pk, err := p.pkBld.Build(sharePool)
+	if err != nil {
+		return nil, err
+	}
+
+	r := make(sql.Row2, len(p.projections))
+	err = p.primary.Get(ctx, pk, func(key, value val.Tuple) error {
+		keyDesc, valDesc := p.primary.Descriptors()
+		for i, idx := range p.keyMap {
+			outputIdx := p.ordMap[i]
+			typ := val.EncToType[keyDesc.Types[idx].Enc]
+			field, err := tree.GetField2(ctx, keyDesc, idx, key, p.primary.NodeStore())
+			if err != nil {
+				return err
+			}
+			r[outputIdx] = sqltypes.MakeTrusted(typ, field)
+		}
+		for i, idx := range p.valMap {
+			outputIdx := p.ordMap[len(p.keyMap)+i]
+			typ := val.EncToType[valDesc.Types[idx].Enc]
+			field, err := tree.GetField2(ctx, valDesc, idx, value, p.primary.NodeStore())
+			if err != nil {
+				return err
+			}
+			r[outputIdx] = sqltypes.MakeTrusted(typ, field)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return r, nil
+}
+
+func (p prollyIndexIter) IsRowIter2(ctx *sql.Context) bool {
+	return true
 }
 
 func (p prollyIndexIter) rowFromTuples(ctx context.Context, key, value val.Tuple, r sql.Row) (err error) {
@@ -239,6 +287,40 @@ func (p prollyCoveringIndexIter) Next(ctx *sql.Context) (sql.Row, error) {
 	return r, nil
 }
 
+func (p prollyCoveringIndexIter) Next2(ctx *sql.Context) (sql.Row2, error) {
+	k, v, err := p.indexIter.Next(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	row := make(sql.Row2, len(p.projections))
+	for i, idx := range p.keyMap {
+		outputIdx := p.ordMap[i]
+		typ := val.EncToType[p.keyDesc.Types[idx].Enc]
+		field, err := tree.GetField2(ctx, p.keyDesc, idx, k, p.ns)
+		if err != nil {
+			return nil, err
+		}
+		row[outputIdx] = sqltypes.MakeTrusted(typ, field)
+	}
+
+	for i, idx := range p.valMap {
+		outputIdx := p.ordMap[len(p.keyMap)+i]
+		typ := val.EncToType[p.valDesc.Types[idx].Enc]
+		field, err := tree.GetField2(ctx, p.valDesc, idx, v, p.ns)
+		if err != nil {
+			return nil, err
+		}
+		row[outputIdx] = sqltypes.MakeTrusted(typ, field)
+	}
+
+	return row, nil
+}
+
+func (p prollyCoveringIndexIter) IsRowIter2(ctx *sql.Context) bool {
+	return true
+}
+
 func (p prollyCoveringIndexIter) writeRowFromTuples(ctx context.Context, key, value val.Tuple, r sql.Row) (err error) {
 	for i, idx := range p.keyMap {
 		outputIdx := p.ordMap[i]
@@ -301,6 +383,9 @@ type prollyKeylessIndexIter struct {
 	ordMap    val.OrdinalMapping
 	valueDesc val.TupleDesc
 	sqlSch    sql.Schema
+
+	card uint64
+	curr sql.Row2
 }
 
 var _ sql.RowIter = prollyKeylessIndexIter{}
@@ -434,6 +519,52 @@ func (p prollyKeylessIndexIter) keylessRowsFromValueTuple(ctx context.Context, n
 		rows[i] = rows[0].Copy()
 	}
 	return
+}
+
+func (p prollyKeylessIndexIter) Next2(ctx *sql.Context) (sql.Row2, error) {
+	if p.card == 0 {
+		idxKey, _, err := p.indexIter.Next(ctx)
+		if err != nil {
+			return nil, err
+		}
+		for to := range p.clusteredMap {
+			from := p.clusteredMap.MapOrdinal(to)
+			p.clusteredBld.PutRaw(to, idxKey.GetField(from))
+		}
+		pk, err := p.clusteredBld.Build(sharePool)
+		if err != nil {
+			return nil, err
+		}
+
+		var value val.Tuple
+		err = p.clustered.Get(ctx, pk, func(k, v val.Tuple) error {
+			value = v
+			return nil
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		p.card = val.ReadKeylessCardinality(value)
+		ns := p.clustered.NodeStore()
+		p.curr = make(sql.Row2, len(p.valueMap))
+		for i, idx := range p.valueMap {
+			outputIdx := p.ordMap[i]
+			typ := val.EncToType[p.valueDesc.Types[idx].Enc]
+			field, err := tree.GetField2(ctx, p.valueDesc, idx, value, ns)
+			if err != nil {
+				return nil, err
+			}
+			p.curr[outputIdx] = sqltypes.MakeTrusted(typ, field)
+		}
+	}
+
+	p.card--
+	return p.curr, nil
+}
+
+func (p prollyKeylessIndexIter) IsRowIter2(ctx *sql.Context) bool {
+	return true
 }
 
 func (p prollyKeylessIndexIter) Close(*sql.Context) error {

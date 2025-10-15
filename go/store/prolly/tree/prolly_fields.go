@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/mohae/uvarint"
 	"io"
 	"math"
 	"time"
@@ -169,6 +170,77 @@ func GetField(ctx context.Context, td val.TupleDesc, i int, tup val.Tuple, ns No
 		return nil, err
 	}
 	return v, err
+}
+
+// GetField2 reads the value from the ith field of the Tuple as an interface{}.
+func GetField2(ctx context.Context, td val.TupleDesc, i int, tup val.Tuple, ns NodeStore) (b []byte, err error) {
+	switch td.Types[i].Enc {
+	case val.Int8Enc, val.Int16Enc, val.Int32Enc, val.Int64Enc,
+		val.Uint8Enc, val.Uint16Enc, val.Uint32Enc, val.Uint64Enc,
+		val.Float32Enc, val.Float64Enc, val.DecimalEnc, val.Bit64Enc,
+		val.DateEnc, val.DatetimeEnc, val.TimeEnc, val.YearEnc,
+		val.EnumEnc, val.SetEnc,
+		val.Hash128Enc, val.CommitAddrEnc, val.CellEnc:
+		b = td.GetField(i, tup)
+		return b, nil
+
+	case val.StringEnc, val.ByteStringEnc:
+		b = td.GetField(i, tup)
+		return b[:len(b)-1], nil // TODO: not sure why we do this?
+
+	case val.JSONEnc, val.GeometryEnc:
+		b = td.GetField(i, tup)
+		return b[:len(b)-1], nil // TODO: not sure why we do this?
+
+	case val.GeomAddrEnc:
+		// TODO: until GeometryEnc is removed, we must check if GeomAddrEnc is a GeometryEnc
+		var ok bool
+		if b, ok = td.GetGeometry(i, tup); ok {
+			return b[:len(b)-1], nil
+		}
+		var h hash.Hash
+		if h, ok = td.GetGeometryAddr(i, tup); ok {
+			b, err = ns.ReadBytes(ctx, h)
+			if err != nil {
+				return nil, err
+			}
+			return b, nil
+		}
+		// TODO: somehow neither Geometry or GeometryAddr, silently pass for now
+		return b, nil
+
+	// TODO: figure out how to utilize with TextStorage, instead of always deserializing
+	case val.StringAddrEnc, val.BytesAddrEnc, val.JSONAddrEnc:
+		h := hash.New(td.GetField(i, tup))
+		b, err = ns.ReadBytes(ctx, h)
+		if err != nil {
+			return nil, err
+		}
+		return b, nil
+
+	case val.BytesAdaptiveEnc, val.StringAdaptiveEnc:
+		b = td.GetField(i, tup)
+		// null value
+		if len(b) == 0 {
+			return b, nil
+		}
+		// inlined
+		if b[0] == 0 {
+			return b[1:], nil
+		}
+		// out-of-band
+		_, lengthBytes := uvarint.Uvarint(b)
+		b, err = ns.ReadBytes(ctx, hash.New(b[lengthBytes:]))
+		return b, err
+
+	// TODO: figure out how to deal with ExtendedEncs
+	case val.ExtendedEnc, val.ExtendedAddrEnc, val.ExtendedAdaptiveEnc:
+		b = td.GetField(i, tup)
+		return b, nil
+
+	default:
+		panic("unknown val.encoding")
+	}
 }
 
 // Serialize writes an interface{} into the byte string representation used in val.Tuple, and returns the byte string,

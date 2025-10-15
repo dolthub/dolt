@@ -16,6 +16,7 @@ package index
 
 import (
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/vitess/go/sqltypes"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/prolly"
@@ -191,6 +192,39 @@ func (it prollyRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 	return row, nil
 }
 
+func (it prollyRowIter) Next2(ctx *sql.Context) (sql.Row2, error) {
+	key, value, err := it.iter.Next(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	row := make(sql.Row2, it.rowLen)
+	for i, idx := range it.keyProj {
+		outputIdx := it.ordProj[i]
+		typ := val.EncToType[it.keyDesc.Types[idx].Enc]
+		field, err := tree.GetField2(ctx, it.keyDesc, idx, key, it.ns)
+		if err != nil {
+			return nil, err
+		}
+		row[outputIdx] = sqltypes.MakeTrusted(typ, field)
+	}
+
+	for i, idx := range it.valProj {
+		outputIdx := it.ordProj[len(it.keyProj)+i]
+		typ := val.EncToType[it.valDesc.Types[idx].Enc]
+		field, err := tree.GetField2(ctx, it.valDesc, idx, value, it.ns)
+		if err != nil {
+			return nil, err
+		}
+		row[outputIdx] = sqltypes.MakeTrusted(typ, field)
+	}
+	return row, nil
+}
+
+func (it prollyRowIter) IsRowIter2(ctx *sql.Context) bool {
+	return true
+}
+
 func (it prollyRowIter) Close(ctx *sql.Context) error {
 	return nil
 }
@@ -202,6 +236,7 @@ type prollyKeylessIter struct {
 	valProj []int
 	ordProj []int
 	curr    sql.Row
+	curr2   sql.Row2
 	rowLen  int
 	card    uint64
 }
@@ -239,6 +274,33 @@ func (it *prollyKeylessIter) nextTuple(ctx *sql.Context) error {
 		}
 	}
 	return nil
+}
+
+func (it *prollyKeylessIter) Next2(ctx *sql.Context) (sql.Row2, error) {
+	if it.card == 0 {
+		_, value, err := it.iter.Next(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		it.card = val.ReadKeylessCardinality(value)
+		it.curr2 = make(sql.Row2, it.rowLen)
+		for i, idx := range it.valProj {
+			outputIdx := it.ordProj[i]
+			typ := val.EncToType[it.valDesc.Types[idx].Enc]
+			field, err := tree.GetField2(ctx, it.valDesc, idx, value, it.ns)
+			if err != nil {
+				return nil, err
+			}
+			it.curr2[outputIdx] = sqltypes.MakeTrusted(typ, field)
+		}
+	}
+	it.card--
+	return it.curr2, nil
+}
+
+func (it *prollyKeylessIter) IsRowIter2(ctx *sql.Context) bool {
+	return true
 }
 
 func (it *prollyKeylessIter) Close(ctx *sql.Context) error {
