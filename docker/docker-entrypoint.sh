@@ -3,10 +3,10 @@ set -eo pipefail
 
 # mysql_log logs messages with a timestamp and optional color formatting.
 # Arguments:
-#   $1 - Log type (e.g., Note, Warn, ERROR)
+#   $1 - Log type (e.g., Note, Warn, ERROR, Debug)
 #   $@ - Log message (if empty, reads from stdin)
 # Output:
-#   Prints a formatted log line to stdout or stderr, with color for Warn and ERROR.
+#   Prints a formatted log line to stdout or stderr, with color for Warn, ERROR, and Debug.
 mysql_log() {
   local type="$1"
   shift
@@ -17,11 +17,17 @@ mysql_log() {
   local color_reset="\033[0m"
   local color
   case "$type" in
-  Warn) color="\033[1;33m" ;;  # yellow
-  ERROR) color="\033[1;31m" ;; # red
+  Warning) color="\033[1;33m" ;;   # yellow
+  ERROR) color="\033[1;31m" ;;  # red
+  Debug) color="\033[1;34m" ;;  # blue
   *) color="" ;;
   esac
   printf '%b%s [%s] [Entrypoint]: %s%b\n' "$color" "$dt" "$type" "$text" "$color_reset"
+}
+
+# _dbg logs a message of type 'Debug' using mysql_log.
+_dbg() {
+  mysql_log Debug "$@"
 }
 
 # mysql_note logs a message of type 'Note' using mysql_log.
@@ -29,17 +35,59 @@ mysql_note() {
   mysql_log Note "$@"
 }
 
-# mysql_warn logs a message of type 'Warn' using mysql_log and writes to stderr.
+# mysql_warn logs a message of type 'Warning' using mysql_log and writes to stderr.
 mysql_warn() {
-  mysql_log Warn "$@" >&2
+  mysql_log Warning "$@" >&2
 }
 
-# mysql_error logs a message of type 'ERROR' using mysql_log, write to stderr, prints a container removal hint, and
+# mysql_error logs a message of type 'ERROR' using mysql_log, writes to stderr, prints a container removal hint, and
 # exits with status 1.
 mysql_error() {
   mysql_log ERROR "$@" >&2
   mysql_note "Remove this container with 'docker rm -f <container_name>' before retrying"
   exit 1
+}
+
+# dolt_log parses piped messages from `dolt sql-server` into the same format as mysql_log. Excludes debug as it can
+# de-sync log output. Users are provided the DOLT_RAW environment variable to disable the parser.
+dolt_log() {
+  local color_reset="\033[0m"
+  local color level msg dt
+
+  while IFS= read -r line || [ -n "$line" ]; do
+    # Skip empty lines
+    [ -z "$line" ] && continue
+
+    # Extract timestamp (after time="..."), fallback empty if missing
+    dt="${line#time=\"}"
+    dt="${dt%%\"*}"
+
+    # Extract level (e.g. info, warn, error)
+    level="${line#*level=}"
+    level="${level%% *}"
+
+    # Extract msg=... (handle quoted or unquoted)
+    if [[ "$line" == *'msg="'* ]]; then
+      msg="${line#*msg=\"}"
+      msg="${msg%%\"*}"
+    elif [[ "$line" == *'msg='* ]]; then
+      msg="${line#*msg=}"
+    else
+      msg="(no message)"
+    fi
+
+    # Map level → display label + color
+    case "${level,,}" in
+    warn|warning) level="Warning"; color="\033[1;33m" ;; # yellow
+    error)        level="ERROR";   color="\033[1;31m" ;; # red
+    debug)        level="Debug";   color="\033[1;34m" ;; # blue
+    info)         level="Info";    color="" ;;           # default
+    *)            level="Info";    color="" ;;
+    esac
+
+    printf '%b%s [%s] [Dolt] [Server]: %s%b\n' \
+      "$color" "$dt" "$level" "$msg" "$color_reset"
+  done
 }
 
 # exec_mysql executes a SQL query using Dolt, retrying until it succeeds or a timeout is reached.
@@ -55,17 +103,27 @@ exec_mysql() {
   local error_message="$2"
   local show_output="${3:-0}"
   local timeout="${DOLT_SERVER_TIMEOUT:-300}"
-  local start_time now output
+  local start_time now output status
 
   start_time=$(date +%s)
 
   while true; do
-    if output=$(dolt sql -q "$sql_command" 2>&1); then
+    if [ -n "$sql_command" ]; then
+      output=$(dolt sql -q "$sql_command" 2>&1)
+      status=$?
+    else
+      set +e # tmp disable to report error to user
+      output=$(dolt sql < /dev/stdin 2>&1 | (grep -iE "Error|error" || true))
+      status=$?
+      set -e
+    fi
+
+    if [ $status -eq 0 ]; then
       [ "$show_output" -eq 1 ] && echo "$output"
       return 0
     fi
 
-    if echo "$output" | grep -qi "syntax error"; then
+    if echo "$output" | grep -qiE "Error [0-9]+ \([A-Z0-9]+\)"; then
       mysql_error "$error_message$output"
     fi
 
@@ -79,6 +137,7 @@ exec_mysql() {
     sleep 1
   done
 }
+
 
 CONTAINER_DATA_DIR="/var/lib/dolt"
 INIT_COMPLETED="$CONTAINER_DATA_DIR/.init_completed"
@@ -171,9 +230,8 @@ get_config_file_path_if_exists() {
 #   e.g., docker_process_init_files /always-initdb.d/*
 # Processes initializer files based on file extensions.
 docker_process_init_files() {
-  mysql_note "Running init script...s"
   local f sql
-
+  echo
   for f; do
     case "$f" in
     *.sh)
@@ -191,28 +249,24 @@ docker_process_init_files() {
       ;;
     *.sql)
       mysql_note "$0: running $f"
-      sql=$(cat "$f")
-      exec_mysql "$sql" "Failed to execute $f: "
+      exec_mysql "" "Failed to load $f: " < "$f"
       ;;
     *.sql.bz2)
       mysql_note "$0: running $f"
-      sql=$(bunzip2 -c "$f")
-      exec_mysql "$sql" "Failed to execute $f: "
+      bunzip2 -c "$f" | exec_mysql "" "Failed to load $f: " 1
       ;;
     *.sql.gz)
       mysql_note "$0: running $f"
-      sql=$(gunzip -c "$f")
-      exec_mysql "$sql" "Failed to execute $f: "
+      gunzip -c "$f" | exec_mysql "" "Failed to load $f: " 1
       ;;
     *.sql.xz)
       mysql_note "$0: running $f"
-      sql=$(xzcat "$f")
-      exec_mysql "$sql" "Failed to execute $f: "
+      xzcat "$f" | exec_mysql "" "Failed to load $f: " 1
       ;;
     *.sql.zst)
       mysql_note "$0: running $f"
       sql=$(zstd -dc "$f")
-      exec_mysql "$sql" "Failed to execute $f: "
+      zstd -dc "$f" | exec_mysql "" "Failed to load $f: " 1
       ;;
     *)
       mysql_warn "$0: ignoring $f"
@@ -242,8 +296,8 @@ create_database_from_env() {
   database=$(get_env_var "DATABASE")
 
   if [ -n "$database" ]; then
-    mysql_note "Creating database '${database}'"
     exec_mysql "CREATE DATABASE IF NOT EXISTS \`$database\`;" "Failed to create database '$database': "
+    mysql_note "Creating database '${database}'"
   fi
 }
 
@@ -319,18 +373,22 @@ dolt_server_initializer() {
 
   SERVER_PID=-1
 
-  trap 'mysql_note "Caught Ctrl+C, shutting down Dolt server..."; [ $SERVER_PID -ne -1 ] && kill "$SERVER_PID"; exit 1' INT TERM
+  trap '' SIGINT
 
   while true; do
     if [ "$SERVER_PID" -eq -1 ] || ! kill -0 "$SERVER_PID" 2>/dev/null; then
       [ "$SERVER_PID" -ne -1 ] && wait "$SERVER_PID" 2>/dev/null || true
       SERVER_PID=-1
-      dolt sql-server --host=0.0.0.0 --port=3306 "$@" &
+      if [ "${DOLT_RAW:-0}" -eq 1 ]; then
+        dolt sql-server --host=0.0.0.0 --port=3306 "$@" 2>&1 &
+      else
+        dolt sql-server --host=0.0.0.0 --port=3306 "$@" 2>&1 | dolt_log &
+      fi
       SERVER_PID=$!
     fi
 
     if is_port_open "0.0.0.0" 3306; then
-      mysql_note "Dolt server started successfully (PID=$SERVER_PID)"
+      mysql_note "Dolt server started."
       return 0
     fi
 
@@ -408,9 +466,8 @@ _main() {
     touch "$INIT_COMPLETED"
   fi
 
-  mysql_note "Server initialization complete!"
+  mysql_note "Dolt init process done. Ready for connections."
 
-  # No need to relaunch, we wait for the background server process to exit and can still see the logs
   wait "$SERVER_PID"
 }
 

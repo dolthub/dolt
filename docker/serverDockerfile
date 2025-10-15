@@ -13,6 +13,8 @@ FROM golang:1.25-bookworm AS build-from-source
 ENV DEBIAN_FRONTEND=noninteractive
 ARG DOLT_VERSION
 
+# COPY doesn't support conditionals, so we rely on the path context to maybe have a dolt/ directory
+# to distinguish between source and binary builds using DOLT_VERSION=source too.
 COPY dolt*/go*/go.mod* /tmp/dolt/go/
 WORKDIR /tmp/dolt/go/
 
@@ -24,13 +26,12 @@ RUN if [ "$DOLT_VERSION" = "source" ]; then \
         rm -rf /var/lib/apt/lists/*; \
     fi
 
+# Separate layers to avoid redundant downloads
 RUN if [ "$DOLT_VERSION" = "source" ]; then \
         go mod download; \
     fi
 
-# COPY doesn't support conditionals, so we rely on the path context to maybe have a dolt/ directory
-# to distinguish between source and binary builds using DOLT_VERSION=source too.
-COPY dolt*/ /tmp/dolt/
+COPY dolt*/go/ /tmp/dolt/go/
 
 RUN if [ "$DOLT_VERSION" = "source" ]; then \
         go build -o /usr/local/bin/dolt ./cmd/dolt && \
