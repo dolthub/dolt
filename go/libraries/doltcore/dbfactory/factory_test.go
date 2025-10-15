@@ -19,7 +19,9 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
+	"github.com/dolthub/dolt/go/libraries/utils/earl"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -31,4 +33,11 @@ func TestCreateMemDB(t *testing.T) {
 	assert.NotNil(t, db)
 	assert.NotNil(t, vrw)
 	assert.NotNil(t, ns)
+}
+
+func TestAWSScheme(t *testing.T) {
+	url, err := earl.Parse("aws://[hosted-doltdb-prod-instance-backups:hosted-doltdb-prod-instance-backups]/5ebe7f6e-7c4a-437a-b684-6aa6cdeb63df/backups/20251014T083342.813/b1625a79-0ae3-4a83-89a7-8715317c4cea/us-jails")
+	require.NoError(t, err)
+	assert.Equal(t, "aws", url.Scheme)
+	assert.Equal(t, "hosted-doltdb-prod-instance-backups:hosted-doltdb-prod-instance-backups", url.Hostname())
 }
