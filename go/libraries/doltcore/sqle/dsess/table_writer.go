@@ -15,11 +15,14 @@
 package dsess
 
 import (
+	"context"
+
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
@@ -34,6 +37,10 @@ type WriteSession interface {
 
 	// SetWorkingSet modifies the state of the WriteSession. The WorkingSetRef of |ws| must match the existing Ref.
 	SetWorkingSet(ctx *sql.Context, ws *doltdb.WorkingSet) error
+
+	// VisitGCRoots is used to ensure that a write session's GC roots are retained
+	// in the case that a GC needs to proceed before the write session is flushed.
+	VisitGCRoots(ctx context.Context, roots func(hash.Hash) bool) error
 
 	// GetOptions returns the editor.Options for this session.
 	GetOptions() editor.Options

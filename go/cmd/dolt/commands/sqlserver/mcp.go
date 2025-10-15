@@ -16,6 +16,7 @@ package sqlserver
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"strconv"
 
@@ -55,8 +56,10 @@ func (c *logrusZapCore) With(fields []zapcore.Field) zapcore.Core {
 }
 
 func (c *logrusZapCore) Enabled(lvl zapcore.Level) bool {
-	// Respect logrus current level
-	return zapToLogrusLevel(lvl) >= c.l.GetLevel()
+	// Respect logrus current level: allow messages at or above the configured level.
+	// Note: logrus levels are ordered with lower numeric values being more severe.
+	// So we log when entryLevel <= loggerLevel (e.g., Info(4) should pass when logger is Debug(5)).
+	return zapToLogrusLevel(lvl) <= c.l.GetLevel()
 }
 
 func (c *logrusZapCore) Check(ent zapcore.Entry, ce *zapcore.CheckedEntry) *zapcore.CheckedEntry {
@@ -143,6 +146,12 @@ func mcpRun(cfg *Config, lgr *logrus.Logger, state *svcs.ServiceState, cancelPtr
 			DatabaseName: dbName,
 		}
 
+		// Announce MCP startup using a concise config string similar to the main server
+		// HP is the MCP HTTP bind host:port; SQL_HP is the SQL server host:port used by MCP.
+		mcpBindHost := "0.0.0.0"
+		confInfo := fmt.Sprintf("HP=\"%s:%d\"|SQL_HP=\"%s:%d\"|U=\"%s\"|DB=\"%s\"", mcpBindHost, *cfg.MCP.Port, dbConf.Host, dbConf.Port, *cfg.MCP.User, dbName)
+		lgr.Infof("Starting Dolt MCP server with Config %s", confInfo)
+
 		srv, err := pkgmcp.NewMCPHTTPServer(
 			logger,
 			dbConf,
@@ -157,7 +166,12 @@ func mcpRun(cfg *Config, lgr *logrus.Logger, state *svcs.ServiceState, cancelPtr
 		runCtx, cancel := context.WithCancel(ctx)
 		*cancelPtr = cancel
 		g, gctx := errgroup.WithContext(runCtx)
-		g.Go(func() error { srv.ListenAndServe(gctx); return nil })
+		g.Go(func() error {
+			// Log readiness from the parent logger so it appears in Dolt output
+			lgr.Infof("Dolt MCP server ready. Accepting connections.")
+			srv.ListenAndServe(gctx)
+			return nil
+		})
 		*groupPtr = g
 	}
 }
