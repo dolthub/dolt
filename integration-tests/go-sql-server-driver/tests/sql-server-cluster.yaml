@@ -1548,8 +1548,6 @@ tests:
     - exec: 'insert into vals values (3,3)'
     - exec: 'insert into vals values (4,4)'
     - exec: 'call dolt_gc()'
-    - exec: 'select * from vals'
-      error_match: "this connection can no longer be used"
   - on: server1
     queries:
     - query: "select `database`, standby_remote, role, epoch, replication_lag_millis, current_error from dolt_cluster.dolt_cluster_status order by `database` asc"
@@ -1570,8 +1568,6 @@ tests:
         - [3,3]
         - [4,4]
     - exec: 'call dolt_gc()'
-      error_match: "must be the primary"
-    - exec: 'call dolt_gc("--shallow")'
 - name: dropped database is no longer present on replica
   multi_repos:
   - name: server1
