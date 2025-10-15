@@ -79,7 +79,7 @@ type PullTableFileWriterConfig struct {
 }
 
 type DestTableFileStore interface {
-	WriteTableFile(ctx context.Context, id string, numChunks int, contentHash []byte, getRd func() (io.ReadCloser, uint64, error)) error
+	WriteTableFile(ctx context.Context, id string, splitOffset uint64, numChunks int, contentHash []byte, getRd func() (io.ReadCloser, uint64, error)) error
 	AddTableFilesToManifest(ctx context.Context, fileIdToNumChunks map[string]int, getAddrs chunks.GetAddrsCurry) error
 }
 
@@ -363,7 +363,7 @@ func (w *PullTableFileWriter) uploadTempTableFile(ctx context.Context, tmpTblFil
 	// already upload bytes.
 	var uploaded uint64
 
-	return w.cfg.DestStore.WriteTableFile(ctx, tmpTblFile.id, tmpTblFile.numChunks, tmpTblFile.contentHash, func() (io.ReadCloser, uint64, error) {
+	return w.cfg.DestStore.WriteTableFile(ctx, tmpTblFile.id, tmpTblFile.chunksLen, tmpTblFile.numChunks, tmpTblFile.contentHash, func() (io.ReadCloser, uint64, error) {
 		rc, err := tmpTblFile.read.Reader()
 		if err != nil {
 			return nil, 0, err
@@ -371,12 +371,12 @@ func (w *PullTableFileWriter) uploadTempTableFile(ctx context.Context, tmpTblFil
 
 		if uploaded != 0 {
 			// A retry. We treat it as if what was already uploaded was rebuffered.
-			atomic.AddUint64(&w.bufferedSendBytes, uint64(uploaded))
+			atomic.AddUint64(&w.bufferedSendBytes, uploaded)
 			uploaded = 0
 		}
 
 		fWithStats := countingReader{countingReader{rc, &uploaded}, &w.finishedSendBytes}
 
-		return fWithStats, uint64(fileSize), nil
+		return fWithStats, fileSize, nil
 	})
 }

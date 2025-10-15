@@ -136,7 +136,12 @@ func (gcc *gcCopier) copyTablesToDir(ctx context.Context) (ts []tableSpec, err e
 	defer r.Close()
 	sz := gcc.writer.FullLength()
 
-	err = gcc.tfp.CopyTableFile(ctx, r, filename, sz, uint32(gcc.writer.ChunkCount()))
+	dataSplit, err := gcc.writer.ChunkDataLength()
+	if err != nil {
+		return nil, fmt.Errorf("gc_copier, ChunkDataLength() error: %w", err)
+	}
+
+	err = gcc.tfp.CopyTableFile(ctx, r, filename, sz, dataSplit)
 	if err != nil {
 		return nil, fmt.Errorf("gc_copier, CopyTableFile error: %w", err)
 	}

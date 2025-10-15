@@ -36,7 +36,7 @@ func (bsm blobstoreManifest) Name() string {
 }
 
 func manifestVersionAndContents(ctx context.Context, bs blobstore.Blobstore) (string, manifestContents, error) {
-	reader, ver, err := bs.Get(ctx, manifestFile, blobstore.AllRange)
+	reader, _, ver, err := bs.Get(ctx, manifestFile, blobstore.AllRange)
 
 	if err != nil {
 		return "", manifestContents{}, err

@@ -29,6 +29,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -1526,9 +1527,10 @@ func (nbs *NomsBlockStore) StatsSummary() string {
 
 // tableFile is our implementation of TableFile.
 type tableFile struct {
-	info   TableSpecInfo
-	open   func(ctx context.Context) (io.ReadCloser, uint64, error)
-	suffix string
+	info        TableSpecInfo
+	open        func(ctx context.Context) (io.ReadCloser, uint64, error)
+	suffix      string
+	splitOffset uint64
 }
 
 // LocationPrefix
@@ -1549,6 +1551,8 @@ func (tf tableFile) FileID() string {
 func (tf tableFile) NumChunks() int {
 	return int(tf.info.GetChunkCount())
 }
+
+func (tf tableFile) SplitOffset() uint64 { return tf.splitOffset }
 
 // Open returns an io.ReadCloser which can be used to read the bytes of a table file and the content length in bytes.
 func (tf tableFile) Open(ctx context.Context) (io.ReadCloser, uint64, error) {
@@ -1612,9 +1616,12 @@ func getTableFiles(css map[hash.Hash]chunkSource, contents manifestContents, num
 }
 
 func newTableFile(cs chunkSource, info tableSpec) tableFile {
-	s := ""
-	if _, ok := cs.(archiveChunkSource); ok {
-		s = ArchiveFileSuffix
+	sfx := ""
+	dataOffset := uint64(0)
+	if a, ok := cs.(archiveChunkSource); ok {
+		sfx = ArchiveFileSuffix
+		dataSpan := a.aRdr.footer.dataSpan()
+		dataOffset = dataSpan.length
 	}
 
 	return tableFile{
@@ -1626,7 +1633,8 @@ func newTableFile(cs chunkSource, info tableSpec) tableFile {
 			}
 			return r, s, nil
 		},
-		suffix: s,
+		suffix:      sfx,
+		splitOffset: dataOffset,
 	}
 }
 
@@ -1682,11 +1690,11 @@ func (nbs *NomsBlockStore) Path() (string, bool) {
 }
 
 // WriteTableFile will read a table file from the provided reader and write it to the TableFileStore
-func (nbs *NomsBlockStore) WriteTableFile(ctx context.Context, fileName string, numChunks int, contentHash []byte, getRd func() (io.ReadCloser, uint64, error)) error {
+func (nbs *NomsBlockStore) WriteTableFile(ctx context.Context, fileName string, splitOffset uint64, numChunks int, _ []byte, getRd func() (io.ReadCloser, uint64, error)) error {
 	valctx.ValidateContext(ctx)
 	tfp, ok := nbs.persister.(tableFilePersister)
 	if !ok {
-		return errors.New("Not implemented")
+		return errors.New("runtime error: table file persister required for WriteTableFile")
 	}
 
 	r, sz, err := getRd()
@@ -1694,7 +1702,13 @@ func (nbs *NomsBlockStore) WriteTableFile(ctx context.Context, fileName string, 
 		return err
 	}
 	defer r.Close()
-	return tfp.CopyTableFile(ctx, r, fileName, sz, uint32(numChunks))
+
+	if splitOffset == 0 && !strings.HasSuffix(fileName, ArchiveFileSuffix) {
+		splitOffset = tableTailOffset(sz, uint32(numChunks))
+	}
+
+	// CopyTableFile can cope with a 0 splitOffset.
+	return tfp.CopyTableFile(ctx, r, fileName, sz, splitOffset)
 }
 
 // AddTableFilesToManifest adds table files to the manifest
