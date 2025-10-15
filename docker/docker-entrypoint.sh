@@ -66,20 +66,26 @@ mysql_error() {
   exit 1
 }
 
-# dolt_log parses piped messages from `dolt sql-server` into the same format as mysql_log,
-# but only handles info, warning, and debug levels. Other levels are ignored and printed by the caller.
+# dolt_server_parser parses Dolt SQL-server logs efficiently.
+# Info, Note, Warning, and Error lines are formatted via mysql_log.
+# All other lines are passed through unmodified.
 dolt_server_parser() {
   while IFS= read -r line || [ -n "$line" ]; do
     [ -z "$line" ] && continue
 
-    local dt="${line#time=\"}"
-    dt="${dt%%\"*}"
+    if [[ "$line" == *level=debug* ]]; then
+      echo "$line"
+      continue
+    fi
 
-    # Extract level (e.g. info, warn, error)
+    # If no level= field, print raw
+    [[ "$line" != *level=* ]] && { echo "$line"; continue; }
+
+    # Extract level
     local level="${line#*level=}"
     level="${level%% *}"
 
-    # Extract msg=... (handle quoted or unquoted)
+    # Extract message (msg="..." or msg=..., fallback to full line)
     local msg
     if [[ "$line" == *'msg="'* ]]; then
       msg="${line#*msg=\"}"
@@ -87,15 +93,15 @@ dolt_server_parser() {
     elif [[ "$line" == *'msg='* ]]; then
       msg="${line#*msg=}"
     else
-      msg="(no message)"
+      msg="$line"
     fi
 
+    # Format known levels
     case "${level,,}" in
-    info)   mysql_log Info "Dolt" "Server" "$msg" ;;
+    info|note)   mysql_log Note "Dolt" "Server" "$msg" ;;
     warn|warning) mysql_log Warning "Dolt" "Server" "$msg" ;;
-    debug)  mysql_log Debug "Dolt" "Server" "$msg" ;;
-    *)      # other levels: skip formatting, let caller handle
-      echo "$line" ;;
+    error)       mysql_log ERROR "Dolt" "Server" "$msg" ;;
+    *)           echo "$line" ;;  # unknown levels, print raw
     esac
   done
 }
@@ -306,8 +312,8 @@ create_database_from_env() {
   database=$(get_env_var "DATABASE")
 
   if [ -n "$database" ]; then
-    exec_mysql "CREATE DATABASE IF NOT EXISTS \`$database\`;" "Failed to create database '$database': "
     mysql_note "Creating database '${database}'"
+    exec_mysql "CREATE DATABASE IF NOT EXISTS \`$database\`;" "Failed to create database '$database': "
   fi
 }
 
@@ -342,16 +348,13 @@ EOF
     user_host=$(get_env_var "USER_HOST")
     user_host="${user_host:-${DOLT_ROOT_HOST:-localhost}}"
 
-    mysql_note "Creating user '${user}@${user_host}'..."
+    mysql_note "Creating user '${user}@${user_host}'"
     exec_mysql "CREATE USER IF NOT EXISTS '$user'@'$user_host' IDENTIFIED BY '$password';" "Failed to create user '$user': "
     exec_mysql "GRANT USAGE ON *.* TO '$user'@'$user_host';" "Failed to grant server access to user '$user': "
 
     if [ -n "$database" ]; then
-      mysql_note "Giving user '${user}@${user_host}' access to schema '${database}'..."
       exec_mysql "GRANT ALL ON \`$database\`.* TO '$user'@'$user_host';" "Failed to grant permissions to user '$user' on database '$database': "
     fi
-
-    mysql_note "'${user}@${user_host}' user successfully created!"
   fi
 }
 
@@ -437,13 +440,10 @@ _main() {
     set -- "$@" --config="$CONFIG_PROVIDED"
   fi
 
-  create_database_from_env
-
-  mysql_note "Starting Dolt server in the background..."
+  mysql_note "Starting Dolt server"
   # Attempt to configure the root user directly through the sql-server using built-in environment variable support
   # The user creation queries with `dolt sql` can interfere with this process so we run them after the server is started
   DOLT_ROOT_HOST="${DOLT_ROOT_HOST:-localhost}"
-  mysql_note "Configuring user 'root@${DOLT_ROOT_HOST}'..."
 
   # `dolt sql` can hold locks that prevent the server from starting during system hangs
   dolt_server_initializer "$@"
@@ -461,7 +461,7 @@ _main() {
     exec_mysql "GRANT ALL PRIVILEGES ON *.* TO 'root'@'${DOLT_ROOT_HOST}' WITH GRANT OPTION;" "Could not set root privileges: "
   fi
 
-  mysql_note "'root@${DOLT_ROOT_HOST}' user successfully configured!"
+  create_database_from_env
 
   create_user_from_env
 

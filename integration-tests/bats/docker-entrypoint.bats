@@ -966,3 +966,39 @@ EOF
     wait $pid
   done
 }
+
+# bats test_tags=no_lambda
+@test "docker-entrypoint: server logs are parsed into entrypoint log format" {
+  cname="${TEST_PREFIX}server-log"
+
+  run_container_with_port "$cname" 3306
+  docker logs "$cname" >/tmp/${cname}.log 2>&1
+  run grep -F "[Note] [Dolt] [Server]" /tmp/"${cname}".log | grep -F -v "level="
+  [ $status -eq 0 ]
+}
+
+# bats test_tags=no_lambda
+@test "docker-entrypoint: DOLT_RAW is respected" {
+  cname="${TEST_PREFIX}dolt-raw"
+
+  run_container_with_port "$cname" 3306 -e DOLT_RAW=1
+  docker logs "$cname" >/tmp/${cname}.log 2>&1
+  run grep -F "level=" /tmp/"${cname}".log | grep -F -v "[Note] [Dolt] [Server]"
+  [ $status -eq 0 ]
+}
+
+# bats test_tags=no_lambda
+@test "docker-entrypoint: server debug logs passthrough unmodified" {
+  cname="${TEST_PREFIX}debug"
+
+  run docker run -d --name "$cname" "$TEST_IMAGE" -l debug
+  run docker run -d --name "$cname" "$TEST_IMAGE" -l debug
+  wait_for_log "$cname" "Dolt init process done. Ready for connections."
+  docker logs "$cname" >/tmp/${cname}.log 2>&1
+
+  run grep -F "level=debug" /tmp/"${cname}".log
+  [ "$status" -eq 0 ]
+
+  run grep -F "[Note] [Dolt] [Server]" /tmp/"${cname}".log
+  [ "$status" -eq 0 ]
+}
