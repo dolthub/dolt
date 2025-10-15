@@ -16,7 +16,6 @@ package index
 
 import (
 	"context"
-	"github.com/dolthub/vitess/go/sqltypes"
 	"io"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -144,7 +143,10 @@ func (p prollyIndexIter) Next2(ctx *sql.Context) (sql.Row2, error) {
 			if err != nil {
 				return err
 			}
-			r[outputIdx] = sqltypes.MakeTrusted(typ, field)
+			r[outputIdx] = sql.Value{
+				Typ: typ,
+				Val: field,
+			}
 		}
 		for i, idx := range p.valMap {
 			outputIdx := p.ordMap[len(p.keyMap)+i]
@@ -153,7 +155,10 @@ func (p prollyIndexIter) Next2(ctx *sql.Context) (sql.Row2, error) {
 			if err != nil {
 				return err
 			}
-			r[outputIdx] = sqltypes.MakeTrusted(typ, field)
+			r[outputIdx] = sql.Value{
+				Typ: typ,
+				Val: field,
+			}
 		}
 		return nil
 	})
@@ -301,7 +306,10 @@ func (p prollyCoveringIndexIter) Next2(ctx *sql.Context) (sql.Row2, error) {
 		if err != nil {
 			return nil, err
 		}
-		row[outputIdx] = sqltypes.MakeTrusted(typ, field)
+		row[outputIdx] = sql.Value{
+			Typ: typ,
+			Val: field,
+		}
 	}
 
 	for i, idx := range p.valMap {
@@ -311,7 +319,10 @@ func (p prollyCoveringIndexIter) Next2(ctx *sql.Context) (sql.Row2, error) {
 		if err != nil {
 			return nil, err
 		}
-		row[outputIdx] = sqltypes.MakeTrusted(typ, field)
+		row[outputIdx] = sql.Value{
+			Typ: typ,
+			Val: field,
+		}
 	}
 
 	return row, nil
@@ -555,7 +566,10 @@ func (p prollyKeylessIndexIter) Next2(ctx *sql.Context) (sql.Row2, error) {
 			if err != nil {
 				return nil, err
 			}
-			p.curr[outputIdx] = sqltypes.MakeTrusted(typ, field)
+			p.curr[outputIdx] = sql.Value{
+				Typ: typ,
+				Val: field,
+			}
 		}
 	}
 
