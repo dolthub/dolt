@@ -69,10 +69,10 @@ func TestInMemoryArchiveIndexReaderQuota(t *testing.T) {
 		require.NoError(t, err)
 
 		// It should have acquired quote.
-		expectedBytes := (1024+1)*8 /* byte span offsets */ +
-			1024*8 /* prefixes */ +
-			1024*4*2 /* chunk spans */ +
-			1024*12 /* suffixes */
+		expectedBytes := (1024+1)*uint64Size /* byte span offsets */ +
+			1024*uint64Size /* prefixes */ +
+			1024*uint32Size*2 /* chunk spans */ +
+			1024*hash.SuffixLen /* suffixes */
 		assert.Equal(t, uint64(expectedBytes), q.Usage())
 
 		// A clone should not change the acquired quota.

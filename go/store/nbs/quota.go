@@ -48,7 +48,7 @@ func (q *UnlimitedQuotaProvider) AcquireQuotaUint32s(ctx context.Context, sz int
 	buf := make([]uint32, sz)
 	q.mu.Lock()
 	defer q.mu.Unlock()
-	q.used += uint64(sz) * 4
+	q.used += uint64(sz) * uint32Size
 	return buf, nil
 }
 
@@ -56,7 +56,7 @@ func (q *UnlimitedQuotaProvider) AcquireQuotaUint64s(ctx context.Context, sz int
 	buf := make([]uint64, sz)
 	q.mu.Lock()
 	defer q.mu.Unlock()
-	q.used += uint64(sz) * 8
+	q.used += uint64(sz) * uint64Size
 	return buf, nil
 }
 

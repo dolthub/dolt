@@ -252,7 +252,7 @@ func newInMemoryArchiveIndexReader(ctx context.Context, reader tableReaderAt, fo
 	if err != nil {
 		return nil, fmt.Errorf("Failed to allocate byteSpans uint64 slice: %w", err)
 	}
-	bytesSoFar := len(byteSpans) * 8
+	bytesSoFar := len(byteSpans) * uint64Size
 	byteSpans[0] = 0 // Null byteSpan to simplify logic.
 	err = binary.Read(secRdr, binary.BigEndian, byteSpans[1:])
 	if err != nil {
@@ -267,7 +267,7 @@ func newInMemoryArchiveIndexReader(ctx context.Context, reader tableReaderAt, fo
 		q.ReleaseQuotaBytes(bytesSoFar)
 		return nil, fmt.Errorf("Failed to allocate prefixes uint32 slice: %w", err)
 	}
-	bytesSoFar += len(prefixes) * 8
+	bytesSoFar += len(prefixes) * uint64Size
 	err = binary.Read(prefixRdr, binary.BigEndian, prefixes[:])
 	if err != nil {
 		q.ReleaseQuotaBytes(bytesSoFar)
@@ -281,7 +281,7 @@ func newInMemoryArchiveIndexReader(ctx context.Context, reader tableReaderAt, fo
 		q.ReleaseQuotaBytes(bytesSoFar)
 		return nil, fmt.Errorf("Failed to allocate chunks uint32 slice: %w", err)
 	}
-	bytesSoFar += len(chnks) * 4
+	bytesSoFar += len(chnks) * uint32Size
 	err = binary.Read(chunkRdr, binary.BigEndian, chnks[:])
 	if err != nil {
 		q.ReleaseQuotaBytes(bytesSoFar)
@@ -377,7 +377,7 @@ func (f *inMemoryArchiveIndexReader) Close() error {
 	// No need to restore count which was over closed. We already incorrectly
 	// released the bytes and can't necessarily do anything about it.
 	if cnt == 0 {
-		numBytes := len(f.chunkRefs)*4 + len(f.prefixes)*8 + len(f.spanIndex)*8 + len(f.suffixes)
+		numBytes := len(f.chunkRefs)*uint32Size + len(f.prefixes)*uint64Size + len(f.spanIndex)*uint64Size + len(f.suffixes)
 		f.q.ReleaseQuotaBytes(numBytes)
 	}
 	return nil
