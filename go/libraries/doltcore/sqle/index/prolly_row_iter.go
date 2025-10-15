@@ -15,13 +15,11 @@
 package index
 
 import (
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/vitess/go/sqltypes"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
+	"github.com/dolthub/go-mysql-server/sql"
 )
 
 type prollyRowIter struct {
@@ -206,7 +204,10 @@ func (it prollyRowIter) Next2(ctx *sql.Context) (sql.Row2, error) {
 		if err != nil {
 			return nil, err
 		}
-		row[outputIdx] = sqltypes.MakeTrusted(typ, field)
+		row[outputIdx] = sql.Value{
+			Typ: typ,
+			Val: field,
+		}
 	}
 
 	for i, idx := range it.valProj {
@@ -216,7 +217,10 @@ func (it prollyRowIter) Next2(ctx *sql.Context) (sql.Row2, error) {
 		if err != nil {
 			return nil, err
 		}
-		row[outputIdx] = sqltypes.MakeTrusted(typ, field)
+		row[outputIdx] = sql.Value{
+			Typ: typ,
+			Val: field,
+		}
 	}
 	return row, nil
 }
@@ -292,7 +296,10 @@ func (it *prollyKeylessIter) Next2(ctx *sql.Context) (sql.Row2, error) {
 			if err != nil {
 				return nil, err
 			}
-			it.curr2[outputIdx] = sqltypes.MakeTrusted(typ, field)
+			it.curr2[outputIdx] = sql.Value{
+				Typ: typ,
+				Val: field,
+			}
 		}
 	}
 	it.card--
