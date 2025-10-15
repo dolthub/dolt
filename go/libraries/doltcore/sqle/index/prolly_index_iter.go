@@ -16,7 +16,6 @@ package index
 
 import (
 	"context"
-	"github.com/dolthub/vitess/go/sqltypes"
 	"io"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -50,6 +49,8 @@ type prollyIndexIter struct {
 }
 
 var _ sql.RowIter = prollyIndexIter{}
+var _ sql.RowIter2 = prollyIndexIter{}
+var _ sql.RowFrameIter = prollyIndexIter{}
 
 // NewProllyIndexIter returns a new prollyIndexIter.
 func newProllyIndexIter(
@@ -144,7 +145,10 @@ func (p prollyIndexIter) Next2(ctx *sql.Context) (sql.Row2, error) {
 			if err != nil {
 				return err
 			}
-			r[outputIdx] = sqltypes.MakeTrusted(typ, field)
+			r[outputIdx] = sql.Value{
+				Val: field,
+				Typ: typ,
+			}
 		}
 		for i, idx := range p.valMap {
 			outputIdx := p.ordMap[len(p.keyMap)+i]
@@ -153,7 +157,10 @@ func (p prollyIndexIter) Next2(ctx *sql.Context) (sql.Row2, error) {
 			if err != nil {
 				return err
 			}
-			r[outputIdx] = sqltypes.MakeTrusted(typ, field)
+			r[outputIdx] = sql.Value{
+				Val: field,
+				Typ: typ,
+			}
 		}
 		return nil
 	})
@@ -165,6 +172,15 @@ func (p prollyIndexIter) Next2(ctx *sql.Context) (sql.Row2, error) {
 
 func (p prollyIndexIter) IsRowIter2(ctx *sql.Context) bool {
 	return true
+}
+
+func (p prollyIndexIter) NextRowFrame(ctx *sql.Context, rowFrame *sql.RowFrame) error {
+	row, err := p.Next2(ctx)
+	if err != nil {
+		return err
+	}
+	rowFrame.Append(row...)
+	return nil
 }
 
 func (p prollyIndexIter) rowFromTuples(ctx context.Context, key, value val.Tuple, r sql.Row) (err error) {
@@ -232,6 +248,8 @@ type prollyCoveringIndexIter struct {
 }
 
 var _ sql.RowIter = prollyCoveringIndexIter{}
+var _ sql.RowIter2 = prollyCoveringIndexIter{}
+var _ sql.RowFrameIter = prollyCoveringIndexIter{}
 
 func newProllyCoveringIndexIter(
 	ctx *sql.Context,
@@ -301,7 +319,10 @@ func (p prollyCoveringIndexIter) Next2(ctx *sql.Context) (sql.Row2, error) {
 		if err != nil {
 			return nil, err
 		}
-		row[outputIdx] = sqltypes.MakeTrusted(typ, field)
+		row[outputIdx] = sql.Value{
+			Val: field,
+			Typ: typ,
+		}
 	}
 
 	for i, idx := range p.valMap {
@@ -311,7 +332,10 @@ func (p prollyCoveringIndexIter) Next2(ctx *sql.Context) (sql.Row2, error) {
 		if err != nil {
 			return nil, err
 		}
-		row[outputIdx] = sqltypes.MakeTrusted(typ, field)
+		row[outputIdx] = sql.Value{
+			Val: field,
+			Typ: typ,
+		}
 	}
 
 	return row, nil
@@ -319,6 +343,15 @@ func (p prollyCoveringIndexIter) Next2(ctx *sql.Context) (sql.Row2, error) {
 
 func (p prollyCoveringIndexIter) IsRowIter2(ctx *sql.Context) bool {
 	return true
+}
+
+func (p prollyCoveringIndexIter) NextRowFrame(ctx *sql.Context, rowFrame *sql.RowFrame) error {
+	row, err := p.Next2(ctx)
+	if err != nil {
+		return err
+	}
+	rowFrame.Append(row...)
+	return nil
 }
 
 func (p prollyCoveringIndexIter) writeRowFromTuples(ctx context.Context, key, value val.Tuple, r sql.Row) (err error) {
@@ -389,6 +422,8 @@ type prollyKeylessIndexIter struct {
 }
 
 var _ sql.RowIter = prollyKeylessIndexIter{}
+var _ sql.RowIter2 = prollyKeylessIndexIter{}
+var _ sql.RowFrameIter = prollyKeylessIndexIter{}
 
 func newProllyKeylessIndexIter(ctx *sql.Context, idx DoltIndex, rng prolly.Range, doltgresRange *DoltgresRange, pkSch sql.PrimaryKeySchema, projections []uint64, rows, dsecondary durable.Index, reverse bool) (prollyKeylessIndexIter, error) {
 	secondary, err := durable.ProllyMapFromIndex(dsecondary)
@@ -555,7 +590,10 @@ func (p prollyKeylessIndexIter) Next2(ctx *sql.Context) (sql.Row2, error) {
 			if err != nil {
 				return nil, err
 			}
-			p.curr[outputIdx] = sqltypes.MakeTrusted(typ, field)
+			p.curr[outputIdx] = sql.Value{
+				Val: field,
+				Typ: typ,
+			}
 		}
 	}
 
@@ -565,6 +603,15 @@ func (p prollyKeylessIndexIter) Next2(ctx *sql.Context) (sql.Row2, error) {
 
 func (p prollyKeylessIndexIter) IsRowIter2(ctx *sql.Context) bool {
 	return true
+}
+
+func (p prollyKeylessIndexIter) NextRowFrame(ctx *sql.Context, rowFrame *sql.RowFrame) error {
+	row, err := p.Next2(ctx)
+	if err != nil {
+		return err
+	}
+	rowFrame.Append(row...)
+	return nil
 }
 
 func (p prollyKeylessIndexIter) Close(*sql.Context) error {

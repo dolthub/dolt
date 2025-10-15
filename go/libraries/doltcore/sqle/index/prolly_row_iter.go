@@ -15,13 +15,11 @@
 package index
 
 import (
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/vitess/go/sqltypes"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
+	"github.com/dolthub/go-mysql-server/sql"
 )
 
 type prollyRowIter struct {
@@ -39,6 +37,8 @@ type prollyRowIter struct {
 }
 
 var _ sql.RowIter = prollyRowIter{}
+var _ sql.RowIter2 = prollyRowIter{}
+var _ sql.RowFrameIter = prollyRowIter{}
 
 func NewProllyRowIterForMap(sch schema.Schema, rows prolly.MapInterface, iter prolly.MapIter, projections []uint64) sql.RowIter {
 	if projections == nil {
@@ -206,7 +206,10 @@ func (it prollyRowIter) Next2(ctx *sql.Context) (sql.Row2, error) {
 		if err != nil {
 			return nil, err
 		}
-		row[outputIdx] = sqltypes.MakeTrusted(typ, field)
+		row[outputIdx] = sql.Value{
+			Val: field,
+			Typ: typ,
+		}
 	}
 
 	for i, idx := range it.valProj {
@@ -216,13 +219,25 @@ func (it prollyRowIter) Next2(ctx *sql.Context) (sql.Row2, error) {
 		if err != nil {
 			return nil, err
 		}
-		row[outputIdx] = sqltypes.MakeTrusted(typ, field)
+		row[outputIdx] = sql.Value{
+			Val: field,
+			Typ: typ,
+		}
 	}
 	return row, nil
 }
 
 func (it prollyRowIter) IsRowIter2(ctx *sql.Context) bool {
 	return true
+}
+
+func (it prollyRowIter) NextRowFrame(ctx *sql.Context, rowFrame *sql.RowFrame) error {
+	row, err := it.Next2(ctx)
+	if err != nil {
+		return err
+	}
+	rowFrame.Append(row...)
+	return nil
 }
 
 func (it prollyRowIter) Close(ctx *sql.Context) error {
@@ -242,8 +257,8 @@ type prollyKeylessIter struct {
 }
 
 var _ sql.RowIter = &prollyKeylessIter{}
-
-//var _ sql.RowIter2 = prollyKeylessIter{}
+var _ sql.RowIter2 = &prollyKeylessIter{}
+var _ sql.RowFrameIter = &prollyKeylessIter{}
 
 func (it *prollyKeylessIter) Next(ctx *sql.Context) (sql.Row, error) {
 	if it.card == 0 {
@@ -292,7 +307,10 @@ func (it *prollyKeylessIter) Next2(ctx *sql.Context) (sql.Row2, error) {
 			if err != nil {
 				return nil, err
 			}
-			it.curr2[outputIdx] = sqltypes.MakeTrusted(typ, field)
+			it.curr2[outputIdx] = sql.Value{
+				Val: field,
+				Typ: typ,
+			}
 		}
 	}
 	it.card--
@@ -301,6 +319,15 @@ func (it *prollyKeylessIter) Next2(ctx *sql.Context) (sql.Row2, error) {
 
 func (it *prollyKeylessIter) IsRowIter2(ctx *sql.Context) bool {
 	return true
+}
+
+func (it *prollyKeylessIter) NextRowFrame(ctx *sql.Context, rowFrame *sql.RowFrame) error {
+	row, err := it.Next2(ctx)
+	if err != nil {
+		return err
+	}
+	rowFrame.Append(row...)
+	return nil
 }
 
 func (it *prollyKeylessIter) Close(ctx *sql.Context) error {
