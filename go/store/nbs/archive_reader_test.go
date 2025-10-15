@@ -85,8 +85,26 @@ func TestInMemoryArchiveIndexReaderQuota(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, uint64(expectedBytes), q.Usage())
 
-		// Closing the last reader should release the quota.
+		// We can clone again.
+		readerClone, err = reader.clone()
+		require.NoError(t, err)
+		assert.Equal(t, uint64(expectedBytes), q.Usage())
+
+		// And clone a clone.
+		anotherReaderClone, err := readerClone.clone()
+		require.NoError(t, err)
+		assert.Equal(t, uint64(expectedBytes), q.Usage())
+		err = anotherReaderClone.close()
+		require.NoError(t, err)
+		assert.Equal(t, uint64(expectedBytes), q.Usage())
+
+		// Closing the original reader while there is a clone should not release the quota.
 		err = reader.close()
+		require.NoError(t, err)
+		assert.Equal(t, uint64(expectedBytes), q.Usage())
+
+		// Closing the last reader should release the quota.
+		err = readerClone.close()
 		require.NoError(t, err)
 		assert.Equal(t, uint64(0), q.Usage())
 	})
