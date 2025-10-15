@@ -101,6 +101,8 @@ func TestInMemoryArchiveIndexReaderQuota(t *testing.T) {
 			t.Run(strconv.Itoa(afterBytes), func(t *testing.T) {
 				// Build a tableReaderAt for the file we just wrote.
 				tra, err := newFileReaderAt(path, false)
+				// newArchiveReader typically takes ownership of the tableReaderAt
+				// but because it is going to error, we need to close it here.
 				require.NoError(t, err)
 
 				// Load it as an archive reader.
@@ -111,6 +113,7 @@ func TestInMemoryArchiveIndexReaderQuota(t *testing.T) {
 				_, err = newArchiveReader(ctx, &errorAfter{tra, afterBytes}, h, uint64(tra.sz), q, stats)
 				require.Error(t, err)
 				assert.Equal(t, uint64(0), q.Usage())
+				require.NoError(t, tra.Close())
 			})
 		}
 	})
@@ -126,6 +129,9 @@ func TestInMemoryArchiveIndexReaderQuota(t *testing.T) {
 				// Build a tableReaderAt for the file we just wrote.
 				tra, err := newFileReaderAt(path, false)
 				require.NoError(t, err)
+				// newArchiveReader typically takes ownership of the tableReaderAt
+				// but because it is going to error, we need to close it here.
+				defer tra.Close()
 
 				// Load it as an archive reader.
 				q := errorQuota{NewUnlimitedMemQuotaProvider(), afterBytes}
