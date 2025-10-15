@@ -284,7 +284,7 @@ tests:
       result:
         columns: ["@@GLOBAL.dolt_log_level"]
         rows: [["info"]]
-- name: "@@global.dolt_auto_gc_enabled false"
+- name: "@@global.dolt_auto_gc_enabled default"
   repos:
   - name: repo1
     server:
@@ -296,8 +296,8 @@ tests:
     - query: "select @@GLOBAL.dolt_auto_gc_enabled"
       result:
         columns: ["@@GLOBAL.dolt_auto_gc_enabled"]
-        rows: [[0]]
-    - exec: "SET @@GLOBAL.dolt_auto_gc_enabled = 1"
+        rows: [[1]]
+    - exec: "SET @@GLOBAL.dolt_auto_gc_enabled = 0"
       error_match: "Variable 'dolt_auto_gc_enabled' is a read only variable"
 - name: "@@global.dolt_auto_gc_enabled true"
   repos:
@@ -320,6 +320,27 @@ tests:
       result:
         columns: ["@@GLOBAL.dolt_auto_gc_enabled"]
         rows: [[1]]
+- name: "@@global.dolt_auto_gc_enabled false"
+  repos:
+    - name: repo1
+      with_files:
+        - name: "config.yaml"
+          contents: |
+            behavior:
+              auto_gc_behavior:
+                enable: false
+            listener:
+              port: {{get_port "repo1"}}
+      server:
+        args: ["--config", "config.yaml"]
+        dynamic_port: repo1
+  connections:
+    - on: repo1
+      queries:
+        - query: "select @@GLOBAL.dolt_auto_gc_enabled"
+          result:
+            columns: ["@@GLOBAL.dolt_auto_gc_enabled"]
+            rows: [[0]]
 - name: system variables in config.yaml can be read in show variables
   repos:
   - name: repo1
