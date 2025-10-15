@@ -1,43 +1,61 @@
 #!/bin/bash
 set -eo pipefail
 
-# mysql_log logs messages with a timestamp and optional color formatting.
+# mysql_log logs messages with flexible metadata and optional color formatting.
 # Arguments:
 #   $1 - Log type (e.g., Note, Warn, ERROR, Debug)
-#   $@ - Log message (if empty, reads from stdin)
+#   $@ - Metadata fields (optional), last argument is always the message
+#   If no arguments, reads message from stdin
 # Output:
 #   Prints a formatted log line to stdout or stderr, with color for Warn, ERROR, and Debug.
 mysql_log() {
-  local type="$1"
-  shift
-  local text="$*"
-  if [ "$#" -eq 0 ]; then text="$(cat)"; fi
-  local dt
+  local type="$1"; shift
+  local dt color color_reset="\033[0m"
   dt="$(date --rfc-3339=seconds)"
-  local color_reset="\033[0m"
-  local color
-  case "$type" in
-  Warning) color="\033[1;33m" ;;   # yellow
-  ERROR) color="\033[1;31m" ;;  # red
-  Debug) color="\033[1;34m" ;;  # blue
-  *) color="" ;;
+
+  # If last argument is missing, read message from stdin
+  local msg meta=()
+  if [ "$#" -eq 0 ]; then
+    msg="$(cat)"
+  else
+    # Split metadata vs message
+    msg="${@: -1}"             # last argument
+    meta=("${@:1:$(($#-1))}")  # everything except last
+  fi
+
+  # Pick color
+  case "${type,,}" in
+  warn|warning) color="\033[1;33m"; type="Warning" ;;
+  error)        color="\033[1;31m"; type="ERROR" ;;
+  debug)        color="\033[1;34m"; type="Debug" ;;
+  info|note)    color=""; type="Note" ;;
+  *)            color="";;
   esac
-  printf '%b%s [%s] [Entrypoint]: %s%b\n' "$color" "$dt" "$type" "$text" "$color_reset"
+
+  # Build metadata block like: [Entrypoint] [Server=db1]
+  local meta_str=""
+  for m in "${meta[@]}"; do
+    meta_str+="[$m] "
+  done
+
+  # Print final formatted log
+  printf '%b%s [%s] %s%s%b\n' \
+    "$color" "$dt" "$type" "$meta_str" "$msg" "$color_reset"
 }
 
 # _dbg logs a message of type 'Debug' using mysql_log.
 _dbg() {
-  mysql_log Debug "$@"
+  mysql_log Debug Entrypoint "$@"
 }
 
 # mysql_note logs a message of type 'Note' using mysql_log.
 mysql_note() {
-  mysql_log Note "$@"
+  mysql_log Note Entrypoint "$@"
 }
 
 # mysql_warn logs a message of type 'Warning' using mysql_log and writes to stderr.
 mysql_warn() {
-  mysql_log Warning "$@" >&2
+  mysql_log Warning Entrypoint "$@" >&2
 }
 
 # mysql_error logs a message of type 'ERROR' using mysql_log, writes to stderr, prints a container removal hint, and
@@ -48,25 +66,21 @@ mysql_error() {
   exit 1
 }
 
-# dolt_log parses piped messages from `dolt sql-server` into the same format as mysql_log. Excludes debug as it can
-# de-sync log output. Users are provided the DOLT_RAW environment variable to disable the parser.
-dolt_log() {
-  local color_reset="\033[0m"
-  local color level msg dt
-
+# dolt_log parses piped messages from `dolt sql-server` into the same format as mysql_log,
+# but only handles info, warning, and debug levels. Other levels are ignored and printed by the caller.
+dolt_server_parser() {
   while IFS= read -r line || [ -n "$line" ]; do
-    # Skip empty lines
     [ -z "$line" ] && continue
 
-    # Extract timestamp (after time="..."), fallback empty if missing
-    dt="${line#time=\"}"
+    local dt="${line#time=\"}"
     dt="${dt%%\"*}"
 
     # Extract level (e.g. info, warn, error)
-    level="${line#*level=}"
+    local level="${line#*level=}"
     level="${level%% *}"
 
     # Extract msg=... (handle quoted or unquoted)
+    local msg
     if [[ "$line" == *'msg="'* ]]; then
       msg="${line#*msg=\"}"
       msg="${msg%%\"*}"
@@ -76,17 +90,13 @@ dolt_log() {
       msg="(no message)"
     fi
 
-    # Map level → display label + color
     case "${level,,}" in
-    warn|warning) level="Warning"; color="\033[1;33m" ;; # yellow
-    error)        level="ERROR";   color="\033[1;31m" ;; # red
-    debug)        level="Debug";   color="\033[1;34m" ;; # blue
-    info)         level="Info";    color="" ;;           # default
-    *)            level="Info";    color="" ;;
+    info)   mysql_log Info "Dolt" "Server" "$msg" ;;
+    warn|warning) mysql_log Warning "Dolt" "Server" "$msg" ;;
+    debug)  mysql_log Debug "Dolt" "Server" "$msg" ;;
+    *)      # other levels: skip formatting, let caller handle
+      echo "$line" ;;
     esac
-
-    printf '%b%s [%s] [Dolt] [Server]: %s%b\n' \
-      "$color" "$dt" "$level" "$msg" "$color_reset"
   done
 }
 
@@ -382,7 +392,7 @@ dolt_server_initializer() {
       if [ "${DOLT_RAW:-0}" -eq 1 ]; then
         dolt sql-server --host=0.0.0.0 --port=3306 "$@" 2>&1 &
       else
-        dolt sql-server --host=0.0.0.0 --port=3306 "$@" 2>&1 | dolt_log &
+        dolt sql-server --host=0.0.0.0 --port=3306 "$@" 2>&1 | dolt_server_parser &
       fi
       SERVER_PID=$!
     fi
