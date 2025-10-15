@@ -15,6 +15,8 @@
 package earl
 
 import (
+	"errors"
+	"fmt"
 	"net/url"
 	"regexp"
 	"strconv"
@@ -78,6 +80,50 @@ func Parse(urlStr string) (*url.URL, error) {
 	return u, nil
 }
 
+func ParseRawWithAWSSupport(urlStr string) (*url.URL, error) {
+	// XXX: This is a kludge to support AWS remote URLs. These URLs use a non-standard syntax to specify the s3 bucket and dynamodb table names, and they look like:
+	// aws://[s3_bucket_name:dynamodb_table_name]/path/to/files/in/s3/and/db/key/in/dynamo
+	//
+	// This was supported by Go url.Parse until 1.25.2, where validation was added to the bracketed hostname component:
+	// https://github.com/golang/go/issues/75678
+	//
+	// Here we explicitly kludge around the aws schema in a hard-coded way. Pretty gross for now.
+	if strings.HasPrefix(urlStr, "aws://[") {
+		hostStart := 7
+		hostEnd := hostStart + strings.Index(urlStr[hostStart:], "]")
+		if hostEnd == hostStart-1 {
+			return nil, errors.New("could not parse aws schema url: expected aws://[s3_bucket:dynamodb_table] but did not find closing bracket.")
+		}
+		host := urlStr[hostStart:hostEnd]
+		hostColon := strings.Index(host, ":")
+		if hostColon == -1 {
+			return nil, errors.New("could not parse aws schema url: expected aws://[s3_bucket:dynamodb_table] but did not find colon introducting dynamodb_table.")
+		}
+
+		rawBucketName := host[:hostColon]
+		rawTableName := host[hostColon+1:]
+		// For full compliance with previous beahvior, we pass both components through url.Parse as hostnames to get the same escape handling as we used to have.
+		parsedBucketName, err := url.Parse("http://" + rawBucketName)
+		if err != nil {
+			return nil, fmt.Errorf("could not parse aws s3 bucket name as hostname: %w", err)
+		}
+		parsedTableName, err := url.Parse("http://" + rawTableName)
+		if err != nil {
+			return nil, fmt.Errorf("could not parse aws dynamodb table name as hostname: %w", err)
+		}
+		returnedHost := "[" + parsedBucketName.Host + ":" + parsedTableName.Host + "]"
+
+		// Here we parse the original urlStr but with the host component replaced by a hard coded compliant value.  We then replace the Host in the *URL we return.
+		parsed, err := url.Parse("aws://hostname" + urlStr[hostEnd+1:])
+		if err != nil {
+			return nil, fmt.Errorf("could not parse aws url: %w", err)
+		}
+		parsed.Host = returnedHost
+		return parsed, nil
+	}
+	return url.Parse(urlStr)
+}
+
 func parse(urlStr string) (*url.URL, error) {
 	if strIdx := strings.Index(urlStr, ":///"); strIdx != -1 && osutil.StartsWithWindowsVolume(urlStr[strIdx+4:]) {
 		return &url.URL{
@@ -91,6 +137,7 @@ func parse(urlStr string) (*url.URL, error) {
 			Path:   urlStr[strIdx+3:],
 		}, nil
 	}
+
 	if strings.Index(urlStr, "://") == -1 {
 		u, err := url.Parse("http://" + urlStr)
 
@@ -102,7 +149,7 @@ func parse(urlStr string) (*url.URL, error) {
 		}
 	}
 
-	return url.Parse(urlStr)
+	return ParseRawWithAWSSupport(urlStr)
 }
 
 // FileUrlFromPath returns a url for the given path with the "file" scheme i.e. file://...

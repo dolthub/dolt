@@ -201,6 +201,25 @@ func TestParse(t *testing.T) {
 			false,
 		},
 		{
+			"aws://[bucketname]/path/to/files",
+			url.URL{},
+			true,
+		},
+		{
+			"aws://[bucketname:tablename",
+			url.URL{},
+			true,
+		},
+		{
+			"aws://[bucketname:tablename]/path/to/files",
+			url.URL{
+				Scheme: "aws",
+				Host:   "[bucketname:tablename]",
+				Path:   "/path/to/files",
+			},
+			false,
+		},
+		{
 			"file://C:/Users/name/datasets",
 			url.URL{
 				Scheme: "file",
