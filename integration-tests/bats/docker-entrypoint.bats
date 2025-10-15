@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 
-load "$BATS_TEST_DIRNAME"/helper/common.bash
+load $BATS_TEST_DIRNAME/helper/common.bash
 
 # These tests validate docker/docker-entrypoint.sh using a Docker image built from
 # docker/serverDockerfile in the repo root. They follow existing integration test conventions.
@@ -28,7 +28,6 @@ setup() {
 }
 
 teardown() {
-  docker ps -a --filter "name=$TEST_PREFIX" --format '{{.Names}}' | xargs -r docker stop >/dev/null 2>&1 || true
   docker ps -a --filter "name=$TEST_PREFIX" --format '{{.Names}}' | xargs -r docker rm -f >/dev/null 2>&1 || true
   teardown_common
 }
@@ -596,10 +595,6 @@ EOF
 
 # bats test_tags=no_lambda
 @test "docker-entrypoint: .sql.gz gzip compressed file processing" {
-  if ! command -v gzip >/dev/null 2>&1; then
-    skip "gzip not installed"
-  fi
-
   cname="${TEST_PREFIX}gzip-sql"
 
   local temp_dir="/tmp/gzip-sql-test-$$"
@@ -638,10 +633,6 @@ EOF
 
 # bats test_tags=no_lambda
 @test "docker-entrypoint: .sql.bz2 bzip2 compressed file processing" {
-  if ! command -v bzip2 >/dev/null 2>&1; then
-    skip "bzip2 not installed on host system"
-  fi
-
   cname="${TEST_PREFIX}bzip2-sql"
 
   local temp_dir="/tmp/bzip2-sql-test-$$"
@@ -663,36 +654,20 @@ EOF
   run_container_with_port "$cname" 3306 -e DOLT_ROOT_PASSWORD=rootpass -e DOLT_ROOT_HOST=% -v "$temp_dir:/docker-entrypoint-initdb.d"
 
   run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u root --password=rootpass -e "SHOW DATABASES;"
-  if [ $status -ne 0 ]; then
-    echo "Failed to show databases. Output: $output"
-    docker logs "$cname" 2>&1
-    return 1
-  fi
-  [[ "$output" =~ "bzip2_sql_db" ]] || { echo "Database bzip2_sql_db not found in: $output"; docker logs "$cname" 2>&1; false; }
+  [ $status -eq 0 ]
+  [[ "$output" =~ "bzip2_sql_db" ]] || false
 
   run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u root --password=rootpass -e "USE bzip2_sql_db; SELECT SUM(total) as total FROM orders;"
-  if [ $status -ne 0 ]; then
-    echo "Failed to query orders table. Output: $output"
-    docker logs "$cname" 2>&1
-    return 1
-  fi
-  [[ "$output" =~ "475.75" ]] || { echo "Expected sum 475.75 not found in: $output"; false; }
+  [ $status -eq 0 ]
+  [[ "$output" =~ "475.75" ]] || false
 
   run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u bzip2user --password=bzip2pass -e "USE bzip2_sql_db; INSERT INTO orders VALUES (4, 'Alice Brown', 99.99, 'shipped');"
-  if [ $status -ne 0 ]; then
-    echo "Failed to insert as bzip2user. Output: $output"
-    docker logs "$cname" 2>&1
-    return 1
-  fi
+  [ $status -eq 0 ]
 
   run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u bzip2user --password=bzip2pass -e "USE bzip2_sql_db; SELECT customer FROM orders WHERE status='completed';"
-  if [ $status -ne 0 ]; then
-    echo "Failed to select as bzip2user. Output: $output"
-    docker logs "$cname" 2>&1
-    return 1
-  fi
-  [[ "$output" =~ "John Doe" ]] || { echo "Expected 'John Doe' not found in: $output"; false; }
-  [[ "$output" =~ "Bob Johnson" ]] || { echo "Expected 'Bob Johnson' not found in: $output"; false; }
+  [ $status -eq 0 ]
+  [[ "$output" =~ "John Doe" ]] || false
+  [[ "$output" =~ "Bob Johnson" ]] || false
 
   rm -rf "$temp_dir"
 }
@@ -741,10 +716,6 @@ EOF
 
 # bats test_tags=no_lambda
 @test "docker-entrypoint: .sql.zst zstd compressed file processing" {
-  if ! command -v zstd >/dev/null 2>&1; then
-    skip "zstd not installed on host system"
-  fi
-
   cname="${TEST_PREFIX}zstd-sql"
 
   local temp_dir="/tmp/zstd-sql-test-$$"
@@ -867,23 +838,23 @@ EOF
 
   run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u root --password=rootpass -e "USE large_test; SELECT COUNT(*) as count FROM bulk_data;"
   [ $status -eq 0 ]
-  [[ "$output" =~ "1200" ]] || { echo "Expected 1200 rows but got: $output"; false; }
+  [[ "$output" =~ "1200" ]] || false
 
   run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u root --password=rootpass -e "USE large_test; SELECT * FROM bulk_data WHERE id = 1;"
   [ $status -eq 0 ]
-  [[ "$output" =~ "value_1" ]] || { echo "Row 1 (from file 1) not found: $output"; false; }
+  [[ "$output" =~ "value_1" ]] || false
 
   run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u root --password=rootpass -e "USE large_test; SELECT * FROM bulk_data WHERE id = 400;"
   [ $status -eq 0 ]
-  [[ "$output" =~ "value_400" ]] || { echo "Row 400 (from file 1) not found: $output"; false; }
+  [[ "$output" =~ "value_400" ]] || false
 
   run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u root --password=rootpass -e "USE large_test; SELECT * FROM bulk_data WHERE id = 600;"
   [ $status -eq 0 ]
-  [[ "$output" =~ "value_600" ]] || { echo "Row 600 (from file 2) not found: $output"; false; }
+  [[ "$output" =~ "value_600" ]] || false
 
   run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u root --password=rootpass -e "USE large_test; SELECT * FROM bulk_data WHERE id = 1200;"
   [ $status -eq 0 ]
-  [[ "$output" =~ "value_1200" ]] || { echo "Row 1200 (from file 3) not found: $output"; false; }
+  [[ "$output" =~ "value_1200" ]] || false
 
   rm -rf "$temp_dir"
 }
