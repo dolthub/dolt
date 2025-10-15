@@ -15,6 +15,7 @@
 package writer
 
 import (
+	"context"
 	"sync"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -25,6 +26,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 // prollyWriteSession handles all edit operations on a table that may also update other tables.
@@ -41,6 +43,18 @@ var _ dsess.WriteSession = &prollyWriteSession{}
 
 func (s *prollyWriteSession) GetWorkingSet() *doltdb.WorkingSet {
 	return s.workingSet
+}
+
+func (s *prollyWriteSession) VisitGCRoots(ctx context.Context, roots func(hash.Hash) bool) error {
+	s.mut.Lock()
+	defer s.mut.Unlock()
+	for _, writer := range s.tables {
+		err := writer.VisitGCRoots(ctx, roots)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // GetTableWriter implemented WriteSession.
