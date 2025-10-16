@@ -956,13 +956,13 @@ EOF
   cname="${TEST_PREFIX}dolt-raw"
 
   run_container_with_port "$cname" 3306 -e DOLT_RAW=1
-  docker logs "$cname" >/tmp/${cname}.log 2>&1
+  docker logs "$cname" >/tmp/"${cname}".log 2>&1
   
   run grep -F "level=" /tmp/"${cname}".log
   [ $status -eq 0 ]
-
-  run ! grep -F "[0] [System] [Dolt] [Server]" /tmp/"${cname}".log
-  [ $status -eq 0 ]
+  
+  run grep -F "[0] [System] [Dolt] [Server]" /tmp/"${cname}".log
+  [ $status -ne 0 ]
 }
 
 # bats test_tags=no_lambda
