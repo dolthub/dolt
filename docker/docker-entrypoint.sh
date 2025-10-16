@@ -314,35 +314,34 @@ docker_process_init_files() {
       if [ -x "$f" ]; then
         mysql_note "$0: running $f"
         if ! "$f"; then
-          mysql_error "Failed to execute init script '$f'"
+          mysql_error "Failed to execute $f: "
         fi
       else
         mysql_note "$0: sourcing $f"
         if ! . "$f"; then
-          mysql_error "Failed to source init script '$f'"
+          mysql_error "Failed to execute $f: "
         fi
       fi
       ;;
     *.sql)
       mysql_note "$0: running $f"
-      exec_mysql "" "Failed to load $f: " < "$f" 1
+      exec_mysql "" "Failed to execute $f: " < "$f" 1
       ;;
     *.sql.bz2)
       mysql_note "$0: running $f"
-      bunzip2 -c "$f" | exec_mysql "" "Failed to load $f: " 1
+      bunzip2 -c "$f" | exec_mysql "" "Failed to execute $f: " 1
       ;;
     *.sql.gz)
       mysql_note "$0: running $f"
-      gunzip -c "$f" | exec_mysql "" "Failed to load $f: " 1
+      gunzip -c "$f" | exec_mysql "" "Failed to execute $f: " 1
       ;;
     *.sql.xz)
       mysql_note "$0: running $f"
-      xzcat "$f" | exec_mysql "" "Failed to load $f: " 1
+      xzcat "$f" | exec_mysql "" "Failed to execute $f: " 1
       ;;
     *.sql.zst)
       mysql_note "$0: running $f"
-      sql=$(zstd -dc "$f")
-      zstd -dc "$f" | exec_mysql "" "Failed to load $f: " 1
+      zstd -dc "$f" | exec_mysql "" "Failed to execute $f: " 1
       ;;
     *)
       mysql_warn "$0: ignoring $f"

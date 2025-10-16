@@ -556,6 +556,55 @@ EOF
 }
 
 # bats test_tags=no_lambda
+@test "docker-entrypoint: .sh shell script execution" {
+  cname="${TEST_PREFIX}sh-script"
+
+  local temp_dir="/tmp/sh-script-test-$$"
+  mkdir -p "$temp_dir"
+
+  cat > "$temp_dir/01-executable.sh" << 'EOF'
+#!/bin/bash
+set -e
+echo "Executing shell script initialization"
+dolt sql -q "CREATE DATABASE IF NOT EXISTS shell_test_db;"
+dolt sql -q "USE shell_test_db; CREATE TABLE script_test (id INT PRIMARY KEY, message VARCHAR(100));"
+dolt sql -q "USE shell_test_db; INSERT INTO script_test VALUES (1, 'Executable script ran');"
+EOF
+  chmod +x "$temp_dir/01-executable.sh"
+
+  cat > "$temp_dir/02-sourced.sh" << 'EOF'
+# Non-executable script - will be sourced
+echo "Sourcing shell script"
+dolt sql -q "USE shell_test_db; INSERT INTO script_test VALUES (2, 'Sourced script ran');"
+EOF
+  # Do NOT chmod +x: it should be sourced instead of executed
+
+  run_container_with_port "$cname" 3306 -e DOLT_ROOT_HOST=% -v "$temp_dir:/docker-entrypoint-initdb.d"
+
+  run docker exec "$cname" dolt sql -q "SHOW DATABASES;"
+  [ $status -eq 0 ]
+  [[ "$output" =~ "shell_test_db" ]] || false
+
+  run docker exec "$cname" dolt sql -q "USE shell_test_db; SELECT message FROM script_test WHERE id=1;"
+  [ $status -eq 0 ]
+  [[ "$output" =~ "Executable script ran" ]] || false
+
+  run docker exec "$cname" dolt sql -q "USE shell_test_db; SELECT message FROM script_test WHERE id=2;"
+  [ $status -eq 0 ]
+  [[ "$output" =~ "Sourced script ran" ]] || false
+
+  run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u root -e "USE shell_test_db; SELECT COUNT(*) as count FROM script_test;"
+  [ $status -eq 0 ]
+  [[ "$output" =~ "2" ]] || false
+
+  docker logs "$cname" >/tmp/"$cname".log 2>&1
+  run grep -F "sourcing /docker-entrypoint-initdb.d/02-sourced.sh" /tmp/"$cname".log
+  [ $status -eq 0 ]
+
+  rm -rf "$temp_dir"
+}
+
+# bats test_tags=no_lambda
 @test "docker-entrypoint: .sql.gz gzip compressed file processing" {
   cname="${TEST_PREFIX}gzip-sql"
 
@@ -797,7 +846,7 @@ EOF
   cname="${TEST_PREFIX}create-schema"
   usr="testuser"
   pwd="testpass"
-  
+
   run_container_with_port "$cname" 3306 \
     -e DOLT_ROOT_PASSWORD=rootpass \
     -e DOLT_ROOT_HOST=% \
@@ -825,19 +874,19 @@ EOF
 # bats test_tags=no_lambda
 @test "docker-entrypoint: latest binary build from dolt directory" {
   cname="${TEST_PREFIX}latest-docker"
-  
+
   LATEST_IMAGE="dolt-entrypoint-latest:test"
   EXPECTED_VERSION=$(curl -s https://api.github.com/repos/dolthub/dolt/releases/latest | grep '"tag_name"' | cut -d'"' -f4 | sed 's/^v//')
   cd "$WORKSPACE_ROOT/dolt"
   docker build -f docker/serverDockerfile --build-arg DOLT_VERSION=latest -t "$LATEST_IMAGE" .
-  
+
   docker run -d --name "$cname" -e DOLT_ROOT_PASSWORD=rootpass -e DOLT_ROOT_HOST=% "$LATEST_IMAGE"
   wait_for_log "$cname" "Server ready. Accepting connections." 300
   wait_for_log "$cname" "Dolt init process done. Ready for connections." 300
-  
+
   run docker exec "$cname" dolt version
   [ $status -eq 0 ]
-  
+
   INSTALLED_VERSION=$(docker exec "$cname" dolt version | grep -o '[0-9]\+\.[0-9]\+\.[0-9]\+' | head -1)
   [ "$INSTALLED_VERSION" = "$EXPECTED_VERSION" ]
 
@@ -850,23 +899,23 @@ EOF
 # bats test_tags=no_lambda
 @test "docker-entrypoint: specific version binary build from dolt directory" {
   cname="${TEST_PREFIX}specific-version"
-  
+
   SPECIFIC_IMAGE="dolt-entrypoint-specific:test"
   SPECIFIC_VERSION="1.34.0"
   echo "Building Dolt from docker directory with specific version: $SPECIFIC_VERSION"
   cd "$WORKSPACE_ROOT/dolt"
   docker build -f docker/serverDockerfile --build-arg DOLT_VERSION="$SPECIFIC_VERSION" -t "$SPECIFIC_IMAGE" .
-  
+
   docker run -d --name "$cname" -e DOLT_ROOT_PASSWORD=rootpass -e DOLT_ROOT_HOST=% "$SPECIFIC_IMAGE"
   wait_for_log "$cname" "Server ready. Accepting connections." 300
   wait_for_log "$cname" "Dolt init process done. Ready for connections." 300
-  
+
   run docker exec "$cname" dolt version
   [ $status -eq 0 ]
-  
+
   INSTALLED_VERSION=$(docker exec "$cname" dolt version | grep -o '[0-9]\+\.[0-9]\+\.[0-9]\+' | head -1)
   [ "$INSTALLED_VERSION" = "$SPECIFIC_VERSION" ]
-  
+
   run docker exec "$cname" dolt sql -q "SHOW DATABASES;"
   [ $status -eq 0 ]
 
@@ -943,10 +992,10 @@ EOF
 
   run_container_with_port "$cname" 3306
   docker logs "$cname" >/tmp/${cname}.log 2>&1
-  
+
   run grep -F "[0] [System] [Dolt] [Server]" /tmp/"${cname}".log
   [ $status -eq 0 ]
-  
+
   run ! grep -F "level=" /tmp/"${cname}".log
   [ $status -ne 0 ]
 }
@@ -957,10 +1006,10 @@ EOF
 
   run_container_with_port "$cname" 3306 -e DOLT_RAW=1
   docker logs "$cname" >/tmp/"${cname}".log 2>&1
-  
+
   run grep -F "level=" /tmp/"${cname}".log
   [ $status -eq 0 ]
-  
+
   run grep -F "[0] [System] [Dolt] [Server]" /tmp/"${cname}".log
   [ $status -ne 0 ]
 }
