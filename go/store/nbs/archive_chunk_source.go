@@ -44,7 +44,7 @@ func newArchiveChunkSource(ctx context.Context, dir string, h hash.Hash, chunkCo
 		return archiveChunkSource{}, err
 	}
 
-	aRdr, err := newArchiveReader(ctx, fra, h, uint64(fra.sz), stats)
+	aRdr, err := newArchiveReader(ctx, fra, h, uint64(fra.sz), q, stats)
 	if err != nil {
 		return archiveChunkSource{}, err
 	}
@@ -59,7 +59,11 @@ func newAWSArchiveChunkSource(ctx context.Context,
 	q MemoryQuotaProvider,
 	stats *Stats) (cs chunkSource, err error) {
 
-	footer := make([]byte, archiveFooterSize)
+	footer, err := q.AcquireQuotaBytes(ctx, int(archiveFooterSize))
+	if err != nil {
+		return emptyChunkSource{}, err
+	}
+	defer q.ReleaseQuotaBytes(int(archiveFooterSize))
 	// sz is what we are really after here, but we'll use the bytes to construct the footer to avoid another call.
 	_, sz, err := s3.readS3ObjectFromEnd(ctx, name, footer, stats)
 	if err != nil {
@@ -72,7 +76,7 @@ func newAWSArchiveChunkSource(ctx context.Context,
 		return emptyChunkSource{}, fmt.Errorf("invalid archive file path: %s", name)
 	}
 
-	aRdr, err := newArchiveReaderFromFooter(ctx, &s3TableReaderAt{s3, name}, hashId, sz, footer, stats)
+	aRdr, err := newArchiveReaderFromFooter(ctx, &s3TableReaderAt{s3, name}, hashId, sz, footer, q, stats)
 	if err != nil {
 		return emptyChunkSource{}, err
 	}
