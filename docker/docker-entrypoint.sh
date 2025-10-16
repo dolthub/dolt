@@ -69,7 +69,7 @@ mysql_warn() {
 # mysql_error logs a message of type 'ERROR' using mysql_log, writes to stderr, prints a container removal hint, and
 # exits with status 1.
 mysql_error() {
-  mysql_log ERROR "$@" >&2
+  mysql_log ERROR Entrypoint "$@" >&2
   mysql_note "Remove this container with 'docker rm -f <container_name>' before retrying"
   exit 1
 }
@@ -155,24 +155,24 @@ exec_mysql() {
       status=$?
     else
       set +e # tmp disable to report error to user
-      output=$(dolt sql < /dev/stdin 2>&1 | (grep -iE "Error|error" || true))
+      output=$(dolt sql < /dev/stdin 2>&1)
       status=$?
       set -e
     fi
 
-    if [ $status -eq 0 ]; then
-      [ "$show_output" -eq 1 ] && echo "$output"
+    if [ "$status" -eq 0 ]; then
+      [ "$show_output" -eq 1 ] && echo "$output" | grep -v '^$'
       return 0
     fi
 
     if echo "$output" | grep -qiE "Error [0-9]+ \([A-Z0-9]+\)"; then
-      mysql_error "$error_message$output"
+      mysql_error "$error_message$(echo "$output" | grep -iE "Error|error")"
     fi
 
     if [ "$timeout" -ne 0 ]; then
       now=$(date +%s)
       if [ $((now - start_time)) -ge "$timeout" ]; then
-        mysql_error "$error_message$output"
+        mysql_error "$error_message$(echo "$output" | grep -iE "Error|error")"
       fi
     fi
 
@@ -291,7 +291,7 @@ docker_process_init_files() {
       ;;
     *.sql)
       mysql_note "$0: running $f"
-      exec_mysql "" "Failed to load $f: " < "$f"
+      exec_mysql "" "Failed to load $f: " < "$f" 1
       ;;
     *.sql.bz2)
       mysql_note "$0: running $f"

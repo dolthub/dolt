@@ -26,7 +26,6 @@ setup() {
 }
 
 teardown() {
-  docker ps -a --filter "name=$TEST_PREFIX" --format '{{.Names}}' | xargs -r docker stop >/dev/null 2>&1 || true
   docker ps -a --filter "name=$TEST_PREFIX" --format '{{.Names}}' | xargs -r docker rm -f >/dev/null 2>&1 || true
   teardown_common
 }
@@ -224,7 +223,7 @@ wait_for_log() {
 
 # bats test_tags=no_lambda
 @test "docker-entrypoint: SQL error reporting without suppression" {
-  cname="${TEST_PREFIX}sql-error-reporting"
+  cname="${TEST_PREFIX}sql-error-reportin"
   run_container "$cname" -e DOLT_ROOT_PASSWORD=rootpass -e DOLT_USER=testuser -e DOLT_PASSWORD=testpass
 
   # Create the user first time (should succeed)
@@ -460,7 +459,7 @@ EOF
 
 # bats test_tags=no_lambda
 @test "docker-entrypoint: MySQL client custom database with root and user access" {
-  cname="${TEST_PREFIX}custom-db"
+  cname="${TEST_PREFIX}custom-d"
   db="testdb"
   usr="testuser"
   pwd="testpass"
@@ -518,7 +517,7 @@ EOF
 @test "docker-entrypoint: docker-entrypoint-initdb.d script execution" {
   cname="${TEST_PREFIX}initdb-scripts"
 
-  local temp_dir="/tmp/initdb-test-$$"
+  local temp_dir="/tmp/initdb-test"
   mkdir -p "$temp_dir"
 
   cat > "$temp_dir/01-create-table.sql" << 'EOF'
@@ -557,45 +556,10 @@ EOF
 }
 
 # bats test_tags=no_lambda
-@test "docker-entrypoint: plain .sql file processing" {
-  cname="${TEST_PREFIX}plain-sql"
-
-  local temp_dir="/tmp/plain-sql-test-$$"
-  mkdir -p "$temp_dir"
-
-  cat > "$temp_dir/01-init.sql" << 'EOF'
-CREATE DATABASE IF NOT EXISTS plain_sql_db;
-USE plain_sql_db;
-CREATE TABLE users_table (id INT PRIMARY KEY, username VARCHAR(50), email VARCHAR(100));
-INSERT INTO users_table VALUES (1, 'alice', 'alice@example.com');
-INSERT INTO users_table VALUES (2, 'bob', 'bob@example.com');
-CREATE USER IF NOT EXISTS 'plainsqluser'@'%' IDENTIFIED BY 'plainsqlpass';
-GRANT ALL ON `plain_sql_db`.* TO 'plainsqluser'@'%';
-GRANT USAGE ON *.* TO 'plainsqluser'@'%';
-EOF
-
-  run_container_with_port "$cname" 3306 -e DOLT_ROOT_HOST=% -v "$temp_dir:/docker-entrypoint-initdb.d"
-
-  run docker exec "$cname" dolt sql -q "SHOW DATABASES;"
-  [ $status -eq 0 ]
-  [[ "$output" =~ "plain_sql_db" ]] || false
-
-  run docker exec "$cname" dolt sql -q "USE plain_sql_db; SELECT COUNT(*) as count FROM users_table;"
-  [ $status -eq 0 ]
-  [[ "$output" =~ "2" ]] || false
-
-  run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u plainsqluser --password=plainsqlpass -e "USE plain_sql_db; SELECT * FROM users_table WHERE username='alice';"
-  [ $status -eq 0 ]
-  [[ "$output" =~ "alice@example.com" ]] || false
-
-  rm -rf "$temp_dir"
-}
-
-# bats test_tags=no_lambda
 @test "docker-entrypoint: .sql.gz gzip compressed file processing" {
   cname="${TEST_PREFIX}gzip-sql"
 
-  local temp_dir="/tmp/gzip-sql-test-$$"
+  local temp_dir="/tmp/gzip-sql-test"
   mkdir -p "$temp_dir"
 
   cat > "$temp_dir/01-init.sql" << 'EOF'
@@ -633,7 +597,7 @@ EOF
 @test "docker-entrypoint: .sql.bz2 bzip2 compressed file processing" {
   cname="${TEST_PREFIX}bzip2-sql"
 
-  local temp_dir="/tmp/bzip2-sql-test-$$"
+  local temp_dir="/tmp/bzip2-sql-test"
   mkdir -p "$temp_dir"
 
   cat > "$temp_dir/01-init.sql" << 'EOF'
@@ -674,7 +638,7 @@ EOF
 @test "docker-entrypoint: .sql.xz xz compressed file processing" {
   cname="${TEST_PREFIX}xz-sql"
 
-  local temp_dir="/tmp/xz-sql-test-$$"
+  local temp_dir="/tmp/xz-sql-test"
   mkdir -p "$temp_dir"
 
   cat > "$temp_dir/01-init.sql" << 'EOF'
@@ -716,7 +680,7 @@ EOF
 @test "docker-entrypoint: .sql.zst zstd compressed file processing" {
   cname="${TEST_PREFIX}zstd-sql"
 
-  local temp_dir="/tmp/zstd-sql-test-$$"
+  local temp_dir="/tmp/zstd-sql-test"
   mkdir -p "$temp_dir"
 
   cat > "$temp_dir/01-init.sql" << 'EOF'
@@ -758,8 +722,8 @@ EOF
 
 # bats test_tags=no_lambda
 @test "docker-entrypoint: load employees database dump (.sql)" {
-  cname="${TEST_PREFIX}employees-dump"
-  local temp_dir="/tmp/employees-dump-test-$$"
+  cname="${TEST_PREFIX}dump"
+  local temp_dir="/tmp/employees-dump-test"
   mkdir -p "$temp_dir"
 
   curl -sL "https://raw.githubusercontent.com/datacharmer/test_db/master/load_employees.dump" -o "$temp_dir/load_employees.sql"
@@ -781,13 +745,33 @@ EOF
 }
 
 # bats test_tags=no_lambda
+@test "docker-entrypoint: error on invalid database dump (.sql)" {
+  cname="${TEST_PREFIX}bad-dump"
+  local temp_dir="/tmp/employees-dump-test"
+  mkdir -p "$temp_dir"
+
+  curl -sL "https://raw.githubusercontent.com/datacharmer/test_db/master/load_employees.dump" -o "$temp_dir/load_employees.sql"
+
+  run docker run -d --name "$cname" -v "$temp_dir:/docker-entrypoint-initdb.d" "$TEST_IMAGE"
+  [ $status -eq 0 ]
+
+  docker wait "$cname"
+  docker logs "$cname" >/tmp/${cname}.log 2>&1
+  cat /tmp/${cname}.log
+  run grep -F "ERROR" /tmp/${cname}.log
+  [ $status -eq 0 ]
+
+  rm -rf "$temp_dir"
+}
+
+# bats test_tags=no_lambda
 @test "docker-entrypoint: GRANT privileges in init script does not require CREATE USER" {
   # Customer error: "error on line 5 for query GRANT ALL PRIVILEGES ON *.* TO 'nautobot'@'%':
   #                  You are not allowed to create a user with GRANT"
 
   cname="${TEST_PREFIX}grant-init"
 
-  local temp_dir="/tmp/grant-init-test-$$"
+  local temp_dir="/tmp/grant-init-test"
   mkdir -p "$temp_dir"
 
   cat > "$temp_dir/01-correct-grants.sql" << 'EOF'
@@ -992,7 +976,6 @@ EOF
   cname="${TEST_PREFIX}debug"
 
   run docker run -d --name "$cname" "$TEST_IMAGE" -l debug
-  run docker run -d --name "$cname" "$TEST_IMAGE" -l debug
   wait_for_log "$cname" "Dolt init process done. Ready for connections."
   docker logs "$cname" >/tmp/${cname}.log 2>&1
 
@@ -1001,4 +984,36 @@ EOF
 
   run grep -F "[Note] [Dolt] [Server]" /tmp/"${cname}".log
   [ "$status" -eq 0 ]
+}
+
+# bats test_tags=no_lambda
+@test "docker-entrypoint: init sql file prints table contents to stdout" {
+  cname="${TEST_PREFIX}plain-sql"
+  temp_dir="/tmp/plain-sql-test"
+  mkdir -p "$temp_dir"
+
+  cat > "$temp_dir/01-init.sql" << 'EOF'
+CREATE DATABASE IF NOT EXISTS plain_sql_db;
+USE plain_sql_db;
+CREATE TABLE users_table (id INT PRIMARY KEY, username VARCHAR(50), email VARCHAR(100));
+INSERT INTO users_table VALUES (1, 'alice', 'alice@example.com');
+INSERT INTO users_table VALUES (2, 'bob', 'bob@example.com');
+SELECT * FROM users_table;
+EOF
+
+  run_container_with_port "$cname" 3306 -e DOLT_ROOT_HOST=% -v "$temp_dir:/docker-entrypoint-initdb.d"
+  docker logs "$cname" >/tmp/${cname}.log 2>&1
+
+  # Verify the table header
+  run grep -F "| id | username | email             |" /tmp/"${cname}".log
+  [ "$status" -eq 0 ]
+
+  # Verify rows
+  run grep -F "| 1  | alice    | alice@example.com |" /tmp/"${cname}".log
+  [ "$status" -eq 0 ]
+
+  run grep -F "| 2  | bob      | bob@example.com   |" /tmp/"${cname}".log
+  [ "$status" -eq 0 ]
+
+  rm -rf "$temp_dir"
 }
