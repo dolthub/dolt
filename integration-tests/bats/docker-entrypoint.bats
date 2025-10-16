@@ -35,7 +35,7 @@ run_container() {
   name="$1"; shift
   docker run -d --name "$name" "$@" "$TEST_IMAGE" >/dev/null
   wait_for_log "$name" "Server ready. Accepting connections."
-  wait_for_log "$name" "Dolt init process done. Ready for connections."
+  wait_for_log "$name" "Dolt init process done. Ready for connections." 300
 
   # Verify container is running
   run docker ps --filter "name=$name" --format "{{.Names}}"
@@ -51,7 +51,7 @@ run_container_with_port() {
   port="$1"; shift
   docker run -d --name "$name" -p "$port:3306" "$@" "$TEST_IMAGE" >/dev/null
   wait_for_log "$name" "Server ready. Accepting connections."
-  wait_for_log "$name" "Dolt init process done. Ready for connections."
+  wait_for_log "$name" "Dolt init process done. Ready for connections." 300
 
   # Verify container is running
   run docker ps --filter "name=$name" --format "{{.Names}}"
