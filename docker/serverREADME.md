@@ -180,5 +180,6 @@ The Dolt SQL Server image supports the following environment variables:
 - `DOLT_PASSWORD` / `MYSQL_PASSWORD`: Sets the password for the user specified in `DOLT_USER`/`MYSQL_USER`
 - `DOLT_USER_HOST` / `MYSQL_USER_HOST`: Specifies a host for the custom user (default: falls back to `DOLT_ROOT_HOST`, then localhost)
 - `DOLT_SERVER_TIMEOUT`: Sets the server startup timeout in seconds (default: 300). A value of 0 means no timeout.
+- `DOLT_RAW`: When set to 1, disables `dolt sql-server` parser to display raw log format.
 
 The user will be granted all privileges on the database specified by `DOLT_DATABASE`/`MYSQL_DATABASE` if provided.
