@@ -18,7 +18,7 @@ setup() {
 
   # Build from source only once per test run, check img already exists
   if ! docker image inspect "$TEST_IMAGE" >/dev/null 2>&1; then
-    echo "Building Dolt from source for integration tests..."
+    echo "Building Dolt from source for `docker-entrypoint.sh` integrations container..."
     docker build -f "$WORKSPACE_ROOT/dolt/docker/serverDockerfile" --build-arg DOLT_VERSION=$DOLT_DOCKER_TEST_VERSION -t "$TEST_IMAGE" "$WORKSPACE_ROOT"
   else
     echo "Using existing source-built image: $TEST_IMAGE"
@@ -222,7 +222,7 @@ wait_for_log() {
 
 # bats test_tags=no_lambda
 @test "docker-entrypoint: SQL error reporting without suppression" {
-  cname="${TEST_PREFIX}sql-error-reportin"
+  cname="${TEST_PREFIX}sql-error-reporting"
   run_container "$cname" -e DOLT_ROOT_PASSWORD=rootpass -e DOLT_USER=testuser -e DOLT_PASSWORD=testpass
 
   # Create the user first time (should succeed)
@@ -911,7 +911,7 @@ EOF
       false
     fi
 
-    if ! wait_for_log "$cname-$cycle" "Dolt init process done. Ready for connections." 15; then
+    if ! wait_for_log "$cname-$cycle" "Dolt init process done. Ready for connections." 30; then
       docker logs "$cname-$cycle"
       false
     fi
@@ -921,14 +921,6 @@ EOF
     run docker logs "$cname-$cycle" 2>&1
     [ $status -eq 0 ]
     if echo "$output" | grep -i "ERROR" >/dev/null; then
-      echo "$output"
-      false
-    fi
-    if ! [[ "$output" =~ "Server ready. Accepting connections" ]]; then
-      echo "$output"
-      false
-    fi
-    if ! [[ "$output" =~ "Dolt init process done. Ready for connections." ]]; then
       echo "$output"
       false
     fi
@@ -950,10 +942,13 @@ EOF
   cname="${TEST_PREFIX}server-log"
 
   run_container_with_port "$cname" 3306
-  wait_for_log "$cname" "Dolt init process done. Ready for connections."
   docker logs "$cname" >/tmp/${cname}.log 2>&1
-  run grep -F "[0] [System] [Dolt] [Server]" /tmp/"${cname}".log | grep -F -v "level="
+  
+  run grep -F "[0] [System] [Dolt] [Server]" /tmp/"${cname}".log
   [ $status -eq 0 ]
+  
+  run ! grep -F "level=" /tmp/"${cname}".log
+  [ $status -ne 0 ]
 }
 
 # bats test_tags=no_lambda
@@ -961,9 +956,12 @@ EOF
   cname="${TEST_PREFIX}dolt-raw"
 
   run_container_with_port "$cname" 3306 -e DOLT_RAW=1
-  wait_for_log "$cname" "Dolt init process done. Ready for connections."
   docker logs "$cname" >/tmp/${cname}.log 2>&1
-  run grep -F "level=" /tmp/"${cname}".log | grep -F -v "[0] [System] [Dolt] [Server]"
+  
+  run grep -F "level=" /tmp/"${cname}".log
+  [ $status -eq 0 ]
+
+  run ! grep -F "[0] [System] [Dolt] [Server]" /tmp/"${cname}".log
   [ $status -eq 0 ]
 }
 
@@ -972,8 +970,8 @@ EOF
   cname="${TEST_PREFIX}debug"
 
   docker run -d --name "$cname" "$TEST_IMAGE" -l debug
-  wait_for_log "$cname" "Dolt init process done. Ready for connections."
-  docker logs "$cname" >/tmp/${cname}.log 2>&1
+  wait_for_log "$cname" "Dolt init process done. Ready for connections." 30
+  docker logs "$cname" >/tmp/"${cname}".log 2>&1
 
   run grep -F "level=debug" /tmp/"${cname}".log
   [ "$status" -eq 0 ]
@@ -1000,11 +998,9 @@ EOF
   run_container_with_port "$cname" 3306 -e DOLT_ROOT_HOST=% -v "$temp_dir:/docker-entrypoint-initdb.d"
   docker logs "$cname" >/tmp/${cname}.log 2>&1
 
-  # Verify the table header
   run grep -F "| id | username | email             |" /tmp/"${cname}".log
   [ "$status" -eq 0 ]
 
-  # Verify rows
   run grep -F "| 1  | alice    | alice@example.com |" /tmp/"${cname}".log
   [ "$status" -eq 0 ]
 

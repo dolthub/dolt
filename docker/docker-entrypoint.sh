@@ -189,9 +189,10 @@ exec_mysql() {
       output=$(dolt sql -q "$sql_command" 2>&1)
       status=$?
     else
-      set +e # tmp disable to report error to user
+      set +e # tmp disable to report error to user formatted
       output=$(dolt sql < /dev/stdin 2>&1)
       status=$?
+      set -e
     fi
 
     if [ "$status" -eq 0 ]; then
@@ -200,7 +201,7 @@ exec_mysql() {
     fi
 
     if echo "$output" | grep -qiE "Error [0-9]+ \([A-Z0-9]+\)"; then
-      mysql_error "$error_message$(echo "$output" | grep -iE "Error|error" || true)"
+      mysql_error "$error_message$(echo "$output" | grep -iE "Error|error")"
     fi
 
     if [ "$timeout" -ne 0 ]; then
