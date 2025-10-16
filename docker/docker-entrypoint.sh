@@ -5,16 +5,24 @@ set -eo pipefail
 # Arguments:
 #   $1 - Log type (e.g., Note, Warn, ERROR, Debug)
 #   $@ - Metadata fields (optional), last argument is always the message
+#        If first metadata is "time=...", it overrides the timestamp
 #   If no arguments, reads message from stdin
 # Output:
 #   Prints a formatted log line to stdout or stderr, with color for Warn, ERROR, and Debug.
 mysql_log() {
   local type="$1"; shift
   local dt color color_reset="\033[0m"
-  dt="$(date --rfc-3339=seconds)"
+  local msg meta=()
+
+  # Check if first metadata item is a time override
+  if [[ "$1" == time=* ]]; then
+    dt="${1#time=}"  # strip "time=" prefix
+    shift
+  else
+    dt="$(date --rfc-3339=seconds)"
+  fi
 
   # If last argument is missing, read message from stdin
-  local msg meta=()
   if [ "$#" -eq 0 ]; then
     msg="$(cat)"
   else
@@ -66,9 +74,20 @@ mysql_error() {
   exit 1
 }
 
-# dolt_server_parser parses Dolt SQL-server logs efficiently.
-# Info, Note, Warning, and Error lines are formatted via mysql_log.
-# All other lines are passed through unmodified.
+# dolt_server_parser parses Dolt SQL-server logs and formats to entry point logs.
+#
+# Info, Note, Warning, and Error lines are passed to mysql_log for formatted output.
+# - Replaces the timestamp with the Dolt log's literal `time=""` value if present.
+#
+# All other lines, including debug lines and unknown levels, are passed through unmodified.
+#
+# Usage:
+#   dolt_server_parser < dolt_raw_log.txt
+#
+# Notes:
+#   - Lines without a `level=` field are printed as-is.
+#   - The first argument passed to mysql_log will be `time="<timestamp>"` if available.
+#   - Message extraction supports both msg="..." and msg=... formats.
 dolt_server_parser() {
   while IFS= read -r line || [ -n "$line" ]; do
     [ -z "$line" ] && continue
@@ -80,6 +99,13 @@ dolt_server_parser() {
 
     # If no level= field, print raw
     [[ "$line" != *level=* ]] && { echo "$line"; continue; }
+
+    # Extract timestamp if available (time="...")
+    local ts=""
+    if [[ "$line" == *'time="'* ]]; then
+      ts="${line#*time=\"}"   # strip up to time="
+      ts="${ts%%\"*}"         # take up to the next quote
+    fi
 
     # Extract level
     local level="${line#*level=}"
@@ -96,12 +122,12 @@ dolt_server_parser() {
       msg="$line"
     fi
 
-    # Format known levels
+    # Format known levels, passing timestamp if available
     case "${level,,}" in
-    info|note)   mysql_log Note "Dolt" "Server" "$msg" ;;
-    warn|warning) mysql_log Warning "Dolt" "Server" "$msg" ;;
-    error)       mysql_log ERROR "Dolt" "Server" "$msg" ;;
-    *)           echo "$line" ;;  # unknown levels, print raw
+    info|note)    mysql_log Note ${ts:+time="$ts"} "Dolt" "Server" "$msg" ;;
+    warn|warning) mysql_log Warning ${ts:+time="$ts"} "Dolt" "Server" "$msg" ;;
+    error)        mysql_log ERROR ${ts:+time="$ts"} "Dolt" "Server" "$msg" ;;
+    *)            echo "$line" ;;  # unknown levels, print raw
     esac
   done
 }
