@@ -96,8 +96,7 @@ wait_for_log() {
 # bats test_tags=no_lambda
 @test "docker-entrypoint: env USER=root is rejected with clear error" {
   cname="${TEST_PREFIX}root-env"
-  run docker run -d --name "$cname" -e DOLT_ROOT_PASSWORD=rootpass -e DOLT_USER=root -e DOLT_PASSWORD=anything "$TEST_IMAGE"
-
+  docker run -d --name "$cname" -e DOLT_ROOT_PASSWORD=rootpass -e DOLT_USER=root -e DOLT_PASSWORD=anything "$TEST_IMAGE"
   wait_for_log "$cname" "cannot be used for the root user"
   docker logs "$cname" >/tmp/${cname}.log 2>&1
   run grep -F "cannot be used for the root user" /tmp/"${cname}".log
@@ -832,9 +831,9 @@ EOF
   cd "$WORKSPACE_ROOT/dolt"
   docker build -f docker/serverDockerfile --build-arg DOLT_VERSION=latest -t "$LATEST_IMAGE" .
   
-  docker run -d --name "$cname" -e DOLT_ROOT_PASSWORD=rootpass -e DOLT_ROOT_HOST=% "$LATEST_IMAGE" >/dev/null
-  wait_for_log "$cname" "Server ready. Accepting connections."
-  wait_for_log "$cname" "Dolt init process done. Ready for connections."
+  docker run -d --name "$cname" -e DOLT_ROOT_PASSWORD=rootpass -e DOLT_ROOT_HOST=% "$LATEST_IMAGE"
+  wait_for_log "$cname" "Server ready. Accepting connections." 300
+  wait_for_log "$cname" "Dolt init process done. Ready for connections." 300
   
   run docker exec "$cname" dolt version
   [ $status -eq 0 ]
@@ -858,9 +857,9 @@ EOF
   cd "$WORKSPACE_ROOT/dolt"
   docker build -f docker/serverDockerfile --build-arg DOLT_VERSION="$SPECIFIC_VERSION" -t "$SPECIFIC_IMAGE" .
   
-  docker run -d --name "$cname" -e DOLT_ROOT_PASSWORD=rootpass -e DOLT_ROOT_HOST=% "$SPECIFIC_IMAGE" >/dev/null
-  wait_for_log "$name" "Server ready. Accepting connections."
-  wait_for_log "$name" "Dolt init process done. Ready for connections."
+  docker run -d --name "$cname" -e DOLT_ROOT_PASSWORD=rootpass -e DOLT_ROOT_HOST=% "$SPECIFIC_IMAGE"
+  wait_for_log "$cname" "Server ready. Accepting connections." 300
+  wait_for_log "$cname" "Dolt init process done. Ready for connections." 300
   
   run docker exec "$cname" dolt version
   [ $status -eq 0 ]
@@ -951,6 +950,7 @@ EOF
   cname="${TEST_PREFIX}server-log"
 
   run_container_with_port "$cname" 3306
+  wait_for_log "$cname" "Dolt init process done. Ready for connections."
   docker logs "$cname" >/tmp/${cname}.log 2>&1
   run grep -F "[0] [System] [Dolt] [Server]" /tmp/"${cname}".log | grep -F -v "level="
   [ $status -eq 0 ]
@@ -961,6 +961,7 @@ EOF
   cname="${TEST_PREFIX}dolt-raw"
 
   run_container_with_port "$cname" 3306 -e DOLT_RAW=1
+  wait_for_log "$cname" "Dolt init process done. Ready for connections."
   docker logs "$cname" >/tmp/${cname}.log 2>&1
   run grep -F "level=" /tmp/"${cname}".log | grep -F -v "[0] [System] [Dolt] [Server]"
   [ $status -eq 0 ]
@@ -970,7 +971,7 @@ EOF
 @test "docker-entrypoint: server debug logs passthrough unmodified" {
   cname="${TEST_PREFIX}debug"
 
-  run docker run -d --name "$cname" "$TEST_IMAGE" -l debug
+  docker run -d --name "$cname" "$TEST_IMAGE" -l debug
   wait_for_log "$cname" "Dolt init process done. Ready for connections."
   docker logs "$cname" >/tmp/${cname}.log 2>&1
 
