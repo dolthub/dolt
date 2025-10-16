@@ -162,7 +162,6 @@ wait_for_log() {
   [ $status -eq 0 ]
   [[ "$output" =~ "Tables_in_versioning,Table_type" ]] || false
 
-  # Can use the database for operations
   run docker exec "$cname" dolt sql -q "USE \`$kw_db\`; CREATE TABLE test_table (id INT);"
   [ $status -eq 0 ]
 }
@@ -996,7 +995,7 @@ EOF
   run grep -F "[0] [System] [Dolt] [Server]" /tmp/"${cname}".log
   [ $status -eq 0 ]
 
-  run ! grep -F "level=" /tmp/"${cname}".log
+  run grep -F "level=" /tmp/"${cname}".log
   [ $status -ne 0 ]
 }
 

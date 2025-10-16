@@ -306,7 +306,7 @@ get_config_file_path_if_exists() {
 #   e.g., docker_process_init_files /always-initdb.d/*
 # Processes initializer files based on file extensions.
 docker_process_init_files() {
-  local f sql
+  local f
   echo
   for f; do
     case "$f" in
