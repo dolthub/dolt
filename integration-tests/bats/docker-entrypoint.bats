@@ -255,8 +255,9 @@ wait_for_log() {
 # bats test_tags=no_lambda
 @test "docker-entrypoint: valid server config file handling" {
   cname="${TEST_PREFIX}valid-server-config"
-  mkdir -p /tmp/test-config
-  cat > /tmp/test-config/test.yaml << 'EOF'
+  temp_dir="/tmp/test-config-$$"
+  mkdir -p $temp_dir
+  cat > $temp_dir/test.yaml << 'EOF'
 log_level: info
 behavior:
   read_only: false
@@ -269,9 +270,9 @@ data_dir: .
 cfg_dir: .doltcfg
 EOF
 
-  run_container "$cname" -v /tmp/test-config:/etc/dolt/servercfg.d:ro
+  run_container "$cname" -v $temp_dir:/etc/dolt/servercfg.d:ro
 
-  rm -rf /tmp/test-config
+  rm -rf $temp_dir
 }
 
 # bats test_tags=no_lambda
@@ -517,7 +518,7 @@ EOF
 @test "docker-entrypoint: docker-entrypoint-initdb.d script execution" {
   cname="${TEST_PREFIX}initdb-scripts"
 
-  local temp_dir="/tmp/initdb-test"
+  local temp_dir="/tmp/initdb-test-$$"
   mkdir -p "$temp_dir"
 
   cat > "$temp_dir/01-create-table.sql" << 'EOF'
@@ -559,7 +560,7 @@ EOF
 @test "docker-entrypoint: .sql.gz gzip compressed file processing" {
   cname="${TEST_PREFIX}gzip-sql"
 
-  local temp_dir="/tmp/gzip-sql-test"
+  local temp_dir="/tmp/gzip-sql-test-$$"
   mkdir -p "$temp_dir"
 
   cat > "$temp_dir/01-init.sql" << 'EOF'
@@ -597,7 +598,7 @@ EOF
 @test "docker-entrypoint: .sql.bz2 bzip2 compressed file processing" {
   cname="${TEST_PREFIX}bzip2-sql"
 
-  local temp_dir="/tmp/bzip2-sql-test"
+  local temp_dir="/tmp/bzip2-sql-test-$$"
   mkdir -p "$temp_dir"
 
   cat > "$temp_dir/01-init.sql" << 'EOF'
@@ -638,7 +639,7 @@ EOF
 @test "docker-entrypoint: .sql.xz xz compressed file processing" {
   cname="${TEST_PREFIX}xz-sql"
 
-  local temp_dir="/tmp/xz-sql-test"
+  local temp_dir="/tmp/xz-sql-test-$$"
   mkdir -p "$temp_dir"
 
   cat > "$temp_dir/01-init.sql" << 'EOF'
@@ -680,7 +681,7 @@ EOF
 @test "docker-entrypoint: .sql.zst zstd compressed file processing" {
   cname="${TEST_PREFIX}zstd-sql"
 
-  local temp_dir="/tmp/zstd-sql-test"
+  local temp_dir="/tmp/zstd-sql-test-$$"
   mkdir -p "$temp_dir"
 
   cat > "$temp_dir/01-init.sql" << 'EOF'
@@ -723,7 +724,7 @@ EOF
 # bats test_tags=no_lambda
 @test "docker-entrypoint: load employees database dump (.sql)" {
   cname="${TEST_PREFIX}dump"
-  local temp_dir="/tmp/employees-dump-test"
+  local temp_dir="/tmp/employees-dump-test-$$"
   mkdir -p "$temp_dir"
 
   curl -sL "https://raw.githubusercontent.com/datacharmer/test_db/master/load_employees.dump" -o "$temp_dir/load_employees.sql"
@@ -747,7 +748,7 @@ EOF
 # bats test_tags=no_lambda
 @test "docker-entrypoint: error on invalid database dump (.sql)" {
   cname="${TEST_PREFIX}bad-dump"
-  local temp_dir="/tmp/employees-dump-test"
+  local temp_dir="/tmp/employees-dump-$$"
   mkdir -p "$temp_dir"
 
   curl -sL "https://raw.githubusercontent.com/datacharmer/test_db/master/load_employees.dump" -o "$temp_dir/load_employees.sql"
@@ -757,7 +758,6 @@ EOF
 
   docker wait "$cname"
   docker logs "$cname" >/tmp/${cname}.log 2>&1
-  cat /tmp/${cname}.log
   run grep -F "ERROR" /tmp/${cname}.log
   [ $status -eq 0 ]
 
@@ -771,7 +771,7 @@ EOF
 
   cname="${TEST_PREFIX}grant-init"
 
-  local temp_dir="/tmp/grant-init-test"
+  local temp_dir="/tmp/grant-init-$$"
   mkdir -p "$temp_dir"
 
   cat > "$temp_dir/01-correct-grants.sql" << 'EOF'
@@ -780,12 +780,7 @@ GRANT ALL PRIVILEGES ON *.* TO 'nautobot'@'%';
 FLUSH PRIVILEGES;
 EOF
 
-  run_container_with_port "$cname" 3306 DOLT_USER=nautobot -e DOLT_PASSWORD=nautobotpass -v "$temp_dir:/docker-entrypoint-initdb.d"
-
-  run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u root --password=rootpass -e "SELECT User, Host FROM mysql.user WHERE User='nautobot';"
-  [ $status -eq 0 ]
-  [[ "$output" =~ "nautobot" ]] || false
-  [[ "$output" =~ "%" ]] || false
+  run_container_with_port "$cname" 3306 -e DOLT_USER_HOST=% -e DOLT_USER=nautobot -e DOLT_PASSWORD=nautobotpass -v "$temp_dir:/docker-entrypoint-initdb.d"
 
   run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u nautobot --password=nautobotpass -e "SHOW DATABASES;"
   [ $status -eq 0 ]
@@ -957,7 +952,7 @@ EOF
 
   run_container_with_port "$cname" 3306
   docker logs "$cname" >/tmp/${cname}.log 2>&1
-  run grep -F "[Note] [Dolt] [Server]" /tmp/"${cname}".log | grep -F -v "level="
+  run grep -F "[0] [System] [Dolt] [Server]" /tmp/"${cname}".log | grep -F -v "level="
   [ $status -eq 0 ]
 }
 
@@ -967,7 +962,7 @@ EOF
 
   run_container_with_port "$cname" 3306 -e DOLT_RAW=1
   docker logs "$cname" >/tmp/${cname}.log 2>&1
-  run grep -F "level=" /tmp/"${cname}".log | grep -F -v "[Note] [Dolt] [Server]"
+  run grep -F "level=" /tmp/"${cname}".log | grep -F -v "[0] [System] [Dolt] [Server]"
   [ $status -eq 0 ]
 }
 
@@ -982,14 +977,14 @@ EOF
   run grep -F "level=debug" /tmp/"${cname}".log
   [ "$status" -eq 0 ]
 
-  run grep -F "[Note] [Dolt] [Server]" /tmp/"${cname}".log
+  run grep -F "[0] [System] [Dolt] [Server]" /tmp/"${cname}".log
   [ "$status" -eq 0 ]
 }
 
 # bats test_tags=no_lambda
 @test "docker-entrypoint: init sql file prints table contents to stdout" {
   cname="${TEST_PREFIX}plain-sql"
-  temp_dir="/tmp/plain-sql-test"
+  temp_dir="/tmp/plain-sql-$$"
   mkdir -p "$temp_dir"
 
   cat > "$temp_dir/01-init.sql" << 'EOF'

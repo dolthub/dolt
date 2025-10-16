@@ -1,136 +1,171 @@
 #!/bin/bash
 set -eo pipefail
 
-# mysql_log logs messages with flexible metadata and optional color formatting.
+# mysql_log prints a structured log line with optional color formatting
+#
 # Arguments:
-#   $1 - Log type (e.g., Note, Warn, ERROR, Debug)
-#   $@ - Metadata fields (optional), last argument is always the message
-#        If first metadata is "time=...", it overrides the timestamp
-#   If no arguments, reads message from stdin
+#   $1            - Timestamp (empty string "" for current time)
+#   $2..$n-1      - Metadata fields (last argument before optional type index is the message)
+#   $n (optional) - Numeric index of metadata field to use for determining log type/color
+#
+# Description:
+#   Prints a structured log line with timestamp, metadata, and message.
+#   Colors the output based on log type:
+#     Warning - yellow
+#     ERROR   - red
+#     Debug   - blue
+#   The log type is determined from the metadata field at type_index (default 0).
+#   The message is always the second-to-last argument.
+#
+# Example:
+#   mysql_log "" Warning Server "$msg"
+#   mysql_log "" Entrypoint Dolt Server "$msg" 2
+#
 # Output:
-#   Prints a formatted log line to stdout or stderr, with color for Warn, ERROR, and Debug.
+#   Prints the formatted log line to stdout with ANSI color codes if applicable.
 mysql_log() {
-  local type="$1"; shift
-  local dt color color_reset="\033[0m"
-  local msg meta=()
+  local dt="$1"; shift
+  local color_reset="\033[0m"
+  local type_index=0
 
-  # Check if first metadata item is a time override
-  if [[ "$1" == time=* ]]; then
-    dt="${1#time=}"  # strip "time=" prefix
-    shift
-  else
-    dt="$(date --rfc-3339=seconds)"
+  [ -z "$dt" ] && dt="$(date --rfc-3339=seconds)"
+
+  # Optional type index (numeric last argument)
+  if [[ "$#" -ge 2 ]] && [[ "${!#}" =~ ^[0-9]+$ ]]; then
+    type_index="${!#}"
+    set -- "${@:1:$(($#-1))}"
   fi
 
-  # If last argument is missing, read message from stdin
-  if [ "$#" -eq 0 ]; then
-    msg="$(cat)"
-  else
-    # Split metadata vs message
-    msg="${@: -1}"             # last argument
-    meta=("${@:1:$(($#-1))}")  # everything except last
-  fi
+  local msg="${@: -1}"                # last argument = message
+  local meta=("${@:1:$(($#-1))}")     # all except last = metadata
+  local type="${meta[$type_index]}"   # pick type for color
 
-  # Pick color
-  case "${type,,}" in
-  warn|warning) color="\033[1;33m"; type="Warning" ;;
-  error)        color="\033[1;31m"; type="ERROR" ;;
-  debug)        color="\033[1;34m"; type="Debug" ;;
-  info|note)    color=""; type="Note" ;;
-  *)            color="";;
+  local color=""
+  case "$type" in
+  Warning) color="\033[1;33m" ;;
+  ERROR)   color="\033[1;31m" ;;
+  Debug)   color="\033[1;34m" ;;
   esac
 
-  # Build metadata block like: [Entrypoint] [Server=db1]
-  local meta_str=""
-  for m in "${meta[@]}"; do
-    meta_str+="[$m] "
-  done
-
-  # Print final formatted log
-  printf '%b%s [%s] %s%s%b\n' \
-    "$color" "$dt" "$type" "$meta_str" "$msg" "$color_reset"
+  printf '%b%s ' "$color" "$dt"
+  printf '[%s] ' "${meta[@]}"
+  printf '%s%b\n' "$msg" "$color_reset" >&1
 }
 
 # _dbg logs a message of type 'Debug' using mysql_log.
 _dbg() {
-  mysql_log Debug Entrypoint "$@"
+  mysql_log "" Debug Entrypoint "$@"
 }
 
 # mysql_note logs a message of type 'Note' using mysql_log.
 mysql_note() {
-  mysql_log Note Entrypoint "$@"
+  mysql_log "" Note Entrypoint "$@"
 }
 
 # mysql_warn logs a message of type 'Warning' using mysql_log and writes to stderr.
 mysql_warn() {
-  mysql_log Warning Entrypoint "$@" >&2
+  mysql_log "" Warning Entrypoint "$@" >&2
 }
 
 # mysql_error logs a message of type 'ERROR' using mysql_log, writes to stderr, prints a container removal hint, and
 # exits with status 1.
 mysql_error() {
-  mysql_log ERROR Entrypoint "$@" >&2
+  mysql_log "" ERROR Entrypoint "$@" >&2
   mysql_note "Remove this container with 'docker rm -f <container_name>' before retrying"
   exit 1
 }
 
-# dolt_server_parser parses Dolt SQL-server logs and formats to entry point logs.
+
+# extract_server_log_field extracts the value of a key from a Dolt SQL server log line
 #
-# Info, Note, Warning, and Error lines are passed to mysql_log for formatted output.
-# - Replaces the timestamp with the Dolt log's literal `time=""` value if present.
+# Arguments:
+#   $1 - The Dolt log line to parse
+#   $2 - The key to extract (e.g., time, level, connectionID)
 #
-# All other lines, including debug lines and unknown levels, are passed through unmodified.
+# Description:
+#   Extracts the value of a specified key from a Dolt SQL server log line.
+#   Supports two formats used in Dolt logs:
+#     key="value"  (quoted)
+#     key=value    (unquoted, terminated by space)
+#   If the key is not present, prints an empty string.
+#
+# Output:
+#   Prints the extracted value to stdout.
+#
+# Example:
+#   extract_server_log_field 'time="2025-10-16T06:16:55Z" level=info' time
+#   # Output: 2025-10-16T06:16:55Z
+extract_server_log_field() {
+  local line="$1" key="$2" val=""
+  if [[ "$line" == *"$key=\""* ]]; then
+    val="${line#*${key}=\"}"
+    val="${val%%\"*}"
+  elif [[ "$line" == *"$key="* ]]; then
+    val="${line#*${key}=}"
+    val="${val%% *}"
+  fi
+  echo "$val"
+}
+
+# dolt_server_log_parser parses Dolt SQL server logs and emits structured messages
+#
+# Reads log lines from stdin, extracts key fields, and outputs structured logs.
+# Fields extracted:
+#   time   - timestamp (time="..."), optional
+#   level  - log level (level=...), mapped to System, Warning, or ERROR
+#   msg    - log message, stripped of key=value prefixes and surrounding quotes
+#
+# Lines without a recognized level are printed unchanged.
+# Debug lines (level=debug) are echoed as-is.
+#
+# Output is sent to stdout, except for Warning and ERROR logs which are colored.
+# Uses mysql_log to format output with timestamp, metadata, and message.
+# Thread information is currently not available and is always set to 0.
 #
 # Usage:
-#   dolt_server_parser < dolt_raw_log.txt
+#   cat dolt_raw.log | dolt_server_log_parser
 #
-# Notes:
-#   - Lines without a `level=` field are printed as-is.
-#   - The first argument passed to mysql_log will be `time="<timestamp>"` if available.
-#   - Message extraction supports both msg="..." and msg=... formats.
-dolt_server_parser() {
+# Example:
+#   echo '2025-10-16T06:16:55Z [0] [System] [Dolt] [Server] level=warning msg="File permission issue"' \
+#     | dolt_server_log_parser
+#
+# Exit status:
+#   Always returns 0
+dolt_server_log_parser() {
+  local thread=0 # we don't report any threads
+
   while IFS= read -r line || [ -n "$line" ]; do
-    [ -z "$line" ] && continue
-
-    if [[ "$line" == *level=debug* ]]; then
-      echo "$line"
-      continue
-    fi
-
-    # If no level= field, print raw
+    [[ -z "$line" ]] && continue
+    [[ "$line" == *level=debug* ]] && { echo "$line"; continue; }
     [[ "$line" != *level=* ]] && { echo "$line"; continue; }
 
-    # Extract timestamp if available (time="...")
-    local ts=""
-    if [[ "$line" == *'time="'* ]]; then
-      ts="${line#*time=\"}"   # strip up to time="
-      ts="${ts%%\"*}"         # take up to the next quote
-    fi
+    local ts level msg log_level
+    ts=$(extract_server_log_field "$line" time)
+    level=$(extract_server_log_field "$line" level)
 
-    # Extract level
-    local level="${line#*level=}"
-    level="${level%% *}"
+    msg="$line"
+    [[ -n "$ts" ]] && msg="${msg//time=\"$ts\"/}"
+    [[ -n "$level" ]] && msg="${msg//level=$level/}"
+    msg="${msg//msg=/}"
+    msg="${msg#"${msg%%[![:space:]]*}"}"
+    msg="${msg%"${msg##*[![:space:]]}"}"
+    [[ "${msg:0:1}" == "\"" && "${msg: -1}" == "\"" ]] && msg="${msg:1:-1}"
 
-    # Extract message (msg="..." or msg=..., fallback to full line)
-    local msg
-    if [[ "$line" == *'msg="'* ]]; then
-      msg="${line#*msg=\"}"
-      msg="${msg%%\"*}"
-    elif [[ "$line" == *'msg='* ]]; then
-      msg="${line#*msg=}"
-    else
-      msg="$line"
-    fi
-
-    # Format known levels, passing timestamp if available
-    case "${level,,}" in
-    info|note)    mysql_log Note ${ts:+time="$ts"} "Dolt" "Server" "$msg" ;;
-    warn|warning) mysql_log Warning ${ts:+time="$ts"} "Dolt" "Server" "$msg" ;;
-    error)        mysql_log ERROR ${ts:+time="$ts"} "Dolt" "Server" "$msg" ;;
-    *)            echo "$line" ;;  # unknown levels, print raw
+    case "$level" in
+    info)    log_level="System" ;;
+    warning) log_level="Warning" ;;
+    error)   log_level="ERROR" ;;
+    *)       log_level="" ;;
     esac
+
+    if [[ -n "$log_level" ]]; then
+      mysql_log "$ts" "$thread" "$log_level" Dolt Server "$msg" 1
+    else
+      echo "$line"
+    fi
   done
 }
+
 
 # exec_mysql executes a SQL query using Dolt, retrying until it succeeds or a timeout is reached.
 # On timeout, it prints the provided error message prefix followed by the command output.
@@ -157,29 +192,27 @@ exec_mysql() {
       set +e # tmp disable to report error to user
       output=$(dolt sql < /dev/stdin 2>&1)
       status=$?
-      set -e
     fi
 
     if [ "$status" -eq 0 ]; then
-      [ "$show_output" -eq 1 ] && echo "$output" | grep -v '^$'
+      [ "$show_output" -eq 1 ] && echo "$output" | grep -v '^$' || true
       return 0
     fi
 
     if echo "$output" | grep -qiE "Error [0-9]+ \([A-Z0-9]+\)"; then
-      mysql_error "$error_message$(echo "$output" | grep -iE "Error|error")"
+      mysql_error "$error_message$(echo "$output" | grep -iE "Error|error" || true)"
     fi
 
     if [ "$timeout" -ne 0 ]; then
       now=$(date +%s)
       if [ $((now - start_time)) -ge "$timeout" ]; then
-        mysql_error "$error_message$(echo "$output" | grep -iE "Error|error")"
+        mysql_error "$error_message$(echo "$output" | grep -iE "Error|error" || true)"
       fi
     fi
 
     sleep 1
   done
 }
-
 
 CONTAINER_DATA_DIR="/var/lib/dolt"
 INIT_COMPLETED="$CONTAINER_DATA_DIR/.init_completed"
@@ -357,9 +390,7 @@ create_user_from_env() {
   database=$(get_env_var "DATABASE")
 
   if [ "$user" = 'root' ]; then
-    mysql_error <<-EOF
-    $(get_env_var_name "USER")="root", $(get_env_var_name "USER") and $(get_env_var_name "PASSWORD") are for configuring the regular user and cannot be used for the root user.
-EOF
+    mysql_error "$(get_env_var_name "USER")="root", $(get_env_var_name "USER") and $(get_env_var_name "PASSWORD") are for configuring the regular user and cannot be used for the root user."
   fi
 
   if [ -n "$user" ] && [ -z "$password" ]; then
@@ -420,10 +451,11 @@ dolt_server_initializer() {
       SERVER_PID=-1
       if [ "${DOLT_RAW:-0}" -eq 1 ]; then
         dolt sql-server --host=0.0.0.0 --port=3306 "$@" 2>&1 &
+        SERVER_PID=$!
       else
-        dolt sql-server --host=0.0.0.0 --port=3306 "$@" 2>&1 | dolt_server_parser &
+        dolt sql-server --host=0.0.0.0 --port=3306 "$@" > >(dolt_server_log_parser) 2>&1 &
+        SERVER_PID=$!
       fi
-      SERVER_PID=$!
     fi
 
     if is_port_open "0.0.0.0" 3306; then
@@ -473,9 +505,9 @@ _main() {
 
   # `dolt sql` can hold locks that prevent the server from starting during system hangs
   dolt_server_initializer "$@"
-
   # Ran in a subshell to avoid exiting the main script, and so, we can use fallback below
   local has_correct_host
+
   has_correct_host=$(exec_mysql \
     "SELECT User, Host FROM mysql.user WHERE User='root' AND Host='${DOLT_ROOT_HOST}' LIMIT 1;" \
     "Could not check root host: " 1 | grep -c "$DOLT_ROOT_HOST" || true)
