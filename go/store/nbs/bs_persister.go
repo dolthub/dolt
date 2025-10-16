@@ -144,7 +144,7 @@ func (bsp *blobstorePersister) ConjoinAll(ctx context.Context, sources chunkSour
 
 	var cs chunkSource
 	if archiveFound {
-		cs, err = newBSArchiveChunkSource(ctx, bsp.bs, plan.name, stats)
+		cs, err = newBSArchiveChunkSource(ctx, bsp.bs, plan.name, bsp.q, stats)
 	} else {
 		cs, err = newBSTableChunkSource(ctx, bsp.bs, plan.name, plan.chunkCount, bsp.q, stats)
 	}
@@ -224,7 +224,7 @@ func (bsp *blobstorePersister) Open(ctx context.Context, name hash.Hash, chunkCo
 	}
 
 	if blobstore.IsNotFoundError(err) {
-		source, err := newBSArchiveChunkSource(ctx, bsp.bs, name, stats)
+		source, err := newBSArchiveChunkSource(ctx, bsp.bs, name, bsp.q, stats)
 		if err != nil {
 			return nil, err
 		}
@@ -344,7 +344,7 @@ func (bsTRA *bsTableReaderAt) ReadAtWithStats(ctx context.Context, p []byte, off
 	return totalRead, nil
 }
 
-func newBSArchiveChunkSource(ctx context.Context, bs blobstore.Blobstore, name hash.Hash, stats *Stats) (cs chunkSource, err error) {
+func newBSArchiveChunkSource(ctx context.Context, bs blobstore.Blobstore, name hash.Hash, q MemoryQuotaProvider, stats *Stats) (cs chunkSource, err error) {
 	rc, sz, _, err := bs.Get(ctx, name.String()+ArchiveFileSuffix, blobstore.NewBlobRange(-int64(archiveFooterSize), 0))
 	if err != nil {
 		return nil, err
@@ -357,7 +357,7 @@ func newBSArchiveChunkSource(ctx context.Context, bs blobstore.Blobstore, name h
 		return nil, err
 	}
 
-	aRdr, err := newArchiveReaderFromFooter(ctx, &bsTableReaderAt{key: name.String() + ArchiveFileSuffix, bs: bs}, name, sz, footer, stats)
+	aRdr, err := newArchiveReaderFromFooter(ctx, &bsTableReaderAt{key: name.String() + ArchiveFileSuffix, bs: bs}, name, sz, footer, q, stats)
 	if err != nil {
 		return emptyChunkSource{}, err
 	}
