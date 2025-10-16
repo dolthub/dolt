@@ -1507,6 +1507,9 @@ tests:
         listener:
           host: 0.0.0.0
           port: {{get_port "server1"}}
+        behavior:
+          auto_gc_behavior:
+            enable: false
         cluster:
           standby_remotes:
           - name: standby
@@ -1526,6 +1529,9 @@ tests:
         listener:
           host: 0.0.0.0
           port: {{get_port "server2"}}
+        behavior:
+          auto_gc_behavior:
+            enable: false
         cluster:
           standby_remotes:
           - name: standby
