@@ -458,7 +458,7 @@ EOF
 
 # bats test_tags=no_lambda
 @test "docker-entrypoint: MySQL client custom database with root and user access" {
-  cname="${TEST_PREFIX}custom-d"
+  cname="${TEST_PREFIX}custom-db"
   db="testdb"
   usr="testuser"
   pwd="testpass"
@@ -805,7 +805,7 @@ EOF
 
   docker wait "$cname"
   docker logs "$cname" >/tmp/${cname}.log 2>&1
-  run grep -F "ERROR" /tmp/${cname}.log
+  run grep -F "Error" /tmp/${cname}.log
   [ $status -eq 0 ]
 
   rm -rf "$temp_dir"
@@ -835,6 +835,36 @@ EOF
 
   run docker run --rm --network host mysql:8.0 mysql -h 127.0.0.1 -P 3306 -u nautobot --password=nautobotpass -e "CREATE DATABASE nautobot_test; USE nautobot_test; CREATE TABLE test (id INT);"
   [ $status -eq 0 ]
+
+  rm -rf "$temp_dir"
+}
+
+# bats test_tags=no_lambda
+@test "docker-entrypoint: init sql file prints table contents to stdout" {
+  cname="${TEST_PREFIX}plain-sql"
+  temp_dir="/tmp/plain-sql-$$"
+  mkdir -p "$temp_dir"
+
+  cat > "$temp_dir/01-init.sql" << 'EOF'
+CREATE DATABASE IF NOT EXISTS plain_sql_db;
+USE plain_sql_db;
+CREATE TABLE users_table (id INT PRIMARY KEY, username VARCHAR(50), email VARCHAR(100));
+INSERT INTO users_table VALUES (1, 'alice', 'alice@example.com');
+INSERT INTO users_table VALUES (2, 'bob', 'bob@example.com');
+SELECT * FROM users_table;
+EOF
+
+  run_container_with_port "$cname" 3306 -e DOLT_ROOT_HOST=% -v "$temp_dir:/docker-entrypoint-initdb.d"
+  docker logs "$cname" >/tmp/${cname}.log 2>&1
+
+  run grep -F "| id | username | email             |" /tmp/"${cname}".log
+  [ "$status" -eq 0 ]
+
+  run grep -F "| 1  | alice    | alice@example.com |" /tmp/"${cname}".log
+  [ "$status" -eq 0 ]
+
+  run grep -F "| 2  | bob      | bob@example.com   |" /tmp/"${cname}".log
+  [ "$status" -eq 0 ]
 
   rm -rf "$temp_dir"
 }
@@ -877,7 +907,7 @@ EOF
   LATEST_IMAGE="dolt-entrypoint-latest:test"
   EXPECTED_VERSION=$(curl -s https://api.github.com/repos/dolthub/dolt/releases/latest | grep '"tag_name"' | cut -d'"' -f4 | sed 's/^v//')
   cd "$WORKSPACE_ROOT/dolt"
-  docker build -f docker/serverDockerfile --build-arg DOLT_VERSION=latest -t "$LATEST_IMAGE" .
+  docker build --no-cache -f docker/serverDockerfile --build-arg DOLT_VERSION=latest -t "$LATEST_IMAGE" .
 
   docker run -d --name "$cname" -e DOLT_ROOT_PASSWORD=rootpass -e DOLT_ROOT_HOST=% "$LATEST_IMAGE"
   wait_for_log "$cname" "Server ready. Accepting connections." 300
@@ -903,7 +933,7 @@ EOF
   SPECIFIC_VERSION="1.34.0"
   echo "Building Dolt from docker directory with specific version: $SPECIFIC_VERSION"
   cd "$WORKSPACE_ROOT/dolt"
-  docker build -f docker/serverDockerfile --build-arg DOLT_VERSION="$SPECIFIC_VERSION" -t "$SPECIFIC_IMAGE" .
+  docker build --no-cache -f docker/serverDockerfile --build-arg DOLT_VERSION="$SPECIFIC_VERSION" -t "$SPECIFIC_IMAGE" .
 
   docker run -d --name "$cname" -e DOLT_ROOT_PASSWORD=rootpass -e DOLT_ROOT_HOST=% "$SPECIFIC_IMAGE"
   wait_for_log "$cname" "Server ready. Accepting connections." 300
@@ -983,77 +1013,4 @@ EOF
   for pid in "${stop_pids[@]}"; do
     wait $pid
   done
-}
-
-# bats test_tags=no_lambda
-@test "docker-entrypoint: server logs are parsed into entrypoint log format" {
-  cname="${TEST_PREFIX}server-log"
-
-  run_container_with_port "$cname" 3306
-  docker logs "$cname" >/tmp/${cname}.log 2>&1
-
-  run grep -F "[0] [System] [Dolt] [Server]" /tmp/"${cname}".log
-  [ $status -eq 0 ]
-
-  run grep -F "level=" /tmp/"${cname}".log
-  [ $status -ne 0 ]
-}
-
-# bats test_tags=no_lambda
-@test "docker-entrypoint: DOLT_RAW is respected" {
-  cname="${TEST_PREFIX}dolt-raw"
-
-  run_container_with_port "$cname" 3306 -e DOLT_RAW=1
-  docker logs "$cname" >/tmp/"${cname}".log 2>&1
-
-  run grep -F "level=" /tmp/"${cname}".log
-  [ $status -eq 0 ]
-
-  run grep -F "[0] [System] [Dolt] [Server]" /tmp/"${cname}".log
-  [ $status -ne 0 ]
-}
-
-# bats test_tags=no_lambda
-@test "docker-entrypoint: server debug logs passthrough unmodified" {
-  cname="${TEST_PREFIX}debug"
-
-  docker run -d --name "$cname" "$TEST_IMAGE" -l debug
-  wait_for_log "$cname" "Dolt init process done. Ready for connections." 30
-  docker logs "$cname" >/tmp/"${cname}".log 2>&1
-
-  run grep -F "level=debug" /tmp/"${cname}".log
-  [ "$status" -eq 0 ]
-
-  run grep -F "[0] [System] [Dolt] [Server]" /tmp/"${cname}".log
-  [ "$status" -eq 0 ]
-}
-
-# bats test_tags=no_lambda
-@test "docker-entrypoint: init sql file prints table contents to stdout" {
-  cname="${TEST_PREFIX}plain-sql"
-  temp_dir="/tmp/plain-sql-$$"
-  mkdir -p "$temp_dir"
-
-  cat > "$temp_dir/01-init.sql" << 'EOF'
-CREATE DATABASE IF NOT EXISTS plain_sql_db;
-USE plain_sql_db;
-CREATE TABLE users_table (id INT PRIMARY KEY, username VARCHAR(50), email VARCHAR(100));
-INSERT INTO users_table VALUES (1, 'alice', 'alice@example.com');
-INSERT INTO users_table VALUES (2, 'bob', 'bob@example.com');
-SELECT * FROM users_table;
-EOF
-
-  run_container_with_port "$cname" 3306 -e DOLT_ROOT_HOST=% -v "$temp_dir:/docker-entrypoint-initdb.d"
-  docker logs "$cname" >/tmp/${cname}.log 2>&1
-
-  run grep -F "| id | username | email             |" /tmp/"${cname}".log
-  [ "$status" -eq 0 ]
-
-  run grep -F "| 1  | alice    | alice@example.com |" /tmp/"${cname}".log
-  [ "$status" -eq 0 ]
-
-  run grep -F "| 2  | bob      | bob@example.com   |" /tmp/"${cname}".log
-  [ "$status" -eq 0 ]
-
-  rm -rf "$temp_dir"
 }

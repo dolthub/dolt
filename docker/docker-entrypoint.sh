@@ -1,202 +1,101 @@
 #!/bin/bash
 set -eo pipefail
 
-# mysql_log prints a structured log line with optional color formatting
+# mysql_log prints a timestamped (ISO 8601), color-coded structured log message with the provided context, if
+# applicable. If <MESSAGE> is omitted, it reads from stdin, allowing multi-line input. <LEVEL> determines the color and
+# log level category (e.g., Warn, Error, Debug). <CONTEXT> is a single string displayed in-between the timestamp and
+# message.
 #
-# Arguments:
-#   $1            - Timestamp (empty string "" for current time)
-#   $2..$n-1      - Metadata fields (last argument before optional type index is the message)
-#   $n (optional) - Numeric index of metadata field to use for determining log type/color
-#
-# Description:
-#   Prints a structured log line with timestamp, metadata, and message.
-#   Colors the output based on log type:
-#     Warning - yellow
-#     ERROR   - red
-#     Debug   - blue
-#   The log type is determined from the metadata field at type_index (default 0).
-#   The message is always the second-to-last argument.
-#
-# Example:
-#   mysql_log "" Warning Server "$msg"
-#   mysql_log "" Entrypoint Dolt Server "$msg" 2
+# Usage:
+#   mysql_log <LEVEL> "<CONTEXT>" [MESSAGE]
+#   mysql_log Warn "[Server]" "Disk space low"
+#   echo "Database connection lost" | mysql_log Error "[DB]"
 #
 # Output:
-#   Prints the formatted log line to stdout with ANSI color codes if applicable.
+#   2025-10-16T12:34:56+00:00 [Warn] [Server] Disk space low
+#   2025-10-16T12:35:01+00:00 [Error] [DB] Database connection lost
 mysql_log() {
-  local dt="$1"; shift
+  local level="$1"; shift
+  local context="$1"; shift
+
+  local dt
+  dt="$(date --rfc-3339=seconds)"
+
   local color_reset="\033[0m"
-  local type_index=0
-
-  [ -z "$dt" ] && dt="$(date --rfc-3339=seconds)"
-
-  # Optional type index (numeric last argument)
-  if [[ "$#" -ge 2 ]] && [[ "${!#}" =~ ^[0-9]+$ ]]; then
-    type_index="${!#}"
-    set -- "${@:1:$(($#-1))}"
-  fi
-
-  local msg="${@: -1}"                # last argument = message
-  local meta=("${@:1:$(($#-1))}")     # all except last = metadata
-  local type="${meta[$type_index]}"   # pick type for color
-
   local color=""
-  case "$type" in
-  Warning) color="\033[1;33m" ;;
-  ERROR)   color="\033[1;31m" ;;
-  Debug)   color="\033[1;34m" ;;
+  case "$level" in
+  Warn)  color="\033[1;33m" ;; # yellow
+  Error) color="\033[1;31m" ;; # red
+  Debug) color="\033[1;34m" ;; # blue
   esac
 
-  printf '%b%s ' "$color" "$dt"
-  printf '[%s] ' "${meta[@]}"
-  printf '%s%b\n' "$msg" "$color_reset" >&1
+  local msg="$*"; if [ "$#" -eq 0 ]; then msg="$(cat)"; fi
+  printf '%b%s [%s] %s %s%b\n' "$color" "$dt" "$level" "$context" "$msg" "$color_reset"
 }
+
 
 # _dbg logs a message of type 'Debug' using mysql_log.
 _dbg() {
-  mysql_log "" Debug Entrypoint "$@"
+  mysql_log Debug "[Entrypoint]" "$@"
 }
 
 # mysql_note logs a message of type 'Note' using mysql_log.
 mysql_note() {
-  mysql_log "" Note Entrypoint "$@"
+  mysql_log Note "[Entrypoint]" "$@"
 }
 
 # mysql_warn logs a message of type 'Warning' using mysql_log and writes to stderr.
 mysql_warn() {
-  mysql_log "" Warning Entrypoint "$@" >&2
+  mysql_log Warn "[Entrypoint]" "$@" >&2
 }
 
 # mysql_error logs a message of type 'ERROR' using mysql_log, writes to stderr, prints a container removal hint, and
 # exits with status 1.
 mysql_error() {
-  mysql_log "" ERROR Entrypoint "$@" >&2
+  mysql_log Error "[Entrypoint]" "$@" >&2
   mysql_note "Remove this container with 'docker rm -f <container_name>' before retrying"
   exit 1
 }
 
-
-# extract_server_log_field extracts the value of a key from a Dolt SQL server log line
-#
-# Arguments:
-#   $1 - The Dolt log line to parse
-#   $2 - The key to extract (e.g., time, level, connectionID)
-#
-# Description:
-#   Extracts the value of a specified key from a Dolt SQL server log line.
-#   Supports two formats used in Dolt logs:
-#     key="value"  (quoted)
-#     key=value    (unquoted, terminated by space)
-#   If the key is not present, prints an empty string.
-#
-# Output:
-#   Prints the extracted value to stdout.
-#
-# Example:
-#   extract_server_log_field 'time="2025-10-16T06:16:55Z" level=info' time
-#   # Output: 2025-10-16T06:16:55Z
-extract_server_log_field() {
-  local line="$1" key="$2" val=""
-  if [[ "$line" == *"$key=\""* ]]; then
-    val="${line#*${key}=\"}"
-    val="${val%%\"*}"
-  elif [[ "$line" == *"$key="* ]]; then
-    val="${line#*${key}=}"
-    val="${val%% *}"
-  fi
-  echo "$val"
-}
-
-# dolt_server_log_parser parses Dolt SQL server logs and emits structured messages
-#
-# Reads log lines from stdin, extracts key fields, and outputs structured logs.
-# Fields extracted:
-#   time   - timestamp (time="..."), optional
-#   level  - log level (level=...), mapped to System, Warning, or ERROR
-#   msg    - log message, stripped of key=value prefixes and surrounding quotes
-#
-# Lines without a recognized level are printed unchanged.
-# Debug lines (level=debug) are echoed as-is.
-#
-# Output is sent to stdout, except for Warning and ERROR logs which are colored.
-# Uses mysql_log to format output with timestamp, metadata, and message.
-# Thread information is currently not available and is always set to 0.
+# exec_mysql executes a SQL query using Dolt, retrying until success or timeout. Ensures reliability during slow
+# container or resource startup. On timeout, it prints the provided error prefix followed by filtered Dolt output.
+# Errors are parsed to remove blank lines and extract only relevant error text. Use --show-result to display successful
+# query results.
 #
 # Usage:
-#   cat dolt_raw.log | dolt_server_log_parser
+#   exec_mysql [--show-result] "<ERROR_MESSAGE>" "<QUERY>"
+#   exec_mysql [--show-result] "<ERROR_MESSAGE>" < /docker-entrypoint-initdb.d/init.sql
+#   cat /docker-entrypoint-initdb.d/init.sql | exec_mysql [--show-result] "<ERROR_MESSAGE>"
 #
-# Example:
-#   echo '2025-10-16T06:16:55Z [0] [System] [Dolt] [Server] level=warning msg="File permission issue"' \
-#     | dolt_server_log_parser
-#
-# Exit status:
-#   Always returns 0
-dolt_server_log_parser() {
-  local thread=0 # we don't report any threads
-
-  while IFS= read -r line || [ -n "$line" ]; do
-    [[ -z "$line" ]] && continue
-    [[ "$line" == *level=debug* ]] && { echo "$line"; continue; }
-    [[ "$line" != *level=* ]] && { echo "$line"; continue; }
-
-    local ts level msg log_level
-    ts=$(extract_server_log_field "$line" time)
-    level=$(extract_server_log_field "$line" level)
-
-    msg="$line"
-    [[ -n "$ts" ]] && msg="${msg//time=\"$ts\"/}"
-    [[ -n "$level" ]] && msg="${msg//level=$level/}"
-    msg="${msg//msg=/}"
-    msg="${msg#"${msg%%[![:space:]]*}"}"
-    msg="${msg%"${msg##*[![:space:]]}"}"
-    [[ "${msg:0:1}" == "\"" && "${msg: -1}" == "\"" ]] && msg="${msg:1:-1}"
-
-    case "$level" in
-    info)    log_level="System" ;;
-    warning) log_level="Warning" ;;
-    error)   log_level="ERROR" ;;
-    *)       log_level="" ;;
-    esac
-
-    if [[ -n "$log_level" ]]; then
-      mysql_log "$ts" "$thread" "$log_level" Dolt Server "$msg" 1
-    else
-      echo "$line"
-    fi
-  done
-}
-
-
-# exec_mysql executes a SQL query using Dolt, retrying until it succeeds or a timeout is reached.
-# On timeout, it prints the provided error message prefix followed by the command output.
-# Containers and system resources can hang during startup, so this function helps ensure
-# that the SQL command is executed successfully before proceeding.
-# Arguments:
-#   $1 - SQL command to execute
-#   $2 - Error message prefix to print on timeout
-#   $3 - (Optional) If set to 1, prints command output on success
+# Output:
+#   Prints query output only if --show-result is specified.
 exec_mysql() {
-  local sql_command="$1"
-  local error_message="$2"
-  local show_output="${3:-0}"
+  local show_result=0
+  if [ "$1" = "--show-result" ]; then
+    show_result=1
+    shift
+  fi
+
+  local error_message="$1"
+  local query="${2:-}"
   local timeout="${DOLT_SERVER_TIMEOUT:-300}"
   local start_time now output status
 
   start_time=$(date +%s)
 
   while true; do
-    if [ -n "$sql_command" ]; then
-      output=$(dolt sql -q "$sql_command" 2>&1)
+    if [ -n "$query" ]; then
+      output=$(dolt sql -q "$query" 2>&1)
       status=$?
     else
-      set +e # tmp disable to report error to user formatted
+      set +e # tmp disabled to initdb.d/ file err
       output=$(dolt sql < /dev/stdin 2>&1)
       status=$?
       set -e
     fi
 
     if [ "$status" -eq 0 ]; then
-      [ "$show_output" -eq 1 ] && echo "$output" | grep -v '^$' || true
+      [ "$show_result" -eq 1 ] && echo "$output" | grep -v "^$" || true
       return 0
     fi
 
@@ -325,23 +224,23 @@ docker_process_init_files() {
       ;;
     *.sql)
       mysql_note "$0: running $f"
-      exec_mysql "" "Failed to execute $f: " < "$f" 1
+      exec_mysql --show-result "Failed to execute $f: " < "$f"
       ;;
     *.sql.bz2)
       mysql_note "$0: running $f"
-      bunzip2 -c "$f" | exec_mysql "" "Failed to execute $f: " 1
+      bunzip2 -c "$f" | exec_mysql --show-result "Failed to execute $f: "
       ;;
     *.sql.gz)
       mysql_note "$0: running $f"
-      gunzip -c "$f" | exec_mysql "" "Failed to execute $f: " 1
+      gunzip -c "$f" | exec_mysql --show-result "Failed to execute $f: "
       ;;
     *.sql.xz)
       mysql_note "$0: running $f"
-      xzcat "$f" | exec_mysql "" "Failed to execute $f: " 1
+      xzcat "$f" | exec_mysql --show-result "Failed to execute $f: "
       ;;
     *.sql.zst)
       mysql_note "$0: running $f"
-      zstd -dc "$f" | exec_mysql "" "Failed to execute $f: " 1
+      zstd -dc "$f" | exec_mysql --show-result "Failed to execute $f: "
       ;;
     *)
       mysql_warn "$0: ignoring $f"
@@ -372,7 +271,7 @@ create_database_from_env() {
 
   if [ -n "$database" ]; then
     mysql_note "Creating database '${database}'"
-    exec_mysql "CREATE DATABASE IF NOT EXISTS \`$database\`;" "Failed to create database '$database': "
+    exec_mysql "Failed to create database '$database': " "CREATE DATABASE IF NOT EXISTS \`$database\`;"
   fi
 }
 
@@ -406,11 +305,11 @@ create_user_from_env() {
     user_host="${user_host:-${DOLT_ROOT_HOST:-localhost}}"
 
     mysql_note "Creating user '${user}@${user_host}'"
-    exec_mysql "CREATE USER IF NOT EXISTS '$user'@'$user_host' IDENTIFIED BY '$password';" "Failed to create user '$user': "
-    exec_mysql "GRANT USAGE ON *.* TO '$user'@'$user_host';" "Failed to grant server access to user '$user': "
+    exec_mysql "Failed to create user '$user': " "CREATE USER IF NOT EXISTS '$user'@'$user_host' IDENTIFIED BY '$password';"
+    exec_mysql "Failed to grant server access to user '$user': " "GRANT USAGE ON *.* TO '$user'@'$user_host';"
 
     if [ -n "$database" ]; then
-      exec_mysql "GRANT ALL ON \`$database\`.* TO '$user'@'$user_host';" "Failed to grant permissions to user '$user' on database '$database': "
+      exec_mysql "Failed to grant permissions to user '$user' on database '$database': " "GRANT ALL ON \`$database\`.* TO '$user'@'$user_host';"
     fi
   fi
 }
@@ -435,7 +334,6 @@ is_port_open() {
 #   $@ - Additional arguments to pass to `dolt sql-server`
 # Returns:
 #   0 if the server starts successfully and is ready to accept connections; exits with error otherwise.
-
 dolt_server_initializer() {
   local timeout="${DOLT_SERVER_TIMEOUT:-300}"
   local start_time
@@ -443,19 +341,15 @@ dolt_server_initializer() {
 
   SERVER_PID=-1
 
-  trap '' SIGINT
+  trap 'mysql_note "Caught Ctrl+C, shutting down Dolt server..."; [ $SERVER_PID -ne -1 ] && kill "$SERVER_PID"; exit 1' INT TERM
 
   while true; do
     if [ "$SERVER_PID" -eq -1 ] || ! kill -0 "$SERVER_PID" 2>/dev/null; then
       [ "$SERVER_PID" -ne -1 ] && wait "$SERVER_PID" 2>/dev/null || true
       SERVER_PID=-1
-      if [ "${DOLT_RAW:-0}" -eq 1 ]; then
-        dolt sql-server --host=0.0.0.0 --port=3306 "$@" 2>&1 &
-        SERVER_PID=$!
-      else
-        dolt sql-server --host=0.0.0.0 --port=3306 "$@" > >(dolt_server_log_parser) 2>&1 &
-        SERVER_PID=$!
-      fi
+      dolt sql-server --host=0.0.0.0 --port=3306 "$@" 2>&1 &
+      SERVER_PID=$!
+
     fi
 
     if is_port_open "0.0.0.0" 3306; then
@@ -508,22 +402,22 @@ _main() {
   # Ran in a subshell to avoid exiting the main script, and so, we can use fallback below
   local has_correct_host
 
-  has_correct_host=$(exec_mysql \
-    "SELECT User, Host FROM mysql.user WHERE User='root' AND Host='${DOLT_ROOT_HOST}' LIMIT 1;" \
-    "Could not check root host: " 1 | grep -c "$DOLT_ROOT_HOST" || true)
+  has_correct_host=$(exec_mysql --show-result "Could not check root host: " \
+    "SELECT User, Host FROM mysql.user WHERE User='root' AND Host='${DOLT_ROOT_HOST}' LIMIT 1;" | \
+    grep -c "$DOLT_ROOT_HOST" || true)
 
   # docker-entrypoint-initdb.d scripts and system hangs may conflict with sql-server root env vars support
   if [ "$has_correct_host" -eq 0 ]; then
     mysql_warn "Environment variables failed to initialize 'root@${DOLT_ROOT_HOST}'; docker-entrypoint-initdb.d scripts queries may have conflicted. Overriding root user..."
-    exec_mysql "CREATE USER IF NOT EXISTS 'root'@'${DOLT_ROOT_HOST}' IDENTIFIED BY '${DOLT_ROOT_PASSWORD}';" "Could not create root user: " # override password
-    exec_mysql "GRANT ALL PRIVILEGES ON *.* TO 'root'@'${DOLT_ROOT_HOST}' WITH GRANT OPTION;" "Could not set root privileges: "
+    exec_mysql "Could not create root user: " "CREATE USER IF NOT EXISTS 'root'@'${DOLT_ROOT_HOST}' IDENTIFIED BY '${DOLT_ROOT_PASSWORD}';" # override password
+    exec_mysql "Could not set root privileges: " "GRANT ALL PRIVILEGES ON *.* TO 'root'@'${DOLT_ROOT_HOST}' WITH GRANT OPTION;"
   fi
 
   create_database_from_env
 
   create_user_from_env
 
-  exec_mysql "SELECT User, Host FROM mysql.user;" "Could not list users: " 1
+  exec_mysql --show-result "Could not list users: " "SELECT User, Host FROM mysql.user;"
 
   if [[ ! -f $INIT_COMPLETED ]]; then
     if ls /docker-entrypoint-initdb.d/* >/dev/null 2>&1; then
