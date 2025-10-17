@@ -98,8 +98,8 @@ wait_for_log() {
   cname="${TEST_PREFIX}root-env"
   docker run -d --name "$cname" -e DOLT_ROOT_PASSWORD=rootpass -e DOLT_USER=root -e DOLT_PASSWORD=anything "$TEST_IMAGE"
   wait_for_log "$cname" "cannot be used for the root user"
-  docker logs "$cname" >/tmp/${cname}.log 2>&1
-  run grep -F "cannot be used for the root user" /tmp/"${cname}".log
+  docker logs "$cname" >$BATS_TMPDIR/${cname}.log 2>&1
+  run grep -F "cannot be used for the root user" $BATS_TMPDIR/"${cname}".log
   [ $status -eq 0 ]
 }
 
@@ -107,8 +107,8 @@ wait_for_log() {
 @test "docker-entrypoint: password without user warns and is ignored" {
   cname="${TEST_PREFIX}pass-no-user"
   run_container "$cname" -e DOLT_ROOT_PASSWORD=rootpass -e DOLT_PASSWORD=orphan
-  docker logs "$cname" >/tmp/${cname}.log 2>&1
-  run grep -i "password will be ignored" /tmp/"${cname}".log
+  docker logs "$cname" >$BATS_TMPDIR/${cname}.log 2>&1
+  run grep -i "password will be ignored" $BATS_TMPDIR/"${cname}".log
   [ $status -eq 0 ]
 }
 
@@ -253,7 +253,7 @@ wait_for_log() {
 # bats test_tags=no_lambda
 @test "docker-entrypoint: valid server config file handling" {
   cname="${TEST_PREFIX}valid-server-config"
-  temp_dir="/tmp/test-config-$$"
+  temp_dir="$BATS_TMPDIR/test-config-$$"
   mkdir -p $temp_dir
   cat > $temp_dir/test.yaml << 'EOF'
 log_level: info
@@ -516,7 +516,7 @@ EOF
 @test "docker-entrypoint: docker-entrypoint-initdb.d script execution" {
   cname="${TEST_PREFIX}initdb-scripts"
 
-  local temp_dir="/tmp/initdb-test-$$"
+  local temp_dir="$BATS_TMPDIR/initdb-test-$$"
   mkdir -p "$temp_dir"
 
   cat > "$temp_dir/01-create-table.sql" << 'EOF'
@@ -531,7 +531,6 @@ EOF
 echo "Bash script executed"
 dolt sql -q "USE testinit; INSERT INTO init_test VALUES (2, 'Bash script executed');"
 EOF
-  chmod +x "$temp_dir/02-bash-script.sh"
 
   cat > "$temp_dir/03-data.sql" << 'EOF'
 USE testinit;
@@ -558,7 +557,8 @@ EOF
 @test "docker-entrypoint: .sh shell script execution" {
   cname="${TEST_PREFIX}sh-script"
 
-  local temp_dir="/tmp/sh-script-test-$$"
+  # the normal tmpdir permissions can't unset chmod -x
+  local temp_dir="$BATS_TEST_TMPDIR/sh-script-test-$$"
   mkdir -p "$temp_dir"
 
   cat > "$temp_dir/01-executable.sh" << 'EOF'
@@ -569,14 +569,13 @@ dolt sql -q "CREATE DATABASE IF NOT EXISTS shell_test_db;"
 dolt sql -q "USE shell_test_db; CREATE TABLE script_test (id INT PRIMARY KEY, message VARCHAR(100));"
 dolt sql -q "USE shell_test_db; INSERT INTO script_test VALUES (1, 'Executable script ran');"
 EOF
-  chmod +x "$temp_dir/01-executable.sh"
 
   cat > "$temp_dir/02-sourced.sh" << 'EOF'
 # Non-executable script - will be sourced
 echo "Sourcing shell script"
 dolt sql -q "USE shell_test_db; INSERT INTO script_test VALUES (2, 'Sourced script ran');"
 EOF
-  # Do NOT chmod +x: it should be sourced instead of executed
+  chmod +x "$temp_dir/01-executable.sh"
 
   run_container_with_port "$cname" 3306 -e DOLT_ROOT_HOST=% -v "$temp_dir:/docker-entrypoint-initdb.d"
 
@@ -596,8 +595,8 @@ EOF
   [ $status -eq 0 ]
   [[ "$output" =~ "2" ]] || false
 
-  docker logs "$cname" >/tmp/"$cname".log 2>&1
-  run grep -F "sourcing /docker-entrypoint-initdb.d/02-sourced.sh" /tmp/"$cname".log
+  docker logs "$cname" > $temp_dir/"$cname".log 2>&1
+  run grep -F "sourcing /docker-entrypoint-initdb.d/02-sourced.sh" $temp_dir/"$cname".log
   [ $status -eq 0 ]
 
   rm -rf "$temp_dir"
@@ -607,7 +606,7 @@ EOF
 @test "docker-entrypoint: .sql.gz gzip compressed file processing" {
   cname="${TEST_PREFIX}gzip-sql"
 
-  local temp_dir="/tmp/gzip-sql-test-$$"
+  local temp_dir="$BATS_TMPDIR/gzip-sql-test-$$"
   mkdir -p "$temp_dir"
 
   cat > "$temp_dir/01-init.sql" << 'EOF'
@@ -645,7 +644,7 @@ EOF
 @test "docker-entrypoint: .sql.bz2 bzip2 compressed file processing" {
   cname="${TEST_PREFIX}bzip2-sql"
 
-  local temp_dir="/tmp/bzip2-sql-test-$$"
+  local temp_dir="$BATS_TMPDIR/bzip2-sql-test-$$"
   mkdir -p "$temp_dir"
 
   cat > "$temp_dir/01-init.sql" << 'EOF'
@@ -686,7 +685,7 @@ EOF
 @test "docker-entrypoint: .sql.xz xz compressed file processing" {
   cname="${TEST_PREFIX}xz-sql"
 
-  local temp_dir="/tmp/xz-sql-test-$$"
+  local temp_dir="$BATS_TMPDIR/xz-sql-test-$$"
   mkdir -p "$temp_dir"
 
   cat > "$temp_dir/01-init.sql" << 'EOF'
@@ -728,7 +727,7 @@ EOF
 @test "docker-entrypoint: .sql.zst zstd compressed file processing" {
   cname="${TEST_PREFIX}zstd-sql"
 
-  local temp_dir="/tmp/zstd-sql-test-$$"
+  local temp_dir="$BATS_TMPDIR/zstd-sql-test-$$"
   mkdir -p "$temp_dir"
 
   cat > "$temp_dir/01-init.sql" << 'EOF'
@@ -771,7 +770,7 @@ EOF
 # bats test_tags=no_lambda
 @test "docker-entrypoint: load employees database dump (.sql)" {
   cname="${TEST_PREFIX}dump"
-  local temp_dir="/tmp/employees-dump-test-$$"
+  local temp_dir="$BATS_TMPDIR/employees-dump-test-$$"
   mkdir -p "$temp_dir"
 
   curl -sL "https://raw.githubusercontent.com/datacharmer/test_db/master/load_employees.dump" -o "$temp_dir/load_employees.sql"
@@ -795,7 +794,7 @@ EOF
 # bats test_tags=no_lambda
 @test "docker-entrypoint: error on invalid database dump (.sql)" {
   cname="${TEST_PREFIX}bad-dump"
-  local temp_dir="/tmp/employees-dump-$$"
+  local temp_dir="$BATS_TMPDIR/employees-dump-$$"
   mkdir -p "$temp_dir"
 
   curl -sL "https://raw.githubusercontent.com/datacharmer/test_db/master/load_employees.dump" -o "$temp_dir/load_employees.sql"
@@ -804,8 +803,8 @@ EOF
   [ $status -eq 0 ]
 
   docker wait "$cname"
-  docker logs "$cname" >/tmp/${cname}.log 2>&1
-  run grep -F "Error" /tmp/${cname}.log
+  docker logs "$cname" >$BATS_TMPDIR/${cname}.log 2>&1
+  run grep -F "Error" $BATS_TMPDIR/${cname}.log
   [ $status -eq 0 ]
 
   rm -rf "$temp_dir"
@@ -818,7 +817,7 @@ EOF
 
   cname="${TEST_PREFIX}grant-init"
 
-  local temp_dir="/tmp/grant-init-$$"
+  local temp_dir="$BATS_TMPDIR/grant-init-$$"
   mkdir -p "$temp_dir"
 
   cat > "$temp_dir/01-correct-grants.sql" << 'EOF'
@@ -842,7 +841,7 @@ EOF
 # bats test_tags=no_lambda
 @test "docker-entrypoint: init sql file prints table contents to stdout" {
   cname="${TEST_PREFIX}plain-sql"
-  temp_dir="/tmp/plain-sql-$$"
+  temp_dir="$BATS_TMPDIR/plain-sql-$$"
   mkdir -p "$temp_dir"
 
   cat > "$temp_dir/01-init.sql" << 'EOF'
@@ -855,15 +854,15 @@ SELECT * FROM users_table;
 EOF
 
   run_container_with_port "$cname" 3306 -e DOLT_ROOT_HOST=% -v "$temp_dir:/docker-entrypoint-initdb.d"
-  docker logs "$cname" >/tmp/${cname}.log 2>&1
+  docker logs "$cname" >$BATS_TMPDIR/${cname}.log 2>&1
 
-  run grep -F "| id | username | email             |" /tmp/"${cname}".log
+  run grep -F "| id | username | email             |" $BATS_TMPDIR/"${cname}".log
   [ "$status" -eq 0 ]
 
-  run grep -F "| 1  | alice    | alice@example.com |" /tmp/"${cname}".log
+  run grep -F "| 1  | alice    | alice@example.com |" $BATS_TMPDIR/"${cname}".log
   [ "$status" -eq 0 ]
 
-  run grep -F "| 2  | bob      | bob@example.com   |" /tmp/"${cname}".log
+  run grep -F "| 2  | bob      | bob@example.com   |" $BATS_TMPDIR/"${cname}".log
   [ "$status" -eq 0 ]
 
   rm -rf "$temp_dir"
