@@ -16,7 +16,6 @@ package dtables
 
 import (
 	"io"
-	"time"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
