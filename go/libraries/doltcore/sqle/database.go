@@ -981,13 +981,13 @@ func (db Database) getNonlocalTable(ctx *sql.Context, root doltdb.RootValue, lwr
 			return nil, false, err
 		}
 
-		globalsEntryTableName, err := doltdb.GetNonlocalTablesNameColumn(ctx, keyDesc, keyTuple)
+		nonlocalsEntryTableName, err := doltdb.GetNonlocalTablesNameColumn(ctx, keyDesc, keyTuple)
 		if err != nil {
 			return nil, false, err
 		}
 
-		globalsEntryTableName = strings.ToLower(globalsEntryTableName)
-		matchesPattern, err := doltdb.MatchTablePattern(globalsEntryTableName, lwrName)
+		nonlocalsEntryTableName = strings.ToLower(nonlocalsEntryTableName)
+		matchesPattern, err := doltdb.MatchTablePattern(nonlocalsEntryTableName, lwrName)
 		if err != nil {
 			return nil, false, err
 		}
