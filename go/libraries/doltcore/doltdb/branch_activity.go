@@ -91,18 +91,20 @@ func BranchActivityReadEvent(branch string) {
 	}
 }
 
-// GetBranchActivity returns activity data for all tracked branches
-func GetBranchActivity() []BranchActivityData {
+// GetBranchActivity returns activity data for all branches (tracked and untracked)
+func GetBranchActivity(ctx context.Context, ddb *DoltDB) ([]BranchActivityData, error) {
 	branchActivityMutex.RLock()
 	defer branchActivityMutex.RUnlock()
 
-	// Collect all unique branch names
-	branches := make(map[string]bool)
-	for branch := range branchReadTimes {
-		branches[branch] = true
+	// Get all branches from the database
+	branchRefs, err := ddb.GetBranches(ctx)
+	if err != nil {
+		return nil, err
 	}
-	for branch := range branchWriteTimes {
-		branches[branch] = true
+	
+	branches := make(map[string]bool)
+	for _, branchRef := range branchRefs {
+		branches[branchRef.GetPath()] = true
 	}
 
 	result := make([]BranchActivityData, 0, len(branches))
@@ -128,5 +130,5 @@ func GetBranchActivity() []BranchActivityData {
 		return result[i].Branch < result[j].Branch
 	})
 
-	return result
+	return result, nil
 }

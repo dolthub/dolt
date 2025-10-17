@@ -15,6 +15,7 @@
 package dtables
 
 import (
+	"fmt"
 	"io"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -73,7 +74,17 @@ type BranchActivityItr struct {
 }
 
 func NewBranchActivityItr(ctx *sql.Context, table *BranchActivityTable) (*BranchActivityItr, error) {
-	activityData := doltdb.GetBranchActivity()
+	// Get the DoltDB from the database
+	ddbs := table.db.DoltDatabases()
+	if len(ddbs) != 1 {
+		return nil, fmt.Errorf("expected exactly 1 dolt database, got %d", len(ddbs))
+	}
+	ddb := ddbs[0]
+	
+	activityData, err := doltdb.GetBranchActivity(ctx, ddb)
+	if err != nil {
+		return nil, err
+	}
 	
 	rows := make([]sql.Row, 0, len(activityData))
 	for _, data := range activityData {
