@@ -199,33 +199,28 @@ func (it prollyRowIter) Next2(ctx *sql.Context) (sql.Row2, error) {
 	row := make(sql.Row2, it.rowLen)
 	for i, idx := range it.keyProj {
 		outputIdx := it.ordProj[i]
-		typ := val.EncToType[it.keyDesc.Types[idx].Enc]
-		field, err := tree.GetField2(ctx, it.keyDesc, idx, key, it.ns)
+		row[outputIdx], err = tree.GetFieldValue(ctx, it.keyDesc, idx, key, it.ns)
 		if err != nil {
 			return nil, err
-		}
-		row[outputIdx] = sql.Value{
-			Typ: typ,
-			Val: field,
 		}
 	}
 
 	for i, idx := range it.valProj {
 		outputIdx := it.ordProj[len(it.keyProj)+i]
-		typ := val.EncToType[it.valDesc.Types[idx].Enc]
-		field, err := tree.GetField2(ctx, it.valDesc, idx, value, it.ns)
+		row[outputIdx], err = tree.GetFieldValue(ctx, it.valDesc, idx, value, it.ns)
 		if err != nil {
 			return nil, err
-		}
-		row[outputIdx] = sql.Value{
-			Typ: typ,
-			Val: field,
 		}
 	}
 	return row, nil
 }
 
 func (it prollyRowIter) IsRowIter2(ctx *sql.Context) bool {
+	for _, typ := range it.keyDesc.Types {
+		if typ.Enc == val.ExtendedEnc || typ.Enc == val.ExtendedAddrEnc || typ.Enc == val.ExtendedAdaptiveEnc {
+			return false
+		}
+	}
 	return true
 }
 
@@ -291,14 +286,9 @@ func (it *prollyKeylessIter) Next2(ctx *sql.Context) (sql.Row2, error) {
 		it.curr2 = make(sql.Row2, it.rowLen)
 		for i, idx := range it.valProj {
 			outputIdx := it.ordProj[i]
-			typ := val.EncToType[it.valDesc.Types[idx].Enc]
-			field, err := tree.GetField2(ctx, it.valDesc, idx, value, it.ns)
+			it.curr2[outputIdx], err = tree.GetFieldValue(ctx, it.valDesc, idx, value, it.ns)
 			if err != nil {
 				return nil, err
-			}
-			it.curr2[outputIdx] = sql.Value{
-				Typ: typ,
-				Val: field,
 			}
 		}
 	}
@@ -307,6 +297,7 @@ func (it *prollyKeylessIter) Next2(ctx *sql.Context) (sql.Row2, error) {
 }
 
 func (it *prollyKeylessIter) IsRowIter2(ctx *sql.Context) bool {
+	// TODO: if keyDesc or valDesc contain ExtendedEnc, return false
 	return true
 }
 

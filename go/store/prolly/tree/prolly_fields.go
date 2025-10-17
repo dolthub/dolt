@@ -172,71 +172,89 @@ func GetField(ctx context.Context, td val.TupleDesc, i int, tup val.Tuple, ns No
 	return v, err
 }
 
-// GetField2 reads the value from the ith field of the Tuple as an interface{}.
-func GetField2(ctx context.Context, td val.TupleDesc, i int, tup val.Tuple, ns NodeStore) (b []byte, err error) {
-	switch td.Types[i].Enc {
+// GetFieldValue reads the value from the ith field of the Tuple as a sql.Value
+func GetFieldValue(ctx context.Context, td val.TupleDesc, i int, tup val.Tuple, ns NodeStore) (v sql.Value, err error) {
+	enc := td.Types[i].Enc
+	switch enc {
 	case val.Int8Enc, val.Int16Enc, val.Int32Enc, val.Int64Enc,
 		val.Uint8Enc, val.Uint16Enc, val.Uint32Enc, val.Uint64Enc,
 		val.Float32Enc, val.Float64Enc, val.DecimalEnc, val.Bit64Enc,
 		val.DateEnc, val.DatetimeEnc, val.TimeEnc, val.YearEnc,
 		val.EnumEnc, val.SetEnc,
+		val.StringEnc, val.ByteStringEnc,
+		val.JSONEnc, val.GeometryEnc,
 		val.Hash128Enc, val.CommitAddrEnc, val.CellEnc:
-		b = td.GetField(i, tup)
-		return b, nil
-
-	case val.StringEnc, val.ByteStringEnc:
-		b = td.GetField(i, tup)
-		return b[:len(b)-1], nil // TODO: not sure why we do this?
-
-	case val.JSONEnc, val.GeometryEnc:
-		b = td.GetField(i, tup)
-		return b[:len(b)-1], nil // TODO: not sure why we do this?
+		v.Val = td.GetField(i, tup)
+		v.Typ = val.EncToType[enc]
+		return v, nil
 
 	case val.GeomAddrEnc:
 		// TODO: until GeometryEnc is removed, we must check if GeomAddrEnc is a GeometryEnc
-		var ok bool
-		if b, ok = td.GetGeometry(i, tup); ok {
-			return b[:len(b)-1], nil
+		if b, ok := td.GetGeometry(i, tup); ok {
+			v.Val = b
+			v.Typ = val.EncToType[enc]
+			return v, nil
 		}
-		var h hash.Hash
-		if h, ok = td.GetGeometryAddr(i, tup); ok {
+		// TODO: have GeometryAddr implement TextStorage
+		if h, ok := td.GetGeometryAddr(i, tup); ok {
+			var b []byte
 			b, err = ns.ReadBytes(ctx, h)
 			if err != nil {
-				return nil, err
+				return v, err
 			}
-			return b, nil
+			v.Val = b
+			v.Typ = val.EncToType[enc]
+			return v, nil
 		}
-		// TODO: somehow neither Geometry or GeometryAddr, silently pass for now
-		return b, nil
+		return
 
-	// TODO: figure out how to utilize with TextStorage, instead of always deserializing
-	case val.StringAddrEnc, val.BytesAddrEnc, val.JSONAddrEnc:
+	case val.StringAddrEnc:
 		h := hash.New(td.GetField(i, tup))
-		b, err = ns.ReadBytes(ctx, h)
+		v.Val2 = val.NewTextStorage(ctx, h, ns)
+		v.Typ = val.EncToType[enc]
+		return v, nil
+
+	case val.BytesAddrEnc:
+		h := hash.New(td.GetField(i, tup))
+		v.Val2 = val.NewByteArray(ctx, h, ns)
+		v.Typ = val.EncToType[enc]
+		return v, nil
+
+	case val.JSONAddrEnc:
+		// TODO: figure out how to utilize with TextStorage, instead of always deserializing
+		h := hash.New(td.GetField(i, tup))
+		v.Val, err = ns.ReadBytes(ctx, h)
 		if err != nil {
-			return nil, err
+			return v, err
 		}
-		return b, nil
+		v.Typ = val.EncToType[enc]
+		return v, nil
 
 	case val.BytesAdaptiveEnc, val.StringAdaptiveEnc:
-		b = td.GetField(i, tup)
+		b := td.GetField(i, tup)
 		// null value
 		if len(b) == 0 {
-			return b, nil
+			v.Typ = val.EncToType[enc]
+			return v, nil
 		}
 		// inlined
 		if b[0] == 0 {
-			return b[1:], nil
+			v.Val = b[1:]
+			v.Typ = val.EncToType[enc]
+			return v, nil
 		}
 		// out-of-band
 		_, lengthBytes := uvarint.Uvarint(b)
-		b, err = ns.ReadBytes(ctx, hash.New(b[lengthBytes:]))
-		return b, err
+		h := hash.New(b[lengthBytes:])
+		v.Val2 = val.NewByteArray(ctx, h, ns)
+		v.Typ = val.EncToType[enc]
+		return v, err
 
 	// TODO: figure out how to deal with ExtendedEncs
 	case val.ExtendedEnc, val.ExtendedAddrEnc, val.ExtendedAdaptiveEnc:
-		b = td.GetField(i, tup)
-		return b, nil
+		v.Val = td.GetField(i, tup)
+		v.Typ = val.EncToType[enc]
+		return v, nil
 
 	default:
 		panic("unknown val.encoding")
