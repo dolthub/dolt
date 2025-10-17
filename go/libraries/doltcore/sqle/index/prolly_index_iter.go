@@ -133,31 +133,21 @@ func (p prollyIndexIter) Next2(ctx *sql.Context) (sql.Row2, error) {
 		return nil, err
 	}
 
-	r := make(sql.Row2, len(p.projections))
+	row := make(sql.Row2, len(p.projections))
 	err = p.primary.Get(ctx, pk, func(key, value val.Tuple) error {
 		keyDesc, valDesc := p.primary.Descriptors()
 		for i, idx := range p.keyMap {
-			outputIdx := p.ordMap[i]
-			typ := val.EncToType[keyDesc.Types[idx].Enc]
-			field, err := tree.GetField2(ctx, keyDesc, idx, key, p.primary.NodeStore())
+			outIdx := p.ordMap[i]
+			row[outIdx], err = tree.GetFieldValue(ctx, keyDesc, idx, key, p.primary.NodeStore())
 			if err != nil {
 				return err
-			}
-			r[outputIdx] = sql.Value{
-				Typ: typ,
-				Val: field,
 			}
 		}
 		for i, idx := range p.valMap {
-			outputIdx := p.ordMap[len(p.keyMap)+i]
-			typ := val.EncToType[valDesc.Types[idx].Enc]
-			field, err := tree.GetField2(ctx, valDesc, idx, value, p.primary.NodeStore())
+			outIdx := p.ordMap[len(p.keyMap)+i]
+			row[outIdx], err = tree.GetFieldValue(ctx, valDesc, idx, value, p.primary.NodeStore())
 			if err != nil {
 				return err
-			}
-			r[outputIdx] = sql.Value{
-				Typ: typ,
-				Val: field,
 			}
 		}
 		return nil
@@ -165,7 +155,7 @@ func (p prollyIndexIter) Next2(ctx *sql.Context) (sql.Row2, error) {
 	if err != nil {
 		return nil, err
 	}
-	return r, nil
+	return row, nil
 }
 
 func (p prollyIndexIter) IsRowIter2(ctx *sql.Context) bool {
@@ -300,28 +290,18 @@ func (p prollyCoveringIndexIter) Next2(ctx *sql.Context) (sql.Row2, error) {
 
 	row := make(sql.Row2, len(p.projections))
 	for i, idx := range p.keyMap {
-		outputIdx := p.ordMap[i]
-		typ := val.EncToType[p.keyDesc.Types[idx].Enc]
-		field, err := tree.GetField2(ctx, p.keyDesc, idx, k, p.ns)
+		outIdx := p.ordMap[i]
+		row[outIdx], err = tree.GetFieldValue(ctx, p.keyDesc, idx, k, p.ns)
 		if err != nil {
 			return nil, err
-		}
-		row[outputIdx] = sql.Value{
-			Typ: typ,
-			Val: field,
 		}
 	}
 
 	for i, idx := range p.valMap {
-		outputIdx := p.ordMap[len(p.keyMap)+i]
-		typ := val.EncToType[p.valDesc.Types[idx].Enc]
-		field, err := tree.GetField2(ctx, p.valDesc, idx, v, p.ns)
+		outIdx := p.ordMap[len(p.keyMap)+i]
+		row[outIdx], err = tree.GetFieldValue(ctx, p.valDesc, idx, v, p.ns)
 		if err != nil {
 			return nil, err
-		}
-		row[outputIdx] = sql.Value{
-			Typ: typ,
-			Val: field,
 		}
 	}
 
@@ -560,15 +540,10 @@ func (p prollyKeylessIndexIter) Next2(ctx *sql.Context) (sql.Row2, error) {
 		ns := p.clustered.NodeStore()
 		p.curr = make(sql.Row2, len(p.valueMap))
 		for i, idx := range p.valueMap {
-			outputIdx := p.ordMap[i]
-			typ := val.EncToType[p.valueDesc.Types[idx].Enc]
-			field, err := tree.GetField2(ctx, p.valueDesc, idx, value, ns)
+			outIdx := p.ordMap[i]
+			p.curr[outIdx], err = tree.GetFieldValue(ctx, p.valueDesc, idx, value, ns)
 			if err != nil {
 				return nil, err
-			}
-			p.curr[outputIdx] = sql.Value{
-				Typ: typ,
-				Val: field,
 			}
 		}
 	}
