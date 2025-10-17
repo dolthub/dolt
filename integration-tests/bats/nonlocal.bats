@@ -332,22 +332,29 @@ SQL
 # The below tests are convenience features but not necessary for the MVP
 
 @test "nonlocal: nonlocal tables appear in show_tables" {
-  skip
   dolt checkout -b other
   dolt sql <<SQL
   CALL dolt_checkout('main');
   CREATE TABLE aliased_table (pk char(8) PRIMARY KEY);
+  CREATE TABLE table_alias_1 (pk char(8) PRIMARY KEY);
+  CREATE TABLE table_alias_wild_3 (pk char(8) PRIMARY KEY);
   INSERT INTO aliased_table VALUES ("amzmapqt");
 
   CALL dolt_checkout('other');
   INSERT INTO dolt_nonlocal_tables(table_name, target_ref, ref_table, options) VALUES
-    ("table_alias_branch", "main", "aliased_table", "immediate");
+    ("table_alias_1", "main", "", "immediate"),
+    ("table_alias_2", "main", "aliased_table", "immediate"),
+    ("table_alias_wild_*", "main", "", "immediate"),
+    ("table_alias_missing", "main", "", "immediate");
 SQL
 
   # Nonlocal tables should appear in "show tables"
   run dolt sql -q "show tables"
   [ "$status" -eq 0 ]
-  [[ "$output" =~ "table_alias_branch" ]] || false
+  [[ "$output" =~ "table_alias_1" ]] || false
+  [[ "$output" =~ "table_alias_2" ]] || false
+  [[ "$output" =~ "table_alias_wild_3" ]] || false
+  ! [[ "$output" =~ "table_alias_missing" ]] || false
 }
 
 @test "nonlocal: creating a nonlocal table creates it on the appropriate branch" {
