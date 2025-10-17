@@ -1,78 +1,118 @@
 #!/bin/bash
 set -eo pipefail
 
-# mysql_log logs messages with a timestamp and optional color formatting.
+# mysql_log prints a timestamped (ISO 8601), color-coded structured log message.
+# The message includes a log level and the message itself.
+# If <MESSAGE> is omitted, it reads from stdin, allowing multi-line input.
+#
 # Arguments:
-#   $1 - Log type (e.g., Note, Warn, ERROR)
-#   $@ - Log message (if empty, reads from stdin)
+#   $1 - <LEVEL>   : Log level (e.g., Warn, Error, Debug)
+#   $2 - <MESSAGE> : Message to log; if omitted, the function reads from stdin
+#
+# Usage:
+#   mysql_log <LEVEL> [MESSAGE]
+#   mysql_log Warn "Disk space low"
+#   echo "Database connection lost" | mysql_log Error
+#
 # Output:
-#   Prints a formatted log line to stdout or stderr, with color for Warn and ERROR.
-mysql_log() {
-  local type="$1"
-  shift
-  local text="$*"
-  if [ "$#" -eq 0 ]; then text="$(cat)"; fi
+#   2025-10-16T12:34:56+00:00 [Warn] [Entrypoint] Disk space low
+#   2025-10-16T12:35:01+00:00 [Error] [Entrypoint] Database connection lost
+_mysql_log() {
+  local level="$1"; shift
+
   local dt
   dt="$(date --rfc-3339=seconds)"
+
   local color_reset="\033[0m"
-  local color
-  case "$type" in
-  Warn) color="\033[1;33m" ;;  # yellow
-  ERROR) color="\033[1;31m" ;; # red
-  *) color="" ;;
+  local color=""
+  case "$level" in
+  Warn)  color="\033[1;33m" ;; # yellow
+  Error) color="\033[1;31m" ;; # red
+  Debug) color="\033[1;34m" ;; # blue
   esac
-  printf '%b%s [%s] [Entrypoint]: %s%b\n' "$color" "$dt" "$type" "$text" "$color_reset"
+
+  local msg="$*"
+  if [ "$#" -eq 0 ]; then
+    msg="$(cat)"
+  fi
+
+  printf '%b%s [%s] [Entrypoint] %s%b\n' "$color" "$dt" "$level" "$msg" "$color_reset"
+}
+
+
+# _dbg logs a message of type 'Debug' using mysql_log.
+_dbg() {
+  _mysql_log Debug "$@"
 }
 
 # mysql_note logs a message of type 'Note' using mysql_log.
 mysql_note() {
-  mysql_log Note "$@"
+  _mysql_log Note "$@"
 }
 
-# mysql_warn logs a message of type 'Warn' using mysql_log and writes to stderr.
+# mysql_warn logs a message of type 'Warning' using mysql_log and writes to stderr.
 mysql_warn() {
-  mysql_log Warn "$@" >&2
+  _mysql_log Warn "$@" >&2
 }
 
-# mysql_error logs a message of type 'ERROR' using mysql_log, write to stderr, prints a container removal hint, and
+# mysql_error logs a message of type 'ERROR' using mysql_log, writes to stderr, prints a container removal hint, and
 # exits with status 1.
 mysql_error() {
-  mysql_log ERROR "$@" >&2
+  _mysql_log Error "$@" >&2
   mysql_note "Remove this container with 'docker rm -f <container_name>' before retrying"
   exit 1
 }
 
-# exec_mysql executes a SQL query using Dolt, retrying until it succeeds or a timeout is reached.
-# On timeout, it prints the provided error message prefix followed by the command output.
-# Containers and system resources can hang during startup, so this function helps ensure
-# that the SQL command is executed successfully before proceeding.
-# Arguments:
-#   $1 - SQL command to execute
-#   $2 - Error message prefix to print on timeout
-#   $3 - (Optional) If set to 1, prints command output on success
+# exec_mysql executes a SQL query using Dolt, retrying until success or timeout. Ensures reliability during slow
+# container or resource startup. On timeout, it prints the provided error prefix followed by filtered Dolt output.
+# Errors are parsed to remove blank lines and extract only relevant error text. Use --show-result to display successful
+# query results.
+#
+# Usage:
+#   exec_mysql [--show-result] "<ERROR_MESSAGE>" "<QUERY>"
+#   exec_mysql [--show-result] "<ERROR_MESSAGE>" < /docker-entrypoint-initdb.d/init.sql
+#   cat /docker-entrypoint-initdb.d/init.sql | exec_mysql [--show-result] "<ERROR_MESSAGE>"
+#
+# Output:
+#   Prints query output only if --show-result is specified.
 exec_mysql() {
-  local sql_command="$1"
-  local error_message="$2"
-  local show_output="${3:-0}"
+  local show_result=0
+  if [ "$1" = "--show-result" ]; then
+    show_result=1
+    shift
+  fi
+
+  local error_message="$1"
+  local query="${2:-}"
   local timeout="${DOLT_SERVER_TIMEOUT:-300}"
-  local start_time now output
+  local start_time now output status
 
   start_time=$(date +%s)
 
   while true; do
-    if output=$(dolt sql -q "$sql_command" 2>&1); then
-      [ "$show_output" -eq 1 ] && echo "$output"
+    if [ -n "$query" ]; then
+      output=$(dolt sql -q "$query" 2>&1)
+      status=$?
+    else
+      set +e # tmp disabled to initdb.d/ file err
+      output=$(dolt sql < /dev/stdin 2>&1)
+      status=$?
+      set -e
+    fi
+
+    if [ "$status" -eq 0 ]; then
+      [ "$show_result" -eq 1 ] && echo "$output" | grep -v "^$" || true
       return 0
     fi
 
-    if echo "$output" | grep -qi "syntax error"; then
-      mysql_error "$error_message$output"
+    if echo "$output" | grep -qiE "Error [0-9]+ \([A-Z0-9]+\)"; then
+      mysql_error "$error_message$(echo "$output" | grep -iE "Error|error")"
     fi
 
     if [ "$timeout" -ne 0 ]; then
       now=$(date +%s)
       if [ $((now - start_time)) -ge "$timeout" ]; then
-        mysql_error "$error_message$output"
+        mysql_error "$error_message$(echo "$output" | grep -iE "Error|error" || true)"
       fi
     fi
 
@@ -171,48 +211,42 @@ get_config_file_path_if_exists() {
 #   e.g., docker_process_init_files /always-initdb.d/*
 # Processes initializer files based on file extensions.
 docker_process_init_files() {
-  mysql_note "Running init script...s"
-  local f sql
-
+  local f
+  echo
   for f; do
     case "$f" in
     *.sh)
       if [ -x "$f" ]; then
         mysql_note "$0: running $f"
         if ! "$f"; then
-          mysql_error "Failed to execute init script '$f'"
+          mysql_error "Failed to execute $f: "
         fi
       else
         mysql_note "$0: sourcing $f"
         if ! . "$f"; then
-          mysql_error "Failed to source init script '$f'"
+          mysql_error "Failed to execute $f: "
         fi
       fi
       ;;
     *.sql)
       mysql_note "$0: running $f"
-      sql=$(cat "$f")
-      exec_mysql "$sql" "Failed to execute $f: "
+      exec_mysql --show-result "Failed to execute $f: " < "$f"
       ;;
     *.sql.bz2)
       mysql_note "$0: running $f"
-      sql=$(bunzip2 -c "$f")
-      exec_mysql "$sql" "Failed to execute $f: "
+      bunzip2 -c "$f" | exec_mysql --show-result "Failed to execute $f: "
       ;;
     *.sql.gz)
       mysql_note "$0: running $f"
-      sql=$(gunzip -c "$f")
-      exec_mysql "$sql" "Failed to execute $f: "
+      gunzip -c "$f" | exec_mysql --show-result "Failed to execute $f: "
       ;;
     *.sql.xz)
       mysql_note "$0: running $f"
-      sql=$(xzcat "$f")
-      exec_mysql "$sql" "Failed to execute $f: "
+      xzcat "$f" | exec_mysql --show-result "Failed to execute $f: "
       ;;
     *.sql.zst)
       mysql_note "$0: running $f"
-      sql=$(zstd -dc "$f")
-      exec_mysql "$sql" "Failed to execute $f: "
+      zstd -dc "$f" | exec_mysql --show-result "Failed to execute $f: "
       ;;
     *)
       mysql_warn "$0: ignoring $f"
@@ -243,7 +277,7 @@ create_database_from_env() {
 
   if [ -n "$database" ]; then
     mysql_note "Creating database '${database}'"
-    exec_mysql "CREATE DATABASE IF NOT EXISTS \`$database\`;" "Failed to create database '$database': "
+    exec_mysql "Failed to create database '$database': " "CREATE DATABASE IF NOT EXISTS \`$database\`;"
   fi
 }
 
@@ -261,9 +295,7 @@ create_user_from_env() {
   database=$(get_env_var "DATABASE")
 
   if [ "$user" = 'root' ]; then
-    mysql_error <<-EOF
-    $(get_env_var_name "USER")="root", $(get_env_var_name "USER") and $(get_env_var_name "PASSWORD") are for configuring the regular user and cannot be used for the root user.
-EOF
+    mysql_error "$(get_env_var_name "USER")="root", $(get_env_var_name "USER") and $(get_env_var_name "PASSWORD") are for configuring the regular user and cannot be used for the root user."
   fi
 
   if [ -n "$user" ] && [ -z "$password" ]; then
@@ -278,16 +310,13 @@ EOF
     user_host=$(get_env_var "USER_HOST")
     user_host="${user_host:-${DOLT_ROOT_HOST:-localhost}}"
 
-    mysql_note "Creating user '${user}@${user_host}'..."
-    exec_mysql "CREATE USER IF NOT EXISTS '$user'@'$user_host' IDENTIFIED BY '$password';" "Failed to create user '$user': "
-    exec_mysql "GRANT USAGE ON *.* TO '$user'@'$user_host';" "Failed to grant server access to user '$user': "
+    mysql_note "Creating user '${user}@${user_host}'"
+    exec_mysql "Failed to create user '$user': " "CREATE USER IF NOT EXISTS '$user'@'$user_host' IDENTIFIED BY '$password';"
+    exec_mysql "Failed to grant server access to user '$user': " "GRANT USAGE ON *.* TO '$user'@'$user_host';"
 
     if [ -n "$database" ]; then
-      mysql_note "Giving user '${user}@${user_host}' access to schema '${database}'..."
-      exec_mysql "GRANT ALL ON \`$database\`.* TO '$user'@'$user_host';" "Failed to grant permissions to user '$user' on database '$database': "
+      exec_mysql "Failed to grant permissions to user '$user' on database '$database': " "GRANT ALL ON \`$database\`.* TO '$user'@'$user_host';"
     fi
-
-    mysql_note "'${user}@${user_host}' user successfully created!"
   fi
 }
 
@@ -311,7 +340,6 @@ is_port_open() {
 #   $@ - Additional arguments to pass to `dolt sql-server`
 # Returns:
 #   0 if the server starts successfully and is ready to accept connections; exits with error otherwise.
-
 dolt_server_initializer() {
   local timeout="${DOLT_SERVER_TIMEOUT:-300}"
   local start_time
@@ -325,12 +353,13 @@ dolt_server_initializer() {
     if [ "$SERVER_PID" -eq -1 ] || ! kill -0 "$SERVER_PID" 2>/dev/null; then
       [ "$SERVER_PID" -ne -1 ] && wait "$SERVER_PID" 2>/dev/null || true
       SERVER_PID=-1
-      dolt sql-server --host=0.0.0.0 --port=3306 "$@" &
+      dolt sql-server --host=0.0.0.0 --port=3306 "$@" 2>&1 &
       SERVER_PID=$!
+
     fi
 
     if is_port_open "0.0.0.0" 3306; then
-      mysql_note "Dolt server started successfully (PID=$SERVER_PID)"
+      mysql_note "Dolt server started."
       return 0
     fi
 
@@ -369,6 +398,32 @@ _main() {
     set -- "$@" --config="$CONFIG_PROVIDED"
   fi
 
+  mysql_note "Starting Dolt server"
+  # Attempt to configure the root user directly through the sql-server using built-in environment variable support
+  # The user creation queries with `dolt sql` can interfere with this process so we run them after the server is started
+  DOLT_ROOT_HOST="${DOLT_ROOT_HOST:-localhost}"
+
+  # `dolt sql` can hold locks that prevent the server from starting during system hangs without this func
+  dolt_server_initializer "$@"
+  # Ran in a subshell to avoid exiting the main script, and so, we can use fallback below
+  local has_correct_host
+  has_correct_host=$(exec_mysql --show-result "Could not check root host: " \
+    "SELECT User, Host FROM mysql.user WHERE User='root' AND Host='${DOLT_ROOT_HOST}' LIMIT 1;" | \
+    grep -c "$DOLT_ROOT_HOST" || true)
+
+  # args or system hangs may conflict with sql-server root env vars support
+  if [ "$has_correct_host" -eq 0 ]; then
+    mysql_warn "Environment variables failed to initialize 'root@${DOLT_ROOT_HOST}'; docker-entrypoint-initdb.d scripts queries may have conflicted. Overriding root user..."
+    exec_mysql "Could not create root user: " "CREATE USER IF NOT EXISTS 'root'@'${DOLT_ROOT_HOST}' IDENTIFIED BY '${DOLT_ROOT_PASSWORD}';" # override password
+    exec_mysql "Could not set root privileges: " "GRANT ALL PRIVILEGES ON *.* TO 'root'@'${DOLT_ROOT_HOST}' WITH GRANT OPTION;"
+  fi
+
+  create_database_from_env
+
+  create_user_from_env
+
+  exec_mysql --show-result "Could not list users: " "SELECT User, Host FROM mysql.user;"
+
   if [[ ! -f $INIT_COMPLETED ]]; then
     if ls /docker-entrypoint-initdb.d/* >/dev/null 2>&1; then
       docker_process_init_files /docker-entrypoint-initdb.d/*
@@ -378,38 +433,7 @@ _main() {
     touch "$INIT_COMPLETED"
   fi
 
-  create_database_from_env
-
-  mysql_note "Starting Dolt server in the background..."
-  # Attempt to configure the root user directly through the sql-server using built-in environment variable support
-  # The user creation queries with `dolt sql` can interfere with this process so we run them after the server is started
-  DOLT_ROOT_HOST="${DOLT_ROOT_HOST:-localhost}"
-  mysql_note "Configuring user 'root@${DOLT_ROOT_HOST}'..."
-
-  # `dolt sql` can hold locks that prevent the server from starting during system hangs
-  dolt_server_initializer "$@"
-
-  # Ran in a subshell to avoid exiting the main script, and so, we can use fallback below
-  local has_correct_host
-  has_correct_host=$(exec_mysql \
-    "SELECT User, Host FROM mysql.user WHERE User='root' AND Host='${DOLT_ROOT_HOST}' LIMIT 1;" \
-    "Could not check root host: " 1 | grep -c "$DOLT_ROOT_HOST" || true)
-
-  # docker-entrypoint-initdb.d scripts and system hangs may conflict with sql-server root env vars support
-  if [ "$has_correct_host" -eq 0 ]; then
-    mysql_warn "Environment variables failed to initialize 'root@${DOLT_ROOT_HOST}'; docker-entrypoint-initdb.d scripts queries may have conflicted. Overriding root user..."
-    exec_mysql "CREATE USER IF NOT EXISTS 'root'@'${DOLT_ROOT_HOST}' IDENTIFIED BY '${DOLT_ROOT_PASSWORD}';" "Could not create root user: " # override password
-    exec_mysql "GRANT ALL PRIVILEGES ON *.* TO 'root'@'${DOLT_ROOT_HOST}' WITH GRANT OPTION;" "Could not set root privileges: "
-  fi
-  mysql_note "'root@${DOLT_ROOT_HOST}' user successfully configured!"
-
-  create_user_from_env
-
-  exec_mysql "SELECT User, Host FROM mysql.user;" "Could not list users: " 1
-
-  mysql_note "Server initialization complete!"
-
-  # No need to relaunch, we wait for the background server process to exit and can still see the logs
+  mysql_note "Dolt init process done. Ready for connections."
   wait "$SERVER_PID"
 }
 
