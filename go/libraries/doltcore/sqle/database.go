@@ -657,6 +657,14 @@ func (db Database) getTableInsensitiveWithRoot(ctx *sql.Context, head *doltdb.Co
 		if !resolve.UseSearchPath || isDoltgresSystemTable {
 			dt, found = dtables.NewBranchesTable(ctx, db, lwrName), true
 		}
+	case doltdb.GetBranchActivityTableName(), doltdb.BranchActivityTableName:
+		isDoltgresSystemTable, err := resolve.IsDoltgresSystemTable(ctx, tname, root)
+		if err != nil {
+			return nil, false, err
+		}
+		if !resolve.UseSearchPath || isDoltgresSystemTable {
+			dt, found = dtables.NewBranchActivityTable(ctx, db), true
+		}
 	case doltdb.RemoteBranchesTableName, doltdb.GetRemoteBranchesTableName():
 		isDoltgresSystemTable, err := resolve.IsDoltgresSystemTable(ctx, tname, root)
 		if err != nil {
