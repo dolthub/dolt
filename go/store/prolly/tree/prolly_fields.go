@@ -26,6 +26,7 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
+	"github.com/mohae/uvarint"
 	"github.com/shopspring/decimal"
 
 	"github.com/dolthub/dolt/go/store/hash"
@@ -169,6 +170,95 @@ func GetField(ctx context.Context, td val.TupleDesc, i int, tup val.Tuple, ns No
 		return nil, err
 	}
 	return v, err
+}
+
+// GetFieldValue reads the value from the ith field of the Tuple as a sql.Value
+func GetFieldValue(ctx context.Context, td val.TupleDesc, i int, tup val.Tuple, ns NodeStore) (v sql.Value, err error) {
+	enc := td.Types[i].Enc
+	switch enc {
+	case val.Int8Enc, val.Int16Enc, val.Int32Enc, val.Int64Enc,
+		val.Uint8Enc, val.Uint16Enc, val.Uint32Enc, val.Uint64Enc,
+		val.Float32Enc, val.Float64Enc, val.DecimalEnc, val.Bit64Enc,
+		val.DateEnc, val.DatetimeEnc, val.TimeEnc, val.YearEnc,
+		val.EnumEnc, val.SetEnc,
+		val.StringEnc, val.ByteStringEnc,
+		val.JSONEnc, val.GeometryEnc,
+		val.Hash128Enc, val.CommitAddrEnc, val.CellEnc:
+		v.Val = td.GetField(i, tup)
+		v.Typ = val.EncToType[enc]
+		return v, nil
+
+	case val.GeomAddrEnc:
+		// TODO: until GeometryEnc is removed, we must check if GeomAddrEnc is a GeometryEnc
+		if b, ok := td.GetGeometry(i, tup); ok {
+			v.Val = b
+			v.Typ = val.EncToType[enc]
+			return v, nil
+		}
+		// TODO: have GeometryAddr implement TextStorage
+		if h, ok := td.GetGeometryAddr(i, tup); ok {
+			var b []byte
+			b, err = ns.ReadBytes(ctx, h)
+			if err != nil {
+				return v, err
+			}
+			v.Val = b
+			v.Typ = val.EncToType[enc]
+			return v, nil
+		}
+		return
+
+	case val.StringAddrEnc:
+		h := hash.New(td.GetField(i, tup))
+		v.Val2 = val.NewTextStorage(ctx, h, ns)
+		v.Typ = val.EncToType[enc]
+		return v, nil
+
+	case val.BytesAddrEnc:
+		h := hash.New(td.GetField(i, tup))
+		v.Val2 = val.NewByteArray(ctx, h, ns)
+		v.Typ = val.EncToType[enc]
+		return v, nil
+
+	case val.JSONAddrEnc:
+		// TODO: figure out how to utilize with TextStorage, instead of always deserializing
+		h := hash.New(td.GetField(i, tup))
+		v.Val, err = ns.ReadBytes(ctx, h)
+		if err != nil {
+			return v, err
+		}
+		v.Typ = val.EncToType[enc]
+		return v, nil
+
+	case val.BytesAdaptiveEnc, val.StringAdaptiveEnc:
+		b := td.GetField(i, tup)
+		// null value
+		if len(b) == 0 {
+			v.Typ = val.EncToType[enc]
+			return v, nil
+		}
+		// inlined
+		if b[0] == 0 {
+			v.Val = b[1:]
+			v.Typ = val.EncToType[enc]
+			return v, nil
+		}
+		// out-of-band
+		_, lengthBytes := uvarint.Uvarint(b)
+		h := hash.New(b[lengthBytes:])
+		v.Val2 = val.NewByteArray(ctx, h, ns)
+		v.Typ = val.EncToType[enc]
+		return v, err
+
+	// TODO: figure out how to deal with ExtendedEncs
+	case val.ExtendedEnc, val.ExtendedAddrEnc, val.ExtendedAdaptiveEnc:
+		v.Val = td.GetField(i, tup)
+		v.Typ = val.EncToType[enc]
+		return v, nil
+
+	default:
+		panic("unknown val.encoding")
+	}
 }
 
 // Serialize writes an interface{} into the byte string representation used in val.Tuple, and returns the byte string,
