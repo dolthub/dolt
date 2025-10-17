@@ -191,13 +191,13 @@ func (it prollyRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 	return row, nil
 }
 
-func (it prollyRowIter) Next2(ctx *sql.Context) (sql.Row2, error) {
+func (it prollyRowIter) Next2(ctx *sql.Context) (sql.ValueRow, error) {
 	key, value, err := it.iter.Next(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	row := make(sql.Row2, it.rowLen)
+	row := make(sql.ValueRow, it.rowLen)
 	for i, idx := range it.keyProj {
 		outputIdx := it.ordProj[i]
 		row[outputIdx], err = tree.GetFieldValue(ctx, it.keyDesc, idx, key, it.ns)
@@ -236,7 +236,7 @@ type prollyKeylessIter struct {
 	valProj []int
 	ordProj []int
 	curr    sql.Row
-	curr2   sql.Row2
+	curr2   sql.ValueRow
 	rowLen  int
 	card    uint64
 }
@@ -276,7 +276,7 @@ func (it *prollyKeylessIter) nextTuple(ctx *sql.Context) error {
 	return nil
 }
 
-func (it *prollyKeylessIter) Next2(ctx *sql.Context) (sql.Row2, error) {
+func (it *prollyKeylessIter) Next2(ctx *sql.Context) (sql.ValueRow, error) {
 	if it.card == 0 {
 		_, value, err := it.iter.Next(ctx)
 		if err != nil {
@@ -284,7 +284,7 @@ func (it *prollyKeylessIter) Next2(ctx *sql.Context) (sql.Row2, error) {
 		}
 
 		it.card = val.ReadKeylessCardinality(value)
-		it.curr2 = make(sql.Row2, it.rowLen)
+		it.curr2 = make(sql.ValueRow, it.rowLen)
 		for i, idx := range it.valProj {
 			outputIdx := it.ordProj[i]
 			it.curr2[outputIdx], err = tree.GetFieldValue(ctx, it.valDesc, idx, value, it.ns)
