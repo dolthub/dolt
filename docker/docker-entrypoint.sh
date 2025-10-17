@@ -1,22 +1,24 @@
 #!/bin/bash
 set -eo pipefail
 
-# mysql_log prints a timestamped (ISO 8601), color-coded structured log message with the provided context, if
-# applicable. If <MESSAGE> is omitted, it reads from stdin, allowing multi-line input. <LEVEL> determines the color and
-# log level category (e.g., Warn, Error, Debug). <CONTEXT> is a single string displayed in-between the timestamp and
-# message.
+# mysql_log prints a timestamped (ISO 8601), color-coded structured log message.
+# The message includes a log level and the message itself.
+# If <MESSAGE> is omitted, it reads from stdin, allowing multi-line input.
+#
+# Arguments:
+#   $1 - <LEVEL>   : Log level (e.g., Warn, Error, Debug)
+#   $2 - <MESSAGE> : Message to log; if omitted, the function reads from stdin
 #
 # Usage:
-#   mysql_log <LEVEL> "<CONTEXT>" [MESSAGE]
-#   mysql_log Warn "[Server]" "Disk space low"
-#   echo "Database connection lost" | mysql_log Error "[DB]"
+#   mysql_log <LEVEL> [MESSAGE]
+#   mysql_log Warn "Disk space low"
+#   echo "Database connection lost" | mysql_log Error
 #
 # Output:
-#   2025-10-16T12:34:56+00:00 [Warn] [Server] Disk space low
-#   2025-10-16T12:35:01+00:00 [Error] [DB] Database connection lost
-mysql_log() {
+#   2025-10-16T12:34:56+00:00 [Warn] [Entrypoint] Disk space low
+#   2025-10-16T12:35:01+00:00 [Error] [Entrypoint] Database connection lost
+_mysql_log() {
   local level="$1"; shift
-  local context="$1"; shift
 
   local dt
   dt="$(date --rfc-3339=seconds)"
@@ -29,30 +31,34 @@ mysql_log() {
   Debug) color="\033[1;34m" ;; # blue
   esac
 
-  local msg="$*"; if [ "$#" -eq 0 ]; then msg="$(cat)"; fi
-  printf '%b%s [%s] %s %s%b\n' "$color" "$dt" "$level" "$context" "$msg" "$color_reset"
+  local msg="$*"
+  if [ "$#" -eq 0 ]; then
+    msg="$(cat)"
+  fi
+
+  printf '%b%s [%s] [Entrypoint] %s%b\n' "$color" "$dt" "$level" "$msg" "$color_reset"
 }
 
 
 # _dbg logs a message of type 'Debug' using mysql_log.
 _dbg() {
-  mysql_log Debug "[Entrypoint]" "$@"
+  _mysql_log Debug "$@"
 }
 
 # mysql_note logs a message of type 'Note' using mysql_log.
 mysql_note() {
-  mysql_log Note "[Entrypoint]" "$@"
+  _mysql_log Note "$@"
 }
 
 # mysql_warn logs a message of type 'Warning' using mysql_log and writes to stderr.
 mysql_warn() {
-  mysql_log Warn "[Entrypoint]" "$@" >&2
+  _mysql_log Warn "$@" >&2
 }
 
 # mysql_error logs a message of type 'ERROR' using mysql_log, writes to stderr, prints a container removal hint, and
 # exits with status 1.
 mysql_error() {
-  mysql_log Error "[Entrypoint]" "$@" >&2
+  _mysql_log Error "$@" >&2
   mysql_note "Remove this container with 'docker rm -f <container_name>' before retrying"
   exit 1
 }
@@ -397,16 +403,15 @@ _main() {
   # The user creation queries with `dolt sql` can interfere with this process so we run them after the server is started
   DOLT_ROOT_HOST="${DOLT_ROOT_HOST:-localhost}"
 
-  # `dolt sql` can hold locks that prevent the server from starting during system hangs
+  # `dolt sql` can hold locks that prevent the server from starting during system hangs without this func
   dolt_server_initializer "$@"
   # Ran in a subshell to avoid exiting the main script, and so, we can use fallback below
   local has_correct_host
-
   has_correct_host=$(exec_mysql --show-result "Could not check root host: " \
     "SELECT User, Host FROM mysql.user WHERE User='root' AND Host='${DOLT_ROOT_HOST}' LIMIT 1;" | \
     grep -c "$DOLT_ROOT_HOST" || true)
 
-  # docker-entrypoint-initdb.d scripts and system hangs may conflict with sql-server root env vars support
+  # args or system hangs may conflict with sql-server root env vars support
   if [ "$has_correct_host" -eq 0 ]; then
     mysql_warn "Environment variables failed to initialize 'root@${DOLT_ROOT_HOST}'; docker-entrypoint-initdb.d scripts queries may have conflicted. Overriding root user..."
     exec_mysql "Could not create root user: " "CREATE USER IF NOT EXISTS 'root'@'${DOLT_ROOT_HOST}' IDENTIFIED BY '${DOLT_ROOT_PASSWORD}';" # override password
@@ -429,7 +434,6 @@ _main() {
   fi
 
   mysql_note "Dolt init process done. Ready for connections."
-
   wait "$SERVER_PID"
 }
 
