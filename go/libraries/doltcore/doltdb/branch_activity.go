@@ -16,6 +16,7 @@ package doltdb
 
 import (
 	"context"
+	"sort"
 	"sync"
 	"time"
 )
@@ -121,6 +122,11 @@ func GetBranchActivity() []BranchActivityData {
 
 		result = append(result, data)
 	}
+
+	// Sort by primary key (branch name)
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].Branch < result[j].Branch
+	})
 
 	return result
 }
