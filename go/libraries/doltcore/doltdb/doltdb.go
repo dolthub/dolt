@@ -583,6 +583,9 @@ func (ddb *DoltDB) ResolveCommitRef(ctx context.Context, ref ref.DoltRef) (*Comm
 		return nil, ErrGhostCommitEncountered
 	}
 
+	// NM4 - record branch resolution for dolt_branch_activity
+	BranchActivityReadEvent(ref.String())
+
 	return NewCommit(ctx, ddb.vrw, ddb.ns, commitVal)
 }
 
