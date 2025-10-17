@@ -234,19 +234,20 @@ SQL
   run dolt sql <<SQL
   CALL DOLT_CHECKOUT('main');
   CREATE TABLE aliased_table (pk char(8) PRIMARY KEY);
-  INSERT INTO dolt_nonlocal_tables(table_name, target_ref, ref_table, options) VALUES
-      ("nonlocal_table", "main", "aliased_table", "immediate");
-  set autocommit = 0;
-  INSERT INTO nonlocal_table VALUES ("eesekkgo");
-
 SQL
 
-  run dolt sql <<SQL
+  dolt sql <<SQL
+  INSERT INTO dolt_nonlocal_tables(table_name, target_ref, ref_table, options) VALUES
+      ("nonlocal_table", "main", "aliased_table", "immediate");
+  INSERT INTO nonlocal_table VALUES ("eesekkgo");
   CREATE TABLE local_table (pk char(8) PRIMARY KEY, FOREIGN KEY (pk) REFERENCES nonlocal_table(pk));
 SQL
 
+  dolt sql -q 'INSERT INTO local_table VALUES ("eesekkgo");'
+
+  run dolt sql -q 'INSERT INTO local_table VALUES ("fdnfjfjf");'
   [ "$status" -eq 1 ]
-  [[ "$output" =~ "table not found: nonlocal_table" ]] || false
+
 }
 
 @test "nonlocal: trying to dolt_add a nonlocal table returns the appropriate warning" {
