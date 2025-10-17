@@ -119,7 +119,7 @@ func (p prollyIndexIter) Next(ctx *sql.Context) (sql.Row, error) {
 	return r, nil
 }
 
-func (p prollyIndexIter) Next2(ctx *sql.Context) (sql.Row2, error) {
+func (p prollyIndexIter) Next2(ctx *sql.Context) (sql.ValueRow, error) {
 	idxKey, _, err := p.indexIter.Next(ctx)
 	if err != nil {
 		return nil, err
@@ -133,7 +133,7 @@ func (p prollyIndexIter) Next2(ctx *sql.Context) (sql.Row2, error) {
 		return nil, err
 	}
 
-	row := make(sql.Row2, len(p.projections))
+	row := make(sql.ValueRow, len(p.projections))
 	err = p.primary.Get(ctx, pk, func(key, value val.Tuple) error {
 		keyDesc, valDesc := p.primary.Descriptors()
 		for i, idx := range p.keyMap {
@@ -282,13 +282,13 @@ func (p prollyCoveringIndexIter) Next(ctx *sql.Context) (sql.Row, error) {
 	return r, nil
 }
 
-func (p prollyCoveringIndexIter) Next2(ctx *sql.Context) (sql.Row2, error) {
+func (p prollyCoveringIndexIter) Next2(ctx *sql.Context) (sql.ValueRow, error) {
 	k, v, err := p.indexIter.Next(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	row := make(sql.Row2, len(p.projections))
+	row := make(sql.ValueRow, len(p.projections))
 	for i, idx := range p.keyMap {
 		outIdx := p.ordMap[i]
 		row[outIdx], err = tree.GetFieldValue(ctx, p.keyDesc, idx, k, p.ns)
@@ -376,7 +376,7 @@ type prollyKeylessIndexIter struct {
 	sqlSch    sql.Schema
 
 	card uint64
-	curr sql.Row2
+	curr sql.ValueRow
 }
 
 var _ sql.RowIter = prollyKeylessIndexIter{}
@@ -512,7 +512,7 @@ func (p prollyKeylessIndexIter) keylessRowsFromValueTuple(ctx context.Context, n
 	return
 }
 
-func (p prollyKeylessIndexIter) Next2(ctx *sql.Context) (sql.Row2, error) {
+func (p prollyKeylessIndexIter) Next2(ctx *sql.Context) (sql.ValueRow, error) {
 	if p.card == 0 {
 		idxKey, _, err := p.indexIter.Next(ctx)
 		if err != nil {
@@ -538,7 +538,7 @@ func (p prollyKeylessIndexIter) Next2(ctx *sql.Context) (sql.Row2, error) {
 
 		p.card = val.ReadKeylessCardinality(value)
 		ns := p.clustered.NodeStore()
-		p.curr = make(sql.Row2, len(p.valueMap))
+		p.curr = make(sql.ValueRow, len(p.valueMap))
 		for i, idx := range p.valueMap {
 			outIdx := p.ordMap[i]
 			p.curr[outIdx], err = tree.GetFieldValue(ctx, p.valueDesc, idx, value, ns)
