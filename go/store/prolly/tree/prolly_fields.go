@@ -20,13 +20,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/mohae/uvarint"
 	"io"
 	"math"
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
+	"github.com/mohae/uvarint"
 	"github.com/shopspring/decimal"
 
 	"github.com/dolthub/dolt/go/store/hash"
