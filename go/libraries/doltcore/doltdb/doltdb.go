@@ -573,8 +573,8 @@ func (ddb *DoltDB) ResolveByNomsRoot(ctx *sql.Context, cs *CommitSpec, cwb ref.D
 
 // ResolveCommitRef takes a DoltRef and returns a Commit, or an error if the commit cannot be found. The ref given must
 // point to a Commit.
-func (ddb *DoltDB) ResolveCommitRef(ctx context.Context, ref ref.DoltRef) (*Commit, error) {
-	commitVal, err := getCommitValForRefStr(ctx, ddb, ref.String())
+func (ddb *DoltDB) ResolveCommitRef(ctx context.Context, doltRef ref.DoltRef) (*Commit, error) {
+	commitVal, err := getCommitValForRefStr(ctx, ddb, doltRef.String())
 	if err != nil {
 		return nil, err
 	}
@@ -583,8 +583,10 @@ func (ddb *DoltDB) ResolveCommitRef(ctx context.Context, ref ref.DoltRef) (*Comm
 		return nil, ErrGhostCommitEncountered
 	}
 
-	// NM4 - record branch resolution for dolt_branch_activity
-	BranchActivityReadEvent(ref.String())
+	if doltRef.GetType() == ref.BranchRefType {
+		branchName := doltRef.GetPath()
+		BranchActivityReadEvent(branchName)
+	}
 
 	return NewCommit(ctx, ddb.vrw, ddb.ns, commitVal)
 }
