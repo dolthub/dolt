@@ -74,11 +74,26 @@ type BranchActivityItr struct {
 }
 
 func NewBranchActivityItr(ctx *sql.Context, table *BranchActivityTable) (*BranchActivityItr, error) {
-	// For now, return a single row with fixed timestamps as requested
-	fixedTime := time.Date(2025, 1, 1, 12, 0, 0, 0, time.UTC)
-
-	rows := []sql.Row{
-		sql.NewRow("main", fixedTime, fixedTime, fixedTime),
+	activityData := doltdb.GetBranchActivity()
+	
+	rows := make([]sql.Row, 0, len(activityData))
+	for _, data := range activityData {
+		var lastRead, lastWrite interface{}
+		
+		if data.LastRead != nil {
+			lastRead = *data.LastRead
+		} else {
+			lastRead = nil
+		}
+		
+		if data.LastWrite != nil {
+			lastWrite = *data.LastWrite
+		} else {
+			lastWrite = nil
+		}
+		
+		row := sql.NewRow(data.Branch, lastRead, lastWrite, data.SystemStartTime)
+		rows = append(rows, row)
 	}
 
 	return &BranchActivityItr{
