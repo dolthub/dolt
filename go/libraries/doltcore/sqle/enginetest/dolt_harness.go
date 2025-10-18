@@ -267,6 +267,11 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 
 		d.session, err = dsess.NewDoltSession(enginetest.NewBaseSession(), d.provider, d.multiRepoEnv.Config(), d.branchControl, d.statsPro, writer.NewWriteSession, d.gcSafepointController)
 		require.NoError(t, err)
+		// Default compact dolt_log schema for in-process enginetest sessions
+		{
+			ctx := enginetest.NewContext(d)
+			_ = ctx.Session.SetSessionVariable(ctx, dsess.DoltLogCommitterOnly, int8(1))
+		}
 
 		e, err := enginetest.NewEngine(t, d, d.provider, d.setupData, d.statsPro)
 		if err != nil {
@@ -295,6 +300,10 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 			// Get a fresh session after running setup scripts, since some setup scripts can change the session state
 			d.session, err = dsess.NewDoltSession(enginetest.NewBaseSession(), d.provider, d.multiRepoEnv.Config(), d.branchControl, d.statsPro, writer.NewWriteSession, nil)
 			require.NoError(t, err)
+			{
+				ctx := enginetest.NewContext(d)
+				_ = ctx.Session.SetSessionVariable(ctx, dsess.DoltLogCommitterOnly, int8(1))
+			}
 		}
 
 		e = e.WithBackgroundThreads(bThreads)
@@ -418,7 +427,9 @@ func (d *DoltHarness) NewContextWithClient(client sql.Client) *sql.Context {
 
 func (d *DoltHarness) NewSession() *sql.Context {
 	d.session = d.newSessionWithClient(sql.Client{Address: "localhost", User: "root"})
-	return d.NewContext()
+	ctx := d.NewContext()
+	_ = ctx.Session.SetSessionVariable(ctx, dsess.DoltLogCommitterOnly, int8(1))
+	return ctx
 }
 
 func (d *DoltHarness) newSessionWithClient(client sql.Client) *dsess.DoltSession {

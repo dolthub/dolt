@@ -88,9 +88,11 @@ var DoltDiffPlanTests = []queries.QueryPlanTest{
 var DoltCommitPlanTests = []queries.QueryPlanTest{
 	{
 		Query: "select * from dolt_log order by commit_hash;",
-		ExpectedPlan: "Sort(dolt_log.commit_hash ASC)\n" +
-			" └─ Table\n" +
-			"     └─ name: dolt_log\n" +
+		ExpectedPlan: "Project\n" +
+			" ├─ columns: [dolt_log.commit_hash, dolt_log.committer, dolt_log.email, dolt_log.date, dolt_log.message, dolt_log.commit_order, dolt_log.author, dolt_log.author_email, dolt_log.author_date]\n" +
+			" └─ Sort(dolt_log.commit_hash ASC)\n" +
+			"     └─ Table\n" +
+			"         └─ name: dolt_log\n" +
 			"",
 	},
 	{
