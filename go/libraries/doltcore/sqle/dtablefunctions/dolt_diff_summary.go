@@ -507,5 +507,5 @@ func shouldIgnoreDelta(delta diff.TableDelta, ignorePatterns doltdb.IgnorePatter
 
 // shouldFilterDoltIgnoreTable filters out the dolt_ignore table itself to match dolt diff behavior.
 func shouldFilterDoltIgnoreTable(delta diff.TableDelta) bool {
-	return delta.FromName.Name == doltdb.IgnoreTableName || delta.ToName.Name == doltdb.IgnoreTableName
+	return strings.EqualFold(delta.FromName.Name, doltdb.IgnoreTableName) || strings.EqualFold(delta.ToName.Name, doltdb.IgnoreTableName)
 }
