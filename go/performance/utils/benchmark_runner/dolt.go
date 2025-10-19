@@ -73,19 +73,7 @@ func (b *doltBenchmarkerImpl) Benchmark(ctx context.Context) (Results, error) {
 		return nil, err
 	}
 
-	testRepo, err := b.initDoltRepo(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer os.RemoveAll(testRepo)
-
 	serverParams, err := b.serverConfig.GetServerArgs()
-	if err != nil {
-		return nil, err
-	}
-
-	server := NewServer(ctx, testRepo, b.serverConfig, syscall.SIGTERM, serverParams)
-	err = server.Start()
 	if err != nil {
 		return nil, err
 	}
@@ -103,19 +91,35 @@ func (b *doltBenchmarkerImpl) Benchmark(ctx context.Context) (Results, error) {
 			if !ok {
 				return nil, ErrNotSysbenchTest
 			}
+
+			testRepo, err := b.initDoltRepo(ctx)
+			if err != nil {
+				return nil, err
+			}
+
+			server := NewServer(ctx, testRepo, b.serverConfig, syscall.SIGTERM, serverParams)
+			err = server.Start()
+			if err != nil {
+				return nil, err
+			}
+
 			tester := NewSysbenchTester(b.config, b.serverConfig, t, serverParams, stampFunc)
-			r, err := tester.Test(ctx)
+
+			var res *Result
+			res, err = tester.Test(ctx)
 			if err != nil {
 				server.Stop()
 				return nil, err
 			}
-			results = append(results, r)
-		}
-	}
+			results = append(results, res)
 
-	err = server.Stop()
-	if err != nil {
-		return nil, err
+			err = server.Stop()
+			if err != nil {
+				return nil, err
+			}
+
+			os.RemoveAll(testRepo)
+		}
 	}
 
 	return results, nil
