@@ -17,7 +17,6 @@ package microsysbench
 import (
 	"context"
 	"fmt"
-	"github.com/dolthub/go-mysql-server/server"
 	"io"
 	"math/rand"
 	"os"
@@ -26,6 +25,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/dolthub/go-mysql-server/server"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/require"
 
