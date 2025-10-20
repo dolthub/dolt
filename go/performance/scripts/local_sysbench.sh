@@ -2,7 +2,7 @@
 set -e
 set -o pipefail
 
-SYSBENCH_TEST="index_scan"
+SYSBENCH_TEST="types_table_scan"
 WORKING_DIR=`mktemp -d`
 PPROF=0
 PORT=3366
@@ -98,6 +98,12 @@ sysbench \
   --mysql-port="$PORT" \
   --mysql-user="$USER" \
   --mysql-password="$PASS" \
+  --db-ps-mode=disable \
+  --time=120 \
+  --table-size=10000 \
+  --percentile=50 \
+  --rand-type=uniform \
+  --rand-seed=1 \
   "$SYSBENCH_TEST" prepare
 
 # restart server to isolate bench run

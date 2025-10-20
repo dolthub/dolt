@@ -182,10 +182,14 @@ func GetFieldValue(ctx context.Context, td val.TupleDesc, i int, tup val.Tuple, 
 		val.Float32Enc, val.Float64Enc, val.DecimalEnc, val.Bit64Enc,
 		val.DateEnc, val.DatetimeEnc, val.TimeEnc, val.YearEnc,
 		val.EnumEnc, val.SetEnc,
-		val.StringEnc, val.ByteStringEnc,
 		val.JSONEnc, val.GeometryEnc,
 		val.Hash128Enc, val.CommitAddrEnc, val.CellEnc:
 		v.Val = td.GetField(i, tup)
+		return v, nil
+
+	case val.StringEnc, val.ByteStringEnc:
+		v.Val = td.GetField(i, tup)
+		v.Val = v.Val[:len(v.Val)-1] // trim trailing NUL character
 		return v, nil
 
 	case val.GeomAddrEnc:
@@ -206,12 +210,7 @@ func GetFieldValue(ctx context.Context, td val.TupleDesc, i int, tup val.Tuple, 
 		}
 		return
 
-	case val.StringAddrEnc:
-		h := hash.New(td.GetField(i, tup))
-		v.WrappedVal = val.NewTextStorage(ctx, h, ns)
-		return v, nil
-
-	case val.BytesAddrEnc:
+	case val.StringAddrEnc, val.BytesAddrEnc:
 		h := hash.New(td.GetField(i, tup))
 		v.WrappedVal = val.NewByteArray(ctx, h, ns)
 		return v, nil
