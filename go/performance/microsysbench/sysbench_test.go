@@ -17,6 +17,7 @@ package microsysbench
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/go-mysql-server/server"
 	"io"
 	"math/rand"
 	"os"
@@ -25,7 +26,6 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/dolthub/go-mysql-server/server"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/require"
 
@@ -43,8 +43,7 @@ const (
 		" `k` int NOT NULL DEFAULT '0'," +
 		" `c` char(120) NOT NULL DEFAULT ''," +
 		" `pad` char(60) NOT NULL DEFAULT ''," +
-		" PRIMARY KEY (`id`)," +
-		" KEY `k_1` (`k`)" +
+		" PRIMARY KEY (`id`)" +
 		");"
 )
 
@@ -57,11 +56,21 @@ func BenchmarkOltpPointSelect(b *testing.B) {
 	})
 }
 
+// unfiltered
 // BenchmarkTableScan-14    	     589	   1992973 ns/op	 2948649 B/op	   62181 allocs/op
 // BenchmarkTableScan-14    	     900	   1132013 ns/op	 1842067 B/op	   12363 allocs/op
 func BenchmarkTableScan(b *testing.B) {
 	benchmarkSysbenchQuery(b, func(int) string {
 		return "SELECT * FROM sbtest1"
+	})
+}
+
+// filtered benchmarks
+// BenchmarkTableScanFiltered-14    	     511	   2202072 ns/op	 1589325 B/op	   52146 allocs/op
+// BenchmarkTableScanFiltered-14    	     645	   1779981 ns/op	 1840009 B/op	   22400 allocs/op
+func BenchmarkTableScanFiltered(b *testing.B) {
+	benchmarkSysbenchQuery(b, func(int) string {
+		return "SELECT * FROM sbtest1 where k > 10"
 	})
 }
 
@@ -88,6 +97,7 @@ func BenchmarkProjectionAggregation(b *testing.B) {
 	})
 }
 
+// BenchmarkSelectRandomPoints-14    	     321	   3591138 ns/op	 2799033 B/op	   92384 allocs/op
 func BenchmarkSelectRandomPoints(b *testing.B) {
 	benchmarkSysbenchQuery(b, func(int) string {
 		var sb strings.Builder
@@ -128,22 +138,26 @@ func benchmarkSysbenchQuery(b *testing.B, getQuery func(int) string) {
 	})
 	ctx, eng := setupBenchmark(b, dEnv)
 	for i := 0; i < b.N; i++ {
+		//_, iter, _, err := eng.Query(ctx, getQuery(i))
 		schema, iter, _, err := eng.Query(ctx, getQuery(i))
 		require.NoError(b, err)
+
+		idx := 0
+		buf := sql.NewByteBuffer(16000)
 		if ri2, ok := iter.(sql.RowIter2); ok && ri2.IsRowIter2(ctx) {
 			for {
-				row2, err := ri2.Next2(ctx)
+				idx++
+				row, err := ri2.Next2(ctx)
 				if err != nil {
 					break
 				}
-				_ = row2
+				outputRow, err := server.RowValueToSQLValues(ctx, schema, row, buf)
+				_ = outputRow
+				if idx%128 == 0 {
+					buf.Reset()
+				}
 			}
-			require.Error(b, io.EOF)
-			err = ri2.Close(ctx)
-			require.NoError(b, err)
 		} else {
-			idx := 0
-			buf := sql.NewByteBuffer(16000)
 			for {
 				idx++
 				row, err := iter.Next(ctx)
@@ -156,10 +170,10 @@ func benchmarkSysbenchQuery(b *testing.B, getQuery func(int) string) {
 					buf.Reset()
 				}
 			}
-			require.Error(b, io.EOF)
-			err = iter.Close(ctx)
-			require.NoError(b, err)
 		}
+		require.Error(b, io.EOF)
+		err = iter.Close(ctx)
+		require.NoError(b, err)
 	}
 	_ = eng.Close()
 	b.ReportAllocs()
