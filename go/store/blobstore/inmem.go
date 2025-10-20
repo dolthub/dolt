@@ -61,12 +61,13 @@ func (bs *InMemoryBlobstore) Path() string {
 
 // Get retrieves an io.reader for the portion of a blob specified by br along with
 // its version
-func (bs *InMemoryBlobstore) Get(ctx context.Context, key string, br BlobRange) (io.ReadCloser, string, error) {
+func (bs *InMemoryBlobstore) Get(ctx context.Context, key string, br BlobRange) (io.ReadCloser, uint64, string, error) {
 	bs.mutex.RLock()
 	defer bs.mutex.RUnlock()
 
 	if val, ok := bs.blobs[key]; ok {
 		if ver, ok := bs.versions[key]; ok && ver != "" {
+			size := uint64(len(val))
 			var byteRange []byte
 			if br.isAllRange() {
 				byteRange = val
@@ -79,13 +80,13 @@ func (bs *InMemoryBlobstore) Get(ctx context.Context, key string, br BlobRange) 
 				}
 			}
 
-			return newByteSliceReadCloser(byteRange), ver, nil
+			return newByteSliceReadCloser(byteRange), size, ver, nil
 		}
 
 		panic("Blob without version, or with invalid version, should no be possible.")
 	}
 
-	return nil, "", NotFound{key}
+	return nil, 0, "", NotFound{key}
 }
 
 // Put sets the blob and the version for a key

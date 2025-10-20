@@ -3,6 +3,9 @@
     <PropertyGroup>
         <OutputType>Exe</OutputType>
         <TargetFramework>net8.0</TargetFramework>
+        <AssemblyName>mysql-connector-test</AssemblyName>
+        <PublishSingleFile>true</PublishSingleFile>
+        <SelfContained>true</SelfContained>
     </PropertyGroup>
 
     <ItemGroup>

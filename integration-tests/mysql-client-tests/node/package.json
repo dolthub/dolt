@@ -11,6 +11,7 @@
   "license": "ISC",
   "dependencies": {
     "knex": "^2.4.0",
+    "mariadb": "^3.4.5",
     "mysql": "^2.18.1",
     "mysql2": "^3.9.8",
     "wtfnode": "^0.9.1",

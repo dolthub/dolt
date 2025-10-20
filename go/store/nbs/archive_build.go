@@ -576,7 +576,7 @@ func verifyAllChunks(ctx context.Context, idx tableIndex, archiveFile string, pr
 		return fmt.Errorf("invalid archive file path: %s", archiveFile)
 	}
 
-	index, err := newArchiveReader(ctx, fra, name, uint64(fra.sz), stats)
+	index, err := newArchiveReader(ctx, fra, name, uint64(fra.sz), NewUnlimitedMemQuotaProvider(), stats)
 	if err != nil {
 		return err
 	}

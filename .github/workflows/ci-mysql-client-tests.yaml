@@ -11,14 +11,50 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  mysql_client_integrations_job:
+  mysql_client_integrations:
     runs-on: ubuntu-22.04
     timeout-minutes: 45
-    name: Run tests
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Copy go package
-        run: cp -r ./go ./integration-tests/go
-      - name: Test mysql client integrations
-        uses: ./.github/actions/mysql-client-tests
+        with:
+          path: dolt
+
+      - name: Free disk space
+        run: |
+          NAME="DISK-CLEANUP"
+          echo "[${NAME}] Starting background cleanup..."
+          [ -d "$AGENT_TOOLSDIRECTORY" ] && sudo rm -rf "$AGENT_TOOLSDIRECTORY" &
+          [ -d /usr/share/dotnet ] && sudo rm -rf /usr/share/dotnet &
+          [ -d /usr/local/lib/android ] && sudo rm -rf /usr/local/lib/android &
+          [ -d /opt/ghc ] && sudo rm -rf /opt/ghc &
+          [ -d /usr/local/share/boost ] && sudo rm -rf /usr/local/share/boost &
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Ensure cache directory exists
+        run: |
+          sudo mkdir -p /mnt/.buildx-cache
+          sudo chown $USER:$USER /mnt/.buildx-cache
+
+      - name: Cache Docker layers
+        uses: actions/cache@v3
+        with:
+          path: /mnt/.buildx-cache
+          key: ${{ runner.os }}-docker-mysql-client-integrations
+          restore-keys: |
+            ${{ runner.os }}-docker
+
+      - name: Build MySQL test image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: dolt/integration-tests/mysql-client-tests/Dockerfile
+          tags: mysql-client-tests:latest
+          load: true
+          cache-from: type=local,src=/mnt/.buildx-cache
+          cache-to: type=local,dest=/mnt/.buildx-cache
+
+      - name: Test MySQL client integrations
+        run: docker run --rm mysql-client-tests:latest

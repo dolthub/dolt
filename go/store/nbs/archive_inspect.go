@@ -99,7 +99,7 @@ type ArchiveInspector struct {
 }
 
 // NewArchiveInspectorFromFileWithMmap creates an ArchiveInspector from a file path with configurable mmap
-func NewArchiveInspectorFromFileWithMmap(ctx context.Context, archivePath string, enableMmap bool) (*ArchiveInspector, error) {
+func NewArchiveInspectorFromFileWithMmap(ctx context.Context, archivePath string, q MemoryQuotaProvider, enableMmap bool) (*ArchiveInspector, error) {
 	fra, err := newFileReaderAt(archivePath, enableMmap)
 	if err != nil {
 		return nil, err
@@ -109,7 +109,7 @@ func NewArchiveInspectorFromFileWithMmap(ctx context.Context, archivePath string
 	dummyHash := hash.Hash{}
 	stats := &Stats{}
 
-	archiveReader, err := newArchiveReader(ctx, fra, dummyHash, uint64(fra.sz), stats)
+	archiveReader, err := newArchiveReader(ctx, fra, dummyHash, uint64(fra.sz), q, stats)
 	if err != nil {
 		fra.Close()
 		return nil, err
@@ -151,6 +151,10 @@ func (ai *ArchiveInspector) MetadataSize() uint32 {
 // FileSize returns the total size of the archive file
 func (ai *ArchiveInspector) FileSize() uint64 {
 	return ai.reader.footer.fileSize
+}
+
+func (ai *ArchiveInspector) SplitOffset() uint64 {
+	return ai.reader.footer.dataSpan().length
 }
 
 // ByteSpanCount returns the number of byte spans in the archive

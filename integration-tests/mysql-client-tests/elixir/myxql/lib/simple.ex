@@ -1,16 +1,26 @@
 defmodule SmokeTest do
-  def myTestFunc(arg1, arg2) do
-    if arg1 != arg2 do
-      raise "Test error"
-    end
+  def main(_args \\ []) do
+    IO.puts("Starting SmokeTest.main/1")
+    
+    cli_args = Burrito.Util.Args.get_arguments()
+    IO.puts("Received CLI args: #{inspect(cli_args)}")
+    
+    result = run(cli_args)
+    System.halt(0)
+    result
   end
 
-  @spec run :: nil
-  def run do
-    args = System.argv()
+  defp run(args) do
+    if length(args) < 3 do
+      IO.puts("Usage: simple <user> <port> <database>")
+      System.halt(1)
+    end
+    
     user = Enum.at(args, 0)
-    {port, _} = Integer.parse(Enum.at(args, 1))
+    port_str = Enum.at(args, 1)
     database = Enum.at(args, 2)
+    
+    {port, _} = Integer.parse(port_str)
 
     {:ok, pid} = MyXQL.start_link(username: user, port: port, database: database)
     {:ok, _} = MyXQL.query(pid, "drop table if exists test")
@@ -21,8 +31,6 @@ defmodule SmokeTest do
     myTestFunc(result.num_rows, 0)
 
     {:ok, _} = MyXQL.query(pid, "insert into test (pk, `value`) values (0,0)")
-
-    # MyXQL uses the CLIENT_FOUND_ROWS flag so we should return the number of rows matched
     {:ok, result} = MyXQL.query(pid, "UPDATE test SET pk = pk where pk = 0")
     myTestFunc(result.num_rows, 1)
 
@@ -31,7 +39,7 @@ defmodule SmokeTest do
 
     {:ok, result} = MyXQL.query(pid, "SELECT * FROM test")
     myTestFunc(result.num_rows, 1)
-    myTestFunc(result.rows, [[0,0]])
+    myTestFunc(result.rows, [[0, 0]])
 
     {:ok, _} = MyXQL.query(pid, "call dolt_add('-A');")
     {:ok, _} = MyXQL.query(pid, "call dolt_commit('-m', 'my commit')")
@@ -45,5 +53,12 @@ defmodule SmokeTest do
     {:ok, result} = MyXQL.query(pid, "select COUNT(*) FROM dolt_log")
     myTestFunc(result.num_rows, 1)
     myTestFunc(result.rows, [[3]])
+    :ok
+  end
+
+  defp myTestFunc(arg1, arg2) do
+    if arg1 != arg2 do
+      raise "Test error: expected #{inspect(arg2)}, got #{inspect(arg1)}"
+    end
   end
 end

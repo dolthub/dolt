@@ -24,11 +24,13 @@ import (
 	"io"
 	"math/bits"
 	"os"
+	"sync/atomic"
 
 	"github.com/dolthub/gozstd"
 	lru "github.com/hashicorp/golang-lru/v2"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
+	"github.com/dolthub/dolt/go/libraries/utils/dynassert"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -77,8 +79,7 @@ func (f archiveFooter) actualFooterSize() uint64 {
 	return archiveFooterSize
 }
 
-// dataSpan returns the span of the data section of the archive. This is not generally used directly since we usually
-// read individual spans for each chunk.
+// dataSpan returns the span of the data section of the archive. This is used during conjoin.
 func (f archiveFooter) dataSpan() byteSpan {
 	return byteSpan{offset: 0, length: f.fileSize - f.actualFooterSize() - uint64(f.metadataSize) - uint64(f.indexSize)}
 }
@@ -121,8 +122,8 @@ func (f archiveFooter) metadataSpan() byteSpan {
 	return byteSpan{offset: f.fileSize - f.actualFooterSize() - uint64(f.metadataSize), length: uint64(f.metadataSize)}
 }
 
-func newArchiveMetadata(ctx context.Context, reader tableReaderAt, name hash.Hash, fileSize uint64, stats *Stats) (*ArchiveMetadata, error) {
-	aRdr, err := newArchiveReader(ctx, reader, name, fileSize, stats)
+func newArchiveMetadata(ctx context.Context, reader tableReaderAt, name hash.Hash, fileSize uint64, q MemoryQuotaProvider, stats *Stats) (*ArchiveMetadata, error) {
+	aRdr, err := newArchiveReader(ctx, reader, name, fileSize, q, stats)
 	if err != nil {
 		return nil, err
 	}
@@ -188,29 +189,29 @@ func newArchiveMetadata(ctx context.Context, reader tableReaderAt, name hash.Has
 	}, nil
 }
 
-func newArchiveReaderFromFooter(ctx context.Context, reader tableReaderAt, name hash.Hash, fileSz uint64, footer []byte, stats *Stats) (archiveReader, error) {
+func newArchiveReaderFromFooter(ctx context.Context, reader tableReaderAt, name hash.Hash, fileSz uint64, footer []byte, q MemoryQuotaProvider, stats *Stats) (archiveReader, error) {
 	if uint64(len(footer)) != archiveFooterSize {
 		return archiveReader{}, errors.New("runtime error: invalid footer.")
 	}
 
-	ftr, err := buildFooter(name, fileSz, footer)
+	ftr, err := buildArchiveFooter(name, fileSz, footer)
 	if err != nil {
 		return archiveReader{}, err
 	}
 
-	return buildArchiveReader(ctx, reader, ftr, stats)
+	return buildArchiveReader(ctx, reader, ftr, q, stats)
 }
 
-func newArchiveReader(ctx context.Context, reader tableReaderAt, name hash.Hash, fileSize uint64, stats *Stats) (archiveReader, error) {
+func newArchiveReader(ctx context.Context, reader tableReaderAt, name hash.Hash, fileSize uint64, q MemoryQuotaProvider, stats *Stats) (archiveReader, error) {
 	footer, err := loadFooter(ctx, reader, name, fileSize, stats)
 	if err != nil {
 		return archiveReader{}, fmt.Errorf("Failed to loadFooter: %w", err)
 	}
 
-	return buildArchiveReader(ctx, reader, footer, stats)
+	return buildArchiveReader(ctx, reader, footer, q, stats)
 }
 
-func buildArchiveReader(ctx context.Context, reader tableReaderAt, footer archiveFooter, stats *Stats) (archiveReader, error) {
+func buildArchiveReader(ctx context.Context, reader tableReaderAt, footer archiveFooter, q MemoryQuotaProvider, stats *Stats) (archiveReader, error) {
 	dictCache, err := lru.New2Q[uint32, *DecompBundle](256)
 	if err != nil {
 		return archiveReader{}, err
@@ -228,7 +229,7 @@ func buildArchiveReader(ctx context.Context, reader tableReaderAt, footer archiv
 		if _, isSet := os.LookupEnv(dconfig.EnvAssertNoInMemoryArchiveIndex); isSet {
 			return archiveReader{}, fmt.Errorf("attempted to load archive index into memory but %s was set", dconfig.EnvAssertNoInMemoryArchiveIndex)
 		}
-		indexRdr, err = newInMemoryArchiveIndexReader(ctx, reader, footer, stats)
+		indexRdr, err = newInMemoryArchiveIndexReader(ctx, reader, footer, q, stats)
 		if err != nil {
 			return archiveReader{}, err
 		}
@@ -243,46 +244,73 @@ func buildArchiveReader(ctx context.Context, reader tableReaderAt, footer archiv
 }
 
 // newInMemoryArchiveIndexReader implements the original index loading logic for non-file readers
-func newInMemoryArchiveIndexReader(ctx context.Context, reader tableReaderAt, footer archiveFooter, stats *Stats) (archiveIndexReader, error) {
+func newInMemoryArchiveIndexReader(ctx context.Context, reader tableReaderAt, footer archiveFooter, q MemoryQuotaProvider, stats *Stats) (archiveIndexReader, error) {
 	byteOffSpan := footer.indexByteOffsetSpan()
 	secRdr := newSectionReader(ctx, reader, int64(byteOffSpan.offset), int64(byteOffSpan.length), stats)
-	byteSpans := make([]uint64, footer.byteSpanCount+1)
-	byteSpans[0] = 0 // Null byteSpan to simplify logic.
-	err := binary.Read(secRdr, binary.BigEndian, byteSpans[1:])
+	byteSpans, err := q.AcquireQuotaUint64s(ctx, int(footer.byteSpanCount)+1)
 	if err != nil {
+		return nil, fmt.Errorf("Failed to allocate byteSpans uint64 slice: %w", err)
+	}
+	bytesSoFar := len(byteSpans) * uint64Size
+	byteSpans[0] = 0 // Null byteSpan to simplify logic.
+	err = binary.Read(secRdr, binary.BigEndian, byteSpans[1:])
+	if err != nil {
+		q.ReleaseQuotaBytes(bytesSoFar)
 		return nil, fmt.Errorf("Failed to read byte spans: %w", err)
 	}
 
 	prefixSpan := footer.indexPrefixSpan()
 	prefixRdr := newSectionReader(ctx, reader, int64(prefixSpan.offset), int64(prefixSpan.length), stats)
-	prefixes := make([]uint64, footer.chunkCount)
+	prefixes, err := q.AcquireQuotaUint64s(ctx, int(footer.chunkCount))
+	if err != nil {
+		q.ReleaseQuotaBytes(bytesSoFar)
+		return nil, fmt.Errorf("Failed to allocate prefixes uint32 slice: %w", err)
+	}
+	bytesSoFar += len(prefixes) * uint64Size
 	err = binary.Read(prefixRdr, binary.BigEndian, prefixes[:])
 	if err != nil {
+		q.ReleaseQuotaBytes(bytesSoFar)
 		return nil, fmt.Errorf("Failed to read prefixes: %w", err)
 	}
 
 	chunkRefSpan := footer.indexChunkRefSpan()
 	chunkRdr := newSectionReader(ctx, reader, int64(chunkRefSpan.offset), int64(chunkRefSpan.length), stats)
-	chnks := make([]uint32, uint64(footer.chunkCount)*2)
+	chnks, err := q.AcquireQuotaUint32s(ctx, int(footer.chunkCount)*2)
+	if err != nil {
+		q.ReleaseQuotaBytes(bytesSoFar)
+		return nil, fmt.Errorf("Failed to allocate chunks uint32 slice: %w", err)
+	}
+	bytesSoFar += len(chnks) * uint32Size
 	err = binary.Read(chunkRdr, binary.BigEndian, chnks[:])
 	if err != nil {
+		q.ReleaseQuotaBytes(bytesSoFar)
 		return nil, fmt.Errorf("Failed to read chunk references: %w", err)
 	}
 
 	suffixSpan := footer.indexSuffixSpan()
 	sufRdr := newSectionReader(ctx, reader, int64(suffixSpan.offset), int64(suffixSpan.length), stats)
-	suffixes := make([]byte, suffixSpan.length)
+	suffixes, err := q.AcquireQuotaBytes(ctx, int(suffixSpan.length))
+	if err != nil {
+		q.ReleaseQuotaBytes(bytesSoFar)
+		return nil, fmt.Errorf("Failed to allocate suffixes byte slice: %w", err)
+	}
+	bytesSoFar += len(suffixes)
 	_, err = io.ReadFull(sufRdr, suffixes)
 	if err != nil {
+		q.ReleaseQuotaBytes(bytesSoFar)
 		return nil, err
 	}
 
-	return &inMemoryArchiveIndexReader{
+	ret := &inMemoryArchiveIndexReader{
 		prefixes:  prefixes,
 		spanIndex: byteSpans,
 		chunkRefs: chnks,
 		suffixes:  suffixes,
-	}, nil
+		q:         q,
+	}
+	ret.refCnt.Add(1)
+
+	return ret, nil
 }
 
 // inMemoryArchiveIndexReader provides the original in-memory index implementation as a fallback
@@ -291,6 +319,8 @@ type inMemoryArchiveIndexReader struct {
 	spanIndex []uint64
 	chunkRefs []uint32
 	suffixes  []byte
+	refCnt    atomic.Int32
+	q         MemoryQuotaProvider
 }
 
 func (f *inMemoryArchiveIndexReader) getNumChunks() uint32 {
@@ -330,7 +360,25 @@ func (f *inMemoryArchiveIndexReader) getSuffix(idx uint32) suffix {
 	return suffix(f.suffixes[start : start+hash.SuffixLen])
 }
 
+func (f *inMemoryArchiveIndexReader) clone() (archiveIndexReader, error) {
+	if !dynassert.Assert(f.refCnt.Add(1) > 1, "attempt to clone a closed inMemoryArchiveIndexReader") {
+		// Restore previous refcnt, despite being in a weird state...
+		f.refCnt.Add(-1)
+		// Just return ourselves in this weird state I guess...
+		return f, nil
+	}
+	return f, nil
+}
+
 func (f *inMemoryArchiveIndexReader) Close() error {
+	cnt := f.refCnt.Add(-1)
+	dynassert.Assert(cnt >= 0, "invalid cnt on inMemoryArchiveIndexReader. closed more times than cloned?")
+	// No need to restore count which was over closed. We already incorrectly
+	// released the bytes and can't necessarily do anything about it.
+	if cnt == 0 {
+		numBytes := len(f.chunkRefs)*uint32Size + len(f.prefixes)*uint64Size + len(f.spanIndex)*uint64Size + len(f.suffixes)
+		f.q.ReleaseQuotaBytes(numBytes)
+	}
 	return nil
 }
 
@@ -341,9 +389,13 @@ func (ar archiveReader) clone() (archiveReader, error) {
 	if err != nil {
 		return archiveReader{}, err
 	}
+	indexReader, err := ar.indexReader.clone()
+	if err != nil {
+		return archiveReader{}, err
+	}
 	return archiveReader{
 		reader:      reader,
-		indexReader: ar.indexReader,
+		indexReader: indexReader,
 		footer:      ar.footer,
 		dictCache:   ar.dictCache, // cache is thread safe.
 	}, nil
@@ -370,10 +422,10 @@ func loadFooter(ctx context.Context, reader ReaderAtWithStats, name hash.Hash, f
 	if err != nil {
 		return
 	}
-	return buildFooter(name, fileSize, buf)
+	return buildArchiveFooter(name, fileSize, buf)
 }
 
-func buildFooter(name hash.Hash, fileSize uint64, buf []byte) (f archiveFooter, err error) {
+func buildArchiveFooter(name hash.Hash, fileSize uint64, buf []byte) (f archiveFooter, err error) {
 	f.formatVersion = buf[afrVersionOffset]
 	f.fileSignature = string(buf[afrSigOffset:])
 	// Verify File Signature

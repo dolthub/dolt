@@ -41,7 +41,9 @@ const (
 	chunkNotAdded
 )
 
-func WriteChunks(chunks []chunks.Chunk) (string, []byte, error) {
+// WriteChunks writes the provided chunks to a newly created memory table and returns the name and data of the resulting
+// table.
+func WriteChunks(chunks []chunks.Chunk) (name string, data []byte, splitOffset uint64, err error) {
 	var size uint64
 	for _, chunk := range chunks {
 		size += uint64(len(chunk.Data()))
@@ -52,26 +54,25 @@ func WriteChunks(chunks []chunks.Chunk) (string, []byte, error) {
 	return writeChunksToMT(mt, chunks)
 }
 
-func writeChunksToMT(mt *memTable, chunks []chunks.Chunk) (string, []byte, error) {
+func writeChunksToMT(mt *memTable, chunks []chunks.Chunk) (name string, data []byte, splitOffset uint64, err error) {
 	for _, chunk := range chunks {
 		res := mt.addChunk(chunk.Hash(), chunk.Data())
 		if res == chunkNotAdded {
-			return "", nil, errors.New("didn't create this memory table with enough space to add all the chunks")
+			return "", nil, 0, errors.New("didn't create this memory table with enough space to add all the chunks")
 		}
 	}
 
 	var stats Stats
-	name, data, count, _, err := mt.write(nil, nil, &stats)
-
+	h, data, splitOffset, count, _, err := mt.write(nil, nil, &stats)
 	if err != nil {
-		return "", nil, err
+		return "", nil, 0, err
 	}
 
 	if count != uint32(len(chunks)) {
-		return "", nil, errors.New("didn't write everything")
+		return "", nil, 0, errors.New("didn't write everything")
 	}
 
-	return name.String(), data, nil
+	return h.String(), data, splitOffset, nil
 }
 
 type memTable struct {
@@ -81,7 +82,7 @@ type memTable struct {
 	pendingRefs   []hasRecord
 	getChildAddrs []chunks.GetAddrsCb
 	maxData       uint64
-	totalData     uint64
+	totalData     uint64 // size of uncompressed data in chunks
 }
 
 func newMemTable(memTableSize uint64) *memTable {
@@ -220,11 +221,11 @@ func (mt *memTable) extract(ctx context.Context, chunks chan<- extractRecord) er
 	return nil
 }
 
-func (mt *memTable) write(haver chunkReader, keeper keeperF, stats *Stats) (name hash.Hash, data []byte, count uint32, gcb gcBehavior, err error) {
+func (mt *memTable) write(haver chunkReader, keeper keeperF, stats *Stats) (name hash.Hash, data []byte, splitOffset uint64, chunkCount uint32, gcb gcBehavior, err error) {
 	gcb = gcBehavior_Continue
 	numChunks := uint64(len(mt.order))
 	if numChunks == 0 {
-		return hash.Hash{}, nil, 0, gcBehavior_Continue, fmt.Errorf("mem table cannot write with zero chunks")
+		return hash.Hash{}, nil, 0, 0, gcBehavior_Continue, fmt.Errorf("mem table cannot write with zero chunks")
 	}
 	maxSize := maxTableSize(uint64(len(mt.order)), mt.totalData)
 	// todo: memory quota
@@ -235,10 +236,10 @@ func (mt *memTable) write(haver chunkReader, keeper keeperF, stats *Stats) (name
 		sort.Sort(hasRecordByPrefix(mt.order)) // hasMany() requires addresses to be sorted.
 		_, gcb, err = haver.hasMany(mt.order, keeper)
 		if err != nil {
-			return hash.Hash{}, nil, 0, gcBehavior_Continue, err
+			return hash.Hash{}, nil, 0, 0, gcBehavior_Continue, err
 		}
 		if gcb != gcBehavior_Continue {
-			return hash.Hash{}, nil, 0, gcb, err
+			return hash.Hash{}, nil, 0, 0, gcb, err
 		}
 
 		sort.Sort(hasRecordByOrder(mt.order)) // restore "insertion" order for write
@@ -248,23 +249,24 @@ func (mt *memTable) write(haver chunkReader, keeper keeperF, stats *Stats) (name
 		if !addr.has {
 			h := addr.a
 			tw.addChunk(*h, mt.chunks[*h])
-			count++
+			chunkCount++
 		}
 	}
 	tableSize, name, err := tw.finish()
-
 	if err != nil {
-		return hash.Hash{}, nil, 0, gcBehavior_Continue, err
+		return hash.Hash{}, nil, 0, 0, gcBehavior_Continue, err
 	}
 
-	if count > 0 {
+	splitOffset = tableSize - (indexSize(chunkCount) + footerSize)
+
+	if chunkCount > 0 {
 		stats.BytesPerPersist.Sample(uint64(tableSize))
 		stats.CompressedChunkBytesPerPersist.Sample(uint64(tw.totalCompressedData))
 		stats.UncompressedChunkBytesPerPersist.Sample(uint64(tw.totalUncompressedData))
-		stats.ChunksPerPersist.Sample(uint64(count))
+		stats.ChunksPerPersist.Sample(uint64(chunkCount))
 	}
 
-	return name, buff[:tableSize], count, gcBehavior_Continue, nil
+	return name, buff[:tableSize], splitOffset, chunkCount, gcBehavior_Continue, nil
 }
 
 func (mt *memTable) close() error {

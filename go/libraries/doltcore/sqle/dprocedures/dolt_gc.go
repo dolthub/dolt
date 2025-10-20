@@ -245,7 +245,7 @@ func doDoltGC(ctx *sql.Context, args []string) (int, error) {
 			mode = types.GCModeFull
 		}
 
-		cmpLvl := chunks.NoArchive
+		cmpLvl := chunks.SimpleArchive
 		if apr.Contains(cli.ArchiveLevelParam) {
 			lvl, ok := apr.GetInt(cli.ArchiveLevelParam)
 			if !ok {

@@ -46,6 +46,11 @@ std::string queries[QUERIES_SIZE] =
 int is_update[QUERIES_SIZE] = {1,0,0,1,0,0,0,0,0,1,0,0,0,0};
 
 int main(int argc, char **argv) {
+    if (argc < 4) {
+        std::cerr << "Usage: " << argv[0] << " <user> <port> <database>" << std::endl;
+        return 1;
+    }
+
   std::string user = argv[1];
   std::string port = argv[2];
   std::string db   = argv[3];
@@ -63,7 +68,7 @@ int main(int argc, char **argv) {
       sql::Statement *stmt = con->createStatement();
 
       if ( is_update[i] ) {
-        int affected_rows = stmt->executeUpdate(queries[i]);
+        stmt->executeUpdate(queries[i]);
       } else {
         sql::ResultSet *res = stmt->executeQuery(queries[i]);
 

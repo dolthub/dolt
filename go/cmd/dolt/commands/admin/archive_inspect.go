@@ -101,7 +101,7 @@ func (cmd ArchiveInspectCmd) Exec(ctx context.Context, commandStr string, args [
 	}
 
 	enableMmap := apr.Contains("mmap")
-	inspector, err := nbs.NewArchiveInspectorFromFileWithMmap(ctx, absPath, enableMmap)
+	inspector, err := nbs.NewArchiveInspectorFromFileWithMmap(ctx, absPath, nbs.NewUnlimitedMemQuotaProvider(), enableMmap)
 	if err != nil {
 		cli.PrintErrln("Error opening archive file:", err.Error())
 		return 1
@@ -112,12 +112,11 @@ func (cmd ArchiveInspectCmd) Exec(ctx context.Context, commandStr string, args [
 	cli.Printf("File size: %d bytes\n", inspector.FileSize())
 	cli.Printf("Format version: %d\n", inspector.FormatVersion())
 	cli.Printf("File signature: %s\n", inspector.FileSignature())
-	cli.Println()
-
 	cli.Printf("Chunk count: %d\n", inspector.ChunkCount())
 	cli.Printf("Byte span count: %d\n", inspector.ByteSpanCount())
 	cli.Printf("Index size: %d bytes\n", inspector.IndexSize())
 	cli.Printf("Metadata size: %d bytes\n", inspector.MetadataSize())
+	cli.Printf("Split offset: %d bytes\n", inspector.SplitOffset())
 
 	// Display metadata if present
 	if inspector.MetadataSize() > 0 {
