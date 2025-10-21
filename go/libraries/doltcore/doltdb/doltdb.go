@@ -585,7 +585,7 @@ func (ddb *DoltDB) ResolveCommitRef(ctx context.Context, doltRef ref.DoltRef) (*
 
 	if doltRef.GetType() == ref.BranchRefType {
 		branchName := doltRef.GetPath()
-		BranchActivityReadEvent(branchName)
+		BranchActivityReadEvent(ctx, branchName)
 	}
 
 	return NewCommit(ctx, ddb.vrw, ddb.ns, commitVal)
@@ -1647,6 +1647,15 @@ func (ddb *DoltDB) UpdateWorkingSet(
 	}
 
 	_, err = ddb.db.withReplicationStatusController(replicationStatus).UpdateWorkingSet(ctx, ds, *wsSpec, prevHash)
+
+	if err == nil {
+		// NM4 - record branch write activity for dolt_branch_activity
+		if headRef, e2 := workingSetRef.ToHeadRef(); e2 == nil && headRef.GetType() == ref.BranchRefType {
+			branchName := headRef.GetPath()
+			BranchActivityWriteEvent(ctx, branchName)
+		}
+	}
+
 	return err
 }
 

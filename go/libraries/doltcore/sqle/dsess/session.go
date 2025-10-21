@@ -184,7 +184,7 @@ func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*branchSta
 
 			// NM4 - record access time for branch activity table.
 			branchRef := ref.NewBranchRef(rev)
-			doltdb.BranchActivityReadEvent(branchRef.GetPath())
+			doltdb.BranchActivityReadEvent(ctx, branchRef.GetPath())
 
 			return branchState, ok, nil
 		}
