@@ -51,21 +51,23 @@ var (
 	branchReadTimes     map[string]time.Time
 	branchWriteTimes    map[string]time.Time
 	systemStartTime     time.Time
-	activityChan        chan branchActivityEvent
+	activityChan        *chan branchActivityEvent
 )
 
-func init() {
+func BranchActivityInit(ctx context.Context) {
 	systemStartTime = time.Now()
 	branchReadTimes = make(map[string]time.Time)
 	branchWriteTimes = make(map[string]time.Time)
-	activityChan = make(chan branchActivityEvent, 64) // lifetime in buffer will be very short.
+	ac := make(chan branchActivityEvent, 64) // lifetime in buffer will be very short.
+	activityChan = &ac
 
 	// Start background goroutine to process events
 	go func() {
-		ctx := context.Background()
+		ctx, cancel := context.WithCancel(ctx)
+		defer cancel()
 		for {
 			select {
-			case event := <-activityChan:
+			case event := <-(*activityChan):
 				branchActivityMutex.Lock()
 				if event.eventType == READ {
 					if existing, exists := branchReadTimes[event.branch]; !exists || event.timestamp.After(existing) {
@@ -86,12 +88,15 @@ func init() {
 
 // BranchActivityReadEvent records when a branch is read/accessed
 func BranchActivityReadEvent(ctx context.Context, branch string) {
+	if activityChan == nil {
+		return
+	}
 	if ctx.Value(StatsSessionContextKey) != nil {
 		return
 	}
 
 	select {
-	case activityChan <- branchActivityEvent{
+	case (*activityChan) <- branchActivityEvent{
 		branch:    branch,
 		timestamp: time.Now(),
 		eventType: READ,
@@ -103,12 +108,15 @@ func BranchActivityReadEvent(ctx context.Context, branch string) {
 
 // BranchActivityWriteEvent records when a branch is written/updated
 func BranchActivityWriteEvent(ctx context.Context, branch string) {
+	if activityChan == nil {
+		return
+	}
 	if ctx.Value(StatsSessionContextKey) != nil {
 		return
 	}
 
 	select {
-	case activityChan <- branchActivityEvent{
+	case (*activityChan) <- branchActivityEvent{
 		branch:    branch,
 		timestamp: time.Now(),
 		eventType: WRITE,
@@ -120,10 +128,13 @@ func BranchActivityWriteEvent(ctx context.Context, branch string) {
 
 // GetBranchActivity returns activity data for all branches (tracked and untracked)
 func GetBranchActivity(ctx context.Context, ddb *DoltDB) ([]BranchActivityData, error) {
+	if activityChan == nil {
+		return nil, nil
+	}
+
 	branchActivityMutex.RLock()
 	defer branchActivityMutex.RUnlock()
 
-	// Get all branches from the database
 	branchRefs, err := ddb.GetBranches(ctx)
 	if err != nil {
 		return nil, err
