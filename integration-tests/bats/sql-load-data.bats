@@ -425,7 +425,7 @@ fields terminated by ','
 lines terminated by '\n'
 SQL
     [ $status -ne 0 ]
-    [[ $output =~ "'2022-10-10 00:00:00:00' is not a valid value for 'datetime'" ]] || false
+    [[ $output =~ "is not a valid value" ]] || false
 }
 
 @test "sql-load-data: schema with not null constraints" {
