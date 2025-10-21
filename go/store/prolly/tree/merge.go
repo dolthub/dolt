@@ -17,7 +17,6 @@ package tree
 import (
 	"bytes"
 	"context"
-	"io"
 
 	"golang.org/x/sync/errgroup"
 
@@ -40,18 +39,18 @@ type MergeStats struct {
 // getNextAndSplitIfAtEnd fetches the next Patch from |patchGenerator|, but it avoids emitting a range patch for the
 // very last node in a level. This is because those nodes don't represent natural chunk boundaries and thus aren't
 // valid patches.
-func getNextAndSplitIfAtEnd[K ~[]byte, O Ordering[K]](ctx context.Context, patchGenerator *PatchGenerator[K, O]) (patch Patch, diffType DiffType, err error) {
-	patch, diffType, err = patchGenerator.Next(ctx)
+func getNextAndSplitIfAtEnd[K ~[]byte, O Ordering[K]](ctx context.Context, patchGenerator *PatchGenerator[K, O]) (patch Patch, diffType DiffType, isMore bool, err error) {
+	patch, diffType, isMore, err = patchGenerator.Next(ctx)
 	if err != nil {
-		return Patch{}, NoDiff, err
+		return Patch{}, NoDiff, false, err
 	}
 	for patchGenerator.to.atEnd() && patch.Level > 0 && diffType != RemovedDiff {
-		patch, diffType, err = patchGenerator.split(ctx)
-		if err != nil {
-			return Patch{}, NoDiff, err
+		patch, diffType, isMore, err = patchGenerator.split(ctx)
+		if err != nil || !isMore {
+			return Patch{}, NoDiff, false, err
 		}
 	}
-	return patch, diffType, nil
+	return patch, diffType, isMore, nil
 }
 
 // ThreeWayMerge implements a three-way merge algorithm using |base| as the common ancestor, |right| as
@@ -164,18 +163,12 @@ func SendPatches[K ~[]byte, O Ordering[K]](
 		lok, rok             = true, true
 	)
 
-	left, lDiffType, err = l.Next(ctx)
-	if err == io.EOF {
-		err, lok = nil, false
-	}
+	left, lDiffType, lok, err = l.Next(ctx)
 	if err != nil {
 		return err
 	}
 
-	right, rDiffType, err = getNextAndSplitIfAtEnd(ctx, &r)
-	if err == io.EOF {
-		err, rok = nil, false
-	}
+	right, rDiffType, rok, err = getNextAndSplitIfAtEnd(ctx, &r)
 	if err != nil {
 		return err
 	}
@@ -189,10 +182,7 @@ func SendPatches[K ~[]byte, O Ordering[K]](
 			if compareWithNilAsMin(ctx, order, K(left.EndKey), K(right.KeyBelowStart)) <= 0 {
 				// Left change is entirely before right change.
 				// This change is already on the left map, so we ignore it.
-				left, lDiffType, err = l.Next(ctx)
-				if err == io.EOF {
-					err, lok = nil, false
-				}
+				left, lDiffType, lok, err = l.Next(ctx)
 				if err != nil {
 					return err
 				}
@@ -203,10 +193,7 @@ func SendPatches[K ~[]byte, O Ordering[K]](
 					return err
 				}
 
-				right, rDiffType, err = getNextAndSplitIfAtEnd(ctx, &r)
-				if err == io.EOF {
-					err, rok = nil, false
-				}
+				right, rDiffType, rok, err = getNextAndSplitIfAtEnd(ctx, &r)
 				if err != nil {
 					return err
 				}
@@ -220,20 +207,17 @@ func SendPatches[K ~[]byte, O Ordering[K]](
 				// that reflects that.
 				if compareWithNilAsMin(ctx, order, K(left.KeyBelowStart), K(right.KeyBelowStart)) > 0 {
 					err = buf.SendPatch(ctx, right)
+					if err != nil {
+						return err
+					}
 				}
 				// This change is already on the left map, so we ignore it.
-				left, lDiffType, err = l.Next(ctx)
-				if err == io.EOF {
-					err, lok = nil, false
-				}
+				left, lDiffType, lok, err = l.Next(ctx)
 				if err != nil {
 					return err
 				}
 
-				right, rDiffType, err = getNextAndSplitIfAtEnd(ctx, &r)
-				if err == io.EOF {
-					err, rok = nil, false
-				}
+				right, rDiffType, rok, err = getNextAndSplitIfAtEnd(ctx, &r)
 				if err != nil {
 					return err
 				}
@@ -242,13 +226,13 @@ func SendPatches[K ~[]byte, O Ordering[K]](
 				// If both have the same start key, split both.
 				cmp := compareWithNilAsMin(ctx, order, K(left.KeyBelowStart), K(right.KeyBelowStart))
 				if cmp <= 0 {
-					left, lDiffType, err = l.split(ctx)
+					left, lDiffType, lok, err = l.split(ctx)
 					if err != nil {
 						return err
 					}
 				}
 				if cmp >= 0 {
-					right, rDiffType, err = r.split(ctx)
+					right, rDiffType, rok, err = r.split(ctx)
 					if err != nil {
 						return err
 					}
@@ -262,10 +246,7 @@ func SendPatches[K ~[]byte, O Ordering[K]](
 			if compareWithNilAsMin(ctx, order, K(left.EndKey), K(right.KeyBelowStart)) <= 0 {
 				// point update comes first
 				// This change is already on the left map, so we ignore it.
-				left, lDiffType, err = l.Next(ctx)
-				if err == io.EOF {
-					err, lok = nil, false
-				}
+				left, lDiffType, lok, err = l.Next(ctx)
 				if err != nil {
 					return err
 				}
@@ -275,16 +256,13 @@ func SendPatches[K ~[]byte, O Ordering[K]](
 				if err != nil {
 					return err
 				}
-				right, rDiffType, err = getNextAndSplitIfAtEnd(ctx, &r)
-				if err == io.EOF {
-					err, rok = nil, false
-				}
+				right, rDiffType, rok, err = getNextAndSplitIfAtEnd(ctx, &r)
 				if err != nil {
 					return err
 				}
 			} else {
 				// overlap, we need to split the range
-				right, rDiffType, err = r.split(ctx)
+				right, rDiffType, rok, err = r.split(ctx)
 				if err != nil {
 					return err
 				}
@@ -299,26 +277,20 @@ func SendPatches[K ~[]byte, O Ordering[K]](
 				if err != nil {
 					return err
 				}
-				right, rDiffType, err = getNextAndSplitIfAtEnd(ctx, &r)
-				if err == io.EOF {
-					err, rok = nil, false
-				}
+				right, rDiffType, rok, err = getNextAndSplitIfAtEnd(ctx, &r)
 				if err != nil {
 					return err
 				}
 			} else if order.Compare(ctx, K(right.EndKey), K(left.EndKey)) > 0 {
 				// range update comes first
 				// This change is already on the left map, so we ignore it.
-				left, lDiffType, err = l.Next(ctx)
-				if err == io.EOF {
-					err, lok = nil, false
-				}
+				left, lDiffType, lok, err = l.Next(ctx)
 				if err != nil {
 					return err
 				}
 			} else {
 				// overlap, we need to split the range
-				left, lDiffType, err = l.split(ctx)
+				left, lDiffType, lok, err = l.split(ctx)
 				if err != nil {
 					return err
 				}
@@ -331,10 +303,7 @@ func SendPatches[K ~[]byte, O Ordering[K]](
 		switch {
 		case cmp < 0:
 			// This change is already on the left map, so we ignore it.
-			left, lDiffType, err = l.Next(ctx)
-			if err == io.EOF {
-				err, lok = nil, false
-			}
+			left, lDiffType, lok, err = l.Next(ctx)
 			if err != nil {
 				return err
 			}
@@ -345,10 +314,7 @@ func SendPatches[K ~[]byte, O Ordering[K]](
 				return err
 			}
 
-			right, rDiffType, err = getNextAndSplitIfAtEnd(ctx, &r)
-			if err == io.EOF {
-				err, rok = nil, false
-			}
+			right, rDiffType, rok, err = getNextAndSplitIfAtEnd(ctx, &r)
 			if err != nil {
 				return err
 			}
@@ -367,18 +333,12 @@ func SendPatches[K ~[]byte, O Ordering[K]](
 				}
 			}
 
-			left, lDiffType, err = l.Next(ctx)
-			if err == io.EOF {
-				err, lok = nil, false
-			}
+			left, lDiffType, lok, err = l.Next(ctx)
 			if err != nil {
 				return err
 			}
 
-			right, rDiffType, err = getNextAndSplitIfAtEnd(ctx, &r)
-			if err == io.EOF {
-				err, rok = nil, false
-			}
+			right, rDiffType, rok, err = getNextAndSplitIfAtEnd(ctx, &r)
 			if err != nil {
 				return err
 			}
@@ -396,10 +356,7 @@ func SendPatches[K ~[]byte, O Ordering[K]](
 			return err
 		}
 
-		right, rDiffType, err = getNextAndSplitIfAtEnd(ctx, &r)
-		if err == io.EOF {
-			err, rok = nil, false
-		}
+		right, rDiffType, rok, err = getNextAndSplitIfAtEnd(ctx, &r)
 		if err != nil {
 			return err
 		}
