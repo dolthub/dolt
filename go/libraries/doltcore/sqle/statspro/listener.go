@@ -22,6 +22,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
@@ -146,7 +147,12 @@ func (sc *StatsController) Restart(ctx *sql.Context) error {
 // Init should only be called once
 func (sc *StatsController) Init(ctx context.Context, pro *sqle.DoltDatabaseProvider, ctxGen ctxFactory, dbs []sql.Database) error {
 	sc.pro = pro
-	sc.ctxGen = ctxGen
+
+	ctxGenWrap := func(ctx context.Context) (*sql.Context, error) {
+		cc := context.WithValue(ctx, doltdb.StatsSessionContextKey, true)
+		return ctxGen(cc)
+	}
+	sc.ctxGen = ctxGenWrap
 
 	sqlCtx, err := sc.ctxGen(ctx)
 	if err != nil {

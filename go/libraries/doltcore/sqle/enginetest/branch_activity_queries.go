@@ -42,15 +42,48 @@ var BranchActivityTests = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "branch creation does not set last read or last write",
+		// This may be a little counterintuitive, but we can create a branch without resolving it first so we end
+		// up with a last_write but no last_read.
+		Name: "branch creation does sets last write but not last read",
 		SetUpScript: []string{
 			"CALL dolt_branch('new_branch')",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query: "SELECT branch, last_read, last_write FROM dolt_branch_activity WHERE branch = 'new_branch'",
+				Query: "SELECT branch, last_read , last_write IS NULL FROM dolt_branch_activity WHERE branch = 'new_branch'",
 				Expected: []sql.Row{
-					{"new_branch", nil, nil},
+					{"new_branch", nil, false},
+				},
+			},
+		},
+	},
+	{
+		Name: "AS OF updates the read time for a branch",
+		SetUpScript: []string{
+			"CREATE TABLE t (id INT PRIMARY KEY)",
+			"INSERT INTO t VALUES (1), (2), (3)",
+			"CALL dolt_commit('-Am', 'initial commit')",
+			"CALL dolt_branch('new_branch')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT branch, last_read IS NULL, last_write IS NULL FROM dolt_branch_activity WHERE branch = 'new_branch'",
+				Expected: []sql.Row{
+					{"new_branch", true, false},
+				},
+			},
+			{
+				Query:    "SELECT * FROM t AS OF 'new_branch'",
+				Expected: []sql.Row{{1}, {2}, {3}},
+			},
+			{
+				Query:            "SLEEP(1)", // stats update is async, give it a moment
+				SkipResultsCheck: true,
+			},
+			{
+				Query: "SELECT branch, last_read IS NULL, last_write IS NULL FROM dolt_branch_activity WHERE branch = 'new_branch'",
+				Expected: []sql.Row{
+					{"new_branch", false, false},
 				},
 			},
 		},
@@ -65,7 +98,7 @@ var BranchActivityTests = []queries.ScriptTest{
 			{
 				Query: "SELECT branch, last_read IS NOT NULL, last_write IS NOT NULL FROM dolt_branch_activity WHERE branch = 'test_branch'",
 				Expected: []sql.Row{
-					{"test_branch", true, false},
+					{"test_branch", true, true},
 				},
 			},
 			{

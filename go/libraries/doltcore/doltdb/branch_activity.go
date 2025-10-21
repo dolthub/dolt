@@ -26,6 +26,12 @@ const (
 	WRITE
 )
 
+type statsSessionContextKeyType struct{}
+
+// StatsSessionContextKey is used to mark sql sessions which are related to stats processing. We don't want to count
+// reads/writes from these sessions in branch activity tracking.
+var StatsSessionContextKey = statsSessionContextKeyType{}
+
 // BranchActivityData represents activity data for a single branch
 type BranchActivityData struct {
 	Branch          string
@@ -79,7 +85,11 @@ func init() {
 }
 
 // BranchActivityReadEvent records when a branch is read/accessed
-func BranchActivityReadEvent(branch string) {
+func BranchActivityReadEvent(ctx context.Context, branch string) {
+	if ctx.Value(StatsSessionContextKey) != nil {
+		return
+	}
+
 	select {
 	case activityChan <- branchActivityEvent{
 		branch:    branch,
@@ -88,6 +98,23 @@ func BranchActivityReadEvent(branch string) {
 	}:
 	default:
 		// Channel is full, drop the event
+	}
+}
+
+// BranchActivityWriteEvent records when a branch is written/updated
+func BranchActivityWriteEvent(ctx context.Context, branch string) {
+	if ctx.Value(StatsSessionContextKey) != nil {
+		return
+	}
+
+	select {
+	case activityChan <- branchActivityEvent{
+		branch:    branch,
+		timestamp: time.Now(),
+		eventType: WRITE,
+	}:
+	default:
+		// Lots of traffic. drop the event
 	}
 }
 
@@ -101,7 +128,7 @@ func GetBranchActivity(ctx context.Context, ddb *DoltDB) ([]BranchActivityData, 
 	if err != nil {
 		return nil, err
 	}
-	
+
 	branches := make(map[string]bool)
 	for _, branchRef := range branchRefs {
 		branches[branchRef.GetPath()] = true
