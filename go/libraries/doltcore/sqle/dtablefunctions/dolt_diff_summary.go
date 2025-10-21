@@ -507,5 +507,23 @@ func shouldIgnoreDelta(delta diff.TableDelta, ignorePatterns doltdb.IgnorePatter
 
 // shouldFilterDoltIgnoreTable filters out the dolt_ignore table itself to match dolt diff behavior.
 func shouldFilterDoltIgnoreTable(delta diff.TableDelta) bool {
-	return strings.EqualFold(delta.FromName.Name, doltdb.IgnoreTableName) || strings.EqualFold(delta.ToName.Name, doltdb.IgnoreTableName)
+	return isIgnoreTable(delta.FromName) || isIgnoreTable(delta.ToName)
+}
+
+// isIgnoreTable checks if a TableName refers to the dolt_ignore table,
+// handling both simple names and schema-qualified names (e.g., "public.dolt_ignore" in DoltgreSQL).
+func isIgnoreTable(tableName doltdb.TableName) bool {
+	// Check unqualified name
+	if strings.EqualFold(tableName.Name, doltdb.IgnoreTableName) {
+		return true
+	}
+
+	// Check if Name contains a schema-qualified reference (e.g., "public.dolt_ignore")
+	// Extract the base table name by splitting on the last dot
+	if idx := strings.LastIndex(tableName.Name, "."); idx != -1 {
+		baseTableName := tableName.Name[idx+1:]
+		return strings.EqualFold(baseTableName, doltdb.IgnoreTableName)
+	}
+
+	return false
 }
