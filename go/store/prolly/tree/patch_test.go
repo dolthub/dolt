@@ -16,7 +16,6 @@ package tree
 
 import (
 	"context"
-	"io"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -50,30 +49,36 @@ func TestPatchGeneratorFromRoots(t *testing.T) {
 		require.NoError(t, err)
 
 		// Range and then EOF
-		dif, diffType, err := dfr.Next(ctx)
+		var isMore bool
+		dif, diffType, isMore, err := dfr.Next(ctx)
 		assert.NoError(t, err)
+		assert.True(t, isMore)
 		assert.NotNil(t, dif)
 		assert.Equal(t, ModifiedDiff, diffType)
 
-		dif, diffType, err = dfr.Next(ctx)
-		require.ErrorIs(t, err, io.EOF)
+		dif, diffType, isMore, err = dfr.Next(ctx)
+		require.NoError(t, err)
+		assert.False(t, isMore)
 
 		// Range and split visits the one different tuple.
 		dfr, err = PatchGeneratorFromRoots(ctx, ns, ns, fromRoot, toRoot, desc)
 		require.NoError(t, err)
-		_, _, err = dfr.Next(ctx)
+		_, _, isMore, err = dfr.Next(ctx)
 		require.NoError(t, err)
+		assert.True(t, isMore)
 
-		dif, diffType, err = dfr.split(ctx)
+		dif, diffType, isMore, err = dfr.split(ctx)
 		assert.NoError(t, err)
+		assert.True(t, isMore)
 		assert.NotNil(t, dif)
 		assert.Equal(t, ModifiedDiff, diffType)
 		assert.Equal(t, fromTups[23][0], val.Tuple(dif.EndKey))
 		assert.Equal(t, fromTups[23][1], val.Tuple(dif.From))
 		assert.Equal(t, toTups[23][1], val.Tuple(dif.To))
 
-		dif, diffType, err = dfr.Next(ctx)
-		assert.Equal(t, io.EOF, err)
+		dif, diffType, isMore, err = dfr.Next(ctx)
+		assert.NoError(t, err)
+		assert.False(t, isMore)
 	})
 	t.Run("FromHasSuffix", func(t *testing.T) {
 		// One or more rows at the end were deleted.
@@ -97,44 +102,50 @@ func TestPatchGeneratorFromRoots(t *testing.T) {
 		dfr, err := PatchGeneratorFromRoots(ctx, ns, ns, fromRoot, toRoot, desc)
 		require.NoError(t, err)
 
-		dif, diffType, err := dfr.Next(ctx)
+		dif, diffType, isMore, err := dfr.Next(ctx)
 		require.NoError(t, err)
+		require.True(t, isMore)
 		require.NotNil(t, dif)
 		require.Equal(t, ModifiedDiff, diffType)
 		require.NotNil(t, dif.To)
 
 		// One or more RangeRemovedDiff and then EOF
-		dif, diffType, err = dfr.Next(ctx)
+		dif, diffType, isMore, err = dfr.Next(ctx)
 		require.NoError(t, err)
+		require.True(t, isMore)
 		require.NotNil(t, dif)
 		require.Equal(t, RemovedDiff, diffType)
 		require.Nil(t, dif.To)
-		dif, diffType, err = dfr.Next(ctx)
+		dif, diffType, isMore, err = dfr.Next(ctx)
 
-		for err == nil {
+		for isMore {
+			require.NoError(t, err)
 			require.NotNil(t, dif)
 			require.Equal(t, RemovedDiff, diffType)
 			require.Nil(t, dif.To)
-			dif, diffType, err = dfr.Next(ctx)
+			dif, diffType, isMore, err = dfr.Next(ctx)
 		}
 
-		require.ErrorIs(t, err, io.EOF)
+		assert.NoError(t, err)
+		assert.False(t, isMore)
 
 		// Range splits into level 0 removes until the next chunk boundary, then level 1 removes.
 		dfr, err = PatchGeneratorFromRoots(ctx, ns, ns, fromRoot, toRoot, desc)
 		require.NoError(t, err)
-		_, _, err = dfr.Next(ctx)
+		_, _, isMore, err = dfr.Next(ctx)
 		require.NoError(t, err)
+		require.True(t, isMore)
 
-		dif, diffType, err = dfr.split(ctx)
+		dif, diffType, isMore, err = dfr.split(ctx)
 		for i := uint32(512); i <= chunkBoundaries[1]; i++ {
 			require.NoError(t, err)
+			require.True(t, isMore)
 			require.NotNil(t, dif, "%d", i)
 			require.Equal(t, RemovedDiff, diffType)
 			assert.Equal(t, fromTups[i][0], val.Tuple(dif.EndKey), "%d", i)
 			assert.Equal(t, fromTups[i][1], val.Tuple(dif.From), "%d", i)
 			assert.Nil(t, dif.To)
-			dif, diffType, err = dfr.Next(ctx)
+			dif, diffType, isMore, err = dfr.Next(ctx)
 		}
 		require.NotNil(t, dif)
 		require.Equal(t, RemovedDiff, diffType)
@@ -146,7 +157,9 @@ func TestPatchGeneratorFromRoots(t *testing.T) {
 		require.True(t, ok)
 		require.Equal(t, chunkBoundaries[1], startKey)
 		require.Nil(t, dif.To)
-		dif, diffType, err = dfr.Next(ctx)
+		dif, diffType, isMore, err = dfr.Next(ctx)
+		require.NoError(t, err)
+		require.True(t, isMore)
 
 		require.NotNil(t, dif)
 		require.Equal(t, RemovedDiff, diffType)
@@ -158,9 +171,10 @@ func TestPatchGeneratorFromRoots(t *testing.T) {
 		require.True(t, ok)
 		require.Equal(t, chunkBoundaries[2], startKey)
 		require.Nil(t, dif.To)
-		dif, diffType, err = dfr.Next(ctx)
+		dif, diffType, isMore, err = dfr.Next(ctx)
 
-		assert.Equal(t, io.EOF, err)
+		assert.NoError(t, err)
+		require.False(t, isMore)
 	})
 	t.Run("FromHasPrefix", func(t *testing.T) {
 		// Some rows were deleted from the beginning.
@@ -181,34 +195,37 @@ func TestPatchGeneratorFromRoots(t *testing.T) {
 		require.NoError(t, err)
 
 		// Range and then EOF
-		dif, diffType, err := dfr.Next(ctx)
+		dif, diffType, isMore, err := dfr.Next(ctx)
 		require.NoError(t, err)
+		require.True(t, isMore)
 		require.NotNil(t, dif)
 		require.Equal(t, ModifiedDiff, diffType)
 		assert.Equal(t, dif.KeyBelowStart, Item(nil))
 		assert.GreaterOrEqual(t, dif.EndKey, toTups[0][0])
 
-		dif, diffType, err = dfr.Next(ctx)
-		require.ErrorIs(t, err, io.EOF)
+		dif, diffType, isMore, err = dfr.Next(ctx)
+		require.False(t, isMore)
 
 		// Range splits into all 512 removes.
 		dfr, err = PatchGeneratorFromRoots(ctx, ns, ns, fromRoot, toRoot, desc)
 		require.NoError(t, err)
-		_, _, err = dfr.Next(ctx)
-		require.NoError(t, err)
+		_, _, isMore, err = dfr.Next(ctx)
+		require.True(t, isMore)
 
-		dif, diffType, err = dfr.split(ctx)
+		dif, diffType, isMore, err = dfr.split(ctx)
 		for i := 0; i < 512; i++ {
 			require.NoError(t, err)
+			require.True(t, isMore)
 			require.NotNil(t, dif)
 			require.Equal(t, RemovedDiff, diffType)
 			assert.Equal(t, fromTups[i][0], val.Tuple(dif.EndKey))
 			assert.Equal(t, fromTups[i][1], val.Tuple(dif.From))
 			assert.Nil(t, dif.To)
-			dif, diffType, err = dfr.Next(ctx)
+			dif, diffType, isMore, err = dfr.Next(ctx)
 		}
 
-		assert.Equal(t, io.EOF, err)
+		assert.NoError(t, err)
+		assert.False(t, isMore)
 	})
 	t.Run("ToHasSuffix", func(t *testing.T) {
 		// Some rows were added to the end.
@@ -229,8 +246,9 @@ func TestPatchGeneratorFromRoots(t *testing.T) {
 		require.NoError(t, err)
 
 		// At least one ModifiedDiff. The previous key is less than the first added key, and the end key is greater.
-		dif, diffType, err := dfr.Next(ctx)
+		dif, diffType, isMore, err := dfr.Next(ctx)
 		require.NoError(t, err)
+		require.True(t, isMore)
 		require.NotNil(t, dif)
 		require.Equal(t, ModifiedDiff, diffType)
 		assert.NotNil(t, dif.KeyBelowStart)
@@ -238,27 +256,31 @@ func TestPatchGeneratorFromRoots(t *testing.T) {
 		assert.Equal(t, dfr.order.Compare(ctx, val.Tuple(dif.EndKey), fromTups[511][0]), 1)
 
 		KeyBelowStart := dif.EndKey
-		dif, diffType, err = dfr.Next(ctx)
-		for err == nil {
+		dif, diffType, isMore, err = dfr.Next(ctx)
+		for isMore {
+			require.NoError(t, err)
 			require.NotNil(t, dif)
 			require.Equal(t, AddedDiff, diffType)
 			assert.Equal(t, KeyBelowStart, dif.KeyBelowStart)
 
 			KeyBelowStart = dif.EndKey
-			dif, diffType, err = dfr.Next(ctx)
+			dif, diffType, isMore, err = dfr.Next(ctx)
 		}
-		require.ErrorIs(t, err, io.EOF)
+		assert.NoError(t, err)
+		assert.False(t, isMore)
 
 		// Range splits into all 512 removes.
 		dfr, err = PatchGeneratorFromRoots(ctx, ns, ns, fromRoot, toRoot, desc)
 		require.NoError(t, err)
 
-		dif, diffType, err = dfr.Next(ctx)
+		dif, diffType, isMore, err = dfr.Next(ctx)
 		for i := 0; i < 512; i++ {
 			require.NoError(t, err)
+			require.True(t, isMore)
 			for dif.Level > 0 {
-				dif, diffType, err = dfr.split(ctx)
+				dif, diffType, isMore, err = dfr.split(ctx)
 				require.NoError(t, err)
+				require.True(t, isMore)
 			}
 			require.NotNil(t, dif)
 			if !assert.Equal(t, AddedDiff, diffType) {
@@ -267,10 +289,11 @@ func TestPatchGeneratorFromRoots(t *testing.T) {
 			assert.Equal(t, toTups[512+i][0], val.Tuple(dif.EndKey))
 			assert.Equal(t, toTups[512+i][1], val.Tuple(dif.To))
 			assert.Nil(t, dif.From)
-			dif, diffType, err = dfr.Next(ctx)
+			dif, diffType, isMore, err = dfr.Next(ctx)
 		}
 
-		assert.Equal(t, io.EOF, err)
+		assert.NoError(t, err)
+		assert.False(t, isMore)
 	})
 	t.Run("ToHasPrefix", func(t *testing.T) {
 		// Some rows were added to the beginning.
@@ -291,33 +314,37 @@ func TestPatchGeneratorFromRoots(t *testing.T) {
 		require.NoError(t, err)
 
 		// At least one ModifiedDiff. The previous key is nil because it comes before any other observed keys, and the end key is greater.
-		dif, diffType, err := dfr.Next(ctx)
+		dif, diffType, isMore, err := dfr.Next(ctx)
 		require.NoError(t, err)
+		require.True(t, isMore)
 		require.NotNil(t, dif)
 		require.Equal(t, ModifiedDiff, diffType)
 		assert.Nil(t, dif.KeyBelowStart, Item(nil))
 
 		KeyBelowStart := dif.EndKey
-		dif, diffType, err = dfr.Next(ctx)
-		for err == nil {
+		dif, diffType, isMore, err = dfr.Next(ctx)
+		for isMore {
+			require.NoError(t, err)
 			require.NotNil(t, dif)
 			require.Equal(t, ModifiedDiff, diffType)
 			assert.Equal(t, KeyBelowStart, dif.KeyBelowStart)
 
 			KeyBelowStart = dif.EndKey
-			dif, diffType, err = dfr.Next(ctx)
+			dif, diffType, isMore, err = dfr.Next(ctx)
 		}
-		require.ErrorIs(t, err, io.EOF)
+		assert.NoError(t, err)
+		assert.False(t, isMore)
 
 		// Range splits into all 512 removes.
 		dfr, err = PatchGeneratorFromRoots(ctx, ns, ns, fromRoot, toRoot, desc)
 		require.NoError(t, err)
 
-		dif, diffType, err = dfr.Next(ctx)
+		dif, diffType, isMore, err = dfr.Next(ctx)
 		for i := 0; i < 512; i++ {
 			require.NoError(t, err)
+			require.True(t, isMore)
 			for dif.Level > 0 {
-				dif, diffType, err = dfr.split(ctx)
+				dif, diffType, isMore, err = dfr.split(ctx)
 				require.NoError(t, err)
 			}
 			require.NotNil(t, dif)
@@ -327,10 +354,11 @@ func TestPatchGeneratorFromRoots(t *testing.T) {
 			assert.Equal(t, toTups[i][0], val.Tuple(dif.EndKey))
 			assert.Equal(t, toTups[i][1], val.Tuple(dif.To))
 			assert.Nil(t, dif.From)
-			dif, diffType, err = dfr.Next(ctx)
+			dif, diffType, isMore, err = dfr.Next(ctx)
 		}
 
-		assert.Equal(t, io.EOF, err)
+		assert.NoError(t, err)
+		assert.False(t, isMore)
 	})
 	t.Run("ToIsEmpty", func(t *testing.T) {
 		ctx := context.Background()
@@ -350,34 +378,37 @@ func TestPatchGeneratorFromRoots(t *testing.T) {
 		require.NoError(t, err)
 
 		var KeyBelowStart Item
-		dif, diffType, err := dfr.Next(ctx)
-		for err == nil {
+		dif, diffType, isMore, err := dfr.Next(ctx)
+		for isMore {
+			require.NoError(t, err)
 			require.NotNil(t, dif)
 			require.Equal(t, RemovedDiff, diffType)
 			assert.Nil(t, dif.To)
 			assert.Equal(t, KeyBelowStart, dif.KeyBelowStart)
 			KeyBelowStart = dif.EndKey
-			dif, diffType, err = dfr.Next(ctx)
+			dif, diffType, isMore, err = dfr.Next(ctx)
 		}
 
 		assert.Equal(t, KeyBelowStart, Item(fromTups[1023][0]))
-		assert.Equal(t, io.EOF, err)
+		assert.NoError(t, err)
+		assert.False(t, isMore)
 
 		// Range splits into level 0 removes until the next chunk boundary, then level 1 removes.
 		dfr, err = PatchGeneratorFromRoots(ctx, ns, ns, fromRoot, toRoot, desc)
 		require.NoError(t, err)
-		_, _, err = dfr.Next(ctx)
-		require.NoError(t, err)
+		_, _, isMore, err = dfr.Next(ctx)
+		require.True(t, isMore)
 
-		dif, diffType, err = dfr.split(ctx)
+		dif, diffType, isMore, err = dfr.split(ctx)
 		for i := uint32(0); i <= chunkBoundaries[0]; i++ {
 			require.NoError(t, err)
+			require.True(t, isMore)
 			require.NotNil(t, dif, "%d", i)
 			require.Equal(t, RemovedDiff, diffType)
 			assert.Equal(t, fromTups[i][0], val.Tuple(dif.EndKey), "%d", i)
 			assert.Equal(t, fromTups[i][1], val.Tuple(dif.From), "%d", i)
 			assert.Nil(t, dif.To)
-			dif, diffType, err = dfr.Next(ctx)
+			dif, diffType, isMore, err = dfr.Next(ctx)
 		}
 
 		require.NotNil(t, dif)
@@ -390,7 +421,7 @@ func TestPatchGeneratorFromRoots(t *testing.T) {
 		require.True(t, ok)
 		require.Equal(t, chunkBoundaries[0], startKey)
 		require.Nil(t, dif.To)
-		dif, diffType, err = dfr.Next(ctx)
+		dif, diffType, isMore, err = dfr.Next(ctx)
 
 		require.NotNil(t, dif)
 		require.Equal(t, RemovedDiff, diffType)
@@ -402,7 +433,9 @@ func TestPatchGeneratorFromRoots(t *testing.T) {
 		require.True(t, ok)
 		require.Equal(t, chunkBoundaries[1], startKey)
 		require.Nil(t, dif.To)
-		dif, diffType, err = dfr.Next(ctx)
+		dif, diffType, isMore, err = dfr.Next(ctx)
+		require.NoError(t, err)
+		require.True(t, isMore)
 
 		require.NotNil(t, dif)
 		require.Equal(t, RemovedDiff, diffType)
@@ -414,9 +447,10 @@ func TestPatchGeneratorFromRoots(t *testing.T) {
 		require.True(t, ok)
 		require.Equal(t, chunkBoundaries[2], startKey)
 		require.Nil(t, dif.To)
-		dif, diffType, err = dfr.Next(ctx)
+		dif, diffType, isMore, err = dfr.Next(ctx)
 
-		assert.Equal(t, io.EOF, err)
+		assert.NoError(t, err)
+		assert.False(t, isMore)
 	})
 
 	t.Run("FromIsEmpty", func(t *testing.T) {
@@ -437,27 +471,32 @@ func TestPatchGeneratorFromRoots(t *testing.T) {
 		var KeyBelowStart Item
 
 		// Range and then EOF
-		dif, diffType, err := dfr.Next(ctx)
+		dif, diffType, isMore, err := dfr.Next(ctx)
 		require.NoError(t, err)
+		require.True(t, isMore)
 		require.Nil(t, dif.KeyBelowStart)
-		for err == nil {
+		for isMore {
+			require.NoError(t, err)
 			require.NotNil(t, dif)
 			require.Equal(t, AddedDiff, diffType)
 			assert.Equal(t, KeyBelowStart, dif.KeyBelowStart)
 			KeyBelowStart = dif.EndKey
-			dif, diffType, err = dfr.Next(ctx)
+			dif, diffType, isMore, err = dfr.Next(ctx)
 		}
-		require.ErrorIs(t, err, io.EOF)
+		assert.NoError(t, err)
+		assert.False(t, isMore)
 
 		dfr, err = PatchGeneratorFromRoots(ctx, ns, ns, fromRoot, toRoot, desc)
 		require.NoError(t, err)
 		for i := 0; i < 1024; i++ {
-			dif, diffType, err = dfr.Next(ctx)
+			dif, diffType, isMore, err = dfr.Next(ctx)
 			require.NoError(t, err)
+			require.True(t, isMore)
 			require.NotNil(t, dif)
 			for dif.Level > 0 {
-				dif, diffType, err = dfr.split(ctx)
+				dif, diffType, isMore, err = dfr.split(ctx)
 				require.NoError(t, err)
+				require.True(t, isMore)
 				require.NotNil(t, dif)
 			}
 			require.Equal(t, AddedDiff, diffType)
@@ -466,7 +505,8 @@ func TestPatchGeneratorFromRoots(t *testing.T) {
 			assert.Nil(t, dif.From)
 		}
 
-		_, _, err = dfr.Next(ctx)
-		assert.Equal(t, io.EOF, err)
+		_, _, isMore, err = dfr.Next(ctx)
+		assert.NoError(t, err)
+		require.False(t, isMore)
 	})
 }
