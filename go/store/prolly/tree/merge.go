@@ -17,6 +17,7 @@ package tree
 import (
 	"bytes"
 	"context"
+
 	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/store/prolly/message"
