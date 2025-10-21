@@ -310,6 +310,12 @@ func (td *PatchGenerator[K, O]) advanceFromPreviousPatch(ctx context.Context) (p
 	return Patch{}, NoDiff, true, nil
 }
 
+// Next finds the next key-value pair (including intermediate pairs pointing to child nodes)
+// this is present in |td.to| that is not present in |td.from|.
+// |isMore| is false iff we have exhausted both cursors and there are no more patches. Otherwise, |patch| contains
+// a patch representing that diff.
+// Note that we choose to use |isMore| instead of returning io.EOF because it is more explicit. Callers should
+// check the value of isMore instead of checking for io.EOF.
 func (td *PatchGenerator[K, O]) Next(ctx context.Context) (patch Patch, diffType DiffType, isMore bool, err error) {
 	if td.previousDiffType != NoDiff {
 		patch, diffType, isMore, err = td.advanceFromPreviousPatch(ctx)
@@ -536,7 +542,7 @@ func skipCommonVisitingParents(ctx context.Context, from, to *cursor) (lastSeenK
 
 	for from.Valid() && to.Valid() {
 		if !equalItems(from, to) {
-			// isMore the next difference
+			// found the next difference
 			return lastSeenKey, from, to, nil
 		}
 

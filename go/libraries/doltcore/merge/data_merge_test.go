@@ -1,4 +1,4 @@
-// Copyright 2023 Dolthub, Inc.
+// Copyright 2025 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -51,18 +51,16 @@ func TestDataMerge(t *testing.T) {
 // new prolly tree node, but none of the keys in that new node have changed from the common ancestor. The merge
 // algorithm assumed that any new node on one side of the merge would necessarily contain a changed key-value pair, but
 // this is not guaranteed. One example where this could cause an error is when all the following are true:
-//   - An insert caused a shift in node boundaries on one side of the merge.
-//   - The node immediately prior to this is unchanged on at least one branch.
-//   - As a result of the shift, both sides of the merge now contain new nodes that have the same end key,
-//     but different start keys.
-//   - One of these two new nodes contains only key-value pairs from the common ancestor, but the other node does not.
-//   - After this point, neither branch has any additional changes from the common ancestor.
+//   - An insert caused a shift in node boundaries on the right side of the merge.
+//   - The node immediately prior to this boundary shift is unchanged on the left side.
+//   - Within the region where node boundaries have shifted, the right side has no other changes, but the left side does.
+//   - After the point where the node boundaries realign, neither branch has any additional changes from the common ancestor.
 //
 // In this situation, the merge algorithm would hit an unexpected EOF error while attempting to diff the two nodes.
 //
 // The below table recreates these conditions: inserting the key 15 shifts the node boundaries, resulting in the right
-// branch containing a node with keys ranging from _ to _, all of which match the ancestor. The left branch contains
-// a node with keys ranging from _ to _, which also includes the key 40.
+// branch containing a new node with keys ranging from 32 to 47, all of which match the ancestor. The left branch contains
+// a new node with keys ranging from 37 to 58, including an additional inserted key 40.
 var shiftingNodeBoundariesTest = func() dataMergeTest {
 	charString := strings.Repeat("1", 255)
 	var rows []sql.Row

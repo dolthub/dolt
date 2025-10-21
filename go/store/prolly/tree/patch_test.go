@@ -210,6 +210,7 @@ func TestPatchGeneratorFromRoots(t *testing.T) {
 		dfr, err = PatchGeneratorFromRoots(ctx, ns, ns, fromRoot, toRoot, desc)
 		require.NoError(t, err)
 		_, _, isMore, err = dfr.Next(ctx)
+		require.NoError(t, err)
 		require.True(t, isMore)
 
 		dif, diffType, isMore, err = dfr.split(ctx)
