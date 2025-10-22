@@ -144,10 +144,10 @@ func benchmarkSysbenchQuery(b *testing.B, getQuery func(int) string) {
 
 		idx := 0
 		buf := sql.NewByteBuffer(16000)
-		if ri2, ok := iter.(sql.RowIter2); ok && ri2.IsRowIter2(ctx) {
+		if ri2, ok := iter.(sql.ValueRowIter); ok && ri2.CanSupport(ctx) {
 			for {
 				idx++
-				row, err := ri2.Next2(ctx)
+				row, err := ri2.NextValueRow(ctx)
 				if err != nil {
 					break
 				}
