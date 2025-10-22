@@ -2112,6 +2112,11 @@ func RunBranchActivityTests(t *testing.T, harness DoltEnginetestHarness) {
 		t.Run(script.Name, func(t *testing.T) {
 			harness = harness.NewHarness(t)
 			defer harness.Close()
+			
+			// Initialize branch activity tracking for this test
+			ctx := context.Background()
+			doltdb.BranchActivityInit(ctx)
+			
 			enginetest.TestScript(t, harness, script)
 		})
 

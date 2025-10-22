@@ -77,7 +77,7 @@ var BranchActivityTests = []queries.ScriptTest{
 				Expected: []sql.Row{{1}, {2}, {3}},
 			},
 			{
-				Query:            "SLEEP(1)", // stats update is async, give it a moment
+				Query:            "SELECT SLEEP(1)", // stats update is async, give it a moment
 				SkipResultsCheck: true,
 			},
 			{
