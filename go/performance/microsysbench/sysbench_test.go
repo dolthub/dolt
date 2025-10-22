@@ -43,7 +43,8 @@ const (
 		" `k` int NOT NULL DEFAULT '0'," +
 		" `c` char(120) NOT NULL DEFAULT ''," +
 		" `pad` char(60) NOT NULL DEFAULT ''," +
-		" PRIMARY KEY (`id`)" +
+		" PRIMARY KEY (`id`)," +
+		" KEY `k_1` (`k`)" +
 		");"
 )
 
@@ -56,26 +57,18 @@ func BenchmarkOltpPointSelect(b *testing.B) {
 	})
 }
 
-// unfiltered
-// BenchmarkTableScan-14    	     589	   1992973 ns/op	 2948649 B/op	   62181 allocs/op
-// BenchmarkTableScan-14    	     900	   1132013 ns/op	 1842067 B/op	   12363 allocs/op
 func BenchmarkTableScan(b *testing.B) {
 	benchmarkSysbenchQuery(b, func(int) string {
 		return "SELECT * FROM sbtest1"
 	})
 }
 
-// filtered benchmarks
-// BenchmarkTableScanFiltered-14    	     511	   2202072 ns/op	 1589325 B/op	   52146 allocs/op
-// BenchmarkTableScanFiltered-14    	     645	   1779981 ns/op	 1840009 B/op	   22400 allocs/op
 func BenchmarkTableScanFiltered(b *testing.B) {
 	benchmarkSysbenchQuery(b, func(int) string {
 		return "SELECT * FROM sbtest1 where k > 10"
 	})
 }
 
-// BenchmarkOltpIndexScan-14    	     163	   7324405 ns/op	 2496428 B/op	   70452 allocs/op
-// BenchmarkOltpIndexScan-14    	     192	   6092641 ns/op	 1405302 B/op	   20691 allocs/op
 func BenchmarkOltpIndexScan(b *testing.B) {
 	benchmarkSysbenchQuery(b, func(int) string {
 		return "SELECT * FROM sbtest1 WHERE k > 0"
