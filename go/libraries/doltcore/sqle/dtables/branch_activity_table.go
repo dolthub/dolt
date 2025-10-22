@@ -28,6 +28,7 @@ import (
 
 var _ sql.Table = (*BranchActivityTable)(nil)
 
+
 // BranchActivityTable is a read-only system table that tracks branch activity
 type BranchActivityTable struct {
 	db        dsess.SqlDatabase
@@ -51,6 +52,7 @@ func (bat *BranchActivityTable) Schema() sql.Schema {
 		{Name: "branch", Type: types.Text, Source: bat.tableName, PrimaryKey: true, Nullable: false, DatabaseSource: bat.db.Name()},
 		{Name: "last_read", Type: types.Datetime, Source: bat.tableName, PrimaryKey: false, Nullable: true, DatabaseSource: bat.db.Name()},
 		{Name: "last_write", Type: types.Datetime, Source: bat.tableName, PrimaryKey: false, Nullable: true, DatabaseSource: bat.db.Name()},
+		{Name: "active_sessions", Type: types.Int32, Source: bat.tableName, PrimaryKey: false, Nullable: false, DatabaseSource: bat.db.Name()},
 		{Name: "system_start_time", Type: types.Datetime, Source: bat.tableName, PrimaryKey: false, Nullable: false, DatabaseSource: bat.db.Name()},
 	}
 }
@@ -102,7 +104,7 @@ func NewBranchActivityItr(ctx *sql.Context, table *BranchActivityTable) (*Branch
 			lastWrite = nil
 		}
 		
-		row := sql.NewRow(data.Branch, lastRead, lastWrite, data.SystemStartTime)
+		row := sql.NewRow(data.Branch, lastRead, lastWrite, data.ActiveSessions, data.SystemStartTime)
 		rows = append(rows, row)
 	}
 
