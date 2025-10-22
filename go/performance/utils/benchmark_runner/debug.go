@@ -25,7 +25,9 @@ var Debug bool
 const envDebug = "DEBUG"
 
 func init() {
-	Debug = true
+	if os.Getenv(envDebug) != "" {
+		Debug = true
+	}
 }
 
 func ExecCommand(ctx context.Context, name string, arg ...string) *exec.Cmd {
