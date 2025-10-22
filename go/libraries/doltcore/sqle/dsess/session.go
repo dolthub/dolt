@@ -181,11 +181,6 @@ func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*branchSta
 			if dbState.Err != nil {
 				return nil, false, dbState.Err
 			}
-
-			// NM4 - record access time for branch activity table.
-			branchRef := ref.NewBranchRef(rev)
-			doltdb.BranchActivityReadEvent(ctx, branchRef.GetPath())
-
 			return branchState, ok, nil
 		}
 	}
@@ -431,6 +426,19 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 		_ = d.setDbSessionVars(ctx, bs, false)
 	}
 
+	// Starting any transaction counts as a read of the given branch. We'll log that. NM4.
+	cdb := ctx.Session.GetCurrentDatabase()
+	_, rev := SplitRevisionDbName(cdb)
+	if rev != "" {
+		doltdb.BranchActivityReadEvent(ctx, rev)
+	} else {
+		rev, ok, err := d.CurrentHead(ctx, cdb)
+		if err == nil && ok {
+			doltdb.BranchActivityReadEvent(ctx, rev)
+		}
+		// Ignore errors here, we just won't log the read activity
+	}
+
 	return tx, nil
 }
 
@@ -663,7 +671,7 @@ func (d *DoltSession) DoltCommit(
 
 		return ws, commit, err
 	}
-
+	// NM4 - we may need to record branch activity write event here.
 	return d.commitCurrentHead(ctx, dbName, tx, commitFunc)
 }
 

@@ -32,6 +32,12 @@ type statsSessionContextKeyType struct{}
 // reads/writes from these sessions in branch activity tracking.
 var StatsSessionContextKey = statsSessionContextKeyType{}
 
+type eventSessionContextKeyType struct{}
+
+// EventSessionContextKey is used to mark sql sessions which are related to backround event. We don't want to count
+// reads/writes from these sessions in branch activity tracking.
+var EventSessionContextKey = eventSessionContextKeyType{}
+
 // BranchActivityData represents activity data for a single branch
 type BranchActivityData struct {
 	Branch          string
@@ -88,10 +94,7 @@ func BranchActivityInit(ctx context.Context) {
 
 // BranchActivityReadEvent records when a branch is read/accessed
 func BranchActivityReadEvent(ctx context.Context, branch string) {
-	if activityChan == nil {
-		return
-	}
-	if ctx.Value(StatsSessionContextKey) != nil {
+	if ignoreEvent(ctx) {
 		return
 	}
 
@@ -108,10 +111,7 @@ func BranchActivityReadEvent(ctx context.Context, branch string) {
 
 // BranchActivityWriteEvent records when a branch is written/updated
 func BranchActivityWriteEvent(ctx context.Context, branch string) {
-	if activityChan == nil {
-		return
-	}
-	if ctx.Value(StatsSessionContextKey) != nil {
+	if ignoreEvent(ctx) {
 		return
 	}
 
@@ -124,6 +124,19 @@ func BranchActivityWriteEvent(ctx context.Context, branch string) {
 	default:
 		// Lots of traffic. drop the event
 	}
+}
+
+func ignoreEvent(ctx context.Context) bool {
+	if activityChan == nil {
+		return true
+	}
+	if ctx.Value(StatsSessionContextKey) != nil {
+		return true
+	}
+	if ctx.Value(EventSessionContextKey) != nil {
+		return true
+	}
+	return false
 }
 
 // GetBranchActivity returns activity data for all branches (tracked and untracked)
