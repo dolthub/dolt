@@ -189,13 +189,19 @@ func GetFieldValue(ctx context.Context, td val.TupleDesc, i int, tup val.Tuple, 
 		return v, nil
 
 	case val.YearEnc:
-		year, _ := td.GetYear(i, tup)
+		year, ok := td.GetYear(i, tup)
+		if !ok {
+			return v, nil
+		}
 		v.Val = make([]byte, 2)
 		binary.LittleEndian.PutUint16(v.Val, uint16(year))
 		return v, nil
 
 	case val.StringEnc, val.ByteStringEnc:
 		v.Val = td.GetField(i, tup)
+		if len(v.Val) == 0 {
+			return v, nil
+		}
 		v.Val = v.Val[:len(v.Val)-1] // trim trailing NUL character
 		return v, nil
 
@@ -217,16 +223,21 @@ func GetFieldValue(ctx context.Context, td val.TupleDesc, i int, tup val.Tuple, 
 				return v, err
 			}
 		}
-		return
+		return v, nil
 
 	case val.StringAddrEnc, val.BytesAddrEnc:
-		h := hash.New(td.GetField(i, tup))
+		h, ok := td.GetAddr(i, tup)
+		if !ok {
+			return v, nil
+		}
 		v.WrappedVal = val.NewByteArray(ctx, h, ns)
 		return v, nil
 
 	case val.JSONAddrEnc:
-		// TODO: figure out how to utilize with TextStorage, instead of always deserializing
-		h := hash.New(td.GetField(i, tup))
+		h, ok := td.GetAddr(i, tup)
+		if !ok {
+			return v, nil
+		}
 		v.Val, err = ns.ReadBytes(ctx, h)
 		if err != nil {
 			return v, err
