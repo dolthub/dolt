@@ -20,6 +20,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	gms "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/eventscheduler"
 	"github.com/dolthub/go-mysql-server/sql"
@@ -475,7 +476,11 @@ func configureEventScheduler(config *SqlEngineConfig, engine *gms.Engine, ctxFac
 		if err != nil {
 			return nil, err
 		}
-		return ctxFactory(context.Background(), sql.WithSession(sess)), nil
+
+		rootCtx := context.Background()
+		markedCtx := context.WithValue(rootCtx, doltdb.EventSessionContextKey, true)
+
+		return ctxFactory(markedCtx, sql.WithSession(sess)), nil
 	}
 
 	// A hidden env var allows overriding the event scheduler period for testing. This option is not

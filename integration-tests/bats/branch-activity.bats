@@ -28,15 +28,14 @@ teardown() {
 # Helper function to start an idle dolt sql connection on a specific branch
 start_idle_connection() {
     local branch=$1
-    
+    [ -n "$branch" ] || fail "Expected non-empty string, got empty"
+
     # Do nothing connection to keep the branch activ
-    dolt sql --use-db "repo1/$branch" &
+    dolt --use-db "repo1/$branch" sql -q "SELECT SLEEP(60)" &
     local pid=$!
     
     # Store the PID for cleanup
     echo $pid >> $BATS_TMPDIR/idle_connections_$$
-    
-    return $pid
 }
 
 # Helper function to cleanup idle connections
@@ -60,11 +59,9 @@ cleanup_idle_connections() {
     sleep 1
     
     # Now test that branch activity table shows the activity
-    run dolt sql -q "SELECT COUNT(*) FROM dolt_branch_activity WHERE last_read IS NOT NULL;"
+    run dolt sql -q "SELECT branch FROM dolt_branch_activity where last_read IS NOT NULL"
     [ $status -eq 0 ]
-    
-    # Should have at least some branches with read activity
-    run dolt sql -q "SELECT branch FROM dolt_branch_activity WHERE last_read IS NOT NULL ORDER BY branch;"
-    [ $status -eq 0 ]
-    
+    [[ "$output" =~ "main" ]] || false
+    [[ "$output" =~ "feature1" ]] || false
+    [[ "$output" =~ "feature2" ]] || false
 }
