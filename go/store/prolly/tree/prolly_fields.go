@@ -17,6 +17,7 @@ package tree
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -180,11 +181,17 @@ func GetFieldValue(ctx context.Context, td val.TupleDesc, i int, tup val.Tuple, 
 	case val.Int8Enc, val.Int16Enc, val.Int32Enc, val.Int64Enc,
 		val.Uint8Enc, val.Uint16Enc, val.Uint32Enc, val.Uint64Enc,
 		val.Float32Enc, val.Float64Enc, val.DecimalEnc, val.Bit64Enc,
-		val.DateEnc, val.DatetimeEnc, val.TimeEnc, val.YearEnc,
+		val.DateEnc, val.DatetimeEnc, val.TimeEnc,
 		val.EnumEnc, val.SetEnc,
 		val.JSONEnc, val.GeometryEnc,
 		val.Hash128Enc, val.CommitAddrEnc, val.CellEnc:
 		v.Val = td.GetField(i, tup)
+		return v, nil
+
+	case val.YearEnc:
+		year, _ := td.GetYear(i, tup)
+		v.Val = make([]byte, 2)
+		binary.LittleEndian.PutUint16(v.Val, uint16(year))
 		return v, nil
 
 	case val.StringEnc, val.ByteStringEnc:
@@ -194,19 +201,21 @@ func GetFieldValue(ctx context.Context, td val.TupleDesc, i int, tup val.Tuple, 
 
 	case val.GeomAddrEnc:
 		// TODO: until GeometryEnc is removed, we must check if GeomAddrEnc is a GeometryEnc
-		if b, ok := td.GetGeometry(i, tup); ok {
-			v.Val = b
-			return v, nil
+		var ok bool
+		v.Val, ok = td.GetGeometry(i, tup)
+		if ok {
+			_, err = deserializeGeometry(v.Val) // TODO: on successful deserialize, this work is wasted
+			if err == nil {
+				return v, nil
+			}
 		}
 		// TODO: have GeometryAddr implement TextStorage
-		if h, ok := td.GetGeometryAddr(i, tup); ok {
-			var b []byte
-			b, err = ns.ReadBytes(ctx, h)
+		h, ok := td.GetGeometryAddr(i, tup)
+		if ok {
+			v.Val, err = ns.ReadBytes(ctx, h)
 			if err != nil {
 				return v, err
 			}
-			v.Val = b
-			return v, nil
 		}
 		return
 
