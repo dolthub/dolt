@@ -17,7 +17,6 @@ package doltdb
 import (
 	"context"
 	"sort"
-	"strings"
 	"sync"
 	"time"
 
@@ -47,7 +46,6 @@ type BranchActivityData struct {
 	LastRead        *time.Time
 	LastWrite       *time.Time
 	SystemStartTime time.Time
-	ActiveSessions  int
 }
 
 type branchActivityEvent struct {
@@ -160,6 +158,7 @@ func ignoreEvent(ctx context.Context, branch string) bool {
 }
 
 // GetBranchActivity returns activity data for all branches (tracked and untracked)
+// The sessionCounts parameter allows external callers to provide session counting
 func GetBranchActivity(ctx *sql.Context, ddb *DoltDB) ([]BranchActivityData, error) {
 	if activityChan == nil {
 		return nil, nil
@@ -178,27 +177,13 @@ func GetBranchActivity(ctx *sql.Context, ddb *DoltDB) ([]BranchActivityData, err
 		branches[branchRef.GetPath()] = true
 	}
 
-	// Count active sessions per branch from ProcessList
-	sessionCounts := make(map[string]int)
-	if ctx.ProcessList != nil {
-		processes := ctx.ProcessList.Processes()
-		for _, process := range processes {
-			if process.Database != "" && strings.Contains(process.Database, "/") {
-				parts := strings.SplitN(process.Database, "/", 2)
-				if len(parts) == 2 {
-					branch := parts[1]
-					sessionCounts[branch]++
-				}
-			}
-		}
-	}
+	// sessionCounts is provided by the caller
 
 	result := make([]BranchActivityData, 0, len(branches))
 	for branch := range branches {
 		data := BranchActivityData{
 			Branch:          branch,
 			SystemStartTime: systemStartTime,
-			ActiveSessions:  sessionCounts[branch], // Get count from ProcessList
 		}
 
 		if readTime, exists := branchReadTimes[branch]; exists {
