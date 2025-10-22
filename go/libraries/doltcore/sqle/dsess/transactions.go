@@ -240,8 +240,13 @@ func doltCommit(ctx *sql.Context,
 			// is the value which we are trying to commit.
 			start := time.Now()
 
+			tableResolver, err := GetTableResolver(ctx)
+			if err != nil {
+				return nil, nil, err
+			}
 			result, err := merge.MergeRoots(
 				ctx,
+				tableResolver,
 				pending.Roots.Staged,
 				curRootVal,
 				pending.Roots.Head,
@@ -493,16 +498,13 @@ func (tx *DoltTransaction) mergeRoots(
 	mergeOpts editor.Options,
 ) (*doltdb.WorkingSet, error) {
 
+	tableResolver, err := GetTableResolver(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	if !rootsEqual(existingWorkingSet.WorkingRoot(), workingSet.WorkingRoot()) {
-		result, err := merge.MergeRoots(
-			ctx,
-			existingWorkingSet.WorkingRoot(),
-			workingSet.WorkingRoot(),
-			startState.WorkingRoot(),
-			workingSet,
-			startState,
-			mergeOpts,
-			merge.MergeOpts{})
+		result, err := merge.MergeRoots(ctx, tableResolver, existingWorkingSet.WorkingRoot(), workingSet.WorkingRoot(), startState.WorkingRoot(), workingSet, startState, mergeOpts, merge.MergeOpts{})
 		if err != nil {
 			return nil, err
 		}
@@ -510,15 +512,7 @@ func (tx *DoltTransaction) mergeRoots(
 	}
 
 	if !rootsEqual(existingWorkingSet.StagedRoot(), workingSet.StagedRoot()) {
-		result, err := merge.MergeRoots(
-			ctx,
-			existingWorkingSet.StagedRoot(),
-			workingSet.StagedRoot(),
-			startState.StagedRoot(),
-			workingSet,
-			startState,
-			mergeOpts,
-			merge.MergeOpts{})
+		result, err := merge.MergeRoots(ctx, tableResolver, existingWorkingSet.StagedRoot(), workingSet.StagedRoot(), startState.StagedRoot(), workingSet, startState, mergeOpts, merge.MergeOpts{})
 		if err != nil {
 			return nil, err
 		}

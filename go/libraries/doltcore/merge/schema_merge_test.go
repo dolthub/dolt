@@ -1639,7 +1639,7 @@ func testSchemaMergeHelper(t *testing.T, tests []schemaMergeTest, flipSides bool
 				var eo editor.Options
 				eo = eo.WithDeaf(editor.NewInMemDeaf(a.VRW()))
 				// attempt merge before skipping to assert no panics
-				result, err := merge.MergeRoots(sql.NewContext(ctx), l, r, a, rootish{r}, rootish{a}, eo, mo)
+				result, err := merge.MergeRoots(sql.NewContext(ctx), doltdb.SimpleTableResolver{}, l, r, a, rootish{r}, rootish{a}, eo, mo)
 				maybeSkip(t, a.VRW().Format(), test, flipSides)
 
 				if test.conflict {

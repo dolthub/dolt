@@ -141,6 +141,22 @@ func (d *DoltSession) Provider() DoltDatabaseProvider {
 	return d.provider
 }
 
+func (d *DoltSession) GetTableResolver(ctx *sql.Context, dbName string) (doltdb.TableResolver, error) {
+	if dbName == "" {
+		// If no database is selected, there's no situation where we need to resolve nonlocal tables.
+		return doltdb.SimpleTableResolver{}, nil
+	}
+	sqlDB, err := d.Provider().Database(ctx, dbName)
+	if err != nil {
+		return nil, err
+	}
+	dbWithRoot, ok := sqlDB.(doltdb.TableResolver)
+	if !ok {
+		return nil, fmt.Errorf("database does not have roots")
+	}
+	return dbWithRoot, nil
+}
+
 // GenericProvider returns the sql.MutableDatabaseProvider for this session. This allows access to the provider without
 // incurring import cycles in some cases.
 func (d *DoltSession) GenericProvider() sql.MutableDatabaseProvider {
@@ -155,6 +171,12 @@ func (d *DoltSession) StatsProvider() sql.StatsProvider {
 // DSessFromSess retrieves a dolt session from a standard sql.Session
 func DSessFromSess(sess sql.Session) *DoltSession {
 	return sess.(*DoltSession)
+}
+
+func GetTableResolver(ctx *sql.Context) (doltdb.TableResolver, error) {
+	dbName := ctx.GetCurrentDatabase()
+	dSess := DSessFromSess(ctx.Session)
+	return dSess.GetTableResolver(ctx, dbName)
 }
 
 // lookupDbState is the private version of LookupDbState, returning a struct that has more information available than
@@ -776,7 +798,11 @@ func (d *DoltSession) newPendingCommit(ctx *sql.Context, branchState *branchStat
 		}
 	}
 
-	pendingCommit, err := actions.GetCommitStaged(ctx, roots, branchState.WorkingSet(), mergeParentCommits, branchState.dbData.Ddb, props)
+	tableResolver, err := GetTableResolver(ctx)
+	if err != nil {
+		return nil, err
+	}
+	pendingCommit, err := actions.GetCommitStaged(ctx, tableResolver, roots, branchState.WorkingSet(), mergeParentCommits, branchState.dbData.Ddb, props)
 	if err != nil {
 		// Special case for nothing staged, which is not an error
 		if _, ok := err.(actions.NothingStaged); !ok {

@@ -487,8 +487,12 @@ func handleMerge(ctx *sql.Context, dbData env.DbData[*sql.Context], stashName st
 		return nil, nil, nil, err
 	}
 
+	tableResolver, err := dsess.GetTableResolver(ctx)
+	if err != nil {
+		return nil, nil, nil, err
+	}
 	opts := editor.Options{Deaf: bulkDbEaFactory(dbData), Tempdir: tmpDir}
-	result, err := merge.MergeRoots(ctx, curWorkingRoot, stashRoot, parentRoot, stashRoot, parentCommit, opts, merge.MergeOpts{IsCherryPick: false})
+	result, err := merge.MergeRoots(ctx, tableResolver, curWorkingRoot, stashRoot, parentRoot, stashRoot, parentCommit, opts, merge.MergeOpts{IsCherryPick: false})
 	if err != nil {
 		return nil, nil, nil, err
 	}

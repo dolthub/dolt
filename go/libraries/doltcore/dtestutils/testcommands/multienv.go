@@ -17,6 +17,7 @@ package testcommands
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/go-mysql-server/sql"
 	"os"
 	"path/filepath"
 
@@ -240,7 +241,7 @@ func (mr *MultiRepoTestSetup) GetDB(dbName string) *doltdb.DoltDB {
 }
 
 func (mr *MultiRepoTestSetup) CommitWithWorkingSet(dbName string) *doltdb.Commit {
-	ctx := context.Background()
+	ctx := sql.NewEmptyContext()
 	dEnv := mr.envs[dbName]
 	ws, err := dEnv.WorkingSet(ctx)
 	if err != nil {
@@ -262,7 +263,7 @@ func (mr *MultiRepoTestSetup) CommitWithWorkingSet(dbName string) *doltdb.Commit
 	if err != nil {
 		panic("couldn't get roots: " + err.Error())
 	}
-	pendingCommit, err := actions.GetCommitStaged(ctx, roots, ws, mergeParentCommits, dEnv.DbData(ctx).Ddb, actions.CommitStagedProps{
+	pendingCommit, err := actions.GetCommitStaged(ctx, doltdb.SimpleTableResolver{}, roots, ws, mergeParentCommits, dEnv.DbData(ctx).Ddb, actions.CommitStagedProps{
 		Message:    "auto commit",
 		Date:       t,
 		AllowEmpty: true,

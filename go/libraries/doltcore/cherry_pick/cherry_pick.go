@@ -249,6 +249,11 @@ func cherryPick(ctx *sql.Context, dSess *dsess.DoltSession, roots doltdb.Roots, 
 		return nil, "", nil, err
 	}
 
+	tableResolver, err := dSess.GetTableResolver(ctx, dbName)
+	if err != nil {
+		return nil, "", nil, err
+	}
+
 	doltDB, ok := dSess.GetDoltDB(ctx, dbName)
 	if !ok {
 		return nil, "", nil, fmt.Errorf("failed to get doltDB")
@@ -333,7 +338,7 @@ func cherryPick(ctx *sql.Context, dSess *dsess.DoltSession, roots doltdb.Roots, 
 		IsCherryPick:        true,
 		KeepSchemaConflicts: false,
 	}
-	result, err := merge.MergeRoots(ctx, roots.Working, cherryRoot, parentRoot, cherryCommit, parentCommit, dbState.EditOpts(), mo)
+	result, err := merge.MergeRoots(ctx, tableResolver, roots.Working, cherryRoot, parentRoot, cherryCommit, parentCommit, dbState.EditOpts(), mo)
 	if err != nil {
 		return result, "", nil, err
 	}

@@ -17,6 +17,7 @@ package cvcmds
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"io"
 	"strings"
 
@@ -71,6 +72,22 @@ func (cmd VerifyConstraintsCmd) Exec(ctx context.Context, commandStr string, arg
 	help, _ := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, verifyConstraintsDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
+	queryist, err := cliCtx.QueryEngine(ctx)
+	if err != nil {
+		cli.PrintErrln(errhand.VerboseErrorFromError(err))
+		return 1
+	}
+	sqlCtx := queryist.Context
+
+	dSess := dsess.DSessFromSess(sqlCtx.Session)
+	dbName := sqlCtx.GetCurrentDatabase()
+
+	tableResolver, err := dSess.GetTableResolver(sqlCtx, dbName)
+	if err != nil {
+		cli.PrintErrln(errhand.VerboseErrorFromError(err))
+		return 1
+	}
+
 	verifyAllRows := apr.Contains(cli.AllFlag)
 	outputOnly := apr.Contains(cli.OutputOnlyFlag)
 	working, err := dEnv.WorkingRoot(ctx)
@@ -111,7 +128,7 @@ func (cmd VerifyConstraintsCmd) Exec(ctx context.Context, commandStr string, arg
 		return commands.HandleVErrAndExitCode(errhand.BuildDError("Unable to get head commit hash.").AddCause(err).Build(), nil)
 	}
 
-	endRoot, tablesWithViolations, err := merge.AddForeignKeyViolations(ctx, working, comparingRoot, tableSet, h)
+	endRoot, tablesWithViolations, err := merge.AddForeignKeyViolations(sqlCtx, tableResolver, working, comparingRoot, tableSet, h)
 	if err != nil {
 		return commands.HandleVErrAndExitCode(errhand.BuildDError("Unable to process constraint violations.").AddCause(err).Build(), nil)
 	}

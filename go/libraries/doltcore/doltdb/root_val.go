@@ -1191,55 +1191,47 @@ func (root *rootValue) PutForeignKeyCollection(ctx context.Context, fkc *Foreign
 // ValidateForeignKeysOnSchemas ensures that all foreign keys' tables are present, removing any foreign keys where the declared
 // table is missing, and returning an error if a key is in an invalid state or a referenced table is missing. Does not
 // check any tables' row data.
-func ValidateForeignKeysOnSchemas(ctx context.Context, root RootValue) (RootValue, error) {
+func ValidateForeignKeysOnSchemas(ctx *sql.Context, tableResolver TableResolver, root RootValue) (RootValue, error) {
 	fkCollection, err := root.GetForeignKeyCollection(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	allTablesSlice, err := UnionTableNames(ctx, root)
-	if err != nil {
-		return nil, err
-	}
 	allTablesSet := make(map[TableName]schema.Schema)
-	var rootObjNamesMap map[TableName]struct{}
-	for _, tableName := range allTablesSlice {
-		tbl, ok, err := root.GetTable(ctx, tableName)
+	getTableSchema := func(tableName TableName) (schema.Schema, bool, error) {
+		if tableSch, ok := allTablesSet[tableName]; ok {
+			return tableSch, true, nil
+		}
+		_, tbl, ok, err := tableResolver.GetDoltTableInsensitiveWithRoot(ctx, root, tableName)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
 		if !ok {
-			if rootObjNamesMap == nil {
-				rootObjNames, err := root.FilterRootObjectNames(ctx, allTablesSlice)
-				if err != nil {
-					return nil, err
-				}
-				rootObjNamesMap = make(map[TableName]struct{})
-				for _, rootObjName := range rootObjNames {
-					rootObjNamesMap[rootObjName] = struct{}{}
-				}
-			}
-			if _, ok = rootObjNamesMap[tableName]; ok {
-				continue
-			}
-			return nil, fmt.Errorf("found table `%s` in staging but could not load for foreign key check", tableName)
+			return nil, false, nil
 		}
 		tblSch, err := tbl.GetSchema(ctx)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
 		allTablesSet[tableName] = tblSch
+		return tblSch, true, nil
 	}
 
 	// some of these checks are sanity checks and should never happen
 	allForeignKeys := fkCollection.AllKeys()
 	for _, foreignKey := range allForeignKeys {
-		tblSch, existsInRoot := allTablesSet[foreignKey.TableName]
+		tblSch, existsInRoot, err := getTableSchema(foreignKey.TableName)
+		if err != nil {
+			return nil, err
+		}
 		if existsInRoot {
 			if err := foreignKey.ValidateTableSchema(tblSch); err != nil {
 				return nil, err
 			}
-			parentSch, existsInRoot := allTablesSet[foreignKey.ReferencedTableName]
+			parentSch, existsInRoot, err := getTableSchema(foreignKey.ReferencedTableName)
+			if err != nil {
+				return nil, err
+			}
 			if !existsInRoot {
 				return nil, fmt.Errorf("foreign key `%s` requires the referenced table `%s`", foreignKey.Name, foreignKey.ReferencedTableName)
 			}
