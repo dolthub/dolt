@@ -42,6 +42,7 @@ func CountFilesInDir(t *testing.T, path string) int {
 func TestArchiveStreamWriterRemove(t *testing.T) {
 	t.Run("RemoveOnFinishedWriterRemovesFile", func(t *testing.T) {
 		dir := t.TempDir()
+		// Empty Dir -> 1 for "." found by WalkDir.
 		require.Equal(t, 1, CountFilesInDir(t, dir))
 		asw, err := NewArchiveStreamWriter(dir)
 		require.NoError(t, err)

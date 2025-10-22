@@ -72,5 +72,6 @@ func TestPushTemptfCleanup(t *testing.T) {
 		return nil
 	})
 	require.NoError(t, err)
+	// Empty Dir -> for "." found by WalkDir
 	require.Equal(t, 1, cnt)
 }
