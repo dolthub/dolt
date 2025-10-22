@@ -1177,7 +1177,6 @@ func resolveAsOfCommitRef(ctx *sql.Context, db Database, head ref.DoltRef, commi
 	}
 
 	cs, err := doltdb.NewCommitSpec(commitRef)
-
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1195,6 +1194,8 @@ func resolveAsOfCommitRef(ctx *sql.Context, db Database, head ref.DoltRef, commi
 	if !ok {
 		return nil, nil, doltdb.ErrGhostCommitEncountered
 	}
+
+	doltdb.BranchActivityReadEvent(ctx, commitRef)
 
 	root, err := cm.GetRootValue(ctx)
 	if err != nil {

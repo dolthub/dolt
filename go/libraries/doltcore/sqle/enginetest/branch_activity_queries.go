@@ -73,11 +73,15 @@ var BranchActivityTests = []queries.ScriptTest{
 				},
 			},
 			{
+				Query:    "SELECT * FROM t AS OF 'HEAD'",
+				Expected: []sql.Row{{1}, {2}, {3}},
+			},
+			{
 				Query:    "SELECT * FROM t AS OF 'new_branch'",
 				Expected: []sql.Row{{1}, {2}, {3}},
 			},
 			{
-				Query:            "SELECT SLEEP(1)", // stats update is async, give it a moment
+				Query:            "SELECT SLEEP(1)", // activity update is async, give it a moment
 				SkipResultsCheck: true,
 			},
 			{
@@ -85,6 +89,10 @@ var BranchActivityTests = []queries.ScriptTest{
 				Expected: []sql.Row{
 					{"new_branch", false, false},
 				},
+			},
+			{
+				Query:    "SELECT branch, last_read IS NULL, last_write IS NULL FROM dolt_branch_activity WHERE branch = 'HEAD'",
+				Expected: []sql.Row{},
 			},
 		},
 	},

@@ -52,6 +52,8 @@ type branchActivityEvent struct {
 	eventType int
 }
 
+// All these variables are effectively globals. Reasonable given they should keep the state for the lifetime of the
+// sql-server process. Does mean that we need to reset them between tests.
 var (
 	branchActivityMutex sync.RWMutex
 	branchReadTimes     map[string]time.Time
@@ -92,9 +94,19 @@ func BranchActivityInit(ctx context.Context) {
 	}()
 }
 
+// BranchActivityClose clears the branch activity tracking information. This is not intended to be called during normal operation,
+// but it allows us to clean up between tests.
+func BranchActivityReset() {
+	branchActivityMutex.Lock()
+	defer branchActivityMutex.Unlock()
+	activityChan = nil
+	branchReadTimes = nil
+	branchWriteTimes = nil
+}
+
 // BranchActivityReadEvent records when a branch is read/accessed
 func BranchActivityReadEvent(ctx context.Context, branch string) {
-	if ignoreEvent(ctx) {
+	if ignoreEvent(ctx, branch) {
 		return
 	}
 
@@ -111,7 +123,7 @@ func BranchActivityReadEvent(ctx context.Context, branch string) {
 
 // BranchActivityWriteEvent records when a branch is written/updated
 func BranchActivityWriteEvent(ctx context.Context, branch string) {
-	if ignoreEvent(ctx) {
+	if ignoreEvent(ctx, branch) {
 		return
 	}
 
@@ -126,7 +138,7 @@ func BranchActivityWriteEvent(ctx context.Context, branch string) {
 	}
 }
 
-func ignoreEvent(ctx context.Context) bool {
+func ignoreEvent(ctx context.Context, branch string) bool {
 	if activityChan == nil {
 		return true
 	}
@@ -136,6 +148,10 @@ func ignoreEvent(ctx context.Context) bool {
 	if ctx.Value(EventSessionContextKey) != nil {
 		return true
 	}
+	if branch == "HEAD" {
+		return true
+	}
+
 	return false
 }
 

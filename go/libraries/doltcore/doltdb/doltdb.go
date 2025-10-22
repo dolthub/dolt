@@ -583,11 +583,6 @@ func (ddb *DoltDB) ResolveCommitRef(ctx context.Context, doltRef ref.DoltRef) (*
 		return nil, ErrGhostCommitEncountered
 	}
 
-	if doltRef.GetType() == ref.BranchRefType {
-		branchName := doltRef.GetPath()
-		BranchActivityReadEvent(ctx, branchName)
-	}
-
 	return NewCommit(ctx, ddb.vrw, ddb.ns, commitVal)
 }
 
