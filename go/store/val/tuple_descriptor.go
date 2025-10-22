@@ -486,7 +486,7 @@ func (td TupleDesc) GetGeometry(i int, tup Tuple) (v []byte, ok bool) {
 func (td TupleDesc) GetGeometryAddr(i int, tup Tuple) (hash.Hash, bool) {
 	// TODO: we are support both Geometry and GeometryAddr for now, so we can't expect just one
 	// td.expectEncoding(i, GeomAddrEnc)
-	return td.getAddr(i, tup)
+	return td.GetAddr(i, tup)
 }
 
 func (td TupleDesc) GetHash128(i int, tup Tuple) (v []byte, ok bool) {
@@ -509,7 +509,7 @@ func (td TupleDesc) GetExtended(i int, tup Tuple) ([]byte, bool) {
 // GetExtendedAddr reads a hash from the ith field of the Tuple.
 func (td TupleDesc) GetExtendedAddr(i int, tup Tuple) (hash.Hash, bool) {
 	td.ExpectEncoding(i, ExtendedAddrEnc)
-	return td.getAddr(i, tup)
+	return td.GetAddr(i, tup)
 }
 
 // GetExtended reads a byte slice from the ith field of the Tuple.
@@ -521,17 +521,17 @@ func (td TupleDesc) GetExtendedAdaptiveValue(i int, tup Tuple) ([]byte, bool) {
 
 func (td TupleDesc) GetJSONAddr(i int, tup Tuple) (hash.Hash, bool) {
 	td.ExpectEncoding(i, JSONAddrEnc)
-	return td.getAddr(i, tup)
+	return td.GetAddr(i, tup)
 }
 
 func (td TupleDesc) GetStringAddr(i int, tup Tuple) (hash.Hash, bool) {
 	td.ExpectEncoding(i, StringAddrEnc)
-	return td.getAddr(i, tup)
+	return td.GetAddr(i, tup)
 }
 
 func (td TupleDesc) GetBytesAddr(i int, tup Tuple) (hash.Hash, bool) {
 	td.ExpectEncoding(i, BytesAddrEnc)
-	return td.getAddr(i, tup)
+	return td.GetAddr(i, tup)
 }
 
 // GetBytesAdaptiveValue returns either a []byte or a BytesWrapper, but Go doesn't allow us to use a single type for that.
@@ -574,10 +574,10 @@ func (td TupleDesc) GetStringAdaptiveValue(i int, vs ValueStore, tup Tuple) (int
 
 func (td TupleDesc) GetCommitAddr(i int, tup Tuple) (v hash.Hash, ok bool) {
 	td.ExpectEncoding(i, CommitAddrEnc)
-	return td.getAddr(i, tup)
+	return td.GetAddr(i, tup)
 }
 
-func (td TupleDesc) getAddr(i int, tup Tuple) (hash.Hash, bool) {
+func (td TupleDesc) GetAddr(i int, tup Tuple) (hash.Hash, bool) {
 	b := td.GetField(i, tup)
 	if b == nil {
 		return hash.Hash{}, false
