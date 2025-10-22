@@ -17,6 +17,7 @@ package dtablefunctions
 import (
 	"fmt"
 	"io"
+	"log"
 	"sort"
 	"strings"
 
@@ -507,14 +508,30 @@ func shouldIgnoreDelta(delta diff.TableDelta, ignorePatterns doltdb.IgnorePatter
 
 // shouldFilterDoltIgnoreTable filters out the dolt_ignore table itself to match dolt diff behavior.
 func shouldFilterDoltIgnoreTable(delta diff.TableDelta) bool {
-	return isIgnoreTable(delta.FromName) || isIgnoreTable(delta.ToName)
+	fromMatch := isIgnoreTable(delta.FromName)
+	toMatch := isIgnoreTable(delta.ToName)
+
+	// DEBUG: Temporary logging to diagnose DoltgreSQL test failure
+	if fromMatch || toMatch {
+		log.Printf("[DEBUG] shouldFilterDoltIgnoreTable: FromName(Name='%s', Schema='%s', Match=%v), ToName(Name='%s', Schema='%s', Match=%v)\n",
+			delta.FromName.Name, delta.FromName.Schema, fromMatch,
+			delta.ToName.Name, delta.ToName.Schema, toMatch)
+	}
+
+	return fromMatch || toMatch
 }
 
 // isIgnoreTable checks if a TableName refers to the dolt_ignore table,
 // handling both simple names and schema-qualified names (e.g., "public.dolt_ignore" in DoltgreSQL).
 func isIgnoreTable(tableName doltdb.TableName) bool {
+	// DEBUG: investigating DoltgreSQL dolt_ignore filter issue
+	log.Printf("[DEBUG] isIgnoreTable called: Name='%s', Schema='%s', IgnoreTableName='%s'\n",
+		tableName.Name, tableName.Schema, doltdb.IgnoreTableName)
+
 	// Check unqualified name
 	if strings.EqualFold(tableName.Name, doltdb.IgnoreTableName) {
+		log.Printf("[DEBUG] isIgnoreTable: MATCH on Name='%s' (Schema='%s', Constant='%s')\n",
+			tableName.Name, tableName.Schema, doltdb.IgnoreTableName)
 		return true
 	}
 
@@ -522,7 +539,11 @@ func isIgnoreTable(tableName doltdb.TableName) bool {
 	// Extract the base table name by splitting on the last dot
 	if idx := strings.LastIndex(tableName.Name, "."); idx != -1 {
 		baseTableName := tableName.Name[idx+1:]
-		return strings.EqualFold(baseTableName, doltdb.IgnoreTableName)
+		if strings.EqualFold(baseTableName, doltdb.IgnoreTableName) {
+			log.Printf("[DEBUG] isIgnoreTable: MATCH on qualified Name='%s' extracted='%s' (Schema='%s', Constant='%s')\n",
+				tableName.Name, baseTableName, tableName.Schema, doltdb.IgnoreTableName)
+			return true
+		}
 	}
 
 	return false
