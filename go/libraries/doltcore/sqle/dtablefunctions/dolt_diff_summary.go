@@ -17,7 +17,6 @@ package dtablefunctions
 import (
 	"fmt"
 	"io"
-	"log"
 	"sort"
 	"strings"
 
@@ -302,11 +301,6 @@ func (ds *DiffSummaryTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.
 			return NewDiffSummaryTableFunctionRowIter([]*diff.TableDeltaSummary{}), nil
 		}
 
-		// Filter out dolt_ignore table itself to match dolt diff behavior
-		if shouldFilterDoltIgnoreTable(delta) {
-			return NewDiffSummaryTableFunctionRowIter([]*diff.TableDeltaSummary{}), nil
-		}
-
 		summ, err := getSummaryForDelta(ctx, delta, sqledb, fromDetails, toDetails, true)
 		if err != nil {
 			return nil, err
@@ -508,43 +502,5 @@ func shouldIgnoreDelta(delta diff.TableDelta, ignorePatterns doltdb.IgnorePatter
 
 // shouldFilterDoltIgnoreTable filters out the dolt_ignore table itself to match dolt diff behavior.
 func shouldFilterDoltIgnoreTable(delta diff.TableDelta) bool {
-	fromMatch := isIgnoreTable(delta.FromName)
-	toMatch := isIgnoreTable(delta.ToName)
-
-	// DEBUG: Temporary logging to diagnose DoltgreSQL test failure
-	if fromMatch || toMatch {
-		log.Printf("[DEBUG] shouldFilterDoltIgnoreTable: FromName(Name='%s', Schema='%s', Match=%v), ToName(Name='%s', Schema='%s', Match=%v)\n",
-			delta.FromName.Name, delta.FromName.Schema, fromMatch,
-			delta.ToName.Name, delta.ToName.Schema, toMatch)
-	}
-
-	return fromMatch || toMatch
-}
-
-// isIgnoreTable checks if a TableName refers to the dolt_ignore table,
-// handling both simple names and schema-qualified names (e.g., "public.dolt_ignore" in DoltgreSQL).
-func isIgnoreTable(tableName doltdb.TableName) bool {
-	// DEBUG: investigating DoltgreSQL dolt_ignore filter issue
-	log.Printf("[DEBUG] isIgnoreTable called: Name='%s', Schema='%s', IgnoreTableName='%s'\n",
-		tableName.Name, tableName.Schema, doltdb.IgnoreTableName)
-
-	// Check unqualified name
-	if strings.EqualFold(tableName.Name, doltdb.IgnoreTableName) {
-		log.Printf("[DEBUG] isIgnoreTable: MATCH on Name='%s' (Schema='%s', Constant='%s')\n",
-			tableName.Name, tableName.Schema, doltdb.IgnoreTableName)
-		return true
-	}
-
-	// Check if Name contains a schema-qualified reference (e.g., "public.dolt_ignore")
-	// Extract the base table name by splitting on the last dot
-	if idx := strings.LastIndex(tableName.Name, "."); idx != -1 {
-		baseTableName := tableName.Name[idx+1:]
-		if strings.EqualFold(baseTableName, doltdb.IgnoreTableName) {
-			log.Printf("[DEBUG] isIgnoreTable: MATCH on qualified Name='%s' extracted='%s' (Schema='%s', Constant='%s')\n",
-				tableName.Name, baseTableName, tableName.Schema, doltdb.IgnoreTableName)
-			return true
-		}
-	}
-
-	return false
+	return strings.EqualFold(delta.FromName.Name, doltdb.IgnoreTableName) || strings.EqualFold(delta.ToName.Name, doltdb.IgnoreTableName)
 }
