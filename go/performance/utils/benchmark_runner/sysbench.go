@@ -97,10 +97,6 @@ func (t *sysbenchTesterImpl) prepare(ctx context.Context) error {
 		cmd.Env = os.Environ()
 		cmd.Env = append(cmd.Env, fmt.Sprintf(luaPathEnvVarTemplate, lp))
 	}
-	if Debug {
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-	}
 	return cmd.Run()
 }
 
