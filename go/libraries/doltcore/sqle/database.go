@@ -107,6 +107,7 @@ var _ rebase.RebasePlanDatabase = Database{}
 var _ sql.SchemaValidator = Database{}
 var _ sql.SchemaDatabase = Database{}
 var _ sql.DatabaseSchema = Database{}
+var _ doltdb.TableResolver = Database{}
 
 type ReadOnlyDatabase struct {
 	Database
