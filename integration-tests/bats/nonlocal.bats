@@ -357,20 +357,16 @@ SQL
   ! [[ "$output" =~ "table_alias_missing" ]] || false
 }
 
-@test "nonlocal: creating a nonlocal table creates it on the appropriate branch" {
-  skip
+@test "nonlocal: creating a table matching a nonlocal table rule results in an error" {
   dolt checkout -b other
   dolt sql <<SQL
   INSERT INTO dolt_nonlocal_tables(table_name, target_ref, options) VALUES
       ("nonlocal_table", "main", "immediate");
-
-  CREATE TABLE nonlocal_table (pk char(8) PRIMARY KEY);
-  INSERT INTO nonlocal_table VALUES ("amzmapqt");
 SQL
 
-  run dolt ls main
-  [ "$status" -eq 0 ]
-  [[ "$output" =~ "nonlocal_table" ]] || false
+  run dolt sql -q "CREATE TABLE nonlocal_table (pk char(8) PRIMARY KEY);"
+  [ "$status" -eq 1 ]
+  [[ "$output" =~ "Cannot create table name nonlocal_table because it matches a name present in dolt_nonlocal_tables." ]] || false
 }
 
 @test "nonlocal: adding an existing table to nonlocal tables errors" {
