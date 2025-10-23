@@ -38,7 +38,7 @@ func TestCmpChunkTableWriter(t *testing.T) {
 	// Setup a TableReader to read compressed chunks out of
 	ti, err := parseTableIndexByCopy(ctx, buff, &UnlimitedQuotaProvider{})
 	require.NoError(t, err)
-	tr, err := newTableReader(ti, tableReaderAtFromBytes(buff), fileBlockSize)
+	tr, err := newTableReader(t.Context(), ti, tableReaderAtFromBytes(buff), fileBlockSize)
 	require.NoError(t, err)
 	defer tr.close()
 
@@ -88,7 +88,7 @@ func TestCmpChunkTableWriter(t *testing.T) {
 	outputBuff := output.Bytes()
 	outputTI, err := parseTableIndexByCopy(ctx, outputBuff, &UnlimitedQuotaProvider{})
 	require.NoError(t, err)
-	outputTR, err := newTableReader(outputTI, tableReaderAtFromBytes(buff), fileBlockSize)
+	outputTR, err := newTableReader(t.Context(), outputTI, tableReaderAtFromBytes(buff), fileBlockSize)
 	require.NoError(t, err)
 	defer outputTR.close()
 

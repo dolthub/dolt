@@ -27,6 +27,7 @@ import (
 	"errors"
 	"io"
 	"sort"
+	"sync/atomic"
 
 	"github.com/golang/snappy"
 	"golang.org/x/sync/errgroup"
@@ -168,23 +169,34 @@ type tableReaderAt interface {
 type tableReader struct {
 	idx       tableIndex
 	r         tableReaderAt
-	prefixes  []uint64
 	blockSize uint64
+
+	// Prefixes are quota allocated and need to be released when no longer used.
+	// Each index.prefixes() call allocated a new slice. newTableReader makes a
+	// new refCnt, and clone() keeps the same prefixes and increments the refcnt.
+	// When the refcnt reaches 0, we call prefixesCleanup().
+	prefixes        []uint64
+	prefixesCnt     *int32
+	prefixesCleanup func()
 }
 
 // newTableReader parses a valid nbs table byte stream and returns a reader. buff must end with an NBS index
 // and footer, though it may contain an unspecified number of bytes before that data. r should allow
 // retrieving any desired range of bytes from the table.
-func newTableReader(index tableIndex, r tableReaderAt, blockSize uint64) (tableReader, error) {
-	p, err := index.prefixes()
+func newTableReader(ctx context.Context, index tableIndex, r tableReaderAt, blockSize uint64) (tableReader, error) {
+	p, cleanup, err := index.prefixes(ctx)
 	if err != nil {
 		return tableReader{}, err
 	}
+	cnt := new(int32)
+	*cnt = 1
 	return tableReader{
-		prefixes:  p,
-		idx:       index,
-		r:         r,
-		blockSize: blockSize,
+		idx:             index,
+		r:               r,
+		blockSize:       blockSize,
+		prefixes:        p,
+		prefixesCnt:     cnt,
+		prefixesCleanup: cleanup,
 	}, nil
 }
 
@@ -740,6 +752,10 @@ func (tr tableReader) currentSize() uint64 {
 }
 
 func (tr tableReader) close() error {
+	tr.prefixes = nil
+	if atomic.AddInt32(tr.prefixesCnt, -1) == 0 {
+		tr.prefixesCleanup()
+	}
 	return errors.Join(tr.idx.Close(), tr.r.Close())
 }
 
@@ -753,11 +769,14 @@ func (tr tableReader) clone() (tableReader, error) {
 		idx.Close()
 		return tableReader{}, err
 	}
+	atomic.AddInt32(tr.prefixesCnt, 1)
 	return tableReader{
-		prefixes:  tr.prefixes,
-		idx:       idx,
-		r:         r,
-		blockSize: tr.blockSize,
+		prefixes:        tr.prefixes,
+		prefixesCleanup: tr.prefixesCleanup,
+		prefixesCnt:     tr.prefixesCnt,
+		idx:             idx,
+		r:               r,
+		blockSize:       tr.blockSize,
 	}, nil
 }
 

@@ -15,9 +15,16 @@
 package nbs
 
 import (
+	"crypto/rand"
+	"io"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/dolthub/dolt/go/store/chunks"
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 func TestCompressedChunkIsEmpty(t *testing.T) {
@@ -51,4 +58,58 @@ func TestCanReadAhead(t *testing.T) {
 		assert.Equal(t, c.ex.end, end)
 		assert.Equal(t, c.ex.can, can)
 	}
+}
+
+func TestTableReaderIndexQuota(t *testing.T) {
+	// Write a simple archive file which has non-sense chunks which claim to be snappy encoded.
+	dir := t.TempDir()
+	writer, err := NewCmpChunkTableWriter(dir)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		writer.Remove()
+	})
+
+	var h hash.Hash
+	_, err = io.ReadFull(rand.Reader, h[:])
+	tableFilePath := filepath.Join(dir, h.String())
+	var bytes [1024]byte
+	count := 1024
+	for i := 0; i < count; i++ {
+		_, err := io.ReadFull(rand.Reader, bytes[:])
+		require.NoError(t, err)
+		chunk := chunks.NewChunk(bytes[:])
+		cmpChunk := ChunkToCompressedChunk(chunk)
+		_, err = writer.AddChunk(cmpChunk)
+		require.NoError(t, err)
+	}
+	_, _, err = writer.Finish()
+	require.NoError(t, err)
+	err = writer.FlushToFile(tableFilePath)
+	require.NoError(t, err)
+
+	t.Run("Success", func(t *testing.T) {
+		ctx := t.Context()
+		q := NewUnlimitedMemQuotaProvider()
+		assert.Equal(t, uint64(0), q.Usage())
+		// stats := &Stats{}
+		reader, err := nomsFileTableReader(ctx, tableFilePath, h, uint32(count), q)
+		require.NoError(t, err)
+		// Immediately after opening the quota acocunts for in memory index.
+		expectedQuotaUsage :=
+			indexSize(uint32(count)) + // The bytes for the index
+				footerSize + // The footer
+				uint64(uint64Size*count) + // The bigendian interpreted prefixes
+				uint64(offsetSize*(count/2)) // The offset bytes, for half the chunks. The other half reuses buff.
+		assert.Equal(t, expectedQuotaUsage, q.Usage())
+		// Cloning doesn't change quota usage.
+		cloned, err := reader.clone()
+		require.NoError(t, err)
+		assert.Equal(t, expectedQuotaUsage, q.Usage())
+		// Closing the original keeps the quota while cloned is around.
+		require.NoError(t, reader.close())
+		assert.Equal(t, expectedQuotaUsage, q.Usage())
+		// Closing the clone does release the quota.
+		require.NoError(t, cloned.close())
+		assert.Equal(t, uint64(0), q.Usage())
+	})
 }
