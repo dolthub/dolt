@@ -58,6 +58,7 @@ echo '
             "env": [
               { "name": "GOMAXPROCS", "value": "7" },
               { "name": "GOEXPERIMENT", "value": "greenteagc" },
+              { "name": "DOLT_EXPERIMENTAL_VALUE_ROW", "value": "true" },
               { "name": "ACTOR", "value": "'$ACTOR'" },
               { "name": "ACTOR_EMAIL", "value": "'$ACTOR_EMAIL'" },
               { "name": "REPO_ACCESS_TOKEN", "value": "'$REPO_ACCESS_TOKEN'" }
