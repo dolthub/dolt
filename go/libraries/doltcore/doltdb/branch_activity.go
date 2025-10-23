@@ -20,6 +20,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/go-mysql-server/sql"
 )
 
@@ -49,25 +50,31 @@ type BranchActivityData struct {
 }
 
 type branchActivityEvent struct {
+	database  string
 	branch    string
 	timestamp time.Time
 	eventType int
+}
+
+type branchActivityKey struct {
+	database string
+	branch   string
 }
 
 // All these variables are effectively globals. Reasonable given they should keep the state for the lifetime of the
 // sql-server process. Does mean that we need to reset them between tests.
 var (
 	branchActivityMutex sync.RWMutex
-	branchReadTimes     map[string]time.Time
-	branchWriteTimes    map[string]time.Time
+	branchReadTimes     map[branchActivityKey]time.Time
+	branchWriteTimes    map[branchActivityKey]time.Time
 	systemStartTime     time.Time
 	activityChan        *chan branchActivityEvent
 )
 
 func BranchActivityInit(ctx context.Context) {
 	systemStartTime = time.Now()
-	branchReadTimes = make(map[string]time.Time)
-	branchWriteTimes = make(map[string]time.Time)
+	branchReadTimes = make(map[branchActivityKey]time.Time)
+	branchWriteTimes = make(map[branchActivityKey]time.Time)
 	ac := make(chan branchActivityEvent, 64) // lifetime in buffer will be very short.
 	activityChan = &ac
 
@@ -78,14 +85,16 @@ func BranchActivityInit(ctx context.Context) {
 		for {
 			select {
 			case event := <-(*activityChan):
+				key := branchActivityKey{database: event.database, branch: event.branch}
+
 				branchActivityMutex.Lock()
 				if event.eventType == READ {
-					if existing, exists := branchReadTimes[event.branch]; !exists || event.timestamp.After(existing) {
-						branchReadTimes[event.branch] = event.timestamp
+					if existing, exists := branchReadTimes[key]; !exists || event.timestamp.After(existing) {
+						branchReadTimes[key] = event.timestamp
 					}
 				} else if event.eventType == WRITE {
-					if existing, exists := branchWriteTimes[event.branch]; !exists || event.timestamp.After(existing) {
-						branchWriteTimes[event.branch] = event.timestamp
+					if existing, exists := branchWriteTimes[key]; !exists || event.timestamp.After(existing) {
+						branchWriteTimes[key] = event.timestamp
 					}
 				}
 				branchActivityMutex.Unlock()
@@ -114,13 +123,16 @@ func BranchActivityReset() {
 }
 
 // BranchActivityReadEvent records when a branch is read/accessed
-func BranchActivityReadEvent(ctx context.Context, branch string) {
+func BranchActivityReadEvent(ctx *sql.Context, branch string) {
 	if ignoreEvent(ctx, branch) {
 		return
 	}
 
+	db, _ := dsess.SplitRevisionDbName(ctx.GetCurrentDatabase())
+
 	select {
 	case *activityChan <- branchActivityEvent{
+		database:  db,
 		branch:    branch,
 		timestamp: time.Now(),
 		eventType: READ,
@@ -131,13 +143,16 @@ func BranchActivityReadEvent(ctx context.Context, branch string) {
 }
 
 // BranchActivityWriteEvent records when a branch is written/updated
-func BranchActivityWriteEvent(ctx context.Context, branch string) {
+func BranchActivityWriteEvent(ctx *sql.Context, branch string) {
 	if ignoreEvent(ctx, branch) {
 		return
 	}
 
+	db, _ := dsess.SplitRevisionDbName(ctx.GetCurrentDatabase())
+
 	select {
 	case *activityChan <- branchActivityEvent{
+		database:  db,
 		branch:    branch,
 		timestamp: time.Now(),
 		eventType: WRITE,
@@ -172,6 +187,8 @@ func GetBranchActivity(ctx *sql.Context, ddb *DoltDB) ([]BranchActivityData, err
 		return nil, nil
 	}
 
+	database := ddb.databaseName
+
 	branchActivityMutex.RLock()
 	defer branchActivityMutex.RUnlock()
 
@@ -192,11 +209,13 @@ func GetBranchActivity(ctx *sql.Context, ddb *DoltDB) ([]BranchActivityData, err
 			SystemStartTime: systemStartTime,
 		}
 
-		if readTime, exists := branchReadTimes[branch]; exists {
+		key := branchActivityKey{database: database, branch: branch}
+
+		if readTime, exists := branchReadTimes[key]; exists {
 			data.LastRead = &readTime
 		}
 
-		if writeTime, exists := branchWriteTimes[branch]; exists {
+		if writeTime, exists := branchWriteTimes[key]; exists {
 			data.LastWrite = &writeTime
 		}
 
