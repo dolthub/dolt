@@ -17,11 +17,12 @@ package val
 import (
 	"context"
 	"database/sql/driver"
+	"unsafe"
+
+	"github.com/dolthub/dolt/go/store/hash"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
-
-	"github.com/dolthub/dolt/go/store/hash"
 )
 
 const BytePeekLength = 128
@@ -88,7 +89,7 @@ func (t *TextStorage) Unwrap(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return string(buf), nil
+	return *(*string)(unsafe.Pointer(&buf)), nil
 }
 
 func (t *TextStorage) UnwrapAny(ctx context.Context) (interface{}, error) {
@@ -132,7 +133,7 @@ func (t *TextStorage) Value() (driver.Value, error) {
 	if err != nil {
 		return "", err
 	}
-	return string(buf), nil
+	return *(*string)(unsafe.Pointer(&buf)), nil
 }
 
 type ByteArray struct {
@@ -198,7 +199,8 @@ func (b *ByteArray) ToString(ctx context.Context) (string, error) {
 	if len(buf) < toShow {
 		toShow = len(buf)
 	}
-	return string(buf[:toShow]), nil
+	res := buf[:toShow]
+	return *(*string)(unsafe.Pointer(&res)), nil
 }
 
 // Hash implements sql.AnyWrapper by returning the Dolt hash.
