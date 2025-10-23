@@ -2109,18 +2109,16 @@ func RunDoltTestsTableTests(t *testing.T, harness DoltEnginetestHarness) {
 
 func RunBranchActivityTests(t *testing.T, harness DoltEnginetestHarness) {
 	for _, script := range BranchActivityTests {
+		// Initialize branch activity tracking for this test.
+		ctx := context.Background()
+		doltdb.BranchActivityInit(ctx)
+
 		t.Run(script.Name, func(t *testing.T) {
 			harness = harness.NewHarness(t)
 			defer harness.Close()
 
-			// Initialize branch activity tracking for this test.
-			ctx := context.Background()
-			doltdb.BranchActivityInit(ctx)
-
 			enginetest.TestScript(t, harness, script)
-
-			doltdb.BranchActivityReset()
 		})
-
+		doltdb.BranchActivityReset()
 	}
 }
