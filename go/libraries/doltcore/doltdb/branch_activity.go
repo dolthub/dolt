@@ -205,7 +205,6 @@ func (t *BranchActivityTracker) GetBranchActivity(ctx *sql.Context, ddb *DoltDB)
 	return result, nil
 }
 
-
 // BranchActivityReadEvent records when a branch is read/accessed - this is for backward compatibility
 // The database parameter should be extracted by the caller using dsess.SplitRevisionDbName
 func BranchActivityReadEvent(ctx *sql.Context, database, branch string) {
