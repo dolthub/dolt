@@ -17,7 +17,7 @@ do
     case "$1" in
 
         --new-new) export DOLT_DEFAULT_BIN_FORMAT="__DOLT__" &&
-            export ENABLE_ROW_ITER_2=true
+            export DOLT_EXPERIMENTAL_VALUE_ROW=true
             ;;
 
         --no-exchange) export SINGLE_THREAD_FEATURE_FLAG=true
@@ -31,7 +31,7 @@ do
         --single) export GOMAXPROCS=1
             ;;
 
-        --row2) export ENABLE_ROW_ITER_2=true
+        --value-row) export DOLT_EXPERIMENTAL_VALUE_ROW=true
             ;;
 
         --journal) export DOLT_ENABLE_CHUNK_JOURNAL=true
@@ -138,7 +138,7 @@ sysbench \
 
 unset DOLT_ENABLE_CHUNK_JOURNAL
 unset DOLT_DEFAULT_BIN_FORMAT
-unset ENABLE_ROW_ITER_2
+unset DOLT_EXPERIMENTAL_VALUE_ROW
 unset SINGLE_THREAD_FEATURE_FLAG
 unset GOMAXPROCS
 
