@@ -101,6 +101,11 @@ func BranchActivityInit(ctx context.Context) {
 func BranchActivityReset() {
 	branchActivityMutex.Lock()
 	defer branchActivityMutex.Unlock()
+
+	if activityChan != nil {
+		// This will cause the background goroutine to exit
+		close(*activityChan)
+	}
 	activityChan = nil
 	branchReadTimes = nil
 	branchWriteTimes = nil

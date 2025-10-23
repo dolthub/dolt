@@ -426,7 +426,7 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 		_ = d.setDbSessionVars(ctx, bs, false)
 	}
 
-	// Starting any transaction counts as a read of the given branch. We'll log that. NM4.
+	// Starting any transaction counts as a read of the given branch. We'll record in the branch activity.
 	cdb := ctx.Session.GetCurrentDatabase()
 	_, rev := SplitRevisionDbName(cdb)
 	if rev != "" {
