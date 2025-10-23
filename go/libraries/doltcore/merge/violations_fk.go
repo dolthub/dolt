@@ -18,10 +18,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/dolthub/go-mysql-server/sql"
 	"io"
 	"time"
 
+	"github.com/dolthub/go-mysql-server/sql"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
