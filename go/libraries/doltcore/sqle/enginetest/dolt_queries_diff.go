@@ -6897,11 +6897,13 @@ var QueryDiffTableScriptTests = []queries.ScriptTest{
 	{
 		Name: "dolt_diff_summary respects dolt_ignore: dropped tables",
 		SetUpScript: []string{
+			"INSERT INTO dolt_ignore VALUES ('dummy', true);", // Create dolt_ignore in initial commit
 			"CREATE TABLE will_be_ignored (pk int primary key);",
 			"CREATE TABLE will_not_be_ignored (pk int primary key);",
 			"CALL DOLT_ADD('.')",
 			"CALL DOLT_COMMIT('-m', 'add tables');",
-			"INSERT INTO dolt_ignore VALUES ('will_be_ignored', true);",
+			"DELETE FROM dolt_ignore WHERE pattern = 'dummy';",          // Remove dummy row
+			"INSERT INTO dolt_ignore VALUES ('will_be_ignored', true);", // Now this modifies dolt_ignore
 			"DROP TABLE will_be_ignored;",
 			"DROP TABLE will_not_be_ignored;",
 		},
