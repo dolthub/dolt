@@ -320,11 +320,6 @@ func (ds *DiffSummaryTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.
 			continue
 		}
 
-		// Filter out dolt_ignore table itself to match dolt diff behavior
-		if shouldFilterDoltIgnoreTable(delta) {
-			continue
-		}
-
 		summ, err := getSummaryForDelta(ctx, delta, sqledb, fromDetails, toDetails, false)
 		if err != nil {
 			return nil, err
@@ -498,9 +493,4 @@ func shouldIgnoreDelta(delta diff.TableDelta, ignorePatterns doltdb.IgnorePatter
 
 	// For modified/renamed tables, don't ignore (consistent with dolt diff behavior)
 	return false
-}
-
-// shouldFilterDoltIgnoreTable filters out the dolt_ignore table itself to match dolt diff behavior.
-func shouldFilterDoltIgnoreTable(delta diff.TableDelta) bool {
-	return strings.EqualFold(delta.FromName.Name, doltdb.IgnoreTableName) || strings.EqualFold(delta.ToName.Name, doltdb.IgnoreTableName)
 }
