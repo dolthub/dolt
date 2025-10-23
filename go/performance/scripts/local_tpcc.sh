@@ -21,10 +21,6 @@ do
         --new-nbf) export DOLT_DEFAULT_BIN_FORMAT="__DOLT__"
             ;;
 
-        --new-new) export DOLT_DEFAULT_BIN_FORMAT="__DOLT__" &&
-            export DOLT_EXPERIMENTAL_VALUE_ROW=true
-            ;;
-
         --no-exchange) export SINGLE_THREAD_FEATURE_FLAG=true
             ;;
 
@@ -133,6 +129,5 @@ echo "DOLT_DEFAULT_BIN_FORMAT='$DOLT_DEFAULT_BIN_FORMAT'"
 echo ""
 
 unset DOLT_DEFAULT_BIN_FORMAT
-unset DOLT_EXPERIMENTAL_VALUE_ROW
 unset SINGLE_THREAD_FEATURE_FLAG
 unset GOMAXPROCS
