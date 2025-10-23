@@ -1644,7 +1644,7 @@ func (ddb *DoltDB) UpdateWorkingSet(
 	_, err = ddb.db.withReplicationStatusController(replicationStatus).UpdateWorkingSet(ctx, ds, *wsSpec, prevHash)
 
 	if err == nil {
-		// NM4 - record branch write activity for dolt_branch_activity
+		// record branch write activity for dolt_branch_activity. Errors here are non-fatal, ignored.
 		if headRef, e2 := workingSetRef.ToHeadRef(); e2 == nil && headRef.GetType() == ref.BranchRefType {
 			branchName := headRef.GetPath()
 			BranchActivityWriteEvent(ctx, branchName)
