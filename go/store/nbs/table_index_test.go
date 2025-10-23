@@ -128,8 +128,9 @@ func BenchmarkFindPrefix(b *testing.B) {
 	defer idx.Close()
 	assert.Equal(b, uint32(596), idx.chunkCount())
 
-	prefixes, err := idx.prefixes()
+	prefixes, cleanup, err := idx.prefixes(b.Context())
 	require.NoError(b, err)
+	defer cleanup()
 
 	b.Run("benchmark prefixIdx()", func(b *testing.B) {
 		var ord uint32

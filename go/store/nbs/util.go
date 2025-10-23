@@ -69,10 +69,10 @@ func IterChunks(ctx context.Context, rd io.ReadSeeker, cb func(chunk chunks.Chun
 	return nil
 }
 
-func GetTableIndexPrefixes(ctx context.Context, rd io.ReadSeeker) (prefixes []uint64, err error) {
+func GetTableIndexPrefixes(ctx context.Context, rd io.ReadSeeker) (prefixes []uint64, cleanup func(), err error) {
 	idx, err := readTableIndexByCopy(ctx, rd, &UnlimitedQuotaProvider{})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	defer func() {
 		cerr := idx.Close()
@@ -81,9 +81,9 @@ func GetTableIndexPrefixes(ctx context.Context, rd io.ReadSeeker) (prefixes []ui
 		}
 	}()
 
-	prefixes, err = idx.prefixes()
+	prefixes, cleanup, err = idx.prefixes(ctx)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	return
 }

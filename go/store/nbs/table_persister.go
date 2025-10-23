@@ -131,7 +131,7 @@ const (
 
 // planRangeCopyConjoin computes a conjoin plan for tablePersisters that can conjoin
 // chunkSources using range copies (copy only chunk records, not chunk indexes).
-func planRangeCopyConjoin(sources chunkSources, stats *Stats) (compactionPlan, error) {
+func planRangeCopyConjoin(ctx context.Context, sources chunkSources, stats *Stats) (compactionPlan, error) {
 	mode := conjoinModeUnknown
 	var sized []sourceWithSize
 	for _, src := range sources {
@@ -161,7 +161,7 @@ func planRangeCopyConjoin(sources chunkSources, stats *Stats) (compactionPlan, e
 	case conjoinModeArchive:
 		return planArchiveConjoin(sized, stats)
 	case conjoinModeTable:
-		return planTableConjoin(sized, stats)
+		return planTableConjoin(ctx, sized, stats)
 	default:
 		return compactionPlan{}, errors.New("runtime error: unknown conjoin mode")
 	}
@@ -172,7 +172,7 @@ func calcChunkRangeSize(index tableIndex) uint64 {
 	return index.tableFileSize() - indexSize(index.chunkCount()) - footerSize
 }
 
-func planTableConjoin(sources []sourceWithSize, stats *Stats) (plan compactionPlan, err error) {
+func planTableConjoin(ctx context.Context, sources []sourceWithSize, stats *Stats) (plan compactionPlan, err error) {
 	// place largest chunk sources at the beginning of the conjoin
 	plan.sources = chunkSourcesByDescendingDataSize{sws: sources}
 	sort.Sort(plan.sources)
@@ -208,14 +208,16 @@ func planTableConjoin(sources []sourceWithSize, stats *Stats) (plan compactionPl
 			return compactionPlan{}, err
 		}
 
-		ordinals, err := index.ordinals()
+		ordinals, cleanup, err := index.ordinals(ctx)
 		if err != nil {
 			return compactionPlan{}, err
 		}
-		prefixes, err := index.prefixes()
+		defer cleanup()
+		prefixes, cleanup, err := index.prefixes(ctx)
 		if err != nil {
 			return compactionPlan{}, err
 		}
+		defer cleanup()
 
 		// Add all the prefix tuples from this index to the list of all prefixIndexRecs, modifying the ordinals such that all entries from the 1st item in sources come after those in the 0th and so on.
 		for j, prefix := range prefixes {

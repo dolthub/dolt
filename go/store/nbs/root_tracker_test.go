@@ -528,7 +528,7 @@ func (ftp fakeTablePersister) Persist(ctx context.Context, mt *memTable, haver c
 		return nil, gcBehavior_Continue, err
 	}
 
-	cs, err := newTableReader(ti, tableReaderAtFromBytes(data), fileBlockSize)
+	cs, err := newTableReader(ctx, ti, tableReaderAtFromBytes(data), fileBlockSize)
 	if err != nil {
 		return emptyChunkSource{}, gcBehavior_Continue, err
 	}
@@ -552,7 +552,7 @@ func (ftp fakeTablePersister) ConjoinAll(ctx context.Context, sources chunkSourc
 		return nil, nil, err
 	}
 
-	cs, err := newTableReader(ti, tableReaderAtFromBytes(data), fileBlockSize)
+	cs, err := newTableReader(ctx, ti, tableReaderAtFromBytes(data), fileBlockSize)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -624,7 +624,7 @@ func (ftp fakeTablePersister) Open(ctx context.Context, name hash.Hash, chunkCou
 		return nil, err
 	}
 
-	cs, err := newTableReader(ti, tableReaderAtFromBytes(data), fileBlockSize)
+	cs, err := newTableReader(ctx, ti, tableReaderAtFromBytes(data), fileBlockSize)
 	if err != nil {
 		return emptyChunkSource{}, err
 	}

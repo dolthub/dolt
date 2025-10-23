@@ -134,10 +134,12 @@ func (cmd InspectCmd) processTableFile(ctx context.Context, path string, fs file
 	}()
 
 	var prefixes []uint64
-	prefixes, err = nbs.GetTableIndexPrefixes(ctx, rdr.(io.ReadSeeker))
+	var cleanup func()
+	prefixes, cleanup, err = nbs.GetTableIndexPrefixes(ctx, rdr.(io.ReadSeeker))
 	if err != nil {
 		return sum, err
 	}
+	defer cleanup()
 
 	sum = &chunkIndexSummary{
 		file:  path,

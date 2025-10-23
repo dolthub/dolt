@@ -51,7 +51,7 @@ func TestPlanCompaction(t *testing.T) {
 		require.NoError(t, err)
 		ti, err := parseTableIndexByCopy(ctx, data, q)
 		require.NoError(t, err)
-		tr, err := newTableReader(ti, tableReaderAtFromBytes(data), fileBlockSize)
+		tr, err := newTableReader(ctx, ti, tableReaderAtFromBytes(data), fileBlockSize)
 		require.NoError(t, err)
 		src := chunkSourceAdapter{tr, name}
 		dataLens = append(dataLens, uint64(len(data))-indexSize(mustUint32(src.count()))-footerSize)
@@ -63,7 +63,7 @@ func TestPlanCompaction(t *testing.T) {
 		}
 	}()
 
-	plan, err := planRangeCopyConjoin(sources, &Stats{})
+	plan, err := planRangeCopyConjoin(ctx, sources, &Stats{})
 	require.NoError(t, err)
 
 	var totalChunks uint32
@@ -78,7 +78,7 @@ func TestPlanCompaction(t *testing.T) {
 	assert.Equal(totalChunks, idx.chunkCount())
 	assert.Equal(totalUnc, idx.totalUncompressedData())
 
-	tr, err := newTableReader(idx, tableReaderAtFromBytes(nil), fileBlockSize)
+	tr, err := newTableReader(ctx, idx, tableReaderAtFromBytes(nil), fileBlockSize)
 	require.NoError(t, err)
 	defer tr.close()
 	for _, content := range tableContents {
