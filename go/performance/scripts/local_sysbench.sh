@@ -16,8 +16,7 @@ while test $# -gt 0
 do
     case "$1" in
 
-        --new-new) export DOLT_DEFAULT_BIN_FORMAT="__DOLT__" &&
-            export DOLT_EXPERIMENTAL_VALUE_ROW=true
+        --new-new) export DOLT_DEFAULT_BIN_FORMAT="__DOLT__"
             ;;
 
         --no-exchange) export SINGLE_THREAD_FEATURE_FLAG=true
@@ -29,9 +28,6 @@ do
 
         # run dolt single threaded
         --single) export GOMAXPROCS=1
-            ;;
-
-        --value-row) export DOLT_EXPERIMENTAL_VALUE_ROW=true
             ;;
 
         --journal) export DOLT_ENABLE_CHUNK_JOURNAL=true
@@ -138,7 +134,6 @@ sysbench \
 
 unset DOLT_ENABLE_CHUNK_JOURNAL
 unset DOLT_DEFAULT_BIN_FORMAT
-unset DOLT_EXPERIMENTAL_VALUE_ROW
 unset SINGLE_THREAD_FEATURE_FLAG
 unset GOMAXPROCS
 
