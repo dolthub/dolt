@@ -2689,36 +2689,15 @@ func (t *WritableDoltTable) createForeignKey(
 			if err != nil {
 				return doltdb.ForeignKey{}, err
 			}
-		}
-
-		_, refTbl, nonlocalTableExists, err := t.db.getNonlocalDoltTable(ctx, root, doltdb.TableName{Name: lwrTableName, Schema: sqlFk.ParentSchema})
-		if err != nil {
-			return doltdb.ForeignKey{}, err
-		}
-		if nonlocalTableExists {
-			if sqlFk.OnDelete != sql.ForeignKeyReferentialAction_NoAction &&
-				sqlFk.OnDelete != sql.ForeignKeyReferentialAction_DefaultAction {
-				return doltdb.ForeignKey{}, fmt.Errorf(
-					"foreign keys referencing nonlocal tables do not support referential actions")
-			}
-			if sqlFk.OnUpdate != sql.ForeignKeyReferentialAction_NoAction &&
-				sqlFk.OnUpdate != sql.ForeignKeyReferentialAction_DefaultAction {
-				return doltdb.ForeignKey{}, fmt.Errorf(
-					"foreign keys referencing nonlocal tables do not support referential actions")
-			}
 		} else {
-			var ok bool
-			refTbl, _, ok, err = doltdb.GetTableInsensitive(ctx, root, doltdb.TableName{Name: sqlFk.ParentTable, Schema: sqlFk.ParentSchema})
+			refTbl, err := t.getDoltTableForFK(ctx, root, lwrTableName, sqlFk)
 			if err != nil {
 				return doltdb.ForeignKey{}, err
 			}
-			if !ok {
-				return doltdb.ForeignKey{}, fmt.Errorf("referenced table `%s` does not exist", sqlFk.ParentTable)
+			refSch, err = refTbl.GetSchema(ctx)
+			if err != nil {
+				return doltdb.ForeignKey{}, err
 			}
-		}
-		refSch, err = refTbl.GetSchema(ctx)
-		if err != nil {
-			return doltdb.ForeignKey{}, err
 		}
 	}
 
@@ -2764,6 +2743,36 @@ func (t *WritableDoltTable) createForeignKey(
 			ReferencedTableColumns: sqlFk.ParentColumns,
 		},
 	}, nil
+}
+
+func (t *WritableDoltTable) getDoltTableForFK(ctx *sql.Context, root doltdb.RootValue, lwrTableName string, sqlFk sql.ForeignKeyConstraint) (refTbl *doltdb.Table, err error) {
+	_, refTbl, nonlocalTableExists, err := t.db.getNonlocalDoltTable(ctx, root, doltdb.TableName{Name: lwrTableName, Schema: sqlFk.ParentSchema})
+	if err != nil {
+		return nil, err
+	}
+	if nonlocalTableExists {
+		if sqlFk.OnDelete != sql.ForeignKeyReferentialAction_NoAction &&
+			sqlFk.OnDelete != sql.ForeignKeyReferentialAction_DefaultAction {
+			return nil, fmt.Errorf(
+				"foreign keys referencing nonlocal tables do not support referential actions")
+		}
+		if sqlFk.OnUpdate != sql.ForeignKeyReferentialAction_NoAction &&
+			sqlFk.OnUpdate != sql.ForeignKeyReferentialAction_DefaultAction {
+			return nil, fmt.Errorf(
+				"foreign keys referencing nonlocal tables do not support referential actions")
+		}
+		return refTbl, nil
+	} else {
+		var ok bool
+		refTbl, _, ok, err = doltdb.GetTableInsensitive(ctx, root, doltdb.TableName{Name: sqlFk.ParentTable, Schema: sqlFk.ParentSchema})
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			return nil, fmt.Errorf("referenced table `%s` does not exist", sqlFk.ParentTable)
+		}
+		return refTbl, nil
+	}
 }
 
 // AddForeignKey implements sql.ForeignKeyTable
