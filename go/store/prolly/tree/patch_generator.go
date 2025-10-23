@@ -17,13 +17,12 @@ package tree
 import (
 	"context"
 	"fmt"
-	"io"
 )
 
 // A Patch represents a single change being applied to a tree.
 // If Level == 0, then this is a change to a single key, and |KeyBelowStart| and |SubtreeCount| are ignored.
 // If Level > 0, then To is either an address or nil, and this patch represents a change to the range (KeyBelowStart, EndKey].
-// An address indicates that the every row in the provided range should be replaced by the rows found by loading the address.
+// An address indicates that the every row in the provided range should be replaced by the rows isMore by loading the address.
 // A nil address indicates that every row in the provided range has been removed.
 type Patch struct {
 	From          Item
@@ -205,7 +204,7 @@ func (td *PatchGenerator[K, O]) advanceToNextDiff(ctx context.Context) (err erro
 // advanceFromPreviousPatch advances the cursors past the end of the previous patches.
 // In the event that the chunk boundaries have shifted between the two versions of the tree,
 // this process might produce additional patches until the boundaries line up again.
-func (td *PatchGenerator[K, O]) advanceFromPreviousPatch(ctx context.Context) (patch Patch, diffType DiffType, err error) {
+func (td *PatchGenerator[K, O]) advanceFromPreviousPatch(ctx context.Context) (patch Patch, diffType DiffType, isMore bool, err error) {
 	if td.previousPatchLevel > 0 {
 		switch td.previousDiffType {
 		case AddedDiff:
@@ -217,7 +216,7 @@ func (td *PatchGenerator[K, O]) advanceFromPreviousPatch(ctx context.Context) (p
 			}
 			err = td.to.advance(ctx)
 			if err != nil {
-				return Patch{}, NoDiff, err
+				return Patch{}, NoDiff, false, err
 			}
 		case RemovedDiff:
 			td.previousKey = td.from.CurrentKey()
@@ -228,13 +227,13 @@ func (td *PatchGenerator[K, O]) advanceFromPreviousPatch(ctx context.Context) (p
 			}
 			err = td.from.advance(ctx)
 			if err != nil {
-				return Patch{}, NoDiff, err
+				return Patch{}, NoDiff, false, err
 			}
 		case ModifiedDiff:
 			td.previousKey = td.to.CurrentKey()
 			err = td.to.advance(ctx)
 			if err != nil {
-				return Patch{}, NoDiff, err
+				return Patch{}, NoDiff, false, err
 			}
 			// Everything less than or equal to the key of the last emitted range has been covered.
 			// Advance the |from| cursor to the first node that contains keys greater than that key.
@@ -247,23 +246,25 @@ func (td *PatchGenerator[K, O]) advanceFromPreviousPatch(ctx context.Context) (p
 					if cmp > 0 {
 						// If this was the very end of the |to| tree, all remaining ranges in |from| have been removed.
 						if !td.to.Valid() {
-							return td.sendRemovedRange(), RemovedDiff, nil
+							return td.sendRemovedRange(), RemovedDiff, true, nil
 						}
 						// The current |from| node contains additional rows that overlap with the new |to| node.
 						// We can encode this as another range.
-						return td.sendModifiedRange()
+						patch, diffType, err = td.sendModifiedRange()
+						return patch, diffType, true, err
 					}
 					// Every value in the from node was covered by the previous diff. Advance it and check again.
 					err = td.from.advance(ctx)
 					if err != nil {
-						return Patch{}, NoDiff, err
+						return Patch{}, NoDiff, false, err
 					}
 					// If we reach the end of the |from| tree, all remaining nodes in |to| have been added.
 					if !td.from.Valid() {
 						if !td.to.Valid() {
-							return Patch{}, NoDiff, io.EOF
+							return Patch{}, NoDiff, false, nil
 						}
-						return td.sendAddedRange()
+						patch, diffType, err = td.sendAddedRange()
+						return patch, diffType, true, err
 					}
 					cmp = td.order.Compare(ctx, K(td.from.CurrentKey()), K(td.previousKey))
 				}
@@ -271,7 +272,7 @@ func (td *PatchGenerator[K, O]) advanceFromPreviousPatch(ctx context.Context) (p
 				// Advancing the from cursor one more time guarantees that both cursors reference chunks with the same start range.
 				err = td.from.advance(ctx)
 				if err != nil {
-					return Patch{}, NoDiff, err
+					return Patch{}, NoDiff, false, err
 				}
 			}
 		}
@@ -286,7 +287,7 @@ func (td *PatchGenerator[K, O]) advanceFromPreviousPatch(ctx context.Context) (p
 			}
 			err = td.from.advance(ctx)
 			if err != nil {
-				return Patch{}, NoDiff, err
+				return Patch{}, NoDiff, false, err
 			}
 		case AddedDiff:
 			td.previousKey = td.to.CurrentKey()
@@ -297,33 +298,39 @@ func (td *PatchGenerator[K, O]) advanceFromPreviousPatch(ctx context.Context) (p
 			}
 			err = td.to.advance(ctx)
 			if err != nil {
-				return Patch{}, NoDiff, err
+				return Patch{}, NoDiff, false, err
 			}
 		case ModifiedDiff:
 			err = td.advanceToNextDiff(ctx)
 			if err != nil {
-				return Patch{}, NoDiff, err
+				return Patch{}, NoDiff, false, err
 			}
 		}
 	}
-	return Patch{}, NoDiff, nil
+	return Patch{}, NoDiff, true, nil
 }
 
-func (td *PatchGenerator[K, O]) Next(ctx context.Context) (patch Patch, diffType DiffType, err error) {
+// Next finds the next key-value pair (including intermediate pairs pointing to child nodes)
+// this is present in |td.to| that is not present in |td.from|.
+// |isMore| is false iff we have exhausted both cursors and there are no more patches. Otherwise, |patch| contains
+// a patch representing that diff.
+// Note that we choose to use |isMore| instead of returning io.EOF because it is more explicit. Callers should
+// check the value of isMore instead of checking for io.EOF.
+func (td *PatchGenerator[K, O]) Next(ctx context.Context) (patch Patch, diffType DiffType, isMore bool, err error) {
 	if td.previousDiffType != NoDiff {
-		patch, diffType, err = td.advanceFromPreviousPatch(ctx)
+		patch, diffType, isMore, err = td.advanceFromPreviousPatch(ctx)
 	}
 	if err != nil || diffType != NoDiff {
-		return patch, diffType, err
+		return patch, diffType, true, err
 	}
 	return td.findNextPatch(ctx)
 }
 
-func (td *PatchGenerator[K, O]) findNextPatch(ctx context.Context) (patch Patch, diffType DiffType, err error) {
+func (td *PatchGenerator[K, O]) findNextPatch(ctx context.Context) (patch Patch, diffType DiffType, isMore bool, err error) {
 	for td.from.Valid() && td.to.Valid() {
 		level, err := td.to.level()
 		if err != nil {
-			return Patch{}, NoDiff, err
+			return Patch{}, NoDiff, false, err
 		}
 		f := td.from.CurrentKey()
 		t := td.to.CurrentKey()
@@ -332,15 +339,16 @@ func (td *PatchGenerator[K, O]) findNextPatch(ctx context.Context) (patch Patch,
 		if cmp == 0 {
 			if !equalcursorValues(td.from, td.to) {
 				if level > 0 {
-					return td.sendModifiedRange()
+					patch, diffType, err = td.sendModifiedRange()
+					return patch, diffType, true, err
 				} else {
-					return td.sendModifiedKey(), ModifiedDiff, nil
+					return td.sendModifiedKey(), ModifiedDiff, true, nil
 				}
 			}
 
 			err = td.advanceToNextDiff(ctx)
 			if err != nil {
-				return Patch{}, NoDiff, err
+				return Patch{}, NoDiff, false, err
 			}
 		} else if level > 0 {
 			// There is a corner case where this *seems* incorrect, but is actually correct.
@@ -349,41 +357,47 @@ func (td *PatchGenerator[K, O]) findNextPatch(ctx context.Context) (patch Patch,
 			// emit a Patch on the |to| node. However, if the |to| node does exist in the |from| tree, then every node
 			// between the current |from| node and that node has been deleted. This is encoded as a Patch whose node
 			// is the |to| node and whose key range is the entire range of the removed nodes.
-			return td.sendModifiedRange()
+			patch, diffType, err = td.sendModifiedRange()
+			return patch, diffType, true, err
 		} else if cmp < 0 {
-			return td.sendRemovedKey(), RemovedDiff, nil
+			return td.sendRemovedKey(), RemovedDiff, true, nil
 		} else {
-			return td.sendAddedKey(), AddedDiff, nil
+			return td.sendAddedKey(), AddedDiff, true, nil
 		}
 	}
 
 	if td.from.Valid() {
 		if td.from.nd.level > 0 {
-			return td.sendRemovedRange(), RemovedDiff, nil
+			return td.sendRemovedRange(), RemovedDiff, true, nil
 		}
-		return td.sendRemovedKey(), RemovedDiff, nil
+		return td.sendRemovedKey(), RemovedDiff, true, nil
 	}
 	if td.to.Valid() {
 		if td.to.nd.level > 0 {
-			return td.sendAddedRange()
+			patch, diffType, err = td.sendAddedRange()
+			return patch, diffType, true, err
 		}
-		return td.sendAddedKey(), AddedDiff, nil
+		return td.sendAddedKey(), AddedDiff, true, nil
 	}
 
-	return Patch{}, NoDiff, io.EOF
+	return Patch{}, NoDiff, false, nil
 }
 
 // split iterates through the children of the current nodes to find the first change.
-// We only call this if both nodes are non-leaf nodes with different hashes, so we're guaranteed to find one.
-func (td *PatchGenerator[K, O]) split(ctx context.Context) (patch Patch, diffType DiffType, err error) {
+// We only call this if both nodes are non-leaf nodes with different hashes.
+// However, this does not mean that we're guaranteed to find a patch in the children nodes.
+// If both child chunks have the same end key but different start keys, one may be a subset of the other.
+// Thus it's not a guarantee that the returned patch is from the child node: the patch could occur after
+// the current nodes, or this could even return EOF if there are no more changes between the two trees.
+func (td *PatchGenerator[K, O]) split(ctx context.Context) (patch Patch, diffType DiffType, isMore bool, err error) {
 	if td.previousPatchLevel == 0 {
-		return Patch{}, NoDiff, fmt.Errorf("can't split a patch that's already at the leaf level")
+		return Patch{}, NoDiff, false, fmt.Errorf("can't split a patch that's already at the leaf level")
 	}
 	switch td.previousDiffType {
 	case RemovedDiff:
 		fromChild, err := fetchChild(ctx, td.from.nrw, td.from.currentRef())
 		if err != nil {
-			return Patch{}, NoDiff, err
+			return Patch{}, NoDiff, false, err
 		}
 		td.from = &cursor{
 			nd:     fromChild,
@@ -392,14 +406,14 @@ func (td *PatchGenerator[K, O]) split(ctx context.Context) (patch Patch, diffTyp
 			nrw:    td.from.nrw,
 		}
 		if td.from.nd.level > 0 {
-			return td.sendRemovedRange(), RemovedDiff, nil
+			return td.sendRemovedRange(), RemovedDiff, true, nil
 		} else {
-			return td.sendRemovedKey(), RemovedDiff, nil
+			return td.sendRemovedKey(), RemovedDiff, true, nil
 		}
 	case AddedDiff:
 		toChild, err := fetchChild(ctx, td.to.nrw, td.to.currentRef())
 		if err != nil {
-			return Patch{}, NoDiff, err
+			return Patch{}, NoDiff, false, err
 		}
 		td.to = &cursor{
 			nd:     toChild,
@@ -408,26 +422,29 @@ func (td *PatchGenerator[K, O]) split(ctx context.Context) (patch Patch, diffTyp
 			nrw:    td.to.nrw,
 		}
 		if td.to.nd.level > 0 {
-			return td.sendAddedRange()
+			patch, diffType, err = td.sendAddedRange()
+			return patch, diffType, true, err
 		} else {
-			return td.sendAddedKey(), AddedDiff, nil
+			return td.sendAddedKey(), AddedDiff, true, nil
 		}
 	case ModifiedDiff:
 
-		toChild, err := fetchChild(ctx, td.to.nrw, td.to.currentRef())
+		toRef := td.to.currentRef()
+		toChild, err := fetchChild(ctx, td.to.nrw, toRef)
 		if err != nil {
-			return Patch{}, NoDiff, err
+			return Patch{}, NoDiff, false, err
 		}
 		toChild, err = toChild.LoadSubtrees()
 		if err != nil {
-			return Patch{}, NoDiff, err
+			return Patch{}, NoDiff, false, err
 		}
 
 		// Maintain invariant that the |from| cursor is never at a higher level than the |to| cursor.
 		if td.from.nd.level == td.to.nd.level {
-			fromChild, err := fetchChild(ctx, td.from.nrw, td.from.currentRef())
+			fromRef := td.from.currentRef()
+			fromChild, err := fetchChild(ctx, td.from.nrw, fromRef)
 			if err != nil {
-				return Patch{}, NoDiff, err
+				return Patch{}, NoDiff, false, err
 			}
 
 			td.from = &cursor{
@@ -439,7 +456,7 @@ func (td *PatchGenerator[K, O]) split(ctx context.Context) (patch Patch, diffTyp
 			for compareWithNilAsMin(ctx, td.order, K(td.from.CurrentKey()), K(td.previousKey)) <= 0 {
 				err = td.from.advance(ctx)
 				if err != nil {
-					return Patch{}, NoDiff, err
+					return Patch{}, NoDiff, false, err
 				}
 			}
 		}
@@ -452,7 +469,7 @@ func (td *PatchGenerator[K, O]) split(ctx context.Context) (patch Patch, diffTyp
 		}
 		return td.findNextPatch(ctx)
 	default:
-		return Patch{}, NoDiff, fmt.Errorf("unexpected Diff type: this shouldn't be possible")
+		return Patch{}, NoDiff, false, fmt.Errorf("unexpected Diff type: this shouldn't be possible")
 	}
 }
 
