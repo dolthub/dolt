@@ -6776,11 +6776,11 @@ var QueryDiffTableScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT COUNT(*) FROM dolt_diff_summary('HEAD', 'WORKING');",
-				Expected: []sql.Row{{1}}, // only not_ignored_table2 should appear
+				Expected: []sql.Row{{2}}, // dolt_ignore and not_ignored_table2 should appear
 			},
 			{
-				Query:    "SELECT to_table_name FROM dolt_diff_summary('HEAD', 'WORKING');",
-				Expected: []sql.Row{{"not_ignored_table2"}},
+				Query:    "SELECT to_table_name FROM dolt_diff_summary('HEAD', 'WORKING') ORDER BY to_table_name;",
+				Expected: []sql.Row{{"dolt_ignore"}, {"not_ignored_table2"}},
 			},
 		},
 	},
@@ -6798,11 +6798,11 @@ var QueryDiffTableScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT COUNT(*) FROM dolt_diff_summary('HEAD', 'WORKING');",
-				Expected: []sql.Row{{1}}, // only regular_table should appear
+				Expected: []sql.Row{{2}}, // dolt_ignore and regular_table should appear
 			},
 			{
-				Query:    "SELECT to_table_name FROM dolt_diff_summary('HEAD', 'WORKING');",
-				Expected: []sql.Row{{"regular_table"}},
+				Query:    "SELECT to_table_name FROM dolt_diff_summary('HEAD', 'WORKING') ORDER BY to_table_name;",
+				Expected: []sql.Row{{"dolt_ignore"}, {"regular_table"}},
 			},
 		},
 	},
@@ -6821,11 +6821,11 @@ var QueryDiffTableScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT COUNT(*) FROM dolt_diff_summary('HEAD', 'WORKING');",
-				Expected: []sql.Row{{2}}, // temp_important and regular_table should appear
+				Expected: []sql.Row{{3}}, // dolt_ignore, temp_important and regular_table should appear
 			},
 			{
 				Query:    "SELECT to_table_name FROM dolt_diff_summary('HEAD', 'WORKING') ORDER BY to_table_name;",
-				Expected: []sql.Row{{"regular_table"}, {"temp_important"}},
+				Expected: []sql.Row{{"dolt_ignore"}, {"regular_table"}, {"temp_important"}},
 			},
 		},
 	},
@@ -6864,11 +6864,11 @@ var QueryDiffTableScriptTests = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT COUNT(*) FROM dolt_diff_summary('HEAD', 'WORKING');",
-				Expected: []sql.Row{{1}}, // only will_not_be_ignored should appear as dropped
+				Expected: []sql.Row{{2}}, // dolt_ignore (modified) and will_not_be_ignored (dropped)
 			},
 			{
-				Query:    "SELECT from_table_name, diff_type FROM dolt_diff_summary('HEAD', 'WORKING');",
-				Expected: []sql.Row{{"will_not_be_ignored", "dropped"}},
+				Query:    "SELECT from_table_name, diff_type FROM dolt_diff_summary('HEAD', 'WORKING') ORDER BY from_table_name;",
+				Expected: []sql.Row{{"dolt_ignore", "modified"}, {"will_not_be_ignored", "dropped"}},
 			},
 		},
 	},
