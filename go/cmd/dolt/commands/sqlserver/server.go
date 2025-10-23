@@ -763,13 +763,7 @@ func ConfigureServices(
 	}
 	controller.Register(RunClusterRemoteSrv)
 
-	branchActivityInit := &svcs.AnonService{
-		InitF: func(ctx context.Context) error {
-			doltdb.BranchActivityInit(ctx)
-			return nil
-		},
-	}
-	controller.Register(branchActivityInit)
+	// Branch activity tracking is now initialized per SqlEngine instance
 
 	// We still have some startup to do from this point, and we do not run
 	// the SQL server until we are fully booted. We also want to stop the

@@ -73,9 +73,10 @@ type DoltSession struct {
 
 	writeSessProv WriteSessFunc
 
-	email    string
-	username string
-	notices  []any // This is used by Doltgres to store notices. This is not used by Dolt.
+	email                 string
+	username              string
+	notices               []any // This is used by Doltgres to store notices. This is not used by Dolt.
+	branchActivityTracker *doltdb.BranchActivityTracker
 }
 
 var _ sql.Session = (*DoltSession)(nil)
@@ -111,6 +112,7 @@ func NewDoltSession(
 	statsProvider sql.StatsProvider,
 	writeSessProv WriteSessFunc,
 	gcSafepointController *gcctx.GCSafepointController,
+	branchActivityTracker *doltdb.BranchActivityTracker,
 ) (*DoltSession, error) {
 	username := conf.GetStringOrDefault(config.UserNameKey, "")
 	email := conf.GetStringOrDefault(config.UserEmailKey, "")
@@ -131,6 +133,7 @@ func NewDoltSession(
 		fs:                    pro.FileSystem(),
 		writeSessProv:         writeSessProv,
 		gcSafepointController: gcSafepointController,
+		branchActivityTracker: branchActivityTracker,
 	}
 
 	return sess, nil
@@ -428,13 +431,13 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 
 	// Starting any transaction counts as a read of the given branch. We'll record in the branch activity.
 	cdb := ctx.Session.GetCurrentDatabase()
-	_, rev := SplitRevisionDbName(cdb)
+	db, rev := SplitRevisionDbName(cdb)
 	if rev != "" {
-		doltdb.BranchActivityReadEvent(ctx, rev)
+		doltdb.BranchActivityReadEvent(ctx, db, rev)
 	} else {
 		rev, ok, err := d.CurrentHead(ctx, cdb)
 		if err == nil && ok {
-			doltdb.BranchActivityReadEvent(ctx, rev)
+			doltdb.BranchActivityReadEvent(ctx, db, rev)
 		}
 		// Ignore errors here, we just won't log the read activity
 	}
@@ -677,7 +680,7 @@ func (d *DoltSession) DoltCommit(
 	if err == nil {
 		branch, b, e := d.CurrentHead(ctx, dbName)
 		if e == nil && b {
-			doltdb.BranchActivityWriteEvent(ctx, branch)
+			doltdb.BranchActivityWriteEvent(ctx, dbName, branch)
 		}
 	}
 	return c, err
@@ -1022,6 +1025,11 @@ func (d *DoltSession) GetRoots(ctx *sql.Context, dbName string) (doltdb.Roots, b
 	}
 
 	return branchState.roots(), true
+}
+
+// GetBranchActivityTracker returns the branch activity tracker for this session
+func (d *DoltSession) GetBranchActivityTracker() *doltdb.BranchActivityTracker {
+	return d.branchActivityTracker
 }
 
 // ResolveRootForRef returns the root value for the ref given, which refers to either a commit spec or is one of the
