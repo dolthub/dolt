@@ -76,20 +76,12 @@ type BranchActivityItr struct {
 }
 
 func NewBranchActivityItr(ctx *sql.Context, table *BranchActivityTable) (*BranchActivityItr, error) {
-	// Get the DoltDB from the database
-	ddbs := table.db.DoltDatabases()
-	if len(ddbs) != 1 {
-		return nil, fmt.Errorf("expected exactly 1 dolt database, got %d", len(ddbs))
-	}
-	ddb := ddbs[0]
-
-	// Count active sessions per branch using SessionManager
 	sessionCounts, err := countActiveSessions(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	activityData, err := doltdb.GetBranchActivity(ctx, ddb)
+	activityData, err := doltdb.GetBranchActivity(ctx, table.db.DbData().Ddb)
 	if err != nil {
 		return nil, err
 	}
