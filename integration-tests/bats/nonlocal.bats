@@ -229,9 +229,8 @@ SQL
 }
 
 @test "nonlocal: test foreign keys" {
-  # Currently, foreign keys cannot be added to nonlocal tables
   dolt checkout -b other
-  run dolt sql <<SQL
+  dolt sql <<SQL
   CALL DOLT_CHECKOUT('main');
   CREATE TABLE aliased_table (pk char(8) PRIMARY KEY);
 SQL
@@ -247,7 +246,48 @@ SQL
 
   run dolt sql -q 'INSERT INTO local_table VALUES ("fdnfjfjf");'
   [ "$status" -eq 1 ]
+  [[ "$output" =~ 'Foreign key violation on fk: `local_table_ibfk_1`, table: `local_table`, referenced table: `nonlocal_table`, key: `[fdnfjfjf]`' ]] || false
 
+  # The current foreign keys hold, so they should validate
+  dolt constraints verify
+  dolt sql -q "CALL DOLT_VERIFY_CONSTRAINTS('--all');"
+
+  # It's possible for foreign keys on nonlocal tables to become invalidated due to changes on the nonlocal
+  # branch, but this can be detected with dolt constraints verify
+
+  dolt sql -q  'CALL DOLT_CHECKOUT("main"); DELETE FROM aliased_table;'
+  run dolt constraints verify
+  [ "$status" -eq 1 ]
+  [[ "$output" =~ 'dolt_constraint_violations_local_table' ]] || false
+  [[ "$output" =~ '| foreign key    | eesekkgo | {"Index": "", "Table": "local_table", "Columns": ["pk"], "OnDelete": "RESTRICT", "OnUpdate": "RESTRICT", "ForeignKey": "local_table_ibfk_1", "ReferencedIndex": "", "ReferencedTable": "nonlocal_table", "ReferencedColumns": ["pk"]} |' ]] || false
+
+  run dolt sql -q "CALL DOLT_VERIFY_CONSTRAINTS('--all');"
+  [ "$status" -eq 1 ]
+  [[ "$output" =~ 'ForeignKey: local_table_ibfk_1' ]] || false
+
+  # Check that neither command removed the FK relation (this can happen if it thinks the child table was dropped)
+  run dolt sql -q 'SHOW CREATE TABLE local_table;'
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ 'local_table_ibfk_1' ]] || false
+
+  # Now try deleting the parent table and confirm that verifies correctly too.
+  dolt sql -q  'CALL DOLT_CHECKOUT("main"); DROP TABLE aliased_table;'
+
+  # dolt sql -q "CALL DOLT_VERIFY_CONSTRAINTS('--all')"
+  run dolt constraints verify
+  [ "$status" -eq 1 ]
+  echo "$output"
+  [[ "$output" =~ 'table not found' ]] || false
+
+  run dolt sql -q "CALL DOLT_VERIFY_CONSTRAINTS('--all');"
+  [ "$status" -eq 1 ]
+  echo "$output"
+  [[ "$output" =~ 'ForeignKey: local_table_ibfk_1' ]] || false
+
+  # Check that neither command removed the FK relation (this can happen if it thinks the child table was dropped)
+  run dolt sql -q 'SHOW CREATE TABLE local_table;'
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ 'local_table_ibfk_1' ]] || false
 }
 
 @test "nonlocal: trying to dolt_add a nonlocal table returns the appropriate warning" {
