@@ -67,6 +67,7 @@ var BranchActivityTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
+				// Creating the branch results in a write time, but no read time.
 				Query: "SELECT branch, last_read IS NULL, last_write IS NULL FROM dolt_branch_activity WHERE branch = 'new_branch'",
 				Expected: []sql.Row{
 					{"new_branch", true, false},
@@ -97,14 +98,21 @@ var BranchActivityTests = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "branch read activity is recorded",
+		Name: "branch checkout counts as read activity",
 		SetUpScript: []string{
 			"CALL dolt_branch('test_branch')",
+			"SELECT SLEEP(4)", // ensure time difference between branch creation and checkout
 			"CALL dolt_checkout('test_branch')",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "SELECT branch, last_read IS NOT NULL, last_write IS NOT NULL FROM dolt_branch_activity WHERE branch = 'test_branch'",
+				Expected: []sql.Row{
+					{"test_branch", true, true},
+				},
+			},
+			{
+				Query: "SELECT branch, TIMESTAMPDIFF(SECOND,last_write,last_read) > 3, TIMESTAMPDIFF(SECOND,last_write,last_read) <=5 FROM dolt_branch_activity WHERE branch = 'test_branch'",
 				Expected: []sql.Row{
 					{"test_branch", true, true},
 				},

@@ -107,8 +107,10 @@ func BranchActivityReset() {
 		close(*activityChan)
 	}
 	activityChan = nil
-	branchReadTimes = nil
-	branchWriteTimes = nil
+
+	// Clear maps
+	clear(branchReadTimes)
+	clear(branchWriteTimes)
 }
 
 // BranchActivityReadEvent records when a branch is read/accessed
@@ -118,7 +120,7 @@ func BranchActivityReadEvent(ctx context.Context, branch string) {
 	}
 
 	select {
-	case (*activityChan) <- branchActivityEvent{
+	case *activityChan <- branchActivityEvent{
 		branch:    branch,
 		timestamp: time.Now(),
 		eventType: READ,
@@ -135,7 +137,7 @@ func BranchActivityWriteEvent(ctx context.Context, branch string) {
 	}
 
 	select {
-	case (*activityChan) <- branchActivityEvent{
+	case *activityChan <- branchActivityEvent{
 		branch:    branch,
 		timestamp: time.Now(),
 		eventType: WRITE,
@@ -145,6 +147,8 @@ func BranchActivityWriteEvent(ctx context.Context, branch string) {
 	}
 }
 
+// ignoreEvent determines whether to ignore the event based on the context and branch name. We ignore events
+// from sessions related to stats processing or event scheduler, as well as events on the HEAD branch.
 func ignoreEvent(ctx context.Context, branch string) bool {
 	if activityChan == nil {
 		return true
@@ -162,8 +166,7 @@ func ignoreEvent(ctx context.Context, branch string) bool {
 	return false
 }
 
-// GetBranchActivity returns activity data for all branches (tracked and untracked)
-// The sessionCounts parameter allows external callers to provide session counting
+// GetBranchActivity returns activity data for all current branches.
 func GetBranchActivity(ctx *sql.Context, ddb *DoltDB) ([]BranchActivityData, error) {
 	if activityChan == nil {
 		return nil, nil
@@ -181,8 +184,6 @@ func GetBranchActivity(ctx *sql.Context, ddb *DoltDB) ([]BranchActivityData, err
 	for _, branchRef := range branchRefs {
 		branches[branchRef.GetPath()] = true
 	}
-
-	// sessionCounts is provided by the caller
 
 	result := make([]BranchActivityData, 0, len(branches))
 	for branch := range branches {
