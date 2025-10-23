@@ -671,8 +671,16 @@ func (d *DoltSession) DoltCommit(
 
 		return ws, commit, err
 	}
-	// NM4 - we may need to record branch activity write event here.
-	return d.commitCurrentHead(ctx, dbName, tx, commitFunc)
+
+	c, err := d.commitCurrentHead(ctx, dbName, tx, commitFunc)
+
+	if err == nil {
+		branch, b, e := d.CurrentHead(ctx, dbName)
+		if e == nil && b {
+			doltdb.BranchActivityWriteEvent(ctx, branch)
+		}
+	}
+	return c, err
 }
 
 // doCommitFunc is a function to write to the database, which involves updating the working set and potentially

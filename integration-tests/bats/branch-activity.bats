@@ -13,15 +13,14 @@ setup() {
     dolt commit -Am "Initial commit"
     dolt branch feature1
     dolt branch feature2
+    dolt branch feature3
     
     cd ../
     start_sql_server
 }
 
 teardown() {
-    cleanup_idle_connections
-
-    stop_sql_server 1 && sleep 0.5
+    stop_sql_server 1
     teardown_common
 }
 
@@ -30,31 +29,19 @@ start_idle_connection() {
     local branch=$1
     [ -n "$branch" ] || fail "Expected non-empty string, got empty"
 
-    # Do nothing connection to keep the branch activ
+    # Do nothing connection. These will be killed by the server shutting down.
     dolt --use-db "repo1/$branch" sql -q "SELECT SLEEP(60)" &
-    local pid=$!
     
-    # Store the PID for cleanup
-    echo $pid >> $BATS_TMPDIR/idle_connections_$$
 }
 
-# Helper function to cleanup idle connections
-cleanup_idle_connections() {
-    if [ -f $BATS_TMPDIR/idle_connections_$$ ]; then
-        while read pid; do
-            kill $pid 2>/dev/null || true
-        done < $BATS_TMPDIR/idle_connections_$$
-    fi
-}
-
-@test "branch-activity: multi-client branch activity tracking" {
+@test "branch-activity: last_read set for connections" {
     cd repo1
 
-    # Start idle connections on different branches to simulate active clients
-    start_idle_connection "main"
+    # Start idle connections on different branches to simulate active clients. Don't include main, as it is used
+    # by the query of the table and should be included there.
     start_idle_connection "feature1"
     start_idle_connection "feature2"
-    
+
     # Wait a moment for connections to establish
     sleep 1
     
@@ -64,4 +51,52 @@ cleanup_idle_connections() {
     [[ "$output" =~ "main" ]] || false
     [[ "$output" =~ "feature1" ]] || false
     [[ "$output" =~ "feature2" ]] || false
+    [[ ! "$output" =~ "feature3" ]] || false
+}
+
+
+@test "branch-activity: active session counts" {
+    cd repo1
+
+    # Start idle connections on different branches to simulate active clients
+    start_idle_connection "main"
+    start_idle_connection "feature1"
+    start_idle_connection "feature2"
+    start_idle_connection "feature2"
+    start_idle_connection "feature2" # 3 active sessions on this branch.
+
+    # Wait a moment for connections to establish
+    sleep 1
+
+    run dolt sql -r csv -q "SELECT branch,active_sessions FROM dolt_branch_activity where last_read IS NOT NULL"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "main,2" ]] || false     # main has 1 idle + 1 from this query
+    [[ "$output" =~ "feature1,1" ]] || false
+    [[ "$output" =~ "feature2,3" ]] || false
+}
+
+@test "branch-activity: empty commit updates last_write" {
+    cd repo1
+
+    # verify no last_write initially
+    run dolt sql -q "SELECT branch FROM dolt_branch_activity where last_write IS NOT NULL"
+    [[ ! "$output" =~ "main" ]] || false
+
+    dolt commit -m "empty commit" --allow-empty
+
+    run dolt sql -q "SELECT branch FROM dolt_branch_activity where last_write IS NOT NULL"
+    [[ "$output" =~ "main" ]] || false
+}
+
+@test "branch-activity: data-changing commit updates last_write" {
+    cd repo1
+
+    # verify no last_write initially
+    run dolt sql -q "SELECT branch FROM dolt_branch_activity where last_write IS NOT NULL"
+    [[ ! "$output" =~ "main" ]] || false
+
+    dolt sql -q "INSERT INTO test VALUES (3, 'Charlie');"
+
+    run dolt sql -q "SELECT branch FROM dolt_branch_activity where last_write IS NOT NULL"
+    [[ "$output" =~ "main" ]] || false
 }
