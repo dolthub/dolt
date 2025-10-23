@@ -62,7 +62,10 @@ type archiveWriter struct {
 	// times. It is not used for any other purpose, and there are cases where we bypass checking it (e.g. conjoining archives).
 	seenChunks hash.HashSet
 	// MD5 is calculated on the entire output, so this hash sink wraps actual ByteSink.
-	md5Summer       *HashingByteSink
+	md5Summer *HashingByteSink
+	// the temporary file path of the output file where we were writing. "" if we were against an in-memory byte sink.
+	path string
+	// the final path we put the archive if we called FlushToFile.
 	finalPath       string
 	stagedBytes     stagedByteSpanSlice
 	stagedChunks    stagedChunkRefSlice
@@ -107,6 +110,7 @@ func newArchiveWriter(tmpDir string) (*archiveWriter, error) {
 	hbSha := NewSHA512HashingByteSink(hbMd5)
 	return &archiveWriter{
 		md5Summer:  hbMd5,
+		path:       bs.path,
 		seenChunks: hash.HashSet{},
 		output:     hbSha,
 	}, nil
@@ -608,10 +612,10 @@ func (asw *ArchiveStreamWriter) Cancel() error {
 }
 
 func (asw *ArchiveStreamWriter) Remove() error {
-	if asw.writer.finalPath == "" {
+	if asw.writer.path == "" {
 		return nil
 	}
-	return os.Remove(asw.writer.finalPath)
+	return os.Remove(asw.writer.path)
 }
 
 func (asw *ArchiveStreamWriter) writeArchiveToChunker(chunker ArchiveToChunker) (uint32, error) {
