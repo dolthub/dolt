@@ -191,6 +191,7 @@ func (it prollyRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 	return row, nil
 }
 
+// NextValueRow implements the sql.ValueRowIter interface.
 func (it prollyRowIter) NextValueRow(ctx *sql.Context) (sql.ValueRow, error) {
 	key, value, err := it.iter.Next(ctx)
 	if err != nil {
@@ -216,6 +217,7 @@ func (it prollyRowIter) NextValueRow(ctx *sql.Context) (sql.ValueRow, error) {
 	return row, nil
 }
 
+// CanSupport implements the sql.ValueRowIter interface.
 func (it prollyRowIter) CanSupport(ctx *sql.Context) bool {
 	for _, typ := range it.keyDesc.Types {
 		if typ.Enc == val.ExtendedEnc || typ.Enc == val.ExtendedAddrEnc || typ.Enc == val.ExtendedAdaptiveEnc {
@@ -280,6 +282,7 @@ func (it *prollyKeylessIter) nextTuple(ctx *sql.Context) error {
 	return nil
 }
 
+// NextValueRow implements the sql.ValueRowIter interface.
 func (it *prollyKeylessIter) NextValueRow(ctx *sql.Context) (sql.ValueRow, error) {
 	if it.card == 0 {
 		_, value, err := it.iter.Next(ctx)
@@ -301,8 +304,13 @@ func (it *prollyKeylessIter) NextValueRow(ctx *sql.Context) (sql.ValueRow, error
 	return it.curr2, nil
 }
 
+// CanSupport implements the sql.ValueRowIter interface.
 func (it *prollyKeylessIter) CanSupport(ctx *sql.Context) bool {
-	// TODO: if keyDesc or valDesc contain ExtendedEnc, return false
+	for _, typ := range it.valDesc.Types {
+		if typ.Enc == val.ExtendedEnc || typ.Enc == val.ExtendedAddrEnc || typ.Enc == val.ExtendedAdaptiveEnc {
+			return false
+		}
+	}
 	return true
 }
 
