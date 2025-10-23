@@ -571,6 +571,45 @@ SQL
     fi
 }
 
+@test "garbage_collection: dolt gc --full reverting to a previous state after some intervening dolt gcs is NOT a no-op" {
+    mkdir -p one/two
+    cd one/two
+    dolt init
+    dolt gc --full
+    rm -rf .dolt/stats
+    ls -laR | grep -v '^d' > ../../files_after_first_full_gc
+    cp ./.dolt/noms/oldgen/manifest ../../oldgen_manifest_after_first_full_gc
+    dolt branch -c main test
+    dolt checkout test
+    dolt sql -q 'create table vals (id int primary key);'
+    dolt commit -Am 'commit schema'
+    dolt gc
+    dolt sql -q 'insert into vals values (1),(2),(3);'
+    dolt commit -Am 'commit values'
+    dolt gc
+    rm -rf .dolt/stats
+    ls -laR | grep -v '^d' > ../../files_after_nonfull_gc
+    cp ./.dolt/noms/oldgen/manifest ../../oldgen_manifest_after_nonfull_gc
+    dolt checkout main
+    dolt branch -D test
+    dolt gc --full
+    rm -rf .dolt/stats
+    ls -laR | grep -v '^d' > ../../files_after_last_full_gc
+    cp ./.dolt/noms/oldgen/manifest ../../oldgen_manifest_after_last_full_gc
+    # This should exit 0 because the gc should have changed things.
+    if cmp ../../files_after_nonfull_gc ../../files_after_last_full_gc; then
+        echo "expected dolt gc to change things, but it didn't."
+        diff ../../files_after_nonfull_gc ../../files_after_last_full_gc || true
+        false
+    fi
+    # This should exit 0 because the gc should have changed things.
+    if cmp ./.dolt/noms/oldgen/manifest ../../oldgen_manifest_after_nonfull_gc; then
+        echo "expected dolt gc --full after a dolt gc to change the manifest, updating the gcgen at least, but it didn't."
+        diff ./.dolt/noms/oldgen/manifest ../../oldgen_manifest_after_nonfull_gc || true
+        false
+    fi
+}
+
 @test "garbage_collection: dolt gc --archive-level not 0" {
     dolt gc --archive-level 1
     run dolt admin storage list
