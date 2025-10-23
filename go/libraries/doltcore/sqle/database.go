@@ -1195,7 +1195,9 @@ func resolveAsOfCommitRef(ctx *sql.Context, db Database, head ref.DoltRef, commi
 		return nil, nil, doltdb.ErrGhostCommitEncountered
 	}
 
-	doltdb.BranchActivityReadEvent(ctx, commitRef)
+	currentDb := ctx.GetCurrentDatabase()
+	dbName, _ := dsess.SplitRevisionDbName(currentDb)
+	doltdb.BranchActivityReadEvent(ctx, dbName, commitRef)
 
 	root, err := cm.GetRootValue(ctx)
 	if err != nil {

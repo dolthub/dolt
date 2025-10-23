@@ -1644,10 +1644,18 @@ func (ddb *DoltDB) UpdateWorkingSet(
 	_, err = ddb.db.withReplicationStatusController(replicationStatus).UpdateWorkingSet(ctx, ds, *wsSpec, prevHash)
 
 	if err == nil {
-		// record branch write activity for dolt_branch_activity. Errors here are non-fatal, ignored.
 		if headRef, e2 := workingSetRef.ToHeadRef(); e2 == nil && headRef.GetType() == ref.BranchRefType {
 			branchName := headRef.GetPath()
-			BranchActivityWriteEvent(ctx, branchName)
+
+			sqlCtx, ok := ctx.(*sql.Context)
+			if ok {
+				db := sqlCtx.GetCurrentDatabase()
+				parts := strings.SplitN(db, "/", 2)
+				db = parts[0]
+
+				// record branch write activity for dolt_branch_activity. Errors here are non-fatal, ignored.
+				BranchActivityWriteEvent(sqlCtx, db, branchName)
+			}
 		}
 	}
 

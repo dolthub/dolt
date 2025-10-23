@@ -17,10 +17,10 @@ package doltdb
 import (
 	"context"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/go-mysql-server/sql"
 )
 
@@ -34,6 +34,11 @@ type statsSessionContextKeyType struct{}
 // StatsSessionContextKey is used to mark sql sessions which are related to stats processing. We don't want to count
 // reads/writes from these sessions in branch activity tracking.
 var StatsSessionContextKey = statsSessionContextKeyType{}
+
+// BranchActivityProvider interface allows sessions to provide branch activity tracking
+type BranchActivityProvider interface {
+	GetBranchActivityTracker() *BranchActivityTracker
+}
 
 type eventSessionContextKeyType struct{}
 
@@ -61,78 +66,74 @@ type branchActivityKey struct {
 	branch   string
 }
 
-// All these variables are effectively globals. Reasonable given they should keep the state for the lifetime of the
-// sql-server process. Does mean that we need to reset them between tests.
-var (
-	branchActivityMutex sync.RWMutex
-	branchReadTimes     map[branchActivityKey]time.Time
-	branchWriteTimes    map[branchActivityKey]time.Time
-	systemStartTime     time.Time
-	activityChan        *chan branchActivityEvent
-)
-
-func BranchActivityInit(ctx context.Context) {
-	systemStartTime = time.Now()
-	branchReadTimes = make(map[branchActivityKey]time.Time)
-	branchWriteTimes = make(map[branchActivityKey]time.Time)
-	ac := make(chan branchActivityEvent, 64) // lifetime in buffer will be very short.
-	activityChan = &ac
-
-	// Start background goroutine to process events
-	go func() {
-		ctx, cancel := context.WithCancel(ctx)
-		defer cancel()
-		for {
-			select {
-			case event := <-(*activityChan):
-				key := branchActivityKey{database: event.database, branch: event.branch}
-
-				branchActivityMutex.Lock()
-				if event.eventType == READ {
-					if existing, exists := branchReadTimes[key]; !exists || event.timestamp.After(existing) {
-						branchReadTimes[key] = event.timestamp
-					}
-				} else if event.eventType == WRITE {
-					if existing, exists := branchWriteTimes[key]; !exists || event.timestamp.After(existing) {
-						branchWriteTimes[key] = event.timestamp
-					}
-				}
-				branchActivityMutex.Unlock()
-			case <-ctx.Done():
-				return
-			}
-		}
-	}()
+// BranchActivityTracker tracks branch activity for a single SQL engine instance
+type BranchActivityTracker struct {
+	mu              sync.RWMutex
+	readTimes       map[branchActivityKey]time.Time
+	writeTimes      map[branchActivityKey]time.Time
+	systemStartTime time.Time
+	activityChan    chan branchActivityEvent
+	cancelFunc      context.CancelFunc
 }
 
-// BranchActivityClose clears the branch activity tracking information. This is not intended to be called during normal operation,
-// but it allows us to clean up between tests.
-func BranchActivityReset() {
-	branchActivityMutex.Lock()
-	defer branchActivityMutex.Unlock()
-
-	if activityChan != nil {
-		// This will cause the background goroutine to exit
-		close(*activityChan)
+// NewBranchActivityTracker creates a new branch activity tracker instance
+func NewBranchActivityTracker(ctx context.Context) *BranchActivityTracker {
+	tracker := &BranchActivityTracker{
+		readTimes:       make(map[branchActivityKey]time.Time),
+		writeTimes:      make(map[branchActivityKey]time.Time),
+		systemStartTime: time.Now(),
+		activityChan:    make(chan branchActivityEvent, 64),
 	}
-	activityChan = nil
 
-	// Clear maps
-	clear(branchReadTimes)
-	clear(branchWriteTimes)
+	// Start background processor
+	ctx, cancel := context.WithCancel(ctx)
+	tracker.cancelFunc = cancel
+	go tracker.processEvents(ctx)
+
+	return tracker
 }
 
-// BranchActivityReadEvent records when a branch is read/accessed
-func BranchActivityReadEvent(ctx *sql.Context, branch string) {
+// processEvents processes activity events in the background
+func (t *BranchActivityTracker) processEvents(ctx context.Context) {
+	for {
+		select {
+		case event := <-t.activityChan:
+			key := branchActivityKey{database: event.database, branch: event.branch}
+
+			t.mu.Lock()
+			if event.eventType == READ {
+				if existing, exists := t.readTimes[key]; !exists || event.timestamp.After(existing) {
+					t.readTimes[key] = event.timestamp
+				}
+			} else if event.eventType == WRITE {
+				if existing, exists := t.writeTimes[key]; !exists || event.timestamp.After(existing) {
+					t.writeTimes[key] = event.timestamp
+				}
+			}
+			t.mu.Unlock()
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+// Close shuts down the tracker
+func (t *BranchActivityTracker) Close() {
+	if t.cancelFunc != nil {
+		t.cancelFunc()
+	}
+	close(t.activityChan)
+}
+
+// RecordReadEvent records when a branch is read/accessed
+func (t *BranchActivityTracker) RecordReadEvent(ctx context.Context, database, branch string) {
 	if ignoreEvent(ctx, branch) {
 		return
 	}
 
-	db, _ := dsess.SplitRevisionDbName(ctx.GetCurrentDatabase())
-
 	select {
-	case *activityChan <- branchActivityEvent{
-		database:  db,
+	case t.activityChan <- branchActivityEvent{
+		database:  database,
 		branch:    branch,
 		timestamp: time.Now(),
 		eventType: READ,
@@ -142,17 +143,15 @@ func BranchActivityReadEvent(ctx *sql.Context, branch string) {
 	}
 }
 
-// BranchActivityWriteEvent records when a branch is written/updated
-func BranchActivityWriteEvent(ctx *sql.Context, branch string) {
+// RecordWriteEvent records when a branch is written/updated
+func (t *BranchActivityTracker) RecordWriteEvent(ctx context.Context, database, branch string) {
 	if ignoreEvent(ctx, branch) {
 		return
 	}
 
-	db, _ := dsess.SplitRevisionDbName(ctx.GetCurrentDatabase())
-
 	select {
-	case *activityChan <- branchActivityEvent{
-		database:  db,
+	case t.activityChan <- branchActivityEvent{
+		database:  database,
 		branch:    branch,
 		timestamp: time.Now(),
 		eventType: WRITE,
@@ -162,35 +161,14 @@ func BranchActivityWriteEvent(ctx *sql.Context, branch string) {
 	}
 }
 
-// ignoreEvent determines whether to ignore the event based on the context and branch name. We ignore events
-// from sessions related to stats processing or event scheduler, as well as events on the HEAD branch.
-func ignoreEvent(ctx context.Context, branch string) bool {
-	if activityChan == nil {
-		return true
-	}
-	if ctx.Value(StatsSessionContextKey) != nil {
-		return true
-	}
-	if ctx.Value(EventSessionContextKey) != nil {
-		return true
-	}
-	if branch == "HEAD" {
-		return true
-	}
+// GetBranchActivity returns activity data for all current branches in the specified database
+func (t *BranchActivityTracker) GetBranchActivity(ctx *sql.Context, ddb *DoltDB) ([]BranchActivityData, error) {
+	database := ctx.GetCurrentDatabase()
+	parts := strings.SplitN(database, "/", 2)
+	database = parts[0]
 
-	return false
-}
-
-// GetBranchActivity returns activity data for all current branches.
-func GetBranchActivity(ctx *sql.Context, ddb *DoltDB) ([]BranchActivityData, error) {
-	if activityChan == nil {
-		return nil, nil
-	}
-
-	database := ddb.databaseName
-
-	branchActivityMutex.RLock()
-	defer branchActivityMutex.RUnlock()
+	t.mu.RLock()
+	defer t.mu.RUnlock()
 
 	branchRefs, err := ddb.GetBranches(ctx)
 	if err != nil {
@@ -206,16 +184,16 @@ func GetBranchActivity(ctx *sql.Context, ddb *DoltDB) ([]BranchActivityData, err
 	for branch := range branches {
 		data := BranchActivityData{
 			Branch:          branch,
-			SystemStartTime: systemStartTime,
+			SystemStartTime: t.systemStartTime,
 		}
 
 		key := branchActivityKey{database: database, branch: branch}
 
-		if readTime, exists := branchReadTimes[key]; exists {
+		if readTime, exists := t.readTimes[key]; exists {
 			data.LastRead = &readTime
 		}
 
-		if writeTime, exists := branchWriteTimes[key]; exists {
+		if writeTime, exists := t.writeTimes[key]; exists {
 			data.LastWrite = &writeTime
 		}
 
@@ -228,4 +206,53 @@ func GetBranchActivity(ctx *sql.Context, ddb *DoltDB) ([]BranchActivityData, err
 	})
 
 	return result, nil
+}
+
+// BranchActivityReadEvent records when a branch is read/accessed - this is for backward compatibility
+// The database parameter should be extracted by the caller using dsess.SplitRevisionDbName
+func BranchActivityReadEvent(ctx *sql.Context, database, branch string) {
+	if provider, ok := ctx.Session.(BranchActivityProvider); ok {
+		tracker := provider.GetBranchActivityTracker()
+		if tracker != nil {
+			tracker.RecordReadEvent(ctx, database, branch)
+		}
+	}
+}
+
+// BranchActivityWriteEvent records when a branch is written/updated - this is for backward compatibility
+// The database parameter should be extracted by the caller using dsess.SplitRevisionDbName
+func BranchActivityWriteEvent(ctx *sql.Context, database, branch string) {
+	if provider, ok := ctx.Session.(BranchActivityProvider); ok {
+		tracker := provider.GetBranchActivityTracker()
+		if tracker != nil {
+			tracker.RecordWriteEvent(ctx, database, branch)
+		}
+	}
+}
+
+// ignoreEvent determines whether to ignore the event based on the context and branch name. We ignore events
+// from sessions related to stats processing or event scheduler, as well as events on the HEAD branch.
+func ignoreEvent(ctx context.Context, branch string) bool {
+	if ctx.Value(StatsSessionContextKey) != nil {
+		return true
+	}
+	if ctx.Value(EventSessionContextKey) != nil {
+		return true
+	}
+	if branch == "HEAD" {
+		return true
+	}
+
+	return false
+}
+
+// GetBranchActivity returns activity data for all current branches
+func GetBranchActivity(ctx *sql.Context, ddb *DoltDB) ([]BranchActivityData, error) {
+	if provider, ok := ctx.Session.(BranchActivityProvider); ok {
+		tracker := provider.GetBranchActivityTracker()
+		if tracker != nil {
+			return tracker.GetBranchActivity(ctx, ddb)
+		}
+	}
+	return nil, nil
 }
