@@ -34,6 +34,7 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/gcctx"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/servercfg"
@@ -169,7 +170,6 @@ func NewSqlEngine(
 	}
 
 	sqlEngine := &SqlEngine{}
-
 	// Create the engine
 	engine := gms.New(analyzer.NewBuilder(pro).Build(), &gms.Config{
 		IsReadOnly:     config.IsReadOnly,
@@ -244,8 +244,10 @@ func NewSqlEngine(
 
 	engine.Analyzer.Catalog.StatsProvider = statsPro
 
+	branchActivityTracker := doltdb.NewBranchActivityTracker(ctx)
+
 	engine.Analyzer.ExecBuilder = rowexec.NewOverrideBuilder(kvexec.Builder{})
-	sessFactory := doltSessionFactory(pro, statsPro, mrEnv.Config(), bcController, gcSafepointController, config.Autocommit)
+	sessFactory := doltSessionFactory(pro, statsPro, mrEnv.Config(), bcController, gcSafepointController, config.Autocommit, branchActivityTracker)
 	sqlEngine.provider = pro
 	sqlEngine.dsessFactory = sessFactory
 	sqlEngine.ContextFactory = sqlContextFactory
@@ -475,7 +477,11 @@ func configureEventScheduler(config *SqlEngineConfig, engine *gms.Engine, ctxFac
 		if err != nil {
 			return nil, err
 		}
-		return ctxFactory(context.Background(), sql.WithSession(sess)), nil
+
+		rootCtx := context.Background()
+		markedCtx := context.WithValue(rootCtx, doltdb.EventSessionContextKey, true)
+
+		return ctxFactory(markedCtx, sql.WithSession(sess)), nil
 	}
 
 	// A hidden env var allows overriding the event scheduler period for testing. This option is not
@@ -507,9 +513,16 @@ func sqlContextFactory(ctx context.Context, opts ...sql.ContextOption) *sql.Cont
 }
 
 // doltSessionFactory returns a sessionFactory that creates a new DoltSession
-func doltSessionFactory(pro *sqle.DoltDatabaseProvider, statsPro sql.StatsProvider, config config.ReadWriteConfig, bc *branch_control.Controller, gcSafepointController *gcctx.GCSafepointController, autocommit bool) sessionFactory {
+func doltSessionFactory(
+	pro *sqle.DoltDatabaseProvider,
+	statsPro sql.StatsProvider,
+	config config.ReadWriteConfig,
+	bc *branch_control.Controller,
+	gcSafepointController *gcctx.GCSafepointController,
+	autocommit bool,
+	tracker *doltdb.BranchActivityTracker) sessionFactory {
 	return func(mysqlSess *sql.BaseSession, provider sql.DatabaseProvider) (*dsess.DoltSession, error) {
-		doltSession, err := dsess.NewDoltSession(mysqlSess, pro, config, bc, statsPro, writer.NewWriteSession, gcSafepointController)
+		doltSession, err := dsess.NewDoltSession(mysqlSess, pro, config, bc, statsPro, writer.NewWriteSession, gcSafepointController, tracker)
 		if err != nil {
 			return nil, err
 		}

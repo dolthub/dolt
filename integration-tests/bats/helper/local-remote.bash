@@ -144,6 +144,7 @@ SKIP_SERVER_TESTS=$(cat <<-EOM
 ~admin-conjoin.bats~
 ~admin-archive-inspect.bats~
 ~nonlocal.bats~
+~branch-activity.bats~
 EOM
 )
 

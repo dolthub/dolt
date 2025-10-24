@@ -135,7 +135,7 @@ func (r ReadOnlyDatabase) WithBranchRevision(requestedName string, branchSpec ds
 func (db Database) WithBranchRevision(requestedName string, branchSpec dsess.SessionDatabaseBranchSpec) (dsess.SqlDatabase, error) {
 	db.rsr, db.rsw = branchSpec.RepoState, branchSpec.RepoState
 	db.revision = branchSpec.Branch
-	db.revName = db.baseName + dsess.DbRevisionDelimiter + branchSpec.Branch
+	db.revName = db.baseName + doltdb.DbRevisionDelimiter + branchSpec.Branch
 	db.revType = dsess.RevisionTypeBranch
 	db.requestedName = requestedName
 
@@ -657,6 +657,14 @@ func (db Database) getTableInsensitiveWithRoot(ctx *sql.Context, head *doltdb.Co
 		if !resolve.UseSearchPath || isDoltgresSystemTable {
 			dt, found = dtables.NewBranchesTable(ctx, db, lwrName), true
 		}
+	case doltdb.GetBranchActivityTableName(), doltdb.BranchActivityTableName:
+		isDoltgresSystemTable, err := resolve.IsDoltgresSystemTable(ctx, tname, root)
+		if err != nil {
+			return nil, false, err
+		}
+		if !resolve.UseSearchPath || isDoltgresSystemTable {
+			dt, found = dtables.NewBranchActivityTable(ctx, db), true
+		}
 	case doltdb.RemoteBranchesTableName, doltdb.GetRemoteBranchesTableName():
 		isDoltgresSystemTable, err := resolve.IsDoltgresSystemTable(ctx, tname, root)
 		if err != nil {
@@ -1169,7 +1177,6 @@ func resolveAsOfCommitRef(ctx *sql.Context, db Database, head ref.DoltRef, commi
 	}
 
 	cs, err := doltdb.NewCommitSpec(commitRef)
-
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1187,6 +1194,10 @@ func resolveAsOfCommitRef(ctx *sql.Context, db Database, head ref.DoltRef, commi
 	if !ok {
 		return nil, nil, doltdb.ErrGhostCommitEncountered
 	}
+
+	currentDb := ctx.GetCurrentDatabase()
+	dbName, _ := doltdb.SplitRevisionDbName(currentDb)
+	doltdb.BranchActivityReadEvent(ctx, dbName, commitRef)
 
 	root, err := cm.GetRootValue(ctx)
 	if err != nil {

@@ -43,10 +43,6 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-const (
-	DbRevisionDelimiter = "/"
-)
-
 var ErrSessionNotPersistable = errors.New("session is not persistable")
 
 // DoltSession is the sql.Session implementation used by dolt. It is accessible through a *sql.Context instance
@@ -73,9 +69,10 @@ type DoltSession struct {
 
 	writeSessProv WriteSessFunc
 
-	email    string
-	username string
-	notices  []any // This is used by Doltgres to store notices. This is not used by Dolt.
+	email                 string
+	username              string
+	notices               []any // This is used by Doltgres to store notices. This is not used by Dolt.
+	branchActivityTracker *doltdb.BranchActivityTracker
 }
 
 var _ sql.Session = (*DoltSession)(nil)
@@ -111,6 +108,7 @@ func NewDoltSession(
 	statsProvider sql.StatsProvider,
 	writeSessProv WriteSessFunc,
 	gcSafepointController *gcctx.GCSafepointController,
+	branchActivityTracker *doltdb.BranchActivityTracker,
 ) (*DoltSession, error) {
 	username := conf.GetStringOrDefault(config.UserNameKey, "")
 	email := conf.GetStringOrDefault(config.UserEmailKey, "")
@@ -131,6 +129,7 @@ func NewDoltSession(
 		fs:                    pro.FileSystem(),
 		writeSessProv:         writeSessProv,
 		gcSafepointController: gcSafepointController,
+		branchActivityTracker: branchActivityTracker,
 	}
 
 	return sess, nil
@@ -163,7 +162,7 @@ func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*branchSta
 	dbName = strings.ToLower(dbName)
 
 	var baseName, rev string
-	baseName, rev = SplitRevisionDbName(dbName)
+	baseName, rev = doltdb.SplitRevisionDbName(dbName)
 
 	d.mu.Lock()
 	dbState, dbStateFound := d.dbStates[baseName]
@@ -181,7 +180,6 @@ func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*branchSta
 			if dbState.Err != nil {
 				return nil, false, dbState.Err
 			}
-
 			return branchState, ok, nil
 		}
 	}
@@ -191,7 +189,7 @@ func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*branchSta
 	// in that case.
 	revisionQualifiedName := dbName
 	if rev != "" {
-		revisionQualifiedName = RevisionDbName(baseName, rev)
+		revisionQualifiedName = doltdb.RevisionDbName(baseName, rev)
 	}
 
 	database, ok, err := d.provider.SessionDatabase(ctx, revisionQualifiedName)
@@ -216,21 +214,6 @@ func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*branchSta
 	}
 
 	return dbState.heads[strings.ToLower(database.Revision())], true, nil
-}
-
-// RevisionDbName returns the name of the revision db for the base name and revision string given
-func RevisionDbName(baseName string, rev string) string {
-	return baseName + DbRevisionDelimiter + rev
-}
-
-func SplitRevisionDbName(dbName string) (string, string) {
-	var baseName, rev string
-	parts := strings.SplitN(dbName, DbRevisionDelimiter, 2)
-	baseName = parts[0]
-	if len(parts) > 1 {
-		rev = parts[1]
-	}
-	return baseName, rev
 }
 
 // LookupDbState returns the session state for the database named. Unqualified database names, e.g. `mydb` get resolved
@@ -262,7 +245,7 @@ func (d *DoltSession) RemoveDbState(_ *sql.Context, dbName string) error {
 
 // RemoveBranchState removes the session state for a branch, for example, if a branch is deleted.
 func (d *DoltSession) RemoveBranchState(ctx *sql.Context, dbName string, branchName string) error {
-	baseName, _ := SplitRevisionDbName(dbName)
+	baseName, _ := doltdb.SplitRevisionDbName(dbName)
 
 	checkedOutState, ok, err := d.lookupDbState(ctx, baseName)
 	if err != nil {
@@ -295,7 +278,7 @@ func (d *DoltSession) RemoveBranchState(ctx *sql.Context, dbName string, branchN
 
 // RenameBranchState replaces all references to a renamed branch with its new name
 func (d *DoltSession) RenameBranchState(ctx *sql.Context, dbName string, oldBranchName, newBranchName string) error {
-	baseName, _ := SplitRevisionDbName(dbName)
+	baseName, _ := doltdb.SplitRevisionDbName(dbName)
 
 	checkedOutState, ok, err := d.lookupDbState(ctx, baseName)
 	if err != nil {
@@ -425,6 +408,19 @@ func (d *DoltSession) StartTransaction(ctx *sql.Context, tCharacteristic sql.Tra
 		}
 
 		_ = d.setDbSessionVars(ctx, bs, false)
+	}
+
+	// Starting any transaction counts as a read of the given branch. We'll record in the branch activity.
+	cdb := ctx.Session.GetCurrentDatabase()
+	db, rev := doltdb.SplitRevisionDbName(cdb)
+	if rev != "" {
+		doltdb.BranchActivityReadEvent(ctx, db, rev)
+	} else {
+		rev, ok, err := d.CurrentHead(ctx, cdb)
+		if err == nil && ok {
+			doltdb.BranchActivityReadEvent(ctx, db, rev)
+		}
+		// Ignore errors here, we just won't log the read activity
 	}
 
 	return tx, nil
@@ -559,7 +555,7 @@ func (d *DoltSession) validateDoltCommit(ctx *sql.Context, dirtyBranchState *bra
 	if currDb == "" {
 		return fmt.Errorf("cannot dolt_commit with no database selected")
 	}
-	currDbBaseName, rev := SplitRevisionDbName(currDb)
+	currDbBaseName, rev := doltdb.SplitRevisionDbName(currDb)
 	dirtyDbBaseName := dirtyBranchState.dbState.dbName
 
 	if !strings.EqualFold(currDbBaseName, dirtyDbBaseName) {
@@ -660,7 +656,15 @@ func (d *DoltSession) DoltCommit(
 		return ws, commit, err
 	}
 
-	return d.commitCurrentHead(ctx, dbName, tx, commitFunc)
+	c, err := d.commitCurrentHead(ctx, dbName, tx, commitFunc)
+
+	if err == nil {
+		branch, b, e := d.CurrentHead(ctx, dbName)
+		if e == nil && b {
+			doltdb.BranchActivityWriteEvent(ctx, dbName, branch)
+		}
+	}
+	return c, err
 }
 
 // doCommitFunc is a function to write to the database, which involves updating the working set and potentially
@@ -801,7 +805,7 @@ func (d *DoltSession) Rollback(ctx *sql.Context, tx sql.Transaction) error {
 // 3) Working set roots in any writeSession.
 func (d *DoltSession) VisitGCRoots(ctx context.Context, dbName string, keep func(hash.Hash) bool) error {
 	dbName = strings.ToLower(dbName)
-	dbName, _ = SplitRevisionDbName(dbName)
+	dbName, _ = doltdb.SplitRevisionDbName(dbName)
 
 	d.mu.Lock()
 	dbState, dbStateFound := d.dbStates[dbName]
@@ -906,7 +910,7 @@ func (d *DoltSession) CreateSavepoint(ctx *sql.Context, tx sql.Transaction, save
 			if !ok {
 				return fmt.Errorf("session state for database %s not found", db.Name())
 			}
-			baseName, _ := SplitRevisionDbName(db.Name())
+			baseName, _ := doltdb.SplitRevisionDbName(db.Name())
 			roots[strings.ToLower(baseName)] = branchState.WorkingSet().WorkingRoot()
 		}
 	}
@@ -998,6 +1002,11 @@ func (d *DoltSession) GetRoots(ctx *sql.Context, dbName string) (doltdb.Roots, b
 	}
 
 	return branchState.roots(), true
+}
+
+// GetBranchActivityTracker returns the branch activity tracker for this session
+func (d *DoltSession) GetBranchActivityTracker() *doltdb.BranchActivityTracker {
+	return d.branchActivityTracker
 }
 
 // ResolveRootForRef returns the root value for the ref given, which refers to either a commit spec or is one of the
@@ -1207,7 +1216,7 @@ func (d *DoltSession) SwitchWorkingSet(
 
 	d.mu.Lock()
 
-	baseName, _ := SplitRevisionDbName(dbName)
+	baseName, _ := doltdb.SplitRevisionDbName(dbName)
 	dbState, ok := d.dbStates[strings.ToLower(baseName)]
 	if !ok {
 		d.mu.Unlock()
@@ -1218,7 +1227,7 @@ func (d *DoltSession) SwitchWorkingSet(
 	d.mu.Unlock()
 
 	// bootstrap the db state as necessary
-	branchState, ok, err := d.lookupDbState(ctx, baseName+DbRevisionDelimiter+headRef.GetPath())
+	branchState, ok, err := d.lookupDbState(ctx, baseName+doltdb.DbRevisionDelimiter+headRef.GetPath())
 	if err != nil {
 		return err
 	}
@@ -1339,7 +1348,7 @@ func (d *DoltSession) setForeignKeyChecksSessionVar(ctx *sql.Context, key string
 // other state tracking metadata.
 func (d *DoltSession) addDB(ctx *sql.Context, db SqlDatabase) error {
 	revisionQualifiedName := strings.ToLower(db.RevisionQualifiedName())
-	baseName, _ := SplitRevisionDbName(revisionQualifiedName)
+	baseName, _ := doltdb.SplitRevisionDbName(revisionQualifiedName)
 
 	DefineSystemVariablesForDB(baseName)
 

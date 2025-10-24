@@ -125,7 +125,7 @@ func ExecuteSqlOnEngine(ctx *sql.Context, engine *sqle.Engine, statements string
 }
 
 func NewTestSQLCtxWithProvider(ctx context.Context, pro dsess.DoltDatabaseProvider, config config.ReadWriteConfig, statsPro sql.StatsProvider, gcSafepointController *gcctx.GCSafepointController) *sql.Context {
-	s, err := dsess.NewDoltSession(sql.NewBaseSession(), pro, config, branch_control.CreateDefaultController(ctx), statsPro, writer.NewWriteSession, gcSafepointController)
+	s, err := dsess.NewDoltSession(sql.NewBaseSession(), pro, config, branch_control.CreateDefaultController(ctx), statsPro, writer.NewWriteSession, gcSafepointController, nil)
 	if err != nil {
 		panic(err)
 	}

@@ -222,7 +222,7 @@ func deleteBranches(ctx *sql.Context, dbData env.DbData[*sql.Context], apr *argp
 		return InvalidArgErr
 	}
 
-	currBase, currBranch := dsess.SplitRevisionDbName(ctx.GetCurrentDatabase())
+	currBase, currBranch := doltdb.SplitRevisionDbName(ctx.GetCurrentDatabase())
 
 	// The current branch on CLI can be deleted as user can be on different branch on SQL and delete it from SQL session.
 	// To update current head info on RepoState, we need DoltEnv to load CLI environment.
@@ -307,7 +307,7 @@ func shouldAllowDefaultBranchDeletion(ctx *sql.Context) bool {
 // selected as the active branch for any active server sessions.
 func validateBranchNotActiveInAnySession(ctx *sql.Context, branchName string) error {
 	currentDbName := ctx.GetCurrentDatabase()
-	currentDbName, _ = dsess.SplitRevisionDbName(currentDbName)
+	currentDbName, _ = doltdb.SplitRevisionDbName(currentDbName)
 	if currentDbName == "" {
 		return nil
 	}
@@ -334,7 +334,7 @@ func validateBranchNotActiveInAnySession(ctx *sql.Context, branchName string) er
 		}
 
 		sessionDbName := sess.Session.GetCurrentDatabase()
-		baseName, _ := dsess.SplitRevisionDbName(sessionDbName)
+		baseName, _ := doltdb.SplitRevisionDbName(sessionDbName)
 		if len(baseName) == 0 || baseName != currentDbName {
 			return false, nil
 		}

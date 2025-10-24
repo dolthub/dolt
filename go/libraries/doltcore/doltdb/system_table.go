@@ -160,6 +160,7 @@ func GeneratedSystemTableNames() []string {
 		GetHelpTableName(),
 		GetBackupsTableName(),
 		GetStashesTableName(),
+		GetBranchActivityTableName(),
 	}
 }
 
@@ -397,6 +398,10 @@ var GetTestsTableName = func() string {
 	return TestsTableName
 }
 
+var GetBranchActivityTableName = func() string {
+	return BranchActivityTableName
+}
+
 const (
 	// LogTableName is the log system table name
 	LogTableName = "dolt_log"
@@ -454,6 +459,9 @@ const (
 
 	// TestsTableName is the tests system table name
 	TestsTableName = "dolt_tests"
+
+	// BranchActivityTableName is the branch activity system table name
+	BranchActivityTableName = "dolt_branch_activity"
 )
 
 // DoltGeneratedTableNames is a list of all the generated dolt system tables that are not specific to a user table.

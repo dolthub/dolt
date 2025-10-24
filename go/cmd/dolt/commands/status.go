@@ -27,7 +27,6 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	eventsapi "github.com/dolthub/eventsapi_schema/dolt/services/eventsapi/v1alpha1"
 )
@@ -136,7 +135,7 @@ func createPrintData(err error, queryist cli.Queryist, sqlCtx *sql.Context, show
 	if brName, hasBranch := cliCtx.GlobalArgs().GetValue(cli.BranchParam); hasBranch {
 		branchName = brName
 	} else if useDb, hasUseDb := cliCtx.GlobalArgs().GetValue(UseDbFlag); hasUseDb {
-		_, branchName = dsess.SplitRevisionDbName(useDb)
+		_, branchName = doltdb.SplitRevisionDbName(useDb)
 	} else {
 		var err error
 		branchName, err = getActiveBranchName(sqlCtx, queryist)

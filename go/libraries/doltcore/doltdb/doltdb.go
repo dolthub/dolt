@@ -573,8 +573,8 @@ func (ddb *DoltDB) ResolveByNomsRoot(ctx *sql.Context, cs *CommitSpec, cwb ref.D
 
 // ResolveCommitRef takes a DoltRef and returns a Commit, or an error if the commit cannot be found. The ref given must
 // point to a Commit.
-func (ddb *DoltDB) ResolveCommitRef(ctx context.Context, ref ref.DoltRef) (*Commit, error) {
-	commitVal, err := getCommitValForRefStr(ctx, ddb, ref.String())
+func (ddb *DoltDB) ResolveCommitRef(ctx context.Context, doltRef ref.DoltRef) (*Commit, error) {
+	commitVal, err := getCommitValForRefStr(ctx, ddb, doltRef.String())
 	if err != nil {
 		return nil, err
 	}
@@ -1642,6 +1642,22 @@ func (ddb *DoltDB) UpdateWorkingSet(
 	}
 
 	_, err = ddb.db.withReplicationStatusController(replicationStatus).UpdateWorkingSet(ctx, ds, *wsSpec, prevHash)
+
+	if err == nil {
+		if headRef, e2 := workingSetRef.ToHeadRef(); e2 == nil && headRef.GetType() == ref.BranchRefType {
+			branchName := headRef.GetPath()
+
+			sqlCtx, ok := ctx.(*sql.Context)
+			if ok {
+				db := sqlCtx.GetCurrentDatabase()
+				db, _ = SplitRevisionDbName(db)
+
+				// record branch write activity for dolt_branch_activity. Errors here are non-fatal, ignored.
+				BranchActivityWriteEvent(sqlCtx, db, branchName)
+			}
+		}
+	}
+
 	return err
 }
 
@@ -2443,4 +2459,23 @@ func (ddb *DoltDB) FSCK(ctx context.Context, progress chan string) (*FSCKReport,
 	FSCKReport := FSCKReport{Problems: errs, ChunkCount: chunkCount}
 
 	return &FSCKReport, nil
+}
+
+const (
+	DbRevisionDelimiter = "/"
+)
+
+// RevisionDbName returns the name of the revision db for the base name and revision string given
+func RevisionDbName(baseName string, rev string) string {
+	return baseName + DbRevisionDelimiter + rev
+}
+
+func SplitRevisionDbName(dbName string) (string, string) {
+	var baseName, rev string
+	parts := strings.SplitN(dbName, DbRevisionDelimiter, 2)
+	baseName = parts[0]
+	if len(parts) > 1 {
+		rev = parts[1]
+	}
+	return baseName, rev
 }

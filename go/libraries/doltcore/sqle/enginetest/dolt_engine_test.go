@@ -2175,3 +2175,9 @@ func TestDoltTestsSystemTable(t *testing.T) {
 	defer harness.Close()
 	RunDoltTestsTableTests(t, harness)
 }
+
+func TestBranchActivity(t *testing.T) {
+	h := newDoltEnginetestHarness(t)
+	defer h.Close()
+	RunBranchActivityTests(t, h)
+}

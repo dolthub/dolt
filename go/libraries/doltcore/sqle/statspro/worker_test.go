@@ -821,7 +821,7 @@ func newTestEngine(ctx context.Context, t *testing.T, dEnv *env.DoltEnv, threads
 
 	gcSafepointController := gcctx.NewGCSafepointController()
 
-	doltSession, err := dsess.NewDoltSession(sql.NewBaseSession(), pro, dEnv.Config.WriteableConfig(), branch_control.CreateDefaultController(ctx), sc, writer.NewWriteSession, gcSafepointController)
+	doltSession, err := dsess.NewDoltSession(sql.NewBaseSession(), pro, dEnv.Config.WriteableConfig(), branch_control.CreateDefaultController(ctx), sc, writer.NewWriteSession, gcSafepointController, nil)
 	if err != nil {
 		panic(err)
 	}
@@ -830,7 +830,7 @@ func newTestEngine(ctx context.Context, t *testing.T, dEnv *env.DoltEnv, threads
 	sqlCtx.SetCurrentDatabase(mrEnv.GetFirstDatabase())
 
 	ctxGen := func(ctx context.Context) (*sql.Context, error) {
-		doltSession, err := dsess.NewDoltSession(sql.NewBaseSession(), pro, dEnv.Config.WriteableConfig(), branch_control.CreateDefaultController(ctx), sc, writer.NewWriteSession, gcSafepointController)
+		doltSession, err := dsess.NewDoltSession(sql.NewBaseSession(), pro, dEnv.Config.WriteableConfig(), branch_control.CreateDefaultController(ctx), sc, writer.NewWriteSession, gcSafepointController, nil)
 		if err != nil {
 			return nil, err
 		}

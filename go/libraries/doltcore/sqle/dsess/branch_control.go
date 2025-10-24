@@ -18,6 +18,7 @@ import (
 	"context"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/branch_control"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 )
 
 // CheckAccessForDb checks whether the current user has the given permissions for the given database.
@@ -47,7 +48,7 @@ func CheckAccessForDb(ctx context.Context, db SqlDatabase, flags branch_control.
 		return nil
 	}
 
-	dbName, branch := SplitRevisionDbName(db.RevisionQualifiedName())
+	dbName, branch := doltdb.SplitRevisionDbName(db.RevisionQualifiedName())
 
 	// Get the permissions for the branch, user, and host combination
 	_, perms := controller.Access.Match(dbName, branch, user, host)
