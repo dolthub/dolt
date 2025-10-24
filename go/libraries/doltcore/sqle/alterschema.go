@@ -141,19 +141,7 @@ func validateNewColumn(
 		return false, nil
 	})
 
-	if err != nil {
-		return err
-	}
-
-	_, oldTblName, found, err := doltdb.GetTableByColTag(ctx, root, tag)
-	if err != nil {
-		return err
-	}
-	if found {
-		return schema.NewErrTagPrevUsed(tag, newColName, tblName, oldTblName.Name)
-	}
-
-	return nil
+	return err
 }
 
 var ErrPrimaryKeySetsIncompatible = errors.New("primary key sets incompatible")

@@ -315,6 +315,7 @@ func MapSchemaBasedOnTagAndName(inSch, outSch Schema) (val.OrdinalMapping, val.O
 		return keyMapping, make([]int, inSch.GetNonPKCols().Size()), nil
 	}
 
+	// TAGS: Use of tags here is confined to a single table
 	err := inSch.GetPKCols().Iter(func(tag uint64, col Column) (stop bool, err error) {
 		i := inSch.GetPKCols().TagToIdx[tag]
 		if foundCol, ok := outSch.GetPKCols().GetByTag(tag); ok {
