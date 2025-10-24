@@ -144,7 +144,7 @@ func countActiveSessions(ctx *sql.Context) (map[string]int, error) {
 
 	// DB of the requester is used to filter out other databases.
 	currentDbName := ctx.GetCurrentDatabase()
-	baseDbName, _ := dsess.SplitRevisionDbName(currentDbName)
+	baseDbName, _ := doltdb.SplitRevisionDbName(currentDbName)
 	if baseDbName == "" {
 		return sessionCounts, nil
 	}
@@ -159,7 +159,7 @@ func countActiveSessions(ctx *sql.Context) (map[string]int, error) {
 		}
 
 		sessionDbName := sess.Session.GetCurrentDatabase()
-		baseName, revision := dsess.SplitRevisionDbName(sessionDbName)
+		baseName, revision := doltdb.SplitRevisionDbName(sessionDbName)
 		if baseName != baseDbName {
 			// Different database, skip
 			return false, nil

@@ -135,7 +135,7 @@ func (r ReadOnlyDatabase) WithBranchRevision(requestedName string, branchSpec ds
 func (db Database) WithBranchRevision(requestedName string, branchSpec dsess.SessionDatabaseBranchSpec) (dsess.SqlDatabase, error) {
 	db.rsr, db.rsw = branchSpec.RepoState, branchSpec.RepoState
 	db.revision = branchSpec.Branch
-	db.revName = db.baseName + dsess.DbRevisionDelimiter + branchSpec.Branch
+	db.revName = db.baseName + doltdb.DbRevisionDelimiter + branchSpec.Branch
 	db.revType = dsess.RevisionTypeBranch
 	db.requestedName = requestedName
 
@@ -1196,7 +1196,7 @@ func resolveAsOfCommitRef(ctx *sql.Context, db Database, head ref.DoltRef, commi
 	}
 
 	currentDb := ctx.GetCurrentDatabase()
-	dbName, _ := dsess.SplitRevisionDbName(currentDb)
+	dbName, _ := doltdb.SplitRevisionDbName(currentDb)
 	doltdb.BranchActivityReadEvent(ctx, dbName, commitRef)
 
 	root, err := cm.GetRootValue(ctx)

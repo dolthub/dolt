@@ -243,7 +243,7 @@ func (p *DoltDatabaseProvider) FileSystemForDatabase(dbname string) (filesys.Fil
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	baseName, _ := dsess.SplitRevisionDbName(dbname)
+	baseName, _ := doltdb.SplitRevisionDbName(dbname)
 
 	dbLocation, ok := p.dbLocations[strings.ToLower(baseName)]
 	if !ok {
@@ -350,7 +350,7 @@ func (p *DoltDatabaseProvider) HasDatabase(ctx *sql.Context, name string) bool {
 
 func (p *DoltDatabaseProvider) AllDatabases(ctx *sql.Context) (all []sql.Database) {
 	currentDb := ctx.GetCurrentDatabase()
-	_, currRev := dsess.SplitRevisionDbName(currentDb)
+	_, currRev := doltdb.SplitRevisionDbName(currentDb)
 
 	p.mu.RLock()
 	showBranches, _ := dsess.GetBooleanSystemVar(ctx, dsess.ShowBranchDatabases)
@@ -767,7 +767,7 @@ func (p *DoltDatabaseProvider) cloneDatabaseFromRemote(
 
 // DropDatabase implements the sql.MutableDatabaseProvider interface
 func (p *DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error {
-	_, revision := dsess.SplitRevisionDbName(name)
+	_, revision := doltdb.SplitRevisionDbName(name)
 	if revision != "" {
 		return fmt.Errorf("unable to drop revision database: %s", name)
 	}
@@ -827,7 +827,7 @@ func (p *DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error
 
 	// We not only have to delete tracking metadata for this database, but also for any derivative
 	// ones we've stored as a result of USE or connection strings
-	derivativeNamePrefix := strings.ToLower(dbKey + dsess.DbRevisionDelimiter)
+	derivativeNamePrefix := strings.ToLower(dbKey + doltdb.DbRevisionDelimiter)
 	for dbName := range p.databases {
 		if strings.HasPrefix(strings.ToLower(dbName), derivativeNamePrefix) {
 			delete(p.databases, dbName)
@@ -956,11 +956,11 @@ func (p *DoltDatabaseProvider) invalidateDbStateInAllSessions(ctx *sql.Context, 
 }
 
 func (p *DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revisionQualifiedName string, requestedName string) (dsess.SqlDatabase, bool, error) {
-	if !strings.Contains(revisionQualifiedName, dsess.DbRevisionDelimiter) {
+	if !strings.Contains(revisionQualifiedName, doltdb.DbRevisionDelimiter) {
 		return nil, false, nil
 	}
 
-	parts := strings.SplitN(revisionQualifiedName, dsess.DbRevisionDelimiter, 2)
+	parts := strings.SplitN(revisionQualifiedName, doltdb.DbRevisionDelimiter, 2)
 	baseName, rev := parts[0], parts[1]
 
 	// Look in the session cache for this DB before doing any IO to figure out what's being asked for
@@ -1241,8 +1241,8 @@ func (p *DoltDatabaseProvider) databaseForClone(ctx *sql.Context, revDB string) 
 	}
 
 	var dbName string
-	if strings.Contains(revDB, dsess.DbRevisionDelimiter) {
-		parts := strings.SplitN(revDB, dsess.DbRevisionDelimiter, 2)
+	if strings.Contains(revDB, doltdb.DbRevisionDelimiter) {
+		parts := strings.SplitN(revDB, doltdb.DbRevisionDelimiter, 2)
 		dbName = parts[0]
 	} else {
 		dbName = revDB
@@ -1330,10 +1330,10 @@ func resolveAncestorSpec(ctx *sql.Context, revSpec string, ddb *doltdb.DoltDB) (
 // managing the session initialization only. Use SessionDatabase for normal database retrieval.
 func (p *DoltDatabaseProvider) BaseDatabase(ctx *sql.Context, name string) (dsess.SqlDatabase, bool) {
 	baseName := name
-	isRevisionDbName := strings.Contains(name, dsess.DbRevisionDelimiter)
+	isRevisionDbName := strings.Contains(name, doltdb.DbRevisionDelimiter)
 
 	if isRevisionDbName {
-		parts := strings.SplitN(name, dsess.DbRevisionDelimiter, 2)
+		parts := strings.SplitN(name, doltdb.DbRevisionDelimiter, 2)
 		baseName = parts[0]
 	}
 
@@ -1348,12 +1348,12 @@ func (p *DoltDatabaseProvider) BaseDatabase(ctx *sql.Context, name string) (dses
 // SessionDatabase implements dsess.SessionDatabaseProvider
 func (p *DoltDatabaseProvider) SessionDatabase(ctx *sql.Context, name string) (dsess.SqlDatabase, bool, error) {
 	baseName := name
-	isRevisionDbName := strings.Contains(name, dsess.DbRevisionDelimiter)
+	isRevisionDbName := strings.Contains(name, doltdb.DbRevisionDelimiter)
 
 	if isRevisionDbName {
 		// TODO: formalize and enforce this rule (can't allow DBs with / in the name)
 		// TODO: some connectors will take issue with the /, we need other mechanisms to support them
-		parts := strings.SplitN(name, dsess.DbRevisionDelimiter, 2)
+		parts := strings.SplitN(name, doltdb.DbRevisionDelimiter, 2)
 		baseName = parts[0]
 	}
 
@@ -1406,7 +1406,7 @@ func (p *DoltDatabaseProvider) SessionDatabase(ctx *sql.Context, name string) (d
 			}
 		}
 
-		revisionQualifiedName = baseName + dsess.DbRevisionDelimiter + head
+		revisionQualifiedName = baseName + doltdb.DbRevisionDelimiter + head
 	}
 
 	db, ok, err := p.databaseForRevision(ctx, revisionQualifiedName, name)
@@ -1617,7 +1617,7 @@ func initialStateForBranchDb(ctx *sql.Context, srcDb dsess.SqlDatabase) (dsess.I
 }
 
 func revisionDbForTag(ctx context.Context, srcDb Database, revSpec string, requestedName string) (ReadOnlyDatabase, error) {
-	baseName, _ := dsess.SplitRevisionDbName(srcDb.Name())
+	baseName, _ := doltdb.SplitRevisionDbName(srcDb.Name())
 	return ReadOnlyDatabase{Database: Database{
 		baseName:      baseName,
 		requestedName: requestedName,
@@ -1626,7 +1626,7 @@ func revisionDbForTag(ctx context.Context, srcDb Database, revSpec string, reque
 		rsr:           srcDb.DbData().Rsr,
 		editOpts:      srcDb.editOpts,
 		revision:      revSpec,
-		revName:       baseName + dsess.DbRevisionDelimiter + revSpec,
+		revName:       baseName + doltdb.DbRevisionDelimiter + revSpec,
 		revType:       dsess.RevisionTypeTag,
 	}}, nil
 }
@@ -1661,7 +1661,7 @@ func initialStateForTagDb(ctx context.Context, srcDb ReadOnlyDatabase) (dsess.In
 }
 
 func revisionDbForCommit(ctx context.Context, srcDb Database, revSpec string, requestedName string) (ReadOnlyDatabase, error) {
-	baseName, _ := dsess.SplitRevisionDbName(srcDb.Name())
+	baseName, _ := doltdb.SplitRevisionDbName(srcDb.Name())
 	return ReadOnlyDatabase{Database: Database{
 		baseName:      baseName,
 		requestedName: requestedName,
@@ -1670,7 +1670,7 @@ func revisionDbForCommit(ctx context.Context, srcDb Database, revSpec string, re
 		rsr:           srcDb.DbData().Rsr,
 		editOpts:      srcDb.editOpts,
 		revision:      revSpec,
-		revName:       baseName + dsess.DbRevisionDelimiter + revSpec,
+		revName:       baseName + doltdb.DbRevisionDelimiter + revSpec,
 		revType:       dsess.RevisionTypeCommit,
 	}}, nil
 }
@@ -1730,12 +1730,9 @@ func (s staticRepoState) CWBHeadRef(*sql.Context) (ref.DoltRef, error) {
 // so it's stored in lower case name. Branch name is case-sensitive, so not changed.
 // TODO: branch names should be case-insensitive too
 func formatDbMapKeyName(name string) string {
-	if !strings.Contains(name, dsess.DbRevisionDelimiter) {
-		return strings.ToLower(name)
+	dbName, rev := doltdb.SplitRevisionDbName(name)
+	if rev == "" {
+		return strings.ToLower(dbName)
 	}
-
-	parts := strings.SplitN(name, dsess.DbRevisionDelimiter, 2)
-	dbName, revSpec := parts[0], parts[1]
-
-	return strings.ToLower(dbName) + dsess.DbRevisionDelimiter + revSpec
+	return strings.ToLower(dbName) + doltdb.DbRevisionDelimiter + rev
 }

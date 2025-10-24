@@ -17,7 +17,6 @@ package doltdb
 import (
 	"context"
 	"sort"
-	"strings"
 	"sync"
 	"time"
 
@@ -85,7 +84,8 @@ func NewBranchActivityTracker(ctx context.Context) *BranchActivityTracker {
 	}
 
 	// Start background processor, we ignore the cancel function as the tracker doesn't have a lifecycle.
-	ctx, _ = context.WithCancel(ctx)
+	ctx, cancel := context.WithCancel(ctx)
+	_ = cancel // silence the linter.
 	go tracker.processEvents(ctx)
 
 	return tracker
@@ -154,8 +154,7 @@ func (t *BranchActivityTracker) RecordWriteEvent(ctx context.Context, database, 
 // GetBranchActivity returns activity data for all current branches in the specified database
 func (t *BranchActivityTracker) GetBranchActivity(ctx *sql.Context, ddb *DoltDB) ([]BranchActivityData, error) {
 	database := ctx.GetCurrentDatabase()
-	parts := strings.SplitN(database, "/", 2)
-	database = parts[0]
+	database, _ = SplitRevisionDbName(database)
 
 	t.mu.RLock()
 	defer t.mu.RUnlock()

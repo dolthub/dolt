@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
 )
@@ -75,7 +76,7 @@ const URLTemplateDatabasePlaceholder = "{database}"
 
 // DefineSystemVariablesForDB defines per database dolt-session variables in the engine as necessary
 func DefineSystemVariablesForDB(name string) {
-	name, _ = SplitRevisionDbName(name)
+	name, _ = doltdb.SplitRevisionDbName(name)
 
 	if _, _, ok := sql.SystemVariables.GetGlobal(name + HeadKeySuffix); !ok {
 		sql.SystemVariables.AddSystemVariables([]sql.SystemVariable{

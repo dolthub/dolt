@@ -1650,8 +1650,7 @@ func (ddb *DoltDB) UpdateWorkingSet(
 			sqlCtx, ok := ctx.(*sql.Context)
 			if ok {
 				db := sqlCtx.GetCurrentDatabase()
-				parts := strings.SplitN(db, "/", 2)
-				db = parts[0]
+				db, _ = SplitRevisionDbName(db)
 
 				// record branch write activity for dolt_branch_activity. Errors here are non-fatal, ignored.
 				BranchActivityWriteEvent(sqlCtx, db, branchName)
@@ -2460,4 +2459,23 @@ func (ddb *DoltDB) FSCK(ctx context.Context, progress chan string) (*FSCKReport,
 	FSCKReport := FSCKReport{Problems: errs, ChunkCount: chunkCount}
 
 	return &FSCKReport, nil
+}
+
+const (
+	DbRevisionDelimiter = "/"
+)
+
+// RevisionDbName returns the name of the revision db for the base name and revision string given
+func RevisionDbName(baseName string, rev string) string {
+	return baseName + DbRevisionDelimiter + rev
+}
+
+func SplitRevisionDbName(dbName string) (string, string) {
+	var baseName, rev string
+	parts := strings.SplitN(dbName, DbRevisionDelimiter, 2)
+	baseName = parts[0]
+	if len(parts) > 1 {
+		rev = parts[1]
+	}
+	return baseName, rev
 }
