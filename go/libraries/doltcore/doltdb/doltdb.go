@@ -2016,10 +2016,10 @@ func (ddb *DoltDB) StoreSizes(ctx context.Context) (StoreSizes, error) {
 		if err != nil {
 			return StoreSizes{}, err
 		}
-		journal := newGenNBS.ChunkJournal()
-		if journal != nil {
+		journalSz, ok := newGenNBS.ChunkJournalSize()
+		if ok {
 			return StoreSizes{
-				JournalBytes: uint64(journal.Size()),
+				JournalBytes: uint64(journalSz),
 				NewGenBytes:  newgenSz,
 				TotalBytes:   totalSz,
 			}, nil
