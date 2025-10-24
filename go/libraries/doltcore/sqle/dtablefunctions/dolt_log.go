@@ -322,30 +322,42 @@ func (ltf *LogTableFunction) WithExpressions(exprs ...sql.Expression) (sql.Node,
 // of the prepared statement, and get fully resolved when they are bound when the
 // prepared statement is later executed.
 func (ltf *LogTableFunction) deferExpressions(expressions ...sql.Expression) (sql.Node, error) {
-	bindVarsExist := false
+	hasDeferredExpression := false
+	var err error
 	for _, expr := range expressions {
-		// functions are not allowed as arguments
-		if _, ok := expr.(sql.FunctionExpression); ok {
-			return nil, ErrInvalidNonLiteralArgument.New(ltf.Name(), expr.String())
-		}
-		// also check for UnresolvedFunction which might not implement FunctionExpression
-		if _, ok := expr.(*expression.UnresolvedFunction); ok {
-			return nil, ErrInvalidNonLiteralArgument.New(ltf.Name(), expr.String())
-		}
-		if expression.IsBindVar(expr) {
-			bindVarsExist = true
-		}
+		sql.Inspect(expr, func(expr sql.Expression) bool {
+			// functions are not allowed as arguments
+			if _, ok := expr.(sql.FunctionExpression); ok {
+				err = ErrInvalidNonLiteralArgument.New(ltf.Name(), expr.String())
+				return false
+			}
+			// also check for UnresolvedFunction which might not implement FunctionExpression
+			if _, ok := expr.(*expression.UnresolvedFunction); ok {
+				err = ErrInvalidNonLiteralArgument.New(ltf.Name(), expr.String())
+				return false
+			}
+			if expression.IsBindVar(expr) {
+				hasDeferredExpression = true
+			}
+			if _, ok := expr.(*expression.GetField); ok {
+				hasDeferredExpression = true
+			}
+			return true
+		})
+	}
+	if err != nil {
+		return nil, err
 	}
 
 	node, _ := ltf.WithExpressions(expressions...)
 	newLtf := *node.(*LogTableFunction)
 
 	// Parse literal arguments for schema determination during analysis phase
-	// getDoltArgs will skip bind variables (can't evaluate them yet)
+	// getDoltArgs will skip bind variables and GetFields (can't evaluate them yet)
 	// only return errors if no bind variables exist (incomplete args are expected with bind vars)
 	// TODO: schema-affecting flags as bind variables don't add columns to schema
 	// this may be a common problem for dynamic table functions that need execution-time schema changes
-	if err := newLtf.addOptions(newLtf.argumentExprs); err != nil && !bindVarsExist {
+	if err := newLtf.addOptions(newLtf.argumentExprs); err != nil && !hasDeferredExpression {
 		return nil, err
 	}
 
