@@ -1202,7 +1202,7 @@ func ValidateForeignKeysOnSchemas(ctx *sql.Context, tableResolver TableResolver,
 		if tableSch, ok := allTablesSet[tableName]; ok {
 			return tableSch, true, nil
 		}
-		_, tbl, ok, err := tableResolver.GetDoltTableInsensitiveWithRoot(ctx, root, tableName)
+		_, tbl, ok, err := tableResolver.GetDoltDBTableInsensitiveWithRoot(ctx, root, tableName)
 		if err != nil {
 			return nil, false, err
 		}

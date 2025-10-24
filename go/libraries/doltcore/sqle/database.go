@@ -298,13 +298,13 @@ func (db Database) getTableInsensitive(ctx *sql.Context, tblName string, readNon
 	return db.getTableInsensitiveWithRoot(ctx, nil, ds, root, tblName, "", readNonlocalTables)
 }
 
-func (db Database) getDoltTableInsensitive(ctx *sql.Context, tblName doltdb.TableName, readNonlocalTables readNonlocalTablesFlag) (doltdb.TableName, *doltdb.Table, bool, error) {
+func (db Database) getDoltDBTableInsensitive(ctx *sql.Context, tblName doltdb.TableName, readNonlocalTables readNonlocalTablesFlag) (doltdb.TableName, *doltdb.Table, bool, error) {
 	root, err := db.GetRoot(ctx)
 	if err != nil {
 		return doltdb.TableName{}, nil, false, err
 	}
 
-	return db.getDoltTableInsensitiveWithRoot(ctx, root, tblName, readNonlocalTables)
+	return db.getDoltDBTableInsensitiveWithRoot(ctx, root, tblName, readNonlocalTables)
 }
 
 func (db Database) GetTableInsensitiveAsOf(ctx *sql.Context, tableName string, asOf interface{}) (sql.Table, bool, error) {
@@ -360,7 +360,7 @@ func (db Database) getTableInsensitiveAsOf(ctx *sql.Context, tableName string, a
 
 func (db Database) getDoltTableInsensitiveAsOf(ctx *sql.Context, tableName doltdb.TableName, asOf interface{}, readNonlocalTables readNonlocalTablesFlag) (doltdb.TableName, *doltdb.Table, bool, error) {
 	if asOf == nil {
-		return db.getDoltTableInsensitive(ctx, tableName, readNonlocalTables)
+		return db.getDoltDBTableInsensitive(ctx, tableName, readNonlocalTables)
 	}
 	_, root, err := resolveAsOf(ctx, db, asOf)
 	if err != nil {
@@ -369,7 +369,7 @@ func (db Database) getDoltTableInsensitiveAsOf(ctx *sql.Context, tableName doltd
 		return doltdb.TableName{}, nil, false, nil
 	}
 
-	return db.getDoltTableInsensitiveWithRoot(ctx, root, tableName, readNonlocalTables)
+	return db.getDoltDBTableInsensitiveWithRoot(ctx, root, tableName, readNonlocalTables)
 }
 
 func (db Database) getTableInsensitiveWithRoot(ctx *sql.Context, head *doltdb.Commit, ds *dsess.DoltSession, root doltdb.RootValue, tblName string, asOf interface{}, readNonlocalTables readNonlocalTablesFlag) (sql.Table, bool, error) {
@@ -968,15 +968,15 @@ func (db Database) getTableInsensitiveWithRoot(ctx *sql.Context, head *doltdb.Co
 	return resolveOverriddenNonexistentTable(ctx, tblName, db)
 }
 
-func (db Database) GetDoltTableInsensitiveWithRoot(ctx *sql.Context, root doltdb.RootValue, tblName doltdb.TableName) (trueTableName doltdb.TableName, table *doltdb.Table, found bool, err error) {
-	return db.getDoltTableInsensitiveWithRoot(ctx, root, tblName, doReadNonlocalTables)
+func (db Database) GetDoltDBTableInsensitiveWithRoot(ctx *sql.Context, root doltdb.RootValue, tblName doltdb.TableName) (trueTableName doltdb.TableName, table *doltdb.Table, found bool, err error) {
+	return db.getDoltDBTableInsensitiveWithRoot(ctx, root, tblName, doReadNonlocalTables)
 }
 
-func (db Database) getDoltTableInsensitiveWithRoot(ctx *sql.Context, root doltdb.RootValue, tblName doltdb.TableName, readNonlocalTables readNonlocalTablesFlag) (trueTableName doltdb.TableName, table *doltdb.Table, found bool, err error) {
+func (db Database) getDoltDBTableInsensitiveWithRoot(ctx *sql.Context, root doltdb.RootValue, tblName doltdb.TableName, readNonlocalTables readNonlocalTablesFlag) (trueTableName doltdb.TableName, table *doltdb.Table, found bool, err error) {
 	tblName = tblName.ToLower()
 
 	if readNonlocalTables {
-		trueTableName, nonlocalTable, exists, err := db.getNonlocalDoltTable(ctx, root, tblName)
+		trueTableName, nonlocalTable, exists, err := db.getNonlocalDoltDBTable(ctx, root, tblName)
 		if err != nil {
 			return doltdb.TableName{}, nil, false, err
 		}
@@ -1017,7 +1017,9 @@ func (db Database) getNonlocalTable(ctx *sql.Context, root doltdb.RootValue, lwr
 	}
 }
 
-func (db Database) getNonlocalDoltTable(ctx *sql.Context, root doltdb.RootValue, lwrName doltdb.TableName) (doltdb.TableName, *doltdb.Table, bool, error) {
+// getNonlocalDoltDBTable checks to see if there exists an entry in the dolt_nonlocal_tables system table that would
+// cause the table name to resolve to a table on a different ref.
+func (db Database) getNonlocalDoltDBTable(ctx *sql.Context, root doltdb.RootValue, lwrName doltdb.TableName) (doltdb.TableName, *doltdb.Table, bool, error) {
 	nonlocalTableEntry, found, err := db.getNonlocalTableEntry(ctx, root, lwrName.Name)
 
 	if err != nil || !found {
@@ -1037,7 +1039,7 @@ func (db Database) getNonlocalDoltTable(ctx *sql.Context, root doltdb.RootValue,
 		if err != nil {
 			return doltdb.TableName{}, nil, false, err
 		}
-		return referencedBranch.(Database).getDoltTableInsensitive(ctx, redirectedTableName, dontReadNonlocalTables)
+		return referencedBranch.(Database).getDoltDBTableInsensitive(ctx, redirectedTableName, dontReadNonlocalTables)
 	} else {
 		// If we couldn't resolve it as a database revision, treat it as a noms ref.
 		// This lets us resolve branch heads like 'heads/$branchName' or remotes refs like '$remote/$branchName'

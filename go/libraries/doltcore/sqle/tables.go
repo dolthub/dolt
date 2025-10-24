@@ -2746,7 +2746,7 @@ func (t *WritableDoltTable) createForeignKey(
 }
 
 func (t *WritableDoltTable) getDoltTableForFK(ctx *sql.Context, root doltdb.RootValue, lwrTableName string, sqlFk sql.ForeignKeyConstraint) (refTbl *doltdb.Table, err error) {
-	_, refTbl, nonlocalTableExists, err := t.db.getNonlocalDoltTable(ctx, root, doltdb.TableName{Name: lwrTableName, Schema: sqlFk.ParentSchema})
+	_, refTbl, nonlocalTableExists, err := t.db.getNonlocalDoltDBTable(ctx, root, doltdb.TableName{Name: lwrTableName, Schema: sqlFk.ParentSchema})
 	if err != nil {
 		return nil, err
 	}
