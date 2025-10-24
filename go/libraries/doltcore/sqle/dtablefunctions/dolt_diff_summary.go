@@ -25,6 +25,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
@@ -287,9 +288,18 @@ func (ds *DiffSummaryTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.
 		return deltas[i].ToName.Less(deltas[j].ToName)
 	})
 
+	ignorePatterns, err := getIgnorePatternsFromContext(ctx, ds.database)
+	if err != nil {
+		return nil, err
+	}
+
 	// If tableNameExpr defined, return a single table diff summary result
 	if ds.tableNameExpr != nil {
 		delta := findMatchingDelta(deltas, tableName)
+
+		if shouldIgnoreDelta(delta, ignorePatterns) {
+			return NewDiffSummaryTableFunctionRowIter([]*diff.TableDeltaSummary{}), nil
+		}
 
 		summ, err := getSummaryForDelta(ctx, delta, sqledb, fromDetails, toDetails, true)
 		if err != nil {
@@ -306,6 +316,10 @@ func (ds *DiffSummaryTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.
 
 	var diffSummaries []*diff.TableDeltaSummary
 	for _, delta := range deltas {
+		if shouldIgnoreDelta(delta, ignorePatterns) {
+			continue
+		}
+
 		summ, err := getSummaryForDelta(ctx, delta, sqledb, fromDetails, toDetails, false)
 		if err != nil {
 			return nil, err
@@ -437,4 +451,46 @@ func getRowFromSummary(ds *diff.TableDeltaSummary) sql.Row {
 		ds.DataChange,             // data_change
 		ds.SchemaChange,           // schema_change
 	}
+}
+
+// getIgnorePatternsFromContext retrieves ignore patterns from the dolt_ignore table.
+func getIgnorePatternsFromContext(ctx *sql.Context, database sql.Database) (doltdb.IgnorePatterns, error) {
+	sess := dsess.DSessFromSess(ctx.Session)
+	dbName := database.Name()
+	roots, ok := sess.GetRoots(ctx, dbName)
+	if !ok {
+		return nil, fmt.Errorf("Could not load database %s", dbName)
+	}
+
+	ignorePatternMap, err := doltdb.GetIgnoredTablePatterns(ctx, roots, []string{""})
+	if err != nil {
+		return nil, err
+	}
+
+	// Return patterns for default schema
+	return ignorePatternMap[""], nil
+}
+
+// shouldIgnoreDelta determines if a table delta should be ignored based on dolt_ignore patterns.
+// This follows the same logic as the dolt diff command: only "added" or "dropped" tables
+// can be ignored, not modified/renamed tables.
+func shouldIgnoreDelta(delta diff.TableDelta, ignorePatterns doltdb.IgnorePatterns) bool {
+	if delta.IsAdd() {
+		ignoreResult, err := ignorePatterns.IsTableNameIgnored(delta.ToName)
+		if err != nil {
+			return false // On error, don't ignore
+		}
+		return ignoreResult == doltdb.Ignore
+	}
+
+	if delta.IsDrop() {
+		ignoreResult, err := ignorePatterns.IsTableNameIgnored(delta.FromName)
+		if err != nil {
+			return false // On error, don't ignore
+		}
+		return ignoreResult == doltdb.Ignore
+	}
+
+	// For modified/renamed tables, don't ignore (consistent with dolt diff behavior)
+	return false
 }
