@@ -1965,8 +1965,15 @@ func (ddb *DoltDB) IsTableFileStore() bool {
 	return ok
 }
 
-// ChunkJournal returns the ChunkJournal for this DoltDB, if one is in use.
-func (ddb *DoltDB) ChunkJournal() *nbs.ChunkJournal {
+// Iterates an unspecified number of previous root hashes for this
+// DoltDB, including the time at which they were written. Ends by
+// visiting the current root hash.
+//
+// Only works in the case that the underlying store is a
+// NomsBlockStore instance which exposes its roots through
+// IterateRoots.  Otherwise returns |nil| without visiting any roots,
+// including the current one.
+func (ddb *DoltDB) IterateRoots(cb func(root string, timestamp *time.Time) error) error {
 	cs := datas.ChunkStoreFromDatabase(ddb.db)
 
 	if generationalNBS, ok := cs.(*nbs.GenerationalNBS); ok {
@@ -1974,7 +1981,7 @@ func (ddb *DoltDB) ChunkJournal() *nbs.ChunkJournal {
 	}
 
 	if nbsStore, ok := cs.(*nbs.NomsBlockStore); ok {
-		return nbsStore.ChunkJournal()
+		return nbsStore.IterateRoots(cb)
 	} else {
 		return nil
 	}
