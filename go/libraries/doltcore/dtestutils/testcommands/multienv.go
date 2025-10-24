@@ -20,11 +20,10 @@ import (
 	"os"
 	"path/filepath"
 
-	cmd "github.com/dolthub/dolt/go/cmd/dolt/commands"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dprocedures"
-	"github.com/dolthub/dolt/go/libraries/utils/config"
+	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	cmd "github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
@@ -32,7 +31,9 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dprocedures"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
+	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/types"
@@ -240,7 +241,7 @@ func (mr *MultiRepoTestSetup) GetDB(dbName string) *doltdb.DoltDB {
 }
 
 func (mr *MultiRepoTestSetup) CommitWithWorkingSet(dbName string) *doltdb.Commit {
-	ctx := context.Background()
+	ctx := sql.NewEmptyContext()
 	dEnv := mr.envs[dbName]
 	ws, err := dEnv.WorkingSet(ctx)
 	if err != nil {
@@ -262,7 +263,7 @@ func (mr *MultiRepoTestSetup) CommitWithWorkingSet(dbName string) *doltdb.Commit
 	if err != nil {
 		panic("couldn't get roots: " + err.Error())
 	}
-	pendingCommit, err := actions.GetCommitStaged(ctx, roots, ws, mergeParentCommits, dEnv.DbData(ctx).Ddb, actions.CommitStagedProps{
+	pendingCommit, err := actions.GetCommitStaged(ctx, doltdb.SimpleTableResolver{}, roots, ws, mergeParentCommits, dEnv.DbData(ctx).Ddb, actions.CommitStagedProps{
 		Message:    "auto commit",
 		Date:       t,
 		AllowEmpty: true,

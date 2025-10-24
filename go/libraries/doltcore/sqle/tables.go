@@ -2644,20 +2644,9 @@ func (t *WritableDoltTable) createForeignKey(
 	} else {
 		// NOTE: If we're creating a foreign key to a system table, we need to use a different
 		//       API to look up the system table and find its schema.
-		isDoltSystemTable := strings.HasPrefix(strings.ToLower(sqlFk.ParentTable), "dolt_")
-		if !isDoltSystemTable {
-			refTbl, _, ok, err := doltdb.GetTableInsensitive(ctx, root, doltdb.TableName{Name: sqlFk.ParentTable, Schema: sqlFk.ParentSchema})
-			if err != nil {
-				return doltdb.ForeignKey{}, err
-			}
-			if !ok {
-				return doltdb.ForeignKey{}, fmt.Errorf("referenced table `%s` does not exist", sqlFk.ParentTable)
-			}
-			refSch, err = refTbl.GetSchema(ctx)
-			if err != nil {
-				return doltdb.ForeignKey{}, err
-			}
-		} else {
+		lwrTableName := strings.ToLower(sqlFk.ParentTable)
+		isDoltSystemTable := strings.HasPrefix(lwrTableName, "dolt_")
+		if isDoltSystemTable {
 			// FKs referencing system tables, like dolt_branches, that are not backed by a real
 			// Dolt table, do not currently allow non-default referential actions. Other system
 			// tables, like the dolt_ci_ system tables, are backed by dolt tables and rely on
@@ -2665,15 +2654,20 @@ func (t *WritableDoltTable) createForeignKey(
 			if !strings.HasPrefix(strings.ToLower(sqlFk.ParentTable), "dolt_ci_") {
 				if sqlFk.OnDelete != sql.ForeignKeyReferentialAction_NoAction &&
 					sqlFk.OnDelete != sql.ForeignKeyReferentialAction_DefaultAction {
+
 					return doltdb.ForeignKey{}, fmt.Errorf(
 						"foreign keys referencing Dolt system tables do not support referential actions")
+
 				} else if sqlFk.OnUpdate != sql.ForeignKeyReferentialAction_NoAction &&
 					sqlFk.OnUpdate != sql.ForeignKeyReferentialAction_DefaultAction {
+
 					return doltdb.ForeignKey{}, fmt.Errorf(
 						"foreign keys referencing Dolt system tables do not support referential actions")
+
 				}
 			}
 
+			var ok bool
 			sqlRefTbl, ok, err := t.db.GetTableInsensitive(ctx, sqlFk.ParentTable)
 			if err != nil {
 				return doltdb.ForeignKey{}, err
@@ -2692,6 +2686,15 @@ func (t *WritableDoltTable) createForeignKey(
 			pkSch := sql.NewPrimaryKeySchema(sqlRefSch, pkOrdinals...)
 
 			refSch, err = sqlutil.ToDoltSchema(ctx, root, doltdb.TableName{Name: sqlFk.ParentTable, Schema: sqlFk.ParentSchema}, pkSch, root, t.Collation())
+			if err != nil {
+				return doltdb.ForeignKey{}, err
+			}
+		} else {
+			refTbl, err := t.getDoltTableForFK(ctx, root, lwrTableName, sqlFk)
+			if err != nil {
+				return doltdb.ForeignKey{}, err
+			}
+			refSch, err = refTbl.GetSchema(ctx)
 			if err != nil {
 				return doltdb.ForeignKey{}, err
 			}
@@ -2740,6 +2743,36 @@ func (t *WritableDoltTable) createForeignKey(
 			ReferencedTableColumns: sqlFk.ParentColumns,
 		},
 	}, nil
+}
+
+func (t *WritableDoltTable) getDoltTableForFK(ctx *sql.Context, root doltdb.RootValue, lwrTableName string, sqlFk sql.ForeignKeyConstraint) (refTbl *doltdb.Table, err error) {
+	_, refTbl, nonlocalTableExists, err := t.db.getNonlocalDoltDBTable(ctx, root, doltdb.TableName{Name: lwrTableName, Schema: sqlFk.ParentSchema})
+	if err != nil {
+		return nil, err
+	}
+	if nonlocalTableExists {
+		if sqlFk.OnDelete != sql.ForeignKeyReferentialAction_NoAction &&
+			sqlFk.OnDelete != sql.ForeignKeyReferentialAction_DefaultAction {
+			return nil, fmt.Errorf(
+				"foreign keys referencing nonlocal tables do not support referential actions")
+		}
+		if sqlFk.OnUpdate != sql.ForeignKeyReferentialAction_NoAction &&
+			sqlFk.OnUpdate != sql.ForeignKeyReferentialAction_DefaultAction {
+			return nil, fmt.Errorf(
+				"foreign keys referencing nonlocal tables do not support referential actions")
+		}
+		return refTbl, nil
+	} else {
+		var ok bool
+		refTbl, _, ok, err = doltdb.GetTableInsensitive(ctx, root, doltdb.TableName{Name: sqlFk.ParentTable, Schema: sqlFk.ParentSchema})
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			return nil, fmt.Errorf("referenced table `%s` does not exist", sqlFk.ParentTable)
+		}
+		return refTbl, nil
+	}
 }
 
 // AddForeignKey implements sql.ForeignKeyTable

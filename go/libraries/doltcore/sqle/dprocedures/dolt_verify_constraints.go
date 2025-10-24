@@ -119,14 +119,17 @@ func calculateViolations(ctx *sql.Context, workingRoot, comparingRoot doltdb.Roo
 		}
 	}
 
+	tableResolver, err := dsess.GetTableResolver(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
 	mergeOpts := merge.MergeOpts{
 		IsCherryPick:              false,
 		KeepSchemaConflicts:       true,
 		ReverifyAllConstraints:    true,
 		RecordViolationsForTables: recordViolationsForTables,
 	}
-	mergeResults, err := merge.MergeRoots(ctx, comparingRoot, workingRoot, comparingRoot, workingRoot, comparingRoot,
-		editor.Options{}, mergeOpts)
+	mergeResults, err := merge.MergeRoots(ctx, tableResolver, comparingRoot, workingRoot, comparingRoot, workingRoot, comparingRoot, editor.Options{}, mergeOpts)
 	if err != nil {
 		return nil, nil, fmt.Errorf("error calculating constraint violations: %w", err)
 	}

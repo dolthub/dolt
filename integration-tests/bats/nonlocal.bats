@@ -229,24 +229,65 @@ SQL
 }
 
 @test "nonlocal: test foreign keys" {
-  # Currently, foreign keys cannot be added to nonlocal tables
   dolt checkout -b other
-  run dolt sql <<SQL
+  dolt sql <<SQL
   CALL DOLT_CHECKOUT('main');
   CREATE TABLE aliased_table (pk char(8) PRIMARY KEY);
-  INSERT INTO dolt_nonlocal_tables(table_name, target_ref, ref_table, options) VALUES
-      ("nonlocal_table", "main", "aliased_table", "immediate");
-  set autocommit = 0;
-  INSERT INTO nonlocal_table VALUES ("eesekkgo");
-
 SQL
 
-  run dolt sql <<SQL
+  dolt sql <<SQL
+  INSERT INTO dolt_nonlocal_tables(table_name, target_ref, ref_table, options) VALUES
+      ("nonlocal_table", "main", "aliased_table", "immediate");
+  INSERT INTO nonlocal_table VALUES ("eesekkgo");
   CREATE TABLE local_table (pk char(8) PRIMARY KEY, FOREIGN KEY (pk) REFERENCES nonlocal_table(pk));
 SQL
 
+  dolt sql -q 'INSERT INTO local_table VALUES ("eesekkgo");'
+
+  run dolt sql -q 'INSERT INTO local_table VALUES ("fdnfjfjf");'
   [ "$status" -eq 1 ]
-  [[ "$output" =~ "table not found: nonlocal_table" ]] || false
+  [[ "$output" =~ 'Foreign key violation on fk: `local_table_ibfk_1`, table: `local_table`, referenced table: `nonlocal_table`, key: `[fdnfjfjf]`' ]] || false
+
+  # The current foreign keys hold, so they should validate
+  dolt constraints verify
+  dolt sql -q "CALL DOLT_VERIFY_CONSTRAINTS('--all');"
+
+  # It's possible for foreign keys on nonlocal tables to become invalidated due to changes on the nonlocal
+  # branch, but this can be detected with dolt constraints verify
+
+  dolt sql -q  'CALL DOLT_CHECKOUT("main"); DELETE FROM aliased_table;'
+  run dolt constraints verify
+  [ "$status" -eq 1 ]
+  [[ "$output" =~ 'dolt_constraint_violations_local_table' ]] || false
+  [[ "$output" =~ '| foreign key    | eesekkgo | {"Index": "", "Table": "local_table", "Columns": ["pk"], "OnDelete": "RESTRICT", "OnUpdate": "RESTRICT", "ForeignKey": "local_table_ibfk_1", "ReferencedIndex": "", "ReferencedTable": "nonlocal_table", "ReferencedColumns": ["pk"]} |' ]] || false
+
+  run dolt sql -q "CALL DOLT_VERIFY_CONSTRAINTS('--all');"
+  [ "$status" -eq 1 ]
+  [[ "$output" =~ 'ForeignKey: local_table_ibfk_1' ]] || false
+
+  # Check that neither command removed the FK relation (this can happen if it thinks the child table was dropped)
+  run dolt sql -q 'SHOW CREATE TABLE local_table;'
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ 'local_table_ibfk_1' ]] || false
+
+  # Now try deleting the parent table and confirm that verifies correctly too.
+  dolt sql -q  'CALL DOLT_CHECKOUT("main"); DROP TABLE aliased_table;'
+
+  # dolt sql -q "CALL DOLT_VERIFY_CONSTRAINTS('--all')"
+  run dolt constraints verify
+  [ "$status" -eq 1 ]
+  echo "$output"
+  [[ "$output" =~ 'table not found' ]] || false
+
+  run dolt sql -q "CALL DOLT_VERIFY_CONSTRAINTS('--all');"
+  [ "$status" -eq 1 ]
+  echo "$output"
+  [[ "$output" =~ 'ForeignKey: local_table_ibfk_1' ]] || false
+
+  # Check that neither command removed the FK relation (this can happen if it thinks the child table was dropped)
+  run dolt sql -q 'SHOW CREATE TABLE local_table;'
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ 'local_table_ibfk_1' ]] || false
 }
 
 @test "nonlocal: trying to dolt_add a nonlocal table returns the appropriate warning" {
@@ -331,38 +372,41 @@ SQL
 # The below tests are convenience features but not necessary for the MVP
 
 @test "nonlocal: nonlocal tables appear in show_tables" {
-  skip
   dolt checkout -b other
   dolt sql <<SQL
   CALL dolt_checkout('main');
   CREATE TABLE aliased_table (pk char(8) PRIMARY KEY);
+  CREATE TABLE table_alias_1 (pk char(8) PRIMARY KEY);
+  CREATE TABLE table_alias_wild_3 (pk char(8) PRIMARY KEY);
   INSERT INTO aliased_table VALUES ("amzmapqt");
 
   CALL dolt_checkout('other');
   INSERT INTO dolt_nonlocal_tables(table_name, target_ref, ref_table, options) VALUES
-    ("table_alias_branch", "main", "aliased_table", "immediate");
+    ("table_alias_1", "main", "", "immediate"),
+    ("table_alias_2", "main", "aliased_table", "immediate"),
+    ("table_alias_wild_*", "main", "", "immediate"),
+    ("table_alias_missing", "main", "", "immediate");
 SQL
 
   # Nonlocal tables should appear in "show tables"
   run dolt sql -q "show tables"
   [ "$status" -eq 0 ]
-  [[ "$output" =~ "table_alias_branch" ]] || false
+  [[ "$output" =~ "table_alias_1" ]] || false
+  [[ "$output" =~ "table_alias_2" ]] || false
+  [[ "$output" =~ "table_alias_wild_3" ]] || false
+  ! [[ "$output" =~ "table_alias_missing" ]] || false
 }
 
-@test "nonlocal: creating a nonlocal table creates it on the appropriate branch" {
-  skip
+@test "nonlocal: creating a table matching a nonlocal table rule results in an error" {
   dolt checkout -b other
   dolt sql <<SQL
   INSERT INTO dolt_nonlocal_tables(table_name, target_ref, options) VALUES
       ("nonlocal_table", "main", "immediate");
-
-  CREATE TABLE nonlocal_table (pk char(8) PRIMARY KEY);
-  INSERT INTO nonlocal_table VALUES ("amzmapqt");
 SQL
 
-  run dolt ls main
-  [ "$status" -eq 0 ]
-  [[ "$output" =~ "nonlocal_table" ]] || false
+  run dolt sql -q "CREATE TABLE nonlocal_table (pk char(8) PRIMARY KEY);"
+  [ "$status" -eq 1 ]
+  [[ "$output" =~ "Cannot create table name nonlocal_table because it matches a name present in dolt_nonlocal_tables." ]] || false
 }
 
 @test "nonlocal: adding an existing table to nonlocal tables errors" {

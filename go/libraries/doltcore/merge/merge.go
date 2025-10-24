@@ -48,7 +48,7 @@ var ErrMultipleViolationsForRow = errors.New("multiple violations for row not su
 
 var ErrSameTblAddedTwice = goerrors.NewKind("table with same name '%s' added in 2 commits can't be merged")
 
-func MergeCommits(ctx *sql.Context, commit, mergeCommit *doltdb.Commit, opts editor.Options) (*Result, error) {
+func MergeCommits(ctx *sql.Context, tableResolver doltdb.TableResolver, commit, mergeCommit *doltdb.Commit, opts editor.Options) (*Result, error) {
 	optCmt, err := doltdb.GetCommitAncestor(ctx, commit, mergeCommit)
 	if err != nil {
 		return nil, err
@@ -78,7 +78,7 @@ func MergeCommits(ctx *sql.Context, commit, mergeCommit *doltdb.Commit, opts edi
 		IsCherryPick:        false,
 		KeepSchemaConflicts: true,
 	}
-	return MergeRoots(ctx, ourRoot, theirRoot, ancRoot, mergeCommit, ancCommit, opts, mo)
+	return MergeRoots(ctx, tableResolver, ourRoot, theirRoot, ancRoot, mergeCommit, ancCommit, opts, mo)
 }
 
 type Result struct {
@@ -162,6 +162,7 @@ func SchemaConflictTableNames(sc []SchemaConflict) (tables []doltdb.TableName) {
 // used to retrieve the base value for a conflict.
 func MergeRoots(
 	ctx *sql.Context,
+	tableResolver doltdb.TableResolver,
 	ourRoot, theirRoot, ancRoot doltdb.RootValue,
 	theirs, ancestor doltdb.Rootish,
 	opts editor.Options,
@@ -355,7 +356,7 @@ func MergeRoots(
 		return nil, err
 	}
 
-	mergedFKColl, conflicts, err := ForeignKeysMerge(ctx, mergedRoot, ourRoot, theirRoot, ancRoot)
+	mergedFKColl, conflicts, err := ForeignKeysMerge(ctx, tableResolver, mergedRoot, ourRoot, theirRoot, ancRoot)
 	if err != nil {
 		return nil, err
 	}
@@ -381,7 +382,7 @@ func MergeRoots(
 		}
 	}
 
-	mergedRoot, _, err = AddForeignKeyViolations(ctx, mergedRoot, ancRoot, tableSet, h)
+	mergedRoot, _, err = AddForeignKeyViolations(ctx, tableResolver, mergedRoot, ancRoot, tableSet, h)
 	if err != nil {
 		return nil, err
 	}

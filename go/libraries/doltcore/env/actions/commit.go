@@ -15,8 +15,9 @@
 package actions
 
 import (
-	"context"
 	"time"
+
+	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -36,7 +37,8 @@ type CommitStagedProps struct {
 
 // GetCommitStaged returns a new pending commit with the roots and commit properties given.
 func GetCommitStaged(
-	ctx context.Context,
+	ctx *sql.Context,
+	tableResolver doltdb.TableResolver,
 	roots doltdb.Roots,
 	ws *doltdb.WorkingSet,
 	mergeParents []*doltdb.Commit,
@@ -99,7 +101,7 @@ func GetCommitStaged(
 			}
 		}
 
-		roots.Staged, err = doltdb.ValidateForeignKeysOnSchemas(ctx, roots.Staged)
+		roots.Staged, err = doltdb.ValidateForeignKeysOnSchemas(ctx, tableResolver, roots.Staged)
 		if err != nil {
 			return nil, err
 		}

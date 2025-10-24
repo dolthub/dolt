@@ -76,6 +76,30 @@ var InMemDoltDB = "mem://"
 var ErrNoRootValAtHash = errors.New("there is no dolt root value at that hash")
 var ErrCannotDeleteLastBranch = errors.New("cannot delete the last branch")
 
+// TableResolver allows the user of a DoltDB to configure how table names are resolved on roots.
+// This is useful because the user-backed system table dolt_nonlocal_tables allows table names to resolve to
+// tables on other refs, but sqle.Database is necessary to resolve those refs.
+type TableResolver interface {
+	GetDoltDBTableInsensitiveWithRoot(ctx *sql.Context, root RootValue, tblName TableName) (trueTableName TableName, table *Table, found bool, err error)
+}
+
+type SimpleTableResolver struct{}
+
+var _ TableResolver = SimpleTableResolver{}
+
+func (t SimpleTableResolver) GetDoltDBTableInsensitiveWithRoot(ctx *sql.Context, root RootValue, tblName TableName) (trueTableName TableName, table *Table, found bool, err error) {
+	trueTableNameString, exists, err := root.ResolveTableName(ctx, tblName)
+	if err != nil || !exists {
+		return TableName{}, nil, false, err
+	}
+	trueTableName = TableName{
+		Name:   trueTableNameString,
+		Schema: tblName.Schema,
+	}
+	table, exists, err = root.GetTable(ctx, trueTableName)
+	return trueTableName, table, exists, err
+}
+
 // DoltDB wraps access to the underlying noms database and hides some of the details of the underlying storage.
 type DoltDB struct {
 	db  hooksDatabase

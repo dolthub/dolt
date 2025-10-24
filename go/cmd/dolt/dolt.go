@@ -46,7 +46,6 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/cvcmds"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/docscmds"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/indexcmds"
-	"github.com/dolthub/dolt/go/cmd/dolt/commands/schcmds"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/sqlserver"
 	"github.com/dolthub/dolt/go/cmd/dolt/doltcmd"
 	"github.com/dolthub/dolt/go/cmd/dolt/doltversion"
@@ -74,7 +73,6 @@ var commandsWithoutCliCtx = []cli.Command{
 	commands.BackupCmd{},
 	commands.LoginCmd{},
 	credcmds.Commands,
-	schcmds.Commands,
 	cvcmds.Commands,
 	commands.SendMetricsCmd{},
 	commands.MigrateCmd{},

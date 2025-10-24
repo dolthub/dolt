@@ -324,7 +324,12 @@ func validateConstraintViolations(ctx *sql.Context, before, after doltdb.RootVal
 		return err
 	}
 
-	violators, err := merge.GetForeignKeyViolatedTables(ctx, after, before, doltdb.NewTableNameSet(doltdb.ToTableNames(tables, table.Schema)))
+	tableResolver, err := dsess.GetTableResolver(ctx)
+	if err != nil {
+		return err
+	}
+
+	violators, err := merge.GetForeignKeyViolatedTables(ctx, tableResolver, after, before, doltdb.NewTableNameSet(doltdb.ToTableNames(tables, table.Schema)))
 	if err != nil {
 		return err
 	}

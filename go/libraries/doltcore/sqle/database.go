@@ -61,6 +61,7 @@ var ErrReservedTableName = errors.NewKind("Invalid table name %s. Table names be
 var ErrReservedDiffTableName = errors.NewKind("Invalid table name %s. Table names beginning with `__DATABASE__` are reserved for internal use")
 var ErrSystemTableAlter = errors.NewKind("Cannot alter table %s: system tables cannot be dropped or altered")
 var ErrInvalidNonlocalTableOptions = errors.NewKind("Invalid nonlocal table options %s: only valid value is 'immediate'.")
+var ErrNonlocalTableName = errors.NewKind("Cannot create table name %s because it matches a name present in dolt_nonlocal_tables.")
 
 type readNonlocalTablesFlag bool
 
@@ -106,6 +107,7 @@ var _ rebase.RebasePlanDatabase = Database{}
 var _ sql.SchemaValidator = Database{}
 var _ sql.SchemaDatabase = Database{}
 var _ sql.DatabaseSchema = Database{}
+var _ doltdb.TableResolver = Database{}
 
 type ReadOnlyDatabase struct {
 	Database
@@ -296,8 +298,17 @@ func (db Database) getTableInsensitive(ctx *sql.Context, tblName string, readNon
 	return db.getTableInsensitiveWithRoot(ctx, nil, ds, root, tblName, "", readNonlocalTables)
 }
 
+func (db Database) getDoltDBTableInsensitive(ctx *sql.Context, tblName doltdb.TableName, readNonlocalTables readNonlocalTablesFlag) (doltdb.TableName, *doltdb.Table, bool, error) {
+	root, err := db.GetRoot(ctx)
+	if err != nil {
+		return doltdb.TableName{}, nil, false, err
+	}
+
+	return db.getDoltDBTableInsensitiveWithRoot(ctx, root, tblName, readNonlocalTables)
+}
+
 func (db Database) GetTableInsensitiveAsOf(ctx *sql.Context, tableName string, asOf interface{}) (sql.Table, bool, error) {
-	return db.getTableInsensitiveAsOf(ctx, tableName, asOf, true)
+	return db.getTableInsensitiveAsOf(ctx, tableName, asOf, doReadNonlocalTables)
 }
 
 // GetTableInsensitiveAsOf implements sql.VersionedDatabase
@@ -345,6 +356,20 @@ func (db Database) getTableInsensitiveAsOf(ctx *sql.Context, tableName string, a
 	default:
 		return nil, false, fmt.Errorf("unexpected table type %T", table)
 	}
+}
+
+func (db Database) getDoltTableInsensitiveAsOf(ctx *sql.Context, tableName doltdb.TableName, asOf interface{}, readNonlocalTables readNonlocalTablesFlag) (doltdb.TableName, *doltdb.Table, bool, error) {
+	if asOf == nil {
+		return db.getDoltDBTableInsensitive(ctx, tableName, readNonlocalTables)
+	}
+	_, root, err := resolveAsOf(ctx, db, asOf)
+	if err != nil {
+		return doltdb.TableName{}, nil, false, err
+	} else if root == nil {
+		return doltdb.TableName{}, nil, false, nil
+	}
+
+	return db.getDoltDBTableInsensitiveWithRoot(ctx, root, tableName, readNonlocalTables)
 }
 
 func (db Database) getTableInsensitiveWithRoot(ctx *sql.Context, head *doltdb.Commit, ds *dsess.DoltSession, root doltdb.RootValue, tblName string, asOf interface{}, readNonlocalTables readNonlocalTablesFlag) (sql.Table, bool, error) {
@@ -943,32 +968,111 @@ func (db Database) getTableInsensitiveWithRoot(ctx *sql.Context, head *doltdb.Co
 	return resolveOverriddenNonexistentTable(ctx, tblName, db)
 }
 
+func (db Database) GetDoltDBTableInsensitiveWithRoot(ctx *sql.Context, root doltdb.RootValue, tblName doltdb.TableName) (trueTableName doltdb.TableName, table *doltdb.Table, found bool, err error) {
+	return db.getDoltDBTableInsensitiveWithRoot(ctx, root, tblName, doReadNonlocalTables)
+}
+
+func (db Database) getDoltDBTableInsensitiveWithRoot(ctx *sql.Context, root doltdb.RootValue, tblName doltdb.TableName, readNonlocalTables readNonlocalTablesFlag) (trueTableName doltdb.TableName, table *doltdb.Table, found bool, err error) {
+	tblName = tblName.ToLower()
+
+	if readNonlocalTables {
+		trueTableName, nonlocalTable, exists, err := db.getNonlocalDoltDBTable(ctx, root, tblName)
+		if err != nil {
+			return doltdb.TableName{}, nil, false, err
+		}
+		if exists {
+			return trueTableName, nonlocalTable, true, nil
+		}
+	}
+
+	trueTableName, table, found, err = db.tableInsensitive(ctx, root, tblName.Name)
+	return trueTableName, table, found, err
+}
+
 // getNonlocalTable checks whether the table name maps onto a table in another root via the dolt_nonlocal_tables system table
 func (db Database) getNonlocalTable(ctx *sql.Context, root doltdb.RootValue, lwrName string) (sql.Table, bool, error) {
+
+	nonlocalTableEntry, found, err := db.getNonlocalTableEntry(ctx, root, lwrName)
+
+	if err != nil || !found {
+		return nil, found, err
+	}
+
+	if nonlocalTableEntry.Options != "immediate" {
+		return nil, false, ErrInvalidNonlocalTableOptions.New(nonlocalTableEntry.Options)
+	}
+
+	// If the ref is a branch, we get the working set, not the head.
+	_, exists, err := isBranch(ctx, db, nonlocalTableEntry.Ref)
+	if exists {
+		referencedBranch, err := RevisionDbForBranch(ctx, db, nonlocalTableEntry.Ref, db.requestedName)
+		if err != nil {
+			return nil, false, err
+		}
+		return referencedBranch.(Database).getTableInsensitive(ctx, nonlocalTableEntry.NewTableName, dontReadNonlocalTables)
+	} else {
+		// If we couldn't resolve it as a database revision, treat it as a noms ref.
+		// This lets us resolve branch heads like 'heads/$branchName' or remotes refs like '$remote/$branchName'
+		return db.getTableInsensitiveAsOf(ctx, nonlocalTableEntry.NewTableName, nonlocalTableEntry.Ref, false)
+	}
+}
+
+// getNonlocalDoltDBTable checks to see if there exists an entry in the dolt_nonlocal_tables system table that would
+// cause the table name to resolve to a table on a different ref.
+func (db Database) getNonlocalDoltDBTable(ctx *sql.Context, root doltdb.RootValue, lwrName doltdb.TableName) (doltdb.TableName, *doltdb.Table, bool, error) {
+	nonlocalTableEntry, found, err := db.getNonlocalTableEntry(ctx, root, lwrName.Name)
+
+	if err != nil || !found {
+		return doltdb.TableName{}, nil, found, err
+	}
+
+	if nonlocalTableEntry.Options != "immediate" {
+		return doltdb.TableName{}, nil, false, ErrInvalidNonlocalTableOptions.New(nonlocalTableEntry.Options)
+	}
+
+	redirectedTableName := doltdb.TableName{Schema: db.schemaName, Name: strings.ToLower(nonlocalTableEntry.NewTableName)}
+
+	// If the ref is a branch, we get the working set, not the head.
+	_, exists, err := isBranch(ctx, db, nonlocalTableEntry.Ref)
+	if exists {
+		referencedBranch, err := RevisionDbForBranch(ctx, db, nonlocalTableEntry.Ref, db.requestedName)
+		if err != nil {
+			return doltdb.TableName{}, nil, false, err
+		}
+		return referencedBranch.(Database).getDoltDBTableInsensitive(ctx, redirectedTableName, dontReadNonlocalTables)
+	} else {
+		// If we couldn't resolve it as a database revision, treat it as a noms ref.
+		// This lets us resolve branch heads like 'heads/$branchName' or remotes refs like '$remote/$branchName'
+		return db.getDoltTableInsensitiveAsOf(ctx, redirectedTableName, nonlocalTableEntry.Ref, dontReadNonlocalTables)
+	}
+}
+
+// getNonlocalTableEntry returns the first entry in the dolt_nonlocal_tables system table that matches the provided table name.
+func (db Database) getNonlocalTableEntry(ctx *sql.Context, root doltdb.RootValue, lwrName string) (doltdb.NonlocalTableEntry, bool, error) {
 	_, nonlocalsTable, nonlocalsTableExists, err := db.resolveUserTable(ctx, root, doltdb.GetNonlocalTablesTableName())
 	if err != nil {
-		return nil, false, err
+		return doltdb.NonlocalTableEntry{}, false, err
 	}
 
 	if !nonlocalsTableExists {
-		return nil, false, nil
+		return doltdb.NonlocalTableEntry{}, false, nil
 	}
 
 	index, err := nonlocalsTable.GetRowData(ctx)
 
 	if err != nil {
-		return nil, false, err
+		return doltdb.NonlocalTableEntry{}, false, err
 	}
 	nonlocalTablesSchema, err := nonlocalsTable.GetSchema(ctx)
 	if err != nil {
-		return nil, false, err
+		return doltdb.NonlocalTableEntry{}, false, err
 	}
 	m := durable.MapFromIndex(index)
 	keyDesc, valueDesc := nonlocalTablesSchema.GetMapDescriptors(m.NodeStore())
 
 	nonlocalTablesMap, err := m.IterAll(ctx)
 	if err != nil {
-		return nil, false, err
+		return doltdb.NonlocalTableEntry{}, false, err
 	}
 	var nonlocalTableEntry doltdb.NonlocalTableEntry
 	// check if there's an entry for this table. If so, resolve that reference.
@@ -978,52 +1082,131 @@ func (db Database) getNonlocalTable(ctx *sql.Context, root doltdb.RootValue, lwr
 			break
 		}
 		if err != nil {
-			return nil, false, err
+			return doltdb.NonlocalTableEntry{}, false, err
 		}
 
-		globalsEntryTableName, err := doltdb.GetNonlocalTablesNameColumn(ctx, keyDesc, keyTuple)
+		nonlocalsEntryTableName, err := doltdb.GetNonlocalTablesNameColumn(ctx, keyDesc, keyTuple)
 		if err != nil {
-			return nil, false, err
+			return doltdb.NonlocalTableEntry{}, false, err
 		}
 
-		globalsEntryTableName = strings.ToLower(globalsEntryTableName)
-		matchesPattern, err := doltdb.MatchTablePattern(globalsEntryTableName, lwrName)
+		nonlocalsEntryTableName = strings.ToLower(nonlocalsEntryTableName)
+		matchesPattern, err := doltdb.MatchTablePattern(nonlocalsEntryTableName, lwrName)
 		if err != nil {
-			return nil, false, err
+			return doltdb.NonlocalTableEntry{}, false, err
 		}
-		if !matchesPattern {
-			continue
+		if matchesPattern {
+			nonlocalTableEntry = doltdb.GetNonlocalTablesRef(ctx, valueDesc, valueTuple)
+			if nonlocalTableEntry.NewTableName == "" {
+				nonlocalTableEntry.NewTableName = lwrName
+			}
+
+			if nonlocalTableEntry.Ref == "" {
+				nonlocalTableEntry.Ref = db.revision
+			}
+			return nonlocalTableEntry, true, nil
 		}
+	}
+	return doltdb.NonlocalTableEntry{}, false, nil
+}
+
+// getRootForNonlocalRef resolves a reference found in a dolt_nonlocal_tables entry.
+// References to branches get resolved to the working set and are writable.
+// Other references get resolved to commits and are read-only.
+func (db Database) getRootForNonlocalRef(ctx *sql.Context, ref string) (root doltdb.RootValue, err error) {
+	// If the ref is a branch, we get the working set, not the head.
+	_, exists, err := isBranch(ctx, db, ref)
+	if exists {
+		referencedBranch, err := RevisionDbForBranch(ctx, db, ref, db.requestedName)
+		if err != nil {
+			return nil, err
+		}
+		return referencedBranch.GetRoot(ctx)
+	} else {
+		// If we couldn't resolve it as a database revision, treat it as a noms ref.
+		// This lets us resolve branch heads like 'heads/$branchName' or remotes refs like '$remote/$branchName'
+		_, root, err = resolveAsOf(ctx, db, ref)
+		return root, err
+	}
+}
+
+func (db Database) getNonlocalTableNames(ctx *sql.Context, root doltdb.RootValue) (nonlocalTableNames []string, error error) {
+	_, nonlocalsTable, nonlocalsTableExists, err := db.resolveUserTable(ctx, root, doltdb.GetNonlocalTablesTableName())
+	if err != nil {
+		return nil, err
+	}
+
+	if !nonlocalsTableExists {
+		return nil, nil
+	}
+
+	index, err := nonlocalsTable.GetRowData(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+	nonlocalTablesSchema, err := nonlocalsTable.GetSchema(ctx)
+	if err != nil {
+		return nil, err
+	}
+	m := durable.MapFromIndex(index)
+	keyDesc, valueDesc := nonlocalTablesSchema.GetMapDescriptors(m.NodeStore())
+
+	nonlocalTablesMap, err := m.IterAll(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var nonlocalTableEntry doltdb.NonlocalTableEntry
+	// for each entry, we need to resolve the reference, and then find all tables on that reference that match the pattern.
+	for {
+		keyTuple, valueTuple, err := nonlocalTablesMap.Next(ctx)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+
+		nonlocalsEntryTableName, err := doltdb.GetNonlocalTablesNameColumn(ctx, keyDesc, keyTuple)
+		if err != nil {
+			return nil, err
+		}
+
+		nonlocalsEntryTableName = strings.ToLower(nonlocalsEntryTableName)
 
 		nonlocalTableEntry = doltdb.GetNonlocalTablesRef(ctx, valueDesc, valueTuple)
-		if nonlocalTableEntry.NewTableName == "" {
-			nonlocalTableEntry.NewTableName = lwrName
-		}
-
 		if nonlocalTableEntry.Ref == "" {
 			nonlocalTableEntry.Ref = db.revision
 		}
 
-		if nonlocalTableEntry.Options != "immediate" {
-			return nil, false, ErrInvalidNonlocalTableOptions.New(nonlocalTableEntry.Options)
+		referencedRoot, err := db.getRootForNonlocalRef(ctx, nonlocalTableEntry.Ref)
+		if err != nil {
+			return nil, err
 		}
 
-		// If the ref is a branch, we get the working set, not the head.
-		_, exists, err := isBranch(ctx, db, nonlocalTableEntry.Ref)
-		if exists {
-			referencedBranch, err := RevisionDbForBranch(ctx, db, nonlocalTableEntry.Ref, db.requestedName)
+		if nonlocalTableEntry.NewTableName == "" {
+			// The rule doesn't specify a name on the nonlocal ref.
+			// Thus, the name of the local table will be the same as the nonlocal table.
+			// If the name on the rule is a pattern, we must find all tables on the nonlocal ref that match that pattern.
+			matchedTables, err := doltdb.GetMatchingTables(ctx, referencedRoot, db.schemaName, nonlocalsEntryTableName)
 			if err != nil {
-				return nil, false, err
+				return nil, err
 			}
-			return referencedBranch.(Database).getTableInsensitive(ctx, nonlocalTableEntry.NewTableName, dontReadNonlocalTables)
+			nonlocalTableNames = append(nonlocalTableNames, matchedTables...)
 		} else {
-			// If we couldn't resolve it as a database revision, treat it as a noms ref.
-			// This lets us resolve branch heads like 'heads/$branchName' or remotes refs like '$remote/$branchName'
-			return db.getTableInsensitiveAsOf(ctx, nonlocalTableEntry.NewTableName, nonlocalTableEntry.Ref, false)
+			// The rule does specify a name on the nonlocal ref.
+			// If a table with that name exists on that ref, then the local name is considered to exist
+			hasTable, err := referencedRoot.HasTable(ctx, doltdb.TableName{Name: nonlocalTableEntry.NewTableName, Schema: db.SchemaName()})
+			if err != nil {
+				return nil, err
+			}
+			if hasTable {
+				nonlocalTableNames = append(nonlocalTableNames, nonlocalsEntryTableName)
+			}
 		}
 	}
 
-	return nil, false, nil
+	return nonlocalTableNames, nil
 }
 
 // getRootsForBranch uses the specified |ddb| to look up a branch named |branch|, and return the
@@ -1212,7 +1395,7 @@ func (db Database) GetTableNamesAsOf(ctx *sql.Context, time interface{}) ([]stri
 
 	showSystemTables := showSystemTablesVar.(int8) == 1
 
-	tblNames, err := db.getAllTableNames(ctx, root, showSystemTables, true)
+	tblNames, err := db.getAllTableNames(ctx, root, showSystemTables, true, true)
 	if err != nil {
 		return nil, err
 	}
@@ -1362,7 +1545,7 @@ func (db Database) tableInsensitive(ctx *sql.Context, root doltdb.RootValue, tab
 		}
 	}
 
-	tableNames, err := db.getAllTableNames(ctx, root, false, false)
+	tableNames, err := db.getAllTableNames(ctx, root, false, false, false)
 	if err != nil {
 		return doltdb.TableName{}, nil, false, err
 	}
@@ -1429,7 +1612,7 @@ func (db Database) GetTableNames(ctx *sql.Context) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	tblNames, err := db.getAllTableNames(ctx, root, showSystemTables, false)
+	tblNames, err := db.getAllTableNames(ctx, root, showSystemTables, false, true)
 	if err != nil {
 		return nil, err
 	}
@@ -1454,10 +1637,10 @@ func (db Database) GetAllTableNames(ctx *sql.Context, showSystemTables bool) ([]
 		return nil, err
 	}
 
-	return db.getAllTableNames(ctx, root, showSystemTables, true)
+	return db.getAllTableNames(ctx, root, showSystemTables, true, true)
 }
 
-func (db Database) getAllTableNames(ctx *sql.Context, root doltdb.RootValue, includeGeneratedSystemTables bool, includeRootObjects bool) ([]string, error) {
+func (db Database) getAllTableNames(ctx *sql.Context, root doltdb.RootValue, includeGeneratedSystemTables bool, includeRootObjects bool, includeNonlocalTables bool) ([]string, error) {
 	var err error
 	var result []string
 	// If we are in a schema-enabled session and the schema name is not set, we need to union all table names in all
@@ -1485,6 +1668,14 @@ func (db Database) getAllTableNames(ctx *sql.Context, root doltdb.RootValue, inc
 			return nil, err
 		}
 		result = append(result, doltdb.FlattenTableNames(systemTables)...)
+	}
+
+	if includeNonlocalTables {
+		nonlocalTableNames, err := db.getNonlocalTableNames(ctx, root)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, nonlocalTableNames...)
 	}
 
 	return result, nil
@@ -1698,6 +1889,18 @@ func (db Database) CreateTable(ctx *sql.Context, tableName string, sch sql.Prima
 
 	if !doltdb.IsValidTableName(tableName) {
 		return ErrInvalidTableName.New(tableName)
+	}
+
+	root, err := db.GetRoot(ctx)
+	if err != nil {
+		return err
+	}
+	_, hasNonlocalTable, err := db.getNonlocalTableEntry(ctx, root, tableName)
+	if err != nil {
+		return err
+	}
+	if hasNonlocalTable {
+		return ErrNonlocalTableName.New(tableName)
 	}
 
 	return db.createSqlTable(ctx, tableName, db.schemaName, sch, collation, comment)
