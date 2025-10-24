@@ -1149,6 +1149,46 @@ SQL
 
 }
 
+# Asserts that renaming a table and trying to merge that change to another branch where
+# the table row data has changed results in a schema conflict.
+#
+# TODO: If we can reliably detect the rename (by comparing column tags/names) then
+#       we could handle this automatically.
+@test "merge: ourRoot modifies the data, theirRoot renames" {
+    dolt checkout -b merge_branch
+    dolt sql -q "ALTER TABLE test1 RENAME TO new_name"
+    dolt add .
+    dolt commit -am "rename test1"
+
+    dolt checkout main
+    dolt sql -q "INSERT INTO test1 VALUES (0,1,2)"
+    dolt commit -am "add pk 0 to test1"
+
+    run dolt merge merge_branch
+    log_status_eq 1
+    [[ "$output" =~ "CONFLICT (schema): Merge conflict in test1" ]] || false
+}
+
+# Asserts that renaming a table and trying to merge that change to another branch where
+# the table schema has changed results in a schema conflict.
+#
+# TODO: If we can reliably detect the rename (by comparing column tags/names) then
+#       we could handle this automatically.
+@test "merge: ourRoot modifies the schema, theirRoot renames" {
+    dolt checkout -b merge_branch
+    dolt sql -q "ALTER TABLE test1 RENAME TO new_name"
+    dolt add .
+    dolt commit -am "rename test1"
+
+    dolt checkout main
+    dolt sql -q "ALTER TABLE test1 DROP COLUMN c2;"
+    dolt commit -am "modify test1"
+
+    run dolt merge merge_branch
+    log_status_eq 1
+    [[ "$output" =~ "CONFLICT (schema): Merge conflict in test1" ]] || false
+}
+
 @test "merge: dolt merge commits successful non-fast-forward merge" {
     dolt branch other
     dolt sql -q "INSERT INTO test1 VALUES (1,2,3)"
