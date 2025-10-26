@@ -985,7 +985,7 @@ func (db Database) getDoltDBTableInsensitiveWithRoot(ctx *sql.Context, root dolt
 		}
 	}
 
-	trueTableName, table, found, err = db.tableInsensitive(ctx, root, tblName.Name)
+	trueTableName, table, found, err = db.tableInsensitive(ctx, root, tblName)
 	return trueTableName, table, found, err
 }
 
@@ -1049,7 +1049,7 @@ func (db Database) getNonlocalDoltDBTable(ctx *sql.Context, root doltdb.RootValu
 
 // getNonlocalTableEntry returns the first entry in the dolt_nonlocal_tables system table that matches the provided table name.
 func (db Database) getNonlocalTableEntry(ctx *sql.Context, root doltdb.RootValue, lwrName string) (doltdb.NonlocalTableEntry, bool, error) {
-	_, nonlocalsTable, nonlocalsTableExists, err := db.resolveUserTable(ctx, root, doltdb.GetNonlocalTablesTableName())
+	_, nonlocalsTable, nonlocalsTableExists, err := db.resolveUserTable(ctx, root, dtables.GetDoltNonlocalTablesName())
 	if err != nil {
 		return doltdb.NonlocalTableEntry{}, false, err
 	}
@@ -1131,7 +1131,7 @@ func (db Database) getRootForNonlocalRef(ctx *sql.Context, ref string) (root dol
 }
 
 func (db Database) getNonlocalTableNames(ctx *sql.Context, root doltdb.RootValue) (nonlocalTableNames []string, error error) {
-	_, nonlocalsTable, nonlocalsTableExists, err := db.resolveUserTable(ctx, root, doltdb.GetNonlocalTablesTableName())
+	_, nonlocalsTable, nonlocalsTableExists, err := db.resolveUserTable(ctx, root, dtables.GetDoltNonlocalTablesName())
 	if err != nil {
 		return nil, err
 	}
@@ -1439,7 +1439,7 @@ func (db Database) getTable(ctx *sql.Context, root doltdb.RootValue, tableName s
 		return t, tblExists, nil
 	}
 
-	tblName, tbl, tblExists, err := db.resolveUserTable(ctx, root, tableName)
+	tblName, tbl, tblExists, err := db.resolveUserTable(ctx, root, doltdb.TableName{Schema: db.schemaName, Name: tableName})
 	if err != nil {
 		return nil, false, err
 	} else if !tblExists {
@@ -1503,9 +1503,9 @@ func (db Database) checkForPgCatalogTable(ctx *sql.Context, tableName string) (s
 // resolveUserTable returns the table with the given name from the root given. The table name is resolved in a
 // case-insensitive manner. The table is returned along with its case-sensitive matched name. An error is returned if
 // no such table exists.
-func (db Database) resolveUserTable(ctx *sql.Context, root doltdb.RootValue, tableName string) (doltdb.TableName, *doltdb.Table, bool, error) {
+func (db Database) resolveUserTable(ctx *sql.Context, root doltdb.RootValue, tableName doltdb.TableName) (doltdb.TableName, *doltdb.Table, bool, error) {
 	if resolve.UseSearchPath && db.schemaName == "" {
-		return resolve.TableWithSearchPath(ctx, root, tableName)
+		return resolve.TableWithSearchPath(ctx, root, tableName.Name)
 	} else {
 		return db.tableInsensitive(ctx, root, tableName)
 	}
@@ -1514,7 +1514,7 @@ func (db Database) resolveUserTable(ctx *sql.Context, root doltdb.RootValue, tab
 // tableInsensitive returns the name of this table in the root given with the db's schema name, if it exists.
 // Name matching is applied in a case-insensitive manner, and the table's case-corrected name is returned as the
 // first result.
-func (db Database) tableInsensitive(ctx *sql.Context, root doltdb.RootValue, tableName string) (doltdb.TableName, *doltdb.Table, bool, error) {
+func (db Database) tableInsensitive(ctx *sql.Context, root doltdb.RootValue, tableName doltdb.TableName) (doltdb.TableName, *doltdb.Table, bool, error) {
 	sess := dsess.DSessFromSess(ctx.Session)
 	dbState, ok, err := sess.LookupDbState(ctx, db.RevisionQualifiedName())
 	if err != nil {
@@ -1531,7 +1531,7 @@ func (db Database) tableInsensitive(ctx *sql.Context, root doltdb.RootValue, tab
 	if root.TableListHash() != 0 {
 		tableList, ok := dbState.SessionCache().GetTableNameMap(root.TableListHash())
 		if ok {
-			tname, ok := tableList[strings.ToLower(tableName)]
+			tname, ok := tableList[strings.ToLower(tableName.Name)]
 			if ok {
 				tblName := doltdb.TableName{Name: tname, Schema: db.schemaName}
 				tbl, _, err := root.GetTable(ctx, tblName)
@@ -1558,14 +1558,13 @@ func (db Database) tableInsensitive(ctx *sql.Context, root doltdb.RootValue, tab
 		dbState.SessionCache().CacheTableNameMap(root.TableListHash(), tableMap)
 	}
 
-	tableName, ok = sql.GetTableNameInsensitive(tableName, tableNames)
+	tableName.Name, ok = sql.GetTableNameInsensitive(tableName.Name, tableNames)
 	if !ok {
 		return doltdb.TableName{}, nil, false, nil
 	}
 
 	// TODO: should we short-circuit the schema name for system tables?
-	tname := doltdb.TableName{Name: tableName, Schema: db.schemaName}
-	tbl, ok, err := root.GetTable(ctx, tname)
+	tbl, ok, err := root.GetTable(ctx, tableName)
 	if err != nil {
 		return doltdb.TableName{}, nil, false, err
 	} else if !ok {
@@ -1573,7 +1572,7 @@ func (db Database) tableInsensitive(ctx *sql.Context, root doltdb.RootValue, tab
 		return doltdb.TableName{}, nil, false, doltdb.ErrTableNotFound
 	}
 
-	return tname, tbl, true, nil
+	return tableName, tbl, true, nil
 }
 
 func (db Database) newDoltTable(tableName string, sch schema.Schema, tbl *doltdb.Table) (sql.Table, error) {
@@ -1780,7 +1779,7 @@ func (db Database) dropTable(ctx *sql.Context, tableName string) error {
 	}
 
 	root := ws.WorkingRoot()
-	tblName, tbl, tblExists, err := db.resolveUserTable(ctx, root, tableName)
+	tblName, tbl, tblExists, err := db.resolveUserTable(ctx, root, doltdb.TableName{Schema: db.schemaName, Name: tableName})
 	if err != nil {
 		return err
 	} else if !tblExists {
