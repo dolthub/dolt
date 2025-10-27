@@ -1607,7 +1607,7 @@ var DoltScripts = []queries.ScriptTest{
 		},
 	},
 	{
-		// Assert that tables can have the same tag values without causing any problems.
+		// Assert that multiple tables can have the same tag values without causing problems.
 		Name: "Overlapping column tags – merge",
 		SetUpScript: []string{
 			"CREATE TABLE t1(pk int primary key, c1 varchar(100), c2 int);",
@@ -1648,6 +1648,45 @@ var DoltScripts = []queries.ScriptTest{
 					{1, 1, "UNO", -1, 1, 1.11},
 					{2, 2, "two", -2, 2, 2.22},
 				},
+			},
+			{
+				// Alter the schema to test DDL operations
+				Query:    "ALTER TABLE t1 drop column c2, add column c3 varchar(100) default 'foo';",
+				Expected: []sql.Row{{types.NewOkResult(0)}},
+			},
+			{
+				// Assert that we can still pull out the data in a join correctly after altering the schema
+				Query: "SELECT t1.pk, t2.pk, t1.c1, t2.c1, t1.c3, t2.c2 from t1 join t2 on t1.pk = t2.pk;",
+				Expected: []sql.Row{
+					{1, 1, "UNO", -1, "foo", 1.11},
+					{2, 2, "two", -2, "foo", 2.22},
+				},
+			},
+		},
+	},
+	{
+		// Updating a column tag, when it is used in a foreign key, doesn't currently update
+		// the tag metadata used in the foreign key, so it becomes invalidated.
+		//
+		// TODO: dolt_update_column_tag() should be updated to correct any column tag references
+		//       in index and foreign key definitions.
+		//       https://github.com/dolthub/dolt/issues/10003
+		Name: "Nonmatching column tags – invalidates FK",
+		SetUpScript: []string{
+			"CREATE TABLE parent(pk int primary key);",
+			"INSERT INTO parent VALUES (1), (2), (3);",
+			"CREATE TABLE t1(pk int primary key, c1 varchar(100), c2 int);",
+			"ALTER TABLE t1 ADD CONSTRAINT fk1 FOREIGN KEY (c2) REFERENCES parent(pk);",
+			"INSERT INTO t1 VALUES (1, 'one', 1), (2, 'two', 2);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL dolt_update_column_tag('t1', 'c2', 3);",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:          "CALL dolt_commit('-Am', 'initial tables');",
+				ExpectedErrStr: "foreign key `fk1` has entered an invalid state, table `t1` has unexpected schema",
 			},
 		},
 	},

@@ -2882,6 +2882,83 @@ var MergeScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		// When a merge is performed where column tags don't fully match across branches, there is an issue where
+		// an index covering the column that has a different tag between the two branches can be dropped during
+		// the merge.
+		Name: "merge with nonmatching column tags on index",
+		SetUpScript: []string{
+			"CREATE TABLE t1(pk int primary key, c1 varchar(100), c2 int);",
+			"INSERT INTO t1 VALUES (1, 'one', 1), (2, 'two', 2);",
+			"CALL dolt_update_column_tag('t1', 'c1', 2);",
+			"ALTER TABLE t1 ADD INDEX idx1(c1);",
+
+			"CALL dolt_commit('-Am', 'initial tables');",
+			"CALL dolt_branch('b1');",
+			"CALL dolt_commit('--allow-empty', '-m', 'empty commit');",
+
+			// Check out branch b1 and change the column tag for the column used in the index
+			"CALL dolt_checkout('b1');",
+			"CALL dolt_update_column_tag('t1', 'c1', 202);",
+			"INSERT INTO t1 VALUES (101, 'blah', 101);",
+			"CALL dolt_commit('-Am', 'changes on b1');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL dolt_checkout('main');",
+				Expected: []sql.Row{{0, "Switched to branch 'main'"}},
+			},
+			{
+				Query:    "SELECT INDEX_NAME, COLUMN_NAME FROM information_schema.statistics WHERE TABLE_SCHEMA = 'mydb' AND TABLE_NAME = 't1';",
+				Expected: []sql.Row{{"PRIMARY", "pk"}, {"idx1", "c1"}},
+			},
+			{
+				Query:           "SELECT t1.c1 from t1 where c1 in ('one', 'two', 'three');",
+				Expected:        []sql.Row{{"one"}, {"two"}},
+				ExpectedIndexes: []string{"idx1"},
+			},
+			{
+				Query:    "CALL dolt_merge('b1');",
+				Expected: []sql.Row{{doltCommit, 0, 0, "merge successful"}},
+			},
+			{
+				// TODO: Because of the tag mismatch during the merge, the index does not get properly retained
+				//       https://github.com/dolthub/dolt/issues/10005
+				Skip:     true,
+				Query:    "SELECT INDEX_NAME, COLUMN_NAME FROM information_schema.statistics WHERE TABLE_SCHEMA='mydb' AND TABLE_NAME='t1';",
+				Expected: []sql.Row{{"PRIMARY", "pk"}, {"idx1", "c1"}},
+			},
+		},
+	},
+	{
+		// When the primary key's column tags don't match across a merge, the merge errors out
+		Name: "merge with nonmatching column tags on primary key",
+		SetUpScript: []string{
+			"CREATE TABLE t1(pk int primary key, c1 varchar(100), c2 int);",
+			"INSERT INTO t1 VALUES (1, 'one', 1), (2, 'two', 2);",
+			"CALL dolt_update_column_tag('t1', 'pk', 1);",
+
+			"CALL dolt_commit('-Am', 'initial tables');",
+			"CALL dolt_branch('b1');",
+			"CALL dolt_commit('--allow-empty', '-m', 'empty commit');",
+
+			// Check out branch b1 and change the column tag for the pk
+			"CALL dolt_checkout('b1');",
+			"CALL dolt_update_column_tag('t1', 'pk', 101);",
+			"INSERT INTO t1 VALUES (101, 'blah', 3);",
+			"CALL dolt_commit('-Am', 'changing t1.pk column tag on b1');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL dolt_checkout('main');",
+				Expected: []sql.Row{{0, "Switched to branch 'main'"}},
+			},
+			{
+				Query:          "CALL dolt_merge('b1');",
+				ExpectedErrStr: "could not map primary key column pk",
+			},
+		},
+	},
 }
 
 var KeylessMergeCVsAndConflictsScripts = []queries.ScriptTest{
