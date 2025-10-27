@@ -150,6 +150,7 @@ var BranchActivityTests = []queries.ScriptTest{
 			"CALL dolt_commit('-Am', 'initial commit')",
 			"CALL dolt_branch('other_branch')",
 			"SELECT last_write INTO @lw FROM dolt_branch_activity WHERE branch = 'other_branch'",
+			"SELECT SLEEP(2)", // Ensure time stamp difference is noticeable
 			"UPDATE `mydb/other_branch`.t SET v='baz' WHERE id=1",
 		},
 		Assertions: []queries.ScriptTestAssertion{
