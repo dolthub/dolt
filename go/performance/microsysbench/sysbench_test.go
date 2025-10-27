@@ -90,7 +90,6 @@ func BenchmarkProjectionAggregation(b *testing.B) {
 	})
 }
 
-// BenchmarkSelectRandomPoints-14    	     321	   3591138 ns/op	 2799033 B/op	   92384 allocs/op
 func BenchmarkSelectRandomPoints(b *testing.B) {
 	benchmarkSysbenchQuery(b, func(int) string {
 		var sb strings.Builder
@@ -106,6 +105,8 @@ func BenchmarkSelectRandomPoints(b *testing.B) {
 	})
 }
 
+// BenchmarkSelectRandomRanges-14    	   13957	     78924 ns/op	  123046 B/op	    2264 allocs/op
+// BenchmarkSelectRandomRanges-14    	   13891	     80415 ns/op	  123126 B/op	    2265 allocs/op
 func BenchmarkSelectRandomRanges(b *testing.B) {
 	benchmarkSysbenchQuery(b, func(int) string {
 		var sb strings.Builder
@@ -119,6 +120,12 @@ func BenchmarkSelectRandomRanges(b *testing.B) {
 		}
 		sb.WriteString(";")
 		return sb.String()
+	})
+}
+
+func BenchmarkCoveringIndexScan(b *testing.B) {
+	benchmarkSysbenchQuery(b, func(int) string {
+		return "SELECT count(id) FROM sbtest1 WHERE k > 0"
 	})
 }
 
@@ -137,7 +144,7 @@ func benchmarkSysbenchQuery(b *testing.B, getQuery func(int) string) {
 
 		idx := 0
 		buf := sql.NewByteBuffer(16000)
-		if ri2, ok := iter.(sql.ValueRowIter); ok && ri2.CanSupport(ctx) {
+		if ri2, ok := iter.(sql.ValueRowIter); false && ok && ri2.IsValueRowIter(ctx) {
 			for {
 				idx++
 				row, err := ri2.NextValueRow(ctx)
