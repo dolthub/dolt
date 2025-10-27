@@ -76,6 +76,7 @@ func RowAsInsertStmt(r row.Row, tableName string, tableSch schema.Schema) (strin
 
 	b.WriteString(" VALUES (")
 	seenOne = false
+	// TAGS: Use of tags here is safe since it's constrained to a single table
 	_, err = r.IterSchema(tableSch, func(tag uint64, val types.Value) (stop bool, err error) {
 		if seenOne {
 			b.WriteRune(',')
@@ -107,6 +108,7 @@ func RowAsDeleteStmt(r row.Row, tableName string, tableSch schema.Schema) (strin
 	b.WriteString(" WHERE (")
 	seenOne := false
 	isKeyless := tableSch.GetPKCols().Size() == 0
+	// TAGS: Use of tags here is safe since it's constrained to a single table
 	_, err := r.IterSchema(tableSch, func(tag uint64, val types.Value) (stop bool, err error) {
 		col, _ := tableSch.GetAllCols().GetByTag(tag)
 		if col.IsPartOfPK || isKeyless {
@@ -141,6 +143,7 @@ func RowAsUpdateStmt(r row.Row, tableName string, tableSch schema.Schema, colsTo
 
 	b.WriteString("SET ")
 	seenOne := false
+	// TAGS: Use of tags here is safe since it's constrained to a single table
 	_, err := r.IterSchema(tableSch, func(tag uint64, val types.Value) (stop bool, err error) {
 		col, _ := tableSch.GetAllCols().GetByTag(tag)
 		exists := colsToUpdate.Contains(col.Name)
@@ -166,6 +169,7 @@ func RowAsUpdateStmt(r row.Row, tableName string, tableSch schema.Schema, colsTo
 
 	b.WriteString(" WHERE (")
 	seenOne = false
+	// TAGS: Use of tags here is safe since it's constrained to a single table
 	_, err = r.IterSchema(tableSch, func(tag uint64, val types.Value) (stop bool, err error) {
 		col, _ := tableSch.GetAllCols().GetByTag(tag)
 		if col.IsPartOfPK {
@@ -198,6 +202,7 @@ func RowAsTupleString(r row.Row, tableSch schema.Schema) (string, error) {
 
 	b.WriteString("(")
 	seenOne := false
+	// TAGS: Use of tags here is safe since it's constrained to a single table
 	_, err := r.IterSchema(tableSch, func(tag uint64, val types.Value) (stop bool, err error) {
 		if seenOne {
 			b.WriteRune(',')
