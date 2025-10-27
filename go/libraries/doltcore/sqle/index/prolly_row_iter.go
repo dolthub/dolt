@@ -217,7 +217,7 @@ func (it prollyRowIter) NextValueRow(ctx *sql.Context) (sql.ValueRow, error) {
 	return row, nil
 }
 
-// CanSupport implements the sql.ValueRowIter interface.
+// IsValueRowIter implements the sql.ValueRowIter interface.
 func (it prollyRowIter) IsValueRowIter(ctx *sql.Context) bool {
 	for _, typ := range it.keyDesc.Types {
 		if typ.Enc == val.ExtendedEnc || typ.Enc == val.ExtendedAddrEnc || typ.Enc == val.ExtendedAdaptiveEnc {
@@ -304,7 +304,7 @@ func (it *prollyKeylessIter) NextValueRow(ctx *sql.Context) (sql.ValueRow, error
 	return it.curr2, nil
 }
 
-// CanSupport implements the sql.ValueRowIter interface.
+// IsValueRowIter implements the sql.ValueRowIter interface.
 func (it *prollyKeylessIter) IsValueRowIter(ctx *sql.Context) bool {
 	for _, typ := range it.valDesc.Types {
 		if typ.Enc == val.ExtendedEnc || typ.Enc == val.ExtendedAddrEnc || typ.Enc == val.ExtendedAdaptiveEnc {
