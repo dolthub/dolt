@@ -25,6 +25,7 @@ var BranchActivityTests = []queries.ScriptTest{
 		SetUpScript: []string{
 			"CALL dolt_branch('feature1')",
 			"CALL dolt_branch('feature2')",
+			"SELECT SLEEP(0.5)", // branch activity update is async, give it a moment.
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -47,6 +48,7 @@ var BranchActivityTests = []queries.ScriptTest{
 		Name: "branch creation does sets last write but not last read",
 		SetUpScript: []string{
 			"CALL dolt_branch('new_branch')",
+			"SELECT SLEEP(0.5)", // branch activity update is async, give it a moment.
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -64,6 +66,7 @@ var BranchActivityTests = []queries.ScriptTest{
 			"INSERT INTO t VALUES (1), (2), (3)",
 			"CALL dolt_commit('-Am', 'initial commit')",
 			"CALL dolt_branch('new_branch')",
+			"SELECT SLEEP(0.5)", // branch activity update is async, give it a moment.
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -82,7 +85,7 @@ var BranchActivityTests = []queries.ScriptTest{
 				Expected: []sql.Row{{1}, {2}, {3}},
 			},
 			{
-				Query:            "SELECT SLEEP(1)", // activity update is async, give it a moment
+				Query:            "SELECT SLEEP(0.5)", // branch activity update is async, give it a moment
 				SkipResultsCheck: true,
 			},
 			{
@@ -103,6 +106,7 @@ var BranchActivityTests = []queries.ScriptTest{
 			"CALL dolt_branch('test_branch')",
 			"SELECT SLEEP(4)", // ensure time difference between branch creation and checkout
 			"CALL dolt_checkout('test_branch')",
+			"SELECT SLEEP(0.5)", // branch activity update is async, give it a moment.
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -130,6 +134,7 @@ var BranchActivityTests = []queries.ScriptTest{
 			"CALL dolt_checkout('temp_branch')",
 			"CALL dolt_checkout('main')",
 			"CALL dolt_branch('-d', 'temp_branch')",
+			"SELECT SLEEP(0.5)", // branch activity update is async, give it a moment.
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -144,12 +149,12 @@ var BranchActivityTests = []queries.ScriptTest{
 	},
 	{
 		Name: "branch activity when writing to another branch",
-		Skip: true, // Mysterious NULL result on CI only for the MacOS platform. Does not reproduce locally.
 		SetUpScript: []string{
 			"CREATE TABLE t (id INT PRIMARY KEY, v VARCHAR(20))",
 			"INSERT INTO t VALUES (1,'foo')",
 			"CALL dolt_commit('-Am', 'initial commit')",
 			"CALL dolt_branch('other_branch')",
+			"SELECT SLEEP(0.5)", // branch activity update is async, give it a moment.
 			"SELECT last_write INTO @lw FROM dolt_branch_activity WHERE branch = 'other_branch'",
 			"SELECT SLEEP(2)", // Ensure time stamp difference is noticeable
 			"UPDATE `mydb/other_branch`.t SET v='baz' WHERE id=1",
