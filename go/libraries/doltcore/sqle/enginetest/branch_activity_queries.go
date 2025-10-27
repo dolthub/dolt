@@ -144,12 +144,12 @@ var BranchActivityTests = []queries.ScriptTest{
 	},
 	{
 		Name: "branch activity when writing to another branch",
-		Skip: true, // Mysterious NULL result on CI only for the MacOS platform. Does not reproduce locally.
 		SetUpScript: []string{
 			"CREATE TABLE t (id INT PRIMARY KEY, v VARCHAR(20))",
 			"INSERT INTO t VALUES (1,'foo')",
 			"CALL dolt_commit('-Am', 'initial commit')",
 			"CALL dolt_branch('other_branch')",
+			"SELECT SLEEP(1)", // branch_activity update is async, give it a moment.
 			"SELECT last_write INTO @lw FROM dolt_branch_activity WHERE branch = 'other_branch'",
 			"SELECT SLEEP(2)", // Ensure time stamp difference is noticeable
 			"UPDATE `mydb/other_branch`.t SET v='baz' WHERE id=1",
