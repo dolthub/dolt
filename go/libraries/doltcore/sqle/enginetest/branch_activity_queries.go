@@ -142,4 +142,21 @@ var BranchActivityTests = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "branch activity when writing to another branch",
+		SetUpScript: []string{
+			"CREATE TABLE t (id INT PRIMARY KEY, v VARCHAR(20))",
+			"INSERT INTO t VALUES (1,'foo')",
+			"CALL dolt_commit('-Am', 'initial commit')",
+			"CALL dolt_branch('other_branch')",
+			"SELECT last_write INTO @lw FROM dolt_branch_activity WHERE branch = 'other_branch'",
+			"UPDATE `mydb/other_branch`.t SET v='baz' WHERE id=1",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT last_write <> @lw FROM dolt_branch_activity WHERE branch = 'other_branch'",
+				Expected: []sql.Row{{true}},
+			},
+		},
+	},
 }
