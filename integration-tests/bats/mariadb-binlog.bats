@@ -4,14 +4,12 @@ load $BATS_TEST_DIRNAME/helper/query-server-common.bash
 
 # https://mariadb.com/docs/server/server-management/server-monitoring-logs/binary-log/binary-log-formats
 
-setup() {
-  setup_no_dolt_init
-
+setup_file() {
   # Create dedicated directory for MariaDB data and binlog dirs
-  MARIADB_DATADIR="$BATS_FILE_TMPDIR/mariadb_data"
-  MARIADB_BINLOG_DIR="$BATS_FILE_TMPDIR/binlog"
-  MARIADB_SOCKET="$BATS_FILE_TMPDIR/mariadb.sock"
-  MARIADB_PORT=$(definePORT)
+  export MARIADB_DATADIR="$BATS_FILE_TMPDIR/mariadb_data"
+  export MARIADB_BINLOG_DIR="$BATS_FILE_TMPDIR/binlog"
+  export MARIADB_SOCKET="$BATS_FILE_TMPDIR/mariadb.sock"
+  export MARIADB_PORT=$(definePORT)
 
   mkdir -p "$MARIADB_DATADIR"
   mkdir -p "$MARIADB_BINLOG_DIR"
@@ -36,10 +34,9 @@ EOF
 
   # Start MariaDB server
   mariadbd --defaults-file="$BATS_FILE_TMPDIR/my.cnf" &
-  MARIADB_PID=$!
+  export MARIADB_PID=$!
 
-  # Wait for MariaDB to be ready
-  for i in {1..30}; do
+  for _ in {1..30}; do
     if mariadb --socket="$MARIADB_SOCKET" -u root -e "SELECT 1" &>/dev/null; then
       break
     fi
@@ -49,7 +46,7 @@ EOF
   # File 000001: Mixed format safe statements
   mariadb --socket="$MARIADB_SOCKET" -u root <<SQL
 SET GLOBAL binlog_format='MIXED';
-CREATE DATABASE binlog_test;
+CREATE DATABASE IF NOT EXISTS binlog_test;
 USE binlog_test;
 
 -- Safe statements that use statement-based logging
@@ -105,19 +102,53 @@ SQL
 
   mariadb --socket="$MARIADB_SOCKET" -u root -e "FLUSH BINARY LOGS;"
 
-  # File 000004: mysql database operations and GRANT statements
+  # File 000004: User and GRANT statements
   mariadb --socket="$MARIADB_SOCKET" -u root <<SQL
 SET SESSION binlog_format='ROW';
 
--- Direct edit of mysql database (should use statement logging regardless)
-USE mysql;
-CREATE TABLE IF NOT EXISTS test_direct (id INT PRIMARY KEY, data VARCHAR(50));
-INSERT INTO test_direct VALUES (1, 'direct_edit');
-
--- Indirect edit via GRANT (always uses statement logging)
+-- User and GRANT operations (always use statement logging)
 CREATE USER IF NOT EXISTS 'testuser'@'localhost' IDENTIFIED BY 'password';
 GRANT SELECT ON binlog_test.* TO 'testuser'@'localhost';
 REVOKE SELECT ON binlog_test.* FROM 'testuser'@'localhost';
+SQL
+
+  mariadb --socket="$MARIADB_SOCKET" -u root -e "FLUSH BINARY LOGS;"
+
+  # File 000005: Multi-file test data - first file
+  mariadb --socket="$MARIADB_SOCKET" -u root <<SQL
+USE binlog_test;
+SET SESSION binlog_format='ROW';
+
+CREATE TABLE multi_file_test1 (
+    id INT PRIMARY KEY,
+    file_num INT,
+    description VARCHAR(100)
+);
+
+INSERT INTO multi_file_test1 VALUES
+    (1, 1, 'From first binlog file'),
+    (2, 1, 'Also from first file');
+SQL
+
+  mariadb --socket="$MARIADB_SOCKET" -u root -e "FLUSH BINARY LOGS;"
+
+  # File 000006: Multi-file test data - second file
+  mariadb --socket="$MARIADB_SOCKET" -u root <<SQL
+USE binlog_test;
+SET SESSION binlog_format='ROW';
+
+CREATE TABLE multi_file_test2 (
+    id INT PRIMARY KEY,
+    file_num INT,
+    description VARCHAR(100)
+);
+
+INSERT INTO multi_file_test2 VALUES
+    (1, 2, 'From second binlog file'),
+    (2, 2, 'Also from second file');
+
+-- Also insert into the first table to verify table ID reuse across files
+INSERT INTO multi_file_test1 VALUES (3, 2, 'Cross-file insert');
 SQL
 
   mariadb --socket="$MARIADB_SOCKET" -u root -e "FLUSH BINARY LOGS;"
@@ -129,22 +160,33 @@ SQL
   [ -f "$MARIADB_BINLOG_DIR/mariadb-bin.000002" ]
   [ -f "$MARIADB_BINLOG_DIR/mariadb-bin.000003" ]
   [ -f "$MARIADB_BINLOG_DIR/mariadb-bin.000004" ]
+  [ -f "$MARIADB_BINLOG_DIR/mariadb-bin.000005" ]
+  [ -f "$MARIADB_BINLOG_DIR/mariadb-bin.000006" ]
 
-  # Create dolt database to receive binlog data
-  cd "$BATS_TMPDIR/dolt-repo-$$"
+  # Create dolt database to receive binlog data (shared across all tests)
+  export DOLT_REPO="$BATS_TMPDIR/dolt-repo-$$"
+  mkdir -p "$DOLT_REPO"
+  cd "$DOLT_REPO" || false
   dolt init
-  start_sql_server "dolt-repo-$$"
+}
+
+setup() {
+  cd "$DOLT_REPO" || false
+  start_sql_server_with_args
 }
 
 teardown() {
-  stop_sql_server 1
+  stop_sql_server
+}
+
+teardown_file() {
 
   if [ ! -z "$MARIADB_PID" ] && ps -p $MARIADB_PID >/dev/null 2>&1; then
     kill $MARIADB_PID 2>/dev/null || true
     wait $MARIADB_PID 2>/dev/null || true
   fi
 
-  rm -rf "$BATS_TMPDIR/dolt-repo-$$"
+  rm -rf "$DOLT_REPO"
 }
 
 @test "mariadb-binlog: mixed format statements" {
@@ -155,7 +197,7 @@ teardown() {
   run mariadb-binlog "$MARIADB_BINLOG_DIR/mariadb-bin.000001"
   [ "$status" -eq 0 ]
 
-  mariadb-binlog "$MARIADB_BINLOG_DIR/mariadb-bin.000001" | mariadb -u root -h 127.0.0.1 -P $PORT --skip-ssl
+  mariadb-binlog "$MARIADB_BINLOG_DIR/mariadb-bin.000001" | mariadb -u root -h 127.0.0.1 -P "$PORT" --skip-ssl
 
   run mariadb -u root -h 127.0.0.1 -P $PORT --skip-ssl -e "SHOW DATABASES"
   [ "$status" -eq 0 ]
@@ -180,19 +222,37 @@ teardown() {
   run mariadb-binlog "$MARIADB_BINLOG_DIR/mariadb-bin.000002"
   [ "$status" -eq 0 ]
 
-  mariadb-binlog "$MARIADB_BINLOG_DIR/mariadb-bin.000002" | mariadb -u root -h 127.0.0.1 -P $PORT --skip-ssl
+  mariadb-binlog "$MARIADB_BINLOG_DIR/mariadb-bin.000002" | mariadb -u root -h 127.0.0.1 -P "$PORT" --skip-ssl
 
   run mariadb -u root -h 127.0.0.1 -P $PORT --skip-ssl -e "USE binlog_test; SHOW TABLES"
   [ "$status" -eq 0 ]
   [[ "$output" =~ "row_test" ]] || false
 
+  # INSERT: 3 rows initially inserted, but 1 deleted later, so should have 2 rows
   run mariadb -u root -h 127.0.0.1 -P $PORT --skip-ssl -e "SELECT COUNT(*) FROM binlog_test.row_test"
   [ "$status" -eq 0 ]
   [[ "$output" =~ "2" ]] || false
 
+  # UPDATE: id=1 should have been updated from 'aaa...' to 'xxx...'
   run mariadb -u root -h 127.0.0.1 -P $PORT --skip-ssl -e "SELECT data FROM binlog_test.row_test WHERE id = 1"
   [ "$status" -eq 0 ]
   [[ "$output" =~ "xxxxxxxx" ]] || false
+
+  # UPDATE: id=2 should also have been updated from 'bbb...' to 'xxx...'
+  run mariadb -u root -h 127.0.0.1 -P $PORT --skip-ssl -e "SELECT data FROM binlog_test.row_test WHERE id = 2"
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "xxxxxxxx" ]] || false
+
+  # DELETE: id=3 should not exist
+  run mariadb -u root -h 127.0.0.1 -P $PORT --skip-ssl -e "SELECT COUNT(*) FROM binlog_test.row_test WHERE id = 3"
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "0" ]] || false
+
+  run mariadb -u root -h 127.0.0.1 -P $PORT --skip-ssl -e "SELECT id FROM binlog_test.row_test ORDER BY id"
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "1" ]] || false
+  [[ "$output" =~ "2" ]] || false
+  [[ ! "$output" =~ "3" ]] || false
 }
 
 @test "mariadb-binlog: statement format with LIMIT" {
@@ -201,7 +261,7 @@ teardown() {
   run mariadb-binlog "$MARIADB_BINLOG_DIR/mariadb-bin.000003"
   [ "$status" -eq 0 ]
 
-  mariadb-binlog "$MARIADB_BINLOG_DIR/mariadb-bin.000003" | mariadb -u root -h 127.0.0.1 -P $PORT --skip-ssl
+  mariadb-binlog "$MARIADB_BINLOG_DIR/mariadb-bin.000003" | mariadb -u root -h 127.0.0.1 -P "$PORT" --skip-ssl
 
   run mariadb -u root -h 127.0.0.1 -P $PORT --skip-ssl -e "USE binlog_test; SHOW TABLES"
   [ "$status" -eq 0 ]
@@ -212,23 +272,76 @@ teardown() {
   [[ "$output" =~ "3" ]] || false
 }
 
-@test "mariadb-binlog: mysql database and grants" {
+@test "mariadb-binlog: user and grants" {
   [ -f "$MARIADB_BINLOG_DIR/mariadb-bin.000004" ]
 
   run mariadb-binlog "$MARIADB_BINLOG_DIR/mariadb-bin.000004"
   [ "$status" -eq 0 ]
 
-  mariadb-binlog "$MARIADB_BINLOG_DIR/mariadb-bin.000004" | mariadb -u root -h 127.0.0.1 -P $PORT --skip-ssl
+  mariadb-binlog "$MARIADB_BINLOG_DIR/mariadb-bin.000004" | mariadb -u root -h 127.0.0.1 -P "$PORT" --skip-ssl
 
-  run mariadb -u root -h 127.0.0.1 -P $PORT --skip-ssl -e "USE mysql; SHOW TABLES"
-  [ "$status" -eq 0 ]
-  [[ "$output" =~ "test_direct" ]] || false
-
-  run mariadb -u root -h 127.0.0.1 -P $PORT --skip-ssl -e "SELECT data FROM mysql.test_direct WHERE id = 1"
-  [ "$status" -eq 0 ]
-  [[ "$output" =~ "direct_edit" ]] || false
-
-  run mariadb -u root -h 127.0.0.1 -P $PORT --skip-ssl -e "SELECT user FROM mysql.user WHERE user = 'testuser'"
+  run mariadb -u root -h 127.0.0.1 -P $PORT --skip-ssl -e "SELECT user, host FROM mysql.user WHERE user = 'testuser'"
   [ "$status" -eq 0 ]
   [[ "$output" =~ "testuser" ]] || false
+  [[ "$output" =~ "localhost" ]] || false
+
+  run mariadb -u root -h 127.0.0.1 -P $PORT --skip-ssl -e "SHOW GRANTS FOR 'testuser'@'localhost'"
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "USAGE" ]] || false
+  [[ ! "$output" =~ "SELECT.*binlog_test" ]] || false
+}
+
+@test "mariadb-binlog: privilege enforcement" {
+  [ -f "$MARIADB_BINLOG_DIR/mariadb-bin.000001" ]
+
+  mariadb -u root -h 127.0.0.1 -P $PORT --skip-ssl -e "CREATE USER IF NOT EXISTS 'unprivileged'@'localhost' IDENTIFIED BY 'test'"
+  mariadb -u root -h 127.0.0.1 -P $PORT --skip-ssl -e "GRANT SELECT ON *.* TO 'unprivileged'@'localhost'"
+
+  run bash -c "mariadb-binlog '$MARIADB_BINLOG_DIR/mariadb-bin.000001' | mariadb -u unprivileged -ptest -h 127.0.0.1 -P '$PORT' --skip-ssl 2>&1"
+  [ "$status" -ne 0 ]
+  [[ "$output" =~ "Access denied" ]] || [[ "$output" =~ "command denied" ]] || false
+
+  mariadb -u root -h 127.0.0.1 -P $PORT --skip-ssl -e "GRANT SUPER ON *.* TO 'unprivileged'@'localhost'"
+
+  run bash -c "mariadb-binlog '$MARIADB_BINLOG_DIR/mariadb-bin.000001' | mariadb -u unprivileged -ptest -h 127.0.0.1 -P '$PORT' --skip-ssl --force 2>&1"
+  [ "$status" -eq 0 ]
+  [[ ! "$output" =~ "Access denied" ]] || [[ ! "$output" =~ "command denied" ]] || false
+
+  mariadb -u root -h 127.0.0.1 -P $PORT --skip-ssl -e "DROP USER IF EXISTS 'unprivileged'@'localhost'"
+}
+
+@test "mariadb-binlog: multiple binlog files in one command" {
+  [ -f "$MARIADB_BINLOG_DIR/mariadb-bin.000005" ]
+  [ -f "$MARIADB_BINLOG_DIR/mariadb-bin.000006" ]
+
+  mariadb-binlog "$MARIADB_BINLOG_DIR/mariadb-bin.000005" "$MARIADB_BINLOG_DIR/mariadb-bin.000006" | mariadb -u root -h 127.0.0.1 -P "$PORT" --skip-ssl
+
+  run mariadb -u root -h 127.0.0.1 -P $PORT --skip-ssl -e "USE binlog_test; SHOW TABLES"
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "multi_file_test1" ]] || false
+  [[ "$output" =~ "multi_file_test2" ]] || false
+
+  run mariadb -u root -h 127.0.0.1 -P $PORT --skip-ssl -e "SELECT COUNT(*) FROM binlog_test.multi_file_test1 WHERE file_num = 1"
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "2" ]] || false
+
+  run mariadb -u root -h 127.0.0.1 -P $PORT --skip-ssl -e "SELECT description FROM binlog_test.multi_file_test1 WHERE id = 1"
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "From first binlog file" ]] || false
+
+  run mariadb -u root -h 127.0.0.1 -P $PORT --skip-ssl -e "SELECT COUNT(*) FROM binlog_test.multi_file_test2 WHERE file_num = 2"
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "2" ]] || false
+
+  run mariadb -u root -h 127.0.0.1 -P $PORT --skip-ssl -e "SELECT description FROM binlog_test.multi_file_test2 WHERE id = 1"
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "From second binlog file" ]] || false
+
+  run mariadb -u root -h 127.0.0.1 -P $PORT --skip-ssl -e "SELECT COUNT(*) FROM binlog_test.multi_file_test1"
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "3" ]] || false
+
+  run mariadb -u root -h 127.0.0.1 -P $PORT --skip-ssl -e "SELECT description FROM binlog_test.multi_file_test1 WHERE id = 3"
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "Cross-file insert" ]] || false
 }
