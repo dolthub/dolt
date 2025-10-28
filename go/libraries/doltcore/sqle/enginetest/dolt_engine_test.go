@@ -1635,6 +1635,16 @@ func TestDiffSystemTablePrepared(t *testing.T) {
 	RunDoltDiffSystemTableTestsPrepared(t, h)
 }
 
+func TestNonlocalTable(t *testing.T) {
+	h := newDoltEnginetestHarness(t)
+	RunNonlocalTableTests(t, h)
+}
+
+func TestNonlocalTablePrepared(t *testing.T) {
+	h := newDoltEnginetestHarness(t)
+	RunNonlocalTableTestsPrepared(t, h)
+}
+
 func TestSchemaDiffTableFunction(t *testing.T) {
 	harness := newDoltEnginetestHarness(t)
 	RunSchemaDiffTableFunctionTests(t, harness)
