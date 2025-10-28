@@ -41,7 +41,7 @@ func doltRevert(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 func doDoltRevert(ctx *sql.Context, args []string) (int, error) {
 	dbName := ctx.GetCurrentDatabase()
 	dSess := dsess.DSessFromSess(ctx.Session)
-	tableResolver, err := dSess.GetTableResolver(ctx, dbName)
+	tableResolver, err := dsess.GetTableResolver(ctx)
 	if err != nil {
 		return 1, err
 	}

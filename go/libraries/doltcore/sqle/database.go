@@ -107,7 +107,16 @@ var _ rebase.RebasePlanDatabase = Database{}
 var _ sql.SchemaValidator = Database{}
 var _ sql.SchemaDatabase = Database{}
 var _ sql.DatabaseSchema = Database{}
-var _ doltdb.TableResolver = Database{}
+
+type TableResolver struct {
+	db Database
+}
+
+var _ doltdb.TableResolver = TableResolver{}
+
+func (t TableResolver) ResolveTable(ctx *sql.Context, root doltdb.RootValue, tblName doltdb.TableName) (trueTableName doltdb.TableName, table *doltdb.Table, found bool, err error) {
+	return t.db.GetDoltDBTableInsensitiveWithRoot(ctx, root, tblName)
+}
 
 type ReadOnlyDatabase struct {
 	Database
@@ -132,6 +141,10 @@ func (r ReadOnlyDatabase) WithBranchRevision(requestedName string, branchSpec ds
 
 	r.Database = revDb.(Database)
 	return r, nil
+}
+
+func (db Database) GetTableResolver() doltdb.TableResolver {
+	return TableResolver{db}
 }
 
 func (db Database) WithBranchRevision(requestedName string, branchSpec dsess.SessionDatabaseBranchSpec) (dsess.SqlDatabase, error) {

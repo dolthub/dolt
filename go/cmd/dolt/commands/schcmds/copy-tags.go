@@ -102,10 +102,7 @@ func (cmd CopyTagsCmd) Exec(ctx context.Context, commandStr string, args []strin
 	}
 	sqlCtx := queryist.Context
 
-	dSess := dsess.DSessFromSess(sqlCtx.Session)
-	dbName := sqlCtx.GetCurrentDatabase()
-
-	tableResolver, err := dSess.GetTableResolver(sqlCtx, dbName)
+	tableResolver, err := dsess.GetTableResolver(sqlCtx)
 	if err != nil {
 		cli.PrintErrln(errhand.VerboseErrorFromError(err))
 		return 1

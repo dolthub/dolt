@@ -1024,7 +1024,7 @@ func fkCollSetDifference(
 func pruneInvalidForeignKeys(ctx *sql.Context, tableResolver doltdb.TableResolver, fkColl *doltdb.ForeignKeyCollection, mergedRoot doltdb.RootValue) (pruned *doltdb.ForeignKeyCollection, err error) {
 	pruned, _ = doltdb.NewForeignKeyCollection()
 	err = fkColl.Iter(func(fk doltdb.ForeignKey) (stop bool, err error) {
-		_, parentTbl, ok, err := tableResolver.GetDoltDBTableInsensitiveWithRoot(ctx, mergedRoot, fk.ReferencedTableName)
+		_, parentTbl, ok, err := tableResolver.ResolveTable(ctx, mergedRoot, fk.ReferencedTableName)
 		if err != nil || !ok {
 			return false, err
 		}

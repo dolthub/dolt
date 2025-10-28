@@ -141,22 +141,6 @@ func (d *DoltSession) Provider() DoltDatabaseProvider {
 	return d.provider
 }
 
-func (d *DoltSession) GetTableResolver(ctx *sql.Context, dbName string) (doltdb.TableResolver, error) {
-	if dbName == "" {
-		// If no database is selected, there's no situation where we need to resolve nonlocal tables.
-		return doltdb.SimpleTableResolver{}, nil
-	}
-	sqlDB, err := d.Provider().Database(ctx, dbName)
-	if err != nil {
-		return nil, err
-	}
-	dbWithRoot, ok := sqlDB.(doltdb.TableResolver)
-	if !ok {
-		return nil, fmt.Errorf("database does not have roots")
-	}
-	return dbWithRoot, nil
-}
-
 // GenericProvider returns the sql.MutableDatabaseProvider for this session. This allows access to the provider without
 // incurring import cycles in some cases.
 func (d *DoltSession) GenericProvider() sql.MutableDatabaseProvider {
@@ -176,7 +160,18 @@ func DSessFromSess(sess sql.Session) *DoltSession {
 func GetTableResolver(ctx *sql.Context) (doltdb.TableResolver, error) {
 	dbName := ctx.GetCurrentDatabase()
 	dSess := DSessFromSess(ctx.Session)
-	return dSess.GetTableResolver(ctx, dbName)
+	if dbName == "" {
+		// If no database is selected, there's no situation where we need to resolve nonlocal tables.
+		return doltdb.SimpleTableResolver{}, nil
+	}
+	sqlDB, ok, err := dSess.Provider().SessionDatabase(ctx, dbName)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, fmt.Errorf("could not load session database")
+	}
+	return sqlDB.GetTableResolver(), nil
 }
 
 // lookupDbState is the private version of LookupDbState, returning a struct that has more information available than
