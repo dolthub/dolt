@@ -1143,6 +1143,7 @@ func (db Database) getRootForNonlocalRef(ctx *sql.Context, ref string) (root dol
 	}
 }
 
+// getNonlocalTableNames returns a list of every table name that will resolve to a nonlocal table when resolved on the provided root.
 func (db Database) getNonlocalTableNames(ctx *sql.Context, root doltdb.RootValue) (nonlocalTableNames []string, error error) {
 	_, nonlocalsTable, nonlocalsTableExists, err := db.resolveUserTable(ctx, root, dtables.GetDoltNonlocalTablesName())
 	if err != nil {
