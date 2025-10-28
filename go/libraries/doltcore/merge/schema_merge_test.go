@@ -1630,7 +1630,7 @@ func testSchemaMergeHelper(t *testing.T, tests []schemaMergeTest, flipSides bool
 		}
 
 		t.Run(test.name, func(t *testing.T) {
-			runTest := func(t *testing.T, test schemaMergeTest, expectDataConflict bool, expConstraintViolations []constraintViolation) {
+			runTest := func(t *testing.T, test schemaMergeTest, isDataConflict bool, constraintViolations []constraintViolation) {
 				ctx := context.Background()
 				a, l, r, m := setupSchemaMergeTest(ctx, t, test)
 				ns := a.NodeStore()
@@ -1647,117 +1647,7 @@ func testSchemaMergeHelper(t *testing.T, tests []schemaMergeTest, flipSides bool
 					require.Error(t, err)
 				} else {
 					require.NoError(t, err)
-					exp, err := doltdb.MapTableHashes(ctx, m)
-					assert.NoError(t, err)
-					act, err := doltdb.MapTableHashes(ctx, result.Root)
-					assert.NoError(t, err)
-
-					assert.Equal(t, len(exp), len(act))
-
-					if expectDataConflict {
-						foundDataConflict := false
-						for name, _ := range exp {
-							_, ok := act[name]
-							assert.True(t, ok)
-							actTbl, _, err := result.Root.GetTable(ctx, name)
-							require.NoError(t, err)
-							hasConflict, err := actTbl.HasConflicts(ctx)
-							require.NoError(t, err)
-							foundDataConflict = foundDataConflict || hasConflict
-						}
-						if !assert.True(t, foundDataConflict, "Expected data conflict, but didn't find one.") {
-							for name, _ := range exp {
-								table, _, err := result.Root.GetTable(ctx, name)
-								require.NoError(t, err)
-								t.Logf("table %s:", name)
-								t.Log(table.DebugString(ctx, ns))
-							}
-
-						}
-					} else {
-						for name, addr := range exp {
-							a, ok := act[name]
-							assert.True(t, ok)
-
-							actTbl, _, err := result.Root.GetTable(ctx, name)
-							require.NoError(t, err)
-							hasConflict, err := actTbl.HasConflicts(ctx)
-							require.NoError(t, err)
-							require.False(t, hasConflict, "Unexpected data conflict")
-
-							numConstraintViolations, err := actTbl.NumConstraintViolations(ctx)
-							require.NoError(t, err)
-							require.EqualValues(t, numConstraintViolations, len(expConstraintViolations))
-
-							sch, err := actTbl.GetSchema(ctx)
-							require.NoError(t, err)
-
-							kd, vd := sch.GetMapDescriptors(m.NodeStore())
-
-							if len(expConstraintViolations) > 0 {
-								artifacts, err := actTbl.GetArtifacts(ctx)
-								require.NoError(t, err)
-								artifactMap := durable.ProllyMapFromArtifactIndex(artifacts)
-								artifactIter, err := artifactMap.IterAllCVs(ctx)
-								require.NoError(t, err)
-
-								// value tuples encoded in ConstraintViolationMeta may
-								// violate the not null constraints assumed by fixed access
-								kd = kd.WithoutFixedAccess()
-								vd = vd.WithoutFixedAccess()
-								for _, expectedViolation := range expConstraintViolations {
-									violationType, key, value, err := merge.NextConstraintViolation(ctx, artifactIter, kd, vd, artifactMap.NodeStore())
-									require.NoError(t, err)
-									require.EqualValues(t, expectedViolation.violationType, violationType)
-									require.EqualValues(t, expectedViolation.key, key)
-									require.EqualValues(t, expectedViolation.value, value)
-								}
-							} else {
-								if addr != a {
-									expTbl, _, err := m.GetTable(ctx, name)
-									require.NoError(t, err)
-									expSchema, err := expTbl.GetSchema(ctx)
-									require.NoError(t, err)
-									expRowDataHash, err := expTbl.GetRowDataHash(ctx)
-									require.NoError(t, err)
-									actRowDataHash, err := actTbl.GetRowDataHash(ctx)
-									require.NoError(t, err)
-									if !expSchema.GetKeyDescriptor(ns).Equals(kd) {
-										t.Fatal("Primary key descriptors unequal")
-									}
-									if !expSchema.GetValueDescriptor(ns).Equals(vd) {
-										t.Fatal("Value descriptors unequal")
-									}
-									if expRowDataHash != actRowDataHash {
-										t.Error("Rows unequal")
-										t.Logf("expected rows: %s", expTbl.DebugString(ctx, m.NodeStore()))
-										t.Logf("actual rows: %s", actTbl.DebugString(ctx, m.NodeStore()))
-									}
-									expIndexSet, err := expTbl.GetIndexSet(ctx)
-									require.NoError(t, err)
-									actIndexSet, err := actTbl.GetIndexSet(ctx)
-									require.NoError(t, err)
-									expSchema.Indexes().Iter(func(index schema.Index) (stop bool, err error) {
-										expIndex, err := expIndexSet.GetIndex(ctx, expSchema, nil, index.Name())
-										require.NoError(t, err)
-										actIndex, err := actIndexSet.GetIndex(ctx, expSchema, nil, index.Name())
-										require.NoError(t, err)
-										expIndexHash, err := expIndex.HashOf()
-										require.NoError(t, err)
-										actIndexHash, err := actIndex.HashOf()
-										require.NoError(t, err)
-										if expIndexHash != actIndexHash {
-											t.Errorf("Index %s unequal", index.Name())
-											t.Logf("expected rows: %s", expIndex.DebugString(ctx, m.NodeStore(), expSchema))
-											t.Logf("actual rows: %s", actIndex.DebugString(ctx, m.NodeStore(), expSchema))
-										}
-										return false, nil
-									})
-
-								}
-							}
-						}
-					}
+					verifyMerge(t, ctx, m, result, ns, isDataConflict, constraintViolations)
 				}
 			}
 			t.Run("test schema merge", func(t *testing.T) {
@@ -1810,6 +1700,119 @@ func setupSchemaMergeTest(ctx context.Context, t *testing.T, test schemaMergeTes
 		assert.NotNil(t, merged)
 	}
 	return
+}
+
+func verifyMerge(t *testing.T, ctx context.Context, m doltdb.RootValue, result *merge.Result, ns tree.NodeStore, isDataConflict bool, constraintViolations []constraintViolation) {
+	exp, err := doltdb.MapTableHashes(ctx, m)
+	assert.NoError(t, err)
+	act, err := doltdb.MapTableHashes(ctx, result.Root)
+	assert.NoError(t, err)
+
+	assert.Equal(t, len(exp), len(act))
+
+	if isDataConflict {
+		foundDataConflict := false
+		for name, _ := range exp {
+			_, ok := act[name]
+			assert.True(t, ok)
+			actTbl, _, err := result.Root.GetTable(ctx, name)
+			require.NoError(t, err)
+			hasConflict, err := actTbl.HasConflicts(ctx)
+			require.NoError(t, err)
+			foundDataConflict = foundDataConflict || hasConflict
+		}
+		if !assert.True(t, foundDataConflict, "Expected data conflict, but didn't find one.") {
+			for name, _ := range exp {
+				table, _, err := result.Root.GetTable(ctx, name)
+				require.NoError(t, err)
+				t.Logf("table %s:", name)
+				t.Log(table.DebugString(ctx, ns))
+			}
+
+		}
+	} else {
+		for name, addr := range exp {
+			a, ok := act[name]
+			assert.True(t, ok)
+
+			actTbl, _, err := result.Root.GetTable(ctx, name)
+			require.NoError(t, err)
+			hasConflict, err := actTbl.HasConflicts(ctx)
+			require.NoError(t, err)
+			require.False(t, hasConflict, "Unexpected data conflict")
+
+			numConstraintViolations, err := actTbl.NumConstraintViolations(ctx)
+			require.NoError(t, err)
+			require.EqualValues(t, numConstraintViolations, len(constraintViolations))
+
+			sch, err := actTbl.GetSchema(ctx)
+			require.NoError(t, err)
+
+			kd, vd := sch.GetMapDescriptors(m.NodeStore())
+
+			if len(constraintViolations) > 0 {
+				artifacts, err := actTbl.GetArtifacts(ctx)
+				require.NoError(t, err)
+				artifactMap := durable.ProllyMapFromArtifactIndex(artifacts)
+				artifactIter, err := artifactMap.IterAllCVs(ctx)
+				require.NoError(t, err)
+
+				// value tuples encoded in ConstraintViolationMeta may
+				// violate the not null constraints assumed by fixed access
+				kd = kd.WithoutFixedAccess()
+				vd = vd.WithoutFixedAccess()
+				for _, expectedViolation := range constraintViolations {
+					violationType, key, value, err := merge.NextConstraintViolation(ctx, artifactIter, kd, vd, artifactMap.NodeStore())
+					require.NoError(t, err)
+					require.EqualValues(t, expectedViolation.violationType, violationType)
+					require.EqualValues(t, expectedViolation.key, key)
+					require.EqualValues(t, expectedViolation.value, value)
+				}
+			} else {
+				if addr != a {
+					expTbl, _, err := m.GetTable(ctx, name)
+					require.NoError(t, err)
+					expSchema, err := expTbl.GetSchema(ctx)
+					require.NoError(t, err)
+					expRowDataHash, err := expTbl.GetRowDataHash(ctx)
+					require.NoError(t, err)
+					actRowDataHash, err := actTbl.GetRowDataHash(ctx)
+					require.NoError(t, err)
+					if !expSchema.GetKeyDescriptor(ns).Equals(kd) {
+						t.Fatal("Primary key descriptors unequal")
+					}
+					if !expSchema.GetValueDescriptor(ns).Equals(vd) {
+						t.Fatal("Value descriptors unequal")
+					}
+					if expRowDataHash != actRowDataHash {
+						t.Error("Rows unequal")
+						t.Logf("expected rows: %s", expTbl.DebugString(ctx, m.NodeStore()))
+						t.Logf("actual rows: %s", actTbl.DebugString(ctx, m.NodeStore()))
+					}
+					expIndexSet, err := expTbl.GetIndexSet(ctx)
+					require.NoError(t, err)
+					actIndexSet, err := actTbl.GetIndexSet(ctx)
+					require.NoError(t, err)
+					expSchema.Indexes().Iter(func(index schema.Index) (stop bool, err error) {
+						expIndex, err := expIndexSet.GetIndex(ctx, expSchema, nil, index.Name())
+						require.NoError(t, err)
+						actIndex, err := actIndexSet.GetIndex(ctx, expSchema, nil, index.Name())
+						require.NoError(t, err)
+						expIndexHash, err := expIndex.HashOf()
+						require.NoError(t, err)
+						actIndexHash, err := actIndex.HashOf()
+						require.NoError(t, err)
+						if expIndexHash != actIndexHash {
+							t.Errorf("Index %s unequal", index.Name())
+							t.Logf("expected rows: %s", expIndex.DebugString(ctx, m.NodeStore(), expSchema))
+							t.Logf("actual rows: %s", actIndex.DebugString(ctx, m.NodeStore(), expSchema))
+						}
+						return false, nil
+					})
+				}
+			}
+		}
+	}
 }
 
 func maybeSkip(t *testing.T, nbf *types.NomsBinFormat, test schemaMergeTest, flipSides bool) {

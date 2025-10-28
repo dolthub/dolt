@@ -144,7 +144,7 @@ func (dbState *DatabaseSessionState) NewEmptyBranchState(head string, revisionTy
 
 // RevisionDbName returns the revision-qualified database name for this branch state
 func (bs *branchState) RevisionDbName() string {
-	return RevisionDbName(bs.dbState.dbName, bs.head)
+	return doltdb.RevisionDbName(bs.dbState.dbName, bs.head)
 }
 
 func (bs *branchState) WorkingRoot() doltdb.RootValue {

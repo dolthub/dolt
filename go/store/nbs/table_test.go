@@ -81,7 +81,7 @@ func TestSimple(t *testing.T) {
 	require.NoError(t, err)
 	ti, err := parseTableIndexByCopy(ctx, tableData, &UnlimitedQuotaProvider{})
 	require.NoError(t, err)
-	tr, err := newTableReader(ti, tableReaderAtFromBytes(tableData), fileBlockSize)
+	tr, err := newTableReader(ctx, ti, tableReaderAtFromBytes(tableData), fileBlockSize)
 	require.NoError(t, err)
 	defer tr.close()
 
@@ -130,7 +130,7 @@ func TestHasMany(t *testing.T) {
 	require.NoError(t, err)
 	ti, err := parseTableIndexByCopy(ctx, tableData, &UnlimitedQuotaProvider{})
 	require.NoError(t, err)
-	tr, err := newTableReader(ti, tableReaderAtFromBytes(tableData), fileBlockSize)
+	tr, err := newTableReader(ctx, ti, tableReaderAtFromBytes(tableData), fileBlockSize)
 	require.NoError(t, err)
 	defer tr.close()
 
@@ -183,7 +183,7 @@ func TestHasManySequentialPrefix(t *testing.T) {
 
 	ti, err := parseTableIndexByCopy(ctx, buff, &UnlimitedQuotaProvider{})
 	require.NoError(t, err)
-	tr, err := newTableReader(ti, tableReaderAtFromBytes(buff), fileBlockSize)
+	tr, err := newTableReader(ctx, ti, tableReaderAtFromBytes(buff), fileBlockSize)
 	require.NoError(t, err)
 	defer tr.close()
 
@@ -238,7 +238,7 @@ func BenchmarkHasMany(b *testing.B) {
 	require.NoError(b, err)
 	ti, err := parseTableIndexByCopy(ctx, tableData, &UnlimitedQuotaProvider{})
 	require.NoError(b, err)
-	tr, err := newTableReader(ti, tableReaderAtFromBytes(tableData), fileBlockSize)
+	tr, err := newTableReader(ctx, ti, tableReaderAtFromBytes(tableData), fileBlockSize)
 	require.NoError(b, err)
 	defer tr.close()
 
@@ -275,7 +275,7 @@ func TestGetMany(t *testing.T) {
 	require.NoError(t, err)
 	ti, err := parseTableIndexByCopy(ctx, tableData, &UnlimitedQuotaProvider{})
 	require.NoError(t, err)
-	tr, err := newTableReader(ti, tableReaderAtFromBytes(tableData), fileBlockSize)
+	tr, err := newTableReader(ctx, ti, tableReaderAtFromBytes(tableData), fileBlockSize)
 	require.NoError(t, err)
 	defer tr.close()
 
@@ -311,7 +311,7 @@ func TestCalcReads(t *testing.T) {
 	require.NoError(t, err)
 	ti, err := parseTableIndexByCopy(ctx, tableData, &UnlimitedQuotaProvider{})
 	require.NoError(t, err)
-	tr, err := newTableReader(ti, tableReaderAtFromBytes(tableData), 0)
+	tr, err := newTableReader(ctx, ti, tableReaderAtFromBytes(tableData), 0)
 	require.NoError(t, err)
 	defer tr.close()
 	addrs := hash.HashSlice{computeAddr(chunks[0]), computeAddr(chunks[1]), computeAddr(chunks[2])}
@@ -350,7 +350,7 @@ func TestExtract(t *testing.T) {
 	require.NoError(t, err)
 	ti, err := parseTableIndexByCopy(ctx, tableData, &UnlimitedQuotaProvider{})
 	require.NoError(t, err)
-	tr, err := newTableReader(ti, tableReaderAtFromBytes(tableData), fileBlockSize)
+	tr, err := newTableReader(ctx, ti, tableReaderAtFromBytes(tableData), fileBlockSize)
 	require.NoError(t, err)
 	defer tr.close()
 
@@ -391,7 +391,7 @@ func Test65k(t *testing.T) {
 	require.NoError(t, err)
 	ti, err := parseTableIndexByCopy(ctx, tableData, &UnlimitedQuotaProvider{})
 	require.NoError(t, err)
-	tr, err := newTableReader(ti, tableReaderAtFromBytes(tableData), fileBlockSize)
+	tr, err := newTableReader(ctx, ti, tableReaderAtFromBytes(tableData), fileBlockSize)
 	require.NoError(t, err)
 	defer tr.close()
 
@@ -446,7 +446,7 @@ func doTestNGetMany(t *testing.T, count int) {
 	require.NoError(t, err)
 	ti, err := parseTableIndexByCopy(ctx, tableData, &UnlimitedQuotaProvider{})
 	require.NoError(t, err)
-	tr, err := newTableReader(ti, tableReaderAtFromBytes(tableData), fileBlockSize)
+	tr, err := newTableReader(ctx, ti, tableReaderAtFromBytes(tableData), fileBlockSize)
 	require.NoError(t, err)
 	defer tr.close()
 

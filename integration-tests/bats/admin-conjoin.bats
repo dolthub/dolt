@@ -70,9 +70,9 @@ get_chunk_count() {
 }
 
 @test "admin-conjoin: test conjoin with specific IDs" {
-    dolt sql -q "$(mutations_and_gc_statement)"
-    dolt sql -q "$(mutations_and_gc_statement)"
-    dolt sql -q "$(mutations_and_gc_statement)"
+    dolt sql -q "$(mutations_and_gc_statement 0)"
+    dolt sql -q "$(mutations_and_gc_statement 0)"
+    dolt sql -q "$(mutations_and_gc_statement 0)"
     
     storage_ids=($(get_oldgen_table_ids))
     [ "${#storage_ids[@]}" -eq 3 ]
@@ -99,11 +99,11 @@ get_chunk_count() {
 
 
 @test "admin-conjoin: test conjoin with --all" {
-    dolt sql -q "$(mutations_and_gc_statement)"
-    dolt sql -q "$(mutations_and_gc_statement)"
-    dolt sql -q "$(mutations_and_gc_statement)"
-    dolt sql -q "$(mutations_and_gc_statement)"
-    dolt sql -q "$(mutations_and_gc_statement)"
+    dolt sql -q "$(mutations_and_gc_statement 0)"
+    dolt sql -q "$(mutations_and_gc_statement 0)"
+    dolt sql -q "$(mutations_and_gc_statement 0)"
+    dolt sql -q "$(mutations_and_gc_statement 0)"
+    dolt sql -q "$(mutations_and_gc_statement 0)"
 
     storage_ids=($(get_oldgen_table_ids))
     [ "${#storage_ids[@]}" -eq 5 ]
@@ -126,14 +126,12 @@ get_chunk_count() {
 }
 
 @test "admin-conjoin: test conjoin with archive files" {
-    dolt sql -q "$(mutations_and_gc_statement)"
-    dolt sql -q "$(mutations_and_gc_statement)"
-    dolt sql -q "$(mutations_and_gc_statement)"
+    dolt sql -q "$(mutations_and_gc_statement 1)"
+    dolt sql -q "$(mutations_and_gc_statement 1)"
+    dolt sql -q "$(mutations_and_gc_statement 1)"
     
-    storage_ids=($(get_oldgen_table_ids))
+    storage_ids=($(get_oldgen_archive_ids))
     [ "${#storage_ids[@]}" -eq 3 ]
-    
-    dolt archive --purge
 
     # Get archive file IDs - these should be .darc files in oldgen
     archive_ids=($(get_oldgen_archive_ids))
@@ -162,16 +160,14 @@ get_chunk_count() {
 }
 
 @test "admin-conjoin: test conjoin with mixed file types" {
-  dolt sql -q "$(mutations_and_gc_statement)"
-  dolt sql -q "$(mutations_and_gc_statement)"
-  dolt sql -q "$(mutations_and_gc_statement)"
-
-  dolt archive --purge
+  dolt sql -q "$(mutations_and_gc_statement 1)"
+  dolt sql -q "$(mutations_and_gc_statement 1)"
+  dolt sql -q "$(mutations_and_gc_statement 1)"
 
   # Table files, not archives.
-  dolt sql -q "$(mutations_and_gc_statement)"
-  dolt sql -q "$(mutations_and_gc_statement)"
-  dolt sql -q "$(mutations_and_gc_statement)"
+  dolt sql -q "$(mutations_and_gc_statement 0)"
+  dolt sql -q "$(mutations_and_gc_statement 0)"
+  dolt sql -q "$(mutations_and_gc_statement 0)"
 
   # sanity check that we have three table files and three archive files
   table_ids=($(get_oldgen_table_ids))

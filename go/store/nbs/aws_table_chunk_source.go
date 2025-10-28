@@ -46,7 +46,7 @@ func newAWSTableFileChunkSource(ctx context.Context, s3 *s3ObjectReader, al awsL
 		return &chunkSourceAdapter{}, err
 	}
 
-	tr, err := newTableReader(index, tra, s3BlockSize)
+	tr, err := newTableReader(ctx, index, tra, s3BlockSize)
 	if err != nil {
 		_ = index.Close()
 		return &chunkSourceAdapter{}, err

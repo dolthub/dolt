@@ -19,6 +19,7 @@ import (
 	"io"
 	"math/bits"
 	"os"
+	"sync/atomic"
 
 	"github.com/dolthub/dolt/go/libraries/utils/file"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -31,6 +32,7 @@ type archiveIndexReader interface {
 	getSpanIndex(idx uint32) uint64
 	getChunkRef(idx uint32) (dict, data uint32)
 	getSuffix(idx uint32) suffix
+	clone() (archiveIndexReader, error)
 	io.Closer
 }
 
@@ -46,6 +48,8 @@ type mmapIndexReader struct {
 	prefixesOffset  uint64
 	chunkRefsOffset uint64
 	suffixesOffset  uint64
+
+	refCnt atomic.Int32
 }
 
 // newMmapIndexReader creates a new memory-mapped index reader.
@@ -65,7 +69,7 @@ func newMmapIndexReader(fileHandle *os.File, footer archiveFooter) (*mmapIndexRe
 		return nil, fmt.Errorf("failed to mmap index: %w", err)
 	}
 
-	return &mmapIndexReader{
+	ret := &mmapIndexReader{
 		data:            mappedData,
 		indexSize:       footer.indexSize,
 		byteSpanCount:   footer.byteSpanCount,
@@ -74,7 +78,10 @@ func newMmapIndexReader(fileHandle *os.File, footer archiveFooter) (*mmapIndexRe
 		prefixesOffset:  prefixesOffset,
 		chunkRefsOffset: chunkRefsOffset,
 		suffixesOffset:  suffixesOffset,
-	}, nil
+	}
+	ret.refCnt.Add(1)
+
+	return ret, nil
 }
 
 func (m *mmapIndexReader) getNumChunks() uint32 {
@@ -164,7 +171,15 @@ func (m *mmapIndexReader) getSuffix(idx uint32) (suf suffix) {
 	return
 }
 
+func (m *mmapIndexReader) clone() (archiveIndexReader, error) {
+	m.refCnt.Add(1)
+	return m, nil
+}
+
 // close unmaps the memory region
 func (m *mmapIndexReader) Close() error {
-	return m.data.Close()
+	if m.refCnt.Add(-1) == 0 {
+		return m.data.Close()
+	}
+	return nil
 }

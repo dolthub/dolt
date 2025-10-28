@@ -158,7 +158,7 @@ func nomsFileTableReader(ctx context.Context, path string, h hash.Hash, chunkCou
 		return nil, errors.New("unexpected chunk count")
 	}
 
-	tr, err := newTableReader(index, fra, fileBlockSize)
+	tr, err := newTableReader(ctx, index, fra, fileBlockSize)
 	if err != nil {
 		index.Close()
 		fra.Close()

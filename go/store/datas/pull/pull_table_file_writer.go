@@ -259,7 +259,7 @@ LOOP:
 			}
 
 			if curWr == nil {
-				if os.Getenv("DOLT_ARCHIVE_PULL_STREAMER") != "" {
+				if os.Getenv("DOLT_ARCHIVE_PULL_STREAMER") != "0" {
 					curWr, err = nbs.NewArchiveStreamWriter(w.cfg.TempDir)
 				} else {
 					curWr, err = nbs.NewCmpChunkTableWriter(w.cfg.TempDir)

@@ -851,6 +851,50 @@ func assertDoltDiffColumnCount(view, selectStmt string, expected int64) []querie
 
 var DiffTableFunctionScriptTests = []queries.ScriptTest{
 	{
+		Name: "IN clause with NOT IN correctly returns table names from DOLT_DIFF",
+		SetUpScript: []string{
+			"CREATE TABLE test_table (id INT PRIMARY KEY, name VARCHAR(50));",
+			"INSERT INTO test_table VALUES (1, 'Alice'), (2, 'Bob'), (3, 'Charlie');",
+			"CALL DOLT_ADD('.');",
+			"CALL DOLT_COMMIT('-m', 'Initial commit');",
+			"CALL DOLT_BRANCH('branch1');",
+
+			"CALL DOLT_CHECKOUT('branch1');",
+			"INSERT INTO test_table VALUES (4, 'David'), (5, 'Eve');",
+			"CALL DOLT_COMMIT('-am', 'Add David and Eve');",
+
+			"CALL DOLT_CHECKOUT('main');",
+			"INSERT INTO test_table VALUES (6, 'Frank');",
+			"UPDATE test_table SET name = 'Alice Updated' WHERE id = 1;",
+			"CALL DOLT_COMMIT('-am', 'Update Alice and add Frank');",
+
+			"CREATE TABLE filter_table (name VARCHAR(50));",
+			"INSERT INTO filter_table VALUES ('Alice Updated'), ('Bob'), ('Charlie'), ('David');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: `SELECT table_name FROM dolt_diff WHERE commit_hash = HASHOF('main') 
+						  AND data_change = 1 
+						  AND table_name NOT IN (SELECT 'dropped_table')
+						  AND table_name IN (SELECT 'filter_table' UNION SELECT 'test_table')`,
+				Expected: []sql.Row{{"test_table"}},
+			},
+			{
+				Query: `SELECT table_name FROM dolt_diff WHERE commit_hash = HASHOF('main') 
+						  AND data_change = 1 
+						  AND table_name NOT IN (SELECT 'dropped_table')
+						  AND table_name IN (SELECT 'other_name' UNION SELECT 'another_name')`,
+				Expected: []sql.Row{},
+			},
+			{
+				Query: `SELECT table_name FROM dolt_diff WHERE commit_hash = HASHOF('main') 
+						  AND data_change = 1 
+						  AND table_name IN (SELECT 'other_name' UNION SELECT 'another_name')`,
+				Expected: []sql.Row{},
+			},
+		},
+	},
+	{
 		Name: "dolt_diff: SELECT * skinny schema visibility",
 		SetUpScript: []string{
 			`CREATE TABLE t (

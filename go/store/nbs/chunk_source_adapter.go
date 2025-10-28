@@ -39,7 +39,7 @@ func newReaderFromIndexData(ctx context.Context, q MemoryQuotaProvider, idxData 
 		return nil, err
 	}
 
-	tr, err := newTableReader(index, tra, blockSize)
+	tr, err := newTableReader(ctx, index, tra, blockSize)
 	if err != nil {
 		return nil, err
 	}

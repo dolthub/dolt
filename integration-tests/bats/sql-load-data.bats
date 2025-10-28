@@ -425,7 +425,7 @@ fields terminated by ','
 lines terminated by '\n'
 SQL
     [ $status -ne 0 ]
-    [[ $output =~ "Incorrect datetime value" ]] || false
+    [[ $output =~ "is not a valid value" ]] || false
 }
 
 @test "sql-load-data: schema with not null constraints" {
@@ -491,9 +491,8 @@ SQL
     run dolt sql -r csv -q "select * from t"
     [ $status -eq 0 ]
     [[ $output =~ "0,0,0" ]] || false
-    # With MySQL semantics, \N maps to NULL, and default is applied to c1 (default 1)
     ! [[ $output =~ "1,NULL,1" ]] || false
-    [[ $output =~ "1,1,1" ]] || false
+    [[ $output == *$'1,\x00,1'* ]] || false
 }
 
 @test "sql-load-data: test schema with check constraints" {

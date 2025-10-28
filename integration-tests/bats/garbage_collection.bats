@@ -413,44 +413,28 @@ SQL
     # Create a lot of data on a new branch.
     dolt checkout -b to_keep
     dolt sql -q "CREATE TABLE vals (val LONGTEXT);"
-    str="hex(random_bytes(1024))"
-    str="$str,$str"
-    str="$str,$str"
-    str="$str,$str"
-    str="$str,$str"
-    str="$str,$str"
-    str="$str,$str"
-    str="$str,$str"
-    str="$str,$str"
-    str="$str,$str"
-    str="$str,$str"
-    dolt sql -q "INSERT INTO vals VALUES (concat($str));"
-    dolt sql -q "INSERT INTO vals VALUES (concat($str));"
-    dolt sql -q "INSERT INTO vals VALUES (concat($str));"
-    dolt sql -q "INSERT INTO vals VALUES (concat($str));"
 
+    # This creates a 2Mb string (1024 calls of random_bytes -> 1Mb, hex doubles).
+    # We don't reuse random_bytes because we want low compression of the.
+    str="hex(random_bytes(1024))"
+    for _ in {1..10}; do
+      str="$str,$str"
+    done
+    twoMb="concat($str)"
+
+    for _ in {1..4}; do
+      dolt sql -q "INSERT INTO vals VALUES ($twoMb);"
+    done
     dolt commit -Am 'create some data on a new commit.'
 
     # Create a lot of data on another new branch.
-    dolt checkout main
-    dolt checkout -b to_delete
+    dolt checkout -b to_delete main
     dolt sql -q "CREATE TABLE vals (val LONGTEXT);"
-    str="hex(random_bytes(1024))"
-    str="$str,$str"
-    str="$str,$str"
-    str="$str,$str"
-    str="$str,$str"
-    str="$str,$str"
-    str="$str,$str"
-    str="$str,$str"
-    str="$str,$str"
-    str="$str,$str"
-    str="$str,$str"
-    dolt sql -q "INSERT INTO vals VALUES (concat($str));"
-    dolt sql -q "INSERT INTO vals VALUES (concat($str));"
-    dolt sql -q "INSERT INTO vals VALUES (concat($str));"
-    dolt sql -q "INSERT INTO vals VALUES (concat($str));"
 
+    # Add 16Mb of uncompressed data.
+    for _ in {1..8}; do
+      dolt sql -q "INSERT INTO vals VALUES ($twoMb);"
+    done
     dolt commit -Am 'create some data on a new commit.'
 
     # GC it into the old gen.
@@ -583,6 +567,45 @@ SQL
     if cmp ./.dolt/noms/manifest ../../manifest_after_first_gc; then
         echo "expected dolt gc --full after a dolt gc to change the manifest, updating the gcgen at least, but it didn't."
         diff ./dolt/noms/manifest ../../manifest_after_first_gc || true
+        false
+    fi
+}
+
+@test "garbage_collection: dolt gc --full reverting to a previous state after some intervening dolt gcs is NOT a no-op" {
+    mkdir -p one/two
+    cd one/two
+    dolt init
+    dolt gc --full
+    rm -rf .dolt/stats
+    ls -laR | grep -v '^d' > ../../files_after_first_full_gc
+    cp ./.dolt/noms/oldgen/manifest ../../oldgen_manifest_after_first_full_gc
+    dolt branch -c main test
+    dolt checkout test
+    dolt sql -q 'create table vals (id int primary key);'
+    dolt commit -Am 'commit schema'
+    dolt gc
+    dolt sql -q 'insert into vals values (1),(2),(3);'
+    dolt commit -Am 'commit values'
+    dolt gc
+    rm -rf .dolt/stats
+    ls -laR | grep -v '^d' > ../../files_after_nonfull_gc
+    cp ./.dolt/noms/oldgen/manifest ../../oldgen_manifest_after_nonfull_gc
+    dolt checkout main
+    dolt branch -D test
+    dolt gc --full
+    rm -rf .dolt/stats
+    ls -laR | grep -v '^d' > ../../files_after_last_full_gc
+    cp ./.dolt/noms/oldgen/manifest ../../oldgen_manifest_after_last_full_gc
+    # This should exit 0 because the gc should have changed things.
+    if cmp ../../files_after_nonfull_gc ../../files_after_last_full_gc; then
+        echo "expected dolt gc to change things, but it didn't."
+        diff ../../files_after_nonfull_gc ../../files_after_last_full_gc || true
+        false
+    fi
+    # This should exit 0 because the gc should have changed things.
+    if cmp ./.dolt/noms/oldgen/manifest ../../oldgen_manifest_after_nonfull_gc; then
+        echo "expected dolt gc --full after a dolt gc to change the manifest, updating the gcgen at least, but it didn't."
+        diff ./.dolt/noms/oldgen/manifest ../../oldgen_manifest_after_nonfull_gc || true
         false
     fi
 }

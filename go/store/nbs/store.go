@@ -2255,13 +2255,6 @@ func (nbs *NomsBlockStore) swapTables(ctx context.Context, specs []tableSpec, mo
 		specs:   specs,
 	}
 
-	sameGcGen := newContents.gcGen == nbs.upstream.gcGen
-	hasLocalNovelty := nbs.hasLocalGCNovelty()
-	if sameGcGen && !hasLocalNovelty {
-		// Nothing has changed. Bail early.
-		return nil
-	}
-
 	upstream, err := nbs.manifestMgr.UpdateGCGen(ctx, nbs.upstream.lock, newContents, nbs.stats, nil)
 	if err != nil {
 		return err

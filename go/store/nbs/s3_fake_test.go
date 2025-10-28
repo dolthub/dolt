@@ -80,7 +80,7 @@ func (m *fakeS3) readerForTable(ctx context.Context, name hash.Hash) (chunkReade
 		if err != nil {
 			return nil, err
 		}
-		tr, err := newTableReader(ti, tableReaderAtFromBytes(buff), s3BlockSize)
+		tr, err := newTableReader(ctx, ti, tableReaderAtFromBytes(buff), s3BlockSize)
 		if err != nil {
 			ti.Close()
 			return nil, err
@@ -104,7 +104,7 @@ func (m *fakeS3) readerForTableWithNamespace(ctx context.Context, ns string, nam
 			return nil, err
 		}
 
-		tr, err := newTableReader(ti, tableReaderAtFromBytes(buff), s3BlockSize)
+		tr, err := newTableReader(ctx, ti, tableReaderAtFromBytes(buff), s3BlockSize)
 		if err != nil {
 			return nil, err
 		}

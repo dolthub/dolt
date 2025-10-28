@@ -587,7 +587,7 @@ type stubAutoGCBehavior struct {
 }
 
 func (stubAutoGCBehavior) Enable() bool {
-	return false
+	return true
 }
 
 func (stubAutoGCBehavior) ArchiveLevel() int { return servercfg.DefaultCompressionLevel }
