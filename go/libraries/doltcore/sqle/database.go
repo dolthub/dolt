@@ -1408,7 +1408,7 @@ func (db Database) GetTableNamesAsOf(ctx *sql.Context, time interface{}) ([]stri
 
 	showSystemTables := showSystemTablesVar.(int8) == 1
 
-	tblNames, err := db.getAllTableNames(ctx, root, showSystemTables, true, true)
+	tblNames, err := db.getAllTableNames(ctx, root, showSystemTables, true, doReadNonlocalTables)
 	if err != nil {
 		return nil, err
 	}
@@ -1558,7 +1558,7 @@ func (db Database) tableInsensitive(ctx *sql.Context, root doltdb.RootValue, tab
 		}
 	}
 
-	tableNames, err := db.getAllTableNames(ctx, root, false, false, false)
+	tableNames, err := db.getAllTableNames(ctx, root, false, false, dontReadNonlocalTables)
 	if err != nil {
 		return doltdb.TableName{}, nil, false, err
 	}
@@ -1624,7 +1624,7 @@ func (db Database) GetTableNames(ctx *sql.Context) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	tblNames, err := db.getAllTableNames(ctx, root, showSystemTables, false, true)
+	tblNames, err := db.getAllTableNames(ctx, root, showSystemTables, false, doReadNonlocalTables)
 	if err != nil {
 		return nil, err
 	}
@@ -1649,10 +1649,10 @@ func (db Database) GetAllTableNames(ctx *sql.Context, showSystemTables bool) ([]
 		return nil, err
 	}
 
-	return db.getAllTableNames(ctx, root, showSystemTables, true, true)
+	return db.getAllTableNames(ctx, root, showSystemTables, true, doReadNonlocalTables)
 }
 
-func (db Database) getAllTableNames(ctx *sql.Context, root doltdb.RootValue, includeGeneratedSystemTables bool, includeRootObjects bool, includeNonlocalTables bool) ([]string, error) {
+func (db Database) getAllTableNames(ctx *sql.Context, root doltdb.RootValue, includeGeneratedSystemTables bool, includeRootObjects bool, includeNonlocalTables readNonlocalTablesFlag) ([]string, error) {
 	var err error
 	var result []string
 	// If we are in a schema-enabled session and the schema name is not set, we need to union all table names in all
