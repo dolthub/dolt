@@ -228,7 +228,7 @@ var _ FKViolationReceiver = (*foreignKeyViolationWriter)(nil)
 func (f *foreignKeyViolationWriter) StartFK(ctx *sql.Context, fk doltdb.ForeignKey) error {
 	f.currFk = fk
 
-	tbl, ok, err := f.rootValue.GetTable(ctx, fk.TableName)
+	tbl, ok, err := f.tableResolver.ResolveTable(ctx, f.rootValue, fk.TableName)
 	if err != nil {
 		return err
 	}
@@ -237,7 +237,7 @@ func (f *foreignKeyViolationWriter) StartFK(ctx *sql.Context, fk doltdb.ForeignK
 	}
 
 	f.currTbl = tbl
-	_, refTbl, ok, err := f.tableResolver.ResolveTable(ctx, f.rootValue, fk.ReferencedTableName)
+	refTbl, ok, err := f.tableResolver.ResolveTable(ctx, f.rootValue, fk.ReferencedTableName)
 	if err != nil {
 		return err
 	}
@@ -690,7 +690,7 @@ func childFkConstraintViolationsProcess(
 // newConstraintViolationsLoadedTable returns a *constraintViolationsLoadedTable. Returns false if the table was loaded
 // but the index could not be found. If the table could not be found, then an error is returned.
 func newConstraintViolationsLoadedTable(ctx *sql.Context, tableResolver doltdb.TableResolver, tblName doltdb.TableName, idxName string, root doltdb.RootValue) (*constraintViolationsLoadedTable, bool, error) {
-	trueTblName, tbl, ok, err := tableResolver.ResolveTable(ctx, root, tblName)
+	trueTblName, tbl, ok, err := tableResolver.ResolveTableInsensitive(ctx, root, tblName)
 	if err != nil {
 		return nil, false, err
 	}

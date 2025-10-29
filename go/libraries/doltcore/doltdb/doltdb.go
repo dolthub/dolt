@@ -80,14 +80,15 @@ var ErrCannotDeleteLastBranch = errors.New("cannot delete the last branch")
 // This is useful because the user-backed system table dolt_nonlocal_tables allows table names to resolve to
 // tables on other refs, but sqle.Database is necessary to resolve those refs.
 type TableResolver interface {
-	ResolveTable(ctx *sql.Context, root RootValue, tblName TableName) (trueTableName TableName, table *Table, found bool, err error)
+	ResolveTableInsensitive(ctx *sql.Context, root RootValue, tblName TableName) (trueTableName TableName, table *Table, found bool, err error)
+	ResolveTable(ctx *sql.Context, root RootValue, tblName TableName) (table *Table, found bool, err error)
 }
 
 type SimpleTableResolver struct{}
 
 var _ TableResolver = SimpleTableResolver{}
 
-func (t SimpleTableResolver) ResolveTable(ctx *sql.Context, root RootValue, tblName TableName) (trueTableName TableName, table *Table, found bool, err error) {
+func (t SimpleTableResolver) ResolveTableInsensitive(ctx *sql.Context, root RootValue, tblName TableName) (trueTableName TableName, table *Table, exists bool, err error) {
 	trueTableNameString, exists, err := root.ResolveTableName(ctx, tblName)
 	if err != nil || !exists {
 		return TableName{}, nil, false, err
@@ -98,6 +99,10 @@ func (t SimpleTableResolver) ResolveTable(ctx *sql.Context, root RootValue, tblN
 	}
 	table, exists, err = root.GetTable(ctx, trueTableName)
 	return trueTableName, table, exists, err
+}
+
+func (t SimpleTableResolver) ResolveTable(ctx *sql.Context, root RootValue, tblName TableName) (table *Table, exists bool, err error) {
+	return root.GetTable(ctx, tblName)
 }
 
 // DoltDB wraps access to the underlying noms database and hides some of the details of the underlying storage.

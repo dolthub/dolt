@@ -114,8 +114,12 @@ type TableResolver struct {
 
 var _ doltdb.TableResolver = TableResolver{}
 
-func (t TableResolver) ResolveTable(ctx *sql.Context, root doltdb.RootValue, tblName doltdb.TableName) (trueTableName doltdb.TableName, table *doltdb.Table, found bool, err error) {
+func (t TableResolver) ResolveTableInsensitive(ctx *sql.Context, root doltdb.RootValue, tblName doltdb.TableName) (trueTableName doltdb.TableName, table *doltdb.Table, found bool, err error) {
 	return t.db.GetDoltDBTableInsensitiveWithRoot(ctx, root, tblName)
+}
+
+func (t TableResolver) ResolveTable(ctx *sql.Context, root doltdb.RootValue, tblName doltdb.TableName) (table *doltdb.Table, found bool, err error) {
+	return t.db.getDoltDBTableWithRoot(ctx, root, tblName, doReadNonlocalTables)
 }
 
 type ReadOnlyDatabase struct {
@@ -1002,6 +1006,20 @@ func (db Database) getDoltDBTableInsensitiveWithRoot(ctx *sql.Context, root dolt
 	return trueTableName, table, found, err
 }
 
+func (db Database) getDoltDBTableWithRoot(ctx *sql.Context, root doltdb.RootValue, tblName doltdb.TableName, readNonlocalTables readNonlocalTablesFlag) (table *doltdb.Table, found bool, err error) {
+	if readNonlocalTables {
+		_, nonlocalTable, exists, err := db.getNonlocalDoltDBTable(ctx, root, tblName)
+		if err != nil {
+			return nil, false, err
+		}
+		if exists {
+			return nonlocalTable, true, nil
+		}
+	}
+
+	return root.GetTable(ctx, tblName)
+}
+
 // getNonlocalTable checks whether the table name maps onto a table in another root via the dolt_nonlocal_tables system table
 func (db Database) getNonlocalTable(ctx *sql.Context, root doltdb.RootValue, lwrName string) (sql.Table, bool, error) {
 
@@ -1032,8 +1050,8 @@ func (db Database) getNonlocalTable(ctx *sql.Context, root doltdb.RootValue, lwr
 
 // getNonlocalDoltDBTable checks to see if there exists an entry in the dolt_nonlocal_tables system table that would
 // cause the table name to resolve to a table on a different ref.
-func (db Database) getNonlocalDoltDBTable(ctx *sql.Context, root doltdb.RootValue, lwrName doltdb.TableName) (doltdb.TableName, *doltdb.Table, bool, error) {
-	nonlocalTableEntry, found, err := db.getNonlocalTableEntry(ctx, root, lwrName.Name)
+func (db Database) getNonlocalDoltDBTable(ctx *sql.Context, root doltdb.RootValue, tableName doltdb.TableName) (doltdb.TableName, *doltdb.Table, bool, error) {
+	nonlocalTableEntry, found, err := db.getNonlocalTableEntry(ctx, root, tableName.Name)
 
 	if err != nil || !found {
 		return doltdb.TableName{}, nil, found, err
