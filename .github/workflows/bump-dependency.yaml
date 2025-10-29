@@ -5,30 +5,7 @@ on:
     types: [ bump-dependency ]
 
 jobs:
-  auth:
-    name: Authenticate Caller
-    runs-on: ubuntu-22.04
-    steps:
-      - name: Check client token
-        env:
-          PAYLOAD_TOKEN: ${{ github.event.client_payload.token }}
-          EXPECTED_TOKEN: ${{ secrets.CLIENT_AUTH_TOKEN }}
-        run: |
-          set -euo pipefail
-          # refuse to proceed without a token
-          if [ -z "${PAYLOAD_TOKEN:-}" ]; then
-            echo "Unauthorized: missing token"
-            exit 1
-          fi
-          # simple equality check; doesn't echo secrets
-          if [ "${PAYLOAD_TOKEN}" != "${EXPECTED_TOKEN}" ]; then
-            echo "Unauthorized: bad token"
-            exit 1
-          fi
-          echo "Caller authenticated"
-
   sanitize-payload:
-    needs: auth
     name: Sanitize Payload
     runs-on: ubuntu-22.04
     outputs:
