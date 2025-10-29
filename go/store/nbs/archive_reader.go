@@ -750,19 +750,6 @@ func (ar archiveReader) iterate(ctx context.Context, cb func(chunks.Chunk) error
 	return nil
 }
 
-func verifyCheckSum(ctx context.Context, reader tableReaderAt, span byteSpan, checkSum sha512Sum, stats *Stats) error {
-	hshr := sha512.New()
-	_, err := io.Copy(hshr, newSectionReader(ctx, reader, int64(span.offset), int64(span.length), stats))
-	if err != nil {
-		return err
-	}
-
-	if sha512Sum(hshr.Sum(nil)) != checkSum {
-		return fmt.Errorf("checksum mismatch.")
-	}
-	return nil
-}
-
 // prollyBinSearch is a search that returns the _best_ index of the target in the input slice. If the target exists,
 // one or more times, the index of the first instance is returned. If the target does not exist, the index which it
 // would be inserted at is returned.
