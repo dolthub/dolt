@@ -18,6 +18,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/dolthub/go-mysql-server/sql"
+
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -27,6 +29,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/store/datas"
@@ -85,11 +88,24 @@ func (cmd CopyTagsCmd) ArgParser() *argparser.ArgParser {
 }
 
 // Exec implements the cli.Command interface.
-func (cmd CopyTagsCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, _ cli.CliContext) int {
+func (cmd CopyTagsCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
 	fromBranchName, fromRoots, toRoots, usage, err := cmd.validateArgs(ctx, commandStr, args, dEnv)
 	if err != nil {
 		verr := errhand.BuildDError("error validating arguments")
 		return commands.HandleVErrAndExitCode(verr.AddCause(err).Build(), usage)
+	}
+
+	queryist, err := cliCtx.QueryEngine(ctx)
+	if err != nil {
+		cli.PrintErrln(errhand.VerboseErrorFromError(err))
+		return 1
+	}
+	sqlCtx := queryist.Context
+
+	tableResolver, err := dsess.GetTableResolver(sqlCtx)
+	if err != nil {
+		cli.PrintErrln(errhand.VerboseErrorFromError(err))
+		return 1
 	}
 
 	// Load all the tags from fromBranch and toBranch
@@ -158,7 +174,7 @@ func (cmd CopyTagsCmd) Exec(ctx context.Context, commandStr string, args []strin
 	}
 
 	if tagsSynced > 0 {
-		if err = doltCommitUpdatedTags(ctx, dEnv, workingRoot, fromBranchName); err != nil {
+		if err = doltCommitUpdatedTags(sqlCtx, tableResolver, dEnv, workingRoot, fromBranchName); err != nil {
 			vErr := errhand.BuildDError("failed to commit column tag updates").AddCause(err).Build()
 			return commands.HandleVErrAndExitCode(vErr, usage)
 		}
@@ -240,7 +256,7 @@ func validateDestinationBranch(ctx context.Context, toRoots *doltdb.Roots) error
 
 // doltCommitUpdatedTags commits tag changes in |workingRoot| for the specified DoltEnv, |dEnv|. The commit message uses
 // |fromBranchName| to document the source of the tag changes.
-func doltCommitUpdatedTags(ctx context.Context, dEnv *env.DoltEnv, workingRoot doltdb.RootValue, fromBranchName string) (err error) {
+func doltCommitUpdatedTags(ctx *sql.Context, tableResolver doltdb.TableResolver, dEnv *env.DoltEnv, workingRoot doltdb.RootValue, fromBranchName string) (err error) {
 	if err = dEnv.UpdateWorkingRoot(ctx, workingRoot); err != nil {
 		return err
 	}
@@ -271,7 +287,7 @@ func doltCommitUpdatedTags(ctx context.Context, dEnv *env.DoltEnv, workingRoot d
 	}
 
 	doltDB := dEnv.DoltDB(ctx)
-	pendingCommit, err := actions.GetCommitStaged(ctx, roots, workingSet, nil, doltDB, actions.CommitStagedProps{
+	pendingCommit, err := actions.GetCommitStaged(ctx, tableResolver, roots, workingSet, nil, doltDB, actions.CommitStagedProps{
 		Name:    name,
 		Email:   email,
 		Message: "Syncing column tags from " + fromBranchName + " branch",
