@@ -5,31 +5,31 @@ on:
     types: [ bump-dependency ]
 
 jobs:
-  get-label:
-    name: Get Label
-    outputs:
-      label: ${{ steps.get-label.outputs.label }}
+  sanitize-payload:
+    name: Sanitize Payload
     runs-on: ubuntu-22.04
+    outputs:
+      label:        ${{ steps.sanitize.outputs.label }}
+      safe_module:  ${{ steps.sanitize.outputs.safe_module }}
+      safe_head:    ${{ steps.sanitize.outputs.safe_head }}
+      safe_assignee: ${{ steps.sanitize.outputs.safe_assignee }}
+      safe_email:   ${{ steps.sanitize.outputs.safe_email }}
+      safe_branch:  ${{ steps.sanitize.outputs.safe_branch }}
+      safe_short:   ${{ steps.sanitize.outputs.safe_short }}
     steps:
-      - name: Get Label
-        id: get-label
+      - uses: actions/checkout@v4
+      - name: Validate & Sanitize Payload (script)
+        id: sanitize
         env:
-          REPO: ${{ github.event.client_payload.dependency }}
-        run: |
-          if [ "$REPO" == "go-mysql-server" ]
-          then
-            echo "label=gms-bump" >> $GITHUB_OUTPUT
-          elif [ "$REPO" == "eventsapi_schema" ]
-          then
-            echo "label=eventsapi_schema-bump" >> $GITHUB_OUTPUT
-          else
-            echo "$REPO is unsupported"
-            exit 1
-          fi
+          RAW_DEP:  ${{ github.event.client_payload.dependency }}
+          RAW_SHA:  ${{ github.event.client_payload.head_commit_sha }}
+          RAW_USER: ${{ github.event.client_payload.assignee }}
+          RAW_MAIL: ${{ github.event.client_payload.assignee_email }}
+        run: bash .github/scripts/sanitize_payload.sh
 
   stale-bump-prs:
     name: Retrieving Stale Bump PRs
-    needs: get-label
+    needs: sanitize-payload
     outputs:
       stale-pulls: ${{ steps.get-stale-prs.outputs.open-pulls }}
     runs-on: ubuntu-22.04
@@ -38,7 +38,7 @@ jobs:
         id: get-stale-prs
         uses: actions/github-script@v7
         env:
-          LABEL: ${{ needs.get-label.outputs.label }}
+          LABEL: ${{ needs.sanitize-payload.outputs.label }}
         with:
           debug: true
           github-token: ${{ secrets.REPO_ACCESS_TOKEN }}
@@ -89,7 +89,7 @@ jobs:
             }
 
   open-bump-pr:
-    needs: [get-label, stale-bump-prs]
+    needs: [sanitize-payload, stale-bump-prs]
     name: Open Bump PR
     runs-on: ubuntu-22.04
     outputs:
@@ -102,47 +102,51 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version-file: go/go.mod
-      - name: Bump dependency
+      - name: Bump dependency (safe)
         working-directory: go
+        env:
+          SAFE_MODULE:   ${{ needs.sanitize-payload.outputs.safe_module }}
+          SAFE_HEAD:     ${{ needs.sanitize-payload.outputs.safe_head }}
         run: |
-          go get github.com/dolthub/${{ github.event.client_payload.dependency }}@${{ github.event.client_payload.head_commit_sha }}
+          GOOS=linux go get "${SAFE_MODULE}@${SAFE_HEAD}"
           go mod tidy
-      - name: Get Assignee and Reviewer
+      - name: Get Assignee and Reviewer (safe)
         id: get_reviewer
+        env:
+          ASSIGNEE: ${{ needs.sanitize-payload.outputs.safe_assignee }}
         run: |
-          if [ "${{ github.event.client_payload.assignee }}" == "zachmu" ]
+          if [ "${ASSIGNEE}" == "zachmu" ]
           then
             echo "reviewer=Hydrocharged" >> $GITHUB_OUTPUT
           else
             echo "reviewer=zachmu" >> $GITHUB_OUTPUT
           fi
-      - name: Get short hash
-        id: short-sha
+      - name: Create and Push new branch (safe)
+        env:
+          GIT_USER:  ${{ needs.sanitize-payload.outputs.safe_assignee }}
+          GIT_MAIL:  ${{ needs.sanitize-payload.outputs.safe_email }}
+          BRANCH:    ${{ needs.sanitize-payload.outputs.safe_branch }}
+          COMMIT_BY: ${{ needs.sanitize-payload.outputs.safe_assignee }}
         run: |
-          commit=${{ github.event.client_payload.head_commit_sha }}
-          short=${commit:0:8}
-          echo "short=$short" >> $GITHUB_OUTPUT
-      - name: Create and Push new branch
-        run: |
-          git config --global --add user.name "${{ github.event.client_payload.assignee }}"
-          git config --global --add user.email "${{ github.event.client_payload.assignee_email }}"
-          branchname=${{ format('{0}-{1}', github.event.client_payload.assignee, steps.short-sha.outputs.short) }}
-          git checkout -b "$branchname"
+          set -euo pipefail
+          git config --global user.name "${GIT_USER}"
+          git config --global user.email "${GIT_MAIL}"
+          git checkout -b -- "${BRANCH}"
           git add .
-          git commit -m "${{ format('[ga-bump-dep] Bump dependency in Dolt by {0}', github.event.client_payload.assignee) }}"
-          git push origin "$branchname"
+          git commit -m "[ga-bump-dep] Bump dependency in Dolt by ${COMMIT_BY}"
+          git push origin "${BRANCH}"
       - name: pull-request
         uses: repo-sync/pull-request@v2
         id: latest-pr
         with:
-          source_branch: ${{ format('{0}-{1}', github.event.client_payload.assignee, steps.short-sha.outputs.short ) }}
+          source_branch: ${{ needs.sanitize-payload.outputs.safe_branch }}
           destination_branch: "main"
           github_token: ${{ secrets.REPO_ACCESS_TOKEN }}
-          pr_title: "[auto-bump] [no-release-notes] dependency by ${{ github.event.client_payload.assignee }}"
+          pr_title: "[auto-bump] [no-release-notes] dependency by ${{ needs.sanitize-payload.outputs.safe_assignee }}"
           pr_template: ".github/markdown-templates/dep-bump.md"
           pr_reviewer: ${{ steps.get_reviewer.outputs.reviewer }}
-          pr_assignee: ${{ github.event.client_payload.assignee }}
-          pr_label: ${{ needs.get-label.outputs.label }}
+          pr_assignee: ${{ needs.sanitize-payload.outputs.safe_assignee }}
+          pr_label: ${{ needs.sanitize-payload.outputs.label }}
 
   comment-on-stale-prs:
     needs: [open-bump-pr, stale-bump-prs]
