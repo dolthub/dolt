@@ -27,13 +27,13 @@ import (
 	"os"
 	"sync/atomic"
 
+	"github.com/dolthub/gozstd"
 	lru "github.com/hashicorp/golang-lru/v2"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
 	"github.com/dolthub/dolt/go/libraries/utils/dynassert"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
-	"github.com/dolthub/gozstd"
 )
 
 // reconstructHashFromPrefixAndSuffix creates a hash from a prefix and suffix
