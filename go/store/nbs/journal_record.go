@@ -256,7 +256,7 @@ func validateJournalRecord(buf []byte) error {
 // records are being persisted to disk. This isn't likely, but the OS filesystem write is not an atomic
 // operation, so it's possible to leave the journal in a corrupted state. We must gracefully recover
 // without preventing the server from starting up, so we are careful to only return the journal file
-// offset that points to end fo the last valid record.
+// offset that points to end of the last valid record.
 func processJournalRecords(ctx context.Context, r io.ReadSeeker, off int64, cb func(o int64, r journalRec) error) (int64, error) {
 	var (
 		buf []byte

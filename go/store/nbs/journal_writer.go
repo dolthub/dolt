@@ -182,7 +182,7 @@ var _ io.Closer = &journalWriter{}
 // the state of the journalWriter. Root hashes read from root update records in the journal are written
 // to |reflogRingBuffer|, which maintains the most recently updated roots which are used to generate the
 // reflog. This function returns the most recent root hash for the journal as well as any error encountered.
-// The journal index will bw truncated to the last valid batch of lookups. Lookups with offsets
+// The journal index will be truncated to the last valid batch of lookups. Lookups with offsets
 // larger than the position of the last valid lookup metadata are rewritten to the index as they
 // are added to the novel ranges map. If the number of novel lookups exceeds |wr.maxNovel|, we
 // extend the journal index with one metadata flush before existing this function to save indexing

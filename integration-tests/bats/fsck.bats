@@ -87,3 +87,11 @@ UPDATE tbl SET guid = UUID() WHERE i >= @random_id LIMIT 1;"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "Chunk: 7i48kt4h41hcjniri7scv5m8a69cdn13 content hash mismatch: hitg0bb0hsakip96qvu2hts0hkrrla9o" ]] || false
 }
+
+@test "fsck: another bad journal crc" {
+  mkdir .dolt
+  cp -R $BATS_CWD/corrupt_dbs/bad_journal_crc_2/* .dolt/
+
+  run dolt fsck
+  [ "$status" -eq 1 ]
+}
