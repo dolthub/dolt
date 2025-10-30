@@ -978,9 +978,9 @@ func TestArchiveConjoinAllComprehensive(t *testing.T) {
 
 	// Create shared chunks that will be duplicated across archives
 	sharedChunks := [][]byte{
-		generateRandomBytes(100, 50),  // 50 bytes - will be in multiple archives
-		generateRandomBytes(200, 100), // 100 bytes - will be in multiple archives
-		generateRandomBytes(300, 25),  // 25 bytes - will be in multiple archives
+		generateRandomBytes(r.Int63n(100), 50),  // 50 bytes - will be in multiple archives
+		generateRandomBytes(r.Int63n(200), 100), // 100 bytes - will be in multiple archives
+		generateRandomBytes(r.Int63n(300), 25),  // 25 bytes - will be in multiple archives
 	}
 
 	// Create shared hashes for these chunks
