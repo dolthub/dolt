@@ -71,7 +71,7 @@ var _ manifest = &ChunkJournal{}
 var _ manifestGCGenUpdater = &ChunkJournal{}
 var _ io.Closer = &ChunkJournal{}
 
-func newChunkJournal(ctx context.Context, nbfVers, dir string, m *journalManifest, p *fsTablePersister) (*ChunkJournal, error) {
+func newChunkJournal(ctx context.Context, nbfVers, dir string, m *journalManifest, p *fsTablePersister, valCb func(error)) (*ChunkJournal, error) {
 	path, err := filepath.Abs(filepath.Join(dir, chunkJournalName))
 	if err != nil {
 		return nil, err
@@ -87,7 +87,7 @@ func newChunkJournal(ctx context.Context, nbfVers, dir string, m *journalManifes
 	} else if ok {
 		// only bootstrap journalWriter if the journal file exists,
 		// otherwise we wait to open in case we're cloning
-		if err = j.bootstrapJournalWriter(ctx); err != nil {
+		if err = j.bootstrapJournalWriter(ctx, valCb); err != nil {
 			return nil, err
 		}
 	}
@@ -133,7 +133,7 @@ func reflogBufferSize() int {
 // file (see indexRec). The journal file is the source of truth for latest root hash.
 // As we process journal records, we keep track of the latest root hash record we see
 // and update the manifest file with the last root hash we saw.
-func (j *ChunkJournal) bootstrapJournalWriter(ctx context.Context) (err error) {
+func (j *ChunkJournal) bootstrapJournalWriter(ctx context.Context, valCb func(error)) (err error) {
 	var ok bool
 	ok, err = fileExists(j.path)
 	if err != nil {
@@ -148,7 +148,7 @@ func (j *ChunkJournal) bootstrapJournalWriter(ctx context.Context) (err error) {
 			return err
 		}
 
-		_, err = j.wr.bootstrapJournal(ctx, j.reflogRingBuffer)
+		_, err = j.wr.bootstrapJournal(ctx, j.reflogRingBuffer, valCb)
 		if err != nil {
 			return err
 		}
@@ -176,7 +176,7 @@ func (j *ChunkJournal) bootstrapJournalWriter(ctx context.Context) (err error) {
 	}
 
 	// parse existing journal file
-	root, err := j.wr.bootstrapJournal(ctx, j.reflogRingBuffer)
+	root, err := j.wr.bootstrapJournal(ctx, j.reflogRingBuffer, valCb)
 	if err != nil {
 		return err
 	}
@@ -249,7 +249,7 @@ func (j *ChunkJournal) IterateRoots(f func(root string, timestamp *time.Time) er
 func (j *ChunkJournal) Persist(ctx context.Context, mt *memTable, haver chunkReader, keeper keeperF, stats *Stats) (chunkSource, gcBehavior, error) {
 	if j.backing.readOnly() {
 		return nil, gcBehavior_Continue, errReadOnlyManifest
-	} else if err := j.maybeInit(ctx); err != nil {
+	} else if err := j.maybeInit(ctx, nil); err != nil { // NM4 - default, nil?
 		return nil, gcBehavior_Continue, err
 	}
 
@@ -287,7 +287,8 @@ func (j *ChunkJournal) ConjoinAll(ctx context.Context, sources chunkSources, sta
 // Open implements tablePersister.
 func (j *ChunkJournal) Open(ctx context.Context, name hash.Hash, chunkCount uint32, stats *Stats) (chunkSource, error) {
 	if name == journalAddr {
-		if err := j.maybeInit(ctx); err != nil {
+		// NM4 - default log?
+		if err := j.maybeInit(ctx, nil); err != nil {
 			return nil, err
 		}
 		return journalChunkSource{journal: j.wr}, nil
@@ -466,9 +467,9 @@ func (j *ChunkJournal) ParseIfExists(ctx context.Context, stats *Stats, readHook
 	return
 }
 
-func (j *ChunkJournal) maybeInit(ctx context.Context) (err error) {
+func (j *ChunkJournal) maybeInit(ctx context.Context, valCb func(error)) (err error) {
 	if j.wr == nil {
-		err = j.bootstrapJournalWriter(ctx)
+		err = j.bootstrapJournalWriter(ctx, valCb)
 	}
 	return
 }

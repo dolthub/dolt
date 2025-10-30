@@ -94,4 +94,5 @@ UPDATE tbl SET guid = UUID() WHERE i >= @random_id LIMIT 1;"
 
   run dolt fsck
   [ "$status" -eq 1 ]
+  [[ "$output" =~ "skipping remaining journal records past offset 5936: invalid journal record: CRC checksum does not match" ]] || false
 }

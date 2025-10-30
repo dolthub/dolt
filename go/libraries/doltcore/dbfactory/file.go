@@ -135,6 +135,29 @@ func (fact FileFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, 
 		return s.ddb, s.vrw, s.ns, nil
 	}
 
+	ddb, vrw, ns, err := fact.CreateDbNoCache(ctx, nbf, urlObj, params, func(vErr error) {
+		logrus.Error(vErr.Error())
+	})
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	singletons[urlObj.Path] = singletonDB{
+		ddb: ddb,
+		vrw: vrw,
+		ns:  ns,
+	}
+
+	return ddb, vrw, ns, nil
+}
+
+// CreateDbNoCache creates a local filesys backed database without using the singleton cache. This is used for a very specific
+// case: the `dolt fsck` command. Since database loading happens before subcommand execution, and `dolt fsck` needs to report
+// journal issues, it needs to load the database without simply printing an error to the log for journal issues.
+//
+// Furthermore, regular database loading uses this code path to construct the GenerationalCS, which is desired because we
+// want the same underlying implementation.
+func (fact FileFactory) CreateDbNoCache(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}, valCb func(error)) (datas.Database, types.ValueReadWriter, tree.NodeStore, error) {
 	path, err := url.PathUnescape(urlObj.Path)
 	if err != nil {
 		return nil, nil, nil, err
@@ -158,7 +181,7 @@ func (fact FileFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, 
 	var newGenSt *nbs.NomsBlockStore
 	q := nbs.NewUnlimitedMemQuotaProvider()
 	if useJournal && chunkJournalFeatureFlag {
-		newGenSt, err = nbs.NewLocalJournalingStore(ctx, nbf.VersionString(), path, q, mmapArchiveIndexes)
+		newGenSt, err = nbs.NewLocalJournalingStore(ctx, nbf.VersionString(), path, q, mmapArchiveIndexes, valCb)
 	} else {
 		newGenSt, err = nbs.NewLocalStore(ctx, nbf.VersionString(), path, defaultMemTableSize, q, mmapArchiveIndexes)
 	}
@@ -204,12 +227,6 @@ func (fact FileFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, 
 	vrw := types.NewValueStore(st)
 	ns := tree.NewNodeStore(st)
 	ddb := datas.NewTypesDatabase(vrw, ns)
-
-	singletons[urlObj.Path] = singletonDB{
-		ddb: ddb,
-		vrw: vrw,
-		ns:  ns,
-	}
 
 	return ddb, vrw, ns, nil
 }
