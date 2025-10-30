@@ -15,12 +15,26 @@
 package commands
 
 import (
+	"bytes"
 	"context"
+	"errors"
+	"fmt"
+	"net/url"
+	"os"
+	"path/filepath"
+	"sync"
+	"sync/atomic"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
+	"github.com/dolthub/dolt/go/libraries/utils/earl"
+	"github.com/dolthub/dolt/go/store/chunks"
+	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/nbs"
+	"github.com/dolthub/dolt/go/store/types"
 	"github.com/fatih/color"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 )
@@ -56,6 +70,10 @@ func (cmd FsckCmd) Name() string {
 	return "fsck"
 }
 
+// Exec re-loads the database, and verifies the integrity of all chunks in the local dolt database.
+//
+// We go to extra effort to load a new database because the default behavior of dolt is to self-heal for some types
+// of corruption. For this reason we bypass any cached database and load a fresh one from disk.
 func (cmd FsckCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, _ cli.CliContext) int {
 	ap := cmd.ArgParser()
 	apr, _, terminate, status := ParseArgsOrPrintHelp(ap, commandStr, args, fsckDocs)
@@ -65,6 +83,45 @@ func (cmd FsckCmd) Exec(ctx context.Context, commandStr string, args []string, d
 
 	quiet := apr.Contains(cli.QuietFlag)
 
+	// We expect these to work because the database has already been initialized in higher layers. We'll check anyway
+	// since it's possible something went sideways or this isn't a local database.
+	exists, isDir := dEnv.FS.Exists(dbfactory.DoltDataDir)
+	if !exists || !isDir {
+		cli.PrintErrln(fmt.Sprintf("Dolt data directory not found at %s", dbfactory.DoltDataDir))
+		return 1
+	}
+
+	absPath, err := dEnv.FS.Abs(dbfactory.DoltDataDir)
+	if err != nil {
+		// This should never happen
+		cli.PrintErrln("Could not get absolute path for dolt data directory:", err.Error())
+		return 1
+	}
+
+	urlStr := earl.FileUrlFromPath(filepath.ToSlash(absPath), os.PathSeparator)
+	u, err := url.Parse(urlStr)
+	if err != nil {
+		panic(err)
+	}
+
+	var errs []error
+	params := make(map[string]interface{})
+	params[dbfactory.ChunkJournalParam] = struct{}{}
+	dbFact := dbfactory.FileFactory{}
+	ddb, _, _, err := dbFact.CreateDbNoCache(ctx, types.Format_Default, u, params, func(vErr error) {
+		errs = append(errs, vErr)
+	})
+	if err != nil {
+		cli.PrintErrln("Could not open dolt database: %s", err.Error())
+		return 1
+	}
+	gs, ok := datas.ChunkStoreFromDatabase(ddb).(*nbs.GenerationalNBS)
+	if !ok {
+		// This should never happen. Mainly a protection against future changes.
+		cli.PrintErrln("runtime error: FSCK requires *nbs.GenerationalNBS chunk store. Got: %T", datas.ChunkStoreFromDatabase(ddb))
+		return 1
+	}
+
 	progress := make(chan string, 32)
 	done := make(chan struct{})
 
@@ -73,11 +130,11 @@ func (cmd FsckCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		close(done)
 	}()
 
-	var report *doltdb.FSCKReport
+	var report *FSCKReport
 	terminate = func() bool {
 		defer close(progress)
 		var err error
-		report, err = dEnv.DoltDB(ctx).FSCK(ctx, progress)
+		report, err = fsckOnChunkStore(ctx, gs, errs, progress)
 		if err != nil {
 			// When FSCK errors, it's unexpected. As in corruption can be found and we shouldn't get an error here.
 			// So we print the error and not the report.
@@ -103,7 +160,7 @@ func (cmd FsckCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	return printFSCKReport(report)
 }
 
-func printFSCKReport(report *doltdb.FSCKReport) int {
+func printFSCKReport(report *FSCKReport) int {
 	cli.Printf("Chunks Scanned: %d\n", report.ChunkCount)
 	if len(report.Problems) == 0 {
 		cli.Println("No problems found.")
@@ -125,4 +182,106 @@ func fsckHandleProgress(ctx context.Context, progress <-chan string, quiet bool)
 			cli.Println(item)
 		}
 	}
+}
+
+type FSCKReport struct {
+	ChunkCount uint32
+	Problems   []error
+}
+
+// FSCK performs a full file system check on the database. This is currently exposed with the CLI as `dolt fsck`
+// The success or failure of the scan are returned in the report as a list of errors. The error returned by this function
+// indicates a deeper issue such as an inability to read from the underlying storage at all.
+func fsckOnChunkStore(ctx context.Context, gs *nbs.GenerationalNBS, errs []error, progress chan string) (*FSCKReport, error) {
+	chunkCount, err := gs.OldGen().Count()
+	if err != nil {
+		return nil, err
+	}
+	chunkCount2, err := gs.NewGen().Count()
+	if err != nil {
+		return nil, err
+	}
+	chunkCount += chunkCount2
+	proccessedCnt := int64(0)
+
+	vs := types.NewValueStore(gs)
+
+	decodeMsg := func(chk chunks.Chunk) string {
+		hrs := ""
+		val, err := types.DecodeValue(chk, vs)
+		if err == nil {
+			hrs = val.HumanReadableString()
+		} else {
+			hrs = fmt.Sprintf("Unable to decode value: %s", err.Error())
+		}
+		return hrs
+	}
+
+	// Append safely to the slice of errors with a mutex.
+	errsLock := &sync.Mutex{}
+	appendErr := func(err error) {
+		errsLock.Lock()
+		defer errsLock.Unlock()
+		errs = append(errs, err)
+	}
+
+	// Callback for validating chunks. This code could be called concurrently, though that is not currently the case.
+	validationCallback := func(chunk chunks.Chunk) {
+		chunkOk := true
+		pCnt := atomic.AddInt64(&proccessedCnt, 1)
+		h := chunk.Hash()
+		raw := chunk.Data()
+		calcChkSum := hash.Of(raw)
+
+		if h != calcChkSum {
+			fuzzyMatch := false
+			// Special case for the journal chunk source. We may have an address which has 4 null bytes at the end.
+			if h[hash.ByteLen-1] == 0 && h[hash.ByteLen-2] == 0 && h[hash.ByteLen-3] == 0 && h[hash.ByteLen-4] == 0 {
+				// Now we'll just verify that the first 16 bytes match.
+				ln := hash.ByteLen - 4
+				fuzzyMatch = bytes.Compare(h[:ln], calcChkSum[:ln]) == 0
+			}
+			if !fuzzyMatch {
+				hrs := decodeMsg(chunk)
+				appendErr(errors.New(fmt.Sprintf("Chunk: %s content hash mismatch: %s\n%s", h.String(), calcChkSum.String(), hrs)))
+				chunkOk = false
+			}
+		}
+
+		if chunkOk {
+			// Round trip validation. Ensure that the top level store returns the same data.
+			c, err := gs.Get(ctx, h)
+			if err != nil {
+				appendErr(errors.New(fmt.Sprintf("Chunk: %s load failed with error: %s", h.String(), err.Error())))
+				chunkOk = false
+			} else if bytes.Compare(raw, c.Data()) != 0 {
+				hrs := decodeMsg(chunk)
+				appendErr(errors.New(fmt.Sprintf("Chunk: %s read with incorrect ID: %s\n%s", h.String(), c.Hash().String(), hrs)))
+				chunkOk = false
+			}
+		}
+
+		percentage := (float64(pCnt) * 100) / float64(chunkCount)
+		result := fmt.Sprintf("(%4.1f%% done)", percentage)
+
+		progStr := "OK: " + h.String()
+		if !chunkOk {
+			progStr = "FAIL: " + h.String()
+		}
+		progStr = result + " " + progStr
+		progress <- progStr
+	}
+
+	err = gs.OldGen().IterateAllChunks(ctx, validationCallback)
+	if err != nil {
+		return nil, err
+	}
+	err = gs.NewGen().IterateAllChunks(ctx, validationCallback)
+	if err != nil {
+		return nil, err
+	}
+
+	FSCKReport := FSCKReport{Problems: errs, ChunkCount: chunkCount}
+
+	return &FSCKReport, nil
 }

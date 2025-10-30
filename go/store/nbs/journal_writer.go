@@ -187,7 +187,7 @@ var _ io.Closer = &journalWriter{}
 // are added to the novel ranges map. If the number of novel lookups exceeds |wr.maxNovel|, we
 // extend the journal index with one metadata flush before existing this function to save indexing
 // progress.
-func (wr *journalWriter) bootstrapJournal(ctx context.Context, reflogRingBuffer *reflogRingBuffer) (last hash.Hash, err error) {
+func (wr *journalWriter) bootstrapJournal(ctx context.Context, reflogRingBuffer *reflogRingBuffer, valCb func(error)) (last hash.Hash, err error) {
 	wr.lock.Lock()
 	defer wr.lock.Unlock()
 
@@ -330,7 +330,7 @@ func (wr *journalWriter) bootstrapJournal(ctx context.Context, reflogRingBuffer 
 			return fmt.Errorf("unknown journal record kind (%d)", r.kind)
 		}
 		return nil
-	})
+	}, valCb)
 	if err != nil {
 		return hash.Hash{}, err
 	}
