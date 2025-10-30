@@ -75,6 +75,7 @@ func makeTestSrcs(t *testing.T, tableSizes []uint32, p tableFilePersister, mode 
 			require.NoError(t, err)
 			reader, err := writer.Reader()
 			require.NoError(t, err)
+			defer reader.Close()
 			splitOffset, err := writer.ChunkDataLength()
 			require.NoError(t, err)
 			err = p.CopyTableFile(t.Context(), reader, name, writer.FullLength(), splitOffset)
