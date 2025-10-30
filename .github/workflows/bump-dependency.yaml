@@ -131,7 +131,7 @@ jobs:
           set -euo pipefail
           git config --global user.name "${GIT_USER}"
           git config --global user.email "${GIT_MAIL}"
-          git checkout -b -- "${BRANCH}"
+          git checkout -b "${BRANCH}"
           git add .
           git commit -m "[ga-bump-dep] Bump dependency in Dolt by ${COMMIT_BY}"
           git push origin "${BRANCH}"
