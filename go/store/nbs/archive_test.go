@@ -974,13 +974,13 @@ func TestArchiveGetRecordRanges(t *testing.T) {
 }
 
 func TestArchiveConjoinAllComprehensive(t *testing.T) {
-	rand.Seed(42)
+	r := rand.New(rand.NewSource(42))
 
 	// Create shared chunks that will be duplicated across archives
 	sharedChunks := [][]byte{
-		generateRandomBytes(100, 50),  // 50 bytes - will be in multiple archives
-		generateRandomBytes(200, 100), // 100 bytes - will be in multiple archives
-		generateRandomBytes(300, 25),  // 25 bytes - will be in multiple archives
+		generateRandomBytes(r.Int63n(100), 50),  // 50 bytes - will be in multiple archives
+		generateRandomBytes(r.Int63n(200), 100), // 100 bytes - will be in multiple archives
+		generateRandomBytes(r.Int63n(300), 25),  // 25 bytes - will be in multiple archives
 	}
 
 	// Create shared hashes for these chunks
@@ -997,13 +997,13 @@ func TestArchiveConjoinAllComprehensive(t *testing.T) {
 
 	for i := 0; i < 10; i++ {
 		// Generate random chunk sizes between 10 and 250 bytes
-		chunkCount := 3 + rand.Intn(5) // 3-7 chunks per archive
+		chunkCount := 3 + r.Intn(5) // 3-7 chunks per archive
 		archiveChunks := make([][]byte, 0, chunkCount)
 		archiveHashes := make([]hash.Hash, 0, chunkCount)
 		useSnappy := make(map[int]bool)
 
 		// Add 1-2 shared chunks to create duplicates
-		duplicateCount := 1 + rand.Intn(2) // 1-2 duplicates per archive
+		duplicateCount := 1 + r.Intn(2) // 1-2 duplicates per archive
 		for j := 0; j < duplicateCount && j < len(sharedChunks); j++ {
 			archiveChunks = append(archiveChunks, sharedChunks[j])
 			archiveHashes = append(archiveHashes, sharedHashes[j])
@@ -1015,7 +1015,7 @@ func TestArchiveConjoinAllComprehensive(t *testing.T) {
 
 		// Add unique chunks with random sizes
 		for j := len(archiveChunks); j < chunkCount; j++ {
-			chunkSize := 10 + rand.Intn(241) // 10-250 bytes
+			chunkSize := 10 + r.Intn(241) // 10-250 bytes
 			seed := int64(i*1000 + j*100 + chunkSize)
 			chunkData := generateRandomBytes(seed, chunkSize)
 
@@ -1023,7 +1023,7 @@ func TestArchiveConjoinAllComprehensive(t *testing.T) {
 			archiveHashes = append(archiveHashes, hashWithPrefix(t, uint64(i*10000+j)))
 
 			// Randomly assign compression type (about 40% Snappy)
-			if rand.Float32() < 0.4 {
+			if r.Float32() < 0.4 {
 				useSnappy[j] = true
 			}
 		}
@@ -1059,13 +1059,13 @@ func TestArchiveConjoinAllComprehensive(t *testing.T) {
 
 	for i := 0; i < 3; i++ {
 		// Create chunks with some duplicates from the first conjoin
-		chunkCount := 4 + rand.Intn(4) // 4-7 chunks per additional archive
+		chunkCount := 4 + r.Intn(4) // 4-7 chunks per additional archive
 		archiveChunks := make([][]byte, 0, chunkCount)
 		archiveHashes := make([]hash.Hash, 0, chunkCount)
 		useSnappy := make(map[int]bool)
 
 		// Add 1-2 chunks that duplicate existing ones
-		duplicateCount := 1 + rand.Intn(2)
+		duplicateCount := 1 + r.Intn(2)
 		for j := 0; j < duplicateCount && j < len(sharedChunks); j++ {
 			archiveChunks = append(archiveChunks, sharedChunks[j])
 			archiveHashes = append(archiveHashes, sharedHashes[j])
@@ -1076,14 +1076,14 @@ func TestArchiveConjoinAllComprehensive(t *testing.T) {
 		}
 
 		for j := len(archiveChunks); j < chunkCount; j++ {
-			chunkSize := 15 + rand.Intn(236) // 15-250 bytes
+			chunkSize := 15 + r.Intn(236) // 15-250 bytes
 			seed := int64(i*2000 + j*200 + chunkSize + 50000)
 			chunkData := generateRandomBytes(seed, chunkSize)
 
 			archiveChunks = append(archiveChunks, chunkData)
 			archiveHashes = append(archiveHashes, hashWithPrefix(t, uint64(i*20000+j+50000)))
 
-			if rand.Float32() < 0.6 {
+			if r.Float32() < 0.6 {
 				useSnappy[j] = true
 			}
 		}
@@ -1222,7 +1222,7 @@ func generateRandomChunk(seed int64, len int) *chunks.Chunk {
 }
 
 func generateRandomBytes(seed int64, len int) []byte {
-	r := rand.NewSource(seed)
+	r := rand.New(rand.NewSource(seed))
 
 	data := make([]byte, len)
 	for i := range data {

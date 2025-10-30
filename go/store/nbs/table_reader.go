@@ -22,6 +22,7 @@
 package nbs
 
 import (
+	"bufio"
 	"context"
 	"encoding/binary"
 	"errors"
@@ -782,27 +783,58 @@ func (tr tableReader) clone() (tableReader, error) {
 
 func (tr tableReader) iterateAllChunks(ctx context.Context, cb func(chunk chunks.Chunk), stats *Stats) error {
 	count := tr.idx.chunkCount()
-	for i := uint32(0); i < count; i++ {
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
+	if count == 0 {
+		return nil
+	}
 
+	// Collect all chunk info then sort by offset.
+	// The index is sorted by prefix, but we need to process chunkRecs in storage order (by offset)
+	type chunkRecord struct {
+		offset uint64
+		length uint32
+		hash   hash.Hash
+	}
+	chunkRecs := make([]chunkRecord, 0, count)
+	for i := uint32(0); i < count; i++ {
 		var h hash.Hash
 		ie, err := tr.idx.indexEntry(i, &h)
 		if err != nil {
 			return err
 		}
 
-		res := make([]byte, ie.Length())
-		n, err := tr.r.ReadAtWithStats(ctx, res, int64(ie.Offset()), stats)
-		if err != nil {
-			return err
-		}
-		if uint32(n) != ie.Length() {
-			return errors.New("failed to read all data")
+		chunkRecs = append(chunkRecs, chunkRecord{
+			offset: ie.Offset(),
+			length: ie.Length(),
+			hash:   h,
+		})
+	}
+	sort.Slice(chunkRecs, func(i, j int) bool {
+		return chunkRecs[i].offset < chunkRecs[j].offset
+	})
+
+	lastChunk := chunkRecs[len(chunkRecs)-1]
+	totalDataSize := lastChunk.offset + uint64(lastChunk.length)
+
+	dataReader := io.NewSectionReader(&bridgeReaderAt{
+		rdr:   tr.r,
+		ctx:   ctx,
+		stats: stats,
+	}, int64(0), int64(totalDataSize))
+	bufReader := bufio.NewReader(dataReader)
+
+	chunkIndex := 0
+	buf := make([]byte, 4*1024*1024)
+
+	for chunkIndex < len(chunkRecs) {
+		if ctx.Err() != nil {
+			return context.Cause(ctx)
 		}
 
-		cchk, err := NewCompressedChunk(h, res)
+		chunk := chunkRecs[chunkIndex]
+		_, err := io.ReadFull(bufReader, buf[:chunk.length])
+		chunkData := buf[:chunk.length]
+
+		cchk, err := NewCompressedChunk(chunk.hash, chunkData)
 		if err != nil {
 			return err
 		}
@@ -811,7 +843,11 @@ func (tr tableReader) iterateAllChunks(ctx context.Context, cb func(chunk chunks
 			return err
 		}
 
+		// Process the chunk
 		cb(chk)
+
+		chunkIndex++
 	}
+
 	return nil
 }
