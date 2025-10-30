@@ -16,6 +16,7 @@ package nbs
 
 import (
 	"bytes"
+	"context"
 	"crypto/md5"
 	"crypto/sha512"
 	"errors"
@@ -118,12 +119,25 @@ type BlockBufferByteSink struct {
 	blocks    [][]byte
 	blockSize int
 	pos       uint64
+
+	ctx context.Context
+	q   MemoryQuotaProvider
 }
 
 // NewBlockBufferByteSink creates a BlockBufferByteSink with the provided block size.
-func NewBlockBufferByteSink(blockSize int) *BlockBufferByteSink {
-	block := make([]byte, 0, blockSize)
-	return &BlockBufferByteSink{pos: 0, blockSize: blockSize, blocks: [][]byte{block}}
+func NewBlockBufferByteSink(ctx context.Context, blockSize int, q MemoryQuotaProvider) (*BlockBufferByteSink, error) {
+	block, err := q.AcquireQuotaByteSlice(ctx, blockSize)
+	if err != nil {
+		return nil, err
+	}
+	block = block[:0]
+	return &BlockBufferByteSink{
+		ctx:       ctx,
+		q:         q,
+		pos:       0,
+		blockSize: blockSize,
+		blocks:    [][]byte{block},
+	}, nil
 }
 
 // Write writes a byte array to the sink.
@@ -142,8 +156,17 @@ func (sink *BlockBufferByteSink) Write(src []byte) (int, error) {
 			sink.blocks[currBlockIdx] = currBlock
 		}
 
-		newBlock := make([]byte, 0, sink.blockSize)
-		newBlock = append(newBlock, src[remaining:]...)
+		rest := src[remaining:]
+		sz := sink.blockSize
+		if len(rest) > sz {
+			sz = len(rest)
+		}
+		newBlock, err := sink.q.AcquireQuotaByteSlice(sink.ctx, sz)
+		if err != nil {
+			return remaining, err
+		}
+		newBlock = newBlock[:0]
+		newBlock = append(newBlock, rest...)
 		sink.blocks = append(sink.blocks, newBlock)
 	}
 
@@ -167,6 +190,15 @@ func (sink *BlockBufferByteSink) Reader() (io.ReadCloser, error) {
 		rs[i] = bytes.NewReader(sink.blocks[i])
 	}
 	return io.NopCloser(io.MultiReader(rs...)), nil
+}
+
+func (sink *BlockBufferByteSink) Close() error {
+	for i := range sink.blocks {
+		l := cap(sink.blocks[i])
+		sink.blocks[i] = nil
+		sink.q.ReleaseQuotaBytes(l)
+	}
+	return nil
 }
 
 // BufferedFileByteSink is a ByteSink implementation that buffers some amount of data before it passes it

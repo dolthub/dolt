@@ -30,6 +30,7 @@ import (
 	"io"
 	"sort"
 	"time"
+	"unsafe"
 
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -137,6 +138,7 @@ type compactionPlan struct {
 	mergedIndex         []byte
 	chunkCount          uint32
 	totalCompressedData uint64
+	closer              func()
 }
 
 const (
@@ -146,7 +148,7 @@ const (
 
 // planRangeCopyConjoin computes a conjoin plan for tablePersisters that can conjoin
 // chunkSources using range copies (copy only chunk records, not chunk indexes).
-func planRangeCopyConjoin(ctx context.Context, sources chunkSources, stats *Stats) (compactionPlan, error) {
+func planRangeCopyConjoin(ctx context.Context, sources chunkSources, q MemoryQuotaProvider, stats *Stats) (compactionPlan, error) {
 	mode := conjoinModeTable
 	sized := make([]sourceWithSize, 0, len(sources))
 	for _, src := range sources {
@@ -162,9 +164,9 @@ func planRangeCopyConjoin(ctx context.Context, sources chunkSources, stats *Stat
 
 	switch mode {
 	case conjoinModeArchive:
-		return planArchiveConjoin(sized, stats)
+		return planArchiveConjoin(ctx, sized, q, stats)
 	case conjoinModeTable:
-		return planTableConjoin(ctx, sized, stats)
+		return planTableConjoin(ctx, sized, q, stats)
 	default:
 		return compactionPlan{}, errors.New("runtime error: unknown conjoin mode")
 	}
@@ -175,7 +177,14 @@ func calcChunkRangeSize(index tableIndex) uint64 {
 	return index.tableFileSize() - indexSize(index.chunkCount()) - footerSize
 }
 
-func planTableConjoin(ctx context.Context, sources []sourceWithSize, stats *Stats) (plan compactionPlan, err error) {
+func planTableConjoin(ctx context.Context, sources []sourceWithSize, q MemoryQuotaProvider, stats *Stats) (plan compactionPlan, err error) {
+	acquiredBytes := 0
+	defer func() {
+		if err != nil {
+			q.ReleaseQuotaBytes(acquiredBytes)
+		}
+	}()
+
 	// place largest chunk sources at the beginning of the conjoin
 	plan.sources = chunkSourcesByDescendingDataSize{sws: sources}
 	sort.Sort(plan.sources)
@@ -199,8 +208,19 @@ func planTableConjoin(ctx context.Context, sources []sourceWithSize, stats *Stat
 
 	lengthsPos := lengthsOffset(plan.chunkCount)
 	suffixesPos := suffixesOffset(plan.chunkCount)
-	plan.mergedIndex = make([]byte, indexSize(plan.chunkCount)+footerSize)
+	sz := int(indexSize(plan.chunkCount) + footerSize)
+	plan.mergedIndex, err = q.AcquireQuotaByteSlice(ctx, sz)
+	if err != nil {
+		return compactionPlan{}, err
+	}
+	acquiredBytes += sz
 
+	prefixRecsSz := int(unsafe.Sizeof(prefixIndexRec{})) * int(plan.chunkCount)
+	err = q.AcquireQuotaBytes(ctx, prefixRecsSz)
+	if err != nil {
+		return compactionPlan{}, err
+	}
+	acquiredBytes += prefixRecsSz
 	prefixIndexRecs := make(prefixIndexSlice, 0, plan.chunkCount)
 	var ordinalOffset uint32
 	for _, sws := range plan.sources.sws {
@@ -231,7 +251,6 @@ func planTableConjoin(ctx context.Context, sources []sourceWithSize, stats *Stat
 
 		var cnt uint32
 		cnt, err = sws.source.count()
-
 		if err != nil {
 			return compactionPlan{}, err
 		}
@@ -285,9 +304,16 @@ func planTableConjoin(ctx context.Context, sources []sourceWithSize, stats *Stat
 
 	writeFooter(plan.mergedIndex[uint64(len(plan.mergedIndex))-footerSize:], plan.chunkCount, totalUncompressedData)
 
+	prefixIndexRecs = nil
+	acquiredBytes -= prefixRecsSz
+	q.ReleaseQuotaBytes(prefixRecsSz)
+
 	suffixesStart := uint64(plan.chunkCount) * (prefixTupleSize + lengthSize)
 	suffixBytes := plan.mergedIndex[suffixesStart : suffixesStart+uint64(plan.chunkCount)*hash.SuffixLen]
 	plan.name = nameFromSuffixes(suffixBytes)
+	plan.closer = func() {
+		q.ReleaseQuotaBytes(acquiredBytes)
+	}
 
 	stats.BytesPerConjoin.Sample(plan.totalCompressedData + uint64(len(plan.mergedIndex)))
 	return plan, nil

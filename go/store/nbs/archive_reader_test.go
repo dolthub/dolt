@@ -171,23 +171,29 @@ type errorQuota struct {
 
 var _ MemoryQuotaProvider = (*errorQuota)(nil)
 
-func (q *errorQuota) AcquireQuotaBytes(ctx context.Context, sz int) ([]byte, error) {
+func (q *errorQuota) AcquireQuotaByteSlice(ctx context.Context, sz int) ([]byte, error) {
 	if int(q.q.Usage())+sz > q.after {
 		return nil, errors.New("quota acquire error")
 	}
-	return q.q.AcquireQuotaBytes(ctx, sz)
+	return q.q.AcquireQuotaByteSlice(ctx, sz)
 }
-func (q *errorQuota) AcquireQuotaUint64s(ctx context.Context, sz int) ([]uint64, error) {
+func (q *errorQuota) AcquireQuotaUint64Slice(ctx context.Context, sz int) ([]uint64, error) {
 	if int(q.q.Usage())+(sz*8) > q.after {
 		return nil, errors.New("quota acquire error")
 	}
-	return q.q.AcquireQuotaUint64s(ctx, sz)
+	return q.q.AcquireQuotaUint64Slice(ctx, sz)
 }
-func (q *errorQuota) AcquireQuotaUint32s(ctx context.Context, sz int) ([]uint32, error) {
+func (q *errorQuota) AcquireQuotaUint32Slice(ctx context.Context, sz int) ([]uint32, error) {
 	if int(q.q.Usage())+(sz*4) > q.after {
 		return nil, errors.New("quota acquire error")
 	}
-	return q.q.AcquireQuotaUint32s(ctx, sz)
+	return q.q.AcquireQuotaUint32Slice(ctx, sz)
+}
+func (q *errorQuota) AcquireQuotaBytes(ctx context.Context, sz int) error {
+	if int(q.q.Usage())+(sz) > q.after {
+		return errors.New("quota acquire error")
+	}
+	return q.q.AcquireQuotaBytes(ctx, sz)
 }
 func (q *errorQuota) ReleaseQuotaBytes(sz int) {
 	q.q.ReleaseQuotaBytes(sz)
