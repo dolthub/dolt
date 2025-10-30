@@ -66,7 +66,12 @@ func (cmd FsckCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	quiet := apr.Contains(cli.QuietFlag)
 
 	progress := make(chan string, 32)
-	go fsckHandleProgress(ctx, progress, quiet)
+	done := make(chan struct{})
+
+	go func() {
+		fsckHandleProgress(ctx, progress, quiet)
+		close(done)
+	}()
 
 	var report *doltdb.FSCKReport
 	terminate = func() bool {
@@ -74,10 +79,12 @@ func (cmd FsckCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		var err error
 		report, err = dEnv.DoltDB(ctx).FSCK(ctx, progress)
 		if err != nil {
+			// When FSCK errors, it's unexpected. As in corruption can be found and we shouldn't get an error here.
+			// So we print the error and not the report.
 			cli.PrintErrln(err.Error())
 			return true
 		}
-		// skip printing the report is we were cancelled. Most likely we tripped on the error above first.
+		// skip printing the report if we were cancelled.
 		select {
 		case <-ctx.Done():
 			cli.PrintErrln(ctx.Err().Error())
@@ -86,6 +93,9 @@ func (cmd FsckCmd) Exec(ctx context.Context, commandStr string, args []string, d
 			return false
 		}
 	}()
+	// Wait for fsckHandleProgress to finish processing all messages
+	<-done
+
 	if terminate {
 		return 1
 	}
@@ -108,15 +118,11 @@ func printFSCKReport(report *doltdb.FSCKReport) int {
 	}
 }
 
-func fsckHandleProgress(ctx context.Context, progress chan string, quiet bool) {
+func fsckHandleProgress(ctx context.Context, progress <-chan string, quiet bool) {
 	for item := range progress {
-		if !quiet {
+		// when ctx is cancelled, keep draining but stop printing
+		if !quiet && ctx.Err() == nil {
 			cli.Println(item)
-		}
-		select {
-		case <-ctx.Done():
-			return
-		default:
 		}
 	}
 }
