@@ -901,7 +901,7 @@ func planArchiveConjoin(sources []sourceWithSize, stats *Stats) (compactionPlan,
 				suffix := arcSrc.aRdr.indexReader.getSuffix(uint32(i))
 				chunkHash := reconstructHashFromPrefixAndSuffix(prefix, suffix)
 
-				// Add to staged chunks. Note that we allow duplicates here, whereas we quietly skip
+				// Note that we allow duplicates here, whereas we quietly skip
 				// duplicates when doing a chunk-by-chunk build of an archive.
 
 				// Adjust byte span IDs for the combined archive
