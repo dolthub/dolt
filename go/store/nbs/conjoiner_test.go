@@ -159,6 +159,7 @@ func TestConjoin(t *testing.T) {
 }
 
 type testConjoinMode int
+
 const (
 	testConjoinModeTableFile testConjoinMode = iota
 	testConjoinModeArchive

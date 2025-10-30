@@ -60,8 +60,8 @@ func (bsp *blobstorePersister) Persist(ctx context.Context, mt *memTable, haver 
 	// persist this table in two parts to facilitate later conjoins
 	records, tail := data[:splitOffset], data[splitOffset:]
 
-	recordsName := name+tableRecordsExt
-	tailName := name+tableTailExt
+	recordsName := name + tableRecordsExt
+	tailName := name + tableTailExt
 
 	// first write table records and tail (index+footer) as separate blobs
 	eg, ectx := errgroup.WithContext(ctx)
@@ -249,8 +249,8 @@ func (bsp *blobstorePersister) CopyTableFile(ctx context.Context, r io.Reader, n
 
 		indexLen := int64(fileSz - splitOffset)
 
-		recordsName := name+tableRecordsExt
-		tailName := name+tableTailExt
+		recordsName := name + tableRecordsExt
+		tailName := name + tableTailExt
 		// check if we can Put concurrently
 		rr, ok := r.(io.ReaderAt)
 		if !ok {
