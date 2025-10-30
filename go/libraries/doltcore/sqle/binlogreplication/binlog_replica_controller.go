@@ -20,6 +20,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dolthub/vitess/go/mysql"
 	"github.com/sirupsen/logrus"
 
 	sqle "github.com/dolthub/go-mysql-server"
@@ -81,6 +82,16 @@ func newDoltBinlogReplicaController() *doltBinlogReplicaController {
 	controller.status.ReplicaSqlRunning = binlogreplication.ReplicaSqlNotRunning
 	controller.applier = newBinlogReplicaApplier(controller.filters)
 	return &controller
+}
+
+// ConsumeBinlogEvent implements the binlogreplication.BinlogReplicaController interface.
+func (d *doltBinlogReplicaController) ConsumeBinlogEvent(ctx *sql.Context, event mysql.BinlogEvent) error {
+	return d.applier.processBinlogEvent(ctx, d.engine, event)
+}
+
+// HasFormatDescription implements the binlogreplication.BinlogReplicaController interface.
+func (d *doltBinlogReplicaController) HasFormatDescription() bool {
+	return d.applier.format != nil
 }
 
 // StartReplica implements the BinlogReplicaController interface.

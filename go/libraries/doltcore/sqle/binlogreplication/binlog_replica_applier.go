@@ -57,13 +57,18 @@ const (
 // This type is NOT used concurrently – there is currently only one single applier process running to process binlog
 // events, so the state in this type is NOT protected with a mutex.
 type binlogReplicaApplier struct {
-	currentGtid               mysql.GTID
-	format                    *mysql.BinlogFormat
-	tableMapsById             map[uint64]*mysql.TableMap
-	stopReplicationChan       chan struct{}
-	currentPosition           *mysql.Position
-	filters                   *filterConfiguration
-	engine                    *gms.Engine
+	currentGtid         mysql.GTID
+	stopReplicationChan chan struct{}
+	currentPosition     *mysql.Position
+	filters             *filterConfiguration
+	engine              *gms.Engine
+
+	// TODO: MariaDB stores this state per-connection at thd->rgi_fake->m_table_map.
+	// See https://github.com/MariaDB/server/blob/mariadb-11.4.8/sql/sql_binlog.cc#L270-L271
+	// See https://github.com/MariaDB/server/blob/mariadb-11.4.8/sql/rpl_rli.h#L811
+	format        *mysql.BinlogFormat
+	tableMapsById map[uint64]*mysql.TableMap
+
 	dbsWithUncommittedChanges map[string]struct{}
 	replicationSourceUuid     string
 	handlerWg                 sync.WaitGroup
@@ -364,9 +369,8 @@ func (a *binlogReplicaApplier) replicaBinlogEventHandler(ctx *sql.Context) error
 // processBinlogEvent processes a single binlog event message and returns an error if there were any problems
 // processing it.
 func (a *binlogReplicaApplier) processBinlogEvent(ctx *sql.Context, engine *gms.Engine, event mysql.BinlogEvent) error {
-	sql.SessionCommandBegin(ctx.Session)
+	err := sql.SessionCommandBegin(ctx.Session)
 	defer sql.SessionCommandEnd(ctx.Session)
-	var err error
 	createCommit := false
 
 	// We don't support checksum validation, so we MUST strip off any checksum bytes if present, otherwise it gets
@@ -467,6 +471,8 @@ func (a *binlogReplicaApplier) processBinlogEvent(ctx *sql.Context, engine *gms.
 			return err
 		}
 		a.format = &format
+		// Clear table maps when starting a new binlog file, since table IDs can be reused across files
+		a.tableMapsById = make(map[uint64]*mysql.TableMap)
 		ctx.GetLogger().WithFields(logrus.Fields{
 			"format":        a.format,
 			"formatVersion": a.format.FormatVersion,

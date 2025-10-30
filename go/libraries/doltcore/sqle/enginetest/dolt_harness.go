@@ -38,6 +38,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/binlogreplication"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/kvexec"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statspro"
@@ -277,6 +278,12 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 		}
 		e.Analyzer.ExecBuilder = rowexec.NewOverrideBuilder(kvexec.Builder{})
 		d.engine = e
+
+		// Set up binlog replica controller to enable BINLOG statement support
+		binlogReplicaController := binlogreplication.DoltBinlogReplicaController
+		binlogReplicaController.SetEngine(e)
+		binlogReplicaController.SetExecutionContext(sql.NewContext(context.Background(), sql.WithSession(d.session)))
+		e.Analyzer.Catalog.BinlogReplicaController = binlogReplicaController
 
 		sqlCtx := enginetest.NewContext(d)
 		databases := pro.AllDatabases(sqlCtx)

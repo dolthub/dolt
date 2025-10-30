@@ -1141,6 +1141,12 @@ func TestLoadDataErrors(t *testing.T) {
 	enginetest.TestLoadDataErrors(t, h)
 }
 
+func TestBinlog(t *testing.T) {
+	h := newDoltHarness(t)
+	defer h.Close()
+	enginetest.TestBinlog(t, h)
+}
+
 func TestSelectIntoFile(t *testing.T) {
 	h := newDoltHarness(t)
 	defer h.Close()
