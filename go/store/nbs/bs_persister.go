@@ -88,29 +88,13 @@ func (bsp *blobstorePersister) Persist(ctx context.Context, mt *memTable, haver 
 
 // ConjoinAll implements tablePersister.
 func (bsp *blobstorePersister) ConjoinAll(ctx context.Context, sources chunkSources, stats *Stats) (chunkSource, cleanupFunc, error) {
-	var sized []sourceWithSize
-	for _, src := range sources {
-		sized = append(sized, sourceWithSize{src, src.currentSize()})
-	}
-
-	archiveFound := false
-	for _, s := range sized {
-		_, ok := s.source.(archiveChunkSource)
-		if ok {
-			archiveFound = true
-			break
-		}
-	}
-
-	var plan compactionPlan
-	var err error
-	if archiveFound {
-		plan, err = planArchiveConjoin(sized, stats)
-	} else {
-		plan, err = planTableConjoin(sized, stats)
-	}
+	plan, err := planRangeCopyConjoin(sources, stats)
 	if err != nil {
 		return nil, nil, err
+	}
+
+	if plan.chunkCount == 0 {
+		return emptyChunkSource{}, nil, nil
 	}
 
 	name := plan.name.String() + plan.suffix
@@ -131,19 +115,21 @@ func (bsp *blobstorePersister) ConjoinAll(ctx context.Context, sources chunkSour
 	}
 
 	// first concatenate all the sub-objects to create a composite sub-object
-	if _, err = bsp.bs.Concatenate(ctx, name+tableRecordsExt, conjoinees); err != nil {
+	recordsName := name + tableRecordsExt
+	tailName := name + tableTailExt
+	if _, err = bsp.bs.Concatenate(ctx, recordsName, conjoinees); err != nil {
 		return nil, nil, err
 	}
-	if _, err = blobstore.PutBytes(ctx, bsp.bs, name+tableTailExt, plan.mergedIndex); err != nil {
+	if _, err = blobstore.PutBytes(ctx, bsp.bs, tailName, plan.mergedIndex); err != nil {
 		return nil, nil, err
 	}
 	// then concatenate into a final blob
-	if _, err = bsp.bs.Concatenate(ctx, name, []string{name + tableRecordsExt, name + tableTailExt}); err != nil {
+	if _, err = bsp.bs.Concatenate(ctx, name, []string{recordsName, tailName}); err != nil {
 		return emptyChunkSource{}, nil, err
 	}
 
 	var cs chunkSource
-	if archiveFound {
+	if plan.suffix == ArchiveFileSuffix {
 		cs, err = newBSArchiveChunkSource(ctx, bsp.bs, plan.name, bsp.q, stats)
 	} else {
 		cs, err = newBSTableChunkSource(ctx, bsp.bs, plan.name, plan.chunkCount, bsp.q, stats)

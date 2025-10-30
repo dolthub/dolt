@@ -114,6 +114,22 @@ type sourceWithSize struct {
 	dataLen uint64
 }
 
+func newSourceWithSize(src chunkSource) (res sourceWithSize, isArchive bool, err error) {
+	aSrc, ok := src.(archiveChunkSource)
+	if !ok {
+		index, err := src.index()
+		if err != nil {
+			return sourceWithSize{}, false, err
+		}
+		// Calculate the amount of chunk data in |src|
+		return sourceWithSize{src, calcChunkRangeSize(index)}, false, nil
+	} else {
+		dataSpan := aSrc.aRdr.footer.dataSpan()
+		dataLen := dataSpan.length - dataSpan.offset
+		return sourceWithSize{src, dataLen}, true, nil
+	}
+}
+
 type compactionPlan struct {
 	sources             chunkSourcesByDescendingDataSize
 	name                hash.Hash
@@ -132,29 +148,17 @@ const (
 // planRangeCopyConjoin computes a conjoin plan for tablePersisters that can conjoin
 // chunkSources using range copies (copy only chunk records, not chunk indexes).
 func planRangeCopyConjoin(sources chunkSources, stats *Stats) (compactionPlan, error) {
-	mode := conjoinModeUnknown
-	var sized []sourceWithSize
+	mode := conjoinModeTable
+	sized := make([]sourceWithSize, 0, len(sources))
 	for _, src := range sources {
-		aSrc, ok := src.(archiveChunkSource)
-		if !ok {
-			if mode == conjoinModeUnknown {
-				mode = conjoinModeTable
-			}
-
-			index, err := src.index()
-			if err != nil {
-				return compactionPlan{}, err
-			}
-			// Calculate the amount of chunk data in |src|
-			sized = append(sized, sourceWithSize{src, calcChunkRangeSize(index)})
-		} else {
-			// A single archive source forces the entire conjoin to be done as an archive conjoin.
-			mode = conjoinModeArchive
-
-			dataSpan := aSrc.aRdr.footer.dataSpan()
-			dataLen := dataSpan.length - dataSpan.offset
-			sized = append(sized, sourceWithSize{src, dataLen})
+		sws, isArchive, err := newSourceWithSize(src)
+		if err != nil {
+			return compactionPlan{}, err
 		}
+		if isArchive {
+			mode = conjoinModeArchive
+		}
+		sized = append(sized, sws)
 	}
 
 	switch mode {

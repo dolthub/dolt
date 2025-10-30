@@ -745,13 +745,14 @@ func (aw *archiveWriter) conjoinAll(ctx context.Context, sources []chunkSource, 
 
 	srcSz := make([]sourceWithSize, 0, len(sources))
 	for _, src := range sources {
-		aSrc, ok := src.(archiveChunkSource)
-		if !ok {
+		sws, isArchive, err := newSourceWithSize(src)
+		if err != nil {
+			return err
+		}
+		if !isArchive {
 			return fmt.Errorf("runtime error: source %T is not an archiveChunkSource", src)
 		}
-		dataSpan := aSrc.aRdr.footer.dataSpan()
-
-		srcSz = append(srcSz, sourceWithSize{src, dataSpan.length})
+		srcSz = append(srcSz, sws)
 	}
 
 	// similar to cloud conjoin, we build the index first. It could come after in this case.
@@ -808,6 +809,29 @@ func planArchiveConjoin(sources []sourceWithSize, stats *Stats) (compactionPlan,
 
 	writer := NewBlockBufferByteSink(fourMb)
 	aw := newArchiveWriterWithSink(writer)
+
+	numByteSpans := 0
+	numChunks := 0
+	for _, src := range orderedSrcs.sws {
+		reader := src.source
+		arcSrc, ok := reader.(archiveChunkSource)
+		if !ok {
+			index, err := reader.index()
+			if err != nil {
+				return compactionPlan{}, err
+			}
+			chks := index.chunkCount()
+			numByteSpans += int(chks)
+			numChunks += int(chks)
+		} else {
+			footer := arcSrc.aRdr.footer
+			numChunks += int(footer.chunkCount)
+			numByteSpans += int(footer.byteSpanCount)
+		}
+	}
+
+	aw.stagedBytes = make(stagedByteSpanSlice, 0, numByteSpans)
+	aw.stagedChunks = make(stagedChunkRefSlice, 0, numChunks)
 
 	currentDataOffset := uint64(0)
 	chunkCounter := uint32(0)
@@ -877,9 +901,8 @@ func planArchiveConjoin(sources []sourceWithSize, stats *Stats) (compactionPlan,
 				suffix := arcSrc.aRdr.indexReader.getSuffix(uint32(i))
 				chunkHash := reconstructHashFromPrefixAndSuffix(prefix, suffix)
 
-				// Add to seen chunks and staged chunks. Note that we allow duplicates here, whereas we quietly skip
+				// Add to staged chunks. Note that we allow duplicates here, whereas we quietly skip
 				// duplicates when doing a chunk-by-chunk build of an archive.
-				aw.seenChunks.Insert(chunkHash)
 
 				// Adjust byte span IDs for the combined archive
 				adjustedDictId := dictId
