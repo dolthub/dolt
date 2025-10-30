@@ -140,8 +140,7 @@ type compactionPlan struct {
 }
 
 const (
-	conjoinModeUnknown = iota
-	conjoinModeTable
+	conjoinModeTable = iota
 	conjoinModeArchive
 )
 
