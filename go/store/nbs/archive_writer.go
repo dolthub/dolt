@@ -833,7 +833,6 @@ func planArchiveConjoin(sources []sourceWithSize, stats *Stats) (compactionPlan,
 	aw.stagedBytes = make(stagedByteSpanSlice, 0, numByteSpans)
 	aw.stagedChunks = make(stagedChunkRefSlice, 0, numChunks)
 
-	currentDataOffset := uint64(0)
 	chunkCounter := uint32(0)
 
 	for _, src := range orderedSrcs.sws {
@@ -867,7 +866,6 @@ func planArchiveConjoin(sources []sourceWithSize, stats *Stats) (compactionPlan,
 
 			for _, rec := range chunkRecs {
 				adjustedSpan := byteSpan{
-					offset: rec.offset + currentDataOffset,
 					length: uint64(rec.length),
 				}
 				aw.stagedBytes = append(aw.stagedBytes, adjustedSpan)
@@ -888,7 +886,6 @@ func planArchiveConjoin(sources []sourceWithSize, stats *Stats) (compactionPlan,
 			for i := uint32(1); i <= footer.byteSpanCount; i++ {
 				span := arcSrc.aRdr.getByteSpanByID(i)
 				adjustedSpan := byteSpan{
-					offset: span.offset + currentDataOffset,
 					length: span.length,
 				}
 				aw.stagedBytes = append(aw.stagedBytes, adjustedSpan)
@@ -918,12 +915,11 @@ func planArchiveConjoin(sources []sourceWithSize, stats *Stats) (compactionPlan,
 				})
 			}
 		}
-		currentDataOffset += src.dataLen
+		aw.bytesWritten += src.dataLen
 	}
 
-	aw.bytesWritten = currentDataOffset
 	// Preserve this for stat reporting as aw.bytesWritten will be updated as we write the index.
-	dataBlocksLen := currentDataOffset
+	dataBlocksLen := aw.bytesWritten
 
 	// The conjoin process is a little different from the normal archive writing process. We manually stick everything
 	// into the writer, and then finalize the index and footer at the end. The datablocks will be written in separately

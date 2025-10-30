@@ -472,13 +472,13 @@ func (suite *BlockStoreSuite) TestChunkStorePutWithRebase() {
 
 func TestBlockStoreConjoinOnCommit(t *testing.T) {
 	t.Run("fake table persister", func(t *testing.T) {
-		testBlockStoreConjoinOnCommit(t, func(t *testing.T) tablePersister {
+		testBlockStoreConjoinOnCommit(t, func(t *testing.T) tableFilePersister {
 			q := NewUnlimitedMemQuotaProvider()
 			return newFakeTablePersister(q)
 		})
 	})
 	t.Run("in memory blobstore persister", func(t *testing.T) {
-		testBlockStoreConjoinOnCommit(t, func(t *testing.T) tablePersister {
+		testBlockStoreConjoinOnCommit(t, func(t *testing.T) tableFilePersister {
 			return &blobstorePersister{
 				bs:        blobstore.NewInMemoryBlobstore(""),
 				blockSize: 4096,
@@ -488,7 +488,7 @@ func TestBlockStoreConjoinOnCommit(t *testing.T) {
 	})
 }
 
-func testBlockStoreConjoinOnCommit(t *testing.T, factory func(t *testing.T) tablePersister) {
+func testBlockStoreConjoinOnCommit(t *testing.T, factory func(t *testing.T) tableFilePersister) {
 	assertContainAll := func(t *testing.T, store chunks.ChunkStore, sources ...chunkSource) {
 		ctx := context.Background()
 		for _, src := range sources {
@@ -540,7 +540,7 @@ func testBlockStoreConjoinOnCommit(t *testing.T, factory func(t *testing.T) tabl
 		fm := &fakeManifest{}
 		p := factory(t)
 
-		srcs := makeTestSrcs(t, []uint32{1, 1, 3, 7}, p)
+		srcs := makeTestSrcs(t, []uint32{1, 1, 3, 7}, p, testConjoinModeTableFile)
 		upstream, err := toSpecs(srcs)
 		require.NoError(t, err)
 		fm.set(constants.FormatLD1String, computeAddr([]byte{0xbe}), hash.Of([]byte{0xef}), upstream, nil)
@@ -576,7 +576,7 @@ func testBlockStoreConjoinOnCommit(t *testing.T, factory func(t *testing.T) tabl
 		q := NewUnlimitedMemQuotaProvider()
 		p := factory(t)
 
-		srcs := makeTestSrcs(t, []uint32{1, 1, 3, 7, 13}, p)
+		srcs := makeTestSrcs(t, []uint32{1, 1, 3, 7, 13}, p, testConjoinModeTableFile)
 		upstream, err := toSpecs(srcs)
 		require.NoError(t, err)
 		fm.set(constants.FormatLD1String, computeAddr([]byte{0xbe}), hash.Of([]byte{0xef}), upstream, nil)

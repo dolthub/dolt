@@ -26,12 +26,14 @@ import (
 	"context"
 	"encoding/binary"
 	"sort"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/store/blobstore"
+	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/constants"
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -48,7 +50,7 @@ func (ts tableSpecsByAscendingCount) Less(i, j int) bool {
 }
 func (ts tableSpecsByAscendingCount) Swap(i, j int) { ts[i], ts[j] = ts[j], ts[i] }
 
-func makeTestSrcs(t *testing.T, tableSizes []uint32, p tablePersister) (srcs chunkSources) {
+func makeTestSrcs(t *testing.T, tableSizes []uint32, p tableFilePersister, mode testConjoinMode) (srcs chunkSources) {
 	count := uint32(0)
 	nextChunk := func() (chunk []byte) {
 		chunk = make([]byte, 4)
@@ -57,25 +59,50 @@ func makeTestSrcs(t *testing.T, tableSizes []uint32, p tablePersister) (srcs chu
 		return chunk
 	}
 
-	for _, s := range tableSizes {
-		mt := newMemTable(testMemTableSize)
-		for i := uint32(0); i < s; i++ {
-			c := nextChunk()
-			mt.addChunk(computeAddr(c), c)
+	for i, s := range tableSizes {
+		if mode == testConjoinModeArchive && i%2 == 0 {
+			// In Archive mode, every other file is an archive.
+			// We have to use CopyTableFile to get these in, instead of Persist().
+			writer, err := NewArchiveStreamWriter(t.TempDir())
+			require.NoError(t, err)
+			defer writer.Remove()
+			for i := uint32(0); i < s; i++ {
+				c := nextChunk()
+				_, err = writer.AddChunk(ChunkToCompressedChunk(chunks.NewChunk(c)))
+				require.NoError(t, err)
+			}
+			_, name, err := writer.Finish()
+			require.NoError(t, err)
+			reader, err := writer.Reader()
+			require.NoError(t, err)
+			splitOffset, err := writer.ChunkDataLength()
+			require.NoError(t, err)
+			err = p.CopyTableFile(t.Context(), reader, name, writer.FullLength(), splitOffset)
+			require.NoError(t, err)
+			h := hash.Parse(strings.TrimSuffix(name, ArchiveFileSuffix))
+			cs, err := p.Open(t.Context(), h, s, &Stats{})
+			require.NoError(t, err)
+			srcs = append(srcs, cs)
+		} else {
+			mt := newMemTable(testMemTableSize)
+			for i := uint32(0); i < s; i++ {
+				c := nextChunk()
+				mt.addChunk(computeAddr(c), c)
+			}
+			cs, _, err := p.Persist(t.Context(), mt, nil, nil, &Stats{})
+			require.NoError(t, err)
+			c, err := cs.clone()
+			require.NoError(t, err)
+			srcs = append(srcs, c)
+			cs.close()
 		}
-		cs, _, err := p.Persist(context.Background(), mt, nil, nil, &Stats{})
-		require.NoError(t, err)
-		c, err := cs.clone()
-		require.NoError(t, err)
-		srcs = append(srcs, c)
-		cs.close()
 	}
 	return
 }
 
 // Makes a tableSet with len(tableSizes) upstream tables containing tableSizes[N] unique chunks
-func makeTestTableSpecs(t *testing.T, tableSizes []uint32, p tablePersister) (specs []tableSpec) {
-	for _, src := range makeTestSrcs(t, tableSizes, p) {
+func makeTestTableSpecs(t *testing.T, tableSizes []uint32, p tableFilePersister, mode testConjoinMode) (specs []tableSpec) {
+	for _, src := range makeTestSrcs(t, tableSizes, p, mode) {
 		specs = append(specs, tableSpec{src.hash(), mustUint32(src.count())})
 		err := src.close()
 		require.NoError(t, err)
@@ -85,36 +112,64 @@ func makeTestTableSpecs(t *testing.T, tableSizes []uint32, p tablePersister) (sp
 
 func TestConjoin(t *testing.T) {
 	t.Run("fake table persister", func(t *testing.T) {
-		testConjoin(t, func(*testing.T) tablePersister {
+		testConjoin(t, testConjoinModeTableFile, func(*testing.T) tableFilePersister {
 			return newFakeTablePersister(&UnlimitedQuotaProvider{})
 		})
 	})
 	t.Run("in-memory blobstore persister", func(t *testing.T) {
-		testConjoin(t, func(*testing.T) tablePersister {
-			return &blobstorePersister{
-				bs:        blobstore.NewInMemoryBlobstore(""),
-				blockSize: 4096,
-				q:         &UnlimitedQuotaProvider{},
-			}
+		t.Run("table file", func(t *testing.T) {
+			testConjoin(t, testConjoinModeTableFile, func(*testing.T) tableFilePersister {
+				return &blobstorePersister{
+					bs:        blobstore.NewInMemoryBlobstore(""),
+					blockSize: 4096,
+					q:         &UnlimitedQuotaProvider{},
+				}
+			})
+		})
+		t.Run("archive", func(t *testing.T) {
+			testConjoin(t, testConjoinModeArchive, func(*testing.T) tableFilePersister {
+				return &blobstorePersister{
+					bs:        blobstore.NewInMemoryBlobstore(""),
+					blockSize: 4096,
+					q:         &UnlimitedQuotaProvider{},
+				}
+			})
 		})
 	})
 	t.Run("local fs blobstore persister", func(t *testing.T) {
-		testConjoin(t, func(*testing.T) tablePersister {
-			return &blobstorePersister{
-				bs:        blobstore.NewLocalBlobstore(t.TempDir()),
-				blockSize: 4096,
-				q:         &UnlimitedQuotaProvider{},
-			}
+		t.Run("table file", func(t *testing.T) {
+			testConjoin(t, testConjoinModeTableFile, func(*testing.T) tableFilePersister {
+				return &blobstorePersister{
+					bs:        blobstore.NewLocalBlobstore(t.TempDir()),
+					blockSize: 4096,
+					q:         &UnlimitedQuotaProvider{},
+				}
+			})
+		})
+		t.Run("archive", func(t *testing.T) {
+			testConjoin(t, testConjoinModeArchive, func(*testing.T) tableFilePersister {
+				return &blobstorePersister{
+					bs:        blobstore.NewLocalBlobstore(t.TempDir()),
+					blockSize: 4096,
+					q:         &UnlimitedQuotaProvider{},
+				}
+			})
 		})
 	})
 }
 
-func testConjoin(t *testing.T, factory func(t *testing.T) tablePersister) {
+type testConjoinMode int
+const (
+	testConjoinModeTableFile testConjoinMode = iota
+	testConjoinModeArchive
+)
+
+func testConjoin(t *testing.T, mode testConjoinMode, factory func(t *testing.T) tableFilePersister) {
 	stats := &Stats{}
-	setup := func(lock hash.Hash, root hash.Hash, sizes []uint32) (fm *fakeManifest, p tablePersister, upstream manifestContents) {
+	setup := func(lock hash.Hash, root hash.Hash, sizes []uint32) (fm *fakeManifest, p tableFilePersister, upstream manifestContents) {
 		p = factory(t)
 		fm = &fakeManifest{}
-		fm.set(constants.FormatLD1String, lock, root, makeTestTableSpecs(t, sizes, p), nil)
+		fm.set(constants.FormatDoltString, lock, root, makeTestTableSpecs(t, sizes, p, mode), nil)
 		var err error
 		_, upstream, err = fm.ParseIfExists(context.Background(), nil, nil)
 		require.NoError(t, err)
@@ -131,7 +186,7 @@ func testConjoin(t *testing.T, factory func(t *testing.T) tablePersister) {
 		return
 	}
 
-	assertContainAll := func(t *testing.T, p tablePersister, expect, actual []tableSpec) {
+	assertContainAll := func(t *testing.T, p tableFilePersister, expect, actual []tableSpec) {
 		open := func(specs []tableSpec) (sources chunkSources) {
 			for _, sp := range specs {
 				cs, err := p.Open(context.Background(), sp.name, sp.chunkCount, stats)
@@ -153,7 +208,7 @@ func testConjoin(t *testing.T, factory func(t *testing.T) tablePersister) {
 			}
 		}()
 
-		ctx := context.Background()
+		ctx := t.Context()
 		for _, src := range expectSrcs {
 			err := extractAllChunks(ctx, src, func(rec extractRecord) {
 				var ok bool
@@ -176,7 +231,7 @@ func testConjoin(t *testing.T, factory func(t *testing.T) tablePersister) {
 	}
 
 	// Compact some tables, interloper slips in a new table
-	makeExtra := func(p tablePersister) tableSpec {
+	makeExtra := func(p tableFilePersister) tableSpec {
 		mt := newMemTable(testMemTableSize)
 		data := []byte{0xde, 0xad}
 		mt.addChunk(computeAddr(data), data)
@@ -226,7 +281,7 @@ func testConjoin(t *testing.T, factory func(t *testing.T) tablePersister) {
 				newTable := makeExtra(p)
 				u := updatePreemptManifest{fm, func() {
 					specs := append([]tableSpec{}, upstream.specs...)
-					fm.set(constants.FormatLD1String, computeAddr([]byte("lock2")), startRoot, append(specs, newTable), nil)
+					fm.set(constants.FormatDoltString, computeAddr([]byte("lock2")), startRoot, append(specs, newTable), nil)
 				}}
 				_, _, err := conjoin(context.Background(), inlineConjoiner{c.maxTables}, upstream, u, p, stats)
 				require.NoError(t, err)
@@ -246,7 +301,7 @@ func testConjoin(t *testing.T, factory func(t *testing.T) tablePersister) {
 				fm, p, upstream := setup(startLock, startRoot, c.precompact)
 
 				u := updatePreemptManifest{fm, func() {
-					fm.set(constants.FormatLD1String, computeAddr([]byte("lock2")), startRoot, upstream.specs[1:], nil)
+					fm.set(constants.FormatDoltString, computeAddr([]byte("lock2")), startRoot, upstream.specs[1:], nil)
 				}}
 				_, _, err := conjoin(context.Background(), inlineConjoiner{c.maxTables}, upstream, u, p, stats)
 				require.NoError(t, err)
@@ -258,10 +313,10 @@ func testConjoin(t *testing.T, factory func(t *testing.T) tablePersister) {
 		}
 	})
 
-	setupAppendix := func(lock hash.Hash, root hash.Hash, specSizes, appendixSizes []uint32) (fm *fakeManifest, p tablePersister, upstream manifestContents) {
-		p = newFakeTablePersister(&UnlimitedQuotaProvider{})
+	setupAppendix := func(lock hash.Hash, root hash.Hash, specSizes, appendixSizes []uint32) (fm *fakeManifest, p tableFilePersister, upstream manifestContents) {
+		p = factory(t)
 		fm = &fakeManifest{}
-		fm.set(constants.FormatLD1String, lock, root, makeTestTableSpecs(t, specSizes, p), makeTestTableSpecs(t, appendixSizes, p))
+		fm.set(constants.FormatDoltString, lock, root, makeTestTableSpecs(t, specSizes, p, mode), makeTestTableSpecs(t, appendixSizes, p, mode))
 
 		var err error
 		_, upstream, err = fm.ParseIfExists(context.Background(), nil, nil)
@@ -312,7 +367,7 @@ func testConjoin(t *testing.T, factory func(t *testing.T) tablePersister) {
 				newTable := makeExtra(p)
 				u := updatePreemptManifest{fm, func() {
 					specs := append([]tableSpec{}, upstream.specs...)
-					fm.set(constants.FormatLD1String, computeAddr([]byte("lock2")), startRoot, append(specs, newTable), upstream.appendix)
+					fm.set(constants.FormatDoltString, computeAddr([]byte("lock2")), startRoot, append(specs, newTable), upstream.appendix)
 				}}
 
 				_, _, err := conjoin(context.Background(), inlineConjoiner{c.maxTables}, upstream, u, p, stats)
@@ -337,7 +392,7 @@ func testConjoin(t *testing.T, factory func(t *testing.T) tablePersister) {
 				u := updatePreemptManifest{fm, func() {
 					app := append([]tableSpec{}, upstream.appendix...)
 					specs := append([]tableSpec{}, newTable)
-					fm.set(constants.FormatLD1String, computeAddr([]byte("lock2")), startRoot, append(specs, upstream.specs...), append(app, newTable))
+					fm.set(constants.FormatDoltString, computeAddr([]byte("lock2")), startRoot, append(specs, upstream.specs...), append(app, newTable))
 				}}
 
 				_, _, err := conjoin(context.Background(), inlineConjoiner{c.maxTables}, upstream, u, p, stats)
@@ -362,7 +417,7 @@ func testConjoin(t *testing.T, factory func(t *testing.T) tablePersister) {
 				fm, p, upstream := setupAppendix(startLock, startRoot, c.precompact, c.appendix)
 
 				u := updatePreemptManifest{fm, func() {
-					fm.set(constants.FormatLD1String, computeAddr([]byte("lock2")), startRoot, upstream.specs[len(c.appendix)+1:], upstream.appendix[:])
+					fm.set(constants.FormatDoltString, computeAddr([]byte("lock2")), startRoot, upstream.specs[len(c.appendix)+1:], upstream.appendix[:])
 				}}
 				_, _, err := conjoin(context.Background(), inlineConjoiner{c.maxTables}, upstream, u, p, stats)
 				require.NoError(t, err)
@@ -385,7 +440,7 @@ func testConjoin(t *testing.T, factory func(t *testing.T) tablePersister) {
 				u := updatePreemptManifest{fm, func() {
 					specs := append([]tableSpec{}, newTable)
 					specs = append(specs, upstream.specs[len(c.appendix)+1:]...)
-					fm.set(constants.FormatLD1String, computeAddr([]byte("lock2")), startRoot, specs, append([]tableSpec{}, newTable))
+					fm.set(constants.FormatDoltString, computeAddr([]byte("lock2")), startRoot, specs, append([]tableSpec{}, newTable))
 				}}
 
 				_, _, err := conjoin(context.Background(), inlineConjoiner{c.maxTables}, upstream, u, p, stats)
