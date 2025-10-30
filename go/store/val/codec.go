@@ -43,6 +43,7 @@ const (
 type ByteSize uint16
 
 const (
+	// TODO: these are the same gms/sql/values/encoding.go
 	int8Size         ByteSize = 1
 	uint8Size        ByteSize = 1
 	int16Size        ByteSize = 2
