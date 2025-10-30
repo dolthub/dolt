@@ -28,7 +28,7 @@ require (
 	github.com/pkg/profile v1.5.0
 	github.com/rivo/uniseg v0.2.0
 	github.com/sergi/go-diff v1.1.0
-	github.com/shopspring/decimal v1.3.1
+	github.com/shopspring/decimal v1.4.0
 	github.com/silvasur/buzhash v0.0.0-20160816060738-9bdec3dec7c6
 	github.com/sirupsen/logrus v1.8.1
 	github.com/skratchdot/open-golang v0.0.0-20200116055534-eef842397966
@@ -61,7 +61,7 @@ require (
 	github.com/dolthub/dolt-mcp v0.2.2
 	github.com/dolthub/eventsapi_schema v0.0.0-20250915094920-eadfd39051ca
 	github.com/dolthub/flatbuffers/v23 v23.3.3-dh.2
-	github.com/dolthub/go-mysql-server v0.20.1-0.20251030193637-646cfd3cd222
+	github.com/dolthub/go-mysql-server v0.20.1-0.20251030230949-c706e02d9136
 	github.com/dolthub/gozstd v0.0.0-20240423170813-23a2903bca63
 	github.com/edsrzf/mmap-go v1.2.0
 	github.com/esote/minmaxheap v1.0.0
