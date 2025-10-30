@@ -24,8 +24,6 @@ import (
 	"math"
 	"time"
 
-	"github.com/sirupsen/logrus"
-
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -248,6 +246,16 @@ func validateJournalRecord(buf []byte) error {
 	return nil
 }
 
+type CorruptJournalRecortError struct {
+	Data   []byte
+	Offset int64
+	Why    string
+}
+
+func (e *CorruptJournalRecortError) Error() string {
+	return fmt.Sprintf("Error validating journal record; skipping remaining journal records past offset %d: %s", e.Offset, e.Why)
+}
+
 // processJournalRecords iterates over a chunk journal's records by reading from disk using |r|, starting at
 // offset |off|, and calls the callback function |cb| with each journal record. The offset where reading was stopped
 // is returned, or any error encountered along the way.
@@ -257,7 +265,7 @@ func validateJournalRecord(buf []byte) error {
 // operation, so it's possible to leave the journal in a corrupted state. We must gracefully recover
 // without preventing the server from starting up, so we are careful to only return the journal file
 // offset that points to end of the last valid record.
-func processJournalRecords(ctx context.Context, r io.ReadSeeker, off int64, cb func(o int64, r journalRec) error) (int64, error) {
+func processJournalRecords(ctx context.Context, r io.ReadSeeker, off int64, cb func(o int64, r journalRec) error, valCb func(error)) (int64, error) {
 	var (
 		buf []byte
 		err error
@@ -296,11 +304,18 @@ func processJournalRecords(ctx context.Context, r io.ReadSeeker, off int64, cb f
 		//       clean shutdown, we expect all journal records to be valid, and could safely error out during startup
 		//       for invalid records.
 		if validationErr := validateJournalRecord(buf); validationErr != nil {
-			// NOTE: We don't assign the validation error to err, because we want to stop processing journal records
-			//       when we see an invalid record and return successfully from processJournalRecords(), so that only
-			//       the preceding, valid records in the journal are used.
-			logrus.Errorf("Error validating journal record; "+
-				"skipping remaining journal records past offset %d: %s", off, validationErr)
+			if valCb != nil {
+				jErr := &CorruptJournalRecortError{
+					Data:   buf,
+					Offset: off,
+					Why:    validationErr.Error(),
+				}
+
+				// NOTE: We don't assign the validation error to err, because we want to stop processing journal records
+				//       when we see an invalid record and return successfully from processJournalRecords(), so that only
+				//       the preceding, valid records in the journal are used.
+				valCb(jErr)
+			}
 			break
 		}
 
