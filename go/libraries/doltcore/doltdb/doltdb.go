@@ -76,6 +76,35 @@ var InMemDoltDB = "mem://"
 var ErrNoRootValAtHash = errors.New("there is no dolt root value at that hash")
 var ErrCannotDeleteLastBranch = errors.New("cannot delete the last branch")
 
+// TableResolver allows the user of a DoltDB to configure how table names are resolved on roots.
+// This is useful because the user-backed system table dolt_nonlocal_tables allows table names to resolve to
+// tables on other refs, but sqle.Database is necessary to resolve those refs.
+type TableResolver interface {
+	ResolveTableInsensitive(ctx *sql.Context, root RootValue, tblName TableName) (trueTableName TableName, table *Table, found bool, err error)
+	ResolveTable(ctx *sql.Context, root RootValue, tblName TableName) (table *Table, found bool, err error)
+}
+
+type SimpleTableResolver struct{}
+
+var _ TableResolver = SimpleTableResolver{}
+
+func (t SimpleTableResolver) ResolveTableInsensitive(ctx *sql.Context, root RootValue, tblName TableName) (trueTableName TableName, table *Table, exists bool, err error) {
+	trueTableNameString, exists, err := root.ResolveTableName(ctx, tblName)
+	if err != nil || !exists {
+		return TableName{}, nil, false, err
+	}
+	trueTableName = TableName{
+		Name:   trueTableNameString,
+		Schema: tblName.Schema,
+	}
+	table, exists, err = root.GetTable(ctx, trueTableName)
+	return trueTableName, table, exists, err
+}
+
+func (t SimpleTableResolver) ResolveTable(ctx *sql.Context, root RootValue, tblName TableName) (table *Table, exists bool, err error) {
+	return root.GetTable(ctx, tblName)
+}
+
 // DoltDB wraps access to the underlying noms database and hides some of the details of the underlying storage.
 type DoltDB struct {
 	db  hooksDatabase
@@ -573,8 +602,8 @@ func (ddb *DoltDB) ResolveByNomsRoot(ctx *sql.Context, cs *CommitSpec, cwb ref.D
 
 // ResolveCommitRef takes a DoltRef and returns a Commit, or an error if the commit cannot be found. The ref given must
 // point to a Commit.
-func (ddb *DoltDB) ResolveCommitRef(ctx context.Context, ref ref.DoltRef) (*Commit, error) {
-	commitVal, err := getCommitValForRefStr(ctx, ddb, ref.String())
+func (ddb *DoltDB) ResolveCommitRef(ctx context.Context, doltRef ref.DoltRef) (*Commit, error) {
+	commitVal, err := getCommitValForRefStr(ctx, ddb, doltRef.String())
 	if err != nil {
 		return nil, err
 	}
@@ -1642,6 +1671,22 @@ func (ddb *DoltDB) UpdateWorkingSet(
 	}
 
 	_, err = ddb.db.withReplicationStatusController(replicationStatus).UpdateWorkingSet(ctx, ds, *wsSpec, prevHash)
+
+	if err == nil {
+		if headRef, e2 := workingSetRef.ToHeadRef(); e2 == nil && headRef.GetType() == ref.BranchRefType {
+			branchName := headRef.GetPath()
+
+			sqlCtx, ok := ctx.(*sql.Context)
+			if ok {
+				db := sqlCtx.GetCurrentDatabase()
+				db, _ = SplitRevisionDbName(db)
+
+				// record branch write activity for dolt_branch_activity. Errors here are non-fatal, ignored.
+				BranchActivityWriteEvent(sqlCtx, db, branchName)
+			}
+		}
+	}
+
 	return err
 }
 
@@ -2443,4 +2488,23 @@ func (ddb *DoltDB) FSCK(ctx context.Context, progress chan string) (*FSCKReport,
 	FSCKReport := FSCKReport{Problems: errs, ChunkCount: chunkCount}
 
 	return &FSCKReport, nil
+}
+
+const (
+	DbRevisionDelimiter = "/"
+)
+
+// RevisionDbName returns the name of the revision db for the base name and revision string given
+func RevisionDbName(baseName string, rev string) string {
+	return baseName + DbRevisionDelimiter + rev
+}
+
+func SplitRevisionDbName(dbName string) (string, string) {
+	var baseName, rev string
+	parts := strings.SplitN(dbName, DbRevisionDelimiter, 2)
+	baseName = parts[0]
+	if len(parts) > 1 {
+		rev = parts[1]
+	}
+	return baseName, rev
 }

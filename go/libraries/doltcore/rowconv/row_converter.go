@@ -64,6 +64,7 @@ func NewRowConverter(ctx context.Context, vrw types.ValueReadWriter, mapping *Fi
 
 	convFuncs := make(map[uint64]types.MarshalCallback, len(mapping.SrcToDest))
 	for srcTag, destTag := range mapping.SrcToDest {
+		// TAGS: Use of tags here is safe since it's constrained to a single table
 		destCol, destOk := mapping.DestSch.GetAllCols().GetByTag(destTag)
 		srcCol, srcOk := mapping.SrcSch.GetAllCols().GetByTag(srcTag)
 

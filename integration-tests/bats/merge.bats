@@ -1149,7 +1149,12 @@ SQL
 
 }
 
-@test "merge: ourRoot modifies, theirRoot renames" {
+# Asserts that renaming a table and trying to merge that change to another branch where
+# the table row data has changed results in a schema conflict.
+#
+# TODO: If we can reliably detect the rename (by comparing column tags/names) then
+#       we could handle this automatically.
+@test "merge: ourRoot modifies the data, theirRoot renames" {
     dolt checkout -b merge_branch
     dolt sql -q "ALTER TABLE test1 RENAME TO new_name"
     dolt add .
@@ -1161,9 +1166,14 @@ SQL
 
     run dolt merge merge_branch
     log_status_eq 1
-    [[ "$output" =~ "cannot merge, column pk on table new_name has duplicate tag as table test1. This was likely because one of the tables is a rename of the other" ]] || false
+    [[ "$output" =~ "CONFLICT (schema): Merge conflict in test1" ]] || false
 }
 
+# Asserts that renaming a table and trying to merge that change to another branch where
+# the table schema has changed results in a schema conflict.
+#
+# TODO: If we can reliably detect the rename (by comparing column tags/names) then
+#       we could handle this automatically.
 @test "merge: ourRoot modifies the schema, theirRoot renames" {
     dolt checkout -b merge_branch
     dolt sql -q "ALTER TABLE test1 RENAME TO new_name"
@@ -1176,7 +1186,7 @@ SQL
 
     run dolt merge merge_branch
     log_status_eq 1
-    [[ "$output" =~ "cannot merge, column pk on table new_name has duplicate tag as table test1. This was likely because one of the tables is a rename of the other" ]] || false
+    [[ "$output" =~ "CONFLICT (schema): Merge conflict in test1" ]] || false
 }
 
 @test "merge: dolt merge commits successful non-fast-forward merge" {

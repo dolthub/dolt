@@ -37,7 +37,7 @@ var GetDoltNonlocalTablesSchema = doltNonlocalTablesSchema
 func NewNonlocallTablesTable(_ *sql.Context, backingTable VersionableTable) sql.Table {
 	return &UserSpaceSystemTable{
 		backingTable: backingTable,
-		tableName:    getDoltNonlocalTablesName(),
+		tableName:    GetDoltNonlocalTablesName(),
 		schema:       GetDoltNonlocalTablesSchema(),
 	}
 }
@@ -45,12 +45,12 @@ func NewNonlocallTablesTable(_ *sql.Context, backingTable VersionableTable) sql.
 // NewEmptyNonlocalTablesTable creates an empty dolt_table_aliases table
 func NewEmptyNonlocalTablesTable(_ *sql.Context) sql.Table {
 	return &UserSpaceSystemTable{
-		tableName: getDoltNonlocalTablesName(),
+		tableName: GetDoltNonlocalTablesName(),
 		schema:    GetDoltNonlocalTablesSchema(),
 	}
 }
 
-func getDoltNonlocalTablesName() doltdb.TableName {
+func GetDoltNonlocalTablesName() doltdb.TableName {
 	if resolve.UseSearchPath {
 		return doltdb.TableName{Schema: doltdb.DoltNamespace, Name: doltdb.GetNonlocalTablesTableName()}
 	}

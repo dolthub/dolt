@@ -59,11 +59,11 @@ type tableIndex interface {
 	// the indexed file to its corresponding entry in index. The |i|th
 	// entry in the result is the |i|th chunk in the indexed file, and its
 	// corresponding value in the slice is the index entry that maps to it.
-	ordinals() ([]uint32, error)
+	ordinals(ctx context.Context) ([]uint32, func(), error)
 
 	// Prefixes returns the sorted slice of |uint64| |addr| prefixes; each
 	// entry corresponds to an indexed chunk address.
-	prefixes() ([]uint64, error)
+	prefixes(ctx context.Context) ([]uint64, func(), error)
 
 	// chunkCount returns the total number of chunks in the indexed file.
 	chunkCount() uint32
@@ -401,24 +401,34 @@ func (ti onHeapTableIndex) offsetAt(ord uint32) uint64 {
 	return binary.BigEndian.Uint64(b)
 }
 
-func (ti onHeapTableIndex) ordinals() ([]uint32, error) {
-	// todo: |o| is not accounted for in the memory quota
-	o := make([]uint32, ti.count)
+func (ti onHeapTableIndex) ordinals(ctx context.Context) ([]uint32, func(), error) {
+	o, err := ti.q.AcquireQuotaUint32s(ctx, int(ti.count))
+	if err != nil {
+		return nil, nil, err
+	}
 	for i, off := uint32(0), uint64(0); i < ti.count; i, off = i+1, off+prefixTupleSize {
 		b := ti.prefixTuples[off+hash.PrefixLen : off+prefixTupleSize]
 		o[i] = binary.BigEndian.Uint32(b)
 	}
-	return o, nil
+	acquired := len(o) * uint32Size
+	return o, func() {
+		ti.q.ReleaseQuotaBytes(acquired)
+	}, nil
 }
 
-func (ti onHeapTableIndex) prefixes() ([]uint64, error) {
-	// todo: |p| is not accounted for in the memory quota
-	p := make([]uint64, ti.count)
+func (ti onHeapTableIndex) prefixes(ctx context.Context) ([]uint64, func(), error) {
+	p, err := ti.q.AcquireQuotaUint64s(ctx, int(ti.count))
+	if err != nil {
+		return nil, nil, err
+	}
 	for i, off := uint32(0), uint64(0); i < ti.count; i, off = i+1, off+prefixTupleSize {
 		b := ti.prefixTuples[off : off+hash.PrefixLen]
 		p[i] = binary.BigEndian.Uint64(b)
 	}
-	return p, nil
+	acquired := len(p) * uint64Size
+	return p, func() {
+		ti.q.ReleaseQuotaBytes(acquired)
+	}, nil
 }
 
 func (ti onHeapTableIndex) hashAt(idx uint32) hash.Hash {

@@ -319,7 +319,11 @@ func executeMerge(
 	opts editor.Options,
 	workingDiffs map[doltdb.TableName]hash.Hash,
 ) (*doltdb.WorkingSet, error) {
-	result, err := merge.MergeCommits(ctx, head, cm, opts)
+	sqlDB, err := dsess.GetTableResolver(ctx)
+	if err != nil {
+		return nil, err
+	}
+	result, err := merge.MergeCommits(ctx, sqlDB, head, cm, opts)
 	if err != nil {
 		switch err {
 		case doltdb.ErrUpToDate:

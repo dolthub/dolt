@@ -88,7 +88,7 @@ func (bsp *blobstorePersister) Persist(ctx context.Context, mt *memTable, haver 
 
 // ConjoinAll implements tablePersister.
 func (bsp *blobstorePersister) ConjoinAll(ctx context.Context, sources chunkSources, stats *Stats) (chunkSource, cleanupFunc, error) {
-	plan, err := planRangeCopyConjoin(sources, stats)
+	plan, err := planRangeCopyConjoin(ctx, sources, stats)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -373,7 +373,7 @@ func newBSTableChunkSource(ctx context.Context, bs blobstore.Blobstore, name has
 		return nil, errors.New("unexpected chunk count")
 	}
 
-	tr, err := newTableReader(index, &bsTableReaderAt{key: name.String(), bs: bs}, s3BlockSize)
+	tr, err := newTableReader(ctx, index, &bsTableReaderAt{key: name.String(), bs: bs}, s3BlockSize)
 	if err != nil {
 		_ = index.Close()
 		return nil, err

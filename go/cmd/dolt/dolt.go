@@ -46,7 +46,6 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/cvcmds"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/docscmds"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/indexcmds"
-	"github.com/dolthub/dolt/go/cmd/dolt/commands/schcmds"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/sqlserver"
 	"github.com/dolthub/dolt/go/cmd/dolt/doltcmd"
 	"github.com/dolthub/dolt/go/cmd/dolt/doltversion"
@@ -74,7 +73,6 @@ var commandsWithoutCliCtx = []cli.Command{
 	commands.BackupCmd{},
 	commands.LoginCmd{},
 	credcmds.Commands,
-	schcmds.Commands,
 	cvcmds.Commands,
 	commands.SendMetricsCmd{},
 	commands.MigrateCmd{},
@@ -608,7 +606,7 @@ If you're interested in running this command against a remote host, hit us up on
 	}
 
 	if hasUseDb && hasBranch {
-		dbName, branchNameInDb := dsess.SplitRevisionDbName(useDb)
+		dbName, branchNameInDb := doltdb.SplitRevisionDbName(useDb)
 		if len(branchNameInDb) != 0 {
 			return nil, fmt.Errorf("Ambiguous branch name: %s or %s", branchNameInDb, useBranch)
 		}
@@ -637,7 +635,7 @@ If you're interested in running this command against a remote host, hit us up on
 	var dbName string
 
 	if hasUseDb {
-		dbName, _ = dsess.SplitRevisionDbName(useDb)
+		dbName, _ = doltdb.SplitRevisionDbName(useDb)
 		targetEnv = mrEnv.GetEnv(dbName)
 		if targetEnv == nil {
 			return nil, fmt.Errorf("The provided --use-db %s does not exist.", dbName)

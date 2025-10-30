@@ -1421,6 +1421,36 @@ func RunDoltDiffSystemTableTestsPrepared(t *testing.T, h DoltEnginetestHarness) 
 	}
 }
 
+func RunNonlocalTableTests(t *testing.T, h DoltEnginetestHarness) {
+	if !types.IsFormat_DOLT(types.Format_Default) {
+		t.Skip("only new format support system table indexing")
+	}
+
+	for _, test := range NonlocalScripts {
+		t.Run(test.Name, func(t *testing.T) {
+			h = h.NewHarness(t)
+			defer h.Close()
+			h.Setup(setup.MydbData)
+			enginetest.TestScript(t, h, test)
+		})
+	}
+}
+
+func RunNonlocalTableTestsPrepared(t *testing.T, h DoltEnginetestHarness) {
+	if !types.IsFormat_DOLT(types.Format_Default) {
+		t.Skip("only new format support system table indexing")
+	}
+
+	for _, test := range NonlocalScripts {
+		t.Run(test.Name, func(t *testing.T) {
+			h = h.NewHarness(t)
+			defer h.Close()
+			h.Setup(setup.MydbData)
+			enginetest.TestScriptPrepared(t, h, test)
+		})
+	}
+}
+
 func RunSchemaDiffTableFunctionTests(t *testing.T, harness DoltEnginetestHarness) {
 	for _, test := range SchemaDiffTableFunctionScriptTests {
 		t.Run(test.Name, func(t *testing.T) {
@@ -2102,6 +2132,17 @@ func RunDoltTestsTableTests(t *testing.T, harness DoltEnginetestHarness) {
 		t.Run(script.Name, func(t *testing.T) {
 			harness = harness.NewHarness(t)
 			defer harness.Close()
+			enginetest.TestScript(t, harness, script)
+		})
+	}
+}
+
+func RunBranchActivityTests(t *testing.T, harness DoltEnginetestHarness) {
+	for _, script := range BranchActivityTests {
+		t.Run(script.Name, func(t *testing.T) {
+			harness = harness.NewHarness(t)
+			defer harness.Close()
+
 			enginetest.TestScript(t, harness, script)
 		})
 	}

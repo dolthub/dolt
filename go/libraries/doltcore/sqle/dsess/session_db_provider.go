@@ -139,6 +139,8 @@ type SqlDatabase interface {
 	// Schema returns the schema of the database.
 	Schema() string
 
+	GetTableResolver() doltdb.TableResolver
+
 	// Clean up any global resources associated with the
 	// SqlDatabase itself.  For DoltDatabases, this notably does
 	// not close the DoltDB, for example, but should shut down

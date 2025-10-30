@@ -41,6 +41,10 @@ func doltRevert(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 func doDoltRevert(ctx *sql.Context, args []string) (int, error) {
 	dbName := ctx.GetCurrentDatabase()
 	dSess := dsess.DSessFromSess(ctx.Session)
+	tableResolver, err := dsess.GetTableResolver(ctx)
+	if err != nil {
+		return 1, err
+	}
 	ddb, ok := dSess.GetDoltDB(ctx, dbName)
 	if !ok {
 		return 1, fmt.Errorf("dolt database could not be found")
@@ -117,7 +121,7 @@ func doDoltRevert(ctx *sql.Context, args []string) (int, error) {
 		return 1, fmt.Errorf("Could not load database %s", dbName)
 	}
 
-	workingRoot, revertMessage, err := merge.Revert(ctx, ddb, workingRoot, commits, dbState.EditOpts())
+	workingRoot, revertMessage, err := merge.Revert(ctx, tableResolver, ddb, workingRoot, commits, dbState.EditOpts())
 	if err != nil {
 		return 1, err
 	}

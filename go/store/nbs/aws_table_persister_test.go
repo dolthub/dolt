@@ -215,7 +215,7 @@ func TestAWSTablePersisterDividePlan(t *testing.T) {
 			s.close()
 		}
 	}()
-	plan, err := planRangeCopyConjoin(sources, &Stats{})
+	plan, err := planRangeCopyConjoin(t.Context(), sources, &Stats{})
 	require.NoError(t, err)
 	copies, manuals, _, err := dividePlan(plan, minPartSize, maxPartSize)
 	require.NoError(t, err)
@@ -510,7 +510,7 @@ func bytesToChunkSource(t *testing.T, bs ...[]byte) chunkSource {
 	data := buff[:tableSize]
 	ti, err := parseTableIndexByCopy(ctx, data, &UnlimitedQuotaProvider{})
 	require.NoError(t, err)
-	rdr, err := newTableReader(ti, tableReaderAtFromBytes(data), fileBlockSize)
+	rdr, err := newTableReader(t.Context(), ti, tableReaderAtFromBytes(data), fileBlockSize)
 	require.NoError(t, err)
 	return chunkSourceAdapter{rdr, name}
 }

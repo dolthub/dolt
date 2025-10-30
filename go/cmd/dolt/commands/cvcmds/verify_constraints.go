@@ -29,6 +29,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -111,30 +112,37 @@ func (cmd VerifyConstraintsCmd) Exec(ctx context.Context, commandStr string, arg
 		return commands.HandleVErrAndExitCode(errhand.BuildDError("Unable to get head commit hash.").AddCause(err).Build(), nil)
 	}
 
-	endRoot, tablesWithViolations, err := merge.AddForeignKeyViolations(ctx, working, comparingRoot, tableSet, h)
+	eng, dbName, err := engine.NewSqlEngineForEnv(ctx, dEnv)
+	if err != nil {
+		return commands.HandleVErrAndExitCode(errhand.BuildDError("Failed to build sql engine.").AddCause(err).Build(), nil)
+	}
+	sqlCtx, err := eng.NewLocalContext(ctx)
+	if err != nil {
+		return commands.HandleVErrAndExitCode(errhand.BuildDError("Failed to build sql context.").AddCause(err).Build(), nil)
+	}
+	defer sql.SessionEnd(sqlCtx.Session)
+	sql.SessionCommandBegin(sqlCtx.Session)
+	defer sql.SessionCommandEnd(sqlCtx.Session)
+	sqlCtx.SetCurrentDatabase(dbName)
+
+	tableResolver, err := dsess.GetTableResolver(sqlCtx)
+	if err != nil {
+		cli.PrintErrln(errhand.VerboseErrorFromError(err))
+		return 1
+	}
+
+	endRoot, tablesWithViolations, err := merge.AddForeignKeyViolations(sqlCtx, tableResolver, working, comparingRoot, tableSet, h)
 	if err != nil {
 		return commands.HandleVErrAndExitCode(errhand.BuildDError("Unable to process constraint violations.").AddCause(err).Build(), nil)
 	}
 
-	err = dEnv.UpdateWorkingRoot(ctx, endRoot)
+	err = dEnv.UpdateWorkingRoot(sqlCtx, endRoot)
 	if err != nil {
 		return commands.HandleVErrAndExitCode(errhand.BuildDError("Unable to update working root.").AddCause(err).Build(), nil)
 	}
 
 	if tablesWithViolations.Size() > 0 {
 		cli.PrintErrln("All constraints are not satisfied.")
-		eng, dbName, err := engine.NewSqlEngineForEnv(ctx, dEnv)
-		if err != nil {
-			return commands.HandleVErrAndExitCode(errhand.BuildDError("Failed to build sql engine.").AddCause(err).Build(), nil)
-		}
-		sqlCtx, err := eng.NewLocalContext(ctx)
-		if err != nil {
-			return commands.HandleVErrAndExitCode(errhand.BuildDError("Failed to build sql context.").AddCause(err).Build(), nil)
-		}
-		defer sql.SessionEnd(sqlCtx.Session)
-		sql.SessionCommandBegin(sqlCtx.Session)
-		defer sql.SessionCommandEnd(sqlCtx.Session)
-		sqlCtx.SetCurrentDatabase(dbName)
 
 		for _, tableName := range tablesWithViolations.AsSortedSlice() {
 			tbl, ok, err := endRoot.GetTable(sqlCtx, tableName)

@@ -163,3 +163,8 @@ func (db *UserSpaceDatabase) AllSchemas(ctx *sql.Context) ([]sql.DatabaseSchema,
 func (db *UserSpaceDatabase) SchemaName() string {
 	return ""
 }
+
+func (db *UserSpaceDatabase) GetTableResolver() doltdb.TableResolver {
+	// UserSpaceDatabase doesn't have an engine and can't resolve other refs, so it uses simple behavior for resolving table names.
+	return doltdb.SimpleTableResolver{}
+}

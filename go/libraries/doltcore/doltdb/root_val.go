@@ -408,7 +408,6 @@ func GenerateTagsForNewColumns(
 
 	// If we found any existing columns set them in the newTags list.
 	for _, col := range existingCols {
-		col := col
 		for i := range newColNames {
 			// Only re-use tags if the noms kind didn't change
 			// TODO: revisit this when new storage format is further along
@@ -605,24 +604,6 @@ func GetTableInsensitive(ctx context.Context, root RootValue, tName TableName) (
 		return nil, "", false, err
 	}
 	return tbl, resolvedName, ok, nil
-}
-
-// GetTableByColTag looks for the table containing the given column tag.
-func GetTableByColTag(ctx context.Context, root RootValue, tag uint64) (tbl *Table, name TableName, found bool, err error) {
-	err = root.IterTables(ctx, func(tn TableName, t *Table, s schema.Schema) (bool, error) {
-		_, found = s.GetAllCols().GetByTag(tag)
-		if found {
-			name, tbl = tn, t
-		}
-
-		return found, nil
-	})
-
-	if err != nil {
-		return nil, TableName{}, false, err
-	}
-
-	return tbl, name, found, nil
 }
 
 // GetAllTableNames retrieves all table names for a RootValue. Dolt only has a single schema (the default empty schema),
@@ -1191,55 +1172,47 @@ func (root *rootValue) PutForeignKeyCollection(ctx context.Context, fkc *Foreign
 // ValidateForeignKeysOnSchemas ensures that all foreign keys' tables are present, removing any foreign keys where the declared
 // table is missing, and returning an error if a key is in an invalid state or a referenced table is missing. Does not
 // check any tables' row data.
-func ValidateForeignKeysOnSchemas(ctx context.Context, root RootValue) (RootValue, error) {
+func ValidateForeignKeysOnSchemas(ctx *sql.Context, tableResolver TableResolver, root RootValue) (RootValue, error) {
 	fkCollection, err := root.GetForeignKeyCollection(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	allTablesSlice, err := UnionTableNames(ctx, root)
-	if err != nil {
-		return nil, err
-	}
 	allTablesSet := make(map[TableName]schema.Schema)
-	var rootObjNamesMap map[TableName]struct{}
-	for _, tableName := range allTablesSlice {
-		tbl, ok, err := root.GetTable(ctx, tableName)
+	getTableSchema := func(tableName TableName) (schema.Schema, bool, error) {
+		if tableSch, ok := allTablesSet[tableName]; ok {
+			return tableSch, true, nil
+		}
+		tbl, ok, err := tableResolver.ResolveTable(ctx, root, tableName)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
 		if !ok {
-			if rootObjNamesMap == nil {
-				rootObjNames, err := root.FilterRootObjectNames(ctx, allTablesSlice)
-				if err != nil {
-					return nil, err
-				}
-				rootObjNamesMap = make(map[TableName]struct{})
-				for _, rootObjName := range rootObjNames {
-					rootObjNamesMap[rootObjName] = struct{}{}
-				}
-			}
-			if _, ok = rootObjNamesMap[tableName]; ok {
-				continue
-			}
-			return nil, fmt.Errorf("found table `%s` in staging but could not load for foreign key check", tableName)
+			return nil, false, nil
 		}
 		tblSch, err := tbl.GetSchema(ctx)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
 		allTablesSet[tableName] = tblSch
+		return tblSch, true, nil
 	}
 
 	// some of these checks are sanity checks and should never happen
 	allForeignKeys := fkCollection.AllKeys()
 	for _, foreignKey := range allForeignKeys {
-		tblSch, existsInRoot := allTablesSet[foreignKey.TableName]
+		tblSch, existsInRoot, err := getTableSchema(foreignKey.TableName)
+		if err != nil {
+			return nil, err
+		}
 		if existsInRoot {
 			if err := foreignKey.ValidateTableSchema(tblSch); err != nil {
 				return nil, err
 			}
-			parentSch, existsInRoot := allTablesSet[foreignKey.ReferencedTableName]
+			parentSch, existsInRoot, err := getTableSchema(foreignKey.ReferencedTableName)
+			if err != nil {
+				return nil, err
+			}
 			if !existsInRoot {
 				return nil, fmt.Errorf("foreign key `%s` requires the referenced table `%s`", foreignKey.Name, foreignKey.ReferencedTableName)
 			}
@@ -1366,7 +1339,7 @@ func GetSchemaHash(ctx context.Context, root RootValue, name TableName, override
 	return root.GetTableSchemaHash(ctx, name)
 }
 
-// ValidateTagUniqueness checks for tag collisions between the given table and the set of tables in then given root.
+// ValidateTagUniqueness checks for tag collisions between columns in the given table.
 func ValidateTagUniqueness(ctx context.Context, root RootValue, tableName string, table *Table) error {
 	prevTName := TableName{Name: tableName}
 	prevHash, err := GetSchemaHash(ctx, root, prevTName, table.overriddenSchema)
@@ -1394,16 +1367,13 @@ func ValidateTagUniqueness(ctx context.Context, root RootValue, tableName string
 		return err
 	}
 
-	existing, err := GetAllTagsForRoots(ctx, root)
-	if err != nil {
-		return err
-	}
-
+	tagsSeen := make(map[uint64]struct{})
 	err = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		oldTableName, ok := existing.Get(tag)
-		if ok && oldTableName != tableName {
-			return true, schema.NewErrTagPrevUsed(tag, col.Name, tableName, oldTableName)
+		if _, ok := tagsSeen[tag]; ok {
+			return true, schema.NewErrTagPrevUsed(tag, col.Name, tableName, tableName)
 		}
+
+		tagsSeen[tag] = struct{}{}
 		return false, nil
 	})
 	if err != nil {
