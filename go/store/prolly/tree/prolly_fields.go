@@ -261,11 +261,6 @@ func GetFieldValue(ctx context.Context, td val.TupleDesc, i int, tup val.Tuple, 
 		v.WrappedVal = val.NewByteArray(ctx, h, ns)
 		return v, err
 
-	// TODO: figure out how to deal with ExtendedEncs
-	case val.ExtendedEnc, val.ExtendedAddrEnc, val.ExtendedAdaptiveEnc:
-		v.Val = td.GetField(i, tup)
-		return v, nil
-
 	default:
 		panic("unknown val.encoding")
 	}

@@ -138,7 +138,6 @@ func benchmarkSysbenchQuery(b *testing.B, getQuery func(int) string) {
 	})
 	ctx, eng := setupBenchmark(b, dEnv)
 	for i := 0; i < b.N; i++ {
-		//_, iter, _, err := eng.Query(ctx, getQuery(i))
 		schema, iter, _, err := eng.Query(ctx, getQuery(i))
 		require.NoError(b, err)
 

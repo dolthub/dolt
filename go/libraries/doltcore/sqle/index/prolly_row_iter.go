@@ -237,15 +237,15 @@ func (it prollyRowIter) Close(ctx *sql.Context) error {
 }
 
 type prollyKeylessIter struct {
-	iter    prolly.MapIter
-	ns      tree.NodeStore
-	valDesc val.TupleDesc
-	valProj []int
-	ordProj []int
-	curr    sql.Row
-	curr2   sql.ValueRow
-	rowLen  int
-	card    uint64
+	iter       prolly.MapIter
+	ns         tree.NodeStore
+	valDesc    val.TupleDesc
+	valProj    []int
+	ordProj    []int
+	curr       sql.Row
+	currValRow sql.ValueRow
+	rowLen     int
+	card       uint64
 }
 
 var _ sql.RowIter = &prollyKeylessIter{}
@@ -291,17 +291,17 @@ func (it *prollyKeylessIter) NextValueRow(ctx *sql.Context) (sql.ValueRow, error
 		}
 
 		it.card = val.ReadKeylessCardinality(value)
-		it.curr2 = make(sql.ValueRow, it.rowLen)
+		it.currValRow = make(sql.ValueRow, it.rowLen)
 		for i, idx := range it.valProj {
 			outputIdx := it.ordProj[i]
-			it.curr2[outputIdx], err = tree.GetFieldValue(ctx, it.valDesc, idx, value, it.ns)
+			it.currValRow[outputIdx], err = tree.GetFieldValue(ctx, it.valDesc, idx, value, it.ns)
 			if err != nil {
 				return nil, err
 			}
 		}
 	}
 	it.card--
-	return it.curr2, nil
+	return it.currValRow, nil
 }
 
 // IsValueRowIter implements the sql.ValueRowIter interface.
