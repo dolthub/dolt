@@ -369,7 +369,7 @@ func (a *binlogReplicaApplier) replicaBinlogEventHandler(ctx *sql.Context) error
 // processBinlogEvent processes a single binlog event message and returns an error if there were any problems
 // processing it.
 func (a *binlogReplicaApplier) processBinlogEvent(ctx *sql.Context, engine *gms.Engine, event mysql.BinlogEvent) error {
-	err := sql.SessionCommandBegin(ctx.Session)
+	sql.SessionCommandBegin(ctx.Session)
 	defer sql.SessionCommandEnd(ctx.Session)
 	createCommit := false
 
@@ -559,7 +559,7 @@ func (a *binlogReplicaApplier) processBinlogEvent(ctx *sql.Context, engine *gms.
 	case event.IsDeleteRows(), event.IsWriteRows(), event.IsUpdateRows():
 		// A ROWS_EVENT is written for row based replication if data is inserted, deleted or updated.
 		// For more details, see: https://mariadb.com/kb/en/rows_event_v1v2-rows_compressed_event_v1/
-		err = a.processRowEvent(ctx, event, engine)
+		err := a.processRowEvent(ctx, event, engine)
 		if err != nil {
 			return err
 		}
@@ -590,7 +590,7 @@ func (a *binlogReplicaApplier) processBinlogEvent(ctx *sql.Context, engine *gms.
 	if createCommit {
 		doltSession := dsess.DSessFromSess(ctx.Session)
 		databasesToCommit := doltSession.DirtyDatabases()
-		if err = doltSession.CommitTransaction(ctx, doltSession.GetTransaction()); err != nil {
+		if err := doltSession.CommitTransaction(ctx, doltSession.GetTransaction()); err != nil {
 			return err
 		}
 

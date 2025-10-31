@@ -15,6 +15,7 @@
 package enginetest
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"runtime"
@@ -22,6 +23,7 @@ import (
 	"testing"
 	"time"
 
+	gms "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/enginetest/scriptgen/setup"
@@ -35,6 +37,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/binlogreplication"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statspro"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
@@ -1144,6 +1147,14 @@ func TestLoadDataErrors(t *testing.T) {
 func TestBinlog(t *testing.T) {
 	h := newDoltHarness(t)
 	defer h.Close()
+	
+	engine, err := h.NewEngine(t)
+	require.NoError(t, err)
+	binlogReplicaController := binlogreplication.DoltBinlogReplicaController
+	binlogReplicaController.SetEngine(engine.(*gms.Engine))
+	binlogReplicaController.SetExecutionContext(sql.NewContext(context.Background(), sql.WithSession(h.Session())))
+	engine.EngineAnalyzer().Catalog.BinlogReplicaController = binlogReplicaController
+
 	enginetest.TestBinlog(t, h)
 }
 
