@@ -202,11 +202,13 @@ func (tbl BranchControlTable) Insert(ctx *sql.Context, row sql.Row) error {
 		}
 	}
 
-	// We check if we're inserting a subset of an already-existing row. We only consider this a subset if the
+	// We check if we're inserting a subset (or exact match) of an already-existing row. We only consider this a subset if the
 	// permissions are as permissible as the existing ones, or are more restrictive (i.e. write is a "subset permission"
 	// of admin). If we are, we deny the insertion as the existing row will already match against ALL possible values for this row.
-	if ok, modPerms := tbl.Match(database, branch, user, host); ok && perms.Consolidate() >= modPerms.Consolidate() {
-		permBits := uint64(modPerms)
+	// If we have an exact match, then we ignore permission restrictions altogether, as we can only associate one set of
+	// permissions to a given set of expressions.
+	if ok, modPerms := tbl.Match(database, branch, user, host); (ok && perms.Consolidate() >= modPerms.Consolidate()) || tbl.ExactMatch(database, branch, user, host) {
+		permBits := uint64(perms)
 		permStr, _ := accessSchema[4].Type.(sql.SetType).BitsToString(permBits)
 		return sql.NewUniqueKeyErr(
 			fmt.Sprintf(`[%q, %q, %q, %q, %q]`, database, branch, user, host, permStr),
@@ -239,7 +241,7 @@ func (tbl BranchControlTable) Update(ctx *sql.Context, old sql.Row, new sql.Row)
 		return branch_control.ErrExpressionsTooLong.New(newDatabase, newBranch, newUser, newHost)
 	}
 
-	// If we're not updating the same row, then we check for a row violation
+	// If we're not updating the exact same row, then we check for a row violation
 	if oldDatabase != newDatabase || oldBranch != newBranch || oldUser != newUser || oldHost != newHost {
 		if ok, modPerms := tbl.Match(newDatabase, newBranch, newUser, newHost); ok {
 			permBits := uint64(modPerms)
