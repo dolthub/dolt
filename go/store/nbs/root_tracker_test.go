@@ -25,6 +25,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"sync"
 	"testing"
 	"time"
@@ -535,6 +536,14 @@ func (ftp fakeTablePersister) Persist(ctx context.Context, mt *memTable, haver c
 	return chunkSourceAdapter{cs, name}, gcBehavior_Continue, nil
 }
 
+func (ftp fakeTablePersister) CopyTableFile(ctx context.Context, r io.Reader, fileId string, fileSz uint64, splitOffset uint64) error {
+	return errors.New("unimplemented fakeTablePersister.CopyTableFile")
+}
+
+func (ftp fakeTablePersister) Path() string {
+	return "//fakeTablePersister/"
+}
+
 func (ftp fakeTablePersister) ConjoinAll(ctx context.Context, sources chunkSources, stats *Stats) (chunkSource, cleanupFunc, error) {
 	name, data, chunkCount, err := compactSourcesToBuffer(sources)
 	if err != nil {
@@ -656,23 +665,8 @@ func (ftp fakeTablePersister) AccessMode() chunks.ExclusiveAccessMode {
 }
 
 func extractAllChunks(ctx context.Context, src chunkSource, cb func(rec extractRecord)) (err error) {
-	var index tableIndex
-	if index, err = src.index(); err != nil {
-		return err
-	}
-
-	for i := uint32(0); i < index.chunkCount(); i++ {
-		var h hash.Hash
-		_, err = index.indexEntry(i, &h)
-		if err != nil {
-			return err
-		}
-
-		data, _, err := src.get(ctx, h, nil, nil)
-		if err != nil {
-			return err
-		}
-		cb(extractRecord{a: h, data: data})
-	}
+	err = src.iterateAllChunks(ctx, func(chunk chunks.Chunk) {
+		cb(extractRecord{a: chunk.Hash(), data: chunk.Data()})
+	}, &Stats{})
 	return
 }
