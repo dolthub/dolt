@@ -15,7 +15,6 @@
 package enginetest
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"runtime"
@@ -1150,10 +1149,9 @@ func TestBinlog(t *testing.T) {
 	
 	engine, err := h.NewEngine(t)
 	require.NoError(t, err)
-	binlogReplicaController := binlogreplication.DoltBinlogReplicaController
-	binlogReplicaController.SetEngine(engine.(*gms.Engine))
-	binlogReplicaController.SetExecutionContext(sql.NewContext(context.Background(), sql.WithSession(h.Session())))
-	engine.EngineAnalyzer().Catalog.BinlogReplicaController = binlogReplicaController
+	binlogConsumer := binlogreplication.DoltBinlogConsumer
+	binlogConsumer.SetEngine(engine.(*gms.Engine))
+	engine.EngineAnalyzer().Catalog.BinlogConsumer = binlogConsumer
 
 	enginetest.TestBinlog(t, h)
 }

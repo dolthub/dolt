@@ -203,3 +203,5 @@ replace github.com/dolthub/go-mysql-server => ../../go-mysql-server
 replace github.com/dolthub/vitess => ../../vitess
 
 go 1.25.3
+
+replace github.com/dolthub/go-mysql-server => ../../go-mysql-servergi
