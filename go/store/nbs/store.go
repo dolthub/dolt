@@ -155,12 +155,30 @@ type Range struct {
 	DictLength uint32
 }
 
+// IterateRoots iterates over the in-memory roots tracked by the ChunkJournal, if there is one.
+func (nbs *NomsBlockStore) IterateRoots(f func(root string, timestamp *time.Time) error) error {
+	cj := nbs.chunkJournal()
+	if cj == nil {
+		return nil
+	}
+	return cj.IterateRoots(f)
+}
+
 // ChunkJournal returns the ChunkJournal in use by this NomsBlockStore, or nil if no ChunkJournal is being used.
-func (nbs *NomsBlockStore) ChunkJournal() *ChunkJournal {
+func (nbs *NomsBlockStore) chunkJournal() *ChunkJournal {
 	if cj, ok := nbs.persister.(*ChunkJournal); ok {
 		return cj
 	}
 	return nil
+}
+
+func (nbs *NomsBlockStore) ChunkJournalSize() (int64, bool) {
+	nbs.mu.Lock()
+	defer nbs.mu.Unlock()
+	if cj := nbs.chunkJournal(); cj != nil {
+		return cj.Size(), true
+	}
+	return 0, false
 }
 
 func (nbs *NomsBlockStore) GetChunkLocationsWithPaths(ctx context.Context, hashes hash.HashSet) (map[string]map[hash.Hash]Range, error) {
@@ -1974,7 +1992,7 @@ func (nbs *NomsBlockStore) hasLocalGCNovelty() bool {
 	if len(nbs.tables.novel) != 0 {
 		return true
 	}
-	if cj := nbs.ChunkJournal(); cj != nil && cj.wr != nil {
+	if cj := nbs.chunkJournal(); cj != nil && cj.wr != nil {
 		return true
 	}
 	return false
