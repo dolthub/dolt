@@ -28,9 +28,9 @@ import (
 // iterators for lookup joins given a primary key.
 type SecondaryLookupIterGen interface {
 	New(context.Context, val.Tuple) (prolly.MapIter, error)
-	InputKeyDesc() val.TupleDesc
-	OutputKeyDesc() val.TupleDesc
-	OutputValDesc() val.TupleDesc
+	InputKeyDesc() *val.TupleDesc
+	OutputKeyDesc() *val.TupleDesc
+	OutputValDesc() *val.TupleDesc
 	Schema() schema.Schema
 	NodeStore() tree.NodeStore
 }
@@ -56,15 +56,15 @@ type covStrictSecondaryLookupGen struct {
 
 var _ SecondaryLookupIterGen = (*covStrictSecondaryLookupGen)(nil)
 
-func (c *covStrictSecondaryLookupGen) InputKeyDesc() val.TupleDesc {
+func (c *covStrictSecondaryLookupGen) InputKeyDesc() *val.TupleDesc {
 	return c.prefixDesc
 }
 
-func (c *covStrictSecondaryLookupGen) OutputKeyDesc() val.TupleDesc {
+func (c *covStrictSecondaryLookupGen) OutputKeyDesc() *val.TupleDesc {
 	return c.m.KeyDesc()
 }
 
-func (c *covStrictSecondaryLookupGen) OutputValDesc() val.TupleDesc {
+func (c *covStrictSecondaryLookupGen) OutputValDesc() *val.TupleDesc {
 	return c.m.ValDesc()
 }
 
@@ -103,15 +103,15 @@ type nonCovStrictSecondaryLookupGen struct {
 	pkMap      val.OrdinalMapping
 }
 
-func (c *nonCovStrictSecondaryLookupGen) InputKeyDesc() val.TupleDesc {
+func (c *nonCovStrictSecondaryLookupGen) InputKeyDesc() *val.TupleDesc {
 	return c.sec.KeyDesc()
 }
 
-func (c *nonCovStrictSecondaryLookupGen) OutputKeyDesc() val.TupleDesc {
+func (c *nonCovStrictSecondaryLookupGen) OutputKeyDesc() *val.TupleDesc {
 	return c.pri.KeyDesc()
 }
 
-func (c *nonCovStrictSecondaryLookupGen) OutputValDesc() val.TupleDesc {
+func (c *nonCovStrictSecondaryLookupGen) OutputValDesc() *val.TupleDesc {
 	return c.pri.ValDesc()
 }
 
@@ -160,15 +160,15 @@ type covLaxSecondaryLookupGen struct {
 	nullSafe   []bool
 }
 
-func (c *covLaxSecondaryLookupGen) InputKeyDesc() val.TupleDesc {
+func (c *covLaxSecondaryLookupGen) InputKeyDesc() *val.TupleDesc {
 	return c.prefixDesc
 }
 
-func (c *covLaxSecondaryLookupGen) OutputKeyDesc() val.TupleDesc {
+func (c *covLaxSecondaryLookupGen) OutputKeyDesc() *val.TupleDesc {
 	return c.m.KeyDesc()
 }
 
-func (c *covLaxSecondaryLookupGen) OutputValDesc() val.TupleDesc {
+func (c *covLaxSecondaryLookupGen) OutputValDesc() *val.TupleDesc {
 	return c.m.ValDesc()
 }
 
@@ -219,11 +219,11 @@ type nonCovLaxSecondaryLookupGen struct {
 	nullSafe   []bool
 }
 
-func (c *nonCovLaxSecondaryLookupGen) InputKeyDesc() val.TupleDesc {
+func (c *nonCovLaxSecondaryLookupGen) InputKeyDesc() *val.TupleDesc {
 	return c.prefixDesc
 }
 
-func (c *nonCovLaxSecondaryLookupGen) OutputKeyDesc() val.TupleDesc {
+func (c *nonCovLaxSecondaryLookupGen) OutputKeyDesc() *val.TupleDesc {
 	return c.pri.KeyDesc()
 }
 
@@ -231,7 +231,7 @@ func (c *nonCovLaxSecondaryLookupGen) Schema() schema.Schema {
 	return c.sch
 }
 
-func (c *nonCovLaxSecondaryLookupGen) OutputValDesc() val.TupleDesc {
+func (c *nonCovLaxSecondaryLookupGen) OutputValDesc() *val.TupleDesc {
 	return c.pri.ValDesc()
 }
 
@@ -278,17 +278,17 @@ func (c *nonCovLaxSecondaryLookupGen) New(ctx context.Context, k val.Tuple) (pro
 type keylessSecondaryLookupGen struct {
 	sch        schema.Schema
 	pkBld      *val.TupleBuilder
+	prefixDesc *val.TupleDesc
 	pri        prolly.Map
 	sec        prolly.Map
-	prefixDesc val.TupleDesc
 	pkMap      val.OrdinalMapping
 }
 
-func (c *keylessSecondaryLookupGen) InputKeyDesc() val.TupleDesc {
+func (c *keylessSecondaryLookupGen) InputKeyDesc() *val.TupleDesc {
 	return c.prefixDesc
 }
 
-func (c *keylessSecondaryLookupGen) OutputKeyDesc() val.TupleDesc {
+func (c *keylessSecondaryLookupGen) OutputKeyDesc() *val.TupleDesc {
 	return c.pri.KeyDesc()
 }
 
@@ -296,7 +296,7 @@ func (c *keylessSecondaryLookupGen) Schema() schema.Schema {
 	return c.sch
 }
 
-func (c *keylessSecondaryLookupGen) OutputValDesc() val.TupleDesc {
+func (c *keylessSecondaryLookupGen) OutputValDesc() *val.TupleDesc {
 	return c.pri.ValDesc()
 }
 
@@ -333,9 +333,9 @@ func (c *keylessSecondaryLookupGen) New(ctx context.Context, k val.Tuple) (proll
 
 type keylessLookupIter struct {
 	pkBld      *val.TupleBuilder
+	prefixDesc *val.TupleDesc
 	pri        prolly.Map
 	secIter    prolly.MapIter
-	prefixDesc val.TupleDesc
 	pkMap      val.OrdinalMapping
 	k          val.Tuple
 	v          val.Tuple
