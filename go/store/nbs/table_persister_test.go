@@ -25,9 +25,10 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/dolthub/dolt/go/store/blobstore"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/dolthub/dolt/go/store/blobstore"
 )
 
 func TestPlanCompaction(t *testing.T) {
@@ -119,7 +120,7 @@ func TestPlanRangeCopyConjoin(t *testing.T) {
 					require.Equal(t, beforesize, q.Usage())
 				})
 				t.Run("Failure", func(t *testing.T) {
-					for i := beforesize + 1024; i < successsize; i+=1024 {
+					for i := beforesize + 1024; i < successsize; i += 1024 {
 						t.Run(strconv.Itoa(int(i)), func(t *testing.T) {
 							q := &errorQuota{NewUnlimitedMemQuotaProvider(), int(i)}
 							ctx := t.Context()
