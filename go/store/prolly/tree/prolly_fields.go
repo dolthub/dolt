@@ -174,7 +174,7 @@ func GetField(ctx context.Context, td *val.TupleDesc, i int, tup val.Tuple, ns N
 }
 
 // GetFieldValue reads the value from the ith field of the Tuple as a sql.Value
-func GetFieldValue(ctx context.Context, td val.TupleDesc, i int, tup val.Tuple, ns NodeStore) (v sql.Value, err error) {
+func GetFieldValue(ctx context.Context, td *val.TupleDesc, i int, tup val.Tuple, ns NodeStore) (v sql.Value, err error) {
 	enc := td.Types[i].Enc
 	v.Typ = val.EncToType[enc]
 	switch enc {
