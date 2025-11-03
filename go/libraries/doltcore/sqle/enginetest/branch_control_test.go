@@ -1361,6 +1361,25 @@ var BranchControlTests = []BranchControlTest{
 			},
 		},
 	},
+	{
+		Name: "Cannot insert an exact match even with elevated permissions",
+		Assertions: []BranchControlTestAssertion{
+			{
+				User:        "root",
+				Host:        "localhost",
+				Query:       "INSERT INTO dolt_branch_control VALUES ('%', '%', '%', '%', 'admin');",
+				ExpectedErr: sql.ErrPrimaryKeyViolation,
+			},
+			{ // This will fail if the above succeeded, so kind of a redundant check but ultimately harmless
+				User:  "root",
+				Host:  "localhost",
+				Query: "DELETE FROM dolt_branch_control WHERE permissions='admin';",
+				Expected: []sql.Row{
+					{types.NewOkResult(0)},
+				},
+			},
+		},
+	},
 }
 
 func TestBranchControl(t *testing.T) {

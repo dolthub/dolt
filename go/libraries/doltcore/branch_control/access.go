@@ -69,7 +69,8 @@ func newAccess() *Access {
 }
 
 // Match returns whether any entries match the given database, branch, user, and host, along with their permissions.
-// Requires external synchronization handling, therefore manually manage the RWMutex.
+// This will match subsets against their superset as well. Requires external synchronization handling, therefore
+// manually manage the RWMutex.
 func (tbl *Access) Match(database string, branch string, user string, host string) (bool, Permissions) {
 	results := tbl.Root.Match(database, branch, user, host)
 	// We use the result(s) with the longest length
@@ -84,6 +85,12 @@ func (tbl *Access) Match(database string, branch string, user string, host strin
 		}
 	}
 	return len(results) > 0, perms
+}
+
+// ExactMatch returns whether any entries exactly match the given database, branch, user, and host. Requires external
+// synchronization handling, therefore manually manage the RWMutex.
+func (tbl *Access) ExactMatch(database string, branch string, user string, host string) bool {
+	return tbl.Root.ExactMatch(database, branch, user, host)
 }
 
 // GetBinlog returns the table's binlog.
