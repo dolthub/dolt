@@ -22,7 +22,6 @@ import (
 	"testing"
 	"time"
 
-	gms "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/enginetest/scriptgen/setup"
@@ -36,7 +35,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/binlogreplication"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/statspro"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
@@ -1144,16 +1142,9 @@ func TestLoadDataErrors(t *testing.T) {
 }
 
 func TestBinlog(t *testing.T) {
-	h := newDoltHarness(t)
-	defer h.Close()
-	
-	engine, err := h.NewEngine(t)
-	require.NoError(t, err)
-	binlogConsumer := binlogreplication.DoltBinlogConsumer
-	binlogConsumer.SetEngine(engine.(*gms.Engine))
-	engine.EngineAnalyzer().Catalog.BinlogConsumer = binlogConsumer
-
-	enginetest.TestBinlog(t, h)
+	harness := newDoltHarness(t)
+	defer harness.Close()
+	RunBinlogTests(t, harness)
 }
 
 func TestSelectIntoFile(t *testing.T) {
