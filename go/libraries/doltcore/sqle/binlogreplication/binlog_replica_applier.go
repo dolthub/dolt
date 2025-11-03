@@ -330,7 +330,6 @@ func (a *binlogReplicaApplier) replicaBinlogEventHandler(ctx *sql.Context) error
 
 		select {
 		case event := <-eventProducer.EventChan():
-			// Wrap each streaming replication event in a session command
 			err := sql.SessionCommandBegin(ctx.Session)
 			if err != nil {
 				ctx.GetLogger().Errorf("failed to begin session command: %v", err.Error())
@@ -375,8 +374,7 @@ func (a *binlogReplicaApplier) replicaBinlogEventHandler(ctx *sql.Context) error
 }
 
 // processBinlogEvent processes a single binlog event message and returns an error if there were any problems
-// processing it. Session command management is handled by the caller (streaming replication handler or
-// TransactionCommittingIter for BINLOG statements).
+// processing it. Session command management is handled by the caller.
 func (a *binlogReplicaApplier) processBinlogEvent(ctx *sql.Context, engine *gms.Engine, event mysql.BinlogEvent) error {
 	createCommit := false
 

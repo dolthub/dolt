@@ -22,7 +22,6 @@ import (
 )
 
 // doltBinlogConsumer is a lightweight wrapper around the binlog applier that implements the BinlogConsumer interface.
-// It provides binlog event processing for BINLOG statement execution.
 type doltBinlogConsumer struct {
 	applier *binlogReplicaApplier
 	engine  *gms.Engine
@@ -31,7 +30,6 @@ type doltBinlogConsumer struct {
 var _ gmsbin.BinlogConsumer = (*doltBinlogConsumer)(nil)
 
 // ProcessEvent implements the BinlogConsumer interface by delegating to the applier.
-// Session command management is handled by the TransactionCommittingIter for BINLOG statements.
 func (d *doltBinlogConsumer) ProcessEvent(ctx *sql.Context, event mysql.BinlogEvent) error {
 	return d.applier.processBinlogEvent(ctx, d.engine, event)
 }
@@ -52,4 +50,3 @@ var DoltBinlogConsumer = &doltBinlogConsumer{
 func (d *doltBinlogConsumer) SetEngine(engine *gms.Engine) {
 	d.engine = engine
 }
-
