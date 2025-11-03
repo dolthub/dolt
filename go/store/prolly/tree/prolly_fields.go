@@ -17,6 +17,7 @@ package tree
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -26,6 +27,7 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
+	"github.com/mohae/uvarint"
 	"github.com/shopspring/decimal"
 
 	"github.com/dolthub/dolt/go/store/hash"
@@ -169,6 +171,99 @@ func GetField(ctx context.Context, td val.TupleDesc, i int, tup val.Tuple, ns No
 		return nil, err
 	}
 	return v, err
+}
+
+// GetFieldValue reads the value from the ith field of the Tuple as a sql.Value
+func GetFieldValue(ctx context.Context, td val.TupleDesc, i int, tup val.Tuple, ns NodeStore) (v sql.Value, err error) {
+	enc := td.Types[i].Enc
+	v.Typ = val.EncToType[enc]
+	switch enc {
+	case val.Int8Enc, val.Int16Enc, val.Int32Enc, val.Int64Enc,
+		val.Uint8Enc, val.Uint16Enc, val.Uint32Enc, val.Uint64Enc,
+		val.Float32Enc, val.Float64Enc, val.DecimalEnc, val.Bit64Enc,
+		val.DateEnc, val.DatetimeEnc, val.TimeEnc,
+		val.EnumEnc, val.SetEnc,
+		val.JSONEnc, val.GeometryEnc,
+		val.Hash128Enc, val.CommitAddrEnc, val.CellEnc:
+		v.Val = td.GetField(i, tup)
+		return v, nil
+
+	case val.YearEnc:
+		year, ok := td.GetYear(i, tup)
+		if !ok {
+			return v, nil
+		}
+		v.Val = make([]byte, 2)
+		binary.LittleEndian.PutUint16(v.Val, uint16(year))
+		return v, nil
+
+	case val.StringEnc, val.ByteStringEnc:
+		v.Val = td.GetField(i, tup)
+		if len(v.Val) == 0 {
+			return v, nil
+		}
+		v.Val = v.Val[:len(v.Val)-1] // trim trailing NUL character
+		return v, nil
+
+	case val.GeomAddrEnc:
+		// TODO: until GeometryEnc is removed, we must check if GeomAddrEnc is a GeometryEnc
+		var ok bool
+		v.Val, ok = td.GetGeometry(i, tup)
+		if ok {
+			_, err = deserializeGeometry(v.Val) // TODO: on successful deserialize, this work is wasted
+			if err == nil {
+				return v, nil
+			}
+		}
+		// TODO: have GeometryAddr implement TextStorage
+		h, ok := td.GetGeometryAddr(i, tup)
+		if ok {
+			v.Val, err = ns.ReadBytes(ctx, h)
+			if err != nil {
+				return v, err
+			}
+		}
+		return v, nil
+
+	case val.StringAddrEnc, val.BytesAddrEnc:
+		h, ok := td.GetAddr(i, tup)
+		if !ok {
+			return v, nil
+		}
+		v.WrappedVal = val.NewByteArray(ctx, h, ns)
+		return v, nil
+
+	case val.JSONAddrEnc:
+		h, ok := td.GetAddr(i, tup)
+		if !ok {
+			return v, nil
+		}
+		v.Val, err = ns.ReadBytes(ctx, h)
+		if err != nil {
+			return v, err
+		}
+		return v, nil
+
+	case val.BytesAdaptiveEnc, val.StringAdaptiveEnc:
+		b := td.GetField(i, tup)
+		// null value
+		if len(b) == 0 {
+			return v, nil
+		}
+		// inlined
+		if b[0] == 0 {
+			v.Val = b[1:]
+			return v, nil
+		}
+		// out-of-band
+		_, lengthBytes := uvarint.Uvarint(b)
+		h := hash.New(b[lengthBytes:])
+		v.WrappedVal = val.NewByteArray(ctx, h, ns)
+		return v, err
+
+	default:
+		panic("unknown val.encoding")
+	}
 }
 
 // Serialize writes an interface{} into the byte string representation used in val.Tuple, and returns the byte string,

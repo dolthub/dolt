@@ -2,7 +2,7 @@
 set -e
 set -o pipefail
 
-SYSBENCH_TEST="oltp_point_select"
+SYSBENCH_TEST="types_table_scan"
 WORKING_DIR=`mktemp -d`
 PPROF=0
 PORT=3366
@@ -16,8 +16,7 @@ while test $# -gt 0
 do
     case "$1" in
 
-        --new-new) export DOLT_DEFAULT_BIN_FORMAT="__DOLT__" &&
-            export ENABLE_ROW_ITER_2=true
+        --new-new) export DOLT_DEFAULT_BIN_FORMAT="__DOLT__"
             ;;
 
         --no-exchange) export SINGLE_THREAD_FEATURE_FLAG=true
@@ -29,9 +28,6 @@ do
 
         # run dolt single threaded
         --single) export GOMAXPROCS=1
-            ;;
-
-        --row2) export ENABLE_ROW_ITER_2=true
             ;;
 
         --journal) export DOLT_ENABLE_CHUNK_JOURNAL=true
@@ -98,6 +94,12 @@ sysbench \
   --mysql-port="$PORT" \
   --mysql-user="$USER" \
   --mysql-password="$PASS" \
+  --db-ps-mode=disable \
+  --time=120 \
+  --table-size=10000 \
+  --percentile=50 \
+  --rand-type=uniform \
+  --rand-seed=1 \
   "$SYSBENCH_TEST" prepare
 
 # restart server to isolate bench run
@@ -123,13 +125,15 @@ sysbench \
   --mysql-user="$USER" \
   --mysql-password="$PASS" \
   --db-ps-mode=disable \
-  --time=30 \
-  --db-ps-mode=disable \
+  --time=120 \
+  --table-size=10000 \
+  --percentile=50 \
+  --rand-type=uniform \
+  --rand-seed=1 \
   "$SYSBENCH_TEST" run
 
 unset DOLT_ENABLE_CHUNK_JOURNAL
 unset DOLT_DEFAULT_BIN_FORMAT
-unset ENABLE_ROW_ITER_2
 unset SINGLE_THREAD_FEATURE_FLAG
 unset GOMAXPROCS
 

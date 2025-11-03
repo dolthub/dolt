@@ -63,6 +63,12 @@ func BenchmarkTableScan(b *testing.B) {
 	})
 }
 
+func BenchmarkTableScanFiltered(b *testing.B) {
+	benchmarkSysbenchQuery(b, func(int) string {
+		return "SELECT * FROM sbtest1 where k > 10"
+	})
+}
+
 func BenchmarkOltpIndexScan(b *testing.B) {
 	benchmarkSysbenchQuery(b, func(int) string {
 		return "SELECT * FROM sbtest1 WHERE k > 0"
@@ -99,6 +105,8 @@ func BenchmarkSelectRandomPoints(b *testing.B) {
 	})
 }
 
+// BenchmarkSelectRandomRanges-14    	   13957	     78924 ns/op	  123046 B/op	    2264 allocs/op
+// BenchmarkSelectRandomRanges-14    	   13891	     80415 ns/op	  123126 B/op	    2265 allocs/op
 func BenchmarkSelectRandomRanges(b *testing.B) {
 	benchmarkSysbenchQuery(b, func(int) string {
 		var sb strings.Builder
@@ -115,6 +123,12 @@ func BenchmarkSelectRandomRanges(b *testing.B) {
 	})
 }
 
+func BenchmarkCoveringIndexScan(b *testing.B) {
+	benchmarkSysbenchQuery(b, func(int) string {
+		return "SELECT count(id) FROM sbtest1 WHERE k > 0"
+	})
+}
+
 var initOnce sync.Once
 
 func benchmarkSysbenchQuery(b *testing.B, getQuery func(int) string) {
@@ -126,18 +140,34 @@ func benchmarkSysbenchQuery(b *testing.B, getQuery func(int) string) {
 	for i := 0; i < b.N; i++ {
 		schema, iter, _, err := eng.Query(ctx, getQuery(i))
 		require.NoError(b, err)
-		i := 0
+
+		idx := 0
 		buf := sql.NewByteBuffer(16000)
-		for {
-			i++
-			row, err := iter.Next(ctx)
-			if err != nil {
-				break
+		if ri2, ok := iter.(sql.ValueRowIter); false && ok && ri2.IsValueRowIter(ctx) {
+			for {
+				idx++
+				row, err := ri2.NextValueRow(ctx)
+				if err != nil {
+					break
+				}
+				outputRow, err := server.RowValueToSQLValues(ctx, schema, row, buf)
+				_ = outputRow
+				if idx%128 == 0 {
+					buf.Reset()
+				}
 			}
-			outputRow, err := server.RowToSQL(ctx, schema, row, nil, buf)
-			_ = outputRow
-			if i%128 == 0 {
-				buf.Reset()
+		} else {
+			for {
+				idx++
+				row, err := iter.Next(ctx)
+				if err != nil {
+					break
+				}
+				outputRow, err := server.RowToSQL(ctx, schema, row, nil, buf)
+				_ = outputRow
+				if idx%128 == 0 {
+					buf.Reset()
+				}
 			}
 		}
 		require.Error(b, io.EOF)

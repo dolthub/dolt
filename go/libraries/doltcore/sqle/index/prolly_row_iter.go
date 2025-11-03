@@ -191,24 +191,65 @@ func (it prollyRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 	return row, nil
 }
 
+// NextValueRow implements the sql.ValueRowIter interface.
+func (it prollyRowIter) NextValueRow(ctx *sql.Context) (sql.ValueRow, error) {
+	key, value, err := it.iter.Next(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	row := make(sql.ValueRow, it.rowLen)
+	for i, idx := range it.keyProj {
+		outIdx := it.ordProj[i]
+		row[outIdx], err = tree.GetFieldValue(ctx, it.keyDesc, idx, key, it.ns)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	for i, idx := range it.valProj {
+		outIdx := it.ordProj[len(it.keyProj)+i]
+		row[outIdx], err = tree.GetFieldValue(ctx, it.valDesc, idx, value, it.ns)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return row, nil
+}
+
+// IsValueRowIter implements the sql.ValueRowIter interface.
+func (it prollyRowIter) IsValueRowIter(ctx *sql.Context) bool {
+	for _, typ := range it.keyDesc.Types {
+		if typ.Enc == val.ExtendedEnc || typ.Enc == val.ExtendedAddrEnc || typ.Enc == val.ExtendedAdaptiveEnc {
+			return false
+		}
+	}
+	for _, typ := range it.valDesc.Types {
+		if typ.Enc == val.ExtendedEnc || typ.Enc == val.ExtendedAddrEnc || typ.Enc == val.ExtendedAdaptiveEnc {
+			return false
+		}
+	}
+	return true
+}
+
 func (it prollyRowIter) Close(ctx *sql.Context) error {
 	return nil
 }
 
 type prollyKeylessIter struct {
-	iter    prolly.MapIter
-	ns      tree.NodeStore
-	valDesc val.TupleDesc
-	valProj []int
-	ordProj []int
-	curr    sql.Row
-	rowLen  int
-	card    uint64
+	iter       prolly.MapIter
+	ns         tree.NodeStore
+	valDesc    val.TupleDesc
+	valProj    []int
+	ordProj    []int
+	curr       sql.Row
+	currValRow sql.ValueRow
+	rowLen     int
+	card       uint64
 }
 
 var _ sql.RowIter = &prollyKeylessIter{}
-
-//var _ sql.RowIter2 = prollyKeylessIter{}
+var _ sql.ValueRowIter = &prollyKeylessIter{}
 
 func (it *prollyKeylessIter) Next(ctx *sql.Context) (sql.Row, error) {
 	if it.card == 0 {
@@ -239,6 +280,38 @@ func (it *prollyKeylessIter) nextTuple(ctx *sql.Context) error {
 		}
 	}
 	return nil
+}
+
+// NextValueRow implements the sql.ValueRowIter interface.
+func (it *prollyKeylessIter) NextValueRow(ctx *sql.Context) (sql.ValueRow, error) {
+	if it.card == 0 {
+		_, value, err := it.iter.Next(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		it.card = val.ReadKeylessCardinality(value)
+		it.currValRow = make(sql.ValueRow, it.rowLen)
+		for i, idx := range it.valProj {
+			outputIdx := it.ordProj[i]
+			it.currValRow[outputIdx], err = tree.GetFieldValue(ctx, it.valDesc, idx, value, it.ns)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+	it.card--
+	return it.currValRow, nil
+}
+
+// IsValueRowIter implements the sql.ValueRowIter interface.
+func (it *prollyKeylessIter) IsValueRowIter(ctx *sql.Context) bool {
+	for _, typ := range it.valDesc.Types {
+		if typ.Enc == val.ExtendedEnc || typ.Enc == val.ExtendedAddrEnc || typ.Enc == val.ExtendedAdaptiveEnc {
+			return false
+		}
+	}
+	return true
 }
 
 func (it *prollyKeylessIter) Close(ctx *sql.Context) error {
