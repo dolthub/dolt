@@ -75,10 +75,3 @@ func TestArchiveStreamWriterRemove(t *testing.T) {
 		require.Equal(t, 1, CountFilesInDir(t, dir))
 	})
 }
-
-func TestPlanArchiveConjoin(t *testing.T) {
-	t.Run("Quota", func(t *testing.T) {
-		t.Run("NoError", func(t *testing.T) {
-		})
-	})
-}
