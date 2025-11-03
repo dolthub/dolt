@@ -225,8 +225,8 @@ func OrdinalMappingFromIndex(idx DoltIndex) (m val.OrdinalMapping) {
 type prollyCoveringIndexIter struct {
 	idx       DoltIndex
 	indexIter prolly.MapIter
-	keyDesc   val.TupleDesc
-	valDesc   val.TupleDesc
+	keyDesc   *val.TupleDesc
+	valDesc   *val.TupleDesc
 
 	ns tree.NodeStore
 
@@ -393,12 +393,13 @@ type prollyKeylessIndexIter struct {
 	eg      *errgroup.Group
 	rowChan chan sql.Row
 
+	valueDesc *val.TupleDesc
+
 	// valueMap transforms tuples from the
 	// clustered index into sql.Rows
-	valueMap  val.OrdinalMapping
-	ordMap    val.OrdinalMapping
-	valueDesc val.TupleDesc
-	sqlSch    sql.Schema
+	valueMap val.OrdinalMapping
+	ordMap   val.OrdinalMapping
+	sqlSch   sql.Schema
 
 	card uint64
 	curr sql.ValueRow

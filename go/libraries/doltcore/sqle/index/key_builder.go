@@ -28,7 +28,7 @@ import (
 // NewSecondaryKeyBuilder creates a new SecondaryKeyBuilder instance that can build keys for the secondary index |def|.
 // The schema of the source table is defined in |sch|, and |idxDesc| describes the tuple layout for the index's keys
 // (index value tuples are not used).
-func NewSecondaryKeyBuilder(ctx *sql.Context, tableName string, sch schema.Schema, def schema.Index, idxDesc val.TupleDesc, p pool.BuffPool, nodeStore tree.NodeStore) (SecondaryKeyBuilder, error) {
+func NewSecondaryKeyBuilder(ctx *sql.Context, tableName string, sch schema.Schema, def schema.Index, idxDesc *val.TupleDesc, p pool.BuffPool, nodeStore tree.NodeStore) (SecondaryKeyBuilder, error) {
 	b := SecondaryKeyBuilder{
 		builder:   val.NewTupleBuilder(idxDesc, nodeStore),
 		pool:      p,
@@ -186,7 +186,7 @@ func (b SecondaryKeyBuilder) canCopyRawBytes(idxField int) bool {
 	return true
 }
 
-func NewClusteredKeyBuilder(def schema.Index, sch schema.Schema, keyDesc val.TupleDesc, p pool.BuffPool, ns tree.NodeStore) (b ClusteredKeyBuilder) {
+func NewClusteredKeyBuilder(def schema.Index, sch schema.Schema, keyDesc *val.TupleDesc, p pool.BuffPool, ns tree.NodeStore) (b ClusteredKeyBuilder) {
 	b.pool = p
 	if schema.IsKeyless(sch) {
 		// [16]byte hash key is always final key field

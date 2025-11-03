@@ -221,8 +221,8 @@ func (td *TupleDesc) GetFixedAccess() FixedAccess {
 }
 
 // WithoutFixedAccess returns a copy of |td| without fixed access metadata.
-func (td *TupleDesc) WithoutFixedAccess() TupleDesc {
-	return TupleDesc{Types: td.Types, Handlers: td.Handlers, cmp: td.cmp}
+func (td *TupleDesc) WithoutFixedAccess() *TupleDesc {
+	return &TupleDesc{Types: td.Types, Handlers: td.Handlers, cmp: td.cmp}
 }
 
 // GetBool reads a bool from the ith field of the Tuple.

@@ -119,13 +119,12 @@ func BuildProllyIndexExternal(ctx *sql.Context, vrw types.ValueReadWriter, ns tr
 	return durable.IndexFromProllyMap(ret), nil
 }
 
-// func BuildProximityIndexExternal(ctx *sql.Context, vrw types.ValueReadWriter, ns tree.NodeStore, sch schema.Schema, tableName string, idx schema.Index, primary prolly.Map, uniqCb DupEntryCb) (durable.Index, error) {
 func BuildProximityIndex(
 	ctx *sql.Context,
 	ns tree.NodeStore,
 	idx schema.Index,
-	keyDesc val.TupleDesc,
-	prefixDesc val.TupleDesc,
+	keyDesc *val.TupleDesc,
+	prefixDesc *val.TupleDesc,
 	iter prolly.MapIter,
 	secondaryBld index.SecondaryKeyBuilder,
 	uniqCb DupEntryCb,
@@ -165,7 +164,7 @@ type tupleIterWithCb struct {
 	iter sort.KeyIter
 	err  error
 
-	prefixDesc val.TupleDesc
+	prefixDesc *val.TupleDesc
 	uniqCb     DupEntryCb
 	lastKey    val.Tuple
 }

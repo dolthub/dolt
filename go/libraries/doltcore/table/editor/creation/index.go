@@ -187,7 +187,7 @@ func BuildSecondaryProllyIndex(
 // FormatKeyForUniqKeyErr formats the given tuple |key| using |d|. The resulting
 // string is suitable for use in a sql.UniqueKeyError
 // This is copied from the writer package to avoid pulling in that dependency and prevent cycles
-func FormatKeyForUniqKeyErr(ctx context.Context, key val.Tuple, d val.TupleDesc) string {
+func FormatKeyForUniqKeyErr(ctx context.Context, key val.Tuple, d *val.TupleDesc) string {
 	var sb strings.Builder
 	sb.WriteString("[")
 	seenOne := false
@@ -286,10 +286,10 @@ func BuildUniqueProllyIndex(
 type PrefixItr struct {
 	itr prolly.MapIter
 	p   val.Tuple
-	d   val.TupleDesc
+	d   *val.TupleDesc
 }
 
-func NewPrefixItr(ctx context.Context, p val.Tuple, d val.TupleDesc, m rangeIterator) (PrefixItr, error) {
+func NewPrefixItr(ctx context.Context, p val.Tuple, d *val.TupleDesc, m rangeIterator) (PrefixItr, error) {
 	rng := prolly.PrefixRange(ctx, p, d)
 	itr, err := m.IterRange(ctx, rng)
 	if err != nil {
