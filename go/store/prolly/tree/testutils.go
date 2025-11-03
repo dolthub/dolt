@@ -45,7 +45,7 @@ func NewTupleLeafNode(keys, values []val.Tuple) Node {
 	return newLeafNode(ks, vs)
 }
 
-func RandomTuplePairs(ctx context.Context, count int, keyDesc, valDesc val.TupleDesc, ns NodeStore) (items [][2]val.Tuple, err error) {
+func RandomTuplePairs(ctx context.Context, count int, keyDesc, valDesc *val.TupleDesc, ns NodeStore) (items [][2]val.Tuple, err error) {
 	keyBuilder := val.NewTupleBuilder(keyDesc, ns)
 	valBuilder := val.NewTupleBuilder(valDesc, ns)
 
@@ -86,7 +86,7 @@ func RandomTuplePairs(ctx context.Context, count int, keyDesc, valDesc val.Tuple
 	return items, nil
 }
 
-func RandomCompositeTuplePairs(ctx context.Context, count int, keyDesc, valDesc val.TupleDesc, ns NodeStore) (items [][2]val.Tuple, err error) {
+func RandomCompositeTuplePairs(ctx context.Context, count int, keyDesc, valDesc *val.TupleDesc, ns NodeStore) (items [][2]val.Tuple, err error) {
 	// preconditions
 	if count%5 != 0 {
 		panic("expected empty divisible by 5")
@@ -124,7 +124,7 @@ func RandomCompositeTuplePairs(ctx context.Context, count int, keyDesc, valDesc 
 }
 
 // Map<Tuple<Uint32>,Tuple<Uint32>>
-func AscendingUintTuples(count int) (tuples [][2]val.Tuple, desc val.TupleDesc) {
+func AscendingUintTuples(count int) (tuples [][2]val.Tuple, desc *val.TupleDesc) {
 	desc = val.NewTupleDescriptor(val.Type{Enc: val.Uint32Enc})
 	bld := val.NewTupleBuilder(desc, nil)
 	tuples = make([][2]val.Tuple, count)
@@ -144,7 +144,7 @@ func AscendingUintTuples(count int) (tuples [][2]val.Tuple, desc val.TupleDesc) 
 	return
 }
 
-func AscendingUintTuplesWithStep(count int, keyStart int, valStart int, step int) (tuples [][2]val.Tuple, desc val.TupleDesc) {
+func AscendingUintTuplesWithStep(count int, keyStart int, valStart int, step int) (tuples [][2]val.Tuple, desc *val.TupleDesc) {
 	desc = val.NewTupleDescriptor(val.Type{Enc: val.Uint32Enc})
 	bld := val.NewTupleBuilder(desc, nil)
 	tuples = make([][2]val.Tuple, count)
@@ -183,7 +183,7 @@ func CloneRandomTuples(items [][2]val.Tuple) (clone [][2]val.Tuple) {
 	return
 }
 
-func SortTuplePairs(ctx context.Context, items [][2]val.Tuple, keyDesc val.TupleDesc) {
+func SortTuplePairs(ctx context.Context, items [][2]val.Tuple, keyDesc *val.TupleDesc) {
 	sort.Slice(items, func(i, j int) bool {
 		return keyDesc.Compare(ctx, items[i][0], items[j][0]) < 0
 	})
@@ -209,7 +209,7 @@ func newLeafNode(keys, values []Item) Node {
 		vv[i] = values[i]
 	}
 
-	s := message.NewProllyMapSerializer(val.TupleDesc{}, sharedPool)
+	s := message.NewProllyMapSerializer(&val.TupleDesc{}, sharedPool)
 	msg := s.Serialize(kk, vv, nil, 0)
 	n, _, err := NodeFromBytes(msg)
 	if err != nil {
@@ -219,7 +219,7 @@ func newLeafNode(keys, values []Item) Node {
 }
 
 // assumes a sorted list
-func deduplicateTuples(ctx context.Context, desc val.TupleDesc, tups [][2]val.Tuple) (uniq [][2]val.Tuple) {
+func deduplicateTuples(ctx context.Context, desc *val.TupleDesc, tups [][2]val.Tuple) (uniq [][2]val.Tuple) {
 	uniq = make([][2]val.Tuple, 1, len(tups))
 	uniq[0] = tups[0]
 
@@ -407,7 +407,7 @@ func MakeTreeForTest(tuples [][2]val.Tuple) (Node, error) {
 	ns := NewTestNodeStore()
 
 	// todo(andy): move this test
-	s := message.NewProllyMapSerializer(val.TupleDesc{}, ns.Pool())
+	s := message.NewProllyMapSerializer(&val.TupleDesc{}, ns.Pool())
 	chunker, err := newEmptyChunker(ctx, ns, s)
 	if err != nil {
 		return Node{}, err

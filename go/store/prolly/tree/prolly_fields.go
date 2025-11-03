@@ -38,7 +38,7 @@ import (
 var ErrValueExceededMaxFieldSize = errors.New("value exceeded max field size of 65kb")
 
 // GetField reads the value from the ith field of the Tuple as an interface{}.
-func GetField(ctx context.Context, td val.TupleDesc, i int, tup val.Tuple, ns NodeStore) (v interface{}, err error) {
+func GetField(ctx context.Context, td *val.TupleDesc, i int, tup val.Tuple, ns NodeStore) (v interface{}, err error) {
 	var ok bool
 	switch td.Types[i].Enc {
 	case val.Int8Enc:

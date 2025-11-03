@@ -41,7 +41,7 @@ const (
 
 var mergeArtifactFileID = []byte(serial.MergeArtifactsFileID)
 
-func NewMergeArtifactSerializer(keyDesc val.TupleDesc, pool pool.BuffPool) MergeArtifactSerializer {
+func NewMergeArtifactSerializer(keyDesc *val.TupleDesc, pool pool.BuffPool) MergeArtifactSerializer {
 	return MergeArtifactSerializer{
 		keyDesc: keyDesc,
 		pool:    pool,
@@ -50,7 +50,7 @@ func NewMergeArtifactSerializer(keyDesc val.TupleDesc, pool pool.BuffPool) Merge
 
 type MergeArtifactSerializer struct {
 	pool    pool.BuffPool
-	keyDesc val.TupleDesc
+	keyDesc *val.TupleDesc
 }
 
 var _ Serializer = MergeArtifactSerializer{}

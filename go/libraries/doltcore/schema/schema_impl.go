@@ -439,23 +439,23 @@ func (si schemaImpl) AddColumn(newCol Column, order *ColumnOrder) (Schema, error
 }
 
 // GetMapDescriptors implements the Schema interface.
-func (si *schemaImpl) GetMapDescriptors(vs val.ValueStore) (keyDesc, valueDesc val.TupleDesc) {
+func (si *schemaImpl) GetMapDescriptors(vs val.ValueStore) (keyDesc, valueDesc *val.TupleDesc) {
 	keyDesc = si.GetKeyDescriptor(vs)
 	valueDesc = si.GetValueDescriptor(vs)
 	return
 }
 
 // GetKeyDescriptor implements the Schema interface.
-func (si *schemaImpl) GetKeyDescriptor(vs val.ValueStore) val.TupleDesc {
+func (si *schemaImpl) GetKeyDescriptor(vs val.ValueStore) *val.TupleDesc {
 	return si.getKeyColumnsDescriptor(vs, true)
 }
 
 // GetKeyDescriptorWithNoConversion implements the Schema interface.
-func (si *schemaImpl) GetKeyDescriptorWithNoConversion(vs val.ValueStore) val.TupleDesc {
+func (si *schemaImpl) GetKeyDescriptorWithNoConversion(vs val.ValueStore) *val.TupleDesc {
 	return si.getKeyColumnsDescriptor(vs, false)
 }
 
-func (si *schemaImpl) getKeyColumnsDescriptor(vs val.ValueStore, convertAddressColumns bool) val.TupleDesc {
+func (si *schemaImpl) getKeyColumnsDescriptor(vs val.ValueStore, convertAddressColumns bool) *val.TupleDesc {
 	if IsKeyless(si) {
 		return val.KeylessTupleDesc
 	}
@@ -543,7 +543,7 @@ func (si *schemaImpl) getKeyColumnsDescriptor(vs val.ValueStore, convertAddressC
 }
 
 // GetValueDescriptor implements the Schema interface.
-func (si *schemaImpl) GetValueDescriptor(vs val.ValueStore) val.TupleDesc {
+func (si *schemaImpl) GetValueDescriptor(vs val.ValueStore) *val.TupleDesc {
 	var tt []val.Type
 	var handlers []val.TupleTypeHandler
 	var collations []sql.CollationID

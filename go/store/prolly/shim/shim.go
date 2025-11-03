@@ -73,7 +73,7 @@ func MapInterfaceFromValue(ctx context.Context, v types.Value, sch schema.Schema
 	}
 }
 
-func MapFromValueWithDescriptors(v types.Value, kd, vd val.TupleDesc, ns tree.NodeStore) (prolly.MapInterface, error) {
+func MapFromValueWithDescriptors(v types.Value, kd, vd *val.TupleDesc, ns tree.NodeStore) (prolly.MapInterface, error) {
 	root, fileId, err := NodeFromValue(v)
 	if err != nil {
 		return prolly.Map{}, err

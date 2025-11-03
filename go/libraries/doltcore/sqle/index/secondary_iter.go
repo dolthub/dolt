@@ -50,8 +50,8 @@ func (i *strictLookupIter) Next(_ context.Context) (k, v val.Tuple, err error) {
 
 type covStrictSecondaryLookupGen struct {
 	index      *doltIndex
+	prefixDesc *val.TupleDesc
 	m          prolly.Map
-	prefixDesc val.TupleDesc
 }
 
 var _ SecondaryLookupIterGen = (*covStrictSecondaryLookupGen)(nil)
@@ -97,9 +97,9 @@ func (c *covStrictSecondaryLookupGen) New(ctx context.Context, k val.Tuple) (pro
 type nonCovStrictSecondaryLookupGen struct {
 	sch        schema.Schema
 	pkBld      *val.TupleBuilder
+	prefixDesc *val.TupleDesc
 	pri        prolly.Map
 	sec        prolly.Map
-	prefixDesc val.TupleDesc
 	pkMap      val.OrdinalMapping
 }
 
@@ -156,7 +156,7 @@ func (c *nonCovStrictSecondaryLookupGen) New(ctx context.Context, k val.Tuple) (
 type covLaxSecondaryLookupGen struct {
 	m          prolly.Map
 	index      *doltIndex
-	prefixDesc val.TupleDesc
+	prefixDesc *val.TupleDesc
 	nullSafe   []bool
 }
 
@@ -213,9 +213,9 @@ type nonCovLaxSecondaryLookupGen struct {
 	pri        prolly.Map
 	sec        prolly.Map
 	sch        schema.Schema
-	prefixDesc val.TupleDesc
 	pkMap      val.OrdinalMapping
 	pkBld      *val.TupleBuilder
+	prefixDesc *val.TupleDesc
 	nullSafe   []bool
 }
 
