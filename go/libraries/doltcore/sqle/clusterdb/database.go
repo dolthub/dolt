@@ -216,3 +216,7 @@ func (db database) AllSchemas(ctx *sql.Context) ([]sql.DatabaseSchema, error) {
 func (db database) SchemaName() string {
 	return ""
 }
+
+func (db database) GetTableResolver() doltdb.TableResolver {
+	return doltdb.SimpleTableResolver{}
+}

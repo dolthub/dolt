@@ -21,6 +21,7 @@ import (
 	"io"
 	"time"
 
+	"github.com/dolthub/go-mysql-server/sql"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
@@ -60,7 +61,7 @@ const (
 )
 
 type FKViolationReceiver interface {
-	StartFK(ctx context.Context, fk doltdb.ForeignKey) error
+	StartFK(ctx *sql.Context, fk doltdb.ForeignKey) error
 	EndCurrFK(ctx context.Context) error
 	NomsFKViolationFound(ctx context.Context, rowKey, rowValue types.Tuple) error
 	ProllyFKViolationFound(ctx context.Context, rowKey, rowValue val.Tuple) error
@@ -68,7 +69,7 @@ type FKViolationReceiver interface {
 
 // GetForeignKeyViolations returns the violations that have been created as a
 // result of the diff between |baseRoot| and |newRoot|. It sends the violations to |receiver|.
-func GetForeignKeyViolations(ctx context.Context, newRoot, baseRoot doltdb.RootValue, tables *doltdb.TableNameSet, receiver FKViolationReceiver) error {
+func GetForeignKeyViolations(ctx *sql.Context, tableResolver doltdb.TableResolver, newRoot, baseRoot doltdb.RootValue, tables *doltdb.TableNameSet, receiver FKViolationReceiver) error {
 	fkColl, err := newRoot.GetForeignKeyCollection(ctx)
 	if err != nil {
 		return err
@@ -83,7 +84,7 @@ func GetForeignKeyViolations(ctx context.Context, newRoot, baseRoot doltdb.RootV
 			return err
 		}
 
-		postParent, ok, err := newConstraintViolationsLoadedTable(ctx, foreignKey.ReferencedTableName, foreignKey.ReferencedTableIndex, newRoot)
+		postParent, ok, err := newConstraintViolationsLoadedTable(ctx, tableResolver, foreignKey.ReferencedTableName, foreignKey.ReferencedTableIndex, newRoot)
 		if err != nil {
 			return err
 		}
@@ -92,7 +93,7 @@ func GetForeignKeyViolations(ctx context.Context, newRoot, baseRoot doltdb.RootV
 				foreignKey.Name, foreignKey.ReferencedTableIndex, foreignKey.ReferencedTableName)
 		}
 
-		postChild, ok, err := newConstraintViolationsLoadedTable(ctx, foreignKey.TableName, foreignKey.TableIndex, newRoot)
+		postChild, ok, err := newConstraintViolationsLoadedTable(ctx, tableResolver, foreignKey.TableName, foreignKey.TableIndex, newRoot)
 		if err != nil {
 			return err
 		}
@@ -101,7 +102,7 @@ func GetForeignKeyViolations(ctx context.Context, newRoot, baseRoot doltdb.RootV
 				foreignKey.Name, foreignKey.TableIndex, foreignKey.TableName)
 		}
 
-		preParent, _, err := newConstraintViolationsLoadedTable(ctx, foreignKey.ReferencedTableName, foreignKey.ReferencedTableIndex, baseRoot)
+		preParent, _, err := newConstraintViolationsLoadedTable(ctx, tableResolver, foreignKey.ReferencedTableName, foreignKey.ReferencedTableIndex, baseRoot)
 		if err != nil {
 			if err != doltdb.ErrTableNotFound {
 				return err
@@ -123,7 +124,7 @@ func GetForeignKeyViolations(ctx context.Context, newRoot, baseRoot doltdb.RootV
 			}
 		}
 
-		preChild, _, err := newConstraintViolationsLoadedTable(ctx, foreignKey.TableName, foreignKey.TableIndex, baseRoot)
+		preChild, _, err := newConstraintViolationsLoadedTable(ctx, tableResolver, foreignKey.TableName, foreignKey.TableIndex, baseRoot)
 		if err != nil {
 			if err != doltdb.ErrTableNotFound {
 				return err
@@ -155,9 +156,9 @@ func GetForeignKeyViolations(ctx context.Context, newRoot, baseRoot doltdb.RootV
 
 // AddForeignKeyViolations adds foreign key constraint violations to each table.
 // todo(andy): pass doltdb.Rootish
-func AddForeignKeyViolations(ctx context.Context, newRoot, baseRoot doltdb.RootValue, tables *doltdb.TableNameSet, theirRootIsh hash.Hash) (doltdb.RootValue, *doltdb.TableNameSet, error) {
-	violationWriter := &foreignKeyViolationWriter{rootValue: newRoot, theirRootIsh: theirRootIsh, violatedTables: doltdb.NewTableNameSet(nil)}
-	err := GetForeignKeyViolations(ctx, newRoot, baseRoot, tables, violationWriter)
+func AddForeignKeyViolations(ctx *sql.Context, tableResolver doltdb.TableResolver, newRoot, baseRoot doltdb.RootValue, tables *doltdb.TableNameSet, theirRootIsh hash.Hash) (doltdb.RootValue, *doltdb.TableNameSet, error) {
+	violationWriter := &foreignKeyViolationWriter{tableResolver: tableResolver, rootValue: newRoot, theirRootIsh: theirRootIsh, violatedTables: doltdb.NewTableNameSet(nil)}
+	err := GetForeignKeyViolations(ctx, tableResolver, newRoot, baseRoot, tables, violationWriter)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -166,9 +167,9 @@ func AddForeignKeyViolations(ctx context.Context, newRoot, baseRoot doltdb.RootV
 
 // GetForeignKeyViolatedTables returns a list of tables that have foreign key
 // violations based on the diff between |newRoot| and |baseRoot|.
-func GetForeignKeyViolatedTables(ctx context.Context, newRoot, baseRoot doltdb.RootValue, tables *doltdb.TableNameSet) (*doltdb.TableNameSet, error) {
+func GetForeignKeyViolatedTables(ctx *sql.Context, tableResolver doltdb.TableResolver, newRoot, baseRoot doltdb.RootValue, tables *doltdb.TableNameSet) (*doltdb.TableNameSet, error) {
 	handler := &foreignKeyViolationTracker{tableSet: doltdb.NewTableNameSet(nil)}
-	err := GetForeignKeyViolations(ctx, newRoot, baseRoot, tables, handler)
+	err := GetForeignKeyViolations(ctx, tableResolver, newRoot, baseRoot, tables, handler)
 	if err != nil {
 		return nil, err
 	}
@@ -181,7 +182,7 @@ type foreignKeyViolationTracker struct {
 	currFk   doltdb.ForeignKey
 }
 
-func (f *foreignKeyViolationTracker) StartFK(ctx context.Context, fk doltdb.ForeignKey) error {
+func (f *foreignKeyViolationTracker) StartFK(ctx *sql.Context, fk doltdb.ForeignKey) error {
 	f.currFk = fk
 	return nil
 }
@@ -204,6 +205,7 @@ var _ FKViolationReceiver = (*foreignKeyViolationTracker)(nil)
 
 // foreignKeyViolationWriter updates rootValue with the foreign key constraint violations.
 type foreignKeyViolationWriter struct {
+	tableResolver  doltdb.TableResolver
 	rootValue      doltdb.RootValue
 	theirRootIsh   hash.Hash
 	violatedTables *doltdb.TableNameSet
@@ -223,10 +225,10 @@ type foreignKeyViolationWriter struct {
 
 var _ FKViolationReceiver = (*foreignKeyViolationWriter)(nil)
 
-func (f *foreignKeyViolationWriter) StartFK(ctx context.Context, fk doltdb.ForeignKey) error {
+func (f *foreignKeyViolationWriter) StartFK(ctx *sql.Context, fk doltdb.ForeignKey) error {
 	f.currFk = fk
 
-	tbl, ok, err := f.rootValue.GetTable(ctx, fk.TableName)
+	tbl, ok, err := f.tableResolver.ResolveTable(ctx, f.rootValue, fk.TableName)
 	if err != nil {
 		return err
 	}
@@ -235,8 +237,7 @@ func (f *foreignKeyViolationWriter) StartFK(ctx context.Context, fk doltdb.Forei
 	}
 
 	f.currTbl = tbl
-
-	refTbl, ok, err := f.rootValue.GetTable(ctx, fk.ReferencedTableName)
+	refTbl, ok, err := f.tableResolver.ResolveTable(ctx, f.rootValue, fk.ReferencedTableName)
 	if err != nil {
 		return err
 	}
@@ -688,8 +689,8 @@ func childFkConstraintViolationsProcess(
 
 // newConstraintViolationsLoadedTable returns a *constraintViolationsLoadedTable. Returns false if the table was loaded
 // but the index could not be found. If the table could not be found, then an error is returned.
-func newConstraintViolationsLoadedTable(ctx context.Context, tblName doltdb.TableName, idxName string, root doltdb.RootValue) (*constraintViolationsLoadedTable, bool, error) {
-	tbl, trueTblName, ok, err := doltdb.GetTableInsensitive(ctx, root, tblName)
+func newConstraintViolationsLoadedTable(ctx *sql.Context, tableResolver doltdb.TableResolver, tblName doltdb.TableName, idxName string, root doltdb.RootValue) (*constraintViolationsLoadedTable, bool, error) {
+	trueTblName, tbl, ok, err := tableResolver.ResolveTableInsensitive(ctx, root, tblName)
 	if err != nil {
 		return nil, false, err
 	}
@@ -716,7 +717,7 @@ func newConstraintViolationsLoadedTable(ctx context.Context, tblName doltdb.Tabl
 		}
 		pkIdx := schema.NewIndex("", pkCols.Tags, pkCols.Tags, pkIdxColl, pkIdxProps)
 		return &constraintViolationsLoadedTable{
-			TableName:   trueTblName,
+			TableName:   trueTblName.Name,
 			Table:       tbl,
 			Schema:      sch,
 			RowData:     rowData,
@@ -729,7 +730,7 @@ func newConstraintViolationsLoadedTable(ctx context.Context, tblName doltdb.Tabl
 	idx, ok := sch.Indexes().GetByNameCaseInsensitive(idxName)
 	if !ok {
 		return &constraintViolationsLoadedTable{
-			TableName: trueTblName,
+			TableName: trueTblName.Name,
 			Table:     tbl,
 			Schema:    sch,
 			RowData:   rowData,
@@ -740,7 +741,7 @@ func newConstraintViolationsLoadedTable(ctx context.Context, tblName doltdb.Tabl
 		return nil, false, err
 	}
 	return &constraintViolationsLoadedTable{
-		TableName:   trueTblName,
+		TableName:   trueTblName.Name,
 		Table:       tbl,
 		Schema:      sch,
 		RowData:     rowData,

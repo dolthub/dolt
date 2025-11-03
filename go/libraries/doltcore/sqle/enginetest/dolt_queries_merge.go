@@ -2887,6 +2887,9 @@ var MergeScripts = []queries.ScriptTest{
 		// an index covering the column that has a different tag between the two branches can be dropped during
 		// the merge.
 		Name: "merge with nonmatching column tags on index",
+		// NOTE: Because we don't want to expose the dolt_update_column_tag() stored procedure in Doltgres yet,
+		//       this is marked as a mysql-only test.
+		Dialect: "mysql",
 		SetUpScript: []string{
 			"CREATE TABLE t1(pk int primary key, c1 varchar(100), c2 int);",
 			"INSERT INTO t1 VALUES (1, 'one', 1), (2, 'two', 2);",
@@ -2933,6 +2936,9 @@ var MergeScripts = []queries.ScriptTest{
 	{
 		// When the primary key's column tags don't match across a merge, the merge errors out
 		Name: "merge with nonmatching column tags on primary key",
+		// NOTE: Because we don't want to expose the dolt_update_column_tag() stored procedure in Doltgres yet,
+		//       this is marked as a mysql-only test.
+		Dialect: "mysql",
 		SetUpScript: []string{
 			"CREATE TABLE t1(pk int primary key, c1 varchar(100), c2 int);",
 			"INSERT INTO t1 VALUES (1, 'one', 1), (2, 'two', 2);",

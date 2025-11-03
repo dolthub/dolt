@@ -156,6 +156,23 @@ func DSessFromSess(sess sql.Session) *DoltSession {
 	return sess.(*DoltSession)
 }
 
+func GetTableResolver(ctx *sql.Context) (doltdb.TableResolver, error) {
+	dbName := ctx.GetCurrentDatabase()
+	dSess := DSessFromSess(ctx.Session)
+	if dbName == "" {
+		// If no database is selected, there's no situation where we need to resolve nonlocal tables.
+		return doltdb.SimpleTableResolver{}, nil
+	}
+	sqlDB, ok, err := dSess.Provider().SessionDatabase(ctx, dbName)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, fmt.Errorf("could not load session database")
+	}
+	return sqlDB.GetTableResolver(), nil
+}
+
 // lookupDbState is the private version of LookupDbState, returning a struct that has more information available than
 // the interface returned by the public method.
 func (d *DoltSession) lookupDbState(ctx *sql.Context, dbName string) (*branchState, bool, error) {
@@ -780,7 +797,11 @@ func (d *DoltSession) newPendingCommit(ctx *sql.Context, branchState *branchStat
 		}
 	}
 
-	pendingCommit, err := actions.GetCommitStaged(ctx, roots, branchState.WorkingSet(), mergeParentCommits, branchState.dbData.Ddb, props)
+	tableResolver, err := GetTableResolver(ctx)
+	if err != nil {
+		return nil, err
+	}
+	pendingCommit, err := actions.GetCommitStaged(ctx, tableResolver, roots, branchState.WorkingSet(), mergeParentCommits, branchState.dbData.Ddb, props)
 	if err != nil {
 		// Special case for nothing staged, which is not an error
 		if _, ok := err.(actions.NothingStaged); !ok {

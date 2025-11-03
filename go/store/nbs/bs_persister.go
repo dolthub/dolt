@@ -60,14 +60,17 @@ func (bsp *blobstorePersister) Persist(ctx context.Context, mt *memTable, haver 
 	// persist this table in two parts to facilitate later conjoins
 	records, tail := data[:splitOffset], data[splitOffset:]
 
+	recordsName := name + tableRecordsExt
+	tailName := name + tableTailExt
+
 	// first write table records and tail (index+footer) as separate blobs
 	eg, ectx := errgroup.WithContext(ctx)
 	eg.Go(func() error {
-		_, err := bsp.bs.Put(ectx, name+tableRecordsExt, int64(len(records)), bytes.NewBuffer(records))
+		_, err := bsp.bs.Put(ectx, recordsName, int64(len(records)), bytes.NewBuffer(records))
 		return err
 	})
 	eg.Go(func() error {
-		_, err := bsp.bs.Put(ectx, name+tableTailExt, int64(len(tail)), bytes.NewBuffer(tail))
+		_, err := bsp.bs.Put(ectx, tailName, int64(len(tail)), bytes.NewBuffer(tail))
 		return err
 	})
 	if err = eg.Wait(); err != nil {
@@ -75,7 +78,7 @@ func (bsp *blobstorePersister) Persist(ctx context.Context, mt *memTable, haver 
 	}
 
 	// then concatenate into a final blob
-	if _, err = bsp.bs.Concatenate(ctx, name, []string{name + tableRecordsExt, name + tableTailExt}); err != nil {
+	if _, err = bsp.bs.Concatenate(ctx, name, []string{recordsName, tailName}); err != nil {
 		return emptyChunkSource{}, gcBehavior_Continue, err
 	}
 	rdr := &bsTableReaderAt{key: name, bs: bsp.bs}
@@ -88,29 +91,13 @@ func (bsp *blobstorePersister) Persist(ctx context.Context, mt *memTable, haver 
 
 // ConjoinAll implements tablePersister.
 func (bsp *blobstorePersister) ConjoinAll(ctx context.Context, sources chunkSources, stats *Stats) (chunkSource, cleanupFunc, error) {
-	var sized []sourceWithSize
-	for _, src := range sources {
-		sized = append(sized, sourceWithSize{src, src.currentSize()})
-	}
-
-	archiveFound := false
-	for _, s := range sized {
-		_, ok := s.source.(archiveChunkSource)
-		if ok {
-			archiveFound = true
-			break
-		}
-	}
-
-	var plan compactionPlan
-	var err error
-	if archiveFound {
-		plan, err = planArchiveConjoin(sized, stats)
-	} else {
-		plan, err = planTableConjoin(ctx, sized, stats)
-	}
+	plan, err := planRangeCopyConjoin(ctx, sources, stats)
 	if err != nil {
 		return nil, nil, err
+	}
+
+	if plan.chunkCount == 0 {
+		return emptyChunkSource{}, nil, nil
 	}
 
 	name := plan.name.String() + plan.suffix
@@ -131,19 +118,21 @@ func (bsp *blobstorePersister) ConjoinAll(ctx context.Context, sources chunkSour
 	}
 
 	// first concatenate all the sub-objects to create a composite sub-object
-	if _, err = bsp.bs.Concatenate(ctx, name+tableRecordsExt, conjoinees); err != nil {
+	recordsName := name + tableRecordsExt
+	tailName := name + tableTailExt
+	if _, err = bsp.bs.Concatenate(ctx, recordsName, conjoinees); err != nil {
 		return nil, nil, err
 	}
-	if _, err = blobstore.PutBytes(ctx, bsp.bs, name+tableTailExt, plan.mergedIndex); err != nil {
+	if _, err = blobstore.PutBytes(ctx, bsp.bs, tailName, plan.mergedIndex); err != nil {
 		return nil, nil, err
 	}
 	// then concatenate into a final blob
-	if _, err = bsp.bs.Concatenate(ctx, name, []string{name + tableRecordsExt, name + tableTailExt}); err != nil {
+	if _, err = bsp.bs.Concatenate(ctx, name, []string{recordsName, tailName}); err != nil {
 		return emptyChunkSource{}, nil, err
 	}
 
 	var cs chunkSource
-	if archiveFound {
+	if plan.suffix == ArchiveFileSuffix {
 		cs, err = newBSArchiveChunkSource(ctx, bsp.bs, plan.name, bsp.q, stats)
 	} else {
 		cs, err = newBSTableChunkSource(ctx, bsp.bs, plan.name, plan.chunkCount, bsp.q, stats)
@@ -260,14 +249,16 @@ func (bsp *blobstorePersister) CopyTableFile(ctx context.Context, r io.Reader, n
 
 		indexLen := int64(fileSz - splitOffset)
 
+		recordsName := name + tableRecordsExt
+		tailName := name + tableTailExt
 		// check if we can Put concurrently
 		rr, ok := r.(io.ReaderAt)
 		if !ok {
 			// sequentially write chunk records then tail
-			if _, err := bsp.bs.Put(ctx, name+tableRecordsExt, int64(splitOffset), lr); err != nil {
+			if _, err := bsp.bs.Put(ctx, recordsName, int64(splitOffset), lr); err != nil {
 				return err
 			}
-			if _, err := bsp.bs.Put(ctx, name+tableTailExt, indexLen, r); err != nil {
+			if _, err := bsp.bs.Put(ctx, tailName, indexLen, r); err != nil {
 				return err
 			}
 		} else {
@@ -276,11 +267,11 @@ func (bsp *blobstorePersister) CopyTableFile(ctx context.Context, r io.Reader, n
 			eg, ectx := errgroup.WithContext(ctx)
 			eg.Go(func() error {
 				srdr := io.NewSectionReader(rr, int64(splitOffset), indexLen)
-				_, err := bsp.bs.Put(ectx, name+tableTailExt, indexLen, srdr)
+				_, err := bsp.bs.Put(ectx, tailName, indexLen, srdr)
 				return err
 			})
 			eg.Go(func() error {
-				_, err := bsp.bs.Put(ectx, name+tableRecordsExt, int64(splitOffset), lr)
+				_, err := bsp.bs.Put(ectx, recordsName, int64(splitOffset), lr)
 				return err
 			})
 			if err := eg.Wait(); err != nil {
@@ -289,7 +280,7 @@ func (bsp *blobstorePersister) CopyTableFile(ctx context.Context, r io.Reader, n
 		}
 
 		// finally concatenate into the complete table
-		_, err := bsp.bs.Concatenate(ctx, name, []string{name + tableRecordsExt, name + tableTailExt})
+		_, err := bsp.bs.Concatenate(ctx, name, []string{recordsName, tailName})
 		return err
 	} else {
 		// no split offset, just copy the whole table. We will create the records object on demand if needed.
