@@ -719,6 +719,12 @@ func (td *TupleDesc) formatValue(ctx context.Context, enc Encoding, i int, value
 
 // Equals returns true if |td| and |other| have equal type slices.
 func (td *TupleDesc) Equals(other *TupleDesc) bool {
+	if td == nil && other == nil {
+		return true
+	}
+	if (td == nil && other != nil) || (td != nil && other == nil) {
+		return false
+	}
 	if len(td.Types) != len(other.Types) {
 		return false
 	}

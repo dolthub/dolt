@@ -357,7 +357,7 @@ func isVirtualIndex(def schema.Index, sch schema.Schema) bool {
 // building a key for a secondary index. This is determined by looking at the encoding of the field
 // in the main table (|tablePos| and |tableValueDescriptor|) and the encoding of the field in the index
 // (|indexPos| and |indexKeyDescriptor|) and seeing if one is an address encoding and the other is not.
-func shouldDereferenceContent(tablePos int, tableValueDescriptor val.TupleDesc, indexPos int, indexKeyDescriptor val.TupleDesc) bool {
+func shouldDereferenceContent(tablePos int, tableValueDescriptor *val.TupleDesc, indexPos int, indexKeyDescriptor *val.TupleDesc) bool {
 	tableEncoding := tableValueDescriptor.Types[tablePos].Enc
 	indexEncoding := indexKeyDescriptor.Types[indexPos].Enc
 	return val.IsReferenceEncoding(tableEncoding) && !val.IsReferenceEncoding(indexEncoding)
@@ -367,7 +367,7 @@ func shouldDereferenceContent(tablePos int, tableValueDescriptor val.TupleDesc, 
 // and return a []byte. |tableValueDescriptor| is the tuple descriptor for the value tuple of the main
 // table, |tablePos| is the field index into the value tuple, and |tuple| is the value tuple from the
 // main table.
-func dereferenceContent(ctx context.Context, tableValueDescriptor val.TupleDesc, tablePos int, tuple val.Tuple, ns tree.NodeStore) ([]byte, error) {
+func dereferenceContent(ctx context.Context, tableValueDescriptor *val.TupleDesc, tablePos int, tuple val.Tuple, ns tree.NodeStore) ([]byte, error) {
 	v, err := tree.GetField(ctx, tableValueDescriptor, tablePos, tuple, ns)
 	if err != nil {
 		return nil, err
@@ -398,7 +398,7 @@ func dereferenceContent(ctx context.Context, tableValueDescriptor val.TupleDesc,
 // and return a GeometryType. |tableValueDescriptor| is the tuple descriptor for the value tuple of the main
 // table, |tablePos| is the field index into the value tuple, and |tuple| is the value tuple from the
 // main table.
-func dereferenceGeometry(ctx context.Context, tableValueDescriptor val.TupleDesc, tablePos int, tuple val.Tuple, ns tree.NodeStore) (interface{}, error) {
+func dereferenceGeometry(ctx context.Context, tableValueDescriptor *val.TupleDesc, tablePos int, tuple val.Tuple, ns tree.NodeStore) (interface{}, error) {
 	v, err := tree.GetField(ctx, tableValueDescriptor, tablePos, tuple, ns)
 	if err != nil {
 		return nil, err
