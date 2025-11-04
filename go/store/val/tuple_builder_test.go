@@ -117,7 +117,7 @@ func testRoundTripInts(t *testing.T) {
 
 	tests := []struct {
 		data map[int]int64
-		desc TupleDesc
+		desc *TupleDesc
 	}{
 		{
 			desc: NewTupleDescriptor(typ),
