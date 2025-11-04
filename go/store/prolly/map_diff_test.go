@@ -265,7 +265,7 @@ func makeMapWithInserts(t *testing.T, m Map, numInserts int) (Map, [][2]val.Tupl
 }
 
 // generates tuple pairs not currently in |m|
-func generateInserts(t *testing.T, m testMap, kd, vd val.TupleDesc, numInserts int) [][2]val.Tuple {
+func generateInserts(t *testing.T, m testMap, kd, vd *val.TupleDesc, numInserts int) [][2]val.Tuple {
 	ctx := context.Background()
 	ns := tree.NewTestNodeStore()
 	tups, err := tree.RandomTuplePairs(ctx, numInserts*2, kd, vd, ns)
@@ -311,7 +311,7 @@ func makeMapWithUpdates(t *testing.T, m Map, updates ...[3]val.Tuple) Map {
 	return mm
 }
 
-func makeUpdatesToTuples(kd, vd val.TupleDesc, tuples ...[2]val.Tuple) (updates [][3]val.Tuple) {
+func makeUpdatesToTuples(kd, vd *val.TupleDesc, tuples ...[2]val.Tuple) (updates [][3]val.Tuple) {
 	ctx := context.Background()
 	ns := tree.NewTestNodeStore()
 	updates = make([][3]val.Tuple, len(tuples))

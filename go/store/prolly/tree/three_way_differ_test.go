@@ -189,7 +189,7 @@ func TestThreeWayDiffer(t *testing.T) {
 				valTypes = append(valTypes, val.Type{Enc: val.Int64Enc, Nullable: true})
 			}
 
-			valDesc := val.TupleDesc{Types: valTypes}
+			valDesc := &val.TupleDesc{Types: valTypes}
 
 			base := newTestMap(t, ctx, tt.base, ns, valDesc)
 			left := newTestMap(t, ctx, tt.left, ns, valDesc)
@@ -219,7 +219,7 @@ func TestThreeWayDiffer(t *testing.T) {
 	}
 }
 
-func testResolver(t *testing.T, ns NodeStore, valDesc val.TupleDesc, valBuilder *val.TupleBuilder) func(*sql.Context, val.Tuple, val.Tuple, val.Tuple) (val.Tuple, bool, error) {
+func testResolver(t *testing.T, ns NodeStore, valDesc *val.TupleDesc, valBuilder *val.TupleBuilder) func(*sql.Context, val.Tuple, val.Tuple, val.Tuple) (val.Tuple, bool, error) {
 	return func(_ *sql.Context, l, r, b val.Tuple) (val.Tuple, bool, error) {
 		for i := range valDesc.Types {
 			var base, left, right int64
@@ -263,7 +263,7 @@ func compareDiffs(t *testing.T, exp, cmp testDiff) {
 	}
 }
 
-func formatTestDiff(t *testing.T, d ThreeWayDiff, keyDesc, valDesc val.TupleDesc) testDiff {
+func formatTestDiff(t *testing.T, d ThreeWayDiff, keyDesc, valDesc *val.TupleDesc) testDiff {
 	key, ok := keyDesc.GetInt64(0, d.Key)
 	require.True(t, ok)
 
@@ -276,7 +276,7 @@ func formatTestDiff(t *testing.T, d ThreeWayDiff, keyDesc, valDesc val.TupleDesc
 	}
 }
 
-func extractTestVal(t *testing.T, valDesc val.TupleDesc, tuple val.Tuple) []int {
+func extractTestVal(t *testing.T, valDesc *val.TupleDesc, tuple val.Tuple) []int {
 	if tuple == nil {
 		return nil
 	}
@@ -292,7 +292,7 @@ func extractTestVal(t *testing.T, valDesc val.TupleDesc, tuple val.Tuple) []int 
 // newTestMap makes a prolly tree from a matrix of integers. Each row corresponds
 // to a row in the prolly map. The first value in a row will be the primary key.
 // The rest of the values will be the value fields.
-func newTestMap(t *testing.T, ctx context.Context, rows [][]int, ns NodeStore, valDesc val.TupleDesc) StaticMap[val.Tuple, val.Tuple, val.TupleDesc] {
+func newTestMap(t *testing.T, ctx context.Context, rows [][]int, ns NodeStore, valDesc *val.TupleDesc) StaticMap[val.Tuple, val.Tuple, *val.TupleDesc] {
 	serializer := message.NewProllyMapSerializer(valDesc, ns.Pool())
 	chkr, err := newEmptyChunker(ctx, ns, serializer)
 	require.NoError(t, err)
@@ -316,7 +316,7 @@ func newTestMap(t *testing.T, ctx context.Context, rows [][]int, ns NodeStore, v
 
 	root, err := chkr.Done(ctx)
 	require.NoError(t, err)
-	return StaticMap[val.Tuple, val.Tuple, val.TupleDesc]{
+	return StaticMap[val.Tuple, val.Tuple, *val.TupleDesc]{
 		Root:      root,
 		NodeStore: ns,
 		Order:     keyDesc,

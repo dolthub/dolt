@@ -210,11 +210,11 @@ func testIterPrefixRange(t *testing.T, om testMap, tuples [][2]val.Tuple) {
 	}
 }
 
-func getDescPrefix(desc val.TupleDesc, sz int) val.TupleDesc {
+func getDescPrefix(desc *val.TupleDesc, sz int) *val.TupleDesc {
 	return val.NewTupleDescriptor(desc.Types[:sz]...)
 }
 
-func getKeyPrefix(key val.Tuple, desc val.TupleDesc) (partial val.Tuple, err error) {
+func getKeyPrefix(key val.Tuple, desc *val.TupleDesc) (partial val.Tuple, err error) {
 	tb := val.NewTupleBuilder(desc, ns)
 	for i := range desc.Types {
 		tb.PutRaw(i, key.GetField(i))

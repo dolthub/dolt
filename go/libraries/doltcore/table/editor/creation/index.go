@@ -331,7 +331,7 @@ var _ error = (*prollyUniqueKeyErr)(nil)
 // (which is the full row).
 type prollyUniqueKeyErr struct {
 	k         val.Tuple
-	kd        val.TupleDesc
+	kd        *val.TupleDesc
 	IndexName string
 }
 
@@ -343,7 +343,7 @@ func (u *prollyUniqueKeyErr) Error() string {
 
 // formatKey returns a comma-separated string representation of the key given
 // that matches the output of the old format.
-func formatKey(ctx context.Context, key val.Tuple, td val.TupleDesc) (string, error) {
+func formatKey(ctx context.Context, key val.Tuple, td *val.TupleDesc) (string, error) {
 	vals := make([]string, td.Count())
 	for i := 0; i < td.Count(); i++ {
 		vals[i] = td.FormatValue(ctx, i, key.GetField(i))

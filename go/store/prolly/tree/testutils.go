@@ -428,7 +428,7 @@ func MakeTreeForTest(tuples [][2]val.Tuple) (Node, error) {
 	return root, nil
 }
 
-func GetAddressFromLevelAndKeyForTest(ctx context.Context, ns NodeStore, root Node, level int, key val.Tuple, keyDesc val.TupleDesc) (addr hash.Hash, ok bool, err error) {
+func GetAddressFromLevelAndKeyForTest(ctx context.Context, ns NodeStore, root Node, level int, key val.Tuple, keyDesc *val.TupleDesc) (addr hash.Hash, ok bool, err error) {
 	i := 0
 	for i < root.Count() {
 		childKey := root.GetKey(i)

@@ -163,7 +163,7 @@ func TestRangeSearch(t *testing.T) {
 		values[i] = make(val.Tuple, 2)
 	}
 	testNode := tree.NewTupleLeafNode(rangeTuples, values)
-	tm := NewMap(testNode, ns, twoCol, val.TupleDesc{})
+	tm := NewMap(testNode, ns, twoCol, &val.TupleDesc{})
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

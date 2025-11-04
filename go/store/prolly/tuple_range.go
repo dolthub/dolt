@@ -184,7 +184,7 @@ func (r Range) Matches(ctx context.Context, t val.Tuple) bool {
 	return true
 }
 
-func (r Range) IsStrictKeyLookup(desc val.TupleDesc) bool {
+func (r Range) IsStrictKeyLookup(desc *val.TupleDesc) bool {
 	// a strict key is a set of non-nil equality restrictions covering every field of a unique index
 	if len(r.Fields) < len(desc.Types) {
 		return false
