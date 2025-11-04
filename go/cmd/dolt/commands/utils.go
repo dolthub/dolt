@@ -49,6 +49,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/libraries/utils/gpg"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/util/outputpager"
@@ -707,6 +708,9 @@ func getCommitInfo(queryist cli.Queryist, sqlCtx *sql.Context, ref string) (*Com
 }
 
 // getCommitInfoWithOptions returns the commit info for the given ref, with options.
+// This function retrieves complete commit metadata directly from the commit object,
+// including both author and committer fields, bypassing any session variables like
+// DoltLogCommitterOnly that control dolt_log table output formatting.
 func getCommitInfoWithOptions(queryist cli.Queryist, sqlCtx *sql.Context, commitRef string, opts commitInfoOptions) (*CommitInfo, error) {
 	hashOfHead, err := getHashOf(queryist, sqlCtx, "HEAD")
 	if err != nil {
@@ -718,30 +722,15 @@ func getCommitInfoWithOptions(queryist cli.Queryist, sqlCtx *sql.Context, commit
 		return nil, fmt.Errorf("no current database set")
 	}
 
-	// Get database directly from queryist to work with any session type
-	sqlEngine, ok := queryist.(*engine.SqlEngine)
+	// Get DoltDB from session - works for both CLI (SqlEngine) and SQL server (ConnectionQueryist)
+	doltSess, ok := sqlCtx.Session.(*dsess.DoltSession)
 	if !ok {
-		return nil, fmt.Errorf("queryist is not a SqlEngine, cannot access database")
+		return nil, fmt.Errorf("session is not a DoltSession: %T (required for commit operations)", sqlCtx.Session)
 	}
 
-	database, err := sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.Database(sqlCtx, dbName)
-	if err != nil {
-		return nil, fmt.Errorf("error getting database '%s': %v", dbName, err)
-	}
-
-	var sqledb dsess.SqlDatabase
-	if db, ok := database.(dsess.SqlDatabase); ok {
-		sqledb = db
-	} else if unwrapper, ok := database.(interface{ Unwrap() sql.Database }); ok {
-		if unwrapped := unwrapper.Unwrap(); unwrapped != nil {
-			if db, ok := unwrapped.(dsess.SqlDatabase); ok {
-				sqledb = db
-			}
-		}
-	}
-
-	if sqledb == nil {
-		return nil, fmt.Errorf("database is not a Dolt database: %T", database)
+	ddb, ok := doltSess.GetDoltDB(sqlCtx, dbName)
+	if !ok {
+		return nil, fmt.Errorf("failed to get DoltDB for database '%s'", dbName)
 	}
 
 	cs, err := doltdb.NewCommitSpec(commitRef)
@@ -749,18 +738,17 @@ func getCommitInfoWithOptions(queryist cli.Queryist, sqlCtx *sql.Context, commit
 		return nil, fmt.Errorf("error creating commit spec for '%s': %v", commitRef, err)
 	}
 
+	// Get head reference
 	var headRef ref.DoltRef
-	if doltSess, ok := sqlCtx.Session.(*dsess.DoltSession); ok {
-		headRef, err = doltSess.CWBHeadRef(sqlCtx, dbName)
-		if err == doltdb.ErrOperationNotSupportedInDetachedHead {
-			// In detached HEAD state, we can still resolve commits without a branch ref
-			headRef = nil
-		} else if err != nil {
-			return nil, fmt.Errorf("error getting head ref: %v", err)
-		}
+	headRef, err = doltSess.CWBHeadRef(sqlCtx, dbName)
+	if err == doltdb.ErrOperationNotSupportedInDetachedHead {
+		// In detached HEAD state, we can still resolve commits without a branch ref
+		headRef = nil
+	} else if err != nil {
+		return nil, fmt.Errorf("error getting head ref: %v", err)
 	}
 
-	optCmt, err := sqledb.DbData().Ddb.Resolve(sqlCtx, cs, headRef)
+	optCmt, err := ddb.Resolve(sqlCtx, cs, headRef)
 	if err != nil {
 		return nil, fmt.Errorf("error resolving commit '%s': %v", commitRef, err)
 	}
@@ -770,12 +758,24 @@ func getCommitInfoWithOptions(queryist cli.Queryist, sqlCtx *sql.Context, commit
 		return nil, nil // No commit found
 	}
 
+	// Get complete commit metadata directly from the commit object.
+	// This retrieves all fields (author, committer, etc.) regardless of any
+	// session variables like DoltLogCommitterOnly that only affect SQL table output.
 	commitMeta, err := commit.GetCommitMeta(sqlCtx)
 	if err != nil {
 		return nil, fmt.Errorf("error getting commit metadata: %v", err)
 	}
 
-	if !opts.showSignature {
+	// Handle signature verification if requested
+	if opts.showSignature && len(commitMeta.Signature) > 0 {
+		// Verify the signature and replace it with the verification output
+		verifyOut, err := gpg.Verify(sqlCtx, []byte(commitMeta.Signature))
+		if err != nil {
+			return nil, fmt.Errorf("error verifying signature: %v", err)
+		}
+		commitMeta.Signature = string(verifyOut)
+	} else if !opts.showSignature {
+		// Clear signature if not requested
 		commitMeta.Signature = ""
 	}
 
