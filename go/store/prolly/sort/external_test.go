@@ -31,7 +31,7 @@ import (
 func TestFlush(t *testing.T) {
 	ctx := sql.NewEmptyContext()
 	tests := []struct {
-		td  val.TupleDesc
+		td  *val.TupleDesc
 		cnt int
 	}{
 		{
@@ -61,7 +61,7 @@ func TestFlush(t *testing.T) {
 		},
 	}
 
-	name := func(td val.TupleDesc, cnt int) string {
+	name := func(td *val.TupleDesc, cnt int) string {
 		b := strings.Builder{}
 		sep := ""
 		for _, t := range td.Types {
@@ -121,7 +121,7 @@ func TestFlush(t *testing.T) {
 func TestMerge(t *testing.T) {
 	ctx := sql.NewEmptyContext()
 	tests := []struct {
-		td     val.TupleDesc
+		td     *val.TupleDesc
 		counts []int
 	}{
 		{
@@ -151,7 +151,7 @@ func TestMerge(t *testing.T) {
 		},
 	}
 
-	name := func(td val.TupleDesc, counts []int) string {
+	name := func(td *val.TupleDesc, counts []int) string {
 		b := strings.Builder{}
 		sep := ""
 		for _, t := range td.Types {
@@ -229,7 +229,7 @@ func TestCompact(t *testing.T) {
 	// run compact until there's only 1 file
 	// check at each iteration that we halved the file count, cnt and size is still the same
 	tests := []struct {
-		td      val.TupleDesc
+		td      *val.TupleDesc
 		fileCnt int
 	}{
 		{
@@ -259,7 +259,7 @@ func TestCompact(t *testing.T) {
 		},
 	}
 
-	name := func(td val.TupleDesc, fileCnt int) string {
+	name := func(td *val.TupleDesc, fileCnt int) string {
 		b := strings.Builder{}
 		sep := ""
 		for _, t := range td.Types {
@@ -332,7 +332,7 @@ func TestFileE2E(t *testing.T) {
 	// we have to spill to disk and compact several times
 	tests := []struct {
 		name      string
-		td        val.TupleDesc
+		td        *val.TupleDesc
 		rows      int
 		batchSize int
 		fileMax   int
@@ -460,7 +460,7 @@ func TestFileE2E(t *testing.T) {
 
 }
 
-func testTuples(ns tree.NodeStore, kd val.TupleDesc, cnt int) []val.Tuple {
+func testTuples(ns tree.NodeStore, kd *val.TupleDesc, cnt int) []val.Tuple {
 	keyBuilder := val.NewTupleBuilder(kd, ns)
 
 	var keys []val.Tuple

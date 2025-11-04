@@ -188,16 +188,16 @@ type lookupMapping struct {
 	ns         tree.NodeStore
 	pool       pool.BuffPool
 	targetKb   *val.TupleBuilder
-	litKd      val.TupleDesc
-	srcKd      val.TupleDesc
-	srcVd      val.TupleDesc
+	litKd      *val.TupleDesc
+	srcKd      *val.TupleDesc
+	srcVd      *val.TupleDesc
 	srcMapping val.OrdinalMapping
 	// litTuple are the statically provided literal expressions in the key expression
 	litTuple val.Tuple
 	split    int
 }
 
-func newLookupKeyMapping(ctx context.Context, sourceSch schema.Schema, tgtKeyDesc val.TupleDesc, keyExprs []sql.Expression, typs []sql.ColumnExpressionType, ns tree.NodeStore) (*lookupMapping, error) {
+func newLookupKeyMapping(ctx context.Context, sourceSch schema.Schema, tgtKeyDesc *val.TupleDesc, keyExprs []sql.Expression, typs []sql.ColumnExpressionType, ns tree.NodeStore) (*lookupMapping, error) {
 	keyless := schema.IsKeyless(sourceSch)
 	// |split| is an index into the schema separating the key and value fields
 	var split int
@@ -280,7 +280,7 @@ func (m *lookupMapping) valid() bool {
 	var litIdx int
 	for to := range m.srcMapping {
 		from := m.srcMapping.MapOrdinal(to)
-		var desc val.TupleDesc
+		var desc *val.TupleDesc
 		if from == -1 {
 			desc = m.litKd
 			// literal offsets increment sequentially
@@ -305,7 +305,7 @@ func (m *lookupMapping) dstKeyTuple(srcKey, srcVal val.Tuple) (val.Tuple, error)
 	for to := range m.srcMapping {
 		from := m.srcMapping.MapOrdinal(to)
 		var tup val.Tuple
-		var desc val.TupleDesc
+		var desc *val.TupleDesc
 		if from == -1 {
 			tup = m.litTuple
 			desc = m.litKd

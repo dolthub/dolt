@@ -75,7 +75,7 @@ type Table interface {
 	// GetTableRows returns this table's rows.
 	GetTableRows(ctx context.Context) (Index, error)
 	// GetTableRowsWithDescriptors returns this table's rows with fewer deserialization calls
-	GetTableRowsWithDescriptors(ctx context.Context, kd, vd val.TupleDesc) (Index, error)
+	GetTableRowsWithDescriptors(ctx context.Context, kd, vd *val.TupleDesc) (Index, error)
 	// SetTableRows sets this table's rows.
 	SetTableRows(ctx context.Context, rows Index) (Table, error)
 
@@ -330,7 +330,7 @@ func (t nomsTable) GetTableRows(ctx context.Context) (Index, error) {
 	return indexFromRef(ctx, t.vrw, t.ns, sch, val.(types.Ref))
 }
 
-func (t nomsTable) GetTableRowsWithDescriptors(ctx context.Context, kd, vd val.TupleDesc) (Index, error) {
+func (t nomsTable) GetTableRowsWithDescriptors(ctx context.Context, kd, vd *val.TupleDesc) (Index, error) {
 	return nil, fmt.Errorf("nomsTable does not implement GetTableRowsWithDescriptors")
 }
 
@@ -857,7 +857,7 @@ func (t doltDevTable) GetTableRows(ctx context.Context) (Index, error) {
 	return IndexFromMapInterface(m), nil
 }
 
-func (t doltDevTable) GetTableRowsWithDescriptors(ctx context.Context, kd, vd val.TupleDesc) (Index, error) {
+func (t doltDevTable) GetTableRowsWithDescriptors(ctx context.Context, kd, vd *val.TupleDesc) (Index, error) {
 	rowbytes := t.msg.PrimaryIndexBytes()
 	m, err := shim.MapFromValueWithDescriptors(types.SerialMessage(rowbytes), kd, vd, t.ns)
 	if err != nil {

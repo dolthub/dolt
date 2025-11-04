@@ -27,8 +27,8 @@ type prollyRowIter struct {
 	iter prolly.MapIter
 	ns   tree.NodeStore
 
-	keyDesc val.TupleDesc
-	valDesc val.TupleDesc
+	keyDesc *val.TupleDesc
+	valDesc *val.TupleDesc
 
 	keyProj []int
 	valProj []int
@@ -53,8 +53,8 @@ func NewProllyRowIterForMap(sch schema.Schema, rows prolly.MapInterface, iter pr
 func NewProllyRowIterForSchema(
 	sch schema.Schema,
 	iter prolly.MapIter,
-	kd val.TupleDesc,
-	vd val.TupleDesc,
+	kd *val.TupleDesc,
+	vd *val.TupleDesc,
 	projections []uint64,
 	ns tree.NodeStore,
 ) sql.RowIter {
@@ -68,8 +68,8 @@ func NewProllyRowIterForSchema(
 func NewKeyedProllyRowIter(
 	sch schema.Schema,
 	iter prolly.MapIter,
-	kd val.TupleDesc,
-	vd val.TupleDesc,
+	kd *val.TupleDesc,
+	vd *val.TupleDesc,
 	projections []uint64,
 	ns tree.NodeStore,
 ) sql.RowIter {
@@ -90,7 +90,7 @@ func NewKeyedProllyRowIter(
 func NewKeylessProllyRowIter(
 	sch schema.Schema,
 	iter prolly.MapIter,
-	vd val.TupleDesc,
+	vd *val.TupleDesc,
 	projections []uint64,
 	ns tree.NodeStore,
 ) sql.RowIter {
@@ -239,7 +239,7 @@ func (it prollyRowIter) Close(ctx *sql.Context) error {
 type prollyKeylessIter struct {
 	iter       prolly.MapIter
 	ns         tree.NodeStore
-	valDesc    val.TupleDesc
+	valDesc    *val.TupleDesc
 	valProj    []int
 	ordProj    []int
 	curr       sql.Row

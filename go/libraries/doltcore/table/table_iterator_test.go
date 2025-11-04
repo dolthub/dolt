@@ -78,7 +78,7 @@ func mustMakeProllyMap(t *testing.T, count int) (prolly.Map, [][2]val.Tuple) {
 	return om, tuples
 }
 
-func mustProllyMapFromTuples(t *testing.T, kd, vd val.TupleDesc, tuples [][2]val.Tuple) prolly.Map {
+func mustProllyMapFromTuples(t *testing.T, kd, vd *val.TupleDesc, tuples [][2]val.Tuple) prolly.Map {
 	ctx := sql.NewEmptyContext()
 	ns := tree.NewTestNodeStore()
 

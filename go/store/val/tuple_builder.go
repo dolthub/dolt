@@ -64,7 +64,7 @@ var defaultTupleLengthTarget int64 = (1 << 11)
 
 type TupleBuilder struct {
 	vs                ValueStore
-	Desc              TupleDesc
+	Desc              *TupleDesc
 	fields            [][]byte
 	buf               []byte
 	pos               int64
@@ -73,7 +73,7 @@ type TupleBuilder struct {
 	inlineSize        int64 // The size of the tuple if every adaptive value is inlined
 }
 
-func NewTupleBuilder(desc TupleDesc, vs ValueStore) *TupleBuilder {
+func NewTupleBuilder(desc *TupleDesc, vs ValueStore) *TupleBuilder {
 	return &TupleBuilder{
 		Desc:              desc,
 		fields:            make([][]byte, len(desc.Types)),

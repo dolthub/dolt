@@ -28,7 +28,7 @@ type ExtendedTupleComparator struct {
 var _ TupleComparator = ExtendedTupleComparator{}
 
 // Compare implements the TupleComparator interface.
-func (c ExtendedTupleComparator) Compare(ctx context.Context, left, right Tuple, desc TupleDesc) (cmp int) {
+func (c ExtendedTupleComparator) Compare(ctx context.Context, left, right Tuple, desc *TupleDesc) (cmp int) {
 	fast := desc.GetFixedAccess()
 	for i := range fast {
 		start, stop := fast[i][0], fast[i][1]

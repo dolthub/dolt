@@ -63,7 +63,7 @@ type rowV struct {
 	col1, col2 int
 }
 
-var vD val.TupleDesc
+var vD *val.TupleDesc
 var vB *val.TupleBuilder
 var syncPool = pool.NewBuffPool()
 
@@ -788,7 +788,7 @@ func buildLeftRightAncCommitsAndBranches(t *testing.T, ddb *doltdb.DoltDB, rootT
 	return mergeCommit, ancCm, root, mergeRoot, ancRoot
 }
 
-var kD val.TupleDesc
+var kD *val.TupleDesc
 var kB *val.TupleBuilder
 
 func key(i int) val.Tuple {

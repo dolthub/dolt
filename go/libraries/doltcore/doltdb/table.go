@@ -445,7 +445,7 @@ func (t *Table) GetRowData(ctx context.Context) (durable.Index, error) {
 	return t.table.GetTableRows(ctx)
 }
 
-func (t *Table) GetRowDataWithDescriptors(ctx context.Context, kd, vd val.TupleDesc) (durable.Index, error) {
+func (t *Table) GetRowDataWithDescriptors(ctx context.Context, kd, vd *val.TupleDesc) (durable.Index, error) {
 	return t.table.GetTableRowsWithDescriptors(ctx, kd, vd)
 }
 

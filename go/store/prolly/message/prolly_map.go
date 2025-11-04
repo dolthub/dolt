@@ -40,13 +40,13 @@ const (
 
 var prollyMapFileID = []byte(serial.ProllyTreeNodeFileID)
 
-func NewProllyMapSerializer(valueDesc val.TupleDesc, pool pool.BuffPool) ProllyMapSerializer {
+func NewProllyMapSerializer(valueDesc *val.TupleDesc, pool pool.BuffPool) ProllyMapSerializer {
 	return ProllyMapSerializer{valDesc: valueDesc, pool: pool}
 }
 
 type ProllyMapSerializer struct {
 	pool    pool.BuffPool
-	valDesc val.TupleDesc
+	valDesc *val.TupleDesc
 }
 
 var _ Serializer = ProllyMapSerializer{}

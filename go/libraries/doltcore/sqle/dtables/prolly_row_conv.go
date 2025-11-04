@@ -33,8 +33,8 @@ type ProllyRowConverter struct {
 	outSchema        schema.Schema
 	ns               tree.NodeStore
 	warnFn           rowconv.WarnFunction
-	keyDesc          val.TupleDesc
-	valDesc          val.TupleDesc
+	keyDesc          *val.TupleDesc
+	valDesc          *val.TupleDesc
 	keyProj          val.OrdinalMapping
 	valProj          val.OrdinalMapping
 	pkTargetTypes    []sql.Type
@@ -112,7 +112,7 @@ func (c ProllyRowConverter) PutConverted(ctx context.Context, key, value val.Tup
 	return c.putFields(ctx, value, c.valProj, c.valDesc, c.nonPkTargetTypes, dstRow, false)
 }
 
-func (c ProllyRowConverter) putFields(ctx context.Context, tup val.Tuple, proj val.OrdinalMapping, desc val.TupleDesc, targetTypes []sql.Type, dstRow sql.Row, isPk bool) error {
+func (c ProllyRowConverter) putFields(ctx context.Context, tup val.Tuple, proj val.OrdinalMapping, desc *val.TupleDesc, targetTypes []sql.Type, dstRow sql.Row, isPk bool) error {
 	virtualOffset := 0
 	for i, j := range proj {
 		if j == -1 {

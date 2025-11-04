@@ -168,7 +168,7 @@ func newEmptyIndex(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeS
 	}
 }
 
-func NewEmptyProllyIndex(ctx context.Context, ns tree.NodeStore, kd, vd val.TupleDesc) (Index, error) {
+func NewEmptyProllyIndex(ctx context.Context, ns tree.NodeStore, kd, vd *val.TupleDesc) (Index, error) {
 	m, err := prolly.NewMapFromTuples(ctx, ns, kd, vd)
 	if err != nil {
 		return nil, err
@@ -176,7 +176,7 @@ func NewEmptyProllyIndex(ctx context.Context, ns tree.NodeStore, kd, vd val.Tupl
 	return IndexFromProllyMap(m), nil
 }
 
-func NewEmptyProximityIndex(ctx context.Context, ns tree.NodeStore, kd, vd val.TupleDesc) (Index, error) {
+func NewEmptyProximityIndex(ctx context.Context, ns tree.NodeStore, kd, vd *val.TupleDesc) (Index, error) {
 	proximityMapBuilder, err := prolly.NewProximityMapBuilder(ctx, ns, vector.DistanceL2Squared{}, kd, vd, prolly.DefaultLogChunkSize)
 	if err != nil {
 		return nil, err

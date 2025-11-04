@@ -64,7 +64,7 @@ var testValDesc = val.NewTupleDescriptor(
 	val.Type{Enc: val.Int64Enc, Nullable: true},
 )
 
-func buildTuple(t *testing.T, ctx context.Context, ns tree.NodeStore, pool pool.BuffPool, desc val.TupleDesc, row []interface{}) val.Tuple {
+func buildTuple(t *testing.T, ctx context.Context, ns tree.NodeStore, pool pool.BuffPool, desc *val.TupleDesc, row []interface{}) val.Tuple {
 	builder := val.NewTupleBuilder(desc, ns)
 	for i, column := range row {
 		err := tree.PutField(ctx, ns, builder, i, column)
@@ -75,7 +75,7 @@ func buildTuple(t *testing.T, ctx context.Context, ns tree.NodeStore, pool pool.
 	return tup
 }
 
-func buildTuples(t *testing.T, ctx context.Context, ns tree.NodeStore, pool pool.BuffPool, desc val.TupleDesc, rows [][]interface{}) [][]byte {
+func buildTuples(t *testing.T, ctx context.Context, ns tree.NodeStore, pool pool.BuffPool, desc *val.TupleDesc, rows [][]interface{}) [][]byte {
 	result := make([][]byte, len(rows))
 	for i, row := range rows {
 		result[i] = buildTuple(t, ctx, ns, pool, desc, row)
@@ -83,13 +83,13 @@ func buildTuples(t *testing.T, ctx context.Context, ns tree.NodeStore, pool pool
 	return result
 }
 
-func createAndValidateProximityMap(t *testing.T, ctx context.Context, ns tree.NodeStore, keyDesc val.TupleDesc, keyBytes [][]byte, valueDesc val.TupleDesc, valueBytes [][]byte, logChunkSize uint8) ProximityMap {
+func createAndValidateProximityMap(t *testing.T, ctx context.Context, ns tree.NodeStore, keyDesc *val.TupleDesc, keyBytes [][]byte, valueDesc *val.TupleDesc, valueBytes [][]byte, logChunkSize uint8) ProximityMap {
 	m := createProximityMap(t, ctx, ns, keyDesc, keyBytes, valueDesc, valueBytes, logChunkSize)
 	validateProximityMapSkipHistoryIndependenceCheck(t, ctx, ns, &m, keyDesc, valueDesc, keyBytes, valueBytes)
 	return m
 }
 
-func createProximityMap(t *testing.T, ctx context.Context, ns tree.NodeStore, keyDesc val.TupleDesc, keyBytes [][]byte, valueDesc val.TupleDesc, valueBytes [][]byte, logChunkSize uint8) ProximityMap {
+func createProximityMap(t *testing.T, ctx context.Context, ns tree.NodeStore, keyDesc *val.TupleDesc, keyBytes [][]byte, valueDesc *val.TupleDesc, valueBytes [][]byte, logChunkSize uint8) ProximityMap {
 	count := len(keyBytes)
 	require.Equal(t, count, len(valueBytes))
 
@@ -114,12 +114,12 @@ func createProximityMap(t *testing.T, ctx context.Context, ns tree.NodeStore, ke
 	return m
 }
 
-func validateProximityMap(t *testing.T, ctx context.Context, ns tree.NodeStore, m *ProximityMap, keyDesc, valDesc val.TupleDesc, keys, values [][]byte, logChunkSize uint8) {
+func validateProximityMap(t *testing.T, ctx context.Context, ns tree.NodeStore, m *ProximityMap, keyDesc, valDesc *val.TupleDesc, keys, values [][]byte, logChunkSize uint8) {
 	validateProximityMapSkipHistoryIndependenceCheck(t, ctx, ns, m, keyDesc, valDesc, keys, values)
 	validateHistoryIndependence(t, ctx, ns, m, keyDesc, keys, valDesc, values, logChunkSize)
 }
 
-func validateProximityMapSkipHistoryIndependenceCheck(t *testing.T, ctx context.Context, ns tree.NodeStore, m *ProximityMap, keyDesc, valDesc val.TupleDesc, keys, values [][]byte) {
+func validateProximityMapSkipHistoryIndependenceCheck(t *testing.T, ctx context.Context, ns tree.NodeStore, m *ProximityMap, keyDesc, valDesc *val.TupleDesc, keys, values [][]byte) {
 	expectedSize := len(keys)
 	actualSize, err := m.Count()
 	require.NoError(t, err)
@@ -147,18 +147,18 @@ func validateProximityMapSkipHistoryIndependenceCheck(t *testing.T, ctx context.
 	// Finally, build a new map with the supplied keys and values and confirm that it has the same root hash.
 }
 
-func validateHistoryIndependence(t *testing.T, ctx context.Context, ns tree.NodeStore, m *ProximityMap, keyDesc val.TupleDesc, keyBytes [][]byte, valueDesc val.TupleDesc, valueBytes [][]byte, logChunkSize uint8) {
+func validateHistoryIndependence(t *testing.T, ctx context.Context, ns tree.NodeStore, m *ProximityMap, keyDesc *val.TupleDesc, keyBytes [][]byte, valueDesc *val.TupleDesc, valueBytes [][]byte, logChunkSize uint8) {
 	// Build a new map with the supplied keys and values and confirm that it has the same root hash.
 	other := createProximityMap(t, ctx, ns, keyDesc, keyBytes, valueDesc, valueBytes, logChunkSize)
 	require.Equal(t, other.HashOf(), m.HashOf())
 }
 
-func vectorFromKey(t *testing.T, keyDesc val.TupleDesc, key []byte) []float32 {
+func vectorFromKey(t *testing.T, keyDesc *val.TupleDesc, key []byte) []float32 {
 	encodedVector := keyDesc.GetField(0, key)
 	return decodeVector(t, keyDesc, encodedVector)
 }
 
-func validateProximityMapNode(t *testing.T, ctx context.Context, ns tree.NodeStore, nd tree.Node, distanceType vector.DistanceType, keyDesc val.TupleDesc, desc val.TupleDesc) {
+func validateProximityMapNode(t *testing.T, ctx context.Context, ns tree.NodeStore, nd tree.Node, distanceType vector.DistanceType, keyDesc *val.TupleDesc, desc *val.TupleDesc) {
 	// For each node, the node's grandchildren should be closer to their parent than the other children.
 	if nd.Level() == 0 {
 		// Leaf node
@@ -197,7 +197,7 @@ func validateProximityMapNode(t *testing.T, ctx context.Context, ns tree.NodeSto
 	}
 }
 
-func encodeVector(t *testing.T, keyDesc val.TupleDesc, vec ...float32) []byte {
+func encodeVector(t *testing.T, keyDesc *val.TupleDesc, vec ...float32) []byte {
 	enc := keyDesc.Types[0].Enc
 	switch enc {
 	case val.JSONAddrEnc:
@@ -211,7 +211,7 @@ func encodeVector(t *testing.T, keyDesc val.TupleDesc, vec ...float32) []byte {
 	}
 }
 
-func decodeVector(t *testing.T, keyDesc val.TupleDesc, valBytes []byte) []float32 {
+func decodeVector(t *testing.T, keyDesc *val.TupleDesc, valBytes []byte) []float32 {
 	ctx := context.Background()
 	enc := keyDesc.Types[0].Enc
 	var vectorValue interface{}
@@ -256,7 +256,7 @@ func TestProximityMap(t *testing.T) {
 	})
 }
 
-func testProximityMapWithEncoding(t *testing.T, keyDesc val.TupleDesc) {
+func testProximityMapWithEncoding(t *testing.T, keyDesc *val.TupleDesc) {
 	testEmptyProximityMap(t, keyDesc)
 	testSingleEntryProximityMap(t, keyDesc)
 	testDoubleEntryProximityMapGetExact(t, keyDesc)
@@ -273,7 +273,7 @@ func testProximityMapWithEncoding(t *testing.T, keyDesc val.TupleDesc) {
 	testManyDimensions(t, keyDesc)
 }
 
-func testEmptyProximityMap(t *testing.T, keyDesc val.TupleDesc) {
+func testEmptyProximityMap(t *testing.T, keyDesc *val.TupleDesc) {
 	t.Run("empty map", func(t *testing.T) {
 		ctx := context.Background()
 		ns := tree.NewTestNodeStore()
@@ -281,7 +281,7 @@ func testEmptyProximityMap(t *testing.T, keyDesc val.TupleDesc) {
 	})
 }
 
-func testSingleEntryProximityMap(t *testing.T, keyDesc val.TupleDesc) {
+func testSingleEntryProximityMap(t *testing.T, keyDesc *val.TupleDesc) {
 	t.Run("single entry map", func(t *testing.T) {
 		ctx := context.Background()
 		ns := tree.NewTestNodeStore()
@@ -292,7 +292,7 @@ func testSingleEntryProximityMap(t *testing.T, keyDesc val.TupleDesc) {
 	})
 }
 
-func testDoubleEntryProximityMapGetExact(t *testing.T, keyDesc val.TupleDesc) {
+func testDoubleEntryProximityMapGetExact(t *testing.T, keyDesc *val.TupleDesc) {
 	t.Run("double entry map get exact", func(t *testing.T) {
 		ctx := context.Background()
 		ns := tree.NewTestNodeStore()
@@ -319,7 +319,7 @@ func testDoubleEntryProximityMapGetExact(t *testing.T, keyDesc val.TupleDesc) {
 	})
 }
 
-func testDoubleEntryProximityMapGetClosest(t *testing.T, keyDesc val.TupleDesc) {
+func testDoubleEntryProximityMapGetClosest(t *testing.T, keyDesc *val.TupleDesc) {
 	t.Run("double entry map get closest", func(t *testing.T) {
 		ctx := context.Background()
 		ns := tree.NewTestNodeStore()
@@ -356,7 +356,7 @@ func testDoubleEntryProximityMapGetClosest(t *testing.T, keyDesc val.TupleDesc) 
 	})
 }
 
-func testProximityMapGetManyClosest(t *testing.T, keyDesc val.TupleDesc) {
+func testProximityMapGetManyClosest(t *testing.T, keyDesc *val.TupleDesc) {
 	t.Run("get many closest", func(t *testing.T) {
 		ctx := context.Background()
 		ns := tree.NewTestNodeStore()
@@ -401,7 +401,7 @@ func testProximityMapGetManyClosest(t *testing.T, keyDesc val.TupleDesc) {
 	})
 }
 
-func testProximityMapWithOverflowNode(t *testing.T, keyDesc val.TupleDesc) {
+func testProximityMapWithOverflowNode(t *testing.T, keyDesc *val.TupleDesc) {
 	t.Run("node too large to fit in a single physical chunk", func(t *testing.T) {
 		ctx := context.Background()
 		ns := tree.NewTestNodeStore()
@@ -428,7 +428,7 @@ func testProximityMapWithOverflowNode(t *testing.T, keyDesc val.TupleDesc) {
 	})
 }
 
-func testMultilevelProximityMap(t *testing.T, keyDesc val.TupleDesc) {
+func testMultilevelProximityMap(t *testing.T, keyDesc *val.TupleDesc) {
 	t.Run("map with multiple levels", func(t *testing.T) {
 		ctx := context.Background()
 		ns := tree.NewTestNodeStore()
@@ -460,7 +460,7 @@ func testMultilevelProximityMap(t *testing.T, keyDesc val.TupleDesc) {
 	})
 }
 
-func testLargerMultilevelProximityMap(t *testing.T, keyDesc val.TupleDesc) {
+func testLargerMultilevelProximityMap(t *testing.T, keyDesc *val.TupleDesc) {
 	t.Run("larger map with multiple levels", func(t *testing.T) {
 		ctx := context.Background()
 		ns := tree.NewTestNodeStore()
@@ -496,7 +496,7 @@ func testLargerMultilevelProximityMap(t *testing.T, keyDesc val.TupleDesc) {
 	})
 }
 
-func testInsertOrderIndependence(t *testing.T, keyDesc val.TupleDesc) {
+func testInsertOrderIndependence(t *testing.T, keyDesc *val.TupleDesc) {
 	t.Run("insert order independence", func(t *testing.T) {
 		ctx := context.Background()
 		ns := tree.NewTestNodeStore()
@@ -534,7 +534,7 @@ func testInsertOrderIndependence(t *testing.T, keyDesc val.TupleDesc) {
 	})
 }
 
-func testIncrementalInserts(t *testing.T, keyDesc val.TupleDesc) {
+func testIncrementalInserts(t *testing.T, keyDesc *val.TupleDesc) {
 	t.Run("incremental inserts", func(t *testing.T) {
 		ctx := context.Background()
 		ns := tree.NewTestNodeStore()
@@ -601,7 +601,7 @@ func testIncrementalInserts(t *testing.T, keyDesc val.TupleDesc) {
 	})
 }
 
-func testIncrementalUpdates(t *testing.T, keyDesc val.TupleDesc) {
+func testIncrementalUpdates(t *testing.T, keyDesc *val.TupleDesc) {
 	t.Run("incremental updates", func(t *testing.T) {
 		ctx := context.Background()
 		ns := tree.NewTestNodeStore()
@@ -697,7 +697,7 @@ func testIncrementalUpdates(t *testing.T, keyDesc val.TupleDesc) {
 	})
 }
 
-func testIncrementalDeletes(t *testing.T, keyDesc val.TupleDesc) {
+func testIncrementalDeletes(t *testing.T, keyDesc *val.TupleDesc) {
 	t.Run("incremental deletes", func(t *testing.T) {
 		ctx := context.Background()
 		ns := tree.NewTestNodeStore()
@@ -778,7 +778,7 @@ func testIncrementalDeletes(t *testing.T, keyDesc val.TupleDesc) {
 // As part of the algorithm for building proximity maps, we store the map keys as bytestrings in a temporary table.
 // The sorting order of a key is not always the same as the lexographic ordering of these bytestrings.
 // This test makes sure that even when this is not the case we still generate correct output.
-func testNonlexographicKey(t *testing.T, keyDesc val.TupleDesc) {
+func testNonlexographicKey(t *testing.T, keyDesc *val.TupleDesc) {
 	t.Run("non-lexographic key", func(t *testing.T) {
 		ctx := context.Background()
 		ns := tree.NewTestNodeStore()
@@ -809,7 +809,7 @@ func testNonlexographicKey(t *testing.T, keyDesc val.TupleDesc) {
 	})
 }
 
-func testManyDimensions(t *testing.T, keyDesc val.TupleDesc) {
+func testManyDimensions(t *testing.T, keyDesc *val.TupleDesc) {
 	ctx := context.Background()
 	ns := tree.NewTestNodeStore()
 	numRows := 50
@@ -817,7 +817,7 @@ func testManyDimensions(t *testing.T, keyDesc val.TupleDesc) {
 	testManyDimensionsHelper(ctx, t, keyDesc, ns, numRows, dimensions)
 }
 
-func testManyDimensionsHelper(ctx context.Context, t *testing.T, keyDesc val.TupleDesc, ns tree.NodeStore, numRows int, dimensions int) {
+func testManyDimensionsHelper(ctx context.Context, t *testing.T, keyDesc *val.TupleDesc, ns tree.NodeStore, numRows int, dimensions int) {
 	pb := pool.NewBuffPool()
 	testKeyDesc := val.NewTupleDescriptor(
 		keyDesc.Types[0],

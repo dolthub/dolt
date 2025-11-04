@@ -256,7 +256,7 @@ type rangeDiffTest struct {
 	rng    Range
 }
 
-func makeRandomOpenStopRangeTest(kd val.TupleDesc, tuples [][2]val.Tuple) rangeDiffTest {
+func makeRandomOpenStopRangeTest(kd *val.TupleDesc, tuples [][2]val.Tuple) rangeDiffTest {
 	ctx := context.Background()
 	i := rand.Intn(len(tuples))
 	j := rand.Intn(len(tuples))
@@ -269,13 +269,13 @@ func makeRandomOpenStopRangeTest(kd val.TupleDesc, tuples [][2]val.Tuple) rangeD
 	return rangeDiffTest{tuples: tuples, rng: OpenStopRange(ctx, start, stop, kd)}
 }
 
-func makeRandomGreaterOrEqualRangeTest(kd val.TupleDesc, tuples [][2]val.Tuple) rangeDiffTest {
+func makeRandomGreaterOrEqualRangeTest(kd *val.TupleDesc, tuples [][2]val.Tuple) rangeDiffTest {
 	i := rand.Intn(len(tuples))
 	start := tuples[i][0]
 	return rangeDiffTest{tuples: tuples, rng: GreaterOrEqualRange(start, kd)}
 }
 
-func makeRandomLesserRangeTest(kd val.TupleDesc, tuples [][2]val.Tuple) rangeDiffTest {
+func makeRandomLesserRangeTest(kd *val.TupleDesc, tuples [][2]val.Tuple) rangeDiffTest {
 	i := rand.Intn(len(tuples))
 	end := tuples[i][0]
 	return rangeDiffTest{tuples: tuples, rng: LesserRange(end, kd)}

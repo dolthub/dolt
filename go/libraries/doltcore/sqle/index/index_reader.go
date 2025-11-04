@@ -425,10 +425,10 @@ var _ IndexScanBuilder = (*nonCoveringIndexImplBuilder)(nil)
 type baseIndexImplBuilder struct {
 	ns                 tree.NodeStore
 	idx                *doltIndex
+	secKd              *val.TupleDesc
+	secVd              *val.TupleDesc
+	prefDesc           *val.TupleDesc
 	sec                prolly.Map
-	secKd              val.TupleDesc
-	secVd              val.TupleDesc
-	prefDesc           val.TupleDesc
 	sch                sql.PrimaryKeySchema
 	projections        []uint64
 	proximitySecondary prolly.ProximityMap

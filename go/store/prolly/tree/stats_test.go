@@ -50,7 +50,7 @@ func TestStatsLevel(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(fmt.Sprintf("stats histogram level test count: %d", tt.count), func(t *testing.T) {
 			root, _, ns := randomTree(t, tt.count*2)
-			m := StaticMap[val.Tuple, val.Tuple, val.TupleDesc]{
+			m := StaticMap[val.Tuple, val.Tuple, *val.TupleDesc]{
 				Root:      root,
 				NodeStore: ns,
 				Order:     keyDesc,

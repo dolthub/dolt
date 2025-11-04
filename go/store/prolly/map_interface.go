@@ -30,12 +30,12 @@ type MapInterface interface {
 	Count() (int, error)
 	HashOf() hash.Hash
 	WalkNodes(ctx context.Context, cb tree.NodeCb) error
-	Descriptors() (val.TupleDesc, val.TupleDesc)
+	Descriptors() (*val.TupleDesc, *val.TupleDesc)
 	IterAll(ctx context.Context) (MapIter, error)
 	Pool() pool.BuffPool
 	Has(ctx context.Context, key val.Tuple) (ok bool, err error)
-	ValDesc() val.TupleDesc
-	KeyDesc() val.TupleDesc
+	ValDesc() *val.TupleDesc
+	KeyDesc() *val.TupleDesc
 }
 
 // MapInterface is a common interface for prolly-tree based maps that can be used as the basis of a mutable map that

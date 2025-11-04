@@ -30,14 +30,16 @@ import (
 )
 
 type Map struct {
-	tuples  tree.StaticMap[val.Tuple, val.Tuple, val.TupleDesc]
-	keyDesc val.TupleDesc
-	valDesc val.TupleDesc
+	tuples  tree.StaticMap[val.Tuple, val.Tuple, *val.TupleDesc]
+	keyDesc *val.TupleDesc
+	valDesc *val.TupleDesc
 }
 
+var _ MapInterface = Map{}
+
 // NewMap creates a Map from the supplied root node
-func NewMap(node tree.Node, ns tree.NodeStore, keyDesc, valDesc val.TupleDesc) Map {
-	tuples := tree.StaticMap[val.Tuple, val.Tuple, val.TupleDesc]{
+func NewMap(node tree.Node, ns tree.NodeStore, keyDesc, valDesc *val.TupleDesc) Map {
+	tuples := tree.StaticMap[val.Tuple, val.Tuple, *val.TupleDesc]{
 		Root:      node,
 		NodeStore: ns,
 		Order:     keyDesc,
@@ -50,7 +52,7 @@ func NewMap(node tree.Node, ns tree.NodeStore, keyDesc, valDesc val.TupleDesc) M
 }
 
 // NewMapFromTuples creates a prolly Tree Map from slice of sorted Tuples.
-func NewMapFromTuples(ctx context.Context, ns tree.NodeStore, keyDesc, valDesc val.TupleDesc, tups ...val.Tuple) (Map, error) {
+func NewMapFromTuples(ctx context.Context, ns tree.NodeStore, keyDesc, valDesc *val.TupleDesc, tups ...val.Tuple) (Map, error) {
 	if len(tups)%2 != 0 {
 		return Map{}, fmt.Errorf("tuples must be key-value pairs")
 	}
@@ -62,7 +64,7 @@ type TupleIter interface {
 	Next(ctx context.Context) (k, v val.Tuple)
 }
 
-func NewMapFromTupleIter(ctx context.Context, ns tree.NodeStore, keyDesc, valDesc val.TupleDesc, iter TupleIter) (Map, error) {
+func NewMapFromTupleIter(ctx context.Context, ns tree.NodeStore, keyDesc, valDesc *val.TupleDesc, iter TupleIter) (Map, error) {
 	serializer := message.NewProllyMapSerializer(valDesc, ns.Pool())
 	ch, err := tree.NewEmptyChunker(ctx, ns, serializer)
 	if err != nil {
@@ -92,7 +94,7 @@ func NewMapFromTupleIter(ctx context.Context, ns tree.NodeStore, keyDesc, valDes
 }
 
 func MutateMapWithTupleIter(ctx context.Context, m Map, iter TupleIter) (Map, error) {
-	fn := tree.ApplyMutations[val.Tuple, val.TupleDesc, message.ProllyMapSerializer]
+	fn := tree.ApplyMutations[val.Tuple, *val.TupleDesc, message.ProllyMapSerializer]
 	s := message.NewProllyMapSerializer(m.valDesc, m.tuples.NodeStore.Pool())
 
 	root, err := fn(ctx, m.tuples.NodeStore, m.tuples.Root, m.keyDesc, s, mutationIter{iter: iter})
@@ -101,7 +103,7 @@ func MutateMapWithTupleIter(ctx context.Context, m Map, iter TupleIter) (Map, er
 	}
 
 	return Map{
-		tuples: tree.StaticMap[val.Tuple, val.Tuple, val.TupleDesc]{
+		tuples: tree.StaticMap[val.Tuple, val.Tuple, *val.TupleDesc]{
 			Root:      root,
 			NodeStore: m.tuples.NodeStore,
 			Order:     m.tuples.Order,
@@ -118,7 +120,7 @@ func DiffMaps(ctx context.Context, from, to Map, considerAllRowsModified bool, c
 // RangeDiffMaps returns diffs within a Range. See Range for which diffs are
 // returned.
 func RangeDiffMaps(ctx context.Context, from, to Map, rng Range, cb tree.DiffFn) error {
-	differ, err := tree.DifferFromCursors[val.Tuple, val.TupleDesc](
+	differ, err := tree.DifferFromCursors[val.Tuple, *val.TupleDesc](
 		ctx, from.tuples.Root, to.tuples.Root,
 		rangeStartSearchFn(rng), rangeStopSearchFn(rng),
 		from.NodeStore(), to.NodeStore(),
@@ -193,15 +195,15 @@ func (m Map) NodeStore() tree.NodeStore {
 	return m.tuples.NodeStore
 }
 
-func (m Map) Tuples() tree.StaticMap[val.Tuple, val.Tuple, val.TupleDesc] {
+func (m Map) Tuples() tree.StaticMap[val.Tuple, val.Tuple, *val.TupleDesc] {
 	return m.tuples
 }
 
-func (m Map) ValDesc() val.TupleDesc {
+func (m Map) ValDesc() *val.TupleDesc {
 	return m.valDesc
 }
 
-func (m Map) KeyDesc() val.TupleDesc {
+func (m Map) KeyDesc() *val.TupleDesc {
 	return m.keyDesc
 }
 
@@ -216,7 +218,7 @@ func (m Map) MutateInterface() MutableMapInterface {
 }
 
 // Rewriter returns a mutator that intends to rewrite this map with the key and value descriptors provided.
-func (m Map) Rewriter(kd, vd val.TupleDesc) *MutableMap {
+func (m Map) Rewriter(kd, vd *val.TupleDesc) *MutableMap {
 	return newMutableMapWithDescriptors(m, kd, vd)
 }
 
@@ -240,7 +242,7 @@ func (m Map) Format() *types.NomsBinFormat {
 }
 
 // Descriptors returns the TupleDesc's from this Map.
-func (m Map) Descriptors() (val.TupleDesc, val.TupleDesc) {
+func (m Map) Descriptors() (*val.TupleDesc, *val.TupleDesc) {
 	return m.keyDesc, m.valDesc
 }
 
@@ -260,7 +262,7 @@ func (m Map) Get(ctx context.Context, key val.Tuple, cb tree.KeyValueFn[val.Tupl
 
 // GetPrefix returns the first key-value pair that matches the prefix key
 // or nil to the callback.
-func (m Map) GetPrefix(ctx context.Context, key val.Tuple, prefDesc val.TupleDesc, cb tree.KeyValueFn[val.Tuple, val.Tuple]) (err error) {
+func (m Map) GetPrefix(ctx context.Context, key val.Tuple, prefDesc *val.TupleDesc, cb tree.KeyValueFn[val.Tuple, val.Tuple]) (err error) {
 	return m.tuples.GetPrefix(ctx, key, prefDesc, cb)
 }
 
@@ -297,7 +299,7 @@ func (m Map) FetchOrdinalRange(ctx context.Context, start, stop uint64) (MapIter
 }
 
 // HasPrefix returns true if the Map contains any key matching |preKey|.
-func (m Map) HasPrefix(ctx context.Context, preKey val.Tuple, preDesc val.TupleDesc) (bool, error) {
+func (m Map) HasPrefix(ctx context.Context, preKey val.Tuple, preDesc *val.TupleDesc) (bool, error) {
 	// todo(andy): we should compute our own |prefixDesc| here, but
 	//  we can't do that efficiently with the current TupleDesc.
 	if preKey.Count() < preDesc.Count() {
@@ -446,7 +448,7 @@ func DebugFormat(ctx context.Context, m Map) (string, error) {
 	return sb.String(), nil
 }
 
-func AddHashToSchema(keyDesc val.TupleDesc) val.TupleDesc {
+func AddHashToSchema(keyDesc *val.TupleDesc) *val.TupleDesc {
 	newTypes := make([]val.Type, len(keyDesc.Types)+1)
 	handlers := make([]val.TupleTypeHandler, len(keyDesc.Types)+1)
 	copy(newTypes, keyDesc.Types)
