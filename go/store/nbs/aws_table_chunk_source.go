@@ -57,7 +57,7 @@ func newAWSTableFileChunkSource(ctx context.Context, s3 *s3ObjectReader, al awsL
 func loadTableIndex(ctx context.Context, stats *Stats, cnt uint32, q MemoryQuotaProvider, loadIndexBytes func(p []byte) error) (tableIndex, error) {
 	idxSz := int(indexSize(cnt) + footerSize)
 	offsetSz := int((cnt - (cnt / 2)) * offsetSize)
-	buf, err := q.AcquireQuotaBytes(ctx, idxSz+offsetSz)
+	buf, err := q.AcquireQuotaByteSlice(ctx, idxSz+offsetSz)
 	if err != nil {
 		return nil, err
 	}

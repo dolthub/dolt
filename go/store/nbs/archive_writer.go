@@ -41,6 +41,10 @@ type stagedChunkRef struct {
 	hash             hash.Hash
 	dictionary, data uint32
 }
+
+// Used in quota allocation. See sizes.go and sizes_test.go.
+var stagedChunkRefSize int
+
 type stagedChunkRefSlice []stagedChunkRef
 
 type stage int
@@ -738,7 +742,7 @@ func (asw *ArchiveStreamWriter) convertSnappyAndStage(cc CompressedChunk) (uint3
 //
 // This method finalizes the index and footer. Effectively completes the in memory archive writing
 // process, but does not write it to disk.
-func (aw *archiveWriter) conjoinAll(ctx context.Context, sources []chunkSource, stats *Stats) error {
+func (aw *archiveWriter) conjoinAll(ctx context.Context, sources []chunkSource, q MemoryQuotaProvider, stats *Stats) error {
 	if len(sources) < 2 {
 		return fmt.Errorf("conjoinAll requires at least 2 archive readers, got %d", len(sources))
 	}
@@ -756,10 +760,11 @@ func (aw *archiveWriter) conjoinAll(ctx context.Context, sources []chunkSource, 
 	}
 
 	// similar to cloud conjoin, we build the index first. It could come after in this case.
-	thePlan, err := planArchiveConjoin(srcSz, stats)
+	thePlan, err := planArchiveConjoin(ctx, srcSz, q, stats)
 	if err != nil {
 		return fmt.Errorf("failed to plan archive conjoin: %w", err)
 	}
+	defer thePlan.closer()
 
 	// Now that we have the plan, we slam all datablocks into the output stream then write the index last.
 	for _, src := range thePlan.sources.sws {
@@ -797,7 +802,10 @@ type tableChunkRecord struct {
 	hash   hash.Hash
 }
 
-func planArchiveConjoin(sources []sourceWithSize, stats *Stats) (compactionPlan, error) {
+// Used in quota memory allocation. See sizes.go and sizes_test.go.
+var tableChunkRecordSize int
+
+func planArchiveConjoin(ctx context.Context, sources []sourceWithSize, q MemoryQuotaProvider, stats *Stats) (plan compactionPlan, err error) {
 	if len(sources) < 2 {
 		return compactionPlan{}, fmt.Errorf("conjoinIndexes requires at least 2 archive readers, got %d", len(sources))
 	}
@@ -807,7 +815,11 @@ func planArchiveConjoin(sources []sourceWithSize, stats *Stats) (compactionPlan,
 	sort.Sort(orderedSrcs)
 	sources = nil
 
-	writer := NewBlockBufferByteSink(fourMb)
+	writer, err := NewBlockBufferByteSink(ctx, fourMb, q)
+	if err != nil {
+		return compactionPlan{}, err
+	}
+	defer writer.Close()
 	aw := newArchiveWriterWithSink(writer)
 
 	numByteSpans := 0
@@ -830,6 +842,23 @@ func planArchiveConjoin(sources []sourceWithSize, stats *Stats) (compactionPlan,
 		}
 	}
 
+	sz := byteSpanSize * int(numByteSpans)
+	sz += stagedChunkRefSize * int(numChunks)
+	err = q.AcquireQuotaBytes(ctx, sz)
+	if err != nil {
+		return compactionPlan{}, err
+	}
+	// We acquire bytes throughout the conjoin and need to clean
+	// them up.  In the happy case, some of these acquired bytes
+	// will actually be the callers responsibility to clean up,
+	// but acquiredBytesOnStack will have been adjusted so that we
+	// always release what we ourselves are still responsible for
+	// at the time that we return from this function.
+	acquiredBytesOnStack := sz
+	defer func() {
+		q.ReleaseQuotaBytes(acquiredBytesOnStack)
+	}()
+
 	aw.stagedBytes = make(stagedByteSpanSlice, 0, numByteSpans)
 	aw.stagedChunks = make(stagedChunkRefSlice, 0, numChunks)
 
@@ -847,6 +876,12 @@ func planArchiveConjoin(sources []sourceWithSize, stats *Stats) (compactionPlan,
 			chks := index.chunkCount()
 			chunkCounter += chks
 
+			tempSz := tableChunkRecordSize * int(chks)
+			err = q.AcquireQuotaBytes(ctx, tempSz)
+			if err != nil {
+				return compactionPlan{}, err
+			}
+			acquiredBytesOnStack += tempSz
 			chunkRecs := make([]tableChunkRecord, 0, chks)
 			for i := uint32(0); i < chks; i++ {
 				var h hash.Hash
@@ -876,6 +911,9 @@ func planArchiveConjoin(sources []sourceWithSize, stats *Stats) (compactionPlan,
 					data:       uint32(len(aw.stagedBytes)),
 				})
 			}
+			chunkRecs = nil
+			acquiredBytesOnStack -= tempSz
+			q.ReleaseQuotaBytes(tempSz)
 		} else {
 			footer := arcSrc.aRdr.footer
 			chunkCounter += footer.chunkCount
@@ -928,7 +966,7 @@ func planArchiveConjoin(sources []sourceWithSize, stats *Stats) (compactionPlan,
 	// So we set the workflow stage to stageIndex because we skipped the byte span insertion stage.
 	aw.workflowStage = stageIndex
 
-	err := aw.indexFinalize(hash.Hash{})
+	err = aw.indexFinalize(hash.Hash{})
 	if err != nil {
 		return compactionPlan{}, fmt.Errorf("failed to finalize archive: %w", err)
 	}
@@ -938,12 +976,26 @@ func planArchiveConjoin(sources []sourceWithSize, stats *Stats) (compactionPlan,
 		return compactionPlan{}, fmt.Errorf("failed to get name of conjoined archive: %w", err)
 	}
 
-	buf := bytes.NewBuffer(make([]byte, 0, writer.pos))
+	idxSize := int(writer.pos)
+
+	bufBytes, err := q.AcquireQuotaByteSlice(ctx, idxSize)
+	if err != nil {
+		return compactionPlan{}, err
+	}
+	acquiredBytesOnStack += idxSize
+	bufBytes = bufBytes[:0]
+	buf := bytes.NewBuffer(bufBytes)
 	if err := writer.Flush(buf); err != nil {
 		return compactionPlan{}, fmt.Errorf("failed to build index buffer while conjoining archives: %w", err)
 	}
 
 	stats.BytesPerConjoin.Sample(dataBlocksLen + uint64(len(buf.Bytes())))
+
+	writer = nil
+
+	// On return, we are going to release quota bytes we are still responsible for.
+	// We are transfering responsibility for idxSize bytes to our caller.
+	acquiredBytesOnStack -= idxSize
 
 	return compactionPlan{
 		sources:             orderedSrcs,
@@ -952,5 +1004,8 @@ func planArchiveConjoin(sources []sourceWithSize, stats *Stats) (compactionPlan,
 		mergedIndex:         buf.Bytes(),
 		chunkCount:          chunkCounter,
 		totalCompressedData: dataBlocksLen,
+		closer: func() {
+			q.ReleaseQuotaBytes(idxSize)
+		},
 	}, nil
 }

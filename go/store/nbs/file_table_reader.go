@@ -132,7 +132,7 @@ func nomsFileTableReader(ctx context.Context, path string, h hash.Hash, chunkCou
 	}
 
 	var b []byte
-	b, err = q.AcquireQuotaBytes(ctx, int(idxSz))
+	b, err = q.AcquireQuotaByteSlice(ctx, int(idxSz))
 	if err != nil {
 		fra.Close()
 		return
