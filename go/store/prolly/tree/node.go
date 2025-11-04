@@ -199,6 +199,9 @@ func (nd *Node) empty() bool {
 }
 
 func (nd *Node) bytes() []byte {
+	if nd == nil {
+		return nil
+	}
 	return nd.msg
 }
 
