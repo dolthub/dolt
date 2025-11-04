@@ -25,7 +25,7 @@ import (
 
 type MapIter tree.KvIter[val.Tuple, val.Tuple]
 
-var _ MapIter = &mutableMapIter[val.Tuple, val.Tuple, val.TupleDesc]{}
+var _ MapIter = &mutableMapIter[val.Tuple, val.Tuple, *val.TupleDesc]{}
 var _ MapIter = &tree.OrderedTreeIter[val.Tuple, val.Tuple]{}
 
 type rangeIter[K, V ~[]byte] interface {

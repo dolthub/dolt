@@ -238,3 +238,6 @@ type byteSpan struct {
 	offset uint64
 	length uint64
 }
+
+// Used in quota allocation. See sizes.go and sizes_test.go.
+var byteSpanSize int

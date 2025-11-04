@@ -1,4 +1,4 @@
-// Copyright 2024 Dolthub, Inc.
+// Copyright 2025 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,8 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package doltversion
+package nbs
 
-const (
-	Version = "1.76.4"
-)
+import "unsafe"
+
+func init() {
+	prefixIndexRecSize = int(unsafe.Sizeof(prefixIndexRec{}))
+	byteSpanSize = int(unsafe.Sizeof(byteSpan{}))
+	stagedChunkRefSize = int(unsafe.Sizeof(stagedChunkRef{}))
+	tableChunkRecordSize = int(unsafe.Sizeof(tableChunkRecord{}))
+}

@@ -215,7 +215,7 @@ type foreignKeyViolationWriter struct {
 
 	// prolly
 	artEditor     *prolly.ArtifactsEditor
-	kd            val.TupleDesc
+	kd            *val.TupleDesc
 	cInfoJsonData []byte
 
 	// noms

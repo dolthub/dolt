@@ -58,7 +58,7 @@ func newAWSArchiveChunkSource(ctx context.Context,
 	q MemoryQuotaProvider,
 	stats *Stats) (cs chunkSource, err error) {
 
-	footer, err := q.AcquireQuotaBytes(ctx, int(archiveFooterSize))
+	footer, err := q.AcquireQuotaByteSlice(ctx, int(archiveFooterSize))
 	if err != nil {
 		return emptyChunkSource{}, err
 	}

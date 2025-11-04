@@ -33,7 +33,7 @@ type testMap interface {
 	Get(ctx context.Context, key val.Tuple, cb tree.KeyValueFn[val.Tuple, val.Tuple]) (err error)
 	IterAll(ctx context.Context) (MapIter, error)
 	IterRange(ctx context.Context, rng Range) (MapIter, error)
-	Descriptors() (val.TupleDesc, val.TupleDesc)
+	Descriptors() (*val.TupleDesc, *val.TupleDesc)
 }
 
 var _ testMap = Map{}
@@ -53,7 +53,7 @@ func countOrderedMap(t *testing.T, om testMap) (cnt int) {
 	return cnt
 }
 
-func keyDescFromMap(om testMap) val.TupleDesc {
+func keyDescFromMap(om testMap) *val.TupleDesc {
 	switch m := om.(type) {
 	case Map:
 		return m.keyDesc
@@ -64,7 +64,7 @@ func keyDescFromMap(om testMap) val.TupleDesc {
 	}
 }
 
-func mustProllyMapFromTuples(t *testing.T, kd, vd val.TupleDesc, tuples [][2]val.Tuple, ns tree.NodeStore) Map {
+func mustProllyMapFromTuples(t *testing.T, kd, vd *val.TupleDesc, tuples [][2]val.Tuple, ns tree.NodeStore) Map {
 	ctx := context.Background()
 
 	serializer := message.NewProllyMapSerializer(vd, ns.Pool())

@@ -34,24 +34,24 @@ const (
 // Writes to the map are queued in a skip.List and periodically flushed when
 // the maximum number of pending writes is exceeded.
 
-type GenericMutableMap[MapType MapInterface, TreeMap tree.MapInterface[val.Tuple, val.Tuple, val.TupleDesc]] struct {
+type GenericMutableMap[MapType MapInterface, TreeMap tree.MapInterface[val.Tuple, val.Tuple, *val.TupleDesc]] struct {
 	flusher MutableMapFlusher[MapType, TreeMap]
 	// tuples contains the primary Prolly Tree and skip.List for this map.
-	tuples tree.MutableMap[val.Tuple, val.Tuple, val.TupleDesc, TreeMap]
+	tuples tree.MutableMap[val.Tuple, val.Tuple, *val.TupleDesc, TreeMap]
 	// stash, if not nil, contains a previous checkpoint of this map.
 	// stashes are created when a MutableMap has been check-pointed, but
 	// the number of in-memory pending writes exceeds, maxPending.
 	// In this case we stash a copy MutableMap containing the checkpoint,
 	// flush the pending writes and continue accumulating
-	stash *tree.MutableMap[val.Tuple, val.Tuple, val.TupleDesc, TreeMap]
+	stash *tree.MutableMap[val.Tuple, val.Tuple, *val.TupleDesc, TreeMap]
 	// keyDesc and valDesc are tuples descriptors for the map.
-	keyDesc val.TupleDesc
-	valDesc val.TupleDesc
+	keyDesc *val.TupleDesc
+	valDesc *val.TupleDesc
 	// buffer size
 	maxPending int
 }
 
-type MutableMap = GenericMutableMap[Map, tree.StaticMap[val.Tuple, val.Tuple, val.TupleDesc]]
+type MutableMap = GenericMutableMap[Map, tree.StaticMap[val.Tuple, val.Tuple, *val.TupleDesc]]
 
 // MapInterface materializes all pending and applied mutations in the GenericMutableMap, producing the resulting MapInterface.
 func (mut *GenericMutableMap[M, T]) MapInterface(ctx context.Context) (MapInterface, error) {
@@ -93,7 +93,7 @@ func newMutableMap(m Map) *MutableMap {
 
 // newMutableMapWithDescriptors returns a new MutableMap with the key and value TupleDescriptors overridden to the
 // values specified in |kd| and |vd|. This is useful if you are rewriting the data in a map to change its schema.
-func newMutableMapWithDescriptors(m Map, kd, vd val.TupleDesc) *MutableMap {
+func newMutableMapWithDescriptors(m Map, kd, vd *val.TupleDesc) *MutableMap {
 	return &MutableMap{
 		tuples:     m.tuples.Mutate(),
 		keyDesc:    kd,
@@ -141,7 +141,7 @@ func (mut *GenericMutableMap[M, T]) Get(ctx context.Context, key val.Tuple, cb t
 	return mut.tuples.Get(ctx, key, cb)
 }
 
-func (mut *GenericMutableMap[M, T]) GetPrefix(ctx context.Context, key val.Tuple, prefixDesc val.TupleDesc, cb tree.KeyValueFn[val.Tuple, val.Tuple]) (err error) {
+func (mut *GenericMutableMap[M, T]) GetPrefix(ctx context.Context, key val.Tuple, prefixDesc *val.TupleDesc, cb tree.KeyValueFn[val.Tuple, val.Tuple]) (err error) {
 	return mut.tuples.GetPrefix(ctx, key, prefixDesc, cb)
 }
 
@@ -151,7 +151,7 @@ func (mut *GenericMutableMap[M, T]) Has(ctx context.Context, key val.Tuple) (ok 
 }
 
 // HasPrefix returns true if a key with a matching prefix to |key| is present in the MutableMap.
-func (mut *GenericMutableMap[M, T]) HasPrefix(ctx context.Context, key val.Tuple, prefixDesc val.TupleDesc) (ok bool, err error) {
+func (mut *GenericMutableMap[M, T]) HasPrefix(ctx context.Context, key val.Tuple, prefixDesc *val.TupleDesc) (ok bool, err error) {
 	return mut.tuples.HasPrefix(ctx, key, prefixDesc)
 }
 
@@ -245,7 +245,7 @@ func (mut *GenericMutableMap[M, T]) IterRange(ctx context.Context, rng Range) (M
 	}
 	memIter := memIterFromRange(ctx, mut.tuples.Edits, rng)
 
-	iter := &mutableMapIter[val.Tuple, val.Tuple, val.TupleDesc]{
+	iter := &mutableMapIter[val.Tuple, val.Tuple, *val.TupleDesc]{
 		memory: memIter,
 		prolly: treeIter,
 		order:  rng.Desc,
@@ -261,7 +261,7 @@ func (mut *GenericMutableMap[M, T]) HasEdits() bool {
 }
 
 // Descriptors returns the key and value val.TupleDesc.
-func (mut *GenericMutableMap[M, T]) Descriptors() (val.TupleDesc, val.TupleDesc) {
+func (mut *GenericMutableMap[M, T]) Descriptors() (*val.TupleDesc, *val.TupleDesc) {
 	return mut.keyDesc, mut.valDesc
 }
 
@@ -353,11 +353,11 @@ func debugFormat(ctx context.Context, m *MutableMap) (string, error) {
 
 type ProllyFlusher struct{}
 
-func (f ProllyFlusher) GetDefaultSerializer(ctx context.Context, mut *GenericMutableMap[Map, tree.StaticMap[val.Tuple, val.Tuple, val.TupleDesc]]) message.Serializer {
+func (f ProllyFlusher) GetDefaultSerializer(ctx context.Context, mut *GenericMutableMap[Map, tree.StaticMap[val.Tuple, val.Tuple, *val.TupleDesc]]) message.Serializer {
 	return message.NewProllyMapSerializer(mut.valDesc, mut.NodeStore().Pool())
 }
 
-func (f ProllyFlusher) Map(ctx context.Context, mut *GenericMutableMap[Map, tree.StaticMap[val.Tuple, val.Tuple, val.TupleDesc]]) (Map, error) {
+func (f ProllyFlusher) Map(ctx context.Context, mut *GenericMutableMap[Map, tree.StaticMap[val.Tuple, val.Tuple, *val.TupleDesc]]) (Map, error) {
 	s := f.GetDefaultSerializer(ctx, mut)
 	treeMap, err := f.ApplyMutationsWithSerializer(ctx, s, mut)
 	if err != nil {
@@ -370,9 +370,9 @@ func (f ProllyFlusher) Map(ctx context.Context, mut *GenericMutableMap[Map, tree
 	}, nil
 }
 
-var _ MutableMapFlusher[Map, tree.StaticMap[val.Tuple, val.Tuple, val.TupleDesc]] = ProllyFlusher{}
+var _ MutableMapFlusher[Map, tree.StaticMap[val.Tuple, val.Tuple, *val.TupleDesc]] = ProllyFlusher{}
 
-func (f ProllyFlusher) ApplyMutations(ctx context.Context, m *GenericMutableMap[Map, tree.StaticMap[val.Tuple, val.Tuple, val.TupleDesc]]) (tree.StaticMap[val.Tuple, val.Tuple, val.TupleDesc], error) {
+func (f ProllyFlusher) ApplyMutations(ctx context.Context, m *GenericMutableMap[Map, tree.StaticMap[val.Tuple, val.Tuple, *val.TupleDesc]]) (tree.StaticMap[val.Tuple, val.Tuple, *val.TupleDesc], error) {
 	serializer := message.NewProllyMapSerializer(m.valDesc, m.NodeStore().Pool())
 	return f.ApplyMutationsWithSerializer(ctx, serializer, m)
 }
@@ -380,13 +380,13 @@ func (f ProllyFlusher) ApplyMutations(ctx context.Context, m *GenericMutableMap[
 func (f ProllyFlusher) ApplyMutationsWithSerializer(
 	ctx context.Context,
 	serializer message.Serializer,
-	m *GenericMutableMap[Map, tree.StaticMap[val.Tuple, val.Tuple, val.TupleDesc]],
-) (tree.StaticMap[val.Tuple, val.Tuple, val.TupleDesc], error) {
+	m *GenericMutableMap[Map, tree.StaticMap[val.Tuple, val.Tuple, *val.TupleDesc]],
+) (tree.StaticMap[val.Tuple, val.Tuple, *val.TupleDesc], error) {
 	newRoot, err := tree.ApplyMutations(ctx, m.NodeStore(), m.tuples.Static.GetRoot(), m.keyDesc, serializer, m.tuples.Mutations())
 	if err != nil {
-		return tree.StaticMap[val.Tuple, val.Tuple, val.TupleDesc]{}, err
+		return tree.StaticMap[val.Tuple, val.Tuple, *val.TupleDesc]{}, err
 	}
-	return tree.StaticMap[val.Tuple, val.Tuple, val.TupleDesc]{
+	return tree.StaticMap[val.Tuple, val.Tuple, *val.TupleDesc]{
 		Root:      newRoot,
 		NodeStore: m.NodeStore(),
 		Order:     m.keyDesc,

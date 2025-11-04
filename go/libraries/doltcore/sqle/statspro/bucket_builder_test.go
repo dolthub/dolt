@@ -57,9 +57,9 @@ func TestMcvHeap(t *testing.T) {
 
 func TestBucketBuilder(t *testing.T) {
 	tests := []struct {
-		bucket  *stats.Bucket
 		name    string
-		keyDesc val.TupleDesc
+		bucket  *stats.Bucket
+		keyDesc *val.TupleDesc
 		keys    []sql.Row
 	}{
 		{

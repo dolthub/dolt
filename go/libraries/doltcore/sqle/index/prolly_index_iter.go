@@ -119,6 +119,62 @@ func (p prollyIndexIter) Next(ctx *sql.Context) (sql.Row, error) {
 	return r, nil
 }
 
+// NextValueRow implements the sql.ValueRowIter interface.
+func (p prollyIndexIter) NextValueRow(ctx *sql.Context) (sql.ValueRow, error) {
+	idxKey, _, err := p.indexIter.Next(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for to := range p.pkMap {
+		from := p.pkMap.MapOrdinal(to)
+		p.pkBld.PutRaw(to, idxKey.GetField(from))
+	}
+	pk, err := p.pkBld.Build(sharePool)
+	if err != nil {
+		return nil, err
+	}
+
+	row := make(sql.ValueRow, len(p.projections))
+	err = p.primary.Get(ctx, pk, func(key, value val.Tuple) error {
+		keyDesc, valDesc := p.primary.Descriptors()
+		for i, idx := range p.keyMap {
+			outIdx := p.ordMap[i]
+			row[outIdx], err = tree.GetFieldValue(ctx, keyDesc, idx, key, p.primary.NodeStore())
+			if err != nil {
+				return err
+			}
+		}
+		for i, idx := range p.valMap {
+			outIdx := p.ordMap[len(p.keyMap)+i]
+			row[outIdx], err = tree.GetFieldValue(ctx, valDesc, idx, value, p.primary.NodeStore())
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return row, nil
+}
+
+// IsValueRowIter implements the sql.ValueRowIter interface.
+func (p prollyIndexIter) IsValueRowIter(ctx *sql.Context) bool {
+	keyDesc, valDesc := p.primary.Descriptors()
+	for _, typ := range keyDesc.Types {
+		if typ.Enc == val.ExtendedEnc || typ.Enc == val.ExtendedAddrEnc || typ.Enc == val.ExtendedAdaptiveEnc {
+			return false
+		}
+	}
+	for _, typ := range valDesc.Types {
+		if typ.Enc == val.ExtendedEnc || typ.Enc == val.ExtendedAddrEnc || typ.Enc == val.ExtendedAdaptiveEnc {
+			return false
+		}
+	}
+	return true
+}
+
 func (p prollyIndexIter) rowFromTuples(ctx context.Context, key, value val.Tuple, r sql.Row) (err error) {
 	keyDesc, valDesc := p.primary.Descriptors()
 
@@ -169,8 +225,8 @@ func OrdinalMappingFromIndex(idx DoltIndex) (m val.OrdinalMapping) {
 type prollyCoveringIndexIter struct {
 	idx       DoltIndex
 	indexIter prolly.MapIter
-	keyDesc   val.TupleDesc
-	valDesc   val.TupleDesc
+	keyDesc   *val.TupleDesc
+	valDesc   *val.TupleDesc
 
 	ns tree.NodeStore
 
@@ -239,6 +295,48 @@ func (p prollyCoveringIndexIter) Next(ctx *sql.Context) (sql.Row, error) {
 	return r, nil
 }
 
+// NextValueRow implements the sql.ValueRowIter interface.
+func (p prollyCoveringIndexIter) NextValueRow(ctx *sql.Context) (sql.ValueRow, error) {
+	k, v, err := p.indexIter.Next(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	row := make(sql.ValueRow, len(p.projections))
+	for i, idx := range p.keyMap {
+		outIdx := p.ordMap[i]
+		row[outIdx], err = tree.GetFieldValue(ctx, p.keyDesc, idx, k, p.ns)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	for i, idx := range p.valMap {
+		outIdx := p.ordMap[len(p.keyMap)+i]
+		row[outIdx], err = tree.GetFieldValue(ctx, p.valDesc, idx, v, p.ns)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return row, nil
+}
+
+// IsValueRowIter implements the sql.ValueRowIter interface.
+func (p prollyCoveringIndexIter) IsValueRowIter(ctx *sql.Context) bool {
+	for _, typ := range p.keyDesc.Types {
+		if typ.Enc == val.ExtendedEnc || typ.Enc == val.ExtendedAddrEnc || typ.Enc == val.ExtendedAdaptiveEnc {
+			return false
+		}
+	}
+	for _, typ := range p.valDesc.Types {
+		if typ.Enc == val.ExtendedEnc || typ.Enc == val.ExtendedAddrEnc || typ.Enc == val.ExtendedAdaptiveEnc {
+			return false
+		}
+	}
+	return true
+}
+
 func (p prollyCoveringIndexIter) writeRowFromTuples(ctx context.Context, key, value val.Tuple, r sql.Row) (err error) {
 	for i, idx := range p.keyMap {
 		outputIdx := p.ordMap[i]
@@ -295,12 +393,16 @@ type prollyKeylessIndexIter struct {
 	eg      *errgroup.Group
 	rowChan chan sql.Row
 
+	valueDesc *val.TupleDesc
+
 	// valueMap transforms tuples from the
 	// clustered index into sql.Rows
-	valueMap  val.OrdinalMapping
-	ordMap    val.OrdinalMapping
-	valueDesc val.TupleDesc
-	sqlSch    sql.Schema
+	valueMap val.OrdinalMapping
+	ordMap   val.OrdinalMapping
+	sqlSch   sql.Schema
+
+	card uint64
+	curr sql.ValueRow
 }
 
 var _ sql.RowIter = prollyKeylessIndexIter{}
@@ -434,6 +536,57 @@ func (p prollyKeylessIndexIter) keylessRowsFromValueTuple(ctx context.Context, n
 		rows[i] = rows[0].Copy()
 	}
 	return
+}
+
+// NextValueRow implements the sql.ValueRowIter interface.
+func (p prollyKeylessIndexIter) NextValueRow(ctx *sql.Context) (sql.ValueRow, error) {
+	if p.card == 0 {
+		idxKey, _, err := p.indexIter.Next(ctx)
+		if err != nil {
+			return nil, err
+		}
+		for to := range p.clusteredMap {
+			from := p.clusteredMap.MapOrdinal(to)
+			p.clusteredBld.PutRaw(to, idxKey.GetField(from))
+		}
+		pk, err := p.clusteredBld.Build(sharePool)
+		if err != nil {
+			return nil, err
+		}
+
+		var value val.Tuple
+		err = p.clustered.Get(ctx, pk, func(k, v val.Tuple) error {
+			value = v
+			return nil
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		p.card = val.ReadKeylessCardinality(value)
+		ns := p.clustered.NodeStore()
+		p.curr = make(sql.ValueRow, len(p.valueMap))
+		for i, idx := range p.valueMap {
+			outIdx := p.ordMap[i]
+			p.curr[outIdx], err = tree.GetFieldValue(ctx, p.valueDesc, idx, value, ns)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	p.card--
+	return p.curr, nil
+}
+
+// IsValueRowIter implements the sql.ValueRowIter interface.
+func (p prollyKeylessIndexIter) IsValueRowIter(ctx *sql.Context) bool {
+	for _, typ := range p.valueDesc.Types {
+		if typ.Enc == val.ExtendedEnc || typ.Enc == val.ExtendedAddrEnc || typ.Enc == val.ExtendedAdaptiveEnc {
+			return false
+		}
+	}
+	return true
 }
 
 func (p prollyKeylessIndexIter) Close(*sql.Context) error {

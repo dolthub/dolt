@@ -38,7 +38,7 @@ type typeSerializer interface {
 	// specified |tuple|, described by |descriptor|, and serializes it to MySQL's binary
 	// encoding used in binlog events. For values stored out of band, the |ns| parameter
 	// provides the node storage location.
-	serialize(_ *sql.Context, typ sql.Type, descriptor val.TupleDesc, tuple val.Tuple, tupleIdx int, ns tree.NodeStore) (data []byte, err error)
+	serialize(_ *sql.Context, typ sql.Type, descriptor *val.TupleDesc, tuple val.Tuple, tupleIdx int, ns tree.NodeStore) (data []byte, err error)
 
 	// metadata returns the MySQL binlog protocol type metadata for the specified |typ|.
 	// The first return parameter identifies the data type, and the second return
@@ -94,7 +94,7 @@ type integerSerializer struct{}
 
 var _ typeSerializer = (*integerSerializer)(nil)
 
-func (i integerSerializer) serialize(_ *sql.Context, typ sql.Type, descriptor val.TupleDesc, tuple val.Tuple, tupleIdx int, ns tree.NodeStore) (data []byte, err error) {
+func (i integerSerializer) serialize(_ *sql.Context, typ sql.Type, descriptor *val.TupleDesc, tuple val.Tuple, tupleIdx int, ns tree.NodeStore) (data []byte, err error) {
 	switch typ.Type() {
 	case query.Type_INT8: // TINYINT
 		intValue, notNull := descriptor.GetInt8(tupleIdx, tuple)
@@ -208,7 +208,7 @@ type floatSerializer struct{}
 
 var _ typeSerializer = (*floatSerializer)(nil)
 
-func (f floatSerializer) serialize(_ *sql.Context, typ sql.Type, descriptor val.TupleDesc, tuple val.Tuple, tupleIdx int, ns tree.NodeStore) (data []byte, err error) {
+func (f floatSerializer) serialize(_ *sql.Context, typ sql.Type, descriptor *val.TupleDesc, tuple val.Tuple, tupleIdx int, ns tree.NodeStore) (data []byte, err error) {
 	switch typ.Type() {
 	case query.Type_FLOAT32:
 		floatValue, notNull := descriptor.GetFloat32(tupleIdx, tuple)
@@ -252,7 +252,7 @@ type decimalSerializer struct{}
 
 var _ typeSerializer = (*decimalSerializer)(nil)
 
-func (d decimalSerializer) serialize(_ *sql.Context, typ sql.Type, descriptor val.TupleDesc, tuple val.Tuple, tupleIdx int, ns tree.NodeStore) (data []byte, err error) {
+func (d decimalSerializer) serialize(_ *sql.Context, typ sql.Type, descriptor *val.TupleDesc, tuple val.Tuple, tupleIdx int, ns tree.NodeStore) (data []byte, err error) {
 	decimalValue, notNull := descriptor.GetDecimal(tupleIdx, tuple)
 	if notNull {
 		decimalType := typ.(sql.DecimalType)
@@ -378,7 +378,7 @@ type timeSerializer struct{}
 
 var _ typeSerializer = (*timeSerializer)(nil)
 
-func (t timeSerializer) serialize(_ *sql.Context, typ sql.Type, descriptor val.TupleDesc, tuple val.Tuple, tupleIdx int, ns tree.NodeStore) (data []byte, err error) {
+func (t timeSerializer) serialize(_ *sql.Context, typ sql.Type, descriptor *val.TupleDesc, tuple val.Tuple, tupleIdx int, ns tree.NodeStore) (data []byte, err error) {
 	durationInMicroseconds, notNull := descriptor.GetSqlTime(tupleIdx, tuple)
 	if notNull {
 		negative := false
@@ -437,7 +437,7 @@ type dateSerializer struct{}
 
 var _ typeSerializer = (*dateSerializer)(nil)
 
-func (d dateSerializer) serialize(_ *sql.Context, typ sql.Type, descriptor val.TupleDesc, tuple val.Tuple, tupleIdx int, ns tree.NodeStore) (data []byte, err error) {
+func (d dateSerializer) serialize(_ *sql.Context, typ sql.Type, descriptor *val.TupleDesc, tuple val.Tuple, tupleIdx int, ns tree.NodeStore) (data []byte, err error) {
 	dateValue, notNull := descriptor.GetDate(tupleIdx, tuple)
 	if notNull {
 		ymd := uint32(
@@ -462,7 +462,7 @@ type timestampSerializer struct{}
 
 var _ typeSerializer = (*timestampSerializer)(nil)
 
-func (t timestampSerializer) serialize(_ *sql.Context, typ sql.Type, descriptor val.TupleDesc, tuple val.Tuple, tupleIdx int, ns tree.NodeStore) (data []byte, err error) {
+func (t timestampSerializer) serialize(_ *sql.Context, typ sql.Type, descriptor *val.TupleDesc, tuple val.Tuple, tupleIdx int, ns tree.NodeStore) (data []byte, err error) {
 	timeValue, notNull := descriptor.GetDatetime(tupleIdx, tuple)
 	if notNull {
 		data = make([]byte, 4)
@@ -497,7 +497,7 @@ type datetimeSerializer struct{}
 
 var _ typeSerializer = (*datetimeSerializer)(nil)
 
-func (d datetimeSerializer) serialize(_ *sql.Context, typ sql.Type, descriptor val.TupleDesc, tuple val.Tuple, tupleIdx int, ns tree.NodeStore) (data []byte, err error) {
+func (d datetimeSerializer) serialize(_ *sql.Context, typ sql.Type, descriptor *val.TupleDesc, tuple val.Tuple, tupleIdx int, ns tree.NodeStore) (data []byte, err error) {
 	timeValue, notNull := descriptor.GetDatetime(tupleIdx, tuple)
 	if notNull {
 		year, month, day := timeValue.Date()
@@ -546,7 +546,7 @@ type yearSerializer struct{}
 
 var _ typeSerializer = (*yearSerializer)(nil)
 
-func (y yearSerializer) serialize(_ *sql.Context, typ sql.Type, descriptor val.TupleDesc, tuple val.Tuple, tupleIdx int, ns tree.NodeStore) (data []byte, err error) {
+func (y yearSerializer) serialize(_ *sql.Context, typ sql.Type, descriptor *val.TupleDesc, tuple val.Tuple, tupleIdx int, ns tree.NodeStore) (data []byte, err error) {
 	intValue, notNull := descriptor.GetYear(tupleIdx, tuple)
 	if notNull {
 		return []byte{byte(intValue - 1900)}, nil
@@ -562,7 +562,7 @@ func (y yearSerializer) metadata(_ *sql.Context, typ sql.Type) (byte, uint16) {
 // storage and encodes it into MySQL's binary encoding.
 type stringSerializer struct{}
 
-func (s *stringSerializer) serialize(_ *sql.Context, typ sql.Type, descriptor val.TupleDesc, tuple val.Tuple, tupleIdx int, ns tree.NodeStore) (data []byte, err error) {
+func (s *stringSerializer) serialize(_ *sql.Context, typ sql.Type, descriptor *val.TupleDesc, tuple val.Tuple, tupleIdx int, ns tree.NodeStore) (data []byte, err error) {
 	var bytes []byte
 	var notNull bool
 
@@ -619,7 +619,7 @@ type bitSerializer struct{}
 
 var _ typeSerializer = (*bitSerializer)(nil)
 
-func (b bitSerializer) serialize(_ *sql.Context, typ sql.Type, descriptor val.TupleDesc, tuple val.Tuple, tupleIdx int, ns tree.NodeStore) (data []byte, err error) {
+func (b bitSerializer) serialize(_ *sql.Context, typ sql.Type, descriptor *val.TupleDesc, tuple val.Tuple, tupleIdx int, ns tree.NodeStore) (data []byte, err error) {
 	// NOTE: descriptor.GetBit(tupleIdx, tuple) doesn't work here. BIT datatypes are described with a Uint64
 	//       encoding, so trying to use GetBit results in an error. At the data level, both are stored with a
 	//       uint64 value, so they are compatible, but we seem to only use Uint64 in the descriptor.
@@ -650,7 +650,7 @@ type setSerializer struct{}
 
 var _ typeSerializer = (*setSerializer)(nil)
 
-func (s setSerializer) serialize(_ *sql.Context, typ sql.Type, descriptor val.TupleDesc, tuple val.Tuple, tupleIdx int, ns tree.NodeStore) (data []byte, err error) {
+func (s setSerializer) serialize(_ *sql.Context, typ sql.Type, descriptor *val.TupleDesc, tuple val.Tuple, tupleIdx int, ns tree.NodeStore) (data []byte, err error) {
 	setValue, notNull := descriptor.GetSet(tupleIdx, tuple)
 	if notNull {
 		setType := typ.(gmstypes.SetType)
@@ -676,7 +676,7 @@ type enumSerializer struct{}
 
 var _ typeSerializer = (*enumSerializer)(nil)
 
-func (e enumSerializer) serialize(_ *sql.Context, typ sql.Type, descriptor val.TupleDesc, tuple val.Tuple, tupleIdx int, ns tree.NodeStore) (data []byte, err error) {
+func (e enumSerializer) serialize(_ *sql.Context, typ sql.Type, descriptor *val.TupleDesc, tuple val.Tuple, tupleIdx int, ns tree.NodeStore) (data []byte, err error) {
 	enumValue, notNull := descriptor.GetEnum(tupleIdx, tuple)
 	if notNull {
 		enumType := typ.(gmstypes.EnumType)
@@ -706,7 +706,7 @@ type blobSerializer struct{}
 
 var _ typeSerializer = (*blobSerializer)(nil)
 
-func (b blobSerializer) serialize(ctx *sql.Context, typ sql.Type, descriptor val.TupleDesc, tuple val.Tuple, tupleIdx int, ns tree.NodeStore) (data []byte, err error) {
+func (b blobSerializer) serialize(ctx *sql.Context, typ sql.Type, descriptor *val.TupleDesc, tuple val.Tuple, tupleIdx int, ns tree.NodeStore) (data []byte, err error) {
 	addr, notNull := descriptor.GetBytesAddr(tupleIdx, tuple)
 	if notNull {
 		return encodeBytesFromAddress(ctx, addr, ns, typ)
@@ -733,7 +733,7 @@ type textSerializer struct{}
 
 var _ typeSerializer = (*textSerializer)(nil)
 
-func (t textSerializer) serialize(ctx *sql.Context, typ sql.Type, descriptor val.TupleDesc, tuple val.Tuple, tupleIdx int, ns tree.NodeStore) (data []byte, err error) {
+func (t textSerializer) serialize(ctx *sql.Context, typ sql.Type, descriptor *val.TupleDesc, tuple val.Tuple, tupleIdx int, ns tree.NodeStore) (data []byte, err error) {
 	addr, notNull := descriptor.GetStringAddr(tupleIdx, tuple)
 	if notNull {
 		return encodeBytesFromAddress(ctx, addr, ns, typ)
@@ -760,7 +760,7 @@ type jsonSerializer struct{}
 
 var _ typeSerializer = (*jsonSerializer)(nil)
 
-func (j jsonSerializer) serialize(ctx *sql.Context, typ sql.Type, descriptor val.TupleDesc, tuple val.Tuple, tupleIdx int, ns tree.NodeStore) (data []byte, err error) {
+func (j jsonSerializer) serialize(ctx *sql.Context, typ sql.Type, descriptor *val.TupleDesc, tuple val.Tuple, tupleIdx int, ns tree.NodeStore) (data []byte, err error) {
 	json, err := tree.GetField(ctx, descriptor, tupleIdx, tuple, ns)
 	if err != nil {
 		return nil, err
@@ -803,7 +803,7 @@ type geometrySerializer struct{}
 
 var _ typeSerializer = (*geometrySerializer)(nil)
 
-func (g geometrySerializer) serialize(ctx *sql.Context, typ sql.Type, descriptor val.TupleDesc, tuple val.Tuple, tupleIdx int, ns tree.NodeStore) (data []byte, err error) {
+func (g geometrySerializer) serialize(ctx *sql.Context, typ sql.Type, descriptor *val.TupleDesc, tuple val.Tuple, tupleIdx int, ns tree.NodeStore) (data []byte, err error) {
 	// NOTE: Using descriptor.GetGeometry() here will return the stored bytes, but
 	//       we need to use tree.GetField() so that they get deserialized into WKB
 	//       format bytes for the correct MySQL binlog serialization format.

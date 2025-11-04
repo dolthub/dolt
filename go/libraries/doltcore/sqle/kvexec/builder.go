@@ -148,8 +148,8 @@ type prollyToSqlJoiner struct {
 }
 
 type kvDesc struct {
-	keyDesc     val.TupleDesc
-	valDesc     val.TupleDesc
+	keyDesc     *val.TupleDesc
+	valDesc     *val.TupleDesc
 	keyMappings []int
 	valMappings []int
 }

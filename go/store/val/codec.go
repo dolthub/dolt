@@ -24,10 +24,11 @@ import (
 	"time"
 	"unsafe"
 
+	querypb "github.com/dolthub/vitess/go/vt/proto/query"
+	"github.com/shopspring/decimal"
+
 	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/store/hash"
-
-	"github.com/shopspring/decimal"
 )
 
 type Type struct {
@@ -42,6 +43,7 @@ const (
 type ByteSize uint16
 
 const (
+	// TODO: these are the same gms/sql/values/encoding.go
 	int8Size         ByteSize = 1
 	uint8Size        ByteSize = 1
 	int16Size        ByteSize = 2
@@ -102,6 +104,52 @@ const (
 
 	sentinel Encoding = 127
 )
+
+var EncToType = map[Encoding]querypb.Type{
+	NullEnc:   querypb.Type_NULL_TYPE,
+	Int8Enc:   querypb.Type_INT8,
+	Int16Enc:  querypb.Type_INT16,
+	Int32Enc:  querypb.Type_INT32,
+	Int64Enc:  querypb.Type_INT64,
+	Uint32Enc: querypb.Type_UINT32,
+	Uint16Enc: querypb.Type_UINT16,
+	Uint8Enc:  querypb.Type_UINT8,
+	Uint64Enc: querypb.Type_UINT64,
+
+	Float32Enc: querypb.Type_FLOAT32,
+	Float64Enc: querypb.Type_FLOAT64,
+	DecimalEnc: querypb.Type_DECIMAL,
+	Bit64Enc:   querypb.Type_INT64,
+
+	DateEnc:     querypb.Type_DATE,
+	DatetimeEnc: querypb.Type_DATETIME,
+	TimeEnc:     querypb.Type_TIME,
+	YearEnc:     querypb.Type_YEAR,
+
+	EnumEnc: querypb.Type_ENUM,
+	SetEnc:  querypb.Type_SET,
+
+	Hash128Enc:    querypb.Type_BLOB,
+	CommitAddrEnc: querypb.Type_BLOB,
+	CellEnc:       querypb.Type_BLOB,
+
+	StringEnc:     querypb.Type_TEXT,
+	ByteStringEnc: querypb.Type_TEXT,
+
+	JSONEnc:     querypb.Type_JSON,
+	GeometryEnc: querypb.Type_GEOMETRY,
+	GeomAddrEnc: querypb.Type_GEOMETRY,
+
+	BytesAddrEnc:      querypb.Type_BLOB,
+	StringAddrEnc:     querypb.Type_BLOB,
+	BytesAdaptiveEnc:  querypb.Type_BLOB,
+	StringAdaptiveEnc: querypb.Type_BLOB,
+	JSONAddrEnc:       querypb.Type_BLOB,
+
+	ExtendedEnc:         querypb.Type_BLOB,
+	ExtendedAddrEnc:     querypb.Type_BLOB,
+	ExtendedAdaptiveEnc: querypb.Type_BLOB,
+}
 
 func IsAddrEncoding(enc Encoding) bool {
 	switch enc {

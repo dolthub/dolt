@@ -20,9 +20,10 @@ import (
 )
 
 type MemoryQuotaProvider interface {
-	AcquireQuotaBytes(ctx context.Context, sz int) ([]byte, error)
-	AcquireQuotaUint64s(ctx context.Context, sz int) ([]uint64, error)
-	AcquireQuotaUint32s(ctx context.Context, sz int) ([]uint32, error)
+	AcquireQuotaByteSlice(ctx context.Context, sz int) ([]byte, error)
+	AcquireQuotaUint64Slice(ctx context.Context, sz int) ([]uint64, error)
+	AcquireQuotaUint32Slice(ctx context.Context, sz int) ([]uint32, error)
+	AcquireQuotaBytes(ctx context.Context, sz int) error
 	ReleaseQuotaBytes(sz int)
 	Usage() uint64
 }
@@ -36,7 +37,7 @@ func NewUnlimitedMemQuotaProvider() *UnlimitedQuotaProvider {
 	return &UnlimitedQuotaProvider{}
 }
 
-func (q *UnlimitedQuotaProvider) AcquireQuotaBytes(ctx context.Context, sz int) ([]byte, error) {
+func (q *UnlimitedQuotaProvider) AcquireQuotaByteSlice(ctx context.Context, sz int) ([]byte, error) {
 	buf := make([]byte, sz)
 	q.mu.Lock()
 	defer q.mu.Unlock()
@@ -44,7 +45,7 @@ func (q *UnlimitedQuotaProvider) AcquireQuotaBytes(ctx context.Context, sz int) 
 	return buf, nil
 }
 
-func (q *UnlimitedQuotaProvider) AcquireQuotaUint32s(ctx context.Context, sz int) ([]uint32, error) {
+func (q *UnlimitedQuotaProvider) AcquireQuotaUint32Slice(ctx context.Context, sz int) ([]uint32, error) {
 	buf := make([]uint32, sz)
 	q.mu.Lock()
 	defer q.mu.Unlock()
@@ -52,12 +53,19 @@ func (q *UnlimitedQuotaProvider) AcquireQuotaUint32s(ctx context.Context, sz int
 	return buf, nil
 }
 
-func (q *UnlimitedQuotaProvider) AcquireQuotaUint64s(ctx context.Context, sz int) ([]uint64, error) {
+func (q *UnlimitedQuotaProvider) AcquireQuotaUint64Slice(ctx context.Context, sz int) ([]uint64, error) {
 	buf := make([]uint64, sz)
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	q.used += uint64(sz) * uint64Size
 	return buf, nil
+}
+
+func (q *UnlimitedQuotaProvider) AcquireQuotaBytes(ctx context.Context, sz int) error {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	q.used += uint64(sz)
+	return nil
 }
 
 func (q *UnlimitedQuotaProvider) ReleaseQuotaBytes(sz int) {

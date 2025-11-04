@@ -30,7 +30,7 @@ var GetNonlocalTablesRef = getNonlocalTablesRef
 // GetNonlocalTablesNameColumn is a function that reads the "table_name" column from dolt_nonlocal_tables. This is used to handle the Doltgres extended string type.
 var GetNonlocalTablesNameColumn = getNonlocalTablesNameColumn
 
-func getNonlocalTablesNameColumn(_ context.Context, keyDesc val.TupleDesc, keyTuple val.Tuple) (string, error) {
+func getNonlocalTablesNameColumn(_ context.Context, keyDesc *val.TupleDesc, keyTuple val.Tuple) (string, error) {
 	key, ok := keyDesc.GetString(0, keyTuple)
 	if !ok {
 		return "", fmt.Errorf("failed to read global table")
@@ -44,7 +44,7 @@ type NonlocalTableEntry struct {
 	Options      string
 }
 
-func getNonlocalTablesRef(_ context.Context, valDesc val.TupleDesc, valTuple val.Tuple) (result NonlocalTableEntry) {
+func getNonlocalTablesRef(_ context.Context, valDesc *val.TupleDesc, valTuple val.Tuple) (result NonlocalTableEntry) {
 	result.Ref, _ = valDesc.GetString(0, valTuple)
 	result.NewTableName, _ = valDesc.GetString(1, valTuple)
 	result.Options, _ = valDesc.GetString(2, valTuple)

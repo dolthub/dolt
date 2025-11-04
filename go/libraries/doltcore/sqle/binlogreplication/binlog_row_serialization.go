@@ -31,10 +31,10 @@ import (
 type rowSerializationIter struct {
 	sch schema.Schema // The schema representing the row being serialized
 
-	keyDesc   val.TupleDesc // The descriptor for the key tuple
-	valueDesc val.TupleDesc // The descriptor for the value tuple
-	key       val.Tuple     // The key tuple for the row being serialized
-	value     val.Tuple     // The value tuple for the row being serialized
+	keyDesc   *val.TupleDesc // The descriptor for the key tuple
+	valueDesc *val.TupleDesc // The descriptor for the value tuple
+	key       val.Tuple      // The key tuple for the row being serialized
+	value     val.Tuple      // The value tuple for the row being serialized
 
 	colIdx   int // The position in the schema for the current column
 	keyIdx   int // The last index in the key tuple used for a column
@@ -64,7 +64,7 @@ func (rsi *rowSerializationIter) hasNext() bool {
 // nextColumn provides the data needed to process the next column in a row, including the column itself, the tuple
 // holding the data, the tuple descriptor for that tuple, and the position index into that tuple where the column
 // is stored. Callers should always call hasNext() before calling nextColumn() to ensure that it is safe to call.
-func (rsi *rowSerializationIter) nextColumn() (schema.Column, val.TupleDesc, val.Tuple, int) {
+func (rsi *rowSerializationIter) nextColumn() (schema.Column, *val.TupleDesc, val.Tuple, int) {
 	col := rsi.sch.GetAllCols().GetColumns()[rsi.colIdx]
 	rsi.colIdx++
 

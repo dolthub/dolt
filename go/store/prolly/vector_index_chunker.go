@@ -74,7 +74,7 @@ func newVectorIndexChunker(ctx context.Context, pathMap *MutableMap, childChunke
 }
 
 // Next produces the next tree node for the corresponding level of the tree.
-func (c *vectorIndexChunker) Next(ctx context.Context, ns tree.NodeStore, serializer message.VectorIndexSerializer, parentPathSegment []byte, level, depth int, originalKeyDesc val.TupleDesc) (tree.Node, uint64, hash.Hash, error) {
+func (c *vectorIndexChunker) Next(ctx context.Context, ns tree.NodeStore, serializer message.VectorIndexSerializer, parentPathSegment []byte, level, depth int, originalKeyDesc *val.TupleDesc) (tree.Node, uint64, hash.Hash, error) {
 	var indexMapKeys [][]byte
 	var indexMapValues [][]byte
 	var indexMapSubtrees []uint64

@@ -124,7 +124,7 @@ func parseTableIndex(ctx context.Context, buff []byte, q MemoryQuotaProvider) (o
 
 	chunks2 := chunkCount / 2
 	chunks1 := chunkCount - chunks2
-	offsetsBuff1, err := q.AcquireQuotaBytes(ctx, int(chunks1*offsetSize))
+	offsetsBuff1, err := q.AcquireQuotaByteSlice(ctx, int(chunks1*offsetSize))
 	if err != nil {
 		return onHeapTableIndex{}, err
 	}
@@ -169,7 +169,7 @@ func readTableIndexByCopy(ctx context.Context, rd io.ReadSeeker, q MemoryQuotaPr
 		return onHeapTableIndex{}, fmt.Errorf("table file index is too large to read on this platform. index size %d > max int.", idxSz)
 	}
 
-	buff, err := q.AcquireQuotaBytes(ctx, int(idxSz))
+	buff, err := q.AcquireQuotaByteSlice(ctx, int(idxSz))
 	if err != nil {
 		return onHeapTableIndex{}, err
 	}
@@ -181,7 +181,7 @@ func readTableIndexByCopy(ctx context.Context, rd io.ReadSeeker, q MemoryQuotaPr
 	}
 
 	chunks1 := chunkCount - (chunkCount / 2)
-	offsets1Buff, err := q.AcquireQuotaBytes(ctx, int(chunks1*offsetSize))
+	offsets1Buff, err := q.AcquireQuotaByteSlice(ctx, int(chunks1*offsetSize))
 	if err != nil {
 		q.ReleaseQuotaBytes(len(buff))
 		return onHeapTableIndex{}, err
@@ -402,7 +402,7 @@ func (ti onHeapTableIndex) offsetAt(ord uint32) uint64 {
 }
 
 func (ti onHeapTableIndex) ordinals(ctx context.Context) ([]uint32, func(), error) {
-	o, err := ti.q.AcquireQuotaUint32s(ctx, int(ti.count))
+	o, err := ti.q.AcquireQuotaUint32Slice(ctx, int(ti.count))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -417,7 +417,7 @@ func (ti onHeapTableIndex) ordinals(ctx context.Context) ([]uint32, func(), erro
 }
 
 func (ti onHeapTableIndex) prefixes(ctx context.Context) ([]uint64, func(), error) {
-	p, err := ti.q.AcquireQuotaUint64s(ctx, int(ti.count))
+	p, err := ti.q.AcquireQuotaUint64Slice(ctx, int(ti.count))
 	if err != nil {
 		return nil, nil, err
 	}

@@ -65,7 +65,7 @@ func ModifyKeylessCardinality(pool pool.BuffPool, value Tuple, delta int64) (upd
 // field count of 1, little endian encoded
 var keySuffix = [...]byte{1, 0}
 
-var KeylessTupleDesc = TupleDesc{
+var KeylessTupleDesc = &TupleDesc{
 	Types: []Type{{Enc: Hash128Enc, Nullable: false}},
 	cmp:   keylessCompare{},
 }
@@ -80,7 +80,7 @@ type keylessCompare struct{}
 var _ TupleComparator = keylessCompare{}
 
 // Compare implements TupleComparator
-func (k keylessCompare) Compare(ctx context.Context, left, right Tuple, desc TupleDesc) int {
+func (k keylessCompare) Compare(ctx context.Context, left, right Tuple, desc *TupleDesc) int {
 	return bytes.Compare(left, right)
 }
 

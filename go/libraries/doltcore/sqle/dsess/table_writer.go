@@ -75,9 +75,9 @@ type WriteSessionFlusher interface {
 type WriterState struct {
 	DoltSchema schema.Schema
 	AutoIncCol schema.Column
-	PkKeyDesc  val.TupleDesc
-	PkValDesc  val.TupleDesc
 	PkSchema   sql.PrimaryKeySchema
+	PkKeyDesc  *val.TupleDesc
+	PkValDesc  *val.TupleDesc
 	SecIndexes []IndexState
 	PriIndex   IndexState
 }

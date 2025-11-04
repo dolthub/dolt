@@ -35,9 +35,9 @@ import (
 // is stored such that it is closer to its parent key than any of its uncle keys, according to a distance function
 // defined on the tree.ProximityMap
 type ProximityMap struct {
-	tuples       tree.ProximityMap[val.Tuple, val.Tuple, val.TupleDesc]
-	keyDesc      val.TupleDesc
-	valDesc      val.TupleDesc
+	tuples       tree.ProximityMap[val.Tuple, val.Tuple, *val.TupleDesc]
+	keyDesc      *val.TupleDesc
+	valDesc      *val.TupleDesc
 	logChunkSize uint8
 }
 
@@ -65,7 +65,7 @@ func (m ProximityMap) Count() (int, error) {
 	return m.tuples.Count()
 }
 
-func (m ProximityMap) Descriptors() (val.TupleDesc, val.TupleDesc) {
+func (m ProximityMap) Descriptors() (*val.TupleDesc, *val.TupleDesc) {
 	return m.keyDesc, m.valDesc
 }
 
@@ -73,11 +73,11 @@ func (m ProximityMap) NodeStore() tree.NodeStore {
 	return m.tuples.NodeStore
 }
 
-func (m ProximityMap) ValDesc() val.TupleDesc {
+func (m ProximityMap) ValDesc() *val.TupleDesc {
 	return m.valDesc
 }
 
-func (m ProximityMap) KeyDesc() val.TupleDesc {
+func (m ProximityMap) KeyDesc() *val.TupleDesc {
 	return m.keyDesc
 }
 
@@ -121,7 +121,7 @@ type kvPair struct {
 }
 
 type proximityMapIter struct {
-	keyDesc, valueDesc val.TupleDesc
+	keyDesc, valueDesc *val.TupleDesc
 	kvPairs            []kvPair
 	i                  int
 }
@@ -139,7 +139,7 @@ func (p *proximityMapIter) Next(ctx context.Context) (k val.Tuple, v val.Tuple, 
 	return
 }
 
-func getConvertToVectorFunction(keyDesc val.TupleDesc, ns tree.NodeStore) (tree.ConvertToVectorFunction, error) {
+func getConvertToVectorFunction(keyDesc *val.TupleDesc, ns tree.NodeStore) (tree.ConvertToVectorFunction, error) {
 	switch keyDesc.Types[0].Enc {
 	case val.JSONAddrEnc:
 		return func(ctx context.Context, bytes []byte) ([]float32, error) {
@@ -165,12 +165,12 @@ func getConvertToVectorFunction(keyDesc val.TupleDesc, ns tree.NodeStore) (tree.
 }
 
 // NewProximityMap creates a new ProximityMap from a supplied root node.
-func NewProximityMap(ns tree.NodeStore, node tree.Node, keyDesc val.TupleDesc, valDesc val.TupleDesc, distanceType vector.DistanceType, logChunkSize uint8) (ProximityMap, error) {
+func NewProximityMap(ns tree.NodeStore, node tree.Node, keyDesc *val.TupleDesc, valDesc *val.TupleDesc, distanceType vector.DistanceType, logChunkSize uint8) (ProximityMap, error) {
 	convertFunc, err := getConvertToVectorFunction(keyDesc, ns)
 	if err != nil {
 		return ProximityMap{}, err
 	}
-	tuples := tree.ProximityMap[val.Tuple, val.Tuple, val.TupleDesc]{
+	tuples := tree.ProximityMap[val.Tuple, val.Tuple, *val.TupleDesc]{
 		Root:         node,
 		NodeStore:    ns,
 		Order:        keyDesc,
@@ -191,7 +191,7 @@ var proximitylevelMapKeyDesc = val.NewTupleDescriptor(
 )
 
 // NewProximityMapBuilder creates a new ProximityMap from a given list of key-value pairs.
-func NewProximityMapBuilder(ctx context.Context, ns tree.NodeStore, distanceType vector.DistanceType, keyDesc val.TupleDesc, valDesc val.TupleDesc, logChunkSize uint8) (ProximityMapBuilder, error) {
+func NewProximityMapBuilder(ctx context.Context, ns tree.NodeStore, distanceType vector.DistanceType, keyDesc *val.TupleDesc, valDesc *val.TupleDesc, logChunkSize uint8) (ProximityMapBuilder, error) {
 
 	emptyLevelMap, err := NewMapFromTuples(ctx, ns, proximitylevelMapKeyDesc, valDesc)
 	if err != nil {
@@ -255,8 +255,8 @@ type ProximityMapBuilder struct {
 	vectorIndexSerializer message.VectorIndexSerializer
 	ns                    tree.NodeStore
 	distanceType          vector.DistanceType
-	keyDesc               val.TupleDesc
-	valDesc               val.TupleDesc
+	keyDesc               *val.TupleDesc
+	valDesc               *val.TupleDesc
 	logChunkSize          uint8
 	maxLevel              uint8
 	levelMap              *MutableMap
@@ -516,7 +516,7 @@ func (b *ProximityMapBuilder) createInitialPathMaps(ctx context.Context, maxLeve
 
 // getNextPathSegmentCandidates takes a list of keys, representing a path into the ProximityMap from the root.
 // It returns an iter over all possible keys that could be the next path segment.
-func (b *ProximityMapBuilder) getNextPathSegmentCandidates(ctx context.Context, pathMap *MutableMap, prefixTupleDesc val.TupleDesc, prefixTuple val.Tuple) (MapIter, error) {
+func (b *ProximityMapBuilder) getNextPathSegmentCandidates(ctx context.Context, pathMap *MutableMap, prefixTupleDesc *val.TupleDesc, prefixTuple val.Tuple) (MapIter, error) {
 	prefixRange := PrefixRange(ctx, prefixTuple, prefixTupleDesc)
 	return pathMap.IterRange(ctx, prefixRange)
 }

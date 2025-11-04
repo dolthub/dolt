@@ -38,7 +38,7 @@ type DiffStatProgress struct {
 	Adds, Removes, Changes, CellChanges, NewRowSize, OldRowSize, NewCellSize, OldCellSize uint64
 }
 
-type prollyReporter func(ctx context.Context, vMapping val.OrdinalMapping, fromD, toD val.TupleDesc, change tree.Diff, ch chan<- DiffStatProgress) error
+type prollyReporter func(ctx context.Context, vMapping val.OrdinalMapping, fromD, toD *val.TupleDesc, change tree.Diff, ch chan<- DiffStatProgress) error
 type nomsReporter func(ctx context.Context, change *diff.Difference, fromSch, toSch schema.Schema, ch chan<- DiffStatProgress) error
 
 // Stat reports a stat of diff changes between two values
@@ -234,7 +234,7 @@ func statWithReporter(ctx context.Context, ch chan DiffStatProgress, from, to ty
 	return nil
 }
 
-func reportPkChanges(ctx context.Context, vMapping val.OrdinalMapping, fromD, toD val.TupleDesc, change tree.Diff, ch chan<- DiffStatProgress) error {
+func reportPkChanges(ctx context.Context, vMapping val.OrdinalMapping, fromD, toD *val.TupleDesc, change tree.Diff, ch chan<- DiffStatProgress) error {
 	var stat DiffStatProgress
 	switch change.Type {
 	case tree.AddedDiff:
@@ -255,7 +255,7 @@ func reportPkChanges(ctx context.Context, vMapping val.OrdinalMapping, fromD, to
 	}
 }
 
-func reportKeylessChanges(ctx context.Context, vMapping val.OrdinalMapping, fromD, toD val.TupleDesc, change tree.Diff, ch chan<- DiffStatProgress) error {
+func reportKeylessChanges(ctx context.Context, vMapping val.OrdinalMapping, fromD, toD *val.TupleDesc, change tree.Diff, ch chan<- DiffStatProgress) error {
 	var stat DiffStatProgress
 	var n, n2 uint64
 	switch change.Type {
@@ -286,7 +286,7 @@ func reportKeylessChanges(ctx context.Context, vMapping val.OrdinalMapping, from
 
 // prollyCountCellDiff counts the number of changes columns between two tuples
 // |from| and |to|. |mapping| should map columns from |from| to |to|.
-func prollyCountCellDiff(ctx context.Context, mapping val.OrdinalMapping, fromD, toD val.TupleDesc, from, to val.Tuple) uint64 {
+func prollyCountCellDiff(ctx context.Context, mapping val.OrdinalMapping, fromD, toD *val.TupleDesc, from, to val.Tuple) uint64 {
 	newCols := uint64(toD.Count())
 	changed := uint64(0)
 	for i, j := range mapping {

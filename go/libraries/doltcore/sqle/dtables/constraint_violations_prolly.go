@@ -209,8 +209,8 @@ type prollyCVIter struct {
 	itr prolly.ArtifactIter
 	sch schema.Schema
 	ns  tree.NodeStore
-	kd  val.TupleDesc
-	vd  val.TupleDesc
+	kd  *val.TupleDesc
+	vd  *val.TupleDesc
 }
 
 func (itr prollyCVIter) Next(ctx *sql.Context) (sql.Row, error) {
@@ -315,7 +315,7 @@ type prollyCVDeleter struct {
 	kb   *val.TupleBuilder
 	ed   *prolly.ArtifactsEditor
 	cvt  *prollyConstraintViolationsTable
-	kd   val.TupleDesc
+	kd   *val.TupleDesc
 }
 
 var _ sql.RowDeleter = (*prollyCVDeleter)(nil)

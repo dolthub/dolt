@@ -75,7 +75,7 @@ func testEqualMapMerge(t *testing.T, sz int) {
 	assert.Equal(t, m.HashOf(), mm.HashOf())
 }
 
-func testThreeWayMapMerge(t *testing.T, kd, vd val.TupleDesc, sz int, ns tree.NodeStore) {
+func testThreeWayMapMerge(t *testing.T, kd, vd *val.TupleDesc, sz int, ns tree.NodeStore) {
 	baseTuples, leftEdits, rightEdits := makeTuplesAndMutations(kd, vd, sz, ns)
 	base := mustProllyMapFromTuples(t, kd, vd, baseTuples, ns)
 
@@ -154,7 +154,7 @@ func testThreeWayMapMerge(t *testing.T, kd, vd val.TupleDesc, sz int, ns tree.No
 	*/
 }
 
-func testTupleMergeFn(t *testing.T, kd, vd val.TupleDesc, sz int, ns tree.NodeStore) {
+func testTupleMergeFn(t *testing.T, kd, vd *val.TupleDesc, sz int, ns tree.NodeStore) {
 	ctx := context.Background()
 	tuples, err := tree.RandomTuplePairs(ctx, sz, kd, vd, ns)
 	require.NoError(t, err)
@@ -230,7 +230,7 @@ type mutationSet struct {
 	updates [][3]val.Tuple
 }
 
-func makeTuplesAndMutations(kd, vd val.TupleDesc, sz int, ns tree.NodeStore) (base [][2]val.Tuple, left, right mutationSet) {
+func makeTuplesAndMutations(kd, vd *val.TupleDesc, sz int, ns tree.NodeStore) (base [][2]val.Tuple, left, right mutationSet) {
 	ctx := context.Background()
 	mutSz := sz / 10
 	totalSz := sz + (mutSz * 2)

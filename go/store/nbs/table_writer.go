@@ -146,6 +146,9 @@ type prefixIndexRec struct {
 	order, size uint32
 }
 
+// These records are used in quota. See sizes.go and sizes_test.go.
+var prefixIndexRecSize int
+
 type prefixIndexSlice []prefixIndexRec
 
 func (hs prefixIndexSlice) Len() int { return len(hs) }

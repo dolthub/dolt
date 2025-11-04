@@ -28,7 +28,9 @@ import (
 
 func TestBlockBufferTableSink(t *testing.T) {
 	createSink := func() ByteSink {
-		return NewBlockBufferByteSink(128)
+		bs, err := NewBlockBufferByteSink(t.Context(), 128, NewUnlimitedMemQuotaProvider())
+		require.NoError(t, err)
+		return bs
 	}
 
 	suite.Run(t, &TableSinkSuite{createSink, t})
@@ -72,6 +74,73 @@ func TestBufferedFileByteSink(t *testing.T) {
 		require.Equal(t, 4, n)
 		require.True(t, bytes.Equal(readbytes[:4], []byte{1, 2, 3, 4}))
 		r.Close()
+	})
+}
+
+func TestBlockBufferByteSink(t *testing.T) {
+	t.Run("Quota", func(t *testing.T) {
+		t.Run("NoError", func(t *testing.T) {
+			q := NewUnlimitedMemQuotaProvider()
+			sink, err := NewBlockBufferByteSink(t.Context(), 4096, q)
+			require.NoError(t, err)
+			assert.Equal(t, uint64(4096), q.Usage())
+			_, err = sink.Write(make([]byte, 4096))
+			require.NoError(t, err)
+			assert.Equal(t, uint64(4096), q.Usage())
+			_, err = sink.Write(make([]byte, 4096))
+			require.NoError(t, err)
+			assert.Equal(t, uint64(8192), q.Usage())
+			_, err = sink.Write(make([]byte, 0))
+			require.NoError(t, err)
+			assert.Equal(t, uint64(8192), q.Usage())
+			_, err = sink.Write(make([]byte, 1))
+			require.NoError(t, err)
+			assert.Equal(t, uint64(12288), q.Usage())
+			_, err = sink.Write(make([]byte, 4095))
+			require.NoError(t, err)
+			assert.Equal(t, uint64(12288), q.Usage())
+			_, err = sink.Write(make([]byte, 65536))
+			require.NoError(t, err)
+			assert.Equal(t, uint64(77824), q.Usage())
+			var buf bytes.Buffer
+			err = sink.Flush(&buf)
+			require.NoError(t, err)
+			assert.Equal(t, uint64(77824), q.Usage())
+			assert.Equal(t, 77824, buf.Len())
+			sink.Close()
+			assert.Equal(t, uint64(0), q.Usage())
+		})
+		t.Run("Error", func(t *testing.T) {
+			t.Run("Init", func(t *testing.T) {
+				q := &errorQuota{NewUnlimitedMemQuotaProvider(), 0}
+				_, err := NewBlockBufferByteSink(t.Context(), 1, q)
+				assert.Error(t, err)
+				assert.Equal(t, uint64(0), q.Usage())
+				q = &errorQuota{NewUnlimitedMemQuotaProvider(), 2048}
+				_, err = NewBlockBufferByteSink(t.Context(), 4096, q)
+				assert.Error(t, err)
+				assert.Equal(t, uint64(0), q.Usage())
+			})
+			t.Run("AfterWrite", func(t *testing.T) {
+				q := &errorQuota{NewUnlimitedMemQuotaProvider(), 8192}
+				sink, err := NewBlockBufferByteSink(t.Context(), 4096, q)
+				require.NoError(t, err)
+				assert.Equal(t, uint64(4096), q.Usage())
+				_, err = sink.Write(make([]byte, 4096))
+				require.NoError(t, err)
+				_, err = sink.Write(make([]byte, 2048))
+				require.NoError(t, err)
+				n, err := sink.Write(make([]byte, 4096))
+				assert.Error(t, err)
+				assert.Equal(t, 2048, n)
+				assert.Equal(t, uint64(8192), q.Usage())
+				n, err = sink.Write(make([]byte, 1))
+				assert.Error(t, err)
+				assert.Equal(t, 0, n)
+				sink.Close()
+				assert.Equal(t, uint64(0), q.Usage())
+			})
+		})
 	})
 }
 

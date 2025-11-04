@@ -29,7 +29,7 @@ import (
 )
 
 // getChunkBoundaries returns all the keys in a node, which indicate the chunk boundaries in the previous tree level.
-func getChunkBoundaries(t *testing.T, desc val.TupleDesc, nd tree.Node) (boundaries []uint32) {
+func getChunkBoundaries(t *testing.T, desc *val.TupleDesc, nd tree.Node) (boundaries []uint32) {
 	for i := 0; i < nd.Count(); i++ {
 		key := nd.GetKey(i)
 		keyInt, ok := desc.GetUint32(0, val.Tuple(key))
@@ -172,7 +172,7 @@ func testPatchBasedMergingResultsOnly[T interface{}](
 	t *testing.T,
 	ctx context.Context,
 	ns tree.NodeStore,
-	keyDesc val.TupleDesc,
+	keyDesc *val.TupleDesc,
 	collide tree.CollisionFn,
 	baseRoot, leftRoot, rightRoot tree.Node,
 	expectedPatches []expectedPatch[T],
@@ -185,7 +185,7 @@ func testPatchBasedMergingResultsOnly[T interface{}](
 
 }
 
-func testPatchBasedMerging[T interface{}](t *testing.T, ctx context.Context, ns tree.NodeStore, keyDesc val.TupleDesc, collide tree.CollisionFn, baseRoot, leftRoot, rightRoot tree.Node, expectedPatches []expectedPatch[T]) {
+func testPatchBasedMerging[T interface{}](t *testing.T, ctx context.Context, ns tree.NodeStore, keyDesc *val.TupleDesc, collide tree.CollisionFn, baseRoot, leftRoot, rightRoot tree.Node, expectedPatches []expectedPatch[T]) {
 	err := producePatches(ctx, ns, leftRoot, rightRoot, baseRoot, collide, keyDesc, func(iter tree.PatchIter) error {
 		var actualPatches []tree.Patch
 		actualPatch, err := iter.NextPatch(ctx)
@@ -257,7 +257,7 @@ func testPatchBasedMerging[T interface{}](t *testing.T, ctx context.Context, ns 
 }
 
 // mutate creates a new tree map by applying a sequence of mutations to an existing tree map.
-func mutate(t *testing.T, ctx context.Context, baseRoot tree.Node, keyDesc, valDesc val.TupleDesc, mutations []mutation[uint32]) tree.Node {
+func mutate(t *testing.T, ctx context.Context, baseRoot tree.Node, keyDesc, valDesc *val.TupleDesc, mutations []mutation[uint32]) tree.Node {
 	baseMap := NewMap(baseRoot, ns, keyDesc, valDesc)
 
 	keyBld := val.NewTupleBuilder(keyDesc, ns)
@@ -284,7 +284,7 @@ func mutate(t *testing.T, ctx context.Context, baseRoot tree.Node, keyDesc, valD
 	return newMap.Node()
 }
 
-func mutateStrings(t *testing.T, ctx context.Context, baseRoot tree.Node, keyDesc, valDesc val.TupleDesc, mutations []mutation[string]) tree.Node {
+func mutateStrings(t *testing.T, ctx context.Context, baseRoot tree.Node, keyDesc, valDesc *val.TupleDesc, mutations []mutation[string]) tree.Node {
 	baseMap := NewMap(baseRoot, ns, keyDesc, valDesc)
 
 	keyBld := val.NewTupleBuilder(keyDesc, ns)
@@ -321,7 +321,7 @@ func makeDeletePatches(start, stop uint32) (mutations []mutation[uint32]) {
 	return mutations
 }
 
-func makeSimpleIntMap(t *testing.T, start, stop int) (tree.Node, val.TupleDesc) {
+func makeSimpleIntMap(t *testing.T, start, stop int) (tree.Node, *val.TupleDesc) {
 	tups, desc := tree.AscendingUintTuplesWithStep(stop-start+1, start, start, 1)
 	root, err := tree.MakeTreeForTest(tups)
 	require.NoError(t, err)
