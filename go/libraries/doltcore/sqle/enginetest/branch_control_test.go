@@ -1380,6 +1380,34 @@ var BranchControlTests = []BranchControlTest{
 			},
 		},
 	},
+	{
+		Name: "Mixed any match operator (single, prefix, postfix)",
+		SetUpScript: []string{
+			"DELETE FROM dolt_branch_control WHERE user = '%';",
+			"INSERT INTO dolt_branch_control VALUES ('%', '%', 'root', 'localhost', 'admin');",
+			"INSERT INTO dolt_branch_control VALUES ('%wy', 'prefix%', '%', '%', 'write');",
+			"INSERT INTO dolt_branch_control VALUES ('%wy', 'mask%', '%', '%', 'write');",
+			"CREATE TABLE test (pk BIGINT);",
+			"CREATE USER testuser@localhost;",
+			"GRANT SELECT, INSERT ON *.* TO testuser@localhost;",
+		},
+		Assertions: []BranchControlTestAssertion{
+			{
+				User:  "root",
+				Host:  "localhost",
+				Query: "INSERT INTO test VALUES (5);",
+				Expected: []sql.Row{
+					{types.NewOkResult(1)},
+				},
+			},
+			{
+				User:        "testuser",
+				Host:        "localhost",
+				Query:       "INSERT INTO test VALUES (6);",
+				ExpectedErr: branch_control.ErrIncorrectPermissions,
+			},
+		},
+	},
 }
 
 func TestBranchControl(t *testing.T) {

@@ -201,23 +201,39 @@ func processMatch(matches []matchNodeCounted, node matchNodeCounted, sortOrder i
 		node.Length += 1
 		matches = append(matches, node)
 	case anyMatch:
-		// Since any match can be a zero-length match, we need to check if we also match the next sort order
-		if len(node.SortOrders) > 1 && node.SortOrders[1] == sortOrder {
-			matches = append(matches, matchNodeCounted{
-				MatchNode: MatchNode{
-					SortOrders: node.SortOrders[2:],
-					Children:   node.Children,
-					Data:       node.Data,
-				},
-				Length: node.Length + 2,
-			})
+		// Since any match can be a zero-length match, we have to check the following sort order for a match as well
+		if len(node.SortOrders) > 1 {
+			// Since we have more sort orders in the slice, we need to check if we also match the next one
+			if node.SortOrders[1] == sortOrder {
+				matches = append(matches, matchNodeCounted{
+					MatchNode: MatchNode{
+						SortOrders: node.SortOrders[2:],
+						Children:   node.Children,
+						Data:       node.Data,
+					},
+					Length: node.Length + 2,
+				})
+			}
+		} else {
+			// If we have no more sort orders in the slice, then we need to check if we match a child
+			if matchNode, ok := node.Children[sortOrder]; ok {
+				matches = append(matches, matchNodeCounted{
+					MatchNode: MatchNode{
+						SortOrders: matchNode.SortOrders[1:],
+						Children:   matchNode.Children,
+						Data:       matchNode.Data,
+					},
+					Length: node.Length + 2,
+				})
+			}
 		}
-		// Any match cannot match a columnMarker as they represent column boundaries
+		// `anyMatch` cannot match a `columnMarker` as they represent column boundaries.
+		// Otherwise, we put this node back into the match pool since it can match an unbounded number of sort orders
 		if sortOrder != columnMarker {
 			matches = append(matches, node)
 		}
 	default:
-		// NOTE: it's worth mentioning that separators only match with themselves, so no need for special logic
+		// NOTE: it's worth mentioning that `columnMarker`s only match with themselves, so no need for special logic
 		if sortOrder == node.SortOrders[0] {
 			node.SortOrders = node.SortOrders[1:]
 			node.Length += 1
