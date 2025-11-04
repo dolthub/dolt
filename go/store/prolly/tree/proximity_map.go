@@ -38,10 +38,10 @@ type ProximityMap[K, V ~[]byte, O Ordering[K]] struct {
 	DistanceType vector.DistanceType
 	Order        O
 	Convert      ConvertToVectorFunction
-	Root         Node
+	Root         *Node
 }
 
-func (t ProximityMap[K, V, O]) GetRoot() Node {
+func (t ProximityMap[K, V, O]) GetRoot() *Node {
 	return t.Root
 }
 

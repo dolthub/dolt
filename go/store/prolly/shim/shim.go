@@ -28,7 +28,7 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-func NodeFromValue(v types.Value) (node tree.Node, fileId string, err error) {
+func NodeFromValue(v types.Value) (node *tree.Node, fileId string, err error) {
 	return tree.NodeFromBytes(v.(types.SerialMessage))
 }
 

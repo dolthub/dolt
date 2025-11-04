@@ -123,7 +123,7 @@ func (m *memStats) PutBound(h hash.Hash, r sql.Row, l int) {
 	m.bounds[k] = r
 }
 
-func (m *memStats) GcMark(from StatsKv, nodes []tree.Node, buckets []*stats.Bucket, idxLen int, tb *val.TupleBuilder) bool {
+func (m *memStats) GcMark(from StatsKv, nodes []*tree.Node, buckets []*stats.Bucket, idxLen int, tb *val.TupleBuilder) bool {
 	if from.GcGen() > m.GcGen() {
 		return false
 	}

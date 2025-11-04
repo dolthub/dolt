@@ -354,7 +354,7 @@ func IncrementTuple(ctx context.Context, start val.Tuple, n int, desc *val.Tuple
 }
 
 func rangeStartSearchFn(rng Range) tree.SearchFn {
-	return func(ctx context.Context, nd tree.Node) int {
+	return func(ctx context.Context, nd *tree.Node) int {
 		// todo(andy): inline sort.Search()
 		return sort.Search(nd.Count(), func(i int) (in bool) {
 			// if |tup| ∈ |rng|, set |in| to true
@@ -366,7 +366,7 @@ func rangeStartSearchFn(rng Range) tree.SearchFn {
 }
 
 func rangeStopSearchFn(rng Range) tree.SearchFn {
-	return func(ctx context.Context, nd tree.Node) (idx int) {
+	return func(ctx context.Context, nd *tree.Node) (idx int) {
 		// todo(andy): inline sort.Search()
 		return sort.Search(nd.Count(), func(i int) (out bool) {
 			// if |tup| ∈ |rng|, set |out| to false

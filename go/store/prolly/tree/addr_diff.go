@@ -31,8 +31,8 @@ type AddrDiff struct {
 type AddrDiffStream[K ~[]byte, O Ordering[K]] struct {
 	fromNs NodeStore
 	toNs   NodeStore
-	from   Node
-	to     Node
+	from   *Node
+	to     *Node
 	dfr    []Differ[K, O]
 }
 
@@ -69,7 +69,7 @@ var ErrInvalidDepth = errors.New("invalid depth. must be > 0")
 func layerDifferFromRoots[K ~[]byte, O Ordering[K]](
 	ctx context.Context,
 	fromNs NodeStore, toNs NodeStore,
-	from, to Node,
+	from, to *Node,
 	order O,
 ) (AddrDiffStream[K, O], error) {
 	// Currently we are punting on trees which aren't the same depth.

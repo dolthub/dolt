@@ -137,7 +137,7 @@ func testGetOrdinalOfCursor(t *testing.T, count int) {
 	require.Equal(t, uint64(len(tuples)), ord)
 }
 
-func randomTree(t *testing.T, count int) (Node, [][2]Item, NodeStore) {
+func randomTree(t *testing.T, count int) (*Node, [][2]Item, NodeStore) {
 	ctx := sql.NewEmptyContext()
 	ns := NewTestNodeStore()
 	serializer := message.NewProllyMapSerializer(valDesc, ns.Pool())

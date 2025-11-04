@@ -33,7 +33,7 @@ import (
 
 var testRand = rand.New(rand.NewSource(1))
 
-func NewTupleLeafNode(keys, values []val.Tuple) Node {
+func NewTupleLeafNode(keys, values []val.Tuple) *Node {
 	ks := make([]Item, len(keys))
 	for i := range ks {
 		ks[i] = Item(keys[i])
@@ -195,11 +195,11 @@ func ShuffleTuplePairs(items [][2]val.Tuple) {
 	})
 }
 
-func NewEmptyTestNode() Node {
+func NewEmptyTestNode() *Node {
 	return newLeafNode(nil, nil)
 }
 
-func newLeafNode(keys, values []Item) Node {
+func newLeafNode(keys, values []Item) *Node {
 	kk := make([][]byte, len(keys))
 	for i := range keys {
 		kk[i] = keys[i]
@@ -305,7 +305,7 @@ func NewTestNodeStore() NodeStore {
 	ts := &chunks.TestStorage{}
 	ns := NewNodeStore(ts.NewViewWithFormat(types.Format_DOLT.VersionString()))
 	bb := &blobBuilderPool
-	return nodeStoreValidator{ns: ns, bbp: bb}
+	return &nodeStoreValidator{ns: ns, bbp: bb}
 }
 
 type nodeStoreValidator struct {
@@ -313,13 +313,15 @@ type nodeStoreValidator struct {
 	bbp *sync.Pool
 }
 
-func (v nodeStoreValidator) ReadBytes(ctx context.Context, h hash.Hash) (result []byte, err error) {
+var _ NodeStore = &nodeStoreValidator{}
+
+func (v *nodeStoreValidator) ReadBytes(ctx context.Context, h hash.Hash) (result []byte, err error) {
 	n, err := v.ns.Read(ctx, h)
 	if err != nil {
 		return nil, err
 	}
 
-	err = WalkNodes(ctx, n, &v, func(ctx context.Context, n Node) error {
+	err = WalkNodes(ctx, n, v, func(ctx context.Context, n *Node) error {
 		if n.IsLeaf() {
 			result = append(result, n.GetValue(0)...)
 		}
@@ -328,26 +330,26 @@ func (v nodeStoreValidator) ReadBytes(ctx context.Context, h hash.Hash) (result 
 	return result, err
 }
 
-func (v nodeStoreValidator) WriteBytes(ctx context.Context, val []byte) (hash.Hash, error) {
+func (v *nodeStoreValidator) WriteBytes(ctx context.Context, val []byte) (hash.Hash, error) {
 	_, h, err := SerializeBytesToAddr(ctx, v, bytes.NewReader(val), len(val))
 	return h, err
 }
 
-func (v nodeStoreValidator) Read(ctx context.Context, ref hash.Hash) (Node, error) {
+func (v *nodeStoreValidator) Read(ctx context.Context, ref hash.Hash) (*Node, error) {
 	nd, err := v.ns.Read(ctx, ref)
 	if err != nil {
-		return Node{}, err
+		return nil, err
 	}
 
 	actual := hash.Of(nd.msg)
 	if ref != actual {
 		err = fmt.Errorf("incorrect node hash (%s != %s)", ref, actual)
-		return Node{}, err
+		return nil, err
 	}
 	return nd, nil
 }
 
-func (v nodeStoreValidator) ReadMany(ctx context.Context, refs hash.HashSlice) ([]Node, error) {
+func (v *nodeStoreValidator) ReadMany(ctx context.Context, refs hash.HashSlice) ([]*Node, error) {
 	nodes, err := v.ns.ReadMany(ctx, refs)
 	if err != nil {
 		return nil, err
@@ -362,7 +364,7 @@ func (v nodeStoreValidator) ReadMany(ctx context.Context, refs hash.HashSlice) (
 	return nodes, nil
 }
 
-func (v nodeStoreValidator) Write(ctx context.Context, nd Node) (hash.Hash, error) {
+func (v *nodeStoreValidator) Write(ctx context.Context, nd *Node) (hash.Hash, error) {
 	h, err := v.ns.Write(ctx, nd)
 	if err != nil {
 		return hash.Hash{}, err
@@ -376,11 +378,11 @@ func (v nodeStoreValidator) Write(ctx context.Context, nd Node) (hash.Hash, erro
 	return h, nil
 }
 
-func (v nodeStoreValidator) Pool() pool.BuffPool {
+func (v *nodeStoreValidator) Pool() pool.BuffPool {
 	return v.ns.Pool()
 }
 
-func (v nodeStoreValidator) BlobBuilder() *BlobBuilder {
+func (v *nodeStoreValidator) BlobBuilder() *BlobBuilder {
 	bb := v.bbp.Get().(*BlobBuilder)
 	if bb.ns == nil {
 		bb.SetNodeStore(v)
@@ -389,20 +391,20 @@ func (v nodeStoreValidator) BlobBuilder() *BlobBuilder {
 }
 
 // PutBlobBuilder implements NodeStore.
-func (v nodeStoreValidator) PutBlobBuilder(bb *BlobBuilder) {
+func (v *nodeStoreValidator) PutBlobBuilder(bb *BlobBuilder) {
 	bb.Reset()
 	v.bbp.Put(bb)
 }
 
-func (v nodeStoreValidator) PurgeCaches() {
+func (v *nodeStoreValidator) PurgeCaches() {
 	v.ns.PurgeCaches()
 }
 
-func (v nodeStoreValidator) Format() *types.NomsBinFormat {
+func (v *nodeStoreValidator) Format() *types.NomsBinFormat {
 	return v.ns.Format()
 }
 
-func MakeTreeForTest(tuples [][2]val.Tuple) (Node, error) {
+func MakeTreeForTest(tuples [][2]val.Tuple) (*Node, error) {
 	ctx := context.Background()
 	ns := NewTestNodeStore()
 
@@ -410,7 +412,7 @@ func MakeTreeForTest(tuples [][2]val.Tuple) (Node, error) {
 	s := message.NewProllyMapSerializer(&val.TupleDesc{}, ns.Pool())
 	chunker, err := newEmptyChunker(ctx, ns, s)
 	if err != nil {
-		return Node{}, err
+		return nil, err
 	}
 	for _, pair := range tuples {
 		if pair[1] == nil {
@@ -418,17 +420,17 @@ func MakeTreeForTest(tuples [][2]val.Tuple) (Node, error) {
 		}
 		err := chunker.AddPair(ctx, Item(pair[0]), Item(pair[1]))
 		if err != nil {
-			return Node{}, err
+			return nil, err
 		}
 	}
 	root, err := chunker.Done(ctx)
 	if err != nil {
-		return Node{}, err
+		return nil, err
 	}
 	return root, nil
 }
 
-func GetAddressFromLevelAndKeyForTest(ctx context.Context, ns NodeStore, root Node, level int, key val.Tuple, keyDesc *val.TupleDesc) (addr hash.Hash, ok bool, err error) {
+func GetAddressFromLevelAndKeyForTest(ctx context.Context, ns NodeStore, root *Node, level int, key val.Tuple, keyDesc *val.TupleDesc) (addr hash.Hash, ok bool, err error) {
 	i := 0
 	for i < root.Count() {
 		childKey := root.GetKey(i)

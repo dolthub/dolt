@@ -57,7 +57,7 @@ type Node struct {
 
 type AddressCb func(ctx context.Context, addr hash.Hash) error
 
-func WalkAddresses(ctx context.Context, nd Node, ns NodeStore, cb AddressCb) error {
+func WalkAddresses(ctx context.Context, nd *Node, ns NodeStore, cb AddressCb) error {
 	return walkAddresses(ctx, nd, func(ctx context.Context, addr hash.Hash) error {
 		if err := cb(ctx, addr); err != nil {
 			return err
@@ -76,13 +76,16 @@ func WalkAddresses(ctx context.Context, nd Node, ns NodeStore, cb AddressCb) err
 	})
 }
 
-type NodeCb func(ctx context.Context, nd Node) error
+type NodeCb func(ctx context.Context, nd *Node) error
 
 // WalkNodes runs a callback function on every node found in the DFS of |nd|
 // that is of the same message type as |nd|.
-func WalkNodes(ctx context.Context, nd Node, ns NodeStore, cb NodeCb) error {
+func WalkNodes(ctx context.Context, nd *Node, ns NodeStore, cb NodeCb) error {
 	if err := cb(ctx, nd); err != nil {
 		return err
+	}
+	if nd == nil {
+		return nil
 	}
 	if nd.IsLeaf() {
 		return nil
@@ -99,7 +102,7 @@ func WalkNodes(ctx context.Context, nd Node, ns NodeStore, cb NodeCb) error {
 
 // walkOpaqueNodes runs a callback function on every node found in the DFS of |nd|
 // including nested trees.
-func walkOpaqueNodes(ctx context.Context, nd Node, ns NodeStore, cb NodeCb) error {
+func walkOpaqueNodes(ctx context.Context, nd *Node, ns NodeStore, cb NodeCb) error {
 	if err := cb(ctx, nd); err != nil {
 		return err
 	}
@@ -113,9 +116,9 @@ func walkOpaqueNodes(ctx context.Context, nd Node, ns NodeStore, cb NodeCb) erro
 	})
 }
 
-func NodeFromBytes(msg []byte) (node Node, fileId string, err error) {
+func NodeFromBytes(msg []byte) (node *Node, fileId string, err error) {
 	fileId, keys, values, level, count, err := message.UnpackFields(msg)
-	return Node{
+	return &Node{
 		keys:   keys,
 		values: values,
 		count:  count,
@@ -124,57 +127,60 @@ func NodeFromBytes(msg []byte) (node Node, fileId string, err error) {
 	}, fileId, err
 }
 
-func (nd Node) HashOf() hash.Hash {
+func (nd *Node) HashOf() hash.Hash {
 	return hash.Of(nd.bytes())
 }
 
-func (nd Node) Count() int {
+func (nd *Node) Count() int {
 	return int(nd.count)
 }
 
-func (nd Node) TreeCount() (int, error) {
+func (nd *Node) TreeCount() (int, error) {
 	return message.GetTreeCount(nd.msg)
 }
 
-func (nd Node) Size() int {
+func (nd *Node) Size() int {
 	return len(nd.bytes())
 }
 
 // Level returns the tree Level for this node
-func (nd Node) Level() int {
+func (nd *Node) Level() int {
+	if nd == nil {
+		return 0
+	}
 	return int(nd.level)
 }
 
 // IsLeaf returns whether this node is a leaf
-func (nd Node) IsLeaf() bool {
+func (nd *Node) IsLeaf() bool {
 	return nd.level == 0
 }
 
 // GetKey returns the |ith| key of this node
-func (nd Node) GetKey(i int) Item {
+func (nd *Node) GetKey(i int) Item {
 	return nd.keys.GetItem(i, nd.msg)
 }
 
 // GetValue returns the |ith| value of this node.
-func (nd Node) GetValue(i int) Item {
+func (nd *Node) GetValue(i int) Item {
 	return nd.values.GetItem(i, nd.msg)
 }
 
-func (nd Node) LoadSubtrees() (Node, error) {
+func (nd *Node) LoadSubtrees() (*Node, error) {
 	var err error
 	if nd.subtrees == nil {
 		// deserializing subtree counts requires a malloc,
 		// we don't load them unless explicitly requested
 		sc, err := message.GetSubtrees(nd.msg)
 		if err != nil {
-			return Node{}, err
+			return nil, err
 		}
 		nd.subtrees = (*subtreeCounts)(&sc)
 	}
 	return nd, err
 }
 
-func (nd Node) GetSubtreeCount(i int) uint64 {
+func (nd *Node) GetSubtreeCount(i int) uint64 {
 	if nd.IsLeaf() {
 		return 1
 	}
@@ -184,30 +190,30 @@ func (nd Node) GetSubtreeCount(i int) uint64 {
 
 // getAddress returns the |ith| address of this node.
 // This method assumes values are 20-byte address hashes.
-func (nd Node) getAddress(i int) hash.Hash {
+func (nd *Node) getAddress(i int) hash.Hash {
 	return hash.New(nd.GetValue(i))
 }
 
-func (nd Node) empty() bool {
-	return nd.bytes() == nil || nd.count == 0
+func (nd *Node) empty() bool {
+	return nd == nil || nd.bytes() == nil || nd.count == 0
 }
 
-func (nd Node) bytes() []byte {
+func (nd *Node) bytes() []byte {
 	return nd.msg
 }
 
-func walkAddresses(ctx context.Context, nd Node, cb AddressCb) (err error) {
+func walkAddresses(ctx context.Context, nd *Node, cb AddressCb) (err error) {
 	return message.WalkAddresses(ctx, nd.msg, cb)
 }
 
-func getLastKey(nd Node) Item {
+func getLastKey(nd *Node) Item {
 	return nd.GetKey(int(nd.count) - 1)
 }
 
 // OutputProllyNode writes the node given to the writer given in a human-readable format, with values converted
 // to the type specified by the provided schema. All nodes have keys displayed in this manner. Interior nodes have
 // their child hash references spelled out, leaf nodes have value tuples delineated like the keys
-func OutputProllyNode(ctx context.Context, w io.Writer, node Node, ns NodeStore, schema schema.Schema) error {
+func OutputProllyNode(ctx context.Context, w io.Writer, node *Node, ns NodeStore, schema schema.Schema) error {
 	kd := schema.GetKeyDescriptor(ns)
 	vd := schema.GetValueDescriptor(ns)
 	for i := 0; i < int(node.count); i++ {
@@ -280,11 +286,11 @@ func OutputProllyNode(ctx context.Context, w io.Writer, node Node, ns NodeStore,
 // displayed in hex-encoded byte strings, but are delineated into their fields. All nodes have keys displayed in this
 // manner. Interior nodes have their child hash references spelled out, leaf nodes have value tuples delineated like
 // the keys
-func OutputProllyNodeBytes(w io.Writer, node Node) error {
+func OutputProllyNodeBytes(w io.Writer, node *Node) error {
 	return types.OutputProllyNodeBytes(w, node.msg)
 }
 
-func OutputAddressMapNode(w io.Writer, node Node) error {
+func OutputAddressMapNode(w io.Writer, node *Node) error {
 	for i := 0; i < int(node.count); i++ {
 		k := node.GetKey(i)
 		w.Write([]byte("\n    { key: "))
@@ -300,6 +306,6 @@ func OutputAddressMapNode(w io.Writer, node Node) error {
 	return nil
 }
 
-func ValueFromNode(root Node) types.Value {
+func ValueFromNode(root *Node) types.Value {
 	return types.SerialMessage(root.bytes())
 }

@@ -34,7 +34,7 @@ type KvIter[K, V ~[]byte] interface {
 type StaticMap[K, V ~[]byte, O Ordering[K]] struct {
 	NodeStore NodeStore
 	Order     O
-	Root      Node
+	Root      *Node
 }
 
 type MapInterface[K, V ~[]byte, O Ordering[K]] interface {
@@ -42,7 +42,7 @@ type MapInterface[K, V ~[]byte, O Ordering[K]] interface {
 	GetPrefix(ctx context.Context, query K, prefixOrder O, cb KeyValueFn[K, V]) (err error)
 	Has(ctx context.Context, query K) (ok bool, err error)
 	HasPrefix(ctx context.Context, query K, prefixOrder O) (ok bool, err error)
-	GetRoot() Node
+	GetRoot() *Node
 	GetNodeStore() NodeStore
 	IterKeyRange(ctx context.Context, start, stop K) (*OrderedTreeIter[K, V], error)
 }
@@ -202,7 +202,7 @@ func VisitMapLevelOrder[K, V ~[]byte, O Ordering[K]](
 	return err
 }
 
-func (t StaticMap[K, V, O]) GetRoot() Node {
+func (t StaticMap[K, V, O]) GetRoot() *Node {
 	return t.Root
 }
 
@@ -515,7 +515,7 @@ type OrderedTreeIter[K, V ~[]byte] struct {
 
 func ReverseOrderedTreeIterFromCursors[K, V ~[]byte](
 	ctx context.Context,
-	root Node, ns NodeStore,
+	root *Node, ns NodeStore,
 	findStart, findEnd SearchFn,
 ) (*OrderedTreeIter[K, V], error) {
 	start, err := newCursorFromSearchFn(ctx, ns, root, findStart)
@@ -544,7 +544,7 @@ func ReverseOrderedTreeIterFromCursors[K, V ~[]byte](
 
 func OrderedTreeIterFromCursors[K, V ~[]byte](
 	ctx context.Context,
-	root Node, ns NodeStore,
+	root *Node, ns NodeStore,
 	findStart, findStop SearchFn,
 ) (*OrderedTreeIter[K, V], error) {
 	start, err := newCursorFromSearchFn(ctx, ns, root, findStart)
@@ -612,9 +612,9 @@ func (it *OrderedTreeIter[K, V]) Iterate(ctx context.Context) (err error) {
 
 type orderedLeafSpanIter[K, V ~[]byte] struct {
 	// in-progress node
-	nd Node
+	nd *Node
 	// remaining leaves
-	leaves []Node
+	leaves []*Node
 	// current index,
 	curr int
 	// last index for |nd|

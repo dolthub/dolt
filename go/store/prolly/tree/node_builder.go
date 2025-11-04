@@ -24,7 +24,7 @@ import (
 )
 
 type novelNode struct {
-	node      Node
+	node      *Node
 	lastKey   Item
 	treeCount uint64
 	addr      hash.Hash
@@ -100,7 +100,7 @@ func (nb *nodeBuilder[S]) count() int {
 	return len(nb.keys)
 }
 
-func (nb *nodeBuilder[S]) build() (node Node, err error) {
+func (nb *nodeBuilder[S]) build() (node *Node, err error) {
 	msg := nb.serializer.Serialize(nb.keys, nb.values, nb.subtrees, nb.level)
 	nb.recycleBuffers()
 	nb.size = 0

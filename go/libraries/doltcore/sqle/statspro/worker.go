@@ -295,7 +295,7 @@ func (sc *StatsController) finalizeHistogram(template stats.Statistic, buckets [
 	return &template
 }
 
-func (sc *StatsController) collectIndexNodes(ctx *sql.Context, prollyMap prolly.Map, idxLen int, nodes []tree.Node, bypassRateLimit, openSessionCmds bool) ([]*stats.Bucket, sql.Row, int, error) {
+func (sc *StatsController) collectIndexNodes(ctx *sql.Context, prollyMap prolly.Map, idxLen int, nodes []*tree.Node, bypassRateLimit, openSessionCmds bool) ([]*stats.Bucket, sql.Row, int, error) {
 	updater := newBucketBuilder(sql.StatQualifier{}, idxLen, prollyMap.KeyDesc())
 	keyBuilder := val.NewTupleBuilder(prollyMap.KeyDesc().PrefixDesc(idxLen), prollyMap.NodeStore())
 
@@ -495,7 +495,7 @@ func (sc *StatsController) updateTable(ctx *sql.Context, newStats *rootStats, ta
 
 		idxLen := len(sqlIdx.Expressions())
 
-		var levelNodes []tree.Node
+		var levelNodes []*tree.Node
 		if err := sc.execWithOptionalRateLimit(ctx, bypassRateLimit, openSessionCmds, func() (err error) {
 			levelNodes, err = tree.GetHistogramLevel(ctx, prollyMap.Tuples(), bucketLowCnt)
 			if err != nil {
