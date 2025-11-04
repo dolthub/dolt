@@ -362,7 +362,7 @@ func GetBranchAwareSession(ctx context.Context) Context {
 	return nil
 }
 
-// GetBranchAwareSession will return a context converted from this if
+// ContextConvertible will return a context converted from this if
 // the Session supports this GetBranch call instead.
 type ContextConvertible interface {
 	GetBranch(*sql.Context) (string, error)
