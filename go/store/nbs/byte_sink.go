@@ -125,6 +125,9 @@ type BlockBufferByteSink struct {
 }
 
 // NewBlockBufferByteSink creates a BlockBufferByteSink with the provided block size.
+//
+// A BlockBufferByteSink acquires memory from |q|. In order to release the memory,
+// it must be |Close|d.
 func NewBlockBufferByteSink(ctx context.Context, blockSize int, q MemoryQuotaProvider) (*BlockBufferByteSink, error) {
 	block, err := q.AcquireQuotaByteSlice(ctx, blockSize)
 	if err != nil {

@@ -219,7 +219,7 @@ func TestAWSTablePersisterDividePlan(t *testing.T) {
 	plan, err := planRangeCopyConjoin(t.Context(), sources, q, &Stats{})
 	require.NoError(t, err)
 	defer plan.closer()
-	copies, manuals, _, err := dividePlan(t.Context(), plan, minPartSize, maxPartSize, q)
+	copies, manuals, _, err := dividePlan(t.Context(), plan, minPartSize, maxPartSize)
 	require.NoError(t, err)
 
 	perTableDataSize := map[string]int64{}

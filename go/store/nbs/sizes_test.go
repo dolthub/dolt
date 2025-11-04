@@ -17,8 +17,9 @@ package nbs
 import (
 	"testing"
 
-	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 func TestSizes(t *testing.T) {
@@ -27,8 +28,8 @@ func TestSizes(t *testing.T) {
 	// rebuilding indexes in Conjoin needs to be able to allocate
 	// all O(n) memory blocks reliably, so these structs should
 	// never contain heap allocated memory or interfaces, etc.
-	assert.Equal(t, hash.ByteLen + uint32Size + uint32Size, prefixIndexRecSize)
-	assert.Equal(t, uint64Size + uint64Size, byteSpanSize)
-	assert.Equal(t, hash.ByteLen + uint32Size + uint32Size, stagedChunkRefSize)
-	assert.Equal(t, hash.ByteLen + uint32Size + uint64Size, tableChunkRecordSize)
+	assert.Equal(t, hash.ByteLen+uint32Size+uint32Size, prefixIndexRecSize)
+	assert.Equal(t, uint64Size+uint64Size, byteSpanSize)
+	assert.Equal(t, hash.ByteLen+uint32Size+uint32Size, stagedChunkRefSize)
+	assert.Equal(t, hash.ByteLen+uint32Size+uint64Size, tableChunkRecordSize)
 }

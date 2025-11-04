@@ -281,7 +281,11 @@ func (s3p awsTablePersister) assembleTable(ctx context.Context, plan compactionP
 	}
 
 	// Separate plan.sources by amount of chunkData. Tables with >5MB of chunk data (copies) can be added to the new table using S3's multipart upload copy feature. Smaller tables with <5MB of chunk data (manuals) must be read, assembled into |buff|, and then re-uploaded in parts that are larger than 5MB.
-	copies, manuals, buff, err := dividePlan(ctx, plan, s3p.limits.partMin, s3p.limits.partMax, s3p.q)
+	copies, manuals, buffSize, err := dividePlan(ctx, plan, s3p.limits.partMin, s3p.limits.partMax)
+	if err != nil {
+		return nil, err
+	}
+	buff, err := s3p.q.AcquireQuotaByteSlice(ctx, int(buffSize))
 	if err != nil {
 		return nil, err
 	}
@@ -445,10 +449,10 @@ func (mp manualPart) readFull(ctx context.Context, buff []byte) error {
 // This function divides |plan.sources| into two groups: those with enough chunk data to use S3's UploadPartCopy API (copies) and those without (manuals).
 // The ordering of the parts is how we will upload them to S3, and the manual parts will be prefixed to the index, thus
 // keeping |plan.sources| in the correct order so the index is correct.
-func dividePlan(ctx context.Context, plan compactionPlan, minPartSize, maxPartSize uint64, q MemoryQuotaProvider) (copies []copyPart, manuals []manualPart, buff []byte, err error) {
+func dividePlan(ctx context.Context, plan compactionPlan, minPartSize, maxPartSize uint64) (copies []copyPart, manuals []manualPart, buffSize uint64, err error) {
 	// NB: if maxPartSize < 2*minPartSize, splitting large copies apart isn't solvable. S3's limits are plenty far enough apart that this isn't a problem in production, but we could violate this in tests.
 	if maxPartSize < 2*minPartSize {
-		return nil, nil, nil, errors.New("failed to split large copies apart")
+		return nil, nil, 0, errors.New("failed to split large copies apart")
 	}
 
 	i := 0
@@ -479,17 +483,13 @@ func dividePlan(ctx context.Context, plan compactionPlan, minPartSize, maxPartSi
 		}
 	}
 
-	buffSize := uint64(0)
+	buffSize = 0
 	var offset int64
 	for ; i < len(plan.sources.sws); i++ {
 		sws := plan.sources.sws[i]
 		manuals = append(manuals, manualPart{sws.source, offset, offset + int64(sws.dataLen)})
 		offset += int64(sws.dataLen)
 		buffSize += sws.dataLen
-	}
-	buff, err = q.AcquireQuotaByteSlice(ctx, int(buffSize))
-	if err != nil {
-		return nil, nil, nil, err
 	}
 	return
 }

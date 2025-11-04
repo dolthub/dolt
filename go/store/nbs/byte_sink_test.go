@@ -113,7 +113,7 @@ func TestBlockBufferByteSink(t *testing.T) {
 		t.Run("Error", func(t *testing.T) {
 			t.Run("Init", func(t *testing.T) {
 				q := &errorQuota{NewUnlimitedMemQuotaProvider(), 0}
-				_, err := NewBlockBufferByteSink(t.Context(), 4096, q)
+				_, err := NewBlockBufferByteSink(t.Context(), 1, q)
 				assert.Error(t, err)
 				assert.Equal(t, uint64(0), q.Usage())
 				q = &errorQuota{NewUnlimitedMemQuotaProvider(), 2048}

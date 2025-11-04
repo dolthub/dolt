@@ -848,11 +848,15 @@ func planArchiveConjoin(ctx context.Context, sources []sourceWithSize, q MemoryQ
 	if err != nil {
 		return compactionPlan{}, err
 	}
-	acquiredBytes := sz
+	// We acquire bytes throughout the conjoin and need to clean
+	// them up.  In the happy case, some of these acquired bytes
+	// will actually be the callers responsibility to clean up,
+	// but acquiredBytesOnStack will have been adjusted so that we
+	// always release what we ourselves are still responsible for
+	// at the time that we return from this function.
+	acquiredBytesOnStack := sz
 	defer func() {
-		if err != nil {
-			q.ReleaseQuotaBytes(acquiredBytes)
-		}
+		q.ReleaseQuotaBytes(acquiredBytesOnStack)
 	}()
 
 	aw.stagedBytes = make(stagedByteSpanSlice, 0, numByteSpans)
@@ -877,7 +881,7 @@ func planArchiveConjoin(ctx context.Context, sources []sourceWithSize, q MemoryQ
 			if err != nil {
 				return compactionPlan{}, err
 			}
-			acquiredBytes += tempSz
+			acquiredBytesOnStack += tempSz
 			chunkRecs := make([]tableChunkRecord, 0, chks)
 			for i := uint32(0); i < chks; i++ {
 				var h hash.Hash
@@ -907,7 +911,8 @@ func planArchiveConjoin(ctx context.Context, sources []sourceWithSize, q MemoryQ
 					data:       uint32(len(aw.stagedBytes)),
 				})
 			}
-			acquiredBytes -= tempSz
+			chunkRecs = nil
+			acquiredBytesOnStack -= tempSz
 			q.ReleaseQuotaBytes(tempSz)
 		} else {
 			footer := arcSrc.aRdr.footer
@@ -977,7 +982,7 @@ func planArchiveConjoin(ctx context.Context, sources []sourceWithSize, q MemoryQ
 	if err != nil {
 		return compactionPlan{}, err
 	}
-	acquiredBytes += idxSize
+	acquiredBytesOnStack += idxSize
 	bufBytes = bufBytes[:0]
 	buf := bytes.NewBuffer(bufBytes)
 	if err := writer.Flush(buf); err != nil {
@@ -987,8 +992,10 @@ func planArchiveConjoin(ctx context.Context, sources []sourceWithSize, q MemoryQ
 	stats.BytesPerConjoin.Sample(dataBlocksLen + uint64(len(buf.Bytes())))
 
 	writer = nil
-	// Our temporary slices used for serializing the index are no longer needed.
-	q.ReleaseQuotaBytes(acquiredBytes - idxSize)
+
+	// On return, we are going to release quota bytes we are still responsible for.
+	// We are transfering responsibility for idxSize bytes to our caller.
+	acquiredBytesOnStack -= idxSize
 
 	return compactionPlan{
 		sources:             orderedSrcs,
