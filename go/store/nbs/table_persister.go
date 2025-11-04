@@ -30,7 +30,6 @@ import (
 	"io"
 	"sort"
 	"time"
-	"unsafe"
 
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -215,7 +214,7 @@ func planTableConjoin(ctx context.Context, sources []sourceWithSize, q MemoryQuo
 	}
 	acquiredBytes += sz
 
-	prefixRecsSz := int(unsafe.Sizeof(prefixIndexRec{})) * int(plan.chunkCount)
+	prefixRecsSz := prefixIndexRecSize * int(plan.chunkCount)
 	err = q.AcquireQuotaBytes(ctx, prefixRecsSz)
 	if err != nil {
 		return compactionPlan{}, err

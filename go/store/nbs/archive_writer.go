@@ -27,7 +27,6 @@ import (
 	"path/filepath"
 	"sort"
 	"time"
-	"unsafe"
 
 	"github.com/dolthub/gozstd"
 
@@ -42,6 +41,10 @@ type stagedChunkRef struct {
 	hash             hash.Hash
 	dictionary, data uint32
 }
+
+// Used in quota allocation. See sizes.go and sizes_test.go.
+var stagedChunkRefSize int
+
 type stagedChunkRefSlice []stagedChunkRef
 
 type stage int
@@ -799,6 +802,9 @@ type tableChunkRecord struct {
 	hash   hash.Hash
 }
 
+// Used in quota memory allocation. See sizes.go and sizes_test.go.
+var tableChunkRecordSize int
+
 func planArchiveConjoin(ctx context.Context, sources []sourceWithSize, q MemoryQuotaProvider, stats *Stats) (plan compactionPlan, err error) {
 	if len(sources) < 2 {
 		return compactionPlan{}, fmt.Errorf("conjoinIndexes requires at least 2 archive readers, got %d", len(sources))
@@ -836,8 +842,8 @@ func planArchiveConjoin(ctx context.Context, sources []sourceWithSize, q MemoryQ
 		}
 	}
 
-	sz := int(unsafe.Sizeof(byteSpan{})) * int(numByteSpans)
-	sz += int(unsafe.Sizeof(stagedChunkRef{})) * int(numChunks)
+	sz := byteSpanSize * int(numByteSpans)
+	sz += stagedChunkRefSize * int(numChunks)
 	err = q.AcquireQuotaBytes(ctx, sz)
 	if err != nil {
 		return compactionPlan{}, err
@@ -866,7 +872,7 @@ func planArchiveConjoin(ctx context.Context, sources []sourceWithSize, q MemoryQ
 			chks := index.chunkCount()
 			chunkCounter += chks
 
-			tempSz := int(unsafe.Sizeof(tableChunkRecord{})) * int(chks)
+			tempSz := tableChunkRecordSize * int(chks)
 			err = q.AcquireQuotaBytes(ctx, tempSz)
 			if err != nil {
 				return compactionPlan{}, err
