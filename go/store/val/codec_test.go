@@ -254,9 +254,9 @@ func TestCompare(t *testing.T) {
 		ctx := sql.NewEmptyContext()
 		act := compare(test.typ, test.l, test.r)
 		assert.Equal(t, test.cmp, act, "expected %s %s %s ",
-			TupleDesc{}.formatValue(ctx, test.typ.Enc, 0, test.l),
+			(&TupleDesc{}).formatValue(ctx, test.typ.Enc, 0, test.l),
 			fmtComparator(test.cmp),
-			TupleDesc{}.formatValue(ctx, test.typ.Enc, 0, test.r))
+			(&TupleDesc{}).formatValue(ctx, test.typ.Enc, 0, test.r))
 	}
 }
 
