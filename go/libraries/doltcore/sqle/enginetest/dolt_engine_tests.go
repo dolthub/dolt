@@ -22,8 +22,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/binlogreplication"
-	gms "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/enginetest/scriptgen/setup"
@@ -2145,20 +2143,6 @@ func RunBranchActivityTests(t *testing.T, harness DoltEnginetestHarness) {
 			harness = harness.NewHarness(t)
 			defer harness.Close()
 
-			enginetest.TestScript(t, harness, script)
-		})
-	}
-}
-
-func RunBinlogTests(t *testing.T, harness DoltEnginetestHarness) {
-	engine, err := harness.NewEngine(t)
-	require.NoError(t, err)
-	binlogConsumer := binlogreplication.DoltBinlogConsumer
-	binlogConsumer.SetEngine(engine.(*gms.Engine))
-	engine.EngineAnalyzer().Catalog.BinlogConsumer = binlogConsumer
-
-	for _, script := range BinlogScripts {
-		t.Run(script.Name, func(t *testing.T) {
 			enginetest.TestScript(t, harness, script)
 		})
 	}

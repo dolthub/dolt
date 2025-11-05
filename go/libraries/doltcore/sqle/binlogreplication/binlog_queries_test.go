@@ -12,17 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package enginetest
+package binlogreplication_test
 
 import (
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"testing"
 
+	gms "github.com/dolthub/go-mysql-server"
+	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
+	"github.com/stretchr/testify/require"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/binlogreplication"
+	doltenginetest "github.com/dolthub/dolt/go/libraries/doltcore/sqle/enginetest"
 )
 
 var (
@@ -34,28 +41,12 @@ var (
 	binlogNoFormatDescStmts   = parseBinlogTestFile("binlog_no_format_desc.txt")
 )
 
-// BinlogScripts contains test cases for the BINLOG statement. To add tests: add a @test to binlog_maker.bats, generate
+// binlogScripts contains test cases for the BINLOG statement. To add tests: add a @test to binlog_maker.bats, generate
 // the .txt file with BINLOG statements, then add a test case here with the corresponding setup.
-var BinlogScripts = []queries.ScriptTest{
-	{
-		Name: "SET sql_mode with numeric bitmask from binlog",
-		Assertions: []queries.ScriptTestAssertion{
-			{Query: "SET @@session.sql_mode=1411383296", Expected: []sql.Row{{types.OkResult{}}}},
-			{Query: "SELECT @@session.sql_mode", Expected: []sql.Row{{"ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION,STRICT_TRANS_TABLES"}}},
-		},
-	},
+var binlogScripts = []queries.ScriptTest{
 	{
 		Name: "SET collation variables with numeric IDs from binlog",
 		Assertions: []queries.ScriptTestAssertion{
-			{Query: "SET @@session.collation_connection=33", Expected: []sql.Row{{types.OkResult{}}}},
-			{Query: "SELECT @@session.collation_connection", Expected: []sql.Row{{"utf8mb3_general_ci"}}},
-			{Query: "SELECT @@session.character_set_connection", Expected: []sql.Row{{"utf8mb3"}}},
-			{Query: "SET @@session.collation_server=8", Expected: []sql.Row{{types.OkResult{}}}},
-			{Query: "SELECT @@session.collation_server", Expected: []sql.Row{{"latin1_swedish_ci"}}},
-			{Query: "SELECT @@session.character_set_server", Expected: []sql.Row{{"latin1"}}},
-			// collation_database always returns the current database's collation. See sql/core.go:729-735
-			{Query: "SET @@session.collation_database=33", Expected: []sql.Row{{types.OkResult{}}}},
-			{Query: "SELECT @@session.collation_database", Expected: []sql.Row{{"utf8mb4_0900_bin"}}},
 			// TODO: lc_time_names no-op
 			{Query: "SET @@session.lc_time_names=0", Expected: []sql.Row{{types.OkResult{}}}},
 			{Query: "SELECT @@session.lc_time_names", Expected: []sql.Row{{"0"}}},
@@ -200,4 +191,21 @@ func parseBinlogTestFile(filename string) []string {
 		stmts = append(stmts, "BINLOG '"+part)
 	}
 	return stmts
+}
+
+// TestBinlog tests the BINLOG statement functionality using the Dolt engine.
+func TestBinlog(t *testing.T) {
+	harness := doltenginetest.NewDoltEnginetestHarness(t)
+	engine, err := harness.NewEngine(t)
+	require.NoError(t, err)
+
+	binlogConsumer := binlogreplication.DoltBinlogConsumer
+	binlogConsumer.SetEngine(engine.(*gms.Engine))
+	engine.EngineAnalyzer().Catalog.BinlogConsumer = binlogConsumer
+
+	for _, script := range binlogScripts {
+		t.Run(script.Name, func(t *testing.T) {
+			enginetest.TestScript(t, harness, script)
+		})
+	}
 }

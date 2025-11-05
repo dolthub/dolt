@@ -67,30 +67,23 @@ teardown_file() {
   fi
 }
 
+setup() {
+  mariadb --socket="$MARIADB_SOCKET" -u root -e "CREATE DATABASE IF NOT EXISTS mydb;"
+}
+
 extract_binlog_to_file() {
   local binlog_file="$1"
   local output_file="$2"
-  local database="${3:-}"
 
-  # Extract only BINLOG statements from mariadb-binlog output
-  # This filters out SET commands, DELIMITER, comments, etc.
-  if [ -n "$database" ]; then
-    mariadb-binlog --database="$database" "$binlog_file" | \
-      awk '/^BINLOG /{flag=1} flag{print} /'\''\/\*!\*\/;$/{flag=0}' > "$output_file"
-  else
-    mariadb-binlog "$binlog_file" | \
-      awk '/^BINLOG /{flag=1} flag{print} /'\''\/\*!\*\/;$/{flag=0}' > "$output_file"
-  fi
+  mariadb-binlog --database="mydb" "$binlog_file" | \
+    awk '/^BINLOG /{flag=1} flag{print} /'\''\/\*!\*\/;$/{flag=0}' > "$output_file"
 
   [ -f "$output_file" ]
   [ -s "$output_file" ]
 }
 
 @test "binlog_maker: simple INSERT with row events" {
-  mariadb --socket="$MARIADB_SOCKET" -u root <<SQL
-DROP DATABASE IF EXISTS mydb;
-CREATE DATABASE mydb;
-USE mydb;
+  mariadb --socket="$MARIADB_SOCKET" -u root mydb <<SQL
 CREATE TABLE users (id INT PRIMARY KEY, name VARCHAR(50), email VARCHAR(100));
 INSERT INTO users VALUES (1, 'Alice', 'alice@example.com');
 INSERT INTO users VALUES (2, 'Bob', 'bob@example.com');
@@ -102,8 +95,7 @@ SQL
 }
 
 @test "binlog_maker: UPDATE with row events" {
-  mariadb --socket="$MARIADB_SOCKET" -u root <<SQL
-USE mydb;
+  mariadb --socket="$MARIADB_SOCKET" -u root mydb <<SQL
 UPDATE users SET name = 'Alice Smith' WHERE id = 1;
 SQL
 
@@ -113,8 +105,7 @@ SQL
 }
 
 @test "binlog_maker: DELETE with row events" {
-  mariadb --socket="$MARIADB_SOCKET" -u root <<SQL
-USE mydb;
+  mariadb --socket="$MARIADB_SOCKET" -u root mydb <<SQL
 DELETE FROM users WHERE id = 2;
 SQL
 
@@ -135,8 +126,7 @@ SQL
 
 @test "binlog_maker: TABLE_MAP without FORMAT_DESCRIPTION (for error test)" {
   # Create a new operation to get TABLE_MAP
-  mariadb --socket="$MARIADB_SOCKET" -u root <<SQL
-USE mydb;
+  mariadb --socket="$MARIADB_SOCKET" -u root mydb <<SQL
 INSERT INTO users VALUES (100, 'Test', 'test@example.com');
 SQL
 
@@ -144,7 +134,7 @@ SQL
 
   # Extract BINLOG statements but skip the FORMAT_DESCRIPTION to simulate error condition
   # Skip the first BINLOG statement (FORMAT_DESCRIPTION), keep the rest
-  mariadb-binlog "$MARIADB_BINLOG_DIR/mariadb-bin.000005" | \
+  mariadb-binlog --database=mydb "$MARIADB_BINLOG_DIR/mariadb-bin.000005" | \
     awk '/^BINLOG /{flag=1} flag{print} /'\''\/\*!\*\/;$/{flag=0}' | \
     awk 'BEGIN{first=1} /^BINLOG /{if(first){skip=1;first=0}else{skip=0}} !skip{print}' > "$TEST_DIR/binlog_no_format_desc.txt"
 
@@ -153,8 +143,7 @@ SQL
 }
 
 @test "binlog_maker: transaction with multiple INSERT UPDATE DELETE" {
-  mariadb --socket="$MARIADB_SOCKET" -u root <<SQL
-USE mydb;
+  mariadb --socket="$MARIADB_SOCKET" -u root mydb <<SQL
 DROP TABLE IF EXISTS multi_op_test;
 CREATE TABLE multi_op_test (
   id INT PRIMARY KEY AUTO_INCREMENT,

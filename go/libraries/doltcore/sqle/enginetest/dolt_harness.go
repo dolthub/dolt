@@ -139,7 +139,7 @@ func newDoltHarness(t *testing.T) *DoltHarness {
 	return dh
 }
 
-func newDoltEnginetestHarness(t *testing.T) DoltEnginetestHarness {
+func NewDoltEnginetestHarness(t *testing.T) DoltEnginetestHarness {
 	return newDoltHarness(t)
 }
 

@@ -63,9 +63,15 @@ type binlogReplicaApplier struct {
 	filters             *filterConfiguration
 	engine              *gms.Engine
 
-	// TODO: MariaDB stores this state per-connection at thd->rgi_fake->m_table_map.
-	// See https://github.com/MariaDB/server/blob/mariadb-11.4.8/sql/sql_binlog.cc#L270-L271
-	// See https://github.com/MariaDB/server/blob/mariadb-11.4.8/sql/rpl_rli.h#L811
+	// TODO: BINLOG statement state should be per-connection, not global.
+	// Currently, DoltBinlogConsumer is a global singleton shared across all SQL connections,
+	// meaning concurrent BINLOG statements from different connections will corrupt each other's
+	// table map and format state.
+	//
+	// MariaDB solves this with per-thread state: thd->rgi_fake->m_table_map
+	// See: https://github.com/MariaDB/server/blob/mariadb-11.4.8/sql/sql_binlog.cc#L270-L271
+	// This is separate from the replication applier (which IS correctly single-threaded).
+	// Test case: Execute BINLOG statements concurrently from two connections and verify no corruption.
 	format        *mysql.BinlogFormat
 	tableMapsById map[uint64]*mysql.TableMap
 
