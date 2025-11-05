@@ -901,6 +901,7 @@ EOF
 
 # bats test_tags=no_lambda
 @test "docker-entrypoint: latest binary build from dolt directory" {
+  BATS_TEST_RETRIES=5 # GitHub ver. retrieval can sometimes return Not Found on CI, could be some form of rate limiting
   cname="${TEST_PREFIX}latest-docker"
 
   LATEST_IMAGE="dolt-entrypoint-latest:test"
@@ -926,6 +927,7 @@ EOF
 
 # bats test_tags=no_lambda
 @test "docker-entrypoint: specific version binary build from dolt directory" {
+  BATS_TEST_RETRIES=5
   cname="${TEST_PREFIX}specific-version"
 
   SPECIFIC_IMAGE="dolt-entrypoint-specific:test"
