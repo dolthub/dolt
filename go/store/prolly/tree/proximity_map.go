@@ -108,7 +108,7 @@ func (t ProximityMap[K, V, O]) Get(ctx context.Context, query K, cb KeyValueFn[K
 		var closestIdx int
 		distance := math.Inf(1)
 
-		for i := 0; i < int(nd.count); i++ {
+		for i := 0; i < nd.Count(); i++ {
 			k := nd.GetKey(i)
 			vec, err := t.Convert(ctx, k)
 			if err != nil {
@@ -208,7 +208,7 @@ func (t ProximityMap[K, V, O]) GetClosest(ctx context.Context, query interface{}
 	// |nodes| holds the current candidates for closest vectors, up to |limit|
 	nodes := newNodePriorityHeap(limit)
 
-	for i := 0; i < int(t.Root.count); i++ {
+	for i := 0; i < t.Root.Count(); i++ {
 		k := t.Root.GetKey(i)
 		vec, err := t.Convert(ctx, k)
 		if err != nil {
@@ -233,7 +233,7 @@ func (t ProximityMap[K, V, O]) GetClosest(ctx context.Context, query interface{}
 				return err
 			}
 			// TODO: We don't need to recompute the distance when visiting the same key as the parent.
-			for i := 0; i < int(node.count); i++ {
+			for i := 0; i < node.Count(); i++ {
 				k := node.GetKey(i)
 				vec, err := t.Convert(ctx, k)
 				if err != nil {

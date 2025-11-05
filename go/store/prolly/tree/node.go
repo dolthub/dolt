@@ -132,6 +132,9 @@ func (nd *Node) HashOf() hash.Hash {
 }
 
 func (nd *Node) Count() int {
+	if nd == nil {
+		return 0
+	}
 	return int(nd.count)
 }
 
@@ -210,7 +213,7 @@ func walkAddresses(ctx context.Context, nd *Node, cb AddressCb) (err error) {
 }
 
 func getLastKey(nd *Node) Item {
-	return nd.GetKey(int(nd.count) - 1)
+	return nd.GetKey(nd.Count() - 1)
 }
 
 // OutputProllyNode writes the node given to the writer given in a human-readable format, with values converted
@@ -219,7 +222,7 @@ func getLastKey(nd *Node) Item {
 func OutputProllyNode(ctx context.Context, w io.Writer, node *Node, ns NodeStore, schema schema.Schema) error {
 	kd := schema.GetKeyDescriptor(ns)
 	vd := schema.GetValueDescriptor(ns)
-	for i := 0; i < int(node.count); i++ {
+	for i := 0; i < node.Count(); i++ {
 		k := node.GetKey(i)
 		kt := val.Tuple(k)
 
@@ -294,7 +297,7 @@ func OutputProllyNodeBytes(w io.Writer, node *Node) error {
 }
 
 func OutputAddressMapNode(w io.Writer, node *Node) error {
-	for i := 0; i < int(node.count); i++ {
+	for i := 0; i < int(node.Count()); i++ {
 		k := node.GetKey(i)
 		w.Write([]byte("\n    { key: "))
 		w.Write(k)

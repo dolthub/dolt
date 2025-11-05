@@ -301,7 +301,7 @@ func (t StaticMap[K, V, O]) HasPrefix(ctx context.Context, query K, prefixOrder 
 }
 
 func (t StaticMap[K, V, O]) LastKey(ctx context.Context) (key K) {
-	if t.Root.count > 0 {
+	if t.Root.Count() > 0 {
 		// if |t.Root| is a leaf node, it represents the entire map
 		// if |t.Root| is an internal node, its last key is the
 		// delimiter for last subtree and is the last key in the map

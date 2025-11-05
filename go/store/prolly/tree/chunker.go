@@ -540,7 +540,7 @@ func getCanonicalRoot[S message.Serializer](ctx context.Context, ns NodeStore, b
 			return nil, err
 		}
 
-		if child.IsLeaf() || child.count > 1 {
+		if child.IsLeaf() || child.Count() > 1 {
 			return child, nil
 		}
 

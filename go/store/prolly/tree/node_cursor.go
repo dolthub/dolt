@@ -90,7 +90,7 @@ func newCursorPastEnd(ctx context.Context, ns NodeStore, nd *Node) (cur *cursor,
 	if err != nil {
 		return nil, err
 	}
-	if cur.idx != int(cur.nd.count) {
+	if cur.idx != int(cur.nd.Count()) {
 		panic("expected |ok| to be  false")
 	}
 
@@ -360,10 +360,10 @@ func Seek[K ~[]byte, O Ordering[K]](ctx context.Context, cur *cursor, key K, ord
 
 func (cur *cursor) Valid() bool {
 	return cur.nd != nil &&
-		cur.nd.count != 0 &&
+		cur.nd.Count() != 0 &&
 		cur.nd.bytes() != nil &&
 		cur.idx >= 0 &&
-		cur.idx < int(cur.nd.count)
+		cur.idx < cur.nd.Count()
 }
 
 func (cur *cursor) CurrentKey() Item {
@@ -395,7 +395,7 @@ func (cur *cursor) firstKey() Item {
 }
 
 func (cur *cursor) lastKey() Item {
-	lastKeyIdx := int(cur.nd.count) - 1
+	lastKeyIdx := int(cur.nd.Count()) - 1
 	return cur.nd.GetKey(lastKeyIdx)
 }
 
@@ -404,7 +404,7 @@ func (cur *cursor) skipToNodeStart() {
 }
 
 func (cur *cursor) skipToNodeEnd() {
-	lastKeyIdx := int(cur.nd.count) - 1
+	lastKeyIdx := int(cur.nd.Count()) - 1
 	cur.idx = lastKeyIdx
 }
 
@@ -412,7 +412,7 @@ func (cur *cursor) keepInBounds() {
 	if cur.idx < 0 {
 		cur.skipToNodeStart()
 	}
-	lastKeyIdx := int(cur.nd.count) - 1
+	lastKeyIdx := int(cur.nd.Count()) - 1
 	if cur.idx > lastKeyIdx {
 		cur.skipToNodeEnd()
 	}
@@ -425,7 +425,7 @@ func (cur *cursor) atNodeStart() bool {
 // atNodeEnd returns true if the cursor's current |idx|
 // points to the last node item
 func (cur *cursor) atNodeEnd() bool {
-	lastKeyIdx := int(cur.nd.count) - 1
+	lastKeyIdx := int(cur.nd.Count()) - 1
 	return cur.idx == lastKeyIdx
 }
 
@@ -439,7 +439,7 @@ func (cur *cursor) level() (uint64, error) {
 
 // invalidateAtEnd sets the cursor's index to the node count.
 func (cur *cursor) invalidateAtEnd() {
-	cur.idx = int(cur.nd.count)
+	cur.idx = cur.nd.Count()
 }
 
 // invalidateAtStart sets the cursor's index to -1.
@@ -452,7 +452,7 @@ func (cur *cursor) invalidateAtStart() {
 // has more keys. hasNext can be false even if parent
 // cursors are not exhausted.
 func (cur *cursor) hasNext() bool {
-	return cur.idx < int(cur.nd.count)-1
+	return cur.idx < int(cur.nd.Count())-1
 }
 
 // hasPrev returns true if the current node has preceding
@@ -465,7 +465,7 @@ func (cur *cursor) hasPrev() bool {
 // outOfBounds returns true if the current cursor and
 // all parents are exhausted.
 func (cur *cursor) outOfBounds() bool {
-	return cur.idx < 0 || cur.idx >= int(cur.nd.count)
+	return cur.idx < 0 || cur.idx >= cur.nd.Count()
 }
 
 // advance either increments the current key index by one,
@@ -601,7 +601,7 @@ func (cur *cursor) atEnd() bool {
 }
 
 func (cur *cursor) copy(other *cursor) {
-	cur.nd = other.nd
+	cur.nd = other.nd // TODO: need to deep copy?
 	cur.idx = other.idx
 	cur.nrw = other.nrw
 
