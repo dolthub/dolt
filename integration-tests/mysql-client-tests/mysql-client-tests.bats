@@ -1,5 +1,5 @@
 #!/usr/bin/env bats
-load /build/bin/helpers.bash
+load helpers.bash
 
 # MySQL client tests are set up to test Dolt as a MySQL server and
 # standard MySQL Clients in a wide array of languages. I used BATS because

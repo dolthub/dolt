@@ -299,6 +299,9 @@ func NewSqlEngine(
 		}
 	}
 
+	dblr.DoltBinlogConsumer.SetEngine(engine)
+	engine.Analyzer.Catalog.BinlogConsumer = dblr.DoltBinlogConsumer
+
 	if config.BinlogReplicaController != nil {
 		binLogSession, err := sessFactory(sql.NewBaseSession(), pro)
 		if err != nil {
