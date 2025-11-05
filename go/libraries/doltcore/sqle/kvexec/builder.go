@@ -145,6 +145,7 @@ type prollyToSqlJoiner struct {
 	desc        []kvDesc
 	ordMappings []int
 	outRow      sql.Row
+	outValRow   sql.ValueRow
 	outCnt      int
 }
 
@@ -232,6 +233,7 @@ func newRowJoiner(schemas []schema.Schema, splits []int, projections []uint64, n
 	}
 
 	outRow := make(sql.Row, len(projections))
+	outValRow := make(sql.ValueRow, len(projections))
 	return &prollyToSqlJoiner{
 		kvSplits:    kvSplits,
 		desc:        tupleDesc,
@@ -239,6 +241,7 @@ func newRowJoiner(schemas []schema.Schema, splits []int, projections []uint64, n
 		ns:          ns,
 		outCnt:      len(projections),
 		outRow:      outRow,
+		outValRow:   outValRow,
 	}
 }
 
@@ -278,6 +281,44 @@ func (m *prollyToSqlJoiner) buildRow(ctx context.Context, tuples ...val.Tuple) (
 		}
 	}
 	return m.outRow, nil
+}
+
+func (m *prollyToSqlJoiner) buildValueRow(ctx context.Context, tuples ...val.Tuple) (sql.ValueRow, error) {
+	if len(tuples) != 2*len(m.desc) {
+		panic("invalid KV count for prollyToSqlJoiner")
+	}
+	clear(m.outValRow)
+
+	split := 0
+	var err error
+	var tup val.Tuple
+	for i, desc := range m.desc {
+		tup = tuples[2*i]
+		if tup == nil {
+			// nullified row
+			split = m.kvSplits[i]
+			continue
+		}
+		if i > 0 {
+			split = m.kvSplits[i-1]
+		}
+		for j, idx := range desc.keyMappings {
+			outputIdx := m.ordMappings[split+j]
+			m.outValRow[outputIdx], err = tree.GetFieldValue(ctx, desc.keyDesc, idx, tup, m.ns)
+			if err != nil {
+				return nil, err
+			}
+		}
+		tup = tuples[2*i+1]
+		for j, idx := range desc.valMappings {
+			outputIdx := m.ordMappings[split+len(desc.keyMappings)+j]
+			m.outValRow[outputIdx], err = tree.GetFieldValue(ctx, desc.valDesc, idx, tup, m.ns)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+	return m.outValRow, nil
 }
 
 func getPhysicalColCount(schemas []schema.Schema, splits []int, projections []uint64) int {

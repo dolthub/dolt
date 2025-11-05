@@ -63,6 +63,7 @@ func (l *lookupJoinKvIter) Close(_ *sql.Context) error {
 }
 
 var _ sql.RowIter = (*lookupJoinKvIter)(nil)
+var _ sql.ValueRowIter = (*lookupJoinKvIter)(nil)
 
 func newLookupKvIter(
 	srcIter prolly.MapIter,
@@ -92,6 +93,7 @@ func newLookupKvIter(
 	}, nil
 }
 
+// Next implements the sql.RowIter interface
 func (l *lookupJoinKvIter) Next(ctx *sql.Context) (sql.Row, error) {
 	for {
 		// (1) initialize secondary iter if does not exist yet
@@ -179,6 +181,123 @@ func (l *lookupJoinKvIter) Next(ctx *sql.Context) (sql.Row, error) {
 		l.returnedARow = true
 		return ret.Copy(), nil
 	}
+}
+
+// NextValueRow implements the sql.ValueRowIter interface
+func (l *lookupJoinKvIter) NextValueRow(ctx *sql.Context) (sql.ValueRow, error) {
+	for {
+		// (1) initialize secondary iter if does not exist yet
+		// (2) read from secondary until EOF
+		// (3) concat, convert, filter primary/secondary rows
+		var err error
+		if l.dstIter == nil {
+			// if secondary iterator does not exist:
+			//   (1) read the next KV pair from the primary iterator
+			//   (2) perform tuple mapping into destination key form
+			//   (3) initialize secondary iterator with |dstKey|
+			l.returnedARow = false
+
+			l.srcKey, l.srcVal, err = l.srcIter.Next(ctx)
+			if err != nil {
+				return nil, err
+			}
+			if l.srcKey == nil {
+				return nil, io.EOF
+			}
+
+			l.dstKey, err = l.keyTupleMapper.dstKeyTuple(l.srcKey, l.srcVal)
+			if err != nil {
+				return nil, err
+			}
+
+			l.dstIter, err = l.dstIterGen.New(ctx, l.dstKey)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		dstKey, dstVal, err := l.dstIter.Next(ctx)
+		if err != nil && err != io.EOF {
+			return nil, err
+		}
+
+		if dstKey == nil {
+			l.dstIter = nil
+			emitLeftJoinNullRow := l.isLeftJoin && !l.returnedARow
+			if !emitLeftJoinNullRow {
+				continue
+			}
+		}
+
+		ret, err := l.joiner.buildValueRow(ctx, l.srcKey, l.srcVal, dstKey, dstVal)
+		if err != nil {
+			return nil, err
+		}
+
+		// side-specific filters are currently hoisted
+		if l.srcFilter != nil {
+			res, err := l.srcFilter.(sql.ValueExpression).EvalValue(ctx, ret[:l.joiner.kvSplits[0]])
+			if err != nil {
+				return nil, err
+			}
+			// TODO: check for NullValue?
+			// TODO: find safer way to check for sql.FalseValue
+			if res.Val[0] == 0 {
+				continue
+			}
+		}
+		if l.dstFilter != nil && l.dstKey != nil {
+			res, err := l.dstFilter.(sql.ValueExpression).EvalValue(ctx, ret[l.joiner.kvSplits[0]:])
+			if err != nil {
+				return nil, err
+			}
+			if res.Val[0] == 0 {
+				continue
+			}
+		}
+		if l.joinFilter != nil {
+			res, err := l.joinFilter.(sql.ValueExpression).EvalValue(ctx, ret)
+			if err != nil {
+				return nil, err
+			}
+			if res.IsNull() && l.excludeNulls {
+				// override default left join behavior
+				l.dstKey = nil
+				continue
+			}
+			if res.Val[0] == 0 {
+				continue
+			}
+		}
+		l.returnedARow = true
+
+		retRow := make(sql.ValueRow, len(ret))
+		copy(retRow, ret)
+		return retRow, nil
+	}
+}
+
+// IsValueRowIter implements the sql.ValueRowIter interface
+func (l *lookupJoinKvIter) IsValueRowIter(ctx *sql.Context) bool {
+	if l.srcFilter != nil {
+		filter, ok := l.srcFilter.(sql.ValueExpression)
+		if !ok || !filter.IsValueExpression() {
+			return false
+		}
+	}
+	if l.dstFilter != nil {
+		filter, ok := l.dstFilter.(sql.ValueExpression)
+		if !ok || !filter.IsValueExpression() {
+			return false
+		}
+	}
+	if l.joinFilter != nil {
+		filter, ok := l.joinFilter.(sql.ValueExpression)
+		if !ok || !filter.IsValueExpression() {
+			return false
+		}
+	}
+	return true
 }
 
 // lookupMapping is responsible for generating keys for lookups into
