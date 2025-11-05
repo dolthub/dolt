@@ -138,7 +138,7 @@ func validateProximityMapSkipHistoryIndependenceCheck(t *testing.T, ctx context.
 	require.Equal(t, expectedSize, matches)
 
 	// Check that the invariant holds: each vector is closer to its parent than any of its uncles.
-	err = tree.WalkNodes(ctx, m.tuples.Root, ns, func(ctx context.Context, nd tree.Node) error {
+	err = tree.WalkNodes(ctx, m.tuples.Root, ns, func(ctx context.Context, nd *tree.Node) error {
 		validateProximityMapNode(t, ctx, ns, nd, vector.DistanceL2Squared{}, keyDesc, valDesc)
 		return nil
 	})

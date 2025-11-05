@@ -82,7 +82,7 @@ func TestMap(t *testing.T) {
 				assert.NoError(t, err)
 			})
 			t.Run("walk nodes smoke test", func(t *testing.T) {
-				err := pm.WalkNodes(ctx, func(_ context.Context, nd tree.Node) error {
+				err := pm.WalkNodes(ctx, func(_ context.Context, nd *tree.Node) error {
 					assert.True(t, nd.Count() > 1)
 					return nil
 				})
