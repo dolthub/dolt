@@ -2149,12 +2149,12 @@ func RunBranchActivityTests(t *testing.T, harness DoltEnginetestHarness) {
 	}
 }
 
-func RunBinlogTests(t *testing.T, setupBinlogConsumer func(*gms.Engine), scripts []queries.ScriptTest) {
+func RunScriptsWithEngineSetup(t *testing.T, setupEngine func(*gms.Engine), scripts []queries.ScriptTest) {
 	harness := newDoltEnginetestHarness(t)
 	engine, err := harness.NewEngine(t)
 	require.NoError(t, err)
 
-	setupBinlogConsumer(engine.(*gms.Engine))
+	setupEngine(engine.(*gms.Engine))
 
 	for _, script := range scripts {
 		t.Run(script.Name, func(t *testing.T) {

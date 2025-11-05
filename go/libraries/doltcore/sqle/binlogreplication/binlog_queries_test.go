@@ -193,7 +193,7 @@ func parseBinlogTestFile(filename string) []string {
 
 // TestBinlog tests the BINLOG statement functionality using the Dolt engine.
 func TestBinlog(t *testing.T) {
-	doltenginetest.RunBinlogTests(t, func(engine *gms.Engine) {
+	doltenginetest.RunScriptsWithEngineSetup(t, func(engine *gms.Engine) {
 		binlogConsumer := binlogreplication.DoltBinlogConsumer
 		binlogConsumer.SetEngine(engine)
 		engine.EngineAnalyzer().Catalog.BinlogConsumer = binlogConsumer
