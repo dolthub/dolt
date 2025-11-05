@@ -98,7 +98,7 @@ func TestSingleQuery(t *testing.T) {
 }
 
 func TestSchemaOverrides(t *testing.T) {
-	harness := NewDoltEnginetestHarness(t)
+	harness := newDoltEnginetestHarness(t)
 	RunSchemaOverridesTest(t, harness)
 }
 
@@ -107,7 +107,7 @@ func TestSchemaOverrides(t *testing.T) {
 func TestSchemaOverridesWithAdaptiveEncoding(t *testing.T) {
 	defer func() { schema.UseAdaptiveEncoding = false }()
 	schema.UseAdaptiveEncoding = true
-	harness := NewDoltEnginetestHarness(t)
+	harness := newDoltEnginetestHarness(t)
 	RunSchemaOverridesTest(t, harness)
 }
 
@@ -188,7 +188,7 @@ func newUpdateResult(matched, updated int) gmstypes.OkResult {
 }
 
 func TestAutoIncrementTrackerLockMode(t *testing.T) {
-	harness := NewDoltEnginetestHarness(t)
+	harness := newDoltEnginetestHarness(t)
 	RunAutoIncrementTrackerLockModeTest(t, harness)
 }
 
@@ -427,7 +427,7 @@ func TestSingleScriptPrepared(t *testing.T) {
 }
 
 func TestVersionedQueries(t *testing.T) {
-	h := NewDoltEnginetestHarness(t)
+	h := newDoltEnginetestHarness(t)
 	defer h.Close()
 
 	RunVersionedQueriesTest(t, h)
@@ -444,23 +444,23 @@ func TestAnsiQuotesSqlModePrepared(t *testing.T) {
 // Tests of choosing the correct execution plan independent of result correctness. Mostly useful for confirming that
 // the right indexes are being used for joining tables.
 func TestQueryPlans(t *testing.T) {
-	harness := NewDoltEnginetestHarness(t)
+	harness := newDoltEnginetestHarness(t)
 	RunQueryTestPlans(t, harness)
 }
 
 func TestIntegrationQueryPlans(t *testing.T) {
-	harness := NewDoltEnginetestHarness(t)
+	harness := newDoltEnginetestHarness(t)
 	defer harness.Close()
 	enginetest.TestIntegrationPlans(t, harness)
 }
 
 func TestDoltDiffQueryPlans(t *testing.T) {
-	harness := NewDoltEnginetestHarness(t).WithParallelism(2) // want Exchange nodes
+	harness := newDoltEnginetestHarness(t).WithParallelism(2) // want Exchange nodes
 	RunDoltDiffQueryPlansTest(t, harness)
 }
 
 func TestBranchPlans(t *testing.T) {
-	harness := NewDoltEnginetestHarness(t)
+	harness := newDoltEnginetestHarness(t)
 	RunBranchPlanTests(t, harness)
 }
 
@@ -471,7 +471,7 @@ func TestQueryErrors(t *testing.T) {
 }
 
 func TestInfoSchema(t *testing.T) {
-	h := NewDoltEnginetestHarness(t)
+	h := newDoltEnginetestHarness(t)
 	RunInfoSchemaTests(t, h)
 }
 
@@ -540,12 +540,12 @@ func TestIgnoreIntoWithDuplicateUniqueKeyKeylessPrepared(t *testing.T) {
 }
 
 func TestInsertIntoErrors(t *testing.T) {
-	h := NewDoltEnginetestHarness(t)
+	h := newDoltEnginetestHarness(t)
 	RunInsertIntoErrorsTest(t, h)
 }
 
 func TestGeneratedColumns(t *testing.T) {
-	harness := NewDoltEnginetestHarness(t)
+	harness := newDoltEnginetestHarness(t)
 	RunGeneratedColumnTests(t, harness)
 }
 
@@ -744,7 +744,7 @@ func TestJoinOps(t *testing.T) {
 }
 
 func TestJoinPlanning(t *testing.T) {
-	h := NewDoltEnginetestHarness(t)
+	h := newDoltEnginetestHarness(t)
 	defer h.Close()
 	enginetest.TestJoinPlanning(t, h)
 }
@@ -822,12 +822,12 @@ func TestRowLimit(t *testing.T) {
 }
 
 func TestBranchDdl(t *testing.T) {
-	h := NewDoltEnginetestHarness(t)
+	h := newDoltEnginetestHarness(t)
 	RunBranchDdlTest(t, h)
 }
 
 func TestBranchDdlPrepared(t *testing.T) {
-	h := NewDoltEnginetestHarness(t)
+	h := newDoltEnginetestHarness(t)
 	RunBranchDdlTestPrepared(t, h)
 }
 
@@ -940,7 +940,7 @@ func TestAdaptiveEncoding(t *testing.T) {
 }
 
 func TestDropDatabase(t *testing.T) {
-	h := NewDoltEnginetestHarness(t)
+	h := newDoltEnginetestHarness(t)
 	RunDropEngineTest(t, h)
 }
 
@@ -963,12 +963,12 @@ func TestForeignKeys(t *testing.T) {
 }
 
 func TestForeignKeyBranches(t *testing.T) {
-	h := NewDoltEnginetestHarness(t)
+	h := newDoltEnginetestHarness(t)
 	RunForeignKeyBranchesTest(t, h)
 }
 
 func TestForeignKeyBranchesPrepared(t *testing.T) {
-	h := NewDoltEnginetestHarness(t)
+	h := newDoltEnginetestHarness(t)
 	RunForeignKeyBranchesPreparedTest(t, h)
 }
 
@@ -1027,17 +1027,17 @@ func TestViews(t *testing.T) {
 }
 
 func TestBranchViews(t *testing.T) {
-	h := NewDoltEnginetestHarness(t)
+	h := newDoltEnginetestHarness(t)
 	RunBranchViewsTest(t, h)
 }
 
 func TestBranchViewsPrepared(t *testing.T) {
-	h := NewDoltEnginetestHarness(t)
+	h := newDoltEnginetestHarness(t)
 	RunBranchViewsPreparedTest(t, h)
 }
 
 func TestVersionedViews(t *testing.T) {
-	h := NewDoltEnginetestHarness(t)
+	h := newDoltEnginetestHarness(t)
 	RunVersionedViewsTest(t, h)
 }
 
@@ -1109,7 +1109,7 @@ func TestAlterTable(t *testing.T) {
 }
 
 func TestVariables(t *testing.T) {
-	h := NewDoltEnginetestHarness(t)
+	h := newDoltEnginetestHarness(t)
 	RunVariableTest(t, h)
 }
 
@@ -1170,17 +1170,17 @@ func TestRollbackTriggers(t *testing.T) {
 }
 
 func TestStoredProcedures(t *testing.T) {
-	h := NewDoltEnginetestHarness(t)
+	h := newDoltEnginetestHarness(t)
 	RunStoredProceduresTest(t, h)
 }
 
 func TestDoltStoredProcedures(t *testing.T) {
-	h := NewDoltEnginetestHarness(t)
+	h := newDoltEnginetestHarness(t)
 	RunDoltStoredProceduresTest(t, h)
 }
 
 func TestDoltStoredProceduresPrepared(t *testing.T) {
-	h := NewDoltEnginetestHarness(t)
+	h := newDoltEnginetestHarness(t)
 	RunDoltStoredProceduresPreparedTest(t, h)
 }
 
@@ -1191,37 +1191,37 @@ func TestEvents(t *testing.T) {
 }
 
 func TestCallAsOf(t *testing.T) {
-	h := NewDoltEnginetestHarness(t)
+	h := newDoltEnginetestHarness(t)
 	RunCallAsOfTest(t, h)
 }
 
 func TestLargeJsonObjects(t *testing.T) {
-	harness := NewDoltEnginetestHarness(t)
+	harness := newDoltEnginetestHarness(t)
 	RunLargeJsonObjectsTest(t, harness)
 }
 
 func TestTransactions(t *testing.T) {
-	h := NewDoltEnginetestHarness(t)
+	h := newDoltEnginetestHarness(t)
 	RunTransactionTests(t, h, false)
 }
 
 func TestTransactionsPrepared(t *testing.T) {
-	h := NewDoltEnginetestHarness(t)
+	h := newDoltEnginetestHarness(t)
 	RunTransactionTests(t, h, true)
 }
 
 func TestBranchTransactions(t *testing.T) {
-	h := NewDoltEnginetestHarness(t)
+	h := newDoltEnginetestHarness(t)
 	RunBranchTransactionTest(t, h)
 }
 
 func TestMultiDbTransactions(t *testing.T) {
-	h := NewDoltEnginetestHarness(t)
+	h := newDoltEnginetestHarness(t)
 	RunMultiDbTransactionsTest(t, h)
 }
 
 func TestMultiDbTransactionsPrepared(t *testing.T) {
-	h := NewDoltEnginetestHarness(t)
+	h := newDoltEnginetestHarness(t)
 	RunMultiDbTransactionsPreparedTest(t, h)
 }
 
@@ -1232,27 +1232,27 @@ func TestConcurrentTransactions(t *testing.T) {
 }
 
 func TestDoltScripts(t *testing.T) {
-	harness := NewDoltEnginetestHarness(t)
+	harness := newDoltEnginetestHarness(t)
 	RunDoltScriptsTest(t, harness)
 }
 
 func TestDoltTempTableScripts(t *testing.T) {
-	harness := NewDoltEnginetestHarness(t)
+	harness := newDoltEnginetestHarness(t)
 	RunDoltTempTableScripts(t, harness)
 }
 
 func TestDoltRevisionDbScripts(t *testing.T) {
-	h := NewDoltEnginetestHarness(t)
+	h := newDoltEnginetestHarness(t)
 	RunDoltRevisionDbScriptsTest(t, h)
 }
 
 func TestDoltRevisionDbScriptsPrepared(t *testing.T) {
-	h := NewDoltEnginetestHarness(t)
+	h := newDoltEnginetestHarness(t)
 	RunDoltRevisionDbScriptsPreparedTest(t, h)
 }
 
 func TestDoltDdlScripts(t *testing.T) {
-	harness := NewDoltEnginetestHarness(t)
+	harness := newDoltEnginetestHarness(t)
 	RunDoltDdlScripts(t, harness)
 }
 
@@ -1269,12 +1269,12 @@ func TestDescribeTableAsOf(t *testing.T) {
 }
 
 func TestShowCreateTable(t *testing.T) {
-	h := NewDoltEnginetestHarness(t)
+	h := newDoltEnginetestHarness(t)
 	RunShowCreateTableTests(t, h)
 }
 
 func TestShowCreateTablePrepared(t *testing.T) {
-	h := NewDoltEnginetestHarness(t)
+	h := newDoltEnginetestHarness(t)
 	RunShowCreateTablePreparedTests(t, h)
 }
 
@@ -1292,17 +1292,17 @@ func TestViewsWithAsOfPrepared(t *testing.T) {
 }
 
 func TestDoltMerge(t *testing.T) {
-	h := NewDoltEnginetestHarness(t)
+	h := newDoltEnginetestHarness(t)
 	RunDoltMergeTests(t, h)
 }
 
 func TestDoltMergePrepared(t *testing.T) {
-	h := NewDoltEnginetestHarness(t)
+	h := newDoltEnginetestHarness(t)
 	RunDoltMergePreparedTests(t, h)
 }
 
 func TestDoltRebase(t *testing.T) {
-	h := NewDoltEnginetestHarness(t)
+	h := newDoltEnginetestHarness(t)
 	RunDoltRebaseTests(t, h)
 }
 
@@ -1312,49 +1312,49 @@ func TestDoltRebasePrepared(t *testing.T) {
 }
 
 func TestDoltRevert(t *testing.T) {
-	h := NewDoltEnginetestHarness(t)
+	h := newDoltEnginetestHarness(t)
 	RunDoltRevertTests(t, h)
 }
 
 func TestDoltRevertPrepared(t *testing.T) {
-	h := NewDoltEnginetestHarness(t)
+	h := newDoltEnginetestHarness(t)
 	RunDoltRevertPreparedTests(t, h)
 }
 
 func TestDoltAutoIncrement(t *testing.T) {
-	h := NewDoltEnginetestHarness(t)
+	h := newDoltEnginetestHarness(t)
 	RunDoltAutoIncrementTests(t, h)
 }
 
 func TestDoltAutoIncrementPrepared(t *testing.T) {
-	h := NewDoltEnginetestHarness(t)
+	h := newDoltEnginetestHarness(t)
 	RunDoltAutoIncrementPreparedTests(t, h)
 }
 
 func TestDoltConflictsTableNameTable(t *testing.T) {
-	h := NewDoltEnginetestHarness(t)
+	h := newDoltEnginetestHarness(t)
 	RunDoltConflictsTableNameTableTests(t, h)
 }
 
 // tests new format behavior for keyless merges that create CVs and conflicts
 func TestKeylessDoltMergeCVsAndConflicts(t *testing.T) {
-	h := NewDoltEnginetestHarness(t)
+	h := newDoltEnginetestHarness(t)
 	RunKeylessDoltMergeCVsAndConflictsTests(t, h)
 }
 
 // eventually this will be part of TestDoltMerge
 func TestDoltMergeArtifacts(t *testing.T) {
-	h := NewDoltEnginetestHarness(t)
+	h := newDoltEnginetestHarness(t)
 	RunDoltMergeArtifacts(t, h)
 }
 
 func TestDoltPreviewMergeConflicts(t *testing.T) {
-	h := NewDoltEnginetestHarness(t)
+	h := newDoltEnginetestHarness(t)
 	RunDoltPreviewMergeConflictsTests(t, h)
 }
 
 func TestDoltPreviewMergeConflictsPrepared(t *testing.T) {
-	h := NewDoltEnginetestHarness(t)
+	h := newDoltEnginetestHarness(t)
 	RunDoltPreviewMergeConflictsPreparedTests(t, h)
 }
 
@@ -1374,7 +1374,7 @@ func TestOldFormatMergeConflictsAndCVs(t *testing.T) {
 }
 
 func TestDoltReset(t *testing.T) {
-	h := NewDoltEnginetestHarness(t)
+	h := newDoltEnginetestHarness(t)
 	RunDoltResetTest(t, h)
 }
 
@@ -1390,32 +1390,32 @@ func TestDoltGC(t *testing.T) {
 }
 
 func TestDoltCheckout(t *testing.T) {
-	h := NewDoltEnginetestHarness(t)
+	h := newDoltEnginetestHarness(t)
 	RunDoltCheckoutTests(t, h)
 }
 
 func TestDoltCheckoutPrepared(t *testing.T) {
-	h := NewDoltEnginetestHarness(t)
+	h := newDoltEnginetestHarness(t)
 	RunDoltCheckoutPreparedTests(t, h)
 }
 
 func TestDoltBranch(t *testing.T) {
-	h := NewDoltEnginetestHarness(t)
+	h := newDoltEnginetestHarness(t)
 	RunDoltBranchTests(t, h)
 }
 
 func TestDoltTag(t *testing.T) {
-	h := NewDoltEnginetestHarness(t)
+	h := newDoltEnginetestHarness(t)
 	RunDoltTagTests(t, h)
 }
 
 func TestDoltRemote(t *testing.T) {
-	h := NewDoltEnginetestHarness(t)
+	h := newDoltEnginetestHarness(t)
 	RunDoltRemoteTests(t, h)
 }
 
 func TestDoltUndrop(t *testing.T) {
-	h := NewDoltEnginetestHarness(t)
+	h := newDoltEnginetestHarness(t)
 	RunDoltUndropTests(t, h)
 }
 
@@ -1488,12 +1488,12 @@ func TestBackupsSystemTable(t *testing.T) {
 }
 
 func TestHistorySystemTable(t *testing.T) {
-	harness := NewDoltEnginetestHarness(t).WithParallelism(2)
+	harness := newDoltEnginetestHarness(t).WithParallelism(2)
 	RunHistorySystemTableTests(t, harness)
 }
 
 func TestHistorySystemTablePrepared(t *testing.T) {
-	harness := NewDoltEnginetestHarness(t).WithParallelism(2)
+	harness := newDoltEnginetestHarness(t).WithParallelism(2)
 	RunHistorySystemTableTestsPrepared(t, harness)
 }
 
@@ -1511,177 +1511,177 @@ func TestBrokenHistorySystemTablePrepared(t *testing.T) {
 }
 
 func TestDoltBranchesSystemTable(t *testing.T) {
-	h := NewDoltEnginetestHarness(t)
+	h := newDoltEnginetestHarness(t)
 	RunDoltBranchesSystemTableTests(t, h)
 }
 
 func TestDoltBranchesSystemTablePrepared(t *testing.T) {
-	h := NewDoltEnginetestHarness(t)
+	h := newDoltEnginetestHarness(t)
 	RunDoltBranchesSystemTableTestsPrepared(t, h)
 }
 
 func TestUnscopedDiffSystemTable(t *testing.T) {
-	h := NewDoltEnginetestHarness(t)
+	h := newDoltEnginetestHarness(t)
 	RunUnscopedDiffSystemTableTests(t, h)
 }
 
 func TestUnscopedDiffSystemTablePrepared(t *testing.T) {
-	h := NewDoltEnginetestHarness(t)
+	h := newDoltEnginetestHarness(t)
 	RunUnscopedDiffSystemTableTestsPrepared(t, h)
 }
 
 func TestColumnDiffSystemTable(t *testing.T) {
-	h := NewDoltEnginetestHarness(t)
+	h := newDoltEnginetestHarness(t)
 	RunColumnDiffSystemTableTests(t, h)
 }
 
 func TestColumnDiffSystemTablePrepared(t *testing.T) {
-	h := NewDoltEnginetestHarness(t)
+	h := newDoltEnginetestHarness(t)
 	RunColumnDiffSystemTableTestsPrepared(t, h)
 }
 
 func TestStatBranchTests(t *testing.T) {
-	harness := NewDoltEnginetestHarness(t)
+	harness := newDoltEnginetestHarness(t)
 	RunStatBranchTests(t, harness)
 }
 
 func TestDiffTableFunction(t *testing.T) {
-	harness := NewDoltEnginetestHarness(t)
+	harness := newDoltEnginetestHarness(t)
 	RunDiffTableFunctionTests(t, harness)
 }
 
 func TestDiffTableFunctionPrepared(t *testing.T) {
-	harness := NewDoltEnginetestHarness(t)
+	harness := newDoltEnginetestHarness(t)
 	RunDiffTableFunctionTestsPrepared(t, harness)
 }
 
 func TestDiffStatTableFunction(t *testing.T) {
-	harness := NewDoltEnginetestHarness(t)
+	harness := newDoltEnginetestHarness(t)
 	RunDiffStatTableFunctionTests(t, harness)
 }
 
 func TestDiffStatTableFunctionPrepared(t *testing.T) {
-	harness := NewDoltEnginetestHarness(t)
+	harness := newDoltEnginetestHarness(t)
 	RunDiffStatTableFunctionTestsPrepared(t, harness)
 }
 
 func TestDiffSummaryTableFunction(t *testing.T) {
-	harness := NewDoltEnginetestHarness(t)
+	harness := newDoltEnginetestHarness(t)
 	RunDiffSummaryTableFunctionTests(t, harness)
 }
 
 func TestDiffSummaryTableFunctionPrepared(t *testing.T) {
-	harness := NewDoltEnginetestHarness(t)
+	harness := newDoltEnginetestHarness(t)
 	RunDiffSummaryTableFunctionTestsPrepared(t, harness)
 }
 
 func TestPatchTableFunction(t *testing.T) {
-	harness := NewDoltEnginetestHarness(t)
+	harness := newDoltEnginetestHarness(t)
 	RunDoltPatchTableFunctionTests(t, harness)
 }
 
 func TestPatchTableFunctionPrepared(t *testing.T) {
-	harness := NewDoltEnginetestHarness(t)
+	harness := newDoltEnginetestHarness(t)
 	RunDoltPatchTableFunctionTestsPrepared(t, harness)
 }
 
 func TestLogTableFunction(t *testing.T) {
-	harness := NewDoltEnginetestHarness(t)
+	harness := newDoltEnginetestHarness(t)
 	RunLogTableFunctionTests(t, harness)
 }
 
 func TestLogTableFunctionPrepared(t *testing.T) {
-	harness := NewDoltEnginetestHarness(t)
+	harness := newDoltEnginetestHarness(t)
 	RunLogTableFunctionTestsPrepared(t, harness)
 }
 
 func TestBranchStatusTableFunction(t *testing.T) {
-	harness := NewDoltEnginetestHarness(t)
+	harness := newDoltEnginetestHarness(t)
 	RunBranchStatusTableFunctionTests(t, harness)
 }
 
 func TestBranchStatusTableFunctionPrepared(t *testing.T) {
-	harness := NewDoltEnginetestHarness(t)
+	harness := newDoltEnginetestHarness(t)
 	RunBranchStatusTableFunctionTestsPrepared(t, harness)
 }
 
 func TestDoltReflog(t *testing.T) {
-	h := NewDoltEnginetestHarness(t)
+	h := newDoltEnginetestHarness(t)
 	RunDoltReflogTests(t, h)
 }
 
 func TestDoltReflogPrepared(t *testing.T) {
-	h := NewDoltEnginetestHarness(t)
+	h := newDoltEnginetestHarness(t)
 	RunDoltReflogTestsPrepared(t, h)
 }
 
 func TestCommitDiffSystemTable(t *testing.T) {
-	harness := NewDoltEnginetestHarness(t)
+	harness := newDoltEnginetestHarness(t)
 	RunCommitDiffSystemTableTests(t, harness)
 }
 
 func TestCommitDiffSystemTablePrepared(t *testing.T) {
-	harness := NewDoltEnginetestHarness(t)
+	harness := newDoltEnginetestHarness(t)
 	RunCommitDiffSystemTableTestsPrepared(t, harness)
 }
 
 func TestDiffSystemTable(t *testing.T) {
-	h := NewDoltEnginetestHarness(t)
+	h := newDoltEnginetestHarness(t)
 	RunDoltDiffSystemTableTests(t, h)
 }
 
 func TestDiffSystemTablePrepared(t *testing.T) {
-	h := NewDoltEnginetestHarness(t)
+	h := newDoltEnginetestHarness(t)
 	RunDoltDiffSystemTableTestsPrepared(t, h)
 }
 
 func TestNonlocalTable(t *testing.T) {
-	h := NewDoltEnginetestHarness(t)
+	h := newDoltEnginetestHarness(t)
 	RunNonlocalTableTests(t, h)
 }
 
 func TestNonlocalTablePrepared(t *testing.T) {
-	h := NewDoltEnginetestHarness(t)
+	h := newDoltEnginetestHarness(t)
 	RunNonlocalTableTestsPrepared(t, h)
 }
 
 func TestSchemaDiffTableFunction(t *testing.T) {
-	harness := NewDoltEnginetestHarness(t)
+	harness := newDoltEnginetestHarness(t)
 	RunSchemaDiffTableFunctionTests(t, harness)
 }
 
 func TestSchemaDiffTableFunctionPrepared(t *testing.T) {
-	harness := NewDoltEnginetestHarness(t)
+	harness := newDoltEnginetestHarness(t)
 	RunSchemaDiffTableFunctionTestsPrepared(t, harness)
 }
 
 func TestDoltDatabaseCollationDiffs(t *testing.T) {
-	harness := NewDoltEnginetestHarness(t)
+	harness := newDoltEnginetestHarness(t)
 	RunDoltDatabaseCollationDiffsTests(t, harness)
 }
 
 func TestQueryDiff(t *testing.T) {
-	harness := NewDoltEnginetestHarness(t)
+	harness := newDoltEnginetestHarness(t)
 	RunQueryDiffTests(t, harness)
 }
 
 func TestSystemTableIndexes(t *testing.T) {
-	harness := NewDoltEnginetestHarness(t)
+	harness := newDoltEnginetestHarness(t)
 	RunSystemTableIndexesTests(t, harness)
 }
 
 func TestSystemTableIndexesPrepared(t *testing.T) {
-	harness := NewDoltEnginetestHarness(t)
+	harness := newDoltEnginetestHarness(t)
 	RunSystemTableIndexesTestsPrepared(t, harness)
 }
 
 func TestSystemTableFunctionIndexes(t *testing.T) {
-	harness := NewDoltEnginetestHarness(t)
+	harness := newDoltEnginetestHarness(t)
 	RunSystemTableFunctionIndexesTests(t, harness)
 }
 
 func TestSystemTableFunctionIndexesPrepared(t *testing.T) {
-	harness := NewDoltEnginetestHarness(t)
+	harness := newDoltEnginetestHarness(t)
 	RunSystemTableFunctionIndexesTestsPrepared(t, harness)
 }
 
@@ -1698,7 +1698,7 @@ func TestAddDropPks(t *testing.T) {
 }
 
 func TestAddAutoIncrementColumn(t *testing.T) {
-	h := NewDoltEnginetestHarness(t)
+	h := newDoltEnginetestHarness(t)
 	RunAddAutoIncrementColumnTests(t, h)
 }
 
@@ -1734,22 +1734,22 @@ func TestTypesOverWire(t *testing.T) {
 }
 
 func TestDoltCherryPick(t *testing.T) {
-	harness := NewDoltEnginetestHarness(t)
+	harness := newDoltEnginetestHarness(t)
 	RunDoltCherryPickTests(t, harness)
 }
 
 func TestDoltCherryPickPrepared(t *testing.T) {
-	harness := NewDoltEnginetestHarness(t)
+	harness := newDoltEnginetestHarness(t)
 	RunDoltCherryPickTestsPrepared(t, harness)
 }
 
 func TestDoltCommit(t *testing.T) {
-	harness := NewDoltEnginetestHarness(t)
+	harness := newDoltEnginetestHarness(t)
 	RunDoltCommitTests(t, harness)
 }
 
 func TestDoltCommitPrepared(t *testing.T) {
-	harness := NewDoltEnginetestHarness(t)
+	harness := newDoltEnginetestHarness(t)
 	RunDoltCommitTestsPrepared(t, harness)
 }
 
@@ -1760,19 +1760,19 @@ func TestQueriesPrepared(t *testing.T) {
 }
 
 func TestStatsHistograms(t *testing.T) {
-	h := NewDoltEnginetestHarness(t)
+	h := newDoltEnginetestHarness(t)
 	RunStatsHistogramTests(t, h)
 }
 
 // TestStatsIO force a provider reload in-between setup and assertions that
 // forces a round trip of the statistics table before inspecting values.
 func TestStatsStorage(t *testing.T) {
-	h := NewDoltEnginetestHarness(t)
+	h := newDoltEnginetestHarness(t)
 	RunStatsStorageTests(t, h)
 }
 
 func TestJoinStats(t *testing.T) {
-	h := NewDoltEnginetestHarness(t)
+	h := newDoltEnginetestHarness(t)
 	RunJoinStatsTests(t, h)
 }
 
@@ -1791,12 +1791,12 @@ func TestSpatialQueriesPrepared(t *testing.T) {
 }
 
 func TestPreparedStatistics(t *testing.T) {
-	h := NewDoltEnginetestHarness(t)
+	h := newDoltEnginetestHarness(t)
 	RunPreparedStatisticsTests(t, h)
 }
 
 func TestVersionedQueriesPrepared(t *testing.T) {
-	h := NewDoltEnginetestHarness(t)
+	h := newDoltEnginetestHarness(t)
 	RunVersionedQueriesPreparedTests(t, h)
 }
 
@@ -1886,7 +1886,7 @@ func TestInsertIgnoreScriptsPrepared(t *testing.T) {
 
 func TestInsertErrorScriptsPrepared(t *testing.T) {
 	skipPreparedTests(t)
-	h := NewDoltEnginetestHarness(t)
+	h := newDoltEnginetestHarness(t)
 	defer h.Close()
 	h = h.WithSkippedQueries([]string{
 		"create table bad (vb varbinary(65535))",
@@ -1967,17 +1967,17 @@ func TestDatabaseCollationWire(t *testing.T) {
 }
 
 func TestAddDropPrimaryKeys(t *testing.T) {
-	harness := NewDoltEnginetestHarness(t)
+	harness := newDoltEnginetestHarness(t)
 	RunAddDropPrimaryKeysTests(t, harness)
 }
 
 func TestDoltVerifyConstraints(t *testing.T) {
-	harness := NewDoltEnginetestHarness(t)
+	harness := newDoltEnginetestHarness(t)
 	RunDoltVerifyConstraintsTests(t, harness)
 }
 
 func TestDoltStorageFormat(t *testing.T) {
-	h := NewDoltEnginetestHarness(t)
+	h := newDoltEnginetestHarness(t)
 	RunDoltStorageFormatTests(t, h)
 }
 
@@ -1994,13 +1994,13 @@ func TestDoltStorageFormatPrepared(t *testing.T) {
 }
 
 func TestThreeWayMergeWithSchemaChangeScripts(t *testing.T) {
-	h := NewDoltEnginetestHarness(t)
+	h := newDoltEnginetestHarness(t)
 
 	RunThreeWayMergeWithSchemaChangeScripts(t, h)
 }
 
 func TestThreeWayMergeWithSchemaChangeScriptsPrepared(t *testing.T) {
-	h := NewDoltEnginetestHarness(t)
+	h := newDoltEnginetestHarness(t)
 
 	RunThreeWayMergeWithSchemaChangeScriptsPrepared(t, h)
 }
@@ -2146,7 +2146,7 @@ func TestStatsAutoRefreshConcurrency(t *testing.T) {
 }
 
 func TestDoltWorkspace(t *testing.T) {
-	harness := NewDoltEnginetestHarness(t)
+	harness := newDoltEnginetestHarness(t)
 	RunDoltWorkspaceTests(t, harness)
 }
 
@@ -2157,13 +2157,13 @@ func TestDoltHelpSystemTable(t *testing.T) {
 }
 
 func TestDoltStash(t *testing.T) {
-	harness := NewDoltEnginetestHarness(t)
+	harness := newDoltEnginetestHarness(t)
 	defer harness.Close()
 	RunDoltStashSystemTableTests(t, harness)
 }
 
 func TestDoltRm(t *testing.T) {
-	harness := NewDoltEnginetestHarness(t)
+	harness := newDoltEnginetestHarness(t)
 	defer harness.Close()
 	RunDoltRmTests(t, harness)
 }
@@ -2175,19 +2175,19 @@ func TestTimeQueries(t *testing.T) {
 }
 
 func TestDoltQueryCatalogSystemTable(t *testing.T) {
-	harness := NewDoltEnginetestHarness(t)
+	harness := newDoltEnginetestHarness(t)
 	defer harness.Close()
 	RunDoltQueryCatalogTests(t, harness)
 }
 
 func TestDoltTestsSystemTable(t *testing.T) {
-	harness := NewDoltEnginetestHarness(t)
+	harness := newDoltEnginetestHarness(t)
 	defer harness.Close()
 	RunDoltTestsTableTests(t, harness)
 }
 
 func TestBranchActivity(t *testing.T) {
-	h := NewDoltEnginetestHarness(t)
+	h := newDoltEnginetestHarness(t)
 	defer h.Close()
 	RunBranchActivityTests(t, h)
 }

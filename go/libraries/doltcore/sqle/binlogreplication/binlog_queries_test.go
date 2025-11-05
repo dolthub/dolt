@@ -22,11 +22,9 @@ import (
 	"testing"
 
 	gms "github.com/dolthub/go-mysql-server"
-	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
-	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/binlogreplication"
 	doltenginetest "github.com/dolthub/dolt/go/libraries/doltcore/sqle/enginetest"
@@ -195,17 +193,9 @@ func parseBinlogTestFile(filename string) []string {
 
 // TestBinlog tests the BINLOG statement functionality using the Dolt engine.
 func TestBinlog(t *testing.T) {
-	harness := doltenginetest.NewDoltEnginetestHarness(t)
-	engine, err := harness.NewEngine(t)
-	require.NoError(t, err)
-
-	binlogConsumer := binlogreplication.DoltBinlogConsumer
-	binlogConsumer.SetEngine(engine.(*gms.Engine))
-	engine.EngineAnalyzer().Catalog.BinlogConsumer = binlogConsumer
-
-	for _, script := range binlogScripts {
-		t.Run(script.Name, func(t *testing.T) {
-			enginetest.TestScript(t, harness, script)
-		})
-	}
+	doltenginetest.RunBinlogTests(t, func(engine *gms.Engine) {
+		binlogConsumer := binlogreplication.DoltBinlogConsumer
+		binlogConsumer.SetEngine(engine)
+		engine.EngineAnalyzer().Catalog.BinlogConsumer = binlogConsumer
+	}, binlogScripts)
 }
