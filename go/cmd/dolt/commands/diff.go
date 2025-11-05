@@ -30,6 +30,8 @@ import (
 	"github.com/gocraft/dbr/v2"
 	"github.com/gocraft/dbr/v2/dialect"
 
+	eventsapi "github.com/dolthub/eventsapi_schema/dolt/services/eventsapi/v1alpha1"
+
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
@@ -42,7 +44,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
-	eventsapi "github.com/dolthub/eventsapi_schema/dolt/services/eventsapi/v1alpha1"
 )
 
 type diffOutput int
@@ -60,6 +61,11 @@ const (
 	TabularDiffOutput diffOutput = 1
 	SQLDiffOutput     diffOutput = 2
 	JsonDiffOutput    diffOutput = 3
+
+	FilterAdds     = "added"
+	FilterModified = "modified"
+	FilterRemoved  = "removed"
+	NoFilter       = "all"
 )
 
 var diffDocs = cli.CommandDocumentationContent{
@@ -86,6 +92,8 @@ The diffs displayed can be limited to show the first N by providing the paramete
 
 To filter which data rows are displayed, use {{.EmphasisLeft}}--where <SQL expression>{{.EmphasisRight}}. Table column names in the filter expression must be prefixed with {{.EmphasisLeft}}from_{{.EmphasisRight}} or {{.EmphasisLeft}}to_{{.EmphasisRight}}, e.g. {{.EmphasisLeft}}to_COLUMN_NAME > 100{{.EmphasisRight}} or {{.EmphasisLeft}}from_COLUMN_NAME + to_COLUMN_NAME = 0{{.EmphasisRight}}.
 
+To filter diff output by change type, use {{.EmphasisLeft}}--filter <type>{{.EmphasisRight}} where {{.EmphasisLeft}}<type>{{.EmphasisRight}} is one of {{.EmphasisLeft}}added{{.EmphasisRight}}, {{.EmphasisLeft}}modified{{.EmphasisRight}}, or {{.EmphasisLeft}}removed{{.EmphasisRight}}. The {{.EmphasisLeft}}added{{.EmphasisRight}} filter shows only additions (new tables or rows), {{.EmphasisLeft}}modified{{.EmphasisRight}} shows only modifications (schema changes, renames, or row updates), and {{.EmphasisLeft}}removed{{.EmphasisRight}} shows only deletions (dropped tables or deleted rows). For example, {{.EmphasisLeft}}dolt diff --filter=removed{{.EmphasisRight}} shows only deleted rows and dropped tables.
+
 The {{.EmphasisLeft}}--diff-mode{{.EmphasisRight}} argument controls how modified rows are presented when the format output is set to {{.EmphasisLeft}}tabular{{.EmphasisRight}}. When set to {{.EmphasisLeft}}row{{.EmphasisRight}}, modified rows are presented as old and new rows. When set to {{.EmphasisLeft}}line{{.EmphasisRight}}, modified rows are presented as a single row, and changes are presented using "+" and "-" within the column. When set to {{.EmphasisLeft}}in-place{{.EmphasisRight}}, modified rows are presented as a single row, and changes are presented side-by-side with a color distinction (requires a color-enabled terminal). When set to {{.EmphasisLeft}}context{{.EmphasisRight}}, rows that contain at least one column that spans multiple lines uses {{.EmphasisLeft}}line{{.EmphasisRight}}, while all other rows use {{.EmphasisLeft}}row{{.EmphasisRight}}. The default value is {{.EmphasisLeft}}context{{.EmphasisRight}}.
 `,
 	Synopsis: []string{
@@ -102,6 +110,7 @@ type diffDisplaySettings struct {
 	where       string
 	skinny      bool
 	includeCols []string
+	filter      *diffTypeFilter
 }
 
 type diffDatasets struct {
@@ -128,6 +137,27 @@ type diffStatistics struct {
 	NewRowCount    uint64
 	OldCellCount   uint64
 	NewCellCount   uint64
+}
+
+type diffTypeFilter struct {
+	filterBy string
+}
+
+func (df *diffTypeFilter) isValid() bool {
+	return df.filterBy == NoFilter || df.filterBy == FilterAdds ||
+		df.filterBy == FilterModified || df.filterBy == FilterRemoved
+}
+
+func (df *diffTypeFilter) includeAddsOrAll() bool {
+	return df.filterBy == NoFilter || df.filterBy == FilterAdds
+}
+
+func (df *diffTypeFilter) includeDropsOrAll() bool {
+	return df.filterBy == NoFilter || df.filterBy == FilterRemoved
+}
+
+func (df *diffTypeFilter) includeModificationsOrAll() bool {
+	return df.filterBy == NoFilter || df.filterBy == FilterModified
 }
 
 type DiffCmd struct{}
@@ -220,6 +250,11 @@ func (cmd DiffCmd) validateArgs(apr *argparser.ArgParseResults) errhand.VerboseE
 		return errhand.BuildDError("invalid output format: %s", f).Build()
 	}
 
+	filterValue, _ := apr.GetValue("filter")
+	if filterValue != "" && filterValue != FilterAdds && filterValue != FilterModified && filterValue != FilterRemoved && filterValue != NoFilter {
+		return errhand.BuildDError("invalid filter: %s. Valid values are: added, modified, removed", filterValue).Build()
+	}
+
 	return nil
 }
 
@@ -267,6 +302,9 @@ func parseDiffDisplaySettings(apr *argparser.ArgParseResults) *diffDisplaySettin
 
 	displaySettings.limit, _ = apr.GetInt(cli.LimitParam)
 	displaySettings.where = apr.GetValueOrDefault(cli.WhereParam, "")
+
+	filterValue := apr.GetValueOrDefault("filter", "all")
+	displaySettings.filter = &diffTypeFilter{filterBy: filterValue}
 
 	return displaySettings
 }
@@ -646,7 +684,7 @@ func getDeltasBetweenRefs(queryist cli.Queryist, sqlCtx *sql.Context, fromRef, t
 }
 
 func getSchemaDiffSummariesBetweenRefs(queryist cli.Queryist, sqlCtx *sql.Context, fromRef, toRef string) ([]diff.TableDeltaSummary, error) {
-	q, err := dbr.InterpolateForDialect("select * from dolt_schema_diff(?, ?)", []interface{}{fromRef, toRef}, dialect.MySQL)
+	q, err := dbr.InterpolateForDialect("SELECT * FROM dolt_schema_diff(?, ?)", []interface{}{fromRef, toRef}, dialect.MySQL)
 	if err != nil {
 		return nil, fmt.Errorf("error: unable to interpolate query: %w", err)
 	}
@@ -683,7 +721,7 @@ func getSchemaDiffSummariesBetweenRefs(queryist cli.Queryist, sqlCtx *sql.Contex
 		}
 
 		q, err := dbr.InterpolateForDialect(
-			"select statement_order, statement from dolt_patch(?, ?) where diff_type='schema' and (table_name=? or table_name=?) order by statement_order asc",
+			"SELECT statement_order, statement FROM dolt_patch(?, ?) WHERE diff_type='schema' AND (table_name=? OR table_name=?) ORDER BY statement_order ASC",
 			[]interface{}{fromRef, toRef, fromTable, toTable},
 			dialect.MySQL)
 		if err != nil {
@@ -715,7 +753,7 @@ func getSchemaDiffSummariesBetweenRefs(queryist cli.Queryist, sqlCtx *sql.Contex
 }
 
 func getDiffSummariesBetweenRefs(queryist cli.Queryist, sqlCtx *sql.Context, fromRef, toRef string) ([]diff.TableDeltaSummary, error) {
-	q, err := dbr.InterpolateForDialect("select * from dolt_diff_summary(?, ?)", []interface{}{fromRef, toRef}, dialect.MySQL)
+	q, err := dbr.InterpolateForDialect("SELECT * FROM dolt_diff_summary(?, ?)", []interface{}{fromRef, toRef}, dialect.MySQL)
 	dataDiffRows, err := cli.GetRowsForSql(queryist, sqlCtx, q)
 	if err != nil {
 		return nil, fmt.Errorf("error: unable to get diff summary from %s to %s: %w", fromRef, toRef, err)
@@ -814,6 +852,37 @@ func diffUserTables(queryist cli.Queryist, sqlCtx *sql.Context, dArgs *diffArgs)
 
 		if !shouldPrintTableDelta(dArgs.tableSet, delta.ToTableName.Name, delta.FromTableName.Name) {
 			continue
+		}
+
+		// Apply table-level filtering based on diff type
+		if dArgs.filter != nil && dArgs.filter.filterBy != NoFilter {
+			shouldIncludeTable := false
+
+			// Check if table was added
+			if delta.IsAdd() && dArgs.filter.includeAddsOrAll() {
+				shouldIncludeTable = true
+			}
+
+			// Check if table was dropped
+			if delta.IsDrop() && dArgs.filter.includeDropsOrAll() {
+				shouldIncludeTable = true
+			}
+
+			// Check if table was modified (schema change or rename)
+			if !delta.IsAdd() && !delta.IsDrop() {
+				isModified := delta.SchemaChange || delta.IsRename()
+				if isModified && dArgs.filter.includeModificationsOrAll() {
+					shouldIncludeTable = true
+				}
+				// If no schema/rename changes but has data changes, let it through for row-level filtering
+				if !isModified && delta.DataChange {
+					shouldIncludeTable = true
+				}
+			}
+
+			if !shouldIncludeTable {
+				continue // Skip this table but continue processing others
+			}
 		}
 
 		if strings.HasPrefix(delta.ToTableName.Name, diff.DBPrefix) {
@@ -1018,7 +1087,7 @@ func schemaFromCreateTableStmt(createTableStmt string) (schema.Schema, error) {
 }
 
 func getTableDiffStats(queryist cli.Queryist, sqlCtx *sql.Context, tableName, fromRef, toRef string) ([]diffStatistics, error) {
-	q, err := dbr.InterpolateForDialect("select * from dolt_diff_stat(?, ?, ?)", []interface{}{fromRef, toRef, tableName}, dialect.MySQL)
+	q, err := dbr.InterpolateForDialect("SELECT * FROM dolt_diff_stat(?, ?, ?)", []interface{}{fromRef, toRef, tableName}, dialect.MySQL)
 	if err != nil {
 		return nil, fmt.Errorf("error interpolating query: %w", err)
 	}
@@ -1495,7 +1564,7 @@ func diffRows(
 	}
 
 	columnNames, format := getColumnNames(fromTableInfo, toTableInfo)
-	query := fmt.Sprintf("select %s ? from dolt_diff(?, ?, ?)", format)
+	query := fmt.Sprintf("SELECT %s ? FROM dolt_diff(?, ?, ?)", format)
 	var params []interface{}
 	for _, col := range columnNames {
 		params = append(params, dbr.I(col))
@@ -1708,6 +1777,35 @@ func writeDiffResults(
 			return err
 		}
 
+		// Apply row-level filtering based on diff type
+		if dArgs.filter != nil && dArgs.filter.filterBy != NoFilter {
+			shouldSkip := false
+
+			// Check oldRow diff type
+			if oldRow.RowDiff == diff.Added && !dArgs.filter.includeAddsOrAll() {
+				shouldSkip = true
+			} else if oldRow.RowDiff == diff.Removed && !dArgs.filter.includeDropsOrAll() {
+				shouldSkip = true
+			} else if (oldRow.RowDiff == diff.ModifiedOld || oldRow.RowDiff == diff.ModifiedNew) &&
+				!dArgs.filter.includeModificationsOrAll() {
+				shouldSkip = true
+			}
+
+			// Check newRow diff type (it might have a different type)
+			if newRow.RowDiff == diff.Added && !dArgs.filter.includeAddsOrAll() {
+				shouldSkip = true
+			} else if newRow.RowDiff == diff.Removed && !dArgs.filter.includeDropsOrAll() {
+				shouldSkip = true
+			} else if (newRow.RowDiff == diff.ModifiedOld || newRow.RowDiff == diff.ModifiedNew) &&
+				!dArgs.filter.includeModificationsOrAll() {
+				shouldSkip = true
+			}
+
+			if shouldSkip {
+				continue // Skip this row and move to the next
+			}
+		}
+
 		if dArgs.skinny {
 			var filteredOldRow, filteredNewRow diff.RowDiff
 			for i, changeType := range newRow.ColDiffs {
@@ -1799,7 +1897,7 @@ func getModifiedCols(
 func validateWhereClause(queryist cli.Queryist, sqlCtx *sql.Context, dArgs *diffArgs) errhand.VerboseError {
 	// Build a minimal validation query that doesn't depend on having actual tables
 	// We use a subquery approach so the aliased columns are available in the WHERE clause
-	query := "select * from (select 1 as diff_type, 1 as from_pk, 1 as to_pk) as diff_validation where " + dArgs.where + " limit 0"
+	query := "SELECT * FROM (SELECT 1 AS diff_type, 1 AS from_pk, 1 AS to_pk) AS diff_validation WHERE " + dArgs.where + " limit 0"
 	_, rowIter, _, err := queryist.Query(sqlCtx, query)
 	if err != nil {
 		return errhand.BuildDError("Error running diff query").AddCause(err).Build()
