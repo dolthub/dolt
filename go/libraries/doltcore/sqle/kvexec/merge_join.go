@@ -321,7 +321,7 @@ func (l *mergeJoinKvIter) buildResultRow(ctx *sql.Context, leftKey, leftVal, rig
 		}
 	}
 
-	return candidate, true, nil
+	return candidate.Copy(), true, nil
 }
 
 func (l *mergeJoinKvIter) exhaustLeftReturn(ctx *sql.Context) (sql.Row, error) {

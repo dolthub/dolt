@@ -152,7 +152,6 @@ func (l *lookupJoinKvIter) Next(ctx *sql.Context) (sql.Row, error) {
 			if !sql.IsTrue(res) {
 				continue
 			}
-
 		}
 		if l.dstFilter != nil && l.dstKey != nil {
 			res, err := sql.EvaluateCondition(ctx, l.dstFilter, ret[l.joiner.kvSplits[0]:])
@@ -178,7 +177,7 @@ func (l *lookupJoinKvIter) Next(ctx *sql.Context) (sql.Row, error) {
 			}
 		}
 		l.returnedARow = true
-		return ret, nil
+		return ret.Copy(), nil
 	}
 }
 
