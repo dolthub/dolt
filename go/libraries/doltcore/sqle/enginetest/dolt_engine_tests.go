@@ -22,6 +22,7 @@ import (
 	"testing"
 	"time"
 
+	gms "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/enginetest/scriptgen/setup"
@@ -2143,6 +2144,20 @@ func RunBranchActivityTests(t *testing.T, harness DoltEnginetestHarness) {
 			harness = harness.NewHarness(t)
 			defer harness.Close()
 
+			enginetest.TestScript(t, harness, script)
+		})
+	}
+}
+
+func RunBinlogTests(t *testing.T, setupBinlogConsumer func(*gms.Engine), scripts []queries.ScriptTest) {
+	harness := newDoltEnginetestHarness(t)
+	engine, err := harness.NewEngine(t)
+	require.NoError(t, err)
+
+	setupBinlogConsumer(engine.(*gms.Engine))
+
+	for _, script := range scripts {
+		t.Run(script.Name, func(t *testing.T) {
 			enginetest.TestScript(t, harness, script)
 		})
 	}
