@@ -158,7 +158,7 @@ func vectorFromKey(t *testing.T, keyDesc *val.TupleDesc, key []byte) []float32 {
 	return decodeVector(t, keyDesc, encodedVector)
 }
 
-func validateProximityMapNode(t *testing.T, ctx context.Context, ns tree.NodeStore, nd tree.Node, distanceType vector.DistanceType, keyDesc *val.TupleDesc, desc *val.TupleDesc) {
+func validateProximityMapNode(t *testing.T, ctx context.Context, ns tree.NodeStore, nd *tree.Node, distanceType vector.DistanceType, keyDesc *val.TupleDesc, desc *val.TupleDesc) {
 	// For each node, the node's grandchildren should be closer to their parent than the other children.
 	if nd.Level() == 0 {
 		// Leaf node
