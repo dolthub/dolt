@@ -39,6 +39,35 @@ var (
 	binlogNoFormatDescStmts   = parseBinlogTestFile("binlog_no_format_desc.txt")
 )
 
+// parseBinlogTestFile parses BINLOG statements from a testdata file. The file is pre-filtered by binlog_maker.bats to
+// contain only BINLOG statements.
+func parseBinlogTestFile(filename string) []string {
+	_, sourceFile, _, _ := runtime.Caller(0)
+	sourceDir := filepath.Dir(sourceFile)
+
+	testdataPath := filepath.Join(sourceDir, "testdata", filename)
+
+	data, err := os.ReadFile(testdataPath)
+	if err != nil {
+		return nil
+	}
+
+	content := strings.TrimSpace(string(data))
+	if content == "" {
+		return nil
+	}
+
+	parts := strings.Split(content, "BINLOG '")
+	var stmts []string
+	for i, part := range parts {
+		if i == 0 && part == "" {
+			continue
+		}
+		stmts = append(stmts, "BINLOG '"+part)
+	}
+	return stmts
+}
+
 // binlogScripts contains test cases for the BINLOG statement. To add tests: add a @test to binlog_maker.bats, generate
 // the .txt file with BINLOG statements, then add a test case here with the corresponding setup.
 var binlogScripts = []queries.ScriptTest{
@@ -162,35 +191,6 @@ var binlogScripts = []queries.ScriptTest{
 	},
 }
 
-// parseBinlogTestFile parses BINLOG statements from a testdata file. The file is pre-filtered by binlog_maker.bats to
-// contain only BINLOG statements.
-func parseBinlogTestFile(filename string) []string {
-	_, sourceFile, _, _ := runtime.Caller(0)
-	sourceDir := filepath.Dir(sourceFile)
-
-	testdataPath := filepath.Join(sourceDir, "testdata", filename)
-
-	data, err := os.ReadFile(testdataPath)
-	if err != nil {
-		return nil
-	}
-
-	content := strings.TrimSpace(string(data))
-	if content == "" {
-		return nil
-	}
-
-	parts := strings.Split(content, "BINLOG '")
-	var stmts []string
-	for i, part := range parts {
-		if i == 0 && part == "" {
-			continue
-		}
-		stmts = append(stmts, "BINLOG '"+part)
-	}
-	return stmts
-}
-
 // TestBinlog tests the BINLOG statement functionality using the Dolt engine.
 func TestBinlog(t *testing.T) {
 	doltenginetest.RunScriptsWithEngineSetup(t, func(engine *gms.Engine) {
@@ -198,4 +198,42 @@ func TestBinlog(t *testing.T) {
 		binlogConsumer.SetEngine(engine)
 		engine.EngineAnalyzer().Catalog.BinlogConsumer = binlogConsumer
 	}, binlogScripts)
+}
+
+// binlogTransactionTests contains transaction tests for concurrent BINLOG statement execution.
+var binlogTransactionTests = []queries.TransactionTest{
+	{
+		Name: "Concurrent BINLOG statements from different connections",
+		SetUpScript: []string{
+			"CREATE TABLE users (id INT PRIMARY KEY, name VARCHAR(50), email VARCHAR(100))",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{Query: "/* client a */ " + binlogFormatDescStmts[0], Expected: []sql.Row{{types.OkResult{}}}},
+			{Query: "/* client b */ " + binlogFormatDescStmts[0], Expected: []sql.Row{{types.OkResult{}}}},
+
+			{Query: "/* client a */ " + binlogInsertStmts[1], Expected: []sql.Row{{types.OkResult{}}}},
+			{Query: "/* client a */ " + binlogInsertStmts[2], Expected: []sql.Row{{types.OkResult{}}}},
+
+			{Query: "/* client b */ " + binlogInsertStmts[1], Expected: []sql.Row{{types.OkResult{}}}},
+
+			{Query: "/* client a */ SELECT COUNT(*) FROM users", Expected: []sql.Row{{2}}},
+			{Query: "/* client b */ SELECT COUNT(*) FROM users", Expected: []sql.Row{{2}}},
+		},
+	},
+}
+
+// TestBinlogConcurrent tests that concurrent BINLOG statements from different connections can execute without
+// corrupting each other's state.
+//
+// This test demonstrates the bug where DoltBinlogConsumer is a global singleton that shares format and tableMapsById
+// across all connections. The test will fail with "duplicate primary key" because both clients share the same table map
+// and try to apply the same INSERT events.
+func TestBinlogConcurrent(t *testing.T) {
+	t.Skip()
+
+	doltenginetest.RunTransactionTestsWithEngineSetup(t, func(engine *gms.Engine) {
+		binlogConsumer := binlogreplication.DoltBinlogConsumer
+		binlogConsumer.SetEngine(engine)
+		engine.EngineAnalyzer().Catalog.BinlogConsumer = binlogConsumer
+	}, binlogTransactionTests)
 }

@@ -2162,3 +2162,19 @@ func RunScriptsWithEngineSetup(t *testing.T, setupEngine func(*gms.Engine), scri
 		})
 	}
 }
+
+func RunTransactionTestsWithEngineSetup(t *testing.T, setupEngine func(*gms.Engine), tests []queries.TransactionTest) {
+	for _, test := range tests {
+		t.Run(test.Name, func(t *testing.T) {
+			harness := newDoltEnginetestHarness(t)
+			harness.Setup(setup.MydbData)
+			engine, err := harness.NewEngine(t)
+			require.NoError(t, err)
+			defer engine.Close()
+
+			setupEngine(engine.(*gms.Engine))
+
+			enginetest.TestTransactionScriptWithEngine(t, engine, harness, test, false)
+		})
+	}
+}
