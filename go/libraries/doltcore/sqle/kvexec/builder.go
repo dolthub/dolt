@@ -246,8 +246,8 @@ func (m *prollyToSqlJoiner) buildRow(ctx context.Context, tuples ...val.Tuple) (
 	if len(tuples) != 2*len(m.desc) {
 		panic("invalid KV count for prollyToSqlJoiner")
 	}
-	//row := make(sql.Row, m.outCnt)
 	clear(m.outRow)
+
 	split := 0
 	var err error
 	var tup val.Tuple
