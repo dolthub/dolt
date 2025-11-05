@@ -2105,3 +2105,207 @@ tests:
       result:
         columns: ['id', 'v']
         rows: [['1','0'], ['2','0'], ['3','0'], ['4','0'], ['5','0'], ['6','1']]
+# https://github.com/dolthub/dolt/issues/10015
+- name: read_only system variable reflects cluster role
+  multi_repos:
+  - name: server1
+    with_files:
+    - name: server.yaml
+      contents: |
+        log_level: trace
+        listener:
+          host: 0.0.0.0
+          port: {{get_port "server1"}}
+        cluster:
+          standby_remotes:
+          - name: standby
+            remote_url_template: http://localhost:{{get_port "server2_cluster"}}/{database}
+          bootstrap_role: primary
+          bootstrap_epoch: 1
+          remotesapi:
+            port: {{get_port "server1_cluster"}}
+    server:
+      args: ["--config", "server.yaml"]
+      dynamic_port: server1
+  - name: server2
+    with_files:
+    - name: server.yaml
+      contents: |
+        log_level: trace
+        listener:
+          host: 0.0.0.0
+          port: {{get_port "server2"}}
+        cluster:
+          standby_remotes:
+          - name: standby
+            remote_url_template: http://localhost:{{get_port "server1_cluster"}}/{database}
+          bootstrap_role: standby
+          bootstrap_epoch: 1
+          remotesapi:
+            port: {{get_port "server2_cluster"}}
+    server:
+      args: ["--config", "server.yaml"]
+      dynamic_port: server2
+  connections:
+  - on: server1
+    queries:
+    - exec: 'CREATE DATABASE repo1'
+    - exec: 'USE repo1'
+    - exec: 'CREATE TABLE vals (i INT PRIMARY KEY)'
+    - query: 'SELECT @@GLOBAL.dolt_cluster_role'
+      result:
+        columns: ['@@GLOBAL.dolt_cluster_role']
+        rows: [['primary']]
+    - query: 'SELECT @@GLOBAL.read_only'
+      result:
+        columns: ['@@GLOBAL.read_only']
+        rows: [['0']]
+  - on: server2
+    queries:
+    - query: 'SELECT @@GLOBAL.dolt_cluster_role'
+      result:
+        columns: ['@@GLOBAL.dolt_cluster_role']
+        rows: [['standby']]
+    - query: 'SELECT @@GLOBAL.read_only'
+      result:
+        columns: ['@@GLOBAL.read_only']
+        rows: [['1']]
+  - on: server1
+    queries:
+    - exec: 'USE repo1'
+    - exec: "CALL dolt_assume_cluster_role('standby', 2)"
+  - on: server1
+    queries:
+    - exec: 'USE repo1'
+    - query: 'SELECT @@GLOBAL.dolt_cluster_role'
+      result:
+        columns: ['@@GLOBAL.dolt_cluster_role']
+        rows: [['standby']]
+    - query: 'SELECT @@GLOBAL.read_only'
+      result:
+        columns: ['@@GLOBAL.read_only']
+        rows: [['1']]
+  - on: server2
+    queries:
+    - exec: "CALL dolt_assume_cluster_role('primary', 2)"
+  - on: server2
+    queries:
+    - exec: 'USE repo1'
+    - query: 'SELECT @@GLOBAL.dolt_cluster_role'
+      result:
+        columns: ['@@GLOBAL.dolt_cluster_role']
+        rows: [['primary']]
+    - query: 'SELECT @@GLOBAL.read_only'
+      result:
+        columns: ['@@GLOBAL.read_only']
+        rows: [['0']]
+  - on: server2
+    queries:
+    - exec: 'USE repo1'
+    - exec: "CALL dolt_assume_cluster_role('standby', 3)"
+  - on: server1
+    queries:
+    - exec: "CALL dolt_assume_cluster_role('primary', 3)"
+  - on: server1
+    queries:
+    - exec: 'USE repo1'
+    - query: 'SELECT @@GLOBAL.dolt_cluster_role'
+      result:
+        columns: ['@@GLOBAL.dolt_cluster_role']
+        rows: [['primary']]
+    - query: 'SELECT @@GLOBAL.read_only'
+      result:
+        columns: ['@@GLOBAL.read_only']
+        rows: [['0']]
+# https://github.com/dolthub/dolt/issues/10015
+- name: read_only system variable with behavior config respects cluster role
+  multi_repos:
+  - name: server1
+    with_files:
+    - name: server.yaml
+      contents: |
+        log_level: trace
+        behavior:
+          read_only: true
+        listener:
+          host: 0.0.0.0
+          port: {{get_port "server1"}}
+        cluster:
+          standby_remotes:
+          - name: standby
+            remote_url_template: http://localhost:{{get_port "server2_cluster"}}/{database}
+          bootstrap_role: primary
+          bootstrap_epoch: 1
+          remotesapi:
+            port: {{get_port "server1_cluster"}}
+    server:
+      args: ["--config", "server.yaml"]
+      dynamic_port: server1
+  - name: server2
+    with_files:
+    - name: server.yaml
+      contents: |
+        log_level: trace
+        behavior:
+          read_only: true
+        listener:
+          host: 0.0.0.0
+          port: {{get_port "server2"}}
+        cluster:
+          standby_remotes:
+          - name: standby
+            remote_url_template: http://localhost:{{get_port "server1_cluster"}}/{database}
+          bootstrap_role: standby
+          bootstrap_epoch: 1
+          remotesapi:
+            port: {{get_port "server2_cluster"}}
+    server:
+      args: ["--config", "server.yaml"]
+      dynamic_port: server2
+  connections:
+  - on: server1
+    queries:
+    - query: 'SELECT @@GLOBAL.dolt_cluster_role'
+      result:
+        columns: ['@@GLOBAL.dolt_cluster_role']
+        rows: [['primary']]
+    - query: 'SELECT @@GLOBAL.read_only'
+      result:
+        columns: ['@@GLOBAL.read_only']
+        rows: [['1']]
+  - on: server2
+    queries:
+    - query: 'SELECT @@GLOBAL.dolt_cluster_role'
+      result:
+        columns: ['@@GLOBAL.dolt_cluster_role']
+        rows: [['standby']]
+    - query: 'SELECT @@GLOBAL.read_only'
+      result:
+        columns: ['@@GLOBAL.read_only']
+        rows: [['1']]
+  - on: server1
+    queries:
+    - exec: "CALL dolt_assume_cluster_role('standby', 2)"
+  - on: server1
+    queries:
+    - query: 'SELECT @@GLOBAL.dolt_cluster_role'
+      result:
+        columns: ['@@GLOBAL.dolt_cluster_role']
+        rows: [['standby']]
+    - query: 'SELECT @@GLOBAL.read_only'
+      result:
+        columns: ['@@GLOBAL.read_only']
+        rows: [['1']]
+  - on: server2
+    queries:
+    - exec: "CALL dolt_assume_cluster_role('primary', 2)"
+  - on: server2
+    queries:
+    - query: 'SELECT @@GLOBAL.dolt_cluster_role'
+      result:
+        columns: ['@@GLOBAL.dolt_cluster_role']
+        rows: [['primary']]
+    - query: 'SELECT @@GLOBAL.read_only'
+      result:
+        columns: ['@@GLOBAL.read_only']
+        rows: [['1']]
