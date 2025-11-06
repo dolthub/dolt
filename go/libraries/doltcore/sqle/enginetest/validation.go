@@ -68,7 +68,7 @@ var validationStages = []validator{
 func validateChunkReferences(ctx context.Context, db sqle.Database) error {
 	validateIndex := func(ctx context.Context, idx durable.Index) error {
 		m := durable.MapFromIndex(idx)
-		return m.WalkNodes(ctx, func(ctx context.Context, nd tree.Node) error {
+		return m.WalkNodes(ctx, func(ctx context.Context, nd *tree.Node) error {
 			if nd.Size() <= 0 {
 				return fmt.Errorf("encountered nil tree.Node")
 			}

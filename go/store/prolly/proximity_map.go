@@ -50,7 +50,7 @@ func (m ProximityMap) WalkNodes(ctx context.Context, cb tree.NodeCb) error {
 	return m.tuples.WalkNodes(ctx, cb)
 }
 
-func (m ProximityMap) Node() tree.Node {
+func (m ProximityMap) Node() *tree.Node {
 	return m.tuples.Root
 }
 
@@ -165,7 +165,7 @@ func getConvertToVectorFunction(keyDesc *val.TupleDesc, ns tree.NodeStore) (tree
 }
 
 // NewProximityMap creates a new ProximityMap from a supplied root node.
-func NewProximityMap(ns tree.NodeStore, node tree.Node, keyDesc *val.TupleDesc, valDesc *val.TupleDesc, distanceType vector.DistanceType, logChunkSize uint8) (ProximityMap, error) {
+func NewProximityMap(ns tree.NodeStore, node *tree.Node, keyDesc *val.TupleDesc, valDesc *val.TupleDesc, distanceType vector.DistanceType, logChunkSize uint8) (ProximityMap, error) {
 	convertFunc, err := getConvertToVectorFunction(keyDesc, ns)
 	if err != nil {
 		return ProximityMap{}, err

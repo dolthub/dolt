@@ -55,7 +55,7 @@ func getPreviousKey(ctx context.Context, cur *cursor) ([]byte, error) {
 // JSON, starting at the specified location in the document. Returns a boolean indicating whether the location already exists
 // in the document. If the location does not exist in the document, the resulting JsonCursor
 // will be at the location where the value would be if it was inserted.
-func newJsonCursor(ctx context.Context, ns NodeStore, root Node, startKey jsonLocation, forRemoval bool) (jCur *JsonCursor, found bool, err error) {
+func newJsonCursor(ctx context.Context, ns NodeStore, root *Node, startKey jsonLocation, forRemoval bool) (jCur *JsonCursor, found bool, err error) {
 	jcur, err := newJsonCursorAtStartOfChunk(ctx, ns, root, startKey.key)
 	if err != nil {
 		return nil, false, err
@@ -64,7 +64,7 @@ func newJsonCursor(ctx context.Context, ns NodeStore, root Node, startKey jsonLo
 	return jcur, found, err
 }
 
-func newJsonCursorAtStartOfChunk(ctx context.Context, ns NodeStore, root Node, startKey []byte) (jCur *JsonCursor, err error) {
+func newJsonCursorAtStartOfChunk(ctx context.Context, ns NodeStore, root *Node, startKey []byte) (jCur *JsonCursor, err error) {
 	ordering := jsonLocationOrdering{}
 	cur, err := newCursorAtKey(ctx, ns, root, startKey, &ordering)
 	if err != nil {

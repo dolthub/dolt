@@ -325,7 +325,12 @@ func ConfigureServices(
 				return err
 			}
 
-			// Set the read_only system variable based on the engine configuration
+			// Set the read_only system variable based on the engine configuration. If cluster replication is enabled,
+			// the read_only value is managed by the cluster role callback instead.
+			if config.ClusterController != nil {
+				return nil
+			}
+
 			sqlCtx := sql.NewEmptyContext()
 			readOnlyValue := int8(0)
 			if config.IsReadOnly {

@@ -37,12 +37,12 @@ type nodeCache struct {
 	stripes [numStripes]*stripe
 }
 
-func (c nodeCache) get(addr hash.Hash) (Node, bool) {
+func (c nodeCache) get(addr hash.Hash) (*Node, bool) {
 	s := c.stripes[addr[0]]
 	return s.get(addr)
 }
 
-func (c nodeCache) insert(addr hash.Hash, node Node) {
+func (c nodeCache) insert(addr hash.Hash, node *Node) {
 	s := c.stripes[addr[0]]
 	s.insert(addr, node)
 }
@@ -56,7 +56,7 @@ func (c nodeCache) purge() {
 type centry struct {
 	prev *centry
 	next *centry
-	n    Node
+	n    *Node
 	i    int
 	a    hash.Hash
 }
@@ -72,12 +72,9 @@ type stripe struct {
 
 func newStripe(maxSize int) *stripe {
 	return &stripe{
-		&sync.Mutex{},
-		make(map[hash.Hash]*centry),
-		nil,
-		0,
-		maxSize,
-		0,
+		mu:     &sync.Mutex{},
+		chunks: make(map[hash.Hash]*centry),
+		maxSz:  maxSize,
 	}
 }
 
@@ -113,18 +110,18 @@ func (s *stripe) moveToFront(e *centry) {
 	s.head = e
 }
 
-func (s *stripe) get(h hash.Hash) (Node, bool) {
+func (s *stripe) get(h hash.Hash) (*Node, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if e, ok := s.chunks[h]; ok {
 		s.moveToFront(e)
 		return e.n, true
 	} else {
-		return Node{}, false
+		return nil, false
 	}
 }
 
-func (s *stripe) insert(addr hash.Hash, node Node) {
+func (s *stripe) insert(addr hash.Hash, node *Node) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 

@@ -67,7 +67,7 @@ func NewEmptyCommitClosure(ns tree.NodeStore) (CommitClosure, error) {
 	return NewCommitClosure(node, ns)
 }
 
-func NewCommitClosure(node tree.Node, ns tree.NodeStore) (CommitClosure, error) {
+func NewCommitClosure(node *tree.Node, ns tree.NodeStore) (CommitClosure, error) {
 	return CommitClosure{
 		closure: tree.StaticMap[CommitClosureKey, CommitClosureValue, commitClosureKeyOrdering]{
 			Root:      node,
@@ -85,7 +85,7 @@ func (c CommitClosure) Height() int {
 	return c.closure.Height()
 }
 
-func (c CommitClosure) Node() tree.Node {
+func (c CommitClosure) Node() *tree.Node {
 	return c.closure.Root
 }
 

@@ -51,7 +51,7 @@ type Differ[K ~[]byte, O Ordering[K]] struct {
 func DifferFromRoots[K ~[]byte, O Ordering[K]](
 	ctx context.Context,
 	fromNs NodeStore, toNs NodeStore,
-	from, to Node,
+	from, to *Node,
 	order O,
 	considerAllRowsModified bool,
 ) (Differ[K, O], error) {
@@ -98,7 +98,7 @@ func DifferFromRoots[K ~[]byte, O Ordering[K]](
 
 func DifferFromCursors[K ~[]byte, O Ordering[K]](
 	ctx context.Context,
-	fromRoot, toRoot Node,
+	fromRoot, toRoot *Node,
 	findStart, findStop SearchFn,
 	fromStore, toStore NodeStore,
 	order O,

@@ -183,12 +183,18 @@ func NewSqlEngine(
 	config.ClusterController.SetIsStandbyCallback(func(isStandby bool) {
 		pro.SetIsStandby(isStandby)
 
-		// Standbys are read only, primaries are not.
-		// We only change this here if the server was not forced read
-		// only by its startup config.
-		if !config.IsReadOnly {
-			engine.ReadOnly.Store(isStandby)
+		// Standbys are read only, primaries respect the config. Update both engine.ReadOnly and the read_only system
+		// variable.
+		readOnly := isStandby || config.IsReadOnly
+		engine.ReadOnly.Store(readOnly)
+
+		readOnlyInt := int8(0)
+		if readOnly {
+			readOnlyInt = 1
 		}
+		sql.SystemVariables.AssignValues(map[string]interface{}{
+			"read_only": readOnlyInt,
+		})
 	})
 
 	// Load in privileges from file, if it exists
@@ -292,6 +298,9 @@ func NewSqlEngine(
 			return nil, err
 		}
 	}
+
+	dblr.DoltBinlogConsumer.SetEngine(engine)
+	engine.Analyzer.Catalog.BinlogConsumer = dblr.DoltBinlogConsumer
 
 	if config.BinlogReplicaController != nil {
 		binLogSession, err := sessFactory(sql.NewBaseSession(), pro)

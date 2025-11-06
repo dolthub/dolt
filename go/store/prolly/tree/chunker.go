@@ -33,7 +33,7 @@ type Chunker interface {
 	AddPair(ctx context.Context, key, value Item) error
 	UpdatePair(ctx context.Context, key, value Item) error
 	DeletePair(ctx context.Context, key, value Item) error
-	Done(ctx context.Context) (Node, error)
+	Done(ctx context.Context) (*Node, error)
 }
 
 type chunker[S message.Serializer] struct {
@@ -416,13 +416,13 @@ func (tc *chunker[S]) createParentChunker(ctx context.Context) (err error) {
 
 // Done returns the root Node of the resulting tree.
 // The logic here is subtle, but hopefully correct and understandable. See comments inline.
-func (tc *chunker[S]) Done(ctx context.Context) (Node, error) {
+func (tc *chunker[S]) Done(ctx context.Context) (*Node, error) {
 	assertTrue(!tc.done, "chunker must not be done")
 	tc.done = true
 
 	if tc.cur != nil {
 		if err := tc.finalizeCursor(ctx); err != nil {
-			return Node{}, err
+			return nil, err
 		}
 	}
 
@@ -433,7 +433,7 @@ func (tc *chunker[S]) Done(ctx context.Context) (Node, error) {
 			// |tc.keys| are the last items at this Level of the tree,
 			// make a chunk out of them
 			if err := tc.handleChunkBoundary(ctx); err != nil {
-				return Node{}, err
+				return nil, err
 			}
 		}
 
@@ -501,7 +501,7 @@ func (tc *chunker[S]) finalizeCursor(ctx context.Context) (err error) {
 		}
 
 		// Invalidate this cursor to mark it finalized.
-		tc.cur.nd = Node{}
+		tc.cur.nd = nil
 	}
 
 	return nil
@@ -524,23 +524,23 @@ func (tc *chunker[S]) isLeaf() bool {
 	return tc.level == 0
 }
 
-func getCanonicalRoot[S message.Serializer](ctx context.Context, ns NodeStore, builder *nodeBuilder[S]) (Node, error) {
+func getCanonicalRoot[S message.Serializer](ctx context.Context, ns NodeStore, builder *nodeBuilder[S]) (*Node, error) {
 	cnt := builder.count()
 	assertTrue(cnt == 1, "in-progress chunk must be non-canonical to call getCanonicalRoot")
 
 	nd, err := builder.build()
 	if err != nil {
-		return Node{}, err
+		return nil, err
 	}
 	mt := nd.getAddress(0)
 
 	for {
 		child, err := fetchChild(ctx, ns, mt)
 		if err != nil {
-			return Node{}, err
+			return nil, err
 		}
 
-		if child.IsLeaf() || child.count > 1 {
+		if child.IsLeaf() || child.Count() > 1 {
 			return child, nil
 		}
 

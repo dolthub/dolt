@@ -91,7 +91,7 @@ func TestKeySplitterDistribution(t *testing.T) {
 	})
 }
 
-func makeProllyTreeWithSizes(t *testing.T, fact splitterFactory, scale, keySz, valSz int) (nd Node, ns NodeStore) {
+func makeProllyTreeWithSizes(t *testing.T, fact splitterFactory, scale, keySz, valSz int) (nd *Node, ns NodeStore) {
 	pro := gaussianItems{
 		keyMean: float64(keySz),
 		keyStd:  float64(keySz) / 4,

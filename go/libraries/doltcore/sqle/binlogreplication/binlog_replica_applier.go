@@ -57,13 +57,22 @@ const (
 // This type is NOT used concurrently – there is currently only one single applier process running to process binlog
 // events, so the state in this type is NOT protected with a mutex.
 type binlogReplicaApplier struct {
-	currentGtid               mysql.GTID
-	format                    *mysql.BinlogFormat
-	tableMapsById             map[uint64]*mysql.TableMap
-	stopReplicationChan       chan struct{}
-	currentPosition           *mysql.Position
-	filters                   *filterConfiguration
-	engine                    *gms.Engine
+	currentGtid         mysql.GTID
+	stopReplicationChan chan struct{}
+	currentPosition     *mysql.Position
+	filters             *filterConfiguration
+	engine              *gms.Engine
+
+	// TODO: BINLOG statement state should be per-connection, not global.
+	// Currently, DoltBinlogConsumer is a global singleton shared across all SQL connections, meaning concurrent BINLOG
+	// statements from different sessions will corrupt each other's table map and format state. There's an existing
+	// skipped transaction test for this under binlog_queries_test.go.
+	//
+	// MariaDB solves this with an implicit per-connection thread state: thd->rgi_fake->m_table_map
+	// See: https://github.com/MariaDB/server/blob/mariadb-11.4.8/sql/sql_binlog.cc#L270-L271
+	format        *mysql.BinlogFormat
+	tableMapsById map[uint64]*mysql.TableMap
+
 	dbsWithUncommittedChanges map[string]struct{}
 	replicationSourceUuid     string
 	handlerWg                 sync.WaitGroup
@@ -325,7 +334,14 @@ func (a *binlogReplicaApplier) replicaBinlogEventHandler(ctx *sql.Context) error
 
 		select {
 		case event := <-eventProducer.EventChan():
-			err := a.processBinlogEvent(ctx, engine, event)
+			err := sql.SessionCommandBegin(ctx.Session)
+			if err != nil {
+				ctx.GetLogger().Errorf("failed to begin session command: %v", err.Error())
+				DoltBinlogReplicaController.setSqlError(mysql.ERUnknownError, err.Error())
+				continue
+			}
+			err = a.processBinlogEvent(ctx, engine, event)
+			sql.SessionCommandEnd(ctx.Session)
 			if err != nil {
 				ctx.GetLogger().Errorf("unexpected error of type %T: '%v'", err, err.Error())
 				DoltBinlogReplicaController.setSqlError(mysql.ERUnknownError, err.Error())
@@ -362,11 +378,8 @@ func (a *binlogReplicaApplier) replicaBinlogEventHandler(ctx *sql.Context) error
 }
 
 // processBinlogEvent processes a single binlog event message and returns an error if there were any problems
-// processing it.
+// processing it. Session command management is handled by the caller.
 func (a *binlogReplicaApplier) processBinlogEvent(ctx *sql.Context, engine *gms.Engine, event mysql.BinlogEvent) error {
-	sql.SessionCommandBegin(ctx.Session)
-	defer sql.SessionCommandEnd(ctx.Session)
-	var err error
 	createCommit := false
 
 	// We don't support checksum validation, so we MUST strip off any checksum bytes if present, otherwise it gets
@@ -467,6 +480,8 @@ func (a *binlogReplicaApplier) processBinlogEvent(ctx *sql.Context, engine *gms.
 			return err
 		}
 		a.format = &format
+		// Clear table maps when starting a new binlog file, since table IDs can be reused across files
+		a.tableMapsById = make(map[uint64]*mysql.TableMap)
 		ctx.GetLogger().WithFields(logrus.Fields{
 			"format":        a.format,
 			"formatVersion": a.format.FormatVersion,
@@ -553,7 +568,7 @@ func (a *binlogReplicaApplier) processBinlogEvent(ctx *sql.Context, engine *gms.
 	case event.IsDeleteRows(), event.IsWriteRows(), event.IsUpdateRows():
 		// A ROWS_EVENT is written for row based replication if data is inserted, deleted or updated.
 		// For more details, see: https://mariadb.com/kb/en/rows_event_v1v2-rows_compressed_event_v1/
-		err = a.processRowEvent(ctx, event, engine)
+		err := a.processRowEvent(ctx, event, engine)
 		if err != nil {
 			return err
 		}
@@ -584,7 +599,7 @@ func (a *binlogReplicaApplier) processBinlogEvent(ctx *sql.Context, engine *gms.
 	if createCommit {
 		doltSession := dsess.DSessFromSess(ctx.Session)
 		databasesToCommit := doltSession.DirtyDatabases()
-		if err = doltSession.CommitTransaction(ctx, doltSession.GetTransaction()); err != nil {
+		if err := doltSession.CommitTransaction(ctx, doltSession.GetTransaction()); err != nil {
 			return err
 		}
 

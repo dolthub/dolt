@@ -26,14 +26,14 @@ import (
 func ApplyPatches[K ~[]byte, O Ordering[K], S message.Serializer](
 	ctx context.Context,
 	ns NodeStore,
-	root Node,
+	root *Node,
 	order O,
 	serializer S,
 	edits PatchIter,
-) (Node, error) {
+) (*Node, error) {
 	newMutation, err := edits.NextPatch(ctx)
 	if err != nil {
-		return Node{}, err
+		return nil, err
 	}
 	// The iterator marks the end of the sequence with a zero object.
 	// Since KeyBelowStart is nil for the first chunk, but EndKey should never be nil, we check EndKey to detect when
@@ -51,12 +51,12 @@ func ApplyPatches[K ~[]byte, O Ordering[K], S message.Serializer](
 	}
 
 	if err != nil {
-		return Node{}, err
+		return nil, err
 	}
 
 	chkr, err := newChunker(ctx, cur.clone(), 0, ns, serializer)
 	if err != nil {
-		return Node{}, err
+		return nil, err
 	}
 
 	for {
@@ -66,12 +66,12 @@ func ApplyPatches[K ~[]byte, O Ordering[K], S message.Serializer](
 			err = applyNodePatch(ctx, order, chkr, cur, K(newMutation.KeyBelowStart), K(newMutation.EndKey), newMutation.To, newMutation.SubtreeCount, newMutation.Level)
 		}
 		if err != nil {
-			return Node{}, err
+			return nil, err
 		}
 		prevMutation := newMutation
 		newMutation, err = edits.NextPatch(ctx)
 		if err != nil {
-			return Node{}, err
+			return nil, err
 		}
 		nextKey := newMutation.EndKey
 		if nextKey == nil {

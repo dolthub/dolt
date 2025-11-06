@@ -25,7 +25,7 @@ import (
 
 // MapInterface is a common interface for prolly-tree based maps.
 type MapInterface interface {
-	Node() tree.Node
+	Node() *tree.Node
 	NodeStore() tree.NodeStore
 	Count() (int, error)
 	HashOf() hash.Hash

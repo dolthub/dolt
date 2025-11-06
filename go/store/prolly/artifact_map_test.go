@@ -55,7 +55,7 @@ func TestArtifactMapEditing(t *testing.T) {
 			require.NoError(t, err)
 
 			nodeCount := 0
-			err = nm.WalkNodes(ctx, func(_ context.Context, nd tree.Node) error {
+			err = nm.WalkNodes(ctx, func(_ context.Context, nd *tree.Node) error {
 				nodeCount++
 				return nil
 			})

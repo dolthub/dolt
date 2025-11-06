@@ -28,14 +28,14 @@ type chunkDiff struct {
 
 // DiffChunksAtLevel returns a list of chunk diffs between two maps at a
 // specific level.
-func DiffChunksAtLevel[K, V ~[]byte, O Ordering[K]](ctx context.Context, level uint16, from, to StaticMap[K, V, O]) ([]chunkDiff, error) {
-	if from.Root.level < level || to.Root.level < level {
-		// |to| < level is a valid state, but  should have happened before calling
-		return nil, fmt.Errorf("level %d invalid for from height: %d, %d", level, from.Root.level, to.Root.level)
+func DiffChunksAtLevel[K, V ~[]byte, O Ordering[K]](ctx context.Context, level int, from, to StaticMap[K, V, O]) ([]chunkDiff, error) {
+	if from.Root.Level() < level || to.Root.Level() < level {
+		// |to| < level is a valid state, but should have happened before calling
+		return nil, fmt.Errorf("level %d invalid for from height: %d, %d", level, from.Root.Level(), to.Root.Level())
 	}
 	fromNode := from.Root
 	var err error
-	for fromNode.level > level {
+	for fromNode.Level() > level {
 		fromNode, err = fetchChild(ctx, from.NodeStore, fromNode.getAddress(0))
 		if err != nil {
 			return nil, err
@@ -43,7 +43,7 @@ func DiffChunksAtLevel[K, V ~[]byte, O Ordering[K]](ctx context.Context, level u
 	}
 
 	toNode := to.Root
-	for toNode.level > level {
+	for toNode.Level() > level {
 		toNode, err = fetchChild(ctx, to.NodeStore, toNode.getAddress(0))
 		if err != nil {
 			return nil, err
@@ -140,16 +140,16 @@ func GetChunksAtLevel[K, V ~[]byte, O Ordering[K]](ctx context.Context, m Static
 
 // GetHistogramLevel returns the highest internal level of the tree that has
 // more than |low| addresses.
-func GetHistogramLevel[K, V ~[]byte, O Ordering[K]](ctx context.Context, m StaticMap[K, V, O], low int) ([]Node, error) {
+func GetHistogramLevel[K, V ~[]byte, O Ordering[K]](ctx context.Context, m StaticMap[K, V, O], low int) ([]*Node, error) {
 	if cnt, err := m.Count(); err != nil {
 		return nil, err
 	} else if cnt == 0 {
 		return nil, nil
 	}
-	currentLevel := []Node{m.Root}
+	currentLevel := []*Node{m.Root}
 	level := m.Root.Level()
 	for len(currentLevel) < low && level > 0 {
-		var nextLevel []Node
+		var nextLevel []*Node
 		for _, node := range currentLevel {
 			for i := 0; i < node.Count(); i++ {
 				child, err := fetchChild(ctx, m.NodeStore, node.getAddress(i))

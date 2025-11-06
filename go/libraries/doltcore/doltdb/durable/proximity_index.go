@@ -106,7 +106,7 @@ func (i proximityIndex) AddColumnToRows(ctx context.Context, newCol string, newS
 
 func (i proximityIndex) DebugString(ctx context.Context, ns tree.NodeStore, schema schema.Schema) string {
 	var b bytes.Buffer
-	i.index.WalkNodes(ctx, func(ctx context.Context, nd tree.Node) error {
+	i.index.WalkNodes(ctx, func(ctx context.Context, nd *tree.Node) error {
 		return tree.OutputProllyNode(ctx, &b, nd, ns, schema)
 	})
 	return b.String()
