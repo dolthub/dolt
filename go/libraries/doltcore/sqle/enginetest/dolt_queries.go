@@ -119,10 +119,10 @@ var ShowCreateTableScriptTests = []queries.ScriptTest{
 				Query: "show create table a as of @Commit1;",
 				Expected: []sql.Row{
 					{"a", "CREATE TABLE `a` (\n" +
-						"  `pk` int NOT NULL,\n" +
-						"  `c1` int,\n" +
-						"  PRIMARY KEY (`pk`)\n" +
-						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin",
+							"  `pk` int NOT NULL,\n" +
+							"  `c1` int,\n" +
+							"  PRIMARY KEY (`pk`)\n" +
+							") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin",
 					},
 				},
 			},
@@ -130,11 +130,11 @@ var ShowCreateTableScriptTests = []queries.ScriptTest{
 				Query: "show create table a as of @Commit2;",
 				Expected: []sql.Row{
 					{"a", "CREATE TABLE `a` (\n" +
-						"  `pk` int NOT NULL,\n" +
-						"  `c1` int,\n" +
-						"  `c2` varchar(20),\n" +
-						"  PRIMARY KEY (`pk`)\n" +
-						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin",
+							"  `pk` int NOT NULL,\n" +
+							"  `c1` int,\n" +
+							"  `c2` varchar(20),\n" +
+							"  PRIMARY KEY (`pk`)\n" +
+							") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin",
 					},
 				},
 			},
@@ -142,11 +142,11 @@ var ShowCreateTableScriptTests = []queries.ScriptTest{
 				Query: "show create table a as of @Commit3;",
 				Expected: []sql.Row{
 					{"a", "CREATE TABLE `a` (\n" +
-						"  `pk` int NOT NULL,\n" +
-						"  `c2` varchar(20),\n" +
-						"  PRIMARY KEY (`pk`),\n" +
-						"  UNIQUE KEY `unique_c2` (`c2`)\n" +
-						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin",
+							"  `pk` int NOT NULL,\n" +
+							"  `c2` varchar(20),\n" +
+							"  PRIMARY KEY (`pk`),\n" +
+							"  UNIQUE KEY `unique_c2` (`c2`)\n" +
+							") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin",
 					},
 				},
 			},
@@ -154,11 +154,11 @@ var ShowCreateTableScriptTests = []queries.ScriptTest{
 				Query: "show create table a as of HEAD;",
 				Expected: []sql.Row{
 					{"a", "CREATE TABLE `a` (\n" +
-						"  `pk` int NOT NULL,\n" +
-						"  `c2` varchar(20),\n" +
-						"  PRIMARY KEY (`pk`),\n" +
-						"  UNIQUE KEY `unique_c2` (`c2`)\n" +
-						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin",
+							"  `pk` int NOT NULL,\n" +
+							"  `c2` varchar(20),\n" +
+							"  PRIMARY KEY (`pk`),\n" +
+							"  UNIQUE KEY `unique_c2` (`c2`)\n" +
+							") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin",
 					},
 				},
 			},
@@ -184,18 +184,18 @@ var ShowCreateTableScriptTests = []queries.ScriptTest{
 			{
 				Query: "show create table tbl",
 				Expected: []sql.Row{{"tbl", "CREATE TABLE `tbl` (\n" +
-					"  `a` int NOT NULL,\n" +
-					"  `b` int NOT NULL DEFAULT '42',\n" + //
-					"  `c` int NOT NULL DEFAULT (24),\n" + // Ensure these match setup above.
-					"  `d` int NOT NULL DEFAULT '-108',\n" + //
-					"  `e` int NOT NULL DEFAULT ((7 + 11)),\n" + // Matches MySQL behavior.
-					"  `f` int DEFAULT CURRENT_TIMESTAMP,\n" + // MySql preserves now as lower case.
-					"  PRIMARY KEY (`a`),\n" +
-					"  KEY `tbl_bc` (`b`,`c`),\n" +
-					"  UNIQUE KEY `tbl_c` (`c`),\n" +
-					"  UNIQUE KEY `tbl_cbd` (`c`,`b`,`d`),\n" +
-					"  UNIQUE KEY `tbl_e` (`e`)\n" +
-					") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+						"  `a` int NOT NULL,\n" +
+						"  `b` int NOT NULL DEFAULT '42',\n" + //
+						"  `c` int NOT NULL DEFAULT (24),\n" + // Ensure these match setup above.
+						"  `d` int NOT NULL DEFAULT '-108',\n" + //
+						"  `e` int NOT NULL DEFAULT ((7 + 11)),\n" + // Matches MySQL behavior.
+						"  `f` int DEFAULT CURRENT_TIMESTAMP,\n" + // MySql preserves now as lower case.
+						"  PRIMARY KEY (`a`),\n" +
+						"  KEY `tbl_bc` (`b`,`c`),\n" +
+						"  UNIQUE KEY `tbl_c` (`c`),\n" +
+						"  UNIQUE KEY `tbl_cbd` (`c`,`b`,`d`),\n" +
+						"  UNIQUE KEY `tbl_e` (`e`)\n" +
+						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
 			},
 		},
 	},
@@ -218,16 +218,16 @@ var ShowCreateTableScriptTests = []queries.ScriptTest{
 			{
 				Query: "show create table tbl",
 				Expected: []sql.Row{{"tbl", "CREATE TABLE `tbl` (\n" +
-					"  `a` int NOT NULL DEFAULT CURRENT_TIMESTAMP,\n" + // MySql preserves now as lower case.
-					"  `b` int NOT NULL DEFAULT '42',\n" + //
-					"  `c` int NOT NULL DEFAULT (24),\n" + // Ensure these match setup above.
-					"  `d` int NOT NULL DEFAULT '-108',\n" + //
-					"  `e` int NOT NULL DEFAULT ((7 + 11)),\n" + // Matches MySQL behavior.
-					"  KEY `tbl_bc` (`b`,`c`),\n" +
-					"  UNIQUE KEY `tbl_c` (`c`),\n" +
-					"  UNIQUE KEY `tbl_cab` (`c`,`a`,`b`),\n" +
-					"  UNIQUE KEY `tbl_e` (`e`)\n" +
-					") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+						"  `a` int NOT NULL DEFAULT CURRENT_TIMESTAMP,\n" + // MySql preserves now as lower case.
+						"  `b` int NOT NULL DEFAULT '42',\n" + //
+						"  `c` int NOT NULL DEFAULT (24),\n" + // Ensure these match setup above.
+						"  `d` int NOT NULL DEFAULT '-108',\n" + //
+						"  `e` int NOT NULL DEFAULT ((7 + 11)),\n" + // Matches MySQL behavior.
+						"  KEY `tbl_bc` (`b`,`c`),\n" +
+						"  UNIQUE KEY `tbl_c` (`c`),\n" +
+						"  UNIQUE KEY `tbl_cab` (`c`,`a`,`b`),\n" +
+						"  UNIQUE KEY `tbl_e` (`e`)\n" +
+						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
 			},
 		},
 	},
@@ -261,13 +261,13 @@ var ShowCreateTableScriptTests = []queries.ScriptTest{
 				Query: "show create table child as of @Commit1;",
 				Expected: []sql.Row{
 					{"child", "CREATE TABLE `child` (\n" +
-						"  `pk` int NOT NULL,\n" +
-						"  `c1` int,\n" +
-						"  `c3` int,\n" +
-						"  PRIMARY KEY (`pk`),\n" +
-						"  KEY `fk1` (`c1`),\n" +
-						"  CONSTRAINT `fk1` FOREIGN KEY (`c1`) REFERENCES `parent` (`pv1`)\n" +
-						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin",
+							"  `pk` int NOT NULL,\n" +
+							"  `c1` int,\n" +
+							"  `c3` int,\n" +
+							"  PRIMARY KEY (`pk`),\n" +
+							"  KEY `fk1` (`c1`),\n" +
+							"  CONSTRAINT `fk1` FOREIGN KEY (`c1`) REFERENCES `parent` (`pv1`)\n" +
+							") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin",
 					},
 				},
 			},
@@ -275,15 +275,15 @@ var ShowCreateTableScriptTests = []queries.ScriptTest{
 				Query: "show create table child as of @Commit2;",
 				Expected: []sql.Row{
 					{"child", "CREATE TABLE `child` (\n" +
-						"  `pk` int NOT NULL,\n" +
-						"  `c1` int,\n" +
-						"  `c3` int,\n" +
-						"  `c2` varchar(20),\n" +
-						"  PRIMARY KEY (`pk`),\n" +
-						"  KEY `fk1` (`c1`),\n" +
-						"  KEY `fk2` (`c2`),\n" +
-						"  CONSTRAINT `fk2` FOREIGN KEY (`c2`) REFERENCES `parent` (`pv2`)\n" +
-						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin",
+							"  `pk` int NOT NULL,\n" +
+							"  `c1` int,\n" +
+							"  `c3` int,\n" +
+							"  `c2` varchar(20),\n" +
+							"  PRIMARY KEY (`pk`),\n" +
+							"  KEY `fk1` (`c1`),\n" +
+							"  KEY `fk2` (`c2`),\n" +
+							"  CONSTRAINT `fk2` FOREIGN KEY (`c2`) REFERENCES `parent` (`pv2`)\n" +
+							") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin",
 					},
 				},
 			},
@@ -291,13 +291,13 @@ var ShowCreateTableScriptTests = []queries.ScriptTest{
 				Query: "show create table child as of @Commit3;",
 				Expected: []sql.Row{
 					{"child", "CREATE TABLE `child` (\n" +
-						"  `pk` int NOT NULL,\n" +
-						"  `c3` int,\n" +
-						"  `c2` varchar(20),\n" +
-						"  PRIMARY KEY (`pk`),\n" +
-						"  UNIQUE KEY `unique_c2` (`c2`),\n" +
-						"  CONSTRAINT `fk2` FOREIGN KEY (`c2`) REFERENCES `parent` (`pv2`)\n" +
-						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin",
+							"  `pk` int NOT NULL,\n" +
+							"  `c3` int,\n" +
+							"  `c2` varchar(20),\n" +
+							"  PRIMARY KEY (`pk`),\n" +
+							"  UNIQUE KEY `unique_c2` (`c2`),\n" +
+							"  CONSTRAINT `fk2` FOREIGN KEY (`c2`) REFERENCES `parent` (`pv2`)\n" +
+							") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin",
 					},
 				},
 			},
@@ -305,13 +305,13 @@ var ShowCreateTableScriptTests = []queries.ScriptTest{
 				Query: "show create table child as of HEAD;",
 				Expected: []sql.Row{
 					{"child", "CREATE TABLE `child` (\n" +
-						"  `pk` int NOT NULL,\n" +
-						"  `c3` int,\n" +
-						"  `c2` varchar(20),\n" +
-						"  PRIMARY KEY (`pk`),\n" +
-						"  UNIQUE KEY `unique_c2` (`c2`),\n" +
-						"  CONSTRAINT `fk2` FOREIGN KEY (`c2`) REFERENCES `parent` (`pv2`)\n" +
-						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin",
+							"  `pk` int NOT NULL,\n" +
+							"  `c3` int,\n" +
+							"  `c2` varchar(20),\n" +
+							"  PRIMARY KEY (`pk`),\n" +
+							"  UNIQUE KEY `unique_c2` (`c2`),\n" +
+							"  CONSTRAINT `fk2` FOREIGN KEY (`c2`) REFERENCES `parent` (`pv2`)\n" +
+							") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin",
 					},
 				},
 			},
@@ -804,13 +804,13 @@ var DoltScripts = []queries.ScriptTest{
 				Query: "select dolt_join_cost('select * from ab, cd, xy where a = c and b = d and y = d')",
 				Expected: []sql.Row{
 					{`memo:
-├── G1: (tablescan: ab 0.0)*
-├── G2: (tablescan: cd 0.0)*
-├── G3: (hashjoin 1 2 12.1) (hashjoin 2 1 12.1) (mergejoin 1 2 6.1)* (mergejoin 2 1 6.1)* (lookupjoin 1 2 9.9) (lookupjoin 2 1 9.9) (innerjoin 2 1 10.1) (innerjoin 1 2 10.1)
-├── G4: (tablescan: xy 0.0)*
-├── G5: (hashjoin 3 4 12.1) (hashjoin 1 7 12.1) (hashjoin 7 1 12.1) (hashjoin 2 6 12.1) (hashjoin 6 2 12.1) (hashjoin 4 3 12.1) (lookupjoin 7 1 9.9) (lookupjoin 6 2 9.9) (innerjoin 4 3 10.1)* (innerjoin 6 2 10.1) (innerjoin 2 6 10.1) (innerjoin 7 1 10.1) (innerjoin 1 7 10.1) (innerjoin 3 4 10.1)*
-├── G6: (hashjoin 1 4 12.1) (hashjoin 4 1 12.1) (innerjoin 4 1 10.1)* (innerjoin 1 4 10.1)*
-└── G7: (hashjoin 2 4 12.1) (hashjoin 4 2 12.1) (innerjoin 4 2 10.1)* (innerjoin 2 4 10.1)*
+├── G1: (tablescan: ab 3.0)*
+├── G2: (tablescan: cd 3.0)*
+├── G3: (hashjoin 1[ab] 2[cd] 12.1) (hashjoin 2[cd] 1[ab] 12.1) (mergejoin 1[ab] 2[cd] 6.1)* (mergejoin 2[cd] 1[ab] 6.1)* (lookupjoin 1[ab] 2[cd] on PRIMARY 9.9) (lookupjoin 2[cd] 1[ab] on PRIMARY 9.9) (innerjoin 2[cd] 1[ab] 10.1) (innerjoin 1[ab] 2[cd] 10.1)
+├── G4: (tablescan: xy 3.0)*
+├── G5: (hashjoin 3 4[xy] 12.1) (hashjoin 1[ab] 7 12.1) (hashjoin 7 1[ab] 12.1) (hashjoin 2[cd] 6 12.1) (hashjoin 6 2[cd] 12.1) (hashjoin 4[xy] 3 12.1) (lookupjoin 7 1[ab] on PRIMARY 9.9) (lookupjoin 6 2[cd] on PRIMARY 9.9) (innerjoin 4[xy] 3 10.1)* (innerjoin 6 2[cd] 10.1) (innerjoin 2[cd] 6 10.1) (innerjoin 7 1[ab] 10.1) (innerjoin 1[ab] 7 10.1) (innerjoin 3 4[xy] 10.1)*
+├── G6: (hashjoin 1[ab] 4[xy] 12.1) (hashjoin 4[xy] 1[ab] 12.1) (innerjoin 4[xy] 1[ab] 10.1)* (innerjoin 1[ab] 4[xy] 10.1)*
+└── G7: (hashjoin 2[cd] 4[xy] 12.1) (hashjoin 4[xy] 2[cd] 12.1) (innerjoin 4[xy] 2[cd] 10.1)* (innerjoin 2[cd] 4[xy] 10.1)*
 `},
 				},
 			},
@@ -990,8 +990,8 @@ var DoltScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "create table t2 (pk int primary key, c1 int, c2 int, " +
-					"FOREIGN KEY (`c1`) REFERENCES `t1` (`pk`) ON DELETE CASCADE ON UPDATE CASCADE, " +
-					"FOREIGN KEY (`c2`) REFERENCES `t1` (`pk`) ON DELETE CASCADE ON UPDATE CASCADE);",
+						"FOREIGN KEY (`c1`) REFERENCES `t1` (`pk`) ON DELETE CASCADE ON UPDATE CASCADE, " +
+						"FOREIGN KEY (`c2`) REFERENCES `t1` (`pk`) ON DELETE CASCADE ON UPDATE CASCADE);",
 				Expected: []sql.Row{{types.NewOkResult(0)}},
 			},
 		},
@@ -1128,11 +1128,11 @@ var DoltScripts = []queries.ScriptTest{
 				Query: "show create table t;",
 				Expected: []sql.Row{{"t",
 					"CREATE TABLE `t` (\n" +
-						"  `pk` int NOT NULL,\n" +
-						"  `c1` int,\n" +
-						"  PRIMARY KEY (`pk`),\n" +
-						"  KEY ```i``` (`c1`)\n" +
-						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+							"  `pk` int NOT NULL,\n" +
+							"  `c1` int,\n" +
+							"  PRIMARY KEY (`pk`),\n" +
+							"  KEY ```i``` (`c1`)\n" +
+							") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
 			},
 		},
 	},
@@ -1196,7 +1196,7 @@ var DoltScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "select a1.* from a as of @second_commit a1 " +
-					"left join a as of @first_commit a2 on a1.pk = a2.pk where a2.pk is null order by 1",
+						"left join a as of @first_commit a2 on a1.pk = a2.pk where a2.pk is null order by 1",
 				Expected: []sql.Row{
 					{4, 4},
 					{5, 5},
@@ -1205,7 +1205,7 @@ var DoltScripts = []queries.ScriptTest{
 			},
 			{
 				Query: "select a1.* from a as of @second_commit a1 " +
-					"left join a as of @second_commit a2 on a1.pk = a2.pk where a2.pk is null order by 1",
+						"left join a as of @second_commit a2 on a1.pk = a2.pk where a2.pk is null order by 1",
 				Expected: []sql.Row{},
 			},
 		},
@@ -1225,24 +1225,24 @@ var DoltScripts = []queries.ScriptTest{
 				Query: "show create table t1",
 				Expected: []sql.Row{
 					{"t1", "CREATE TABLE `t1` (\n" +
-						"  `a` int NOT NULL,\n" +
-						"  `b` varchar(10) NOT NULL DEFAULT 'abc',\n" +
-						"  PRIMARY KEY (`a`),\n" +
-						"  KEY `t1b` (`b`),\n" +
-						"  CONSTRAINT `ck1` CHECK (`b` LIKE '%abc%')\n" +
-						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
+							"  `a` int NOT NULL,\n" +
+							"  `b` varchar(10) NOT NULL DEFAULT 'abc',\n" +
+							"  PRIMARY KEY (`a`),\n" +
+							"  KEY `t1b` (`b`),\n" +
+							"  CONSTRAINT `ck1` CHECK (`b` LIKE '%abc%')\n" +
+							") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
 				},
 			},
 			{
 				Query: "show create table t2",
 				Expected: []sql.Row{
 					{"t2", "CREATE TABLE `t2` (\n" +
-						"  `c` int NOT NULL,\n" +
-						"  `d` varchar(10),\n" +
-						"  PRIMARY KEY (`c`),\n" +
-						"  UNIQUE KEY `t2du` (`d`),\n" +
-						"  CONSTRAINT `fk1` FOREIGN KEY (`d`) REFERENCES `t1` (`b`)\n" +
-						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
+							"  `c` int NOT NULL,\n" +
+							"  `d` varchar(10),\n" +
+							"  PRIMARY KEY (`c`),\n" +
+							"  UNIQUE KEY `t2du` (`d`),\n" +
+							"  CONSTRAINT `fk1` FOREIGN KEY (`d`) REFERENCES `t1` (`b`)\n" +
+							") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
 				},
 			},
 		},
@@ -1406,41 +1406,41 @@ var DoltScripts = []queries.ScriptTest{
 		Name: "Nautobot FOREIGN KEY panic repro",
 		SetUpScript: []string{
 			"CREATE TABLE `auth_user` (" +
-				"	`password` varchar(128) NOT NULL," +
-				"	`last_login` datetime," +
-				"	`is_superuser` tinyint NOT NULL," +
-				"	`username` varchar(150) NOT NULL," +
-				"	`first_name` varchar(150) NOT NULL," +
-				"	`last_name` varchar(150) NOT NULL," +
-				"	`email` varchar(254) NOT NULL," +
-				"	`is_staff` tinyint NOT NULL," +
-				"	`is_active` tinyint NOT NULL," +
-				"	`date_joined` datetime NOT NULL," +
-				"	`id` char(32) NOT NULL," +
-				"	`config_data` json NOT NULL," +
-				"	PRIMARY KEY (`id`)," +
-				"	UNIQUE KEY `username` (`username`)" +
-				") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin",
+					"	`password` varchar(128) NOT NULL," +
+					"	`last_login` datetime," +
+					"	`is_superuser` tinyint NOT NULL," +
+					"	`username` varchar(150) NOT NULL," +
+					"	`first_name` varchar(150) NOT NULL," +
+					"	`last_name` varchar(150) NOT NULL," +
+					"	`email` varchar(254) NOT NULL," +
+					"	`is_staff` tinyint NOT NULL," +
+					"	`is_active` tinyint NOT NULL," +
+					"	`date_joined` datetime NOT NULL," +
+					"	`id` char(32) NOT NULL," +
+					"	`config_data` json NOT NULL," +
+					"	PRIMARY KEY (`id`)," +
+					"	UNIQUE KEY `username` (`username`)" +
+					") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin",
 			"CREATE TABLE `users_token` (" +
-				"	`id` char(32) NOT NULL," +
-				"	`created` datetime NOT NULL," +
-				"	`expires` datetime," +
-				"	`key` varchar(40) NOT NULL," +
-				"	`write_enabled` tinyint NOT NULL," +
-				"	`description` varchar(200) NOT NULL," +
-				"	`user_id` char(32) NOT NULL," +
-				"	PRIMARY KEY (`id`)," +
-				"	UNIQUE KEY `key` (`key`)," +
-				"	KEY `users_token_user_id_af964690` (`user_id`)," +
-				"	CONSTRAINT `users_token_user_id_af964690_fk_auth_user_id` FOREIGN KEY (`user_id`) REFERENCES `auth_user` (`id`)" +
-				") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
+					"	`id` char(32) NOT NULL," +
+					"	`created` datetime NOT NULL," +
+					"	`expires` datetime," +
+					"	`key` varchar(40) NOT NULL," +
+					"	`write_enabled` tinyint NOT NULL," +
+					"	`description` varchar(200) NOT NULL," +
+					"	`user_id` char(32) NOT NULL," +
+					"	PRIMARY KEY (`id`)," +
+					"	UNIQUE KEY `key` (`key`)," +
+					"	KEY `users_token_user_id_af964690` (`user_id`)," +
+					"	CONSTRAINT `users_token_user_id_af964690_fk_auth_user_id` FOREIGN KEY (`user_id`) REFERENCES `auth_user` (`id`)" +
+					") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;",
 			"INSERT INTO `auth_user` (`password`,`last_login`,`is_superuser`,`username`,`first_name`,`last_name`,`email`,`is_staff`,`is_active`,`date_joined`,`id`,`config_data`)" +
-				"VALUES ('pbkdf2_sha256$216000$KRpZeDPgwc5E$vl/2hwrmtnckaBT0A8pf63Ph+oYuCHYI7qozMTZihTo=',NULL,1,'admin','','','admin@example.com',1,1,'2022-08-30 18:27:21.810049','1056443cc03446c592fa4c06bb06a1a6','{}');",
+					"VALUES ('pbkdf2_sha256$216000$KRpZeDPgwc5E$vl/2hwrmtnckaBT0A8pf63Ph+oYuCHYI7qozMTZihTo=',NULL,1,'admin','','','admin@example.com',1,1,'2022-08-30 18:27:21.810049','1056443cc03446c592fa4c06bb06a1a6','{}');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "INSERT INTO `users_token` (`id`, `user_id`, `created`, `expires`, `key`, `write_enabled`, `description`) " +
-					"VALUES ('acc2e157db2845a79221cc654b1dcecc', '1056443cc03446c592fa4c06bb06a1a6', '2022-08-30 18:27:21.948487', NULL, '0123456789abcdef0123456789abcdef01234567', 1, '');",
+						"VALUES ('acc2e157db2845a79221cc654b1dcecc', '1056443cc03446c592fa4c06bb06a1a6', '2022-08-30 18:27:21.948487', NULL, '0123456789abcdef0123456789abcdef01234567', 1, '');",
 				Expected: []sql.Row{{types.OkResult{RowsAffected: 0x1, InsertID: 0x0}}},
 			},
 		},
@@ -2260,7 +2260,7 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 			},
 			{
 				Query: "select de, fr, commit_hash=@commit1, commit_hash=@commit2, commit_hash=@commit3, commit_hash=@commit4" +
-					" from dolt_history_T1 where n=2 order by commit_date",
+						" from dolt_history_T1 where n=2 order by commit_date",
 				Expected: []sql.Row{
 					{"Zwei", nil, true, false, false, false},
 					{"Zwei", nil, false, true, false, false},
@@ -2520,7 +2520,7 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 				ExpectedWarning:       1246,
 				ExpectedWarningsCount: 1,
 				ExpectedWarningMessageSubstring: "Unable to convert field c2 in historical rows because " +
-					"its type (int) doesn't match current schema's type (varchar(20))",
+						"its type (int) doesn't match current schema's type (varchar(20))",
 			},
 		},
 	},
@@ -8560,9 +8560,9 @@ var DoltTempTableScripts = []queries.ScriptTest{
 				Query: "show create table t;",
 				Expected: []sql.Row{
 					{"t", "CREATE TEMPORARY TABLE `t` (\n" +
-						"  `i` int NOT NULL AUTO_INCREMENT,\n" +
-						"  PRIMARY KEY (`i`)\n" +
-						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
+							"  `i` int NOT NULL AUTO_INCREMENT,\n" +
+							"  PRIMARY KEY (`i`)\n" +
+							") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
 				},
 			},
 			{
@@ -8575,9 +8575,9 @@ var DoltTempTableScripts = []queries.ScriptTest{
 				Query: "show create table t;",
 				Expected: []sql.Row{
 					{"t", "CREATE TEMPORARY TABLE `t` (\n" +
-						"  `i` int NOT NULL AUTO_INCREMENT,\n" +
-						"  PRIMARY KEY (`i`)\n" +
-						") ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
+							"  `i` int NOT NULL AUTO_INCREMENT,\n" +
+							"  PRIMARY KEY (`i`)\n" +
+							") ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
 				},
 			},
 			{
@@ -8598,9 +8598,9 @@ var DoltTempTableScripts = []queries.ScriptTest{
 				Query: "show create table t;",
 				Expected: []sql.Row{
 					{"t", "CREATE TEMPORARY TABLE `t` (\n" +
-						"  `i` int NOT NULL AUTO_INCREMENT,\n" +
-						"  PRIMARY KEY (`i`)\n" +
-						") ENGINE=InnoDB AUTO_INCREMENT=1001 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
+							"  `i` int NOT NULL AUTO_INCREMENT,\n" +
+							"  PRIMARY KEY (`i`)\n" +
+							") ENGINE=InnoDB AUTO_INCREMENT=1001 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
 				},
 			},
 			{
@@ -8650,8 +8650,8 @@ var DoltTempTableScripts = []queries.ScriptTest{
 				Query: "show create table tmp;",
 				Expected: []sql.Row{
 					{"tmp", "CREATE TEMPORARY TABLE `tmp` (\n" +
-						"  `i` int\n" +
-						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
+							"  `i` int\n" +
+							") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
 				},
 			},
 			{
@@ -8671,9 +8671,9 @@ var DoltTempTableScripts = []queries.ScriptTest{
 				Query: "show create table t;",
 				Expected: []sql.Row{
 					{"t", "CREATE TEMPORARY TABLE `t` (\n" +
-						"  `i` int,\n" +
-						"  `j` int\n" +
-						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
+							"  `i` int,\n" +
+							"  `j` int\n" +
+							") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
 				},
 			},
 			{
@@ -8686,8 +8686,8 @@ var DoltTempTableScripts = []queries.ScriptTest{
 				Query: "show create table t;",
 				Expected: []sql.Row{
 					{"t", "CREATE TABLE `t` (\n" +
-						"  `i` int\n" +
-						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
+							"  `i` int\n" +
+							") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
 				},
 			},
 			{
