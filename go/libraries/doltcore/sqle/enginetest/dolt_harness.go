@@ -26,6 +26,7 @@ import (
 	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/enginetest/scriptgen/setup"
 	"github.com/dolthub/go-mysql-server/memory"
+	"github.com/dolthub/go-mysql-server/server"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
 	"github.com/dolthub/go-mysql-server/sql/rowexec"
@@ -67,10 +68,19 @@ type DoltHarness struct {
 	configureStats        bool
 	useLocalFilesystem    bool
 	setupTestProcedures   bool
+	server                bool
 }
 
 func (d *DoltHarness) UseLocalFileSystem() {
 	d.useLocalFilesystem = true
+}
+
+func (d *DoltHarness) UseServer() {
+	d.server = true
+}
+
+func (d *DoltHarness) SessionBuilder() server.SessionBuilder {
+	return newSessionBuilder(d)
 }
 
 func (d *DoltHarness) Session() *dsess.DoltSession {
@@ -91,6 +101,7 @@ type DoltEnginetestHarness interface {
 	enginetest.Harness
 	enginetest.SkippingHarness
 	enginetest.ClientHarness
+	enginetest.ServerHarness
 	enginetest.IndexHarness
 	enginetest.VersionedDBHarness
 	enginetest.ForeignKeyHarness
@@ -325,6 +336,9 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 			require.NoError(t, err)
 		}
 
+		if d.server {
+			return enginetest.NewServerQueryEngine(t, e, d.SessionBuilder())
+		}
 		return e, nil
 	}
 
@@ -348,6 +362,10 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 	// Get a fresh session after running setup scripts, since some setup scripts can change the session state
 	d.session, err = dsess.NewDoltSession(enginetest.NewBaseSession(), d.provider, d.multiRepoEnv.Config(), d.branchControl, d.statsPro, writer.NewWriteSession, nil, d.branchActivityTracker)
 	require.NoError(t, err)
+
+	if d.server {
+		return enginetest.NewServerQueryEngine(t, e, d.SessionBuilder())
+	}
 
 	return e, err
 }
