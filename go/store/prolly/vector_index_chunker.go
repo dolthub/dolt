@@ -74,7 +74,7 @@ func newVectorIndexChunker(ctx context.Context, pathMap *MutableMap, childChunke
 }
 
 // Next produces the next tree node for the corresponding level of the tree.
-func (c *vectorIndexChunker) Next(ctx context.Context, ns tree.NodeStore, serializer message.VectorIndexSerializer, parentPathSegment []byte, level, depth int, originalKeyDesc *val.TupleDesc) (tree.Node, uint64, hash.Hash, error) {
+func (c *vectorIndexChunker) Next(ctx context.Context, ns tree.NodeStore, serializer message.VectorIndexSerializer, parentPathSegment []byte, level, depth int, originalKeyDesc *val.TupleDesc) (*tree.Node, uint64, hash.Hash, error) {
 	var indexMapKeys [][]byte
 	var indexMapValues [][]byte
 	var indexMapSubtrees []uint64
@@ -85,7 +85,7 @@ func (c *vectorIndexChunker) Next(ctx context.Context, ns tree.NodeStore, serial
 			msg := serializer.Serialize(indexMapKeys, indexMapValues, indexMapSubtrees, level)
 			node, _, err := tree.NodeFromBytes(msg)
 			if err != nil {
-				return tree.Node{}, 0, hash.Hash{}, err
+				return nil, 0, hash.Hash{}, err
 			}
 			nodeHash, err := ns.Write(ctx, node)
 			return node, subtreeSum, nodeHash, err
@@ -95,7 +95,7 @@ func (c *vectorIndexChunker) Next(ctx context.Context, ns tree.NodeStore, serial
 			// a node one level down, that will be pointed to by this node.
 			_, childCount, nodeHash, err := c.childChunker.Next(ctx, ns, serializer, c.lastKey, level-1, depth+1, originalKeyDesc)
 			if err != nil {
-				return tree.Node{}, 0, hash.Hash{}, err
+				return nil, 0, hash.Hash{}, err
 			}
 			c.lastValue = nodeHash[:]
 			indexMapSubtrees = append(indexMapSubtrees, childCount)
@@ -110,7 +110,7 @@ func (c *vectorIndexChunker) Next(ctx context.Context, ns tree.NodeStore, serial
 		if err == io.EOF {
 			c.atEnd = true
 		} else if err != nil {
-			return tree.Node{}, 0, hash.Hash{}, err
+			return nil, 0, hash.Hash{}, err
 		} else {
 			// nextValue is a pathMap value tuple: it contains a primary key from the underlying table.
 			// nextKey is a pathMap key tuple: it contains a field for each edge in the final index graph that connects

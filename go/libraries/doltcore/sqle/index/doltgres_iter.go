@@ -212,10 +212,10 @@ func NewDoltgresPartitionIter(ctx *sql.Context, lookup sql.IndexLookup) (sql.Par
 
 // doltgresProllyMapIterator returns a map iterator, which handles the contiguous iteration over the underlying map that
 // stores an index's data. This also handles filter expressions, if any are present.
-func doltgresProllyMapIterator(ctx *sql.Context, keyDesc *val.TupleDesc, ns tree.NodeStore, root tree.Node, rang DoltgresRange) (prolly.MapIter, error) {
+func doltgresProllyMapIterator(ctx *sql.Context, keyDesc *val.TupleDesc, ns tree.NodeStore, root *tree.Node, rang DoltgresRange) (prolly.MapIter, error) {
 	searchRow := make(sql.Row, len(keyDesc.Types))
 	var findStartErr error
-	findStart := func(_ context.Context, nd tree.Node) int {
+	findStart := func(_ context.Context, nd *tree.Node) int {
 		return sort.Search(nd.Count(), func(i int) bool {
 			key := val.Tuple(nd.GetKey(i))
 			if err := doltgresMapSearchKeyToRow(ctx, key, keyDesc, ns, searchRow); err != nil {
@@ -235,7 +235,7 @@ func doltgresProllyMapIterator(ctx *sql.Context, keyDesc *val.TupleDesc, ns tree
 		})
 	}
 	var findStopErr error
-	findStop := func(_ context.Context, nd tree.Node) (idx int) {
+	findStop := func(_ context.Context, nd *tree.Node) (idx int) {
 		return sort.Search(nd.Count(), func(i int) bool {
 			key := val.Tuple(nd.GetKey(i))
 			if err := doltgresMapSearchKeyToRow(ctx, key, keyDesc, ns, searchRow); err != nil {

@@ -139,7 +139,7 @@ type PatchGenerator[K ~[]byte, O Ordering[K]] struct {
 	previousDiffType   DiffType
 }
 
-func PatchGeneratorFromRoots[K ~[]byte, O Ordering[K]](ctx context.Context, fromNs, toNs NodeStore, from, to Node, order O) (PatchGenerator[K, O], error) {
+func PatchGeneratorFromRoots[K ~[]byte, O Ordering[K]](ctx context.Context, fromNs, toNs NodeStore, from, to *Node, order O) (PatchGenerator[K, O], error) {
 	var fc, tc *cursor
 
 	if !from.empty() {
@@ -151,7 +151,7 @@ func PatchGeneratorFromRoots[K ~[]byte, O Ordering[K]](ctx context.Context, from
 	if !to.empty() {
 		tc = newCursorAtRoot(ctx, toNs, to)
 		// Maintain invariant that the |from| cursor is never at a higher level than the |to| cursor.
-		for fc.nd.level > tc.nd.level {
+		for fc.nd.Level() > tc.nd.Level() {
 			fromChild, err := fetchChild(ctx, fc.nrw, fc.currentRef())
 			if err != nil {
 				return PatchGenerator[K, O]{}, err
@@ -367,13 +367,13 @@ func (td *PatchGenerator[K, O]) findNextPatch(ctx context.Context) (patch Patch,
 	}
 
 	if td.from.Valid() {
-		if td.from.nd.level > 0 {
+		if td.from.nd.Level() > 0 {
 			return td.sendRemovedRange(), RemovedDiff, true, nil
 		}
 		return td.sendRemovedKey(), RemovedDiff, true, nil
 	}
 	if td.to.Valid() {
-		if td.to.nd.level > 0 {
+		if td.to.nd.Level() > 0 {
 			patch, diffType, err = td.sendAddedRange()
 			return patch, diffType, true, err
 		}
@@ -405,7 +405,7 @@ func (td *PatchGenerator[K, O]) split(ctx context.Context) (patch Patch, diffTyp
 			parent: td.from,
 			nrw:    td.from.nrw,
 		}
-		if td.from.nd.level > 0 {
+		if td.from.nd.Level() > 0 {
 			return td.sendRemovedRange(), RemovedDiff, true, nil
 		} else {
 			return td.sendRemovedKey(), RemovedDiff, true, nil
@@ -421,7 +421,7 @@ func (td *PatchGenerator[K, O]) split(ctx context.Context) (patch Patch, diffTyp
 			parent: td.to,
 			nrw:    td.to.nrw,
 		}
-		if td.to.nd.level > 0 {
+		if td.to.nd.Level() > 0 {
 			patch, diffType, err = td.sendAddedRange()
 			return patch, diffType, true, err
 		} else {
@@ -440,7 +440,7 @@ func (td *PatchGenerator[K, O]) split(ctx context.Context) (patch Patch, diffTyp
 		}
 
 		// Maintain invariant that the |from| cursor is never at a higher level than the |to| cursor.
-		if td.from.nd.level == td.to.nd.level {
+		if td.from.nd.Level() == td.to.nd.Level() {
 			fromRef := td.from.currentRef()
 			fromChild, err := fetchChild(ctx, td.from.nrw, fromRef)
 			if err != nil {

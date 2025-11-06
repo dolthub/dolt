@@ -138,7 +138,7 @@ func validateProximityMapSkipHistoryIndependenceCheck(t *testing.T, ctx context.
 	require.Equal(t, expectedSize, matches)
 
 	// Check that the invariant holds: each vector is closer to its parent than any of its uncles.
-	err = tree.WalkNodes(ctx, m.tuples.Root, ns, func(ctx context.Context, nd tree.Node) error {
+	err = tree.WalkNodes(ctx, m.tuples.Root, ns, func(ctx context.Context, nd *tree.Node) error {
 		validateProximityMapNode(t, ctx, ns, nd, vector.DistanceL2Squared{}, keyDesc, valDesc)
 		return nil
 	})
@@ -158,7 +158,7 @@ func vectorFromKey(t *testing.T, keyDesc *val.TupleDesc, key []byte) []float32 {
 	return decodeVector(t, keyDesc, encodedVector)
 }
 
-func validateProximityMapNode(t *testing.T, ctx context.Context, ns tree.NodeStore, nd tree.Node, distanceType vector.DistanceType, keyDesc *val.TupleDesc, desc *val.TupleDesc) {
+func validateProximityMapNode(t *testing.T, ctx context.Context, ns tree.NodeStore, nd *tree.Node, distanceType vector.DistanceType, keyDesc *val.TupleDesc, desc *val.TupleDesc) {
 	// For each node, the node's grandchildren should be closer to their parent than the other children.
 	if nd.Level() == 0 {
 		// Leaf node

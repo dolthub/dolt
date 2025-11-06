@@ -156,7 +156,7 @@ func TestWriteImmutableTree(t *testing.T) {
 			unfilledCnt := 0
 			sum := 0
 			byteCnt := 0
-			WalkNodes(ctx, root, ns, func(ctx context.Context, n Node) error {
+			WalkNodes(ctx, root, ns, func(ctx context.Context, n *Node) error {
 				if n.empty() {
 					return nil
 				}
@@ -317,7 +317,7 @@ func TestImmutableTreeWalk(t *testing.T) {
 		t.Run(fmt.Sprintf("inputSize=%d; chunkSize=%d; keyCnt=%d", tt.blobLen, tt.chunkSize, tt.keyCnt), func(t *testing.T) {
 			r := newTree(t, ns, tt.keyCnt, tt.blobLen, tt.chunkSize)
 			var cnt int
-			walkOpaqueNodes(context.Background(), r, ns, func(ctx context.Context, n Node) error {
+			walkOpaqueNodes(context.Background(), r, ns, func(ctx context.Context, n *Node) error {
 				cnt++
 				return nil
 			})
@@ -345,7 +345,7 @@ func blobAddrCnt(size, chunk int) int {
 	return sum + 1
 }
 
-func newTree(t *testing.T, ns NodeStore, keyCnt, blobLen, chunkSize int) Node {
+func newTree(t *testing.T, ns NodeStore, keyCnt, blobLen, chunkSize int) *Node {
 	ctx := context.Background()
 
 	keyDesc := val.NewTupleDescriptor(val.Type{Enc: val.Uint32Enc})

@@ -26,8 +26,9 @@ func TestNodeCache(t *testing.T) {
 	t.Run("InsertGetPurge", func(t *testing.T) {
 		// Simple smoke screen test of insert, get, purge.
 		var addr hash.Hash
-		var n Node
-		n.msg = make([]byte, 1024)
+		n := &Node{
+			msg: make([]byte, 1024),
+		}
 		cache := newChunkCache(256 * 1024)
 		for i := 0; i < numStripes; i++ {
 			addr[0] = uint8(i)

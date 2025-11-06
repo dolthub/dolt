@@ -62,18 +62,18 @@ func getNextAndSplitIfAtEnd[K ~[]byte, O Ordering[K]](ctx context.Context, patch
 func ThreeWayMerge[K ~[]byte, O Ordering[K], S message.Serializer](
 	ctx context.Context,
 	ns NodeStore,
-	left, right, base Node,
+	left, right, base *Node,
 	collide CollisionFn,
 	order O,
 	serializer S,
-) (final Node, stats MergeStats, err error) {
+) (final *Node, stats MergeStats, err error) {
 	ld, err := PatchGeneratorFromRoots[K](ctx, ns, ns, base, left, order)
 	if err != nil {
-		return Node{}, MergeStats{}, err
+		return nil, MergeStats{}, err
 	}
 	rd, err := PatchGeneratorFromRoots[K](ctx, ns, ns, base, right, order)
 	if err != nil {
-		return Node{}, MergeStats{}, err
+		return nil, MergeStats{}, err
 	}
 
 	eg, ctx := errgroup.WithContext(ctx)
@@ -97,7 +97,7 @@ func ThreeWayMerge[K ~[]byte, O Ordering[K], S message.Serializer](
 	})
 
 	if err = eg.Wait(); err != nil {
-		return Node{}, MergeStats{}, err
+		return nil, MergeStats{}, err
 	}
 
 	return final, stats, nil

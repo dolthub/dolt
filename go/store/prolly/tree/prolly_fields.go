@@ -549,10 +549,10 @@ func getJSONAddrHash(ctx context.Context, ns NodeStore, v interface{}) (hash.Has
 	return root.HashOf(), nil
 }
 
-func serializeJsonToBlob(ctx context.Context, ns NodeStore, j sql.JSONWrapper) (Node, hash.Hash, error) {
+func serializeJsonToBlob(ctx context.Context, ns NodeStore, j sql.JSONWrapper) (*Node, hash.Hash, error) {
 	buf, err := types.MarshallJson(ctx, j)
 	if err != nil {
-		return Node{}, hash.Hash{}, err
+		return nil, hash.Hash{}, err
 	}
 	return SerializeBytesToAddr(ctx, ns, bytes.NewReader(buf), len(buf))
 }
@@ -645,13 +645,13 @@ func serializeGeometry(v interface{}) []byte {
 	}
 }
 
-func SerializeBytesToAddr(ctx context.Context, ns NodeStore, r io.Reader, dataSize int) (Node, hash.Hash, error) {
+func SerializeBytesToAddr(ctx context.Context, ns NodeStore, r io.Reader, dataSize int) (*Node, hash.Hash, error) {
 	bb := ns.BlobBuilder()
 	defer ns.PutBlobBuilder(bb)
 	bb.Init(dataSize)
 	node, addr, err := bb.Chunk(ctx, r)
 	if err != nil {
-		return Node{}, hash.Hash{}, err
+		return nil, hash.Hash{}, err
 	}
 	return node, addr, nil
 }

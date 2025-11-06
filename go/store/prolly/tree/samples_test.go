@@ -71,12 +71,12 @@ func (s Samples) percentiles() (p50, p90, p99, p999, p100 int) {
 	return
 }
 
-func PrintTreeSummaryByLevel(t *testing.T, nd Node, ns NodeStore) {
+func PrintTreeSummaryByLevel(t *testing.T, nd *Node, ns NodeStore) {
 	ctx := context.Background()
 
 	sizeByLevel := make([]Samples, nd.Level()+1)
 	cardByLevel := make([]Samples, nd.Level()+1)
-	err := WalkNodes(ctx, nd, ns, func(ctx context.Context, nd Node) error {
+	err := WalkNodes(ctx, nd, ns, func(ctx context.Context, nd *Node) error {
 		lvl := nd.Level()
 		sizeByLevel[lvl] = append(sizeByLevel[lvl], nd.Size())
 		cardByLevel[lvl] = append(cardByLevel[lvl], int(nd.count))
@@ -96,16 +96,16 @@ func PrintTreeSummaryByLevel(t *testing.T, nd Node, ns NodeStore) {
 	fmt.Println()
 }
 
-func plotNodeSizeDistribution(t *testing.T, name string, nd Node, ns NodeStore) {
+func plotNodeSizeDistribution(t *testing.T, name string, nd *Node, ns NodeStore) {
 	data, err := measureTreeNodes(nd, ns)
 	require.NoError(t, err)
 	plotIntHistogram(name, data)
 }
 
-func measureTreeNodes(nd Node, ns NodeStore) (Samples, error) {
+func measureTreeNodes(nd *Node, ns NodeStore) (Samples, error) {
 	ctx := context.Background()
 	data := make(Samples, 0, 1024)
-	err := WalkNodes(ctx, nd, ns, func(ctx context.Context, nd Node) error {
+	err := WalkNodes(ctx, nd, ns, func(ctx context.Context, nd *Node) error {
 		data = append(data, nd.Size())
 		return nil
 	})

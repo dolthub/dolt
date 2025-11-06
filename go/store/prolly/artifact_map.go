@@ -73,7 +73,7 @@ var _ MapInterface = (*ArtifactMap)(nil)
 
 // NewArtifactMap creates an artifact map based on |srcKeyDesc| which is the key descriptor for
 // the corresponding row map.
-func NewArtifactMap(node tree.Node, ns tree.NodeStore, srcKeyDesc *val.TupleDesc) ArtifactMap {
+func NewArtifactMap(node *tree.Node, ns tree.NodeStore, srcKeyDesc *val.TupleDesc) ArtifactMap {
 	keyDesc, valDesc := mergeArtifactsDescriptorsFromSource(srcKeyDesc)
 	tuples := tree.StaticMap[val.Tuple, val.Tuple, *val.TupleDesc]{
 		Root:      node,
@@ -139,7 +139,7 @@ func (m ArtifactMap) HashOf() hash.Hash {
 	return m.tuples.HashOf()
 }
 
-func (m ArtifactMap) Node() tree.Node {
+func (m ArtifactMap) Node() *tree.Node {
 	return m.tuples.Root
 }
 

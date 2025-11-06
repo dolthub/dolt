@@ -38,7 +38,7 @@ type Map struct {
 var _ MapInterface = Map{}
 
 // NewMap creates a Map from the supplied root node
-func NewMap(node tree.Node, ns tree.NodeStore, keyDesc, valDesc *val.TupleDesc) Map {
+func NewMap(node *tree.Node, ns tree.NodeStore, keyDesc, valDesc *val.TupleDesc) Map {
 	tuples := tree.StaticMap[val.Tuple, val.Tuple, *val.TupleDesc]{
 		Root:      node,
 		NodeStore: ns,
@@ -360,7 +360,7 @@ func (m Map) GetKeyRangeCardinality(ctx context.Context, startInclusive val.Tupl
 	return m.tuples.GetKeyRangeCardinality(ctx, startInclusive, endExclusive)
 }
 
-func (m Map) Node() tree.Node {
+func (m Map) Node() *tree.Node {
 	return m.tuples.Root
 }
 
@@ -375,7 +375,7 @@ func (m Map) CompareItems(ctx context.Context, left, right tree.Item) int {
 
 func treeIterFromRange(
 	ctx context.Context,
-	root tree.Node,
+	root *tree.Node,
 	ns tree.NodeStore,
 	rng Range,
 ) (*tree.OrderedTreeIter[val.Tuple, val.Tuple], error) {
@@ -385,7 +385,7 @@ func treeIterFromRange(
 
 func treeIterFromRangeReverse(
 	ctx context.Context,
-	root tree.Node,
+	root *tree.Node,
 	ns tree.NodeStore,
 	rng Range,
 ) (*tree.OrderedTreeIter[val.Tuple, val.Tuple], error) {

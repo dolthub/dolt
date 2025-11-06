@@ -430,7 +430,7 @@ func mergeProllyTableData(ctx *sql.Context, tm *TableMerger, finalSch schema.Sch
 		return err
 	})
 
-	var mergedRoot tree.Node
+	var mergedRoot *tree.Node
 	// consume |patches| and apply them to |left|
 	eg.Go(func() error {
 		leftRowData, err := tm.leftTbl.GetRowData(errCtx)

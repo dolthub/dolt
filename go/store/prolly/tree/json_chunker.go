@@ -41,28 +41,28 @@ type JsonChunker struct {
 }
 
 // SerializeJsonToAddr stores a JSON document as a prolly tree, returning the root of the tree.
-func SerializeJsonToAddr(ctx context.Context, ns NodeStore, j sql.JSONWrapper) (Node, error) {
+func SerializeJsonToAddr(ctx context.Context, ns NodeStore, j sql.JSONWrapper) (*Node, error) {
 	if indexedJson, ok := j.(IndexedJsonDocument); ok {
 		return indexedJson.m.Root, nil
 	}
 	jsonBytes, err := types.MarshallJson(ctx, j)
 	if err != nil {
-		return Node{}, err
+		return nil, err
 	}
 
 	jsonChunker, err := newEmptyJsonChunker(ctx, ns)
 	if err != nil {
-		return Node{}, err
+		return nil, err
 	}
 	jsonChunker.appendJsonToBuffer(jsonBytes)
 	err = jsonChunker.processBuffer(ctx)
 	if err != nil {
-		return Node{}, err
+		return nil, err
 	}
 
 	node, err := jsonChunker.Done(ctx)
 	if err != nil {
-		return Node{}, err
+		return nil, err
 	}
 	return node, nil
 }
@@ -113,14 +113,14 @@ func newJsonChunker(ctx context.Context, jCur *JsonCursor, ns NodeStore) (*JsonC
 	return &jChunker, nil
 }
 
-func (j *JsonChunker) Done(ctx context.Context) (Node, error) {
+func (j *JsonChunker) Done(ctx context.Context) (*Node, error) {
 	var endOfDocumentKey = []byte{byte(endOfValue)}
 
 	if j.jCur == nil {
 		// The remaining buffer becomes the final blob
 		err := j.createNewLeafChunk(ctx, endOfDocumentKey, j.jScanner.jsonBuffer)
 		if err != nil {
-			return Node{}, err
+			return nil, err
 		}
 		return j.chunker.Done(ctx)
 	}
@@ -138,7 +138,7 @@ func (j *JsonChunker) Done(ctx context.Context) (Node, error) {
 		j.appendJsonToBuffer(jsonBytes)
 		err := j.processBuffer(ctx)
 		if err != nil {
-			return Node{}, err
+			return nil, err
 		}
 		if len(j.jScanner.jsonBuffer) == 0 {
 			// Advance the cursor so that we don't re-insert the current key when finalizing the chunker.
@@ -147,13 +147,13 @@ func (j *JsonChunker) Done(ctx context.Context) (Node, error) {
 		}
 		err = cur.advance(ctx)
 		if err != nil {
-			return Node{}, err
+			return nil, err
 		}
 		if !cur.Valid() {
 			// We reached the end of the tree.
 			err := j.createNewLeafChunk(ctx, endOfDocumentKey, j.jScanner.jsonBuffer)
 			if err != nil {
-				return Node{}, err
+				return nil, err
 			}
 			return j.chunker.Done(ctx)
 		}
