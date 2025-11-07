@@ -403,16 +403,14 @@ type prollyKeylessIndexIter struct {
 
 	card uint64
 	curr sql.ValueRow
-
-	queueRowsInit bool
 }
 
-var _ sql.RowIter = (*prollyKeylessIndexIter)(nil)
+var _ sql.RowIter = prollyKeylessIndexIter{}
 
-func newProllyKeylessIndexIter(ctx *sql.Context, idx DoltIndex, rng prolly.Range, doltgresRange *DoltgresRange, pkSch sql.PrimaryKeySchema, projections []uint64, rows, dsecondary durable.Index, reverse bool) (*prollyKeylessIndexIter, error) {
+func newProllyKeylessIndexIter(ctx *sql.Context, idx DoltIndex, rng prolly.Range, doltgresRange *DoltgresRange, pkSch sql.PrimaryKeySchema, projections []uint64, rows, dsecondary durable.Index, reverse bool) (prollyKeylessIndexIter, error) {
 	secondary, err := durable.ProllyMapFromIndex(dsecondary)
 	if err != nil {
-		return nil, err
+		return prollyKeylessIndexIter{}, err
 	}
 	var indexIter prolly.MapIter
 	if doltgresRange == nil {
@@ -422,18 +420,18 @@ func newProllyKeylessIndexIter(ctx *sql.Context, idx DoltIndex, rng prolly.Range
 			indexIter, err = secondary.IterRange(ctx, rng)
 		}
 		if err != nil {
-			return nil, err
+			return prollyKeylessIndexIter{}, err
 		}
 	} else {
 		indexIter, err = doltgresProllyMapIterator(ctx, secondary.KeyDesc(), secondary.NodeStore(), secondary.Tuples().Root, *doltgresRange)
 		if err != nil {
-			return nil, err
+			return prollyKeylessIndexIter{}, err
 		}
 	}
 
 	clustered, err := durable.ProllyMapFromIndex(rows)
 	if err != nil {
-		return nil, err
+		return prollyKeylessIndexIter{}, err
 	}
 	keyDesc, valDesc := clustered.Descriptors()
 	indexMap := OrdinalMappingFromIndex(idx)
@@ -441,9 +439,9 @@ func newProllyKeylessIndexIter(ctx *sql.Context, idx DoltIndex, rng prolly.Range
 	sch := idx.Schema()
 	_, vm, om := projectionMappings(sch, projections)
 
-	eg, _ := errgroup.WithContext(ctx)
+	eg, c := errgroup.WithContext(ctx)
 
-	iter := &prollyKeylessIndexIter{
+	iter := prollyKeylessIndexIter{
 		idx:          idx,
 		indexIter:    indexIter,
 		clustered:    clustered,
@@ -456,18 +454,16 @@ func newProllyKeylessIndexIter(ctx *sql.Context, idx DoltIndex, rng prolly.Range
 		valueDesc:    valDesc,
 		sqlSch:       pkSch.Schema,
 	}
+
+	eg.Go(func() error {
+		return iter.queueRows(c)
+	})
+
 	return iter, nil
 }
 
 // Next returns the next row from the iterator.
-func (p *prollyKeylessIndexIter) Next(ctx *sql.Context) (sql.Row, error) {
-	if !p.queueRowsInit {
-		p.queueRowsInit = true
-		p.eg.Go(func() error {
-			return p.queueRows(ctx)
-		})
-	}
-
+func (p prollyKeylessIndexIter) Next(ctx *sql.Context) (sql.Row, error) {
 	r, ok := <-p.rowChan
 	if ok {
 		return r, nil
@@ -480,8 +476,7 @@ func (p *prollyKeylessIndexIter) Next(ctx *sql.Context) (sql.Row, error) {
 	return nil, io.EOF
 }
 
-// queueRows builds sql.Row values in the background for Next()
-func (p *prollyKeylessIndexIter) queueRows(ctx context.Context) error {
+func (p prollyKeylessIndexIter) queueRows(ctx context.Context) error {
 	defer close(p.rowChan)
 
 	for {
@@ -523,7 +518,7 @@ func (p *prollyKeylessIndexIter) queueRows(ctx context.Context) error {
 	}
 }
 
-func (p *prollyKeylessIndexIter) keylessRowsFromValueTuple(ctx context.Context, ns tree.NodeStore, value val.Tuple) (rows []sql.Row, err error) {
+func (p prollyKeylessIndexIter) keylessRowsFromValueTuple(ctx context.Context, ns tree.NodeStore, value val.Tuple) (rows []sql.Row, err error) {
 	card := val.ReadKeylessCardinality(value)
 	rows = make([]sql.Row, card)
 	rows[0] = make(sql.Row, len(p.valueMap))
@@ -543,57 +538,6 @@ func (p *prollyKeylessIndexIter) keylessRowsFromValueTuple(ctx context.Context, 
 	return
 }
 
-// NextValueRow implements the sql.ValueRowIter interface.
-func (p *prollyKeylessIndexIter) NextValueRow(ctx *sql.Context) (sql.ValueRow, error) {
-	if p.card == 0 {
-		idxKey, _, err := p.indexIter.Next(ctx)
-		if err != nil {
-			return nil, err
-		}
-		for to := range p.clusteredMap {
-			from := p.clusteredMap.MapOrdinal(to)
-			p.clusteredBld.PutRaw(to, idxKey.GetField(from))
-		}
-		pk, err := p.clusteredBld.Build(sharePool)
-		if err != nil {
-			return nil, err
-		}
-
-		var value val.Tuple
-		err = p.clustered.Get(ctx, pk, func(k, v val.Tuple) error {
-			value = v
-			return nil
-		})
-		if err != nil {
-			return nil, err
-		}
-
-		p.card = val.ReadKeylessCardinality(value)
-		ns := p.clustered.NodeStore()
-		p.curr = make(sql.ValueRow, len(p.valueMap))
-		for i, idx := range p.valueMap {
-			outIdx := p.ordMap[i]
-			p.curr[outIdx], err = tree.GetFieldValue(ctx, p.valueDesc, idx, value, ns)
-			if err != nil {
-				return nil, err
-			}
-		}
-	}
-
-	p.card--
-	return p.curr, nil
-}
-
-// IsValueRowIter implements the sql.ValueRowIter interface.
-func (p *prollyKeylessIndexIter) IsValueRowIter(ctx *sql.Context) bool {
-	for _, typ := range p.valueDesc.Types {
-		if typ.Enc == val.ExtendedEnc || typ.Enc == val.ExtendedAddrEnc || typ.Enc == val.ExtendedAdaptiveEnc {
-			return false
-		}
-	}
-	return true
-}
-
-func (p *prollyKeylessIndexIter) Close(*sql.Context) error {
+func (p prollyKeylessIndexIter) Close(*sql.Context) error {
 	return nil
 }
