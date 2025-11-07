@@ -217,12 +217,14 @@ func GetFieldValue(ctx context.Context, td *val.TupleDesc, i int, tup val.Tuple,
 		}
 		// TODO: have GeometryAddr implement TextStorage
 		h, ok := td.GetGeometryAddr(i, tup)
-		if ok {
-			v.Val, err = ns.ReadBytes(ctx, h)
-			if err != nil {
-				return v, err
-			}
+		if !ok {
+			return v, nil
 		}
+		v.Val, err = ns.ReadBytes(ctx, h)
+		if err != nil {
+			return v, err
+		}
+		v.WrappedVal = val.NewByteArray(ctx, h, ns)
 		return v, nil
 
 	case val.StringAddrEnc, val.BytesAddrEnc:
