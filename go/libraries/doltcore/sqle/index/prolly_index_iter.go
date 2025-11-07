@@ -404,8 +404,7 @@ type prollyKeylessIndexIter struct {
 	card uint64
 	curr sql.ValueRow
 
-	// Track whether the async goroutine has been started (for Next() only)
-	goroutineStarted bool
+	queueRowsInit bool
 }
 
 var _ sql.RowIter = (*prollyKeylessIndexIter)(nil)
@@ -462,8 +461,8 @@ func newProllyKeylessIndexIter(ctx *sql.Context, idx DoltIndex, rng prolly.Range
 
 // Next returns the next row from the iterator.
 func (p *prollyKeylessIndexIter) Next(ctx *sql.Context) (sql.Row, error) {
-	if !p.goroutineStarted {
-		p.goroutineStarted = true
+	if !p.queueRowsInit {
+		p.queueRowsInit = true
 		p.eg.Go(func() error {
 			return p.queueRows(ctx)
 		})
