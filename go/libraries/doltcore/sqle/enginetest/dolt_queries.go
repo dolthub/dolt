@@ -804,13 +804,13 @@ var DoltScripts = []queries.ScriptTest{
 				Query: "select dolt_join_cost('select * from ab, cd, xy where a = c and b = d and y = d')",
 				Expected: []sql.Row{
 					{`memo:
-├── G1: (tablescan: ab 0.0)*
-├── G2: (tablescan: cd 0.0)*
-├── G3: (hashjoin 1 2 12.1) (hashjoin 2 1 12.1) (mergejoin 1 2 6.1)* (mergejoin 2 1 6.1)* (lookupjoin 1 2 9.9) (lookupjoin 2 1 9.9) (innerjoin 2 1 10.1) (innerjoin 1 2 10.1)
-├── G4: (tablescan: xy 0.0)*
-├── G5: (hashjoin 3 4 12.1) (hashjoin 1 7 12.1) (hashjoin 7 1 12.1) (hashjoin 2 6 12.1) (hashjoin 6 2 12.1) (hashjoin 4 3 12.1) (lookupjoin 7 1 9.9) (lookupjoin 6 2 9.9) (innerjoin 4 3 10.1)* (innerjoin 6 2 10.1) (innerjoin 2 6 10.1) (innerjoin 7 1 10.1) (innerjoin 1 7 10.1) (innerjoin 3 4 10.1)*
-├── G6: (hashjoin 1 4 12.1) (hashjoin 4 1 12.1) (innerjoin 4 1 10.1)* (innerjoin 1 4 10.1)*
-└── G7: (hashjoin 2 4 12.1) (hashjoin 4 2 12.1) (innerjoin 4 2 10.1)* (innerjoin 2 4 10.1)*
+├── G1: (tablescan: ab 3.0)*
+├── G2: (tablescan: cd 3.0)*
+├── G3: (hashjoin 1[ab] 2[cd] 12.1) (hashjoin 2[cd] 1[ab] 12.1) (mergejoin 1[ab] 2[cd] 6.1)* (mergejoin 2[cd] 1[ab] 6.1)* (lookupjoin 1[ab] 2[cd] on PRIMARY 9.9) (lookupjoin 2[cd] 1[ab] on PRIMARY 9.9) (innerjoin 2[cd] 1[ab] 10.1) (innerjoin 1[ab] 2[cd] 10.1)
+├── G4: (tablescan: xy 3.0)*
+├── G5: (hashjoin 3 4[xy] 12.1) (hashjoin 1[ab] 7 12.1) (hashjoin 7 1[ab] 12.1) (hashjoin 2[cd] 6 12.1) (hashjoin 6 2[cd] 12.1) (hashjoin 4[xy] 3 12.1) (lookupjoin 7 1[ab] on PRIMARY 9.9) (lookupjoin 6 2[cd] on PRIMARY 9.9) (innerjoin 4[xy] 3 10.1)* (innerjoin 6 2[cd] 10.1) (innerjoin 2[cd] 6 10.1) (innerjoin 7 1[ab] 10.1) (innerjoin 1[ab] 7 10.1) (innerjoin 3 4[xy] 10.1)*
+├── G6: (hashjoin 1[ab] 4[xy] 12.1) (hashjoin 4[xy] 1[ab] 12.1) (innerjoin 4[xy] 1[ab] 10.1)* (innerjoin 1[ab] 4[xy] 10.1)*
+└── G7: (hashjoin 2[cd] 4[xy] 12.1) (hashjoin 4[xy] 2[cd] 12.1) (innerjoin 4[xy] 2[cd] 10.1)* (innerjoin 2[cd] 4[xy] 10.1)*
 `},
 				},
 			},
