@@ -167,6 +167,7 @@ END`,
 
 	for _, script := range scripts {
 		harness := newDoltHarness(t)
+		//harness.UseServer()
 		harness.Setup(setup.MydbData)
 
 		engine, err := harness.NewEngine(t)
