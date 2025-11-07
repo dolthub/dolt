@@ -464,6 +464,7 @@ func newProllyKeylessIndexIter(ctx *sql.Context, idx DoltIndex, rng prolly.Range
 
 // Next returns the next row from the iterator.
 func (p prollyKeylessIndexIter) Next(ctx *sql.Context) (sql.Row, error) {
+	panic("prollyKeylessIndexIter Next()")
 	r, ok := <-p.rowChan
 	if ok {
 		return r, nil
@@ -540,6 +541,7 @@ func (p prollyKeylessIndexIter) keylessRowsFromValueTuple(ctx context.Context, n
 
 // NextValueRow implements the sql.ValueRowIter interface.
 func (p prollyKeylessIndexIter) NextValueRow(ctx *sql.Context) (sql.ValueRow, error) {
+	panic("prollyKeylessIndexIter NextValueRow()")
 	if p.card == 0 {
 		idxKey, _, err := p.indexIter.Next(ctx)
 		if err != nil {
