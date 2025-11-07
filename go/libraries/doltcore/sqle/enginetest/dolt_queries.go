@@ -17,7 +17,6 @@ package enginetest
 import (
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/sql"
@@ -711,51 +710,6 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 // DoltScripts are script tests specific to Dolt (not the engine in general), e.g. by involving Dolt functions. Break
 // this slice into others with good names as it grows.
 var DoltScripts = []queries.ScriptTest{
-	{
-		// https://github.com/dolthub/dolt/issues/10038
-		Name: "COUNT and SELECT * Return Result with Same LIKE Condition",
-		SetUpScript: []string{
-			`CREATE TABLE DATABASECHANGELOG (
-					ID varchar(255) NOT NULL,
-					AUTHOR varchar(255) NOT NULL,
-					FILENAME varchar(255) NOT NULL,
-					DATEEXECUTED datetime NOT NULL,
-					ORDEREXECUTED int NOT NULL,
-					EXECTYPE varchar(10) NOT NULL,
-					MD5SUM varchar(35),
-					DESCRIPTION varchar(255),
-					COMMENTS varchar(255),
-					TAG varchar(255),
-					LIQUIBASE varchar(20),
-					CONTEXTS varchar(255),
-					LABELS varchar(255),
-					DEPLOYMENT_ID varchar(10),
-					UNIQUE KEY idx_databasechangelog_id_author_filename (ID,AUTHOR,FILENAME)
-				) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`,
-			`INSERT INTO DATABASECHANGELOG (ID, AUTHOR, FILENAME, DATEEXECUTED, ORDEREXECUTED, EXECTYPE, MD5SUM, DESCRIPTION, COMMENTS, TAG, LIQUIBASE, CONTEXTS, LABELS, DEPLOYMENT_ID)
-				 VALUES('v50.2024-01-04T13:52:51', 'noahmoss', 'migrations/001_update_migrations.yaml', '2025-11-04 18:39:46', 334, 'EXECUTED', '9:19f8b6614c4fe95ff71b42830785df04', 'createTable tableName=data_permissions', 'Data permissions table', NULL, '4.26.0', NULL, NULL, '2252723448');`,
-		},
-		Assertions: []queries.ScriptTestAssertion{
-			{
-				Query: "select count(1) from DATABASECHANGELOG where ID like 'V50.2024-01-04%';",
-				Expected: []sql.Row{
-					{1},
-				},
-			},
-			{
-				Query: "select * from DATABASECHANGELOG where ID like 'V50.2024-01-04%';",
-				Expected: []sql.Row{
-					{"v50.2024-01-04T13:52:51", "noahmoss", "migrations/001_update_migrations.yaml", time.Date(2025, time.November, 4, 18, 39, 46, 0, time.UTC), 334, "EXECUTED", "9:19f8b6614c4fe95ff71b42830785df04", "createTable tableName=data_permissions", "Data permissions table", nil, "4.26.0", nil, nil, "2252723448"},
-				},
-			},
-			{
-				Query: "select ID, AUTHOR, FILENAME from DATABASECHANGELOG where ID like 'V50.2024-01-04%';",
-				Expected: []sql.Row{
-					{"v50.2024-01-04T13:52:51", "noahmoss", "migrations/001_update_migrations.yaml"},
-				},
-			},
-		},
-	},
 	{
 		// https://github.com/dolthub/dolt/issues/8283
 		Name: "dolt_status tests",

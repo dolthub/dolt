@@ -122,3 +122,61 @@ teardown() {
     [[ $output =~ "schon" ]] || false
     [[ $output =~ "schön" ]] || false
 }
+
+@test "sql-charsets-collations: collations respected wildcard select and count" {
+    start_sql_server
+
+    dolt sql << 'SQL'
+CREATE TABLE DATABASECHANGELOG (
+    ID varchar(255) NOT NULL,
+    AUTHOR varchar(255) NOT NULL,
+    FILENAME varchar(255) NOT NULL,
+    DATEEXECUTED datetime NOT NULL,
+    ORDEREXECUTED int NOT NULL,
+    EXECTYPE varchar(10) NOT NULL,
+    MD5SUM varchar(35),
+    DESCRIPTION varchar(255),
+    COMMENTS varchar(255),
+    TAG varchar(255),
+    LIQUIBASE varchar(20),
+    CONTEXTS varchar(255),
+    LABELS varchar(255),
+    DEPLOYMENT_ID varchar(10),
+    UNIQUE KEY idx_databasechangelog_id_author_filename (ID,AUTHOR,FILENAME)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+INSERT INTO DATABASECHANGELOG (ID, AUTHOR, FILENAME, DATEEXECUTED, ORDEREXECUTED, EXECTYPE, MD5SUM, DESCRIPTION, COMMENTS, TAG, LIQUIBASE, CONTEXTS, LABELS, DEPLOYMENT_ID)
+VALUES('v50.2024-01-04T13:52:51', 'noahmoss', 'migrations/001_update_migrations.yaml', '2024-11-04 18:39:46', 334, 'EXECUTED', '9:19f8b6614c4fe95ff71b42830785df04', 'createTable tableName=data_permissions', 'Data permissions table', NULL, '4.26.0', NULL, NULL, '2252723448');
+SQL
+
+    run dolt sql -q "select count(1) from DATABASECHANGELOG where ID like 'V50.2024-01-04%';"
+    [ $status -eq 0 ]
+    [[ $output == *"1"* ]] || false
+
+    run dolt sql -q "select * from DATABASECHANGELOG where ID like 'V50.2024-01-04%';"
+    [ $status -eq 0 ]
+    [[ $output == *"v50.2024-01-04T13:52:51"* ]] || false
+    [[ $output == *"noahmoss"* ]] || false
+    [[ $output == *"migrations/001_update_migrations.yaml"* ]] || false
+    [[ $output == *"2024-11-04"* ]] || false
+    [[ $output == *"334"* ]] || false
+    [[ $output == *"EXECUTED"* ]] || false
+    [[ $output == *"9:19f8b6614c4fe95ff71b42830785df04"* ]] || false
+    [[ $output == *"createTable tableName=data_permissions"* ]] || false
+    [[ $output == *"Data permissions table"* ]] || false
+    [[ $output == *"4.26.0"* ]] || false
+    [[ $output == *"2252723448"* ]] || false
+
+    run dolt sql -q "select ID, AUTHOR, FILENAME from DATABASECHANGELOG where ID like 'V50.2024-01-04%';"
+    [ $status -eq 0 ]
+    [[ $output == *"v50.2024-01-04T13:52:51"* ]] || false
+    [[ $output == *"noahmoss"* ]] || false
+    [[ $output == *"migrations/001_update_migrations.yaml"* ]] || false
+
+    dolt sql -q "alter table DATABASECHANGELOG modify ID varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin;"
+    run dolt sql -q "select count(1) from DATABASECHANGELOG where ID like 'V50.2024-01-04%';"
+    [ $status -eq 0 ]
+    [[ $output == *"0"* ]] || false
+
+    stop_sql_server
+}
