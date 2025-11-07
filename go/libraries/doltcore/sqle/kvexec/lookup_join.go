@@ -214,6 +214,8 @@ func newLookupKeyMapping(ctx context.Context, sourceSch schema.Schema, tgtKeyDes
 	srcMapping := make(val.OrdinalMapping, len(keyExprs))
 	var litMappings val.OrdinalMapping
 	var litTypes []val.Type
+	tda := val.TupleDescriptorArgs{}
+
 	for i, e := range keyExprs {
 		switch e := e.(type) {
 		case *expression.GetField:
@@ -233,10 +235,13 @@ func newLookupKeyMapping(ctx context.Context, sourceSch schema.Schema, tgtKeyDes
 		case *expression.Literal:
 			srcMapping[i] = -1
 			litMappings = append(litMappings, i)
-			litTypes = append(litTypes, tgtKeyDesc.Types[i])
+			tgtTyp := tgtKeyDesc.Types[i]
+			litTypes = append(litTypes, tgtTyp)
+			tda.Handlers = append(tda.Handlers, tgtKeyDesc.Handlers[i])
 		}
 	}
-	litDesc := val.NewTupleDescriptor(litTypes...)
+
+	litDesc := val.NewTupleDescriptorWithArgs(tda, litTypes...)
 	litTb := val.NewTupleBuilder(litDesc, ns)
 	for i, j := range litMappings {
 		val := keyExprs[j].(*expression.Literal).Value()
