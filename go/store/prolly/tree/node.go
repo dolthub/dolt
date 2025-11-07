@@ -49,6 +49,8 @@ type Node struct {
 	// to accelerate Item lookups into msg.
 	keys   message.ItemAccess
 	values message.ItemAccess
+	// hash is the saved hash
+	hash hash.Hash
 	// count is the Item pair count.
 	count uint16
 	// level is 0-indexed tree height.
@@ -128,7 +130,11 @@ func NodeFromBytes(msg []byte) (node *Node, fileId string, err error) {
 }
 
 func (nd *Node) HashOf() hash.Hash {
-	return hash.Of(nd.bytes())
+	// TODO: not sure if msg ever changes...
+	if nd.hash.IsEmpty() {
+		nd.hash = hash.Of(nd.bytes())
+	}
+	return nd.hash
 }
 
 func (nd *Node) Count() int {
