@@ -206,16 +206,6 @@ func GetFieldValue(ctx context.Context, td *val.TupleDesc, i int, tup val.Tuple,
 		return v, nil
 
 	case val.GeomAddrEnc:
-		// TODO: until GeometryEnc is removed, we must check if GeomAddrEnc is a GeometryEnc
-		var ok bool
-		v.Val, ok = td.GetGeometry(i, tup)
-		if ok {
-			_, err = deserializeGeometry(v.Val) // TODO: on successful deserialize, this work is wasted
-			if err == nil {
-				return v, nil
-			}
-		}
-		// TODO: have GeometryAddr implement TextStorage
 		h, ok := td.GetGeometryAddr(i, tup)
 		if !ok {
 			return v, nil
