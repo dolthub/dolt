@@ -80,7 +80,7 @@ func OnceContextValues[T1, T2 any](f func(ctx context.Context) (T1, T2)) func(co
 	}
 }
 
-func NewIndexedJsonDocument(ctx context.Context, root Node, ns NodeStore) IndexedJsonDocument {
+func NewIndexedJsonDocument(ctx context.Context, root *Node, ns NodeStore) IndexedJsonDocument {
 	m := StaticMap[jsonLocationKey, address, *jsonLocationOrdering]{
 		Root:      root,
 		NodeStore: ns,
@@ -127,7 +127,7 @@ func getInterfaceFromIndexedJsonMap(ctx context.Context, m StaticJsonMap) (val i
 
 // getInterfaceFromIndexedJsonMap extracts the JSON bytes from a StaticJsonMap
 func getBytesFromIndexedJsonMap(ctx context.Context, m StaticJsonMap) (bytes []byte, err error) {
-	err = m.WalkNodes(ctx, func(ctx context.Context, n Node) error {
+	err = m.WalkNodes(ctx, func(ctx context.Context, n *Node) error {
 		if n.IsLeaf() {
 			bytes = append(bytes, n.GetValue(0)...)
 		}
@@ -616,7 +616,7 @@ func (i IndexedJsonDocument) GetBytes(ctx context.Context) (bytes []byte, err er
 func (i IndexedJsonDocument) getFirstCharacter(ctx context.Context) (byte, error) {
 	stopIterationError := fmt.Errorf("stop")
 	var firstCharacter byte
-	err := i.m.WalkNodes(ctx, func(ctx context.Context, nd Node) error {
+	err := i.m.WalkNodes(ctx, func(ctx context.Context, nd *Node) error {
 		if nd.IsLeaf() {
 			firstCharacter = nd.GetValue(0)[0]
 			return stopIterationError

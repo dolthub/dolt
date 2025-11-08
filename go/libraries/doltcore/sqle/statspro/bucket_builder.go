@@ -68,7 +68,7 @@ func firstRowForIndex(ctx *sql.Context, idxLen int, prollyMap prolly.Map, keyBui
 	return firstRow, nil
 }
 
-func newBucketBuilder(qual sql.StatQualifier, prefixLen int, tupleDesc val.TupleDesc) *bucketBuilder {
+func newBucketBuilder(qual sql.StatQualifier, prefixLen int, tupleDesc *val.TupleDesc) *bucketBuilder {
 	return &bucketBuilder{
 		qual:      qual,
 		prefixLen: prefixLen,
@@ -83,7 +83,7 @@ func newBucketBuilder(qual sql.StatQualifier, prefixLen int, tupleDesc val.Tuple
 type bucketBuilder struct {
 	mcvs       *mcvHeap
 	qual       sql.StatQualifier
-	tupleDesc  val.TupleDesc
+	tupleDesc  *val.TupleDesc
 	currentKey val.Tuple
 	prefixLen  int
 	count      int
@@ -219,7 +219,7 @@ func (m *mcvHeap) Truncate(cutoff float64) {
 	*m = old[start:]
 }
 
-func (m mcvHeap) Values(ctx context.Context, keyDesc val.TupleDesc, ns tree.NodeStore, prefixLen int) ([]sql.Row, error) {
+func (m mcvHeap) Values(ctx context.Context, keyDesc *val.TupleDesc, ns tree.NodeStore, prefixLen int) ([]sql.Row, error) {
 	ret := make([]sql.Row, len(m))
 	for i, mcv := range m {
 		// todo build sql.Row

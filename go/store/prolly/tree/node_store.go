@@ -36,13 +36,13 @@ type NodeStore interface {
 	val.ValueStore
 
 	// Read reads a prolly tree Node from the store.
-	Read(ctx context.Context, ref hash.Hash) (Node, error)
+	Read(ctx context.Context, ref hash.Hash) (*Node, error)
 
 	// ReadMany reads many prolly tree Nodes from the store.
-	ReadMany(ctx context.Context, refs hash.HashSlice) ([]Node, error)
+	ReadMany(ctx context.Context, refs hash.HashSlice) ([]*Node, error)
 
 	// Write writes a prolly tree Node to the store.
-	Write(ctx context.Context, nd Node) (hash.Hash, error)
+	Write(ctx context.Context, nd *Node) (hash.Hash, error)
 
 	// Pool returns a buffer pool.
 	Pool() pool.BuffPool
@@ -90,7 +90,7 @@ func NewNodeStore(cs chunks.ChunkStore) NodeStore {
 }
 
 // Read implements NodeStore.
-func (ns *nodeStore) Read(ctx context.Context, ref hash.Hash) (Node, error) {
+func (ns *nodeStore) Read(ctx context.Context, ref hash.Hash) (*Node, error) {
 	n, ok := ns.cache.get(ref)
 	if ok {
 		return n, nil
@@ -98,13 +98,13 @@ func (ns *nodeStore) Read(ctx context.Context, ref hash.Hash) (Node, error) {
 
 	c, err := ns.store.Get(ctx, ref)
 	if err != nil {
-		return Node{}, err
+		return nil, err
 	}
 	assertTrue(c.Size() > 0, "empty chunk returned from ChunkStore")
 
 	n, _, err = NodeFromBytes(c.Data())
 	if err != nil {
-		return Node{}, err
+		return nil, err
 	}
 	ns.cache.insert(ref, n)
 
@@ -112,8 +112,8 @@ func (ns *nodeStore) Read(ctx context.Context, ref hash.Hash) (Node, error) {
 }
 
 // ReadMany implements NodeStore.
-func (ns *nodeStore) ReadMany(ctx context.Context, addrs hash.HashSlice) ([]Node, error) {
-	found := make(map[hash.Hash]Node)
+func (ns *nodeStore) ReadMany(ctx context.Context, addrs hash.HashSlice) ([]*Node, error) {
+	found := make(map[hash.Hash]*Node)
 	gets := hash.HashSet{}
 
 	for _, r := range addrs {
@@ -144,7 +144,7 @@ func (ns *nodeStore) ReadMany(ctx context.Context, addrs hash.HashSlice) ([]Node
 	}
 
 	var ok bool
-	nodes := make([]Node, len(addrs))
+	nodes := make([]*Node, len(addrs))
 	for i, addr := range addrs {
 		nodes[i], ok = found[addr]
 		if ok {
@@ -155,7 +155,7 @@ func (ns *nodeStore) ReadMany(ctx context.Context, addrs hash.HashSlice) ([]Node
 }
 
 // Write implements NodeStore.
-func (ns *nodeStore) Write(ctx context.Context, nd Node) (hash.Hash, error) {
+func (ns *nodeStore) Write(ctx context.Context, nd *Node) (hash.Hash, error) {
 	c := chunks.NewChunk(nd.bytes())
 	assertTrue(c.Size() > 0, "cannot write empty chunk to ChunkStore")
 
@@ -214,7 +214,7 @@ func (ns *nodeStore) ReadBytes(ctx context.Context, h hash.Hash) (result []byte,
 		return nil, err
 	}
 
-	err = WalkNodes(ctx, n, ns, func(ctx context.Context, n Node) error {
+	err = WalkNodes(ctx, n, ns, func(ctx context.Context, n *Node) error {
 		if n.IsLeaf() {
 			result = append(result, n.GetValue(0)...)
 		}

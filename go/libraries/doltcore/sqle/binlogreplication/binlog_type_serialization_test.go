@@ -1037,7 +1037,7 @@ func TestGeometrySerializer(t *testing.T) {
 	require.EqualValues(t, 0x04, metadata)
 }
 
-func newTupleBuilderForEncoding(encoding val.Encoding) (val.TupleDesc, *val.TupleBuilder) {
+func newTupleBuilderForEncoding(encoding val.Encoding) (*val.TupleDesc, *val.TupleBuilder) {
 	ns := tree.NewTestNodeStore()
 	tupleDesc := val.NewTupleDescriptor(val.Type{Enc: encoding})
 	tupleBuilder := val.NewTupleBuilder(tupleDesc, ns)

@@ -117,7 +117,7 @@ func testRoundTripInts(t *testing.T) {
 
 	tests := []struct {
 		data map[int]int64
-		desc TupleDesc
+		desc *TupleDesc
 	}{
 		{
 			desc: NewTupleDescriptor(typ),
@@ -215,7 +215,7 @@ type testCompare struct{}
 
 var _ TupleComparator = testCompare{}
 
-func (tc testCompare) Compare(ctx context.Context, left, right Tuple, desc TupleDesc) (cmp int) {
+func (tc testCompare) Compare(ctx context.Context, left, right Tuple, desc *TupleDesc) (cmp int) {
 	for i, typ := range desc.Types {
 		cmp = compare(typ, left.GetField(i), right.GetField(i))
 		if cmp != 0 {

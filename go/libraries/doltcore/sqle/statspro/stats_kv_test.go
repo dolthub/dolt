@@ -183,12 +183,12 @@ func newTestProllyKv(t *testing.T, threads *sql.BackgroundThreads) *prollyStats 
 	return kv
 }
 
-func testNodes(t *testing.T, cnt int, seed uint8) ([]tree.Node, []*stats.Bucket) {
+func testNodes(t *testing.T, cnt int, seed uint8) ([]*tree.Node, []*stats.Bucket) {
 	ts := &chunks.TestStorage{}
 	ns := tree.NewNodeStore(ts.NewViewWithFormat(types.Format_DOLT.VersionString()))
 	s := message.NewBlobSerializer(ns.Pool())
 
-	var nodes []tree.Node
+	var nodes []*tree.Node
 	var buckets []*stats.Bucket
 	for i := range cnt {
 		vals := [][]byte{{uint8(i), seed, 1, 1}}

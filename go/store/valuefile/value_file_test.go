@@ -152,7 +152,7 @@ func makeProllyMap(t *testing.T, ns tree.NodeStore, count int) (prolly.Map, [][2
 	return om, tuples
 }
 
-func mustProllyMapFromTuples(t *testing.T, kd, vd val.TupleDesc, ns tree.NodeStore, tuples [][2]val.Tuple) prolly.Map {
+func mustProllyMapFromTuples(t *testing.T, kd, vd *val.TupleDesc, ns tree.NodeStore, tuples [][2]val.Tuple) prolly.Map {
 	ctx := sql.NewEmptyContext()
 
 	serializer := message.NewProllyMapSerializer(vd, ns.Pool())

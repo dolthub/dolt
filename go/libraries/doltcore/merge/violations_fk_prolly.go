@@ -298,7 +298,7 @@ func prollyChildSecDiffFkConstraintViolations(
 func createCVIfNoPartialKeyMatchesPri(
 	ctx context.Context,
 	k, v, partialKey val.Tuple,
-	partialKeyDesc val.TupleDesc,
+	partialKeyDesc *val.TupleDesc,
 	idx prolly.Map,
 	receiver FKViolationReceiver) error {
 	itr, err := creation.NewPrefixItr(ctx, partialKey, partialKeyDesc, idx)
@@ -319,7 +319,7 @@ func createCVIfNoPartialKeyMatchesPri(
 func createCVForSecIdx(
 	ctx context.Context,
 	k val.Tuple,
-	primaryKD val.TupleDesc,
+	primaryKD *val.TupleDesc,
 	primaryKb *val.TupleBuilder,
 	pri prolly.Map,
 	pool pool.BuffPool,
@@ -352,8 +352,8 @@ func createCVForSecIdx(
 func createCVsForPartialKeyMatches(
 	ctx context.Context,
 	partialKey val.Tuple,
-	partialKeyDesc val.TupleDesc,
-	primaryKD val.TupleDesc,
+	partialKeyDesc *val.TupleDesc,
+	primaryKD *val.TupleDesc,
 	primaryIdx prolly.Map,
 	secondaryIdx prolly.Map,
 	pool pool.BuffPool,

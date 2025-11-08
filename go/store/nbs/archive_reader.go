@@ -248,7 +248,7 @@ func buildArchiveReader(ctx context.Context, reader tableReaderAt, footer archiv
 func newInMemoryArchiveIndexReader(ctx context.Context, reader tableReaderAt, footer archiveFooter, q MemoryQuotaProvider, stats *Stats) (archiveIndexReader, error) {
 	byteOffSpan := footer.indexByteOffsetSpan()
 	secRdr := newSectionReader(ctx, reader, int64(byteOffSpan.offset), int64(byteOffSpan.length), stats)
-	byteSpans, err := q.AcquireQuotaUint64s(ctx, int(footer.byteSpanCount)+1)
+	byteSpans, err := q.AcquireQuotaUint64Slice(ctx, int(footer.byteSpanCount)+1)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to allocate byteSpans uint64 slice: %w", err)
 	}
@@ -262,7 +262,7 @@ func newInMemoryArchiveIndexReader(ctx context.Context, reader tableReaderAt, fo
 
 	prefixSpan := footer.indexPrefixSpan()
 	prefixRdr := newSectionReader(ctx, reader, int64(prefixSpan.offset), int64(prefixSpan.length), stats)
-	prefixes, err := q.AcquireQuotaUint64s(ctx, int(footer.chunkCount))
+	prefixes, err := q.AcquireQuotaUint64Slice(ctx, int(footer.chunkCount))
 	if err != nil {
 		q.ReleaseQuotaBytes(bytesSoFar)
 		return nil, fmt.Errorf("Failed to allocate prefixes uint32 slice: %w", err)
@@ -276,7 +276,7 @@ func newInMemoryArchiveIndexReader(ctx context.Context, reader tableReaderAt, fo
 
 	chunkRefSpan := footer.indexChunkRefSpan()
 	chunkRdr := newSectionReader(ctx, reader, int64(chunkRefSpan.offset), int64(chunkRefSpan.length), stats)
-	chnks, err := q.AcquireQuotaUint32s(ctx, int(footer.chunkCount)*2)
+	chnks, err := q.AcquireQuotaUint32Slice(ctx, int(footer.chunkCount)*2)
 	if err != nil {
 		q.ReleaseQuotaBytes(bytesSoFar)
 		return nil, fmt.Errorf("Failed to allocate chunks uint32 slice: %w", err)
@@ -290,7 +290,7 @@ func newInMemoryArchiveIndexReader(ctx context.Context, reader tableReaderAt, fo
 
 	suffixSpan := footer.indexSuffixSpan()
 	sufRdr := newSectionReader(ctx, reader, int64(suffixSpan.offset), int64(suffixSpan.length), stats)
-	suffixes, err := q.AcquireQuotaBytes(ctx, int(suffixSpan.length))
+	suffixes, err := q.AcquireQuotaByteSlice(ctx, int(suffixSpan.length))
 	if err != nil {
 		q.ReleaseQuotaBytes(bytesSoFar)
 		return nil, fmt.Errorf("Failed to allocate suffixes byte slice: %w", err)

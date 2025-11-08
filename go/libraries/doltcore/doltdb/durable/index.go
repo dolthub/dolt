@@ -168,7 +168,7 @@ func newEmptyIndex(ctx context.Context, vrw types.ValueReadWriter, ns tree.NodeS
 	}
 }
 
-func NewEmptyProllyIndex(ctx context.Context, ns tree.NodeStore, kd, vd val.TupleDesc) (Index, error) {
+func NewEmptyProllyIndex(ctx context.Context, ns tree.NodeStore, kd, vd *val.TupleDesc) (Index, error) {
 	m, err := prolly.NewMapFromTuples(ctx, ns, kd, vd)
 	if err != nil {
 		return nil, err
@@ -176,7 +176,7 @@ func NewEmptyProllyIndex(ctx context.Context, ns tree.NodeStore, kd, vd val.Tupl
 	return IndexFromProllyMap(m), nil
 }
 
-func NewEmptyProximityIndex(ctx context.Context, ns tree.NodeStore, kd, vd val.TupleDesc) (Index, error) {
+func NewEmptyProximityIndex(ctx context.Context, ns tree.NodeStore, kd, vd *val.TupleDesc) (Index, error) {
 	proximityMapBuilder, err := prolly.NewProximityMapBuilder(ctx, ns, vector.DistanceL2Squared{}, kd, vd, prolly.DefaultLogChunkSize)
 	if err != nil {
 		return nil, err
@@ -416,7 +416,7 @@ func (i prollyIndex) AddColumnToRows(ctx context.Context, newCol string, newSche
 
 func (i prollyIndex) DebugString(ctx context.Context, ns tree.NodeStore, schema schema.Schema) string {
 	var b bytes.Buffer
-	i.index.WalkNodes(ctx, func(ctx context.Context, nd tree.Node) error {
+	i.index.WalkNodes(ctx, func(ctx context.Context, nd *tree.Node) error {
 		return tree.OutputProllyNode(ctx, &b, nd, ns, schema)
 	})
 	return b.String()

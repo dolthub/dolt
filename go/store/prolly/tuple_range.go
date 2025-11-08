@@ -27,22 +27,22 @@ import (
 )
 
 // OpenStopRange defines a half-open Range of Tuples [start, stop).
-func OpenStopRange(ctx context.Context, start, stop val.Tuple, desc val.TupleDesc) Range {
+func OpenStopRange(ctx context.Context, start, stop val.Tuple, desc *val.TupleDesc) Range {
 	return openStopRange(ctx, start, stop, desc)
 }
 
 // GreaterOrEqualRange defines a Range of Tuples greater than or equal to |start|.
-func GreaterOrEqualRange(start val.Tuple, desc val.TupleDesc) Range {
+func GreaterOrEqualRange(start val.Tuple, desc *val.TupleDesc) Range {
 	return greaterOrEqualRange(start, desc)
 }
 
 // LesserRange defines a Range of Tuples less than |stop|.
-func LesserRange(stop val.Tuple, desc val.TupleDesc) Range {
+func LesserRange(stop val.Tuple, desc *val.TupleDesc) Range {
 	return lesserRange(stop, desc)
 }
 
 // PrefixRange constructs a Range for Tuples with a prefix of |prefix|.
-func PrefixRange(ctx context.Context, prefix val.Tuple, desc val.TupleDesc) Range {
+func PrefixRange(ctx context.Context, prefix val.Tuple, desc *val.TupleDesc) Range {
 	return closedRange(ctx, prefix, prefix, desc)
 }
 
@@ -57,7 +57,7 @@ func PrefixRange(ctx context.Context, prefix val.Tuple, desc val.TupleDesc) Rang
 // by using RangeFields as logical predicates (see filteredIter).
 type Range struct {
 	Fields []RangeField
-	Desc   val.TupleDesc
+	Desc   *val.TupleDesc
 	Tup    val.Tuple
 	// SkipRangeMatchCallback is false if any type in the index range
 	// expression can return a false positive match. Strings, datetimes,
@@ -184,7 +184,7 @@ func (r Range) Matches(ctx context.Context, t val.Tuple) bool {
 	return true
 }
 
-func (r Range) IsStrictKeyLookup(desc val.TupleDesc) bool {
+func (r Range) IsStrictKeyLookup(desc *val.TupleDesc) bool {
 	// a strict key is a set of non-nil equality restrictions covering every field of a unique index
 	if len(r.Fields) < len(desc.Types) {
 		return false
@@ -250,7 +250,7 @@ func (r Range) KeyRangeLookup(ctx context.Context, pool pool.BuffPool, ns tree.N
 	return IncrementTuple(ctx, r.Tup, n, r.Desc, pool, ns)
 }
 
-func IncrementTuple(ctx context.Context, start val.Tuple, n int, desc val.TupleDesc, pool pool.BuffPool, ns tree.NodeStore) (val.Tuple, bool, error) {
+func IncrementTuple(ctx context.Context, start val.Tuple, n int, desc *val.TupleDesc, pool pool.BuffPool, ns tree.NodeStore) (val.Tuple, bool, error) {
 	tb := val.NewTupleBuilder(desc, ns)
 	for i := 0; i < n; i++ {
 		if i != n {
@@ -354,7 +354,7 @@ func IncrementTuple(ctx context.Context, start val.Tuple, n int, desc val.TupleD
 }
 
 func rangeStartSearchFn(rng Range) tree.SearchFn {
-	return func(ctx context.Context, nd tree.Node) int {
+	return func(ctx context.Context, nd *tree.Node) int {
 		// todo(andy): inline sort.Search()
 		return sort.Search(nd.Count(), func(i int) (in bool) {
 			// if |tup| ∈ |rng|, set |in| to true
@@ -366,7 +366,7 @@ func rangeStartSearchFn(rng Range) tree.SearchFn {
 }
 
 func rangeStopSearchFn(rng Range) tree.SearchFn {
-	return func(ctx context.Context, nd tree.Node) (idx int) {
+	return func(ctx context.Context, nd *tree.Node) (idx int) {
 		// todo(andy): inline sort.Search()
 		return sort.Search(nd.Count(), func(i int) (out bool) {
 			// if |tup| ∈ |rng|, set |out| to false
@@ -378,7 +378,7 @@ func rangeStopSearchFn(rng Range) tree.SearchFn {
 }
 
 // closedRange defines an inclusive Range of Tuples from [start, stop].
-func closedRange(ctx context.Context, start, stop val.Tuple, desc val.TupleDesc) (rng Range) {
+func closedRange(ctx context.Context, start, stop val.Tuple, desc *val.TupleDesc) (rng Range) {
 	rng = Range{
 		Fields: make([]RangeField, len(desc.Types)),
 		Desc:   desc,
@@ -398,7 +398,7 @@ func closedRange(ctx context.Context, start, stop val.Tuple, desc val.TupleDesc)
 }
 
 // OpenStartRange defines a half-open Range of Tuples (start, stop].
-func openStartRange(ctx context.Context, start, stop val.Tuple, desc val.TupleDesc) (rng Range) {
+func openStartRange(ctx context.Context, start, stop val.Tuple, desc *val.TupleDesc) (rng Range) {
 	rng = closedRange(ctx, start, stop, desc)
 	last := len(rng.Fields) - 1
 	rng.Fields[last].Lo.Inclusive = false
@@ -407,7 +407,7 @@ func openStartRange(ctx context.Context, start, stop val.Tuple, desc val.TupleDe
 }
 
 // OpenStopRange defines a half-open Range of Tuples [start, stop).
-func openStopRange(ctx context.Context, start, stop val.Tuple, desc val.TupleDesc) (rng Range) {
+func openStopRange(ctx context.Context, start, stop val.Tuple, desc *val.TupleDesc) (rng Range) {
 	rng = closedRange(ctx, start, stop, desc)
 	last := len(rng.Fields) - 1
 	rng.Fields[last].Hi.Inclusive = false
@@ -416,7 +416,7 @@ func openStopRange(ctx context.Context, start, stop val.Tuple, desc val.TupleDes
 }
 
 // OpenRange defines a non-inclusive Range of Tuples from (start, stop).
-func openRange(ctx context.Context, start, stop val.Tuple, desc val.TupleDesc) (rng Range) {
+func openRange(ctx context.Context, start, stop val.Tuple, desc *val.TupleDesc) (rng Range) {
 	rng = closedRange(ctx, start, stop, desc)
 	last := len(rng.Fields) - 1
 	rng.Fields[last].Lo.Inclusive = false
@@ -426,7 +426,7 @@ func openRange(ctx context.Context, start, stop val.Tuple, desc val.TupleDesc) (
 }
 
 // GreaterRange defines a Range of Tuples greater than |start|.
-func greaterRange(start val.Tuple, desc val.TupleDesc) (rng Range) {
+func greaterRange(start val.Tuple, desc *val.TupleDesc) (rng Range) {
 	rng = greaterOrEqualRange(start, desc)
 	last := len(rng.Fields) - 1
 	rng.Fields[last].Lo.Inclusive = false
@@ -434,7 +434,7 @@ func greaterRange(start val.Tuple, desc val.TupleDesc) (rng Range) {
 }
 
 // GreaterOrEqualRange defines a Range of Tuples greater than or equal to |start|.
-func greaterOrEqualRange(start val.Tuple, desc val.TupleDesc) (rng Range) {
+func greaterOrEqualRange(start val.Tuple, desc *val.TupleDesc) (rng Range) {
 	rng = Range{
 		Fields: make([]RangeField, len(desc.Types)),
 		Desc:   desc,
@@ -449,7 +449,7 @@ func greaterOrEqualRange(start val.Tuple, desc val.TupleDesc) (rng Range) {
 }
 
 // LesserRange defines a Range of Tuples less than |stop|.
-func lesserRange(stop val.Tuple, desc val.TupleDesc) (rng Range) {
+func lesserRange(stop val.Tuple, desc *val.TupleDesc) (rng Range) {
 	rng = lesserOrEqualRange(stop, desc)
 	last := len(rng.Fields) - 1
 	rng.Fields[last].Hi.Inclusive = false
@@ -457,7 +457,7 @@ func lesserRange(stop val.Tuple, desc val.TupleDesc) (rng Range) {
 }
 
 // LesserOrEqualRange defines a Range of Tuples less than or equal to |stop|.
-func lesserOrEqualRange(stop val.Tuple, desc val.TupleDesc) (rng Range) {
+func lesserOrEqualRange(stop val.Tuple, desc *val.TupleDesc) (rng Range) {
 	rng = Range{
 		Fields: make([]RangeField, len(desc.Types)),
 		Desc:   desc,

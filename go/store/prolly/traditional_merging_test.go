@@ -25,15 +25,15 @@ import (
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 )
 
-func traditionalThreeWayMerge[K ~[]byte, O tree.Ordering[K], S message.Serializer](ctx context.Context, ns tree.NodeStore, left, right, base tree.Node, collide tree.CollisionFn, leftSchemaChange, rightSchemaChange bool, order O, serializer S) (final tree.Node, err error) {
+func traditionalThreeWayMerge[K ~[]byte, O tree.Ordering[K], S message.Serializer](ctx context.Context, ns tree.NodeStore, left, right, base *tree.Node, collide tree.CollisionFn, leftSchemaChange, rightSchemaChange bool, order O, serializer S) (final *tree.Node, err error) {
 	ld, err := tree.DifferFromRoots[K](ctx, ns, ns, base, left, order, leftSchemaChange)
 	if err != nil {
-		return tree.Node{}, err
+		return nil, err
 	}
 
 	rd, err := tree.DifferFromRoots[K](ctx, ns, ns, base, right, order, rightSchemaChange)
 	if err != nil {
-		return tree.Node{}, err
+		return nil, err
 	}
 
 	eg, ctx := errgroup.WithContext(ctx)
@@ -56,7 +56,7 @@ func traditionalThreeWayMerge[K ~[]byte, O tree.Ordering[K], S message.Serialize
 	})
 
 	if err = eg.Wait(); err != nil {
-		return tree.Node{}, err
+		return nil, err
 	}
 	return final, nil
 }

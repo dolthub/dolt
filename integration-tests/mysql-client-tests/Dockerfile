@@ -139,6 +139,8 @@ RUN apt-get update && apt-get install -y \
   default-mysql-client \
   postgresql-15-mysql-fdw \
   r-base-core \
+  mariadb-server \
+  netcat-openbsd \
   lsof \
   bats \
   && rm -rf /var/lib/apt/lists/*
@@ -176,8 +178,10 @@ COPY --from=ruby_clients_build /build/bin/ /build/bin/ruby/
 COPY dolt/integration-tests/mysql-client-tests/r/ /build/bin/r/
 COPY dolt/integration-tests/mysql-client-tests/perl/ /build/bin/perl/
 
-COPY dolt/integration-tests/mysql-client-tests/mysql-client-tests.bats /build/bin/
-COPY dolt/integration-tests/mysql-client-tests/helpers.bash /build/bin/
+COPY dolt/integration-tests/mysql-client-tests/*.bats /build/bin/bats/
+COPY dolt/integration-tests/mysql-client-tests/helpers.bash /build/bin/bats/
+# We don't know the transitive deps for bats/helper/ so we import all bats ~8MB
+COPY dolt/integration-tests/bats/ /build/bin/bats/
 COPY dolt/integration-tests/mysql-client-tests/mysql-client-tests-entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 

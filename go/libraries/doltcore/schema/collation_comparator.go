@@ -31,7 +31,7 @@ type CollationTupleComparator struct {
 var _ val.TupleComparator = CollationTupleComparator{}
 
 // Compare implements TupleComparator
-func (c CollationTupleComparator) Compare(ctx context.Context, left, right val.Tuple, desc val.TupleDesc) (cmp int) {
+func (c CollationTupleComparator) Compare(ctx context.Context, left, right val.Tuple, desc *val.TupleDesc) (cmp int) {
 	fast := desc.GetFixedAccess()
 	for i := range fast {
 		start, stop := fast[i][0], fast[i][1]

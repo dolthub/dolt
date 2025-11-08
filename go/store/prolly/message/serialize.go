@@ -74,7 +74,7 @@ func writeItemOffsets32(b *fb.Builder, items [][]byte, sumSz int) fb.UOffsetT {
 }
 
 // countAddresses returns the number of chunk addresses stored within |items|.
-func countAddresses(items [][]byte, td val.TupleDesc) (cnt int) {
+func countAddresses(items [][]byte, td *val.TupleDesc) (cnt int) {
 	for i := len(items) - 1; i >= 0; i-- {
 		val.IterAddressFields(td, func(j int, t val.Type) {
 			// get offset of address within |tup|
@@ -97,7 +97,7 @@ func countAddresses(items [][]byte, td val.TupleDesc) (cnt int) {
 }
 
 // writeAddressOffsets serializes an array of uint16 offStart representing address offStart within an array of items.
-func writeAddressOffsets(b *fb.Builder, items [][]byte, sumSz int, td val.TupleDesc) fb.UOffsetT {
+func writeAddressOffsets(b *fb.Builder, items [][]byte, sumSz int, td *val.TupleDesc) fb.UOffsetT {
 	var cnt int
 	var off = sumSz
 	for i := len(items) - 1; i >= 0; i-- {

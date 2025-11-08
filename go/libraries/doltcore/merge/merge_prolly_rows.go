@@ -430,7 +430,7 @@ func mergeProllyTableData(ctx *sql.Context, tm *TableMerger, finalSch schema.Sch
 		return err
 	})
 
-	var mergedRoot tree.Node
+	var mergedRoot *tree.Node
 	// consume |patches| and apply them to |left|
 	eg.Go(func() error {
 		leftRowData, err := tm.leftTbl.GetRowData(errCtx)
@@ -493,7 +493,7 @@ func mergeProllyTableData(ctx *sql.Context, tm *TableMerger, finalSch schema.Sch
 	return finalTbl, s, nil
 }
 
-func threeWayDiffer(ctx context.Context, tm *TableMerger, valueMerger *valueMerger, diffInfo tree.ThreeWayDiffInfo) (*tree.ThreeWayDiffer[val.Tuple, val.TupleDesc], error) {
+func threeWayDiffer(ctx context.Context, tm *TableMerger, valueMerger *valueMerger, diffInfo tree.ThreeWayDiffInfo) (*tree.ThreeWayDiffer[val.Tuple, *val.TupleDesc], error) {
 	lr, err := tm.leftTbl.GetRowData(ctx)
 	if err != nil {
 		return nil, err
@@ -586,7 +586,7 @@ func (cv checkValidator) validateDiff(ctx *sql.Context, diff tree.ThreeWayDiff) 
 	conflictCount := 0
 
 	var valueTuple val.Tuple
-	var valueDesc val.TupleDesc
+	var valueDesc *val.TupleDesc
 	switch diff.Op {
 	case tree.DiffOpLeftDelete, tree.DiffOpRightDelete, tree.DiffOpConvergentDelete, tree.DiffOpDivergentDeleteResolved:
 		// no need to validate check constraints for deletes
@@ -888,11 +888,11 @@ type uniqIndex struct {
 	def              schema.Index
 	secondary        *prolly.MutableMap
 	clustered        *prolly.MutableMap
+	prefixDesc       *val.TupleDesc
+	clusteredKeyDesc *val.TupleDesc
 	meta             UniqCVMeta
-	prefixDesc       val.TupleDesc
 	secondaryBld     index.SecondaryKeyBuilder
 	clusteredBld     index.ClusteredKeyBuilder
-	clusteredKeyDesc val.TupleDesc
 }
 
 func newUniqIndex(ctx *sql.Context, sch schema.Schema, tableName string, def schema.Index, clustered, secondary prolly.Map) (uniqIndex, error) {
@@ -1605,7 +1605,7 @@ func (m *secondaryMerger) finalize(ctx context.Context) (durable.IndexSet, durab
 
 // remapTuple takes the given |tuple| and the |desc| that describes its data, and uses |mapping| to map the tuple's
 // data into a new [][]byte, as indicated by the specified ordinal mapping.
-func remapTuple(tuple val.Tuple, desc val.TupleDesc, mapping val.OrdinalMapping) [][]byte {
+func remapTuple(tuple val.Tuple, desc *val.TupleDesc, mapping val.OrdinalMapping) [][]byte {
 	result := make([][]byte, len(mapping))
 	for to, from := range mapping {
 		if from == -1 {
@@ -1630,7 +1630,7 @@ func remapTuple(tuple val.Tuple, desc val.TupleDesc, mapping val.OrdinalMapping)
 func remapTupleWithColumnDefaults(
 	ctx *sql.Context,
 	keyTuple, valueTuple val.Tuple,
-	valDesc val.TupleDesc,
+	valDesc *val.TupleDesc,
 	mapping val.OrdinalMapping,
 	tm *TableMerger,
 	rowSch schema.Schema,
@@ -1799,7 +1799,7 @@ func mergeTableArtifacts(ctx context.Context, tm *TableMerger, mergeTbl *doltdb.
 // a three-way cell edit (tree.DiffOpDivergentModifyResolved).
 type valueMerger struct {
 	numCols                                int
-	baseVD, leftVD, rightVD, resultVD      val.TupleDesc
+	baseVD, leftVD, rightVD, resultVD      *val.TupleDesc
 	leftSchema, rightSchema, resultSchema  schema.Schema
 	leftMapping, rightMapping, baseMapping val.OrdinalMapping
 	baseToLeftMapping                      val.OrdinalMapping
@@ -1997,7 +1997,7 @@ func (m *valueMerger) processBaseColumn(ctx context.Context, i int, left, right,
 	var modifiedCol []byte
 	var modifiedColIdx int
 	var modifiedSchema schema.Schema
-	var modifiedVD val.TupleDesc
+	var modifiedVD *val.TupleDesc
 	if !leftColExists {
 		modifiedCol, modifiedColIdx = rightCol, rightColIdx
 		modifiedSchema = m.rightSchema
@@ -2332,7 +2332,7 @@ func getColumn(tuple *val.Tuple, mapping *val.OrdinalMapping, idx int) (col []by
 
 // convert takes the `i`th column in the provided tuple and converts it to the type specified in the provided schema.
 // returns the new representation, and a bool indicating success.
-func convert(ctx context.Context, fromDesc, toDesc val.TupleDesc, toSchema schema.Schema, fromIndex, toIndex int, tuple val.Tuple, originalValue []byte, ns tree.NodeStore) ([]byte, error) {
+func convert(ctx context.Context, fromDesc, toDesc *val.TupleDesc, toSchema schema.Schema, fromIndex, toIndex int, tuple val.Tuple, originalValue []byte, ns tree.NodeStore) ([]byte, error) {
 	if fromDesc.Types[fromIndex] == toDesc.Types[toIndex] {
 		// No conversion is necessary here.
 		return originalValue, nil

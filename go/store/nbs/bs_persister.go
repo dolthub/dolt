@@ -91,10 +91,11 @@ func (bsp *blobstorePersister) Persist(ctx context.Context, mt *memTable, haver 
 
 // ConjoinAll implements tablePersister.
 func (bsp *blobstorePersister) ConjoinAll(ctx context.Context, sources chunkSources, stats *Stats) (chunkSource, cleanupFunc, error) {
-	plan, err := planRangeCopyConjoin(ctx, sources, stats)
+	plan, err := planRangeCopyConjoin(ctx, sources, bsp.q, stats)
 	if err != nil {
 		return nil, nil, err
 	}
+	defer plan.closer()
 
 	if plan.chunkCount == 0 {
 		return emptyChunkSource{}, nil, nil

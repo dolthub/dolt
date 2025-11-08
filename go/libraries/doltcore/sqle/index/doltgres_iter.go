@@ -59,8 +59,8 @@ type DoltgresPartition struct {
 // to a higher level, which will bypass reading from the primary table. This mirrors the Postgres behavior.
 type DoltgresFilterIter struct {
 	sqlCtx  *sql.Context
+	keyDesc *val.TupleDesc
 	inner   prolly.MapIter
-	keyDesc val.TupleDesc
 	ns      tree.NodeStore
 	row     sql.Row
 	filters []sql.Expression
@@ -212,10 +212,10 @@ func NewDoltgresPartitionIter(ctx *sql.Context, lookup sql.IndexLookup) (sql.Par
 
 // doltgresProllyMapIterator returns a map iterator, which handles the contiguous iteration over the underlying map that
 // stores an index's data. This also handles filter expressions, if any are present.
-func doltgresProllyMapIterator(ctx *sql.Context, keyDesc val.TupleDesc, ns tree.NodeStore, root tree.Node, rang DoltgresRange) (prolly.MapIter, error) {
+func doltgresProllyMapIterator(ctx *sql.Context, keyDesc *val.TupleDesc, ns tree.NodeStore, root *tree.Node, rang DoltgresRange) (prolly.MapIter, error) {
 	searchRow := make(sql.Row, len(keyDesc.Types))
 	var findStartErr error
-	findStart := func(_ context.Context, nd tree.Node) int {
+	findStart := func(_ context.Context, nd *tree.Node) int {
 		return sort.Search(nd.Count(), func(i int) bool {
 			key := val.Tuple(nd.GetKey(i))
 			if err := doltgresMapSearchKeyToRow(ctx, key, keyDesc, ns, searchRow); err != nil {
@@ -235,7 +235,7 @@ func doltgresProllyMapIterator(ctx *sql.Context, keyDesc val.TupleDesc, ns tree.
 		})
 	}
 	var findStopErr error
-	findStop := func(_ context.Context, nd tree.Node) (idx int) {
+	findStop := func(_ context.Context, nd *tree.Node) (idx int) {
 		return sort.Search(nd.Count(), func(i int) bool {
 			key := val.Tuple(nd.GetKey(i))
 			if err := doltgresMapSearchKeyToRow(ctx, key, keyDesc, ns, searchRow); err != nil {
@@ -289,7 +289,7 @@ func doltgresProllyMapIterator(ctx *sql.Context, keyDesc val.TupleDesc, ns tree.
 
 // doltgresMapSearchKeyToRow writes the given key into the given row. As all used functions are expressions, they expect
 // a sql.Row, and we must therefore convert the key tuple into the format expected of the expression.
-func doltgresMapSearchKeyToRow(ctx context.Context, key val.Tuple, keyDesc val.TupleDesc, ns tree.NodeStore, row sql.Row) (err error) {
+func doltgresMapSearchKeyToRow(ctx context.Context, key val.Tuple, keyDesc *val.TupleDesc, ns tree.NodeStore, row sql.Row) (err error) {
 	for i := range row {
 		row[i], err = tree.GetField(ctx, keyDesc, i, key, ns)
 		if err != nil {

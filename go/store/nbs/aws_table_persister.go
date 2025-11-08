@@ -231,10 +231,11 @@ func (s partsByPartNum) Swap(i, j int) {
 }
 
 func (s3p awsTablePersister) ConjoinAll(ctx context.Context, sources chunkSources, stats *Stats) (chunkSource, cleanupFunc, error) {
-	plan, err := planRangeCopyConjoin(ctx, sources, stats)
+	plan, err := planRangeCopyConjoin(ctx, sources, s3p.q, stats)
 	if err != nil {
 		return nil, nil, err
 	}
+	defer plan.closer()
 
 	if plan.chunkCount == 0 {
 		return emptyChunkSource{}, nil, nil
@@ -280,11 +281,18 @@ func (s3p awsTablePersister) assembleTable(ctx context.Context, plan compactionP
 	}
 
 	// Separate plan.sources by amount of chunkData. Tables with >5MB of chunk data (copies) can be added to the new table using S3's multipart upload copy feature. Smaller tables with <5MB of chunk data (manuals) must be read, assembled into |buff|, and then re-uploaded in parts that are larger than 5MB.
-	copies, manuals, buff, err := dividePlan(plan, s3p.limits.partMin, s3p.limits.partMax)
-
+	copies, manuals, buffSize, err := dividePlan(ctx, plan, s3p.limits.partMin, s3p.limits.partMax)
 	if err != nil {
 		return nil, err
 	}
+	buff, err := s3p.q.AcquireQuotaByteSlice(ctx, int(buffSize))
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		s3p.q.ReleaseQuotaBytes(len(buff))
+	}()
+	tail := plan.mergedIndex
 
 	ae := atomicerr.New()
 	// Concurrently read data from small tables into |buff|
@@ -350,18 +358,32 @@ func (s3p awsTablePersister) assembleTable(ctx context.Context, plan compactionP
 	}
 
 	// Then, split buff (data from |manuals| and index) into parts and upload those concurrently.
-	numManualParts := getNumParts(uint64(len(buff)), s3p.limits.partTarget) // TODO: What if this is too big?
+	lbuf := uint64(len(buff))
+	ltail := uint64(len(tail))
+	totalSz := lbuf + ltail
+	numManualParts := getNumParts(totalSz, s3p.limits.partTarget) // TODO: What if this is too big?
 	for i := uint32(0); i < numManualParts; i++ {
 		start, end := uint64(i)*s3p.limits.partTarget, uint64(i+1)*s3p.limits.partTarget
 		if i+1 == numManualParts { // If this is the last part, make sure it includes any overflow
-			end = uint64(len(buff))
+			end = totalSz
+		}
+		var rdr io.Reader
+		if start >= lbuf {
+			rdr = bytes.NewReader(tail[start-lbuf : end-lbuf])
+		} else if end < lbuf {
+			rdr = bytes.NewReader(buff[start:end])
+		} else {
+			rdr = io.MultiReader(
+				bytes.NewReader(buff[start:]),
+				bytes.NewReader(tail[:end-lbuf]),
+			)
 		}
 		uploadWg.Add(1)
-		go func(data []byte, partNum int32) {
+		go func(data io.Reader, partNum int32) {
 			sendPart(partNum, func() (etag string, err error) {
 				return s3p.uploadPart(ctx, data, key, uploadID, partNum)
 			})
-		}(buff[start:end], partNum)
+		}(rdr, partNum)
 		partNum++
 	}
 
@@ -427,10 +449,10 @@ func (mp manualPart) readFull(ctx context.Context, buff []byte) error {
 // This function divides |plan.sources| into two groups: those with enough chunk data to use S3's UploadPartCopy API (copies) and those without (manuals).
 // The ordering of the parts is how we will upload them to S3, and the manual parts will be prefixed to the index, thus
 // keeping |plan.sources| in the correct order so the index is correct.
-func dividePlan(plan compactionPlan, minPartSize, maxPartSize uint64) (copies []copyPart, manuals []manualPart, buff []byte, err error) {
+func dividePlan(ctx context.Context, plan compactionPlan, minPartSize, maxPartSize uint64) (copies []copyPart, manuals []manualPart, buffSize uint64, err error) {
 	// NB: if maxPartSize < 2*minPartSize, splitting large copies apart isn't solvable. S3's limits are plenty far enough apart that this isn't a problem in production, but we could violate this in tests.
 	if maxPartSize < 2*minPartSize {
-		return nil, nil, nil, errors.New("failed to split large copies apart")
+		return nil, nil, 0, errors.New("failed to split large copies apart")
 	}
 
 	i := 0
@@ -461,7 +483,7 @@ func dividePlan(plan compactionPlan, minPartSize, maxPartSize uint64) (copies []
 		}
 	}
 
-	buffSize := uint64(len(plan.mergedIndex))
+	buffSize = 0
 	var offset int64
 	for ; i < len(plan.sources.sws); i++ {
 		sws := plan.sources.sws[i]
@@ -469,8 +491,6 @@ func dividePlan(plan compactionPlan, minPartSize, maxPartSize uint64) (copies []
 		offset += int64(sws.dataLen)
 		buffSize += sws.dataLen
 	}
-	buff = make([]byte, buffSize)
-	copy(buff[buffSize-uint64(len(plan.mergedIndex)):], plan.mergedIndex)
 	return
 }
 
@@ -508,13 +528,13 @@ func (s3p awsTablePersister) uploadPartCopy(ctx context.Context, src string, src
 	return
 }
 
-func (s3p awsTablePersister) uploadPart(ctx context.Context, data []byte, key, uploadID string, partNum int32) (etag string, err error) {
+func (s3p awsTablePersister) uploadPart(ctx context.Context, data io.Reader, key, uploadID string, partNum int32) (etag string, err error) {
 	res, err := s3p.s3.UploadPart(ctx, &s3.UploadPartInput{
 		Bucket:     aws.String(s3p.bucket),
 		Key:        aws.String(s3p.key(key)),
 		PartNumber: aws.Int32(partNum),
 		UploadId:   aws.String(uploadID),
-		Body:       bytes.NewReader(data),
+		Body:       data,
 	})
 	if err == nil {
 		etag = *res.ETag

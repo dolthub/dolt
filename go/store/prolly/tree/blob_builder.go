@@ -64,7 +64,7 @@ type BlobBuilder struct {
 	ns        NodeStore
 	S         message.Serializer
 	wr        blobNodeWriter
-	lastN     Node
+	lastN     *Node
 	keys      [][]byte
 	buf       []byte
 	vals      [][]byte
@@ -86,7 +86,7 @@ func (b *BlobBuilder) Reset() {
 	b.buf = nil
 	b.vals = nil
 	b.subtrees = nil
-	b.lastN = Node{}
+	b.lastN = nil
 	b.levelCap = 0
 }
 
@@ -149,13 +149,13 @@ func (b *BlobBuilder) expand(numAddrs int) {
 // returns that address to its parent. This continues until the Reader returns
 // io.EOF, when every writer in the chain completes its chunk and we return the
 // root node.
-func (b *BlobBuilder) Chunk(ctx context.Context, r io.Reader) (Node, hash.Hash, error) {
+func (b *BlobBuilder) Chunk(ctx context.Context, r io.Reader) (*Node, hash.Hash, error) {
 	if b.wr == nil {
-		return Node{}, hash.Hash{}, nil
+		return nil, hash.Hash{}, nil
 	}
 	h, _, err := b.wr.Write(ctx, r)
 	if err != nil && err != io.EOF {
-		return Node{}, hash.Hash{}, err
+		return nil, hash.Hash{}, err
 	}
 	return b.lastN, h, nil
 }
@@ -278,7 +278,7 @@ func (b *JSONDoc) ToIndexedJSONDocument(ctx context.Context) (sql.JSONWrapper, e
 	if err != nil {
 		return nil, err
 	}
-	if root.level > 0 && root.keys.IsEmpty() {
+	if root.Level() > 0 && root.keys.IsEmpty() {
 		// We're reading a non-indexed multi-chunk document written by an older version of Dolt.
 		return b.ToLazyJSONDocument(ctx)
 	}

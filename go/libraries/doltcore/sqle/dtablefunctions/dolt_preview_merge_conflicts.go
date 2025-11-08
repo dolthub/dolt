@@ -584,7 +584,7 @@ type previewMergeConflictsTableFunctionRowIter struct {
 	ourSch       schema.Schema
 	vrw          dtypes.ValueReadWriter
 	ns           tree.NodeStore
-	itr          *tree.ThreeWayDiffer[val.Tuple, val.TupleDesc]
+	itr          *tree.ThreeWayDiffer[val.Tuple, *val.TupleDesc]
 	tblName      doltdb.TableName
 	ourRows      prolly.Map
 	theirRows    prolly.Map

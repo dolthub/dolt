@@ -39,7 +39,7 @@ func NewEmptyAddressMap(ns tree.NodeStore) (AddressMap, error) {
 	return NewAddressMap(n, ns)
 }
 
-func NewAddressMap(node tree.Node, ns tree.NodeStore) (AddressMap, error) {
+func NewAddressMap(node *tree.Node, ns tree.NodeStore) (AddressMap, error) {
 	return AddressMap{
 		addresses: tree.StaticMap[stringSlice, address, lexicographic]{
 			Root:      node,
@@ -69,7 +69,7 @@ func (c AddressMap) Height() int {
 	return c.addresses.Height()
 }
 
-func (c AddressMap) Node() tree.Node {
+func (c AddressMap) Node() *tree.Node {
 	return c.addresses.Root
 }
 

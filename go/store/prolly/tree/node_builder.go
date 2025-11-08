@@ -24,14 +24,13 @@ import (
 )
 
 type novelNode struct {
-	node      Node
+	node      *Node
 	lastKey   Item
 	treeCount uint64
 	addr      hash.Hash
 }
 
 func writeNewNode[S message.Serializer](ctx context.Context, ns NodeStore, bld *nodeBuilder[S]) (novelNode, error) {
-
 	node, err := bld.build()
 	if err != nil {
 		return novelNode{}, err
@@ -43,7 +42,7 @@ func writeNewNode[S message.Serializer](ctx context.Context, ns NodeStore, bld *
 	}
 
 	var lastKey Item
-	if node.count > 0 {
+	if node.Count() > 0 {
 		k := getLastKey(node)
 		lastKey = ns.Pool().Get(uint64(len(k)))
 		copy(lastKey, k)
@@ -100,7 +99,7 @@ func (nb *nodeBuilder[S]) count() int {
 	return len(nb.keys)
 }
 
-func (nb *nodeBuilder[S]) build() (node Node, err error) {
+func (nb *nodeBuilder[S]) build() (node *Node, err error) {
 	msg := nb.serializer.Serialize(nb.keys, nb.values, nb.subtrees, nb.level)
 	nb.recycleBuffers()
 	nb.size = 0

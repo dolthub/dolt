@@ -86,7 +86,7 @@ func newTestNodeStore() tree.NodeStore {
 	return tree.NewNodeStore(ts.NewView())
 }
 
-func generateProllyTuples(kd, vd val.TupleDesc, size uint64, ns tree.NodeStore) [][2]val.Tuple {
+func generateProllyTuples(kd, vd *val.TupleDesc, size uint64, ns tree.NodeStore) [][2]val.Tuple {
 	src := rand.NewSource(0)
 
 	tups := make([][2]val.Tuple, size)

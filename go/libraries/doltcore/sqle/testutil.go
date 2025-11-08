@@ -561,7 +561,7 @@ func SqlRowsFromDurableIndex(idx durable.Index, sch schema.Schema) ([]sql.Row, e
 	return sqlRows, nil
 }
 
-func sqlRowFromTuples(sch schema.Schema, kd, vd val.TupleDesc, k, v val.Tuple) (sql.Row, error) {
+func sqlRowFromTuples(sch schema.Schema, kd, vd *val.TupleDesc, k, v val.Tuple) (sql.Row, error) {
 	var err error
 	ctx := context.Background()
 	r := make(sql.Row, sch.GetAllCols().Size())

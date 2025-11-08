@@ -256,7 +256,7 @@ func testKeyRngUpdateDiffs(t *testing.T, from Map, tups [][2]val.Tuple, numUpdat
 	assert.Equal(t, len(inRange), cnt)
 }
 
-func makeRandomBoundedKeyRange(kd val.TupleDesc, tuples [][2]val.Tuple) keyRangeDiffTest {
+func makeRandomBoundedKeyRange(kd *val.TupleDesc, tuples [][2]val.Tuple) keyRangeDiffTest {
 	i := rand.Intn(len(tuples))
 	j := rand.Intn(len(tuples))
 	if j < i {
@@ -270,7 +270,7 @@ func makeRandomBoundedKeyRange(kd val.TupleDesc, tuples [][2]val.Tuple) keyRange
 	return keyRangeDiffTest{tuples: tuples, keyRange: kR}
 }
 
-func makeRandomUnboundedLowerKeyRange(kd val.TupleDesc, tuples [][2]val.Tuple) keyRangeDiffTest {
+func makeRandomUnboundedLowerKeyRange(kd *val.TupleDesc, tuples [][2]val.Tuple) keyRangeDiffTest {
 	i := rand.Intn(len(tuples))
 	end := tuples[i][0]
 
@@ -279,7 +279,7 @@ func makeRandomUnboundedLowerKeyRange(kd val.TupleDesc, tuples [][2]val.Tuple) k
 	return keyRangeDiffTest{tuples: tuples, keyRange: kR}
 }
 
-func makeRandomUnboundedUpperKeyRange(kd val.TupleDesc, tuples [][2]val.Tuple) keyRangeDiffTest {
+func makeRandomUnboundedUpperKeyRange(kd *val.TupleDesc, tuples [][2]val.Tuple) keyRangeDiffTest {
 	i := rand.Intn(len(tuples))
 	start := tuples[i][0]
 
@@ -288,7 +288,7 @@ func makeRandomUnboundedUpperKeyRange(kd val.TupleDesc, tuples [][2]val.Tuple) k
 	return keyRangeDiffTest{tuples: tuples, keyRange: kR}
 }
 
-func makeBoundedKeyRangeWithMissingKeys(t *testing.T, m Map, kd val.TupleDesc, vd val.TupleDesc, tuples [][2]val.Tuple) keyRangeDiffTest {
+func makeBoundedKeyRangeWithMissingKeys(t *testing.T, m Map, kd *val.TupleDesc, vd *val.TupleDesc, tuples [][2]val.Tuple) keyRangeDiffTest {
 	ctx := context.Background()
 	inserts := generateInserts(t, m, kd, vd, 2)
 	low, hi := inserts[0][0], inserts[1][0]
@@ -313,7 +313,7 @@ func getPairsInKeyRange(tuples [][2]val.Tuple, rng keyRange) (keys [][2]val.Tupl
 type keyRange struct {
 	start val.Tuple
 	stop  val.Tuple
-	kd    val.TupleDesc
+	kd    *val.TupleDesc
 }
 
 func (kR keyRange) includes(k val.Tuple) bool {

@@ -63,11 +63,11 @@ type MutationIter interface {
 func ApplyMutations[K ~[]byte, O Ordering[K], S message.Serializer](
 	ctx context.Context,
 	ns NodeStore,
-	root Node,
+	root *Node,
 	order O,
 	serializer S,
 	edits MutationIter,
-) (Node, error) {
+) (*Node, error) {
 	newMutation := edits.NextMutation(ctx)
 	newKey := newMutation.Key
 	newValue := newMutation.Value
@@ -77,12 +77,12 @@ func ApplyMutations[K ~[]byte, O Ordering[K], S message.Serializer](
 
 	cur, err := newCursorAtKey(ctx, ns, root, K(newKey), order)
 	if err != nil {
-		return Node{}, err
+		return nil, err
 	}
 
 	chkr, err := newChunker(ctx, cur.clone(), 0, ns, serializer)
 	if err != nil {
-		return Node{}, err
+		return nil, err
 	}
 
 	for newKey != nil {
@@ -90,7 +90,7 @@ func ApplyMutations[K ~[]byte, O Ordering[K], S message.Serializer](
 		// move |cur| to the NextMutation mutation point
 		err = Seek(ctx, cur, K(newKey), order)
 		if err != nil {
-			return Node{}, err
+			return nil, err
 		}
 
 		var oldValue Item
@@ -123,7 +123,7 @@ func ApplyMutations[K ~[]byte, O Ordering[K], S message.Serializer](
 		// move |chkr| to the NextMutation mutation point
 		err = chkr.advanceTo(ctx, cur)
 		if err != nil {
-			return Node{}, err
+			return nil, err
 		}
 
 		if oldValue == nil {
@@ -136,7 +136,7 @@ func ApplyMutations[K ~[]byte, O Ordering[K], S message.Serializer](
 			}
 		}
 		if err != nil {
-			return Node{}, err
+			return nil, err
 		}
 
 		prev := newKey

@@ -25,7 +25,7 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-func NextConstraintViolation(ctx context.Context, itr prolly.ArtifactIter, kd, vd val.TupleDesc, ns tree.NodeStore) (violationType any, key sql.Row, value sql.Row, err error) {
+func NextConstraintViolation(ctx context.Context, itr prolly.ArtifactIter, kd, vd *val.TupleDesc, ns tree.NodeStore) (violationType any, key sql.Row, value sql.Row, err error) {
 	art, err := itr.Next(ctx)
 	if err != nil {
 		return

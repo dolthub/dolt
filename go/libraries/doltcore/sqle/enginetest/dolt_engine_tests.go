@@ -22,6 +22,7 @@ import (
 	"testing"
 	"time"
 
+	gms "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/enginetest/scriptgen/setup"
@@ -2144,6 +2145,36 @@ func RunBranchActivityTests(t *testing.T, harness DoltEnginetestHarness) {
 			defer harness.Close()
 
 			enginetest.TestScript(t, harness, script)
+		})
+	}
+}
+
+func RunScriptsWithEngineSetup(t *testing.T, setupEngine func(*gms.Engine), scripts []queries.ScriptTest) {
+	harness := newDoltEnginetestHarness(t)
+	engine, err := harness.NewEngine(t)
+	require.NoError(t, err)
+
+	setupEngine(engine.(*gms.Engine))
+
+	for _, script := range scripts {
+		t.Run(script.Name, func(t *testing.T) {
+			enginetest.TestScript(t, harness, script)
+		})
+	}
+}
+
+func RunTransactionTestsWithEngineSetup(t *testing.T, setupEngine func(*gms.Engine), tests []queries.TransactionTest) {
+	for _, test := range tests {
+		t.Run(test.Name, func(t *testing.T) {
+			harness := newDoltEnginetestHarness(t)
+			harness.Setup(setup.MydbData)
+			engine, err := harness.NewEngine(t)
+			require.NoError(t, err)
+			defer engine.Close()
+
+			setupEngine(engine.(*gms.Engine))
+
+			enginetest.TestTransactionScriptWithEngine(t, engine, harness, test, false)
 		})
 	}
 }

@@ -50,22 +50,22 @@ const (
 )
 
 type ArtifactMap struct {
-	tuples tree.StaticMap[val.Tuple, val.Tuple, val.TupleDesc]
+	tuples tree.StaticMap[val.Tuple, val.Tuple, *val.TupleDesc]
 	// the description of the source table where these artifacts come from
-	srcKeyDesc val.TupleDesc
-	keyDesc    val.TupleDesc
-	valDesc    val.TupleDesc
+	srcKeyDesc *val.TupleDesc
+	keyDesc    *val.TupleDesc
+	valDesc    *val.TupleDesc
 }
 
 func (m ArtifactMap) Has(ctx context.Context, key val.Tuple) (ok bool, err error) {
 	return m.tuples.Has(ctx, key)
 }
 
-func (m ArtifactMap) ValDesc() val.TupleDesc {
+func (m ArtifactMap) ValDesc() *val.TupleDesc {
 	return m.valDesc
 }
 
-func (m ArtifactMap) KeyDesc() val.TupleDesc {
+func (m ArtifactMap) KeyDesc() *val.TupleDesc {
 	return m.keyDesc
 }
 
@@ -73,9 +73,9 @@ var _ MapInterface = (*ArtifactMap)(nil)
 
 // NewArtifactMap creates an artifact map based on |srcKeyDesc| which is the key descriptor for
 // the corresponding row map.
-func NewArtifactMap(node tree.Node, ns tree.NodeStore, srcKeyDesc val.TupleDesc) ArtifactMap {
+func NewArtifactMap(node *tree.Node, ns tree.NodeStore, srcKeyDesc *val.TupleDesc) ArtifactMap {
 	keyDesc, valDesc := mergeArtifactsDescriptorsFromSource(srcKeyDesc)
-	tuples := tree.StaticMap[val.Tuple, val.Tuple, val.TupleDesc]{
+	tuples := tree.StaticMap[val.Tuple, val.Tuple, *val.TupleDesc]{
 		Root:      node,
 		NodeStore: ns,
 		Order:     keyDesc,
@@ -90,7 +90,7 @@ func NewArtifactMap(node tree.Node, ns tree.NodeStore, srcKeyDesc val.TupleDesc)
 
 // NewArtifactMapFromTuples creates an artifact map based on |srcKeyDesc| which is the key descriptor for
 // the corresponding row map and inserts the given |tups|. |tups| must be a key followed by a value.
-func NewArtifactMapFromTuples(ctx context.Context, ns tree.NodeStore, srcKeyDesc val.TupleDesc, tups ...val.Tuple) (ArtifactMap, error) {
+func NewArtifactMapFromTuples(ctx context.Context, ns tree.NodeStore, srcKeyDesc *val.TupleDesc, tups ...val.Tuple) (ArtifactMap, error) {
 	kd, vd := mergeArtifactsDescriptorsFromSource(srcKeyDesc)
 	serializer := message.NewMergeArtifactSerializer(kd, ns.Pool())
 
@@ -114,7 +114,7 @@ func NewArtifactMapFromTuples(ctx context.Context, ns tree.NodeStore, srcKeyDesc
 		return ArtifactMap{}, err
 	}
 
-	tuples := tree.StaticMap[val.Tuple, val.Tuple, val.TupleDesc]{
+	tuples := tree.StaticMap[val.Tuple, val.Tuple, *val.TupleDesc]{
 		Root:      root,
 		NodeStore: ns,
 		Order:     kd,
@@ -139,7 +139,7 @@ func (m ArtifactMap) HashOf() hash.Hash {
 	return m.tuples.HashOf()
 }
 
-func (m ArtifactMap) Node() tree.Node {
+func (m ArtifactMap) Node() *tree.Node {
 	return m.tuples.Root
 }
 
@@ -151,7 +151,7 @@ func (m ArtifactMap) Format() *types.NomsBinFormat {
 	return m.tuples.NodeStore.Format()
 }
 
-func (m ArtifactMap) Descriptors() (key, val val.TupleDesc) {
+func (m ArtifactMap) Descriptors() (key, val *val.TupleDesc) {
 	return m.keyDesc, m.valDesc
 }
 
@@ -336,7 +336,7 @@ type ArtifactsEditor struct {
 	pool       pool.BuffPool
 	artKB      *val.TupleBuilder
 	artVB      *val.TupleBuilder
-	srcKeyDesc val.TupleDesc
+	srcKeyDesc *val.TupleDesc
 }
 
 // BuildArtifactKey builds a val.Tuple to be used to look up a value in this ArtifactsEditor. The key is composed
@@ -430,7 +430,7 @@ func (wr *ArtifactsEditor) ReplaceConstraintViolation(ctx context.Context, srcKe
 	return nil
 }
 
-func artifactCollisionErr(ctx context.Context, key val.Tuple, desc val.TupleDesc, old, new []byte) error {
+func artifactCollisionErr(ctx context.Context, key val.Tuple, desc *val.TupleDesc, old, new []byte) error {
 	return fmt.Errorf("error storing constraint violation for primary key (%s): another violation already exists\n"+
 		"new violation: %s old violation: (%s)", desc.Format(ctx, key), string(old), string(new))
 }
@@ -563,8 +563,8 @@ type artifactIterImpl struct {
 	itr    MapIter
 	pool   pool.BuffPool
 	tb     *val.TupleBuilder
-	artKD  val.TupleDesc
-	artVD  val.TupleDesc
+	artKD  *val.TupleDesc
+	artVD  *val.TupleDesc
 	numPks int
 }
 
@@ -614,7 +614,7 @@ type Artifact struct {
 	ArtType ArtifactType
 }
 
-func mergeArtifactsDescriptorsFromSource(srcKd val.TupleDesc) (kd, vd val.TupleDesc) {
+func mergeArtifactsDescriptorsFromSource(srcKd *val.TupleDesc) (kd, vd *val.TupleDesc) {
 	// artifact key consists of keys of source schema, followed by target branch
 	// commit hash, and artifact type.
 	keyTypes := srcKd.Types

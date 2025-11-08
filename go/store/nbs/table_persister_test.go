@@ -22,15 +22,17 @@
 package nbs
 
 import (
-	"context"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/dolthub/dolt/go/store/blobstore"
 )
 
 func TestPlanCompaction(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	assert := assert.New(t)
 	tableContents := [][][]byte{
 		{[]byte("hello2"), []byte("goodbye2"), []byte("badbye2")},
@@ -38,8 +40,7 @@ func TestPlanCompaction(t *testing.T) {
 		{[]byte("solo")},
 	}
 
-	q := &UnlimitedQuotaProvider{}
-
+	q := NewUnlimitedMemQuotaProvider()
 	var sources chunkSources
 	var dataLens []uint64
 	var totalUnc uint64
@@ -54,17 +55,14 @@ func TestPlanCompaction(t *testing.T) {
 		tr, err := newTableReader(ctx, ti, tableReaderAtFromBytes(data), fileBlockSize)
 		require.NoError(t, err)
 		src := chunkSourceAdapter{tr, name}
+		t.Cleanup(func() { src.close() })
 		dataLens = append(dataLens, uint64(len(data))-indexSize(mustUint32(src.count()))-footerSize)
 		sources = append(sources, src)
 	}
-	defer func() {
-		for _, s := range sources {
-			s.close()
-		}
-	}()
 
-	plan, err := planRangeCopyConjoin(ctx, sources, &Stats{})
+	plan, err := planRangeCopyConjoin(ctx, sources, q, &Stats{})
 	require.NoError(t, err)
+	defer plan.closer()
 
 	var totalChunks uint32
 	for i, src := range sources {
@@ -84,4 +82,61 @@ func TestPlanCompaction(t *testing.T) {
 	for _, content := range tableContents {
 		assertChunksInReader(content, tr, assert)
 	}
+}
+
+func TestPlanRangeCopyConjoin(t *testing.T) {
+	t.Run("Quota", func(t *testing.T) {
+		type testCase struct {
+			name string
+			mode testConjoinMode
+		}
+		cases := []testCase{{
+			name: "WithArchives",
+			mode: conjoinModeArchive,
+		}, {
+			name: "WitouthArchives",
+			mode: conjoinModeTable,
+		}}
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				var beforesize uint64
+				var successsize uint64
+				t.Run("Success", func(t *testing.T) {
+					q := NewUnlimitedMemQuotaProvider()
+					ctx := t.Context()
+					persister := &blobstorePersister{
+						bs:        blobstore.NewInMemoryBlobstore(""),
+						blockSize: 4096,
+						q:         q,
+					}
+					srcs := makeTestSrcs(t, []uint32{1024, 1024, 1024, 1024}, persister, tc.mode)
+					beforesize = q.Usage()
+					plan, err := planRangeCopyConjoin(ctx, srcs, q, &Stats{})
+					require.NoError(t, err)
+					t.Cleanup(plan.closer)
+					successsize = q.Usage()
+					require.Greater(t, q.Usage(), beforesize)
+					plan.closer()
+					require.Equal(t, beforesize, q.Usage())
+				})
+				t.Run("Failure", func(t *testing.T) {
+					for i := beforesize + 1024; i < successsize; i += 1024 {
+						t.Run(strconv.Itoa(int(i)), func(t *testing.T) {
+							q := &errorQuota{NewUnlimitedMemQuotaProvider(), int(i)}
+							ctx := t.Context()
+							persister := &blobstorePersister{
+								bs:        blobstore.NewInMemoryBlobstore(""),
+								blockSize: 4096,
+								q:         q,
+							}
+							srcs := makeTestSrcs(t, []uint32{1024, 1024, 1024, 1024}, persister, tc.mode)
+							_, err := planRangeCopyConjoin(ctx, srcs, q, &Stats{})
+							require.Error(t, err)
+							require.Equal(t, beforesize, q.Usage())
+						})
+					}
+				})
+			})
+		}
+	})
 }

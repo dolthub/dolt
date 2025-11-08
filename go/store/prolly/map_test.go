@@ -82,7 +82,7 @@ func TestMap(t *testing.T) {
 				assert.NoError(t, err)
 			})
 			t.Run("walk nodes smoke test", func(t *testing.T) {
-				err := pm.WalkNodes(ctx, func(_ context.Context, nd tree.Node) error {
+				err := pm.WalkNodes(ctx, func(_ context.Context, nd *tree.Node) error {
 					assert.True(t, nd.Count() > 1)
 					return nil
 				})
@@ -268,7 +268,7 @@ func TestVisitMapLevelOrder(t *testing.T) {
 }
 
 func TestNewEmptyNode(t *testing.T) {
-	s := message.NewProllyMapSerializer(val.TupleDesc{}, sharedPool)
+	s := message.NewProllyMapSerializer(&val.TupleDesc{}, sharedPool)
 	msg := s.Serialize(nil, nil, nil, 0)
 	empty, fileId, err := tree.NodeFromBytes(msg)
 	require.NoError(t, err)
@@ -436,12 +436,12 @@ func testIterAll(t *testing.T, om testMap, tuples [][2]val.Tuple) {
 	}
 }
 
-func pointRangeFromTuple(tup val.Tuple, desc val.TupleDesc) Range {
+func pointRangeFromTuple(tup val.Tuple, desc *val.TupleDesc) Range {
 	ctx := context.Background()
 	return closedRange(ctx, tup, tup, desc)
 }
 
-func formatTuples(tuples [][2]val.Tuple, kd, vd val.TupleDesc) string {
+func formatTuples(tuples [][2]val.Tuple, kd, vd *val.TupleDesc) string {
 	ctx := context.Background()
 	var sb strings.Builder
 	sb.WriteString("Tuples (")

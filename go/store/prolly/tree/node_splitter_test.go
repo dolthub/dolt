@@ -91,7 +91,7 @@ func TestKeySplitterDistribution(t *testing.T) {
 	})
 }
 
-func makeProllyTreeWithSizes(t *testing.T, fact splitterFactory, scale, keySz, valSz int) (nd Node, ns NodeStore) {
+func makeProllyTreeWithSizes(t *testing.T, fact splitterFactory, scale, keySz, valSz int) (nd *Node, ns NodeStore) {
 	pro := gaussianItems{
 		keyMean: float64(keySz),
 		keyStd:  float64(keySz) / 4,
@@ -102,7 +102,7 @@ func makeProllyTreeWithSizes(t *testing.T, fact splitterFactory, scale, keySz, v
 
 	ctx := context.Background()
 	ns = NewTestNodeStore()
-	serializer := message.NewProllyMapSerializer(val.TupleDesc{}, ns.Pool())
+	serializer := message.NewProllyMapSerializer(&val.TupleDesc{}, ns.Pool())
 	chunker, err := newEmptyChunker(ctx, ns, serializer)
 	require.NoError(t, err)
 

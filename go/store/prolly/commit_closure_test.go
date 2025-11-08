@@ -208,7 +208,7 @@ func TestCommitClosure(t *testing.T) {
 
 		numnodes := 0
 		totalentries := 0
-		err = tree.WalkNodes(ctx, cc.closure.Root, ns, func(ctx context.Context, node tree.Node) error {
+		err = tree.WalkNodes(ctx, cc.closure.Root, ns, func(ctx context.Context, node *tree.Node) error {
 			numnodes++
 			totalentries += node.Count()
 			return nil

@@ -156,8 +156,8 @@ type ConflictOffsets struct {
 
 // ConflictDescriptors holds the descriptors for the key and base, ours, and theirs values for a row.
 type ConflictDescriptors struct {
-	BaseVal, OurVal, TheirVal val.TupleDesc
-	Key                       val.TupleDesc
+	BaseVal, OurVal, TheirVal *val.TupleDesc
+	Key                       *val.TupleDesc
 }
 
 // GetConflictOffsets returns the offsets of the columns in a conflict row.
@@ -604,8 +604,8 @@ type prollyConflictDeleter struct {
 	kB             *val.TupleBuilder
 	vB             *val.TupleBuilder
 	ed             *prolly.ArtifactsEditor
-	kd             val.TupleDesc
-	vd             val.TupleDesc
+	kd             *val.TupleDesc
+	vd             *val.TupleDesc
 	ourDiffTypeIdx int
 	baseColSize    int
 	ourColSize     int

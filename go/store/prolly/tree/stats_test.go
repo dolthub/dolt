@@ -50,7 +50,7 @@ func TestStatsLevel(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(fmt.Sprintf("stats histogram level test count: %d", tt.count), func(t *testing.T) {
 			root, _, ns := randomTree(t, tt.count*2)
-			m := StaticMap[val.Tuple, val.Tuple, val.TupleDesc]{
+			m := StaticMap[val.Tuple, val.Tuple, *val.TupleDesc]{
 				Root:      root,
 				NodeStore: ns,
 				Order:     keyDesc,
@@ -60,9 +60,9 @@ func TestStatsLevel(t *testing.T) {
 
 			require.Equal(t, tt.level, levelNodes[0].Level())
 
-			if root.level == 0 {
+			if root.Level() == 0 {
 				require.Equal(t, 1, len(levelNodes))
-			} else if root.level == 1 {
+			} else if root.Level() == 1 {
 				require.Equal(t, root.Count(), len(levelNodes))
 			} else {
 				if len(levelNodes) < lowBucketCnt || len(levelNodes) >= highBucketCnt {
@@ -74,10 +74,10 @@ func TestStatsLevel(t *testing.T) {
 	}
 }
 
-func histLevelCount(t *testing.T, nodes []Node) int {
+func histLevelCount(t *testing.T, nodes []*Node) int {
 	cnt := 0
 	for _, n := range nodes {
-		switch n.level {
+		switch n.Level() {
 		case 0:
 			cnt += n.Count()
 		default:
