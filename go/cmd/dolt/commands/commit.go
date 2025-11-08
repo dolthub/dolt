@@ -178,9 +178,6 @@ func performCommit(ctx context.Context, commandStr string, args []string, cliCtx
 	}
 
 	commit, err := getCommitInfo(queryist.Queryist, queryist.Context, "HEAD")
-	if err != nil {
-		return handleCommitErr(queryist.Context, queryist.Queryist, err, usage), false
-	}
 	if cli.ExecuteWithStdioRestored != nil {
 		cli.ExecuteWithStdioRestored(func() {
 			pager := outputpager.Start()
