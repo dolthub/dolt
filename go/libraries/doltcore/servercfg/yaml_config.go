@@ -91,6 +91,8 @@ type ListenerYAMLConfig struct {
 	TLSKey *string `yaml:"tls_key,omitempty"`
 	// TLSCert is a file system path to a TLS certificate chain in PEM format.
 	TLSCert *string `yaml:"tls_cert,omitempty"`
+	// CACert is a file system path to a certificate authority in PEM format.
+	CACert *string `yaml:"ca_cert,omitempty" minver:"TBD"`
 	// RequireSecureTransport can enable a mode where non-TLS connections are turned away.
 	RequireSecureTransport *bool `yaml:"require_secure_transport,omitempty"`
 	// AllowCleartextPasswords enables use of cleartext passwords.
@@ -860,6 +862,15 @@ func (cfg YAMLConfig) TLSCert() string {
 		return ""
 	}
 	return *cfg.ListenerConfig.TLSCert
+}
+
+// CACert returns a path to the servers certificate authority file, or "" if there
+// is no CA cert configured.
+func (cfg YAMLConfig) CACert() string {
+	if cfg.ListenerConfig.CACert == nil {
+		return ""
+	}
+	return *cfg.ListenerConfig.CACert
 }
 
 // RequireSecureTransport is true if the server should reject non-TLS connections.
