@@ -276,7 +276,17 @@ func (cm *CommitMeta) CommitterTime() time.Time {
 //
 // We round this to the nearest second, which is what MySQL timestamp does by default.
 func (cm *CommitMeta) FormatTS() string {
+	return cm.FormatAuthorTS()
+}
+
+// FormatAuthorTS returns the author timestamp in the standard Git log format.
+func (cm *CommitMeta) FormatAuthorTS() string {
 	return cm.Time().In(CommitLoc).Round(time.Second).Format(time.RubyDate)
+}
+
+// FormatCommitterTS returns the committer timestamp in the standard Git log format.
+func (cm *CommitMeta) FormatCommitterTS() string {
+	return cm.CommitterTime().In(CommitLoc).Round(time.Second).Format(time.RubyDate)
 }
 
 // String returns the human readable string representation of the commit data
