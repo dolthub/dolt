@@ -140,7 +140,9 @@ func (j *ChunkJournal) bootstrapJournalWriter(ctx context.Context) (err error) {
 		return err
 	}
 
-	if !ok { // create new journal file
+	canCreate := !j.backing.readOnly()
+
+	if canCreate && !ok { // create new journal file
 		j.wr, err = createJournalWriter(ctx, j.path)
 		if err != nil {
 			return err
