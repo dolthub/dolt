@@ -560,6 +560,7 @@ func OrderedTreeIterFromCursors[K, V ~[]byte](
 		return curr.compare(stop) >= 0
 	}
 
+	// TODO: this is evaluating as an empty range
 	if stopFn(start) {
 		start = nil // empty range
 	}
