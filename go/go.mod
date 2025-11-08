@@ -13,7 +13,7 @@ require (
 	github.com/dolthub/fslock v0.0.3
 	github.com/dolthub/ishell v0.0.0-20240701202509-2b217167d718
 	github.com/dolthub/sqllogictest/go v0.0.0-20201107003712-816f3ae12d81
-	github.com/dolthub/vitess v0.0.0-20250930230441-70c2c6a98e33
+	github.com/dolthub/vitess v0.0.0-20251107003339-843d10a6a8d4
 	github.com/dustin/go-humanize v1.0.1
 	github.com/fatih/color v1.13.0
 	github.com/flynn-archive/go-shlex v0.0.0-20150515145356-3f9db97f8568
@@ -28,7 +28,7 @@ require (
 	github.com/pkg/profile v1.5.0
 	github.com/rivo/uniseg v0.2.0
 	github.com/sergi/go-diff v1.1.0
-	github.com/shopspring/decimal v1.3.1
+	github.com/shopspring/decimal v1.4.0
 	github.com/silvasur/buzhash v0.0.0-20160816060738-9bdec3dec7c6
 	github.com/sirupsen/logrus v1.8.1
 	github.com/skratchdot/open-golang v0.0.0-20200116055534-eef842397966
@@ -200,4 +200,5 @@ require (
 )
 
 replace github.com/dolthub/go-mysql-server => /Users/amx/dolt_workspace/go-mysql-server
+
 go 1.25.3
