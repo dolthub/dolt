@@ -390,18 +390,13 @@ _main() {
   # dolt config will be set if user provided a single json file in /etc/dolt/doltcfg.d directory.
   # It will overwrite config_global.json file in $HOME/.dolt
   set_dolt_config_if_defined
+  CONFIG_PROVIDED=
 
   # if there is a single yaml provided in /etc/dolt/servercfg.d directory,
   # it will be used to start the server with --config flag.
   get_config_file_path_if_exists "$DOLT_CONFIG_DIR" "yaml"
   if [ -z "$CONFIG_PROVIDED" ]; then
-    get_config_file_path_if_exists "$DOLT_CONFIG_DIR" "yml"
-  fi
-  if [ -z "$CONFIG_PROVIDED" ]; then
     get_config_file_path_if_exists "$SERVER_CONFIG_DIR" "yaml"
-    if [ -z "$CONFIG_PROVIDED" ]; then
-      get_config_file_path_if_exists "$SERVER_CONFIG_DIR" "yml"
-    fi
   fi
 
   if [ -n "$CONFIG_PROVIDED" ]; then
