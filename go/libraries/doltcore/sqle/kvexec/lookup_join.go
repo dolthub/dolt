@@ -15,7 +15,6 @@
 package kvexec
 
 import (
-	"context"
 	"fmt"
 	"io"
 	"strings"
@@ -197,7 +196,14 @@ type lookupMapping struct {
 	split    int
 }
 
-func newLookupKeyMapping(ctx context.Context, sourceSch schema.Schema, tgtKeyDesc *val.TupleDesc, keyExprs []sql.Expression, typs []sql.ColumnExpressionType, ns tree.NodeStore) (*lookupMapping, error) {
+func newLookupKeyMapping(
+	ctx *sql.Context,
+	sourceSch schema.Schema,
+	tgtKeyDesc *val.TupleDesc,
+	keyExprs []sql.Expression,
+	typs []sql.ColumnExpressionType,
+	ns tree.NodeStore,
+) (*lookupMapping, error) {
 	keyless := schema.IsKeyless(sourceSch)
 	// |split| is an index into the schema separating the key and value fields
 	var split int
@@ -244,11 +250,12 @@ func newLookupKeyMapping(ctx context.Context, sourceSch schema.Schema, tgtKeyDes
 	litDesc := val.NewTupleDescriptorWithArgs(tda, litTypes...)
 	litTb := val.NewTupleBuilder(litDesc, ns)
 	for i, j := range litMappings {
-		val := keyExprs[j].(*expression.Literal).Value()
-		val, _, err := typs[j].Type.Convert(ctx, val)
+		colTyp := typs[j]
+		val, _, err := convertKeyValue(ctx, colTyp, keyExprs[j].(*expression.Literal))
 		if err != nil {
 			return nil, err
 		}
+
 		if err := tree.PutField(ctx, ns, litTb, i, val); err != nil {
 			return nil, err
 		}
@@ -274,6 +281,23 @@ func newLookupKeyMapping(ctx context.Context, sourceSch schema.Schema, tgtKeyDes
 		ns:         ns,
 		pool:       ns.Pool(),
 	}, nil
+}
+
+func convertKeyValue(ctx *sql.Context, colTyp sql.ColumnExpressionType, val *expression.Literal) (any, sql.ConvertInRange, error) {
+	srcType := val.Type()
+	destType := colTyp.Type
+
+	if srcEt, ok := srcType.(sql.ExtendedType); ok {
+		if destEt, ok := destType.(sql.ExtendedType); ok {
+			converted, err := destEt.ConvertToType(ctx, srcEt, val.Value())
+			if err != nil {
+				return nil, false, err
+			}
+
+			return converted, sql.InRange, nil
+		}
+	}
+	return colTyp.Type.Convert(ctx, val)
 }
 
 // valid returns whether the source and destination key types
