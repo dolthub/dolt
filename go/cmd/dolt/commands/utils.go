@@ -26,7 +26,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/sirupsen/logrus"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -40,7 +40,6 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dconfig"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
@@ -49,7 +48,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
-	"github.com/dolthub/dolt/go/libraries/utils/gpg"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/util/outputpager"
@@ -708,87 +706,68 @@ func getCommitInfo(queryist cli.Queryist, sqlCtx *sql.Context, ref string) (*Com
 }
 
 // getCommitInfoWithOptions fetches commit metadata for the supplied ref.
-// It first queries dolt_log from an isolated session with @@dolt_log_committer_only
-// disabled so committer details are always available, and falls back to the
-// commit object when necessary for backward compatibility.
-func getCommitInfoWithOptions(queryist cli.Queryist, sqlCtx *sql.Context, commitRef string, opts commitInfoOptions) (*CommitInfo, error) {
+// It queries dolt_log in a child session with @@dolt_log_committer_only
+// disabled when possible, and reuses the parent session if the child
+// context cannot be established.
+func getCommitInfoWithOptions(queryist cli.Queryist, sqlCtx *sql.Context, ref string, opts commitInfoOptions) (*CommitInfo, error) {
 	hashOfHead, err := getHashOf(queryist, sqlCtx, "HEAD")
 	if err != nil {
 		return nil, fmt.Errorf("error getting hash of HEAD: %v", err)
 	}
 
+	queryCtx := sqlCtx
 	if se, ok := queryist.(*engine.SqlEngine); ok {
-		childCtx, closeChild, childErr := se.NewChildContext(sqlCtx)
-		if childErr == nil {
-			defer closeChild()
-
-			if disableErr := disableCommitterOnly(childCtx); disableErr == nil {
-				info, buildErr := getCommitInfoFromLog(queryist, childCtx, commitRef, opts, hashOfHead)
-				if buildErr == nil && info != nil {
-					return info, nil
-				}
-				if buildErr != nil {
-					logrus.WithError(buildErr).Debug("unable to build commit info from dolt_log; falling back to commit object")
-				}
-
-				fallbackInfo, fallbackErr := getCommitInfoFromCommitObject(queryist, childCtx, commitRef, opts, hashOfHead)
-				if fallbackInfo != nil || fallbackErr != nil {
-					return fallbackInfo, fallbackErr
-				}
-
-				return nil, nil
+		childCtx, closer, childErr := se.NewChildContext(sqlCtx)
+		if childErr != nil {
+			logrus.WithError(childErr).Debug("unable to create child context for commit info; using parent session")
+		} else {
+			childSess, ok := childCtx.Session.(*dsess.DoltSession)
+			if !ok {
+				closer()
+				logrus.Debug("child context session is not a DoltSession; using parent session for commit info")
 			} else {
-				logrus.WithError(disableErr).Debug("unable to disable @@dolt_log_committer_only for commit info; falling back to commit object")
-				fallbackInfo, fallbackErr := getCommitInfoFromCommitObject(queryist, childCtx, commitRef, opts, hashOfHead)
-				if fallbackInfo != nil || fallbackErr != nil {
-					return fallbackInfo, fallbackErr
+				if err := childSess.SetSessionVariable(childCtx, dsess.DoltLogCommitterOnly, int8(0)); err != nil {
+					closer()
+					logrus.WithError(err).Debug("unable to disable @@dolt_log_committer_only in child context; using parent session")
+				} else {
+					queryCtx = childCtx
+					defer closer()
 				}
-
-				return nil, nil
 			}
 		}
-
-		logrus.WithError(childErr).Debug("unable to create child context for commit info; falling back to commit object")
 	}
 
-	return getCommitInfoFromCommitObject(queryist, sqlCtx, commitRef, opts, hashOfHead)
-}
-
-func disableCommitterOnly(sqlCtx *sql.Context) error {
-	doltSess, ok := sqlCtx.Session.(*dsess.DoltSession)
-	if !ok {
-		return fmt.Errorf("session is not a DoltSession: %T (required for commit operations)", sqlCtx.Session)
-	}
-
-	return doltSess.SetSessionVariable(sqlCtx, dsess.DoltLogCommitterOnly, int8(0))
-}
-
-func getCommitInfoFromLog(queryist cli.Queryist, sqlCtx *sql.Context, commitRef string, opts commitInfoOptions, hashOfHead string) (*CommitInfo, error) {
 	var q string
-	var err error
 	if opts.showSignature {
-		q, err = dbr.InterpolateForDialect("select * from dolt_log(?, '--parents', '--decorate=full', '--show-signature')", []interface{}{commitRef}, dialect.MySQL)
+		q, err = dbr.InterpolateForDialect("select * from dolt_log(?, '--parents', '--decorate=full', '--show-signature')", []interface{}{ref}, dialect.MySQL)
 	} else {
-		q, err = dbr.InterpolateForDialect("select * from dolt_log(?, '--parents', '--decorate=full')", []interface{}{commitRef}, dialect.MySQL)
+		q, err = dbr.InterpolateForDialect("select * from dolt_log(?, '--parents', '--decorate=full')", []interface{}{ref}, dialect.MySQL)
 	}
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error interpolating query: %v", err)
 	}
 
-	rows, err := cli.GetRowsForSql(queryist, sqlCtx, q)
+	rows, err := cli.GetRowsForSql(queryist, queryCtx, q)
 	if err != nil {
-		return nil, err
-	}
-	if len(rows) == 0 {
-		return nil, fmt.Errorf("no rows returned from dolt_log")
+		return nil, fmt.Errorf("error getting logs for ref '%s': %v", ref, err)
 	}
 
-	return buildCommitInfoFromLogRow(queryist, sqlCtx, rows[0], opts, hashOfHead)
-}
+	var row sql.Row
+	if len(rows) > 0 {
+		row = rows[0]
+	}
 
-func buildCommitInfoFromLogRow(queryist cli.Queryist, sqlCtx *sql.Context, row sql.Row, opts commitInfoOptions, hashOfHead string) (*CommitInfo, error) {
-	if len(row) < 6 {
-		return nil, fmt.Errorf("unexpected dolt_log row shape")
+	if row == nil && queryCtx != sqlCtx {
+		rows, err = cli.GetRowsForSql(queryist, sqlCtx, q)
+		if err != nil {
+			return nil, fmt.Errorf("error getting logs for ref '%s': %v", ref, err)
+		}
+		if len(rows) > 0 {
+			row = rows[0]
+		}
+	}
+	if row == nil {
+		return nil, nil
 	}
 
 	commitHashStr, ok := row[0].(string)
@@ -800,7 +779,7 @@ func buildCommitInfoFromLogRow(queryist cli.Queryist, sqlCtx *sql.Context, row s
 	committerEmail, _ := row[2].(string)
 	committerTs, err := getTimestampColAsUint64(row[3])
 	if err != nil {
-		return nil, fmt.Errorf("error parsing committer timestamp: %v", err)
+		return nil, fmt.Errorf("error parsing committer timestamp '%v': %w", row[3], err)
 	}
 
 	message, ok := row[4].(string)
@@ -835,12 +814,12 @@ func buildCommitInfoFromLogRow(queryist cli.Queryist, sqlCtx *sql.Context, row s
 	}
 	authorTs := committerTs
 	if len(row) > 8 {
-		if ts, err := getTimestampColAsUint64(row[8]); err == nil {
+		if ts, tsErr := getTimestampColAsUint64(row[8]); tsErr == nil {
 			authorTs = ts
 		}
 	}
 
-	var parentHashStrs []string
+	parentHashStrs := []string{}
 	if len(row) > 9 {
 		if parentStr, ok := row[9].(string); ok && parentStr != "" {
 			parentHashStrs = strings.Split(parentStr, ", ")
@@ -889,105 +868,6 @@ func buildCommitInfoFromLogRow(queryist cli.Queryist, sqlCtx *sql.Context, row s
 		commitMeta:        commitMeta,
 		commitHash:        commitHashStr,
 		height:            commitOrder,
-		isHead:            commitHashStr == hashOfHead,
-		parentHashes:      parentHashStrs,
-		localBranchNames:  localBranches,
-		remoteBranchNames: remoteBranches,
-		tagNames:          tags,
-	}, nil
-}
-
-func getCommitInfoFromCommitObject(queryist cli.Queryist, sqlCtx *sql.Context, commitRef string, opts commitInfoOptions, hashOfHead string) (*CommitInfo, error) {
-	dbName := sqlCtx.GetCurrentDatabase()
-	if dbName == "" {
-		return nil, fmt.Errorf("no current database set")
-	}
-
-	doltSess, ok := sqlCtx.Session.(*dsess.DoltSession)
-	if !ok {
-		return nil, fmt.Errorf("session is not a DoltSession: %T (required for commit operations)", sqlCtx.Session)
-	}
-
-	ddb, ok := doltSess.GetDoltDB(sqlCtx, dbName)
-	if !ok {
-		return nil, fmt.Errorf("failed to get DoltDB for database '%s'", dbName)
-	}
-
-	cs, err := doltdb.NewCommitSpec(commitRef)
-	if err != nil {
-		return nil, fmt.Errorf("error creating commit spec for '%s': %v", commitRef, err)
-	}
-
-	var headRef ref.DoltRef
-	headRef, err = doltSess.CWBHeadRef(sqlCtx, dbName)
-	if err == doltdb.ErrOperationNotSupportedInDetachedHead {
-		headRef = nil
-	} else if err != nil {
-		return nil, fmt.Errorf("error getting head ref: %v", err)
-	}
-
-	optCmt, err := ddb.Resolve(sqlCtx, cs, headRef)
-	if err != nil {
-		return nil, fmt.Errorf("error resolving commit '%s': %v", commitRef, err)
-	}
-
-	commit, ok := optCmt.ToCommit()
-	if !ok {
-		return nil, nil
-	}
-
-	commitMeta, err := commit.GetCommitMeta(sqlCtx)
-	if err != nil {
-		return nil, fmt.Errorf("error getting commit metadata: %v", err)
-	}
-
-	if opts.showSignature && len(commitMeta.Signature) > 0 {
-		verifyOut, err := gpg.Verify(sqlCtx, []byte(commitMeta.Signature))
-		if err != nil {
-			return nil, fmt.Errorf("error verifying signature: %v", err)
-		}
-		commitMeta.Signature = string(verifyOut)
-	} else if !opts.showSignature {
-		commitMeta.Signature = ""
-	}
-
-	commitHash, err := commit.HashOf()
-	if err != nil {
-		return nil, fmt.Errorf("error getting commit hash: %v", err)
-	}
-	commitHashStr := commitHash.String()
-
-	height, err := commit.Height()
-	if err != nil {
-		return nil, fmt.Errorf("error getting commit height: %v", err)
-	}
-
-	parentHashes, err := commit.ParentHashes(sqlCtx)
-	if err != nil {
-		return nil, fmt.Errorf("error getting parent hashes: %v", err)
-	}
-	var parentHashStrs []string
-	for _, ph := range parentHashes {
-		parentHashStrs = append(parentHashStrs, ph.String())
-	}
-
-	localBranches, err := getBranchesForHash(queryist, sqlCtx, commitHashStr, true)
-	if err != nil {
-		return nil, fmt.Errorf("error getting branches for hash '%s': %v", commitHashStr, err)
-	}
-	remoteBranches, err := getBranchesForHash(queryist, sqlCtx, commitHashStr, false)
-	if err != nil {
-		return nil, fmt.Errorf("error getting remote branches for hash '%s': %v", commitHashStr, err)
-	}
-	tags, err := getTagsForHash(queryist, sqlCtx, commitHashStr)
-	if err != nil {
-		return nil, fmt.Errorf("error getting tags for hash '%s': %v", commitHashStr, err)
-	}
-
-	return &CommitInfo{
-		commitMeta:        commitMeta,
-		commitHash:        commitHashStr,
-		height:            height,
 		isHead:            commitHashStr == hashOfHead,
 		parentHashes:      parentHashStrs,
 		localBranchNames:  localBranches,
