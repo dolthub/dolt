@@ -392,9 +392,19 @@ _main() {
   set_dolt_config_if_defined
 
   # if there is a single yaml provided in /etc/dolt/servercfg.d directory,
-  # it will be used to start the server with --config flag
-  get_config_file_path_if_exists "$SERVER_CONFIG_DIR" "yaml"
-  if [ ! -z "$CONFIG_PROVIDED" ]; then
+  # it will be used to start the server with --config flag.
+  get_config_file_path_if_exists "$DOLT_CONFIG_DIR" "yaml"
+  if [ -z "$CONFIG_PROVIDED" ]; then
+    get_config_file_path_if_exists "$DOLT_CONFIG_DIR" "yml"
+  fi
+  if [ -z "$CONFIG_PROVIDED" ]; then
+    get_config_file_path_if_exists "$SERVER_CONFIG_DIR" "yaml"
+    if [ -z "$CONFIG_PROVIDED" ]; then
+      get_config_file_path_if_exists "$SERVER_CONFIG_DIR" "yml"
+    fi
+  fi
+
+  if [ -n "$CONFIG_PROVIDED" ]; then
     set -- "$@" --config="$CONFIG_PROVIDED"
   fi
 

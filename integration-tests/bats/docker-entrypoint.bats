@@ -274,6 +274,26 @@ EOF
 }
 
 # bats test_tags=no_lambda
+@test "docker-entrypoint: server config applies log level" {
+  # https://github.com/dolthub/dolt/issues/10053
+  cname="${TEST_PREFIX}server-config-log"
+  temp_dir="$BATS_TMPDIR/server-config-log-$$"
+  mkdir -p "$temp_dir"
+  cat > "$temp_dir/config.yaml" <<'EOF'
+log_level: debug
+EOF
+
+  run_container "$cname" -v "$temp_dir":/etc/dolt/doltcfg.d:ro
+
+  docker logs "$cname" >"$BATS_TMPDIR/${cname}.log" 2>&1
+  run grep -F "Starting server with Config" "$BATS_TMPDIR/${cname}.log"
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ 'L="debug"' ]] || false
+
+  rm -rf "$temp_dir"
+}
+
+# bats test_tags=no_lambda
 @test "docker-entrypoint: wrong password authentication" {
   cname="${TEST_PREFIX}wrong-pass"
   usr="testuser"
