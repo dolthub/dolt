@@ -183,9 +183,8 @@ func newCursorFromSearchFn(ctx context.Context, ns NodeStore, nd *Node, search S
 	return
 }
 
-func newLeafCursorAtKey[K ~[]byte, O Ordering[K]](ctx context.Context, ns NodeStore, nd *Node, key K, order O) (cursor, error) {
+func moveCursorToKey[K ~[]byte, O Ordering[K]](ctx context.Context, cur *cursor, key K, order O) error {
 	var err error
-	cur := cursor{nd: nd, nrw: ns}
 	for {
 		// binary search |cur.nd| for |key|
 		i, j := 0, cur.nd.Count()
@@ -208,12 +207,12 @@ func newLeafCursorAtKey[K ~[]byte, O Ordering[K]](ctx context.Context, ns NodeSt
 		cur.keepInBounds()
 
 		// reuse |cur| object to keep stack alloc'd
-		cur.nd, err = fetchChild(ctx, ns, cur.currentRef())
+		cur.nd, err = fetchChild(ctx, cur.nrw, cur.currentRef())
 		if err != nil {
-			return cur, err
+			return err
 		}
 	}
-	return cur, nil
+	return nil
 }
 
 // searchForKey returns a SearchFn for |key|.

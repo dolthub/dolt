@@ -240,7 +240,8 @@ func (t StaticMap[K, V, O]) WalkNodes(ctx context.Context, cb NodeCb) error {
 }
 
 func (t StaticMap[K, V, O]) Get(ctx context.Context, query K, cb KeyValueFn[K, V]) (err error) {
-	cur, err := newLeafCursorAtKey(ctx, t.NodeStore, t.Root, query, t.Order)
+	cur := &cursor{nd: t.Root, nrw: t.NodeStore}
+	err = moveCursorToKey(ctx, cur, query, t.Order)
 	if err != nil {
 		return err
 	}
@@ -260,7 +261,8 @@ func (t StaticMap[K, V, O]) Get(ctx context.Context, query K, cb KeyValueFn[K, V
 }
 
 func (t StaticMap[K, V, O]) GetPrefix(ctx context.Context, query K, prefixOrder O, cb KeyValueFn[K, V]) (err error) {
-	cur, err := newLeafCursorAtKey(ctx, t.NodeStore, t.Root, query, prefixOrder)
+	cur := &cursor{nd: t.Root, nrw: t.NodeStore}
+	err = moveCursorToKey(ctx, cur, query, prefixOrder)
 	if err != nil {
 		return err
 	}
@@ -280,7 +282,8 @@ func (t StaticMap[K, V, O]) GetPrefix(ctx context.Context, query K, prefixOrder 
 }
 
 func (t StaticMap[K, V, O]) Has(ctx context.Context, query K) (ok bool, err error) {
-	cur, err := newLeafCursorAtKey(ctx, t.NodeStore, t.Root, query, t.Order)
+	cur := &cursor{nd: t.Root, nrw: t.NodeStore}
+	err = moveCursorToKey(ctx, cur, query, t.Order)
 	if err != nil {
 		return false, err
 	} else if cur.Valid() {
@@ -290,7 +293,8 @@ func (t StaticMap[K, V, O]) Has(ctx context.Context, query K) (ok bool, err erro
 }
 
 func (t StaticMap[K, V, O]) HasPrefix(ctx context.Context, query K, prefixOrder O) (ok bool, err error) {
-	cur, err := newLeafCursorAtKey(ctx, t.NodeStore, t.Root, query, prefixOrder)
+	cur := &cursor{nd: t.Root, nrw: t.NodeStore}
+	err = moveCursorToKey(ctx, cur, query, prefixOrder)
 	if err != nil {
 		return false, err
 	} else if cur.Valid() {
