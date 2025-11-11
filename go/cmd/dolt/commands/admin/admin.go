@@ -27,5 +27,6 @@ var Commands = cli.NewHiddenSubCommandHandler("admin", "Commands for directly wo
 	NewGenToOldGenCmd{},
 	ConjoinCmd{},
 	ArchiveInspectCmd{},
+	JournalInspectCmd{},
 	createchunk.Commands,
 })
