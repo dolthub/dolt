@@ -159,6 +159,19 @@ func (df *diffTypeFilter) includeModificationsOrAll() bool {
 	return df.filterBy == NoFilter || df.filterBy == FilterModified
 }
 
+// shouldSkipDiffType checks if a row with the given diff type should be skipped based on the filter settings
+func shouldSkipDiffType(filter *diffTypeFilter, rowDiffType diff.ChangeType) bool {
+	if rowDiffType == diff.Added && !filter.includeAddsOrAll() {
+		return true
+	} else if rowDiffType == diff.Removed && !filter.includeDropsOrAll() {
+		return true
+	} else if (rowDiffType == diff.ModifiedOld || rowDiffType == diff.ModifiedNew) &&
+		!filter.includeModificationsOrAll() {
+		return true
+	}
+	return false
+}
+
 // shouldUseLazyHeader determines if we should delay printing the table header
 // until we know there are rows to display. This prevents empty headers when
 // all rows are filtered out in data-only diffs.
@@ -1890,30 +1903,8 @@ func writeDiffResults(
 
 		// Apply row-level filtering based on diff type
 		if dArgs.filter != nil && dArgs.filter.filterBy != NoFilter {
-			shouldSkip := false
-
-			// Check oldRow diff type
-			if oldRow.RowDiff == diff.Added && !dArgs.filter.includeAddsOrAll() {
-				shouldSkip = true
-			} else if oldRow.RowDiff == diff.Removed && !dArgs.filter.includeDropsOrAll() {
-				shouldSkip = true
-			} else if (oldRow.RowDiff == diff.ModifiedOld || oldRow.RowDiff == diff.ModifiedNew) &&
-				!dArgs.filter.includeModificationsOrAll() {
-				shouldSkip = true
-			}
-
-			// Check newRow diff type (it might have a different type)
-			if newRow.RowDiff == diff.Added && !dArgs.filter.includeAddsOrAll() {
-				shouldSkip = true
-			} else if newRow.RowDiff == diff.Removed && !dArgs.filter.includeDropsOrAll() {
-				shouldSkip = true
-			} else if (newRow.RowDiff == diff.ModifiedOld || newRow.RowDiff == diff.ModifiedNew) &&
-				!dArgs.filter.includeModificationsOrAll() {
-				shouldSkip = true
-			}
-
-			if shouldSkip {
-				continue // Skip this row and move to the next
+			if shouldSkipDiffType(dArgs.filter, oldRow.RowDiff) || shouldSkipDiffType(dArgs.filter, newRow.RowDiff) {
+				continue
 			}
 		}
 
