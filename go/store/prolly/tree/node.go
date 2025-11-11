@@ -19,6 +19,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"sync"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 
@@ -50,7 +51,8 @@ type Node struct {
 	keys   message.ItemAccess
 	values message.ItemAccess
 	// hash is the saved hash
-	hash hash.Hash
+	hash   hash.Hash
+	hashed sync.Once
 	// count is the Item pair count.
 	count uint16
 	// level is 0-indexed tree height.
@@ -126,11 +128,13 @@ func NodeFromBytes(msg []byte) (node *Node, fileId string, err error) {
 		count:  count,
 		level:  level,
 		msg:    msg,
-		hash:   hash.Of(msg),
 	}, fileId, err
 }
 
 func (nd *Node) HashOf() hash.Hash {
+	nd.hashed.Do(func() {
+		nd.hash = hash.Of(nd.msg)
+	})
 	return nd.hash
 }
 
