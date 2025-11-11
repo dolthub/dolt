@@ -30,8 +30,6 @@ import (
 	"github.com/gocraft/dbr/v2"
 	"github.com/gocraft/dbr/v2/dialect"
 
-	eventsapi "github.com/dolthub/eventsapi_schema/dolt/services/eventsapi/v1alpha1"
-
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
@@ -44,6 +42,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
+	eventsapi "github.com/dolthub/eventsapi_schema/dolt/services/eventsapi/v1alpha1"
 )
 
 type diffOutput int
@@ -158,6 +157,102 @@ func (df *diffTypeFilter) includeDropsOrAll() bool {
 
 func (df *diffTypeFilter) includeModificationsOrAll() bool {
 	return df.filterBy == NoFilter || df.filterBy == FilterModified
+}
+
+// shouldUseLazyHeader determines if we should delay printing the table header
+// until we know there are rows to display. This prevents empty headers when
+// all rows are filtered out in data-only diffs.
+func shouldUseLazyHeader(dArgs *diffArgs, tableSummary diff.TableDeltaSummary) bool {
+	return dArgs.filter != nil && dArgs.filter.filterBy != NoFilter &&
+		!tableSummary.SchemaChange && !tableSummary.IsRename()
+}
+
+// lazyRowWriter delays table header output until the first row is written.
+// This prevents empty table headers when all rows are filtered out.
+type lazyRowWriter struct {
+	// The real writer, created on first write
+	realWriter diff.SqlRowDiffWriter
+
+	// Factory to create the real writer
+	createWriter func() (diff.SqlRowDiffWriter, error)
+
+	// diffWriter to call BeginTable on
+	dw diffWriter
+
+	// Parameters for BeginTable
+	fromTableName string
+	toTableName   string
+	isAdd         bool
+	isDrop        bool
+
+	// Has BeginTable been called?
+	initialized bool
+}
+
+// newLazyRowWriter creates a lazy row writer that delays header output
+func newLazyRowWriter(
+	dw diffWriter,
+	fromTableName, toTableName string,
+	isAdd, isDrop bool,
+	createWriter func() (diff.SqlRowDiffWriter, error),
+) *lazyRowWriter {
+	return &lazyRowWriter{
+		createWriter:  createWriter,
+		dw:            dw,
+		fromTableName: fromTableName,
+		toTableName:   toTableName,
+		isAdd:         isAdd,
+		isDrop:        isDrop,
+		initialized:   false,
+	}
+}
+
+// ensureInitialized calls BeginTable and creates the real writer on first call
+func (l *lazyRowWriter) ensureInitialized(ctx *sql.Context) error {
+	if l.initialized {
+		return nil
+	}
+
+	// Call BeginTable to print the header
+	err := l.dw.BeginTable(l.fromTableName, l.toTableName, l.isAdd, l.isDrop)
+	if err != nil {
+		return err
+	}
+
+	// Create the real writer
+	realWriter, err := l.createWriter()
+	if err != nil {
+		return err
+	}
+
+	l.realWriter = realWriter
+	l.initialized = true
+	return nil
+}
+
+// WriteRow implements diff.SqlRowDiffWriter
+func (l *lazyRowWriter) WriteRow(ctx *sql.Context, row sql.Row, diffType diff.ChangeType, colDiffTypes []diff.ChangeType) error {
+	if err := l.ensureInitialized(ctx); err != nil {
+		return err
+	}
+	return l.realWriter.WriteRow(ctx, row, diffType, colDiffTypes)
+}
+
+// WriteCombinedRow implements diff.SqlRowDiffWriter
+func (l *lazyRowWriter) WriteCombinedRow(ctx *sql.Context, oldRow, newRow sql.Row, mode diff.Mode) error {
+	if err := l.ensureInitialized(ctx); err != nil {
+		return err
+	}
+	return l.realWriter.WriteCombinedRow(ctx, oldRow, newRow, mode)
+}
+
+// Close implements diff.SqlRowDiffWriter
+func (l *lazyRowWriter) Close(ctx context.Context) error {
+	// Only close if we actually created the real writer
+	if l.initialized && l.realWriter != nil {
+		return l.realWriter.Close(ctx)
+	}
+	return nil
 }
 
 type DiffCmd struct{}
@@ -684,7 +779,7 @@ func getDeltasBetweenRefs(queryist cli.Queryist, sqlCtx *sql.Context, fromRef, t
 }
 
 func getSchemaDiffSummariesBetweenRefs(queryist cli.Queryist, sqlCtx *sql.Context, fromRef, toRef string) ([]diff.TableDeltaSummary, error) {
-	q, err := dbr.InterpolateForDialect("SELECT * FROM dolt_schema_diff(?, ?)", []interface{}{fromRef, toRef}, dialect.MySQL)
+	q, err := dbr.InterpolateForDialect("select * from dolt_schema_diff(?, ?)", []interface{}{fromRef, toRef}, dialect.MySQL)
 	if err != nil {
 		return nil, fmt.Errorf("error: unable to interpolate query: %w", err)
 	}
@@ -721,7 +816,7 @@ func getSchemaDiffSummariesBetweenRefs(queryist cli.Queryist, sqlCtx *sql.Contex
 		}
 
 		q, err := dbr.InterpolateForDialect(
-			"SELECT statement_order, statement FROM dolt_patch(?, ?) WHERE diff_type='schema' AND (table_name=? OR table_name=?) ORDER BY statement_order ASC",
+			"select statement_order, statement from dolt_patch(?, ?) where diff_type='schema' and (table_name=? or table_name=?) order by statement_order asc",
 			[]interface{}{fromRef, toRef, fromTable, toTable},
 			dialect.MySQL)
 		if err != nil {
@@ -753,7 +848,7 @@ func getSchemaDiffSummariesBetweenRefs(queryist cli.Queryist, sqlCtx *sql.Contex
 }
 
 func getDiffSummariesBetweenRefs(queryist cli.Queryist, sqlCtx *sql.Context, fromRef, toRef string) ([]diff.TableDeltaSummary, error) {
-	q, err := dbr.InterpolateForDialect("SELECT * FROM dolt_diff_summary(?, ?)", []interface{}{fromRef, toRef}, dialect.MySQL)
+	q, err := dbr.InterpolateForDialect("select * from dolt_diff_summary(?, ?)", []interface{}{fromRef, toRef}, dialect.MySQL)
 	dataDiffRows, err := cli.GetRowsForSql(queryist, sqlCtx, q)
 	if err != nil {
 		return nil, fmt.Errorf("error: unable to get diff summary from %s to %s: %w", fromRef, toRef, err)
@@ -1087,7 +1182,7 @@ func schemaFromCreateTableStmt(createTableStmt string) (schema.Schema, error) {
 }
 
 func getTableDiffStats(queryist cli.Queryist, sqlCtx *sql.Context, tableName, fromRef, toRef string) ([]diffStatistics, error) {
-	q, err := dbr.InterpolateForDialect("SELECT * FROM dolt_diff_stat(?, ?, ?)", []interface{}{fromRef, toRef, tableName}, dialect.MySQL)
+	q, err := dbr.InterpolateForDialect("select * from dolt_diff_stat(?, ?, ?)", []interface{}{fromRef, toRef, tableName}, dialect.MySQL)
 	if err != nil {
 		return nil, fmt.Errorf("error interpolating query: %w", err)
 	}
@@ -1179,7 +1274,7 @@ func diffUserTable(
 	fromTable := tableSummary.FromTableName
 	toTable := tableSummary.ToTableName
 
-	if dArgs.diffParts&NameOnlyDiff == 0 {
+	if dArgs.diffParts&NameOnlyDiff == 0 && !shouldUseLazyHeader(dArgs, tableSummary) {
 		// TODO: schema names
 		err := dw.BeginTable(tableSummary.FromTableName.Name, tableSummary.ToTableName.Name, tableSummary.IsAdd(), tableSummary.IsDrop())
 		if err != nil {
@@ -1514,10 +1609,26 @@ func diffRows(
 		unionSch = unionSchemas(fromSch, toSch)
 	}
 
-	// We always instantiate a RowWriter in case the diffWriter needs it to close off any work from schema output
-	rowWriter, err := dw.RowWriter(fromTableInfo, toTableInfo, tableSummary, unionSch)
-	if err != nil {
-		return errhand.VerboseErrorFromError(err)
+	var rowWriter diff.SqlRowDiffWriter
+	var err error
+	if shouldUseLazyHeader(dArgs, tableSummary) {
+		// Use lazy writer to delay BeginTable until first row write
+		rowWriter = newLazyRowWriter(
+			dw,
+			tableSummary.FromTableName.Name,
+			tableSummary.ToTableName.Name,
+			tableSummary.IsAdd(),
+			tableSummary.IsDrop(),
+			func() (diff.SqlRowDiffWriter, error) {
+				return dw.RowWriter(fromTableInfo, toTableInfo, tableSummary, unionSch)
+			},
+		)
+	} else {
+		// We always instantiate a RowWriter in case the diffWriter needs it to close off any work from schema output
+		rowWriter, err = dw.RowWriter(fromTableInfo, toTableInfo, tableSummary, unionSch)
+		if err != nil {
+			return errhand.VerboseErrorFromError(err)
+		}
 	}
 
 	// can't diff
@@ -1564,7 +1675,7 @@ func diffRows(
 	}
 
 	columnNames, format := getColumnNames(fromTableInfo, toTableInfo)
-	query := fmt.Sprintf("SELECT %s ? FROM dolt_diff(?, ?, ?)", format)
+	query := fmt.Sprintf("select %s ? from dolt_diff(?, ?, ?)", format)
 	var params []interface{}
 	for _, col := range columnNames {
 		params = append(params, dbr.I(col))
@@ -1897,7 +2008,7 @@ func getModifiedCols(
 func validateWhereClause(queryist cli.Queryist, sqlCtx *sql.Context, dArgs *diffArgs) errhand.VerboseError {
 	// Build a minimal validation query that doesn't depend on having actual tables
 	// We use a subquery approach so the aliased columns are available in the WHERE clause
-	query := "SELECT * FROM (SELECT 1 AS diff_type, 1 AS from_pk, 1 AS to_pk) AS diff_validation WHERE " + dArgs.where + " limit 0"
+	query := "select * from (select 1 as diff_type, 1 as from_pk, 1 as to_pk) as diff_validation where " + dArgs.where + " limit 0"
 	_, rowIter, _, err := queryist.Query(sqlCtx, query)
 	if err != nil {
 		return errhand.BuildDError("Error running diff query").AddCause(err).Build()

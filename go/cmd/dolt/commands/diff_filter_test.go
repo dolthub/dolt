@@ -15,13 +15,15 @@
 package commands
 
 import (
+	"context"
 	"strings"
 	"testing"
-)
 
-// ============================================================================
-// diffTypeFilter Struct Tests
-// ============================================================================
+	"github.com/dolthub/go-mysql-server/sql"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+)
 
 func TestDiffTypeFilter_IsValid(t *testing.T) {
 	tests := []struct {
@@ -131,10 +133,6 @@ func TestDiffTypeFilter_IncludeModificationsOrAll(t *testing.T) {
 	}
 }
 
-// ============================================================================
-// Edge Case Tests
-// ============================================================================
-
 func TestDiffTypeFilter_ConsistencyAcrossMethods(t *testing.T) {
 	// Test that NoFilter returns true for all include methods
 	t.Run("NoFilter returns true for all methods", func(t *testing.T) {
@@ -219,10 +217,6 @@ func TestDiffTypeFilter_InvalidFilterBehavior(t *testing.T) {
 	}
 }
 
-// ============================================================================
-// Validation Tests
-// ============================================================================
-
 func TestDiffCmd_ValidateArgs_ValidFilterValues(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -283,10 +277,6 @@ func TestDiffCmd_ValidateArgs_InvalidFilterValues(t *testing.T) {
 	}
 }
 
-// ============================================================================
-// Constant Value Tests
-// ============================================================================
-
 func TestFilterConstants(t *testing.T) {
 	// Test that filter constants have expected values
 	tests := []struct {
@@ -337,10 +327,6 @@ func TestFilterConstants_AreLowercase(t *testing.T) {
 	}
 }
 
-// ============================================================================
-// Documentation Tests
-// ============================================================================
-
 func TestDiffTypeFilter_MethodNaming(t *testing.T) {
 	// Ensure method names are consistent and descriptive
 	df := &diffTypeFilter{filterBy: NoFilter}
@@ -351,4 +337,255 @@ func TestDiffTypeFilter_MethodNaming(t *testing.T) {
 	_ = df.includeAddsOrAll()
 	_ = df.includeDropsOrAll()
 	_ = df.includeModificationsOrAll()
+}
+
+func TestShouldUseLazyHeader(t *testing.T) {
+	tests := []struct {
+		name           string
+		filter         *diffTypeFilter
+		schemaChange   bool
+		isRename       bool
+		expectedResult bool
+	}{
+		{
+			name:           "use lazy: filter active, data-only change",
+			filter:         &diffTypeFilter{filterBy: FilterAdds},
+			schemaChange:   false,
+			isRename:       false,
+			expectedResult: true,
+		},
+		{
+			name:           "don't use lazy: no filter",
+			filter:         nil,
+			schemaChange:   false,
+			isRename:       false,
+			expectedResult: false,
+		},
+		{
+			name:           "don't use lazy: filter is NoFilter",
+			filter:         &diffTypeFilter{filterBy: NoFilter},
+			schemaChange:   false,
+			isRename:       false,
+			expectedResult: false,
+		},
+		{
+			name:           "don't use lazy: schema changed",
+			filter:         &diffTypeFilter{filterBy: FilterModified},
+			schemaChange:   true,
+			isRename:       false,
+			expectedResult: false,
+		},
+		{
+			name:           "don't use lazy: table renamed",
+			filter:         &diffTypeFilter{filterBy: FilterRemoved},
+			schemaChange:   false,
+			isRename:       true,
+			expectedResult: false,
+		},
+		{
+			name:           "don't use lazy: schema changed AND renamed",
+			filter:         &diffTypeFilter{filterBy: FilterAdds},
+			schemaChange:   true,
+			isRename:       true,
+			expectedResult: false,
+		},
+		{
+			name:           "use lazy: filter=modified, data-only",
+			filter:         &diffTypeFilter{filterBy: FilterModified},
+			schemaChange:   false,
+			isRename:       false,
+			expectedResult: true,
+		},
+		{
+			name:           "use lazy: filter=removed, data-only",
+			filter:         &diffTypeFilter{filterBy: FilterRemoved},
+			schemaChange:   false,
+			isRename:       false,
+			expectedResult: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dArgs := &diffArgs{
+				diffDisplaySettings: &diffDisplaySettings{
+					filter: tt.filter,
+				},
+			}
+			tableSummary := diff.TableDeltaSummary{
+				SchemaChange: tt.schemaChange,
+			}
+			// Create a mock rename by setting different from/to names
+			if tt.isRename {
+				tableSummary.FromTableName = doltdb.TableName{Name: "old_table"}
+				tableSummary.ToTableName = doltdb.TableName{Name: "new_table"}
+			} else {
+				tableSummary.FromTableName = doltdb.TableName{Name: "table"}
+				tableSummary.ToTableName = doltdb.TableName{Name: "table"}
+			}
+
+			result := shouldUseLazyHeader(dArgs, tableSummary)
+
+			if result != tt.expectedResult {
+				t.Errorf("%s: expected %v, got %v", tt.name, tt.expectedResult, result)
+			}
+		})
+	}
+}
+
+// mockDiffWriter is a test implementation of diffWriter
+type mockDiffWriter struct {
+	beginTableCalled bool
+	beginTableError  error
+}
+
+func (m *mockDiffWriter) BeginTable(_ /* fromTableName */, _ /* toTableName */ string, _ /* isAdd */, _ /* isDrop */ bool) error {
+	m.beginTableCalled = true
+	return m.beginTableError
+}
+
+func (m *mockDiffWriter) WriteTableSchemaDiff(_ /* fromTableInfo */, _ /* toTableInfo */ *diff.TableInfo, _ /* tds */ diff.TableDeltaSummary) error {
+	return nil
+}
+
+func (m *mockDiffWriter) WriteEventDiff(_ /* ctx */ context.Context, _ /* eventName */, _ /* oldDefn */, _ /* newDefn */ string) error {
+	return nil
+}
+
+func (m *mockDiffWriter) WriteTriggerDiff(_ /* ctx */ context.Context, _ /* triggerName */, _ /* oldDefn */, _ /* newDefn */ string) error {
+	return nil
+}
+
+func (m *mockDiffWriter) WriteViewDiff(_ /* ctx */ context.Context, _ /* viewName */, _ /* oldDefn */, _ /* newDefn */ string) error {
+	return nil
+}
+
+func (m *mockDiffWriter) WriteTableDiffStats(_ /* diffStats */ []diffStatistics, _ /* oldColLen */, _ /* newColLen */ int, _ /* areTablesKeyless */ bool) error {
+	return nil
+}
+
+func (m *mockDiffWriter) RowWriter(_ /* fromTableInfo */, _ /* toTableInfo */ *diff.TableInfo, _ /* tds */ diff.TableDeltaSummary, _ /* unionSch */ sql.Schema) (diff.SqlRowDiffWriter, error) {
+	return &mockRowWriter{}, nil
+}
+
+func (m *mockDiffWriter) Close(_ /* ctx */ context.Context) error {
+	return nil
+}
+
+// mockRowWriter is a test implementation of SqlRowDiffWriter
+type mockRowWriter struct {
+	writeCalled bool
+	closeCalled bool
+}
+
+func (m *mockRowWriter) WriteRow(_ /* ctx */ *sql.Context, _ /* row */ sql.Row, _ /* diffType */ diff.ChangeType, _ /* colDiffTypes */ []diff.ChangeType) error {
+	m.writeCalled = true
+	return nil
+}
+
+func (m *mockRowWriter) WriteCombinedRow(_ /* ctx */ *sql.Context, _ /* oldRow */, _ /* newRow */ sql.Row, _ /* mode */ diff.Mode) error {
+	m.writeCalled = true
+	return nil
+}
+
+func (m *mockRowWriter) Close(_ /* ctx */ context.Context) error {
+	m.closeCalled = true
+	return nil
+}
+
+func TestLazyRowWriter_NoRowsWritten(t *testing.T) {
+	mockDW := &mockDiffWriter{}
+	factory := func() (diff.SqlRowDiffWriter, error) {
+		return mockDW.RowWriter(nil, nil, diff.TableDeltaSummary{}, nil)
+	}
+
+	lazyWriter := newLazyRowWriter(mockDW, "fromTable", "toTable", false, false, factory)
+
+	// Close without writing any rows
+	err := lazyWriter.Close(context.Background())
+	if err != nil {
+		t.Fatalf("Close() returned error: %v", err)
+	}
+
+	// BeginTable should NEVER have been called
+	if mockDW.beginTableCalled {
+		t.Error("BeginTable() was called even though no rows were written - should have been lazy!")
+	}
+}
+
+func TestLazyRowWriter_RowsWritten(t *testing.T) {
+	mockDW := &mockDiffWriter{}
+	factory := func() (diff.SqlRowDiffWriter, error) {
+		return mockDW.RowWriter(nil, nil, diff.TableDeltaSummary{}, nil)
+	}
+
+	lazyWriter := newLazyRowWriter(mockDW, "fromTable", "toTable", false, false, factory)
+
+	// Write a row
+	ctx := sql.NewEmptyContext()
+	err := lazyWriter.WriteRow(ctx, sql.Row{}, diff.Added, []diff.ChangeType{})
+	if err != nil {
+		t.Fatalf("WriteRow() returned error: %v", err)
+	}
+
+	// BeginTable should have been called on first write
+	if !mockDW.beginTableCalled {
+		t.Error("BeginTable() was NOT called after writing a row - should have been initialized!")
+	}
+
+	// Close
+	err = lazyWriter.Close(context.Background())
+	if err != nil {
+		t.Fatalf("Close() returned error: %v", err)
+	}
+}
+
+func TestLazyRowWriter_CombinedRowsWritten(t *testing.T) {
+	mockDW := &mockDiffWriter{}
+	factory := func() (diff.SqlRowDiffWriter, error) {
+		return mockDW.RowWriter(nil, nil, diff.TableDeltaSummary{}, nil)
+	}
+
+	lazyWriter := newLazyRowWriter(mockDW, "fromTable", "toTable", false, false, factory)
+
+	// Write a combined row
+	ctx := sql.NewEmptyContext()
+	err := lazyWriter.WriteCombinedRow(ctx, sql.Row{}, sql.Row{}, diff.ModeRow)
+	if err != nil {
+		t.Fatalf("WriteCombinedRow() returned error: %v", err)
+	}
+
+	// BeginTable should have been called on first write
+	if !mockDW.beginTableCalled {
+		t.Error("BeginTable() was NOT called after writing combined row - should have been initialized!")
+	}
+}
+
+func TestLazyRowWriter_InitializedOnlyOnce(t *testing.T) {
+	callCount := 0
+	mockDW := &mockDiffWriter{}
+	factory := func() (diff.SqlRowDiffWriter, error) {
+		return mockDW.RowWriter(nil, nil, diff.TableDeltaSummary{}, nil)
+	}
+
+	lazyWriter := newLazyRowWriter(mockDW, "fromTable", "toTable", false, false, factory)
+
+	ctx := sql.NewEmptyContext()
+
+	// Write multiple rows
+	for i := 0; i < 5; i++ {
+		mockDW.beginTableCalled = false // Reset flag
+		err := lazyWriter.WriteRow(ctx, sql.Row{}, diff.Added, []diff.ChangeType{})
+		if err != nil {
+			t.Fatalf("WriteRow() %d returned error: %v", i, err)
+		}
+		if mockDW.beginTableCalled {
+			callCount++
+		}
+	}
+
+	// BeginTable should have been called exactly ONCE (on first write only)
+	if callCount != 1 {
+		t.Errorf("BeginTable() called %d times, expected exactly 1", callCount)
+	}
 }

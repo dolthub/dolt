@@ -499,7 +499,7 @@ insert into test values (1,2,3);
 insert into test values (4,5,6);
 SQL
     dolt add .
-    dolt add . && dolt commit -m "First commit"
+    dolt commit -am "First commit"
 
     dolt sql <<SQL
 alter table test
@@ -576,7 +576,7 @@ EOF
 
 @test "diff: data diff only" {
     dolt add .
-    dolt add . && dolt commit -m "First commit"
+    dolt commit -am "First commit"
 
     dolt sql -q "insert into test (pk) values (10);"
 
@@ -590,7 +590,7 @@ EOF
 
 @test "diff: schema changes only" {
     dolt add .
-    dolt add . && dolt commit -m "First commit"
+    dolt commit -am "First commit"
 
     dolt sql <<SQL
 alter table test
@@ -851,7 +851,7 @@ SQL
 
     # update a row to trigger FKs to be resolved
     dolt sql -q "UPDATE employees SET nickname = 'bobby' WHERE emp_no = 100;"
-    dolt add . && dolt commit -m "Updating data, and resolving FKs"
+    dolt commit -am "Updating data, and resolving FKs"
 
     # check that the diff output doesn't mention FKs getting resolved or the dept_emp table
     run dolt diff HEAD~ HEAD
@@ -1191,14 +1191,14 @@ SQL
     dolt add .
     dolt sql -q "INSERT INTO t VALUES (1, 1, 1)"
 
-    dolt add . && dolt commit -m "cm1"
+    dolt commit -am "cm1"
 
     dolt sql -q "UPDATE t SET val1=2 where pk=1"
     run dolt diff -r sql
     [ $status -eq 0 ]
     [[ "$output" =~ 'UPDATE `t` SET `val1`=2 WHERE `pk`=1;' ]] || false
 
-    dolt add . && dolt commit -m "cm2"
+    dolt commit -am "cm2"
 
     dolt sql -q "UPDATE t SET val1=3, val2=4 where pk = 1"
     dolt diff -r sql
@@ -1206,7 +1206,7 @@ SQL
     [ $status -eq 0 ]
     [[ "$output" =~ 'UPDATE `t` SET `val1`=3,`val2`=4 WHERE `pk`=1;' ]] || false
 
-    dolt add . && dolt commit -m "cm3"
+    dolt commit -am "cm3"
 
     dolt sql -q "UPDATE t SET val1=3 where pk=1;"
     run dolt diff -r sql
@@ -1214,7 +1214,7 @@ SQL
     [[ "$output" = '' ]] || false
 
     dolt sql -q "alter table t add val3 int"
-    dolt add . && dolt commit -m "cm4"
+    dolt commit -am "cm4"
 
     dolt sql -q "update t set val1=30,val3=4 where pk=1"
     run dolt diff -r sql
@@ -1226,7 +1226,7 @@ SQL
     dolt sql -q "CREATE TABLE t(pk int primary key, val1 int, val2 int)"
     dolt add .
     dolt sql -q "INSERT INTO t VALUES (1, 1, 1)"
-    dolt add . && dolt commit -m "cm1"
+    dolt commit -am "cm1"
 
     run dolt diff --skinny --data HEAD~1
     [ $status -eq 0 ]
@@ -1235,10 +1235,10 @@ SQL
     [[ "$output" =~ 'val2' ]] || false
 
     dolt sql -q "UPDATE t SET val1=2 WHERE pk=1"
-    dolt add . && dolt commit -m "cm2"
+    dolt commit -am "cm2"
 
     dolt sql -q "UPDATE t SET val1=3 WHERE pk=1"
-    dolt add . && dolt commit -m "cm3"
+    dolt commit -am "cm3"
 
     run dolt diff --skinny HEAD~1
     [ $status -eq 0 ]
@@ -1252,7 +1252,7 @@ SQL
     dolt add .
     dolt sql -q "INSERT INTO t VALUES (1, 1, 1)"
     dolt sql -q "INSERT INTO t VALUES (2, 2, 2)"
-    dolt add . && dolt commit -m "cm1"
+    dolt commit -am "cm1"
 
     run dolt diff --skinny --data HEAD~1
     [ $status -eq 0 ]
@@ -1263,7 +1263,7 @@ SQL
     dolt sql -q "UPDATE t SET val1=3 WHERE pk=1"
     dolt sql -q "ALTER TABLE t ADD val3 int "
     dolt sql -q "UPDATE t SET val3=4 WHERE pk=1"
-    dolt add . && dolt commit -m "cm2"
+    dolt commit -am "cm2"
 
     run dolt diff --skinny --data HEAD~1
     [ $status -eq 0 ]
@@ -1278,7 +1278,7 @@ SQL
     dolt add .
     dolt sql -q "INSERT INTO t VALUES (1, 1, 'bla')"
     dolt sql -q "INSERT INTO t VALUES (2, 2, 'bla2')"
-    dolt add . && dolt commit -m "cm1"
+    dolt commit -am "cm1"
 
     run dolt diff --skinny --data HEAD~1
     [ $status -eq 0 ]
@@ -1289,7 +1289,7 @@ SQL
     dolt sql -q "ALTER TABLE t DROP COLUMN s"
     dolt sql -q "UPDATE t SET val1=3 WHERE pk=1"
     dolt sql -q "UPDATE t SET val1=4 WHERE pk=2"
-    dolt add . && dolt commit -m "cm2"
+    dolt commit -am "cm2"
 
     run dolt diff --skinny --data HEAD~1
     [ $status -eq 0 ]
@@ -1303,7 +1303,7 @@ SQL
     dolt add .
     dolt sql -q "INSERT INTO t VALUES (1, 1, 1)"
     dolt sql -q "INSERT INTO t VALUES (2, 2, 2)"
-    dolt add . && dolt commit -m "cm1"
+    dolt commit -am "cm1"
 
     run dolt diff --skinny --data HEAD~1
     [ $status -eq 0 ]
@@ -1312,7 +1312,7 @@ SQL
     [[ "$output" =~ 'val2' ]] || false
 
     dolt sql -q "DELETE FROM t WHERE pk=1"
-    dolt add . && dolt commit -m "cm2"
+    dolt commit -am "cm2"
 
     run dolt diff --skinny --data HEAD~1
     [ $status -eq 0 ]
@@ -1324,21 +1324,21 @@ SQL
 @test "diff: keyless sql diffs" {
     dolt sql -q "create table t(pk int, val int)"
     dolt add .
-    dolt add . && dolt commit -m "cm1"
+    dolt commit -am "cm1"
 
     dolt sql -q "INSERT INTO t values (1, 1)"
     run dolt diff -r sql
     [ $status -eq 0 ]
     [[ "$output" = 'INSERT INTO `t` (`pk`,`val`) VALUES (1,1);' ]] || false
 
-    dolt add . && dolt commit -m "cm2"
+    dolt commit -am "cm2"
 
     dolt sql -q "INSERT INTO t values (1, 1)"
     run dolt diff -r sql
     [ $status -eq 0 ]
     [[ "$output" = 'INSERT INTO `t` (`pk`,`val`) VALUES (1,1);' ]] || false
 
-    dolt add . && dolt commit -m "cm3"
+    dolt commit -am "cm3"
 
     dolt sql -q "UPDATE t SET val = 2 where pk = 1"
     dolt diff -r sql
@@ -1350,7 +1350,7 @@ SQL
     [[ "$output" =~ 'INSERT INTO `t` (`pk`,`val`) VALUES (1,2);' ]] || false
     [ "${#lines[@]}" = "4" ]
 
-    dolt add . && dolt commit -m "cm4"
+    dolt commit -am "cm4"
 
     dolt sql -q "DELETE FROM t WHERE val < 3"
     run dolt diff -r sql
@@ -1358,7 +1358,7 @@ SQL
     [ "${lines[0]}" = 'DELETE FROM `t` WHERE `pk`=1 AND `val`=2;' ]
     [ "${lines[1]}" = 'DELETE FROM `t` WHERE `pk`=1 AND `val`=2;' ]
 
-    dolt add . && dolt commit -m "cm5"
+    dolt commit -am "cm5"
 
     dolt sql -q "alter table t add primary key (pk)"
     dolt diff -r sql
@@ -1368,7 +1368,7 @@ SQL
     [ "${lines[1]}" = 'ALTER TABLE `t` ADD PRIMARY KEY (pk);' ]
     [ "${lines[2]}" = "Primary key sets differ between revisions for table 't', skipping data diff" ]
 
-    dolt add . && dolt commit -m "cm6"
+    dolt commit -am "cm6"
 
     dolt sql -q "alter table t add column pk2 int"
     dolt sql -q "alter table t drop primary key"
@@ -1387,7 +1387,7 @@ create table t(pk int, val int);
 insert into t values (1,1);
 SQL
     dolt add .
-    dolt add . && dolt commit -m "creating table"
+    dolt commit -am "creating table"
 
     dolt sql -q "alter table t add primary key (pk)"
 
@@ -1404,7 +1404,7 @@ SQL
     [[ "$output" =~ "Primary key sets differ between revisions for table 't', skipping data diff" ]] || false
 
 
-    dolt add . && dolt commit -m 'added primary key'
+    dolt commit -am 'added primary key'
 
     dolt sql -q "alter table t drop primary key"
 
@@ -1462,10 +1462,10 @@ SQL
     done
 
     dolt sql -q "INSERT INTO t values $VALUES"
-    dolt add . && dolt commit -m "Add the initial rows"
+    dolt commit -am "Add the initial rows"
 
     dolt sql -q "UPDATE t set val = val + 1 WHERE pk < 10000"
-    dolt add . && dolt commit -m "make a bulk update creating a large diff"
+    dolt commit -am "make a bulk update creating a large diff"
 
     run dolt diff HEAD~1
     [ "${#lines[@]}" -eq 2007 ] # 2000 diffs + 6 for top rows before data + 1 for bottom row of table
@@ -1609,7 +1609,7 @@ CREATE TABLE t2 (pk1a int, pk1b int, col1 int, PRIMARY KEY (pk1a, pk1b));
 INSERT INTO t2 VALUES (1, 1, 1);
 call dolt_add('.');
 SQL
-    dolt add . && dolt commit -m "initial"
+    dolt commit -am "initial"
 
     dolt sql <<SQL
 ALTER TABLE t1 RENAME COLUMN pk to pk2;
@@ -1619,7 +1619,7 @@ ALTER TABLE t2 RENAME COLUMN pk1b to pk2b;
 UPDATE t2 set col1 = 100;
 call dolt_add('.');
 SQL
-    dolt add . && dolt commit -m 'rename primary key'
+    dolt commit -am 'rename primary key'
 
     run dolt diff HEAD~1 HEAD
     [ $status -eq 0 ]
@@ -1653,7 +1653,7 @@ EOF
     dolt sql -q "Insert into t values (1), (2), (3);"
     dolt sql -q "alter table t add column col1 int;"
     dolt add .
-    dolt add . && dolt commit -m "setup"
+    dolt commit -am "setup"
 
     # Turn a short tuple into a nominal one
     dolt sql -q "UPDATE t set col1 = 1 where pk = 1;"
@@ -1722,7 +1722,7 @@ SQL
     fi
 
     dolt add .
-    dolt add . && dolt commit -m "commit 1"
+    dolt commit -am "commit 1"
     dolt sql <<SQL
 CREATE TABLE mytable(pk BIGINT PRIMARY KEY AUTO_INCREMENT, v1 BIGINT);
 CREATE TRIGGER trigger1 BEFORE INSERT ON mytable FOR EACH ROW SET new.v1 = -new.v1;
@@ -2015,7 +2015,7 @@ insert into test values (2,'small');
 insert into test values (3,'medium');
 SQL
     dolt add .
-    dolt add . && dolt commit -m "First commit"
+    dolt commit -am "First commit"
 
     dolt sql <<SQL
 insert into test values (4,'large');
@@ -2057,7 +2057,7 @@ insert into test values (2,'small');
 insert into test values (3,'medium');
 SQL
     dolt add .
-    dolt add . && dolt commit -m "First commit"
+    dolt commit -am "First commit"
 
     dolt sql <<SQL
 alter table test add column c1 int;
@@ -2134,7 +2134,7 @@ create table test (pk int primary key auto_increment);
 insert into test values (1);
 SQL
     dolt add .
-    dolt add . && dolt commit -m "First commit"
+    dolt commit -am "First commit"
 
     dolt sql <<SQL
 insert into test values (2);
@@ -2300,7 +2300,7 @@ EOF
     [[ $output = '' ]] || false
 
     run dolt diff HEAD~1 -r sql --filter=modified
-    [ "${lines[0]}" = 'UPDATE `t` SET `val`=12 WHERE (`pk`=1);' ]
+    [ "${lines[0]}" = 'UPDATE `t` SET `val`=12 WHERE `pk`=1;' ]
 
     # Test filter with row deletes
     dolt sql -q "DELETE from t where pk=1"
@@ -2317,7 +2317,7 @@ EOF
 
     run dolt diff HEAD~1 -r sql --filter=removed
     [ $status -eq 0 ]
-    [ "${lines[0]}" = 'DELETE FROM `t` WHERE (`pk`=1);' ]
+    [ "${lines[0]}" = 'DELETE FROM `t` WHERE `pk`=1;' ]
 
     # Test filter with schema changes - add column
     dolt sql -q "ALTER TABLE t ADD val2 int"
@@ -2334,7 +2334,7 @@ EOF
 
     run dolt diff HEAD~1 -r sql --filter=modified
     [ $status -eq 0 ]
-    [ "${lines[0]}" = 'ALTER TABLE `t` ADD `val2` INT;' ]
+    [ "${lines[0]}" = 'ALTER TABLE `t` ADD `val2` int;' ]
 
     # Test filter with schema changes - modify column type
     dolt sql -q "ALTER TABLE t MODIFY COLUMN val2 varchar(255)"
@@ -2351,8 +2351,7 @@ EOF
 
     run dolt diff HEAD~1 -r sql  --filter=modified
     [ $status -eq 0 ]
-    [ "${lines[0]}" = 'ALTER TABLE `t` DROP `val2`;' ]
-    [ "${lines[1]}" = 'ALTER TABLE `t` ADD `val2` VARCHAR(255);' ]
+    [ "${lines[0]}" = 'ALTER TABLE `t` MODIFY COLUMN `val2` varchar(255);' ]
 
     # Test filter with schema changes - rename column
     dolt sql -q "ALTER TABLE t RENAME COLUMN val2 TO val3"
