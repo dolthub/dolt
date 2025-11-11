@@ -68,7 +68,7 @@ func TestRoundTripNodeItems(t *testing.T) {
 
 func TestNodeSize(t *testing.T) {
 	sz := unsafe.Sizeof(Node{})
-	assert.Equal(t, 104, int(sz))
+	assert.Equal(t, 120, int(sz))
 }
 
 func BenchmarkNodeGet(b *testing.B) {
