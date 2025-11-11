@@ -126,14 +126,11 @@ func NodeFromBytes(msg []byte) (node *Node, fileId string, err error) {
 		count:  count,
 		level:  level,
 		msg:    msg,
+		hash:   hash.Of(msg),
 	}, fileId, err
 }
 
 func (nd *Node) HashOf() hash.Hash {
-	// TODO: not sure if msg ever changes...
-	if nd.hash.IsEmpty() {
-		nd.hash = hash.Of(nd.bytes())
-	}
 	return nd.hash
 }
 
