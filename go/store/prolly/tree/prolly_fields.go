@@ -210,10 +210,6 @@ func GetFieldValue(ctx context.Context, td *val.TupleDesc, i int, tup val.Tuple,
 		if !ok {
 			return v, nil
 		}
-		v.Val, err = ns.ReadBytes(ctx, h)
-		if err != nil {
-			return v, err
-		}
 		v.WrappedVal = val.NewByteArray(ctx, h, ns)
 		return v, nil
 
