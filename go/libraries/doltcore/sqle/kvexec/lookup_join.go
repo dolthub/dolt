@@ -251,7 +251,7 @@ func newLookupKeyMapping(
 	litTb := val.NewTupleBuilder(litDesc, ns)
 	for i, j := range litMappings {
 		colTyp := typs[j]
-		val, _, err := convertKeyValue(ctx, colTyp, keyExprs[j].(*expression.Literal))
+		val, _, err := convertLiteralKeyValue(ctx, colTyp, keyExprs[j].(*expression.Literal))
 		if err != nil {
 			return nil, err
 		}
@@ -283,10 +283,13 @@ func newLookupKeyMapping(
 	}, nil
 }
 
-func convertKeyValue(ctx *sql.Context, colTyp sql.ColumnExpressionType, val *expression.Literal) (any, sql.ConvertInRange, error) {
+// convertLiteralKeyValue converts a literal expression value to the appropriate type for the reference column
+// in a key lookup
+func convertLiteralKeyValue(ctx *sql.Context, colTyp sql.ColumnExpressionType, val *expression.Literal) (any, sql.ConvertInRange, error) {
 	srcType := val.Type()
 	destType := colTyp.Type
 
+	// For extended types, use the rich type conversion methods
 	if srcEt, ok := srcType.(sql.ExtendedType); ok {
 		if destEt, ok := destType.(sql.ExtendedType); ok {
 			converted, err := destEt.ConvertToType(ctx, srcEt, val.Value())
@@ -297,7 +300,8 @@ func convertKeyValue(ctx *sql.Context, colTyp sql.ColumnExpressionType, val *exp
 			return converted, sql.InRange, nil
 		}
 	}
-	return colTyp.Type.Convert(ctx, val)
+
+	return destType.Convert(ctx, val)
 }
 
 // valid returns whether the source and destination key types
