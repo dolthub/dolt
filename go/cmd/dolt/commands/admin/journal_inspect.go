@@ -57,6 +57,7 @@ func (cmd JournalInspectCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsFlag("roots", "r", "Display root hashes found in the journal")
 	ap.SupportsFlag("chunks", "c", "Display chunk hashes found in the journal")
 	ap.SupportsFlag("verbose", "v", "Display verbose output during inspection (same as -r -c")
+	ap.SupportsFlag("crc-scan", "", "Scan invalid sections for valid CRCs. SLOW.")
 	return ap
 }
 
@@ -79,6 +80,8 @@ func (cmd JournalInspectCmd) Exec(_ context.Context, commandStr string, args []s
 		seeChunks = true
 	}
 
+	crcScan := apr.Contains("crc-scan")
+
 	if _, err := os.Stat(journalPath); os.IsNotExist(err) {
 		cli.PrintErrln("Error: Journal file does not exist:", journalPath)
 		return 1
@@ -91,5 +94,5 @@ func (cmd JournalInspectCmd) Exec(_ context.Context, commandStr string, args []s
 	}
 
 	// JournalInspect returns an exit code. It's entire purpose it to print errors, after all.
-	return nbs.JournalInspect(absPath, seeRoots, seeChunks)
+	return nbs.JournalInspect(absPath, seeRoots, seeChunks, crcScan)
 }

@@ -19,11 +19,12 @@ import (
 	"encoding/hex"
 	"io"
 	"os"
+	"slices"
 
 	"github.com/sirupsen/logrus"
 )
 
-func JournalInspect(journalPath string, seeRoots, seeChunks bool) int {
+func JournalInspect(journalPath string, seeRoots, seeChunks, crcScan bool) int {
 	var f *os.File
 	f, err := os.Open(journalPath)
 	if err != nil {
@@ -64,6 +65,9 @@ func JournalInspect(journalPath string, seeRoots, seeChunks bool) int {
 	// changes for false, and never reset to zero once set.
 	exitStatus := 0
 
+	// Offset of the start of a suspect region. Used to process a bad region if we end up returning to a healthy state.
+	suspectRegionStart := -1
+
 	shasum := sha256.Sum256(buf)
 	logrus.Infof("Read %d bytes with sha256 sum: %s", len(buf), hex.EncodeToString(shasum[:]))
 
@@ -84,6 +88,7 @@ func JournalInspect(journalPath string, seeRoots, seeChunks bool) int {
 				happyRecords, happyBytes = endHappiness(happyRecords, happyBytes)
 				logrus.Errorf("Encountered zero size record at offset %d [$od -j %d -x %s]", offset, offset, journalPath)
 				healthyState = false
+				suspectRegionStart = offset
 				exitStatus = 1
 			}
 
@@ -110,6 +115,13 @@ func JournalInspect(journalPath string, seeRoots, seeChunks bool) int {
 					logrus.Infof("Resumed healthy reads at offset %d", offset)
 					healthyState = true
 					firstHealthy = true
+					if crcScan && suspectRegionStart != -1 {
+						crcMatches := scanMysteryBytesForCRCs(0, buf[suspectRegionStart:offset])
+						if len(crcMatches) > 0 {
+							logrus.Infof("Scanned suspect region %d to %d for possible CRC matches. Found %v", suspectRegionStart, offset, crcMatches)
+						}
+					}
+					suspectRegionStart = -1
 				}
 
 				rec, err := readJournalRecord(recordBuf)
@@ -119,6 +131,7 @@ func JournalInspect(journalPath string, seeRoots, seeChunks bool) int {
 					happyRecords, happyBytes = endHappiness(happyRecords, happyBytes)
 					logrus.Errorf("Lost healthy reads at offset %d (read error: %v) [$od -j %d -x %s]", offset, err, offset, journalPath)
 					healthyState = false
+					suspectRegionStart = offset
 					exitStatus = 1
 
 					cons = 0
@@ -145,6 +158,7 @@ func JournalInspect(journalPath string, seeRoots, seeChunks bool) int {
 					happyRecords, happyBytes = endHappiness(happyRecords, happyBytes)
 					logrus.Errorf("Unexpected Record Kind: %d", rec.kind)
 					healthyState = false
+					suspectRegionStart = offset
 					exitStatus = 1
 					continue
 				}
@@ -165,6 +179,7 @@ func JournalInspect(journalPath string, seeRoots, seeChunks bool) int {
 					happyRecords, happyBytes = endHappiness(happyRecords, happyBytes)
 					logrus.Errorf("Lost healthy reads at offset %d (%v) [$od -j %d -x %s]", offset, err, offset, journalPath)
 					healthyState = false
+					suspectRegionStart = offset
 					exitStatus = 1
 				}
 
@@ -178,6 +193,7 @@ func JournalInspect(journalPath string, seeRoots, seeChunks bool) int {
 				happyRecords, happyBytes = endHappiness(happyRecords, happyBytes)
 				logrus.Errorf("Lost healthy reads at offset %d (read %d - past EOF) [$od -j %d -x %s]", offset, size, offset, journalPath)
 				healthyState = false
+				suspectRegionStart = offset
 				exitStatus = 1
 			}
 
@@ -188,6 +204,12 @@ func JournalInspect(journalPath string, seeRoots, seeChunks bool) int {
 	}
 	if happyRecords > 0 {
 		logrus.Infof("Successfully read %d records (%d bytes)", happyRecords, happyBytes)
+	}
+	if crcScan && !healthyState && suspectRegionStart != -1 {
+		crcMatches := scanMysteryBytesForCRCs(0, buf[suspectRegionStart:])
+		if len(crcMatches) > 0 {
+			logrus.Infof("Scanned suspect region %d to EOF for possible CRC matches. Found %v", suspectRegionStart, crcMatches)
+		}
 	}
 
 	logrus.Infof("----- Journal Inspection Report -----")
@@ -212,4 +234,50 @@ func endHappiness(happyRecords, happyBytes int) (int, int) {
 	logrus.Errorf("Successfully read %d records (%d bytes) before encountering an error", happyRecords, happyBytes)
 
 	return 0, 0
+}
+
+type validCRCResult struct {
+	start  uint32
+	end    uint32
+	nested []validCRCResult
+}
+
+// scanMysteryBytesForCRCs attempts to interpret the given byte slice for anything which looks like a CRC check summed section.
+// Journal records have a CRC checksum at the end of them, and in the case of chunk records, there is an inner CRC checksum
+// as well. This function scans the given byte slice for anything that looks like a valid checksum starting from the end
+// of the slice and working backwards.
+//
+// We are only calling this method on data that already failed validation, so we expect what we will find here to be a clue
+// into what is wrong with the journal file. But it's also very likely it will find nothing and possibly false positives.
+//
+// Always call with startIdx of 0. It's exposed for recursion purposes. The |buf| slice is the data to scan, and the
+// result offsets will be relative to the start of the slice.
+func scanMysteryBytesForCRCs(start int, buf []byte) []validCRCResult {
+	var results []validCRCResult
+	endIdx := len(buf) - 4
+	startIdx := start
+	for startIdx < endIdx {
+		outerCrc := readUint32(buf[endIdx:])
+		for startIdx < endIdx {
+			computedCrc := crc(buf[startIdx:endIdx])
+			if outerCrc == computedCrc {
+				// Found something! Could be random chance, could be real.
+				found := validCRCResult{
+					start:  uint32(startIdx),
+					end:    uint32(endIdx + 4),
+					nested: scanMysteryBytesForCRCs(startIdx, buf[0:endIdx]),
+				}
+				results = append(results, found)
+
+				endIdx = startIdx
+				startIdx = start
+			} else {
+				startIdx += 1
+			}
+		}
+		endIdx -= 1
+		startIdx = start
+	}
+	slices.Reverse(results)
+	return results
 }
