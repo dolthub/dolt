@@ -180,7 +180,7 @@ func JournalInspect(journalPath string, seeRoots, seeChunks bool) int {
 				healthyState = false
 				exitStatus = 1
 			}
-			
+
 			cons = 0
 			numBad += 1
 			offset += 1
