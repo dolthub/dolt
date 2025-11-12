@@ -248,9 +248,9 @@ func defaultServerConfigYAML() *YAMLConfig {
 		MaxQueryLenInLogs: ptr(DefaultMaxLoggedQueryLen),
 		EncodeLoggedQuery: ptr(DefaultEncodeLoggedQuery),
 		BehaviorConfig: BehaviorYAMLConfig{
-			ReadOnly:              ptr(DefaultReadOnly),
-			AutoCommit:            ptr(DefaultAutoCommit),
-			DoltTransactionCommit: ptr(DefaultDoltTransactionCommit),
+			ReadOnly:               ptr(DefaultReadOnly),
+			AutoCommit:             ptr(DefaultAutoCommit),
+			DoltTransactionCommit:  ptr(DefaultDoltTransactionCommit),
 			BranchActivityTracking: ptr(DefaultBranchActivityTracking),
 			AutoGCBehavior: &AutoGCBehaviorYAMLConfig{
 				Enable_:       ptr(DefaultAutoGCBehaviorEnable),
