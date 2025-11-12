@@ -323,7 +323,6 @@ func snappyFuzzyDecode(src []byte, start int) {
 	window := make([]byte, 0, min(MaxOut, 1<<20))
 
 	w := LineLogger{}
-	defer w.Flush()
 
 	lastWroteDots := false
 	writeOut := func(p []byte) bool {
@@ -483,6 +482,7 @@ func snappyFuzzyDecode(src []byte, start int) {
 		}
 	}
 
+	w.Flush()
 	logrus.Infof("------ Snappy Fuzzy Decode Complete: processed %d bytes, encountered %d errors ------", offset-start, errs)
 }
 
