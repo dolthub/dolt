@@ -117,6 +117,7 @@ func (t *BranchActivityTracker) processEvents(ctx context.Context) {
 
 // RecordReadEvent records when a branch is read/accessed
 func (t *BranchActivityTracker) RecordReadEvent(ctx context.Context, database, branch string) {
+	return
 	if ignoreEvent(ctx, branch) {
 		return
 	}
@@ -135,6 +136,7 @@ func (t *BranchActivityTracker) RecordReadEvent(ctx context.Context, database, b
 
 // RecordWriteEvent records when a branch is written/updated
 func (t *BranchActivityTracker) RecordWriteEvent(ctx context.Context, database, branch string) {
+	return
 	if ignoreEvent(ctx, branch) {
 		return
 	}
