@@ -30,20 +30,19 @@ setup() {
 
     cd ../
 
-    # Create complete config file with branch activity tracking enabled
+    # Define port and create complete config file
+    # Can't use start_sql_server_with_config because it hardcodes behavior.autocommit: false
+    # and we can't override it without duplicate YAML keys
+    PORT=$( definePORT )
     cat > server.yaml <<EOF
-log_level: debug
-
 listener:
-  host: 0.0.0.0
-  max_connections: 10
+  port: $PORT
 
 behavior:
-  autocommit: false
   branch_activity_tracking: true
 EOF
 
-    start_sql_server_with_args "" "--config" "server.yaml"
+    start_sql_server_with_args_no_port "--config" "server.yaml"
 }
 
 teardown() {
