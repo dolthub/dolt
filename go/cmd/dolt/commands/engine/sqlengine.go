@@ -244,6 +244,7 @@ func NewSqlEngine(
 	_, enabled, _ := sql.SystemVariables.GetGlobal(dsess.DoltStatsEnabled)
 	if enabled.(int8) == 1 {
 		//statsPro = statspro.NewStatsController(logrus.StandardLogger(), bThreads, mrEnv.GetEnv(mrEnv.GetFirstDatabase()))
+		statsPro = statspro.StatsNoop{}
 	} else {
 		statsPro = statspro.StatsNoop{}
 	}
