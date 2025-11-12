@@ -23,6 +23,7 @@ import (
 	"io"
 	"os"
 	"slices"
+	"time"
 
 	"github.com/sirupsen/logrus"
 )
@@ -70,6 +71,8 @@ func JournalInspect(journalPath string, seeRoots, seeChunks, crcScan, snapScan b
 
 	// suspectRegionStart is the offset of an unparsable region. Used to process bad regions when they come up.
 	suspectRegionStart := -1
+
+	var lastRootTs time.Time
 
 	shasum := sha256.Sum256(buf)
 	logrus.Infof("Read %d bytes with sha256 sum: %s", len(buf), hex.EncodeToString(shasum[:]))
@@ -155,6 +158,14 @@ func JournalInspect(journalPath string, seeRoots, seeChunks, crcScan, snapScan b
 						logrus.Infof("Chunk Record Found %s (%d bytes)", rec.address.String(), len(recordBuf))
 					}
 				} else if rec.kind == rootHashJournalRecKind {
+					if lastRootTs.IsZero() {
+						lastRootTs = rec.timestamp
+					}
+					if rec.timestamp.Before(lastRootTs) {
+						logrus.Warnf("Root record timestamp went backwards: last %s, this %s", lastRootTs.String(), rec.timestamp.String())
+					}
+					lastRootTs = rec.timestamp
+
 					numRoots += 1
 					if firstHealthy {
 						logrus.Infof("First Root Record Found %s (%d bytes)", rec.address.String(), len(recordBuf))
