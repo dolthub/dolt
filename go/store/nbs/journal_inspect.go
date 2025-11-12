@@ -41,8 +41,8 @@ func JournalInspect(journalPath string, seeRoots, seeChunks, crcScan, snapScan b
 	}
 
 	// Counters for various conditions we want to report on. These counters require a little understanding of the
-	// scan logic below. For example, when we hit block of null butes, the number of zero length records will be high,
-	// but of we his a block of random non-null bytes, the number of large records will be very high. Look at the printed
+	// scan logic below. For example, when we hit a block of null bytes, the number of zero length records will be high,
+	// but if we hit a block of random non-null bytes, the number of large records will be very high. Look at the printed
 	// scan log and the stats, and reason about what they mean together.
 	numZeros := 0    // number of zero length records seen
 	numTooLarge := 0 // number of over-large records seen
