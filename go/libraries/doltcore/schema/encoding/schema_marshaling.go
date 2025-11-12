@@ -458,7 +458,7 @@ func UnmarshalSchemaAtAddr(ctx context.Context, vr types.ValueReader, addr hash.
 	schemaCacheMu.Unlock()
 
 	if ok {
-		return cachedSch, nil
+		return cachedSch.Copy(), nil
 	}
 
 	schemaVal, err := vr.ReadValue(ctx, addr)
