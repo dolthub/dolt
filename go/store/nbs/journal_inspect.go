@@ -115,7 +115,6 @@ func JournalInspect(journalPath string, seeRoots, seeChunks, crcScan, snapScan b
 			firstHealthy := false
 			if err = validateJournalRecord(recordBuf); err == nil {
 				if !healthyState {
-					logrus.Infof("Resumed healthy reads at offset %d", offset)
 					healthyState = true
 					firstHealthy = true
 					if suspectRegionStart != -1 {
@@ -130,6 +129,7 @@ func JournalInspect(journalPath string, seeRoots, seeChunks, crcScan, snapScan b
 						}
 					}
 					suspectRegionStart = -1
+					logrus.Infof("Resumed healthy reads at offset %d", offset)
 				}
 
 				rec, err := readJournalRecord(recordBuf)
