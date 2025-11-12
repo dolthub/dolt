@@ -415,7 +415,7 @@ type schCacheData struct {
 	schema schema.Schema
 }
 
-var schemaCacheMu *sync.RWMutex = &sync.RWMutex{}
+var schemaCacheMu *sync.Mutex = &sync.Mutex{}
 var unmarshalledSchemaCache = map[hash.Hash]schema.Schema{}
 
 // UnmarshalSchema takes a types.Value representing a Schema and Unmarshalls it into a schema.Schema.
@@ -453,9 +453,9 @@ func UnmarshalSchema(ctx context.Context, nbf *types.NomsBinFormat, schemaVal ty
 
 // UnmarshalSchemaAtAddr returns the schema at the given address, using the schema cache if possible.
 func UnmarshalSchemaAtAddr(ctx context.Context, vr types.ValueReader, addr hash.Hash) (schema.Schema, error) {
-	schemaCacheMu.RLock()
+	schemaCacheMu.Lock()
 	cachedSch, ok := unmarshalledSchemaCache[addr]
-	schemaCacheMu.RUnlock()
+	schemaCacheMu.Unlock()
 
 	if ok {
 		return cachedSch, nil

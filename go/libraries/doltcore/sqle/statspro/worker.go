@@ -355,7 +355,8 @@ func (sc *StatsController) collectIndexNodes(ctx *sql.Context, prollyMap prolly.
 					keyBytes, _, err := iter.Next(ctx)
 					if errors.Is(err, io.EOF) {
 						break
-					} else if err != nil {
+					}
+					if err != nil {
 						return err
 					}
 					// build full key
