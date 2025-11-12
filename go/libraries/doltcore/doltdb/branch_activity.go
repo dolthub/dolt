@@ -47,16 +47,16 @@ var EventSessionContextKey = eventSessionContextKeyType{}
 
 // BranchActivityData represents activity data for a single branch
 type BranchActivityData struct {
-	Branch          string
+	SystemStartTime time.Time
 	LastRead        *time.Time
 	LastWrite       *time.Time
-	SystemStartTime time.Time
+	Branch          string
 }
 
 type branchActivityEvent struct {
+	timestamp time.Time
 	database  string
 	branch    string
-	timestamp time.Time
 	eventType int
 }
 
@@ -67,11 +67,11 @@ type branchActivityKey struct {
 
 // BranchActivityTracker tracks branch activity for a single SQL engine instance
 type BranchActivityTracker struct {
-	mu              sync.RWMutex
+	systemStartTime time.Time
 	readTimes       map[branchActivityKey]time.Time
 	writeTimes      map[branchActivityKey]time.Time
-	systemStartTime time.Time
-	activityChan    chan branchActivityEvent
+	activityChan    chan *branchActivityEvent
+	mu              sync.RWMutex
 }
 
 // NewBranchActivityTracker creates a new branch activity tracker instance
@@ -79,8 +79,8 @@ func NewBranchActivityTracker(ctx context.Context) *BranchActivityTracker {
 	tracker := &BranchActivityTracker{
 		readTimes:       make(map[branchActivityKey]time.Time),
 		writeTimes:      make(map[branchActivityKey]time.Time),
+		activityChan:    make(chan *branchActivityEvent, 64),
 		systemStartTime: time.Now(),
-		activityChan:    make(chan branchActivityEvent, 64),
 	}
 
 	// Start background processor, we ignore the cancel function as the tracker doesn't have a lifecycle.
@@ -122,7 +122,7 @@ func (t *BranchActivityTracker) RecordReadEvent(ctx context.Context, database, b
 	}
 
 	select {
-	case t.activityChan <- branchActivityEvent{
+	case t.activityChan <- &branchActivityEvent{
 		database:  database,
 		branch:    branch,
 		timestamp: time.Now(),
@@ -140,7 +140,7 @@ func (t *BranchActivityTracker) RecordWriteEvent(ctx context.Context, database, 
 	}
 
 	select {
-	case t.activityChan <- branchActivityEvent{
+	case t.activityChan <- &branchActivityEvent{
 		database:  database,
 		branch:    branch,
 		timestamp: time.Now(),
