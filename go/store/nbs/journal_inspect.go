@@ -317,7 +317,7 @@ func snappyFuzzyDecode(src []byte, start int) {
 	var MaxEnc = 8 << 20      // max encoded bytes to consume from start (default 8 MiB)
 	var MaxOut = 32 << 20     // max decoded bytes to produce (default 32 MiB)
 	var MaxBackward = 2 << 20 // max backref distance (default 2 MiB)
-	var dots = []byte("@")    // bytes inserted when we run into errors
+	var dots = []byte("<.>")  // bytes inserted when we run into errors
 
 	// History window for backrefs (decoded bytes so far).
 	window := make([]byte, 0, min(MaxOut, 1<<20))
@@ -330,14 +330,15 @@ func snappyFuzzyDecode(src []byte, start int) {
 			return true
 		}
 		// Avoid writing placeholders repeatedly.
-		if lastWroteDots && slices.Equal(p, dots) {
-			return true
-		}
 		if slices.Equal(p, dots) {
+			if lastWroteDots {
+				return true
+			}
 			lastWroteDots = true
 		} else {
 			lastWroteDots = false
 		}
+
 		// Clip to remaining output budget (note: history maintenance must match this).
 		remain := MaxOut - len(window)
 		if remain <= 0 {
