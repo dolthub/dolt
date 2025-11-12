@@ -192,8 +192,10 @@ type lookupMapping struct {
 	srcVd      *val.TupleDesc
 	srcMapping val.OrdinalMapping
 	// litTuple are the statically provided literal expressions in the key expression
-	litTuple val.Tuple
-	split    int
+	litTuple   val.Tuple
+	split      int
+	keyExprs   []sql.Expression
+	idxColTyps []sql.ColumnExpressionType
 }
 
 func newLookupKeyMapping(
@@ -280,6 +282,8 @@ func newLookupKeyMapping(
 		targetKb:   val.NewTupleBuilder(tgtKeyDesc, ns),
 		ns:         ns,
 		pool:       ns.Pool(),
+		keyExprs:   keyExprs,
+		idxColTyps: typs,
 	}, nil
 }
 
@@ -328,6 +332,16 @@ func (m *lookupMapping) valid() bool {
 		}
 		if desc.Types[from].Enc != m.targetKb.Desc.Types[to].Enc {
 			return false
+		}
+
+		// The extended encoding types don't provide us enough information to know if the types are actually
+		// byte-compatible for these lookups, so we need to dig deeper.
+		switch desc.Types[from].Enc {
+		case val.ExtendedAddrEnc, val.ExtendedEnc, val.ExtendedAdaptiveEnc:
+			toTyp := m.idxColTyps[from].Type
+			fromTyp := m.keyExprs[from].Type()
+			// this is more conservative than it needs to be, we want to assert these values are byte-compatible
+			return toTyp == fromTyp
 		}
 	}
 	return true
