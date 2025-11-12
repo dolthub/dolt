@@ -72,15 +72,17 @@ type BranchActivityTracker struct {
 	writeTimes      map[branchActivityKey]time.Time
 	systemStartTime time.Time
 	activityChan    chan branchActivityEvent
+	trackingEnabled bool
 }
 
 // NewBranchActivityTracker creates a new branch activity tracker instance
-func NewBranchActivityTracker(ctx context.Context) *BranchActivityTracker {
+func NewBranchActivityTracker(ctx context.Context, trackingEnabled bool) *BranchActivityTracker {
 	tracker := &BranchActivityTracker{
 		readTimes:       make(map[branchActivityKey]time.Time),
 		writeTimes:      make(map[branchActivityKey]time.Time),
 		systemStartTime: time.Now(),
 		activityChan:    make(chan branchActivityEvent, 64),
+		trackingEnabled: trackingEnabled,
 	}
 
 	// Start background processor, we ignore the cancel function as the tracker doesn't have a lifecycle.
@@ -117,7 +119,7 @@ func (t *BranchActivityTracker) processEvents(ctx context.Context) {
 
 // RecordReadEvent records when a branch is read/accessed
 func (t *BranchActivityTracker) RecordReadEvent(ctx context.Context, database, branch string) {
-	if ignoreEvent(ctx, branch) {
+	if !t.trackingEnabled || ignoreEvent(ctx, branch) {
 		return
 	}
 
@@ -135,7 +137,7 @@ func (t *BranchActivityTracker) RecordReadEvent(ctx context.Context, database, b
 
 // RecordWriteEvent records when a branch is written/updated
 func (t *BranchActivityTracker) RecordWriteEvent(ctx context.Context, database, branch string) {
-	if ignoreEvent(ctx, branch) {
+	if !t.trackingEnabled || ignoreEvent(ctx, branch) {
 		return
 	}
 

@@ -245,6 +245,7 @@ func ConfigureServices(
 				ServerHost:                 cfg.ServerConfig.Host(),
 				Autocommit:                 cfg.ServerConfig.AutoCommit(),
 				DoltTransactionCommit:      cfg.ServerConfig.DoltTransactionCommit(),
+				BranchActivityTracking:     cfg.ServerConfig.BranchActivityTracking(),
 				JwksConfig:                 cfg.ServerConfig.JwksConfig(),
 				SystemVariables:            cfg.ServerConfig.SystemVars(),
 				ClusterController:          clusterController,

@@ -61,6 +61,7 @@ const (
 	DefaultAutoCommit                = true
 	DefaultAutoGCBehaviorEnable      = true
 	DefaultDoltTransactionCommit     = false
+	DefaultBranchActivityTracking    = false
 	DefaultMaxConnections            = 1000
 	DefaultMaxWaitConnections        = 50
 	DefaultMaxWaitConnectionsTimeout = 60 * time.Second
@@ -160,6 +161,8 @@ type ServerConfig interface {
 	// DoltTransactionCommit defines the value of the @@dolt_transaction_commit session variable that enables Dolt
 	// commits to be automatically created when a SQL transaction is committed.
 	DoltTransactionCommit() bool
+	// BranchActivityTracking enables or disables the tracking of branch activity for the dolt_branch_activity table
+	BranchActivityTracking() bool
 	// DataDir is the path to a directory to use as the data dir, both to create new databases and locate existing ones.
 	DataDir() string
 	// CfgDir is the path to a directory to use to store the dolt configuration files.
@@ -248,6 +251,7 @@ func defaultServerConfigYAML() *YAMLConfig {
 			ReadOnly:              ptr(DefaultReadOnly),
 			AutoCommit:            ptr(DefaultAutoCommit),
 			DoltTransactionCommit: ptr(DefaultDoltTransactionCommit),
+			BranchActivityTracking: ptr(DefaultBranchActivityTracking),
 			AutoGCBehavior: &AutoGCBehaviorYAMLConfig{
 				Enable_:       ptr(DefaultAutoGCBehaviorEnable),
 				ArchiveLevel_: ptr(DefaultCompressionLevel),
@@ -326,6 +330,7 @@ const (
 	LogFormatKey                    = "log_format"
 	AutoCommitKey                   = "autocommit"
 	DoltTransactionCommitKey        = "dolt_transaction_commit"
+	BranchActivityTrackingKey       = "branch_activity_tracking"
 	DataDirKey                      = "data_dir"
 	CfgDirKey                       = "cfg_dir"
 	MaxConnectionsKey               = "max_connections"

@@ -133,7 +133,7 @@ func newDoltHarness(t *testing.T) *DoltHarness {
 		t:                     t,
 		skippedQueries:        defaultSkippedQueries,
 		parallelism:           1,
-		branchActivityTracker: doltdb.NewBranchActivityTracker(context.Background()),
+		branchActivityTracker: doltdb.NewBranchActivityTracker(context.Background(), false), // Default to disabled for tests
 	}
 
 	return dh

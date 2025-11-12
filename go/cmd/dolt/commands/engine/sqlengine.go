@@ -85,6 +85,7 @@ type SqlEngineConfig struct {
 	AutoGCController           *sqle.AutoGCController
 	BinlogReplicaController    binlogreplication.BinlogReplicaController
 	EventSchedulerStatus       eventscheduler.SchedulerStatus
+	BranchActivityTracking     bool
 }
 
 type SqlEngineConfigOption func(*SqlEngineConfig)
@@ -250,7 +251,7 @@ func NewSqlEngine(
 
 	engine.Analyzer.Catalog.StatsProvider = statsPro
 
-	branchActivityTracker := doltdb.NewBranchActivityTracker(ctx)
+	branchActivityTracker := doltdb.NewBranchActivityTracker(ctx, config.BranchActivityTracking)
 
 	engine.Analyzer.ExecBuilder = rowexec.NewOverrideBuilder(kvexec.Builder{})
 	sessFactory := doltSessionFactory(pro, statsPro, mrEnv.Config(), bcController, gcSafepointController, config.Autocommit, branchActivityTracker)
