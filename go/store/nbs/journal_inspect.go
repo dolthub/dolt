@@ -15,8 +15,11 @@
 package nbs
 
 import (
+	"bytes"
 	"crypto/sha256"
+	"encoding/binary"
 	"encoding/hex"
+	"fmt"
 	"io"
 	"os"
 	"slices"
@@ -24,7 +27,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func JournalInspect(journalPath string, seeRoots, seeChunks, crcScan bool) int {
+func JournalInspect(journalPath string, seeRoots, seeChunks, crcScan, snapScan bool) int {
 	var f *os.File
 	f, err := os.Open(journalPath)
 	if err != nil {
@@ -65,7 +68,7 @@ func JournalInspect(journalPath string, seeRoots, seeChunks, crcScan bool) int {
 	// changes for false, and never reset to zero once set.
 	exitStatus := 0
 
-	// Offset of the start of a suspect region. Used to process a bad region if we end up returning to a healthy state.
+	// suspectRegionStart is the offset of an unparsable region. Used to process bad regions when they come up.
 	suspectRegionStart := -1
 
 	shasum := sha256.Sum256(buf)
@@ -115,10 +118,15 @@ func JournalInspect(journalPath string, seeRoots, seeChunks, crcScan bool) int {
 					logrus.Infof("Resumed healthy reads at offset %d", offset)
 					healthyState = true
 					firstHealthy = true
-					if crcScan && suspectRegionStart != -1 {
-						crcMatches := scanMysteryBytesForCRCs(0, buf[suspectRegionStart:offset])
-						if len(crcMatches) > 0 {
-							logrus.Infof("Scanned suspect region %d to %d for possible CRC matches. Found %v", suspectRegionStart, offset, crcMatches)
+					if suspectRegionStart != -1 {
+						if crcScan {
+							crcMatches := scanMysteryBytesForCRCs(0, buf[suspectRegionStart:offset])
+							if len(crcMatches) > 0 {
+								logrus.Infof("Scanned suspect region %d to %d for possible CRC matches. Found %v", suspectRegionStart, offset, crcMatches)
+							}
+						}
+						if snapScan {
+							snappyFuzzyDecode(buf[0:offset], suspectRegionStart)
 						}
 					}
 					suspectRegionStart = -1
@@ -205,10 +213,16 @@ func JournalInspect(journalPath string, seeRoots, seeChunks, crcScan bool) int {
 	if happyRecords > 0 {
 		logrus.Infof("Successfully read %d records (%d bytes)", happyRecords, happyBytes)
 	}
-	if crcScan && !healthyState && suspectRegionStart != -1 {
-		crcMatches := scanMysteryBytesForCRCs(0, buf[suspectRegionStart:])
-		if len(crcMatches) > 0 {
-			logrus.Infof("Scanned suspect region %d to EOF for possible CRC matches. Found %v", suspectRegionStart, crcMatches)
+	if !healthyState && suspectRegionStart != -1 {
+		if crcScan {
+			crcMatches := scanMysteryBytesForCRCs(0, buf[suspectRegionStart:])
+			if len(crcMatches) > 0 {
+				logrus.Infof("Scanned suspect region %d to EOF for possible CRC matches. Found %v", suspectRegionStart, crcMatches)
+			}
+		}
+		if snapScan {
+			// Scan to the end of the buffer.
+			snappyFuzzyDecode(buf[:], suspectRegionStart)
 		}
 	}
 
@@ -281,3 +295,288 @@ func scanMysteryBytesForCRCs(start int, buf []byte) []validCRCResult {
 	slices.Reverse(results)
 	return results
 }
+
+const (
+	tagLiteral = 0x00
+	tagCopy1   = 0x01
+	tagCopy2   = 0x02
+	tagCopy4   = 0x03
+)
+
+// snappyFuzzyDecode performs a scan of |src|, attempting to find portions of valid snappy-compressed data.
+//
+// See: https://github.com/golang/snappy/blob/master/decode_other.go#L14
+func snappyFuzzyDecode(src []byte, start int) {
+	if start < 0 || start >= len(src) {
+		logrus.Errorf("snappyFuzzyDecode: start %d out of range for src len %d", start, len(src))
+		return
+	}
+
+	logrus.Infof("------ Beginning Snappy Fuzzy Decode from offset %d ------", start)
+
+	var MaxEnc = 8 << 20      // max encoded bytes to consume from start (default 8 MiB)
+	var MaxOut = 32 << 20     // max decoded bytes to produce (default 32 MiB)
+	var MaxBackward = 2 << 20 // max backref distance (default 2 MiB)
+	var dots = []byte("@")    // bytes inserted when we run into errors
+
+	// History window for backrefs (decoded bytes so far).
+	window := make([]byte, 0, min(MaxOut, 1<<20))
+
+	w := LineLogger{}
+	defer w.Flush()
+
+	lastWroteDots := false
+	writeOut := func(p []byte) bool {
+		if len(p) == 0 || MaxOut <= 0 {
+			return true
+		}
+		// Avoid writing placeholders repeatedly.
+		if lastWroteDots && slices.Equal(p, dots) {
+			return true
+		}
+		if slices.Equal(p, dots) {
+			lastWroteDots = true
+		} else {
+			lastWroteDots = false
+		}
+		// Clip to remaining output budget (note: history maintenance must match this).
+		remain := MaxOut - len(window)
+		if remain <= 0 {
+			return false
+		}
+		if len(p) > remain {
+			p = p[:remain]
+		}
+		_, err := w.Write(p)
+		return err == nil && len(window) < MaxOut
+	}
+
+	offset := start
+	end := start + MaxEnc
+	if end > len(src) {
+		end = len(src)
+	}
+	errs := 0
+
+	for offset < end && len(window) < MaxOut {
+		currentByte := src[offset]
+		switch currentByte & 0x03 {
+		case tagLiteral: // LITERAL
+			litLen, adv, ok := literalLenFromTag(src[offset:])
+			if !ok || litLen < 0 {
+				_ = writeOut(dots)
+				errs++
+				offset++ // skip 1 byte and try to realign
+				continue
+			}
+			if offset+adv+litLen > len(src) {
+				_ = writeOut(dots)
+				errs++
+				offset++
+				continue
+			}
+
+			offset += adv
+
+			// Clip literal to remaining decoded budget for history and sink.
+			remain := MaxOut - len(window)
+			writeLen := min(litLen, remain)
+			if writeLen > 0 {
+				// Append to history first, then write the same bytes.
+				window = append(window, src[offset:offset+writeLen]...)
+				if !writeOut(src[offset : offset+writeLen]) {
+					logrus.Errorf("snappyFuzzyDecode: hit maxout or sink error during literal write")
+					return
+				}
+			}
+			// Consume the whole literal from the encoded stream (even if clipped).
+			offset += litLen
+
+		case tagCopy1: // COPY-1: len=4+((currentByte>>2)&7), off: 11 bits across currentByte+next
+			if offset+2 > len(src) {
+				_ = writeOut(dots)
+				errs++
+				offset++
+				continue
+			}
+			length := int(4 + ((currentByte >> 2) & 0x7))
+			off := int(src[offset+1]) | (int(currentByte&0xE0) << 3)
+			offset += 2
+			if off <= 0 || off > len(window) || off > MaxBackward {
+				_ = writeOut(dots)
+				errs++
+				continue
+			}
+			// Clip to remaining decoded budget.
+			if rem := MaxOut - len(window); rem <= 0 {
+				logrus.Errorf("snappyFuzzyDecode: hit maxout during copy1")
+				return
+			} else if length > rem {
+				length = rem
+			}
+			if length > 0 {
+				// Expand into history; get just-appended tail to write
+				tail := appendCopy(&window, off, length)
+				if !writeOut(tail) {
+					logrus.Errorf("snappyFuzzyDecode: hit maxout or sink error during copy1 write")
+					return
+				}
+			}
+
+		case tagCopy2: // COPY-2: len=1+(currentByte>>2), off: next 2 LE
+			if offset+3 > len(src) {
+				_ = writeOut(dots)
+				errs++
+				offset++
+				continue
+			}
+			length := int(1 + (currentByte >> 2))
+			off := int(binary.LittleEndian.Uint16(src[offset+1 : offset+3]))
+			offset += 3
+			if off <= 0 || off > len(window) || off > MaxBackward {
+				_ = writeOut(dots)
+				errs++
+				continue
+			}
+			if rem := MaxOut - len(window); rem <= 0 {
+				logrus.Errorf("snappyFuzzyDecode: hit maxout during copy2")
+				return
+			} else if length > rem {
+				length = rem
+			}
+			if length > 0 {
+				tail := appendCopy(&window, off, length)
+				if !writeOut(tail) {
+					logrus.Errorf("snappyFuzzyDecode: hit maxout or sink error during copy2 write")
+					return
+				}
+			}
+
+		case tagCopy4: // COPY-4: len=1+(currentByte>>2), off: next 4 LE
+			if offset+5 > len(src) {
+				_ = writeOut(dots)
+				errs++
+				offset++
+				continue
+			}
+			length := int(1 + (currentByte >> 2))
+			off := int(binary.LittleEndian.Uint32(src[offset+1 : offset+5]))
+			offset += 5
+			if off <= 0 || off > len(window) || off > MaxBackward {
+				_ = writeOut(dots)
+				errs++
+				continue
+			}
+			if rem := MaxOut - len(window); rem <= 0 {
+				logrus.Errorf("snappyFuzzyDecode: hit maxout during copy4")
+				return
+			} else if length > rem {
+				length = rem
+			}
+			if length > 0 {
+				tail := appendCopy(&window, off, length)
+				if !writeOut(tail) {
+					logrus.Errorf("snappyFuzzyDecode: hit maxout or sink error during copy4 write")
+					return
+				}
+			}
+		}
+	}
+
+	logrus.Infof("------ Snappy Fuzzy Decode Complete: processed %d bytes, encountered %d errors ------", offset-start, errs)
+}
+
+// --- helpers ---
+// literalLenFromTag decodes a literal length from the tag byte(s) at the start of b.
+// It returns the length, number of bytes consumed, and whether decoding succeeded.
+func literalLenFromTag(b []byte) (int, int, bool) {
+	if len(b) == 0 || (b[0]&0x03) != 0x00 {
+		return 0, 0, false
+	}
+	h := int(b[0] >> 2)
+	switch {
+	case h < 60:
+		return h + 1, 1, true
+	case h == 60:
+		if len(b) < 2 {
+			return 0, 0, false
+		}
+		return int(b[1]) + 1, 2, true
+	case h == 61:
+		if len(b) < 3 {
+			return 0, 0, false
+		}
+		return int(binary.LittleEndian.Uint16(b[1:3])) + 1, 3, true
+	case h == 62:
+		if len(b) < 4 {
+			return 0, 0, false
+		}
+		v := uint32(b[1]) | uint32(b[2])<<8 | uint32(b[3])<<16
+		return int(v) + 1, 4, true
+	case h == 63:
+		if len(b) < 5 {
+			return 0, 0, false
+		}
+		return int(binary.LittleEndian.Uint32(b[1:5])) + 1, 5, true
+	}
+	return 0, 0, false
+}
+
+// appendCopy appends 'n' bytes to *dst by back-referencing 'off' bytes from the end.
+// It returns the slice that was appended (so caller can stream it to w).
+func appendCopy(dst *[]byte, off, n int) []byte {
+	base := *dst
+	start := len(base) - off
+	writtenAt := len(base)
+	for n > 0 {
+		chunk := n
+		if chunk > off {
+			chunk = off
+		}
+		base = append(base, base[start:start+chunk]...)
+		start += chunk
+		n -= chunk
+	}
+	*dst = base
+	return base[writtenAt:]
+}
+
+// LineLogger buffers data until ~80 bytes or an explicit newline,
+// then logs it via logrus.Infof(). Newlines are rendered as "\n",
+// and non-ASCII bytes as "\xNN".
+type LineLogger struct {
+	buf bytes.Buffer
+}
+
+func (w *LineLogger) Write(p []byte) (int, error) {
+	total := 0
+	for _, b := range p {
+		// treat '\n' as data marker, not newline
+		if b == '\n' {
+			w.buf.WriteString(`\n`)
+		} else {
+			if b < 0x20 || b > 0x7e {
+				w.buf.WriteString(fmt.Sprintf(`\x%02X`, b))
+			} else {
+				w.buf.WriteByte(b)
+			}
+		}
+
+		total++
+		if w.buf.Len() >= 80 {
+			w.flush()
+		}
+	}
+	return total, nil
+}
+
+func (w *LineLogger) flush() {
+	if w.buf.Len() == 0 {
+		return
+	}
+	logrus.Infof("%s", w.buf.String())
+	w.buf.Reset()
+}
+
+// Flush can be called manually to force any remaining bytes out.
+func (w *LineLogger) Flush() { w.flush() }

@@ -23,6 +23,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/store/nbs"
+	"github.com/sirupsen/logrus"
 )
 
 type JournalInspectCmd struct {
@@ -58,6 +59,7 @@ func (cmd JournalInspectCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsFlag("chunks", "c", "Display chunk hashes found in the journal")
 	ap.SupportsFlag("verbose", "v", "Display verbose output during inspection (same as -r -c")
 	ap.SupportsFlag("crc-scan", "", "Scan invalid sections for valid CRCs. SLOW.")
+	ap.SupportsFlag("snappy-scan", "", "Scan invalid sections for snappy tags and content headers.")
 	return ap
 }
 
@@ -65,6 +67,14 @@ func (cmd JournalInspectCmd) Exec(_ context.Context, commandStr string, args []s
 	ap := cmd.ArgParser()
 	usage, _ := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, cli.CommandDocumentationContent{}, ap))
 	apr := cli.ParseArgsOrDie(ap, args, usage)
+
+	// All output is to logrus, which prints to stderr by default. We want it to print to stdout, so we can pipe to `less` etc.
+	logrus.SetOutput(cli.CliOut)
+	logrus.SetFormatter(&logrus.TextFormatter{
+		ForceColors:      true,
+		DisableTimestamp: false,
+		FullTimestamp:    false, // keeps the "INFO[0000]" short style
+	})
 
 	var journalPath string
 	if apr.NArg() == 1 {
@@ -81,6 +91,7 @@ func (cmd JournalInspectCmd) Exec(_ context.Context, commandStr string, args []s
 	}
 
 	crcScan := apr.Contains("crc-scan")
+	snappScan := apr.Contains("snappy-scan")
 
 	if _, err := os.Stat(journalPath); os.IsNotExist(err) {
 		cli.PrintErrln("Error: Journal file does not exist:", journalPath)
@@ -94,5 +105,5 @@ func (cmd JournalInspectCmd) Exec(_ context.Context, commandStr string, args []s
 	}
 
 	// JournalInspect returns an exit code. It's entire purpose it to print errors, after all.
-	return nbs.JournalInspect(absPath, seeRoots, seeChunks, crcScan)
+	return nbs.JournalInspect(absPath, seeRoots, seeChunks, crcScan, snappScan)
 }
