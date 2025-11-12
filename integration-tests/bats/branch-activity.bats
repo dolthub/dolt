@@ -30,11 +30,20 @@ setup() {
 
     cd ../
 
-    # Create config file to enable branch activity tracking
-    echo "behavior:
-  branch_activity_tracking: true" > server.yaml
+    # Create complete config file with branch activity tracking enabled
+    cat > server.yaml <<EOF
+log_level: debug
 
-    start_sql_server_with_config "" server.yaml
+listener:
+  host: 0.0.0.0
+  max_connections: 10
+
+behavior:
+  autocommit: false
+  branch_activity_tracking: true
+EOF
+
+    start_sql_server_with_args "" "--config" "server.yaml"
 }
 
 teardown() {
