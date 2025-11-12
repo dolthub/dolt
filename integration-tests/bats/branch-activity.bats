@@ -4,7 +4,7 @@ load $BATS_TEST_DIRNAME/helper/query-server-common.bash
 
 setup() {
     setup_no_dolt_init
-    
+
     # Create first database
     mkdir repo1
     cd repo1
@@ -15,9 +15,9 @@ setup() {
     dolt branch feature1
     dolt branch feature2
     dolt branch feature3
-    
+
     cd ../
-    
+
     # Create second database for multi-database testing
     mkdir repo2
     cd repo2
@@ -27,9 +27,14 @@ setup() {
     dolt commit -Am "Initial commit"
     dolt branch dev
     dolt branch staging
-    
+
     cd ../
-    start_sql_server
+
+    # Create config file to enable branch activity tracking
+    echo "behavior:
+  branch_activity_tracking: true" > server.yaml
+
+    start_sql_server_with_config "" server.yaml
 }
 
 teardown() {
@@ -119,7 +124,7 @@ start_idle_connection() {
     # Same for repo2, should result in read on dev
     dolt --use-db "repo2/dev" sql -q "SELECT SLEEP(60)" &
     sleep 1
-    
+
     run dolt --use-db repo1 sql -q "SELECT branch FROM dolt_branch_activity WHERE last_read IS NOT NULL"
     [ $status -eq 0 ]
     [[ "$output" =~ "main" ]] || false
@@ -133,4 +138,18 @@ start_idle_connection() {
     [[ "$output" =~ "dev" ]] || false
     [[ ! "$output" =~ "staging" ]] || false # staging should have no activity
     [[ ! "$output" =~ "feature1" ]] || false # feature1 should not appear (it's in repo1)
+}
+
+@test "branch-activity: error when tracking disabled" {
+    # Stop the server that has tracking enabled
+    stop_sql_server 1
+
+    # Start a new server without branch activity tracking (default config)
+    start_sql_server
+
+    cd repo1
+    # Attempt to query dolt_branch_activity should result in an error
+    run dolt sql -q "SELECT * FROM dolt_branch_activity"
+    [ $status -eq 1 ]
+    [[ "$output" =~ "branch activity tracking is not enabled" ]] || false
 }

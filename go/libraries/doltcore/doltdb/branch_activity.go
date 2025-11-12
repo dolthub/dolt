@@ -75,6 +75,11 @@ type BranchActivityTracker struct {
 	trackingEnabled bool
 }
 
+// IsTrackingEnabled returns whether branch activity tracking is enabled
+func (t *BranchActivityTracker) IsTrackingEnabled() bool {
+	return t.trackingEnabled
+}
+
 // NewBranchActivityTracker creates a new branch activity tracker instance
 func NewBranchActivityTracker(ctx context.Context, trackingEnabled bool) *BranchActivityTracker {
 	tracker := &BranchActivityTracker{
