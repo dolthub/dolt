@@ -16,6 +16,7 @@ package val
 
 import (
 	"math"
+	"unsafe"
 
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/pool"
@@ -159,18 +160,19 @@ func (tup Tuple) GetField(i int) []byte {
 		return nil
 	}
 
-	sz := ByteSize(len(tup))
-	split := sz - uint16Size*ByteSize(cnt)
-	offs := tup[split : sz-countSize]
-
+	split := len(tup) - 2*cnt
 	start, stop := uint16(0), uint16(split)
-	if i*2 < len(offs) {
-		pos := i * 2
-		stop = ReadUint16(offs[pos : pos+2])
+	if i < cnt {
+		pos := split + i*2
+		p1 := *(*byte)(unsafe.Pointer(uintptr(unsafe.Pointer(unsafe.SliceData(tup))) + uintptr(pos)))
+		p2 := *(*byte)(unsafe.Pointer(uintptr(unsafe.Pointer(unsafe.SliceData(tup))) + uintptr(pos+1)))
+		stop = uint16(p1) | uint16(p2)<<8
 	}
 	if i > 0 {
-		pos := (i - 1) * 2
-		start = ReadUint16(offs[pos : pos+2])
+		pos := split + (i-1)*2
+		p1 := *(*byte)(unsafe.Pointer(uintptr(unsafe.Pointer(unsafe.SliceData(tup))) + uintptr(pos)))
+		p2 := *(*byte)(unsafe.Pointer(uintptr(unsafe.Pointer(unsafe.SliceData(tup))) + uintptr(pos+1)))
+		start = uint16(p1) | uint16(p2)<<8
 	}
 
 	if start == stop {
@@ -185,8 +187,10 @@ func (tup Tuple) FieldIsNull(i int) bool {
 }
 
 func (tup Tuple) Count() int {
-	sl := tup[len(tup)-int(countSize):]
-	return int(ReadUint16(sl))
+	b1 := *(*byte)(unsafe.Pointer(uintptr(unsafe.Pointer(unsafe.SliceData(tup))) + uintptr(len(tup)-1)))
+	b2 := *(*byte)(unsafe.Pointer(uintptr(unsafe.Pointer(unsafe.SliceData(tup))) + uintptr(len(tup)-2)))
+	sz := uint16(b1) | uint16(b2)<<8
+	return int(sz)
 }
 
 func isNull(val []byte) bool {
