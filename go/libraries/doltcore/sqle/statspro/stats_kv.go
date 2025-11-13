@@ -505,8 +505,8 @@ func (sc *StatsController) PutBucket(ctx context.Context, h hash.Hash, b *stats.
 }
 
 func (sc *StatsController) GetBucket(ctx context.Context, h hash.Hash, tupB *val.TupleBuilder) (*stats.Bucket, bool, error) {
-	sc.mu.Lock()
-	defer sc.mu.Unlock()
+	sc.mu.RLock()
+	defer sc.mu.RUnlock()
 	return sc.kv.GetBucket(ctx, h, tupB)
 }
 

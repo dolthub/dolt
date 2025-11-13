@@ -96,7 +96,7 @@ type StatsController struct {
 	// Stats tracks table statistics accessible to sessions.
 	Stats *rootStats
 	// mu protects all shared object access
-	mu sync.Mutex
+	mu sync.RWMutex
 	// genCnt is used to atomically swap Stats, same behavior
 	// as last-writer wins
 	genCnt atomic.Uint64
@@ -130,7 +130,7 @@ const defaultGcInterval = 24 * time.Hour
 
 func NewStatsController(logger *logrus.Logger, bgThreads *sql.BackgroundThreads, dEnv *env.DoltEnv) *StatsController {
 	return &StatsController{
-		mu:          sync.Mutex{},
+		mu:          sync.RWMutex{},
 		logger:      logger,
 		gcInterval:  defaultGcInterval,
 		rateLimiter: newSimpleRateLimiter(defaultJobInterval),
