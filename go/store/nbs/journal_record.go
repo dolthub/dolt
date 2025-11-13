@@ -294,6 +294,20 @@ func processJournalRecords(ctx context.Context, r io.ReadSeeker, off int64, cb f
 			break
 		}
 
+		if l > journalWriterBuffSize {
+			if valCb != nil {
+				jErr := &CorruptJournalRecortError{
+					Data:   buf,
+					Offset: off,
+					Why:    fmt.Sprintf("invalid journal record length: %d exceeds max allowed size of %d", l, journalWriterBuffSize),
+				}
+				// We've run into an invalid journal record length, so we stop processing further records allowing
+				// the system to start, but we report the error via the validation callback.
+				valCb(jErr)
+			}
+			break
+		}
+
 		if buf, err = rdr.Peek(int(l)); err != nil {
 			break
 		}
