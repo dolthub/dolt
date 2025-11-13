@@ -425,6 +425,59 @@ func (se *SqlEngine) Query(ctx *sql.Context, query string) (sql.Schema, sql.RowI
 	return se.engine.Query(ctx, query)
 }
 
+// NewChildContext returns a new sql.Context with a fresh DoltSession based on the
+// current engine configuration. The returned closer must be invoked once the caller
+// is finished with the context to release lifecycle hooks.
+func (se *SqlEngine) NewChildContext(parentCtx *sql.Context) (*sql.Context, func(), error) {
+	mysqlSess := sql.NewBaseSession()
+	var parentSession sql.Session
+	if parentCtx != nil {
+		parentSession = parentCtx.Session
+		if parentSession != nil {
+			mysqlSess.SetClient(parentSession.Client())
+			mysqlSess.SetLogger(parentSession.GetLogger())
+		}
+	}
+
+	doltSess, err := se.dsessFactory(mysqlSess, se.provider)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	baseCtx := context.Background()
+	if parentCtx != nil {
+		baseCtx = parentCtx.Context
+	}
+
+	childCtx := se.ContextFactory(baseCtx, sql.WithSession(doltSess))
+
+	if parentCtx != nil {
+		if dbName := parentCtx.GetCurrentDatabase(); dbName != "" {
+			childCtx.SetCurrentDatabase(dbName)
+			if parentDsess, ok := parentSession.(*dsess.DoltSession); ok {
+				if headRef, headErr := parentDsess.CWBHeadRef(parentCtx, dbName); headErr == nil && headRef != nil {
+					if err := doltSess.SetSessionVariable(childCtx, dsess.HeadKey(dbName), headRef.String()); err != nil {
+						sql.SessionEnd(childCtx.Session)
+						return nil, nil, err
+					}
+				}
+			}
+		}
+	}
+
+	if err := sql.SessionCommandBegin(childCtx.Session); err != nil {
+		sql.SessionEnd(childCtx.Session)
+		return nil, nil, err
+	}
+
+	closeChild := func() {
+		sql.SessionCommandEnd(childCtx.Session)
+		sql.SessionEnd(childCtx.Session)
+	}
+
+	return childCtx, closeChild, nil
+}
+
 func (se *SqlEngine) QueryWithBindings(ctx *sql.Context, query string, parsed sqlparser.Statement, bindings map[string]sqlparser.Expr, qFlags *sql.QueryFlags) (sql.Schema, sql.RowIter, *sql.QueryFlags, error) {
 	return se.engine.QueryWithBindings(ctx, query, parsed, bindings, qFlags)
 }
