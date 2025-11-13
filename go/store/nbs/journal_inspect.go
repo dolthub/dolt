@@ -81,7 +81,7 @@ func JournalInspect(journalPath string, seeRoots, seeChunks, crcScan, snapScan b
 
 	// Linear scan of the journal file. If we read a good record, skip to the end of it. If we hit a bad record,
 	// move forward one byte and try again. And print reasonable information along our journey of discovery.
-	for offset := 0; offset < len(buf)-4; {
+	for offset := 0; offset <= len(buf)-4; {
 		// First four bytes are the record size. 0 should never be valid
 		size := readUint32(buf[offset:])
 		if size == 0 {
