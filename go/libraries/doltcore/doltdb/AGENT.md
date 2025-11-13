@@ -45,6 +45,12 @@ dolt checkout <branch-name>
 dolt checkout -b <branch-name>
 ```
 
+### Checkout Behavior with Running SQL Servers
+- `dolt checkout` on the CLI only affects the shell process that runs the command. When a `dolt sql-server` is running, existing SQL connections keep their current branch until they explicitly switch.
+- Each SQL session (CLI `dolt sql`, MySQL client, application connection) maintains its own active branch. Run `CALL dolt_checkout('<branch>');` at the beginning of every session or scripted block to ensure you are on the correct branch.
+- Chain branch changes inside scripts: start with `CALL dolt_checkout('<branch>');`, then run your queries. Do not assume a previous checkout persists for new connections.
+- When automating, include the checkout in the same transaction / session context where the data changes execute.
+
 ### Data Operations
 ```bash
 # Stage changes
