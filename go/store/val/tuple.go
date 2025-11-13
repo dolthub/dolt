@@ -162,17 +162,17 @@ func (tup Tuple) GetField(i int) []byte {
 
 	split := len(tup) - 2*cnt
 	start, stop := uint16(0), uint16(split)
-	if i < cnt {
+	if i < cnt-1 {
 		pos := split + i*2
-		p1 := *(*byte)(unsafe.Pointer(uintptr(unsafe.Pointer(unsafe.SliceData(tup))) + uintptr(pos)))
-		p2 := *(*byte)(unsafe.Pointer(uintptr(unsafe.Pointer(unsafe.SliceData(tup))) + uintptr(pos+1)))
-		stop = uint16(p1) | uint16(p2)<<8
+		p0 := *(*byte)(unsafe.Pointer(uintptr(unsafe.Pointer(unsafe.SliceData(tup))) + uintptr(pos)))
+		p1 := *(*byte)(unsafe.Pointer(uintptr(unsafe.Pointer(unsafe.SliceData(tup))) + uintptr(pos+1)))
+		stop = uint16(p0) | uint16(p1)<<8
 	}
 	if i > 0 {
 		pos := split + (i-1)*2
-		p1 := *(*byte)(unsafe.Pointer(uintptr(unsafe.Pointer(unsafe.SliceData(tup))) + uintptr(pos)))
-		p2 := *(*byte)(unsafe.Pointer(uintptr(unsafe.Pointer(unsafe.SliceData(tup))) + uintptr(pos+1)))
-		start = uint16(p1) | uint16(p2)<<8
+		p0 := *(*byte)(unsafe.Pointer(uintptr(unsafe.Pointer(unsafe.SliceData(tup))) + uintptr(pos)))
+		p1 := *(*byte)(unsafe.Pointer(uintptr(unsafe.Pointer(unsafe.SliceData(tup))) + uintptr(pos+1)))
+		start = uint16(p0) | uint16(p1)<<8
 	}
 
 	if start == stop {
@@ -187,9 +187,9 @@ func (tup Tuple) FieldIsNull(i int) bool {
 }
 
 func (tup Tuple) Count() int {
+	b0 := *(*byte)(unsafe.Pointer(uintptr(unsafe.Pointer(unsafe.SliceData(tup))) + uintptr(len(tup)-2)))
 	b1 := *(*byte)(unsafe.Pointer(uintptr(unsafe.Pointer(unsafe.SliceData(tup))) + uintptr(len(tup)-1)))
-	b2 := *(*byte)(unsafe.Pointer(uintptr(unsafe.Pointer(unsafe.SliceData(tup))) + uintptr(len(tup)-2)))
-	sz := uint16(b1) | uint16(b2)<<8
+	sz := uint16(b0) | uint16(b1)<<8
 	return int(sz)
 }
 
