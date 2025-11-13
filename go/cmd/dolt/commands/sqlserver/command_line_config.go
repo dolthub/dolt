@@ -42,6 +42,7 @@ type commandLineServerConfig struct {
 	cfgDir                  string
 	autoCommit              bool
 	doltTransactionCommit   bool
+	branchActivityTracking  bool
 	maxConnections          uint64
 	maxWaitConnections      uint32
 	maxWaitConnsTimeout     time.Duration
@@ -86,6 +87,7 @@ func DefaultCommandLineServerConfig() *commandLineServerConfig {
 		logLevel:                servercfg.DefaultLogLevel,
 		logFormat:               servercfg.DefaultLogFormat,
 		autoCommit:              servercfg.DefaultAutoCommit,
+		branchActivityTracking:  servercfg.DefaultBranchActivityTracking,
 		maxConnections:          servercfg.DefaultMaxConnections,
 		maxWaitConnections:      servercfg.DefaultMaxWaitConnections,
 		maxWaitConnsTimeout:     servercfg.DefaultMaxWaitConnectionsTimeout,
@@ -280,6 +282,11 @@ func (cfg *commandLineServerConfig) AutoCommit() bool {
 // commits to be automatically created when a SQL transaction is committed. The default is false.
 func (cfg *commandLineServerConfig) DoltTransactionCommit() bool {
 	return cfg.doltTransactionCommit
+}
+
+// BranchActivityTracking enables or disables the tracking of branch activity for the dolt_branch_activity table. The default is false.
+func (cfg *commandLineServerConfig) BranchActivityTracking() bool {
+	return cfg.branchActivityTracking
 }
 
 // MaxConnections returns the maximum number of simultaneous connections the server will allow.  The default is 1
