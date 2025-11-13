@@ -405,7 +405,7 @@ func getSourceKv(ctx *sql.Context, n sql.Node, isSrc bool) (prolly.Map, prolly.M
 		priSch = lb.OutputSchema()
 
 		if isSrc {
-			l, err := n.GetLookup(ctx, nil)
+			l, _, err := n.GetLookup(ctx, nil)
 			if err != nil {
 				return prolly.Map{}, prolly.Map{}, nil, nil, nil, nil, nil, nil, err
 			}
@@ -585,7 +585,7 @@ func getMergeKv(ctx *sql.Context, n sql.Node) (mergeState, error) {
 		ms.tags = doltTable.ProjectedTags()
 		ms.idxSch = idx.IndexSchema()
 		ms.priSch = idx.Schema()
-		l, err := n.GetLookup(ctx, nil)
+		l, _, err := n.GetLookup(ctx, nil)
 		if err != nil {
 			return ms, err
 		}
