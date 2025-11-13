@@ -161,53 +161,45 @@ func (s *prollyWriteSession) SetOptions(opts editor.Options) {
 // flush is the inner implementation for Flush that does not acquire any locks
 func (s *prollyWriteSession) flush(ctx *sql.Context, autoIncSet bool, manualAutoIncrementsSettings map[string]uint64) (*doltdb.WorkingSet, error) {
 	tables := make(map[doltdb.TableName]*doltdb.Table, len(s.tables))
-	mu := &sync.Mutex{}
 
 	eg, egCtx := errgroup.WithContext(ctx)
 	sqlEgCtx := ctx.WithContext(egCtx)
 
 	for n := range s.tables {
-		name := n // make a copy
-		eg.Go(func() error {
-			wr := s.tables[name]
-			t, err := wr.table(sqlEgCtx)
+		wr := s.tables[n]
+		t, err := wr.table(sqlEgCtx)
+		if err != nil {
+			return nil, err
+		}
+
+		// Update this table's auto increment value if it has one. This value comes from the global state unless an
+		// override was specified (e.g. if the next value was set explicitly)
+		if schema.HasAutoIncrement(wr.sch) {
+			// TODO: need schema name for auto increment
+			autoIncVal, err := s.aiTracker.Current(n.Name)
 			if err != nil {
-				return err
+				return nil, err
+			}
+			override, hasManuallySetAi := manualAutoIncrementsSettings[n.Name]
+			if hasManuallySetAi {
+				autoIncVal = override
 			}
 
-			// Update this table's auto increment value if it has one. This value comes from the global state unless an
-			// override was specified (e.g. if the next value was set explicitly)
-			if schema.HasAutoIncrement(wr.sch) {
-				// TODO: need schema name for auto increment
-				autoIncVal, err := s.aiTracker.Current(name.Name)
+			// Update the table with the new auto-inc value if necessary. If it was set manually via an ALTER TABLE
+			// statement, we defer to the tracker to update the value itself, since this impacts the global state.
+			if hasManuallySetAi {
+				t, err = s.aiTracker.Set(sqlEgCtx, n.Name, t, s.workingSet.Ref(), autoIncVal)
 				if err != nil {
-					return err
+					return nil, err
 				}
-				override, hasManuallySetAi := manualAutoIncrementsSettings[name.Name]
-				if hasManuallySetAi {
-					autoIncVal = override
-				}
-
-				// Update the table with the new auto-inc value if necessary. If it was set manually via an ALTER TABLE
-				// statement, we defer to the tracker to update the value itself, since this impacts the global state.
-				if hasManuallySetAi {
-					t, err = s.aiTracker.Set(sqlEgCtx, name.Name, t, s.workingSet.Ref(), autoIncVal)
-					if err != nil {
-						return err
-					}
-				} else if autoIncSet {
-					t, err = t.SetAutoIncrementValue(sqlEgCtx, autoIncVal)
-					if err != nil {
-						return err
-					}
+			} else if autoIncSet {
+				t, err = t.SetAutoIncrementValue(sqlEgCtx, autoIncVal)
+				if err != nil {
+					return nil, err
 				}
 			}
-
-			mu.Lock()
-			defer mu.Unlock()
-			tables[name] = t
-			return nil
-		})
+		}
+		tables[n] = t
 	}
 	if err := eg.Wait(); err != nil {
 		return nil, err
