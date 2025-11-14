@@ -114,6 +114,7 @@ func getVectorIndexKeysAndValues(msg serial.Message) (keys, values *ItemAccess, 
 	if err != nil {
 		return
 	}
+	keys = &ItemAccess{}
 	keys.bufStart = lookupVectorOffset(vectorIvfKeyItemBytesVOffset, pm.Table())
 	keys.bufLen = uint32(pm.KeyItemsLength())
 	keys.offStart = lookupVectorOffset(vectorIvfKeyOffsetsVOffset, pm.Table())
@@ -122,6 +123,7 @@ func getVectorIndexKeysAndValues(msg serial.Message) (keys, values *ItemAccess, 
 	count = uint16(keys.offLen/2) - 1
 	level = uint16(pm.TreeLevel())
 
+	values = &ItemAccess{}
 	vv := pm.ValueItemsBytes()
 	if vv != nil {
 		values.bufStart = lookupVectorOffset(vectorIvfValueItemBytesVOffset, pm.Table())
