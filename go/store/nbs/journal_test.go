@@ -46,6 +46,18 @@ func makeTestChunkJournal(t *testing.T) *ChunkJournal {
 	return j
 }
 
+func openTestChunkJournal(t *testing.T, dir string) *ChunkJournal {
+	m, err := newJournalManifest(t.Context(), dir)
+	require.NoError(t, err)
+	q := NewUnlimitedMemQuotaProvider()
+	p := newFSTablePersister(dir, q, false)
+	nbf := types.Format_Default.VersionString()
+	j, err := newChunkJournal(t.Context(), nbf, dir, m, p.(*fsTablePersister))
+	require.NoError(t, err)
+	t.Cleanup(func() { j.Close() })
+	return j
+}
+
 func TestChunkJournalBlockStoreSuite(t *testing.T) {
 	cacheOnce.Do(makeGlobalCaches)
 	fn := func(ctx context.Context, dir string) (*NomsBlockStore, error) {
@@ -56,6 +68,33 @@ func TestChunkJournalBlockStoreSuite(t *testing.T) {
 	suite.Run(t, &BlockStoreSuite{
 		factory:        fn,
 		skipInterloper: true,
+	})
+}
+
+func TestChunkJournalReadOnly(t *testing.T) {
+	t.Run("ReadOnlyOpenNonExistantJournalFails", func(t *testing.T) {
+		// If a read only ChunkJournal tries to open a journal,
+		// and that journal does not exist, it should fail,
+		// not try to create it.
+		rw := makeTestChunkJournal(t)
+		assert.Equal(t, chunks.ExclusiveAccessMode(chunks.ExclusiveAccessMode_Exclusive), rw.AccessMode())
+		ro := openTestChunkJournal(t, rw.backing.dir)
+		assert.Equal(t, chunks.ExclusiveAccessMode(chunks.ExclusiveAccessMode_ReadOnly), ro.AccessMode())
+
+		// We start without a journal.
+		assert.False(t, containsJournalSpec(rw.contents.specs))
+
+		rosource, err := ro.Open(t.Context(), journalAddr, 0, &Stats{})
+		require.Error(t, err)
+		require.Nil(t, rosource)
+
+		rwsource, err := rw.Open(t.Context(), journalAddr, 0, &Stats{})
+		require.NoError(t, err)
+		require.NotNil(t, rwsource)
+
+		rosource, err = ro.Open(t.Context(), journalAddr, 0, &Stats{})
+		require.NoError(t, err)
+		require.NotNil(t, rosource)
 	})
 }
 

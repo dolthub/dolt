@@ -68,6 +68,8 @@ type BehaviorYAMLConfig struct {
 	EventSchedulerStatus *string `yaml:"event_scheduler,omitempty" minver:"1.17.0"`
 
 	AutoGCBehavior *AutoGCBehaviorYAMLConfig `yaml:"auto_gc_behavior,omitempty" minver:"1.50.0"`
+
+	BranchActivityTracking *bool `yaml:"branch_activity_tracking,omitempty" minver:"TBD"`
 }
 
 // UserYAMLConfig contains server configuration regarding the user account clients must use to connect
@@ -202,6 +204,7 @@ func ServerConfigAsYAMLConfig(cfg ServerConfig) *YAMLConfig {
 			AutoCommit:                   ptr(cfg.AutoCommit()),
 			DisableClientMultiStatements: ptr(cfg.DisableClientMultiStatements()),
 			DoltTransactionCommit:        ptr(cfg.DoltTransactionCommit()),
+			BranchActivityTracking:       ptr(cfg.BranchActivityTracking()),
 			EventSchedulerStatus:         ptr(cfg.EventSchedulerStatus()),
 			AutoGCBehavior:               autoGCBehavior,
 		},
@@ -275,6 +278,7 @@ func ServerConfigSetValuesAsYAMLConfig(cfg ServerConfig) *YAMLConfig {
 			AutoCommit:                   zeroIf(ptr(cfg.AutoCommit()), !cfg.ValueSet(AutoCommitKey)),
 			DisableClientMultiStatements: zeroIf(ptr(cfg.DisableClientMultiStatements()), !cfg.ValueSet(DisableClientMultiStatementsKey)),
 			DoltTransactionCommit:        zeroIf(ptr(cfg.DoltTransactionCommit()), !cfg.ValueSet(DoltTransactionCommitKey)),
+			BranchActivityTracking:       zeroIf(ptr(cfg.BranchActivityTracking()), !cfg.ValueSet(BranchActivityTrackingKey)),
 			EventSchedulerStatus:         zeroIf(ptr(cfg.EventSchedulerStatus()), !cfg.ValueSet(EventSchedulerKey)),
 		},
 		ListenerConfig: ListenerYAMLConfig{
@@ -661,6 +665,15 @@ func (cfg YAMLConfig) DoltTransactionCommit() bool {
 	}
 
 	return *cfg.BehaviorConfig.DoltTransactionCommit
+}
+
+// BranchActivityTracking enables or disables the tracking of branch activity for the dolt_branch_activity table
+func (cfg YAMLConfig) BranchActivityTracking() bool {
+	if cfg.BehaviorConfig.BranchActivityTracking == nil {
+		return DefaultBranchActivityTracking
+	}
+
+	return *cfg.BehaviorConfig.BranchActivityTracking
 }
 
 // LogLevel returns the level of logging that the server will use.

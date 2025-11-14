@@ -274,6 +274,30 @@ EOF
 }
 
 # bats test_tags=no_lambda
+@test "docker-entrypoint: doltcfg.json and servercfg.yaml both honored" {
+  cname="${TEST_PREFIX}server-config-json-yaml"
+  temp_dir="$BATS_TMPDIR/server-config-json-yaml-$$"
+  mkdir -p "$temp_dir/doltcfg" "$temp_dir/servercfg"
+  cat > "$temp_dir/doltcfg/config.json" <<'EOF'
+{}
+EOF
+  cat > "$temp_dir/servercfg/config.yaml" <<'EOF'
+log_level: debug
+EOF
+
+  run_container "$cname" \
+    -v "$temp_dir/doltcfg":/etc/dolt/doltcfg.d:ro \
+    -v "$temp_dir/servercfg":/etc/dolt/servercfg.d:ro
+
+  docker logs "$cname" >"$BATS_TMPDIR/${cname}.log" 2>&1
+  run grep -F "Starting server with Config" "$BATS_TMPDIR/${cname}.log"
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ 'L="debug"' ]] || false
+
+  rm -rf "$temp_dir"
+}
+
+# bats test_tags=no_lambda
 @test "docker-entrypoint: wrong password authentication" {
   cname="${TEST_PREFIX}wrong-pass"
   usr="testuser"

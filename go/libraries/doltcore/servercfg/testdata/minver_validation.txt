@@ -15,6 +15,7 @@ BehaviorConfig servercfg.BehaviorYAMLConfig 0.0.0 behavior,omitempty
 -AutoGCBehavior *servercfg.AutoGCBehaviorYAMLConfig 1.50.0 auto_gc_behavior,omitempty
 --Enable_ *bool 1.50.0 enable,omitempty
 --ArchiveLevel_ *int 1.52.1 archive_level,omitempty
+-BranchActivityTracking *bool TBD branch_activity_tracking,omitempty
 UserConfig servercfg.UserYAMLConfig 0.0.0 user,omitempty
 -Name *string 0.0.0 name,omitempty
 -Password *string 0.0.0 password,omitempty

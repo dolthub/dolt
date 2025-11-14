@@ -124,7 +124,7 @@ func createJournalWriter(ctx context.Context, path string) (wr *journalWriter, e
 	// Open the journal file and initialize it with 16KB of zero bytes. This is intended to
 	// ensure that we can write to the journal and to allocate space for the first set of
 	// records, but probably isn't strictly necessary.
-	if f, err = os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0666); err != nil {
+	if f, err = os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0666); err != nil {
 		return nil, err
 	}
 	const batch = 1024 * 1024

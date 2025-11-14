@@ -37,6 +37,7 @@ behavior:
     auto_gc_behavior:
         enable: true
         archive_level: 1
+    branch_activity_tracking: false
 
 listener:
     host: localhost
@@ -89,6 +90,8 @@ jwks:
 	expected := ServerConfigAsYAMLConfig(DefaultServerConfig())
 
 	expected.BehaviorConfig.DoltTransactionCommit = &trueValue
+	falseValue := false
+	expected.BehaviorConfig.BranchActivityTracking = &falseValue
 	expected.CfgDirStr = nillableStrPtr("")
 	expected.PrivilegeFile = ptr("some other nonsense")
 	expected.BranchControlFile = ptr("third nonsense")
