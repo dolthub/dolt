@@ -158,16 +158,23 @@ func (tup Tuple) GetField(i int) []byte {
 		return nil
 	}
 
-	split := len(tup) - 2*cnt
+	sz := len(tup)
+	split := sz - 2*cnt
 	start, stop := uint16(0), uint16(split)
 	if i < cnt-1 {
 		pos := split + i*2
+		if pos >= sz || pos+1 >= sz {
+			panic("tuple field out of range")
+		}
 		p0 := *(*byte)(unsafe.Pointer(uintptr(unsafe.Pointer(unsafe.SliceData(tup))) + uintptr(pos)))
 		p1 := *(*byte)(unsafe.Pointer(uintptr(unsafe.Pointer(unsafe.SliceData(tup))) + uintptr(pos+1)))
 		stop = uint16(p0) | uint16(p1)<<8
 	}
 	if i > 0 {
 		pos := split + (i-1)*2
+		if pos >= sz || pos+1 >= sz {
+			panic("tuple field out of range")
+		}
 		p0 := *(*byte)(unsafe.Pointer(uintptr(unsafe.Pointer(unsafe.SliceData(tup))) + uintptr(pos)))
 		p1 := *(*byte)(unsafe.Pointer(uintptr(unsafe.Pointer(unsafe.SliceData(tup))) + uintptr(pos+1)))
 		start = uint16(p0) | uint16(p1)<<8
@@ -185,6 +192,9 @@ func (tup Tuple) FieldIsNull(i int) bool {
 }
 
 func (tup Tuple) Count() int {
+	if len(tup) < 2 {
+		panic("malformed tuple")
+	}
 	b0 := *(*byte)(unsafe.Pointer(uintptr(unsafe.Pointer(unsafe.SliceData(tup))) + uintptr(len(tup)-2)))
 	b1 := *(*byte)(unsafe.Pointer(uintptr(unsafe.Pointer(unsafe.SliceData(tup))) + uintptr(len(tup)-1)))
 	sz := uint16(b0) | uint16(b1)<<8

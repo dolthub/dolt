@@ -57,6 +57,9 @@ func (acc *ItemAccess) GetItem(i int, msg serial.Message) []byte {
 		switch acc.offsetSize {
 		case OFFSET_SIZE_16:
 			off := offStart + i*2
+			if off >= len(msg) || off+4 > len(msg) {
+				panic("attempt to access item out of range")
+			}
 			b3 := *(*byte)(unsafe.Pointer(uintptr(unsafe.Pointer(unsafe.SliceData(msg))) + uintptr(off+3)))
 			b2 := *(*byte)(unsafe.Pointer(uintptr(unsafe.Pointer(unsafe.SliceData(msg))) + uintptr(off+2)))
 			b1 := *(*byte)(unsafe.Pointer(uintptr(unsafe.Pointer(unsafe.SliceData(msg))) + uintptr(off+1)))
@@ -65,6 +68,9 @@ func (acc *ItemAccess) GetItem(i int, msg serial.Message) []byte {
 			start = uint32(b0) | (uint32(b1) << 8)
 		case OFFSET_SIZE_32:
 			off := offStart + i*4
+			if off >= len(msg) || off+8 > len(msg) {
+				panic("attempt to access item out of range")
+			}
 			b7 := *(*byte)(unsafe.Pointer(uintptr(unsafe.Pointer(unsafe.SliceData(msg))) + uintptr(off+7)))
 			b6 := *(*byte)(unsafe.Pointer(uintptr(unsafe.Pointer(unsafe.SliceData(msg))) + uintptr(off+6)))
 			b5 := *(*byte)(unsafe.Pointer(uintptr(unsafe.Pointer(unsafe.SliceData(msg))) + uintptr(off+5)))
