@@ -217,7 +217,6 @@ func fsckOnChunkStore(ctx context.Context, gs *nbs.GenerationalNBS, errs []error
 		return hrs
 	}
 
-	// Append safely to the slice of errors with a mutex.
 	errsLock := &sync.Mutex{}
 	appendErr := func(err error) {
 		errsLock.Lock()

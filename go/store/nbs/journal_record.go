@@ -240,20 +240,10 @@ func validateJournalRecord(buf []byte) error {
 	off -= indexRecChecksumSz
 	crcMatches := crc(buf[:off]) == readUint32(buf[off:])
 	if !crcMatches {
-		return fmt.Errorf("invalid journal record: CRC checksum does not match")
+		return fmt.Errorf("CRC checksum does not match")
 	}
 
 	return nil
-}
-
-type CorruptJournalRecortError struct {
-	Data   []byte
-	Offset int64
-	Why    string
-}
-
-func (e *CorruptJournalRecortError) Error() string {
-	return fmt.Sprintf("Error validating journal record; skipping remaining journal records past offset %d: %s", e.Offset, e.Why)
 }
 
 // processJournalRecords iterates over a chunk journal's records by reading from disk using |r|, starting at
@@ -280,6 +270,15 @@ func processJournalRecords(ctx context.Context, r io.ReadSeeker, off int64, cb f
 	for {
 		// peek to read next record size
 		if buf, err = rdr.Peek(uint32Size); err != nil {
+			// EOF is very expected. There could be two null bytes at the end of the journal file.
+			// What would be abnormal is any other error, or non-null bytes at the end of the file.
+			if errors.Is(err, io.EOF) && dataExistsNearEOF(rdr) {
+				if valCb != nil {
+					// NOTE: We don't assign this error to err, because we want to recover from this.
+					jErr := fmt.Errorf("non-zero data found near end of journal file at offset %d", off)
+					valCb(jErr)
+				}
+			}
 			break
 		}
 
@@ -289,26 +288,27 @@ func processJournalRecords(ctx context.Context, r io.ReadSeeker, off int64, cb f
 
 		// The journal file data is initialized to a block of zero bytes, so if we read a record
 		// length of 0, we know we've reached the end of the journal records and are starting to
-		// read the zero padding.
+		// read the zero padding. This is a normal condition we expect and should not warn on.
 		if l == 0 {
 			break
 		}
 
 		if l > journalWriterBuffSize {
+			// We probably hit a corrupted record. Report error and stop processing.
 			if valCb != nil {
-				jErr := &CorruptJournalRecortError{
-					Data:   buf,
-					Offset: off,
-					Why:    fmt.Sprintf("invalid journal record length: %d exceeds max allowed size of %d", l, journalWriterBuffSize),
-				}
-				// We've run into an invalid journal record length, so we stop processing further records allowing
-				// the system to start, but we report the error via the validation callback.
+				// NOTE: We don't assign this error to err, because we want to recover from this.
+				jErr := fmt.Errorf("invalid journal record length: %d exceeds max allowed size of %d", l, journalWriterBuffSize)
 				valCb(jErr)
 			}
 			break
 		}
 
 		if buf, err = rdr.Peek(int(l)); err != nil {
+			if valCb != nil {
+				// We probably wend off the end of the file. Report error and recover.
+				jErr := fmt.Errorf("failed to read full journal record of length %d at offset %d: %w", l, off, err)
+				valCb(jErr)
+			}
 			break
 		}
 
@@ -319,15 +319,8 @@ func processJournalRecords(ctx context.Context, r io.ReadSeeker, off int64, cb f
 		//       for invalid records.
 		if validationErr := validateJournalRecord(buf); validationErr != nil {
 			if valCb != nil {
-				jErr := &CorruptJournalRecortError{
-					Data:   buf,
-					Offset: off,
-					Why:    validationErr.Error(),
-				}
-
-				// NOTE: We don't assign the validation error to err, because we want to stop processing journal records
-				//       when we see an invalid record and return successfully from processJournalRecords(), so that only
-				//       the preceding, valid records in the journal are used.
+				// We don't assign the validation error to err, because we want to recover from this.
+				jErr := fmt.Errorf("invalid journal record at offset %d: %w", off, validationErr)
 				valCb(jErr)
 			}
 			break
@@ -335,7 +328,8 @@ func processJournalRecords(ctx context.Context, r io.ReadSeeker, off int64, cb f
 
 		var rec journalRec
 		if rec, err = readJournalRecord(buf); err != nil {
-			break // failed to read valid record
+			// Highly unlikely, since we already validated the record above.
+			break // failed to read valid record. We will not recover from this.
 		}
 		if err = cb(off, rec); err != nil {
 			break
@@ -343,6 +337,7 @@ func processJournalRecords(ctx context.Context, r io.ReadSeeker, off int64, cb f
 
 		// advance |rdr| state by |l| bytes
 		if _, err = io.ReadFull(rdr, buf); err != nil {
+			// We've already peeked this far successfully, so this is unexpected. Unrecoverable.
 			break
 		}
 		off += int64(len(buf))
@@ -350,7 +345,7 @@ func processJournalRecords(ctx context.Context, r io.ReadSeeker, off int64, cb f
 
 	// If a non-EOF error was captured while processing journal records, return a
 	// journal offset of 0 and the error, which will cause startup to halt.
-	if err != nil && err != io.EOF {
+	if err != nil && !errors.Is(err, io.EOF) {
 		return 0, err
 	}
 
@@ -360,6 +355,25 @@ func processJournalRecords(ctx context.Context, r io.ReadSeeker, off int64, cb f
 		return 0, err
 	}
 	return off, nil
+}
+
+// ensureNoDataNearEOF very specific helper to endure there is no non-zero data near the end of the journal file.
+// We have already hit an EOF condition before this is called, so we are actually going to ignore any IO errors here.
+// If we find any non-zero data, we return true.
+func dataExistsNearEOF(rdr *bufio.Reader) (dataFound bool) {
+	var buf []byte
+	var err error
+
+	for i := 0; i < 3; i++ {
+		buf, err = rdr.Peek(i + 1)
+		if err != nil {
+			return false
+		}
+		if buf[i] != 0 {
+			return true
+		}
+	}
+	return false
 }
 
 func peekRootHashAt(journal io.ReaderAt, offset int64) (root hash.Hash, err error) {

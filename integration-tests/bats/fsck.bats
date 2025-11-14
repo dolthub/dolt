@@ -94,7 +94,8 @@ UPDATE tbl SET guid = UUID() WHERE i >= @random_id LIMIT 1;"
 
   run dolt fsck
   [ "$status" -eq 1 ]
-  [[ "$output" =~ "skipping remaining journal records past offset 5936: invalid journal record: CRC checksum does not match" ]] || false
+
+  [[ "$output" =~ "invalid journal record at offset 5936: CRC checksum does not match" ]] || false
 }
 
 @test "fsck: journal with long record length" {
@@ -110,4 +111,41 @@ UPDATE tbl SET guid = UUID() WHERE i >= @random_id LIMIT 1;"
   [ "$status" -eq 0 ]
   [[ "$output" =~ "501" ]] || false
 }
+
+@test "fsck: journal read off EOF" {
+  mkdir .dolt
+  cp -R $BATS_CWD/corrupt_dbs/bad_journal_read_off_EOF/* .dolt
+
+  run dolt fsck
+  [ "$status" -eq 1 ]
+  [[ "$output" =~ "failed to read full journal record of length 1024 at offset 1393617: EOF" ]] || false
+
+  # Ensure we can still read data
+  run dolt sql -q "select count(*) from tbl;"
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "201" ]] || false
+}
+
+@test "fsck: journal with small null pad" {
+  mkdir .dolt
+  cp -R $BATS_CWD/corrupt_dbs/happy_journal_with_null_pad/* .dolt/
+
+  # FSCK should be happy with this database. 0 exit status.
+  dolt fsck
+}
+
+@test "fsck: journal with small non-null pad" {
+  mkdir .dolt
+  cp -R $BATS_CWD/corrupt_dbs/bad_journal_with_non_null_pad/* .dolt/
+
+  run dolt fsck
+  [ "$status" -eq 1 ]
+  [[ "$output" =~ "non-zero data found near end of journal file at offset 1458477" ]] || false
+
+  # Ensure we can still read data
+  run dolt sql -q "select count(*) from tbl;"
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "201" ]] || false
+}
+
 
