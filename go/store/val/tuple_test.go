@@ -27,7 +27,7 @@ var testPool = pool.NewBuffPool()
 
 func TestNewTuple(t *testing.T) {
 	for n := 0; n < 1024; n++ {
-		fields := randomByteFields(t)
+		fields := randomByteFields()
 		tup := NewTuple(testPool, fields...)
 		for i, field := range fields {
 			assert.Equal(t, field, tup.GetField(i))
@@ -37,7 +37,7 @@ func TestNewTuple(t *testing.T) {
 
 func TestTuplePrefix(t *testing.T) {
 	for n := 0; n < 1024; n++ {
-		fields := randomByteFields(t)
+		fields := randomByteFields()
 		full := NewTuple(testPool, fields...)
 		for i := 0; i <= len(fields); i++ {
 			exp := NewTuple(testPool, fields[:i]...)
@@ -49,7 +49,7 @@ func TestTuplePrefix(t *testing.T) {
 
 func TestTupleSuffix(t *testing.T) {
 	for n := 0; n < 1024; n++ {
-		fields := randomByteFields(t)
+		fields := randomByteFields()
 		full := NewTuple(testPool, fields...)
 		for i := 0; i <= full.Count(); i++ {
 			exp := NewTuple(testPool, fields[i:]...)
@@ -59,9 +59,77 @@ func TestTupleSuffix(t *testing.T) {
 	}
 }
 
-func randomByteFields(t *testing.T) (fields [][]byte) {
+func randomTuples(numTuples int) []Tuple {
+	tuples := make([]Tuple, numTuples)
+	for i := range tuples {
+		fields := randomByteFields()
+		tuples[i] = NewTuple(testPool, fields...)
+	}
+	return tuples
+}
+
+// BenchmarkTupleCount
+// BenchmarkTupleCount-14    	 4743597	       239.5 ns/op
+func BenchmarkTupleCount(b *testing.B) {
+	tuples := randomTuples(1024)
+
+	b.ResetTimer()
+	var res int
+	for i := 0; i < b.N; i++ {
+		for _, tuple := range tuples {
+			res += tuple.Count()
+		}
+	}
+}
+
+// BenchmarkTupleCountUnsafe
+// BenchmarkTupleCountUnsafe-14    	 4680088	       238.9 ns/op
+func BenchmarkTupleCountUnsafe(b *testing.B) {
+	tuples := randomTuples(1024)
+
+	b.ResetTimer()
+	var res int
+	for i := 0; i < b.N; i++ {
+		for _, tuple := range tuples {
+			res += tuple.CountUnsafe()
+		}
+	}
+}
+
+// cpu: Apple M4 Pro
+// BenchmarkGetField
+// BenchmarkGetField-14    	  460736	      2569 ns/op
+func BenchmarkGetField(b *testing.B) {
+	tuples := randomTuples(1024)
+
+	b.ResetTimer()
+	for n := 0; n < b.N; n++ {
+		for _, tup := range tuples {
+			for i := 0; i < tup.Count(); i++ {
+				_ = tup.GetField(i)
+			}
+		}
+	}
+}
+
+// cpu: Apple M4 Pro
+// BenchmarkGetFieldUnsafe
+// BenchmarkGetFieldUnsafe-14    	  772669	      1474 ns/op
+func BenchmarkGetFieldUnsafe(b *testing.B) {
+	tuples := randomTuples(1024)
+
+	b.ResetTimer()
+	for n := 0; n < b.N; n++ {
+		for _, tup := range tuples {
+			for i := 0; i < tup.CountUnsafe(); i++ {
+				_ = tup.GetFieldUnsafe(i)
+			}
+		}
+	}
+}
+
+func randomByteFields() (fields [][]byte) {
 	fields = make([][]byte, rand.Intn(19)+1)
-	assert.True(t, len(fields) > 0)
 	for i := range fields {
 		if rand.Uint32()%4 == 0 {
 			// 25% NULL
