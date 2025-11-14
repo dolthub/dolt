@@ -68,8 +68,7 @@ func randomTuples(numTuples int) []Tuple {
 	return tuples
 }
 
-// BenchmarkTupleCount
-// BenchmarkTupleCount-14    	 4743597	       239.5 ns/op
+// BenchmarkTupleCountUnsafe-14    	 4680088	       238.9 ns/op
 func BenchmarkTupleCount(b *testing.B) {
 	tuples := randomTuples(1024)
 
@@ -82,23 +81,9 @@ func BenchmarkTupleCount(b *testing.B) {
 	}
 }
 
-// BenchmarkTupleCountUnsafe
-// BenchmarkTupleCountUnsafe-14    	 4680088	       238.9 ns/op
-func BenchmarkTupleCountUnsafe(b *testing.B) {
-	tuples := randomTuples(1024)
-
-	b.ResetTimer()
-	var res int
-	for i := 0; i < b.N; i++ {
-		for _, tuple := range tuples {
-			res += tuple.CountUnsafe()
-		}
-	}
-}
-
 // cpu: Apple M4 Pro
 // BenchmarkGetField
-// BenchmarkGetField-14    	  460736	      2569 ns/op
+// BenchmarkGetFieldUnsafe-14    	  772669	      1474 ns/op
 func BenchmarkGetField(b *testing.B) {
 	tuples := randomTuples(1024)
 
@@ -107,22 +92,6 @@ func BenchmarkGetField(b *testing.B) {
 		for _, tup := range tuples {
 			for i := 0; i < tup.Count(); i++ {
 				_ = tup.GetField(i)
-			}
-		}
-	}
-}
-
-// cpu: Apple M4 Pro
-// BenchmarkGetFieldUnsafe
-// BenchmarkGetFieldUnsafe-14    	  772669	      1474 ns/op
-func BenchmarkGetFieldUnsafe(b *testing.B) {
-	tuples := randomTuples(1024)
-
-	b.ResetTimer()
-	for n := 0; n < b.N; n++ {
-		for _, tup := range tuples {
-			for i := 0; i < tup.CountUnsafe(); i++ {
-				_ = tup.GetFieldUnsafe(i)
 			}
 		}
 	}
