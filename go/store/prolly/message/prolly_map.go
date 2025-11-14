@@ -110,6 +110,7 @@ func getProllyMapKeysAndValues(msg serial.Message) (keys, values *ItemAccess, le
 	if err != nil {
 		return
 	}
+	keys = &ItemAccess{}
 	keys.bufStart = lookupVectorOffset(prollyMapKeyItemBytesVOffset, pm.Table())
 	keys.bufLen = uint32(pm.KeyItemsLength())
 	keys.offStart = lookupVectorOffset(prollyMapKeyOffsetsVOffset, pm.Table())
@@ -118,6 +119,7 @@ func getProllyMapKeysAndValues(msg serial.Message) (keys, values *ItemAccess, le
 	count = uint16(keys.offLen/2) - 1
 	level = uint16(pm.TreeLevel())
 
+	values = &ItemAccess{}
 	vv := pm.ValueItemsBytes()
 	if vv != nil {
 		values.bufStart = lookupVectorOffset(prollyMapValueItemBytesVOffset, pm.Table())

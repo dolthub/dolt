@@ -74,8 +74,9 @@ func getBlobValues(msg serial.Message) (values *ItemAccess, err error) {
 	var b serial.Blob
 	err = serial.InitBlobRoot(&b, msg, serial.MessagePrefixSz)
 	if err != nil {
-		return &ItemAccess{}, err
+		return nil, err
 	}
+	values = &ItemAccess{}
 	if b.TreeLevel() > 0 {
 		values.bufStart = lookupVectorOffset(blobAddressArrayVOffset, b.Table())
 		values.bufLen = uint32(b.AddressArrayLength())

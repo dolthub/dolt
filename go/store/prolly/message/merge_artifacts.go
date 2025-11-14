@@ -112,6 +112,7 @@ func getArtifactMapKeysAndValues(msg serial.Message) (keys, values *ItemAccess, 
 	if err != nil {
 		return
 	}
+	keys = &ItemAccess{}
 	keys.bufStart = lookupVectorOffset(mergeArtifactKeyItemBytesVOffset, ma.Table())
 	keys.bufLen = uint32(ma.KeyItemsLength())
 	keys.offStart = lookupVectorOffset(mergeArtifactKeyOffsetsVOffset, ma.Table())
@@ -120,6 +121,7 @@ func getArtifactMapKeysAndValues(msg serial.Message) (keys, values *ItemAccess, 
 	count = uint16(keys.offLen/2) - 1
 	level = uint16(ma.TreeLevel())
 
+	values = &ItemAccess{}
 	vv := ma.ValueItemsBytes()
 	if vv != nil {
 		values.bufStart = lookupVectorOffset(mergeArtifactValueItemBytesVOffset, ma.Table())

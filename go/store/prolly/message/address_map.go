@@ -87,8 +87,10 @@ func getAddressMapKeys(msg serial.Message) (keys *ItemAccess, err error) {
 	var am serial.AddressMap
 	err = serial.InitAddressMapRoot(&am, msg, serial.MessagePrefixSz)
 	if err != nil {
-		return keys, err
+		return nil, err
 	}
+
+	keys = &ItemAccess{}
 	keys.bufStart = lookupVectorOffset(addressMapKeyItemsBytesVOffset, am.Table())
 	keys.bufLen = uint32(am.KeyItemsLength())
 	keys.offStart = lookupVectorOffset(addressMapKeyItemsOffsetsVOffset, am.Table())
@@ -100,8 +102,10 @@ func getAddressMapValues(msg serial.Message) (values *ItemAccess, err error) {
 	var am serial.AddressMap
 	err = serial.InitAddressMapRoot(&am, msg, serial.MessagePrefixSz)
 	if err != nil {
-		return values, err
+		return nil, err
 	}
+
+	values = &ItemAccess{}
 	values.bufStart = lookupVectorOffset(addressMapAddressArrayVOffset, am.Table())
 	values.bufLen = uint32(am.AddressArrayLength())
 	values.itemWidth = hash.ByteLen
