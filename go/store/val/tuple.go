@@ -153,7 +153,7 @@ func (tup Tuple) GetOffset(i int) (int, bool) {
 	return int(start), start != stop
 }
 func (tup Tuple) GetField(i int) []byte {
-	cnt := tup.CountUnsafe()
+	cnt := tup.Count()
 	if i >= cnt {
 		return nil
 	}
