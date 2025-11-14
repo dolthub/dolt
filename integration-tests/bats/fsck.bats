@@ -87,3 +87,65 @@ UPDATE tbl SET guid = UUID() WHERE i >= @random_id LIMIT 1;"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "Chunk: 7i48kt4h41hcjniri7scv5m8a69cdn13 content hash mismatch: hitg0bb0hsakip96qvu2hts0hkrrla9o" ]] || false
 }
+
+@test "fsck: another bad journal crc" {
+  mkdir .dolt
+  cp -R $BATS_CWD/corrupt_dbs/bad_journal_crc_2/* .dolt/
+
+  run dolt fsck
+  [ "$status" -eq 1 ]
+
+  [[ "$output" =~ "invalid journal record at offset 5936: CRC checksum does not match" ]] || false
+}
+
+@test "fsck: journal with long record length" {
+  mkdir .dolt
+  cp -R $BATS_CWD/corrupt_dbs/bad_journal_invalid_record_len/* .dolt/
+
+  run dolt fsck
+  [ "$status" -eq 1 ]
+  [[ "$output" =~ "invalid journal record length: 5242881 exceeds max allowed size of 5242880" ]] || false
+
+  # Ensure we can still read data
+  run dolt sql -q "select count(*) from tbl;"
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "501" ]] || false
+}
+
+@test "fsck: journal read off EOF" {
+  mkdir .dolt
+  cp -R $BATS_CWD/corrupt_dbs/bad_journal_read_off_EOF/* .dolt
+
+  run dolt fsck
+  [ "$status" -eq 1 ]
+  [[ "$output" =~ "failed to read full journal record of length 1024 at offset 1393617: EOF" ]] || false
+
+  # Ensure we can still read data
+  run dolt sql -q "select count(*) from tbl;"
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "201" ]] || false
+}
+
+@test "fsck: journal with small null pad" {
+  mkdir .dolt
+  cp -R $BATS_CWD/corrupt_dbs/happy_journal_with_null_pad/* .dolt/
+
+  # FSCK should be happy with this database. 0 exit status.
+  dolt fsck
+}
+
+@test "fsck: journal with small non-null pad" {
+  mkdir .dolt
+  cp -R $BATS_CWD/corrupt_dbs/bad_journal_with_non_null_pad/* .dolt/
+
+  run dolt fsck
+  [ "$status" -eq 1 ]
+  [[ "$output" =~ "non-zero data found near end of journal file at offset 1458477" ]] || false
+
+  # Ensure we can still read data
+  run dolt sql -q "select count(*) from tbl;"
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "201" ]] || false
+}
+
+
