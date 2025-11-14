@@ -68,7 +68,7 @@ func randomTuples(numTuples int) []Tuple {
 	return tuples
 }
 
-// BenchmarkTupleCountUnsafe-14    	 4680088	       238.9 ns/op
+// BenchmarkTupleCount-14    	 4612776	       239.2 ns/op
 func BenchmarkTupleCount(b *testing.B) {
 	tuples := randomTuples(1024)
 
@@ -81,9 +81,7 @@ func BenchmarkTupleCount(b *testing.B) {
 	}
 }
 
-// cpu: Apple M4 Pro
-// BenchmarkGetField
-// BenchmarkGetFieldUnsafe-14    	  772669	      1474 ns/op
+// BenchmarkGetField-14    	   42997	     26963 ns/op
 func BenchmarkGetField(b *testing.B) {
 	tuples := randomTuples(1024)
 
