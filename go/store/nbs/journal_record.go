@@ -237,7 +237,7 @@ func validateJournalRecord(buf []byte) error {
 			off, len(buf))
 	}
 
-	off -= indexRecChecksumSz
+	off -= journalRecChecksumSz
 	crcMatches := crc(buf[:off]) == readUint32(buf[off:])
 	if !crcMatches {
 		return fmt.Errorf("invalid journal record: CRC checksum does not match")
@@ -380,7 +380,8 @@ func peekRootHashAt(journal io.ReaderAt, offset int64) (root hash.Hash, err erro
 		return
 	}
 	buf = buf[:sz]
-	if !validateIndexRecord(buf) {
+	err = validateJournalRecord(buf)
+	if err != nil {
 		err = fmt.Errorf("failed to validate root hash record at %d", offset)
 		return
 	}
