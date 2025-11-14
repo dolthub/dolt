@@ -152,35 +152,7 @@ func (tup Tuple) GetOffset(i int) (int, bool) {
 
 	return int(start), start != stop
 }
-
-// GetField returns the value for field |i|.
 func (tup Tuple) GetField(i int) []byte {
-	cnt := tup.Count()
-	if i >= cnt {
-		return nil
-	}
-
-	sz := ByteSize(len(tup))
-	split := sz - uint16Size*ByteSize(cnt)
-	offs := tup[split : sz-countSize]
-
-	start, stop := uint16(0), uint16(split)
-	if i*2 < len(offs) {
-		pos := i * 2
-		stop = ReadUint16(offs[pos : pos+2])
-	}
-	if i > 0 {
-		pos := (i - 1) * 2
-		start = ReadUint16(offs[pos : pos+2])
-	}
-
-	if start == stop {
-		return nil // NULL
-	}
-
-	return tup[start:stop]
-}
-func (tup Tuple) GetFieldUnsafe(i int) []byte {
 	cnt := tup.CountUnsafe()
 	if i >= cnt {
 		return nil
@@ -213,13 +185,6 @@ func (tup Tuple) FieldIsNull(i int) bool {
 }
 
 func (tup Tuple) Count() int {
-	b0 := *(*byte)(unsafe.Pointer(uintptr(unsafe.Pointer(unsafe.SliceData(tup))) + uintptr(len(tup)-2)))
-	b1 := *(*byte)(unsafe.Pointer(uintptr(unsafe.Pointer(unsafe.SliceData(tup))) + uintptr(len(tup)-1)))
-	sz := uint16(b0) | uint16(b1)<<8
-	return int(sz)
-}
-
-func (tup Tuple) CountUnsafe() int {
 	b0 := *(*byte)(unsafe.Pointer(uintptr(unsafe.Pointer(unsafe.SliceData(tup))) + uintptr(len(tup)-2)))
 	b1 := *(*byte)(unsafe.Pointer(uintptr(unsafe.Pointer(unsafe.SliceData(tup))) + uintptr(len(tup)-1)))
 	sz := uint16(b0) | uint16(b1)<<8
