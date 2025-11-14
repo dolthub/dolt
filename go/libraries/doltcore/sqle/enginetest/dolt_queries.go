@@ -5396,6 +5396,36 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "dolt_log with non-literal arguments",
+		SetUpScript: []string{
+			"create table t (pk int primary key, c1 varchar(20), c2 varchar(20));",
+			"call dolt_add('.')",
+			"set @Commit1 = '';",
+			"call dolt_commit_hash_out(@Commit1, '-am', 'creating table t');",
+
+			"insert into t values(1, 'one', 'two'), (2, 'two', 'three');",
+			"set @Commit2 = '';",
+			"call dolt_commit_hash_out(@Commit2, '-am', 'inserting into t');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT dl1.message, dl2.message from dolt_log() dl1 join lateral (select message from dolt_log(dl1.commit_hash)) dl2;",
+				Expected: []sql.Row{
+					{"inserting into t", "inserting into t"},
+					{"inserting into t", "creating table t"},
+					{"inserting into t", "Initialize data repository"},
+					{"creating table t", "creating table t"},
+					{"creating table t", "Initialize data repository"},
+					{"Initialize data repository", "Initialize data repository"},
+				},
+			},
+			{
+				Query:    "SELECT message from dolt_log() dl1 where exists (select 1 from dolt_log(dl1.commit_hash, '--not', @Commit1));",
+				Expected: []sql.Row{{"inserting into t"}},
+			},
+		},
+	},
 }
 
 var BranchStatusTableFunctionScriptTests = []queries.ScriptTest{
