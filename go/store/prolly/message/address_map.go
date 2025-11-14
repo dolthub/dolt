@@ -83,7 +83,7 @@ func (s AddressMapSerializer) Serialize(keys, addrs [][]byte, subtrees []uint64,
 	return serial.FinishMessage(b, serial.AddressMapEnd(b), addressMapFileID)
 }
 
-func getAddressMapKeys(msg serial.Message) (keys ItemAccess, err error) {
+func getAddressMapKeys(msg serial.Message) (keys *ItemAccess, err error) {
 	var am serial.AddressMap
 	err = serial.InitAddressMapRoot(&am, msg, serial.MessagePrefixSz)
 	if err != nil {
@@ -96,7 +96,7 @@ func getAddressMapKeys(msg serial.Message) (keys ItemAccess, err error) {
 	return
 }
 
-func getAddressMapValues(msg serial.Message) (values ItemAccess, err error) {
+func getAddressMapValues(msg serial.Message) (values *ItemAccess, err error) {
 	var am serial.AddressMap
 	err = serial.InitAddressMapRoot(&am, msg, serial.MessagePrefixSz)
 	if err != nil {
@@ -180,7 +180,7 @@ func estimateAddressMapSize(keys, addresses [][]byte, subtrees []uint64) (keySz,
 	return
 }
 
-func getAddressMapKeysAndValues(msg serial.Message) (keys, values ItemAccess, level, count uint16, err error) {
+func getAddressMapKeysAndValues(msg serial.Message) (keys, values *ItemAccess, level, count uint16, err error) {
 	keys, err = getAddressMapKeys(msg)
 	if err != nil {
 		return

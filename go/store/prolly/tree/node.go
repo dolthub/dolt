@@ -42,13 +42,13 @@ type Node struct {
 	// this field is lazily decoded from msg
 	// because it requires a malloc.
 	subtrees *subtreeCounts
+	// keys and values cache offset metadata
+	// to accelerate Item lookups into msg.
+	keys   *message.ItemAccess
+	values *message.ItemAccess
 	// msg is the underlying buffer for the Node
 	// encoded as a Flatbuffers message.
 	msg serial.Message
-	// keys and values cache offset metadata
-	// to accelerate Item lookups into msg.
-	keys   message.ItemAccess
-	values message.ItemAccess
 	// count is the Item pair count.
 	count uint16
 	// level is 0-indexed tree height.

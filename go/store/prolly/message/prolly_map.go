@@ -104,7 +104,7 @@ func (s ProllyMapSerializer) Serialize(keys, values [][]byte, subtrees []uint64,
 	return serial.FinishMessage(b, serial.ProllyTreeNodeEnd(b), prollyMapFileID)
 }
 
-func getProllyMapKeysAndValues(msg serial.Message) (keys, values ItemAccess, level, count uint16, err error) {
+func getProllyMapKeysAndValues(msg serial.Message) (keys, values *ItemAccess, level, count uint16, err error) {
 	var pm serial.ProllyTreeNode
 	err = serial.InitProllyTreeNodeRoot(&pm, msg, serial.MessagePrefixSz)
 	if err != nil {
