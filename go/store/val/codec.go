@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"github.com/dolthub/go-mysql-server/sql/types"
 	"math"
 	"math/big"
 	"math/bits"
@@ -577,10 +578,14 @@ func readDate(val []byte) (date time.Time) {
 
 func writeDate(buf []byte, val time.Time) {
 	expectSize(buf, dateSize)
-	t := uint32(val.Year() << yearShift)
-	t += uint32(val.Month() << monthShift)
-	t += uint32(val.Day())
-	writeUint32(buf, t)
+	if val.Equal(types.ZeroTime) {
+		writeUint32(buf, 0)
+	} else {
+		t := uint32(val.Year() << yearShift)
+		t += uint32(val.Month() << monthShift)
+		t += uint32(val.Day())
+		writeUint32(buf, t)
+	}
 }
 
 func compareDate(l, r time.Time) int {
