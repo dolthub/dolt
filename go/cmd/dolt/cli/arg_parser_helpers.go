@@ -320,6 +320,7 @@ func CreateDiffArgParser(isTableFunction bool) *argparser.ArgParser {
 		ap.SupportsString(FormatFlag, "r", "result output format", "How to format diff output. Valid values are tabular, sql, json. Defaults to tabular.")
 		ap.SupportsString(WhereParam, "", "column", "filters columns based on values in the diff.  See {{.EmphasisLeft}}dolt diff --help{{.EmphasisRight}} for details.")
 		ap.SupportsInt(LimitParam, "", "record_count", "limits to the first N diffs.")
+		ap.SupportsString("filter", "", "diff_type", "filters results based on the type of modification (added, modified, removed).")
 		ap.SupportsFlag(StagedFlag, "", "Show only the staged data changes.")
 		ap.SupportsFlag(CachedFlag, "c", "Synonym for --staged")
 		ap.SupportsFlag(MergeBase, "", "Uses merge base of the first commit and second commit (or HEAD if not supplied) as the first commit")
