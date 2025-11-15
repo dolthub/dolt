@@ -28,15 +28,16 @@ func TestDoltLogBindVariables(t *testing.T) {
 	ctx := sql.NewEmptyContext()
 
 	// Test that bind variables are properly handled in deferExpressions
-	ltf := &LogTableFunction{ctx: ctx}
+	ltf := &LogTableFunction{}
 
 	// This should not fail during prepare phase
-	node, err := ltf.deferExpressions(expression.NewBindVar("v1"))
+	node, err := ltf.deferExpressions(ctx, expression.NewBindVar("v1"))
 	assert.NoError(t, err)
 	assert.NotNil(t, node)
 
 	// Test mixed bind variables and literals
 	node, err = ltf.deferExpressions(
+		ctx,
 		expression.NewBindVar("v1"),
 		expression.NewLiteral("--parents", types.Text),
 	)
@@ -45,6 +46,7 @@ func TestDoltLogBindVariables(t *testing.T) {
 
 	// Test the exact customer issue case: dolt_log(?, "--not", ?) #9508
 	node, err = ltf.deferExpressions(
+		ctx,
 		expression.NewBindVar("v1"),
 		expression.NewLiteral("--not", types.Text),
 		expression.NewBindVar("v2"),
@@ -54,9 +56,7 @@ func TestDoltLogBindVariables(t *testing.T) {
 }
 
 func TestDoltLogExpressionsInterface(t *testing.T) {
-	ctx := sql.NewEmptyContext()
 	ltf := &LogTableFunction{
-		ctx: ctx,
 		argumentExprs: []sql.Expression{
 			expression.NewBindVar("v1"),
 			expression.NewLiteral("HEAD", types.Text),
@@ -87,12 +87,11 @@ func TestDoltLogExpressionsInterface(t *testing.T) {
 }
 
 func TestDoltLogValidateRevisionStrings(t *testing.T) {
-	ctx := sql.NewEmptyContext()
-
 	// Test that validation works with parsed strings
 	ltf := &LogTableFunction{
-		ctx:          ctx,
-		revisionStrs: []string{"HEAD"},
+		LogTableFunctionArgs: LogTableFunctionArgs{
+			revisionStrs: []string{"HEAD"},
+		},
 	}
 
 	// Should validate normally
@@ -118,21 +117,19 @@ func TestDoltLogTypeValidation(t *testing.T) {
 
 	// Test that type validation still works in addOptions via getDoltArgs
 	// No type check in validateRevisionStrings because getDoltArgs already validates types
-	ltf := &LogTableFunction{
-		ctx: ctx,
-	}
+	ltf := &LogTableFunction{}
 
 	// Test with non-text expression (integer)
-	err := ltf.addOptions([]sql.Expression{
+	err := ltf.addOptions(ctx, []sql.Expression{
 		expression.NewLiteral(123, types.Int32),
-	})
+	}, nil, true)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "Invalid argument to dolt_log: 123")
 
 	// Test with text expression (should work)
-	err = ltf.addOptions([]sql.Expression{
+	err = ltf.addOptions(ctx, []sql.Expression{
 		expression.NewLiteral("HEAD", types.Text),
-	})
+	}, nil, true)
 	assert.NoError(t, err)
 }
 
@@ -141,7 +138,7 @@ func TestDoltLogBindVariableWithParents(t *testing.T) {
 
 	// Test bind variable with --parents flag to ensure schema is properly determined
 	// during execution phase when bind variables are resolved
-	ltf := &LogTableFunction{ctx: ctx}
+	ltf := &LogTableFunction{}
 
 	// Test case: dolt_log(?, "--parents") - bind variable with parents flag
 	bindVarExprs := []sql.Expression{
@@ -150,7 +147,7 @@ func TestDoltLogBindVariableWithParents(t *testing.T) {
 	}
 
 	// During analysis phase, this should defer parsing due to bind variable
-	node, err := ltf.deferExpressions(bindVarExprs...)
+	node, err := ltf.deferExpressions(ctx, bindVarExprs...)
 	assert.NoError(t, err)
 	assert.NotNil(t, node)
 
@@ -188,7 +185,7 @@ func TestDoltLogBindVariableWithParents(t *testing.T) {
 	}
 
 	// This simulates what happens in RowIter when bind variables are resolved
-	err = newLtf.addOptions(executionExprs)
+	err = newLtf.addOptions(ctx, executionExprs, nil, true)
 	assert.NoError(t, err)
 
 	// After execution parsing, showParents should still be true
@@ -211,7 +208,7 @@ func TestDoltLogBindVariableAsOption(t *testing.T) {
 
 	// Test where the bind variable itself is an option flag like --parents
 	// This tests the case where schema-affecting flags are also bind variables
-	ltf := &LogTableFunction{ctx: ctx}
+	ltf := &LogTableFunction{}
 
 	// Test case: dolt_log("HEAD", ?) where ? will be "--parents"
 	bindVarAsOptionExprs := []sql.Expression{
@@ -221,7 +218,7 @@ func TestDoltLogBindVariableAsOption(t *testing.T) {
 
 	// During analysis phase, schema determination should not include parents column
 	// because --parents is in a bind variable, not a literal
-	node, err := ltf.deferExpressions(bindVarAsOptionExprs...)
+	node, err := ltf.deferExpressions(ctx, bindVarAsOptionExprs...)
 	assert.NoError(t, err)
 	assert.NotNil(t, node)
 
@@ -255,7 +252,7 @@ func TestDoltLogBindVariableAsOption(t *testing.T) {
 	}
 
 	// This simulates what happens in RowIter when bind variables are resolved
-	err = newLtf.addOptions(executionExprs)
+	err = newLtf.addOptions(ctx, executionExprs, nil, true)
 	assert.NoError(t, err)
 
 	// After execution parsing, showParents should be true
@@ -266,7 +263,7 @@ func TestDoltLogFunctionsRejected(t *testing.T) {
 	ctx := sql.NewEmptyContext()
 
 	// Test that functions are rejected even when used alongside bind variables
-	ltf := &LogTableFunction{ctx: ctx}
+	ltf := &LogTableFunction{}
 
 	// Create a simple function expression that implements sql.FunctionExpression
 	upperFunc := expression.NewUnresolvedFunction("UPPER", false, nil, expression.NewLiteral("--parents", types.Text))
@@ -278,7 +275,7 @@ func TestDoltLogFunctionsRejected(t *testing.T) {
 	}
 
 	// Should fail during analysis because functions are not allowed, regardless of bind variables
-	node, err := ltf.deferExpressions(bindVarWithFunctionExprs...)
+	node, err := ltf.deferExpressions(ctx, bindVarWithFunctionExprs...)
 	assert.Error(t, err)
 	assert.Nil(t, node)
 	assert.Contains(t, err.Error(), "only literal values supported")
