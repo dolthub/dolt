@@ -35,7 +35,7 @@ type Serializer interface {
 	Serialize(keys, values [][]byte, subtrees []uint64, level int) serial.Message
 }
 
-func UnpackFields(msg serial.Message) (fileId string, keys, values ItemAccess, level, count uint16, err error) {
+func UnpackFields(msg serial.Message) (fileId string, keys, values *ItemAccess, level, count uint16, err error) {
 	fileId = serial.GetFileID(msg)
 	switch fileId {
 	case serial.ProllyTreeNodeFileID:

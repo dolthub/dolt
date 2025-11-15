@@ -83,12 +83,14 @@ func (s AddressMapSerializer) Serialize(keys, addrs [][]byte, subtrees []uint64,
 	return serial.FinishMessage(b, serial.AddressMapEnd(b), addressMapFileID)
 }
 
-func getAddressMapKeys(msg serial.Message) (keys ItemAccess, err error) {
+func getAddressMapKeys(msg serial.Message) (keys *ItemAccess, err error) {
 	var am serial.AddressMap
 	err = serial.InitAddressMapRoot(&am, msg, serial.MessagePrefixSz)
 	if err != nil {
-		return keys, err
+		return nil, err
 	}
+
+	keys = &ItemAccess{}
 	keys.bufStart = lookupVectorOffset(addressMapKeyItemsBytesVOffset, am.Table())
 	keys.bufLen = uint32(am.KeyItemsLength())
 	keys.offStart = lookupVectorOffset(addressMapKeyItemsOffsetsVOffset, am.Table())
@@ -96,12 +98,14 @@ func getAddressMapKeys(msg serial.Message) (keys ItemAccess, err error) {
 	return
 }
 
-func getAddressMapValues(msg serial.Message) (values ItemAccess, err error) {
+func getAddressMapValues(msg serial.Message) (values *ItemAccess, err error) {
 	var am serial.AddressMap
 	err = serial.InitAddressMapRoot(&am, msg, serial.MessagePrefixSz)
 	if err != nil {
-		return values, err
+		return nil, err
 	}
+
+	values = &ItemAccess{}
 	values.bufStart = lookupVectorOffset(addressMapAddressArrayVOffset, am.Table())
 	values.bufLen = uint32(am.AddressArrayLength())
 	values.itemWidth = hash.ByteLen
@@ -180,7 +184,7 @@ func estimateAddressMapSize(keys, addresses [][]byte, subtrees []uint64) (keySz,
 	return
 }
 
-func getAddressMapKeysAndValues(msg serial.Message) (keys, values ItemAccess, level, count uint16, err error) {
+func getAddressMapKeysAndValues(msg serial.Message) (keys, values *ItemAccess, level, count uint16, err error) {
 	keys, err = getAddressMapKeys(msg)
 	if err != nil {
 		return

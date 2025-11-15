@@ -16,6 +16,7 @@ package val
 
 import (
 	"math"
+	"unsafe"
 
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/pool"
@@ -151,26 +152,32 @@ func (tup Tuple) GetOffset(i int) (int, bool) {
 
 	return int(start), start != stop
 }
-
-// GetField returns the value for field |i|.
 func (tup Tuple) GetField(i int) []byte {
 	cnt := tup.Count()
 	if i >= cnt {
 		return nil
 	}
 
-	sz := ByteSize(len(tup))
-	split := sz - uint16Size*ByteSize(cnt)
-	offs := tup[split : sz-countSize]
-
+	sz := len(tup)
+	split := sz - 2*cnt
 	start, stop := uint16(0), uint16(split)
-	if i*2 < len(offs) {
-		pos := i * 2
-		stop = ReadUint16(offs[pos : pos+2])
+	if i < cnt-1 {
+		pos := split + i*2
+		if pos >= sz || pos+1 >= sz {
+			panic("tuple field out of range")
+		}
+		p0 := *(*byte)(unsafe.Pointer(uintptr(unsafe.Pointer(unsafe.SliceData(tup))) + uintptr(pos)))
+		p1 := *(*byte)(unsafe.Pointer(uintptr(unsafe.Pointer(unsafe.SliceData(tup))) + uintptr(pos+1)))
+		stop = uint16(p0) | uint16(p1)<<8
 	}
 	if i > 0 {
-		pos := (i - 1) * 2
-		start = ReadUint16(offs[pos : pos+2])
+		pos := split + (i-1)*2
+		if pos >= sz || pos+1 >= sz {
+			panic("tuple field out of range")
+		}
+		p0 := *(*byte)(unsafe.Pointer(uintptr(unsafe.Pointer(unsafe.SliceData(tup))) + uintptr(pos)))
+		p1 := *(*byte)(unsafe.Pointer(uintptr(unsafe.Pointer(unsafe.SliceData(tup))) + uintptr(pos+1)))
+		start = uint16(p0) | uint16(p1)<<8
 	}
 
 	if start == stop {
@@ -185,8 +192,13 @@ func (tup Tuple) FieldIsNull(i int) bool {
 }
 
 func (tup Tuple) Count() int {
-	sl := tup[len(tup)-int(countSize):]
-	return int(ReadUint16(sl))
+	if len(tup) < 2 {
+		panic("malformed tuple")
+	}
+	b0 := *(*byte)(unsafe.Pointer(uintptr(unsafe.Pointer(unsafe.SliceData(tup))) + uintptr(len(tup)-2)))
+	b1 := *(*byte)(unsafe.Pointer(uintptr(unsafe.Pointer(unsafe.SliceData(tup))) + uintptr(len(tup)-1)))
+	sz := uint16(b0) | uint16(b1)<<8
+	return int(sz)
 }
 
 func isNull(val []byte) bool {

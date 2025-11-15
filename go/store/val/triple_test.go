@@ -28,9 +28,9 @@ func TestNewTriple(t *testing.T) {
 
 func roundTripTripleFields(t *testing.T) {
 	for n := 0; n < 100; n++ {
-		f1 := randomByteFields(t)
-		f2 := randomByteFields(t)
-		f3 := randomByteFields(t)
+		f1 := randomByteFields()
+		f2 := randomByteFields()
+		f3 := randomByteFields()
 
 		t1 := NewTuple(testPool, f1...)
 		t2 := NewTuple(testPool, f2...)
