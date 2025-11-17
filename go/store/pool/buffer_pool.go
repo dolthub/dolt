@@ -14,6 +14,8 @@
 
 package pool
 
+import "sync"
+
 type BuffPool interface {
 	Get(size uint64) []byte
 	GetSlices(size uint64) [][]byte
@@ -31,4 +33,30 @@ func (bp buffPool) Get(size uint64) []byte {
 
 func (bp buffPool) GetSlices(size uint64) [][]byte {
 	return make([][]byte, size)
+}
+
+var realBuffPool = sync.Pool{
+	New: func() any {
+		return make([]byte, 0, 65504) // This is apparently MaxTupleDataSize
+	},
+}
+
+type realBuff struct{}
+
+func NewRealBuffPool() *realBuff {
+	return &realBuff{}
+}
+
+func (b *realBuff) Get(size uint64) []byte {
+	res := realBuffPool.Get().([]byte)
+	return res[:size]
+}
+
+func (b *realBuff) Put(data []byte) {
+	clear(data)
+	realBuffPool.Put(data[:0])
+}
+
+func (b *realBuff) GetSlices(size uint64) [][]byte {
+	panic("this is unused")
 }
