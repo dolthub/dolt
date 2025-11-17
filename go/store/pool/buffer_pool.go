@@ -49,12 +49,13 @@ func NewRealBuffPool() *realBuff {
 
 func (b *realBuff) Get(size uint64) []byte {
 	res := realBuffPool.Get().([]byte)
-	return res[:size]
+	res = res[:size]
+	clear(res)
+	return res
 }
 
 func (b *realBuff) Put(data []byte) {
-	clear(data)
-	realBuffPool.Put(data[:0])
+	realBuffPool.Put(data)
 }
 
 func (b *realBuff) GetSlices(size uint64) [][]byte {
