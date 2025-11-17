@@ -711,7 +711,7 @@ func getCommitInfoWithOptions(queryist cli.Queryist, sqlCtx *sql.Context, ref st
 		return nil, fmt.Errorf("error getting hash of HEAD: %v", err)
 	}
 
-	// So all columns appear in dolt log disable dolt_log_committer_only in new context
+	// So all columns appear always and no need to check if author cols exist.
 	err = sqlCtx.SetSessionVariable(sqlCtx, dsess.DoltLogCommitterOnly, int8(0))
 	if err != nil {
 		return nil, err
@@ -741,8 +741,8 @@ func getCommitInfoWithOptions(queryist cli.Queryist, sqlCtx *sql.Context, ref st
 		return nil, nil
 	}
 
-	// row: 0-5 committer columns, 6 parents, 7 refs, 8 signature (opt), then author columns at the end. Author columns
-	// are appended at the end for backward compatibility with old sys cmds using fixed indices.
+	// row: 0-5 committer columns, 6 parents, 7 refs, 8 signature (opt), then author columns at the end to be backward
+	// compatible with old client sys commands fixed indices.
 	row := rows[0]
 	commitHashStr, ok := row[0].(string)
 	if !ok {

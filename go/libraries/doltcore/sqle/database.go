@@ -633,7 +633,7 @@ func (db Database) getTableInsensitiveWithRoot(ctx *sql.Context, head *doltdb.Co
 				}
 			}
 
-			dt, found = dtables.NewLogTable(db.Name(), lwrName, db.ddb, head, ctx), true
+			dt, found = dtables.NewLogTable(ctx, db.Name(), lwrName, db.ddb, head), true
 		}
 	case doltdb.DiffTableName, doltdb.GetDiffTableName():
 		isDoltgresSystemTable, err := resolve.IsDoltgresSystemTable(ctx, tname, root)

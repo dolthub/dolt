@@ -49,8 +49,25 @@ var _ sql.Table = (*LogTable)(nil)
 var _ sql.StatisticsTable = (*LogTable)(nil)
 var _ sql.IndexAddressable = (*LogTable)(nil)
 
+// LogSchemaCommitterColumns legacy committer schema columns.
+var LogSchemaCommitterColumns = sql.Schema{
+	&sql.Column{Name: "commit_hash", Type: types.Text, PrimaryKey: true},
+	&sql.Column{Name: "committer", Type: types.Text},
+	&sql.Column{Name: "email", Type: types.Text},
+	&sql.Column{Name: "date", Type: types.Datetime},
+	&sql.Column{Name: "message", Type: types.Text},
+	&sql.Column{Name: "commit_order", Type: types.Uint64},
+}
+
+// LogSchemaAuthorColumns additional author columns to create full dolt_log schema.
+var LogSchemaAuthorColumns = sql.Schema{
+	&sql.Column{Name: "author", Type: types.Text},
+	&sql.Column{Name: "author_email", Type: types.Text},
+	&sql.Column{Name: "author_date", Type: types.Datetime},
+}
+
 // NewLogTable creates a LogTable
-func NewLogTable(dbName string, tableName string, ddb *doltdb.DoltDB, head *doltdb.Commit, ctx *sql.Context) sql.Table {
+func NewLogTable(ctx *sql.Context, dbName string, tableName string, ddb *doltdb.DoltDB, head *doltdb.Commit) sql.Table {
 	return &LogTable{dbName: dbName, tableName: tableName, ddb: ddb, head: head, ctx: ctx}
 }
 
@@ -88,34 +105,7 @@ func (dt *LogTable) String() string {
 	return dt.tableName
 }
 
-// BuildLogRow builds a row based on the specified schema type
-func BuildLogRow(commitHash hash.Hash, meta *datas.CommitMeta, height uint64, showCommitterOnly bool) sql.Row {
-	rowVals := make([]interface{}, 0, len(LogSchemaCommitterColumns))
-	rowVals = append(rowVals, commitHash.String(), *meta.CommitterName, *meta.CommitterEmail, meta.CommitterTime(), meta.Description, height)
-	if !showCommitterOnly {
-		rowVals = append(rowVals, meta.Name, meta.Email, meta.Time())
-	}
-	return sql.NewRow(rowVals...)
-}
-
-// LogSchemaCommitterColumns To maintain compatibility with existing views, these columns names remain unchanged.
-var LogSchemaCommitterColumns = sql.Schema{
-	&sql.Column{Name: "commit_hash", Type: types.Text, PrimaryKey: true},
-	&sql.Column{Name: "committer", Type: types.Text},
-	&sql.Column{Name: "email", Type: types.Text},
-	&sql.Column{Name: "date", Type: types.Datetime},
-	&sql.Column{Name: "message", Type: types.Text},
-	&sql.Column{Name: "commit_order", Type: types.Uint64},
-}
-
-// LogSchemaAuthorColumns are the additional columns in the full log schema
-var LogSchemaAuthorColumns = sql.Schema{
-	&sql.Column{Name: "author", Type: types.Text},
-	&sql.Column{Name: "author_email", Type: types.Text},
-	&sql.Column{Name: "author_date", Type: types.Datetime},
-}
-
-// GetLogTableSchema returns the log table schema based on the session variable and the provided table and db names
+// GetLogTableSchema returns the log table schema based on the flag.
 func GetLogTableSchema(showCommitterOnly bool) sql.Schema {
 	cols := make(sql.Schema, 0, len(LogSchemaCommitterColumns))
 	cols = append(cols, LogSchemaCommitterColumns...)
@@ -123,6 +113,16 @@ func GetLogTableSchema(showCommitterOnly bool) sql.Schema {
 		cols = append(cols, LogSchemaAuthorColumns...)
 	}
 	return cols
+}
+
+// BuildLogRow builds a dolt_log row with the option to show author columns.
+func BuildLogRow(commitHash hash.Hash, meta *datas.CommitMeta, height uint64, showCommitterOnly bool) sql.Row {
+	rowVals := make([]interface{}, 0, len(LogSchemaCommitterColumns))
+	rowVals = append(rowVals, commitHash.String(), *meta.CommitterName, *meta.CommitterEmail, meta.CommitterTime(), meta.Description, height)
+	if !showCommitterOnly {
+		rowVals = append(rowVals, meta.Name, meta.Email, meta.Time())
+	}
+	return sql.NewRow(rowVals...)
 }
 
 // Schema is a sql.Table interface function that gets the sql.Schema of the log system table.
