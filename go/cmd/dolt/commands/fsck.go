@@ -112,13 +112,13 @@ func (cmd FsckCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		errs = append(errs, vErr)
 	})
 	if err != nil {
-		cli.PrintErrln("Could not open dolt database: %s", err.Error())
+		cli.PrintErrln(fmt.Sprintf("Could not open dolt database: %s", err.Error()))
 		return 1
 	}
 	gs, ok := datas.ChunkStoreFromDatabase(ddb).(*nbs.GenerationalNBS)
 	if !ok {
 		// This should never happen. Mainly a protection against future changes.
-		cli.PrintErrln("runtime error: FSCK requires *nbs.GenerationalNBS chunk store. Got: %T", datas.ChunkStoreFromDatabase(ddb))
+		cli.PrintErrln(fmt.Sprintf("runtime error: FSCK requires *nbs.GenerationalNBS chunk store. Got: %T", datas.ChunkStoreFromDatabase(ddb)))
 		return 1
 	}
 
