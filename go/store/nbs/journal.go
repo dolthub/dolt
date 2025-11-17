@@ -267,7 +267,7 @@ func (j *ChunkJournal) Persist(ctx context.Context, mt *memTable, haver chunkRea
 		if record.has {
 			continue
 		}
-		c := chunks.NewChunkWithHash(hash.Hash(*record.a), mt.chunks[*record.a])
+		c := chunks.NewChunkWithHash(*record.a, mt.chunks[*record.a])
 		err := j.wr.writeCompressedChunk(ctx, ChunkToCompressedChunk(c))
 		if err != nil {
 			return nil, gcBehavior_Continue, err
