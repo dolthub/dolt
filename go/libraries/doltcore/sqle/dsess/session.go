@@ -151,22 +151,6 @@ func (d *DoltSession) StatsProvider() sql.StatsProvider {
 	return d.statsProv
 }
 
-// GetBaseSession implements the sql.Session interface.
-func (d *DoltSession) GetBaseSession() *sql.BaseSession {
-	if d.Session == nil {
-		return nil
-	}
-	return d.Session.GetBaseSession()
-}
-
-// SetBaseSession implements the sql.Session interface.
-func (d *DoltSession) SetBaseSession(base *sql.BaseSession) {
-	if d.Session == nil {
-		return
-	}
-	d.Session.SetBaseSession(base)
-}
-
 // DSessFromSess retrieves a dolt session from a standard sql.Session
 func DSessFromSess(sess sql.Session) *DoltSession {
 	return sess.(*DoltSession)

@@ -712,13 +712,10 @@ func getCommitInfoWithOptions(queryist cli.Queryist, sqlCtx *sql.Context, ref st
 	}
 
 	// So all columns appear in dolt log disable dolt_log_committer_only in new context
-	sqlCtx = sql.NewContext(
-		sqlCtx.Context,
-		sql.WithSession(sqlCtx.Session),
-		sql.WithSessionVariables(map[string]interface{}{
-			dsess.DoltLogCommitterOnly: int8(0),
-		}),
-	)
+	err = sqlCtx.SetSessionVariable(sqlCtx, dsess.DoltLogCommitterOnly, int8(0))
+	if err != nil {
+		return nil, err
+	}
 
 	var q string
 	authorColOffset := 0
@@ -744,8 +741,9 @@ func getCommitInfoWithOptions(queryist cli.Queryist, sqlCtx *sql.Context, ref st
 		return nil, nil
 	}
 
+	// row: 0-5 committer columns, 6 parents, 7 refs, 8 signature (opt), then author columns at the end. Author columns
+	// are appended at the end for backward compatibility with old sys cmds using fixed indices.
 	row := rows[0]
-
 	commitHashStr, ok := row[0].(string)
 	if !ok {
 		return nil, fmt.Errorf("unexpected type for commit hash: %T", row[0])
@@ -783,8 +781,6 @@ func getCommitInfoWithOptions(queryist cli.Queryist, sqlCtx *sql.Context, ref st
 		return nil, fmt.Errorf("unexpected type for commit_order: %T", v)
 	}
 
-	// Column order: 0-5 committer columns, 6 parents, 7 refs, 8 signature (opt), then author columns at the end. Author
-	// columns are appended at the end for backward compatibility with old sys cmds using fixed indices.
 	parentHashStrs := []string{}
 	if parentStr, ok := row[6].(string); ok && parentStr != "" {
 		parentHashStrs = strings.Split(parentStr, ", ")
@@ -792,21 +788,20 @@ func getCommitInfoWithOptions(queryist cli.Queryist, sqlCtx *sql.Context, ref st
 
 	var signature string
 	if opts.showSignature {
-		// Signature is always the last column when present
-		signature = row[7].(string)
+		signature = row[8].(string)
 	}
 
-	authorName, ok := row[7+authorColOffset].(string)
+	authorName, ok := row[8+authorColOffset].(string)
 	if !ok {
-		return nil, fmt.Errorf("unexpected type for author name: %T", row[6])
+		return nil, fmt.Errorf("unexpected type for author name: %T", row[8+authorColOffset])
 	}
-	authorEmail, ok := row[8+authorColOffset].(string)
+	authorEmail, ok := row[9+authorColOffset].(string)
 	if !ok {
-		return nil, fmt.Errorf("unexpected type for author email: %T", row[7])
+		return nil, fmt.Errorf("unexpected type for author email: %T", row[9+authorColOffset])
 	}
-	authorTs, err := getTimestampColAsUint64(row[9+authorColOffset])
+	authorTs, err := getTimestampColAsUint64(row[10+authorColOffset])
 	if err != nil {
-		return nil, fmt.Errorf("error parsing author timestamp '%v': %w", row[8], err)
+		return nil, fmt.Errorf("error parsing author timestamp '%v': %w", row[10+authorColOffset], err)
 	}
 
 	commitMeta := &datas.CommitMeta{

@@ -50,8 +50,8 @@ var _ sql.StatisticsTable = (*LogTable)(nil)
 var _ sql.IndexAddressable = (*LogTable)(nil)
 
 // NewLogTable creates a LogTable
-func NewLogTable(dbName string, tableName string, ddb *doltdb.DoltDB, head *doltdb.Commit, ctx *sql.Context, showCommitterOnly bool) sql.Table {
-	return &LogTable{dbName: dbName, tableName: tableName, ddb: ddb, head: head, ctx: ctx, showCommitterOnly: showCommitterOnly}
+func NewLogTable(dbName string, tableName string, ddb *doltdb.DoltDB, head *doltdb.Commit, ctx *sql.Context) sql.Table {
+	return &LogTable{dbName: dbName, tableName: tableName, ddb: ddb, head: head, ctx: ctx}
 }
 
 // DataLength implements sql.StatisticsTable
