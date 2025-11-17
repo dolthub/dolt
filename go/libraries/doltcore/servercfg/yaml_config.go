@@ -69,7 +69,7 @@ type BehaviorYAMLConfig struct {
 
 	AutoGCBehavior *AutoGCBehaviorYAMLConfig `yaml:"auto_gc_behavior,omitempty" minver:"1.50.0"`
 
-	BranchActivityTracking *bool `yaml:"branch_activity_tracking,omitempty" minver:"TBD"`
+	BranchActivityTracking *bool `yaml:"branch_activity_tracking,omitempty" minver:"1.77.0"`
 }
 
 // UserYAMLConfig contains server configuration regarding the user account clients must use to connect
@@ -92,7 +92,7 @@ type ListenerYAMLConfig struct {
 	// TLSCert is a file system path to a TLS certificate chain in PEM format.
 	TLSCert *string `yaml:"tls_cert,omitempty"`
 	// CACert is a file system path to a certificate authority in PEM format.
-	CACert *string `yaml:"ca_cert,omitempty" minver:"TBD"`
+	CACert *string `yaml:"ca_cert,omitempty" minver:"1.77.0"`
 	// RequireSecureTransport can enable a mode where non-TLS connections are turned away.
 	RequireSecureTransport *bool `yaml:"require_secure_transport,omitempty"`
 	// AllowCleartextPasswords enables use of cleartext passwords.
