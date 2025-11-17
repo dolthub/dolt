@@ -56,13 +56,13 @@ func TestParseDate(t *testing.T) {
 	}
 }
 
-func TestParsePerson(t *testing.T) {
+func TestParseContributor(t *testing.T) {
 	tests := []struct {
-		personStr  string
-		personType string
-		expName    string
-		expEmail   string
-		expErr     bool
+		contribStr  string
+		contribType string
+		expName     string
+		expEmail    string
+		expErr      bool
 	}{
 		{"Hi <hi@hi.com>", "author", "Hi", "hi@hi.com", false},
 		{"John Doe <hi@hi.com>", "author", "John Doe", "hi@hi.com", false},
@@ -74,8 +74,8 @@ func TestParsePerson(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		t.Run(test.personStr+"_"+test.personType, func(t *testing.T) {
-			name, email, err := ParsePerson(test.personStr, test.personType)
+		t.Run(test.contribStr+"_"+test.contribType, func(t *testing.T) {
+			name, email, err := ParseContributor(test.contribStr, test.contribType)
 
 			if test.expErr {
 				assert.Error(t, err)

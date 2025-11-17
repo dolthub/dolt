@@ -81,7 +81,7 @@ func (cmd CreateCommitCmd) Exec(ctx context.Context, commandStr string, args []s
 	var name, email string
 	var err error
 	if authorStr, ok := apr.GetValue(cli.AuthorParam); ok {
-		name, email, err = cli.ParsePerson(authorStr, "author")
+		name, email, err = cli.ParseContributor(authorStr, "author")
 		if err != nil {
 			cli.PrintErrln(errhand.VerboseErrorFromError(err))
 			return 1

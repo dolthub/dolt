@@ -503,7 +503,7 @@ func getNameAndEmail(ctx *sql.Context, apr *argparser.ArgParseResults) (string, 
 	var err error
 	var name, email string
 	if authorStr, ok := apr.GetValue(cli.AuthorParam); ok {
-		name, email, err = cli.ParsePerson(authorStr, "author")
+		name, email, err = cli.ParseContributor(authorStr, "author")
 		if err != nil {
 			return "", "", err
 		}
