@@ -51,7 +51,7 @@ type LogTable struct {
 	tableName         string
 	headHash          hash.Hash
 	ctx               *sql.Context
-	schType           *LogSchemaType
+	schType           LogSchemaType
 }
 
 var _ sql.Table = (*LogTable)(nil)
@@ -59,7 +59,7 @@ var _ sql.StatisticsTable = (*LogTable)(nil)
 var _ sql.IndexAddressable = (*LogTable)(nil)
 
 // NewLogTable creates a LogTable
-func NewLogTable(dbName string, tableName string, ddb *doltdb.DoltDB, head *doltdb.Commit, ctx *sql.Context, schType *LogSchemaType) sql.Table {
+func NewLogTable(dbName string, tableName string, ddb *doltdb.DoltDB, head *doltdb.Commit, ctx *sql.Context, schType LogSchemaType) sql.Table {
 	return &LogTable{dbName: dbName, tableName: tableName, ddb: ddb, head: head, ctx: ctx, schType: schType}
 }
 
@@ -98,8 +98,8 @@ func (dt *LogTable) String() string {
 }
 
 // BuildLogRowWithSchemaType builds a row based on the specified schema type
-func BuildLogRowWithSchemaType(commitHash hash.Hash, meta *datas.CommitMeta, height uint64, schType *LogSchemaType) sql.Row {
-	switch *schType {
+func BuildLogRowWithSchemaType(commitHash hash.Hash, meta *datas.CommitMeta, height uint64, schType LogSchemaType) sql.Row {
+	switch schType {
 	case LogSchemaCommitterOnly:
 		return sql.NewRow(
 			commitHash.String(),
@@ -158,14 +158,11 @@ func GetLogTableSchemaWithType(schType *LogSchemaType) sql.Schema {
 
 // Schema is a sql.Table interface function that gets the sql.Schema of the log system table.
 func (dt *LogTable) Schema() sql.Schema {
-	if dt.schType == nil {
-		dt.schType = new(LogSchemaType)
-	}
-	*dt.schType = LogSchema
+	dt.schType = LogSchema
 	if showCommitterOnly, _ := dsess.GetBooleanSystemVar(dt.ctx, dsess.DoltLogCommitterOnly); showCommitterOnly {
-		*dt.schType = LogSchemaCommitterOnly
+		dt.schType = LogSchemaCommitterOnly
 	}
-	sch := GetLogTableSchemaWithType(dt.schType)
+	sch := GetLogTableSchemaWithType(&dt.schType)
 	for _, col := range sch {
 		col.Source = dt.tableName
 		col.DatabaseSource = dt.dbName
@@ -292,11 +289,11 @@ func (dt *LogTable) HeadHash() (hash.Hash, error) {
 // LogItr is a sql.RowItr implementation which iterates over each commit as if it's a row in the table.
 type LogItr struct {
 	child   doltdb.CommitItr[*sql.Context]
-	schType *LogSchemaType
+	schType LogSchemaType
 }
 
 // NewLogItr creates a LogItr from the current environment.
-func NewLogItr(ctx *sql.Context, ddb *doltdb.DoltDB, head *doltdb.Commit, schType *LogSchemaType) (*LogItr, error) {
+func NewLogItr(ctx *sql.Context, ddb *doltdb.DoltDB, head *doltdb.Commit, schType LogSchemaType) (*LogItr, error) {
 	h, err := head.HashOf()
 	if err != nil {
 		return nil, err
