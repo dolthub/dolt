@@ -425,7 +425,6 @@ func (se *SqlEngine) Query(ctx *sql.Context, query string) (sql.Schema, sql.RowI
 	return se.engine.Query(ctx, query)
 }
 
-
 func (se *SqlEngine) QueryWithBindings(ctx *sql.Context, query string, parsed sqlparser.Statement, bindings map[string]sqlparser.Expr, qFlags *sql.QueryFlags) (sql.Schema, sql.RowIter, *sql.QueryFlags, error) {
 	return se.engine.QueryWithBindings(ctx, query, parsed, bindings, qFlags)
 }
