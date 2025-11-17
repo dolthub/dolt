@@ -28,7 +28,7 @@ import (
 	driver "github.com/dolthub/dolt/go/libraries/doltcore/dtestutils/sql_server_driver"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"gopkg.in/yaml.v3"
+	yaml "gopkg.in/yaml.v3"
 )
 
 var GlobalPorts GlobalDynamicResources
@@ -225,7 +225,7 @@ func (d *DynamicResources) GetOrAllocateTempDir(name string) string {
 
 func (d *DynamicResources) ApplyTemplate(s string) string {
 	tmpl, err := template.New("sql").Funcs(map[string]any{
-		"get_port":    d.GetOrAllocatePort,
+		"get_port": d.GetOrAllocatePort,
 		"get_tempdir": d.GetOrAllocateTempDir,
 	}).Parse(s)
 	require.NoError(d.t, err)

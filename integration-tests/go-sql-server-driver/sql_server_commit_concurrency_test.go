@@ -66,8 +66,6 @@ func testSQLTransactionWithAmendCommit(t *testing.T) {
 		db.Close()
 	})
 
-	require.NoError(t, err)
-
 	_, err = db.ExecContext(ctx, `
 CREATE TABLE test_table (
   id INT AUTO_INCREMENT PRIMARY KEY,
@@ -154,8 +152,6 @@ func testSQLRacingAmend(t *testing.T) {
 	t.Cleanup(func() {
 		db.Close()
 	})
-
-	require.NoError(t, err)
 
 	_, err = db.ExecContext(ctx, `
 	CREATE TABLE test_table (

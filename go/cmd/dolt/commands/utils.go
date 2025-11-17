@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/sirupsen/logrus"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -711,13 +712,13 @@ func getCommitInfoWithOptions(queryist cli.Queryist, sqlCtx *sql.Context, ref st
 	}
 
 	// Create a context with dolt_log_committer_only disabled
-	//doltLogCtx := sql.NewContext(
-	//	sqlCtx.Context,
-	//	sql.WithSession(sqlCtx.Session),
-	//	sql.WithSessionVariables(map[string]interface{}{
-	//		dsess.DoltLogCommitterOnly: int8(0),
-	//	}),
-	//)
+	doltLogCtx := sql.NewContext(
+		sqlCtx.Context,
+		sql.WithSession(sqlCtx.Session),
+		sql.WithSessionVariables(map[string]interface{}{
+			dsess.DoltLogCommitterOnly: int8(0),
+		}),
+	)
 
 	var q string
 	if opts.showSignature {
@@ -732,7 +733,7 @@ func getCommitInfoWithOptions(queryist cli.Queryist, sqlCtx *sql.Context, ref st
 		}
 	}
 
-	rows, err := cli.GetRowsForSql(queryist, sqlCtx, q)
+	rows, err := cli.GetRowsForSql(queryist, doltLogCtx, q)
 	if err != nil {
 		return nil, fmt.Errorf("error getting logs for ref '%s': %v", ref, err)
 	}
@@ -765,6 +766,7 @@ func getCommitInfoWithOptions(queryist cli.Queryist, sqlCtx *sql.Context, ref st
 	case uint64:
 		commitOrder = v
 	case string:
+		var err error
 		commitOrder, err = strconv.ParseUint(v, 10, 64)
 		if err != nil {
 			return nil, fmt.Errorf("error parsing commit_order '%s': %v", v, err)
@@ -774,36 +776,27 @@ func getCommitInfoWithOptions(queryist cli.Queryist, sqlCtx *sql.Context, ref st
 	}
 
 	authorName := committerName
-	if len(row) > 6 {
-		if v, ok := row[6].(string); ok && v != "" {
-			authorName = v
-		}
+	if v, ok := row[6].(string); ok && v != "" {
+		authorName = v
 	}
 	authorEmail := committerEmail
-	if len(row) > 7 {
-		if v, ok := row[7].(string); ok && v != "" {
-			authorEmail = v
-		}
+	if v, ok := row[7].(string); ok && v != "" {
+		authorEmail = v
 	}
 	authorTs := committerTs
-	if len(row) > 8 {
-		if ts, tsErr := getTimestampColAsUint64(row[8]); tsErr == nil {
-			authorTs = ts
-		}
+	if ts, tsErr := getTimestampColAsUint64(row[8]); tsErr == nil {
+		authorTs = ts
 	}
 
 	parentHashStrs := []string{}
-	if len(row) > 9 {
-		if parentStr, ok := row[9].(string); ok && parentStr != "" {
-			parentHashStrs = strings.Split(parentStr, ", ")
-		}
+	if parentStr, ok := row[9].(string); ok && parentStr != "" {
+		parentHashStrs = strings.Split(parentStr, ", ")
 	}
 
 	var signature string
-	if opts.showSignature && len(row) > 0 {
-		if sigVal, ok := row[len(row)-1].(string); ok {
-			signature = sigVal
-		}
+	if opts.showSignature {
+		// Signature is always the last column when present
+		signature = row[len(row)-1].(string)
 	}
 
 	commitMeta := &datas.CommitMeta{
