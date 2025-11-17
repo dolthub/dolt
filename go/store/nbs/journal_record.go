@@ -246,16 +246,6 @@ func validateJournalRecord(buf []byte) error {
 	return nil
 }
 
-type CorruptJournalRecortError struct {
-	Data   []byte
-	Offset int64
-	Why    string
-}
-
-func (e *CorruptJournalRecortError) Error() string {
-	return fmt.Sprintf("Error validating journal record; skipping remaining journal records past offset %d: %s", e.Offset, e.Why)
-}
-
 // processJournalRecords iterates over a chunk journal's records by reading from disk using |r|, starting at
 // offset |off|, and calls the callback function |cb| with each journal record. The offset where reading was stopped
 // is returned, or any error encountered along the way.
