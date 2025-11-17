@@ -43,7 +43,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/editor"
@@ -705,70 +704,44 @@ func getCommitInfo(queryist cli.Queryist, sqlCtx *sql.Context, ref string) (*Com
 	return getCommitInfoWithOptions(queryist, sqlCtx, ref, commitInfoOptions{})
 }
 
-// getCommitInfoWithOptions fetches commit metadata for the supplied ref.
-// It queries dolt_log in a child session with @@dolt_log_committer_only
-// disabled when possible, and reuses the parent session if the child
-// context cannot be established.
 func getCommitInfoWithOptions(queryist cli.Queryist, sqlCtx *sql.Context, ref string, opts commitInfoOptions) (*CommitInfo, error) {
 	hashOfHead, err := getHashOf(queryist, sqlCtx, "HEAD")
 	if err != nil {
 		return nil, fmt.Errorf("error getting hash of HEAD: %v", err)
 	}
 
-	queryCtx := sqlCtx
-	if se, ok := queryist.(*engine.SqlEngine); ok {
-		childCtx, closer, childErr := se.NewChildContext(sqlCtx)
-		if childErr != nil {
-			logrus.WithError(childErr).Debug("unable to create child context for commit info; using parent session")
-		} else {
-			childSess, ok := childCtx.Session.(*dsess.DoltSession)
-			if !ok {
-				closer()
-				logrus.Debug("child context session is not a DoltSession; using parent session for commit info")
-			} else {
-				if err := childSess.SetSessionVariable(childCtx, dsess.DoltLogCommitterOnly, int8(0)); err != nil {
-					closer()
-					logrus.WithError(err).Debug("unable to disable @@dolt_log_committer_only in child context; using parent session")
-				} else {
-					queryCtx = childCtx
-					defer closer()
-				}
-			}
-		}
-	}
+	// Create a context with dolt_log_committer_only disabled
+	//doltLogCtx := sql.NewContext(
+	//	sqlCtx.Context,
+	//	sql.WithSession(sqlCtx.Session),
+	//	sql.WithSessionVariables(map[string]interface{}{
+	//		dsess.DoltLogCommitterOnly: int8(0),
+	//	}),
+	//)
 
 	var q string
 	if opts.showSignature {
 		q, err = dbr.InterpolateForDialect("select * from dolt_log(?, '--parents', '--decorate=full', '--show-signature')", []interface{}{ref}, dialect.MySQL)
+		if err != nil {
+			return nil, fmt.Errorf("error interpolating query: %v", err)
+		}
 	} else {
 		q, err = dbr.InterpolateForDialect("select * from dolt_log(?, '--parents', '--decorate=full')", []interface{}{ref}, dialect.MySQL)
-	}
-	if err != nil {
-		return nil, fmt.Errorf("error interpolating query: %v", err)
+		if err != nil {
+			return nil, fmt.Errorf("error interpolating query: %v", err)
+		}
 	}
 
-	rows, err := cli.GetRowsForSql(queryist, queryCtx, q)
+	rows, err := cli.GetRowsForSql(queryist, sqlCtx, q)
 	if err != nil {
 		return nil, fmt.Errorf("error getting logs for ref '%s': %v", ref, err)
 	}
-
-	var row sql.Row
-	if len(rows) > 0 {
-		row = rows[0]
-	}
-
-	if row == nil && queryCtx != sqlCtx {
-		rows, err = cli.GetRowsForSql(queryist, sqlCtx, q)
-		if err != nil {
-			return nil, fmt.Errorf("error getting logs for ref '%s': %v", ref, err)
-		}
-		if len(rows) > 0 {
-			row = rows[0]
-		}
-	}
-	if row == nil {
+	if len(rows) == 0 {
+		// No commit with this hash exists
 		return nil, nil
 	}
+
+	row := rows[0]
 
 	commitHashStr, ok := row[0].(string)
 	if !ok {

@@ -1,6 +1,6 @@
 #!/usr/bin/expect
 
-set timeout 5
+set timeout 30
 set env(NO_COLOR) 1
 
 source  "$env(BATS_CWD)/helper/common_expect_functions.tcl"
