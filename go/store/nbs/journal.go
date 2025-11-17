@@ -95,7 +95,7 @@ func newChunkJournal(ctx context.Context, nbfVers, dir string, m *journalManifes
 }
 
 func JournalParserLoggingRecoveryCb(err error) {
-	logrus.Errorf(err.Error())
+	logrus.Error(err.Error())
 }
 
 // reflogBufferSize returns the size of the ring buffer to allocate to store in-memory roots references when
