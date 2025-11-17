@@ -666,7 +666,7 @@ func newLocalStore(ctx context.Context, nbfVerStr string, dir string, memTableSi
 	return newNomsBlockStore(ctx, nbfVerStr, makeManifestManager(m), p, q, c, memTableSize)
 }
 
-func NewLocalJournalingStore(ctx context.Context, nbfVers, dir string, q MemoryQuotaProvider, mmapArchiveIndexes bool, valCb func(error)) (*NomsBlockStore, error) {
+func NewLocalJournalingStore(ctx context.Context, nbfVers, dir string, q MemoryQuotaProvider, mmapArchiveIndexes bool, recoveryCb func(error)) (*NomsBlockStore, error) {
 	cacheOnce.Do(makeGlobalCaches)
 	if err := checkDir(dir); err != nil {
 		return nil, err
@@ -678,7 +678,7 @@ func NewLocalJournalingStore(ctx context.Context, nbfVers, dir string, q MemoryQ
 	}
 	p := newFSTablePersister(dir, q, mmapArchiveIndexes)
 
-	journal, err := newChunkJournal(ctx, nbfVers, dir, m, p.(*fsTablePersister), valCb)
+	journal, err := newChunkJournal(ctx, nbfVers, dir, m, p.(*fsTablePersister), recoveryCb)
 	if err != nil {
 		return nil, err
 	}

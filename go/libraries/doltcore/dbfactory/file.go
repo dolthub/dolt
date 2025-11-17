@@ -135,9 +135,7 @@ func (fact FileFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, 
 		return s.ddb, s.vrw, s.ns, nil
 	}
 
-	ddb, vrw, ns, err := fact.CreateDbNoCache(ctx, nbf, urlObj, params, func(vErr error) {
-		logrus.Error(vErr.Error())
-	})
+	ddb, vrw, ns, err := fact.CreateDbNoCache(ctx, nbf, urlObj, params, nbs.JournalParserLoggingRecoveryCb)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -157,7 +155,7 @@ func (fact FileFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, 
 //
 // Furthermore, regular database loading uses this code path to construct the GenerationalCS, which is desired because we
 // want the same underlying implementation.
-func (fact FileFactory) CreateDbNoCache(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}, valCb func(error)) (datas.Database, types.ValueReadWriter, tree.NodeStore, error) {
+func (fact FileFactory) CreateDbNoCache(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}, recCb func(error)) (datas.Database, types.ValueReadWriter, tree.NodeStore, error) {
 	path, err := url.PathUnescape(urlObj.Path)
 	if err != nil {
 		return nil, nil, nil, err
@@ -181,7 +179,7 @@ func (fact FileFactory) CreateDbNoCache(ctx context.Context, nbf *types.NomsBinF
 	var newGenSt *nbs.NomsBlockStore
 	q := nbs.NewUnlimitedMemQuotaProvider()
 	if useJournal && chunkJournalFeatureFlag {
-		newGenSt, err = nbs.NewLocalJournalingStore(ctx, nbf.VersionString(), path, q, mmapArchiveIndexes, valCb)
+		newGenSt, err = nbs.NewLocalJournalingStore(ctx, nbf.VersionString(), path, q, mmapArchiveIndexes, recCb)
 	} else {
 		newGenSt, err = nbs.NewLocalStore(ctx, nbf.VersionString(), path, defaultMemTableSize, q, mmapArchiveIndexes)
 	}
