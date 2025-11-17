@@ -167,16 +167,6 @@ func (d *DoltSession) SetBaseSession(base *sql.BaseSession) {
 	d.Session.SetBaseSession(base)
 }
 
-// Copy implements the sql.Session interface.
-func (d *DoltSession) Copy() sql.Session {
-	cpy := *d
-	// Copy the embedded session
-	if d.Session != nil {
-		cpy.Session = d.Session.Copy()
-	}
-	return &cpy
-}
-
 // DSessFromSess retrieves a dolt session from a standard sql.Session
 func DSessFromSess(sess sql.Session) *DoltSession {
 	return sess.(*DoltSession)

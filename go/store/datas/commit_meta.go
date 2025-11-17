@@ -54,18 +54,6 @@ var AuthorDate = time.Now
 var CustomAuthorDate bool
 var AuthorLoc = time.Local
 
-// ValueOrDefault returns the pointer value, or the fallback if nil or empty (for strings)
-func ValueOrDefault[T comparable](value *T, fallback T) T {
-	if value == nil {
-		return fallback
-	}
-	var zero T
-	if *value == zero {
-		return fallback
-	}
-	return *value
-}
-
 // CommitMeta contains all the metadata that is associated with a commit within a data repo.
 type CommitMeta struct {
 	Name          string
@@ -116,31 +104,12 @@ func init() {
 
 // NewCommitMetaWithUserTS creates a user metadata
 func NewCommitMetaWithUserTS(name, email, desc string, userTS time.Time) (*CommitMeta, error) {
-	n := strings.TrimSpace(name)
-	e := strings.TrimSpace(email)
-	d := strings.TrimSpace(desc)
-
-	if n == "" {
-		return nil, ErrNameNotConfigured
-	}
-
-	if e == "" {
-		return nil, ErrEmailNotConfigured
-	}
-
-	if d == "" {
-		return nil, ErrEmptyCommitMessage
-	}
-
-	committerDateMillis := uint64(CommitterDate().UnixMilli())
-	authorDateMillis := userTS.UnixMilli()
-
-	return &CommitMeta{n, e, d, "", committerDateMillis, authorDateMillis, nil, nil}, nil
+	return NewCommitMetaWithAuthorCommitter(name, email, desc, userTS, "", "")
 }
 
 // NewCommitMetaWithAuthorCommitter creates commit metadata with separate author and committer information
 // If committer info is empty, defaults to author info. Maintains backwards compatibility.
-func NewCommitMetaWithAuthorCommitter(authorName, authorEmail, desc string, ats time.Time, committerName, committerEmail string, cts time.Time) (*CommitMeta, error) {
+func NewCommitMetaWithAuthorCommitter(authorName, authorEmail, desc string, ats time.Time, committerName, committerEmail string) (*CommitMeta, error) {
 
 	an := strings.TrimSpace(authorName)
 	ae := strings.TrimSpace(authorEmail)
@@ -233,15 +202,17 @@ func CommitMetaFromNomsSt(st types.Struct) (*CommitMeta, error) {
 		signature = types.String("")
 	}
 
+	name := string(n.(types.String))
+	email := string(e.(types.String))
 	return &CommitMeta{
-		Name:           string(n.(types.String)),
-		Email:          string(e.(types.String)),
+		Name:           name,
+		Email:          email,
 		Description:    string(d.(types.String)),
 		Signature:      string(signature.(types.String)),
 		Timestamp:      uint64(ts.(types.Uint)),
 		UserTimestamp:  int64(userTS.(types.Int)),
-		CommitterName:  nil,
-		CommitterEmail: nil,
+		CommitterName:  &name,
+		CommitterEmail: &email,
 	}, nil
 }
 

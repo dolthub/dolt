@@ -33,15 +33,6 @@ import (
 
 const logsDefaultRowCount = 100
 
-// LogSchemaType represents different log table schema types
-type LogSchemaType int
-
-const (
-	// LogSchema is the most recent iteration that includes both committer and author information
-	LogSchema LogSchemaType = iota
-	LogSchemaCommitterOnly
-)
-
 // LogTable is a sql.Table implementation that implements a system table which shows the dolt commit log
 type LogTable struct {
 	ddb               *doltdb.DoltDB
@@ -51,7 +42,7 @@ type LogTable struct {
 	tableName         string
 	headHash          hash.Hash
 	ctx               *sql.Context
-	schType           LogSchemaType
+	showCommitterOnly bool
 }
 
 var _ sql.Table = (*LogTable)(nil)
@@ -59,8 +50,8 @@ var _ sql.StatisticsTable = (*LogTable)(nil)
 var _ sql.IndexAddressable = (*LogTable)(nil)
 
 // NewLogTable creates a LogTable
-func NewLogTable(dbName string, tableName string, ddb *doltdb.DoltDB, head *doltdb.Commit, ctx *sql.Context, schType LogSchemaType) sql.Table {
-	return &LogTable{dbName: dbName, tableName: tableName, ddb: ddb, head: head, ctx: ctx, schType: schType}
+func NewLogTable(dbName string, tableName string, ddb *doltdb.DoltDB, head *doltdb.Commit, ctx *sql.Context, showCommitterOnly bool) sql.Table {
+	return &LogTable{dbName: dbName, tableName: tableName, ddb: ddb, head: head, ctx: ctx, showCommitterOnly: showCommitterOnly}
 }
 
 // DataLength implements sql.StatisticsTable
@@ -97,31 +88,15 @@ func (dt *LogTable) String() string {
 	return dt.tableName
 }
 
-// BuildLogRowWithSchemaType builds a row based on the specified schema type
-func BuildLogRowWithSchemaType(commitHash hash.Hash, meta *datas.CommitMeta, height uint64, schType LogSchemaType) sql.Row {
-	switch schType {
-	case LogSchemaCommitterOnly:
-		return sql.NewRow(
-			commitHash.String(),
-			datas.ValueOrDefault(meta.CommitterName, meta.Name),
-			datas.ValueOrDefault(meta.CommitterEmail, meta.Email),
-			meta.CommitterTime(),
-			meta.Description,
-			height)
-	case LogSchema:
-		fallthrough
-	default:
-		return sql.NewRow(
-			commitHash.String(),
-			datas.ValueOrDefault(meta.CommitterName, meta.Name),
-			datas.ValueOrDefault(meta.CommitterEmail, meta.Email),
-			meta.CommitterTime(),
-			meta.Description,
-			height,
-			meta.Name,
-			meta.Email,
-			meta.Time())
+// BuildLogRow builds a row based on the specified schema type
+func BuildLogRow(commitHash hash.Hash, meta *datas.CommitMeta, height uint64, showCommitterOnly bool) sql.Row {
+	rowVals := make([]interface{}, 0, len(LogSchemaCommitterColumns))
+	// CommitterName and CommitterEmail are normalized in GetCommitMeta to always be set
+	rowVals = append(rowVals, commitHash.String(), *meta.CommitterName, *meta.CommitterEmail, meta.CommitterTime(), meta.Description, height)
+	if !showCommitterOnly {
+		rowVals = append(rowVals, meta.Name, meta.Email, meta.Time())
 	}
+	return sql.NewRow(rowVals...)
 }
 
 // LogSchemaCommitterColumns To maintain compatibility with existing views, these columns names remain unchanged.
@@ -142,27 +117,19 @@ var LogSchemaAuthorColumns = sql.Schema{
 }
 
 // GetLogTableSchema returns the log table schema based on the session variable and the provided table and db names
-func GetLogTableSchemaWithType(schType *LogSchemaType) sql.Schema {
+func GetLogTableSchema(showCommitterOnly bool) sql.Schema {
 	cols := make(sql.Schema, 0, len(LogSchemaCommitterColumns))
 	cols = append(cols, LogSchemaCommitterColumns...)
-	switch *schType {
-	case LogSchemaCommitterOnly:
-		return cols
-	case LogSchema:
-		fallthrough
-	default:
+	if !showCommitterOnly {
 		cols = append(cols, LogSchemaAuthorColumns...)
-		return cols
 	}
+	return cols
 }
 
 // Schema is a sql.Table interface function that gets the sql.Schema of the log system table.
 func (dt *LogTable) Schema() sql.Schema {
-	dt.schType = LogSchema
-	if showCommitterOnly, _ := dsess.GetBooleanSystemVar(dt.ctx, dsess.DoltLogCommitterOnly); showCommitterOnly {
-		dt.schType = LogSchemaCommitterOnly
-	}
-	sch := GetLogTableSchemaWithType(&dt.schType)
+	dt.showCommitterOnly, _ = dsess.GetBooleanSystemVar(dt.ctx, dsess.DoltLogCommitterOnly)
+	sch := GetLogTableSchema(dt.showCommitterOnly)
 	for _, col := range sch {
 		col.Source = dt.tableName
 		col.DatabaseSource = dt.dbName
@@ -188,9 +155,9 @@ func (dt *LogTable) PartitionRows(ctx *sql.Context, p sql.Partition) (sql.RowIte
 		if err != nil {
 			return nil, err
 		}
-		return sql.RowsToRowIter(BuildLogRowWithSchemaType(p.Hash(), p.Meta(), height, dt.schType)), nil
+		return sql.RowsToRowIter(BuildLogRow(p.Hash(), p.Meta(), height, dt.showCommitterOnly)), nil
 	default:
-		return NewLogItr(ctx, dt.ddb, dt.head, dt.schType)
+		return NewLogItr(ctx, dt.ddb, dt.head, dt.showCommitterOnly)
 	}
 }
 
@@ -288,12 +255,12 @@ func (dt *LogTable) HeadHash() (hash.Hash, error) {
 
 // LogItr is a sql.RowItr implementation which iterates over each commit as if it's a row in the table.
 type LogItr struct {
-	child   doltdb.CommitItr[*sql.Context]
-	schType LogSchemaType
+	child             doltdb.CommitItr[*sql.Context]
+	showCommitterOnly bool
 }
 
 // NewLogItr creates a LogItr from the current environment.
-func NewLogItr(ctx *sql.Context, ddb *doltdb.DoltDB, head *doltdb.Commit, schType LogSchemaType) (*LogItr, error) {
+func NewLogItr(ctx *sql.Context, ddb *doltdb.DoltDB, head *doltdb.Commit, showCommitterOnly bool) (*LogItr, error) {
 	h, err := head.HashOf()
 	if err != nil {
 		return nil, err
@@ -304,7 +271,7 @@ func NewLogItr(ctx *sql.Context, ddb *doltdb.DoltDB, head *doltdb.Commit, schTyp
 		return nil, err
 	}
 
-	return &LogItr{child: child, schType: schType}, nil
+	return &LogItr{child: child, showCommitterOnly: showCommitterOnly}, nil
 }
 
 // Next retrieves the next row. It will return io.EOF if it's the last row.
@@ -335,7 +302,7 @@ func (itr *LogItr) Next(ctx *sql.Context) (sql.Row, error) {
 		}
 	}
 
-	return BuildLogRowWithSchemaType(h, meta, height, itr.schType), nil
+	return BuildLogRow(h, meta, height, itr.showCommitterOnly), nil
 }
 
 // Close closes the iterator.

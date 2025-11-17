@@ -114,11 +114,7 @@ func GetCommitStaged(
 
 	var meta *datas.CommitMeta
 
-	if props.CommitterName != "" || props.CommitterEmail != "" || !props.CommitterDate.IsZero() {
-		meta, err = datas.NewCommitMetaWithAuthorCommitter(props.Name, props.Email, props.Message, props.Date, props.CommitterName, props.CommitterEmail, datas.CommitterDate())
-	} else {
-		meta, err = datas.NewCommitMetaWithUserTS(props.Name, props.Email, props.Message, props.Date)
-	}
+	meta, err = datas.NewCommitMetaWithAuthorCommitter(props.Name, props.Email, props.Message, props.Date, props.CommitterName, props.CommitterEmail)
 
 	if err != nil {
 		return nil, err
