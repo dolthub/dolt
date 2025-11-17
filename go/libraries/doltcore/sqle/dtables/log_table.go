@@ -124,15 +124,6 @@ func BuildLogRowWithSchemaType(commitHash hash.Hash, meta *datas.CommitMeta, hei
 	}
 }
 
-// BuildLogRow builds a row using only the session var to determine compactness (no override).
-func BuildLogRow(ctx *sql.Context, commitHash hash.Hash, meta *datas.CommitMeta, height uint64) sql.Row {
-	schType := LogSchema
-	if useCommitterOnly, _ := dsess.GetBooleanSystemVar(ctx, dsess.DoltLogCommitterOnly); useCommitterOnly {
-		schType = LogSchemaCommitterOnly
-	}
-	return BuildLogRowWithSchemaType(commitHash, meta, height, &schType)
-}
-
 // LogSchemaCommitterColumns To maintain compatibility with existing views, these columns names remain unchanged.
 var LogSchemaCommitterColumns = sql.Schema{
 	&sql.Column{Name: "commit_hash", Type: types.Text, PrimaryKey: true},
@@ -167,11 +158,11 @@ func GetLogTableSchemaWithType(schType *LogSchemaType) sql.Schema {
 
 // Schema is a sql.Table interface function that gets the sql.Schema of the log system table.
 func (dt *LogTable) Schema() sql.Schema {
-	if dt.schType != nil {
-		return GetLogTableSchemaWithType(dt.schType)
+	if dt.schType == nil {
+		dt.schType = new(LogSchemaType)
 	}
-	dt.schType = new(LogSchemaType)
-	if useCommitterOnly, _ := dsess.GetBooleanSystemVar(dt.ctx, dsess.DoltLogCommitterOnly); useCommitterOnly {
+	*dt.schType = LogSchema
+	if showCommitterOnly, _ := dsess.GetBooleanSystemVar(dt.ctx, dsess.DoltLogCommitterOnly); showCommitterOnly {
 		*dt.schType = LogSchemaCommitterOnly
 	}
 	sch := GetLogTableSchemaWithType(dt.schType)

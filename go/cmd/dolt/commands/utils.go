@@ -749,8 +749,14 @@ func getCommitInfoWithOptions(queryist cli.Queryist, sqlCtx *sql.Context, ref st
 		return nil, fmt.Errorf("unexpected type for commit hash: %T", row[0])
 	}
 
-	committerName, _ := row[1].(string)
-	committerEmail, _ := row[2].(string)
+	committerName, ok := row[1].(string)
+	if !ok {
+		return nil, fmt.Errorf("unexpected type for committer name: %T", row[1])
+	}
+	committerEmail, ok := row[2].(string)
+	if !ok {
+		return nil, fmt.Errorf("unexpected type for committer email: %T", row[2])
+	}
 	committerTs, err := getTimestampColAsUint64(row[3])
 	if err != nil {
 		return nil, fmt.Errorf("error parsing committer timestamp '%v': %w", row[3], err)
@@ -775,17 +781,17 @@ func getCommitInfoWithOptions(queryist cli.Queryist, sqlCtx *sql.Context, ref st
 		return nil, fmt.Errorf("unexpected type for commit_order: %T", v)
 	}
 
-	authorName := committerName
-	if v, ok := row[6].(string); ok && v != "" {
-		authorName = v
+	authorName, ok := row[6].(string)
+	if !ok {
+		return nil, fmt.Errorf("unexpected type for author name: %T", row[6])
 	}
-	authorEmail := committerEmail
-	if v, ok := row[7].(string); ok && v != "" {
-		authorEmail = v
+	authorEmail, ok := row[7].(string)
+	if !ok {
+		return nil, fmt.Errorf("unexpected type for author email: %T", row[7])
 	}
-	authorTs := committerTs
-	if ts, tsErr := getTimestampColAsUint64(row[8]); tsErr == nil {
-		authorTs = ts
+	authorTs, err := getTimestampColAsUint64(row[8])
+	if err != nil {
+		return nil, fmt.Errorf("error parsing author timestamp '%v': %w", row[8], err)
 	}
 
 	parentHashStrs := []string{}
@@ -808,14 +814,10 @@ func getCommitInfoWithOptions(queryist cli.Queryist, sqlCtx *sql.Context, ref st
 		UserTimestamp: int64(authorTs),
 	}
 
-	if committerName != "" && committerName != authorName {
-		nameCopy := committerName
-		commitMeta.CommitterName = &nameCopy
-	}
-	if committerEmail != "" && committerEmail != authorEmail {
-		emailCopy := committerEmail
-		commitMeta.CommitterEmail = &emailCopy
-	}
+	nameCopy := committerName
+	commitMeta.CommitterName = &nameCopy
+	emailCopy := committerEmail
+	commitMeta.CommitterEmail = &emailCopy
 
 	localBranches, err := getBranchesForHash(queryist, sqlCtx, commitHashStr, true)
 	if err != nil {

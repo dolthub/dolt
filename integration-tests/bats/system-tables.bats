@@ -2,7 +2,7 @@
 load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
-    skiponwindows "tests are flaky on Windows"
+#    skiponwindows "tests are flaky on Windows"
     setup_common
 }
 
@@ -103,6 +103,68 @@ teardown() {
     run dolt sql -q "select (select commit_order from dolt_log where message = 'Added test2 table') = (select commit_order from dolt_log() where message = 'Added test2 table') as orders_match"
     [ $status -eq 0 ]
     [[ "$output" =~ "true" ]] || false
+}
+
+@test "system-tables: dolt_log_committer_only session variable controls author columns" {
+    dolt sql -q "create table test (pk int, c1 int, primary key(pk))"
+    dolt add test
+    dolt commit -m "Initial commit"
+    
+    # Create a commit with different author and committer using SQL
+    dolt sql -q "create table test2 (pk int, c1 int, primary key(pk))"
+    dolt sql -q "CALL DOLT_ADD('test2')"
+    dolt sql -q "CALL DOLT_COMMIT('--author', 'Test Author <author@test.com>', '-m', 'Commit with different author and committer')"
+    
+    # Test with dolt_log_committer_only enabled (set and query in same session)
+    run dolt sql -r csv -q "SET @@dolt_log_committer_only = 1; SELECT * FROM dolt_log WHERE message = 'Commit with different author and committer'"
+    [ $status -eq 0 ]
+    # Check that author column names are not in the header (but "author" may appear in data like email addresses)
+    [[ ! "$output" =~ ,author, ]] || false
+    [[ ! "$output" =~ ,author_email, ]] || false
+    [[ ! "$output" =~ ,author_date ]] || false
+    [[ "$output" =~ ,committer, ]] || false
+    [[ "$output" =~ ,email, ]] || false
+    
+    # Test with dolt_log_committer_only disabled (set and query in same session)
+    run dolt sql -r csv -q "SET @@dolt_log_committer_only = 0; SELECT * FROM dolt_log WHERE message = 'Commit with different author and committer'"
+    [ $status -eq 0 ]
+    # Check that author column names are in the header
+    [[ "$output" =~ ,author, ]] || false
+    [[ "$output" =~ ,author_email, ]] || false
+    [[ "$output" =~ ,author_date ]] || false
+    [[ "$output" =~ ,committer, ]] || false
+    [[ "$output" =~ ,email, ]] || false
+}
+
+@test "system-tables: dolt_log_committer_only session variable controls author columns in dolt_log() function" {
+    dolt sql -q "create table test (pk int, c1 int, primary key(pk))"
+    dolt add test
+    dolt commit -m "Initial commit"
+    
+    # Create a commit with different author and committer using SQL
+    dolt sql -q "create table test2 (pk int, c1 int, primary key(pk))"
+    dolt sql -q "CALL DOLT_ADD('test2')"
+    dolt sql -q "CALL DOLT_COMMIT('--author', 'Test Author <author@test.com>', '-m', 'Commit with different author and committer')"
+    
+    # Test with dolt_log_committer_only enabled (set and query in same session)
+    run dolt sql -r csv -q "SET @@dolt_log_committer_only = 1; SELECT * FROM dolt_log() WHERE message = 'Commit with different author and committer'"
+    [ $status -eq 0 ]
+    # Check that author column names are not in the header (but "author" may appear in data like email addresses)
+    [[ ! "$output" =~ ,author, ]] || false
+    [[ ! "$output" =~ ,author_email, ]] || false
+    [[ ! "$output" =~ ,author_date ]] || false
+    [[ "$output" =~ ,committer, ]] || false
+    [[ "$output" =~ ,email, ]] || false
+    
+    # Test with dolt_log_committer_only disabled (set and query in same session)
+    run dolt sql -r csv -q "SET @@dolt_log_committer_only = 0; SELECT * FROM dolt_log() WHERE message = 'Commit with different author and committer'"
+    [ $status -eq 0 ]
+    # Check that author column names are in the header
+    [[ "$output" =~ ,author, ]] || false
+    [[ "$output" =~ ,author_email, ]] || false
+    [[ "$output" =~ ,author_date ]] || false
+    [[ "$output" =~ ,committer, ]] || false
+    [[ "$output" =~ ,email, ]] || false
 }
 
 @test "system-tables: commit_order reflects topological order for branches" {
