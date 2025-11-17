@@ -711,8 +711,8 @@ func getCommitInfoWithOptions(queryist cli.Queryist, sqlCtx *sql.Context, ref st
 		return nil, fmt.Errorf("error getting hash of HEAD: %v", err)
 	}
 
-	// Create a context with dolt_log_committer_only disabled
-	doltLogCtx := sql.NewContext(
+	// So all columns appear in dolt log disable dolt_log_committer_only in new context
+	sqlCtx = sql.NewContext(
 		sqlCtx.Context,
 		sql.WithSession(sqlCtx.Session),
 		sql.WithSessionVariables(map[string]interface{}{
@@ -733,7 +733,7 @@ func getCommitInfoWithOptions(queryist cli.Queryist, sqlCtx *sql.Context, ref st
 		}
 	}
 
-	rows, err := cli.GetRowsForSql(queryist, doltLogCtx, q)
+	rows, err := cli.GetRowsForSql(queryist, sqlCtx, q)
 	if err != nil {
 		return nil, fmt.Errorf("error getting logs for ref '%s': %v", ref, err)
 	}
