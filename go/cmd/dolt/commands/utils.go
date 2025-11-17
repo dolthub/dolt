@@ -721,11 +721,13 @@ func getCommitInfoWithOptions(queryist cli.Queryist, sqlCtx *sql.Context, ref st
 	)
 
 	var q string
+	authorColOffset := 0
 	if opts.showSignature {
 		q, err = dbr.InterpolateForDialect("select * from dolt_log(?, '--parents', '--decorate=full', '--show-signature')", []interface{}{ref}, dialect.MySQL)
 		if err != nil {
 			return nil, fmt.Errorf("error interpolating query: %v", err)
 		}
+		authorColOffset++
 	} else {
 		q, err = dbr.InterpolateForDialect("select * from dolt_log(?, '--parents', '--decorate=full')", []interface{}{ref}, dialect.MySQL)
 		if err != nil {
@@ -781,28 +783,30 @@ func getCommitInfoWithOptions(queryist cli.Queryist, sqlCtx *sql.Context, ref st
 		return nil, fmt.Errorf("unexpected type for commit_order: %T", v)
 	}
 
-	authorName, ok := row[6].(string)
-	if !ok {
-		return nil, fmt.Errorf("unexpected type for author name: %T", row[6])
-	}
-	authorEmail, ok := row[7].(string)
-	if !ok {
-		return nil, fmt.Errorf("unexpected type for author email: %T", row[7])
-	}
-	authorTs, err := getTimestampColAsUint64(row[8])
-	if err != nil {
-		return nil, fmt.Errorf("error parsing author timestamp '%v': %w", row[8], err)
-	}
-
+	// Column order: 0-5 committer columns, 6 parents, 7 refs, 8 signature (opt), then author columns at the end. Author
+	// columns are appended at the end for backward compatibility with old sys cmds using fixed indices.
 	parentHashStrs := []string{}
-	if parentStr, ok := row[9].(string); ok && parentStr != "" {
+	if parentStr, ok := row[6].(string); ok && parentStr != "" {
 		parentHashStrs = strings.Split(parentStr, ", ")
 	}
 
 	var signature string
 	if opts.showSignature {
 		// Signature is always the last column when present
-		signature = row[len(row)-1].(string)
+		signature = row[7].(string)
+	}
+
+	authorName, ok := row[7+authorColOffset].(string)
+	if !ok {
+		return nil, fmt.Errorf("unexpected type for author name: %T", row[6])
+	}
+	authorEmail, ok := row[8+authorColOffset].(string)
+	if !ok {
+		return nil, fmt.Errorf("unexpected type for author email: %T", row[7])
+	}
+	authorTs, err := getTimestampColAsUint64(row[9+authorColOffset])
+	if err != nil {
+		return nil, fmt.Errorf("error parsing author timestamp '%v': %w", row[8], err)
 	}
 
 	commitMeta := &datas.CommitMeta{

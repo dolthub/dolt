@@ -91,7 +91,6 @@ func (dt *LogTable) String() string {
 // BuildLogRow builds a row based on the specified schema type
 func BuildLogRow(commitHash hash.Hash, meta *datas.CommitMeta, height uint64, showCommitterOnly bool) sql.Row {
 	rowVals := make([]interface{}, 0, len(LogSchemaCommitterColumns))
-	// CommitterName and CommitterEmail are normalized in GetCommitMeta to always be set
 	rowVals = append(rowVals, commitHash.String(), *meta.CommitterName, *meta.CommitterEmail, meta.CommitterTime(), meta.Description, height)
 	if !showCommitterOnly {
 		rowVals = append(rowVals, meta.Name, meta.Email, meta.Time())
