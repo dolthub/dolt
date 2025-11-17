@@ -18,13 +18,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
-	"github.com/dolthub/go-mysql-server/sql/types"
 	"math"
 	"math/big"
 	"math/bits"
 	"time"
 	"unsafe"
 
+	"github.com/dolthub/go-mysql-server/sql/types"
 	querypb "github.com/dolthub/vitess/go/vt/proto/query"
 	"github.com/shopspring/decimal"
 
