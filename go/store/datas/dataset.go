@@ -108,6 +108,9 @@ var refnameActions = [256]refnameAction{
 // * - it ends with ".lock"
 // * - it contains a "@{" portion
 func validateDatasetIdComponent(refname string) (int, error) {
+	if len(refname) == 0 {
+		return -1, ErrInvalidDatasetID
+	}
 	if refname[0] == '.' { // Component starts with '.'
 		return -1, ErrInvalidDatasetID
 	}

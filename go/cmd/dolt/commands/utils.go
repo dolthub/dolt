@@ -806,18 +806,15 @@ func getCommitInfoWithOptions(queryist cli.Queryist, sqlCtx *sql.Context, ref st
 	}
 
 	commitMeta := &datas.CommitMeta{
-		Name:          authorName,
-		Email:         authorEmail,
-		Description:   message,
-		Signature:     signature,
-		Timestamp:     committerTs,
-		UserTimestamp: int64(authorTs),
+		Name:           authorName,
+		Email:          authorEmail,
+		Description:    message,
+		Signature:      signature,
+		Timestamp:      committerTs,
+		UserTimestamp:  int64(authorTs),
+		CommitterName:  &committerName,
+		CommitterEmail: &committerEmail,
 	}
-
-	nameCopy := committerName
-	commitMeta.CommitterName = &nameCopy
-	emailCopy := committerEmail
-	commitMeta.CommitterEmail = &emailCopy
 
 	localBranches, err := getBranchesForHash(queryist, sqlCtx, commitHashStr, true)
 	if err != nil {

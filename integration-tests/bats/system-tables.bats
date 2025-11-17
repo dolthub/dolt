@@ -105,53 +105,6 @@ teardown() {
     [[ "$output" =~ "true" ]] || false
 }
 
-@test "system-tables: dolt_log_committer_only session variable controls author columns" {
-    dolt sql -q "create table test (pk int, c1 int, primary key(pk))"
-    dolt add test
-    dolt commit -m "Initial commit"
-    
-    # Create a commit with different author and committer using SQL
-    dolt sql -q "create table test2 (pk int, c1 int, primary key(pk))"
-    dolt sql -q "CALL DOLT_ADD('test2')"
-    dolt sql -q "CALL DOLT_COMMIT('--author', 'Test Author <author@test.com>', '-m', 'Commit with different author and committer')"
-    
-    # Test dolt_log table with dolt_log_committer_only enabled
-    run dolt sql -r csv -q "SET @@dolt_log_committer_only = 1; SELECT * FROM dolt_log WHERE message = 'Commit with different author and committer'"
-    [ $status -eq 0 ]
-    [[ ! "$output" =~ ,author, ]] || false
-    [[ ! "$output" =~ ,author_email, ]] || false
-    [[ ! "$output" =~ ,author_date ]] || false
-    [[ "$output" =~ ,committer, ]] || false
-    [[ "$output" =~ ,email, ]] || false
-    
-    # Test dolt_log table with dolt_log_committer_only disabled
-    run dolt sql -r csv -q "SET @@dolt_log_committer_only = 0; SELECT * FROM dolt_log WHERE message = 'Commit with different author and committer'"
-    [ $status -eq 0 ]
-    [[ "$output" =~ ,author, ]] || false
-    [[ "$output" =~ ,author_email, ]] || false
-    [[ "$output" =~ ,author_date ]] || false
-    [[ "$output" =~ ,committer, ]] || false
-    [[ "$output" =~ ,email, ]] || false
-    
-    # Test dolt_log() function with dolt_log_committer_only enabled
-    run dolt sql -r csv -q "SET @@dolt_log_committer_only = 1; SELECT * FROM dolt_log() WHERE message = 'Commit with different author and committer'"
-    [ $status -eq 0 ]
-    [[ ! "$output" =~ ,author, ]] || false
-    [[ ! "$output" =~ ,author_email, ]] || false
-    [[ ! "$output" =~ ,author_date ]] || false
-    [[ "$output" =~ ,committer, ]] || false
-    [[ "$output" =~ ,email, ]] || false
-    
-    # Test dolt_log() function with dolt_log_committer_only disabled
-    run dolt sql -r csv -q "SET @@dolt_log_committer_only = 0; SELECT * FROM dolt_log() WHERE message = 'Commit with different author and committer'"
-    [ $status -eq 0 ]
-    [[ "$output" =~ ,author, ]] || false
-    [[ "$output" =~ ,author_email, ]] || false
-    [[ "$output" =~ ,author_date ]] || false
-    [[ "$output" =~ ,committer, ]] || false
-    [[ "$output" =~ ,email, ]] || false
-}
-
 @test "system-tables: commit_order reflects topological order for branches" {
     if [ "$SQL_ENGINE" = "remote-engine" ]; then
       skip "needs checkout which is unsupported for remote-engine"
@@ -1211,4 +1164,49 @@ SQL
     run dolt sql -q "prepare stmt_preview from 'select * from dolt_preview_merge_conflicts(?, ?, ?)'; set @branch = 'other'; set @base = 'main'; set @table = 'users'; execute stmt_preview using @branch, @base, @table;"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "dolt_conflict_id" ]] || false
+}
+
+@test "system-tables: dolt_log_committer_only session variable controls author columns" {
+  dolt sql -q "create table test (pk int, c1 int, primary key(pk))"
+  dolt add test
+  dolt commit -m "Initial commit"
+
+  # Create a commit with different author and committer using SQL
+  dolt sql -q "create table test2 (pk int, c1 int, primary key(pk))"
+  dolt sql -q "CALL DOLT_ADD('test2')"
+  dolt sql -q "CALL DOLT_COMMIT('--author', 'Test Author <author@test.com>', '-m', 'Commit with different author and committer')"
+
+  # Test dolt_log table with dolt_log_committer_only
+  run dolt sql -r csv -q "SET @@dolt_log_committer_only = 1; SELECT * FROM dolt_log WHERE message = 'Commit with different author and committer'"
+  [ $status -eq 0 ]
+  [[ ! "$output" =~ ,author, ]] || false
+  [[ ! "$output" =~ ,author_email, ]] || false
+  [[ ! "$output" =~ ,author_date ]] || false
+  [[ "$output" =~ ,committer, ]] || false
+  [[ "$output" =~ ,email, ]] || false
+
+  run dolt sql -r csv -q "SET @@dolt_log_committer_only = 0; SELECT * FROM dolt_log WHERE message = 'Commit with different author and committer'"
+  [ $status -eq 0 ]
+  [[ "$output" =~ ,author, ]] || false
+  [[ "$output" =~ ,author_email, ]] || false
+  [[ "$output" =~ ,author_date ]] || false
+  [[ "$output" =~ ,committer, ]] || false
+  [[ "$output" =~ ,email, ]] || false
+
+  # Test dolt_log() function with dolt_log_committer_only
+  run dolt sql -r csv -q "SET @@dolt_log_committer_only = 1; SELECT * FROM dolt_log() WHERE message = 'Commit with different author and committer'"
+  [ $status -eq 0 ]
+  [[ ! "$output" =~ ,author, ]] || false
+  [[ ! "$output" =~ ,author_email, ]] || false
+  [[ ! "$output" =~ ,author_date ]] || false
+  [[ "$output" =~ ,committer, ]] || false
+  [[ "$output" =~ ,email, ]] || false
+
+  run dolt sql -r csv -q "SET @@dolt_log_committer_only = 0; SELECT * FROM dolt_log() WHERE message = 'Commit with different author and committer'"
+  [ $status -eq 0 ]
+  [[ "$output" =~ ,author, ]] || false
+  [[ "$output" =~ ,author_email, ]] || false
+  [[ "$output" =~ ,author_date ]] || false
+  [[ "$output" =~ ,committer, ]] || false
+  [[ "$output" =~ ,email, ]] || false
 }
