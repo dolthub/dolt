@@ -256,9 +256,9 @@ func validateJournalRecord(buf []byte) error {
 // without preventing the server from starting up, so we are careful to only return the journal file
 // offset that points to end of the last valid record.
 //
-// The |recoveredCb| callback is called with any errors encountered that we automatically recover from. This allows the caller
+// The |recoveryCb| callback is called with any errors encountered that we automatically recover from. This allows the caller
 // to handle the situation in a context specific way.
-func processJournalRecords(ctx context.Context, r io.ReadSeeker, off int64, cb func(o int64, r journalRec) error, recoveredCb func(error)) (int64, error) {
+func processJournalRecords(ctx context.Context, r io.ReadSeeker, off int64, cb func(o int64, r journalRec) error, recoveryCb func(error)) (int64, error) {
 	var (
 		buf []byte
 		err error
@@ -296,20 +296,20 @@ func processJournalRecords(ctx context.Context, r io.ReadSeeker, off int64, cb f
 
 		if l > journalWriterBuffSize {
 			// Probably hit a corrupted record. Report error and stop processing.
-			if recoveredCb != nil {
+			if recoveryCb != nil {
 				// We don't assign this error to err, because we want to recover from this.
 				jErr := fmt.Errorf("invalid journal record length: %d exceeds max allowed size of %d", l, journalWriterBuffSize)
-				recoveredCb(jErr)
+				recoveryCb(jErr)
 			}
 			recovered = true
 			break
 		}
 
 		if buf, err = rdr.Peek(int(l)); err != nil {
-			if recoveredCb != nil {
+			if recoveryCb != nil {
 				// We probably wend off the end of the file. Report error and recover.
 				jErr := fmt.Errorf("failed to read full journal record of length %d at offset %d: %w", l, off, err)
-				recoveredCb(jErr)
+				recoveryCb(jErr)
 			}
 			recovered = true
 			break
@@ -321,10 +321,10 @@ func processJournalRecords(ctx context.Context, r io.ReadSeeker, off int64, cb f
 		//       clean shutdown, we expect all journal records to be valid, and could safely error out during startup
 		//       for invalid records.
 		if validationErr := validateJournalRecord(buf); validationErr != nil {
-			if recoveredCb != nil {
+			if recoveryCb != nil {
 				// We don't assign the validation error to err, because we want to recover from this.
 				jErr := fmt.Errorf("invalid journal record at offset %d: %w", off, validationErr)
-				recoveredCb(jErr)
+				recoveryCb(jErr)
 			}
 			recovered = true
 			break
@@ -353,8 +353,15 @@ func processJournalRecords(ctx context.Context, r io.ReadSeeker, off int64, cb f
 
 	// If we hit a recovery state, we want to check if there is any parseable data in the remainder of the journal.
 	if recovered {
-		notOk, _ := possibleDataLossCheck(rdr)
-		if notOk {
+		dataLossFound, dErr := possibleDataLossCheck(rdr)
+		if dErr != nil {
+			// Finding an error at this point is considered recoverable since we were already in a recovery state.
+			// Report the error and continue.
+			if recoveryCb != nil {
+				recoveryCb(fmt.Errorf("error while checking for possible data loss in journal at offset %d: %w", off, dErr))
+			}
+		}
+		if dataLossFound {
 			err = fmt.Errorf("possible data loss detected in journal file at offset %d", off)
 			return 0, err
 		}
