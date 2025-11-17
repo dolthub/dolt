@@ -318,7 +318,7 @@ func (wr *journalWriter) bootstrapJournal(ctx context.Context, reflogRingBuffer 
 
 		case rootHashJournalRecKind:
 			lastOffset = o
-			last = hash.Hash(r.address)
+			last = r.address
 			if !reflogDisabled && reflogRingBuffer != nil {
 				reflogRingBuffer.Push(reflogRootHashEntry{
 					root:      r.address.String(),
