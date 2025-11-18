@@ -26,17 +26,18 @@ import (
 
 const VerboseFlag = "verbose"
 
-// ParseContributor parses author/committer strings in 'Name <email@example.com>' format
-func ParseContributor(personStr, personType string) (string, string, error) {
-	if len(personStr) == 0 {
-		return "", "", fmt.Errorf("option '%s' requires a value", personType)
+// Parses the author flag for the commit method.
+func ParseAuthor(authorStr string) (string, string, error) {
+	if len(authorStr) == 0 {
+		return "", "", errors.New("Option 'author' requires a value")
 	}
 
-	reg := regexp.MustCompile("(?m)([^)]+) \\<([^)]+)")
-	matches := reg.FindStringSubmatch(personStr)
+	reg := regexp.MustCompile("(?m)([^)]+) \\<([^)]+)") // Regex matches Name <email
+	matches := reg.FindStringSubmatch(authorStr)        // This function places the original string at the beginning of matches
 
+	// If name and email are provided
 	if len(matches) != 3 {
-		return "", "", fmt.Errorf("%s not formatted correctly. Use 'Name <%s@example.com>' format", personType, personType)
+		return "", "", errors.New("Author not formatted correctly. Use 'Name <author@example.com>' format")
 	}
 
 	name := matches[1]
