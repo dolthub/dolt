@@ -113,7 +113,7 @@ func doDoltCommit(ctx *sql.Context, args []string) (string, bool, error) {
 
 	var name, email string
 	if authorStr, ok := apr.GetValue(cli.AuthorParam); ok {
-		name, email, err = cli.ParseContributor(authorStr, "author")
+		name, email, err = cli.ParseAuthor(authorStr)
 		if err != nil {
 			return "", false, err
 		}
