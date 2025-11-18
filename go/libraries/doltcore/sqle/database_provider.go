@@ -711,12 +711,8 @@ func (p *DoltDatabaseProvider) CreateCollatedDatabase(ctx *sql.Context, name str
 		userName := ctx.Client().User
 		userEmail := fmt.Sprintf("%s@%s", ctx.Client().User, ctx.Client().Address)
 
-		pendingCommit, err := sess.NewPendingCommit(ctx, name, roots, actions.CommitStagedProps{
-			Message: "CREATE DATABASE",
-			Date:    t,
-			Name:    userName,
-			Email:   userEmail,
-		})
+		csp := actions.NewCommitStagedProps(userName, userEmail, t, "CREATE DATABASE")
+		pendingCommit, err := sess.NewPendingCommit(ctx, name, roots, csp)
 		if err != nil {
 			return err
 		}

@@ -163,26 +163,8 @@ func CreateCommitStagedPropsFromCherryPickOptions(ctx *sql.Context, options Cher
 		return nil, err
 	}
 
-	committerName := datas.CommitterName // env vars
-	if committerName == "" {
-		committerName = originalMeta.Name
-	}
-	committerEmail := datas.CommitterEmail
-	if committerEmail == "" {
-		committerEmail = originalMeta.Email
-	}
-	// Defaults to time.Now if not overridden.
-	committerDate := datas.CommitterDate()
-
-	commitProps := actions.CommitStagedProps{
-		Date:           originalMeta.Time(),
-		Name:           originalMeta.Name,
-		Email:          originalMeta.Email,
-		CommitterName:  committerName,
-		CommitterEmail: committerEmail,
-		CommitterDate:  &committerDate,
-		SkipVerification: options.SkipVerification,
-	}
+	commitProps := actions.NewCommitStagedProps(originalMeta.Name, originalMeta.Email, originalMeta.Time(), "")
+	commitProps.SkipVerification = options.SkipVerification
 
 	if options.CommitMessage != "" {
 		commitProps.Message = options.CommitMessage

@@ -516,14 +516,8 @@ func (d *DoltSession) CommitTransaction(ctx *sql.Context, tx sql.Transaction) (e
 
 		dbName := ctx.GetCurrentDatabase()
 		var pendingCommit *doltdb.PendingCommit
-		pendingCommit, err = d.PendingCommitAllStaged(ctx, dbName, dirtyBranchState, actions.CommitStagedProps{
-			Message:    message,
-			Date:       ctx.QueryTime(),
-			AllowEmpty: false,
-			Force:      false,
-			Name:       d.Username(),
-			Email:      d.Email(),
-		})
+		csp := actions.NewCommitStagedProps(d.Username(), d.Email(), ctx.QueryTime(), message)
+		pendingCommit, err = d.PendingCommitAllStaged(ctx, dirtyBranchState, csp)
 		if err != nil {
 			return err
 		}

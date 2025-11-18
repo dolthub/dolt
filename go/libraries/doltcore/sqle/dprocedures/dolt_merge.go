@@ -448,14 +448,10 @@ func executeNoFFMerge(
 		return ws.WithStagedRoot(roots.Staged), nil, nil
 	}
 
-	pendingCommit, err := dSess.NewPendingCommit(ctx, dbName, roots, actions.CommitStagedProps{
-		Message:          msg,
-		Date:             spec.Date,
-		Force:            spec.Force,
-		Name:             spec.Name,
-		Email:            spec.Email,
-		SkipVerification: skipVerification,
-	})
+	csp := actions.NewCommitStagedProps(spec.Name, spec.Email, spec.Date, msg)
+	csp.Force = spec.Force
+	pendingCommit, err := dSess.NewPendingCommit(ctx, dbName, roots, csp)
+	pendingCommit.SkipVerification = skipVerification
 	if err != nil {
 		return nil, nil, err
 	}
@@ -528,7 +524,7 @@ func getNameAndEmail(ctx *sql.Context, apr *argparser.ArgParseResults) (string, 
 	var err error
 	var name, email string
 	if authorStr, ok := apr.GetValue(cli.AuthorParam); ok {
-		name, email, err = cli.ParseContributor(authorStr, "author")
+		name, email, err = cli.ParseAuthor(authorStr)
 		if err != nil {
 			return "", "", err
 		}

@@ -25,6 +25,8 @@ import (
 
 func TestCommitMetaToAndFromNomsStruct(t *testing.T) {
 	cm, _ := NewCommitMeta("Bill Billerson", "bigbillieb@fake.horse", "This is a test commit")
+	ts := uint64(0)
+	cm.Timestamp = &ts
 	cmSt, err := cm.toNomsStruct(types.Format_Default)
 	assert.NoError(t, err)
 	result, err := CommitMetaFromNomsSt(cmSt)

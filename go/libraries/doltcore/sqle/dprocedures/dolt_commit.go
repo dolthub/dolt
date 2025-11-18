@@ -113,7 +113,7 @@ func doDoltCommit(ctx *sql.Context, args []string) (string, bool, error) {
 
 	var name, email string
 	if authorStr, ok := apr.GetValue(cli.AuthorParam); ok {
-		name, email, err = cli.ParseContributor(authorStr, "author")
+		name, email, err = cli.ParseAuthor(authorStr)
 		if err != nil {
 			return "", false, err
 		}
@@ -144,48 +144,31 @@ func doDoltCommit(ctx *sql.Context, args []string) (string, bool, error) {
 	}
 
 	t := ctx.QueryTime()
+	csp := actions.NewCommitStagedProps(name, email, t, msg)
+	csp.AllowEmpty = apr.Contains(cli.AllowEmptyFlag)
+	csp.SkipEmpty = apr.Contains(cli.SkipEmptyFlag)
+	csp.Amend = amend
+	csp.SkipVerification = apr.Contains(cli.SkipVerificationFlag)
+
 	if commitTimeStr, ok := apr.GetValue(cli.DateParam); ok {
 		var err error
 		t, err = dconfig.ParseDate(commitTimeStr)
-
+		csp.Date = t
+		csp.CommitterDate = &t
 		if err != nil {
 			return "", false, err
 		}
 	} else if datas.CustomAuthorDate {
 		t = datas.AuthorDate()
+		csp.Date = t
 	}
 
 	if apr.Contains(cli.ForceFlag) {
+		csp.Force = true
 		err = ctx.SetSessionVariable(ctx, "dolt_force_transaction_commit", 1)
 		if err != nil {
 			return "", false, err
 		}
-	}
-
-	committerName := datas.CommitterName
-	if committerName == "" {
-		committerName = name
-	}
-	committerEmail := datas.CommitterEmail
-	if committerEmail == "" {
-		committerEmail = email
-	}
-
-	cts := datas.CommitterDate()
-	csp := actions.CommitStagedProps{
-		Message:          msg,
-		Date:             t,
-		AllowEmpty:       apr.Contains(cli.AllowEmptyFlag),
-		SkipEmpty:        apr.Contains(cli.SkipEmptyFlag),
-		Amend:            amend,
-		Force:            apr.Contains(cli.ForceFlag),
-		Name:             name,
-		Email:            email,
-		SkipVerification: apr.Contains(cli.SkipVerificationFlag),
-
-		CommitterName:    committerName,
-		CommitterEmail:   committerEmail,
-		CommitterDate:    &cts,
 	}
 
 	shouldSign, err := dsess.GetBooleanSystemVar(ctx, "gpgsign")
