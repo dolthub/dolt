@@ -778,7 +778,7 @@ func (cfg YAMLConfig) MetricsPort() int {
 }
 
 func (cfg YAMLConfig) MetricsTLSCert() string {
-	if cfg.MetricsConfig.TlsCa == nil {
+	if cfg.MetricsConfig.TlsCert == nil {
 		return ""
 	}
 
