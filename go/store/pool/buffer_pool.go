@@ -53,12 +53,9 @@ func NewRealBuffPool() *realBuff {
 }
 
 func (b *realBuff) Get(size uint64) []byte {
-	if b.pos+size > 1024 {
-		return make([]byte, size)
-	}
-	res := b.buf[b.pos : b.pos+size]
-	b.pos += size
-	return res
+	clear(b.buf[:b.pos])
+	b.pos = size
+	return b.buf[:size]
 }
 
 func (b *realBuff) GetSlices(size uint64) [][]byte {
