@@ -373,10 +373,14 @@ func (s3p awsTablePersister) assembleTable(ctx context.Context, plan compactionP
 		} else if end < lbuf {
 			rdr = bytes.NewReader(buff[start:end])
 		} else {
-			rdr = io.MultiReader(
-				bytes.NewReader(buff[start:]),
-				bytes.NewReader(tail[:end-lbuf]),
-			)
+			// UploadPart needs a ReadSeeker, so we can't use a simple
+			// io.MultiReader here. We can revisit this later, but for
+			// now we make an unquota'd copy of these two buffers which
+			// must live until the upload is done.
+			data := make([]byte, 0, len(buff[start:])+len(tail[:end-lbuf]))
+			data = append(data, buff[start:]...)
+			data = append(data, tail[:end-lbuf]...)
+			rdr = bytes.NewReader(data)
 		}
 		uploadWg.Add(1)
 		go func(data io.Reader, partNum int32) {
