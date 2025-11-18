@@ -613,19 +613,28 @@ func ConfigureServices(
 					return err
 				}
 
+				tlsConfig, err := servercfg.LoadMetricsTLSConfig(cfg.ServerConfig)
+				if err != nil {
+					return err
+				}
+
 				mux := http.NewServeMux()
 				mux.Handle("/metrics", promhttp.Handler())
 				metSrv.srv = &http.Server{
-					Addr:    addr,
-					Handler: mux,
+					Addr:      addr,
+					Handler:   mux,
+					TLSConfig: tlsConfig,
 				}
-
 			}
 			return nil
 		},
 		RunF: func(context.Context) {
 			if metSrv.state.CompareAndSwap(svcs.ServiceState_Init, svcs.ServiceState_Run) {
-				_ = metSrv.srv.Serve(metSrv.lis)
+				if metSrv.srv.TLSConfig != nil {
+					_ = metSrv.srv.ServeTLS(metSrv.lis, "", "")
+				} else {
+					_ = metSrv.srv.Serve(metSrv.lis)
+				}
 			}
 		},
 		StopF: func() error {
