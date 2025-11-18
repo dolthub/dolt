@@ -54,17 +54,19 @@ var AuthorDate = time.Now
 var CustomAuthorDate bool
 var AuthorLoc = time.Local
 
+var CommitterName string
+var CommitterEmail string
+
 // CommitMeta contains all the metadata that is associated with a commit within a data repo.
 type CommitMeta struct {
-	Name          string
-	Email         string
-	Description   string
-	Signature     string
-	Timestamp     uint64
-	UserTimestamp int64
-
-	CommitterName  *string
-	CommitterEmail *string
+	Name           string
+	Email          string
+	Description    string
+	Signature      string
+	Timestamp      uint64
+	UserTimestamp  int64
+	CommitterName  string
+	CommitterEmail string
 }
 
 // NewCommitMeta creates a CommitMeta instance from a name, email, and description and uses the current time for the
@@ -100,17 +102,26 @@ func init() {
 			CustomAuthorDate = true
 		}
 	}
+
+	committerName := os.Getenv(dconfig.EnvDoltCommitterName)
+	if committerName != "" {
+		CommitterName = committerName
+	}
+
+	committerEmail := os.Getenv(dconfig.EnvDoltCommitterEmail)
+	if committerEmail != "" {
+		CommitterEmail = committerEmail
+	}
 }
 
 // NewCommitMetaWithUserTS creates a user metadata
 func NewCommitMetaWithUserTS(name, email, desc string, userTS time.Time) (*CommitMeta, error) {
-	return NewCommitMetaWithAuthorCommitter(name, email, desc, userTS, "", "")
+	return NewCommitMetaWithAuthorCommitter(name, email, desc, userTS, "", "", nil)
 }
 
 // NewCommitMetaWithAuthorCommitter creates commit metadata with separate author and committer information
 // If committer info is empty, defaults to author info. Maintains backwards compatibility.
-func NewCommitMetaWithAuthorCommitter(authorName, authorEmail, desc string, ats time.Time, committerName, committerEmail string) (*CommitMeta, error) {
-
+func NewCommitMetaWithAuthorCommitter(authorName, authorEmail, desc string, ats time.Time, committerName, committerEmail string, cts *time.Time) (*CommitMeta, error) {
 	an := strings.TrimSpace(authorName)
 	ae := strings.TrimSpace(authorEmail)
 	d := strings.TrimSpace(desc)
@@ -138,17 +149,13 @@ func NewCommitMetaWithAuthorCommitter(authorName, authorEmail, desc string, ats 
 	}
 
 	committerDateMillis := uint64(CommitterDate().UnixMilli())
+	if cts != nil { // env var was set
+		committerDateMillis = uint64(cts.UnixMilli())
+	}
+
 	authorDateMillis := ats.UnixMilli()
 
-	var cnptr, ceptr *string
-	if cn != an {
-		cnptr = &cn
-	}
-	if ce != ae {
-		ceptr = &ce
-	}
-
-	return &CommitMeta{an, ae, d, "", committerDateMillis, authorDateMillis, cnptr, ceptr}, nil
+	return &CommitMeta{an, ae, d, "", committerDateMillis, authorDateMillis, cn, ce}, nil
 }
 
 func getRequiredFromSt(st types.Struct, k string) (types.Value, error) {
@@ -211,8 +218,8 @@ func CommitMetaFromNomsSt(st types.Struct) (*CommitMeta, error) {
 		Signature:      string(signature.(types.String)),
 		Timestamp:      uint64(ts.(types.Uint)),
 		UserTimestamp:  int64(userTS.(types.Int)),
-		CommitterName:  &name,
-		CommitterEmail: &email,
+		CommitterName:  name,
+		CommitterEmail: email,
 	}, nil
 }
 
@@ -242,16 +249,12 @@ func (cm *CommitMeta) CommitterTime() time.Time {
 	return time.UnixMilli(int64(cm.Timestamp))
 }
 
-// FormatTS takes the internal timestamp and turns it into a human readable string in the time.RubyDate format
+// FormatTS takes the internal timestamp and turns it into a human-readable string in the time.RubyDate format
 // which looks like: "Mon Jan 02 15:04:05 -0700 2006"
 //
-// We round this to the nearest second, which is what MySQL timestamp does by default.
+// We round this to the nearest second, which is what MySQL timestamp does by default. This returns the author timestamp
+// in the standard Git log format.
 func (cm *CommitMeta) FormatTS() string {
-	return cm.FormatAuthorTS()
-}
-
-// FormatAuthorTS returns the author timestamp in the standard Git log format.
-func (cm *CommitMeta) FormatAuthorTS() string {
 	return cm.Time().In(CommitLoc).Round(time.Second).Format(time.RubyDate)
 }
 

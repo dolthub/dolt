@@ -26,7 +26,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions/commitwalk"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
-	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
@@ -41,13 +40,14 @@ const logTableDefaultRowCount = 10
 // It is created once at build time to determine the table schema (ignoring arguments that must be deferred)
 // It is created again at execution time, this time incorporating deferred arguments.
 type LogTableFunctionArgs struct {
-	decoration      string
-	revisionStrs    []string
-	notRevisionStrs []string
-	tableNames      []string
-	minParents      int
-	showParents     bool
-	showSignature   bool
+	decoration        string
+	revisionStrs      []string
+	notRevisionStrs   []string
+	tableNames        []string
+	minParents        int
+	showParents       bool
+	showSignature     bool
+	showCommitterOnly bool
 }
 
 // Name implements the sql.TableFunction interface
@@ -140,6 +140,7 @@ func (ltfa *LogTableFunctionArgs) addOptions(ctx *sql.Context, expressions []sql
 	ltfa.minParents = minParents
 	ltfa.showParents = apr.Contains(cli.ParentsFlag)
 	ltfa.showSignature = apr.Contains(cli.ShowSignatureFlag)
+	ltfa.showCommitterOnly, _ = dsess.GetBooleanSystemVar(ctx, dsess.DoltLogCommitterOnly)
 
 	decorateOption := apr.GetValueOrDefault(cli.DecorateFlag, "auto")
 	switch decorateOption {
@@ -175,26 +176,9 @@ var _ sql.TableFunction = (*LogTableFunction)(nil)
 var _ sql.ExecSourceRel = (*LogTableFunction)(nil)
 var _ sql.AuthorizationCheckerNode = (*LogTableFunction)(nil)
 
-var logTableSchema = sql.Schema{
-	&sql.Column{Name: "commit_hash", Type: types.Text},
-	&sql.Column{Name: "committer", Type: types.Text}, // Legacy: shows author name for backwards compatibility
-	&sql.Column{Name: "email", Type: types.Text},     // Legacy: shows author email for backwards compatibility
-	&sql.Column{Name: "date", Type: types.Datetime},  // Legacy: shows author date for backwards compatibility
-	&sql.Column{Name: "message", Type: types.Text},
-	&sql.Column{Name: "commit_order", Type: types.Uint64},
-	// New columns for separate author/committer info
-	&sql.Column{Name: "author", Type: types.Text},
-	&sql.Column{Name: "author_email", Type: types.Text},
-	&sql.Column{Name: "author_date", Type: types.Datetime},
-	&sql.Column{Name: "committer_name", Type: types.Text},
-	&sql.Column{Name: "committer_email", Type: types.Text},
-	&sql.Column{Name: "committer_date", Type: types.Datetime},
-}
-
 // NewInstance creates a new instance of TableFunction interface
 func (ltf *LogTableFunction) NewInstance(ctx *sql.Context, db sql.Database, expressions []sql.Expression) (sql.Node, error) {
 	newInstance := &LogTableFunction{
-		ctx:      ctx,
 		database: db,
 	}
 
@@ -292,8 +276,7 @@ func (ltf *LogTableFunction) getOptionsString() string {
 
 // Schema implements the sql.Node interface.
 func (ltf *LogTableFunction) Schema() sql.Schema {
-	logSchema := logTableSchema
-
+	logSchema := dtables.NewLogTableSchema(true)
 	if ltf.showParents {
 		logSchema = append(logSchema, &sql.Column{Name: "parents", Type: types.Text})
 	}
@@ -302,6 +285,9 @@ func (ltf *LogTableFunction) Schema() sql.Schema {
 	}
 	if ltf.showSignature {
 		logSchema = append(logSchema, &sql.Column{Name: "signature", Type: types.Text})
+	}
+	if !ltf.showCommitterOnly {
+		logSchema = append(logSchema, dtables.LogSchemaAuthorColumns...)
 	}
 
 	return logSchema
@@ -592,48 +578,7 @@ func (ltf *LogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter
 	return ltf.NewDotDotLogTableFunctionRowIter(ctx, sqledb.DbData().Ddb, commits, notCommits, matchFunc, cHashToRefs, ltf.tableNames)
 }
 
-// getCommitHashToRefs builds map of commit hashes to branch/tag names for decoration.
-// ResolveCommitForRef resolves a commit reference using the same logic as LogTableFunction.
-// This is a public method that can be used by other packages to resolve commits consistently.
-func ResolveCommitForRef(ctx *sql.Context, database sql.Database, commitRef string) (*doltdb.Commit, error) {
-	sqledb, ok := database.(dsess.SqlDatabase)
-	if !ok {
-		return nil, fmt.Errorf("database is not a Dolt database: %T", database)
-	}
-
-	cs, err := doltdb.NewCommitSpec(commitRef)
-	if err != nil {
-		return nil, fmt.Errorf("error creating commit spec for '%s': %v", commitRef, err)
-	}
-
-	// Get head reference like LogTableFunction does - handle detached HEAD case
-	var headRef ref.DoltRef
-	if doltSess, ok := ctx.Session.(*dsess.DoltSession); ok {
-		dbName := ctx.GetCurrentDatabase()
-		headRef, err = doltSess.CWBHeadRef(ctx, dbName)
-		if err == doltdb.ErrOperationNotSupportedInDetachedHead {
-			// In detached HEAD state, we can still resolve commits without a branch ref
-			headRef = nil
-		} else if err != nil {
-			return nil, fmt.Errorf("error getting head ref: %v", err)
-		}
-	}
-
-	optCmt, err := sqledb.DbData().Ddb.Resolve(ctx, cs, headRef)
-	if err != nil {
-		return nil, fmt.Errorf("error resolving commit '%s': %v", commitRef, err)
-	}
-
-	commit, ok := optCmt.ToCommit()
-	if !ok {
-		return nil, fmt.Errorf("no commit found for ref '%s'", commitRef)
-	}
-
-	return commit, nil
-}
-
 // GetCommitHashToRefs builds map of commit hashes to branch/tag names for decoration.
-// This is a public method that can be used by other packages.
 func GetCommitHashToRefs(ctx *sql.Context, ddb *doltdb.DoltDB, decoration string) (map[hash.Hash][]string, error) {
 	cHashToRefs := map[hash.Hash][]string{}
 
@@ -688,13 +633,14 @@ var _ sql.RowIter = (*logTableFunctionRowIter)(nil)
 
 // logTableFunctionRowIter is a sql.RowIter implementation which iterates over each commit as if it's a row in the table.
 type logTableFunctionRowIter struct {
-	child         doltdb.CommitItr[*sql.Context]
-	cHashToRefs   map[hash.Hash][]string
-	decoration    string
-	tableNames    []string
-	headHash      hash.Hash
-	showParents   bool
-	showSignature bool
+	child             doltdb.CommitItr[*sql.Context]
+	cHashToRefs       map[hash.Hash][]string
+	decoration        string
+	tableNames        []string
+	headHash          hash.Hash
+	showParents       bool
+	showSignature     bool
+	showCommitterOnly bool
 }
 
 // NewLogTableFunctionRowIter creates iterator for single commit history traversal.
@@ -710,20 +656,15 @@ func (ltf *LogTableFunction) NewLogTableFunctionRowIter(ctx *sql.Context, ddb *d
 	}
 
 	return &logTableFunctionRowIter{
-		child:         child,
-		showParents:   ltf.showParents,
-		showSignature: ltf.showSignature,
-		decoration:    ltf.decoration,
-		cHashToRefs:   cHashToRefs,
-		headHash:      h,
-		tableNames:    tableNames,
+		child:             child,
+		showParents:       ltf.showParents,
+		showSignature:     ltf.showSignature,
+		showCommitterOnly: ltf.showCommitterOnly,
+		decoration:        ltf.decoration,
+		cHashToRefs:       cHashToRefs,
+		headHash:          h,
+		tableNames:        tableNames,
 	}, nil
-}
-
-func (ltf *LogTableFunction) WithShowCommitterOnly(showCommitterOnly bool) (sql.Node, error) {
-	newLtf := *ltf
-	newLtf.showCommitterOnly = &showCommitterOnly
-	return &newLtf, nil
 }
 
 // NewDotDotLogTableFunctionRowIter creates iterator for range queries with inclusion/exclusion commits.
@@ -865,7 +806,7 @@ func (itr *logTableFunctionRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 		}
 	}
 
-	row := dtables.BuildLogRow(commitHash, meta, height)
+	row := dtables.NewLogTableRow(commitHash, meta, height, true)
 
 	if itr.showParents {
 		prStr, err := getParentsString(ctx, commit)
@@ -891,6 +832,10 @@ func (itr *logTableFunctionRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 		} else {
 			row = append(row, "")
 		}
+	}
+
+	if !itr.showCommitterOnly {
+		row = append(row, meta.Name, meta.Email, meta.Time())
 	}
 
 	return row, nil

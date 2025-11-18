@@ -22,8 +22,6 @@ const (
 	AllowEmptyFlag       = "allow-empty"
 	AmendFlag            = "amend"
 	AuthorParam          = "author"
-	CommitterParam       = "committer"
-	CommitterDateParam   = "committer-date"
 	ArchiveLevelParam    = "archive-level"
 	BranchParam          = "branch"
 	CachedFlag           = "cached"

@@ -18,7 +18,6 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
@@ -125,15 +124,6 @@ func doDoltCommit(ctx *sql.Context, args []string) (string, bool, error) {
 		email = fmt.Sprintf("%s@%s", ctx.Client().User, ctx.Client().Address)
 	}
 
-	// Parse committer information if provided
-	var committerName, committerEmail string
-	if committerStr, ok := apr.GetValue(cli.CommitterParam); ok {
-		committerName, committerEmail, err = cli.ParseContributor(committerStr, "committer")
-		if err != nil {
-			return "", false, err
-		}
-	}
-
 	amend := apr.Contains(cli.AmendFlag)
 
 	msg, msgOk := apr.GetValue(cli.MessageArg)
@@ -172,30 +162,28 @@ func doDoltCommit(ctx *sql.Context, args []string) (string, bool, error) {
 		}
 	}
 
+	committerName := datas.CommitterName
+	if committerName == "" {
+		committerName = name
+	}
+	committerEmail := datas.CommitterEmail
+	if committerEmail == "" {
+		committerEmail = email
+	}
+
+	cts := datas.CommitterDate()
 	csp := actions.CommitStagedProps{
-		Message:    msg,
-		Date:       t,
-		AllowEmpty: apr.Contains(cli.AllowEmptyFlag),
-		SkipEmpty:  apr.Contains(cli.SkipEmptyFlag),
-		Amend:      amend,
-		Force:      apr.Contains(cli.ForceFlag),
-		Name:       name,
-		Email:      email,
-	}
-
-	var committerDate time.Time
-	if committerDateStr, ok := apr.GetValue(cli.CommitterDateParam); ok {
-		var err error
-		committerDate, err = dconfig.ParseDate(committerDateStr)
-		if err != nil {
-			return "", false, err
-		}
-	}
-
-	if committerName != "" || committerEmail != "" || !committerDate.IsZero() {
-		csp.CommitterName = committerName
-		csp.CommitterEmail = committerEmail
-		csp.CommitterDate = committerDate
+		Message:        msg,
+		Date:           t,
+		AllowEmpty:     apr.Contains(cli.AllowEmptyFlag),
+		SkipEmpty:      apr.Contains(cli.SkipEmptyFlag),
+		Amend:          amend,
+		Force:          apr.Contains(cli.ForceFlag),
+		Name:           name,
+		Email:          email,
+		CommitterName:  committerName,
+		CommitterEmail: committerEmail,
+		CommitterDate:  &cts,
 	}
 
 	shouldSign, err := dsess.GetBooleanSystemVar(ctx, "gpgsign")

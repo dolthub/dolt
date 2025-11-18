@@ -41,7 +41,6 @@ type LogTable struct {
 	dbName            string
 	tableName         string
 	headHash          hash.Hash
-	ctx               *sql.Context
 	showCommitterOnly bool
 }
 
@@ -67,8 +66,15 @@ var LogSchemaAuthorColumns = sql.Schema{
 }
 
 // NewLogTable creates a LogTable
-func NewLogTable(ctx *sql.Context, dbName string, tableName string, ddb *doltdb.DoltDB, head *doltdb.Commit) sql.Table {
-	return &LogTable{dbName: dbName, tableName: tableName, ddb: ddb, head: head, ctx: ctx}
+func NewLogTable(ctx *sql.Context, dbName, tableName string, ddb *doltdb.DoltDB, head *doltdb.Commit) sql.Table {
+	sco, _ := dsess.GetBooleanSystemVar(ctx, dsess.DoltLogCommitterOnly)
+	return &LogTable{
+		dbName:            dbName,
+		tableName:         tableName,
+		ddb:               ddb,
+		head:              head,
+		showCommitterOnly: sco,
+	}
 }
 
 // DataLength implements sql.StatisticsTable
@@ -105,8 +111,8 @@ func (dt *LogTable) String() string {
 	return dt.tableName
 }
 
-// GetLogTableSchema returns the log table schema based on the flag.
-func GetLogTableSchema(showCommitterOnly bool) sql.Schema {
+// NewLogTableSchema returns the log table schema based on the flag.
+func NewLogTableSchema(showCommitterOnly bool) sql.Schema {
 	cols := make(sql.Schema, 0, len(LogSchemaCommitterColumns))
 	cols = append(cols, LogSchemaCommitterColumns...)
 	if !showCommitterOnly {
@@ -115,10 +121,10 @@ func GetLogTableSchema(showCommitterOnly bool) sql.Schema {
 	return cols
 }
 
-// BuildLogRow builds a dolt_log row with the option to show author columns.
-func BuildLogRow(commitHash hash.Hash, meta *datas.CommitMeta, height uint64, showCommitterOnly bool) sql.Row {
+// NewLogTableRow builds a dolt_log row with the option to show author columns.
+func NewLogTableRow(commitHash hash.Hash, meta *datas.CommitMeta, height uint64, showCommitterOnly bool) sql.Row {
 	rowVals := make([]interface{}, 0, len(LogSchemaCommitterColumns))
-	rowVals = append(rowVals, commitHash.String(), *meta.CommitterName, *meta.CommitterEmail, meta.CommitterTime(), meta.Description, height)
+	rowVals = append(rowVals, commitHash.String(), meta.CommitterName, meta.CommitterEmail, meta.CommitterTime(), meta.Description, height)
 	if !showCommitterOnly {
 		rowVals = append(rowVals, meta.Name, meta.Email, meta.Time())
 	}
@@ -127,8 +133,7 @@ func BuildLogRow(commitHash hash.Hash, meta *datas.CommitMeta, height uint64, sh
 
 // Schema is a sql.Table interface function that gets the sql.Schema of the log system table.
 func (dt *LogTable) Schema() sql.Schema {
-	dt.showCommitterOnly, _ = dsess.GetBooleanSystemVar(dt.ctx, dsess.DoltLogCommitterOnly)
-	sch := GetLogTableSchema(dt.showCommitterOnly)
+	sch := NewLogTableSchema(dt.showCommitterOnly)
 	for _, col := range sch {
 		col.Source = dt.tableName
 		col.DatabaseSource = dt.dbName
@@ -154,9 +159,9 @@ func (dt *LogTable) PartitionRows(ctx *sql.Context, p sql.Partition) (sql.RowIte
 		if err != nil {
 			return nil, err
 		}
-		return sql.RowsToRowIter(BuildLogRow(p.Hash(), p.Meta(), height, dt.showCommitterOnly)), nil
+		return sql.RowsToRowIter(NewLogTableRow(p.Hash(), p.Meta(), height, dt.showCommitterOnly)), nil
 	default:
-		return NewLogItr(ctx, dt.ddb, dt.head, dt.showCommitterOnly)
+		return dt.NewLogItr(ctx, dt.ddb, dt.head)
 	}
 }
 
@@ -259,7 +264,7 @@ type LogItr struct {
 }
 
 // NewLogItr creates a LogItr from the current environment.
-func NewLogItr(ctx *sql.Context, ddb *doltdb.DoltDB, head *doltdb.Commit, showCommitterOnly bool) (*LogItr, error) {
+func (dt *LogTable) NewLogItr(ctx *sql.Context, ddb *doltdb.DoltDB, head *doltdb.Commit) (*LogItr, error) {
 	h, err := head.HashOf()
 	if err != nil {
 		return nil, err
@@ -270,7 +275,7 @@ func NewLogItr(ctx *sql.Context, ddb *doltdb.DoltDB, head *doltdb.Commit, showCo
 		return nil, err
 	}
 
-	return &LogItr{child: child, showCommitterOnly: showCommitterOnly}, nil
+	return &LogItr{child: child, showCommitterOnly: dt.showCommitterOnly}, nil
 }
 
 // Next retrieves the next row. It will return io.EOF if it's the last row.
@@ -301,7 +306,7 @@ func (itr *LogItr) Next(ctx *sql.Context) (sql.Row, error) {
 		}
 	}
 
-	return BuildLogRow(h, meta, height, itr.showCommitterOnly), nil
+	return NewLogTableRow(h, meta, height, itr.showCommitterOnly), nil
 }
 
 // Close closes the iterator.

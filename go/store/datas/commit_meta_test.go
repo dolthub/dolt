@@ -31,7 +31,17 @@ func TestCommitMetaToAndFromNomsStruct(t *testing.T) {
 
 	if err != nil {
 		t.Fatal("Failed to convert from types.Struct to CommitMeta")
-	} else if !reflect.DeepEqual(cm, result) {
+	}
+
+	normalizedCm := *cm
+	if normalizedCm.CommitterName == "" {
+		normalizedCm.CommitterName = normalizedCm.Name
+	}
+	if normalizedCm.CommitterEmail == "" {
+		normalizedCm.CommitterEmail = normalizedCm.Email
+	}
+
+	if !reflect.DeepEqual(&normalizedCm, result) {
 		t.Error("CommitMeta was not converted without error.")
 	}
 
