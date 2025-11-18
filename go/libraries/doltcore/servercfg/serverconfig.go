@@ -185,6 +185,10 @@ type ServerConfig interface {
 	CACert() string
 	// RequireSecureTransport is true if the server should reject non-TLS connections.
 	RequireSecureTransport() bool
+	// RequireClientCert is true if the server should reject any connections that don't present a certificate. When
+	// enabled, a client certificate is always required, and if a CA cert is also configured, then the client cert
+	// will also be verified. Enabling this option also means that non-TLS connections are not allowed.
+	RequireClientCert() bool
 	// MaxLoggedQueryLen is the max length of queries written to the logs.  Queries longer than this number are truncated.
 	// If this value is 0 then the query is not truncated and will be written to the logs in its entirety.  If the value
 	// is less than 0 then the queries will be omitted from the logs completely
@@ -474,9 +478,14 @@ func ConfigInfo(config ServerConfig) string {
 		config.ReadTimeout(), config.ReadOnly(), config.LogLevel(), socket)
 }
 
-func getTLSConfig(cert, key, ca string) (*tls.Config, error) {
+func getTLSConfig(cert, key, ca string, requireClientCert bool) (*tls.Config, error) {
 	if key == "" && cert == "" {
-		return nil, nil
+		if requireClientCert {
+			return nil, fmt.Errorf("must supply tls_cert and tls_key when require_client_cert is enabled")
+		} else {
+			// No TLS configuration needed
+			return nil, nil
+		}
 	}
 
 	c, err := tls.LoadX509KeyPair(cert, key)
@@ -497,11 +506,22 @@ func getTLSConfig(cert, key, ca string) (*tls.Config, error) {
 		}
 	}
 
+	clientAuthType := tls.VerifyClientCertIfGiven
+	if requireClientCert {
+		// If a CA cert has been specified, then in addition to requiring
+		// a client cert, also verify it, otherwise allow any client cert.
+		if ca != "" {
+			clientAuthType = tls.RequireAndVerifyClientCert
+		} else {
+			clientAuthType = tls.RequireAnyClientCert
+		}
+	}
+
 	return &tls.Config{
 		Certificates: []tls.Certificate{c},
 		// tlsVerifyClientCertIfGiven will request a client cert from the client,
 		// and if provided, will validate it against the specified client CAs.
-		ClientAuth: tls.VerifyClientCertIfGiven,
+		ClientAuth: clientAuthType,
 		ClientCAs:  caCertPool,
 	}, nil
 }
@@ -509,11 +529,11 @@ func getTLSConfig(cert, key, ca string) (*tls.Config, error) {
 // LoadTLSConfig loads the certificate chain from config.TLSKey() and config.TLSCert() and returns
 // a *tls.Config configured for its use. Returns `nil` if key and cert are `""`.
 func LoadTLSConfig(cfg ServerConfig) (*tls.Config, error) {
-	return getTLSConfig(cfg.TLSCert(), cfg.TLSKey(), cfg.CACert())
+	return getTLSConfig(cfg.TLSCert(), cfg.TLSKey(), cfg.CACert(), cfg.RequireClientCert())
 }
 
 func LoadMetricsTLSConfig(cfg ServerConfig) (*tls.Config, error) {
-	return getTLSConfig(cfg.MetricsTLSCert(), cfg.MetricsTLSKey(), cfg.MetricsTLSCA())
+	return getTLSConfig(cfg.MetricsTLSCert(), cfg.MetricsTLSKey(), cfg.MetricsTLSCA(), false)
 }
 
 // CheckForUnixSocket evaluates ServerConfig for whether the unix socket is to be used or not.

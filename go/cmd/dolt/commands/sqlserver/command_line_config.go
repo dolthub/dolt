@@ -49,6 +49,7 @@ type commandLineServerConfig struct {
 	tlsKey                  string
 	tlsCert                 string
 	caCert                  string
+	requireClientCert       bool
 	requireSecureTransport  bool
 	maxLoggedQueryLen       int
 	shouldEncodeLoggedQuery bool
@@ -319,6 +320,13 @@ func (cfg *commandLineServerConfig) TLSCert() string {
 // is no CA cert configured.
 func (cfg *commandLineServerConfig) CACert() string {
 	return cfg.caCert
+}
+
+// RequireClientCert is true if the server should reject any connections that don't present a certificate. When
+// enabled, a client certificate is always required, and if a CA cert is also configured, then the client cert
+// will also be verified. Enabling this option also means that non-TLS connections are not allowed.
+func (cfg *commandLineServerConfig) RequireClientCert() bool {
+	return cfg.requireClientCert
 }
 
 // RequireSecureTransport is true if the server should reject non-TLS connections.
