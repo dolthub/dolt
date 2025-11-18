@@ -62,7 +62,7 @@ type CommitMeta struct {
 	Email          string
 	Description    string
 	Signature      string
-	Timestamp      uint64
+	Timestamp      *uint64
 	UserTimestamp  int64
 	CommitterName  string
 	CommitterEmail string
@@ -102,15 +102,8 @@ func init() {
 		}
 	}
 
-	committerName := os.Getenv(dconfig.EnvDoltCommitterName)
-	if committerName != "" {
-		CommitterName = committerName
-	}
-
-	committerEmail := os.Getenv(dconfig.EnvDoltCommitterEmail)
-	if committerEmail != "" {
-		CommitterEmail = committerEmail
-	}
+	CommitterName = os.Getenv(dconfig.EnvDoltCommitterName)
+	CommitterEmail = os.Getenv(dconfig.EnvDoltCommitterEmail)
 }
 
 // NewCommitMetaWithUserTS creates a user metadata
@@ -119,7 +112,7 @@ func NewCommitMetaWithUserTS(name, email, desc string, userTS time.Time) (*Commi
 }
 
 // NewCommitMetaWithAuthorCommitter creates commit metadata with separate author and committer information
-// If committer info is empty, defaults to author info. Maintains backwards compatibility.
+// If committer info is empty, defaults to author info.
 func NewCommitMetaWithAuthorCommitter(authorName, authorEmail, desc string, ats time.Time, committerName, committerEmail string, cts *time.Time) (*CommitMeta, error) {
 	an := strings.TrimSpace(authorName)
 	ae := strings.TrimSpace(authorEmail)
@@ -147,9 +140,10 @@ func NewCommitMetaWithAuthorCommitter(authorName, authorEmail, desc string, ats 
 		ce = ae
 	}
 
-	committerDateMillis := uint64(CommitterDate().UnixMilli())
-	if cts != nil { // env var was set
-		committerDateMillis = uint64(cts.UnixMilli())
+	var committerDateMillis *uint64
+	if cts != nil { // in use of inline modification e.g. when using --date blocking CommitterDate() later
+		cdm := uint64(cts.UnixMilli())
+		committerDateMillis = &cdm
 	}
 
 	authorDateMillis := ats.UnixMilli()
@@ -165,7 +159,7 @@ func (cm *CommitMeta) Time() time.Time {
 // CommitterTime returns the time at which the commit was created
 // This does not preserve timezone information, and returns the time in the system's local timezone
 func (cm *CommitMeta) CommitterTime() time.Time {
-	return time.UnixMilli(int64(cm.Timestamp))
+	return time.UnixMilli(int64(*cm.Timestamp))
 }
 
 // FormatTS takes the internal timestamp and turns it into a human-readable string in the time.RubyDate format
