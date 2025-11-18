@@ -120,7 +120,7 @@ func (p prollyIndexIter) Next(ctx *sql.Context) (sql.Row, error) {
 		from := p.pkMap.MapOrdinal(to)
 		p.pkBld.PutRaw(to, idxKey.GetField(from))
 	}
-	pk, err := p.pkBld.Build(p.pkBuf)
+	pk, err := p.pkBld.Build(realPool)
 	if err != nil {
 		return nil, err
 	}
