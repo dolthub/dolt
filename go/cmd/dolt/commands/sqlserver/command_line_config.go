@@ -360,15 +360,15 @@ func (cfg *commandLineServerConfig) MetricsPort() int {
 	return servercfg.DefaultMetricsPort
 }
 
-func (cfg *commandLineServerConfig) MetricsTlsCert() string {
+func (cfg *commandLineServerConfig) MetricsTLSCert() string {
 	return ""
 }
 
-func (cfg *commandLineServerConfig) MetricsTlsKey() string {
+func (cfg *commandLineServerConfig) MetricsTLSKey() string {
 	return ""
 }
 
-func (cfg *commandLineServerConfig) MetricsTlsCa() string {
+func (cfg *commandLineServerConfig) MetricsTLSCA() string {
 	return ""
 }
 
