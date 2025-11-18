@@ -550,8 +550,13 @@ func (a *AutoIncrementTracker) initWithRoots(ctx context.Context, roots ...doltd
 				}
 
 				tableNameStr := tableName.ToLower().Name
-				if oldValue, loaded := a.sequences.LoadOrStore(tableNameStr, seq); loaded && seq > oldValue.(uint64) {
-					a.sequences.Store(tableNameStr, seq)
+				if oldValue, loaded := a.sequences.LoadOrStore(tableNameStr, seq); loaded {
+					old := oldValue.(uint64)
+					for seq > old && !a.sequences.CompareAndSwap(tableNameStr, old, seq) {
+						oldValue, _ = a.sequences.Load(tableNameStr)
+						old = oldValue.(uint64)
+
+					}
 				}
 
 				return false, nil

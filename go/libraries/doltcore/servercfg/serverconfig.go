@@ -16,9 +16,11 @@ package servercfg
 
 import (
 	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"fmt"
 	"net"
+	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -178,6 +180,9 @@ type ServerConfig interface {
 	TLSKey() string
 	// TLSCert returns a path to the servers PEM-encoded TLS certificate chain. "" if there is none.
 	TLSCert() string
+	// CACert returns a path to the servers certificate authority file, or "" if there
+	// is no CA cert configured.
+	CACert() string
 	// RequireSecureTransport is true if the server should reject non-TLS connections.
 	RequireSecureTransport() bool
 	// MaxLoggedQueryLen is the max length of queries written to the logs.  Queries longer than this number are truncated.
@@ -472,10 +477,25 @@ func LoadTLSConfig(cfg ServerConfig) (*tls.Config, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	var caCertPool *x509.CertPool
+	if cfg.CACert() != "" {
+		caCertPEM, err := os.ReadFile(cfg.CACert())
+		if err != nil {
+			return nil, fmt.Errorf("unable to read CA file at: %s", cfg.CACert())
+		}
+		caCertPool = x509.NewCertPool()
+		if ok := caCertPool.AppendCertsFromPEM(caCertPEM); !ok {
+			return nil, fmt.Errorf("unable to add CA cert to cert pool")
+		}
+	}
+
 	return &tls.Config{
-		Certificates: []tls.Certificate{
-			c,
-		},
+		Certificates: []tls.Certificate{c},
+		// tlsVerifyClientCertIfGiven will request a client cert from the client,
+		// and if provided, will validate it against the specified client CAs.
+		ClientAuth: tls.VerifyClientCertIfGiven,
+		ClientCAs:  caCertPool,
 	}, nil
 }
 

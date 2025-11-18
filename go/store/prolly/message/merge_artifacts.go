@@ -106,12 +106,13 @@ func (s MergeArtifactSerializer) Serialize(keys, values [][]byte, subtrees []uin
 	return serial.FinishMessage(b, serial.MergeArtifactsEnd(b), mergeArtifactFileID)
 }
 
-func getArtifactMapKeysAndValues(msg serial.Message) (keys, values ItemAccess, level, count uint16, err error) {
+func getArtifactMapKeysAndValues(msg serial.Message) (keys, values *ItemAccess, level, count uint16, err error) {
 	var ma serial.MergeArtifacts
 	err = serial.InitMergeArtifactsRoot(&ma, msg, serial.MessagePrefixSz)
 	if err != nil {
 		return
 	}
+	keys = &ItemAccess{}
 	keys.bufStart = lookupVectorOffset(mergeArtifactKeyItemBytesVOffset, ma.Table())
 	keys.bufLen = uint32(ma.KeyItemsLength())
 	keys.offStart = lookupVectorOffset(mergeArtifactKeyOffsetsVOffset, ma.Table())
@@ -120,6 +121,7 @@ func getArtifactMapKeysAndValues(msg serial.Message) (keys, values ItemAccess, l
 	count = uint16(keys.offLen/2) - 1
 	level = uint16(ma.TreeLevel())
 
+	values = &ItemAccess{}
 	vv := ma.ValueItemsBytes()
 	if vv != nil {
 		values.bufStart = lookupVectorOffset(mergeArtifactValueItemBytesVOffset, ma.Table())

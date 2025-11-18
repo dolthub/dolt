@@ -48,6 +48,7 @@ type commandLineServerConfig struct {
 	maxWaitConnsTimeout     time.Duration
 	tlsKey                  string
 	tlsCert                 string
+	caCert                  string
 	requireSecureTransport  bool
 	maxLoggedQueryLen       int
 	shouldEncodeLoggedQuery bool
@@ -312,6 +313,12 @@ func (cfg *commandLineServerConfig) TLSKey() string {
 // TLSCert returns a path to the servers PEM-encoded TLS certificate chain. "" if there is none.
 func (cfg *commandLineServerConfig) TLSCert() string {
 	return cfg.tlsCert
+}
+
+// CACert returns a path to the servers certificate authority file, or "" if there
+// is no CA cert configured.
+func (cfg *commandLineServerConfig) CACert() string {
+	return cfg.caCert
 }
 
 // RequireSecureTransport is true if the server should reject non-TLS connections.
