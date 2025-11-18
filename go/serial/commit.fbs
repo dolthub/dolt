@@ -29,10 +29,8 @@ table Commit {
   timestamp_millis:uint64;
   user_timestamp_millis:int64;
   signature:string;
-  
-  // Optional committer fields
-  committer_name:string;
-  committer_email:string;
+  committer_name:string;    // Optional
+  committer_email:string;   // Optional
 }
 
 // KEEP THIS IN SYNC WITH fileidentifiers.go

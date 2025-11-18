@@ -180,12 +180,16 @@ func commit_flatbuffer(vaddr hash.Hash, opts CommitOptions, heights []uint64, pa
 		sigoff = builder.CreateString(opts.Meta.Signature)
 	}
 
-	var committerNameOff, committerEmailOff flatbuffers.UOffsetT
-	if opts.Meta.CommitterName != nil {
-		committerNameOff = builder.CreateString(*opts.Meta.CommitterName)
+	// Author and committer data is normalized in commit meta constructor, i.e. author name and email is used for
+	// committer if not provided. Optional build prevents different hash values from older versions.
+	var committerNameOff flatbuffers.UOffsetT
+	if opts.Meta.CommitterName != opts.Meta.Name {
+		committerNameOff = builder.CreateString(opts.Meta.CommitterName)
 	}
-	if opts.Meta.CommitterEmail != nil {
-		committerEmailOff = builder.CreateString(*opts.Meta.CommitterEmail)
+
+	var committerEmailOff flatbuffers.UOffsetT
+	if opts.Meta.CommitterEmail != opts.Meta.Email {
+		committerEmailOff = builder.CreateString(opts.Meta.CommitterEmail)
 	}
 
 	serial.CommitStart(builder)
@@ -199,12 +203,8 @@ func commit_flatbuffer(vaddr hash.Hash, opts CommitOptions, heights []uint64, pa
 	serial.CommitAddTimestampMillis(builder, opts.Meta.Timestamp)
 	serial.CommitAddUserTimestampMillis(builder, opts.Meta.UserTimestamp)
 	serial.CommitAddSignature(builder, sigoff)
-	if committerNameOff != 0 {
-		serial.CommitAddCommitterName(builder, committerNameOff)
-	}
-	if committerEmailOff != 0 {
-		serial.CommitAddCommitterEmail(builder, committerEmailOff)
-	}
+	serial.CommitAddCommitterName(builder, committerNameOff)
+	serial.CommitAddCommitterEmail(builder, committerEmailOff)
 
 	bytes := serial.FinishMessage(builder, serial.CommitEnd(builder), []byte(serial.CommitFileID))
 	return bytes, maxheight + 1
@@ -604,15 +604,13 @@ func GetCommitMeta(ctx context.Context, cv types.Value) (*CommitMeta, error) {
 		ret.Timestamp = cmsg.TimestampMillis()
 		ret.UserTimestamp = cmsg.UserTimestampMillis()
 		ret.Signature = string(cmsg.Signature())
-		ret.CommitterName = &ret.Name
+		ret.CommitterName = ret.Name
 		if cnBytes := cmsg.CommitterName(); cnBytes != nil {
-			cn := string(cnBytes)
-			ret.CommitterName = &cn
+			ret.CommitterName = string(cnBytes)
 		}
-		ret.CommitterEmail = &ret.Email
+		ret.CommitterEmail = ret.Email
 		if ceBytes := cmsg.CommitterEmail(); ceBytes != nil {
-			ce := string(ceBytes)
-			ret.CommitterEmail = &ce
+			ret.CommitterEmail = string(ceBytes)
 		}
 
 		return ret, nil

@@ -813,8 +813,8 @@ func getCommitInfoWithOptions(queryist cli.Queryist, sqlCtx *sql.Context, ref st
 		Signature:      signature,
 		Timestamp:      committerTs,
 		UserTimestamp:  int64(authorTs),
-		CommitterName:  &committerName,
-		CommitterEmail: &committerEmail,
+		CommitterName:  committerName,
+		CommitterEmail: committerEmail,
 	}
 
 	localBranches, err := getBranchesForHash(queryist, sqlCtx, commitHashStr, true)
