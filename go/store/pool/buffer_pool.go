@@ -48,13 +48,13 @@ type realBuff struct {
 
 func NewRealBuffPool() *realBuff {
 	return &realBuff{
-		buf: make([]byte, 1024),
+		buf: make([]byte, 65504),
 	}
 }
 
 func (b *realBuff) Get(size uint64) []byte {
-	clear(b.buf[:b.pos])
-	b.pos = size
+	//clear(b.buf[:b.pos])
+	//b.pos = size
 	return b.buf[:size]
 }
 
