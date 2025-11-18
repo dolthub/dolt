@@ -41,21 +41,24 @@ var realBuffPool = sync.Pool{
 	},
 }
 
-type realBuff struct{}
+type realBuff struct {
+	buf []byte
+	pos uint64
+}
 
 func NewRealBuffPool() *realBuff {
-	return &realBuff{}
+	return &realBuff{
+		buf: make([]byte, 1024),
+	}
 }
 
 func (b *realBuff) Get(size uint64) []byte {
-	res := realBuffPool.Get().([]byte)
-	res = res[:size]
-	clear(res)
+	if b.pos+size > 1024 {
+		return make([]byte, size)
+	}
+	res := b.buf[b.pos : b.pos+size]
+	b.pos += size
 	return res
-}
-
-func (b *realBuff) Put(data []byte) {
-	realBuffPool.Put(data)
 }
 
 func (b *realBuff) GetSlices(size uint64) [][]byte {
