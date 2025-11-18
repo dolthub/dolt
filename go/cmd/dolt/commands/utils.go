@@ -711,14 +711,16 @@ func getCommitInfoWithOptions(queryist cli.Queryist, sqlCtx *sql.Context, ref st
 		return nil, fmt.Errorf("error getting hash of HEAD: %v", err)
 	}
 
-	// So all columns appear always and no need to check if author cols exist.
-	err = sqlCtx.SetSessionVariable(sqlCtx, dsess.DoltLogCommitterOnly, int8(0))
+	authorColumnsSupport, err := cli.HasSystemVariable(queryist, sqlCtx, dsess.DoltLogCommitterOnly)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error checking for author column support: %v", err)
+	}
+	if authorColumnsSupport {
+		_ = sqlCtx.Session.SetSessionVariable(sqlCtx, dsess.DoltLogCommitterOnly, int8(0))
 	}
 
-	var q string
 	authorColOffset := 0
+	var q string
 	if opts.showSignature {
 		q, err = dbr.InterpolateForDialect("select * from dolt_log(?, '--parents', '--decorate=full', '--show-signature')", []interface{}{ref}, dialect.MySQL)
 		if err != nil {
@@ -791,28 +793,38 @@ func getCommitInfoWithOptions(queryist cli.Queryist, sqlCtx *sql.Context, ref st
 		signature = row[8].(string)
 	}
 
-	authorName, ok := row[8+authorColOffset].(string)
-	if !ok {
-		return nil, fmt.Errorf("unexpected type for author name: %T", row[8+authorColOffset])
-	}
-	authorEmail, ok := row[9+authorColOffset].(string)
-	if !ok {
-		return nil, fmt.Errorf("unexpected type for author email: %T", row[9+authorColOffset])
-	}
-	authorTs, err := getTimestampColAsUint64(row[10+authorColOffset])
-	if err != nil {
-		return nil, fmt.Errorf("error parsing author timestamp '%v': %w", row[10+authorColOffset], err)
-	}
-
-	commitMeta := &datas.CommitMeta{
-		Name:           authorName,
-		Email:          authorEmail,
-		Description:    message,
-		Signature:      signature,
-		Timestamp:      committerTs,
-		UserTimestamp:  int64(authorTs),
-		CommitterName:  committerName,
-		CommitterEmail: committerEmail,
+	var commitMeta *datas.CommitMeta
+	if authorColumnsSupport {
+		authorName, ok := row[8+authorColOffset].(string)
+		if !ok {
+			return nil, fmt.Errorf("unexpected type for author name: %T", row[8+authorColOffset])
+		}
+		authorEmail, ok := row[9+authorColOffset].(string)
+		if !ok {
+			return nil, fmt.Errorf("unexpected type for author email: %T", row[9+authorColOffset])
+		}
+		authorTs, err := getTimestampColAsUint64(row[10+authorColOffset])
+		if err != nil {
+			return nil, fmt.Errorf("error parsing author timestamp '%v': %w", row[10+authorColOffset], err)
+		}
+		commitMeta = &datas.CommitMeta{
+			Name:           authorName,
+			Email:          authorEmail,
+			Description:    message,
+			Signature:      signature,
+			Timestamp:      committerTs,
+			UserTimestamp:  int64(authorTs),
+			CommitterName:  committerName,
+			CommitterEmail: committerEmail,
+		}
+	} else { // old dolt_log placed author info in committer columns
+		commitMeta = &datas.CommitMeta{
+			Name:          committerName,
+			Email:         committerEmail,
+			Description:   message,
+			Signature:     signature,
+			UserTimestamp: int64(committerTs),
+		}
 	}
 
 	localBranches, err := getBranchesForHash(queryist, sqlCtx, commitHashStr, true)
