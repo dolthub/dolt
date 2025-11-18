@@ -94,7 +94,11 @@ UPDATE tbl SET guid = UUID() WHERE i >= @random_id LIMIT 1;"
 
   run dolt fsck
   [ "$status" -eq 1 ]
-  [[ "$output" =~ "skipping remaining journal records past offset 5936: invalid journal record: CRC checksum does not match" ]] || false
+  [[ "$output" =~ "possible data loss detected in journal file at offset 5936" ]] || false
+
+  run dolt sql -q "select count(*) from tbl;"
+  [ "$status" -eq 1 ]
+  [[ "$output" =~ "possible data loss detected in journal file at offset 5936" ]] || false
 }
 
 @test "fsck: journal with long record length" {
@@ -102,6 +106,7 @@ UPDATE tbl SET guid = UUID() WHERE i >= @random_id LIMIT 1;"
   cp -R $BATS_CWD/corrupt_dbs/bad_journal_invalid_record_len/* .dolt/
 
   run dolt fsck
+
   [ "$status" -eq 1 ]
   [[ "$output" =~ "invalid journal record length: 5242881 exceeds max allowed size of 5242880" ]] || false
 
