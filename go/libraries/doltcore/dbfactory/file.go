@@ -135,7 +135,7 @@ func (fact FileFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, 
 		return s.ddb, s.vrw, s.ns, nil
 	}
 
-	ddb, vrw, ns, err := fact.CreateDbNoCache(ctx, nbf, urlObj, params, nbs.JournalParserLoggingRecoveryCb)
+	ddb, vrw, ns, err := fact.CreateDbNoCache(ctx, nbf, urlObj, params, nbs.JournalParserLoggingWarningsCb)
 	if err != nil {
 		return nil, nil, nil, err
 	}
