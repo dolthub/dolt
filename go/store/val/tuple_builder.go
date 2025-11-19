@@ -526,8 +526,15 @@ func (tb *TupleBuilder) ensureCapacity(sz ByteSize) {
 	// TODO: This wastes memory when allocating a new backing array.
 	//   The initial part of the new backing array won't be referenced by anything.
 	//   tb.fields will still point to the original backing array.
-	for i := 0; i < need; i++ {
-		tb.buf = append(tb.buf, byte(0))
+	//for i := 0; i < need; i++ {
+	//	tb.buf = append(tb.buf, byte(0))
+	//}
+
+	// We can safely replace tb.buf.
+	// tb.fields is still referencing the original backing array.
+	if need > 0 {
+		tb.pos = 0
+		tb.buf = make([]byte, defaultTupleLengthTarget)
 	}
 }
 
