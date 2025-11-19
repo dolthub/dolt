@@ -819,7 +819,7 @@ func getCommitInfoWithOptions(queryist cli.Queryist, sqlCtx *sql.Context, ref st
 		Email:          authorEmail,
 		Description:    message,
 		Signature:      signature,
-		Timestamp:      committerTs,
+		Timestamp:      &committerTs,
 		UserTimestamp:  int64(authorTs),
 		CommitterName:  committerName,
 		CommitterEmail: committerEmail,

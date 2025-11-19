@@ -200,7 +200,7 @@ func commit_flatbuffer(vaddr hash.Hash, opts CommitOptions, heights []uint64, pa
 	serial.CommitAddName(builder, nameoff)
 	serial.CommitAddEmail(builder, emailoff)
 	serial.CommitAddDescription(builder, descoff)
-	serial.CommitAddTimestampMillis(builder, opts.Meta.Timestamp)
+	serial.CommitAddTimestampMillis(builder, *opts.Meta.Timestamp)
 	serial.CommitAddUserTimestampMillis(builder, opts.Meta.UserTimestamp)
 	serial.CommitAddSignature(builder, sigoff)
 	serial.CommitAddCommitterName(builder, committerNameOff)
@@ -219,6 +219,11 @@ var commitValueTupleDesc = val.NewTupleDescriptor()
 func newCommitForValue(ctx context.Context, cs chunks.ChunkStore, vrw types.ValueReadWriter, ns tree.NodeStore, v types.Value, opts CommitOptions) (*Commit, error) {
 	if opts.Meta == nil {
 		opts.Meta = &CommitMeta{}
+	}
+
+	if opts.Meta.Timestamp == nil {
+		ts := uint64(CommitterDate().UnixMilli())
+		opts.Meta.Timestamp = &ts
 	}
 
 	if vrw.Format().UsesFlatbuffers() {
@@ -601,7 +606,8 @@ func GetCommitMeta(ctx context.Context, cv types.Value) (*CommitMeta, error) {
 		ret.Name = string(cmsg.Name())
 		ret.Email = string(cmsg.Email())
 		ret.Description = string(cmsg.Description())
-		ret.Timestamp = cmsg.TimestampMillis()
+		tsm := cmsg.TimestampMillis()
+		ret.Timestamp = &tsm
 		ret.UserTimestamp = cmsg.UserTimestampMillis()
 		ret.Signature = string(cmsg.Signature())
 		ret.CommitterName = ret.Name

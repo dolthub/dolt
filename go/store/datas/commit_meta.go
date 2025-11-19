@@ -63,7 +63,7 @@ type CommitMeta struct {
 	Email          string
 	Description    string
 	Signature      string
-	Timestamp      uint64
+	Timestamp      *uint64
 	UserTimestamp  int64
 	CommitterName  string
 	CommitterEmail string
@@ -141,9 +141,10 @@ func NewCommitMetaWithAuthorCommitter(authorName, authorEmail, desc string, ats 
 		ce = ae
 	}
 
-	committerDateMillis := uint64(CommitterDate().UnixMilli())
-	if cts != nil { // env var was set
-		committerDateMillis = uint64(cts.UnixMilli())
+	var committerDateMillis *uint64
+	if cts != nil { // in use of inline modification e.g. when using --date blocking CommitterDate() later
+		cdm := uint64(cts.UnixMilli())
+		committerDateMillis = &cdm
 	}
 
 	authorDateMillis := ats.UnixMilli()
@@ -180,7 +181,7 @@ func CommitMetaFromNomsSt(st types.Struct) (*CommitMeta, error) {
 		return nil, err
 	}
 
-	ts, err := getRequiredFromSt(st, commitMetaTimestampKey)
+	tsv, err := getRequiredFromSt(st, commitMetaTimestampKey)
 
 	if err != nil {
 		return nil, err
@@ -191,7 +192,7 @@ func CommitMetaFromNomsSt(st types.Struct) (*CommitMeta, error) {
 	if err != nil {
 		return nil, err
 	} else if !ok {
-		userTS = types.Int(int64(uint64(ts.(types.Uint))))
+		userTS = types.Int(int64(tsv.(types.Uint)))
 	}
 
 	signature, ok, err := st.MaybeGet(commitMetaSignature)
@@ -204,12 +205,13 @@ func CommitMetaFromNomsSt(st types.Struct) (*CommitMeta, error) {
 
 	name := string(n.(types.String))
 	email := string(e.(types.String))
+	ts := uint64(tsv.(types.Uint))
 	return &CommitMeta{
 		Name:           name,
 		Email:          email,
 		Description:    string(d.(types.String)),
 		Signature:      string(signature.(types.String)),
-		Timestamp:      uint64(ts.(types.Uint)),
+		Timestamp:      &ts,
 		UserTimestamp:  int64(userTS.(types.Int)),
 		CommitterName:  name,
 		CommitterEmail: email,
@@ -221,7 +223,7 @@ func (cm *CommitMeta) toNomsStruct(nbf *types.NomsBinFormat) (types.Struct, erro
 		commitMetaNameKey:      types.String(cm.Name),
 		commitMetaEmailKey:     types.String(cm.Email),
 		commitMetaDescKey:      types.String(cm.Description),
-		commitMetaTimestampKey: types.Uint(cm.Timestamp),
+		commitMetaTimestampKey: types.Uint(*cm.Timestamp),
 		commitMetaVersionKey:   types.String(commitMetaVersion),
 		commitMetaUserTSKey:    types.Int(cm.UserTimestamp),
 		commitMetaSignature:    types.String(cm.Signature),
@@ -239,7 +241,7 @@ func (cm *CommitMeta) Time() time.Time {
 // CommitterTime returns the time at which the commit was created
 // This does not preserve timezone information, and returns the time in the system's local timezone
 func (cm *CommitMeta) CommitterTime() time.Time {
-	return time.UnixMilli(int64(cm.Timestamp))
+	return time.UnixMilli(int64(*cm.Timestamp))
 }
 
 // FormatTS takes the internal timestamp and turns it into a human-readable string in the time.RubyDate format
