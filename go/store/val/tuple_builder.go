@@ -534,7 +534,7 @@ func (tb *TupleBuilder) ensureCapacity(sz ByteSize) {
 	// tb.fields is still referencing the original backing array.
 	if need > 0 {
 		tb.pos = 0
-		tb.buf = make([]byte, defaultTupleLengthTarget)
+		tb.buf = make([]byte, max(defaultTupleLengthTarget, int64(need)))
 	}
 }
 
