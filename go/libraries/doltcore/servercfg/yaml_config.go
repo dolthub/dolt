@@ -111,9 +111,9 @@ type MetricsYAMLConfig struct {
 	Labels  map[string]string `yaml:"labels"`
 	Host    *string           `yaml:"host,omitempty"`
 	Port    *int              `yaml:"port,omitempty"`
-	TlsCert *string           `yaml:"tls_cert,omitempty" minver:"0.0.0"`
-	TlsKey  *string           `yaml:"tls_key,omitempty" minver:"0.0.0"`
-	TlsCa   *string           `yaml:"tls_ca,omitempty" minver:"0.0.0"`
+	TlsCert *string           `yaml:"tls_cert,omitempty" minver:"TBD"`
+	TlsKey  *string           `yaml:"tls_key,omitempty" minver:"TBD"`
+	TlsCa   *string           `yaml:"tls_ca,omitempty" minver:"TBD"`
 }
 
 type RemotesapiYAMLConfig struct {
