@@ -692,6 +692,9 @@ branch_control_file: dir1/dir2/abc.db
   # labels: {}
   # host: localhost
   # port: 9091
+  # tls_cert: ""
+  # tls_key: ""
+  # tls_ca: ""
 
 # cluster:
   # standby_remotes:
