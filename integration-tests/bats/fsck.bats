@@ -87,3 +87,32 @@ UPDATE tbl SET guid = UUID() WHERE i >= @random_id LIMIT 1;"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "Chunk: 7i48kt4h41hcjniri7scv5m8a69cdn13 content hash mismatch: hitg0bb0hsakip96qvu2hts0hkrrla9o" ]] || false
 }
+
+@test "fsck: another bad journal crc" {
+  mkdir .dolt
+  cp -R $BATS_CWD/corrupt_dbs/bad_journal_crc_2/* .dolt/
+
+  run dolt fsck
+  [ "$status" -eq 1 ]
+  [[ "$output" =~ "possible data loss detected in journal file at offset 5936" ]] || false
+
+  run dolt sql -q "select count(*) from tbl;"
+  [ "$status" -eq 1 ]
+  [[ "$output" =~ "possible data loss detected in journal file at offset 5936" ]] || false
+}
+
+@test "fsck: journal with long record length" {
+  mkdir .dolt
+  cp -R $BATS_CWD/corrupt_dbs/bad_journal_invalid_record_len/* .dolt/
+
+  run dolt fsck
+
+  [ "$status" -eq 1 ]
+  [[ "$output" =~ "invalid journal record length: 5242881 exceeds max allowed size of 5242880" ]] || false
+
+  # Ensure we can still read data
+  run dolt sql -q "select count(*) from tbl;"
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "501" ]] || false
+}
+

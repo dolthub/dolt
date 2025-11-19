@@ -62,7 +62,7 @@ func TestChunkJournalPuller(t *testing.T) {
 		nbf := types.Format_Default.VersionString()
 		q := nbs.NewUnlimitedMemQuotaProvider()
 
-		st, err := nbs.NewLocalJournalingStore(ctx, nbf, dir, q, false)
+		st, err := nbs.NewLocalJournalingStore(ctx, nbf, dir, q, false, nil)
 		require.NoError(t, err)
 
 		ns := tree.NewNodeStore(st)
@@ -95,7 +95,7 @@ func TestPuller(t *testing.T) {
 		nbf := types.Format_Default.VersionString()
 		q := nbs.NewUnlimitedMemQuotaProvider()
 
-		st, err := nbs.NewLocalJournalingStore(ctx, nbf, dir, q, false)
+		st, err := nbs.NewLocalJournalingStore(ctx, nbf, dir, q, false, nil)
 		require.NoError(t, err)
 
 		plr, err := NewPuller(ctx, t.TempDir(), 1<<20, gs, st, waf, []hash.Hash{ghost}, statsCh)
