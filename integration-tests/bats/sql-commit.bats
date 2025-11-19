@@ -313,13 +313,11 @@ SQL
 
   run dolt sql -r csv -q "SELECT committer, email, date FROM dolt_commits WHERE message = 'Commit with different committer timestamp'"
   [ "$status" -eq 0 ]
-  echo $output
   [[ "$output" =~ committer,email,date ]] || false
   [[ "$output" =~ "Bats Tests,bats@email.fake,2023-09-26 12:34:56" ]] || false
 
   run dolt sql -r csv -q "SELECT author, author_date, committer, date FROM dolt_log WHERE message = 'Commit with different committer timestamp'"
   [ "$status" -eq 0 ]
-  echo $output
   [[ "$output" =~ author,author_date,committer,date ]] || false
   [[ "$output" =~ "Date Test Author,2023-09-26 01:23:45,Bats Tests,2023-09-26 12:34:56" ]] || false
 }
