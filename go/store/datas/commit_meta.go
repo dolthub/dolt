@@ -103,15 +103,8 @@ func init() {
 		}
 	}
 
-	committerName := os.Getenv(dconfig.EnvDoltCommitterName)
-	if committerName != "" {
-		CommitterName = committerName
-	}
-
-	committerEmail := os.Getenv(dconfig.EnvDoltCommitterEmail)
-	if committerEmail != "" {
-		CommitterEmail = committerEmail
-	}
+	CommitterName = os.Getenv(dconfig.EnvDoltCommitterName)
+	CommitterEmail = os.Getenv(dconfig.EnvDoltCommitterEmail)
 }
 
 // NewCommitMetaWithUserTS creates a user metadata
