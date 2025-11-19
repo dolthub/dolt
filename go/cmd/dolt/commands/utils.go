@@ -793,38 +793,36 @@ func getCommitInfoWithOptions(queryist cli.Queryist, sqlCtx *sql.Context, ref st
 		signature = row[8].(string)
 	}
 
-	var commitMeta *datas.CommitMeta
+	var authorName, authorEmail string
+	var authorTs uint64
 	if authorColumnsSupport {
-		authorName, ok := row[8+authorColOffset].(string)
+		authorName, ok = row[8+authorColOffset].(string)
 		if !ok {
 			return nil, fmt.Errorf("unexpected type for author name: %T", row[8+authorColOffset])
 		}
-		authorEmail, ok := row[9+authorColOffset].(string)
+		authorEmail, ok = row[9+authorColOffset].(string)
 		if !ok {
 			return nil, fmt.Errorf("unexpected type for author email: %T", row[9+authorColOffset])
 		}
-		authorTs, err := getTimestampColAsUint64(row[10+authorColOffset])
+		authorTs, err = getTimestampColAsUint64(row[10+authorColOffset])
 		if err != nil {
 			return nil, fmt.Errorf("error parsing author timestamp '%v': %w", row[10+authorColOffset], err)
 		}
-		commitMeta = &datas.CommitMeta{
-			Name:           authorName,
-			Email:          authorEmail,
-			Description:    message,
-			Signature:      signature,
-			Timestamp:      committerTs,
-			UserTimestamp:  int64(authorTs),
-			CommitterName:  committerName,
-			CommitterEmail: committerEmail,
-		}
-	} else { // old dolt_log placed author info in committer columns
-		commitMeta = &datas.CommitMeta{
-			Name:          committerName,
-			Email:         committerEmail,
-			Description:   message,
-			Signature:     signature,
-			UserTimestamp: int64(committerTs),
-		}
+	} else { // old clients used committer cols for author
+		authorName = committerName
+		authorEmail = committerEmail
+		authorTs = committerTs
+	}
+
+	commitMeta := &datas.CommitMeta{
+		Name:           authorName,
+		Email:          authorEmail,
+		Description:    message,
+		Signature:      signature,
+		Timestamp:      committerTs,
+		UserTimestamp:  int64(authorTs),
+		CommitterName:  committerName,
+		CommitterEmail: committerEmail,
 	}
 
 	localBranches, err := getBranchesForHash(queryist, sqlCtx, commitHashStr, true)
