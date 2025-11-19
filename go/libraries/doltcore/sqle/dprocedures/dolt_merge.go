@@ -433,13 +433,9 @@ func executeNoFFMerge(
 		return ws.WithStagedRoot(roots.Staged), nil, nil
 	}
 
-	pendingCommit, err := dSess.NewPendingCommit(ctx, dbName, roots, actions.CommitStagedProps{
-		Message: msg,
-		Date:    spec.Date,
-		Force:   spec.Force,
-		Name:    spec.Name,
-		Email:   spec.Email,
-	})
+	csp := actions.NewCommitStagedProps(spec.Name, spec.Email, spec.Date, msg)
+	csp.Force = spec.Force
+	pendingCommit, err := dSess.NewPendingCommit(ctx, dbName, roots, csp)
 	if err != nil {
 		return nil, nil, err
 	}

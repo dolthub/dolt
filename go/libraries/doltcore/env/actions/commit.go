@@ -39,6 +39,32 @@ type CommitStagedProps struct {
 	CommitterEmail string
 }
 
+// NewCommitStagedProps creates a new CommitStagedProps with the given author information. Committer fields are
+// automatically populated from environment variables (DOLT_COMMITTER_NAME, DOLT_COMMITTER_EMAIL, DOLT_COMMITTER_DATE)
+// if set, otherwise they default to the author values. The committer date defaults to the current time if not set via
+// environment variable.
+func NewCommitStagedProps(name, email string, date time.Time, message string) CommitStagedProps {
+	committerName := datas.CommitterName
+	if committerName == "" {
+		committerName = name
+	}
+	committerEmail := datas.CommitterEmail
+	if committerEmail == "" {
+		committerEmail = email
+	}
+	committerDate := datas.CommitterDate()
+
+	return CommitStagedProps{
+		Message:        message,
+		Date:           date,
+		Name:           name,
+		Email:          email,
+		CommitterName:  committerName,
+		CommitterEmail: committerEmail,
+		CommitterDate:  &committerDate,
+	}
+}
+
 // GetCommitStaged returns a new pending commit with the roots and commit properties given.
 func GetCommitStaged(
 	ctx *sql.Context,
