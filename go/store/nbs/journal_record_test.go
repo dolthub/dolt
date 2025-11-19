@@ -156,7 +156,7 @@ func TestJournalForDataLoss(t *testing.T) {
 		{false, false, 1, 0, []section{root, null, garb, null, root, null}},
 		{false, false, 1, 0, []section{root, null, garb, null, root, garb}},
 
-		// Recovery cases when non-null bytes immediately follow a a record or any type.
+		// Recovery cases when non-null bytes immediately follow a record of any type.
 		{false, true, 1, 0, []section{root, garb, garb, garb}},
 		{false, true, 1, 2, []section{root, chnk, chnk, garb}}, // valid chunks still get reported to callback, even if they aren't followed by a root record.
 		{false, true, 1, 0, []section{root, garb, null, chnk, chnk}},
@@ -169,11 +169,9 @@ func TestJournalForDataLoss(t *testing.T) {
 		{true, true, 1, 0, []section{root, garb, root, root}},
 		{true, false, 1, 0, []section{root, null, root, chnk, chnk, null}},
 		{true, true, 1, 0, []section{root, garb, root, chnk, chnk, garb}},
-
-		// edge cases where there are we see multiple roots, but they have garbage between them.
-		{false, false, 1, 0, []section{root, null, root, null, root, null, root, garb}},
-		{false, false, 1, 0, []section{root, null, root, garb, root, garb, root, garb}},
-		{false, true, 1, 0, []section{root, garb, root, null, root, null, root, null}},
+		{true, false, 1, 0, []section{root, null, root, null, root, null, root, garb}},
+		{true, false, 1, 0, []section{root, null, root, garb, root, garb, root, garb}},
+		{true, true, 1, 0, []section{root, garb, root, null, root, null, root, null}},
 
 		// Chunks in the suffix garbage shouldn't matter.
 		{false, false, 1, 0, []section{root, null, chnk, chnk, chnk}},

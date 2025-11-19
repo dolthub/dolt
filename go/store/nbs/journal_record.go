@@ -381,7 +381,6 @@ func processJournalRecords(ctx context.Context, r io.ReadSeeker, off int64, cb f
 // valid root record followed by another record (root hash or chunk).
 func possibleDataLossCheck(reader *bufio.Reader) (dataLoss bool, err error) {
 	firstRootFound := false
-	secondRecordFound := false
 
 	remainingData, err := io.ReadAll(reader)
 	if err != nil {
@@ -405,8 +404,7 @@ func possibleDataLossCheck(reader *bufio.Reader) (dataLoss bool, err error) {
 					}
 					if firstRootFound {
 						// found the second record!
-						secondRecordFound = true
-						break
+						return true, nil
 					}
 					if record.kind == rootHashJournalRecKind {
 						// found the first root hash record
@@ -418,12 +416,10 @@ func possibleDataLossCheck(reader *bufio.Reader) (dataLoss bool, err error) {
 				}
 			}
 		}
-		// Found unparsable data. Reset any found root hash state and continue scanning.
-		firstRootFound = false
 		idx++
 	}
 
-	return firstRootFound && secondRecordFound, nil
+	return false, nil
 }
 
 func peekRootHashAt(journal io.ReaderAt, offset int64) (root hash.Hash, err error) {
