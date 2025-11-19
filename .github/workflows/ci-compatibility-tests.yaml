@@ -46,7 +46,7 @@ jobs:
         run: |
           dolt config --global --add user.name 'DoltHub Actions'
           dolt config --global --add user.email 'actions@dolthub.com'
-      - name: Install netcat
+      - name: Install `netcat`
         run: sudo apt-get update && sudo apt-get install -y netcat-openbsd
       # Windows mounts remove execute bits for compatibility scripts.
       - name: Ensure Compatibility Scripts Executable
@@ -55,3 +55,5 @@ jobs:
       - name: Test all
         run: ./runner.sh
         working-directory: ./integration-tests/compatibility
+        env:
+          BATS_PRINT_OUTPUT_ON_FAILURE: "1"
