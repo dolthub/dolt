@@ -59,7 +59,8 @@ func NewCommitStagedProps(name, email string, date time.Time, message string) Co
 		Email:          email,
 		CommitterName:  committerName,
 		CommitterEmail: committerEmail,
-		// CommitterDate if defined overrides the env var set for CommitterDate() later when the commit is written.
+		// CommitterDate if defined overrides time.Now or env var set by CommitterDate(). Caller is responsible for
+		// setting this field explicitly atm.
 	}
 }
 
