@@ -219,6 +219,9 @@ var commitValueTupleDesc = val.NewTupleDescriptor()
 func newCommitForValue(ctx context.Context, cs chunks.ChunkStore, vrw types.ValueReadWriter, ns tree.NodeStore, v types.Value, opts CommitOptions) (*Commit, error) {
 	if opts.Meta == nil {
 		opts.Meta = &CommitMeta{}
+		// Noms testing relies on deterministic init value from empty CommitMeta
+		ts := uint64(0)
+		opts.Meta.Timestamp = &ts
 	}
 
 	if opts.Meta.Timestamp == nil {
