@@ -201,6 +201,10 @@ type ServerConfig interface {
 	MetricsLabels() map[string]string
 	MetricsHost() string
 	MetricsPort() int
+	MetricsTLSCert() string
+	MetricsTLSKey() string
+	MetricsTLSCA() string
+
 	// PrivilegeFilePath returns the path to the file which contains all needed privilege information in the form of a
 	// JSON string.
 	PrivilegeFilePath() string
@@ -350,6 +354,9 @@ const (
 	MetricsLabelsKey                = "metrics_labels"
 	MetricsHostKey                  = "metrics_host"
 	MetricsPortKey                  = "metrics_port"
+	MetricsTLSCertKey               = "metrics_tls_cert"
+	MetricsTLSKeyKey                = "metrics_tls_key"
+	MetricsTLSCAKey                 = "metrics_tls_ca"
 	PrivilegeFilePathKey            = "privilege_file_path"
 	BranchControlFilePathKey        = "branch_control_file_path"
 	UserVarsKey                     = "user_vars"
@@ -467,23 +474,23 @@ func ConfigInfo(config ServerConfig) string {
 		config.ReadTimeout(), config.ReadOnly(), config.LogLevel(), socket)
 }
 
-// LoadTLSConfig loads the certificate chain from config.TLSKey() and config.TLSCert() and returns
-// a *tls.Config configured for its use. Returns `nil` if key and cert are `""`.
-func LoadTLSConfig(cfg ServerConfig) (*tls.Config, error) {
-	if cfg.TLSKey() == "" && cfg.TLSCert() == "" {
+func getTLSConfig(cert, key, ca string) (*tls.Config, error) {
+	if key == "" && cert == "" {
 		return nil, nil
 	}
-	c, err := tls.LoadX509KeyPair(cfg.TLSCert(), cfg.TLSKey())
+
+	c, err := tls.LoadX509KeyPair(cert, key)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("tls.LoadX509KeyPair(%v, %v) failed: %w", cert, key, err)
 	}
 
 	var caCertPool *x509.CertPool
-	if cfg.CACert() != "" {
-		caCertPEM, err := os.ReadFile(cfg.CACert())
+	if ca != "" {
+		caCertPEM, err := os.ReadFile(ca)
 		if err != nil {
-			return nil, fmt.Errorf("unable to read CA file at: %s", cfg.CACert())
+			return nil, fmt.Errorf("unable to read CA file at %s: %w", ca, err)
 		}
+
 		caCertPool = x509.NewCertPool()
 		if ok := caCertPool.AppendCertsFromPEM(caCertPEM); !ok {
 			return nil, fmt.Errorf("unable to add CA cert to cert pool")
@@ -497,6 +504,16 @@ func LoadTLSConfig(cfg ServerConfig) (*tls.Config, error) {
 		ClientAuth: tls.VerifyClientCertIfGiven,
 		ClientCAs:  caCertPool,
 	}, nil
+}
+
+// LoadTLSConfig loads the certificate chain from config.TLSKey() and config.TLSCert() and returns
+// a *tls.Config configured for its use. Returns `nil` if key and cert are `""`.
+func LoadTLSConfig(cfg ServerConfig) (*tls.Config, error) {
+	return getTLSConfig(cfg.TLSCert(), cfg.TLSKey(), cfg.CACert())
+}
+
+func LoadMetricsTLSConfig(cfg ServerConfig) (*tls.Config, error) {
+	return getTLSConfig(cfg.MetricsTLSCert(), cfg.MetricsTLSKey(), cfg.MetricsTLSCA())
 }
 
 // CheckForUnixSocket evaluates ServerConfig for whether the unix socket is to be used or not.

@@ -57,6 +57,9 @@ metrics:
         label1: value1
         label2: 2
         label3: true
+    tls_cert: /path/to/file.cert
+    tls_key: /path/to/file.key
+    tls_ca: /path/to/ca.cert
 
 user_session_vars:
     - name: user0
@@ -104,6 +107,9 @@ jwks:
 			"label2": "2",
 			"label3": "true",
 		},
+		TlsCert: ptr("/path/to/file.cert"),
+		TlsKey:  ptr("/path/to/file.key"),
+		TlsCa:   ptr("/path/to/ca.cert"),
 	}
 	expected.DataDirStr = ptr("some nonsense")
 	expected.SystemVars_ = nil
@@ -347,6 +353,9 @@ func TestYAMLConfigDefaults(t *testing.T) {
 	assert.Equal(t, DefaultMetricsHost, cfg.MetricsHost())
 	assert.Equal(t, DefaultMetricsPort, cfg.MetricsPort())
 	assert.Nil(t, cfg.MetricsConfig.Labels)
+	assert.Equal(t, "", cfg.MetricsTLSCert())
+	assert.Equal(t, "", cfg.MetricsTLSKey())
+	assert.Equal(t, "", cfg.MetricsTLSCA())
 	assert.Equal(t, DefaultAllowCleartextPasswords, cfg.AllowCleartextPasswords())
 	assert.Nil(t, cfg.RemotesapiPort())
 

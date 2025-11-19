@@ -360,6 +360,18 @@ func (cfg *commandLineServerConfig) MetricsPort() int {
 	return servercfg.DefaultMetricsPort
 }
 
+func (cfg *commandLineServerConfig) MetricsTLSCert() string {
+	return ""
+}
+
+func (cfg *commandLineServerConfig) MetricsTLSKey() string {
+	return ""
+}
+
+func (cfg *commandLineServerConfig) MetricsTLSCA() string {
+	return ""
+}
+
 func (cfg *commandLineServerConfig) RemotesapiPort() *int {
 	return cfg.remotesapiPort
 }

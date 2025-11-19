@@ -108,9 +108,12 @@ type PerformanceYAMLConfig struct {
 }
 
 type MetricsYAMLConfig struct {
-	Labels map[string]string `yaml:"labels"`
-	Host   *string           `yaml:"host,omitempty"`
-	Port   *int              `yaml:"port,omitempty"`
+	Labels  map[string]string `yaml:"labels"`
+	Host    *string           `yaml:"host,omitempty"`
+	Port    *int              `yaml:"port,omitempty"`
+	TlsCert *string           `yaml:"tls_cert,omitempty" minver:"TBD"`
+	TlsKey  *string           `yaml:"tls_key,omitempty" minver:"TBD"`
+	TlsCa   *string           `yaml:"tls_ca,omitempty" minver:"TBD"`
 }
 
 type RemotesapiYAMLConfig struct {
@@ -227,9 +230,12 @@ func ServerConfigAsYAMLConfig(cfg ServerConfig) *YAMLConfig {
 		DataDirStr: ptr(cfg.DataDir()),
 		CfgDirStr:  ptr(cfg.CfgDir()),
 		MetricsConfig: MetricsYAMLConfig{
-			Labels: cfg.MetricsLabels(),
-			Host:   nillableStrPtr(cfg.MetricsHost()),
-			Port:   ptr(cfg.MetricsPort()),
+			Labels:  cfg.MetricsLabels(),
+			Host:    nillableStrPtr(cfg.MetricsHost()),
+			Port:    ptr(cfg.MetricsPort()),
+			TlsCert: ptr(cfg.MetricsTLSCert()),
+			TlsKey:  ptr(cfg.MetricsTLSKey()),
+			TlsCa:   ptr(cfg.MetricsTLSCA()),
 		},
 		RemotesapiConfig: RemotesapiYAMLConfig{
 			Port_:     cfg.RemotesapiPort(),
@@ -300,9 +306,12 @@ func ServerConfigSetValuesAsYAMLConfig(cfg ServerConfig) *YAMLConfig {
 		DataDirStr: zeroIf(ptr(cfg.DataDir()), !cfg.ValueSet(DataDirKey)),
 		CfgDirStr:  zeroIf(ptr(cfg.CfgDir()), !cfg.ValueSet(CfgDirKey)),
 		MetricsConfig: MetricsYAMLConfig{
-			Labels: zeroIf(cfg.MetricsLabels(), !cfg.ValueSet(MetricsLabelsKey)),
-			Host:   zeroIf(ptr(cfg.MetricsHost()), !cfg.ValueSet(MetricsHostKey)),
-			Port:   zeroIf(ptr(cfg.MetricsPort()), !cfg.ValueSet(MetricsPortKey)),
+			Labels:  zeroIf(cfg.MetricsLabels(), !cfg.ValueSet(MetricsLabelsKey)),
+			Host:    zeroIf(ptr(cfg.MetricsHost()), !cfg.ValueSet(MetricsHostKey)),
+			Port:    zeroIf(ptr(cfg.MetricsPort()), !cfg.ValueSet(MetricsPortKey)),
+			TlsCert: zeroIf(ptr(cfg.MetricsTLSCert()), !cfg.ValueSet(MetricsTLSCertKey)),
+			TlsKey:  zeroIf(ptr(cfg.MetricsTLSKey()), !cfg.ValueSet(MetricsTLSKeyKey)),
+			TlsCa:   zeroIf(ptr(cfg.MetricsTLSCA()), !cfg.ValueSet(MetricsTLSCAKey)),
 		},
 		RemotesapiConfig: RemotesapiYAMLConfig{
 			Port_:     zeroIf(cfg.RemotesapiPort(), !cfg.ValueSet(RemotesapiPortKey)),
@@ -402,6 +411,15 @@ func (cfg YAMLConfig) withPlaceholdersFilledIn() YAMLConfig {
 	}
 	if withPlaceholders.MetricsConfig.Port == nil {
 		withPlaceholders.MetricsConfig.Port = ptr(9091)
+	}
+	if withPlaceholders.MetricsConfig.TlsCert == nil {
+		withPlaceholders.MetricsConfig.TlsCert = ptr("")
+	}
+	if withPlaceholders.MetricsConfig.TlsKey == nil {
+		withPlaceholders.MetricsConfig.TlsKey = ptr("")
+	}
+	if withPlaceholders.MetricsConfig.TlsCa == nil {
+		withPlaceholders.MetricsConfig.TlsCa = ptr("")
 	}
 
 	if withPlaceholders.RemotesapiConfig.Port_ == nil {
@@ -757,6 +775,28 @@ func (cfg YAMLConfig) MetricsPort() int {
 	}
 
 	return *cfg.MetricsConfig.Port
+}
+
+func (cfg YAMLConfig) MetricsTLSCert() string {
+	if cfg.MetricsConfig.TlsCert == nil {
+		return ""
+	}
+
+	return *cfg.MetricsConfig.TlsCert
+}
+
+func (cfg YAMLConfig) MetricsTLSKey() string {
+	if cfg.MetricsConfig.TlsKey == nil {
+		return ""
+	}
+	return *cfg.MetricsConfig.TlsKey
+}
+
+func (cfg YAMLConfig) MetricsTLSCA() string {
+	if cfg.MetricsConfig.TlsCa == nil {
+		return ""
+	}
+	return *cfg.MetricsConfig.TlsCa
 }
 
 func (cfg YAMLConfig) RemotesapiPort() *int {
