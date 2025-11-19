@@ -99,7 +99,6 @@ func newProllyIndexIter(
 		primary:     primary,
 		pkBld:       pkBld,
 		pkMap:       pkMap,
-		pkBuf:       NewFakePool(),
 		keyMap:      keyProj,
 		valMap:      valProj,
 		ordMap:      ordProj,
