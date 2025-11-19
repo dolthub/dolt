@@ -51,13 +51,12 @@ wait_for_connection() {
 
 start_sql_server() {
   PORT=$(definePORT)
-  local server_bin=${DOLT_SERVER_BIN:-dolt}
   DB_NAME=$(basename "$PWD")
   
   if [ "$IS_WINDOWS" != true ]; then
-    $server_bin sql-server --host 0.0.0.0 --port=$PORT --socket "dolt.$PORT.sock" > server.log 2>&1 3>&- &
+    $dolt_server sql-server --host 0.0.0.0 --port=$PORT --socket "dolt.$PORT.sock" > server.log 2>&1 3>&- &
   else
-    $server_bin sql-server --host 0.0.0.0 --port=$PORT > server.log 2>&1 3>&- &
+    $dolt_server sql-server --host 0.0.0.0 --port=$PORT > server.log 2>&1 3>&- &
   fi
   SERVER_PID=$!
   
@@ -78,6 +77,7 @@ stop_sql_server() {
 }
 
 setup_file() {
+  export dolt_server=${DOLT_SERVER_BIN:-dolt}
   export dolt_client=${DOLT_CLIENT_BIN:-dolt}
 }
 
@@ -120,8 +120,16 @@ latest_commit() {
   [[ "$output" =~ "| 1    |" ]] || false
 }
 
-@test "sql-server: commit commands can retrieve commit metadata via dolt_log interface" {
+@test "sql-server: commit-related commands can retrieve commit metadata via internal dolt_log interface" {
   start_sql_server
+
+  server_version=$($dolt_server version 2>&1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n1)
+  if [ -n "$server_version" ]; then
+    major_minor=$(echo "$server_version" | cut -d. -f1,2)
+    if [ "$(printf '%s\n' "$major_minor" "1.58" | sort -V | head -n1)" != "1.58" ]; then
+      skip "dolt show requires dolt_tests system table (added in v1.58.6), skipping for server version $server_version"
+    fi
+  fi
 
   # Test dolt log - should display commit info
   run $dolt_client log -n 3
