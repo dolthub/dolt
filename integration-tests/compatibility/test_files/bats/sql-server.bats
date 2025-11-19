@@ -139,7 +139,8 @@ latest_commit() {
   [[ "$output" =~ "made changes to main" ]] || false
 
   # Test dolt commit - create a new commit and verify output
-  run $dolt_client sql -q "USE $DB_NAME; INSERT INTO abc VALUES (1000, 'test commit', 2.5, 1, 999);"
+  # Use 'big' table to avoid conflicts with 'abc' table modifications from other branches
+  run $dolt_client sql -q "USE $DB_NAME; INSERT INTO big VALUES (10000, 'test commit');"
   [ "$status" -eq 0 ]
 
   run $dolt_client add -A
@@ -160,26 +161,18 @@ latest_commit() {
   revert_output=$(strip_ansi "$output")
   [[ "$revert_output" =~ "commit " ]] || false
 
-  # Test dolt merge - merge a branch that merges cleanly
-  # We should already be on the default branch after the previous operations
-  run $dolt_client merge check_merge
-  # Merge may already be done, check if we get commit output or already-merged message
-  if [ "$status" -eq 0 ]; then
-    merge_output=$(strip_ansi "$output")
-    [[ "$merge_output" =~ "commit " ]] || [[ "$merge_output" =~ "already up to date" ]] || [[ "$merge_output" =~ "Already up to date" ]] || false
-  fi
+  # Note: dolt merge is not tested here because it cannot be used when a SQL server is running.
+  # The dolt merge command requires direct repository access which conflicts with an active server.
 
-  # Test dolt cherry-pick - cherry-pick a commit from init branch
-  # Get a commit from init branch to cherry-pick
-  run $dolt_client log init -n 1
+  # Test dolt cherry-pick - cherry-pick a commit from check_merge branch (only modifies def table, won't conflict)
+  run $dolt_client log check_merge -n 1
   [ "$status" -eq 0 ]
   cherry_commit=$(extract_commit_hash "$output")
   [[ -n "$cherry_commit" ]] || false
 
   run $dolt_client cherry-pick "$cherry_commit"
-  # Cherry-pick may fail if commit already applied, but that's ok for this test
-  if [ "$status" -eq 0 ]; then
-    cherry_output=$(strip_ansi "$output")
-    [[ "$cherry_output" =~ "commit " ]] || false
-  fi
+  # If it creates a commit, it shows commit info, otherwise it says "No changes were made"
+  [ "$status" -eq 0 ]
+  cherry_output=$(strip_ansi "$output")
+  [[ "$cherry_output" =~ "commit " ]] || [[ "$cherry_output" =~ "No changes were made" ]] || false
 }
