@@ -68,6 +68,9 @@ var EmptyTuple = Tuple([]byte{0, 0})
 
 func NewTuple(pool pool.BuffPool, values ...[]byte) Tuple {
 	values = trimNullSuffix(values)
+	if len(values) > MaxTupleFields {
+		panic("tuple field maxIdx exceeds maximum")
+	}
 
 	var count int
 	var pos ByteSize
@@ -77,9 +80,6 @@ func NewTuple(pool pool.BuffPool, values ...[]byte) Tuple {
 		}
 		count++
 		pos += sizeOf(v)
-	}
-	if len(values) > MaxTupleFields {
-		panic("tuple field maxIdx exceeds maximum")
 	}
 	if pos > MaxTupleDataSize {
 		panic("tuple data size exceeds maximum")

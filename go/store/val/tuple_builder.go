@@ -60,7 +60,7 @@ func (om OrdinalMapping) IsIdentityMapping() bool {
 	return true
 }
 
-var defaultTupleLengthTarget int64 = (1 << 11)
+var defaultTupleLengthTarget int64 = (1 << 11) // 2048 = 2KB
 
 type TupleBuilder struct {
 	vs                ValueStore
@@ -77,7 +77,7 @@ func NewTupleBuilder(desc *TupleDesc, vs ValueStore) *TupleBuilder {
 	return &TupleBuilder{
 		Desc:              desc,
 		fields:            make([][]byte, len(desc.Types)),
-		buf:               make([]byte, builderBufferSize),
+		buf:               make([]byte, defaultTupleLengthTarget),
 		vs:                vs,
 		tupleLengthTarget: defaultTupleLengthTarget,
 	}
@@ -522,11 +522,12 @@ func (tb *TupleBuilder) putAddr(i int, v hash.Hash) {
 }
 
 func (tb *TupleBuilder) ensureCapacity(sz ByteSize) {
-	need := int(tb.pos+int64(sz)) - len(tb.buf)
-	if need > 0 {
-		for i := 0; i < need; i++ {
-			tb.buf = append(tb.buf, byte(0))
-		}
+	need := int(tb.pos+int64(sz)) - cap(tb.buf)
+	// TODO: This wastes memory when allocating a new backing array.
+	//   The initial part of the new backing array won't be referenced by anything.
+	//   tb.fields will still point to the original backing array.
+	for i := 0; i < need; i++ {
+		tb.buf = append(tb.buf, byte(0))
 	}
 }
 
