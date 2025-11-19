@@ -17,6 +17,7 @@ package schcmds
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -287,11 +288,8 @@ func doltCommitUpdatedTags(ctx *sql.Context, tableResolver doltdb.TableResolver,
 	}
 
 	doltDB := dEnv.DoltDB(ctx)
-	pendingCommit, err := actions.GetCommitStaged(ctx, tableResolver, roots, workingSet, nil, doltDB, actions.CommitStagedProps{
-		Name:    name,
-		Email:   email,
-		Message: "Syncing column tags from " + fromBranchName + " branch",
-	})
+	csp := actions.NewCommitStagedProps(name, email, time.Now(), "Syncing column tags from "+fromBranchName+" branch")
+	pendingCommit, err := actions.GetCommitStaged(ctx, tableResolver, roots, workingSet, nil, doltDB, csp)
 	if err != nil {
 		return err
 	}
