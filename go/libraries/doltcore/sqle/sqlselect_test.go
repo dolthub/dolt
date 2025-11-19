@@ -787,7 +787,7 @@ func BasicSelectTests() []SelectTest {
 					env.DefaultInitBranch,
 					headCommitHash,
 					"billy bob", "bigbillieb@fake.horse",
-					time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC).In(LoadedLocalLocation()), // Author time (branches table uses meta.Time())
+					time.Date(1970, 1, 1, 1, 0, 0, 0, time.UTC).In(LoadedLocalLocation()),
 					"Initialize data repository",
 					"",
 					"",

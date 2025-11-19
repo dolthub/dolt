@@ -167,6 +167,7 @@ func doDoltCommit(ctx *sql.Context, args []string) (string, bool, error) {
 	csp.SkipEmpty = apr.Contains(cli.SkipEmptyFlag)
 	csp.Amend = amend
 	csp.Force = apr.Contains(cli.ForceFlag)
+	csp.CommitterDate = &t
 
 	shouldSign, err := dsess.GetBooleanSystemVar(ctx, "gpgsign")
 	if err != nil {
