@@ -82,7 +82,6 @@ func Run(parentCtx context.Context, commitList []string, profilePath string) err
 	}()
 
 	for _, commit := range commitList {
-		commit := commit // https://golang.org/doc/faq#closures_and_goroutines
 		g.Go(func() error {
 			return buildBinaries(ctx, tempDir, repoDir, doltBin, profilePath, commit)
 		})
