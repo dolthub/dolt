@@ -61,6 +61,9 @@ MetricsConfig servercfg.MetricsYAMLConfig 0.0.0 metrics,omitempty
 -Labels map[string]string 0.0.0 labels
 -Host *string 0.0.0 host,omitempty
 -Port *int 0.0.0 port,omitempty
+-TlsCert *string 1.78.2 tls_cert,omitempty
+-TlsKey *string 1.78.2 tls_key,omitempty
+-TlsCa *string 1.78.2 tls_ca,omitempty
 ClusterCfg *servercfg.ClusterYAMLConfig 0.0.0 cluster,omitempty
 -StandbyRemotes_ []servercfg.StandbyRemoteYAMLConfig 0.0.0 standby_remotes
 --Name_ string 0.0.0 name
