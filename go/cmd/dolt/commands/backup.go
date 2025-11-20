@@ -20,12 +20,13 @@ import (
 	"github.com/gocraft/dbr/v2"
 	"github.com/gocraft/dbr/v2/dialect"
 
+	"github.com/dolthub/go-mysql-server/sql"
+
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dprocedures"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtablefunctions"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	eventsapi "github.com/dolthub/eventsapi_schema/dolt/services/eventsapi/v1alpha1"
 )
@@ -172,16 +173,20 @@ func printDoltBackupsTableFunc(queryEngine *cli.QueryEngineResult, apr *argparse
 		return errhand.BuildDError("failed to interpolate SELECT query for %s()", dtablefunctions.BackupsTableFunctionName).AddCause(err).Build()
 	}
 
-	rows, err := cli.GetRowsForSql(queryEngine.Queryist, queryEngine.Context, query)
+	schema, rowItr, _, err := queryEngine.Queryist.Query(queryEngine.Context, query)
 	if err != nil {
-		return errhand.BuildDError("failed to execute SELECT query for %s()", dtablefunctions.BackupsTableFunctionName).AddCause(err).Build()
+		return errhand.BuildDError("failed to execute query for %s()", dtablefunctions.BackupsTableFunctionName).AddCause(err).Build()
+	}
+	rows, err := sql.RowIterToRows(queryEngine.Context, rowItr)
+	if err != nil {
+		return errhand.BuildDError("failed to retrieve slice for %s()", dtablefunctions.BackupsTableFunctionName).AddCause(err).Build()
 	}
 
 	const colExpectedStrFmt = "col %s: expected string, got %v"
 	for _, row := range rows {
 		name, ok := row[0].(string)
 		if !ok {
-			return errhand.BuildDError(colExpectedStrFmt, dtables.BackupsTableSchema[0].Name, row[0]).Build()
+			return errhand.BuildDError(colExpectedStrFmt, schema[0].Name, row[0]).Build()
 		}
 
 		if !apr.Contains(cli.VerboseFlag) {
@@ -191,12 +196,12 @@ func printDoltBackupsTableFunc(queryEngine *cli.QueryEngineResult, apr *argparse
 
 		url, ok := row[1].(string)
 		if !ok {
-			return errhand.BuildDError(colExpectedStrFmt, dtables.BackupsTableSchema[1].Name, row[1]).Build()
+			return errhand.BuildDError(colExpectedStrFmt, schema[1].Name, row[1]).Build()
 		}
 
 		jsonStr, err := getJsonAsString(queryEngine.Context, row[2])
 		if err != nil {
-			return errhand.BuildDError(colExpectedStrFmt, dtables.BackupsTableSchema[2].Name, row[2]).AddCause(err).Build()
+			return errhand.BuildDError(colExpectedStrFmt, schema[2].Name, row[2]).AddCause(err).Build()
 		}
 
 		cli.Printf("%s %s %s\n", name, url, jsonStr)
