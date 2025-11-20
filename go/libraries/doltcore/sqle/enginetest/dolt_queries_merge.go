@@ -176,7 +176,7 @@ var MergeScripts = []queries.ScriptTest{
 			{
 				Query: "select * from dolt_status;",
 				Expected: []sql.Row{
-					{"aTable", false, "constraint violation"},
+					{"aTable", byte(0), "constraint violation"},
 				},
 			},
 			{
@@ -513,7 +513,7 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT * from dolt_status",
-				Expected: []sql.Row{{"test", true, "modified"}},
+				Expected: []sql.Row{{"test", byte(1), "modified"}},
 			},
 			{
 				Query:    "SELECT COUNT(*) FROM dolt_log",
@@ -577,7 +577,7 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT * from dolt_status",
-				Expected: []sql.Row{{"test", false, "modified"}, {"test", false, "conflict"}},
+				Expected: []sql.Row{{"test", byte(0), "modified"}, {"test", byte(0), "conflict"}},
 			},
 			{
 				Query:    "SELECT COUNT(*) FROM dolt_log",
@@ -605,7 +605,7 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT * from dolt_status",
-				Expected: []sql.Row{{"test", false, "modified"}},
+				Expected: []sql.Row{{"test", byte(0), "modified"}},
 			},
 			{
 				Query:    "SELECT * from test ORDER BY pk",
@@ -682,7 +682,7 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT * from dolt_status",
-				Expected: []sql.Row{{"test", false, "conflict"}},
+				Expected: []sql.Row{{"test", byte(0), "conflict"}},
 			},
 			{
 				Query:    "SELECT COUNT(*) FROM dolt_log",
@@ -775,7 +775,7 @@ var MergeScripts = []queries.ScriptTest{
 			{
 				Skip:     true,
 				Query:    "SELECT * from dolt_status",
-				Expected: []sql.Row{{"test", false, "schema conflict"}},
+				Expected: []sql.Row{{"test", byte(0), "schema conflict"}},
 			},
 			{
 				Skip:     true,
@@ -810,7 +810,7 @@ var MergeScripts = []queries.ScriptTest{
 			{
 				Skip:     true,
 				Query:    "SELECT * from dolt_status",
-				Expected: []sql.Row{{"test", true, "merged"}},
+				Expected: []sql.Row{{"test", byte(1), "merged"}},
 			},
 			{
 				Skip:             true,
@@ -856,7 +856,7 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT * FROM DOLT_STATUS",
-				Expected: []sql.Row{{"test", false, "modified"}, {"test", false, "conflict"}},
+				Expected: []sql.Row{{"test", byte(0), "modified"}, {"test", byte(0), "conflict"}},
 			},
 			{
 				// errors because creating a new branch implicitly commits the current transaction
@@ -1331,7 +1331,7 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT * from dolt_status",
-				Expected: []sql.Row{{"test", false, "modified"}, {"test", false, "conflict"}},
+				Expected: []sql.Row{{"test", byte(0), "modified"}, {"test", byte(0), "conflict"}},
 			},
 			{
 				Query:    "SELECT COUNT(*) FROM dolt_conflicts",
@@ -1580,7 +1580,7 @@ var MergeScripts = []queries.ScriptTest{
 			{
 				Query: "select * from dolt_status;",
 				Expected: []sql.Row{
-					{"child", false, "constraint violation"},
+					{"child", byte(0), "constraint violation"},
 				},
 			},
 		},
@@ -1670,7 +1670,7 @@ var MergeScripts = []queries.ScriptTest{
 			{
 				Query: "select * from dolt_status;",
 				Expected: []sql.Row{
-					{"t", false, "constraint violation"},
+					{"t", byte(0), "constraint violation"},
 				},
 			},
 		},
@@ -1708,7 +1708,7 @@ var MergeScripts = []queries.ScriptTest{
 			{
 				Query: "select * from dolt_status;",
 				Expected: []sql.Row{
-					{"t", false, "constraint violation"},
+					{"t", byte(0), "constraint violation"},
 				},
 			},
 		},
@@ -1746,7 +1746,7 @@ var MergeScripts = []queries.ScriptTest{
 			{
 				Query: "select * from dolt_status;",
 				Expected: []sql.Row{
-					{"t", false, "constraint violation"},
+					{"t", byte(0), "constraint violation"},
 				},
 			},
 		},
@@ -1784,7 +1784,7 @@ var MergeScripts = []queries.ScriptTest{
 			{
 				Query: "select * from dolt_status;",
 				Expected: []sql.Row{
-					{"t", false, "constraint violation"},
+					{"t", byte(0), "constraint violation"},
 				},
 			},
 		},
@@ -4343,7 +4343,7 @@ var SchemaConflictScripts = []queries.ScriptTest{
 			{
 				Query: "select * from dolt_status",
 				Expected: []sql.Row{
-					{"t", false, "schema conflict"},
+					{"t", byte(0), "schema conflict"},
 				},
 			},
 		},
