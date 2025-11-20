@@ -6,10 +6,6 @@ REQUIRE_CLIENT_CERT=false
 
 setup() {
     skiponwindows "tests are flaky on Windows"
-    if [ "$SQL_ENGINE" = "remote-engine" ]; then
-      skip "This test tests remote connections directly, SQL_ENGINE is not needed."
-    fi
-
     export CERTS_DIR=$PWD/certs
     setup_no_dolt_init
     dolt init
@@ -37,6 +33,8 @@ EOF
 
     dolt sql-server --config ./config.yml --socket "dolt.$PORT.sock" &
     SERVER_PID=$!
+    # We use a hard coded sleep here, instead of calling wait_for_connection, since
+    # wait_for_connection won't work when a client cert is required.
     sleep 1
 }
 
@@ -57,6 +55,8 @@ EOF
 
     dolt sql-server --config ./config.yml --socket "dolt.$PORT.sock" &
     SERVER_PID=$!
+    # We use a hard coded sleep here, instead of calling wait_for_connection, since
+    # wait_for_connection won't work when a client cert is required.
     sleep 1
 }
 
