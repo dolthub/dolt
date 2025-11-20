@@ -31,7 +31,7 @@ type IndexedJsonDiffer struct {
 	started           bool
 }
 
-var _ IJsonDiffer = &IndexedJsonDiffer{}
+var _ JsonDiffer = &IndexedJsonDiffer{}
 
 func NewIndexedJsonDiffer(ctx context.Context, from, to IndexedJsonDocument) (*IndexedJsonDiffer, error) {
 	ordering := jsonLocationOrdering{}

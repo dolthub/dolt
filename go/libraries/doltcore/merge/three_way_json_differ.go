@@ -26,7 +26,7 @@ import (
 )
 
 type ThreeWayJsonDiffer struct {
-	leftDiffer, rightDiffer           tree.IJsonDiffer
+	leftDiffer, rightDiffer           tree.JsonDiffer
 	leftCurrentDiff, rightCurrentDiff *tree.JsonDiff
 	leftIsDone, rightIsDone           bool
 	ns                                tree.NodeStore

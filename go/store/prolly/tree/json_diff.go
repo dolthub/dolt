@@ -17,15 +17,13 @@ package tree
 import (
 	"bytes"
 	"context"
-	"io"
-	"reflect"
-	"strings"
-
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
+	"io"
+	"reflect"
 )
 
-type IJsonDiffer interface {
+type JsonDiffer interface {
 	Next(ctx context.Context) (JsonDiff, error)
 }
 
@@ -41,45 +39,45 @@ type jsonKeyPair struct {
 	key   string
 }
 
-// JsonDiffer computes the diff between two JSON objects.
-type JsonDiffer struct {
+// InMemoryJsonDiffer computes the diff between two JSON objects that are fully loaded in memory.
+type InMemoryJsonDiffer struct {
 	currentFromPair *jsonKeyPair
 	currentToPair   *jsonKeyPair
-	subDiffer       *JsonDiffer
+	subDiffer       *InMemoryJsonDiffer
 	root            []byte
 	from            types.JSONIter
 	to              types.JSONIter
 }
 
-var _ IJsonDiffer = &JsonDiffer{}
+var _ JsonDiffer = &InMemoryJsonDiffer{}
 
-func NewJsonDiffer(from, to types.JsonObject) *JsonDiffer {
+func NewInMemoryJsonDiffer(from, to types.JsonObject) *InMemoryJsonDiffer {
 	fromIter := types.NewJSONIter(from)
 	toIter := types.NewJSONIter(to)
-	return &JsonDiffer{
+	return &InMemoryJsonDiffer{
 		root: []byte{byte(startOfValue)},
 		from: fromIter,
 		to:   toIter,
 	}
 }
 
-func (differ *JsonDiffer) newSubDiffer(key string, from, to types.JsonObject) JsonDiffer {
+func (differ *InMemoryJsonDiffer) newSubDiffer(key string, from, to types.JsonObject) InMemoryJsonDiffer {
 	fromIter := types.NewJSONIter(from)
 	toIter := types.NewJSONIter(to)
 	newRoot := differ.appendKey(key)
-	return JsonDiffer{
+	return InMemoryJsonDiffer{
 		root: newRoot,
 		from: fromIter,
 		to:   toIter,
 	}
 }
 
-func (differ *JsonDiffer) appendKey(key string) []byte {
-	escapedKey := strings.Replace(key, "\"", "\\\"", -1)
+func (differ *InMemoryJsonDiffer) appendKey(key string) []byte {
+	escapedKey := key //strings.Replace(key, "\"", "\\\"", -1)
 	return append(append(differ.root, beginObjectKey), []byte(escapedKey)...)
 }
 
-func (differ *JsonDiffer) Next(ctx context.Context) (diff JsonDiff, err error) {
+func (differ *InMemoryJsonDiffer) Next(ctx context.Context) (diff JsonDiff, err error) {
 	for {
 		if differ.subDiffer != nil {
 			diff, err := differ.subDiffer.Next(ctx)
@@ -197,5 +195,25 @@ func (differ *JsonDiffer) Next(ctx context.Context) (diff JsonDiff, err error) {
 		default:
 			panic("unreachable")
 		}
+	}
+}
+
+func NewJsonDiffer(ctx context.Context, from, to sql.JSONWrapper) (differ JsonDiffer, err error) {
+	indexedFrom, isFromIndexed := from.(IndexedJsonDocument)
+	indexedTo, isToIndexed := to.(IndexedJsonDocument)
+
+	if isFromIndexed && isToIndexed {
+		return NewIndexedJsonDiffer(ctx, indexedFrom, indexedTo)
+	} else {
+		fromObject, err := from.ToInterface(ctx)
+		if err != nil {
+			return nil, err
+		}
+		toObject, err := to.ToInterface(ctx)
+		if err != nil {
+			return nil, err
+		}
+		// TODO: Handle non-objects being diffed
+		return NewInMemoryJsonDiffer(fromObject.(types.JsonObject), toObject.(types.JsonObject)), nil
 	}
 }
