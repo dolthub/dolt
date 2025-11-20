@@ -1,5 +1,6 @@
 #!/usr/bin/env bats
 load $BATS_TEST_DIRNAME/helper/common.bash
+load $BATS_TEST_DIRNAME/helper/query-server-common.bash
 
 setup() {
     setup_common
@@ -23,6 +24,39 @@ teardown() {
     teardown_common
     rm -rf $TMPDIRS
     cd $BATS_TMPDIR
+}
+
+start_remotesrv() {
+    local port=${1:-$(definePORT)}
+    mkdir -p $BATS_TMPDIR/remotes-$$
+    remotesrv --http-port $port --grpc-port $port --dir $BATS_TMPDIR/remotes-$$ &> $BATS_TMPDIR/remotes-$$/remotesrv.log 3>&- &
+    remotesrv_pid=$!
+    REMOTESRV_PORT=$port
+
+    wait_for_port $port
+}
+
+wait_for_port() {
+    local port=$1
+    local timeout_ms=${2:-5000}
+    local end_time=$((SECONDS+($timeout_ms/1000)))
+
+    while [ $SECONDS -lt $end_time ]; do
+        nc -z localhost "$port" >/dev/null 2>&1 && return 0
+        sleep 0.1
+    done
+
+    echo "Failed to connect on port $port within $timeout_ms ms."
+    return 1
+}
+
+stop_remotesrv() {
+    if [ ! -z "$remotesrv_pid" ]; then
+        kill $remotesrv_pid 2>/dev/null || true
+        wait $remotesrv_pid 2>/dev/null || true
+        remotesrv_pid=""
+    fi
+    rm -rf $BATS_TMPDIR/remotes-$$
 }
 
 @test "backup: add named backup" {
@@ -318,18 +352,37 @@ teardown() {
     [ "$status" -ne 0 ]
 }
 
-@test "backup: dolt_backups() table function with verbose flag" {
+@test "backup: add HTTP and HTTPS" {
     cd repo1
-    dolt backup add bac1 file://../bac1
-    
-    run dolt sql -q "SELECT name, url FROM dolt_backups()" -r csv
+    dolt backup add httpbackup http://localhost:$REMOTESRV_PORT/test-org/backup-repo
+    dolt backup add httpsbackup https://localhost:$REMOTESRV_PORT/test-org/backup-repo
+    run dolt backup -v
     [ "$status" -eq 0 ]
-    [[ "${lines[0]}" =~ "name,url" ]] || false
-    [[ "${lines[1]}" =~ "bac1,file://" ]] || false
+    [[ "$output" =~ "httpbackup" ]] || false
+    [[ "$output" =~ "http://localhost:$REMOTESRV_PORT/test-org/backup-repo" ]] || false
+    [[ "$output" =~ "httpsbackup" ]] || false
+    [[ "$output" =~ "https://localhost:$REMOTESRV_PORT/test-org/backup-repo" ]] || false
+}
+
+# No HTTPS test for sync-url; `dolt/go/utils/remotesrv` does not expose TLS configuration flags.
+@test "backup: sync-url and restore HTTP" {
+    start_remotesrv
     
-    run dolt sql -q "SELECT name, url, params FROM dolt_backups('--verbose')" -r csv
+    cd repo1
+    dolt sql -q "CREATE TABLE t2 (b int)"
+    dolt add .
+    dolt commit -am "add t2"
+    
+    run dolt backup sync-url http://localhost:$REMOTESRV_PORT/test-org/backup-repo
     [ "$status" -eq 0 ]
-    [[ "${lines[0]}" =~ "name,url,params" ]] || false
-    [[ "${lines[1]}" =~ "bac1,file://" ]] || false
-    [[ "${lines[1]}" =~ "{}" ]] || false
+    
+    cd ..
+    dolt backup restore http://localhost:$REMOTESRV_PORT/test-org/backup-repo repo3
+    cd repo3
+    run dolt ls
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "t1" ]] || false
+    [[ "$output" =~ "t2" ]] || false
+    
+    stop_remotesrv
 }

@@ -27,6 +27,12 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 )
 
+var BackupsTableSchema = []*sql.Column{
+	{Name: "name", Type: types.Text, PrimaryKey: true, Nullable: false},
+	{Name: "url", Type: types.Text, PrimaryKey: false, Nullable: false},
+	{Name: "params", Type: types.JSON, PrimaryKey: false, Nullable: false},
+}
+
 type BackupsTable struct {
 	db        dsess.SqlDatabase
 	tableName string
@@ -47,11 +53,7 @@ func (bt BackupsTable) String() string {
 }
 
 func (bt BackupsTable) Schema() sql.Schema {
-	columns := []*sql.Column{
-		{Name: "name", Type: types.Text, Source: bt.tableName, PrimaryKey: true, Nullable: false, DatabaseSource: bt.db.Name()},
-		{Name: "url", Type: types.Text, Source: bt.tableName, PrimaryKey: false, Nullable: false, DatabaseSource: bt.db.Name()},
-	}
-	return columns
+	return BackupsTableSchema[:2]
 }
 
 func (bt BackupsTable) Collation() sql.CollationID {

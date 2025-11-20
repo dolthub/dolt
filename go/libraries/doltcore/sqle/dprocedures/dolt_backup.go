@@ -132,9 +132,6 @@ func addBackup(ctx *sql.Context, dbData env.DbData[*sql.Context], apr *argparser
 	scheme, absBackupUrl, err := env.GetAbsRemoteUrl(filesys.LocalFS, cfg, backupUrl)
 	if err != nil {
 		return fmt.Errorf("error: '%s' is not valid, %s", backupUrl, err.Error())
-	} else if scheme == dbfactory.HTTPScheme || scheme == dbfactory.HTTPSScheme {
-		// not sure how to get the dialer so punting on this
-		return fmt.Errorf("sync-url does not support http or https backup locations currently")
 	}
 
 	params, err := cli.ProcessBackupArgs(apr, scheme, absBackupUrl)
@@ -182,7 +179,7 @@ func restoreBackup(ctx *sql.Context, _ env.DbData[*sql.Context], apr *argparser.
 	}
 
 	r := env.NewRemote("", backupUrl, params)
-	srcDb, err := r.GetRemoteDB(ctx, types.Format_Default, nil)
+	srcDb, err := sess.Provider().GetRemoteDB(ctx, types.Format_Default, r, false)
 	if err != nil {
 		return err
 	}
@@ -253,9 +250,6 @@ func loadAwsParams(ctx *sql.Context, sess *dsess.DoltSession, apr *argparser.Arg
 	scheme, absBackupUrl, err := env.GetAbsRemoteUrl(filesys.LocalFS, cfg, backupUrl)
 	if err != nil {
 		return nil, fmt.Errorf("error: '%s' is not valid.", backupUrl)
-	} else if scheme == dbfactory.HTTPScheme || scheme == dbfactory.HTTPSScheme {
-		// not sure how to get the dialer so punting on this
-		return nil, fmt.Errorf("%s does not support http or https backup locations currently", backupCmd)
 	}
 
 	params, err := cli.ProcessBackupArgs(apr, scheme, absBackupUrl)
