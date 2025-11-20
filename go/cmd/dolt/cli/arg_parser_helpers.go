@@ -46,15 +46,6 @@ func ParseAuthor(authorStr string) (string, string, error) {
 	return name, email, nil
 }
 
-const (
-	SyncBackupId        = "sync"
-	SyncBackupUrlId     = "sync-url"
-	RestoreBackupId     = "restore"
-	AddBackupId         = "add"
-	RemoveBackupId      = "remove"
-	RemoveBackupShortId = "rm"
-)
-
 var branchForceFlagDesc = "Reset {{.LessThan}}branchname{{.GreaterThan}} to {{.LessThan}}startpoint{{.GreaterThan}}, even if {{.LessThan}}branchname{{.GreaterThan}} exists already. Without {{.EmphasisLeft}}-f{{.EmphasisRight}}, {{.EmphasisLeft}}dolt branch{{.EmphasisRight}} refuses to change an existing branch. In combination with {{.EmphasisLeft}}-d{{.EmphasisRight}} (or {{.EmphasisLeft}}--delete{{.EmphasisRight}}), allow deleting the branch irrespective of its merged status. In combination with -m (or {{.EmphasisLeft}}--move{{.EmphasisRight}}), allow renaming the branch even if the new branch name already exists, the same applies for {{.EmphasisLeft}}-c{{.EmphasisRight}} (or {{.EmphasisLeft}}--copy{{.EmphasisRight}})."
 
 // CreateCommitArgParser creates the argparser shared dolt commit cli and DOLT_COMMIT.

@@ -16,18 +16,18 @@ package commands
 
 import (
 	"context"
-	"strings"
 
-	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/gocraft/dbr/v2"
 	"github.com/gocraft/dbr/v2/dialect"
 
-	eventsapi "github.com/dolthub/eventsapi_schema/dolt/services/eventsapi/v1alpha1"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dprocedures"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtablefunctions"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+	eventsapi "github.com/dolthub/eventsapi_schema/dolt/services/eventsapi/v1alpha1"
 )
 
 var backupDocs = cli.CommandDocumentationContent{
@@ -106,216 +106,96 @@ func (cmd BackupCmd) EventType() eventsapi.ClientEventType {
 }
 
 // Exec executes the command
-func (cmd BackupCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
-	ap := cmd.ArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, backupDocs, ap))
-	apr := cli.ParseArgsOrDie(ap, args, help)
+func (cmd BackupCmd) Exec(ctx context.Context, commandStr string, args []string, _ *env.DoltEnv, cliCtx cli.CliContext) int {
+	argParser := cmd.ArgParser()
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, backupDocs, argParser))
+	apr := cli.ParseArgsOrDie(argParser, args, help)
 
-	queryist, err := cliCtx.QueryEngine(ctx)
+	queryEngine, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	var verr errhand.VerboseError
+	var verboseErr errhand.VerboseError
+	if apr.NArg() == 0 {
+		verboseErr = printDoltBackupsTableFunc(&queryEngine, apr)
+		return HandleVErrAndExitCode(verboseErr, usage)
+	}
 
-	// All the sub commands except `restore` require a valid environment
-	if apr.NArg() == 0 || apr.Arg(0) != cli.RestoreBackupId {
-		if !cli.CheckEnvIsValid(dEnv) {
-			return 2
+	switch apr.Arg(0) {
+	case dprocedures.DoltBackupParamAdd:
+		if apr.NArg() != 3 {
+			verboseErr = errhand.BuildDError("").SetPrintUsage().Build()
 		}
-	}
-
-	switch {
-	case apr.NArg() == 0:
-		verr = printBackups(queryist.Context, queryist.Queryist, apr)
-	case apr.Arg(0) == cli.AddBackupId:
-		verr = addBackup(queryist.Context, queryist.Queryist, dEnv, apr)
-	case apr.Arg(0) == cli.RemoveBackupId:
-		verr = removeBackup(queryist.Context, queryist.Queryist, apr)
-	case apr.Arg(0) == cli.RemoveBackupShortId:
-		verr = removeBackup(queryist.Context, queryist.Queryist, apr)
-	case apr.Arg(0) == cli.SyncBackupId:
-		verr = syncBackup(queryist.Context, queryist.Queryist, apr)
-	case apr.Arg(0) == cli.SyncBackupUrlId:
-		verr = syncBackupUrl(queryist.Context, queryist.Queryist, dEnv, apr)
-	case apr.Arg(0) == cli.RestoreBackupId:
-		verr = restoreBackup(queryist.Context, queryist.Queryist, dEnv, apr)
+	case dprocedures.DoltBackupParamRemove, dprocedures.DoltBackupParamRm,
+		dprocedures.DoltBackupParamSync,
+		dprocedures.DoltBackupParamSyncUrl:
+		if apr.NArg() != 2 {
+			verboseErr = errhand.BuildDError("").SetPrintUsage().Build()
+		}
+	case dprocedures.DoltBackupParamRestore:
+		if apr.NArg() < 3 {
+			verboseErr = errhand.BuildDError("").SetPrintUsage().Build()
+		}
 	default:
-		verr = errhand.BuildDError("").SetPrintUsage().Build()
+		verboseErr = errhand.BuildDError("").SetPrintUsage().Build()
 	}
 
-	return HandleVErrAndExitCode(verr, usage)
+	if verboseErr != nil {
+		return HandleVErrAndExitCode(verboseErr, usage)
+	}
+
+	verboseErr = callDoltBackupProc(&queryEngine, args)
+	return HandleVErrAndExitCode(verboseErr, usage)
 }
 
-func removeBackup(sqlCtx *sql.Context, queryist cli.Queryist, apr *argparser.ArgParseResults) errhand.VerboseError {
-	if apr.NArg() != 2 {
-		return errhand.BuildDError("").SetPrintUsage().Build()
-	}
-
-	backupName := strings.TrimSpace(apr.Arg(1))
-	qry, err := dbr.InterpolateForDialect("CALL dolt_backup('remove', ?)", []interface{}{backupName}, dialect.MySQL)
+func callDoltBackupProc(queryEngine *cli.QueryEngineResult, params []string) errhand.VerboseError {
+	query, err := interpolateStoredProcedureCall(dprocedures.DoltBackupProcedureName, params)
 	if err != nil {
 		return errhand.BuildDError("error: failed to build query").AddCause(err).Build()
 	}
 
-	_, err = cli.GetRowsForSql(queryist, sqlCtx, qry)
+	_, err = cli.GetRowsForSql(queryEngine.Queryist, queryEngine.Context, query)
 	if err != nil {
-		return errhand.BuildDError("error: failed to delete backup tracking ref").AddCause(err).Build()
+		return errhand.BuildDError("error: failed to %s backup", params[0]).AddCause(err).Build()
 	}
 
 	return nil
 }
 
-func addBackup(sqlCtx *sql.Context, queryist cli.Queryist, dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.VerboseError {
-	if apr.NArg() != 3 {
-		return errhand.BuildDError("").SetPrintUsage().Build()
-	}
-
-	backupName := strings.TrimSpace(apr.Arg(1))
-
-	backupUrl := apr.Arg(2)
-	scheme, absBackupUrl, err := env.GetAbsRemoteUrl(dEnv.FS, dEnv.Config, backupUrl)
-	if err != nil {
-		return errhand.BuildDError("error: '%s' is not valid.", backupUrl).AddCause(err).Build()
-	}
-
-	_, err = cli.ProcessBackupArgs(apr, scheme, absBackupUrl)
-	if err != nil {
-		return errhand.VerboseErrorFromError(err)
-	}
-
-	qry, err := dbr.InterpolateForDialect("CALL dolt_backup('add', ?, ?)", []interface{}{backupName, absBackupUrl}, dialect.MySQL)
+func printDoltBackupsTableFunc(queryEngine *cli.QueryEngineResult, apr *argparser.ArgParseResults) errhand.VerboseError {
+	params := []interface{}{apr.Option(cli.VerboseFlag)}
+	query, err := dbr.InterpolateForDialect("SELECT * FROM dolt_backups(?)", params, dialect.MySQL)
 	if err != nil {
 		return errhand.BuildDError("error: failed to build query").AddCause(err).Build()
 	}
-
-	_, err = cli.GetRowsForSql(queryist, sqlCtx, qry)
+	rows, err := cli.GetRowsForSql(queryEngine.Queryist, queryEngine.Context, query)
 	if err != nil {
-		return errhand.BuildDError("error: failed to add backup").AddCause(err).Build()
-	}
-
-	return nil
-}
-
-func printBackups(sqlCtx *sql.Context, queryist cli.Queryist, apr *argparser.ArgParseResults) errhand.VerboseError {
-	var qry string
-	if apr.Contains(cli.VerboseFlag) {
-		qry = "SELECT * FROM dolt_backups('--verbose')"
-	} else {
-		qry = "SELECT * FROM dolt_backups()"
-	}
-
-	rows, err := cli.GetRowsForSql(queryist, sqlCtx, qry)
-	if err != nil {
-		return errhand.BuildDError("Unable to get backups from the local directory").AddCause(err).Build()
+		return errhand.BuildDError("error: unable to query %s()", dtablefunctions.BackupsTableFunctionName).AddCause(err).Build()
 	}
 
 	for _, row := range rows {
 		name, ok := row[0].(string)
 		if !ok {
-			return errhand.BuildDError("unexpectedly received non-string name column from dolt_backups: %v", row[0]).Build()
+			return errhand.BuildDError("unexpected non-string name column: %v", row[0]).Build()
 		}
 
 		if apr.Contains(cli.VerboseFlag) {
 			if len(row) < 3 {
-				return errhand.BuildDError("unexpectedly received insufficient columns from dolt_backups: expected 3, got %d", len(row)).Build()
+				return errhand.BuildDError("unexpected insufficient columns: expected 3, got %d", len(row)).Build()
 			}
 			url, ok := row[1].(string)
 			if !ok {
-				return errhand.BuildDError("unexpectedly received non-string url column from dolt_backups: %v", row[1]).Build()
+				return errhand.BuildDError("unexpected non-string url: %v", row[1]).Build()
 			}
-			paramStr, err := getJsonAsString(sqlCtx, row[2])
+			jsonStr, err := getJsonAsString(queryEngine.Context, row[2])
 			if err != nil {
-				return errhand.BuildDError("unexpectedly received invalid params column from dolt_backups").AddCause(err).Build()
+				return errhand.BuildDError("unexpected invalid json column").AddCause(err).Build()
 			}
-			cli.Printf("%s %s %s\n", name, url, paramStr)
+			cli.Printf("%s %s %s\n", name, url, jsonStr)
 		} else {
 			cli.Println(name)
 		}
-	}
-
-	return nil
-}
-
-func syncBackupUrl(sqlCtx *sql.Context, queryist cli.Queryist, dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.VerboseError {
-	if apr.NArg() != 2 {
-		return errhand.BuildDError("").SetPrintUsage().Build()
-	}
-
-	backupUrl := apr.Arg(1)
-	scheme, absBackupUrl, err := env.GetAbsRemoteUrl(dEnv.FS, dEnv.Config, backupUrl)
-	if err != nil {
-		return errhand.BuildDError("error: '%s' is not valid.", backupUrl).AddCause(err).Build()
-	}
-
-	_, err = cli.ProcessBackupArgs(apr, scheme, absBackupUrl)
-	if err != nil {
-		return errhand.VerboseErrorFromError(err)
-	}
-
-	qry, err := dbr.InterpolateForDialect("CALL dolt_backup('sync-url', ?)", []interface{}{absBackupUrl}, dialect.MySQL)
-	if err != nil {
-		return errhand.BuildDError("error: failed to build query").AddCause(err).Build()
-	}
-
-	_, err = cli.GetRowsForSql(queryist, sqlCtx, qry)
-	if err != nil {
-		return errhand.BuildDError("error: failed to sync backup").AddCause(err).Build()
-	}
-
-	return nil
-}
-
-func syncBackup(sqlCtx *sql.Context, queryist cli.Queryist, apr *argparser.ArgParseResults) errhand.VerboseError {
-	if apr.NArg() != 2 {
-		return errhand.BuildDError("").SetPrintUsage().Build()
-	}
-
-	backupName := strings.TrimSpace(apr.Arg(1))
-	qry, err := dbr.InterpolateForDialect("CALL dolt_backup('sync', ?)", []interface{}{backupName}, dialect.MySQL)
-	if err != nil {
-		return errhand.BuildDError("error: failed to build query").AddCause(err).Build()
-	}
-
-	_, err = cli.GetRowsForSql(queryist, sqlCtx, qry)
-	if err != nil {
-		return errhand.BuildDError("error: failed to sync backup").AddCause(err).Build()
-	}
-
-	return nil
-}
-
-func restoreBackup(sqlCtx *sql.Context, queryist cli.Queryist, dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.VerboseError {
-	if apr.NArg() < 3 {
-		return errhand.BuildDError("").SetPrintUsage().Build()
-	}
-	apr.Args = apr.Args[1:]
-	restoredDB, urlStr, verr := parseArgs(apr)
-	if verr != nil {
-		return verr
-	}
-
-	_, remoteUrl, err := env.GetAbsRemoteUrl(dEnv.FS, dEnv.Config, urlStr)
-	if err != nil {
-		return errhand.BuildDError("error: '%s' is not valid.", urlStr).Build()
-	}
-
-	if err := cli.VerifyNoAwsParams(apr); err != nil {
-		return errhand.VerboseErrorFromError(err)
-	}
-
-	procArgs := []string{"restore", remoteUrl, restoredDB}
-	if apr.Contains(cli.ForceFlag) {
-		procArgs = []string{"restore", "--force", remoteUrl, restoredDB}
-	}
-	qry, err := interpolateStoredProcedureCall("dolt_backup", procArgs)
-	if err != nil {
-		return errhand.BuildDError("error: failed to build query").AddCause(err).Build()
-	}
-
-	_, err = cli.GetRowsForSql(queryist, sqlCtx, qry)
-	if err != nil {
-		return errhand.BuildDError("error: failed to restore backup").AddCause(err).Build()
 	}
 
 	return nil

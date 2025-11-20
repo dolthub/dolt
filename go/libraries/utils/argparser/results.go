@@ -273,3 +273,13 @@ func (res *ArgParseResults) FlagsEqualTo(names []string, val bool) *set.StrSet {
 
 	return set.NewStrSet(results)
 }
+
+// Option returns the long form of the option flag (e.g., "--force"). Returns empty string if the option is not found or
+// has no long name.
+func (res *ArgParseResults) Option(flagName string) string {
+	opt, ok := res.parser.nameOrAbbrevToOpt[flagName]
+	if !ok || opt.Name == "" {
+		return ""
+	}
+	return "--" + opt.Name
+}
