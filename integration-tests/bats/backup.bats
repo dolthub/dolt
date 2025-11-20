@@ -317,3 +317,19 @@ teardown() {
     run dolt backup sync-url file://../bac1
     [ "$status" -ne 0 ]
 }
+
+@test "backup: dolt_backups() table function with verbose flag" {
+    cd repo1
+    dolt backup add bac1 file://../bac1
+    
+    run dolt sql -q "SELECT name, url FROM dolt_backups()" -r csv
+    [ "$status" -eq 0 ]
+    [[ "${lines[0]}" =~ "name,url" ]] || false
+    [[ "${lines[1]}" =~ "bac1,file://" ]] || false
+    
+    run dolt sql -q "SELECT name, url, params FROM dolt_backups('--verbose')" -r csv
+    [ "$status" -eq 0 ]
+    [[ "${lines[0]}" =~ "name,url,params" ]] || false
+    [[ "${lines[1]}" =~ "bac1,file://" ]] || false
+    [[ "${lines[1]}" =~ "{}" ]] || false
+}
