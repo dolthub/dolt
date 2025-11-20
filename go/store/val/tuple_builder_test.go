@@ -17,6 +17,7 @@ package val
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"math"
 	"math/rand"
 	"testing"
@@ -353,4 +354,40 @@ func TestTupleBuilderAdaptiveEncodings(t *testing.T) {
 			}
 		})
 	}
+}
+
+type testBuilder struct {
+	fields [][]byte
+	buf    []byte
+}
+
+func TestTestBuilder(t *testing.T) {
+	tb := &testBuilder{
+		fields: make([][]byte, 20),
+		buf:    make([]byte, 10),
+	}
+	origbuf := tb.buf
+	for i := 0; i < len(tb.buf); i++ {
+		tb.buf[i] = byte(i)
+		tb.fields[i] = tb.buf[i : i+1]
+	}
+	fmt.Printf("Orig Buf: %v\n", origbuf)
+	fmt.Printf("  Fields: %v\n", tb.fields)
+
+	// Allocate new backing array
+	for i := 10; i < len(tb.fields); i++ {
+		tb.buf = append(tb.buf, byte(100+i))
+		tb.fields[i] = tb.buf[i : i+1]
+	}
+	newBuf := tb.buf
+	fmt.Printf("Orig Buf: %v\n", origbuf)
+	fmt.Printf(" New Buf: %v\n", newBuf)
+	fmt.Printf("  Fields: %v\n", tb.fields)
+
+	// Fields[0] still references the original backing array
+	origbuf[0] = 99
+	newBuf[0] = 10
+	fmt.Printf("Orig Buf: %v\n", origbuf)
+	fmt.Printf(" New Buf: %v\n", newBuf)
+	fmt.Printf("  Fields: %v\n", tb.fields)
 }
