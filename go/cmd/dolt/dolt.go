@@ -70,7 +70,6 @@ var dumpZshCommand = &commands.GenZshCompCmd{}
 
 var commandsWithoutCliCtx = []cli.Command{
 	commands.CloneCmd{},
-	commands.BackupCmd{},
 	commands.LoginCmd{},
 	credcmds.Commands,
 	cvcmds.Commands,

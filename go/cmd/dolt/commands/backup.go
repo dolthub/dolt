@@ -16,19 +16,18 @@ package commands
 
 import (
 	"context"
-	"encoding/json"
 	"strings"
+
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/gocraft/dbr/v2"
+	"github.com/gocraft/dbr/v2/dialect"
 
 	eventsapi "github.com/dolthub/eventsapi_schema/dolt/services/eventsapi/v1alpha1"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
-	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/store/datas/pull"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 var backupDocs = cli.CommandDocumentationContent{
@@ -112,6 +111,11 @@ func (cmd BackupCmd) Exec(ctx context.Context, commandStr string, args []string,
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, backupDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
+	queryist, err := cliCtx.QueryEngine(ctx)
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	}
+
 	var verr errhand.VerboseError
 
 	// All the sub commands except `restore` require a valid environment
@@ -123,19 +127,19 @@ func (cmd BackupCmd) Exec(ctx context.Context, commandStr string, args []string,
 
 	switch {
 	case apr.NArg() == 0:
-		verr = printBackups(dEnv, apr)
+		verr = printBackups(queryist.Context, queryist.Queryist, apr)
 	case apr.Arg(0) == cli.AddBackupId:
-		verr = addBackup(dEnv, apr)
+		verr = addBackup(queryist.Context, queryist.Queryist, dEnv, apr)
 	case apr.Arg(0) == cli.RemoveBackupId:
-		verr = removeBackup(ctx, dEnv, apr)
+		verr = removeBackup(queryist.Context, queryist.Queryist, apr)
 	case apr.Arg(0) == cli.RemoveBackupShortId:
-		verr = removeBackup(ctx, dEnv, apr)
+		verr = removeBackup(queryist.Context, queryist.Queryist, apr)
 	case apr.Arg(0) == cli.SyncBackupId:
-		verr = syncBackup(ctx, dEnv, apr)
+		verr = syncBackup(queryist.Context, queryist.Queryist, apr)
 	case apr.Arg(0) == cli.SyncBackupUrlId:
-		verr = syncBackupUrl(ctx, dEnv, apr)
+		verr = syncBackupUrl(queryist.Context, queryist.Queryist, dEnv, apr)
 	case apr.Arg(0) == cli.RestoreBackupId:
-		verr = restoreBackup(ctx, dEnv, apr)
+		verr = restoreBackup(queryist.Context, queryist.Queryist, dEnv, apr)
 	default:
 		verr = errhand.BuildDError("").SetPrintUsage().Build()
 	}
@@ -143,31 +147,26 @@ func (cmd BackupCmd) Exec(ctx context.Context, commandStr string, args []string,
 	return HandleVErrAndExitCode(verr, usage)
 }
 
-func removeBackup(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.VerboseError {
+func removeBackup(sqlCtx *sql.Context, queryist cli.Queryist, apr *argparser.ArgParseResults) errhand.VerboseError {
 	if apr.NArg() != 2 {
 		return errhand.BuildDError("").SetPrintUsage().Build()
 	}
 
-	old := strings.TrimSpace(apr.Arg(1))
-	err := dEnv.RemoveBackup(ctx, old)
-
-	switch err {
-	case nil:
-		return nil
-	case env.ErrFailedToWriteRepoState:
-		return errhand.BuildDError("error: failed to save change to repo state").AddCause(err).Build()
-	case env.ErrFailedToDeleteBackup:
-		return errhand.BuildDError("error: failed to delete backup tracking ref").AddCause(err).Build()
-	case env.ErrFailedToReadFromDb:
-		return errhand.BuildDError("error: failed to read from db").AddCause(err).Build()
-	case env.ErrBackupNotFound:
-		return errhand.BuildDError("error: unknown backup: '%s' ", old).Build()
-	default:
-		return errhand.BuildDError("error: unknown error").AddCause(err).Build()
+	backupName := strings.TrimSpace(apr.Arg(1))
+	qry, err := dbr.InterpolateForDialect("CALL dolt_backup('remove', ?)", []interface{}{backupName}, dialect.MySQL)
+	if err != nil {
+		return errhand.BuildDError("error: failed to build query").AddCause(err).Build()
 	}
+
+	_, err = cli.GetRowsForSql(queryist, sqlCtx, qry)
+	if err != nil {
+		return errhand.BuildDError("error: failed to delete backup tracking ref").AddCause(err).Build()
+	}
+
+	return nil
 }
 
-func addBackup(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.VerboseError {
+func addBackup(sqlCtx *sql.Context, queryist cli.Queryist, dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.VerboseError {
 	if apr.NArg() != 3 {
 		return errhand.BuildDError("").SetPrintUsage().Build()
 	}
@@ -180,53 +179,65 @@ func addBackup(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.Verbos
 		return errhand.BuildDError("error: '%s' is not valid.", backupUrl).AddCause(err).Build()
 	}
 
-	params, err := cli.ProcessBackupArgs(apr, scheme, absBackupUrl)
+	_, err = cli.ProcessBackupArgs(apr, scheme, absBackupUrl)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
 
-	r := env.NewRemote(backupName, backupUrl, params)
-	err = dEnv.AddBackup(r)
-
-	switch err {
-	case nil:
-		return nil
-	case env.ErrBackupAlreadyExists:
-		return errhand.BuildDError("error: a backup named '%s' already exists.", r.Name).AddDetails("remove it before running this command again").Build()
-	case env.ErrBackupNotFound:
-		return errhand.BuildDError("error: unknown backup: '%s' ", r.Name).Build()
-	case env.ErrInvalidBackupURL:
-		return errhand.BuildDError("error: '%s' is not valid.", r.Url).AddCause(err).Build()
-	case env.ErrInvalidBackupName:
-		return errhand.BuildDError("error: invalid backup name: %s", r.Name).Build()
-	default:
-		return errhand.BuildDError("error: Unable to save changes.").AddCause(err).Build()
+	qry, err := dbr.InterpolateForDialect("CALL dolt_backup('add', ?, ?)", []interface{}{backupName, absBackupUrl}, dialect.MySQL)
+	if err != nil {
+		return errhand.BuildDError("error: failed to build query").AddCause(err).Build()
 	}
+
+	_, err = cli.GetRowsForSql(queryist, sqlCtx, qry)
+	if err != nil {
+		return errhand.BuildDError("error: failed to add backup").AddCause(err).Build()
+	}
+
+	return nil
 }
 
-func printBackups(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.VerboseError {
-	backups, err := dEnv.GetBackups()
+func printBackups(sqlCtx *sql.Context, queryist cli.Queryist, apr *argparser.ArgParseResults) errhand.VerboseError {
+	var qry string
+	if apr.Contains(cli.VerboseFlag) {
+		qry = "SELECT * FROM dolt_backups('--verbose')"
+	} else {
+		qry = "SELECT * FROM dolt_backups()"
+	}
+
+	rows, err := cli.GetRowsForSql(queryist, sqlCtx, qry)
 	if err != nil {
 		return errhand.BuildDError("Unable to get backups from the local directory").AddCause(err).Build()
 	}
 
-	for _, r := range backups.Snapshot() {
-		if apr.Contains(cli.VerboseFlag) {
-			paramStr := make([]byte, 0)
-			if len(r.Params) > 0 {
-				paramStr, _ = json.Marshal(r.Params)
-			}
+	for _, row := range rows {
+		name, ok := row[0].(string)
+		if !ok {
+			return errhand.BuildDError("unexpectedly received non-string name column from dolt_backups: %v", row[0]).Build()
+		}
 
-			cli.Printf("%s %s %s\n", r.Name, r.Url, paramStr)
+		if apr.Contains(cli.VerboseFlag) {
+			if len(row) < 3 {
+				return errhand.BuildDError("unexpectedly received insufficient columns from dolt_backups: expected 3, got %d", len(row)).Build()
+			}
+			url, ok := row[1].(string)
+			if !ok {
+				return errhand.BuildDError("unexpectedly received non-string url column from dolt_backups: %v", row[1]).Build()
+			}
+			paramStr, err := getJsonAsString(sqlCtx, row[2])
+			if err != nil {
+				return errhand.BuildDError("unexpectedly received invalid params column from dolt_backups").AddCause(err).Build()
+			}
+			cli.Printf("%s %s %s\n", name, url, paramStr)
 		} else {
-			cli.Println(r.Name)
+			cli.Println(name)
 		}
 	}
 
 	return nil
 }
 
-func syncBackupUrl(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.VerboseError {
+func syncBackupUrl(sqlCtx *sql.Context, queryist cli.Queryist, dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.VerboseError {
 	if apr.NArg() != 2 {
 		return errhand.BuildDError("").SetPrintUsage().Build()
 	}
@@ -237,65 +248,44 @@ func syncBackupUrl(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPar
 		return errhand.BuildDError("error: '%s' is not valid.", backupUrl).AddCause(err).Build()
 	}
 
-	params, err := cli.ProcessBackupArgs(apr, scheme, absBackupUrl)
+	_, err = cli.ProcessBackupArgs(apr, scheme, absBackupUrl)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
 
-	b := env.NewRemote("__temp__", backupUrl, params)
-	return backup(ctx, dEnv, b)
+	qry, err := dbr.InterpolateForDialect("CALL dolt_backup('sync-url', ?)", []interface{}{absBackupUrl}, dialect.MySQL)
+	if err != nil {
+		return errhand.BuildDError("error: failed to build query").AddCause(err).Build()
+	}
+
+	_, err = cli.GetRowsForSql(queryist, sqlCtx, qry)
+	if err != nil {
+		return errhand.BuildDError("error: failed to sync backup").AddCause(err).Build()
+	}
+
+	return nil
 }
 
-func syncBackup(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.VerboseError {
+func syncBackup(sqlCtx *sql.Context, queryist cli.Queryist, apr *argparser.ArgParseResults) errhand.VerboseError {
 	if apr.NArg() != 2 {
 		return errhand.BuildDError("").SetPrintUsage().Build()
 	}
 
 	backupName := strings.TrimSpace(apr.Arg(1))
-
-	backups, err := dEnv.GetBackups()
+	qry, err := dbr.InterpolateForDialect("CALL dolt_backup('sync', ?)", []interface{}{backupName}, dialect.MySQL)
 	if err != nil {
-		return errhand.BuildDError("Unable to get backups from the local directory").AddCause(err).Build()
+		return errhand.BuildDError("error: failed to build query").AddCause(err).Build()
 	}
 
-	b, ok := backups.Get(backupName)
-	if !ok {
-		return errhand.BuildDError("error: unknown backup: '%s' ", backupName).Build()
+	_, err = cli.GetRowsForSql(queryist, sqlCtx, qry)
+	if err != nil {
+		return errhand.BuildDError("error: failed to sync backup").AddCause(err).Build()
 	}
 
-	return backup(ctx, dEnv, b)
+	return nil
 }
 
-func backup(ctx context.Context, dEnv *env.DoltEnv, b env.Remote) errhand.VerboseError {
-	destDb, err := b.GetRemoteDB(ctx, dEnv.DoltDB(ctx).ValueReadWriter().Format(), dEnv)
-	if err != nil {
-		return errhand.BuildDError("error: unable to open destination.").AddCause(err).Build()
-	}
-	tmpDir, err := dEnv.TempTableFilesDir()
-	if err != nil {
-		return errhand.BuildDError("error: ").AddCause(err).Build()
-	}
-	err = actions.SyncRoots(ctx, dEnv.DoltDB(ctx), destDb, tmpDir, buildProgStarter(defaultLanguage), stopProgFuncs)
-
-	switch err {
-	case nil:
-		return nil
-	case pull.ErrDBUpToDate:
-		return nil
-	case env.ErrBackupAlreadyExists:
-		return errhand.BuildDError("error: a backup named '%s' already exists.", b.Name).AddDetails("remove it before running this command again").Build()
-	case env.ErrBackupNotFound:
-		return errhand.BuildDError("error: unknown backup: '%s' ", b.Name).Build()
-	case env.ErrInvalidBackupURL:
-		return errhand.BuildDError("error: '%s' is not valid.", b.Url).AddCause(err).Build()
-	case env.ErrInvalidBackupName:
-		return errhand.BuildDError("error: invalid backup name: %s", b.Name).Build()
-	default:
-		return errhand.BuildDError("error: Unable to save changes.").AddCause(err).Build()
-	}
-}
-
-func restoreBackup(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.VerboseError {
+func restoreBackup(sqlCtx *sql.Context, queryist cli.Queryist, dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.VerboseError {
 	if apr.NArg() < 3 {
 		return errhand.BuildDError("").SetPrintUsage().Build()
 	}
@@ -305,88 +295,27 @@ func restoreBackup(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPar
 		return verr
 	}
 
-	// For error recovery, record whether EnvForClone created the directory, or just `.dolt/noms` within the directory.
-	userDirExisted, _ := dEnv.FS.Exists(restoredDB)
-
-	force := apr.Contains(cli.ForceFlag)
-
-	scheme, remoteUrl, err := env.GetAbsRemoteUrl(dEnv.FS, dEnv.Config, urlStr)
+	_, remoteUrl, err := env.GetAbsRemoteUrl(dEnv.FS, dEnv.Config, urlStr)
 	if err != nil {
 		return errhand.BuildDError("error: '%s' is not valid.", urlStr).Build()
 	}
 
-	var params map[string]string
-	params, verr = parseRemoteArgs(apr, scheme, remoteUrl)
-	if verr != nil {
-		return verr
-	}
-
-	r := env.NewRemote("", remoteUrl, params)
-	srcDb, err := r.GetRemoteDB(ctx, types.Format_Default, dEnv)
-	if err != nil {
+	if err := cli.VerifyNoAwsParams(apr); err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
 
-	mrEnv, err := env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), dEnv.FS, dEnv.Version, dEnv)
-	if err != nil {
-		return errhand.BuildDError("error: Unable to list databases").AddCause(err).Build()
+	procArgs := []string{"restore", remoteUrl, restoredDB}
+	if apr.Contains(cli.ForceFlag) {
+		procArgs = []string{"restore", "--force", remoteUrl, restoredDB}
 	}
-	var existingDEnv *env.DoltEnv
-	err = mrEnv.Iter(func(dbName string, dEnv *env.DoltEnv) (stop bool, err error) {
-		if dbName == restoredDB {
-			existingDEnv = dEnv
-			return true, nil
-		}
-		return false, nil
-	})
+	qry, err := interpolateStoredProcedureCall("dolt_backup", procArgs)
 	if err != nil {
-		return errhand.BuildDError("error: Unable to list databases").AddCause(err).Build()
+		return errhand.BuildDError("error: failed to build query").AddCause(err).Build()
 	}
 
-	if existingDEnv != nil {
-		if !force {
-			return errhand.BuildDError("error: cannot restore backup into %s. A database with that name already exists. Did you mean to supply --force?", restoredDB).Build()
-		}
-
-		tmpDir, err := existingDEnv.TempTableFilesDir()
-		if err != nil {
-			return errhand.VerboseErrorFromError(err)
-		}
-
-		err = actions.SyncRoots(ctx, srcDb, existingDEnv.DoltDB(ctx), tmpDir, buildProgStarter(downloadLanguage), stopProgFuncs)
-		if err != nil {
-			return errhand.VerboseErrorFromError(err)
-		}
-	} else {
-		// Create a new Dolt env for the clone; use env.NoRemote to avoid origin upstream
-		clonedEnv, err := actions.EnvForClone(ctx, srcDb.ValueReadWriter().Format(), env.NoRemote, restoredDB, dEnv.FS, dEnv.Version, env.GetCurrentUserHomeDir)
-		if err != nil {
-			return errhand.VerboseErrorFromError(err)
-		}
-
-		// Nil out the old Dolt env so we don't accidentally use the wrong database
-		dEnv = nil
-
-		// still make empty repo state
-		_, err = env.CreateRepoState(clonedEnv.FS, env.DefaultInitBranch)
-		if err != nil {
-			return errhand.VerboseErrorFromError(err)
-		}
-		tmpDir, err := clonedEnv.TempTableFilesDir()
-		if err != nil {
-			return errhand.VerboseErrorFromError(err)
-		}
-		err = actions.SyncRoots(ctx, srcDb, clonedEnv.DoltDB(ctx), tmpDir, buildProgStarter(downloadLanguage), stopProgFuncs)
-		if err != nil {
-			// If we're cloning into a directory that already exists do not erase it. Otherwise
-			// make best effort to delete the directory we created.
-			if userDirExisted {
-				_ = clonedEnv.FS.Delete(dbfactory.DoltDir, true)
-			} else {
-				_ = clonedEnv.FS.Delete(".", true)
-			}
-			return errhand.VerboseErrorFromError(err)
-		}
+	_, err = cli.GetRowsForSql(queryist, sqlCtx, qry)
+	if err != nil {
+		return errhand.BuildDError("error: failed to restore backup").AddCause(err).Build()
 	}
 
 	return nil
