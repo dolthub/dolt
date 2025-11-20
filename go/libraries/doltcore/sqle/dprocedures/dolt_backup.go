@@ -36,7 +36,14 @@ import (
 )
 
 const (
-	DoltBackupFuncName = "dolt_backup"
+	DoltBackupProcedureName = "dolt_backup"
+
+	DoltBackupParamAdd     = "add"
+	DoltBackupParamRemove  = "remove"
+	DoltBackupParamRm      = "rm"
+	DoltBackupParamSync    = "sync"
+	DoltBackupParamSyncUrl = "sync-url"
+	DoltBackupParamRestore = "restore"
 
 	statusOk  = 0
 	statusErr = 1
@@ -78,31 +85,31 @@ func doDoltBackup(ctx *sql.Context, args []string) (int, error) {
 		return statusErr, sql.ErrDatabaseNotFound.New(dbName)
 	}
 
-	if apr.NArg() == 0 {
-		return statusErr, fmt.Errorf("listing existing backup endpoints in sql is not currently implemented. Let us know if you need this by opening a GitHub issue: https://github.com/dolthub/dolt/issues")
-
+	if apr.NArg() == 0 || (apr.NArg() == 1 && apr.Contains(cli.VerboseFlag)) {
+		return statusErr, fmt.Errorf("error: invalid argument, use 'dolt_backups()' function table to list backups")
 	}
+
 	switch apr.Arg(0) {
-	case cli.AddBackupId:
+	case DoltBackupParamAdd:
 		err = addBackup(ctx, dbData, apr)
 		if err != nil {
 			return statusErr, fmt.Errorf("error adding backup: %w", err)
 		}
-	case cli.RemoveBackupId, cli.RemoveBackupShortId:
+	case DoltBackupParamRemove, DoltBackupParamRm:
 		err = removeBackup(ctx, dbData, apr)
 		if err != nil {
 			return statusErr, fmt.Errorf("error removing backup: %w", err)
 		}
-	case cli.RestoreBackupId:
+	case DoltBackupParamRestore:
 		if err = restoreBackup(ctx, dbData, apr); err != nil {
 			return statusErr, fmt.Errorf("error restoring backup: %w", err)
 		}
-	case cli.SyncBackupUrlId:
+	case DoltBackupParamSyncUrl:
 		err = syncBackupViaUrl(ctx, dbData, sess, apr)
 		if err != nil {
 			return statusErr, fmt.Errorf("error syncing backup url: %w", err)
 		}
-	case cli.SyncBackupId:
+	case DoltBackupParamSync:
 		err = syncBackupViaName(ctx, dbData, sess, apr)
 		if err != nil {
 			return statusErr, fmt.Errorf("error syncing backup: %w", err)

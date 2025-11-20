@@ -20,6 +20,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
 	"github.com/dolthub/go-mysql-server/sql/types"
@@ -28,6 +29,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
+
+const BackupsTableFunctionName = doltdb.BackupsTableName
 
 type BackupsTableFunction struct {
 	ctx           *sql.Context
@@ -111,8 +114,8 @@ func (btf *BackupsTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.Row
 }
 
 func (btf *BackupsTableFunction) Schema() sql.Schema {
-	ap := cli.CreateBackupArgParser()
-	var lits []string
+	argParser := cli.CreateBackupArgParser()
+	var literals []string
 	// This is called at plan time, so we can only evaluate constant literals
 	for _, expr := range btf.argumentExprs {
 		if !expr.Resolved() {
@@ -129,13 +132,13 @@ func (btf *BackupsTableFunction) Schema() sql.Schema {
 		if !ok {
 			continue
 		}
-		lits = append(lits, str)
+		literals = append(literals, str)
 	}
 
 	schema := make(sql.Schema, len(backupsTableSchema))
 	copy(schema, backupsTableSchema)
 
-	apr, _ := ap.Parse(lits)
+	apr, _ := argParser.Parse(literals)
 	if apr.Contains(cli.VerboseFlag) {
 		schema = append(schema, &sql.Column{Name: "params", Type: types.JSON, PrimaryKey: false, Nullable: true})
 	}
@@ -155,9 +158,6 @@ func (btf *BackupsTableFunction) String() string {
 	var args []string
 	for _, expr := range btf.argumentExprs {
 		args = append(args, expr.String())
-	}
-	if len(args) == 0 {
-		return "DOLT_BACKUPS()"
 	}
 	return fmt.Sprintf("DOLT_BACKUPS(%s)", strings.Join(args, ", "))
 }
@@ -193,7 +193,7 @@ func (btf *BackupsTableFunction) WithExpressions(expressions ...sql.Expression) 
 }
 
 func (btf *BackupsTableFunction) Name() string {
-	return "dolt_backups"
+	return BackupsTableFunctionName
 }
 
 func (btf *BackupsTableFunction) Database() sql.Database {
@@ -201,9 +201,9 @@ func (btf *BackupsTableFunction) Database() sql.Database {
 }
 
 func (btf *BackupsTableFunction) WithDatabase(database sql.Database) (sql.Node, error) {
-	new := *btf
-	new.database = database
-	return &new, nil
+	newBtf := *btf
+	newBtf.database = database
+	return &newBtf, nil
 }
 
 type backupsItr struct {
