@@ -86,7 +86,7 @@ func doDoltBackup(ctx *sql.Context, args []string) (int, error) {
 	}
 
 	if apr.NArg() == 0 || (apr.NArg() == 1 && apr.Contains(cli.VerboseFlag)) {
-		return statusErr, fmt.Errorf("error: invalid argument, use 'dolt_backups()' function table to list backups")
+		return statusErr, fmt.Errorf("error: invalid argument, use 'dolt_backups()' table function to list backups")
 	}
 
 	switch apr.Arg(0) {
