@@ -189,7 +189,6 @@ func (btf *BackupsTableFunction) WithExpressions(expressions ...sql.Expression) 
 	newBtf := *btf
 	newBtf.argumentExprs = expressions
 
-	// We can't evaluate verbose at plan time, so we'll check it in RowIter
 	return &newBtf, nil
 }
 
