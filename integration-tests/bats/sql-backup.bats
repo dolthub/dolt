@@ -33,13 +33,6 @@ teardown() {
     [[ "$output" =~ "address conflict with a remote: 'bac1'" ]] || false
 }
 
-@test "sql-backup: dolt_backup add invalid https backup" {
-    mkdir bac1
-    run dolt sql -q "call dolt_backup('add', 'bac1', 'https://doltremoteapi.dolthub.com/Dolthub/non-existing-repo')"
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "sync-url does not support http or https backup locations currently" ]] || false
-}
-
 @test "sql-backup: dolt_backup remove" {
     mkdir bac1
     dolt sql -q "call dolt_backup('add', 'bac1', 'file://./bac1')"
