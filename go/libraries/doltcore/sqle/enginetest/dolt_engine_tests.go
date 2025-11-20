@@ -1324,6 +1324,26 @@ func RunLogTableFunctionTestsPrepared(t *testing.T, harness DoltEnginetestHarnes
 	}
 }
 
+func RunJsonDiffTableFunctionTests(t *testing.T, harness DoltEnginetestHarness) {
+	for _, test := range JsonDiffTableFunctionScriptTests {
+		harness = harness.NewHarness(t)
+		defer harness.Close()
+		harness.Setup(setup.MydbData)
+		harness.SkipSetupCommit()
+		enginetest.TestScript(t, harness, test)
+	}
+}
+
+func RunJsonDiffTableFunctionTestsPrepared(t *testing.T, harness DoltEnginetestHarness) {
+	for _, test := range JsonDiffTableFunctionScriptTests {
+		harness = harness.NewHarness(t)
+		defer harness.Close()
+		harness.Setup(setup.MydbData)
+		harness.SkipSetupCommit()
+		enginetest.TestScriptPrepared(t, harness, test)
+	}
+}
+
 func RunBranchStatusTableFunctionTests(t *testing.T, harness DoltEnginetestHarness) {
 	for _, test := range BranchStatusTableFunctionScriptTests {
 		t.Run(test.Name, func(t *testing.T) {

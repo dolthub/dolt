@@ -5428,6 +5428,77 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 	},
 }
 
+var JsonDiffTableFunctionScriptTests = []queries.ScriptTest{
+	{
+		Name:        "basic functionality with JSON literals",
+		SetUpScript: []string{},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    `SELECT * from dolt_json_diff('{"a":1}', '{"a":2}');`,
+				Expected: []sql.Row{{"modified", "$.a", types.JSONDocument{Val: 1}, types.JSONDocument{Val: 2}}},
+			},
+			{
+				Query:    `SELECT * from dolt_json_diff('{}', '{"added_key":"added_value"}');`,
+				Expected: []sql.Row{{"added", "$.added_key", nil, types.JSONDocument{Val: "added_value"}}},
+			},
+			{
+				Query:    `SELECT * from dolt_json_diff('{"removed_key":true}', '{}');`,
+				Expected: []sql.Row{{"removed", "$.removed_key", types.JSONDocument{Val: true}, nil}},
+			},
+			{
+				Query: `SELECT * from dolt_json_diff('{"a":null}', '{"b":null}');`,
+				Expected: []sql.Row{
+					{"removed", "$.a", types.JSONDocument{Val: nil}, nil},
+					{"added", "$.b", nil, types.JSONDocument{Val: nil}},
+				},
+			},
+		},
+	},
+	{
+		Name: "basic functionality with small json objects retrieved from tables",
+		SetUpScript: []string{
+			"CREATE TABLE test_table(pk int primary key, from_json json, to_json json);",
+			`INSERT INTO test_table VALUES (0, '{"a":1}', '{"a":2}');`,
+			`INSERT INTO test_table VALUES (1, '{"b":3}', '{"c":3}');`,
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    `SELECT * FROM dolt_json_diff((select from_json FROM test_table where pk = 0), (select to_json FROM test_table where pk = 0));`,
+				Expected: []sql.Row{{"modified", "$.a", types.JSONDocument{Val: 1}, types.JSONDocument{Val: 2}}},
+			},
+			{
+				Query: `SELECT from_json, to_json, diff_type, path, from_value, to_value FROM test_table JOIN LATERAL (SELECT * from dolt_json_diff(from_json, to_json)) sq;`,
+				Expected: []sql.Row{
+					{
+						types.JSONDocument{Val: types.JsonObject{"a": 1}},
+						types.JSONDocument{Val: types.JsonObject{"a": 2}},
+						"modified",
+						"$.a",
+						types.JSONDocument{Val: 1},
+						types.JSONDocument{Val: 2},
+					},
+					{
+						types.JSONDocument{Val: types.JsonObject{"b": 3}},
+						types.JSONDocument{Val: types.JsonObject{"c": 3}},
+						"removed",
+						"$.b",
+						types.JSONDocument{Val: 3},
+						nil,
+					},
+					{
+						types.JSONDocument{Val: types.JsonObject{"b": 3}},
+						types.JSONDocument{Val: types.JsonObject{"c": 3}},
+						"added",
+						"$.c",
+						nil,
+						types.JSONDocument{Val: 3},
+					},
+				},
+			},
+		},
+	},
+}
+
 var BranchStatusTableFunctionScriptTests = []queries.ScriptTest{
 	{
 		// * anc

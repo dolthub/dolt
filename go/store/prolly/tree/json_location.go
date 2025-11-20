@@ -159,6 +159,28 @@ func jsonPathFromKey(pathKey []byte) (path jsonLocation) {
 	return ret
 }
 
+// toMysqlJsonPath generates the string used by MySQL JSON functions to refer to this JSON path.
+func (p jsonLocation) toMysqlJsonPath() string {
+	result := make([]byte, 0, len(p.key))
+	result = append(result, '$')
+	for i := 0; i < len(p.offsets)-1; i++ {
+		pathElement := p.getPathElement(i)
+		if pathElement.isArrayIndex {
+			arrayIndex := pathElement.getArrayIndex()
+			fmt.Appendf(result, "[%d]", arrayIndex)
+		} else {
+			result = append(result, '.')
+			result = append(result, pathElement.key...)
+		}
+	}
+	return string(result)
+}
+
+// MySqlJsonPathFromKey generates the string used by MySQL JSON functions corresponding to the provided path from an indexed JSON doc
+func MySqlJsonPathFromKey(pathKey []byte) string {
+	return jsonPathFromKey(pathKey).toMysqlJsonPath()
+}
+
 // varIntLength returns the length of a SQLite4 varint in bytes, given the contents of the first byte.
 // (https://sqlite.org/src4/doc/trunk/www/varint.wiki)
 func varIntLength(firstByte byte) int {
