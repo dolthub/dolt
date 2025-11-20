@@ -60,6 +60,11 @@ const (
 	TabularDiffOutput diffOutput = 1
 	SQLDiffOutput     diffOutput = 2
 	JsonDiffOutput    diffOutput = 3
+
+	FilterAdds     = "added"
+	FilterModified = "modified"
+	FilterRemoved  = "removed"
+	NoFilter       = "all"
 )
 
 var diffDocs = cli.CommandDocumentationContent{
@@ -86,6 +91,8 @@ The diffs displayed can be limited to show the first N by providing the paramete
 
 To filter which data rows are displayed, use {{.EmphasisLeft}}--where <SQL expression>{{.EmphasisRight}}. Table column names in the filter expression must be prefixed with {{.EmphasisLeft}}from_{{.EmphasisRight}} or {{.EmphasisLeft}}to_{{.EmphasisRight}}, e.g. {{.EmphasisLeft}}to_COLUMN_NAME > 100{{.EmphasisRight}} or {{.EmphasisLeft}}from_COLUMN_NAME + to_COLUMN_NAME = 0{{.EmphasisRight}}.
 
+To filter diff output by change type, use {{.EmphasisLeft}}--filter <type>{{.EmphasisRight}} where {{.EmphasisLeft}}<type>{{.EmphasisRight}} is one of {{.EmphasisLeft}}added{{.EmphasisRight}}, {{.EmphasisLeft}}modified{{.EmphasisRight}}, or {{.EmphasisLeft}}removed{{.EmphasisRight}}. The {{.EmphasisLeft}}added{{.EmphasisRight}} filter shows only additions (new tables or rows), {{.EmphasisLeft}}modified{{.EmphasisRight}} shows only modifications (schema changes, renames, or row updates), and {{.EmphasisLeft}}removed{{.EmphasisRight}} shows only deletions (dropped tables or deleted rows). For example, {{.EmphasisLeft}}dolt diff --filter=removed{{.EmphasisRight}} shows only deleted rows and dropped tables.
+
 The {{.EmphasisLeft}}--diff-mode{{.EmphasisRight}} argument controls how modified rows are presented when the format output is set to {{.EmphasisLeft}}tabular{{.EmphasisRight}}. When set to {{.EmphasisLeft}}row{{.EmphasisRight}}, modified rows are presented as old and new rows. When set to {{.EmphasisLeft}}line{{.EmphasisRight}}, modified rows are presented as a single row, and changes are presented using "+" and "-" within the column. When set to {{.EmphasisLeft}}in-place{{.EmphasisRight}}, modified rows are presented as a single row, and changes are presented side-by-side with a color distinction (requires a color-enabled terminal). When set to {{.EmphasisLeft}}context{{.EmphasisRight}}, rows that contain at least one column that spans multiple lines uses {{.EmphasisLeft}}line{{.EmphasisRight}}, while all other rows use {{.EmphasisLeft}}row{{.EmphasisRight}}. The default value is {{.EmphasisLeft}}context{{.EmphasisRight}}.
 `,
 	Synopsis: []string{
@@ -102,6 +109,7 @@ type diffDisplaySettings struct {
 	where       string
 	skinny      bool
 	includeCols []string
+	filter      *diffTypeFilter
 }
 
 type diffDatasets struct {
@@ -128,6 +136,136 @@ type diffStatistics struct {
 	NewRowCount    uint64
 	OldCellCount   uint64
 	NewCellCount   uint64
+}
+
+type diffTypeFilter struct {
+	filterBy string
+}
+
+func (df *diffTypeFilter) isValid() bool {
+	return df.filterBy == NoFilter || df.filterBy == FilterAdds ||
+		df.filterBy == FilterModified || df.filterBy == FilterRemoved
+}
+
+func (df *diffTypeFilter) includeAddsOrAll() bool {
+	return df.filterBy == NoFilter || df.filterBy == FilterAdds
+}
+
+func (df *diffTypeFilter) includeDropsOrAll() bool {
+	return df.filterBy == NoFilter || df.filterBy == FilterRemoved
+}
+
+func (df *diffTypeFilter) includeModificationsOrAll() bool {
+	return df.filterBy == NoFilter || df.filterBy == FilterModified
+}
+
+// shouldSkipDiffType checks if a row with the given diff type should be skipped based on the filter settings
+func shouldSkipDiffType(filter *diffTypeFilter, rowDiffType diff.ChangeType) bool {
+	if rowDiffType == diff.Added && !filter.includeAddsOrAll() {
+		return true
+	} else if rowDiffType == diff.Removed && !filter.includeDropsOrAll() {
+		return true
+	} else if (rowDiffType == diff.ModifiedOld || rowDiffType == diff.ModifiedNew) &&
+		!filter.includeModificationsOrAll() {
+		return true
+	}
+	return false
+}
+
+// shouldUseLazyHeader determines if we should delay printing the table header
+// until we know there are rows to display. This prevents empty headers when
+// all rows are filtered out in data-only diffs.
+func shouldUseLazyHeader(dArgs *diffArgs, tableSummary diff.TableDeltaSummary) bool {
+	return dArgs.filter != nil && dArgs.filter.filterBy != NoFilter &&
+		!tableSummary.SchemaChange && !tableSummary.IsRename()
+}
+
+// lazyRowWriter delays table header output until the first row is written.
+// This prevents empty table headers when all rows are filtered out.
+type lazyRowWriter struct {
+	// The real writer, created on first write
+	realWriter diff.SqlRowDiffWriter
+
+	// Factory to create the real writer
+	createWriter func() (diff.SqlRowDiffWriter, error)
+
+	// diffWriter to call BeginTable on
+	dw diffWriter
+
+	// Parameters for BeginTable
+	fromTableName string
+	toTableName   string
+	isAdd         bool
+	isDrop        bool
+
+	// Has BeginTable been called?
+	initialized bool
+}
+
+// newLazyRowWriter creates a lazy row writer that delays header output
+func newLazyRowWriter(
+	dw diffWriter,
+	fromTableName, toTableName string,
+	isAdd, isDrop bool,
+	createWriter func() (diff.SqlRowDiffWriter, error),
+) *lazyRowWriter {
+	return &lazyRowWriter{
+		createWriter:  createWriter,
+		dw:            dw,
+		fromTableName: fromTableName,
+		toTableName:   toTableName,
+		isAdd:         isAdd,
+		isDrop:        isDrop,
+		initialized:   false,
+	}
+}
+
+// ensureInitialized calls BeginTable and creates the real writer on first call
+func (l *lazyRowWriter) ensureInitialized(ctx *sql.Context) error {
+	if l.initialized {
+		return nil
+	}
+
+	// Call BeginTable to print the header
+	err := l.dw.BeginTable(l.fromTableName, l.toTableName, l.isAdd, l.isDrop)
+	if err != nil {
+		return err
+	}
+
+	// Create the real writer
+	realWriter, err := l.createWriter()
+	if err != nil {
+		return err
+	}
+
+	l.realWriter = realWriter
+	l.initialized = true
+	return nil
+}
+
+// WriteRow implements diff.SqlRowDiffWriter
+func (l *lazyRowWriter) WriteRow(ctx *sql.Context, row sql.Row, diffType diff.ChangeType, colDiffTypes []diff.ChangeType) error {
+	if err := l.ensureInitialized(ctx); err != nil {
+		return err
+	}
+	return l.realWriter.WriteRow(ctx, row, diffType, colDiffTypes)
+}
+
+// WriteCombinedRow implements diff.SqlRowDiffWriter
+func (l *lazyRowWriter) WriteCombinedRow(ctx *sql.Context, oldRow, newRow sql.Row, mode diff.Mode) error {
+	if err := l.ensureInitialized(ctx); err != nil {
+		return err
+	}
+	return l.realWriter.WriteCombinedRow(ctx, oldRow, newRow, mode)
+}
+
+// Close implements diff.SqlRowDiffWriter
+func (l *lazyRowWriter) Close(ctx context.Context) error {
+	// Only close if we actually created the real writer
+	if l.initialized && l.realWriter != nil {
+		return l.realWriter.Close(ctx)
+	}
+	return nil
 }
 
 type DiffCmd struct{}
@@ -220,6 +358,11 @@ func (cmd DiffCmd) validateArgs(apr *argparser.ArgParseResults) errhand.VerboseE
 		return errhand.BuildDError("invalid output format: %s", f).Build()
 	}
 
+	filterValue, _ := apr.GetValue("filter")
+	if filterValue != "" && filterValue != FilterAdds && filterValue != FilterModified && filterValue != FilterRemoved && filterValue != NoFilter {
+		return errhand.BuildDError("invalid filter: %s. Valid values are: added, modified, removed", filterValue).Build()
+	}
+
 	return nil
 }
 
@@ -267,6 +410,9 @@ func parseDiffDisplaySettings(apr *argparser.ArgParseResults) *diffDisplaySettin
 
 	displaySettings.limit, _ = apr.GetInt(cli.LimitParam)
 	displaySettings.where = apr.GetValueOrDefault(cli.WhereParam, "")
+
+	filterValue := apr.GetValueOrDefault("filter", "all")
+	displaySettings.filter = &diffTypeFilter{filterBy: filterValue}
 
 	return displaySettings
 }
@@ -816,6 +962,37 @@ func diffUserTables(queryist cli.Queryist, sqlCtx *sql.Context, dArgs *diffArgs)
 			continue
 		}
 
+		// Apply table-level filtering based on diff type
+		if dArgs.filter != nil && dArgs.filter.filterBy != NoFilter {
+			shouldIncludeTable := false
+
+			// Check if table was added
+			if delta.IsAdd() && dArgs.filter.includeAddsOrAll() {
+				shouldIncludeTable = true
+			}
+
+			// Check if table was dropped
+			if delta.IsDrop() && dArgs.filter.includeDropsOrAll() {
+				shouldIncludeTable = true
+			}
+
+			// Check if table was modified (schema change or rename)
+			if !delta.IsAdd() && !delta.IsDrop() {
+				isModified := delta.SchemaChange || delta.IsRename()
+				if isModified && dArgs.filter.includeModificationsOrAll() {
+					shouldIncludeTable = true
+				}
+				// If no schema/rename changes but has data changes, let it through for row-level filtering
+				if !isModified && delta.DataChange {
+					shouldIncludeTable = true
+				}
+			}
+
+			if !shouldIncludeTable {
+				continue // Skip this table but continue processing others
+			}
+		}
+
 		if strings.HasPrefix(delta.ToTableName.Name, diff.DBPrefix) {
 			verr := diffDatabase(queryist, sqlCtx, delta, dArgs, dw)
 			if verr != nil {
@@ -1110,7 +1287,7 @@ func diffUserTable(
 	fromTable := tableSummary.FromTableName
 	toTable := tableSummary.ToTableName
 
-	if dArgs.diffParts&NameOnlyDiff == 0 {
+	if dArgs.diffParts&NameOnlyDiff == 0 && !shouldUseLazyHeader(dArgs, tableSummary) {
 		// TODO: schema names
 		err := dw.BeginTable(tableSummary.FromTableName.Name, tableSummary.ToTableName.Name, tableSummary.IsAdd(), tableSummary.IsDrop())
 		if err != nil {
@@ -1445,10 +1622,26 @@ func diffRows(
 		unionSch = unionSchemas(fromSch, toSch)
 	}
 
-	// We always instantiate a RowWriter in case the diffWriter needs it to close off any work from schema output
-	rowWriter, err := dw.RowWriter(fromTableInfo, toTableInfo, tableSummary, unionSch)
-	if err != nil {
-		return errhand.VerboseErrorFromError(err)
+	var rowWriter diff.SqlRowDiffWriter
+	var err error
+	if shouldUseLazyHeader(dArgs, tableSummary) {
+		// Use lazy writer to delay BeginTable until first row write
+		rowWriter = newLazyRowWriter(
+			dw,
+			tableSummary.FromTableName.Name,
+			tableSummary.ToTableName.Name,
+			tableSummary.IsAdd(),
+			tableSummary.IsDrop(),
+			func() (diff.SqlRowDiffWriter, error) {
+				return dw.RowWriter(fromTableInfo, toTableInfo, tableSummary, unionSch)
+			},
+		)
+	} else {
+		// We always instantiate a RowWriter in case the diffWriter needs it to close off any work from schema output
+		rowWriter, err = dw.RowWriter(fromTableInfo, toTableInfo, tableSummary, unionSch)
+		if err != nil {
+			return errhand.VerboseErrorFromError(err)
+		}
 	}
 
 	// can't diff
@@ -1706,6 +1899,13 @@ func writeDiffResults(
 		oldRow, newRow, err := ds.SplitDiffResultRow(ctx, r)
 		if err != nil {
 			return err
+		}
+
+		// Apply row-level filtering based on diff type
+		if dArgs.filter != nil && dArgs.filter.filterBy != NoFilter {
+			if shouldSkipDiffType(dArgs.filter, oldRow.RowDiff) || shouldSkipDiffType(dArgs.filter, newRow.RowDiff) {
+				continue
+			}
 		}
 
 		if dArgs.skinny {
