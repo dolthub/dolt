@@ -103,3 +103,21 @@ var BackupsSystemTableQueries = queries.ScriptTest{
 		},
 	},
 }
+
+var BackupsTableFunctionQueries = queries.ScriptTest{
+	Name: "dolt_backups() table function",
+	SetUpScript: []string{
+		`call dolt_backup("add", "backup1", "file:///tmp/backup1");`,
+	},
+	Assertions: []queries.ScriptTestAssertion{
+		{
+			Query:    "select name from dolt_backups();",
+			Expected: []sql.Row{{"backup1"}},
+		},
+		{
+			Query:    "select name from dolt_backups() where name = 'backup1';",
+			Expected: []sql.Row{{"backup1"}},
+		},
+		// Table functions are implicitly read-only at the SQL parser level.
+	},
+}
