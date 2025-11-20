@@ -21,6 +21,7 @@ import (
 	"strings"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
 	"github.com/dolthub/go-mysql-server/sql/types"
@@ -40,11 +41,6 @@ type BackupsTableFunction struct {
 
 var _ sql.TableFunction = (*BackupsTableFunction)(nil)
 var _ sql.ExecSourceRel = (*BackupsTableFunction)(nil)
-
-var backupsTableSchema = sql.Schema{
-	&sql.Column{Name: "name", Type: types.Text, PrimaryKey: true, Nullable: false},
-	&sql.Column{Name: "url", Type: types.Text, PrimaryKey: false, Nullable: false},
-}
 
 func (btf *BackupsTableFunction) NewInstance(ctx *sql.Context, database sql.Database, expressions []sql.Expression) (sql.Node, error) {
 	newInstance := &BackupsTableFunction{
@@ -70,8 +66,6 @@ func (btf *BackupsTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.Row
 	if err != nil {
 		return nil, sql.ErrInvalidArgumentDetails.New(btf.Name(), err.Error())
 	}
-
-	showVerbose := apr.Contains(cli.VerboseFlag)
 
 	sqlDb, ok := btf.database.(dsess.SqlDatabase)
 	if !ok {
@@ -108,7 +102,7 @@ func (btf *BackupsTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.Row
 	return &backupsItr{
 		names:       names,
 		remotes:     remotes,
-		showVerbose: showVerbose,
+		showVerbose: apr.Contains(cli.VerboseFlag),
 		idx:         0,
 	}, nil
 }
@@ -135,14 +129,11 @@ func (btf *BackupsTableFunction) Schema() sql.Schema {
 		literals = append(literals, str)
 	}
 
-	schema := make(sql.Schema, len(backupsTableSchema))
-	copy(schema, backupsTableSchema)
-
 	apr, _ := argParser.Parse(literals)
 	if apr.Contains(cli.VerboseFlag) {
-		schema = append(schema, &sql.Column{Name: "params", Type: types.JSON, PrimaryKey: false, Nullable: true})
+		return dtables.BackupsTableSchema
 	}
-	return schema
+	return dtables.BackupsTableSchema[:2]
 }
 
 func (btf *BackupsTableFunction) Resolved() bool {

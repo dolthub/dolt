@@ -17,6 +17,7 @@ package commands
 import (
 	"context"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/gocraft/dbr/v2"
 	"github.com/gocraft/dbr/v2/dialect"
 
@@ -27,6 +28,7 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+
 	eventsapi "github.com/dolthub/eventsapi_schema/dolt/services/eventsapi/v1alpha1"
 )
 
@@ -75,6 +77,8 @@ Snapshot the database and upload the backup to {{.LessThan}}url{{.GreaterThan}}.
 	},
 }
 
+var VerboseErrorUsage = errhand.BuildDError("").SetPrintUsage().Build()
+
 type BackupCmd struct{}
 
 // Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
@@ -105,7 +109,8 @@ func (cmd BackupCmd) EventType() eventsapi.ClientEventType {
 	return eventsapi.ClientEventType_REMOTE
 }
 
-// Exec executes the command
+// Exec executes the `dolt backup` command with the provided subcommand. If no subcommand is provided, the
+// `dolt_backups()` table function will be printed.
 func (cmd BackupCmd) Exec(ctx context.Context, commandStr string, args []string, _ *env.DoltEnv, cliCtx cli.CliContext) int {
 	argParser := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, backupDocs, argParser))
@@ -116,86 +121,87 @@ func (cmd BackupCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	var verboseErr errhand.VerboseError
 	if apr.NArg() == 0 {
-		verboseErr = printDoltBackupsTableFunc(&queryEngine, apr)
+		verboseErr := printDoltBackupsTableFunc(&queryEngine, apr)
 		return HandleVErrAndExitCode(verboseErr, usage)
 	}
 
 	switch apr.Arg(0) {
 	case dprocedures.DoltBackupParamAdd:
 		if apr.NArg() != 3 {
-			verboseErr = errhand.BuildDError("").SetPrintUsage().Build()
+			return HandleVErrAndExitCode(VerboseErrorUsage, usage)
 		}
-	case dprocedures.DoltBackupParamRemove, dprocedures.DoltBackupParamRm,
+	case dprocedures.DoltBackupParamRemove,
+		dprocedures.DoltBackupParamRm,
 		dprocedures.DoltBackupParamSync,
 		dprocedures.DoltBackupParamSyncUrl:
 		if apr.NArg() != 2 {
-			verboseErr = errhand.BuildDError("").SetPrintUsage().Build()
+			return HandleVErrAndExitCode(VerboseErrorUsage, usage)
 		}
 	case dprocedures.DoltBackupParamRestore:
 		if apr.NArg() < 3 {
-			verboseErr = errhand.BuildDError("").SetPrintUsage().Build()
+			return HandleVErrAndExitCode(VerboseErrorUsage, usage)
 		}
 	default:
-		verboseErr = errhand.BuildDError("").SetPrintUsage().Build()
+		return HandleVErrAndExitCode(VerboseErrorUsage, usage)
 	}
 
-	if verboseErr != nil {
-		return HandleVErrAndExitCode(verboseErr, usage)
-	}
-
-	verboseErr = callDoltBackupProc(&queryEngine, args)
+	verboseErr := callDoltBackupProc(&queryEngine, args)
 	return HandleVErrAndExitCode(verboseErr, usage)
 }
 
+// callDoltBackupProc calls the dolt_backup stored procedure with the given parameters.
 func callDoltBackupProc(queryEngine *cli.QueryEngineResult, params []string) errhand.VerboseError {
 	query, err := interpolateStoredProcedureCall(dprocedures.DoltBackupProcedureName, params)
 	if err != nil {
-		return errhand.BuildDError("error: failed to build query").AddCause(err).Build()
+		return errhand.BuildDError("failed to interpolate stored procedure %s", dprocedures.DoltBackupProcedureName).AddCause(err).Build()
 	}
 
 	_, err = cli.GetRowsForSql(queryEngine.Queryist, queryEngine.Context, query)
 	if err != nil {
-		return errhand.BuildDError("error: failed to %s backup", params[0]).AddCause(err).Build()
+		return errhand.BuildDError("failed to execute stored procedure %s", dprocedures.DoltBackupProcedureName).AddCause(err).Build()
 	}
 
 	return nil
 }
 
+// printDoltBackupsTableFunc queries the dolt_backups() table function and prints the results. If the verbose flag is
+// set, it prints name, url, and params columns. Otherwise, it prints only the name column.
 func printDoltBackupsTableFunc(queryEngine *cli.QueryEngineResult, apr *argparser.ArgParseResults) errhand.VerboseError {
 	params := []interface{}{apr.Option(cli.VerboseFlag)}
 	query, err := dbr.InterpolateForDialect("SELECT * FROM dolt_backups(?)", params, dialect.MySQL)
 	if err != nil {
-		return errhand.BuildDError("error: failed to build query").AddCause(err).Build()
-	}
-	rows, err := cli.GetRowsForSql(queryEngine.Queryist, queryEngine.Context, query)
-	if err != nil {
-		return errhand.BuildDError("error: unable to query %s()", dtablefunctions.BackupsTableFunctionName).AddCause(err).Build()
+		return errhand.BuildDError("failed to interpolate SELECT query for %s()", dtablefunctions.BackupsTableFunctionName).AddCause(err).Build()
 	}
 
+	rows, err := cli.GetRowsForSql(queryEngine.Queryist, queryEngine.Context, query)
+	if err != nil {
+		return errhand.BuildDError("failed to execute SELECT query for %s()", dtablefunctions.BackupsTableFunctionName).AddCause(err).Build()
+	}
+
+	const colExpectedStrFmt = "col %s: expected string, got %v"
 	for _, row := range rows {
 		name, ok := row[0].(string)
 		if !ok {
-			return errhand.BuildDError("unexpected non-string name column: %v", row[0]).Build()
+			return errhand.BuildDError(colExpectedStrFmt, dtables.BackupsTableSchema[0].Name, row[0]).Build()
 		}
 
-		if apr.Contains(cli.VerboseFlag) {
-			if len(row) < 3 {
-				return errhand.BuildDError("unexpected insufficient columns: expected 3, got %d", len(row)).Build()
-			}
-			url, ok := row[1].(string)
-			if !ok {
-				return errhand.BuildDError("unexpected non-string url: %v", row[1]).Build()
-			}
-			jsonStr, err := getJsonAsString(queryEngine.Context, row[2])
-			if err != nil {
-				return errhand.BuildDError("unexpected invalid json column").AddCause(err).Build()
-			}
-			cli.Printf("%s %s %s\n", name, url, jsonStr)
-		} else {
+		if !apr.Contains(cli.VerboseFlag) {
 			cli.Println(name)
+			continue
 		}
+
+		url, ok := row[1].(string)
+		if !ok {
+			return errhand.BuildDError(colExpectedStrFmt, dtables.BackupsTableSchema[1].Name, row[1]).Build()
+		}
+
+		jsonStr, err := getJsonAsString(queryEngine.Context, row[2])
+		if err != nil {
+			return errhand.BuildDError(colExpectedStrFmt, dtables.BackupsTableSchema[2].Name, row[2]).AddCause(err).Build()
+		}
+
+		cli.Printf("%s %s %s\n", name, url, jsonStr)
 	}
 
 	return nil
