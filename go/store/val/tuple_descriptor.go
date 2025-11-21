@@ -473,8 +473,7 @@ func (td *TupleDesc) GetJSON(i int, tup Tuple) (v []byte, ok bool) {
 // GetGeometry reads a []byte from the ith field of the Tuple.
 // If the ith field is NULL, |ok| is set to false.
 func (td *TupleDesc) GetGeometry(i int, tup Tuple) (v []byte, ok bool) {
-	// TODO: we are support both Geometry and GeometryAddr for now, so we can't expect just one
-	// td.expectEncoding(i, GeometryEnc)
+	td.ExpectEncoding(i, GeometryEnc)
 	b := td.GetField(i, tup)
 	if b != nil {
 		v = readByteString(b)
@@ -484,8 +483,7 @@ func (td *TupleDesc) GetGeometry(i int, tup Tuple) (v []byte, ok bool) {
 }
 
 func (td *TupleDesc) GetGeometryAddr(i int, tup Tuple) (hash.Hash, bool) {
-	// TODO: we are support both Geometry and GeometryAddr for now, so we can't expect just one
-	// td.expectEncoding(i, GeomAddrEnc)
+	td.ExpectEncoding(i, GeomAddrEnc)
 	return td.GetAddr(i, tup)
 }
 
