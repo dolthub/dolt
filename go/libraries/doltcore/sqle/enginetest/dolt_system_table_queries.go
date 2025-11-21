@@ -83,7 +83,7 @@ var BackupsSystemTableQueries = queries.ScriptTest{
 			ExpectedErrStr: "table doesn't support UPDATE",
 		},
 		{
-			Query:          "insert into dolt_backups values ('backup4', 'file:///tmp/broken');", // nolint: gas
+			Query:          "insert into dolt_backups values ('backup4', 'file:///tmp/broken', '{}');", // nolint: gas
 			ExpectedErrStr: "table doesn't support INSERT INTO",
 		},
 		{
@@ -95,29 +95,11 @@ var BackupsSystemTableQueries = queries.ScriptTest{
 			Expected: []sql.Row{{0}},
 		},
 		{
-			Query: "select * from dolt_backups where url like 'aws://%'",
+			Query: "select name, url, params from dolt_backups where url like 'aws://%'",
 			Expected: []sql.Row{
-				{"backup2", "aws://[ddb_table:ddb_s3_bucket]/db1"},
-				{"backup4", "aws://[ddb_table_4:ddb_s3_bucket_4]/db1"},
+				{"backup2", "aws://[ddb_table:ddb_s3_bucket]/db1", "{}"},
+				{"backup4", "aws://[ddb_table_4:ddb_s3_bucket_4]/db1", "{}"},
 			},
 		},
-	},
-}
-
-var BackupsTableFunctionQueries = queries.ScriptTest{
-	Name: "dolt_backups() table function",
-	SetUpScript: []string{
-		`call dolt_backup("add", "backup1", "file:///tmp/backup1");`,
-	},
-	Assertions: []queries.ScriptTestAssertion{
-		{
-			Query:    "select name from dolt_backups();",
-			Expected: []sql.Row{{"backup1"}},
-		},
-		{
-			Query:    "select name from dolt_backups() where name = 'backup1';",
-			Expected: []sql.Row{{"backup1"}},
-		},
-		// Table functions are implicitly read-only at the SQL parser level.
 	},
 }
