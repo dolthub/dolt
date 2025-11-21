@@ -1,3 +1,5 @@
+load $BATS_TEST_DIRNAME/helper/query-server-common.bash
+
 # Track the remotesrv process ID.
 remotesrv_pid=""
 # Track the port number that remotesrv is running on.
