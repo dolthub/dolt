@@ -196,7 +196,7 @@ teardown() {
     run dolt backup sync bac1
     [ "$status" -eq 1 ]
     [[ ! "$output" =~ "panic" ]] || false
-    [[ "$output" =~ "unknown backup: 'bac1'" ]] || false
+    [[ "$output" =~ "unknown backup 'bac1'" ]] || false
 }
 
 @test "backup: cannot override another client's backup" {

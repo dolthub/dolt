@@ -237,8 +237,8 @@ func restoreBackup(ctx *sql.Context, _ env.DbData[*sql.Context], apr *argparser.
 			return err
 		}
 
-		if registerErr := sess.Provider().RegisterNewDatabaseWithLock(ctx, dbName, clonedEnv); registerErr != nil {
-			return registerErr
+		if err = sess.Provider().RegisterNewDatabaseWithLock(ctx, dbName, clonedEnv); err != nil {
+			return err
 		}
 
 		return nil

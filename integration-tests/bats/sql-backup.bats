@@ -55,7 +55,7 @@ teardown() {
 
     run dolt sql -q "call dolt_backup('remove','bac1')"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "error: unknown backup: 'bac1'" ]] || false
+    [[ "$output" =~ "error: unknown backup 'bac1'" ]] || false
 }
 
 @test "sql-backup: dolt_backup rm" {
