@@ -5452,14 +5452,28 @@ var JsonDiffTableFunctionScriptTests = []queries.ScriptTest{
 					{"added", "$.b", nil, types.JSONDocument{Val: nil}},
 				},
 			},
+			{
+				Query: `SELECT * from dolt_json_diff('{"a": [0, 1, 2]}', '{"a": [0, 1, 3]}');`,
+				Expected: []sql.Row{
+					{"modified", "$.a[2]", types.JSONDocument{Val: 2}, types.JSONDocument{Val: 3}},
+				},
+			},
+			{
+				Query: `SELECT * from dolt_json_diff('[0, 1, 2]', '[0, 1, 3]');`,
+				Expected: []sql.Row{
+					{"modified", "$[2]", types.JSONDocument{Val: 2}, types.JSONDocument{Val: 3}},
+				},
+			},
 		},
 	},
 	{
-		Name: "basic functionality with small json objects retrieved from tables",
+		Name: "lateral join with small json objects retrieved from tables",
 		SetUpScript: []string{
 			"CREATE TABLE test_table(pk int primary key, from_json json, to_json json);",
 			`INSERT INTO test_table VALUES (0, '{"a":1}', '{"a":2}');`,
 			`INSERT INTO test_table VALUES (1, '{"b":3}', '{"c":3}');`,
+			`INSERT INTO test_table VALUES (2, '[0, 1, 2]', '[0, 1, 3]');`,
+			`INSERT INTO test_table VALUES (3, '{"a": [0, 1, 2]}', '{"a": [0, 1, 3]}');`,
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -5491,6 +5505,22 @@ var JsonDiffTableFunctionScriptTests = []queries.ScriptTest{
 						"added",
 						"$.c",
 						nil,
+						types.JSONDocument{Val: 3},
+					},
+					{
+						types.JSONDocument{Val: types.JsonArray{0, 1, 2}},
+						types.JSONDocument{Val: types.JsonArray{0, 1, 3}},
+						"modified",
+						"$[2]",
+						types.JSONDocument{Val: 2},
+						types.JSONDocument{Val: 3},
+					},
+					{
+						types.JSONDocument{Val: types.JsonObject{"a": types.JsonArray{0, 1, 2}}},
+						types.JSONDocument{Val: types.JsonObject{"a": types.JsonArray{0, 1, 3}}},
+						"modified",
+						"$.a[2]",
+						types.JSONDocument{Val: 2},
 						types.JSONDocument{Val: 3},
 					},
 				},

@@ -25,11 +25,17 @@ type JsonDiffTest struct {
 	ExpectedDiffs []JsonDiff
 }
 
-func makeJsonPathKey(parts ...string) []byte {
+func makeJsonPathKey(parts ...interface{}) []byte {
 	result := []byte{byte(startOfValue)}
 	for _, part := range parts {
-		result = append(result, beginObjectKey)
-		result = append(result, []byte(part)...)
+		switch p := part.(type) {
+		case string:
+			result = append(result, beginObjectKey)
+			result = append(result, []byte(p)...)
+		case int:
+			result = append(result, beginArrayKey)
+			result = append(result, makeVarInt(uint64(p))...)
+		}
 	}
 	return result
 }
@@ -203,6 +209,58 @@ var SimpleJsonDiffTests = []JsonDiffTest{
 				Key:  makeJsonPathKey(`a`),
 				From: &types.JSONDocument{Val: types.JsonObject{"b": 2}},
 				To:   &types.JSONDocument{Val: types.JsonArray{1, 2}},
+				Type: ModifiedDiff,
+			},
+		},
+	},
+	{
+		Name: "array modification",
+		From: types.JSONDocument{Val: types.JsonArray{1, 2}},
+		To:   types.JSONDocument{Val: types.JsonArray{1, 3}},
+		ExpectedDiffs: []JsonDiff{
+			{
+				Key:  makeJsonPathKey(1),
+				From: &types.JSONDocument{Val: 2},
+				To:   &types.JSONDocument{Val: 3},
+				Type: ModifiedDiff,
+			},
+		},
+	},
+	{
+		Name: "array insert at end",
+		From: types.JSONDocument{Val: types.JsonArray{1, 2}},
+		To:   types.JSONDocument{Val: types.JsonArray{1, 2, types.JsonObject{"a": 2}}},
+		ExpectedDiffs: []JsonDiff{
+			{
+				Key:  makeJsonPathKey(2),
+				From: nil,
+				To:   &types.JSONDocument{Val: types.JsonObject{"a": 2}},
+				Type: AddedDiff,
+			},
+		},
+	},
+	{
+		Name: "array removal at end",
+		From: types.JSONDocument{Val: types.JsonArray{1, 2, types.JsonArray{3}}},
+		To:   types.JSONDocument{Val: types.JsonArray{1, 2}},
+		ExpectedDiffs: []JsonDiff{
+			{
+				Key:  makeJsonPathKey(2),
+				From: &types.JSONDocument{Val: types.JsonArray{3}},
+				To:   nil,
+				Type: RemovedDiff,
+			},
+		},
+	},
+	{
+		Name: "array modification in object",
+		From: types.JSONDocument{Val: types.JsonObject{"a": types.JsonArray{1, 2}}},
+		To:   types.JSONDocument{Val: types.JsonObject{"a": types.JsonArray{1, 3}}},
+		ExpectedDiffs: []JsonDiff{
+			{
+				Key:  makeJsonPathKey(`a`, 1),
+				From: &types.JSONDocument{Val: 2},
+				To:   &types.JSONDocument{Val: 3},
 				Type: ModifiedDiff,
 			},
 		},
