@@ -188,7 +188,7 @@ SQL
     
     run dolt sql -r csv -q "select * from dolt_status;"
     [ $status -eq 0 ]
-    [[ "$output" =~ 'test2,false,new table' ]] || false
+    [[ "$output" =~ 'test2,0,new table' ]] || false
 
     # Now another partial commit
     run dolt sql << SQL
@@ -215,7 +215,7 @@ SQL
     
     run dolt sql -r csv -q "select * from dolt_status;"
     [ $status -eq 0 ]
-    [[ "$output" =~ 'test,false,modified' ]] || false
+    [[ "$output" =~ 'test,0,modified' ]] || false
 }
 
 @test "sql-commit: The -f parameter is properly parsed and executes" {

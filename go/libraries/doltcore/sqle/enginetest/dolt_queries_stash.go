@@ -321,8 +321,8 @@ var DoltStashTests = []queries.ScriptTest{
 			{
 				Query: "SELECT * FROM DOLT_STATUS",
 				Expected: []sql.Row{
-					{"test", true, "modified"},
-					{"test", false, "modified"},
+					{"test", byte(1), "modified"},
+					{"test", byte(0), "modified"},
 				},
 			},
 			{
@@ -340,7 +340,7 @@ var DoltStashTests = []queries.ScriptTest{
 			{
 				Query: "SELECT * FROM dolt_status;",
 				Expected: []sql.Row{
-					{"test", false, "modified"},
+					{"test", byte(0), "modified"},
 				},
 			},
 		},
@@ -356,8 +356,8 @@ var DoltStashTests = []queries.ScriptTest{
 			{
 				Query: "SELECT * FROM DOLT_STATUS",
 				Expected: []sql.Row{
-					{"test", true, "new table"},
-					{"new", false, "new table"},
+					{"test", byte(1), "new table"},
+					{"new", byte(0), "new table"},
 				},
 			},
 			{
@@ -375,8 +375,8 @@ var DoltStashTests = []queries.ScriptTest{
 			{
 				Query: "SELECT * FROM dolt_status;",
 				Expected: []sql.Row{
-					{"test", true, "new table"},
-					{"new", false, "new table"},
+					{"test", byte(1), "new table"},
+					{"new", byte(0), "new table"},
 				},
 			},
 		},
@@ -393,9 +393,9 @@ var DoltStashTests = []queries.ScriptTest{
 			{
 				Query: "SELECT * FROM DOLT_STATUS",
 				Expected: []sql.Row{
-					{"new", true, "new table"},
-					{"test", false, "new table"},
-					{"new", false, "modified"},
+					{"new", byte(1), "new table"},
+					{"test", byte(0), "new table"},
+					{"new", byte(0), "modified"},
 				},
 			},
 			{
@@ -405,7 +405,7 @@ var DoltStashTests = []queries.ScriptTest{
 			{
 				Query: "SELECT * FROM DOLT_STATUS",
 				Expected: []sql.Row{
-					{"test", false, "new table"},
+					{"test", byte(0), "new table"},
 				},
 			},
 			{
@@ -415,8 +415,8 @@ var DoltStashTests = []queries.ScriptTest{
 			{
 				Query: "SELECT * FROM DOLT_STATUS",
 				Expected: []sql.Row{
-					{"new", true, "new table"},
-					{"test", false, "new table"},
+					{"new", byte(1), "new table"},
+					{"test", byte(0), "new table"},
 				},
 			},
 		},
@@ -432,7 +432,7 @@ var DoltStashTests = []queries.ScriptTest{
 			{
 				Query: "SELECT * FROM DOLT_STATUS;",
 				Expected: []sql.Row{
-					{"new_tab", false, "deleted"},
+					{"new_tab", byte(0), "deleted"},
 				},
 			},
 			{
@@ -521,7 +521,7 @@ var DoltStashTests = []queries.ScriptTest{
 			{
 				Query: "SELECT * FROM DOLT_STATUS",
 				Expected: []sql.Row{
-					{"test", false, "deleted"},
+					{"test", byte(0), "deleted"},
 				},
 			},
 		},

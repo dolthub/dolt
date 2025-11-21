@@ -361,6 +361,8 @@ func GetTinyIntColAsBool(col interface{}) (bool, error) {
 	switch v := col.(type) {
 	case bool:
 		return v, nil
+	case byte:
+		return v == 1, nil
 	case int:
 		return v == 1, nil
 	case string:

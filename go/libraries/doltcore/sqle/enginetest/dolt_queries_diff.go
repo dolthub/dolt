@@ -6163,7 +6163,7 @@ var DoltDatabaseCollationScriptTests = []queries.ScriptTest{
 			{
 				Query: "select * from dolt_status",
 				Expected: []sql.Row{
-					{"__DATABASE__mydb", false, "modified"},
+					{"__DATABASE__mydb", byte(0), "modified"},
 				},
 			},
 			{
@@ -6182,7 +6182,7 @@ var DoltDatabaseCollationScriptTests = []queries.ScriptTest{
 			{
 				Query: "select * from dolt_status",
 				Expected: []sql.Row{
-					{"__DATABASE__mydb", true, "modified"},
+					{"__DATABASE__mydb", byte(1), "modified"},
 				},
 			},
 			{
@@ -6245,7 +6245,7 @@ var DoltDatabaseCollationScriptTests = []queries.ScriptTest{
 			{
 				Query: "select * from dolt_status",
 				Expected: []sql.Row{
-					{"__DATABASE__mydb", false, "modified"},
+					{"__DATABASE__mydb", byte(0), "modified"},
 				},
 			},
 			{
@@ -6264,7 +6264,7 @@ var DoltDatabaseCollationScriptTests = []queries.ScriptTest{
 			{
 				Query: "select * from dolt_status",
 				Expected: []sql.Row{
-					{"__DATABASE__mydb", true, "modified"},
+					{"__DATABASE__mydb", byte(1), "modified"},
 				},
 			},
 			{
@@ -6327,7 +6327,7 @@ var DoltDatabaseCollationScriptTests = []queries.ScriptTest{
 			{
 				Query: "select * from dolt_status",
 				Expected: []sql.Row{
-					{"__DATABASE__mydb", false, "modified"},
+					{"__DATABASE__mydb", byte(0), "modified"},
 				},
 			},
 			{
@@ -6377,7 +6377,7 @@ var DoltDatabaseCollationScriptTests = []queries.ScriptTest{
 			{
 				Query: "select * from dolt_status;",
 				Expected: []sql.Row{
-					{"__DATABASE__mydb", false, "modified"},
+					{"__DATABASE__mydb", byte(0), "modified"},
 				},
 			},
 			{

@@ -99,7 +99,6 @@ SKIP_SERVER_TESTS=$(cat <<-EOM
 ~default-values.bats~
 ~types.bats~
 ~config-home.bats~
-~cherry-pick.bats~
 ~triggers.bats~
 ~config.bats~
 ~sql-branch.bats~

@@ -692,7 +692,7 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "select * from dolt_status",
-				Expected: []sql.Row{{"t01", false, "modified"}},
+				Expected: []sql.Row{{"t01", byte(0), "modified"}},
 			},
 			{
 				Query:    "call dolt_checkout('t01')",
@@ -726,11 +726,11 @@ var DoltScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT * FROM dolt_status;",
-				Expected: []sql.Row{{"t", false, "new table"}},
+				Expected: []sql.Row{{"t", byte(0), "new table"}},
 			},
 			{
 				Query:    "SELECT * FROM `mydb/main`.dolt_status;",
-				Expected: []sql.Row{{"t", false, "new table"}},
+				Expected: []sql.Row{{"t", byte(0), "new table"}},
 			},
 			{
 				Query:    "SELECT * FROM dolt_status AS OF 'tag1';",
@@ -743,7 +743,7 @@ var DoltScripts = []queries.ScriptTest{
 			{
 				// HEAD is a special revision spec
 				Query:    "SELECT * FROM dolt_status AS OF 'head';",
-				Expected: []sql.Row{{"t", false, "new table"}},
+				Expected: []sql.Row{{"t", byte(0), "new table"}},
 			},
 			{
 				Query:    "SELECT * FROM dolt_status AS OF 'HEAD~1';",
@@ -751,11 +751,11 @@ var DoltScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT * FROM dolt_status AS OF 'branch1';",
-				Expected: []sql.Row{{"abc", true, "new table"}},
+				Expected: []sql.Row{{"abc", byte(1), "new table"}},
 			},
 			{
 				Query:    "SELECT * FROM `mydb/branch1`.dolt_status;",
-				Expected: []sql.Row{{"abc", true, "new table"}},
+				Expected: []sql.Row{{"abc", byte(1), "new table"}},
 			},
 		},
 	},
@@ -3709,7 +3709,7 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 			{
 				Query: "select * from dolt_status",
 				Expected: []sql.Row{
-					{"t1", true, "modified"},
+					{"t1", byte(1), "modified"},
 				},
 			},
 			{
@@ -3740,7 +3740,7 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 			{
 				Query: "select * from dolt_status",
 				Expected: []sql.Row{
-					{"t2", true, "modified"},
+					{"t2", byte(1), "modified"},
 				},
 			},
 			{
@@ -3790,8 +3790,8 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 			{
 				Query: "select * from dolt_status",
 				Expected: []sql.Row{
-					{"t1", true, "modified"},
-					{"t2", true, "modified"},
+					{"t1", byte(1), "modified"},
+					{"t2", byte(1), "modified"},
 				},
 			},
 			{
@@ -4469,7 +4469,7 @@ var DoltResetTestScripts = []queries.ScriptTest{
 			{
 				// dolt_status should only show the unstaged table t being added
 				Query:    "select * from dolt_status",
-				Expected: []sql.Row{{"t", false, "new table"}},
+				Expected: []sql.Row{{"t", byte(0), "new table"}},
 			},
 		},
 	},
@@ -4492,7 +4492,7 @@ var DoltResetTestScripts = []queries.ScriptTest{
 			{
 				// dolt_status should only show the unstaged table t being added
 				Query:    "select * from dolt_status",
-				Expected: []sql.Row{{"t", false, "new table"}},
+				Expected: []sql.Row{{"t", byte(0), "new table"}},
 			},
 		},
 	},
@@ -7374,7 +7374,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "select * from dolt_status",
-				Expected: []sql.Row{{"t", false, "modified"}, {"t", false, "conflict"}},
+				Expected: []sql.Row{{"t", byte(0), "modified"}, {"t", byte(0), "conflict"}},
 			},
 			{
 				Query: "select base_pk, base_v, our_pk, our_diff_type, their_pk, their_diff_type from dolt_conflicts_t;",
@@ -7388,7 +7388,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "select * from dolt_status",
-				Expected: []sql.Row{{"t", false, "modified"}},
+				Expected: []sql.Row{{"t", byte(0), "modified"}},
 			},
 			{
 				Query:    "select * from dolt_conflicts;",
@@ -7539,7 +7539,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 			{
 				// An ignored table should still be present (and unstaged) after aborting the merge.
 				Query:    "select * from dolt_status;",
-				Expected: []sql.Row{{"generated_foo", false, "new table"}},
+				Expected: []sql.Row{{"generated_foo", byte(0), "new table"}},
 			},
 			{
 				// Changes made to the table during the merge should not be reverted.
