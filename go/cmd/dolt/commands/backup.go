@@ -166,20 +166,20 @@ func callDoltBackupProc(queryEngine *cli.QueryEngineResult, params []string) err
 // name, url, and params columns. Otherwise, it prints only the name column.
 func printDoltBackupsTable(queryEngine *cli.QueryEngineResult, apr *argparser.ArgParseResults) errhand.VerboseError {
 	query := fmt.Sprintf("SELECT * FROM `%s`", doltdb.BackupsTableName)
-	schema, rowItr, _, err := queryEngine.Queryist.Query(queryEngine.Context, query)
+	schema, rowIter, _, err := queryEngine.Queryist.Query(queryEngine.Context, query)
 	if err != nil {
 		return errhand.BuildDError("failed to execute query for %s", doltdb.BackupsTableName).AddCause(err).Build()
 	}
-	rows, err := sql.RowIterToRows(queryEngine.Context, rowItr)
+	rows, err := sql.RowIterToRows(queryEngine.Context, rowIter)
 	if err != nil {
 		return errhand.BuildDError("failed to retrieve slice for %s", doltdb.BackupsTableName).AddCause(err).Build()
 	}
 
-	const colExpectedStrFmt = "column '%s': expected string, got %v"
+	const errColumnExpectedStringFmt = "column '%s' expected string, got %v"
 	for _, row := range rows {
 		name, ok := row[0].(string)
 		if !ok {
-			return errhand.BuildDError(colExpectedStrFmt, schema[0].Name, row[0]).Build()
+			return errhand.BuildDError(errColumnExpectedStringFmt, schema[0].Name, row[0]).Build()
 		}
 
 		if !apr.Contains(cli.VerboseFlag) {
@@ -189,12 +189,12 @@ func printDoltBackupsTable(queryEngine *cli.QueryEngineResult, apr *argparser.Ar
 
 		url, ok := row[1].(string)
 		if !ok {
-			return errhand.BuildDError(colExpectedStrFmt, schema[1].Name, row[1]).Build()
+			return errhand.BuildDError(errColumnExpectedStringFmt, schema[1].Name, row[1]).Build()
 		}
 
 		jsonStr, err := getJsonAsString(queryEngine.Context, row[2])
 		if err != nil {
-			return errhand.BuildDError(colExpectedStrFmt, schema[2].Name, row[2]).AddCause(err).Build()
+			return errhand.BuildDError(errColumnExpectedStringFmt, schema[2].Name, row[2]).AddCause(err).Build()
 		}
 
 		cli.Printf("%s %s %s\n", name, url, jsonStr)
