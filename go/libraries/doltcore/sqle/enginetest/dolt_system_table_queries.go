@@ -95,7 +95,7 @@ var BackupsSystemTableQueries = queries.ScriptTest{
 			Expected: []sql.Row{{0}},
 		},
 		{
-			Query: "select name, url, params from dolt_backups where url like 'aws://%'",
+			Query: "select * from dolt_backups where url like 'aws://%'",
 			Expected: []sql.Row{
 				{"backup2", "aws://[ddb_table:ddb_s3_bucket]/db1", "{}"},
 				{"backup4", "aws://[ddb_table_4:ddb_s3_bucket_4]/db1", "{}"},

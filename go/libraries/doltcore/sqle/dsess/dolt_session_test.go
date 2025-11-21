@@ -251,6 +251,10 @@ type emptyRevisionDatabaseProvider struct {
 	sql.DatabaseProvider
 }
 
+func (e emptyRevisionDatabaseProvider) RegisterNewDatabaseWithLock(ctx *sql.Context, name string, dEnv *env.DoltEnv) error {
+	return nil
+}
+
 func (e emptyRevisionDatabaseProvider) DbFactoryUrl() string {
 	return ""
 }
