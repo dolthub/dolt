@@ -29,5 +29,4 @@ var DoltTableFunctions = []sql.TableFunction{
 	&ReflogTableFunction{},
 	&QueryDiffTableFunction{},
 	&TestsRunTableFunction{},
-	&BackupsTableFunction{},
 }

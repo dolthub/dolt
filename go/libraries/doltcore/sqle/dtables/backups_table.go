@@ -27,12 +27,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 )
 
-var BackupsTableSchema = []*sql.Column{
-	{Name: "name", Type: types.Text, PrimaryKey: true, Nullable: false},
-	{Name: "url", Type: types.Text, PrimaryKey: false, Nullable: false},
-	{Name: "params", Type: types.JSON, PrimaryKey: false, Nullable: false},
-}
-
 type BackupsTable struct {
 	db        dsess.SqlDatabase
 	tableName string
@@ -53,7 +47,11 @@ func (bt BackupsTable) String() string {
 }
 
 func (bt BackupsTable) Schema() sql.Schema {
-	return BackupsTableSchema[:2]
+	return []*sql.Column{
+		{Name: "name", Type: types.Text, PrimaryKey: true, Nullable: false},
+		{Name: "url", Type: types.Text, PrimaryKey: false, Nullable: false},
+		{Name: "params", Type: types.JSON, PrimaryKey: false, Nullable: false},
+	}
 }
 
 func (bt BackupsTable) Collation() sql.CollationID {
@@ -69,9 +67,10 @@ func (bt BackupsTable) PartitionRows(context *sql.Context, _ sql.Partition) (sql
 }
 
 type backupsItr struct {
-	urls  map[string]string
-	names []string
-	idx   int
+	names  []string
+	urls   map[string]string
+	params map[string]map[string]string
+	idx    int
 }
 
 var _ sql.RowIter = (*backupsItr)(nil)
@@ -80,7 +79,14 @@ func (bi *backupsItr) Next(ctx *sql.Context) (sql.Row, error) {
 	if bi.idx < len(bi.names) {
 		bi.idx++
 		name := bi.names[bi.idx-1]
-		return sql.NewRow(name, bi.urls[name]), nil
+		url := bi.urls[name]
+
+		params, _, err := types.JSON.Convert(ctx, bi.params[name])
+		if err != nil {
+			return nil, err
+		}
+
+		return sql.NewRow(name, url, params), nil
 	}
 	return nil, io.EOF
 }
@@ -105,14 +111,16 @@ func newBackupsIter(ctx *sql.Context, dbName string) (*backupsItr, error) {
 
 	names := make([]string, 0)
 	urls := map[string]string{}
+	params := map[string]map[string]string{}
 
 	backups.Iter(func(key string, val env.Remote) bool {
 		names = append(names, key)
 		urls[key] = val.Url
+		params[key] = val.Params
 		return true
 	})
 
 	sort.Strings(names)
 
-	return &backupsItr{names: names, urls: urls, idx: 0}, nil
+	return &backupsItr{names: names, urls: urls, params: params, idx: 0}, nil
 }

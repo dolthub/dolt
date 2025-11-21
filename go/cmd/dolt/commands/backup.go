@@ -16,17 +16,15 @@ package commands
 
 import (
 	"context"
-
-	"github.com/gocraft/dbr/v2"
-	"github.com/gocraft/dbr/v2/dialect"
+	"fmt"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dprocedures"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtablefunctions"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	eventsapi "github.com/dolthub/eventsapi_schema/dolt/services/eventsapi/v1alpha1"
 )
@@ -108,8 +106,8 @@ func (cmd BackupCmd) EventType() eventsapi.ClientEventType {
 	return eventsapi.ClientEventType_REMOTE
 }
 
-// Exec executes the `dolt backup` command with the provided subcommand. If no subcommand is provided, the
-// `dolt_backups()` table function will be printed.
+// Exec executes the `dolt backup` command with the provided subcommand. If no subcommand is provided, the dolt_backups
+// table will be printed.
 func (cmd BackupCmd) Exec(ctx context.Context, commandStr string, args []string, _ *env.DoltEnv, cliCtx cli.CliContext) int {
 	argParser := cmd.ArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, backupDocs, argParser))
@@ -121,7 +119,7 @@ func (cmd BackupCmd) Exec(ctx context.Context, commandStr string, args []string,
 	}
 
 	if apr.NArg() == 0 {
-		verboseErr := printDoltBackupsTableFunc(&queryEngine, apr)
+		verboseErr := printDoltBackupsTable(&queryEngine, apr)
 		return HandleVErrAndExitCode(verboseErr, usage)
 	}
 
@@ -164,25 +162,20 @@ func callDoltBackupProc(queryEngine *cli.QueryEngineResult, params []string) err
 	return nil
 }
 
-// printDoltBackupsTableFunc queries the dolt_backups() table function and prints the results. If the verbose flag is
-// set, it prints name, url, and params columns. Otherwise, it prints only the name column.
-func printDoltBackupsTableFunc(queryEngine *cli.QueryEngineResult, apr *argparser.ArgParseResults) errhand.VerboseError {
-	params := []interface{}{apr.Option(cli.VerboseFlag)}
-	query, err := dbr.InterpolateForDialect("SELECT * FROM dolt_backups(?)", params, dialect.MySQL)
-	if err != nil {
-		return errhand.BuildDError("failed to interpolate SELECT query for %s()", dtablefunctions.BackupsTableFunctionName).AddCause(err).Build()
-	}
-
+// printDoltBackupsTable queries the dolt_backups table and prints the results. If the verbose flag is set, it prints
+// name, url, and params columns. Otherwise, it prints only the name column.
+func printDoltBackupsTable(queryEngine *cli.QueryEngineResult, apr *argparser.ArgParseResults) errhand.VerboseError {
+	query := fmt.Sprintf("SELECT * FROM `%s`", doltdb.BackupsTableName)
 	schema, rowItr, _, err := queryEngine.Queryist.Query(queryEngine.Context, query)
 	if err != nil {
-		return errhand.BuildDError("failed to execute query for %s()", dtablefunctions.BackupsTableFunctionName).AddCause(err).Build()
+		return errhand.BuildDError("failed to execute query for %s", doltdb.BackupsTableName).AddCause(err).Build()
 	}
 	rows, err := sql.RowIterToRows(queryEngine.Context, rowItr)
 	if err != nil {
-		return errhand.BuildDError("failed to retrieve slice for %s()", dtablefunctions.BackupsTableFunctionName).AddCause(err).Build()
+		return errhand.BuildDError("failed to retrieve slice for %s", doltdb.BackupsTableName).AddCause(err).Build()
 	}
 
-	const colExpectedStrFmt = "col %s: expected string, got %v"
+	const colExpectedStrFmt = "column '%s': expected string, got %v"
 	for _, row := range rows {
 		name, ok := row[0].(string)
 		if !ok {
