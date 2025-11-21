@@ -1,6 +1,7 @@
 #!/usr/bin/env bats
 load $BATS_TEST_DIRNAME/helper/common.bash
 load $BATS_TEST_DIRNAME/helper/query-server-common.bash
+load $BATS_TEST_DIRNAME/helper/remotesrv-common.bash
 
 setup() {
     setup_common
@@ -21,42 +22,10 @@ setup() {
 }
 
 teardown() {
+    stop_remotesrv
     teardown_common
     rm -rf $TMPDIRS
     cd $BATS_TMPDIR
-}
-
-start_remotesrv() {
-    local port=${1:-$(definePORT)}
-    mkdir -p $BATS_TMPDIR/remotes-$$
-    remotesrv --http-port $port --grpc-port $port --dir $BATS_TMPDIR/remotes-$$ &> $BATS_TMPDIR/remotes-$$/remotesrv.log 3>&- &
-    remotesrv_pid=$!
-    REMOTESRV_PORT=$port
-
-    wait_for_port $port
-}
-
-wait_for_port() {
-    local port=$1
-    local timeout_ms=${2:-5000}
-    local end_time=$((SECONDS+($timeout_ms/1000)))
-
-    while [ $SECONDS -lt $end_time ]; do
-        nc -z localhost "$port" >/dev/null 2>&1 && return 0
-        sleep 0.1
-    done
-
-    echo "Failed to connect on port $port within $timeout_ms ms."
-    return 1
-}
-
-stop_remotesrv() {
-    if [ ! -z "$remotesrv_pid" ]; then
-        kill $remotesrv_pid 2>/dev/null || true
-        wait $remotesrv_pid 2>/dev/null || true
-        remotesrv_pid=""
-    fi
-    rm -rf $BATS_TMPDIR/remotes-$$
 }
 
 @test "backup: add named backup" {
@@ -247,7 +216,7 @@ stop_remotesrv() {
     dolt backup sync bac1
     [ "$status" -eq 1 ]
     [[ ! "$output" =~ "panic" ]] || false
-    [[ "$output" =~ "unknown backup: 'bac1'" ]] || false
+    [[ "$output" =~ "unknown backup 'bac1'" ]] || false
 }
 
 @test "backup: cannot clone a backup" {
@@ -383,6 +352,4 @@ stop_remotesrv() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ "t1" ]] || false
     [[ "$output" =~ "t2" ]] || false
-    
-    stop_remotesrv
 }
