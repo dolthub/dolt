@@ -266,6 +266,32 @@ var SimpleJsonDiffTests = []JsonDiffTest{
 		},
 	},
 	{
+		Name: "primitive modification",
+		From: types.JSONDocument{Val: "before"},
+		To:   types.JSONDocument{Val: "after"},
+		ExpectedDiffs: []JsonDiff{
+			{
+				Key:  makeJsonPathKey(),
+				From: &types.JSONDocument{Val: "before"},
+				To:   &types.JSONDocument{Val: "after"},
+				Type: ModifiedDiff,
+			},
+		},
+	},
+	{
+		Name: "object replaced with primitive",
+		From: types.JSONDocument{Val: types.JsonObject{"key": "value"}},
+		To:   types.JSONDocument{Val: "primitive"},
+		ExpectedDiffs: []JsonDiff{
+			{
+				Key:  makeJsonPathKey(),
+				From: &types.JSONDocument{Val: types.JsonObject{"key": "value"}},
+				To:   &types.JSONDocument{Val: "primitive"},
+				Type: ModifiedDiff,
+			},
+		},
+	},
+	{
 		Name: "remove object",
 		From: types.JSONDocument{Val: types.JsonObject{"a": types.JsonObject{"b": types.JsonObject{"c": 3}}}},
 		To:   types.JSONDocument{Val: types.JsonObject{"a": types.JsonObject{}}},

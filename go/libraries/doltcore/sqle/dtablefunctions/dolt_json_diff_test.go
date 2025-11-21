@@ -25,6 +25,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// TestDoltJsonDiffTableFunction uses the same test cases as TestJsonDiff,
+// but transforms them to use the DOLT_JSON_DIFF system table function
+// instead.
 func TestDoltJsonDiffTableFunction(t *testing.T) {
 	for _, testCase := range tree.SimpleJsonDiffTests {
 		ctx := sql.NewEmptyContext()
