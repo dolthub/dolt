@@ -1,5 +1,6 @@
 #!/usr/bin/env bats
 load $BATS_TEST_DIRNAME/helper/common.bash
+load $BATS_TEST_DIRNAME/helper/remotesrv-common.bash
 
 setup() {
     setup_common
@@ -20,6 +21,7 @@ setup() {
 }
 
 teardown() {
+    stop_remotesrv
     teardown_common
     rm -rf $TMPDIRS
     cd $BATS_TMPDIR
@@ -194,7 +196,7 @@ teardown() {
     run dolt backup sync bac1
     [ "$status" -eq 1 ]
     [[ ! "$output" =~ "panic" ]] || false
-    [[ "$output" =~ "unknown backup: 'bac1'" ]] || false
+    [[ "$output" =~ "unknown backup 'bac1'" ]] || false
 }
 
 @test "backup: cannot override another client's backup" {
@@ -213,7 +215,7 @@ teardown() {
     dolt backup sync bac1
     [ "$status" -eq 1 ]
     [[ ! "$output" =~ "panic" ]] || false
-    [[ "$output" =~ "unknown backup: 'bac1'" ]] || false
+    [[ "$output" =~ "unknown backup 'bac1'" ]] || false
 }
 
 @test "backup: cannot clone a backup" {
@@ -316,4 +318,37 @@ teardown() {
     mkdir newdir && cd newdir
     run dolt backup sync-url file://../bac1
     [ "$status" -ne 0 ]
+}
+
+@test "backup: add HTTP and HTTPS" {
+    cd repo1
+    dolt backup add httpbackup http://localhost:$REMOTESRV_PORT/test-org/backup-repo
+    dolt backup add httpsbackup https://localhost:$REMOTESRV_PORT/test-org/backup-repo
+    run dolt backup -v
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "httpbackup" ]] || false
+    [[ "$output" =~ "http://localhost:$REMOTESRV_PORT/test-org/backup-repo" ]] || false
+    [[ "$output" =~ "httpsbackup" ]] || false
+    [[ "$output" =~ "https://localhost:$REMOTESRV_PORT/test-org/backup-repo" ]] || false
+}
+
+# No HTTPS test for sync-url; `dolt/go/utils/remotesrv` does not expose TLS configuration flags.
+@test "backup: sync-url and restore HTTP" {
+    start_remotesrv
+    
+    cd repo1
+    dolt sql -q "CREATE TABLE t2 (b int)"
+    dolt add .
+    dolt commit -am "add t2"
+    
+    run dolt backup sync-url http://localhost:$REMOTESRV_PORT/test-org/backup-repo
+    [ "$status" -eq 0 ]
+    
+    cd ..
+    dolt backup restore http://localhost:$REMOTESRV_PORT/test-org/backup-repo repo3
+    cd repo3
+    run dolt ls
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "t1" ]] || false
+    [[ "$output" =~ "t2" ]] || false
 }
