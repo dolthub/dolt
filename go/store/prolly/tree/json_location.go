@@ -18,9 +18,10 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/dolthub/go-mysql-server/sql/types"
 	"slices"
 	"strconv"
+
+	"github.com/dolthub/go-mysql-server/sql/types"
 
 	"github.com/mohae/uvarint"
 )

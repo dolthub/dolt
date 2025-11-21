@@ -17,10 +17,11 @@ package tree
 import (
 	"bytes"
 	"context"
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/types"
 	"io"
 	"reflect"
+
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/types"
 )
 
 // JsonDiffer produces a stream of JsonDiffs describing the differences

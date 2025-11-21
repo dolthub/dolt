@@ -15,9 +15,10 @@
 package dtablefunctions
 
 import (
-	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"io"
 	"testing"
+
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
