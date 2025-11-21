@@ -54,14 +54,19 @@ var AuthorDate = time.Now
 var CustomAuthorDate bool
 var AuthorLoc = time.Local
 
+var CommitterName string
+var CommitterEmail string
+
 // CommitMeta contains all the metadata that is associated with a commit within a data repo.
 type CommitMeta struct {
-	Name          string
-	Email         string
-	Description   string
-	Signature     string
-	Timestamp     uint64
-	UserTimestamp int64
+	Name           string
+	Email          string
+	Description    string
+	Signature      string
+	Timestamp      *uint64
+	UserTimestamp  int64
+	CommitterName  string
+	CommitterEmail string
 }
 
 // NewCommitMeta creates a CommitMeta instance from a name, email, and description and uses the current time for the
@@ -97,19 +102,31 @@ func init() {
 			CustomAuthorDate = true
 		}
 	}
+
+	CommitterName = os.Getenv(dconfig.EnvDoltCommitterName)
+	CommitterEmail = os.Getenv(dconfig.EnvDoltCommitterEmail)
 }
 
 // NewCommitMetaWithUserTS creates a user metadata
 func NewCommitMetaWithUserTS(name, email, desc string, userTS time.Time) (*CommitMeta, error) {
-	n := strings.TrimSpace(name)
-	e := strings.TrimSpace(email)
+	return NewCommitMetaWithAuthorCommitter(name, email, desc, userTS, "", "", nil)
+}
+
+// NewCommitMetaWithAuthorCommitter creates commit metadata with separate author and committer information
+// If committer info is empty, defaults to author info.
+func NewCommitMetaWithAuthorCommitter(authorName, authorEmail, desc string, ats time.Time, committerName, committerEmail string, cts *time.Time) (*CommitMeta, error) {
+	an := strings.TrimSpace(authorName)
+	ae := strings.TrimSpace(authorEmail)
 	d := strings.TrimSpace(desc)
 
-	if n == "" {
+	cn := strings.TrimSpace(committerName)
+	ce := strings.TrimSpace(committerEmail)
+
+	if an == "" {
 		return nil, ErrNameNotConfigured
 	}
 
-	if e == "" {
+	if ae == "" {
 		return nil, ErrEmailNotConfigured
 	}
 
@@ -117,10 +134,22 @@ func NewCommitMetaWithUserTS(name, email, desc string, userTS time.Time) (*Commi
 		return nil, ErrEmptyCommitMessage
 	}
 
-	committerDateMillis := uint64(CommitterDate().UnixMilli())
-	authorDateMillis := userTS.UnixMilli()
+	if cn == "" {
+		cn = an
+	}
+	if ce == "" {
+		ce = ae
+	}
 
-	return &CommitMeta{n, e, d, "", committerDateMillis, authorDateMillis}, nil
+	var committerDateMillis *uint64
+	if cts != nil { // in use of inline modification e.g. when using --date blocking CommitterDate() later
+		cdm := uint64(cts.UnixMilli())
+		committerDateMillis = &cdm
+	}
+
+	authorDateMillis := ats.UnixMilli()
+
+	return &CommitMeta{an, ae, d, "", committerDateMillis, authorDateMillis, cn, ce}, nil
 }
 
 func getRequiredFromSt(st types.Struct, k string) (types.Value, error) {
@@ -152,7 +181,7 @@ func CommitMetaFromNomsSt(st types.Struct) (*CommitMeta, error) {
 		return nil, err
 	}
 
-	ts, err := getRequiredFromSt(st, commitMetaTimestampKey)
+	tsv, err := getRequiredFromSt(st, commitMetaTimestampKey)
 
 	if err != nil {
 		return nil, err
@@ -163,7 +192,7 @@ func CommitMetaFromNomsSt(st types.Struct) (*CommitMeta, error) {
 	if err != nil {
 		return nil, err
 	} else if !ok {
-		userTS = types.Int(int64(uint64(ts.(types.Uint))))
+		userTS = types.Int(int64(tsv.(types.Uint)))
 	}
 
 	signature, ok, err := st.MaybeGet(commitMetaSignature)
@@ -174,13 +203,18 @@ func CommitMetaFromNomsSt(st types.Struct) (*CommitMeta, error) {
 		signature = types.String("")
 	}
 
+	name := string(n.(types.String))
+	email := string(e.(types.String))
+	ts := uint64(tsv.(types.Uint))
 	return &CommitMeta{
-		Name:          string(n.(types.String)),
-		Email:         string(e.(types.String)),
-		Description:   string(d.(types.String)),
-		Signature:     string(signature.(types.String)),
-		Timestamp:     uint64(ts.(types.Uint)),
-		UserTimestamp: int64(userTS.(types.Int)),
+		Name:           name,
+		Email:          email,
+		Description:    string(d.(types.String)),
+		Signature:      string(signature.(types.String)),
+		Timestamp:      &ts,
+		UserTimestamp:  int64(userTS.(types.Int)),
+		CommitterName:  name,
+		CommitterEmail: email,
 	}, nil
 }
 
@@ -189,7 +223,7 @@ func (cm *CommitMeta) toNomsStruct(nbf *types.NomsBinFormat) (types.Struct, erro
 		commitMetaNameKey:      types.String(cm.Name),
 		commitMetaEmailKey:     types.String(cm.Email),
 		commitMetaDescKey:      types.String(cm.Description),
-		commitMetaTimestampKey: types.Uint(cm.Timestamp),
+		commitMetaTimestampKey: types.Uint(*cm.Timestamp),
 		commitMetaVersionKey:   types.String(commitMetaVersion),
 		commitMetaUserTSKey:    types.Int(cm.UserTimestamp),
 		commitMetaSignature:    types.String(cm.Signature),
@@ -198,17 +232,30 @@ func (cm *CommitMeta) toNomsStruct(nbf *types.NomsBinFormat) (types.Struct, erro
 	return types.NewStruct(nbf, commitMetaStName, metadata)
 }
 
-// Time returns the time at which the commit occurred
+// Time returns the time at which the commit was authored
+// This does not preserve timezone information, and returns the time in the system's local timezone
 func (cm *CommitMeta) Time() time.Time {
 	return time.UnixMilli(cm.UserTimestamp)
 }
 
-// FormatTS takes the internal timestamp and turns it into a human readable string in the time.RubyDate format
+// CommitterTime returns the time at which the commit was created
+// This does not preserve timezone information, and returns the time in the system's local timezone
+func (cm *CommitMeta) CommitterTime() time.Time {
+	return time.UnixMilli(int64(*cm.Timestamp))
+}
+
+// FormatTS takes the internal timestamp and turns it into a human-readable string in the time.RubyDate format
 // which looks like: "Mon Jan 02 15:04:05 -0700 2006"
 //
-// We round this to the nearest second, which is what MySQL timestamp does by default.
+// We round this to the nearest second, which is what MySQL timestamp does by default. This returns the author timestamp
+// in the standard Git log format.
 func (cm *CommitMeta) FormatTS() string {
 	return cm.Time().In(CommitLoc).Round(time.Second).Format(time.RubyDate)
+}
+
+// FormatCommitterTS returns the committer timestamp in the standard Git log format.
+func (cm *CommitMeta) FormatCommitterTS() string {
+	return cm.CommitterTime().In(CommitLoc).Round(time.Second).Format(time.RubyDate)
 }
 
 // String returns the human readable string representation of the commit data

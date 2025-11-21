@@ -180,6 +180,18 @@ func commit_flatbuffer(vaddr hash.Hash, opts CommitOptions, heights []uint64, pa
 		sigoff = builder.CreateString(opts.Meta.Signature)
 	}
 
+	// Author and committer data is normalized in commit meta constructor, i.e. author name and email is used for
+	// committer if not provided. Optional build prevents different hash values from older versions.
+	var committerNameOff flatbuffers.UOffsetT
+	if opts.Meta.CommitterName != opts.Meta.Name {
+		committerNameOff = builder.CreateString(opts.Meta.CommitterName)
+	}
+
+	var committerEmailOff flatbuffers.UOffsetT
+	if opts.Meta.CommitterEmail != opts.Meta.Email {
+		committerEmailOff = builder.CreateString(opts.Meta.CommitterEmail)
+	}
+
 	serial.CommitStart(builder)
 	serial.CommitAddRoot(builder, vaddroff)
 	serial.CommitAddHeight(builder, maxheight+1)
@@ -188,9 +200,11 @@ func commit_flatbuffer(vaddr hash.Hash, opts CommitOptions, heights []uint64, pa
 	serial.CommitAddName(builder, nameoff)
 	serial.CommitAddEmail(builder, emailoff)
 	serial.CommitAddDescription(builder, descoff)
-	serial.CommitAddTimestampMillis(builder, opts.Meta.Timestamp)
+	serial.CommitAddTimestampMillis(builder, *opts.Meta.Timestamp)
 	serial.CommitAddUserTimestampMillis(builder, opts.Meta.UserTimestamp)
 	serial.CommitAddSignature(builder, sigoff)
+	serial.CommitAddCommitterName(builder, committerNameOff)
+	serial.CommitAddCommitterEmail(builder, committerEmailOff)
 
 	bytes := serial.FinishMessage(builder, serial.CommitEnd(builder), []byte(serial.CommitFileID))
 	return bytes, maxheight + 1
@@ -205,6 +219,14 @@ var commitValueTupleDesc = val.NewTupleDescriptor()
 func newCommitForValue(ctx context.Context, cs chunks.ChunkStore, vrw types.ValueReadWriter, ns tree.NodeStore, v types.Value, opts CommitOptions) (*Commit, error) {
 	if opts.Meta == nil {
 		opts.Meta = &CommitMeta{}
+		// Noms testing relies on deterministic init value from empty CommitMeta
+		ts := uint64(0)
+		opts.Meta.Timestamp = &ts
+	}
+
+	if opts.Meta.Timestamp == nil {
+		ts := uint64(CommitterDate().UnixMilli())
+		opts.Meta.Timestamp = &ts
 	}
 
 	if vrw.Format().UsesFlatbuffers() {
@@ -587,9 +609,19 @@ func GetCommitMeta(ctx context.Context, cv types.Value) (*CommitMeta, error) {
 		ret.Name = string(cmsg.Name())
 		ret.Email = string(cmsg.Email())
 		ret.Description = string(cmsg.Description())
-		ret.Timestamp = cmsg.TimestampMillis()
+		tsm := cmsg.TimestampMillis()
+		ret.Timestamp = &tsm
 		ret.UserTimestamp = cmsg.UserTimestampMillis()
 		ret.Signature = string(cmsg.Signature())
+		ret.CommitterName = ret.Name
+		if cnBytes := cmsg.CommitterName(); cnBytes != nil {
+			ret.CommitterName = string(cnBytes)
+		}
+		ret.CommitterEmail = ret.Email
+		if ceBytes := cmsg.CommitterEmail(); ceBytes != nil {
+			ret.CommitterEmail = string(ceBytes)
+		}
+
 		return ret, nil
 	}
 	c, ok := cv.(types.Struct)
