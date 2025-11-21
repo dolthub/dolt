@@ -167,7 +167,7 @@ func (p jsonLocation) toMysqlJsonPath() string {
 		pathElement := p.getPathElement(i)
 		if pathElement.isArrayIndex {
 			arrayIndex := pathElement.getArrayIndex()
-			fmt.Appendf(result, "[%d]", arrayIndex)
+			result = fmt.Appendf(result, "[%d]", arrayIndex)
 		} else {
 			result = append(result, '.')
 			result = append(result, pathElement.key...)
