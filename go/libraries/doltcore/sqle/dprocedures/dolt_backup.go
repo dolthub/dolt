@@ -86,33 +86,33 @@ func doDoltBackup(ctx *sql.Context, args []string) (int, error) {
 	}
 
 	if apr.NArg() == 0 || (apr.NArg() == 1 && apr.Contains(cli.VerboseFlag)) {
-		return statusErr, fmt.Errorf("error: invalid argument, use 'dolt_backups()' table function to list backups")
+		return statusErr, fmt.Errorf("error: invalid argument, use 'dolt_backups' table to list backups")
 	}
 
 	switch apr.Arg(0) {
 	case DoltBackupParamAdd:
 		err = addBackup(ctx, dbData, apr)
 		if err != nil {
-			return statusErr, fmt.Errorf("error adding backup: %w", err)
+			return statusErr, err
 		}
 	case DoltBackupParamRemove, DoltBackupParamRm:
 		err = removeBackup(ctx, dbData, apr)
 		if err != nil {
-			return statusErr, fmt.Errorf("error removing backup: %w", err)
+			return statusErr, err
 		}
 	case DoltBackupParamRestore:
 		if err = restoreBackup(ctx, dbData, apr); err != nil {
-			return statusErr, fmt.Errorf("error restoring backup: %w", err)
+			return statusErr, err
 		}
 	case DoltBackupParamSyncUrl:
 		err = syncBackupViaUrl(ctx, dbData, sess, apr)
 		if err != nil {
-			return statusErr, fmt.Errorf("error syncing backup url: %w", err)
+			return statusErr, err
 		}
 	case DoltBackupParamSync:
 		err = syncBackupViaName(ctx, dbData, sess, apr)
 		if err != nil {
-			return statusErr, fmt.Errorf("error syncing backup: %w", err)
+			return statusErr, err
 		}
 	default:
 		return statusErr, fmt.Errorf("unrecognized dolt_backup parameter: %s", apr.Arg(0))
@@ -123,11 +123,17 @@ func doDoltBackup(ctx *sql.Context, args []string) (int, error) {
 
 func addBackup(ctx *sql.Context, dbData env.DbData[*sql.Context], apr *argparser.ArgParseResults) error {
 	if apr.NArg() != 3 {
-		return fmt.Errorf("usage: dolt_backup('add', 'backup_name', 'backup-url')")
+		return fmt.Errorf("usage: dolt_backup('add', 'backup_name', 'backup_url')")
 	}
 
 	backupName := strings.TrimSpace(apr.Arg(1))
+	if backupName == "" {
+		return fmt.Errorf("error: backup name is required")
+	}
 	backupUrl := apr.Arg(2)
+	if backupUrl == "" {
+		return fmt.Errorf("error: backup url is required")
+	}
 	cfg := loadConfig(ctx)
 	scheme, absBackupUrl, err := env.GetAbsRemoteUrl(filesys.LocalFS, cfg, backupUrl)
 	if err != nil {
@@ -147,11 +153,11 @@ func addBackup(ctx *sql.Context, dbData env.DbData[*sql.Context], apr *argparser
 	case env.ErrBackupAlreadyExists:
 		return fmt.Errorf("error: a backup named '%s' already exists, remove it before running this command again", r.Name)
 	case env.ErrBackupNotFound:
-		return fmt.Errorf("error: unknown backup: '%s' ", r.Name)
+		return fmt.Errorf("error: unknown backup '%s'", r.Name)
 	case env.ErrInvalidBackupURL:
 		return fmt.Errorf("error: '%s' is not valid, cause: %s", r.Url, err.Error())
 	case env.ErrInvalidBackupName:
-		return fmt.Errorf("error: invalid backup name: '%s'", r.Name)
+		return fmt.Errorf("error: invalid backup name '%s'", r.Name)
 	default:
 		return fmt.Errorf("error: Unable to save changes, cause: %s", err.Error())
 	}
@@ -168,7 +174,13 @@ func restoreBackup(ctx *sql.Context, _ env.DbData[*sql.Context], apr *argparser.
 	}
 
 	backupUrl := strings.TrimSpace(apr.Arg(1))
+	if backupUrl == "" {
+		return fmt.Errorf("error: backup url is required")
+	}
 	dbName := strings.TrimSpace(apr.Arg(2))
+	if dbName == "" {
+		return fmt.Errorf("error: backup name is required")
+	}
 	force := apr.Contains(cli.ForceFlag)
 
 	sess := dsess.DSessFromSess(ctx.Session)
@@ -209,6 +221,11 @@ func restoreBackup(ctx *sql.Context, _ env.DbData[*sql.Context], apr *argparser.
 			return err
 		}
 
+		// Reload the repo state into the DoltEnv so it's available when the database is registered.
+		if err = clonedEnv.ReloadRepoState(); err != nil {
+			return err
+		}
+
 		if err = syncRootsFromBackup(ctx, clonedEnv.DbData(ctx), sess, r); err != nil {
 			// If we're cloning into a directory that already exists do not erase it.
 			// Otherwise, make a best effort to delete any directory we created.
@@ -217,8 +234,14 @@ func restoreBackup(ctx *sql.Context, _ env.DbData[*sql.Context], apr *argparser.
 			} else {
 				_ = clonedEnv.FS.Delete(".", true)
 			}
+			return err
 		}
-		return err
+
+		if registerErr := sess.Provider().RegisterNewDatabaseWithLock(ctx, dbName, clonedEnv); registerErr != nil {
+			return registerErr
+		}
+
+		return nil
 	}
 }
 
@@ -228,6 +251,9 @@ func removeBackup(ctx *sql.Context, dbData env.DbData[*sql.Context], apr *argpar
 	}
 
 	backupName := strings.TrimSpace(apr.Arg(1))
+	if backupName == "" {
+		return fmt.Errorf("error: backup name is required")
+	}
 	err := dbData.Rsw.RemoveBackup(ctx, backupName)
 	switch err {
 	case nil:
@@ -239,7 +265,7 @@ func removeBackup(ctx *sql.Context, dbData env.DbData[*sql.Context], apr *argpar
 	case env.ErrFailedToReadFromDb:
 		return fmt.Errorf("error: failed to read from db, cause: %s", err.Error())
 	case env.ErrBackupNotFound:
-		return fmt.Errorf("error: unknown backup: '%s' ", backupName)
+		return fmt.Errorf("error: unknown backup '%s'", backupName)
 	default:
 		return fmt.Errorf("error: unknown error, cause: %s", err.Error())
 	}
@@ -280,10 +306,13 @@ func loadAwsParams(ctx *sql.Context, sess *dsess.DoltSession, apr *argparser.Arg
 
 func syncBackupViaUrl(ctx *sql.Context, dbData env.DbData[*sql.Context], sess *dsess.DoltSession, apr *argparser.ArgParseResults) error {
 	if apr.NArg() != 2 {
-		return fmt.Errorf("usage: dolt_backup('sync-url', BACKUP_URL)")
+		return fmt.Errorf("usage: dolt_backup('sync-url', backup_url)")
 	}
 
 	backupUrl := strings.TrimSpace(apr.Arg(1))
+	if backupUrl == "" {
+		return fmt.Errorf("error: backup url is required")
+	}
 	params, err := loadAwsParams(ctx, sess, apr, backupUrl, "sync-url")
 	if err != nil {
 		return err
@@ -296,10 +325,13 @@ func syncBackupViaUrl(ctx *sql.Context, dbData env.DbData[*sql.Context], sess *d
 
 func syncBackupViaName(ctx *sql.Context, dbData env.DbData[*sql.Context], sess *dsess.DoltSession, apr *argparser.ArgParseResults) error {
 	if apr.NArg() != 2 {
-		return fmt.Errorf("usage: dolt_backup('sync', BACKUP_NAME)")
+		return fmt.Errorf("usage: dolt_backup('sync', backup_name)")
 	}
 
 	backupName := strings.TrimSpace(apr.Arg(1))
+	if backupName == "" {
+		return fmt.Errorf("error: backup name is required")
+	}
 	backups, err := dbData.Rsr.GetBackups()
 	if err != nil {
 		return err
@@ -307,7 +339,7 @@ func syncBackupViaName(ctx *sql.Context, dbData env.DbData[*sql.Context], sess *
 
 	b, ok := backups.Get(backupName)
 	if !ok {
-		return fmt.Errorf("error: unknown backup: '%s'; %v", backupName, backups)
+		return fmt.Errorf("error: unknown backup '%s'", backupName)
 	}
 
 	return syncRootsToBackup(ctx, dbData, sess, b)
@@ -317,7 +349,7 @@ func syncBackupViaName(ctx *sql.Context, dbData env.DbData[*sql.Context], sess *
 func syncRootsToBackup(ctx *sql.Context, dbData env.DbData[*sql.Context], sess *dsess.DoltSession, backup env.Remote) error {
 	destDb, err := sess.Provider().GetRemoteDB(ctx, dbData.Ddb.ValueReadWriter().Format(), backup, true)
 	if err != nil {
-		return fmt.Errorf("error loading backup destination: %w", err)
+		return err
 	}
 
 	tmpDir, err := dbData.Rsw.TempTableFilesDir()
@@ -327,7 +359,7 @@ func syncRootsToBackup(ctx *sql.Context, dbData env.DbData[*sql.Context], sess *
 
 	err = actions.SyncRoots(ctx, dbData.Ddb, destDb, tmpDir, runProgFuncs, stopProgFuncs)
 	if err != nil && err != pull.ErrDBUpToDate {
-		return fmt.Errorf("error syncing backup: %w", err)
+		return err
 	}
 
 	return nil
