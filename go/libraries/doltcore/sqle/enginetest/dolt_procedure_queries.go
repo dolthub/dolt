@@ -199,16 +199,18 @@ var BackupsProcedureScripts = []queries.ScriptTest{
 	{
 		Name: "dolt_backup restore",
 		SetUpScript: []string{
+			fmt.Sprintf("call dolt_backup('add', 'dolt_backup1', '%s');", fileUrl("dolt_backup1")),
+			"call dolt_backup('sync', 'dolt_backup1');",
 			"create table t(a int primary key, b int);",
 			"insert into t values (1, 100), (2, 200);",
 			"call dolt_add('t');",
 			"call dolt_commit('-m', 'restore this commit');",
-			fmt.Sprintf("call dolt_backup('add', 'dolt_backup1', '%s');", fileUrl("dolt_backup1")),
-			"call dolt_backup('sync', 'dolt_backup1');",
+			fmt.Sprintf("call dolt_backup('add', 'dolt_backup2', '%s');", fileUrl("dolt_backup2")),
+			"call dolt_backup('sync', 'dolt_backup2');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    fmt.Sprintf("call dolt_backup('restore', '%s', 'restored_db');", fileUrl("dolt_backup1")),
+				Query:    fmt.Sprintf("call dolt_backup('restore', '%s', 'restored_db');", fileUrl("dolt_backup2")),
 				Expected: []sql.Row{{0}},
 			},
 			{
@@ -228,12 +230,20 @@ var BackupsProcedureScripts = []queries.ScriptTest{
 				ExpectedErrStr: "usage: dolt_backup('restore', 'backup_url', 'database_name')",
 			},
 			{
-				Query:          fmt.Sprintf("call dolt_backup('restore', '%s', 'restored_db');", fileUrl("dolt_backup1")),
+				Query:          fmt.Sprintf("call dolt_backup('restore', '%s', 'restored_db');", fileUrl("dolt_backup2")),
 				ExpectedErrStr: "error: cannot restore backup into restored_db. A database with that name already exists. Did you mean to supply --force?",
 			},
 			{
 				Query:    fmt.Sprintf("call dolt_backup('restore', '%s', 'restored_db', '--force');", fileUrl("dolt_backup1")),
 				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:       "select * from restored_db.t",
+				ExpectedErr: sql.ErrTableNotFound,
+			},
+			{
+				Query:    "select message from restored_db.dolt_log order by commit_order;",
+				Expected: []sql.Row{{"Initialize data repository"}, {"checkpoint enginetest database mydb"}},
 			},
 			{
 				Query:          "call dolt_backup('restore', 'invalid://url', 'restored_db2');",
