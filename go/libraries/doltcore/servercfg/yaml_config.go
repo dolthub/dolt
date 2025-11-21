@@ -95,6 +95,9 @@ type ListenerYAMLConfig struct {
 	CACert *string `yaml:"ca_cert,omitempty" minver:"1.77.0"`
 	// RequireSecureTransport can enable a mode where non-TLS connections are turned away.
 	RequireSecureTransport *bool `yaml:"require_secure_transport,omitempty"`
+	// RequireClientCert enables a mode where all clients must present a certificate. If a CA
+	// cert is also provided, the client cert will also be verified.
+	RequireClientCert *bool `yaml:"require_client_cert,omitempty" minver:"TBD"`
 	// AllowCleartextPasswords enables use of cleartext passwords.
 	AllowCleartextPasswords *bool `yaml:"allow_cleartext_passwords,omitempty"`
 	// Socket is unix socket file path
@@ -911,6 +914,16 @@ func (cfg YAMLConfig) CACert() string {
 		return ""
 	}
 	return *cfg.ListenerConfig.CACert
+}
+
+// RequireClientCert is true if the server should reject any connections that don't present a certificate. When
+// enabled, a client certificate is always required, and if a CA cert is also configured, then the client cert
+// will also be verified. Enabling this option also means that non-TLS connections are not allowed.
+func (cfg YAMLConfig) RequireClientCert() bool {
+	if cfg.ListenerConfig.RequireClientCert == nil {
+		return false
+	}
+	return *cfg.ListenerConfig.RequireClientCert
 }
 
 // RequireSecureTransport is true if the server should reject non-TLS connections.

@@ -1166,6 +1166,11 @@ func getConfigFromServerConfig(serverConfig servercfg.ServerConfig, plf server.P
 	serverConf.EncodeLoggedQuery = serverConfig.ShouldEncodeLoggedQuery()
 	serverConf.ProtocolListenerFactory = plf
 
+	// If client certs are required, then TLS connections are implicitly required
+	if serverConfig.RequireClientCert() {
+		serverConf.RequireSecureTransport = true
+	}
+
 	return serverConf, nil
 }
 

@@ -145,6 +145,7 @@ SKIP_SERVER_TESTS=$(cat <<-EOM
 ~admin-archive-inspect.bats~
 ~nonlocal.bats~
 ~branch-activity.bats~
+~mutual-tls-auth.bats~
 EOM
 )
 
