@@ -29,6 +29,7 @@ import (
 	"github.com/dolthub/go-mysql-server/server"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/memo"
+	"github.com/dolthub/go-mysql-server/sql/mysql_db"
 	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/dolthub/go-mysql-server/sql/transform"
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
@@ -516,8 +517,19 @@ func RunDoltStoredProceduresTest(t *testing.T, h DoltEnginetestHarness) {
 	for _, script := range DoltProcedureTests {
 		func() {
 			h := h.NewHarness(t)
+			h.UseLocalFileSystem()
 			defer h.Close()
-			enginetest.TestScript(t, h, script)
+
+			engine, err := h.NewEngine(t)
+			require.NoError(t, err)
+			defer engine.Close()
+
+			if engine.EngineAnalyzer().Catalog.MySQLDb != nil {
+				engine.EngineAnalyzer().Catalog.MySQLDb.AddRootAccount()
+				engine.EngineAnalyzer().Catalog.MySQLDb.SetPersister(&mysql_db.NoopPersister{})
+			}
+
+			enginetest.TestScriptWithEngine(t, engine, h, script)
 		}()
 	}
 }
@@ -526,6 +538,7 @@ func RunDoltStoredProceduresPreparedTest(t *testing.T, h DoltEnginetestHarness) 
 	for _, script := range DoltProcedureTests {
 		func() {
 			h := h.NewHarness(t)
+			h.UseLocalFileSystem()
 			defer h.Close()
 			enginetest.TestScriptPrepared(t, h, script)
 		}()

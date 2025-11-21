@@ -15,11 +15,250 @@
 package enginetest
 
 import (
+	"fmt"
+	"os"
+	"path/filepath"
+
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/sql"
 
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
 )
+
+func init() {
+	DoltProcedureTests = append(DoltProcedureTests, BackupsProcedureScripts...)
+}
+
+// fileUrl returns a file:// URL path for backup tests.
+func fileUrl(path string) string {
+	path = filepath.Join(os.TempDir(), path)
+	return "file://" + filepath.ToSlash(filepath.Clean(path))
+}
+
+var BackupsProcedureScripts = []queries.ScriptTest{
+	{
+		Name: "dolt_backup add",
+		SetUpScript: []string{
+			fmt.Sprintf("call dolt_backup('add', 'dolt_backup1', '%s');", fileUrl("dolt_backup1")),
+			fmt.Sprintf("call dolt_backup('add', 'dolt_backup2', '%s');", fileUrl("dolt_backup2")),
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    fmt.Sprintf("call dolt_backup('add', 'backup3', '%s');", fileUrl("dolt_backup3")),
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:          fmt.Sprintf("call dolt_backup('add', 'dolt_backup1', '%s');", fileUrl("dolt_backup1")),
+				ExpectedErrStr: "error: a backup named 'dolt_backup1' already exists, remove it before running this command again",
+			},
+			{
+				Query:          fmt.Sprintf("call dolt_backup('add', '', '');"),
+				ExpectedErrStr: "error: backup name is required",
+			},
+			{
+				Query:          "call dolt_backup('add', 'backup4', '');",
+				ExpectedErrStr: "error: backup url is required",
+			},
+			{
+				Query:          "call dolt_backup('add', 'backup4');",
+				ExpectedErrStr: "usage: dolt_backup('add', 'backup_name', 'backup_url')",
+			},
+			{
+				Query:          "call dolt_backup('add');",
+				ExpectedErrStr: "usage: dolt_backup('add', 'backup_name', 'backup_url')",
+			},
+			{
+				// Invalid URLs are accepted but will fail when used in 'sync'.
+				Query:    "call dolt_backup('add', 'backup4', 'invalid://url');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:          fmt.Sprintf("call dolt_backup('add', 'backup with spaces', '%s');", fileUrl("dolt_backup2")),
+				ExpectedErrStr: "error: invalid backup name 'backup with spaces'",
+			},
+			{
+				Query:          fmt.Sprintf("call dolt_backup('add', 'backup/slash', '%s');", fileUrl("dolt_backup3")),
+				ExpectedErrStr: "error: invalid backup name 'backup/slash'",
+			},
+		},
+	},
+	{
+		Name: "dolt_backup remove",
+		SetUpScript: []string{
+			fmt.Sprintf("call dolt_backup('add', 'dolt_backup1', '%s');", fileUrl("dolt_backup1")),
+			fmt.Sprintf("call dolt_backup('add', 'dolt_backup2', '%s');", fileUrl("dolt_backup2")),
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_backup('rm', 'dolt_backup2');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    fmt.Sprintf("call dolt_backup('add', 'dolt_backup2', '%s');", fileUrl("dolt_backup2")),
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "call dolt_backup('remove', 'dolt_backup1');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:          "call dolt_backup('remove', 'nonexistent');",
+				ExpectedErrStr: "error: unknown backup 'nonexistent'",
+			},
+			{
+				Query:          "call dolt_backup('remove');",
+				ExpectedErrStr: "usage: dolt_backup('remove', 'backup_name')",
+			},
+			{
+				Query:          "call dolt_backup('remove', 'dolt_backup1', 'extra');",
+				ExpectedErrStr: "usage: dolt_backup('remove', 'backup_name')",
+			},
+			{
+				Query:          "call dolt_backup('remove', '');",
+				ExpectedErrStr: "error: backup name is required",
+			},
+		},
+	},
+	{
+		Name: "dolt_backup sync",
+		SetUpScript: []string{
+			fmt.Sprintf("call dolt_backup('add', 'dolt_backup1', '%s');", fileUrl("dolt_backup1")),
+			"create table t(a int primary key, b int);",
+			"insert into t values (1, 100), (2, 200);",
+			"call dolt_add('t');",
+			"call dolt_commit('-m', 'initial commit');",
+			"call dolt_backup('add', 'invalid_backup', 'invalid://url');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_backup('sync', 'dolt_backup1');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				// Making sure nothing is happening to the data.
+				Query:    "select * from t;",
+				Expected: []sql.Row{{1, 100}, {2, 200}},
+			},
+			{
+				Query:          "call dolt_backup('sync', 'nonexistent');",
+				ExpectedErrStr: "error: unknown backup 'nonexistent'",
+			},
+			{
+				Query:          "call dolt_backup('sync');",
+				ExpectedErrStr: "usage: dolt_backup('sync', backup_name)",
+			},
+			{
+				Query:          "call dolt_backup('sync', 'dolt_backup1', 'extra');",
+				ExpectedErrStr: "usage: dolt_backup('sync', backup_name)",
+			},
+			{
+				Query:          "call dolt_backup('sync', 'invalid_backup');",
+				ExpectedErrStr: "unknown url scheme: 'invalid'",
+			},
+			{
+				Query:          "call dolt_backup('sync', '');",
+				ExpectedErrStr: "error: backup name is required",
+			},
+		},
+	},
+	{
+		Name: "dolt_backup sync-url",
+		SetUpScript: []string{
+			"create table t(a int primary key, b int);",
+			"insert into t values (1, 100), (2, 200);",
+			"call dolt_add('t');",
+			"call dolt_commit('-m', 'initial commit');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    fmt.Sprintf("call dolt_backup('sync-url', '%s');", fileUrl("dolt_backup1")),
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "select * from t;",
+				Expected: []sql.Row{{1, 100}, {2, 200}},
+			},
+			{
+				Query:          "call dolt_backup('sync-url');",
+				ExpectedErrStr: "usage: dolt_backup('sync-url', backup_url)",
+			},
+			{
+				Query:          "call dolt_backup('sync-url', '', 'extra');",
+				ExpectedErrStr: "usage: dolt_backup('sync-url', backup_url)",
+			},
+			{
+				Query:          "call dolt_backup('sync-url', 'invalid://url');",
+				ExpectedErrStr: "unknown url scheme: 'invalid'",
+			},
+			{
+				Query:          "call dolt_backup('sync-url', '');",
+				ExpectedErrStr: "error: backup url is required",
+			},
+		},
+	},
+	{
+		Name: "dolt_backup restore",
+		SetUpScript: []string{
+			"create table t(a int primary key, b int);",
+			"insert into t values (1, 100), (2, 200);",
+			"call dolt_add('t');",
+			"call dolt_commit('-m', 'restore this commit');",
+			fmt.Sprintf("call dolt_backup('add', 'dolt_backup1', '%s');", fileUrl("dolt_backup1")),
+			"call dolt_backup('sync', 'dolt_backup1');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    fmt.Sprintf("call dolt_backup('restore', '%s', 'restored_db');", fileUrl("dolt_backup1")),
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "select * from restored_db.t order by a;",
+				Expected: []sql.Row{{1, 100}, {2, 200}},
+			},
+			{
+				Query:    "select message from restored_db.dolt_log order by commit_order;",
+				Expected: []sql.Row{{"Initialize data repository"}, {"checkpoint enginetest database mydb"}, {"restore this commit"}},
+			},
+			{
+				Query:          "call dolt_backup('restore');",
+				ExpectedErrStr: "usage: dolt_backup('restore', 'backup_url', 'database_name')",
+			},
+			{
+				Query:          fmt.Sprintf("call dolt_backup('restore', '%s');", fileUrl("dolt_backup1")),
+				ExpectedErrStr: "usage: dolt_backup('restore', 'backup_url', 'database_name')",
+			},
+			{
+				Query:          fmt.Sprintf("call dolt_backup('restore', '%s', 'restored_db');", fileUrl("dolt_backup1")),
+				ExpectedErrStr: "error: cannot restore backup into restored_db. A database with that name already exists. Did you mean to supply --force?",
+			},
+			{
+				Query:    fmt.Sprintf("call dolt_backup('restore', '%s', 'restored_db', '--force');", fileUrl("dolt_backup1")),
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:          "call dolt_backup('restore', 'invalid://url', 'restored_db2');",
+				ExpectedErrStr: "unknown url scheme: 'invalid'",
+			},
+		},
+	},
+	{
+		Name: "dolt_backup error",
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          fmt.Sprintf("call dolt_backup('invalid', 'dolt_backup1', '%s');", fileUrl("dolt_backup1")),
+				ExpectedErrStr: "unrecognized dolt_backup parameter: invalid",
+			},
+			{
+				Query:          "call dolt_backup();",
+				ExpectedErrStr: "error: invalid argument, use 'dolt_backups' table to list backups",
+			},
+			{
+				Query:          "call dolt_backup('--verbose');",
+				ExpectedErrStr: "error: invalid argument, use 'dolt_backups' table to list backups",
+			},
+		},
+	},
+}
 
 var DoltProcedureTests = []queries.ScriptTest{
 	{
