@@ -253,6 +253,58 @@ var SimpleJsonDiffTests = []JsonDiffTest{
 		},
 	},
 	{
+		// Currently, inserting or removing elements from an array is seen as a modification at each subsequent index.
+		// This may change in the future.
+		Name: "array insert in middle",
+		From: types.JSONDocument{Val: types.JsonArray{1, 2, 3}},
+		To:   types.JSONDocument{Val: types.JsonArray{1, "inserted", 2, 3}},
+		ExpectedDiffs: []JsonDiff{
+			{
+				Key:  makeJsonPathKey(1),
+				From: &types.JSONDocument{Val: 2},
+				To:   &types.JSONDocument{Val: "inserted"},
+				Type: ModifiedDiff,
+			},
+			{
+				Key:  makeJsonPathKey(2),
+				From: &types.JSONDocument{Val: 3},
+				To:   &types.JSONDocument{Val: 2},
+				Type: ModifiedDiff,
+			},
+			{
+				Key:  makeJsonPathKey(3),
+				To:   &types.JSONDocument{Val: 3},
+				Type: AddedDiff,
+			},
+		},
+	},
+	{
+		// Currently, inserting or removing elements from an array is seen as a modification at each subsequent index.
+		// This may change in the future.
+		Name: "array removal in middle",
+		From: types.JSONDocument{Val: types.JsonArray{1, "removed", 2, 3}},
+		To:   types.JSONDocument{Val: types.JsonArray{1, 2, 3}},
+		ExpectedDiffs: []JsonDiff{
+			{
+				Key:  makeJsonPathKey(1),
+				From: &types.JSONDocument{Val: "removed"},
+				To:   &types.JSONDocument{Val: 2},
+				Type: ModifiedDiff,
+			},
+			{
+				Key:  makeJsonPathKey(2),
+				From: &types.JSONDocument{Val: 2},
+				To:   &types.JSONDocument{Val: 3},
+				Type: ModifiedDiff,
+			},
+			{
+				Key:  makeJsonPathKey(3),
+				From: &types.JSONDocument{Val: 3},
+				Type: RemovedDiff,
+			},
+		},
+	},
+	{
 		Name: "array modification in object",
 		From: types.JSONDocument{Val: types.JsonObject{"a": types.JsonArray{1, 2}}},
 		To:   types.JSONDocument{Val: types.JsonObject{"a": types.JsonArray{1, 3}}},
@@ -261,6 +313,31 @@ var SimpleJsonDiffTests = []JsonDiffTest{
 				Key:  makeJsonPathKey(`a`, 1),
 				From: &types.JSONDocument{Val: 2},
 				To:   &types.JSONDocument{Val: 3},
+				Type: ModifiedDiff,
+			},
+		},
+	},
+	{
+		Name: "object modification in array",
+		From: types.JSONDocument{Val: types.JsonArray{types.JsonObject{"a": "b", "c": "d"}, types.JsonObject{"e": "f"}, types.JsonObject{"i": "j"}}},
+		To:   types.JSONDocument{Val: types.JsonArray{types.JsonObject{"a": "b"}, types.JsonObject{"e": "f", "g": "h"}, types.JsonObject{"i": "k"}}},
+		ExpectedDiffs: []JsonDiff{
+			{
+				Key:  makeJsonPathKey(0, "c"),
+				From: &types.JSONDocument{Val: "d"},
+				To:   nil,
+				Type: RemovedDiff,
+			},
+			{
+				Key:  makeJsonPathKey(1, "g"),
+				From: nil,
+				To:   &types.JSONDocument{Val: "h"},
+				Type: AddedDiff,
+			},
+			{
+				Key:  makeJsonPathKey(2, "i"),
+				From: &types.JSONDocument{Val: "j"},
+				To:   &types.JSONDocument{Val: "k"},
 				Type: ModifiedDiff,
 			},
 		},
