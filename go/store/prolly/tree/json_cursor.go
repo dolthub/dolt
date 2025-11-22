@@ -64,7 +64,7 @@ func newJsonCursor(ctx context.Context, ns NodeStore, root *Node, startKey jsonL
 	return jcur, found, err
 }
 
-func newJsonCursorAtStartOfChunk(ctx context.Context, ns NodeStore, root *Node, startKey []byte) (jCur *JsonCursor, err error) {
+func newJsonCursorAtStartOfChunk(ctx context.Context, ns NodeStore, root *Node, startKey jsonLocationKey) (jCur *JsonCursor, err error) {
 	ordering := jsonLocationOrdering{}
 	cur, err := newCursorAtKey(ctx, ns, root, startKey, &ordering)
 	if err != nil {

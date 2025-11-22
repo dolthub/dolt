@@ -29,6 +29,19 @@ const (
 	RemovedDiff  DiffType = 3
 )
 
+func (t DiffType) DiffTypeString() string {
+	switch t {
+	case AddedDiff:
+		return "added"
+	case ModifiedDiff:
+		return "modified"
+	case RemovedDiff:
+		return "removed"
+	default:
+		return "unknown"
+	}
+}
+
 type Diff struct {
 	Key      Item
 	From, To Item

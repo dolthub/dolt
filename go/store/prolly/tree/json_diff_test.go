@@ -30,261 +30,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-type jsonDiffTest struct {
-	name          string
-	from, to      sql.JSONWrapper
-	expectedDiffs []JsonDiff
-}
-
-func makeJsonPathKey(parts ...string) []byte {
-	result := []byte{byte(startOfValue)}
-	for _, part := range parts {
-		result = append(result, beginObjectKey)
-		result = append(result, []byte(part)...)
-	}
-	return result
-}
-
-var simpleJsonDiffTests = []jsonDiffTest{
-	{
-		name:          "empty object, no modifications",
-		from:          types.JSONDocument{Val: types.JsonObject{}},
-		to:            types.JSONDocument{Val: types.JsonObject{}},
-		expectedDiffs: nil,
-	},
-	{
-		name: "insert into empty object",
-		from: types.JSONDocument{Val: types.JsonObject{}},
-		to:   types.JSONDocument{Val: types.JsonObject{"a": 1}},
-		expectedDiffs: []JsonDiff{
-			{
-				Key:  makeJsonPathKey(`a`),
-				From: nil,
-				To:   &types.JSONDocument{Val: 1},
-				Type: AddedDiff,
-			},
-		},
-	},
-	{
-		name: "delete from object",
-		from: types.JSONDocument{Val: types.JsonObject{"a": 1}},
-		to:   types.JSONDocument{Val: types.JsonObject{}},
-		expectedDiffs: []JsonDiff{
-			{
-				Key:  makeJsonPathKey(`a`),
-				From: &types.JSONDocument{Val: 1},
-				To:   nil,
-				Type: RemovedDiff,
-			},
-		},
-	},
-	{
-		name: "modify object",
-		from: types.JSONDocument{Val: types.JsonObject{"a": 1}},
-		to:   types.JSONDocument{Val: types.JsonObject{"a": 2}},
-		expectedDiffs: []JsonDiff{
-			{
-				Key:  makeJsonPathKey(`a`),
-				From: &types.JSONDocument{Val: 1},
-				To:   &types.JSONDocument{Val: 2},
-				Type: ModifiedDiff,
-			},
-		},
-	},
-	{
-		name: "nested insert",
-		from: types.JSONDocument{Val: types.JsonObject{"a": types.JsonObject{}}},
-		to:   types.JSONDocument{Val: types.JsonObject{"a": types.JsonObject{"b": 1}}},
-		expectedDiffs: []JsonDiff{
-			{
-				Key:  makeJsonPathKey(`a`, `b`),
-				To:   &types.JSONDocument{Val: 1},
-				Type: AddedDiff,
-			},
-		},
-	},
-	{
-		name: "nested delete",
-		from: types.JSONDocument{Val: types.JsonObject{"a": types.JsonObject{"b": 1}}},
-		to:   types.JSONDocument{Val: types.JsonObject{"a": types.JsonObject{}}},
-		expectedDiffs: []JsonDiff{
-			{
-				Key:  makeJsonPathKey(`a`, `b`),
-				From: &types.JSONDocument{Val: 1},
-				Type: RemovedDiff,
-			},
-		},
-	},
-	{
-		name: "nested modify",
-		from: types.JSONDocument{Val: types.JsonObject{"a": types.JsonObject{"b": 1}}},
-		to:   types.JSONDocument{Val: types.JsonObject{"a": types.JsonObject{"b": 2}}},
-		expectedDiffs: []JsonDiff{
-			{
-				Key:  makeJsonPathKey(`a`, `b`),
-				From: &types.JSONDocument{Val: 1},
-				To:   &types.JSONDocument{Val: 2},
-				Type: ModifiedDiff,
-			},
-		},
-	},
-	{
-		name: "insert object",
-		from: types.JSONDocument{Val: types.JsonObject{"a": types.JsonObject{}}},
-		to:   types.JSONDocument{Val: types.JsonObject{"a": types.JsonObject{"b": types.JsonObject{"c": 3}}}},
-		expectedDiffs: []JsonDiff{
-			{
-				Key:  makeJsonPathKey(`a`, `b`),
-				To:   &types.JSONDocument{Val: types.JsonObject{"c": 3}},
-				Type: AddedDiff,
-			},
-		},
-	},
-	{
-		name: "modify to object",
-		from: types.JSONDocument{Val: types.JsonObject{"a": types.JsonObject{"b": 2}}},
-		to:   types.JSONDocument{Val: types.JsonObject{"a": types.JsonObject{"b": types.JsonObject{"c": 3}}}},
-		expectedDiffs: []JsonDiff{
-			{
-				Key:  makeJsonPathKey(`a`, `b`),
-				From: &types.JSONDocument{Val: 2},
-				To:   &types.JSONDocument{Val: types.JsonObject{"c": 3}},
-				Type: ModifiedDiff,
-			},
-		},
-	},
-	{
-		name: "modify from object",
-		from: types.JSONDocument{Val: types.JsonObject{"a": types.JsonObject{"b": 2}}},
-		to:   types.JSONDocument{Val: types.JsonObject{"a": 1}},
-		expectedDiffs: []JsonDiff{
-			{
-				Key:  makeJsonPathKey(`a`),
-				From: &types.JSONDocument{Val: types.JsonObject{"b": 2}},
-				To:   &types.JSONDocument{Val: 1},
-				Type: ModifiedDiff,
-			},
-		},
-	},
-	{
-		name: "modify to array",
-		from: types.JSONDocument{Val: types.JsonObject{"a": types.JsonObject{"b": "foo"}}},
-		to:   types.JSONDocument{Val: types.JsonObject{"a": types.JsonObject{"b": types.JsonArray{1, 2}}}},
-		expectedDiffs: []JsonDiff{
-			{
-				Key:  makeJsonPathKey(`a`, `b`),
-				From: &types.JSONDocument{Val: "foo"},
-				To:   &types.JSONDocument{Val: types.JsonArray{1, 2}},
-				Type: ModifiedDiff,
-			},
-		},
-	},
-	{
-		name: "modify from array",
-		from: types.JSONDocument{Val: types.JsonObject{"a": types.JsonArray{1, 2}}},
-		to:   types.JSONDocument{Val: types.JsonObject{"a": 1}},
-		expectedDiffs: []JsonDiff{
-			{
-				Key:  makeJsonPathKey(`a`),
-				From: &types.JSONDocument{Val: types.JsonArray{1, 2}},
-				To:   &types.JSONDocument{Val: 1},
-				Type: ModifiedDiff,
-			},
-		},
-	},
-	{
-		name: "array to object",
-		from: types.JSONDocument{Val: types.JsonObject{"a": types.JsonArray{1, 2}}},
-		to:   types.JSONDocument{Val: types.JsonObject{"a": types.JsonObject{"b": types.JsonObject{"c": 3}}}},
-		expectedDiffs: []JsonDiff{
-			{
-				Key:  makeJsonPathKey(`a`),
-				From: &types.JSONDocument{Val: types.JsonArray{1, 2}},
-				To:   &types.JSONDocument{Val: types.JsonObject{"b": types.JsonObject{"c": 3}}},
-				Type: ModifiedDiff,
-			},
-		},
-	},
-	{
-		name: "object to array",
-		from: types.JSONDocument{Val: types.JsonObject{"a": types.JsonObject{"b": 2}}},
-		to:   types.JSONDocument{Val: types.JsonObject{"a": types.JsonArray{1, 2}}},
-		expectedDiffs: []JsonDiff{
-			{
-				Key:  makeJsonPathKey(`a`),
-				From: &types.JSONDocument{Val: types.JsonObject{"b": 2}},
-				To:   &types.JSONDocument{Val: types.JsonArray{1, 2}},
-				Type: ModifiedDiff,
-			},
-		},
-	},
-	{
-		name: "remove object",
-		from: types.JSONDocument{Val: types.JsonObject{"a": types.JsonObject{"b": types.JsonObject{"c": 3}}}},
-		to:   types.JSONDocument{Val: types.JsonObject{"a": types.JsonObject{}}},
-		expectedDiffs: []JsonDiff{
-			{
-				Key:  makeJsonPathKey(`a`, `b`),
-				From: &types.JSONDocument{Val: types.JsonObject{"c": 3}},
-				Type: RemovedDiff,
-			},
-		},
-	},
-	{
-		name: "insert escaped double quotes",
-		from: types.JSONDocument{Val: types.JsonObject{"\"a\"": "1"}},
-		to:   types.JSONDocument{Val: types.JsonObject{"b": "\"2\""}},
-		expectedDiffs: []JsonDiff{
-			{
-				Key:  makeJsonPathKey(`"a"`),
-				From: &types.JSONDocument{Val: "1"},
-				To:   nil,
-				Type: RemovedDiff,
-			},
-			{
-				Key:  makeJsonPathKey(`b`),
-				From: nil,
-				To:   &types.JSONDocument{Val: "\"2\""},
-				Type: AddedDiff,
-			},
-		},
-	},
-	{
-		name: "modifications returned in lexographic order",
-		from: types.JSONDocument{Val: types.JsonObject{"a": types.JsonObject{"1": "i"}, "aa": 2, "b": 6}},
-		to:   types.JSONDocument{Val: types.JsonObject{"": 1, "a": types.JsonObject{}, "aa": 3, "bb": 5}},
-		expectedDiffs: []JsonDiff{
-			{
-				Key:  makeJsonPathKey(``),
-				To:   &types.JSONDocument{Val: 1},
-				Type: AddedDiff,
-			},
-			{
-				Key:  makeJsonPathKey(`a`, `1`),
-				From: &types.JSONDocument{Val: "i"},
-				Type: RemovedDiff,
-			},
-			{
-				Key:  makeJsonPathKey(`aa`),
-				From: &types.JSONDocument{Val: 2},
-				To:   &types.JSONDocument{Val: 3},
-				Type: ModifiedDiff,
-			},
-			{
-				Key:  makeJsonPathKey(`b`),
-				From: &types.JSONDocument{Val: 6},
-				Type: RemovedDiff,
-			},
-			{
-				Key:  makeJsonPathKey(`bb`),
-				To:   &types.JSONDocument{Val: 5},
-				Type: AddedDiff,
-			},
-		},
-	},
-}
-
-func largeJsonDiffTests(t *testing.T) []jsonDiffTest {
+func largeJsonDiffTests(t *testing.T) []JsonDiffTest {
 	ctx := sql.NewEmptyContext()
 	ns := NewTestNodeStore()
 
@@ -325,12 +71,12 @@ func largeJsonDiffTests(t *testing.T) []jsonDiffTest {
 	}
 
 	largeObject := createLargeArraylessDocumentForTesting(t, ctx, ns)
-	return []jsonDiffTest{
+	return []JsonDiffTest{
 		{
-			name: "nested insert",
-			from: largeObject,
-			to:   insert(largeObject, "$.level7.newKey", 2),
-			expectedDiffs: []JsonDiff{
+			Name: "nested insert",
+			From: largeObject,
+			To:   insert(largeObject, "$.level7.newKey", 2),
+			ExpectedDiffs: []JsonDiff{
 				{
 					Key:  makeJsonPathKey(`level7`, `newKey`),
 					From: nil,
@@ -340,10 +86,10 @@ func largeJsonDiffTests(t *testing.T) []jsonDiffTest {
 			},
 		},
 		{
-			name: "nested remove",
-			from: largeObject,
-			to:   remove(largeObject, "$.level7.level6"),
-			expectedDiffs: []JsonDiff{
+			Name: "nested remove",
+			From: largeObject,
+			To:   remove(largeObject, "$.level7.level6"),
+			ExpectedDiffs: []JsonDiff{
 				{
 					Key:  makeJsonPathKey(`level7`, `level6`),
 					From: lookup(largeObject, "$.level7.level6"),
@@ -353,10 +99,10 @@ func largeJsonDiffTests(t *testing.T) []jsonDiffTest {
 			},
 		},
 		{
-			name: "nested modification 1",
-			from: largeObject,
-			to:   set(largeObject, "$.level7.level5", 2),
-			expectedDiffs: []JsonDiff{
+			Name: "nested modification 1",
+			From: largeObject,
+			To:   set(largeObject, "$.level7.level5", 2),
+			ExpectedDiffs: []JsonDiff{
 				{
 					Key:  makeJsonPathKey(`level7`, `level5`),
 					From: lookup(largeObject, "$.level7.level5"),
@@ -366,10 +112,10 @@ func largeJsonDiffTests(t *testing.T) []jsonDiffTest {
 			},
 		},
 		{
-			name: "nested modification 2",
-			from: largeObject,
-			to:   set(largeObject, "$.level7.level4", 1),
-			expectedDiffs: []JsonDiff{
+			Name: "nested modification 2",
+			From: largeObject,
+			To:   set(largeObject, "$.level7.level4", 1),
+			ExpectedDiffs: []JsonDiff{
 				{
 					Key:  makeJsonPathKey(`level7`, `level4`),
 					From: lookup(largeObject, "$.level7.level4"),
@@ -379,10 +125,10 @@ func largeJsonDiffTests(t *testing.T) []jsonDiffTest {
 			},
 		},
 		{
-			name: "convert object to array",
-			from: largeObject,
-			to:   set(largeObject, "$.level7.level6", []interface{}{}),
-			expectedDiffs: []JsonDiff{
+			Name: "convert object To array",
+			From: largeObject,
+			To:   set(largeObject, "$.level7.level6", []interface{}{}),
+			ExpectedDiffs: []JsonDiff{
 				{
 					Key:  makeJsonPathKey(`level7`, `level6`),
 					From: lookup(largeObject, "$.level7.level6"),
@@ -392,10 +138,10 @@ func largeJsonDiffTests(t *testing.T) []jsonDiffTest {
 			},
 		},
 		{
-			name: "convert array to object",
-			from: set(largeObject, "$.level7.level6", []interface{}{}),
-			to:   largeObject,
-			expectedDiffs: []JsonDiff{
+			Name: "convert array To object",
+			From: set(largeObject, "$.level7.level6", []interface{}{}),
+			To:   largeObject,
+			ExpectedDiffs: []JsonDiff{
 				{
 					Key:  makeJsonPathKey(`level7`, `level6`),
 					From: &types.JSONDocument{Val: []interface{}{}},
@@ -410,11 +156,11 @@ func largeJsonDiffTests(t *testing.T) []jsonDiffTest {
 			// - One document fits in a single chunk and the other doesn't
 			// - The location of the chunk boundary in the larger document is also present in the smaller document
 			// - The chunk boundary doesn't fall at the beginning of value.
-			// Then the differ would fail to advance the prolly tree cursor and would incorrectly see the larger document as corrupt.
-			// The values in this test case are specifically chosen to meet these conditions.
-			name: "no error when diffing large doc with small doc",
-			from: largeObject,
-			to:   insert(emptyDocument, "$.level6", insert(emptyDocument, "$.level4", lookup(largeObject, "$.level6.level4"))),
+			// Then the differ would fail To advance the prolly tree cursor and would incorrectly see the larger document as corrupt.
+			// The values in this test case are specifically chosen To meet these conditions.
+			Name: "no error when diffing large doc with small doc",
+			From: largeObject,
+			To:   insert(emptyDocument, "$.level6", insert(emptyDocument, "$.level4", lookup(largeObject, "$.level6.level4"))),
 		},
 		{
 			// This is a regression test.
@@ -424,12 +170,12 @@ func largeJsonDiffTests(t *testing.T) []jsonDiffTest {
 			// - If a value "A.b" within this object was modified
 			// - The previous chunk was also modified
 			// Then the differ would incorrectly report that the entire "A" object had been modified, instead of the sub-value "A.b"
-			// The values in this test case are specifically chosen to meet these conditions,
+			// The values in this test case are specifically chosen To meet these conditions,
 			// as there is a chunk boundary immediately before "$.level5.level3.level1"
-			name: "correctly diff object that begins on chunk boundary",
-			from: largeObject,
-			to:   set(set(largeObject, "$.level5.level2.number", 2), "$.level5.level3.level1.number", 2),
-			expectedDiffs: []JsonDiff{
+			Name: "correctly diff object that begins on chunk boundary",
+			From: largeObject,
+			To:   set(set(largeObject, "$.level5.level2.number", 2), "$.level5.level3.level1.number", 2),
+			ExpectedDiffs: []JsonDiff{
 				{
 					Key:  makeJsonPathKey(`level5`, `level2`, `number`),
 					From: types.JSONDocument{Val: 1},
@@ -468,26 +214,26 @@ func createLargeArraylessDocumentForTesting(t *testing.T, ctx *sql.Context, ns N
 
 func TestJsonDiff(t *testing.T) {
 	t.Run("simple tests", func(t *testing.T) {
-		runTestBatch(t, simpleJsonDiffTests)
+		runTestBatch(t, SimpleJsonDiffTests)
 	})
 	t.Run("large document tests", func(t *testing.T) {
 		runTestBatch(t, largeJsonDiffTests(t))
 	})
 }
 
-func runTestBatch(t *testing.T, tests []jsonDiffTest) {
+func runTestBatch(t *testing.T, tests []JsonDiffTest) {
 	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
+		t.Run(test.Name, func(t *testing.T) {
 			runTest(t, test)
 		})
 	}
 }
 
-func runTest(t *testing.T, test jsonDiffTest) {
+func runTest(t *testing.T, test JsonDiffTest) {
 	ctx := context.Background()
 	ns := NewTestNodeStore()
-	from := newIndexedJsonDocumentFromValue(t, ctx, ns, test.from)
-	to := newIndexedJsonDocumentFromValue(t, ctx, ns, test.to)
+	from := newIndexedJsonDocumentFromValue(t, ctx, ns, test.From)
+	to := newIndexedJsonDocumentFromValue(t, ctx, ns, test.To)
 	differ, err := NewIndexedJsonDiffer(ctx, from, to)
 	require.NoError(t, err)
 	var actualDiffs []JsonDiff
@@ -517,12 +263,12 @@ func runTest(t *testing.T, test jsonDiffTest) {
 
 		return cmp == 0
 	}
-	if test.expectedDiffs != nil {
+	if test.ExpectedDiffs != nil {
 
-		if !assert.Equal(t, len(test.expectedDiffs), len(actualDiffs)) {
-			require.Fail(t, "Diffs don't match", "Expected: %v\nActual: %v", test.expectedDiffs, actualDiffs)
+		if !assert.Equal(t, len(test.ExpectedDiffs), len(actualDiffs)) {
+			require.Fail(t, "Diffs don't match", "Expected: %v\nActual: %v", test.ExpectedDiffs, actualDiffs)
 		}
-		for i, expected := range test.expectedDiffs {
+		for i, expected := range test.ExpectedDiffs {
 			actual := actualDiffs[i]
 			require.True(t, diffsEqual(expected, actual), fmt.Sprintf("Expected: %v\nActual: %v", expected, actual))
 		}

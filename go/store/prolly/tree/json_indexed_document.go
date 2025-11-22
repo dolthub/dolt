@@ -27,8 +27,6 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/types"
 )
 
-type jsonLocationKey = []byte
-
 type address = []byte
 
 type StaticJsonMap = StaticMap[jsonLocationKey, address, *jsonLocationOrdering]

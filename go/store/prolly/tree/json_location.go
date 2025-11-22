@@ -21,8 +21,63 @@ import (
 	"slices"
 	"strconv"
 
+	"github.com/dolthub/go-mysql-server/sql/types"
+
 	"github.com/mohae/uvarint"
 )
+
+// jsonLocationKey is the serialized version of a jsonLocation.
+// It represents a path into a JSON document as sequence of bytes.
+type jsonLocationKey []byte
+
+func (key jsonLocationKey) emitAdded(value interface{}) JsonDiff {
+	return JsonDiff{
+		Key:  key,
+		From: nil,
+		To:   &types.JSONDocument{Val: value},
+		Type: AddedDiff,
+	}
+}
+
+func (key jsonLocationKey) emitRemoved(value interface{}) JsonDiff {
+	return JsonDiff{
+		Key:  key,
+		From: &types.JSONDocument{Val: value},
+		To:   nil,
+		Type: RemovedDiff,
+	}
+}
+
+func (key jsonLocationKey) emitModified(from interface{}, to interface{}) JsonDiff {
+	return JsonDiff{
+		Key:  key,
+		From: &types.JSONDocument{Val: from},
+		To:   &types.JSONDocument{Val: to},
+		Type: ModifiedDiff,
+	}
+}
+
+// appendKey creates a new key by adding an object key to a root.
+// This is designed to potentially reuse memory, but is safe in
+// this context because only a single derived key is used at a time.
+func (root jsonLocationKey) appendObjectKey(key []byte) jsonLocationKey {
+	return append(append(root, beginObjectKey), key...)
+}
+
+func (root jsonLocationKey) appendObjectKeyString(key string) jsonLocationKey {
+	return root.appendObjectKey([]byte(key))
+}
+
+// appendIndex creates a new key by adding a array index key to a root.
+// This is designed to potentially reuse memory, but is safe in
+// this context because only a single derived key is used at a time.
+func (root jsonLocationKey) appendArrayIndexU64(idx uint64) jsonLocationKey {
+	return append(append(root, beginArrayKey), getVarInt(idx)...)
+}
+
+func (root jsonLocationKey) appendArrayIndex(idx int) jsonLocationKey {
+	return root.appendArrayIndexU64(uint64(idx))
+}
 
 // jsonLocation is a representation of a path into a JSON document. It is designed for efficient in-place modification and fast
 // comparisons. The |offsets| field is redundant and can be generated from the |key| field using the jsonPathFromKey function.
@@ -57,7 +112,7 @@ import (
 //
 // |offsets| - This field stores an offset to the start of each path element in |key|, plus an offset to the end of |key|
 type jsonLocation struct {
-	key     []byte
+	key     jsonLocationKey
 	offsets []int
 }
 
@@ -157,6 +212,28 @@ func jsonPathFromKey(pathKey []byte) (path jsonLocation) {
 	}
 	ret.offsets = append(ret.offsets, i)
 	return ret
+}
+
+// toMysqlJsonPath generates the string used by MySQL JSON functions to refer to this JSON path.
+func (p jsonLocation) toMysqlJsonPath() string {
+	result := make([]byte, 0, len(p.key))
+	result = append(result, '$')
+	for i := 0; i < len(p.offsets)-1; i++ {
+		pathElement := p.getPathElement(i)
+		if pathElement.isArrayIndex {
+			arrayIndex := pathElement.getArrayIndex()
+			result = fmt.Appendf(result, "[%d]", arrayIndex)
+		} else {
+			result = append(result, '.')
+			result = append(result, pathElement.key...)
+		}
+	}
+	return string(result)
+}
+
+// MySqlJsonPathFromKey generates the string used by MySQL JSON functions corresponding to the provided path from an indexed JSON doc
+func MySqlJsonPathFromKey(pathKey []byte) string {
+	return jsonPathFromKey(pathKey).toMysqlJsonPath()
 }
 
 // varIntLength returns the length of a SQLite4 varint in bytes, given the contents of the first byte.
@@ -331,12 +408,12 @@ func jsonPathElementsFromMySQLJsonPath(pathBytes []byte) (jsonLocation, error) {
 }
 
 func (p *jsonLocation) appendObjectKey(key []byte) {
-	p.key = append(append(p.key, beginObjectKey), key...)
+	p.key = p.key.appendObjectKey(key)
 	p.offsets = append(p.offsets, len(p.key))
 }
 
 func (p *jsonLocation) appendArrayIndex(idx uint64) {
-	p.key = append(append(p.key, beginArrayKey), getVarInt(idx)...)
+	p.key = p.key.appendArrayIndexU64(idx)
 	p.offsets = append(p.offsets, len(p.key))
 }
 
@@ -464,9 +541,9 @@ type jsonLocationOrdering struct {
 	err error // store errors created during comparisons
 }
 
-var _ Ordering[[]byte] = &jsonLocationOrdering{}
+var _ Ordering[jsonLocationKey] = &jsonLocationOrdering{}
 
-func (o *jsonLocationOrdering) Compare(ctx context.Context, left, right []byte) int {
+func (o *jsonLocationOrdering) Compare(ctx context.Context, left, right jsonLocationKey) int {
 	// A JSON document that fits entirely in a single chunk has no keys,
 	if len(left) == 0 && len(right) == 0 {
 		return 0
