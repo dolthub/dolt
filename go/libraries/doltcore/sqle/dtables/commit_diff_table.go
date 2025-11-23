@@ -24,6 +24,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/rowconv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
@@ -40,6 +41,7 @@ var ErrInvalidCommitDiffTableArgs = errors.New("commit_diff_<table> requires one
 type CommitDiffTable struct {
 	workingRoot       doltdb.RootValue
 	stagedRoot        doltdb.RootValue
+	headRef           ref.DoltRef
 	requiredFilterErr error
 	ddb               *doltdb.DoltDB
 	table             *doltdb.Table
@@ -59,7 +61,7 @@ var _ sql.Table = (*CommitDiffTable)(nil)
 var _ sql.IndexAddressable = (*CommitDiffTable)(nil)
 var _ sql.StatisticsTable = (*CommitDiffTable)(nil)
 
-func NewCommitDiffTable(ctx *sql.Context, dbName string, tblName doltdb.TableName, ddb *doltdb.DoltDB, wRoot, sRoot doltdb.RootValue) (sql.Table, error) {
+func NewCommitDiffTable(ctx *sql.Context, dbName string, tblName doltdb.TableName, ddb *doltdb.DoltDB, wRoot, sRoot doltdb.RootValue, headRef ref.DoltRef) (sql.Table, error) {
 	diffTblName := doltdb.DoltCommitDiffTablePrefix + tblName.Name
 
 	var table *doltdb.Table
@@ -91,6 +93,7 @@ func NewCommitDiffTable(ctx *sql.Context, dbName string, tblName doltdb.TableNam
 		ddb:          ddb,
 		workingRoot:  wRoot,
 		stagedRoot:   sRoot,
+		headRef:      headRef,
 		joiner:       j,
 		sqlSch:       sqlSch,
 		targetSchema: sch,
@@ -287,7 +290,7 @@ func (dt *CommitDiffTable) rootValForHash(ctx *sql.Context, hashStr string) (dol
 			return nil, "", nil, err
 		}
 
-		optCmt, err := dt.ddb.Resolve(ctx, cs, nil)
+		optCmt, err := dt.ddb.Resolve(ctx, cs, dt.headRef)
 		if err != nil {
 			return nil, "", nil, err
 		}
