@@ -5449,6 +5449,14 @@ var CommitDiffSystemTableScriptTests = []queries.ScriptTest{
 				},
 			},
 			{
+				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type FROM DOLT_COMMIT_DIFF_t WHERE TO_COMMIT='WORKING' and FROM_COMMIT='HEAD~';",
+				Expected: []sql.Row{
+					{1, 2, 3, nil, nil, nil, "added"},
+					{4, 5, 6, nil, nil, nil, "added"},
+					{7, 8, 9, nil, nil, nil, "added"},
+				},
+			},
+			{
 				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type FROM DOLT_COMMIT_DIFF_t WHERE TO_COMMIT='STAGED' and FROM_COMMIT='HEAD';",
 				Expected: []sql.Row{
 					{1, 2, 3, nil, nil, nil, "added"},
