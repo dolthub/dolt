@@ -306,7 +306,7 @@ select * from dolt_status;
 SQL
     [ $status -eq 0 ]
     [[ "${lines[3]}" =~ "other" ]] || false
-    [[ "${lines[5]}" =~ "test,false,new table" ]] || false
+    [[ "${lines[5]}" =~ "test,0,new table" ]] || false
 }
 
 get_head_commit() {

@@ -25,13 +25,13 @@ teardown() {
 @test "sql-status: status properly works with working and staged tables" {
     run dolt sql -r csv -q "select * from dolt_status"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ 'test,false,new table' ]] || false
+    [[ "$output" =~ 'test,0,new table' ]] || false
     dolt add .
 
     # Confirm table is now marked as staged
     run dolt sql -r csv -q "select * from dolt_status"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ 'test,true,new table' ]] || false
+    [[ "$output" =~ 'test,1,new table' ]] || false
 }
 
 @test "sql-status: status properly works with table rename" {
@@ -39,7 +39,7 @@ teardown() {
     dolt add test
     run dolt sql -r csv -q "select * from dolt_status"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ 'test,true,new table' ]] || false
+    [[ "$output" =~ 'test,1,new table' ]] || false
 
     # Rename test to test2
     run dolt sql -r csv -q "alter table test rename to test2"
@@ -48,14 +48,14 @@ teardown() {
     # Confirm table is now marked as renamed, test still staged
     run dolt sql -r csv -q "select * from dolt_status"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ 'test,true,new table' ]] || false
-    [[ "$output" =~ 'test -> test2,false,renamed' ]] || false
+    [[ "$output" =~ 'test,1,new table' ]] || false
+    [[ "$output" =~ 'test -> test2,0,renamed' ]] || false
 
     # Confirm table is now marked as staged
     dolt add test2
     run dolt sql -r csv -q "select * from dolt_status"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ 'test2,true,new table' ]] || false
+    [[ "$output" =~ 'test2,1,new table' ]] || false
 }
 
 @test "sql-status: table that has staged and unstaged changes shows up twice" {
@@ -68,8 +68,8 @@ teardown() {
     run dolt sql -r csv -q "select * from dolt_status"
 
     [ "$status" -eq 0 ]
-    [[ "$output" =~ 'test,true,new table' ]] || false
-    [[ "$output" =~ 'test,false,modified' ]] || false
+    [[ "$output" =~ 'test,1,new table' ]] || false
+    [[ "$output" =~ 'test,0,modified' ]] || false
 }
 
 @test "sql-status: status properly works with docs" {
@@ -78,10 +78,9 @@ teardown() {
     echo license-text > LICENSE.md
     dolt docs upload LICENSE.md LICENSE.md
 
-    dolt sql -r csv -q "select * from dolt_status ORDER BY table_name"
     run dolt sql -r csv -q "select * from dolt_status ORDER BY table_name"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ 'dolt_docs,false,new table' ]] || false
+    [[ "$output" =~ 'dolt_docs,0,new table' ]] || false
 }
 
 @test "sql-status: status works property with working tables in conflict" {
@@ -104,7 +103,7 @@ teardown() {
 
     run dolt sql -r csv -q "select * from dolt_status"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ 'test,false,conflict' ]] || false
+    [[ "$output" =~ 'test,0,conflict' ]] || false
 }
 
 @test "sql-status: status works properly with working docs in conflict" {
@@ -149,7 +148,7 @@ teardown() {
      dolt status
      run dolt sql -r csv -q "select * from dolt_status ORDER BY status"
      [ "$status" -eq 0 ]
-     [[ "$output" =~ 'dolt_docs,false,conflict' ]] || false
+     [[ "$output" =~ 'dolt_docs,0,conflict' ]] || false
 }
 
 @test "sql-status: tables with no observable changes don't show in status but can be staged" {
@@ -164,10 +163,9 @@ insert into temp__t1 values (1);
 drop table t1;
 rename table temp__t1 to t1;
 SQL
-    dolt sql -q "select * from dolt_status;"
-    run dolt sql -q "select * from dolt_status;"
+    run dolt sql -q "select count(*)=0 from dolt_status;"
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 0 ]
+    [[ "$output" =~ "true" ]] || false
 
     run dolt diff t1
     [ "$status" -eq 0 ]
@@ -177,5 +175,5 @@ SQL
 
     run dolt sql -r csv -q "select * from dolt_status;"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "t1,true,modified" ]] || false
+    [[ "$output" =~ "t1,1,modified" ]] || false
 }

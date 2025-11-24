@@ -140,8 +140,8 @@ var DoltRmTests = []queries.ScriptTest{
 			{
 				Query: "select * from dolt_status;",
 				Expected: []sql.Row{
-					{"test", true, "deleted"},
-					{"test", false, "new table"},
+					{"test", byte(1), "deleted"},
+					{"test", byte(0), "new table"},
 				},
 			},
 		},
@@ -160,7 +160,7 @@ var DoltRmTests = []queries.ScriptTest{
 			{
 				Query: "SELECT * FROM DOLT_STATUS",
 				Expected: []sql.Row{
-					{"test", false, "new table"},
+					{"test", byte(0), "new table"},
 				},
 			},
 		},
@@ -181,9 +181,9 @@ var DoltRmTests = []queries.ScriptTest{
 			{
 				Query: "SELECT * FROM dolt_status",
 				Expected: []sql.Row{
-					{"committed", true, "deleted"},
-					{"staged", false, "new table"},
-					{"committed", false, "new table"},
+					{"committed", byte(1), "deleted"},
+					{"staged", byte(0), "new table"},
+					{"committed", byte(0), "new table"},
 				},
 			},
 		},

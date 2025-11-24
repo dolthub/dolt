@@ -135,7 +135,7 @@ var RevertScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "select * from dolt_status",
-				Expected: []sql.Row{{"dont_track", false, "new table"}},
+				Expected: []sql.Row{{"dont_track", byte(0), "new table"}},
 			},
 		},
 	},

@@ -538,7 +538,7 @@ SQL
     run dolt sql -r csv -q "select * from dolt_status"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "table_name,staged,status" ]] || false
-    [[ "$output" =~ "test,false,modified" ]] || false
+    [[ "$output" =~ "test,0,modified" ]] || false
 
     run dolt filter-branch --apply-to-uncommitted -q "alter table test add column filter int"
     [ "$status" -eq 0 ]
@@ -546,7 +546,7 @@ SQL
     run dolt sql -r csv -q "select * from dolt_status"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "table_name,staged,status" ]] || false
-    [[ "$output" =~ "test,false,modified" ]] || false
+    [[ "$output" =~ "test,0,modified" ]] || false
 
     run dolt sql -r csv -q "select * from test as of 'HEAD'"
     [ "$status" -eq 0 ]
@@ -564,7 +564,7 @@ SQL
     run dolt sql -r csv -q "select * from dolt_status"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "table_name,staged,status" ]] || false
-    [[ "$output" =~ "test,true,modified" ]] || false
+    [[ "$output" =~ "test,1,modified" ]] || false
 
     run dolt filter-branch --apply-to-uncommitted -q "alter table test add column filter int"
     [ "$status" -eq 0 ]
@@ -572,7 +572,7 @@ SQL
     run dolt sql -r csv -q "select * from dolt_status"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "table_name,staged,status" ]] || false
-    [[ "$output" =~ "test,true,modified" ]] || false
+    [[ "$output" =~ "test,1,modified" ]] || false
 
     run dolt sql -r csv -q "select * from test as of 'HEAD'"
     [ "$status" -eq 0 ]
@@ -598,7 +598,7 @@ SQL
     run dolt sql -r csv -q "call dolt_checkout('other'); select * from dolt_status;"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "table_name,staged,status" ]] || false
-    [[ "$output" =~ "test,false,modified" ]] || false
+    [[ "$output" =~ "test,0,modified" ]] || false
 
     run dolt filter-branch --apply-to-uncommitted --branches -q "alter table test add column filter int"
     [ "$status" -eq 0 ]
@@ -612,7 +612,7 @@ SQL
     run dolt sql -r csv -q "call dolt_checkout('other'); select * from dolt_status;"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "table_name,staged,status" ]] || false
-    [[ "$output" =~ "test,false,modified" ]] || false
+    [[ "$output" =~ "test,0,modified" ]] || false
 
     run dolt sql -r csv -q "select * from test"
     [ "$status" -eq 0 ]
@@ -647,7 +647,7 @@ SQL
     run dolt sql -r csv -q "call dolt_checkout('other'); select * from dolt_status;"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "table_name,staged,status" ]] || false
-    [[ "$output" =~ "test,true,modified" ]] || false
+    [[ "$output" =~ "test,1,modified" ]] || false
 
     run dolt filter-branch --apply-to-uncommitted --branches -q "alter table test add column filter int"
     [ "$status" -eq 0 ]
@@ -661,7 +661,7 @@ SQL
     run dolt sql -r csv -q "call dolt_checkout('other'); select * from dolt_status;"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "table_name,staged,status" ]] || false
-    [[ "$output" =~ "test,true,modified" ]] || false
+    [[ "$output" =~ "test,1,modified" ]] || false
 
     run dolt sql -r csv -q "select * from test"
     [ "$status" -eq 0 ]

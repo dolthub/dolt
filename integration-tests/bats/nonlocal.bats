@@ -323,9 +323,9 @@ SQL
   echo "$output"
   ! [[ "$output" =~ "test_table" ]] || false
 
-  run dolt sql -q "CALL DOLT_CHECKOUT('main'); SELECT * FROM dolt_status"
+  run dolt sql -r csv -q "CALL DOLT_CHECKOUT('main'); SELECT * FROM dolt_status"
   [ "$status" -eq 0 ]
-  [[ "$output" =~ "test_table | false" ]] || false
+  [[ "$output" =~ "test_table,0" ]] || false
 }
 
 @test "nonlocal: self-referrential nonlocal tables in the same branch as their target are effectively ignored" {
@@ -338,18 +338,18 @@ SQL
 SQL
 
   dolt add nonlocal_table
-  run dolt sql -q "select * from dolt_status"
+  run dolt sql -r csv -q "select * from dolt_status"
   [ "$status" -eq 0 ]
   echo "$output"
-  [[ "$output" =~ "nonlocal_table       | true" ]] || false
+  [[ "$output" =~ "nonlocal_table,1" ]] || false
 
   # Unstage nonlocal_table but keep it in the working set
   dolt reset HEAD
 
   dolt add .
-  run dolt sql -q "select * from dolt_status"
+  run dolt sql -r csv -q "select * from dolt_status"
   [ "$status" -eq 0 ]
-  [[ "$output" =~ "nonlocal_table       | true" ]] || false
+  [[ "$output" =~ "nonlocal_table,1" ]] || false
 }
 
 @test "nonlocal: adding an existing table to nonlocal tables errors" {
