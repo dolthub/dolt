@@ -89,8 +89,6 @@ type DoltDatabaseProvider interface {
 	// (otherwise all branches are cloned), remoteName is the name for the remote created in the new database, and
 	// remoteUrl is a URL (e.g. "file:///dbs/db1") or an <org>/<database> path indicating a database hosted on DoltHub.
 	CloneDatabaseFromRemote(ctx *sql.Context, dbName, branch, remoteName, remoteUrl string, depth int, remoteParams map[string]string) error
-	// RegisterNewDatabaseWithLock registers |dEnv| as a database named |name| in this provider.
-	RegisterNewDatabaseWithLock(ctx *sql.Context, name string, dEnv *env.DoltEnv) error
 	// SessionDatabase returns the SessionDatabase for the specified database, which may name a revision of a base
 	// database.
 	SessionDatabase(ctx *sql.Context, dbName string) (SqlDatabase, bool, error)

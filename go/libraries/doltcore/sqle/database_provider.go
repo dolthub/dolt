@@ -920,14 +920,6 @@ func (p *DoltDatabaseProvider) registerNewDatabase(ctx *sql.Context, name string
 	return nil
 }
 
-// RegisterNewDatabaseWithLock registers |dEnv| as a database named |name| in this provider. This method, unlike its
-// wrapped parent, handles mutex locking internally and is intended for callers outside this package.
-func (p *DoltDatabaseProvider) RegisterNewDatabaseWithLock(ctx *sql.Context, name string, dEnv *env.DoltEnv) error {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	return p.registerNewDatabase(ctx, name, dEnv)
-}
-
 // invalidateDbStateInAllSessions removes the db state for this database from every session. This is necessary when a
 // database is dropped, so that other sessions don't use stale db state.
 func (p *DoltDatabaseProvider) invalidateDbStateInAllSessions(ctx *sql.Context, name string) error {
