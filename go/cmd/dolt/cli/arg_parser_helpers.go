@@ -385,21 +385,6 @@ func CreateGlobalArgParser(name string) *argparser.ArgParser {
 var awsParams = []string{dbfactory.AWSRegionParam, dbfactory.AWSCredsTypeParam, dbfactory.AWSCredsFileParam, dbfactory.AWSCredsProfile}
 var ossParams = []string{dbfactory.OSSCredsFileParam, dbfactory.OSSCredsProfile}
 
-func ProcessBackupArgs(apr *argparser.ArgParseResults, scheme, backupUrl string) (map[string]string, error) {
-	params := map[string]string{}
-
-	var err error
-	switch scheme {
-	case dbfactory.AWSScheme:
-		err = AddAWSParams(backupUrl, apr, params)
-	case dbfactory.OSSScheme:
-		err = AddOSSParams(backupUrl, apr, params)
-	default:
-		err = VerifyNoAwsParams(apr)
-	}
-	return params, err
-}
-
 func AddAWSParams(remoteUrl string, apr *argparser.ArgParseResults, params map[string]string) error {
 	isAWS := strings.HasPrefix(remoteUrl, "aws")
 
@@ -448,7 +433,7 @@ func VerifyNoAwsParams(apr *argparser.ArgParseResults) error {
 		}
 
 		keysStr := strings.Join(awsParamKeys, ",")
-		return fmt.Errorf("The parameters %s, are only valid for aws remotes", keysStr)
+		return fmt.Errorf("the parameters %s, are only valid for aws remotes", keysStr)
 	}
 
 	return nil

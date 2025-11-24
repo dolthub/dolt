@@ -121,10 +121,6 @@ func (s SessionStateAdapter) AddRemote(remote env.Remote) error {
 		return env.ErrRemoteAlreadyExists
 	}
 
-	if strings.IndexAny(remote.Name, " \t\n\r./\\!@#$%^&*(){}[],.<>'\"?=+|") != -1 {
-		return env.ErrInvalidBackupName
-	}
-
 	fs, err := s.session.Provider().FileSystemForDatabase(s.dbName)
 	if err != nil {
 		return err
@@ -137,7 +133,7 @@ func (s SessionStateAdapter) AddRemote(remote env.Remote) error {
 
 	// can have multiple remotes with the same address, but no conflicting backups
 	if rem, found := env.CheckRemoteAddressConflict(remote.Url, nil, repoState.Backups); found {
-		return fmt.Errorf("%w: '%s' -> %s", env.ErrRemoteAddressConflict, rem.Name, rem.Url)
+		return env.ErrRemoteAddressConflict.New(rem.Name, rem.Url)
 	}
 
 	s.remotes.Set(remote.Name, remote)
@@ -145,33 +141,35 @@ func (s SessionStateAdapter) AddRemote(remote env.Remote) error {
 	return repoState.Save(fs)
 }
 
-func (s SessionStateAdapter) AddBackup(backup env.Remote) error {
-	if _, ok := s.backups.Get(backup.Name); ok {
-		return env.ErrBackupAlreadyExists
+func (s SessionStateAdapter) AddBackup(remote env.Remote) error {
+	const invalidNameCharacters = " \t\n\r./\\!@#$%^&*(){}[],.<>'\"?=+|"
+	if remote.Name == "" || strings.IndexAny(remote.Name, invalidNameCharacters) != -1 {
+		return env.ErrBackupInvalidName.New(remote.Name)
 	}
 
-	if strings.IndexAny(backup.Name, " \t\n\r./\\!@#$%^&*(){}[],.<>'\"?=+|") != -1 {
-		return env.ErrInvalidBackupName
+	if _, ok := s.backups.Get(remote.Name); ok {
+		return env.ErrBackupAlreadyExists.New(remote.Name)
 	}
 
-	fs, err := s.session.Provider().FileSystemForDatabase(s.dbName)
+	if conflict, found := env.CheckRemoteAddressConflict(remote.Url, s.remotes, s.backups); found {
+		return env.ErrRemoteAddressConflict.New(conflict.Name, remote.Url)
+	}
+
+	s.backups.Set(remote.Name, remote)
+
+	fileSys, err := s.session.Provider().FileSystemForDatabase(s.dbName)
+	if err != nil {
+		return err
+	}
+	parsedRepoState, err := env.LoadRepoState(fileSys)
 	if err != nil {
 		return err
 	}
 
-	repoState, err := env.LoadRepoState(fs)
-	if err != nil {
-		return err
-	}
-
-	// no conflicting remote or backup addresses
-	if bac, found := env.CheckRemoteAddressConflict(backup.Url, repoState.Remotes, repoState.Backups); found {
-		return fmt.Errorf("%w: '%s' -> %s", env.ErrRemoteAddressConflict, bac.Name, bac.Url)
-	}
-
-	s.backups.Set(backup.Name, backup)
-	repoState.AddBackup(backup)
-	return repoState.Save(fs)
+	// TODO(elianddb): This is a known limitation of repo_state.json; may lose concurrent modifications.
+	//  See: https://www.dolthub.com/blog/2021-08-06-long-dark-rewrite-of-the-soul/
+	parsedRepoState.Backups = s.backups
+	return parsedRepoState.Save(fileSys)
 }
 
 func (s SessionStateAdapter) RemoveRemote(_ context.Context, name string) error {
@@ -201,29 +199,26 @@ func (s SessionStateAdapter) RemoveRemote(_ context.Context, name string) error 
 }
 
 func (s SessionStateAdapter) RemoveBackup(_ context.Context, name string) error {
-	backup, ok := s.backups.Get(name)
+	_, ok := s.backups.Get(name)
 	if !ok {
-		return env.ErrBackupNotFound
+		return env.ErrBackupNotFound.New(name)
 	}
-	s.backups.Delete(backup.Name)
+	s.backups.Delete(name)
 
 	fs, err := s.session.Provider().FileSystemForDatabase(s.dbName)
 	if err != nil {
 		return err
 	}
 
-	repoState, err := env.LoadRepoState(fs)
+	parsedRepoState, err := env.LoadRepoState(fs)
 	if err != nil {
 		return err
 	}
 
-	backup, ok = repoState.Backups.Get(name)
-	if !ok {
-		// sanity check
-		return env.ErrBackupNotFound
-	}
-	repoState.Backups.Delete(name)
-	return repoState.Save(fs)
+	// TODO(elianddb): This is a known limitation of repo_state.json; may lose concurrent modifications.
+	//  See: https://www.dolthub.com/blog/2021-08-06-long-dark-rewrite-of-the-soul/
+	parsedRepoState.Backups = s.backups
+	return parsedRepoState.Save(fs)
 }
 
 func (s SessionStateAdapter) TempTableFilesDir() (string, error) {
