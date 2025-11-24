@@ -196,7 +196,7 @@ teardown() {
     run dolt backup sync bac1
     [ "$status" -eq 1 ]
     [[ ! "$output" =~ "panic" ]] || false
-    [[ "$output" =~ "unknown backup 'bac1'" ]] || false
+    [[ "$output" =~ "backup 'bac1' not found" ]] || false
 }
 
 @test "backup: cannot override another client's backup" {
@@ -284,13 +284,14 @@ teardown() {
     # Check in the ".dolt" is in my current directory case...
     run dolt backup restore file://../bac1 repo2
     [ "$status" -ne 0 ]
-    [[ "$output" =~ "cannot restore backup into repo2. A database with that name already exists" ]] || false
+    echo $output
+    [[ "$output" =~ "database 'repo2' already exists, use '--force' to overwrite" ]] || false
 
     # Check in the ".dolt" is in a subdirectory case...
     cd ..
-    run dolt backup restore file://../bac1 repo2
+    run dolt backup restore file://bac1 repo2
     [ "$status" -ne 0 ]
-    [[ "$output" =~ "cannot restore backup into repo2. A database with that name already exists" ]] || false
+    [[ "$output" =~ "database 'repo2' already exists, use '--force' to overwrite" ]] || false
 }
 
 @test "backup: restore existing database with --force succeeds" {
