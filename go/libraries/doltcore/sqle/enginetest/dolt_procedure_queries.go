@@ -23,106 +23,189 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 
 	gmstypes "github.com/dolthub/go-mysql-server/sql/types"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 )
 
 func init() {
 	DoltProcedureTests = append(DoltProcedureTests, BackupsProcedureScripts...)
 }
 
-// fileUrl returns a file:// URL path for backup tests.
+// fileUrl returns a file:// URL path.
 func fileUrl(path string) string {
 	path = filepath.Join(os.TempDir(), path)
 	return "file://" + filepath.ToSlash(filepath.Clean(path))
+}
+
+// awsUrl returns an aws:// URL with the given dynamo table, S3 bucket, and database path.
+func awsUrl(dynamoTable, s3Bucket, path string) string {
+	return fmt.Sprintf("aws://[%s:%s]/%s", dynamoTable, s3Bucket, path)
 }
 
 var BackupsProcedureScripts = []queries.ScriptTest{
 	{
 		Name: "dolt_backup add",
 		SetUpScript: []string{
-			fmt.Sprintf("call dolt_backup('add', 'dolt_backup1', '%s');", fileUrl("dolt_backup1")),
-			fmt.Sprintf("call dolt_backup('add', 'dolt_backup2', '%s');", fileUrl("dolt_backup2")),
+			fmt.Sprintf("call dolt_backup('add', 'bak1', '%s');", fileUrl("dolt_backup1")),
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    fmt.Sprintf("call dolt_backup('add', 'backup3', '%s');", fileUrl("dolt_backup3")),
+				Query:    fmt.Sprintf("call dolt_backup('add', 'bak2', '%s');", fileUrl("dolt_backup2")),
 				Expected: []sql.Row{{0}},
 			},
 			{
-				Query:          fmt.Sprintf("call dolt_backup('add', 'dolt_backup1', '%s');", fileUrl("dolt_backup1")),
-				ExpectedErrStr: "error: a backup named 'dolt_backup1' already exists, remove it before running this command again",
-			},
-			{
-				Query:          fmt.Sprintf("call dolt_backup('add', '', '');"),
-				ExpectedErrStr: "error: backup name is required",
-			},
-			{
-				Query:          "call dolt_backup('add', 'backup4', '');",
-				ExpectedErrStr: "error: backup url is required",
-			},
-			{
-				Query:          "call dolt_backup('add', 'backup4');",
-				ExpectedErrStr: "usage: dolt_backup('add', 'backup_name', 'backup_url')",
-			},
-			{
-				Query:          "call dolt_backup('add');",
-				ExpectedErrStr: "usage: dolt_backup('add', 'backup_name', 'backup_url')",
+				Query: "select * from dolt_backups order by name;",
+				Expected: []sql.Row{
+					{"bak1", fileUrl("dolt_backup1"), gmstypes.JSONDocument{Val: map[string]interface{}{}}},
+					{"bak2", fileUrl("dolt_backup2"), gmstypes.JSONDocument{Val: map[string]interface{}{}}},
+				},
 			},
 			{
 				// Invalid URLs are accepted but will fail when used in 'sync'.
-				Query:    "call dolt_backup('add', 'backup4', 'invalid://url');",
+				Query:    "call dolt_backup('add', 'bak3', 'invalid://url');",
 				Expected: []sql.Row{{0}},
 			},
 			{
-				Query:          fmt.Sprintf("call dolt_backup('add', 'backup with spaces', '%s');", fileUrl("dolt_backup2")),
-				ExpectedErrStr: "error: invalid backup name 'backup with spaces'",
+				Query: "select * from dolt_backups order by name",
+				Expected: []sql.Row{
+					{"bak1", fileUrl("dolt_backup1"), gmstypes.JSONDocument{Val: map[string]interface{}{}}},
+					{"bak2", fileUrl("dolt_backup2"), gmstypes.JSONDocument{Val: map[string]interface{}{}}},
+					{"bak3", "invalid://url", gmstypes.JSONDocument{Val: map[string]interface{}{}}},
+				},
 			},
 			{
-				Query:          fmt.Sprintf("call dolt_backup('add', 'backup/slash', '%s');", fileUrl("dolt_backup3")),
-				ExpectedErrStr: "error: invalid backup name 'backup/slash'",
+				Query:    fmt.Sprintf("call dolt_backup('add', 'aws_params', '%s', '--aws-region=<region>', '--aws-creds-type=file', '--aws-creds-file=<file>', '--aws-creds-profile=<profile>');", awsUrl("test-dynamo", "test-bucket", "testdb-params")),
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    fmt.Sprintf("call dolt_backup('add', 'aws_partial', '%s', '--aws-region=eu-west-1', '--aws-creds-profile=<profile>');", awsUrl("test-dynamo", "test-bucket", "testdb-partial")),
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query: "select * from dolt_backups where url like 'aws://%' order by name;",
+				Expected: []sql.Row{
+					{
+						"aws_params",
+						awsUrl("test-dynamo", "test-bucket", "testdb-params"),
+						gmstypes.JSONDocument{
+							Val: map[string]interface{}{
+								"aws-region":        "<region>",
+								"aws-creds-type":    "file",
+								"aws-creds-file":    "<file>",
+								"aws-creds-profile": "<profile>",
+							},
+						},
+					},
+					{
+						"aws_partial",
+						awsUrl("test-dynamo", "test-bucket", "testdb-partial"),
+						gmstypes.JSONDocument{
+							Val: map[string]interface{}{
+								"aws-creds-profile": "<profile>",
+								"aws-region":        "eu-west-1",
+							},
+						},
+					},
+				},
+			},
+			{
+				Query:       fmt.Sprintf("call dolt_backup('add', 'aws_conflict', '%s', '--aws-region=<region>', '--aws-creds-type=file', '--aws-creds-file=<file>', '--aws-creds-profile=<profile>');", awsUrl("test-dynamo", "test-bucket", "testdb-params")),
+				ExpectedErr: env.ErrRemoteAddressConflict,
+			},
+			{
+				Query:          fmt.Sprintf("call dolt_backup('add', 'aws_conflict', '%s', '--aws-creds-type=<err>');", awsUrl("test-dynamo", "test-bucket", "testdb-params")),
+				ExpectedErrStr: "<err> is not a valid option for 'aws-creds-type'. valid options are: role|env|file",
+			},
+			{
+				Query:          "call dolt_backup('add', 'bak2');",
+				ExpectedErrStr: "usage: dolt_backup('add', 'name', 'url', ['--aws-region=<region>'], ['--aws-creds-type=<type>'], ['--aws-creds-file=<file>'], ['--aws-creds-profile=<profile>'])",
+			},
+			{
+				Query:          "call dolt_backup('add');",
+				ExpectedErrStr: "usage: dolt_backup('add', 'name', 'url', ['--aws-region=<region>'], ['--aws-creds-type=<type>'], ['--aws-creds-file=<file>'], ['--aws-creds-profile=<profile>'])",
+			},
+			{
+				Query:          fmt.Sprintf("call dolt_backup('add', 'bak1', '%s');", fileUrl("dolt_backup1")),
+				ExpectedErrStr: "backup 'bak1' already exists",
+			},
+			{
+				Query:          fmt.Sprintf("call dolt_backup('add', '', '%s');", fileUrl("dolt_backup2")),
+				ExpectedErrStr: "backup name '' is invalid",
+			},
+			{
+				Query:          "call dolt_backup('add', 'bak2', '');",
+				ExpectedErrStr: "backup URL '' is invalid",
+			},
+			{
+				Query:          fmt.Sprintf("call dolt_backup('add', 'backup with spaces', '%s');", fileUrl("dolt_backup2")),
+				ExpectedErrStr: "backup name 'backup with spaces' is invalid",
+			},
+			{
+				Query:          fmt.Sprintf("call dolt_backup('add', 'backup/slash', '%s');", fileUrl("dolt_backup2")),
+				ExpectedErrStr: "backup name 'backup/slash' is invalid",
 			},
 		},
 	},
 	{
 		Name: "dolt_backup remove",
 		SetUpScript: []string{
-			fmt.Sprintf("call dolt_backup('add', 'dolt_backup1', '%s');", fileUrl("dolt_backup1")),
-			fmt.Sprintf("call dolt_backup('add', 'dolt_backup2', '%s');", fileUrl("dolt_backup2")),
+			fmt.Sprintf("call dolt_backup('add', 'bak1', '%s');", fileUrl("dolt_backup1")),
+			fmt.Sprintf("call dolt_backup('add', 'bak2', '%s');", fileUrl("dolt_backup2")),
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "call dolt_backup('rm', 'dolt_backup2');",
+				Query: "select * from dolt_backups order by name;",
+				Expected: []sql.Row{
+					{"bak1", fileUrl("dolt_backup1"), gmstypes.JSONDocument{Val: map[string]interface{}{}}},
+					{"bak2", fileUrl("dolt_backup2"), gmstypes.JSONDocument{Val: map[string]interface{}{}}},
+				},
+			},
+			{
+				Query:    "call dolt_backup('rm', 'bak2');",
 				Expected: []sql.Row{{0}},
 			},
 			{
-				Query:    fmt.Sprintf("call dolt_backup('add', 'dolt_backup2', '%s');", fileUrl("dolt_backup2")),
+				Query: "select * from dolt_backups order by name;",
+				Expected: []sql.Row{
+					{"bak1", fileUrl("dolt_backup1"), gmstypes.JSONDocument{Val: map[string]interface{}{}}},
+				},
+			},
+			{
+				Query:    fmt.Sprintf("call dolt_backup('add', 'bak2', '%s');", fileUrl("dolt_backup2")),
 				Expected: []sql.Row{{0}},
 			},
 			{
-				Query:    "call dolt_backup('remove', 'dolt_backup1');",
+				Query:    "call dolt_backup('remove', 'bak1');",
 				Expected: []sql.Row{{0}},
+			},
+			{
+				Query: "select * from dolt_backups;",
+				Expected: []sql.Row{
+					{"bak2", fileUrl("dolt_backup2"), gmstypes.JSONDocument{Val: map[string]interface{}{}}},
+				},
 			},
 			{
 				Query:          "call dolt_backup('remove', 'nonexistent');",
-				ExpectedErrStr: "error: unknown backup 'nonexistent'",
+				ExpectedErrStr: "backup 'nonexistent' not found",
 			},
 			{
 				Query:          "call dolt_backup('remove');",
-				ExpectedErrStr: "usage: dolt_backup('remove', 'backup_name')",
+				ExpectedErrStr: "usage: dolt_backup('remove', 'name')",
 			},
 			{
-				Query:          "call dolt_backup('remove', 'dolt_backup1', 'extra');",
-				ExpectedErrStr: "usage: dolt_backup('remove', 'backup_name')",
+				Query:          "call dolt_backup('remove', 'bak1', 'extra');",
+				ExpectedErrStr: "usage: dolt_backup('remove', 'name')",
 			},
 			{
 				Query:          "call dolt_backup('remove', '');",
-				ExpectedErrStr: "error: backup name is required",
+				ExpectedErrStr: "backup '' not found",
 			},
 		},
 	},
 	{
 		Name: "dolt_backup sync",
 		SetUpScript: []string{
-			fmt.Sprintf("call dolt_backup('add', 'dolt_backup1', '%s');", fileUrl("dolt_backup1")),
+			fmt.Sprintf("call dolt_backup('add', 'bak1', '%s');", fileUrl("dolt_backup1")),
 			"create table t(a int primary key, b int);",
 			"insert into t values (1, 100), (2, 200);",
 			"call dolt_add('t');",
@@ -131,25 +214,24 @@ var BackupsProcedureScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "call dolt_backup('sync', 'dolt_backup1');",
+				Query:    "call dolt_backup('sync', 'bak1');",
 				Expected: []sql.Row{{0}},
 			},
 			{
-				// Making sure nothing is happening to the data.
 				Query:    "select * from t;",
 				Expected: []sql.Row{{1, 100}, {2, 200}},
 			},
 			{
 				Query:          "call dolt_backup('sync', 'nonexistent');",
-				ExpectedErrStr: "error: unknown backup 'nonexistent'",
+				ExpectedErrStr: "backup 'nonexistent' not found",
 			},
 			{
 				Query:          "call dolt_backup('sync');",
-				ExpectedErrStr: "usage: dolt_backup('sync', backup_name)",
+				ExpectedErrStr: "usage: dolt_backup('sync', 'name')",
 			},
 			{
 				Query:          "call dolt_backup('sync', 'dolt_backup1', 'extra');",
-				ExpectedErrStr: "usage: dolt_backup('sync', backup_name)",
+				ExpectedErrStr: "usage: dolt_backup('sync', 'name')",
 			},
 			{
 				Query:          "call dolt_backup('sync', 'invalid_backup');",
@@ -157,19 +239,28 @@ var BackupsProcedureScripts = []queries.ScriptTest{
 			},
 			{
 				Query:          "call dolt_backup('sync', '');",
-				ExpectedErrStr: "error: backup name is required",
+				ExpectedErrStr: "backup '' not found",
 			},
 		},
 	},
 	{
 		Name: "dolt_backup sync-url",
 		SetUpScript: []string{
+			fmt.Sprintf("call dolt_backup('add', 'bak1', '%s');", fileUrl("dolt_backup1")),
 			"create table t(a int primary key, b int);",
 			"insert into t values (1, 100), (2, 200);",
 			"call dolt_add('t');",
 			"call dolt_commit('-m', 'initial commit');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    fmt.Sprintf("call dolt_backup('sync-url', '%s');", fileUrl("dolt_backup2")),
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "select * from t;",
+				Expected: []sql.Row{{1, 100}, {2, 200}},
+			},
 			{
 				Query:    fmt.Sprintf("call dolt_backup('sync-url', '%s');", fileUrl("dolt_backup1")),
 				Expected: []sql.Row{{0}},
@@ -180,11 +271,11 @@ var BackupsProcedureScripts = []queries.ScriptTest{
 			},
 			{
 				Query:          "call dolt_backup('sync-url');",
-				ExpectedErrStr: "usage: dolt_backup('sync-url', backup_url)",
+				ExpectedErrStr: "usage: dolt_backup('sync-url', 'remote_url', ['--aws-region=<region>'], ['--aws-creds-type=<type>'], ['--aws-creds-file=<file>'], ['--aws-creds-profile=<profile>'])",
 			},
 			{
 				Query:          "call dolt_backup('sync-url', '', 'extra');",
-				ExpectedErrStr: "usage: dolt_backup('sync-url', backup_url)",
+				ExpectedErrStr: "usage: dolt_backup('sync-url', 'remote_url', ['--aws-region=<region>'], ['--aws-creds-type=<type>'], ['--aws-creds-file=<file>'], ['--aws-creds-profile=<profile>'])",
 			},
 			{
 				Query:          "call dolt_backup('sync-url', 'invalid://url');",
@@ -192,7 +283,7 @@ var BackupsProcedureScripts = []queries.ScriptTest{
 			},
 			{
 				Query:          "call dolt_backup('sync-url', '');",
-				ExpectedErrStr: "error: backup url is required",
+				ExpectedErrStr: "backup URL '' is invalid",
 			},
 		},
 	},
@@ -223,15 +314,15 @@ var BackupsProcedureScripts = []queries.ScriptTest{
 			},
 			{
 				Query:          "call dolt_backup('restore');",
-				ExpectedErrStr: "usage: dolt_backup('restore', 'backup_url', 'database_name')",
+				ExpectedErrStr: "usage: dolt_backup('restore', 'remote_url', 'new_db_name', ['--aws-region=<region>'], ['--aws-creds-type=<type>'], ['--aws-creds-file=<file>'], ['--aws-creds-profile=<profile>'])",
 			},
 			{
 				Query:          fmt.Sprintf("call dolt_backup('restore', '%s');", fileUrl("dolt_backup1")),
-				ExpectedErrStr: "usage: dolt_backup('restore', 'backup_url', 'database_name')",
+				ExpectedErrStr: "usage: dolt_backup('restore', 'remote_url', 'new_db_name', ['--aws-region=<region>'], ['--aws-creds-type=<type>'], ['--aws-creds-file=<file>'], ['--aws-creds-profile=<profile>'])",
 			},
 			{
 				Query:          fmt.Sprintf("call dolt_backup('restore', '%s', 'restored_db');", fileUrl("dolt_backup2")),
-				ExpectedErrStr: "error: cannot restore backup into restored_db. A database with that name already exists. Did you mean to supply --force?",
+				ExpectedErrStr: "database 'restored_db' already exists, use '--force' to overwrite",
 			},
 			{
 				Query:    fmt.Sprintf("call dolt_backup('restore', '%s', 'restored_db', '--force');", fileUrl("dolt_backup1")),
@@ -256,15 +347,15 @@ var BackupsProcedureScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:          fmt.Sprintf("call dolt_backup('invalid', 'dolt_backup1', '%s');", fileUrl("dolt_backup1")),
-				ExpectedErrStr: "unrecognized dolt_backup parameter: invalid",
+				ExpectedErrStr: "unrecognized dolt_backup parameter 'invalid'",
 			},
 			{
 				Query:          "call dolt_backup();",
-				ExpectedErrStr: "error: invalid argument, use 'dolt_backups' table to list backups",
+				ExpectedErrStr: "use 'dolt_backups' table to list backups",
 			},
 			{
 				Query:          "call dolt_backup('--verbose');",
-				ExpectedErrStr: "error: invalid argument, use 'dolt_backups' table to list backups",
+				ExpectedErrStr: "use 'dolt_backups' table to list backups",
 			},
 		},
 	},
