@@ -19,16 +19,20 @@ import (
 	"context"
 	"io"
 	"reflect"
-	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/types"
 )
 
-type IJsonDiffer interface {
+// JsonDiffer produces a stream of JsonDiffs describing the differences
+// between two JSON documents.
+type JsonDiffer interface {
 	Next(ctx context.Context) (JsonDiff, error)
 }
 
+// JsonDiff describes a single change between two JSON documents.
+// Key is a serialized JsonLocation value describing a path into the document
+// where the change occurred.
 type JsonDiff struct {
 	From sql.JSONWrapper
 	To   sql.JSONWrapper
@@ -36,50 +40,73 @@ type JsonDiff struct {
 	Type DiffType
 }
 
+// NoDiffJsonDiffer is a JsonDiffer that reports no diffs
+type NoDiffJsonDiffer struct{}
+
+func (differ NoDiffJsonDiffer) Next(ctx context.Context) (diff JsonDiff, err error) {
+	return JsonDiff{}, io.EOF
+}
+
+// SingleDiffJsonDiffer is a JsonDiffer that reports a single diff
+type SingleDiffJsonDiffer struct {
+	diff JsonDiff
+	done bool
+}
+
+func (differ *SingleDiffJsonDiffer) Next(ctx context.Context) (diff JsonDiff, err error) {
+	if differ.done {
+		return JsonDiff{}, io.EOF
+	}
+	differ.done = true
+	return differ.diff, nil
+}
+
 type jsonKeyPair struct {
 	value interface{}
 	key   string
 }
 
-// JsonDiffer computes the diff between two JSON objects.
-type JsonDiffer struct {
+func newInMemoryJsonDiffer(key jsonLocationKey, fromValue interface{}, toValue interface{}) (diff JsonDiffer) {
+	if reflect.TypeOf(fromValue) != reflect.TypeOf(toValue) {
+		return &SingleDiffJsonDiffer{diff: key.emitModified(fromValue, toValue)}
+	} else {
+		switch from := fromValue.(type) {
+		case types.JsonObject:
+			return newInMemoryJsonObjectDiffer(key, from, toValue.(types.JsonObject))
+		case types.JsonArray:
+			return newInMemoryJsonArrayDiffer(key, from, toValue.(types.JsonArray))
+		default:
+			if fromValue == toValue {
+				return NoDiffJsonDiffer{}
+			}
+			return &SingleDiffJsonDiffer{diff: key.emitModified(fromValue, toValue)}
+		}
+	}
+}
+
+// InMemoryJsonDiffer computes the diff between two JSON objects that are fully loaded in memory.
+type InMemoryJsonDiffer struct {
 	currentFromPair *jsonKeyPair
 	currentToPair   *jsonKeyPair
-	subDiffer       *JsonDiffer
-	root            []byte
+	subDiffer       JsonDiffer
+	root            jsonLocationKey
 	from            types.JSONIter
 	to              types.JSONIter
 }
 
-var _ IJsonDiffer = &JsonDiffer{}
+var _ JsonDiffer = &InMemoryJsonDiffer{}
 
-func NewJsonDiffer(from, to types.JsonObject) *JsonDiffer {
+func newInMemoryJsonObjectDiffer(root []byte, from, to types.JsonObject) *InMemoryJsonDiffer {
 	fromIter := types.NewJSONIter(from)
 	toIter := types.NewJSONIter(to)
-	return &JsonDiffer{
-		root: []byte{byte(startOfValue)},
+	return &InMemoryJsonDiffer{
+		root: root,
 		from: fromIter,
 		to:   toIter,
 	}
 }
 
-func (differ *JsonDiffer) newSubDiffer(key string, from, to types.JsonObject) JsonDiffer {
-	fromIter := types.NewJSONIter(from)
-	toIter := types.NewJSONIter(to)
-	newRoot := differ.appendKey(key)
-	return JsonDiffer{
-		root: newRoot,
-		from: fromIter,
-		to:   toIter,
-	}
-}
-
-func (differ *JsonDiffer) appendKey(key string) []byte {
-	escapedKey := strings.Replace(key, "\"", "\\\"", -1)
-	return append(append(differ.root, beginObjectKey), []byte(escapedKey)...)
-}
-
-func (differ *JsonDiffer) Next(ctx context.Context) (diff JsonDiff, err error) {
+func (differ *InMemoryJsonDiffer) Next(ctx context.Context) (diff JsonDiff, err error) {
 	for {
 		if differ.subDiffer != nil {
 			diff, err := differ.subDiffer.Next(ctx)
@@ -113,89 +140,111 @@ func (differ *JsonDiffer) Next(ctx context.Context) (diff JsonDiff, err error) {
 			return JsonDiff{}, io.EOF
 		}
 
-		var diffType DiffType
-
 		if differ.currentFromPair == nil && differ.currentToPair != nil {
-			diffType = AddedDiff
+			diff = differ.root.appendObjectKeyString(differ.currentToPair.key).emitAdded(differ.currentToPair.value)
+			differ.currentToPair = nil
+			return diff, nil
 		} else if differ.currentFromPair != nil && differ.currentToPair == nil {
-			diffType = RemovedDiff
+			diff = differ.root.appendObjectKeyString(differ.currentFromPair.key).emitRemoved(differ.currentFromPair.value)
+			differ.currentFromPair = nil
+			return diff, nil
 		} else { // differ.currentFromPair != nil && differ.currentToPair != nil
 			keyCmp := bytes.Compare([]byte(differ.currentFromPair.key), []byte(differ.currentToPair.key))
 			if keyCmp > 0 {
 				// `to` key comes before `from` key. Right key must have been inserted.
-				diffType = AddedDiff
+				diff = differ.root.appendObjectKeyString(differ.currentToPair.key).emitAdded(differ.currentToPair.value)
+				differ.currentToPair = nil
+				return diff, nil
 			} else if keyCmp < 0 {
 				// `to` key comes after `from` key. Right key must have been deleted.
-				diffType = RemovedDiff
+				diff = differ.root.appendObjectKeyString(differ.currentFromPair.key).emitRemoved(differ.currentFromPair.value)
+				differ.currentFromPair = nil
+				return diff, nil
 			} else {
-				key := differ.currentFromPair.key
+				key := differ.root.appendObjectKeyString(differ.currentFromPair.key)
 				fromValue := differ.currentFromPair.value
 				toValue := differ.currentToPair.value
-				if reflect.TypeOf(fromValue) != reflect.TypeOf(toValue) {
-					diffType = ModifiedDiff
-				} else {
-					switch from := fromValue.(type) {
-					case types.JsonObject:
-						// Recursively compare the objects to generate diffs.
-						subDiffer := differ.newSubDiffer(key, from, toValue.(types.JsonObject))
-						differ.subDiffer = &subDiffer
-						continue
-					case types.JsonArray:
-						if reflect.DeepEqual(fromValue, toValue) {
-							differ.currentFromPair = nil
-							differ.currentToPair = nil
-							continue
-						} else {
-							diffType = ModifiedDiff
-						}
-					default:
-						if fromValue == toValue {
-							differ.currentFromPair = nil
-							differ.currentToPair = nil
-							continue
-						}
-						diffType = ModifiedDiff
-					}
-				}
+				differ.currentFromPair = nil
+				differ.currentToPair = nil
+				differ.subDiffer = newInMemoryJsonDiffer(key, fromValue, toValue)
+				continue
 			}
 		}
+	}
+}
 
-		switch diffType {
-		case AddedDiff:
-			key, value := differ.currentToPair.key, differ.currentToPair.value
-			result := JsonDiff{
-				Key:  differ.appendKey(key),
-				From: nil,
-				To:   &types.JSONDocument{Val: value},
-				Type: AddedDiff,
+// InMemoryJsonArrayDiffer diffs two JSON arrays that are fully loaded in memory.
+// Currently, this works by comparing matching indexes, which means it produces
+// confusing results when an insert or removal has shifted the indexes of values.
+// TODO: Support Longest Common Subsequence (LCS) approximations for identifying
+// inserts and removals, like Git does.
+type InMemoryJsonArrayDiffer struct {
+	subDiffer                  JsonDiffer
+	root                       jsonLocationKey
+	idx                        int
+	fromJsonArray, toJsonArray types.JsonArray
+}
+
+func newInMemoryJsonArrayDiffer(root []byte, fromJsonArray, toJsonArray types.JsonArray) *InMemoryJsonArrayDiffer {
+	return &InMemoryJsonArrayDiffer{
+		root:          root,
+		idx:           0,
+		fromJsonArray: fromJsonArray,
+		toJsonArray:   toJsonArray,
+	}
+}
+
+func (differ *InMemoryJsonArrayDiffer) Next(ctx context.Context) (diff JsonDiff, err error) {
+	for {
+		if differ.subDiffer != nil {
+			diff, err := differ.subDiffer.Next(ctx)
+			if err == io.EOF {
+				differ.subDiffer = nil
+				continue
+			} else if err != nil {
+				return JsonDiff{}, err
 			}
-			differ.currentToPair = nil
-			return result, nil
-		case RemovedDiff:
-			key, value := differ.currentFromPair.key, differ.currentFromPair.value
-			result := JsonDiff{
-				Key:  differ.appendKey(key),
-				From: &types.JSONDocument{Val: value},
-				To:   nil,
-				Type: RemovedDiff,
-			}
-			differ.currentFromPair = nil
-			return result, nil
-		case ModifiedDiff:
-			key := differ.currentFromPair.key
-			from := differ.currentFromPair.value
-			to := differ.currentToPair.value
-			result := JsonDiff{
-				Key:  differ.appendKey(key),
-				From: &types.JSONDocument{Val: from},
-				To:   &types.JSONDocument{Val: to},
-				Type: ModifiedDiff,
-			}
-			differ.currentFromPair = nil
-			differ.currentToPair = nil
-			return result, nil
-		default:
-			panic("unreachable")
+			return diff, nil
 		}
+		if differ.idx >= len(differ.fromJsonArray) && differ.idx >= len(differ.toJsonArray) {
+			return JsonDiff{}, io.EOF
+		}
+		if differ.idx >= len(differ.fromJsonArray) {
+			// We've exhausted the "from" array but not the "to" array, indicating elements were added.
+			diff = differ.root.appendArrayIndex(differ.idx).emitAdded(differ.toJsonArray[differ.idx])
+			differ.idx++
+			return diff, nil
+		}
+		if differ.idx >= len(differ.toJsonArray) {
+			// We've exhausted the "to" array but not the "from" array, indicating elements were removed.
+			diff = differ.root.appendArrayIndex(differ.idx).emitRemoved(differ.fromJsonArray[differ.idx])
+			differ.idx++
+			return diff, nil
+		}
+		key := differ.root.appendArrayIndex(differ.idx)
+		fromValue := differ.fromJsonArray[differ.idx]
+		toValue := differ.toJsonArray[differ.idx]
+		differ.idx++
+		differ.subDiffer = newInMemoryJsonDiffer(key, fromValue, toValue)
+		continue
+	}
+}
+
+func NewJsonDiffer(ctx context.Context, from, to sql.JSONWrapper) (differ JsonDiffer, err error) {
+	indexedFrom, isFromIndexed := from.(IndexedJsonDocument)
+	indexedTo, isToIndexed := to.(IndexedJsonDocument)
+
+	if isFromIndexed && isToIndexed {
+		return NewIndexedJsonDiffer(ctx, indexedFrom, indexedTo)
+	} else {
+		fromObject, err := from.ToInterface(ctx)
+		if err != nil {
+			return nil, err
+		}
+		toObject, err := to.ToInterface(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return newInMemoryJsonDiffer([]byte{byte(startOfValue)}, fromObject, toObject), nil
 	}
 }
