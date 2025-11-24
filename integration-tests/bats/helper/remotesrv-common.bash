@@ -44,6 +44,5 @@ stop_remotesrv() {
         wait $remotesrv_pid 2>/dev/null || true
         remotesrv_pid=""
     fi
-    rm -rf $BATS_TMPDIR/remotes-$$
 }
 
