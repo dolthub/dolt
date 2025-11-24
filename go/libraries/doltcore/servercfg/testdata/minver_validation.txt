@@ -31,6 +31,7 @@ ListenerConfig servercfg.ListenerYAMLConfig 0.0.0 listener,omitempty
 -TLSCert *string 0.0.0 tls_cert,omitempty
 -CACert *string 1.77.0 ca_cert,omitempty
 -RequireSecureTransport *bool 0.0.0 require_secure_transport,omitempty
+-RequireClientCert *bool 1.78.3 require_client_cert,omitempty
 -AllowCleartextPasswords *bool 0.0.0 allow_cleartext_passwords,omitempty
 -Socket *string 0.0.0 socket,omitempty
 PerformanceConfig *servercfg.PerformanceYAMLConfig 0.0.0 performance,omitempty

@@ -97,7 +97,7 @@ type ListenerYAMLConfig struct {
 	RequireSecureTransport *bool `yaml:"require_secure_transport,omitempty"`
 	// RequireClientCert enables a mode where all clients must present a certificate. If a CA
 	// cert is also provided, the client cert will also be verified.
-	RequireClientCert *bool `yaml:"require_client_cert,omitempty" minver:"TBD"`
+	RequireClientCert *bool `yaml:"require_client_cert,omitempty" minver:"1.78.3"`
 	// AllowCleartextPasswords enables use of cleartext passwords.
 	AllowCleartextPasswords *bool `yaml:"allow_cleartext_passwords,omitempty"`
 	// Socket is unix socket file path
