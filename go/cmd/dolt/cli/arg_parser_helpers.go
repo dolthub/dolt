@@ -433,7 +433,7 @@ func VerifyNoAwsParams(apr *argparser.ArgParseResults) error {
 		}
 
 		keysStr := strings.Join(awsParamKeys, ",")
-		return fmt.Errorf("the parameters %s, are only valid for aws remotes", keysStr)
+		return fmt.Errorf("The parameters %s, are only valid for aws remotes", keysStr)
 	}
 
 	return nil
