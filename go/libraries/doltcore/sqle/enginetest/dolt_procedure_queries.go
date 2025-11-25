@@ -197,6 +197,10 @@ var BackupsProcedureScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{0}},
 			},
 			{
+				Query:    "select * from dolt_backups;",
+				Expected: []sql.Row{},
+			},
+			{
 				Query:    "drop table t;",
 				Expected: []sql.Row{{gmstypes.OkResult{}}},
 			},
