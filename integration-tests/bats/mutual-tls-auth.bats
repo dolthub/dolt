@@ -3,6 +3,7 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 load $BATS_TEST_DIRNAME/helper/query-server-common.bash
 
 REQUIRE_CLIENT_CERT=false
+REQUIRE_SECURE_TRANSPORT=false
 
 setup() {
     skiponwindows "tests are flaky on Windows"
@@ -27,6 +28,7 @@ listener:
   host: "0.0.0.0"
   port: $PORT
   require_client_cert: $REQUIRE_CLIENT_CERT
+  require_secure_transport: $REQUIRE_SECURE_TRANSPORT
   tls_cert:  $CERTS_DIR/server-cert.pem
   tls_key:   $CERTS_DIR/server-key.pem
 EOF
@@ -48,6 +50,7 @@ listener:
   host: "0.0.0.0"
   port: $PORT
   require_client_cert: $REQUIRE_CLIENT_CERT
+  require_secure_transport: $REQUIRE_SECURE_TRANSPORT
   ca_cert:   $CERTS_DIR/ca.pem
   tls_cert:  $CERTS_DIR/server-cert.pem
   tls_key:   $CERTS_DIR/server-key.pem
@@ -382,6 +385,16 @@ EOF
 }
 
 # bats test_tags=no_lambda
+@test "mutual-tls-auth: dolt cli works with require_secure_transport" {
+  REQUIRE_SECURE_TRANSPORT=true
+  start_sql_server_with_TLS
+
+  run dolt sql -q 'show databases'
+  [ "$status" -eq 0 ] || false
+  [[ "$output" =~ "Database" ]] || false
+}
+
+# bats test_tags=no_lambda
 @test "mutual-tls-auth: auth works with require_client_cert (without cert verification)" {
   dolt sql -q "create user user1@'%';"
   dolt sql -q "grant all privileges on *.* to user1@'%';"
@@ -447,7 +460,7 @@ EOF
 
   run dolt sql -q "SELECT 1;"
   [ "$status" -ne 0 ]
-  [[ "$output" =~ "UNAVAILABLE" ]] || false
+  [[ "$output" =~ "remote error: tls: certificate required" ]] || false
 }
 
 # bats test_tags=no_lambda
