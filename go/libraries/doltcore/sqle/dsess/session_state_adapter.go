@@ -121,6 +121,10 @@ func (s SessionStateAdapter) AddRemote(remote env.Remote) error {
 		return env.ErrRemoteAlreadyExists
 	}
 
+	if strings.IndexAny(remote.Name, env.InvalidNameCharacters) != -1 {
+		return env.ErrInvalidRemoteName
+	}
+
 	fs, err := s.session.Provider().FileSystemForDatabase(s.dbName)
 	if err != nil {
 		return err
@@ -142,8 +146,7 @@ func (s SessionStateAdapter) AddRemote(remote env.Remote) error {
 }
 
 func (s SessionStateAdapter) AddBackup(remote env.Remote) error {
-	const invalidNameCharacters = " \t\n\r./\\!@#$%^&*(){}[],.<>'\"?=+|"
-	if remote.Name == "" || strings.IndexAny(remote.Name, invalidNameCharacters) != -1 {
+	if remote.Name == "" || strings.IndexAny(remote.Name, env.InvalidNameCharacters) != -1 {
 		return env.ErrBackupInvalidName.New(remote.Name)
 	}
 

@@ -382,21 +382,21 @@ func CreateGlobalArgParser(name string) *argparser.ArgParser {
 	return ap
 }
 
-var awsParams = []string{dbfactory.AWSRegionParam, dbfactory.AWSCredsTypeParam, dbfactory.AWSCredsFileParam, dbfactory.AWSCredsProfile}
+var AwsParams = []string{dbfactory.AWSRegionParam, dbfactory.AWSCredsTypeParam, dbfactory.AWSCredsFileParam, dbfactory.AWSCredsProfile}
 var ossParams = []string{dbfactory.OSSCredsFileParam, dbfactory.OSSCredsProfile}
 
 func AddAWSParams(remoteUrl string, apr *argparser.ArgParseResults, params map[string]string) error {
 	isAWS := strings.HasPrefix(remoteUrl, "aws")
 
 	if !isAWS {
-		for _, p := range awsParams {
+		for _, p := range AwsParams {
 			if _, ok := apr.GetValue(p); ok {
 				return fmt.Errorf("%s param is only valid for aws cloud remotes in the format aws://dynamo-table:s3-bucket/database", p)
 			}
 		}
 	}
 
-	for _, p := range awsParams {
+	for _, p := range AwsParams {
 		if val, ok := apr.GetValue(p); ok {
 			params[p] = val
 		}
@@ -426,7 +426,7 @@ func AddOSSParams(remoteUrl string, apr *argparser.ArgParseResults, params map[s
 }
 
 func VerifyNoAwsParams(apr *argparser.ArgParseResults) error {
-	if awsParams := apr.GetValues(awsParams...); len(awsParams) > 0 {
+	if awsParams := apr.GetValues(AwsParams...); len(awsParams) > 0 {
 		awsParamKeys := make([]string, 0, len(awsParams))
 		for k := range awsParams {
 			awsParamKeys = append(awsParamKeys, k)
