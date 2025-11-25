@@ -121,7 +121,9 @@ for tuple in $OS_ARCH_TUPLES; do
         rpmarch="aarch64"
       fi
       (
-        cd utils/rpmbuild;
+        cd utils/rpmbuild/SOURCES;
+        ln -sf ../../../out/"dolt-$os-$arch.tar.gz" .
+        cd ..
         rpmbuild -bb --target ${rpmarch} --define "_topdir $(pwd)" --define "_prefix /usr/local" --define "DOLT_VERSION ${DOLT_VERSION}" --define "DOLT_ARCH ${arch}" SPECS/dolt.spec;
         mv RPMS/${rpmarch}/dolt*rpm ../../out
       )
