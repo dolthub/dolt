@@ -1,4 +1,5 @@
 #!/bin/bash
+# -*- mode: shell-script; indent-tabs-mode: nil; sh-basic-offset: 2; -*-
 
 # Run this from within a golang docker container.
 # Expects two env variables:
@@ -14,23 +15,23 @@ set -o pipefail
 KNOWN_OS_ARCH_TUPLES="darwin-amd64 darwin-arm64 windows-amd64 linux-amd64 linux-arm64"
 
 if [[ -z "$OS_ARCH_TUPLES" ]]; then
-    OS_ARCH_TUPLES="$KNOWN_OS_ARCH_TUPLES"
+  OS_ARCH_TUPLES="$KNOWN_OS_ARCH_TUPLES"
 fi
 
 for tuple in $OS_ARCH_TUPLES; do
     found=0
-    for known in $KNOWN_OS_ARCH_TUPLES; do
-	if [[ $tuple == $known ]]; then
-	    found=1
-	fi
-    done
-    if (( found == 0 )); then
-	echo "buildindocker.sh: Unknown OS_ARCH_TUPLE $tuple supplied. Known tuples: $KNOWN_OS_ARCH_TUPLES."
-	exit 2
+  for known in $KNOWN_OS_ARCH_TUPLES; do
+    if [[ $tuple == $known ]]; then
+      found=1
     fi
+  done
+  if (( found == 0 )); then
+    echo "buildindocker.sh: Unknown OS_ARCH_TUPLE $tuple supplied. Known tuples: $KNOWN_OS_ARCH_TUPLES."
+    exit 2
+  fi
 done
 
-apt-get update && apt-get install -y p7zip-full pigz curl xz-utils mingw-w64 clang-19
+apt-get update && apt-get install -y p7zip-full pigz curl xz-utils mingw-w64 clang-19 rpm
 
 cd /
 curl -o optcross.tar.xz https://dolthub-tools.s3.us-west-2.amazonaws.com/optcross/"$(uname -m)"-linux_20250327_0.0.3_trixie.tar.xz
@@ -40,6 +41,9 @@ tar Jxf icustatic.tar.xz
 export PATH=/opt/cross/bin:"$PATH"
 
 cd /src
+
+parsed=(`grep "Version = " ./cmd/dolt/doltversion/version.go`)
+DOLT_VERSION=`eval echo ${parsed[2]}`
 
 BINS="dolt"
 
@@ -111,12 +115,21 @@ for tuple in $OS_ARCH_TUPLES; do
     (cd out && 7z a "dolt-$os-$arch.zip" "dolt-$os-$arch" && 7z a "dolt-$os-$arch.7z" "dolt-$os-$arch")
   else
     tar cf - -C out "dolt-$os-$arch" | pigz -9 > "out/dolt-$os-$arch.tar.gz"
+    if [ "$os" = linux ]; then
+      rpmarch="x86_64"
+      if [ "$arch" = "arm64" ]; then
+        rpmarch="aarch64"
+      fi
+      (
+        cd utils/rpmbuild;
+        rpmbuild -bb --target ${rpmarch} --define "_topdir $(pwd)" --define "_prefix /usr/local" --define "DOLT_VERSION ${DOLT_VERSION}" --define "DOLT_ARCH ${arch}" SPECS/dolt.spec;
+        mv RPMS/${rpmarch}/dolt*rpm ../../out
+      )
+    fi
   fi
 done
 
 render_install_sh() {
-  local parsed=(`grep "Version = " ./cmd/dolt/doltversion/version.go`)
-  local DOLT_VERSION=`eval echo ${parsed[2]}`
   sed 's|__DOLT_VERSION__|'"$DOLT_VERSION"'|' utils/publishrelease/install.sh
 }
 
