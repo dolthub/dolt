@@ -34,12 +34,6 @@ import (
 )
 
 const (
-	// chunkJournalFileSize is the size we initialize the journal file to when it is first created. We
-	// create a 16KB block of zero-initialized data and then sync the file to the first byte. We do this
-	// to ensure that we can write to the journal file and that we have some space for initial records.
-	// This probably isn't strictly necessary, but it also doesn't hurt.
-	chunkJournalFileSize = 16 * 1024
-
 	// journalWriterBuffSize is the size of the statically allocated buffer where journal records are
 	// built before being written to the journal file on disk. There is not a hard limit on the size
 	// of records – specifically, some newer data chunking formats (i.e. optimized JSON storage) can
@@ -121,26 +115,8 @@ func createJournalWriter(ctx context.Context, path string) (wr *journalWriter, e
 		return nil, err
 	}
 
-	// Open the journal file and initialize it with 16KB of zero bytes. This is intended to
-	// ensure that we can write to the journal and to allocate space for the first set of
-	// records, but probably isn't strictly necessary.
 	if f, err = os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0666); err != nil {
 		return nil, err
-	}
-	const batch = 1024 * 1024
-	b := make([]byte, batch)
-	for i := 0; i < chunkJournalFileSize; i += batch {
-		if _, err = f.Write(b); err != nil { // zero fill |f|
-			return nil, err
-		}
-	}
-	if err = f.Sync(); err != nil {
-		return nil, err
-	}
-	if o, err := f.Seek(0, io.SeekStart); err != nil {
-		return nil, err
-	} else if o != 0 {
-		return nil, fmt.Errorf("expected file journalOffset 0, got %d", o)
 	}
 
 	return &journalWriter{

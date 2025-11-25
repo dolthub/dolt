@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"os"
 	"time"
 
 	"github.com/dolthub/dolt/go/store/d"
@@ -370,6 +371,17 @@ func processJournalRecords(ctx context.Context, r io.ReadSeeker, off int64, cb f
 	// successfully processed journal record
 	if _, err = r.Seek(off, 0); err != nil {
 		return 0, err
+	}
+
+	if f, ok := r.(*os.File); ok {
+		err = f.Truncate(off)
+		if err != nil {
+			return 0, err
+		}
+		err = f.Sync()
+		if err != nil {
+			return 0, err
+		}
 	}
 
 	return off, nil

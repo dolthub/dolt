@@ -12,3 +12,10 @@ and perhaps other tools in the future. Please catalog the contents of each datab
   This database contains a journal file which has been altered to have an object (7i48kt4h41hcjniri7scv5m8a69cdn13)
   which has a bad CRC. The object in question doesn't trip any problems until it's fully loaded, which indicates that the CRC for the journal record is correct, but the data is not.
 
+## journal_data.bin
+  This is a binary file which constitutes a valid journal root hash record followed by a
+  chunk record (100 bytes of random data). This file can be appended to assist in testing for
+  dataloss. We parse journal files until we can't parse them any longer, so you need to append
+  null bytes or random data to the end of a journal file to get into that state. That does
+  not constitute dataloss though - which is why you append this file to the journal because
+  these bytes are parsable. 
