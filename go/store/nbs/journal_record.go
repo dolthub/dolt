@@ -362,8 +362,7 @@ func processJournalRecords(ctx context.Context, r io.ReadSeeker, off int64, cb f
 			}
 		}
 		if dataLossFound {
-			err = fmt.Errorf("possible data loss detected in journal file at offset %d", off)
-			return 0, err
+			return 0, NewJournalDataLossError(off)
 		}
 	}
 
@@ -376,25 +375,50 @@ func processJournalRecords(ctx context.Context, r io.ReadSeeker, off int64, cb f
 	return off, nil
 }
 
+var ErrJournalDataLoss = errors.New("corrupted journal")
+
+func NewJournalDataLossError(offset int64) error {
+	return fmt.Errorf("possible data loss detected in journal file at offset %d: %w", offset, ErrJournalDataLoss)
+}
+
 // possibleDataLossCheck checks for non-zero data starting at |off| in |r|. When calling this method, we've already hit
 // as state where we can't read a record at |off|, so we are going to scan forward from |off| to see if there is any
 // valid root record followed by another record (root hash or chunk).
 func possibleDataLossCheck(reader *bufio.Reader) (dataLoss bool, err error) {
 	firstRootFound := false
 
-	remainingData, err := io.ReadAll(reader)
-	if err != nil {
+	atEOF := false
+
+	bufferPrefix := 0
+	const buffSize = journalWriterBuffSize * 2
+
+	buf := make([]byte, buffSize)
+
+ReadBatchGoto:
+	n, err := io.ReadFull(reader, buf[bufferPrefix:])
+	switch err {
+	case nil:
+		// Got a full buffer. Let's go.
+	case io.ErrUnexpectedEOF:
+		// Final short read before EOF: n bytes valid
+		atEOF = true
+		buf = buf[:bufferPrefix+n]
+	case io.EOF:
+		// ReadFull only returns EOF if no bytes were read. We may have plenty of unprocessed data in buf.
+		atEOF = true
+		buf = buf[:bufferPrefix]
+	default:
 		return false, err
 	}
 
 	idx := 0
-	for idx <= len(remainingData)-rootHashRecordSize() {
-		sz := readUint32(remainingData[idx : idx+uint32Size])
+	for idx <= len(buf)-rootHashRecordSize() {
+		sz := readUint32(buf[idx : idx+uint32Size])
 		if sz > 0 && sz <= journalWriterBuffSize {
 			// in the right range.
-			if int(sz) <= len(remainingData[idx:]) {
+			if int(sz) <= len(buf[idx:]) {
 				// try to validate it.
-				candidate := remainingData[idx : idx+int(sz)]
+				candidate := buf[idx : idx+int(sz)]
 				e := validateJournalRecord(candidate)
 				if e == nil {
 					record, err := readJournalRecord(candidate)
@@ -403,7 +427,7 @@ func possibleDataLossCheck(reader *bufio.Reader) (dataLoss bool, err error) {
 						return false, err
 					}
 					if firstRootFound {
-						// found the second record!
+						// found the second record! => possible data loss
 						return true, nil
 					}
 					if record.kind == rootHashJournalRecKind {
@@ -414,9 +438,30 @@ func possibleDataLossCheck(reader *bufio.Reader) (dataLoss bool, err error) {
 					idx += int(sz)
 					continue
 				}
+			} else {
+				// Not enough data to validate this record. Break out to try to read more data. Interestingly, if you are
+				// looking at random data, and you've parsed a size which is one byte shy of the max size (5Mb), this means
+				// we only got halfway through the buffer, and we're forced to perform a largish copy of the remaining data to the front
+				// of the buffer.
+				if !atEOF {
+					// We can read more data. Data shifted after the loop then we'll hit that sweet goto.
+					break
+				}
+
+				// We are at EOF, so we can't read more data. Just end the scan byte for byte.
+				// We got a length which is in the range, but there isn't enough data in the file so we just assume
+				// the current position isn't the start of a valid record.
 			}
 		}
 		idx++
+	}
+
+	if !atEOF {
+		// Shift remaining data to front of buffer and read more.
+		remaining := len(buf) - idx
+		copy(buf[0:], buf[idx:idx+remaining])
+		bufferPrefix = remaining
+		goto ReadBatchGoto
 	}
 
 	return false, nil

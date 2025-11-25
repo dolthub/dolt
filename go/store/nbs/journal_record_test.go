@@ -17,6 +17,7 @@ package nbs
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"math/rand"
 	"testing"
@@ -244,6 +245,88 @@ func TestJournalForDataLoss(t *testing.T) {
 	}
 }
 
+func TestJournalForDataLossOnBoundary(t *testing.T) {
+	r := rand.New(rand.NewSource(987654321))
+	// The data loss detection logic has some special cases around buffer boundaries to avoid reading all data into
+	// memory at once. This test constructs a journal which starts with a few valid records, then a bunch of garbage
+	// data, then we'll stick two records which constitute data loss on the buffer boundary at each byte of the valid buffer.
+	//
+	// The data loss code uses a 10 Mb buffer, so we'll make a 10 Mb journal plus 1 Kb.
+	bufSz := 2*journalWriterBuffSize + (1 << 10)
+
+	// Pre generate random buffer to speed this process up.
+	randBuf := make([]byte, bufSz)
+	r.Read(randBuf)
+
+	nullBuf := make([]byte, bufSz)
+	for i := range nullBuf {
+		nullBuf[i] = 0
+	}
+
+	type backerType struct {
+		buf  []byte
+		name string
+	}
+	var backers = []backerType{
+		{buf: randBuf, name: "randBuf"},
+		{buf: nullBuf, name: "nullBuf"},
+	}
+	for _, backer := range backers {
+		journalBuf := make([]byte, bufSz)
+		copy(journalBuf, randBuf)
+
+		var rec journalRec
+		var off uint32
+		rec, _ = makeRootHashRecord()
+		off += writeRootHashRecord(journalBuf[:], rec.address)
+		rec, _ = makeChunkRecord()
+		off += writeChunkRecord(journalBuf[off:], mustCompressedChunk(rec))
+
+		check := func(o int64, r journalRec) (_ error) { return nil }
+
+		// Verify that the journal as it exists at this moment does not trigger data loss. If it did, we'd have
+		// no confidence in the rest of the test.
+		ctx := context.Background()
+		var recoverErr error
+		bytesRead, err := processJournalRecords(ctx, bytes.NewReader(journalBuf[:]), 0, check, func(e error) { recoverErr = e })
+		require.NoError(t, err)
+		require.Equal(t, off, uint32(bytesRead))
+		require.Error(t, recoverErr) // We do expect a warning here, but no data loss.
+
+		// TODO: create a lost chunk which is slightly smaller than journalWriterBuffSize.
+		lostData := make([]byte, 1<<10) // lost data is only ~180 bytes. Allocate 1K.
+		off = 0
+		rec, _ = makeRootHashRecord()
+		off += writeRootHashRecord(lostData[:], rec.address)
+		rec, _ = makeChunkRecord()
+		off += writeChunkRecord(lostData[off:], mustCompressedChunk(rec))
+		lostData = lostData[:off]
+
+		t.Run(backer.name, func(t *testing.T) {
+			// startPoint and endPoint define the range of offsets to test for data loss on the boundary.
+			startPoint := (2 * journalWriterBuffSize) - uint32(len(lostData)) - uint32(rootHashRecordSize())
+			// endPoint puts the fist byte of lostData 10 bytes after the 10 Mb read.
+			endPoint := (2 * journalWriterBuffSize) + uint32(rootHashRecordSize())
+
+			for startPoint <= endPoint {
+				// Copy lost data into journal buffer at the test offset.
+				copy(journalBuf[startPoint:startPoint+uint32(len(lostData))], lostData)
+
+				_, err := processJournalRecords(ctx, bytes.NewReader(journalBuf[:]), 0, check, func(e error) { recoverErr = e })
+				require.Error(t, err)
+				require.True(t, errors.Is(err, ErrJournalDataLoss))
+				require.Error(t, recoverErr)
+
+				// Reset the journal buffer to original status.
+				copy(journalBuf[startPoint:startPoint+uint32(len(lostData))], backer.buf[startPoint:startPoint+uint32(len(lostData))])
+
+				// Testing every option takes a couple hours. Don't use `r` because we want this to be non-deterministic.
+				startPoint += uint32(rand.Intn(38) + 1) // Don't want to skip rootHashRecordSize() entirely.
+			}
+		})
+	}
+}
+
 func randomMemTable(cnt int) (*memTable, map[hash.Hash]chunks.Chunk) {
 	chnx := make(map[hash.Hash]chunks.Chunk, cnt)
 	for i := 0; i < cnt; i++ {
@@ -355,7 +438,7 @@ func writeCorruptJournalRecord(buf []byte) (n uint32) {
 
 func mustCompressedChunk(rec journalRec) CompressedChunk {
 	d.PanicIfFalse(rec.kind == chunkJournalRecKind)
-	cc, err := NewCompressedChunk(hash.Hash(rec.address), rec.payload)
+	cc, err := NewCompressedChunk(rec.address, rec.payload)
 	d.PanicIfError(err)
 	return cc
 }
