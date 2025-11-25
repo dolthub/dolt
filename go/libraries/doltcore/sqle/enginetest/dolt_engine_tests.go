@@ -518,12 +518,7 @@ func RunDoltStoredProceduresTest(t *testing.T, h DoltEnginetestHarness) {
 			h := h.NewHarness(t)
 			h.UseLocalFileSystem()
 			defer h.Close()
-
-			engine, err := h.NewEngine(t)
-			require.NoError(t, err)
-			defer engine.Close()
-
-			enginetest.TestScriptWithEngine(t, engine, h, script)
+			enginetest.TestScript(t, h, script)
 		}()
 	}
 }
