@@ -1,11 +1,13 @@
 #!/usr/bin/env bats
 load $BATS_TEST_DIRNAME/helper/common.bash
+load $BATS_TEST_DIRNAME/helper/query-server-common.bash
 
 setup() {
     setup_common
 }
 
 teardown() {
+    stop_sql_server
     teardown_common
 }
 
@@ -77,17 +79,17 @@ teardown() {
     # Not enough arguments
     run dolt sql -q "call dolt_backup('restore')"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "usage: dolt_backup('restore', 'remote_url', 'new_db_name', ['--aws-region=<region>'], ['--aws-creds-type=<type>'], ['--aws-creds-file=<file>'], ['--aws-creds-profile=<profile>'])" ]] || false
+    [[ "$output" =~ "usage: dolt_backup('restore', 'remote_url', 'new_db_name', ['--force'], ['--aws-region=<region>'], ['--aws-creds-type=<type>'], ['--aws-creds-file=<file>'], ['--aws-creds-profile=<profile>'])" ]] || false
 
     # Not enough arguments
     run dolt sql -q "call dolt_backup('restore', 'file:///some_directory')"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "usage: dolt_backup('restore', 'remote_url', 'new_db_name', ['--aws-region=<region>'], ['--aws-creds-type=<type>'], ['--aws-creds-file=<file>'], ['--aws-creds-profile=<profile>'])" ]] || false
+    [[ "$output" =~ "usage: dolt_backup('restore', 'remote_url', 'new_db_name', ['--force'], ['--aws-region=<region>'], ['--aws-creds-type=<type>'], ['--aws-creds-file=<file>'], ['--aws-creds-profile=<profile>'])" ]] || false
 
     # Too many arguments
     run dolt sql -q "call dolt_backup('restore', 'hostedapidb-0', 'file:///some_directory', 'too many')"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "usage: dolt_backup('restore', 'remote_url', 'new_db_name', ['--aws-region=<region>'], ['--aws-creds-type=<type>'], ['--aws-creds-file=<file>'], ['--aws-creds-profile=<profile>'])" ]] || false
+    [[ "$output" =~ "usage: dolt_backup('restore', 'remote_url', 'new_db_name', ['--force'], ['--aws-region=<region>'], ['--aws-creds-type=<type>'], ['--aws-creds-file=<file>'], ['--aws-creds-profile=<profile>'])" ]] || false
 }
 
 @test "sql-backup: dolt_backup restore" {
@@ -214,4 +216,24 @@ teardown() {
     [ "$status" -ne 0 ]
     run dolt sql -q "CALL dolt_backup('sync-url', 'https://dolthub.com/dolthub/backup')"
     [ "$status" -ne 0 ]
+}
+
+@test "sql-backup: dolt_backup rejects AWS parameters fails in sql-server" {
+    start_sql_server
+
+    run dolt sql -q "call dolt_backup('add', 'backup1', 'aws://[table:bucket]/db', '--aws-region=us-east-1')"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "AWS parameters are unavailable when running in server mode" ]] || false
+
+    run dolt sql -q "call dolt_backup('sync-url', 'backup2', 'aws://[table:bucket]/db', '--aws-creds-type=file')"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "AWS parameters are unavailable when running in server mode" ]] || false
+
+    run dolt sql -q "call dolt_backup('restore', 'backup3', 'aws://[table:bucket]/db', '--aws-creds-file=/path/to/file')"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "AWS parameters are unavailable when running in server mode" ]] || false
+
+    run dolt sql -q "call dolt_backup('add', 'backup4', 'aws://[table:bucket]/db', '--aws-creds-profile=profile')"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "AWS parameters are unavailable when running in server mode" ]] || false
 }

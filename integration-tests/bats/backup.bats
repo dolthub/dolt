@@ -1,6 +1,7 @@
 #!/usr/bin/env bats
 load $BATS_TEST_DIRNAME/helper/common.bash
 load $BATS_TEST_DIRNAME/helper/remotesrv-common.bash
+load $BATS_TEST_DIRNAME/helper/query-server-common.bash
 
 setup() {
     setup_common
@@ -22,6 +23,7 @@ setup() {
 
 teardown() {
     stop_remotesrv
+    stop_sql_server
     teardown_common
     rm -rf $TMPDIRS
     cd $BATS_TMPDIR
@@ -352,4 +354,25 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ "t1" ]] || false
     [[ "$output" =~ "t2" ]] || false
+}
+
+@test "backup: CLI rejects AWS parameters in sql-server" {
+    cd repo1
+    start_sql_server
+    
+    run dolt backup add test aws://[table:bucket]/db --aws-region=us-east-1
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "AWS parameters are unavailable when running in server mode" ]] || false
+
+    run dolt backup sync-url aws://[table:bucket]/db --aws-creds-type=file
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "AWS parameters are unavailable when running in server mode" ]] || false
+
+    run dolt backup restore aws://[table:bucket]/db newdb --aws-region=us-east-1
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "AWS parameters are unavailable when running in server mode" ]] || false
+
+    run dolt backup add aws-backup2 aws://[table:bucket]/db --aws-creds-type=file
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "AWS parameters are unavailable when running in server mode" ]] || false
 }

@@ -342,11 +342,11 @@ var BackupsProcedureScripts = []queries.ScriptTest{
 			},
 			{
 				Query:          "call dolt_backup('restore');",
-				ExpectedErrStr: "usage: dolt_backup('restore', 'remote_url', 'new_db_name', ['--aws-region=<region>'], ['--aws-creds-type=<type>'], ['--aws-creds-file=<file>'], ['--aws-creds-profile=<profile>'])",
+				ExpectedErrStr: "usage: dolt_backup('restore', 'remote_url', 'new_db_name', ['--force'], ['--aws-region=<region>'], ['--aws-creds-type=<type>'], ['--aws-creds-file=<file>'], ['--aws-creds-profile=<profile>'])",
 			},
 			{
 				Query:          fmt.Sprintf("call dolt_backup('restore', '%s');", fileUrl("dolt_backup1")),
-				ExpectedErrStr: "usage: dolt_backup('restore', 'remote_url', 'new_db_name', ['--aws-region=<region>'], ['--aws-creds-type=<type>'], ['--aws-creds-file=<file>'], ['--aws-creds-profile=<profile>'])",
+				ExpectedErrStr: "usage: dolt_backup('restore', 'remote_url', 'new_db_name', ['--force'], ['--aws-region=<region>'], ['--aws-creds-type=<type>'], ['--aws-creds-file=<file>'], ['--aws-creds-profile=<profile>'])",
 			},
 			{
 				Query:          fmt.Sprintf("call dolt_backup('restore', '%s', 'restored_db');", fileUrl("dolt_backup2")),
