@@ -55,6 +55,10 @@ var fsckDocs = cli.CommandDocumentationContent{
 	},
 }
 
+const (
+	journalReviveFlag = "revive-journal-with-data-loss"
+)
+
 func (cmd FsckCmd) Docs() *cli.CommandDocumentation {
 	return cli.NewCommandDocumentation(fsckDocs, cmd.ArgParser())
 }
@@ -62,6 +66,7 @@ func (cmd FsckCmd) Docs() *cli.CommandDocumentation {
 func (cmd FsckCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithMaxArgs(cmd.Name(), 0)
 	ap.SupportsFlag(cli.QuietFlag, "", "Don't show progress. Just print final report.")
+	ap.SupportsFlag(journalReviveFlag, "", "Revives a corrupted chunk journal by discarding invalid chunks. This may result in data loss.")
 
 	return ap
 }
@@ -79,6 +84,23 @@ func (cmd FsckCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	apr, _, terminate, status := ParseArgsOrPrintHelp(ap, commandStr, args, fsckDocs)
 	if terminate {
 		return status
+	}
+
+	if apr.Contains(journalReviveFlag) {
+		root, err := dEnv.FS.Abs("")
+		if err != nil {
+			cli.PrintErrln("Could not get absolute path for dolt data directory:", err.Error())
+		}
+		noms := filepath.Join(root, "noms")
+
+		path, err := nbs.ReviveJournalWithDataLoss(noms)
+		if err != nil {
+			cli.PrintErrln("Could not revive chunk journal:", err.Error())
+			return 1
+		}
+
+		cli.Printf("Revived chunk journal at %s\n", path)
+		return 0
 	}
 
 	quiet := apr.Contains(cli.QuietFlag)
@@ -177,7 +199,7 @@ func printFSCKReport(report *FSCKReport) int {
 
 func fsckHandleProgress(ctx context.Context, progress <-chan string, quiet bool) {
 	for item := range progress {
-		// when ctx is cancelled, keep draining but stop printing
+		// when ctx is canceled, keep draining but stop printing
 		if !quiet && ctx.Err() == nil {
 			cli.Println(item)
 		}

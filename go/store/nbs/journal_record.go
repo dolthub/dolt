@@ -23,10 +23,12 @@ import (
 	"io"
 	"math"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/fslock"
 )
 
 // journalRec is a record in a chunk journal. Its serialization format uses
@@ -245,6 +247,66 @@ func validateJournalRecord(buf []byte) error {
 	}
 
 	return nil
+}
+
+// ReviveJournalWithDataLoss attempts to recover from a corrupted chunk journal file located in |nomsDir|. This is
+// a special access method for use by the FSCK command. It acquired the lock on the NBS store,
+// verifies that there is dataloss, and if so, truncates the journal to the last known good offset. A backup of the
+// corrupted journal file is created with a timestamped suffix before truncating. If no data loss is detected, no action
+// is taken and an empty string is returned. If data loss is detected and recovery is performed, the path to the backup
+// file is returned.
+func ReviveJournalWithDataLoss(nomsDir string) (preservePath string, err error) {
+	lock := fslock.New(filepath.Join(nomsDir, lockFileName))
+	err = lock.TryLock()
+	if err != nil {
+		return "", fmt.Errorf("could not acquire lock on NBS store: %w", err)
+	}
+	defer lock.Unlock()
+
+	journalPath := filepath.Join(nomsDir, chunkJournalName)
+	jornalFile, err := os.OpenFile(journalPath, os.O_RDWR, 0666)
+	if err != nil {
+		return "", fmt.Errorf("could not open chunk journal file: %w", err)
+	}
+	defer jornalFile.Close()
+
+	noOp := func(o int64, r journalRec) error { return nil }
+	// First verify that the journal has data loss.
+	var offset int64
+	offset, err = processJournalRecords(context.Background(), jornalFile, 0, noOp, nil)
+	if err == nil {
+		// No data loss detected, nothing to do.
+		return "", fmt.Errorf("no data loss detected in chunk journal file; no recovery performed")
+	}
+	if !errors.Is(err, ErrJournalDataLoss) {
+		return "", fmt.Errorf("could not process chunk journal file: %w", err)
+	}
+
+	// Seek back to the start, to perform a full copy.
+	if _, err = jornalFile.Seek(0, io.SeekStart); err != nil {
+		return "", fmt.Errorf("could not seek to start of chunk journal file: %w", err)
+	}
+
+	// Create a backup of the journal file before truncating.
+	preservePath = fmt.Sprintf("%s_save_%d", journalPath, time.Now().Format("2006_01_02_15_04_05"))
+	saveFile, err := os.OpenFile(preservePath, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0666)
+	if err != nil {
+		return "", fmt.Errorf("could not create backup of corrupted chunk journal file: %w", err)
+	}
+	defer saveFile.Close()
+	if _, err = io.Copy(saveFile, jornalFile); err != nil {
+		return "", fmt.Errorf("could not backup corrupted chunk journal file: %w", err)
+	}
+
+	// Now truncate the journal file to the last known good offset.
+	if err = jornalFile.Truncate(offset); err != nil {
+		return "", fmt.Errorf("could not truncate corrupted chunk journal file: %w", err)
+	}
+	if err = jornalFile.Sync(); err != nil {
+		return "", fmt.Errorf("could not sync truncated chunk journal file: %w", err)
+	}
+
+	return preservePath, nil
 }
 
 // processJournalRecords iterates over a chunk journal's records by reading from disk using |r|, starting at
