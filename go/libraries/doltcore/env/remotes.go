@@ -692,7 +692,15 @@ func getAbsFileRemoteUrl(u *url.URL, fs filesys2.Filesys) (string, error) {
 	}
 
 	exists, isDir := fs.Exists(urlStr)
-	if exists && !isDir {
+
+	if !exists {
+		// TODO: very odd that GetAbsRemoteUrl will create a directory if it doesn't exist.
+		//  This concern should be separated
+		err = fs.MkDirs(urlStr)
+		if err != nil {
+			return "", fmt.Errorf("failed to create directory '%s': %w", urlStr, err)
+		}
+	} else if !isDir {
 		return "", filesys2.ErrIsFile
 	}
 
