@@ -185,6 +185,31 @@ var BackupsProcedureScripts = []queries.ScriptTest{
 				},
 			},
 			{
+				Query:    "create table t (t text);",
+				Expected: []sql.Row{{gmstypes.OkResult{}}},
+			},
+			{
+				// Testing that remove only affects the dolt_backups table, but keeps the original backup intact.
+				Query:    "call dolt_backup('sync', 'bak2')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "call dolt_backup('remove', 'bak2');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "drop table t;",
+				Expected: []sql.Row{{gmstypes.OkResult{}}},
+			},
+			{
+				Query:    fmt.Sprintf("call dolt_backup('restore', '%s', 'restored_db');", fileUrl("dolt_backup2")),
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "select * from restored_db.t;",
+				Expected: []sql.Row{},
+			},
+			{
 				Query:          "call dolt_backup('remove', 'nonexistent');",
 				ExpectedErrStr: "backup 'nonexistent' not found",
 			},
