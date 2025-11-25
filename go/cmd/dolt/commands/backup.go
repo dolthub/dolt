@@ -176,27 +176,30 @@ func printDoltBackupsTable(queryEngine *cli.QueryEngineResult, showVerbose bool)
 
 	const errColumnExpectedStringFmt = "column '%s' expected string, got %v"
 	for _, row := range rows {
-		name, ok := row[0].(string)
+		// Backup configuration name
+		nameStr, ok := row[0].(string)
 		if !ok {
 			return errhand.BuildDError(errColumnExpectedStringFmt, schema[0].Name, row[0]).Build()
 		}
 
 		if !showVerbose {
-			cli.Println(name)
+			cli.Println(nameStr)
 			continue
 		}
 
-		url, ok := row[1].(string)
+		// Remote backup location URL (aws://, gs://, file://, http[s]://)
+		urlStr, ok := row[1].(string)
 		if !ok {
 			return errhand.BuildDError(errColumnExpectedStringFmt, schema[1].Name, row[1]).Build()
 		}
 
+		// Backup connection parameters
 		jsonStr, err := getJsonAsString(queryEngine.Context, row[2])
 		if err != nil {
 			return errhand.BuildDError(errColumnExpectedStringFmt, schema[2].Name, row[2]).AddCause(err).Build()
 		}
 
-		cli.Printf("%s %s %s\n", name, url, jsonStr)
+		cli.Printf("%s %s %s\n", nameStr, urlStr, jsonStr)
 	}
 
 	return nil
