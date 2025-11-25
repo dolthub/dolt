@@ -152,7 +152,7 @@ func (s SessionStateAdapter) AddBackup(remote env.Remote) error {
 	}
 
 	if conflict, found := env.CheckRemoteAddressConflict(remote.Url, s.remotes, s.backups); found {
-		return env.ErrRemoteAddressConflict.New(conflict.Name, remote.Url)
+		return env.ErrRemoteAddressConflict.New(conflict.Name, conflict.Url)
 	}
 
 	s.backups.Set(remote.Name, remote)
