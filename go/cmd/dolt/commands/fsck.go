@@ -25,8 +25,6 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/fatih/color"
-
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -37,6 +35,7 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/nbs"
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/fatih/color"
 )
 
 type FsckCmd struct{}
@@ -44,7 +43,7 @@ type FsckCmd struct{}
 var _ cli.Command = FsckCmd{}
 
 func (cmd FsckCmd) Description() string {
-	return "Verifies the contents of the database are not corrupted."
+	return "Verifies the contents of the database are not corrupted. Provides repair when possible."
 }
 
 var fsckDocs = cli.CommandDocumentationContent{
@@ -52,6 +51,7 @@ var fsckDocs = cli.CommandDocumentationContent{
 	LongDesc:  "Verifies the contents of the database are not corrupted.",
 	Synopsis: []string{
 		"[--quiet]",
+		"--revive-journal-with-data-loss",
 	},
 }
 
@@ -66,7 +66,10 @@ func (cmd FsckCmd) Docs() *cli.CommandDocumentation {
 func (cmd FsckCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParserWithMaxArgs(cmd.Name(), 0)
 	ap.SupportsFlag(cli.QuietFlag, "", "Don't show progress. Just print final report.")
-	ap.SupportsFlag(journalReviveFlag, "", "Revives a corrupted chunk journal by discarding invalid chunks. This may result in data loss.")
+	ap.SupportsFlag(journalReviveFlag, "", `Revives a corrupted chunk journal by discarding unparsable data.
+WARNING: This may result in data loss. Your original data will be preserved in a backup file. Use this option to restore
+the ability to use your Dolt database. Please contact Dolt (https://github.com/dolthub/dolt/issues) for assistance.
+`)
 
 	return ap
 }
@@ -87,20 +90,7 @@ func (cmd FsckCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	}
 
 	if apr.Contains(journalReviveFlag) {
-		root, err := dEnv.FS.Abs("")
-		if err != nil {
-			cli.PrintErrln("Could not get absolute path for dolt data directory:", err.Error())
-		}
-		noms := filepath.Join(root, "noms")
-
-		path, err := nbs.ReviveJournalWithDataLoss(noms)
-		if err != nil {
-			cli.PrintErrln("Could not revive chunk journal:", err.Error())
-			return 1
-		}
-
-		cli.Printf("Revived chunk journal at %s\n", path)
-		return 0
+		return reviveJournalWithDataLoss(dEnv)
 	}
 
 	quiet := apr.Contains(cli.QuietFlag)
@@ -134,7 +124,14 @@ func (cmd FsckCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		errs = append(errs, vErr)
 	})
 	if err != nil {
-		cli.PrintErrln(fmt.Sprintf("Could not open dolt database: %s", err.Error()))
+		if errors.Is(err, nbs.ErrJournalDataLoss) {
+			cli.PrintErrln("WARNING: Chunk journal is corrupted and some data may be lost.")
+			cli.PrintErrln("Run `dolt fsck --revive-journal-with-data-loss` to attempt to recover the journal by")
+			cli.PrintErrln("discarding invalid data blocks. Your original data will be preserved in a backup file.")
+			return 1
+		} else {
+			cli.PrintErrln(fmt.Sprintf("Could not open dolt database: %s", err.Error()))
+		}
 		return 1
 	}
 	gs, ok := datas.ChunkStoreFromDatabase(ddb).(*nbs.GenerationalNBS)
@@ -180,6 +177,25 @@ func (cmd FsckCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	}
 
 	return printFSCKReport(report)
+}
+
+func reviveJournalWithDataLoss(dEnv *env.DoltEnv) int {
+	root, err := dEnv.FS.Abs("")
+	if err != nil {
+		cli.PrintErrln("Could not get absolute path for dolt data directory:", err.Error())
+		return 1
+	}
+	noms := filepath.Join(root, ".dolt", "noms")
+
+	path, err := nbs.ReviveJournalWithDataLoss(noms)
+	if err != nil {
+		cli.PrintErrln("Could not revive chunk journal:", err.Error())
+		return 1
+	}
+
+	cli.Printf("Revived chunk journal at:\n%s\n", path)
+	cli.Printf("For assistance recovering data, please file a ticket: https://github.com/dolthub/dolt/issues\n")
+	return 0
 }
 
 func printFSCKReport(report *FSCKReport) int {

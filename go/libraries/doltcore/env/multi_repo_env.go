@@ -169,7 +169,10 @@ func MultiEnvForDirectory(
 	} else {
 		dbErr := newDEnv.DBLoadError
 		if dbErr != nil {
-			if !errors.Is(dbErr, doltdb.ErrMissingDoltDataDir) {
+			if errors.Is(dbErr, nbs.ErrJournalDataLoss) {
+				logrus.Errorf("failed to load database %s with error: %s", dbName, dbErr.Error())
+				logrus.Errorf("please run 'dolt fsck' to assess the damage and attempt repairs")
+			} else if !errors.Is(dbErr, doltdb.ErrMissingDoltDataDir) {
 				logrus.Warnf("failed to load database with error: %s", dbErr.Error())
 			}
 		}
@@ -204,7 +207,10 @@ func MultiEnvForDirectory(
 		} else {
 			dbErr := newEnv.DBLoadError
 			if dbErr != nil {
-				if !errors.Is(dbErr, doltdb.ErrMissingDoltDataDir) {
+				if errors.Is(dbErr, nbs.ErrJournalDataLoss) {
+					logrus.Errorf("failed to load database at %s with error: %s", path, dbErr.Error())
+					logrus.Errorf("please run 'dolt fsck' to assess the damage and attempt repairs")
+				} else if !errors.Is(dbErr, doltdb.ErrMissingDoltDataDir) {
 					logrus.Warnf("failed to load database at %s with error: %s", path, dbErr.Error())
 				}
 			}
@@ -247,7 +253,10 @@ func (mrEnv *MultiRepoEnv) ReloadDBs(
 		if !dEnv.Valid() {
 			dbErr := dEnv.DBLoadError
 			if dbErr != nil {
-				if !errors.Is(dbErr, doltdb.ErrMissingDoltDataDir) {
+				if errors.Is(dbErr, nbs.ErrJournalDataLoss) {
+					logrus.Errorf("failed to load database at %s with error: %s", dEnv.urlStr, dbErr.Error())
+					logrus.Errorf("please run 'dolt fsck' to assess the damage and attempt repairs")
+				} else if !errors.Is(dbErr, doltdb.ErrMissingDoltDataDir) {
 					logrus.Warnf("failed to load database at %s with error: %s", dEnv.urlStr, dbErr.Error())
 				}
 			}

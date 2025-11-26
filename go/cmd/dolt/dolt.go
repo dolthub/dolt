@@ -115,6 +115,14 @@ var commandsWithoutCurrentDirWrites = []cli.Command{
 	commands.ProfileCmd{},
 }
 
+// commands that specifically skip the env.MultiEnvForDirectory loading step. These commands work in a context where
+// we expect the database to fail loading, but we need to get through to the Exec call anyway. The dEnv created with LoadWithoutDB
+// will be passed to these commands, so we can determine where the data root is, but commands will need to load the database
+// on terms that make sense for their purpose.
+var commandsSkippingDBLoad = []cli.Command{
+	commands.FsckCmd{},
+}
+
 func initCliContext(commandName string) bool {
 	for _, command := range commandsWithoutCliCtx {
 		if command.Name() == commandName {
@@ -135,6 +143,15 @@ func supportsGlobalArgs(commandName string) bool {
 
 func needsWriteAccess(commandName string) bool {
 	for _, command := range commandsWithoutCurrentDirWrites {
+		if command.Name() == commandName {
+			return false
+		}
+	}
+	return true
+}
+
+func needsDBLoad(commandName string) bool {
+	for _, command := range commandsSkippingDBLoad {
 		if command.Name() == commandName {
 			return false
 		}
@@ -472,21 +489,23 @@ func runMain() int {
 	// will be lost. This is particularly confusing for database specific system
 	// variables like `${db_name}_default_branch` (maybe these should not be
 	// part of Dolt config in the first place!).
+	var mrEnv *env.MultiRepoEnv
+	if needsDBLoad(cfg.subCommand) {
+		mrEnv, err = env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), cfg.dataDirFS, dEnv.Version, dEnv)
+		if err != nil {
+			cli.PrintErrln("failed to load database names")
+			return 1
+		}
+		_ = mrEnv.Iter(func(dbName string, dEnv *env.DoltEnv) (stop bool, err error) {
+			dsess.DefineSystemVariablesForDB(dbName)
+			return false, nil
+		})
 
-	mrEnv, err := env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), cfg.dataDirFS, dEnv.Version, dEnv)
-	if err != nil {
-		cli.PrintErrln("failed to load database names")
-		return 1
-	}
-	_ = mrEnv.Iter(func(dbName string, dEnv *env.DoltEnv) (stop bool, err error) {
-		dsess.DefineSystemVariablesForDB(dbName)
-		return false, nil
-	})
-
-	// TODO: we set persisted vars here, and this should be deferred until after we know what command line arguments might change them
-	err = dsess.InitPersistedSystemVars(dEnv)
-	if err != nil {
-		cli.Printf("error: failed to load persisted global variables: %s\n", err.Error())
+		// TODO: we set persisted vars here, and this should be deferred until after we know what command line arguments might change them
+		err = dsess.InitPersistedSystemVars(dEnv)
+		if err != nil {
+			cli.Printf("error: failed to load persisted global variables: %s\n", err.Error())
+		}
 	}
 
 	var cliCtx cli.CliContext = nil

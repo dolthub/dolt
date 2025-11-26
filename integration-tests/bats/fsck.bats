@@ -96,3 +96,49 @@ UPDATE tbl SET guid = UUID() WHERE i >= @random_id LIMIT 1;"
   [ "$status" -eq 1 ]
   [[ "$output" =~ "skipping remaining journal records past offset 5936: invalid journal record: CRC checksum does not match" ]] || false
 }
+
+@test "fsck: recover from broken journal" {
+  dolt init
+  dolt sql -q "create table recovermeplease (i int auto_increment primary key, guid char(36))"
+  dolt commit -Am "Create table recovermeplease"
+
+  local journal=".dolt/noms/vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv"
+  # append some bytes which are going to stop the journal reading process, then append a couple records.
+  printf '\x00\x00\x00\x00' >> "$journal"
+  cat $BATS_CWD/corrupt_dbs/journal_data.bin >> "$journal"
+
+  run dolt status
+  [ "$status" -eq 1 ]
+  [[ "$output" =~ "please run 'dolt fsck' to assess the damage and attempt repairs" ]] || false
+
+  run dolt fsck
+  [ "$status" -eq 1 ]
+  [[ "$output" =~ "dolt fsck --revive-journal-with-data-loss" ]] || false
+
+  run dolt fsck --revive-journal-with-data-loss
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "please file a ticket: https://github.com/dolthub/dolt/issues" ]] || false
+
+  dolt fsck
+
+  run dolt show
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "recovermeplease" ]] || false
+
+  # Look for the save file.
+  ls .dolt/noms/vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv_save_* >/dev/null 2>&1
+}
+
+@test "fsck: do nothing when nothing is wrong with journal" {
+  dolt init
+  dolt sql -q "create table recovermenoloss (i int auto_increment primary key, guid char(36))"
+  dolt commit -Am "Create table recovermenoloss"
+
+  run dolt fsck --revive-journal-with-data-loss
+  [ "$status" -eq 1 ]
+  [[ "$output" =~ "no data loss detected in chunk journal file; no recovery performed" ]] || false
+
+  run dolt show
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "recovermenoloss" ]] || false
+}

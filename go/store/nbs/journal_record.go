@@ -250,11 +250,10 @@ func validateJournalRecord(buf []byte) error {
 }
 
 // ReviveJournalWithDataLoss attempts to recover from a corrupted chunk journal file located in |nomsDir|. This is
-// a special access method for use by the FSCK command. It acquired the lock on the NBS store,
-// verifies that there is dataloss, and if so, truncates the journal to the last known good offset. A backup of the
+// a special access method for use by the FSCK command. It acquires the lock on the NBS store,
+// verifies that there is data loss, then truncates the journal to the last known good offset. A backup of the
 // corrupted journal file is created with a timestamped suffix before truncating. If no data loss is detected, no action
-// is taken and an empty string is returned. If data loss is detected and recovery is performed, the path to the backup
-// file is returned.
+// is taken and an empty string and error is returned.
 func ReviveJournalWithDataLoss(nomsDir string) (preservePath string, err error) {
 	lock := fslock.New(filepath.Join(nomsDir, lockFileName))
 	err = lock.TryLock()
@@ -288,7 +287,10 @@ func ReviveJournalWithDataLoss(nomsDir string) (preservePath string, err error) 
 	}
 
 	// Create a backup of the journal file before truncating.
-	preservePath = fmt.Sprintf("%s_save_%d", journalPath, time.Now().Format("2006_01_02_15_04_05"))
+	now := time.Now()
+	seconds := now.Hour()*3600 + now.Minute()*60 + now.Second()
+	ts := fmt.Sprintf("%04d_%02d_%02d_%05d", now.Year(), now.Month(), now.Day(), seconds)
+	preservePath = fmt.Sprintf("%s_save_%s", journalPath, ts)
 	saveFile, err := os.OpenFile(preservePath, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0666)
 	if err != nil {
 		return "", fmt.Errorf("could not create backup of corrupted chunk journal file: %w", err)
@@ -425,7 +427,7 @@ func processJournalRecords(ctx context.Context, r io.ReadSeeker, off int64, cb f
 			}
 		}
 		if dataLossFound {
-			return 0, NewJournalDataLossError(off)
+			return off, NewJournalDataLossError(off)
 		}
 	}
 
