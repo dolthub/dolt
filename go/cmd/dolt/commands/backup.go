@@ -16,42 +16,40 @@ package commands
 
 import (
 	"context"
-	"encoding/json"
-	"strings"
+	"fmt"
 
-	eventsapi "github.com/dolthub/eventsapi_schema/dolt/services/eventsapi/v1alpha1"
+	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
-	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dprocedures"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/store/datas/pull"
-	"github.com/dolthub/dolt/go/store/types"
+	eventsapi "github.com/dolthub/eventsapi_schema/dolt/services/eventsapi/v1alpha1"
 )
 
 var backupDocs = cli.CommandDocumentationContent{
-	ShortDesc: "Manage server backups",
-	LongDesc: `With no arguments, shows a list of existing backups. Several subcommands are available to perform operations on backups, point in time snapshots of a database's contents.
+	ShortDesc: "Manage database backups, including creation, sync, and restore.",
+	LongDesc: `
+With no arguments, shows a list of existing backups. Several subcommands are available to perform operations on backups; point in time snapshots of a database's contents.
 
 {{.EmphasisLeft}}add{{.EmphasisRight}}
 Adds a backup named {{.LessThan}}name{{.GreaterThan}} for the database at {{.LessThan}}url{{.GreaterThan}}.
-The {{.LessThan}}url{{.GreaterThan}} parameter supports url schemes of http, https, aws, gs, and file. The url prefix defaults to https. If the {{.LessThan}}url{{.GreaterThan}} parameter is in the format {{.EmphasisLeft}}<organization>/<repository>{{.EmphasisRight}} then dolt will use the {{.EmphasisLeft}}backups.default_host{{.EmphasisRight}} from your configuration file (Which will be dolthub.com unless changed).
+The {{.LessThan}}url{{.GreaterThan}} parameter supports http, https, aws, gs, and file schemes (https as default). If the {{.LessThan}}url{{.GreaterThan}} parameter is in the format {{.EmphasisLeft}}<organization>/<repository>{{.EmphasisRight}} then dolt will use the {{.EmphasisLeft}}backups.default_host{{.EmphasisRight}} from your configuration file (dolthub.com by default).
 The URL address must be unique to existing remotes and backups.
 
-AWS cloud backup urls should be of the form {{.EmphasisLeft}}aws://[dynamo-table:s3-bucket]/database{{.EmphasisRight}}. You may configure your aws cloud backup using the optional parameters {{.EmphasisLeft}}aws-region{{.EmphasisRight}}, {{.EmphasisLeft}}aws-creds-type{{.EmphasisRight}}, {{.EmphasisLeft}}aws-creds-file{{.EmphasisRight}}.
+AWS cloud backup URLs should be of the form {{.EmphasisLeft}}aws://[dynamo-table:s3-bucket]/database{{.EmphasisRight}}. You may configure your AWS cloud backup using the optional parameters {{.EmphasisLeft}}aws-region{{.EmphasisRight}}, {{.EmphasisLeft}}aws-creds-type{{.EmphasisRight}}, {{.EmphasisLeft}}aws-creds-file{{.EmphasisRight}}, {{.EmphasisLeft}}aws-creds-profile{{.EmphasisRight}}.
 
-aws-creds-type specifies the means by which credentials should be retrieved in order to access the specified cloud resources (specifically the dynamo table, and the s3 bucket). Valid values are 'role', 'env', or 'file'.
+aws-creds-type specifies the means by which credentials should be retrieved in order to access the specified cloud resources (required for DynamoDB tables, and S3 buckets). Valid values are 'role', 'env', or 'file'.
 
-	role: Use the credentials installed for the current user
-	env: Looks for environment variables AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY
-	file: Uses the credentials file specified by the parameter aws-creds-file
+	role: Use the credentials installed for the current user.
+	env:  Looks for environment variables AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY.
+	file: Uses the credentials file specified by the parameter aws-creds-file.
 
-	
-GCP backup urls should be of the form gs://gcs-bucket/database and will use the credentials setup using the gcloud command line available from Google.
+GCP backup URLs should follow the format {{.EmphasisLeft}}gs://gcs-bucket/database{{.EmphasisRight}}. Backups will use the credentials that you configure using the gcloud CLI.
 
-The local filesystem can be used as a backup by providing a repository url in the format file://absolute path. See https://en.wikipedia.org/wiki/File_URI_scheme
+The local filesystem can be used as a backup by providing a repository URL in the format {{.EmphasisLeft}}file://absolute-path{{.EmphasisRight}}. See https://en.wikipedia.org/wiki/File_URI_scheme.
 
 {{.EmphasisLeft}}remove{{.EmphasisRight}}, {{.EmphasisLeft}}rm{{.EmphasisRight}}
 Remove the backup named {{.LessThan}}name{{.GreaterThan}}. All configuration settings for the backup are removed. The contents of the backup are not affected.
@@ -62,19 +60,20 @@ Restore a Dolt database from a given {{.LessThan}}url{{.GreaterThan}} into a spe
 {{.EmphasisLeft}}sync{{.EmphasisRight}}
 Snapshot the database and upload to the backup {{.LessThan}}name{{.GreaterThan}}. This includes branches, tags, working sets, and remote tracking refs.
 
-	
 {{.EmphasisLeft}}sync-url{{.EmphasisRight}}
-Snapshot the database and upload the backup to {{.LessThan}}url{{.GreaterThan}}. Like sync, this includes branches, tags, working sets, and remote tracking refs, but it does not require you to create a named backup`,
-
+Snapshot the database and upload the backup to {{.LessThan}}url{{.GreaterThan}}. Like sync, this includes branches, tags, working sets, and remote tracking refs, but it does not require you to create a named backup.
+`,
 	Synopsis: []string{
 		"[-v | --verbose]",
 		"add [--aws-region {{.LessThan}}region{{.GreaterThan}}] [--aws-creds-type {{.LessThan}}creds-type{{.GreaterThan}}] [--aws-creds-file {{.LessThan}}file{{.GreaterThan}}] [--aws-creds-profile {{.LessThan}}profile{{.GreaterThan}}] {{.LessThan}}name{{.GreaterThan}} {{.LessThan}}url{{.GreaterThan}}",
 		"remove {{.LessThan}}name{{.GreaterThan}}",
-		"restore [--force] {{.LessThan}}url{{.GreaterThan}} {{.LessThan}}name{{.GreaterThan}}",
+		"restore [--aws-region {{.LessThan}}region{{.GreaterThan}}] [--aws-creds-type {{.LessThan}}creds-type{{.GreaterThan}}] [--aws-creds-file {{.LessThan}}file{{.GreaterThan}}] [--aws-creds-profile {{.LessThan}}profile{{.GreaterThan}}] [--force] {{.LessThan}}url{{.GreaterThan}} {{.LessThan}}name{{.GreaterThan}}",
 		"sync {{.LessThan}}name{{.GreaterThan}}",
 		"sync-url [--aws-region {{.LessThan}}region{{.GreaterThan}}] [--aws-creds-type {{.LessThan}}creds-type{{.GreaterThan}}] [--aws-creds-file {{.LessThan}}file{{.GreaterThan}}] [--aws-creds-profile {{.LessThan}}profile{{.GreaterThan}}] {{.LessThan}}url{{.GreaterThan}}",
 	},
 }
+
+var VerboseErrUsage = errhand.BuildDError("").SetPrintUsage().Build()
 
 type BackupCmd struct{}
 
@@ -106,287 +105,101 @@ func (cmd BackupCmd) EventType() eventsapi.ClientEventType {
 	return eventsapi.ClientEventType_REMOTE
 }
 
-// Exec executes the command
-func (cmd BackupCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, cliCtx cli.CliContext) int {
-	ap := cmd.ArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, backupDocs, ap))
-	apr := cli.ParseArgsOrDie(ap, args, help)
+// Exec executes the `dolt backup` command with the provided subcommand. If no subcommand is provided, the dolt_backups
+// table is printed.
+func (cmd BackupCmd) Exec(ctx context.Context, commandStr string, args []string, _ *env.DoltEnv, cliCtx cli.CliContext) int {
+	argParser := cmd.ArgParser()
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, backupDocs, argParser))
+	apr := cli.ParseArgsOrDie(argParser, args, help)
 
-	var verr errhand.VerboseError
-
-	// All the sub commands except `restore` require a valid environment
-	if apr.NArg() == 0 || apr.Arg(0) != cli.RestoreBackupId {
-		if !cli.CheckEnvIsValid(dEnv) {
-			return 2
-		}
-	}
-
-	switch {
-	case apr.NArg() == 0:
-		verr = printBackups(dEnv, apr)
-	case apr.Arg(0) == cli.AddBackupId:
-		verr = addBackup(dEnv, apr)
-	case apr.Arg(0) == cli.RemoveBackupId:
-		verr = removeBackup(ctx, dEnv, apr)
-	case apr.Arg(0) == cli.RemoveBackupShortId:
-		verr = removeBackup(ctx, dEnv, apr)
-	case apr.Arg(0) == cli.SyncBackupId:
-		verr = syncBackup(ctx, dEnv, apr)
-	case apr.Arg(0) == cli.SyncBackupUrlId:
-		verr = syncBackupUrl(ctx, dEnv, apr)
-	case apr.Arg(0) == cli.RestoreBackupId:
-		verr = restoreBackup(ctx, dEnv, apr)
-	default:
-		verr = errhand.BuildDError("").SetPrintUsage().Build()
-	}
-
-	return HandleVErrAndExitCode(verr, usage)
-}
-
-func removeBackup(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.VerboseError {
-	if apr.NArg() != 2 {
-		return errhand.BuildDError("").SetPrintUsage().Build()
-	}
-
-	old := strings.TrimSpace(apr.Arg(1))
-	err := dEnv.RemoveBackup(ctx, old)
-
-	switch err {
-	case nil:
-		return nil
-	case env.ErrFailedToWriteRepoState:
-		return errhand.BuildDError("error: failed to save change to repo state").AddCause(err).Build()
-	case env.ErrFailedToDeleteBackup:
-		return errhand.BuildDError("error: failed to delete backup tracking ref").AddCause(err).Build()
-	case env.ErrFailedToReadFromDb:
-		return errhand.BuildDError("error: failed to read from db").AddCause(err).Build()
-	case env.ErrBackupNotFound:
-		return errhand.BuildDError("error: unknown backup: '%s' ", old).Build()
-	default:
-		return errhand.BuildDError("error: unknown error").AddCause(err).Build()
-	}
-}
-
-func addBackup(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.VerboseError {
-	if apr.NArg() != 3 {
-		return errhand.BuildDError("").SetPrintUsage().Build()
-	}
-
-	backupName := strings.TrimSpace(apr.Arg(1))
-
-	backupUrl := apr.Arg(2)
-	scheme, absBackupUrl, err := env.GetAbsRemoteUrl(dEnv.FS, dEnv.Config, backupUrl)
+	queryEngine, err := cliCtx.QueryEngine(ctx)
 	if err != nil {
-		return errhand.BuildDError("error: '%s' is not valid.", backupUrl).AddCause(err).Build()
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	params, err := cli.ProcessBackupArgs(apr, scheme, absBackupUrl)
+	if apr.NArg() == 0 {
+		verboseErr := printDoltBackupsTable(&queryEngine, apr.Contains(cli.VerboseFlag))
+		return HandleVErrAndExitCode(verboseErr, usage)
+	}
+
+	switch apr.Arg(0) {
+	case dprocedures.DoltBackupParamAdd:
+		if apr.NArg() != 3 {
+			return HandleVErrAndExitCode(VerboseErrUsage, usage)
+		}
+	case dprocedures.DoltBackupParamRemove,
+		dprocedures.DoltBackupParamRm,
+		dprocedures.DoltBackupParamSync,
+		dprocedures.DoltBackupParamSyncUrl:
+		if apr.NArg() != 2 {
+			return HandleVErrAndExitCode(VerboseErrUsage, usage)
+		}
+	case dprocedures.DoltBackupParamRestore:
+		if apr.NArg() < 3 {
+			return HandleVErrAndExitCode(VerboseErrUsage, usage)
+		}
+	default:
+		return HandleVErrAndExitCode(VerboseErrUsage, usage)
+	}
+
+	verboseErr := callDoltBackupProc(&queryEngine, args)
+	return HandleVErrAndExitCode(verboseErr, usage)
+}
+
+// callDoltBackupProc calls the dolt_backup stored procedure with the given parameters.
+func callDoltBackupProc(queryEngine *cli.QueryEngineResult, params []string) errhand.VerboseError {
+	query, err := interpolateStoredProcedureCall(dprocedures.DoltBackupProcedureName, params)
+	if err != nil {
+		return errhand.BuildDError("failed to interpolate stored procedure %s", dprocedures.DoltBackupProcedureName).AddCause(err).Build()
+	}
+
+	_, err = cli.GetRowsForSql(queryEngine.Queryist, queryEngine.Context, query)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
-	}
-
-	r := env.NewRemote(backupName, backupUrl, params)
-	err = dEnv.AddBackup(r)
-
-	switch err {
-	case nil:
-		return nil
-	case env.ErrBackupAlreadyExists:
-		return errhand.BuildDError("error: a backup named '%s' already exists.", r.Name).AddDetails("remove it before running this command again").Build()
-	case env.ErrBackupNotFound:
-		return errhand.BuildDError("error: unknown backup: '%s' ", r.Name).Build()
-	case env.ErrInvalidBackupURL:
-		return errhand.BuildDError("error: '%s' is not valid.", r.Url).AddCause(err).Build()
-	case env.ErrInvalidBackupName:
-		return errhand.BuildDError("error: invalid backup name: %s", r.Name).Build()
-	default:
-		return errhand.BuildDError("error: Unable to save changes.").AddCause(err).Build()
-	}
-}
-
-func printBackups(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.VerboseError {
-	backups, err := dEnv.GetBackups()
-	if err != nil {
-		return errhand.BuildDError("Unable to get backups from the local directory").AddCause(err).Build()
-	}
-
-	for _, r := range backups.Snapshot() {
-		if apr.Contains(cli.VerboseFlag) {
-			paramStr := make([]byte, 0)
-			if len(r.Params) > 0 {
-				paramStr, _ = json.Marshal(r.Params)
-			}
-
-			cli.Printf("%s %s %s\n", r.Name, r.Url, paramStr)
-		} else {
-			cli.Println(r.Name)
-		}
 	}
 
 	return nil
 }
 
-func syncBackupUrl(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.VerboseError {
-	if apr.NArg() != 2 {
-		return errhand.BuildDError("").SetPrintUsage().Build()
-	}
-
-	backupUrl := apr.Arg(1)
-	scheme, absBackupUrl, err := env.GetAbsRemoteUrl(dEnv.FS, dEnv.Config, backupUrl)
-	if err != nil {
-		return errhand.BuildDError("error: '%s' is not valid.", backupUrl).AddCause(err).Build()
-	}
-
-	params, err := cli.ProcessBackupArgs(apr, scheme, absBackupUrl)
+// printDoltBackupsTable queries the dolt_backups table and prints the results. If the verbose flag is set, it prints
+// name, url, and params columns. Otherwise, it prints only the name column.
+func printDoltBackupsTable(queryEngine *cli.QueryEngineResult, showVerbose bool) errhand.VerboseError {
+	query := fmt.Sprintf("SELECT * FROM `%s`", doltdb.BackupsTableName)
+	schema, rowIter, _, err := queryEngine.Queryist.Query(queryEngine.Context, query)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
-
-	b := env.NewRemote("__temp__", backupUrl, params)
-	return backup(ctx, dEnv, b)
-}
-
-func syncBackup(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.VerboseError {
-	if apr.NArg() != 2 {
-		return errhand.BuildDError("").SetPrintUsage().Build()
-	}
-
-	backupName := strings.TrimSpace(apr.Arg(1))
-
-	backups, err := dEnv.GetBackups()
+	rows, err := sql.RowIterToRows(queryEngine.Context, rowIter)
 	if err != nil {
-		return errhand.BuildDError("Unable to get backups from the local directory").AddCause(err).Build()
+		return errhand.BuildDError("failed to retrieve slice for %s", doltdb.BackupsTableName).AddCause(err).Build()
 	}
 
-	b, ok := backups.Get(backupName)
-	if !ok {
-		return errhand.BuildDError("error: unknown backup: '%s' ", backupName).Build()
-	}
-
-	return backup(ctx, dEnv, b)
-}
-
-func backup(ctx context.Context, dEnv *env.DoltEnv, b env.Remote) errhand.VerboseError {
-	destDb, err := b.GetRemoteDB(ctx, dEnv.DoltDB(ctx).ValueReadWriter().Format(), dEnv)
-	if err != nil {
-		return errhand.BuildDError("error: unable to open destination.").AddCause(err).Build()
-	}
-	tmpDir, err := dEnv.TempTableFilesDir()
-	if err != nil {
-		return errhand.BuildDError("error: ").AddCause(err).Build()
-	}
-	err = actions.SyncRoots(ctx, dEnv.DoltDB(ctx), destDb, tmpDir, buildProgStarter(defaultLanguage), stopProgFuncs)
-
-	switch err {
-	case nil:
-		return nil
-	case pull.ErrDBUpToDate:
-		return nil
-	case env.ErrBackupAlreadyExists:
-		return errhand.BuildDError("error: a backup named '%s' already exists.", b.Name).AddDetails("remove it before running this command again").Build()
-	case env.ErrBackupNotFound:
-		return errhand.BuildDError("error: unknown backup: '%s' ", b.Name).Build()
-	case env.ErrInvalidBackupURL:
-		return errhand.BuildDError("error: '%s' is not valid.", b.Url).AddCause(err).Build()
-	case env.ErrInvalidBackupName:
-		return errhand.BuildDError("error: invalid backup name: %s", b.Name).Build()
-	default:
-		return errhand.BuildDError("error: Unable to save changes.").AddCause(err).Build()
-	}
-}
-
-func restoreBackup(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.VerboseError {
-	if apr.NArg() < 3 {
-		return errhand.BuildDError("").SetPrintUsage().Build()
-	}
-	apr.Args = apr.Args[1:]
-	restoredDB, urlStr, verr := parseArgs(apr)
-	if verr != nil {
-		return verr
-	}
-
-	// For error recovery, record whether EnvForClone created the directory, or just `.dolt/noms` within the directory.
-	userDirExisted, _ := dEnv.FS.Exists(restoredDB)
-
-	force := apr.Contains(cli.ForceFlag)
-
-	scheme, remoteUrl, err := env.GetAbsRemoteUrl(dEnv.FS, dEnv.Config, urlStr)
-	if err != nil {
-		return errhand.BuildDError("error: '%s' is not valid.", urlStr).Build()
-	}
-
-	var params map[string]string
-	params, verr = parseRemoteArgs(apr, scheme, remoteUrl)
-	if verr != nil {
-		return verr
-	}
-
-	r := env.NewRemote("", remoteUrl, params)
-	srcDb, err := r.GetRemoteDB(ctx, types.Format_Default, dEnv)
-	if err != nil {
-		return errhand.VerboseErrorFromError(err)
-	}
-
-	mrEnv, err := env.MultiEnvForDirectory(ctx, dEnv.Config.WriteableConfig(), dEnv.FS, dEnv.Version, dEnv)
-	if err != nil {
-		return errhand.BuildDError("error: Unable to list databases").AddCause(err).Build()
-	}
-	var existingDEnv *env.DoltEnv
-	err = mrEnv.Iter(func(dbName string, dEnv *env.DoltEnv) (stop bool, err error) {
-		if dbName == restoredDB {
-			existingDEnv = dEnv
-			return true, nil
-		}
-		return false, nil
-	})
-	if err != nil {
-		return errhand.BuildDError("error: Unable to list databases").AddCause(err).Build()
-	}
-
-	if existingDEnv != nil {
-		if !force {
-			return errhand.BuildDError("error: cannot restore backup into %s. A database with that name already exists. Did you mean to supply --force?", restoredDB).Build()
+	const errColumnExpectedStringFmt = "column '%s' expected string, got %v"
+	for _, row := range rows {
+		// Backup configuration name
+		nameStr, ok := row[0].(string)
+		if !ok {
+			return errhand.BuildDError(errColumnExpectedStringFmt, schema[0].Name, row[0]).Build()
 		}
 
-		tmpDir, err := existingDEnv.TempTableFilesDir()
+		if !showVerbose {
+			cli.Println(nameStr)
+			continue
+		}
+
+		// Remote backup location URL (aws://, gs://, file://, http[s]://)
+		urlStr, ok := row[1].(string)
+		if !ok {
+			return errhand.BuildDError(errColumnExpectedStringFmt, schema[1].Name, row[1]).Build()
+		}
+
+		// Backup connection parameters
+		jsonStr, err := getJsonAsString(queryEngine.Context, row[2])
 		if err != nil {
-			return errhand.VerboseErrorFromError(err)
+			return errhand.BuildDError(errColumnExpectedStringFmt, schema[2].Name, row[2]).AddCause(err).Build()
 		}
 
-		err = actions.SyncRoots(ctx, srcDb, existingDEnv.DoltDB(ctx), tmpDir, buildProgStarter(downloadLanguage), stopProgFuncs)
-		if err != nil {
-			return errhand.VerboseErrorFromError(err)
-		}
-	} else {
-		// Create a new Dolt env for the clone; use env.NoRemote to avoid origin upstream
-		clonedEnv, err := actions.EnvForClone(ctx, srcDb.ValueReadWriter().Format(), env.NoRemote, restoredDB, dEnv.FS, dEnv.Version, env.GetCurrentUserHomeDir)
-		if err != nil {
-			return errhand.VerboseErrorFromError(err)
-		}
-
-		// Nil out the old Dolt env so we don't accidentally use the wrong database
-		dEnv = nil
-
-		// still make empty repo state
-		_, err = env.CreateRepoState(clonedEnv.FS, env.DefaultInitBranch)
-		if err != nil {
-			return errhand.VerboseErrorFromError(err)
-		}
-		tmpDir, err := clonedEnv.TempTableFilesDir()
-		if err != nil {
-			return errhand.VerboseErrorFromError(err)
-		}
-		err = actions.SyncRoots(ctx, srcDb, clonedEnv.DoltDB(ctx), tmpDir, buildProgStarter(downloadLanguage), stopProgFuncs)
-		if err != nil {
-			// If we're cloning into a directory that already exists do not erase it. Otherwise
-			// make best effort to delete the directory we created.
-			if userDirExisted {
-				_ = clonedEnv.FS.Delete(dbfactory.DoltDir, true)
-			} else {
-				_ = clonedEnv.FS.Delete(".", true)
-			}
-			return errhand.VerboseErrorFromError(err)
-		}
+		cli.Printf("%s %s %s\n", nameStr, urlStr, jsonStr)
 	}
 
 	return nil

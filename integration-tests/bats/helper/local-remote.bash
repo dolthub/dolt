@@ -95,7 +95,6 @@ SKIP_SERVER_TESTS=$(cat <<-EOM
 ~diff-stat.bats~
 ~sql-merge.bats~
 ~import-append-tables.bats~
-~backup.bats~
 ~default-values.bats~
 ~types.bats~
 ~config-home.bats~
