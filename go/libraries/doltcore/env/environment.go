@@ -54,7 +54,7 @@ const (
 
 	TmpDirName = "tmp"
 
-	InvalidNameCharacters = " \t\n\r./\\!@#$%^&*(){}[],.<>'\"?=+|"
+	InvalidRemoteNameCharacters = " \t\n\r./\\!@#$%^&*(){}[],.<>'\"?=+|"
 )
 
 var zeroHashStr = (hash.Hash{}).String()
@@ -1025,7 +1025,7 @@ func (dEnv *DoltEnv) AddRemote(r Remote) error {
 		return ErrRemoteAlreadyExists
 	}
 
-	if strings.IndexAny(r.Name, InvalidNameCharacters) != -1 {
+	if strings.IndexAny(r.Name, InvalidRemoteNameCharacters) != -1 {
 		return ErrInvalidRemoteName
 	}
 
@@ -1057,7 +1057,7 @@ func (dEnv *DoltEnv) AddBackup(r Remote) error {
 		return ErrBackupAlreadyExists.New(r.Name)
 	}
 
-	if strings.IndexAny(r.Name, InvalidNameCharacters) != -1 {
+	if strings.IndexAny(r.Name, InvalidRemoteNameCharacters) != -1 {
 		return ErrBackupInvalidName.New(r.Name)
 	}
 

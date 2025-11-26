@@ -27,7 +27,7 @@ import (
 )
 
 func init() {
-	DoltProcedureTests = append(DoltProcedureTests, BackupsProcedureScripts...)
+	DoltProcedureTests = append(DoltProcedureTests, DoltBackupProcedureScripts...)
 }
 
 // fileUrl returns a file:// URL path.
@@ -41,7 +41,7 @@ func awsUrl(dynamoTable, s3Bucket, path string) string {
 	return fmt.Sprintf("aws://[%s:%s]/%s", dynamoTable, s3Bucket, path)
 }
 
-var BackupsProcedureScripts = []queries.ScriptTest{
+var DoltBackupProcedureScripts = []queries.ScriptTest{
 	{
 		Name: "dolt_backup add",
 		SetUpScript: []string{

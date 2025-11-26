@@ -121,7 +121,7 @@ func (s SessionStateAdapter) AddRemote(remote env.Remote) error {
 		return env.ErrRemoteAlreadyExists
 	}
 
-	if strings.IndexAny(remote.Name, env.InvalidNameCharacters) != -1 {
+	if strings.IndexAny(remote.Name, env.InvalidRemoteNameCharacters) != -1 {
 		return env.ErrInvalidRemoteName
 	}
 
@@ -146,7 +146,7 @@ func (s SessionStateAdapter) AddRemote(remote env.Remote) error {
 }
 
 func (s SessionStateAdapter) AddBackup(remote env.Remote) error {
-	if remote.Name == "" || strings.IndexAny(remote.Name, env.InvalidNameCharacters) != -1 {
+	if remote.Name == "" || strings.IndexAny(remote.Name, env.InvalidRemoteNameCharacters) != -1 {
 		return env.ErrBackupInvalidName.New(remote.Name)
 	}
 
