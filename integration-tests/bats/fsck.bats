@@ -88,13 +88,14 @@ UPDATE tbl SET guid = UUID() WHERE i >= @random_id LIMIT 1;"
     [[ "$output" =~ "Chunk: 7i48kt4h41hcjniri7scv5m8a69cdn13 content hash mismatch: hitg0bb0hsakip96qvu2hts0hkrrla9o" ]] || false
 }
 
-@test "fsck: another bad journal crc" {
+@test "fsck: bad journal crc, suggests data loss recovery" {
   mkdir .dolt
   cp -R $BATS_CWD/corrupt_dbs/bad_journal_crc_2/* .dolt/
 
   run dolt fsck
   [ "$status" -eq 1 ]
-  [[ "$output" =~ "skipping remaining journal records past offset 5936: invalid journal record: CRC checksum does not match" ]] || false
+  [[ "$output" =~ "WARNING: Chunk journal is corrupted and some data may be lost." ]] || false
+  [[ "$output" =~ "Run \`dolt fsck --revive-journal-with-data-loss\`" ]] || false
 }
 
 @test "fsck: recover from broken journal" {
