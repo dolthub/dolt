@@ -23,7 +23,6 @@ setup() {
 
 teardown() {
     stop_remotesrv
-    stop_sql_server
     teardown_common
     rm -rf $TMPDIRS
     cd $BATS_TMPDIR
@@ -356,7 +355,8 @@ teardown() {
     [[ "$output" =~ "t2" ]] || false
 }
 
-@test "backup: CLI rejects AWS parameters in sql-server" {
+@test "backup: rejects AWS parameters in sql-server" {
+    skip_if_remote
     cd repo1
     start_sql_server
     
@@ -375,4 +375,6 @@ teardown() {
     run dolt backup add aws-backup2 aws://[table:bucket]/db --aws-creds-type=file
     [ "$status" -eq 1 ]
     [[ "$output" =~ "AWS parameters are unavailable when running in server mode" ]] || false
+
+    stop_sql_server
 }
