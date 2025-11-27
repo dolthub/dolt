@@ -39,6 +39,16 @@ const (
 	RemovedTable
 )
 
+// Filter type constants for diff filtering.
+// These correspond to the string values used in the --filter flag and
+// are stored in TableDeltaSummary.DiffType field.
+const (
+	DiffTypeAdded    = "added"
+	DiffTypeModified = "modified"
+	DiffTypeRemoved  = "removed"
+	DiffTypeAll      = "all"
+)
+
 const DBPrefix = "__DATABASE__"
 
 type TableInfo struct {
@@ -95,6 +105,22 @@ func (tds TableDeltaSummary) IsRename() bool {
 		return false
 	}
 	return tds.FromTableName != tds.ToTableName
+}
+
+// ChangeTypeToDiffType converts a row-level ChangeType to a table-level DiffType string.
+// This allows row-level filtering to use the same DiffType infrastructure as table-level filtering.
+func ChangeTypeToDiffType(ct ChangeType) string {
+	switch ct {
+	case Added:
+		return DiffTypeAdded
+	case Removed:
+		return DiffTypeRemoved
+	case ModifiedOld, ModifiedNew:
+		// Both ModifiedOld and ModifiedNew represent the same logical change: modified
+		return DiffTypeModified
+	default:
+		return ""
+	}
 }
 
 // GetStagedUnstagedTableDeltas represents staged and unstaged changes as TableDelta slices.

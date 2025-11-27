@@ -60,11 +60,6 @@ const (
 	TabularDiffOutput diffOutput = 1
 	SQLDiffOutput     diffOutput = 2
 	JsonDiffOutput    diffOutput = 3
-
-	FilterAdds     = "added"
-	FilterModified = "modified"
-	FilterRemoved  = "removed"
-	NoFilter       = "all"
 )
 
 var diffDocs = cli.CommandDocumentationContent{
@@ -138,45 +133,74 @@ type diffStatistics struct {
 	NewCellCount   uint64
 }
 
+// diffTypeFilter manages which diff types should be included in the output.
+// When filters is nil or empty, all types are included.
 type diffTypeFilter struct {
-	filterBy string
+	// Map of diff type -> should include
+	// If nil or empty, includes all types
+	filters map[string]bool
 }
 
-func (df *diffTypeFilter) isValid() bool {
-	return df.filterBy == NoFilter || df.filterBy == FilterAdds ||
-		df.filterBy == FilterModified || df.filterBy == FilterRemoved
+// newDiffTypeFilter creates a filter for the specified diff type.
+// Pass diff.DiffTypeAll or empty string to include all types.
+func newDiffTypeFilter(filterType string) *diffTypeFilter {
+	if filterType == "" || filterType == diff.DiffTypeAll {
+		return &diffTypeFilter{filters: nil} // nil means include all
+	}
+
+	return &diffTypeFilter{
+		filters: map[string]bool{
+			filterType: true,
+		},
+	}
 }
 
-func (df *diffTypeFilter) includeAddsOrAll() bool {
-	return df.filterBy == NoFilter || df.filterBy == FilterAdds
-}
-
-func (df *diffTypeFilter) includeDropsOrAll() bool {
-	return df.filterBy == NoFilter || df.filterBy == FilterRemoved
-}
-
-func (df *diffTypeFilter) includeModificationsOrAll() bool {
-	return df.filterBy == NoFilter || df.filterBy == FilterModified
-}
-
-// shouldSkipDiffType checks if a row with the given diff type should be skipped based on the filter settings
-func shouldSkipDiffType(filter *diffTypeFilter, rowDiffType diff.ChangeType) bool {
-	if rowDiffType == diff.Added && !filter.includeAddsOrAll() {
-		return true
-	} else if rowDiffType == diff.Removed && !filter.includeDropsOrAll() {
-		return true
-	} else if (rowDiffType == diff.ModifiedOld || rowDiffType == diff.ModifiedNew) &&
-		!filter.includeModificationsOrAll() {
+// shouldInclude checks if the given diff type should be included.
+// Uses TableDeltaSummary.DiffType field for table-level filtering.
+func (df *diffTypeFilter) shouldInclude(diffType string) bool {
+	// nil or empty filters means include everything
+	if df.filters == nil || len(df.filters) == 0 {
 		return true
 	}
-	return false
+
+	return df.filters[diffType]
+}
+
+// isValid validates the filter configuration
+func (df *diffTypeFilter) isValid() bool {
+	if df.filters == nil {
+		return true
+	}
+
+	for filterType := range df.filters {
+		if filterType != diff.DiffTypeAdded &&
+			filterType != diff.DiffTypeModified &&
+			filterType != diff.DiffTypeRemoved {
+			return false
+		}
+	}
+	return true
+}
+
+// shouldSkipRow checks if a row should be skipped based on the filter settings.
+// Uses the DiffType infrastructure for consistency with table-level filtering.
+func shouldSkipRow(filter *diffTypeFilter, rowChangeType diff.ChangeType) bool {
+	if filter == nil {
+		return false
+	}
+
+	// Convert row-level ChangeType to table-level DiffType string
+	diffType := diff.ChangeTypeToDiffType(rowChangeType)
+
+	// Use the map-based shouldInclude method
+	return !filter.shouldInclude(diffType)
 }
 
 // shouldUseLazyHeader determines if we should delay printing the table header
 // until we know there are rows to display. This prevents empty headers when
 // all rows are filtered out in data-only diffs.
 func shouldUseLazyHeader(dArgs *diffArgs, tableSummary diff.TableDeltaSummary) bool {
-	return dArgs.filter != nil && dArgs.filter.filterBy != NoFilter &&
+	return dArgs.filter != nil && dArgs.filter.filters != nil &&
 		!tableSummary.SchemaChange && !tableSummary.IsRename()
 }
 
@@ -358,9 +382,13 @@ func (cmd DiffCmd) validateArgs(apr *argparser.ArgParseResults) errhand.VerboseE
 		return errhand.BuildDError("invalid output format: %s", f).Build()
 	}
 
-	filterValue, _ := apr.GetValue("filter")
-	if filterValue != "" && filterValue != FilterAdds && filterValue != FilterModified && filterValue != FilterRemoved && filterValue != NoFilter {
-		return errhand.BuildDError("invalid filter: %s. Valid values are: added, modified, removed", filterValue).Build()
+	filterValue, hasFilter := apr.GetValue(cli.FilterParam)
+	if hasFilter {
+		filter := newDiffTypeFilter(filterValue)
+		if !filter.isValid() {
+			return errhand.BuildDError("invalid filter: %s. Valid values are: %s, %s, %s",
+				filterValue, diff.DiffTypeAdded, diff.DiffTypeModified, diff.DiffTypeRemoved).Build()
+		}
 	}
 
 	return nil
@@ -411,8 +439,8 @@ func parseDiffDisplaySettings(apr *argparser.ArgParseResults) *diffDisplaySettin
 	displaySettings.limit, _ = apr.GetInt(cli.LimitParam)
 	displaySettings.where = apr.GetValueOrDefault(cli.WhereParam, "")
 
-	filterValue := apr.GetValueOrDefault("filter", "all")
-	displaySettings.filter = &diffTypeFilter{filterBy: filterValue}
+	filterValue := apr.GetValueOrDefault(cli.FilterParam, diff.DiffTypeAll)
+	displaySettings.filter = newDiffTypeFilter(filterValue)
 
 	return displaySettings
 }
@@ -963,23 +991,23 @@ func diffUserTables(queryist cli.Queryist, sqlCtx *sql.Context, dArgs *diffArgs)
 		}
 
 		// Apply table-level filtering based on diff type
-		if dArgs.filter != nil && dArgs.filter.filterBy != NoFilter {
+		if dArgs.filter != nil && dArgs.filter.filters != nil {
 			shouldIncludeTable := false
 
 			// Check if table was added
-			if delta.IsAdd() && dArgs.filter.includeAddsOrAll() {
+			if delta.IsAdd() && dArgs.filter.shouldInclude(diff.DiffTypeAdded) {
 				shouldIncludeTable = true
 			}
 
 			// Check if table was dropped
-			if delta.IsDrop() && dArgs.filter.includeDropsOrAll() {
+			if delta.IsDrop() && dArgs.filter.shouldInclude(diff.DiffTypeRemoved) {
 				shouldIncludeTable = true
 			}
 
 			// Check if table was modified (schema change or rename)
 			if !delta.IsAdd() && !delta.IsDrop() {
 				isModified := delta.SchemaChange || delta.IsRename()
-				if isModified && dArgs.filter.includeModificationsOrAll() {
+				if isModified && dArgs.filter.shouldInclude(diff.DiffTypeModified) {
 					shouldIncludeTable = true
 				}
 				// If no schema/rename changes but has data changes, let it through for row-level filtering
@@ -1902,8 +1930,8 @@ func writeDiffResults(
 		}
 
 		// Apply row-level filtering based on diff type
-		if dArgs.filter != nil && dArgs.filter.filterBy != NoFilter {
-			if shouldSkipDiffType(dArgs.filter, oldRow.RowDiff) || shouldSkipDiffType(dArgs.filter, newRow.RowDiff) {
+		if dArgs.filter != nil {
+			if shouldSkipRow(dArgs.filter, oldRow.RowDiff) || shouldSkipRow(dArgs.filter, newRow.RowDiff) {
 				continue
 			}
 		}
