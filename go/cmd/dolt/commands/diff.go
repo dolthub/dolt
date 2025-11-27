@@ -30,6 +30,8 @@ import (
 	"github.com/gocraft/dbr/v2"
 	"github.com/gocraft/dbr/v2/dialect"
 
+	eventsapi "github.com/dolthub/eventsapi_schema/dolt/services/eventsapi/v1alpha1"
+
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
@@ -42,7 +44,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
-	eventsapi "github.com/dolthub/eventsapi_schema/dolt/services/eventsapi/v1alpha1"
 )
 
 type diffOutput int
@@ -204,92 +205,55 @@ func shouldUseLazyHeader(dArgs *diffArgs, tableSummary diff.TableDeltaSummary) b
 		!tableSummary.SchemaChange && !tableSummary.IsRename()
 }
 
-// lazyRowWriter delays table header output until the first row is written.
-// This prevents empty table headers when all rows are filtered out.
+// lazyRowWriter wraps a SqlRowDiffWriter and delays calling BeginTable
+// until the first row is actually written. This prevents empty table headers
+// when all rows are filtered out.
 type lazyRowWriter struct {
-	// The real writer, created on first write
-	realWriter diff.SqlRowDiffWriter
+	writer diff.SqlRowDiffWriter
 
-	// Factory to create the real writer
-	createWriter func() (diff.SqlRowDiffWriter, error)
-
-	// diffWriter to call BeginTable on
-	dw diffWriter
-
-	// Parameters for BeginTable
-	fromTableName string
-	toTableName   string
-	isAdd         bool
-	isDrop        bool
-
-	// Has BeginTable been called?
-	initialized bool
+	// Callback to invoke before first write
+	// Set to nil after first call
+	onFirstWrite func() error
 }
 
-// newLazyRowWriter creates a lazy row writer that delays header output
-func newLazyRowWriter(
-	dw diffWriter,
-	fromTableName, toTableName string,
-	isAdd, isDrop bool,
-	createWriter func() (diff.SqlRowDiffWriter, error),
-) *lazyRowWriter {
+// newLazyRowWriter creates a lazy writer that wraps the given writer.
+// The onFirstWrite callback is invoked exactly once before the first write.
+func newLazyRowWriter(writer diff.SqlRowDiffWriter, onFirstWrite func() error) *lazyRowWriter {
 	return &lazyRowWriter{
-		createWriter:  createWriter,
-		dw:            dw,
-		fromTableName: fromTableName,
-		toTableName:   toTableName,
-		isAdd:         isAdd,
-		isDrop:        isDrop,
-		initialized:   false,
+		writer:       writer,
+		onFirstWrite: onFirstWrite,
 	}
-}
-
-// ensureInitialized calls BeginTable and creates the real writer on first call
-func (l *lazyRowWriter) ensureInitialized(ctx *sql.Context) error {
-	if l.initialized {
-		return nil
-	}
-
-	// Call BeginTable to print the header
-	err := l.dw.BeginTable(l.fromTableName, l.toTableName, l.isAdd, l.isDrop)
-	if err != nil {
-		return err
-	}
-
-	// Create the real writer
-	realWriter, err := l.createWriter()
-	if err != nil {
-		return err
-	}
-
-	l.realWriter = realWriter
-	l.initialized = true
-	return nil
 }
 
 // WriteRow implements diff.SqlRowDiffWriter
 func (l *lazyRowWriter) WriteRow(ctx *sql.Context, row sql.Row, diffType diff.ChangeType, colDiffTypes []diff.ChangeType) error {
-	if err := l.ensureInitialized(ctx); err != nil {
-		return err
+	// Initialize on first write
+	if l.onFirstWrite != nil {
+		if err := l.onFirstWrite(); err != nil {
+			return err
+		}
+		l.onFirstWrite = nil // Prevent double-initialization
 	}
-	return l.realWriter.WriteRow(ctx, row, diffType, colDiffTypes)
+
+	return l.writer.WriteRow(ctx, row, diffType, colDiffTypes)
 }
 
 // WriteCombinedRow implements diff.SqlRowDiffWriter
 func (l *lazyRowWriter) WriteCombinedRow(ctx *sql.Context, oldRow, newRow sql.Row, mode diff.Mode) error {
-	if err := l.ensureInitialized(ctx); err != nil {
-		return err
+	// Initialize on first write
+	if l.onFirstWrite != nil {
+		if err := l.onFirstWrite(); err != nil {
+			return err
+		}
+		l.onFirstWrite = nil
 	}
-	return l.realWriter.WriteCombinedRow(ctx, oldRow, newRow, mode)
+
+	return l.writer.WriteCombinedRow(ctx, oldRow, newRow, mode)
 }
 
 // Close implements diff.SqlRowDiffWriter
 func (l *lazyRowWriter) Close(ctx context.Context) error {
-	// Only close if we actually created the real writer
-	if l.initialized && l.realWriter != nil {
-		return l.realWriter.Close(ctx)
-	}
-	return nil
+	return l.writer.Close(ctx)
 }
 
 type DiffCmd struct{}
@@ -1650,26 +1614,26 @@ func diffRows(
 		unionSch = unionSchemas(fromSch, toSch)
 	}
 
+	// We always instantiate a RowWriter in case the diffWriter needs it to close off any work from schema output
 	var rowWriter diff.SqlRowDiffWriter
-	var err error
+	realWriter, err := dw.RowWriter(fromTableInfo, toTableInfo, tableSummary, unionSch)
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
+
 	if shouldUseLazyHeader(dArgs, tableSummary) {
-		// Use lazy writer to delay BeginTable until first row write
-		rowWriter = newLazyRowWriter(
-			dw,
-			tableSummary.FromTableName.Name,
-			tableSummary.ToTableName.Name,
-			tableSummary.IsAdd(),
-			tableSummary.IsDrop(),
-			func() (diff.SqlRowDiffWriter, error) {
-				return dw.RowWriter(fromTableInfo, toTableInfo, tableSummary, unionSch)
-			},
-		)
-	} else {
-		// We always instantiate a RowWriter in case the diffWriter needs it to close off any work from schema output
-		rowWriter, err = dw.RowWriter(fromTableInfo, toTableInfo, tableSummary, unionSch)
-		if err != nil {
-			return errhand.VerboseErrorFromError(err)
+		// Wrap with lazy writer to delay BeginTable until first row write
+		onFirstWrite := func() error {
+			return dw.BeginTable(
+				tableSummary.FromTableName.Name,
+				tableSummary.ToTableName.Name,
+				tableSummary.IsAdd(),
+				tableSummary.IsDrop(),
+			)
 		}
+		rowWriter = newLazyRowWriter(realWriter, onFirstWrite)
+	} else {
+		rowWriter = realWriter
 	}
 
 	// can't diff
