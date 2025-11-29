@@ -2396,3 +2396,72 @@ EOF
     [ $status -eq 1 ]
     [[ $output =~ "invalid filter" ]] || false
 }
+
+@test "diff: --filter=renamed filters to only renamed tables" {
+    dolt sql -q "create table t(pk int primary key, val int)"
+    dolt sql -q "INSERT INTO t VALUES (1, 10)"
+    dolt add . && dolt commit -m "create table with data"
+
+    # Rename the table
+    dolt sql -q "RENAME TABLE t TO t_renamed"
+    dolt add . && dolt commit -m "rename table"
+
+    # filter=renamed should show the renamed table (shows different from/to names)
+    run dolt diff HEAD~1 --filter=renamed
+    [ $status -eq 0 ]
+    [[ $output =~ 'diff --dolt a/t b/t_renamed' ]] || false
+    [[ $output =~ '--- a/t' ]] || false
+    [[ $output =~ '+++ b/t_renamed' ]] || false
+
+    # filter=added should not show the renamed table
+    run dolt diff HEAD~1 --filter=added
+    [ $status -eq 0 ]
+    [[ $output = '' ]] || false
+
+    # filter=modified should not show the renamed table
+    run dolt diff HEAD~1 --filter=modified
+    [ $status -eq 0 ]
+    [[ $output = '' ]] || false
+
+    # filter=dropped should not show the renamed table
+    run dolt diff HEAD~1 --filter=dropped
+    [ $status -eq 0 ]
+    [[ $output = '' ]] || false
+}
+
+@test "diff: --filter=dropped filters to only dropped tables" {
+    dolt sql -q "create table t(pk int primary key, val int)"
+    dolt sql -q "INSERT INTO t VALUES (1, 10)"
+    dolt add . && dolt commit -m "create table with data"
+
+    # Drop the table
+    dolt sql -q "DROP TABLE t"
+    dolt add . && dolt commit -m "drop table"
+
+    # filter=dropped should show the dropped table
+    run dolt diff HEAD~1 --filter=dropped
+    [ $status -eq 0 ]
+    [[ $output =~ 'diff --dolt a/t b/t' ]] || false
+    [[ $output =~ 'deleted table' ]] || false
+
+    # filter=removed (alias for dropped) should also show the dropped table
+    run dolt diff HEAD~1 --filter=removed
+    [ $status -eq 0 ]
+    [[ $output =~ 'diff --dolt a/t b/t' ]] || false
+    [[ $output =~ 'deleted table' ]] || false
+
+    # filter=added should not show the dropped table
+    run dolt diff HEAD~1 --filter=added
+    [ $status -eq 0 ]
+    [[ $output = '' ]] || false
+
+    # filter=modified should not show the dropped table
+    run dolt diff HEAD~1 --filter=modified
+    [ $status -eq 0 ]
+    [[ $output = '' ]] || false
+
+    # filter=renamed should not show the dropped table
+    run dolt diff HEAD~1 --filter=renamed
+    [ $status -eq 0 ]
+    [[ $output = '' ]] || false
+}

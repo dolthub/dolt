@@ -78,7 +78,19 @@ func TestDiffTypeFilter_ShouldInclude(t *testing.T) {
 		// Testing with filter=dropped
 		{"filter=dropped, check added", diff.DiffTypeDropped, diff.DiffTypeAdded, false},
 		{"filter=dropped, check modified", diff.DiffTypeDropped, diff.DiffTypeModified, false},
-		{"filter=dropped, check removed", diff.DiffTypeDropped, diff.DiffTypeDropped, true},
+		{"filter=dropped, check dropped", diff.DiffTypeDropped, diff.DiffTypeDropped, true},
+		{"filter=dropped, check renamed", diff.DiffTypeDropped, diff.DiffTypeRenamed, false},
+
+		// Testing with filter=renamed
+		{"filter=renamed, check added", diff.DiffTypeRenamed, diff.DiffTypeAdded, false},
+		{"filter=renamed, check modified", diff.DiffTypeRenamed, diff.DiffTypeModified, false},
+		{"filter=renamed, check dropped", diff.DiffTypeRenamed, diff.DiffTypeDropped, false},
+		{"filter=renamed, check renamed", diff.DiffTypeRenamed, diff.DiffTypeRenamed, true},
+
+		// Testing with "removed" alias (should map to dropped)
+		{"filter=removed (alias), check dropped", "removed", diff.DiffTypeDropped, true},
+		{"filter=removed (alias), check added", "removed", diff.DiffTypeAdded, false},
+		{"filter=removed (alias), check renamed", "removed", diff.DiffTypeRenamed, false},
 
 		// Testing with filter=all
 		{"filter=all, check added", diff.DiffTypeAll, diff.DiffTypeAdded, true},
