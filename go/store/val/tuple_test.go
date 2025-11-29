@@ -27,7 +27,7 @@ var testPool = pool.NewBuffPool()
 
 func TestNewTuple(t *testing.T) {
 	for n := 0; n < 1024; n++ {
-		fields := randomByteFields(t)
+		fields := randomByteFields()
 		tup := NewTuple(testPool, fields...)
 		for i, field := range fields {
 			assert.Equal(t, field, tup.GetField(i))
@@ -37,7 +37,7 @@ func TestNewTuple(t *testing.T) {
 
 func TestTuplePrefix(t *testing.T) {
 	for n := 0; n < 1024; n++ {
-		fields := randomByteFields(t)
+		fields := randomByteFields()
 		full := NewTuple(testPool, fields...)
 		for i := 0; i <= len(fields); i++ {
 			exp := NewTuple(testPool, fields[:i]...)
@@ -49,7 +49,7 @@ func TestTuplePrefix(t *testing.T) {
 
 func TestTupleSuffix(t *testing.T) {
 	for n := 0; n < 1024; n++ {
-		fields := randomByteFields(t)
+		fields := randomByteFields()
 		full := NewTuple(testPool, fields...)
 		for i := 0; i <= full.Count(); i++ {
 			exp := NewTuple(testPool, fields[i:]...)
@@ -59,9 +59,44 @@ func TestTupleSuffix(t *testing.T) {
 	}
 }
 
-func randomByteFields(t *testing.T) (fields [][]byte) {
+func randomTuples(numTuples int) []Tuple {
+	tuples := make([]Tuple, numTuples)
+	for i := range tuples {
+		fields := randomByteFields()
+		tuples[i] = NewTuple(testPool, fields...)
+	}
+	return tuples
+}
+
+// BenchmarkTupleCount-14    	 4612776	       239.2 ns/op
+func BenchmarkTupleCount(b *testing.B) {
+	tuples := randomTuples(1024)
+
+	b.ResetTimer()
+	var res int
+	for i := 0; i < b.N; i++ {
+		for _, tuple := range tuples {
+			res += tuple.Count()
+		}
+	}
+}
+
+// BenchmarkGetField-14    	   42997	     26963 ns/op
+func BenchmarkGetField(b *testing.B) {
+	tuples := randomTuples(1024)
+
+	b.ResetTimer()
+	for n := 0; n < b.N; n++ {
+		for _, tup := range tuples {
+			for i := 0; i < tup.Count(); i++ {
+				_ = tup.GetField(i)
+			}
+		}
+	}
+}
+
+func randomByteFields() (fields [][]byte) {
 	fields = make([][]byte, rand.Intn(19)+1)
-	assert.True(t, len(fields) > 0)
 	for i := range fields {
 		if rand.Uint32()%4 == 0 {
 			// 25% NULL

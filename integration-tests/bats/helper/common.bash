@@ -42,8 +42,14 @@ current_dolt_user_email() {
 }
 
 # get_head_commit returns the commit hash for the current HEAD
+# optionally takes a branch name as an argument to get the head commit of that branch
 get_head_commit() {
+  branch=$1
+  if [ -z "$branch" ]; then
     dolt log -n 1 | grep -m 1 commit | cut -c 13-44
+  else
+    dolt --branch "$branch" log -n 1 | grep -m 1 commit | cut -c 13-44
+  fi
 }
 
 dolt_log_in_PST() {

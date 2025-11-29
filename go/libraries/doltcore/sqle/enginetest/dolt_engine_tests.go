@@ -516,6 +516,7 @@ func RunDoltStoredProceduresTest(t *testing.T, h DoltEnginetestHarness) {
 	for _, script := range DoltProcedureTests {
 		func() {
 			h := h.NewHarness(t)
+			h.UseLocalFileSystem()
 			defer h.Close()
 			enginetest.TestScript(t, h, script)
 		}()
@@ -526,6 +527,7 @@ func RunDoltStoredProceduresPreparedTest(t *testing.T, h DoltEnginetestHarness) 
 	for _, script := range DoltProcedureTests {
 		func() {
 			h := h.NewHarness(t)
+			h.UseLocalFileSystem()
 			defer h.Close()
 			enginetest.TestScriptPrepared(t, h, script)
 		}()
@@ -1321,6 +1323,26 @@ func RunLogTableFunctionTestsPrepared(t *testing.T, harness DoltEnginetestHarnes
 			harness.SkipSetupCommit()
 			enginetest.TestScriptPrepared(t, harness, test)
 		})
+	}
+}
+
+func RunJsonDiffTableFunctionTests(t *testing.T, harness DoltEnginetestHarness) {
+	for _, test := range JsonDiffTableFunctionScriptTests {
+		harness = harness.NewHarness(t)
+		defer harness.Close()
+		harness.Setup(setup.MydbData)
+		harness.SkipSetupCommit()
+		enginetest.TestScript(t, harness, test)
+	}
+}
+
+func RunJsonDiffTableFunctionTestsPrepared(t *testing.T, harness DoltEnginetestHarness) {
+	for _, test := range JsonDiffTableFunctionScriptTests {
+		harness = harness.NewHarness(t)
+		defer harness.Close()
+		harness.Setup(setup.MydbData)
+		harness.SkipSetupCommit()
+		enginetest.TestScriptPrepared(t, harness, test)
 	}
 }
 

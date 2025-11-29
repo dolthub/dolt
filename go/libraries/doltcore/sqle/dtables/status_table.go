@@ -107,7 +107,8 @@ type StatusItr struct {
 type statusTableRow struct {
 	tableName string
 	status    string
-	isStaged  bool
+	isStaged  byte // not a bool bc wire protocol confuses bools and tinyint(1), resulting in in consistent display
+	// of this table when you are using local vs remote sql connections.
 }
 
 func containsTableName(name string, names []doltdb.TableName) bool {
@@ -174,7 +175,7 @@ func newStatusItr(ctx *sql.Context, st *StatusTable) (*StatusItr, error) {
 		for _, tbl := range ms.TablesWithSchemaConflicts() {
 			rows = append(rows, statusTableRow{
 				tableName: tbl.String(),
-				isStaged:  false,
+				isStaged:  byte(0),
 				status:    "schema conflict",
 			})
 		}
@@ -182,7 +183,7 @@ func newStatusItr(ctx *sql.Context, st *StatusTable) (*StatusItr, error) {
 		for _, tbl := range ms.MergedTables() {
 			rows = append(rows, statusTableRow{
 				tableName: tbl.String(),
-				isStaged:  true,
+				isStaged:  byte(1),
 				status:    mergedStatus,
 			})
 		}
@@ -209,7 +210,7 @@ func newStatusItr(ctx *sql.Context, st *StatusTable) (*StatusItr, error) {
 		}
 		rows = append(rows, statusTableRow{
 			tableName: tblName,
-			isStaged:  true,
+			isStaged:  byte(1),
 			status:    statusString(td),
 		})
 	}
@@ -223,7 +224,7 @@ func newStatusItr(ctx *sql.Context, st *StatusTable) (*StatusItr, error) {
 		}
 		rows = append(rows, statusTableRow{
 			tableName: tblName,
-			isStaged:  false,
+			isStaged:  byte(0),
 			status:    statusString(td),
 		})
 	}
@@ -231,7 +232,7 @@ func newStatusItr(ctx *sql.Context, st *StatusTable) (*StatusItr, error) {
 	for _, sd := range stagedSchemas {
 		rows = append(rows, statusTableRow{
 			tableName: sd.CurName(),
-			isStaged:  true,
+			isStaged:  byte(1),
 			status:    schemaStatusString(sd),
 		})
 	}
@@ -239,7 +240,7 @@ func newStatusItr(ctx *sql.Context, st *StatusTable) (*StatusItr, error) {
 	for _, sd := range unstagedSchemas {
 		rows = append(rows, statusTableRow{
 			tableName: sd.CurName(),
-			isStaged:  false,
+			isStaged:  byte(0),
 			status:    schemaStatusString(sd),
 		})
 	}

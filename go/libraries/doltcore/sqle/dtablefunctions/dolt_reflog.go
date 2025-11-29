@@ -92,14 +92,10 @@ func (rltf *ReflogTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.Row
 	}
 
 	ddb := sqlDb.DbData().Ddb
-	journal := ddb.ChunkJournal()
-	if journal == nil {
-		return sql.RowsToRowIter(), nil
-	}
 
 	previousCommitsByRef := make(map[string]string)
 	rows := make([]sql.Row, 0)
-	err := journal.IterateRoots(func(root string, timestamp *time.Time) error {
+	err := ddb.IterateRoots(func(root string, timestamp *time.Time) error {
 		hashof := hash.Parse(root)
 		datasets, err := ddb.DatasetsByRootHash(ctx, hashof)
 		if err != nil {

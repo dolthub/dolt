@@ -692,7 +692,7 @@ var DoltRevisionDbScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "select * from dolt_status",
-				Expected: []sql.Row{{"t01", false, "modified"}},
+				Expected: []sql.Row{{"t01", byte(0), "modified"}},
 			},
 			{
 				Query:    "call dolt_checkout('t01')",
@@ -726,11 +726,11 @@ var DoltScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT * FROM dolt_status;",
-				Expected: []sql.Row{{"t", false, "new table"}},
+				Expected: []sql.Row{{"t", byte(0), "new table"}},
 			},
 			{
 				Query:    "SELECT * FROM `mydb/main`.dolt_status;",
-				Expected: []sql.Row{{"t", false, "new table"}},
+				Expected: []sql.Row{{"t", byte(0), "new table"}},
 			},
 			{
 				Query:    "SELECT * FROM dolt_status AS OF 'tag1';",
@@ -743,7 +743,7 @@ var DoltScripts = []queries.ScriptTest{
 			{
 				// HEAD is a special revision spec
 				Query:    "SELECT * FROM dolt_status AS OF 'head';",
-				Expected: []sql.Row{{"t", false, "new table"}},
+				Expected: []sql.Row{{"t", byte(0), "new table"}},
 			},
 			{
 				Query:    "SELECT * FROM dolt_status AS OF 'HEAD~1';",
@@ -751,11 +751,11 @@ var DoltScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT * FROM dolt_status AS OF 'branch1';",
-				Expected: []sql.Row{{"abc", true, "new table"}},
+				Expected: []sql.Row{{"abc", byte(1), "new table"}},
 			},
 			{
 				Query:    "SELECT * FROM `mydb/branch1`.dolt_status;",
-				Expected: []sql.Row{{"abc", true, "new table"}},
+				Expected: []sql.Row{{"abc", byte(1), "new table"}},
 			},
 		},
 	},
@@ -3709,7 +3709,7 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 			{
 				Query: "select * from dolt_status",
 				Expected: []sql.Row{
-					{"t1", true, "modified"},
+					{"t1", byte(1), "modified"},
 				},
 			},
 			{
@@ -3740,7 +3740,7 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 			{
 				Query: "select * from dolt_status",
 				Expected: []sql.Row{
-					{"t2", true, "modified"},
+					{"t2", byte(1), "modified"},
 				},
 			},
 			{
@@ -3790,8 +3790,8 @@ var DoltCheckoutScripts = []queries.ScriptTest{
 			{
 				Query: "select * from dolt_status",
 				Expected: []sql.Row{
-					{"t1", true, "modified"},
-					{"t2", true, "modified"},
+					{"t1", byte(1), "modified"},
+					{"t2", byte(1), "modified"},
 				},
 			},
 			{
@@ -4469,7 +4469,7 @@ var DoltResetTestScripts = []queries.ScriptTest{
 			{
 				// dolt_status should only show the unstaged table t being added
 				Query:    "select * from dolt_status",
-				Expected: []sql.Row{{"t", false, "new table"}},
+				Expected: []sql.Row{{"t", byte(0), "new table"}},
 			},
 		},
 	},
@@ -4492,7 +4492,7 @@ var DoltResetTestScripts = []queries.ScriptTest{
 			{
 				// dolt_status should only show the unstaged table t being added
 				Query:    "select * from dolt_status",
-				Expected: []sql.Row{{"t", false, "new table"}},
+				Expected: []sql.Row{{"t", byte(0), "new table"}},
 			},
 		},
 	},
@@ -5393,6 +5393,137 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 			{
 				Query:    "SELECT message FROM dolt_log('mytag') ORDER BY commit_order;",
 				Expected: []sql.Row{{"Initialize data repository"}, {"create table"}},
+			},
+		},
+	},
+	{
+		Name: "dolt_log with non-literal arguments",
+		SetUpScript: []string{
+			"create table t (pk int primary key, c1 varchar(20), c2 varchar(20));",
+			"call dolt_add('.')",
+			"set @Commit1 = '';",
+			"call dolt_commit_hash_out(@Commit1, '-am', 'creating table t');",
+
+			"insert into t values(1, 'one', 'two'), (2, 'two', 'three');",
+			"set @Commit2 = '';",
+			"call dolt_commit_hash_out(@Commit2, '-am', 'inserting into t');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "SELECT dl1.message, dl2.message from dolt_log() dl1 join lateral (select message from dolt_log(dl1.commit_hash)) dl2;",
+				Expected: []sql.Row{
+					{"inserting into t", "inserting into t"},
+					{"inserting into t", "creating table t"},
+					{"inserting into t", "Initialize data repository"},
+					{"creating table t", "creating table t"},
+					{"creating table t", "Initialize data repository"},
+					{"Initialize data repository", "Initialize data repository"},
+				},
+			},
+			{
+				Query:    "SELECT message from dolt_log() dl1 where exists (select 1 from dolt_log(dl1.commit_hash, '--not', @Commit1));",
+				Expected: []sql.Row{{"inserting into t"}},
+			},
+		},
+	},
+}
+
+var JsonDiffTableFunctionScriptTests = []queries.ScriptTest{
+	{
+		Name:        "basic functionality with JSON literals",
+		SetUpScript: []string{},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    `SELECT * from dolt_json_diff('{"a":1}', '{"a":2}');`,
+				Expected: []sql.Row{{"modified", "$.a", types.JSONDocument{Val: 1}, types.JSONDocument{Val: 2}}},
+			},
+			{
+				Query:    `SELECT * from dolt_json_diff('{}', '{"added_key":"added_value"}');`,
+				Expected: []sql.Row{{"added", "$.added_key", nil, types.JSONDocument{Val: "added_value"}}},
+			},
+			{
+				Query:    `SELECT * from dolt_json_diff('{"removed_key":true}', '{}');`,
+				Expected: []sql.Row{{"removed", "$.removed_key", types.JSONDocument{Val: true}, nil}},
+			},
+			{
+				Query: `SELECT * from dolt_json_diff('{"a":null}', '{"b":null}');`,
+				Expected: []sql.Row{
+					{"removed", "$.a", types.JSONDocument{Val: nil}, nil},
+					{"added", "$.b", nil, types.JSONDocument{Val: nil}},
+				},
+			},
+			{
+				Query: `SELECT * from dolt_json_diff('{"a": [0, 1, 2]}', '{"a": [0, 1, 3]}');`,
+				Expected: []sql.Row{
+					{"modified", "$.a[2]", types.JSONDocument{Val: 2}, types.JSONDocument{Val: 3}},
+				},
+			},
+			{
+				Query: `SELECT * from dolt_json_diff('[0, 1, 2]', '[0, 1, 3]');`,
+				Expected: []sql.Row{
+					{"modified", "$[2]", types.JSONDocument{Val: 2}, types.JSONDocument{Val: 3}},
+				},
+			},
+		},
+	},
+	{
+		Name: "lateral join with small json objects retrieved from tables",
+		SetUpScript: []string{
+			"CREATE TABLE test_table(pk int primary key, from_json json, to_json json);",
+			`INSERT INTO test_table VALUES (0, '{"a":1}', '{"a":2}');`,
+			`INSERT INTO test_table VALUES (1, '{"b":3}', '{"c":3}');`,
+			`INSERT INTO test_table VALUES (2, '[0, 1, 2]', '[0, 1, 3]');`,
+			`INSERT INTO test_table VALUES (3, '{"a": [0, 1, 2]}', '{"a": [0, 1, 3]}');`,
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    `SELECT * FROM dolt_json_diff((select from_json FROM test_table where pk = 0), (select to_json FROM test_table where pk = 0));`,
+				Expected: []sql.Row{{"modified", "$.a", types.JSONDocument{Val: 1}, types.JSONDocument{Val: 2}}},
+			},
+			{
+				Query: `SELECT from_json, to_json, diff_type, path, from_value, to_value FROM test_table JOIN LATERAL (SELECT * from dolt_json_diff(from_json, to_json)) sq;`,
+				Expected: []sql.Row{
+					{
+						types.JSONDocument{Val: types.JsonObject{"a": 1}},
+						types.JSONDocument{Val: types.JsonObject{"a": 2}},
+						"modified",
+						"$.a",
+						types.JSONDocument{Val: 1},
+						types.JSONDocument{Val: 2},
+					},
+					{
+						types.JSONDocument{Val: types.JsonObject{"b": 3}},
+						types.JSONDocument{Val: types.JsonObject{"c": 3}},
+						"removed",
+						"$.b",
+						types.JSONDocument{Val: 3},
+						nil,
+					},
+					{
+						types.JSONDocument{Val: types.JsonObject{"b": 3}},
+						types.JSONDocument{Val: types.JsonObject{"c": 3}},
+						"added",
+						"$.c",
+						nil,
+						types.JSONDocument{Val: 3},
+					},
+					{
+						types.JSONDocument{Val: types.JsonArray{0, 1, 2}},
+						types.JSONDocument{Val: types.JsonArray{0, 1, 3}},
+						"modified",
+						"$[2]",
+						types.JSONDocument{Val: 2},
+						types.JSONDocument{Val: 3},
+					},
+					{
+						types.JSONDocument{Val: types.JsonObject{"a": types.JsonArray{0, 1, 2}}},
+						types.JSONDocument{Val: types.JsonObject{"a": types.JsonArray{0, 1, 3}}},
+						"modified",
+						"$.a[2]",
+						types.JSONDocument{Val: 2},
+						types.JSONDocument{Val: 3},
+					},
+				},
 			},
 		},
 	},
@@ -7344,7 +7475,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "select * from dolt_status",
-				Expected: []sql.Row{{"t", false, "modified"}, {"t", false, "conflict"}},
+				Expected: []sql.Row{{"t", byte(0), "modified"}, {"t", byte(0), "conflict"}},
 			},
 			{
 				Query: "select base_pk, base_v, our_pk, our_diff_type, their_pk, their_diff_type from dolt_conflicts_t;",
@@ -7358,7 +7489,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 			},
 			{
 				Query:    "select * from dolt_status",
-				Expected: []sql.Row{{"t", false, "modified"}},
+				Expected: []sql.Row{{"t", byte(0), "modified"}},
 			},
 			{
 				Query:    "select * from dolt_conflicts;",
@@ -7509,7 +7640,7 @@ var DoltCherryPickTests = []queries.ScriptTest{
 			{
 				// An ignored table should still be present (and unstaged) after aborting the merge.
 				Query:    "select * from dolt_status;",
-				Expected: []sql.Row{{"generated_foo", false, "new table"}},
+				Expected: []sql.Row{{"generated_foo", byte(0), "new table"}},
 			},
 			{
 				// Changes made to the table during the merge should not be reverted.

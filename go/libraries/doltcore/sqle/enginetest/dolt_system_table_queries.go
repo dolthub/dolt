@@ -83,7 +83,7 @@ var BackupsSystemTableQueries = queries.ScriptTest{
 			ExpectedErrStr: "table doesn't support UPDATE",
 		},
 		{
-			Query:          "insert into dolt_backups values ('backup4', 'file:///tmp/broken');", // nolint: gas
+			Query:          "insert into dolt_backups values ('backup4', 'file:///tmp/broken', '{}');", // nolint: gas
 			ExpectedErrStr: "table doesn't support INSERT INTO",
 		},
 		{
@@ -97,8 +97,8 @@ var BackupsSystemTableQueries = queries.ScriptTest{
 		{
 			Query: "select * from dolt_backups where url like 'aws://%'",
 			Expected: []sql.Row{
-				{"backup2", "aws://[ddb_table:ddb_s3_bucket]/db1"},
-				{"backup4", "aws://[ddb_table_4:ddb_s3_bucket_4]/db1"},
+				{"backup2", "aws://[ddb_table:ddb_s3_bucket]/db1", "{}"},
+				{"backup4", "aws://[ddb_table_4:ddb_s3_bucket_4]/db1", "{}"},
 			},
 		},
 	},

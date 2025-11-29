@@ -106,9 +106,13 @@ func (s VectorIndexSerializer) Serialize(keys, values [][]byte, subtrees []uint6
 	return serial.FinishMessage(b, serial.VectorIndexNodeEnd(b), vectorIvfFileID)
 }
 
-func getVectorIndexKeysAndValues(msg serial.Message) (keys, values ItemAccess, level, count uint16, err error) {
-	keys.offsetSize = OFFSET_SIZE_32
-	values.offsetSize = OFFSET_SIZE_32
+func getVectorIndexKeysAndValues(msg serial.Message) (keys, values *ItemAccess, level, count uint16, err error) {
+	keys = &ItemAccess{
+		offsetSize: OFFSET_SIZE_32,
+	}
+	values = &ItemAccess{
+		offsetSize: OFFSET_SIZE_32,
+	}
 	var pm serial.VectorIndexNode
 	err = serial.InitVectorIndexNodeRoot(&pm, msg, serial.MessagePrefixSz)
 	if err != nil {

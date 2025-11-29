@@ -1634,12 +1634,12 @@ var DoltStoredProcedureTransactionTests = []queries.TransactionTest{
 			{
 				// dirty working set: client a's changes were not committed to head
 				Query:    "/* client a */ select * from dolt_status",
-				Expected: []sql.Row{{"users", false, "modified"}},
+				Expected: []sql.Row{{"users", byte(0), "modified"}},
 			},
 			{
 				// dirty working set: client a's changes were not committed to head, but are visible to client b
 				Query:    "/* client b */ select * from dolt_status",
-				Expected: []sql.Row{{"users", false, "modified"}},
+				Expected: []sql.Row{{"users", byte(0), "modified"}},
 			},
 			{
 				Query:    "/* client a */ select * from users order by id",
@@ -1716,14 +1716,14 @@ var DoltStoredProcedureTransactionTests = []queries.TransactionTest{
 				// dirty working set: modifications are staged
 				Query: "/* client a */ select * from dolt_status",
 				Expected: []sql.Row{
-					{"users", true, "modified"},
+					{"users", byte(1), "modified"},
 				},
 			},
 			{
 				// dirty working set: modifications are staged
 				Query: "/* client b */ select * from dolt_status",
 				Expected: []sql.Row{
-					{"users", true, "modified"},
+					{"users", byte(1), "modified"},
 				},
 			},
 			{
@@ -1804,16 +1804,16 @@ var DoltStoredProcedureTransactionTests = []queries.TransactionTest{
 				// dirty working set: modifications are staged and unstaged
 				Query: "/* client a */ select * from dolt_status",
 				Expected: []sql.Row{
-					{"users", true, "modified"},
-					{"users", false, "modified"},
+					{"users", byte(1), "modified"},
+					{"users", byte(0), "modified"},
 				},
 			},
 			{
 				// dirty working set: modifications are staged and unstaged
 				Query: "/* client b */ select * from dolt_status",
 				Expected: []sql.Row{
-					{"users", true, "modified"},
-					{"users", false, "modified"},
+					{"users", byte(1), "modified"},
+					{"users", byte(0), "modified"},
 				},
 			},
 			{
@@ -2036,16 +2036,16 @@ var DoltStoredProcedureTransactionTests = []queries.TransactionTest{
 				// working set has t2 new, t1 modified, nothing staged
 				Query: "/* client a */ select * from dolt_status",
 				Expected: []sql.Row{
-					{"t2", false, "new table"},
-					{"t1", false, "modified"},
+					{"t2", byte(0), "new table"},
+					{"t1", byte(0), "modified"},
 				},
 			},
 			{
 				// working set has t2 new, t1 modified, nothing staged
 				Query: "/* client b */ select * from dolt_status",
 				Expected: []sql.Row{
-					{"t2", false, "new table"},
-					{"t1", false, "modified"},
+					{"t2", byte(0), "new table"},
+					{"t1", byte(0), "modified"},
 				},
 			},
 			{

@@ -32,9 +32,9 @@ const (
 	commitClosureAddressArrayVOffset fb.VOffsetT = 6
 )
 
-func getCommitClosureKeys(msg serial.Message) (ItemAccess, error) {
-	var ret ItemAccess
+func getCommitClosureKeys(msg serial.Message) (*ItemAccess, error) {
 	var m serial.CommitClosure
+	ret := &ItemAccess{}
 	err := serial.InitCommitClosureRoot(&m, msg, serial.MessagePrefixSz)
 	if err != nil {
 		return ret, err
@@ -45,9 +45,9 @@ func getCommitClosureKeys(msg serial.Message) (ItemAccess, error) {
 	return ret, nil
 }
 
-func getCommitClosureValues(msg serial.Message) (ItemAccess, error) {
-	var ret ItemAccess
+func getCommitClosureValues(msg serial.Message) (*ItemAccess, error) {
 	var m serial.CommitClosure
+	ret := &ItemAccess{}
 	err := serial.InitCommitClosureRoot(&m, msg, serial.MessagePrefixSz)
 	if err != nil {
 		return ret, err

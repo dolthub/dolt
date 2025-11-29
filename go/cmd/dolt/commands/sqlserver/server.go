@@ -245,6 +245,7 @@ func ConfigureServices(
 				ServerHost:                 cfg.ServerConfig.Host(),
 				Autocommit:                 cfg.ServerConfig.AutoCommit(),
 				DoltTransactionCommit:      cfg.ServerConfig.DoltTransactionCommit(),
+				BranchActivityTracking:     cfg.ServerConfig.BranchActivityTracking(),
 				JwksConfig:                 cfg.ServerConfig.JwksConfig(),
 				SystemVariables:            cfg.ServerConfig.SystemVars(),
 				ClusterController:          clusterController,
@@ -612,19 +613,28 @@ func ConfigureServices(
 					return err
 				}
 
+				tlsConfig, err := servercfg.LoadMetricsTLSConfig(cfg.ServerConfig)
+				if err != nil {
+					return err
+				}
+
 				mux := http.NewServeMux()
 				mux.Handle("/metrics", promhttp.Handler())
 				metSrv.srv = &http.Server{
-					Addr:    addr,
-					Handler: mux,
+					Addr:      addr,
+					Handler:   mux,
+					TLSConfig: tlsConfig,
 				}
-
 			}
 			return nil
 		},
 		RunF: func(context.Context) {
 			if metSrv.state.CompareAndSwap(svcs.ServiceState_Init, svcs.ServiceState_Run) {
-				_ = metSrv.srv.Serve(metSrv.lis)
+				if metSrv.srv.TLSConfig != nil {
+					_ = metSrv.srv.ServeTLS(metSrv.lis, "", "")
+				} else {
+					_ = metSrv.srv.Serve(metSrv.lis)
+				}
 			}
 		},
 		StopF: func() error {
@@ -1155,6 +1165,11 @@ func getConfigFromServerConfig(serverConfig servercfg.ServerConfig, plf server.P
 	serverConf.MaxLoggedQueryLen = serverConfig.MaxLoggedQueryLen()
 	serverConf.EncodeLoggedQuery = serverConfig.ShouldEncodeLoggedQuery()
 	serverConf.ProtocolListenerFactory = plf
+
+	// If client certs are required, then TLS connections are implicitly required
+	if serverConfig.RequireClientCert() {
+		serverConf.RequireSecureTransport = true
+	}
 
 	return serverConf, nil
 }

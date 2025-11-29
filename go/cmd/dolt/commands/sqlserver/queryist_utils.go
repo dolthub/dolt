@@ -16,6 +16,7 @@ package sqlserver
 
 import (
 	"context"
+	"crypto/tls"
 	sql2 "database/sql"
 	"fmt"
 	"io"
@@ -36,9 +37,33 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
+type QueryistTLSMode int
+
+const (
+	QueryistTLSMode_Disabled QueryistTLSMode = iota
+	// Require TLS, verify the server certificate using the system
+	// trust store, do not allow fallback to plaintext.
+	//
+	// Used for `dolt --host ... sql ...` when `--no-tls-` is not
+	// specified. Often used for connecting to Hosted DoltDB
+	// instances using the CLI commands posted on
+	// hosted.doltdb.com.
+	QueryistTLSMode_Enabled
+	// Used for local Dolt CLI queryist connecting to the running
+	// local server. In this mode, TLS is allowed but not required
+	// and the client does not verify the remote TLS
+	// certificate. It is assumed connecting to the port locally
+	// is secure and lands the client in the correct place, given
+	// the contents of sql-server.info, for example.
+	//
+	// This mode still does not allow the Dolt CLI to connect to a
+	// server which requires a client certificate.
+	QueryistTLSMode_NoVerify_FallbackToPlaintext
+)
+
 // BuildConnectionStringQueryist returns a Queryist that connects to the server specified by the given server config. Presence in this
 // module isn't ideal, but it's the only way to get the server config into the queryist.
-func BuildConnectionStringQueryist(ctx context.Context, cwdFS filesys.Filesys, creds *cli.UserPassword, apr *argparser.ArgParseResults, host string, port int, useTLS bool, dbRev string) (cli.LateBindQueryist, error) {
+func BuildConnectionStringQueryist(ctx context.Context, cwdFS filesys.Filesys, creds *cli.UserPassword, apr *argparser.ArgParseResults, host string, port int, tlsMode QueryistTLSMode, dbRev string) (cli.LateBindQueryist, error) {
 	clientConfig, err := GetClientConfig(cwdFS, creds, apr)
 	if err != nil {
 		return nil, err
@@ -54,8 +79,13 @@ func BuildConnectionStringQueryist(ctx context.Context, cwdFS filesys.Filesys, c
 	parsedMySQLConfig.DBName = dbRev
 	parsedMySQLConfig.Addr = fmt.Sprintf("%s:%d", host, port)
 
-	if useTLS {
-		parsedMySQLConfig.TLSConfig = "true"
+	switch tlsMode {
+	case QueryistTLSMode_Disabled:
+	case QueryistTLSMode_Enabled:
+		parsedMySQLConfig.TLS = &tls.Config{}
+	case QueryistTLSMode_NoVerify_FallbackToPlaintext:
+		parsedMySQLConfig.TLS = &tls.Config{InsecureSkipVerify: true}
+		parsedMySQLConfig.AllowFallbackToPlaintext = true
 	}
 
 	mysqlConnector, err := mysql.NewConnector(parsedMySQLConfig)

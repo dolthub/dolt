@@ -217,8 +217,9 @@ SQL
       run dolt sql << SQL
 INSERT INTO test VALUES (1);
 call dolt_reset('--hard');
-SELECT count(*)=0 FROM dolt_status;
 SQL
+  
+    run dolt sql -q "SELECT count(*)=0 FROM dolt_status"
     [ $status -eq 0 ]
     [[ "$output" =~ "true" ]] || false
 }
@@ -243,10 +244,10 @@ INSERT INTO test VALUES (1);
 SQL
 
     dolt sql -q "call dolt_reset('test');"
-    run dolt sql -q "SELECT * FROM dolt_status;"
+    run dolt sql -r csv -q "SELECT * FROM dolt_status;"
 
     [ $status -eq 0 ]
-    [[ "$output" =~ "false" ]] || false
+    [[ "$output" =~ "test,0,modified" ]] || false
 }
 
 @test "sql-reset: CALL DOLT_RESET soft maintains staged session variable" {
@@ -298,10 +299,10 @@ SQL
     run dolt sql -q "call dolt_reset('--hard')"
     [ "$status" -eq 0 ]
 
-    run dolt sql -q "select * from dolt_status"
+    run dolt sql -r csv -q "select * from dolt_status"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "| dolt_ignore | false  | new table |" ]] || false
-    [ "${#lines[@]}" -eq 6 ]
+    [[ "$output" =~ "dolt_ignore,0,new table" ]] || false
+    [ "${#lines[@]}" -eq 3 ]
 
     run dolt sql -q "select * from test2"
     [ "$status" -eq 0 ]

@@ -68,6 +68,8 @@ type BehaviorYAMLConfig struct {
 	EventSchedulerStatus *string `yaml:"event_scheduler,omitempty" minver:"1.17.0"`
 
 	AutoGCBehavior *AutoGCBehaviorYAMLConfig `yaml:"auto_gc_behavior,omitempty" minver:"1.50.0"`
+
+	BranchActivityTracking *bool `yaml:"branch_activity_tracking,omitempty" minver:"1.77.0"`
 }
 
 // UserYAMLConfig contains server configuration regarding the user account clients must use to connect
@@ -89,8 +91,13 @@ type ListenerYAMLConfig struct {
 	TLSKey *string `yaml:"tls_key,omitempty"`
 	// TLSCert is a file system path to a TLS certificate chain in PEM format.
 	TLSCert *string `yaml:"tls_cert,omitempty"`
+	// CACert is a file system path to a certificate authority in PEM format.
+	CACert *string `yaml:"ca_cert,omitempty" minver:"1.77.0"`
 	// RequireSecureTransport can enable a mode where non-TLS connections are turned away.
 	RequireSecureTransport *bool `yaml:"require_secure_transport,omitempty"`
+	// RequireClientCert enables a mode where all clients must present a certificate. If a CA
+	// cert is also provided, the client cert will also be verified.
+	RequireClientCert *bool `yaml:"require_client_cert,omitempty" minver:"1.78.3"`
 	// AllowCleartextPasswords enables use of cleartext passwords.
 	AllowCleartextPasswords *bool `yaml:"allow_cleartext_passwords,omitempty"`
 	// Socket is unix socket file path
@@ -104,9 +111,12 @@ type PerformanceYAMLConfig struct {
 }
 
 type MetricsYAMLConfig struct {
-	Labels map[string]string `yaml:"labels"`
-	Host   *string           `yaml:"host,omitempty"`
-	Port   *int              `yaml:"port,omitempty"`
+	Labels  map[string]string `yaml:"labels"`
+	Host    *string           `yaml:"host,omitempty"`
+	Port    *int              `yaml:"port,omitempty"`
+	TlsCert *string           `yaml:"tls_cert,omitempty" minver:"1.78.2"`
+	TlsKey  *string           `yaml:"tls_key,omitempty" minver:"1.78.2"`
+	TlsCa   *string           `yaml:"tls_ca,omitempty" minver:"1.78.2"`
 }
 
 type RemotesapiYAMLConfig struct {
@@ -202,6 +212,7 @@ func ServerConfigAsYAMLConfig(cfg ServerConfig) *YAMLConfig {
 			AutoCommit:                   ptr(cfg.AutoCommit()),
 			DisableClientMultiStatements: ptr(cfg.DisableClientMultiStatements()),
 			DoltTransactionCommit:        ptr(cfg.DoltTransactionCommit()),
+			BranchActivityTracking:       ptr(cfg.BranchActivityTracking()),
 			EventSchedulerStatus:         ptr(cfg.EventSchedulerStatus()),
 			AutoGCBehavior:               autoGCBehavior,
 		},
@@ -222,9 +233,12 @@ func ServerConfigAsYAMLConfig(cfg ServerConfig) *YAMLConfig {
 		DataDirStr: ptr(cfg.DataDir()),
 		CfgDirStr:  ptr(cfg.CfgDir()),
 		MetricsConfig: MetricsYAMLConfig{
-			Labels: cfg.MetricsLabels(),
-			Host:   nillableStrPtr(cfg.MetricsHost()),
-			Port:   ptr(cfg.MetricsPort()),
+			Labels:  cfg.MetricsLabels(),
+			Host:    nillableStrPtr(cfg.MetricsHost()),
+			Port:    ptr(cfg.MetricsPort()),
+			TlsCert: ptr(cfg.MetricsTLSCert()),
+			TlsKey:  ptr(cfg.MetricsTLSKey()),
+			TlsCa:   ptr(cfg.MetricsTLSCA()),
 		},
 		RemotesapiConfig: RemotesapiYAMLConfig{
 			Port_:     cfg.RemotesapiPort(),
@@ -275,6 +289,7 @@ func ServerConfigSetValuesAsYAMLConfig(cfg ServerConfig) *YAMLConfig {
 			AutoCommit:                   zeroIf(ptr(cfg.AutoCommit()), !cfg.ValueSet(AutoCommitKey)),
 			DisableClientMultiStatements: zeroIf(ptr(cfg.DisableClientMultiStatements()), !cfg.ValueSet(DisableClientMultiStatementsKey)),
 			DoltTransactionCommit:        zeroIf(ptr(cfg.DoltTransactionCommit()), !cfg.ValueSet(DoltTransactionCommitKey)),
+			BranchActivityTracking:       zeroIf(ptr(cfg.BranchActivityTracking()), !cfg.ValueSet(BranchActivityTrackingKey)),
 			EventSchedulerStatus:         zeroIf(ptr(cfg.EventSchedulerStatus()), !cfg.ValueSet(EventSchedulerKey)),
 		},
 		ListenerConfig: ListenerYAMLConfig{
@@ -294,9 +309,12 @@ func ServerConfigSetValuesAsYAMLConfig(cfg ServerConfig) *YAMLConfig {
 		DataDirStr: zeroIf(ptr(cfg.DataDir()), !cfg.ValueSet(DataDirKey)),
 		CfgDirStr:  zeroIf(ptr(cfg.CfgDir()), !cfg.ValueSet(CfgDirKey)),
 		MetricsConfig: MetricsYAMLConfig{
-			Labels: zeroIf(cfg.MetricsLabels(), !cfg.ValueSet(MetricsLabelsKey)),
-			Host:   zeroIf(ptr(cfg.MetricsHost()), !cfg.ValueSet(MetricsHostKey)),
-			Port:   zeroIf(ptr(cfg.MetricsPort()), !cfg.ValueSet(MetricsPortKey)),
+			Labels:  zeroIf(cfg.MetricsLabels(), !cfg.ValueSet(MetricsLabelsKey)),
+			Host:    zeroIf(ptr(cfg.MetricsHost()), !cfg.ValueSet(MetricsHostKey)),
+			Port:    zeroIf(ptr(cfg.MetricsPort()), !cfg.ValueSet(MetricsPortKey)),
+			TlsCert: zeroIf(ptr(cfg.MetricsTLSCert()), !cfg.ValueSet(MetricsTLSCertKey)),
+			TlsKey:  zeroIf(ptr(cfg.MetricsTLSKey()), !cfg.ValueSet(MetricsTLSKeyKey)),
+			TlsCa:   zeroIf(ptr(cfg.MetricsTLSCA()), !cfg.ValueSet(MetricsTLSCAKey)),
 		},
 		RemotesapiConfig: RemotesapiYAMLConfig{
 			Port_:     zeroIf(cfg.RemotesapiPort(), !cfg.ValueSet(RemotesapiPortKey)),
@@ -396,6 +414,15 @@ func (cfg YAMLConfig) withPlaceholdersFilledIn() YAMLConfig {
 	}
 	if withPlaceholders.MetricsConfig.Port == nil {
 		withPlaceholders.MetricsConfig.Port = ptr(9091)
+	}
+	if withPlaceholders.MetricsConfig.TlsCert == nil {
+		withPlaceholders.MetricsConfig.TlsCert = ptr("")
+	}
+	if withPlaceholders.MetricsConfig.TlsKey == nil {
+		withPlaceholders.MetricsConfig.TlsKey = ptr("")
+	}
+	if withPlaceholders.MetricsConfig.TlsCa == nil {
+		withPlaceholders.MetricsConfig.TlsCa = ptr("")
 	}
 
 	if withPlaceholders.RemotesapiConfig.Port_ == nil {
@@ -663,6 +690,15 @@ func (cfg YAMLConfig) DoltTransactionCommit() bool {
 	return *cfg.BehaviorConfig.DoltTransactionCommit
 }
 
+// BranchActivityTracking enables or disables the tracking of branch activity for the dolt_branch_activity table
+func (cfg YAMLConfig) BranchActivityTracking() bool {
+	if cfg.BehaviorConfig.BranchActivityTracking == nil {
+		return DefaultBranchActivityTracking
+	}
+
+	return *cfg.BehaviorConfig.BranchActivityTracking
+}
+
 // LogLevel returns the level of logging that the server will use.
 func (cfg YAMLConfig) LogLevel() LogLevel {
 	if cfg.LogLevelStr == nil {
@@ -742,6 +778,28 @@ func (cfg YAMLConfig) MetricsPort() int {
 	}
 
 	return *cfg.MetricsConfig.Port
+}
+
+func (cfg YAMLConfig) MetricsTLSCert() string {
+	if cfg.MetricsConfig.TlsCert == nil {
+		return ""
+	}
+
+	return *cfg.MetricsConfig.TlsCert
+}
+
+func (cfg YAMLConfig) MetricsTLSKey() string {
+	if cfg.MetricsConfig.TlsKey == nil {
+		return ""
+	}
+	return *cfg.MetricsConfig.TlsKey
+}
+
+func (cfg YAMLConfig) MetricsTLSCA() string {
+	if cfg.MetricsConfig.TlsCa == nil {
+		return ""
+	}
+	return *cfg.MetricsConfig.TlsCa
 }
 
 func (cfg YAMLConfig) RemotesapiPort() *int {
@@ -847,6 +905,25 @@ func (cfg YAMLConfig) TLSCert() string {
 		return ""
 	}
 	return *cfg.ListenerConfig.TLSCert
+}
+
+// CACert returns a path to the servers certificate authority file, or "" if there
+// is no CA cert configured.
+func (cfg YAMLConfig) CACert() string {
+	if cfg.ListenerConfig.CACert == nil {
+		return ""
+	}
+	return *cfg.ListenerConfig.CACert
+}
+
+// RequireClientCert is true if the server should reject any connections that don't present a certificate. When
+// enabled, a client certificate is always required, and if a CA cert is also configured, then the client cert
+// will also be verified. Enabling this option also means that non-TLS connections are not allowed.
+func (cfg YAMLConfig) RequireClientCert() bool {
+	if cfg.ListenerConfig.RequireClientCert == nil {
+		return false
+	}
+	return *cfg.ListenerConfig.RequireClientCert
 }
 
 // RequireSecureTransport is true if the server should reject non-TLS connections.

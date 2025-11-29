@@ -1,11 +1,13 @@
 #!/usr/bin/env bats
 load $BATS_TEST_DIRNAME/helper/common.bash
+load $BATS_TEST_DIRNAME/helper/query-server-common.bash
 
 setup() {
     setup_common
 }
 
 teardown() {
+    stop_sql_server
     teardown_common
 }
 
@@ -33,13 +35,6 @@ teardown() {
     [[ "$output" =~ "address conflict with a remote: 'bac1'" ]] || false
 }
 
-@test "sql-backup: dolt_backup add invalid https backup" {
-    mkdir bac1
-    run dolt sql -q "call dolt_backup('add', 'bac1', 'https://doltremoteapi.dolthub.com/Dolthub/non-existing-repo')"
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "sync-url does not support http or https backup locations currently" ]] || false
-}
-
 @test "sql-backup: dolt_backup remove" {
     mkdir bac1
     dolt sql -q "call dolt_backup('add', 'bac1', 'file://./bac1')"
@@ -62,7 +57,7 @@ teardown() {
 
     run dolt sql -q "call dolt_backup('remove','bac1')"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "error: unknown backup: 'bac1'" ]] || false
+    [[ "$output" =~ "backup 'bac1' not found" ]] || false
 }
 
 @test "sql-backup: dolt_backup rm" {
@@ -84,17 +79,17 @@ teardown() {
     # Not enough arguments
     run dolt sql -q "call dolt_backup('restore')"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "usage: dolt_backup('restore', 'backup_url', 'database_name')" ]] || false
+    [[ "$output" =~ "usage: dolt_backup('restore', 'remote_url', 'new_db_name', ['--force'], ['--aws-region=<region>'], ['--aws-creds-type=<type>'], ['--aws-creds-file=<file>'], ['--aws-creds-profile=<profile>'])" ]] || false
 
     # Not enough arguments
     run dolt sql -q "call dolt_backup('restore', 'file:///some_directory')"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "usage: dolt_backup('restore', 'backup_url', 'database_name')" ]] || false
+    [[ "$output" =~ "usage: dolt_backup('restore', 'remote_url', 'new_db_name', ['--force'], ['--aws-region=<region>'], ['--aws-creds-type=<type>'], ['--aws-creds-file=<file>'], ['--aws-creds-profile=<profile>'])" ]] || false
 
     # Too many arguments
     run dolt sql -q "call dolt_backup('restore', 'hostedapidb-0', 'file:///some_directory', 'too many')"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "usage: dolt_backup('restore', 'backup_url', 'database_name')" ]] || false
+    [[ "$output" =~ "usage: dolt_backup('restore', 'remote_url', 'new_db_name', ['--force'], ['--aws-region=<region>'], ['--aws-creds-type=<type>'], ['--aws-creds-file=<file>'], ['--aws-creds-profile=<profile>'])" ]] || false
 }
 
 @test "sql-backup: dolt_backup restore" {
@@ -146,7 +141,7 @@ teardown() {
     # Assert that without --force, we can't update an existing db from a backup
     run dolt sql -q "call dolt_backup('restore', 'file://$backupsDir', 'db1');"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "cannot restore backup into db1. A database with that name already exists." ]] || false
+    [[ "$output" =~ "database 'db1' already exists, use '--force' to overwrite" ]] || false
 
     # Use --force to overwrite the existing database and sanity check the data
     run dolt sql -q "call dolt_backup('restore', '--force', 'file://$backupsDir', 'db1');"
@@ -216,9 +211,29 @@ teardown() {
     (cd the_restore && dolt status)
 }
 
-@test "sql-backup: dolt_backup sync-url fails for http remotes" {
+@test "sql-backup: dolt_backup sync-url fails on non-grpc http request" {
     run dolt sql -q "call dolt_backup('sync-url', 'http://dolthub.com/dolthub/backup')"
     [ "$status" -ne 0 ]
     run dolt sql -q "CALL dolt_backup('sync-url', 'https://dolthub.com/dolthub/backup')"
     [ "$status" -ne 0 ]
+}
+
+@test "sql-backup: dolt_backup rejects AWS parameters fails in sql-server" {
+    start_sql_server
+
+    run dolt sql -q "call dolt_backup('add', 'backup1', 'aws://[table:bucket]/db', '--aws-region=us-east-1')"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "AWS parameters are unavailable when running in server mode" ]] || false
+
+    run dolt sql -q "call dolt_backup('sync-url', 'backup2', 'aws://[table:bucket]/db', '--aws-creds-type=file')"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "AWS parameters are unavailable when running in server mode" ]] || false
+
+    run dolt sql -q "call dolt_backup('restore', 'backup3', 'aws://[table:bucket]/db', '--aws-creds-file=/path/to/file')"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "AWS parameters are unavailable when running in server mode" ]] || false
+
+    run dolt sql -q "call dolt_backup('add', 'backup4', 'aws://[table:bucket]/db', '--aws-creds-profile=profile')"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "AWS parameters are unavailable when running in server mode" ]] || false
 }

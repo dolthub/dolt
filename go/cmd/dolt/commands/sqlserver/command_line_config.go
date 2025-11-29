@@ -42,11 +42,14 @@ type commandLineServerConfig struct {
 	cfgDir                  string
 	autoCommit              bool
 	doltTransactionCommit   bool
+	branchActivityTracking  bool
 	maxConnections          uint64
 	maxWaitConnections      uint32
 	maxWaitConnsTimeout     time.Duration
 	tlsKey                  string
 	tlsCert                 string
+	caCert                  string
+	requireClientCert       bool
 	requireSecureTransport  bool
 	maxLoggedQueryLen       int
 	shouldEncodeLoggedQuery bool
@@ -86,6 +89,7 @@ func DefaultCommandLineServerConfig() *commandLineServerConfig {
 		logLevel:                servercfg.DefaultLogLevel,
 		logFormat:               servercfg.DefaultLogFormat,
 		autoCommit:              servercfg.DefaultAutoCommit,
+		branchActivityTracking:  servercfg.DefaultBranchActivityTracking,
 		maxConnections:          servercfg.DefaultMaxConnections,
 		maxWaitConnections:      servercfg.DefaultMaxWaitConnections,
 		maxWaitConnsTimeout:     servercfg.DefaultMaxWaitConnectionsTimeout,
@@ -282,6 +286,11 @@ func (cfg *commandLineServerConfig) DoltTransactionCommit() bool {
 	return cfg.doltTransactionCommit
 }
 
+// BranchActivityTracking enables or disables the tracking of branch activity for the dolt_branch_activity table. The default is false.
+func (cfg *commandLineServerConfig) BranchActivityTracking() bool {
+	return cfg.branchActivityTracking
+}
+
 // MaxConnections returns the maximum number of simultaneous connections the server will allow.  The default is 1
 func (cfg *commandLineServerConfig) MaxConnections() uint64 {
 	return cfg.maxConnections
@@ -305,6 +314,19 @@ func (cfg *commandLineServerConfig) TLSKey() string {
 // TLSCert returns a path to the servers PEM-encoded TLS certificate chain. "" if there is none.
 func (cfg *commandLineServerConfig) TLSCert() string {
 	return cfg.tlsCert
+}
+
+// CACert returns a path to the servers certificate authority file, or "" if there
+// is no CA cert configured.
+func (cfg *commandLineServerConfig) CACert() string {
+	return cfg.caCert
+}
+
+// RequireClientCert is true if the server should reject any connections that don't present a certificate. When
+// enabled, a client certificate is always required, and if a CA cert is also configured, then the client cert
+// will also be verified. Enabling this option also means that non-TLS connections are not allowed.
+func (cfg *commandLineServerConfig) RequireClientCert() bool {
+	return cfg.requireClientCert
 }
 
 // RequireSecureTransport is true if the server should reject non-TLS connections.
@@ -344,6 +366,18 @@ func (cfg *commandLineServerConfig) MetricsHost() string {
 
 func (cfg *commandLineServerConfig) MetricsPort() int {
 	return servercfg.DefaultMetricsPort
+}
+
+func (cfg *commandLineServerConfig) MetricsTLSCert() string {
+	return ""
+}
+
+func (cfg *commandLineServerConfig) MetricsTLSKey() string {
+	return ""
+}
+
+func (cfg *commandLineServerConfig) MetricsTLSCA() string {
+	return ""
 }
 
 func (cfg *commandLineServerConfig) RemotesapiPort() *int {

@@ -117,15 +117,19 @@ SUPPORTED CONFIG FILE FIELDS:
 
 {{.EmphasisLeft}}listener.max_wait_connections_timeout{{.EmphasisRight}}: The maximum amount of time that a connection will block waiting for a connection before being rejected.
 
-{{.EmphasisLeft}}listener.read_timeout_millis{{.EmphasisRight}}: The number of milliseconds that the server will wait for a read operation
+{{.EmphasisLeft}}listener.read_timeout_millis{{.EmphasisRight}}: The number of milliseconds that the server will wait for a read operation.
 
-{{.EmphasisLeft}}listener.write_timeout_millis{{.EmphasisRight}}: The number of milliseconds that the server will wait for a write operation
+{{.EmphasisLeft}}listener.write_timeout_millis{{.EmphasisRight}}: The number of milliseconds that the server will wait for a write operation.
 
-{{.EmphasisLeft}}listener.require_secure_transport{{.EmphasisRight}}: Boolean flag to turn on TLS/SSL transport
+{{.EmphasisLeft}}listener.require_secure_transport{{.EmphasisRight}}: Boolean flag to turn on TLS/SSL transport.
 
-{{.EmphasisLeft}}listener.tls_cert{{.EmphasisRight}}: The path to the TLS certicifcate used for secure transport
+{{.EmphasisLeft}}listener.require_client_cert{{.EmphasisRight}}: Boolean flag to require all connections present a certificate. This implies that all connections must be over TLS, so listener.tls_key and listener.tls_cert must also be set.
 
-{{.EmphasisLeft}}listener.tls_key{{.EmphasisRight}}: The path to the TLS key used for secure transport
+{{.EmphasisLeft}}listener.ca_cert{{.EmphasisRight}}: The path to a Certificate Authority (CA) certificate used to validate client certificates.
+
+{{.EmphasisLeft}}listener.tls_cert{{.EmphasisRight}}: The path to the TLS certificate used for secure transport.
+
+{{.EmphasisLeft}}listener.tls_key{{.EmphasisRight}}: The path to the TLS key used for secure transport.
 
 {{.EmphasisLeft}}remotesapi.port{{.EmphasisRight}}: A port to listen for remote API operations on. If set to a positive integer, this server will accept connections from clients to clone, pull, etc. databases being served.
 

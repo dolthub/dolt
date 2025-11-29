@@ -76,6 +76,16 @@ type BranchActivityItr struct {
 }
 
 func NewBranchActivityItr(ctx *sql.Context, table *BranchActivityTable) (*BranchActivityItr, error) {
+	// Check if branch activity tracking is enabled
+	if provider, ok := ctx.Session.(doltdb.BranchActivityProvider); ok {
+		tracker := provider.GetBranchActivityTracker()
+		if tracker == nil || !tracker.IsTrackingEnabled() {
+			return nil, fmt.Errorf("branch activity tracking is not enabled; enable it in the server config with 'behavior.branch_activity_tracking: true'")
+		}
+	} else {
+		return nil, fmt.Errorf("branch activity tracking is not enabled; enable it in the server config with 'behavior.branch_activity_tracking: true'")
+	}
+
 	sessionCounts, err := countActiveSessions(ctx)
 	if err != nil {
 		return nil, err

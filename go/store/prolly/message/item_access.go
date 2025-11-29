@@ -15,8 +15,9 @@
 package message
 
 import (
+	"unsafe"
+
 	"github.com/dolthub/dolt/go/gen/fb/serial"
-	"github.com/dolthub/dolt/go/store/val"
 )
 
 type offsetSize uint8
@@ -48,28 +49,48 @@ type ItemAccess struct {
 }
 
 // GetItem returns the ith Item from the buffer.
-func (acc ItemAccess) GetItem(i int, msg serial.Message) []byte {
-	buf := msg[acc.bufStart : acc.bufStart+acc.bufLen]
-	off := msg[acc.offStart : acc.offStart+acc.offLen]
+func (acc *ItemAccess) GetItem(i int, msg serial.Message) []byte {
+	bufStart := int(acc.bufStart)
 	if acc.offStart != 0 {
+		offStart := int(acc.offStart)
 		var stop, start uint32
 		switch acc.offsetSize {
 		case OFFSET_SIZE_16:
-			stop = uint32(val.ReadUint16(off[(i*2)+2 : (i*2)+4]))
-			start = uint32(val.ReadUint16(off[(i * 2) : (i*2)+2]))
+			off := offStart + i*2
+			if off >= len(msg) || off+4 > len(msg) {
+				panic("attempt to access item out of range")
+			}
+			b3 := *(*byte)(unsafe.Pointer(uintptr(unsafe.Pointer(unsafe.SliceData(msg))) + uintptr(off+3)))
+			b2 := *(*byte)(unsafe.Pointer(uintptr(unsafe.Pointer(unsafe.SliceData(msg))) + uintptr(off+2)))
+			b1 := *(*byte)(unsafe.Pointer(uintptr(unsafe.Pointer(unsafe.SliceData(msg))) + uintptr(off+1)))
+			b0 := *(*byte)(unsafe.Pointer(uintptr(unsafe.Pointer(unsafe.SliceData(msg))) + uintptr(off)))
+			stop = uint32(b2) | (uint32(b3) << 8)
+			start = uint32(b0) | (uint32(b1) << 8)
 		case OFFSET_SIZE_32:
-			stop = val.ReadUint32(off[(i*4)+4 : (i*4)+8])
-			start = val.ReadUint32(off[(i * 4) : (i*4)+4])
+			off := offStart + i*4
+			if off >= len(msg) || off+8 > len(msg) {
+				panic("attempt to access item out of range")
+			}
+			b7 := *(*byte)(unsafe.Pointer(uintptr(unsafe.Pointer(unsafe.SliceData(msg))) + uintptr(off+7)))
+			b6 := *(*byte)(unsafe.Pointer(uintptr(unsafe.Pointer(unsafe.SliceData(msg))) + uintptr(off+6)))
+			b5 := *(*byte)(unsafe.Pointer(uintptr(unsafe.Pointer(unsafe.SliceData(msg))) + uintptr(off+5)))
+			b4 := *(*byte)(unsafe.Pointer(uintptr(unsafe.Pointer(unsafe.SliceData(msg))) + uintptr(off+4)))
+			b3 := *(*byte)(unsafe.Pointer(uintptr(unsafe.Pointer(unsafe.SliceData(msg))) + uintptr(off+3)))
+			b2 := *(*byte)(unsafe.Pointer(uintptr(unsafe.Pointer(unsafe.SliceData(msg))) + uintptr(off+2)))
+			b1 := *(*byte)(unsafe.Pointer(uintptr(unsafe.Pointer(unsafe.SliceData(msg))) + uintptr(off+1)))
+			b0 := *(*byte)(unsafe.Pointer(uintptr(unsafe.Pointer(unsafe.SliceData(msg))) + uintptr(off)))
+			stop = uint32(b4) | (uint32(b5) << 8) | (uint32(b6) << 16) | (uint32(b7) << 24)
+			start = uint32(b0) | (uint32(b1) << 8) | (uint32(b2) << 16) | (uint32(b3) << 24)
 		}
 
-		return buf[start:stop]
+		return msg[bufStart+int(start) : bufStart+int(stop)]
 	} else {
-		stop := int(acc.itemWidth) * (i + 1)
-		start := int(acc.itemWidth) * i
-		return buf[start:stop]
+		start := bufStart + int(acc.itemWidth)*i
+		stop := start + int(acc.itemWidth)
+		return msg[start:stop]
 	}
 }
 
-func (acc ItemAccess) IsEmpty() bool {
+func (acc *ItemAccess) IsEmpty() bool {
 	return acc.bufLen == 0
 }
