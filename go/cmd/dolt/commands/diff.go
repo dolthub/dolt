@@ -87,7 +87,7 @@ The diffs displayed can be limited to show the first N by providing the paramete
 
 To filter which data rows are displayed, use {{.EmphasisLeft}}--where <SQL expression>{{.EmphasisRight}}. Table column names in the filter expression must be prefixed with {{.EmphasisLeft}}from_{{.EmphasisRight}} or {{.EmphasisLeft}}to_{{.EmphasisRight}}, e.g. {{.EmphasisLeft}}to_COLUMN_NAME > 100{{.EmphasisRight}} or {{.EmphasisLeft}}from_COLUMN_NAME + to_COLUMN_NAME = 0{{.EmphasisRight}}.
 
-To filter diff output by change type, use {{.EmphasisLeft}}--filter <type>{{.EmphasisRight}} where {{.EmphasisLeft}}<type>{{.EmphasisRight}} is one of {{.EmphasisLeft}}added{{.EmphasisRight}}, {{.EmphasisLeft}}modified{{.EmphasisRight}}, or {{.EmphasisLeft}}removed{{.EmphasisRight}}. The {{.EmphasisLeft}}added{{.EmphasisRight}} filter shows only additions (new tables or rows), {{.EmphasisLeft}}modified{{.EmphasisRight}} shows only modifications (schema changes, renames, or row updates), and {{.EmphasisLeft}}removed{{.EmphasisRight}} shows only deletions (dropped tables or deleted rows). For example, {{.EmphasisLeft}}dolt diff --filter=removed{{.EmphasisRight}} shows only deleted rows and dropped tables.
+To filter diff output by change type, use {{.EmphasisLeft}}--filter <type>{{.EmphasisRight}} where {{.EmphasisLeft}}<type>{{.EmphasisRight}} is one of {{.EmphasisLeft}}added{{.EmphasisRight}}, {{.EmphasisLeft}}modified{{.EmphasisRight}}, {{.EmphasisLeft}}renamed{{.EmphasisRight}}, or {{.EmphasisLeft}}dropped{{.EmphasisRight}}. The {{.EmphasisLeft}}added{{.EmphasisRight}} filter shows only additions (new tables or rows), {{.EmphasisLeft}}modified{{.EmphasisRight}} shows only schema modifications or row updates, {{.EmphasisLeft}}renamed{{.EmphasisRight}} shows only renamed tables, and {{.EmphasisLeft}}dropped{{.EmphasisRight}} shows only deletions (dropped tables or deleted rows). You can also use {{.EmphasisLeft}}removed{{.EmphasisRight}} as an alias for {{.EmphasisLeft}}dropped{{.EmphasisRight}}. For example, {{.EmphasisLeft}}dolt diff --filter=dropped{{.EmphasisRight}} shows only deleted rows and dropped tables.
 
 The {{.EmphasisLeft}}--diff-mode{{.EmphasisRight}} argument controls how modified rows are presented when the format output is set to {{.EmphasisLeft}}tabular{{.EmphasisRight}}. When set to {{.EmphasisLeft}}row{{.EmphasisRight}}, modified rows are presented as old and new rows. When set to {{.EmphasisLeft}}line{{.EmphasisRight}}, modified rows are presented as a single row, and changes are presented using "+" and "-" within the column. When set to {{.EmphasisLeft}}in-place{{.EmphasisRight}}, modified rows are presented as a single row, and changes are presented side-by-side with a color distinction (requires a color-enabled terminal). When set to {{.EmphasisLeft}}context{{.EmphasisRight}}, rows that contain at least one column that spans multiple lines uses {{.EmphasisLeft}}line{{.EmphasisRight}}, while all other rows use {{.EmphasisLeft}}row{{.EmphasisRight}}. The default value is {{.EmphasisLeft}}context{{.EmphasisRight}}.
 `,
@@ -144,14 +144,21 @@ type diffTypeFilter struct {
 
 // newDiffTypeFilter creates a filter for the specified diff type.
 // Pass diff.DiffTypeAll or empty string to include all types.
+// Accepts "removed" as an alias for "dropped" for user convenience.
 func newDiffTypeFilter(filterType string) *diffTypeFilter {
 	if filterType == "" || filterType == diff.DiffTypeAll {
 		return &diffTypeFilter{filters: nil} // nil means include all
 	}
 
+	// Map "removed" to "dropped" (alias for user convenience)
+	internalFilterType := filterType
+	if filterType == "removed" {
+		internalFilterType = diff.DiffTypeDropped
+	}
+
 	return &diffTypeFilter{
 		filters: map[string]bool{
-			filterType: true,
+			internalFilterType: true,
 		},
 	}
 }
@@ -176,7 +183,8 @@ func (df *diffTypeFilter) isValid() bool {
 	for filterType := range df.filters {
 		if filterType != diff.DiffTypeAdded &&
 			filterType != diff.DiffTypeModified &&
-			filterType != diff.DiffTypeRemoved {
+			filterType != diff.DiffTypeRenamed &&
+			filterType != diff.DiffTypeDropped {
 			return false
 		}
 	}
@@ -355,8 +363,8 @@ func (cmd DiffCmd) validateArgs(apr *argparser.ArgParseResults) errhand.VerboseE
 	if hasFilter {
 		filter := newDiffTypeFilter(filterValue)
 		if !filter.isValid() {
-			return errhand.BuildDError("invalid filter: %s. Valid values are: %s, %s, %s",
-				filterValue, diff.DiffTypeAdded, diff.DiffTypeModified, diff.DiffTypeRemoved).Build()
+			return errhand.BuildDError("invalid filter: %s. Valid values are: %s, %s, %s, %s (or %s)",
+				filterValue, diff.DiffTypeAdded, diff.DiffTypeModified, diff.DiffTypeRenamed, diff.DiffTypeDropped, "removed").Build()
 		}
 	}
 
@@ -816,10 +824,10 @@ func getSchemaDiffSummariesBetweenRefs(queryist cli.Queryist, sqlCtx *sql.Contex
 			diffType = diff.DiffTypeAdded
 			tableName = toTable
 		case toTable == "":
-			diffType = diff.DiffTypeRemoved
+			diffType = diff.DiffTypeDropped
 			tableName = fromTable
 		case fromTable != "" && toTable != "" && fromTable != toTable:
-			diffType = diff.DiffTypeModified // Renamed tables are treated as modified
+			diffType = diff.DiffTypeRenamed
 			tableName = toTable
 		default:
 			return nil, fmt.Errorf("error: unexpected schema diff case: fromTable='%s', toTable='%s'", fromTable, toTable)
@@ -881,17 +889,14 @@ func getDiffSummariesBetweenRefs(queryist cli.Queryist, sqlCtx *sql.Context, fro
 		}
 
 		switch summary.DiffType {
-		case diff.DiffTypeRemoved:
+		case diff.DiffTypeDropped:
 			summary.TableName = summary.FromTableName
 		case diff.DiffTypeAdded:
 			summary.TableName = summary.ToTableName
+		case diff.DiffTypeRenamed:
+			summary.TableName = summary.ToTableName
 		case diff.DiffTypeModified:
-			// For renamed tables, use ToTableName; for other modifications, use FromTableName
-			if summary.FromTableName.Name != summary.ToTableName.Name {
-				summary.TableName = summary.ToTableName
-			} else {
-				summary.TableName = summary.FromTableName
-			}
+			summary.TableName = summary.FromTableName
 		default:
 			return nil, fmt.Errorf("error: unexpected diff type '%s'", summary.DiffType)
 		}

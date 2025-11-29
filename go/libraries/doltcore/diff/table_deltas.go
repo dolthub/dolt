@@ -45,7 +45,8 @@ const (
 const (
 	DiffTypeAdded    = "added"
 	DiffTypeModified = "modified"
-	DiffTypeRemoved  = "removed"
+	DiffTypeRenamed  = "renamed"
+	DiffTypeDropped  = "dropped"
 	DiffTypeAll      = "all"
 )
 
@@ -114,7 +115,7 @@ func ChangeTypeToDiffType(ct ChangeType) string {
 	case Added:
 		return DiffTypeAdded
 	case Removed:
-		return DiffTypeRemoved
+		return DiffTypeDropped
 	case ModifiedOld, ModifiedNew:
 		// Both ModifiedOld and ModifiedNew represent the same logical change: modified
 		return DiffTypeModified
@@ -715,7 +716,7 @@ func (td TableDelta) GetSummary(ctx context.Context) (*TableDeltaSummary, error)
 			FromTableName: td.FromName,
 			DataChange:    dataChange,
 			SchemaChange:  true,
-			DiffType:      DiffTypeRemoved,
+			DiffType:      DiffTypeDropped,
 		}, nil
 	}
 
@@ -738,7 +739,7 @@ func (td TableDelta) GetSummary(ctx context.Context) (*TableDeltaSummary, error)
 			ToTableName:   td.ToName,
 			DataChange:    dataChange,
 			SchemaChange:  true,
-			DiffType:      DiffTypeModified,
+			DiffType:      DiffTypeRenamed,
 		}, nil
 	}
 

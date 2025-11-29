@@ -33,7 +33,7 @@ func TestDiffTypeFilter_IsValid(t *testing.T) {
 	}{
 		{"valid: added", diff.DiffTypeAdded, true},
 		{"valid: modified", diff.DiffTypeModified, true},
-		{"valid: removed", diff.DiffTypeRemoved, true},
+		{"valid: removed", diff.DiffTypeDropped, true},
 		{"valid: all", diff.DiffTypeAll, true},
 		{"invalid: empty string with nil filter", "", true}, // nil filter is valid
 		{"invalid: random string", "invalid", false},
@@ -68,27 +68,27 @@ func TestDiffTypeFilter_ShouldInclude(t *testing.T) {
 		// Testing with filter=added
 		{"filter=added, check added", diff.DiffTypeAdded, diff.DiffTypeAdded, true},
 		{"filter=added, check modified", diff.DiffTypeAdded, diff.DiffTypeModified, false},
-		{"filter=added, check removed", diff.DiffTypeAdded, diff.DiffTypeRemoved, false},
+		{"filter=added, check removed", diff.DiffTypeAdded, diff.DiffTypeDropped, false},
 
 		// Testing with filter=modified
 		{"filter=modified, check added", diff.DiffTypeModified, diff.DiffTypeAdded, false},
 		{"filter=modified, check modified", diff.DiffTypeModified, diff.DiffTypeModified, true},
-		{"filter=modified, check removed", diff.DiffTypeModified, diff.DiffTypeRemoved, false},
+		{"filter=modified, check removed", diff.DiffTypeModified, diff.DiffTypeDropped, false},
 
-		// Testing with filter=removed
-		{"filter=removed, check added", diff.DiffTypeRemoved, diff.DiffTypeAdded, false},
-		{"filter=removed, check modified", diff.DiffTypeRemoved, diff.DiffTypeModified, false},
-		{"filter=removed, check removed", diff.DiffTypeRemoved, diff.DiffTypeRemoved, true},
+		// Testing with filter=dropped
+		{"filter=dropped, check added", diff.DiffTypeDropped, diff.DiffTypeAdded, false},
+		{"filter=dropped, check modified", diff.DiffTypeDropped, diff.DiffTypeModified, false},
+		{"filter=dropped, check removed", diff.DiffTypeDropped, diff.DiffTypeDropped, true},
 
 		// Testing with filter=all
 		{"filter=all, check added", diff.DiffTypeAll, diff.DiffTypeAdded, true},
 		{"filter=all, check modified", diff.DiffTypeAll, diff.DiffTypeModified, true},
-		{"filter=all, check removed", diff.DiffTypeAll, diff.DiffTypeRemoved, true},
+		{"filter=all, check removed", diff.DiffTypeAll, diff.DiffTypeDropped, true},
 
 		// Testing with empty filter (nil filters map)
 		{"filter=empty, check added", "", diff.DiffTypeAdded, true},
 		{"filter=empty, check modified", "", diff.DiffTypeModified, true},
-		{"filter=empty, check removed", "", diff.DiffTypeRemoved, true},
+		{"filter=empty, check removed", "", diff.DiffTypeDropped, true},
 	}
 
 	for _, tt := range tests {
@@ -110,7 +110,7 @@ func TestDiffTypeFilter_ConsistencyAcrossMethods(t *testing.T) {
 		if !df.shouldInclude(diff.DiffTypeAdded) {
 			t.Error("filter=all should include added")
 		}
-		if !df.shouldInclude(diff.DiffTypeRemoved) {
+		if !df.shouldInclude(diff.DiffTypeDropped) {
 			t.Error("filter=all should include removed")
 		}
 		if !df.shouldInclude(diff.DiffTypeModified) {
@@ -125,7 +125,7 @@ func TestDiffTypeFilter_ConsistencyAcrossMethods(t *testing.T) {
 		if !df.shouldInclude(diff.DiffTypeAdded) {
 			t.Error("filter=added should include added")
 		}
-		if df.shouldInclude(diff.DiffTypeRemoved) {
+		if df.shouldInclude(diff.DiffTypeDropped) {
 			t.Error("filter=added should not include removed")
 		}
 		if df.shouldInclude(diff.DiffTypeModified) {
@@ -133,17 +133,17 @@ func TestDiffTypeFilter_ConsistencyAcrossMethods(t *testing.T) {
 		}
 	})
 
-	t.Run("filter=removed only includes removed", func(t *testing.T) {
-		df := newDiffTypeFilter(diff.DiffTypeRemoved)
+	t.Run("filter=dropped only includes removed", func(t *testing.T) {
+		df := newDiffTypeFilter(diff.DiffTypeDropped)
 
 		if df.shouldInclude(diff.DiffTypeAdded) {
-			t.Error("filter=removed should not include added")
+			t.Error("filter=dropped should not include added")
 		}
-		if !df.shouldInclude(diff.DiffTypeRemoved) {
-			t.Error("filter=removed should include removed")
+		if !df.shouldInclude(diff.DiffTypeDropped) {
+			t.Error("filter=dropped should include removed")
 		}
 		if df.shouldInclude(diff.DiffTypeModified) {
-			t.Error("filter=removed should not include modified")
+			t.Error("filter=dropped should not include modified")
 		}
 	})
 
@@ -153,7 +153,7 @@ func TestDiffTypeFilter_ConsistencyAcrossMethods(t *testing.T) {
 		if df.shouldInclude(diff.DiffTypeAdded) {
 			t.Error("filter=modified should not include added")
 		}
-		if df.shouldInclude(diff.DiffTypeRemoved) {
+		if df.shouldInclude(diff.DiffTypeDropped) {
 			t.Error("filter=modified should not include removed")
 		}
 		if !df.shouldInclude(diff.DiffTypeModified) {
@@ -186,7 +186,7 @@ func TestFilterConstants(t *testing.T) {
 	}{
 		{"DiffTypeAdded value", diff.DiffTypeAdded, "added"},
 		{"DiffTypeModified value", diff.DiffTypeModified, "modified"},
-		{"DiffTypeRemoved value", diff.DiffTypeRemoved, "removed"},
+		{"DiffTypeDropped value", diff.DiffTypeDropped, "dropped"},
 		{"DiffTypeAll value", diff.DiffTypeAll, "all"},
 	}
 
@@ -201,7 +201,7 @@ func TestFilterConstants(t *testing.T) {
 
 func TestFilterConstants_AreUnique(t *testing.T) {
 	// Test that all filter constants are unique
-	constants := []string{diff.DiffTypeAdded, diff.DiffTypeModified, diff.DiffTypeRemoved, diff.DiffTypeAll}
+	constants := []string{diff.DiffTypeAdded, diff.DiffTypeModified, diff.DiffTypeDropped, diff.DiffTypeAll}
 	seen := make(map[string]bool)
 
 	for _, c := range constants {
@@ -218,7 +218,7 @@ func TestFilterConstants_AreUnique(t *testing.T) {
 
 func TestFilterConstants_AreLowercase(t *testing.T) {
 	// Test that filter constants are lowercase (convention)
-	constants := []string{diff.DiffTypeAdded, diff.DiffTypeModified, diff.DiffTypeRemoved, diff.DiffTypeAll}
+	constants := []string{diff.DiffTypeAdded, diff.DiffTypeModified, diff.DiffTypeDropped, diff.DiffTypeAll}
 
 	for _, c := range constants {
 		if c != strings.ToLower(c) {
@@ -265,7 +265,7 @@ func TestShouldUseLazyHeader(t *testing.T) {
 		},
 		{
 			name:           "don't use lazy: table renamed",
-			filterType:     diff.DiffTypeRemoved,
+			filterType:     diff.DiffTypeDropped,
 			schemaChange:   false,
 			isRename:       true,
 			expectedResult: false,
@@ -285,8 +285,8 @@ func TestShouldUseLazyHeader(t *testing.T) {
 			expectedResult: true,
 		},
 		{
-			name:           "use lazy: filter=removed, data-only",
-			filterType:     diff.DiffTypeRemoved,
+			name:           "use lazy: filter=dropped, data-only",
+			filterType:     diff.DiffTypeDropped,
 			schemaChange:   false,
 			isRename:       false,
 			expectedResult: true,
@@ -498,25 +498,25 @@ func TestShouldSkipRow(t *testing.T) {
 		expectedResult bool
 	}{
 		{"filter=added, row=Added", diff.DiffTypeAdded, diff.Added, false},
-		{"filter=added, row=Removed", diff.DiffTypeAdded, diff.Removed, true},
+		{"filter=added, row=Dropped", diff.DiffTypeAdded, diff.Removed, true},
 		{"filter=added, row=ModifiedOld", diff.DiffTypeAdded, diff.ModifiedOld, true},
 		{"filter=added, row=ModifiedNew", diff.DiffTypeAdded, diff.ModifiedNew, true},
 
-		{"filter=removed, row=Added", diff.DiffTypeRemoved, diff.Added, true},
-		{"filter=removed, row=Removed", diff.DiffTypeRemoved, diff.Removed, false},
-		{"filter=removed, row=ModifiedOld", diff.DiffTypeRemoved, diff.ModifiedOld, true},
+		{"filter=dropped, row=Added", diff.DiffTypeDropped, diff.Added, true},
+		{"filter=dropped, row=Dropped", diff.DiffTypeDropped, diff.Removed, false},
+		{"filter=dropped, row=ModifiedOld", diff.DiffTypeDropped, diff.ModifiedOld, true},
 
 		{"filter=modified, row=Added", diff.DiffTypeModified, diff.Added, true},
-		{"filter=modified, row=Removed", diff.DiffTypeModified, diff.Removed, true},
+		{"filter=modified, row=Dropped", diff.DiffTypeModified, diff.Removed, true},
 		{"filter=modified, row=ModifiedOld", diff.DiffTypeModified, diff.ModifiedOld, false},
 		{"filter=modified, row=ModifiedNew", diff.DiffTypeModified, diff.ModifiedNew, false},
 
 		{"filter=all, row=Added", diff.DiffTypeAll, diff.Added, false},
-		{"filter=all, row=Removed", diff.DiffTypeAll, diff.Removed, false},
+		{"filter=all, row=Dropped", diff.DiffTypeAll, diff.Removed, false},
 		{"filter=all, row=ModifiedOld", diff.DiffTypeAll, diff.ModifiedOld, false},
 
 		{"nil filter, row=Added", "", diff.Added, false},
-		{"nil filter, row=Removed", "", diff.Removed, false},
+		{"nil filter, row=Dropped", "", diff.Removed, false},
 	}
 
 	for _, tt := range tests {

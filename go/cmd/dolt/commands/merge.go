@@ -485,12 +485,12 @@ func calculateMergeStats(queryist cli.Queryist, sqlCtx *sql.Context, mergeStats 
 			mergeStats[summary.TableName.Name] = &merge.MergeStats{
 				Operation: merge.TableAdded,
 			}
-		} else if summary.DiffType == diff.DiffTypeRemoved {
+		} else if summary.DiffType == diff.DiffTypeDropped {
 			allUnmodified = false
 			mergeStats[summary.TableName.Name] = &merge.MergeStats{
 				Operation: merge.TableRemoved,
 			}
-		} else if summary.DiffType == diff.DiffTypeModified {
+		} else if summary.DiffType == diff.DiffTypeModified || summary.DiffType == diff.DiffTypeRenamed {
 			allUnmodified = false
 			mergeStats[summary.TableName.Name] = &merge.MergeStats{
 				Operation: merge.TableModified,
