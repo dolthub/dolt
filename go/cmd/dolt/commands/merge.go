@@ -480,17 +480,17 @@ func calculateMergeStats(queryist cli.Queryist, sqlCtx *sql.Context, mergeStats 
 		if strings.HasPrefix(summary.TableName.Name, diff.DBPrefix) {
 			continue
 		}
-		if summary.DiffType == "added" {
+		if summary.DiffType == diff.DiffTypeAdded {
 			allUnmodified = false
 			mergeStats[summary.TableName.Name] = &merge.MergeStats{
 				Operation: merge.TableAdded,
 			}
-		} else if summary.DiffType == "dropped" {
+		} else if summary.DiffType == diff.DiffTypeRemoved {
 			allUnmodified = false
 			mergeStats[summary.TableName.Name] = &merge.MergeStats{
 				Operation: merge.TableRemoved,
 			}
-		} else if summary.DiffType == "modified" || summary.DiffType == "renamed" {
+		} else if summary.DiffType == diff.DiffTypeModified {
 			allUnmodified = false
 			mergeStats[summary.TableName.Name] = &merge.MergeStats{
 				Operation: merge.TableModified,

@@ -31,11 +31,11 @@ func TestDiffTypeFilter_IsValid(t *testing.T) {
 		filterBy string
 		want     bool
 	}{
-		{"valid: added", FilterAdds, true},
-		{"valid: modified", FilterModified, true},
-		{"valid: removed", FilterRemoved, true},
-		{"valid: all", NoFilter, true},
-		{"invalid: empty string", "", false},
+		{"valid: added", diff.DiffTypeAdded, true},
+		{"valid: modified", diff.DiffTypeModified, true},
+		{"valid: removed", diff.DiffTypeRemoved, true},
+		{"valid: all", diff.DiffTypeAll, true},
+		{"invalid: empty string with nil filter", "", true}, // nil filter is valid
 		{"invalid: random string", "invalid", false},
 		{"invalid: uppercase", "ADDED", false},
 		{"invalid: typo addedd", "addedd", false},
@@ -49,7 +49,7 @@ func TestDiffTypeFilter_IsValid(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			df := &diffTypeFilter{filterBy: tt.filterBy}
+			df := newDiffTypeFilter(tt.filterBy)
 			got := df.isValid()
 			if got != tt.want {
 				t.Errorf("isValid() = %v, want %v", got, tt.want)
@@ -58,220 +58,120 @@ func TestDiffTypeFilter_IsValid(t *testing.T) {
 	}
 }
 
-func TestDiffTypeFilter_IncludeAddsOrAll(t *testing.T) {
+func TestDiffTypeFilter_ShouldInclude(t *testing.T) {
 	tests := []struct {
-		name     string
-		filterBy string
-		want     bool
+		name       string
+		filterType string
+		checkType  string
+		want       bool
 	}{
-		{"filter=added returns true", FilterAdds, true},
-		{"filter=all returns true", NoFilter, true},
-		{"filter=modified returns false", FilterModified, false},
-		{"filter=removed returns false", FilterRemoved, false},
-		{"empty filter returns false", "", false},
-		{"invalid filter returns false", "invalid", false},
+		// Testing with filter=added
+		{"filter=added, check added", diff.DiffTypeAdded, diff.DiffTypeAdded, true},
+		{"filter=added, check modified", diff.DiffTypeAdded, diff.DiffTypeModified, false},
+		{"filter=added, check removed", diff.DiffTypeAdded, diff.DiffTypeRemoved, false},
+
+		// Testing with filter=modified
+		{"filter=modified, check added", diff.DiffTypeModified, diff.DiffTypeAdded, false},
+		{"filter=modified, check modified", diff.DiffTypeModified, diff.DiffTypeModified, true},
+		{"filter=modified, check removed", diff.DiffTypeModified, diff.DiffTypeRemoved, false},
+
+		// Testing with filter=removed
+		{"filter=removed, check added", diff.DiffTypeRemoved, diff.DiffTypeAdded, false},
+		{"filter=removed, check modified", diff.DiffTypeRemoved, diff.DiffTypeModified, false},
+		{"filter=removed, check removed", diff.DiffTypeRemoved, diff.DiffTypeRemoved, true},
+
+		// Testing with filter=all
+		{"filter=all, check added", diff.DiffTypeAll, diff.DiffTypeAdded, true},
+		{"filter=all, check modified", diff.DiffTypeAll, diff.DiffTypeModified, true},
+		{"filter=all, check removed", diff.DiffTypeAll, diff.DiffTypeRemoved, true},
+
+		// Testing with empty filter (nil filters map)
+		{"filter=empty, check added", "", diff.DiffTypeAdded, true},
+		{"filter=empty, check modified", "", diff.DiffTypeModified, true},
+		{"filter=empty, check removed", "", diff.DiffTypeRemoved, true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			df := &diffTypeFilter{filterBy: tt.filterBy}
-			got := df.includeAddsOrAll()
+			df := newDiffTypeFilter(tt.filterType)
+			got := df.shouldInclude(tt.checkType)
 			if got != tt.want {
-				t.Errorf("includeAddsOrAll() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
-func TestDiffTypeFilter_IncludeDropsOrAll(t *testing.T) {
-	tests := []struct {
-		name     string
-		filterBy string
-		want     bool
-	}{
-		{"filter=removed returns true", FilterRemoved, true},
-		{"filter=all returns true", NoFilter, true},
-		{"filter=added returns false", FilterAdds, false},
-		{"filter=modified returns false", FilterModified, false},
-		{"empty filter returns false", "", false},
-		{"invalid filter returns false", "invalid", false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			df := &diffTypeFilter{filterBy: tt.filterBy}
-			got := df.includeDropsOrAll()
-			if got != tt.want {
-				t.Errorf("includeDropsOrAll() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
-func TestDiffTypeFilter_IncludeModificationsOrAll(t *testing.T) {
-	tests := []struct {
-		name     string
-		filterBy string
-		want     bool
-	}{
-		{"filter=modified returns true", FilterModified, true},
-		{"filter=all returns true", NoFilter, true},
-		{"filter=added returns false", FilterAdds, false},
-		{"filter=removed returns false", FilterRemoved, false},
-		{"empty filter returns false", "", false},
-		{"invalid filter returns false", "invalid", false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			df := &diffTypeFilter{filterBy: tt.filterBy}
-			got := df.includeModificationsOrAll()
-			if got != tt.want {
-				t.Errorf("includeModificationsOrAll() = %v, want %v", got, tt.want)
+				t.Errorf("shouldInclude(%s) = %v, want %v", tt.checkType, got, tt.want)
 			}
 		})
 	}
 }
 
 func TestDiffTypeFilter_ConsistencyAcrossMethods(t *testing.T) {
-	// Test that NoFilter returns true for all include methods
-	t.Run("NoFilter returns true for all methods", func(t *testing.T) {
-		df := &diffTypeFilter{filterBy: NoFilter}
+	// Test that filter=all returns true for all diff types
+	t.Run("filter=all returns true for all types", func(t *testing.T) {
+		df := newDiffTypeFilter(diff.DiffTypeAll)
 
-		if !df.includeAddsOrAll() {
-			t.Error("NoFilter should include adds")
+		if !df.shouldInclude(diff.DiffTypeAdded) {
+			t.Error("filter=all should include added")
 		}
-		if !df.includeDropsOrAll() {
-			t.Error("NoFilter should include drops")
+		if !df.shouldInclude(diff.DiffTypeRemoved) {
+			t.Error("filter=all should include removed")
 		}
-		if !df.includeModificationsOrAll() {
-			t.Error("NoFilter should include modifications")
+		if !df.shouldInclude(diff.DiffTypeModified) {
+			t.Error("filter=all should include modified")
 		}
 	})
 
-	// Test that each specific filter only returns true for its method
-	t.Run("FilterAdds only true for adds", func(t *testing.T) {
-		df := &diffTypeFilter{filterBy: FilterAdds}
+	// Test that each specific filter only returns true for its type
+	t.Run("filter=added only includes added", func(t *testing.T) {
+		df := newDiffTypeFilter(diff.DiffTypeAdded)
 
-		if !df.includeAddsOrAll() {
-			t.Error("FilterAdds should include adds")
+		if !df.shouldInclude(diff.DiffTypeAdded) {
+			t.Error("filter=added should include added")
 		}
-		if df.includeDropsOrAll() {
-			t.Error("FilterAdds should not include drops")
+		if df.shouldInclude(diff.DiffTypeRemoved) {
+			t.Error("filter=added should not include removed")
 		}
-		if df.includeModificationsOrAll() {
-			t.Error("FilterAdds should not include modifications")
+		if df.shouldInclude(diff.DiffTypeModified) {
+			t.Error("filter=added should not include modified")
 		}
 	})
 
-	t.Run("FilterRemoved only true for drops", func(t *testing.T) {
-		df := &diffTypeFilter{filterBy: FilterRemoved}
+	t.Run("filter=removed only includes removed", func(t *testing.T) {
+		df := newDiffTypeFilter(diff.DiffTypeRemoved)
 
-		if df.includeAddsOrAll() {
-			t.Error("FilterRemoved should not include adds")
+		if df.shouldInclude(diff.DiffTypeAdded) {
+			t.Error("filter=removed should not include added")
 		}
-		if !df.includeDropsOrAll() {
-			t.Error("FilterRemoved should include drops")
+		if !df.shouldInclude(diff.DiffTypeRemoved) {
+			t.Error("filter=removed should include removed")
 		}
-		if df.includeModificationsOrAll() {
-			t.Error("FilterRemoved should not include modifications")
+		if df.shouldInclude(diff.DiffTypeModified) {
+			t.Error("filter=removed should not include modified")
 		}
 	})
 
-	t.Run("FilterModified only true for modifications", func(t *testing.T) {
-		df := &diffTypeFilter{filterBy: FilterModified}
+	t.Run("filter=modified only includes modified", func(t *testing.T) {
+		df := newDiffTypeFilter(diff.DiffTypeModified)
 
-		if df.includeAddsOrAll() {
-			t.Error("FilterModified should not include adds")
+		if df.shouldInclude(diff.DiffTypeAdded) {
+			t.Error("filter=modified should not include added")
 		}
-		if df.includeDropsOrAll() {
-			t.Error("FilterModified should not include drops")
+		if df.shouldInclude(diff.DiffTypeRemoved) {
+			t.Error("filter=modified should not include removed")
 		}
-		if !df.includeModificationsOrAll() {
-			t.Error("FilterModified should include modifications")
+		if !df.shouldInclude(diff.DiffTypeModified) {
+			t.Error("filter=modified should include modified")
 		}
 	})
 }
 
 func TestDiffTypeFilter_InvalidFilterBehavior(t *testing.T) {
-	// Test that invalid filters consistently return false for all include methods
-	invalidFilters := []string{"", "invalid", "ADDED", "addedd", "delete"}
+	// Test that invalid filters return false for isValid
+	invalidFilters := []string{"invalid", "ADDED", "addedd", "delete"}
 
 	for _, filterValue := range invalidFilters {
 		t.Run("invalid filter: "+filterValue, func(t *testing.T) {
-			df := &diffTypeFilter{filterBy: filterValue}
+			df := newDiffTypeFilter(filterValue)
 
-			if !df.isValid() {
-				// Only test include methods if filter is invalid
-				if df.includeAddsOrAll() {
-					t.Error("Invalid filter should not include adds")
-				}
-				if df.includeDropsOrAll() {
-					t.Error("Invalid filter should not include drops")
-				}
-				if df.includeModificationsOrAll() {
-					t.Error("Invalid filter should not include modifications")
-				}
-			}
-		})
-	}
-}
-
-func TestDiffCmd_ValidateArgs_ValidFilterValues(t *testing.T) {
-	tests := []struct {
-		name      string
-		filterArg string
-	}{
-		{"valid: added", "added"},
-		{"valid: modified", "modified"},
-		{"valid: removed", "removed"},
-		{"valid: all", "all"},
-		{"valid: empty (not provided)", ""},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// We're testing that these values pass validation
-			// The actual validation happens in validateArgs which checks constants
-			if tt.filterArg != "" {
-				validValues := []string{FilterAdds, FilterModified, FilterRemoved, NoFilter}
-				found := false
-				for _, valid := range validValues {
-					if tt.filterArg == valid {
-						found = true
-						break
-					}
-				}
-				if !found && tt.filterArg != "" {
-					t.Errorf("Expected %s to be a valid filter value", tt.filterArg)
-				}
-			}
-		})
-	}
-}
-
-func TestDiffCmd_ValidateArgs_InvalidFilterValues(t *testing.T) {
-	tests := []struct {
-		name      string
-		filterArg string
-	}{
-		{"invalid: random string", "invalid"},
-		{"invalid: typo addedd", "addedd"},
-		{"invalid: uppercase ADDED", "ADDED"},
-		{"invalid: insert", "insert"},
-		{"invalid: update", "update"},
-		{"invalid: delete", "delete"},
-		{"invalid: adds (plural)", "adds"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// These should NOT be in the list of valid values
-			validValues := []string{FilterAdds, FilterModified, FilterRemoved, NoFilter}
-			for _, valid := range validValues {
-				if tt.filterArg == valid {
-					t.Errorf("Expected %s to be invalid, but it matched %s", tt.filterArg, valid)
-				}
+			if df.isValid() {
+				t.Errorf("Filter %s should be invalid", filterValue)
 			}
 		})
 	}
@@ -284,10 +184,10 @@ func TestFilterConstants(t *testing.T) {
 		constant string
 		expected string
 	}{
-		{"FilterAdds value", FilterAdds, "added"},
-		{"FilterModified value", FilterModified, "modified"},
-		{"FilterRemoved value", FilterRemoved, "removed"},
-		{"NoFilter value", NoFilter, "all"},
+		{"DiffTypeAdded value", diff.DiffTypeAdded, "added"},
+		{"DiffTypeModified value", diff.DiffTypeModified, "modified"},
+		{"DiffTypeRemoved value", diff.DiffTypeRemoved, "removed"},
+		{"DiffTypeAll value", diff.DiffTypeAll, "all"},
 	}
 
 	for _, tt := range tests {
@@ -301,7 +201,7 @@ func TestFilterConstants(t *testing.T) {
 
 func TestFilterConstants_AreUnique(t *testing.T) {
 	// Test that all filter constants are unique
-	constants := []string{FilterAdds, FilterModified, FilterRemoved, NoFilter}
+	constants := []string{diff.DiffTypeAdded, diff.DiffTypeModified, diff.DiffTypeRemoved, diff.DiffTypeAll}
 	seen := make(map[string]bool)
 
 	for _, c := range constants {
@@ -318,7 +218,7 @@ func TestFilterConstants_AreUnique(t *testing.T) {
 
 func TestFilterConstants_AreLowercase(t *testing.T) {
 	// Test that filter constants are lowercase (convention)
-	constants := []string{FilterAdds, FilterModified, FilterRemoved, NoFilter}
+	constants := []string{diff.DiffTypeAdded, diff.DiffTypeModified, diff.DiffTypeRemoved, diff.DiffTypeAll}
 
 	for _, c := range constants {
 		if c != strings.ToLower(c) {
@@ -327,78 +227,66 @@ func TestFilterConstants_AreLowercase(t *testing.T) {
 	}
 }
 
-func TestDiffTypeFilter_MethodNaming(t *testing.T) {
-	// Ensure method names are consistent and descriptive
-	df := &diffTypeFilter{filterBy: NoFilter}
-
-	// These tests just verify the methods exist and are callable
-	// (compilation will fail if methods are renamed)
-	_ = df.isValid()
-	_ = df.includeAddsOrAll()
-	_ = df.includeDropsOrAll()
-	_ = df.includeModificationsOrAll()
-}
-
 func TestShouldUseLazyHeader(t *testing.T) {
 	tests := []struct {
 		name           string
-		filter         *diffTypeFilter
+		filterType     string
 		schemaChange   bool
 		isRename       bool
 		expectedResult bool
 	}{
 		{
 			name:           "use lazy: filter active, data-only change",
-			filter:         &diffTypeFilter{filterBy: FilterAdds},
+			filterType:     diff.DiffTypeAdded,
 			schemaChange:   false,
 			isRename:       false,
 			expectedResult: true,
 		},
 		{
 			name:           "don't use lazy: no filter",
-			filter:         nil,
+			filterType:     "",
 			schemaChange:   false,
 			isRename:       false,
 			expectedResult: false,
 		},
 		{
-			name:           "don't use lazy: filter is NoFilter",
-			filter:         &diffTypeFilter{filterBy: NoFilter},
+			name:           "don't use lazy: filter is all",
+			filterType:     diff.DiffTypeAll,
 			schemaChange:   false,
 			isRename:       false,
 			expectedResult: false,
 		},
 		{
 			name:           "don't use lazy: schema changed",
-			filter:         &diffTypeFilter{filterBy: FilterModified},
+			filterType:     diff.DiffTypeModified,
 			schemaChange:   true,
 			isRename:       false,
 			expectedResult: false,
 		},
 		{
 			name:           "don't use lazy: table renamed",
-			filter:         &diffTypeFilter{filterBy: FilterRemoved},
+			filterType:     diff.DiffTypeRemoved,
 			schemaChange:   false,
 			isRename:       true,
 			expectedResult: false,
 		},
 		{
 			name:           "don't use lazy: schema changed AND renamed",
-			filter:         &diffTypeFilter{filterBy: FilterAdds},
+			filterType:     diff.DiffTypeAdded,
 			schemaChange:   true,
 			isRename:       true,
 			expectedResult: false,
 		},
 		{
 			name:           "use lazy: filter=modified, data-only",
-			filter:         &diffTypeFilter{filterBy: FilterModified},
+			filterType:     diff.DiffTypeModified,
 			schemaChange:   false,
 			isRename:       false,
 			expectedResult: true,
 		},
 		{
 			name:           "use lazy: filter=removed, data-only",
-			filter:         &diffTypeFilter{filterBy: FilterRemoved},
+			filterType:     diff.DiffTypeRemoved,
 			schemaChange:   false,
 			isRename:       false,
 			expectedResult: true,
@@ -407,9 +295,14 @@ func TestShouldUseLazyHeader(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			var filter *diffTypeFilter
+			if tt.filterType != "" {
+				filter = newDiffTypeFilter(tt.filterType)
+			}
+
 			dArgs := &diffArgs{
 				diffDisplaySettings: &diffDisplaySettings{
-					filter: tt.filter,
+					filter: filter,
 				},
 			}
 			tableSummary := diff.TableDeltaSummary{
@@ -495,11 +388,15 @@ func (m *mockRowWriter) Close(_ /* ctx */ context.Context) error {
 
 func TestLazyRowWriter_NoRowsWritten(t *testing.T) {
 	mockDW := &mockDiffWriter{}
-	factory := func() (diff.SqlRowDiffWriter, error) {
-		return mockDW.RowWriter(nil, nil, diff.TableDeltaSummary{}, nil)
+	realWriter := &mockRowWriter{}
+
+	beginTableCalled := false
+	onFirstWrite := func() error {
+		beginTableCalled = true
+		return mockDW.BeginTable("fromTable", "toTable", false, false)
 	}
 
-	lazyWriter := newLazyRowWriter(mockDW, "fromTable", "toTable", false, false, factory)
+	lazyWriter := newLazyRowWriter(realWriter, onFirstWrite)
 
 	// Close without writing any rows
 	err := lazyWriter.Close(context.Background())
@@ -508,18 +405,20 @@ func TestLazyRowWriter_NoRowsWritten(t *testing.T) {
 	}
 
 	// BeginTable should NEVER have been called
-	if mockDW.beginTableCalled {
+	if beginTableCalled {
 		t.Error("BeginTable() was called even though no rows were written - should have been lazy!")
 	}
 }
 
 func TestLazyRowWriter_RowsWritten(t *testing.T) {
 	mockDW := &mockDiffWriter{}
-	factory := func() (diff.SqlRowDiffWriter, error) {
-		return mockDW.RowWriter(nil, nil, diff.TableDeltaSummary{}, nil)
+	realWriter := &mockRowWriter{}
+
+	onFirstWrite := func() error {
+		return mockDW.BeginTable("fromTable", "toTable", false, false)
 	}
 
-	lazyWriter := newLazyRowWriter(mockDW, "fromTable", "toTable", false, false, factory)
+	lazyWriter := newLazyRowWriter(realWriter, onFirstWrite)
 
 	// Write a row
 	ctx := sql.NewEmptyContext()
@@ -542,11 +441,13 @@ func TestLazyRowWriter_RowsWritten(t *testing.T) {
 
 func TestLazyRowWriter_CombinedRowsWritten(t *testing.T) {
 	mockDW := &mockDiffWriter{}
-	factory := func() (diff.SqlRowDiffWriter, error) {
-		return mockDW.RowWriter(nil, nil, diff.TableDeltaSummary{}, nil)
+	realWriter := &mockRowWriter{}
+
+	onFirstWrite := func() error {
+		return mockDW.BeginTable("fromTable", "toTable", false, false)
 	}
 
-	lazyWriter := newLazyRowWriter(mockDW, "fromTable", "toTable", false, false, factory)
+	lazyWriter := newLazyRowWriter(realWriter, onFirstWrite)
 
 	// Write a combined row
 	ctx := sql.NewEmptyContext()
@@ -564,28 +465,72 @@ func TestLazyRowWriter_CombinedRowsWritten(t *testing.T) {
 func TestLazyRowWriter_InitializedOnlyOnce(t *testing.T) {
 	callCount := 0
 	mockDW := &mockDiffWriter{}
-	factory := func() (diff.SqlRowDiffWriter, error) {
-		return mockDW.RowWriter(nil, nil, diff.TableDeltaSummary{}, nil)
+	realWriter := &mockRowWriter{}
+
+	onFirstWrite := func() error {
+		callCount++
+		return mockDW.BeginTable("fromTable", "toTable", false, false)
 	}
 
-	lazyWriter := newLazyRowWriter(mockDW, "fromTable", "toTable", false, false, factory)
+	lazyWriter := newLazyRowWriter(realWriter, onFirstWrite)
 
 	ctx := sql.NewEmptyContext()
 
 	// Write multiple rows
 	for i := 0; i < 5; i++ {
-		mockDW.beginTableCalled = false // Reset flag
 		err := lazyWriter.WriteRow(ctx, sql.Row{}, diff.Added, []diff.ChangeType{})
 		if err != nil {
 			t.Fatalf("WriteRow() %d returned error: %v", i, err)
-		}
-		if mockDW.beginTableCalled {
-			callCount++
 		}
 	}
 
 	// BeginTable should have been called exactly ONCE (on first write only)
 	if callCount != 1 {
 		t.Errorf("BeginTable() called %d times, expected exactly 1", callCount)
+	}
+}
+
+func TestShouldSkipRow(t *testing.T) {
+	tests := []struct {
+		name           string
+		filterType     string
+		rowChangeType  diff.ChangeType
+		expectedResult bool
+	}{
+		{"filter=added, row=Added", diff.DiffTypeAdded, diff.Added, false},
+		{"filter=added, row=Removed", diff.DiffTypeAdded, diff.Removed, true},
+		{"filter=added, row=ModifiedOld", diff.DiffTypeAdded, diff.ModifiedOld, true},
+		{"filter=added, row=ModifiedNew", diff.DiffTypeAdded, diff.ModifiedNew, true},
+
+		{"filter=removed, row=Added", diff.DiffTypeRemoved, diff.Added, true},
+		{"filter=removed, row=Removed", diff.DiffTypeRemoved, diff.Removed, false},
+		{"filter=removed, row=ModifiedOld", diff.DiffTypeRemoved, diff.ModifiedOld, true},
+
+		{"filter=modified, row=Added", diff.DiffTypeModified, diff.Added, true},
+		{"filter=modified, row=Removed", diff.DiffTypeModified, diff.Removed, true},
+		{"filter=modified, row=ModifiedOld", diff.DiffTypeModified, diff.ModifiedOld, false},
+		{"filter=modified, row=ModifiedNew", diff.DiffTypeModified, diff.ModifiedNew, false},
+
+		{"filter=all, row=Added", diff.DiffTypeAll, diff.Added, false},
+		{"filter=all, row=Removed", diff.DiffTypeAll, diff.Removed, false},
+		{"filter=all, row=ModifiedOld", diff.DiffTypeAll, diff.ModifiedOld, false},
+
+		{"nil filter, row=Added", "", diff.Added, false},
+		{"nil filter, row=Removed", "", diff.Removed, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var filter *diffTypeFilter
+			if tt.filterType != "" {
+				filter = newDiffTypeFilter(tt.filterType)
+			}
+
+			result := shouldSkipRow(filter, tt.rowChangeType)
+
+			if result != tt.expectedResult {
+				t.Errorf("expected %v, got %v", tt.expectedResult, result)
+			}
+		})
 	}
 }

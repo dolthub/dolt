@@ -190,6 +190,11 @@ func shouldSkipRow(filter *diffTypeFilter, rowChangeType diff.ChangeType) bool {
 		return false
 	}
 
+	// Don't filter None - it represents "no row" on one side of the diff
+	if rowChangeType == diff.None {
+		return false
+	}
+
 	// Convert row-level ChangeType to table-level DiffType string
 	diffType := diff.ChangeTypeToDiffType(rowChangeType)
 
@@ -808,13 +813,13 @@ func getSchemaDiffSummariesBetweenRefs(queryist cli.Queryist, sqlCtx *sql.Contex
 				tableName = fromTable
 			}
 		case fromTable == "":
-			diffType = "added"
+			diffType = diff.DiffTypeAdded
 			tableName = toTable
 		case toTable == "":
-			diffType = "dropped"
+			diffType = diff.DiffTypeRemoved
 			tableName = fromTable
 		case fromTable != "" && toTable != "" && fromTable != toTable:
-			diffType = "renamed"
+			diffType = diff.DiffTypeModified // Renamed tables are treated as modified
 			tableName = toTable
 		default:
 			return nil, fmt.Errorf("error: unexpected schema diff case: fromTable='%s', toTable='%s'", fromTable, toTable)
@@ -876,14 +881,17 @@ func getDiffSummariesBetweenRefs(queryist cli.Queryist, sqlCtx *sql.Context, fro
 		}
 
 		switch summary.DiffType {
-		case "dropped":
+		case diff.DiffTypeRemoved:
 			summary.TableName = summary.FromTableName
-		case "added":
+		case diff.DiffTypeAdded:
 			summary.TableName = summary.ToTableName
-		case "renamed":
-			summary.TableName = summary.ToTableName
-		case "modified":
-			summary.TableName = summary.FromTableName
+		case diff.DiffTypeModified:
+			// For renamed tables, use ToTableName; for other modifications, use FromTableName
+			if summary.FromTableName.Name != summary.ToTableName.Name {
+				summary.TableName = summary.ToTableName
+			} else {
+				summary.TableName = summary.FromTableName
+			}
 		default:
 			return nil, fmt.Errorf("error: unexpected diff type '%s'", summary.DiffType)
 		}
@@ -956,32 +964,11 @@ func diffUserTables(queryist cli.Queryist, sqlCtx *sql.Context, dArgs *diffArgs)
 
 		// Apply table-level filtering based on diff type
 		if dArgs.filter != nil && dArgs.filter.filters != nil {
-			shouldIncludeTable := false
+			// For data-only changes (no schema/rename), always let them through for row-level filtering
+			isDataOnlyChange := !delta.SchemaChange && !delta.IsRename() && delta.DataChange
 
-			// Check if table was added
-			if delta.IsAdd() && dArgs.filter.shouldInclude(diff.DiffTypeAdded) {
-				shouldIncludeTable = true
-			}
-
-			// Check if table was dropped
-			if delta.IsDrop() && dArgs.filter.shouldInclude(diff.DiffTypeRemoved) {
-				shouldIncludeTable = true
-			}
-
-			// Check if table was modified (schema change or rename)
-			if !delta.IsAdd() && !delta.IsDrop() {
-				isModified := delta.SchemaChange || delta.IsRename()
-				if isModified && dArgs.filter.shouldInclude(diff.DiffTypeModified) {
-					shouldIncludeTable = true
-				}
-				// If no schema/rename changes but has data changes, let it through for row-level filtering
-				if !isModified && delta.DataChange {
-					shouldIncludeTable = true
-				}
-			}
-
-			if !shouldIncludeTable {
-				continue // Skip this table but continue processing others
+			if !isDataOnlyChange && !dArgs.filter.shouldInclude(delta.DiffType) {
+				continue // Skip this table
 			}
 		}
 

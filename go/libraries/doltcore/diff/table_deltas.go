@@ -715,7 +715,7 @@ func (td TableDelta) GetSummary(ctx context.Context) (*TableDeltaSummary, error)
 			FromTableName: td.FromName,
 			DataChange:    dataChange,
 			SchemaChange:  true,
-			DiffType:      "dropped",
+			DiffType:      DiffTypeRemoved,
 		}, nil
 	}
 
@@ -726,7 +726,7 @@ func (td TableDelta) GetSummary(ctx context.Context) (*TableDeltaSummary, error)
 			ToTableName:  td.ToName,
 			DataChange:   dataChange,
 			SchemaChange: true,
-			DiffType:     "added",
+			DiffType:     DiffTypeAdded,
 		}, nil
 	}
 
@@ -738,7 +738,7 @@ func (td TableDelta) GetSummary(ctx context.Context) (*TableDeltaSummary, error)
 			ToTableName:   td.ToName,
 			DataChange:    dataChange,
 			SchemaChange:  true,
-			DiffType:      "renamed",
+			DiffType:      DiffTypeModified,
 		}, nil
 	}
 
@@ -753,7 +753,7 @@ func (td TableDelta) GetSummary(ctx context.Context) (*TableDeltaSummary, error)
 		ToTableName:   td.ToName,
 		DataChange:    dataChange,
 		SchemaChange:  schemaChange,
-		DiffType:      "modified",
+		DiffType:      DiffTypeModified,
 	}, nil
 }
 
