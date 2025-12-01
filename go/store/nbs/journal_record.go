@@ -296,9 +296,12 @@ func ReviveJournalWithDataLoss(nomsDir string) (preservePath string, err error) 
 	if err != nil {
 		return "", fmt.Errorf("could not create backup of corrupted chunk journal file: %w", err)
 	}
-	defer saveFile.Close()
 	if _, err = io.Copy(saveFile, jornalFile); err != nil {
 		return "", fmt.Errorf("could not backup corrupted chunk journal file: %w", err)
+	}
+
+	if err = saveFile.Close(); err != nil {
+		return "", fmt.Errorf("could not close backup of corrupted chunk journal file: %w", err)
 	}
 
 	// Now truncate the journal file to the last known good offset.
@@ -438,6 +441,9 @@ func processJournalRecords(ctx context.Context, r io.ReadSeeker, off int64, cb f
 		return 0, err
 	}
 
+	// When we have a real file, we truncate anything which is beyond the current offset. Historically we put
+	// null bytes there, and there have been cases of garbage data being present instead of nulls. If there is any
+	// data beyond the current offset which we can parse and looks like data loss, we would have errored out above.
 	if f, ok := r.(*os.File); ok {
 		err = f.Truncate(off)
 		if err != nil {
@@ -458,9 +464,10 @@ func NewJournalDataLossError(offset int64) error {
 	return fmt.Errorf("possible data loss detected in journal file at offset %d: %w", offset, ErrJournalDataLoss)
 }
 
-// possibleDataLossCheck checks for non-zero data starting at |off| in |r|. When calling this method, we've already hit
-// as state where we can't read a record at |off|, so we are going to scan forward from |off| to see if there is any
-// valid root record followed by another record (root hash or chunk).
+// possibleDataLossCheck checks for parsable data remaining in |reader| which constitutes data loss. When calling this
+// method, we've already hit a state where we can't read a record at the current position. We'll read until EOF looking
+// for a parsable root hash record followed by another parsable record. If that occurs, we consider that data loss, and
+// return true. Otherwise, false is returned.
 func possibleDataLossCheck(reader *bufio.Reader) (dataLoss bool, err error) {
 	firstRootFound := false
 
