@@ -41,6 +41,8 @@ const (
 	EnvDisableFixedAccess            = "DOLT_DISABLE_FIXED_ACCESS"
 	EnvDoltAssistAgree               = "DOLT_ASSIST_AGREE"
 	EnvDoltAuthorDate                = "DOLT_AUTHOR_DATE"
+	EnvDoltAuthorName                = "DOLT_AUTHOR_NAME"
+	EnvDoltAuthorEmail               = "DOLT_AUTHOR_EMAIL"
 	EnvDoltCommitterDate             = "DOLT_COMMITTER_DATE"
 	EnvDoltCommitterName             = "DOLT_COMMITTER_NAME"
 	EnvDoltCommitterEmail            = "DOLT_COMMITTER_EMAIL"
