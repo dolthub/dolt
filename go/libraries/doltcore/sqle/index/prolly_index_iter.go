@@ -301,7 +301,7 @@ func (p prollyCoveringIndexIter) NextValueRow(ctx *sql.Context) (sql.ValueRow, e
 	if err != nil {
 		return nil, err
 	}
-	
+
 	row := sql.ValueRowPoolManager.Get(len(p.projections))
 	for i, idx := range p.keyMap {
 		outIdx := p.ordMap[i]
