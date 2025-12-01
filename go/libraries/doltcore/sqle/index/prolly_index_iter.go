@@ -134,7 +134,7 @@ func (p prollyIndexIter) NextValueRow(ctx *sql.Context) (sql.ValueRow, error) {
 		return nil, err
 	}
 
-	row := make(sql.ValueRow, len(p.projections))
+	row := sql.ValueRowPoolManager.Get(len(p.projections))
 	err = p.primary.Get(ctx, pk, func(key, value val.Tuple) error {
 		keyDesc, valDesc := p.primary.Descriptors()
 		for i, idx := range p.keyMap {
@@ -301,8 +301,8 @@ func (p prollyCoveringIndexIter) NextValueRow(ctx *sql.Context) (sql.ValueRow, e
 	if err != nil {
 		return nil, err
 	}
-
-	row := make(sql.ValueRow, len(p.projections))
+	
+	row := sql.ValueRowPoolManager.Get(len(p.projections))
 	for i, idx := range p.keyMap {
 		outIdx := p.ordMap[i]
 		row[outIdx], err = tree.GetFieldValue(ctx, p.keyDesc, idx, k, p.ns)
