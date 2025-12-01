@@ -261,7 +261,7 @@ func (d *DoltHarness) NewEngine(t *testing.T) (enginetest.QueryEngine, error) {
 		require.NoError(t, err)
 		ctxGen := func(ctx context.Context) (*sql.Context, error) {
 			client := sql.Client{Address: "localhost", User: "root"}
-			return sql.NewContext(context.Background(), sql.WithSession(d.newStatsSessionWithClient(client))), nil
+			return sql.NewNonEngineContext(context.Background(), sql.WithSession(d.newStatsSessionWithClient(client))), nil
 		}
 		// xxx: stats threads can't be tied to single test cycle,
 		// this is only OK for enginetests
@@ -412,11 +412,11 @@ func (d *DoltHarness) Parallelism() int {
 }
 
 func (d *DoltHarness) NewContext() *sql.Context {
-	return sql.NewContext(context.Background(), sql.WithSession(d.session))
+	return sql.NewNonEngineContext(context.Background(), sql.WithSession(d.session))
 }
 
 func (d *DoltHarness) NewContextWithClient(client sql.Client) *sql.Context {
-	return sql.NewContext(context.Background(), sql.WithSession(d.newSessionWithClient(client)))
+	return sql.NewNonEngineContext(context.Background(), sql.WithSession(d.newSessionWithClient(client)))
 }
 
 func (d *DoltHarness) NewSession() *sql.Context {

@@ -420,7 +420,7 @@ func TestTableEditorMultipleIndexErrorHandling(t *testing.T) {
 		require.NoError(t, tableEditor.InsertRow(ctx, dRow, handleDuplicateKeyError))
 	}
 
-	_, err = tableEditor.Table(sql.NewContext(ctx))
+	_, err = tableEditor.Table(sql.NewNonEngineContext(ctx))
 	require.NoError(t, err)
 
 	for i := 0; i < 3; i++ {
@@ -442,7 +442,7 @@ func TestTableEditorMultipleIndexErrorHandling(t *testing.T) {
 		require.Error(t, err)
 	}
 
-	table, err = tableEditor.Table(sql.NewContext(ctx))
+	table, err = tableEditor.Table(sql.NewNonEngineContext(ctx))
 	require.NoError(t, err)
 	tableData, err := table.GetNomsRowData(ctx)
 	require.NoError(t, err)

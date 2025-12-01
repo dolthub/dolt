@@ -454,7 +454,7 @@ func TestKeylessTableEditorMultipleIndexErrorHandling(t *testing.T) {
 		require.NoError(t, tableEditor.InsertRow(ctx, dRow, nil))
 	}
 
-	_, err = tableEditor.Table(sql.NewContext(ctx))
+	_, err = tableEditor.Table(sql.NewNonEngineContext(ctx))
 	require.NoError(t, err)
 
 	for i := 0; i < 3; i++ {
@@ -464,7 +464,7 @@ func TestKeylessTableEditorMultipleIndexErrorHandling(t *testing.T) {
 			2: types.Int(i + 10),
 		})
 		require.NoError(t, err)
-		err = tableEditor.InsertRow(sql.NewContext(ctx), dRow, nil)
+		err = tableEditor.InsertRow(sql.NewNonEngineContext(ctx), dRow, nil)
 		require.NoError(t, err)
 		dRow, err = row.New(format, tableSch, row.TaggedValues{
 			0: types.Int(i + 10),
@@ -472,11 +472,11 @@ func TestKeylessTableEditorMultipleIndexErrorHandling(t *testing.T) {
 			2: types.Int(i),
 		})
 		require.NoError(t, err)
-		err = tableEditor.InsertRow(sql.NewContext(ctx), dRow, nil)
+		err = tableEditor.InsertRow(sql.NewNonEngineContext(ctx), dRow, nil)
 		require.NoError(t, err)
 	}
 
-	table, err = tableEditor.Table(sql.NewContext(ctx))
+	table, err = tableEditor.Table(sql.NewNonEngineContext(ctx))
 	require.NoError(t, err)
 	tableData, err := table.GetNomsRowData(ctx)
 	require.NoError(t, err)
@@ -611,7 +611,7 @@ func TestKeylessTableEditorIndexCardinality(t *testing.T) {
 		}
 	}
 
-	table, err = tableEditor.Table(sql.NewContext(ctx))
+	table, err = tableEditor.Table(sql.NewNonEngineContext(ctx))
 	require.NoError(t, err)
 
 	idxv1Data, err := table.GetNomsIndexRowData(ctx, "idx_v1")

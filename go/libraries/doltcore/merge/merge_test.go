@@ -310,7 +310,7 @@ func TestMergeCommits(t *testing.T) {
 	}
 	opts := editor.TestEditorOptions(vrw)
 	// TODO: stats
-	merged, _, err := merger.MergeTable(sql.NewContext(context.Background()), doltdb.TableName{Name: tableName}, opts, MergeOpts{IsCherryPick: false})
+	merged, _, err := merger.MergeTable(sql.NewNonEngineContext(context.Background()), doltdb.TableName{Name: tableName}, opts, MergeOpts{IsCherryPick: false})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -369,7 +369,7 @@ func TestNomsMergeCommits(t *testing.T) {
 		t.Fatal(err)
 	}
 	opts := editor.TestEditorOptions(vrw)
-	merged, stats, err := merger.MergeTable(sql.NewContext(context.Background()), doltdb.TableName{Name: tableName}, opts, MergeOpts{IsCherryPick: false})
+	merged, stats, err := merger.MergeTable(sql.NewNonEngineContext(context.Background()), doltdb.TableName{Name: tableName}, opts, MergeOpts{IsCherryPick: false})
 	if err != nil {
 		t.Fatal(err)
 	}

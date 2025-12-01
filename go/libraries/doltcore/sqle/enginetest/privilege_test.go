@@ -79,7 +79,7 @@ func TestRevisionDatabasePrivileges(t *testing.T) {
 			defer engine.Close()
 
 			ctx := enginetest.NewContext(harness)
-			ctx.NewCtxWithClient(sql.Client{
+			ctx.WithClient(sql.Client{
 				User:    "root",
 				Address: "localhost",
 			})
@@ -980,7 +980,7 @@ func TestDoltOnlyRevisionDatabasePrivileges(t *testing.T) {
 			defer engine.Close()
 
 			ctx := enginetest.NewContext(harness)
-			ctx.NewCtxWithClient(sql.Client{
+			ctx.WithClient(sql.Client{
 				User:    "root",
 				Address: "localhost",
 			})

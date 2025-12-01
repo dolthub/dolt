@@ -229,7 +229,7 @@ func BenchmarkMapItr(b *testing.B) {
 	require.NoError(b, err)
 
 	dmItr := index.NewDoltMapIter(itr.NextTuple, closeFunc, index.NewKVToSqlRowConverterForCols(m.Format(), sch, nil))
-	sqlCtx := sql.NewContext(ctx)
+	sqlCtx := sql.NewNonEngineContext(ctx)
 
 	b.ResetTimer()
 	for {

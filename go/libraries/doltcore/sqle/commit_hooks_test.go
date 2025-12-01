@@ -222,7 +222,7 @@ func TestAsyncPushOnWrite(t *testing.T) {
 		require.NotNil(t, hook)
 		require.NotNil(t, runThreads)
 		runThreads(bThreads, func(ctx context.Context) (*sql.Context, error) {
-			return sql.NewContext(ctx), nil
+			return sql.NewNonEngineContext(ctx), nil
 		})
 
 		for i := 0; i < 200; i++ {
@@ -294,7 +294,7 @@ func TestAsyncPushOnWrite(t *testing.T) {
 		hook, runThreads := NewAsyncPushOnWriteHook(tmpDir, &buffer.Buffer{})
 		hook.destDb = destDB
 		runThreads(bThreads, func(ctx context.Context) (*sql.Context, error) {
-			return sql.NewContext(ctx), nil
+			return sql.NewNonEngineContext(ctx), nil
 		})
 
 		// Pretend we replicate a HEAD which does exist.
