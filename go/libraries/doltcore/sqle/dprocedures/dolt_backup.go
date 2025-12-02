@@ -65,11 +65,11 @@ func doltBackup(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 		return nil, err
 	}
 
-	// TODO(elianddb): DoltgreSQL needs an auth handler for stored procedures, i.e. AuthType_CALL, but for now we use
-	//  this. dolt_backup already requires admin privilege on GMS due to its potentially destructive nature.
-	privileges, counter := ctx.GetPrivilegeSet()
-	if counter == 0 || !privileges.Has(sql.PrivilegeType_Super) {
-		return nil, sql.ErrPrivilegeCheckFailed.New(ctx.Session.Client().User)
+	if sqlserver.RunningInServerMode() {
+		privileges, counter := ctx.GetPrivilegeSet()
+		if counter == 0 || !privileges.Has(sql.PrivilegeType_Super) {
+			return nil, sql.ErrPrivilegeCheckFailed.New(ctx.Session.Client().User)
+		}
 	}
 
 	apr, err := cli.CreateBackupArgParser().Parse(args)
@@ -77,8 +77,16 @@ func doltBackup(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 		return nil, err
 	}
 
-	if sqlserver.RunningInServerMode() && apr.ContainsAny(cli.AwsParams...) {
-		return nil, fmt.Errorf("AWS parameters are unavailable when running in server mode")
+	if sqlserver.RunningInServerMode() {
+		// TODO(elianddb): DoltgreSQL needs an auth handler for stored procedures, i.e. AuthType_CALL, but for now we use
+		//  this. dolt_backup already requires admin privilege on GMS due to its potentially destructive nature.
+		privileges, counter := ctx.GetPrivilegeSet()
+		if counter == 0 || !privileges.Has(sql.PrivilegeType_Super) {
+			return nil, sql.ErrPrivilegeCheckFailed.New(ctx.Session.Client().User)
+		}
+		if apr.ContainsAny(cli.AwsParams...) {
+			return nil, fmt.Errorf("AWS parameters are unavailable when running in server mode")
+		}
 	}
 
 	if apr.NArg() == 0 || (apr.NArg() == 1 && apr.Contains(cli.VerboseFlag)) {
