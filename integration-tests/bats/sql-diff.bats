@@ -948,3 +948,13 @@ SQL
     [[ "$output" =~ "multiple values provided for \`skinny" ]] || false
     [ "$status" -eq 1 ]
 }
+
+@test "sql-diff: BIT(n) types show values in diff output" {
+    dolt sql -q "CREATE TABLE t (id INT PRIMARY KEY, some_bitval BIT(3))"
+    dolt sql -q "INSERT INTO t (id, some_bitval) VALUES ROW(0, b'000'), ROW(1, b'001'), ROW(2, b'010')"
+    run dolt diff HEAD -r sql
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "INSERT INTO \`t\` (\`id\`,\`some_bitval\`) VALUES (0,0x00);" ]] || false
+    [[ "$output" =~ "INSERT INTO \`t\` (\`id\`,\`some_bitval\`) VALUES (1,0x01);" ]] || false
+    [[ "$output" =~ "INSERT INTO \`t\` (\`id\`,\`some_bitval\`) VALUES (2,0x02);" ]] || false
+}
