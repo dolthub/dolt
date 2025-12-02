@@ -387,6 +387,49 @@ var DoltBackupProcedureScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "dolt_backup transactional operations",
+		SetUpScript: []string{
+			"create table t(a int primary key);",
+			`CREATE PROCEDURE transaction_backup_ops()
+BEGIN
+	START TRANSACTION;
+	INSERT INTO t VALUES (1);
+	
+	CALL dolt_backup('add', 'txn_bak', '` + fileUrl("txn_backup") + `');
+	
+	CALL dolt_backup('sync', 'txn_bak');
+	CALL dolt_backup('sync-url', '` + fileUrl("txn_backup_url") + `');
+	CALL dolt_backup('restore', '` + fileUrl("txn_backup") + `', 'restored_txn_db');
+	
+	CALL dolt_backup('remove', 'txn_bak');
+	
+	COMMIT;
+END`,
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call transaction_backup_ops();",
+				Expected: []sql.Row{{gmstypes.OkResult{}}},
+			},
+			{
+				Query:    "select * from restored_txn_db.t;",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    fmt.Sprintf("call dolt_backup('restore', '%s', 'restored_txn_url_db');", fileUrl("txn_backup_url")),
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "select * from restored_txn_url_db.t;",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "select count(*) from dolt_backups where name='txn_bak';",
+				Expected: []sql.Row{{0}},
+			},
+		},
+	},
 }
 
 var DoltProcedureTests = []queries.ScriptTest{
