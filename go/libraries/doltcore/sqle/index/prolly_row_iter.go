@@ -290,9 +290,8 @@ func (it *prollyKeylessIter) NextValueRow(ctx *sql.Context) (sql.ValueRow, error
 			return nil, err
 		}
 
-		// TODO: tricky to use pool here
 		it.card = val.ReadKeylessCardinality(value)
-		it.currValRow = make(sql.ValueRow, it.rowLen)
+		it.currValRow = sql.ValueRowPoolManager.Get(it.rowLen)
 		for i, idx := range it.valProj {
 			outputIdx := it.ordProj[i]
 			it.currValRow[outputIdx], err = tree.GetFieldValue(ctx, it.valDesc, idx, value, it.ns)
