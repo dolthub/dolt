@@ -759,7 +759,7 @@ func BasicSelectTests() []SelectTest {
 				&sql.Column{Name: "commit_hash", Type: gmstypes.Text},
 				&sql.Column{Name: "committer", Type: gmstypes.Text},
 				&sql.Column{Name: "email", Type: gmstypes.Text},
-				&sql.Column{Name: "date", Type: gmstypes.Datetime},
+				&sql.Column{Name: "date", Type: gmstypes.Datetime3},
 				&sql.Column{Name: "message", Type: gmstypes.Text},
 				&sql.Column{Name: "commit_order", Type: gmstypes.Uint64},
 			},
