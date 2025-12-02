@@ -80,7 +80,7 @@ RUN pyinstaller --onefile --collect-all mysql.connector sqlalchemy-test.py
 RUN pyinstaller --onefile --collect-all mysql.connector mysql-connector-test.py
 RUN pyinstaller --onefile mariadb-connector-test.py
 
-FROM elixir:1.18-slim AS elixir_clients_build
+FROM elixir:1.18.3-slim AS elixir_clients_build
 RUN apt-get update && apt-get install -y ca-certificates xz-utils curl && rm -rf /var/lib/apt/lists/*
 RUN curl -sSL https://ziglang.org/download/0.14.1/zig-x86_64-linux-0.14.1.tar.xz | tar -xJ
 ENV PATH="/zig-x86_64-linux-0.14.1:${PATH}"
