@@ -2205,6 +2205,7 @@ func TestBranchActivity(t *testing.T) {
 // TestDriverExecution verifies that queries work in dolt driver, where the MySQLDb is not initialized.
 func TestDriverExecution(t *testing.T) {
 	h := newDoltHarness(t)
+	h.UseLocalFileSystem()
 	defer h.Close()
 
 	engine, err := h.NewEngine(t)

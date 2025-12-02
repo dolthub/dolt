@@ -65,13 +65,6 @@ func doltBackup(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 		return nil, err
 	}
 
-	if sqlserver.RunningInServerMode() {
-		privileges, counter := ctx.GetPrivilegeSet()
-		if counter == 0 || !privileges.Has(sql.PrivilegeType_Super) {
-			return nil, sql.ErrPrivilegeCheckFailed.New(ctx.Session.Client().User)
-		}
-	}
-
 	apr, err := cli.CreateBackupArgParser().Parse(args)
 	if err != nil {
 		return nil, err
