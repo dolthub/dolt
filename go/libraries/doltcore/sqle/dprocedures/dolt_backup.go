@@ -160,6 +160,14 @@ func doltBackupAdd(ctx *sql.Context, dbData env.DbData[*sql.Context], dsess *dse
 // from the repository state via |dbData.Rsr|. The sync operation copies all roots from the current database to the
 // backup location, overwriting any existing data.
 func doltBackupSync(ctx *sql.Context, dbData env.DbData[*sql.Context], dsess *dsess.DoltSession, backupName string) error {
+	// Commit the current session's working set to the persistent chunk store. This ensures that uncommitted
+	// transaction changes (e.g. INSERTs) are visible to the backup procedure, which reads directly from the persistent
+	// database roots.
+	err := dsess.CommitWorkingSet(ctx, ctx.GetCurrentDatabase(), ctx.GetTransaction())
+	if err != nil {
+		return err
+	}
+
 	backups, err := dbData.Rsr.GetBackups()
 	if err != nil {
 		return err
@@ -178,6 +186,11 @@ func doltBackupSync(ctx *sql.Context, dbData env.DbData[*sql.Context], dsess *ds
 // in |apr| if present, otherwise they are loaded from session variables if the URL scheme matches. The sync operation
 // copies all roots from the current database to the remote location, overwriting any existing data.
 func doltBackupSyncUrl(ctx *sql.Context, dbData env.DbData[*sql.Context], dsess *dsess.DoltSession, apr *argparser.ArgParseResults) error {
+	err := dsess.CommitWorkingSet(ctx, ctx.GetCurrentDatabase(), ctx.GetTransaction())
+	if err != nil {
+		return err
+	}
+
 	remoteUrlScheme, remoteUrl, err := newAbsRemoteUrl(dsess, apr.Arg(1))
 	if err != nil {
 		return err
