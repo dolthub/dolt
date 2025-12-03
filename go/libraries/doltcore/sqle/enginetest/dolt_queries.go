@@ -5324,7 +5324,7 @@ var LogTableFunctionScriptTests = []queries.ScriptTest{
 					{"commit_hash", "text", "NO", "PRI", nil, ""},
 					{"committer", "text", "NO", "", nil, ""},
 					{"email", "text", "NO", "", nil, ""},
-					{"date", "datetime", "NO", "", nil, ""},
+					{"date", "datetime(3)", "NO", "", nil, ""},
 					{"message", "text", "NO", "", nil, ""},
 					{"commit_order", "bigint unsigned", "NO", "", nil, ""},
 				},
