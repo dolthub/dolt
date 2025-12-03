@@ -51,13 +51,14 @@ var fsckDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Verifies the contents of the database are not corrupted.",
 	LongDesc:  "Verifies the contents of the database are not corrupted.",
 	Synopsis: []string{
-		"[--quiet]",
+		"[--quiet] [--mark-and-sweep]",
 		"--revive-journal-with-data-loss",
 	},
 }
 
 const (
 	journalReviveFlag = "revive-journal-with-data-loss"
+	markAndSweepFlag  = "mark-and-sweep"
 )
 
 func (cmd FsckCmd) Docs() *cli.CommandDocumentation {
@@ -71,6 +72,7 @@ func (cmd FsckCmd) ArgParser() *argparser.ArgParser {
 WARNING: This may result in data loss. Your original data will be preserved in a backup file. Use this option to restore
 the ability to use your Dolt database. Please contact Dolt (https://github.com/dolthub/dolt/issues) for assistance.
 `)
+	ap.SupportsFlag(markAndSweepFlag, "", "Validates commit DAG and tree structures starting from a specific commit.")
 
 	return ap
 }
@@ -95,6 +97,7 @@ func (cmd FsckCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	}
 
 	quiet := apr.Contains(cli.QuietFlag)
+	markAndSweep := apr.Contains(markAndSweepFlag)
 
 	// We expect these to work because the database has already been initialized in higher layers. We'll check anyway
 	// since it's possible something went sideways or this isn't a local database.
@@ -154,7 +157,7 @@ func (cmd FsckCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	terminate = func() bool {
 		defer close(progress)
 		var err error
-		report, err = fsckOnChunkStore(ctx, gs, errs, progress)
+		report, err = fsckOnChunkStore(ctx, gs, errs, progress, markAndSweep)
 		if err != nil {
 			// When FSCK errors, it's unexpected. As in corruption can be found and we shouldn't get an error here.
 			// So we print the error and not the report.
@@ -228,10 +231,195 @@ type FSCKReport struct {
 	Problems   []error
 }
 
+
+// validateCommitDAG walks the commit DAG starting from a specific commit hash,
+// validates each commit's tree structure in order using breadth-first search.
+func validateCommitDAG(ctx context.Context, gs *nbs.GenerationalNBS, startCommitHash hash.Hash, progress chan string, appendErr func(error)) error {
+	progress <- "Starting commit DAG validation..."
+	
+	vs := types.NewValueStore(gs)
+	
+	// Queue for commits to process (breadth-first through commit history)
+	commitQueue := []hash.Hash{startCommitHash}
+	visitedCommits := make(hash.HashSet)
+	
+	for len(commitQueue) > 0 {
+		// Dequeue next commit
+		commitHash := commitQueue[0]
+		commitQueue = commitQueue[1:]
+		
+		// Skip if already processed
+		if visitedCommits.Has(commitHash) {
+			continue
+		}
+		visitedCommits.Insert(commitHash)
+		
+		progress <- fmt.Sprintf("Validating commit: %s", commitHash.String())
+		
+		// Load and validate the commit
+		commitValue, err := vs.ReadValue(ctx, commitHash)
+		if err != nil {
+			appendErr(fmt.Errorf("failed to read commit %s: %w", commitHash.String(), err))
+			continue
+		}
+		
+		if commitValue == nil {
+			appendErr(fmt.Errorf("commit %s not found", commitHash.String()))
+			continue
+		}
+		
+		// Ensure it's actually a commit
+		commit, ok := commitValue.(types.Struct)
+		if !ok {
+			appendErr(fmt.Errorf("hash %s is not a commit struct", commitHash.String()))
+			continue
+		}
+		
+		// Get the tree reference from the commit (stored in the "value" field)
+		treeValue, ok, err := commit.MaybeGet("value")
+		if err != nil {
+			appendErr(fmt.Errorf("failed to get value from commit %s: %w", commitHash.String(), err))
+			continue
+		}
+		if !ok {
+			appendErr(fmt.Errorf("commit %s missing value field", commitHash.String()))
+			continue
+		}
+		
+		// Validate the tree structure (the value is the root tree)
+		if treeRefValue, ok := treeValue.(types.Ref); ok {
+			err = validateTree(ctx, vs, treeRefValue.TargetHash(), progress, appendErr)
+			if err != nil {
+				appendErr(fmt.Errorf("failed to validate tree in commit %s: %w", commitHash.String(), err))
+			}
+		} else {
+			// If it's not a Ref, try to validate the value directly
+			err = validateTree(ctx, vs, commitHash, progress, appendErr)
+			if err != nil {
+				appendErr(fmt.Errorf("failed to validate tree in commit %s: %w", commitHash.String(), err))
+			}
+		}
+		
+		// Add parent commits to queue for processing (using parents_list if available, otherwise parents Set)
+		parentsList, hasParentsList, err := commit.MaybeGet("parents_list")
+		if err != nil {
+			appendErr(fmt.Errorf("failed to get parents_list from commit %s: %w", commitHash.String(), err))
+			continue
+		}
+		
+		if hasParentsList {
+			if pList, ok := parentsList.(types.List); ok {
+				err := pList.Iter(ctx, func(v types.Value, index uint64) (stop bool, err error) {
+					if ref, ok := v.(types.Ref); ok {
+						commitQueue = append(commitQueue, ref.TargetHash())
+					}
+					return false, nil
+				})
+				if err != nil {
+					appendErr(fmt.Errorf("failed to iterate parents_list in commit %s: %w", commitHash.String(), err))
+				}
+			}
+		} else {
+			// Fall back to parents Set
+			parents, ok, err := commit.MaybeGet("parents")
+			if err != nil {
+				appendErr(fmt.Errorf("failed to get parents from commit %s: %w", commitHash.String(), err))
+				continue
+			}
+			if ok {
+				if parentsSet, ok := parents.(types.Set); ok {
+					err := parentsSet.Iter(ctx, func(v types.Value) (stop bool, err error) {
+						if ref, ok := v.(types.Ref); ok {
+							commitQueue = append(commitQueue, ref.TargetHash())
+						}
+						return false, nil
+					})
+					if err != nil {
+						appendErr(fmt.Errorf("failed to iterate parents in commit %s: %w", commitHash.String(), err))
+					}
+				}
+			}
+		}
+	}
+	
+	progress <- "Commit DAG validation completed"
+	return nil
+}
+
+// validateTree performs breadth-first validation of a tree structure
+func validateTree(ctx context.Context, vs *types.ValueStore, treeHash hash.Hash, progress chan string, appendErr func(error)) error {
+	progress <- fmt.Sprintf("Validating tree: %s", treeHash.String())
+	
+	// Queue for tree entries to process (breadth-first)
+	treeQueue := []hash.Hash{treeHash}
+	visitedTrees := make(hash.HashSet)
+	
+	for len(treeQueue) > 0 {
+		// Dequeue next tree
+		currentTreeHash := treeQueue[0]
+		treeQueue = treeQueue[1:]
+		
+		// Skip if already processed
+		if visitedTrees.Has(currentTreeHash) {
+			continue
+		}
+		visitedTrees.Insert(currentTreeHash)
+		
+		// Load the tree
+		treeValue, err := vs.ReadValue(ctx, currentTreeHash)
+		if err != nil {
+			return fmt.Errorf("failed to read tree %s: %w", currentTreeHash.String(), err)
+		}
+		
+		if treeValue == nil {
+			return fmt.Errorf("tree %s not found", currentTreeHash.String())
+		}
+		
+		// Ensure it's a map (trees are stored as maps in Noms)
+		treeMap, ok := treeValue.(types.Map)
+		if !ok {
+			return fmt.Errorf("hash %s is not a tree map", currentTreeHash.String())
+		}
+		
+		// Iterate through tree entries
+		err = treeMap.Iter(ctx, func(key, value types.Value) (stop bool, err error) {
+			// Validate that we can read the key (should be a string - the filename)
+			if _, ok := key.(types.String); !ok {
+				appendErr(fmt.Errorf("invalid tree entry key type in tree %s", currentTreeHash.String()))
+			}
+			
+			// Process the value (could be a blob ref or subtree ref)
+			if ref, ok := value.(types.Ref); ok {
+				targetHash := ref.TargetHash()
+				
+				// Try to load the target to see if it's a subtree or blob
+				targetValue, err := vs.ReadValue(ctx, targetHash)
+				if err != nil {
+					appendErr(fmt.Errorf("failed to read tree entry target %s in tree %s: %w", targetHash.String(), currentTreeHash.String(), err))
+					return false, nil // Continue processing other entries
+				} else if targetValue != nil {
+					// If it's another map, it's a subtree - add to queue
+					if _, isMap := targetValue.(types.Map); isMap {
+						treeQueue = append(treeQueue, targetHash)
+					}
+					// If it's a blob or other type, we've validated we can read it
+				}
+			}
+			
+			return false, nil // Continue iteration
+		})
+		if err != nil {
+			return fmt.Errorf("failed to iterate tree entries in %s: %w", currentTreeHash.String(), err)
+		}
+	}
+	
+	return nil
+}
+
 // FSCK performs a full file system check on the database. This is currently exposed with the CLI as `dolt fsck`
 // The success or failure of the scan are returned in the report as a list of errors. The error returned by this function
 // indicates a deeper issue such as an inability to read from the underlying storage at all.
-func fsckOnChunkStore(ctx context.Context, gs *nbs.GenerationalNBS, errs []error, progress chan string) (*FSCKReport, error) {
+func fsckOnChunkStore(ctx context.Context, gs *nbs.GenerationalNBS, errs []error, progress chan string, markAndSweep bool) (*FSCKReport, error) {
 	chunkCount, err := gs.OldGen().Count()
 	if err != nil {
 		return nil, err
@@ -262,6 +450,18 @@ func fsckOnChunkStore(ctx context.Context, gs *nbs.GenerationalNBS, errs []error
 		errsLock.Lock()
 		defer errsLock.Unlock()
 		errs = append(errs, err)
+	}
+
+	// Perform commit DAG validation if requested
+	if markAndSweep {
+		progress <- "Starting commit DAG validation..."
+
+		// Use the hardcoded hash for now - this can be made configurable later
+		startCommitHash := hash.Parse("uqb8mmceook4qoh6o3d09qqoeo7h72n7")
+		err = validateCommitDAG(ctx, gs, startCommitHash, progress, appendErr)
+		if err != nil {
+			appendErr(fmt.Errorf("commit DAG validation failed: %w", err))
+		}
 	}
 
 	// Callback for validating chunks. This code could be called concurrently, though that is not currently the case.
