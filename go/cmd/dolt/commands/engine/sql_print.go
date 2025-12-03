@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -212,6 +213,10 @@ type binaryHexIterator struct {
 
 var _ sql.RowIter = (*binaryHexIterator)(nil)
 
+// BinaryAsHexString serves as an indicator that a binary value has been processed by the --binary-as-hex flag iterator
+// into a hex string value.
+type BinaryAsHexString string
+
 // newBinaryHexIterator creates a new iterator that transforms binary data to hex format
 func newBinaryHexIterator(inner sql.RowIter, schema sql.Schema) sql.RowIter {
 	return &binaryHexIterator{
@@ -220,86 +225,97 @@ func newBinaryHexIterator(inner sql.RowIter, schema sql.Schema) sql.RowIter {
 	}
 }
 
-// Next returns the next row with binary data transformed to hex format
-func (iter *binaryHexIterator) Next(ctx *sql.Context) (sql.Row, error) {
-	rowData, err := iter.inner.Next(ctx)
+// Next returns the next row with binary data transformed to hex format.
+func (iter *binaryHexIterator) Next(ctx *sql.Context) (rowData sql.Row, err error) {
+	rowData, err = iter.inner.Next(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	// TODO: Add support for BLOB types (TINYBLOB, BLOB, MEDIUMBLOB, LONGBLOB) and BIT type
 	for i, val := range rowData {
-		if val != nil && i < len(iter.schema) {
-			switch iter.schema[i].Type.Type() {
-			case sqltypes.Binary, sqltypes.VarBinary, sqltypes.Blob:
-				hexStr, err := convertBinaryValueToHexString(ctx, val)
-				if err != nil {
-					return nil, err
-				}
-				rowData[i] = sqlutil.BinaryAsHexPrintValue(hexStr)
-			case sqltypes.Bit:
-				if vUint, ok := val.(uint64); ok {
-					hexDigits := 0
-					if bitType, ok := iter.schema[i].Type.(types.BitType); ok {
-						hexDigits = (int(bitType.NumberOfBits()) + 3) / 4
-					}
-					if hexDigits > 0 {
-						format := fmt.Sprintf("0x%%0%dX", hexDigits)
-						rowData[i] = sqlutil.BinaryAsHexPrintValue(fmt.Sprintf(format, vUint))
-					} else {
-						rowData[i] = sqlutil.BinaryAsHexPrintValue(fmt.Sprintf("0x%X", vUint))
-					}
-				} else {
-					// fallback for other types (e.g. []byte if that happens)
-					hexStr, err := convertBinaryValueToHexString(ctx, val)
-					if err != nil {
-						return nil, err
-					}
-					rowData[i] = sqlutil.BinaryAsHexPrintValue(hexStr)
-				}
+		if bytesWrapper, ok := val.(sql.BytesWrapper); ok {
+			val, err = bytesWrapper.Unwrap(ctx)
+			if err != nil {
+				return nil, err
 			}
+		}
+
+		hexBytes, err := binaryToUpperHexBytes(val)
+		if err != nil {
+			return nil, err
+		}
+
+		var strBuilder strings.Builder
+		switch iter.schema[i].Type.Type() {
+		case sqltypes.Binary, sqltypes.VarBinary, sqltypes.Blob:
+			strBuilder.Grow(2 + len(hexBytes))
+			strBuilder.WriteByte('0')
+			strBuilder.WriteByte('x')
+			strBuilder.Write(hexBytes)
+			rowData[i] = BinaryAsHexString(strBuilder.String())
+		case sqltypes.Bit:
+			padding := 0
+			if bitType, ok := iter.schema[i].Type.(types.BitType); ok {
+				padding = (int(bitType.NumberOfBits())+3)/4 - len(hexBytes)
+			}
+
+			strBuilder.Grow(2 + padding + len(hexBytes))
+			strBuilder.WriteByte('0')
+			strBuilder.WriteByte('x')
+			for repeat := 0; repeat < padding; repeat++ {
+				strBuilder.WriteByte('0')
+			}
+			strBuilder.Write(hexBytes)
+			rowData[i] = BinaryAsHexString(strBuilder.String())
 		}
 	}
 
 	return rowData, nil
 }
 
-func convertBinaryValueToHexString(ctx *sql.Context, val interface{}) (string, error) {
+// binaryToUpperHexBytes converts the input |binary| into uppercase hexadecimal bytes. It accepts binary and numeric
+// input types. This is optimized for large byte arrays i.e. sqltypes.Blob, reimplementing a modified version of the hex
+// encoder from Go's standard library to do uppercasing in a single pass.
+func binaryToUpperHexBytes(binary interface{}) ([]byte, error) {
+	upperHexTable := "0123456789ABCDEF"
 	var valBytes []byte
-	switch v := val.(type) {
+	switch v := binary.(type) {
 	case []byte:
 		valBytes = v
 	case string:
 		valBytes = []byte(v)
-	case sql.BytesWrapper:
-		var err error
-		valBytes, err = v.Unwrap(*ctx)
-		if err != nil {
-			return "", err
+	case uint64:
+		if v == 0 {
+			return []byte{'0'}, nil
 		}
-	default:
-		return "", fmt.Errorf("unexpected type %T (%v)", val, val)
-	}
+		valBytes = make([]byte, 16)
+		// uint64 contains 16 nibbles (4-bit chunks) obtained by & 0xF.
+		// Map each nibble directly to the hex table above.
+		// We assume big-endian and shift right to process from least to greatest bit.
+		index := 15
+		for v > 0 {
+			valBytes[index] = upperHexTable[v&0xF]
+			v >>= 4
+			index--
+		}
 
-	buffer := make([]byte, 2+hex.EncodedLen(len(valBytes)))
-	buffer[0] = '0'
-	buffer[1] = 'x'
+		// Index + 1 to avoid leading zeros.
+		return valBytes[index+1:], nil
+	default:
+		return nil, fmt.Errorf("unexpected type %T (%v)", binary, binary)
+	}
 
 	if len(valBytes) == 0 {
-		return string(buffer), nil
+		return []byte{}, nil
 	}
 
-	hex.Encode(buffer[2:], valBytes)
-	for i := 2; i < len(buffer); i++ {
-		// Convert a-f to A-F.
-		// 0-9 are 0x30-0x39 (bit 6 is 0).
-		// a-f are 0x61-0x66 (bit 6 is 1).
-		// We want to subtract 0x20 (32) from a-f.
-		// (buf[i] & 0x40) is 0x40 for letters, 0 for digits.
-		// 0x40 >> 1 is 0x20.
-		buffer[i] -= (buffer[i] & 0x40) >> 1
+	hexBuffer := make([]byte, hex.EncodedLen(len(valBytes)))
+	for index, valByte := range valBytes {
+		// Each byte contains 2 nibbles (4-bit chunks), map each to upper hex table above.
+		hexBuffer[index*2] = upperHexTable[valByte>>4]
+		hexBuffer[index*2+1] = upperHexTable[valByte&0x0F]
 	}
-	return string(buffer), nil
+	return hexBuffer, nil
 }
 
 // Close closes the wrapped iterator and releases any resources.
