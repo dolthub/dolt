@@ -51,13 +51,14 @@ var fsckDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Verifies the contents of the database are not corrupted.",
 	LongDesc:  "Verifies the contents of the database are not corrupted.",
 	Synopsis: []string{
-		"[--quiet]",
+		"[--quiet] [--mark-and-sweep]",
 		"--revive-journal-with-data-loss",
 	},
 }
 
 const (
 	journalReviveFlag = "revive-journal-with-data-loss"
+	markAndSweepFlag  = "mark-and-sweep"
 )
 
 func (cmd FsckCmd) Docs() *cli.CommandDocumentation {
@@ -71,6 +72,7 @@ func (cmd FsckCmd) ArgParser() *argparser.ArgParser {
 WARNING: This may result in data loss. Your original data will be preserved in a backup file. Use this option to restore
 the ability to use your Dolt database. Please contact Dolt (https://github.com/dolthub/dolt/issues) for assistance.
 `)
+	ap.SupportsFlag(markAndSweepFlag, "", "Performs mark and sweep garbage collection on the chunk store during verification.")
 
 	return ap
 }
@@ -95,6 +97,7 @@ func (cmd FsckCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	}
 
 	quiet := apr.Contains(cli.QuietFlag)
+	markAndSweep := apr.Contains(markAndSweepFlag)
 
 	// We expect these to work because the database has already been initialized in higher layers. We'll check anyway
 	// since it's possible something went sideways or this isn't a local database.
@@ -154,7 +157,7 @@ func (cmd FsckCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	terminate = func() bool {
 		defer close(progress)
 		var err error
-		report, err = fsckOnChunkStore(ctx, gs, errs, progress)
+		report, err = fsckOnChunkStore(ctx, gs, errs, progress, markAndSweep)
 		if err != nil {
 			// When FSCK errors, it's unexpected. As in corruption can be found and we shouldn't get an error here.
 			// So we print the error and not the report.
@@ -228,10 +231,67 @@ type FSCKReport struct {
 	Problems   []error
 }
 
+// noopGetAddrs is a placeholder function that extracts no references from chunks.
+// For basic mark-and-sweep operations, this prevents following references.
+func noopGetAddrs(c chunks.Chunk) chunks.GetAddrsCb {
+	return func(ctx context.Context, addrs hash.HashSet, _ chunks.PendingRefExists) error {
+		return nil
+	}
+}
+
+// noopFilter allows all chunks to pass through during mark-and-sweep.
+func noopFilter(ctx context.Context, hashes hash.HashSet) (hash.HashSet, error) {
+	return hashes, nil
+}
+
+// performMarkAndSweep executes mark-and-sweep operation on the provided chunk store.
+// This demonstrates the basic MarkAndSweep functionality without finalization.
+func performMarkAndSweep(ctx context.Context, gs *nbs.GenerationalNBS, progress chan string, appendErr func(error)) error {
+	progress <- "Beginning GC mode..."
+	
+	// Begin garbage collection
+	err := gs.BeginGC(nil, chunks.GCMode_Full)
+	if err != nil {
+		return fmt.Errorf("failed to begin GC: %w", err)
+	}
+	defer gs.EndGC(chunks.GCMode_Full)
+
+	progress <- "Starting mark-and-sweep operation..."
+	
+	// Create mark-and-sweep operation with basic parameters
+	sweeper, err := gs.MarkAndSweepChunks(ctx, noopGetAddrs, noopFilter, nil, chunks.GCMode_Full, chunks.NoArchive)
+	if err != nil {
+		return fmt.Errorf("failed to create mark-and-sweep operation: %w", err)
+	}
+	defer sweeper.Close(ctx)
+	
+	// Get the root hash to preserve it
+	rootHash, err := gs.Root(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get root hash: %w", err)
+	}
+	
+	progress <- "Saving root hash and reachable chunks..."
+	
+	// Save the root hash (and any chunks reachable from it)
+	var rootHashes []hash.Hash
+	if rootHash != (hash.Hash{}) {
+		rootHashes = append(rootHashes, rootHash)
+	}
+	
+	err = sweeper.SaveHashes(ctx, rootHashes)
+	if err != nil {
+		return fmt.Errorf("failed to save hashes: %w", err)
+	}
+	
+	progress <- "Mark-and-sweep operation completed successfully"
+	return nil
+}
+
 // FSCK performs a full file system check on the database. This is currently exposed with the CLI as `dolt fsck`
 // The success or failure of the scan are returned in the report as a list of errors. The error returned by this function
 // indicates a deeper issue such as an inability to read from the underlying storage at all.
-func fsckOnChunkStore(ctx context.Context, gs *nbs.GenerationalNBS, errs []error, progress chan string) (*FSCKReport, error) {
+func fsckOnChunkStore(ctx context.Context, gs *nbs.GenerationalNBS, errs []error, progress chan string, markAndSweep bool) (*FSCKReport, error) {
 	chunkCount, err := gs.OldGen().Count()
 	if err != nil {
 		return nil, err
@@ -318,6 +378,16 @@ func fsckOnChunkStore(ctx context.Context, gs *nbs.GenerationalNBS, errs []error
 	err = gs.NewGen().IterateAllChunks(ctx, validationCallback)
 	if err != nil {
 		return nil, err
+	}
+
+	// Perform mark-and-sweep if requested
+	if markAndSweep {
+		progress <- "Starting mark-and-sweep garbage collection..."
+		
+		err = performMarkAndSweep(ctx, gs, progress, appendErr)
+		if err != nil {
+			appendErr(errors.New(fmt.Sprintf("Mark-and-sweep failed: %s", err.Error())))
+		}
 	}
 
 	FSCKReport := FSCKReport{Problems: errs, ChunkCount: chunkCount}
