@@ -1133,4 +1133,9 @@ expect eof
     run dolt sql -r csv -q "SELECT b_var FROM all_bin_test WHERE id = 2;" --skip-binary-as-hex
     [ "$status" -eq 0 ]
     [[ ! $output =~ "0xFF" ]] || false
+
+    # Check NULL row
+    run dolt sql -q "SELECT b_var FROM all_bin_test WHERE id=7"
+    [ "$status" -eq 0 ]
+    [[ $output =~ "NULL" ]] || false
 }

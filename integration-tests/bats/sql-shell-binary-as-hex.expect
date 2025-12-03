@@ -15,7 +15,7 @@ source "$env(BATS_CWD)/helper/common_expect_functions.tcl"
 
 set timeout 10
 set env(NO_COLOR) 1
-set debug 0
+set debug 1
 if {$debug} {
     # Built-in expect variable that when set shows everything the shell sends and receives.
     log_user 1
@@ -64,13 +64,13 @@ if {$has_binary_hex && $has_skip_hex} {
 run_query "DROP TABLE IF EXISTS all_bin_test;" {}
 run_query "CREATE TABLE all_bin_test (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    b_bit BIT(32),
-    b_fixed BINARY(8),
-    b_var VARBINARY(32),
-    b_tinyblob TINYBLOB,
-    b_blob BLOB,
-    b_mediumblob MEDIUMBLOB,
-    b_longblob LONGBLOB
+    b_bit BIT(32) NULL,
+    b_fixed BINARY(8) NULL,
+    b_var VARBINARY(32) NULL,
+    b_tinyblob TINYBLOB NULL,
+    b_blob BLOB NULL,
+    b_mediumblob MEDIUMBLOB NULL,
+    b_longblob LONGBLOB NULL
 );" {}
 
 # Row 1: Zeroes
@@ -90,6 +90,9 @@ run_query "INSERT INTO all_bin_test (b_bit,b_fixed,b_var,b_tinyblob,b_blob,b_med
 
 # Row 6: DEADBEEF
 run_query "INSERT INTO all_bin_test (b_bit,b_fixed,b_var,b_tinyblob,b_blob,b_mediumblob,b_longblob) VALUES (b'11011110101011011011111011101111', X'DEADBEEF', X'DEADBEEF', X'DEADBEEF', X'DEADBEEF', X'DEADBEEF', X'DEADBEEF');" {}
+
+# Row 7: NULLs
+run_query "INSERT INTO all_bin_test (b_bit,b_fixed,b_var,b_tinyblob,b_blob,b_mediumblob,b_longblob) VALUES (NULL, NULL, NULL, NULL, NULL, NULL, NULL);" {}
 
 
 run_query "SELECT b_bit, b_fixed, b_var, b_tinyblob, b_blob, b_mediumblob, b_longblob FROM all_bin_test WHERE id = 1;" {
@@ -176,6 +179,16 @@ run_query "SELECT b_bit, b_fixed, b_var, b_tinyblob, b_blob, b_mediumblob, b_lon
         expect_with_defaults_2 {0xDEADBEEF} {\|} {}
         expect_with_defaults_2 {0xDEADBEEF} {\|} {}
     }
+}
+
+run_query "SELECT b_bit, b_fixed, b_var, b_tinyblob, b_blob, b_mediumblob, b_longblob FROM all_bin_test WHERE id = 7;" {
+    expect_with_defaults_2 {NULL} {\|} {}
+    expect_with_defaults_2 {NULL} {\|} {}
+    expect_with_defaults_2 {NULL} {\|} {}
+    expect_with_defaults_2 {NULL} {\|} {}
+    expect_with_defaults_2 {NULL} {\|} {}
+    expect_with_defaults_2 {NULL} {\|} {}
+    expect_with_defaults_2 {NULL} {\|} {}
 }
 
 run_query "exit;" { expect eof }
